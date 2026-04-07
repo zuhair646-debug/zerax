@@ -1,25 +1,3 @@
-## ✅ احذف من السطر 1 إلى السطر 56
-
-**توقف قبل هذا السطر:**
-```python
-# ============== MODELS ==============
-```
-
-في الصورة أرى هذا السطر رقم **57**
-
----
-
-## 📝 يعني:
-
-1. **اذهب لأعلى الملف** (سطر 1)
-2. **احذف كل شيء من السطر 1 إلى السطر 56**
-3. **ابقِ السطر 57 وما بعده** (# ============== MODELS ==============)
-
----
-
-## 🔄 ثم الصق هذا الكود الجديد في البداية:
-
-```python
 from fastapi import FastAPI, APIRouter, HTTPException, Depends, UploadFile, File, Form
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from fastapi.responses import StreamingResponse
@@ -85,12 +63,6 @@ except:
     paypalrestsdk = None
 
 eleven_client = ElevenLabs(api_key=ELEVENLABS_API_KEY) if ElevenLabs and ELEVENLABS_API_KEY else None
-
-```
-
----
-
-**بعدها اضغط "Commit changes"** ✅
 # ============== MODELS ==============
 
 # Role levels: owner (100) > super_admin (80) > admin (50) > client (10)
