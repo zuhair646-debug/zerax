@@ -16,3 +16,5 @@ openai
 elevenlabs
 paypalrestsdk
 pillow
+certifi
+dnspython
