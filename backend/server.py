@@ -1,3 +1,25 @@
+## ✅ احذف من السطر 1 إلى السطر 56
+
+**توقف قبل هذا السطر:**
+```python
+# ============== MODELS ==============
+```
+
+في الصورة أرى هذا السطر رقم **57**
+
+---
+
+## 📝 يعني:
+
+1. **اذهب لأعلى الملف** (سطر 1)
+2. **احذف كل شيء من السطر 1 إلى السطر 56**
+3. **ابقِ السطر 57 وما بعده** (# ============== MODELS ==============)
+
+---
+
+## 🔄 ثم الصق هذا الكود الجديد في البداية:
+
+```python
 from fastapi import FastAPI, APIRouter, HTTPException, Depends, UploadFile, File, Form
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from fastapi.responses import StreamingResponse
@@ -13,47 +35,62 @@ import uuid
 from datetime import datetime, timezone, timedelta
 import bcrypt
 import jwt
-from openai import OpenAI
-from elevenlabs.client import ElevenLabs
-from elevenlabs.types import VoiceSettings
 import base64
 import httpx
-from PIL import Image, ImageDraw, ImageFont
 import io
+
+# Optional imports
+try:
+    from elevenlabs.client import ElevenLabs
+    from elevenlabs.types import VoiceSettings
+except ImportError:
+    ElevenLabs = None
+    VoiceSettings = None
+
+try:
+    from PIL import Image, ImageDraw, ImageFont
+except ImportError:
+    Image = None
+    ImageDraw = None
+    ImageFont = None
+
+try:
+    import openai
+except ImportError:
+    openai = None
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
 
-mongo_url = os.environ.get('MONGO_URL', 'mongodb://localhost:27017')
+mongo_url = os.environ.get('MONGO_URL')
+db_name = os.environ.get('DB_NAME', 'zitex_db')
 client = AsyncIOMotorClient(mongo_url)
-db = client[os.environ.get('DB_NAME', 'zitex_db')]
+db = client[db_name]
 
-app = FastAPI(title="Zitex API", description="AI-Powered Creative Platform")
+app = FastAPI(title="Zitex API")
 api_router = APIRouter(prefix="/api")
 
 security = HTTPBearer()
-JWT_SECRET = os.environ.get('JWT_SECRET', 'your-secret-key')
+JWT_SECRET = os.environ.get('JWT_SECRET', 'secret')
 OPENAI_API_KEY = os.environ.get('OPENAI_API_KEY')
-OWNER_WHATSAPP = os.environ.get('OWNER_WHATSAPP', '966507374438')
 ELEVENLABS_API_KEY = os.environ.get('ELEVENLABS_API_KEY')
 PAYPAL_CLIENT_ID = os.environ.get('PAYPAL_CLIENT_ID')
 PAYPAL_SECRET = os.environ.get('PAYPAL_SECRET')
 
-# Initialize OpenAI client
-openai_client = OpenAI(api_key=OPENAI_API_KEY) if OPENAI_API_KEY else None
+try:
+    import paypalrestsdk
+    if PAYPAL_CLIENT_ID and PAYPAL_SECRET:
+        paypalrestsdk.configure({"mode": "live", "client_id": PAYPAL_CLIENT_ID, "client_secret": PAYPAL_SECRET})
+except:
+    paypalrestsdk = None
 
-# Initialize PayPal
-import paypalrestsdk
-if PAYPAL_CLIENT_ID and PAYPAL_SECRET:
-    paypalrestsdk.configure({
-        "mode": "live",  # LIVE MODE - Production
-        "client_id": PAYPAL_CLIENT_ID,
-        "client_secret": PAYPAL_SECRET
-    })
+eleven_client = ElevenLabs(api_key=ELEVENLABS_API_KEY) if ElevenLabs and ELEVENLABS_API_KEY else None
 
-# Initialize ElevenLabs client
-eleven_client = ElevenLabs(api_key=ELEVENLABS_API_KEY) if ELEVENLABS_API_KEY else None
+```
 
+---
+
+**بعدها اضغط "Commit changes"** ✅
 # ============== MODELS ==============
 
 # Role levels: owner (100) > super_admin (80) > admin (50) > client (10)
