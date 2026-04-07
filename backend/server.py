@@ -703,7 +703,7 @@ async def generate_image(prompt: str, current_user: dict = Depends(get_current_u
     
     try:
         chat = LlmChat(
-            api_key=EMERGENT_LLM_KEY,
+            api_key=OPENAI_API_KEY,
             session_id=f"img-gen-{uuid.uuid4()}",
             system_message="You are an image generation assistant."
         ).with_model("gemini", "gemini-3-pro-image-preview").with_params(modalities=["image", "text"])
@@ -1059,7 +1059,7 @@ async def generate_suggestions(request_id: str, current_user: dict = Depends(get
             system_msg += " هذه تجربة مجانية، قدم ملخصاً موجزاً فقط."
         
         chat = LlmChat(
-            api_key=EMERGENT_LLM_KEY,
+            api_key=OPENAI_API_KEY,
             session_id=f"website-gen-{request_id}",
             system_message=system_msg
         ).with_model("openai", "gpt-5.2")
@@ -1874,7 +1874,7 @@ from services import AIAssistant, DeploymentService
 # Initialize AI Assistant
 ai_assistant = AIAssistant(
     db=db,
-    api_key=EMERGENT_LLM_KEY,
+    api_key=OPENAI_API_KEY,
     elevenlabs_key=ELEVENLABS_API_KEY
 )
 set_ai_assistant(ai_assistant)
