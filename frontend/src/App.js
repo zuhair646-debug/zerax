@@ -29,34 +29,59 @@ function App() {
   const [loading, setLoading] = React.useState(true);
 
   React.useEffect(() => {
-    const token = localStorage.getItem('token');
-    if (token) {
-      fetch(`${process.env.REACT_APP_BACKEND_URL}/api/auth/me`, {
-        headers: { 'Authorization': `Bearer ${token}` }
-      })
-        .then(res => res.json())
-        .then(data => {
-          if (data.id) {
+    const checkAuth = async () => {
+      const token = localStorage.getItem('token');
+      
+      if (!token) {
+        setLoading(false);
+        return;
+      }
+
+      try {
+        const response = await fetch(`${process.env.REACT_APP_BACKEND_URL}/api/auth/me`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+
+        if (response.ok) {
+          const data = await response.json();
+          if (data && data.id) {
             setUser(data);
           } else {
             localStorage.removeItem('token');
           }
-          setLoading(false);
-        })
-        .catch(() => {
+        } else {
           localStorage.removeItem('token');
-          setLoading(false);
-        });
-    } else {
-      setLoading(false);
-    }
+        }
+      } catch (error) {
+        console.error('Auth check failed:', error);
+        localStorage.removeItem('token');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    checkAuth();
   }, []);
 
   const ProtectedRoute = ({ children, adminOnly = false }) => {
-    if (loading) return <div className="flex items-center justify-center min-h-screen bg-slate-900 text-white">جاري التحميل...</div>;
-    if (!user) return <Navigate to="/login" />;
+    if (loading) {
+      return (
+        <div className="flex items-center justify-center min-h-screen bg-slate-900 text-white">
+          جاري التحميل...
+        </div>
+      );
+    }
+    
+    if (!user) {
+      return <Navigate to="/login" />;
+    }
+    
     const isAdmin = user.role === 'admin' || user.role === 'super_admin' || user.role === 'owner' || user.is_owner;
-    if (adminOnly && !isAdmin) return <Navigate to="/dashboard" />;
+    
+    if (adminOnly && !isAdmin) {
+      return <Navigate to="/dashboard" />;
+    }
+    
     return children;
   };
 
@@ -69,7 +94,6 @@ function App() {
           <Route path="/register" element={<RegisterPage setUser={setUser} />} />
           <Route path="/pricing" element={<PricingPage user={user} />} />
           <Route path="/payment" element={<ProtectedRoute><PaymentPage user={user} /></ProtectedRoute>} />
-          
           <Route path="/dashboard" element={<ProtectedRoute><ClientDashboard user={user} setUser={setUser} /></ProtectedRoute>} />
           <Route path="/dashboard/new-request" element={<ProtectedRoute><NewRequest user={user} /></ProtectedRoute>} />
           <Route path="/dashboard/requests" element={<ProtectedRoute><MyRequests user={user} /></ProtectedRoute>} />
@@ -77,7 +101,6 @@ function App() {
           <Route path="/dashboard/websites" element={<ProtectedRoute><MyWebsites user={user} /></ProtectedRoute>} />
           <Route path="/dashboard/images" element={<ProtectedRoute><ImageGenerator user={user} /></ProtectedRoute>} />
           <Route path="/dashboard/videos" element={<ProtectedRoute><VideoGenerator user={user} /></ProtectedRoute>} />
-          
           <Route path="/admin" element={<ProtectedRoute adminOnly><AdminDashboard user={user} /></ProtectedRoute>} />
           <Route path="/admin/requests" element={<ProtectedRoute adminOnly><AdminRequests user={user} /></ProtectedRoute>} />
           <Route path="/admin/payments" element={<ProtectedRoute adminOnly><AdminPayments user={user} /></ProtectedRoute>} />
