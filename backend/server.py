@@ -42,7 +42,11 @@ load_dotenv(ROOT_DIR / '.env')
 
 mongo_url = os.environ.get('MONGO_URL')
 db_name = os.environ.get('DB_NAME', 'zitex_db')
-client = AsyncIOMotorClient(mongo_url)
+# Disable TLS for Railway internal MongoDB
+if 'railway.internal' in str(mongo_url):
+    client = AsyncIOMotorClient(mongo_url, tls=False)
+else:
+    client = AsyncIOMotorClient(mongo_url)
 db = client[db_name]
 
 app = FastAPI(title="Zitex API")
