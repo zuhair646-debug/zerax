@@ -28,6 +28,14 @@ function App() {
   const [user, setUser] = React.useState(null);
   const [loading, setLoading] = React.useState(true);
 
+  // Custom setUser that also updates loading state
+  const handleSetUser = React.useCallback((userData) => {
+    setUser(userData);
+    if (userData) {
+      setLoading(false);
+    }
+  }, []);
+
   React.useEffect(() => {
     const checkAuth = async () => {
       const token = localStorage.getItem('token');
@@ -67,6 +75,7 @@ function App() {
     if (loading) {
       return (
         <div className="flex items-center justify-center min-h-screen bg-slate-900 text-white">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-white mr-3"></div>
           جاري التحميل...
         </div>
       );
@@ -90,11 +99,11 @@ function App() {
       <BrowserRouter>
         <Routes>
           <Route path="/" element={<LandingPage user={user} />} />
-          <Route path="/login" element={<LoginPage setUser={setUser} />} />
-          <Route path="/register" element={<RegisterPage setUser={setUser} />} />
+          <Route path="/login" element={user ? <Navigate to="/dashboard" /> : <LoginPage setUser={handleSetUser} />} />
+          <Route path="/register" element={user ? <Navigate to="/dashboard" /> : <RegisterPage setUser={handleSetUser} />} />
           <Route path="/pricing" element={<PricingPage user={user} />} />
           <Route path="/payment" element={<ProtectedRoute><PaymentPage user={user} /></ProtectedRoute>} />
-          <Route path="/dashboard" element={<ProtectedRoute><ClientDashboard user={user} setUser={setUser} /></ProtectedRoute>} />
+          <Route path="/dashboard" element={<ProtectedRoute><ClientDashboard user={user} setUser={handleSetUser} /></ProtectedRoute>} />
           <Route path="/dashboard/new-request" element={<ProtectedRoute><NewRequest user={user} /></ProtectedRoute>} />
           <Route path="/dashboard/requests" element={<ProtectedRoute><MyRequests user={user} /></ProtectedRoute>} />
           <Route path="/dashboard/requests/:id" element={<ProtectedRoute><RequestDetails user={user} /></ProtectedRoute>} />
