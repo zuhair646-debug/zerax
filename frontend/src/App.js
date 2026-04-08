@@ -23,7 +23,7 @@ import AdminActivity from '@/pages/AdminActivity';
 import AIChat from '@/pages/AIChat';
 import ProjectsPage from '@/pages/ProjectsPage';
 import '@/App.css';
-
+// Build trigger v2
 function App() {
   const [user, setUser] = React.useState(null);
   const [loading, setLoading] = React.useState(true);
