@@ -47,7 +47,9 @@ client = AsyncIOMotorClient(mongo_url)
 db = client[db_name]
 app = FastAPI(title="Zitex API")
 api_router = APIRouter(prefix="/api")
-
+@api_router.get("/health")
+async def health_check():
+    return {"status": "ok", "message": "Server is running"}
 security = HTTPBearer()
 JWT_SECRET = os.environ.get('JWT_SECRET', 'secret')
 OPENAI_API_KEY = os.environ.get('OPENAI_API_KEY')
