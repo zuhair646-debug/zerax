@@ -28,18 +28,14 @@ function App() {
   const [user, setUser] = React.useState(null);
   const [loading, setLoading] = React.useState(true);
 
-  // Custom setUser that also updates loading state
   const handleSetUser = React.useCallback((userData) => {
     setUser(userData);
-    if (userData) {
-      setLoading(false);
-    }
+    setLoading(false);
   }, []);
 
   React.useEffect(() => {
     const checkAuth = async () => {
       const token = localStorage.getItem('token');
-      
       if (!token) {
         setLoading(false);
         return;
@@ -49,7 +45,6 @@ function App() {
         const response = await fetch(`${process.env.REACT_APP_BACKEND_URL}/api/auth/me`, {
           headers: { 'Authorization': `Bearer ${token}` }
         });
-
         if (response.ok) {
           const data = await response.json();
           if (data && data.id) {
@@ -67,30 +62,14 @@ function App() {
         setLoading(false);
       }
     };
-
     checkAuth();
   }, []);
 
   const ProtectedRoute = ({ children, adminOnly = false }) => {
-    if (loading) {
-      return (
-        <div className="flex items-center justify-center min-h-screen bg-slate-900 text-white">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-white mr-3"></div>
-          جاري التحميل...
-        </div>
-      );
-    }
-    
-    if (!user) {
-      return <Navigate to="/login" />;
-    }
-    
+    if (loading) return <div className="flex items-center justify-center min-h-screen bg-slate-900 text-white"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-white mr-3"></div>جاري التحميل...</div>;
+    if (!user) return <Navigate to="/login" />;
     const isAdmin = user.role === 'admin' || user.role === 'super_admin' || user.role === 'owner' || user.is_owner;
-    
-    if (adminOnly && !isAdmin) {
-      return <Navigate to="/dashboard" />;
-    }
-    
+    if (adminOnly && !isAdmin) return <Navigate to="/dashboard" />;
     return children;
   };
 
