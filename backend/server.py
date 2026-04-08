@@ -47,6 +47,7 @@ client = AsyncIOMotorClient(mongo_url)
 db = client[db_name]
 app = FastAPI(title="Zitex API")
 api_router = APIRouter(prefix="/api")
+
 @api_router.get("/health")
 async def health_check():
     return {"status": "ok", "message": "Server is running"}
