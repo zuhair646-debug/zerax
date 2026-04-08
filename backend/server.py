@@ -44,7 +44,9 @@ mongo_url = os.environ.get('MONGO_URL')
 db_name = os.environ.get('DB_NAME', 'zitex_db')
 client = AsyncIOMotorClient(
     mongo_url,
-    serverSelectionTimeoutMS=5000
+    serverSelectionTimeoutMS=5000,
+    tls=False,
+    directConnection=True
 )
 db = client[db_name]
 
