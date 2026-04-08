@@ -42,12 +42,7 @@ load_dotenv(ROOT_DIR / '.env')
 
 mongo_url = os.environ.get('MONGO_URL')
 db_name = os.environ.get('DB_NAME', 'zitex_db')
-client = AsyncIOMotorClient(
-    mongo_url,
-    serverSelectionTimeoutMS=5000,
-    tls=False,
-    directConnection=True
-)
+client = AsyncIOMotorClient(mongo_url)
 db = client[db_name]
 
 app = FastAPI(title="Zitex API")
