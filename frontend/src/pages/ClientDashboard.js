@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Navbar } from '@/components/Navbar';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { useNavigate } from 'react-router-dom';
 import { PlusCircle, FileText, Globe, Image, Video, Coins, Crown, Gift, Sparkles } from 'lucide-react';
 
@@ -13,20 +13,23 @@ const ClientDashboard = ({ user, setUser }) => {
   useEffect(() => {
     const fetchStats = async () => {
       const token = localStorage.getItem('token');
+      
       if (!token) {
         setLoading(false);
         return;
       }
-      
+
       try {
+        const backendUrl = process.env.REACT_APP_BACKEND_URL;
+        
         const [requestsRes, websitesRes, userRes] = await Promise.all([
-          fetch(`${process.env.REACT_APP_BACKEND_URL}/api/requests`, {
+          fetch(`${backendUrl}/api/requests`, {
             headers: { 'Authorization': `Bearer ${token}` }
           }),
-          fetch(`${process.env.REACT_APP_BACKEND_URL}/api/websites`, {
+          fetch(`${backendUrl}/api/websites`, {
             headers: { 'Authorization': `Bearer ${token}` }
           }),
-          fetch(`${process.env.REACT_APP_BACKEND_URL}/api/auth/me`, {
+          fetch(`${backendUrl}/api/auth/me`, {
             headers: { 'Authorization': `Bearer ${token}` }
           })
         ]);
@@ -34,7 +37,7 @@ const ClientDashboard = ({ user, setUser }) => {
         const requests = requestsRes.ok ? await requestsRes.json() : [];
         const websites = websitesRes.ok ? await websitesRes.json() : [];
         const userData = userRes.ok ? await userRes.json() : null;
-        
+
         if (userData && userData.id) {
           setUser(userData);
         }
@@ -47,8 +50,9 @@ const ClientDashboard = ({ user, setUser }) => {
         });
       } catch (error) {
         console.error('Error fetching stats:', error);
+      } finally {
+        setLoading(false);
       }
-      setLoading(false);
     };
 
     fetchStats();
@@ -70,7 +74,7 @@ const ClientDashboard = ({ user, setUser }) => {
         <div className="mb-8 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
           <div>
             <h1 className="text-3xl font-bold text-white mb-2" data-testid="dashboard-title">
-              مرحباً، {user?.name}
+              مرحباً، {user?.name || 'مستخدم'}
               {user?.is_owner && <Crown className="w-6 h-6 inline ms-2 text-yellow-400" />}
             </h1>
             <p className="text-gray-400">إليك نظرة سريعة على حسابك</p>
@@ -82,10 +86,12 @@ const ClientDashboard = ({ user, setUser }) => {
         </div>
 
         {loading ? (
-          <div className="text-center py-12 text-white">جاري التحميل...</div>
+          <div className="text-center py-12 text-white">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-white mx-auto mb-4"></div>
+            جاري التحميل...
+          </div>
         ) : (
           <>
-            {/* Free Trials Banner */}
             {(user?.free_images > 0 || user?.free_videos > 0 || user?.free_website_trial) && (
               <Card className="bg-gradient-to-r from-green-500/20 to-emerald-500/20 border-green-500/30 mb-8">
                 <CardContent className="p-6">
@@ -117,7 +123,6 @@ const ClientDashboard = ({ user, setUser }) => {
               </Card>
             )}
 
-            {/* Stats Cards */}
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
               <Card className="bg-slate-800 border-slate-700">
                 <CardContent className="p-6">
@@ -157,12 +162,11 @@ const ClientDashboard = ({ user, setUser }) => {
               </Card>
             </div>
 
-            {/* Quick Actions */}
             <h2 className="text-xl font-semibold text-white mb-4">إجراءات سريعة</h2>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
               {quickActions.map((action, index) => (
-                <Card 
-                  key={index} 
+                <Card
+                  key={index}
                   className="bg-slate-800 border-slate-700 hover:border-slate-500 transition-all cursor-pointer group"
                   onClick={() => navigate(action.path)}
                 >
