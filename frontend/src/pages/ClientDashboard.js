@@ -12,9 +12,13 @@ const ClientDashboard = ({ user, setUser }) => {
 
   useEffect(() => {
     const fetchStats = async () => {
+      const token = localStorage.getItem('token');
+      if (!token) {
+        setLoading(false);
+        return;
+      }
+      
       try {
-        const token = localStorage.getItem('token');
-        
         const [requestsRes, websitesRes, userRes] = await Promise.all([
           fetch(`${process.env.REACT_APP_BACKEND_URL}/api/requests`, {
             headers: { 'Authorization': `Bearer ${token}` }
@@ -27,25 +31,24 @@ const ClientDashboard = ({ user, setUser }) => {
           })
         ]);
 
-        const requests = await requestsRes.json();
-        const websites = await websitesRes.json();
-        const userData = await userRes.json();
+        const requests = requestsRes.ok ? await requestsRes.json() : [];
+        const websites = websitesRes.ok ? await websitesRes.json() : [];
+        const userData = userRes.ok ? await userRes.json() : null;
         
-        if (userData.id) {
+        if (userData && userData.id) {
           setUser(userData);
         }
 
         setStats({
-          requests: requests.length || 0,
-          pending: (requests.filter?.(r => r.status === 'pending') || []).length,
-          completed: (requests.filter?.(r => r.status === 'completed') || []).length,
-          websites: websites.length || 0
+          requests: Array.isArray(requests) ? requests.length : 0,
+          pending: Array.isArray(requests) ? requests.filter(r => r.status === 'pending').length : 0,
+          completed: Array.isArray(requests) ? requests.filter(r => r.status === 'completed').length : 0,
+          websites: Array.isArray(websites) ? websites.length : 0
         });
       } catch (error) {
         console.error('Error fetching stats:', error);
-      } finally {
-        setLoading(false);
       }
+      setLoading(false);
     };
 
     fetchStats();
@@ -140,51 +143,52 @@ const ClientDashboard = ({ user, setUser }) => {
                     <Globe className="w-8 h-8 text-green-400" />
                     <span className="text-3xl font-bold text-white">{stats.websites}</span>
                   </div>
-                  <p className="text-sm text-gray-400">المواقع الجاهزة</p>
+                  <p className="text-sm text-gray-400">المواقع المنجزة</p>
                 </CardContent>
               </Card>
               <Card className="bg-slate-800 border-slate-700">
                 <CardContent className="p-6">
-                  <p className="text-sm text-gray-400 mb-1">الاشتراك الحالي</p>
-                  <p className="text-lg font-semibold text-white">
-                    {user?.is_owner ? 'مالك (مجاني)' : 
-                     user?.subscription_type === 'images' ? 'باقة الصور' :
-                     user?.subscription_type === 'videos' ? 'باقة الفيديو' : 'لا يوجد'}
-                  </p>
+                  <div className="flex items-center justify-between mb-2">
+                    <PlusCircle className="w-8 h-8 text-purple-400" />
+                    <span className="text-3xl font-bold text-white">{stats.pending}</span>
+                  </div>
+                  <p className="text-sm text-gray-400">قيد التنفيذ</p>
                 </CardContent>
               </Card>
             </div>
 
             {/* Quick Actions */}
-            <Card className="bg-slate-800 border-slate-700">
-              <CardHeader>
-                <CardTitle className="text-white">الإجراءات السريعة</CardTitle>
-                <CardDescription className="text-gray-400">اختر ما تريد فعله</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                  {quickActions.map((action, idx) => (
-                    <button
-                      key={idx}
-                      onClick={() => navigate(action.path)}
-                      className="p-6 rounded-xl bg-slate-700/50 hover:bg-slate-700 transition-all text-right group border border-slate-600 hover:border-slate-500 relative"
-                      data-testid={`action-${idx}`}
-                    >
-                      {action.badge && (
-                        <span className="absolute top-3 left-3 text-xs bg-green-500 text-white px-2 py-1 rounded-full">
-                          {action.badge}
-                        </span>
-                      )}
-                      <div className={`w-12 h-12 rounded-xl bg-gradient-to-br ${action.color} flex items-center justify-center text-white mb-4 group-hover:scale-110 transition-transform`}>
+            <h2 className="text-xl font-semibold text-white mb-4">إجراءات سريعة</h2>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {quickActions.map((action, index) => (
+                <Card 
+                  key={index} 
+                  className="bg-slate-800 border-slate-700 hover:border-slate-500 transition-all cursor-pointer group"
+                  onClick={() => navigate(action.path)}
+                >
+                  <CardContent className="p-6">
+                    <div className="flex items-start gap-4">
+                      <div className={`p-3 rounded-lg bg-gradient-to-r ${action.color} text-white`}>
                         {action.icon}
                       </div>
-                      <h3 className="text-lg font-semibold text-white mb-2">{action.title}</h3>
-                      <p className="text-sm text-gray-400">{action.desc}</p>
-                    </button>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2">
+                          <h3 className="font-semibold text-white group-hover:text-cyan-400 transition-colors">
+                            {action.title}
+                          </h3>
+                          {action.badge && (
+                            <span className="px-2 py-0.5 text-xs bg-green-500/20 text-green-400 rounded-full">
+                              {action.badge}
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-sm text-gray-400 mt-1">{action.desc}</p>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
           </>
         )}
       </div>
