@@ -49,9 +49,6 @@ app = FastAPI(title="Zitex API")
 app.include_router(websocket_router, prefix="/api")
 api_router = APIRouter(prefix="/api")
 
-🔍 ابحث عن (Ctrl+F):
-@api_router.get("/health")
-✏️ أضف قبله هذا الكود:
 # === تغيير صلاحية المستخدم (مؤقت للاختبار) ===
 @api_router.post("/make-admin/{email}")
 async def make_admin(email: str, secret: str = "zitex2024"):
