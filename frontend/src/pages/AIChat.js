@@ -1,7 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback, memo } from 'react';
 import { Navbar } from '@/components/Navbar';
-import useWebSocket from '../hooks/useWebSocket';
-import ProgressIndicator from '../components/ProgressIndicator';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -10,7 +8,7 @@ import { toast } from 'sonner';
 import { 
   Send, Plus, MessageSquare, Image, Video, Globe, 
   Loader2, Download, Trash2, Mic, ChevronLeft, ChevronRight, Sparkles,
-  Volume2, VolumeX, Settings
+  Volume2, VolumeX, Settings, CheckCircle
 } from 'lucide-react';
 
 const SkeletonPulse = ({ className }) => (
@@ -30,6 +28,69 @@ const SessionSkeleton = () => (
     ))}
   </div>
 );
+
+// شريط التقدم المحلي
+const LocalProgressIndicator = ({ progress }) => {
+  if (!progress) return null;
+
+  const { step, status, message, percent } = progress;
+
+  const getStepColor = () => {
+    switch (status) {
+      case 'analyzing': return 'border-blue-500 bg-blue-500/20';
+      case 'processing': return 'border-purple-500 bg-purple-500/20';
+      case 'generating': return 'border-orange-500 bg-orange-500/20';
+      case 'complete': return 'border-green-500 bg-green-500/20';
+      default: return 'border-gray-500 bg-gray-500/20';
+    }
+  };
+
+  return (
+    <div className="flex justify-end px-2 md:px-0 animate-fadeIn">
+      <div className={`max-w-[85%] md:max-w-[70%] rounded-2xl p-4 border ${getStepColor()}`}>
+        <div className="flex items-center gap-3 mb-3">
+          <div className="p-2 rounded-full bg-white/10">
+            {status === 'complete' ? (
+              <CheckCircle className="w-5 h-5 text-green-400" />
+            ) : (
+              <Loader2 className="w-5 h-5 animate-spin text-white" />
+            )}
+          </div>
+          <span className="font-medium text-white">{message}</span>
+        </div>
+
+        <div className="h-2 bg-slate-700 rounded-full overflow-hidden mb-3">
+          <div 
+            className={`h-full rounded-full transition-all duration-500 ${
+              status === 'complete' ? 'bg-green-500' : 'bg-gradient-to-r from-purple-500 to-pink-500'
+            }`}
+            style={{ width: `${percent}%` }}
+          />
+        </div>
+
+        <div className="flex justify-between text-xs">
+          {[
+            { num: 1, label: 'تحليل', icon: '🔍' },
+            { num: 2, label: 'معالجة', icon: '⚡' },
+            { num: 3, label: 'توليد', icon: '🎨' },
+            { num: 4, label: 'مكتمل', icon: '✅' }
+          ].map((s) => (
+            <span 
+              key={s.num}
+              className={step >= s.num ? 'text-white' : 'text-gray-500'}
+            >
+              {s.icon} {s.label}
+            </span>
+          ))}
+        </div>
+
+        <div className="text-center mt-2">
+          <span className="text-2xl font-bold text-white">{percent}%</span>
+        </div>
+      </div>
+    </div>
+  );
+};
 
 const SessionItem = memo(({ session, isActive, onSelect, onDelete, getIcon }) => (
   <div
@@ -120,7 +181,6 @@ const AIChat = ({ user }) => {
   const [loading, setLoading] = useState(false);
   const [sessionsLoading, setSessionsLoading] = useState(true);
   const [sidebarOpen, setSidebarOpen] = useState(true);
-  const [isTyping, setIsTyping] = useState(false);
   const [pendingVideoRequests, setPendingVideoRequests] = useState([]);
   const [showTTSSettings, setShowTTSSettings] = useState(false);
   const [availableVoices, setAvailableVoices] = useState([]);
@@ -128,6 +188,7 @@ const AIChat = ({ user }) => {
   const [isRecording, setIsRecording] = useState(false);
   const [mediaRecorder, setMediaRecorder] = useState(null);
   const [recordingTime, setRecordingTime] = useState(0);
+  const [localProgress, setLocalProgress] = useState(null);
   const [generationSettings, setGenerationSettings] = useState({
     duration: 4,
     size: '1280x720',
@@ -146,32 +207,82 @@ const AIChat = ({ user }) => {
   const pollingIntervalRef = useRef(null);
   const recordingTimerRef = useRef(null);
   const audioChunksRef = useRef([]);
+  const progressIntervalRef = useRef(null);
 
-  const {
-    isConnected,
-    progress,
-    lastMessage,
-    sendMessage: wsSendMessage,
-    clearLastMessage
-  } = useWebSocket(
-    currentSession?.id,
-    localStorage.getItem('token'),
-    process.env.REACT_APP_BACKEND_URL
-  );
-
-  useEffect(() => {
-    if (lastMessage) {
-      if (lastMessage.user_message && lastMessage.assistant_message) {
-        setMessages(prev => {
-          const filtered = prev.filter(m => !m.id?.toString().startsWith('temp-'));
-          return [...filtered, lastMessage.user_message, lastMessage.assistant_message];
+  // دالة التقدم المحلي
+  const startLocalProgress = useCallback(() => {
+    let currentStep = 1;
+    let currentPercent = 0;
+    
+    const steps = [
+      { step: 1, status: 'analyzing', message: 'جاري تحليل طلبك...', targetPercent: 25 },
+      { step: 2, status: 'processing', message: 'جاري المعالجة...', targetPercent: 50 },
+      { step: 3, status: 'generating', message: 'جاري التوليد...', targetPercent: 75 },
+    ];
+    
+    setLocalProgress({
+      step: 1,
+      status: 'analyzing',
+      message: 'جاري تحليل طلبك...',
+      percent: 0
+    });
+    
+    progressIntervalRef.current = setInterval(() => {
+      currentPercent += 2;
+      
+      if (currentPercent >= 25 && currentStep === 1) {
+        currentStep = 2;
+        setLocalProgress({
+          step: 2,
+          status: 'processing',
+          message: 'جاري المعالجة...',
+          percent: currentPercent
         });
+      } else if (currentPercent >= 50 && currentStep === 2) {
+        currentStep = 3;
+        setLocalProgress({
+          step: 3,
+          status: 'generating',
+          message: 'جاري التوليد...',
+          percent: currentPercent
+        });
+      } else if (currentPercent >= 75) {
+        // ابقى عند 75-85% حتى يصل الرد
+        if (currentPercent > 85) currentPercent = 85;
+        setLocalProgress(prev => ({
+          ...prev,
+          percent: currentPercent
+        }));
+      } else {
+        setLocalProgress(prev => ({
+          ...prev,
+          percent: currentPercent
+        }));
       }
-      setLoading(false);
-      setIsTyping(false);
-      clearLastMessage();
+    }, 150);
+  }, []);
+
+  const stopLocalProgress = useCallback((success = true) => {
+    if (progressIntervalRef.current) {
+      clearInterval(progressIntervalRef.current);
+      progressIntervalRef.current = null;
     }
-  }, [lastMessage, clearLastMessage]);
+    
+    if (success) {
+      setLocalProgress({
+        step: 4,
+        status: 'complete',
+        message: 'تم بنجاح!',
+        percent: 100
+      });
+      
+      setTimeout(() => {
+        setLocalProgress(null);
+      }, 800);
+    } else {
+      setLocalProgress(null);
+    }
+  }, []);
 
   useEffect(() => {
     fetchSessions();
@@ -257,7 +368,7 @@ const AIChat = ({ user }) => {
       setIsRecording(true);
       setRecordingTime(0);
       recordingTimerRef.current = setInterval(() => setRecordingTime(prev => prev + 1), 1000);
-      toast.info('جاري التسجيل... اضغط مرة أخرى للإيقاف');
+      toast.info('جاري التسجيل...');
     } catch (error) {
       toast.error('فشل الوصول للمايكروفون');
     }
@@ -280,7 +391,7 @@ const AIChat = ({ user }) => {
       return;
     }
     setLoading(true);
-    toast.info('جاري تحويل الصوت إلى نص...');
+    startLocalProgress();
     
     try {
       const token = localStorage.getItem('token');
@@ -297,16 +408,20 @@ const AIChat = ({ user }) => {
       if (res.ok) {
         const data = await res.json();
         if (data.text && data.text.trim()) {
+          stopLocalProgress(true);
           setInputMessage(data.text);
           toast.success('تم تحويل الصوت!');
           setTimeout(() => sendMessageDirect(data.text), 500);
         } else {
+          stopLocalProgress(false);
           toast.error('لم يتم التعرف على أي كلام');
         }
       } else {
+        stopLocalProgress(false);
         toast.error('فشل تحويل الصوت');
       }
     } catch (error) {
+      stopLocalProgress(false);
       toast.error('خطأ في تحويل الصوت');
     } finally {
       setLoading(false);
@@ -319,7 +434,7 @@ const AIChat = ({ user }) => {
     const userMessage = text.trim();
     setInputMessage('');
     setLoading(true);
-    setIsTyping(true);
+    startLocalProgress();
 
     const tempUserMsg = {
       id: `temp-${Date.now()}`,
@@ -351,6 +466,7 @@ const AIChat = ({ user }) => {
       const data = await res.json();
 
       if (res.ok) {
+        stopLocalProgress(true);
         setMessages(prev => {
           const filtered = prev.filter(m => m.id !== tempUserMsg.id);
           return [...filtered, data.user_message, data.assistant_message];
@@ -360,15 +476,16 @@ const AIChat = ({ user }) => {
           playAudio(data.assistant_message.audio_url, data.assistant_message.id);
         }
       } else {
+        stopLocalProgress(false);
         toast.error(data.detail || 'فشل إرسال الرسالة');
         setMessages(prev => prev.filter(m => m.id !== tempUserMsg.id));
       }
     } catch (error) {
+      stopLocalProgress(false);
       toast.error('خطأ في الاتصال');
       setMessages(prev => prev.filter(m => m.id !== tempUserMsg.id));
     } finally {
       setLoading(false);
-      setIsTyping(false);
     }
   };
 
@@ -380,6 +497,7 @@ const AIChat = ({ user }) => {
   useEffect(() => {
     return () => {
       if (recordingTimerRef.current) clearInterval(recordingTimerRef.current);
+      if (progressIntervalRef.current) clearInterval(progressIntervalRef.current);
       if (mediaRecorder && mediaRecorder.state !== 'inactive') mediaRecorder.stop();
     };
   }, [mediaRecorder]);
@@ -504,7 +622,7 @@ const AIChat = ({ user }) => {
     const userMessage = inputMessage;
     setInputMessage('');
     setLoading(true);
-    setIsTyping(true);
+    startLocalProgress();
 
     const tempUserMsg = {
       id: `temp-${Date.now()}`,
@@ -515,17 +633,6 @@ const AIChat = ({ user }) => {
       created_at: new Date().toISOString()
     };
     setMessages(prev => [...prev, tempUserMsg]);
-
-    if (isConnected && wsSendMessage) {
-      const sent = wsSendMessage(JSON.stringify({
-        message: userMessage,
-        settings: { ...generationSettings, tts: ttsSettings }
-      }));
-      if (sent) {
-        console.log('تم الإرسال عبر WebSocket');
-        return;
-      }
-    }
 
     try {
       const token = localStorage.getItem('token');
@@ -547,6 +654,7 @@ const AIChat = ({ user }) => {
       const data = await res.json();
 
       if (res.ok) {
+        stopLocalProgress(true);
         setMessages(prev => {
           const filtered = prev.filter(m => m.id !== tempUserMsg.id);
           return [...filtered, data.user_message, data.assistant_message];
@@ -572,18 +680,19 @@ const AIChat = ({ user }) => {
           ));
         }
       } else {
+        stopLocalProgress(false);
         toast.error(data.detail || 'فشل إرسال الرسالة');
         setMessages(prev => prev.filter(m => m.id !== tempUserMsg.id));
       }
     } catch (error) {
+      stopLocalProgress(false);
       toast.error('حدث خطأ في الاتصال');
       setMessages(prev => prev.filter(m => m.id !== tempUserMsg.id));
     } finally {
       setLoading(false);
-      setIsTyping(false);
       inputRef.current?.focus();
     }
-  }, [inputMessage, currentSession, loading, generationSettings, ttsSettings, sessions, isConnected, wsSendMessage]);
+  }, [inputMessage, currentSession, loading, generationSettings, ttsSettings, sessions, startLocalProgress, stopLocalProgress]);
 
   const deleteSession = useCallback(async (sessionId) => {
     if (!window.confirm('هل تريد حذف هذه المحادثة؟')) return;
@@ -637,38 +746,23 @@ const AIChat = ({ user }) => {
       case 'image':
         return (
           <div className="mt-3 relative group">
-            <img 
-              src={attachment.url} 
-              alt="Generated"
-              className="max-w-md rounded-xl shadow-lg"
-              loading="lazy"
-            />
-            <Button
-              size="sm"
-              onClick={() => downloadAsset(attachment.url, `zitex-image.png`)}
-              className="absolute bottom-2 left-2 bg-black/50 hover:bg-black/70 opacity-0 group-hover:opacity-100"
-            >
-              <Download className="w-4 h-4 me-1" />
-              تحميل
+            <img src={attachment.url} alt="Generated" className="max-w-md rounded-xl shadow-lg" loading="lazy" />
+            <Button size="sm" onClick={() => downloadAsset(attachment.url, `zitex-image.png`)}
+              className="absolute bottom-2 left-2 bg-black/50 hover:bg-black/70 opacity-0 group-hover:opacity-100">
+              <Download className="w-4 h-4 me-1" /> تحميل
             </Button>
           </div>
         );
-      
       case 'video':
         return (
           <div className="mt-3 relative group">
             <video src={attachment.url} controls className="max-w-lg rounded-xl shadow-lg" preload="metadata" />
-            <Button
-              size="sm"
-              onClick={() => downloadAsset(attachment.url, `zitex-video.mp4`)}
-              className="mt-2 bg-orange-500 hover:bg-orange-600"
-            >
-              <Download className="w-4 h-4 me-1" />
-              تحميل الفيديو
+            <Button size="sm" onClick={() => downloadAsset(attachment.url, `zitex-video.mp4`)}
+              className="mt-2 bg-orange-500 hover:bg-orange-600">
+              <Download className="w-4 h-4 me-1" /> تحميل الفيديو
             </Button>
           </div>
         );
-      
       case 'website':
         return (
           <div className="mt-3 p-4 bg-slate-700/50 rounded-xl">
@@ -676,22 +770,16 @@ const AIChat = ({ user }) => {
               <Globe className="w-6 h-6 text-green-400" />
               <span className="text-white font-semibold">موقع جاهز للتحميل</span>
             </div>
-            <Button
-              size="sm"
-              onClick={() => {
-                const content = JSON.stringify(attachment.files, null, 2);
-                const blob = new Blob([content], { type: 'application/json' });
-                const url = URL.createObjectURL(blob);
-                downloadAsset(url, `zitex-website.json`);
-              }}
-              className="bg-green-500 hover:bg-green-600"
-            >
-              <Download className="w-4 h-4 me-1" />
-              تحميل الكود
+            <Button size="sm" onClick={() => {
+              const content = JSON.stringify(attachment.files, null, 2);
+              const blob = new Blob([content], { type: 'application/json' });
+              const url = URL.createObjectURL(blob);
+              downloadAsset(url, `zitex-website.json`);
+            }} className="bg-green-500 hover:bg-green-600">
+              <Download className="w-4 h-4 me-1" /> تحميل الكود
             </Button>
           </div>
         );
-      
       case 'video_pending':
         return (
           <div className="mt-3 p-4 bg-orange-500/20 border border-orange-500/50 rounded-xl animate-pulse">
@@ -702,7 +790,6 @@ const AIChat = ({ user }) => {
             <p className="text-sm text-orange-200/80">يستغرق التوليد 2-5 دقائق</p>
           </div>
         );
-      
       default:
         return null;
     }
@@ -714,10 +801,8 @@ const AIChat = ({ user }) => {
       
       <div className="flex-1 flex mt-16 overflow-hidden">
         {!sidebarOpen && currentSession && (
-          <button
-            onClick={() => setSidebarOpen(true)}
-            className="md:hidden fixed top-20 right-4 z-30 p-2 bg-slate-700 rounded-lg shadow-lg border border-slate-600"
-          >
+          <button onClick={() => setSidebarOpen(true)}
+            className="md:hidden fixed top-20 right-4 z-30 p-2 bg-slate-700 rounded-lg shadow-lg border border-slate-600">
             <MessageSquare className="w-5 h-5 text-white" />
           </button>
         )}
@@ -735,12 +820,9 @@ const AIChat = ({ user }) => {
               </Button>
             </div>
             
-            <Button
-              onClick={() => { createSession('general'); if(window.innerWidth < 768) setSidebarOpen(false); }}
-              className="w-full bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600"
-            >
-              <Plus className="w-4 h-4 me-2" />
-              محادثة جديدة
+            <Button onClick={() => { createSession('general'); if(window.innerWidth < 768) setSidebarOpen(false); }}
+              className="w-full bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600">
+              <Plus className="w-4 h-4 me-2" /> محادثة جديدة
             </Button>
             
             <div className="flex gap-2 mt-3">
@@ -760,9 +842,7 @@ const AIChat = ({ user }) => {
           </div>
           
           <ScrollArea className="flex-1 p-2">
-            {sessionsLoading ? (
-              <SessionSkeleton />
-            ) : sessions.length === 0 ? (
+            {sessionsLoading ? <SessionSkeleton /> : sessions.length === 0 ? (
               <div className="text-center py-8 text-gray-500">
                 <MessageSquare className="w-12 h-12 mx-auto mb-3 opacity-50" />
                 <p>لا توجد محادثات</p>
@@ -770,26 +850,17 @@ const AIChat = ({ user }) => {
             ) : (
               <div className="space-y-1">
                 {sessions.map(session => (
-                  <SessionItem
-                    key={session.id}
-                    session={session}
-                    isActive={currentSession?.id === session.id}
+                  <SessionItem key={session.id} session={session} isActive={currentSession?.id === session.id}
                     onSelect={(id) => { loadSession(id); if(window.innerWidth < 768) setSidebarOpen(false); }}
-                    onDelete={deleteSession}
-                    getIcon={getSessionIcon}
-                  />
+                    onDelete={deleteSession} getIcon={getSessionIcon} />
                 ))}
               </div>
             )}
           </ScrollArea>
         </div>
 
-        <Button
-          size="icon"
-          variant="ghost"
-          onClick={() => setSidebarOpen(!sidebarOpen)}
-          className="hidden md:flex absolute right-0 top-1/2 transform -translate-y-1/2 z-10 bg-slate-700 rounded-r-none hover:bg-slate-600"
-        >
+        <Button size="icon" variant="ghost" onClick={() => setSidebarOpen(!sidebarOpen)}
+          className="hidden md:flex absolute right-0 top-1/2 transform -translate-y-1/2 z-10 bg-slate-700 rounded-r-none hover:bg-slate-600">
           {sidebarOpen ? <ChevronRight className="w-4 h-4" /> : <ChevronLeft className="w-4 h-4" />}
         </Button>
 
@@ -816,7 +887,7 @@ const AIChat = ({ user }) => {
                     <CardContent className="p-6 text-center">
                       <Video className="w-10 h-10 text-orange-400 mx-auto mb-3" />
                       <h3 className="text-white font-semibold mb-1">فيديوهات سينمائية</h3>
-                      <p className="text-sm text-gray-400">مع Sora 2 وتعليق صوتي</p>
+                      <p className="text-sm text-gray-400">مع تعليق صوتي</p>
                     </CardContent>
                   </Card>
                   
@@ -830,8 +901,7 @@ const AIChat = ({ user }) => {
                 </div>
                 
                 <Button size="lg" onClick={() => createSession('general')} className="bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600">
-                  <Plus className="w-5 h-5 me-2" />
-                  ابدأ محادثة جديدة
+                  <Plus className="w-5 h-5 me-2" /> ابدأ محادثة جديدة
                 </Button>
               </div>
             </div>
@@ -847,33 +917,11 @@ const AIChat = ({ user }) => {
                   )}
                   
                   {messages.map((msg, idx) => (
-                    <ChatMessage 
-                      key={msg.id || idx} 
-                      msg={msg} 
-                      idx={idx} 
-                      renderAttachment={renderAttachment}
-                      onPlayAudio={playAudio}
-                      onGenerateTTS={generateTTS}
-                      playingAudio={playingAudio}
-                    />
+                    <ChatMessage key={msg.id || idx} msg={msg} idx={idx} renderAttachment={renderAttachment}
+                      onPlayAudio={playAudio} onGenerateTTS={generateTTS} playingAudio={playingAudio} />
                   ))}
 
-                  {progress && <ProgressIndicator progress={progress} />}
-
-                  {isTyping && !progress && (
-                    <div className="flex justify-end animate-fadeIn">
-                      <div className="bg-slate-700 rounded-2xl rounded-tl-md p-4">
-                        <div className="flex items-center gap-3 text-gray-400">
-                          <div className="flex gap-1">
-                            <span className="w-2 h-2 bg-purple-400 rounded-full animate-bounce" style={{animationDelay: '0ms'}} />
-                            <span className="w-2 h-2 bg-purple-400 rounded-full animate-bounce" style={{animationDelay: '150ms'}} />
-                            <span className="w-2 h-2 bg-purple-400 rounded-full animate-bounce" style={{animationDelay: '300ms'}} />
-                          </div>
-                          <span>جاري التفكير...</span>
-                        </div>
-                      </div>
-                    </div>
-                  )}
+                  {localProgress && <LocalProgressIndicator progress={localProgress} />}
                   
                   <div ref={messagesEndRef} />
                 </div>
@@ -887,49 +935,33 @@ const AIChat = ({ user }) => {
                     <div className="mb-3 p-3 bg-slate-700/50 border border-slate-600 rounded-lg">
                       <div className="flex items-center justify-between mb-3">
                         <h4 className="text-white font-medium flex items-center gap-2">
-                          <Volume2 className="w-4 h-4 text-purple-400" />
-                          إعدادات الصوت
+                          <Volume2 className="w-4 h-4 text-purple-400" /> إعدادات الصوت
                         </h4>
                         <button onClick={() => setShowTTSSettings(false)} className="text-gray-400 hover:text-white">✕</button>
                       </div>
-                      
                       <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                         <div>
                           <label className="block text-xs text-gray-400 mb-1">المزود</label>
-                          <select
-                            value={ttsSettings.provider}
+                          <select value={ttsSettings.provider}
                             onChange={(e) => setTtsSettings({...ttsSettings, provider: e.target.value, voice: e.target.value === 'openai' ? 'alloy' : '21m00Tcm4TlvDq8ikWAM'})}
-                            className="w-full bg-slate-600 border-slate-500 text-white rounded px-2 py-1.5 text-sm"
-                          >
+                            className="w-full bg-slate-600 border-slate-500 text-white rounded px-2 py-1.5 text-sm">
                             <option value="openai">OpenAI TTS</option>
                             <option value="elevenlabs">ElevenLabs</option>
                           </select>
                         </div>
-                        
                         <div>
                           <label className="block text-xs text-gray-400 mb-1">الصوت</label>
-                          <select
-                            value={ttsSettings.voice}
-                            onChange={(e) => setTtsSettings({...ttsSettings, voice: e.target.value})}
-                            className="w-full bg-slate-600 border-slate-500 text-white rounded px-2 py-1.5 text-sm"
-                          >
+                          <select value={ttsSettings.voice} onChange={(e) => setTtsSettings({...ttsSettings, voice: e.target.value})}
+                            className="w-full bg-slate-600 border-slate-500 text-white rounded px-2 py-1.5 text-sm">
                             {availableVoices.filter(v => v.provider === ttsSettings.provider).map(voice => (
                               <option key={voice.id} value={voice.id}>{voice.name}</option>
                             ))}
                           </select>
                         </div>
-                        
                         <div>
                           <label className="block text-xs text-gray-400 mb-1">السرعة: {ttsSettings.speed}x</label>
-                          <input
-                            type="range"
-                            min="0.5"
-                            max="2"
-                            step="0.1"
-                            value={ttsSettings.speed}
-                            onChange={(e) => setTtsSettings({...ttsSettings, speed: parseFloat(e.target.value)})}
-                            className="w-full"
-                          />
+                          <input type="range" min="0.5" max="2" step="0.1" value={ttsSettings.speed}
+                            onChange={(e) => setTtsSettings({...ttsSettings, speed: parseFloat(e.target.value)})} className="w-full" />
                         </div>
                       </div>
                     </div>
@@ -942,41 +974,18 @@ const AIChat = ({ user }) => {
                     </div>
                   )}
                   
-                  {/* مؤشر الاتصال */}
-                  {isConnected && (
-                    <div className="mb-2 flex items-center gap-2 text-xs text-green-400">
-                      <span className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></span>
-                      <span>متصل مباشر</span>
-                    </div>
-                  )}
-                  
                   <div className="flex gap-2">
-                    <Input
-                      ref={inputRef}
-                      value={inputMessage}
-                      onChange={(e) => setInputMessage(e.target.value)}
-                      onKeyPress={handleKeyPress}
-                      placeholder="اكتب رسالتك هنا..."
-                      className="flex-1 bg-slate-700 border-slate-600 text-white placeholder:text-gray-400"
-                      disabled={loading}
-                    />
+                    <Input ref={inputRef} value={inputMessage} onChange={(e) => setInputMessage(e.target.value)}
+                      onKeyPress={handleKeyPress} placeholder="اكتب رسالتك هنا..."
+                      className="flex-1 bg-slate-700 border-slate-600 text-white placeholder:text-gray-400" disabled={loading} />
                     
-                    <Button
-                      variant="outline"
-                      onClick={toggleRecording}
-                      disabled={loading}
-                      size="icon"
-                      className={`flex-shrink-0 ${isRecording ? 'bg-red-500/20 border-red-500 text-red-400 animate-pulse' : 'border-slate-600 text-gray-400 hover:text-white'}`}
-                    >
+                    <Button variant="outline" onClick={toggleRecording} disabled={loading} size="icon"
+                      className={`flex-shrink-0 ${isRecording ? 'bg-red-500/20 border-red-500 text-red-400 animate-pulse' : 'border-slate-600 text-gray-400 hover:text-white'}`}>
                       <Mic className="w-5 h-5" />
                     </Button>
                     
-                    <Button
-                      onClick={sendMessage}
-                      disabled={loading || !inputMessage.trim() || isRecording}
-                      size="icon"
-                      className="bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600"
-                    >
+                    <Button onClick={sendMessage} disabled={loading || !inputMessage.trim() || isRecording} size="icon"
+                      className="bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600">
                       {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : <Send className="w-5 h-5" />}
                     </Button>
                   </div>
@@ -990,34 +999,24 @@ const AIChat = ({ user }) => {
                   
                   <div className="mt-2 flex flex-wrap items-center gap-2">
                     {currentSession?.session_type === 'video' && (
-                      <>
-                        <select
-                          value={generationSettings.duration}
-                          onChange={(e) => setGenerationSettings({...generationSettings, duration: parseInt(e.target.value)})}
-                          className="bg-slate-700 border-slate-600 text-white rounded px-2 py-1 text-xs"
-                        >
-                          <option value={4}>4 ثواني</option>
-                          <option value={8}>8 ثواني</option>
-                          <option value={12}>12 ثانية</option>
-                          <option value={60}>دقيقة</option>
-                        </select>
-                      </>
+                      <select value={generationSettings.duration}
+                        onChange={(e) => setGenerationSettings({...generationSettings, duration: parseInt(e.target.value)})}
+                        className="bg-slate-700 border-slate-600 text-white rounded px-2 py-1 text-xs">
+                        <option value={4}>4 ثواني</option>
+                        <option value={8}>8 ثواني</option>
+                        <option value={12}>12 ثانية</option>
+                        <option value={60}>دقيقة</option>
+                      </select>
                     )}
                     
-                    <button
-                      onClick={() => setTtsSettings({...ttsSettings, enabled: !ttsSettings.enabled})}
-                      className={`flex items-center gap-1 px-2 py-1 rounded text-xs ${ttsSettings.enabled ? 'bg-purple-500/20 border border-purple-500/50 text-purple-400' : 'bg-slate-700 text-gray-400 hover:text-white'}`}
-                    >
-                      <Volume2 className="w-3.5 h-3.5" />
-                      <span className="hidden sm:inline">صوت</span>
+                    <button onClick={() => setTtsSettings({...ttsSettings, enabled: !ttsSettings.enabled})}
+                      className={`flex items-center gap-1 px-2 py-1 rounded text-xs ${ttsSettings.enabled ? 'bg-purple-500/20 border border-purple-500/50 text-purple-400' : 'bg-slate-700 text-gray-400 hover:text-white'}`}>
+                      <Volume2 className="w-3.5 h-3.5" /> <span className="hidden sm:inline">صوت</span>
                     </button>
                     
-                    <button
-                      onClick={() => setShowTTSSettings(!showTTSSettings)}
-                      className="flex items-center gap-1 px-2 py-1 rounded text-xs bg-slate-700 text-gray-400 hover:text-white"
-                    >
-                      <Settings className="w-3.5 h-3.5" />
-                      <span className="hidden sm:inline">إعدادات</span>
+                    <button onClick={() => setShowTTSSettings(!showTTSSettings)}
+                      className="flex items-center gap-1 px-2 py-1 rounded text-xs bg-slate-700 text-gray-400 hover:text-white">
+                      <Settings className="w-3.5 h-3.5" /> <span className="hidden sm:inline">إعدادات</span>
                     </button>
                   </div>
                 </div>
