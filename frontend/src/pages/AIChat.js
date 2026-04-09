@@ -12,8 +12,6 @@ import {
   Loader2, Download, Trash2, Mic, ChevronLeft, ChevronRight, Sparkles,
   Volume2, VolumeX, Settings
 } from 'lucide-react';
-import useWebSocket from '../hooks/useWebSocket';
-import ProgressIndicator from '../components/ProgressIndicator';
 // ============== Loading Skeleton ==============
 const SkeletonPulse = ({ className }) => (
   <div className={`animate-pulse bg-slate-700 rounded ${className}`} />
