@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback, memo, lazy, Suspense } from 'react';
+import React, { useState, useEffect, useRef, useCallback, memo } from 'react';
 import { Navbar } from '@/components/Navbar';
 import useWebSocket from '../hooks/useWebSocket';
 import ProgressIndicator from '../components/ProgressIndicator';
@@ -12,7 +12,7 @@ import {
   Loader2, Download, Trash2, Mic, ChevronLeft, ChevronRight, Sparkles,
   Volume2, VolumeX, Settings
 } from 'lucide-react';
-// ============== Loading Skeleton ==============
+
 const SkeletonPulse = ({ className }) => (
   <div className={`animate-pulse bg-slate-700 rounded ${className}`} />
 );
@@ -31,23 +31,12 @@ const SessionSkeleton = () => (
   </div>
 );
 
-const MessageSkeleton = () => (
-  <div className="flex justify-end">
-    <div className="bg-slate-700 rounded-2xl rounded-tl-md p-4 max-w-[60%]">
-      <SkeletonPulse className="h-4 w-48 mb-2" />
-      <SkeletonPulse className="h-4 w-32" />
-    </div>
-  </div>
-);
-
-// ============== Memoized Components ==============
 const SessionItem = memo(({ session, isActive, onSelect, onDelete, getIcon }) => (
   <div
     className={`group flex items-center gap-2 p-3 rounded-lg cursor-pointer transition-all duration-200 ${
       isActive ? 'bg-slate-700 shadow-lg' : 'hover:bg-slate-700/50'
     }`}
     onClick={() => onSelect(session.id)}
-    data-testid={`session-${session.id}`}
   >
     <div className={`p-2 rounded-lg transition-colors ${
       session.session_type === 'image' ? 'bg-purple-500/20 text-purple-400' :
@@ -65,26 +54,23 @@ const SessionItem = memo(({ session, isActive, onSelect, onDelete, getIcon }) =>
       size="icon"
       variant="ghost"
       onClick={(e) => { e.stopPropagation(); onDelete(session.id); }}
-      className="opacity-0 group-hover:opacity-100 h-8 w-8 text-gray-400 hover:text-red-400 transition-opacity"
+      className="opacity-0 group-hover:opacity-100 h-8 w-8 text-gray-400 hover:text-red-400"
     >
       <Trash2 className="w-4 h-4" />
     </Button>
   </div>
 ));
 
-const ChatMessage = memo(({ msg, idx, renderAttachment, onPlayAudio, onGenerateTTS, playingAudio, ttsEnabled }) => {
+const ChatMessage = memo(({ msg, idx, renderAttachment, onPlayAudio, onGenerateTTS, playingAudio }) => {
   const [isExpanded, setIsExpanded] = useState(false);
-  const maxLength = 300; // الحد الأقصى للأحرف قبل "المزيد"
+  const maxLength = 300;
   const shouldTruncate = msg.content && msg.content.length > maxLength;
   const displayContent = shouldTruncate && !isExpanded 
     ? msg.content.slice(0, maxLength) + '...' 
     : msg.content;
 
   return (
-    <div
-      className={`flex ${msg.role === 'user' ? 'justify-start' : 'justify-end'} animate-fadeIn px-2 md:px-0`}
-      data-testid={`message-${idx}`}
-    >
+    <div className={`flex ${msg.role === 'user' ? 'justify-start' : 'justify-end'} animate-fadeIn px-2 md:px-0`}>
       <div className={`max-w-[95%] md:max-w-[80%] ${
         msg.role === 'user' 
           ? 'bg-blue-600 rounded-2xl rounded-tr-md' 
@@ -96,9 +82,9 @@ const ChatMessage = memo(({ msg, idx, renderAttachment, onPlayAudio, onGenerateT
         {shouldTruncate && (
           <button
             onClick={() => setIsExpanded(!isExpanded)}
-            className="text-purple-400 hover:text-purple-300 text-xs md:text-sm mt-2 font-medium transition-colors"
+            className="text-purple-400 hover:text-purple-300 text-xs md:text-sm mt-2 font-medium"
           >
-            {isExpanded ? '🔼 عرض أقل' : '🔽 عرض المزيد'}
+            {isExpanded ? 'عرض أقل' : 'عرض المزيد'}
           </button>
         )}
         {msg.attachments?.map((attachment, aIdx) => (
@@ -116,13 +102,8 @@ const ChatMessage = memo(({ msg, idx, renderAttachment, onPlayAudio, onGenerateT
                   ? 'bg-purple-500 text-white' 
                   : 'bg-slate-600 hover:bg-slate-500 text-gray-300'
               }`}
-              title={msg.audio_url ? 'تشغيل الصوت' : 'توليد صوت'}
             >
-              {playingAudio === msg.id ? (
-                <VolumeX className="w-4 h-4" />
-              ) : (
-                <Volume2 className="w-4 h-4" />
-              )}
+              {playingAudio === msg.id ? <VolumeX className="w-4 h-4" /> : <Volume2 className="w-4 h-4" />}
             </button>
           )}
         </div>
@@ -131,7 +112,6 @@ const ChatMessage = memo(({ msg, idx, renderAttachment, onPlayAudio, onGenerateT
   );
 });
 
-// ============== Main Component ==============
 const AIChat = ({ user }) => {
   const [sessions, setSessions] = useState([]);
   const [currentSession, setCurrentSession] = useState(null);
@@ -166,7 +146,7 @@ const AIChat = ({ user }) => {
   const pollingIntervalRef = useRef(null);
   const recordingTimerRef = useRef(null);
   const audioChunksRef = useRef([]);
-  // WebSocket للشات الحي
+
   const {
     isConnected,
     progress,
@@ -179,12 +159,11 @@ const AIChat = ({ user }) => {
     process.env.REACT_APP_BACKEND_URL
   );
 
-  // معالجة رسائل WebSocket
   useEffect(() => {
     if (lastMessage) {
       if (lastMessage.user_message && lastMessage.assistant_message) {
         setMessages(prev => {
-          const filtered = prev.filter(m => !m.id?.startsWith('temp-'));
+          const filtered = prev.filter(m => !m.id?.toString().startsWith('temp-'));
           return [...filtered, lastMessage.user_message, lastMessage.assistant_message];
         });
       }
@@ -193,6 +172,7 @@ const AIChat = ({ user }) => {
       clearLastMessage();
     }
   }, [lastMessage, clearLastMessage]);
+
   useEffect(() => {
     fetchSessions();
     fetchVoices();
@@ -247,8 +227,6 @@ const AIChat = ({ user }) => {
       if (res.ok) {
         const data = await res.json();
         playAudio(data.audio_url, messageId);
-        
-        // Update message with audio
         setMessages(prev => prev.map(m => 
           m.id === messageId ? { ...m, audio_url: data.audio_url } : m
         ));
@@ -258,18 +236,14 @@ const AIChat = ({ user }) => {
     }
   };
 
-  // ============== Voice Recording Functions ==============
   const startRecording = async () => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       const recorder = new MediaRecorder(stream, { mimeType: 'audio/webm' });
-      
       audioChunksRef.current = [];
       
       recorder.ondataavailable = (e) => {
-        if (e.data.size > 0) {
-          audioChunksRef.current.push(e.data);
-        }
+        if (e.data.size > 0) audioChunksRef.current.push(e.data);
       };
       
       recorder.onstop = async () => {
@@ -278,20 +252,14 @@ const AIChat = ({ user }) => {
         await transcribeAudio(audioBlob);
       };
       
-      recorder.start(100); // Collect data every 100ms
+      recorder.start(100);
       setMediaRecorder(recorder);
       setIsRecording(true);
       setRecordingTime(0);
-      
-      // Start timer
-      recordingTimerRef.current = setInterval(() => {
-        setRecordingTime(prev => prev + 1);
-      }, 1000);
-      
-      toast.info('🎤 جاري التسجيل... اضغط مرة أخرى للإيقاف');
+      recordingTimerRef.current = setInterval(() => setRecordingTime(prev => prev + 1), 1000);
+      toast.info('جاري التسجيل... اضغط مرة أخرى للإيقاف');
     } catch (error) {
-      console.error('Recording error:', error);
-      toast.error('فشل الوصول للمايكروفون. تأكد من إعطاء الصلاحية.');
+      toast.error('فشل الوصول للمايكروفون');
     }
   };
 
@@ -299,8 +267,6 @@ const AIChat = ({ user }) => {
     if (mediaRecorder && mediaRecorder.state !== 'inactive') {
       mediaRecorder.stop();
       setIsRecording(false);
-      
-      // Stop timer
       if (recordingTimerRef.current) {
         clearInterval(recordingTimerRef.current);
         recordingTimerRef.current = null;
@@ -313,9 +279,8 @@ const AIChat = ({ user }) => {
       toast.error('اختر محادثة أولاً');
       return;
     }
-    
     setLoading(true);
-    toast.info('🔄 جاري تحويل الصوت إلى نص...');
+    toast.info('جاري تحويل الصوت إلى نص...');
     
     try {
       const token = localStorage.getItem('token');
@@ -332,30 +297,23 @@ const AIChat = ({ user }) => {
       if (res.ok) {
         const data = await res.json();
         if (data.text && data.text.trim()) {
-          // Set the transcribed text as input and auto-send
           setInputMessage(data.text);
-          toast.success('✅ تم تحويل الصوت!');
-          
-          // Auto-send after a short delay
-          setTimeout(() => {
-            sendMessageWithText(data.text);
-          }, 500);
+          toast.success('تم تحويل الصوت!');
+          setTimeout(() => sendMessageDirect(data.text), 500);
         } else {
           toast.error('لم يتم التعرف على أي كلام');
         }
       } else {
-        const error = await res.json();
-        toast.error(error.detail || 'فشل تحويل الصوت');
+        toast.error('فشل تحويل الصوت');
       }
     } catch (error) {
-      console.error('Transcription error:', error);
       toast.error('خطأ في تحويل الصوت');
     } finally {
       setLoading(false);
     }
   };
 
-  const sendMessageWithText = async (text) => {
+  const sendMessageDirect = async (text) => {
     if (!text.trim() || !currentSession) return;
     
     const userMessage = text.trim();
@@ -385,10 +343,7 @@ const AIChat = ({ user }) => {
           },
           body: JSON.stringify({
             message: userMessage,
-            settings: {
-              ...generationSettings,
-              tts: ttsSettings
-            }
+            settings: { ...generationSettings, tts: ttsSettings }
           })
         }
       );
@@ -401,18 +356,8 @@ const AIChat = ({ user }) => {
           return [...filtered, data.user_message, data.assistant_message];
         });
         
-        // Auto-play audio if TTS is enabled
         if (ttsSettings.enabled && data.assistant_message?.audio_url) {
           playAudio(data.assistant_message.audio_url, data.assistant_message.id);
-        }
-
-        // Check for pending video requests
-        const videoPendingAttachment = data.assistant_message?.attachments?.find(
-          a => a.type === 'video_pending'
-        );
-        if (videoPendingAttachment && videoPendingAttachment.requests) {
-          setPendingVideoRequests(prev => [...prev, ...videoPendingAttachment.requests]);
-          toast.info('🎬 جاري توليد الفيديو في الخلفية...');
         }
       } else {
         toast.error(data.detail || 'فشل إرسال الرسالة');
@@ -428,37 +373,24 @@ const AIChat = ({ user }) => {
   };
 
   const toggleRecording = () => {
-    if (isRecording) {
-      stopRecording();
-    } else {
-      startRecording();
-    }
+    if (isRecording) stopRecording();
+    else startRecording();
   };
 
-  // Cleanup recording on unmount
   useEffect(() => {
     return () => {
-      if (recordingTimerRef.current) {
-        clearInterval(recordingTimerRef.current);
-      }
-      if (mediaRecorder && mediaRecorder.state !== 'inactive') {
-        mediaRecorder.stop();
-      }
+      if (recordingTimerRef.current) clearInterval(recordingTimerRef.current);
+      if (mediaRecorder && mediaRecorder.state !== 'inactive') mediaRecorder.stop();
     };
   }, [mediaRecorder]);
 
-  // Polling for video requests status
   useEffect(() => {
     if (pendingVideoRequests.length > 0 && currentSession) {
-      // Start polling every 5 seconds
       pollingIntervalRef.current = setInterval(async () => {
         await checkVideoRequestsStatus();
       }, 5000);
-      
       return () => {
-        if (pollingIntervalRef.current) {
-          clearInterval(pollingIntervalRef.current);
-        }
+        if (pollingIntervalRef.current) clearInterval(pollingIntervalRef.current);
       };
     }
   }, [pendingVideoRequests, currentSession]);
@@ -477,39 +409,15 @@ const AIChat = ({ user }) => {
         const requests = await res.json();
         const completedRequests = requests.filter(r => r.status === 'completed');
         const stillPending = requests.filter(r => r.status === 'pending' || r.status === 'processing');
-        const failedRequests = requests.filter(r => r.status === 'failed');
         
-        // Handle completed videos - reload session to get new messages
         if (completedRequests.length > 0) {
-          const newlyCompleted = completedRequests.filter(
-            r => pendingVideoRequests.some(p => p.id === r.id)
-          );
-          
-          if (newlyCompleted.length > 0) {
-            toast.success(`✅ تم توليد ${newlyCompleted.length} فيديو بنجاح!`);
-            // Reload the session to get new messages with videos
-            await loadSession(currentSession.id);
-          }
+          toast.success(`تم توليد ${completedRequests.length} فيديو بنجاح!`);
+          await loadSession(currentSession.id);
         }
         
-        // Handle failed requests
-        if (failedRequests.length > 0) {
-          const newlyFailed = failedRequests.filter(
-            r => pendingVideoRequests.some(p => p.id === r.id)
-          );
-          
-          if (newlyFailed.length > 0) {
-            newlyFailed.forEach(r => {
-              toast.error(`❌ فشل توليد الفيديو: ${r.error || 'خطأ غير معروف'}`);
-            });
-          }
-        }
-        
-        // Update pending requests
         const stillPendingIds = stillPending.map(r => r.id);
         setPendingVideoRequests(prev => prev.filter(p => stillPendingIds.includes(p.id)));
         
-        // Stop polling if no more pending requests
         if (stillPending.length === 0 && pollingIntervalRef.current) {
           clearInterval(pollingIntervalRef.current);
           pollingIntervalRef.current = null;
@@ -559,7 +467,7 @@ const AIChat = ({ user }) => {
       setSessions(prev => [session, ...prev]);
       setCurrentSession(session);
       setMessages([]);
-      setPendingVideoRequests([]); // Clear pending requests for new session
+      setPendingVideoRequests([]);
       toast.success('تم إنشاء محادثة جديدة');
     } catch (error) {
       toast.error('فشل إنشاء المحادثة');
@@ -576,7 +484,6 @@ const AIChat = ({ user }) => {
       setCurrentSession(session);
       setMessages(session.messages || []);
       
-      // Check for pending video requests when loading session
       const videoRes = await fetch(
         `${process.env.REACT_APP_BACKEND_URL}/api/chat/video-requests?session_id=${sessionId}`,
         { headers: { 'Authorization': `Bearer ${token}` } }
@@ -600,7 +507,7 @@ const AIChat = ({ user }) => {
     setIsTyping(true);
 
     const tempUserMsg = {
-      id: Date.now().toString(),
+      id: `temp-${Date.now()}`,
       role: 'user',
       content: userMessage,
       message_type: 'text',
@@ -608,6 +515,17 @@ const AIChat = ({ user }) => {
       created_at: new Date().toISOString()
     };
     setMessages(prev => [...prev, tempUserMsg]);
+
+    if (isConnected && wsSendMessage) {
+      const sent = wsSendMessage(JSON.stringify({
+        message: userMessage,
+        settings: { ...generationSettings, tts: ttsSettings }
+      }));
+      if (sent) {
+        console.log('تم الإرسال عبر WebSocket');
+        return;
+      }
+    }
 
     try {
       const token = localStorage.getItem('token');
@@ -621,10 +539,7 @@ const AIChat = ({ user }) => {
           },
           body: JSON.stringify({
             message: userMessage,
-            settings: {
-              ...generationSettings,
-              tts: ttsSettings
-            }
+            settings: { ...generationSettings, tts: ttsSettings }
           })
         }
       );
@@ -637,23 +552,21 @@ const AIChat = ({ user }) => {
           return [...filtered, data.user_message, data.assistant_message];
         });
         
-        // Auto-play audio if TTS is enabled and audio is available
         if (ttsSettings.enabled && data.assistant_message?.audio_url) {
           playAudio(data.assistant_message.audio_url, data.assistant_message.id);
         }
 
-        // Check for pending video requests in the response
         const videoPendingAttachment = data.assistant_message?.attachments?.find(
           a => a.type === 'video_pending'
         );
         if (videoPendingAttachment && videoPendingAttachment.requests) {
           setPendingVideoRequests(prev => [...prev, ...videoPendingAttachment.requests]);
-          toast.info('🎬 جاري توليد الفيديو في الخلفية... سيظهر تلقائياً عند الانتهاء');
+          toast.info('جاري توليد الفيديو في الخلفية...');
         }
 
         if (sessions.find(s => s.id === currentSession.id)?.message_count === 0) {
-          setSessions(prev => prev.map(s => 
-            s.id === currentSession.id 
+          setSessions(prev => prev.map(s =>
+            s.id === currentSession.id
               ? { ...s, title: userMessage.slice(0, 50), message_count: 2 }
               : s
           ));
@@ -670,7 +583,7 @@ const AIChat = ({ user }) => {
       setIsTyping(false);
       inputRef.current?.focus();
     }
-  }, [inputMessage, currentSession, loading, generationSettings, sessions]);
+  }, [inputMessage, currentSession, loading, generationSettings, ttsSettings, sessions, isConnected, wsSendMessage]);
 
   const deleteSession = useCallback(async (sessionId) => {
     if (!window.confirm('هل تريد حذف هذه المحادثة؟')) return;
@@ -726,14 +639,14 @@ const AIChat = ({ user }) => {
           <div className="mt-3 relative group">
             <img 
               src={attachment.url} 
-              alt={attachment.prompt || 'Generated image'}
+              alt="Generated"
               className="max-w-md rounded-xl shadow-lg"
               loading="lazy"
             />
             <Button
               size="sm"
-              onClick={() => downloadAsset(attachment.url, `zitex-image-${attachment.id}.png`)}
-              className="absolute bottom-2 left-2 bg-black/50 hover:bg-black/70 opacity-0 group-hover:opacity-100 transition-opacity"
+              onClick={() => downloadAsset(attachment.url, `zitex-image.png`)}
+              className="absolute bottom-2 left-2 bg-black/50 hover:bg-black/70 opacity-0 group-hover:opacity-100"
             >
               <Download className="w-4 h-4 me-1" />
               تحميل
@@ -744,48 +657,14 @@ const AIChat = ({ user }) => {
       case 'video':
         return (
           <div className="mt-3 relative group">
-            <video 
-              src={attachment.url}
-              controls
-              className="max-w-lg rounded-xl shadow-lg"
-              preload="metadata"
-            />
-            <div className="mt-2 flex items-center gap-2 text-xs text-gray-400">
-              <span>المدة: {attachment.duration} ثانية</span>
-              <span>•</span>
-              <span>الدقة: {attachment.size}</span>
-            </div>
+            <video src={attachment.url} controls className="max-w-lg rounded-xl shadow-lg" preload="metadata" />
             <Button
               size="sm"
-              onClick={() => downloadAsset(attachment.url, `zitex-video-${attachment.id}.mp4`)}
+              onClick={() => downloadAsset(attachment.url, `zitex-video.mp4`)}
               className="mt-2 bg-orange-500 hover:bg-orange-600"
             >
               <Download className="w-4 h-4 me-1" />
               تحميل الفيديو
-            </Button>
-          </div>
-        );
-      
-      case 'audio':
-        return (
-          <div className="mt-3 p-4 bg-slate-700/50 rounded-xl">
-            <div className="flex items-center gap-3">
-              <Mic className="w-8 h-8 text-blue-400" />
-              <audio 
-                ref={audioRef}
-                src={attachment.url}
-                controls
-                className="w-full"
-                preload="metadata"
-              />
-            </div>
-            <Button
-              size="sm"
-              onClick={() => downloadAsset(attachment.url, `zitex-audio-${attachment.id}.mp3`)}
-              className="mt-2 bg-blue-500 hover:bg-blue-600"
-            >
-              <Download className="w-4 h-4 me-1" />
-              تحميل الصوت
             </Button>
           </div>
         );
@@ -797,23 +676,15 @@ const AIChat = ({ user }) => {
               <Globe className="w-6 h-6 text-green-400" />
               <span className="text-white font-semibold">موقع جاهز للتحميل</span>
             </div>
-            <div className="space-y-1 text-sm text-gray-400 max-h-32 overflow-y-auto">
-              {Object.keys(attachment.files || {}).map(filename => (
-                <div key={filename} className="flex items-center gap-2">
-                  <span className="text-green-400">📄</span>
-                  <span className="truncate">{filename}</span>
-                </div>
-              ))}
-            </div>
             <Button
               size="sm"
               onClick={() => {
                 const content = JSON.stringify(attachment.files, null, 2);
                 const blob = new Blob([content], { type: 'application/json' });
                 const url = URL.createObjectURL(blob);
-                downloadAsset(url, `zitex-website-${attachment.id}.json`);
+                downloadAsset(url, `zitex-website.json`);
               }}
-              className="mt-3 bg-green-500 hover:bg-green-600"
+              className="bg-green-500 hover:bg-green-600"
             >
               <Download className="w-4 h-4 me-1" />
               تحميل الكود
@@ -828,28 +699,7 @@ const AIChat = ({ user }) => {
               <Loader2 className="w-6 h-6 text-orange-400 animate-spin" />
               <span className="text-orange-300 font-semibold">جاري توليد الفيديو...</span>
             </div>
-            <p className="text-sm text-orange-200/80">{attachment.message || 'يستغرق التوليد 2-5 دقائق'}</p>
-            <div className="mt-3 space-y-2">
-              {attachment.requests?.map((req, i) => (
-                <div key={req.id} className="flex items-center gap-2 text-xs text-orange-200/60">
-                  <span className="w-2 h-2 bg-orange-400 rounded-full animate-pulse"></span>
-                  <span>فيديو {i + 1}: {req.prompt?.slice(0, 40)}... ({req.duration}ث)</span>
-                </div>
-              ))}
-            </div>
-            <p className="text-xs text-orange-300/50 mt-3">💡 يمكنك متابعة المحادثة - سيظهر الفيديو تلقائياً</p>
-          </div>
-        );
-      
-      case 'video_error':
-        return (
-          <div className="mt-3 p-4 bg-red-500/20 border border-red-500/50 rounded-xl">
-            <div className="flex items-center gap-2 mb-2">
-              <Video className="w-6 h-6 text-red-400" />
-              <span className="text-red-300 font-semibold">فشل توليد الفيديو</span>
-            </div>
-            <p className="text-sm text-red-200">{attachment.message || 'حدث خطأ غير متوقع'}</p>
-            <p className="text-xs text-red-300/70 mt-2">💡 نصيحة: حاول مرة أخرى أو استخدم وصف أبسط</p>
+            <p className="text-sm text-orange-200/80">يستغرق التوليد 2-5 دقائق</p>
           </div>
         );
       
@@ -859,33 +709,25 @@ const AIChat = ({ user }) => {
   }, [downloadAsset]);
 
   return (
-    <div className="h-screen bg-slate-900 flex flex-col overflow-hidden" data-testid="ai-chat-page">
+    <div className="h-screen bg-slate-900 flex flex-col overflow-hidden">
       <Navbar user={user} transparent />
       
       <div className="flex-1 flex mt-16 overflow-hidden">
-        {/* Mobile Hamburger Menu Button */}
         {!sidebarOpen && currentSession && (
           <button
             onClick={() => setSidebarOpen(true)}
             className="md:hidden fixed top-20 right-4 z-30 p-2 bg-slate-700 rounded-lg shadow-lg border border-slate-600"
-            data-testid="mobile-menu-btn"
           >
             <MessageSquare className="w-5 h-5 text-white" />
           </button>
         )}
         
-        {/* Sidebar Overlay for Mobile */}
         {sidebarOpen && (
-          <div 
-            className="md:hidden fixed inset-0 bg-black/50 z-10"
-            onClick={() => setSidebarOpen(false)}
-          />
+          <div className="md:hidden fixed inset-0 bg-black/50 z-10" onClick={() => setSidebarOpen(false)} />
         )}
         
-        {/* Sidebar */}
         <div className={`${sidebarOpen ? 'w-80' : 'w-0'} ${sidebarOpen ? 'fixed md:relative inset-y-0 right-0 z-20 mt-16 md:mt-0' : ''} flex-shrink-0 transition-all duration-300 overflow-hidden bg-slate-800 border-l border-slate-700 flex flex-col`}>
           <div className="p-3 md:p-4 border-b border-slate-700">
-            {/* Mobile close button */}
             <div className="flex md:hidden justify-between items-center mb-3">
               <span className="text-white font-semibold">المحادثات</span>
               <Button size="sm" variant="ghost" onClick={() => setSidebarOpen(false)}>
@@ -895,8 +737,7 @@ const AIChat = ({ user }) => {
             
             <Button
               onClick={() => { createSession('general'); if(window.innerWidth < 768) setSidebarOpen(false); }}
-              className="w-full bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 transition-all text-sm md:text-base"
-              data-testid="new-chat-btn"
+              className="w-full bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600"
             >
               <Plus className="w-4 h-4 me-2" />
               محادثة جديدة
@@ -904,15 +745,15 @@ const AIChat = ({ user }) => {
             
             <div className="flex gap-2 mt-3">
               <Button size="sm" variant="outline" onClick={() => { createSession('image'); if(window.innerWidth < 768) setSidebarOpen(false); }}
-                className="flex-1 border-purple-500/50 text-purple-400 hover:bg-purple-500/20 transition-colors">
+                className="flex-1 border-purple-500/50 text-purple-400 hover:bg-purple-500/20">
                 <Image className="w-4 h-4" />
               </Button>
               <Button size="sm" variant="outline" onClick={() => { createSession('video'); if(window.innerWidth < 768) setSidebarOpen(false); }}
-                className="flex-1 border-orange-500/50 text-orange-400 hover:bg-orange-500/20 transition-colors">
+                className="flex-1 border-orange-500/50 text-orange-400 hover:bg-orange-500/20">
                 <Video className="w-4 h-4" />
               </Button>
               <Button size="sm" variant="outline" onClick={() => { createSession('website'); if(window.innerWidth < 768) setSidebarOpen(false); }}
-                className="flex-1 border-green-500/50 text-green-400 hover:bg-green-500/20 transition-colors">
+                className="flex-1 border-green-500/50 text-green-400 hover:bg-green-500/20">
                 <Globe className="w-4 h-4" />
               </Button>
             </div>
@@ -925,7 +766,6 @@ const AIChat = ({ user }) => {
               <div className="text-center py-8 text-gray-500">
                 <MessageSquare className="w-12 h-12 mx-auto mb-3 opacity-50" />
                 <p>لا توجد محادثات</p>
-                <p className="text-sm mt-1">ابدأ محادثة جديدة!</p>
               </div>
             ) : (
               <div className="space-y-1">
@@ -944,7 +784,6 @@ const AIChat = ({ user }) => {
           </ScrollArea>
         </div>
 
-        {/* Toggle sidebar - Desktop */}
         <Button
           size="icon"
           variant="ghost"
@@ -954,25 +793,18 @@ const AIChat = ({ user }) => {
           {sidebarOpen ? <ChevronRight className="w-4 h-4" /> : <ChevronLeft className="w-4 h-4" />}
         </Button>
 
-        {/* Chat Area */}
         <div className="flex-1 flex flex-col overflow-hidden">
           {!currentSession ? (
-            // Welcome screen
             <div className="flex-1 flex items-center justify-center p-4 md:p-8">
               <div className="text-center max-w-2xl animate-fadeIn">
                 <div className="w-20 h-20 md:w-24 md:h-24 mx-auto mb-6 bg-gradient-to-br from-purple-500 to-pink-500 rounded-3xl flex items-center justify-center shadow-2xl">
                   <Sparkles className="w-10 h-10 md:w-12 md:h-12 text-white" />
                 </div>
                 <h1 className="text-2xl md:text-4xl font-bold text-white mb-4">مرحباً بك في زيتكس</h1>
-                <p className="text-xl text-gray-400 mb-8">
-                  مساعدك الإبداعي الذكي لتوليد الصور والفيديوهات وبناء المواقع
-                </p>
+                <p className="text-xl text-gray-400 mb-8">مساعدك الإبداعي الذكي</p>
                 
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
-                  <Card 
-                    className="bg-slate-800 border-purple-500/30 cursor-pointer hover:bg-slate-700 hover:scale-105 transition-all duration-300"
-                    onClick={() => createSession('image')}
-                  >
+                  <Card className="bg-slate-800 border-purple-500/30 cursor-pointer hover:bg-slate-700 hover:scale-105 transition-all" onClick={() => createSession('image')}>
                     <CardContent className="p-6 text-center">
                       <Image className="w-10 h-10 text-purple-400 mx-auto mb-3" />
                       <h3 className="text-white font-semibold mb-1">توليد صور</h3>
@@ -980,10 +812,7 @@ const AIChat = ({ user }) => {
                     </CardContent>
                   </Card>
                   
-                  <Card 
-                    className="bg-slate-800 border-orange-500/30 cursor-pointer hover:bg-slate-700 hover:scale-105 transition-all duration-300"
-                    onClick={() => createSession('video')}
-                  >
+                  <Card className="bg-slate-800 border-orange-500/30 cursor-pointer hover:bg-slate-700 hover:scale-105 transition-all" onClick={() => createSession('video')}>
                     <CardContent className="p-6 text-center">
                       <Video className="w-10 h-10 text-orange-400 mx-auto mb-3" />
                       <h3 className="text-white font-semibold mb-1">فيديوهات سينمائية</h3>
@@ -991,10 +820,7 @@ const AIChat = ({ user }) => {
                     </CardContent>
                   </Card>
                   
-                  <Card 
-                    className="bg-slate-800 border-green-500/30 cursor-pointer hover:bg-slate-700 hover:scale-105 transition-all duration-300"
-                    onClick={() => createSession('website')}
-                  >
+                  <Card className="bg-slate-800 border-green-500/30 cursor-pointer hover:bg-slate-700 hover:scale-105 transition-all" onClick={() => createSession('website')}>
                     <CardContent className="p-6 text-center">
                       <Globe className="w-10 h-10 text-green-400 mx-auto mb-3" />
                       <h3 className="text-white font-semibold mb-1">بناء مواقع</h3>
@@ -1003,11 +829,7 @@ const AIChat = ({ user }) => {
                   </Card>
                 </div>
                 
-                <Button
-                  size="lg"
-                  onClick={() => createSession('general')}
-                  className="bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 shadow-lg hover:shadow-xl transition-all"
-                >
+                <Button size="lg" onClick={() => createSession('general')} className="bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600">
                   <Plus className="w-5 h-5 me-2" />
                   ابدأ محادثة جديدة
                 </Button>
@@ -1015,19 +837,12 @@ const AIChat = ({ user }) => {
             </div>
           ) : (
             <>
-              {/* Messages */}
               <ScrollArea className="flex-1 p-4 overflow-y-auto">
                 <div className="max-w-4xl mx-auto space-y-4">
                   {messages.length === 0 && (
-                    <div className="text-center py-12 text-gray-500 animate-fadeIn">
+                    <div className="text-center py-12 text-gray-500">
                       <MessageSquare className="w-16 h-16 mx-auto mb-4 opacity-50" />
                       <p className="text-lg">ابدأ المحادثة!</p>
-                      <p className="text-sm mt-2">
-                        {currentSession.session_type === 'image' && 'قل لي ما الصورة التي تريدها...'}
-                        {currentSession.session_type === 'video' && 'أخبرني عن الفيديو الذي تريد إنشاءه...'}
-                        {currentSession.session_type === 'website' && 'صف لي الموقع الذي تريد بناءه...'}
-                        {currentSession.session_type === 'general' && 'كيف يمكنني مساعدتك اليوم؟'}
-                      </p>
                     </div>
                   )}
                   
@@ -1040,11 +855,12 @@ const AIChat = ({ user }) => {
                       onPlayAudio={playAudio}
                       onGenerateTTS={generateTTS}
                       playingAudio={playingAudio}
-                      ttsEnabled={ttsSettings.enabled}
                     />
                   ))}
-                    {progress && <ProgressIndicator progress={progress} />}
-                  {isTyping && (
+
+                  {progress && <ProgressIndicator progress={progress} />}
+
+                  {isTyping && !progress && (
                     <div className="flex justify-end animate-fadeIn">
                       <div className="bg-slate-700 rounded-2xl rounded-tl-md p-4">
                         <div className="flex items-center gap-3 text-gray-400">
@@ -1063,24 +879,18 @@ const AIChat = ({ user }) => {
                 </div>
               </ScrollArea>
 
-              {/* Input Area */}
               <div className="border-t border-slate-700 p-2 md:p-4 bg-slate-800/50 backdrop-blur">
                 <div className="max-w-4xl mx-auto">
-                  {/* Audio Element for TTS */}
                   <audio ref={audioRef} className="hidden" />
                   
-                  {/* TTS Settings Panel */}
                   {showTTSSettings && (
-                    <div className="mb-3 p-3 md:p-4 bg-slate-700/50 border border-slate-600 rounded-lg animate-fadeIn">
+                    <div className="mb-3 p-3 bg-slate-700/50 border border-slate-600 rounded-lg">
                       <div className="flex items-center justify-between mb-3">
-                        <h4 className="text-white font-medium flex items-center gap-2 text-sm md:text-base">
-                          <Volume2 className="w-4 h-4 md:w-5 md:h-5 text-purple-400" />
+                        <h4 className="text-white font-medium flex items-center gap-2">
+                          <Volume2 className="w-4 h-4 text-purple-400" />
                           إعدادات الصوت
                         </h4>
-                        <button 
-                          onClick={() => setShowTTSSettings(false)}
-                          className="text-gray-400 hover:text-white"
-                        >✕</button>
+                        <button onClick={() => setShowTTSSettings(false)} className="text-gray-400 hover:text-white">✕</button>
                       </div>
                       
                       <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
@@ -1103,12 +913,9 @@ const AIChat = ({ user }) => {
                             onChange={(e) => setTtsSettings({...ttsSettings, voice: e.target.value})}
                             className="w-full bg-slate-600 border-slate-500 text-white rounded px-2 py-1.5 text-sm"
                           >
-                            {availableVoices
-                              .filter(v => v.provider === ttsSettings.provider)
-                              .map(voice => (
-                                <option key={voice.id} value={voice.id}>{voice.name}</option>
-                              ))
-                            }
+                            {availableVoices.filter(v => v.provider === ttsSettings.provider).map(voice => (
+                              <option key={voice.id} value={voice.id}>{voice.name}</option>
+                            ))}
                           </select>
                         </div>
                         
@@ -1128,77 +935,60 @@ const AIChat = ({ user }) => {
                     </div>
                   )}
                   
-                  {/* Pending Video Requests Indicator */}
                   {pendingVideoRequests.length > 0 && (
                     <div className="mb-2 p-2 bg-orange-500/20 border border-orange-500/40 rounded-lg flex items-center gap-2 text-sm">
-                      <Loader2 className="w-4 h-4 text-orange-400 animate-spin flex-shrink-0" />
-                      <span className="text-orange-300 text-xs md:text-sm">
-                        جاري توليد {pendingVideoRequests.length} فيديو... (2-5 دقائق)
-                      </span>
+                      <Loader2 className="w-4 h-4 text-orange-400 animate-spin" />
+                      <span className="text-orange-300">جاري توليد {pendingVideoRequests.length} فيديو...</span>
                     </div>
                   )}
                   
-                  {/* Main Input Row */}
+                  {/* مؤشر الاتصال */}
+                  {isConnected && (
+                    <div className="mb-2 flex items-center gap-2 text-xs text-green-400">
+                      <span className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></span>
+                      <span>متصل مباشر</span>
+                    </div>
+                  )}
+                  
                   <div className="flex gap-2">
                     <Input
                       ref={inputRef}
                       value={inputMessage}
                       onChange={(e) => setInputMessage(e.target.value)}
                       onKeyPress={handleKeyPress}
-                      placeholder={
-                        currentSession?.session_type === 'image' ? 'صف الصورة التي تريدها...' :
-                        currentSession?.session_type === 'video' ? 'صف المشهد الذي تريد إنشاءه...' :
-                        currentSession?.session_type === 'website' ? 'صف الموقع الذي تريد بناءه...' :
-                        'اكتب رسالتك هنا...'
-                      }
-                      className="flex-1 bg-slate-700 border-slate-600 text-white placeholder:text-gray-400 text-base py-3 focus:ring-2 focus:ring-purple-500 transition-all"
+                      placeholder="اكتب رسالتك هنا..."
+                      className="flex-1 bg-slate-700 border-slate-600 text-white placeholder:text-gray-400"
                       disabled={loading}
-                      data-testid="chat-input"
                     />
                     
-                    {/* Microphone Button */}
                     <Button
                       variant="outline"
                       onClick={toggleRecording}
                       disabled={loading}
                       size="icon"
-                      className={`flex-shrink-0 transition-all ${
-                        isRecording 
-                          ? 'bg-red-500/20 border-red-500 text-red-400 animate-pulse' 
-                          : 'border-slate-600 text-gray-400 hover:text-white hover:border-green-500'
-                      }`}
-                      title={isRecording ? `جاري التسجيل... ${recordingTime}ث` : 'تحدث بالصوت'}
+                      className={`flex-shrink-0 ${isRecording ? 'bg-red-500/20 border-red-500 text-red-400 animate-pulse' : 'border-slate-600 text-gray-400 hover:text-white'}`}
                     >
-                      <Mic className={`w-5 h-5 ${isRecording ? 'text-red-400' : ''}`} />
+                      <Mic className="w-5 h-5" />
                     </Button>
                     
-                    {/* Send Button */}
                     <Button
                       onClick={sendMessage}
                       disabled={loading || !inputMessage.trim() || isRecording}
                       size="icon"
-                      className="bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 flex-shrink-0 transition-all disabled:opacity-50"
-                      data-testid="send-btn"
+                      className="bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600"
                     >
-                      {loading ? (
-                        <Loader2 className="w-5 h-5 animate-spin" />
-                      ) : (
-                        <Send className="w-5 h-5" />
-                      )}
+                      {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : <Send className="w-5 h-5" />}
                     </Button>
                   </div>
                   
-                  {/* Recording indicator */}
                   {isRecording && (
                     <div className="mt-2 flex items-center gap-2 px-3 py-1.5 bg-red-500/20 border border-red-500/50 rounded-lg w-fit">
                       <span className="w-2 h-2 bg-red-500 rounded-full animate-pulse"></span>
-                      <span className="text-red-400 text-sm font-medium">{recordingTime}ث - اضغط للإيقاف</span>
+                      <span className="text-red-400 text-sm">{recordingTime}ث - اضغط للإيقاف</span>
                     </div>
                   )}
                   
-                  {/* Tools Bar - Bottom */}
                   <div className="mt-2 flex flex-wrap items-center gap-2">
-                    {/* Video Settings */}
                     {currentSession?.session_type === 'video' && (
                       <>
                         <select
@@ -1209,53 +999,26 @@ const AIChat = ({ user }) => {
                           <option value={4}>4 ثواني</option>
                           <option value={8}>8 ثواني</option>
                           <option value={12}>12 ثانية</option>
-                          <option value={50}>50 ثانية</option>
                           <option value={60}>دقيقة</option>
-                        </select>
-                        <select
-                          value={generationSettings.size}
-                          onChange={(e) => setGenerationSettings({...generationSettings, size: e.target.value})}
-                          className="bg-slate-700 border-slate-600 text-white rounded px-2 py-1 text-xs"
-                        >
-                          <option value="1280x720">HD</option>
-                          <option value="1792x1024">عريض</option>
-                          <option value="1024x1792">عمودي</option>
-                          <option value="1024x1024">مربع</option>
                         </select>
                       </>
                     )}
                     
-                    {/* TTS Toggle */}
                     <button
                       onClick={() => setTtsSettings({...ttsSettings, enabled: !ttsSettings.enabled})}
-                      className={`flex items-center gap-1 px-2 py-1 rounded text-xs transition-all ${
-                        ttsSettings.enabled 
-                          ? 'bg-purple-500/20 border border-purple-500/50 text-purple-400' 
-                          : 'bg-slate-700 text-gray-400 hover:text-white'
-                      }`}
-                      title={ttsSettings.enabled ? 'إيقاف الرد الصوتي' : 'تفعيل الرد الصوتي'}
+                      className={`flex items-center gap-1 px-2 py-1 rounded text-xs ${ttsSettings.enabled ? 'bg-purple-500/20 border border-purple-500/50 text-purple-400' : 'bg-slate-700 text-gray-400 hover:text-white'}`}
                     >
                       <Volume2 className="w-3.5 h-3.5" />
                       <span className="hidden sm:inline">صوت</span>
                     </button>
                     
-                    {/* TTS Settings */}
                     <button
                       onClick={() => setShowTTSSettings(!showTTSSettings)}
-                      className="flex items-center gap-1 px-2 py-1 rounded text-xs bg-slate-700 text-gray-400 hover:text-white transition-all"
-                      title="إعدادات الصوت"
+                      className="flex items-center gap-1 px-2 py-1 rounded text-xs bg-slate-700 text-gray-400 hover:text-white"
                     >
                       <Settings className="w-3.5 h-3.5" />
                       <span className="hidden sm:inline">إعدادات</span>
                     </button>
-                    
-                    {/* Status Indicators */}
-                    {ttsSettings.enabled && (
-                      <span className="text-purple-400 text-xs flex items-center gap-1 mr-auto">
-                        <Volume2 className="w-3 h-3" />
-                        {ttsSettings.provider === 'openai' ? 'OpenAI' : 'ElevenLabs'}
-                      </span>
-                    )}
                   </div>
                 </div>
               </div>
@@ -1264,15 +1027,12 @@ const AIChat = ({ user }) => {
         </div>
       </div>
       
-      {/* CSS Animation */}
       <style>{`
         @keyframes fadeIn {
           from { opacity: 0; transform: translateY(10px); }
           to { opacity: 1; transform: translateY(0); }
         }
-        .animate-fadeIn {
-          animation: fadeIn 0.3s ease-out;
-        }
+        .animate-fadeIn { animation: fadeIn 0.3s ease-out; }
       `}</style>
     </div>
   );
