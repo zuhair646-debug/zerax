@@ -1125,6 +1125,208 @@ async def log_download(item_type: str, item_id: str, current_user: dict = Depend
         {"item_type": item_type, "item_id": item_id}
     )
     return {"message": "Download logged"}
+لا مشكلة! ✅ الجزء الأول كافي حالياً.
+
+**احفظ التغييرات الآن:**
+- اضغط **"Commit changes"** (الزر الأخضر في الأسفل)
+
+---
+    
+# ============== GPT-5.2 CHAT FUNCTION ==============
+
+async def chat_with_gpt5(messages: list, system_prompt: str = None) -> str:
+    """Chat with GPT-5.2 model"""
+    if not openai_client:
+        raise HTTPException(status_code=500, detail="OpenAI client not initialized")
+    
+    chat_messages = []
+    if system_prompt:
+        chat_messages.append({"role": "system", "content": system_prompt})
+    chat_messages.extend(messages)
+    
+    try:
+        response = openai_client.chat.completions.create(
+            model="gpt-5.2",
+            messages=chat_messages,
+            max_tokens=4096,
+            temperature=0.7
+        )
+        return response.choices[0].message.content
+    except Exception as e:
+        logging.error(f"GPT-5.2 Error: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"AI Error: {str(e)}")
+
+# ============== GPT IMAGE 1 GENERATION ==============
+
+async def generate_image_gpt(prompt: str, size: str = "1024x1024") -> str:
+    """Generate image using GPT Image 1 (DALL-E 4)"""
+    if not openai_client:
+        raise HTTPException(status_code=500, detail="OpenAI client not initialized")
+    
+    try:
+        response = openai_client.images.generate(
+            model="gpt-image-1",
+            prompt=prompt,
+            size=size,
+            quality="high",
+            n=1
+        )
+        image_url = response.data[0].url
+        
+        # Download and convert to base64
+        async with httpx.AsyncClient() as client:
+            img_response = await client.get(image_url)
+            image_b64 = base64.b64encode(img_response.content).decode()
+            return f"data:image/png;base64,{image_b64}"
+    except Exception as e:
+        logging.error(f"GPT Image 1 Error: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Image generation failed: {str(e)}")
+
+# ============== SORA 2 VIDEO GENERATION ==============
+
+async def generate_video_sora2(prompt: str, duration: int = 10, size: str = "1280x720") -> dict:
+    """Generate video using Sora 2"""
+    if not openai_client:
+        raise HTTPException(status_code=500, detail="OpenAI client not initialized")
+    
+    # Validate duration (Sora 2 supports up to 60 seconds)
+    if duration > 60:
+        duration = 60
+    
+    try:
+        logging.info(f"🎬 Starting Sora 2 video generation: {prompt[:50]}...")
+        
+        response = openai_client.videos.generate(
+            model="sora-2",
+            prompt=prompt,
+            duration=duration,
+            size=size
+        )
+        
+        video_url = response.url
+        logging.info(f"✅ Video generated successfully: {video_url[:50]}...")
+        
+        return {
+            "url": video_url,
+            "duration": duration,
+            "size": size,
+            "prompt": prompt
+        }
+    except Exception as e:
+        logging.error(f"Sora 2 Error: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Video generation failed: {str(e)}")
+
+# ============== DESIGN PLAN SYSTEM ==============
+
+async def create_design_plan(user_request: str, project_type: str = "website") -> dict:
+    """Create a design plan before building"""
+    system_prompt = """أنت مصمم ومطور محترف. عند استلام طلب من المستخدم:
+
+1. حلل الطلب بعناية
+2. أنشئ خطة تصميمية شاملة تتضمن:
+   - عنوان المشروع
+   - وصف تفصيلي
+   - قائمة الميزات المطلوبة
+   - التقنيات المستخدمة
+   - الوقت المتوقع للإنجاز
+   - هيكل الملفات
+
+رد بصيغة JSON فقط:
+{
+    "title": "عنوان المشروع",
+    "description": "وصف تفصيلي",
+    "features": ["ميزة 1", "ميزة 2"],
+    "tech_stack": ["React", "Tailwind", "etc"],
+    "estimated_time": "30 دقيقة",
+    "file_structure": ["index.html", "style.css", "script.js"],
+    "preview_description": "وصف قصير لما سيبدو عليه المشروع"
+}"""
+
+    messages = [{"role": "user", "content": f"نوع المشروع: {project_type}\n\nالطلب: {user_request}"}]
+    
+    response = await chat_with_gpt5(messages, system_prompt)
+    
+    try:
+        # Extract JSON from response
+        import json
+        import re
+        json_match = re.search(r'\{[\s\S]*\}', response)
+        if json_match:
+            plan = json.loads(json_match.group())
+            plan['id'] = str(uuid.uuid4())
+            plan['status'] = 'pending'
+            plan['project_type'] = project_type
+            return plan
+    except:
+        pass
+    
+    return {
+        "id": str(uuid.uuid4()),
+        "title": "مشروع جديد",
+        "description": response,
+        "features": [],
+        "tech_stack": [],
+        "estimated_time": "غير محدد",
+        "status": "pending",
+        "project_type": project_type
+    }
+
+# ============== VERCEL AUTO DEPLOYMENT ==============
+
+VERCEL_TOKEN = os.environ.get('VERCEL_TOKEN')
+
+async def deploy_to_vercel(project_name: str, files: dict) -> dict:
+    """Deploy project to Vercel automatically"""
+    if not VERCEL_TOKEN:
+        raise HTTPException(status_code=500, detail="Vercel token not configured")
+    
+    try:
+        # Prepare files for Vercel deployment
+        vercel_files = []
+        for filename, content in files.items():
+            vercel_files.append({
+                "file": filename,
+                "data": content
+            })
+        
+        # Create deployment
+        async with httpx.AsyncClient() as client:
+            response = await client.post(
+                "https://api.vercel.com/v13/deployments",
+                headers={
+                    "Authorization": f"Bearer {VERCEL_TOKEN}",
+                    "Content-Type": "application/json"
+                },
+                json={
+                    "name": project_name.lower().replace(" ", "-"),
+                    "files": vercel_files,
+                    "projectSettings": {
+                        "framework": None
+                    }
+                },
+                timeout=60.0
+            )
+            
+            if response.status_code == 200:
+                data = response.json()
+                return {
+                    "success": True,
+                    "url": f"https://{data.get('url', '')}",
+                    "deployment_id": data.get('id', ''),
+                    "status": "deployed"
+                }
+            else:
+                logging.error(f"Vercel deployment error: {response.text}")
+                return {
+                    "success": False,
+                    "error": response.text
+                }
+    except Exception as e:
+        logging.error(f"Deployment error: {str(e)}")
+        return {
+            "success": False,
+            "error": str(e)
+        }
 
 # ============== VIDEO GENERATION ==============
 
