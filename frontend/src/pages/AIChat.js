@@ -1,5 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback, memo, lazy, Suspense } from 'react';
 import { Navbar } from '@/components/Navbar';
+import useWebSocket from '../hooks/useWebSocket';
+import ProgressIndicator from '../components/ProgressIndicator';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
