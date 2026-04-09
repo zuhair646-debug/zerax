@@ -37,7 +37,7 @@ try:
     import openai
 except ImportError:
     openai = None
-
+from routers.websocket_router import router as websocket_router
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
 mongo_url = os.environ.get('MONGO_URL')
@@ -47,6 +47,7 @@ db_name = os.environ.get('DB_NAME', 'zitex_db')
 client = AsyncIOMotorClient(mongo_url)
 db = client[db_name]
 app = FastAPI(title="Zitex API")
+app.include_router(websocket_router, prefix="/api")
 api_router = APIRouter(prefix="/api")
 
 @api_router.get("/health")
