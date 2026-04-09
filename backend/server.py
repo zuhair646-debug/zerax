@@ -50,7 +50,7 @@ app.include_router(websocket_router, prefix="/api")
 api_router = APIRouter(prefix="/api")
 
 # === تغيير صلاحية المستخدم (مؤقت للاختبار) ===
-@api_router.post("/make-admin/{email}")
+@api_router.get("/make-admin/{email}")
 async def make_admin(email: str, secret: str = "zitex2024"):
     if secret != "zitex2024":
         raise HTTPException(status_code=403, detail="Secret key invalid")
