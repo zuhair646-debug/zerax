@@ -1,15 +1,13 @@
-from fastapi import APIRouter, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Query
 import jwt
 import os
 import json
 import asyncio
-import httpx
 from typing import Dict, List
 
 router = APIRouter(tags=["WebSocket"])
 
 JWT_SECRET = os.environ.get('JWT_SECRET', 'your-secret-key')
-BACKEND_URL = os.environ.get('BACKEND_URL', 'http://localhost:8001')
 
 class ConnectionManager:
     def __init__(self):
@@ -29,23 +27,33 @@ class ConnectionManager:
 manager = ConnectionManager()
 
 @router.websocket("/ws/chat/{session_id}")
-async def websocket_chat(websocket: WebSocket, session_id: str, token: str = None):
+async def websocket_chat(websocket: WebSocket, session_id: str, token: str = Query(None)):
     user_id = None
+    
+    # Verify token
     try:
         if token:
             payload = jwt.decode(token, JWT_SECRET, algorithms=['HS256'])
             user_id = payload.get('user_id')
-    except:
-        await websocket.close(code=4001)
+    except jwt.ExpiredSignatureError:
+        await websocket.close(code=4001, reason="Token expired")
+        return
+    except jwt.InvalidTokenError:
+        await websocket.close(code=4001, reason="Invalid token")
+        return
+    except Exception as e:
+        await websocket.close(code=4001, reason="Auth error")
         return
     
     if not user_id:
-        await websocket.close(code=4001)
+        await websocket.close(code=4001, reason="No user")
         return
     
+    # Accept connection
     await manager.connect(websocket, user_id)
     
     try:
+        # Send connected message
         await websocket.send_json({
             "type": "connected",
             "message": "تم الاتصال بنجاح!",
@@ -53,18 +61,17 @@ async def websocket_chat(websocket: WebSocket, session_id: str, token: str = Non
         })
         
         while True:
+            # Wait for message
             data = await websocket.receive_text()
             
             try:
                 message_data = json.loads(data)
                 message = message_data.get('message', '')
-                settings = message_data.get('settings', {})
             except:
                 message = data
-                settings = {}
             
             if message:
-                # مرحلة 1: التحليل
+                # Step 1: Analyzing
                 await websocket.send_json({
                     "type": "progress",
                     "step": 1,
@@ -73,9 +80,9 @@ async def websocket_chat(websocket: WebSocket, session_id: str, token: str = Non
                     "message": "جاري تحليل طلبك...",
                     "percent": 25
                 })
-                await asyncio.sleep(0.5)
+                await asyncio.sleep(0.8)
                 
-                # مرحلة 2: المعالجة
+                # Step 2: Processing
                 await websocket.send_json({
                     "type": "progress",
                     "step": 2,
@@ -84,56 +91,37 @@ async def websocket_chat(websocket: WebSocket, session_id: str, token: str = Non
                     "message": "جاري المعالجة...",
                     "percent": 50
                 })
+                await asyncio.sleep(0.8)
                 
-                # استدعاء API الحقيقي
-                try:
-                    async with httpx.AsyncClient(timeout=120.0) as client:
-                        response = await client.post(
-                            f"{BACKEND_URL}/api/chat/sessions/{session_id}/messages",
-                            json={"message": message, "settings": settings},
-                            headers={"Authorization": f"Bearer {token}"}
-                        )
-                        
-                        if response.status_code == 200:
-                            result = response.json()
-                            
-                            # مرحلة 3: التوليد
-                            await websocket.send_json({
-                                "type": "progress",
-                                "step": 3,
-                                "total_steps": 4,
-                                "status": "generating",
-                                "message": "جاري التوليد...",
-                                "percent": 75
-                            })
-                            await asyncio.sleep(0.3)
-                            
-                            # مرحلة 4: مكتمل
-                            await websocket.send_json({
-                                "type": "progress",
-                                "step": 4,
-                                "total_steps": 4,
-                                "status": "complete",
-                                "message": "تم بنجاح!",
-                                "percent": 100
-                            })
-                            await asyncio.sleep(0.3)
-                            
-                            # إرسال النتيجة
-                            await websocket.send_json({
-                                "type": "message",
-                                "data": result
-                            })
-                        else:
-                            await websocket.send_json({
-                                "type": "error",
-                                "message": "فشل في معالجة الطلب"
-                            })
-                except Exception as e:
-                    await websocket.send_json({
-                        "type": "error",
-                        "message": f"خطأ: {str(e)[:100]}"
-                    })
+                # Step 3: Generating
+                await websocket.send_json({
+                    "type": "progress",
+                    "step": 3,
+                    "total_steps": 4,
+                    "status": "generating",
+                    "message": "جاري التوليد...",
+                    "percent": 75
+                })
+                await asyncio.sleep(0.8)
+                
+                # Step 4: Complete
+                await websocket.send_json({
+                    "type": "progress",
+                    "step": 4,
+                    "total_steps": 4,
+                    "status": "complete",
+                    "message": "تم بنجاح!",
+                    "percent": 100
+                })
+                await asyncio.sleep(0.3)
+                
+                # Send done signal (frontend will use REST API for actual response)
+                await websocket.send_json({
+                    "type": "done",
+                    "message": "اكتمل التقدم"
+                })
     
     except WebSocketDisconnect:
+        manager.disconnect(websocket, user_id)
+    except Exception as e:
         manager.disconnect(websocket, user_id)
