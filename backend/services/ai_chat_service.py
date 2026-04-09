@@ -1,5 +1,6 @@
 """
-Zitex AI Chat Service - Simplified for independent hosting
+Zitex AI Chat Service
+خدمة الشات الذكي لتوليد المحتوى
 """
 import os
 import uuid
@@ -18,44 +19,24 @@ except ImportError:
     OPENAI_AVAILABLE = False
     openai = None
 
-# Check if AI features are enabled
+# AI Features enabled
 AI_FEATURES_ENABLED = True
-
-try:
-    from elevenlabs.client import ElevenLabs
-    from elevenlabs.types import VoiceSettings
-    ELEVENLABS_AVAILABLE = True
-except ImportError:
-    ELEVENLABS_AVAILABLE = False
-    ElevenLabs = None
-    VoiceSettings = None
-    from elevenlabs.types import VoiceSettings
-    ELEVENLABS_AVAILABLE = True
-except ImportError:
-    ELEVENLABS_AVAILABLE = False
-    ElevenLabs = None
-    VoiceSettings = None
 
 
 class AIAssistant:
+    """مساعد الذكاء الاصطناعي"""
+    
     def __init__(self, db: AsyncIOMotorDatabase, api_key: str = None, elevenlabs_key: str = None, openai_key: str = None):
         self.db = db
         self.api_key = api_key or os.environ.get('OPENAI_API_KEY')
-        self.elevenlabs_key = elevenlabs_key
-        
-        self.eleven_client = None
-        if ELEVENLABS_AVAILABLE and elevenlabs_key:
-            try:
-                self.eleven_client = ElevenLabs(api_key=elevenlabs_key)
-            except:
-                pass
+        self.openai_key = openai_key or self.api_key
         
         self.openai_client = None
-        if OPENAI_AVAILABLE and self.api_key:
+        if OPENAI_AVAILABLE and self.openai_key:
             try:
-                self.openai_client = openai.OpenAI(api_key=self.api_key)
-            except:
-                pass
+                self.openai_client = openai.OpenAI(api_key=self.openai_key)
+            except Exception as e:
+                logger.error(f"OpenAI init error: {e}")
     
     async def create_session(self, user_id: str, session_type: str = "general", title: str = None) -> Dict:
         session = {
@@ -98,11 +79,49 @@ class AIAssistant:
             "created_at": datetime.now(timezone.utc).isoformat()
         }
         
-        ai_response = "مرحباً! كيف يمكنني مساعدتك؟"
+        ai_response = ""
+        attachments = []
         
-        if self.openai_client:
+        # Check if user wants to generate an image
+        image_keywords = ['صورة', 'صور', 'أنشئ صورة', 'اصنع صورة', 'ارسم', 'توليد صورة', 'اريد صورة', 'ولد صورة', 'image', 'generate', 'create image', 'draw']
+        is_image_request = any(kw in message.lower() for kw in image_keywords) or session.get("session_type") == "image"
+        
+        if not self.openai_client:
+            ai_response = "عذراً، خدمة الذكاء الاصطناعي غير متاحة حالياً."
+        elif is_image_request:
+            # Generate image using DALL-E
             try:
-                messages = [{"role": "system", "content": "أنت مساعد ذكي اسمك زيتكس. أجب بالعربية."}]
+                image_response = self.openai_client.images.generate(
+                    model="dall-e-3",
+                    prompt=message,
+                    size="1024x1024",
+                    quality="standard",
+                    n=1,
+                )
+                image_url = image_response.data[0].url
+                
+                # Save to database
+                asset = {
+                    "id": str(uuid.uuid4()),
+                    "user_id": user_id,
+                    "session_id": session_id,
+                    "asset_type": "image",
+                    "url": image_url,
+                    "prompt": message,
+                    "created_at": datetime.now(timezone.utc).isoformat()
+                }
+                await self.db.generated_assets.insert_one(asset)
+                
+                ai_response = "تم إنشاء الصورة بنجاح! 🎨"
+                attachments = [{"type": "image", "url": image_url, "prompt": message}]
+                
+            except Exception as e:
+                logger.error(f"Image generation error: {e}")
+                ai_response = f"عذراً، حدث خطأ في توليد الصورة: {str(e)[:100]}"
+        else:
+            # Regular chat
+            try:
+                messages = [{"role": "system", "content": "أنت زيتكس، مساعد ذكي. يمكنك توليد الصور إذا طلب المستخدم ذلك. أجب بالعربية دائماً."}]
                 for msg in session.get("messages", [])[-10:]:
                     messages.append({"role": msg["role"], "content": msg["content"]})
                 messages.append({"role": "user", "content": message})
@@ -114,14 +133,14 @@ class AIAssistant:
                 ai_response = completion.choices[0].message.content
             except Exception as e:
                 logger.error(f"OpenAI error: {e}")
-                ai_response = f"عذراً، حدث خطأ. يرجى المحاولة لاحقاً."
+                ai_response = f"عذراً، حدث خطأ: {str(e)[:100]}"
         
         assistant_msg = {
             "id": str(uuid.uuid4()),
             "role": "assistant",
             "content": ai_response,
-            "message_type": "text",
-            "attachments": [],
+            "message_type": "image" if attachments else "text",
+            "attachments": attachments,
             "created_at": datetime.now(timezone.utc).isoformat()
         }
         
