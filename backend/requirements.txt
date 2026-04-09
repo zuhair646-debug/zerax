@@ -18,3 +18,4 @@ paypalrestsdk
 pillow
 certifi
 dnspython
+replicate
