@@ -17,7 +17,22 @@ import jwt
 import base64
 import httpx
 import io
+# ============== GPT-5.2 & SORA 2 & GPT IMAGE 1 ==============
+from openai import OpenAI
+import zipfile
+import tempfile
+import shutil
+from concurrent.futures import ThreadPoolExecutor
 
+# Thread pool for background video generation
+video_executor = ThreadPoolExecutor(max_workers=2)
+
+# AI Models Configuration
+AI_MODELS = {
+    "chat": "gpt-5.2",
+    "image": "gpt-image-1", 
+    "video": "sora-2"
+}
 # Optional imports
 try:
     from elevenlabs.client import ElevenLabs
