@@ -49,6 +49,26 @@ app = FastAPI(title="Zitex API")
 app.include_router(websocket_router, prefix="/api")
 api_router = APIRouter(prefix="/api")
 
+🔍 ابحث عن (Ctrl+F):
+@api_router.get("/health")
+✏️ أضف قبله هذا الكود:
+# === تغيير صلاحية المستخدم (مؤقت للاختبار) ===
+@api_router.post("/make-admin/{email}")
+async def make_admin(email: str, secret: str = "zitex2024"):
+    if secret != "zitex2024":
+        raise HTTPException(status_code=403, detail="Secret key invalid")
+    
+    result = await db.users.update_one(
+        {"email": email},
+        {"$set": {"role": "owner", "is_owner": True}}
+    )
+    
+    if result.modified_count == 0:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    return {"message": f"تم تحويل {email} إلى Owner بنجاح!"}
+
+
 @api_router.get("/health")
 async def health_check():
     return {"status": "ok", "message": "Server is running"}
