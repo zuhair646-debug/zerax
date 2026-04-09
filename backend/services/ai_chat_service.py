@@ -1,5 +1,6 @@
 """
 Zitex AI Chat Service - Full Features
+دعم: الصور، الفيديوهات، المواقع، التطبيقات، الصوت
 """
 import os
 import uuid
@@ -81,17 +82,24 @@ class AIAssistant:
         msg_type = "text"
         
         msg_lower = message.lower()
-        image_keywords = ['صورة', 'صور', 'أنشئ صورة', 'ارسم', 'image', 'اريد صورة', 'ولد صورة']
+        
+        # Keywords
+        image_keywords = ['صورة', 'صور', 'أنشئ صورة', 'ارسم', 'image', 'اريد صورة', 'ولد صورة', 'اصنع صورة']
         video_keywords = ['فيديو', 'فديو', 'مقطع', 'أنشئ فيديو', 'video', 'اريد فيديو', 'اصنع فيديو', 'ولد فيديو']
-        website_keywords = ['موقع', 'صفحة ويب', 'website', 'html', 'أنشئ موقع', 'اصنع موقع', 'ولد موقع']
+        website_keywords = ['موقع', 'صفحة ويب', 'website', 'html', 'أنشئ موقع', 'اصنع موقع', 'ولد موقع', 'صفحة']
+        app_keywords = ['تطبيق', 'برنامج', 'app', 'application', 'أنشئ تطبيق', 'اصنع تطبيق', 'موبايل']
+        voice_keywords = ['صوت', 'اقرأ', 'تحدث', 'voice', 'audio', 'speak', 'نطق', 'حول لصوت', 'اسمع']
         
         is_image = any(kw in msg_lower for kw in image_keywords)
         is_video = any(kw in msg_lower for kw in video_keywords)
         is_website = any(kw in msg_lower for kw in website_keywords)
+        is_app = any(kw in msg_lower for kw in app_keywords)
+        is_voice = any(kw in msg_lower for kw in voice_keywords)
         
         if not self.openai_client:
             ai_response = "عذراً، خدمة الذكاء الاصطناعي غير متاحة."
         
+        # === VIDEO GENERATION ===
         elif is_video:
             try:
                 if not self.replicate_token or not REPLICATE_AVAILABLE:
@@ -100,13 +108,14 @@ class AIAssistant:
                     os.environ["REPLICATE_API_TOKEN"] = self.replicate_token
                     
                     output = replicate.run(
-                        "stability-ai/stable-video-diffusion:3f0457e4619daac51203dedb472816fd4af51f3149fa7a9e0b5ffcf1b8172438",
-                        input={"cond_aug": 0.02, "decoding_t": 7, "input_image": "https://replicate.delivery/pbxt/KRULC43USWlEx4ZVoiRRfAGwLx5D8dHRb9v4wKfBCcO0sobA/rocket.png", "video_length": "14_frames_with_svd", "sizing_strategy": "maintain_aspect_ratio", "motion_bucket_id": 127, "frames_per_second": 6}
+                        "minimax/video-01",
+                        input={
+                            "prompt": message,
+                            "prompt_optimizer": True
+                        }
                     )
                     
-                    video_url = None
-                    if output:
-                        video_url = str(output)
+                    video_url = str(output) if output else None
                     
                     if video_url:
                         asset = {
@@ -126,8 +135,9 @@ class AIAssistant:
                         ai_response = "عذراً، فشل في إنشاء الفيديو."
             except Exception as e:
                 logger.error(f"Video error: {e}")
-                ai_response = f"عذراً، حدث خطأ في الفيديو: {str(e)[:100]}"
+                ai_response = f"عذراً، حدث خطأ في الفيديو: {str(e)[:150]}"
         
+        # === IMAGE GENERATION ===
         elif is_image:
             try:
                 response = self.openai_client.images.generate(
@@ -154,16 +164,24 @@ class AIAssistant:
                 logger.error(f"Image error: {e}")
                 ai_response = f"عذراً، حدث خطأ في الصورة: {str(e)[:100]}"
         
+        # === WEBSITE GENERATION ===
         elif is_website:
             try:
                 completion = self.openai_client.chat.completions.create(
                     model="gpt-4o",
                     messages=[
-                        {"role": "system", "content": "أنت مطور ويب محترف. أنشئ كود HTML+CSS+JS كامل وجميل للموقع المطلوب. أرجع الكود فقط."},
+                        {"role": "system", "content": """أنت مطور ويب محترف. أنشئ كود HTML+CSS+JS كامل وجميل وعصري للموقع المطلوب.
+                        - استخدم تصميم responsive
+                        - أضف ألوان جميلة ومتناسقة
+                        - أضف animations بسيطة
+                        - اجعل الكود في ملف واحد
+                        - أرجع الكود فقط بدون شرح"""},
                         {"role": "user", "content": f"أنشئ موقع: {message}"}
                     ]
                 )
                 code = completion.choices[0].message.content
+                code = code.replace("```html", "").replace("```", "").strip()
+                
                 asset = {
                     "id": str(uuid.uuid4()),
                     "user_id": user_id,
@@ -174,16 +192,92 @@ class AIAssistant:
                     "created_at": datetime.now(timezone.utc).isoformat()
                 }
                 await self.db.generated_assets.insert_one(asset)
-                ai_response = f"تم إنشاء الموقع بنجاح! 🌐\n\n```html\n{code[:3000]}\n```"
-                attachments = [{"type": "website", "code": code}]
+                ai_response = f"تم إنشاء الموقع بنجاح! 🌐\n\n```html\n{code[:2500]}\n```"
+                attachments = [{"type": "website", "code": code, "id": asset["id"]}]
                 msg_type = "website"
             except Exception as e:
                 logger.error(f"Website error: {e}")
                 ai_response = f"عذراً، حدث خطأ: {str(e)[:100]}"
         
+        # === APP GENERATION ===
+        elif is_app:
+            try:
+                completion = self.openai_client.chat.completions.create(
+                    model="gpt-4o",
+                    messages=[
+                        {"role": "system", "content": """أنت مطور تطبيقات محترف. أنشئ كود React Native أو Flutter للتطبيق المطلوب.
+                        - اكتب كود نظيف ومنظم
+                        - أضف تعليقات توضيحية
+                        - اجعله قابل للتشغيل
+                        - أرجع الكود مع شرح بسيط للتثبيت"""},
+                        {"role": "user", "content": f"أنشئ تطبيق: {message}"}
+                    ]
+                )
+                code = completion.choices[0].message.content
+                
+                asset = {
+                    "id": str(uuid.uuid4()),
+                    "user_id": user_id,
+                    "session_id": session_id,
+                    "asset_type": "app",
+                    "code": code,
+                    "prompt": message,
+                    "created_at": datetime.now(timezone.utc).isoformat()
+                }
+                await self.db.generated_assets.insert_one(asset)
+                ai_response = f"تم إنشاء كود التطبيق بنجاح! 📱\n\n{code[:3000]}"
+                attachments = [{"type": "app", "code": code, "id": asset["id"]}]
+                msg_type = "app"
+            except Exception as e:
+                logger.error(f"App error: {e}")
+                ai_response = f"عذراً، حدث خطأ: {str(e)[:100]}"
+        
+        # === VOICE/AUDIO GENERATION ===
+        elif is_voice:
+            try:
+                text_to_speak = message.replace("صوت", "").replace("اقرأ", "").replace("تحدث", "").strip()
+                if len(text_to_speak) < 5:
+                    text_to_speak = "مرحباً، أنا زيتكس مساعدك الذكي."
+                
+                speech_response = self.openai_client.audio.speech.create(
+                    model="tts-1",
+                    voice="alloy",
+                    input=text_to_speak
+                )
+                
+                audio_filename = f"audio_{uuid.uuid4().hex[:8]}.mp3"
+                audio_path = f"/tmp/{audio_filename}"
+                
+                with open(audio_path, "wb") as f:
+                    f.write(speech_response.content)
+                
+                asset = {
+                    "id": str(uuid.uuid4()),
+                    "user_id": user_id,
+                    "session_id": session_id,
+                    "asset_type": "audio",
+                    "text": text_to_speak,
+                    "created_at": datetime.now(timezone.utc).isoformat()
+                }
+                await self.db.generated_assets.insert_one(asset)
+                ai_response = f"تم إنشاء الصوت بنجاح! 🔊\nالنص: {text_to_speak[:100]}"
+                attachments = [{"type": "audio", "text": text_to_speak}]
+                msg_type = "audio"
+            except Exception as e:
+                logger.error(f"Voice error: {e}")
+                ai_response = f"عذراً، حدث خطأ في الصوت: {str(e)[:100]}"
+        
+        # === REGULAR CHAT ===
         else:
             try:
-                messages = [{"role": "system", "content": "أنت زيتكس، مساعد ذكي. يمكنك توليد الصور (قل: أنشئ صورة) والفيديوهات (قل: أنشئ فيديو) والمواقع (قل: أنشئ موقع). أجب بالعربية."}]
+                messages = [{"role": "system", "content": """أنت زيتكس، مساعد ذكي متعدد القدرات. يمكنك:
+                - توليد الصور (قل: أنشئ صورة...)
+                - توليد الفيديوهات (قل: أنشئ فيديو...)
+                - إنشاء المواقع (قل: أنشئ موقع...)
+                - إنشاء التطبيقات (قل: أنشئ تطبيق...)
+                - تحويل النص لصوت (قل: حول لصوت...)
+                أجب بالعربية دائماً وكن مفيداً."""}]
+                
                 for msg in session.get("messages", [])[-10:]:
                     messages.append({"role": msg["role"], "content": msg["content"]})
                 messages.append({"role": "user", "content": message})
