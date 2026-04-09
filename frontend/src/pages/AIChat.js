@@ -168,7 +168,33 @@ const AIChat = ({ user }) => {
   const pollingIntervalRef = useRef(null);
   const recordingTimerRef = useRef(null);
   const audioChunksRef = useRef([]);
+  // WebSocket للشات الحي
+  const {
+    isConnected,
+    progress,
+    lastMessage,
+    sendMessage: wsSendMessage,
+    clearLastMessage
+  } = useWebSocket(
+    currentSession?.id,
+    localStorage.getItem('token'),
+    process.env.REACT_APP_BACKEND_URL
+  );
 
+  // معالجة رسائل WebSocket
+  useEffect(() => {
+    if (lastMessage) {
+      if (lastMessage.user_message && lastMessage.assistant_message) {
+        setMessages(prev => {
+          const filtered = prev.filter(m => !m.id?.startsWith('temp-'));
+          return [...filtered, lastMessage.user_message, lastMessage.assistant_message];
+        });
+      }
+      setLoading(false);
+      setIsTyping(false);
+      clearLastMessage();
+    }
+  }, [lastMessage, clearLastMessage]);
   useEffect(() => {
     fetchSessions();
     fetchVoices();
