@@ -20,3 +20,5 @@ certifi
 dnspython
 replicate
 httpx
+pydantic
+openai>=1.40.0
