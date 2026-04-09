@@ -5,6 +5,7 @@ import LandingPage from '@/pages/LandingPage';
 import LoginPage from '@/pages/LoginPage';
 import RegisterPage from '@/pages/RegisterPage';
 import ClientDashboard from '@/pages/ClientDashboard';
+import AdminPricing from './pages/AdminPricing';
 import NewRequest from '@/pages/NewRequest';
 import MyRequests from '@/pages/MyRequests';
 import RequestDetails from '@/pages/RequestDetails';
@@ -95,6 +96,7 @@ function App() {
           <Route path="/admin/clients" element={<ProtectedRoute adminOnly><AdminClients user={user} /></ProtectedRoute>} />
           <Route path="/admin/websites" element={<ProtectedRoute adminOnly><AdminWebsites user={user} /></ProtectedRoute>} />
           <Route path="/admin/settings" element={<ProtectedRoute adminOnly><AdminSettings user={user} /></ProtectedRoute>} />
+          <Route path="/admin/pricing" element={<ProtectedRoute adminOnly><AdminPricing user={user} /></ProtectedRoute>} />
           <Route path="/admin/activity" element={<ProtectedRoute adminOnly><AdminActivity user={user} /></ProtectedRoute>} />
           <Route path="/chat" element={<ProtectedRoute><AIChat user={user} /></ProtectedRoute>} />
           <Route path="/projects" element={<ProtectedRoute><ProjectsPage user={user} /></ProtectedRoute>} />
