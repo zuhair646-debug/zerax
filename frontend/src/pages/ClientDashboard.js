@@ -1,42 +1,11 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React from 'react';
 import { Navbar } from '@/components/Navbar';
-import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { useNavigate } from 'react-router-dom';
 import { Coins, Crown, Gift, Image, Video, Globe, MessageSquare } from 'lucide-react';
 
-const ClientDashboard = ({ user, setUser }) => {
+const ClientDashboard = ({ user }) => {
   const navigate = useNavigate();
-  const [loading, setLoading] = useState(true);
-  const hasFetched = useRef(false);
-
-  useEffect(() => {
-    if (hasFetched.current) return;
-    hasFetched.current = true;
-
-    const fetchData = async () => {
-      const token = localStorage.getItem('token');
-      if (!token) {
-        setLoading(false);
-        return;
-      }
-
-      try {
-        const res = await fetch(`${process.env.REACT_APP_BACKEND_URL}/api/auth/me`, {
-          headers: { 'Authorization': `Bearer ${token}` }
-        });
-        if (res.ok) {
-          const userData = await res.json();
-          setUser(userData);
-        }
-      } catch (error) {
-        console.error('Error:', error);
-      }
-      setLoading(false);
-    };
-
-    fetchData();
-  }, []);
 
   const quickActions = [
     { title: 'الشات الذكي', desc: 'تحدث مع الذكاء الاصطناعي', icon: <MessageSquare className="w-6 h-6" />, path: '/chat', color: 'from-purple-500 to-pink-500' },
@@ -44,17 +13,6 @@ const ClientDashboard = ({ user, setUser }) => {
     { title: 'إنشاء الفيديو', desc: 'فيديوهات بتقنية AI', icon: <Video className="w-6 h-6" />, path: '/chat', color: 'from-orange-500 to-red-500' },
     { title: 'بناء المواقع', desc: 'مواقع احترافية', icon: <Globe className="w-6 h-6" />, path: '/chat', color: 'from-green-500 to-emerald-500' },
   ];
-
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-slate-900 flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin w-10 h-10 border-4 border-purple-500 border-t-transparent rounded-full mx-auto mb-4"></div>
-          <p className="text-white">جاري التحميل...</p>
-        </div>
-      </div>
-    );
-  }
 
   return (
     <div className="min-h-screen bg-slate-900">
