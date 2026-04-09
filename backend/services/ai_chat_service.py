@@ -16,9 +16,19 @@ try:
     OPENAI_AVAILABLE = True
 except ImportError:
     OPENAI_AVAILABLE = False
+    openai = None
+
+# Check if AI features are enabled
+AI_FEATURES_ENABLED = True
 
 try:
     from elevenlabs.client import ElevenLabs
+    from elevenlabs.types import VoiceSettings
+    ELEVENLABS_AVAILABLE = True
+except ImportError:
+    ELEVENLABS_AVAILABLE = False
+    ElevenLabs = None
+    VoiceSettings = None
     from elevenlabs.types import VoiceSettings
     ELEVENLABS_AVAILABLE = True
 except ImportError:
