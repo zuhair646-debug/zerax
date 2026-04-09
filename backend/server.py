@@ -66,13 +66,14 @@ async def make_admin(email: str, secret: str = "zitex2024"):
     return {"message": f"تم تحويل {email} إلى Owner بنجاح!"}
 
 # === نظام إدارة الأسعار والعروض ===
-USD_TO_SAR = 3.75  # سعر الصرف
-
 DEFAULT_PRICING = {
+    "type": "pricing",
+    "currency": "USD",
+    "exchange_rate": 3.75,
     "packages": [
-        {"id": "starter", "name": "باقة المبتدئ", "credits": 100, "price_usd": 13, "bonus": 0, "popular": False},
-        {"id": "pro", "name": "باقة المحترف", "credits": 500, "price_usd": 53, "bonus": 50, "popular": True},
-        {"id": "enterprise", "name": "باقة الأعمال", "credits": 2000, "price_usd": 187, "bonus": 300, "popular": False},
+        {"id": "starter", "name": "باقة المبتدئ", "credits": 100, "price": 13, "bonus": 0, "popular": False},
+        {"id": "pro", "name": "باقة المحترف", "credits": 500, "price": 53, "bonus": 50, "popular": True},
+        {"id": "enterprise", "name": "باقة الأعمال", "credits": 2000, "price": 187, "bonus": 300, "popular": False},
     ],
     "services": {
         "image": 5,
@@ -83,7 +84,10 @@ DEFAULT_PRICING = {
         "website_simple": 50,
         "website_advanced": 150,
     },
-    "exchange_rate": 3.75,
+    "first_order_discount": 0,
+    "signup_bonus": 20,
+    "referral_bonus": 30,
+    "invited_bonus": 20,
     "offers": []
 }
 
@@ -96,19 +100,107 @@ async def get_pricing(credentials: HTTPAuthorizationCredentials = Depends(securi
         raise HTTPException(status_code=403, detail="Admin only")
     
     pricing = await db.settings.find_one({"type": "pricing"})
+    
     if not pricing:
-        await db.settings.insert_one({"type": "pricing", **DEFAULT_PRICING})
-        pricing = DEFAULT_PRICING
+        pricing = DEFAULT_PRICING.copy()
+        await db.settings.insert_one(pricing)
+        pricing = await db.settings.find_one({"type": "pricing"})
     
-    # Add SAR prices
-    pricing_with_sar = {**pricing}
-    if "packages" in pricing_with_sar:
-        rate = pricing_with_sar.get("exchange_rate", 3.75)
-        for pkg in pricing_with_sar["packages"]:
-            pkg["price_sar"] = round(pkg["price_usd"] * rate)
-    
-    return pricing_with_sar
+    result = {k: v for k, v in pricing.items() if k != '_id'}
+    return result
 
+@api_router.put("/admin/pricing")
+async def update_pricing(data: dict, credentials: HTTPAuthorizationCredentials = Depends(security)):
+    token = credentials.credentials
+    payload = jwt.decode(token, JWT_SECRET, algorithms=['HS256'])
+    user = await db.users.find_one({"id": payload['user_id']})
+    if not user or user.get('role') not in ['admin', 'owner']:
+        raise HTTPException(status_code=403, detail="Admin only")
+    
+    data['type'] = 'pricing'
+    await db.settings.update_one(
+        {"type": "pricing"},
+        {"$set": data},
+        upsert=True
+    )
+    return {"message": "تم تحديث الأسعار بنجاح"}
+
+@api_router.post("/admin/offers")
+async def create_offer(data: dict, credentials: HTTPAuthorizationCredentials = Depends(security)):
+    token = credentials.credentials
+    payload = jwt.decode(token, JWT_SECRET, algorithms=['HS256'])
+    user = await db.users.find_one({"id": payload['user_id']})
+    if not user or user.get('role') not in ['admin', 'owner']:
+        raise HTTPException(status_code=403, detail="Admin only")
+    
+    offer = {
+        "id": str(uuid.uuid4())[:8],
+        "name": data.get("name", "عرض خاص"),
+        "code": data.get("code", "").upper(),
+        "discount_percent": data.get("discount_percent", 0),
+        "for_first_order": data.get("for_first_order", False),
+        "max_uses": data.get("max_uses", 0),
+        "used_count": 0,
+        "active": True,
+        "created_at": datetime.now(timezone.utc).isoformat()
+    }
+    
+    await db.settings.update_one(
+        {"type": "pricing"},
+        {"$push": {"offers": offer}},
+        upsert=True
+    )
+    return {"message": "تم إنشاء العرض بنجاح", "offer": offer}
+
+@api_router.delete("/admin/offers/{offer_id}")
+async def delete_offer(offer_id: str, credentials: HTTPAuthorizationCredentials = Depends(security)):
+    token = credentials.credentials
+    payload = jwt.decode(token, JWT_SECRET, algorithms=['HS256'])
+    user = await db.users.find_one({"id": payload['user_id']})
+    if not user or user.get('role') not in ['admin', 'owner']:
+        raise HTTPException(status_code=403, detail="Admin only")
+    
+    await db.settings.update_one(
+        {"type": "pricing"},
+        {"$pull": {"offers": {"id": offer_id}}}
+    )
+    return {"message": "تم حذف العرض"}
+
+@api_router.post("/validate-coupon")
+async def validate_coupon(data: dict):
+    code = data.get("code", "").upper()
+    pricing = await db.settings.find_one({"type": "pricing"})
+    
+    if not pricing or not pricing.get("offers"):
+        raise HTTPException(status_code=404, detail="كود غير صالح")
+    
+    for offer in pricing["offers"]:
+        if offer.get("code") == code and offer.get("active"):
+            if offer.get("max_uses") > 0 and offer.get("used_count", 0) >= offer["max_uses"]:
+                raise HTTPException(status_code=400, detail="انتهى العرض")
+            return {
+                "valid": True,
+                "discount_percent": offer.get("discount_percent", 0),
+                "name": offer.get("name"),
+                "for_first_order": offer.get("for_first_order", False)
+            }
+    
+    raise HTTPException(status_code=404, detail="كود غير صالح")
+
+@api_router.get("/pricing")
+async def get_public_pricing():
+    pricing = await db.settings.find_one({"type": "pricing"})
+    if not pricing:
+        pricing = DEFAULT_PRICING.copy()
+    
+    return {
+        "currency": pricing.get("currency", "USD"),
+        "exchange_rate": pricing.get("exchange_rate", 3.75),
+        "packages": pricing.get("packages", []),
+        "services": pricing.get("services", {}),
+        "first_order_discount": pricing.get("first_order_discount", 0)
+    }
+    
 @api_router.put("/admin/pricing")
 async def update_pricing(data: dict, credentials: HTTPAuthorizationCredentials = Depends(security)):
     token = credentials.credentials
