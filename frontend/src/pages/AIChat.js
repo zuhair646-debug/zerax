@@ -1045,7 +1045,7 @@ const AIChat = ({ user }) => {
                       ttsEnabled={ttsSettings.enabled}
                     />
                   ))}
-                  
+                    {progress && <ProgressIndicator progress={progress} />}
                   {isTyping && (
                     <div className="flex justify-end animate-fadeIn">
                       <div className="bg-slate-700 rounded-2xl rounded-tl-md p-4">
