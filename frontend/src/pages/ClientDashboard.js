@@ -3,7 +3,7 @@ import { Navbar } from '@/components/Navbar';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { useNavigate } from 'react-router-dom';
-import { PlusCircle, FileText, Globe, Image, Video, Coins, Crown, Gift, Sparkles } from 'lucide-react';
+import { PlusCircle, FileText, Globe, Image, Video, Coins, Crown, Gift, Sparkles, MessageSquare } from 'lucide-react';
 
 const ClientDashboard = ({ user, setUser }) => {
   const navigate = useNavigate();
@@ -13,33 +13,40 @@ const ClientDashboard = ({ user, setUser }) => {
   useEffect(() => {
     const fetchStats = async () => {
       const token = localStorage.getItem('token');
-      
       if (!token) {
         setLoading(false);
         return;
       }
 
       try {
-        const backendUrl = process.env.REACT_APP_BACKEND_URL;
-        
-        const [requestsRes, websitesRes, userRes] = await Promise.all([
-          fetch(`${backendUrl}/api/requests`, {
+        const results = await Promise.allSettled([
+          fetch(`${process.env.REACT_APP_BACKEND_URL}/api/requests`, {
             headers: { 'Authorization': `Bearer ${token}` }
           }),
-          fetch(`${backendUrl}/api/websites`, {
+          fetch(`${process.env.REACT_APP_BACKEND_URL}/api/websites`, {
             headers: { 'Authorization': `Bearer ${token}` }
           }),
-          fetch(`${backendUrl}/api/auth/me`, {
+          fetch(`${process.env.REACT_APP_BACKEND_URL}/api/auth/me`, {
             headers: { 'Authorization': `Bearer ${token}` }
           })
         ]);
 
-        const requests = requestsRes.ok ? await requestsRes.json() : [];
-        const websites = websitesRes.ok ? await websitesRes.json() : [];
-        const userData = userRes.ok ? await userRes.json() : null;
+        let requests = [];
+        let websites = [];
 
-        if (userData && userData.id) {
-          setUser(userData);
+        if (results[0].status === 'fulfilled' && results[0].value.ok) {
+          requests = await results[0].value.json();
+        }
+
+        if (results[1].status === 'fulfilled' && results[1].value.ok) {
+          websites = await results[1].value.json();
+        }
+
+        if (results[2].status === 'fulfilled' && results[2].value.ok) {
+          const userData = await results[2].value.json();
+          if (userData && userData.id) {
+            setUser(userData);
+          }
         }
 
         setStats({
@@ -59,6 +66,7 @@ const ClientDashboard = ({ user, setUser }) => {
   }, [setUser]);
 
   const quickActions = [
+    { title: 'الشات الذكي', desc: 'تحدث مع الذكاء الاصطناعي', icon: <MessageSquare className="w-6 h-6" />, path: '/chat', color: 'from-purple-500 to-pink-500' },
     { title: 'طلب موقع جديد', desc: 'أنشئ موقعك بالذكاء الاصطناعي', icon: <PlusCircle className="w-6 h-6" />, path: '/dashboard/new-request', color: 'from-blue-500 to-cyan-500' },
     { title: 'توليد الصور', desc: user?.free_images > 0 ? `${user.free_images} صور مجانية` : 'أنشئ صوراً إبداعية', icon: <Image className="w-6 h-6" />, path: '/dashboard/images', color: 'from-purple-500 to-pink-500', badge: user?.free_images > 0 ? 'مجاني' : null },
     { title: 'إنشاء الفيديو', desc: user?.free_videos > 0 ? `${user.free_videos} فيديوهات مجانية` : 'فيديوهات بتقنية AI', icon: <Video className="w-6 h-6" />, path: '/dashboard/videos', color: 'from-orange-500 to-red-500', badge: user?.free_videos > 0 ? 'مجاني' : null },
@@ -67,13 +75,13 @@ const ClientDashboard = ({ user, setUser }) => {
   ];
 
   return (
-    <div className="min-h-screen bg-slate-900" data-testid="client-dashboard">
+    <div className="min-h-screen bg-slate-900">
       <Navbar user={user} transparent />
-      
+
       <div className="container mx-auto px-4 md:px-8 max-w-7xl pt-24 pb-12">
         <div className="mb-8 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
           <div>
-            <h1 className="text-3xl font-bold text-white mb-2" data-testid="dashboard-title">
+            <h1 className="text-3xl font-bold text-white mb-2">
               مرحباً، {user?.name || 'مستخدم'}
               {user?.is_owner && <Crown className="w-6 h-6 inline ms-2 text-yellow-400" />}
             </h1>
@@ -87,7 +95,7 @@ const ClientDashboard = ({ user, setUser }) => {
 
         {loading ? (
           <div className="text-center py-12 text-white">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-white mx-auto mb-4"></div>
+            <div className="animate-spin w-8 h-8 border-4 border-purple-500 border-t-transparent rounded-full mx-auto mb-4"></div>
             جاري التحميل...
           </div>
         ) : (
@@ -99,7 +107,7 @@ const ClientDashboard = ({ user, setUser }) => {
                     <Gift className="w-10 h-10 text-green-400" />
                     <div>
                       <h3 className="text-xl font-semibold text-white">تجاربك المجانية</h3>
-                      <p className="text-green-400/70">جرّب خدماتنا مجاناً قبل الاشتراك!</p>
+                      <p className="text-green-400/70">جرّب خدماتنا مجاناً!</p>
                     </div>
                   </div>
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -165,11 +173,8 @@ const ClientDashboard = ({ user, setUser }) => {
             <h2 className="text-xl font-semibold text-white mb-4">إجراءات سريعة</h2>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
               {quickActions.map((action, index) => (
-                <Card
-                  key={index}
-                  className="bg-slate-800 border-slate-700 hover:border-slate-500 transition-all cursor-pointer group"
-                  onClick={() => navigate(action.path)}
-                >
+                <Card key={index} className="bg-slate-800 border-slate-700 hover:border-slate-500 transition-all cursor-pointer group"
+                  onClick={() => navigate(action.path)}>
                   <CardContent className="p-6">
                     <div className="flex items-start gap-4">
                       <div className={`p-3 rounded-lg bg-gradient-to-r ${action.color} text-white`}>
