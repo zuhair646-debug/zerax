@@ -6,7 +6,7 @@ import { Input } from '@/components/ui/input';
 import { toast } from 'sonner';
 import { 
   DollarSign, Save, Plus, Trash2, Tag, Percent, 
-  Package, Settings, Gift, ArrowLeft 
+  Package, Settings, Gift, ArrowLeft, Star, Users, ShoppingBag
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
@@ -19,11 +19,9 @@ const AdminPricing = ({ user }) => {
     name: '',
     code: '',
     discount_percent: 0,
-    discount_amount: 0,
-    max_uses: 0
+    max_uses: 0,
+    for_first_order: false
   });
-
-  const exchangeRate = pricing?.exchange_rate || 3.75;
 
   useEffect(() => {
     fetchPricing();
@@ -38,6 +36,30 @@ const AdminPricing = ({ user }) => {
       if (res.ok) {
         const data = await res.json();
         setPricing(data);
+      } else {
+        // Initialize default pricing
+        setPricing({
+          currency: 'USD',
+          exchange_rate: 3.75,
+          packages: [
+            { id: 'starter', name: 'باقة المبتدئ', credits: 100, price: 13, bonus: 0, popular: false },
+            { id: 'pro', name: 'باقة المحترف', credits: 500, price: 53, bonus: 50, popular: true },
+            { id: 'enterprise', name: 'باقة الأعمال', credits: 2000, price: 187, bonus: 300, popular: false },
+          ],
+          services: {
+            image: 5,
+            video_4s: 10,
+            video_8s: 18,
+            video_12s: 25,
+            video_60s: 100,
+            website_simple: 50,
+            website_advanced: 150,
+          },
+          first_order_discount: 0,
+          signup_bonus: 20,
+          referral_bonus: 30,
+          offers: []
+        });
       }
     } catch (error) {
       toast.error('فشل تحميل الأسعار');
@@ -68,16 +90,44 @@ const AdminPricing = ({ user }) => {
 
   const updatePackage = (index, field, value) => {
     const updated = { ...pricing };
-    updated.packages[index][field] = field.includes('price') || field === 'credits' || field === 'bonus' 
-      ? Number(value) 
-      : value;
+    if (field === 'popular') {
+      updated.packages[index][field] = value;
+    } else if (['price', 'credits', 'bonus'].includes(field)) {
+      updated.packages[index][field] = Number(value) || 0;
+    } else {
+      updated.packages[index][field] = value;
+    }
     setPricing(updated);
+  };
+
+  const addPackage = () => {
+    const newPkg = {
+      id: `pkg_${Date.now()}`,
+      name: 'باقة جديدة',
+      credits: 100,
+      price: 10,
+      bonus: 0,
+      popular: false
+    };
+    setPricing({
+      ...pricing,
+      packages: [...(pricing.packages || []), newPkg]
+    });
+    toast.success('تم إضافة باقة جديدة');
+  };
+
+  const deletePackage = (index) => {
+    if (!confirm('هل تريد حذف هذه الباقة؟')) return;
+    const updated = { ...pricing };
+    updated.packages.splice(index, 1);
+    setPricing(updated);
+    toast.success('تم حذف الباقة');
   };
 
   const updateService = (key, value) => {
     setPricing({
       ...pricing,
-      services: { ...pricing.services, [key]: Number(value) }
+      services: { ...pricing.services, [key]: Number(value) || 0 }
     });
   };
 
@@ -98,7 +148,7 @@ const AdminPricing = ({ user }) => {
       });
       if (res.ok) {
         toast.success('تم إضافة العرض');
-        setNewOffer({ name: '', code: '', discount_percent: 0, discount_amount: 0, max_uses: 0 });
+        setNewOffer({ name: '', code: '', discount_percent: 0, max_uses: 0, for_first_order: false });
         fetchPricing();
       }
     } catch (error) {
@@ -121,6 +171,21 @@ const AdminPricing = ({ user }) => {
     }
   };
 
+  const getDisplayPrice = (price) => {
+    if (pricing?.currency === 'SAR') {
+      return `${price} ر.س`;
+    }
+    return `$${price}`;
+  };
+
+  const getConvertedPrice = (price) => {
+    const rate = pricing?.exchange_rate || 3.75;
+    if (pricing?.currency === 'SAR') {
+      return `≈ $${(price / rate).toFixed(0)}`;
+    }
+    return `≈ ${Math.round(price * rate)} ر.س`;
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen bg-slate-900 flex items-center justify-center">
@@ -134,6 +199,7 @@ const AdminPricing = ({ user }) => {
       <Navbar user={user} transparent />
       
       <div className="container mx-auto px-4 md:px-8 max-w-6xl pt-24 pb-12">
+        {/* Header */}
         <div className="flex items-center justify-between mb-8">
           <div className="flex items-center gap-4">
             <Button variant="ghost" onClick={() => navigate('/admin')} className="text-gray-400">
@@ -141,7 +207,7 @@ const AdminPricing = ({ user }) => {
             </Button>
             <div>
               <h1 className="text-3xl font-bold text-white">إدارة الأسعار</h1>
-              <p className="text-gray-400">تحكم بالباقات والعروض</p>
+              <p className="text-gray-400">تحكم كامل بالباقات والعروض</p>
             </div>
           </div>
           <Button onClick={savePricing} disabled={saving} className="bg-green-600 hover:bg-green-700">
@@ -150,23 +216,92 @@ const AdminPricing = ({ user }) => {
           </Button>
         </div>
 
-        {/* سعر الصرف */}
+        {/* إعدادات العملة */}
         <Card className="bg-slate-800 border-slate-700 mb-6">
           <CardContent className="p-6">
-            <div className="flex items-center gap-4">
-              <DollarSign className="w-8 h-8 text-green-400" />
-              <div className="flex-1">
-                <h3 className="text-white font-semibold">سعر الصرف</h3>
-                <p className="text-gray-400 text-sm">1 دولار = كم ريال؟</p>
+            <div className="flex items-center gap-3 mb-4">
+              <DollarSign className="w-6 h-6 text-green-400" />
+              <h2 className="text-xl font-semibold text-white">إعدادات العملة</h2>
+            </div>
+            
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="bg-slate-700/50 rounded-lg p-4">
+                <label className="text-gray-400 text-sm block mb-2">العملة الأساسية</label>
+                <select
+                  value={pricing?.currency || 'USD'}
+                  onChange={(e) => setPricing({ ...pricing, currency: e.target.value })}
+                  className="w-full bg-slate-600 border-slate-500 text-white rounded-lg px-3 py-2"
+                >
+                  <option value="USD">🇺🇸 دولار أمريكي (USD)</option>
+                  <option value="SAR">🇸🇦 ريال سعودي (SAR)</option>
+                </select>
               </div>
-              <Input
-                type="number"
-                step="0.01"
-                value={pricing?.exchange_rate || 3.75}
-                onChange={(e) => setPricing({ ...pricing, exchange_rate: Number(e.target.value) })}
-                className="w-32 bg-slate-700 border-slate-600 text-white text-center"
-              />
-              <span className="text-gray-400">ريال</span>
+              
+              <div className="bg-slate-700/50 rounded-lg p-4">
+                <label className="text-gray-400 text-sm block mb-2">سعر الصرف (1 USD = ؟ SAR)</label>
+                <Input
+                  type="number"
+                  step="0.01"
+                  value={pricing?.exchange_rate || 3.75}
+                  onChange={(e) => setPricing({ ...pricing, exchange_rate: Number(e.target.value) })}
+                  className="bg-slate-600 border-slate-500 text-white"
+                />
+              </div>
+              
+              <div className="bg-slate-700/50 rounded-lg p-4">
+                <label className="text-gray-400 text-sm block mb-2">خصم أول طلب %</label>
+                <div className="flex items-center gap-2">
+                  <Input
+                    type="number"
+                    value={pricing?.first_order_discount || 0}
+                    onChange={(e) => setPricing({ ...pricing, first_order_discount: Number(e.target.value) })}
+                    className="bg-slate-600 border-slate-500 text-white"
+                  />
+                  <Percent className="w-5 h-5 text-pink-400" />
+                </div>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* مكافآت التسجيل والإحالة */}
+        <Card className="bg-slate-800 border-slate-700 mb-6">
+          <CardContent className="p-6">
+            <div className="flex items-center gap-3 mb-4">
+              <Users className="w-6 h-6 text-blue-400" />
+              <h2 className="text-xl font-semibold text-white">مكافآت التسجيل والإحالة</h2>
+            </div>
+            
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="bg-slate-700/50 rounded-lg p-4">
+                <label className="text-gray-400 text-sm block mb-2">مكافأة التسجيل (نقاط)</label>
+                <Input
+                  type="number"
+                  value={pricing?.signup_bonus || 0}
+                  onChange={(e) => setPricing({ ...pricing, signup_bonus: Number(e.target.value) })}
+                  className="bg-slate-600 border-slate-500 text-white"
+                />
+              </div>
+              
+              <div className="bg-slate-700/50 rounded-lg p-4">
+                <label className="text-gray-400 text-sm block mb-2">مكافأة الإحالة للداعي (نقاط)</label>
+                <Input
+                  type="number"
+                  value={pricing?.referral_bonus || 0}
+                  onChange={(e) => setPricing({ ...pricing, referral_bonus: Number(e.target.value) })}
+                  className="bg-slate-600 border-slate-500 text-white"
+                />
+              </div>
+              
+              <div className="bg-slate-700/50 rounded-lg p-4">
+                <label className="text-gray-400 text-sm block mb-2">مكافأة المدعو (نقاط)</label>
+                <Input
+                  type="number"
+                  value={pricing?.invited_bonus || 0}
+                  onChange={(e) => setPricing({ ...pricing, invited_bonus: Number(e.target.value) })}
+                  className="bg-slate-600 border-slate-500 text-white"
+                />
+              </div>
             </div>
           </CardContent>
         </Card>
@@ -174,77 +309,91 @@ const AdminPricing = ({ user }) => {
         {/* الباقات */}
         <Card className="bg-slate-800 border-slate-700 mb-6">
           <CardContent className="p-6">
-            <div className="flex items-center gap-3 mb-6">
-              <Package className="w-6 h-6 text-purple-400" />
-              <h2 className="text-xl font-semibold text-white">باقات النقاط</h2>
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-3">
+                <Package className="w-6 h-6 text-purple-400" />
+                <h2 className="text-xl font-semibold text-white">باقات النقاط</h2>
+              </div>
+              <Button onClick={addPackage} className="bg-purple-600 hover:bg-purple-700">
+                <Plus className="w-4 h-4 me-2" /> إضافة باقة
+              </Button>
             </div>
 
-            <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead>
-                  <tr className="text-gray-400 text-sm border-b border-slate-700">
-                    <th className="text-right py-3 px-2">الاسم</th>
-                    <th className="text-center py-3 px-2">النقاط</th>
-                    <th className="text-center py-3 px-2">السعر ($)</th>
-                    <th className="text-center py-3 px-2">بالريال ≈</th>
-                    <th className="text-center py-3 px-2">المكافأة</th>
-                    <th className="text-center py-3 px-2">مميز</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {pricing?.packages?.map((pkg, index) => (
-                    <tr key={pkg.id} className="border-b border-slate-700/50">
-                      <td className="py-3 px-2">
-                        <Input
-                          value={pkg.name}
-                          onChange={(e) => updatePackage(index, 'name', e.target.value)}
-                          className="bg-slate-700 border-slate-600 text-white"
-                        />
-                      </td>
-                      <td className="py-3 px-2">
-                        <Input
-                          type="number"
-                          value={pkg.credits}
-                          onChange={(e) => updatePackage(index, 'credits', e.target.value)}
-                          className="bg-slate-700 border-slate-600 text-white text-center w-24 mx-auto"
-                        />
-                      </td>
-                      <td className="py-3 px-2">
-                        <div className="flex items-center justify-center gap-1">
-                          <span className="text-green-400">$</span>
-                          <Input
-                            type="number"
-                            value={pkg.price_usd}
-                            onChange={(e) => updatePackage(index, 'price_usd', e.target.value)}
-                            className="bg-slate-700 border-slate-600 text-white text-center w-20"
-                          />
-                        </div>
-                      </td>
-                      <td className="py-3 px-2 text-center">
-                        <span className="text-yellow-400 font-semibold">
-                          {Math.round(pkg.price_usd * exchangeRate)} ر.س
-                        </span>
-                      </td>
-                      <td className="py-3 px-2">
+            <div className="space-y-4">
+              {pricing?.packages?.map((pkg, index) => (
+                <div key={pkg.id} className="bg-slate-700/50 rounded-lg p-4">
+                  <div className="grid grid-cols-2 md:grid-cols-7 gap-3 items-center">
+                    <div className="col-span-2 md:col-span-1">
+                      <label className="text-gray-400 text-xs block mb-1">الاسم</label>
+                      <Input
+                        value={pkg.name}
+                        onChange={(e) => updatePackage(index, 'name', e.target.value)}
+                        className="bg-slate-600 border-slate-500 text-white"
+                      />
+                    </div>
+                    
+                    <div>
+                      <label className="text-gray-400 text-xs block mb-1">النقاط</label>
+                      <Input
+                        type="number"
+                        value={pkg.credits}
+                        onChange={(e) => updatePackage(index, 'credits', e.target.value)}
+                        className="bg-slate-600 border-slate-500 text-white text-center"
+                      />
+                    </div>
+                    
+                    <div>
+                      <label className="text-gray-400 text-xs block mb-1">السعر</label>
+                      <div className="flex items-center gap-1">
                         <Input
                           type="number"
-                          value={pkg.bonus}
-                          onChange={(e) => updatePackage(index, 'bonus', e.target.value)}
-                          className="bg-slate-700 border-slate-600 text-white text-center w-20 mx-auto"
+                          value={pkg.price}
+                          onChange={(e) => updatePackage(index, 'price', e.target.value)}
+                          className="bg-slate-600 border-slate-500 text-white text-center"
                         />
-                      </td>
-                      <td className="py-3 px-2 text-center">
+                      </div>
+                    </div>
+                    
+                    <div>
+                      <label className="text-gray-400 text-xs block mb-1">تحويل</label>
+                      <p className="text-yellow-400 text-sm font-medium py-2">
+                        {getConvertedPrice(pkg.price)}
+                      </p>
+                    </div>
+                    
+                    <div>
+                      <label className="text-gray-400 text-xs block mb-1">مكافأة</label>
+                      <Input
+                        type="number"
+                        value={pkg.bonus}
+                        onChange={(e) => updatePackage(index, 'bonus', e.target.value)}
+                        className="bg-slate-600 border-slate-500 text-white text-center"
+                      />
+                    </div>
+                    
+                    <div className="flex items-center gap-3">
+                      <label className="flex items-center gap-2 cursor-pointer">
                         <input
                           type="checkbox"
                           checked={pkg.popular}
                           onChange={(e) => updatePackage(index, 'popular', e.target.checked)}
-                          className="w-5 h-5 rounded"
+                          className="w-4 h-4 rounded"
                         />
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+                        <Star className={`w-4 h-4 ${pkg.popular ? 'text-yellow-400' : 'text-gray-500'}`} />
+                      </label>
+                      
+                      <Button 
+                        variant="ghost" 
+                        size="sm" 
+                        onClick={() => deletePackage(index)}
+                        className="text-red-400 hover:text-red-300 hover:bg-red-500/20"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              ))}
             </div>
           </CardContent>
         </Card>
@@ -252,27 +401,29 @@ const AdminPricing = ({ user }) => {
         {/* أسعار الخدمات */}
         <Card className="bg-slate-800 border-slate-700 mb-6">
           <CardContent className="p-6">
-            <div className="flex items-center gap-3 mb-6">
-              <Settings className="w-6 h-6 text-blue-400" />
+            <div className="flex items-center gap-3 mb-4">
+              <ShoppingBag className="w-6 h-6 text-orange-400" />
               <h2 className="text-xl font-semibold text-white">أسعار الخدمات (بالنقاط)</h2>
             </div>
 
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              {pricing?.services && Object.entries(pricing.services).map(([key, value]) => (
+              {[
+                { key: 'image', label: 'توليد صورة', icon: '🖼️' },
+                { key: 'video_4s', label: 'فيديو 4 ثواني', icon: '🎬' },
+                { key: 'video_8s', label: 'فيديو 8 ثواني', icon: '🎬' },
+                { key: 'video_12s', label: 'فيديو 12 ثانية', icon: '🎬' },
+                { key: 'video_60s', label: 'فيديو دقيقة', icon: '🎥' },
+                { key: 'website_simple', label: 'موقع بسيط', icon: '🌐' },
+                { key: 'website_advanced', label: 'موقع متقدم', icon: '💻' },
+              ].map(({ key, label, icon }) => (
                 <div key={key} className="bg-slate-700/50 rounded-lg p-4">
-                  <label className="text-gray-400 text-sm block mb-2">
-                    {key === 'image' && 'توليد صورة'}
-                    {key === 'video_4s' && 'فيديو 4 ثواني'}
-                    {key === 'video_8s' && 'فيديو 8 ثواني'}
-                    {key === 'video_12s' && 'فيديو 12 ثانية'}
-                    {key === 'video_60s' && 'فيديو دقيقة'}
-                    {key === 'website_simple' && 'موقع بسيط'}
-                    {key === 'website_advanced' && 'موقع متقدم'}
+                  <label className="text-gray-400 text-sm flex items-center gap-2 mb-2">
+                    <span>{icon}</span> {label}
                   </label>
                   <div className="flex items-center gap-2">
                     <Input
                       type="number"
-                      value={value}
+                      value={pricing?.services?.[key] || 0}
                       onChange={(e) => updateService(key, e.target.value)}
                       className="bg-slate-600 border-slate-500 text-white text-center"
                     />
@@ -287,44 +438,63 @@ const AdminPricing = ({ user }) => {
         {/* العروض والخصومات */}
         <Card className="bg-slate-800 border-slate-700">
           <CardContent className="p-6">
-            <div className="flex items-center gap-3 mb-6">
+            <div className="flex items-center gap-3 mb-4">
               <Gift className="w-6 h-6 text-pink-400" />
-              <h2 className="text-xl font-semibold text-white">العروض والخصومات</h2>
+              <h2 className="text-xl font-semibold text-white">أكواد الخصم والعروض</h2>
             </div>
 
             {/* إضافة عرض جديد */}
             <div className="bg-slate-700/50 rounded-lg p-4 mb-6">
-              <h3 className="text-white font-medium mb-4">إضافة عرض جديد</h3>
-              <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
-                <Input
-                  placeholder="اسم العرض"
-                  value={newOffer.name}
-                  onChange={(e) => setNewOffer({ ...newOffer, name: e.target.value })}
-                  className="bg-slate-600 border-slate-500 text-white"
-                />
-                <Input
-                  placeholder="كود الخصم"
-                  value={newOffer.code}
-                  onChange={(e) => setNewOffer({ ...newOffer, code: e.target.value.toUpperCase() })}
-                  className="bg-slate-600 border-slate-500 text-white uppercase"
-                />
-                <div className="flex items-center gap-1">
+              <h3 className="text-white font-medium mb-4">إضافة كود خصم جديد</h3>
+              <div className="grid grid-cols-1 md:grid-cols-6 gap-3 items-end">
+                <div>
+                  <label className="text-gray-400 text-xs block mb-1">اسم العرض</label>
+                  <Input
+                    placeholder="عرض الصيف"
+                    value={newOffer.name}
+                    onChange={(e) => setNewOffer({ ...newOffer, name: e.target.value })}
+                    className="bg-slate-600 border-slate-500 text-white"
+                  />
+                </div>
+                <div>
+                  <label className="text-gray-400 text-xs block mb-1">كود الخصم</label>
+                  <Input
+                    placeholder="SUMMER24"
+                    value={newOffer.code}
+                    onChange={(e) => setNewOffer({ ...newOffer, code: e.target.value.toUpperCase() })}
+                    className="bg-slate-600 border-slate-500 text-white uppercase font-mono"
+                  />
+                </div>
+                <div>
+                  <label className="text-gray-400 text-xs block mb-1">نسبة الخصم %</label>
                   <Input
                     type="number"
-                    placeholder="نسبة %"
+                    placeholder="20"
                     value={newOffer.discount_percent || ''}
                     onChange={(e) => setNewOffer({ ...newOffer, discount_percent: Number(e.target.value) })}
                     className="bg-slate-600 border-slate-500 text-white"
                   />
-                  <Percent className="w-4 h-4 text-gray-400" />
                 </div>
-                <Input
-                  type="number"
-                  placeholder="الحد الأقصى"
-                  value={newOffer.max_uses || ''}
-                  onChange={(e) => setNewOffer({ ...newOffer, max_uses: Number(e.target.value) })}
-                  className="bg-slate-600 border-slate-500 text-white"
-                />
+                <div>
+                  <label className="text-gray-400 text-xs block mb-1">الحد الأقصى (0 = لا نهائي)</label>
+                  <Input
+                    type="number"
+                    placeholder="100"
+                    value={newOffer.max_uses || ''}
+                    onChange={(e) => setNewOffer({ ...newOffer, max_uses: Number(e.target.value) })}
+                    className="bg-slate-600 border-slate-500 text-white"
+                  />
+                </div>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    id="firstOrder"
+                    checked={newOffer.for_first_order}
+                    onChange={(e) => setNewOffer({ ...newOffer, for_first_order: e.target.checked })}
+                    className="w-4 h-4 rounded"
+                  />
+                  <label htmlFor="firstOrder" className="text-gray-400 text-xs">أول طلب فقط</label>
+                </div>
                 <Button onClick={addOffer} className="bg-pink-600 hover:bg-pink-700">
                   <Plus className="w-4 h-4 me-1" /> إضافة
                 </Button>
@@ -341,20 +511,26 @@ const AdminPricing = ({ user }) => {
                       <div>
                         <p className="text-white font-medium">{offer.name}</p>
                         <p className="text-gray-400 text-sm">
-                          كود: <span className="text-pink-400 font-mono">{offer.code}</span>
-                          {offer.discount_percent > 0 && ` • خصم ${offer.discount_percent}%`}
-                          {offer.max_uses > 0 && ` • استخدم ${offer.used_count || 0}/${offer.max_uses}`}
+                          كود: <span className="text-pink-400 font-mono bg-pink-500/20 px-2 py-0.5 rounded">{offer.code}</span>
+                          {offer.discount_percent > 0 && <span className="ms-2">• خصم {offer.discount_percent}%</span>}
+                          {offer.max_uses > 0 && <span className="ms-2">• استخدم {offer.used_count || 0}/{offer.max_uses}</span>}
+                          {offer.for_first_order && <span className="ms-2 text-yellow-400">• أول طلب فقط</span>}
                         </p>
                       </div>
                     </div>
-                    <Button variant="ghost" size="sm" onClick={() => deleteOffer(offer.id)} className="text-red-400 hover:text-red-300">
-                      <Trash2 className="w-4 h-4" />
-                    </Button>
+                    <div className="flex items-center gap-2">
+                      <span className={`px-2 py-1 rounded text-xs ${offer.active ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'}`}>
+                        {offer.active ? 'نشط' : 'متوقف'}
+                      </span>
+                      <Button variant="ghost" size="sm" onClick={() => deleteOffer(offer.id)} className="text-red-400 hover:text-red-300">
+                        <Trash2 className="w-4 h-4" />
+                      </Button>
+                    </div>
                   </div>
                 ))}
               </div>
             ) : (
-              <p className="text-gray-500 text-center py-8">لا توجد عروض حالياً</p>
+              <p className="text-gray-500 text-center py-8">لا توجد أكواد خصم حالياً</p>
             )}
           </CardContent>
         </Card>
