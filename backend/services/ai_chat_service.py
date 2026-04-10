@@ -375,7 +375,9 @@ class AIAssistant:
             except Exception as e:
                 logger.error(f"Game error: {e}")
                 ai_response = f"عذراً، حدث خطأ: {str(e)[:100]}"
-           elif is_game:
+                
+        elif is_game:
+            try:
      
                 completion = self.openai_client.chat.completions.create(
                     model="gpt-5.2",
