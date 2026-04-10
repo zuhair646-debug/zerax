@@ -100,7 +100,7 @@ class AIAssistant:
         )
         return response.choices[0].message.content
     
-    async def generate_image_gpt(self, prompt: str, size: str = "1024x1024") -> str:
+ async def generate_image_gpt(self, prompt: str, size: str = "1024x1024") -> str:
         if not self.openai_client:
             raise ValueError("OpenAI client not initialized")
         response = self.openai_client.images.generate(
@@ -110,7 +110,13 @@ class AIAssistant:
             quality="high",
             n=1
         )
-        return response.data[0].url
+        # gpt-image-1 returns b64_json, not url
+        if response.data[0].b64_json:
+            return f"data:image/png;base64,{response.data[0].b64_json}"
+        elif response.data[0].url:
+            return response.data[0].url
+        else:
+            raise ValueError("No image data returned")
     
     async def generate_video_sora2(self, prompt: str, duration: int = 8, size: str = "1792x1024") -> Dict:
         api_key = self.emergent_key or self.openai_key
