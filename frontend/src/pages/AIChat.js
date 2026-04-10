@@ -347,20 +347,59 @@ const AIChat = ({ user }) => {
     }
   };
 
-  const startRecording = async () => {
+const startRecording = async () => {
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      const recorder = new MediaRecorder(stream, { mimeType: 'audio/webm' });
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        toast.error('المتصفح لا يدعم تسجيل الصوت');
+        return;
+      }
+
+      const stream = await navigator.mediaDevices.getUserMedia({ 
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true
+        } 
+      });
+
+      let mimeType = 'audio/webm;codecs=opus';
+      if (!MediaRecorder.isTypeSupported(mimeType)) {
+        mimeType = 'audio/webm';
+        if (!MediaRecorder.isTypeSupported(mimeType)) {
+          mimeType = 'audio/mp4';
+          if (!MediaRecorder.isTypeSupported(mimeType)) {
+            mimeType = '';
+          }
+        }
+      }
+
+      const recorderOptions = mimeType ? { mimeType } : {};
+      const recorder = new MediaRecorder(stream, recorderOptions);
       audioChunksRef.current = [];
       
       recorder.ondataavailable = (e) => {
-        if (e.data.size > 0) audioChunksRef.current.push(e.data);
+        if (e.data && e.data.size > 0) audioChunksRef.current.push(e.data);
       };
       
       recorder.onstop = async () => {
-        const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
         stream.getTracks().forEach(track => track.stop());
+        if (audioChunksRef.current.length === 0) {
+          toast.error('لم يتم تسجيل أي صوت');
+          return;
+        }
+        const audioBlob = new Blob(audioChunksRef.current, { type: mimeType || 'audio/webm' });
+        if (audioBlob.size < 1000) {
+          toast.error('التسجيل قصير جداً');
+          return;
+        }
         await transcribeAudio(audioBlob);
+      };
+
+      recorder.onerror = (e) => {
+        console.error('Recording error:', e);
+        toast.error('حدث خطأ في التسجيل');
+        stream.getTracks().forEach(track => track.stop());
+        setIsRecording(false);
       };
       
       recorder.start(100);
@@ -368,9 +407,27 @@ const AIChat = ({ user }) => {
       setIsRecording(true);
       setRecordingTime(0);
       recordingTimerRef.current = setInterval(() => setRecordingTime(prev => prev + 1), 1000);
-      toast.info('جاري التسجيل...');
+      toast.info('🎤 جاري التسجيل... تحدث الآن');
     } catch (error) {
-      toast.error('فشل الوصول للمايكروفون');
+      console.error('Microphone error:', error);
+      if (error.name === 'NotAllowedError') {
+        toast.error('يرجى السماح بالوصول للمايكروفون');
+      } else if (error.name === 'NotFoundError') {
+        toast.error('لم يتم العثور على مايكروفون');
+      } else {
+        toast.error('فشل الوصول للمايكروفون');
+      }
+    }
+  };
+
+  const stopRecording = () => {
+    if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+      mediaRecorder.stop();
+      setIsRecording(false);
+      if (recordingTimerRef.current) {
+        clearInterval(recordingTimerRef.current);
+        recordingTimerRef.current = null;
+      }
     }
   };
 
