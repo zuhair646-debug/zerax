@@ -792,7 +792,7 @@ const startRecording = async () => {
       case 'image':
         return (
           <div className="mt-3 relative group">
-            <img src={attachment.url} alt="Generated" className="max-w-md rounded-xl shadow-lg" loading="lazy" />
+          <img src={attachment.url} alt="Generated" className="w-full max-w-[280px] sm:max-w-sm md:max-w-md rounded-xl shadow-lg" loading="lazy" />
             <Button size="sm" onClick={() => downloadAsset(attachment.url, `zitex-image.png`)}
               className="absolute bottom-2 left-2 bg-black/50 hover:bg-black/70 opacity-0 group-hover:opacity-100">
               <Download className="w-4 h-4 me-1" /> تحميل
@@ -802,7 +802,7 @@ const startRecording = async () => {
       case 'video':
         return (
           <div className="mt-3 relative group">
-            <video src={attachment.url} controls className="max-w-lg rounded-xl shadow-lg" preload="metadata" />
+            <video src={attachment.url} controls className="w-full max-w-[300px] sm:max-w-md md:max-w-lg rounded-xl shadow-lg" preload="metadata" />
             <Button size="sm" onClick={() => downloadAsset(attachment.url, `zitex-video.mp4`)}
               className="mt-2 bg-orange-500 hover:bg-orange-600">
               <Download className="w-4 h-4 me-1" /> تحميل الفيديو
