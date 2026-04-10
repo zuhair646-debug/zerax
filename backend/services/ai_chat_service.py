@@ -356,15 +356,99 @@ class AIAssistant:
             except Exception as e:
                 logger.error(f"Image error: {e}")
                 ai_response = f"عذراً، حدث خطأ في الصورة: {str(e)[:100]}"
-    
+
         elif is_game:
-            try:
-                completion = self.openai_client.chat.completions.create(
+            # Check if user is asking for ideas or ready to create
+            idea_keywords = ['فكرة', 'اقتراح', 'افكار', 'ماذا', 'اقترح', 'idea', 'suggest']
+            is_asking_idea = any(kw in msg_lower for kw in idea_keywords)
+            
+            if is_asking_idea:
+                # AI suggests ideas first
+                idea_completion = self.openai_client.chat.completions.create(
                     model="gpt-5.2",
                     messages=[
-                        {"role": "system", "content": "أنت مطور ألعاب محترف. أنشئ لعبة ثلاثية الأبعاد باستخدام Babylon.js. استخدم CDN وأنشئ مشهد 3D كامل مع إضاءة وكاميرا وتفاعل. أرجع ملف HTML واحد كامل فقط بدون شرح."},
-                        {"role": "user", "content": f"أنشئ لعبة 3D: {message}"}
+                        {"role": "system", "content": """أنت مستشار ألعاب محترف. عندما يطلب المستخدم فكرة لعبة:
+1. اقترح 3 أفكار مختلفة ومبتكرة
+2. لكل فكرة اشرح: الفكرة، أسلوب اللعب، الميزات الرئيسية
+3. اسأل المستخدم أي فكرة يفضل
+4. لا تنشئ كود - فقط اقترح واسأل
+
+مثال:
+🎮 **فكرة 1: سباق الفضاء**
+- سفينة فضائية تتجنب الكويكبات
+- تحكم بالأسهم، جمع نجوم للنقاط
+
+🎮 **فكرة 2: برج الدفاع**
+- ابني أبراج لحماية قلعتك
+- أعداء يهجمون من كل الاتجاهات
+
+🎮 **فكرة 3: متاهة ثلاثية الأبعاد**
+- استكشف متاهة وابحث عن الكنز
+- وحوش تطاردك
+
+أي فكرة تعجبك؟ أو اقترح فكرتك الخاصة!"""},
+                        {"role": "user", "content": message}
                     ],
+                    max_completion_tokens=1024
+                )
+                ai_response = idea_completion.choices[0].message.content
+                attachments = []
+                msg_type = "text"
+            else:
+                # Check credits first
+                game_cost = 20  # نقاط للعبة بسيطة
+                if not is_owner and user_credits < game_cost:
+                    ai_response = f"⚠️ رصيدك غير كافٍ!\n\nتكلفة إنشاء اللعبة: {game_cost} نقطة\nرصيدك الحالي: {user_credits} نقطة\n\nيرجى شحن رصيدك للمتابعة."
+                    attachments = []
+                    msg_type = "text"
+                else:
+                    try:
+                        completion = self.openai_client.chat.completions.create(
+                            model="gpt-5.2",
+                            messages=[
+                                {"role": "system", "content": """أنت مطور ألعاب خبير في Babylon.js. مهمتك إنشاء ألعاب 3D احترافية.
+
+قواعد صارمة:
+1. استخدم Babylon.js من CDN
+2. أنشئ مشهد 3D كامل مع إضاءة وكاميرا
+3. أضف تفاعل وتحكم بالماوس/لوحة المفاتيح
+4. أضف نظام نقاط ومستويات
+5. اجعل اللعبة ممتعة وقابلة للعب فوراً
+6. أرجع ملف HTML واحد كامل فقط بدون أي شرح
+7. تأكد أن الكود يعمل 100%"""},
+                                {"role": "user", "content": f"أنشئ لعبة 3D احترافية: {message}"}
+                            ],
+                            max_completion_tokens=4096
+                        )
+                        code = completion.choices[0].message.content.replace("```html", "").replace("```", "").strip()
+                        
+                        # Deduct credits
+                        if not is_owner:
+                            await self.db.users.update_one({"id": user_id}, {"$inc": {"credits": -game_cost}})
+                        
+                        asset = {
+                            "id": str(uuid.uuid4()),
+                            "user_id": user_id,
+                            "session_id": session_id,
+                            "asset_type": "game",
+                            "code": code,
+                            "prompt": message,
+                            "tech": "babylon.js",
+                            "credits_used": game_cost,
+                            "created_at": datetime.now(timezone.utc).isoformat()
+                        }
+                        await self.db.generated_assets.insert_one(asset)
+                        deploy_result = None
+                        if is_deploy and self.vercel_token:
+                            deploy_result = await self.deploy_to_vercel(f"zitex-game-{asset['id'][:8]}", {"index.html": code})
+                        if deploy_result and deploy_result.get("success"):
+                            ai_response = f"✅ تم إنشاء اللعبة ونشرها! 🎮 (تم خصم {game_cost} نقطة)\n\n🔗 الرابط: {deploy_result.get('url')}\n\n💡 جرب اللعبة في المعاينة على اليمين!"
+                            attachments = [{"type": "game", "code": code, "id": asset["id"], "url": deploy_result.get('url')}]
+                        else:
+                            ai_response = f"✅ تم إنشاء اللعبة بنجاح! 🎮 (تم خصم {game_cost} نقطة)\n\n👁️ شاهد اللعبة في المعاينة على اليمين\n🚀 قل 'انشر اللعبة' لرفعها على رابط مباشر!"
+                            attachments = [{"type": "game", "code": code, "id": asset["id"]}]
+                        msg_type = "game"
+
                     max_completion_tokens=4096
                 )
                 code = completion.choices[0].message.content.replace("```html", "").replace("```", "").strip()
