@@ -24,6 +24,7 @@ import zipfile
 import tempfile
 import shutil
 from concurrent.futures import ThreadPoolExecutor
+security = HTTPBearer()
 
 # Thread pool for background video generation
 video_executor = ThreadPoolExecutor(max_workers=2)
