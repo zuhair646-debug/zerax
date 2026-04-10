@@ -3,32 +3,23 @@ import { Link, useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { LogOut, LayoutDashboard, Shield, Menu, X, MessageSquare, Rocket } from 'lucide-react';
 
+// اللوغو الذهبي الجديد
+const ZITEX_LOGO_URL = "https://static.prod-images.emergentagent.com/jobs/d28c1cbc-c039-46df-a176-2e32ebb0f715/images/f7f88c5a96c3a3978fb84a31dd4d6b922be1568a9083c93bf3cef363e8c17387.png";
+
 export const ZitexLogo = ({ size = 'md', light = false }) => {
   const sizes = {
     sm: 'w-8 h-8',
     md: 'w-10 h-10',
-    lg: 'w-14 h-14'
+    lg: 'w-14 h-14',
+    xl: 'w-20 h-20'
   };
   
   return (
-    <div className={`${sizes[size]} relative flex items-center justify-center`}>
-      <svg viewBox="0 0 100 100" className="w-full h-full">
-        <defs>
-          <linearGradient id="zGradient" x1="0%" y1="0%" x2="100%" y2="100%">
-            <stop offset="0%" stopColor="#3b82f6" />
-            <stop offset="100%" stopColor="#8b5cf6" />
-          </linearGradient>
-        </defs>
-        <path
-          d="M20 25 L80 25 L30 75 L80 75"
-          stroke="url(#zGradient)"
-          strokeWidth="12"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          fill="none"
-        />
-      </svg>
-    </div>
+    <img 
+      src={ZITEX_LOGO_URL} 
+      alt="Zitex" 
+      className={`${sizes[size]} object-contain`}
+    />
   );
 };
 
@@ -48,59 +39,73 @@ export const Navbar = ({ user, transparent = false, setUser }) => {
   const isAdmin = user?.role === 'admin' || user?.role === 'super_admin' || user?.role === 'owner' || user?.is_owner;
 
   return (
-    <nav className={`fixed top-0 left-0 right-0 z-50 ${transparent ? 'bg-slate-900/80 backdrop-blur-xl border-b border-white/10' : 'bg-white/95 backdrop-blur-md border-b border-gray-200'}`}>
+    <nav className={`fixed top-0 left-0 right-0 z-50 ${transparent ? 'bg-[#0a0a12]/90 backdrop-blur-xl border-b border-amber-500/10' : 'bg-[#0a0a12]/95 backdrop-blur-md border-b border-amber-500/20'}`}>
       <div className="container mx-auto px-4 md:px-8 max-w-7xl">
         <div className="flex items-center justify-between h-16">
           <Link to="/" className="flex items-center gap-3" data-testid="navbar-logo">
             <ZitexLogo size="md" />
-            <span className={`text-2xl font-bold ${transparent ? 'text-white' : 'text-gray-900'}`}>Zitex</span>
+            <span className="text-2xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-amber-400 to-yellow-500">Zitex</span>
           </Link>
 
           {/* Desktop Menu */}
           <div className="hidden md:flex items-center gap-4">
-            <Link to="/pricing" className={`text-sm font-medium ${transparent ? 'text-gray-300 hover:text-white' : 'text-gray-600 hover:text-gray-900'}`}>
+            <Link to="/pricing" className="text-sm font-medium text-gray-400 hover:text-amber-400 transition-colors">
               الأسعار
             </Link>
             {user ? (
               <>
                 <Button
-                  variant={transparent ? "outline" : "default"}
+                  variant="outline"
                   onClick={() => navigate('/chat')}
                   data-testid="navbar-chat-btn"
-                  className={transparent ? 'bg-gradient-to-r from-purple-500 to-pink-500 border-0 text-white hover:from-purple-600 hover:to-pink-600' : 'bg-gradient-to-r from-purple-500 to-pink-500'}
+                  className="bg-gradient-to-r from-amber-600 to-yellow-600 border-0 text-white hover:from-amber-700 hover:to-yellow-700 shadow-lg shadow-amber-500/20"
                 >
                   <MessageSquare className="w-4 h-4 me-2" />
                   الشات الذكي
                 </Button>
                 <Button
-                  variant={transparent ? "outline" : "ghost"}
+                  variant="outline"
                   onClick={() => navigate('/projects')}
                   data-testid="navbar-projects-btn"
-                  className={transparent ? 'border-green-500/50 text-green-400 hover:bg-green-500/20' : 'text-green-400'}
+                  className="border-amber-500/30 text-amber-400 hover:bg-amber-500/10"
                 >
                   <Rocket className="w-4 h-4 me-2" />
                   مشاريعي
                 </Button>
                 <Button
-                  variant={transparent ? "outline" : "ghost"}
+                  variant="outline"
                   onClick={() => navigate(isAdmin ? '/admin' : '/dashboard')}
                   data-testid="navbar-dashboard-btn"
-                  className={transparent ? 'border-white/20 text-white hover:bg-white/10' : ''}
+                  className="border-slate-700 text-gray-300 hover:bg-slate-800 hover:text-amber-400"
                 >
                   {isAdmin ? <Shield className="w-4 h-4 me-2" /> : <LayoutDashboard className="w-4 h-4 me-2" />}
                   {isAdmin ? 'لوحة الأدمن' : 'لوحة التحكم'}
                 </Button>
-                <Button variant="outline" onClick={handleLogout} data-testid="navbar-logout-btn" className={transparent ? 'border-white/20 text-white hover:bg-white/10' : ''}>
+                <Button 
+                  variant="outline" 
+                  onClick={handleLogout} 
+                  data-testid="navbar-logout-btn" 
+                  className="border-slate-700 text-gray-300 hover:bg-red-500/10 hover:text-red-400 hover:border-red-500/30"
+                >
                   <LogOut className="w-4 h-4 me-2" />
                   خروج
                 </Button>
               </>
             ) : (
               <>
-                <Button variant="ghost" onClick={() => navigate('/login')} data-testid="navbar-login-btn" className={transparent ? 'text-white hover:bg-white/10' : ''}>
+                <Button 
+                  variant="ghost" 
+                  onClick={() => navigate('/login')} 
+                  data-testid="navbar-login-btn" 
+                  className="text-gray-300 hover:text-amber-400 hover:bg-amber-500/10"
+                >
                   دخول
                 </Button>
-                <Button onClick={() => navigate('/register')} data-testid="navbar-register-btn" className="bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700">
+                <Button 
+                  onClick={() => navigate('/register')} 
+                  data-testid="navbar-register-btn" 
+                  className="bg-gradient-to-r from-amber-600 to-yellow-600 hover:from-amber-700 hover:to-yellow-700 shadow-lg shadow-amber-500/20"
+                >
                   ابدأ مجاناً
                 </Button>
               </>
@@ -108,31 +113,64 @@ export const Navbar = ({ user, transparent = false, setUser }) => {
           </div>
 
           {/* Mobile Menu Button */}
-          <button className="md:hidden" onClick={() => setIsMenuOpen(!isMenuOpen)}>
-            {isMenuOpen ? <X className={transparent ? 'text-white' : 'text-gray-900'} /> : <Menu className={transparent ? 'text-white' : 'text-gray-900'} />}
+          <button className="md:hidden p-2 rounded-lg hover:bg-slate-800" onClick={() => setIsMenuOpen(!isMenuOpen)}>
+            {isMenuOpen ? <X className="text-amber-400" /> : <Menu className="text-amber-400" />}
           </button>
         </div>
 
         {/* Mobile Menu */}
         {isMenuOpen && (
-          <div className={`md:hidden py-4 border-t ${transparent ? 'border-white/10' : 'border-gray-200'}`}>
+          <div className="md:hidden py-4 border-t border-amber-500/10">
             <div className="flex flex-col gap-2">
-              <Link to="/pricing" className={`py-2 ${transparent ? 'text-white' : 'text-gray-900'}`}>الأسعار</Link>
+              <Link to="/pricing" className="py-2 text-gray-300 hover:text-amber-400">الأسعار</Link>
               {user ? (
                 <>
-                  <Button variant="default" onClick={() => navigate('/chat')} className="justify-start bg-gradient-to-r from-purple-500 to-pink-500">
+                  <Button 
+                    variant="default" 
+                    onClick={() => { navigate('/chat'); setIsMenuOpen(false); }} 
+                    className="justify-start bg-gradient-to-r from-amber-600 to-yellow-600"
+                  >
                     <MessageSquare className="w-4 h-4 me-2" />
                     الشات الذكي
                   </Button>
-                  <Button variant="ghost" onClick={() => navigate(isAdmin ? '/admin' : '/dashboard')} className="justify-start">
+                  <Button 
+                    variant="ghost" 
+                    onClick={() => { navigate('/projects'); setIsMenuOpen(false); }} 
+                    className="justify-start text-amber-400"
+                  >
+                    <Rocket className="w-4 h-4 me-2" />
+                    مشاريعي
+                  </Button>
+                  <Button 
+                    variant="ghost" 
+                    onClick={() => { navigate(isAdmin ? '/admin' : '/dashboard'); setIsMenuOpen(false); }} 
+                    className="justify-start text-gray-300"
+                  >
                     لوحة التحكم
                   </Button>
-                  <Button variant="ghost" onClick={handleLogout} className="justify-start">خروج</Button>
+                  <Button 
+                    variant="ghost" 
+                    onClick={handleLogout} 
+                    className="justify-start text-red-400"
+                  >
+                    خروج
+                  </Button>
                 </>
               ) : (
                 <>
-                  <Button variant="ghost" onClick={() => navigate('/login')} className="justify-start">دخول</Button>
-                  <Button onClick={() => navigate('/register')} className="bg-gradient-to-r from-blue-500 to-purple-600">ابدأ مجاناً</Button>
+                  <Button 
+                    variant="ghost" 
+                    onClick={() => { navigate('/login'); setIsMenuOpen(false); }} 
+                    className="justify-start text-gray-300"
+                  >
+                    دخول
+                  </Button>
+                  <Button 
+                    onClick={() => { navigate('/register'); setIsMenuOpen(false); }} 
+                    className="bg-gradient-to-r from-amber-600 to-yellow-600"
+                  >
+                    ابدأ مجاناً
+                  </Button>
                 </>
               )}
             </div>
