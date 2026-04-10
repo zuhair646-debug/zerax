@@ -431,17 +431,6 @@ const startRecording = async () => {
     }
   };
 
-  const stopRecording = () => {
-    if (mediaRecorder && mediaRecorder.state !== 'inactive') {
-      mediaRecorder.stop();
-      setIsRecording(false);
-      if (recordingTimerRef.current) {
-        clearInterval(recordingTimerRef.current);
-        recordingTimerRef.current = null;
-      }
-    }
-  };
-
   const transcribeAudio = async (audioBlob) => {
     if (!currentSession) {
       toast.error('اختر محادثة أولاً');
