@@ -1159,8 +1159,11 @@ async def log_download(item_type: str, item_id: str, current_user: dict = Depend
 
 async def chat_with_gpt5(messages: list, system_prompt: str = None) -> str:
     """Chat with GPT-5.2 model"""
-    if not openai_client:
-        raise HTTPException(status_code=500, detail="OpenAI client not initialized")
+    api_key = os.environ.get('OPENAI_API_KEY')
+    if not api_key:
+        raise HTTPException(status_code=500, detail="OpenAI API key not configured")
+    
+    client = OpenAI(api_key=api_key)
     
     chat_messages = []
     if system_prompt:
@@ -1168,7 +1171,7 @@ async def chat_with_gpt5(messages: list, system_prompt: str = None) -> str:
     chat_messages.extend(messages)
     
     try:
-        response = openai_client.chat.completions.create(
+        response = client.chat.completions.create(
             model="gpt-5.2",
             messages=chat_messages,
             max_tokens=4096,
@@ -1183,11 +1186,14 @@ async def chat_with_gpt5(messages: list, system_prompt: str = None) -> str:
 
 async def generate_image_gpt(prompt: str, size: str = "1024x1024") -> str:
     """Generate image using GPT Image 1 (DALL-E 4)"""
-    if not openai_client:
-        raise HTTPException(status_code=500, detail="OpenAI client not initialized")
+    api_key = os.environ.get('OPENAI_API_KEY')
+    if not api_key:
+        raise HTTPException(status_code=500, detail="OpenAI API key not configured")
+    
+    client = OpenAI(api_key=api_key)
     
     try:
-        response = openai_client.images.generate(
+        response = client.images.generate(
             model="gpt-image-1",
             prompt=prompt,
             size=size,
@@ -1197,8 +1203,8 @@ async def generate_image_gpt(prompt: str, size: str = "1024x1024") -> str:
         image_url = response.data[0].url
         
         # Download and convert to base64
-        async with httpx.AsyncClient() as client:
-            img_response = await client.get(image_url)
+        async with httpx.AsyncClient() as client_http:
+            img_response = await client_http.get(image_url)
             image_b64 = base64.b64encode(img_response.content).decode()
             return f"data:image/png;base64,{image_b64}"
     except Exception as e:
@@ -1209,17 +1215,20 @@ async def generate_image_gpt(prompt: str, size: str = "1024x1024") -> str:
 
 async def generate_video_sora2(prompt: str, duration: int = 10, size: str = "1280x720") -> dict:
     """Generate video using Sora 2"""
-    if not openai_client:
-        raise HTTPException(status_code=500, detail="OpenAI client not initialized")
+    api_key = os.environ.get('OPENAI_API_KEY')
+    if not api_key:
+        raise HTTPException(status_code=500, detail="OpenAI API key not configured")
+    
+    client = OpenAI(api_key=api_key)
     
     # Validate duration (Sora 2 supports up to 60 seconds)
     if duration > 60:
         duration = 60
     
     try:
-        logging.info(f"🎬 Starting Sora 2 video generation: {prompt[:50]}...")
+        logging.info(f"Starting Sora 2 video generation: {prompt[:50]}...")
         
-        response = openai_client.videos.generate(
+        response = client.videos.generate(
             model="sora-2",
             prompt=prompt,
             duration=duration,
@@ -1227,7 +1236,7 @@ async def generate_video_sora2(prompt: str, duration: int = 10, size: str = "128
         )
         
         video_url = response.url
-        logging.info(f"✅ Video generated successfully: {video_url[:50]}...")
+        logging.info(f"Video generated successfully: {video_url[:50]}...")
         
         return {
             "url": video_url,
