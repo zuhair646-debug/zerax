@@ -42,15 +42,20 @@ const LoginPage = ({ setUser }) => {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center p-4 bg-slate-900" data-testid="login-page">
-      <div className="absolute inset-0 bg-gradient-to-br from-blue-600/10 via-purple-600/5 to-transparent"></div>
+    <div className="min-h-screen flex items-center justify-center p-4 bg-[#0a0a12]" data-testid="login-page">
+      {/* Background Effects */}
+      <div className="absolute inset-0 bg-gradient-to-br from-amber-600/5 via-yellow-600/5 to-transparent"></div>
+      <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-amber-500/10 rounded-full blur-3xl"></div>
+      <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-yellow-500/10 rounded-full blur-3xl"></div>
       
-      <Card className="w-full max-w-md bg-slate-800 border-slate-700 relative z-10">
+      <Card className="w-full max-w-md bg-[#0d0d18]/90 backdrop-blur-xl border-amber-500/20 relative z-10 shadow-2xl shadow-amber-500/5">
         <CardHeader className="text-center">
           <Link to="/" className="flex justify-center mb-4">
-            <ZitexLogo size="lg" />
+            <ZitexLogo size="xl" />
           </Link>
-          <CardTitle className="text-2xl text-white" data-testid="login-title">تسجيل الدخول</CardTitle>
+          <CardTitle className="text-2xl text-transparent bg-clip-text bg-gradient-to-r from-amber-400 to-yellow-500" data-testid="login-title">
+            تسجيل الدخول
+          </CardTitle>
           <CardDescription className="text-gray-400">أدخل بياناتك للوصول إلى حسابك</CardDescription>
         </CardHeader>
         <CardContent>
@@ -64,7 +69,7 @@ const LoginPage = ({ setUser }) => {
                 value={formData.email}
                 onChange={(e) => setFormData({ ...formData, email: e.target.value })}
                 required
-                className="bg-slate-700 border-slate-600 text-white placeholder:text-gray-400"
+                className="bg-slate-800/50 border-slate-700 text-white placeholder:text-gray-500 focus:border-amber-500/50 focus:ring-amber-500/20"
                 data-testid="email-input"
               />
             </div>
@@ -73,17 +78,17 @@ const LoginPage = ({ setUser }) => {
               <Input
                 id="password"
                 type="password"
-                placeholder="••••••••"
+                placeholder="********"
                 value={formData.password}
                 onChange={(e) => setFormData({ ...formData, password: e.target.value })}
                 required
-                className="bg-slate-700 border-slate-600 text-white placeholder:text-gray-400"
+                className="bg-slate-800/50 border-slate-700 text-white placeholder:text-gray-500 focus:border-amber-500/50 focus:ring-amber-500/20"
                 data-testid="password-input"
               />
             </div>
             <Button 
               type="submit" 
-              className="w-full bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700" 
+              className="w-full bg-gradient-to-r from-amber-600 to-yellow-600 hover:from-amber-700 hover:to-yellow-700 shadow-lg shadow-amber-500/20 text-white font-medium" 
               disabled={loading} 
               data-testid="login-submit-btn"
             >
@@ -92,7 +97,7 @@ const LoginPage = ({ setUser }) => {
           </form>
           <div className="mt-4 text-center text-sm">
             <span className="text-gray-400">ليس لديك حساب؟ </span>
-            <Link to="/register" className="text-blue-400 hover:underline" data-testid="register-link">
+            <Link to="/register" className="text-amber-400 hover:text-amber-300 hover:underline transition-colors" data-testid="register-link">
               إنشاء حساب جديد
             </Link>
           </div>
