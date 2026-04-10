@@ -300,6 +300,14 @@ async def health_check():
 security = HTTPBearer()
 JWT_SECRET = os.environ.get('JWT_SECRET', 'secret')
 OPENAI_API_KEY = os.environ.get('OPENAI_API_KEY')
+# Initialize OpenAI client for STT
+openai_client = None
+if OPENAI_API_KEY:
+    try:
+        openai_client = OpenAI(api_key=OPENAI_API_KEY)
+        logging.info("✅ OpenAI client initialized for STT")
+    except Exception as e:
+        logging.error(f"OpenAI init error: {e}")
 ELEVENLABS_API_KEY = os.environ.get('ELEVENLABS_API_KEY')
 PAYPAL_CLIENT_ID = os.environ.get('PAYPAL_CLIENT_ID')
 PAYPAL_SECRET = os.environ.get('PAYPAL_SECRET')
