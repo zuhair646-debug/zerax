@@ -120,7 +120,7 @@ class AIAssistant:
         if duration not in valid_durations:
             duration = min(valid_durations, key=lambda x: abs(x - duration))
         
-       valid_sizes = ["1280x720", "720x1280"]
+        valid_sizes = ["1280x720", "720x1280"]
         if size not in valid_sizes:
             size = "1280x720"
         
