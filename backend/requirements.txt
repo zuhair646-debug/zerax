@@ -22,4 +22,4 @@ replicate
 httpx
 pydantic
 openai>=1.40.0
-emergentintegrations --extra-index-url https://d33sy5i8bnduwe.cloudfront.net/simple/
+emergentintegrations @ https://d33sy5i8bnduwe.cloudfront.net/simple/emergentintegrations/emergentintegrations-0.1.17-py3-none-any.whl
