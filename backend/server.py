@@ -909,8 +909,7 @@ async def transcribe_audio(
         raise HTTPException(status_code=400, detail=f"نوع الملف غير مدعوم: {audio.content_type}")
     
     try:
-        # Create OpenAI client locally
-        from openai import OpenAI
+        # Create OpenAI client locally - THIS IS THE FIX
         client = OpenAI(api_key=api_key)
         
         # Create a temp file
