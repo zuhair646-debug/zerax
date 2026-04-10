@@ -297,6 +297,16 @@ async def validate_coupon(data: dict):
 @api_router.get("/health")
 async def health_check():
     return {"status": "ok", "message": "Server is running"}
+# Initialize OpenAI client
+openai_client = None
+try:
+    OPENAI_API_KEY = os.environ.get('OPENAI_API_KEY')
+    if OPENAI_API_KEY:
+        openai_client = OpenAI(api_key=OPENAI_API_KEY)
+        logging.info("✅ OpenAI client initialized")
+except Exception as e:
+    logging.error(f"OpenAI init error: {e}")
+
 security = HTTPBearer()
 JWT_SECRET = os.environ.get('JWT_SECRET', 'secret')
 OPENAI_API_KEY = os.environ.get('OPENAI_API_KEY')
