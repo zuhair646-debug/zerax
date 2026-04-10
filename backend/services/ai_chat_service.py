@@ -449,7 +449,7 @@ class AIAssistant:
                             attachments = [{"type": "game", "code": code, "id": asset["id"]}]
                             
                         msg_type = "game"
-                    except Exception as e:
+                        except Exception as e:
                     logger.error(f"Game error: {e}")
                     ai_response = f"عذراً، حدث خطأ: {str(e)[:100]}"
                 
