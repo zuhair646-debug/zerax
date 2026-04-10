@@ -24,7 +24,6 @@ except ImportError:
     OPENAI_AVAILABLE = False
     OpenAI = None
 
-# Emergent Integrations for Sora 2
 # Using OpenAI SDK directly for Sora 2
 SORA_AVAILABLE = True
 AI_FEATURES_ENABLED = True
