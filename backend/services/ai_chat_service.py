@@ -448,7 +448,10 @@ class AIAssistant:
                             ai_response = f"✅ تم إنشاء اللعبة بنجاح! 🎮 (تم خصم {game_cost} نقطة)\n\n👁️ شاهد اللعبة في المعاينة على اليمين\n🚀 قل 'انشر اللعبة' لرفعها على رابط مباشر!"
                             attachments = [{"type": "game", "code": code, "id": asset["id"]}]
                         msg_type = "game"
-  
+                  except Exception as e:
+                    logger.error(f"Game error: {e}")
+                    ai_response = f"عذراً، حدث خطأ: {str(e)[:100]}"
+                
         elif is_website:
             try:
      
