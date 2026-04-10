@@ -818,16 +818,27 @@ async def get_voices(current_user: dict = Depends(get_current_user)):
 
 @api_router.post("/tts/generate")
 async def generate_tts(request: TTSRequest, current_user: dict = Depends(get_current_user)):
+```
+
+**استبدل كامل الـ function حتى قبل `# ============== SPEECH TO TEXT` بهذا:**
+
+```python
+@api_router.post("/tts/generate")
+async def generate_tts(request: TTSRequest, current_user: dict = Depends(get_current_user)):
     """Generate text-to-speech audio - supports OpenAI and ElevenLabs"""
     try:
         audio_data = None
         
         if request.provider == "openai":
-            if not openai_client:
-                raise HTTPException(status_code=400, detail="OpenAI TTS غير متاح")
+            api_key = os.environ.get('OPENAI_API_KEY')
+            if not api_key:
+                raise HTTPException(status_code=400, detail="OpenAI TTS غير متاح - يرجى إضافة OPENAI_API_KEY")
+            
+            # Create client locally
+            client = OpenAI(api_key=api_key)
             
             # Generate speech with OpenAI
-            response = openai_client.audio.speech.create(
+            response = client.audio.speech.create(
                 model="tts-1",
                 voice=request.voice,
                 input=request.text,
@@ -882,6 +893,7 @@ async def generate_tts(request: TTSRequest, current_user: dict = Depends(get_cur
         }
         
     except Exception as e:
+        logging.error(f"TTS Error: {str(e)}")
         raise HTTPException(status_code=500, detail=f"خطأ في توليد الصوت: {str(e)}")
 
 # ============== SPEECH TO TEXT (Voice Input) ==============
