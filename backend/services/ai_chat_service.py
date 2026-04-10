@@ -118,38 +118,59 @@ class AIAssistant:
             raise ValueError("No image data returned")
     
     async def generate_video_sora2(self, prompt: str, duration: int = 8, size: str = "1792x1024") -> Dict:
-        api_key = self.emergent_key or self.openai_key
-        if not api_key:
-            raise ValueError("No API key available for video generation")
-        if not SORA_AVAILABLE:
-            raise ValueError("emergentintegrations library not installed")
+        """Generate video using OpenAI Sora 2 directly"""
+        if not self.openai_client:
+            raise ValueError("OpenAI client not initialized")
+        
         valid_durations = [4, 8, 12]
         if duration not in valid_durations:
             duration = min(valid_durations, key=lambda x: abs(x - duration))
-        valid_sizes = ["1280x720", "1792x1024", "1024x1792", "1024x1024"]
+        
+        valid_sizes = ["1280x720", "1920x1080", "1792x1024"]
         if size not in valid_sizes:
-            size = "1792x1024"
+            size = "1280x720"
+        
         logger.info(f"🎬 Generating Sora 2 video: {prompt[:50]}... (duration: {duration}s, size: {size})")
+        
         try:
-            video_gen = OpenAIVideoGeneration(api_key=api_key)
-            video_bytes = video_gen.text_to_video(
-                prompt=prompt,
+            import time
+            
+            # Create video generation task
+            response = self.openai_client.videos.create(
                 model="sora-2",
+                prompt=prompt,
                 size=size,
-                duration=duration,
-                max_wait_time=600
+                seconds=duration
             )
-            if video_bytes:
-                temp_path = f"/tmp/video_{uuid.uuid4().hex[:8]}.mp4"
-                video_gen.save_video(video_bytes, temp_path)
-                with open(temp_path, 'rb') as f:
-                    video_b64 = base64.b64encode(f.read()).decode()
-                os.remove(temp_path)
-                video_url = f"data:video/mp4;base64,{video_b64}"
-                logger.info(f"✅ Video generated successfully ({duration}s, {size})")
-                return {"url": video_url, "duration": duration, "size": size, "model": "sora-2"}
-            else:
-                raise ValueError("Video generation returned no data")
+            
+            video_id = response.id
+            logger.info(f"Video task created: {video_id}")
+            
+            # Poll for completion (max 10 minutes)
+            max_attempts = 60
+            for attempt in range(max_attempts):
+                status = self.openai_client.videos.retrieve(video_id)
+                logger.info(f"Video status: {status.status}, progress: {getattr(status, 'progress', 0)}%")
+                
+                if status.status == "completed":
+                    # Download video
+                    video_content = self.openai_client.videos.content(video_id)
+                    video_bytes = video_content.read()
+                    
+                    # Convert to base64
+                    video_b64 = base64.b64encode(video_bytes).decode()
+                    video_url = f"data:video/mp4;base64,{video_b64}"
+                    
+                    logger.info(f"✅ Video generated successfully ({duration}s, {size})")
+                    return {"url": video_url, "duration": duration, "size": size, "model": "sora-2"}
+                
+                elif status.status == "failed":
+                    raise ValueError(f"Video generation failed: {getattr(status, 'error', 'Unknown error')}")
+                
+                time.sleep(10)  # Wait 10 seconds before checking again
+            
+            raise ValueError("Video generation timed out")
+            
         except Exception as e:
             logger.error(f"Sora 2 error: {e}")
             raise
