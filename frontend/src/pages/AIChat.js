@@ -132,7 +132,7 @@ const ChatMessage = memo(({ msg, idx, renderAttachment, onPlayAudio, onGenerateT
 
   return (
     <div className={`flex ${msg.role === 'user' ? 'justify-start' : 'justify-end'} animate-fadeIn px-2 md:px-0`}>
-      <div className={`max-w-[95%] md:max-w-[80%] ${
+ <div className={`max-w-[85%] sm:max-w-[90%] md:max-w-[80%] ${
         msg.role === 'user' 
           ? 'bg-blue-600 rounded-2xl rounded-tr-md' 
           : 'bg-slate-700 rounded-2xl rounded-tl-md'
