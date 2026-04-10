@@ -99,8 +99,7 @@ class AIAssistant:
             temperature=0.7
         )
         return response.choices[0].message.content
-    
-        async def generate_image_gpt(self, prompt: str, size: str = "1024x1024") -> str:
+       async def generate_image_gpt(self, prompt: str, size: str = "1024x1024") -> str:
         if not self.openai_client:
             raise ValueError("OpenAI client not initialized")
         response = self.openai_client.images.generate(
