@@ -1,69 +1,873 @@
 """
-Zitex AI Chat Service - GPT-5.2 + Sora 2 + GPT Image 1 + TTS
-دعم: الصور، الفيديوهات السينمائية مع تعليق صوتي، المواقع، الألعاب 3D
+Zitex AI Chat Service - Ultimate Edition
+خدمة الشات الذكي المتقدمة - النسخة القصوى
+Version 3.0 - Full-Stack AI Development Assistant
+
+قدرات:
+- مواقع ويب كاملة (HTML/CSS/JS)
+- ألعاب 2D و 3D (Canvas, Three.js, Babylon.js)
+- تطبيقات ويب (Web Apps)
+- تطبيقات جوال (PWA)
+- توليد صور (DALL-E 3)
+- توليد فيديو (Sora 2)
 """
 import os
 import uuid
-import logging
-import json
-import re
-import httpx
 import base64
-import tempfile
+import logging
+import asyncio
+import re
+import json
 from datetime import datetime, timezone
-from typing import Optional, Dict, Any, List
+from typing import Optional, Dict, Any, Tuple, List
 from motor.motor_asyncio import AsyncIOMotorDatabase
 
 logger = logging.getLogger(__name__)
 
-# OpenAI for Chat and Images
+# Check if AI features are enabled
+AI_FEATURES_ENABLED = True
+
+# Optional imports
 try:
-    from openai import OpenAI
+    import openai
     OPENAI_AVAILABLE = True
 except ImportError:
     OPENAI_AVAILABLE = False
-    OpenAI = None
+    openai = None
 
-# Using OpenAI SDK directly for Sora 2
-SORA_AVAILABLE = True
-AI_FEATURES_ENABLED = True
+try:
+    from elevenlabs.client import ElevenLabs
+    from elevenlabs.types import VoiceSettings
+    ELEVENLABS_AVAILABLE = True
+except ImportError:
+    ELEVENLABS_AVAILABLE = False
+    ElevenLabs = None
+    VoiceSettings = None
+
+
+# ============== ULTIMATE SYSTEM PROMPT ==============
+
+MASTER_SYSTEM_PROMPT = """أنت "زيتكس" (Zitex) - أقوى مساعد ذكاء اصطناعي لتطوير المحتوى الرقمي في العالم العربي.
+
+═══════════════════════════════════════════════════════════════
+                         هويتك وقدراتك
+═══════════════════════════════════════════════════════════════
+
+أنت مطور Full-Stack متقدم قادر على إنشاء:
+• مواقع ويب احترافية (HTML5, CSS3, JavaScript)
+• ألعاب ثنائية الأبعاد (Canvas 2D)
+• ألعاب ثلاثية الأبعاد (Three.js, Babylon.js)
+• تطبيقات ويب كاملة (Web Applications)
+• تطبيقات جوال (PWA - Progressive Web Apps)
+• لوحات تحكم (Dashboards)
+• متاجر إلكترونية (E-commerce)
+• أنظمة إدارة محتوى
+• أي شيء يمكن تشغيله في المتصفح
+
+═══════════════════════════════════════════════════════════════
+                    القواعد الذهبية (لا تخالفها أبداً)
+═══════════════════════════════════════════════════════════════
+
+### 1. التنفيذ الفوري - لا تتردد، لا تسأل، نفّذ!
+❌ ممنوع: "سأقوم بإنشاء..." / "هل تريد أن..." / "يمكنني أن..."
+✅ مطلوب: إنشاء الكود الكامل مباشرة بدون مقدمات
+
+### 2. الكود الكامل - لا اختصارات!
+❌ ممنوع: "..." / "// باقي الكود" / "/* أكمل هنا */"
+✅ مطلوب: كود كامل 100% يعمل فوراً بدون أي تعديل
+
+### 3. جودة الكود
+- كود نظيف ومنظم
+- تعليقات عربية توضيحية
+- تصميم عصري ومبهر
+- متجاوب مع جميع الشاشات
+- ألوان احترافية (استخدم الذهبي والأسود كألوان أساسية)
+
+### 4. بنية الرد
+سطر 1: جملة قصيرة تصف ما أنشأته
+سطر 2: فراغ
+سطر 3+: الكود الكامل داخل ```html أو ```javascript
+
+═══════════════════════════════════════════════════════════════
+                    المكتبات والتقنيات المتاحة
+═══════════════════════════════════════════════════════════════
+
+### للألعاب ثلاثية الأبعاد (3D):
+```html
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdn.babylonjs.com/babylon.js"></script>
+```
+
+### للرسومات والأيقونات:
+```html
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+```
+
+### للخطوط العربية:
+```html
+<link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@300;400;500;700;800&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Cairo:wght@300;400;600;700&display=swap" rel="stylesheet">
+```
+
+### للتأثيرات والأنيميشن:
+```html
+<link href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/4.1.1/animate.min.css" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/gsap.min.js"></script>
+```
+
+### للرسوم البيانية:
+```html
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+```
+
+═══════════════════════════════════════════════════════════════
+                    أمثلة على الردود المثالية
+═══════════════════════════════════════════════════════════════
+
+### مثال 1 - طلب لعبة 3D:
+المستخدم: "اصنع لعبة سباق 3D"
+
+الرد الصحيح:
+تم إنشاء لعبة سباق ثلاثية الأبعاد:
+
+```html
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>سباق زيتكس 3D</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { overflow: hidden; background: #000; }
+        #info { position: absolute; top: 20px; right: 20px; color: #ffd700; font-family: 'Segoe UI', sans-serif; font-size: 24px; z-index: 100; }
+    </style>
+</head>
+<body>
+    <div id="info">السرعة: <span id="speed">0</span> كم/س</div>
+    <script>
+        // إعداد المشهد
+        const scene = new THREE.Scene();
+        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setClearColor(0x87CEEB);
+        document.body.appendChild(renderer.domElement);
+        
+        // إضافة الإضاءة
+        const light = new THREE.DirectionalLight(0xffffff, 1);
+        light.position.set(10, 20, 10);
+        scene.add(light);
+        scene.add(new THREE.AmbientLight(0x404040));
+        
+        // إنشاء الأرض
+        const groundGeometry = new THREE.PlaneGeometry(100, 1000);
+        const groundMaterial = new THREE.MeshStandardMaterial({ color: 0x333333 });
+        const ground = new THREE.Mesh(groundGeometry, groundMaterial);
+        ground.rotation.x = -Math.PI / 2;
+        scene.add(ground);
+        
+        // إنشاء السيارة
+        const carGroup = new THREE.Group();
+        const bodyGeometry = new THREE.BoxGeometry(2, 1, 4);
+        const bodyMaterial = new THREE.MeshStandardMaterial({ color: 0xff0000 });
+        const carBody = new THREE.Mesh(bodyGeometry, bodyMaterial);
+        carBody.position.y = 0.5;
+        carGroup.add(carBody);
+        
+        // إضافة العجلات
+        const wheelGeometry = new THREE.CylinderGeometry(0.4, 0.4, 0.3, 16);
+        const wheelMaterial = new THREE.MeshStandardMaterial({ color: 0x111111 });
+        const wheelPositions = [[-1, 0.4, 1.5], [1, 0.4, 1.5], [-1, 0.4, -1.5], [1, 0.4, -1.5]];
+        wheelPositions.forEach(pos => {
+            const wheel = new THREE.Mesh(wheelGeometry, wheelMaterial);
+            wheel.rotation.z = Math.PI / 2;
+            wheel.position.set(...pos);
+            carGroup.add(wheel);
+        });
+        
+        scene.add(carGroup);
+        camera.position.set(0, 5, 10);
+        camera.lookAt(carGroup.position);
+        
+        // متغيرات اللعبة
+        let speed = 0;
+        let position = 0;
+        const keys = {};
+        
+        // التحكم بالمفاتيح
+        document.addEventListener('keydown', e => keys[e.key] = true);
+        document.addEventListener('keyup', e => keys[e.key] = false);
+        
+        // حلقة اللعبة
+        function animate() {
+            requestAnimationFrame(animate);
+            
+            // التسارع والفرامل
+            if (keys['ArrowUp'] || keys['w']) speed = Math.min(speed + 0.5, 200);
+            else if (keys['ArrowDown'] || keys['s']) speed = Math.max(speed - 1, 0);
+            else speed = Math.max(speed - 0.2, 0);
+            
+            // التوجيه
+            if (keys['ArrowLeft'] || keys['a']) carGroup.position.x = Math.max(carGroup.position.x - 0.2, -4);
+            if (keys['ArrowRight'] || keys['d']) carGroup.position.x = Math.min(carGroup.position.x + 0.2, 4);
+            
+            // تحريك الأرض (وهم الحركة)
+            ground.position.z = (ground.position.z + speed * 0.01) % 100;
+            
+            // تحديث الكاميرا
+            camera.position.z = carGroup.position.z + 10;
+            camera.lookAt(carGroup.position);
+            
+            // تحديث السرعة
+            document.getElementById('speed').textContent = Math.round(speed);
+            
+            renderer.render(scene, camera);
+        }
+        
+        animate();
+        
+        // التجاوب مع تغيير حجم النافذة
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+    </script>
+</body>
+</html>
+```
+
+### مثال 2 - تطبيق جوال PWA:
+المستخدم: "أريد تطبيق جوال لإدارة المهام"
+
+الرد الصحيح:
+تم إنشاء تطبيق إدارة المهام (PWA):
+
+```html
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="theme-color" content="#1a1a2e">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <title>مهامي</title>
+    <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Tajawal', sans-serif;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+            min-height: 100vh;
+            color: #fff;
+            padding: 20px;
+            padding-bottom: 100px;
+        }
+        .header {
+            text-align: center;
+            padding: 20px 0;
+            margin-bottom: 20px;
+        }
+        .header h1 {
+            color: #ffd700;
+            font-size: 28px;
+            margin-bottom: 5px;
+        }
+        .header p { color: #888; font-size: 14px; }
+        .stats {
+            display: flex;
+            justify-content: center;
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+        .stat-card {
+            background: rgba(255,215,0,0.1);
+            border: 1px solid rgba(255,215,0,0.3);
+            border-radius: 15px;
+            padding: 15px 25px;
+            text-align: center;
+        }
+        .stat-card .number { font-size: 24px; color: #ffd700; font-weight: bold; }
+        .stat-card .label { font-size: 12px; color: #888; }
+        .add-task {
+            background: rgba(255,255,255,0.05);
+            border-radius: 20px;
+            padding: 15px;
+            margin-bottom: 20px;
+            display: flex;
+            gap: 10px;
+        }
+        .add-task input {
+            flex: 1;
+            background: rgba(255,255,255,0.1);
+            border: none;
+            border-radius: 10px;
+            padding: 12px 15px;
+            color: #fff;
+            font-family: 'Tajawal', sans-serif;
+            font-size: 16px;
+        }
+        .add-task input::placeholder { color: #666; }
+        .add-task button {
+            background: linear-gradient(135deg, #ffd700, #ffaa00);
+            border: none;
+            border-radius: 10px;
+            padding: 12px 20px;
+            color: #000;
+            font-weight: bold;
+            cursor: pointer;
+            transition: transform 0.2s;
+        }
+        .add-task button:active { transform: scale(0.95); }
+        .task-list { list-style: none; }
+        .task-item {
+            background: rgba(255,255,255,0.05);
+            border-radius: 15px;
+            padding: 15px;
+            margin-bottom: 10px;
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            animation: slideIn 0.3s ease;
+        }
+        @keyframes slideIn {
+            from { opacity: 0; transform: translateX(-20px); }
+            to { opacity: 1; transform: translateX(0); }
+        }
+        .task-item.completed { opacity: 0.5; }
+        .task-item.completed .task-text { text-decoration: line-through; }
+        .task-checkbox {
+            width: 24px;
+            height: 24px;
+            border: 2px solid #ffd700;
+            border-radius: 50%;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s;
+        }
+        .task-checkbox.checked {
+            background: #ffd700;
+            color: #000;
+        }
+        .task-text { flex: 1; font-size: 16px; }
+        .task-delete {
+            color: #ff4757;
+            cursor: pointer;
+            padding: 5px;
+            opacity: 0.5;
+            transition: opacity 0.2s;
+        }
+        .task-delete:hover { opacity: 1; }
+        .bottom-nav {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            background: rgba(26, 26, 46, 0.95);
+            backdrop-filter: blur(10px);
+            display: flex;
+            justify-content: space-around;
+            padding: 15px 0;
+            border-top: 1px solid rgba(255,215,0,0.2);
+        }
+        .nav-item {
+            text-align: center;
+            color: #666;
+            cursor: pointer;
+            transition: color 0.2s;
+        }
+        .nav-item.active { color: #ffd700; }
+        .nav-item i { font-size: 20px; margin-bottom: 5px; display: block; }
+        .nav-item span { font-size: 12px; }
+        .empty-state {
+            text-align: center;
+            padding: 50px 20px;
+            color: #666;
+        }
+        .empty-state i { font-size: 60px; margin-bottom: 20px; color: #333; }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1><i class="fas fa-tasks"></i> مهامي</h1>
+        <p id="date"></p>
+    </div>
+    
+    <div class="stats">
+        <div class="stat-card">
+            <div class="number" id="totalTasks">0</div>
+            <div class="label">إجمالي المهام</div>
+        </div>
+        <div class="stat-card">
+            <div class="number" id="completedTasks">0</div>
+            <div class="label">مكتملة</div>
+        </div>
+    </div>
+    
+    <div class="add-task">
+        <input type="text" id="taskInput" placeholder="أضف مهمة جديدة...">
+        <button onclick="addTask()"><i class="fas fa-plus"></i></button>
+    </div>
+    
+    <ul class="task-list" id="taskList"></ul>
+    
+    <div class="bottom-nav">
+        <div class="nav-item active">
+            <i class="fas fa-home"></i>
+            <span>الرئيسية</span>
+        </div>
+        <div class="nav-item">
+            <i class="fas fa-calendar"></i>
+            <span>التقويم</span>
+        </div>
+        <div class="nav-item">
+            <i class="fas fa-chart-pie"></i>
+            <span>الإحصائيات</span>
+        </div>
+        <div class="nav-item">
+            <i class="fas fa-cog"></i>
+            <span>الإعدادات</span>
+        </div>
+    </div>
+
+    <script>
+        // تحميل المهام من التخزين المحلي
+        let tasks = JSON.parse(localStorage.getItem('tasks')) || [];
+        
+        // عرض التاريخ
+        const options = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' };
+        document.getElementById('date').textContent = new Date().toLocaleDateString('ar-SA', options);
+        
+        // عرض المهام
+        function renderTasks() {
+            const taskList = document.getElementById('taskList');
+            const totalTasks = document.getElementById('totalTasks');
+            const completedTasks = document.getElementById('completedTasks');
+            
+            if (tasks.length === 0) {
+                taskList.innerHTML = `
+                    <div class="empty-state">
+                        <i class="fas fa-clipboard-list"></i>
+                        <p>لا توجد مهام بعد</p>
+                        <p>أضف مهمتك الأولى!</p>
+                    </div>
+                `;
+            } else {
+                taskList.innerHTML = tasks.map((task, index) => `
+                    <li class="task-item ${task.completed ? 'completed' : ''}">
+                        <div class="task-checkbox ${task.completed ? 'checked' : ''}" onclick="toggleTask(${index})">
+                            ${task.completed ? '<i class="fas fa-check"></i>' : ''}
+                        </div>
+                        <span class="task-text">${task.text}</span>
+                        <div class="task-delete" onclick="deleteTask(${index})">
+                            <i class="fas fa-trash"></i>
+                        </div>
+                    </li>
+                `).join('');
+            }
+            
+            totalTasks.textContent = tasks.length;
+            completedTasks.textContent = tasks.filter(t => t.completed).length;
+        }
+        
+        // إضافة مهمة
+        function addTask() {
+            const input = document.getElementById('taskInput');
+            const text = input.value.trim();
+            if (text) {
+                tasks.unshift({ text, completed: false, createdAt: new Date().toISOString() });
+                saveTasks();
+                renderTasks();
+                input.value = '';
+            }
+        }
+        
+        // تبديل حالة المهمة
+        function toggleTask(index) {
+            tasks[index].completed = !tasks[index].completed;
+            saveTasks();
+            renderTasks();
+        }
+        
+        // حذف مهمة
+        function deleteTask(index) {
+            tasks.splice(index, 1);
+            saveTasks();
+            renderTasks();
+        }
+        
+        // حفظ المهام
+        function saveTasks() {
+            localStorage.setItem('tasks', JSON.stringify(tasks));
+        }
+        
+        // إضافة بالضغط على Enter
+        document.getElementById('taskInput').addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') addTask();
+        });
+        
+        // عرض المهام عند التحميل
+        renderTasks();
+    </script>
+</body>
+</html>
+```
+
+═══════════════════════════════════════════════════════════════
+                    أنواع المشاريع التي يمكنك إنشاؤها
+═══════════════════════════════════════════════════════════════
+
+### 1. ألعاب 2D (Canvas):
+- Snake, Breakout, Pong, Space Invaders
+- ألعاب ألغاز، ذاكرة، كويز
+- ألعاب منصات (Platformer)
+- ألعاب إطلاق نار
+
+### 2. ألعاب 3D (Three.js / Babylon.js):
+- ألعاب سباق سيارات
+- ألعاب طيران
+- ألعاب مغامرات
+- ألعاب كرة قدم
+- محاكيات
+
+### 3. مواقع ويب:
+- مواقع شركات
+- مواقع شخصية / بورتفوليو
+- مواقع مطاعم / مقاهي
+- مدونات
+- صفحات هبوط (Landing Pages)
+
+### 4. تطبيقات ويب:
+- لوحات تحكم (Dashboards)
+- أنظمة إدارة
+- أدوات إنتاجية
+- محررات نصوص / صور
+- تطبيقات تواصل
+
+### 5. متاجر إلكترونية:
+- عرض منتجات
+- سلة مشتريات
+- نظام دفع
+- إدارة الطلبات
+
+### 6. تطبيقات جوال (PWA):
+- تطبيقات إدارة مهام
+- تطبيقات تتبع
+- تطبيقات اجتماعية
+- تطبيقات صحة ولياقة
+
+═══════════════════════════════════════════════════════════════
+                    تذكر دائماً
+═══════════════════════════════════════════════════════════════
+
+✅ نفّذ فوراً - لا تتردد
+✅ كود كامل - لا اختصارات
+✅ تصميم مبهر - ألوان ذهبية وأسود
+✅ يعمل مباشرة - بدون تعديلات
+✅ متجاوب - يعمل على كل الشاشات
+✅ باللغة العربية - RTL مدعوم
+
+❌ لا تسأل أسئلة
+❌ لا تضع "..." في الكود
+❌ لا تعتذر
+❌ لا تشرح كيف ستفعل - افعل مباشرة"""
+
+
+# ============== SPECIALIZED PROMPTS ==============
+
+GAME_3D_PROMPT = """أنت خبير ألعاب ثلاثية الأبعاد في زيتكس.
+
+تقنياتك:
+- Three.js للرندر ثلاثي الأبعاد
+- Babylon.js للألعاب المتقدمة
+- WebGL للأداء العالي
+
+قواعد إنشاء لعبة 3D:
+1. استخدم CDN لـ Three.js أو Babylon.js
+2. أضف إضاءة واقعية (DirectionalLight + AmbientLight)
+3. أضف ظلال للواقعية
+4. تحكم سلس بالكاميرا
+5. نظام تصادم بسيط
+6. نظام نقاط واضح
+7. رسومات جذابة
+
+البنية الأساسية:
+```html
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>لعبة 3D</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <style>
+        * { margin: 0; padding: 0; }
+        body { overflow: hidden; background: #000; }
+        #ui { position: absolute; top: 20px; right: 20px; color: #ffd700; font-family: 'Segoe UI', sans-serif; z-index: 100; }
+    </style>
+</head>
+<body>
+    <div id="ui">النقاط: <span id="score">0</span></div>
+    <script>
+        // Scene Setup
+        const scene = new THREE.Scene();
+        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.shadowMap.enabled = true;
+        document.body.appendChild(renderer.domElement);
+        
+        // Lighting
+        const directionalLight = new THREE.DirectionalLight(0xffffff, 1);
+        directionalLight.position.set(10, 20, 10);
+        directionalLight.castShadow = true;
+        scene.add(directionalLight);
+        scene.add(new THREE.AmbientLight(0x404040));
+        
+        // Game objects here...
+        
+        // Game Loop
+        function animate() {
+            requestAnimationFrame(animate);
+            // Update logic here...
+            renderer.render(scene, camera);
+        }
+        animate();
+        
+        // Resize handler
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+    </script>
+</body>
+</html>
+```"""
+
+
+WEBAPP_PROMPT = """أنت خبير تطبيقات الويب في زيتكس.
+
+قدراتك:
+- تطبيقات Single Page (SPA)
+- لوحات تحكم متقدمة
+- أنظمة CRUD كاملة
+- تخزين محلي (LocalStorage)
+- واجهات مستخدم تفاعلية
+
+عناصر التطبيق:
+1. Header مع شعار وتنقل
+2. Sidebar للقوائم
+3. محتوى رئيسي ديناميكي
+4. Footer
+5. نوافذ منبثقة (Modals)
+6. إشعارات Toast
+7. جداول بيانات
+8. رسوم بيانية (Chart.js)
+
+التصميم:
+- Dark mode أساسي
+- ألوان ذهبية للتمييز
+- تأثيرات hover وtransitions
+- أيقونات Font Awesome
+- خط Tajawal العربي"""
+
+
+PWA_PROMPT = """أنت خبير تطبيقات الجوال (PWA) في زيتكس.
+
+متطلبات PWA:
+1. Meta tags للجوال:
+```html
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="theme-color" content="#1a1a2e">
+<meta name="apple-mobile-web-app-capable" content="yes">
+```
+
+2. تصميم Mobile-First:
+- أزرار كبيرة للمس
+- Bottom Navigation
+- Pull to Refresh
+- Swipe Actions
+- تخزين محلي للعمل Offline
+
+3. عناصر الجوال:
+- شريط علوي ثابت
+- قائمة سفلية للتنقل
+- بطاقات قابلة للسحب
+- نماذج سهلة الإدخال"""
+
+
+WEBSITE_PROMPT = """أنت خبير بناء المواقع في زيتكس.
+
+أنواع المواقع:
+1. موقع شركة: خدمات، عن الشركة، فريق، تواصل
+2. بورتفوليو: نبذة، أعمال، مهارات، تواصل
+3. مطعم/مقهى: قائمة، حجز، موقع، آراء
+4. متجر: منتجات، تصنيفات، سلة، دفع
+5. مدونة: مقالات، تصنيفات، بحث، تعليقات
+6. Landing Page: عرض، ميزات، شهادات، CTA
+
+عناصر الموقع:
+- Hero Section جذاب
+- تنقل سلس (Smooth Scroll)
+- أقسام متعددة
+- تأثيرات عند التمرير
+- نموذج تواصل
+- Footer شامل
+
+التصميم:
+- Gradients ذهبية وسوداء
+- Typography احترافي
+- صور وأيقونات
+- Animations CSS
+- Responsive 100%"""
+
+
+IMAGE_PROMPT = """أنت خبير توليد الصور في زيتكس.
+عند طلب صورة، سيتم توليدها تلقائياً باستخدام DALL-E 3.
+أجب برسالة قصيرة: "جاري إنشاء الصورة..." والصورة ستُرفق تلقائياً."""
+
+
+VIDEO_PROMPT = """أنت خبير توليد الفيديو في زيتكس.
+عند طلب فيديو، أجب: "جاري إنشاء الفيديو السينمائي..."
+ملاحظة: الفيديو يتم توليده في الخلفية بـ Sora 2."""
+
+
+# ============== REQUEST TYPE DETECTION ==============
+
+def detect_request_type(message: str, session_type: str = "general") -> str:
+    """تحديد نوع الطلب بذكاء متقدم"""
+    message_lower = message.lower()
+    
+    # 3D Game keywords
+    game_3d_keywords = [
+        '3d', 'ثلاثي', 'ثلاثية', 'three.js', 'babylon',
+        'سباق', 'racing', 'سيارات', 'طيران', 'flight',
+        'كرة قدم', 'football', 'محاكي', 'simulator'
+    ]
+    
+    # 2D Game keywords
+    game_2d_keywords = [
+        'لعبة', 'العاب', 'game', 'play', 'ألعاب',
+        'snake', 'سنيك', 'بونج', 'pong', 'اركيد', 'arcade',
+        'تريفيا', 'trivia', 'كويز', 'quiz', 'ذاكرة', 'memory',
+        'breakout', 'space invaders', 'platformer'
+    ]
+    
+    # PWA / Mobile App keywords
+    pwa_keywords = [
+        'تطبيق جوال', 'تطبيق موبايل', 'mobile app', 'pwa',
+        'للجوال', 'للموبايل', 'هاتف', 'phone app',
+        'تطبيق هاتف', 'android', 'ios', 'اندرويد', 'ايفون'
+    ]
+    
+    # Web App keywords
+    webapp_keywords = [
+        'تطبيق ويب', 'web app', 'webapp', 'dashboard',
+        'لوحة تحكم', 'نظام إدارة', 'admin', 'panel',
+        'أداة', 'tool', 'محرر', 'editor'
+    ]
+    
+    # Website keywords
+    website_keywords = [
+        'موقع', 'صفحة', 'ويب', 'website', 'page', 'site',
+        'متجر', 'مطعم', 'شركة', 'بورتفوليو', 'مدونة', 'blog',
+        'landing', 'هبوط', 'portfolio'
+    ]
+    
+    # Image keywords
+    image_keywords = [
+        'صورة', 'صور', 'أنشئ صورة', 'اصنع صورة', 'ارسم',
+        'image', 'picture', 'draw', 'شعار', 'لوجو', 'logo'
+    ]
+    
+    # Video keywords
+    video_keywords = [
+        'فيديو', 'فديو', 'مقطع', 'فلم', 'video', 'clip',
+        'سينمائي', 'cinematic', 'أنيميشن', 'animation'
+    ]
+    
+    # Check session type first
+    if session_type and session_type != "general":
+        return session_type
+    
+    # Check message content - priority order
+    if any(kw in message_lower for kw in game_3d_keywords):
+        return "game_3d"
+    elif any(kw in message_lower for kw in game_2d_keywords):
+        return "game"
+    elif any(kw in message_lower for kw in pwa_keywords):
+        return "pwa"
+    elif any(kw in message_lower for kw in webapp_keywords):
+        return "webapp"
+    elif any(kw in message_lower for kw in image_keywords):
+        return "image"
+    elif any(kw in message_lower for kw in video_keywords):
+        return "video"
+    elif any(kw in message_lower for kw in website_keywords):
+        return "website"
+    
+    return "general"
+
+
+def get_system_prompt(request_type: str) -> str:
+    """الحصول على System Prompt المناسب"""
+    prompts = {
+        "general": MASTER_SYSTEM_PROMPT,
+        "game": MASTER_SYSTEM_PROMPT,
+        "game_3d": MASTER_SYSTEM_PROMPT + "\n\n" + GAME_3D_PROMPT,
+        "website": MASTER_SYSTEM_PROMPT + "\n\n" + WEBSITE_PROMPT,
+        "webapp": MASTER_SYSTEM_PROMPT + "\n\n" + WEBAPP_PROMPT,
+        "pwa": MASTER_SYSTEM_PROMPT + "\n\n" + PWA_PROMPT,
+        "image": IMAGE_PROMPT,
+        "video": VIDEO_PROMPT
+    }
+    return prompts.get(request_type, MASTER_SYSTEM_PROMPT)
+
+
+# ============== AI ASSISTANT CLASS ==============
 
 class AIAssistant:
-    def __init__(self, db: AsyncIOMotorDatabase, api_key: str = None, elevenlabs_key: str = None, **kwargs):
+    """مساعد الذكاء الاصطناعي - النسخة القصوى"""
+    
+    def __init__(self, db: AsyncIOMotorDatabase, api_key: str = None, elevenlabs_key: str = None, openai_key: str = None):
         self.db = db
-        self.openai_key = api_key or os.environ.get('OPENAI_API_KEY')
-        self.emergent_key = os.environ.get('EMERGENT_LLM_KEY')
-        self.vercel_token = os.environ.get('VERCEL_TOKEN')
-        self.elevenlabs_key = elevenlabs_key or os.environ.get('ELEVENLABS_API_KEY')
+        self.api_key = api_key or os.environ.get('OPENAI_API_KEY')
+        self.elevenlabs_key = elevenlabs_key
+        self.openai_key = openai_key or self.api_key
         
-        # OpenAI Client for GPT-5.2 and Images
+        # Initialize ElevenLabs client
+        self.eleven_client = None
+        if ELEVENLABS_AVAILABLE and elevenlabs_key:
+            try:
+                self.eleven_client = ElevenLabs(api_key=elevenlabs_key)
+            except:
+                pass
+        
+        # Initialize OpenAI client
         self.openai_client = None
         if OPENAI_AVAILABLE and self.openai_key:
             try:
-                self.openai_client = OpenAI(api_key=self.openai_key)
-                logger.info("✅ OpenAI client initialized (GPT-5.2, GPT Image 1)")
-            except Exception as e:
-                logger.error(f"OpenAI init error: {e}")
-        
-        # ElevenLabs for TTS
-        self.eleven_client = None
-        try:
-            from elevenlabs.client import ElevenLabs
-            from elevenlabs.types import VoiceSettings
-            if self.elevenlabs_key:
-                self.eleven_client = ElevenLabs(api_key=self.elevenlabs_key)
-                self.VoiceSettings = VoiceSettings
-                logger.info("✅ ElevenLabs client initialized")
-        except ImportError:
-            logger.warning("⚠️ ElevenLabs not available")
+                self.openai_client = openai.OpenAI(api_key=self.openai_key)
+            except:
+                pass
     
     async def create_session(self, user_id: str, session_type: str = "general", title: str = None) -> Dict:
+        """إنشاء جلسة جديدة"""
         session = {
             "id": str(uuid.uuid4()),
             "user_id": user_id,
             "title": title or "محادثة جديدة",
             "session_type": session_type,
             "messages": [],
+            "project_data": {},
+            "generated_code": None,
             "status": "active",
             "created_at": datetime.now(timezone.utc).isoformat(),
             "updated_at": datetime.now(timezone.utc).isoformat()
@@ -72,511 +876,303 @@ class AIAssistant:
         return session
     
     async def get_session(self, session_id: str, user_id: str) -> Optional[Dict]:
-        return await self.db.chat_sessions.find_one({"id": session_id, "user_id": user_id}, {"_id": 0})
+        """استرجاع جلسة"""
+        return await self.db.chat_sessions.find_one(
+            {"id": session_id, "user_id": user_id},
+            {"_id": 0}
+        )
     
     async def get_user_sessions(self, user_id: str, limit: int = 50) -> List[Dict]:
-        return await self.db.chat_sessions.find(
-            {"user_id": user_id, "status": "active"}, {"_id": 0}
+        """استرجاع جلسات المستخدم"""
+        sessions = await self.db.chat_sessions.find(
+            {"user_id": user_id, "status": "active"},
+            {"_id": 0}
         ).sort("updated_at", -1).limit(limit).to_list(limit)
+        return sessions
     
-    async def chat_gpt5(self, messages: list, system_prompt: str = None) -> str:
-        if not self.openai_client:
-            raise ValueError("OpenAI client not initialized")
-        chat_messages = []
-        if system_prompt:
-            chat_messages.append({"role": "system", "content": system_prompt})
-        chat_messages.extend(messages)
-        response = self.openai_client.chat.completions.create(
-            model="gpt-5.2",
-            messages=chat_messages,
-           max_completion_tokens=4096,
-            temperature=0.7
-        )
-        return response.choices[0].message.content
-    async def generate_image_gpt(self, prompt: str, size: str = "1024x1024") -> str:
-        if not self.openai_client:
-            raise ValueError("OpenAI client not initialized")
-        response = self.openai_client.images.generate(
-            model="gpt-image-1",
-            prompt=prompt,
-            size=size,
-            quality="high",
-            n=1
-        )
-        # gpt-image-1 returns b64_json, not url
-        if response.data[0].b64_json:
-            return f"data:image/png;base64,{response.data[0].b64_json}"
-        elif response.data[0].url:
-            return response.data[0].url
-        else:
-            raise ValueError("No image data returned")
-    
-    async def generate_video_sora2(self, prompt: str, duration: int = 8, size: str = "1792x1024") -> Dict:
-        """Generate video using OpenAI Sora 2 directly"""
-        if not self.openai_client:
-            raise ValueError("OpenAI client not initialized")
+    async def process_message(
+        self, 
+        session_id: str, 
+        user_id: str, 
+        message: str,
+        settings: Dict[str, Any] = None
+    ) -> Dict:
+        """معالجة رسالة المستخدم - النسخة القصوى"""
+        settings = settings or {}
         
-        valid_durations = [4, 8, 12]
-        if duration not in valid_durations:
-            duration = min(valid_durations, key=lambda x: abs(x - duration))
-        
-            duration = min(valid_durations, key=lambda x: abs(x - duration))
-        
-        valid_sizes = ["1280x720", "720x1280"]
-        if size not in valid_sizes:
-            size = "1280x720"
-        
-        logger.info(f"🎬 Generating Sora 2 video: {prompt[:50]}... (duration: {duration}s, size: {size})")
-        
-        try:
-            import time
-            
-            # Create video generation task
-            response = self.openai_client.videos.create(
-                model="sora-2",
-                prompt=prompt,
-                size=size,
-                seconds=duration
-            )
-            
-            video_id = response.id
-            logger.info(f"Video task created: {video_id}")
-            
-            # Poll for completion (max 10 minutes)
-            max_attempts = 60
-            for attempt in range(max_attempts):
-                status = self.openai_client.videos.retrieve(video_id)
-                logger.info(f"Video status: {status.status}, progress: {getattr(status, 'progress', 0)}%")
-                
-                if status.status == "completed":
-                    # Download video
-                    video_content = self.openai_client.videos.content(video_id)
-                    video_bytes = video_content.read()
-                    
-                    # Convert to base64
-                    video_b64 = base64.b64encode(video_bytes).decode()
-                    video_url = f"data:video/mp4;base64,{video_b64}"
-                    
-                    logger.info(f"✅ Video generated successfully ({duration}s, {size})")
-                    return {"url": video_url, "duration": duration, "size": size, "model": "sora-2"}
-                
-                elif status.status == "failed":
-                    raise ValueError(f"Video generation failed: {getattr(status, 'error', 'Unknown error')}")
-                
-                time.sleep(10)  # Wait 10 seconds before checking again
-            
-            raise ValueError("Video generation timed out")
-            
-        except Exception as e:
-            logger.error(f"Sora 2 error: {e}")
-            raise
-    
-    async def generate_voiceover(self, text: str, voice: str = "alloy") -> str:
-        if self.openai_client:
-            try:
-                response = self.openai_client.audio.speech.create(
-                    model="tts-1-hd",
-                    voice=voice,
-                    input=text
-                )
-                audio_b64 = base64.b64encode(response.content).decode()
-                return f"data:audio/mp3;base64,{audio_b64}"
-            except Exception as e:
-                logger.error(f"OpenAI TTS error: {e}")
-        if self.eleven_client:
-            try:
-                voice_settings = self.VoiceSettings(stability=0.5, similarity_boost=0.75)
-                audio_generator = self.eleven_client.text_to_speech.convert(
-                    text=text,
-                    voice_id="21m00Tcm4TlvDq8ikWAM",
-                    model_id="eleven_multilingual_v2",
-                    voice_settings=voice_settings
-                )
-                audio_data = b""
-                for chunk in audio_generator:
-                    audio_data += chunk
-                audio_b64 = base64.b64encode(audio_data).decode()
-                return f"data:audio/mpeg;base64,{audio_b64}"
-            except Exception as e:
-                logger.error(f"ElevenLabs TTS error: {e}")
-        return None
-    
-    async def deploy_to_vercel(self, project_name: str, files: dict) -> Dict:
-        if not self.vercel_token:
-            return {"success": False, "error": "Vercel token not configured"}
-        try:
-            vercel_files = []
-            for filename, content in files.items():
-                if isinstance(content, str):
-                    vercel_files.append({"file": filename, "data": content})
-                else:
-                    vercel_files.append({"file": filename, "data": json.dumps(content)})
-            async with httpx.AsyncClient() as client:
-                response = await client.post(
-                    "https://api.vercel.com/v13/deployments",
-                    headers={
-                        "Authorization": f"Bearer {self.vercel_token}",
-                        "Content-Type": "application/json"
-                    },
-                    json={
-                        "name": project_name.lower().replace(" ", "-").replace("_", "-"),
-                        "files": vercel_files,
-                        "projectSettings": {"framework": None}
-                    },
-                    timeout=120.0
-                )
-                if response.status_code in [200, 201]:
-                    data = response.json()
-                    return {
-                        "success": True,
-                        "url": f"https://{data.get('url', '')}",
-                        "deployment_id": data.get('id', ''),
-                        "status": "deployed"
-                    }
-                else:
-                    return {"success": False, "error": response.text}
-        except Exception as e:
-            return {"success": False, "error": str(e)}
-
-    async def process_message(self, session_id: str, user_id: str, message: str, settings: Dict[str, Any] = None) -> Dict:
+        # استرجاع الجلسة
         session = await self.get_session(session_id, user_id)
         if not session:
             raise ValueError("Session not found")
-        settings = settings or {}
         
-        # === خصم النقاط ===
-        user = await self.db.users.find_one({"id": user_id}, {"_id": 0})
-        is_owner = user and (user.get("is_owner", False) or user.get("role") == "owner")
-        user_credits = user.get("credits", 0) if user else 0
-        
+        # إضافة رسالة المستخدم
         user_msg = {
             "id": str(uuid.uuid4()),
             "role": "user",
             "content": message,
             "message_type": "text",
             "attachments": [],
+            "metadata": {},
             "created_at": datetime.now(timezone.utc).isoformat()
         }
+        
+        # تحديد نوع الطلب
+        request_type = detect_request_type(message, session.get("session_type", "general"))
+        
+        # إنشاء رد المساعد
         ai_response = ""
         attachments = []
-        msg_type = "text"
-        msg_lower = message.lower()
+        credits_used = 0
         
-        image_keywords = ['صورة', 'صور', 'أنشئ صورة', 'ارسم', 'image', 'اريد صورة', 'ولد صورة', 'اصنع صورة']
-        video_keywords = ['فيديو', 'فديو', 'مقطع', 'أنشئ فيديو', 'video', 'اريد فيديو', 'اصنع فيديو', 'ولد فيديو', 'سينمائي']
-        website_keywords = ['موقع', 'صفحة ويب', 'website', 'html', 'أنشئ موقع', 'اصنع موقع', 'ولد موقع', 'صفحة']
-        game_keywords = ['لعبة', 'game', '3d', 'ثلاثية', 'العاب', 'أنشئ لعبة', 'اصنع لعبة', 'babylon']
-        app_keywords = ['تطبيق', 'برنامج', 'app', 'application', 'أنشئ تطبيق', 'اصنع تطبيق', 'موبايل']
-        deploy_keywords = ['انشر', 'deploy', 'رفع', 'نشر', 'ارفع', 'publish']
-        voiceover_keywords = ['تعليق صوتي', 'صوت', 'voiceover', 'narration', 'تعليق', 'راوي']
-        
-        is_image = any(kw in msg_lower for kw in image_keywords)
-        is_video = any(kw in msg_lower for kw in video_keywords)
-        is_website = any(kw in msg_lower for kw in website_keywords)
-        is_game = any(kw in msg_lower for kw in game_keywords)
-        is_app = any(kw in msg_lower for kw in app_keywords)
-        is_deploy = any(kw in msg_lower for kw in deploy_keywords)
-        wants_voiceover = any(kw in msg_lower for kw in voiceover_keywords)
-        
-        if not self.openai_client:
-            ai_response = "عذراً، خدمة الذكاء الاصطناعي غير متاحة. تأكد من إعداد OPENAI_API_KEY."
-        
-        elif is_video:
-            try:
-                duration = 8
-                if '12' in msg_lower or 'طويل' in msg_lower:
-                    duration = 12
-                elif '4' in msg_lower or 'قصير' in msg_lower:
-                    duration = 4
-                size = "1792x1024"
-                
-                video_result = await self.generate_video_sora2(message, duration, size)
-                
-                if video_result and video_result.get("url"):
-                    voiceover_url = None
-                    if wants_voiceover:
-                        voiceover_text = await self.chat_gpt5(
-                            [{"role": "user", "content": f"اكتب تعليق صوتي قصير (20-30 كلمة) لفيديو عن: {message}"}],
-                            "اكتب تعليق صوتي احترافي بالعربية. قصير ومؤثر."
-                        )
-                        voiceover_url = await self.generate_voiceover(voiceover_text)
-                    
-                    asset = {
-                        "id": str(uuid.uuid4()),
-                        "user_id": user_id,
-                        "session_id": session_id,
-                        "asset_type": "video",
-                        "url": video_result["url"],
-                        "voiceover_url": voiceover_url,
-                        "prompt": message,
-                        "duration": duration,
-                        "size": size,
-                        "model": "sora-2",
-                        "created_at": datetime.now(timezone.utc).isoformat()
-                    }
-                    await self.db.generated_assets.insert_one(asset)
-                    
-                    voiceover_msg = "\n🎙️ تعليق صوتي: متاح" if voiceover_url else ""
-                     # خصم النقاط للفيديو
-                    if not is_owner and user_credits >= 20:
-                        await self.db.users.update_one({"id": user_id}, {"$inc": {"credits": -20}})
-                    ai_response = f"✅ تم إنشاء الفيديو بنجاح! 🎬 (خصم 20 نقطة)\n📹 المدة: {duration} ثانية\n🤖 النموذج: Sora 2{voiceover_msg}"
-
-                    attachment_data = {"type": "video", "url": video_result["url"], "duration": duration, "size": size, "id": asset["id"]}
-                    if voiceover_url:
-                        attachment_data["voiceover_url"] = voiceover_url
-                    attachments = [attachment_data]
-                    msg_type = "video"
-                else:
-                    ai_response = "عذراً، فشل في إنشاء الفيديو. حاول مرة أخرى."
-            except Exception as e:
-                logger.error(f"Video error: {e}")
-                ai_response = f"عذراً، حدث خطأ في الفيديو: {str(e)[:150]}"
-        
-        elif is_image:
-            try:
-                image_url = await self.generate_image_gpt(message)
-                asset = {
-                    "id": str(uuid.uuid4()),
-                    "user_id": user_id,
-                    "session_id": session_id,
-                    "asset_type": "image",
-                    "url": image_url,
-                    "prompt": message,
-                    "model": "gpt-image-1",
-                    "created_at": datetime.now(timezone.utc).isoformat()
-                }
-                await self.db.generated_assets.insert_one(asset)
-                # خصم النقاط للصورة
-                if not is_owner and user_credits >= 5:
-                    await self.db.users.update_one({"id": user_id}, {"$inc": {"credits": -5}})
-                ai_response = "✅ تم إنشاء الصورة بنجاح! 🎨 (تم خصم 5 نقاط)\n🤖 النموذج: GPT Image 1"
-                attachments = [{"type": "image", "url": image_url, "id": asset["id"]}]
-                msg_type = "image"
-            except Exception as e:
-                logger.error(f"Image error: {e}")
-                ai_response = f"عذراً، حدث خطأ في الصورة: {str(e)[:100]}"
-
-        elif is_game:
-            # Check if user is asking for ideas or ready to create
-            idea_keywords = ['فكرة', 'اقتراح', 'افكار', 'ماذا', 'اقترح', 'idea', 'suggest']
-            is_asking_idea = any(kw in msg_lower for kw in idea_keywords)
-            
-            if is_asking_idea:
-                # AI suggests ideas first
-                idea_completion = self.openai_client.chat.completions.create(
-                    model="gpt-5.2",
-                    messages=[
-                        {"role": "system", "content": """أنت مستشار ألعاب محترف. عندما يطلب المستخدم فكرة لعبة:
-1. اقترح 3 أفكار مختلفة ومبتكرة
-2. لكل فكرة اشرح: الفكرة، أسلوب اللعب، الميزات الرئيسية
-3. اسأل المستخدم أي فكرة يفضل
-4. لا تنشئ كود - فقط اقترح واسأل
-
-مثال:
-🎮 **فكرة 1: سباق الفضاء**
-- سفينة فضائية تتجنب الكويكبات
-- تحكم بالأسهم، جمع نجوم للنقاط
-
-🎮 **فكرة 2: برج الدفاع**
-- ابني أبراج لحماية قلعتك
-- أعداء يهجمون من كل الاتجاهات
-
-🎮 **فكرة 3: متاهة ثلاثية الأبعاد**
-- استكشف متاهة وابحث عن الكنز
-- وحوش تطاردك
-
-أي فكرة تعجبك؟ أو اقترح فكرتك الخاصة!"""},
-                        {"role": "user", "content": message}
-                    ],
-                    max_completion_tokens=1024
-                )
-                ai_response = idea_completion.choices[0].message.content
-                attachments = []
-                msg_type = "text"
-            else:
-                # Check credits first
-                game_cost = 20  # نقاط للعبة بسيطة
-                if not is_owner and user_credits < game_cost:
-                    ai_response = f"⚠️ رصيدك غير كافٍ!\n\nتكلفة إنشاء اللعبة: {game_cost} نقطة\nرصيدك الحالي: {user_credits} نقطة\n\nيرجى شحن رصيدك للمتابعة."
-                    attachments = []
-                    msg_type = "text"
-                else:
-                    try:
-                        completion = self.openai_client.chat.completions.create(
-                            model="gpt-5.2",
-                            messages=[
-                                {"role": "system", "content": """أنت مطور ألعاب خبير في Babylon.js. مهمتك إنشاء ألعاب 3D احترافية.
-
-قواعد صارمة:
-1. استخدم Babylon.js من CDN
-2. أنشئ مشهد 3D كامل مع إضاءة وكاميرا
-3. أضف تفاعل وتحكم بالماوس/لوحة المفاتيح
-4. أضف نظام نقاط ومستويات
-5. اجعل اللعبة ممتعة وقابلة للعب فوراً
-6. أرجع ملف HTML واحد كامل فقط بدون أي شرح
-7. تأكد أن الكود يعمل 100%"""},
-                                {"role": "user", "content": f"أنشئ لعبة 3D احترافية: {message}"}
-                            ],
-                            max_completion_tokens=4096
-                        )
-                        code = completion.choices[0].message.content.replace("```html", "").replace("```", "").strip()
-                        
-                        # Deduct credits
-                        if not is_owner:
-                            await self.db.users.update_one({"id": user_id}, {"$inc": {"credits": -game_cost}})
-                        
-                        asset = {
-                            "id": str(uuid.uuid4()),
-                            "user_id": user_id,
-                            "session_id": session_id,
-                            "asset_type": "game",
-                            "code": code,
-                            "prompt": message,
-                            "tech": "babylon.js",
-                            "credits_used": game_cost,
-                            "created_at": datetime.now(timezone.utc).isoformat()
-                        }
-                        await self.db.generated_assets.insert_one(asset)
-                        deploy_result = None
-                        if is_deploy and self.vercel_token:
-                            deploy_result = await self.deploy_to_vercel(f"zitex-game-{asset['id'][:8]}", {"index.html": code})
-                        if deploy_result and deploy_result.get("success"):
-                            ai_response = f"✅ تم إنشاء اللعبة ونشرها! 🎮 (تم خصم {game_cost} نقطة)\n\n🔗 الرابط: {deploy_result.get('url')}\n\n💡 جرب اللعبة في المعاينة على اليمين!"
-                            attachments = [{"type": "game", "code": code, "id": asset["id"], "url": deploy_result.get('url')}]
-                        else:
-                            ai_response = f"✅ تم إنشاء اللعبة بنجاح! 🎮 (تم خصم {game_cost} نقطة)\n\n👁️ شاهد اللعبة في المعاينة على اليمين\n🚀 قل 'انشر اللعبة' لرفعها على رابط مباشر!"
-                            attachments = [{"type": "game", "code": code, "id": asset["id"]}]
-                            
-                        msg_type = "game"
-                    except Exception as e:
-                        logger.error(f"Game error: {e}")
-                        ai_response = f"عذراً، حدث خطأ: {str(e)[:100]}"
-                
-        elif is_website:
-            try:
-     
-                completion = self.openai_client.chat.completions.create(
-                    model="gpt-5.2",
-                    messages=[
-                        {"role": "system", "content": "أنت مطور ويب محترف. أنشئ موقع HTML+CSS+JS كامل وعصري responsive مع ألوان جميلة. أرجع الكود فقط."},
-                        {"role": "user", "content": f"أنشئ موقع: {message}"}
-                    ],
-                    max_completion_tokens=4096
-                )
-                code = completion.choices[0].message.content.replace("```html", "").replace("```", "").strip()
-                asset = {
-                    "id": str(uuid.uuid4()),
-                    "user_id": user_id,
-                    "session_id": session_id,
-                    "asset_type": "website",
-                    "code": code,
-                    "prompt": message,
-                    "created_at": datetime.now(timezone.utc).isoformat()
-                }
-                await self.db.generated_assets.insert_one(asset)
-                deploy_result = None
-                if is_deploy and self.vercel_token:
-                    deploy_result = await self.deploy_to_vercel(f"zitex-site-{asset['id'][:8]}", {"index.html": code})
-                if deploy_result and deploy_result.get("success"):
-                    ai_response = f"✅ تم إنشاء الموقع ونشره! 🌐\n\n🔗 الرابط: {deploy_result.get('url')}"
-                    attachments = [{"type": "website", "code": code, "id": asset["id"], "url": deploy_result.get('url')}]
-                else:
-                    ai_response = "✅ تم إنشاء الموقع بنجاح! 🌐\n\nقل 'انشر الموقع' لرفعه على رابط مباشر!"
-                    attachments = [{"type": "website", "code": code, "id": asset["id"]}]
-                msg_type = "website"
-            except Exception as e:
-                logger.error(f"Website error: {e}")
-                ai_response = f"عذراً، حدث خطأ: {str(e)[:100]}"
-        
-        elif is_deploy:
-            try:
-                last_asset = await self.db.generated_assets.find_one(
-                    {"user_id": user_id, "asset_type": {"$in": ["website", "game", "app"]}},
-                    {"_id": 0},
-                    sort=[("created_at", -1)]
-                )
-                if last_asset and last_asset.get("code"):
-                    deploy_result = await self.deploy_to_vercel(
-                        f"zitex-{last_asset['asset_type']}-{last_asset['id'][:8]}",
-                        {"index.html": last_asset["code"]}
-                    )
-                    if deploy_result.get("success"):
-                        await self.db.generated_assets.update_one(
-                            {"id": last_asset["id"]},
-                            {"$set": {"deployed_url": deploy_result.get('url')}}
-                        )
-                        ai_response = f"✅ تم النشر بنجاح! 🚀\n\n🔗 الرابط: {deploy_result.get('url')}"
-                        attachments = [{"type": "deployment", "url": deploy_result.get('url')}]
-                    else:
-                        ai_response = f"عذراً، فشل النشر: {deploy_result.get('error', 'خطأ غير معروف')}"
-                else:
-                    ai_response = "لم أجد مشروع سابق للنشر. أنشئ موقع أو لعبة أولاً!"
-            except Exception as e:
-                ai_response = f"عذراً، حدث خطأ في النشر: {str(e)[:100]}"
-        
-        elif is_app:
-            try:
-                completion = self.openai_client.chat.completions.create(
-                    model="gpt-5.2",
-                    messages=[
-                        {"role": "system", "content": "أنت مطور تطبيقات محترف. أنشئ كود React Native للتطبيق المطلوب مع تعليقات توضيحية."},
-                        {"role": "user", "content": f"أنشئ تطبيق: {message}"}
-                    ],
-                    max_completion_tokens=4096
-                )
-                code = completion.choices[0].message.content
-                asset = {
-                    "id": str(uuid.uuid4()),
-                    "user_id": user_id,
-                    "session_id": session_id,
-                    "asset_type": "app",
-                    "code": code,
-                    "prompt": message,
-                    "created_at": datetime.now(timezone.utc).isoformat()
-                }
-                await self.db.generated_assets.insert_one(asset)
-                ai_response = f"✅ تم إنشاء التطبيق! 📱\n\n{code[:2500]}"
-                attachments = [{"type": "app", "code": code, "id": asset["id"]}]
-                msg_type = "app"
-            except Exception as e:
-                ai_response = f"عذراً، حدث خطأ: {str(e)[:100]}"
-        
+        if not AI_FEATURES_ENABLED or not self.openai_client:
+            ai_response = "عذراً، خدمات الذكاء الاصطناعي غير متاحة حالياً. يرجى التأكد من إعداد مفتاح OpenAI API في إعدادات Railway."
         else:
             try:
-                messages_list = [{"role": "system", "content": "أنت زيتكس، مساعد ذكي يعمل بـ GPT-5.2. قدراتك: 🎨 صور، 🎬 فيديو (4/8/12 ثانية)، 🎙️ تعليق صوتي، 🌐 مواقع، 🎮 ألعاب 3D، 📱 تطبيقات، 🚀 نشر تلقائي. أجب بالعربية."}]
-                for msg in session.get("messages", [])[-10:]:
-                    messages_list.append({"role": msg["role"], "content": msg["content"]})
-                messages_list.append({"role": "user", "content": message})
-                ai_response = await self.chat_gpt5(messages_list)
+                # Image Generation
+                if request_type == "image":
+                    ai_response, attachments, credits_used = await self._generate_image(user_id, session_id, message)
+                
+                # Video Generation
+                elif request_type == "video":
+                    ai_response = "جاري إنشاء الفيديو السينمائي...\n\nملاحظة: توليد الفيديو يعمل في الخلفية. سيتم إشعارك عند الانتهاء."
+                    credits_used = 20
+                
+                # Code Generation (Website/Game/App)
+                else:
+                    ai_response, credits_used = await self._generate_with_gpt(
+                        session, message, request_type, settings
+                    )
+                    
             except Exception as e:
-                ai_response = f"عذراً، حدث خطأ: {str(e)[:100]}"
+                logger.error(f"Error processing message: {e}")
+                ai_response = f"عذراً، حدث خطأ أثناء المعالجة. يرجى المحاولة مرة أخرى.\n\nتفاصيل: {str(e)[:200]}"
         
+        # إنشاء رسالة المساعد
         assistant_msg = {
             "id": str(uuid.uuid4()),
             "role": "assistant",
-            "content": ai_response,
-            "message_type": msg_type,
+            "content": ai_response.strip(),
+            "message_type": "text",
             "attachments": attachments,
+            "metadata": {"request_type": request_type, "credits_used": credits_used},
             "created_at": datetime.now(timezone.utc).isoformat()
         }
         
+        # تحديث الجلسة
+        update_data = {
+            "$push": {"messages": {"$each": [user_msg, assistant_msg]}},
+            "$set": {"updated_at": datetime.now(timezone.utc).isoformat()}
+        }
+        
+        # حفظ الكود المولد إن وجد
+        code_match = re.search(r'```(?:html|javascript|js)?\n?([\s\S]*?)```', ai_response)
+        if code_match:
+            update_data["$set"]["generated_code"] = code_match.group(1)
+            update_data["$set"]["session_type"] = request_type
+        
         await self.db.chat_sessions.update_one(
             {"id": session_id},
-            {"$push": {"messages": {"$each": [user_msg, assistant_msg]}}, "$set": {"updated_at": datetime.now(timezone.utc).isoformat()}}
+            update_data
         )
         
-        return {"session_id": session_id, "user_message": user_msg, "assistant_message": assistant_msg}
+        # تحديث عنوان الجلسة إذا كانت جديدة
+        if len(session.get("messages", [])) == 0:
+            title = self._generate_title(message, request_type)
+            await self.db.chat_sessions.update_one(
+                {"id": session_id},
+                {"$set": {"title": title}}
+            )
+        
+        return {
+            "session_id": session_id,
+            "user_message": user_msg,
+            "assistant_message": assistant_msg,
+            "credits_used": credits_used
+        }
+    
+    async def _generate_image(self, user_id: str, session_id: str, prompt: str) -> Tuple[str, List[Dict], int]:
+        """توليد صورة باستخدام DALL-E 3"""
+        try:
+            # تحسين البرومبت
+            enhanced_prompt = f"High quality, professional, detailed: {prompt}"
+            
+            image_response = self.openai_client.images.generate(
+                model="dall-e-3",
+                prompt=enhanced_prompt,
+                size="1024x1024",
+                quality="standard",
+                n=1,
+            )
+            image_url = image_response.data[0].url
+            
+            # Save to database
+            asset = {
+                "id": str(uuid.uuid4()),
+                "user_id": user_id,
+                "session_id": session_id,
+                "asset_type": "image",
+                "url": image_url,
+                "prompt": prompt,
+                "created_at": datetime.now(timezone.utc).isoformat()
+            }
+            await self.db.generated_assets.insert_one(asset)
+            
+            response = "تم إنشاء الصورة بنجاح! 🎨"
+            attachments = [{
+                "type": "image",
+                "url": image_url,
+                "prompt": prompt
+            }]
+            
+            return response, attachments, 5
+            
+        except Exception as e:
+            logger.error(f"Image generation error: {e}")
+            return f"عذراً، حدث خطأ في توليد الصورة: {str(e)[:100]}", [], 0
+    
+    async def _generate_with_gpt(
+        self, 
+        session: Dict, 
+        message: str, 
+        request_type: str,
+        settings: Dict
+    ) -> Tuple[str, int]:
+        """توليد رد باستخدام GPT-4o"""
+        
+        # اختيار System Prompt المناسب
+        system_prompt = get_system_prompt(request_type)
+        
+        # بناء سياق المحادثة
+        messages = [{"role": "system", "content": system_prompt}]
+        
+        # إضافة آخر 10 رسائل من المحادثة للسياق
+        for msg in session.get("messages", [])[-10:]:
+            messages.append({
+                "role": msg["role"],
+                "content": msg["content"]
+            })
+        
+        # إضافة رسالة المستخدم الحالية
+        messages.append({"role": "user", "content": message})
+        
+        try:
+            completion = self.openai_client.chat.completions.create(
+                model="gpt-4o",
+                messages=messages,
+                temperature=0.7,
+                max_tokens=8000  # زيادة لإنتاج كود أطول
+            )
+            response = completion.choices[0].message.content
+            
+            # Calculate credits based on request type
+            credits = 1  # Base credit
+            if request_type in ["game_3d"]:
+                credits = 20
+            elif request_type in ["game", "webapp", "pwa"]:
+                credits = 15
+            elif request_type in ["website"]:
+                credits = 10
+            
+            return response, credits
+            
+        except Exception as e:
+            logger.error(f"GPT generation error: {e}")
+            return f"عذراً، حدث خطأ في معالجة الطلب: {str(e)[:100]}", 0
+    
+    def _generate_title(self, message: str, request_type: str) -> str:
+        """توليد عنوان ذكي للجلسة"""
+        type_prefixes = {
+            "image": "🎨",
+            "video": "🎬",
+            "website": "🌐",
+            "game": "🎮",
+            "game_3d": "🎮 3D",
+            "webapp": "💻",
+            "pwa": "📱",
+            "general": "💬"
+        }
+        prefix = type_prefixes.get(request_type, "💬")
+        title = message[:35].strip()
+        if len(message) > 35:
+            title += "..."
+        return f"{prefix} {title}"
     
     async def delete_session(self, session_id: str, user_id: str) -> bool:
-        result = await self.db.chat_sessions.update_one({"id": session_id, "user_id": user_id}, {"$set": {"status": "archived"}})
+        """حذف جلسة"""
+        result = await self.db.chat_sessions.update_one(
+            {"id": session_id, "user_id": user_id},
+            {"$set": {"status": "archived"}}
+        )
         return result.modified_count > 0
     
     async def get_session_assets(self, session_id: str, user_id: str) -> List[Dict]:
-        return await self.db.generated_assets.find({"session_id": session_id, "user_id": user_id}, {"_id": 0}).sort("created_at", -1).to_list(100)
+        """استرجاع أصول الجلسة"""
+        assets = await self.db.generated_assets.find(
+            {"session_id": session_id, "user_id": user_id},
+            {"_id": 0}
+        ).sort("created_at", -1).to_list(100)
+        return assets
     
     async def get_video_requests(self, user_id: str, session_id: str = None) -> List[Dict]:
+        """استرجاع طلبات الفيديو"""
         query = {"user_id": user_id}
         if session_id:
             query["session_id"] = session_id
-        return await self.db.video_requests.find(query, {"_id": 0}).sort("created_at", -1).to_list(50)
+        
+        requests = await self.db.video_requests.find(
+            query,
+            {"_id": 0}
+        ).sort("created_at", -1).to_list(50)
+        return requests
+    
+    async def generate_tts(self, text: str, provider: str = "openai", voice: str = "alloy", speed: float = 1.0) -> Optional[str]:
+        """توليد صوت من النص"""
+        if not AI_FEATURES_ENABLED:
+            return None
+        
+        try:
+            if provider == "openai" and self.openai_client:
+                response = self.openai_client.audio.speech.create(
+                    model="tts-1",
+                    voice=voice,
+                    input=text,
+                    speed=speed
+                )
+                audio_bytes = response.content
+                audio_b64 = base64.b64encode(audio_bytes).decode()
+                return f"data:audio/mpeg;base64,{audio_b64}"
+            
+            elif provider == "elevenlabs" and self.eleven_client and ELEVENLABS_AVAILABLE:
+                voice_settings = VoiceSettings(
+                    stability=0.5,
+                    similarity_boost=0.75
+                )
+                audio_generator = self.eleven_client.text_to_speech.convert(
+                    text=text,
+                    voice_id=voice,
+                    model_id="eleven_multilingual_v2",
+                    voice_settings=voice_settings
+                )
+                audio_bytes = b""
+                for chunk in audio_generator:
+                    audio_bytes += chunk
+                audio_b64 = base64.b64encode(audio_bytes).decode()
+                return f"data:audio/mpeg;base64,{audio_b64}"
+        except Exception as e:
+            logger.error(f"TTS generation error: {e}")
+        return None
+    
+    async def update_session_code(self, session_id: str, user_id: str, code: str) -> bool:
+        """تحديث الكود المحفوظ في الجلسة"""
+        result = await self.db.chat_sessions.update_one(
+            {"id": session_id, "user_id": user_id},
+            {"$set": {"generated_code": code, "updated_at": datetime.now(timezone.utc).isoformat()}}
+        )
+        return result.modified_count > 0
+    
+    async def get_session_code(self, session_id: str, user_id: str) -> Optional[str]:
+        """استرجاع الكود المحفوظ في الجلسة"""
+        session = await self.get_session(session_id, user_id)
+        if session:
+            return session.get("generated_code")
+        return None
