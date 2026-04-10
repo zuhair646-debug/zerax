@@ -448,34 +448,7 @@ class AIAssistant:
                             ai_response = f"✅ تم إنشاء اللعبة بنجاح! 🎮 (تم خصم {game_cost} نقطة)\n\n👁️ شاهد اللعبة في المعاينة على اليمين\n🚀 قل 'انشر اللعبة' لرفعها على رابط مباشر!"
                             attachments = [{"type": "game", "code": code, "id": asset["id"]}]
                         msg_type = "game"
-                )
-                code = completion.choices[0].message.content.replace("```html", "").replace("```", "").strip()
-                asset = {
-                    "id": str(uuid.uuid4()),
-                    "user_id": user_id,
-                    "session_id": session_id,
-                    "asset_type": "game",
-                    "code": code,
-                    "prompt": message,
-                    "tech": "babylon.js",
-                    "created_at": datetime.now(timezone.utc).isoformat()
-                }
-                await self.db.generated_assets.insert_one(asset)
-                deploy_result = None
-                if is_deploy and self.vercel_token:
-                    deploy_result = await self.deploy_to_vercel(f"zitex-game-{asset['id'][:8]}", {"index.html": code})
-                if deploy_result and deploy_result.get("success"):
-                    ai_response = f"✅ تم إنشاء اللعبة ونشرها! 🎮\n\n🔗 الرابط: {deploy_result.get('url')}"
-                    attachments = [{"type": "game", "code": code, "id": asset["id"], "url": deploy_result.get('url')}]
-                else:
-                    ai_response = "✅ تم إنشاء اللعبة بنجاح! 🎮\n\nقل 'انشر اللعبة' لرفعها على رابط مباشر!"
-                    attachments = [{"type": "game", "code": code, "id": asset["id"]}]
-                msg_type = "game"
-            except Exception as e:
-                logger.error(f"Game error: {e}")
-
-                            msg_type = "game"
-
+  
         elif is_website:
             try:
      
