@@ -328,7 +328,10 @@ class AIAssistant:
                     "created_at": datetime.now(timezone.utc).isoformat()
                 }
                 await self.db.generated_assets.insert_one(asset)
-                ai_response = "✅ تم إنشاء الصورة بنجاح! 🎨\n🤖 النموذج: GPT Image 1"
+               # خصم النقاط للصورة
+                    if not is_owner and user_credits >= 5:
+                        await self.db.users.update_one({"id": user_id}, {"$inc": {"credits": -5}})
+                    ai_response = "✅ تم إنشاء الصورة بنجاح! 🎨 (تم خصم 5 نقاط)\n📸 النموذج: GPT Image 1" 🎨\n🤖 النموذج: GPT Image 1"
                 attachments = [{"type": "image", "url": image_url, "id": asset["id"]}]
                 msg_type = "image"
             except Exception as e:
