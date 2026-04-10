@@ -225,7 +225,7 @@ class AIAssistant:
         session = await self.get_session(session_id, user_id)
         if not session:
             raise ValueError("Session not found")
-         settings = settings or {}
+        settings = settings or {}
         
         # === خصم النقاط ===
         user = await self.db.users.find_one({"id": user_id}, {"_id": 0})
