@@ -893,8 +893,11 @@ async def transcribe_audio(
     current_user: dict = Depends(get_current_user)
 ):
     """Convert speech to text using OpenAI Whisper"""
-    if not openai_client:
-        raise HTTPException(status_code=400, detail="خدمة التحويل الصوتي غير متاحة")
+    
+    # Check for API key
+    api_key = os.environ.get('OPENAI_API_KEY')
+    if not api_key:
+        raise HTTPException(status_code=400, detail="خدمة التحويل الصوتي غير متاحة - يرجى إضافة OPENAI_API_KEY")
     
     # Check file size (max 25MB)
     content = await audio.read()
@@ -902,12 +905,15 @@ async def transcribe_audio(
         raise HTTPException(status_code=400, detail="حجم الملف أكبر من 25MB")
     
     # Check file type
-    allowed_types = ['audio/webm', 'audio/mp3', 'audio/mpeg', 'audio/wav', 'audio/mp4', 'audio/m4a', 'audio/ogg']
     if audio.content_type and not any(t in audio.content_type for t in ['audio', 'webm', 'ogg']):
         raise HTTPException(status_code=400, detail=f"نوع الملف غير مدعوم: {audio.content_type}")
     
     try:
-        # Create a file-like object
+        # Create OpenAI client locally
+        from openai import OpenAI
+        client = OpenAI(api_key=api_key)
+        
+        # Create a temp file
         import tempfile
         with tempfile.NamedTemporaryFile(suffix='.webm', delete=False) as tmp_file:
             tmp_file.write(content)
@@ -915,7 +921,7 @@ async def transcribe_audio(
         
         # Transcribe using OpenAI Whisper
         with open(tmp_file_path, 'rb') as audio_file:
-            response = openai_client.audio.transcriptions.create(
+            response = client.audio.transcriptions.create(
                 file=audio_file,
                 model="whisper-1",
                 language=language,
@@ -941,6 +947,7 @@ async def transcribe_audio(
         }
         
     except Exception as e:
+        logging.error(f"STT Error: {str(e)}")
         raise HTTPException(status_code=500, detail=f"خطأ في تحويل الصوت: {str(e)}")
 
 # ============== IMAGE GENERATION & EDITING ==============
