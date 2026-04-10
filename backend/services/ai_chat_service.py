@@ -25,13 +25,8 @@ except ImportError:
     OpenAI = None
 
 # Emergent Integrations for Sora 2
-try:
-    from emergentintegrations.llm.openai.video_generation import OpenAIVideoGeneration
-    SORA_AVAILABLE = True
-except ImportError:
-    SORA_AVAILABLE = False
-    OpenAIVideoGeneration = None
-
+# Using OpenAI SDK directly for Sora 2
+SORA_AVAILABLE = True
 AI_FEATURES_ENABLED = True
 
 class AIAssistant:
