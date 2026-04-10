@@ -303,7 +303,7 @@ class AIAssistant:
                      # خصم النقاط للفيديو
                     if not is_owner and user_credits >= 20:
                         await self.db.users.update_one({"id": user_id}, {"$inc": {"credits": -20}})
-                    ai_response = f"✅ تم إنشاء الفيديو السينمائي بنجاح! 🎬 (تم خصم 20 نقطة)\n\n📹 المدة: {duration} ثانية\n📐 الدقة: {size} (Full HD+)\n🤖 النموذج: Sora 2{voiceover_msg}"\n\n📹 المدة: {duration} ثانية\n📐 الدقة: {size} (Full HD+)\n🤖 النموذج: Sora 2{voiceover_msg}"
+                 ai_response = f"✅ تم إنشاء الفيديو السينمائي بنجاح! 🎬 (تم خصم 20 نقطة)\n\n📹 المدة: {duration} ثانية\n📐 الدقة: {size} (Full HD+)\n🤖 النموذج: Sora 2{voiceover_msg}"
                     
                     attachment_data = {"type": "video", "url": video_result["url"], "duration": duration, "size": size, "id": asset["id"]}
                     if voiceover_url:
