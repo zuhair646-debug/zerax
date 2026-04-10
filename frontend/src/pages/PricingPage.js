@@ -100,14 +100,14 @@ const PricingPage = ({ user }) => {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-slate-900 flex items-center justify-center">
-        <div className="animate-spin w-12 h-12 border-4 border-purple-500 border-t-transparent rounded-full" />
+      <div className="min-h-screen bg-[#0a0a12] flex items-center justify-center">
+        <div className="animate-spin w-12 h-12 border-4 border-amber-500 border-t-transparent rounded-full" />
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-slate-900 via-slate-800 to-slate-900" data-testid="pricing-page">
+    <div className="min-h-screen bg-gradient-to-b from-[#0a0a12] via-[#0d0d18] to-[#0a0a12]" data-testid="pricing-page">
       <Navbar user={user} />
       
       <div className="pt-24 pb-16 px-4">
@@ -115,7 +115,7 @@ const PricingPage = ({ user }) => {
           {/* Header */}
           <div className="text-center mb-16">
             <h1 className="text-4xl md:text-5xl font-bold text-white mb-4">
-              أسعار <span className="text-transparent bg-clip-text bg-gradient-to-r from-purple-400 to-pink-400">شفافة</span> وبسيطة
+              أسعار <span className="text-transparent bg-clip-text bg-gradient-to-r from-amber-400 to-yellow-500">شفافة</span> وبسيطة
             </h1>
             <p className="text-xl text-gray-400 max-w-2xl mx-auto">
               ابدأ مجاناً مع 20 نقطة + 3 صور + 2 فيديو، واشترِ المزيد حسب احتياجك
@@ -124,16 +124,16 @@ const PricingPage = ({ user }) => {
 
           {/* User Balance Card */}
           {user && userBalance && (
-            <Card className="bg-gradient-to-r from-purple-900/50 to-pink-900/50 border-purple-500/30 mb-12">
+            <Card className="bg-gradient-to-r from-amber-900/30 to-yellow-900/30 border-amber-500/30 mb-12">
               <CardContent className="p-6">
                 <div className="flex flex-wrap items-center justify-between gap-4">
                   <div>
                     <p className="text-gray-400 text-sm">رصيدك الحالي</p>
-                    <p className="text-3xl font-bold text-white">{userBalance.credits} <span className="text-lg text-purple-400">نقطة</span></p>
+                    <p className="text-3xl font-bold text-white">{userBalance.credits} <span className="text-lg text-amber-400">نقطة</span></p>
                   </div>
                   <div className="flex gap-4 text-center">
                     <div className="bg-slate-800/50 rounded-lg px-4 py-2">
-                      <p className="text-2xl font-bold text-purple-400">{userBalance.free_images}</p>
+                      <p className="text-2xl font-bold text-amber-400">{userBalance.free_images}</p>
                       <p className="text-xs text-gray-400">صور مجانية</p>
                     </div>
                     <div className="bg-slate-800/50 rounded-lg px-4 py-2">
@@ -142,7 +142,7 @@ const PricingPage = ({ user }) => {
                     </div>
                     {userBalance.bonus_points > 0 && (
                       <div className="bg-slate-800/50 rounded-lg px-4 py-2">
-                        <p className="text-2xl font-bold text-green-400">{userBalance.bonus_points}</p>
+                        <p className="text-2xl font-bold text-emerald-400">{userBalance.bonus_points}</p>
                         <p className="text-xs text-gray-400">نقاط مكافأة</p>
                       </div>
                     )}
@@ -155,7 +155,7 @@ const PricingPage = ({ user }) => {
           {/* Credits Packages */}
           <div className="mb-16">
             <h2 className="text-2xl font-bold text-white text-center mb-8 flex items-center justify-center gap-2">
-              <Zap className="w-6 h-6 text-yellow-400" />
+              <Zap className="w-6 h-6 text-amber-400" />
               باقات النقاط
             </h2>
             
@@ -165,12 +165,12 @@ const PricingPage = ({ user }) => {
                   key={pkg.id}
                   className={`relative overflow-hidden transition-all duration-300 hover:scale-105 ${
                     pkg.popular 
-                      ? 'bg-gradient-to-b from-purple-900/80 to-slate-800 border-purple-500 shadow-lg shadow-purple-500/20' 
-                      : 'bg-slate-800 border-slate-700 hover:border-purple-500/50'
+                      ? 'bg-gradient-to-b from-amber-900/50 to-slate-800 border-amber-500 shadow-lg shadow-amber-500/20' 
+                      : 'bg-slate-800/50 border-slate-700 hover:border-amber-500/50'
                   }`}
                 >
                   {pkg.popular && (
-                    <div className="absolute top-0 left-0 right-0 bg-gradient-to-r from-purple-500 to-pink-500 text-white text-center py-1 text-sm font-semibold">
+                    <div className="absolute top-0 left-0 right-0 bg-gradient-to-r from-amber-500 to-yellow-500 text-black text-center py-1 text-sm font-semibold">
                       <Star className="w-4 h-4 inline me-1" />
                       الأكثر شعبية
                     </div>
@@ -180,7 +180,7 @@ const PricingPage = ({ user }) => {
                     <CardTitle className="text-white text-xl">{pkg.name}</CardTitle>
                     <CardDescription className="text-gray-400">
                       {pkg.credits} نقطة
-                      {pkg.bonus > 0 && <span className="text-green-400 mr-1">+ {pkg.bonus} هدية</span>}
+                      {pkg.bonus > 0 && <span className="text-emerald-400 mr-1">+ {pkg.bonus} هدية</span>}
                     </CardDescription>
                   </CardHeader>
                   
@@ -193,19 +193,19 @@ const PricingPage = ({ user }) => {
                     
                     <ul className="space-y-3 text-gray-300 text-sm">
                       <li className="flex items-center gap-2">
-                        <Check className="w-4 h-4 text-green-400" />
+                        <Check className="w-4 h-4 text-emerald-400" />
                         {Math.floor(pkg.credits / 5)} صورة تقريباً
                       </li>
                       <li className="flex items-center gap-2">
-                        <Check className="w-4 h-4 text-green-400" />
+                        <Check className="w-4 h-4 text-emerald-400" />
                         {Math.floor(pkg.credits / 25)} فيديو 12 ثانية
                       </li>
                       <li className="flex items-center gap-2">
-                        <Check className="w-4 h-4 text-green-400" />
+                        <Check className="w-4 h-4 text-emerald-400" />
                         صلاحية دائمة
                       </li>
                       {pkg.bonus > 0 && (
-                        <li className="flex items-center gap-2 text-green-400">
+                        <li className="flex items-center gap-2 text-emerald-400">
                           <Gift className="w-4 h-4" />
                           +{pkg.bonus} نقطة هدية
                         </li>
@@ -218,7 +218,7 @@ const PricingPage = ({ user }) => {
                       onClick={() => handlePurchase(pkg.id, 'credits')}
                       className={`w-full ${
                         pkg.popular 
-                          ? 'bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600' 
+                          ? 'bg-gradient-to-r from-amber-500 to-yellow-500 hover:from-amber-600 hover:to-yellow-600 text-black font-semibold' 
                           : 'bg-slate-700 hover:bg-slate-600'
                       }`}
                     >
@@ -233,16 +233,16 @@ const PricingPage = ({ user }) => {
           {/* Subscriptions */}
           <div className="mb-16">
             <h2 className="text-2xl font-bold text-white text-center mb-8 flex items-center justify-center gap-2">
-              <Crown className="w-6 h-6 text-yellow-400" />
+              <Crown className="w-6 h-6 text-amber-400" />
               الاشتراكات الشهرية
             </h2>
             
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
               {pricing?.subscriptions && Object.entries(pricing.subscriptions).map(([key, sub]) => (
-                <Card key={key} className="bg-slate-800 border-slate-700 hover:border-purple-500/50 transition-all">
+                <Card key={key} className="bg-slate-800/50 border-slate-700 hover:border-amber-500/50 transition-all">
                   <CardHeader>
                     <div className="flex items-center gap-2 mb-2">
-                      {key.includes('image') && <Image className="w-5 h-5 text-purple-400" />}
+                      {key.includes('image') && <Image className="w-5 h-5 text-amber-400" />}
                       {key.includes('video') && <Video className="w-5 h-5 text-orange-400" />}
                       {key.includes('all') && <Sparkles className="w-5 h-5 text-yellow-400" />}
                     </div>
@@ -259,7 +259,7 @@ const PricingPage = ({ user }) => {
                     <ul className="space-y-2">
                       {sub.features?.map((feature, idx) => (
                         <li key={idx} className="flex items-center gap-2 text-gray-300 text-sm">
-                          <Check className="w-4 h-4 text-green-400" />
+                          <Check className="w-4 h-4 text-emerald-400" />
                           {feature}
                         </li>
                       ))}
@@ -270,7 +270,7 @@ const PricingPage = ({ user }) => {
                     <Button 
                       onClick={() => handlePurchase(key, 'subscription')}
                       variant="outline"
-                      className="w-full border-purple-500/50 text-purple-400 hover:bg-purple-500/20"
+                      className="w-full border-amber-500/50 text-amber-400 hover:bg-amber-500/20"
                     >
                       اشترك الآن
                     </Button>
@@ -286,12 +286,12 @@ const PricingPage = ({ user }) => {
             
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
               {pricing?.service_costs && [
-                { key: 'image_generation', icon: Image, color: 'text-purple-400', label: 'صورة واحدة' },
+                { key: 'image_generation', icon: Image, color: 'text-amber-400', label: 'صورة واحدة' },
                 { key: 'video_12_seconds', icon: Video, color: 'text-orange-400', label: 'فيديو 12 ثانية' },
                 { key: 'video_60_seconds', icon: Video, color: 'text-red-400', label: 'فيديو دقيقة' },
-                { key: 'website_simple', icon: Globe, color: 'text-green-400', label: 'موقع بسيط' },
+                { key: 'website_simple', icon: Globe, color: 'text-emerald-400', label: 'موقع بسيط' },
               ].map(({ key, icon: Icon, color, label }) => (
-                <Card key={key} className="bg-slate-800/50 border-slate-700 text-center">
+                <Card key={key} className="bg-slate-800/30 border-slate-700 text-center">
                   <CardContent className="pt-6">
                     <Icon className={`w-8 h-8 mx-auto mb-2 ${color}`} />
                     <p className="text-2xl font-bold text-white">{pricing.service_costs[key]}</p>
@@ -305,10 +305,10 @@ const PricingPage = ({ user }) => {
 
           {/* Referral Section */}
           {user && (
-            <Card className="bg-gradient-to-r from-green-900/30 to-emerald-900/30 border-green-500/30 mb-16">
+            <Card className="bg-gradient-to-r from-emerald-900/30 to-teal-900/30 border-emerald-500/30 mb-16">
               <CardHeader>
                 <CardTitle className="text-white flex items-center gap-2">
-                  <Users className="w-6 h-6 text-green-400" />
+                  <Users className="w-6 h-6 text-emerald-400" />
                   ادعُ أصدقاءك واكسب نقاط
                 </CardTitle>
                 <CardDescription className="text-gray-400">
@@ -324,17 +324,17 @@ const PricingPage = ({ user }) => {
                       <div className="flex-1 bg-slate-800 border border-slate-600 rounded-lg px-4 py-3 text-white font-mono text-lg">
                         {referralInfo?.referral_code || '---'}
                       </div>
-                      <Button onClick={copyReferralCode} variant="outline" className="border-green-500/50 text-green-400">
+                      <Button onClick={copyReferralCode} variant="outline" className="border-emerald-500/50 text-emerald-400">
                         <Copy className="w-4 h-4" />
                       </Button>
-                      <Button onClick={shareReferralLink} className="bg-green-600 hover:bg-green-700">
+                      <Button onClick={shareReferralLink} className="bg-emerald-600 hover:bg-emerald-700">
                         <Share2 className="w-4 h-4" />
                       </Button>
                     </div>
                   </div>
                   
                   <div className="text-center px-6 py-4 bg-slate-800/50 rounded-lg">
-                    <p className="text-3xl font-bold text-green-400">{referralInfo?.total_referrals || 0}</p>
+                    <p className="text-3xl font-bold text-emerald-400">{referralInfo?.total_referrals || 0}</p>
                     <p className="text-sm text-gray-400">دعوة ناجحة</p>
                   </div>
                 </div>
@@ -344,17 +344,17 @@ const PricingPage = ({ user }) => {
 
           {/* Free Trial Info */}
           <div className="text-center">
-            <Card className="bg-slate-800/50 border-slate-700 inline-block">
+            <Card className="bg-slate-800/30 border-amber-500/20 inline-block">
               <CardContent className="p-6">
-                <Gift className="w-12 h-12 text-yellow-400 mx-auto mb-4" />
+                <Gift className="w-12 h-12 text-amber-400 mx-auto mb-4" />
                 <h3 className="text-xl font-bold text-white mb-2">ابدأ مجاناً الآن!</h3>
                 <p className="text-gray-400 mb-4">
-                  كل مستخدم جديد يحصل على: <span className="text-green-400 font-semibold">20 نقطة + 3 صور + 2 فيديو</span> مجاناً
+                  كل مستخدم جديد يحصل على: <span className="text-amber-400 font-semibold">20 نقطة + 3 صور + 2 فيديو</span> مجاناً
                 </p>
                 {!user && (
                   <Button 
                     onClick={() => window.location.href = '/register'}
-                    className="bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600"
+                    className="bg-gradient-to-r from-amber-500 to-yellow-500 hover:from-amber-600 hover:to-yellow-600 text-black font-semibold"
                   >
                     سجّل الآن مجاناً
                   </Button>
