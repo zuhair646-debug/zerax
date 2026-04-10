@@ -95,7 +95,7 @@ class AIAssistant:
         response = self.openai_client.chat.completions.create(
             model="gpt-5.2",
             messages=chat_messages,
-            max_tokens=4096,
+           max_completion_tokens=4096,
             temperature=0.7
         )
         return response.choices[0].message.content
@@ -348,7 +348,7 @@ class AIAssistant:
                         {"role": "system", "content": "أنت مطور ألعاب محترف. أنشئ لعبة ثلاثية الأبعاد باستخدام Babylon.js. استخدم CDN وأنشئ مشهد 3D كامل مع إضاءة وكاميرا وتفاعل. أرجع ملف HTML واحد كامل فقط بدون شرح."},
                         {"role": "user", "content": f"أنشئ لعبة 3D: {message}"}
                     ],
-                    max_tokens=4096
+                    max_completion_tokens=4096
                 )
                 code = completion.choices[0].message.content.replace("```html", "").replace("```", "").strip()
                 asset = {
@@ -385,7 +385,7 @@ class AIAssistant:
                         {"role": "system", "content": "أنت مطور ويب محترف. أنشئ موقع HTML+CSS+JS كامل وعصري responsive مع ألوان جميلة. أرجع الكود فقط."},
                         {"role": "user", "content": f"أنشئ موقع: {message}"}
                     ],
-                    max_tokens=4096
+                    max_completion_tokens=4096
                 )
                 code = completion.choices[0].message.content.replace("```html", "").replace("```", "").strip()
                 asset = {
@@ -446,7 +446,7 @@ class AIAssistant:
                         {"role": "system", "content": "أنت مطور تطبيقات محترف. أنشئ كود React Native للتطبيق المطلوب مع تعليقات توضيحية."},
                         {"role": "user", "content": f"أنشئ تطبيق: {message}"}
                     ],
-                    max_tokens=4096
+                    max_completion_tokens=4096
                 )
                 code = completion.choices[0].message.content
                 asset = {
