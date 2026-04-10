@@ -818,13 +818,6 @@ async def get_voices(current_user: dict = Depends(get_current_user)):
 
 @api_router.post("/tts/generate")
 async def generate_tts(request: TTSRequest, current_user: dict = Depends(get_current_user)):
-```
-
-**استبدل كامل الـ function حتى قبل `# ============== SPEECH TO TEXT` بهذا:**
-
-```python
-@api_router.post("/tts/generate")
-async def generate_tts(request: TTSRequest, current_user: dict = Depends(get_current_user)):
     """Generate text-to-speech audio - supports OpenAI and ElevenLabs"""
     try:
         audio_data = None
