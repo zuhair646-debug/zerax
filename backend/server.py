@@ -1161,12 +1161,6 @@ async def log_download(item_type: str, item_id: str, current_user: dict = Depend
         {"item_type": item_type, "item_id": item_id}
     )
     return {"message": "Download logged"}
-لا مشكلة! ✅ الجزء الأول كافي حالياً.
-
-**احفظ التغييرات الآن:**
-- اضغط **"Commit changes"** (الزر الأخضر في الأسفل)
-
----
     
 # ============== GPT-5.2 CHAT FUNCTION ==============
 
