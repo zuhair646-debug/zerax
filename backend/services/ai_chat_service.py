@@ -339,9 +339,7 @@ class AIAssistant:
             except Exception as e:
                 logger.error(f"Image error: {e}")
                 ai_response = f"عذراً، حدث خطأ في الصورة: {str(e)[:100]}"
-        
-        elif is_game:
-        
+    
         elif is_game:
             try:
                 completion = self.openai_client.chat.completions.create(
