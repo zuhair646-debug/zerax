@@ -1,5 +1,3 @@
-# Force rebuild v2
-from routers.websocket_router import router as websocket_router
 from fastapi import FastAPI, APIRouter, HTTPException, Depends, UploadFile, File, Form
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from fastapi.responses import StreamingResponse
@@ -18,320 +16,79 @@ import jwt
 import base64
 import httpx
 import io
-# ============== GPT-5.2 & SORA 2 & GPT IMAGE 1 ==============
-from openai import OpenAI
-import zipfile
-import tempfile
-import shutil
-from concurrent.futures import ThreadPoolExecutor
-security = HTTPBearer()
 
-# Thread pool for background video generation
-video_executor = ThreadPoolExecutor(max_workers=2)
+# AI Features disabled for independent hosting
+# To enable: install openai, elevenlabs, Pillow and configure API keys
+AI_FEATURES_ENABLED = False
 
-# AI Models Configuration
-AI_MODELS = {
-    "chat": "gpt-5.2",
-    "image": "gpt-image-1", 
-    "video": "sora-2"
-}
-# Optional imports
+# Optional imports for AI features
 try:
     from elevenlabs.client import ElevenLabs
     from elevenlabs.types import VoiceSettings
+    ELEVENLABS_AVAILABLE = True
 except ImportError:
+    ELEVENLABS_AVAILABLE = False
     ElevenLabs = None
     VoiceSettings = None
 
 try:
     from PIL import Image, ImageDraw, ImageFont
+    PIL_AVAILABLE = True
 except ImportError:
+    PIL_AVAILABLE = False
     Image = None
     ImageDraw = None
     ImageFont = None
 
 try:
     import openai
+    OPENAI_AVAILABLE = True
 except ImportError:
+    OPENAI_AVAILABLE = False
     openai = None
+
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
-mongo_url = os.environ.get('MONGO_URL')
-db_name = os.environ.get('DB_NAME', 'zitex_db')
 
-# Connect to MongoDB
+mongo_url = os.environ['MONGO_URL']
 client = AsyncIOMotorClient(mongo_url)
-db = client[db_name]
-app = FastAPI(title="Zitex API")
-app.include_router(websocket_router, prefix="/api")
+db = client[os.environ['DB_NAME']]
+
+app = FastAPI(title="Zitex API", description="AI-Powered Creative Platform")
 api_router = APIRouter(prefix="/api")
 
-# === تغيير صلاحية المستخدم (مؤقت للاختبار) ===
-@api_router.get("/make-admin/{email}")
-async def make_admin(email: str, secret: str = "zitex2024"):
-    if secret != "zitex2024":
-        raise HTTPException(status_code=403, detail="Secret key invalid")
-    
-    result = await db.users.update_one(
-        {"email": email},
-        {"$set": {"role": "owner", "is_owner": True}}
-    )
-    
-    if result.modified_count == 0:
-        raise HTTPException(status_code=404, detail="User not found")
-    
-    return {"message": f"تم تحويل {email} إلى Owner بنجاح!"}
-
-# === نظام إدارة الأسعار والعروض ===
-DEFAULT_PRICING = {
-    "type": "pricing",
-    "currency": "USD",
-    "exchange_rate": 3.75,
-    "packages": [
-        {"id": "starter", "name": "باقة المبتدئ", "credits": 100, "price": 13, "bonus": 0, "popular": False},
-        {"id": "pro", "name": "باقة المحترف", "credits": 500, "price": 53, "bonus": 50, "popular": True},
-        {"id": "enterprise", "name": "باقة الأعمال", "credits": 2000, "price": 187, "bonus": 300, "popular": False},
-    ],
-    "services": {
-        "image": 5,
-        "video_4s": 10,
-        "video_8s": 18,
-        "video_12s": 25,
-        "video_60s": 100,
-        "website_simple": 50,
-        "website_advanced": 150,
-    },
-    "first_order_discount": 0,
-    "signup_bonus": 20,
-    "referral_bonus": 30,
-    "invited_bonus": 20,
-    "offers": []
-}
-
-@api_router.get("/admin/pricing")
-async def get_pricing(credentials: HTTPAuthorizationCredentials = Depends(security)):
-    token = credentials.credentials
-    payload = jwt.decode(token, JWT_SECRET, algorithms=['HS256'])
-    user = await db.users.find_one({"id": payload['user_id']})
-    if not user or user.get('role') not in ['admin', 'owner']:
-        raise HTTPException(status_code=403, detail="Admin only")
-    
-    pricing = await db.settings.find_one({"type": "pricing"})
-    
-    if not pricing:
-        pricing = DEFAULT_PRICING.copy()
-        await db.settings.insert_one(pricing)
-        pricing = await db.settings.find_one({"type": "pricing"})
-    
-    result = {k: v for k, v in pricing.items() if k != '_id'}
-    return result
-
-@api_router.put("/admin/pricing")
-async def update_pricing(data: dict, credentials: HTTPAuthorizationCredentials = Depends(security)):
-    token = credentials.credentials
-    payload = jwt.decode(token, JWT_SECRET, algorithms=['HS256'])
-    user = await db.users.find_one({"id": payload['user_id']})
-    if not user or user.get('role') not in ['admin', 'owner']:
-        raise HTTPException(status_code=403, detail="Admin only")
-    
-    data['type'] = 'pricing'
-    await db.settings.update_one(
-        {"type": "pricing"},
-        {"$set": data},
-        upsert=True
-    )
-    return {"message": "تم تحديث الأسعار بنجاح"}
-
-@api_router.post("/admin/offers")
-async def create_offer(data: dict, credentials: HTTPAuthorizationCredentials = Depends(security)):
-    token = credentials.credentials
-    payload = jwt.decode(token, JWT_SECRET, algorithms=['HS256'])
-    user = await db.users.find_one({"id": payload['user_id']})
-    if not user or user.get('role') not in ['admin', 'owner']:
-        raise HTTPException(status_code=403, detail="Admin only")
-    
-    offer = {
-        "id": str(uuid.uuid4())[:8],
-        "name": data.get("name", "عرض خاص"),
-        "code": data.get("code", "").upper(),
-        "discount_percent": data.get("discount_percent", 0),
-        "for_first_order": data.get("for_first_order", False),
-        "max_uses": data.get("max_uses", 0),
-        "used_count": 0,
-        "active": True,
-        "created_at": datetime.now(timezone.utc).isoformat()
-    }
-    
-    await db.settings.update_one(
-        {"type": "pricing"},
-        {"$push": {"offers": offer}},
-        upsert=True
-    )
-    return {"message": "تم إنشاء العرض بنجاح", "offer": offer}
-
-@api_router.delete("/admin/offers/{offer_id}")
-async def delete_offer(offer_id: str, credentials: HTTPAuthorizationCredentials = Depends(security)):
-    token = credentials.credentials
-    payload = jwt.decode(token, JWT_SECRET, algorithms=['HS256'])
-    user = await db.users.find_one({"id": payload['user_id']})
-    if not user or user.get('role') not in ['admin', 'owner']:
-        raise HTTPException(status_code=403, detail="Admin only")
-    
-    await db.settings.update_one(
-        {"type": "pricing"},
-        {"$pull": {"offers": {"id": offer_id}}}
-    )
-    return {"message": "تم حذف العرض"}
-
-@api_router.post("/validate-coupon")
-async def validate_coupon(data: dict):
-    code = data.get("code", "").upper()
-    pricing = await db.settings.find_one({"type": "pricing"})
-    
-    if not pricing or not pricing.get("offers"):
-        raise HTTPException(status_code=404, detail="كود غير صالح")
-    
-    for offer in pricing["offers"]:
-        if offer.get("code") == code and offer.get("active"):
-            if offer.get("max_uses") > 0 and offer.get("used_count", 0) >= offer["max_uses"]:
-                raise HTTPException(status_code=400, detail="انتهى العرض")
-            return {
-                "valid": True,
-                "discount_percent": offer.get("discount_percent", 0),
-                "name": offer.get("name"),
-                "for_first_order": offer.get("for_first_order", False)
-            }
-    
-    raise HTTPException(status_code=404, detail="كود غير صالح")
-
-@api_router.get("/pricing")
-async def get_public_pricing():
-    pricing = await db.settings.find_one({"type": "pricing"})
-    if not pricing:
-        pricing = DEFAULT_PRICING.copy()
-    
-    return {
-        "currency": pricing.get("currency", "USD"),
-        "exchange_rate": pricing.get("exchange_rate", 3.75),
-        "packages": pricing.get("packages", []),
-        "services": pricing.get("services", {}),
-        "first_order_discount": pricing.get("first_order_discount", 0)
-    }
-    
-@api_router.put("/admin/pricing")
-async def update_pricing(data: dict, credentials: HTTPAuthorizationCredentials = Depends(security)):
-    token = credentials.credentials
-    payload = jwt.decode(token, JWT_SECRET, algorithms=['HS256'])
-    user = await db.users.find_one({"id": payload['user_id']})
-    if not user or user.get('role') not in ['admin', 'owner']:
-        raise HTTPException(status_code=403, detail="Admin only")
-    
-    await db.settings.update_one(
-        {"type": "pricing"},
-        {"$set": data},
-        upsert=True
-    )
-    return {"message": "تم تحديث الأسعار بنجاح"}
-
-@api_router.post("/admin/offers")
-async def create_offer(data: dict, credentials: HTTPAuthorizationCredentials = Depends(security)):
-    token = credentials.credentials
-    payload = jwt.decode(token, JWT_SECRET, algorithms=['HS256'])
-    user = await db.users.find_one({"id": payload['user_id']})
-    if not user or user.get('role') not in ['admin', 'owner']:
-        raise HTTPException(status_code=403, detail="Admin only")
-    
-    offer = {
-        "id": str(uuid.uuid4())[:8],
-        "name": data.get("name", "عرض خاص"),
-        "code": data.get("code", "").upper(),
-        "discount_percent": data.get("discount_percent", 0),
-        "discount_amount": data.get("discount_amount", 0),
-        "valid_until": data.get("valid_until"),
-        "max_uses": data.get("max_uses", 0),
-        "used_count": 0,
-        "active": True,
-        "created_at": datetime.now(timezone.utc).isoformat()
-    }
-    
-    await db.settings.update_one(
-        {"type": "pricing"},
-        {"$push": {"offers": offer}},
-        upsert=True
-    )
-    return {"message": "تم إنشاء العرض بنجاح", "offer": offer}
-
-@api_router.delete("/admin/offers/{offer_id}")
-async def delete_offer(offer_id: str, credentials: HTTPAuthorizationCredentials = Depends(security)):
-    token = credentials.credentials
-    payload = jwt.decode(token, JWT_SECRET, algorithms=['HS256'])
-    user = await db.users.find_one({"id": payload['user_id']})
-    if not user or user.get('role') not in ['admin', 'owner']:
-        raise HTTPException(status_code=403, detail="Admin only")
-    
-    await db.settings.update_one(
-        {"type": "pricing"},
-        {"$pull": {"offers": {"id": offer_id}}}
-    )
-    return {"message": "تم حذف العرض"}
-
-@api_router.post("/validate-coupon")
-async def validate_coupon(data: dict):
-    code = data.get("code", "").upper()
-    pricing = await db.settings.find_one({"type": "pricing"})
-    
-    if not pricing or not pricing.get("offers"):
-        raise HTTPException(status_code=404, detail="كود غير صالح")
-    
-    for offer in pricing["offers"]:
-        if offer.get("code") == code and offer.get("active"):
-            if offer.get("max_uses") > 0 and offer.get("used_count", 0) >= offer["max_uses"]:
-                raise HTTPException(status_code=400, detail="انتهى العرض")
-            return {
-                "valid": True,
-                "discount_percent": offer.get("discount_percent", 0),
-                "discount_amount": offer.get("discount_amount", 0),
-                "name": offer.get("name")
-            }
-    
-    raise HTTPException(status_code=404, detail="كود غير صالح")
-
-@api_router.get("/health")
-async def health_check():
-    return {"status": "ok", "message": "Server is running"}
-# Initialize OpenAI client
-openai_client = None
-try:
-    OPENAI_API_KEY = os.environ.get('OPENAI_API_KEY')
-    if OPENAI_API_KEY:
-        openai_client = OpenAI(api_key=OPENAI_API_KEY)
-        logging.info("✅ OpenAI client initialized")
-except Exception as e:
-    logging.error(f"OpenAI init error: {e}")
-
 security = HTTPBearer()
-JWT_SECRET = os.environ.get('JWT_SECRET', 'secret')
+JWT_SECRET = os.environ.get('JWT_SECRET', 'your-secret-key')
 OPENAI_API_KEY = os.environ.get('OPENAI_API_KEY')
-# Initialize OpenAI client for STT
-openai_client = None
-if OPENAI_API_KEY:
-    try:
-        openai_client = OpenAI(api_key=OPENAI_API_KEY)
-        logging.info("✅ OpenAI client initialized for STT")
-    except Exception as e:
-        logging.error(f"OpenAI init error: {e}")
+OWNER_WHATSAPP = os.environ.get('OWNER_WHATSAPP', '966507374438')
 ELEVENLABS_API_KEY = os.environ.get('ELEVENLABS_API_KEY')
 PAYPAL_CLIENT_ID = os.environ.get('PAYPAL_CLIENT_ID')
 PAYPAL_SECRET = os.environ.get('PAYPAL_SECRET')
 
+# Initialize PayPal
 try:
     import paypalrestsdk
+    PAYPAL_AVAILABLE = True
     if PAYPAL_CLIENT_ID and PAYPAL_SECRET:
-        paypalrestsdk.configure({"mode": "live", "client_id": PAYPAL_CLIENT_ID, "client_secret": PAYPAL_SECRET})
-except:
+        paypalrestsdk.configure({
+            "mode": "live",  # LIVE MODE - Production
+            "client_id": PAYPAL_CLIENT_ID,
+            "client_secret": PAYPAL_SECRET
+        })
+except ImportError:
+    PAYPAL_AVAILABLE = False
     paypalrestsdk = None
 
-eleven_client = ElevenLabs(api_key=ELEVENLABS_API_KEY) if ElevenLabs and ELEVENLABS_API_KEY else None
+# Initialize OpenAI client (for TTS/STT when enabled)
+openai_client = None
+if OPENAI_AVAILABLE and OPENAI_API_KEY:
+    openai_client = openai.OpenAI(api_key=OPENAI_API_KEY)
+
+# Initialize ElevenLabs client
+eleven_client = None
+if ELEVENLABS_AVAILABLE and ELEVENLABS_API_KEY:
+    eleven_client = ElevenLabs(api_key=ELEVENLABS_API_KEY)
+
 # ============== MODELS ==============
 
 # Role levels: owner (100) > super_admin (80) > admin (50) > client (10)
@@ -763,7 +520,7 @@ async def login(credentials: UserLogin):
             user_doc[field] = 0 if field != 'free_website_trial' else False
     
     user = User(**{k: v for k, v in user_doc.items() if k != 'password'})
-    await log_activity(user.id, "user_login", "create", f"User logged in")
+    await log_activity(user.id, "user_login", "create", "User logged in")
     
     token = create_token(user.id, user.role)
     return {"token": token, "user": user}
@@ -821,25 +578,23 @@ async def get_voices(current_user: dict = Depends(get_current_user)):
 @api_router.post("/tts/generate")
 async def generate_tts(request: TTSRequest, current_user: dict = Depends(get_current_user)):
     """Generate text-to-speech audio - supports OpenAI and ElevenLabs"""
+    if not AI_FEATURES_ENABLED:
+        raise HTTPException(status_code=503, detail="ميزة تحويل النص لصوت معطلة مؤقتاً. ستتوفر قريباً!")
+    
     try:
         audio_data = None
         
         if request.provider == "openai":
-            api_key = os.environ.get('OPENAI_API_KEY')
-            if not api_key:
+            if not openai_client:
                 raise HTTPException(status_code=400, detail="OpenAI TTS غير متاح - يرجى إضافة OPENAI_API_KEY")
             
-            # Create client locally
-            client = OpenAI(api_key=api_key)
-            
             # Generate speech with OpenAI
-            response = client.audio.speech.create(
+            response = openai_client.audio.speech.create(
                 model="tts-1",
                 voice=request.voice,
                 input=request.text,
                 speed=request.speed
             )
-            
             audio_bytes = response.content
             audio_base64 = base64.b64encode(audio_bytes).decode()
             audio_data = f"data:audio/mp3;base64,{audio_base64}"
@@ -888,7 +643,6 @@ async def generate_tts(request: TTSRequest, current_user: dict = Depends(get_cur
         }
         
     except Exception as e:
-        logging.error(f"TTS Error: {str(e)}")
         raise HTTPException(status_code=500, detail=f"خطأ في توليد الصوت: {str(e)}")
 
 # ============== SPEECH TO TEXT (Voice Input) ==============
@@ -900,10 +654,10 @@ async def transcribe_audio(
     current_user: dict = Depends(get_current_user)
 ):
     """Convert speech to text using OpenAI Whisper"""
+    if not AI_FEATURES_ENABLED:
+        raise HTTPException(status_code=503, detail="ميزة تحويل الصوت للنص معطلة مؤقتاً. ستتوفر قريباً!")
     
-    # Check for API key
-    api_key = os.environ.get('OPENAI_API_KEY')
-    if not api_key:
+    if not openai_client:
         raise HTTPException(status_code=400, detail="خدمة التحويل الصوتي غير متاحة - يرجى إضافة OPENAI_API_KEY")
     
     # Check file size (max 25MB)
@@ -912,14 +666,12 @@ async def transcribe_audio(
         raise HTTPException(status_code=400, detail="حجم الملف أكبر من 25MB")
     
     # Check file type
+    allowed_types = ['audio/webm', 'audio/mp3', 'audio/mpeg', 'audio/wav', 'audio/mp4', 'audio/m4a', 'audio/ogg']
     if audio.content_type and not any(t in audio.content_type for t in ['audio', 'webm', 'ogg']):
         raise HTTPException(status_code=400, detail=f"نوع الملف غير مدعوم: {audio.content_type}")
     
     try:
-        # Create OpenAI client locally - THIS IS THE FIX
-        client = OpenAI(api_key=api_key)
-        
-        # Create a temp file
+        # Create a file-like object
         import tempfile
         with tempfile.NamedTemporaryFile(suffix='.webm', delete=False) as tmp_file:
             tmp_file.write(content)
@@ -927,7 +679,7 @@ async def transcribe_audio(
         
         # Transcribe using OpenAI Whisper
         with open(tmp_file_path, 'rb') as audio_file:
-            response = client.audio.transcriptions.create(
+            response = openai_client.audio.transcriptions.create(
                 file=audio_file,
                 model="whisper-1",
                 language=language,
@@ -953,13 +705,16 @@ async def transcribe_audio(
         }
         
     except Exception as e:
-        logging.error(f"STT Error: {str(e)}")
         raise HTTPException(status_code=500, detail=f"خطأ في تحويل الصوت: {str(e)}")
 
 # ============== IMAGE GENERATION & EDITING ==============
 
 @api_router.post("/generate/image")
 async def generate_image(prompt: str, current_user: dict = Depends(get_current_user)):
+    """Generate image - TEMPORARILY DISABLED for independent hosting"""
+    if not AI_FEATURES_ENABLED:
+        raise HTTPException(status_code=503, detail="ميزة توليد الصور معطلة مؤقتاً. ستتوفر قريباً بعد إعداد OpenAI API!")
+    
     user_doc = await db.users.find_one({"id": current_user['user_id']}, {"_id": 0})
     
     is_owner = user_doc.get('is_owner', False)
@@ -982,24 +737,25 @@ async def generate_image(prompt: str, current_user: dict = Depends(get_current_u
         raise HTTPException(status_code=403, detail="لا يوجد لديك رصيد مجاني أو اشتراك")
     
     try:
-        chat = LlmChat(
-            api_key=OPENAI_API_KEY,
-            session_id=f"img-gen-{uuid.uuid4()}",
-            system_message="You are an image generation assistant."
-        ).with_model("gemini", "gemini-3-pro-image-preview").with_params(modalities=["image", "text"])
+        # Use OpenAI DALL-E for image generation
+        if not openai_client:
+            raise HTTPException(status_code=400, detail="خدمة توليد الصور غير متاحة - يرجى إضافة OPENAI_API_KEY")
         
-        msg = UserMessage(text=prompt)
-        text, images = await chat.send_message_multimodal_response(msg)
+        response = openai_client.images.generate(
+            model="dall-e-3",
+            prompt=prompt,
+            size="1024x1024",
+            quality="standard",
+            n=1,
+        )
         
-        image_data = None
-        if images and len(images) > 0:
-            image_data = f"data:{images[0]['mime_type']};base64,{images[0]['data']}"
+        image_url = response.data[0].url
         
         gen_record = ImageGeneration(
             user_id=current_user['user_id'],
             prompt=prompt,
-            image_url=image_data,
-            status="completed" if image_data else "failed",
+            image_url=image_url,
+            status="completed" if image_url else "failed",
             is_free=is_free_use
         )
         
@@ -1019,8 +775,8 @@ async def generate_image(prompt: str, current_user: dict = Depends(get_current_u
         
         return {
             "id": gen_record.id, 
-            "image_url": image_data, 
-            "text": text,
+            "image_url": image_url, 
+            "text": "تم توليد الصورة بنجاح",
             "free_images_remaining": updated_user.get('free_images', 0),
             "was_free": is_free_use
         }
@@ -1030,6 +786,9 @@ async def generate_image(prompt: str, current_user: dict = Depends(get_current_u
 @api_router.post("/images/edit")
 async def edit_image(request: ImageEditRequest, current_user: dict = Depends(get_current_user)):
     """Add text to an image"""
+    if not PIL_AVAILABLE:
+        raise HTTPException(status_code=503, detail="ميزة تحرير الصور معطلة مؤقتاً - Pillow غير مثبتة")
+    
     try:
         # Decode base64 image
         if request.image_base64.startswith('data:'):
@@ -1156,211 +915,6 @@ async def log_download(item_type: str, item_id: str, current_user: dict = Depend
         {"item_type": item_type, "item_id": item_id}
     )
     return {"message": "Download logged"}
-    
-# ============== GPT-5.2 CHAT FUNCTION ==============
-
-async def chat_with_gpt5(messages: list, system_prompt: str = None) -> str:
-    """Chat with GPT-5.2 model"""
-    api_key = os.environ.get('OPENAI_API_KEY')
-    if not api_key:
-        raise HTTPException(status_code=500, detail="OpenAI API key not configured")
-    
-    client = OpenAI(api_key=api_key)
-    
-    chat_messages = []
-    if system_prompt:
-        chat_messages.append({"role": "system", "content": system_prompt})
-    chat_messages.extend(messages)
-    
-    try:
-        response = client.chat.completions.create(
-            model="gpt-5.2",
-            messages=chat_messages,
-            max_tokens=4096,
-            temperature=0.7
-        )
-        return response.choices[0].message.content
-    except Exception as e:
-        logging.error(f"GPT-5.2 Error: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"AI Error: {str(e)}")
-
-# ============== GPT IMAGE 1 GENERATION ==============
-
-async def generate_image_gpt(prompt: str, size: str = "1024x1024") -> str:
-    """Generate image using GPT Image 1 (DALL-E 4)"""
-    api_key = os.environ.get('OPENAI_API_KEY')
-    if not api_key:
-        raise HTTPException(status_code=500, detail="OpenAI API key not configured")
-    
-    client = OpenAI(api_key=api_key)
-    
-    try:
-        response = client.images.generate(
-            model="gpt-image-1",
-            prompt=prompt,
-            size=size,
-            quality="high",
-            n=1
-        )
-        image_url = response.data[0].url
-        
-        # Download and convert to base64
-        async with httpx.AsyncClient() as client_http:
-            img_response = await client_http.get(image_url)
-            image_b64 = base64.b64encode(img_response.content).decode()
-            return f"data:image/png;base64,{image_b64}"
-    except Exception as e:
-        logging.error(f"GPT Image 1 Error: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"Image generation failed: {str(e)}")
-
-# ============== SORA 2 VIDEO GENERATION ==============
-
-async def generate_video_sora2(prompt: str, duration: int = 10, size: str = "1280x720") -> dict:
-    """Generate video using Sora 2"""
-    api_key = os.environ.get('OPENAI_API_KEY')
-    if not api_key:
-        raise HTTPException(status_code=500, detail="OpenAI API key not configured")
-    
-    client = OpenAI(api_key=api_key)
-    
-    # Validate duration (Sora 2 supports up to 60 seconds)
-    if duration > 60:
-        duration = 60
-    
-    try:
-        logging.info(f"Starting Sora 2 video generation: {prompt[:50]}...")
-        
-        response = client.videos.generate(
-            model="sora-2",
-            prompt=prompt,
-            duration=duration,
-            size=size
-        )
-        
-        video_url = response.url
-        logging.info(f"Video generated successfully: {video_url[:50]}...")
-        
-        return {
-            "url": video_url,
-            "duration": duration,
-            "size": size,
-            "prompt": prompt
-        }
-    except Exception as e:
-        logging.error(f"Sora 2 Error: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"Video generation failed: {str(e)}")
-
-# ============== DESIGN PLAN SYSTEM ==============
-
-async def create_design_plan(user_request: str, project_type: str = "website") -> dict:
-    """Create a design plan before building"""
-    system_prompt = """أنت مصمم ومطور محترف. عند استلام طلب من المستخدم:
-
-1. حلل الطلب بعناية
-2. أنشئ خطة تصميمية شاملة تتضمن:
-   - عنوان المشروع
-   - وصف تفصيلي
-   - قائمة الميزات المطلوبة
-   - التقنيات المستخدمة
-   - الوقت المتوقع للإنجاز
-   - هيكل الملفات
-
-رد بصيغة JSON فقط:
-{
-    "title": "عنوان المشروع",
-    "description": "وصف تفصيلي",
-    "features": ["ميزة 1", "ميزة 2"],
-    "tech_stack": ["React", "Tailwind", "etc"],
-    "estimated_time": "30 دقيقة",
-    "file_structure": ["index.html", "style.css", "script.js"],
-    "preview_description": "وصف قصير لما سيبدو عليه المشروع"
-}"""
-
-    messages = [{"role": "user", "content": f"نوع المشروع: {project_type}\n\nالطلب: {user_request}"}]
-    
-    response = await chat_with_gpt5(messages, system_prompt)
-    
-    try:
-        # Extract JSON from response
-        import json
-        import re
-        json_match = re.search(r'\{[\s\S]*\}', response)
-        if json_match:
-            plan = json.loads(json_match.group())
-            plan['id'] = str(uuid.uuid4())
-            plan['status'] = 'pending'
-            plan['project_type'] = project_type
-            return plan
-    except:
-        pass
-    
-    return {
-        "id": str(uuid.uuid4()),
-        "title": "مشروع جديد",
-        "description": response,
-        "features": [],
-        "tech_stack": [],
-        "estimated_time": "غير محدد",
-        "status": "pending",
-        "project_type": project_type
-    }
-
-# ============== VERCEL AUTO DEPLOYMENT ==============
-
-VERCEL_TOKEN = os.environ.get('VERCEL_TOKEN')
-
-async def deploy_to_vercel(project_name: str, files: dict) -> dict:
-    """Deploy project to Vercel automatically"""
-    if not VERCEL_TOKEN:
-        raise HTTPException(status_code=500, detail="Vercel token not configured")
-    
-    try:
-        # Prepare files for Vercel deployment
-        vercel_files = []
-        for filename, content in files.items():
-            vercel_files.append({
-                "file": filename,
-                "data": content
-            })
-        
-        # Create deployment
-        async with httpx.AsyncClient() as client:
-            response = await client.post(
-                "https://api.vercel.com/v13/deployments",
-                headers={
-                    "Authorization": f"Bearer {VERCEL_TOKEN}",
-                    "Content-Type": "application/json"
-                },
-                json={
-                    "name": project_name.lower().replace(" ", "-"),
-                    "files": vercel_files,
-                    "projectSettings": {
-                        "framework": None
-                    }
-                },
-                timeout=60.0
-            )
-            
-            if response.status_code == 200:
-                data = response.json()
-                return {
-                    "success": True,
-                    "url": f"https://{data.get('url', '')}",
-                    "deployment_id": data.get('id', ''),
-                    "status": "deployed"
-                }
-            else:
-                logging.error(f"Vercel deployment error: {response.text}")
-                return {
-                    "success": False,
-                    "error": response.text
-                }
-    except Exception as e:
-        logging.error(f"Deployment error: {str(e)}")
-        return {
-            "success": False,
-            "error": str(e)
-        }
 
 # ============== VIDEO GENERATION ==============
 
@@ -1528,6 +1082,10 @@ async def create_request(request_data: WebsiteRequestCreate, current_user: dict 
 
 @api_router.post("/requests/{request_id}/generate-suggestions")
 async def generate_suggestions(request_id: str, current_user: dict = Depends(get_current_user)):
+    """Generate AI suggestions for website - TEMPORARILY DISABLED"""
+    if not AI_FEATURES_ENABLED:
+        raise HTTPException(status_code=503, detail="ميزة اقتراحات الذكاء الاصطناعي معطلة مؤقتاً. ستتوفر قريباً!")
+    
     request_doc = await db.website_requests.find_one({"id": request_id}, {"_id": 0})
     if not request_doc:
         raise HTTPException(status_code=404, detail="Request not found")
@@ -1538,16 +1096,13 @@ async def generate_suggestions(request_id: str, current_user: dict = Depends(get
     is_trial = request_doc.get('is_trial', False)
     
     try:
+        if not openai_client:
+            raise HTTPException(status_code=400, detail="خدمة الذكاء الاصطناعي غير متاحة - يرجى إضافة OPENAI_API_KEY")
+        
         system_msg = "أنت مصمم مواقع محترف. قم بتقديم اقتراحات تفصيلية لتصميم الموقع بناءً على متطلبات العميل. أجب بالعربية."
         
         if is_trial:
             system_msg += " هذه تجربة مجانية، قدم ملخصاً موجزاً فقط."
-        
-        chat = LlmChat(
-            api_key=OPENAI_API_KEY,
-            session_id=f"website-gen-{request_id}",
-            system_message=system_msg
-        ).with_model("openai", "gpt-5.2")
         
         prompt = f"""العميل يريد موقع بالمواصفات التالية:
 العنوان: {request_doc['title']}
@@ -1559,8 +1114,14 @@ async def generate_suggestions(request_id: str, current_user: dict = Depends(get
 
 {"تجربة مجانية - ملخص موجز فقط." if is_trial else "قدم اقتراحات احترافية كاملة."}"""
         
-        user_message = UserMessage(text=prompt)
-        response = await chat.send_message(user_message)
+        completion = openai_client.chat.completions.create(
+            model="gpt-4o",
+            messages=[
+                {"role": "system", "content": system_msg},
+                {"role": "user", "content": prompt}
+            ]
+        )
+        response = completion.choices[0].message.content
         
         if is_trial:
             response += "\n\n---\n🔒 **معاينة محدودة**\nللحصول على التصميم الكامل، يرجى شراء نقاط."
@@ -1761,420 +1322,154 @@ async def update_website_status(website_id: str, status: str, admin: dict = Depe
         raise HTTPException(status_code=404, detail="Website not found")
     return {"message": "Status updated"}
 
-# ============== PRICING ==============
+# ============== FILE UPLOAD (FREE) ==============
 
-# تسعير الخدمات - شامل ومحدث
-PRICING_CONFIG = {
-    # باقات النقاط
-    "credits_packages": [
-        {"id": "starter", "name": "باقة المبتدئ", "credits": 100, "price_sar": 50, "price_usd": 13, "popular": False, "bonus": 0},
-        {"id": "pro", "name": "باقة المحترف", "credits": 500, "price_sar": 200, "price_usd": 53, "popular": True, "bonus": 50},
-        {"id": "enterprise", "name": "باقة الأعمال", "credits": 2000, "price_sar": 700, "price_usd": 187, "popular": False, "bonus": 300},
-    ],
-    # اشتراكات شهرية
-    "subscriptions": {
-        "images_monthly": {"name": "اشتراك الصور الشهري", "price_sar": 100, "price_usd": 27, "limit": "غير محدود", "features": ["صور غير محدودة", "جودة عالية HD", "أولوية التوليد"]},
-        "videos_monthly": {"name": "اشتراك الفيديو الشهري", "price_sar": 150, "price_usd": 40, "limit": "50 فيديو/شهر", "features": ["50 فيديو سينمائي", "دقيقة كاملة لكل فيديو", "جودة 4K"]},
-        "all_inclusive": {"name": "الباقة الشاملة", "price_sar": 300, "price_usd": 80, "limit": "كل شيء", "features": ["صور غير محدودة", "100 فيديو/شهر", "5 مواقع/شهر", "دعم أولوية"]},
-    },
-    # تكلفة الخدمات بالنقاط
-    "service_costs": {
-        "image_generation": 5,           # 5 نقاط لكل صورة
-        "video_4_seconds": 10,           # 10 نقاط لفيديو 4 ثواني
-        "video_8_seconds": 18,           # 18 نقطة لفيديو 8 ثواني
-        "video_12_seconds": 25,          # 25 نقطة لفيديو 12 ثانية
-        "video_50_seconds": 80,          # 80 نقطة لفيديو 50 ثانية
-        "video_60_seconds": 100,         # 100 نقطة لفيديو دقيقة
-        "website_simple": 50,            # 50 نقطة لموقع بسيط
-        "website_advanced": 150,         # 150 نقطة لموقع متقدم
-        "website_ecommerce": 300,        # 300 نقطة لمتجر إلكتروني
-        "tts_per_1000_chars": 2,         # 2 نقطة لكل 1000 حرف صوتي
-    },
-    # التجربة المجانية
-    "free_trial": {
-        "images": 3,
-        "videos": 2,
-        "website_preview": True,
-        "signup_bonus": 20,              # 20 نقطة مجانية عند التسجيل
-    },
-    # مكافآت الدعوات
-    "referral_rewards": {
-        "inviter_bonus": 30,             # 30 نقطة للداعي
-        "invited_bonus": 20,             # 20 نقطة للمدعو
-        "first_purchase_bonus": 50,      # 50 نقطة أول عملية شراء
-    }
+@api_router.post("/files/upload")
+async def upload_file(
+    file: UploadFile = File(...),
+    file_category: str = Form(default="general"),
+    current_user: dict = Depends(get_current_user)
+):
+    """Upload any file - FREE for all users"""
+    try:
+        # Check file size (50MB limit)
+        contents = await file.read()
+        if len(contents) > 50 * 1024 * 1024:
+            raise HTTPException(status_code=400, detail="حجم الملف أكبر من 50MB")
+        
+        # Generate unique filename
+        file_ext = file.filename.split('.')[-1] if '.' in file.filename else 'bin'
+        unique_filename = f"{uuid.uuid4()}.{file_ext}"
+        
+        # For now, store as base64 (in production, use cloud storage)
+        file_b64 = base64.b64encode(contents).decode()
+        file_url = f"data:{file.content_type};base64,{file_b64}"
+        
+        # Save to database
+        file_doc = {
+            "id": str(uuid.uuid4()),
+            "user_id": current_user['user_id'],
+            "filename": file.filename,
+            "unique_filename": unique_filename,
+            "content_type": file.content_type,
+            "size": len(contents),
+            "category": file_category,
+            "file_url": file_url,
+            "created_at": datetime.now(timezone.utc).isoformat()
+        }
+        await db.uploaded_files.insert_one(file_doc)
+        
+        await log_activity(
+            current_user['user_id'],
+            "file_uploaded",
+            "create",
+            f"Uploaded file: {file.filename} ({file_category})",
+            {"filename": file.filename, "size": len(contents), "category": file_category}
+        )
+        
+        return {
+            "id": file_doc['id'],
+            "filename": file.filename,
+            "file_url": file_url,
+            "size": len(contents),
+            "category": file_category,
+            "message": "تم رفع الملف بنجاح (مجاني)"
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"خطأ في رفع الملف: {str(e)}")
+
+@api_router.get("/files/my-files")
+async def get_my_files(current_user: dict = Depends(get_current_user)):
+    """Get user's uploaded files"""
+    files = await db.uploaded_files.find(
+        {"user_id": current_user['user_id']},
+        {"_id": 0, "file_url": 0}  # Don't return full base64 in list
+    ).sort("created_at", -1).to_list(100)
+    return {"files": files}
+
+# ============== SOCIAL MEDIA EXPORT (FREE) ==============
+
+SOCIAL_SPECS = {
+    "tiktok": {"width": 1080, "height": 1920, "aspect": "9:16", "max_duration": 180},
+    "snapchat": {"width": 1080, "height": 1920, "aspect": "9:16", "max_duration": 60},
+    "instagram_reels": {"width": 1080, "height": 1920, "aspect": "9:16", "max_duration": 90},
+    "instagram_story": {"width": 1080, "height": 1920, "aspect": "9:16", "max_duration": 15},
+    "instagram_post": {"width": 1080, "height": 1080, "aspect": "1:1", "max_duration": 60},
+    "youtube_shorts": {"width": 1080, "height": 1920, "aspect": "9:16", "max_duration": 60},
+    "facebook": {"width": 1280, "height": 720, "aspect": "16:9", "max_duration": 240},
+    "twitter": {"width": 1280, "height": 720, "aspect": "16:9", "max_duration": 140}
 }
 
-@api_router.get("/pricing")
-async def get_pricing():
-    return PRICING_CONFIG
+SOCIAL_TIPS = {
+    "tiktok": ["استخدم موسيقى ترند", "أضف نص على الفيديو", "اجعل أول 3 ثواني جذابة"],
+    "snapchat": ["أضف فلاتر وملصقات", "استخدم النص المتحرك", "اجعله قصير ومباشر"],
+    "instagram_reels": ["استخدم الهاشتاقات المناسبة", "أضف موسيقى من مكتبة انستقرام", "تفاعل مع الترندات"],
+    "instagram_story": ["أضف استطلاعات وأسئلة", "استخدم الملصقات التفاعلية", "انشر في أوقات الذروة"],
+    "instagram_post": ["اكتب وصف جذاب", "استخدم 5-10 هاشتاقات", "رد على التعليقات بسرعة"],
+    "youtube_shorts": ["أضف عنوان جذاب", "استخدم الوصف والهاشتاقات", "انشر بانتظام"],
+    "facebook": ["شارك في المجموعات المناسبة", "أضف وصف مفصل", "استخدم الإعلانات المدفوعة"],
+    "twitter": ["اجعله قصير ومؤثر", "استخدم الهاشتاقات الترند", "انشر في أوقات النشاط"]
+}
 
-@api_router.get("/pricing/calculate")
-async def calculate_price(service: str, quantity: int = 1):
-    """حساب تكلفة خدمة معينة"""
-    costs = PRICING_CONFIG["service_costs"]
-    if service not in costs:
-        raise HTTPException(status_code=400, detail="خدمة غير معروفة")
+@api_router.post("/social/export")
+async def export_for_social(
+    asset_id: str,
+    platforms: List[str],
+    current_user: dict = Depends(get_current_user)
+):
+    """Export media for social platforms - FREE"""
+    exports = []
     
-    total_cost = costs[service] * quantity
-    return {
-        "service": service,
-        "quantity": quantity,
-        "cost_per_unit": costs[service],
-        "total_cost": total_cost
-    }
-
-# ============== REFERRAL SYSTEM (نظام الدعوات) ==============
-
-@api_router.get("/referral/info")
-async def get_referral_info(current_user: dict = Depends(get_current_user)):
-    """الحصول على معلومات الدعوة للمستخدم"""
-    user_doc = await db.users.find_one({"id": current_user['user_id']}, {"_id": 0, "password": 0})
-    if not user_doc:
-        raise HTTPException(status_code=404, detail="المستخدم غير موجود")
-    
-    referral_code = user_doc.get('referral_code', str(uuid.uuid4())[:8].upper())
-    
-    # تحديث الكود إذا لم يكن موجوداً
-    if 'referral_code' not in user_doc:
-        await db.users.update_one(
-            {"id": current_user['user_id']},
-            {"$set": {"referral_code": referral_code}}
-        )
-    
-    # حساب عدد الدعوات الناجحة
-    referrals_count = await db.users.count_documents({"referred_by": referral_code})
-    
-    return {
-        "referral_code": referral_code,
-        "referral_link": f"https://zitex.com/register?ref={referral_code}",
-        "total_referrals": referrals_count,
-        "bonus_points": user_doc.get('bonus_points', 0),
-        "rewards": PRICING_CONFIG["referral_rewards"]
-    }
-
-@api_router.post("/referral/apply")
-async def apply_referral_code(request: ApplyReferralRequest, current_user: dict = Depends(get_current_user)):
-    """تطبيق كود دعوة"""
-    user_doc = await db.users.find_one({"id": current_user['user_id']}, {"_id": 0})
-    if not user_doc:
-        raise HTTPException(status_code=404, detail="المستخدم غير موجود")
-    
-    # التحقق من عدم استخدام كود من قبل
-    if user_doc.get('referred_by'):
-        raise HTTPException(status_code=400, detail="لقد استخدمت كود دعوة من قبل")
-    
-    # التحقق من صحة الكود
-    inviter = await db.users.find_one({"referral_code": request.referral_code.upper()}, {"_id": 0})
-    if not inviter:
-        raise HTTPException(status_code=400, detail="كود الدعوة غير صحيح")
-    
-    # لا يمكن دعوة نفسك
-    if inviter['id'] == current_user['user_id']:
-        raise HTTPException(status_code=400, detail="لا يمكنك استخدام كودك الخاص")
-    
-    rewards = PRICING_CONFIG["referral_rewards"]
-    
-    # إضافة النقاط للمدعو
-    await db.users.update_one(
-        {"id": current_user['user_id']},
-        {
-            "$set": {"referred_by": request.referral_code.upper()},
-            "$inc": {"bonus_points": rewards["invited_bonus"], "credits": rewards["invited_bonus"]}
+    for platform in platforms:
+        if platform not in SOCIAL_SPECS:
+            continue
+        
+        specs = SOCIAL_SPECS[platform]
+        tips = SOCIAL_TIPS.get(platform, [])
+        
+        # Get platform icon
+        icons = {
+            "tiktok": "🎵", "snapchat": "👻", "instagram_reels": "📸",
+            "instagram_story": "📱", "instagram_post": "🖼️",
+            "youtube_shorts": "▶️", "facebook": "📘", "twitter": "🐦"
         }
-    )
-    
-    # إضافة النقاط للداعي
-    await db.users.update_one(
-        {"id": inviter['id']},
-        {
-            "$inc": {
-                "bonus_points": rewards["inviter_bonus"],
-                "credits": rewards["inviter_bonus"],
-                "total_referrals": 1
-            }
+        
+        platform_names = {
+            "tiktok": "TikTok", "snapchat": "Snapchat", "instagram_reels": "Instagram Reels",
+            "instagram_story": "Instagram Story", "instagram_post": "Instagram Post",
+            "youtube_shorts": "YouTube Shorts", "facebook": "Facebook", "twitter": "Twitter/X"
         }
-    )
+        
+        exports.append({
+            "platform": platform,
+            "platform_name": platform_names.get(platform, platform),
+            "icon": icons.get(platform, "📱"),
+            "specs": specs,
+            "tips": tips,
+            "download_url": None,  # In production, this would be a processed file URL
+            "status": "ready"
+        })
     
     await log_activity(
         current_user['user_id'],
-        "referral_applied",
+        "social_export",
         "create",
-        f"Applied referral code: {request.referral_code}",
-        {"inviter_id": inviter['id'], "bonus": rewards["invited_bonus"]}
+        f"Exported for platforms: {', '.join(platforms)}",
+        {"platforms": platforms, "asset_id": asset_id}
     )
     
     return {
-        "message": f"تم تطبيق الكود بنجاح! حصلت على {rewards['invited_bonus']} نقطة مجانية",
-        "bonus_received": rewards["invited_bonus"]
+        "exports": exports,
+        "message": "تم تجهيز الملفات للتصدير (مجاني)"
     }
 
-@api_router.get("/referral/leaderboard")
-async def get_referral_leaderboard():
-    """قائمة أفضل الداعين"""
-    top_referrers = await db.users.find(
-        {"total_referrals": {"$gt": 0}},
-        {"_id": 0, "name": 1, "total_referrals": 1, "bonus_points": 1}
-    ).sort("total_referrals", -1).limit(10).to_list(10)
-    
-    return {"leaderboard": top_referrers}
-
-# ============== USER POINTS/CREDITS ==============
-
-@api_router.get("/user/balance")
-async def get_user_balance(current_user: dict = Depends(get_current_user)):
-    """الحصول على رصيد المستخدم"""
-    user_doc = await db.users.find_one({"id": current_user['user_id']}, {"_id": 0, "password": 0})
-    if not user_doc:
-        raise HTTPException(status_code=404, detail="المستخدم غير موجود")
-    
-    return {
-        "credits": user_doc.get('credits', 0),
-        "bonus_points": user_doc.get('bonus_points', 0),
-        "free_images": user_doc.get('free_images', 0),
-        "free_videos": user_doc.get('free_videos', 0),
-        "free_website_trial": user_doc.get('free_website_trial', False),
-        "subscription_type": user_doc.get('subscription_type'),
-        "subscription_expires": user_doc.get('subscription_expires'),
-        "total_spent": user_doc.get('total_spent', 0),
-        "service_costs": PRICING_CONFIG["service_costs"]
-    }
-
-@api_router.post("/user/claim-signup-bonus")
-async def claim_signup_bonus(current_user: dict = Depends(get_current_user)):
-    """المطالبة بمكافأة التسجيل"""
-    user_doc = await db.users.find_one({"id": current_user['user_id']}, {"_id": 0})
-    if not user_doc:
-        raise HTTPException(status_code=404, detail="المستخدم غير موجود")
-    
-    if user_doc.get('signup_bonus_claimed'):
-        raise HTTPException(status_code=400, detail="لقد حصلت على مكافأة التسجيل من قبل")
-    
-    bonus = PRICING_CONFIG["free_trial"]["signup_bonus"]
-    
-    await db.users.update_one(
-        {"id": current_user['user_id']},
-        {
-            "$set": {"signup_bonus_claimed": True},
-            "$inc": {"credits": bonus, "bonus_points": bonus}
-        }
-    )
-    
-    await log_activity(
-        current_user['user_id'],
-        "signup_bonus_claimed",
-        "create",
-        f"Claimed signup bonus: {bonus} points"
-    )
-    
-    return {"message": f"تهانينا! حصلت على {bonus} نقطة مجانية", "bonus": bonus}
-
-# ============== PAYMENTS ==============
-
-@api_router.post("/payments/create-order")
-async def create_payment_order(request: CreateOrderRequest, current_user: dict = Depends(get_current_user)):
-    """إنشاء طلب دفع PayPal حقيقي"""
-    
-    # البحث عن الباقة
-    package_info = None
-    credits_to_add = 0
-    package_name = ""
-    
-    if request.package_type == "credits":
-        for pkg in PRICING_CONFIG["credits_packages"]:
-            if pkg["id"] == request.package_id:
-                package_info = pkg
-                credits_to_add = pkg["credits"] + pkg.get("bonus", 0)
-                package_name = pkg["name"]
-                break
-    elif request.package_type == "subscription":
-        if request.package_id in PRICING_CONFIG["subscriptions"]:
-            package_info = PRICING_CONFIG["subscriptions"][request.package_id]
-            package_info["id"] = request.package_id
-            package_name = package_info.get("name", request.package_id)
-    
-    if not package_info:
-        raise HTTPException(status_code=400, detail="الباقة غير موجودة")
-    
-    paypal_order_id = None
-    
-    # إنشاء طلب PayPal حقيقي
-    if PAYPAL_CLIENT_ID and PAYPAL_SECRET:
-        try:
-            payment = paypalrestsdk.Payment({
-                "intent": "sale",
-                "payer": {"payment_method": "paypal"},
-                "redirect_urls": {
-                    "return_url": f"{os.environ.get('FRONTEND_URL', 'https://zitex.com')}/payment/success",
-                    "cancel_url": f"{os.environ.get('FRONTEND_URL', 'https://zitex.com')}/payment/cancel"
-                },
-                "transactions": [{
-                    "item_list": {
-                        "items": [{
-                            "name": package_name,
-                            "sku": request.package_id,
-                            "price": str(request.amount),
-                            "currency": request.currency,
-                            "quantity": 1
-                        }]
-                    },
-                    "amount": {
-                        "total": str(request.amount),
-                        "currency": request.currency
-                    },
-                    "description": f"Zitex - {package_name} ({credits_to_add} نقطة)"
-                }]
-            })
-            
-            if payment.create():
-                paypal_order_id = payment.id
-                logging.info(f"PayPal payment created: {paypal_order_id}")
-            else:
-                logging.error(f"PayPal error: {payment.error}")
-                raise HTTPException(status_code=500, detail=f"خطأ PayPal: {payment.error}")
-        except Exception as e:
-            logging.error(f"PayPal exception: {e}")
-            # Fallback to mock for testing
-            paypal_order_id = f"PAYPAL-{str(uuid.uuid4())[:8].upper()}"
-    else:
-        # Mock mode if no PayPal credentials
-        paypal_order_id = f"PAYPAL-{str(uuid.uuid4())[:8].upper()}"
-    
-    order = PaymentOrder(
-        user_id=current_user['user_id'],
-        package_id=request.package_id,
-        package_type=request.package_type,
-        amount=request.amount,
-        currency=request.currency,
-        paypal_order_id=paypal_order_id,
-        credits_added=credits_to_add,
-        metadata={"package_info": package_info, "package_name": package_name}
-    )
-    
-    order_doc = order.model_dump()
-    order_doc['created_at'] = order_doc['created_at'].isoformat()
-    await db.payment_orders.insert_one(order_doc)
-    
-    await log_activity(
-        current_user['user_id'],
-        "payment_order_created",
-        "create",
-        f"Created payment order for {request.package_id}",
-        {"order_id": order.id, "amount": request.amount, "paypal_id": paypal_order_id}
-    )
-    
-    return {
-        "order_id": paypal_order_id,
-        "internal_id": order.id,
-        "amount": request.amount,
-        "currency": request.currency
-    }
-
-@api_router.post("/payments/capture-order")
-async def capture_payment_order(request: CaptureOrderRequest, current_user: dict = Depends(get_current_user)):
-    """تأكيد الدفع وإضافة النقاط"""
-    
-    # البحث عن الطلب
-    order_doc = await db.payment_orders.find_one({
-        "paypal_order_id": request.order_id,
-        "user_id": current_user['user_id'],
-        "status": "pending"
-    }, {"_id": 0})
-    
-    if not order_doc:
-        raise HTTPException(status_code=404, detail="الطلب غير موجود")
-    
-    # في الإنتاج، نتحقق من PayPal API
-    # هنا نفترض أن الدفع تم بنجاح
-    
-    credits_to_add = order_doc.get('credits_added', 0)
-    
-    # التحقق من مكافأة أول عملية شراء
-    user_doc = await db.users.find_one({"id": current_user['user_id']}, {"_id": 0})
-    first_purchase_bonus = 0
-    if user_doc and not user_doc.get('first_purchase_bonus_claimed'):
-        first_purchase_bonus = POINTS_CONFIG.get("first_purchase_bonus", 50)
-        credits_to_add += first_purchase_bonus
-    
-    # تحديث الطلب
-    await db.payment_orders.update_one(
-        {"id": order_doc['id']},
-        {
-            "$set": {
-                "status": "completed",
-                "completed_at": datetime.now(timezone.utc).isoformat()
-            }
-        }
-    )
-    
-    # إضافة النقاط للمستخدم
-    update_ops = {"$inc": {"credits": credits_to_add, "total_spent": order_doc.get('amount', 0)}}
-    if first_purchase_bonus > 0:
-        update_ops["$set"] = {"first_purchase_bonus_claimed": True}
-    
-    # إذا كان اشتراك، نضيف نوع الاشتراك وتاريخ الانتهاء
-    if request.package_type == "subscription":
-        expires_at = datetime.now(timezone.utc) + timedelta(days=30)
-        if "$set" not in update_ops:
-            update_ops["$set"] = {}
-        update_ops["$set"]["subscription_type"] = request.package_id.replace("_monthly", "")
-        update_ops["$set"]["subscription_expires"] = expires_at.isoformat()
-    
-    await db.users.update_one({"id": current_user['user_id']}, update_ops)
-    
-    await log_activity(
-        current_user['user_id'],
-        "payment_completed",
-        "create",
-        f"Payment completed: {credits_to_add} credits added",
-        {
-            "order_id": order_doc['id'],
-            "credits_added": credits_to_add,
-            "first_purchase_bonus": first_purchase_bonus
-        }
-    )
-    
-    # إرسال إشعار للمالك
-    try:
-        await send_whatsapp_notification(
-            f"💰 عملية شراء جديدة!\n"
-            f"المستخدم: {user_doc.get('name', 'غير معروف')}\n"
-            f"الباقة: {request.package_id}\n"
-            f"المبلغ: ${order_doc.get('amount', 0)}\n"
-            f"النقاط المضافة: {credits_to_add}"
-        )
-    except:
-        pass
-    
-    return {
-        "status": "completed",
-        "credits_added": credits_to_add,
-        "first_purchase_bonus": first_purchase_bonus,
-        "message": f"تم الدفع بنجاح! حصلت على {credits_to_add} نقطة"
-    }
-
-@api_router.get("/payments/history")
-async def get_payment_history(current_user: dict = Depends(get_current_user)):
-    """سجل المدفوعات"""
-    orders = await db.payment_orders.find(
-        {"user_id": current_user['user_id']},
-        {"_id": 0}
-    ).sort("created_at", -1).limit(50).to_list(50)
-    
-    return {"orders": orders}
-
-@api_router.get("/settings/payment")
-async def get_payment_settings():
-    settings = await db.settings.find_one({"type": "payment"}, {"_id": 0})
-    if not settings:
-        return {"bank_name": "", "bank_iban": "", "bank_account_name": "", "paypal_email": "", "owner_whatsapp": OWNER_WHATSAPP}
-    return settings
-
-# ============== ADMIN ==============
+# ============== ADMIN ROUTES ==============
 
 @api_router.get("/admin/stats")
 async def get_admin_stats(admin: dict = Depends(require_admin)):
-    return AdminStats(
+    stats = AdminStats(
         total_users=await db.users.count_documents({}),
         total_requests=await db.website_requests.count_documents({}),
         pending_requests=await db.website_requests.count_documents({"status": "pending"}),
@@ -2186,207 +1481,46 @@ async def get_admin_stats(admin: dict = Depends(require_admin)):
         total_videos_generated=await db.video_generations.count_documents({}),
         total_activities=await db.activity_logs.count_documents({})
     )
+    return stats
 
 @api_router.get("/admin/users")
 async def get_all_users(admin: dict = Depends(require_admin)):
     users = await db.users.find({}, {"_id": 0, "password": 0}).sort("created_at", -1).to_list(1000)
     return users
 
-@api_router.get("/admin/users/{user_id}/activity")
-async def get_user_activity(user_id: str, admin: dict = Depends(require_admin)):
-    """Get activity log for a specific user"""
-    activities = await db.activity_logs.find(
-        {"user_id": user_id},
-        {"_id": 0}
-    ).sort("created_at", -1).to_list(500)
+@api_router.get("/admin/activities")
+async def get_activities(limit: int = 100, admin: dict = Depends(require_admin)):
+    activities = await db.activity_logs.find({}, {"_id": 0}).sort("created_at", -1).to_list(limit)
     return activities
 
-@api_router.get("/admin/activity")
-async def get_all_activity(limit: int = 100, admin: dict = Depends(require_admin)):
-    """Get all activity logs"""
-    activities = await db.activity_logs.find(
-        {},
-        {"_id": 0}
-    ).sort("created_at", -1).to_list(limit)
-    return activities
+@api_router.get("/pricing")
+async def get_pricing():
+    return {
+        "credits_packages": CREDITS_PACKAGES,
+        "service_costs": POINTS_CONFIG
+    }
 
-@api_router.put("/admin/settings/payment")
-async def update_payment_settings(settings: SiteSettings, admin: dict = Depends(require_admin)):
-    await db.settings.update_one(
-        {"type": "payment"},
-        {"$set": {**settings.model_dump(), "type": "payment"}},
-        upsert=True
-    )
-    return {"message": "Settings updated"}
-
-@api_router.put("/admin/users/{user_id}/role")
-async def update_user_role(user_id: str, role: str, current_user: dict = Depends(get_current_user)):
-    """Update user role - only owner can promote to super_admin"""
-    user_doc = await db.users.find_one({"id": current_user['user_id']}, {"_id": 0})
-    current_role = user_doc.get('role', 'client')
-    current_level = ROLE_LEVELS.get(current_role, 0)
-    
-    target_level = ROLE_LEVELS.get(role, 0)
-    
-    # Can only assign roles lower than your own
-    if target_level >= current_level:
-        raise HTTPException(status_code=403, detail="Cannot assign role equal or higher than your own")
-    
-    # Only owner can create super_admin
-    if role == "super_admin" and current_role != "owner":
-        raise HTTPException(status_code=403, detail="Only owner can create super admins")
-    
-    result = await db.users.update_one(
-        {"id": user_id},
-        {"$set": {"role": role}}
-    )
-    
-    if result.matched_count == 0:
-        raise HTTPException(status_code=404, detail="User not found")
-    
-    await log_activity(
-        current_user['user_id'],
-        "role_updated",
-        "edit",
-        f"Updated user {user_id} role to {role}"
-    )
-    
-    return {"message": f"User role updated to {role}"}
-
-@api_router.put("/admin/users/{user_id}/deactivate")
-async def deactivate_user(user_id: str, admin: dict = Depends(require_admin)):
-    """Deactivate a user account"""
-    target_user = await db.users.find_one({"id": user_id}, {"_id": 0})
-    if not target_user:
-        raise HTTPException(status_code=404, detail="User not found")
-    
-    # Cannot deactivate owner
-    if target_user.get('is_owner'):
-        raise HTTPException(status_code=403, detail="Cannot deactivate owner account")
-    
-    # Check role hierarchy
-    admin_level = ROLE_LEVELS.get(admin.get('role', 'admin'), 50)
-    target_level = ROLE_LEVELS.get(target_user.get('role', 'client'), 10)
-    
-    if target_level >= admin_level:
-        raise HTTPException(status_code=403, detail="Cannot deactivate user with equal or higher role")
-    
-    await db.users.update_one(
-        {"id": user_id},
-        {"$set": {"is_active": False}}
-    )
-    
-    await log_activity(
-        admin.get('id', 'admin'),
-        "user_deactivated",
-        "edit",
-        f"Deactivated user {user_id}"
-    )
-    
-    return {"message": "User deactivated"}
-
-@api_router.put("/admin/users/{user_id}/activate")
-async def activate_user(user_id: str, admin: dict = Depends(require_admin)):
-    """Activate a user account"""
-    result = await db.users.update_one(
-        {"id": user_id},
-        {"$set": {"is_active": True}}
-    )
-    
-    if result.matched_count == 0:
-        raise HTTPException(status_code=404, detail="User not found")
-    
-    return {"message": "User activated"}
-
-@api_router.put("/admin/users/{user_id}/make-owner")
-async def make_user_owner(user_id: str, current_user: dict = Depends(get_current_user)):
-    """Make user an owner - only existing owner can do this"""
-    requester = await db.users.find_one({"id": current_user['user_id']}, {"_id": 0})
-    if not requester.get('is_owner'):
-        raise HTTPException(status_code=403, detail="Only owner can transfer ownership")
-    
-    result = await db.users.update_one(
-        {"id": user_id},
-        {"$set": {"is_owner": True, "role": "owner"}}
-    )
-    if result.matched_count == 0:
-        raise HTTPException(status_code=404, detail="User not found")
-    
-    return {"message": "User is now owner"}
-
-@api_router.put("/admin/users/{user_id}/add-credits")
-async def add_user_credits(user_id: str, credits: int, admin: dict = Depends(require_admin)):
-    result = await db.users.update_one(
-        {"id": user_id},
-        {"$inc": {"credits": credits}}
-    )
-    if result.matched_count == 0:
-        raise HTTPException(status_code=404, detail="User not found")
-    
-    await log_activity(
-        admin.get('id', 'admin'),
-        "credits_added",
-        "edit",
-        f"Added {credits} credits to user {user_id}"
-    )
-    
-    return {"message": f"Added {credits} credits"}
-
-@api_router.put("/admin/users/{user_id}/add-free-trials")
-async def add_free_trials(user_id: str, images: int = 0, videos: int = 0, admin: dict = Depends(require_admin)):
-    update = {}
-    if images > 0:
-        update["free_images"] = images
-    if videos > 0:
-        update["free_videos"] = videos
-    
-    if update:
-        result = await db.users.update_one(
-            {"id": user_id},
-            {"$inc": update}
-        )
-        if result.matched_count == 0:
-            raise HTTPException(status_code=404, detail="User not found")
-    
-    return {"message": f"Added {images} free images, {videos} free videos"}
-
-# ============== APP SETUP ==============
-
-# Import and setup chat router
-from routers import chat_router, set_ai_assistant, deployment_router, set_deployment_service
-from services import AIAssistant, DeploymentService
-
-# Initialize AI Assistant
-ai_assistant = AIAssistant(
-    db=db,
-    api_key=OPENAI_API_KEY,
-    elevenlabs_key=ELEVENLABS_API_KEY
-)
-set_ai_assistant(ai_assistant)
-
-# Initialize Deployment Service
-deployment_service = DeploymentService(db=db)
-set_deployment_service(deployment_service)
-
-# Include routers
-app.include_router(api_router)
-app.include_router(chat_router, prefix="/api")
-app.include_router(deployment_router, prefix="/api")
+# ============== CORS & APP SETUP ==============
 
 app.add_middleware(
     CORSMiddleware,
+    allow_origins=["*"],
     allow_credentials=True,
-    allow_origins=os.environ.get('CORS_ORIGINS', '*').split(','),
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-)
-logger = logging.getLogger(__name__)
+# Include the main API router
+app.include_router(api_router)
 
-@app.on_event("shutdown")
-async def shutdown_db_client():
-    client.close()
+# Import and include chat router
+from services.ai_chat_service import chat_router
+app.include_router(chat_router)
+
+@app.get("/")
+async def root():
+    return {"message": "Zitex API - AI Creative Platform", "status": "running"}
+
+@app.get("/health")
+async def health():
+    return {"status": "healthy", "ai_features": AI_FEATURES_ENABLED}
