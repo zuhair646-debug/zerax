@@ -9,7 +9,9 @@ import {
   Loader2, Download, Trash2, Mic, ChevronLeft, ChevronRight, Sparkles,
   Volume2, VolumeX, Copy, Check, Play, X, ArrowUp,
   Code, Eye, EyeOff, Gamepad2, RefreshCw, Maximize2, Minimize2,
-  Coins, Gift, Paperclip, Zap, Save, GitFork, Settings2, Bot
+  Coins, Gift, Paperclip, Zap, Save, GitFork, Settings2, Bot,
+  Layout, Rocket, Link, ExternalLink, BookMarked, Upload, Share2, FileText,
+  Smartphone
 } from 'lucide-react';
 
 // ============== Zitex Logo Animation ==============
@@ -72,258 +74,305 @@ const CodeBlock = memo(({ code, language = 'html', filename }) => {
 });
 
 // ============== Message Content Parser ==============
-const parseMessageContent = (content) => {
+const parseMessageContent = (content, metadata = {}) => {
   if (!content) return [];
   const parts = [];
-  const codeBlockRegex = /```(\w+)?\n?([\s\S]*?)```/g;
+  
+  // First, remove CODE_BLOCK from display (code goes to Live Preview only)
+  let displayContent = content.replace(/\[CODE_BLOCK\]\s*```[\s\S]*?```\s*\[\/CODE_BLOCK\]/g, '');
+  
+  // Also remove any regular code blocks from display (they go to preview)
+  displayContent = displayContent.replace(/```(?:html|javascript|js)?\n?[\s\S]*?```/g, '');
+  
+  // Extract buttons
+  const buttonRegex = /\[BUTTONS\]\n?([\s\S]*?)\[\/BUTTONS\]/g;
+  
+  let processedContent = displayContent;
+  
+  // Extract buttons
+  let buttonMatch;
+  while ((buttonMatch = buttonRegex.exec(displayContent)) !== null) {
+    const buttonText = buttonMatch[1].trim();
+    const buttons = buttonText.split('|').map(b => b.trim()).filter(b => b);
+    processedContent = processedContent.replace(buttonMatch[0], `__BUTTONS__${JSON.stringify(buttons)}__ENDBUTTONS__`);
+  }
+  
+  // Now parse the rest
   let lastIndex = 0;
   let match;
   
-  while ((match = codeBlockRegex.exec(content)) !== null) {
+  // Handle buttons
+  const combinedRegex = /__BUTTONS__([\s\S]*?)__ENDBUTTONS__/g;
+  
+  while ((match = combinedRegex.exec(processedContent)) !== null) {
     if (match.index > lastIndex) {
-      parts.push({ type: 'text', content: content.slice(lastIndex, match.index) });
+      const textBefore = processedContent.slice(lastIndex, match.index).trim();
+      if (textBefore) {
+        parts.push({ type: 'text', content: textBefore });
+      }
     }
-    parts.push({ type: 'code', language: match[1] || 'code', content: match[2].trim() });
+    
+    if (match[1]) {
+      // Buttons
+      try {
+        const buttons = JSON.parse(match[1]);
+        parts.push({ type: 'buttons', buttons });
+      } catch (e) {
+        parts.push({ type: 'text', content: match[0] });
+      }
+    }
+    
     lastIndex = match.index + match[0].length;
   }
   
-  if (lastIndex < content.length) {
-    parts.push({ type: 'text', content: content.slice(lastIndex) });
+  if (lastIndex < processedContent.length) {
+    const remaining = processedContent.slice(lastIndex).trim();
+    if (remaining) {
+      parts.push({ type: 'text', content: remaining });
+    }
   }
   
-  return parts.length > 0 ? parts : [{ type: 'text', content }];
+  // If we have preview, add indicator
+  if (metadata?.has_preview) {
+    parts.push({ type: 'preview_indicator' });
+  }
+  
+  return parts.length > 0 ? parts : [{ type: 'text', content: displayContent.trim() || content }];
 };
 
-// ============== Session Skeleton ==============
-const SessionSkeleton = () => (
-  <div className="space-y-2 p-2">
-    {[1, 2, 3].map(i => (
-      <div key={i} className="flex items-center gap-3 p-3 rounded-xl bg-slate-800/30 animate-pulse">
-        <div className="w-8 h-8 bg-slate-700 rounded-lg" />
-        <div className="flex-1 space-y-2">
-          <div className="h-3 bg-slate-700 rounded w-3/4" />
-          <div className="h-2 bg-slate-700/50 rounded w-1/2" />
-        </div>
-      </div>
-    ))}
-  </div>
-);
-
-// ============== Markdown Renderer ==============
-const MarkdownRenderer = memo(({ content }) => {
-  // Parse markdown content
-  const renderMarkdown = (text) => {
-    if (!text) return null;
-    
-    const lines = text.split('\n');
-    const elements = [];
-    let inTable = false;
-    let tableRows = [];
-    
-    lines.forEach((line, idx) => {
-      // Headers
-      if (line.startsWith('## ')) {
-        elements.push(<h2 key={idx} className="text-xl font-bold text-amber-400 mt-4 mb-2 flex items-center gap-2">{line.slice(3)}</h2>);
-      } else if (line.startsWith('### ')) {
-        elements.push(<h3 key={idx} className="text-lg font-semibold text-white mt-3 mb-1">{line.slice(4)}</h3>);
-      }
-      // Horizontal rule
-      else if (line.trim() === '---') {
-        elements.push(<hr key={idx} className="border-slate-700/50 my-3" />);
-      }
-      // Blockquote
-      else if (line.startsWith('> ')) {
-        elements.push(
-          <div key={idx} className="border-r-4 border-amber-500/50 pr-4 my-2 text-amber-200/80 bg-amber-500/5 py-2 rounded-l">
-            {line.slice(2)}
-          </div>
-        );
-      }
-      // Table detection
-      else if (line.includes('|') && line.trim().startsWith('|')) {
-        if (!inTable) {
-          inTable = true;
-          tableRows = [];
-        }
-        if (!line.includes('---')) {
-          tableRows.push(line.split('|').filter(cell => cell.trim()).map(cell => cell.trim()));
-        }
-      }
-      // End of table
-      else if (inTable && !line.includes('|')) {
-        inTable = false;
-        if (tableRows.length > 0) {
-          elements.push(
-            <div key={`table-${idx}`} className="my-3 overflow-x-auto">
-              <table className="w-full text-sm border border-slate-700/50 rounded-lg overflow-hidden">
-                <thead>
-                  <tr className="bg-slate-800/50">
-                    {tableRows[0]?.map((cell, i) => (
-                      <th key={i} className="px-4 py-2 text-right text-amber-400 font-medium border-b border-slate-700/50">{cell}</th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {tableRows.slice(1).map((row, rowIdx) => (
-                    <tr key={rowIdx} className="border-b border-slate-700/30 hover:bg-slate-800/30">
-                      {row.map((cell, cellIdx) => (
-                        <td key={cellIdx} className="px-4 py-2 text-gray-300">{cell}</td>
-                      ))}
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          );
-          tableRows = [];
-        }
-        // Process the current non-table line
-        if (line.trim()) {
-          elements.push(<p key={idx} className="text-gray-300 leading-relaxed">{line}</p>);
-        }
-      }
-      // Bullet points
-      else if (line.trim().startsWith('- ') || line.trim().startsWith('• ')) {
-        elements.push(
-          <div key={idx} className="flex items-start gap-2 my-1 mr-4">
-            <span className="text-amber-400 mt-1">•</span>
-            <span className="text-gray-300">{line.trim().slice(2)}</span>
-          </div>
-        );
-      }
-      // Bold text handling
-      else if (line.trim() && !inTable) {
-        let processedLine = line
-          .replace(/\*\*(.*?)\*\*/g, '<strong class="text-white font-semibold">$1</strong>')
-          .replace(/`(.*?)`/g, '<code class="bg-slate-700/50 px-1.5 py-0.5 rounded text-amber-300 text-sm">$1</code>');
-        elements.push(<p key={idx} className="text-gray-300 leading-relaxed my-1" dangerouslySetInnerHTML={{ __html: processedLine }} />);
-      }
-    });
-    
-    // Handle remaining table if any
-    if (inTable && tableRows.length > 0) {
-      elements.push(
-        <div key="table-final" className="my-3 overflow-x-auto">
-          <table className="w-full text-sm border border-slate-700/50 rounded-lg overflow-hidden">
-            <thead>
-              <tr className="bg-slate-800/50">
-                {tableRows[0]?.map((cell, i) => (
-                  <th key={i} className="px-4 py-2 text-right text-amber-400 font-medium border-b border-slate-700/50">{cell}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {tableRows.slice(1).map((row, rowIdx) => (
-                <tr key={rowIdx} className="border-b border-slate-700/30 hover:bg-slate-800/30">
-                  {row.map((cell, cellIdx) => (
-                    <td key={cellIdx} className="px-4 py-2 text-gray-300">{cell}</td>
-                  ))}
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      );
-    }
-    
-    return elements;
-  };
-  
-  return <div className="markdown-content">{renderMarkdown(content)}</div>;
-});
-
-// ============== Session Item ==============
-const SessionItem = memo(({ session, isActive, onSelect, onDelete, getIcon }) => (
-  <div
-    onClick={() => onSelect(session.id)}
-    className={`group flex items-center gap-3 p-3 rounded-xl cursor-pointer transition-all ${isActive ? 'bg-gradient-to-l from-amber-600/20 to-transparent border border-amber-500/30' : 'hover:bg-slate-800/50'}`}
-  >
-    <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${isActive ? 'bg-amber-500/20 text-amber-400' : 'bg-slate-800 text-gray-400'}`}>
-      {getIcon(session.session_type)}
+// ============== Preview Indicator Component ==============
+const PreviewIndicator = memo(() => (
+  <div className="mt-3 p-3 bg-gradient-to-r from-green-500/10 to-emerald-500/10 border border-green-500/30 rounded-xl flex items-center gap-3">
+    <div className="w-10 h-10 rounded-full bg-green-500/20 flex items-center justify-center">
+      <Eye className="w-5 h-5 text-green-400" />
     </div>
-    <div className="flex-1 min-w-0">
-      <p className={`text-sm truncate ${isActive ? 'text-amber-200' : 'text-white'}`}>{session.title || 'محادثة جديدة'}</p>
-      <p className="text-[10px] text-gray-500">{session.message_count || 0} رسالة</p>
+    <div>
+      <p className="text-green-300 text-sm font-medium">شاهد النتيجة في المعاينة المباشرة ←</p>
+      <p className="text-green-400/60 text-xs">يمكنك التفاعل مع الموقع مباشرة</p>
     </div>
-    <button onClick={(e) => { e.stopPropagation(); onDelete(session.id); }} className="opacity-0 group-hover:opacity-100 p-1.5 rounded-lg hover:bg-red-500/20 text-red-400 transition-all">
-      <Trash2 className="w-3.5 h-3.5" />
-    </button>
   </div>
 ));
 
-// ============== Live Preview Panel ==============
-const LivePreviewPanel = memo(({ code, isOpen, onClose, onRefresh, isFullscreen, onToggleFullscreen }) => {
-  const iframeRef = useRef(null);
+// ============== Choice Buttons Component ==============
+const ChoiceButtons = memo(({ buttons, onSelect }) => (
+  <div className="flex flex-wrap gap-2 mt-3">
+    {buttons.map((btn, idx) => (
+      <button
+        key={idx}
+        onClick={() => onSelect(btn)}
+        className="px-4 py-2 bg-gradient-to-r from-amber-500/20 to-yellow-500/20 hover:from-amber-500/30 hover:to-yellow-500/30 border border-amber-500/40 hover:border-amber-400 text-amber-200 rounded-xl text-sm font-medium transition-all duration-200 hover:scale-105 hover:shadow-lg hover:shadow-amber-500/20"
+      >
+        {btn}
+      </button>
+    ))}
+  </div>
+));
+
+// ============== File Upload Component ==============
+const FileUploadButton = memo(({ onFileSelect }) => {
+  const fileInputRef = useRef(null);
   
-  useEffect(() => {
-    if (iframeRef.current && code) {
-      const doc = iframeRef.current.contentDocument;
-      doc.open();
-      doc.write(code);
-      doc.close();
+  const handleClick = () => fileInputRef.current?.click();
+  
+  const handleChange = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    
+    // Check file size (50MB limit)
+    if (file.size > 50 * 1024 * 1024) {
+      toast.error('حجم الملف أكبر من 50 MB');
+      return;
     }
-  }, [code]);
+    
+    onFileSelect(file);
+    e.target.value = ''; // Reset input
+  };
+  
+  return (
+    <>
+      <input
+        ref={fileInputRef}
+        type="file"
+        className="hidden"
+        accept="image/*,video/*,.pdf,.doc,.docx,.txt,audio/*"
+        onChange={handleChange}
+      />
+      <Button
+        size="icon"
+        variant="ghost"
+        onClick={handleClick}
+        className="h-9 w-9 text-gray-400 hover:text-amber-400 hover:bg-amber-500/10"
+        title="رفع ملف (مجاني)"
+      >
+        <Upload className="w-4 h-4" />
+      </Button>
+    </>
+  );
+});
+
+// ============== Social Media Export Modal ==============
+const SOCIAL_PLATFORMS = [
+  { id: 'tiktok', name: 'TikTok', icon: '🎵', color: 'from-pink-500 to-purple-500' },
+  { id: 'snapchat', name: 'Snapchat', icon: '👻', color: 'from-yellow-400 to-yellow-500' },
+  { id: 'instagram_reels', name: 'Instagram Reels', icon: '📸', color: 'from-purple-500 to-pink-500' },
+  { id: 'instagram_story', name: 'Instagram Story', icon: '📱', color: 'from-orange-500 to-pink-500' },
+  { id: 'instagram_post', name: 'Instagram Post', icon: '🖼️', color: 'from-pink-500 to-orange-500' },
+  { id: 'youtube_shorts', name: 'YouTube Shorts', icon: '▶️', color: 'from-red-500 to-red-600' },
+  { id: 'facebook', name: 'Facebook', icon: '📘', color: 'from-blue-600 to-blue-700' },
+  { id: 'twitter', name: 'Twitter/X', icon: '🐦', color: 'from-blue-400 to-blue-500' }
+];
+
+const SocialExportModal = memo(({ isOpen, onClose, assetId, assetUrl, assetType }) => {
+  const [selectedPlatforms, setSelectedPlatforms] = useState([]);
+  const [exportResults, setExportResults] = useState(null);
+  const [isExporting, setIsExporting] = useState(false);
+  const API_URL = process.env.REACT_APP_BACKEND_URL;
+  
+  const togglePlatform = (platformId) => {
+    setSelectedPlatforms(prev => 
+      prev.includes(platformId) 
+        ? prev.filter(p => p !== platformId)
+        : [...prev, platformId]
+    );
+  };
+  
+  const handleExport = async () => {
+    if (selectedPlatforms.length === 0) {
+      toast.error('اختر منصة واحدة على الأقل');
+      return;
+    }
+    
+    setIsExporting(true);
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch(`${API_URL}/api/social/export`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          asset_id: assetId,
+          platforms: selectedPlatforms
+        })
+      });
+      
+      const data = await response.json();
+      if (response.ok) {
+        setExportResults(data.exports);
+        toast.success('تم تجهيز الملفات للتصدير!');
+      } else {
+        toast.error(data.detail || 'فشل التصدير');
+      }
+    } catch (error) {
+      toast.error('خطأ في الاتصال');
+    } finally {
+      setIsExporting(false);
+    }
+  };
   
   if (!isOpen) return null;
   
   return (
-    <div className={`${isFullscreen ? 'fixed inset-0 z-50' : 'h-full'} bg-[#0d0d18] flex flex-col`}>
-      <div className="flex items-center justify-between px-4 py-2 bg-slate-900/80 border-b border-slate-700/50">
-        <div className="flex items-center gap-2">
-          <Eye className="w-4 h-4 text-green-400" />
-          <span className="text-sm text-white font-medium">المعاينة المباشرة</span>
-        </div>
-        <div className="flex items-center gap-1">
-          <button onClick={onRefresh} className="p-1.5 rounded hover:bg-slate-700/50 text-gray-400">
-            <RefreshCw className="w-4 h-4" />
-          </button>
-          <button onClick={onToggleFullscreen} className="p-1.5 rounded hover:bg-slate-700/50 text-gray-400">
-            {isFullscreen ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
-          </button>
-          <button onClick={onClose} className="p-1.5 rounded hover:bg-slate-700/50 text-gray-400">
-            <X className="w-4 h-4" />
-          </button>
-        </div>
-      </div>
-      <div className="flex-1 bg-white">
-        <iframe ref={iframeRef} title="preview" className="w-full h-full border-0" sandbox="allow-scripts allow-same-origin" />
-      </div>
-    </div>
-  );
-});
-
-// ============== Chat Message ==============
-const ChatMessage = memo(({ msg, idx, renderAttachment, onPlayAudio, onGenerateTTS, playingAudio, onPreview, isTyping }) => {
-  const isUser = msg.role === 'user';
-  const parts = parseMessageContent(msg.content);
-  
-  return (
-    <div className={`flex ${isUser ? 'justify-start' : 'justify-end'} animate-fadeIn`}>
-      <div className={`flex items-start gap-3 max-w-[85%] ${isUser ? 'flex-row' : 'flex-row-reverse'}`}>
-        {isUser ? (
-          <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-purple-500 flex items-center justify-center flex-shrink-0">
-            <span className="text-white text-xs font-bold">أنت</span>
+    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/70 backdrop-blur-sm" onClick={onClose}>
+      <div 
+        className="bg-slate-900 border border-slate-700 rounded-2xl w-full max-w-2xl max-h-[85vh] overflow-hidden shadow-2xl"
+        onClick={e => e.stopPropagation()}
+      >
+        {/* Header */}
+        <div className="p-4 border-b border-slate-700 flex items-center justify-between bg-gradient-to-r from-purple-500/10 to-pink-500/10">
+          <div className="flex items-center gap-3">
+            <Share2 className="w-6 h-6 text-purple-400" />
+            <div>
+              <h2 className="text-lg font-bold text-white">تصدير للمنصات الاجتماعية</h2>
+              <p className="text-xs text-gray-400">مجاني - اختر المنصات المطلوبة</p>
+            </div>
           </div>
-        ) : (
-          <ZitexLogo size="sm" isAnimating={isTyping} />
-        )}
-        <div className={`rounded-2xl ${isUser ? 'rounded-tl-md bg-gradient-to-br from-blue-600 to-blue-700' : 'rounded-tr-md bg-slate-800 border border-slate-700/50'} p-4`}>
-          {parts.map((part, i) => (
-            part.type === 'code' ? (
-              <CodeBlock key={i} code={part.content} language={part.language} />
-            ) : (
-              <MarkdownRenderer key={i} content={part.content} />
-            )
-          ))}
-          {msg.attachments?.map((att, i) => <div key={i}>{renderAttachment(att)}</div>)}
-          {!isUser && (
-            <div className="flex items-center gap-2 mt-3 pt-2 border-t border-slate-700/30">
-              <button onClick={() => parts.some(p => p.type === 'code') && onPreview(parts.find(p => p.type === 'code').content)} className="p-1.5 rounded hover:bg-slate-700/50 text-gray-400 hover:text-white" title="معاينة">
-                <Eye className="w-4 h-4" />
-              </button>
-              <button onClick={() => navigator.clipboard.writeText(msg.content).then(() => toast.success('تم النسخ!'))} className="p-1.5 rounded hover:bg-slate-700/50 text-gray-400 hover:text-white" title="نسخ">
-                <Copy className="w-4 h-4" />
-              </button>
+          <Button size="icon" variant="ghost" onClick={onClose}>
+            <X className="w-5 h-5" />
+          </Button>
+        </div>
+        
+        {/* Content */}
+        <div className="p-4 overflow-y-auto max-h-[60vh]">
+          {!exportResults ? (
+            <>
+              {/* Platform Selection */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                {SOCIAL_PLATFORMS.map(platform => (
+                  <button
+                    key={platform.id}
+                    onClick={() => togglePlatform(platform.id)}
+                    className={`p-3 rounded-xl border-2 transition-all ${
+                      selectedPlatforms.includes(platform.id)
+                        ? `bg-gradient-to-br ${platform.color} border-transparent text-white shadow-lg`
+                        : 'bg-slate-800/50 border-slate-700 hover:border-slate-600 text-gray-300'
+                    }`}
+                  >
+                    <span className="text-2xl block mb-1">{platform.icon}</span>
+                    <span className="text-xs font-medium">{platform.name}</span>
+                  </button>
+                ))}
+              </div>
+              
+              {/* Export Button */}
+              <div className="mt-6">
+                <Button
+                  onClick={handleExport}
+                  disabled={isExporting || selectedPlatforms.length === 0}
+                  className="w-full bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 h-12 text-lg"
+                >
+                  {isExporting ? (
+                    <><Loader2 className="w-5 h-5 animate-spin me-2" /> جاري التجهيز...</>
+                  ) : (
+                    <><Share2 className="w-5 h-5 me-2" /> تصدير ({selectedPlatforms.length})</>
+                  )}
+                </Button>
+              </div>
+            </>
+          ) : (
+            /* Export Results */
+            <div className="space-y-3">
+              {exportResults.map(result => (
+                <div key={result.platform} className="p-4 bg-slate-800/50 rounded-xl border border-slate-700">
+                  <div className="flex items-center gap-3 mb-3">
+                    <span className="text-2xl">{result.icon}</span>
+                    <div className="flex-1">
+                      <h4 className="font-medium text-white">{result.platform_name}</h4>
+                      <p className="text-xs text-gray-400">
+                        {result.specs.width}x{result.specs.height} • {result.specs.aspect}
+                      </p>
+                    </div>
+                    {result.download_url && (
+                      <a
+                        href={result.download_url}
+                        download
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="px-3 py-1.5 bg-green-500/20 text-green-400 rounded-lg text-sm font-medium hover:bg-green-500/30 flex items-center gap-1"
+                      >
+                        <Download className="w-4 h-4" /> تحميل
+                      </a>
+                    )}
+                  </div>
+                  {/* Tips */}
+                  <div className="space-y-1">
+                    {result.tips?.map((tip, i) => (
+                      <p key={i} className="text-xs text-amber-300/80 flex items-start gap-2">
+                        <span className="text-amber-400">💡</span> {tip}
+                      </p>
+                    ))}
+                  </div>
+                </div>
+              ))}
+              
+              <Button
+                onClick={() => { setExportResults(null); setSelectedPlatforms([]); }}
+                variant="outline"
+                className="w-full mt-4"
+              >
+                تصدير لمنصات أخرى
+              </Button>
             </div>
           )}
         </div>
@@ -332,16 +381,444 @@ const ChatMessage = memo(({ msg, idx, renderAttachment, onPlayAudio, onGenerateT
   );
 });
 
+// ============== Uploaded File Preview ==============
+const UploadedFilePreview = memo(({ file, onRemove, onSend }) => (
+  <div className="mx-4 mb-2 p-3 bg-slate-800/70 border border-slate-700 rounded-xl flex items-center gap-3">
+    {file.type.startsWith('image/') ? (
+      <img src={URL.createObjectURL(file)} alt="Preview" className="w-14 h-14 object-cover rounded-lg" />
+    ) : file.type.startsWith('video/') ? (
+      <div className="w-14 h-14 bg-orange-500/20 rounded-lg flex items-center justify-center">
+        <Video className="w-6 h-6 text-orange-400" />
+      </div>
+    ) : file.type.startsWith('audio/') ? (
+      <div className="w-14 h-14 bg-purple-500/20 rounded-lg flex items-center justify-center">
+        <Volume2 className="w-6 h-6 text-purple-400" />
+      </div>
+    ) : (
+      <div className="w-14 h-14 bg-blue-500/20 rounded-lg flex items-center justify-center">
+        <FileText className="w-6 h-6 text-blue-400" />
+      </div>
+    )}
+    <div className="flex-1 min-w-0">
+      <p className="text-white text-sm truncate">{file.name}</p>
+      <p className="text-xs text-gray-400">{(file.size / 1024 / 1024).toFixed(2)} MB</p>
+    </div>
+    <Button size="icon" variant="ghost" onClick={onRemove} className="text-red-400 hover:bg-red-500/20">
+      <X className="w-4 h-4" />
+    </Button>
+    <Button onClick={onSend} className="bg-amber-500 hover:bg-amber-600 text-black">
+      <Send className="w-4 h-4 me-1" /> أرسل
+    </Button>
+  </div>
+));
+
+// ============== Session Skeleton ==============
+const SessionSkeleton = () => (
+  <div className="space-y-2 p-2">
+    {[1, 2, 3].map(i => (
+      <div key={i} className="flex items-center gap-2 p-3 rounded-lg bg-slate-800/30 animate-pulse">
+        <div className="w-8 h-8 rounded-lg bg-slate-700/50" />
+        <div className="flex-1">
+          <div className="h-3 w-3/4 mb-2 bg-slate-700/50 rounded" />
+          <div className="h-2 w-1/2 bg-slate-700/50 rounded" />
+        </div>
+      </div>
+    ))}
+  </div>
+);
+
+// ============== Session Item ==============
+const SessionItem = memo(({ session, isActive, onSelect, onDelete, getIcon }) => (
+  <div
+    className={`group flex items-center gap-2 p-2.5 rounded-xl cursor-pointer transition-all duration-200 ${
+      isActive 
+        ? 'bg-gradient-to-r from-amber-500/20 to-yellow-500/20 border border-amber-500/30' 
+        : 'hover:bg-slate-800/50 border border-transparent'
+    }`}
+    onClick={() => onSelect(session.id)}
+    data-testid={`session-${session.id}`}
+  >
+    <div className={`p-1.5 rounded-lg ${
+      session.session_type === 'image' ? 'bg-purple-500/20 text-purple-400' :
+      session.session_type === 'video' ? 'bg-orange-500/20 text-orange-400' :
+      session.session_type === 'website' ? 'bg-green-500/20 text-green-400' :
+      session.session_type === 'game' ? 'bg-cyan-500/20 text-cyan-400' :
+      session.session_type === 'mobile' ? 'bg-pink-500/20 text-pink-400' :
+      'bg-slate-700/50 text-gray-400'
+    }`}>
+      {getIcon(session.session_type)}
+    </div>
+    <div className="flex-1 min-w-0">
+      <p className="text-white text-sm truncate">{session.title}</p>
+      <p className="text-[10px] text-gray-500">{session.message_count || 0} رسالة</p>
+    </div>
+    <Button
+      size="icon"
+      variant="ghost"
+      onClick={(e) => { e.stopPropagation(); onDelete(session.id); }}
+      className="opacity-0 group-hover:opacity-100 h-6 w-6 text-gray-500 hover:text-red-400"
+    >
+      <Trash2 className="w-3 h-3" />
+    </Button>
+  </div>
+));
+
+// ============== Chat Message ==============
+const ChatMessage = memo(({ msg, idx, renderAttachment, onPlayAudio, onGenerateTTS, playingAudio, onPreview, isTyping, onButtonClick }) => {
+  const parsedContent = parseMessageContent(msg.content, msg.metadata);
+  const hasButtons = parsedContent.some(p => p.type === 'buttons');
+  const hasPreviewIndicator = parsedContent.some(p => p.type === 'preview_indicator');
+  const isUser = msg.role === 'user';
+  
+  return (
+    <div className={`flex ${isUser ? 'justify-start' : 'justify-end'} animate-fadeIn`} data-testid={`message-${idx}`}>
+      {/* User Message */}
+      {isUser ? (
+        <div className="flex items-start gap-3 max-w-[85%]">
+          <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-cyan-500 flex items-center justify-center text-white text-sm font-medium flex-shrink-0">
+            U
+          </div>
+          <div className="bg-slate-800/80 backdrop-blur border border-slate-700/50 rounded-2xl rounded-tl-md p-4 shadow-lg">
+            {parsedContent.map((part, i) => (
+              part.type === 'buttons' ? null : 
+              part.type === 'preview_indicator' ? null :
+              <p key={i} className="text-white whitespace-pre-wrap leading-relaxed text-sm">{part.content}</p>
+            ))}
+            <p className="text-[10px] text-gray-500 mt-2">
+              {new Date(msg.created_at).toLocaleTimeString('ar-SA', { hour: '2-digit', minute: '2-digit' })}
+            </p>
+          </div>
+        </div>
+      ) : (
+        /* AI Message */
+        <div className="flex items-start gap-3 max-w-[85%]">
+          <div className="order-2">
+            <div className="bg-gradient-to-br from-slate-800 to-slate-900 border border-slate-700/50 rounded-2xl rounded-tr-md p-4 shadow-xl">
+              {parsedContent.map((part, i) => (
+                part.type === 'buttons' ? (
+                  <ChoiceButtons key={i} buttons={part.buttons} onSelect={onButtonClick} />
+                ) : part.type === 'preview_indicator' ? (
+                  <PreviewIndicator key={i} />
+                ) : (
+                  <p key={i} className="text-gray-200 whitespace-pre-wrap leading-relaxed text-sm">{part.content}</p>
+                )
+              ))}
+              
+              {/* Attachments */}
+              {msg.attachments?.map((attachment, aIdx) => (
+                <div key={aIdx}>{renderAttachment(attachment, onPreview)}</div>
+              ))}
+              
+              {/* Footer - hide if only buttons */}
+              {!hasButtons && (
+                <div className="flex items-center justify-between mt-3 pt-2 border-t border-slate-700/30">
+                  <p className="text-[10px] text-gray-500">
+                    {new Date(msg.created_at).toLocaleTimeString('ar-SA', { hour: '2-digit', minute: '2-digit' })}
+                  </p>
+                  <div className="flex items-center gap-1">
+                    {msg.metadata?.credits_used > 0 && (
+                      <span className="text-[10px] text-amber-400/60 mr-2">
+                        -{msg.metadata.credits_used} نقطة
+                      </span>
+                    )}
+                    <button
+                      onClick={() => msg.audio_url ? onPlayAudio(msg.audio_url, msg.id) : onGenerateTTS(msg.content, msg.id)}
+                      className={`p-1.5 rounded-lg transition-all ${
+                        playingAudio === msg.id ? 'bg-purple-500 text-white' : 'text-gray-400 hover:bg-slate-700'
+                      }`}
+                    >
+                      {playingAudio === msg.id ? <VolumeX className="w-3.5 h-3.5" /> : <Volume2 className="w-3.5 h-3.5" />}
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+          <ZitexLogo size="sm" isAnimating={isTyping} />
+        </div>
+      )}
+    </div>
+  );
+});
+
+// ============== Live Preview Panel ==============
+const LivePreviewPanel = memo(({ code, isOpen, onClose, onRefresh, isFullscreen, onToggleFullscreen, onExportCode, userCredits, onSaveTemplate, onDeploy, currentSession }) => {
+  const iframeRef = useRef(null);
+  const [copied, setCopied] = useState(false);
+  const [showDeployModal, setShowDeployModal] = useState(false);
+  const [showTemplateModal, setShowTemplateModal] = useState(false);
+  const [subdomain, setSubdomain] = useState('');
+  const [templateName, setTemplateName] = useState('');
+  const [deploying, setDeploying] = useState(false);
+  const [saving, setSaving] = useState(false);
+  
+  useEffect(() => {
+    if (code && iframeRef.current) {
+      const iframe = iframeRef.current;
+      const doc = iframe.contentDocument || iframe.contentWindow.document;
+      doc.open();
+      doc.write(code);
+      doc.close();
+    }
+  }, [code]);
+  
+  const handleCopyCode = async () => {
+    await navigator.clipboard.writeText(code);
+    setCopied(true);
+    toast.success('تم نسخ الكود!');
+    setTimeout(() => setCopied(false), 2000);
+  };
+  
+  const handleDeploy = async () => {
+    if (!subdomain.trim()) {
+      toast.error('أدخل اسم النطاق');
+      return;
+    }
+    setDeploying(true);
+    try {
+      await onDeploy(subdomain);
+      setShowDeployModal(false);
+      setSubdomain('');
+    } catch (e) {
+      // Error handled in parent
+    } finally {
+      setDeploying(false);
+    }
+  };
+  
+  const handleSaveTemplate = async () => {
+    if (!templateName.trim()) {
+      toast.error('أدخل اسم القالب');
+      return;
+    }
+    setSaving(true);
+    try {
+      await onSaveTemplate(templateName);
+      setShowTemplateModal(false);
+      setTemplateName('');
+    } catch (e) {
+      // Error handled in parent
+    } finally {
+      setSaving(false);
+    }
+  };
+  
+  if (!isOpen) return null;
+  
+  return (
+    <div className={`${isFullscreen ? 'fixed inset-0 z-50' : 'h-full'} bg-slate-900 flex flex-col`}>
+      {/* Header */}
+      <div className="flex items-center justify-between p-3 bg-slate-800/80 border-b border-slate-700/50">
+        <div className="flex items-center gap-3">
+          <div className="flex gap-1.5">
+            <span className="w-3 h-3 rounded-full bg-red-500"></span>
+            <span className="w-3 h-3 rounded-full bg-yellow-500"></span>
+            <span className="w-3 h-3 rounded-full bg-green-500"></span>
+          </div>
+          <span className="text-sm text-gray-400 font-medium">Live Preview</span>
+          {code && (
+            <span className="text-xs text-green-400 bg-green-500/20 px-2 py-0.5 rounded-full">متصل</span>
+          )}
+        </div>
+        <div className="flex items-center gap-1">
+          {code && (
+            <>
+              {/* Save as Template */}
+              <button 
+                onClick={() => setShowTemplateModal(true)} 
+                className="flex items-center gap-1 px-2 py-1.5 rounded-lg text-xs font-medium hover:bg-slate-700 text-gray-400 hover:text-white transition-all"
+                title="حفظ كقالب (10 نقاط)"
+              >
+                <BookMarked className="w-3.5 h-3.5" />
+                <span className="hidden sm:inline">قالب</span>
+              </button>
+              
+              {/* Deploy */}
+              <button 
+                onClick={() => setShowDeployModal(true)} 
+                className="flex items-center gap-1 px-2 py-1.5 rounded-lg text-xs font-medium bg-green-500/20 hover:bg-green-500/30 text-green-400 transition-all"
+                title="نشر على الإنترنت (100 نقطة)"
+              >
+                <Rocket className="w-3.5 h-3.5" />
+                <span className="hidden sm:inline">نشر</span>
+              </button>
+              
+              <button 
+                onClick={handleCopyCode} 
+                className="flex items-center gap-1 px-2 py-1.5 rounded-lg text-xs font-medium hover:bg-slate-700 text-gray-400 hover:text-white transition-all"
+                title="نسخ الكود"
+              >
+                {copied ? <Check className="w-3.5 h-3.5 text-green-400" /> : <Copy className="w-3.5 h-3.5" />}
+                <span className="hidden sm:inline">{copied ? 'تم!' : 'نسخ'}</span>
+              </button>
+              <button 
+                onClick={onExportCode} 
+                className="flex items-center gap-1 px-2 py-1.5 rounded-lg text-xs font-medium bg-amber-500/20 hover:bg-amber-500/30 text-amber-400 transition-all"
+                title="تصدير الكود (50 نقطة)"
+              >
+                <Download className="w-3.5 h-3.5" />
+                <span className="hidden sm:inline">تصدير</span>
+              </button>
+            </>
+          )}
+          <button onClick={onRefresh} className="p-1.5 rounded-lg hover:bg-slate-700 text-gray-400 hover:text-white transition-all">
+            <RefreshCw className="w-4 h-4" />
+          </button>
+          <button onClick={onToggleFullscreen} className="p-1.5 rounded-lg hover:bg-slate-700 text-gray-400 hover:text-white transition-all">
+            {isFullscreen ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
+          </button>
+          <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-slate-700 text-gray-400 hover:text-red-400 transition-all">
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+      </div>
+      
+      {/* Deployment Info Bar */}
+      {currentSession?.deployment && (
+        <div className="px-3 py-2 bg-green-500/10 border-b border-green-500/20 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Rocket className="w-4 h-4 text-green-400" />
+            <span className="text-green-300 text-sm">منشور على:</span>
+            <a href={currentSession.deployment.url} target="_blank" rel="noopener noreferrer" className="text-green-400 hover:underline flex items-center gap-1">
+              {currentSession.deployment.url}
+              <ExternalLink className="w-3 h-3" />
+            </a>
+          </div>
+        </div>
+      )}
+      
+      {/* Preview */}
+      <div className="flex-1 bg-white overflow-hidden">
+        {code ? (
+          <iframe ref={iframeRef} className="w-full h-full border-0" title="Live Preview" sandbox="allow-scripts allow-same-origin allow-forms allow-popups" />
+        ) : (
+          <div className="h-full flex items-center justify-center bg-slate-900 text-gray-500">
+            <div className="text-center">
+              <Eye className="w-16 h-16 mx-auto mb-4 opacity-20" />
+              <p className="text-lg mb-2">المعاينة المباشرة</p>
+              <p className="text-sm text-gray-600">سيظهر المشروع هنا أثناء البناء</p>
+            </div>
+          </div>
+        )}
+      </div>
+      
+      {/* Deploy Modal */}
+      {showDeployModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm">
+          <div className="bg-slate-800 border border-slate-700 rounded-2xl p-6 w-full max-w-md mx-4 animate-fadeIn">
+            <h3 className="text-xl font-bold text-white mb-2 flex items-center gap-2">
+              <Rocket className="w-6 h-6 text-green-400" />
+              نشر المشروع
+            </h3>
+            <p className="text-gray-400 text-sm mb-4">سيتم نشر مشروعك على رابط دائم</p>
+            
+            <div className="mb-4">
+              <label className="text-gray-300 text-sm mb-2 block">اختر اسم النطاق</label>
+              <div className="flex items-center bg-slate-900 border border-slate-700 rounded-xl overflow-hidden">
+                <span className="px-3 text-gray-500 text-sm">https://</span>
+                <input
+                  type="text"
+                  value={subdomain}
+                  onChange={(e) => setSubdomain(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, ''))}
+                  placeholder="my-project"
+                  className="flex-1 bg-transparent text-white px-2 py-3 text-sm focus:outline-none"
+                />
+                <span className="px-3 text-gray-500 text-sm">.zitex.app</span>
+              </div>
+              <p className="text-xs text-gray-500 mt-1">حروف إنجليزية صغيرة وأرقام وشرطات فقط</p>
+            </div>
+            
+            <div className="bg-amber-500/10 border border-amber-500/30 rounded-xl p-3 mb-4">
+              <p className="text-amber-300 text-sm flex items-center gap-2">
+                <Coins className="w-4 h-4" />
+                التكلفة: <strong>100 نقطة</strong>
+              </p>
+            </div>
+            
+            <div className="flex gap-2">
+              <button
+                onClick={() => setShowDeployModal(false)}
+                className="flex-1 px-4 py-2 bg-slate-700 hover:bg-slate-600 rounded-xl text-white transition-all"
+              >
+                إلغاء
+              </button>
+              <button
+                onClick={handleDeploy}
+                disabled={deploying || !subdomain.trim()}
+                className="flex-1 px-4 py-2 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 rounded-xl text-white font-medium transition-all disabled:opacity-50 flex items-center justify-center gap-2"
+              >
+                {deploying ? <Loader2 className="w-4 h-4 animate-spin" /> : <Rocket className="w-4 h-4" />}
+                {deploying ? 'جاري النشر...' : 'نشر الآن'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      
+      {/* Save Template Modal */}
+      {showTemplateModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm">
+          <div className="bg-slate-800 border border-slate-700 rounded-2xl p-6 w-full max-w-md mx-4 animate-fadeIn">
+            <h3 className="text-xl font-bold text-white mb-2 flex items-center gap-2">
+              <BookMarked className="w-6 h-6 text-purple-400" />
+              حفظ كقالب
+            </h3>
+            <p className="text-gray-400 text-sm mb-4">احفظ هذا التصميم كقالب لاستخدامه لاحقاً</p>
+            
+            <div className="mb-4">
+              <label className="text-gray-300 text-sm mb-2 block">اسم القالب</label>
+              <input
+                type="text"
+                value={templateName}
+                onChange={(e) => setTemplateName(e.target.value)}
+                placeholder="مثال: متجر إلكتروني أزرق"
+                className="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-3 text-white text-sm focus:outline-none focus:border-purple-500"
+              />
+            </div>
+            
+            <div className="bg-purple-500/10 border border-purple-500/30 rounded-xl p-3 mb-4">
+              <p className="text-purple-300 text-sm flex items-center gap-2">
+                <Coins className="w-4 h-4" />
+                التكلفة: <strong>10 نقاط</strong>
+              </p>
+            </div>
+            
+            <div className="flex gap-2">
+              <button
+                onClick={() => setShowTemplateModal(false)}
+                className="flex-1 px-4 py-2 bg-slate-700 hover:bg-slate-600 rounded-xl text-white transition-all"
+              >
+                إلغاء
+              </button>
+              <button
+                onClick={handleSaveTemplate}
+                disabled={saving || !templateName.trim()}
+                className="flex-1 px-4 py-2 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 rounded-xl text-white font-medium transition-all disabled:opacity-50 flex items-center justify-center gap-2"
+              >
+                {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <BookMarked className="w-4 h-4" />}
+                {saving ? 'جاري الحفظ...' : 'حفظ القالب'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+});
+
 // ============== Credits Banner ==============
 const CreditsBanner = memo(({ credits, isOwner, onBuyCredits }) => {
   if (isOwner) return null;
-  const percentage = Math.min(100, (credits / 100) * 100);
-  if (percentage > 30) return null;
+  
+  const percentage = Math.min(100, Math.max(0, ((credits || 0) / 1000) * 100));
+  const isLow = percentage < 30;
+  
+  if (!isLow) return null;
   
   return (
-    <div className="flex items-center justify-between p-3 mb-3 bg-gradient-to-r from-amber-900/30 to-orange-900/30 rounded-xl border border-amber-500/20">
+    <div className="flex items-center justify-between px-4 py-2 bg-gradient-to-r from-amber-500/10 to-orange-500/10 border border-amber-500/20 rounded-xl mb-3">
       <div className="flex items-center gap-2">
-        <Coins className="w-5 h-5 text-amber-400" />
+        <Zap className="w-4 h-4 text-amber-400" />
         <span className="text-sm text-amber-200">نقاطك تنفذ؟ اشتري المزيد بخصم 44%...</span>
       </div>
       <button 
@@ -349,7 +826,7 @@ const CreditsBanner = memo(({ credits, isOwner, onBuyCredits }) => {
         className="flex items-center gap-1.5 px-3 py-1 bg-gradient-to-r from-green-500 to-emerald-500 rounded-full text-white text-xs font-medium hover:from-green-600 hover:to-emerald-600 transition-all"
       >
         <Coins className="w-3 h-3" />
-        Credits {Math.round(percentage)}% more
+        اشتري الآن
       </button>
       <button className="text-gray-500 hover:text-white transition-colors">
         <X className="w-4 h-4" />
@@ -367,7 +844,7 @@ const AIChat = ({ user }) => {
   const [inputMessage, setInputMessage] = useState('');
   const [loading, setLoading] = useState(false);
   const [sessionsLoading, setSessionsLoading] = useState(true);
-  const [sidebarOpen, setSidebarOpen] = useState(false); // مخفي بشكل افتراضي
+  const [sidebarOpen, setSidebarOpen] = useState(false);
   const [isTyping, setIsTyping] = useState(false);
   const [playingAudio, setPlayingAudio] = useState(null);
   const [isRecording, setIsRecording] = useState(false);
@@ -375,6 +852,10 @@ const AIChat = ({ user }) => {
   const [recordingTime, setRecordingTime] = useState(0);
   const [userCredits, setUserCredits] = useState(user?.credits || 0);
   const [ultraMode, setUltraMode] = useState(false);
+  
+  // Templates State
+  const [templates, setTemplates] = useState([]);
+  const [showTemplatesPanel, setShowTemplatesPanel] = useState(false);
   
   // Preview State
   const [previewCode, setPreviewCode] = useState('');
@@ -388,6 +869,14 @@ const AIChat = ({ user }) => {
     voice: 'alloy',
     speed: 1.0
   });
+  
+  // File Upload State
+  const [uploadedFile, setUploadedFile] = useState(null);
+  const [isUploading, setIsUploading] = useState(false);
+  
+  // Social Export State
+  const [showSocialExport, setShowSocialExport] = useState(false);
+  const [exportAsset, setExportAsset] = useState(null);
   
   // Refs
   const messagesEndRef = useRef(null);
@@ -408,6 +897,7 @@ const AIChat = ({ user }) => {
   useEffect(() => {
     fetchSessions();
     fetchUserCredits();
+    fetchTemplates();
   }, []);
 
   useEffect(() => {
@@ -423,6 +913,62 @@ const AIChat = ({ user }) => {
     };
   }, [mediaRecorder]);
 
+  const fetchTemplates = useCallback(async () => {
+    try {
+      const token = localStorage.getItem('token');
+      const res = await fetch(`${process.env.REACT_APP_BACKEND_URL}/api/chat/templates`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setTemplates(data.templates || []);
+      }
+    } catch (error) {
+      console.error('Error fetching templates:', error);
+    }
+  }, []);
+
+  const handleUseTemplate = useCallback(async (templateId) => {
+    try {
+      const token = localStorage.getItem('token');
+      const res = await fetch(`${process.env.REACT_APP_BACKEND_URL}/api/chat/templates/use`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ template_id: templateId })
+      });
+      
+      const data = await res.json();
+      
+      if (res.ok) {
+        toast.success(`تم تحميل القالب: ${data.template_name}`);
+        setPreviewCode(data.code);
+        setPreviewOpen(true);
+        setShowTemplatesPanel(false);
+        if (data.cost > 0 && user?.role !== 'owner') {
+          setUserCredits(prev => Math.max(0, prev - data.cost));
+        }
+        // Fetch and load the session
+        const sessionRes = await fetch(`${process.env.REACT_APP_BACKEND_URL}/api/chat/sessions/${data.session_id}`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (sessionRes.ok) {
+          const sessionData = await sessionRes.json();
+          setCurrentSession(sessionData);
+          setMessages(sessionData.messages || []);
+          setSessions(prev => {
+            const exists = prev.find(s => s.id === sessionData.id);
+            if (!exists) return [sessionData, ...prev];
+            return prev;
+          });
+        }
+      } else {
+        toast.error(data.detail || 'فشل تحميل القالب');
+      }
+    } catch (error) {
+      toast.error('حدث خطأ في الاتصال');
+    }
+  }, [user]);
+
   const fetchUserCredits = async () => {
     try {
       const token = localStorage.getItem('token');
@@ -437,6 +983,78 @@ const AIChat = ({ user }) => {
       console.error('Error fetching credits:', error);
     }
   };
+
+  // Upload file to backend
+  const handleFileUpload = useCallback(async (file, category = 'general') => {
+    setIsUploading(true);
+    try {
+      const token = localStorage.getItem('token');
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('file_category', category);
+      
+      const res = await fetch(`${process.env.REACT_APP_BACKEND_URL}/api/files/upload`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${token}` },
+        body: formData
+      });
+      
+      const data = await res.json();
+      
+      if (res.ok) {
+        toast.success('تم رفع الملف بنجاح!');
+        return data;
+      } else {
+        toast.error(data.detail || 'فشل رفع الملف');
+        return null;
+      }
+    } catch (error) {
+      toast.error('خطأ في رفع الملف');
+      return null;
+    } finally {
+      setIsUploading(false);
+    }
+  }, []);
+  
+  // Handle file selection for chat
+  const handleFileSelect = useCallback((file) => {
+    setUploadedFile(file);
+  }, []);
+  
+  // Send uploaded file as message
+  const handleSendFile = useCallback(async () => {
+    if (!uploadedFile || !currentSession) return;
+    
+    // Upload file first
+    const uploadResult = await handleFileUpload(uploadedFile, 
+      uploadedFile.type.startsWith('image/') ? 'reference' : 
+      uploadedFile.type.startsWith('video/') ? 'reference' : 'document'
+    );
+    
+    if (uploadResult) {
+      // Send message with file reference
+      const fileMessage = uploadedFile.type.startsWith('image/') 
+        ? `[رفعت صورة: ${uploadedFile.name}]\nرابط الصورة: ${uploadResult.file_url}`
+        : uploadedFile.type.startsWith('video/')
+        ? `[رفعت فيديو مرجعي: ${uploadedFile.name}]\nرابط الفيديو: ${uploadResult.file_url}`
+        : `[رفعت مستند: ${uploadedFile.name}]\nرابط الملف: ${uploadResult.file_url}`;
+      
+      setInputMessage(fileMessage);
+      setUploadedFile(null);
+      
+      // Auto send
+      setTimeout(() => {
+        const sendBtn = document.querySelector('[data-testid="send-btn"]');
+        if (sendBtn) sendBtn.click();
+      }, 100);
+    }
+  }, [uploadedFile, currentSession, handleFileUpload]);
+  
+  // Open social export modal
+  const openSocialExport = useCallback((asset) => {
+    setExportAsset(asset);
+    setShowSocialExport(true);
+  }, []);
 
   const fetchSessions = useCallback(async () => {
     setSessionsLoading(true);
@@ -467,10 +1085,11 @@ const AIChat = ({ user }) => {
       const session = await res.json();
       setSessions(prev => [session, ...prev]);
       setCurrentSession(session);
+      // Set messages from session (includes welcome message with buttons)
       setMessages(session.messages || []);
       setPreviewCode('');
       toast.success('تم إنشاء محادثة جديدة');
-      setSidebarOpen(false);
+      if (window.innerWidth < 768) setSidebarOpen(false);
     } catch (error) {
       toast.error('فشل إنشاء المحادثة');
     }
@@ -486,7 +1105,7 @@ const AIChat = ({ user }) => {
       setCurrentSession(session);
       setMessages(session.messages || []);
       setPreviewCode('');
-      setSidebarOpen(false);
+      if (window.innerWidth < 768) setSidebarOpen(false);
     } catch (error) {
       toast.error('فشل تحميل المحادثة');
     }
@@ -533,10 +1152,10 @@ const AIChat = ({ user }) => {
           playAudio(data.assistant_message.audio_url, data.assistant_message.id);
         }
 
-        const assistantContent = data.assistant_message?.content || '';
-        const codeMatch = assistantContent.match(/```(?:html|javascript|js)?\n?([\s\S]*?)```/);
-        if (codeMatch) {
-          setPreviewCode(codeMatch[1]);
+        // Auto-open Live Preview when code is generated
+        const metadata = data.assistant_message?.metadata || {};
+        if (metadata.generated_code) {
+          setPreviewCode(metadata.generated_code);
           setPreviewOpen(true);
         }
 
@@ -550,7 +1169,7 @@ const AIChat = ({ user }) => {
         setMessages(prev => prev.filter(m => m.id !== tempUserMsg.id));
       }
     } catch (error) {
-      toast.error('خطأ في الاتصال');
+      toast.error('حدث خطأ في الاتصال');
       setMessages(prev => prev.filter(m => m.id !== tempUserMsg.id));
     } finally {
       setLoading(false);
@@ -559,6 +1178,7 @@ const AIChat = ({ user }) => {
   }, [inputMessage, currentSession, loading, ttsSettings, ultraMode, sessions]);
 
   const deleteSession = useCallback(async (sessionId) => {
+    if (!window.confirm('هل تريد حذف هذه المحادثة؟')) return;
     try {
       const token = localStorage.getItem('token');
       await fetch(`${process.env.REACT_APP_BACKEND_URL}/api/chat/sessions/${sessionId}`, {
@@ -569,6 +1189,7 @@ const AIChat = ({ user }) => {
       if (currentSession?.id === sessionId) {
         setCurrentSession(null);
         setMessages([]);
+        setPreviewCode('');
       }
       toast.success('تم حذف المحادثة');
     } catch (error) {
@@ -576,133 +1197,424 @@ const AIChat = ({ user }) => {
     }
   }, [currentSession]);
 
-  const handleKeyPress = (e) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault();
-      sendMessage();
+  // Voice Recording
+  const startRecording = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const recorder = new MediaRecorder(stream, { mimeType: 'audio/webm' });
+      audioChunksRef.current = [];
+      recorder.ondataavailable = (e) => { if (e.data.size > 0) audioChunksRef.current.push(e.data); };
+      recorder.onstop = async () => {
+        const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
+        stream.getTracks().forEach(track => track.stop());
+        await transcribeAudio(audioBlob);
+      };
+      recorder.start(100);
+      setMediaRecorder(recorder);
+      setIsRecording(true);
+      setRecordingTime(0);
+      recordingTimerRef.current = setInterval(() => setRecordingTime(prev => prev + 1), 1000);
+    } catch (error) {
+      toast.error('فشل الوصول للمايكروفون');
     }
   };
 
-  const playAudio = useCallback((audioUrl, messageId) => {
-    if (audioRef.current) {
-      if (playingAudio === messageId) {
-        audioRef.current.pause();
-        setPlayingAudio(null);
-      } else {
+  const stopRecording = () => {
+    if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+      mediaRecorder.stop();
+      setIsRecording(false);
+      if (recordingTimerRef.current) {
+        clearInterval(recordingTimerRef.current);
+        recordingTimerRef.current = null;
+      }
+    }
+  };
+
+  const transcribeAudio = async (audioBlob) => {
+    if (!currentSession) { toast.error('اختر محادثة أولاً'); return; }
+    setLoading(true);
+    try {
+      const token = localStorage.getItem('token');
+      const formData = new FormData();
+      formData.append('audio', audioBlob, 'recording.webm');
+      formData.append('language', 'ar');
+      const res = await fetch(`${process.env.REACT_APP_BACKEND_URL}/api/stt/transcribe`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${token}` },
+        body: formData
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.text?.trim()) {
+          setInputMessage(data.text);
+          toast.success('تم تحويل الصوت!');
+        } else {
+          toast.error('لم يتم التعرف على أي كلام');
+        }
+      }
+    } catch (error) {
+      toast.error('خطأ في تحويل الصوت');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const toggleRecording = () => { isRecording ? stopRecording() : startRecording(); };
+
+  const playAudio = (audioUrl, messageId) => {
+    if (playingAudio === messageId) {
+      audioRef.current?.pause();
+      setPlayingAudio(null);
+    } else {
+      if (audioRef.current) {
         audioRef.current.src = audioUrl;
         audioRef.current.play();
         setPlayingAudio(messageId);
         audioRef.current.onended = () => setPlayingAudio(null);
       }
     }
-  }, [playingAudio]);
+  };
 
-  const generateTTS = useCallback(async (text, messageId) => {
+  const generateTTS = async (text, messageId) => {
     try {
       const token = localStorage.getItem('token');
-      const res = await fetch(`${process.env.REACT_APP_BACKEND_URL}/api/chat/tts`, {
+      const res = await fetch(`${process.env.REACT_APP_BACKEND_URL}/api/tts/generate`, {
         method: 'POST',
         headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text, ...ttsSettings })
+        body: JSON.stringify({
+          text: text.replace(/```[\s\S]*?```/g, '').replace(/[*#_]/g, '').trim(),
+          provider: ttsSettings.provider,
+          voice: ttsSettings.voice,
+          speed: ttsSettings.speed
+        })
       });
-      const data = await res.json();
-      if (data.audio_url) playAudio(data.audio_url, messageId);
+      if (res.ok) {
+        const data = await res.json();
+        playAudio(data.audio_url, messageId);
+        setMessages(prev => prev.map(m => m.id === messageId ? { ...m, audio_url: data.audio_url } : m));
+      }
     } catch (error) {
       toast.error('فشل توليد الصوت');
     }
-  }, [ttsSettings, playAudio]);
+  };
 
-  const toggleRecording = useCallback(async () => {
-    if (isRecording) {
-      mediaRecorder?.stop();
-      setIsRecording(false);
-      clearInterval(recordingTimerRef.current);
-      setRecordingTime(0);
-    } else {
-      try {
-        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-        const recorder = new MediaRecorder(stream);
-        audioChunksRef.current = [];
-        
-        recorder.ondataavailable = (e) => audioChunksRef.current.push(e.data);
-        recorder.onstop = async () => {
-          stream.getTracks().forEach(t => t.stop());
-          const blob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
-          // TODO: Send to backend for transcription
-          toast.info('تم تسجيل الصوت - ميزة التحويل قادمة قريباً');
-        };
-        
-        recorder.start();
-        setMediaRecorder(recorder);
-        setIsRecording(true);
-        recordingTimerRef.current = setInterval(() => setRecordingTime(t => t + 1), 1000);
-      } catch (error) {
-        toast.error('فشل الوصول للميكروفون');
-      }
+  const downloadAsset = useCallback((url, filename) => {
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  }, []);
+
+  const handleKeyPress = useCallback((e) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      sendMessage();
     }
-  }, [isRecording, mediaRecorder]);
+  }, [sendMessage]);
+
+  const getSessionIcon = useCallback((type) => {
+    switch (type) {
+      case 'image': return <Image className="w-4 h-4" />;
+      case 'video': return <Video className="w-4 h-4" />;
+      case 'website': return <Globe className="w-4 h-4" />;
+      case 'game': return <Gamepad2 className="w-4 h-4" />;
+      case 'mobile': return <Smartphone className="w-4 h-4" />;
+      default: return <MessageSquare className="w-4 h-4" />;
+    }
+  }, []);
 
   const handlePreview = useCallback((code) => {
     setPreviewCode(code);
     setPreviewOpen(true);
   }, []);
 
-  const getSessionIcon = useCallback((type) => {
-    const icons = {
-      image: <Image className="w-4 h-4" />,
-      video: <Video className="w-4 h-4" />,
-      website: <Globe className="w-4 h-4" />,
-      game: <Gamepad2 className="w-4 h-4" />,
-      general: <MessageSquare className="w-4 h-4" />
-    };
-    return icons[type] || icons.general;
-  }, []);
+  // Handle button click from chat - send as message
+  const handleButtonClick = useCallback((buttonText) => {
+    if (loading || !currentSession) return;
+    setInputMessage(buttonText);
+    // Auto-send after a short delay
+    setTimeout(() => {
+      const input = document.querySelector('[data-testid="chat-input"]');
+      if (input) {
+        const event = new KeyboardEvent('keypress', { key: 'Enter', bubbles: true });
+      }
+    }, 100);
+  }, [loading, currentSession]);
+  
+  // Effect to auto-send when inputMessage changes from button click
+  const buttonClickRef = useRef(false);
+  
+  const handleButtonClickDirect = useCallback(async (buttonText) => {
+    if (loading || !currentSession) return;
+    
+    setLoading(true);
+    setIsTyping(true);
 
-  const downloadAsset = useCallback((url, filename) => {
+    const tempUserMsg = {
+      id: Date.now().toString(),
+      role: 'user',
+      content: buttonText,
+      attachments: [],
+      created_at: new Date().toISOString()
+    };
+    setMessages(prev => [...prev, tempUserMsg]);
+
+    try {
+      const token = localStorage.getItem('token');
+      const res = await fetch(
+        `${process.env.REACT_APP_BACKEND_URL}/api/chat/sessions/${currentSession.id}/messages`,
+        {
+          method: 'POST',
+          headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ message: buttonText, settings: { tts: ttsSettings, ultra: ultraMode } })
+        }
+      );
+
+      const data = await res.json();
+
+      if (res.ok) {
+        setMessages(prev => {
+          const filtered = prev.filter(m => m.id !== tempUserMsg.id);
+          return [...filtered, data.user_message, data.assistant_message];
+        });
+        
+        if (data.credits_used) setUserCredits(prev => Math.max(0, prev - data.credits_used));
+
+        // Auto-open Live Preview when code is generated
+        const metadata = data.assistant_message?.metadata || {};
+        if (metadata.generated_code) {
+          setPreviewCode(metadata.generated_code);
+          setPreviewOpen(true);
+        }
+      } else {
+        toast.error(data.detail || 'فشل إرسال الرسالة');
+        setMessages(prev => prev.filter(m => m.id !== tempUserMsg.id));
+      }
+    } catch (error) {
+      toast.error('حدث خطأ في الاتصال');
+      setMessages(prev => prev.filter(m => m.id !== tempUserMsg.id));
+    } finally {
+      setLoading(false);
+      setIsTyping(false);
+    }
+  }, [currentSession, loading, ttsSettings, ultraMode]);
+
+  // Handle export code with credits deduction
+  const handleExportCode = useCallback(async () => {
+    if (!previewCode) {
+      toast.error('لا يوجد كود للتصدير');
+      return;
+    }
+    
+    if (userCredits < 50 && user?.role !== 'owner') {
+      toast.error('رصيد غير كافٍ! التصدير يكلف 50 نقطة');
+      return;
+    }
+    
+    // Remove Zitex badge for export
+    let cleanCode = previewCode.replace(/<!-- Zitex Badge -->[\s\S]*?<\/div>/g, '');
+    
+    // Download as HTML file
+    const blob = new Blob([cleanCode], { type: 'text/html' });
+    const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = filename;
+    a.download = 'zitex-project.html';
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
-  }, []);
+    URL.revokeObjectURL(url);
+    
+    // Deduct credits
+    if (user?.role !== 'owner') {
+      setUserCredits(prev => Math.max(0, prev - 50));
+    }
+    
+    toast.success('تم تصدير الكود بنجاح! (-50 نقطة)');
+  }, [previewCode, userCredits, user]);
 
-  const renderAttachment = useCallback((attachment) => {
+  // Handle save as template
+  const handleSaveTemplate = useCallback(async (templateName) => {
+    if (!currentSession) {
+      toast.error('اختر محادثة أولاً');
+      return;
+    }
+    
+    try {
+      const token = localStorage.getItem('token');
+      const res = await fetch(`${process.env.REACT_APP_BACKEND_URL}/api/chat/templates/save`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          session_id: currentSession.id,
+          name: templateName,
+          category: currentSession.session_type || 'custom'
+        })
+      });
+      
+      const data = await res.json();
+      
+      if (res.ok) {
+        toast.success(data.message || 'تم حفظ القالب بنجاح!');
+        if (user?.role !== 'owner') {
+          setUserCredits(prev => Math.max(0, prev - 10));
+        }
+      } else {
+        toast.error(data.detail || 'فشل حفظ القالب');
+      }
+    } catch (error) {
+      toast.error('حدث خطأ في الاتصال');
+    }
+  }, [currentSession, user]);
+
+  // Handle deploy
+  const handleDeploy = useCallback(async (subdomain) => {
+    if (!currentSession) {
+      toast.error('اختر محادثة أولاً');
+      return;
+    }
+    
+    try {
+      const token = localStorage.getItem('token');
+      const res = await fetch(`${process.env.REACT_APP_BACKEND_URL}/api/chat/deploy`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          session_id: currentSession.id,
+          subdomain: subdomain
+        })
+      });
+      
+      const data = await res.json();
+      
+      if (res.ok) {
+        toast.success(`🚀 تم النشر بنجاح!\n${data.url}`);
+        if (user?.role !== 'owner') {
+          setUserCredits(prev => Math.max(0, prev - 100));
+        }
+        // Update current session with deployment info
+        setCurrentSession(prev => ({
+          ...prev,
+          deployment: {
+            id: data.id,
+            subdomain: subdomain,
+            url: data.url,
+            status: 'active'
+          }
+        }));
+      } else {
+        toast.error(data.detail || 'فشل النشر');
+      }
+    } catch (error) {
+      toast.error('حدث خطأ في الاتصال');
+    }
+  }, [currentSession, user]);
+
+  const renderAttachment = useCallback((attachment, onPreview) => {
     switch (attachment.type) {
       case 'image':
+      case 'image_preview':
         return (
-          <div className="mt-3 rounded-xl overflow-hidden border border-slate-700/50">
-            <img src={attachment.url} alt="Generated" className="w-full max-h-80 object-contain bg-slate-900" />
-            <div className="p-2 bg-slate-800/50 flex justify-end gap-2">
-              <Button size="sm" variant="outline" onClick={() => window.open(attachment.url, '_blank')}>
-                <Eye className="w-4 h-4 me-1" /> عرض
-              </Button>
-              <Button size="sm" variant="outline" onClick={() => downloadAsset(attachment.url, `zitex-image-${Date.now()}.png`)}>
+          <div className="mt-3 relative group rounded-xl overflow-hidden">
+            <img src={attachment.url} alt={attachment.prompt || "Generated"} className="max-w-full rounded-xl" loading="lazy" />
+            {attachment.scene && (
+              <div className="absolute top-2 left-2 bg-black/70 px-2 py-1 rounded-lg text-xs text-white">
+                مشهد {attachment.scene}
+              </div>
+            )}
+            <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
+              <Button size="sm" onClick={() => downloadAsset(attachment.url, 'zitex-image.png')} className="bg-white/20 backdrop-blur">
                 <Download className="w-4 h-4 me-1" /> تحميل
+              </Button>
+              <Button size="sm" onClick={() => openSocialExport({ id: attachment.id || 'temp', url: attachment.url, type: 'image' })} className="bg-purple-500/80 backdrop-blur hover:bg-purple-500">
+                <Share2 className="w-4 h-4 me-1" /> نشر
               </Button>
             </div>
           </div>
         );
       case 'video':
         return (
-          <div className="mt-3 rounded-xl overflow-hidden border border-slate-700/50">
-            <video src={attachment.url} controls className="w-full max-h-80 bg-slate-900" />
-            <div className="p-2 bg-slate-800/50 flex justify-end gap-2">
-              <Button size="sm" variant="outline" onClick={() => downloadAsset(attachment.url, `zitex-video-${Date.now()}.mp4`)}>
+          <div className="mt-3 bg-slate-800/50 rounded-xl p-3 border border-slate-700/50">
+            <div className="flex items-center gap-2 mb-2">
+              <Video className="w-5 h-5 text-orange-400" />
+              <span className="text-white font-medium text-sm">
+                {attachment.video_type === 'cinematic' ? 'فيديو سينمائي' : 
+                 attachment.video_type === 'funny' ? 'فيديو مضحك' : 
+                 attachment.video_type === 'advertising' ? 'فيديو إعلاني' : 'فيديو'}
+              </span>
+              {attachment.duration && (
+                <span className="text-xs text-gray-400">({attachment.duration} ثواني)</span>
+              )}
+            </div>
+            <video src={attachment.url} controls className="w-full rounded-xl" preload="metadata" />
+            <div className="flex gap-2 mt-2">
+              <Button size="sm" onClick={() => downloadAsset(attachment.url, 'zitex-video.mp4')} className="bg-orange-500 hover:bg-orange-600">
+                <Download className="w-4 h-4 me-1" /> تحميل
+              </Button>
+              <Button size="sm" onClick={() => openSocialExport({ id: attachment.id || 'temp', url: attachment.url, type: 'video' })} className="bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600">
+                <Share2 className="w-4 h-4 me-1" /> نشر للمنصات
+              </Button>
+            </div>
+          </div>
+        );
+      case 'audio':
+      case 'audio_preview':
+        return (
+          <div className="mt-3 bg-purple-500/10 border border-purple-500/30 rounded-xl p-3">
+            <div className="flex items-center gap-2 mb-2">
+              <Volume2 className="w-5 h-5 text-purple-400" />
+              <span className="text-purple-300 font-medium text-sm">
+                {attachment.type === 'audio_preview' ? 'معاينة التعليق الصوتي' : 'التعليق الصوتي'}
+              </span>
+              {attachment.voice && (
+                <span className="text-xs text-purple-400/60">({attachment.voice})</span>
+              )}
+            </div>
+            <audio src={attachment.url} controls className="w-full" />
+            {attachment.text && (
+              <p className="text-xs text-gray-400 mt-2 italic">"{attachment.text.slice(0, 100)}..."</p>
+            )}
+          </div>
+        );
+      case 'website':
+      case 'game':
+        return (
+          <div className="mt-3 p-3 bg-slate-800/50 rounded-xl border border-slate-700/50">
+            <div className="flex items-center gap-2 mb-2">
+              {attachment.type === 'game' ? <Gamepad2 className="w-5 h-5 text-cyan-400" /> : <Globe className="w-5 h-5 text-green-400" />}
+              <span className="text-white font-medium text-sm">{attachment.type === 'game' ? 'لعبة جاهزة!' : 'موقع جاهز!'}</span>
+            </div>
+            <div className="flex gap-2">
+              <Button size="sm" onClick={() => onPreview(attachment.code || Object.values(attachment.files || {})[0])} className="bg-green-500 hover:bg-green-600">
+                <Eye className="w-4 h-4 me-1" /> معاينة
+              </Button>
+              <Button size="sm" variant="outline" onClick={() => downloadAsset(URL.createObjectURL(new Blob([attachment.code], { type: 'text/html' })), `zitex-${attachment.type}.html`)}>
                 <Download className="w-4 h-4 me-1" /> تحميل
               </Button>
             </div>
           </div>
         );
-      case 'code':
+      case 'mobile_app':
         return (
-          <div className="mt-3">
-            <CodeBlock code={attachment.code} language={attachment.language || 'html'} />
-            <div className="flex gap-2 mt-2">
-              <Button size="sm" variant="outline" onClick={() => handlePreview(attachment.code)}>
-                <Eye className="w-4 h-4 me-1" /> معاينة
+          <div className="mt-3 p-3 bg-gradient-to-r from-pink-500/10 to-purple-500/10 rounded-xl border border-pink-500/30">
+            <div className="flex items-center gap-2 mb-2">
+              <Smartphone className="w-5 h-5 text-pink-400" />
+              <span className="text-white font-medium text-sm">تطبيق موبايل جاهز!</span>
+              {attachment.platform && (
+                <span className="text-xs bg-pink-500/20 text-pink-300 px-2 py-0.5 rounded-full">{attachment.platform}</span>
+              )}
+            </div>
+            <p className="text-gray-400 text-xs mb-2">{attachment.description || 'تم توليد كود التطبيق بنجاح'}</p>
+            <div className="flex gap-2">
+              <Button size="sm" onClick={() => onPreview(attachment.code)} className="bg-pink-500 hover:bg-pink-600">
+                <Eye className="w-4 h-4 me-1" /> عرض الكود
               </Button>
-              <Button size="sm" variant="outline" onClick={() => downloadAsset(URL.createObjectURL(new Blob([attachment.code], { type: 'text/html' })), `zitex-${attachment.type}.html`)}>
+              <Button size="sm" variant="outline" onClick={() => {
+                const blob = new Blob([attachment.code], { type: 'text/plain' });
+                downloadAsset(URL.createObjectURL(blob), `zitex-app.${attachment.file_extension || 'txt'}`);
+              }}>
                 <Download className="w-4 h-4 me-1" /> تحميل
               </Button>
             </div>
@@ -718,12 +1630,21 @@ const AIChat = ({ user }) => {
       default:
         return null;
     }
-  }, [downloadAsset, handlePreview]);
+  }, [downloadAsset, openSocialExport]);
 
   return (
     <div className="h-screen bg-[#0a0a12] flex flex-col overflow-hidden" data-testid="ai-chat-page">
       <Navbar user={user} transparent />
       <audio ref={audioRef} className="hidden" />
+      
+      {/* Social Export Modal */}
+      <SocialExportModal 
+        isOpen={showSocialExport} 
+        onClose={() => setShowSocialExport(false)}
+        assetId={exportAsset?.id}
+        assetUrl={exportAsset?.url}
+        assetType={exportAsset?.type}
+      />
       
       <div className="flex-1 flex mt-16 overflow-hidden">
         {/* Sessions Dropdown Button - Always visible */}
@@ -741,254 +1662,312 @@ const AIChat = ({ user }) => {
           {sidebarOpen && (
             <div className="absolute top-12 right-0 w-80 bg-[#0d0d18] border border-slate-700/50 rounded-2xl shadow-2xl overflow-hidden animate-fadeIn">
               {/* User Credits Header */}
-              <div className="p-3 border-b border-slate-800/50 bg-gradient-to-r from-slate-800/50 to-slate-900/50">
-                <div className="flex items-center justify-between">
+              <div className="p-4 bg-gradient-to-r from-amber-500/10 to-yellow-500/10 border-b border-slate-700/50">
+                <div className="flex items-center justify-between mb-2">
                   <div className="flex items-center gap-2">
-                    <div className="w-10 h-10 rounded-full bg-gradient-to-br from-amber-500 to-yellow-500 flex items-center justify-center">
-                      <span className="text-black text-sm font-bold">{user?.email?.[0]?.toUpperCase() || 'U'}</span>
-                    </div>
-                    <div>
-                      <p className="text-white text-sm font-medium">{user?.role === 'owner' ? 'مالك' : 'مستخدم'}</p>
-                      <p className="text-xs text-amber-400 flex items-center gap-1">
-                        <Coins className="w-3 h-3" />
-                        <span className="font-bold">{user?.role === 'owner' ? '∞' : userCredits}</span> نقطة
-                      </p>
-                    </div>
+                    <Coins className="w-5 h-5 text-amber-400" />
+                    <span className="text-white font-bold">{userCredits}</span>
+                    <span className="text-gray-400 text-sm">نقطة</span>
                   </div>
-                  <button onClick={() => setSidebarOpen(false)} className="p-2 rounded-lg hover:bg-slate-700/50 text-gray-400">
-                    <X className="w-4 h-4" />
+                  {user?.role === 'owner' && (
+                    <span className="text-xs bg-purple-500/20 text-purple-300 px-2 py-1 rounded-full">مالك</span>
+                  )}
+                </div>
+              </div>
+              
+              {/* New Session Buttons */}
+              <div className="p-3 border-b border-slate-700/50">
+                <p className="text-xs text-gray-500 mb-2 px-1">محادثة جديدة</p>
+                <div className="grid grid-cols-2 gap-2">
+                  <button onClick={() => createSession('general')} className="flex items-center gap-2 p-2 rounded-lg bg-slate-800/50 hover:bg-slate-700 text-white text-xs transition-all">
+                    <MessageSquare className="w-4 h-4 text-blue-400" /> عام
+                  </button>
+                  <button onClick={() => createSession('website')} className="flex items-center gap-2 p-2 rounded-lg bg-slate-800/50 hover:bg-slate-700 text-white text-xs transition-all">
+                    <Globe className="w-4 h-4 text-green-400" /> موقع
+                  </button>
+                  <button onClick={() => createSession('image')} className="flex items-center gap-2 p-2 rounded-lg bg-slate-800/50 hover:bg-slate-700 text-white text-xs transition-all">
+                    <Image className="w-4 h-4 text-purple-400" /> صورة
+                  </button>
+                  <button onClick={() => createSession('video')} className="flex items-center gap-2 p-2 rounded-lg bg-slate-800/50 hover:bg-slate-700 text-white text-xs transition-all">
+                    <Video className="w-4 h-4 text-orange-400" /> فيديو
+                  </button>
+                  <button onClick={() => createSession('game')} className="flex items-center gap-2 p-2 rounded-lg bg-slate-800/50 hover:bg-slate-700 text-white text-xs transition-all">
+                    <Gamepad2 className="w-4 h-4 text-cyan-400" /> لعبة
+                  </button>
+                  <button onClick={() => createSession('mobile')} className="flex items-center gap-2 p-2 rounded-lg bg-slate-800/50 hover:bg-slate-700 text-white text-xs transition-all">
+                    <Smartphone className="w-4 h-4 text-pink-400" /> تطبيق
                   </button>
                 </div>
               </div>
               
-              {/* New Chat Button */}
-              <div className="p-3 border-b border-slate-800/50">
-                <Button onClick={() => { createSession('general'); setSidebarOpen(false); }} className="w-full bg-gradient-to-r from-amber-600 to-yellow-600 hover:from-amber-700 hover:to-yellow-700 shadow-lg shadow-amber-500/20" data-testid="new-chat-btn">
-                  <Plus className="w-4 h-4 me-2" /> محادثة جديدة
-                </Button>
-                <div className="grid grid-cols-4 gap-1.5 mt-2">
-                  {[
-                    { type: 'image', icon: Image, color: 'purple', label: 'صورة' },
-                    { type: 'video', icon: Video, color: 'orange', label: 'فيديو' },
-                    { type: 'website', icon: Globe, color: 'green', label: 'موقع' },
-                    { type: 'game', icon: Gamepad2, color: 'cyan', label: 'لعبة' }
-                  ].map(({ type, icon: Icon, color, label }) => (
-                    <button 
-                      key={type} 
-                      onClick={() => { createSession(type); setSidebarOpen(false); }} 
-                      className={`p-2 rounded-lg border border-${color}-500/30 bg-${color}-500/10 hover:bg-${color}-500/20 transition-all flex flex-col items-center gap-1`}
-                      title={label}
-                    >
-                      <Icon className={`w-4 h-4 text-${color}-400`} />
-                      <span className={`text-[10px] text-${color}-400`}>{label}</span>
-                    </button>
-                  ))}
-                </div>
-              </div>
-              
               {/* Sessions List */}
-              <div className="max-h-80 overflow-y-auto">
-                {sessionsLoading ? <SessionSkeleton /> : sessions.length === 0 ? (
-                  <div className="text-center py-8 text-gray-500">
-                    <Sparkles className="w-10 h-10 mx-auto mb-2 opacity-20" />
-                    <p className="text-sm">لا توجد محادثات سابقة</p>
-                    <p className="text-xs text-gray-600">ابدأ محادثة جديدة!</p>
+              <ScrollArea className="h-64">
+                {sessionsLoading ? (
+                  <SessionSkeleton />
+                ) : sessions.length === 0 ? (
+                  <div className="p-4 text-center text-gray-500 text-sm">
+                    لا توجد محادثات بعد
                   </div>
                 ) : (
                   <div className="p-2 space-y-1">
-                    <p className="text-xs text-gray-500 px-2 py-1">المحادثات السابقة ({sessions.length})</p>
                     {sessions.map(session => (
-                      <div key={session.id} onClick={() => { loadSession(session.id); setSidebarOpen(false); }}>
-                        <SessionItem session={session} isActive={currentSession?.id === session.id} onSelect={() => {}} onDelete={deleteSession} getIcon={getSessionIcon} />
-                      </div>
+                      <SessionItem 
+                        key={session.id}
+                        session={session}
+                        isActive={currentSession?.id === session.id}
+                        onSelect={loadSession}
+                        onDelete={deleteSession}
+                        getIcon={getSessionIcon}
+                      />
                     ))}
                   </div>
                 )}
-              </div>
+              </ScrollArea>
             </div>
           )}
         </div>
-        
-        {/* Overlay when dropdown is open */}
-        {sidebarOpen && <div className="fixed inset-0 z-20" onClick={() => setSidebarOpen(false)} />}
 
-        {/* Main Area - Full Width */}
-        <div className={`flex-1 flex ${previewOpen ? 'flex-row' : 'flex-col'} overflow-hidden w-full`}>
-          {/* Chat Column */}
-          <div className={`${previewOpen ? 'w-1/2 border-l border-slate-800/50' : 'w-full'} flex flex-col overflow-hidden`}>
+        {/* Main Chat Area */}
+        <div className={`flex-1 flex flex-col transition-all duration-300 ${previewOpen ? 'lg:w-1/2' : 'w-full'}`}>
+          {/* Messages Area */}
+          <div className="flex-1 overflow-y-auto px-4 py-6">
             {!currentSession ? (
               /* Welcome Screen */
-              <div className="flex-1 flex items-center justify-center p-4">
+              <div className="h-full flex items-center justify-center">
                 <div className="text-center max-w-lg">
                   <ZitexLogo size="xl" isAnimating={false} />
-                  <h1 className="text-3xl font-bold text-white mt-6 mb-2">
-                    مرحباً في <span className="text-transparent bg-clip-text bg-gradient-to-r from-amber-400 to-yellow-500">Zitex</span>
-                  </h1>
-                  <p className="text-amber-200/80 mb-8">منصة الإبداع بالذكاء الاصطناعي</p>
-                  <div className="grid grid-cols-2 gap-3 mb-6">
-                    {[
-                      { type: 'image', icon: Image, color: 'purple', title: 'صور', desc: 'GPT Image 1' },
-                      { type: 'video', icon: Video, color: 'orange', title: 'فيديو', desc: 'Sora 2' },
-                      { type: 'website', icon: Globe, color: 'green', title: 'مواقع', desc: 'GPT-5.2' },
-                      { type: 'game', icon: Gamepad2, color: 'cyan', title: 'ألعاب', desc: 'Babylon.js' }
-                    ].map(({ type, icon: Icon, color, title, desc }) => (
-                      <Card key={type} className={`bg-slate-800/30 border-slate-700/50 cursor-pointer hover:bg-slate-800/50 hover:border-${color}-500/30 transition-all`} onClick={() => createSession(type)}>
-                        <CardContent className="p-4 text-center">
-                          <Icon className={`w-8 h-8 text-${color}-400 mx-auto mb-2`} />
-                          <h3 className="text-white font-medium text-sm">{title}</h3>
-                          <p className="text-[10px] text-gray-500">{desc}</p>
-                        </CardContent>
-                      </Card>
-                    ))}
+                  <h1 className="text-3xl font-bold text-white mt-6 mb-3">مرحباً بك في Zitex</h1>
+                  <p className="text-gray-400 mb-8">مساعدك الذكي لإنشاء المواقع والصور والفيديوهات والتطبيقات</p>
+                  
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                    <button onClick={() => createSession('website')} className="p-4 bg-gradient-to-br from-green-500/20 to-emerald-500/20 hover:from-green-500/30 hover:to-emerald-500/30 border border-green-500/30 rounded-xl transition-all group">
+                      <Globe className="w-8 h-8 text-green-400 mx-auto mb-2 group-hover:scale-110 transition-transform" />
+                      <span className="text-white text-sm font-medium">موقع ويب</span>
+                    </button>
+                    <button onClick={() => createSession('image')} className="p-4 bg-gradient-to-br from-purple-500/20 to-pink-500/20 hover:from-purple-500/30 hover:to-pink-500/30 border border-purple-500/30 rounded-xl transition-all group">
+                      <Image className="w-8 h-8 text-purple-400 mx-auto mb-2 group-hover:scale-110 transition-transform" />
+                      <span className="text-white text-sm font-medium">صورة</span>
+                    </button>
+                    <button onClick={() => createSession('video')} className="p-4 bg-gradient-to-br from-orange-500/20 to-red-500/20 hover:from-orange-500/30 hover:to-red-500/30 border border-orange-500/30 rounded-xl transition-all group">
+                      <Video className="w-8 h-8 text-orange-400 mx-auto mb-2 group-hover:scale-110 transition-transform" />
+                      <span className="text-white text-sm font-medium">فيديو</span>
+                    </button>
+                    <button onClick={() => createSession('game')} className="p-4 bg-gradient-to-br from-cyan-500/20 to-blue-500/20 hover:from-cyan-500/30 hover:to-blue-500/30 border border-cyan-500/30 rounded-xl transition-all group">
+                      <Gamepad2 className="w-8 h-8 text-cyan-400 mx-auto mb-2 group-hover:scale-110 transition-transform" />
+                      <span className="text-white text-sm font-medium">لعبة</span>
+                    </button>
+                    <button onClick={() => createSession('mobile')} className="p-4 bg-gradient-to-br from-pink-500/20 to-rose-500/20 hover:from-pink-500/30 hover:to-rose-500/30 border border-pink-500/30 rounded-xl transition-all group">
+                      <Smartphone className="w-8 h-8 text-pink-400 mx-auto mb-2 group-hover:scale-110 transition-transform" />
+                      <span className="text-white text-sm font-medium">تطبيق موبايل</span>
+                    </button>
+                    <button onClick={() => createSession('general')} className="p-4 bg-gradient-to-br from-amber-500/20 to-yellow-500/20 hover:from-amber-500/30 hover:to-yellow-500/30 border border-amber-500/30 rounded-xl transition-all group">
+                      <MessageSquare className="w-8 h-8 text-amber-400 mx-auto mb-2 group-hover:scale-110 transition-transform" />
+                      <span className="text-white text-sm font-medium">محادثة عامة</span>
+                    </button>
                   </div>
-                  <Button size="lg" onClick={() => createSession('general')} className="bg-gradient-to-r from-amber-600 to-yellow-600 hover:from-amber-700 hover:to-yellow-700 shadow-lg shadow-amber-500/20">
-                    <Zap className="w-5 h-5 me-2" /> ابدأ الآن
-                  </Button>
-                </div>
-              </div>
-            ) : (
-              <>
-                {/* Messages */}
-                <ScrollArea className="flex-1 p-4">
-                  <div className="max-w-3xl mx-auto space-y-4">
-                    {messages.length === 0 && (
-                      <div className="text-center py-16 text-gray-500">
-                        <Bot className="w-16 h-16 mx-auto mb-4 opacity-20" />
-                        <p>ابدأ المحادثة!</p>
+                  
+                  {/* Features */}
+                  <div className="mt-8 grid grid-cols-3 gap-4 text-center">
+                    <div>
+                      <div className="w-10 h-10 rounded-full bg-green-500/20 flex items-center justify-center mx-auto mb-2">
+                        <Zap className="w-5 h-5 text-green-400" />
                       </div>
-                    )}
-                    {messages.map((msg, idx) => (
-                      <ChatMessage key={msg.id || idx} msg={msg} idx={idx} renderAttachment={renderAttachment} onPlayAudio={playAudio} onGenerateTTS={generateTTS} playingAudio={playingAudio} onPreview={handlePreview} isTyping={isTyping && idx === messages.length - 1 && msg.role === 'assistant'} />
-                    ))}
-                    {isTyping && (
-                      <div className="flex justify-end">
-                        <div className="flex items-start gap-3">
-                          <div className="bg-slate-800 rounded-2xl rounded-tr-md p-4 border border-slate-700/50">
-                            <div className="flex items-center gap-2">
-                              {[0, 1, 2].map(i => <span key={i} className="w-2 h-2 bg-amber-500 rounded-full animate-bounce" style={{ animationDelay: `${i * 150}ms` }} />)}
-                              <span className="text-gray-400 text-sm mr-2">جاري التفكير...</span>
-                            </div>
-                          </div>
-                          <ZitexLogo size="sm" isAnimating={true} />
-                        </div>
+                      <p className="text-xs text-gray-400">سريع وذكي</p>
+                    </div>
+                    <div>
+                      <div className="w-10 h-10 rounded-full bg-purple-500/20 flex items-center justify-center mx-auto mb-2">
+                        <Sparkles className="w-5 h-5 text-purple-400" />
                       </div>
-                    )}
-                    <div ref={messagesEndRef} />
-                  </div>
-                </ScrollArea>
-
-                {/* Input Area */}
-                <div className="border-t border-slate-800/50 p-3 bg-[#0d0d18]/90 backdrop-blur">
-                  <div className="max-w-3xl mx-auto">
-                    {/* Credits Banner */}
-                    <CreditsBanner credits={userCredits} isOwner={user?.role === 'owner'} onBuyCredits={() => toast.info('سيتم إضافة هذه الميزة قريباً')} />
-                    
-                    {/* Input Box */}
-                    <div className="bg-slate-800/50 rounded-2xl border border-slate-700/50 overflow-hidden focus-within:border-purple-500/50 transition-colors">
-                      {/* Recording Indicator */}
-                      {isRecording && (
-                        <div className="px-4 py-2 bg-red-500/10 border-b border-red-500/20 flex items-center gap-3">
-                          <span className="w-2 h-2 bg-red-500 rounded-full animate-pulse"></span>
-                          <span className="text-red-400 text-sm font-mono">
-                            {Math.floor(recordingTime / 60).toString().padStart(2, '0')}:{(recordingTime % 60).toString().padStart(2, '0')}
-                          </span>
-                          <span className="text-red-300/70 text-xs">جاري التسجيل...</span>
-                        </div>
-                      )}
-                      
-                      {/* Text Area */}
-                      <textarea
-                        ref={textareaRef}
-                        value={inputMessage}
-                        onChange={(e) => setInputMessage(e.target.value)}
-                        onKeyPress={handleKeyPress}
-                        placeholder="Message Agent"
-                        className="w-full bg-transparent text-white placeholder:text-gray-500 text-sm resize-none focus:outline-none min-h-[50px] max-h-[150px] p-4"
-                        disabled={loading}
-                        rows={1}
-                        data-testid="chat-input"
-                      />
-                      
-                      {/* Bottom Tools */}
-                      <div className="flex items-center justify-between px-3 py-2 border-t border-slate-700/30">
-                        <div className="flex items-center gap-1">
-                          {/* Attach File (Disabled) */}
-                          <button className="p-2 rounded-lg text-gray-500 hover:text-gray-400 hover:bg-slate-700/50 transition-all opacity-50 cursor-not-allowed" title="رفع ملفات (قريباً)" disabled>
-                            <Paperclip className="w-4 h-4" />
-                          </button>
-                          
-                          {/* Save (Disabled) */}
-                          <button className="flex items-center gap-1 px-2 py-1.5 rounded-lg text-gray-500 hover:text-gray-400 hover:bg-slate-700/50 transition-all text-xs opacity-50 cursor-not-allowed" title="حفظ (قريباً)" disabled>
-                            <Save className="w-3.5 h-3.5" />
-                            <span className="hidden sm:inline">Save</span>
-                          </button>
-                          
-                          {/* Fork (Disabled) */}
-                          <button className="flex items-center gap-1 px-2 py-1.5 rounded-lg text-gray-500 hover:text-gray-400 hover:bg-slate-700/50 transition-all text-xs opacity-50 cursor-not-allowed" title="نسخ (قريباً)" disabled>
-                            <GitFork className="w-3.5 h-3.5" />
-                            <span className="hidden sm:inline">Fork</span>
-                          </button>
-                          
-                          {/* Ultra Mode */}
-                          <button 
-                            onClick={() => setUltraMode(!ultraMode)}
-                            className={`flex items-center gap-1 px-2 py-1.5 rounded-lg text-xs transition-all ${ultraMode ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30' : 'text-gray-500 hover:text-gray-400 hover:bg-slate-700/50'}`}
-                            title="وضع Ultra"
-                          >
-                            <Zap className="w-3.5 h-3.5" />
-                            <span className="hidden sm:inline">Ultra</span>
-                            <div className={`w-6 h-3.5 rounded-full transition-colors ${ultraMode ? 'bg-amber-500' : 'bg-slate-600'}`}>
-                              <div className={`w-2.5 h-2.5 rounded-full bg-white transition-transform mt-0.5 ${ultraMode ? 'translate-x-3' : 'translate-x-0.5'}`} />
-                            </div>
-                          </button>
-                        </div>
-                        
-                        <div className="flex items-center gap-1">
-                          {/* Mic */}
-                          <button
-                            onClick={toggleRecording}
-                            disabled={loading}
-                            className={`p-2 rounded-lg transition-all ${isRecording ? 'bg-red-500 text-white animate-pulse' : 'text-gray-400 hover:text-white hover:bg-slate-700/50'}`}
-                          >
-                            <Mic className="w-5 h-5" />
-                          </button>
-                          
-                          {/* Send */}
-                          <button
-                            onClick={sendMessage}
-                            disabled={loading || !inputMessage.trim() || isRecording}
-                            className="p-2 rounded-lg bg-gradient-to-r from-amber-600 to-yellow-600 text-white disabled:opacity-50 hover:from-amber-700 hover:to-yellow-700 transition-all shadow-lg shadow-amber-500/20"
-                            data-testid="send-btn"
-                          >
-                            {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : <ArrowUp className="w-5 h-5" />}
-                          </button>
-                        </div>
+                      <p className="text-xs text-gray-400">جودة عالية</p>
+                    </div>
+                    <div>
+                      <div className="w-10 h-10 rounded-full bg-amber-500/20 flex items-center justify-center mx-auto mb-2">
+                        <Gift className="w-5 h-5 text-amber-400" />
                       </div>
+                      <p className="text-xs text-gray-400">رفع الملفات مجاني</p>
                     </div>
                   </div>
                 </div>
-              </>
+              </div>
+            ) : (
+              /* Chat Messages */
+              <div className="max-w-4xl mx-auto space-y-4">
+                <CreditsBanner credits={userCredits} isOwner={user?.role === 'owner'} onBuyCredits={() => window.location.href = '/pricing'} />
+                
+                {messages.map((msg, idx) => (
+                  <ChatMessage
+                    key={msg.id || idx}
+                    msg={msg}
+                    idx={idx}
+                    renderAttachment={renderAttachment}
+                    onPlayAudio={playAudio}
+                    onGenerateTTS={generateTTS}
+                    playingAudio={playingAudio}
+                    onPreview={handlePreview}
+                    isTyping={isTyping && idx === messages.length - 1 && msg.role === 'assistant'}
+                    onButtonClick={handleButtonClickDirect}
+                  />
+                ))}
+                
+                {/* Typing Indicator */}
+                {isTyping && (
+                  <div className="flex justify-end animate-fadeIn">
+                    <div className="flex items-start gap-3">
+                      <div className="order-2 bg-gradient-to-br from-slate-800 to-slate-900 border border-slate-700/50 rounded-2xl rounded-tr-md p-4">
+                        <div className="flex items-center gap-2">
+                          <div className="flex gap-1">
+                            <span className="w-2 h-2 bg-amber-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></span>
+                            <span className="w-2 h-2 bg-amber-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></span>
+                            <span className="w-2 h-2 bg-amber-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></span>
+                          </div>
+                          <span className="text-gray-400 text-sm">جاري التفكير...</span>
+                        </div>
+                      </div>
+                      <ZitexLogo size="sm" isAnimating={true} />
+                    </div>
+                  </div>
+                )}
+                
+                <div ref={messagesEndRef} />
+              </div>
             )}
           </div>
           
-          {/* Preview Panel */}
-          {previewOpen && (
-            <div className={`${previewFullscreen ? 'fixed inset-0 z-50' : 'w-1/2'}`}>
-              <LivePreviewPanel code={previewCode} isOpen={previewOpen} onClose={() => setPreviewOpen(false)} onRefresh={() => {}} isFullscreen={previewFullscreen} onToggleFullscreen={() => setPreviewFullscreen(!previewFullscreen)} />
+          {/* Input Area */}
+          {currentSession && (
+            <div className="p-4 border-t border-slate-800/50 bg-[#0a0a12]/80 backdrop-blur">
+              {/* Uploaded File Preview */}
+              {uploadedFile && (
+                <UploadedFilePreview 
+                  file={uploadedFile} 
+                  onRemove={() => setUploadedFile(null)}
+                  onSend={handleSendFile}
+                />
+              )}
+              
+              <div className="max-w-4xl mx-auto">
+                <div className="flex items-end gap-2 bg-slate-800/50 border border-slate-700/50 rounded-2xl p-2">
+                  {/* File Upload Button */}
+                  <FileUploadButton onFileSelect={handleFileSelect} />
+                  
+                  {/* Voice Input */}
+                  <Button
+                    size="icon"
+                    variant="ghost"
+                    onClick={toggleRecording}
+                    className={`h-9 w-9 ${isRecording ? 'bg-red-500 text-white animate-pulse' : 'text-gray-400 hover:text-amber-400 hover:bg-amber-500/10'}`}
+                    disabled={loading}
+                  >
+                    <Mic className="w-4 h-4" />
+                  </Button>
+                  
+                  {isRecording && (
+                    <span className="text-red-400 text-xs font-mono">{Math.floor(recordingTime / 60)}:{(recordingTime % 60).toString().padStart(2, '0')}</span>
+                  )}
+                  
+                  {/* Text Input */}
+                  <textarea
+                    ref={textareaRef}
+                    value={inputMessage}
+                    onChange={(e) => setInputMessage(e.target.value)}
+                    onKeyPress={handleKeyPress}
+                    placeholder="اكتب رسالتك هنا... أو اضغط على الأزرار أعلاه"
+                    className="flex-1 bg-transparent text-white placeholder-gray-500 resize-none focus:outline-none text-sm py-2 px-2 max-h-32"
+                    rows={1}
+                    disabled={loading || isRecording}
+                    data-testid="chat-input"
+                  />
+                  
+                  {/* Preview Toggle */}
+                  {previewCode && (
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      onClick={() => setPreviewOpen(!previewOpen)}
+                      className={`h-9 w-9 ${previewOpen ? 'text-green-400 bg-green-500/10' : 'text-gray-400 hover:text-green-400'}`}
+                    >
+                      {previewOpen ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    </Button>
+                  )}
+                  
+                  {/* Send Button */}
+                  <Button
+                    size="icon"
+                    onClick={sendMessage}
+                    disabled={loading || !inputMessage.trim() || isRecording}
+                    className="h-9 w-9 bg-gradient-to-r from-amber-500 to-yellow-500 hover:from-amber-600 hover:to-yellow-600 text-black disabled:opacity-50"
+                    data-testid="send-btn"
+                  >
+                    {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+                  </Button>
+                </div>
+                
+                {/* Quick Tips */}
+                <div className="flex items-center justify-center gap-4 mt-2 text-xs text-gray-500">
+                  <span className="flex items-center gap-1">
+                    <Upload className="w-3 h-3" /> رفع الملفات مجاني
+                  </span>
+                  <span className="flex items-center gap-1">
+                    <Share2 className="w-3 h-3" /> تصدير للسوشيال مجاني
+                  </span>
+                </div>
+              </div>
             </div>
           )}
         </div>
+
+        {/* Live Preview Panel */}
+        {previewOpen && (
+          <div className={`${previewFullscreen ? 'fixed inset-0 z-50' : 'hidden lg:block lg:w-1/2'} border-l border-slate-700/50`}>
+            <LivePreviewPanel
+              code={previewCode}
+              isOpen={previewOpen}
+              onClose={() => setPreviewOpen(false)}
+              onRefresh={() => {
+                if (previewCode) {
+                  const temp = previewCode;
+                  setPreviewCode('');
+                  setTimeout(() => setPreviewCode(temp), 100);
+                }
+              }}
+              isFullscreen={previewFullscreen}
+              onToggleFullscreen={() => setPreviewFullscreen(!previewFullscreen)}
+              onExportCode={handleExportCode}
+              userCredits={userCredits}
+              onSaveTemplate={handleSaveTemplate}
+              onDeploy={handleDeploy}
+              currentSession={currentSession}
+            />
+          </div>
+        )}
       </div>
       
-      {/* Styles */}
-      <style>{`
-        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
-        .animate-fadeIn { animation: fadeIn 0.3s ease-out; }
-        @keyframes spin-slow { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
-        .animate-spin-slow { animation: spin-slow 2s linear infinite; }
-        ::-webkit-scrollbar { width: 6px; }
-        ::-webkit-scrollbar-track { background: transparent; }
-        ::-webkit-scrollbar-thumb { background: #334155; border-radius: 3px; }
+      {/* Mobile Preview Button */}
+      {previewCode && !previewOpen && (
+        <button
+          onClick={() => setPreviewOpen(true)}
+          className="lg:hidden fixed bottom-24 right-4 z-30 p-3 bg-gradient-to-r from-green-500 to-emerald-500 rounded-full shadow-lg text-white"
+        >
+          <Eye className="w-6 h-6" />
+        </button>
+      )}
+      
+      {/* CSS Animations */}
+      <style jsx global>{`
+        @keyframes fadeIn {
+          from { opacity: 0; transform: translateY(10px); }
+          to { opacity: 1; transform: translateY(0); }
+        }
+        .animate-fadeIn {
+          animation: fadeIn 0.3s ease-out;
+        }
+        @keyframes spin-slow {
+          from { transform: rotate(0deg); }
+          to { transform: rotate(360deg); }
+        }
+        .animate-spin-slow {
+          animation: spin-slow 3s linear infinite;
+        }
       `}</style>
     </div>
   );
