@@ -1,356 +1,164 @@
 """
-Zitex AI Chat Service - Progressive Builder Edition
-خدمة الشات الذكي - النسخة التدريجية
-Version 7.0 - Real Hosting + Full Game Support
+Zitex AI Chat Service
+خدمة الشات الذكي لزيتكس
 """
 import os
-import uuid
-import base64
-import logging
 import re
+import uuid
+import json
+import logging
 import asyncio
-import requests
+import base64
+import httpx
 from datetime import datetime, timezone
-from typing import Optional, Dict, Any, Tuple, List
+from typing import Dict, List, Optional, Any, Tuple
 from motor.motor_asyncio import AsyncIOMotorDatabase
-from dotenv import load_dotenv
 
-# Load environment variables
-load_dotenv()
-
+# Configure logging
+logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+# Check for AI features
 AI_FEATURES_ENABLED = True
+EMERGENT_LLM_AVAILABLE = False
+OPENAI_AVAILABLE = False
+ELEVENLABS_AVAILABLE = False
 
-# ============== Object Storage for Real Hosting ==============
-STORAGE_URL = "https://integrations.emergentagent.com/objstore/api/v1/storage"
-EMERGENT_KEY = os.environ.get('EMERGENT_LLM_KEY')
-APP_NAME = "zitex-hosting"
-storage_key = None
-
-def init_storage():
-    """Initialize storage connection - call once at startup"""
-    global storage_key
-    if storage_key:
-        return storage_key
-    try:
-        resp = requests.post(f"{STORAGE_URL}/init", json={"emergent_key": EMERGENT_KEY}, timeout=30)
-        resp.raise_for_status()
-        storage_key = resp.json()["storage_key"]
-        logger.info("Object Storage initialized successfully")
-        return storage_key
-    except Exception as e:
-        logger.error(f"Storage init failed: {e}")
-        return None
-
-def upload_to_storage(path: str, data: bytes, content_type: str) -> Optional[dict]:
-    """Upload file to object storage"""
-    key = init_storage()
-    if not key:
-        return None
-    try:
-        resp = requests.put(
-            f"{STORAGE_URL}/objects/{path}",
-            headers={"X-Storage-Key": key, "Content-Type": content_type},
-            data=data, timeout=120
-        )
-        resp.raise_for_status()
-        return resp.json()
-    except Exception as e:
-        logger.error(f"Upload failed: {e}")
-        return None
-
-def get_from_storage(path: str) -> Optional[Tuple[bytes, str]]:
-    """Download file from storage"""
-    key = init_storage()
-    if not key:
-        return None
-    try:
-        resp = requests.get(
-            f"{STORAGE_URL}/objects/{path}",
-            headers={"X-Storage-Key": key}, timeout=60
-        )
-        resp.raise_for_status()
-        return resp.content, resp.headers.get("Content-Type", "text/html")
-    except Exception as e:
-        logger.error(f"Download failed: {e}")
-        return None
-
-# Try to import emergentintegrations for LLM chat
 try:
-    from emergentintegrations.llm.chat import LlmChat, UserMessage
+    from emergentintegrations.llm.chat import LlmChat
+    from emergentintegrations.llm.chat.models import UserMessage
     EMERGENT_LLM_AVAILABLE = True
+    logger.info("Emergent LLM integration available")
 except ImportError:
-    EMERGENT_LLM_AVAILABLE = False
-    LlmChat = None
-    UserMessage = None
+    logger.warning("Emergent LLM not available")
 
 try:
     import openai
     OPENAI_AVAILABLE = True
 except ImportError:
-    OPENAI_AVAILABLE = False
-    openai = None
+    logger.warning("OpenAI not available")
 
 try:
-    from elevenlabs.client import ElevenLabs
-    from elevenlabs.types import VoiceSettings
+    from elevenlabs import ElevenLabs
     ELEVENLABS_AVAILABLE = True
 except ImportError:
-    ELEVENLABS_AVAILABLE = False
-    ElevenLabs = None
-    VoiceSettings = None
+    logger.warning("ElevenLabs not available")
+
+# Storage configuration
+STORAGE_URL = os.environ.get('STORAGE_URL', 'https://storage.emergentagent.com/api/v1/storage')
+APP_NAME = os.environ.get('APP_NAME', 'zitex')
+EMERGENT_KEY = os.environ.get('EMERGENT_LLM_KEY', '')
+
+# Initialize storage key
+storage_key = EMERGENT_KEY
+
+def init_storage():
+    """Initialize storage with available key"""
+    global storage_key
+    storage_key = EMERGENT_KEY or os.environ.get('OPENAI_API_KEY', '')
+    return bool(storage_key)
+
+def upload_to_storage(path: str, data: bytes, content_type: str = "application/octet-stream") -> bool:
+    """Upload data to object storage"""
+    if not storage_key:
+        logger.warning("No storage key available")
+        return False
+    
+    try:
+        import httpx
+        headers = {
+            "Authorization": f"Bearer {storage_key}",
+            "Content-Type": content_type
+        }
+        
+        with httpx.Client(timeout=60.0) as client:
+            response = client.put(
+                f"{STORAGE_URL}/{path}",
+                content=data,
+                headers=headers
+            )
+            
+            if response.status_code in [200, 201]:
+                logger.info(f"Uploaded to storage: {path}")
+                return True
+            else:
+                logger.error(f"Storage upload failed: {response.status_code}")
+                return False
+    except Exception as e:
+        logger.error(f"Storage upload error: {e}")
+        return False
+
+def get_from_storage(path: str) -> Optional[Tuple[bytes, str]]:
+    """Get data from object storage"""
+    if not storage_key:
+        return None
+    
+    try:
+        import httpx
+        headers = {"Authorization": f"Bearer {storage_key}"}
+        
+        with httpx.Client(timeout=30.0) as client:
+            response = client.get(f"{STORAGE_URL}/{path}", headers=headers)
+            
+            if response.status_code == 200:
+                content_type = response.headers.get("content-type", "application/octet-stream")
+                return response.content, content_type
+            return None
+    except Exception as e:
+        logger.error(f"Storage get error: {e}")
+        return None
+
 
 MASTER_SYSTEM_PROMPT = """أنت "زيتكس" (Zitex) - مهندس ذكاء اصطناعي لبناء المشاريع الرقمية والمحتوى الإبداعي.
 
-## ⚠️ قاعدة ذهبية:
-لا تضع الكود أبداً داخل الرسالة النصية!
-ضع الكود فقط في [CODE_BLOCK] في نهاية ردك.
+## 🎯 مهمتك الأساسية:
+أنت مستشار محترف تساعد العملاء في إنشاء:
+- مواقع ويب احترافية
+- تطبيقات موبايل (Flutter, React Native, Swift, Kotlin)
+- ألعاب 2D و 3D
+- فيديوهات سينمائية ومضحكة وإعلانية (15-60 ثانية)
+- صور وشعارات احترافية
 
-## 🎯 طريقة العمل:
+## 🔄 أسلوب العمل الاستشاري:
+1. **اسأل أولاً** - لا تبدأ مباشرة، افهم احتياجات العميل
+2. **قدم خيارات** - استخدم الأزرار التفاعلية دائماً
+3. **وضح التكلفة** - أخبر العميل بتكلفة كل خدمة قبل البدء
+4. **اطلب الموافقة** - لا تنفذ أي شيء بدون موافقة صريحة
 
-### 1. صيغة الأزرار (إجبارية للخيارات):
+## 📋 صيغة الأزرار التفاعلية:
+استخدم هذه الصيغة دائماً لعرض الخيارات:
 [BUTTONS]
-خيار1|خيار2|خيار3|✏️ غير ذلك
+خيار 1|خيار 2|خيار 3
 [/BUTTONS]
 
-### 2. التحقق من النقاط:
-قبل أي عملية إنشاء، تأكد من رصيد العميل:
-- إذا كان الرصيد غير كافٍ، اطلب منه شحن النقاط
-- أخبره بالتكلفة قبل البدء
-
----
-
-## 🎬 قسم الفيديوهات المتقدم:
-
-عندما يطلب العميل فيديو، اسأله أولاً عن نوع الفيديو:
-
+مثال:
+ما نوع المشروع الذي تريده؟
 [BUTTONS]
-🎬 فيديو سينمائي|😂 فيديو مضحك|📺 فيديو إعلاني/تجاري|✏️ نوع آخر
+🌐 موقع ويب|📱 تطبيق موبايل|🎮 لعبة|🎬 فيديو
 [/BUTTONS]
 
----
+## 💰 جدول الأسعار:
+- رسالة عادية: 1 نقطة
+- موقع ويب: 15 نقطة
+- تطبيق ويب/لوحة تحكم: 20 نقطة
+- لعبة 2D: 15 نقطة
+- لعبة 3D: 25 نقطة
+- صورة عادية: 5 نقاط
+- شعار/لوغو: 10 نقاط
+- تطبيق موبايل (Flutter/React Native): 30 نقطة
+- تطبيق موبايل (Swift/Kotlin): 35 نقطة
 
-### 📹 النوع 1: فيديوهات سينمائية (أفلام قصيرة)
-**الوصف:** أفلام أكشن، دراما، خيال علمي، رعب، رومانسي
+### أسعار الفيديوهات:
+| المدة | سينمائي | مضحك | إعلاني |
+|-------|---------|------|--------|
+| 15 ثانية | 80 نقطة | 50 نقطة | 100 نقطة |
+| 30 ثانية | 150 نقطة | 90 نقطة | 180 نقطة |
+| 45 ثانية | 220 نقطة | 130 نقطة | 260 نقطة |
+| 60 ثانية | 300 نقطة | 170 نقطة | 350 نقطة |
+| مخصص | حسب المدة | حسب المدة | حسب المدة |
 
-**الخطوات:**
-1. **اسأل عن النوع:**
-   - أكشن ومغامرات
-   - دراما عاطفية
-   - خيال علمي/فانتازيا
-   - رعب/إثارة
-   - رومانسي
-
-2. **اسأل عن الفكرة:**
-   - ما القصة التي تريد سردها؟
-   - ما المشاعر التي تريد إيصالها؟
-
-3. **اسأل عن المدة:**
-   [BUTTONS]
-   4 ثواني (30 نقطة)|8 ثواني (60 نقطة)|12 ثانية (100 نقطة)
-   [/BUTTONS]
-
-4. **اكتب السيناريو** بتفصيل:
-   ```
-   📝 السيناريو السينمائي:
-   
-   🎬 المشهد 1 (0-4 ثواني):
-   [وصف تفصيلي للمشهد، الإضاءة، الزاوية، الحركة]
-   
-   🎬 المشهد 2 (4-8 ثواني):
-   [وصف تفصيلي]
-   
-   🎵 الموسيقى المقترحة: [نوع الموسيقى]
-   🎨 الأسلوب البصري: [سينمائي، واقعي، خيالي]
-   ```
-
-5. **عند الموافقة، أرسل:**
-   [VIDEO_GENERATE]
-   type: cinematic
-   duration: [4/8/12]
-   prompt: [وصف تفصيلي جداً للمشهد السينمائي بالإنجليزية]
-   size: 1792x1024
-   [/VIDEO_GENERATE]
-
----
-
-### 😂 النوع 2: فيديوهات مضحكة (كوميدي)
-**الوصف:** محتوى مضحك، ميمز متحركة، مقالب، محاكاة ساخرة
-
-**الخطوات:**
-1. **اسأل عن نوع الكوميديا:**
-   - ميم/موقف مضحك
-   - محاكاة ساخرة
-   - حيوانات مضحكة
-   - مواقف يومية طريفة
-
-2. **اسأل إذا كان لديه فيديو مرجعي:**
-   "هل لديك فيديو مضحك تريد محاكاته؟ صف لي الفيديو أو أعطني الفكرة"
-
-3. **اكتب السيناريو:**
-   ```
-   😂 سيناريو الفيديو المضحك:
-   
-   🎭 الموقف: [وصف الموقف الكوميدي]
-   👤 الشخصيات: [من في المشهد]
-   ⚡ نقطة الذروة: [اللحظة المضحكة]
-   🔊 الصوت: [تعليق صوتي مضحك أو موسيقى]
-   ```
-
-4. **عند الموافقة:**
-   [VIDEO_GENERATE]
-   type: funny
-   duration: [4/8]
-   prompt: [وصف المشهد الكوميدي بالتفصيل بالإنجليزية]
-   size: 1024x1792
-   [/VIDEO_GENERATE]
-
----
-
-### 📺 النوع 3: فيديوهات إعلانية/تجارية (الأهم!)
-**الوصف:** إعلانات منتجات، حملات تسويقية، فيديوهات ترويجية
-
-**الخطوات التفصيلية:**
-
-**الخطوة 1 - جمع معلومات المنتج/الشركة:**
-```
-📋 أسئلة إجبارية:
-1. ما اسم الشركة/المنتج؟
-2. ما الخدمة أو المنتج الذي تروج له؟
-3. ما الرسالة الإعلانية الرئيسية؟
-4. من الجمهور المستهدف؟ (عمر، اهتمامات)
-5. هل لديك شعار (لوغو)؟ [نعم/لا]
-6. ما هي ألوان العلامة التجارية؟
-```
-
-**الخطوة 2 - اسأل عن المدة:**
-```
-ما المدة المطلوبة للإعلان؟
-
-[BUTTONS]
-4 ثواني (إعلان سريع)|8 ثواني (إعلان متوسط)|12 ثانية (إعلان كامل)
-[/BUTTONS]
-```
-
-**الخطوة 3 - اكتب السيناريو التفصيلي:**
-```
-📺 السيناريو الإعلاني المقترح:
-
-🎬 المشهد 1 (0-4 ث): جذب الانتباه
-- [وصف المشهد الافتتاحي]
-- النص: "[نص التعليق الصوتي]"
-
-🎬 المشهد 2 (4-8 ث): عرض المنتج
-- [وصف عرض المنتج/الخدمة]
-- النص: "[نص التعليق الصوتي]"
-
-🎬 المشهد 3 (8-12 ث): الدعوة للعمل
-- [وصف الختام والشعار]
-- النص: "[نص التعليق الصوتي]"
-
-🎙️ التعليق الصوتي الكامل:
-"[النص الكامل للتعليق الصوتي]"
-
-🎵 الموسيقى: [نوع الموسيقى المقترحة]
-🎨 الأسلوب: [احترافي/حيوي/فاخر]
-
-[BUTTONS]
-✅ موافق على السيناريو|✏️ عدّل السيناريو|🔊 اسمع التعليق الصوتي
-[/BUTTONS]
-```
-
-**الخطوة 4 - إذا طلب سماع التعليق الصوتي:**
-[VOICE_PREVIEW]
-text: [نص التعليق الصوتي]
-voice: [اختر صوت مناسب: onyx للذكور، nova للإناث]
-[/VOICE_PREVIEW]
-
-**الخطوة 5 - إذا طلب صور تجريبية:**
-[IMAGE_PREVIEW]
-scene_1: [وصف المشهد الأول بالإنجليزية]
-scene_2: [وصف المشهد الثاني بالإنجليزية]
-[/IMAGE_PREVIEW]
-
-**الخطوة 6 - عرض التكلفة النهائية:**
-```
-💰 تفاصيل التكلفة:
-━━━━━━━━━━━━━━━━━━━━━━
-| الخدمة | التكلفة |
-|--------|---------|
-| إنشاء الفيديو ([X] ثواني) | [X] نقطة |
-| التعليق الصوتي | 10 نقاط |
-| صور تجريبية ([X] صور) | [X] نقطة |
-━━━━━━━━━━━━━━━━━━━━━━
-الإجمالي: [X] نقطة
-رصيدك الحالي: [X] نقطة
-
-[BUTTONS]
-✅ موافق، ابدأ الإنشاء|📝 عدّل السيناريو|❌ إلغاء
-[/BUTTONS]
-```
-
-**الخطوة 7 - عند الموافقة النهائية:**
-[VIDEO_GENERATE]
-type: advertising
-duration: [4/8/12]
-prompt: [وصف تفصيلي جداً للإعلان بالإنجليزية، يشمل المنتج والعلامة التجارية]
-voice_text: [نص التعليق الصوتي]
-voice: [الصوت المختار]
-size: 1280x720
-[/VIDEO_GENERATE]
-
----
-
-## 💰 جدول تكاليف الفيديوهات:
-
-| نوع الفيديو | 4 ثواني | 8 ثواني | 12 ثانية |
-|-------------|---------|---------|----------|
-| سينمائي | 50 نقطة | 80 نقطة | 120 نقطة |
-| مضحك | 30 نقطة | 50 نقطة | 70 نقطة |
-| إعلاني | 60 نقطة | 100 نقطة | 150 نقطة |
-| + تعليق صوتي | +10 نقاط |
-| + صور تجريبية | +5 نقاط/صورة |
-
----
-
-## 🖼️ قسم الصور:
-
-### أنواع الصور:
-
-**1. تصميم شعار (لوغو):**
-خطوات:
-1. اسأل عن اسم الشركة/العلامة التجارية
-2. اسأل عن المجال (تقنية، طعام، أزياء...)
-3. اسأل عن الألوان المفضلة
-4. اسأل عن النمط (بسيط، حديث، كلاسيكي)
-5. اقترح 3 أفكار بالوصف
-6. بعد الموافقة:
-   [IMAGE_GENERATE]
-   type: logo
-   prompt: [وصف الشعار بالتفصيل بالإنجليزية]
-   [/IMAGE_GENERATE]
-
-التكلفة: 10 نقاط
-
-**2. صور منتجات:**
-[IMAGE_GENERATE]
-type: product
-prompt: [وصف صورة المنتج]
-[/IMAGE_GENERATE]
-
-التكلفة: 5 نقاط
-
-**3. صور متعددة:**
-[IMAGES_GENERATE]
-count: [عدد الصور]
-prompts:
-- [وصف الصورة 1]
-- [وصف الصورة 2]
-[/IMAGES_GENERATE]
-
-التكلفة: 4 نقاط × عدد الصور
-"""
+- تعليق صوتي: 10 نقاط
+- نشر المشروع: 100 نقطة
 
 ## ⚠️ قواعد صارمة:
 
@@ -358,12 +166,45 @@ prompts:
 2. **أظهر التكلفة الكاملة** قبل البدء
 3. **اطلب موافقة صريحة** قبل خصم النقاط
 4. **إذا كان الرصيد غير كافٍ:**
-   "⚠️ رصيدك الحالي (X نقطة) غير كافٍ.
+   أرسل هذه الرسالة:
+   ⚠️ رصيدك الحالي (X نقطة) غير كافٍ.
    المطلوب: X نقطة
    [BUTTONS]
    💰 شحن النقاط|🔙 رجوع
-   [/BUTTONS]"
+   [/BUTTONS]
 5. **لا تولد فيديو أبداً بدون موافقة على السيناريو والتكلفة**
+
+## 🎬 قسم الفيديوهات:
+
+### عند طلب فيديو، اسأل أولاً عن النوع:
+[BUTTONS]
+🎬 فيديو سينمائي|😂 فيديو مضحك|📺 فيديو إعلاني|✏️ نوع آخر
+[/BUTTONS]
+
+### ثم اسأل عن المدة:
+[BUTTONS]
+⏱️ 15 ثانية|⏱️ 30 ثانية|⏱️ 45 ثانية|⏱️ 60 ثانية (دقيقة)|✏️ مدة مخصصة
+[/BUTTONS]
+
+### خطوات إنشاء الفيديو:
+1. اسأل عن نوع الفيديو
+2. اسأل عن المدة المطلوبة
+3. اسأل عن الفكرة أو السيناريو
+4. اقترح سيناريو مفصل للمشاهد
+5. اسأل إذا يريد تعليق صوتي
+6. أظهر التكلفة الإجمالية
+7. اطلب الموافقة قبل البدء
+8. عند الموافقة، استخدم أمر توليد الفيديو
+
+### أمر توليد الفيديو:
+[VIDEO_GENERATE]
+type: cinematic/funny/advertising
+duration: 15/30/45/60
+prompt: وصف تفصيلي للمشهد بالإنجليزية
+voice_text: نص التعليق الصوتي (اختياري)
+voice: alloy/echo/fable/onyx/nova/shimmer
+size: 1920x1080
+[/VIDEO_GENERATE]
 
 ## 🎨 الأصوات المتاحة للتعليق الصوتي:
 - alloy (أنثوي محايد) - مناسب للإعلانات العامة
@@ -376,17 +217,12 @@ prompts:
 ## 🎮 مكتبات الألعاب:
 - Phaser 3, Three.js, Babylon.js, PixiJS, Matter.js, Howler.js, GSAP
 
----
-
-## 📱 قسم تطبيقات الموبايل (جديد!):
+## 📱 قسم تطبيقات الموبايل:
 
 ### عند طلب تطبيق موبايل، اسأل أولاً:
-
 [BUTTONS]
 📱 iOS (iPhone/iPad)|🤖 Android|📲 كلاهما (iOS + Android)
 [/BUTTONS]
-
----
 
 ### 🔧 أنواع البرمجة المتاحة:
 
@@ -412,40 +248,27 @@ prompts:
 - تصميم Material Design
 - التكلفة: 35 نقطة
 
----
-
 ### 📋 خطوات إنشاء التطبيق:
 
 **الخطوة 1 - اختيار المنصة:**
-```
 ما المنصة المستهدفة لتطبيقك؟
-
 [BUTTONS]
 📱 iOS فقط|🤖 Android فقط|📲 كلاهما
 [/BUTTONS]
-```
 
 **الخطوة 2 - اختيار نوع البرمجة:**
-إذا اختار كلاهما أو iOS:
-```
 ما نوع البرمجة المفضل؟
-
 [BUTTONS]
 🎯 Flutter (موصى به)|⚛️ React Native|🍎 Swift (iOS فقط)|📝 Kotlin (Android فقط)
 [/BUTTONS]
-```
 
 **الخطوة 3 - نوع التطبيق:**
-```
 ما نوع التطبيق الذي تريده؟
-
 [BUTTONS]
 🛒 تطبيق تجارة|📋 تطبيق خدمات|💬 تطبيق تواصل|📰 تطبيق أخبار/محتوى|🎮 لعبة موبايل|✏️ نوع آخر
 [/BUTTONS]
-```
 
 **الخطوة 4 - جمع المتطلبات:**
-```
 📋 أخبرني عن تطبيقك:
 1. ما اسم التطبيق؟
 2. ما وظيفته الرئيسية؟
@@ -453,10 +276,8 @@ prompts:
 4. هل يحتاج تسجيل دخول؟
 5. ما الألوان والهوية البصرية؟
 6. هل تحتاج قاعدة بيانات/Backend؟
-```
 
 **الخطوة 5 - عرض التكلفة والبدء:**
-```
 💰 ملخص المشروع:
 ━━━━━━━━━━━━━━━━━━━━━━
 📱 التطبيق: [اسم التطبيق]
@@ -469,135 +290,9 @@ prompts:
 [BUTTONS]
 ✅ ابدأ البناء|📝 تعديل المتطلبات|❌ إلغاء
 [/BUTTONS]
-```
-
-**الخطوة 6 - البناء:**
-عند الموافقة، ابدأ بإنشاء الكود:
-
-للـ Flutter:
-[CODE_BLOCK]
-```dart
-// main.dart - Flutter App
-import 'package:flutter/material.dart';
-// ... الكود الكامل
-```
-[/CODE_BLOCK]
-
-للـ React Native:
-[CODE_BLOCK]
-```javascript
-// App.js - React Native App
-import React from 'react';
-import { View, Text, StyleSheet } from 'react-native';
-// ... الكود الكامل
-```
-[/CODE_BLOCK]
-
-للـ Swift:
-[CODE_BLOCK]
-```swift
-// ContentView.swift - SwiftUI App
-import SwiftUI
-// ... الكود الكامل
-```
-[/CODE_BLOCK]
-
-للـ Kotlin:
-[CODE_BLOCK]
-```kotlin
-// MainActivity.kt - Android App
-package com.example.app
-import android.os.Bundle
-import androidx.appcompat.app.AppCompatActivity
-// ... الكود الكامل
-```
-[/CODE_BLOCK]
-
----
-
-### 📁 هيكل ملفات التطبيق:
-
-**Flutter:**
-```
-lib/
-├── main.dart
-├── screens/
-│   ├── home_screen.dart
-│   ├── login_screen.dart
-│   └── profile_screen.dart
-├── widgets/
-├── models/
-└── services/
-pubspec.yaml
-```
-
-**React Native:**
-```
-src/
-├── App.js
-├── screens/
-│   ├── HomeScreen.js
-│   ├── LoginScreen.js
-│   └── ProfileScreen.js
-├── components/
-├── navigation/
-└── services/
-package.json
-```
-
-**Swift:**
-```
-App/
-├── AppName.swift (Entry)
-├── Views/
-│   ├── ContentView.swift
-│   ├── HomeView.swift
-│   └── LoginView.swift
-├── Models/
-└── Services/
-```
-
-**Kotlin:**
-```
-app/src/main/
-├── java/com/app/
-│   ├── MainActivity.kt
-│   ├── ui/
-│   │   ├── HomeFragment.kt
-│   │   └── LoginFragment.kt
-│   └── data/
-├── res/
-│   ├── layout/
-│   └── values/
-└── AndroidManifest.xml
-```
-
----
-
-### ⚠️ قواعد تطبيقات الموبايل:
-
-1. **أنشئ الكود الكامل** - لا تترك TODO أو placeholders
-2. **أضف التعليقات** بالعربية والإنجليزية
-3. **صمم واجهة جميلة** مع Animations
-4. **استخدم أفضل الممارسات** لكل منصة
-5. **قدم تعليمات التشغيل** بالتفصيل
-
----
-
-## 💰 جدول تكاليف تطبيقات الموبايل:
-
-|| التقنية | المنصة | التكلفة |
-||---------|--------|---------|
-|| Flutter | iOS + Android | 30 نقطة |
-|| React Native | iOS + Android | 30 نقطة |
-|| Swift | iOS فقط | 35 نقطة |
-|| Kotlin | Android فقط | 35 نقطة |
-|| + تصميم UI متقدم | - | +15 نقطة |
-|| + Backend/API | - | +20 نقطة |
 
 اجعل كل تفاعل احترافياً ومنظماً!
 """
-
 
 WELCOME_MESSAGE = """## 👋 مرحباً بك في زيتكس!
 
@@ -609,6 +304,7 @@ WELCOME_MESSAGE = """## 👋 مرحباً بك في زيتكس!
 [BUTTONS]
 🌐 موقع ويب|📱 تطبيق موبايل|🎮 لعبة|🎬 فيديو|🖼️ صورة/لوغو|✏️ فكرة أخرى
 [/BUTTONS]"""
+
 
 ZITEX_BADGE = '''<!-- Zitex Badge -->
 <div id="zitex-badge" style="position:fixed;bottom:20px;right:20px;background:linear-gradient(135deg,#1a1a2e,#16213e);padding:10px 20px;border-radius:25px;box-shadow:0 4px 15px rgba(0,0,0,0.3);z-index:9999;display:flex;align-items:center;gap:10px;cursor:pointer;border:1px solid rgba(255,215,0,0.3);" onclick="window.open('https://zitex.vercel.app','_blank')">
@@ -626,7 +322,7 @@ SERVICE_COSTS = {
     "game_3d": 25,
     "image": 5,
     "image_logo": 10,
-    "image_preview": 5,         # صور تجريبية للمشاهد
+    "image_preview": 5,
     "image_multiple": 15,
     # تطبيقات الموبايل
     "mobile_flutter": 30,
@@ -635,21 +331,24 @@ SERVICE_COSTS = {
     "mobile_kotlin": 35,
     "mobile_ui_advanced": 15,
     "mobile_backend": 20,
-    # فيديوهات سينمائية
-    "video_cinematic_4": 50,
-    "video_cinematic_8": 80,
-    "video_cinematic_12": 120,
+    # فيديوهات سينمائية (المدد الجديدة)
+    "video_cinematic_15": 80,
+    "video_cinematic_30": 150,
+    "video_cinematic_45": 220,
+    "video_cinematic_60": 300,
     # فيديوهات مضحكة
-    "video_funny_4": 30,
-    "video_funny_8": 50,
-    "video_funny_12": 70,
+    "video_funny_15": 50,
+    "video_funny_30": 90,
+    "video_funny_45": 130,
+    "video_funny_60": 170,
     # فيديوهات إعلانية
-    "video_advertising_4": 60,
-    "video_advertising_8": 100,
-    "video_advertising_12": 150,
+    "video_advertising_15": 100,
+    "video_advertising_30": 180,
+    "video_advertising_45": 260,
+    "video_advertising_60": 350,
     # إضافات
-    "voice_over": 10,           # تعليق صوتي
-    "voice_preview": 5,         # معاينة صوتية
+    "voice_over": 10,
+    "voice_preview": 5,
     "modification": 5,
     "export": 50,
     "deploy": 100,
@@ -663,25 +362,33 @@ VIDEO_CATEGORIES = {
         "name": "مقاطع قصيرة",
         "name_en": "Short Clips",
         "description": "ريلز، تيك توك، ستوري",
-        "durations": [4, 8],
-        "sizes": ["1024x1792", "1080x1920"],  # Portrait
-        "cost_base": 30
+        "durations": [15, 30],
+        "sizes": ["1080x1920", "1024x1792"],
+        "cost_base": 50
     },
     "cinematic": {
         "name": "فيديوهات سينمائية",
         "name_en": "Cinematic Videos",
         "description": "أفلام قصيرة، مشاهد درامية",
-        "durations": [8, 12],
-        "sizes": ["1792x1024", "1280x720"],  # Widescreen
-        "cost_base": 100
+        "durations": [15, 30, 45, 60],
+        "sizes": ["1920x1080", "1792x1024"],
+        "cost_base": 80
     },
     "advertising": {
         "name": "فيديوهات إعلانية",
         "name_en": "Advertising Videos",
         "description": "حملات إعلانية، ترويج منتجات",
-        "durations": [4, 8, 12],
-        "sizes": ["1280x720", "1024x1024", "1024x1792"],
-        "cost_base": 150
+        "durations": [15, 30, 45, 60],
+        "sizes": ["1920x1080", "1080x1080", "1080x1920"],
+        "cost_base": 100
+    },
+    "funny": {
+        "name": "فيديوهات مضحكة",
+        "name_en": "Funny Videos",
+        "description": "محتوى ترفيهي وكوميدي",
+        "durations": [15, 30, 45, 60],
+        "sizes": ["1920x1080", "1080x1920"],
+        "cost_base": 50
     }
 }
 
@@ -788,7 +495,6 @@ DEFAULT_TEMPLATES = [
         "cost": 35,
         "tags": ["game", "3d", "racing", "threejs"]
     },
-    # قوالب تطبيقات الموبايل
     {
         "id": "mobile-flutter-ecommerce",
         "name": "تطبيق متجر Flutter",
@@ -810,28 +516,6 @@ DEFAULT_TEMPLATES = [
         "cost": 30,
         "tags": ["mobile", "react-native", "social", "ios", "android"],
         "tech": "react_native"
-    },
-    {
-        "id": "mobile-swift-fitness",
-        "name": "تطبيق لياقة Swift",
-        "category": "mobile",
-        "preview_image": "/api/templates/preview/mobile-swift-fitness",
-        "description": "تطبيق لياقة وصحة لـ iOS بتقنية Swift",
-        "is_premium": True,
-        "cost": 35,
-        "tags": ["mobile", "swift", "fitness", "ios"],
-        "tech": "swift"
-    },
-    {
-        "id": "mobile-kotlin-news",
-        "name": "تطبيق أخبار Kotlin",
-        "category": "mobile",
-        "preview_image": "/api/templates/preview/mobile-kotlin-news",
-        "description": "تطبيق أخبار لـ Android بتقنية Kotlin",
-        "is_premium": True,
-        "cost": 35,
-        "tags": ["mobile", "kotlin", "news", "android"],
-        "tech": "kotlin"
     }
 ]
 
@@ -1041,7 +725,7 @@ class AIAssistant:
             }
         )
         return result.modified_count > 0
-    
+
     async def process_message(self, session_id: str, user_id: str, message: str, settings: Dict[str, Any] = None) -> Dict:
         settings = settings or {}
         
@@ -1105,7 +789,7 @@ class AIAssistant:
         # Check if response has buttons
         if "[BUTTONS]" in ai_response:
             has_buttons = True
-
+        
         assistant_msg = {
             "id": str(uuid.uuid4()),
             "role": "assistant",
@@ -1200,7 +884,7 @@ class AIAssistant:
         except Exception as e:
             logger.error(f"Image error: {e}")
             return "❌ خطأ في توليد الصورة", [], 0
-    
+
     async def _process_ai_commands(self, ai_response: str, user_id: str, session_id: str, available_credits: int) -> Tuple[str, List[Dict], int]:
         """معالجة الأوامر الخاصة في رد الذكاء الاصطناعي"""
         attachments = []
@@ -1226,11 +910,11 @@ class AIAssistant:
             prompt = video_match.group(3).strip()
             voice_text = video_match.group(4).strip() if video_match.group(4) else None
             voice = video_match.group(5).strip() if video_match.group(5) else "onyx"
-            size = video_match.group(6).strip() if video_match.group(6) else "1280x720"
+            size = video_match.group(6).strip() if video_match.group(6) else "1920x1080"
             
-            # حساب التكلفة
+            # حساب التكلفة بناءً على المدد الجديدة
             cost_key = f"video_{video_type}_{duration}"
-            video_cost = SERVICE_COSTS.get(cost_key, 60)
+            video_cost = SERVICE_COSTS.get(cost_key, 80)
             voice_cost = SERVICE_COSTS.get("voice_over", 10) if voice_text else 0
             total_video_cost = video_cost + voice_cost
             
@@ -1267,7 +951,7 @@ class AIAssistant:
 ## ✅ تم إنشاء الفيديو بنجاح!
 
 🎬 النوع: {video_type}
-⏱️ المدة: {duration} ثواني
+⏱️ المدة: {duration} ثانية
 💰 التكلفة: {total_video_cost} نقطة
 
 [BUTTONS]
@@ -1333,7 +1017,7 @@ class AIAssistant:
             r'\[IMAGE_PREVIEW\]\s*([\s\S]*?)\[/IMAGE_PREVIEW\]',
             ai_response, re.IGNORECASE
         )
-
+        
         if image_preview_match:
             scenes_text = image_preview_match.group(1).strip()
             scenes = re.findall(r'scene_\d+:\s*(.+)', scenes_text)
@@ -1407,7 +1091,7 @@ class AIAssistant:
                     )
         
         return processed_response, attachments, total_credits
-    
+
     async def _generate_video(self, user_id: str, session_id: str, prompt: str, duration: int, size: str, video_type: str) -> Optional[Dict]:
         """توليد فيديو باستخدام Sora 2"""
         try:
@@ -1415,15 +1099,15 @@ class AIAssistant:
             
             video_gen = OpenAIVideoGeneration(api_key=self.emergent_key)
             
-            # Ensure duration is valid (4, 8, or 12)
-            valid_durations = [4, 8, 12]
+            # المدد المدعومة الجديدة (15, 30, 45, 60 ثانية)
+            valid_durations = [15, 30, 45, 60]
             if duration not in valid_durations:
                 duration = min(valid_durations, key=lambda x: abs(x - duration))
             
             # Ensure size is valid
-            valid_sizes = ["1280x720", "1792x1024", "1024x1792", "1024x1024"]
+            valid_sizes = ["1920x1080", "1080x1920", "1080x1080", "1792x1024", "1024x1792"]
             if size not in valid_sizes:
-                size = "1280x720"
+                size = "1920x1080"
             
             logger.info(f"Generating video: type={video_type}, duration={duration}, size={size}")
             
@@ -1432,7 +1116,7 @@ class AIAssistant:
                 model="sora-2",
                 size=size,
                 duration=duration,
-                max_wait_time=600
+                max_wait_time=900  # 15 دقيقة للفيديوهات الطويلة
             )
             
             if video_bytes:
@@ -1570,9 +1254,9 @@ class AIAssistant:
         except Exception as e:
             logger.error(f"GPT error: {e}")
             return f"❌ خطأ في المعالجة: {str(e)}", 0, False
-
+    
     def _generate_title(self, message: str, request_type: str) -> str:
-        icons = {"image": "🎨", "video": "🎬", "website": "🌐", "game": "🎮", "webapp": "💻", "pwa": "📱"}
+        icons = {"image": "🎨", "video": "🎬", "website": "🌐", "game": "🎮", "webapp": "💻", "pwa": "📱", "mobile": "📱"}
         prefix = icons.get(request_type, "💬")
         title = message[:25].strip()
         if len(message) > 25:
@@ -1598,7 +1282,7 @@ class AIAssistant:
         if session_id:
             query["session_id"] = session_id
         return await self.db.video_requests.find(query, {"_id": 0}).sort("created_at", -1).to_list(50)
-    
+
     async def generate_tts(self, text: str, provider: str = "openai", voice: str = "alloy", speed: float = 1.0) -> Optional[str]:
         """توليد صوت من النص باستخدام OpenAI TTS"""
         if not text or len(text.strip()) == 0:
@@ -1608,7 +1292,6 @@ class AIAssistant:
         text = text[:4000]
         
         # Remove buttons and code blocks from text
-        import re
         text = re.sub(r'\[BUTTONS\][\s\S]*?\[/BUTTONS\]', '', text)
         text = re.sub(r'\[CODE_BLOCK\][\s\S]*?\[/CODE_BLOCK\]', '', text)
         text = re.sub(r'```[\s\S]*?```', '', text)
@@ -1758,7 +1441,7 @@ class AIAssistant:
             "template_name": template["name"],
             "cost": cost
         }
-    
+
     def _get_default_template_code(self, template_id: str) -> str:
         """كود القوالب الافتراضية"""
         templates_code = {
@@ -1794,7 +1477,6 @@ class AIAssistant:
     </section>
 </body>
 </html>''',
-
             "ecommerce-gold": '''<!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
@@ -1806,7 +1488,7 @@ class AIAssistant:
 <body class="bg-[#0a0a12] text-white min-h-screen">
     <nav class="bg-black/80 backdrop-blur border-b border-amber-500/20 sticky top-0 z-50">
         <div class="max-w-6xl mx-auto px-6 py-4 flex justify-between items-center">
-            <h1 class="text-2xl font-bold text-amber-400">🛒 المتجر</h1>
+            <h1 class="text-2xl font-bold text-amber-400">المتجر</h1>
             <div class="flex items-center gap-4">
                 <input type="text" placeholder="ابحث..." class="bg-slate-800 border border-slate-700 rounded-lg px-4 py-2 text-sm">
                 <button class="relative p-2">🛍️<span class="absolute -top-1 -right-1 bg-amber-500 text-black text-xs w-5 h-5 rounded-full flex items-center justify-center">3</span></button>
@@ -1897,6 +1579,7 @@ class AIAssistant:
     </main>
 </body>
 </html>''',
+
             "game-2d-platformer": '''<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -1978,7 +1661,6 @@ class AIAssistant:
     </script>
 </body>
 </html>''',
-
             "game-3d-racing": '''<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -1996,7 +1678,7 @@ class AIAssistant:
 <body>
     <div id="ui">
         <div>Speed: <span id="speed">0</span> km/h</div>
-        <div style="margin-top:10px;font-size:14px;">↑↓ Accelerate/Brake | ←→ Steer</div>
+        <div style="margin-top:10px;font-size:14px;">Use Arrow Keys to Drive</div>
     </div>
     <script>
         const scene = new THREE.Scene();
@@ -2008,14 +1690,12 @@ class AIAssistant:
         renderer.setSize(window.innerWidth, window.innerHeight);
         document.body.appendChild(renderer.domElement);
         
-        // Lights
         const ambient = new THREE.AmbientLight(0x404040, 2);
         scene.add(ambient);
         const directional = new THREE.DirectionalLight(0xffffff, 1);
         directional.position.set(50, 50, 50);
         scene.add(directional);
         
-        // Road
         const roadGeo = new THREE.PlaneGeometry(20, 1000);
         const roadMat = new THREE.MeshStandardMaterial({ color: 0x333333 });
         const road = new THREE.Mesh(roadGeo, roadMat);
@@ -2023,14 +1703,12 @@ class AIAssistant:
         road.position.z = -450;
         scene.add(road);
         
-        // Car (simple box for now)
         const carGeo = new THREE.BoxGeometry(2, 1, 4);
         const carMat = new THREE.MeshStandardMaterial({ color: 0xffd700 });
         const car = new THREE.Mesh(carGeo, carMat);
         car.position.y = 0.5;
         scene.add(car);
         
-        // Trees
         for (let i = 0; i < 50; i++) {
             const treeGeo = new THREE.ConeGeometry(2, 8, 8);
             const treeMat = new THREE.MeshStandardMaterial({ color: 0x228b22 });
@@ -2073,10 +1751,8 @@ class AIAssistant:
     </script>
 </body>
 </html>''',
-            # Mobile App Templates (Code Examples)
-            "mobile-flutter-ecommerce": '''// Flutter E-Commerce App Template
-// pubspec.yaml dependencies needed:
-// flutter, cupertino_icons, provider, http, cached_network_image
+            "mobile-flutter-ecommerce": '''// Flutter E-Commerce App
+// Run: flutter create my_app && cd my_app && flutter run
 
 import 'package:flutter/material.dart';
 
@@ -2093,10 +1769,6 @@ class MyApp extends StatelessWidget {
       theme: ThemeData(
         primarySwatch: Colors.amber,
         scaffoldBackgroundColor: const Color(0xFF0a0a12),
-        appBarTheme: const AppBarTheme(
-          backgroundColor: Color(0xFF0d0d18),
-          foregroundColor: Colors.amber,
-        ),
       ),
       home: const HomeScreen(),
     );
@@ -2110,115 +1782,58 @@ class HomeScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('🛒 المتجر'),
-        actions: [
-          IconButton(icon: const Icon(Icons.shopping_cart), onPressed: () {}),
-        ],
+        title: const Text('المتجر'),
+        backgroundColor: const Color(0xFF0d0d18),
       ),
       body: GridView.builder(
         padding: const EdgeInsets.all(16),
         gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
           crossAxisCount: 2,
           childAspectRatio: 0.75,
-          crossAxisSpacing: 16,
-          mainAxisSpacing: 16,
         ),
         itemCount: 10,
-        itemBuilder: (context, index) => ProductCard(index: index),
-      ),
-    );
-  }
-}
-
-class ProductCard extends StatelessWidget {
-  final int index;
-  const ProductCard({super.key, required this.index});
-  
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      decoration: BoxDecoration(
-        color: const Color(0xFF16213e),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.amber.withOpacity(0.3)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Expanded(
-            child: Container(
-              decoration: BoxDecoration(
-                color: Colors.amber.withOpacity(0.1),
-                borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
+        itemBuilder: (context, index) => Card(
+          color: const Color(0xFF16213e),
+          child: Column(
+            children: [
+              Expanded(child: Icon(Icons.shopping_bag, size: 64, color: Colors.amber)),
+              Padding(
+                padding: const EdgeInsets.all(8),
+                child: Text('منتج ${index + 1}', style: const TextStyle(color: Colors.white)),
               ),
-              child: const Center(child: Icon(Icons.shopping_bag, size: 64, color: Colors.amber)),
-            ),
+            ],
           ),
-          Padding(
-            padding: const EdgeInsets.all(12),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text('منتج ${index + 1}', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-                const SizedBox(height: 4),
-                const Text('199 ر.س', style: TextStyle(color: Colors.amber, fontSize: 16)),
-              ],
-            ),
-          ),
-        ],
+        ),
       ),
     );
   }
 }''',
-            "mobile-react-native-social": '''// React Native Social App Template
-// Required packages: react-navigation, react-native-vector-icons
+            "mobile-react-native-social": '''// React Native Social App
+// Run: npx react-native init MyApp && cd MyApp && npx react-native run-android
 
-import React, { useState } from 'react';
-import {
-  View, Text, StyleSheet, FlatList, Image,
-  TouchableOpacity, TextInput, SafeAreaView
-} from 'react-native';
+import React from 'react';
+import { View, Text, FlatList, StyleSheet, SafeAreaView } from 'react-native';
 
 const App = () => {
-  const [posts, setPosts] = useState([
-    { id: '1', user: 'أحمد', content: 'مرحباً بالجميع! 👋', likes: 24, comments: 5 },
-    { id: '2', user: 'سارة', content: 'يوم جميل ☀️', likes: 18, comments: 3 },
-    { id: '3', user: 'محمد', content: 'شاركوني آراءكم 💭', likes: 32, comments: 12 },
-  ]);
-
-  const PostCard = ({ item }) => (
-    <View style={styles.postCard}>
-      <View style={styles.postHeader}>
-        <View style={styles.avatar}>
-          <Text style={styles.avatarText}>{item.user[0]}</Text>
-        </View>
-        <Text style={styles.userName}>{item.user}</Text>
-      </View>
-      <Text style={styles.postContent}>{item.content}</Text>
-      <View style={styles.postActions}>
-        <TouchableOpacity style={styles.actionBtn}>
-          <Text style={styles.actionText}>❤️ {item.likes}</Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.actionBtn}>
-          <Text style={styles.actionText}>💬 {item.comments}</Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.actionBtn}>
-          <Text style={styles.actionText}>🔄 مشاركة</Text>
-        </TouchableOpacity>
-      </View>
-    </View>
-  );
+  const posts = [
+    { id: '1', user: 'أحمد', content: 'مرحباً بالجميع!' },
+    { id: '2', user: 'سارة', content: 'يوم جميل' },
+  ];
 
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>🌐 التواصل</Text>
+        <Text style={styles.title}>التواصل</Text>
       </View>
       <FlatList
         data={posts}
-        renderItem={({ item }) => <PostCard item={item} />}
         keyExtractor={item => item.id}
-        contentContainerStyle={styles.feed}
+        renderItem={({ item }) => (
+          <View style={styles.post}>
+            <Text style={styles.user}>{item.user}</Text>
+            <Text style={styles.content}>{item.content}</Text>
+          </View>
+        )}
       />
     </SafeAreaView>
   );
@@ -2226,291 +1841,21 @@ const App = () => {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#0a0a12' },
-  header: { padding: 16, backgroundColor: '#0d0d18', borderBottomWidth: 1, borderBottomColor: '#ffd70033' },
-  headerTitle: { fontSize: 24, fontWeight: 'bold', color: '#ffd700' },
-  feed: { padding: 16 },
-  postCard: { backgroundColor: '#16213e', borderRadius: 16, padding: 16, marginBottom: 16, borderWidth: 1, borderColor: '#ffd70033' },
-  postHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 12 },
-  avatar: { width: 40, height: 40, borderRadius: 20, backgroundColor: '#ffd700', justifyContent: 'center', alignItems: 'center', marginRight: 12 },
-  avatarText: { color: '#000', fontWeight: 'bold', fontSize: 18 },
-  userName: { color: '#fff', fontWeight: 'bold', fontSize: 16 },
-  postContent: { color: '#ccc', fontSize: 16, lineHeight: 24, marginBottom: 12 },
-  postActions: { flexDirection: 'row', justifyContent: 'space-around', borderTopWidth: 1, borderTopColor: '#ffffff22', paddingTop: 12 },
-  actionBtn: { padding: 8 },
-  actionText: { color: '#ffd700', fontSize: 14 },
+  header: { padding: 16, backgroundColor: '#0d0d18' },
+  title: { fontSize: 24, fontWeight: 'bold', color: '#ffd700' },
+  post: { margin: 16, padding: 16, backgroundColor: '#16213e', borderRadius: 12 },
+  user: { color: '#ffd700', fontWeight: 'bold' },
+  content: { color: '#ccc', marginTop: 8 },
 });
 
-export default App;''',
-
-            "mobile-swift-fitness": '''// Swift Fitness App Template
-// SwiftUI - iOS 15+
-
-import SwiftUI
-
-@main
-struct FitnessApp: App {
-    var body: some Scene {
-        WindowGroup {
-            ContentView()
-        }
-    }
-}
-
-struct ContentView: View {
-    @State private var steps: Int = 8432
-    @State private var calories: Int = 420
-    @State private var distance: Double = 5.2
-    
-    var body: some View {
-        NavigationView {
-            ScrollView {
-                VStack(spacing: 20) {
-                    // Stats Cards
-                    HStack(spacing: 16) {
-                        StatCard(title: "خطوات", value: "\\(steps)", icon: "figure.walk", color: .amber)
-                        StatCard(title: "سعرات", value: "\\(calories)", icon: "flame.fill", color: .orange)
-                    }
-                    
-                    HStack(spacing: 16) {
-                        StatCard(title: "مسافة", value: String(format: "%.1f km", distance), icon: "location.fill", color: .blue)
-                        StatCard(title: "وقت", value: "45 د", icon: "clock.fill", color: .purple)
-                    }
-                    
-                    // Progress Ring
-                    ZStack {
-                        Circle()
-                            .stroke(Color.gray.opacity(0.3), lineWidth: 20)
-                        Circle()
-                            .trim(from: 0, to: 0.7)
-                            .stroke(Color.amber, style: StrokeStyle(lineWidth: 20, lineCap: .round))
-                            .rotationEffect(.degrees(-90))
-                        VStack {
-                            Text("70%")
-                                .font(.system(size: 48, weight: .bold))
-                                .foregroundColor(.amber)
-                            Text("من الهدف اليومي")
-                                .foregroundColor(.gray)
-                        }
-                    }
-                    .frame(width: 200, height: 200)
-                    .padding()
-                    
-                    // Workout Button
-                    Button(action: {}) {
-                        HStack {
-                            Image(systemName: "play.fill")
-                            Text("ابدأ التمرين")
-                                .fontWeight(.bold)
-                        }
-                        .frame(maxWidth: .infinity)
-                        .padding()
-                        .background(Color.amber)
-                        .foregroundColor(.black)
-                        .cornerRadius(16)
-                    }
-                    .padding(.horizontal)
-                }
-                .padding()
-            }
-            .background(Color(hex: "0a0a12"))
-            .navigationTitle("💪 اللياقة")
-            .navigationBarTitleDisplayMode(.large)
-        }
-    }
-}
-
-struct StatCard: View {
-    let title: String
-    let value: String
-    let icon: String
-    let color: Color
-    
-    var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack {
-                Image(systemName: icon)
-                    .foregroundColor(color)
-                Spacer()
-            }
-            Text(value)
-                .font(.title2)
-                .fontWeight(.bold)
-                .foregroundColor(.white)
-            Text(title)
-                .font(.caption)
-                .foregroundColor(.gray)
-        }
-        .padding()
-        .background(Color(hex: "16213e"))
-        .cornerRadius(16)
-    }
-}
-
-extension Color {
-    static let amber = Color(red: 1, green: 0.84, blue: 0)
-    
-    init(hex: String) {
-        let scanner = Scanner(string: hex)
-        var rgbValue: UInt64 = 0
-        scanner.scanHexInt64(&rgbValue)
-        self.init(
-            red: Double((rgbValue & 0xFF0000) >> 16) / 255.0,
-            green: Double((rgbValue & 0x00FF00) >> 8) / 255.0,
-            blue: Double(rgbValue & 0x0000FF) / 255.0
-        )
-    }
-}''',
-            "mobile-kotlin-news": '''// Kotlin News App Template
-// Android - Jetpack Compose
-
-package com.zitex.newsapp
-
-import android.os.Bundle
-import androidx.activity.ComponentActivity
-import androidx.activity.compose.setContent
-import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
-import androidx.compose.ui.Alignment
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
-
-class MainActivity : ComponentActivity() {
-    override fun onCreate(savedInstanceState: Bundle?) {
-        super.onCreate(savedInstanceState)
-        setContent {
-            NewsAppTheme {
-                NewsScreen()
-            }
-        }
-    }
-}
-
-@Composable
-fun NewsAppTheme(content: @Composable () -> Unit) {
-    MaterialTheme(
-        colorScheme = darkColorScheme(
-            primary = Color(0xFFFFD700),
-            background = Color(0xFF0A0A12),
-            surface = Color(0xFF16213E),
-        ),
-        content = content
-    )
-}
-
-data class NewsItem(
-    val id: Int,
-    val title: String,
-    val summary: String,
-    val category: String,
-    val time: String
-)
-
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-fun NewsScreen() {
-    val news = remember {
-        listOf(
-            NewsItem(1, "عاجل: تحديثات جديدة في عالم التقنية", "تعرف على آخر المستجدات في عالم الذكاء الاصطناعي والتطبيقات", "تقنية", "منذ 5 دقائق"),
-            NewsItem(2, "الأسواق المالية تشهد ارتفاعاً ملحوظاً", "مؤشرات إيجابية في البورصات العالمية اليوم", "اقتصاد", "منذ 15 دقيقة"),
-            NewsItem(3, "نتائج مباريات اليوم", "ملخص شامل لأهم المباريات في الدوريات الكبرى", "رياضة", "منذ 30 دقيقة"),
-            NewsItem(4, "اكتشاف علمي جديد", "علماء يتوصلون لاكتشاف مذهل في مجال الطب", "علوم", "منذ ساعة"),
-        )
-    }
-    
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = { 
-                    Text(
-                        "📰 الأخبار",
-                        color = Color(0xFFFFD700),
-                        fontWeight = FontWeight.Bold
-                    )
-                },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = Color(0xFF0D0D18)
-                )
-            )
-        },
-        containerColor = Color(0xFF0A0A12)
-    ) { padding ->
-        LazyColumn(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(padding)
-                .padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
-        ) {
-            items(news) { item ->
-                NewsCard(item)
-            }
-        }
-    }
-}
-
-@Composable
-fun NewsCard(news: NewsItem) {
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(containerColor = Color(0xFF16213E))
-    ) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Surface(
-                    shape = RoundedCornerShape(8.dp),
-                    color = Color(0xFFFFD700).copy(alpha = 0.2f)
-                ) {
-                    Text(
-                        text = news.category,
-                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
-                        color = Color(0xFFFFD700),
-                        fontSize = 12.sp
-                    )
-                }
-                Text(
-                    text = news.time,
-                    color = Color.Gray,
-                    fontSize = 12.sp
-                )
-            }
-            Spacer(modifier = Modifier.height(12.dp))
-            Text(
-                text = news.title,
-                color = Color.White,
-                fontWeight = FontWeight.Bold,
-                fontSize = 18.sp
-            )
-            Spacer(modifier = Modifier.height(8.dp))
-            Text(
-                text = news.summary,
-                color = Color.Gray,
-                fontSize = 14.sp,
-                lineHeight = 20.sp
-            )
-        }
-    }
-}'''
+export default App;'''
         }
         return templates_code.get(template_id, templates_code["landing-dark"])
 
-    # ============== Deployment System with Real Hosting ==============
+    
+    # ============== Deployment System ==============
     async def deploy_project(self, user_id: str, session_id: str, subdomain: str) -> Dict:
-        """نشر المشروع على نطاق فرعي مع استضافة حقيقية"""
-        import re
+        """نشر المشروع على نطاق فرعي"""
         
         # Validate subdomain
         subdomain = subdomain.lower().strip()
@@ -2533,7 +1878,7 @@ fun NewsCard(news: NewsItem) {
         if credits < cost:
             raise ValueError(f"رصيد غير كافٍ. المطلوب: {cost} نقطة")
         
-        # Upload to Object Storage for real hosting
+        # Upload to Object Storage
         storage_path = f"{APP_NAME}/sites/{subdomain}/index.html"
         html_code = session["generated_code"]
         
@@ -2623,7 +1968,7 @@ fun NewsCard(news: NewsItem) {
         """استرجاع مشاريع المستخدم المنشورة"""
         deployments = await self.db.deployments.find(
             {"user_id": user_id, "status": "active"},
-            {"_id": 0, "code": 0}
+            {"_id": 0}
         ).sort("created_at", -1).to_list(50)
         return deployments
     
@@ -2639,6 +1984,113 @@ fun NewsCard(news: NewsItem) {
         result = await self.db.deployments.update_one(
             {"id": deployment_id, "user_id": user_id},
             {"$set": {"status": "deleted"}}
+        )
+        return result.modified_count > 0
+
+    # ============== Export & Social Media ==============
+    async def export_for_social(self, user_id: str, asset_id: str, platform: str) -> Dict:
+        """تصدير الأصول لمنصات التواصل الاجتماعي"""
+        asset = await self.db.generated_assets.find_one(
+            {"id": asset_id, "user_id": user_id},
+            {"_id": 0}
+        )
+        
+        if not asset:
+            raise ValueError("الملف غير موجود")
+        
+        # Platform dimensions
+        dimensions = {
+            "instagram_post": {"width": 1080, "height": 1080},
+            "instagram_story": {"width": 1080, "height": 1920},
+            "instagram_reel": {"width": 1080, "height": 1920},
+            "tiktok": {"width": 1080, "height": 1920},
+            "youtube_short": {"width": 1080, "height": 1920},
+            "youtube_video": {"width": 1920, "height": 1080},
+            "facebook_post": {"width": 1200, "height": 630},
+            "twitter_post": {"width": 1200, "height": 675},
+            "linkedin_post": {"width": 1200, "height": 627}
+        }
+        
+        if platform not in dimensions:
+            raise ValueError("المنصة غير مدعومة")
+        
+        return {
+            "asset_id": asset_id,
+            "platform": platform,
+            "dimensions": dimensions[platform],
+            "original_url": asset.get("url"),
+            "message": f"✅ جاهز للنشر على {platform}"
+        }
+    
+    # ============== Analytics ==============
+    async def get_user_analytics(self, user_id: str) -> Dict:
+        """إحصائيات المستخدم"""
+        # Count sessions
+        total_sessions = await self.db.chat_sessions.count_documents({"user_id": user_id})
+        active_sessions = await self.db.chat_sessions.count_documents({"user_id": user_id, "status": "active"})
+        
+        # Count assets
+        total_images = await self.db.generated_assets.count_documents({"user_id": user_id, "asset_type": "image"})
+        total_videos = await self.db.generated_assets.count_documents({"user_id": user_id, "asset_type": "video"})
+        
+        # Count deployments
+        total_deployments = await self.db.deployments.count_documents({"user_id": user_id, "status": "active"})
+        
+        # Get user credits
+        user = await self.db.users.find_one({"id": user_id}, {"_id": 0, "credits": 1, "credit_history": 1})
+        credits = user.get("credits", 0) if user else 0
+        
+        # Calculate total spent
+        credit_history = user.get("credit_history", []) if user else []
+        total_spent = sum(abs(h.get("amount", 0)) for h in credit_history if h.get("amount", 0) < 0)
+        
+        return {
+            "sessions": {
+                "total": total_sessions,
+                "active": active_sessions
+            },
+            "assets": {
+                "images": total_images,
+                "videos": total_videos,
+                "total": total_images + total_videos
+            },
+            "deployments": total_deployments,
+            "credits": {
+                "current": credits,
+                "total_spent": total_spent
+            }
+        }
+    
+    # ============== Admin Functions ==============
+    async def get_all_users_stats(self) -> Dict:
+        """إحصائيات جميع المستخدمين (للأدمن)"""
+        total_users = await self.db.users.count_documents({})
+        total_sessions = await self.db.chat_sessions.count_documents({})
+        total_assets = await self.db.generated_assets.count_documents({})
+        total_deployments = await self.db.deployments.count_documents({"status": "active"})
+        
+        return {
+            "users": total_users,
+            "sessions": total_sessions,
+            "assets": total_assets,
+            "deployments": total_deployments
+        }
+    
+    async def add_credits_to_user(self, admin_id: str, target_user_id: str, amount: int, reason: str = "admin_add") -> bool:
+        """إضافة نقاط لمستخدم (للأدمن)"""
+        result = await self.db.users.update_one(
+            {"id": target_user_id},
+            {
+                "$inc": {"credits": amount},
+                "$push": {
+                    "credit_history": {
+                        "amount": amount,
+                        "reason": reason,
+                        "admin_id": admin_id,
+                        "timestamp": datetime.now(timezone.utc).isoformat()
+                    }
+                }
+            }
         )
         return result.modified_count > 0
 
