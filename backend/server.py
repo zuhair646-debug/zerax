@@ -1522,7 +1522,13 @@ app.include_router(api_router)
 
 # Import and include chat router
 from routers import chat_router, set_ai_assistant
+from services.ai_chat_service import AIAssistant
+
 app.include_router(chat_router, prefix="/api")
+
+# Initialize AI Assistant
+ai_assistant = AIAssistant(db)
+set_ai_assistant(ai_assistant)
 
 @app.get("/")
 async def root():
