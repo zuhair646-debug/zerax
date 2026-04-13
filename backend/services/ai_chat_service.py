@@ -1,112 +1,106 @@
 """
-Zitex AI Chat Service
-خدمة الشات الذكي لزيتكس
+Zitex AI Chat Service - Progressive Builder Edition
+خدمة الشات الذكي - النسخة التدريجية
+Version 8.0 - Vision + Image Inspire + Edit + STT Fix
 """
 import os
-import re
 import uuid
-import json
-import logging
-import asyncio
 import base64
-import httpx
+import logging
+import re
+import asyncio
+import requests
 from datetime import datetime, timezone
-from typing import Dict, List, Optional, Any, Tuple
+from typing import Optional, Dict, Any, Tuple, List
 from motor.motor_asyncio import AsyncIOMotorDatabase
+from dotenv import load_dotenv
 
-# Configure logging
-logging.basicConfig(level=logging.INFO)
+# Load environment variables
+load_dotenv()
+
 logger = logging.getLogger(__name__)
 
-# Check for AI features
 AI_FEATURES_ENABLED = True
-EMERGENT_LLM_AVAILABLE = False
-OPENAI_AVAILABLE = False
-ELEVENLABS_AVAILABLE = False
 
+# ============== Object Storage for Real Hosting ==============
+STORAGE_URL = "https://integrations.emergentagent.com/objstore/api/v1/storage"
+EMERGENT_KEY = os.environ.get('EMERGENT_LLM_KEY')
+APP_NAME = "zitex-hosting"
+storage_key = None
+
+def init_storage():
+    """Initialize storage connection - call once at startup"""
+    global storage_key
+    if storage_key:
+        return storage_key
+    try:
+        resp = requests.post(f"{STORAGE_URL}/init", json={"emergent_key": EMERGENT_KEY}, timeout=30)
+        resp.raise_for_status()
+        storage_key = resp.json()["storage_key"]
+        logger.info("Object Storage initialized successfully")
+        return storage_key
+    except Exception as e:
+        logger.error(f"Storage init failed: {e}")
+        return None
+
+def upload_to_storage(path: str, data: bytes, content_type: str) -> Optional[dict]:
+    """Upload file to object storage"""
+    key = init_storage()
+    if not key:
+        return None
+    try:
+        resp = requests.put(
+            f"{STORAGE_URL}/objects/{path}",
+            headers={"X-Storage-Key": key, "Content-Type": content_type},
+            data=data, timeout=120
+        )
+        resp.raise_for_status()
+        return resp.json()
+    except Exception as e:
+        logger.error(f"Upload failed: {e}")
+        return None
+
+def get_from_storage(path: str) -> Optional[Tuple[bytes, str]]:
+    """Download file from storage"""
+    key = init_storage()
+    if not key:
+        return None
+    try:
+        resp = requests.get(
+            f"{STORAGE_URL}/objects/{path}",
+            headers={"X-Storage-Key": key}, timeout=60
+        )
+        resp.raise_for_status()
+        return resp.content, resp.headers.get("Content-Type", "text/html")
+    except Exception as e:
+        logger.error(f"Download failed: {e}")
+        return None
+
+# Try to import emergentintegrations for LLM chat
 try:
-    from emergentintegrations.llm.chat import LlmChat
-    from emergentintegrations.llm.chat.models import UserMessage
+    from emergentintegrations.llm.chat import LlmChat, UserMessage
     EMERGENT_LLM_AVAILABLE = True
-    logger.info("Emergent LLM integration available")
 except ImportError:
-    logger.warning("Emergent LLM not available")
+    EMERGENT_LLM_AVAILABLE = False
+    LlmChat = None
+    UserMessage = None
 
 try:
     import openai
     OPENAI_AVAILABLE = True
 except ImportError:
-    logger.warning("OpenAI not available")
+    OPENAI_AVAILABLE = False
+    openai = None
 
 try:
-    from elevenlabs import ElevenLabs
+    from elevenlabs.client import ElevenLabs
+    from elevenlabs.types import VoiceSettings
     ELEVENLABS_AVAILABLE = True
 except ImportError:
-    logger.warning("ElevenLabs not available")
+    ELEVENLABS_AVAILABLE = False
+    ElevenLabs = None
+    VoiceSettings = None
 
-# Storage configuration
-STORAGE_URL = os.environ.get('STORAGE_URL', 'https://storage.emergentagent.com/api/v1/storage')
-APP_NAME = os.environ.get('APP_NAME', 'zitex')
-EMERGENT_KEY = os.environ.get('EMERGENT_LLM_KEY', '')
-
-# Initialize storage key
-storage_key = EMERGENT_KEY
-
-def init_storage():
-    """Initialize storage with available key"""
-    global storage_key
-    storage_key = EMERGENT_KEY or os.environ.get('OPENAI_API_KEY', '')
-    return bool(storage_key)
-
-def upload_to_storage(path: str, data: bytes, content_type: str = "application/octet-stream") -> bool:
-    """Upload data to object storage"""
-    if not storage_key:
-        logger.warning("No storage key available")
-        return False
-    
-    try:
-        import httpx
-        headers = {
-            "Authorization": f"Bearer {storage_key}",
-            "Content-Type": content_type
-        }
-        
-        with httpx.Client(timeout=60.0) as client:
-            response = client.put(
-                f"{STORAGE_URL}/{path}",
-                content=data,
-                headers=headers
-            )
-            
-            if response.status_code in [200, 201]:
-                logger.info(f"Uploaded to storage: {path}")
-                return True
-            else:
-                logger.error(f"Storage upload failed: {response.status_code}")
-                return False
-    except Exception as e:
-        logger.error(f"Storage upload error: {e}")
-        return False
-
-def get_from_storage(path: str) -> Optional[Tuple[bytes, str]]:
-    """Get data from object storage"""
-    if not storage_key:
-        return None
-    
-    try:
-        import httpx
-        headers = {"Authorization": f"Bearer {storage_key}"}
-        
-        with httpx.Client(timeout=30.0) as client:
-            response = client.get(f"{STORAGE_URL}/{path}", headers=headers)
-            
-            if response.status_code == 200:
-                content_type = response.headers.get("content-type", "application/octet-stream")
-                return response.content, content_type
-            return None
-    except Exception as e:
-        logger.error(f"Storage get error: {e}")
-        return None
 
 MASTER_SYSTEM_PROMPT = """أنت "زيتكس" (Zitex) - مهندس ذكاء اصطناعي محترف لبناء المشاريع الرقمية والمحتوى الإبداعي.
 أنت تعمل كمستشار ومنفذ في نفس الوقت. تجمع المتطلبات ثم تبني المشروع مرحلة بمرحلة مع العميل.
@@ -125,11 +119,9 @@ MASTER_SYSTEM_PROMPT = """أنت "زيتكس" (Zitex) - مهندس ذكاء اص
 كل الألعاب والمواقع تُبنى بـ **HTML + CSS + Tailwind + JavaScript** وليس Canvas العادي.
 
 ### CDNs إجبارية في كل كود:
-```
-<script src="https://cdn.tailwindcss.com"></script>
-<link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;700;900&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
-```
+- script src="https://cdn.tailwindcss.com"
+- link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;700;900&display=swap" rel="stylesheet"
+- link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css"
 
 ### أسلوب التصميم الموحد لكل الألعاب:
 كل لعبة مهما كان نوعها تُبنى بنفس المبادئ:
@@ -194,8 +186,7 @@ MASTER_SYSTEM_PROMPT = """أنت "زيتكس" (Zitex) - مهندس ذكاء اص
 - تأثيرات: flip, match glow, shake عند الخطأ
 - HUD: ⏱️ وقت + 🔄 محاولات + ⭐ نقاط + 📊 مستوى
 
-### نموذج CSS الأساسي (لكل الألعاب):
-```
+### نموذج CSS الأساسي (لكل الألعاب) - استخدم هذا الأسلوب:
 *{margin:0;box-sizing:border-box;font-family:'Tajawal',sans-serif}
 body{background:linear-gradient(135deg,#0a0a1a,#1a1a2e);color:#fff;min-height:100vh;overflow:hidden}
 .hud{background:rgba(0,0,0,0.85);backdrop-filter:blur(12px);border-bottom:2px solid #ffd700;padding:12px 20px;display:flex;justify-content:space-between;align-items:center;position:fixed;top:0;width:100%;z-index:50}
@@ -213,7 +204,6 @@ body{background:linear-gradient(135deg,#0a0a1a,#1a1a2e);color:#fff;min-height:10
 @keyframes shake{0%,100%{transform:translateX(0)}25%{transform:translateX(-5px)}75%{transform:translateX(5px)}}
 @keyframes glow{0%,100%{box-shadow:0 0 5px rgba(255,215,0,0.3)}50%{box-shadow:0 0 20px rgba(255,215,0,0.8)}}
 @keyframes float{0%,100%{transform:translateY(0)}50%{transform:translateY(-8px)}}
-```
 
 ### ممنوع منعاً باتاً:
 - ❌ Canvas بدائي بـ fillRect فقط
@@ -223,13 +213,6 @@ body{background:linear-gradient(135deg,#0a0a1a,#1a1a2e);color:#fff;min-height:10
 - ❌ أزرار HTML عادية بدون تصميم
 - ❌ كود أقل من 200 سطر
 
-### قواعد عامة:
-- كل كود 200+ سطر على الأقل 
-- requestAnimationFrame للحركة في الألعاب
-- HUD بموارد وأزرار تفاعلية في الألعاب
-- يعرض محتوى فوري بدون نقر
-- احترافي وجاهز للنشر من أول مرحلة
-
 ## 🎯 طريقة العمل العامة:
 
 ### 1. صيغة الأزرار (إجبارية للخيارات):
@@ -237,7 +220,41 @@ body{background:linear-gradient(135deg,#0a0a1a,#1a1a2e);color:#fff;min-height:10
 خيار1|خيار2|خيار3|✏️ غير ذلك
 [/BUTTONS]
 
-### 2. التحقق من النقاط:
+### 2. عند اختيار قسم من القائمة الرئيسية، أظهر خيارات القسم فقط:
+
+**إذا اختار 🌐 موقع ويب:**
+"ممتاز! وش نوع الموقع اللي تبيه؟"
+[BUTTONS]
+🏢 موقع شركة|🛒 متجر إلكتروني|📝 مدونة|📄 صفحة هبوط|🎨 بورتفوليو|✏️ نوع آخر
+[/BUTTONS]
+
+**إذا اختار 📱 تطبيق موبايل:**
+"ممتاز! وش نوع التطبيق؟"
+[BUTTONS]
+🛒 تطبيق تجارة|📋 تطبيق خدمات|💬 تطبيق تواصل|📰 أخبار/محتوى|🎮 لعبة موبايل|✏️ نوع آخر
+[/BUTTONS]
+
+**إذا اختار 🎮 لعبة:**
+"ممتاز! وش نوع اللعبة؟"
+[BUTTONS]
+🏰 استراتيجية/بناء|🔫 أكشن/قتال|🏎️ سباق|🧩 ألغاز/ذكاء|🍕 مطعم/طبخ|👶 أطفال/تعليمية|✏️ نوع آخر
+[/BUTTONS]
+
+**إذا اختار 🎬 فيديو:**
+"ممتاز! وش نوع الفيديو؟"
+[BUTTONS]
+🎬 فيديو سينمائي|😂 فيديو مضحك|📺 فيديو إعلاني/تجاري|✏️ نوع آخر
+[/BUTTONS]
+
+**إذا اختار 🖼️ صورة/لوغو:**
+"ممتاز! وش تبي بالضبط؟"
+[BUTTONS]
+🎨 شعار (لوغو)|📸 صورة منتج|🖼️ صورة فنية|📐 تصميم بانر|✏️ نوع آخر
+[/BUTTONS]
+
+⚠️ مهم: لا تخلط خيارات الأقسام! كل قسم يعرض خياراته الخاصة فقط.
+
+### 3. التحقق من النقاط:
 قبل أي عملية إنشاء، تأكد من رصيد العميل.
 إذا كان الرصيد غير كافٍ، اطلب منه شحن النقاط.
 
@@ -419,6 +436,34 @@ type: product
 prompt: [وصف بالإنجليزية]
 [/IMAGE_GENERATE]
 
+### 🎨 استيحاء من صورة مرجعية (10 نقاط):
+عندما يرفق العميل صورة ويقول "سوّ لي مثلها" أو "استوحِ منها":
+1. شوف الصورة المرفقة وافهم تفاصيلها
+2. اكتب وصف دقيق لما تريد توليده بالإنجليزية
+3. أرسل:
+[IMAGE_INSPIRE]
+reference: [رابط الصورة المرجعية]
+prompt: [وصف تفصيلي بالإنجليزية للصورة المطلوبة مستوحاة من المرجع مع التعديلات المطلوبة]
+[/IMAGE_INSPIRE]
+
+### ✏️ تعديل صورة سابقة (8 نقاط):
+عندما يضغط العميل على صورة سبق إرسالها ويطلب تعديل:
+1. ابحث عن رابط الصورة الأصلية في المحادثة السابقة (ستجده في الرسائل كرابط https://...)
+2. أرسل الأمر مع الرابط الفعلي (ليس نص وصفي - الرابط الحقيقي من المحادثة):
+[IMAGE_EDIT]
+original: https://... (الرابط الفعلي للصورة من المحادثة)
+changes: [وصف التعديلات بالإنجليزية]
+[/IMAGE_EDIT]
+⚠️ ممنوع كتابة [رابط الصورة] - لازم تحط الرابط الحقيقي https://...
+
+### قواعد الصور:
+- عندما يرفق العميل صورة، شوفها وعلّق عليها فوراً
+- إذا قال "سوّ مثلها" استخدم [IMAGE_INSPIRE] مع الرابط الحقيقي
+- إذا قال "عدّل" على صورة سابقة، ابحث عن رابطها في المحادثة واستخدم [IMAGE_EDIT] مع الرابط الحقيقي
+- إذا قال "صمم لي صورة" بدون مرجع استخدم [IMAGE_GENERATE]
+- اكتب الـ prompt دائماً بالإنجليزية وبتفاصيل كثيرة
+- ⚠️ دائماً استخدم الرابط الحقيقي (https://...) وليس نص وصفي مثل [رابط الصورة]
+
 ---
 
 ## 📱 قسم تطبيقات الموبايل:
@@ -474,11 +519,11 @@ prompt: [وصف بالإنجليزية]
 - **حجم الكود**: لعبة المرحلة الأولى يجب أن تكون **200+ سطر كود على الأقل**
 
 **للمواقع:**
-- استخدم **Tailwind CSS** عبر CDN: `<script src="https://cdn.tailwindcss.com"></script>`
+- استخدم **Tailwind CSS** عبر CDN
 - استخدم **تدرجات** وخلفيات غنية، ليس ألوان مسطحة
 - أضف **ظلال** (shadow-lg, shadow-xl)، **زوايا مدورة** (rounded-xl)، **شفافية** (backdrop-blur)
-- استخدم **Font Awesome** للأيقونات: `<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">`
-- استخدم **Google Fonts** للخطوط العربية: `<link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700&display=swap" rel="stylesheet">`
+- استخدم **Font Awesome** للأيقونات
+- استخدم **Google Fonts** للخطوط العربية
 - تصميم **responsive** يعمل على جميع الشاشات
 - أضف **hover effects** و **transitions** و **animations** لكل العناصر التفاعلية
 
@@ -503,6 +548,7 @@ prompt: [وصف بالإنجليزية]
 6. **لا تتوقف أبداً** - كل رد يجب أن يحتوي على تقدم فعلي (كود أو تصميم أو اقتراح)
 7. **التصميم يجب أن يكون احترافي** - راجع قسم "قواعد جودة التصميم" أعلاه
 """
+
 
 WELCOME_MESSAGE = """## 👋 مرحباً بك في زيتكس!
 
@@ -534,29 +580,21 @@ SERVICE_COSTS = {
     "image_logo": 10,
     "image_preview": 5,
     "image_multiple": 15,
-    # تطبيقات الموبايل
     "mobile_flutter": 30,
     "mobile_react_native": 30,
     "mobile_swift": 35,
     "mobile_kotlin": 35,
     "mobile_ui_advanced": 15,
     "mobile_backend": 20,
-    # فيديوهات سينمائية (المدد الجديدة)
-    "video_cinematic_15": 80,
-    "video_cinematic_30": 150,
-    "video_cinematic_45": 220,
-    "video_cinematic_60": 300,
-    # فيديوهات مضحكة
-    "video_funny_15": 50,
-    "video_funny_30": 90,
-    "video_funny_45": 130,
-    "video_funny_60": 170,
-    # فيديوهات إعلانية
-    "video_advertising_15": 100,
-    "video_advertising_30": 180,
-    "video_advertising_45": 260,
-    "video_advertising_60": 350,
-    # إضافات
+    "video_cinematic_4": 50,
+    "video_cinematic_8": 80,
+    "video_cinematic_12": 120,
+    "video_funny_4": 30,
+    "video_funny_8": 50,
+    "video_funny_12": 70,
+    "video_advertising_4": 60,
+    "video_advertising_8": 100,
+    "video_advertising_12": 150,
     "voice_over": 10,
     "voice_preview": 5,
     "modification": 5,
@@ -572,33 +610,25 @@ VIDEO_CATEGORIES = {
         "name": "مقاطع قصيرة",
         "name_en": "Short Clips",
         "description": "ريلز، تيك توك، ستوري",
-        "durations": [15, 30],
-        "sizes": ["1080x1920", "1024x1792"],
-        "cost_base": 50
+        "durations": [4, 8],
+        "sizes": ["1024x1792", "1080x1920"],
+        "cost_base": 30
     },
     "cinematic": {
         "name": "فيديوهات سينمائية",
         "name_en": "Cinematic Videos",
         "description": "أفلام قصيرة، مشاهد درامية",
-        "durations": [15, 30, 45, 60],
-        "sizes": ["1920x1080", "1792x1024"],
-        "cost_base": 80
+        "durations": [8, 12],
+        "sizes": ["1792x1024", "1280x720"],
+        "cost_base": 100
     },
     "advertising": {
         "name": "فيديوهات إعلانية",
         "name_en": "Advertising Videos",
         "description": "حملات إعلانية، ترويج منتجات",
-        "durations": [15, 30, 45, 60],
-        "sizes": ["1920x1080", "1080x1080", "1080x1920"],
-        "cost_base": 100
-    },
-    "funny": {
-        "name": "فيديوهات مضحكة",
-        "name_en": "Funny Videos",
-        "description": "محتوى ترفيهي وكوميدي",
-        "durations": [15, 30, 45, 60],
-        "sizes": ["1920x1080", "1080x1920"],
-        "cost_base": 50
+        "durations": [4, 8, 12],
+        "sizes": ["1280x720", "1024x1024", "1024x1792"],
+        "cost_base": 150
     }
 }
 
@@ -726,6 +756,28 @@ DEFAULT_TEMPLATES = [
         "cost": 30,
         "tags": ["mobile", "react-native", "social", "ios", "android"],
         "tech": "react_native"
+    },
+    {
+        "id": "mobile-swift-fitness",
+        "name": "تطبيق لياقة Swift",
+        "category": "mobile",
+        "preview_image": "/api/templates/preview/mobile-swift-fitness",
+        "description": "تطبيق لياقة وصحة لـ iOS بتقنية Swift",
+        "is_premium": True,
+        "cost": 35,
+        "tags": ["mobile", "swift", "fitness", "ios"],
+        "tech": "swift"
+    },
+    {
+        "id": "mobile-kotlin-news",
+        "name": "تطبيق أخبار Kotlin",
+        "category": "mobile",
+        "preview_image": "/api/templates/preview/mobile-kotlin-news",
+        "description": "تطبيق أخبار لـ Android بتقنية Kotlin",
+        "is_premium": True,
+        "cost": 35,
+        "tags": ["mobile", "kotlin", "news", "android"],
+        "tech": "kotlin"
     }
 ]
 
@@ -811,7 +863,6 @@ GAME_LIBRARIES = {
 def detect_request_type(message: str, session_type: str = "general") -> str:
     message_lower = message.lower()
     
-    # Mobile app detection (priority)
     if any(word in message for word in ["تطبيق موبايل", "تطبيق جوال", "تطبيق هاتف", "📱 تطبيق"]):
         return "mobile"
     if any(word in message_lower for word in ["flutter", "react native", "swift", "kotlin"]):
@@ -821,7 +872,6 @@ def detect_request_type(message: str, session_type: str = "general") -> str:
     if any(word in message for word in ["android", "أندرويد", "اندرويد"]):
         return "mobile"
     
-    # Direct button selections
     if "موقع ويب" in message or "🌐 موقع" in message:
         return "website"
     elif "تطبيق ويب" in message or "لوحة" in message_lower:
@@ -833,7 +883,6 @@ def detect_request_type(message: str, session_type: str = "general") -> str:
     elif "فيديو" in message_lower or "🎬" in message:
         return "video"
     
-    # 3D detection
     if "3d" in message_lower or "ثلاثي" in message_lower or "سباق" in message_lower:
         return "game_3d"
     
@@ -873,7 +922,6 @@ class AIAssistant:
             except Exception:
                 pass
         
-        # Check if we have any LLM capability
         self.llm_available = bool(self.emergent_key) or bool(self.openai_client)
     
     async def create_session(self, user_id: str, session_type: str = "general", title: str = None) -> Dict:
@@ -900,6 +948,7 @@ class AIAssistant:
             "created_at": datetime.now(timezone.utc).isoformat(),
             "updated_at": datetime.now(timezone.utc).isoformat()
         }
+
         await self.db.chat_sessions.insert_one(session)
         return session
     
@@ -935,7 +984,7 @@ class AIAssistant:
             }
         )
         return result.modified_count > 0
-
+    
     async def process_message(self, session_id: str, user_id: str, message: str, settings: Dict[str, Any] = None) -> Dict:
         settings = settings or {}
         
@@ -979,10 +1028,8 @@ class AIAssistant:
                 has_buttons = True
             else:
                 try:
-                    # Generate GPT response first
                     ai_response, credits_used, has_buttons = await self._generate_with_gpt(session, message, request_type, credits, settings)
                     
-                    # Process special commands in AI response
                     ai_response, extra_attachments, extra_credits = await self._process_ai_commands(
                         ai_response, user_id, session_id, credits - credits_used
                     )
@@ -996,7 +1043,6 @@ class AIAssistant:
                     logger.error(f"Error: {e}")
                     ai_response = "❌ حدث خطأ، حاول مرة أخرى"
         
-        # Check if response has buttons
         if "[BUTTONS]" in ai_response:
             has_buttons = True
         
@@ -1010,7 +1056,8 @@ class AIAssistant:
                 "request_type": request_type,
                 "credits_used": credits_used,
                 "credits_remaining": credits - credits_used,
-                "has_buttons": has_buttons
+                "has_buttons": has_buttons,
+                "image_urls": [a["url"] for a in attachments if a.get("type") == "image" and a.get("url")]
             },
             "created_at": datetime.now(timezone.utc).isoformat()
         }
@@ -1020,33 +1067,26 @@ class AIAssistant:
             "$set": {"updated_at": datetime.now(timezone.utc).isoformat()}
         }
         
-        # Update session type
         if request_type != "general":
             update_data["$set"]["session_type"] = request_type
         
-        # Extract code from [CODE_BLOCK] or regular code blocks
         code = None
-
-        # First try CODE_BLOCK format with backticks
+        
         code_block_match = re.search(r'\[CODE_BLOCK\]\s*```(?:html|javascript|js)?\n?([\s\S]*?)```\s*\[/CODE_BLOCK\]', ai_response)
         if code_block_match:
             code = code_block_match.group(1).strip()
         else:
-            # Try CODE_BLOCK without backticks (direct HTML)
             code_block_match2 = re.search(r'\[CODE_BLOCK\]\s*(<!DOCTYPE[\s\S]*?</html>)\s*\[/CODE_BLOCK\]', ai_response, re.IGNORECASE)
             if code_block_match2:
                 code = code_block_match2.group(1).strip()
             else:
-                # Try CODE_BLOCK with any content
                 code_block_match3 = re.search(r'\[CODE_BLOCK\]\s*([\s\S]*?)\s*\[/CODE_BLOCK\]', ai_response)
                 if code_block_match3:
                     code = code_block_match3.group(1).strip()
-                    # Remove backtick wrappers if present
                     code = re.sub(r'^```(?:html|javascript|js)?\s*', '', code)
                     code = re.sub(r'```\s*$', '', code)
                     code = code.strip()
                 else:
-                    # Fall back to regular code block
                     code_match = re.search(r'```(?:html|javascript|js)?\n?([\s\S]*?)```', ai_response)
                     if code_match:
                         code = code_match.group(1).strip()
@@ -1054,13 +1094,11 @@ class AIAssistant:
         if code:
             code_with_badge = inject_zitex_badge(code)
             update_data["$set"]["generated_code"] = code_with_badge
-            # Store code in metadata for frontend to use
             assistant_msg["metadata"]["generated_code"] = code_with_badge
             assistant_msg["metadata"]["has_preview"] = True
         
         await self.db.chat_sessions.update_one({"id": session_id}, update_data)
         
-        # Update title
         non_welcome = [m for m in session.get("messages", []) if not m.get("metadata", {}).get("is_welcome")]
         if len(non_welcome) == 0:
             title = self._generate_title(message, request_type)
@@ -1108,7 +1146,7 @@ class AIAssistant:
         except Exception as e:
             logger.error(f"Image error: {e}")
             return "❌ خطأ في توليد الصورة", [], 0
-
+    
     async def _process_ai_commands(self, ai_response: str, user_id: str, session_id: str, available_credits: int) -> Tuple[str, List[Dict], int]:
         """معالجة الأوامر الخاصة في رد الذكاء الاصطناعي"""
         attachments = []
@@ -1134,16 +1172,14 @@ class AIAssistant:
             prompt = video_match.group(3).strip()
             voice_text = video_match.group(4).strip() if video_match.group(4) else None
             voice = video_match.group(5).strip() if video_match.group(5) else "onyx"
-            size = video_match.group(6).strip() if video_match.group(6) else "1920x1080"
+            size = video_match.group(6).strip() if video_match.group(6) else "1280x720"
             
-            # حساب التكلفة بناءً على المدد الجديدة
             cost_key = f"video_{video_type}_{duration}"
-            video_cost = SERVICE_COSTS.get(cost_key, 80)
+            video_cost = SERVICE_COSTS.get(cost_key, 60)
             voice_cost = SERVICE_COSTS.get("voice_over", 10) if voice_text else 0
             total_video_cost = video_cost + voice_cost
             
             if available_credits >= total_video_cost:
-                # توليد الفيديو
                 video_result = await self._generate_video(
                     user_id, session_id, prompt, duration, size, video_type
                 )
@@ -1158,7 +1194,6 @@ class AIAssistant:
                     })
                     total_credits += video_cost
                     
-                    # توليد التعليق الصوتي إذا مطلوب
                     if voice_text:
                         audio_url = await self.generate_tts(voice_text, "openai", voice)
                         if audio_url:
@@ -1170,12 +1205,11 @@ class AIAssistant:
                             })
                             total_credits += voice_cost
                     
-                    # تحديث الرد
                     success_msg = f"""
 ## ✅ تم إنشاء الفيديو بنجاح!
 
 🎬 النوع: {video_type}
-⏱️ المدة: {duration} ثانية
+⏱️ المدة: {duration} ثواني
 💰 التكلفة: {total_video_cost} نقطة
 
 [BUTTONS]
@@ -1314,8 +1348,187 @@ class AIAssistant:
                         processed_response
                     )
         
-        return processed_response, attachments, total_credits
+        # معالجة أمر الاستيحاء من صورة [IMAGE_INSPIRE]
+        inspire_match = re.search(
+            r'\[IMAGE_INSPIRE\]\s*'
+            r'reference:\s*(\S+)\s*'
+            r'prompt:\s*([^\[]+?)\s*'
+            r'\[/IMAGE_INSPIRE\]',
+            processed_response, re.IGNORECASE | re.DOTALL
+        )
+        
+        if inspire_match:
+            ref_url = inspire_match.group(1).strip()
+            inspire_prompt = inspire_match.group(2).strip()
+            inspire_cost = 10
+            
+            if available_credits - total_credits >= inspire_cost:
+                inspired_url = await self._generate_inspired_image(ref_url, inspire_prompt)
+                if inspired_url:
+                    attachments.append({
+                        "type": "image",
+                        "url": inspired_url,
+                        "image_type": "inspired",
+                        "prompt": inspire_prompt,
+                        "reference": ref_url
+                    })
+                    total_credits += inspire_cost
+                    
+                    processed_response = re.sub(
+                        r'\[IMAGE_INSPIRE\][\s\S]*?\[/IMAGE_INSPIRE\]',
+                        f"""
+## ✅ تم إنشاء صورة مستوحاة من المرجع!
 
+💰 التكلفة: {inspire_cost} نقطة
+
+[BUTTONS]
+✏️ عدّل الصورة|🎨 نسخة أخرى|💾 حفظ|🔄 مختلفة تماماً
+[/BUTTONS]""",
+                        processed_response
+                    )
+                else:
+                    processed_response = re.sub(
+                        r'\[IMAGE_INSPIRE\][\s\S]*?\[/IMAGE_INSPIRE\]',
+                        "❌ فشل توليد الصورة. حاول مرة أخرى.",
+                        processed_response
+                    )
+        
+        # معالجة أمر تعديل صورة [IMAGE_EDIT]
+        edit_match = re.search(
+            r'\[IMAGE_EDIT\]\s*'
+            r'original:\s*(\S+)\s*'
+            r'changes:\s*([^\[]+?)\s*'
+            r'\[/IMAGE_EDIT\]',
+            processed_response, re.IGNORECASE | re.DOTALL
+        )
+        
+        if edit_match:
+            original_url = edit_match.group(1).strip()
+            edit_changes = edit_match.group(2).strip()
+            edit_cost = 8
+            
+            if available_credits - total_credits >= edit_cost:
+                edited_url = await self._edit_image_with_prompt(original_url, edit_changes)
+                if edited_url:
+                    attachments.append({
+                        "type": "image",
+                        "url": edited_url,
+                        "image_type": "edited",
+                        "prompt": edit_changes,
+                        "original": original_url
+                    })
+                    total_credits += edit_cost
+                    
+                    processed_response = re.sub(
+                        r'\[IMAGE_EDIT\][\s\S]*?\[/IMAGE_EDIT\]',
+                        f"""
+## ✅ تم تعديل الصورة!
+
+💰 التكلفة: {edit_cost} نقطة
+
+[BUTTONS]
+✏️ تعديل إضافي|🔄 إعادة التعديل|💾 حفظ|↩️ الرجوع للأصلية
+[/BUTTONS]""",
+                        processed_response
+                    )
+                else:
+                    processed_response = re.sub(
+                        r'\[IMAGE_EDIT\][\s\S]*?\[/IMAGE_EDIT\]',
+                        "❌ فشل تعديل الصورة. حاول مرة أخرى.",
+                        processed_response
+                    )
+        
+        return processed_response, attachments, total_credits
+    
+    async def _generate_inspired_image(self, reference_url: str, prompt: str) -> Optional[str]:
+        """توليد صورة مستوحاة من صورة مرجعية"""
+        try:
+            from emergentintegrations.llm.openai.image_generation import OpenAIImageGeneration
+            
+            image_gen = OpenAIImageGeneration(api_key=self.emergent_key)
+            
+            ref_description = ""
+            try:
+                ref_resp = requests.get(reference_url, timeout=15)
+                if ref_resp.status_code == 200:
+                    ref_b64 = base64.b64encode(ref_resp.content).decode('utf-8')
+                    if EMERGENT_LLM_AVAILABLE and self.emergent_key:
+                        from emergentintegrations.llm.chat import FileContent
+                        chat = LlmChat(api_key=self.emergent_key, session_id="img-analyze", system_message="You are an expert image analyst. Describe this image in great detail for an artist to recreate it. Focus on: art style, colors, composition, characters, buildings, landscape, UI elements. Be very specific. Answer in English.")
+                        chat.with_model("openai", "gpt-4o")
+                        content_type = ref_resp.headers.get('Content-Type', 'image/png')
+                        fc = FileContent(content_type=content_type, file_content_base64=ref_b64)
+                        msg = UserMessage(text="Describe this image in full detail for recreation:", file_contents=[fc])
+                        ref_description = await chat.send_message(msg)
+            except Exception as e:
+                logger.error(f"Failed to analyze reference image: {e}")
+            
+            full_prompt = f"Create a high quality game art illustration. {prompt}. "
+            if ref_description:
+                full_prompt += f"Style reference: {ref_description[:500]}"
+            
+            images = await image_gen.generate_images(
+                prompt=full_prompt,
+                model="gpt-image-1",
+                number_of_images=1
+            )
+            
+            if images and len(images) > 0:
+                image_id = str(uuid.uuid4())
+                image_path = f"{APP_NAME}/images/{image_id}.png"
+                upload_result = upload_to_storage(image_path, images[0], "image/png")
+                if upload_result:
+                    return f"{STORAGE_URL.replace('/api/v1/storage', '')}/images/{image_id}.png"
+                else:
+                    return f"data:image/png;base64,{base64.b64encode(images[0]).decode('utf-8')}"
+            return None
+        except Exception as e:
+            logger.error(f"Inspired image generation error: {e}")
+            return None
+    
+    async def _edit_image_with_prompt(self, original_url: str, edit_prompt: str) -> Optional[str]:
+        """تعديل صورة بناءً على تعليق العميل"""
+        try:
+            from emergentintegrations.llm.openai.image_generation import OpenAIImageGeneration
+            
+            image_gen = OpenAIImageGeneration(api_key=self.emergent_key)
+            
+            original_description = ""
+            try:
+                ref_resp = requests.get(original_url, timeout=15)
+                if ref_resp.status_code == 200:
+                    ref_b64 = base64.b64encode(ref_resp.content).decode('utf-8')
+                    if EMERGENT_LLM_AVAILABLE and self.emergent_key:
+                        from emergentintegrations.llm.chat import FileContent
+                        chat = LlmChat(api_key=self.emergent_key, session_id="img-edit", system_message="Describe this image in detail in English. Focus on every visual element.")
+                        chat.with_model("openai", "gpt-4o")
+                        fc = FileContent(content_type="image/png", file_content_base64=ref_b64)
+                        msg = UserMessage(text="Describe this image:", file_contents=[fc])
+                        original_description = await chat.send_message(msg)
+            except Exception as e:
+                logger.error(f"Failed to analyze original image: {e}")
+            
+            full_prompt = f"Recreate this image with modifications: {original_description[:500]}. CHANGES REQUESTED: {edit_prompt}"
+            
+            images = await image_gen.generate_images(
+                prompt=full_prompt,
+                model="gpt-image-1",
+                number_of_images=1
+            )
+            
+            if images and len(images) > 0:
+                image_id = str(uuid.uuid4())
+                image_path = f"{APP_NAME}/images/{image_id}.png"
+                upload_result = upload_to_storage(image_path, images[0], "image/png")
+                if upload_result:
+                    return f"{STORAGE_URL.replace('/api/v1/storage', '')}/images/{image_id}.png"
+                else:
+                    return f"data:image/png;base64,{base64.b64encode(images[0]).decode('utf-8')}"
+            return None
+        except Exception as e:
+            logger.error(f"Image edit error: {e}")
+            return None
+    
     async def _generate_video(self, user_id: str, session_id: str, prompt: str, duration: int, size: str, video_type: str) -> Optional[Dict]:
         """توليد فيديو باستخدام Sora 2"""
         try:
@@ -1323,15 +1536,13 @@ class AIAssistant:
             
             video_gen = OpenAIVideoGeneration(api_key=self.emergent_key)
             
-            # المدد المدعومة الجديدة (15, 30, 45, 60 ثانية)
-            valid_durations = [15, 30, 45, 60]
+            valid_durations = [4, 8, 12]
             if duration not in valid_durations:
                 duration = min(valid_durations, key=lambda x: abs(x - duration))
             
-            # Ensure size is valid
-            valid_sizes = ["1920x1080", "1080x1920", "1080x1080", "1792x1024", "1024x1792"]
+            valid_sizes = ["1280x720", "1792x1024", "1024x1792", "1024x1024"]
             if size not in valid_sizes:
-                size = "1920x1080"
+                size = "1280x720"
             
             logger.info(f"Generating video: type={video_type}, duration={duration}, size={size}")
             
@@ -1340,11 +1551,10 @@ class AIAssistant:
                 model="sora-2",
                 size=size,
                 duration=duration,
-                max_wait_time=900  # 15 دقيقة للفيديوهات الطويلة
+                max_wait_time=600
             )
             
             if video_bytes:
-                # رفع الفيديو إلى Object Storage
                 video_id = str(uuid.uuid4())
                 video_path = f"{APP_NAME}/videos/{user_id}/{video_id}.mp4"
                 
@@ -1353,7 +1563,6 @@ class AIAssistant:
                 if upload_result:
                     video_url = f"{STORAGE_URL.replace('/api/v1/storage', '')}/videos/{user_id}/{video_id}.mp4"
                     
-                    # حفظ في قاعدة البيانات
                     asset = {
                         "id": video_id,
                         "user_id": user_id,
@@ -1391,7 +1600,6 @@ class AIAssistant:
             )
             
             if images and len(images) > 0:
-                # رفع الصورة إلى Object Storage
                 image_id = str(uuid.uuid4())
                 image_path = f"{APP_NAME}/images/{image_id}.png"
                 
@@ -1401,7 +1609,6 @@ class AIAssistant:
                     image_url = f"{STORAGE_URL.replace('/api/v1/storage', '')}/images/{image_id}.png"
                     return image_url
                 else:
-                    # إذا فشل الرفع، إرجاع base64
                     image_base64 = base64.b64encode(images[0]).decode('utf-8')
                     return f"data:image/png;base64,{image_base64}"
             
@@ -1410,9 +1617,8 @@ class AIAssistant:
         except Exception as e:
             logger.error(f"Image generation error: {e}")
             return None
-
+    
     async def _generate_with_gpt(self, session: Dict, message: str, request_type: str, credits: int, settings: Dict) -> Tuple[str, int, bool]:
-        # Build context about the project
         project_data = session.get("project_data", {})
         stage = session.get("conversation_stage", "initial")
         
@@ -1424,21 +1630,24 @@ class AIAssistant:
         
         system_prompt = MASTER_SYSTEM_PROMPT + context
         
-        # Extract image URLs from message
         image_urls = re.findall(r'(https?://\S+\.(?:png|jpg|jpeg|gif|webp))', message, re.IGNORECASE)
-        # Also check for objstore URLs
         image_urls += re.findall(r'(https?://integrations\.emergentagent\.com/objstore/\S+)', message)
         
-        # Build conversation history
         conversation_history = ""
         for msg in session.get("messages", [])[-12:]:
             role_label = "المستخدم" if msg["role"] == "user" else "زيتكس"
             conversation_history += f"\n{role_label}: {msg['content']}\n"
+            if msg.get("metadata", {}).get("image_urls"):
+                for img_url in msg["metadata"]["image_urls"]:
+                    conversation_history += f"[صورة مولّدة: {img_url}]\n"
+            elif msg.get("attachments"):
+                for att in msg["attachments"]:
+                    if att.get("type") == "image" and att.get("url"):
+                        conversation_history += f"[صورة مولّدة: {att['url']}]\n"
         
         full_prompt = f"{conversation_history}\nالمستخدم: {message}"
         
         try:
-            # Try Emergent LLM first (preferred)
             if EMERGENT_LLM_AVAILABLE and self.emergent_key:
                 chat = LlmChat(
                     api_key=self.emergent_key,
@@ -1447,10 +1656,9 @@ class AIAssistant:
                 )
                 chat.with_model("openai", "gpt-4o")
                 
-                # Build message with image support
                 file_contents = []
                 if image_urls:
-                    for img_url in image_urls[:3]:  # Max 3 images
+                    for img_url in image_urls[:3]:
                         try:
                             from emergentintegrations.llm.chat import FileContent
                             img_resp = requests.get(img_url, timeout=15)
@@ -1467,8 +1675,7 @@ class AIAssistant:
                 else:
                     user_message = UserMessage(text=full_prompt)
                 response = await chat.send_message(user_message)
-  
-            # Fall back to direct OpenAI client
+            
             elif self.openai_client:
                 messages = [{"role": "system", "content": system_prompt}]
                 for msg in session.get("messages", [])[-12:]:
@@ -1485,10 +1692,8 @@ class AIAssistant:
             else:
                 return "⚠️ خدمة الذكاء الاصطناعي غير متاحة. يرجى إضافة مفتاح API.", 0, False
             
-            # Determine credits based on content
-            credits_used = 1  # Base cost for conversation
+            credits_used = 1
             
-            # Check if response contains code (in CODE_BLOCK or regular code block)
             has_code = '[CODE_BLOCK]' in response or ('```html' in response and '[CODE_BLOCK]' not in response) or '```javascript' in response
             
             if has_code:
@@ -1503,7 +1708,7 @@ class AIAssistant:
             return f"❌ خطأ في المعالجة: {str(e)}", 0, False
     
     def _generate_title(self, message: str, request_type: str) -> str:
-        icons = {"image": "🎨", "video": "🎬", "website": "🌐", "game": "🎮", "webapp": "💻", "pwa": "📱", "mobile": "📱"}
+        icons = {"image": "🎨", "video": "🎬", "website": "🌐", "game": "🎮", "webapp": "💻", "pwa": "📱"}
         prefix = icons.get(request_type, "💬")
         title = message[:25].strip()
         if len(message) > 25:
@@ -1529,16 +1734,15 @@ class AIAssistant:
         if session_id:
             query["session_id"] = session_id
         return await self.db.video_requests.find(query, {"_id": 0}).sort("created_at", -1).to_list(50)
-
+    
     async def generate_tts(self, text: str, provider: str = "openai", voice: str = "alloy", speed: float = 1.0) -> Optional[str]:
         """توليد صوت من النص باستخدام OpenAI TTS"""
         if not text or len(text.strip()) == 0:
             return None
         
-        # Limit text length
         text = text[:4000]
         
-        # Remove buttons and code blocks from text
+        import re
         text = re.sub(r'\[BUTTONS\][\s\S]*?\[/BUTTONS\]', '', text)
         text = re.sub(r'\[CODE_BLOCK\][\s\S]*?\[/CODE_BLOCK\]', '', text)
         text = re.sub(r'```[\s\S]*?```', '', text)
@@ -1552,7 +1756,6 @@ class AIAssistant:
             
             tts = OpenAITextToSpeech(api_key=self.emergent_key)
             
-            # Generate audio as base64
             audio_base64 = await tts.generate_speech_base64(
                 text=text,
                 model="tts-1",
@@ -1560,7 +1763,6 @@ class AIAssistant:
                 speed=speed
             )
             
-            # Return as data URL
             return f"data:audio/mp3;base64,{audio_base64}"
             
         except Exception as e:
@@ -1581,12 +1783,10 @@ class AIAssistant:
     
     # ============== Templates System ==============
     async def save_as_template(self, user_id: str, session_id: str, name: str, description: str = "", category: str = "custom") -> Dict:
-        """حفظ المشروع كقالب"""
         session = await self.get_session(session_id, user_id)
         if not session or not session.get("generated_code"):
             raise ValueError("لا يوجد كود للحفظ")
         
-        # Check credits
         credits = await self.get_user_credits(user_id)
         cost = SERVICE_COSTS["save_template"]
         if credits < cost:
@@ -1618,16 +1818,13 @@ class AIAssistant:
         }
     
     async def get_templates(self, user_id: str = None, category: str = None, include_public: bool = True) -> List[Dict]:
-        """استرجاع القوالب"""
         templates = []
         
-        # Add default templates
         for t in DEFAULT_TEMPLATES:
             if category and t["category"] != category:
                 continue
             templates.append({**t, "is_default": True, "user_id": None})
         
-        # Add user templates
         query = {}
         if user_id:
             if include_public:
@@ -1646,8 +1843,6 @@ class AIAssistant:
         return templates
     
     async def use_template(self, user_id: str, template_id: str, session_id: str = None) -> Dict:
-        """استخدام قالب"""
-        # Check if default template
         default_template = next((t for t in DEFAULT_TEMPLATES if t["id"] == template_id), None)
         
         if default_template:
@@ -1659,7 +1854,6 @@ class AIAssistant:
                 raise ValueError("القالب غير موجود")
             code = template.get("code", "")
         
-        # Check credits for premium templates
         cost = template.get("cost", SERVICE_COSTS["use_template"])
         if cost > 0:
             credits = await self.get_user_credits(user_id)
@@ -1667,14 +1861,12 @@ class AIAssistant:
                 raise ValueError(f"رصيد غير كافٍ. المطلوب: {cost} نقطة")
             await self.deduct_credits(user_id, cost, "use_template")
         
-        # Update uses count
         if not default_template:
             await self.db.templates.update_one(
                 {"id": template_id},
                 {"$inc": {"uses_count": 1}}
             )
         
-        # Create or update session with template code
         if session_id:
             await self.update_session_code(session_id, user_id, code)
         else:
@@ -1688,9 +1880,8 @@ class AIAssistant:
             "template_name": template["name"],
             "cost": cost
         }
-
+    
     def _get_default_template_code(self, template_id: str) -> str:
-        """كود القوالب الافتراضية"""
         templates_code = {
             "landing-dark": '''<!DOCTYPE html>
 <html lang="ar" dir="rtl">
@@ -1713,436 +1904,51 @@ class AIAssistant:
     </nav>
     <section class="pt-32 pb-20 px-6">
         <div class="max-w-4xl mx-auto text-center">
-            <h1 class="text-5xl md:text-6xl font-bold mb-6 text-transparent bg-clip-text bg-gradient-to-r from-amber-400 to-yellow-500">
-                عنوان رئيسي جذاب
-            </h1>
-            <p class="text-xl text-gray-400 mb-8">وصف مختصر يشرح ما تقدمه من خدمات أو منتجات بشكل واضح ومباشر</p>
-            <button class="px-8 py-4 bg-gradient-to-r from-amber-600 to-yellow-600 rounded-full text-lg font-bold hover:from-amber-700 hover:to-yellow-700 transition shadow-lg shadow-amber-500/30">
-                ابدأ الآن
-            </button>
+            <h1 class="text-5xl md:text-6xl font-bold mb-6 text-transparent bg-clip-text bg-gradient-to-r from-amber-400 to-yellow-500">عنوان رئيسي جذاب</h1>
+            <p class="text-xl text-gray-400 mb-8">وصف مختصر يشرح ما تقدمه من خدمات</p>
+            <button class="px-8 py-4 bg-gradient-to-r from-amber-600 to-yellow-600 rounded-full text-lg font-bold hover:from-amber-700 hover:to-yellow-700 transition shadow-lg shadow-amber-500/30">ابدأ الآن</button>
         </div>
     </section>
 </body>
-</html>''',
-            "ecommerce-gold": '''<!DOCTYPE html>
-<html lang="ar" dir="rtl">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>متجر إلكتروني</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-</head>
-<body class="bg-[#0a0a12] text-white min-h-screen">
-    <nav class="bg-black/80 backdrop-blur border-b border-amber-500/20 sticky top-0 z-50">
-        <div class="max-w-6xl mx-auto px-6 py-4 flex justify-between items-center">
-            <h1 class="text-2xl font-bold text-amber-400">المتجر</h1>
-            <div class="flex items-center gap-4">
-                <input type="text" placeholder="ابحث..." class="bg-slate-800 border border-slate-700 rounded-lg px-4 py-2 text-sm">
-                <button class="relative p-2">🛍️<span class="absolute -top-1 -right-1 bg-amber-500 text-black text-xs w-5 h-5 rounded-full flex items-center justify-center">3</span></button>
-            </div>
-        </div>
-    </nav>
-    <section class="py-12 px-6">
-        <div class="max-w-6xl mx-auto">
-            <h2 class="text-3xl font-bold text-amber-400 mb-8">المنتجات المميزة</h2>
-            <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
-                <div class="bg-slate-800/50 border border-slate-700 rounded-2xl overflow-hidden hover:border-amber-500/50 transition">
-                    <div class="h-48 bg-gradient-to-br from-amber-500/20 to-yellow-500/20 flex items-center justify-center text-6xl">📱</div>
-                    <div class="p-4">
-                        <h3 class="text-lg font-bold text-white">منتج 1</h3>
-                        <p class="text-gray-400 text-sm mb-3">وصف المنتج</p>
-                        <div class="flex justify-between items-center">
-                            <span class="text-amber-400 font-bold">199 ر.س</span>
-                            <button class="px-4 py-2 bg-amber-600 rounded-lg text-sm hover:bg-amber-700">أضف للسلة</button>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </section>
-</body>
-</html>''',
-            "portfolio-minimal": '''<!DOCTYPE html>
-<html lang="ar" dir="rtl">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>معرض الأعمال</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-</head>
-<body class="bg-[#0a0a12] text-white min-h-screen">
-    <section class="min-h-screen flex items-center justify-center px-6">
-        <div class="text-center">
-            <div class="w-32 h-32 bg-gradient-to-br from-amber-500 to-yellow-500 rounded-full mx-auto mb-6 flex items-center justify-center text-4xl">👤</div>
-            <h1 class="text-4xl font-bold mb-2">اسمك هنا</h1>
-            <p class="text-amber-400 text-xl mb-6">مصمم | مطور | مبدع</p>
-            <p class="text-gray-400 max-w-md mx-auto mb-8">نبذة مختصرة عنك وعن خبراتك ومهاراتك في مجال عملك</p>
-            <div class="flex justify-center gap-4">
-                <a href="#" class="px-6 py-3 bg-amber-600 rounded-lg hover:bg-amber-700 transition">أعمالي</a>
-                <a href="#" class="px-6 py-3 border border-amber-500 rounded-lg hover:bg-amber-500/20 transition">تواصل معي</a>
-            </div>
-        </div>
-    </section>
-</body>
-</html>''',
-            "dashboard-pro": '''<!DOCTYPE html>
-<html lang="ar" dir="rtl">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>لوحة التحكم</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-</head>
-<body class="bg-[#0a0a12] text-white min-h-screen flex">
-    <aside class="w-64 bg-[#0d0d18] border-l border-slate-800 p-4 hidden md:block">
-        <h1 class="text-xl font-bold text-amber-400 mb-8">📊 Dashboard</h1>
-        <nav class="space-y-2">
-            <a href="#" class="flex items-center gap-3 px-4 py-3 bg-amber-500/20 border border-amber-500/30 rounded-xl text-amber-400">🏠 الرئيسية</a>
-            <a href="#" class="flex items-center gap-3 px-4 py-3 hover:bg-slate-800 rounded-xl text-gray-400">📈 الإحصائيات</a>
-            <a href="#" class="flex items-center gap-3 px-4 py-3 hover:bg-slate-800 rounded-xl text-gray-400">👥 المستخدمين</a>
-            <a href="#" class="flex items-center gap-3 px-4 py-3 hover:bg-slate-800 rounded-xl text-gray-400">⚙️ الإعدادات</a>
-        </nav>
-    </aside>
-    <main class="flex-1 p-6">
-        <h2 class="text-2xl font-bold mb-6">مرحباً بك 👋</h2>
-        <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
-            <div class="bg-gradient-to-br from-amber-500/20 to-yellow-500/20 border border-amber-500/30 rounded-2xl p-6">
-                <p class="text-gray-400 text-sm">إجمالي المبيعات</p>
-                <p class="text-3xl font-bold text-amber-400">12,450</p>
-            </div>
-            <div class="bg-slate-800/50 border border-slate-700 rounded-2xl p-6">
-                <p class="text-gray-400 text-sm">المستخدمين</p>
-                <p class="text-3xl font-bold">2,340</p>
-            </div>
-            <div class="bg-slate-800/50 border border-slate-700 rounded-2xl p-6">
-                <p class="text-gray-400 text-sm">الطلبات</p>
-                <p class="text-3xl font-bold">456</p>
-            </div>
-            <div class="bg-slate-800/50 border border-slate-700 rounded-2xl p-6">
-                <p class="text-gray-400 text-sm">الإيرادات</p>
-                <p class="text-3xl font-bold">89,200</p>
-            </div>
-        </div>
-    </main>
-</body>
-</html>''',
-
-            "game-2d-platformer": '''<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>2D Platformer Game</title>
-    <script src="https://cdn.jsdelivr.net/npm/phaser@3.70.0/dist/phaser.min.js"></script>
-    <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { background: #1a1a2e; display: flex; justify-content: center; align-items: center; min-height: 100vh; }
-        #game { border-radius: 12px; overflow: hidden; box-shadow: 0 0 30px rgba(255,215,0,0.3); }
-    </style>
-</head>
-<body>
-    <div id="game"></div>
-    <script>
-        const config = {
-            type: Phaser.AUTO,
-            width: 800,
-            height: 600,
-            parent: 'game',
-            backgroundColor: '#16213e',
-            physics: { default: 'arcade', arcade: { gravity: { y: 800 }, debug: false } },
-            scene: { preload, create, update }
-        };
-        
-        let player, cursors, platforms, coins, score = 0, scoreText;
-        const game = new Phaser.Game(config);
-        
-        function preload() {
-            this.load.setBaseURL('https://labs.phaser.io');
-            this.load.image('ground', 'assets/sprites/platform.png');
-            this.load.image('star', 'assets/sprites/star.png');
-            this.load.spritesheet('dude', 'assets/sprites/dude.png', { frameWidth: 32, frameHeight: 48 });
-        }
-        
-        function create() {
-            platforms = this.physics.add.staticGroup();
-            platforms.create(400, 568, 'ground').setScale(2).refreshBody();
-            platforms.create(600, 400, 'ground');
-            platforms.create(50, 250, 'ground');
-            platforms.create(750, 220, 'ground');
-            
-            player = this.physics.add.sprite(100, 450, 'dude');
-            player.setBounce(0.2);
-            player.setCollideWorldBounds(true);
-            
-            this.anims.create({ key: 'left', frames: this.anims.generateFrameNumbers('dude', { start: 0, end: 3 }), frameRate: 10, repeat: -1 });
-            this.anims.create({ key: 'turn', frames: [{ key: 'dude', frame: 4 }], frameRate: 20 });
-            this.anims.create({ key: 'right', frames: this.anims.generateFrameNumbers('dude', { start: 5, end: 8 }), frameRate: 10, repeat: -1 });
-            
-            coins = this.physics.add.group();
-            for (let i = 0; i < 12; i++) {
-                const coin = coins.create(70 + i * 70, 0, 'star');
-                coin.setBounceY(Phaser.Math.FloatBetween(0.4, 0.8));
-            }
-            
-            scoreText = this.add.text(16, 16, 'Score: 0', { fontSize: '32px', fill: '#ffd700' });
-            
-            this.physics.add.collider(player, platforms);
-            this.physics.add.collider(coins, platforms);
-            this.physics.add.overlap(player, coins, collectCoin, null, this);
-            
-            cursors = this.input.keyboard.createCursorKeys();
-        }
-        
-        function update() {
-            if (cursors.left.isDown) { player.setVelocityX(-200); player.anims.play('left', true); }
-            else if (cursors.right.isDown) { player.setVelocityX(200); player.anims.play('right', true); }
-            else { player.setVelocityX(0); player.anims.play('turn'); }
-            if (cursors.up.isDown && player.body.touching.down) player.setVelocityY(-500);
-        }
-        
-        function collectCoin(player, coin) {
-            coin.disableBody(true, true);
-            score += 10;
-            scoreText.setText('Score: ' + score);
-        }
-    </script>
-</body>
-</html>''',
-            "game-3d-racing": '''<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>3D Racing Game</title>
-    <script src="https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.min.js"></script>
-    <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { background: #000; overflow: hidden; }
-        #ui { position: fixed; top: 20px; left: 20px; color: #ffd700; font-family: Arial; font-size: 24px; z-index: 100; }
-        #speed { font-size: 48px; font-weight: bold; }
-    </style>
-</head>
-<body>
-    <div id="ui">
-        <div>Speed: <span id="speed">0</span> km/h</div>
-        <div style="margin-top:10px;font-size:14px;">Use Arrow Keys to Drive</div>
-    </div>
-    <script>
-        const scene = new THREE.Scene();
-        scene.background = new THREE.Color(0x1a1a2e);
-        scene.fog = new THREE.Fog(0x1a1a2e, 50, 200);
-        
-        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
-        const renderer = new THREE.WebGLRenderer({ antialias: true });
-        renderer.setSize(window.innerWidth, window.innerHeight);
-        document.body.appendChild(renderer.domElement);
-        
-        const ambient = new THREE.AmbientLight(0x404040, 2);
-        scene.add(ambient);
-        const directional = new THREE.DirectionalLight(0xffffff, 1);
-        directional.position.set(50, 50, 50);
-        scene.add(directional);
-        
-        const roadGeo = new THREE.PlaneGeometry(20, 1000);
-        const roadMat = new THREE.MeshStandardMaterial({ color: 0x333333 });
-        const road = new THREE.Mesh(roadGeo, roadMat);
-        road.rotation.x = -Math.PI / 2;
-        road.position.z = -450;
-        scene.add(road);
-        
-        const carGeo = new THREE.BoxGeometry(2, 1, 4);
-        const carMat = new THREE.MeshStandardMaterial({ color: 0xffd700 });
-        const car = new THREE.Mesh(carGeo, carMat);
-        car.position.y = 0.5;
-        scene.add(car);
-        
-        for (let i = 0; i < 50; i++) {
-            const treeGeo = new THREE.ConeGeometry(2, 8, 8);
-            const treeMat = new THREE.MeshStandardMaterial({ color: 0x228b22 });
-            const tree = new THREE.Mesh(treeGeo, treeMat);
-            tree.position.set((Math.random() > 0.5 ? 15 : -15), 4, -i * 20);
-            scene.add(tree);
-        }
-        
-        camera.position.set(0, 5, 10);
-        camera.lookAt(car.position);
-        
-        let speed = 0;
-        const keys = {};
-        document.addEventListener('keydown', e => keys[e.code] = true);
-        document.addEventListener('keyup', e => keys[e.code] = false);
-        
-        function animate() {
-            requestAnimationFrame(animate);
-            
-            if (keys['ArrowUp']) speed = Math.min(speed + 0.5, 100);
-            if (keys['ArrowDown']) speed = Math.max(speed - 1, 0);
-            if (keys['ArrowLeft']) car.position.x = Math.max(car.position.x - 0.2, -8);
-            if (keys['ArrowRight']) car.position.x = Math.min(car.position.x + 0.2, 8);
-            
-            speed *= 0.99;
-            car.position.z -= speed * 0.1;
-            camera.position.z = car.position.z + 10;
-            camera.lookAt(car.position);
-            
-            document.getElementById('speed').textContent = Math.round(speed);
-            renderer.render(scene, camera);
-        }
-        animate();
-        
-        window.addEventListener('resize', () => {
-            camera.aspect = window.innerWidth / window.innerHeight;
-            camera.updateProjectionMatrix();
-            renderer.setSize(window.innerWidth, window.innerHeight);
-        });
-    </script>
-</body>
-</html>''',
-            "mobile-flutter-ecommerce": '''// Flutter E-Commerce App
-// Run: flutter create my_app && cd my_app && flutter run
-
-import 'package:flutter/material.dart';
-
-void main() => runApp(const MyApp());
-
-class MyApp extends StatelessWidget {
-  const MyApp({super.key});
-  
-  @override
-  Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'متجر إلكتروني',
-      debugShowCheckedModeBanner: false,
-      theme: ThemeData(
-        primarySwatch: Colors.amber,
-        scaffoldBackgroundColor: const Color(0xFF0a0a12),
-      ),
-      home: const HomeScreen(),
-    );
-  }
-}
-
-class HomeScreen extends StatelessWidget {
-  const HomeScreen({super.key});
-  
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('المتجر'),
-        backgroundColor: const Color(0xFF0d0d18),
-      ),
-      body: GridView.builder(
-        padding: const EdgeInsets.all(16),
-        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-          crossAxisCount: 2,
-          childAspectRatio: 0.75,
-        ),
-        itemCount: 10,
-        itemBuilder: (context, index) => Card(
-          color: const Color(0xFF16213e),
-          child: Column(
-            children: [
-              Expanded(child: Icon(Icons.shopping_bag, size: 64, color: Colors.amber)),
-              Padding(
-                padding: const EdgeInsets.all(8),
-                child: Text('منتج ${index + 1}', style: const TextStyle(color: Colors.white)),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}''',
-            "mobile-react-native-social": '''// React Native Social App
-// Run: npx react-native init MyApp && cd MyApp && npx react-native run-android
-
-import React from 'react';
-import { View, Text, FlatList, StyleSheet, SafeAreaView } from 'react-native';
-
-const App = () => {
-  const posts = [
-    { id: '1', user: 'أحمد', content: 'مرحباً بالجميع!' },
-    { id: '2', user: 'سارة', content: 'يوم جميل' },
-  ];
-
-  return (
-    <SafeAreaView style={styles.container}>
-      <View style={styles.header}>
-        <Text style={styles.title}>التواصل</Text>
-      </View>
-      <FlatList
-        data={posts}
-        keyExtractor={item => item.id}
-        renderItem={({ item }) => (
-          <View style={styles.post}>
-            <Text style={styles.user}>{item.user}</Text>
-            <Text style={styles.content}>{item.content}</Text>
-          </View>
-        )}
-      />
-    </SafeAreaView>
-  );
-};
-
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#0a0a12' },
-  header: { padding: 16, backgroundColor: '#0d0d18' },
-  title: { fontSize: 24, fontWeight: 'bold', color: '#ffd700' },
-  post: { margin: 16, padding: 16, backgroundColor: '#16213e', borderRadius: 12 },
-  user: { color: '#ffd700', fontWeight: 'bold' },
-  content: { color: '#ccc', marginTop: 8 },
-});
-
-export default App;'''
+</html>'''
         }
         return templates_code.get(template_id, templates_code["landing-dark"])
-
     
     # ============== Deployment System ==============
     async def deploy_project(self, user_id: str, session_id: str, subdomain: str) -> Dict:
-        """نشر المشروع على نطاق فرعي"""
+        import re
         
-        # Validate subdomain
         subdomain = subdomain.lower().strip()
         if not re.match(r'^[a-z0-9][a-z0-9-]{2,30}[a-z0-9]$', subdomain):
-            raise ValueError("اسم النطاق غير صالح. استخدم حروف إنجليزية صغيرة وأرقام وشرطات فقط (4-32 حرف)")
+            raise ValueError("اسم النطاق غير صالح")
         
-        # Check if subdomain is taken
         existing = await self.db.deployments.find_one({"subdomain": subdomain, "status": "active"})
         if existing:
-            raise ValueError(f"النطاق {subdomain}.zitex.app محجوز بالفعل")
+            raise ValueError(f"النطاق {subdomain}.zitex.app محجوز")
         
-        # Get session code
         session = await self.get_session(session_id, user_id)
         if not session or not session.get("generated_code"):
             raise ValueError("لا يوجد كود للنشر")
         
-        # Check credits
         credits = await self.get_user_credits(user_id)
         cost = SERVICE_COSTS["deploy"]
         if credits < cost:
             raise ValueError(f"رصيد غير كافٍ. المطلوب: {cost} نقطة")
         
-        # Upload to Object Storage
         storage_path = f"{APP_NAME}/sites/{subdomain}/index.html"
         html_code = session["generated_code"]
         
-        # Ensure code is bytes
         if isinstance(html_code, str):
             html_code = html_code.encode('utf-8')
         
         upload_result = upload_to_storage(storage_path, html_code, "text/html")
         
         if not upload_result:
-            raise ValueError("فشل رفع الملف. حاول مرة أخرى")
+            raise ValueError("فشل رفع الملف")
         
-        # Generate public URL
         public_url = f"https://{subdomain}.zitex.app"
         storage_url = f"{STORAGE_URL.replace('/api/v1/storage', '')}/sites/{subdomain}/index.html"
         
-        # Create deployment record
         deployment = {
             "id": str(uuid.uuid4()),
             "user_id": user_id,
@@ -2161,7 +1967,6 @@ export default App;'''
         await self.db.deployments.insert_one(deployment)
         await self.deduct_credits(user_id, cost, f"deploy:{subdomain}")
         
-        # Update session with deployment info
         await self.db.chat_sessions.update_one(
             {"id": session_id},
             {"$set": {
@@ -2180,11 +1985,10 @@ export default App;'''
             "url": public_url,
             "storage_url": storage_url,
             "subdomain": subdomain,
-            "message": f"🚀 تم نشر المشروع بنجاح!\n\n🔗 الرابط: {public_url}\n\n💰 التكلفة: {cost} نقطة"
+            "message": f"🚀 تم نشر المشروع!\n\n🔗 {public_url}\n\n💰 التكلفة: {cost} نقطة"
         }
     
     async def update_deployment(self, user_id: str, deployment_id: str, new_code: str) -> Dict:
-        """تحديث مشروع منشور"""
         deployment = await self.db.deployments.find_one(
             {"id": deployment_id, "user_id": user_id, "status": "active"},
             {"_id": 0}
@@ -2193,7 +1997,6 @@ export default App;'''
         if not deployment:
             raise ValueError("المشروع غير موجود")
         
-        # Upload updated code
         storage_path = deployment["storage_path"]
         if isinstance(new_code, str):
             new_code = new_code.encode('utf-8')
@@ -2203,141 +2006,30 @@ export default App;'''
         if not upload_result:
             raise ValueError("فشل تحديث الملف")
         
-        # Update record
         await self.db.deployments.update_one(
             {"id": deployment_id},
             {"$set": {"updated_at": datetime.now(timezone.utc).isoformat()}}
         )
         
-        return {"message": "تم تحديث المشروع بنجاح", "url": deployment["url"]}
+        return {"message": "تم تحديث المشروع", "url": deployment["url"]}
     
     async def get_user_deployments(self, user_id: str) -> List[Dict]:
-        """استرجاع مشاريع المستخدم المنشورة"""
         deployments = await self.db.deployments.find(
             {"user_id": user_id, "status": "active"},
-            {"_id": 0}
+            {"_id": 0, "code": 0}
         ).sort("created_at", -1).to_list(50)
         return deployments
     
     async def get_deployment_by_subdomain(self, subdomain: str) -> Optional[Dict]:
-        """استرجاع مشروع منشور بالنطاق"""
         return await self.db.deployments.find_one(
             {"subdomain": subdomain, "status": "active"},
             {"_id": 0}
         )
     
     async def delete_deployment(self, user_id: str, deployment_id: str) -> bool:
-        """حذف مشروع منشور"""
         result = await self.db.deployments.update_one(
             {"id": deployment_id, "user_id": user_id},
             {"$set": {"status": "deleted"}}
-        )
-        return result.modified_count > 0
-
-    # ============== Export & Social Media ==============
-    async def export_for_social(self, user_id: str, asset_id: str, platform: str) -> Dict:
-        """تصدير الأصول لمنصات التواصل الاجتماعي"""
-        asset = await self.db.generated_assets.find_one(
-            {"id": asset_id, "user_id": user_id},
-            {"_id": 0}
-        )
-        
-        if not asset:
-            raise ValueError("الملف غير موجود")
-        
-        # Platform dimensions
-        dimensions = {
-            "instagram_post": {"width": 1080, "height": 1080},
-            "instagram_story": {"width": 1080, "height": 1920},
-            "instagram_reel": {"width": 1080, "height": 1920},
-            "tiktok": {"width": 1080, "height": 1920},
-            "youtube_short": {"width": 1080, "height": 1920},
-            "youtube_video": {"width": 1920, "height": 1080},
-            "facebook_post": {"width": 1200, "height": 630},
-            "twitter_post": {"width": 1200, "height": 675},
-            "linkedin_post": {"width": 1200, "height": 627}
-        }
-        
-        if platform not in dimensions:
-            raise ValueError("المنصة غير مدعومة")
-        
-        return {
-            "asset_id": asset_id,
-            "platform": platform,
-            "dimensions": dimensions[platform],
-            "original_url": asset.get("url"),
-            "message": f"✅ جاهز للنشر على {platform}"
-        }
-    
-    # ============== Analytics ==============
-    async def get_user_analytics(self, user_id: str) -> Dict:
-        """إحصائيات المستخدم"""
-        # Count sessions
-        total_sessions = await self.db.chat_sessions.count_documents({"user_id": user_id})
-        active_sessions = await self.db.chat_sessions.count_documents({"user_id": user_id, "status": "active"})
-        
-        # Count assets
-        total_images = await self.db.generated_assets.count_documents({"user_id": user_id, "asset_type": "image"})
-        total_videos = await self.db.generated_assets.count_documents({"user_id": user_id, "asset_type": "video"})
-        
-        # Count deployments
-        total_deployments = await self.db.deployments.count_documents({"user_id": user_id, "status": "active"})
-        
-        # Get user credits
-        user = await self.db.users.find_one({"id": user_id}, {"_id": 0, "credits": 1, "credit_history": 1})
-        credits = user.get("credits", 0) if user else 0
-        
-        # Calculate total spent
-        credit_history = user.get("credit_history", []) if user else []
-        total_spent = sum(abs(h.get("amount", 0)) for h in credit_history if h.get("amount", 0) < 0)
-        
-        return {
-            "sessions": {
-                "total": total_sessions,
-                "active": active_sessions
-            },
-            "assets": {
-                "images": total_images,
-                "videos": total_videos,
-                "total": total_images + total_videos
-            },
-            "deployments": total_deployments,
-            "credits": {
-                "current": credits,
-                "total_spent": total_spent
-            }
-        }
-    
-    # ============== Admin Functions ==============
-    async def get_all_users_stats(self) -> Dict:
-        """إحصائيات جميع المستخدمين (للأدمن)"""
-        total_users = await self.db.users.count_documents({})
-        total_sessions = await self.db.chat_sessions.count_documents({})
-        total_assets = await self.db.generated_assets.count_documents({})
-        total_deployments = await self.db.deployments.count_documents({"status": "active"})
-        
-        return {
-            "users": total_users,
-            "sessions": total_sessions,
-            "assets": total_assets,
-            "deployments": total_deployments
-        }
-    
-    async def add_credits_to_user(self, admin_id: str, target_user_id: str, amount: int, reason: str = "admin_add") -> bool:
-        """إضافة نقاط لمستخدم (للأدمن)"""
-        result = await self.db.users.update_one(
-            {"id": target_user_id},
-            {
-                "$inc": {"credits": amount},
-                "$push": {
-                    "credit_history": {
-                        "amount": amount,
-                        "reason": reason,
-                        "admin_id": admin_id,
-                        "timestamp": datetime.now(timezone.utc).isoformat()
-                    }
-                }
-            }
         )
         return result.modified_count > 0
 
