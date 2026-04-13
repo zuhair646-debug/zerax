@@ -660,12 +660,13 @@ async def transcribe_audio(
     language: str = Form(default="ar"),
     current_user: dict = Depends(get_current_user)
 ):
-    """Convert speech to text using OpenAI Whisper"""
+    """Convert speech to text using OpenAI Whisper via Emergent"""
     if not AI_FEATURES_ENABLED:
         raise HTTPException(status_code=503, detail="ميزة تحويل الصوت للنص معطلة مؤقتاً. ستتوفر قريباً!")
     
-    if not openai_client:
-        raise HTTPException(status_code=400, detail="خدمة التحويل الصوتي غير متاحة - يرجى إضافة OPENAI_API_KEY")
+    emergent_key = os.environ.get('EMERGENT_LLM_KEY')
+    if not emergent_key:
+        raise HTTPException(status_code=400, detail="خدمة التحويل الصوتي غير متاحة")
     
     # Check file size (max 25MB)
     content = await audio.read()
@@ -673,31 +674,30 @@ async def transcribe_audio(
         raise HTTPException(status_code=400, detail="حجم الملف أكبر من 25MB")
     
     # Check file type
-    allowed_types = ['audio/webm', 'audio/mp3', 'audio/mpeg', 'audio/wav', 'audio/mp4', 'audio/m4a', 'audio/ogg']
     if audio.content_type and not any(t in audio.content_type for t in ['audio', 'webm', 'ogg']):
         raise HTTPException(status_code=400, detail=f"نوع الملف غير مدعوم: {audio.content_type}")
     
     try:
-        # Create a file-like object
+        from emergentintegrations.llm.openai import OpenAISpeechToText
         import tempfile
+        
         with tempfile.NamedTemporaryFile(suffix='.webm', delete=False) as tmp_file:
             tmp_file.write(content)
             tmp_file_path = tmp_file.name
         
-        # Transcribe using OpenAI Whisper
+        stt = OpenAISpeechToText(api_key=emergent_key)
+        
         with open(tmp_file_path, 'rb') as audio_file:
-            response = openai_client.audio.transcriptions.create(
+            response = await stt.transcribe(
                 file=audio_file,
                 model="whisper-1",
                 language=language,
                 response_format="json"
             )
         
-        # Clean up temp file
         import os as os_module
         os_module.unlink(tmp_file_path)
         
-        # Log activity
         await log_activity(
             current_user['user_id'],
             "stt_transcribed",
@@ -713,6 +713,7 @@ async def transcribe_audio(
         
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"خطأ في تحويل الصوت: {str(e)}")
+
 
 # ============== IMAGE GENERATION & EDITING ==============
 
