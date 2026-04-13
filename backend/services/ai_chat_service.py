@@ -1340,7 +1340,7 @@ class AIAssistant:
                     model="gpt-4o",
                     messages=messages,
                     temperature=0.7,
-                    max_tokens=32000
+                    max_tokens=16384
                 )
                 response = completion.choices[0].message.content
             else:
