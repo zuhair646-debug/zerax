@@ -1026,16 +1026,30 @@ class AIAssistant:
         
         # Extract code from [CODE_BLOCK] or regular code blocks
         code = None
-        
-        # First try CODE_BLOCK format
+
+        # First try CODE_BLOCK format with backticks
         code_block_match = re.search(r'\[CODE_BLOCK\]\s*```(?:html|javascript|js)?\n?([\s\S]*?)```\s*\[/CODE_BLOCK\]', ai_response)
         if code_block_match:
             code = code_block_match.group(1).strip()
         else:
-            # Fall back to regular code block
-            code_match = re.search(r'```(?:html|javascript|js)?\n?([\s\S]*?)```', ai_response)
-            if code_match:
-                code = code_match.group(1).strip()
+            # Try CODE_BLOCK without backticks (direct HTML)
+            code_block_match2 = re.search(r'\[CODE_BLOCK\]\s*(<!DOCTYPE[\s\S]*?</html>)\s*\[/CODE_BLOCK\]', ai_response, re.IGNORECASE)
+            if code_block_match2:
+                code = code_block_match2.group(1).strip()
+            else:
+                # Try CODE_BLOCK with any content
+                code_block_match3 = re.search(r'\[CODE_BLOCK\]\s*([\s\S]*?)\s*\[/CODE_BLOCK\]', ai_response)
+                if code_block_match3:
+                    code = code_block_match3.group(1).strip()
+                    # Remove backtick wrappers if present
+                    code = re.sub(r'^```(?:html|javascript|js)?\s*', '', code)
+                    code = re.sub(r'```\s*$', '', code)
+                    code = code.strip()
+                else:
+                    # Fall back to regular code block
+                    code_match = re.search(r'```(?:html|javascript|js)?\n?([\s\S]*?)```', ai_response)
+                    if code_match:
+                        code = code_match.group(1).strip()
         
         if code:
             code_with_badge = inject_zitex_badge(code)
