@@ -1410,7 +1410,7 @@ class AIAssistant:
         except Exception as e:
             logger.error(f"Image generation error: {e}")
             return None
-    
+
     async def _generate_with_gpt(self, session: Dict, message: str, request_type: str, credits: int, settings: Dict) -> Tuple[str, int, bool]:
         # Build context about the project
         project_data = session.get("project_data", {})
@@ -1423,6 +1423,11 @@ class AIAssistant:
 """
         
         system_prompt = MASTER_SYSTEM_PROMPT + context
+        
+        # Extract image URLs from message
+        image_urls = re.findall(r'(https?://\S+\.(?:png|jpg|jpeg|gif|webp))', message, re.IGNORECASE)
+        # Also check for objstore URLs
+        image_urls += re.findall(r'(https?://integrations\.emergentagent\.com/objstore/\S+)', message)
         
         # Build conversation history
         conversation_history = ""
@@ -1442,9 +1447,27 @@ class AIAssistant:
                 )
                 chat.with_model("openai", "gpt-4o")
                 
-                user_message = UserMessage(text=full_prompt)
+                # Build message with image support
+                file_contents = []
+                if image_urls:
+                    for img_url in image_urls[:3]:  # Max 3 images
+                        try:
+                            from emergentintegrations.llm.chat import FileContent
+                            img_resp = requests.get(img_url, timeout=15)
+                            if img_resp.status_code == 200:
+                                img_b64 = base64.b64encode(img_resp.content).decode('utf-8')
+                                content_type = img_resp.headers.get('Content-Type', 'image/png')
+                                file_contents.append(FileContent(content_type=content_type, file_content_base64=img_b64))
+                                logger.info(f"Attached image: {img_url[:50]}...")
+                        except Exception as e:
+                            logger.error(f"Failed to attach image {img_url}: {e}")
+                
+                if file_contents:
+                    user_message = UserMessage(text=full_prompt, file_contents=file_contents)
+                else:
+                    user_message = UserMessage(text=full_prompt)
                 response = await chat.send_message(user_message)
-            
+  
             # Fall back to direct OpenAI client
             elif self.openai_client:
                 messages = [{"role": "system", "content": system_prompt}]
