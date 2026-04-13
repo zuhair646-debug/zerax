@@ -19,7 +19,7 @@ import io
 
 # AI Features disabled for independent hosting
 # To enable: install openai, elevenlabs, Pillow and configure API keys
-AI_FEATURES_ENABLED = False
+AI_FEATURES_ENABLED = True
 
 # Optional imports for AI features
 try:
