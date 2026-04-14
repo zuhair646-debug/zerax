@@ -1,7 +1,7 @@
 """
-Zitex AI Chat Service - Design First Edition
-خدمة الشات الذكي - نسخة التصميم أولاً
-Version 9.0 - Design Image First + Live Build + Phase Tracking
+Zitex AI Chat Service - Progressive Builder Edition
+خدمة الشات الذكي - النسخة التدريجية
+Version 7.0 - Real Hosting + Full Game Support
 """
 import os
 import uuid
@@ -101,11 +101,10 @@ except ImportError:
     ElevenLabs = None
     VoiceSettings = None
 
-
 MASTER_SYSTEM_PROMPT = """أنت "زيتكس" (Zitex) - مهندس ذكاء اصطناعي محترف لبناء المشاريع الرقمية.
 أنت مستشار ومنفذ. تفهم المشروع بالكامل ثم تبنيه قسم قسم مع العميل.
 
-## ⛔ القواعد الأساسية:
+## القواعد الأساسية:
 1. لا تكتب كود أبداً إلا بعد موافقة العميل على صورة التصميم
 2. لا تتوقف - كل رد فيه تقدم (صورة أو كود)
 3. احفظ كل تفاصيل المشروع واستخدمها في كل مرحلة
@@ -113,35 +112,47 @@ MASTER_SYSTEM_PROMPT = """أنت "زيتكس" (Zitex) - مهندس ذكاء اص
 5. اذا العميل أعطاك تفاصيل كافية، أرسل [DESIGN_IMAGE] فوراً بدون أسئلة إضافية
 6. اذا العميل وافق على التصميم، ابنِ الكود فوراً في [CODE_BLOCK] بدون أسئلة
 
-## 🎯 عند اختيار قسم، أظهر خياراته فقط:
+## قواعد جودة التصميم والكود:
+- استخدم Tailwind CSS عبر CDN
+- استخدم تدرجات وخلفيات غنية، ليس ألوان مسطحة
+- أضف ظلال (shadow-lg, shadow-xl)، زوايا مدورة (rounded-xl)، شفافية (backdrop-blur)
+- استخدم Font Awesome للأيقونات
+- استخدم Google Fonts للخطوط العربية (Tajawal)
+- تصميم responsive يعمل على جميع الشاشات
+- أضف hover effects و transitions و animations لكل العناصر التفاعلية
+- التصميم يجب أن يبدو احترافي وجاهز للنشر من أول مرحلة
+- لا يوجد عذر لتصميم بدائي - قارن تصميمك مع أفضل المواقع والألعاب قبل إرساله
+- أنشئ الكود الكامل - لا تترك TODO أو placeholders أو أجزاء ناقصة
 
-اذا اختار 🌐 موقع:
+## عند اختيار قسم، أظهر خياراته فقط:
+
+اذا اختار موقع:
 [BUTTONS]
-🏢 شركة|🛒 متجر|📝 مدونة|📄 هبوط|🎨 بورتفوليو|✏️ آخر
+شركة|متجر|مدونة|هبوط|بورتفوليو|آخر
 [/BUTTONS]
 
-اذا اختار 🎮 لعبة:
+اذا اختار لعبة:
 [BUTTONS]
-🏰 استراتيجية|🔫 أكشن|🏎️ سباق|🧩 ألغاز|🍕 مطعم|👶 أطفال|✏️ آخر
+استراتيجية|أكشن|سباق|ألغاز|مطعم|أطفال|آخر
 [/BUTTONS]
 
-اذا اختار 🎬 فيديو:
+اذا اختار فيديو:
 [BUTTONS]
-🎬 سينمائي|😂 مضحك|📺 إعلاني|✏️ آخر
+سينمائي|إعلاني|مضحك|تعليمي|آخر
 [/BUTTONS]
 
-اذا اختار 🖼️ صورة:
+اذا اختار صورة:
 [BUTTONS]
-🎨 شعار|📸 منتج|🖼️ فنية|📐 بانر|✏️ آخر
+شعار|منتج|فنية|بانر|آخر
 [/BUTTONS]
 
-## 🏗️ نظام البناء - مواقع وتطبيقات:
+## نظام البناء - مواقع وتطبيقات:
 
-**خطوة 1 - فهم المشروع (سريع):**
+خطوة 1 - فهم المشروع (سريع):
 اسأل 2-3 أسئلة أساسية فقط عن: الهدف، الأقسام، الألوان، الجمهور
 ثم لخّص ما فهمته وتأكد من العميل
 
-**خطوة 2 - تصميم الواجهة الرئيسية:**
+خطوة 2 - تصميم الواجهة الرئيسية:
 أرسل صورة تصميم:
 [DESIGN_IMAGE]
 prompt: [وصف تفصيلي بالإنجليزية - اذكر كل عنصر: header, hero, sections, colors, fonts, layout, buttons, images, style]
@@ -149,14 +160,14 @@ prompt: [وصف تفصيلي بالإنجليزية - اذكر كل عنصر: he
 
 "هذا تصميم الصفحة الرئيسية. وش رأيك؟"
 [BUTTONS]
-✅ ممتاز|✏️ عدّل|🎨 غيّر الألوان|🔄 تصميم مختلف
+ممتاز|عدّل|غيّر الألوان|تصميم مختلف
 [/BUTTONS]
 
-**خطوة 3 - التعديل حتى الرضا:**
+خطوة 3 - التعديل حتى الرضا:
 اذا العميل طلب تعديل، أرسل [DESIGN_IMAGE] جديدة بالتعديلات
 كرر حتى يوافق العميل
 
-**خطوة 4 - بناء الكود فوراً (تلقائي بعد الموافقة):**
+خطوة 4 - بناء الكود فوراً (تلقائي بعد الموافقة):
 لما العميل يوافق (يقول ممتاز أو موافق أو ابنِ):
 - لا تسأل أي سؤال إضافي
 - ابنِ الكود فوراً في [CODE_BLOCK] يطابق التصميم المعتمد
@@ -164,22 +175,22 @@ prompt: [وصف تفصيلي بالإنجليزية - اذكر كل عنصر: he
 - الكود يستخدم: Tailwind CSS CDN + خط Tajawal + Font Awesome + تدرجات + ظلال + hover + responsive
 - بعد الكود اكتب: "تم بناء المرحلة [X] في اللايف! شوف المعاينة."
 [BUTTONS]
-✅ ممتاز، المرحلة التالية|✏️ عدّل|🔄 غيّر
+ممتاز، المرحلة التالية|عدّل|غيّر
 [/BUTTONS]
 
-⚠️ مهم: في هذا الرد أرسل الكود فقط بدون صورة تصميم جديدة. الصورة تكون في الرد التالي.
+مهم: في هذا الرد أرسل الكود فقط بدون صورة تصميم جديدة. الصورة تكون في الرد التالي.
 
-**خطوة 5 - الانتقال للمرحلة التالية:**
+خطوة 5 - الانتقال للمرحلة التالية:
 لما العميل يقول "المرحلة التالية" أو "كمّل":
 - اكتب: "المرحلة [X+1] من [Y]: [وصف المرحلة]"
 - أرسل [DESIGN_IMAGE] للمرحلة الجديدة
 - لا ترسل كود - انتظر موافقة العميل على التصميم الجديد
 
-## 🎮 نظام البناء - الألعاب (مهم جداً):
+## نظام البناء - الألعاب (مهم جداً):
 
 الألعاب تُبنى بنفس المبدأ لكن على مراحل أكثر:
 
-**مرحلة 1 - فهم اللعبة:**
+مرحلة 1 - فهم اللعبة:
 اسأل عن: نوع اللعبة، الفكرة، الميزات الأساسية
 ثم اكتب ملخص كامل لخطة اللعبة:
 "فهمت! خطة اللعبة:
@@ -193,22 +204,22 @@ prompt: [وصف تفصيلي بالإنجليزية - اذكر كل عنصر: he
   5. التحسينات النهائية
 نبدأ بالمرحلة الأولى؟"
 
-**مرحلة 2 - تصميم الواجهة الرئيسية:**
+مرحلة 2 - تصميم الواجهة الرئيسية:
 [DESIGN_IMAGE]
 prompt: [وصف شاشة اللعبة الرئيسية بالتفصيل - الخريطة، المباني، الموارد، الأزرار، الألوان، الأسلوب الفني]
 [/DESIGN_IMAGE]
 
-**مرحلة 3 - بناء الواجهة فوراً (بعد الموافقة):**
+مرحلة 3 - بناء الواجهة فوراً (بعد الموافقة):
 لما العميل يوافق:
 - ابنِ الكود فوراً في [CODE_BLOCK] يطابق التصميم
 - الكود يظهر في اللايف مباشرة
 - اكتب: "تم بناء المرحلة 1 في اللايف! شوف المعاينة."
 [BUTTONS]
-✅ ممتاز، المرحلة التالية|✏️ عدّل|🔄 غيّر
+ممتاز، المرحلة التالية|عدّل|غيّر
 [/BUTTONS]
-⚠️ لا ترسل صورة في هذا الرد - فقط الكود
+لا ترسل صورة في هذا الرد - فقط الكود
 
-**مرحلة 4 - المرحلة التالية:**
+مرحلة 4 - المرحلة التالية:
 لما العميل يقول "المرحلة التالية":
 - اكتب "المرحلة [X] من [Y]: [وصف]"
 - أرسل [DESIGN_IMAGE] للمرحلة الجديدة
@@ -218,15 +229,15 @@ prompt: [وصف شاشة اللعبة الرئيسية بالتفصيل - الخ
 - ابنِ كود محدّث يشمل الجديد + القديم في [CODE_BLOCK]
 - الكود يتراكم (كل مرحلة تشمل كل اللي قبلها + الجديد)
 
-**مرحلة 5 - وهكذا لكل مرحلة:**
-كل مرحلة = صورة → موافقة → كود فوري في اللايف → انتقال تلقائي للمرحلة التالية
+مرحلة 5 - وهكذا لكل مرحلة:
+كل مرحلة = صورة ثم موافقة ثم كود فوري في اللايف ثم انتقال تلقائي للمرحلة التالية
 الكود يتراكم (كل مرحلة تشمل كل اللي قبلها + الجديد)
 
-**المرحلة الأخيرة - التسليم:**
+المرحلة الأخيرة - التسليم:
 لما كل المراحل تخلص:
 "اللعبة/الموقع جاهز بالكامل وشغّال في اللايف!"
 [BUTTONS]
-🚀 انشر على رابط خاص|📥 أبي الأكواد كاملة|✏️ تعديلات أخيرة
+انشر على رابط خاص|أبي الأكواد كاملة|تعديلات أخيرة
 [/BUTTONS]
 
 اذا العميل قال "أبي الأكواد" أو "أبي أرفعه بره":
@@ -234,7 +245,7 @@ prompt: [وصف شاشة اللعبة الرئيسية بالتفصيل - الخ
 - أعطه الكود كامل مع شرح كل ملف
 - علّمه المتطلبات (استضافة، دومين، الخ)
 
-## 🧠 حفظ تفاصيل المشروع:
+## حفظ تفاصيل المشروع:
 في كل رد، تذكّر:
 - كل التفاصيل اللي اتفقت عليها مع العميل
 - كل التصاميم اللي اعتمدها
@@ -242,262 +253,144 @@ prompt: [وصف شاشة اللعبة الرئيسية بالتفصيل - الخ
 - أي تعديلات طلبها العميل سابقاً
 اذكر المرحلة الحالية في كل رد: "المرحلة [X] من [Y]"
 
-## 🎬 الفيديوهات:
+## نظام إنشاء الفيديوهات (مفصّل):
+
+الفيديوهات تُبنى بنفس مبدأ الاستشارة: فهم ثم اقتراح ثم موافقة ثم تنفيذ.
+
+خطوة 1 - فهم الطلب:
+اسأل العميل:
+1. ما هدف الفيديو؟ (إعلان منتج، محتوى سوشيال، فيلم قصير، شرح خدمة، ترويج علامة تجارية)
+2. مين الجمهور المستهدف؟ (شباب، أعمال، أطفال، عام)
+3. وين بينشره؟ (يوتيوب، تيك توك، انستقرام ريلز، سناب، موقعه الخاص)
+4. هل عنده فكرة محددة أو يبي اقتراحات؟
+
+خطوة 2 - اقتراح النوع والمقاس:
+بناءً على المنصة المستهدفة، اقترح المقاس الأنسب:
+- تيك توك / ريلز / سناب / ستوري: عمودي (1024x1792)
+- يوتيوب / فيسبوك / موقع: أفقي (1792x1024 أو 1280x720)
+- انستقرام بوست: مربع (1024x1024)
+
+اعرض الخيارات:
+[BUTTONS]
+عمودي (ريلز/تيك توك)|أفقي (يوتيوب)|مربع (انستقرام)
+[/BUTTONS]
+
+ثم اقترح نوع الفيديو:
+[BUTTONS]
+سينمائي (دراماتيكي)|إعلاني (ترويجي)|مضحك (كوميدي)|تعليمي (شرح)
+[/BUTTONS]
+
+خطوة 3 - بناء السيناريو التفصيلي:
+اكتب سيناريو مفصّل مشهد بمشهد:
+"السيناريو المقترح:
+
+المشهد الأول (0-3 ثواني): [الافتتاحية - hook يجذب المشاهد]
+المشهد الثاني (3-7 ثواني): [المحتوى الرئيسي - الرسالة أو القصة]
+المشهد الثالث (7-10 ثواني): [الختام - CTA أو نهاية مؤثرة]
+
+النمط البصري: [سينمائي داكن / ألوان زاهية / مينيمال أنيق]
+الإضاءة: [طبيعية دافئة / دراماتيكية / ناعمة احترافية]
+حركة الكاميرا: [بطيئة سينمائية / سريعة ديناميكية / ثابتة مع زوم]
+الموسيقى المقترحة: [ملحمية / هادئة / حماسية / بدون]"
+
+[BUTTONS]
+موافق على السيناريو|عدّل السيناريو|سيناريو مختلف تماماً
+[/BUTTONS]
+
+خطوة 4 - التعليق الصوتي (اختياري):
+"هل تبي تعليق صوتي على الفيديو؟ (+10 نقاط)"
+[BUTTONS]
+نعم، أبي تعليق صوتي|لا، بدون صوت|معاينة الأصوات المتاحة
+[/BUTTONS]
+
+اذا أراد تعليق صوتي:
+- اكتب نص التعليق الصوتي الكامل
+- اقترح نوع الصوت المناسب:
+  alloy: صوت محايد متعدد الاستخدامات
+  echo: صوت رجالي عميق ودافئ
+  fable: صوت سردي قصصي
+  onyx: صوت رجالي قوي وواثق
+  nova: صوت نسائي دافئ وطبيعي
+  shimmer: صوت نسائي واضح ومشرق
+- أرسل معاينة صوتية:
+[VOICE_PREVIEW]
+text: [نص المعاينة]
+voice: [اسم الصوت]
+[/VOICE_PREVIEW]
+
+خطوة 5 - ملخص التكلفة والتأكيد:
+قبل التوليد، اعرض ملخص كامل:
+"ملخص طلب الفيديو:
+- النوع: [سينمائي/إعلاني/مضحك/تعليمي]
+- المدة: [4/8/12] ثواني
+- المقاس: [أفقي/عمودي/مربع] ([WxH])
+- تعليق صوتي: [نعم - صوت X / لا]
+- التكلفة الإجمالية: [X] نقطة (فيديو: [Y] + صوت: [Z])
+- رصيدك الحالي: [N] نقطة
+- المتبقي بعد الخصم: [N-X] نقطة"
+
+[BUTTONS]
+موافق، أنشئ الفيديو|تعديل الطلب|إلغاء
+[/BUTTONS]
+
+خطوة 6 - التوليد:
+بعد الموافقة الصريحة فقط، أرسل أمر التوليد:
 [VIDEO_GENERATE]
-type: [cinematic/funny/advertising]
+type: [cinematic/funny/advertising/educational]
 duration: [4/8/12]
-prompt: [وصف بالإنجليزية]
-size: [1792x1024 أو 1024x1792 أو 1280x720]
+prompt: [وصف تفصيلي بالإنجليزية - يشمل: المشهد الكامل، الإضاءة، الألوان، حركة الكاميرا، الأسلوب البصري، التفاصيل الدقيقة - 100+ كلمة على الأقل]
+voice_text: [نص التعليق الصوتي بالعربية أو الإنجليزية - اذا مطلوب]
+voice: [alloy/echo/fable/onyx/nova/shimmer]
+size: [1792x1024 أو 1024x1792 أو 1280x720 أو 1024x1024]
 [/VIDEO_GENERATE]
 
-## 🖼️ الصور:
+بعد التوليد بنجاح:
+"تم إنشاء الفيديو بنجاح! شاهده أعلاه."
+[BUTTONS]
+تحميل الفيديو|فيديو إضافي|تصدير للسوشيال ميديا|تعديلات
+[/BUTTONS]
+
+أنماط الفيديو التفصيلية:
+1. سينمائي (cinematic): إضاءة دراماتيكية، حركة كاميرا بطيئة وسلسة، ألوان عميقة ومشبعة، أسلوب أفلام هوليوود
+2. إعلاني (advertising): ألوان زاهية تجذب العين، نصوص واضحة وكبيرة، CTA قوي، إيقاع سريع وحيوي، تركيز على المنتج
+3. مضحك (funny): مواقف كوميدية، حركات مبالغة، ألوان مشرقة، إيقاع سريع مفاجئ
+4. تعليمي (educational): رسوم توضيحية واضحة، خطوات مرتبة، خلفية نظيفة، نصوص مصاحبة
+
+تكلفة الفيديوهات:
+سينمائي: 4 ثواني = 50 نقطة | 8 ثواني = 80 نقطة | 12 ثانية = 120 نقطة
+مضحك: 4 ثواني = 30 نقطة | 8 ثواني = 50 نقطة | 12 ثانية = 70 نقطة
+إعلاني: 4 ثواني = 60 نقطة | 8 ثواني = 100 نقطة | 12 ثانية = 150 نقطة
+تعليمي: 4 ثواني = 40 نقطة | 8 ثواني = 65 نقطة | 12 ثانية = 90 نقطة
+التعليق الصوتي: +10 نقاط إضافية
+
+## الصور:
 [IMAGE_GENERATE]
-type: [logo/product]
-prompt: [وصف بالإنجليزية]
+type: [logo/product/banner/social/art]
+prompt: [وصف تفصيلي بالإنجليزية - 50+ كلمة]
 [/IMAGE_GENERATE]
 
 استيحاء من صورة (10 نقاط):
 [IMAGE_INSPIRE]
-reference: [رابط الصورة]
-prompt: [وصف بالإنجليزية]
+reference: [رابط الصورة المرجعية]
+prompt: [وصف بالإنجليزية للصورة المطلوبة مع ذكر ما يُستوحى من المرجع]
 [/IMAGE_INSPIRE]
 
 تعديل صورة (8 نقاط):
 [IMAGE_EDIT]
-original: https://... (الرابط الفعلي)
-changes: [وصف بالإنجليزية]
+original: [الرابط الفعلي للصورة الأصلية]
+changes: [وصف التعديلات المطلوبة بالإنجليزية]
 [/IMAGE_EDIT]
 
-## ⚠️ قواعد:
+## قواعد صارمة:
 1. تحقق من الرصيد قبل أي إنشاء
-2. صورة التصميم أولاً دائماً قبل الكود
+2. صورة التصميم أولاً دائماً قبل الكود (للمواقع والألعاب)
 3. لا تكتب كود بدون موافقة على التصميم
 4. الكود يتراكم - كل مرحلة تشمل اللي قبلها
 5. احفظ كل التفاصيل واستخدمها
-6. prompt الصور يكون تفصيلي جداً بالإنجليزية (100+ كلمة)
+6. prompt الصور والفيديوهات يكون تفصيلي جداً بالإنجليزية (100+ كلمة)
+7. لا تولد فيديو أبداً بدون موافقة على السيناريو والتكلفة
+8. لا تتوقف أبداً - كل رد يجب أن يحتوي على تقدم فعلي
 """
-
-## 🎮 تطبيق البناء التدريجي - مثال لعبة:
-
-**مرحلة 0:** "وش نوع اللعبة؟" → "لعبة بناء قرية" → "وش المميزات الأساسية؟" → "زراعة، بناء، تجارة"
-
-**مرحلة 1:** إرسال كود اللعبة مع:
-- الخريطة الرئيسية / شكل القرية
-- التصميم العام والألوان
-- واجهة اللاعب الأساسية
-→ "هذا شكل القرية الرئيسي. وش رأيك؟"
-
-**مرحلة 2:** بعد الموافقة:
-- إضافة المباني الأساسية (مصنع قمح، مصنع حديد، مخزن)
-- نظام البناء والتطوير
-→ "أضفت المباني الأساسية. وش تبي نضيف؟"
-[BUTTONS]
-🏰 قبائل|⚔️ نظام قتال|🏪 سوق تبادل|✏️ إضافة أخرى
-[/BUTTONS]
-
-**مرحلة 3:** بعد الاختيار:
-- إضافة نظام القبائل/القتال/التبادل
-- ميكانيكيات اللعب المتقدمة
-→ "أضفت نظام القبائل. شوف واختبر:"
-
-**وهكذا** حتى اللعبة كاملة وجاهزة للنشر.
-
----
-
-## 🌐 تطبيق البناء التدريجي - مثال موقع:
-
-**مرحلة 0:** "وش نوع الموقع؟" → "موقع شركة تقنية" → "الأقسام؟" → "رئيسية، خدمات، فريق، تواصل"
-
-**مرحلة 1:** إرسال كود الموقع مع:
-- Header و Hero Section
-- التصميم العام والألوان
-→ "شوف التصميم الأولي:"
-
-**مرحلة 2:** بعد الموافقة:
-- إضافة قسم الخدمات والفريق
-→ "أضفت باقي الأقسام. وش رأيك؟"
-
-**مرحلة 3:** تحسينات:
-- Animations وتحريكات
-- نموذج التواصل
-→ "الموقع شبه جاهز:"
-
----
-
-## 🎬 قسم الفيديوهات:
-
-عندما يطلب العميل فيديو، اسأله أولاً عن نوع الفيديو:
-
-[BUTTONS]
-🎬 فيديو سينمائي|😂 فيديو مضحك|📺 فيديو إعلاني/تجاري|✏️ نوع آخر
-[/BUTTONS]
-
-### الخطوات لكل نوع:
-1. اسأل عن الفكرة/القصة (سؤال أو اثنين فقط)
-2. اسأل عن المدة:
-   [BUTTONS]
-   4 ثواني|8 ثواني|12 ثانية
-   [/BUTTONS]
-3. اكتب السيناريو وأعرضه
-4. عند الموافقة والتكلفة، أرسل:
-   [VIDEO_GENERATE]
-   type: [cinematic/funny/advertising]
-   duration: [4/8/12]
-   prompt: [وصف تفصيلي بالإنجليزية]
-   size: [1792x1024 أو 1024x1792 أو 1280x720]
-   [/VIDEO_GENERATE]
-
-### إضافات الفيديو:
-- إذا طلب سماع التعليق الصوتي:
-   [VOICE_PREVIEW]
-   text: [نص التعليق]
-   voice: [onyx/nova/alloy/echo/fable/shimmer]
-   [/VOICE_PREVIEW]
-
-- إذا طلب صور تجريبية:
-   [IMAGE_PREVIEW]
-   scene_1: [وصف المشهد بالإنجليزية]
-   scene_2: [وصف المشهد بالإنجليزية]
-   [/IMAGE_PREVIEW]
-
-## 💰 تكاليف الفيديوهات:
-| نوع | 4ث | 8ث | 12ث |
-|-----|----|----|-----|
-| سينمائي | 50 | 80 | 120 |
-| مضحك | 30 | 50 | 70 |
-| إعلاني | 60 | 100 | 150 |
-| + تعليق صوتي | +10 نقاط |
-| + صور تجريبية | +5/صورة |
-
----
-
-## 🖼️ قسم الصور:
-
-**شعار:** 10 نقاط → اسأل عن الاسم والمجال والألوان والنمط، ثم:
-[IMAGE_GENERATE]
-type: logo
-prompt: [وصف بالإنجليزية]
-[/IMAGE_GENERATE]
-
-**صورة عادية:** 5 نقاط →
-[IMAGE_GENERATE]
-type: product
-prompt: [وصف بالإنجليزية]
-[/IMAGE_GENERATE]
-
-### 🎨 استيحاء من صورة مرجعية (10 نقاط):
-عندما يرفق العميل صورة ويقول "سوّ لي مثلها" أو "استوحِ منها":
-1. شوف الصورة المرفقة وافهم تفاصيلها
-2. اكتب وصف دقيق لما تريد توليده بالإنجليزية
-3. أرسل:
-[IMAGE_INSPIRE]
-reference: [رابط الصورة المرجعية]
-prompt: [وصف تفصيلي بالإنجليزية للصورة المطلوبة مستوحاة من المرجع مع التعديلات المطلوبة]
-[/IMAGE_INSPIRE]
-
-### ✏️ تعديل صورة سابقة (8 نقاط):
-عندما يضغط العميل على صورة سبق إرسالها ويطلب تعديل:
-1. ابحث عن رابط الصورة الأصلية في المحادثة السابقة (ستجده في الرسائل كرابط https://...)
-2. أرسل الأمر مع الرابط الفعلي (ليس نص وصفي - الرابط الحقيقي من المحادثة):
-[IMAGE_EDIT]
-original: https://... (الرابط الفعلي للصورة من المحادثة)
-changes: [وصف التعديلات بالإنجليزية]
-[/IMAGE_EDIT]
-⚠️ ممنوع كتابة [رابط الصورة] - لازم تحط الرابط الحقيقي https://...
-
-### قواعد الصور:
-- عندما يرفق العميل صورة، شوفها وعلّق عليها فوراً
-- إذا قال "سوّ مثلها" استخدم [IMAGE_INSPIRE] مع الرابط الحقيقي
-- إذا قال "عدّل" على صورة سابقة، ابحث عن رابطها في المحادثة واستخدم [IMAGE_EDIT] مع الرابط الحقيقي
-- إذا قال "صمم لي صورة" بدون مرجع استخدم [IMAGE_GENERATE]
-- اكتب الـ prompt دائماً بالإنجليزية وبتفاصيل كثيرة
-- ⚠️ دائماً استخدم الرابط الحقيقي (https://...) وليس نص وصفي مثل [رابط الصورة]
-
----
-
-## 📱 قسم تطبيقات الموبايل:
-
-### التقنيات:
-| التقنية | المنصة | التكلفة |
-|---------|--------|---------|
-| Flutter | iOS + Android | 30 نقطة |
-| React Native | iOS + Android | 30 نقطة |
-| Swift | iOS فقط | 35 نقطة |
-| Kotlin | Android فقط | 35 نقطة |
-| + UI متقدم | | +15 نقطة |
-| + Backend | | +20 نقطة |
-
-### التدفق:
-1. اسأل عن المنصة → نوع البرمجة → نوع التطبيق
-2. اجمع المتطلبات الأساسية (3-5 أسئلة)
-3. ابدأ البناء التدريجي (مرحلة 1: واجهة → مرحلة 2: شاشات → مرحلة 3: منطق)
-
----
-
-## 🎮 مكتبات الألعاب:
-- Phaser 3, Three.js, Babylon.js, PixiJS, Matter.js, Howler.js, GSAP
-
-## 🎨 الأصوات المتاحة:
-- alloy (أنثوي محايد) | echo (ذكوري عميق) | fable (أنثوي دافئ)
-- onyx (ذكوري قوي) | nova (أنثوي نشط) | shimmer (أنثوي ناعم)
-
----
-
-## 🎨⛔ قواعد جودة التصميم (مهم جداً!):
-
-### ممنوع منعاً باتاً:
-- ❌ **ممنوع استخدام مربعات ملونة بسيطة** كبديل عن رسومات حقيقية
-- ❌ **ممنوع placeholder.com** أو أي صور وهمية
-- ❌ **ممنوع "Your Village Map Here"** أو أي نص بديل عن محتوى فعلي
-- ❌ **ممنوع تصميمات بدائية** بأزرار HTML عادية وألوان أساسية
-- ❌ **ممنوع شاشات بيضاء فارغة** - كل كود يجب أن يعرض محتوى فوري بدون أي نقرة
-
-### الطريقة الصحيحة للتصميم:
-
-**للألعاب (الأهم!):**
-- استخدم **HTML5 Canvas** مع رسم فعلي باستخدام paths وgradients وshadows
-- كل عنصر يُرسم بـ **10+ أسطر كود على الأقل** (ليس سطر واحد fillRect)
-- **حقل قمح مثلاً يُرسم هكذا**: أرض بتدرج بني→أصفر + 15-20 ساق أخضر بارتفاعات مختلفة + سنابل ذهبية في الأعلى + حركة خفيفة للسنابل (wind animation) + ظل خفيف
-- **مصنع مثلاً يُرسم هكذا**: جدران رمادية متدرجة + سقف مائل + 3 نوافذ صغيرة مضيئة + باب كبير + مدخنة مع دائرتين دخان متحركتين + لافتة باسم المصنع
-- **قلعة مثلاً تُرسم هكذا**: جدار حجري بتكسير + 4 أبراج بأسقف مخروطية + بوابة كبيرة + علم متحرك في الأعلى + خندق مائي حولها
-- **شجرة مثلاً تُرسم هكذا**: جذع بني بتدرج + 3 دوائر خضراء متداخلة بأحجام مختلفة + ظل على الأرض
-- استخدم **requestAnimationFrame** لحركة مستمرة (دخان، رياح، ماء، أعلام)
-- أضف **واجهة لعب (HUD)**: شريط موارد في الأعلى (قمح، حديد، خشب، ذهب) مع أرقام
-- أضف **أزرار تفاعلية** في اللعبة: بناء، تطوير، هجوم (بتصميم جميل ليس HTML buttons)
-- **Isometric view** (منظور 45 درجة) مفضل للألعاب الاستراتيجية - استخدم transform وskew
-- **حجم الكود**: لعبة المرحلة الأولى يجب أن تكون **200+ سطر كود على الأقل**
-
-**للمواقع:**
-- استخدم **Tailwind CSS** عبر CDN
-- استخدم **تدرجات** وخلفيات غنية، ليس ألوان مسطحة
-- أضف **ظلال** (shadow-lg, shadow-xl)، **زوايا مدورة** (rounded-xl)، **شفافية** (backdrop-blur)
-- استخدم **Font Awesome** للأيقونات
-- استخدم **Google Fonts** للخطوط العربية
-- تصميم **responsive** يعمل على جميع الشاشات
-- أضف **hover effects** و **transitions** و **animations** لكل العناصر التفاعلية
-
-**مبدأ عام:**
-- التصميم يجب أن يبدو **احترافي وجاهز للنشر** من أول مرحلة
-- لا يوجد عذر لتصميم بدائي. إذا طلب العميل لعبة، يجب أن تبدو لعبة حقيقية
-- إذا طلب موقع، يجب أن يبدو موقع شركة حقيقية
-- **قارن تصميمك مع أفضل المواقع/الألعاب** قبل إرساله
-
----
-
-## ⚠️ قواعد صارمة:
-1. **تحقق من الرصيد دائماً** قبل أي إنشاء
-2. **أظهر التكلفة** واطلب موافقة صريحة قبل خصم النقاط
-3. **إذا كان الرصيد غير كافٍ:**
-   "⚠️ رصيدك الحالي (X نقطة) غير كافٍ. المطلوب: X نقطة"
-   [BUTTONS]
-   💰 شحن النقاط|🔙 رجوع
-   [/BUTTONS]
-4. **لا تولد فيديو أبداً بدون موافقة على السيناريو والتكلفة**
-5. **أنشئ الكود الكامل** - لا تترك TODO أو placeholders أو أجزاء ناقصة
-6. **لا تتوقف أبداً** - كل رد يجب أن يحتوي على تقدم فعلي (كود أو تصميم أو اقتراح)
-7. **التصميم يجب أن يكون احترافي** - راجع قسم "قواعد جودة التصميم" أعلاه
-"""
-
 
 WELCOME_MESSAGE = """## 👋 مرحباً بك في زيتكس!
 
@@ -544,6 +437,9 @@ SERVICE_COSTS = {
     "video_advertising_4": 60,
     "video_advertising_8": 100,
     "video_advertising_12": 150,
+    "video_educational_4": 40,
+    "video_educational_8": 65,
+    "video_educational_12": 90,
     "voice_over": 10,
     "voice_preview": 5,
     "modification": 5,
@@ -578,6 +474,14 @@ VIDEO_CATEGORIES = {
         "durations": [4, 8, 12],
         "sizes": ["1280x720", "1024x1024", "1024x1792"],
         "cost_base": 150
+    },
+    "educational": {
+        "name": "فيديوهات تعليمية",
+        "name_en": "Educational Videos",
+        "description": "شرح خدمات، دروس، محتوى تعليمي",
+        "durations": [4, 8, 12],
+        "sizes": ["1280x720", "1792x1024", "1024x1024"],
+        "cost_base": 90
     }
 }
 
@@ -897,7 +801,6 @@ class AIAssistant:
             "created_at": datetime.now(timezone.utc).isoformat(),
             "updated_at": datetime.now(timezone.utc).isoformat()
         }
-
         await self.db.chat_sessions.insert_one(session)
         return session
     
@@ -933,6 +836,7 @@ class AIAssistant:
             }
         )
         return result.modified_count > 0
+
     
     async def process_message(self, session_id: str, user_id: str, message: str, settings: Dict[str, Any] = None) -> Dict:
         settings = settings or {}
@@ -1097,12 +1001,53 @@ class AIAssistant:
             return "❌ خطأ في توليد الصورة", [], 0
     
     async def _process_ai_commands(self, ai_response: str, user_id: str, session_id: str, available_credits: int) -> Tuple[str, List[Dict], int]:
-        """معالجة الأوامر الخاصة في رد الذكاء الاصطناعي"""
         attachments = []
         total_credits = 0
         processed_response = ai_response
         
-        # معالجة أمر توليد الفيديو [VIDEO_GENERATE]
+        design_match = re.search(
+            r'\[DESIGN_IMAGE\]\s*'
+            r'prompt:\s*([^\[]+?)\s*'
+            r'\[/DESIGN_IMAGE\]',
+            processed_response, re.IGNORECASE | re.DOTALL
+        )
+        
+        if design_match:
+            design_prompt = design_match.group(1).strip()
+            design_cost = 5
+            
+            if available_credits - total_credits >= design_cost:
+                design_url = await self._generate_single_image(design_prompt)
+                if design_url:
+                    attachments.append({
+                        "type": "image",
+                        "url": design_url,
+                        "image_type": "design_mockup",
+                        "prompt": design_prompt
+                    })
+                    total_credits += design_cost
+                    
+                    processed_response = re.sub(
+                        r'\[DESIGN_IMAGE\][\s\S]*?\[/DESIGN_IMAGE\]',
+                        f"""
+## 🎨 تصميم المشروع المقترح
+
+💰 التكلفة: {design_cost} نقاط
+
+شوف التصميم أعلاه وقلي رأيك:
+
+[BUTTONS]
+✅ ممتاز، ابنِ الكود|✏️ عدّل التصميم|🎨 غيّر الألوان|🔄 تصميم مختلف تماماً
+[/BUTTONS]""",
+                        processed_response
+                    )
+                else:
+                    processed_response = re.sub(
+                        r'\[DESIGN_IMAGE\][\s\S]*?\[/DESIGN_IMAGE\]',
+                        "❌ فشل توليد صورة التصميم. حاول مرة أخرى.",
+                        processed_response
+                    )
+        
         video_match = re.search(
             r'\[VIDEO_GENERATE\]\s*'
             r'type:\s*(\w+)\s*'
@@ -1182,7 +1127,6 @@ class AIAssistant:
                     processed_response
                 )
         
-        # معالجة أمر معاينة الصوت [VOICE_PREVIEW]
         voice_preview_match = re.search(
             r'\[VOICE_PREVIEW\]\s*'
             r'text:\s*([^\[]+?)\s*'
@@ -1219,7 +1163,6 @@ class AIAssistant:
                         processed_response
                     )
         
-        # معالجة أمر معاينة الصور [IMAGE_PREVIEW]
         image_preview_match = re.search(
             r'\[IMAGE_PREVIEW\]\s*([\s\S]*?)\[/IMAGE_PREVIEW\]',
             ai_response, re.IGNORECASE
@@ -1257,7 +1200,6 @@ class AIAssistant:
                         processed_response
                     )
         
-        # معالجة أمر توليد صورة [IMAGE_GENERATE]
         image_gen_match = re.search(
             r'\[IMAGE_GENERATE\]\s*'
             r'type:\s*(\w+)\s*'
@@ -1297,7 +1239,6 @@ class AIAssistant:
                         processed_response
                     )
         
-        # معالجة أمر الاستيحاء من صورة [IMAGE_INSPIRE]
         inspire_match = re.search(
             r'\[IMAGE_INSPIRE\]\s*'
             r'reference:\s*(\S+)\s*'
@@ -1342,7 +1283,6 @@ class AIAssistant:
                         processed_response
                     )
         
-        # معالجة أمر تعديل صورة [IMAGE_EDIT]
         edit_match = re.search(
             r'\[IMAGE_EDIT\]\s*'
             r'original:\s*(\S+)\s*'
@@ -1685,7 +1625,6 @@ class AIAssistant:
         return await self.db.video_requests.find(query, {"_id": 0}).sort("created_at", -1).to_list(50)
     
     async def generate_tts(self, text: str, provider: str = "openai", voice: str = "alloy", speed: float = 1.0) -> Optional[str]:
-        """توليد صوت من النص باستخدام OpenAI TTS"""
         if not text or len(text.strip()) == 0:
             return None
         
@@ -1854,26 +1793,271 @@ class AIAssistant:
     <section class="pt-32 pb-20 px-6">
         <div class="max-w-4xl mx-auto text-center">
             <h1 class="text-5xl md:text-6xl font-bold mb-6 text-transparent bg-clip-text bg-gradient-to-r from-amber-400 to-yellow-500">عنوان رئيسي جذاب</h1>
-            <p class="text-xl text-gray-400 mb-8">وصف مختصر يشرح ما تقدمه من خدمات</p>
+            <p class="text-xl text-gray-400 mb-8">وصف مختصر يشرح ما تقدمه من خدمات أو منتجات بشكل واضح ومباشر</p>
             <button class="px-8 py-4 bg-gradient-to-r from-amber-600 to-yellow-600 rounded-full text-lg font-bold hover:from-amber-700 hover:to-yellow-700 transition shadow-lg shadow-amber-500/30">ابدأ الآن</button>
         </div>
     </section>
+</body>
+</html>''',
+            "ecommerce-gold": '''<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>متجر إلكتروني</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-[#0a0a12] text-white min-h-screen">
+    <nav class="bg-black/80 backdrop-blur border-b border-amber-500/20 sticky top-0 z-50">
+        <div class="max-w-6xl mx-auto px-6 py-4 flex justify-between items-center">
+            <h1 class="text-2xl font-bold text-amber-400">🛒 المتجر</h1>
+            <div class="flex items-center gap-4">
+                <input type="text" placeholder="ابحث..." class="bg-slate-800 border border-slate-700 rounded-lg px-4 py-2 text-sm">
+                <button class="relative p-2">🛍️<span class="absolute -top-1 -right-1 bg-amber-500 text-black text-xs w-5 h-5 rounded-full flex items-center justify-center">3</span></button>
+            </div>
+        </div>
+    </nav>
+    <section class="py-12 px-6">
+        <div class="max-w-6xl mx-auto">
+            <h2 class="text-3xl font-bold text-amber-400 mb-8">المنتجات المميزة</h2>
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <div class="bg-slate-800/50 border border-slate-700 rounded-2xl overflow-hidden hover:border-amber-500/50 transition">
+                    <div class="h-48 bg-gradient-to-br from-amber-500/20 to-yellow-500/20 flex items-center justify-center text-6xl">📱</div>
+                    <div class="p-4">
+                        <h3 class="text-lg font-bold text-white">منتج 1</h3>
+                        <p class="text-gray-400 text-sm mb-3">وصف المنتج</p>
+                        <div class="flex justify-between items-center">
+                            <span class="text-amber-400 font-bold">199 ر.س</span>
+                            <button class="px-4 py-2 bg-amber-600 rounded-lg text-sm hover:bg-amber-700">أضف للسلة</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+</body>
+</html>''',
+            "portfolio-minimal": '''<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>معرض الأعمال</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-[#0a0a12] text-white min-h-screen">
+    <section class="min-h-screen flex items-center justify-center px-6">
+        <div class="text-center">
+            <div class="w-32 h-32 bg-gradient-to-br from-amber-500 to-yellow-500 rounded-full mx-auto mb-6 flex items-center justify-center text-4xl">👤</div>
+            <h1 class="text-4xl font-bold mb-2">اسمك هنا</h1>
+            <p class="text-amber-400 text-xl mb-6">مصمم | مطور | مبدع</p>
+            <p class="text-gray-400 max-w-md mx-auto mb-8">نبذة مختصرة عنك وعن خبراتك ومهاراتك في مجال عملك</p>
+            <div class="flex justify-center gap-4">
+                <a href="#" class="px-6 py-3 bg-amber-600 rounded-lg hover:bg-amber-700 transition">أعمالي</a>
+                <a href="#" class="px-6 py-3 border border-amber-500 rounded-lg hover:bg-amber-500/20 transition">تواصل معي</a>
+            </div>
+        </div>
+    </section>
+</body>
+</html>''',
+            "dashboard-pro": '''<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>لوحة التحكم</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-[#0a0a12] text-white min-h-screen flex">
+    <aside class="w-64 bg-[#0d0d18] border-l border-slate-800 p-4 hidden md:block">
+        <h1 class="text-xl font-bold text-amber-400 mb-8">📊 Dashboard</h1>
+        <nav class="space-y-2">
+            <a href="#" class="flex items-center gap-3 px-4 py-3 bg-amber-500/20 border border-amber-500/30 rounded-xl text-amber-400">🏠 الرئيسية</a>
+            <a href="#" class="flex items-center gap-3 px-4 py-3 hover:bg-slate-800 rounded-xl text-gray-400">📈 الإحصائيات</a>
+            <a href="#" class="flex items-center gap-3 px-4 py-3 hover:bg-slate-800 rounded-xl text-gray-400">👥 المستخدمين</a>
+            <a href="#" class="flex items-center gap-3 px-4 py-3 hover:bg-slate-800 rounded-xl text-gray-400">⚙️ الإعدادات</a>
+        </nav>
+    </aside>
+    <main class="flex-1 p-6">
+        <h2 class="text-2xl font-bold mb-6">مرحباً بك 👋</h2>
+        <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
+            <div class="bg-gradient-to-br from-amber-500/20 to-yellow-500/20 border border-amber-500/30 rounded-2xl p-6">
+                <p class="text-gray-400 text-sm">إجمالي المبيعات</p>
+                <p class="text-3xl font-bold text-amber-400">12,450</p>
+            </div>
+            <div class="bg-slate-800/50 border border-slate-700 rounded-2xl p-6">
+                <p class="text-gray-400 text-sm">المستخدمين</p>
+                <p class="text-3xl font-bold">2,340</p>
+            </div>
+            <div class="bg-slate-800/50 border border-slate-700 rounded-2xl p-6">
+                <p class="text-gray-400 text-sm">الطلبات</p>
+                <p class="text-3xl font-bold">456</p>
+            </div>
+            <div class="bg-slate-800/50 border border-slate-700 rounded-2xl p-6">
+                <p class="text-gray-400 text-sm">الإيرادات</p>
+                <p class="text-3xl font-bold text-green-400">+15%</p>
+            </div>
+        </div>
+    </main>
+</body>
+</html>''',
+            "game-2d-platformer": '''<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>لعبة منصات 2D</title>
+    <script src="https://cdn.jsdelivr.net/npm/phaser@3.70.0/dist/phaser.min.js"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { background: #0a0a12; display: flex; justify-content: center; align-items: center; min-height: 100vh; }
+        #game-container { border: 3px solid #ffd700; border-radius: 10px; overflow: hidden; }
+        .score { position: absolute; top: 20px; right: 20px; color: #ffd700; font-size: 24px; font-family: Arial; }
+    </style>
+</head>
+<body>
+    <div class="score">النقاط: <span id="score">0</span></div>
+    <div id="game-container"></div>
+    <script>
+        let score = 0;
+        const config = {
+            type: Phaser.AUTO, width: 800, height: 600, parent: 'game-container',
+            physics: { default: 'arcade', arcade: { gravity: { y: 500 }, debug: false } },
+            scene: { preload, create, update }
+        };
+        let player, platforms, cursors, stars;
+        function preload() {
+            this.load.setBaseURL('https://labs.phaser.io');
+            this.load.image('sky', 'assets/skies/space3.png');
+            this.load.image('ground', 'assets/sprites/platform.png');
+            this.load.image('star', 'assets/demoscene/star.png');
+            this.load.spritesheet('dude', 'assets/sprites/dude.png', { frameWidth: 32, frameHeight: 48 });
+        }
+        function create() {
+            this.add.image(400, 300, 'sky');
+            platforms = this.physics.add.staticGroup();
+            platforms.create(400, 568, 'ground').setScale(2).refreshBody();
+            platforms.create(600, 400, 'ground');
+            platforms.create(50, 250, 'ground');
+            platforms.create(750, 220, 'ground');
+            player = this.physics.add.sprite(100, 450, 'dude');
+            player.setBounce(0.2);
+            player.setCollideWorldBounds(true);
+            this.anims.create({ key: 'left', frames: this.anims.generateFrameNumbers('dude', { start: 0, end: 3 }), frameRate: 10, repeat: -1 });
+            this.anims.create({ key: 'turn', frames: [{ key: 'dude', frame: 4 }], frameRate: 20 });
+            this.anims.create({ key: 'right', frames: this.anims.generateFrameNumbers('dude', { start: 5, end: 8 }), frameRate: 10, repeat: -1 });
+            stars = this.physics.add.group({ key: 'star', repeat: 11, setXY: { x: 12, y: 0, stepX: 70 } });
+            stars.children.iterate(child => child.setBounceY(Phaser.Math.FloatBetween(0.4, 0.8)));
+            this.physics.add.collider(player, platforms);
+            this.physics.add.collider(stars, platforms);
+            this.physics.add.overlap(player, stars, collectStar, null, this);
+            cursors = this.input.keyboard.createCursorKeys();
+        }
+        function update() {
+            if (cursors.left.isDown) { player.setVelocityX(-160); player.anims.play('left', true); }
+            else if (cursors.right.isDown) { player.setVelocityX(160); player.anims.play('right', true); }
+            else { player.setVelocityX(0); player.anims.play('turn'); }
+            if (cursors.up.isDown && player.body.touching.down) player.setVelocityY(-330);
+        }
+        function collectStar(player, star) {
+            star.disableBody(true, true);
+            score += 10;
+            document.getElementById('score').textContent = score;
+        }
+        new Phaser.Game(config);
+    </script>
+</body>
+</html>''',
+            "game-3d-racing": '''<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>لعبة سباق 3D</title>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.min.js"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { overflow: hidden; background: #000; }
+        #info { position: absolute; top: 20px; left: 50%; transform: translateX(-50%); color: #ffd700; font-size: 24px; font-family: Arial; z-index: 10; }
+        #controls { position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%); color: #fff; font-size: 14px; font-family: Arial; z-index: 10; }
+    </style>
+</head>
+<body>
+    <div id="info">السرعة: <span id="speed">0</span> كم/س</div>
+    <div id="controls">استخدم الأسهم للتحكم</div>
+    <script>
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x1a1a2e);
+        scene.fog = new THREE.Fog(0x1a1a2e, 50, 200);
+        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        document.body.appendChild(renderer.domElement);
+        const ambient = new THREE.AmbientLight(0x404040, 2);
+        scene.add(ambient);
+        const directional = new THREE.DirectionalLight(0xffffff, 1);
+        directional.position.set(50, 50, 50);
+        scene.add(directional);
+        const roadGeo = new THREE.PlaneGeometry(20, 1000);
+        const roadMat = new THREE.MeshStandardMaterial({ color: 0x333333 });
+        const road = new THREE.Mesh(roadGeo, roadMat);
+        road.rotation.x = -Math.PI / 2;
+        road.position.z = -450;
+        scene.add(road);
+        const carGeo = new THREE.BoxGeometry(2, 1, 4);
+        const carMat = new THREE.MeshStandardMaterial({ color: 0xffd700 });
+        const car = new THREE.Mesh(carGeo, carMat);
+        car.position.y = 0.5;
+        scene.add(car);
+        for (let i = 0; i < 50; i++) {
+            const treeGeo = new THREE.ConeGeometry(2, 8, 8);
+            const treeMat = new THREE.MeshStandardMaterial({ color: 0x228b22 });
+            const tree = new THREE.Mesh(treeGeo, treeMat);
+            tree.position.set((Math.random() > 0.5 ? 15 : -15), 4, -i * 20);
+            scene.add(tree);
+        }
+        camera.position.set(0, 5, 10);
+        camera.lookAt(car.position);
+        let speed = 0;
+        const keys = {};
+        document.addEventListener('keydown', e => keys[e.code] = true);
+        document.addEventListener('keyup', e => keys[e.code] = false);
+        function animate() {
+            requestAnimationFrame(animate);
+            if (keys['ArrowUp']) speed = Math.min(speed + 0.5, 100);
+            if (keys['ArrowDown']) speed = Math.max(speed - 1, 0);
+            if (keys['ArrowLeft']) car.position.x = Math.max(car.position.x - 0.2, -8);
+            if (keys['ArrowRight']) car.position.x = Math.min(car.position.x + 0.2, 8);
+            speed *= 0.99;
+            car.position.z -= speed * 0.1;
+            camera.position.z = car.position.z + 10;
+            camera.lookAt(car.position);
+            document.getElementById('speed').textContent = Math.round(speed);
+            renderer.render(scene, camera);
+        }
+        animate();
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+    </script>
 </body>
 </html>'''
         }
         return templates_code.get(template_id, templates_code["landing-dark"])
     
-    # ============== Deployment System ==============
+    # ============== Deployment System with Real Hosting ==============
     async def deploy_project(self, user_id: str, session_id: str, subdomain: str) -> Dict:
         import re
         
         subdomain = subdomain.lower().strip()
         if not re.match(r'^[a-z0-9][a-z0-9-]{2,30}[a-z0-9]$', subdomain):
-            raise ValueError("اسم النطاق غير صالح")
+            raise ValueError("اسم النطاق غير صالح. استخدم حروف إنجليزية صغيرة وأرقام وشرطات فقط (4-32 حرف)")
         
         existing = await self.db.deployments.find_one({"subdomain": subdomain, "status": "active"})
         if existing:
-            raise ValueError(f"النطاق {subdomain}.zitex.app محجوز")
+            raise ValueError(f"النطاق {subdomain}.zitex.app محجوز بالفعل")
         
         session = await self.get_session(session_id, user_id)
         if not session or not session.get("generated_code"):
@@ -1893,7 +2077,7 @@ class AIAssistant:
         upload_result = upload_to_storage(storage_path, html_code, "text/html")
         
         if not upload_result:
-            raise ValueError("فشل رفع الملف")
+            raise ValueError("فشل رفع الملف. حاول مرة أخرى")
         
         public_url = f"https://{subdomain}.zitex.app"
         storage_url = f"{STORAGE_URL.replace('/api/v1/storage', '')}/sites/{subdomain}/index.html"
@@ -1934,7 +2118,7 @@ class AIAssistant:
             "url": public_url,
             "storage_url": storage_url,
             "subdomain": subdomain,
-            "message": f"🚀 تم نشر المشروع!\n\n🔗 {public_url}\n\n💰 التكلفة: {cost} نقطة"
+            "message": f"🚀 تم نشر المشروع بنجاح!\n\n🔗 الرابط: {public_url}\n\n💰 التكلفة: {cost} نقطة"
         }
     
     async def update_deployment(self, user_id: str, deployment_id: str, new_code: str) -> Dict:
@@ -1960,7 +2144,7 @@ class AIAssistant:
             {"$set": {"updated_at": datetime.now(timezone.utc).isoformat()}}
         )
         
-        return {"message": "تم تحديث المشروع", "url": deployment["url"]}
+        return {"message": "تم تحديث المشروع بنجاح", "url": deployment["url"]}
     
     async def get_user_deployments(self, user_id: str) -> List[Dict]:
         deployments = await self.db.deployments.find(
@@ -1981,4 +2165,3 @@ class AIAssistant:
             {"$set": {"status": "deleted"}}
         )
         return result.modified_count > 0
-
