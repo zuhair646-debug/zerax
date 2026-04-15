@@ -1368,7 +1368,7 @@ class AIAssistant:
                 image_path = f"{APP_NAME}/images/{image_id}.png"
                 upload_result = upload_to_storage(image_path, images[0], "image/png")
                 if upload_result:
-                    return f"{STORAGE_URL.replace('/api/v1/storage', '')}/images/{image_id}.png"
+                    return f"{BACKEND_URL}/api/storage/images/{image_id}.png"
                 else:
                     return f"data:image/png;base64,{base64.b64encode(images[0]).decode('utf-8')}"
             return None
@@ -1411,7 +1411,7 @@ class AIAssistant:
                 image_path = f"{APP_NAME}/images/{image_id}.png"
                 upload_result = upload_to_storage(image_path, images[0], "image/png")
                 if upload_result:
-                    return f"{STORAGE_URL.replace('/api/v1/storage', '')}/images/{image_id}.png"
+                    return f"{BACKEND_URL}/api/storage/images/{image_id}.png"
                 else:
                     return f"data:image/png;base64,{base64.b64encode(images[0]).decode('utf-8')}"
             return None
