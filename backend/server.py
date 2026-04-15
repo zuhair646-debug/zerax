@@ -57,7 +57,43 @@ db = client[os.environ['DB_NAME']]
 app = FastAPI(title="Zitex API", description="AI-Powered Creative Platform")
 @app.get("/api/health")
 async def health_check():
-    return {"status": "ok", "message": "Server is running"}
+    return {"status": "healthy", "service": "zitex-api"}
+
+# Storage proxy endpoint - serve images/videos from Object Storage
+@app.get("/api/storage/{file_path:path}")
+async def serve_storage_file(file_path: str):
+    """Proxy endpoint to serve files from Object Storage"""
+    try:
+        from services.ai_chat_service import get_from_storage, APP_NAME
+        
+        full_path = f"{APP_NAME}/{file_path}"
+        result = get_from_storage(full_path)
+        
+        if result is None:
+            raise HTTPException(status_code=404, detail="File not found")
+        
+        file_data, content_type = result
+        
+        if not content_type or content_type == "text/html":
+            if file_path.endswith(".png"):
+                content_type = "image/png"
+            elif file_path.endswith(".jpg") or file_path.endswith(".jpeg"):
+                content_type = "image/jpeg"
+            elif file_path.endswith(".mp4"):
+                content_type = "video/mp4"
+            elif file_path.endswith(".mp3"):
+                content_type = "audio/mpeg"
+        
+        return StreamingResponse(
+            io.BytesIO(file_data),
+            media_type=content_type,
+            headers={"Cache-Control": "public, max-age=86400"}
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Storage proxy error: {e}")
+        raise HTTPException(status_code=500, detail="Failed to fetch file")
 
 @app.get("/health")
 async def health():
