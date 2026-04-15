@@ -1496,7 +1496,7 @@ class AIAssistant:
                 upload_result = upload_to_storage(image_path, images[0], "image/png")
                 
                 if upload_result:
-                    image_url = f"{STORAGE_URL.replace('/api/v1/storage', '')}/images/{image_id}.png"
+                    image_url = f"{BACKEND_URL}/api/storage/images/{image_id}.png"
                     return image_url
                 else:
                     image_base64 = base64.b64encode(images[0]).decode('utf-8')
