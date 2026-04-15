@@ -1521,11 +1521,22 @@ class AIAssistant:
         
         image_urls = re.findall(r'(https?://\S+\.(?:png|jpg|jpeg|gif|webp))', message, re.IGNORECASE)
         image_urls += re.findall(r'(https?://integrations\.emergentagent\.com/objstore/\S+)', message)
-        
+
+        # Build conversation history (strip base64 data to avoid token explosion)
         conversation_history = ""
-        for msg in session.get("messages", [])[-12:]:
+        for msg in session.get("messages", [])[-8:]:
             role_label = "المستخدم" if msg["role"] == "user" else "زيتكس"
-            conversation_history += f"\n{role_label}: {msg['content']}\n"
+            msg_content = msg['content']
+            # Remove base64 image data from message content
+            msg_content = re.sub(r'data:image/[^;]+;base64,[A-Za-z0-9+/=]+', '[صورة مرفقة]', msg_content)
+            # Remove very long code blocks from history (keep first 500 chars)
+            if '[CODE_BLOCK]' in msg_content:
+                msg_content = re.sub(r'\[CODE_BLOCK\][\s\S]*?\[/CODE_BLOCK\]', '[CODE_BLOCK]...كود تم بناؤه...[/CODE_BLOCK]', msg_content)
+            # Limit each message to 2000 chars max
+            if len(msg_content) > 2000:
+                msg_content = msg_content[:2000] + "...[تم اختصار الرسالة]"
+            conversation_history += f"\n{role_label}: {msg_content}\n"
+            # Include image URLs from attachments so AI can reference them
             if msg.get("metadata", {}).get("image_urls"):
                 for img_url in msg["metadata"]["image_urls"]:
                     conversation_history += f"[صورة مولّدة: {img_url}]\n"
@@ -1534,7 +1545,9 @@ class AIAssistant:
                     if att.get("type") == "image" and att.get("url"):
                         conversation_history += f"[صورة مولّدة: {att['url']}]\n"
         
-        full_prompt = f"{conversation_history}\nالمستخدم: {message}"
+        # Clean base64 from current message too
+        clean_message = re.sub(r'data:image/[^;]+;base64,[A-Za-z0-9+/=]+', '[صورة مرفقة]', message)
+        full_prompt = f"{conversation_history}\nالمستخدم: {clean_message}"
         
         try:
             if EMERGENT_LLM_AVAILABLE and self.emergent_key:
