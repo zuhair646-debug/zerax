@@ -26,6 +26,7 @@ AI_FEATURES_ENABLED = True
 STORAGE_URL = "https://integrations.emergentagent.com/objstore/api/v1/storage"
 EMERGENT_KEY = os.environ.get('EMERGENT_LLM_KEY')
 APP_NAME = "zitex-hosting"
+BACKEND_URL = os.environ.get('BACKEND_URL', '')
 storage_key = None
 
 def init_storage():
