@@ -12,14 +12,11 @@ pydantic
 email-validator
 python-dotenv
 python-multipart
-openai
+openai>=2.30.0
 elevenlabs
 paypalrestsdk
 pillow
 certifi
 dnspython
 replicate
-httpx
-pydantic
-openai>=2.30.0
-
+emergentintegrations
