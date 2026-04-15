@@ -1451,7 +1451,7 @@ class AIAssistant:
                 upload_result = upload_to_storage(video_path, video_bytes, "video/mp4")
                 
                 if upload_result:
-                    video_url = f"{STORAGE_URL.replace('/api/v1/storage', '')}/videos/{user_id}/{video_id}.mp4"
+                    video_url = f"{BACKEND_URL}/api/storage/videos/{user_id}/{video_id}.mp4"
                     
                     asset = {
                         "id": video_id,
