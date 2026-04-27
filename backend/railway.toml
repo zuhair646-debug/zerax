@@ -1,7 +1,7 @@
 [build]
 builder = "NIXPACKS"
 
-[build.env]
+[build.environment]
 NIXPACKS_PYTHON_VERSION = "3.11"
 
 [deploy]
