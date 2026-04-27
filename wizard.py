@@ -1,0 +1,37 @@
+"""Booking section renderers — reservation form, booking widget."""
+from typing import Dict, Any
+from .renderer_helpers import _esc
+
+
+def _section_reservation(d, theme) -> str:
+    return f"""<section class="reservation" id="reservation" data-hl="reservation"><div class="container reservation-grid"><div class="res-copy"><h2>{_esc(d.get('title','احجز الآن'))}</h2><p>{_esc(d.get('subtitle','اختر الوقت المناسب واستمتع بتجربة لا تُنسى'))}</p></div><form class="res-form"><div class="res-row"><label>الاسم</label><input placeholder="اسمك الكامل"/></div><div class="res-row-2"><div><label>التاريخ</label><input type="date"/></div><div><label>الوقت</label><input type="time"/></div></div><div class="res-row-2"><div><label>العدد</label><select><option>1</option><option>2</option><option>4+</option></select></div><div><label>الجوال</label><input type="tel" placeholder="05xxxxxxxx"/></div></div><button class="btn btn-primary">✓ تأكيد الحجز</button></form></div></section>"""
+
+
+
+def _section_booking_widget(d, theme):
+    """Inline booking form — fetches services from /public/{slug}/services and creates a booking."""
+    p = theme.get("primary", "#FFD700")
+    t = d.get("title") or "احجز موعدك الآن"
+    sub = d.get("subtitle") or "اختر الخدمة والموظف والوقت المناسب لك"
+    return f"""<section id="booking-widget" style="padding:80px 20px;background:linear-gradient(180deg,#0f0f14,#18181f);text-align:center">
+<h2 style="font-size:36px;font-weight:900;margin:0 0 8px">{_esc(t)}</h2>
+<p style="opacity:.7;margin:0 0 32px">{_esc(sub)}</p>
+<div id="zx-bk-root" style="max-width:520px;margin:0 auto;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.1);border-radius:20px;padding:24px;text-align:right">
+<div id="zx-bk-step1"><label style="display:block;opacity:.7;font-size:13px;margin-bottom:6px">1️⃣ اختر الخدمة</label><select id="zx-bk-svc" style="width:100%;padding:12px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.15);border-radius:10px;color:#fff;margin-bottom:14px"><option>جاري التحميل...</option></select>
+<label style="display:block;opacity:.7;font-size:13px;margin-bottom:6px">2️⃣ اختر الموظف (اختياري)</label><select id="zx-bk-staff" style="width:100%;padding:12px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.15);border-radius:10px;color:#fff;margin-bottom:14px"><option value="">أي موظف متاح</option></select>
+<label style="display:block;opacity:.7;font-size:13px;margin-bottom:6px">3️⃣ التاريخ</label><input type="date" id="zx-bk-date" style="width:100%;padding:12px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.15);border-radius:10px;color:#fff;margin-bottom:14px"/>
+<div id="zx-bk-slots" style="display:none;margin-bottom:14px"><label style="display:block;opacity:.7;font-size:13px;margin-bottom:6px">4️⃣ الوقت المتاح</label><div id="zx-bk-slots-grid" style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px;max-height:180px;overflow:auto"></div></div>
+<div id="zx-bk-details" style="display:none;margin-top:10px"><input id="zx-bk-name" placeholder="اسمك الكامل" style="width:100%;padding:12px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.15);border-radius:10px;color:#fff;margin-bottom:8px"/>
+<input id="zx-bk-phone" placeholder="رقم جوالك" style="width:100%;padding:12px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.15);border-radius:10px;color:#fff;margin-bottom:8px"/>
+<textarea id="zx-bk-notes" rows="2" placeholder="ملاحظات (اختياري)" style="width:100%;padding:12px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.15);border-radius:10px;color:#fff;margin-bottom:14px"></textarea>
+<button id="zx-bk-submit" style="width:100%;padding:14px;background:linear-gradient(90deg,{p},#f97316);color:#000;border:0;border-radius:10px;font-weight:900;font-size:16px;cursor:pointer">✓ تأكيد الحجز</button></div>
+<div id="zx-bk-msg" style="margin-top:12px;font-size:13px"></div></div></div>
+<script>(function(){{var SLUG=location.pathname.split('/').pop()||'';
+async function j(u,o){{var r=await fetch('/api/websites'+u,o);var d=await r.json();if(!r.ok)throw new Error(d.detail||'err');return d;}}
+(async function init(){{try{{var d=await j('/public/'+SLUG+'/services');var svc=document.getElementById('zx-bk-svc');svc.innerHTML=(d.services||[]).map(function(s){{return '<option value="'+s.id+'" data-dur="'+s.duration_min+'">'+s.name+' - '+s.price+'ر.س ('+s.duration_min+'د)</option>'}}).join('');var st=document.getElementById('zx-bk-staff');(d.staff||[]).forEach(function(s){{var o=document.createElement('option');o.value=s.id;o.textContent=s.name+(s.role?' - '+s.role:'');st.appendChild(o);}});var dt=document.getElementById('zx-bk-date');dt.min=new Date().toISOString().slice(0,10);dt.value=new Date(Date.now()+86400000).toISOString().slice(0,10);dt.onchange=loadSlots;svc.onchange=loadSlots;document.getElementById('zx-bk-staff').onchange=loadSlots;loadSlots();}}catch(e){{document.getElementById('zx-bk-msg').innerHTML='<span style="color:#ef4444">فشل التحميل: '+e.message+'</span>';}}}})();
+async function loadSlots(){{var sid=document.getElementById('zx-bk-svc').value;var date=document.getElementById('zx-bk-date').value;var staff=document.getElementById('zx-bk-staff').value;if(!sid||!date)return;try{{var u='/public/'+SLUG+'/availability?service_id='+sid+'&date='+date+(staff?'&staff_id='+staff:'');var d=await j(u);var g=document.getElementById('zx-bk-slots-grid');g.innerHTML=d.slots.map(function(s){{return '<button data-t="'+s.time+'" '+(s.available?'':'disabled')+' style="padding:8px;background:'+(s.available?'rgba(255,255,255,.08)':'rgba(255,255,255,.02)')+';border:1px solid rgba(255,255,255,.12);color:'+(s.available?'#fff':'#555')+';border-radius:6px;cursor:'+(s.available?'pointer':'not-allowed')+';font-size:12px">'+s.time+'</button>'}}).join('');document.getElementById('zx-bk-slots').style.display='block';g.querySelectorAll('button:not([disabled])').forEach(function(b){{b.onclick=function(){{g.querySelectorAll('button').forEach(function(x){{x.style.background='rgba(255,255,255,.08)';x.style.color='#fff'}});b.style.background='{p}';b.style.color='#000';window.__zxSlot=date+'T'+b.dataset.t+':00+03:00';document.getElementById('zx-bk-details').style.display='block';}}}});}}catch(e){{}}}}
+document.getElementById('zx-bk-submit').onclick=async function(){{var sid=document.getElementById('zx-bk-svc').value;var staff=document.getElementById('zx-bk-staff').value;var name=document.getElementById('zx-bk-name').value.trim();var phone=document.getElementById('zx-bk-phone').value.trim();if(!window.__zxSlot||!name||!phone){{document.getElementById('zx-bk-msg').innerHTML='<span style="color:#f59e0b">⚠️ اختر وقتاً وأدخل اسمك ورقمك</span>';return;}}try{{var r=await j('/public/'+SLUG+'/bookings',{{method:'POST',headers:{{'Content-Type':'application/json'}},body:JSON.stringify({{service_id:sid,staff_id:staff||null,slot_iso:window.__zxSlot,customer_name:name,customer_phone:phone,notes:document.getElementById('zx-bk-notes').value.trim()}})}});document.getElementById('zx-bk-root').innerHTML='<div style="text-align:center;padding:30px"><div style="font-size:64px">✅</div><h3 style="margin:10px 0">تم الحجز بنجاح</h3><p style="opacity:.7">رقم الحجز: '+r.booking_id.slice(0,8)+'</p><p style="opacity:.7">سنتواصل معك قبل الموعد للتأكيد</p></div>';}}catch(e){{document.getElementById('zx-bk-msg').innerHTML='<span style="color:#ef4444">❌ '+e.message+'</span>';}}}};
+}})();</script>
+</section>"""
+
+
