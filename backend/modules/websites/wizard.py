@@ -52,65 +52,138 @@ def _vertical_steps(vertical_id: Optional[str]) -> List[Dict[str, Any]]:
 
 def _merged_steps(project: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
     """Return STEPS with vertical-specific questions spliced in right after 'variant',
-    AND deep widget-style steps right after 'extras' (one per chosen extra + cart for ecom)."""
+    AND deep widget-style steps right after 'extras':
+    For each chosen extra (mapped to a widget), inject 2-3 steps:
+      1. style_<wid>  → 3 visual variants + ai_custom + skip option
+      2. color_<wid>  → 6 color picks (+custom hex via ai brief)
+      3. custom_<wid> → ONLY if variant==ai_custom → free-text brief (with optional ref image upload)
+    Cart is auto-added for any e-commerce vertical.
+    Delivery badge is auto-added for delivery-capable verticals.
+    """
     vertical_id = ((project or {}).get("vertical")) if project else None
     v_steps = _vertical_steps(vertical_id)
 
-    # 🆕 Per-extra widget style steps with 3 visual options + AI custom
     extras_chosen = (((project or {}).get("wizard") or {}).get("answers") or {}).get("extras") or []
     if not isinstance(extras_chosen, list):
         extras_chosen = []
+    features_chosen = (((project or {}).get("wizard") or {}).get("answers") or {}).get("features") or []
+    if not isinstance(features_chosen, list):
+        features_chosen = []
     EXTRA_TO_WIDGET = {
         "whatsapp_float": "whatsapp",
-        "sticky_phone":   "whatsapp",   # phone shares whatsapp visual style
+        "sticky_phone":   "whatsapp",
         "scroll_top":     "scroll_top",
         "book_float":     "book_float",
         "announce_bar":   "announce_bar",
         "rating_widget":  "whatsapp",
     }
+    # Features that imply additional widgets
+    FEATURE_TO_WIDGET = {
+        "delivery": "delivery_badge",
+        "whatsapp": "whatsapp",
+        "booking":  "book_float",
+    }
+
     style_steps: List[Dict[str, Any]] = []
-    seen_widgets: set = set()  # dedup so we don't ask the same widget twice
+    seen_widgets: set = set()
     try:
         from .widget_styles import WIDGETS
     except Exception:
         WIDGETS = {}
-    for ext in extras_chosen:
-        wid = EXTRA_TO_WIDGET.get(ext)
-        if not wid or wid not in WIDGETS or wid in seen_widgets:
-            continue
+
+    # Map color names to hex
+    COLOR_PALETTE = [
+        ("brand_gold",  "ذهبي فاخر",      "#D4AF37"),
+        ("brand_green", "أخضر واتساب",    "#25D366"),
+        ("brand_red",   "أحمر طاقة",       "#DC2626"),
+        ("brand_blue",  "أزرق احترافي",   "#2563EB"),
+        ("brand_purple","بنفسجي ملكي",    "#7C3AED"),
+        ("brand_dark",  "أسود أنيق",       "#000000"),
+    ]
+
+    def _add_widget_steps(wid: str, w: Dict[str, Any]):
+        """Append 2-3 ordered steps for this widget."""
+        if wid in seen_widgets:
+            return
         seen_widgets.add(wid)
-        w = WIDGETS[wid]
+        name_ar = w.get("name_ar", wid)
+        # 1) Variant/Shape step (3 shapes + AI custom + skip)
         variants = list((w.get("variants") or {}).items())[:3]
-        chips = [{"id": vid, "label": v.get("name_ar", vid), "value": vid} for vid, v in variants]
-        chips.append({"id": "ai_custom", "label": "🤖 صمّم لي بمزاجي (AI)", "value": "ai_custom"})
+        v_chips = [{"id": vid, "label": v.get("name_ar", vid), "value": vid} for vid, v in variants]
+        v_chips.append({"id": "ai_custom", "label": "🤖 صمّم لي بمزاجي (AI)", "value": "ai_custom"})
+        v_chips.append({"id": "default",   "label": "تخطّي (افتراضي)",         "value": "default"})
         style_steps.append({
             "id": f"style_{wid}",
-            "title": f"شكل {w.get('name_ar', wid)}",
-            "question": f"✨ اختر شكل {w.get('name_ar', wid)} — أو اطلب من الذكاء الاصطناعي تصميماً مخصّصاً بمزاجك:",
-            "chips": chips,
+            "title": f"شكل {name_ar}",
+            "question": f"✨ اختر شكل {name_ar} — أو اطلب من الذكاء الاصطناعي تصميماً بمزاجك:",
+            "chips": v_chips,
             "render": "chips",
             "applies": f"widget_style_{wid}",
             "vertical_specific": True,
             "widget_id": wid,
         })
-    # Cart style step for any e-commerce-like vertical
-    biz = ((project or {}).get("business_type") or (project or {}).get("template") or "").lower()
-    if biz in ("store", "ecommerce", "cosmetics", "automotive", "jewelry", "bakery", "restaurant", "coffee", "pets") and "cart" in WIDGETS and "cart" not in seen_widgets:
-        seen_widgets.add("cart")
-        w = WIDGETS["cart"]
-        variants = list((w.get("variants") or {}).items())[:3]
-        chips = [{"id": vid, "label": v.get("name_ar", vid), "value": vid} for vid, v in variants]
-        chips.append({"id": "ai_custom", "label": "🤖 صمّم سلة بمزاجي (AI)", "value": "ai_custom"})
+        # 2) Color step
+        c_chips = [{"id": cid, "label": label, "value": hex_v} for cid, label, hex_v in COLOR_PALETTE]
+        c_chips.append({"id": "skip_color", "label": "تخطّي (الافتراضي)", "value": ""})
         style_steps.append({
-            "id": "style_cart",
-            "title": "شكل السلة",
-            "question": "🛒 اختر شكل سلة التسوّق — أو اطلب من AI تصميماً مخصّصاً بمزاجك:",
-            "chips": chips,
+            "id": f"color_{wid}",
+            "title": f"لون {name_ar}",
+            "question": f"🎨 ما اللون الذي تريده لـ {name_ar}؟",
+            "chips": c_chips,
             "render": "chips",
-            "applies": "widget_style_cart",
+            "applies": f"widget_color_{wid}",
             "vertical_specific": True,
-            "widget_id": "cart",
+            "widget_id": wid,
         })
+        # 3) AI custom brief (only shown if user picked ai_custom)
+        style_steps.append({
+            "id": f"custom_{wid}",
+            "title": f"تصميمك المخصّص لـ {name_ar}",
+            "question": f"📝 صف لي التصميم الذي تتخيّله لـ {name_ar} (مثل: 'أبيها ذهبية متوهّجة بشكل قطرة'). يمكنك أيضاً رفع صورة مرجعية:",
+            "chips": [],
+            "render": "free_text_with_image",
+            "free_text": True,
+            "supports_image_upload": True,
+            "applies": f"widget_custom_{wid}",
+            "vertical_specific": True,
+            "widget_id": wid,
+            # Conditional: only show if user selected ai_custom for this widget
+            "_show_only_if_ai_custom": wid,
+        })
+
+    # Add steps for chosen extras
+    for ext in extras_chosen:
+        wid = EXTRA_TO_WIDGET.get(ext)
+        if wid and wid in WIDGETS:
+            _add_widget_steps(wid, WIDGETS[wid])
+
+    # Add steps for features (whatsapp, delivery, booking)
+    for feat in features_chosen:
+        wid = FEATURE_TO_WIDGET.get(feat)
+        if wid and wid in WIDGETS:
+            _add_widget_steps(wid, WIDGETS[wid])
+
+    # Cart for e-commerce verticals
+    biz = ((project or {}).get("business_type") or (project or {}).get("template") or "").lower()
+    vert = (vertical_id or "").lower()
+    ECOM_TAGS = ("store", "ecommerce", "cosmetics", "automotive", "jewelry", "bakery", "restaurant", "coffee", "pets", "library", "art_gallery")
+    if (biz in ECOM_TAGS or vert in ECOM_TAGS) and "cart" in WIDGETS:
+        _add_widget_steps("cart", WIDGETS["cart"])
+
+    # Delivery badge for delivery-capable verticals
+    if "delivery" in features_chosen and "delivery_badge" in WIDGETS:
+        _add_widget_steps("delivery_badge", WIDGETS["delivery_badge"])
+
+    # Filter out conditional custom_* steps where user did not pick ai_custom
+    widget_styles_state = (project or {}).get("widget_styles") or {}
+    filtered_style_steps: List[Dict[str, Any]] = []
+    for s in style_steps:
+        gate_wid = s.get("_show_only_if_ai_custom")
+        if gate_wid:
+            chosen = (widget_styles_state.get(gate_wid) or {}).get("variant")
+            if chosen != "ai_custom":
+                continue
+        filtered_style_steps.append(s)
 
     out: List[Dict[str, Any]] = []
     for s in STEPS:
@@ -118,7 +191,7 @@ def _merged_steps(project: Optional[Dict[str, Any]] = None) -> List[Dict[str, An
         if s["id"] == "variant":
             out.extend(v_steps)
         if s["id"] == "extras":
-            out.extend(style_steps)
+            out.extend(filtered_style_steps)
     return out
 
 
@@ -476,13 +549,16 @@ def apply_answer(project: Dict[str, Any], step_id: str, value: Any) -> Dict[str,
         vert_map[key] = value
         ans["vertical"] = vert_map
     elif step_id.startswith("style_"):
-        # 🆕 Per-widget style picker (e.g. style_whatsapp, style_cart) — applied to widget_styles
+        # 🆕 Per-widget shape picker — applied to widget_styles
         widget_id = step_id.replace("style_", "", 1)
         styles = dict(project.get("widget_styles") or {})
         widget_state = dict(styles.get(widget_id) or {})
         if value == "ai_custom":
             widget_state["variant"] = "ai_custom"
-            widget_state["awaiting_ai_brief"] = True  # frontend will prompt for description
+            widget_state["awaiting_ai_brief"] = True
+        elif value == "default":
+            widget_state.pop("variant", None)
+            widget_state.pop("awaiting_ai_brief", None)
         else:
             widget_state["variant"] = value
             widget_state.pop("awaiting_ai_brief", None)
@@ -491,6 +567,45 @@ def apply_answer(project: Dict[str, Any], step_id: str, value: Any) -> Dict[str,
         styles_map = dict(ans.get("widget_styles") or {})
         styles_map[widget_id] = value
         ans["widget_styles"] = styles_map
+    elif step_id.startswith("color_"):
+        # 🆕 Per-widget color picker
+        widget_id = step_id.replace("color_", "", 1)
+        styles = dict(project.get("widget_styles") or {})
+        widget_state = dict(styles.get(widget_id) or {})
+        if value and isinstance(value, str) and value.startswith("#"):
+            widget_state["color"] = value
+        else:
+            widget_state.pop("color", None)
+        styles[widget_id] = widget_state
+        project["widget_styles"] = styles
+        colors_map = dict(ans.get("widget_colors") or {})
+        colors_map[widget_id] = value
+        ans["widget_colors"] = colors_map
+    elif step_id.startswith("custom_"):
+        # 🆕 Per-widget AI custom brief — value is {brief: str, ref_image_url?: str}
+        widget_id = step_id.replace("custom_", "", 1)
+        brief = ""
+        ref_image = None
+        if isinstance(value, dict):
+            brief = (value.get("brief") or value.get("text") or "").strip()
+            ref_image = value.get("ref_image_url") or value.get("image_url")
+        else:
+            brief = str(value or "").strip()
+        styles = dict(project.get("widget_styles") or {})
+        widget_state = dict(styles.get(widget_id) or {})
+        widget_state["ai_brief"] = brief
+        if ref_image:
+            widget_state["ref_image_url"] = ref_image
+        widget_state.pop("awaiting_ai_brief", None)
+        # NOTE: actual ai_css generation happens via the existing
+        # POST /widget-ai-design endpoint. The wizard merely stores the brief
+        # so the renderer can show a placeholder; user/owner can re-run AI
+        # design from the dashboard.
+        styles[widget_id] = widget_state
+        project["widget_styles"] = styles
+        custom_map = dict(ans.get("widget_custom") or {})
+        custom_map[widget_id] = {"brief": brief, "ref_image_url": ref_image}
+        ans["widget_custom"] = custom_map
 
     wizard["answers"] = ans
     wizard["completed"] = list(dict.fromkeys((wizard.get("completed") or []) + [step_id]))

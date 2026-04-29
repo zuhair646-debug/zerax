@@ -358,6 +358,7 @@ function InlineStepRenderer({ step, variants, loading, onAnswer, selected, setSe
 
   // 🆕 AI custom design — when user picks ai_custom in a style_<widget> step
   const isStyleStep = step.id?.startsWith('style_');
+  const isCustomStep = step.id?.startsWith('custom_');  // 🆕 deep brief step (free_text_with_image)
   const aiPicked = isStyleStep && selected === 'ai_custom';
   const submitAi = async () => {
     if (!aiBrief.trim() || !project?.id || !step.widget_id) return;
@@ -378,6 +379,28 @@ function InlineStepRenderer({ step, variants, loading, onAnswer, selected, setSe
     }
   };
 
+  // 🆕 Custom brief step (custom_<widget>) — free text + optional image upload
+  const [customBrief, setCustomBrief] = useState('');
+  const [customImg, setCustomImg] = useState(null);  // base64 data URL or remote URL
+  const submitCustomBrief = async () => {
+    if (!customBrief.trim()) {
+      toast.error('اكتب وصفاً للتصميم أولاً');
+      return;
+    }
+    onAnswer({ brief: customBrief.trim(), ref_image_url: customImg });
+  };
+  const handleImgPick = (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.size > 3 * 1024 * 1024) {
+      toast.error('الصورة كبيرة جداً (حد 3MB)');
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => setCustomImg(reader.result);
+    reader.readAsDataURL(file);
+  };
+
   if (render === 'variants') {
     return <VariantPicker variants={variants} onPick={handleSingle} loading={loading} />;
   }
@@ -386,6 +409,43 @@ function InlineStepRenderer({ step, variants, loading, onAnswer, selected, setSe
   if (step.id === 'buttons') return <ButtonShapePicker onPick={handleSingle} loading={loading} />;
   if (step.id === 'colors')  return <ColorPicker       onPick={handleSingle} loading={loading} />;
   if (step.id === 'typography') return <FontPicker     onPick={handleSingle} loading={loading} />;
+
+  // 🆕 Deep brief step (custom_<widget>) — free text + image upload
+  if (render === 'free_text_with_image' || isCustomStep) {
+    return (
+      <div className="mx-3 p-3 bg-gradient-to-br from-amber-500/15 to-orange-500/15 border border-amber-400/30 rounded-xl space-y-2" data-testid="custom-brief-box">
+        <div className="text-xs font-black text-amber-200">📝 صف لي تصميمك بالضبط (وارفق صورة مرجعية إن وُجدت):</div>
+        <textarea
+          value={customBrief}
+          onChange={(e) => setCustomBrief(e.target.value)}
+          placeholder="مثال: شكل قطرة بحدود ذهبية متوهّجة + خلفية سوداء شفافة + أيقونة في الوسط..."
+          className="w-full min-h-[80px] p-2 bg-black/30 border border-white/10 rounded-lg text-sm focus:border-amber-400 focus:outline-none"
+          data-testid="custom-brief-input"
+          dir="rtl"
+        />
+        <div className="flex items-center gap-2">
+          <label className="flex-1 cursor-pointer px-3 py-2 rounded-lg bg-white/10 hover:bg-white/15 text-xs text-center" data-testid="custom-img-label">
+            {customImg ? '✓ صورة مرفقة' : '📎 إرفاق صورة مرجعية (اختياري)'}
+            <input type="file" accept="image/*" onChange={handleImgPick} className="hidden" data-testid="custom-img-input" />
+          </label>
+          {customImg && (
+            <button onClick={() => setCustomImg(null)} className="px-2 py-2 text-xs bg-red-500/20 hover:bg-red-500/30 rounded-lg" data-testid="custom-img-clear">✕</button>
+          )}
+        </div>
+        {customImg && (
+          <img src={customImg} alt="مرجع" className="max-h-24 rounded-lg border border-white/10" data-testid="custom-img-preview" />
+        )}
+        <button
+          onClick={submitCustomBrief}
+          disabled={!customBrief.trim() || loading}
+          className="w-full py-2 rounded-lg bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-sm font-black text-black disabled:opacity-50"
+          data-testid="custom-brief-submit"
+        >
+          ✨ احفظ الوصف وتابع
+        </button>
+      </div>
+    );
+  }
 
   // Default chip renderer + AI brief textarea when ai_custom is selected
   return (

@@ -122,6 +122,17 @@ WIDGETS: Dict[str, Dict[str, Any]] = {
             "festive": {"name_ar": "احتفالي", "css": "background:linear-gradient(90deg,#ef4444,#dc2626,#7c3aed);color:#fff;font-weight:900;animation:zx-gradient 8s ease infinite;background-size:200% 200%;"},
         },
     },
+    "delivery_badge": {
+        "selector": ".zx-delivery-badge, #zx-delivery-fab",
+        "name_ar": "شارة التوصيل (🛵)",
+        "description_ar": "شارة/زر التوصيل العائم — يظهر للمتاجر والمطاعم",
+        "default_pos": "bottom-right",
+        "variants": {
+            "scooter_pill": {"name_ar": "كبسولة سكوتر 🛵", "css": "width:auto;height:46px;padding:0 18px;border-radius:24px;background:linear-gradient(135deg,#10b981,#059669);color:#fff;border:0;cursor:pointer;font-weight:900;font-size:13px;display:inline-flex;align-items:center;gap:8px;box-shadow:0 6px 20px rgba(16,185,129,.45);"},
+            "truck_square": {"name_ar": "مربع شاحنة 🚚", "css": _base_fab(52, "linear-gradient(135deg,#f59e0b,#dc2626)", "#fff", "12px") + "font-size:24px;"},
+            "free_ribbon": {"name_ar": "شريط توصيل مجاني", "css": "width:auto;height:40px;padding:0 16px;border-radius:8px;background:#fbbf24;color:#000;border:0;cursor:pointer;font-weight:900;font-size:13px;display:inline-flex;align-items:center;gap:6px;clip-path:polygon(8px 0,100% 0,calc(100% - 8px) 50%,100% 100%,8px 100%,0 50%);"},
+        },
+    },
 }
 
 
@@ -163,9 +174,21 @@ def get_styles_css(project: Dict[str, Any]) -> str:
             out.append(f"{sel}{{display:none !important;}}")
             continue
         variant_id = cfg.get("variant")
-        v = w["variants"].get(variant_id)
-        if v and v.get("css"):
-            out.append(f"{sel}{{{v['css']}}}")
+        # 🆕 ai_custom variant: use server-generated CSS (overrides everything below)
+        if variant_id == "ai_custom" and cfg.get("ai_css"):
+            out.append(f"{sel}{{{cfg['ai_css']}}}")
+        else:
+            v = w["variants"].get(variant_id)
+            if v and v.get("css"):
+                out.append(f"{sel}{{{v['css']}}}")
+        # 🆕 Color override (applied AFTER variant so it wins) — from color picker step
+        color = cfg.get("color")
+        if color and isinstance(color, str) and color.startswith("#"):
+            out.append(f"{sel}{{background:{color} !important;}}")
+        # Text/icon color override
+        text_color = cfg.get("text_color")
+        if text_color and isinstance(text_color, str) and text_color.startswith("#"):
+            out.append(f"{sel}{{color:{text_color} !important;}}")
         if w.get("supports_position", True):
             pos = cfg.get("position") or w["default_pos"]
             pos_css = POSITIONS.get(pos)
