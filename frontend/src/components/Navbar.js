@@ -1,7 +1,7 @@
 import React from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
-import { LogOut, LayoutDashboard, Shield, Menu, X, MessageSquare, Rocket } from 'lucide-react';
+import { LogOut, LayoutDashboard, Shield, Menu, X } from 'lucide-react';
 
 // اللوغو الذهبي الجديد
 const ZITEX_LOGO_URL = "https://static.prod-images.emergentagent.com/jobs/d28c1cbc-c039-46df-a176-2e32ebb0f715/images/f7f88c5a96c3a3978fb84a31dd4d6b922be1568a9083c93bf3cef363e8c17387.png";
@@ -54,24 +54,6 @@ export const Navbar = ({ user, transparent = false, setUser }) => {
             </Link>
             {user ? (
               <>
-                <Button
-                  variant="outline"
-                  onClick={() => navigate('/chat')}
-                  data-testid="navbar-chat-btn"
-                  className="bg-gradient-to-r from-amber-600 to-yellow-600 border-0 text-white hover:from-amber-700 hover:to-yellow-700 shadow-lg shadow-amber-500/20"
-                >
-                  <MessageSquare className="w-4 h-4 me-2" />
-                  الشات الذكي
-                </Button>
-                <Button
-                  variant="outline"
-                  onClick={() => navigate('/projects')}
-                  data-testid="navbar-projects-btn"
-                  className="border-amber-500/30 text-amber-400 hover:bg-amber-500/10"
-                >
-                  <Rocket className="w-4 h-4 me-2" />
-                  مشاريعي
-                </Button>
                 <Button
                   variant="outline"
                   onClick={() => navigate(isAdmin ? '/admin' : '/dashboard')}
@@ -145,22 +127,6 @@ export const Navbar = ({ user, transparent = false, setUser }) => {
               <Link to="/pricing" className="py-2 text-gray-300 hover:text-amber-400">الأسعار</Link>
               {user ? (
                 <>
-                  <Button 
-                    variant="default" 
-                    onClick={() => { navigate('/chat'); setIsMenuOpen(false); }} 
-                    className="justify-start bg-gradient-to-r from-amber-600 to-yellow-600"
-                  >
-                    <MessageSquare className="w-4 h-4 me-2" />
-                    الشات الذكي
-                  </Button>
-                  <Button 
-                    variant="ghost" 
-                    onClick={() => { navigate('/projects'); setIsMenuOpen(false); }} 
-                    className="justify-start text-amber-400"
-                  >
-                    <Rocket className="w-4 h-4 me-2" />
-                    مشاريعي
-                  </Button>
                   <Button 
                     variant="ghost" 
                     onClick={() => { navigate(isAdmin ? '/admin' : '/dashboard'); setIsMenuOpen(false); }} 
