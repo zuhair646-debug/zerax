@@ -351,6 +351,9 @@ function ChipGroup({ chips, multi, onSingle, onMulti, loading, selected, setSele
 function InlineStepRenderer({ step, variants, loading, onAnswer, selected, setSelected, project }) {
   const [aiBrief, setAiBrief] = useState('');
   const [aiBusy, setAiBusy] = useState(false);
+  // 🆕 Custom brief step state (must be declared before any conditional return — React Hooks rules)
+  const [customBrief, setCustomBrief] = useState('');
+  const [customImg, setCustomImg] = useState(null);  // base64 data URL or remote URL
   if (!step) return null;
   const render = step.render || 'chips';
   const handleSingle = (v) => onAnswer(v);
@@ -380,8 +383,6 @@ function InlineStepRenderer({ step, variants, loading, onAnswer, selected, setSe
   };
 
   // 🆕 Custom brief step (custom_<widget>) — free text + optional image upload
-  const [customBrief, setCustomBrief] = useState('');
-  const [customImg, setCustomImg] = useState(null);  // base64 data URL or remote URL
   const submitCustomBrief = async () => {
     if (!customBrief.trim()) {
       toast.error('اكتب وصفاً للتصميم أولاً');
