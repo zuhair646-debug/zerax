@@ -1801,9 +1801,9 @@ const AIChat = ({ user }) => {
                     </div>
                   </div>
 
-                  {/* 6 Creative Cards Grid */}
-                  <div className="text-center mb-5">
-                    <div className="text-xs font-bold text-amber-300/70 tracking-widest mb-1">أو اختر الإنشاء السريع</div>
+                  {/* Working Sections */}
+                  <div className="text-center mb-4">
+                    <div className="text-xs font-bold text-amber-300/70 tracking-widest mb-1">الأقسام المتاحة</div>
                     <div className="h-px w-20 mx-auto bg-gradient-to-r from-transparent via-amber-400/40 to-transparent"></div>
                   </div>
 
@@ -1812,38 +1812,11 @@ const AIChat = ({ user }) => {
                       {
                         type: 'website-template',
                         title: 'مواقع جاهزة',
-                        desc: '٢٥ قالب جاهز',
+                        desc: '٢٥ قالب احترافي',
                         gradient: 'from-emerald-500/20 to-teal-500/10',
                         accent: '#10b981',
                         bgImage: 'https://images.unsplash.com/photo-1467232004584-a241de8bcf5d?auto=format&fit=crop&w=800&q=70',
                         action: () => (window.location.href = '/websites'),
-                      },
-                      {
-                        type: 'mobile',
-                        title: 'تطبيق موبايل',
-                        desc: 'Flutter / Swift / Kotlin',
-                        gradient: 'from-pink-500/20 to-rose-500/10',
-                        accent: '#ec4899',
-                        bgImage: 'https://images.unsplash.com/photo-1512941937669-90a1b58e7e9c?auto=format&fit=crop&w=800&q=70',
-                        action: () => createSession('mobile'),
-                      },
-                      {
-                        type: 'web-to-app',
-                        title: 'تحويل موقع لتطبيق',
-                        desc: 'Web → Android/iOS',
-                        gradient: 'from-cyan-500/20 to-sky-500/10',
-                        accent: '#06b6d4',
-                        bgImage: 'https://images.unsplash.com/photo-1607252650355-f7fd0460ccdb?auto=format&fit=crop&w=800&q=70',
-                        action: () => createSession('mobile'),
-                      },
-                      {
-                        type: 'game',
-                        title: 'إنشاء الألعاب',
-                        desc: 'Phaser / Three.js',
-                        gradient: 'from-cyan-500/20 to-blue-500/10',
-                        accent: '#0ea5e9',
-                        bgImage: 'https://images.unsplash.com/photo-1542751371-adc38448a05e?auto=format&fit=crop&w=800&q=70',
-                        action: () => createSession('game'),
                       },
                       {
                         type: 'image',
@@ -1851,7 +1824,7 @@ const AIChat = ({ user }) => {
                         desc: 'GPT Image 1 / Nano Banana',
                         gradient: 'from-purple-500/20 to-violet-500/10',
                         accent: '#a855f7',
-                        bgImage: 'https://images.unsplash.com/photo-1561735445-df9c3deef91d?auto=format&fit=crop&w=800&q=70',
+                        bgImage: 'https://images.unsplash.com/photo-1502691876148-a84978e59af8?auto=format&fit=crop&w=800&q=70',
                         action: () => createSession('image'),
                       },
                       {
@@ -1868,28 +1841,78 @@ const AIChat = ({ user }) => {
                         key={type}
                         onClick={action}
                         className="relative group cursor-pointer rounded-xl overflow-hidden aspect-[4/3] sm:aspect-[5/4] border border-white/10 hover:border-white/30 transition-all hover:scale-[1.03] hover:shadow-2xl"
-                        style={{ boxShadow: `0 0 0 0 ${accent}` }}
                         onMouseEnter={(e) => (e.currentTarget.style.boxShadow = `0 12px 40px -8px ${accent}80`)}
                         onMouseLeave={(e) => (e.currentTarget.style.boxShadow = '')}
                         data-testid={`hero-card-${type}`}
                       >
-                        {/* Background image */}
                         <div
                           className="absolute inset-0 bg-cover bg-center scale-110 group-hover:scale-125 transition-transform duration-700"
                           style={{ backgroundImage: `url('${bgImage}')` }}
                         />
-                        {/* Color overlay */}
                         <div className={`absolute inset-0 bg-gradient-to-tr ${gradient}`} />
                         <div className="absolute inset-0 bg-gradient-to-t from-black via-black/70 to-black/20" />
-                        {/* Content */}
                         <div className="relative h-full flex flex-col justify-end p-3 sm:p-4 text-right">
                           <h3 className="text-white font-black text-base sm:text-lg mb-0.5" style={{ textShadow: '0 2px 8px rgba(0,0,0,.5)' }}>
                             {title}
                           </h3>
                           <p className="text-[10px] sm:text-xs text-white/75 font-medium">{desc}</p>
                         </div>
-                        {/* Top-right accent corner */}
                         <div className="absolute top-2 right-2 w-2 h-2 rounded-full" style={{ background: accent, boxShadow: `0 0 8px ${accent}` }} />
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Coming Soon Sections */}
+                  <div className="text-center mb-4 mt-10">
+                    <div className="text-xs font-bold text-white/40 tracking-widest mb-1">قريباً — قيد التطوير</div>
+                    <div className="h-px w-20 mx-auto bg-gradient-to-r from-transparent via-white/15 to-transparent"></div>
+                  </div>
+
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 sm:gap-4">
+                    {[
+                      {
+                        type: 'mobile',
+                        title: 'تطبيق موبايل',
+                        desc: 'Flutter / Swift / Kotlin',
+                        gradient: 'from-pink-500/20 to-rose-500/10',
+                        bgImage: 'https://images.unsplash.com/photo-1512941937669-90a1b58e7e9c?auto=format&fit=crop&w=800&q=70',
+                      },
+                      {
+                        type: 'web-to-app',
+                        title: 'تحويل موقع لتطبيق',
+                        desc: 'Web → Android/iOS',
+                        gradient: 'from-cyan-500/20 to-sky-500/10',
+                        bgImage: 'https://images.unsplash.com/photo-1607252650355-f7fd0460ccdb?auto=format&fit=crop&w=800&q=70',
+                      },
+                      {
+                        type: 'game',
+                        title: 'إنشاء الألعاب',
+                        desc: 'Phaser / Three.js',
+                        gradient: 'from-cyan-500/20 to-blue-500/10',
+                        bgImage: 'https://images.unsplash.com/photo-1493711662062-fa541adb3fc8?auto=format&fit=crop&w=800&q=70',
+                      },
+                    ].map(({ type, title, desc, gradient, bgImage }) => (
+                      <div
+                        key={type}
+                        onClick={() => toast.info('🛠️ هذا القسم قيد التحضير — قريباً!')}
+                        className="relative group rounded-xl overflow-hidden aspect-[4/3] sm:aspect-[5/4] border border-white/10 cursor-not-allowed opacity-70 hover:opacity-90 transition-all"
+                        data-testid={`hero-card-${type}`}
+                      >
+                        <div
+                          className="absolute inset-0 bg-cover bg-center scale-110 grayscale transition-transform duration-700"
+                          style={{ backgroundImage: `url('${bgImage}')` }}
+                        />
+                        <div className={`absolute inset-0 bg-gradient-to-tr ${gradient}`} />
+                        <div className="absolute inset-0 bg-gradient-to-t from-black via-black/70 to-black/20" />
+                        <div className="absolute top-2 left-2 z-10 px-2 py-0.5 rounded-md bg-amber-400/90 text-black text-[10px] font-black tracking-wider">
+                          🔒 قريباً
+                        </div>
+                        <div className="relative h-full flex flex-col justify-end p-3 sm:p-4 text-right">
+                          <h3 className="text-white font-black text-base sm:text-lg mb-0.5" style={{ textShadow: '0 2px 8px rgba(0,0,0,.5)' }}>
+                            {title}
+                          </h3>
+                          <p className="text-[10px] sm:text-xs text-white/75 font-medium">{desc}</p>
+                        </div>
                       </div>
                     ))}
                   </div>
