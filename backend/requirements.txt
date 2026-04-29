@@ -1,22 +1,38 @@
+# Zitex Backend Requirements
+# Modified for independent hosting (without Emergent-specific packages)
+
+# Core Framework
 fastapi
 uvicorn
 starlette
+
+# Database
 motor
 pymongo
+
+# Authentication
 bcrypt
 PyJWT
 python-jose
+
+# HTTP & Networking
 httpx
 requests
+
+# Data Validation
 pydantic
 email-validator
 python-dotenv
 python-multipart
-openai>=2.30.0
-elevenlabs
-paypalrestsdk
-pillow
-certifi
-dnspython
-replicate
 
+# OpenAI (for AI features when enabled)
+openai
+
+# ElevenLabs (optional - for voice)
+elevenlabs
+
+# PayPal
+paypalrestsdk
+
+# Utilities
+uuid

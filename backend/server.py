@@ -1,6 +1,6 @@
 from fastapi import FastAPI, APIRouter, HTTPException, Depends, UploadFile, File, Form
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-from fastapi.responses import StreamingResponse
+from fastapi.responses import StreamingResponse, Response
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
@@ -55,49 +55,6 @@ client = AsyncIOMotorClient(mongo_url)
 db = client[os.environ['DB_NAME']]
 
 app = FastAPI(title="Zitex API", description="AI-Powered Creative Platform")
-@app.get("/api/health")
-async def health_check():
-    return {"status": "healthy", "service": "zitex-api"}
-
-# Storage proxy endpoint - serve images/videos from Object Storage
-@app.get("/api/storage/{file_path:path}")
-async def serve_storage_file(file_path: str):
-    """Proxy endpoint to serve files from Object Storage"""
-    try:
-        from services.ai_chat_service import get_from_storage, APP_NAME
-        
-        full_path = f"{APP_NAME}/{file_path}"
-        result = get_from_storage(full_path)
-        
-        if result is None:
-            raise HTTPException(status_code=404, detail="File not found")
-        
-        file_data, content_type = result
-        
-        if not content_type or content_type == "text/html":
-            if file_path.endswith(".png"):
-                content_type = "image/png"
-            elif file_path.endswith(".jpg") or file_path.endswith(".jpeg"):
-                content_type = "image/jpeg"
-            elif file_path.endswith(".mp4"):
-                content_type = "video/mp4"
-            elif file_path.endswith(".mp3"):
-                content_type = "audio/mpeg"
-        
-        return StreamingResponse(
-            io.BytesIO(file_data),
-            media_type=content_type,
-            headers={"Cache-Control": "public, max-age=86400"}
-        )
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Storage proxy error: {e}")
-        raise HTTPException(status_code=500, detail="Failed to fetch file")
-
-@app.get("/health")
-async def health():
-    return {"status": "ok", "message": "Server is running"}
 api_router = APIRouter(prefix="/api")
 
 security = HTTPBearer()
@@ -487,6 +444,7 @@ class UserRegisterWithReferral(BaseModel):
     name: str
     country: str = "SA"
     referral_code: Optional[str] = None
+    affiliate_code: Optional[str] = None  # 🆕 paid affiliate program
 
 @api_router.post("/auth/register")
 async def register(user_data: UserRegisterWithReferral):
@@ -532,9 +490,21 @@ async def register(user_data: UserRegisterWithReferral):
                 {"id": inviter['id']},
                 {"$inc": {"credits": inviter_bonus, "bonus_points": inviter_bonus, "total_referrals": 1}}
             )
+
+    # 🆕 Paid affiliate attribution (if user signed up via marketer's link)
+    if user_data.affiliate_code:
+        doc['affiliate_ref'] = user_data.affiliate_code.upper()
     
     await db.users.insert_one(doc)
     await log_activity(user.id, "user_registered", "create", f"New user registered: {user.email} with {doc['credits']} bonus points")
+
+    # 🆕 Track affiliate signup (best-effort, never blocks registration)
+    if user_data.affiliate_code:
+        try:
+            from modules.affiliate.routes import record_signup
+            await record_signup(db, user.id, user_data.affiliate_code)
+        except Exception as _ae:
+            logging.getLogger(__name__).warning(f"affiliate signup hook failed: {_ae}")
     
     token = create_token(user.id, user.role)
     
@@ -567,6 +537,82 @@ async def login(credentials: UserLogin):
     
     token = create_token(user.id, user.role)
     return {"token": token, "user": user}
+
+
+# ============== GOOGLE OAUTH (Emergent-managed) ==============
+class GoogleExchangeIn(BaseModel):
+    session_id: str
+
+@api_router.post("/auth/google/exchange")
+async def google_exchange(body: GoogleExchangeIn):
+    """Exchange an Emergent OAuth session_id for our app JWT.
+    Finds-or-creates the user in `users` and returns {token, user, is_new}.
+    REMINDER: DO NOT HARDCODE THE URL, OR ADD ANY FALLBACKS OR REDIRECT URLS, THIS BREAKS THE AUTH
+    """
+    sid = (body.session_id or "").strip()
+    if not sid:
+        raise HTTPException(400, "session_id required")
+
+    # Call Emergent's session-data endpoint to retrieve verified Google identity
+    import httpx
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            r = await client.get(
+                "https://demobackend.emergentagent.com/auth/v1/env/oauth/session-data",
+                headers={"X-Session-ID": sid},
+            )
+            if r.status_code != 200:
+                raise HTTPException(401, "session expired or invalid")
+            data = r.json()
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(502, f"OAuth provider error: {str(e)[:200]}")
+
+    email = (data.get("email") or "").lower().strip()
+    name = data.get("name") or email.split("@")[0]
+    picture = data.get("picture") or ""
+    if not email:
+        raise HTTPException(400, "email not returned by provider")
+
+    # Find or create user (preserves email/password sign-up if same email)
+    existing = await db.users.find_one({"email": email}, {"_id": 0})
+    is_new = False
+    if existing:
+        # Mark Google as a known login provider, refresh picture/name once
+        patch: Dict[str, Any] = {
+            "google_linked": True,
+            "last_login_at": datetime.now(timezone.utc).isoformat(),
+        }
+        if picture and not existing.get('avatar_url'):
+            patch['avatar_url'] = picture
+        await db.users.update_one({"id": existing['id']}, {"$set": patch})
+        for field in ['free_images', 'free_videos', 'free_website_trial']:
+            if field not in existing:
+                existing[field] = 0 if field != 'free_website_trial' else False
+        user = User(**{k: v for k, v in existing.items() if k != 'password'})
+    else:
+        is_new = True
+        signup_bonus = POINTS_CONFIG.get("signup_bonus", 20)
+        user = User(
+            email=email, name=name, role="client", country="SA",
+            credits=signup_bonus, bonus_points=signup_bonus,
+            free_images=3, free_videos=2, free_website_trial=True,
+        )
+        doc = user.model_dump()
+        doc['password'] = ""  # No password — Google-only login (can be set later)
+        doc['google_linked'] = True
+        doc['avatar_url'] = picture
+        doc['signup_bonus_claimed'] = True
+        doc['created_at'] = doc['created_at'].isoformat()
+        await db.users.insert_one(doc)
+        await log_activity(user.id, "user_registered", "create",
+                           f"Google sign-up: {email}")
+
+    await log_activity(user.id, "user_login", "create",
+                       f"Google login: {email}")
+    token = create_token(user.id, user.role)
+    return {"token": token, "user": user, "is_new": is_new}
 
 @api_router.get("/auth/me")
 async def get_me(current_user: dict = Depends(get_current_user)):
@@ -749,7 +795,6 @@ async def transcribe_audio(
         
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"خطأ في تحويل الصوت: {str(e)}")
-
 
 # ============== IMAGE GENERATION & EDITING ==============
 
@@ -1366,154 +1411,420 @@ async def update_website_status(website_id: str, status: str, admin: dict = Depe
         raise HTTPException(status_code=404, detail="Website not found")
     return {"message": "Status updated"}
 
-# ============== FILE UPLOAD (FREE) ==============
+# ============== PRICING ==============
 
-@api_router.post("/files/upload")
-async def upload_file(
-    file: UploadFile = File(...),
-    file_category: str = Form(default="general"),
-    current_user: dict = Depends(get_current_user)
-):
-    """Upload any file - FREE for all users"""
-    try:
-        # Check file size (50MB limit)
-        contents = await file.read()
-        if len(contents) > 50 * 1024 * 1024:
-            raise HTTPException(status_code=400, detail="حجم الملف أكبر من 50MB")
-        
-        # Generate unique filename
-        file_ext = file.filename.split('.')[-1] if '.' in file.filename else 'bin'
-        unique_filename = f"{uuid.uuid4()}.{file_ext}"
-        
-        # For now, store as base64 (in production, use cloud storage)
-        file_b64 = base64.b64encode(contents).decode()
-        file_url = f"data:{file.content_type};base64,{file_b64}"
-        
-        # Save to database
-        file_doc = {
-            "id": str(uuid.uuid4()),
-            "user_id": current_user['user_id'],
-            "filename": file.filename,
-            "unique_filename": unique_filename,
-            "content_type": file.content_type,
-            "size": len(contents),
-            "category": file_category,
-            "file_url": file_url,
-            "created_at": datetime.now(timezone.utc).isoformat()
-        }
-        await db.uploaded_files.insert_one(file_doc)
-        
-        await log_activity(
-            current_user['user_id'],
-            "file_uploaded",
-            "create",
-            f"Uploaded file: {file.filename} ({file_category})",
-            {"filename": file.filename, "size": len(contents), "category": file_category}
-        )
-        
-        return {
-            "id": file_doc['id'],
-            "filename": file.filename,
-            "file_url": file_url,
-            "size": len(contents),
-            "category": file_category,
-            "message": "تم رفع الملف بنجاح (مجاني)"
-        }
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"خطأ في رفع الملف: {str(e)}")
-
-@api_router.get("/files/my-files")
-async def get_my_files(current_user: dict = Depends(get_current_user)):
-    """Get user's uploaded files"""
-    files = await db.uploaded_files.find(
-        {"user_id": current_user['user_id']},
-        {"_id": 0, "file_url": 0}  # Don't return full base64 in list
-    ).sort("created_at", -1).to_list(100)
-    return {"files": files}
-
-# ============== SOCIAL MEDIA EXPORT (FREE) ==============
-
-SOCIAL_SPECS = {
-    "tiktok": {"width": 1080, "height": 1920, "aspect": "9:16", "max_duration": 180},
-    "snapchat": {"width": 1080, "height": 1920, "aspect": "9:16", "max_duration": 60},
-    "instagram_reels": {"width": 1080, "height": 1920, "aspect": "9:16", "max_duration": 90},
-    "instagram_story": {"width": 1080, "height": 1920, "aspect": "9:16", "max_duration": 15},
-    "instagram_post": {"width": 1080, "height": 1080, "aspect": "1:1", "max_duration": 60},
-    "youtube_shorts": {"width": 1080, "height": 1920, "aspect": "9:16", "max_duration": 60},
-    "facebook": {"width": 1280, "height": 720, "aspect": "16:9", "max_duration": 240},
-    "twitter": {"width": 1280, "height": 720, "aspect": "16:9", "max_duration": 140}
+# تسعير الخدمات - شامل ومحدث
+PRICING_CONFIG = {
+    # باقات النقاط
+    "credits_packages": [
+        {"id": "starter", "name": "باقة المبتدئ", "credits": 100, "price_sar": 50, "price_usd": 13, "popular": False, "bonus": 0},
+        {"id": "pro", "name": "باقة المحترف", "credits": 500, "price_sar": 200, "price_usd": 53, "popular": True, "bonus": 50},
+        {"id": "enterprise", "name": "باقة الأعمال", "credits": 2000, "price_sar": 700, "price_usd": 187, "popular": False, "bonus": 300},
+    ],
+    # اشتراكات شهرية
+    "subscriptions": {
+        "images_monthly": {"name": "اشتراك الصور الشهري", "price_sar": 100, "price_usd": 27, "limit": "غير محدود", "features": ["صور غير محدودة", "جودة عالية HD", "أولوية التوليد"]},
+        "videos_monthly": {"name": "اشتراك الفيديو الشهري", "price_sar": 150, "price_usd": 40, "limit": "50 فيديو/شهر", "features": ["50 فيديو سينمائي", "دقيقة كاملة لكل فيديو", "جودة 4K"]},
+        "all_inclusive": {"name": "الباقة الشاملة", "price_sar": 300, "price_usd": 80, "limit": "كل شيء", "features": ["صور غير محدودة", "100 فيديو/شهر", "5 مواقع/شهر", "دعم أولوية"]},
+    },
+    # تكلفة الخدمات بالنقاط
+    "service_costs": {
+        "image_generation": 5,           # 5 نقاط لكل صورة
+        "video_4_seconds": 10,           # 10 نقاط لفيديو 4 ثواني
+        "video_8_seconds": 18,           # 18 نقطة لفيديو 8 ثواني
+        "video_12_seconds": 25,          # 25 نقطة لفيديو 12 ثانية
+        "video_50_seconds": 80,          # 80 نقطة لفيديو 50 ثانية
+        "video_60_seconds": 100,         # 100 نقطة لفيديو دقيقة
+        "website_simple": 50,            # 50 نقطة لموقع بسيط
+        "website_advanced": 150,         # 150 نقطة لموقع متقدم
+        "website_ecommerce": 300,        # 300 نقطة لمتجر إلكتروني
+        "tts_per_1000_chars": 2,         # 2 نقطة لكل 1000 حرف صوتي
+    },
+    # التجربة المجانية
+    "free_trial": {
+        "images": 3,
+        "videos": 2,
+        "website_preview": True,
+        "signup_bonus": 20,              # 20 نقطة مجانية عند التسجيل
+    },
+    # مكافآت الدعوات
+    "referral_rewards": {
+        "inviter_bonus": 30,             # 30 نقطة للداعي
+        "invited_bonus": 20,             # 20 نقطة للمدعو
+        "first_purchase_bonus": 50,      # 50 نقطة أول عملية شراء
+    }
 }
 
-SOCIAL_TIPS = {
-    "tiktok": ["استخدم موسيقى ترند", "أضف نص على الفيديو", "اجعل أول 3 ثواني جذابة"],
-    "snapchat": ["أضف فلاتر وملصقات", "استخدم النص المتحرك", "اجعله قصير ومباشر"],
-    "instagram_reels": ["استخدم الهاشتاقات المناسبة", "أضف موسيقى من مكتبة انستقرام", "تفاعل مع الترندات"],
-    "instagram_story": ["أضف استطلاعات وأسئلة", "استخدم الملصقات التفاعلية", "انشر في أوقات الذروة"],
-    "instagram_post": ["اكتب وصف جذاب", "استخدم 5-10 هاشتاقات", "رد على التعليقات بسرعة"],
-    "youtube_shorts": ["أضف عنوان جذاب", "استخدم الوصف والهاشتاقات", "انشر بانتظام"],
-    "facebook": ["شارك في المجموعات المناسبة", "أضف وصف مفصل", "استخدم الإعلانات المدفوعة"],
-    "twitter": ["اجعله قصير ومؤثر", "استخدم الهاشتاقات الترند", "انشر في أوقات النشاط"]
-}
+@api_router.get("/pricing")
+async def get_pricing():
+    return PRICING_CONFIG
 
-@api_router.post("/social/export")
-async def export_for_social(
-    asset_id: str,
-    platforms: List[str],
-    current_user: dict = Depends(get_current_user)
-):
-    """Export media for social platforms - FREE"""
-    exports = []
+@api_router.get("/pricing/calculate")
+async def calculate_price(service: str, quantity: int = 1):
+    """حساب تكلفة خدمة معينة"""
+    costs = PRICING_CONFIG["service_costs"]
+    if service not in costs:
+        raise HTTPException(status_code=400, detail="خدمة غير معروفة")
     
-    for platform in platforms:
-        if platform not in SOCIAL_SPECS:
-            continue
-        
-        specs = SOCIAL_SPECS[platform]
-        tips = SOCIAL_TIPS.get(platform, [])
-        
-        # Get platform icon
-        icons = {
-            "tiktok": "🎵", "snapchat": "👻", "instagram_reels": "📸",
-            "instagram_story": "📱", "instagram_post": "🖼️",
-            "youtube_shorts": "▶️", "facebook": "📘", "twitter": "🐦"
+    total_cost = costs[service] * quantity
+    return {
+        "service": service,
+        "quantity": quantity,
+        "cost_per_unit": costs[service],
+        "total_cost": total_cost
+    }
+
+# ============== REFERRAL SYSTEM (نظام الدعوات) ==============
+
+@api_router.get("/referral/info")
+async def get_referral_info(current_user: dict = Depends(get_current_user)):
+    """الحصول على معلومات الدعوة للمستخدم"""
+    user_doc = await db.users.find_one({"id": current_user['user_id']}, {"_id": 0, "password": 0})
+    if not user_doc:
+        raise HTTPException(status_code=404, detail="المستخدم غير موجود")
+    
+    referral_code = user_doc.get('referral_code', str(uuid.uuid4())[:8].upper())
+    
+    # تحديث الكود إذا لم يكن موجوداً
+    if 'referral_code' not in user_doc:
+        await db.users.update_one(
+            {"id": current_user['user_id']},
+            {"$set": {"referral_code": referral_code}}
+        )
+    
+    # حساب عدد الدعوات الناجحة
+    referrals_count = await db.users.count_documents({"referred_by": referral_code})
+    
+    return {
+        "referral_code": referral_code,
+        "referral_link": f"https://zitex.com/register?ref={referral_code}",
+        "total_referrals": referrals_count,
+        "bonus_points": user_doc.get('bonus_points', 0),
+        "rewards": PRICING_CONFIG["referral_rewards"]
+    }
+
+@api_router.post("/referral/apply")
+async def apply_referral_code(request: ApplyReferralRequest, current_user: dict = Depends(get_current_user)):
+    """تطبيق كود دعوة"""
+    user_doc = await db.users.find_one({"id": current_user['user_id']}, {"_id": 0})
+    if not user_doc:
+        raise HTTPException(status_code=404, detail="المستخدم غير موجود")
+    
+    # التحقق من عدم استخدام كود من قبل
+    if user_doc.get('referred_by'):
+        raise HTTPException(status_code=400, detail="لقد استخدمت كود دعوة من قبل")
+    
+    # التحقق من صحة الكود
+    inviter = await db.users.find_one({"referral_code": request.referral_code.upper()}, {"_id": 0})
+    if not inviter:
+        raise HTTPException(status_code=400, detail="كود الدعوة غير صحيح")
+    
+    # لا يمكن دعوة نفسك
+    if inviter['id'] == current_user['user_id']:
+        raise HTTPException(status_code=400, detail="لا يمكنك استخدام كودك الخاص")
+    
+    rewards = PRICING_CONFIG["referral_rewards"]
+    
+    # إضافة النقاط للمدعو
+    await db.users.update_one(
+        {"id": current_user['user_id']},
+        {
+            "$set": {"referred_by": request.referral_code.upper()},
+            "$inc": {"bonus_points": rewards["invited_bonus"], "credits": rewards["invited_bonus"]}
         }
-        
-        platform_names = {
-            "tiktok": "TikTok", "snapchat": "Snapchat", "instagram_reels": "Instagram Reels",
-            "instagram_story": "Instagram Story", "instagram_post": "Instagram Post",
-            "youtube_shorts": "YouTube Shorts", "facebook": "Facebook", "twitter": "Twitter/X"
+    )
+    
+    # إضافة النقاط للداعي
+    await db.users.update_one(
+        {"id": inviter['id']},
+        {
+            "$inc": {
+                "bonus_points": rewards["inviter_bonus"],
+                "credits": rewards["inviter_bonus"],
+                "total_referrals": 1
+            }
         }
-        
-        exports.append({
-            "platform": platform,
-            "platform_name": platform_names.get(platform, platform),
-            "icon": icons.get(platform, "📱"),
-            "specs": specs,
-            "tips": tips,
-            "download_url": None,  # In production, this would be a processed file URL
-            "status": "ready"
-        })
+    )
     
     await log_activity(
         current_user['user_id'],
-        "social_export",
+        "referral_applied",
         "create",
-        f"Exported for platforms: {', '.join(platforms)}",
-        {"platforms": platforms, "asset_id": asset_id}
+        f"Applied referral code: {request.referral_code}",
+        {"inviter_id": inviter['id'], "bonus": rewards["invited_bonus"]}
     )
     
     return {
-        "exports": exports,
-        "message": "تم تجهيز الملفات للتصدير (مجاني)"
+        "message": f"تم تطبيق الكود بنجاح! حصلت على {rewards['invited_bonus']} نقطة مجانية",
+        "bonus_received": rewards["invited_bonus"]
     }
 
-# ============== ADMIN ROUTES ==============
+@api_router.get("/referral/leaderboard")
+async def get_referral_leaderboard():
+    """قائمة أفضل الداعين"""
+    top_referrers = await db.users.find(
+        {"total_referrals": {"$gt": 0}},
+        {"_id": 0, "name": 1, "total_referrals": 1, "bonus_points": 1}
+    ).sort("total_referrals", -1).limit(10).to_list(10)
+    
+    return {"leaderboard": top_referrers}
+
+# ============== USER POINTS/CREDITS ==============
+
+@api_router.get("/user/balance")
+async def get_user_balance(current_user: dict = Depends(get_current_user)):
+    """الحصول على رصيد المستخدم"""
+    user_doc = await db.users.find_one({"id": current_user['user_id']}, {"_id": 0, "password": 0})
+    if not user_doc:
+        raise HTTPException(status_code=404, detail="المستخدم غير موجود")
+    
+    return {
+        "credits": user_doc.get('credits', 0),
+        "bonus_points": user_doc.get('bonus_points', 0),
+        "free_images": user_doc.get('free_images', 0),
+        "free_videos": user_doc.get('free_videos', 0),
+        "free_website_trial": user_doc.get('free_website_trial', False),
+        "subscription_type": user_doc.get('subscription_type'),
+        "subscription_expires": user_doc.get('subscription_expires'),
+        "total_spent": user_doc.get('total_spent', 0),
+        "service_costs": PRICING_CONFIG["service_costs"]
+    }
+
+@api_router.post("/user/claim-signup-bonus")
+async def claim_signup_bonus(current_user: dict = Depends(get_current_user)):
+    """المطالبة بمكافأة التسجيل"""
+    user_doc = await db.users.find_one({"id": current_user['user_id']}, {"_id": 0})
+    if not user_doc:
+        raise HTTPException(status_code=404, detail="المستخدم غير موجود")
+    
+    if user_doc.get('signup_bonus_claimed'):
+        raise HTTPException(status_code=400, detail="لقد حصلت على مكافأة التسجيل من قبل")
+    
+    bonus = PRICING_CONFIG["free_trial"]["signup_bonus"]
+    
+    await db.users.update_one(
+        {"id": current_user['user_id']},
+        {
+            "$set": {"signup_bonus_claimed": True},
+            "$inc": {"credits": bonus, "bonus_points": bonus}
+        }
+    )
+    
+    await log_activity(
+        current_user['user_id'],
+        "signup_bonus_claimed",
+        "create",
+        f"Claimed signup bonus: {bonus} points"
+    )
+    
+    return {"message": f"تهانينا! حصلت على {bonus} نقطة مجانية", "bonus": bonus}
+
+# ============== PAYMENTS ==============
+
+@api_router.post("/payments/create-order")
+async def create_payment_order(request: CreateOrderRequest, current_user: dict = Depends(get_current_user)):
+    """إنشاء طلب دفع PayPal حقيقي"""
+    
+    # البحث عن الباقة
+    package_info = None
+    credits_to_add = 0
+    package_name = ""
+    
+    if request.package_type == "credits":
+        for pkg in PRICING_CONFIG["credits_packages"]:
+            if pkg["id"] == request.package_id:
+                package_info = pkg
+                credits_to_add = pkg["credits"] + pkg.get("bonus", 0)
+                package_name = pkg["name"]
+                break
+    elif request.package_type == "subscription":
+        if request.package_id in PRICING_CONFIG["subscriptions"]:
+            package_info = PRICING_CONFIG["subscriptions"][request.package_id]
+            package_info["id"] = request.package_id
+            package_name = package_info.get("name", request.package_id)
+    
+    if not package_info:
+        raise HTTPException(status_code=400, detail="الباقة غير موجودة")
+    
+    paypal_order_id = None
+    
+    # إنشاء طلب PayPal حقيقي
+    if PAYPAL_CLIENT_ID and PAYPAL_SECRET:
+        try:
+            payment = paypalrestsdk.Payment({
+                "intent": "sale",
+                "payer": {"payment_method": "paypal"},
+                "redirect_urls": {
+                    "return_url": f"{os.environ.get('FRONTEND_URL', 'https://zitex.com')}/payment/success",
+                    "cancel_url": f"{os.environ.get('FRONTEND_URL', 'https://zitex.com')}/payment/cancel"
+                },
+                "transactions": [{
+                    "item_list": {
+                        "items": [{
+                            "name": package_name,
+                            "sku": request.package_id,
+                            "price": str(request.amount),
+                            "currency": request.currency,
+                            "quantity": 1
+                        }]
+                    },
+                    "amount": {
+                        "total": str(request.amount),
+                        "currency": request.currency
+                    },
+                    "description": f"Zitex - {package_name} ({credits_to_add} نقطة)"
+                }]
+            })
+            
+            if payment.create():
+                paypal_order_id = payment.id
+                logging.info(f"PayPal payment created: {paypal_order_id}")
+            else:
+                logging.error(f"PayPal error: {payment.error}")
+                raise HTTPException(status_code=500, detail=f"خطأ PayPal: {payment.error}")
+        except Exception as e:
+            logging.error(f"PayPal exception: {e}")
+            # Fallback to mock for testing
+            paypal_order_id = f"PAYPAL-{str(uuid.uuid4())[:8].upper()}"
+    else:
+        # Mock mode if no PayPal credentials
+        paypal_order_id = f"PAYPAL-{str(uuid.uuid4())[:8].upper()}"
+    
+    order = PaymentOrder(
+        user_id=current_user['user_id'],
+        package_id=request.package_id,
+        package_type=request.package_type,
+        amount=request.amount,
+        currency=request.currency,
+        paypal_order_id=paypal_order_id,
+        credits_added=credits_to_add,
+        metadata={"package_info": package_info, "package_name": package_name}
+    )
+    
+    order_doc = order.model_dump()
+    order_doc['created_at'] = order_doc['created_at'].isoformat()
+    await db.payment_orders.insert_one(order_doc)
+    
+    await log_activity(
+        current_user['user_id'],
+        "payment_order_created",
+        "create",
+        f"Created payment order for {request.package_id}",
+        {"order_id": order.id, "amount": request.amount, "paypal_id": paypal_order_id}
+    )
+    
+    return {
+        "order_id": paypal_order_id,
+        "internal_id": order.id,
+        "amount": request.amount,
+        "currency": request.currency
+    }
+
+@api_router.post("/payments/capture-order")
+async def capture_payment_order(request: CaptureOrderRequest, current_user: dict = Depends(get_current_user)):
+    """تأكيد الدفع وإضافة النقاط"""
+    
+    # البحث عن الطلب
+    order_doc = await db.payment_orders.find_one({
+        "paypal_order_id": request.order_id,
+        "user_id": current_user['user_id'],
+        "status": "pending"
+    }, {"_id": 0})
+    
+    if not order_doc:
+        raise HTTPException(status_code=404, detail="الطلب غير موجود")
+    
+    # في الإنتاج، نتحقق من PayPal API
+    # هنا نفترض أن الدفع تم بنجاح
+    
+    credits_to_add = order_doc.get('credits_added', 0)
+    
+    # التحقق من مكافأة أول عملية شراء
+    user_doc = await db.users.find_one({"id": current_user['user_id']}, {"_id": 0})
+    first_purchase_bonus = 0
+    if user_doc and not user_doc.get('first_purchase_bonus_claimed'):
+        first_purchase_bonus = POINTS_CONFIG.get("first_purchase_bonus", 50)
+        credits_to_add += first_purchase_bonus
+    
+    # تحديث الطلب
+    await db.payment_orders.update_one(
+        {"id": order_doc['id']},
+        {
+            "$set": {
+                "status": "completed",
+                "completed_at": datetime.now(timezone.utc).isoformat()
+            }
+        }
+    )
+    
+    # إضافة النقاط للمستخدم
+    update_ops = {"$inc": {"credits": credits_to_add, "total_spent": order_doc.get('amount', 0)}}
+    if first_purchase_bonus > 0:
+        update_ops["$set"] = {"first_purchase_bonus_claimed": True}
+    
+    # إذا كان اشتراك، نضيف نوع الاشتراك وتاريخ الانتهاء
+    if request.package_type == "subscription":
+        expires_at = datetime.now(timezone.utc) + timedelta(days=30)
+        if "$set" not in update_ops:
+            update_ops["$set"] = {}
+        update_ops["$set"]["subscription_type"] = request.package_id.replace("_monthly", "")
+        update_ops["$set"]["subscription_expires"] = expires_at.isoformat()
+    
+    await db.users.update_one({"id": current_user['user_id']}, update_ops)
+    
+    await log_activity(
+        current_user['user_id'],
+        "payment_completed",
+        "create",
+        f"Payment completed: {credits_to_add} credits added",
+        {
+            "order_id": order_doc['id'],
+            "credits_added": credits_to_add,
+            "first_purchase_bonus": first_purchase_bonus
+        }
+    )
+    
+    # إرسال إشعار للمالك
+    try:
+        await send_whatsapp_notification(
+            f"💰 عملية شراء جديدة!\n"
+            f"المستخدم: {user_doc.get('name', 'غير معروف')}\n"
+            f"الباقة: {request.package_id}\n"
+            f"المبلغ: ${order_doc.get('amount', 0)}\n"
+            f"النقاط المضافة: {credits_to_add}"
+        )
+    except:
+        pass
+    
+    return {
+        "status": "completed",
+        "credits_added": credits_to_add,
+        "first_purchase_bonus": first_purchase_bonus,
+        "message": f"تم الدفع بنجاح! حصلت على {credits_to_add} نقطة"
+    }
+
+@api_router.get("/payments/history")
+async def get_payment_history(current_user: dict = Depends(get_current_user)):
+    """سجل المدفوعات"""
+    orders = await db.payment_orders.find(
+        {"user_id": current_user['user_id']},
+        {"_id": 0}
+    ).sort("created_at", -1).limit(50).to_list(50)
+    
+    return {"orders": orders}
+
+@api_router.get("/settings/payment")
+async def get_payment_settings():
+    settings = await db.settings.find_one({"type": "payment"}, {"_id": 0})
+    if not settings:
+        return {"bank_name": "", "bank_iban": "", "bank_account_name": "", "paypal_email": "", "owner_whatsapp": OWNER_WHATSAPP}
+    return settings
+
+# ============== ADMIN ==============
 
 @api_router.get("/admin/stats")
 async def get_admin_stats(admin: dict = Depends(require_admin)):
-    stats = AdminStats(
+    return AdminStats(
         total_users=await db.users.count_documents({}),
         total_requests=await db.website_requests.count_documents({}),
         pending_requests=await db.website_requests.count_documents({"status": "pending"}),
@@ -1525,52 +1836,1552 @@ async def get_admin_stats(admin: dict = Depends(require_admin)):
         total_videos_generated=await db.video_generations.count_documents({}),
         total_activities=await db.activity_logs.count_documents({})
     )
-    return stats
 
 @api_router.get("/admin/users")
 async def get_all_users(admin: dict = Depends(require_admin)):
     users = await db.users.find({}, {"_id": 0, "password": 0}).sort("created_at", -1).to_list(1000)
     return users
 
-@api_router.get("/admin/activities")
-async def get_activities(limit: int = 100, admin: dict = Depends(require_admin)):
-    activities = await db.activity_logs.find({}, {"_id": 0}).sort("created_at", -1).to_list(limit)
+@api_router.get("/admin/users/{user_id}/activity")
+async def get_user_activity(user_id: str, admin: dict = Depends(require_admin)):
+    """Get activity log for a specific user"""
+    activities = await db.activity_logs.find(
+        {"user_id": user_id},
+        {"_id": 0}
+    ).sort("created_at", -1).to_list(500)
     return activities
 
-@api_router.get("/pricing")
-async def get_pricing():
+@api_router.get("/admin/activity")
+async def get_all_activity(limit: int = 100, admin: dict = Depends(require_admin)):
+    """Get all activity logs"""
+    activities = await db.activity_logs.find(
+        {},
+        {"_id": 0}
+    ).sort("created_at", -1).to_list(limit)
+    return activities
+
+@api_router.put("/admin/settings/payment")
+async def update_payment_settings(settings: SiteSettings, admin: dict = Depends(require_admin)):
+    await db.settings.update_one(
+        {"type": "payment"},
+        {"$set": {**settings.model_dump(), "type": "payment"}},
+        upsert=True
+    )
+    return {"message": "Settings updated"}
+
+@api_router.put("/admin/users/{user_id}/role")
+async def update_user_role(user_id: str, role: str, current_user: dict = Depends(get_current_user)):
+    """Update user role - only owner can promote to super_admin"""
+    user_doc = await db.users.find_one({"id": current_user['user_id']}, {"_id": 0})
+    current_role = user_doc.get('role', 'client')
+    current_level = ROLE_LEVELS.get(current_role, 0)
+    
+    target_level = ROLE_LEVELS.get(role, 0)
+    
+    # Can only assign roles lower than your own
+    if target_level >= current_level:
+        raise HTTPException(status_code=403, detail="Cannot assign role equal or higher than your own")
+    
+    # Only owner can create super_admin
+    if role == "super_admin" and current_role != "owner":
+        raise HTTPException(status_code=403, detail="Only owner can create super admins")
+    
+    result = await db.users.update_one(
+        {"id": user_id},
+        {"$set": {"role": role}}
+    )
+    
+    if result.matched_count == 0:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    await log_activity(
+        current_user['user_id'],
+        "role_updated",
+        "edit",
+        f"Updated user {user_id} role to {role}"
+    )
+    
+    return {"message": f"User role updated to {role}"}
+
+@api_router.put("/admin/users/{user_id}/deactivate")
+async def deactivate_user(user_id: str, admin: dict = Depends(require_admin)):
+    """Deactivate a user account"""
+    target_user = await db.users.find_one({"id": user_id}, {"_id": 0})
+    if not target_user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    # Cannot deactivate owner
+    if target_user.get('is_owner'):
+        raise HTTPException(status_code=403, detail="Cannot deactivate owner account")
+    
+    # Check role hierarchy
+    admin_level = ROLE_LEVELS.get(admin.get('role', 'admin'), 50)
+    target_level = ROLE_LEVELS.get(target_user.get('role', 'client'), 10)
+    
+    if target_level >= admin_level:
+        raise HTTPException(status_code=403, detail="Cannot deactivate user with equal or higher role")
+    
+    await db.users.update_one(
+        {"id": user_id},
+        {"$set": {"is_active": False}}
+    )
+    
+    await log_activity(
+        admin.get('id', 'admin'),
+        "user_deactivated",
+        "edit",
+        f"Deactivated user {user_id}"
+    )
+    
+    return {"message": "User deactivated"}
+
+@api_router.put("/admin/users/{user_id}/activate")
+async def activate_user(user_id: str, admin: dict = Depends(require_admin)):
+    """Activate a user account"""
+    result = await db.users.update_one(
+        {"id": user_id},
+        {"$set": {"is_active": True}}
+    )
+    
+    if result.matched_count == 0:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    return {"message": "User activated"}
+
+@api_router.put("/admin/users/{user_id}/make-owner")
+async def make_user_owner(user_id: str, current_user: dict = Depends(get_current_user)):
+    """Make user an owner - only existing owner can do this"""
+    requester = await db.users.find_one({"id": current_user['user_id']}, {"_id": 0})
+    if not requester.get('is_owner'):
+        raise HTTPException(status_code=403, detail="Only owner can transfer ownership")
+    
+    result = await db.users.update_one(
+        {"id": user_id},
+        {"$set": {"is_owner": True, "role": "owner"}}
+    )
+    if result.matched_count == 0:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    return {"message": "User is now owner"}
+
+@api_router.put("/admin/users/{user_id}/add-credits")
+async def add_user_credits(user_id: str, credits: int, admin: dict = Depends(require_admin)):
+    result = await db.users.update_one(
+        {"id": user_id},
+        {"$inc": {"credits": credits}}
+    )
+    if result.matched_count == 0:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    await log_activity(
+        admin.get('id', 'admin'),
+        "credits_added",
+        "edit",
+        f"Added {credits} credits to user {user_id}"
+    )
+    
+    return {"message": f"Added {credits} credits"}
+
+@api_router.put("/admin/users/{user_id}/add-free-trials")
+async def add_free_trials(user_id: str, images: int = 0, videos: int = 0, admin: dict = Depends(require_admin)):
+    update = {}
+    if images > 0:
+        update["free_images"] = images
+    if videos > 0:
+        update["free_videos"] = videos
+    
+    if update:
+        result = await db.users.update_one(
+            {"id": user_id},
+            {"$inc": update}
+        )
+        if result.matched_count == 0:
+            raise HTTPException(status_code=404, detail="User not found")
+    
+    return {"message": f"Added {images} free images, {videos} free videos"}
+
+
+# ============== CREDITS MANAGEMENT ==============
+
+class UpdateCreditsRequest(BaseModel):
+    credits: int
+
+@api_router.put("/admin/users/{user_id}/credits")
+async def set_user_credits(user_id: str, request: UpdateCreditsRequest, admin: dict = Depends(require_admin)):
+    """Set user credits to specific value"""
+    result = await db.users.update_one(
+        {"id": user_id},
+        {"$set": {"credits": request.credits}}
+    )
+    if result.matched_count == 0:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    await log_activity(
+        admin.get('id', 'admin'),
+        "credits_set",
+        "edit",
+        f"Set credits to {request.credits} for user {user_id}"
+    )
+    
+    return {"message": f"Credits set to {request.credits}"}
+
+
+# ============== PRICING MANAGEMENT (Admin) ==============
+
+class PricingRequest(BaseModel):
+    pricing: dict
+
+@api_router.get("/admin/service-pricing")
+async def get_service_pricing(admin: dict = Depends(require_admin)):
+    """Get service pricing for admin"""
+    pricing_doc = await db.settings.find_one({"type": "pricing"}, {"_id": 0})
+    if pricing_doc:
+        return {"pricing": pricing_doc.get("pricing", {})}
+    
+    # Default pricing
+    return {"pricing": {
+        "website": 15,
+        "game": 15,
+        "image": 5,
+        "video": 20,
+        "modification": 5,
+        "save_template": 10,
+        "export": 50,
+        "deploy": 100
+    }}
+
+@api_router.put("/admin/service-pricing")
+async def update_service_pricing(request: PricingRequest, admin: dict = Depends(require_admin)):
+    """Update service pricing"""
+    await db.settings.update_one(
+        {"type": "pricing"},
+        {"$set": {"type": "pricing", "pricing": request.pricing}},
+        upsert=True
+    )
+    
+    await log_activity(
+        admin.get('id', 'admin'),
+        "pricing_updated",
+        "edit",
+        "Updated service pricing"
+    )
+    
+    return {"message": "Pricing updated"}
+
+
+# ============== OFFERS MANAGEMENT ==============
+
+class OfferRequest(BaseModel):
+    name: str
+    credits: int
+    price: float
+    discount: int = 0
+    is_active: bool = True
+
+class OfferUpdateRequest(BaseModel):
+    name: Optional[str] = None
+    credits: Optional[int] = None
+    price: Optional[float] = None
+    discount: Optional[int] = None
+    is_active: Optional[bool] = None
+
+@api_router.get("/admin/offers")
+async def get_offers(admin: dict = Depends(require_admin)):
+    """Get all credit offers"""
+    offers = await db.offers.find({}, {"_id": 0}).sort("created_at", -1).to_list(100)
+    return {"offers": offers}
+
+@api_router.post("/admin/offers")
+async def create_offer(request: OfferRequest, admin: dict = Depends(require_admin)):
+    """Create new credit offer"""
+    offer = {
+        "id": str(uuid.uuid4()),
+        "name": request.name,
+        "credits": request.credits,
+        "price": request.price,
+        "discount": request.discount,
+        "is_active": request.is_active,
+        "created_at": datetime.now(timezone.utc).isoformat(),
+        "created_by": admin.get('id', 'admin')
+    }
+    
+    await db.offers.insert_one(offer)
+    
+    await log_activity(
+        admin.get('id', 'admin'),
+        "offer_created",
+        "create",
+        f"Created offer: {request.name}"
+    )
+    
+    return {"offer": {k: v for k, v in offer.items() if k != '_id'}}
+
+@api_router.put("/admin/offers/{offer_id}")
+async def update_offer(offer_id: str, request: OfferUpdateRequest, admin: dict = Depends(require_admin)):
+    """Update credit offer"""
+    update_data = {k: v for k, v in request.model_dump().items() if v is not None}
+    
+    if not update_data:
+        raise HTTPException(status_code=400, detail="No data to update")
+    
+    result = await db.offers.update_one(
+        {"id": offer_id},
+        {"$set": update_data}
+    )
+    
+    if result.matched_count == 0:
+        raise HTTPException(status_code=404, detail="Offer not found")
+    
+    return {"message": "Offer updated"}
+
+@api_router.delete("/admin/offers/{offer_id}")
+async def delete_offer(offer_id: str, admin: dict = Depends(require_admin)):
+    """Delete credit offer"""
+    result = await db.offers.delete_one({"id": offer_id})
+    
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Offer not found")
+    
+    await log_activity(
+        admin.get('id', 'admin'),
+        "offer_deleted",
+        "delete",
+        f"Deleted offer: {offer_id}"
+    )
+    
+    return {"message": "Offer deleted"}
+
+
+# ============== PUBLIC OFFERS API ==============
+
+@api_router.get("/offers")
+async def get_public_offers():
+    """Get active credit offers for purchase"""
+    offers = await db.offers.find({"is_active": True}, {"_id": 0}).to_list(100)
+    return {"offers": offers}
+
+# ============== FILE UPLOAD SYSTEM (مجاني) ==============
+
+# Object Storage Configuration
+STORAGE_URL = "https://integrations.emergentagent.com/objstore/api/v1/storage"
+EMERGENT_KEY = os.environ.get('EMERGENT_LLM_KEY')
+APP_NAME = "zitex-files"
+
+import requests as http_requests
+import tempfile
+
+_storage_key = None
+
+def _init_storage():
+    """Initialize storage connection"""
+    global _storage_key
+    if _storage_key:
+        return _storage_key
+    try:
+        resp = http_requests.post(f"{STORAGE_URL}/init", json={"emergent_key": EMERGENT_KEY}, timeout=30)
+        resp.raise_for_status()
+        _storage_key = resp.json()["storage_key"]
+        return _storage_key
+    except Exception as e:
+        logger.error(f"Storage init failed: {e}")
+        return None
+
+def _upload_file_to_storage(path: str, data: bytes, content_type: str):
+    """Upload file to object storage"""
+    key = _init_storage()
+    if not key:
+        return None
+    try:
+        resp = http_requests.put(
+            f"{STORAGE_URL}/objects/{path}",
+            headers={"X-Storage-Key": key, "Content-Type": content_type},
+            data=data, timeout=120
+        )
+        resp.raise_for_status()
+        return resp.json()
+    except Exception as e:
+        logger.error(f"Upload failed: {e}")
+        return None
+
+# Allowed file types
+ALLOWED_IMAGE_TYPES = ["image/jpeg", "image/png", "image/gif", "image/webp"]
+ALLOWED_VIDEO_TYPES = ["video/mp4", "video/webm", "video/quicktime", "video/x-msvideo"]
+ALLOWED_DOC_TYPES = ["application/pdf", "application/msword", "application/vnd.openxmlformats-officedocument.wordprocessingml.document", "text/plain"]
+ALLOWED_AUDIO_TYPES = ["audio/mpeg", "audio/wav", "audio/ogg", "audio/mp4"]
+
+MAX_FILE_SIZE = 50 * 1024 * 1024  # 50 MB
+
+class FileUploadResponse(BaseModel):
+    id: str
+    filename: str
+    file_type: str
+    file_url: str
+    size: int
+    created_at: str
+
+@api_router.post("/files/upload", response_model=FileUploadResponse)
+async def upload_file(
+    file: UploadFile = File(...),
+    file_category: str = Form("general"),  # general, logo, product, reference, document
+    current_user: dict = Depends(get_current_user)
+):
+    """
+    رفع ملف (مجاني)
+    - صور: jpg, png, gif, webp
+    - فيديوهات: mp4, webm, mov, avi
+    - مستندات: pdf, doc, docx, txt
+    - صوتيات: mp3, wav, ogg, m4a
+    """
+    # Check file size
+    contents = await file.read()
+    if len(contents) > MAX_FILE_SIZE:
+        raise HTTPException(status_code=400, detail=f"حجم الملف أكبر من الحد المسموح ({MAX_FILE_SIZE // (1024*1024)} MB)")
+    
+    # Determine file type
+    content_type = file.content_type or "application/octet-stream"
+    
+    if content_type in ALLOWED_IMAGE_TYPES:
+        file_type = "image"
+    elif content_type in ALLOWED_VIDEO_TYPES:
+        file_type = "video"
+    elif content_type in ALLOWED_DOC_TYPES:
+        file_type = "document"
+    elif content_type in ALLOWED_AUDIO_TYPES:
+        file_type = "audio"
+    else:
+        raise HTTPException(status_code=400, detail=f"نوع الملف غير مدعوم: {content_type}")
+    
+    # Generate unique filename
+    file_id = str(uuid.uuid4())
+    ext = file.filename.split('.')[-1] if '.' in file.filename else 'bin'
+    storage_path = f"{APP_NAME}/{current_user['user_id']}/{file_category}/{file_id}.{ext}"
+    
+    # Upload to storage
+    upload_result = _upload_file_to_storage(storage_path, contents, content_type)
+    
+    if not upload_result:
+        raise HTTPException(status_code=500, detail="فشل رفع الملف. حاول مرة أخرى")
+    
+    # Generate public URL
+    file_url = f"https://integrations.emergentagent.com/objstore/{APP_NAME}/{current_user['user_id']}/{file_category}/{file_id}.{ext}"
+    
+    # Save to database
+    file_doc = {
+        "id": file_id,
+        "user_id": current_user['user_id'],
+        "filename": file.filename,
+        "file_type": file_type,
+        "file_category": file_category,
+        "content_type": content_type,
+        "storage_path": storage_path,
+        "file_url": file_url,
+        "size": len(contents),
+        "created_at": datetime.now(timezone.utc).isoformat()
+    }
+    await db.uploaded_files.insert_one(file_doc)
+    
+    await log_activity(
+        current_user['user_id'],
+        "file_uploaded",
+        "create",
+        f"Uploaded {file_type}: {file.filename}",
+        {"file_category": file_category, "size": len(contents)}
+    )
+    
+    return FileUploadResponse(
+        id=file_id,
+        filename=file.filename,
+        file_type=file_type,
+        file_url=file_url,
+        size=len(contents),
+        created_at=file_doc["created_at"]
+    )
+
+@api_router.get("/files/my-files")
+async def get_my_files(
+    file_type: Optional[str] = None,
+    file_category: Optional[str] = None,
+    current_user: dict = Depends(get_current_user)
+):
+    """استرجاع ملفات المستخدم"""
+    query = {"user_id": current_user['user_id']}
+    if file_type:
+        query["file_type"] = file_type
+    if file_category:
+        query["file_category"] = file_category
+    
+    files = await db.uploaded_files.find(query, {"_id": 0}).sort("created_at", -1).to_list(100)
+    return {"files": files}
+
+@api_router.delete("/files/{file_id}")
+async def delete_file(file_id: str, current_user: dict = Depends(get_current_user)):
+    """حذف ملف"""
+    result = await db.uploaded_files.delete_one({
+        "id": file_id,
+        "user_id": current_user['user_id']
+    })
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="الملف غير موجود")
+    return {"message": "تم حذف الملف بنجاح"}
+
+# ============== SOCIAL MEDIA EXPORT (مجاني) ==============
+
+# Social media platform specifications
+SOCIAL_PLATFORMS = {
+    "tiktok": {
+        "name": "TikTok",
+        "icon": "🎵",
+        "video_specs": {"width": 1080, "height": 1920, "aspect": "9:16", "max_duration": 180},
+        "image_specs": {"width": 1080, "height": 1920}
+    },
+    "snapchat": {
+        "name": "Snapchat",
+        "icon": "👻",
+        "video_specs": {"width": 1080, "height": 1920, "aspect": "9:16", "max_duration": 60},
+        "image_specs": {"width": 1080, "height": 1920}
+    },
+    "instagram_reels": {
+        "name": "Instagram Reels",
+        "icon": "📸",
+        "video_specs": {"width": 1080, "height": 1920, "aspect": "9:16", "max_duration": 90},
+        "image_specs": {"width": 1080, "height": 1920}
+    },
+    "instagram_story": {
+        "name": "Instagram Story",
+        "icon": "📱",
+        "video_specs": {"width": 1080, "height": 1920, "aspect": "9:16", "max_duration": 15},
+        "image_specs": {"width": 1080, "height": 1920}
+    },
+    "instagram_post": {
+        "name": "Instagram Post",
+        "icon": "🖼️",
+        "video_specs": {"width": 1080, "height": 1080, "aspect": "1:1", "max_duration": 60},
+        "image_specs": {"width": 1080, "height": 1080}
+    },
+    "youtube_shorts": {
+        "name": "YouTube Shorts",
+        "icon": "▶️",
+        "video_specs": {"width": 1080, "height": 1920, "aspect": "9:16", "max_duration": 60},
+        "image_specs": {"width": 1280, "height": 720}
+    },
+    "facebook": {
+        "name": "Facebook",
+        "icon": "📘",
+        "video_specs": {"width": 1280, "height": 720, "aspect": "16:9", "max_duration": 240},
+        "image_specs": {"width": 1200, "height": 630}
+    },
+    "twitter": {
+        "name": "Twitter/X",
+        "icon": "🐦",
+        "video_specs": {"width": 1280, "height": 720, "aspect": "16:9", "max_duration": 140},
+        "image_specs": {"width": 1200, "height": 675}
+    }
+}
+
+class SocialExportRequest(BaseModel):
+    asset_id: str  # ID of the video or image to export
+    platforms: List[str]  # List of platform keys
+
+class SocialExportResult(BaseModel):
+    platform: str
+    platform_name: str
+    icon: str
+    status: str  # ready, processing, error
+    download_url: Optional[str] = None
+    specs: dict
+    tips: List[str]
+
+@api_router.get("/social/platforms")
+async def get_social_platforms():
+    """استرجاع قائمة المنصات الاجتماعية المدعومة"""
+    platforms = []
+    for key, specs in SOCIAL_PLATFORMS.items():
+        platforms.append({
+            "id": key,
+            "name": specs["name"],
+            "icon": specs["icon"],
+            "video_specs": specs["video_specs"],
+            "image_specs": specs["image_specs"]
+        })
+    return {"platforms": platforms}
+
+@api_router.post("/social/export")
+async def export_to_social(
+    request: SocialExportRequest,
+    current_user: dict = Depends(get_current_user)
+):
+    """
+    تصدير فيديو/صورة لمنصات التواصل الاجتماعي (مجاني)
+    يقوم بإعداد الملف بالمواصفات المناسبة لكل منصة
+    """
+    # Get the asset
+    asset = await db.generated_assets.find_one(
+        {"id": request.asset_id, "user_id": current_user['user_id']},
+        {"_id": 0}
+    )
+    
+    if not asset:
+        # Try uploaded files
+        asset = await db.uploaded_files.find_one(
+            {"id": request.asset_id, "user_id": current_user['user_id']},
+            {"_id": 0}
+        )
+    
+    if not asset:
+        raise HTTPException(status_code=404, detail="الملف غير موجود")
+    
+    asset_type = asset.get("asset_type") or asset.get("file_type")
+    asset_url = asset.get("url") or asset.get("file_url")
+    
+    results = []
+    
+    for platform_key in request.platforms:
+        if platform_key not in SOCIAL_PLATFORMS:
+            results.append(SocialExportResult(
+                platform=platform_key,
+                platform_name="غير معروف",
+                icon="❓",
+                status="error",
+                specs={},
+                tips=["المنصة غير مدعومة"]
+            ))
+            continue
+        
+        platform = SOCIAL_PLATFORMS[platform_key]
+        specs = platform["video_specs"] if asset_type == "video" else platform["image_specs"]
+        
+        # Generate tips for the platform
+        tips = _get_platform_tips(platform_key, asset_type)
+        
+        results.append(SocialExportResult(
+            platform=platform_key,
+            platform_name=platform["name"],
+            icon=platform["icon"],
+            status="ready",
+            download_url=asset_url,  # Original URL - frontend can handle resize
+            specs=specs,
+            tips=tips
+        ))
+    
+    # Log activity
+    await log_activity(
+        current_user['user_id'],
+        "social_export",
+        "create",
+        f"Exported to: {', '.join(request.platforms)}",
+        {"asset_id": request.asset_id, "platforms": request.platforms}
+    )
+    
+    return {"exports": [r.model_dump() for r in results]}
+
+def _get_platform_tips(platform: str, asset_type: str) -> List[str]:
+    """نصائح لكل منصة"""
+    tips_db = {
+        "tiktok": {
+            "video": [
+                "استخدم موسيقى ترند لزيادة الانتشار",
+                "أضف نص على الفيديو في أول 3 ثواني",
+                "استخدم هاشتاقات شائعة (3-5 هاشتاقات)"
+            ],
+            "image": ["حوّل الصورة إلى فيديو قصير للأفضل"]
+        },
+        "snapchat": {
+            "video": [
+                "اجعل الرسالة واضحة في أول ثانيتين",
+                "استخدم فلاتر Snapchat لزيادة التفاعل"
+            ],
+            "image": ["أضف ملصقات تفاعلية من Snapchat"]
+        },
+        "instagram_reels": {
+            "video": [
+                "استخدم موسيقى من مكتبة Instagram",
+                "أضف نص وملصقات تفاعلية",
+                "انشر في أوقات الذروة (12-3 م، 7-9 م)"
+            ],
+            "image": ["حوّلها إلى Reel للوصول أكبر"]
+        },
+        "instagram_story": {
+            "video": [
+                "أضف استطلاع أو سؤال لزيادة التفاعل",
+                "استخدم موسيقى ترند"
+            ],
+            "image": ["أضف رابط أو CTA واضح"]
+        },
+        "instagram_post": {
+            "video": [
+                "اكتب كابشن جذاب (أول سطرين مهمين)",
+                "استخدم 20-30 هاشتاق"
+            ],
+            "image": ["استخدم ألوان متناسقة مع هوية حسابك"]
+        },
+        "youtube_shorts": {
+            "video": [
+                "ابدأ بـ hook قوي في أول ثانية",
+                "أضف عنوان جذاب ووصف SEO",
+                "استخدم #Shorts في الوصف"
+            ],
+            "image": ["يفضل الفيديو على YouTube"]
+        },
+        "facebook": {
+            "video": [
+                "أضف ترجمة للفيديو (85% يشاهدون بدون صوت)",
+                "الطول المثالي 1-2 دقيقة"
+            ],
+            "image": ["اكتب نص مصاحب مفصل"]
+        },
+        "twitter": {
+            "video": [
+                "اجعله قصيراً ومباشراً",
+                "أضف نص في التغريدة يشرح المحتوى"
+            ],
+            "image": ["اكتب تغريدة جذابة مع الصورة"]
+        }
+    }
+    
+    return tips_db.get(platform, {}).get(asset_type, ["تأكد من جودة المحتوى"])
+
+@api_router.get("/social/export-history")
+async def get_export_history(current_user: dict = Depends(get_current_user)):
+    """سجل التصديرات للمنصات الاجتماعية"""
+    history = await db.activity_logs.find(
+        {"user_id": current_user['user_id'], "action": "social_export"},
+        {"_id": 0}
+    ).sort("created_at", -1).to_list(50)
+    return {"history": history}
+
+# ============== AI TRAINING SYSTEM (Admin Only) ==============
+
+class TrainingExampleCreate(BaseModel):
+    category: str  # game, website, landing, ecommerce, portfolio, dashboard
+    subcategory: str = ""  # strategy, racing, puzzle, restaurant, etc.
+    title: str
+    description: str = ""
+    design_image_url: str = ""  # URL to the design reference image
+    html_code: str  # The high-quality HTML code
+    tags: List[str] = []
+
+class TrainingExampleUpdate(BaseModel):
+    category: Optional[str] = None
+    subcategory: Optional[str] = None
+    title: Optional[str] = None
+    description: Optional[str] = None
+    design_image_url: Optional[str] = None
+    html_code: Optional[str] = None
+    tags: Optional[List[str]] = None
+
+@api_router.post("/admin/training/examples")
+async def add_training_example(data: TrainingExampleCreate, admin: dict = Depends(require_admin)):
+    """Add a new training example for AI learning"""
+    example = {
+        "id": str(uuid.uuid4()),
+        "category": data.category,
+        "subcategory": data.subcategory,
+        "title": data.title,
+        "description": data.description,
+        "design_image_url": data.design_image_url,
+        "html_code": data.html_code,
+        "tags": data.tags,
+        "is_active": True,
+        "usage_count": 0,
+        "created_by": admin.get('id', 'admin'),
+        "created_at": datetime.now(timezone.utc).isoformat(),
+        "updated_at": datetime.now(timezone.utc).isoformat()
+    }
+    await db.training_examples.insert_one(example)
+    return {"id": example["id"], "message": "تم إضافة المثال التدريبي بنجاح"}
+
+@api_router.get("/admin/training/examples")
+async def get_training_examples(
+    category: Optional[str] = None,
+    subcategory: Optional[str] = None,
+    admin: dict = Depends(require_admin)
+):
+    """Get all training examples"""
+    query = {"is_active": True}
+    if category:
+        query["category"] = category
+    if subcategory:
+        query["subcategory"] = subcategory
+    examples = await db.training_examples.find(query, {"_id": 0}).sort("created_at", -1).to_list(200)
+    return {"examples": examples, "total": len(examples)}
+
+@api_router.get("/admin/training/examples/{example_id}")
+async def get_training_example(example_id: str, admin: dict = Depends(require_admin)):
+    """Get a single training example"""
+    example = await db.training_examples.find_one({"id": example_id, "is_active": True}, {"_id": 0})
+    if not example:
+        raise HTTPException(status_code=404, detail="المثال غير موجود")
+    return example
+
+@api_router.put("/admin/training/examples/{example_id}")
+async def update_training_example(example_id: str, data: TrainingExampleUpdate, admin: dict = Depends(require_admin)):
+    """Update a training example"""
+    update_data = {k: v for k, v in data.model_dump().items() if v is not None}
+    update_data["updated_at"] = datetime.now(timezone.utc).isoformat()
+    result = await db.training_examples.update_one(
+        {"id": example_id},
+        {"$set": update_data}
+    )
+    if result.matched_count == 0:
+        raise HTTPException(status_code=404, detail="المثال غير موجود")
+    return {"message": "تم تحديث المثال بنجاح"}
+
+@api_router.delete("/admin/training/examples/{example_id}")
+async def delete_training_example(example_id: str, admin: dict = Depends(require_admin)):
+    """Soft delete a training example"""
+    result = await db.training_examples.update_one(
+        {"id": example_id},
+        {"$set": {"is_active": False}}
+    )
+    if result.matched_count == 0:
+        raise HTTPException(status_code=404, detail="المثال غير موجود")
+    return {"message": "تم حذف المثال بنجاح"}
+
+@api_router.post("/admin/training/upload-image")
+async def upload_training_image(
+    file: UploadFile = File(...),
+    admin: dict = Depends(require_admin)
+):
+    """Upload a design reference image for training"""
+    contents = await file.read()
+    if len(contents) > 10 * 1024 * 1024:
+        raise HTTPException(status_code=400, detail="حجم الصورة أكبر من 10MB")
+    
+    try:
+        from services.ai_chat_service import upload_to_storage, APP_NAME, STORAGE_URL
+        
+        image_id = str(uuid.uuid4())
+        ext = file.filename.split('.')[-1] if '.' in file.filename else 'png'
+        storage_path = f"{APP_NAME}/training/{image_id}.{ext}"
+        
+        result = upload_to_storage(storage_path, contents, file.content_type or "image/png")
+        if result:
+            return {"image_url": f"/api/storage/training/{image_id}.{ext}", "id": image_id}
+        else:
+            img_b64 = base64.b64encode(contents).decode()
+            return {"image_url": f"data:{file.content_type};base64,{img_b64}", "id": image_id}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"فشل رفع الصورة: {str(e)}")
+
+@api_router.get("/admin/training/stats")
+async def get_training_stats(admin: dict = Depends(require_admin)):
+    """Get training system statistics"""
+    total = await db.training_examples.count_documents({"is_active": True})
+    auto_learned = await db.training_examples.count_documents({"is_active": True, "source": "auto_learned"})
+    manual = total - auto_learned
+    by_category = {}
+    categories = ["game", "website", "landing", "ecommerce", "portfolio", "dashboard", "mobile"]
+    for cat in categories:
+        count = await db.training_examples.count_documents({"is_active": True, "category": cat})
+        if count > 0:
+            by_category[cat] = count
+    
+    # Learning stats
+    knowledge_rules = await db.knowledge_base.count_documents({})
+    quality_logs = await db.code_quality_log.count_documents({})
+    avg_quality = 0
+    if quality_logs > 0:
+        pipeline = [{"$group": {"_id": None, "avg": {"$avg": "$quality_score"}}}]
+        result = await db.code_quality_log.aggregate(pipeline).to_list(1)
+        if result:
+            avg_quality = round(result[0]["avg"], 1)
+    
     return {
-        "credits_packages": CREDITS_PACKAGES,
-        "service_costs": POINTS_CONFIG
+        "total_examples": total,
+        "auto_learned": auto_learned,
+        "manual_added": manual,
+        "by_category": by_category,
+        "knowledge_rules": knowledge_rules,
+        "total_generations": quality_logs,
+        "avg_quality_score": avg_quality
     }
 
-# ============== CORS & APP SETUP ==============
+class FetchTemplatesRequest(BaseModel):
+    query: str
+    category: str = "game"
+    count: int = 3
+    source: str = "codepen"  # codepen or ai
+
+@api_router.post("/admin/training/fetch")
+async def fetch_templates_from_sources(data: FetchTemplatesRequest, admin: dict = Depends(require_admin)):
+    """Fetch real templates from CodePen or generate via AI"""
+    try:
+        results = []
+        
+        if data.source == "codepen":
+            # Scrape real code from CodePen
+            results = await _fetch_from_codepen(data.query, data.category, data.count)
+        else:
+            # Fallback to AI generation
+            results = await _fetch_from_ai(data.query, data.category, data.count)
+        
+        # Store as pending
+        stored = []
+        for tmpl in results:
+            pending = {
+                "id": str(uuid.uuid4()),
+                "category": data.category,
+                "subcategory": tmpl.get("subcategory", ""),
+                "title": tmpl.get("title", "قالب بدون عنوان"),
+                "description": tmpl.get("description", ""),
+                "html_code": tmpl.get("html_code", ""),
+                "tags": tmpl.get("tags", []),
+                "source_url": tmpl.get("source_url", ""),
+                "source_author": tmpl.get("source_author", ""),
+                "status": "pending",
+                "query": data.query,
+                "fetch_source": data.source,
+                "created_at": datetime.now(timezone.utc).isoformat()
+            }
+            await db.pending_templates.insert_one(pending)
+            stored.append({k: v for k, v in pending.items() if k != '_id'})
+        
+        return {"templates": stored, "count": len(stored)}
+    except Exception as e:
+        logger.error(f"Fetch templates error: {e}")
+        raise HTTPException(status_code=500, detail=f"خطأ: {str(e)}")
+
+async def _fetch_from_codepen(query: str, category: str, count: int) -> list:
+    """Fetch real code examples from the web (GitHub, public repos) and enhance them"""
+    import httpx
+    
+    # Map Arabic to English search terms
+    search_map = {
+        "ألعاب استراتيجية": "strategy village building game html javascript",
+        "ألعاب سباق": "car racing game html canvas javascript",
+        "ألعاب ألغاز": "puzzle game html css javascript",
+        "ألعاب أطفال": "kids educational game html",
+        "ألعاب أكشن": "action shooter game javascript canvas",
+        "ألعاب منصات": "platformer game javascript phaser",
+        "ألعاب قتال": "fighting game javascript",
+        "مواقع شركات": "company website template html tailwind dark",
+        "صفحات هبوط": "saas landing page template html tailwind",
+        "متاجر إلكترونية": "ecommerce store template html tailwind",
+        "معارض أعمال": "portfolio website template html css modern",
+        "لوحات تحكم": "admin dashboard template html tailwind dark",
+    }
+    
+    en_query = query
+    for ar, en in search_map.items():
+        if ar in query:
+            en_query = en
+            break
+    else:
+        cat_map = {"game": "game html javascript", "website": "website html template", "landing": "landing page html", "ecommerce": "ecommerce store html", "portfolio": "portfolio html", "dashboard": "dashboard html"}
+        en_query = cat_map.get(category, "html css") + " " + query
+    
+    results = []
+    
+    async with httpx.AsyncClient(timeout=30, follow_redirects=True) as client:
+        headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
+        
+        # Search GitHub for real HTML files
+        try:
+            gh_url = f"https://api.github.com/search/repositories?q={en_query}+language:html&sort=stars&per_page=10"
+            gh_resp = await client.get(gh_url, headers={**headers, "Accept": "application/vnd.github.v3+json"})
+            
+            if gh_resp.status_code == 200:
+                repos = gh_resp.json().get("items", [])
+                
+                for repo in repos[:count * 3]:
+                    try:
+                        # Try to get the main HTML file (index.html)
+                        raw_url = f"https://raw.githubusercontent.com/{repo['full_name']}/{repo.get('default_branch', 'main')}/index.html"
+                        html_resp = await client.get(raw_url, headers=headers)
+                        
+                        if html_resp.status_code != 200:
+                            # Try game.html or main.html
+                            for alt in ["game.html", "main.html", "src/index.html", "public/index.html"]:
+                                alt_url = f"https://raw.githubusercontent.com/{repo['full_name']}/{repo.get('default_branch', 'main')}/{alt}"
+                                html_resp = await client.get(alt_url, headers=headers)
+                                if html_resp.status_code == 200:
+                                    break
+                        
+                        if html_resp.status_code == 200 and len(html_resp.text) > 500:
+                            html_code = html_resp.text
+                            
+                            # Only accept if it has meaningful HTML
+                            if "<html" in html_code.lower() and ("<script" in html_code.lower() or "<style" in html_code.lower()):
+                                results.append({
+                                    "title": repo.get("name", "Template"),
+                                    "description": f"GitHub: {repo['full_name']} ({repo.get('stargazers_count', 0)} stars)",
+                                    "subcategory": "",
+                                    "html_code": html_code[:15000],
+                                    "tags": [category, "github", "real-code"],
+                                    "source_url": repo.get("html_url", ""),
+                                    "source_author": repo.get("owner", {}).get("login", "unknown")
+                                })
+                                
+                                if len(results) >= count:
+                                    break
+                    except Exception as e:
+                        logger.warning(f"Failed to fetch repo {repo.get('full_name')}: {e}")
+                        continue
+        except Exception as e:
+            logger.error(f"GitHub search error: {e}")
+    
+    # If not enough from GitHub, use AI to generate based on real-world inspiration
+    if len(results) < count:
+        ai_results = await _fetch_from_ai(query, category, count - len(results))
+        results.extend(ai_results)
+    
+    return results[:count]
+
+async def _fetch_from_ai(query: str, category: str, count: int) -> list:
+    """Generate templates using AI as fallback"""
+    try:
+        from emergentintegrations.llm.chat import LlmChat, UserMessage
+        import json as json_module
+        
+        emergent_key = os.environ.get('EMERGENT_LLM_KEY')
+        if not emergent_key:
+            return []
+        
+        fetch_prompt = f"""أنشئ {count} قوالب HTML احترافية مختلفة.
+
+الطلب: {query}
+التصنيف: {category}
+
+القواعد:
+1. HTML كامل يبدأ بـ <!DOCTYPE html>
+2. استخدم <script src="https://cdn.tailwindcss.com"></script>
+3. استخدم Font Awesome CDN
+4. خط Tajawal العربي، اتجاه RTL
+5. تصميم احترافي مع تدرجات وظلال و hover و animations
+6. للألعاب: إيموجي للعناصر، JavaScript تفاعلي كامل، شريط موارد، خريطة بصرية
+7. كل قالب مختلف تماماً (ألوان وهيكل وأسلوب مختلف)
+8. كود طويل ومفصّل (2000+ حرف)
+
+أرجع JSON فقط:
+[{{"title":"عنوان","description":"وصف","subcategory":"فرعي","tags":["وسم"],"html_code":"<!DOCTYPE html>..."}}]"""
+
+        chat = LlmChat(api_key=emergent_key, session_id=f"fetch-{uuid.uuid4()}", system_message="أرجع JSON فقط بدون أي نص.")
+        chat.with_model("openai", "gpt-4o")
+        response = await chat.send_message(UserMessage(text=fetch_prompt))
+        
+        response_clean = response.strip()
+        if response_clean.startswith("```"):
+            response_clean = response_clean.split("\n", 1)[1] if "\n" in response_clean else response_clean[3:]
+            response_clean = response_clean.rsplit("```", 1)[0]
+        
+        templates = json_module.loads(response_clean.strip())
+        if not isinstance(templates, list):
+            templates = [templates]
+        
+        for t in templates:
+            t["source_url"] = ""
+            t["source_author"] = "AI Generated"
+        
+        return templates[:count]
+    except Exception as e:
+        logger.error(f"AI fetch error: {e}")
+        return []
+
+@api_router.get("/admin/training/pending")
+async def get_pending_templates(admin: dict = Depends(require_admin)):
+    """Get all pending fetched templates"""
+    pending = await db.pending_templates.find(
+        {"status": "pending"}, {"_id": 0}
+    ).sort("created_at", -1).to_list(100)
+    return {"templates": pending, "total": len(pending)}
+
+@api_router.post("/admin/training/approve/{template_id}")
+async def approve_pending_template(template_id: str, admin: dict = Depends(require_admin)):
+    """Approve a pending template and add it to training examples"""
+    pending = await db.pending_templates.find_one({"id": template_id, "status": "pending"}, {"_id": 0})
+    if not pending:
+        raise HTTPException(status_code=404, detail="القالب غير موجود")
+    
+    example = {
+        "id": str(uuid.uuid4()),
+        "category": pending["category"],
+        "subcategory": pending.get("subcategory", ""),
+        "title": pending["title"],
+        "description": pending.get("description", ""),
+        "design_image_url": "",
+        "html_code": pending["html_code"],
+        "tags": pending.get("tags", []),
+        "is_active": True,
+        "usage_count": 0,
+        "created_by": admin.get('id', 'admin'),
+        "source": "ai_fetched",
+        "created_at": datetime.now(timezone.utc).isoformat(),
+        "updated_at": datetime.now(timezone.utc).isoformat()
+    }
+    await db.training_examples.insert_one(example)
+    await db.pending_templates.update_one({"id": template_id}, {"$set": {"status": "approved"}})
+    
+    return {"id": example["id"], "message": "تم اعتماد القالب وإضافته للتدريب"}
+
+@api_router.delete("/admin/training/pending/{template_id}")
+async def reject_pending_template(template_id: str, admin: dict = Depends(require_admin)):
+    """Reject/delete a pending template"""
+    result = await db.pending_templates.update_one(
+        {"id": template_id, "status": "pending"},
+        {"$set": {"status": "rejected"}}
+    )
+    if result.matched_count == 0:
+        raise HTTPException(status_code=404, detail="القالب غير موجود")
+    return {"message": "تم رفض القالب"}
+
+@api_router.post("/admin/training/approve-all")
+async def approve_all_pending(admin: dict = Depends(require_admin)):
+    """Approve all pending templates at once"""
+    pending = await db.pending_templates.find({"status": "pending"}, {"_id": 0}).to_list(100)
+    approved = 0
+    for p in pending:
+        example = {
+            "id": str(uuid.uuid4()),
+            "category": p["category"],
+            "subcategory": p.get("subcategory", ""),
+            "title": p["title"],
+            "description": p.get("description", ""),
+            "design_image_url": "",
+            "html_code": p["html_code"],
+            "tags": p.get("tags", []),
+            "is_active": True,
+            "usage_count": 0,
+            "created_by": admin.get('id', 'admin'),
+            "source": "ai_fetched",
+            "created_at": datetime.now(timezone.utc).isoformat(),
+            "updated_at": datetime.now(timezone.utc).isoformat()
+        }
+        await db.training_examples.insert_one(example)
+        await db.pending_templates.update_one({"id": p["id"]}, {"$set": {"status": "approved"}})
+        approved += 1
+    return {"approved": approved, "message": f"تم اعتماد {approved} قالب"}
+
+@api_router.delete("/admin/training/pending-all")
+async def reject_all_pending(admin: dict = Depends(require_admin)):
+    """Reject all pending templates"""
+    result = await db.pending_templates.update_many(
+        {"status": "pending"},
+        {"$set": {"status": "rejected"}}
+    )
+    return {"rejected": result.modified_count, "message": f"تم رفض {result.modified_count} قالب"}
+
+# ============== APP SETUP ==============
+
+# Import and setup chat router
+from routers import chat_router, set_ai_assistant, deployment_router, set_deployment_service
+from routers.websocket_router import router as websocket_router, set_ai_assistant as set_ws_ai_assistant
+from services import AIAssistant, DeploymentService
+
+# Initialize AI Assistant
+ai_assistant = AIAssistant(
+    db=db,
+    api_key=OPENAI_API_KEY,
+    elevenlabs_key=ELEVENLABS_API_KEY,
+    openai_key=OPENAI_API_KEY
+)
+set_ai_assistant(ai_assistant)
+set_ws_ai_assistant(ai_assistant)
+
+# Initialize Deployment Service
+deployment_service = DeploymentService(db=db)
+set_deployment_service(deployment_service)
+
+# ============== WEBSITES MODULE (self-contained) ==============
+try:
+    from modules.websites import register_routes as register_websites_routes
+    register_websites_routes(app, db, get_current_user)
+    logging.getLogger(__name__).info("Websites module registered")
+except Exception as _we:
+    logging.getLogger(__name__).error(f"Failed to register websites module: {_we}", exc_info=True)
+
+# ============== BILLING MODULE (Stripe subscription gate) ==============
+try:
+    from modules.billing import register_routes as register_billing_routes
+    register_billing_routes(app, db, get_current_user)
+    logging.getLogger(__name__).info("Billing module registered")
+except Exception as _be:
+    logging.getLogger(__name__).error(f"Failed to register billing module: {_be}", exc_info=True)
+
+# ============== SOURCE CODE DOWNLOADER (owner-only) ==============
+try:
+    from modules.source.routes import init_routes as init_source_routes
+    _source_router = init_source_routes(db, get_current_user)
+    app.include_router(_source_router, prefix="/api")
+    logging.getLogger(__name__).info("Source module registered")
+except Exception as _se:
+    logging.getLogger(__name__).error(f"Failed to register source module: {_se}", exc_info=True)
+
+# ============== SITE BANNER & STORIES (Zitex main marketing site) ==============
+try:
+    from modules.site.routes import init_routes as init_site_routes
+
+    async def _require_owner(current_user: dict = Depends(get_current_user)):
+        if (current_user or {}).get("role") != "owner":
+            from fastapi import HTTPException as _HE
+            raise _HE(403, "Owner only")
+        return current_user
+
+    _site_router = init_site_routes(db, get_current_user, _require_owner)
+    app.include_router(_site_router, prefix="/api")
+    logging.getLogger(__name__).info("Site (banner+stories) module registered")
+except Exception as _ste:
+    logging.getLogger(__name__).error(f"Failed to register site module: {_ste}", exc_info=True)
+
+# ============== OPERATOR (Agency Mode) — multi-client management ==============
+try:
+    from modules.operator.routes import init_routes as init_operator_routes
+    _operator_router = init_operator_routes(db, get_current_user)
+    app.include_router(_operator_router, prefix="/api")
+    logging.getLogger(__name__).info("Operator module registered")
+
+    @app.on_event("startup")
+    async def _start_operator_scheduler():
+        try:
+            from modules.operator.health import start_scheduler
+            start_scheduler(db, interval_seconds=6 * 3600)  # every 6h
+        except Exception as _e:
+            logging.getLogger(__name__).error(f"operator scheduler failed: {_e}")
+except Exception as _oe:
+    logging.getLogger(__name__).error(f"Failed to register operator module: {_oe}", exc_info=True)
+
+# ============== AFFILIATE (Paid marketing program) ==============
+try:
+    from modules.affiliate.routes import init_routes as init_affiliate_routes
+    _affiliate_router = init_affiliate_routes(db, get_current_user)
+    app.include_router(_affiliate_router, prefix="/api")
+    logging.getLogger(__name__).info("Affiliate module registered")
+except Exception as _afe:
+    logging.getLogger(__name__).error(f"Failed to register affiliate module: {_afe}", exc_info=True)
+
+# ============== VISUAL DESIGNER APIS ==============
+class DesignElement(BaseModel):
+    id: str
+    type: str
+    x: float
+    y: float
+    width: float = 100
+    height: float = 100
+    rotation: float = 0
+    scale_x: float = 1
+    scale_y: float = 1
+    z_index: int = 0
+    props: dict = Field(default_factory=dict)
+
+
+class Design(BaseModel):
+    id: Optional[str] = None
+    user_id: Optional[str] = None
+    name: str
+    category: str = "game"
+    genre: str = "strategy"
+    canvas: dict = Field(default_factory=lambda: {"width": 1280, "height": 720, "background_image_url": None, "background_color": "#87CEEB"})
+    elements: List[DesignElement] = Field(default_factory=list)
+    meta: dict = Field(default_factory=dict)
+    created_at: Optional[str] = None
+    updated_at: Optional[str] = None
+
+
+@api_router.get("/designs")
+async def list_designs(current_user: dict = Depends(get_current_user)):
+    items = await db.designs.find(
+        {"user_id": current_user["user_id"]},
+        {"_id": 0}
+    ).sort("updated_at", -1).to_list(200)
+    return {"designs": items}
+
+
+@api_router.get("/designs/{design_id}")
+async def get_design(design_id: str, current_user: dict = Depends(get_current_user)):
+    d = await db.designs.find_one({"id": design_id, "user_id": current_user["user_id"]}, {"_id": 0})
+    if not d:
+        raise HTTPException(status_code=404, detail="Design not found")
+    return d
+
+
+@api_router.post("/designs")
+async def create_design(design: Design, current_user: dict = Depends(get_current_user)):
+    now = datetime.now(timezone.utc).isoformat()
+    d = design.model_dump()
+    d["id"] = str(uuid.uuid4())
+    d["user_id"] = current_user["user_id"]
+    d["created_at"] = now
+    d["updated_at"] = now
+    await db.designs.insert_one(d)
+    d.pop("_id", None)
+    return d
+
+
+@api_router.patch("/designs/{design_id}")
+async def update_design(design_id: str, design: Design, current_user: dict = Depends(get_current_user)):
+    existing = await db.designs.find_one({"id": design_id, "user_id": current_user["user_id"]})
+    if not existing:
+        raise HTTPException(status_code=404, detail="Design not found")
+    update = design.model_dump(exclude={"id", "user_id", "created_at"})
+    update["updated_at"] = datetime.now(timezone.utc).isoformat()
+    await db.designs.update_one({"id": design_id}, {"$set": update})
+    updated = await db.designs.find_one({"id": design_id}, {"_id": 0})
+    return updated
+
+
+@api_router.delete("/designs/{design_id}")
+async def delete_design(design_id: str, current_user: dict = Depends(get_current_user)):
+    r = await db.designs.delete_one({"id": design_id, "user_id": current_user["user_id"]})
+    if r.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Design not found")
+    return {"ok": True}
+
+
+@api_router.post("/designs/{design_id}/duplicate")
+async def duplicate_design(design_id: str, current_user: dict = Depends(get_current_user)):
+    d = await db.designs.find_one({"id": design_id, "user_id": current_user["user_id"]}, {"_id": 0})
+    if not d:
+        raise HTTPException(status_code=404, detail="Design not found")
+    d["id"] = str(uuid.uuid4())
+    d["name"] = f"{d.get('name','تصميم')} (نسخة)"
+    now = datetime.now(timezone.utc).isoformat()
+    d["created_at"] = now
+    d["updated_at"] = now
+    await db.designs.insert_one(d)
+    d.pop("_id", None)
+    return d
+
+
+@api_router.post("/designs/{design_id}/build")
+async def build_from_design(design_id: str, current_user: dict = Depends(get_current_user)):
+    """Convert a user-crafted design JSON into a live, playable game HTML.
+    The HTML uses the exact element positions the user chose — zero AI drift."""
+    d = await db.designs.find_one({"id": design_id, "user_id": current_user["user_id"]}, {"_id": 0})
+    if not d:
+        raise HTTPException(status_code=404, detail="Design not found")
+    from services.ai_chat_service import render_design_to_html
+    html = render_design_to_html(d)
+    return {"html": html, "design_id": design_id}
+
+
+# ============== USER IMAGES (saved from chat) ==============
+class UserImage(BaseModel):
+    id: Optional[str] = None
+    user_id: Optional[str] = None
+    url: str
+    prompt: str = ""
+    source_session_id: Optional[str] = None
+    created_at: Optional[str] = None
+
+
+@api_router.post("/user-images")
+async def save_user_image(img: UserImage, current_user: dict = Depends(get_current_user)):
+    """Save a chat-generated image to the user's personal library so they can extract elements from it later."""
+    # Avoid duplicates: same URL for same user
+    existing = await db.user_images.find_one({"user_id": current_user["user_id"], "url": img.url}, {"_id": 0})
+    if existing:
+        return existing
+    d = img.model_dump()
+    d["id"] = str(uuid.uuid4())
+    d["user_id"] = current_user["user_id"]
+    d["created_at"] = datetime.now(timezone.utc).isoformat()
+    await db.user_images.insert_one(d)
+    d.pop("_id", None)
+    return d
+
+
+@api_router.get("/user-images")
+async def list_user_images(current_user: dict = Depends(get_current_user)):
+    items = await db.user_images.find(
+        {"user_id": current_user["user_id"]},
+        {"_id": 0}
+    ).sort("created_at", -1).to_list(500)
+    return {"images": items}
+
+
+@api_router.delete("/user-images/{image_id}")
+async def delete_user_image(image_id: str, current_user: dict = Depends(get_current_user)):
+    r = await db.user_images.delete_one({"id": image_id, "user_id": current_user["user_id"]})
+    if r.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Image not found")
+    return {"ok": True}
+
+
+# ============== USER ELEMENTS (cropped pieces from saved images) ==============
+class UserElement(BaseModel):
+    id: Optional[str] = None
+    user_id: Optional[str] = None
+    name: str                                  # e.g. "حقل قمح" (user-picked label)
+    source_image_url: str                      # URL of the source image
+    source_image_id: Optional[str] = None      # reference to user_images.id
+    crop: dict                                 # {x, y, w, h} — in natural image pixels
+    natural_width: int                          # source image natural width
+    natural_height: int
+    category: str = "custom"                   # user-defined grouping
+    created_at: Optional[str] = None
+
+
+@api_router.post("/user-elements")
+async def create_user_element(el: UserElement, current_user: dict = Depends(get_current_user)):
+    d = el.model_dump()
+    d["id"] = str(uuid.uuid4())
+    d["user_id"] = current_user["user_id"]
+    d["created_at"] = datetime.now(timezone.utc).isoformat()
+    await db.user_elements.insert_one(d)
+    d.pop("_id", None)
+    return d
+
+
+@api_router.get("/user-elements")
+async def list_user_elements(current_user: dict = Depends(get_current_user)):
+    items = await db.user_elements.find(
+        {"user_id": current_user["user_id"]},
+        {"_id": 0}
+    ).sort("created_at", -1).to_list(500)
+    return {"elements": items}
+
+
+@api_router.patch("/user-elements/{el_id}")
+async def update_user_element(el_id: str, el: UserElement, current_user: dict = Depends(get_current_user)):
+    existing = await db.user_elements.find_one({"id": el_id, "user_id": current_user["user_id"]})
+    if not existing:
+        raise HTTPException(status_code=404, detail="Element not found")
+    update = el.model_dump(exclude={"id", "user_id", "created_at"})
+    await db.user_elements.update_one({"id": el_id}, {"$set": update})
+    updated = await db.user_elements.find_one({"id": el_id}, {"_id": 0})
+    return updated
+
+
+@api_router.delete("/user-elements/{el_id}")
+async def delete_user_element(el_id: str, current_user: dict = Depends(get_current_user)):
+    r = await db.user_elements.delete_one({"id": el_id, "user_id": current_user["user_id"]})
+    if r.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Element not found")
+    return {"ok": True}
+# ============== END VISUAL DESIGNER APIS ==============
+
+
+# Health check endpoint - MUST be before other routers
+@app.get("/api/health")
+async def health_check():
+    return {"status": "healthy", "service": "zitex-api"}
+
+# Serve static game engine (delegated to games module)
+try:
+    from modules.games.routes import init_routes as _init_games_routes
+    _games_router = _init_games_routes()
+    app.include_router(_games_router, prefix="/api")
+except Exception as _ge:
+    logging.getLogger(__name__).error(f"games module failed: {_ge}")
+
+
+@app.get("/api/iframe-test")
+async def serve_iframe_test():
+    """Deprecated — handled by modules.games.routes. Kept as fallback."""
+    import os
+    p = os.path.join(os.path.dirname(__file__), "static", "iframe-test.html")
+    if os.path.exists(p):
+        with open(p, 'r') as f:
+            content = f.read()
+        return Response(content=content, media_type="text/html")
+
+
+@app.get("/api/image-backed-test")
+async def serve_image_backed_test():
+    """Deprecated — handled by modules.games.routes. Kept as fallback."""
+    import os
+    p = os.path.join(os.path.dirname(__file__), "static", "image-backed-test.html")
+    if os.path.exists(p):
+        with open(p, 'r') as f:
+            content = f.read()
+        return Response(content=content, media_type="text/html")
+
+
+@app.get("/api/final-preview")
+async def serve_final_preview():
+    import os
+    p = os.path.join(os.path.dirname(__file__), "static", "final-preview.html")
+    if os.path.exists(p):
+        with open(p, 'r') as f:
+            content = f.read()
+        return Response(content=content, media_type="text/html")
+
+
+@app.get("/api/designer-preview-test")
+async def serve_designer_preview_test():
+    import os
+    p = os.path.join(os.path.dirname(__file__), "static", "designer-preview-test.html")
+    if os.path.exists(p):
+        with open(p, 'r') as f:
+            content = f.read()
+        return Response(content=content, media_type="text/html")
+
+
+@app.get("/api/user-designed-preview")
+async def serve_user_designed_preview():
+    import os
+    p = os.path.join(os.path.dirname(__file__), "static", "user-designed-preview.html")
+    if os.path.exists(p):
+        with open(p, 'r') as f:
+            content = f.read()
+        return Response(content=content, media_type="text/html")
+
+
+@app.get("/api/user-crop-preview")
+async def serve_user_crop_preview():
+    import os
+    p = os.path.join(os.path.dirname(__file__), "static", "user-crop-preview.html")
+    if os.path.exists(p):
+        with open(p, 'r') as f:
+            content = f.read()
+        return Response(content=content, media_type="text/html")
+
+# Storage proxy endpoint - serve images/videos from Object Storage
+@app.get("/api/storage/{file_path:path}")
+async def serve_storage_file(file_path: str):
+    """Proxy endpoint to serve files from Object Storage"""
+    try:
+        from services.ai_chat_service import get_from_storage, APP_NAME
+        
+        full_path = f"{APP_NAME}/{file_path}"
+        result = get_from_storage(full_path)
+        
+        if result is None:
+            raise HTTPException(status_code=404, detail="File not found")
+        
+        file_data, content_type = result
+        
+        # Determine content type from path if not set
+        if not content_type or content_type == "text/html":
+            if file_path.endswith(".png"):
+                content_type = "image/png"
+            elif file_path.endswith(".jpg") or file_path.endswith(".jpeg"):
+                content_type = "image/jpeg"
+            elif file_path.endswith(".mp4"):
+                content_type = "video/mp4"
+            elif file_path.endswith(".mp3"):
+                content_type = "audio/mpeg"
+        
+        return StreamingResponse(
+            io.BytesIO(file_data),
+            media_type=content_type,
+            headers={"Cache-Control": "public, max-age=86400"}
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Storage proxy error: {e}")
+        raise HTTPException(status_code=500, detail="Failed to fetch file")
+
+# Include routers
+app.include_router(api_router)
+app.include_router(chat_router, prefix="/api")
+app.include_router(deployment_router, prefix="/api")
+app.include_router(websocket_router, prefix="/api")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
     allow_credentials=True,
+    allow_origins=os.environ.get('CORS_ORIGINS', '*').split(','),
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# Include the main API router
-app.include_router(api_router)
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
+logger = logging.getLogger(__name__)
 
-# Import and include chat router
-from routers import chat_router, set_ai_assistant
-from services.ai_chat_service import AIAssistant
-
-app.include_router(chat_router, prefix="/api")
-
-# Initialize AI Assistant
-ai_assistant = AIAssistant(db)
-set_ai_assistant(ai_assistant)
-
-@app.get("/")
-async def root():
-    return {"message": "Zitex API - AI Creative Platform", "status": "running"}
-
-@app.get("/health")
-async def health():
-    return {"status": "healthy", "ai_features": AI_FEATURES_ENABLED}
+@app.on_event("shutdown")
+async def shutdown_db_client():
+    client.close()

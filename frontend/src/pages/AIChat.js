@@ -80,6 +80,12 @@ const parseMessageContent = (content, metadata = {}) => {
   
   // First, remove CODE_BLOCK from display (code goes to Live Preview only)
   let displayContent = content.replace(/\[CODE_BLOCK\]\s*```[\s\S]*?```\s*\[\/CODE_BLOCK\]/g, '');
+  // Also handle [CODES_BLOCK] and other variations
+  displayContent = displayContent.replace(/\[CODE\w*_?BLOCK\]\s*```[\s\S]*?```\s*\[\/CODE\w*_?BLOCK\]/g, '');
+  displayContent = displayContent.replace(/\[CODE\w*_?BLOCK\]\s*[\s\S]*?\[\/CODE\w*_?BLOCK\]/g, '');
+  
+  // Remove raw HTML blocks that are code output (<!DOCTYPE...>)
+  displayContent = displayContent.replace(/<!DOCTYPE\s+html[\s\S]*?<\/html>/gi, '');
   
   // Also remove any regular code blocks from display (they go to preview)
   displayContent = displayContent.replace(/```(?:html|javascript|js)?\n?[\s\S]*?```/g, '');
@@ -202,7 +208,7 @@ const FileUploadButton = memo(({ onFileSelect }) => {
         variant="ghost"
         onClick={handleClick}
         className="h-9 w-9 text-gray-400 hover:text-amber-400 hover:bg-amber-500/10"
-        title="رفع ملف (مجاني)"
+        title="رفع ملف"
       >
         <Upload className="w-4 h-4" />
       </Button>
@@ -443,7 +449,6 @@ const SessionItem = memo(({ session, isActive, onSelect, onDelete, getIcon }) =>
       session.session_type === 'video' ? 'bg-orange-500/20 text-orange-400' :
       session.session_type === 'website' ? 'bg-green-500/20 text-green-400' :
       session.session_type === 'game' ? 'bg-cyan-500/20 text-cyan-400' :
-      session.session_type === 'mobile' ? 'bg-pink-500/20 text-pink-400' :
       'bg-slate-700/50 text-gray-400'
     }`}>
       {getIcon(session.session_type)}
@@ -556,8 +561,17 @@ const LivePreviewPanel = memo(({ code, isOpen, onClose, onRefresh, isFullscreen,
     if (code && iframeRef.current) {
       const iframe = iframeRef.current;
       const doc = iframe.contentDocument || iframe.contentWindow.document;
+      // iframe with about:blank can't resolve relative /api/* URLs — rewrite to absolute backend URL
+      const backend = process.env.REACT_APP_BACKEND_URL || '';
+      let patched = code;
+      if (backend) {
+        // HTML attributes: src="/api/..." href="/api/..."
+        patched = patched.replace(/(src|href)=["'](\/api\/[^"']+)["']/g, `$1="${backend}$2"`);
+        // CSS url(...) — with or without quotes
+        patched = patched.replace(/url\((["']?)(\/api\/[^)"']+)\1\)/g, `url($1${backend}$2$1)`);
+      }
       doc.open();
-      doc.write(code);
+      doc.write(patched);
       doc.close();
     }
   }, [code]);
@@ -826,7 +840,7 @@ const CreditsBanner = memo(({ credits, isOwner, onBuyCredits }) => {
         className="flex items-center gap-1.5 px-3 py-1 bg-gradient-to-r from-green-500 to-emerald-500 rounded-full text-white text-xs font-medium hover:from-green-600 hover:to-emerald-600 transition-all"
       >
         <Coins className="w-3 h-3" />
-        اشتري الآن
+        Credits {Math.round(percentage)}% more
       </button>
       <button className="text-gray-500 hover:text-white transition-colors">
         <X className="w-4 h-4" />
@@ -844,7 +858,7 @@ const AIChat = ({ user }) => {
   const [inputMessage, setInputMessage] = useState('');
   const [loading, setLoading] = useState(false);
   const [sessionsLoading, setSessionsLoading] = useState(true);
-  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState(false); // مخفي بشكل افتراضي
   const [isTyping, setIsTyping] = useState(false);
   const [playingAudio, setPlayingAudio] = useState(null);
   const [isRecording, setIsRecording] = useState(false);
@@ -1339,6 +1353,7 @@ const AIChat = ({ user }) => {
       const input = document.querySelector('[data-testid="chat-input"]');
       if (input) {
         const event = new KeyboardEvent('keypress', { key: 'Enter', bubbles: true });
+        // Directly call sendMessage with the button text
       }
     }, 100);
   }, [loading, currentSession]);
@@ -1427,7 +1442,7 @@ const AIChat = ({ user }) => {
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
     
-    // Deduct credits
+    // Deduct credits (TODO: call backend)
     if (user?.role !== 'owner') {
       setUserCredits(prev => Math.max(0, prev - 50));
     }
@@ -1528,6 +1543,30 @@ const AIChat = ({ user }) => {
               <Button size="sm" onClick={() => downloadAsset(attachment.url, 'zitex-image.png')} className="bg-white/20 backdrop-blur">
                 <Download className="w-4 h-4 me-1" /> تحميل
               </Button>
+              <Button
+                size="sm"
+                onClick={async () => {
+                  try {
+                    const token = localStorage.getItem('token');
+                    const res = await fetch(`${API_URL}/api/user-images`, {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+                      body: JSON.stringify({ url: attachment.url, prompt: attachment.prompt || '', source_session_id: currentSession?.id || null }),
+                    });
+                    if (res.ok) {
+                      toast.success('✅ حُفظت الصورة في المحرر — افتح "المحرر المرئي" لاستخراج عناصر منها', { duration: 5000 });
+                    } else {
+                      const t = await res.text();
+                      toast.error('فشل الحفظ: ' + t);
+                    }
+                  } catch (e) { toast.error('فشل الاتصال: ' + e.message); }
+                }}
+                className="bg-yellow-500 backdrop-blur hover:bg-yellow-400 text-black font-bold"
+                data-testid={`save-img-to-designer-${attachment.id || 'x'}`}
+                title="احفظ الصورة في مكتبة المحرر لاستخراج عناصر منها لاحقاً"
+              >
+                ✂️ حفظ للمحرر
+              </Button>
               <Button size="sm" onClick={() => openSocialExport({ id: attachment.id || 'temp', url: attachment.url, type: 'image' })} className="bg-purple-500/80 backdrop-blur hover:bg-purple-500">
                 <Share2 className="w-4 h-4 me-1" /> نشر
               </Button>
@@ -1596,30 +1635,6 @@ const AIChat = ({ user }) => {
             </div>
           </div>
         );
-      case 'mobile_app':
-        return (
-          <div className="mt-3 p-3 bg-gradient-to-r from-pink-500/10 to-purple-500/10 rounded-xl border border-pink-500/30">
-            <div className="flex items-center gap-2 mb-2">
-              <Smartphone className="w-5 h-5 text-pink-400" />
-              <span className="text-white font-medium text-sm">تطبيق موبايل جاهز!</span>
-              {attachment.platform && (
-                <span className="text-xs bg-pink-500/20 text-pink-300 px-2 py-0.5 rounded-full">{attachment.platform}</span>
-              )}
-            </div>
-            <p className="text-gray-400 text-xs mb-2">{attachment.description || 'تم توليد كود التطبيق بنجاح'}</p>
-            <div className="flex gap-2">
-              <Button size="sm" onClick={() => onPreview(attachment.code)} className="bg-pink-500 hover:bg-pink-600">
-                <Eye className="w-4 h-4 me-1" /> عرض الكود
-              </Button>
-              <Button size="sm" variant="outline" onClick={() => {
-                const blob = new Blob([attachment.code], { type: 'text/plain' });
-                downloadAsset(URL.createObjectURL(blob), `zitex-app.${attachment.file_extension || 'txt'}`);
-              }}>
-                <Download className="w-4 h-4 me-1" /> تحميل
-              </Button>
-            </div>
-          </div>
-        );
       case 'video_pending':
         return (
           <div className="mt-3 p-3 bg-orange-500/10 border border-orange-500/20 rounded-xl flex items-center gap-3">
@@ -1630,25 +1645,25 @@ const AIChat = ({ user }) => {
       default:
         return null;
     }
-  }, [downloadAsset, openSocialExport]);
+  }, [downloadAsset]);
 
   return (
     <div className="h-screen bg-[#0a0a12] flex flex-col overflow-hidden" data-testid="ai-chat-page">
       <Navbar user={user} transparent />
       <audio ref={audioRef} className="hidden" />
       
-      {/* Social Export Modal */}
-      <SocialExportModal 
-        isOpen={showSocialExport} 
-        onClose={() => setShowSocialExport(false)}
-        assetId={exportAsset?.id}
-        assetUrl={exportAsset?.url}
-        assetType={exportAsset?.type}
-      />
-      
       <div className="flex-1 flex mt-16 overflow-hidden">
         {/* Sessions Dropdown Button - Always visible */}
-        <div className="fixed top-20 right-4 z-30">
+        <div className="fixed top-20 right-4 z-30 flex items-center gap-2">
+          <button
+            onClick={() => (window.location.href = '/designer')}
+            className="flex items-center gap-2 px-4 py-2 rounded-xl shadow-lg border border-yellow-500/40 bg-gradient-to-r from-yellow-600/30 to-orange-600/30 text-yellow-300 hover:from-yellow-600/50 hover:to-orange-600/50 transition-all"
+            data-testid="open-designer-btn"
+            title="المحرر المرئي"
+          >
+            <span className="text-base">🎨</span>
+            <span className="text-sm font-medium">المحرر المرئي</span>
+          </button>
           <button 
             onClick={() => setSidebarOpen(!sidebarOpen)} 
             className={`flex items-center gap-2 px-4 py-2 rounded-xl shadow-lg border transition-all ${sidebarOpen ? 'bg-amber-600 border-amber-500 text-white' : 'bg-slate-800 border-slate-700 text-white hover:bg-slate-700'}`}
@@ -1662,313 +1677,386 @@ const AIChat = ({ user }) => {
           {sidebarOpen && (
             <div className="absolute top-12 right-0 w-80 bg-[#0d0d18] border border-slate-700/50 rounded-2xl shadow-2xl overflow-hidden animate-fadeIn">
               {/* User Credits Header */}
-              <div className="p-4 bg-gradient-to-r from-amber-500/10 to-yellow-500/10 border-b border-slate-700/50">
-                <div className="flex items-center justify-between mb-2">
+              <div className="p-3 border-b border-slate-800/50 bg-gradient-to-r from-slate-800/50 to-slate-900/50">
+                <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
-                    <Coins className="w-5 h-5 text-amber-400" />
-                    <span className="text-white font-bold">{userCredits}</span>
-                    <span className="text-gray-400 text-sm">نقطة</span>
+                    <div className="w-10 h-10 rounded-full bg-gradient-to-br from-amber-500 to-yellow-500 flex items-center justify-center">
+                      <span className="text-black text-sm font-bold">{user?.email?.[0]?.toUpperCase() || 'U'}</span>
+                    </div>
+                    <div>
+                      <p className="text-white text-sm font-medium">{user?.role === 'owner' ? 'مالك' : 'مستخدم'}</p>
+                      <p className="text-xs text-amber-400 flex items-center gap-1">
+                        <Coins className="w-3 h-3" />
+                        <span className="font-bold">{user?.role === 'owner' ? '∞' : userCredits}</span> نقطة
+                      </p>
+                    </div>
                   </div>
-                  {user?.role === 'owner' && (
-                    <span className="text-xs bg-purple-500/20 text-purple-300 px-2 py-1 rounded-full">مالك</span>
-                  )}
+                  <button onClick={() => setSidebarOpen(false)} className="p-2 rounded-lg hover:bg-slate-700/50 text-gray-400">
+                    <X className="w-4 h-4" />
+                  </button>
                 </div>
               </div>
               
-              {/* New Session Buttons */}
-              <div className="p-3 border-b border-slate-700/50">
-                <p className="text-xs text-gray-500 mb-2 px-1">محادثة جديدة</p>
-                <div className="grid grid-cols-2 gap-2">
-                  <button onClick={() => createSession('general')} className="flex items-center gap-2 p-2 rounded-lg bg-slate-800/50 hover:bg-slate-700 text-white text-xs transition-all">
-                    <MessageSquare className="w-4 h-4 text-blue-400" /> عام
-                  </button>
-                  <button onClick={() => createSession('website')} className="flex items-center gap-2 p-2 rounded-lg bg-slate-800/50 hover:bg-slate-700 text-white text-xs transition-all">
-                    <Globe className="w-4 h-4 text-green-400" /> موقع
-                  </button>
-                  <button onClick={() => createSession('image')} className="flex items-center gap-2 p-2 rounded-lg bg-slate-800/50 hover:bg-slate-700 text-white text-xs transition-all">
-                    <Image className="w-4 h-4 text-purple-400" /> صورة
-                  </button>
-                  <button onClick={() => createSession('video')} className="flex items-center gap-2 p-2 rounded-lg bg-slate-800/50 hover:bg-slate-700 text-white text-xs transition-all">
-                    <Video className="w-4 h-4 text-orange-400" /> فيديو
-                  </button>
-                  <button onClick={() => createSession('game')} className="flex items-center gap-2 p-2 rounded-lg bg-slate-800/50 hover:bg-slate-700 text-white text-xs transition-all">
-                    <Gamepad2 className="w-4 h-4 text-cyan-400" /> لعبة
-                  </button>
-                  <button onClick={() => createSession('mobile')} className="flex items-center gap-2 p-2 rounded-lg bg-slate-800/50 hover:bg-slate-700 text-white text-xs transition-all">
-                    <Smartphone className="w-4 h-4 text-pink-400" /> تطبيق
-                  </button>
+              {/* New Chat Button */}
+              <div className="p-3 border-b border-slate-800/50">
+                <Button onClick={() => { createSession('general'); setSidebarOpen(false); }} className="w-full bg-gradient-to-r from-amber-600 to-yellow-600 hover:from-amber-700 hover:to-yellow-700 shadow-lg shadow-amber-500/20" data-testid="new-chat-btn">
+                  <Plus className="w-4 h-4 me-2" /> محادثة جديدة
+                </Button>
+                <div className="grid grid-cols-5 gap-1.5 mt-2">
+                  {[
+                    { type: 'image', icon: Image, color: 'purple', label: 'صورة' },
+                    { type: 'video', icon: Video, color: 'orange', label: 'فيديو' },
+                    { type: 'mobile', icon: Smartphone, color: 'pink', label: 'تطبيق' },
+                    { type: 'website', icon: Globe, color: 'green', label: 'موقع' },
+                    { type: 'game', icon: Gamepad2, color: 'cyan', label: 'لعبة' }
+                  ].map(({ type, icon: Icon, color, label }) => (
+                    <button 
+                      key={type} 
+                      onClick={() => { createSession(type); setSidebarOpen(false); }} 
+                      className={`p-2 rounded-lg border border-${color}-500/30 bg-${color}-500/10 hover:bg-${color}-500/20 transition-all flex flex-col items-center gap-1`}
+                      title={label}
+                    >
+                      <Icon className={`w-4 h-4 text-${color}-400`} />
+                      <span className={`text-[10px] text-${color}-400`}>{label}</span>
+                    </button>
+                  ))}
                 </div>
               </div>
               
               {/* Sessions List */}
-              <ScrollArea className="h-64">
-                {sessionsLoading ? (
-                  <SessionSkeleton />
-                ) : sessions.length === 0 ? (
-                  <div className="p-4 text-center text-gray-500 text-sm">
-                    لا توجد محادثات بعد
+              <div className="max-h-80 overflow-y-auto">
+                {sessionsLoading ? <SessionSkeleton /> : sessions.length === 0 ? (
+                  <div className="text-center py-8 text-gray-500">
+                    <Sparkles className="w-10 h-10 mx-auto mb-2 opacity-20" />
+                    <p className="text-sm">لا توجد محادثات سابقة</p>
+                    <p className="text-xs text-gray-600">ابدأ محادثة جديدة!</p>
                   </div>
                 ) : (
                   <div className="p-2 space-y-1">
+                    <p className="text-xs text-gray-500 px-2 py-1">المحادثات السابقة ({sessions.length})</p>
                     {sessions.map(session => (
-                      <SessionItem 
-                        key={session.id}
-                        session={session}
-                        isActive={currentSession?.id === session.id}
-                        onSelect={loadSession}
-                        onDelete={deleteSession}
-                        getIcon={getSessionIcon}
-                      />
+                      <div key={session.id} onClick={() => { loadSession(session.id); setSidebarOpen(false); }}>
+                        <SessionItem session={session} isActive={currentSession?.id === session.id} onSelect={() => {}} onDelete={deleteSession} getIcon={getSessionIcon} />
+                      </div>
                     ))}
                   </div>
                 )}
-              </ScrollArea>
+              </div>
             </div>
           )}
         </div>
+        
+        {/* Overlay when dropdown is open */}
+        {sidebarOpen && <div className="fixed inset-0 z-20" onClick={() => setSidebarOpen(false)} />}
 
-        {/* Main Chat Area */}
-        <div className={`flex-1 flex flex-col transition-all duration-300 ${previewOpen ? 'lg:w-1/2' : 'w-full'}`}>
-          {/* Messages Area */}
-          <div className="flex-1 overflow-y-auto px-4 py-6">
+        {/* Main Area - Full Width */}
+        <div className={`flex-1 flex ${previewOpen ? 'flex-row' : 'flex-col'} overflow-hidden w-full`}>
+          {/* Chat Column */}
+          <div className={`${previewOpen ? 'w-1/2 border-l border-slate-800/50' : 'w-full'} flex flex-col overflow-hidden`}>
             {!currentSession ? (
               /* Welcome Screen */
-              <div className="h-full flex items-center justify-center">
+              <div className="flex-1 flex items-center justify-center p-4">
                 <div className="text-center max-w-lg">
                   <ZitexLogo size="xl" isAnimating={false} />
-                  <h1 className="text-3xl font-bold text-white mt-6 mb-3">مرحباً بك في Zitex</h1>
-                  <p className="text-gray-400 mb-8">مساعدك الذكي لإنشاء المواقع والصور والفيديوهات والتطبيقات</p>
-                  
-                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                    <button onClick={() => createSession('website')} className="p-4 bg-gradient-to-br from-green-500/20 to-emerald-500/20 hover:from-green-500/30 hover:to-emerald-500/30 border border-green-500/30 rounded-xl transition-all group">
-                      <Globe className="w-8 h-8 text-green-400 mx-auto mb-2 group-hover:scale-110 transition-transform" />
-                      <span className="text-white text-sm font-medium">موقع ويب</span>
-                    </button>
-                    <button onClick={() => createSession('image')} className="p-4 bg-gradient-to-br from-purple-500/20 to-pink-500/20 hover:from-purple-500/30 hover:to-pink-500/30 border border-purple-500/30 rounded-xl transition-all group">
-                      <Image className="w-8 h-8 text-purple-400 mx-auto mb-2 group-hover:scale-110 transition-transform" />
-                      <span className="text-white text-sm font-medium">صورة</span>
-                    </button>
-                    <button onClick={() => createSession('video')} className="p-4 bg-gradient-to-br from-orange-500/20 to-red-500/20 hover:from-orange-500/30 hover:to-red-500/30 border border-orange-500/30 rounded-xl transition-all group">
-                      <Video className="w-8 h-8 text-orange-400 mx-auto mb-2 group-hover:scale-110 transition-transform" />
-                      <span className="text-white text-sm font-medium">فيديو</span>
-                    </button>
-                    <button onClick={() => createSession('game')} className="p-4 bg-gradient-to-br from-cyan-500/20 to-blue-500/20 hover:from-cyan-500/30 hover:to-blue-500/30 border border-cyan-500/30 rounded-xl transition-all group">
-                      <Gamepad2 className="w-8 h-8 text-cyan-400 mx-auto mb-2 group-hover:scale-110 transition-transform" />
-                      <span className="text-white text-sm font-medium">لعبة</span>
-                    </button>
-                    <button onClick={() => createSession('mobile')} className="p-4 bg-gradient-to-br from-pink-500/20 to-rose-500/20 hover:from-pink-500/30 hover:to-rose-500/30 border border-pink-500/30 rounded-xl transition-all group">
-                      <Smartphone className="w-8 h-8 text-pink-400 mx-auto mb-2 group-hover:scale-110 transition-transform" />
-                      <span className="text-white text-sm font-medium">تطبيق موبايل</span>
-                    </button>
-                    <button onClick={() => createSession('general')} className="p-4 bg-gradient-to-br from-amber-500/20 to-yellow-500/20 hover:from-amber-500/30 hover:to-yellow-500/30 border border-amber-500/30 rounded-xl transition-all group">
-                      <MessageSquare className="w-8 h-8 text-amber-400 mx-auto mb-2 group-hover:scale-110 transition-transform" />
-                      <span className="text-white text-sm font-medium">محادثة عامة</span>
-                    </button>
+                  <h1 className="text-3xl font-bold text-white mt-6 mb-2">
+                    مرحباً في <span className="text-transparent bg-clip-text bg-gradient-to-r from-amber-400 to-yellow-500">Zitex</span>
+                  </h1>
+                  <p className="text-amber-200/80 mb-8">منصة الإبداع بالذكاء الاصطناعي</p>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mb-6">
+                    {[
+                      { type: 'video', icon: Video, color: 'orange', title: 'فيديو', desc: 'Sora 2' },
+                      { type: 'image', icon: Image, color: 'purple', title: 'صور', desc: 'GPT Image 1' },
+                      { type: 'mobile', icon: Smartphone, color: 'pink', title: 'تطبيق موبايل', desc: 'Flutter/Swift/Kotlin' },
+                      { type: 'game', icon: Gamepad2, color: 'cyan', title: 'ألعاب', desc: 'Phaser/Three.js' },
+                      { type: 'website', icon: Globe, color: 'green', title: 'مواقع', desc: 'React/HTML' }
+                    ].map(({ type, icon: Icon, color, title, desc }) => (
+                      <Card key={type} className={`bg-slate-800/30 border-slate-700/50 cursor-pointer hover:bg-slate-800/50 hover:border-${color}-500/30 transition-all`} onClick={() => createSession(type)}>
+                        <CardContent className="p-4 text-center">
+                          <Icon className={`w-8 h-8 text-${color}-400 mx-auto mb-2`} />
+                          <h3 className="text-white font-medium text-sm">{title}</h3>
+                          <p className="text-[10px] text-gray-500">{desc}</p>
+                        </CardContent>
+                      </Card>
+                    ))}
                   </div>
-                  
-                  {/* Features */}
-                  <div className="mt-8 grid grid-cols-3 gap-4 text-center">
-                    <div>
-                      <div className="w-10 h-10 rounded-full bg-green-500/20 flex items-center justify-center mx-auto mb-2">
-                        <Zap className="w-5 h-5 text-green-400" />
-                      </div>
-                      <p className="text-xs text-gray-400">سريع وذكي</p>
-                    </div>
-                    <div>
-                      <div className="w-10 h-10 rounded-full bg-purple-500/20 flex items-center justify-center mx-auto mb-2">
-                        <Sparkles className="w-5 h-5 text-purple-400" />
-                      </div>
-                      <p className="text-xs text-gray-400">جودة عالية</p>
-                    </div>
-                    <div>
-                      <div className="w-10 h-10 rounded-full bg-amber-500/20 flex items-center justify-center mx-auto mb-2">
-                        <Gift className="w-5 h-5 text-amber-400" />
-                      </div>
-                      <p className="text-xs text-gray-400">رفع الملفات مجاني</p>
-                    </div>
+                  <div className="flex gap-3 justify-center">
+                    <Button size="lg" onClick={() => createSession('general')} className="bg-gradient-to-r from-amber-600 to-yellow-600 hover:from-amber-700 hover:to-yellow-700 shadow-lg shadow-amber-500/20">
+                      <Zap className="w-5 h-5 me-2" /> ابدأ الآن
+                    </Button>
+                    <Button size="lg" variant="outline" onClick={() => setShowTemplatesPanel(true)} className="border-purple-500/50 text-purple-400 hover:bg-purple-500/10">
+                      <Layout className="w-5 h-5 me-2" /> القوالب
+                    </Button>
                   </div>
                 </div>
               </div>
             ) : (
-              /* Chat Messages */
-              <div className="max-w-4xl mx-auto space-y-4">
-                <CreditsBanner credits={userCredits} isOwner={user?.role === 'owner'} onBuyCredits={() => window.location.href = '/pricing'} />
-                
-                {messages.map((msg, idx) => (
-                  <ChatMessage
-                    key={msg.id || idx}
-                    msg={msg}
-                    idx={idx}
-                    renderAttachment={renderAttachment}
-                    onPlayAudio={playAudio}
-                    onGenerateTTS={generateTTS}
-                    playingAudio={playingAudio}
-                    onPreview={handlePreview}
-                    isTyping={isTyping && idx === messages.length - 1 && msg.role === 'assistant'}
-                    onButtonClick={handleButtonClickDirect}
-                  />
-                ))}
-                
-                {/* Typing Indicator */}
-                {isTyping && (
-                  <div className="flex justify-end animate-fadeIn">
-                    <div className="flex items-start gap-3">
-                      <div className="order-2 bg-gradient-to-br from-slate-800 to-slate-900 border border-slate-700/50 rounded-2xl rounded-tr-md p-4">
-                        <div className="flex items-center gap-2">
-                          <div className="flex gap-1">
-                            <span className="w-2 h-2 bg-amber-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></span>
-                            <span className="w-2 h-2 bg-amber-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></span>
-                            <span className="w-2 h-2 bg-amber-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></span>
+              <>
+                {/* Messages */}
+                <ScrollArea className="flex-1 p-4">
+                  <div className="max-w-3xl mx-auto space-y-4">
+                    {messages.length === 0 && (
+                      <div className="text-center py-16 text-gray-500">
+                        <Bot className="w-16 h-16 mx-auto mb-4 opacity-20" />
+                        <p>ابدأ المحادثة!</p>
+                      </div>
+                    )}
+                    {messages.map((msg, idx) => (
+                      <ChatMessage key={msg.id || idx} msg={msg} idx={idx} renderAttachment={renderAttachment} onPlayAudio={playAudio} onGenerateTTS={generateTTS} playingAudio={playingAudio} onPreview={handlePreview} isTyping={isTyping && idx === messages.length - 1 && msg.role === 'assistant'} onButtonClick={handleButtonClickDirect} />
+                    ))}
+                    {isTyping && (
+                      <div className="flex justify-end">
+                        <div className="flex items-start gap-3">
+                          <div className="bg-slate-800 rounded-2xl rounded-tr-md p-4 border border-slate-700/50">
+                            <div className="flex items-center gap-2">
+                              {[0, 1, 2].map(i => <span key={i} className="w-2 h-2 bg-amber-500 rounded-full animate-bounce" style={{ animationDelay: `${i * 150}ms` }} />)}
+                              <span className="text-gray-400 text-sm mr-2">جاري التفكير...</span>
+                            </div>
                           </div>
-                          <span className="text-gray-400 text-sm">جاري التفكير...</span>
+                          <ZitexLogo size="sm" isAnimating={true} />
                         </div>
                       </div>
-                      <ZitexLogo size="sm" isAnimating={true} />
+                    )}
+                    <div ref={messagesEndRef} />
+                  </div>
+                </ScrollArea>
+
+                {/* Input Area */}
+                <div className="border-t border-slate-800/50 p-3 bg-[#0d0d18]/90 backdrop-blur">
+                  <div className="max-w-3xl mx-auto">
+                    {/* Credits Banner */}
+                    <CreditsBanner credits={userCredits} isOwner={user?.role === 'owner'} onBuyCredits={() => toast.info('سيتم إضافة هذه الميزة قريباً')} />
+                    
+                    {/* Input Box */}
+                    <div className="bg-slate-800/50 rounded-2xl border border-slate-700/50 overflow-hidden focus-within:border-purple-500/50 transition-colors">
+                      {/* Recording Indicator */}
+                      {isRecording && (
+                        <div className="px-4 py-2 bg-red-500/10 border-b border-red-500/20 flex items-center gap-3">
+                          <span className="w-2 h-2 bg-red-500 rounded-full animate-pulse"></span>
+                          <span className="text-red-400 text-sm font-mono">
+                            {Math.floor(recordingTime / 60).toString().padStart(2, '0')}:{(recordingTime % 60).toString().padStart(2, '0')}
+                          </span>
+                          <span className="text-red-300/70 text-xs">جاري التسجيل...</span>
+                        </div>
+                      )}
+                      
+                      {/* Text Area */}
+                      <textarea
+                        ref={textareaRef}
+                        value={inputMessage}
+                        onChange={(e) => setInputMessage(e.target.value)}
+                        onKeyPress={handleKeyPress}
+                        placeholder="Message Agent"
+                        className="w-full bg-transparent text-white placeholder:text-gray-500 text-sm resize-none focus:outline-none min-h-[50px] max-h-[150px] p-4"
+                        disabled={loading}
+                        rows={1}
+                        data-testid="chat-input"
+                      />
+                      
+                      {/* Bottom Tools */}
+                      <div className="flex items-center justify-between px-3 py-2 border-t border-slate-700/30">
+                        <div className="flex items-center gap-1">
+                          {/* Attach File - NOW ACTIVE! */}
+                          <FileUploadButton onFileSelect={handleFileSelect} />
+                          
+                          {/* Save Template */}
+                          <button 
+                            onClick={() => setShowTemplatesPanel(true)}
+                            className="flex items-center gap-1 px-2 py-1.5 rounded-lg text-gray-400 hover:text-amber-400 hover:bg-amber-500/10 transition-all text-xs" 
+                            title="القوالب"
+                          >
+                            <Save className="w-3.5 h-3.5" />
+                            <span className="hidden sm:inline">قوالب</span>
+                          </button>
+                          
+                          {/* Social Export */}
+                          <button 
+                            onClick={() => setShowSocialExport(true)}
+                            className="flex items-center gap-1 px-2 py-1.5 rounded-lg text-gray-400 hover:text-purple-400 hover:bg-purple-500/10 transition-all text-xs" 
+                            title="نشر للمنصات"
+                          >
+                            <Share2 className="w-3.5 h-3.5" />
+                            <span className="hidden sm:inline">نشر</span>
+                          </button>
+                          
+                          {/* Ultra Mode */}
+                          <button 
+                            onClick={() => setUltraMode(!ultraMode)}
+                            className={`flex items-center gap-1 px-2 py-1.5 rounded-lg text-xs transition-all ${ultraMode ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30' : 'text-gray-500 hover:text-gray-400 hover:bg-slate-700/50'}`}
+                            title="وضع Ultra"
+                          >
+                            <Zap className="w-3.5 h-3.5" />
+                            <span className="hidden sm:inline">Ultra</span>
+                            <div className={`w-6 h-3.5 rounded-full transition-colors ${ultraMode ? 'bg-amber-500' : 'bg-slate-600'}`}>
+                              <div className={`w-2.5 h-2.5 rounded-full bg-white transition-transform mt-0.5 ${ultraMode ? 'translate-x-3' : 'translate-x-0.5'}`} />
+                            </div>
+                          </button>
+                        </div>
+                        
+                        <div className="flex items-center gap-1">
+                          {/* Mic */}
+                          <button
+                            onClick={toggleRecording}
+                            disabled={loading}
+                            className={`p-2 rounded-lg transition-all ${isRecording ? 'bg-red-500 text-white animate-pulse' : 'text-gray-400 hover:text-white hover:bg-slate-700/50'}`}
+                          >
+                            <Mic className="w-5 h-5" />
+                          </button>
+                          
+                          {/* Send */}
+                          <button
+                            onClick={sendMessage}
+                            disabled={loading || !inputMessage.trim() || isRecording}
+                            className="p-2 rounded-lg bg-gradient-to-r from-amber-600 to-yellow-600 text-white disabled:opacity-50 hover:from-amber-700 hover:to-yellow-700 transition-all shadow-lg shadow-amber-500/20"
+                            data-testid="send-btn"
+                          >
+                            {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : <ArrowUp className="w-5 h-5" />}
+                          </button>
+                        </div>
+                      </div>
                     </div>
                   </div>
-                )}
-                
-                <div ref={messagesEndRef} />
-              </div>
+                </div>
+              </>
             )}
           </div>
           
-          {/* Input Area */}
-          {currentSession && (
-            <div className="p-4 border-t border-slate-800/50 bg-[#0a0a12]/80 backdrop-blur">
-              {/* Uploaded File Preview */}
-              {uploadedFile && (
-                <UploadedFilePreview 
-                  file={uploadedFile} 
-                  onRemove={() => setUploadedFile(null)}
-                  onSend={handleSendFile}
-                />
-              )}
-              
-              <div className="max-w-4xl mx-auto">
-                <div className="flex items-end gap-2 bg-slate-800/50 border border-slate-700/50 rounded-2xl p-2">
-                  {/* File Upload Button */}
-                  <FileUploadButton onFileSelect={handleFileSelect} />
-                  
-                  {/* Voice Input */}
-                  <Button
-                    size="icon"
-                    variant="ghost"
-                    onClick={toggleRecording}
-                    className={`h-9 w-9 ${isRecording ? 'bg-red-500 text-white animate-pulse' : 'text-gray-400 hover:text-amber-400 hover:bg-amber-500/10'}`}
-                    disabled={loading}
-                  >
-                    <Mic className="w-4 h-4" />
-                  </Button>
-                  
-                  {isRecording && (
-                    <span className="text-red-400 text-xs font-mono">{Math.floor(recordingTime / 60)}:{(recordingTime % 60).toString().padStart(2, '0')}</span>
-                  )}
-                  
-                  {/* Text Input */}
-                  <textarea
-                    ref={textareaRef}
-                    value={inputMessage}
-                    onChange={(e) => setInputMessage(e.target.value)}
-                    onKeyPress={handleKeyPress}
-                    placeholder="اكتب رسالتك هنا... أو اضغط على الأزرار أعلاه"
-                    className="flex-1 bg-transparent text-white placeholder-gray-500 resize-none focus:outline-none text-sm py-2 px-2 max-h-32"
-                    rows={1}
-                    disabled={loading || isRecording}
-                    data-testid="chat-input"
-                  />
-                  
-                  {/* Preview Toggle */}
-                  {previewCode && (
-                    <Button
-                      size="icon"
-                      variant="ghost"
-                      onClick={() => setPreviewOpen(!previewOpen)}
-                      className={`h-9 w-9 ${previewOpen ? 'text-green-400 bg-green-500/10' : 'text-gray-400 hover:text-green-400'}`}
-                    >
-                      {previewOpen ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                    </Button>
-                  )}
-                  
-                  {/* Send Button */}
-                  <Button
-                    size="icon"
-                    onClick={sendMessage}
-                    disabled={loading || !inputMessage.trim() || isRecording}
-                    className="h-9 w-9 bg-gradient-to-r from-amber-500 to-yellow-500 hover:from-amber-600 hover:to-yellow-600 text-black disabled:opacity-50"
-                    data-testid="send-btn"
-                  >
-                    {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
-                  </Button>
-                </div>
-                
-                {/* Quick Tips */}
-                <div className="flex items-center justify-center gap-4 mt-2 text-xs text-gray-500">
-                  <span className="flex items-center gap-1">
-                    <Upload className="w-3 h-3" /> رفع الملفات مجاني
-                  </span>
-                  <span className="flex items-center gap-1">
-                    <Share2 className="w-3 h-3" /> تصدير للسوشيال مجاني
-                  </span>
-                </div>
-              </div>
+          {/* Preview Panel */}
+          {previewOpen && (
+            <div className={`${previewFullscreen ? 'fixed inset-0 z-50' : 'w-1/2'}`}>
+              <LivePreviewPanel 
+                code={previewCode} 
+                isOpen={previewOpen} 
+                onClose={() => setPreviewOpen(false)} 
+                onRefresh={() => {
+                  if (previewCode) {
+                    const temp = previewCode;
+                    setPreviewCode('');
+                    setTimeout(() => setPreviewCode(temp), 100);
+                  }
+                }} 
+                isFullscreen={previewFullscreen} 
+                onToggleFullscreen={() => setPreviewFullscreen(!previewFullscreen)}
+                onExportCode={handleExportCode}
+                userCredits={userCredits}
+                onSaveTemplate={handleSaveTemplate}
+                onDeploy={handleDeploy}
+                currentSession={currentSession}
+              />
             </div>
           )}
         </div>
-
-        {/* Live Preview Panel */}
-        {previewOpen && (
-          <div className={`${previewFullscreen ? 'fixed inset-0 z-50' : 'hidden lg:block lg:w-1/2'} border-l border-slate-700/50`}>
-            <LivePreviewPanel
-              code={previewCode}
-              isOpen={previewOpen}
-              onClose={() => setPreviewOpen(false)}
-              onRefresh={() => {
-                if (previewCode) {
-                  const temp = previewCode;
-                  setPreviewCode('');
-                  setTimeout(() => setPreviewCode(temp), 100);
-                }
-              }}
-              isFullscreen={previewFullscreen}
-              onToggleFullscreen={() => setPreviewFullscreen(!previewFullscreen)}
-              onExportCode={handleExportCode}
-              userCredits={userCredits}
-              onSaveTemplate={handleSaveTemplate}
-              onDeploy={handleDeploy}
-              currentSession={currentSession}
-            />
-          </div>
-        )}
       </div>
       
-      {/* Mobile Preview Button */}
-      {previewCode && !previewOpen && (
-        <button
-          onClick={() => setPreviewOpen(true)}
-          className="lg:hidden fixed bottom-24 right-4 z-30 p-3 bg-gradient-to-r from-green-500 to-emerald-500 rounded-full shadow-lg text-white"
-        >
-          <Eye className="w-6 h-6" />
-        </button>
+      {/* Styles */}
+      <style>{`
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        .animate-fadeIn { animation: fadeIn 0.3s ease-out; }
+        @keyframes spin-slow { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+        .animate-spin-slow { animation: spin-slow 2s linear infinite; }
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #334155; border-radius: 3px; }
+      `}</style>
+      
+      {/* Templates Panel */}
+      {showTemplatesPanel && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm">
+          <div className="bg-slate-900 border border-slate-700 rounded-2xl p-6 w-full max-w-4xl mx-4 max-h-[85vh] overflow-hidden flex flex-col animate-fadeIn">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-2xl font-bold text-white flex items-center gap-2">
+                <Layout className="w-7 h-7 text-purple-400" />
+                القوالب الجاهزة
+              </h2>
+              <button onClick={() => setShowTemplatesPanel(false)} className="p-2 rounded-lg hover:bg-slate-800 text-gray-400">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            
+            <div className="flex gap-2 mb-4 overflow-x-auto pb-2">
+              {['الكل', 'landing', 'ecommerce', 'portfolio', 'dashboard', 'game', 'custom'].map(cat => (
+                <button 
+                  key={cat} 
+                  className="px-4 py-2 rounded-full text-sm whitespace-nowrap bg-slate-800 hover:bg-slate-700 text-gray-300 border border-slate-700"
+                >
+                  {cat === 'الكل' ? cat : cat === 'landing' ? 'صفحات هبوط' : cat === 'ecommerce' ? 'متاجر' : cat === 'portfolio' ? 'معارض' : cat === 'dashboard' ? 'لوحات تحكم' : cat === 'game' ? '🎮 ألعاب' : 'مخصص'}
+                </button>
+              ))}
+            </div>
+            
+            <div className="flex-1 overflow-y-auto">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {templates.map(template => (
+                  <div 
+                    key={template.id} 
+                    className="bg-slate-800/50 border border-slate-700 rounded-xl overflow-hidden hover:border-purple-500/50 transition-all group"
+                  >
+                    <div className="h-40 bg-gradient-to-br from-purple-500/20 to-pink-500/20 relative overflow-hidden flex items-center justify-center">
+                      <div className="text-center">
+                        <div className="text-5xl mb-2">
+                          {template.category === 'ecommerce' ? '🛒' : template.category === 'dashboard' ? '📊' : template.category === 'portfolio' ? '👤' : template.category === 'game' ? '🎮' : template.category === 'landing' ? '🌐' : '✨'}
+                        </div>
+                        <div className="text-xs text-gray-400 bg-black/30 px-2 py-1 rounded">
+                          {template.category === 'game' ? (template.id.includes('3d') ? 'Three.js' : 'Phaser.js') : 'Tailwind CSS'}
+                        </div>
+                      </div>
+                      <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                        <button
+                          onClick={() => handleUseTemplate(template.id)}
+                          className="px-4 py-2 bg-purple-600 hover:bg-purple-700 rounded-lg text-white text-sm font-medium"
+                        >
+                          استخدام القالب
+                        </button>
+                      </div>
+                      {template.is_premium && (
+                        <span className="absolute top-2 left-2 px-2 py-1 bg-amber-500 text-black text-xs font-bold rounded-full">Premium</span>
+                      )}
+                    </div>
+                    <div className="p-4">
+                      <h3 className="text-white font-medium mb-1">{template.name}</h3>
+                      <p className="text-gray-400 text-sm mb-2 line-clamp-2">{template.description}</p>
+                      <div className="flex items-center justify-between">
+                        <span className={`text-xs px-2 py-1 rounded-full ${template.cost > 0 ? 'bg-amber-500/20 text-amber-400' : 'bg-green-500/20 text-green-400'}`}>
+                          {template.cost > 0 ? `${template.cost} نقطة` : 'مجاني'}
+                        </span>
+                        {template.uses_count > 0 && (
+                          <span className="text-xs text-gray-500">{template.uses_count} استخدام</span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+              
+              {templates.length === 0 && (
+                <div className="text-center py-12 text-gray-500">
+                  <Layout className="w-16 h-16 mx-auto mb-4 opacity-20" />
+                  <p>لا توجد قوالب متاحة</p>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
       )}
       
-      {/* CSS Animations */}
-      <style jsx global>{`
-        @keyframes fadeIn {
-          from { opacity: 0; transform: translateY(10px); }
-          to { opacity: 1; transform: translateY(0); }
-        }
-        .animate-fadeIn {
-          animation: fadeIn 0.3s ease-out;
-        }
-        @keyframes spin-slow {
-          from { transform: rotate(0deg); }
-          to { transform: rotate(360deg); }
-        }
-        .animate-spin-slow {
-          animation: spin-slow 3s linear infinite;
-        }
-      `}</style>
+      {/* Uploaded File Preview */}
+      {uploadedFile && (
+        <div className="fixed bottom-24 left-1/2 -translate-x-1/2 z-50 w-full max-w-lg">
+          <UploadedFilePreview 
+            file={uploadedFile} 
+            onRemove={() => setUploadedFile(null)} 
+            onSend={handleSendFile}
+          />
+        </div>
+      )}
+      
+      {/* Social Export Modal */}
+      <SocialExportModal
+        isOpen={showSocialExport}
+        onClose={() => { setShowSocialExport(false); setExportAsset(null); }}
+        assetId={exportAsset?.id}
+        assetUrl={exportAsset?.url}
+        assetType={exportAsset?.type}
+      />
     </div>
   );
 };
