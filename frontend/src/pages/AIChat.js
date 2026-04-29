@@ -1825,7 +1825,7 @@ const AIChat = ({ user }) => {
                         gradient: 'from-purple-500/20 to-violet-500/10',
                         accent: '#a855f7',
                         bgImage: 'https://images.unsplash.com/photo-1502691876148-a84978e59af8?auto=format&fit=crop&w=800&q=70',
-                        action: () => createSession('image'),
+                        action: () => (window.location.href = '/studio/image'),
                       },
                       {
                         type: 'video',
@@ -1834,7 +1834,7 @@ const AIChat = ({ user }) => {
                         gradient: 'from-orange-500/20 to-red-500/10',
                         accent: '#f97316',
                         bgImage: 'https://images.unsplash.com/photo-1485846234645-a62644f84728?auto=format&fit=crop&w=800&q=70',
-                        action: () => createSession('video'),
+                        action: () => (window.location.href = '/studio/video'),
                       },
                     ].map(({ type, title, desc, gradient, accent, bgImage, action }) => (
                       <div

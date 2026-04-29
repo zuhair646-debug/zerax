@@ -3048,6 +3048,15 @@ try:
 except Exception as _afe:
     logging.getLogger(__name__).error(f"Failed to register affiliate module: {_afe}", exc_info=True)
 
+# ============== STUDIO (Image/Video deep generation for merchants) ==============
+try:
+    from modules.studio import create_router as create_studio_router
+    _studio_router = create_studio_router(db, get_current_user)
+    app.include_router(_studio_router)  # router already has /api prefix
+    logging.getLogger(__name__).info("Studio module registered")
+except Exception as _se:
+    logging.getLogger(__name__).error(f"Failed to register studio module: {_se}", exc_info=True)
+
 # ============== VISUAL DESIGNER APIS ==============
 class DesignElement(BaseModel):
     id: str

@@ -40,6 +40,9 @@ import DriverDashboardPage from '@/pages/driver/DriverDashboard';
 import SubscriptionGate from '@/pages/billing/SubscriptionGate';
 import BillingSuccess from '@/pages/billing/BillingSuccess';
 import BillingCancel from '@/pages/billing/BillingCancel';
+import StudioHub from '@/pages/studio/StudioHub';
+import StudioImage from '@/pages/studio/StudioImage';
+import StudioVideo from '@/pages/studio/StudioVideo';
 import '@/App.css';
 
 function App() {
@@ -122,6 +125,9 @@ function App() {
           <Route path="/operator" element={<ProtectedRoute><Operator user={user} /></ProtectedRoute>} />
           <Route path="/affiliate" element={<ProtectedRoute><Affiliate user={user} /></ProtectedRoute>} />
           <Route path="/admin/affiliates" element={<ProtectedRoute adminOnly><AdminAffiliates /></ProtectedRoute>} />
+          <Route path="/studio" element={<ProtectedRoute><StudioHub user={user} /></ProtectedRoute>} />
+          <Route path="/studio/image" element={<ProtectedRoute><StudioImage user={user} /></ProtectedRoute>} />
+          <Route path="/studio/video" element={<ProtectedRoute><StudioVideo user={user} /></ProtectedRoute>} />
         </Routes>
       </BrowserRouter>
       <Toaster position="top-center" richColors />
