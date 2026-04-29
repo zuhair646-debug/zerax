@@ -180,6 +180,7 @@ async def delete_session(
     
     return {"message": "Session archived"}
 
+
 @router.get("/sessions/{session_id}/assets")
 async def get_session_assets(
     session_id: str,
@@ -393,6 +394,7 @@ async def delete_deployment(
         raise HTTPException(status_code=404, detail="Deployment not found")
     
     return {"message": "تم حذف المشروع"}
+
 
 # ============== Serve Deployed Sites ==============
 from fastapi.responses import HTMLResponse, Response

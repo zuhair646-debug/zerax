@@ -4,15 +4,16 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { useNavigate } from 'react-router-dom';
 import { Sparkles, Zap, Shield, Globe, Image, Video, Code, ArrowLeft, CheckCircle, Gamepad2 } from 'lucide-react';
+import SiteBannerStories from '@/components/SiteBannerStories';
 
 const LandingPage = ({ user }) => {
   const navigate = useNavigate();
 
   const services = [
-    { icon: <Globe className="w-10 h-10" />, title: 'إنشاء المواقع', desc: 'مواقع احترافية مخصصة بالذكاء الاصطناعي', color: 'from-emerald-500 to-teal-500' },
-    { icon: <Image className="w-10 h-10" />, title: 'توليد الصور', desc: 'صور إبداعية بتقنية GPT Image 1', color: 'from-amber-500 to-yellow-500' },
-    { icon: <Video className="w-10 h-10" />, title: 'إنشاء الفيديو', desc: 'فيديوهات سينمائية بـ Sora 2', color: 'from-orange-500 to-red-500' },
-    { icon: <Gamepad2 className="w-10 h-10" />, title: 'تصميم الألعاب', desc: 'ألعاب تفاعلية بـ Babylon.js', color: 'from-cyan-500 to-blue-500' },
+    { icon: <Globe className="w-10 h-10" />, title: 'إنشاء المواقع', desc: 'مواقع احترافية مخصصة بالذكاء الاصطناعي', color: 'from-emerald-500 to-teal-500', route: '/websites', status: 'live' },
+    { icon: <Image className="w-10 h-10" />, title: 'توليد الصور', desc: 'صور إبداعية بتقنية GPT Image 1', color: 'from-amber-500 to-yellow-500', status: 'soon' },
+    { icon: <Video className="w-10 h-10" />, title: 'إنشاء الفيديو', desc: 'فيديوهات سينمائية بـ Sora 2', color: 'from-orange-500 to-red-500', status: 'soon' },
+    { icon: <Gamepad2 className="w-10 h-10" />, title: 'تصميم الألعاب', desc: 'ألعاب تفاعلية بـ Babylon.js', color: 'from-cyan-500 to-blue-500', status: 'soon' },
   ];
 
   const features = [
@@ -30,9 +31,14 @@ const LandingPage = ({ user }) => {
   return (
     <div className="min-h-screen bg-[#0a0a12]" data-testid="landing-page">
       <Navbar user={user} transparent />
-      
+
+      {/* Rotating banner + stories at the very top */}
+      <div className="pt-16">
+        <SiteBannerStories placement="outside" />
+      </div>
+
       {/* Hero Section */}
-      <section className="relative pt-32 pb-20 overflow-hidden">
+      <section className="relative pt-20 pb-20 overflow-hidden">
         {/* Background Effects */}
         <div className="absolute inset-0 bg-gradient-to-br from-amber-600/10 via-yellow-600/5 to-transparent"></div>
         <div className="absolute top-20 right-10 w-72 h-72 bg-amber-500/20 rounded-full blur-3xl"></div>
@@ -54,12 +60,12 @@ const LandingPage = ({ user }) => {
             <div className="flex flex-col sm:flex-row gap-4 justify-center">
               <Button 
                 size="lg" 
-                onClick={() => navigate(user ? '/chat' : '/register')}
+                onClick={() => navigate(user ? '/websites' : '/demo')}
                 data-testid="hero-cta-btn"
                 className="h-14 px-10 text-lg bg-gradient-to-r from-amber-500 to-yellow-500 hover:from-amber-600 hover:to-yellow-600 text-black font-semibold shadow-lg shadow-amber-500/25"
               >
                 <Sparkles className="w-5 h-5 me-2" />
-                {user ? 'الشات الذكي' : 'ابدأ مجاناً'}
+                {user ? 'استوديو المواقع' : '⚡ جرّب 60 ثانية مجاناً'}
               </Button>
               <Button 
                 size="lg" 
@@ -71,6 +77,11 @@ const LandingPage = ({ user }) => {
                 عرض الأسعار
               </Button>
             </div>
+            {!user && (
+              <p className="text-xs text-amber-300/70 mt-4 text-center" data-testid="demo-hint">
+                ✨ بدون تسجيل · بدون بطاقة ائتمان · شاهد موقعك يُولد لحظياً
+              </p>
+            )}
           </div>
         </div>
       </section>
@@ -86,17 +97,38 @@ const LandingPage = ({ user }) => {
           </div>
           
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-            {services.map((service, idx) => (
-              <Card key={idx} className="bg-slate-800/30 border-slate-700/50 hover:border-amber-500/30 transition-all group cursor-pointer" data-testid={`service-card-${idx}`}>
-                <CardContent className="p-6 text-center">
-                  <div className={`w-20 h-20 mx-auto mb-6 rounded-2xl bg-gradient-to-br ${service.color} flex items-center justify-center text-white group-hover:scale-110 transition-transform shadow-lg`}>
-                    {service.icon}
-                  </div>
-                  <h3 className="text-xl font-semibold text-white mb-2">{service.title}</h3>
-                  <p className="text-gray-400">{service.desc}</p>
-                </CardContent>
-              </Card>
-            ))}
+            {services.map((service, idx) => {
+              const isLive = service.status === 'live';
+              return (
+                <Card
+                  key={idx}
+                  onClick={() => { if (isLive && service.route) navigate(user ? service.route : '/register'); }}
+                  className={`bg-slate-800/30 border-slate-700/50 transition-all group relative ${isLive ? 'hover:border-amber-500/50 cursor-pointer hover:-translate-y-1' : 'opacity-70 cursor-not-allowed'}`}
+                  data-testid={`service-card-${idx}`}
+                >
+                  {!isLive && (
+                    <div className="absolute top-3 left-3 z-10 px-2.5 py-1 rounded-full bg-slate-900/90 border border-amber-500/40 text-amber-400 text-[10px] font-bold flex items-center gap-1">
+                      🔒 قريباً
+                    </div>
+                  )}
+                  {isLive && (
+                    <div className="absolute top-3 left-3 z-10 px-2.5 py-1 rounded-full bg-emerald-500/90 text-white text-[10px] font-bold flex items-center gap-1 animate-pulse">
+                      ✨ مفتوح
+                    </div>
+                  )}
+                  <CardContent className="p-6 text-center">
+                    <div className={`w-20 h-20 mx-auto mb-6 rounded-2xl bg-gradient-to-br ${service.color} flex items-center justify-center text-white ${isLive ? 'group-hover:scale-110' : 'grayscale'} transition-transform shadow-lg`}>
+                      {service.icon}
+                    </div>
+                    <h3 className="text-xl font-semibold text-white mb-2">{service.title}</h3>
+                    <p className="text-gray-400">{service.desc}</p>
+                    {isLive && (
+                      <div className="mt-4 text-emerald-400 text-sm font-bold">ابدأ الآن ←</div>
+                    )}
+                  </CardContent>
+                </Card>
+              );
+            })}
           </div>
         </div>
       </section>
