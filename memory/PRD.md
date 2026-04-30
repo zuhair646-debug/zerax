@@ -15,6 +15,41 @@
 - 🔒 **Images**: قريباً
 
 
+### 🆕 Apr 30, 2026 — 3D VRM INFRASTRUCTURE + STATIONARY PNG + AUTO-OPEN (P0 — INFRA READY, AWAITING VRM ASSETS ⏳)
+
+المستخدم طلب:
+1. شخصيات ثلاثية الأبعاد حقيقية أنيمي (مثل Sora فيديوهات)
+2. شخصية بالغة جذابة (مو طفلة)، تغيّر ملابس كل فترة
+3. AI Director يبهر بسيناريوهات جديدة
+4. ثابتات في مكانها (لا مشي / اختفاء)
+5. تفاعلية 100% من أول ما يفتح الموقع (لا زر للمايكروفون)
+
+#### ما تم بناءه (جاهز للتشغيل):
+- **`/app/frontend/src/components/Avatar3D.js`** (جديد): VRM renderer نقي على Three.js (بدون @react-three/fiber بسبب تعارض React 19)
+  - تنفّس، إمالة رأس، رمش، lip-sync للكلام
+  - Auto-fit camera على bounding box للنموذج
+  - يدعم tint للتوحيد البصري
+- **`/app/frontend/src/components/CharacterSceneEngine3D.js`** (جديد): واجهة 3D كاملة
+  - Suspense + PNG fallback للتحميل
+- **`/app/frontend/src/components/CharacterSceneEngine.js`** (v5): flag `USE_3D` يتحكم
+  - حالياً `USE_3D=false` → يعرض PNG ثابتة (لا مشي، لا اختفاء)
+- **حزم مثبّتة**: `three@0.184` + `@pixiv/three-vrm@3.5` + `three-stdlib@2.36`
+- **مجلد**: `/app/frontend/public/avatars-3d/` فيه ملف sample1.vrm (VRM1 Constraint Twist Sample - نموذج تقني ليس جذاب)
+
+#### ما ينقص (المستخدم لازم يوفّره):
+- ملفات VRM حقيقية لشخصيات بالغات جذابات (من VRoid Hub أو Booth.pm)
+- save as: `/app/frontend/public/avatars-3d/zara.vrm` & `layla.vrm`
+- ثم set `USE_3D = true` في CharacterSceneEngine.js
+
+#### Auto-open VoiceStage
+- **`ZitexDuoLauncher.js` v4**: أول زيارة → فتح تلقائي بعد 2s
+- cooldown 10 دقائق (localStorage `zitex_vs_dismissed_at`)
+- يكمل الـ auto-listen + wake-word السابق
+
+#### Push
+- Commit: `07e8bd2` → GitHub main → Vercel auto-deploy
+
+
 ### 🆕 Apr 30, 2026 — SORA 2 LIVING AVATARS + WAKE WORD (P0 — COMPLETE ✅)
 
 طلبات المستخدم:
