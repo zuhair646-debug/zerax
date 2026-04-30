@@ -15,6 +15,20 @@
 - 🔒 **Images**: قريباً
 
 
+### 🆕 Apr 30, 2026 — Hands-Free VAD Auto-Listen (P0 — COMPLETE ✅)
+طلب المستخدم: يبغى الميكروفون يفتح لحاله بدون زر.
+- **`/app/frontend/src/components/VoiceStage.js`**:
+  - أضيف `startListeningRef` و `stageRef` لتفادي stale closures داخل audio callbacks.
+  - `kickAutoListen()` helper يستدعى تلقائياً بعد:
+    1. انتهاء صوت الترحيب (`autoGreet` → `audio.onended`).
+    2. انتهاء رد الـ AI (`finishAndMaybeNavigate` إذا ما كان فيه navigation).
+    3. انتهاء banter.
+  - `rec.onerror(no-speech)` و `rec.onend` يعيدون تشغيل الميكروفون تلقائياً طالما `autoListenRef.current === true` والـstage ليس speaking/banter/thinking.
+  - عند تغيير `open=false` → إيقاف `autoListenRef` + إغلاق `recRef.current`.
+  - Mic button hint محدّث: "اضغط للبدء أو استنى الميكروفون يفتح" / "🎙️ أسمعك الحين — تكلّم".
+- Pushed to GitHub: `39b8274` → Vercel redeploys تلقائياً.
+
+
 ### 🆕 Apr 30, 2026 — VOICE STAGE v2: Banter + Lip-Sync + Anon Trial + Companion Mode (P0 — COMPLETE ✅)
 
 طلب المستخدم: 4 إضافات دفعة واحدة:
