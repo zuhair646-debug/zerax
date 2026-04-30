@@ -85,6 +85,7 @@ export default function Avatar3D({
         vrm.scene.rotation.y = 0; // VRM1 sample already faces +Z
         vrm.scene.position.set(0, 0, 0);
         scene.add(vrm.scene);
+
         vrmRef.current = vrm;
         setLoaded(true);
         if (onReady) onReady(vrm);
@@ -115,10 +116,14 @@ export default function Avatar3D({
           head.rotation.x = Math.sin(t * 0.7) * 0.05;
           head.rotation.y = Math.sin(t * 0.5) * 0.08;
         }
+        // Don't override arm rotation — let VRM rest pose be as designed
+        // (Phase 2 will add AI Director to set meaningful rotations per scene)
         const leftArm = vrm.humanoid?.getNormalizedBoneNode('leftUpperArm');
         const rightArm = vrm.humanoid?.getNormalizedBoneNode('rightUpperArm');
-        if (leftArm)  leftArm.rotation.z = (Math.PI / 2 - 0.15) + Math.sin(t * 0.9) * 0.03;
-        if (rightArm) rightArm.rotation.z = (-Math.PI / 2 + 0.15) + Math.sin(t * 0.9 + 0.5) * 0.03;
+        // T-pose → arms by sides: rotate ~70° around z-axis
+        // VRM normalized convention: left arm needs negative z, right arm positive z
+        if (leftArm)  leftArm.rotation.z = -1.25 + Math.sin(t * 0.9) * 0.025;
+        if (rightArm) rightArm.rotation.z = 1.25 - Math.sin(t * 0.9 + 0.5) * 0.025;
         if (vrm.expressionManager) {
           // Blink every ~4s
           const blinkPhase = (t % 4) / 4;
