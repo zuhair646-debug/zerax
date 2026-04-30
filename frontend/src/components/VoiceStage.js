@@ -71,6 +71,8 @@ export default function VoiceStage({ open, onClose, initialCharacter = 'zara', m
   const lipSyncIntervalRef = useRef(null);
   const greetedRef = useRef(false);
   const autoListenRef = useRef(false);
+  const startListeningRef = useRef(null);
+  const stageRef = useRef('intro');
 
   const isAuthed = !!(typeof window !== 'undefined' && localStorage.getItem('token'));
   const anonId = !isAuthed && mode === 'main' ? getAnonId() : null;
@@ -82,6 +84,8 @@ export default function VoiceStage({ open, onClose, initialCharacter = 'zara', m
       setLaylaState('hidden');
       setStage('intro');
       greetedRef.current = false;
+      autoListenRef.current = false;
+      if (recRef.current) try { recRef.current.stop(); } catch (_) {}
       return;
     }
     const t1 = setTimeout(() => setZaraState('entering'), 100);
@@ -126,6 +130,7 @@ export default function VoiceStage({ open, onClose, initialCharacter = 'zara', m
 
   // ===== Character state mapping =====
   useEffect(() => {
+    stageRef.current = stage;
     if (stage === 'idle') {
       setZaraState('idle'); setLaylaState('idle');
     } else if (stage === 'listening') {
@@ -173,17 +178,19 @@ export default function VoiceStage({ open, onClose, initialCharacter = 'zara', m
         audio.onended = () => {
           stopLipSync();
           setStage('idle');
-          setSubtitle('كلّمني... قول وش تبغى');
+          setSubtitle('كلّمني... أنا أسمعك الحين');
+          kickAutoListen();
         };
-        audio.onerror = () => { stopLipSync(); setStage('idle'); };
+        audio.onerror = () => { stopLipSync(); setStage('idle'); kickAutoListen(); };
         audioRef.current = audio;
-        audio.play().catch(() => { stopLipSync(); setStage('idle'); });
+        audio.play().catch(() => { stopLipSync(); setStage('idle'); kickAutoListen(); });
       } else {
-        setTimeout(() => { setStage('idle'); setSubtitle('كلّمني... قول وش تبغى'); }, 3000);
+        setTimeout(() => { setStage('idle'); setSubtitle('كلّمني... أنا أسمعك'); kickAutoListen(); }, 3000);
       }
     } catch (e) {
       setStage('idle');
       setSubtitle(`هلا ${userName}! وش تبغى نسوي؟`);
+      kickAutoListen();
     }
   };
 
@@ -218,13 +225,14 @@ export default function VoiceStage({ open, onClose, initialCharacter = 'zara', m
         if (e.error === 'no-speech') {
           // Auto-restart after a moment
           setTimeout(() => {
-            if (recRef.current === rec && stage !== 'speaking' && stage !== 'banter') {
+            if (recRef.current === rec && stageRef.current !== 'speaking' && stageRef.current !== 'banter' && autoListenRef.current) {
               try { rec.start(); } catch (_) {}
             }
           }, 800);
         } else if (e.error === 'not-allowed') {
           toast.error('فعّلي إذن المايكروفون عشان أسمعك');
           setListening(false); setStage('idle');
+          autoListenRef.current = false;
         } else if (e.error !== 'aborted') {
           setListening(false); setStage('idle');
         }
@@ -233,9 +241,9 @@ export default function VoiceStage({ open, onClose, initialCharacter = 'zara', m
         // Auto-restart the recognition loop while we're still "listening" mode
         // and the AI isn't currently talking.
         setListening(false);
-        if (autoListenRef.current && stage !== 'speaking' && stage !== 'banter' && stage !== 'thinking') {
+        if (autoListenRef.current && stageRef.current !== 'speaking' && stageRef.current !== 'banter' && stageRef.current !== 'thinking') {
           setTimeout(() => {
-            if (autoListenRef.current) {
+            if (autoListenRef.current && recRef.current === rec) {
               try { rec.start(); } catch (_) {}
             }
           }, 300);
@@ -248,7 +256,22 @@ export default function VoiceStage({ open, onClose, initialCharacter = 'zara', m
       toast.error('فشل المايك');
       setListening(false);
     }
-  }, [listening, anonUsage, onSignupNeeded, stage]);
+  }, [listening, anonUsage, onSignupNeeded]);
+
+  // Keep a stable ref to startListening so audio callbacks can trigger VAD
+  useEffect(() => { startListeningRef.current = startListening; }, [startListening]);
+
+  // Helper: kick off auto-listen after AI finishes speaking
+  const kickAutoListen = useCallback(() => {
+    // If user muted, or name prompt is showing, or we're navigating away, skip
+    if (muted || showNamePrompt) return;
+    if (anonUsage && anonUsage.blocked) return;
+    setTimeout(() => {
+      if (startListeningRef.current && stageRef.current === 'idle') {
+        startListeningRef.current();
+      }
+    }, 400);
+  }, [muted, showNamePrompt, anonUsage]);
 
   const stopListening = useCallback(() => {
     autoListenRef.current = false;
@@ -307,6 +330,7 @@ export default function VoiceStage({ open, onClose, initialCharacter = 'zara', m
         } else {
           setStage('idle');
           setSubtitle('كملي... كلّمني تاني');
+          kickAutoListen();
         }
       };
 
@@ -474,7 +498,7 @@ export default function VoiceStage({ open, onClose, initialCharacter = 'zara', m
             : <Mic className="w-10 h-10 text-black" />}
         </button>
         <div className="text-[11px] text-white/60 font-bold">
-          {listening ? 'تكلّم الآن' : stage === 'thinking' ? 'تفكر...' : stage === 'speaking' ? 'تتكلم معاك' : stage === 'banter' ? 'تتدخل' : 'اضغط وكلّم'}
+          {listening ? '🎙️ أسمعك الحين — تكلّم' : stage === 'thinking' ? 'تفكر...' : stage === 'speaking' ? 'تتكلم معاك' : stage === 'banter' ? 'تتدخل' : 'اضغط للبدء أو استنى الميكروفون يفتح'}
         </div>
       </div>
 
