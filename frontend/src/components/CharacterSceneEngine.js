@@ -12,7 +12,7 @@ import React, { lazy, Suspense } from 'react';
 
 const Lazy3D = lazy(() => import('./CharacterSceneEngine3D'));
 
-const USE_3D = false; // switch to true once you upload proper VRM character files
+const USE_3D = true; // ✅ ENABLED — user uploaded Z.vrm as zara.vrm + layla.vrm
 
 export default function CharacterSceneEngine({ onLaunchVoice }) {
   if (USE_3D) {
