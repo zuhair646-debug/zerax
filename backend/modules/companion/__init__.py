@@ -326,9 +326,9 @@ def create_companion_router(db, get_current_user) -> APIRouter:
             api_key = os.environ.get("EMERGENT_LLM_KEY", "").strip()
             if api_key:
                 tts = OpenAITextToSpeech(api_key=api_key)
-                voice = "shimmer" if primary == "zara" else "nova"
+                voice = "coral" if primary == "zara" else "sage"
                 audio_b64 = await tts.generate_speech_base64(
-                    text=reply[:4000], model="tts-1", voice=voice
+                    text=reply[:4000], model="tts-1-hd", voice=voice, speed=0.92,
                 )
                 if audio_b64:
                     audio_url = f"data:audio/mp3;base64,{audio_b64}"

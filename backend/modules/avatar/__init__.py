@@ -194,7 +194,7 @@ def create_avatar_router(db, get_current_user) -> APIRouter:
         response = await chat.send_message(UserMessage(text=user_msg))
         return response
 
-    # ===== Helper: TTS via OpenAI (HD quality) =====
+    # ===== Helper: TTS via OpenAI (HD quality + Arabic-optimized) =====
     async def _tts(text: str, voice_id: Optional[str] = None) -> Optional[str]:
         try:
             from emergentintegrations.llm.openai import OpenAITextToSpeech
@@ -202,17 +202,45 @@ def create_avatar_router(db, get_current_user) -> APIRouter:
             if not api_key:
                 return None
             tts = OpenAITextToSpeech(api_key=api_key)
-            voice = voice_id or "nova"
-            # Clean text for natural speech: remove emojis & double newlines
-            clean = text[:4000]
-            # Strip common emoji ranges (TTS reads them weirdly)
+            voice = voice_id or "coral"
+
+            # Deep text cleaning for better Arabic pronunciation
             import re as _re
-            clean = _re.sub(r'[\U0001F300-\U0001FAFF\U00002700-\U000027BF\U0001F000-\U0001F2FF]+', '', clean)
+            clean = text[:4000]
+            # Remove emojis (TTS reads them poorly)
+            clean = _re.sub(r'[\U0001F000-\U0001FFFF\U00002600-\U000027BF\U0001F300-\U0001F9FF\u2600-\u26FF\u2700-\u27BF]+', '', clean)
+            # Remove Arabic tatweel (stretches pronunciation oddly)
+            clean = clean.replace('ـ', '')
+            # Fix common speech flow issues
+            clean = clean.replace('!', '.').replace('؟', '.').replace('?', '.')
+            # Expand common Saudi colloquial abbreviations to proper pronunciation
+            replacements = {
+                'ان شاء الله': 'إن شاء الله',
+                'ماشاء الله': 'ما شاء الله',
+                'ولله': 'والله',
+                'وشو': 'وش هو',
+                'شلونك': 'شلون حالك',
+                'مدري': 'ما أدري',
+                'AI': 'إيه آي',
+                'OK': 'أوكي',
+                'ok': 'أوكي',
+            }
+            for k, v in replacements.items():
+                clean = clean.replace(k, v)
+            # Collapse whitespace
             clean = _re.sub(r'\s+', ' ', clean).strip()
+            # Remove duplicate punctuation
+            clean = _re.sub(r'\.{2,}', '.', clean)
+            clean = _re.sub(r'،{2,}', '،', clean)
+
+            if not clean:
+                return None
+
             audio_b64 = await tts.generate_speech_base64(
                 text=clean,
-                model="tts-1-hd",  # HD model — clearer Arabic pronunciation
+                model="tts-1-hd",
                 voice=voice,
+                speed=0.92,  # Slightly slower — much clearer Arabic articulation
             )
             if not audio_b64:
                 return None
@@ -342,8 +370,8 @@ def create_avatar_router(db, get_current_user) -> APIRouter:
 
         audio_url = None
         if payload.want_voice:
-            # Primary voice: Zara = shimmer (playful), Layla = nova (elegant)
-            primary_voice = "shimmer" if primary == "zara" else "nova"
+            # Voice assignments optimized for Arabic: coral (warm friendly female) + sage (wise measured female)
+            primary_voice = "coral" if primary == "zara" else "sage"
             audio_url = await _tts(text, primary_voice)
 
         # Dual banter — secondary character adds a short reaction
@@ -355,7 +383,7 @@ def create_avatar_router(db, get_current_user) -> APIRouter:
                 banter_ctx = f"ليلى قالت: '{text}'" if secondary == "zara" else f"زارا قالت: '{text}'"
                 banter_text = await _chat_completion(banter_sys, banter_ctx, f"{sid}-banter")
                 if banter_text and payload.want_voice:
-                    sec_voice = "shimmer" if secondary == "zara" else "nova"
+                    sec_voice = "coral" if secondary == "zara" else "sage"
                     banter_audio = await _tts(banter_text, sec_voice)
             except Exception as e:
                 logger.warning(f"[AVATAR] Banter generation failed: {e}")
@@ -437,7 +465,7 @@ def create_avatar_router(db, get_current_user) -> APIRouter:
 
         audio_url = None
         if want_voice:
-            voice = "shimmer" if primary == "zara" else "nova"
+            voice = "coral" if primary == "zara" else "sage"
             audio_url = await _tts(text, voice)
         return {"reply": text, "audio_url": audio_url, "primary": primary}
 
