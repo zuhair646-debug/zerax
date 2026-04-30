@@ -44,44 +44,31 @@ AVAILABLE_VOICES = [
 
 # ===== System messages =====
 # Saudi dialect — natural, friendly, warm
-ZITEX_AVATAR_SYSTEM = """أنت إحدى الشخصيتين (زارا أو ليلى) — مساعدتا منصة Zitex الذكية.
+ZITEX_AVATAR_SYSTEM = """أنت زارا أو ليلى — مساعدة صوتية على منصة Zitex.
 
-⚠️ مهم جداً: تتكلمين باللهجة السعودية الطبيعية (خليجية حجازية/نجدية) — مو الفصحى.
-
-أمثلة على كلامك الصحيح:
-- "هلا والله! وش تبغى اليوم؟" بدلاً من "مرحباً، ماذا تريد؟"
-- "يلا نسوّيها" / "تمام عليك" / "ما عليك زود"
-- "أنا معاك خطوة خطوة" / "ابشر" / "على راسي"
-- "يعطيك العافية" / "الله يسعدك" / "أبدييع"
-- "خلنا نبدأ" / "احكي لي شلون تبغاها"
-- استخدمي "تبي" بدل "تريد"، "ابغى" بدل "أريد"، "شلون" بدل "كيف"، "وش" بدل "ماذا"
+قواعد الكلام (مهم جداً):
+- لهجة سعودية طبيعية فقط: "هلا" "وش" "ابغى" "تبي" "شلون" "أبشر" "تمام"
+- ردود قصيرة جداً جداً: 1-2 جملة فقط (الصوت يسمع، فلا تطول)
+- لا emojis في الرد (الصوت يقرأها بشكل غريب)
+- اسم المستخدم لو موجود استخدميه مباشرة
+- بدون مقدمات ولا تكرار
 
 شخصيتك:
-- زارا: ذهبية الشعر، ودودة، حيوية، تضحك بسهولة، emoji كثير (✨🎨💫🔥)
-  أسلوبها: "هلا حبيبي 💫 وش عاجبني فيك اليوم؟"، "يا سلام! قولي قولي..."
-- ليلى: سوداء الشعر بذهبي، هادئة أنيقة، ذكية، مستشارة، emoji قليل (🖤✨)
-  أسلوبها: "أهلاً... جاني شي حلو اليوم؟"، "أنا أسمعك، كمّل"
+- زارا: مرحة حماسية ("ابشر يا قلبي!" "يا سلام!")
+- ليلى: هادئة أنيقة ("تمام معاك" "أنا أسمعك")
 
-قد تظهرين مع رفيقتك — اذكريها بشكل طبيعي ("بسأل ليلى معاي"، "زارا راح تعجبها الفكرة").
+خدمات Zitex (لو سأل):
+- مواقع جاهزة (25 تخصص)
+- توليد صور AI (5 نقاط)
+- توليد فيديو AI (4-12 نقطة/ثانية)
+- مساعدة ذكية لمتجرك
 
-الخدمات الشغّالة على Zitex:
-- مواقع جاهزة (25 تخصص: مطاعم، كافيهات، صالونات، عقارات، أسهم...)
-- إنشاء صور AI (5 نقاط/صورة)
-- إنشاء فيديوهات AI (Sora 2، 4-12 نقطة/ثانية)
-- قريباً: تطبيقات موبايل، ألعاب
+Intent routing — لو طلب شي محدد، فهمي القصد:
+- يبغى صورة → اكتشفي الموضوع وردي: "تمام، خلنا نسوي صورة [الموضوع]. أنقلك للاستوديو الآن"
+- يبغى فيديو → "تمام، فيديو [النوع]. أحوّلك للويزارد"
+- يبغى موقع → "ممتاز، موقع [النوع]. أوديك لصفحة المواقع"
 
-أسلوب المحادثة:
-- ردود قصيرة جداً (1-3 جمل) — ما تطوّلين
-- لو العميل طلب شي مبهم ("ابغى صورة") اسألي بذكاء:
-  * وش موضوعها؟ لمين؟ شلون جوّها؟
-- وجّهي العميل للصفحة المناسبة بشكل طبيعي:
-  * صور → /chat/image
-  * فيديو → /chat/video
-  * موقع → /websites
-- شجّعي بلطف مو بإلحاح.
-- استخدمي "دقيقة" أو "ثانية واحدة" بدل "لحظة من فضلك".
-
-اللغة: سعودي فقط — ممنوع أي كلمة فصحى ثقيلة. كلامك مثل ما يتكلم البنات في تويتر والسناب.
+اللهجة: سعودي خفيف فقط — لا فصحى ثقيلة.
 """
 
 
@@ -131,9 +118,11 @@ class AvatarChatIn(BaseModel):
     message: str = Field(..., min_length=1, max_length=500)
     session_id: Optional[str] = None
     want_voice: bool = True
-    primary: Optional[str] = "zara"  # 'zara' | 'layla'
-    anon_id: Optional[str] = None    # for unauthenticated trial counter
-    dual_banter: bool = True         # include a short secondary-character reply
+    primary: Optional[str] = "zara"
+    anon_id: Optional[str] = None
+    dual_banter: bool = True
+    user_name: Optional[str] = None  # for personalization
+    detect_intent: bool = True       # extract intent for auto-routing
 
 
 class StartTrialIn(BaseModel):
@@ -205,7 +194,7 @@ def create_avatar_router(db, get_current_user) -> APIRouter:
         response = await chat.send_message(UserMessage(text=user_msg))
         return response
 
-    # ===== Helper: TTS via OpenAI =====
+    # ===== Helper: TTS via OpenAI (HD quality) =====
     async def _tts(text: str, voice_id: Optional[str] = None) -> Optional[str]:
         try:
             from emergentintegrations.llm.openai import OpenAITextToSpeech
@@ -214,9 +203,15 @@ def create_avatar_router(db, get_current_user) -> APIRouter:
                 return None
             tts = OpenAITextToSpeech(api_key=api_key)
             voice = voice_id or "nova"
+            # Clean text for natural speech: remove emojis & double newlines
+            clean = text[:4000]
+            # Strip common emoji ranges (TTS reads them weirdly)
+            import re as _re
+            clean = _re.sub(r'[\U0001F300-\U0001FAFF\U00002700-\U000027BF\U0001F000-\U0001F2FF]+', '', clean)
+            clean = _re.sub(r'\s+', ' ', clean).strip()
             audio_b64 = await tts.generate_speech_base64(
-                text=text[:4000],
-                model="tts-1",
+                text=clean,
+                model="tts-1-hd",  # HD model — clearer Arabic pronunciation
                 voice=voice,
             )
             if not audio_b64:
@@ -271,6 +266,56 @@ def create_avatar_router(db, get_current_user) -> APIRouter:
             upsert=True,
         )
 
+    def _detect_intent_simple(message: str) -> Dict[str, Any]:
+        """Fast keyword-based intent detection (no LLM call needed)."""
+        m = (message or "").lower()
+        # Image keywords
+        img_kw = ["صورة", "صور", "تصميم صورة", "اعملي صورة", "ابغى صورة", "ابي صورة", "image"]
+        vid_kw = ["فيديو", "فيديوهات", "كليب", "video", "اعملي فيديو"]
+        site_kw = ["موقع", "ستور", "متجر", "تطبيق", "website", "site"]
+        avatar_kw = ["مساعد", "مساعدة", "ذكاء", "بوت", "avatar"]
+
+        intent = None
+        if any(k in m for k in img_kw):
+            intent = "image"
+        elif any(k in m for k in vid_kw):
+            intent = "video"
+        elif any(k in m for k in site_kw):
+            intent = "site"
+        elif any(k in m for k in avatar_kw):
+            intent = "avatar"
+
+        if not intent:
+            return {"intent": None, "subject": None, "route": None}
+
+        # Extract subject (everything after the keyword + clean it)
+        subject = message
+        # Remove common prefixes
+        for prefix in ["ابغى ", "أبغى ", "ابي ", "أبي ", "اعملي ", "اعمل لي ", "سويلي ", "سوي لي ", "تقدري ", "ممكن "]:
+            if subject.startswith(prefix):
+                subject = subject[len(prefix):]
+                break
+        # Remove the keyword itself + connective words
+        for kw in img_kw + vid_kw + site_kw + avatar_kw:
+            if subject.lower().startswith(kw):
+                subject = subject[len(kw):].strip()
+                # Strip "ل" "عن" "من" prefixes
+                for c in ["لـ", "ل ", "عن ", "حق ", "للـ"]:
+                    if subject.startswith(c):
+                        subject = subject[len(c):]
+                        break
+                break
+
+        subject = subject.strip(" ،,.!؟?")
+        # Strip leading "لـ" or "ل " preposition that often remains
+        for c in ["لـ", "ل ", "عن ", "حق ", "للـ", "ل"]:
+            if subject.startswith(c):
+                subject = subject[len(c):].lstrip(" ـ")
+                break
+
+        routes = {"image": "/chat/image", "video": "/chat/video", "site": "/websites", "avatar": "/dashboard/avatar"}
+        return {"intent": intent, "subject": subject or None, "route": routes.get(intent)}
+
     # ===== ZITEX MAIN AVATAR (public, no auth) =====
     @router.post("/avatar/chat")
     async def zitex_avatar_chat(payload: AvatarChatIn):
@@ -284,10 +329,16 @@ def create_avatar_router(db, get_current_user) -> APIRouter:
             raise HTTPException(403, f"انتهت المحادثات المجانية ({ANON_FREE_LIMIT}). سجّل حسابك لتكمل ✨")
 
         try:
-            text = await _chat_completion(ZITEX_AVATAR_SYSTEM, payload.message, sid)
+            # Build personalized message — inject name into context
+            name_prefix = f"اسم المستخدم: {payload.user_name}\n\n" if payload.user_name else ""
+            user_msg = name_prefix + payload.message
+            text = await _chat_completion(ZITEX_AVATAR_SYSTEM, user_msg, sid)
         except Exception as e:
             logger.exception(f"[AVATAR] Chat failed: {e}")
             raise HTTPException(500, "فشل المساعد. حاول مرة ثانية.")
+
+        # Intent detection — fast, no LLM call
+        intent_data = _detect_intent_simple(payload.message) if payload.detect_intent else {"intent": None}
 
         audio_url = None
         if payload.want_voice:
@@ -338,7 +389,57 @@ def create_avatar_router(db, get_current_user) -> APIRouter:
                 "from_char": secondary,
             } if banter_text else None,
             "anon_usage": usage,
+            "intent": intent_data,
         }
+
+    # ===== ZITEX GREETING (auto-greet on entry — fast Haiku-based) =====
+    @router.post("/avatar/greet")
+    async def zitex_greet(payload: Dict[str, Any]):
+        """Quick personalized greeting on app entry. Uses Haiku for speed."""
+        primary = payload.get("primary", "zara")
+        user_name = payload.get("user_name") or "صديقي"
+        time_hint = payload.get("time_hint", "")  # 'morning'|'afternoon'|'evening'|'night'
+        want_voice = payload.get("want_voice", True)
+
+        # Build a quick context (no LLM needed for simple greetings — but use LLM for variety)
+        time_phrase = {
+            "morning": "صباح الخير",
+            "afternoon": "مساء النور",
+            "evening": "مساء الخير",
+            "night": "أهلاً في الليل",
+        }.get(time_hint, "هلا")
+
+        char_persona = (
+            "أنت زارا، مرحة وحماسية. ردك جملة واحدة قصيرة جداً (5-12 كلمة)."
+            if primary == "zara"
+            else "أنت ليلى، أنيقة وهادئة. ردك جملة واحدة قصيرة جداً (5-12 كلمة)."
+        )
+        sys = f"""أنت {primary} على موقع Zitex.
+{char_persona}
+بدون emoji. لهجة سعودية طبيعية. استخدمي الاسم.
+"""
+        user_msg = f"المستخدم اسمه {user_name} وفتح الموقع الآن. الوقت: {time_phrase}. حييه ترحيب طبيعي قصير وذكّريه إنه يقدر يطلب صور أو فيديو أو موقع بالكلام."
+
+        try:
+            from emergentintegrations.llm.chat import LlmChat, UserMessage
+            api_key = os.environ.get("EMERGENT_LLM_KEY")
+            if not api_key:
+                # Fallback static greeting
+                text = f"{time_phrase} {user_name}! وش تحب نسوي اليوم؟"
+            else:
+                chat = LlmChat(api_key=api_key, session_id=f"greet-{user_name}", system_message=sys)
+                # Use Haiku — much faster (claude-haiku-4-5)
+                chat.with_model("anthropic", "claude-haiku-4-5-20251001")
+                text = await chat.send_message(UserMessage(text=user_msg))
+        except Exception as e:
+            logger.warning(f"[AVATAR-GREET] LLM failed: {e}")
+            text = f"{time_phrase} {user_name}! وش تحب نسوي اليوم؟"
+
+        audio_url = None
+        if want_voice:
+            voice = "shimmer" if primary == "zara" else "nova"
+            audio_url = await _tts(text, voice)
+        return {"reply": text, "audio_url": audio_url, "primary": primary}
 
     # ===== ANON USAGE STATUS =====
     @router.get("/avatar/anon-usage")

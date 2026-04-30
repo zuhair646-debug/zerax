@@ -40,6 +40,22 @@ export default function ChatImage({ user }) {
     if (!localStorage.getItem('token')) { navigate('/login'); return; }
     refreshCredits();
     startWizard();
+
+    // Pull voice intent if user came from Voice Stage
+    try {
+      const raw = sessionStorage.getItem('zitex_voice_intent');
+      if (raw) {
+        const data = JSON.parse(raw);
+        if (data.intent === 'image' && data.subject && (Date.now() - (data.ts || 0)) < 60000) {
+          // Pre-fill the first text input with the voice subject — wait for wizard to load
+          setTimeout(() => {
+            setTextAnswer(data.subject);
+            toast.success(`✓ سمعتك: "${data.subject}". اضغطي تأكيد أو عدّلي`);
+          }, 800);
+        }
+        sessionStorage.removeItem('zitex_voice_intent');
+      }
+    } catch (_) {}
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [navigate]);
 

@@ -1,22 +1,24 @@
 /**
- * Voice Stage — Voice-first immersive AI companion overlay.
+ * Voice Stage v3 — fully voice-first immersive AI experience.
  *
- * NEW (v2):
- *   - Lip-sync: rapidly swap idle ↔ talk image during audio playback
- *   - Dual banter: secondary character chimes in with a short reaction
- *   - Anonymous trial: 5 free voice convos for unauthenticated visitors
- *   - Companion mode: when prop `mode='companion'`, uses /api/companion/voice-chat instead
+ * NEW v3:
+ *   - Auto-greet on open: AI speaks first using user's name
+ *   - User name input (small badge top-corner)
+ *   - Walking characters in background (not static)
+ *   - Intent extraction: when user says "ابغى صورة لكافيه" → auto-navigate to /chat/image
+ *     with subject pre-filled (passed via URL state)
+ *   - HD TTS quality + cleaner Arabic pronunciation
+ *   - Faster responses (Haiku for greetings)
  */
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { Mic, MicOff, X, Volume2, VolumeX, Sparkles } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { Mic, MicOff, X, Volume2, VolumeX, Sparkles, User as UserIcon } from 'lucide-react';
 import { toast } from 'sonner';
 
 const API = process.env.REACT_APP_BACKEND_URL;
 
-// Detect Speech Recognition availability
 const SR = (typeof window !== 'undefined') && (window.SpeechRecognition || window.webkitSpeechRecognition);
 
-// Get or create anon ID for unauthenticated trial tracking
 function getAnonId() {
   if (typeof window === 'undefined') return null;
   let id = localStorage.getItem('zitex_anon_id');
@@ -27,7 +29,25 @@ function getAnonId() {
   return id;
 }
 
+function getStoredName() {
+  if (typeof window === 'undefined') return '';
+  return localStorage.getItem('zitex_user_name') || '';
+}
+
+function setStoredName(name) {
+  try { localStorage.setItem('zitex_user_name', name); } catch (_) {}
+}
+
+function getTimeHint() {
+  const h = new Date().getHours();
+  if (h >= 5 && h < 12) return 'morning';
+  if (h >= 12 && h < 17) return 'afternoon';
+  if (h >= 17 && h < 21) return 'evening';
+  return 'night';
+}
+
 export default function VoiceStage({ open, onClose, initialCharacter = 'zara', mode = 'main', onSignupNeeded }) {
+  const navigate = useNavigate();
   const [primary, setPrimary] = useState(initialCharacter);
   const [zaraState, setZaraState] = useState('hidden');
   const [laylaState, setLaylaState] = useState('hidden');
@@ -39,49 +59,68 @@ export default function VoiceStage({ open, onClose, initialCharacter = 'zara', m
   const [lastAIReply, setLastAIReply] = useState('');
   const [lastBanter, setLastBanter] = useState(null);
   const [subtitle, setSubtitle] = useState('');
-  const [lipSyncTick, setLipSyncTick] = useState(0); // toggles 0/1 during talk for lip-sync
+  const [lipSyncTick, setLipSyncTick] = useState(0);
   const [anonUsage, setAnonUsage] = useState(null);
+  const [userName, setUserName] = useState(getStoredName());
+  const [showNamePrompt, setShowNamePrompt] = useState(!getStoredName());
+  const [tempName, setTempName] = useState('');
   const recRef = useRef(null);
   const audioRef = useRef(null);
   const banterAudioRef = useRef(null);
   const sessionRef = useRef(null);
   const lipSyncIntervalRef = useRef(null);
+  const greetedRef = useRef(false);
 
   const isAuthed = !!(typeof window !== 'undefined' && localStorage.getItem('token'));
   const anonId = !isAuthed && mode === 'main' ? getAnonId() : null;
 
-  // ===== Entrance animation =====
+  // ===== Entrance + auto-greet =====
   useEffect(() => {
     if (!open) {
       setZaraState('hidden');
       setLaylaState('hidden');
       setStage('intro');
+      greetedRef.current = false;
       return;
     }
     const t1 = setTimeout(() => setZaraState('entering'), 100);
-    const t2 = setTimeout(() => setLaylaState('entering'), 500);
-    const t3 = setTimeout(() => { setZaraState('idle'); setLaylaState('idle'); }, 2500);
-    const t4 = setTimeout(() => { setStage('idle'); setSubtitle('اضغطي المايك وكلّمني 💫'); }, 2800);
+    const t2 = setTimeout(() => setLaylaState('entering'), 400);
+    const t3 = setTimeout(() => { setZaraState('idle'); setLaylaState('idle'); setStage('idle'); }, 2200);
     sessionRef.current = `stage-${Date.now()}`;
-    // Fetch anon usage
     if (anonId) {
       fetch(`${API}/api/avatar/anon-usage?anon_id=${anonId}`)
         .then(r => r.ok ? r.json() : null)
         .then(d => d && setAnonUsage(d))
         .catch(() => {});
     }
+    // Auto-greet — wait until characters land + user has name
+    const t4 = setTimeout(() => {
+      if (!greetedRef.current && userName && !showNamePrompt) {
+        greetedRef.current = true;
+        autoGreet();
+      } else if (!userName) {
+        setSubtitle('اكتب اسمك عشان أسلم عليك يا غالي');
+      }
+    }, 2500);
     return () => [t1, t2, t3, t4].forEach(clearTimeout);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
-  // ===== Cleanup =====
+  // Greet right after name is provided
   useEffect(() => {
-    return () => {
-      if (recRef.current) { try { recRef.current.stop(); } catch (_) {} }
-      if (audioRef.current) { try { audioRef.current.pause(); } catch (_) {} }
-      if (banterAudioRef.current) { try { banterAudioRef.current.pause(); } catch (_) {} }
-      if (lipSyncIntervalRef.current) { clearInterval(lipSyncIntervalRef.current); }
-    };
+    if (open && userName && !showNamePrompt && !greetedRef.current && stage === 'idle') {
+      greetedRef.current = true;
+      autoGreet();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [showNamePrompt, userName, stage, open]);
+
+  // ===== Cleanup =====
+  useEffect(() => () => {
+    if (recRef.current) try { recRef.current.stop(); } catch (_) {}
+    if (audioRef.current) try { audioRef.current.pause(); } catch (_) {}
+    if (banterAudioRef.current) try { banterAudioRef.current.pause(); } catch (_) {}
+    if (lipSyncIntervalRef.current) clearInterval(lipSyncIntervalRef.current);
   }, []);
 
   // ===== Character state mapping =====
@@ -95,7 +134,6 @@ export default function VoiceStage({ open, onClose, initialCharacter = 'zara', m
       if (primary === 'zara') { setZaraState('talking'); setLaylaState('listening'); }
       else { setLaylaState('talking'); setZaraState('listening'); }
     } else if (stage === 'banter') {
-      // Secondary speaks, primary listens with attention
       if (primary === 'zara') { setLaylaState('talking'); setZaraState('listening'); }
       else { setZaraState('talking'); setLaylaState('listening'); }
     } else if (stage === 'thinking') {
@@ -103,31 +141,59 @@ export default function VoiceStage({ open, onClose, initialCharacter = 'zara', m
     }
   }, [stage, primary]);
 
-  // ===== Lip-sync ticker =====
+  // ===== Lip-sync =====
   const startLipSync = useCallback(() => {
     if (lipSyncIntervalRef.current) clearInterval(lipSyncIntervalRef.current);
-    lipSyncIntervalRef.current = setInterval(() => {
-      setLipSyncTick(t => (t + 1) % 3); // 0,1,2 — visual frame index
-    }, 140); // ~7Hz mouth swap
+    lipSyncIntervalRef.current = setInterval(() => setLipSyncTick(t => (t + 1) % 3), 140);
   }, []);
-
   const stopLipSync = useCallback(() => {
-    if (lipSyncIntervalRef.current) {
-      clearInterval(lipSyncIntervalRef.current);
-      lipSyncIntervalRef.current = null;
-    }
+    if (lipSyncIntervalRef.current) { clearInterval(lipSyncIntervalRef.current); lipSyncIntervalRef.current = null; }
     setLipSyncTick(0);
   }, []);
+
+  // ===== Auto-greet =====
+  const autoGreet = async () => {
+    setStage('thinking');
+    setSubtitle('...');
+    try {
+      const r = await fetch(`${API}/api/avatar/greet`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ primary, user_name: userName, time_hint: getTimeHint(), want_voice: !muted }),
+      });
+      const d = await r.json();
+      if (!r.ok) throw new Error(d.detail || 'fail');
+      setLastAIReply(d.reply);
+      setSubtitle(d.reply);
+      setStage('speaking');
+      if (d.audio_url && !muted) {
+        const audio = new Audio(d.audio_url);
+        audio.onplay = () => startLipSync();
+        audio.onended = () => {
+          stopLipSync();
+          setStage('idle');
+          setSubtitle('كلّمني... قول وش تبغى');
+        };
+        audio.onerror = () => { stopLipSync(); setStage('idle'); };
+        audioRef.current = audio;
+        audio.play().catch(() => { stopLipSync(); setStage('idle'); });
+      } else {
+        setTimeout(() => { setStage('idle'); setSubtitle('كلّمني... قول وش تبغى'); }, 3000);
+      }
+    } catch (e) {
+      setStage('idle');
+      setSubtitle(`هلا ${userName}! وش تبغى نسوي؟`);
+    }
+  };
 
   // ===== Listening =====
   const startListening = useCallback(() => {
     if (!SR) {
-      toast.error('المتصفح ما يدعم التعرف الصوتي. جرّب Chrome/Edge/Safari.');
+      toast.error('المتصفح ما يدعم الصوت — جرّب Chrome');
       return;
     }
     if (listening) return;
     if (anonUsage && anonUsage.blocked) {
-      toast.error('انتهت محادثاتك المجانية — سجّل لتكمل ✨');
       if (onSignupNeeded) onSignupNeeded();
       return;
     }
@@ -137,128 +203,122 @@ export default function VoiceStage({ open, onClose, initialCharacter = 'zara', m
       rec.continuous = false;
       rec.interimResults = true;
       rec.maxAlternatives = 1;
-
-      rec.onstart = () => {
-        setListening(true);
-        setStage('listening');
-        setSubtitle('🎤 أنا أسمعك...');
-      };
+      rec.onstart = () => { setListening(true); setStage('listening'); setSubtitle('أنا أسمعك...'); };
       rec.onresult = (e) => {
         const txt = Array.from(e.results).map(r => r[0].transcript).join(' ');
         setLastUserSaid(txt);
-        if (e.results[e.results.length - 1].isFinal) {
-          handleUserSpeech(txt.trim());
-        }
+        if (e.results[e.results.length - 1].isFinal) handleUserSpeech(txt.trim());
       };
       rec.onerror = (e) => {
-        setListening(false);
-        setStage('idle');
-        if (e.error === 'no-speech') {
-          setSubtitle('ما سمعت شي... جرّب مرة ثانية');
-          setTimeout(() => setSubtitle('اضغطي المايك وكلّمني 💫'), 2000);
-        } else if (e.error === 'not-allowed') {
-          toast.error('محتاجة إذن الميكروفون');
-        }
+        setListening(false); setStage('idle');
+        if (e.error === 'no-speech') setSubtitle('ما سمعت شي — جرّب مرة ثانية');
+        else if (e.error === 'not-allowed') toast.error('فعّلي إذن المايكروفون');
       };
       rec.onend = () => setListening(false);
       rec.start();
       recRef.current = rec;
-    } catch (e) {
-      toast.error('فشل تشغيل الميكروفون');
+    } catch (_) {
+      toast.error('فشل المايك');
       setListening(false);
     }
   }, [listening, anonUsage, onSignupNeeded]);
 
   const stopListening = useCallback(() => {
-    if (recRef.current) { try { recRef.current.stop(); } catch (_) {} }
+    if (recRef.current) try { recRef.current.stop(); } catch (_) {}
     setListening(false);
     if (stage === 'listening') setStage('idle');
   }, [stage]);
 
-  // ===== Send to backend + play audio + banter =====
+  // ===== Send to backend + handle intent routing =====
   const handleUserSpeech = async (text) => {
     if (!text) return;
     setStage('thinking');
-    setSubtitle('💭 جاري التفكير...');
+    setSubtitle('...');
     try {
       const endpoint = mode === 'companion' ? '/api/companion/voice-chat' : '/api/avatar/chat';
       const headers = { 'Content-Type': 'application/json' };
       const token = localStorage.getItem('token');
       if (token) headers.Authorization = `Bearer ${token}`;
-
       const body = mode === 'companion'
-        ? { message: text, want_voice: true }
+        ? { message: text, want_voice: !muted }
         : {
-            message: text,
-            session_id: sessionRef.current,
-            want_voice: true,
-            primary,
-            anon_id: anonId,
-            dual_banter: !muted,
+            message: text, session_id: sessionRef.current, want_voice: !muted,
+            primary, anon_id: anonId, dual_banter: !muted && !text.match(/^(نعم|لا|اوكي|تمام|اي)$/i),
+            user_name: userName || null, detect_intent: true,
           };
-
-      const r = await fetch(`${API}${endpoint}`, {
-        method: 'POST',
-        headers,
-        body: JSON.stringify(body),
-      });
+      const r = await fetch(`${API}${endpoint}`, { method: 'POST', headers, body: JSON.stringify(body) });
       const d = await r.json();
       if (!r.ok) throw new Error(d.detail || 'فشل');
 
       setLastAIReply(d.reply);
       setSubtitle(d.reply);
       setLastBanter(d.banter || null);
-
       if (d.anon_usage) setAnonUsage(d.anon_usage);
 
       setStage('speaking');
 
-      // Play primary audio + lip-sync
+      // Schedule auto-navigation if intent detected
+      const intent = d.intent;
+      const shouldNavigate = intent && intent.intent && intent.route && mode !== 'companion';
+
+      const finishAndMaybeNavigate = () => {
+        if (shouldNavigate) {
+          // Pass extracted subject as URL state via sessionStorage
+          if (intent.subject) {
+            sessionStorage.setItem('zitex_voice_intent', JSON.stringify({
+              intent: intent.intent,
+              subject: intent.subject,
+              from_voice: true,
+              ts: Date.now(),
+            }));
+          }
+          setTimeout(() => {
+            onClose && onClose();
+            navigate(intent.route);
+          }, 1200);
+        } else {
+          setStage('idle');
+          setSubtitle('كملي... كلّمني تاني');
+        }
+      };
+
       if (d.audio_url && !muted) {
         const audio = new Audio(d.audio_url);
         audio.onplay = () => startLipSync();
         audio.onended = async () => {
           stopLipSync();
-          // Banter follow-up
           if (d.banter && d.banter.audio_url && !muted) {
-            await new Promise(r => setTimeout(r, 300));
+            await new Promise(r => setTimeout(r, 250));
             setStage('banter');
-            setSubtitle(`${d.banter.from_char === 'zara' ? '💛 زارا' : '🖤 ليلى'}: ${d.banter.text}`);
+            setSubtitle(`${d.banter.from_char === 'zara' ? 'زارا' : 'ليلى'}: ${d.banter.text}`);
             const b = new Audio(d.banter.audio_url);
             b.onplay = () => startLipSync();
-            b.onended = () => {
-              stopLipSync();
-              setStage('idle');
-              setSubtitle(primary === 'zara' ? 'كملي... أنا معاك ✨' : 'كملي... أنا أسمعك 🖤');
-            };
-            b.onerror = () => { stopLipSync(); setStage('idle'); };
+            b.onended = () => { stopLipSync(); finishAndMaybeNavigate(); };
+            b.onerror = () => { stopLipSync(); finishAndMaybeNavigate(); };
             banterAudioRef.current = b;
-            b.play().catch(() => { stopLipSync(); setStage('idle'); });
+            b.play().catch(() => { stopLipSync(); finishAndMaybeNavigate(); });
           } else {
-            setStage('idle');
-            setSubtitle(primary === 'zara' ? 'كملي... أنا معاك ✨' : 'كملي... أنا أسمعك 🖤');
+            finishAndMaybeNavigate();
           }
         };
-        audio.onerror = () => { stopLipSync(); setStage('idle'); };
+        audio.onerror = () => { stopLipSync(); finishAndMaybeNavigate(); };
         audioRef.current = audio;
-        audio.play().catch(() => { stopLipSync(); setStage('idle'); });
+        audio.play().catch(() => { stopLipSync(); finishAndMaybeNavigate(); });
       } else {
-        setTimeout(() => setStage('idle'), 4000);
+        setTimeout(finishAndMaybeNavigate, 2500);
       }
     } catch (e) {
       toast.error(e.message);
       setStage('idle');
-      setSubtitle('حصل خطأ 😔 جرّب تاني');
-      if (e.message && e.message.includes('انتهت المحادثات')) {
-        if (onSignupNeeded) onSignupNeeded();
-      }
+      setSubtitle('حصل خطأ — جرّب تاني');
+      if (e.message && e.message.includes('انتهت')) onSignupNeeded && onSignupNeeded();
     }
   };
 
   const toggleMute = () => {
-    const nextMuted = !muted;
-    setMuted(nextMuted);
-    if (nextMuted) {
+    const nxt = !muted;
+    setMuted(nxt);
+    if (nxt) {
       if (audioRef.current) try { audioRef.current.pause(); } catch (_) {}
       if (banterAudioRef.current) try { banterAudioRef.current.pause(); } catch (_) {}
     }
@@ -266,21 +326,24 @@ export default function VoiceStage({ open, onClose, initialCharacter = 'zara', m
 
   const switchPrimary = () => {
     setPrimary(p => p === 'zara' ? 'layla' : 'zara');
-    setSubtitle('تحوّلت لرفيقتك الثانية ✨');
-    setTimeout(() => setSubtitle('اضغطي المايك وكلّمني 💫'), 2000);
+    setSubtitle('بدّلت لرفيقتك الثانية');
+    setTimeout(() => setSubtitle('كلّمني...'), 1500);
+  };
+
+  const submitName = () => {
+    const n = tempName.trim();
+    if (!n || n.length < 2) { toast.error('اكتب اسمك بشكل صحيح'); return; }
+    setStoredName(n);
+    setUserName(n);
+    setShowNamePrompt(false);
   };
 
   if (!open) return null;
 
-  // Helper: pick image based on state + lip-sync tick
   const pickImage = (char, state) => {
     const base = char === 'zara' ? 'zara' : 'layla';
     if (state === 'talking') {
-      // Lip-sync: alternate idle/talk every tick
       return lipSyncTick % 2 === 0 ? `/avatars/${base}_idle.png` : `/avatars/${base}_talk.png`;
-    }
-    if (state === 'listening' || state === 'idle' || state === 'entering') {
-      return `/avatars/${base}_idle.png`;
     }
     return `/avatars/${base}_idle.png`;
   };
@@ -292,7 +355,6 @@ export default function VoiceStage({ open, onClose, initialCharacter = 'zara', m
         <div className="absolute inset-0 opacity-40">
           <div className="absolute top-0 left-1/4 w-96 h-96 bg-amber-500/20 rounded-full blur-[120px] animate-pulse" />
           <div className="absolute bottom-0 right-1/4 w-96 h-96 bg-purple-500/20 rounded-full blur-[120px] animate-pulse" style={{ animationDelay: '1s' }} />
-          <div className="absolute top-1/2 left-1/2 w-[600px] h-[600px] -translate-x-1/2 -translate-y-1/2 bg-pink-500/10 rounded-full blur-[150px]" />
         </div>
         <div className="absolute inset-0 opacity-60" style={{
           backgroundImage: 'radial-gradient(1px 1px at 20% 30%, white 50%, transparent), radial-gradient(1px 1px at 50% 70%, white 50%, transparent), radial-gradient(1.5px 1.5px at 80% 20%, white 50%, transparent), radial-gradient(1px 1px at 30% 90%, white 50%, transparent), radial-gradient(1px 1px at 70% 50%, white 50%, transparent)',
@@ -302,6 +364,7 @@ export default function VoiceStage({ open, onClose, initialCharacter = 'zara', m
 
       <div className="absolute bottom-0 left-0 right-0 h-1/3 bg-gradient-to-t from-black/60 to-transparent pointer-events-none" />
 
+      {/* Top buttons */}
       <button onClick={onClose} className="absolute top-4 right-4 w-11 h-11 rounded-full bg-white/10 border border-white/20 backdrop-blur-md text-white hover:bg-white/20 z-50 flex items-center justify-center" data-testid="vs-close">
         <X className="w-5 h-5" />
       </button>
@@ -312,29 +375,34 @@ export default function VoiceStage({ open, onClose, initialCharacter = 'zara', m
         </button>
         {mode !== 'companion' && (
           <button onClick={switchPrimary} className="h-11 px-4 rounded-full bg-white/10 border border-white/20 backdrop-blur-md text-white hover:bg-white/20 text-xs font-black flex items-center" data-testid="vs-swap">
-            بدّلي ({primary === 'zara' ? 'إلى ليلى 🖤' : 'إلى زارا 💛'})
+            بدّلي ({primary === 'zara' ? 'لـ ليلى' : 'لـ زارا'})
+          </button>
+        )}
+        {/* User name badge */}
+        {userName && !showNamePrompt && (
+          <button
+            onClick={() => { setTempName(userName); setShowNamePrompt(true); }}
+            className="h-11 px-3 rounded-full bg-amber-500/20 border border-amber-400/40 text-amber-200 text-xs font-black flex items-center gap-1"
+            data-testid="vs-user-name"
+          >
+            <UserIcon className="w-3.5 h-3.5" /> {userName}
           </button>
         )}
       </div>
 
-      {/* Anon trial badge */}
+      {/* Anon trial */}
       {anonId && anonUsage && mode === 'main' && (
         <div className={`absolute top-20 left-1/2 -translate-x-1/2 z-50 px-3 py-1 rounded-full text-[11px] font-black backdrop-blur-md ${
-          anonUsage.blocked
-            ? 'bg-red-500/30 border border-red-400/50 text-red-200'
-            : anonUsage.remaining <= 1
-              ? 'bg-amber-500/30 border border-amber-400/50 text-amber-200'
-              : 'bg-emerald-500/20 border border-emerald-400/40 text-emerald-200'
+          anonUsage.blocked ? 'bg-red-500/30 border border-red-400/50 text-red-200'
+          : anonUsage.remaining <= 1 ? 'bg-amber-500/30 border border-amber-400/50 text-amber-200'
+          : 'bg-emerald-500/20 border border-emerald-400/40 text-emerald-200'
         }`} data-testid="vs-anon-counter">
           <Sparkles className="w-3 h-3 inline me-1" />
-          {anonUsage.blocked
-            ? 'انتهت المحادثات المجانية — سجّل لتكمل'
-            : `محادثات مجانية متبقية: ${anonUsage.remaining}/${anonUsage.limit}`
-          }
+          {anonUsage.blocked ? 'انتهت المحادثات المجانية — سجّل لتكمل' : `محادثات مجانية: ${anonUsage.remaining}/${anonUsage.limit}`}
         </div>
       )}
 
-      {/* Characters */}
+      {/* Characters with walking idle animation */}
       <Character
         name="zara"
         image={pickImage('zara', zaraState)}
@@ -363,28 +431,22 @@ export default function VoiceStage({ open, onClose, initialCharacter = 'zara', m
       <div className="absolute bottom-8 left-1/2 -translate-x-1/2 flex flex-col items-center gap-3 z-40">
         <button
           onClick={listening ? stopListening : startListening}
-          disabled={stage === 'thinking' || stage === 'speaking' || stage === 'banter'}
+          disabled={stage === 'thinking' || stage === 'speaking' || stage === 'banter' || showNamePrompt}
           className={`relative w-24 h-24 rounded-full flex items-center justify-center transition-all disabled:opacity-40 ${
-            listening
-              ? 'bg-red-500 shadow-[0_0_60px_rgba(239,68,68,0.8)] scale-110'
-              : stage === 'thinking'
-                ? 'bg-purple-500'
-                : (stage === 'speaking' || stage === 'banter')
-                  ? 'bg-emerald-500 shadow-[0_0_60px_rgba(16,185,129,0.8)]'
-                  : 'bg-gradient-to-br from-amber-500 to-yellow-500 hover:scale-110 shadow-[0_0_40px_rgba(245,158,11,0.6)]'
+            listening ? 'bg-red-500 shadow-[0_0_60px_rgba(239,68,68,0.8)] scale-110'
+            : stage === 'thinking' ? 'bg-purple-500'
+            : (stage === 'speaking' || stage === 'banter') ? 'bg-emerald-500 shadow-[0_0_60px_rgba(16,185,129,0.8)]'
+            : 'bg-gradient-to-br from-amber-500 to-yellow-500 hover:scale-110 shadow-[0_0_40px_rgba(245,158,11,0.6)]'
           }`}
           data-testid="vs-mic-btn"
         >
           {listening && <span className="absolute inset-0 rounded-full border-4 border-red-400 animate-ping" />}
-          {stage === 'thinking'
-            ? <div className="w-6 h-6 border-4 border-white border-t-transparent rounded-full animate-spin" />
-            : listening
-              ? <MicOff className="w-10 h-10 text-white" />
-              : <Mic className="w-10 h-10 text-black" />
-          }
+          {stage === 'thinking' ? <div className="w-6 h-6 border-4 border-white border-t-transparent rounded-full animate-spin" />
+            : listening ? <MicOff className="w-10 h-10 text-white" />
+            : <Mic className="w-10 h-10 text-black" />}
         </button>
         <div className="text-[11px] text-white/60 font-bold">
-          {listening ? 'تكلّم الآن...' : stage === 'thinking' ? 'جاري التفكير' : stage === 'speaking' ? 'تتكلم معاك...' : stage === 'banter' ? 'تتدخل برأيها...' : 'اضغطي للتحدّث'}
+          {listening ? 'تكلّم الآن' : stage === 'thinking' ? 'تفكر...' : stage === 'speaking' ? 'تتكلم معاك' : stage === 'banter' ? 'تتدخل' : 'اضغط وكلّم'}
         </div>
       </div>
 
@@ -395,17 +457,45 @@ export default function VoiceStage({ open, onClose, initialCharacter = 'zara', m
       </button>
 
       {transcriptVisible && (lastUserSaid || lastAIReply) && (
-        <div className="absolute top-20 left-4 right-4 max-w-2xl mx-auto bg-black/70 backdrop-blur-xl rounded-2xl border border-white/10 p-3 text-white text-sm z-40 space-y-2" data-testid="vs-transcript">
+        <div className="absolute top-32 left-4 right-4 max-w-2xl mx-auto bg-black/70 backdrop-blur-xl rounded-2xl border border-white/10 p-3 text-white text-sm z-40 space-y-2" data-testid="vs-transcript">
           {lastUserSaid && <div><span className="text-amber-300 font-black">أنت:</span> {lastUserSaid}</div>}
           {lastAIReply && <div><span className="text-purple-300 font-black">{primary === 'zara' ? 'زارا' : 'ليلى'}:</span> {lastAIReply}</div>}
           {lastBanter && <div><span className="text-pink-300 font-black">{lastBanter.from_char === 'zara' ? 'زارا' : 'ليلى'}:</span> {lastBanter.text}</div>}
+        </div>
+      )}
+
+      {/* Name prompt overlay */}
+      {showNamePrompt && (
+        <div className="absolute inset-0 z-[110] bg-black/80 flex items-center justify-center p-4" data-testid="vs-name-prompt">
+          <div className="bg-gradient-to-br from-[#2a1a3e] to-[#1a0a2e] rounded-3xl border-2 border-amber-400/40 p-6 max-w-sm w-full text-center" dir="rtl">
+            <div className="text-3xl mb-2">👋</div>
+            <h3 className="text-xl font-black text-white mb-1">قبل ما نبدأ...</h3>
+            <p className="text-sm text-amber-200/80 mb-4">شنو اسمك؟</p>
+            <input
+              autoFocus
+              value={tempName}
+              onChange={(e) => setTempName(e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Enter') submitName(); }}
+              placeholder="اسمك"
+              className="w-full p-3 mb-3 bg-black/40 border-2 border-amber-400/30 focus:border-amber-400 rounded-xl text-center text-lg text-white outline-none"
+              dir="rtl"
+              data-testid="vs-name-input"
+            />
+            <button
+              onClick={submitName}
+              className="w-full py-3 rounded-xl bg-gradient-to-r from-amber-500 to-yellow-500 text-black font-black"
+              data-testid="vs-name-submit"
+            >
+              ابدأ
+            </button>
+          </div>
         </div>
       )}
     </div>
   );
 }
 
-// ================== CHARACTER ==================
+// ============== CHARACTER ==============
 function Character({ image, fallback, state, side, isPrimary, dataTestId }) {
   const [imgSrc, setImgSrc] = useState(image);
 
@@ -415,11 +505,11 @@ function Character({ image, fallback, state, side, isPrimary, dataTestId }) {
   const onScreenX = side === 'left' ? '-15%' : '15%';
 
   const stateConfig = {
-    hidden:    { x: offScreenX, y: '20%',  scale: 0.8, opacity: 0,   animClass: '' },
-    entering:  { x: onScreenX,  y: '0%',   scale: 1,   opacity: 1,   animClass: 'char-entering' },
-    idle:      { x: onScreenX,  y: '0%',   scale: isPrimary ? 1.05 : 0.95, opacity: isPrimary ? 1 : 0.75, animClass: 'char-bob' },
-    listening: { x: onScreenX,  y: '-2%',  scale: isPrimary ? 1.1  : 0.95, opacity: 1,   animClass: 'char-lean' },
-    talking:   { x: onScreenX,  y: '0%',   scale: 1.1, opacity: 1,   animClass: 'char-talk' },
+    hidden:    { x: offScreenX, y: '20%', scale: 0.8, opacity: 0,   animClass: '' },
+    entering:  { x: onScreenX,  y: '0%',  scale: 1,   opacity: 1,   animClass: 'char-walking' },
+    idle:      { x: onScreenX,  y: '0%',  scale: isPrimary ? 1.05 : 0.95, opacity: isPrimary ? 1 : 0.8, animClass: 'char-walking' },
+    listening: { x: onScreenX,  y: '-2%', scale: isPrimary ? 1.1  : 0.95, opacity: 1,   animClass: 'char-lean' },
+    talking:   { x: onScreenX,  y: '0%',  scale: 1.1, opacity: 1,   animClass: 'char-talk' },
   };
   const cfg = stateConfig[state] || stateConfig.idle;
 
@@ -446,15 +536,6 @@ function Character({ image, fallback, state, side, isPrimary, dataTestId }) {
             : 'drop-shadow(0 10px 30px rgba(0,0,0,0.4))',
         }}
       />
-      {isPrimary && state !== 'hidden' && state !== 'entering' && (
-        <div className="absolute top-4 left-1/2 -translate-x-1/2 flex items-center gap-1 bg-amber-500/90 text-black text-[10px] font-black px-2 py-0.5 rounded-full">
-          {state === 'listening' && <span className="w-1.5 h-1.5 bg-black rounded-full animate-pulse" />}
-          {state === 'talking' && '🗣'}
-          {state === 'listening' && 'تسمع'}
-          {state === 'talking' && 'تتكلم'}
-          {state === 'idle' && '💫'}
-        </div>
-      )}
     </div>
   );
 }

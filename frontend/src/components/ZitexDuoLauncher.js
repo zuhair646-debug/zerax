@@ -29,7 +29,7 @@ export default function ZitexDuoLauncher() {
           <button
             onClick={() => launch('zara')}
             className="fixed bottom-0 left-0 w-28 sm:w-36 h-40 sm:h-48 z-40 group pointer-events-auto"
-            style={{ animation: 'zd-peek-left 10s ease-in-out infinite' }}
+            style={{ animation: 'zd-walk-left 8s ease-in-out infinite' }}
             data-testid="duo-launcher-zara"
             aria-label="تكلّم مع زارا"
           >
@@ -50,7 +50,7 @@ export default function ZitexDuoLauncher() {
           <button
             onClick={() => launch('layla')}
             className="fixed bottom-0 right-0 w-28 sm:w-36 h-40 sm:h-48 z-40 group pointer-events-auto"
-            style={{ animation: 'zd-peek-right 12s ease-in-out infinite' }}
+            style={{ animation: 'zd-walk-right 9s ease-in-out infinite' }}
             data-testid="duo-launcher-layla"
             aria-label="تكلّم مع ليلى"
           >
@@ -78,15 +78,17 @@ export default function ZitexDuoLauncher() {
 
           {/* Inline keyframes for peek animation */}
           <style>{`
-            @keyframes zd-peek-left {
-              0%, 85%, 100% { transform: translateY(8px); }
-              90%           { transform: translateY(-10px); }
-              95%           { transform: translateY(-4px); }
+            @keyframes zd-walk-left {
+              0%, 100% { transform: translate(0, 8px) rotate(0deg); }
+              25%      { transform: translate(15px, -2px) rotate(-1.5deg); }
+              50%      { transform: translate(30px, -10px) rotate(0deg); }
+              75%      { transform: translate(15px, -4px) rotate(1.5deg); }
             }
-            @keyframes zd-peek-right {
-              0%, 80%, 100% { transform: translateY(8px); }
-              85%           { transform: translateY(-12px); }
-              92%           { transform: translateY(-4px); }
+            @keyframes zd-walk-right {
+              0%, 100% { transform: translate(0, 8px) rotate(0deg); }
+              25%      { transform: translate(-15px, -2px) rotate(1.5deg); }
+              50%      { transform: translate(-30px, -10px) rotate(0deg); }
+              75%      { transform: translate(-15px, -4px) rotate(-1.5deg); }
             }
           `}</style>
         </>

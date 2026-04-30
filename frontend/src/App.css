@@ -205,6 +205,18 @@ button {
           mask-image: linear-gradient(to bottom, black 92%, transparent);
 }
 
+/* Walking animation — gentle side-to-side sway like a person standing/strolling */
+@keyframes char-walking-anim {
+  0%   { translate: 0 0;     rotate: 0deg; }
+  25%  { translate: -6px -4px; rotate: -1.5deg; }
+  50%  { translate: 0 -8px;  rotate: 0deg; }
+  75%  { translate: 6px -4px;  rotate: 1.5deg; }
+  100% { translate: 0 0;     rotate: 0deg; }
+}
+.char-walking {
+  animation: char-walking-anim 5s ease-in-out infinite;
+}
+
 /* Subtle idle bob — gentle breathing */
 @keyframes char-bob-anim {
   0%, 100% { translate: 0 0; }

@@ -40,6 +40,22 @@ export default function ChatVideo({ user }) {
     if (!localStorage.getItem('token')) { navigate('/login'); return; }
     refreshCredits();
     startWizard();
+
+    // Pull voice intent if coming from Voice Stage
+    try {
+      const raw = sessionStorage.getItem('zitex_voice_intent');
+      if (raw) {
+        const data = JSON.parse(raw);
+        if (data.intent === 'video' && data.subject && (Date.now() - (data.ts || 0)) < 60000) {
+          setTimeout(() => {
+            setTextAnswer(data.subject);
+            toast.success(`✓ سمعتك: "${data.subject}". اضغطي تأكيد أو عدّلي`);
+          }, 800);
+        }
+        sessionStorage.removeItem('zitex_voice_intent');
+      }
+    } catch (_) {}
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [navigate]);
 
   useEffect(() => {
