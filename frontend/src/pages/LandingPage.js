@@ -5,7 +5,7 @@ import { useNavigate } from 'react-router-dom';
 import { Sparkles } from 'lucide-react';
 import { toast } from 'sonner';
 import SiteBannerStories from '@/components/SiteBannerStories';
-import AIAssistantAvatar from '@/components/AIAssistantAvatar';
+import ZitexDuo from '@/components/ZitexDuo';
 
 const LandingPage = ({ user }) => {
   const navigate = useNavigate();
@@ -211,8 +211,8 @@ const LandingPage = ({ user }) => {
         </div>
       </footer>
 
-      {/* AI Assistant Avatar — floating bottom-right */}
-      <AIAssistantAvatar mode="zitex" characterStyle="friendly_arab_woman" />
+      {/* Dual AI characters: Zara + Layla (always visible, bottom peek) */}
+      <ZitexDuo />
     </div>
   );
 };
