@@ -402,14 +402,6 @@ export default function VoiceStage({ open, onClose, initialCharacter = 'zara', m
 
   if (!open) return null;
 
-  const pickImage = (char, state) => {
-    const base = char === 'zara' ? 'zara' : 'layla';
-    if (state === 'talking') {
-      return lipSyncTick % 2 === 0 ? `/avatars/${base}_idle.png` : `/avatars/${base}_talk.png`;
-    }
-    return `/avatars/${base}_idle.png`;
-  };
-
   return (
     <div className="fixed inset-0 z-[100] overflow-hidden" data-testid="voice-stage">
       {/* Background */}
@@ -464,23 +456,21 @@ export default function VoiceStage({ open, onClose, initialCharacter = 'zara', m
         </div>
       )}
 
-      {/* Characters with walking idle animation */}
+      {/* Characters — full 3D VRM */}
       <Character
         name="zara"
-        image={pickImage('zara', zaraState)}
-        fallback="/avatars/f1_zara.png"
         state={zaraState}
         side="left"
         isPrimary={primary === 'zara'}
+        talking={zaraState === 'talking'}
         dataTestId="vs-zara"
       />
       <Character
         name="layla"
-        image={pickImage('layla', laylaState)}
-        fallback="/avatars/f2_layla.png"
         state={laylaState}
         side="right"
         isPrimary={primary === 'layla'}
+        talking={laylaState === 'talking'}
         dataTestId="vs-layla"
       />
 
@@ -557,28 +547,36 @@ export default function VoiceStage({ open, onClose, initialCharacter = 'zara', m
   );
 }
 
-// ============== CHARACTER ==============
-function Character({ image, fallback, state, side, isPrimary, dataTestId }) {
-  const [imgSrc, setImgSrc] = useState(image);
+// ============== CHARACTER (3D VRM) ==============
+const VRM_URLS = {
+  zara: '/avatars-3d/zara.vrm',
+  layla: '/avatars-3d/layla.vrm',
+};
+const TINTS = {
+  zara: '#f5a623',
+  layla: '#a855f7',
+};
 
-  useEffect(() => { setImgSrc(image); }, [image]);
-
+function Character({ name, state, side, isPrimary, talking, dataTestId }) {
   const offScreenX = side === 'left' ? '-110%' : '110%';
-  const onScreenX = side === 'left' ? '-15%' : '15%';
+  const onScreenX = side === 'left' ? '-12%' : '12%';
 
   const stateConfig = {
-    hidden:    { x: offScreenX, y: '20%', scale: 0.8, opacity: 0,   animClass: '' },
-    entering:  { x: onScreenX,  y: '0%',  scale: 1,   opacity: 1,   animClass: 'char-walking' },
-    idle:      { x: onScreenX,  y: '0%',  scale: isPrimary ? 1.05 : 0.95, opacity: isPrimary ? 1 : 0.8, animClass: 'char-walking' },
-    listening: { x: onScreenX,  y: '-2%', scale: isPrimary ? 1.1  : 0.95, opacity: 1,   animClass: 'char-lean' },
-    talking:   { x: onScreenX,  y: '0%',  scale: 1.1, opacity: 1,   animClass: 'char-talk' },
+    hidden:    { x: offScreenX, y: '20%', scale: 0.8, opacity: 0 },
+    entering:  { x: onScreenX,  y: '0%',  scale: 1,   opacity: 1 },
+    idle:      { x: onScreenX,  y: '0%',  scale: isPrimary ? 1.05 : 0.95, opacity: isPrimary ? 1 : 0.85 },
+    listening: { x: onScreenX,  y: '-2%', scale: isPrimary ? 1.1  : 0.95, opacity: 1 },
+    talking:   { x: onScreenX,  y: '0%',  scale: 1.1, opacity: 1 },
   };
   const cfg = stateConfig[state] || stateConfig.idle;
+
+  // Lazy import keeps initial bundle small
+  const Avatar3DLazy = React.useMemo(() => React.lazy(() => import('./Avatar3D')), []);
 
   return (
     <div
       data-testid={dataTestId}
-      className={`absolute bottom-0 ${side === 'left' ? 'left-0' : 'right-0'} w-1/2 sm:w-2/5 max-w-[500px] h-[85%] pointer-events-none ${cfg.animClass}`}
+      className={`absolute bottom-0 ${side === 'left' ? 'left-0' : 'right-0'} w-1/2 sm:w-2/5 max-w-[500px] h-[85%] pointer-events-none`}
       style={{
         transform: `translate(${cfg.x}, ${cfg.y}) scale(${cfg.scale})`,
         opacity: cfg.opacity,
@@ -586,18 +584,18 @@ function Character({ image, fallback, state, side, isPrimary, dataTestId }) {
         transformOrigin: side === 'left' ? 'bottom left' : 'bottom right',
       }}
     >
-      <img
-        src={imgSrc}
-        onError={() => { if (fallback && imgSrc !== fallback) setImgSrc(fallback); }}
-        alt=""
-        className="w-full h-full object-contain object-bottom avatar-chroma"
-        draggable={false}
-        style={{
-          filter: isPrimary
-            ? 'drop-shadow(0 0 40px rgba(245,158,11,0.5)) drop-shadow(0 10px 30px rgba(0,0,0,0.5))'
-            : 'drop-shadow(0 10px 30px rgba(0,0,0,0.4))',
-        }}
-      />
+      <React.Suspense fallback={<div className="w-full h-full" />}>
+        <Avatar3DLazy
+          url={VRM_URLS[name] || VRM_URLS.zara}
+          tint={TINTS[name]}
+          talking={talking}
+          className="w-full h-full"
+          dataTestId={`${dataTestId}-3d`}
+          cameraPos={[0, 1.05, 2.4]}
+          fov={32}
+          sceneOffset={name === 'layla' ? 2.5 : 0}
+        />
+      </React.Suspense>
     </div>
   );
 }

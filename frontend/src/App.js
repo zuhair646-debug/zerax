@@ -4,6 +4,8 @@ import { Toaster } from '@/components/ui/sonner';
 import LandingPage from '@/pages/LandingPage';
 import DemoLanding from '@/pages/DemoLanding';
 import VrmPreview from '@/pages/VrmPreview';
+import ZitexDuoLauncher from '@/components/ZitexDuoLauncher';
+import GlobalAvatarMount from '@/components/GlobalAvatarMount';
 import LoginPage from '@/pages/LoginPage';
 import RegisterPage from '@/pages/RegisterPage';
 import ClientDashboard from '@/pages/ClientDashboard';
@@ -143,6 +145,8 @@ function App() {
           <Route path="/admin/ai-core" element={<ProtectedRoute adminOnly><AdminAICore user={user} /></ProtectedRoute>} />
           <Route path="/companion" element={<ProtectedRoute><Companion user={user} setUser={setUser} /></ProtectedRoute>} />
         </Routes>
+        {/* Global persistent avatars — appear on EVERY route except VRM preview */}
+        <GlobalAvatarMount />
       </BrowserRouter>
       <Toaster position="top-center" richColors />
     </div>
