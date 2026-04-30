@@ -15,6 +15,47 @@
 - 🔒 **Images**: قريباً
 
 
+### 🆕 Apr 30, 2026 — PHASE 1 COMPLETE: Premium Saudi Voices + Animation Cycle + Smarter AI ✅
+
+**1. ElevenLabs Premium TTS** (`/app/backend/modules/avatar/__init__.py`):
+- Subscribed Starter plan → API key works
+- Primary: `eleven_multilingual_v2` (best Arabic quality)
+- Voice mapping: Zara=Bella `EXAVITQu4vr4xnSDxMaL`, Layla=Charlotte `XB0fDUnXU5powFXDhCwa`
+- Per-character settings (stability/similarity/style tuned)
+- 3-tier fallback: ElevenLabs → OpenAI gpt-4o-mini-tts → emergent tts-1-hd
+- Tested: 117 KB audio for greet, 115 KB for chat reply, 35 KB banter
+
+**2. Smarter AI Brain** (`ZITEX_AVATAR_SYSTEM`):
+- Now answers ANY question: cooking, medical, study, life advice, tech, casual chat
+- Still routes Zitex-specific intents (image/video/website creation)
+- Stays Saudi dialect natural
+
+**3. Animation Cycling** (`Avatar3D.js`):
+- 8 scenes × 5 seconds = 40-second loop:
+  - idle breathing (default)
+  - wave with right hand
+  - curious head tilt
+  - hand-on-hip pose
+  - look around (left/right)
+  - stretch arms
+  - think pose (hand near chin)
+  - happy bounce (with smile expression)
+- `sceneOffset` prop staggers Zara (0s) and Layla (2.5s) so they don't sync
+
+**4. UX Cleanup:**
+- ❌ Removed bottom "اضغط وكلّمي صوتاً" CTA button (CharacterSceneEngine + 3D)
+- ✅ `getStoredName()` reads from `localStorage.user.name` first → logged-in users skip name prompt
+- ✅ Auto-greet uses real user name from JWT/cached profile
+
+**5. Push:** Commit `ebc50ce` → Vercel auto-deploy
+
+**Phase 2 Pending:**
+- Wardrobe variants (multiple VRM outfits)
+- Sister-debate mode (Zara + Layla discuss user's problem together)
+- 30 Sora 2 interactive video library
+- Mobile PWA full integration
+
+
 ### 🆕 Apr 30, 2026 — 3D VRM INFRASTRUCTURE + STATIONARY PNG + AUTO-OPEN (P0 — INFRA READY, AWAITING VRM ASSETS ⏳)
 
 المستخدم طلب:
