@@ -5,6 +5,7 @@ import { useNavigate } from 'react-router-dom';
 import { Sparkles } from 'lucide-react';
 import { toast } from 'sonner';
 import SiteBannerStories from '@/components/SiteBannerStories';
+import AIAssistantAvatar from '@/components/AIAssistantAvatar';
 
 const LandingPage = ({ user }) => {
   const navigate = useNavigate();
@@ -209,6 +210,9 @@ const LandingPage = ({ user }) => {
           </div>
         </div>
       </footer>
+
+      {/* AI Assistant Avatar — floating bottom-right */}
+      <AIAssistantAvatar mode="zitex" characterStyle="friendly_arab_woman" />
     </div>
   );
 };

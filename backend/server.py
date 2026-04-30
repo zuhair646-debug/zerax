@@ -3066,6 +3066,15 @@ try:
 except Exception as _vwe:
     logging.getLogger(__name__).error(f"Failed to register video wizard module: {_vwe}", exc_info=True)
 
+# ============== AI AVATAR (Animated assistant — main site + merchant subscription) ==============
+try:
+    from modules.avatar import create_avatar_router
+    _avatar_router = create_avatar_router(db, get_current_user)
+    app.include_router(_avatar_router)
+    logging.getLogger(__name__).info("Avatar module registered")
+except Exception as _ae:
+    logging.getLogger(__name__).error(f"Failed to register avatar module: {_ae}", exc_info=True)
+
 # ============== VISUAL DESIGNER APIS ==============
 class DesignElement(BaseModel):
     id: str
