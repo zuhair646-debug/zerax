@@ -15,6 +15,44 @@
 - 🔒 **Images**: قريباً
 
 
+### 🆕 Apr 30, 2026 — SORA 2 LIVING AVATARS + WAKE WORD (P0 — COMPLETE ✅)
+
+طلبات المستخدم:
+1. أفاتار بحركات حقيقية (ليس CSS بس): كنس، لعب كرة، قفز
+2. كلمة تنبيه "يا زارا" / "يا ليلى" لفتح الـ VoiceStage بدون لمس الصفحة
+
+#### 🎬 Sora 2 Avatar Scene Videos
+- **`/app/backend/modules/avatar/scenes.py`** (جديد):
+  - `SCENE_CATALOG`: 7 مشاهد (sweeping, football, jumping, dancing, coffee, typing, wave)
+  - `CHARACTERS`: وصف زارا (شعر أشقر + سترة كريمية + جينز) وليلى (شعر أسود متموج + بلوزة سوداء)
+  - `BG_DESC`: خلفية أرجوانية كونية مظلمة مع نجوم، لتفادي تصادم الألوان مع واجهة الموقع
+  - Endpoints: `/api/avatar/scenes/catalog|manifest|generate|generate-batch|jobs|delete`
+  - جنريشن يشتغل في background task (Sora 2 يستغرق 2-3 دقائق لكل clip)
+  - Size: `1280x720` @ 4s (Sora 2 يقبل فقط 1280x720 و 720x1280)
+- الكليبات محفوظة في `/app/frontend/public/avatar-videos/*.mp4` → تنشر مع الفرونت على Vercel
+- **Seeded library (6 clips)**: zara/layla × wave/dancing/jumping
+
+#### 🖼️ Frontend Integration
+- **`/app/frontend/src/components/CharacterSceneEngine.js`**:
+  - يجلب المانيفست على mount من `/api/avatar/scenes/manifest`
+  - كل 8 ثواني → احتمال 50% يشغل clip عشوائي لأحد الشخصيتين
+  - `<video autoPlay muted playsInline onEnded={reset}>` بـ `object-cover` + `mix-blend-mode: screen` لمزج الخلفية السوداء
+  - Fallback كامل على CSS + PNG لو ما في clips
+
+#### 🎙️ Wake Word Listener
+- **`/app/frontend/src/components/WakeWordListener.js`** (جديد):
+  - Web Speech API continuous=true, lang='ar-SA'
+  - Regex patterns: `(يا\s+)?زار[اه]` و `(يا\s+)?ليل[اى]`
+  - عند الكشف → dispatch CustomEvent `zitex:wake-word` بـ `{character}`
+  - Toggle محفوظ في localStorage، indicator floating (bottom-20 left-4)
+- **`/app/frontend/src/components/ZitexDuoLauncher.js`** (v3):
+  - يستمع لـ`zitex:wake-word` → يفتح VoiceStage بالشخصية المطلوبة
+  - Dispatches `zitex:voice-stage-open/close` — WakeWordListener يوقف نفسه أثناء فتح VoiceStage (تجنّب تصادم المايك)
+
+#### 🚀 Deployment
+- Commits: `24456dc`, `8b6377c` → pushed to `zuhair646-debug/zitex:main` → Vercel auto-deploy
+
+
 ### 🆕 Apr 30, 2026 — Hands-Free VAD Auto-Listen (P0 — COMPLETE ✅)
 طلب المستخدم: يبغى الميكروفون يفتح لحاله بدون زر.
 - **`/app/frontend/src/components/VoiceStage.js`**:
