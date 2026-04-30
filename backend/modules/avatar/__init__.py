@@ -183,6 +183,11 @@ def _is_active(avatar: Optional[Dict[str, Any]]) -> Dict[str, Any]:
 def create_avatar_router(db, get_current_user) -> APIRouter:
     router = APIRouter(prefix="/api", tags=["avatar"])
 
+    async def _require_admin(current_user: dict = Depends(get_current_user)):
+        if current_user.get("role") not in ("admin", "super_admin", "owner"):
+            raise HTTPException(403, "admin only")
+        return current_user
+
     # ===== Helper: chat with Claude =====
     async def _chat_completion(system: str, user_msg: str, session_id: str) -> str:
         from emergentintegrations.llm.chat import LlmChat, UserMessage
@@ -790,5 +795,13 @@ def create_avatar_router(db, get_current_user) -> APIRouter:
             "timestamp": _now().isoformat(),
         })
         return {"reply": text, "audio_url": audio_url, "session_id": sid}
+
+    # ===== Register Sora 2 scene-video routes =====
+    try:
+        from .scenes import register_scene_routes
+        register_scene_routes(router, db, _require_admin)
+        logger.info("[AVATAR] Scene video routes registered")
+    except Exception as _se:
+        logger.error(f"[AVATAR] Failed to register scene routes: {_se}", exc_info=True)
 
     return router

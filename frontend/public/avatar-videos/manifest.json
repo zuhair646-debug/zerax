@@ -1,0 +1,54 @@
+{
+  "zara": [
+    {
+      "scene_id": "wave",
+      "url": "/avatar-videos/zara-wave.mp4",
+      "filename": "zara-wave.mp4",
+      "generated_at": "2026-04-30T19:39:49.596699+00:00"
+    },
+    {
+      "scene_id": "dancing",
+      "url": "/avatar-videos/zara-dancing.mp4",
+      "filename": "zara-dancing.mp4",
+      "generated_at": "2026-04-30T19:41:09.087698+00:00"
+    },
+    {
+      "scene_id": "jumping",
+      "url": "/avatar-videos/zara-jumping.mp4",
+      "filename": "zara-jumping.mp4",
+      "generated_at": "2026-04-30T19:42:29.749645+00:00"
+    }
+  ],
+  "layla": [],
+  "jobs": {
+    "zara:wave": {
+      "status": "done",
+      "finished_at": "2026-04-30T19:39:49.596714+00:00"
+    },
+    "layla:coffee": {
+      "status": "failed",
+      "error": "no bytes returned"
+    },
+    "zara:dancing": {
+      "status": "done",
+      "finished_at": "2026-04-30T19:41:09.087714+00:00"
+    },
+    "zara:jumping": {
+      "status": "done",
+      "finished_at": "2026-04-30T19:42:29.749683+00:00"
+    },
+    "layla:wave": {
+      "status": "running",
+      "started_at": "2026-04-30T19:42:29.750020+00:00"
+    },
+    "layla:dancing": {
+      "status": "queued",
+      "started_at": "2026-04-30T19:38:28.784838+00:00"
+    },
+    "layla:jumping": {
+      "status": "queued",
+      "started_at": "2026-04-30T19:38:28.784842+00:00"
+    }
+  },
+  "updated_at": "2026-04-30T19:42:29.750024+00:00"
+}

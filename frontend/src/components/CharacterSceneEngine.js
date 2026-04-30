@@ -15,6 +15,8 @@
  */
 import React, { useEffect, useState, useRef } from 'react';
 
+const API = process.env.REACT_APP_BACKEND_URL;
+
 const SCENES = [
   { id: 'ball-toss',      duration: 4000, weight: 3 },
   { id: 'peek-hide',      duration: 3500, weight: 2 },
@@ -33,10 +35,46 @@ function pickScene() {
   return SCENES[0];
 }
 
+function pickRandom(arr) {
+  if (!arr || arr.length === 0) return null;
+  return arr[Math.floor(Math.random() * arr.length)];
+}
+
 export default function CharacterSceneEngine({ onLaunchVoice }) {
   const [scene, setScene] = useState(SCENES[SCENES.length - 1]); // start with idle sway
   const [tick, setTick] = useState(0);
+  const [manifest, setManifest] = useState({ zara: [], layla: [] });
+  const [zaraClip, setZaraClip] = useState(null);  // {url, scene_id} when playing
+  const [laylaClip, setLaylaClip] = useState(null);
   const timerRef = useRef(null);
+  const clipTimerRef = useRef(null);
+
+  // Fetch Sora 2 video manifest once
+  useEffect(() => {
+    if (!API) return;
+    fetch(`${API}/api/avatar/scenes/manifest`)
+      .then(r => r.ok ? r.json() : null)
+      .then(d => d && setManifest({ zara: d.zara || [], layla: d.layla || [] }))
+      .catch(() => {});
+  }, []);
+
+  // Periodically choose whether to play a Sora clip (50% chance every ~8s)
+  useEffect(() => {
+    const tryPlayClip = () => {
+      const pool = [];
+      if (manifest.zara.length > 0) pool.push('zara');
+      if (manifest.layla.length > 0) pool.push('layla');
+      if (pool.length && Math.random() < 0.5) {
+        const ch = pool[Math.floor(Math.random() * pool.length)];
+        const clip = pickRandom(manifest[ch]);
+        if (ch === 'zara') setZaraClip(clip); else setLaylaClip(clip);
+      }
+    };
+    // first attempt after 3s, then every 8s
+    const first = setTimeout(tryPlayClip, 3000);
+    clipTimerRef.current = setInterval(tryPlayClip, 8000);
+    return () => { clearTimeout(first); clearInterval(clipTimerRef.current); };
+  }, [manifest]);
 
   useEffect(() => {
     const runNext = () => {
@@ -57,8 +95,8 @@ export default function CharacterSceneEngine({ onLaunchVoice }) {
       <button
         key={`zara-${tick}`}
         onClick={() => onLaunchVoice && onLaunchVoice('zara')}
-        className={`fixed bottom-0 z-40 pointer-events-auto group zara-scene-${scene.id}`}
-        style={{
+        className={`fixed bottom-0 z-40 pointer-events-auto group ${zaraClip ? 'zara-video-pose' : `zara-scene-${scene.id}`}`}
+        style={zaraClip ? { left: '0.5rem' } : {
           '--duration': `${scene.duration}ms`,
           animation: `zara-${scene.id} ${scene.duration}ms ease-in-out forwards`,
         }}
@@ -66,16 +104,28 @@ export default function CharacterSceneEngine({ onLaunchVoice }) {
         aria-label="تكلّم مع زارا"
       >
         <div className="relative w-28 sm:w-36 h-40 sm:h-48">
-          <img
-            src="/avatars/zara_idle.png"
-            onError={(e) => { e.target.src = '/avatars/f1_zara.png'; }}
-            alt=""
-            className="w-full h-full object-contain object-bottom transition-transform group-hover:scale-110"
-            style={{ filter: 'drop-shadow(0 0 20px rgba(245,158,11,0.4))' }}
-            draggable={false}
-          />
+          {zaraClip ? (
+            <video
+              src={zaraClip.url}
+              autoPlay muted playsInline
+              onEnded={() => setZaraClip(null)}
+              onError={() => setZaraClip(null)}
+              className="w-full h-full object-cover object-center rounded-xl transition-transform group-hover:scale-110"
+              style={{ filter: 'drop-shadow(0 0 25px rgba(245,158,11,0.5))', mixBlendMode: 'screen' }}
+              data-testid="zara-sora-video"
+            />
+          ) : (
+            <img
+              src="/avatars/zara_idle.png"
+              onError={(e) => { e.target.src = '/avatars/f1_zara.png'; }}
+              alt=""
+              className="w-full h-full object-contain object-bottom transition-transform group-hover:scale-110"
+              style={{ filter: 'drop-shadow(0 0 20px rgba(245,158,11,0.4))' }}
+              draggable={false}
+            />
+          )}
           {/* Optional prop: ball during ball-toss */}
-          {scene.id === 'ball-toss' && (
+          {!zaraClip && scene.id === 'ball-toss' && (
             <div className="absolute bottom-16 left-1/2 w-5 h-5 rounded-full bg-gradient-to-br from-pink-400 to-orange-500 shadow-[0_0_15px_rgba(236,72,153,0.8)]"
               style={{ animation: `ball-fly 2000ms ease-in-out infinite` }} />
           )}
@@ -86,8 +136,8 @@ export default function CharacterSceneEngine({ onLaunchVoice }) {
       <button
         key={`layla-${tick}`}
         onClick={() => onLaunchVoice && onLaunchVoice('layla')}
-        className={`fixed bottom-0 z-40 pointer-events-auto group layla-scene-${scene.id}`}
-        style={{
+        className={`fixed bottom-0 z-40 pointer-events-auto group ${laylaClip ? 'layla-video-pose' : `layla-scene-${scene.id}`}`}
+        style={laylaClip ? { right: '0.5rem' } : {
           '--duration': `${scene.duration}ms`,
           animation: `layla-${scene.id} ${scene.duration}ms ease-in-out forwards`,
         }}
@@ -95,14 +145,26 @@ export default function CharacterSceneEngine({ onLaunchVoice }) {
         aria-label="تكلّم مع ليلى"
       >
         <div className="relative w-28 sm:w-36 h-40 sm:h-48">
-          <img
-            src="/avatars/layla_idle.png"
-            onError={(e) => { e.target.src = '/avatars/f2_layla.png'; }}
-            alt=""
-            className="w-full h-full object-contain object-bottom transition-transform group-hover:scale-110"
-            style={{ filter: 'drop-shadow(0 0 20px rgba(168,85,247,0.4))' }}
-            draggable={false}
-          />
+          {laylaClip ? (
+            <video
+              src={laylaClip.url}
+              autoPlay muted playsInline
+              onEnded={() => setLaylaClip(null)}
+              onError={() => setLaylaClip(null)}
+              className="w-full h-full object-cover object-center rounded-xl transition-transform group-hover:scale-110"
+              style={{ filter: 'drop-shadow(0 0 25px rgba(168,85,247,0.5))', mixBlendMode: 'screen' }}
+              data-testid="layla-sora-video"
+            />
+          ) : (
+            <img
+              src="/avatars/layla_idle.png"
+              onError={(e) => { e.target.src = '/avatars/f2_layla.png'; }}
+              alt=""
+              className="w-full h-full object-contain object-bottom transition-transform group-hover:scale-110"
+              style={{ filter: 'drop-shadow(0 0 20px rgba(168,85,247,0.4))' }}
+              draggable={false}
+            />
+          )}
         </div>
       </button>
 
