@@ -15,7 +15,7 @@ export default function CharacterSceneEngine3D({ onLaunchVoice }) {
     <>
       <button
         onClick={() => onLaunchVoice && onLaunchVoice('zara')}
-        className="fixed bottom-0 left-2 z-40 w-40 sm:w-52 md:w-64 h-56 sm:h-72 md:h-80 pointer-events-auto group cursor-pointer"
+        className="fixed bottom-0 left-2 z-40 w-44 sm:w-52 md:w-60 h-60 sm:h-72 md:h-80 pointer-events-auto group cursor-pointer"
         data-testid="duo-launcher-zara"
         aria-label="تكلّم مع زارا"
       >
@@ -27,6 +27,7 @@ export default function CharacterSceneEngine3D({ onLaunchVoice }) {
             dataTestId="zara-3d"
             cameraPos={[0, 1.3, 1.5]}
             fov={28}
+            sceneOffset={0}
           />
         </Suspense>
         <HintDot color="amber" />
@@ -34,7 +35,7 @@ export default function CharacterSceneEngine3D({ onLaunchVoice }) {
 
       <button
         onClick={() => onLaunchVoice && onLaunchVoice('layla')}
-        className="fixed bottom-0 right-2 z-40 w-40 sm:w-52 md:w-64 h-56 sm:h-72 md:h-80 pointer-events-auto group cursor-pointer"
+        className="fixed bottom-0 right-2 z-40 w-44 sm:w-52 md:w-60 h-60 sm:h-72 md:h-80 pointer-events-auto group cursor-pointer"
         data-testid="duo-launcher-layla"
         aria-label="تكلّم مع ليلى"
       >
@@ -46,17 +47,10 @@ export default function CharacterSceneEngine3D({ onLaunchVoice }) {
             dataTestId="layla-3d"
             cameraPos={[0, 1.3, 1.5]}
             fov={28}
+            sceneOffset={2.5}
           />
         </Suspense>
         <HintDot color="purple" />
-      </button>
-
-      <button
-        onClick={() => onLaunchVoice && onLaunchVoice('zara')}
-        className="fixed bottom-6 left-1/2 -translate-x-1/2 z-40 px-4 py-2 rounded-full bg-gradient-to-r from-amber-500 via-orange-500 to-pink-500 text-white font-black text-xs shadow-[0_0_30px_rgba(245,158,11,0.6)] hover:scale-105 transition flex items-center gap-1.5"
-        data-testid="duo-launcher-cta"
-      >
-        اضغط وكلّمني صوتاً
       </button>
     </>
   );

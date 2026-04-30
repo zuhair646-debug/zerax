@@ -68,15 +68,6 @@ function SceneEngine2D({ onLaunchVoice }) {
           <HintDot color="purple" />
         </div>
       </button>
-
-      {/* Center CTA */}
-      <button
-        onClick={() => onLaunchVoice && onLaunchVoice('zara')}
-        className="fixed bottom-6 left-1/2 -translate-x-1/2 z-40 px-4 py-2 rounded-full bg-gradient-to-r from-amber-500 via-orange-500 to-pink-500 text-white font-black text-xs shadow-[0_0_30px_rgba(245,158,11,0.6)] hover:scale-105 transition flex items-center gap-1.5"
-        data-testid="duo-launcher-cta"
-      >
-        اضغط وكلّمني صوتاً
-      </button>
     </>
   );
 }

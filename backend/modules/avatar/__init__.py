@@ -43,32 +43,43 @@ AVAILABLE_VOICES = [
 ]
 
 # ===== System messages =====
-# Saudi dialect — natural, friendly, warm
-ZITEX_AVATAR_SYSTEM = """أنت زارا أو ليلى — مساعدة صوتية على منصة Zitex.
+# Saudi dialect — natural, friendly, warm, knowledgeable about everything
+ZITEX_AVATAR_SYSTEM = """أنت زارا أو ليلى — مساعدة صوتية ذكية على منصة Zitex.
 
 قواعد الكلام (مهم جداً):
-- لهجة سعودية طبيعية فقط: "هلا" "وش" "ابغى" "تبي" "شلون" "أبشر" "تمام"
-- ردود قصيرة جداً جداً: 1-2 جملة فقط (الصوت يسمع، فلا تطول)
+- لهجة سعودية طبيعية فقط: "هلا" "وش" "ابغى" "تبي" "شلون" "أبشر" "تمام" "والله"
+- ردود قصيرة طبيعية: 1-3 جمل (الصوت يسمع، لا تطولين)
 - لا emojis في الرد (الصوت يقرأها بشكل غريب)
-- اسم المستخدم لو موجود استخدميه مباشرة
+- اسم المستخدم لو موجود استخدميه مباشرة بحب
 - بدون مقدمات ولا تكرار
 
 شخصيتك:
 - زارا: مرحة حماسية ("ابشر يا قلبي!" "يا سلام!")
 - ليلى: هادئة أنيقة ("تمام معاك" "أنا أسمعك")
 
-خدمات Zitex (لو سأل):
+ذكاؤك (مهم جداً):
+أنت **مساعدة شاملة** — تجاوبين على **أي** سؤال يسأله المستخدم:
+- أسئلة عامة (طبخ، طب، رياضة، تاريخ، علوم، تكنولوجيا، أخبار)
+- مساعدة دراسية (شرح دروس، حل واجبات، تلخيص)
+- نصائح حياتية (مشاكل شخصية، علاقات، عمل)
+- استشارات تقنية (برمجة، تصميم، أدوات)
+- محادثة عادية (نكات، قصص، تشجيع)
+- بالطبع كل خدمات Zitex
+
+لو سأل عن شي مالك علم به، قولي بصراحة: "والله ما عندي معلومة دقيقة عن هذا، بس..."
+
+خدمات Zitex (لو سأل تحديداً):
 - مواقع جاهزة (25 تخصص)
 - توليد صور AI (5 نقاط)
 - توليد فيديو AI (4-12 نقطة/ثانية)
-- مساعدة ذكية لمتجرك
+- استوديو ذكي لمتجرك
 
-Intent routing — لو طلب شي محدد، فهمي القصد:
+Intent routing — لو طلب صراحة شي من Zitex، فهمي القصد:
 - يبغى صورة → اكتشفي الموضوع وردي: "تمام، خلنا نسوي صورة [الموضوع]. أنقلك للاستوديو الآن"
 - يبغى فيديو → "تمام، فيديو [النوع]. أحوّلك للويزارد"
 - يبغى موقع → "ممتاز، موقع [النوع]. أوديك لصفحة المواقع"
 
-اللهجة: سعودي خفيف فقط — لا فصحى ثقيلة.
+اللهجة: سعودي خفيف طبيعي — لا فصحى ثقيلة، لا مصري، لا شامي.
 """
 
 
@@ -199,11 +210,26 @@ def create_avatar_router(db, get_current_user) -> APIRouter:
         response = await chat.send_message(UserMessage(text=user_msg))
         return response
 
+    # Voice mapping per character — ElevenLabs voice IDs
+    ELEVENLABS_VOICE_MAP = {
+        "zara":     "EXAVITQu4vr4xnSDxMaL",   # Bella — warm soft young
+        "layla":    "XB0fDUnXU5powFXDhCwa",   # Charlotte — elegant
+        "shimmer":  "EXAVITQu4vr4xnSDxMaL",
+        "nova":     "XB0fDUnXU5powFXDhCwa",
+        "coral":    "EXAVITQu4vr4xnSDxMaL",
+        "sage":     "XB0fDUnXU5powFXDhCwa",
+        "alloy":    "EXAVITQu4vr4xnSDxMaL",
+        "fable":    "pFZP5JQG7iQjIQuC4Bku",
+        "echo":     "XrExE9yKIg1WjnnlVkGX",
+        "onyx":     "XrExE9yKIg1WjnnlVkGX",
+    }
+
     # ===== Helper: TTS via OpenAI gpt-4o-mini-tts (ChatGPT-grade with instructions) =====
     async def _tts(text: str, voice_id: Optional[str] = None) -> Optional[str]:
         try:
             import re as _re
             import base64 as _b64
+            import asyncio as _asyncio
 
             voice = voice_id or "coral"
 
@@ -230,6 +256,40 @@ def create_avatar_router(db, get_current_user) -> APIRouter:
 
             # Use DIRECT OpenAI key (user-provided) for premium TTS
             direct_key = os.environ.get("OPENAI_DIRECT_KEY", "").strip()
+
+            # ===== PRIMARY: ElevenLabs eleven_multilingual_v2 (best Arabic) =====
+            el_key = os.environ.get("ELEVENLABS_API_KEY", "").strip()
+            if el_key:
+                try:
+                    from elevenlabs.client import ElevenLabs
+                    el_client = ElevenLabs(api_key=el_key)
+                    el_voice_id = ELEVENLABS_VOICE_MAP.get(voice.lower(), ELEVENLABS_VOICE_MAP["zara"])
+
+                    def _gen_el():
+                        if voice.lower() in ("zara", "shimmer", "coral", "alloy", "fable"):
+                            settings = {"stability": 0.42, "similarity_boost": 0.78,
+                                        "style": 0.45, "use_speaker_boost": True}
+                        elif voice.lower() in ("layla", "nova", "sage"):
+                            settings = {"stability": 0.55, "similarity_boost": 0.82,
+                                        "style": 0.30, "use_speaker_boost": True}
+                        else:
+                            settings = {"stability": 0.5, "similarity_boost": 0.75,
+                                        "style": 0.3, "use_speaker_boost": True}
+                        chunks = el_client.text_to_speech.convert(
+                            text=clean,
+                            voice_id=el_voice_id,
+                            model_id="eleven_multilingual_v2",
+                            voice_settings=settings,
+                            output_format="mp3_44100_128",
+                        )
+                        return b"".join(chunks)
+
+                    audio_bytes = await _asyncio.get_event_loop().run_in_executor(None, _gen_el)
+                    if audio_bytes:
+                        audio_b64 = _b64.b64encode(audio_bytes).decode("utf-8")
+                        return f"data:audio/mp3;base64,{audio_b64}"
+                except Exception as ee:
+                    logger.warning(f"[AVATAR] ElevenLabs TTS failed, falling back: {ee}")
 
             if direct_key:
                 # Premium path: gpt-4o-mini-tts with instructions for Saudi dialect

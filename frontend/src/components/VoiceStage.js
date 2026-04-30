@@ -31,6 +31,16 @@ function getAnonId() {
 
 function getStoredName() {
   if (typeof window === 'undefined') return '';
+  // 1. Logged-in user: get from cached user object
+  try {
+    const userJson = localStorage.getItem('user');
+    if (userJson) {
+      const u = JSON.parse(userJson);
+      const n = u?.name || u?.full_name || u?.display_name || u?.email?.split('@')[0];
+      if (n && typeof n === 'string' && n.trim().length >= 2) return n.trim();
+    }
+  } catch (_) {}
+  // 2. Anonymous: prior typed name
   return localStorage.getItem('zitex_user_name') || '';
 }
 
