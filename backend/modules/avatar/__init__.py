@@ -194,32 +194,23 @@ def create_avatar_router(db, get_current_user) -> APIRouter:
         response = await chat.send_message(UserMessage(text=user_msg))
         return response
 
-    # ===== Helper: TTS via OpenAI (HD quality + Arabic-optimized) =====
+    # ===== Helper: TTS via OpenAI gpt-4o-mini-tts (ChatGPT-grade with instructions) =====
     async def _tts(text: str, voice_id: Optional[str] = None) -> Optional[str]:
         try:
-            from emergentintegrations.llm.openai import OpenAITextToSpeech
-            api_key = os.environ.get("EMERGENT_LLM_KEY", "").strip()
-            if not api_key:
-                return None
-            tts = OpenAITextToSpeech(api_key=api_key)
+            import re as _re
+            import base64 as _b64
+
             voice = voice_id or "coral"
 
-            # Deep text cleaning for better Arabic pronunciation
-            import re as _re
+            # Deep text cleaning for natural Arabic speech
             clean = text[:4000]
-            # Remove emojis (TTS reads them poorly)
             clean = _re.sub(r'[\U0001F000-\U0001FFFF\U00002600-\U000027BF\U0001F300-\U0001F9FF\u2600-\u26FF\u2700-\u27BF]+', '', clean)
-            # Remove Arabic tatweel (stretches pronunciation oddly)
             clean = clean.replace('ـ', '')
-            # Fix common speech flow issues
             clean = clean.replace('!', '.').replace('؟', '.').replace('?', '.')
-            # Expand common Saudi colloquial abbreviations to proper pronunciation
             replacements = {
                 'ان شاء الله': 'إن شاء الله',
                 'ماشاء الله': 'ما شاء الله',
                 'ولله': 'والله',
-                'وشو': 'وش هو',
-                'شلونك': 'شلون حالك',
                 'مدري': 'ما أدري',
                 'AI': 'إيه آي',
                 'OK': 'أوكي',
@@ -227,26 +218,69 @@ def create_avatar_router(db, get_current_user) -> APIRouter:
             }
             for k, v in replacements.items():
                 clean = clean.replace(k, v)
-            # Collapse whitespace
             clean = _re.sub(r'\s+', ' ', clean).strip()
-            # Remove duplicate punctuation
             clean = _re.sub(r'\.{2,}', '.', clean)
-            clean = _re.sub(r'،{2,}', '،', clean)
-
             if not clean:
                 return None
 
+            # Use DIRECT OpenAI key (user-provided) for premium TTS
+            direct_key = os.environ.get("OPENAI_DIRECT_KEY", "").strip()
+
+            if direct_key:
+                # Premium path: gpt-4o-mini-tts with instructions for Saudi dialect
+                from openai import AsyncOpenAI
+                client = AsyncOpenAI(api_key=direct_key)
+
+                # Personality-specific instructions for natural Saudi speech
+                if voice == "coral":
+                    instructions = (
+                        "Speak in a warm, cheerful, friendly young woman's voice with a natural Saudi Arabic dialect. "
+                        "Pronounce Arabic words clearly and naturally, as a native Saudi/Khaleeji speaker would. "
+                        "Tone: playful, engaged, personal — like a close female friend. "
+                        "Pace: medium, conversational, with natural emotion. Do not sound robotic."
+                    )
+                elif voice == "sage":
+                    instructions = (
+                        "Speak in an elegant, calm, wise young woman's voice with a natural Saudi Arabic dialect. "
+                        "Pronounce Arabic words precisely and smoothly as a native Saudi speaker would. "
+                        "Tone: thoughtful, refined, composed — like a sophisticated mentor. "
+                        "Pace: slow-medium, deliberate, with emotional depth. Avoid robotic delivery."
+                    )
+                else:
+                    instructions = (
+                        "Speak in a natural Saudi Arabic dialect, clearly and expressively, as a native speaker."
+                    )
+
+                try:
+                    response = await client.audio.speech.create(
+                        model="gpt-4o-mini-tts",
+                        voice=voice,
+                        input=clean,
+                        instructions=instructions,
+                        response_format="mp3",
+                        speed=1.0,
+                    )
+                    audio_bytes = response.content if hasattr(response, "content") else await response.aread()
+                    audio_b64 = _b64.b64encode(audio_bytes).decode("utf-8")
+                    return f"data:audio/mp3;base64,{audio_b64}"
+                except Exception as oe:
+                    logger.warning(f"[AVATAR] gpt-4o-mini-tts failed, falling back: {oe}")
+                    # Fall through to tts-1-hd fallback
+
+            # Fallback: emergentintegrations tts-1-hd
+            from emergentintegrations.llm.openai import OpenAITextToSpeech
+            em_key = os.environ.get("EMERGENT_LLM_KEY", "").strip()
+            if not em_key:
+                return None
+            tts = OpenAITextToSpeech(api_key=em_key)
             audio_b64 = await tts.generate_speech_base64(
-                text=clean,
-                model="tts-1-hd",
-                voice=voice,
-                speed=0.92,  # Slightly slower — much clearer Arabic articulation
+                text=clean, model="tts-1-hd", voice=voice, speed=0.92,
             )
             if not audio_b64:
                 return None
             return f"data:audio/mp3;base64,{audio_b64}"
         except Exception as e:
-            logger.warning(f"[AVATAR] TTS failed: {e}")
+            logger.warning(f"[AVATAR] TTS total failure: {e}")
             return None
 
     # ===== Helper: deduct points atomically =====

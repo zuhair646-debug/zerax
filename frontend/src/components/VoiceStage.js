@@ -70,6 +70,7 @@ export default function VoiceStage({ open, onClose, initialCharacter = 'zara', m
   const sessionRef = useRef(null);
   const lipSyncIntervalRef = useRef(null);
   const greetedRef = useRef(false);
+  const autoListenRef = useRef(false);
 
   const isAuthed = !!(typeof window !== 'undefined' && localStorage.getItem('token'));
   const anonId = !isAuthed && mode === 'main' ? getAnonId() : null;
@@ -186,7 +187,7 @@ export default function VoiceStage({ open, onClose, initialCharacter = 'zara', m
     }
   };
 
-  // ===== Listening =====
+  // ===== Listening (auto-VAD: continuous; restarts after AI finishes) =====
   const startListening = useCallback(() => {
     if (!SR) {
       toast.error('المتصفح ما يدعم الصوت — جرّب Chrome');
@@ -200,30 +201,57 @@ export default function VoiceStage({ open, onClose, initialCharacter = 'zara', m
     try {
       const rec = new SR();
       rec.lang = 'ar-SA';
-      rec.continuous = false;
+      rec.continuous = true;          // Keep listening continuously
       rec.interimResults = true;
       rec.maxAlternatives = 1;
-      rec.onstart = () => { setListening(true); setStage('listening'); setSubtitle('أنا أسمعك...'); };
+      rec.onstart = () => { setListening(true); setStage('listening'); setSubtitle('أنا أسمعك... تكلم معي'); };
       rec.onresult = (e) => {
         const txt = Array.from(e.results).map(r => r[0].transcript).join(' ');
         setLastUserSaid(txt);
-        if (e.results[e.results.length - 1].isFinal) handleUserSpeech(txt.trim());
+        if (e.results[e.results.length - 1].isFinal && txt.trim().length >= 2) {
+          // Stop listening, send, then resume after AI finishes
+          try { rec.stop(); } catch (_) {}
+          handleUserSpeech(txt.trim());
+        }
       };
       rec.onerror = (e) => {
-        setListening(false); setStage('idle');
-        if (e.error === 'no-speech') setSubtitle('ما سمعت شي — جرّب مرة ثانية');
-        else if (e.error === 'not-allowed') toast.error('فعّلي إذن المايكروفون');
+        if (e.error === 'no-speech') {
+          // Auto-restart after a moment
+          setTimeout(() => {
+            if (recRef.current === rec && stage !== 'speaking' && stage !== 'banter') {
+              try { rec.start(); } catch (_) {}
+            }
+          }, 800);
+        } else if (e.error === 'not-allowed') {
+          toast.error('فعّلي إذن المايكروفون عشان أسمعك');
+          setListening(false); setStage('idle');
+        } else if (e.error !== 'aborted') {
+          setListening(false); setStage('idle');
+        }
       };
-      rec.onend = () => setListening(false);
+      rec.onend = () => {
+        // Auto-restart the recognition loop while we're still "listening" mode
+        // and the AI isn't currently talking.
+        setListening(false);
+        if (autoListenRef.current && stage !== 'speaking' && stage !== 'banter' && stage !== 'thinking') {
+          setTimeout(() => {
+            if (autoListenRef.current) {
+              try { rec.start(); } catch (_) {}
+            }
+          }, 300);
+        }
+      };
       rec.start();
       recRef.current = rec;
+      autoListenRef.current = true;
     } catch (_) {
       toast.error('فشل المايك');
       setListening(false);
     }
-  }, [listening, anonUsage, onSignupNeeded]);
+  }, [listening, anonUsage, onSignupNeeded, stage]);
 
   const stopListening = useCallback(() => {
+    autoListenRef.current = false;
     if (recRef.current) try { recRef.current.stop(); } catch (_) {}
     setListening(false);
     if (stage === 'listening') setStage('idle');
