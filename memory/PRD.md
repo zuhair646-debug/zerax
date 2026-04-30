@@ -15,6 +15,30 @@
 - 🔒 **Images**: قريباً
 
 
+### 🆕 May 1, 2026 — GLOBAL PERSISTENT VRM AVATARS (P0 — DONE ✅)
+
+طلبات المستخدم:
+1. **احذف الشخصيات القديمة (PNG)** — البنت الشعر دهبي + الثانية اللابسة سود
+2. استخدم فقط الشخصيات الجديدة (زارا حمراء + ليلى أرجوانية - VRM 3D)
+3. **احذف صفحة المحادثة المنفصلة** — لا modal كامل الشاشة
+4. **الشخصيات تظهر في كل مكان** بالموقع (لا فقط الصفحة الرئيسية)
+5. تطلع رأسها من الزوايا
+6. ينادي الذكاء بصوته → يرد مباشرة بدون فتح صفحة جديدة
+7. AI يوجّه المستخدم لأقسام الموقع (يفتح قسم الفيديو، السيناريو) ويتفاعل معه
+
+**ما تم:**
+- 🗑️ **أزيل**: TalkPage.js (route + import) — لا modal كامل الشاشة
+- 🗑️ **أزيلت** كل مراجع PNG القديمة (`zara_idle.png`, `layla_idle.png`, `f1_zara.png`, `f2_layla.png`):
+  - `CharacterSceneEngine` v7 → Avatar3D مباشر (VRM)
+  - `VoiceStage.Character` → Avatar3D مع lazy import
+- 🆕 **`GlobalAvatarMount.js`**: يثبّت `ZitexDuoLauncher` على **كل** المسارات (ما عدا login/register/auth-callback/vrm-preview/sites/client/driver)
+- 🎬 **Peek أنيمشن**: شخصية تطلع من الزاوية السفلى مع حركة ترحيب لطيفة
+- 🎙️ **Wake-word + Auto-open** يشتغلون الآن في **كل** الصفحات
+- 🎯 **Intent navigation** موجود مسبقاً: AI يكتشف القصد ويوجّه لـ`/chat/image`, `/chat/video`, `/websites`, `/dashboard/avatar`
+
+**Push:** Commit `64b0026` → Vercel auto-deploy
+
+
 ### 🆕 Apr 30, 2026 — PHASE 1 COMPLETE: Premium Saudi Voices + Animation Cycle + Smarter AI ✅
 
 **1. ElevenLabs Premium TTS** (`/app/backend/modules/avatar/__init__.py`):
