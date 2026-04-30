@@ -3057,6 +3057,15 @@ try:
 except Exception as _se:
     logging.getLogger(__name__).error(f"Failed to register studio module: {_se}", exc_info=True)
 
+# ============== VIDEO WIZARD (Smart conversational flow for main /chat/video) ==============
+try:
+    from modules.video_wizard import create_video_wizard_router
+    _vw_router = create_video_wizard_router(db, get_current_user)
+    app.include_router(_vw_router)
+    logging.getLogger(__name__).info("Video Wizard module registered")
+except Exception as _vwe:
+    logging.getLogger(__name__).error(f"Failed to register video wizard module: {_vwe}", exc_info=True)
+
 # ============== VISUAL DESIGNER APIS ==============
 class DesignElement(BaseModel):
     id: str

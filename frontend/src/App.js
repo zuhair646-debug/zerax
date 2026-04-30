@@ -43,6 +43,7 @@ import BillingCancel from '@/pages/billing/BillingCancel';
 import StudioHub from '@/pages/studio/StudioHub';
 import StudioImage from '@/pages/studio/StudioImage';
 import StudioVideo from '@/pages/studio/StudioVideo';
+import ChatVideo from '@/pages/chat/ChatVideo';
 import '@/App.css';
 
 function App() {
@@ -128,6 +129,8 @@ function App() {
           <Route path="/studio" element={<ProtectedRoute><StudioHub user={user} /></ProtectedRoute>} />
           <Route path="/studio/image" element={<ProtectedRoute><StudioImage user={user} /></ProtectedRoute>} />
           <Route path="/studio/video" element={<ProtectedRoute><StudioVideo user={user} /></ProtectedRoute>} />
+          <Route path="/chat/video" element={<ProtectedRoute><ChatVideo user={user} /></ProtectedRoute>} />
+          <Route path="/chat/image" element={<ProtectedRoute><AIChat user={user} initialType="image" /></ProtectedRoute>} />
         </Routes>
       </BrowserRouter>
       <Toaster position="top-center" richColors />
