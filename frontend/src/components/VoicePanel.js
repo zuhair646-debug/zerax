@@ -59,6 +59,7 @@ export default function VoicePanel({ open, onClose, user }) {
   const autoListenRef = useRef(false);
   const stageRef = useRef('idle');
   const startListeningRef = useRef(null);
+  const greetOnceRef = useRef(false);
 
   // Fetch credits on mount
   useEffect(() => {
@@ -80,9 +81,10 @@ export default function VoicePanel({ open, onClose, user }) {
     if (existing) { sessionRef.current = existing; }
   }, [open]);
 
-  // Start session: auto-greet + begin listening
+  // Start session: auto-greet + begin listening (once per open)
   useEffect(() => {
-    if (!open || sessionStarted) return;
+    if (!open || sessionStarted || greetOnceRef.current) return;
+    greetOnceRef.current = true;
     setSessionStarted(true);
     autoGreet();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -131,6 +133,11 @@ export default function VoicePanel({ open, onClose, user }) {
 
   const playAudio = (url) => new Promise((resolve) => {
     if (!url || muted) { setStage('idle'); kickAutoListen(); resolve(); return; }
+    // Stop any currently playing audio to prevent double voices
+    if (audioRef.current) {
+      try { audioRef.current.pause(); audioRef.current.src = ''; } catch (_) {}
+      audioRef.current = null;
+    }
     try {
       const a = new Audio(url);
       audioRef.current = a;
@@ -253,6 +260,7 @@ export default function VoicePanel({ open, onClose, user }) {
       if (audioRef.current) { try { audioRef.current.pause(); } catch (_) {} }
       autoListenRef.current = false;
       setSessionStarted(false);
+      greetOnceRef.current = false;
     }
   }, [open]);
 
