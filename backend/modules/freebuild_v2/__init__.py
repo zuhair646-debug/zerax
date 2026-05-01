@@ -413,6 +413,14 @@ def _build_model_messages(session: Dict[str, Any], new_user_msg: str) -> List[Di
     being built, inject a hard instruction to BUILD NOW this turn."""
     msgs: List[Dict[str, str]] = [{"role": "system", "content": ARCHITECT_SYSTEM}]
 
+    # Inject the resource library so the architect has real Unsplash IDs +
+    # Quran audio CDN URLs + SVG icons + verse design templates ready to use.
+    try:
+        from .resources import build_resources_block
+        msgs.append({"role": "system", "content": build_resources_block()})
+    except Exception as _re:
+        logger.warning(f"[FREEBUILD] resources block failed: {_re}")
+
     # Append the conversation history
     for m in session.get("messages", []):
         role = m.get("role")
@@ -459,21 +467,24 @@ def _build_model_messages(session: Dict[str, Any], new_user_msg: str) -> List[Di
                 "العميل قدّم معلومات كافية بالفعل. مننتظر تصميماً حقيقياً الآن.\n"
                 "- لا تطلب أي معلومة إضافية.\n"
                 "- لا تكرّر 'راح أصمم' — صمّم فعلياً هذه اللحظة.\n"
-                "- في هذا الرد، `html_update` يجب أن يحتوي على موقع كامل (navbar + hero + قسم + footer) بحجم ≥ 10,000 حرف.\n"
-                "- لو نقصك تفصيل، خذ افتراضاً منطقياً واكمل (اسم تقديري، ألوان مناسبة، محتوى تجريبي عالي الجودة).\n"
-                "- `next_question_type` يكون \"text\" أو \"yes_no\" بحيث تسأل العميل عن تحسين معين بعد ما يشوف التصميم.\n"
-                "- `progress_note` يصف ما بنيته (مثلاً: \"بنيت الصفحة الرئيسية بالكامل: navbar، hero، قسم القرّاء، footer\").\n\n"
-                "إذا رجعت رداً بدون html_update في هذه الدورة، فشلت في مهمتك. هذه الدورة = بناء إلزامي."
+                "- في هذا الرد، `html_update` يجب أن يحتوي على **SPA متعدد الصفحات** (≥5 صفحات) بحجم ≥ 18,000 حرف.\n"
+                "- صور Unsplash إجبارية: ≥4 صور `<img>` أو background-image في الموقع.\n"
+                "- إذا الموقع قرآني/ديني: ≥3 بطاقات قارئ مع `<audio src='https://server*.mp3quran.net/...'>` + ≥1 آية بتصميم عثماني.\n"
+                "- SVG icons من المكتبة المُعطاة لك (≥6 أيقونات في الموقع).\n"
+                "- لو نقصك تفصيل، خذ افتراضاً منطقياً واكمل.\n"
+                "- `next_question_type` = \"text\" أو \"yes_no\" (سؤال تحسين).\n"
+                "- `progress_note` يصف ما بنيته بدقة.\n\n"
+                "إذا رجعت رداً بدون html_update غني (≥18KB، صور حقيقية، صوتيات إن كان قرآني، أيقونات SVG)، فشلت في مهمتك."
             ),
         })
     elif current_html:
-        # Encourage incremental additions
+        # Encourage incremental additions — and remind about visual richness
         msgs.append({
             "role": "system",
             "content": (
-                "ملاحظة: الموقع موجود بالفعل. كل رد يجب أن يُحسّن أو يوسّع الموقع. "
-                "ارجع `html_update` مع الـHTML الكامل المُحدّث (تحافظ على كل الأقسام السابقة وتضيف/تعدّل حسب طلب العميل). "
-                "تحديث حقيقي مطلوب في كل رد من هنا وطالع."
+                "ملاحظة: الموقع موجود بالفعل. كل رد يجب أن يُحسّن أو يوسّع الموقع.\n"
+                "ارجع `html_update` مع الـHTML الكامل المُحدّث (تحافظ على كل الأقسام السابقة وتضيف/تعدّل حسب طلب العميل).\n"
+                "تذكير: استخدم مكتبة الموارد (Unsplash IDs + mp3quran CDN + SVG icons + Quran verse template) في كل تحديث."
             ),
         })
 
