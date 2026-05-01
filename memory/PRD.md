@@ -15,6 +15,41 @@
 - 🔒 **Images**: قريباً
 
 
+### 🆕 May 1, 2026 — AMBIENT VOICE AGENT (Phase 2 final) ✅
+
+**User's vision locked:**
+- ❌ لا نافذة محادثة تظهر عند الكلام
+- ❌ لا ضغط على المايك (إلا لتفعيل مرة واحدة)
+- ✅ نادي "زيتكس" → المايك ينبض → AI يرد بالصوت
+- ✅ صوت موحّد نظيف بدون إيموجي/إنجليزي/تكرار
+- ✅ انتقال سلس للأقسام عند الطلب
+
+**المكوّنات الجديدة:**
+- 🆕 `AmbientVoiceAgent.js`:
+  - Wake-word: `/ز[يَ]ت[كك]س/`, `/zitex/`, `/يا زيتكس/`
+  - 4 phases: ambient (breathing) / listening (emerald pulse) / thinking (purple) / speaking (amber)
+  - AI reply = audio + toast (bottom-center, 6s) — لا modal
+  - Intent → navigate silently + sessionStorage
+  - localStorage persistence للحالة
+
+- 🔄 `ZitexDuoLauncher v8` → فقط يُركّب `AmbientVoiceAgent`
+
+**Backend TTS Hardening:**
+- إزالة إيموجي شاملة من جميع النطاقات
+- Character whitelist: Arabic + Latin + digits + basic punct فقط
+- Collapse repeated punctuation (`!!` → `.`) لمنع التكرار
+- Normalize: Zitex/zitex/ZITEX → "زيتكس"
+- System prompt: حظر صريح للإيموجي/الإنجليزي/التكرار
+
+**اختبار حي:**
+- `ambient-voice-button: 1`
+- `voice-panel: 0` (لا نافذة)
+- `canvases: 0` (لا شخصيات)
+- 63KB صوت نظيف لرد "كيف الحال؟" = 3.5s واضحة
+
+**Push:** Commit `1bf59ac` → Vercel ينشر
+
+
 ### 🆕 May 1, 2026 — COMPACT VOICE PANEL (Phase 2 start) ✅
 
 **User feedback:** الـfull-screen modal كبير جداً، الشخصيات 3D تشوش — يبغي تجربة "ChatGPT-style":
