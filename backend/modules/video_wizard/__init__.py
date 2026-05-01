@@ -104,6 +104,43 @@ CATEGORIES = {
             {"id": "narration",  "label": "ما الذي يُقال (السكريبت)",             "type": "text"},
         ],
     },
+    "short_film": {
+        "label": "🎞️ فيلم قصير",
+        "desc": "مشهد قصير برسالة",
+        "questions": [
+            {"id": "story_beat", "label": "ما اللحظة الأساسية في القصة؟",            "type": "text"},
+            {"id": "character",  "label": "صف الشخصية الرئيسية",                    "type": "text"},
+            {"id": "setting",    "label": "أين تحدث؟",                             "type": "text"},
+            {"id": "mood",       "label": "الإحساس؟",                             "type": "select",
+             "options": ["bittersweet", "tense", "hopeful", "haunting", "triumphant"]},
+            {"id": "voiceover",  "label": "تعليق صوتي (اختياري)",                  "type": "text", "optional": True},
+        ],
+    },
+    "fashion": {
+        "label": "👠 فاشن فيلم",
+        "desc": "فيلم أزياء editorial",
+        "questions": [
+            {"id": "garment",    "label": "وش القطعة/المجموعة؟",                    "type": "text"},
+            {"id": "model_pose", "label": "حركة الموديل؟",                          "type": "select",
+             "options": ["walking_runway", "spinning_dress", "lying_still", "candid_movement", "hero_pose"]},
+            {"id": "environment","label": "البيئة؟",                                "type": "text"},
+            {"id": "vibe",       "label": "النفَس البصري؟",                          "type": "select",
+             "options": ["editorial_high_fashion", "surreal_dreamscape", "urban_grit", "luxury_clean"]},
+        ],
+    },
+    "automotive_ad": {
+        "label": "🏎️ إعلان سيارة",
+        "desc": "فيديو سيارة سينمائي",
+        "questions": [
+            {"id": "car",        "label": "نوع/موديل السيارة؟",                     "type": "text"},
+            {"id": "scene",      "label": "وين الإعلان؟",                          "type": "select",
+             "options": ["mountain_pass", "wet_city_night", "desert_dunes", "salt_flat", "coastal_highway"]},
+            {"id": "camera_move","label": "حركة الكاميرا؟",                          "type": "select",
+             "options": ["low_tracking_gimbal", "drone_arc_above", "interior_driver_pov", "static_hero_shot"]},
+            {"id": "mood",       "label": "الإحساس؟",                              "type": "select",
+             "options": ["aggressive_speed", "luxury_calm", "rugged_offroad", "futuristic_tech"]},
+        ],
+    },
 }
 
 # Duration tiers
@@ -151,12 +188,14 @@ def create_video_wizard_router(db, get_current_user) -> APIRouter:
     @router.get("/categories")
     async def get_categories():
         """Return the list of category options (no auth needed)."""
+        from .director_prompts import VOICE_LIBRARY
         return {
             "categories": [
                 {"id": k, "label": v["label"], "desc": v["desc"]} for k, v in CATEGORIES.items()
             ],
             "durations": DURATION_TIERS,
             "voices": VOICE_OPTIONS,
+            "voice_library": VOICE_LIBRARY,
         }
 
     @router.post("/start")
@@ -308,15 +347,27 @@ def create_video_wizard_router(db, get_current_user) -> APIRouter:
         ans = sess.get("answers") or {}
         cat = sess["category"]
         cat_def = CATEGORIES[cat]
-        # Compose a strong prompt from all answers
-        prompt_parts: List[str] = []
-        prompt_parts.append(f"Style: {cat_def['label'].split(' ', 1)[-1]} ({cat}).")
+
+        # Build user-facing brief from answers (Arabic)
+        brief_parts: List[str] = [f"النوع: {cat_def['label']}"]
         for q in cat_def["questions"]:
             v = ans.get(q["id"])
             if v:
-                prompt_parts.append(f"{q['label']}: {v}")
-        prompt_parts.append(f"Duration: {ans['duration_seconds']} seconds. High cinematic quality.")
-        full_prompt = " ".join(str(p) for p in prompt_parts)
+                brief_parts.append(f"{q['label']}: {v}")
+        brief_parts.append(f"المدة: {ans['duration_seconds']} ثانية.")
+        brief = "\n".join(str(p) for p in brief_parts)
+
+        # ====== Cinematic prompt engineering by Director persona ======
+        try:
+            from .director_prompts import get_director
+            director = get_director(cat)
+            cinematic_prompt = await _engineer_cinematic_prompt(director["system"], brief)
+            full_prompt = cinematic_prompt
+            director_name = director["persona_name"]
+        except Exception as _ee:
+            logger.warning(f"[VIDEO-WIZARD] director engineering failed, using brief: {_ee}")
+            full_prompt = brief + " High cinematic quality, professional cinematography, detailed."
+            director_name = "Fallback"
 
         # Atomic credit deduction
         cost = ans["estimated_cost"]
@@ -340,7 +391,7 @@ def create_video_wizard_router(db, get_current_user) -> APIRouter:
             video_gen = OpenAIVideoGeneration(api_key=emergent_key)
             # Sora 2 caps at 12s currently; will accept longer prompts but generate up to its max
             sora_duration = min(12, ans["duration_seconds"])
-            logger.info(f"[VIDEO-WIZARD] Generating: cat={cat}, sora_dur={sora_duration}, requested={ans['duration_seconds']}")
+            logger.info(f"[VIDEO-WIZARD] Director={director_name} Generating: cat={cat}, sora_dur={sora_duration}, requested={ans['duration_seconds']}")
             video_bytes = video_gen.text_to_video(
                 prompt=full_prompt,
                 model="sora-2",
@@ -363,6 +414,7 @@ def create_video_wizard_router(db, get_current_user) -> APIRouter:
                 "session_id": payload.session_id,
                 "media_url": data_url,
                 "prompt_used": full_prompt,
+                "director_persona": director_name,
                 "duration_actual_seconds": sora_duration,
                 "duration_requested": ans["duration_seconds"],
                 "credits_spent": cost,
@@ -380,6 +432,7 @@ def create_video_wizard_router(db, get_current_user) -> APIRouter:
                 "asset": {k: v for k, v in doc.items() if k != "_id"},
                 "credits_spent": cost,
                 "credits_remaining": await _get_credits(user["user_id"]),
+                "director": director_name,
             }
         except Exception as e:
             # Refund
@@ -396,3 +449,56 @@ def create_video_wizard_router(db, get_current_user) -> APIRouter:
             raise HTTPException(500, f"فشل توليد الفيديو. تمت إعادة النقاط. ({str(e)[:120]})")
 
     return router
+
+
+# ============================================================================
+# Director persona — cinematic prompt engineering helper
+# ============================================================================
+async def _engineer_cinematic_prompt(director_system: str, brief: str) -> str:
+    user_msg = (
+        f"## CLIENT BRIEF (Arabic)\n{brief}\n\n"
+        f"## OUTPUT REQUIREMENTS\n"
+        f"- Output language: English (video models perform best with English prompts).\n"
+        f"- Output format: ONE single flowing-line prompt of 80-130 words. NO bullet points, NO markdown, NO 'here is the prompt:' preamble. JUST the prompt itself."
+    )
+
+    direct_key = os.environ.get("OPENAI_DIRECT_KEY", "").strip()
+    out = ""
+    if direct_key:
+        from openai import AsyncOpenAI
+        client = AsyncOpenAI(api_key=direct_key)
+        resp = await client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {"role": "system", "content": director_system},
+                {"role": "user", "content": user_msg},
+            ],
+            temperature=0.85,
+            max_tokens=500,
+        )
+        out = (resp.choices[0].message.content or "").strip()
+    else:
+        from emergentintegrations.llm.chat import LlmChat, UserMessage
+        api_key = os.environ.get("EMERGENT_LLM_KEY")
+        if not api_key:
+            raise RuntimeError("no LLM key")
+        chat = LlmChat(
+            api_key=api_key,
+            session_id=f"videxpert-{uuid.uuid4()}",
+            system_message=director_system,
+        )
+        chat.with_model("openai", "gpt-4o-mini")
+        out = (await chat.send_message(UserMessage(text=user_msg)) or "").strip()
+
+    if out.startswith('"') and out.endswith('"'):
+        out = out[1:-1]
+    if out.startswith("```"):
+        lines = out.split("\n")
+        if lines[0].startswith("```"):
+            lines = lines[1:]
+        if lines and lines[-1].startswith("```"):
+            lines = lines[:-1]
+        out = "\n".join(lines).strip()
+    if len(out) < 40:
+        raise RuntimeError("cinematic prompt too short")
+    return out

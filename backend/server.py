@@ -3088,6 +3088,15 @@ try:
 except Exception as _iwe:
     logging.getLogger(__name__).error(f"Failed to register image wizard module: {_iwe}", exc_info=True)
 
+# ============== FREE-BUILD (AI conversational website builder — NO templates) ==============
+try:
+    from modules.freebuild import create_freebuild_router
+    _fb_router = create_freebuild_router(db, get_current_user)
+    app.include_router(_fb_router)
+    logging.getLogger(__name__).info("FreeBuild module registered")
+except Exception as _fbe:
+    logging.getLogger(__name__).error(f"Failed to register freebuild module: {_fbe}", exc_info=True)
+
 # ============== CHANNEL BRIDGE (Push Zitex-generated assets to owner's client websites) ==============
 try:
     from modules.bridge import create_bridge_router
