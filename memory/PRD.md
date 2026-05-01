@@ -6,7 +6,36 @@
 ## User Language: Arabic (العربية)
 
 
-### 🆕 May 1, 2026 — FREE-BUILD WEBSITE BUILDER (NO TEMPLATES) + SPECIALIZED IMAGE/VIDEO EXPERTS ✅
+### 🆕 May 1, 2026 — FREEBUILD V2: CONVERSATIONAL LIVE BUILDER ✅
+
+طلب المستخدم: التصميم القديم (17 Y/N + 3 free-text ثم توليد) كان غلط — يبي **شات + معاينة مباشرة** بخطوات متتالية، كل ما يجاوب الذكاء يضيف شي للموقع ويظهر live. الذكاء يفهم السياق (مثلاً "موقع تحفيظ قرآن" → يجيب مكتبة قرّاء ونظام تسميع). لا قوالب جاهزة.
+
+**Backend**: `/app/backend/modules/freebuild_v2/__init__.py`
+- Endpoints: `/api/freebuild/v2/{start, chat, session/{id}, preview/{id}, save-as-project, projects, project-preview/{id}, refine, project/{id}}`
+- OpenAI gpt-4o مع `response_format=json_object` → shape موحّد: `{message_to_user, next_question_type: 'text'|'yes_no'|'done', options, html_update, progress_note}`
+- Architect system prompt: يسأل سؤال واحد، يحدد نوعه ديناميكياً، يبني HTML incrementally (كل turn يرجع الـHTML الكامل المحدّث)، يفرض Arabic copy حقيقي + RTL + Tajawal + production-grade depth + no templates
+- Pricing: **3 نقاط لكل turn يحدّث HTML** · الأسئلة العادية مجانية · cap 60 turn/session
+- Domain intelligence: تحفيظ قرآن → مكتبة قرّاء + تسميع، مطعم → منيو + حجز، عيادة → حجز مواعيد، متجر → منتجات + سلة
+
+**Frontend**: `/app/frontend/src/pages/FreeBuild.js` (rewritten)
+- Split-pane layout: 42% شات يسار + 58% iframe معاينة يمين (desktop) · stacked على mobile
+- Chat bubbles مع avatars، progress notes تحت رسائل AI، typing indicator
+- Input bar: textarea + send + quick yes/no buttons عند yes_no قيد
+- Save modal + Gallery modal للمواقع المحفوظة
+- Cache-busting لـiframe preview على كل تحديث
+- Credits pill + new-session + gallery buttons في الـheader
+
+**Testing**:
+- Backend pytest: **14/15** (`/app/backend/tests/test_freebuild_v2.py`) 
+- Frontend: **13/13** (iteration_27.json — testing agent)
+- E2E سيناريو موقع تحفيظ قرآن: 7 turns في 31s، 4 html_updates، 12 نقطة، نهاية done تلقائية ✅
+
+**Commits**:
+- `c9c24d6` feat(freebuild-v2): conversational LIVE builder with side preview
+- `615dccf` test: pytest suite
+- Push to `zuhair646-debug/zitex:main` → Vercel auto-deploy
+
+
 
 طلب المستخدم: 
 1. قسم الصور: متخصص لكل نوع (إعلانات، منتجات، بنرات، لوقو) بمستوى احترافي عالي
