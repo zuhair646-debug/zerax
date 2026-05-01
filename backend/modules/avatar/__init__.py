@@ -57,6 +57,13 @@ ZITEX_AVATAR_SYSTEM = """أنت زارا أو ليلى — مساعدة صوتي
 - زارا: مرحة حماسية ("ابشر يا قلبي!" "يا سلام!")
 - ليلى: هادئة أنيقة ("تمام معاك" "أنا أسمعك")
 
+قواعد النطق الصارمة:
+- **ممنوع الإيموجي** (🌹 😊 ❤️ الخ) — يسبب مشاكل في الصوت
+- **ممنوع علامات التعجب المتكررة** (!! !!!) — استخدم علامة واحدة أو لا شيء
+- **ممنوع الكلمات الإنجليزية** إلا لو ضرورية جداً (اكتبها بالعربية: "أوكي" بدل "OK")
+- **ممنوع تكرار الجمل أو الكلمات**
+- جملة واحدة كاملة بدون توقف مفاجئ
+
 ذكاؤك (مهم جداً):
 أنت **مساعدة شاملة** — تجاوبين على **أي** سؤال يسأله المستخدم:
 - أسئلة عامة (طبخ، طب، رياضة، تاريخ، علوم، تكنولوجيا، أخبار)
@@ -235,8 +242,15 @@ def create_avatar_router(db, get_current_user) -> APIRouter:
 
             # Deep text cleaning for natural Arabic speech
             clean = text[:4000]
-            clean = _re.sub(r'[\U0001F000-\U0001FFFF\U00002600-\U000027BF\U0001F300-\U0001F9FF\u2600-\u26FF\u2700-\u27BF]+', '', clean)
+            # Remove ALL emoji & pictograph ranges
+            clean = _re.sub(r'[\U0001F000-\U0001FFFF\U00002000-\U000027BF\u2600-\u27BF\uFE0F]+', '', clean)
+            # Keep only Arabic, Latin, digits, basic punct
+            clean = _re.sub(r'[^\u0600-\u06FF\u0750-\u077F\u08A0-\u08FFa-zA-Z0-9\s\.\,\!\?\-\:\;\(\)،؟\'\"]+', ' ', clean)
             clean = clean.replace('ـ', '')
+            # Collapse repeated punctuation
+            clean = _re.sub(r'[!]{2,}', '.', clean)
+            clean = _re.sub(r'[؟\?]{2,}', '.', clean)
+            clean = _re.sub(r'[.]{2,}', '.', clean)
             clean = clean.replace('!', '.').replace('؟', '.').replace('?', '.')
             replacements = {
                 'ان شاء الله': 'إن شاء الله',
@@ -246,11 +260,13 @@ def create_avatar_router(db, get_current_user) -> APIRouter:
                 'AI': 'إيه آي',
                 'OK': 'أوكي',
                 'ok': 'أوكي',
+                'Zitex': 'زيتكس',
+                'zitex': 'زيتكس',
+                'ZITEX': 'زيتكس',
             }
             for k, v in replacements.items():
                 clean = clean.replace(k, v)
             clean = _re.sub(r'\s+', ' ', clean).strip()
-            clean = _re.sub(r'\.{2,}', '.', clean)
             if not clean:
                 return None
 
