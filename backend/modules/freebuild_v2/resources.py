@@ -201,55 +201,72 @@ def unsplash_url(photo_id: str, w: int = 1600, q: int = 80) -> str:
 # Maps any English/Arabic keyword the AI might use to a UNSPLASH_LIBRARY key.
 # Order matters — longer/more specific terms first.
 KEYWORD_ALIASES: List[tuple] = [
-    # Quran / Islamic
-    (("quran", "qur'an", "qoran", "mushaf", "recitation", "tilawah", "ayah",
-      "قرآن", "مصحف", "تلاوة", "آية"), "quran"),
+    # Quran / Islamic — broaden coverage
+    (("quran", "qur'an", "qoran", "quranic", "mushaf", "recitation",
+      "tilawah", "tilawat", "ayah", "verse", "surah", "tajweed",
+      "قرآن", "قران", "كريم", "مصحف", "تلاوة", "آية", "سورة", "تجويد"),
+     "quran"),
     (("madinah", "medina", "prophet-mosque", "المدينة", "مدينة"), "madinah"),
     (("mecca", "kaaba", "haram", "مكة", "كعبة"), "mecca"),
-    (("mosque", "masjid", "minaret", "prayer-hall", "مسجد", "مساجد"), "mosque"),
-    (("islamic-pattern", "geometric-pattern", "زخرفة", "زخارف"), "islamic_pattern"),
+    (("mosque", "masjid", "minaret", "prayer", "مسجد", "مساجد", "صلاة"),
+     "mosque"),
+    (("islamic-pattern", "geometric-pattern", "islamic-art",
+      "زخرفة", "زخارف"), "islamic_pattern"),
     # Smart tech / AI
     (("smart-tech", "smart-technology", "ai", "artificial-intelligence",
-      "machine-learning", "ذكاء", "ذكي", "تقنية"), "smart_tech"),
-    (("interaction", "interactive", "تفاعل"), "interaction"),
-    (("tracking", "monitoring", "analytics", "metrics", "متابعة", "تتبع"), "tracking"),
-    (("mobile-app", "smartphone", "app", "تطبيق"), "mobile_app"),
+      "machine-learning", "neural", "ذكاء-اصطناعي", "ذكاء", "ذكي", "تقنية"),
+     "smart_tech"),
+    (("interaction", "interactive", "engagement", "تفاعل"), "interaction"),
+    (("tracking", "monitoring", "analytics", "metrics", "stats",
+      "متابعة", "تتبع", "إحصاء"), "tracking"),
+    (("mobile-app", "smartphone", "app", "application", "تطبيق"),
+     "mobile_app"),
     # Education / learning
-    (("memorization", "memorize", "حفظ", "تحفيظ"), "memorization"),
-    (("teacher", "student", "tutor", "lesson", "درس", "معلم", "طالب", "تعليم"),
-     "teacher_student"),
-    (("classroom", "school", "صف", "مدرسة"), "classroom"),
-    (("books", "library", "كتب", "مكتبة"), "books"),
-    (("graduation", "تخرج"), "education"),
+    (("memorization", "memorize", "حفظ", "تحفيظ", "حافظ"), "memorization"),
+    (("teacher", "student", "tutor", "lesson", "instructor",
+      "درس", "معلم", "طالب", "تعليم", "مدرس"), "teacher_student"),
+    (("classroom", "school", "academy", "صف", "مدرسة", "أكاديمية"),
+     "classroom"),
+    (("books", "library", "reading", "كتب", "مكتبة", "قراءة"), "books"),
+    (("graduation", "graduate", "diploma", "تخرج", "شهادة"), "education"),
     # Kids
-    (("kids", "child", "children", "boy", "girl", "أطفال", "طفل"),
-     "children_learning"),
+    (("kids", "child", "children", "boy", "girl", "young",
+      "أطفال", "طفل", "صغار"), "children_learning"),
     # Food
-    (("saudi-food", "kabsa", "arab-food", "كبسة", "أكل-سعودي"), "saudi_food"),
-    (("food", "meal", "dish", "طعام", "أكل", "وجبة"), "food_general"),
+    (("saudi-food", "kabsa", "arab-food", "kabseh", "mandi",
+      "كبسة", "مندي", "أكل-سعودي"), "saudi_food"),
+    (("food", "meal", "dish", "cuisine", "طعام", "أكل", "وجبة", "طبق"),
+     "food_general"),
     (("restaurant", "dining", "مطعم"), "restaurant_interior"),
-    (("cafe", "coffee", "latte", "قهوة", "كافيه", "مقهى"), "cafe"),
-    (("dessert", "sweets", "cake", "حلويات"), "dessert"),
+    (("cafe", "coffee", "latte", "espresso", "قهوة", "كافيه", "مقهى"),
+     "cafe"),
+    (("dessert", "sweets", "cake", "حلويات", "حلى"), "dessert"),
     # Healthcare
     (("dentist", "dental", "أسنان"), "dentist"),
-    (("clinic", "hospital", "عيادة", "مستشفى"), "clinic"),
-    (("doctor", "physician", "nurse", "طبيب", "ممرض"), "doctor"),
+    (("clinic", "hospital", "medical-center", "عيادة", "مستشفى", "مركز-طبي"),
+     "clinic"),
+    (("doctor", "physician", "nurse", "specialist",
+      "طبيب", "ممرض", "أخصائي"), "doctor"),
     # E-commerce
-    (("perfume", "fragrance", "عطر", "عطور"), "perfume"),
-    (("jewelry", "ring", "necklace", "مجوهرات", "ذهب"), "jewelry"),
-    (("watch", "ساعة"), "watch"),
-    (("fashion", "clothing", "أزياء", "ملابس"), "fashion"),
+    (("perfume", "fragrance", "cologne", "عطر", "عطور"), "perfume"),
+    (("jewelry", "ring", "necklace", "diamond",
+      "مجوهرات", "ذهب", "ألماس"), "jewelry"),
+    (("watch", "ساعة", "ساعات"), "watch"),
+    (("fashion", "clothing", "apparel", "boutique",
+      "أزياء", "ملابس", "بوتيك"), "fashion"),
     # Real estate
-    (("villa", "house", "home", "real-estate", "فيلا", "بيت", "عقار"),
-     "modern_villa"),
-    (("interior", "living-room", "ديكور", "صالة"), "interior_living"),
+    (("villa", "house", "home", "real-estate", "property",
+      "فيلا", "بيت", "منزل", "عقار"), "modern_villa"),
+    (("interior", "living-room", "bedroom", "ديكور", "صالة"), "interior_living"),
     # Other
-    (("tech", "office", "workspace", "مكتب"), "office_workspace"),
-    (("city", "urban", "night", "مدينة", "ليل"), "city_night"),
-    (("nature", "mountain", "landscape", "طبيعة", "جبال"), "nature"),
-    (("luxury", "gold", "premium", "فخامة", "ذهبي"), "luxury"),
-    (("gym", "fitness", "workout", "نادي"), "gym"),
-    (("yoga", "meditation", "يوغا"), "yoga"),
+    (("tech", "office", "workspace", "desk", "مكتب"), "office_workspace"),
+    (("city", "urban", "night", "skyline", "مدينة", "ليل"), "city_night"),
+    (("nature", "mountain", "landscape", "forest", "طبيعة", "جبال", "غابة"),
+     "nature"),
+    (("luxury", "gold", "premium", "elegant",
+      "فخامة", "ذهبي", "فاخر"), "luxury"),
+    (("gym", "fitness", "workout", "exercise", "نادي", "رياضة"), "gym"),
+    (("yoga", "meditation", "wellness", "يوغا", "تأمل"), "yoga"),
 ]
 
 
@@ -276,20 +293,90 @@ def resolve_image_for_keyword(keyword: str, w: int = 1600) -> str:
 
 
 def post_process_html_images(html: str) -> str:
-    """Replace AI-generated @@IMG/<keyword>@@ placeholders with real URLs.
-    Pattern: src="@@IMG/quran-mushaf@@"  →  src="https://images.unsplash.com/photo-...".
-    Also handles background-image: url(@@IMG/...@@).
-    This guarantees images ALWAYS match section semantic intent."""
+    """Replace EVERY <img> src and EVERY background-image url(...) with a real
+    Unsplash URL chosen by the server based on:
+      1. The @@IMG/<keyword>@@ placeholder if present (preferred)
+      2. The img's alt text
+      3. The nearest preceding heading (h1/h2/h3)
+      4. The nearest class name containing semantic hints
+    Falls back to a generic image only if nothing matches.
+    Guarantees images ALWAYS match section semantic intent — even if AI
+    ignored the @@IMG instruction and wrote a direct (possibly broken or
+    semantically-wrong) Unsplash URL.
+    """
     import re
-    if not html or "@@IMG/" not in html:
+    if not html:
         return html
 
-    def _replace(m):
+    # ─── Step 1: replace explicit @@IMG/<keyword>@@ placeholders ───────────
+    def _replace_placeholder(m):
         keyword = m.group(1).strip()
         return resolve_image_for_keyword(keyword)
+    html = re.sub(r"@@IMG/([^@]+)@@", _replace_placeholder, html)
 
-    # Match @@IMG/<keyword>@@ where keyword is anything except '@'
-    return re.sub(r"@@IMG/([^@]+)@@", _replace, html)
+    # ─── Step 2: replace EVERY <img> src — derive keyword from context ────
+    # Find all <img> tags and capture the position so we can look back for headings
+    def _find_nearest_heading_before(pos: int) -> str:
+        # Look back up to 1500 chars for the last heading
+        before = html[max(0, pos - 1500):pos]
+        matches = re.findall(r"<h[1-4][^>]*>([^<]+)</h[1-4]>", before)
+        return matches[-1].strip() if matches else ""
+
+    def _find_section_class_before(pos: int) -> str:
+        before = html[max(0, pos - 500):pos]
+        m = re.findall(r'class="([^"]+)"', before)
+        return " ".join(m[-2:]) if m else ""
+
+    img_pattern = re.compile(
+        r'<img\s+([^>]*?)\bsrc="([^"]*)"([^>]*)>',
+        re.IGNORECASE,
+    )
+
+    def _replace_img(m):
+        attrs_before, _src, attrs_after = m.group(1), m.group(2), m.group(3)
+        full_attrs = attrs_before + " " + attrs_after
+        alt_match = re.search(r'\balt="([^"]*)"', full_attrs)
+        alt = alt_match.group(1) if alt_match else ""
+        heading = _find_nearest_heading_before(m.start())
+        section_cls = _find_section_class_before(m.start())
+        # Combine all context signals — the resolver does substring matching
+        # so concatenating is safe.
+        context = " ".join(filter(None, [alt, heading, section_cls])).strip() or "abstract"
+        new_src = resolve_image_for_keyword(context)
+        return f'<img {attrs_before.strip()} src="{new_src}" {attrs_after.strip()}>'
+
+    html = img_pattern.sub(_replace_img, html)
+
+    # ─── Step 3: replace background-image: url(...) usages ────────────────
+    bg_pattern = re.compile(
+        r"background-image\s*:\s*url\(\s*['\"]?([^'\")]+)['\"]?\s*\)",
+        re.IGNORECASE,
+    )
+
+    def _replace_bg(m):
+        original_url = m.group(1)
+        # If it's our placeholder, was already handled in step 1
+        # If it's a data: or relative URL, leave alone
+        if original_url.startswith("data:") or original_url.startswith("/") or "@@IMG" in original_url:
+            return m.group(0)
+        # Try to find context — look back for class name or heading
+        pos = m.start()
+        # background-image is in CSS or inline-style; look for nearest class hint
+        before = html[max(0, pos - 800):pos]
+        # Look for an inline style preceded by an element — find the nearest class=
+        cls_match = re.findall(r'class="([^"]+)"', before)
+        heading = ""
+        # Sometimes hero sections have h1 nearby
+        h_match = re.findall(r"<h[1-4][^>]*>([^<]+)</h[1-4]>", before)
+        if h_match:
+            heading = h_match[-1].strip()
+        context = " ".join(filter(None, [(cls_match[-1] if cls_match else ""), heading])).strip() or "abstract"
+        new_src = resolve_image_for_keyword(context)
+        return f"background-image:url('{new_src}')"
+
+    html = bg_pattern.sub(_replace_bg, html)
+
+    return html
 
 
 # ════════════════════════════════════════════════════════════════════════════
@@ -439,6 +526,147 @@ AUDIO_CARD_TEMPLATE = '''
 '''
 
 
+# ════════════════════════════════════════════════════════════════════════════
+#  NAVBAR REFERENCE TEMPLATE (Zitex-style — pill nav, glassmorphism)
+# ════════════════════════════════════════════════════════════════════════════
+NAVBAR_TEMPLATE = '''
+<header class="topbar">
+  <div class="topbar-inner">
+    <a href="#/home" class="logo">
+      <span class="logo-mark">ن</span>
+      <span class="logo-text">نور القرآن</span>
+    </a>
+
+    <nav class="nav-pills">
+      <a href="#/home" class="pill">الرئيسية</a>
+      <a href="#/readers" class="pill">المكتبة</a>
+      <a href="#/lessons" class="pill">الدروس</a>
+      <a href="#/dashboard" class="pill">لوحة التحكم</a>
+      <a href="#/settings" class="pill">الإعدادات</a>
+    </nav>
+
+    <div class="topbar-actions">
+      <button class="icon-btn" aria-label="الحساب">
+        <span class="avatar">أ</span>
+      </button>
+      <a href="#/login" class="cta-btn">دخول</a>
+      <button class="menu-toggle" aria-label="القائمة">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M3 6h18M3 12h18M3 18h18"/></svg>
+      </button>
+    </div>
+  </div>
+
+  <nav class="nav-mobile" id="navMobile">
+    <a href="#/home">الرئيسية</a>
+    <a href="#/readers">المكتبة</a>
+    <a href="#/lessons">الدروس</a>
+    <a href="#/dashboard">لوحة التحكم</a>
+    <a href="#/settings">الإعدادات</a>
+  </nav>
+</header>
+
+<style>
+.topbar{
+  position: sticky; top: 0; z-index: 100;
+  backdrop-filter: blur(20px) saturate(180%);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  background: rgba(10,10,20,0.78);
+  border-bottom: 1px solid rgba(255,255,255,0.08);
+}
+.topbar-inner{
+  max-width: 1280px; margin: 0 auto;
+  padding: 12px 24px;
+  display: flex; align-items: center; gap: 24px;
+}
+.logo{
+  display: flex; align-items: center; gap: 10px;
+  text-decoration: none; color: var(--text); font-weight: 900; font-size: 18px;
+  flex-shrink: 0;
+}
+.logo-mark{
+  width: 36px; height: 36px; border-radius: 10px;
+  background: linear-gradient(135deg, var(--primary), var(--accent));
+  display: flex; align-items: center; justify-content: center;
+  color: #fff; font-weight: 900; font-size: 18px;
+  box-shadow: 0 4px 16px rgba(212,175,55,0.3);
+}
+.nav-pills{
+  display: flex; gap: 4px; flex: 1;
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,255,255,0.06);
+  padding: 4px; border-radius: 999px;
+  margin: 0 12px;
+}
+.nav-pills .pill{
+  padding: 8px 18px; border-radius: 999px;
+  text-decoration: none; color: var(--text-muted, rgba(255,255,255,0.7));
+  font-size: 14px; font-weight: 600;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+}
+.nav-pills .pill:hover{
+  background: rgba(255,255,255,0.05);
+  color: var(--text);
+}
+.nav-pills .pill.active{
+  background: linear-gradient(135deg, rgba(212,175,55,0.2), rgba(212,175,55,0.1));
+  color: var(--primary);
+  border: 1px solid rgba(212,175,55,0.3);
+}
+.topbar-actions{ display: flex; align-items: center; gap: 12px; flex-shrink: 0 }
+.icon-btn{
+  width: 40px; height: 40px; border-radius: 12px;
+  background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.08);
+  display: flex; align-items: center; justify-content: center;
+  cursor: pointer; transition: all 0.2s;
+  color: var(--text);
+}
+.icon-btn:hover{ background: rgba(255,255,255,0.1) }
+.avatar{
+  width: 28px; height: 28px; border-radius: 50%;
+  background: linear-gradient(135deg, var(--primary), var(--accent));
+  display: flex; align-items: center; justify-content: center;
+  color: #fff; font-weight: 800; font-size: 13px;
+}
+.cta-btn{
+  padding: 10px 20px; border-radius: 10px;
+  background: linear-gradient(135deg, var(--primary), var(--accent));
+  color: #1a1208; font-weight: 800; font-size: 14px;
+  text-decoration: none; transition: transform 0.2s;
+}
+.cta-btn:hover{ transform: translateY(-1px) }
+.menu-toggle{
+  display: none; width: 40px; height: 40px;
+  background: transparent; border: none; color: var(--text); cursor: pointer;
+}
+.nav-mobile{
+  display: none; flex-direction: column;
+  padding: 8px 24px 16px;
+  border-top: 1px solid rgba(255,255,255,0.06);
+}
+.nav-mobile a{
+  padding: 12px; color: var(--text); text-decoration: none;
+  border-radius: 8px; font-weight: 600;
+}
+.nav-mobile a:hover{ background: rgba(255,255,255,0.04) }
+@media (max-width: 900px){
+  .nav-pills{ display: none }
+  .menu-toggle{ display: flex; align-items: center; justify-content: center }
+  .cta-btn{ display: none }
+  .nav-mobile.open{ display: flex }
+}
+</style>
+
+<script>
+  (function(){
+    const tg = document.querySelector('.menu-toggle');
+    const mb = document.getElementById('navMobile');
+    if(tg && mb) tg.addEventListener('click', () => mb.classList.toggle('open'));
+  })();
+</script>
+'''
+
+
 def build_resources_block() -> str:
     """Format the entire resource library as a system-prompt-friendly block."""
     parts: List[str] = []
@@ -514,19 +742,27 @@ def build_resources_block() -> str:
     parts.append("\n## 🎵 قالب بطاقة قارئ مع مشغّل صوت")
     parts.append("```html\n" + AUDIO_CARD_TEMPLATE.strip() + "\n```")
 
+    # NAVBAR REFERENCE — pill-style horizontal nav (THE preferred design)
+    parts.append("\n## 🧭 قالب الـNavbar الإجباري (pill-style أفقي)")
+    parts.append(
+        "**استخدم هذا القالب بالضبط** — الروابط تكون pills أفقية في صف، مو مربعات صغيرة. "
+        "هذا التصميم هو المعتمد لكل المواقع. عدّل اسم الموقع والروابط فقط، احتفظ بالـCSS كاملاً.\n"
+        "```html\n" + NAVBAR_TEMPLATE.strip() + "\n```"
+    )
+
     parts.append(
         "\n## ⚡ قواعد إجبارية"
-        "\n1. **لا تكتب رابط Unsplash مباشرة أبداً** — استخدم `@@IMG/<keyword>@@` فقط."
-        "\n2. كل قسم/بطاقة يحتاج صورة → اختر keyword يطابق محتوى القسم بالضبط:"
-        "\n   - قسم اسمه 'نظام تفاعل ذكي' → `@@IMG/smart-tech@@` أو `@@IMG/interaction@@`"
-        "\n   - قسم اسمه 'مكتبة قرّاء' → `@@IMG/quran@@`"
-        "\n   - قسم اسمه 'متابعة الطالب' → `@@IMG/tracking@@`"
-        "\n   - قسم اسمه 'دروس تجويد' → `@@IMG/memorization@@`"
-        "\n3. لا تخلط الكلمات المفتاحية — لو القسم عن الذكاء الصناعي **لا** تستخدم `food` أو `villa`."
-        "\n4. كل html_update في موقع قرآني يجب أن يحتوي على ≥3 بطاقات قارئ مع `<audio>`"
-        "\n5. كل html_update في موقع قرآني يجب أن يحتوي على ≥1 آية بتصميم عثماني"
-        "\n6. كل قسم مميزات/خدمات يجب أن يحتوي على صورة (`@@IMG/...@@`)"
-        "\n7. Hero يجب أن يكون فيه صورة (`@@IMG/...@@`)"
+        "\n1. **استخدم `@@IMG/<keyword>@@` فقط** — لا تكتب رابط Unsplash مباشرة أبداً."
+        "\n2. اختر keyword يطابق محتوى القسم بالضبط:"
+        "\n   - 'نظام تفاعل ذكي' → `@@IMG/smart-tech@@` ✓ (مو `food` ❌)"
+        "\n   - 'مكتبة قرّاء' → `@@IMG/quran@@` ✓"
+        "\n   - 'متابعة الطالب' → `@@IMG/tracking@@` ✓"
+        "\n   - 'دروس تجويد' → `@@IMG/memorization@@` ✓ أو `@@IMG/quran@@`"
+        "\n3. **استخدم قالب الـNavbar فوق بالضبط** — pill-style أفقي مع backdrop-filter blur."
+        "\n4. كل html_update في موقع قرآني يجب أن يحتوي على ≥3 بطاقات قارئ مع `<audio>` (mp3quran.net CDN)."
+        "\n5. كل html_update في موقع قرآني يجب أن يحتوي على ≥1 آية بتصميم عثماني."
+        "\n6. كل قسم مميزات/خدمات يجب أن يحتوي على صورة `@@IMG/<keyword>@@`."
+        "\n7. Hero يجب أن يكون فيه صورة `@@IMG/<keyword>@@` (background-image أو img)."
     )
 
     return "\n".join(parts)
