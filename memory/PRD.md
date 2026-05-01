@@ -15,6 +15,29 @@
 - 🔒 **Images**: قريباً
 
 
+### 🆕 May 1, 2026 — PROFESSIONAL ANIMATION ENGINE (P0 — DONE ✅)
+
+المستخدم كان محبط من حركات مصنوعة يدوياً (rotation.z يدوي = حركات غير طبيعية).
+الحل: استبدال الكود بالـ motion-capture حقيقي عبر مكتبة VRMA.
+
+**ما تم:**
+- 📥 حمّلت 11 ملف VRMA حقيقي من [tk256ailab/vrm-viewer](https://github.com/tk256ailab/vrm-viewer):
+  Angry, Blush, Clapping, Goodbye, Jump, LookAround, Relax, Sad, Sleepy, Surprised, Thinking
+  (~118KB/file × 11 = 1.3MB total — MIT license)
+- 🎬 **`/app/frontend/src/components/Avatar3D.js` v2** (re-written from scratch):
+  - `VRMAnimationLoaderPlugin` + `createVRMAnimationClip` من `@pixiv/three-vrm-animation`
+  - `THREE.AnimationMixer` لتشغيل حقيقي
+  - crossfade 0.5s بين المقاطع
+  - idle cycle يتنقل بين 4 أنيميشن كل 7 ثواني
+  - `action` prop لتشغيل حركات one-shot (wave, jump...)
+  - animation cache (Map) لتجنب إعادة التحميل
+- 🔄 **Character orientation fix**: neutralize `hips.rotation.y = 0` في الـ tick لمنع الأنيميشن من تدوير الشخصية بعيداً عن الكاميرا
+- 🎨 `DoubleSide` على كل المواد (رموش/شعر يرندر من كل الاتجاهات)
+- 🗑️ حذفت كل الـ manual bone rotations اليدوية
+
+**Push:** Commit `bbca914` → Vercel ينشر
+
+
 ### 🆕 May 1, 2026 — GLOBAL PERSISTENT VRM AVATARS (P0 — DONE ✅)
 
 طلبات المستخدم:
