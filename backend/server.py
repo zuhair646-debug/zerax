@@ -3097,6 +3097,15 @@ try:
 except Exception as _fbe:
     logging.getLogger(__name__).error(f"Failed to register freebuild module: {_fbe}", exc_info=True)
 
+# ============== FREE-BUILD V2 (Conversational LIVE builder with side preview) ==============
+try:
+    from modules.freebuild_v2 import create_freebuild_v2_router
+    _fb2_router = create_freebuild_v2_router(db, get_current_user)
+    app.include_router(_fb2_router)
+    logging.getLogger(__name__).info("FreeBuild v2 module registered")
+except Exception as _fb2e:
+    logging.getLogger(__name__).error(f"Failed to register freebuild v2 module: {_fb2e}", exc_info=True)
+
 # ============== CHANNEL BRIDGE (Push Zitex-generated assets to owner's client websites) ==============
 try:
     from modules.bridge import create_bridge_router
