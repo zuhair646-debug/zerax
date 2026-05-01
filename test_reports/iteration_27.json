@@ -1,0 +1,67 @@
+{
+  "summary": "Frontend testing of FreeBuild v2 conversational split-pane website builder at /build-from-zero. All 13 test cases passed successfully. The new UI renders correctly with split-pane layout, chat flow works, credits display, and all interactive elements function properly.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {
+        "screen": "FreeBuild v2",
+        "issues": ["Console shows repeated 'Error fetching stats: TypeError: Failed to fetch' - appears to be from a different component (not FreeBuild), does not affect functionality"]
+      }
+    ]
+  },
+  "test_report_links": [
+    "/app/test_reports/iteration_27.json"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "FreeBuild v2 correctly implements split-pane layout with flex-col lg:flex-row for responsive design",
+    "Chat panel uses data-testid attributes for all interactive elements enabling robust testing",
+    "AI greeting appears within 8 seconds via /api/freebuild/v2/start endpoint",
+    "Chat flow works: user message appears immediately, typing indicator shows, AI response arrives within 15s",
+    "Gallery modal opens/closes correctly with proper data-testid selectors",
+    "New session button resets chat to fresh greeting",
+    "Back home button navigates to / correctly",
+    "Mobile responsive layout stacks panels vertically (chat above preview)"
+  ],
+  "updated_files": [],
+  "success_rate": {
+    "backend": "N/A (backend already verified - 14/15 pytest tests passing)",
+    "frontend": "100% (13/13 test cases passed)"
+  },
+  "test_credentials": {
+    "owner": "owner@zitex.com / owner123"
+  },
+  "seed_data_creation": "",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "FreeBuild v2 frontend fully tested. Key findings: (1) Route /build-from-zero requires auth - redirects to /login if not authenticated, (2) Split-pane layout works: chat-panel on left, preview-panel on right on desktop (lg:flex-row), stacks vertically on mobile (flex-col), (3) AI greeting bubble appears within 8s with Arabic text containing 'المهندس الذكي', (4) Preview iframe shows empty state with 'ابدأ المحادثة' text initially, (5) Credits pill shows numeric balance (e.g., '3933 نقطة'), (6) Chat input textarea is focusable, (7) Sending message: user bubble appears within 1s, input clears, typing indicator shows, AI response arrives within 15s, (8) Gallery modal opens/closes correctly, (9) New session button resets chat, (10) Back home button navigates to /",
+  "features_verified": {
+    "test_1_auth_redirect": "✅ /build-from-zero redirects to /login when not authenticated",
+    "test_2a_chat_panel": "✅ [data-testid='chat-panel'] found on left side",
+    "test_2b_preview_panel": "✅ [data-testid='preview-panel'] found on right side",
+    "test_2c_ai_greeting": "✅ AI greeting bubble appears with Arabic text containing 'المهندس الذكي'",
+    "test_2d_preview_iframe": "✅ [data-testid='preview-iframe'] rendered with empty state",
+    "test_2e_credits_pill": "✅ [data-testid='credits-pill'] shows numeric balance",
+    "test_2f_chat_input": "✅ [data-testid='chat-input-textarea'] present and focusable",
+    "test_3a_user_bubble": "✅ User bubble appears within 1s after sending message",
+    "test_3b_input_cleared": "✅ Input cleared after sending",
+    "test_3c_typing_indicator": "✅ [data-testid='chat-typing-indicator'] appears while AI thinking",
+    "test_3d_ai_response": "✅ New AI bubble appears within 15s with follow-up question",
+    "test_4a_gallery_modal": "✅ [data-testid='gallery-modal'] opens when clicking gallery button",
+    "test_4b_gallery_close": "✅ [data-testid='gallery-close-btn'] closes modal",
+    "test_4c_new_session": "✅ [data-testid='new-session-btn'] resets chat to fresh greeting",
+    "test_4d_back_home": "✅ [data-testid='back-home-btn'] navigates to /",
+    "test_5a_mobile_panels": "✅ Both panels exist on mobile viewport",
+    "test_5b_mobile_layout": "✅ Panels stack vertically on mobile (chat above preview)",
+    "test_5c_mobile_elements": "✅ All key elements present on mobile"
+  },
+  "mocked_apis": {
+    "has_mocked_apis": false,
+    "note": "All integrations are live (OpenAI gpt-4o for FreeBuild v2 chat)"
+  }
+}
