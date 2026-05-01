@@ -402,6 +402,12 @@ async def _openai_architect_turn(messages_for_model: List[Dict[str, str]]) -> Di
             logger.warning("[FREEBUILD] html_update missing <html>, discarding")
             data["html_update"] = None
         else:
+            # Replace @@IMG/<keyword>@@ placeholders with real Unsplash URLs
+            try:
+                from .resources import post_process_html_images
+                h = post_process_html_images(h)
+            except Exception as _imgerr:
+                logger.warning(f"[FREEBUILD] image post-process failed: {_imgerr}")
             data["html_update"] = h
 
     return data
