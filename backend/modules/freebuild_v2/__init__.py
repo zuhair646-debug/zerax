@@ -1,0 +1,588 @@
+"""
+Zitex FreeBuild v2 — CONVERSATIONAL LIVE BUILDER.
+
+Philosophy:
+    NO fixed wizard. NO templates. The user has a natural conversation with a
+    senior web architect AI. The AI asks ONE question at a time (dynamically
+    chooses text/yes-no). After enough context, it starts BUILDING LIVE — each
+    chat turn incrementally updates the HTML, which renders instantly in a side
+    preview pane. The user sees the site materialize step-by-step.
+
+Flow example:
+    AI: "هلا! وش فكرة الموقع؟"                        (qtype: text)
+    USER: "موقع لتحفيظ القرآن الكريم"
+    AI: "تمام، مشروع مبارك. تبيه يدعم التسجيل؟"         (qtype: yes_no)
+    USER: "نعم"
+    AI: "يلا أبدأ بالهيكل الأساسي..." + html_update
+    → preview shows hero with Quran theme
+    AI: "تبي مكتبة قرّاء في القسم الثاني؟"              (qtype: yes_no)
+    USER: "نعم — ١٠ قرّاء"
+    AI: "عطني أسماء ٣ قرّاء تفضلهم"                   (qtype: text)
+    USER: "السديس، الشريم، المعيقلي"
+    AI: "ممتاز." + html_update  (adds readers grid)
+    ... and so on.
+
+Endpoints:
+    POST /api/freebuild/v2/start          — creates session + first AI message
+    POST /api/freebuild/v2/chat           — submit user message, get AI reply + (optional) html_update
+    GET  /api/freebuild/v2/session/{id}   — fetch full state (messages + html)
+    GET  /api/freebuild/v2/preview/{id}   — live HTML preview
+    POST /api/freebuild/v2/save-as-project — lock current HTML as a permanent project
+    GET  /api/freebuild/v2/projects       — list saved projects
+    DELETE /api/freebuild/v2/project/{id}
+"""
+from __future__ import annotations
+import os
+import json
+import uuid
+import logging
+from datetime import datetime, timezone
+from typing import Any, Dict, List, Optional
+from fastapi import APIRouter, HTTPException, Depends, Response
+from pydantic import BaseModel, Field
+
+logger = logging.getLogger(__name__)
+
+# ---- Pricing ----
+# A turn that updates HTML costs this many credits. Pure Q&A turns are free.
+TURN_UPDATE_COST = 3
+# Saving a session as a permanent named project is free (they already paid per update).
+
+# Hard cap on chat turns per session to prevent runaway costs.
+MAX_TURNS_PER_SESSION = 60
+
+
+# ---- Architect System Prompt ----
+ARCHITECT_SYSTEM = """You are a Senior Web Architect at a top-tier digital agency, conversing IN ARABIC (Saudi dialect) with a client who is building a website FROM SCRATCH — never from templates. You ARE the expert coder and interviewer in one.
+
+Your mission: Through a natural, flowing conversation (ONE question at a time), gather enough context to build a UNIQUE, BESPOKE website — and actually BUILD IT incrementally during the conversation. Each of your turns may UPDATE THE LIVE HTML so the client sees progress in real-time on their preview pane.
+
+### OUTPUT FORMAT (STRICT JSON — always):
+You MUST respond with a valid JSON object with these exact keys:
+{
+  "message_to_user": "<Arabic text — your message to the client; friendly, concise, Saudi tone — NO emojis, NO markdown, NO newlines unless necessary>",
+  "next_question_type": "text" | "yes_no" | "done",
+  "options": null | ["النص المخصّص 1", "النص المخصّص 2", "..."]  // only fill when next_question_type is 'yes_no' and you want custom labels; otherwise null
+  "html_update": null | "<full updated HTML document>",
+  "progress_note": null | "<1-sentence Arabic describing what you just added/changed in the HTML, shown as a caption under the preview>"
+}
+
+### RULES
+
+1. **Ask ONE question at a time** — never compound multiple questions. Make it feel like a conversation with a human expert.
+
+2. **Choose question type intelligently:**
+   - Use "yes_no" for binary decisions ("تبي خلفية سوداء؟")
+   - Use "text" for open-ended info (site name, vision, list of items)
+   - Use "done" ONLY when the client explicitly says they're satisfied / finished
+
+3. **When to update HTML ("html_update" field):**
+   - Turn 1-3: usually just gather context, `html_update` stays null
+   - Turn 4+: as soon as you have enough signal, START building. Put the full HTML in `html_update`. Subsequent turns UPDATE it (add sections, change colors, add content) — each update returns the FULL updated HTML.
+   - NEVER return partial HTML. Always full document.
+   - When `html_update` is null, it means no visual change this turn (pure Q&A).
+
+4. **HTML quality rules (when you DO update):**
+   - Complete `<!DOCTYPE html>` document, RTL (`dir="rtl"`), lang="ar".
+   - Embedded CSS in `<style>` — no external frameworks (no Tailwind, no Bootstrap, no React).
+   - Use CSS variables, modern features (`clamp()`, `:has()`, `backdrop-filter`, gradients, transforms).
+   - Google Fonts for Arabic: Tajawal / Cairo / Reem Kufi / IBM Plex Sans Arabic via `<link>`.
+   - Real Arabic copy that matches the brief — NEVER "Lorem ipsum", NEVER generic.
+   - Use Unsplash via `https://images.unsplash.com/photo-{real_id}?auto=format&fit=crop&w=1600&q=80` for imagery — pick IDs that truly exist.
+   - Mobile-first responsive. Proper semantic HTML5. ARIA where needed.
+   - Asymmetric / distinctive layouts. NEVER center-everything templates.
+   - Include `<meta name="description">` and Open Graph tags matching the brief.
+   - Include a footer with the site name.
+   - **DEPTH**: Every `html_update` must be PRODUCTION-GRADE and RICH. Each section should have:
+     - A proper heading AND a descriptive paragraph (2-3 sentences of real content).
+     - Visual polish (gradients, spacing, hover states, proper typography scale).
+     - When adding a feature, ELABORATE: e.g., "مكتبة قرّاء" should include per-reader cards with name + bio + "استمع للتلاوة" button — not just the name.
+   - **WHEN THE USER SIGNALS "DONE"** (`next_question_type: "done"`): Return a FINAL polished, consolidated HTML in `html_update` that is complete, rich, and ready-to-deploy. Do a full pass: ensure navigation, add missing polish, make sure all sections flow.
+   - Minimum page size on any html_update: aim for 8-15 KB of rich markup. Avoid skeletal 1-2 KB outputs.
+
+5. **Progressive building:**
+   - First build: usually hero + one section based on what you know so far.
+   - Each subsequent turn: ADD or MODIFY based on the new answer. Preserve everything else.
+   - Describe what you did in `progress_note` (Arabic, 1 line).
+
+6. **Client psychology:**
+   - Be warm, respectful, Saudi-friendly ("حياك"، "تمام"، "أبشر"، "أفهم عليك").
+   - Never repeat questions already answered.
+   - Reference their earlier answers by name ("ذكرت إنك تبي موقع لتحفيظ القرآن — ضفت الحين قسم المكتبة").
+   - If the client says "كذا تمام" / "يكفي" / "خلاص انتهيت" → set next_question_type to "done".
+
+7. **Specialized domain expertise (critical):**
+   When the client mentions a domain, immediately bring in the right BUILDING BLOCKS — don't ask generic questions. Examples:
+   - تحفيظ قرآن → مكتبة قرّاء، عرض مصحف، تسجيل الطلاب، مقرّر أسبوعي، نظام تسميع.
+   - مطعم → منيو، حجز طاولة، توصيل، صور أطباق.
+   - عيادة → حجز مواعيد، الأطباء، الخدمات، تواصل واتساب.
+   - متجر → منتجات، سلة، دفع، تصفّح تصنيفات.
+   - تعليمي → دورات، معلمين، جدول، اختبارات.
+   Mention the specific blocks you'll build for their domain.
+
+8. **Language:** Always Saudi Arabic dialect for `message_to_user` and `progress_note`. The HTML itself contains Arabic content too.
+
+### OUTPUT FORMAT ENFORCEMENT
+Return ONLY the JSON object. No markdown fences. No preamble. No trailing text.
+"""
+
+
+# ---- Pydantic Models ----
+
+class StartIn(BaseModel):
+    pass
+
+class ChatIn(BaseModel):
+    session_id: str
+    message: str = Field(..., min_length=1, max_length=2000)
+
+class SaveProjectIn(BaseModel):
+    session_id: str
+    name: str = Field(..., min_length=1, max_length=80)
+
+class RefineIn(BaseModel):
+    project_id: str
+    instruction: str = Field(..., min_length=4, max_length=600)
+
+
+# ---- Helpers ----
+
+def _now() -> str:
+    return datetime.now(timezone.utc).isoformat()
+
+
+async def _openai_architect_turn(messages_for_model: List[Dict[str, str]]) -> Dict[str, Any]:
+    """Call OpenAI gpt-4o with JSON response format, return parsed dict."""
+    direct_key = os.environ.get("OPENAI_DIRECT_KEY", "").strip()
+    if not direct_key:
+        raise RuntimeError("OPENAI_DIRECT_KEY not configured")
+
+    from openai import AsyncOpenAI
+    client = AsyncOpenAI(api_key=direct_key)
+
+    resp = await client.chat.completions.create(
+        model="gpt-4o",
+        messages=messages_for_model,
+        temperature=0.75,
+        max_tokens=8000,
+        response_format={"type": "json_object"},
+    )
+    content = (resp.choices[0].message.content or "").strip()
+    # Strip accidental markdown fences
+    if content.startswith("```"):
+        lines = content.split("\n")
+        if lines[0].startswith("```"):
+            lines = lines[1:]
+        if lines and lines[-1].startswith("```"):
+            lines = lines[:-1]
+        content = "\n".join(lines).strip()
+
+    try:
+        data = json.loads(content)
+    except json.JSONDecodeError as e:
+        logger.error(f"[FREEBUILD] JSON parse failed. Raw: {content[:500]}")
+        raise RuntimeError(f"AI returned invalid JSON: {e}")
+
+    # Validate shape
+    required = ["message_to_user", "next_question_type"]
+    for k in required:
+        if k not in data:
+            raise RuntimeError(f"AI response missing field: {k}")
+
+    if data["next_question_type"] not in ("text", "yes_no", "done"):
+        data["next_question_type"] = "text"
+
+    data.setdefault("options", None)
+    data.setdefault("html_update", None)
+    data.setdefault("progress_note", None)
+
+    # Strip markdown fences in html if AI added them
+    html = data.get("html_update")
+    if html and isinstance(html, str):
+        h = html.strip()
+        if h.startswith("```"):
+            lines = h.split("\n")
+            if lines[0].startswith("```"):
+                lines = lines[1:]
+            if lines and lines[-1].startswith("```"):
+                lines = lines[:-1]
+            h = "\n".join(lines).strip()
+        if "<html" not in h.lower():
+            # Invalid HTML — treat as null
+            logger.warning("[FREEBUILD] html_update missing <html>, discarding")
+            data["html_update"] = None
+        else:
+            data["html_update"] = h
+
+    return data
+
+
+def _build_model_messages(session: Dict[str, Any], new_user_msg: str) -> List[Dict[str, str]]:
+    """Compose the full message list for the model, including current HTML state."""
+    msgs: List[Dict[str, str]] = [{"role": "system", "content": ARCHITECT_SYSTEM}]
+
+    # Append the conversation history
+    for m in session.get("messages", []):
+        role = m.get("role")
+        content = m.get("content", "")
+        if role in ("user", "assistant"):
+            # For assistant turns, we stored the raw JSON they returned; re-feed the text
+            if role == "assistant":
+                content = m.get("message_to_user", content) or content
+            msgs.append({"role": role, "content": content})
+
+    # Inject current HTML state as a system reminder (so model can modify it)
+    current_html = session.get("html") or ""
+    if current_html:
+        msgs.append({
+            "role": "system",
+            "content": (
+                "## CURRENT_HTML_STATE (modify from this baseline when you return html_update)\n"
+                "```html\n" + current_html + "\n```"
+            ),
+        })
+
+    msgs.append({"role": "user", "content": new_user_msg})
+    return msgs
+
+
+# ---- Router factory ----
+
+def create_freebuild_v2_router(db, get_current_user) -> APIRouter:
+    router = APIRouter(prefix="/api/freebuild/v2", tags=["freebuild-v2"])
+
+    async def _credits(uid: str) -> int:
+        u = await db.users.find_one({"id": uid}, {"_id": 0, "credits": 1})
+        return int((u or {}).get("credits", 0) or 0)
+
+    async def _deduct(uid: str, amount: int, reason: str) -> bool:
+        r = await db.users.update_one(
+            {"id": uid, "credits": {"$gte": amount}},
+            {"$inc": {"credits": -amount},
+             "$push": {"credit_history": {"amount": -amount, "reason": reason, "timestamp": _now()}}}
+        )
+        return r.modified_count > 0
+
+    # ===== START =====
+    @router.post("/start")
+    async def start(_: StartIn, user=Depends(get_current_user)):
+        sid = str(uuid.uuid4())
+        first_ai_message = (
+            "هلا والله، أنا المهندس الذكي اللي بيبني موقعك من الصفر. "
+            "قبل نبدأ — احكيلي فكرة الموقع بكلمتين. وش تبي تسوي؟ "
+            "(مثلاً: موقع لتحفيظ القرآن، متجر عطور، عيادة أسنان، بورتفوليو شخصي...)"
+        )
+        session = {
+            "id": sid,
+            "user_id": user["user_id"],
+            "messages": [{
+                "role": "assistant",
+                "content": first_ai_message,
+                "message_to_user": first_ai_message,
+                "next_question_type": "text",
+                "options": None,
+                "timestamp": _now(),
+            }],
+            "html": "",
+            "turns": 0,
+            "complete": False,
+            "credits_spent": 0,
+            "created_at": _now(),
+            "updated_at": _now(),
+        }
+        await db.freebuild_v2_sessions.insert_one(session.copy())
+        return {
+            "session_id": sid,
+            "assistant_message": first_ai_message,
+            "next_question_type": "text",
+            "options": None,
+            "html": "",
+            "progress_note": None,
+            "credits_balance": await _credits(user["user_id"]),
+        }
+
+    # ===== CHAT =====
+    @router.post("/chat")
+    async def chat(payload: ChatIn, user=Depends(get_current_user)):
+        session = await db.freebuild_v2_sessions.find_one(
+            {"id": payload.session_id, "user_id": user["user_id"]}, {"_id": 0}
+        )
+        if not session:
+            raise HTTPException(404, "session not found")
+        if session.get("complete"):
+            raise HTTPException(400, "session already complete — save it or start a new one")
+        if session.get("turns", 0) >= MAX_TURNS_PER_SESSION:
+            raise HTTPException(400, f"تم الوصول للحد الأقصى ({MAX_TURNS_PER_SESSION} دورات). احفظ الموقع وابدأ جلسة جديدة لو تبي تكمل.")
+
+        # Append user message
+        session["messages"].append({
+            "role": "user",
+            "content": payload.message,
+            "timestamp": _now(),
+        })
+
+        # Call the architect
+        try:
+            model_msgs = _build_model_messages(session, payload.message)
+            ai = await _openai_architect_turn(model_msgs)
+        except Exception as e:
+            logger.exception(f"[FREEBUILD-V2] architect call failed: {e}")
+            raise HTTPException(500, f"فشل الذكاء المعماري: {str(e)[:140]}")
+
+        html_update = ai.get("html_update")
+        charge = 0
+
+        # Deduct credits ONLY if this turn actually updated HTML
+        if html_update:
+            ok = await _deduct(user["user_id"], TURN_UPDATE_COST, "freebuild_v2_turn_update")
+            if not ok:
+                # Drop the html update but save the assistant's text reply
+                html_update = None
+                ai["html_update"] = None
+                ai["message_to_user"] = (
+                    "رصيدك ما يكفي للتحديث ({} نقاط مطلوبة). اشحن رصيدك وارجع — المحادثة محفوظة."
+                ).format(TURN_UPDATE_COST)
+            else:
+                charge = TURN_UPDATE_COST
+
+        # Append assistant message
+        assistant_entry = {
+            "role": "assistant",
+            "content": ai["message_to_user"],
+            "message_to_user": ai["message_to_user"],
+            "next_question_type": ai["next_question_type"],
+            "options": ai.get("options"),
+            "progress_note": ai.get("progress_note"),
+            "had_html_update": bool(html_update),
+            "timestamp": _now(),
+        }
+        session["messages"].append(assistant_entry)
+
+        update_fields = {
+            "messages": session["messages"],
+            "turns": session.get("turns", 0) + 1,
+            "updated_at": _now(),
+        }
+        if html_update:
+            update_fields["html"] = html_update
+            update_fields["credits_spent"] = session.get("credits_spent", 0) + charge
+        if ai["next_question_type"] == "done":
+            update_fields["complete"] = True
+
+        await db.freebuild_v2_sessions.update_one(
+            {"id": payload.session_id},
+            {"$set": update_fields}
+        )
+
+        return {
+            "assistant_message": ai["message_to_user"],
+            "next_question_type": ai["next_question_type"],
+            "options": ai.get("options"),
+            "html_updated": bool(html_update),
+            "progress_note": ai.get("progress_note"),
+            "complete": ai["next_question_type"] == "done",
+            "turns": update_fields["turns"],
+            "credits_spent_this_turn": charge,
+            "credits_balance": await _credits(user["user_id"]),
+        }
+
+    # ===== GET SESSION =====
+    @router.get("/session/{session_id}")
+    async def get_session(session_id: str, user=Depends(get_current_user)):
+        s = await db.freebuild_v2_sessions.find_one(
+            {"id": session_id, "user_id": user["user_id"]}, {"_id": 0}
+        )
+        if not s:
+            raise HTTPException(404, "session not found")
+        # Slim the messages payload for transport (strip full HTML from each)
+        return {
+            "id": s["id"],
+            "messages": [
+                {k: v for k, v in m.items() if k != "html_update"}
+                for m in s.get("messages", [])
+            ],
+            "html": s.get("html", ""),
+            "turns": s.get("turns", 0),
+            "complete": s.get("complete", False),
+            "credits_spent": s.get("credits_spent", 0),
+            "created_at": s.get("created_at"),
+            "updated_at": s.get("updated_at"),
+        }
+
+    # ===== LIVE PREVIEW =====
+    @router.get("/preview/{session_id}")
+    async def preview(session_id: str):
+        # Live preview is public-readable (no auth) so iframe can load freely
+        s = await db.freebuild_v2_sessions.find_one(
+            {"id": session_id}, {"_id": 0, "html": 1}
+        )
+        if not s or not s.get("html"):
+            # Return a pleasant "empty state" HTML
+            return Response(
+                content=_empty_preview_html(),
+                media_type="text/html; charset=utf-8",
+            )
+        return Response(content=s["html"], media_type="text/html; charset=utf-8")
+
+    # ===== SAVE AS PERMANENT PROJECT =====
+    @router.post("/save-as-project")
+    async def save_as_project(payload: SaveProjectIn, user=Depends(get_current_user)):
+        s = await db.freebuild_v2_sessions.find_one(
+            {"id": payload.session_id, "user_id": user["user_id"]}, {"_id": 0}
+        )
+        if not s:
+            raise HTTPException(404, "session not found")
+        if not s.get("html"):
+            raise HTTPException(400, "لا يوجد موقع محفوظ في هذه الجلسة بعد")
+
+        pid = str(uuid.uuid4())
+        slug = payload.name.strip().replace(" ", "-").lower()[:40] or "site"
+        proj = {
+            "id": pid,
+            "user_id": user["user_id"],
+            "source_session_id": payload.session_id,
+            "name": payload.name.strip(),
+            "slug": f"{slug}-{pid[:6]}",
+            "html": s["html"],
+            "credits_spent": s.get("credits_spent", 0),
+            "version": 1,
+            "history": [{"version": 1, "html": s["html"], "created_at": _now(), "instruction": "initial save"}],
+            "created_at": _now(),
+            "updated_at": _now(),
+        }
+        await db.freebuild_v2_projects.insert_one(proj.copy())
+        await db.freebuild_v2_sessions.update_one(
+            {"id": payload.session_id},
+            {"$set": {"saved_project_id": pid, "complete": True}}
+        )
+        return {
+            "ok": True,
+            "project_id": pid,
+            "preview_url": f"/api/freebuild/v2/project-preview/{pid}",
+        }
+
+    # ===== LIST PROJECTS =====
+    @router.get("/projects")
+    async def list_projects(user=Depends(get_current_user)):
+        cursor = db.freebuild_v2_projects.find(
+            {"user_id": user["user_id"]},
+            {"_id": 0, "html": 0, "history": 0}
+        ).sort("created_at", -1)
+        items = await cursor.to_list(length=100)
+        return {"projects": items, "count": len(items)}
+
+    # ===== PROJECT PREVIEW (saved) =====
+    @router.get("/project-preview/{project_id}")
+    async def project_preview(project_id: str):
+        p = await db.freebuild_v2_projects.find_one(
+            {"id": project_id}, {"_id": 0, "html": 1}
+        )
+        if not p or not p.get("html"):
+            raise HTTPException(404, "project not found")
+        return Response(content=p["html"], media_type="text/html; charset=utf-8")
+
+    # ===== REFINE PROJECT (post-save) =====
+    @router.post("/refine")
+    async def refine(payload: RefineIn, user=Depends(get_current_user)):
+        p = await db.freebuild_v2_projects.find_one(
+            {"id": payload.project_id, "user_id": user["user_id"]}, {"_id": 0}
+        )
+        if not p:
+            raise HTTPException(404, "project not found")
+
+        ok = await _deduct(user["user_id"], TURN_UPDATE_COST, "freebuild_v2_refine")
+        if not ok:
+            raise HTTPException(402, f"رصيدك ما يكفي ({TURN_UPDATE_COST} نقاط مطلوبة)")
+
+        try:
+            # One-shot refinement with current HTML as context
+            msgs = [
+                {"role": "system", "content": ARCHITECT_SYSTEM},
+                {"role": "system", "content": f"## CURRENT_HTML\n```html\n{p.get('html','')}\n```"},
+                {"role": "user", "content": f"طبّق هذا التعديل على الموقع: {payload.instruction.strip()}"},
+            ]
+            ai = await _openai_architect_turn(msgs)
+            new_html = ai.get("html_update") or p.get("html")
+            new_version = int(p.get("version", 1)) + 1
+            history = list(p.get("history") or [])
+            history.append({
+                "version": new_version,
+                "html": new_html,
+                "instruction": payload.instruction.strip(),
+                "created_at": _now(),
+            })
+            history = history[-10:]
+            await db.freebuild_v2_projects.update_one(
+                {"id": payload.project_id},
+                {"$set": {
+                    "html": new_html,
+                    "version": new_version,
+                    "history": history,
+                    "updated_at": _now(),
+                }}
+            )
+            return {
+                "ok": True,
+                "version": new_version,
+                "credits_balance": await _credits(user["user_id"]),
+            }
+        except Exception as e:
+            # refund
+            await db.users.update_one(
+                {"id": user["user_id"]},
+                {"$inc": {"credits": TURN_UPDATE_COST},
+                 "$push": {"credit_history": {
+                     "amount": TURN_UPDATE_COST,
+                     "reason": f"refund_fb2_refine: {str(e)[:80]}",
+                     "timestamp": _now(),
+                 }}}
+            )
+            logger.exception(f"[FREEBUILD-V2] refine failed: {e}")
+            raise HTTPException(500, f"فشل التحديث. تمت إعادة النقاط. ({str(e)[:120]})")
+
+    # ===== DELETE PROJECT =====
+    @router.delete("/project/{project_id}")
+    async def delete_project(project_id: str, user=Depends(get_current_user)):
+        r = await db.freebuild_v2_projects.delete_one(
+            {"id": project_id, "user_id": user["user_id"]}
+        )
+        if r.deleted_count == 0:
+            raise HTTPException(404, "project not found")
+        return {"ok": True}
+
+    return router
+
+
+def _empty_preview_html() -> str:
+    """Friendly empty-state HTML shown while the AI hasn't built yet."""
+    return """<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<title>الموقع يُبنى الآن</title>
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:'Segoe UI','Tahoma',sans-serif;background:#0a0a14;color:#fff;
+       height:100vh;display:flex;align-items:center;justify-content:center;overflow:hidden;
+       background-image:
+         radial-gradient(circle at 20% 30%, rgba(245,158,11,0.15) 0%, transparent 40%),
+         radial-gradient(circle at 80% 70%, rgba(217,119,6,0.12) 0%, transparent 40%)}
+  .box{text-align:center;padding:48px;max-width:540px}
+  h1{font-size:clamp(28px,5vw,44px);font-weight:900;margin-bottom:16px;
+     background:linear-gradient(135deg,#fbbf24,#f59e0b);-webkit-background-clip:text;color:transparent}
+  p{color:rgba(255,255,255,0.65);font-size:17px;line-height:1.7;margin-bottom:28px}
+  .pulse{display:inline-block;width:12px;height:12px;border-radius:50%;
+         background:#fbbf24;animation:pulse 1.6s infinite;margin:0 4px}
+  .pulse:nth-child(2){animation-delay:0.2s}
+  .pulse:nth-child(3){animation-delay:0.4s}
+  @keyframes pulse{0%,100%{opacity:0.3;transform:scale(0.8)}50%{opacity:1;transform:scale(1.2)}}
+</style>
+</head>
+<body>
+  <div class="box">
+    <h1>ابدأ المحادثة مع المهندس الذكي</h1>
+    <p>اكتب فكرة موقعك في الشات على اليسار — وبتشوف الموقع يتبنى هنا لحظة بلحظة.</p>
+    <div><span class="pulse"></span><span class="pulse"></span><span class="pulse"></span></div>
+  </div>
+</body>
+</html>"""
