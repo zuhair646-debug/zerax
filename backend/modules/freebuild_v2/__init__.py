@@ -152,22 +152,72 @@ def _now() -> str:
 
 
 async def _openai_architect_turn(messages_for_model: List[Dict[str, str]]) -> Dict[str, Any]:
-    """Call OpenAI gpt-4o with JSON response format, return parsed dict."""
+    """Call an LLM with JSON response format, return parsed dict.
+    Tries OPENAI_DIRECT_KEY first (user's own billing). Falls back to EMERGENT_LLM_KEY.
+    Raises a specific HTTPException if neither key is configured.
+    """
     direct_key = os.environ.get("OPENAI_DIRECT_KEY", "").strip()
-    if not direct_key:
-        raise RuntimeError("OPENAI_DIRECT_KEY not configured")
+    emergent_key = os.environ.get("EMERGENT_LLM_KEY", "").strip()
+    content = ""
 
-    from openai import AsyncOpenAI
-    client = AsyncOpenAI(api_key=direct_key)
+    last_error = None
 
-    resp = await client.chat.completions.create(
-        model="gpt-4o",
-        messages=messages_for_model,
-        temperature=0.75,
-        max_tokens=8000,
-        response_format={"type": "json_object"},
-    )
-    content = (resp.choices[0].message.content or "").strip()
+    # ===== Try OpenAI direct =====
+    if direct_key:
+        try:
+            from openai import AsyncOpenAI
+            client = AsyncOpenAI(api_key=direct_key)
+            resp = await client.chat.completions.create(
+                model="gpt-4o",
+                messages=messages_for_model,
+                temperature=0.75,
+                max_tokens=8000,
+                response_format={"type": "json_object"},
+            )
+            content = (resp.choices[0].message.content or "").strip()
+        except Exception as e:
+            last_error = f"OpenAI direct: {type(e).__name__}: {str(e)[:200]}"
+            logger.warning(f"[FREEBUILD] OpenAI direct failed, trying emergent: {last_error}")
+            content = ""
+
+    # ===== Fallback: Emergent universal key =====
+    if not content and emergent_key:
+        try:
+            from emergentintegrations.llm.chat import LlmChat, UserMessage
+            # Build a single concatenated prompt since LlmChat takes one message
+            system_parts = [m["content"] for m in messages_for_model if m["role"] == "system"]
+            user_parts = [m["content"] for m in messages_for_model if m["role"] == "user"]
+            sys_combined = "\n\n".join(system_parts)
+            # The last user message is the current turn
+            last_user_msg = user_parts[-1] if user_parts else ""
+            # Prior user turns as context
+            prior = "\n\n".join([f"[عميل سابق] {u}" for u in user_parts[:-1]])
+            user_combined = (prior + "\n\n" + f"[عميل الآن] {last_user_msg}").strip()
+
+            chat = LlmChat(
+                api_key=emergent_key,
+                session_id=f"fb2-{uuid.uuid4()}",
+                system_message=sys_combined,
+            )
+            chat.with_model("openai", "gpt-4o")
+            # Emergent wrapper doesn't support response_format; emphasize JSON in prompt
+            user_combined += "\n\n⚠️ أعد فقط JSON كما هو موضّح في الـsystem prompt. لا markdown، لا شيء آخر."
+            content = (await chat.send_message(UserMessage(text=user_combined)) or "").strip()
+        except Exception as e:
+            last_error = (last_error + " | " if last_error else "") + f"Emergent: {type(e).__name__}: {str(e)[:200]}"
+            logger.warning(f"[FREEBUILD] Emergent fallback failed: {str(e)[:200]}")
+            content = ""
+
+    if not content:
+        if not direct_key and not emergent_key:
+            raise RuntimeError(
+                "مفتاح الذكاء الاصطناعي غير مُعدّ. محتاج تضيف OPENAI_DIRECT_KEY (مفضّل) "
+                "أو EMERGENT_LLM_KEY في Railway/Render environment variables."
+            )
+        raise RuntimeError(
+            f"فشل الاتصال بالذكاء (تأكد من شحن رصيد OpenAI أو Emergent): {last_error}"
+        )
+
     # Strip accidental markdown fences
     if content.startswith("```"):
         lines = content.split("\n")
@@ -176,6 +226,13 @@ async def _openai_architect_turn(messages_for_model: List[Dict[str, str]]) -> Di
         if lines and lines[-1].startswith("```"):
             lines = lines[:-1]
         content = "\n".join(lines).strip()
+
+    # Some models wrap JSON in extra text — extract {...}
+    if not content.startswith("{"):
+        i = content.find("{")
+        j = content.rfind("}")
+        if i >= 0 and j > i:
+            content = content[i:j + 1]
 
     try:
         data = json.loads(content)
@@ -263,6 +320,28 @@ def create_freebuild_v2_router(db, get_current_user) -> APIRouter:
         )
         return r.modified_count > 0
 
+    # ===== HEALTH / DIAGNOSTIC =====
+    @router.get("/health")
+    async def health():
+        """Public diagnostic — tells the deployer which keys are set.
+        Never leaks the key values themselves."""
+        direct = bool(os.environ.get("OPENAI_DIRECT_KEY", "").strip())
+        emergent = bool(os.environ.get("EMERGENT_LLM_KEY", "").strip())
+        eleven = bool(os.environ.get("ELEVENLABS_API_KEY", "").strip())
+        return {
+            "service": "freebuild-v2",
+            "ok": direct or emergent,
+            "keys_configured": {
+                "OPENAI_DIRECT_KEY": direct,
+                "EMERGENT_LLM_KEY": emergent,
+                "ELEVENLABS_API_KEY": eleven,
+            },
+            "recommendation": (
+                None if (direct or emergent)
+                else "أضف OPENAI_DIRECT_KEY أو EMERGENT_LLM_KEY في environment variables"
+            ),
+        }
+
     # ===== START =====
     @router.post("/start")
     async def start(_: StartIn, user=Depends(get_current_user)):
@@ -326,8 +405,24 @@ def create_freebuild_v2_router(db, get_current_user) -> APIRouter:
             model_msgs = _build_model_messages(session, payload.message)
             ai = await _openai_architect_turn(model_msgs)
         except Exception as e:
-            logger.exception(f"[FREEBUILD-V2] architect call failed: {e}")
-            raise HTTPException(500, f"فشل الذكاء المعماري: {str(e)[:140]}")
+            err = str(e)[:400]
+            logger.exception(f"[FREEBUILD-V2] architect call failed: {err}")
+            # Detect common failure causes and give an actionable message
+            if "مفتاح الذكاء" in err or "not configured" in err.lower():
+                raise HTTPException(500,
+                    "مفتاح الذكاء الاصطناعي غير مُعدّ على السيرفر. "
+                    "تأكد من إضافة OPENAI_DIRECT_KEY في Environment Variables."
+                )
+            if "insufficient_quota" in err.lower() or "billing" in err.lower() or "exceeded" in err.lower():
+                raise HTTPException(500,
+                    "رصيد OpenAI انتهى. اشحن من dashboard.openai.com → Billing، "
+                    "أو استخدم EMERGENT_LLM_KEY كبديل."
+                )
+            if "rate" in err.lower() and "limit" in err.lower():
+                raise HTTPException(429, "طلبات كثيرة جداً. انتظر ثانيتين وحاول مرة ثانية.")
+            if "invalid" in err.lower() and "key" in err.lower() or "401" in err:
+                raise HTTPException(500, "مفتاح OpenAI غير صحيح. تحقق من OPENAI_DIRECT_KEY.")
+            raise HTTPException(500, f"فشل الذكاء المعماري: {err[:140]}")
 
         html_update = ai.get("html_update")
         charge = 0
