@@ -113,6 +113,10 @@ export default function WakeWordListener() {
 
   if (!SR) return null; // browser doesn't support Web Speech API
 
+  // TEMPORARY: hide the visible toggle UI while Phase 2 is in progress.
+  // Wake-word detection still runs in background if user had previously enabled it.
+  return null;
+  // eslint-disable-next-line no-unreachable
   return (
     <button
       onClick={toggle}

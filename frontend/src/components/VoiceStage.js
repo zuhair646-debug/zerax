@@ -44,6 +44,28 @@ function getStoredName() {
   return localStorage.getItem('zitex_user_name') || '';
 }
 
+// ====== AI Director: map reply text keywords to VRMA animations ======
+const ANIMATION_RULES = [
+  { keywords: ['أبشر', 'ابشر', 'يا سلام', 'تمام', 'ممتاز', 'روعة', 'وااو', 'واو'], action: 'clap' },
+  { keywords: ['ما أدري', 'مدري', 'تقريبا', 'يمكن', 'فكر', 'خلي أفكر', 'دقيقة', 'شوف'], action: 'thinking' },
+  { keywords: ['هلا', 'أهلا', 'مرحبا', 'السلام', 'وعليكم', 'صباح', 'مساء', 'مرحبتين'], action: 'wave' },
+  { keywords: ['استغفر', 'الله', 'سبحان', 'لا حول', 'يا ربي', 'يا رب'], action: 'blush' },
+  { keywords: ['وااو', 'يا حبذا', 'ما توقعت', 'جد', 'مستحيل', 'لا يمكن'], action: 'surprised' },
+  { keywords: ['آسف', 'آسفة', 'للأسف', 'حزين', 'تعبان', 'زعلانة', 'زعلان'], action: 'sad' },
+  { keywords: ['عاش', 'أحسنت', 'برافو', 'ممتاز عليك', 'مبروك'], action: 'clap' },
+];
+
+function pickAnimationFromText(text) {
+  if (!text) return null;
+  const normalized = text.toLowerCase();
+  for (const rule of ANIMATION_RULES) {
+    if (rule.keywords.some((k) => normalized.includes(k.toLowerCase()))) {
+      return rule.action;
+    }
+  }
+  return null;
+}
+
 function setStoredName(name) {
   try { localStorage.setItem('zitex_user_name', name); } catch (_) {}
 }
@@ -73,6 +95,8 @@ export default function VoiceStage({ open, onClose, initialCharacter = 'zara', m
   const [anonUsage, setAnonUsage] = useState(null);
   const [userName, setUserName] = useState(getStoredName());
   const [showNamePrompt, setShowNamePrompt] = useState(!getStoredName());
+  const [zaraAction, setZaraAction] = useState(null);
+  const [laylaAction, setLaylaAction] = useState(null);
   const [tempName, setTempName] = useState('');
   const recRef = useRef(null);
   const audioRef = useRef(null);
@@ -316,6 +340,30 @@ export default function VoiceStage({ open, onClose, initialCharacter = 'zara', m
       setLastBanter(d.banter || null);
       if (d.anon_usage) setAnonUsage(d.anon_usage);
 
+      // Trigger voice-synced animation on the speaking character
+      const reactionAnim = pickAnimationFromText(d.reply);
+      if (reactionAnim) {
+        if (primary === 'zara') setZaraAction(reactionAnim);
+        else setLaylaAction(reactionAnim);
+        // Clear after ~4s so future animations can re-trigger
+        setTimeout(() => {
+          if (primary === 'zara') setZaraAction(null);
+          else setLaylaAction(null);
+        }, 4000);
+      }
+      // Banter animation on the other character
+      if (d.banter?.text) {
+        const banterAnim = pickAnimationFromText(d.banter.text);
+        if (banterAnim) {
+          if (primary === 'zara') setLaylaAction(banterAnim);
+          else setZaraAction(banterAnim);
+          setTimeout(() => {
+            if (primary === 'zara') setLaylaAction(null);
+            else setZaraAction(null);
+          }, 4000);
+        }
+      }
+
       setStage('speaking');
 
       // Schedule auto-navigation if intent detected
@@ -463,6 +511,7 @@ export default function VoiceStage({ open, onClose, initialCharacter = 'zara', m
         side="left"
         isPrimary={primary === 'zara'}
         talking={zaraState === 'talking'}
+        action={zaraAction}
         dataTestId="vs-zara"
       />
       <Character
@@ -471,6 +520,7 @@ export default function VoiceStage({ open, onClose, initialCharacter = 'zara', m
         side="right"
         isPrimary={primary === 'layla'}
         talking={laylaState === 'talking'}
+        action={laylaAction}
         dataTestId="vs-layla"
       />
 
@@ -557,7 +607,7 @@ const TINTS = {
   layla: '#a855f7',
 };
 
-function Character({ name, state, side, isPrimary, talking, dataTestId }) {
+function Character({ name, state, side, isPrimary, talking, action, dataTestId }) {
   const offScreenX = side === 'left' ? '-110%' : '110%';
   const onScreenX = side === 'left' ? '-12%' : '12%';
 
@@ -589,6 +639,7 @@ function Character({ name, state, side, isPrimary, talking, dataTestId }) {
           url={VRM_URLS[name] || VRM_URLS.zara}
           tint={TINTS[name]}
           talking={talking}
+          action={action}
           className="w-full h-full"
           dataTestId={`${dataTestId}-3d`}
           cameraPos={[0, 1.05, 2.4]}
