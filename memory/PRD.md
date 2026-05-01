@@ -15,6 +15,33 @@
 - 🔒 **Images**: قريباً
 
 
+### 🆕 May 1, 2026 — Hide 3D Characters + AI Director Voice-Sync (DONE ✅)
+
+طلبات المستخدم:
+1. إخفاء الشخصيات 3D مؤقتاً (محتاجة المزيد من العمل) — بدون حذف الكود
+2. استبدال بزر محادثة صوتية بسيط مثل ChatGPT (من جنب)
+3. إضافة الأنيميشن المرتبط بالصوت (من التعليق السابق)
+
+**ما تم:**
+- 🆕 **`VoiceChatButton.js`** جديد: زر دائري (14×14) بتدرج amber→orange→pink في bottom-right مع animate-ping pulse + tooltip
+- 🔄 **`ZitexDuoLauncher` v6**: `SHOW_3D_PEEK = false` flag يتحكم — الكود محفوظ 100%، فقط مخفي
+- 🔇 **`WakeWordListener`**: يرجع `null` قبل الرندر لإخفاء الـ UI (الكشف يشتغل لو المستخدم فعّله من قبل)
+- 🎭 **AI Director MVP** في `VoiceStage`:
+  - `pickAnimationFromText()` يحلل رد الـAI → يشغّل الأنيميشن المناسب
+  - كلمات تحفيز: أبشر/تمام→clap, ما أدري/فكر→thinking, هلا/مرحبا→wave, استغفر/الله→blush, وااو→surprised, آسف→sad
+  - الـbanter يعطي animation منفصل للشخصية الثانية
+  - تصفير بعد 4s لإعادة استخدام
+- State جديد: `zaraAction` / `laylaAction` → تمرير لـ`Character` → `Avatar3D` prop `action`
+
+**Push:** Commit `d78916d` → Vercel ينشر
+
+**Phase 2 Plan (next):**
+- 🤝 Dual-sister debate mode: شخصيتين يتناقشون مع بعض
+- 👗 Outfit variants (تصميم VRM جديدة)
+- 📱 PWA mobile integration
+- 🧠 Tool-use: AI يفتح أقسام الموقع، يكتب سيناريو، يقترح أفكار
+
+
 ### 🆕 May 1, 2026 — PROFESSIONAL ANIMATION ENGINE (P0 — DONE ✅)
 
 المستخدم كان محبط من حركات مصنوعة يدوياً (rotation.z يدوي = حركات غير طبيعية).
