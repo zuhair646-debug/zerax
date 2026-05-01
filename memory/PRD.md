@@ -5,6 +5,51 @@
 
 ## User Language: Arabic (العربية)
 
+
+### 🆕 May 1, 2026 — NATIVE SAUDI VOICES + OPPOSITE-GENDER LOGIC ✅
+
+طلب المستخدم: الصوت ما كان يطلع سعودي طبيعي. اختار صوتين من مكتبة ElevenLabs العامة وأرسل الـ Voice IDs:
+- **Mohammed Almansari** (`2bnoa3wtrtcUW41TrSJM`) — صوت ذكر سعودي
+- **Layan - The Professional** (`gVzwmdZzRgBrNjXaTmi5`) — صوت أنثى عربي
+
+طلب نظام جنس معاكس: المستخدمة الأنثى تسمع صوت رجل، المستخدم الذكر يسمع صوت بنت.
+
+**Backend changes** (`/app/backend/modules/avatar/__init__.py`):
+- `ELEVENLABS_VOICE_MAP` يحتوي الـIDs الجديدة + aliases للـbackward compatibility
+- `_resolve_persona(user_gender)` → يرجع `mohammed` للمستخدمة الأنثى، `layan` للمستخدم الذكر
+- `_avatar_system_prompt(persona_gender)` ديناميكي — يبني system prompt مختلف حسب الجنس
+  - male persona: "محمد المنصاري — أخوي محترم"
+  - female persona: "ليان — احترافية لطيفة"
+- `AvatarChatIn` يقبل `user_gender` field اختياري
+- `/api/avatar/chat` و `/api/avatar/greet` يستخدمون الـ persona resolution
+- Voice settings مضبوطة لـ Arabic: stability=0.50-0.55, similarity_boost=0.85, model=eleven_multilingual_v2
+
+**Backend changes** (`/app/backend/server.py`):
+- `User`, `UserRegister`, `UserRegisterWithReferral` فيهم `gender: str = "female"` field
+- `/api/auth/register` يحفظ الجنس
+- `/api/auth/me` و `/api/auth/login` يرجعون gender (عبر `User(**doc)`)
+
+**Frontend changes** (`/app/frontend/src/components/AmbientVoiceAgent.js`):
+- `getUserGender()` helper يقرأ من `localStorage.user.gender`
+- `sendToAI` يبعث `user_gender` مع كل طلب (بدلاً من `primary: "zara"`)
+
+**Frontend changes** (`/app/frontend/src/pages/RegisterPage.js`):
+- Gender select جديد بخيارين واضحين:
+  - "أنثى — الذكاء يردّ بصوت رجل"
+  - "ذكر — الذكاء يردّ بصوت بنت"
+- 3 columns layout: gender / country / referral
+
+**اختبار curl محقق ✅**:
+- Female user → primary=`mohammed`, audio=110KB ✅
+- Male user → primary=`layan`, audio=134KB ✅
+- Unknown gender → defaults to layan ✅
+- Greet endpoint نفس المنطق ✅
+- Register with gender=male → user.gender=male في الـ response ✅
+- عيّنات صوت محفوظة في `/app/frontend/public/voice-samples/sample_mohammed.mp3` و `sample_layan.mp3`
+
+**Push:** Commit `72cd83e` → `https://github.com/zuhair646-debug/zitex` → Vercel ينشر تلقائياً
+
+
 ## 🎯 Modular Architecture (Feb 2026)
 **كل قسم في module مستقل تماماً** — يمكن تطويره/نشره/إصلاحه بدون لمس الأقسام الأخرى.
 
