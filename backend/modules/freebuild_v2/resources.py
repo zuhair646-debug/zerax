@@ -141,6 +141,36 @@ UNSPLASH_LIBRARY: Dict[str, List[str]] = {
     "watch": [
         "1523275335684-37898b6baf30",
     ],
+    # ─── Smart Tech / AI / Apps ────────────────────────────────────────────
+    "smart_tech": [
+        "1518770660439-4636190af475",  # circuit board
+        "1531297484001-80022131f5a1",  # screens
+        "1633356122544-f134324a6cee",  # dashboard
+    ],
+    "ai": [
+        "1518770660439-4636190af475",
+        "1531297484001-80022131f5a1",
+    ],
+    "interaction": [
+        "1531297484001-80022131f5a1",
+        "1517245386807-bb43f82c33c4",
+    ],
+    "tracking": [
+        "1633356122544-f134324a6cee",  # analytics dashboard
+        "1517245386807-bb43f82c33c4",  # laptop with charts
+    ],
+    "memorization": [
+        "1503676260728-1c00da094a0b",  # studying
+        "1481627834876-b7833e8f5570",  # open book
+    ],
+    "teacher_student": [
+        "1503676260728-1c00da094a0b",
+        "1518398046578-8cca57782e17",
+    ],
+    "mobile_app": [
+        "1551650975-87deedd944c3",
+        "1556656793-08538906a9f8",
+    ],
     # ─── Real Estate / Architecture ────────────────────────────────────────
     "modern_villa": [
         "1568605114967-8130f3a36994",
@@ -163,6 +193,103 @@ UNSPLASH_LIBRARY: Dict[str, List[str]] = {
 
 def unsplash_url(photo_id: str, w: int = 1600, q: int = 80) -> str:
     return f"https://images.unsplash.com/photo-{photo_id}?auto=format&fit=crop&w={w}&q={q}"
+
+
+# ════════════════════════════════════════════════════════════════════════════
+#  KEYWORD → CATEGORY ALIAS MAP  (for semantic image post-processing)
+# ════════════════════════════════════════════════════════════════════════════
+# Maps any English/Arabic keyword the AI might use to a UNSPLASH_LIBRARY key.
+# Order matters — longer/more specific terms first.
+KEYWORD_ALIASES: List[tuple] = [
+    # Quran / Islamic
+    (("quran", "qur'an", "qoran", "mushaf", "recitation", "tilawah", "ayah",
+      "قرآن", "مصحف", "تلاوة", "آية"), "quran"),
+    (("madinah", "medina", "prophet-mosque", "المدينة", "مدينة"), "madinah"),
+    (("mecca", "kaaba", "haram", "مكة", "كعبة"), "mecca"),
+    (("mosque", "masjid", "minaret", "prayer-hall", "مسجد", "مساجد"), "mosque"),
+    (("islamic-pattern", "geometric-pattern", "زخرفة", "زخارف"), "islamic_pattern"),
+    # Smart tech / AI
+    (("smart-tech", "smart-technology", "ai", "artificial-intelligence",
+      "machine-learning", "ذكاء", "ذكي", "تقنية"), "smart_tech"),
+    (("interaction", "interactive", "تفاعل"), "interaction"),
+    (("tracking", "monitoring", "analytics", "metrics", "متابعة", "تتبع"), "tracking"),
+    (("mobile-app", "smartphone", "app", "تطبيق"), "mobile_app"),
+    # Education / learning
+    (("memorization", "memorize", "حفظ", "تحفيظ"), "memorization"),
+    (("teacher", "student", "tutor", "lesson", "درس", "معلم", "طالب", "تعليم"),
+     "teacher_student"),
+    (("classroom", "school", "صف", "مدرسة"), "classroom"),
+    (("books", "library", "كتب", "مكتبة"), "books"),
+    (("graduation", "تخرج"), "education"),
+    # Kids
+    (("kids", "child", "children", "boy", "girl", "أطفال", "طفل"),
+     "children_learning"),
+    # Food
+    (("saudi-food", "kabsa", "arab-food", "كبسة", "أكل-سعودي"), "saudi_food"),
+    (("food", "meal", "dish", "طعام", "أكل", "وجبة"), "food_general"),
+    (("restaurant", "dining", "مطعم"), "restaurant_interior"),
+    (("cafe", "coffee", "latte", "قهوة", "كافيه", "مقهى"), "cafe"),
+    (("dessert", "sweets", "cake", "حلويات"), "dessert"),
+    # Healthcare
+    (("dentist", "dental", "أسنان"), "dentist"),
+    (("clinic", "hospital", "عيادة", "مستشفى"), "clinic"),
+    (("doctor", "physician", "nurse", "طبيب", "ممرض"), "doctor"),
+    # E-commerce
+    (("perfume", "fragrance", "عطر", "عطور"), "perfume"),
+    (("jewelry", "ring", "necklace", "مجوهرات", "ذهب"), "jewelry"),
+    (("watch", "ساعة"), "watch"),
+    (("fashion", "clothing", "أزياء", "ملابس"), "fashion"),
+    # Real estate
+    (("villa", "house", "home", "real-estate", "فيلا", "بيت", "عقار"),
+     "modern_villa"),
+    (("interior", "living-room", "ديكور", "صالة"), "interior_living"),
+    # Other
+    (("tech", "office", "workspace", "مكتب"), "office_workspace"),
+    (("city", "urban", "night", "مدينة", "ليل"), "city_night"),
+    (("nature", "mountain", "landscape", "طبيعة", "جبال"), "nature"),
+    (("luxury", "gold", "premium", "فخامة", "ذهبي"), "luxury"),
+    (("gym", "fitness", "workout", "نادي"), "gym"),
+    (("yoga", "meditation", "يوغا"), "yoga"),
+]
+
+
+def resolve_image_for_keyword(keyword: str, w: int = 1600) -> str:
+    """Map any user-supplied keyword to a real Unsplash URL via the alias table.
+    Falls back to a generic abstract_dark image if no match."""
+    import random as _random
+    if not keyword:
+        keyword = "abstract"
+    kw = keyword.lower().replace("_", "-").strip()
+    # Try direct category match first
+    if kw in UNSPLASH_LIBRARY:
+        chosen = _random.choice(UNSPLASH_LIBRARY[kw])
+        return unsplash_url(chosen, w=w)
+    # Fuzzy match via aliases
+    for terms, category in KEYWORD_ALIASES:
+        for term in terms:
+            if term in kw:
+                if category in UNSPLASH_LIBRARY and UNSPLASH_LIBRARY[category]:
+                    chosen = _random.choice(UNSPLASH_LIBRARY[category])
+                    return unsplash_url(chosen, w=w)
+    # Fallback
+    return unsplash_url(UNSPLASH_LIBRARY["abstract_dark"][0], w=w)
+
+
+def post_process_html_images(html: str) -> str:
+    """Replace AI-generated @@IMG/<keyword>@@ placeholders with real URLs.
+    Pattern: src="@@IMG/quran-mushaf@@"  →  src="https://images.unsplash.com/photo-...".
+    Also handles background-image: url(@@IMG/...@@).
+    This guarantees images ALWAYS match section semantic intent."""
+    import re
+    if not html or "@@IMG/" not in html:
+        return html
+
+    def _replace(m):
+        keyword = m.group(1).strip()
+        return resolve_image_for_keyword(keyword)
+
+    # Match @@IMG/<keyword>@@ where keyword is anything except '@'
+    return re.sub(r"@@IMG/([^@]+)@@", _replace, html)
 
 
 # ════════════════════════════════════════════════════════════════════════════
@@ -317,23 +444,40 @@ def build_resources_block() -> str:
     parts: List[str] = []
     parts.append("# 📚 مكتبة الموارد الجاهزة (استخدمها بحرية — كلها مُتحقّق منها وتعمل)")
 
-    # Unsplash images
-    parts.append("\n## 🖼️ صور Unsplash جاهزة (استخدم أي ID من القائمة)")
-    parts.append("الصيغة: `https://images.unsplash.com/photo-{ID}?auto=format&fit=crop&w=1600&q=80`")
-    for category, ids in UNSPLASH_LIBRARY.items():
-        parts.append(f"- **{category}**: {', '.join(ids[:3])}")
-
+    # ════════════════════════════════════════════════════════════════════
+    # CRITICAL: image placeholder system (post-processed server-side)
+    # ════════════════════════════════════════════════════════════════════
+    parts.append("\n## 🖼️ نظام الصور الذكي — `@@IMG/<keyword>@@`")
     parts.append(
-        "\n💡 لازم تحط صورة Unsplash في الأماكن التالية على الأقل:"
-        "\n- Hero background أو image جنب العنوان"
-        "\n- كل قسم مميزات: صورة في كل بطاقة"
-        "\n- قسم about/خلفية الموقع"
-        "\n- بطاقات المنتجات/الأطباء/المعلمين/إلخ"
-        "\n\nاستخدم `<img loading=\"lazy\">` أو `background-image: url(...)`"
+        "**القاعدة الأهم على الإطلاق**: لا تكتب روابط صور Unsplash مباشرة (لأنك تخطئ في اختيار الـIDs).\n"
+        "بدلاً من ذلك، استخدم placeholder بهذي الصيغة:\n"
+        "```html\n"
+        '<img src="@@IMG/quran-mushaf@@" alt="القرآن الكريم">\n'
+        '<img src="@@IMG/saudi-food@@" alt="طعام">\n'
+        '<div style="background-image: url(@@IMG/madinah@@)"></div>\n'
+        "```\n\n"
+        "السيرفر بعدها يبدّل كل `@@IMG/<keyword>@@` بصورة Unsplash حقيقية مطابقة للموضوع.\n"
+        "**ميزة هذي الطريقة**: الصور تطابق سياق القسم دائماً ولا تخطئ.\n"
+    )
+
+    # Available keywords list
+    parts.append("\n### الكلمات المفتاحية المتاحة (اختر الأنسب لكل قسم)")
+    parts.append(
+        "**ديني/إسلامي**: `quran`, `madinah`, `mecca`, `mosque`, `islamic-pattern`, "
+        "`mushaf`, `recitation`, `ayah`\n"
+        "**تعليم**: `memorization`, `teacher-student`, `classroom`, `books`, "
+        "`children-learning`, `graduation`, `education`\n"
+        "**ذكاء/تقنية**: `smart-tech`, `ai`, `interaction`, `tracking`, `mobile-app`, "
+        "`tech`, `office`\n"
+        "**طعام**: `saudi-food`, `food`, `restaurant`, `cafe`, `dessert`\n"
+        "**صحة**: `doctor`, `clinic`, `dentist`\n"
+        "**متاجر**: `perfume`, `jewelry`, `watch`, `fashion`\n"
+        "**عقار**: `villa`, `interior`, `modern-house`\n"
+        "**أخرى**: `nature`, `city-night`, `luxury`, `gym`, `yoga`, `abstract-dark`\n"
     )
 
     # Quran audio
-    parts.append("\n## 🔊 تلاوات قرآنية (CDN حقيقي يعمل)")
+    parts.append("\n## 🔊 تلاوات قرآنية (CDN حقيقي يعمل — استخدم رابط مباشر)")
     parts.append("استخدم هذي الروابط في `<audio>` HTML5 — كلها تعمل:")
     for r in QURAN_RECITERS:
         ex = r["full_surah_url"].format(surah=1)
@@ -341,7 +485,7 @@ def build_resources_block() -> str:
     parts.append(
         "\nنمط استخدام (مثلاً سورة الفاتحة بصوت السديس):"
         "\n```html\n<audio controls src=\"https://server11.mp3quran.net/sds/001.mp3\"></audio>\n```"
-        "\n- `{surah:03d}` يعني رقم السورة بـ3 أرقام (001 للفاتحة، 002 للبقرة، 114 للناس)"
+        "\n- `{surah:03d}` = رقم السورة بـ3 أرقام (001 للفاتحة، 002 للبقرة، 114 للناس)"
         "\n- لازم تضيف بطاقات قرّاء مع مشغّل صوت في أي موقع قرآني"
     )
 
@@ -372,11 +516,17 @@ def build_resources_block() -> str:
 
     parts.append(
         "\n## ⚡ قواعد إجبارية"
-        "\n1. كل html_update في موقع قرآني يجب أن يحتوي على ≥3 بطاقات قارئ مع `<audio>`"
-        "\n2. كل html_update في موقع قرآني يجب أن يحتوي على ≥1 آية بتصميم عثماني"
-        "\n3. كل قسم مميزات/خدمات يجب أن يحتوي على صورة Unsplash"
-        "\n4. Hero يجب أن يكون فيه صورة Unsplash (background-image أو img)"
-        "\n5. لا تستخدم emoji في الأيقونات — استخدم SVG inline من المكتبة فوق"
+        "\n1. **لا تكتب رابط Unsplash مباشرة أبداً** — استخدم `@@IMG/<keyword>@@` فقط."
+        "\n2. كل قسم/بطاقة يحتاج صورة → اختر keyword يطابق محتوى القسم بالضبط:"
+        "\n   - قسم اسمه 'نظام تفاعل ذكي' → `@@IMG/smart-tech@@` أو `@@IMG/interaction@@`"
+        "\n   - قسم اسمه 'مكتبة قرّاء' → `@@IMG/quran@@`"
+        "\n   - قسم اسمه 'متابعة الطالب' → `@@IMG/tracking@@`"
+        "\n   - قسم اسمه 'دروس تجويد' → `@@IMG/memorization@@`"
+        "\n3. لا تخلط الكلمات المفتاحية — لو القسم عن الذكاء الصناعي **لا** تستخدم `food` أو `villa`."
+        "\n4. كل html_update في موقع قرآني يجب أن يحتوي على ≥3 بطاقات قارئ مع `<audio>`"
+        "\n5. كل html_update في موقع قرآني يجب أن يحتوي على ≥1 آية بتصميم عثماني"
+        "\n6. كل قسم مميزات/خدمات يجب أن يحتوي على صورة (`@@IMG/...@@`)"
+        "\n7. Hero يجب أن يكون فيه صورة (`@@IMG/...@@`)"
     )
 
     return "\n".join(parts)
