@@ -360,7 +360,9 @@ async def _openai_architect_turn(messages_for_model: List[Dict[str, str]]) -> Di
 
 
 def _build_model_messages(session: Dict[str, Any], new_user_msg: str) -> List[Dict[str, str]]:
-    """Compose the full message list for the model, including current HTML state."""
+    """Compose the full message list for the model, including current HTML state.
+    Includes server-side forcing logic: if user has made 2+ turns without an HTML
+    being built, inject a hard instruction to BUILD NOW this turn."""
     msgs: List[Dict[str, str]] = [{"role": "system", "content": ARCHITECT_SYSTEM}]
 
     # Append the conversation history
@@ -368,19 +370,62 @@ def _build_model_messages(session: Dict[str, Any], new_user_msg: str) -> List[Di
         role = m.get("role")
         content = m.get("content", "")
         if role in ("user", "assistant"):
-            # For assistant turns, we stored the raw JSON they returned; re-feed the text
             if role == "assistant":
                 content = m.get("message_to_user", content) or content
             msgs.append({"role": role, "content": content})
 
-    # Inject current HTML state as a system reminder (so model can modify it)
+    # Count user turns so far (excluding the incoming one)
+    user_turns_so_far = sum(1 for m in session.get("messages", []) if m.get("role") == "user")
     current_html = session.get("html") or ""
+
+    # Inject current HTML state as a system reminder
     if current_html:
         msgs.append({
             "role": "system",
             "content": (
                 "## CURRENT_HTML_STATE (modify from this baseline when you return html_update)\n"
                 "```html\n" + current_html + "\n```"
+            ),
+        })
+
+    # ═══════════════════════════════════════════════════════════════════
+    # 🔥 SERVER-SIDE FORCING: prevent AI from asking endless questions
+    # ═══════════════════════════════════════════════════════════════════
+    # user_turns_so_far counts prior turns (the incoming one not yet in session)
+    # So by turn count 2 (this is the 3rd user message), we ALREADY have 2 answers.
+    # If still no HTML by then, FORCE the build on this turn.
+    #
+    # Rules applied on each incoming user turn (inclusive of this one):
+    #   Incoming turn 1 (user_turns_so_far == 0): gather — natural conversation
+    #   Incoming turn 2 (user_turns_so_far == 1): gather — second question OK
+    #   Incoming turn 3+ (user_turns_so_far >= 2) AND html empty: FORCE BUILD
+    #   Any turn where html exists: incremental update encouraged
+    incoming_turn_index = user_turns_so_far + 1  # 1-based for this incoming message
+
+    if not current_html and incoming_turn_index >= 3:
+        # HARD INSTRUCTION — model MUST build this turn
+        msgs.append({
+            "role": "system",
+            "content": (
+                "🚨 ORDER FROM THE USER & PLATFORM — DO NOT IGNORE 🚨\n\n"
+                "العميل قدّم معلومات كافية بالفعل. مننتظر تصميماً حقيقياً الآن.\n"
+                "- لا تطلب أي معلومة إضافية.\n"
+                "- لا تكرّر 'راح أصمم' — صمّم فعلياً هذه اللحظة.\n"
+                "- في هذا الرد، `html_update` يجب أن يحتوي على موقع كامل (navbar + hero + قسم + footer) بحجم ≥ 10,000 حرف.\n"
+                "- لو نقصك تفصيل، خذ افتراضاً منطقياً واكمل (اسم تقديري، ألوان مناسبة، محتوى تجريبي عالي الجودة).\n"
+                "- `next_question_type` يكون \"text\" أو \"yes_no\" بحيث تسأل العميل عن تحسين معين بعد ما يشوف التصميم.\n"
+                "- `progress_note` يصف ما بنيته (مثلاً: \"بنيت الصفحة الرئيسية بالكامل: navbar، hero، قسم القرّاء، footer\").\n\n"
+                "إذا رجعت رداً بدون html_update في هذه الدورة، فشلت في مهمتك. هذه الدورة = بناء إلزامي."
+            ),
+        })
+    elif current_html:
+        # Encourage incremental additions
+        msgs.append({
+            "role": "system",
+            "content": (
+                "ملاحظة: الموقع موجود بالفعل. كل رد يجب أن يُحسّن أو يوسّع الموقع. "
+                "ارجع `html_update` مع الـHTML الكامل المُحدّث (تحافظ على كل الأقسام السابقة وتضيف/تعدّل حسب طلب العميل). "
+                "تحديث حقيقي مطلوب في كل رد من هنا وطالع."
             ),
         })
 
