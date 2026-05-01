@@ -44,50 +44,68 @@ AVAILABLE_VOICES = [
 
 # ===== System messages =====
 # Saudi dialect — natural, friendly, warm, knowledgeable about everything
-ZITEX_AVATAR_SYSTEM = """أنت زارا أو ليلى — مساعدة صوتية ذكية على منصة Zitex.
+def _avatar_system_prompt(persona_gender: str = "female") -> str:
+    """Returns the system prompt tailored to the AI persona's gender.
+    - persona_gender == "female"  → Layan (female persona, female voice) — speaks to a male user
+    - persona_gender == "male"    → Mohammed (male persona, male voice) — speaks to a female user
+    """
+    is_male = (persona_gender or "female").lower() == "male"
+    if is_male:
+        identity = (
+            "أنت محمد المنصاري — مساعد صوتي ذكي سعودي على منصة Zitex.\n"
+            "صوتك رجالي دافئ، شخصيتك واثقة لطيفة محترمة.\n"
+            "تتكلم مع مستخدمة (أنثى) بأسلوب أخوي محترم — بدون إفراط بالألقاب."
+        )
+        verb = "تتكلم"
+        examples = '"هلا والله" "أبشري" "تأمري أمر" "تمام يا أستاذة" "حياك الله"'
+    else:
+        identity = (
+            "أنتِ ليان — مساعدة صوتية ذكية سعودية على منصة Zitex.\n"
+            "صوتك بنوتي ناعم واثق، شخصيتك ودودة لبقة احترافية.\n"
+            "تتكلمين مع مستخدم (ذكر) بأسلوب محترم لطيف — بدون دلع زائد."
+        )
+        verb = "تتكلمين"
+        examples = '"هلا والله" "أبشر" "تأمر أمر" "تمام يا أستاذ" "حياك الله"'
+
+    return f"""{identity}
 
 قواعد الكلام (مهم جداً):
-- لهجة سعودية طبيعية فقط: "هلا" "وش" "ابغى" "تبي" "شلون" "أبشر" "تمام" "والله"
-- ردود قصيرة طبيعية: 1-3 جمل (الصوت يسمع، لا تطولين)
-- لا emojis في الرد (الصوت يقرأها بشكل غريب)
-- اسم المستخدم لو موجود استخدميه مباشرة بحب
-- بدون مقدمات ولا تكرار
-
-شخصيتك:
-- زارا: مرحة حماسية ("ابشر يا قلبي!" "يا سلام!")
-- ليلى: هادئة أنيقة ("تمام معاك" "أنا أسمعك")
-
-قواعد النطق الصارمة:
-- **ممنوع الإيموجي** (🌹 😊 ❤️ الخ) — يسبب مشاكل في الصوت
-- **ممنوع علامات التعجب المتكررة** (!! !!!) — استخدم علامة واحدة أو لا شيء
-- **ممنوع الكلمات الإنجليزية** إلا لو ضرورية جداً (اكتبها بالعربية: "أوكي" بدل "OK")
-- **ممنوع تكرار الجمل أو الكلمات**
-- جملة واحدة كاملة بدون توقف مفاجئ
+- لهجة سعودية طبيعية فقط: {examples}
+- ردود قصيرة طبيعية: 1-3 جمل (الصوت يُسمع، لا تطوّل)
+- ممنوع الإيموجي نهائياً (🌹 😊 ❤️) — يخرّب نطق الصوت
+- ممنوع الكلمات الإنجليزية إلا لو ضرورية جداً (اكتبها بالعربية: "أوكي" بدل "OK")
+- ممنوع تكرار الجمل أو الكلمات
+- ممنوع علامات التعجب المتكررة (!! !!!) — استخدم علامة واحدة أو لا شيء
+- اسم المستخدم لو موجود استخدمه مباشرة بشكل طبيعي
+- بدون مقدمات طويلة ولا اعتذارات متكررة
 
 ذكاؤك (مهم جداً):
-أنت **مساعدة شاملة** — تجاوبين على **أي** سؤال يسأله المستخدم:
+{verb} كمساعد شامل — تجاوب على أي سؤال يسأله المستخدم:
 - أسئلة عامة (طبخ، طب، رياضة، تاريخ، علوم، تكنولوجيا، أخبار)
 - مساعدة دراسية (شرح دروس، حل واجبات، تلخيص)
-- نصائح حياتية (مشاكل شخصية، علاقات، عمل)
+- نصائح حياتية (مشاكل شخصية، عمل، دراسة)
 - استشارات تقنية (برمجة، تصميم، أدوات)
 - محادثة عادية (نكات، قصص، تشجيع)
 - بالطبع كل خدمات Zitex
 
-لو سأل عن شي مالك علم به، قولي بصراحة: "والله ما عندي معلومة دقيقة عن هذا، بس..."
+لو سُئل عن شي مالك علم به، قول بصراحة: "والله ما عندي معلومة دقيقة عن هذا، بس..."
 
-خدمات Zitex (لو سأل تحديداً):
+خدمات Zitex (لو سُئل تحديداً):
 - مواقع جاهزة (25 تخصص)
 - توليد صور AI (5 نقاط)
 - توليد فيديو AI (4-12 نقطة/ثانية)
-- استوديو ذكي لمتجرك
+- استوديو ذكي للمتجر
 
-Intent routing — لو طلب صراحة شي من Zitex، فهمي القصد:
-- يبغى صورة → اكتشفي الموضوع وردي: "تمام، خلنا نسوي صورة [الموضوع]. أنقلك للاستوديو الآن"
+Intent routing — لو طلب صراحة شي من Zitex، افهم القصد:
+- يبغى صورة → اكتشف الموضوع ورد: "تمام، خلّنا نسوي صورة [الموضوع]. أنقلك للاستوديو الآن"
 - يبغى فيديو → "تمام، فيديو [النوع]. أحوّلك للويزارد"
 - يبغى موقع → "ممتاز، موقع [النوع]. أوديك لصفحة المواقع"
 
 اللهجة: سعودي خفيف طبيعي — لا فصحى ثقيلة، لا مصري، لا شامي.
 """
+
+# Backward-compatible default (female persona)
+ZITEX_AVATAR_SYSTEM = _avatar_system_prompt("female")
 
 
 def _merchant_system_message(config: Dict[str, Any]) -> str:
@@ -140,6 +158,7 @@ class AvatarChatIn(BaseModel):
     anon_id: Optional[str] = None
     dual_banter: bool = True
     user_name: Optional[str] = None  # for personalization
+    user_gender: Optional[str] = None  # 'male' | 'female' — pick OPPOSITE-gender voice
     detect_intent: bool = True       # extract intent for auto-routing
 
 
@@ -217,19 +236,39 @@ def create_avatar_router(db, get_current_user) -> APIRouter:
         response = await chat.send_message(UserMessage(text=user_msg))
         return response
 
-    # Voice mapping per character — ElevenLabs voice IDs
+    # Voice mapping per character — ElevenLabs voice IDs (NATIVE ARABIC)
+    # Mohammed Almansari (male, Saudi) and Layan The Professional (female, Arabic)
+    # Logic: AI persona is opposite-gender of the user.
+    #   - User is FEMALE → AI replies as MALE (Mohammed)
+    #   - User is MALE   → AI replies as FEMALE (Layan)
     ELEVENLABS_VOICE_MAP = {
-        "zara":     "EXAVITQu4vr4xnSDxMaL",   # Bella — warm soft young
-        "layla":    "XB0fDUnXU5powFXDhCwa",   # Charlotte — elegant
-        "shimmer":  "EXAVITQu4vr4xnSDxMaL",
-        "nova":     "XB0fDUnXU5powFXDhCwa",
-        "coral":    "EXAVITQu4vr4xnSDxMaL",
-        "sage":     "XB0fDUnXU5powFXDhCwa",
-        "alloy":    "EXAVITQu4vr4xnSDxMaL",
-        "fable":    "pFZP5JQG7iQjIQuC4Bku",
-        "echo":     "XrExE9yKIg1WjnnlVkGX",
-        "onyx":     "XrExE9yKIg1WjnnlVkGX",
+        "mohammed": "2bnoa3wtrtcUW41TrSJM",   # Mohammed Almansari — male, Saudi/Khaleeji
+        "layan":    "gVzwmdZzRgBrNjXaTmi5",   # Layan The Professional — female, Arabic
+        # Backward-compat aliases (legacy code paths still work)
+        "zara":     "gVzwmdZzRgBrNjXaTmi5",   # → Layan
+        "layla":    "gVzwmdZzRgBrNjXaTmi5",   # → Layan
+        "shimmer":  "gVzwmdZzRgBrNjXaTmi5",
+        "nova":     "gVzwmdZzRgBrNjXaTmi5",
+        "coral":    "gVzwmdZzRgBrNjXaTmi5",
+        "sage":     "gVzwmdZzRgBrNjXaTmi5",
+        "alloy":    "2bnoa3wtrtcUW41TrSJM",
+        "fable":    "gVzwmdZzRgBrNjXaTmi5",
+        "echo":     "2bnoa3wtrtcUW41TrSJM",
+        "onyx":     "2bnoa3wtrtcUW41TrSJM",
     }
+
+    def _resolve_persona(user_gender: Optional[str]) -> str:
+        """Return persona key based on user gender (opposite-gender voice).
+        - user is female → persona 'mohammed' (male voice)
+        - user is male   → persona 'layan'    (female voice)
+        - unknown        → default 'layan'    (female voice)
+        """
+        g = (user_gender or "").strip().lower()
+        if g in ("female", "f", "أنثى", "بنت", "امرأة"):
+            return "mohammed"
+        if g in ("male", "m", "ذكر", "رجل", "ولد"):
+            return "layan"
+        return "layan"
 
     # ===== Helper: TTS via OpenAI gpt-4o-mini-tts (ChatGPT-grade with instructions) =====
     async def _tts(text: str, voice_id: Optional[str] = None) -> Optional[str]:
@@ -282,14 +321,23 @@ def create_avatar_router(db, get_current_user) -> APIRouter:
                     el_voice_id = ELEVENLABS_VOICE_MAP.get(voice.lower(), ELEVENLABS_VOICE_MAP["zara"])
 
                     def _gen_el():
-                        if voice.lower() in ("zara", "shimmer", "coral", "alloy", "fable"):
-                            settings = {"stability": 0.42, "similarity_boost": 0.78,
-                                        "style": 0.45, "use_speaker_boost": True}
+                        # Tuned for native Saudi/Arabic voices (Mohammed & Layan)
+                        if voice.lower() in ("mohammed",):
+                            # Male — calm, confident, warm
+                            settings = {"stability": 0.55, "similarity_boost": 0.85,
+                                        "style": 0.25, "use_speaker_boost": True}
+                        elif voice.lower() in ("layan",):
+                            # Female — professional, soft, expressive
+                            settings = {"stability": 0.50, "similarity_boost": 0.85,
+                                        "style": 0.30, "use_speaker_boost": True}
+                        elif voice.lower() in ("zara", "shimmer", "coral", "alloy", "fable"):
+                            settings = {"stability": 0.50, "similarity_boost": 0.85,
+                                        "style": 0.30, "use_speaker_boost": True}
                         elif voice.lower() in ("layla", "nova", "sage"):
-                            settings = {"stability": 0.55, "similarity_boost": 0.82,
+                            settings = {"stability": 0.50, "similarity_boost": 0.85,
                                         "style": 0.30, "use_speaker_boost": True}
                         else:
-                            settings = {"stability": 0.5, "similarity_boost": 0.75,
+                            settings = {"stability": 0.5, "similarity_boost": 0.85,
                                         "style": 0.3, "use_speaker_boost": True}
                         chunks = el_client.text_to_speech.convert(
                             text=clean,
@@ -377,19 +425,7 @@ def create_avatar_router(db, get_current_user) -> APIRouter:
         )
         return result.modified_count > 0
 
-    # Banter prompts (secondary character reacts to primary's reply)
-    ZARA_BANTER_PROMPT = (
-        "أنتِ زارا — حماسية مرحة ذهبية الشعر. رفيقتك ليلى قالت للمستخدم شي — "
-        "أضيفي تعليق/ردة فعل قصيرة جداً (جملة واحدة، 3-8 كلمات) باللهجة السعودية. "
-        "ممكن: تأييد ('الله أوه عجبتني!')، تعليق مرح ('يا ستّي!')، ملاحظة ('بس لا تنسيه...'). "
-        "لا تعيدي كلام ليلى — فقط تعليق قصير spontanious. emoji واحد كحد أقصى."
-    )
-    LAYLA_BANTER_PROMPT = (
-        "أنتِ ليلى — أنيقة هادئة بشعر أسود. رفيقتك زارا قالت للمستخدم شي — "
-        "أضيفي تعليق/ردة فعل قصيرة جداً (جملة واحدة، 3-8 كلمات) باللهجة السعودية. "
-        "ممكن: تأييد هادئ ('صح كلامها')، إضافة رزينة ('وأنا أقترح أيضاً...')، ملاحظة حكيمة. "
-        "لا تعيدي كلام زارا — فقط تعليق قصير أنيق. emoji واحد كحد أقصى."
-    )
+    # Banter prompts removed — single-voice mode only (cleaner audio UX)
 
     ANON_FREE_LIMIT = 5
 
@@ -463,8 +499,12 @@ def create_avatar_router(db, get_current_user) -> APIRouter:
     @router.post("/avatar/chat")
     async def zitex_avatar_chat(payload: AvatarChatIn):
         sid = payload.session_id or "zitex-public"
-        primary = payload.primary or "zara"
-        secondary = "layla" if primary == "zara" else "zara"
+
+        # Determine AI persona based on user gender (OPPOSITE-gender voice)
+        persona = _resolve_persona(payload.user_gender)
+        persona_gender = "male" if persona == "mohammed" else "female"
+        primary = persona  # 'mohammed' or 'layan'
+        secondary = "layan" if primary == "mohammed" else "mohammed"
 
         # Anon free-trial enforcement
         usage = await _check_anon_usage(payload.anon_id)
@@ -475,7 +515,8 @@ def create_avatar_router(db, get_current_user) -> APIRouter:
             # Build personalized message — inject name into context
             name_prefix = f"اسم المستخدم: {payload.user_name}\n\n" if payload.user_name else ""
             user_msg = name_prefix + payload.message
-            text = await _chat_completion(ZITEX_AVATAR_SYSTEM, user_msg, sid)
+            system_prompt = _avatar_system_prompt(persona_gender)
+            text = await _chat_completion(system_prompt, user_msg, sid)
         except Exception as e:
             logger.exception(f"[AVATAR] Chat failed: {e}")
             raise HTTPException(500, "فشل المساعد. حاول مرة ثانية.")
@@ -485,24 +526,10 @@ def create_avatar_router(db, get_current_user) -> APIRouter:
 
         audio_url = None
         if payload.want_voice:
-            # Voice assignments optimized for Arabic: coral (warm friendly female) + sage (wise measured female)
-            primary_voice = "coral" if primary == "zara" else "sage"
-            audio_url = await _tts(text, primary_voice)
+            # Use the persona's native Arabic voice (Mohammed or Layan)
+            audio_url = await _tts(text, primary)
 
-        # Dual banter — secondary character adds a short reaction
-        banter_text = None
-        banter_audio = None
-        if payload.dual_banter and len(text) < 600:
-            try:
-                banter_sys = ZARA_BANTER_PROMPT if secondary == "zara" else LAYLA_BANTER_PROMPT
-                banter_ctx = f"ليلى قالت: '{text}'" if secondary == "zara" else f"زارا قالت: '{text}'"
-                banter_text = await _chat_completion(banter_sys, banter_ctx, f"{sid}-banter")
-                if banter_text and payload.want_voice:
-                    sec_voice = "coral" if secondary == "zara" else "sage"
-                    banter_audio = await _tts(banter_text, sec_voice)
-            except Exception as e:
-                logger.warning(f"[AVATAR] Banter generation failed: {e}")
-                banter_text = None
+        # Dual banter disabled for now — single voice keeps audio clean & focused
 
         # Track anon usage
         if payload.anon_id:
@@ -515,7 +542,7 @@ def create_avatar_router(db, get_current_user) -> APIRouter:
             "user_message": payload.message,
             "assistant_reply": text,
             "primary": primary,
-            "banter_reply": banter_text,
+            "user_gender": payload.user_gender,
             "had_voice": bool(audio_url),
             "anon_id": payload.anon_id,
             "timestamp": _now().isoformat(),
@@ -526,11 +553,7 @@ def create_avatar_router(db, get_current_user) -> APIRouter:
             "session_id": sid,
             "primary": primary,
             "secondary": secondary,
-            "banter": {
-                "text": banter_text,
-                "audio_url": banter_audio,
-                "from_char": secondary,
-            } if banter_text else None,
+            "banter": None,
             "anon_usage": usage,
             "intent": intent_data,
         }
@@ -539,10 +562,15 @@ def create_avatar_router(db, get_current_user) -> APIRouter:
     @router.post("/avatar/greet")
     async def zitex_greet(payload: Dict[str, Any]):
         """Quick personalized greeting on app entry. Uses Haiku for speed."""
-        primary = payload.get("primary", "zara")
         user_name = payload.get("user_name") or "صديقي"
+        user_gender = payload.get("user_gender")
         time_hint = payload.get("time_hint", "")  # 'morning'|'afternoon'|'evening'|'night'
         want_voice = payload.get("want_voice", True)
+
+        # Determine AI persona by OPPOSITE-gender
+        persona = _resolve_persona(user_gender)
+        persona_gender = "male" if persona == "mohammed" else "female"
+        primary = persona
 
         # Build a quick context (no LLM needed for simple greetings — but use LLM for variety)
         time_phrase = {
@@ -552,16 +580,14 @@ def create_avatar_router(db, get_current_user) -> APIRouter:
             "night": "أهلاً في الليل",
         }.get(time_hint, "هلا")
 
-        char_persona = (
-            "أنت زارا، مرحة وحماسية. ردك جملة واحدة قصيرة جداً (5-12 كلمة)."
-            if primary == "zara"
-            else "أنت ليلى، أنيقة وهادئة. ردك جملة واحدة قصيرة جداً (5-12 كلمة)."
-        )
-        sys = f"""أنت {primary} على موقع Zitex.
-{char_persona}
-بدون emoji. لهجة سعودية طبيعية. استخدمي الاسم.
+        if persona_gender == "male":
+            char_persona = "أنت محمد، مساعد رجالي سعودي محترم. ردك جملة واحدة قصيرة جداً (5-12 كلمة)."
+        else:
+            char_persona = "أنتِ ليان، مساعدة سعودية احترافية. ردك جملة واحدة قصيرة جداً (5-12 كلمة)."
+        sys = f"""{char_persona}
+بدون إيموجي. لهجة سعودية طبيعية. استخدم اسم المستخدم.
 """
-        user_msg = f"المستخدم اسمه {user_name} وفتح الموقع الآن. الوقت: {time_phrase}. حييه ترحيب طبيعي قصير وذكّريه إنه يقدر يطلب صور أو فيديو أو موقع بالكلام."
+        user_msg = f"المستخدم اسمه {user_name} وفتح موقع Zitex الآن. الوقت: {time_phrase}. حيّه ترحيب طبيعي قصير وذكّره إنه يقدر يطلب صور أو فيديو أو موقع بالكلام."
 
         try:
             from emergentintegrations.llm.chat import LlmChat, UserMessage
@@ -580,8 +606,7 @@ def create_avatar_router(db, get_current_user) -> APIRouter:
 
         audio_url = None
         if want_voice:
-            voice = "coral" if primary == "zara" else "sage"
-            audio_url = await _tts(text, voice)
+            audio_url = await _tts(text, primary)
         return {"reply": text, "audio_url": audio_url, "primary": primary}
 
     # ===== ANON USAGE STATUS =====

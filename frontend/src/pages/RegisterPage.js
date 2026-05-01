@@ -18,6 +18,7 @@ const RegisterPage = ({ setUser }) => {
     email: '', 
     password: '', 
     country: 'SA',
+    gender: 'female',  // 'male' | 'female' — used to pick opposite-gender AI voice
     referral_code: '',
     affiliate_code: ''   // 🆕 paid affiliate
   });
@@ -165,6 +166,15 @@ const RegisterPage = ({ setUser }) => {
                         data-testid="password-input" />
                     </Field>
                     <div className="grid grid-cols-2 gap-3">
+                      <Field label="الجنس">
+                        <Select value={formData.gender} onValueChange={(value) => setFormData({ ...formData, gender: value })}>
+                          <SelectTrigger className="h-11 bg-black/40 border-amber-500/15 text-white focus:border-amber-400/60" data-testid="gender-select"><SelectValue /></SelectTrigger>
+                          <SelectContent className="bg-[#0c0c18] border-amber-500/20">
+                            <SelectItem value="female" data-testid="gender-female">أنثى — الذكاء يردّ بصوت رجل</SelectItem>
+                            <SelectItem value="male" data-testid="gender-male">ذكر — الذكاء يردّ بصوت بنت</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </Field>
                       <Field label="الدولة">
                         <Select value={formData.country} onValueChange={(value) => setFormData({ ...formData, country: value })}>
                           <SelectTrigger className="h-11 bg-black/40 border-amber-500/15 text-white focus:border-amber-400/60"><SelectValue /></SelectTrigger>
