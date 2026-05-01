@@ -245,11 +245,10 @@ const FreeBuild = () => {
 
           {/* INPUT AREA */}
           <div className="flex-shrink-0 border-t border-amber-400/15 p-3 bg-[#0a0a14]">
-            {questionType === 'done' && htmlStarted && !savedProjectId && (
-              <div className="mb-2 p-3 rounded-xl bg-emerald-500/10 border border-emerald-400/30 text-center">
-                <div className="text-emerald-300 font-black text-sm mb-2">✓ الموقع جاهز!</div>
-                <Button onClick={() => setSaveOpen(true)} className="bg-emerald-500 hover:bg-emerald-400 text-black font-black w-full" data-testid="done-save-btn">
-                  <Save className="w-4 h-4 ms-2" /> احفظ الموقع باسمه
+            {htmlStarted && !savedProjectId && (
+              <div className="mb-2 flex gap-2">
+                <Button onClick={() => setSaveOpen(true)} className="flex-1 bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-200 border border-emerald-400/40 font-bold text-xs h-9" data-testid="save-anytime-btn">
+                  <Save className="w-3.5 h-3.5 ms-1.5" /> احفظ المشروع باسمه
                 </Button>
               </div>
             )}
@@ -279,16 +278,16 @@ const FreeBuild = () => {
                     send();
                   }
                 }}
-                placeholder={questionType === 'yes_no' ? 'أو اكتب إجابة مخصّصة...' : 'اكتب جوابك هنا...'}
+                placeholder={questionType === 'yes_no' ? 'أو اكتب إجابة مخصّصة...' : (htmlStarted ? 'وسّع الموقع أو اطلب تعديل...' : 'اكتب جوابك هنا...')}
                 rows={1}
-                disabled={sending || questionType === 'done'}
+                disabled={sending}
                 className="flex-1 resize-none bg-black/50 border border-amber-400/20 rounded-xl px-3 py-2.5 text-white placeholder:text-white/35 focus:border-amber-400/60 focus:outline-none text-sm"
                 data-testid="chat-input-textarea"
                 style={{ minHeight: '42px', maxHeight: '120px' }}
               />
               <Button
                 onClick={() => send()}
-                disabled={sending || !input.trim() || questionType === 'done'}
+                disabled={sending || !input.trim()}
                 className="bg-gradient-to-br from-amber-500 to-yellow-500 text-black font-black h-[42px] px-4 flex-shrink-0 disabled:opacity-50"
                 data-testid="chat-send-btn"
               >
@@ -296,7 +295,7 @@ const FreeBuild = () => {
               </Button>
             </div>
             <div className="mt-1.5 text-[10px] text-white/35 flex justify-between">
-              <span>{turns} دورة · {htmlStarted ? 'يبني الآن' : 'جمع فكرة'}</span>
+              <span>{turns} دورة · {htmlStarted ? 'التصميم قيد البناء' : 'جمع فكرة'}</span>
               <span>{htmlStarted ? '3 نقاط/تحديث' : 'الأسئلة مجانية'}</span>
             </div>
           </div>
