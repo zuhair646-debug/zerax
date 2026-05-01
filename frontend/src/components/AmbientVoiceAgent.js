@@ -35,6 +35,24 @@ function getUserName() {
   return localStorage.getItem('zitex_user_name') || '';
 }
 
+function getUserGender() {
+  // Returns 'male' | 'female' | '' (unknown)
+  // Used by the avatar to pick the OPPOSITE-gender voice:
+  //   user female → AI replies as male (Mohammed)
+  //   user male   → AI replies as female (Layan)
+  try {
+    const raw = localStorage.getItem('user');
+    if (raw) {
+      const u = JSON.parse(raw);
+      const g = (u?.gender || '').toLowerCase();
+      if (g === 'male' || g === 'female') return g;
+    }
+  } catch (_) {}
+  const stored = (localStorage.getItem('zitex_user_gender') || '').toLowerCase();
+  if (stored === 'male' || stored === 'female') return stored;
+  return '';
+}
+
 function getAnonId() {
   let id = localStorage.getItem(ANON_ID_KEY);
   if (!id) {
@@ -96,10 +114,10 @@ export default function AmbientVoiceAgent() {
         method: 'POST', headers,
         body: JSON.stringify({
           message: text,
-          primary: 'zara',
           session_id: sessionRef.current,
           want_voice: true,
           user_name: getUserName(),
+          user_gender: getUserGender(),
           detect_intent: true,
           dual_banter: false,
         }),

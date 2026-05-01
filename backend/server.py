@@ -104,6 +104,7 @@ class UserRegister(BaseModel):
     password: str
     name: str
     country: str = "SA"
+    gender: str = "female"  # 'male' | 'female' — used to pick opposite-gender AI voice
 
 class UserLogin(BaseModel):
     email: EmailStr
@@ -116,6 +117,7 @@ class User(BaseModel):
     name: str
     role: str = "client"
     country: str = "SA"
+    gender: str = "female"  # 'male' | 'female'
     credits: float = 0
     free_images: int = 3
     free_videos: int = 3
@@ -443,6 +445,7 @@ class UserRegisterWithReferral(BaseModel):
     password: str
     name: str
     country: str = "SA"
+    gender: str = "female"  # 'male' | 'female'
     referral_code: Optional[str] = None
     affiliate_code: Optional[str] = None  # 🆕 paid affiliate program
 
@@ -460,6 +463,7 @@ async def register(user_data: UserRegisterWithReferral):
         name=user_data.name,
         role="client",
         country=user_data.country,
+        gender=(user_data.gender or "female").lower(),
         credits=signup_bonus,  # نقاط مجانية عند التسجيل
         bonus_points=signup_bonus,
         free_images=3,
