@@ -6,6 +6,74 @@
 ## User Language: Arabic (العربية)
 
 
+### 🆕 May 1, 2026 — FREE-BUILD WEBSITE BUILDER (NO TEMPLATES) + SPECIALIZED IMAGE/VIDEO EXPERTS ✅
+
+طلب المستخدم: 
+1. قسم الصور: متخصص لكل نوع (إعلانات، منتجات، بنرات، لوقو) بمستوى احترافي عالي
+2. قسم الفيديو: متخصص + أصوات متعددة + أفلام قصيرة واقعية
+3. قسم بناء المواقع من الصفر: ذكاء يفهم طلب العميل ويصمم مباشرة، لا قوالب جاهزة، يسأل نعم/لا ويبني
+4. **استقلال كامل** — كل شي بمفتاح OpenAI الخاص بالمستخدم (`OPENAI_DIRECT_KEY`)، لا اعتماد على Emergent
+
+### 🏗️ Module 1: FreeBuild — `/api/freebuild/*`
+
+**ملف جديد**: `/app/backend/modules/freebuild/__init__.py`
+**ملف جديد**: `/app/frontend/src/pages/FreeBuild.js` → route `/build-from-zero`
+**LandingPage**: زر "أنشئ موقعك من الصفر بمحادثة ذكية" يوجّه لـ `/build-from-zero` بدلاً من `/websites`
+
+**Flow**:
+1. `POST /api/freebuild/start` → session + first Y/N
+2. 17 سؤال نعم/لا يحدّدون: الجمهور، الـpalette، النبرة، الـmotion، الأقسام، اللغة
+3. 3 أسئلة نص حر: اسم الموقع، الرؤية، اللون المفضل
+4. `POST /api/freebuild/generate` → OpenAI gpt-4o (مفتاح المستخدم) يبني HTML+CSS+JS كامل في 30s
+5. `GET /api/freebuild/preview/{id}` → public HTML preview
+6. `POST /api/freebuild/refine` → تعديل الموقع بتعليمات (10 نقاط/تعديل)
+7. `GET /api/freebuild/projects` → قائمة المواقع
+8. حفظ history (آخر 10 إصدارات)
+
+**Architect Persona**: System prompt بـ13 قاعدة: handcrafted HTML, CSS variables, modern features (clamp/has/scroll-timeline), asymmetric layouts, real Arabic copy, RTL support, SEO meta.
+
+**Pricing**: 25 نقطة للتوليد + 10 لكل تعديل
+
+**Test result E2E**: 32.5s generate, 11KB valid HTML, RTL, Cairo font, gold #D4AF37, site name "نور للتصميم" مدمج.
+
+### 🎨 Module 2: Image Wizard — Specialized Experts
+
+**ملف جديد**: `/app/backend/modules/image_wizard/expert_prompts.py` (14 expert personas)
+**14 فئة** (كانت 6):
+- social_ad, product_shot, banner, portrait, scene, food (الأصلية)
+- 🆕 logo (مصمم هوية بصرية)
+- 🆕 poster (مصمم بوسترات)
+- 🆕 thumbnail (استراتيجي ثَمب نيل يوتيوب)
+- 🆕 ebook_cover (Penguin/Knopf-level)
+- 🆕 app_icon (iOS Apple Design Award)
+- 🆕 real_estate (تصوير معماري)
+- 🆕 fashion (Vogue editorial)
+- 🆕 automotive (سيارات سينمائية)
+
+**Pipeline جديد**: User answers (Arabic) → OpenAI gpt-4o-mini يلعب دور "expert persona" → polished cinematic English prompt → image gen.
+
+**Multi-provider**: Each category has `preferred_model`:
+- gpt-image-1 (OpenAI direct key) → primary للوقو/منتجات/أيقونات
+- gemini-2.5-flash-image-preview (Nano Banana) → primary للسوشيال/سينمائي/أزياء
+- Auto-fallback لو preferred فشل
+
+### 🎬 Module 3: Video Wizard — Director Personas + Voice Library
+
+**ملف جديد**: `/app/backend/modules/video_wizard/director_prompts.py` (10 director personas + 15 voices)
+**10 فئات** (كانت 7): + short_film, fashion, automotive_ad
+**15 صوت** في `voice_library`: 
+- AR: Mohammed Almansari, Layan
+- EN: Rachel, Domi, Bella, Antoni, Arnold, Adam, Sam, Daniel, Charlotte, Lily, Matilda, Dorothy, Josh
+
+**Pipeline جديد**: User answers → OpenAI gpt-4o-mini يلعب دور "director persona" (Hollywood/Auteur/Anime/Horror/National Geographic) → cinematic 80-130 word Sora 2 prompt → video gen.
+
+### 🔑 INDEPENDENCE: OpenAI Direct Key Everywhere
+
+كل الـLLM calls الجديدة في FreeBuild + Image Expert + Video Director تستخدم `OPENAI_DIRECT_KEY` كـ primary، مع fallback لـ EMERGENT_LLM_KEY فقط لو الـDIRECT key مفقود. هذا يحقق طلب المستخدم بالاستقلال الكامل.
+
+**Push:** Commit pending → `https://github.com/zuhair646-debug/zitex` → Vercel auto-deploy
+
+
 ### 🆕 May 1, 2026 — NATIVE SAUDI VOICES + OPPOSITE-GENDER LOGIC ✅
 
 طلب المستخدم: الصوت ما كان يطلع سعودي طبيعي. اختار صوتين من مكتبة ElevenLabs العامة وأرسل الـ Voice IDs:

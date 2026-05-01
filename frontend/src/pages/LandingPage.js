@@ -134,7 +134,7 @@ const LandingPage = ({ user }) => {
 
         {/* STANDALONE FEATURED CTA */}
         <div
-          onClick={() => goOrRegister('/websites')}
+          onClick={() => goOrRegister('/build-from-zero')}
           className="relative mb-8 cursor-pointer group rounded-2xl overflow-hidden border border-amber-400/30 hover:border-amber-300/60 transition-all hover:shadow-[0_20px_60px_-12px_rgba(245,158,11,0.5)]"
           data-testid="hero-build-website-from-scratch"
         >
@@ -149,13 +149,13 @@ const LandingPage = ({ user }) => {
             </div>
             <div className="flex-1 text-right">
               <div className="inline-block px-2 py-0.5 rounded-md bg-amber-400/20 border border-amber-300/40 text-amber-300 text-[10px] font-black tracking-wider mb-2">
-                الأكثر طلباً
+                ذكاء معماري · بدون قوالب
               </div>
               <h2 className="text-2xl sm:text-3xl font-black text-white mb-1">
                 أنشئ موقعك من الصفر <span className="text-amber-300">بمحادثة ذكية</span>
               </h2>
               <p className="text-white/75 text-xs sm:text-sm leading-relaxed">
-                استوديو احترافي بـ ٢٥ تخصص — تحكّم عميق بالألوان والأشكال والـ widgets
+                المهندس الذكي يسألك نعم/لا — يبني لك موقعاً فريداً 100% يعكس خيالك (HTML + CSS + JS)
               </p>
             </div>
             <div className="flex-shrink-0">
