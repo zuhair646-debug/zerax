@@ -15,6 +15,32 @@
 - 🔒 **Images**: قريباً
 
 
+### 🆕 May 1, 2026 — COMPACT VOICE PANEL (Phase 2 start) ✅
+
+**User feedback:** الـfull-screen modal كبير جداً، الشخصيات 3D تشوش — يبغي تجربة "ChatGPT-style":
+- زر صغير يضغطه → محادثة inline (بدون modal كبير)
+- بدون شخصيات
+- بدون صفحة ثانية
+- AI يوجّه للأقسام ويكمل المحادثة بعد الانتقال
+
+**ما تم:**
+- 🆕 **`VoicePanel.js`** جديد: card عائم 360×350px في bottom-right (يمين السفلى)
+  - auto-greet + auto-listen
+  - Session persistence via `sessionStorage.zitex_voice_session_id`
+  - live subtitle + listening indicator + credits + mute toggle
+  - `INTENT_ROUTES`: image→`/chat/image`, video→`/chat/video`, website→`/websites`
+- 🔄 **`ZitexDuoLauncher` v7**:
+  - مخفيات الشخصيات 3D كلياً (لا CharacterSceneEngine mount)
+  - `VoiceChatButton` + `VoicePanel` (lazy) بدلاً من `VoiceStage`
+  - "Continue conversation" pattern: بعد التوجيه يعيد فتح Panel تلقائياً من `zitex_voice_reopen` key
+- 🗂️ **محفوظ 100%**: VoiceStage, Avatar3D, CharacterSceneEngine, كل ملفات VRM + VRMA
+  (الرجوع يتم بتغيير `SHOW_3D_PEEK=true` + استيراد VoiceStage بدل VoicePanel)
+- ✅ **اختبار حي**: `voice-chat-button: 1, canvases: 0, voice-panel opened: 1`
+  subtitle received: "صباح الخير صديقي! أنا زارا، أقدر أساعدك بصور وفيديو وأي موقع"
+
+**Push:** Commit `934d20f` → Vercel ينشر
+
+
 ### 🆕 May 1, 2026 — Hide 3D Characters + AI Director Voice-Sync (DONE ✅)
 
 طلبات المستخدم:
