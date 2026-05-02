@@ -6,6 +6,32 @@
 ## User Language: Arabic (العربية)
 
 
+### 🆕 May 2, 2026 — FREEBUILD V2: AI-GENERATED IMAGES (Nano Banana) ✅
+
+طلب المستخدم: "ما أبي صور من Unsplash، أبي الذكاء يخلق الصور بنفسه ويفهم محتوى كل قسم" — مثل لما يكون قسم "مكافآت الأطفال" يطلع صورة كأس وهدايا ونجوم، ولما يكون قسم "تلاوة القرآن" يطلع مصحف بإضاءة روحانية.
+
+**الحل المُنفّذ**:
+- ملف جديد `/app/backend/modules/freebuild_v2/image_gen.py`:
+  - يستخدم Gemini `gemini-3.1-flash-image-preview` (Nano Banana) عبر `EMERGENT_LLM_KEY`
+  - يقرأ كل `<img>` في الـHTML المولّد، يستخرج alt + أقرب h1/h2/h3 + class، يبني prompt سينمائي إنجليزي + يحقن style موحّد عالمي
+  - parallel async generation مع semaphore=4 لمنع الإغراق
+  - cache بـmd5(description::style_seed) → نفس الوصف = نفس الصورة (لا تكلفة إضافية)
+  - الصور تُحفظ في `/app/backend/static/fb2_images/{hash}.png` وتُقدّم عبر `GET /api/freebuild/v2/img/{filename}`
+  - Fallback إلى Unsplash القديم لو فشل التوليد (السايت ما ينكسر)
+- `__init__.py`:
+  - `_validate_and_unwrap_response` → الآن `await post_process_html_with_ai_images` بدل المعالج القديم
+  - System prompt جديد للذكاء: استخدم `<img src="@@IMG/auto@@" alt="<وصف غني بالعربي>">` + ممنوع كتابة Unsplash URLs مباشرة
+  - Endpoint جديد `POST /api/freebuild/v2/regenerate-images` (3 نقاط) لإعادة رسم كل الصور بـstyle seed مختلف
+- Frontend (`FreeBuild.js`): زر "صور جديدة" بنفسجي يظهر بعد التوليد الأول
+
+**اختبار E2E ✅**:
+- جلسة "موقع رياضي + لاعبين سعوديين + مكافآت" → 5 صور AI generated، 0 Unsplash URLs
+- Cache hit للوصف نفسه → نفس URL (no re-gen)
+- HTTP 200 على `/api/freebuild/v2/img/*.png` (image/png, ~700KB-900KB لكل صورة)
+
+**Commit**: `18eeb75` → push `zuhair646-debug/zitex:main` → Vercel/Railway auto-deploy
+
+
 ### 🆕 May 1, 2026 — FREEBUILD V2: CONVERSATIONAL LIVE BUILDER ✅
 
 طلب المستخدم: التصميم القديم (17 Y/N + 3 free-text ثم توليد) كان غلط — يبي **شات + معاينة مباشرة** بخطوات متتالية، كل ما يجاوب الذكاء يضيف شي للموقع ويظهر live. الذكاء يفهم السياق (مثلاً "موقع تحفيظ قرآن" → يجيب مكتبة قرّاء ونظام تسميع). لا قوالب جاهزة.
