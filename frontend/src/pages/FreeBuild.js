@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
-import { Send, Loader2, Sparkles, ArrowRight, Save, ExternalLink, Trash2, Eye, RotateCcw, Check } from 'lucide-react';
+import { Send, Loader2, Sparkles, ArrowRight, Save, ExternalLink, Trash2, Eye, RotateCcw, Check, GripVertical, Pencil, Plus, X, ChevronUp, ChevronDown } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -68,6 +68,12 @@ const FreeBuild = () => {
   const [savedProjectId, setSavedProjectId] = useState(null);
   const [galleryOpen, setGalleryOpen] = useState(false);
   const [gallery, setGallery] = useState([]);
+  const [navEditorOpen, setNavEditorOpen] = useState(false);
+  const [navLinks, setNavLinks] = useState([]);
+  const [navLoading, setNavLoading] = useState(false);
+  const [addingTab, setAddingTab] = useState(false);
+  const [newTabLabel, setNewTabLabel] = useState('');
+  const [newTabBrief, setNewTabBrief] = useState('');
   const chatEndRef = useRef(null);
 
   useEffect(() => {
@@ -166,6 +172,90 @@ const FreeBuild = () => {
     setSending(false);
   };
 
+  const openNavEditor = async () => {
+    if (!sessionId) return;
+    setNavLoading(true);
+    setNavEditorOpen(true);
+    try {
+      const d = await fetchJson(`/api/freebuild/v2/nav/${sessionId}`);
+      setNavLinks(d.links || []);
+    } catch (e) {
+      toast.error('فشل تحميل التبويبات: ' + e.message);
+    }
+    setNavLoading(false);
+  };
+
+  const navAction = async (body) => {
+    setNavLoading(true);
+    try {
+      const d = await fetchJson('/api/freebuild/v2/edit-nav', {
+        method: 'POST',
+        body: JSON.stringify({ session_id: sessionId, ...body }),
+      });
+      setCredits(d.credits_balance);
+      setIframeBust(Date.now());
+      // Refresh nav list
+      const fresh = await fetchJson(`/api/freebuild/v2/nav/${sessionId}`);
+      setNavLinks(fresh.links || []);
+      return d;
+    } catch (e) {
+      toast.error(e.message);
+      throw e;
+    } finally {
+      setNavLoading(false);
+    }
+  };
+
+  const renameTab = async (id) => {
+    const link = navLinks.find((l) => l.id === id);
+    const newLabel = window.prompt('الاسم الجديد:', link?.label || '');
+    if (!newLabel || newLabel.trim() === link?.label) return;
+    try {
+      await navAction({ action: 'rename', route_id: id, new_label: newLabel.trim() });
+      toast.success('تم إعادة التسمية');
+    } catch {}
+  };
+
+  const deleteTab = async (id) => {
+    if (id === 'home') { toast.error('لا يمكن حذف الرئيسية'); return; }
+    if (!window.confirm('احذف هذا التبويب وصفحته؟')) return;
+    try {
+      await navAction({ action: 'delete', route_id: id });
+      toast.success('تم الحذف');
+    } catch {}
+  };
+
+  const moveTab = async (idx, dir) => {
+    const newIdx = idx + dir;
+    if (newIdx < 0 || newIdx >= navLinks.length) return;
+    const reordered = [...navLinks];
+    [reordered[idx], reordered[newIdx]] = [reordered[newIdx], reordered[idx]];
+    setNavLinks(reordered);
+    try {
+      await navAction({ action: 'reorder', ordered_ids: reordered.map((l) => l.id) });
+    } catch {}
+  };
+
+  const addTab = async () => {
+    if (!newTabLabel.trim()) { toast.error('اكتب اسم التبويب'); return; }
+    setAddingTab(true);
+    const tid = toast.loading('🤖 الذكاء يبني الصفحة الجديدة...');
+    try {
+      const d = await navAction({
+        action: 'add',
+        new_label_for_add: newTabLabel.trim(),
+        new_brief: newTabBrief.trim() || null,
+      });
+      toast.dismiss(tid);
+      toast.success(d.ai_message || 'تمت الإضافة');
+      setNewTabLabel('');
+      setNewTabBrief('');
+    } catch (e) {
+      toast.dismiss(tid);
+    }
+    setAddingTab(false);
+  };
+
   const saveAsProject = async () => {
     const name = (projectName || 'موقعي').trim();
     try {
@@ -238,6 +328,16 @@ const FreeBuild = () => {
                 title="أعد رسم كل الصور بنمط مختلف (3 نقاط)"
               >
                 <Sparkles className="w-3 h-3" /> <span className="hidden sm:inline">صور جديدة</span>
+              </button>
+            )}
+            {htmlStarted && (
+              <button
+                onClick={openNavEditor}
+                className="px-2.5 py-1 rounded-md bg-amber-400/10 border border-amber-400/25 text-amber-200 hover:bg-amber-400/20 flex items-center gap-1"
+                data-testid="edit-nav-btn"
+                title="تحرير التبويبات (إضافة/إعادة تسمية/حذف)"
+              >
+                <Pencil className="w-3 h-3" /> <span className="hidden sm:inline">التبويبات</span>
               </button>
             )}
             <button onClick={() => setGalleryOpen(true)} className="px-2.5 py-1 rounded-md bg-amber-400/10 border border-amber-400/25 text-amber-200 hover:bg-amber-400/20" data-testid="gallery-btn">
@@ -433,6 +533,121 @@ const FreeBuild = () => {
               </div>
             )}
             <Button onClick={() => setGalleryOpen(false)} variant="outline" className="w-full mt-4 border-white/20" data-testid="gallery-close-btn">إغلاق</Button>
+          </div>
+        </div>
+      )}
+
+      {/* NAV EDITOR MODAL */}
+      {navEditorOpen && (
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-start justify-center p-4 overflow-auto" onClick={() => setNavEditorOpen(false)} data-testid="nav-editor-modal">
+          <div className="bg-[#0c0c18] border border-amber-400/25 rounded-2xl max-w-2xl w-full p-6 my-10" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-black flex items-center gap-2">
+                <Pencil className="w-4 h-4 text-amber-300" /> تحرير التبويبات
+              </h3>
+              <button onClick={() => setNavEditorOpen(false)} className="text-white/50 hover:text-white" data-testid="nav-editor-close">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <p className="text-xs text-white/50 mb-4">
+              غيّر ترتيب التبويبات، أعد تسميتها، احذفها، أو أضف صفحة جديدة (الذكاء يبنيها كاملة).
+            </p>
+
+            {navLoading && (
+              <div className="flex items-center gap-2 text-amber-300 text-sm mb-3" data-testid="nav-editor-loading">
+                <Loader2 className="w-4 h-4 animate-spin" /> جاري المعالجة...
+              </div>
+            )}
+
+            {/* Existing tabs list */}
+            <div className="space-y-2 mb-6 max-h-[40vh] overflow-y-auto">
+              {navLinks.length === 0 ? (
+                <div className="text-center py-6 text-white/50 text-sm">لا توجد تبويبات</div>
+              ) : (
+                navLinks.map((link, idx) => (
+                  <div
+                    key={link.id}
+                    className="flex items-center gap-2 p-2.5 rounded-xl bg-white/[0.04] border border-white/10 hover:border-amber-400/30 transition"
+                    data-testid={`nav-tab-row-${link.id}`}
+                  >
+                    <div className="flex flex-col gap-0.5">
+                      <button
+                        onClick={() => moveTab(idx, -1)}
+                        disabled={idx === 0 || navLoading}
+                        className="text-white/40 hover:text-amber-300 disabled:opacity-30"
+                        data-testid={`nav-up-${link.id}`}
+                      >
+                        <ChevronUp className="w-3.5 h-3.5" />
+                      </button>
+                      <button
+                        onClick={() => moveTab(idx, 1)}
+                        disabled={idx === navLinks.length - 1 || navLoading}
+                        className="text-white/40 hover:text-amber-300 disabled:opacity-30"
+                        data-testid={`nav-down-${link.id}`}
+                      >
+                        <ChevronDown className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                    <GripVertical className="w-4 h-4 text-white/30 flex-shrink-0" />
+                    <div className="flex-1">
+                      <div className="font-bold text-sm">{link.label}</div>
+                      <div className="text-[10px] text-white/40 font-mono">#/{link.id}</div>
+                    </div>
+                    <button
+                      onClick={() => renameTab(link.id)}
+                      disabled={navLoading}
+                      className="text-amber-300 hover:text-amber-200 p-1.5"
+                      title="إعادة تسمية"
+                      data-testid={`nav-rename-${link.id}`}
+                    >
+                      <Pencil className="w-3.5 h-3.5" />
+                    </button>
+                    <button
+                      onClick={() => deleteTab(link.id)}
+                      disabled={navLoading || link.id === 'home'}
+                      className="text-rose-400 hover:text-rose-300 disabled:opacity-30 p-1.5"
+                      title={link.id === 'home' ? 'لا يمكن حذف الرئيسية' : 'حذف'}
+                      data-testid={`nav-delete-${link.id}`}
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                ))
+              )}
+            </div>
+
+            {/* Add new tab */}
+            <div className="border-t border-white/10 pt-4">
+              <div className="text-sm font-bold mb-2 flex items-center gap-2">
+                <Plus className="w-4 h-4 text-emerald-400" /> إضافة تبويب جديد
+                <span className="text-[10px] text-amber-300/80 font-normal mr-auto">(3 نقاط — الذكاء يبني الصفحة كاملة)</span>
+              </div>
+              <Input
+                value={newTabLabel}
+                onChange={(e) => setNewTabLabel(e.target.value)}
+                placeholder="اسم التبويب (مثلاً: لوحة الوالدين)"
+                className="bg-black/40 border-white/15 mb-2"
+                data-testid="new-tab-label"
+                disabled={addingTab}
+              />
+              <Textarea
+                value={newTabBrief}
+                onChange={(e) => setNewTabBrief(e.target.value)}
+                placeholder="(اختياري) شنو يحتوي القسم؟ مثلاً: لوحة فيها متابعة تقدم الأطفال + رصيد المكافآت + زر تحويل"
+                className="bg-black/40 border-white/15 mb-3 min-h-[70px]"
+                data-testid="new-tab-brief"
+                disabled={addingTab}
+              />
+              <Button
+                onClick={addTab}
+                disabled={addingTab || !newTabLabel.trim()}
+                className="w-full bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-400 hover:to-emerald-500 text-black font-black"
+                data-testid="add-tab-btn"
+              >
+                {addingTab ? <><Loader2 className="w-4 h-4 animate-spin mr-2" /> الذكاء يبني الصفحة...</> : <><Plus className="w-4 h-4 mr-1" /> أضف وابني الصفحة</>}
+              </Button>
+            </div>
           </div>
         </div>
       )}
