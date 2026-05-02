@@ -277,6 +277,10 @@ class RefineIn(BaseModel):
     project_id: str
     instruction: str = Field(..., min_length=4, max_length=600)
 
+class RegenImagesIn(BaseModel):
+    session_id: str
+    style_seed: Optional[str] = ""
+
 
 # ---- Helpers ----
 
@@ -402,12 +406,24 @@ async def _openai_architect_turn(messages_for_model: List[Dict[str, str]]) -> Di
             logger.warning("[FREEBUILD] html_update missing <html>, discarding")
             data["html_update"] = None
         else:
-            # Replace @@IMG/<keyword>@@ placeholders with real Unsplash URLs
+            # AI-GENERATE every image inline via Nano Banana, then save the
+            # resulting HTML. Falls back to Unsplash library only if AI fails.
             try:
-                from .resources import post_process_html_images
-                h = post_process_html_images(h)
+                from .image_gen import post_process_html_with_ai_images
+                from .resources import resolve_image_for_keyword
+                h = await post_process_html_with_ai_images(
+                    h,
+                    style_seed="",
+                    fallback_resolver=resolve_image_for_keyword,
+                )
             except Exception as _imgerr:
-                logger.warning(f"[FREEBUILD] image post-process failed: {_imgerr}")
+                logger.warning(f"[FREEBUILD] AI image post-process failed: {_imgerr}")
+                # Last-resort: keep old behavior so the page still renders
+                try:
+                    from .resources import post_process_html_images
+                    h = post_process_html_images(h)
+                except Exception:
+                    pass
             data["html_update"] = h
 
     return data
@@ -426,6 +442,31 @@ def _build_model_messages(session: Dict[str, Any], new_user_msg: str) -> List[Di
         msgs.append({"role": "system", "content": build_resources_block()})
     except Exception as _re:
         logger.warning(f"[FREEBUILD] resources block failed: {_re}")
+
+    # 🔥 NEW IMAGE SYSTEM (Feb 2026) — every image is AI-generated server-side
+    # The architect must NOT write hardcoded image URLs. It just writes <img>
+    # with a vivid Arabic `alt=""` and (optionally) `@@IMG/<keyword>@@` as src.
+    # The server reads alt + nearest heading + class hint and generates a
+    # bespoke AI image (Nano Banana) for each <img>. Same alt → same image.
+    msgs.append({"role": "system", "content": (
+        "## 🎨 نظام الصور الجديد (إجباري)\n"
+        "كل صورة في الموقع راح تُولَّد بالذكاء الاصطناعي تلقائياً (Gemini Nano Banana) "
+        "بناءً على وصف الـalt + أقرب عنوان h1/h2/h3 + اسم الكلاس.\n\n"
+        "**القواعد**:\n"
+        "1. اكتب `<img src=\"@@IMG/auto@@\" alt=\"<وصف عربي تفصيلي للمشهد المطلوب>\">` — "
+        "السيرفر يستبدل src بصورة AI حقيقية.\n"
+        "2. الـalt لازم يكون **وصف بصري غني بالعربي** (5-15 كلمة) عن المشهد المطلوب — "
+        "مو مجرد كلمة. مثلاً:\n"
+        "   - بدل `alt=\"مكافآت\"` اكتب `alt=\"كأس ذهبي وهدايا ملوّنة ونجوم متطايرة في احتفال بالأطفال\"`\n"
+        "   - بدل `alt=\"مسجد\"` اكتب `alt=\"المسجد النبوي الشريف وقت الغروب بإضاءة ذهبية روحانية\"`\n"
+        "   - بدل `alt=\"تلاوة\"` اكتب `alt=\"مصحف مفتوح بإضاءة دافئة وأحرف ذهبية وخلفية روحانية\"`\n"
+        "3. ممنوع كتابة روابط Unsplash مباشرة (images.unsplash.com/photo-xxxxx). السيرفر سيرفضها.\n"
+        "4. لـbackground-image في CSS: استعمل `background-image: url(@@IMG/auto@@)` "
+        "وضع class وصفي قوي على نفس العنصر (مثلاً `class=\"hero-rewards-section\"`) "
+        "ليلتقطه السيرفر كسياق.\n"
+        "5. الـalt هو **الـprompt** للذكاء — كلما كان أوضح وأغنى، الصورة تطلع أحسن.\n"
+        "6. لا تقلق من 'تكرار' الصور — الـcache عبر hash، ولكل alt مختلف صورة مختلفة.\n"
+    )})
 
     # Append the conversation history
     for m in session.get("messages", []):
@@ -839,6 +880,83 @@ def create_freebuild_v2_router(db, get_current_user) -> APIRouter:
         if r.deleted_count == 0:
             raise HTTPException(404, "project not found")
         return {"ok": True}
+
+    # ===== SERVE AI-GENERATED IMAGE FILE (public, no auth — iframes need this) =====
+    @router.get("/img/{filename}")
+    async def serve_image(filename: str):
+        from pathlib import Path as _P
+        # path-traversal guard
+        if "/" in filename or "\\" in filename or ".." in filename:
+            raise HTTPException(400, "invalid filename")
+        if not filename.endswith(".png"):
+            raise HTTPException(400, "only .png supported")
+        fp = _P("/app/backend/static/fb2_images") / filename
+        if not fp.exists() or not fp.is_file():
+            raise HTTPException(404, "image not found")
+        try:
+            data = fp.read_bytes()
+        except Exception:
+            raise HTTPException(500, "read failed")
+        return Response(
+            content=data,
+            media_type="image/png",
+            headers={"Cache-Control": "public, max-age=86400"},
+        )
+
+    # ===== REGENERATE ALL IMAGES IN A SESSION (different visual variant) =====
+    @router.post("/regenerate-images")
+    async def regenerate_images(payload: RegenImagesIn, user=Depends(get_current_user)):
+        """Re-roll every image in the current session with a different style seed.
+        This keeps the HTML structure but produces a fresh visual variant.
+        Costs same as a normal turn update."""
+        s = await db.freebuild_v2_sessions.find_one(
+            {"id": payload.session_id, "user_id": user["user_id"]}, {"_id": 0}
+        )
+        if not s:
+            raise HTTPException(404, "session not found")
+        html = s.get("html") or ""
+        if not html:
+            raise HTTPException(400, "لا يوجد موقع في الجلسة")
+
+        ok = await _deduct(user["user_id"], TURN_UPDATE_COST, "freebuild_v2_regen_imgs")
+        if not ok:
+            raise HTTPException(402, f"رصيدك ما يكفي ({TURN_UPDATE_COST} نقاط مطلوبة)")
+
+        # First, restore @@IMG/<keyword>@@ placeholders by replacing existing
+        # /api/freebuild/v2/img/* URLs back to plain alt-based contexts is not
+        # needed — the post-processor reads alt+heading on every <img> tag, so
+        # we just re-run with a new style seed to force a fresh hash → fresh PNG.
+        try:
+            from .image_gen import post_process_html_with_ai_images
+            from .resources import resolve_image_for_keyword
+            # Use a unique style seed per call so cache misses → genuine variants
+            seed = (payload.style_seed or "").strip() or f"variant-{uuid.uuid4().hex[:8]}"
+            new_html = await post_process_html_with_ai_images(
+                html,
+                style_seed=seed,
+                fallback_resolver=resolve_image_for_keyword,
+            )
+            await db.freebuild_v2_sessions.update_one(
+                {"id": payload.session_id},
+                {"$set": {"html": new_html, "updated_at": _now()}}
+            )
+            return {
+                "ok": True,
+                "style_seed": seed,
+                "credits_balance": await _credits(user["user_id"]),
+            }
+        except Exception as e:
+            await db.users.update_one(
+                {"id": user["user_id"]},
+                {"$inc": {"credits": TURN_UPDATE_COST},
+                 "$push": {"credit_history": {
+                     "amount": TURN_UPDATE_COST,
+                     "reason": f"refund_fb2_regen: {str(e)[:80]}",
+                     "timestamp": _now(),
+                 }}}
+            )
+            logger.exception(f"[FREEBUILD-V2] regen images failed: {e}")
+            raise HTTPException(500, f"فشل التوليد. أعيدت النقاط. ({str(e)[:120]})")
 
     return router
 
