@@ -142,6 +142,30 @@ const FreeBuild = () => {
     setSending(false);
   };
 
+  const regenerateImages = async () => {
+    if (!sessionId || !htmlStarted) {
+      toast.error('لازم يكون فيه موقع مولّد قبل');
+      return;
+    }
+    if (sending) return;
+    setSending(true);
+    const tid = toast.loading('🎨 يعيد رسم الصور بنمط مختلف...');
+    try {
+      const d = await fetchJson('/api/freebuild/v2/regenerate-images', {
+        method: 'POST',
+        body: JSON.stringify({ session_id: sessionId, style_seed: '' }),
+      });
+      setCredits(d.credits_balance);
+      setIframeBust(Date.now());
+      toast.dismiss(tid);
+      toast.success('تم تجديد الصور بمزاج جديد');
+    } catch (e) {
+      toast.dismiss(tid);
+      toast.error(e.message);
+    }
+    setSending(false);
+  };
+
   const saveAsProject = async () => {
     const name = (projectName || 'موقعي').trim();
     try {
@@ -205,6 +229,17 @@ const FreeBuild = () => {
             <button onClick={newSession} className="px-2.5 py-1 rounded-md bg-white/5 border border-white/10 text-white/70 hover:bg-white/10 flex items-center gap-1" data-testid="new-session-btn" title="بدء جلسة جديدة">
               <RotateCcw className="w-3 h-3" /> <span className="hidden sm:inline">جديد</span>
             </button>
+            {htmlStarted && (
+              <button
+                onClick={regenerateImages}
+                disabled={sending}
+                className="px-2.5 py-1 rounded-md bg-fuchsia-500/15 border border-fuchsia-400/30 text-fuchsia-200 hover:bg-fuchsia-500/25 flex items-center gap-1 disabled:opacity-50"
+                data-testid="regen-images-btn"
+                title="أعد رسم كل الصور بنمط مختلف (3 نقاط)"
+              >
+                <Sparkles className="w-3 h-3" /> <span className="hidden sm:inline">صور جديدة</span>
+              </button>
+            )}
             <button onClick={() => setGalleryOpen(true)} className="px-2.5 py-1 rounded-md bg-amber-400/10 border border-amber-400/25 text-amber-200 hover:bg-amber-400/20" data-testid="gallery-btn">
               مواقعي
             </button>
