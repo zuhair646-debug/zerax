@@ -6,6 +6,29 @@
 ## User Language: Arabic (العربية)
 
 
+### 🆕 May 2, 2026 — DEEP DOMAIN INTELLIGENCE + INTERNAL LINKING + NAV EDITOR ✅
+
+طلب المستخدم: الذكاء يفكّر بعمق "زي مهندس برمجيات + خبير مجال"، يربط الأقسام داخلياً، ويتيح للعميل تعديل التبويبات بنفسه.
+
+**الجزء 1 — Blueprints احترافية لكل مجال** (`/app/backend/modules/freebuild_v2/blueprints.py`):
+- 8 blueprints مُصنّعة يدوياً: `quran_memorization`, `restaurant`, `ecommerce_store`, `sports_club`, `clinic`, `academy_education`, `realestate`, `salon_beauty` (+ generic fallback).
+- كل blueprint عنده: personas، 8-16 صفحة إجبارية، must-have features (مايك تسجيل + AI تصحيح تجويد + خطة تكرار + لوحة الأب + تحويل مكافآت للقرآن)، user flows، integrations، cohesion rules، design language.
+- `detect_domain()` يكتشف المجال من رسائل المستخدم (~70 keyword عربي/إنجليزي).
+- `render_blueprint_block()` يحقن الـblueprint في system prompt مع قواعد اكتمال صارمة ("ممنوع تقول done حتى تتأكد كل صفحة موجودة").
+
+**الجزء 2 — Internal Linking enforcement**:
+- `LINKING_RULES` system message: كل كرت/قسم في `#/home` لازم يكون داخل `<a href="#/...">`، كل clickable element عنده target حقيقي، breadcrumb في الصفحات الفرعية.
+
+**الجزء 3 — Navigation Editor**:
+- `POST /api/freebuild/v2/edit-nav` يدعم 4 actions: `rename`, `delete`, `reorder`, `add` (الـadd يستدعي الذكاء يبني صفحة كاملة بـ3 نقاط).
+- `GET /api/freebuild/v2/nav/{session_id}` يرجع قائمة التبويبات للـeditor UI.
+- Frontend (`FreeBuild.js`): زر "التبويبات" في الـheader → modal فيه reorder arrows + rename + delete + إضافة تبويب جديد (label + brief).
+
+**E2E محقّق**: جلسة "تحفيظ قرآن" → الذكاء بنى **15 صفحة كاملة** (home, login, register, dashboard-parent, readers, lessons, memorize, rewards, transfer, leaderboard, teacher, profile, settings, about, contact) مطابقة للـblueprint بالضبط، 20 internal link، 3 عناصر صوت، ميزة تسجيل، 3 قرّاء مذكورين، صور AI. Nav editor كل العمليات (rename/delete/reorder) ترجع 200.
+
+**Commit**: `0c727a1` → push `zuhair646-debug/zitex:main` ✅
+
+
 ### 🆕 May 2, 2026 — FREEBUILD V2: AI-GENERATED IMAGES (Nano Banana) ✅
 
 طلب المستخدم: "ما أبي صور من Unsplash، أبي الذكاء يخلق الصور بنفسه ويفهم محتوى كل قسم" — مثل لما يكون قسم "مكافآت الأطفال" يطلع صورة كأس وهدايا ونجوم، ولما يكون قسم "تلاوة القرآن" يطلع مصحف بإضاءة روحانية.
