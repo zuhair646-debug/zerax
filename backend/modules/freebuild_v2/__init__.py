@@ -281,6 +281,18 @@ class RegenImagesIn(BaseModel):
     session_id: str
     style_seed: Optional[str] = ""
 
+class NavEditIn(BaseModel):
+    session_id: str
+    action: str  # 'rename' | 'delete' | 'add' | 'reorder'
+    # For 'rename'
+    route_id: Optional[str] = None  # e.g. "rewards" (without "#/")
+    new_label: Optional[str] = None
+    # For 'add'
+    new_label_for_add: Optional[str] = None
+    new_brief: Optional[str] = None  # what the new page should contain
+    # For 'reorder'
+    ordered_ids: Optional[List[str]] = None
+
 
 # ---- Helpers ----
 
@@ -442,6 +454,23 @@ def _build_model_messages(session: Dict[str, Any], new_user_msg: str) -> List[Di
         msgs.append({"role": "system", "content": build_resources_block()})
     except Exception as _re:
         logger.warning(f"[FREEBUILD] resources block failed: {_re}")
+
+    # 🧠 DOMAIN INTELLIGENCE — inject the matching blueprint based on what
+    # the user has said so far. This gives the architect a senior-consultant
+    # checklist of pages, features, flows, and cohesion rules per domain.
+    try:
+        from .blueprints import detect_domain, render_blueprint_block, LINKING_RULES
+        # Build a single blob from all user turns + the incoming new message
+        user_text_blob = " ".join(
+            (m.get("content", "") for m in session.get("messages", []) if m.get("role") == "user")
+        ) + " " + (new_user_msg or "")
+        domain_key = detect_domain(user_text_blob)
+        if domain_key:
+            logger.info(f"[FREEBUILD] domain detected: {domain_key}")
+        msgs.append({"role": "system", "content": render_blueprint_block(domain_key)})
+        msgs.append({"role": "system", "content": LINKING_RULES})
+    except Exception as _bpe:
+        logger.warning(f"[FREEBUILD] blueprint inject failed: {_bpe}")
 
     # 🔥 NEW IMAGE SYSTEM (Feb 2026) — every image is AI-generated server-side
     # The architect must NOT write hardcoded image URLs. It just writes <img>
@@ -957,6 +986,162 @@ def create_freebuild_v2_router(db, get_current_user) -> APIRouter:
             )
             logger.exception(f"[FREEBUILD-V2] regen images failed: {e}")
             raise HTTPException(500, f"فشل التوليد. أعيدت النقاط. ({str(e)[:120]})")
+
+    # ===== NAVIGATION EDITOR (rename/delete/add/reorder tabs) =====
+    @router.post("/edit-nav")
+    async def edit_nav(payload: NavEditIn, user=Depends(get_current_user)):
+        s = await db.freebuild_v2_sessions.find_one(
+            {"id": payload.session_id, "user_id": user["user_id"]}, {"_id": 0}
+        )
+        if not s:
+            raise HTTPException(404, "session not found")
+        html = s.get("html") or ""
+        if not html:
+            raise HTTPException(400, "ما في موقع في الجلسة")
+
+        action = (payload.action or "").lower()
+
+        # ── Local-only mutations (rename/delete/reorder) — no LLM call ──
+        if action == "rename":
+            if not payload.route_id or not payload.new_label:
+                raise HTTPException(400, "route_id + new_label مطلوبة")
+            rid = payload.route_id.strip().lstrip("#/").strip()
+            new_label = payload.new_label.strip()[:60]
+            # Replace label inside any <a href="#/<rid>">…</a> in nav
+            import re as _re
+            pat = _re.compile(rf'(<a[^>]*href="#/{_re.escape(rid)}"[^>]*>)([^<]*)(</a>)', _re.IGNORECASE)
+            html = pat.sub(rf'\1{new_label}\3', html)
+            await db.freebuild_v2_sessions.update_one(
+                {"id": payload.session_id},
+                {"$set": {"html": html, "updated_at": _now()}}
+            )
+            return {"ok": True, "action": "rename", "credits_balance": await _credits(user["user_id"])}
+
+        if action == "delete":
+            if not payload.route_id:
+                raise HTTPException(400, "route_id مطلوب")
+            rid = payload.route_id.strip().lstrip("#/").strip()
+            if rid == "home":
+                raise HTTPException(400, "لا يمكن حذف الصفحة الرئيسية")
+            import re as _re
+            # Remove any <a> link in nav pointing to this route
+            html = _re.sub(rf'<a[^>]*href="#/{_re.escape(rid)}"[^>]*>[^<]*</a>', "", html, flags=_re.IGNORECASE)
+            # Remove the section page itself
+            html = _re.sub(
+                rf'<section[^>]*id="page-{_re.escape(rid)}"[^>]*>.*?</section>',
+                "",
+                html,
+                flags=_re.IGNORECASE | _re.DOTALL,
+            )
+            await db.freebuild_v2_sessions.update_one(
+                {"id": payload.session_id},
+                {"$set": {"html": html, "updated_at": _now()}}
+            )
+            return {"ok": True, "action": "delete", "credits_balance": await _credits(user["user_id"])}
+
+        if action == "reorder":
+            if not payload.ordered_ids:
+                raise HTTPException(400, "ordered_ids مطلوبة")
+            import re as _re
+            # Find the <nav class="nav-pills"> ... </nav> block (or the first <nav>)
+            nav_match = _re.search(r"<nav[^>]*class=\"[^\"]*nav-pills[^\"]*\"[^>]*>(.*?)</nav>", html, _re.IGNORECASE | _re.DOTALL)
+            if not nav_match:
+                nav_match = _re.search(r"<nav[^>]*>(.*?)</nav>", html, _re.IGNORECASE | _re.DOTALL)
+            if not nav_match:
+                raise HTTPException(400, "ما لقيت navbar للتبديل")
+            inner = nav_match.group(1)
+            # Extract all <a href="#/..."> ... </a> with their labels
+            link_re = _re.compile(r'<a[^>]*href="#/([^"]+)"[^>]*>([^<]*)</a>', _re.IGNORECASE)
+            existing = {m.group(1).strip(): m.group(0) for m in link_re.finditer(inner)}
+            # Build new inner in order, fall back to existing for missing ones
+            new_inner_parts = [existing[r] for r in payload.ordered_ids if r in existing]
+            # Append any remaining links not in ordered_ids
+            for r, tag in existing.items():
+                if r not in payload.ordered_ids:
+                    new_inner_parts.append(tag)
+            new_inner = "\n".join(new_inner_parts)
+            new_nav = nav_match.group(0).replace(inner, new_inner)
+            html = html.replace(nav_match.group(0), new_nav, 1)
+            await db.freebuild_v2_sessions.update_one(
+                {"id": payload.session_id},
+                {"$set": {"html": html, "updated_at": _now()}}
+            )
+            return {"ok": True, "action": "reorder", "credits_balance": await _credits(user["user_id"])}
+
+        if action == "add":
+            label = (payload.new_label_for_add or "").strip()
+            brief = (payload.new_brief or "").strip()
+            if not label:
+                raise HTTPException(400, "new_label_for_add مطلوب")
+            ok = await _deduct(user["user_id"], TURN_UPDATE_COST, "freebuild_v2_add_nav")
+            if not ok:
+                raise HTTPException(402, f"رصيدك ما يكفي ({TURN_UPDATE_COST} نقاط مطلوبة)")
+            try:
+                # Ask the architect to add a new sub-page only — minimal, focused
+                add_msgs = [
+                    {"role": "system", "content": ARCHITECT_SYSTEM},
+                    {"role": "system", "content": (
+                        f"## CURRENT_HTML\n```html\n{html}\n```"
+                    )},
+                    {"role": "user", "content": (
+                        f"أضف صفحة فرعية جديدة باسم '{label}' للموقع. "
+                        f"المحتوى المطلوب: {brief or 'صمّم محتوى احترافي مناسب لهذا التبويب بناءً على نوع الموقع.'}\n"
+                        f"التعليمات:\n"
+                        f"1. أضف رابط للنafbar مع `<a href=\"#/{label}\" class=\"pill\">{label}</a>` "
+                        f"(اختر معرّف لاتيني قصير معقول لو الاسم بالعربي).\n"
+                        f"2. أضف `<section class=\"page\" id=\"page-XYZ\">` بمحتوى غني (hero + 3-5 أقسام).\n"
+                        f"3. اربط هذه الصفحة بصفحات أخرى لو فيه ترابط منطقي.\n"
+                        f"4. ارجع HTML كامل محدّث + رسالة قصيرة للمستخدم."
+                    )},
+                ]
+                ai = await _openai_architect_turn(add_msgs)
+                new_html = ai.get("html_update") or html
+                await db.freebuild_v2_sessions.update_one(
+                    {"id": payload.session_id},
+                    {"$set": {"html": new_html, "updated_at": _now(),
+                              "credits_spent": s.get("credits_spent", 0) + TURN_UPDATE_COST}}
+                )
+                return {
+                    "ok": True,
+                    "action": "add",
+                    "ai_message": ai.get("message_to_user"),
+                    "credits_balance": await _credits(user["user_id"]),
+                }
+            except Exception as e:
+                # refund
+                await db.users.update_one(
+                    {"id": user["user_id"]},
+                    {"$inc": {"credits": TURN_UPDATE_COST},
+                     "$push": {"credit_history": {
+                         "amount": TURN_UPDATE_COST,
+                         "reason": f"refund_fb2_addnav: {str(e)[:80]}",
+                         "timestamp": _now(),
+                     }}}
+                )
+                logger.exception(f"[FREEBUILD-V2] add nav failed: {e}")
+                raise HTTPException(500, f"فشل إضافة التبويب. أعيدت النقاط. ({str(e)[:120]})")
+
+        raise HTTPException(400, f"action غير معروف: {action}")
+
+    # ===== EXTRACT NAV STRUCTURE (for the editor UI to populate) =====
+    @router.get("/nav/{session_id}")
+    async def get_nav(session_id: str, user=Depends(get_current_user)):
+        s = await db.freebuild_v2_sessions.find_one(
+            {"id": session_id, "user_id": user["user_id"]}, {"_id": 0, "html": 1}
+        )
+        if not s:
+            raise HTTPException(404, "session not found")
+        html = s.get("html") or ""
+        if not html:
+            return {"links": []}
+        import re as _re
+        nav_match = _re.search(r"<nav[^>]*class=\"[^\"]*nav-pills[^\"]*\"[^>]*>(.*?)</nav>", html, _re.IGNORECASE | _re.DOTALL)
+        if not nav_match:
+            nav_match = _re.search(r"<nav[^>]*>(.*?)</nav>", html, _re.IGNORECASE | _re.DOTALL)
+        inner = nav_match.group(1) if nav_match else ""
+        link_re = _re.compile(r'<a[^>]*href="#/([^"]+)"[^>]*>([^<]*)</a>', _re.IGNORECASE)
+        links = [{"id": m.group(1).strip(), "label": m.group(2).strip()} for m in link_re.finditer(inner)]
+        return {"links": links}
 
     return router
 
