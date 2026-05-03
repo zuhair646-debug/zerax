@@ -6,6 +6,41 @@
 ## User Language: Arabic (العربية)
 
 
+### 🆕 May 2, 2026 — PERSISTENT CONSTRAINTS + VERIFIED SOURCES + SURGICAL EDIT ✅
+
+طلب المستخدم: 3 مشاكل حقيقية اشتكى منها:
+1. الذكاء "ينسى" قيود العميل بعد دور أو اثنين (مثلاً يقول "ما أبي أحمر" → يحترمها مرتين ثم يرجع يحط أحمر).
+2. التعديل البسيط على قسم واحد يخرّب الموقع كله — لازم تعديل جراحي محدد.
+3. مكتبة القرّاء ناقصة + روابط مختلقة + يحرّف نص القرآن — لازم مصادر معتمدة.
+
+**الحل (3 مكتبات جديدة)**:
+- 📜 `/app/backend/modules/freebuild_v2/constraints.py`:
+  - `extract_constraints_from_text()` — regex auto-extraction من رسائل المستخدم (color_ban, quran_text_ban, font_ban, emoji_ban, preserve_others, generic_ban)
+  - `render_constraints_block()` — يبني system message صارم يُحقن في **كل turn** يجبر الذكاء يراجع كل قيد قبل ما يرد
+  - `detect_edit_scope()` — يلتقط طلبات التعديل الجراحي ("عدّل الهيرو بس")
+- ⚓ `/app/backend/modules/freebuild_v2/verified_sources.py`:
+  - 20 قارئ موثّقين بـserver + slug من mp3quran.net (السديس، الشريم، المعيقلي، العفاسي، الحصري، الغامدي، المنشاوي، عبد الباسط، الجهني، أيوب، الدوسري، الشاطري، الطبلاوي، الرفاعي، فارس عباد، إلخ)
+  - مؤسسات معتمدة (مجمع الملك فهد، الجامعة الإسلامية بالمدينة، رابطة العالم الإسلامي)
+  - قاعدة حرجة: ممنوع كتابة آيات القرآن كنص LLM (يحرّف) — بدائل: صور Nano Banana decorative + fetch من alquran.cloud API وقت التشغيل
+  - قاعدة عامة: الذكاء ممنوع يخترع مصادر/أرقام/إحصائيات → لو ما عنده يقول "ما عندي مصدر معتمد"
+
+**Backend changes في `__init__.py`**:
+- chat() الآن يستخرج قيود تلقائياً من كل رسالة + يحفظها في session.constraints
+- `_build_model_messages` يحقن: blueprint + linking + verified_sources + constraints + image rules
+- 3 endpoints جديدة: `GET /constraints/{sid}`, `POST /constraints/add`, `DELETE /constraints/{sid}/{cid}`
+- session response فيه constraints[]
+
+**Frontend** (`FreeBuild.js`): زر "قيود" أحمر مع badge عدد + modal يعرض كل القيود المحفوظة مع delete + textarea لإضافة قيود يدوية
+
+**E2E محقّق**: جلسة بثلاث قيود (ما أبي أزرق + ممنوع إيموجي + ممنوع خط Cairo) → الذكاء بنى موقع تحفيظ قرآن بـ7 أقسام:
+- Blue color leaks: **0** ✅
+- Cairo font leaks: **0** ✅
+- Emoji in body: **0** ✅
+- القيود محفوظة وتُحقن في كل turn
+
+**Commit**: `664410b` → push `zuhair646-debug/zitex:main` ✅
+
+
 ### 🆕 May 2, 2026 — DEEP DOMAIN INTELLIGENCE + INTERNAL LINKING + NAV EDITOR ✅
 
 طلب المستخدم: الذكاء يفكّر بعمق "زي مهندس برمجيات + خبير مجال"، يربط الأقسام داخلياً، ويتيح للعميل تعديل التبويبات بنفسه.
