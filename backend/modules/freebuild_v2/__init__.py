@@ -497,6 +497,85 @@ async def _openai_architect_turn(messages_for_model: List[Dict[str, str]]) -> Di
                     h = post_process_html_images(h)
                 except Exception:
                     pass
+
+            # 🔊 AUDIO POST-PROCESSING — make all <audio> tags reliable + add
+            # an automatic Surah selector that swaps URLs across all reciters.
+            try:
+                import re as _are
+                def _fix_audio(m):
+                    tag = m.group(0)
+                    inner = m.group(1) or ""
+                    src_m = _are.search(r'<source[^>]*src="([^"]+)"', inner)
+                    direct_src_m = _are.search(r'<audio[^>]*\bsrc="([^"]+)"', tag)
+                    src = (direct_src_m.group(1) if direct_src_m
+                           else (src_m.group(1) if src_m else None))
+                    if not src:
+                        return tag
+                    return (
+                        f'<audio controls preload="metadata" playsinline '
+                        f'crossorigin="anonymous" src="{src}" '
+                        f'class="reciter-audio" data-base-src="{src}">'
+                        f'متصفحك لا يدعم تشغيل الصوت — '
+                        f'<a href="{src}" target="_blank" rel="noopener">حمّل الملف مباشرة</a>.'
+                        f'</audio>'
+                    )
+                h = _are.sub(
+                    r'<audio[^>]*>(.*?)</audio>',
+                    _fix_audio,
+                    h,
+                    flags=_are.DOTALL,
+                )
+
+                # Inject Surah selector + swap script ONCE if a #/readers
+                # section exists and we haven't done it yet.
+                if 'id="page-readers"' in h and 'data-zitex-surah-selector' not in h:
+                    from .verified_sources import SURAH_LIST
+                    # Build full 114 list (we have only ~10 in SURAH_LIST table;
+                    # generate the rest with default name pattern from API).
+                    surah_options = []
+                    full_names = {s["num"]: s["name_ar"] for s in SURAH_LIST}
+                    for n in range(1, 115):
+                        nm = full_names.get(n, f"السورة {n}")
+                        surah_options.append(
+                            f'<option value="{n:03d}">{n}. {nm}</option>'
+                        )
+                    selector_html = (
+                        '<div data-zitex-surah-selector style="margin:1.5rem 0;text-align:center">'
+                        '<label style="font-weight:bold;margin-inline-end:.5rem;color:#d4af37">'
+                        'اختر السورة:</label>'
+                        '<select id="zitex-surah-pick" '
+                        'style="padding:.6rem 1rem;border-radius:.6rem;border:1px solid '
+                        '#d4af37;background:#1a1208;color:#fff;font-size:1rem;'
+                        'min-width:240px">'
+                        + "".join(surah_options) +
+                        '</select></div>'
+                    )
+                    swap_script = (
+                        '<script data-zitex-surah-script>'
+                        '(function(){var sel=document.getElementById("zitex-surah-pick");'
+                        'if(!sel)return;sel.addEventListener("change",function(){'
+                        'var n=sel.value;'
+                        'document.querySelectorAll("audio.reciter-audio").forEach(function(a){'
+                        'var base=a.getAttribute("data-base-src")||a.src;'
+                        'a.src=base.replace(/\\/\\d{3}\\.mp3$/,"/"+n+".mp3");'
+                        'a.load();'
+                        '});});})();'
+                        '</script>'
+                    )
+                    # Insert selector right after the readers <h2> heading
+                    h = _are.sub(
+                        r'(<section[^>]*id="page-readers"[^>]*>\s*<h[1-3][^>]*>[^<]+</h[1-3]>)',
+                        r'\1' + selector_html,
+                        h,
+                        count=1,
+                    )
+                    # Append swap script before </body>
+                    if '</body>' in h:
+                        h = h.replace('</body>', swap_script + '</body>', 1)
+                    else:
+                        h = h + swap_script
+            except Exception as _aerr:
+                logger.warning(f"[FREEBUILD] audio post-process failed: {_aerr}")
             data["html_update"] = h
 
     return data
@@ -555,23 +634,28 @@ def _build_model_messages(session: Dict[str, Any], new_user_msg: str) -> List[Di
     msgs.append({"role": "system", "content": (
         "## 🛠️ نظام الأدوات (Tool Calling) — قدراتك الجديدة\n"
         "أنت الآن agent يقدر **ينفّذ أدوات حقيقية** بدلاً من الاختراع. الأدوات المتاحة:\n\n"
-        "1. **`quran_reciter_lookup(name, surah)`** — يرجع روابط mp3quran.net الحقيقية لقارئ "
-        "محدد. **استخدمها لازم** قبل ما تكتب أي `<audio src='...'>` في موقع قرآن.\n"
-        "2. **`quran_verse_fetch(surah, ayah)`** — يجلب نص آية بالضبط من alquran.cloud. "
-        "**استخدمها لازم** قبل ما تعرض أي آية كنص (لأنك تحرّف).\n"
-        "3. **`web_search(query, num)`** — DuckDuckGo بحث حقيقي. استخدمها لجلب أمثلة، "
-        "منافسين، أرقام، شراكات.\n"
-        "4. **`web_fetch(url, max_chars)`** — يجلب نص صفحة فعلية. استخدمها بعد web_search "
-        "لاستخراج تفاصيل دقيقة.\n"
-        "5. **`generate_image_url(description)`** — توليد صورة AI لو احتجت URL مباشر "
-        "(عادة استعمل `@@IMG/auto@@` بدل هذا، أوفر).\n\n"
-        "### متى تستخدم الأدوات؟\n"
-        "- موقع قرآن → استدعِ `quran_reciter_lookup` لكل قارئ تبي تذكره. لا تخترع slugs.\n"
-        "- العميل طلب نموذج/مرجع/منافس → استدعِ `web_search` ثم `web_fetch` للنتيجة الأهم.\n"
-        "- آية محددة → استدعِ `quran_verse_fetch`.\n\n"
+        "1. **`quran_reciter_lookup(name, surah)`** — يرجع روابط mp3quran.net الحقيقية. "
+        "🚨 **استخدمها مرة واحدة بدون name** (`{name: \"\"}`) لاسترجاع **كل الـ20 قارئ دفعة واحدة**. "
+        "لا تستدعِ الأداة 20 مرة! استدعِ مرة واحدة، ثم استخدم الـ`reciters` array اللي ترجعها لبناء كل البطاقات.\n"
+        "2. **`quran_verse_fetch(surah, ayah)`** — يجلب نص آية بالضبط من alquran.cloud.\n"
+        "3. **`web_search(query, num)`** — DuckDuckGo بحث حقيقي.\n"
+        "4. **`web_fetch(url, max_chars)`** — يجلب نص صفحة فعلية.\n"
+        "5. **`generate_image_url(description)`** — توليد صورة AI.\n\n"
+        "### قواعد إجبارية لمواقع القرآن:\n"
+        "1. **في #/readers**: أعرض **كل الـ20 قارئ** في كروت — استخدم Grid 3 أعمدة. "
+        "كل بطاقة فيها: اسم القارئ، البلد، البايو، `<audio controls preload=\"none\">` "
+        "مع `<source src=\"{example_url}\" type=\"audio/mpeg\">`.\n"
+        "2. **سلكتر السور**: اعمل dropdown فيه قائمة سور القرآن الكاملة (114 سورة). "
+        "لما يختار المستخدم سورة، JavaScript يحدّث كل الـaudio elements بـURL السورة الجديدة "
+        "(تركيبة: `https://server{server}.mp3quran.net/{slug}/{surah:03d}.mp3`).\n"
+        "3. **لا تخترع** أرقام servers أو slugs — استخدم القيم اللي رجعتها الأداة.\n"
+        "4. **آيات القرآن**: ممنوع تكتبها كنص؛ استدعِ `quran_verse_fetch` أو استعمل الصورة.\n\n"
+        "### قواعد البحث (web_search):\n"
+        "- العميل ذكر منافس/مرجع/مؤسسة → استدعِ `web_search` للتحقق.\n"
+        "- بعد البحث، إذا فيه نتيجة مهمة، استدعِ `web_fetch` لاستخراج التفاصيل.\n\n"
         "### قاعدة ذهبية:\n"
         "**ممنوع** تخترع رابط، رقم سورة، اسم سلج (slug)، أو إحصائية. لو احتجت بيانات "
-        "حقيقية، استدعِ الأداة المناسبة. هذا الفرق بين موقع احترافي وموقع شعبي.\n"
+        "حقيقية، استدعِ الأداة المناسبة. هذا الفرق بين موقع احترافي وموقع فاشل."
     )})
 
     # 🔥 NEW IMAGE SYSTEM (Feb 2026) — every image is AI-generated server-side

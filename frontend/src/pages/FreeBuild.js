@@ -516,7 +516,8 @@ const FreeBuild = () => {
                 src={previewUrl}
                 title="Live preview"
                 className="w-full h-full rounded-xl bg-white border-0 shadow-lg shadow-black/50"
-                sandbox="allow-scripts allow-same-origin"
+                sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-modals"
+                allow="autoplay; encrypted-media; fullscreen; microphone"
                 data-testid="preview-iframe"
               />
             ) : (

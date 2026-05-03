@@ -363,6 +363,7 @@ async def post_process_html_with_ai_images(
 
     img_contexts: List[str] = []
     img_jobs: List[Tuple[int, int, str]] = []  # (start, end, context)
+    SKIP_IMG_CONTEXTS = ("reciter-card", "reciter-avatar", "reciter-name", "reciter-meta")
     for m in img_re.finditer(html):
         attrs_full = (m.group(1) or "") + " " + (m.group(3) or "")
         alt_m = re.search(r'\balt="([^"]*)"', attrs_full)
@@ -370,6 +371,9 @@ async def post_process_html_with_ai_images(
         heading = _find_nearest_heading_before(m.start())
         cls = _find_class_hint_before(m.start())
         ctx = " ".join(filter(None, [alt, heading, cls])).strip() or "abstract"
+        # Skip generating heavy AI images for reciter cards (we use letter avatars)
+        if any(skip in cls for skip in SKIP_IMG_CONTEXTS):
+            continue
         img_jobs.append((m.start(), m.end(), ctx))
         img_contexts.append(ctx)
 
