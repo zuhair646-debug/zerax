@@ -6,6 +6,35 @@
 ## User Language: Arabic (العربية)
 
 
+### 🆕 May 3, 2026 — TRUE AGENT SYSTEM with REAL TOOL CALLING ✅
+
+طلب المستخدم: "بدّل الـchatbot لذكاء حقيقي يستخدم أدوات + يبحث + يجيب من مصادر موثوقة بدل ما يخترع".
+
+**المنفّذ — 5 أدوات حقيقية تشتغل بدون أي API keys إضافية**:
+1. `quran_reciter_lookup(name, surah)` — يبحث في 20 قارئ معتمد ويرجع URL **حقيقي** من mp3quran.net (verified HTTP 200)
+2. `quran_verse_fetch(surah, ayah)` — يجلب نص الآية بالضبط من مصحف المدينة عبر alquran.cloud API (يقضي على تحريف الذكاء للقرآن)
+3. `web_search(query, num)` — DuckDuckGo حقيقي (lite + html endpoints + 3-tier fallback parser). 0 API keys.
+4. `web_fetch(url, max_chars)` — HTTP GET + BeautifulSoup + cleanup. يجلب title + meta + body text.
+5. `generate_image_url(description)` — on-demand Nano Banana.
+
+**Architect integration**:
+- `_openai_architect_turn` الآن يدور حلقة tool-calling (4 iterations max). الذكاء يستلم TOOL_SCHEMAS، يقرر أي أداة يستدعي، النتائج ترجع له، يكرر، ولما يخلص يطلع JSON النهائي.
+- system prompt جديد يجبر الذكاء يستخدم الأدوات قبل ما يكتب أي audio src أو verse text.
+
+**Dependencies**: `beautifulsoup4 + lxml` في requirements.txt.
+
+**E2E proof — الجلسة الفعلية**: "موقع تحفيظ قرآن مع 5 قراء حقيقيين + آية الفاتحة"
+- الـbackend logs تظهر: `quran_reciter_lookup × 5` و `quran_verse_fetch(1,1)` نجحت كلها
+- HTML المولّد فيه **5 روابط mp3quran حقيقية**:
+  - `server11.mp3quran.net/sds/001.mp3` (السديس) ✅ HTTP 200
+  - `server7.mp3quran.net/shur/001.mp3` (الشريم) ✅ HTTP 200
+  - `server12.mp3quran.net/maher/001.mp3` (المعيقلي) ✅ HTTP 200
+  - `server8.mp3quran.net/afs/001.mp3` (العفاسي) ✅ HTTP 200
+  - `server13.mp3quran.net/husr/001.mp3` (الحصري) ✅ HTTP 200
+
+**Commit**: `cb59fb2` → push `zuhair646-debug/zitex:main` ✅
+
+
 ### 🆕 May 2, 2026 — PERSISTENT CONSTRAINTS + VERIFIED SOURCES + SURGICAL EDIT ✅
 
 طلب المستخدم: 3 مشاكل حقيقية اشتكى منها:
