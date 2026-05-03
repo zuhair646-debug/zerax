@@ -35,6 +35,7 @@ from __future__ import annotations
 import os
 import json
 import uuid
+import asyncio
 import logging
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
@@ -320,15 +321,70 @@ async def _openai_architect_turn(messages_for_model: List[Dict[str, str]]) -> Di
     if direct_key:
         try:
             from openai import AsyncOpenAI
+            from .tools import TOOL_SCHEMAS, execute_tool_call
             client = AsyncOpenAI(api_key=direct_key)
-            resp = await client.chat.completions.create(
-                model="gpt-4o",
-                messages=messages_for_model,
-                temperature=0.85,
-                max_tokens=16000,
-                response_format={"type": "json_object"},
-            )
-            content = (resp.choices[0].message.content or "").strip()
+
+            # ── Tool-calling loop (max 4 iterations) ──
+            local_msgs = list(messages_for_model)
+            for _iter in range(4):
+                resp = await client.chat.completions.create(
+                    model="gpt-4o",
+                    messages=local_msgs,
+                    temperature=0.85,
+                    max_tokens=16000,
+                    tools=TOOL_SCHEMAS,
+                    tool_choice="auto",
+                )
+                msg = resp.choices[0].message
+                # If model wants to call tools, execute them and feed back
+                if msg.tool_calls:
+                    local_msgs.append({
+                        "role": "assistant",
+                        "content": msg.content or "",
+                        "tool_calls": [
+                            {"id": tc.id, "type": "function",
+                             "function": {"name": tc.function.name, "arguments": tc.function.arguments}}
+                            for tc in msg.tool_calls
+                        ],
+                    })
+                    # Execute each tool call concurrently
+                    async def _run(tc):
+                        try:
+                            args = json.loads(tc.function.arguments or "{}")
+                        except Exception:
+                            args = {}
+                        result = await execute_tool_call(tc.function.name, args)
+                        logger.info(f"[FB2-TOOL] {tc.function.name}({list(args.keys())}) → ok={result.get('ok')}")
+                        return tc.id, result
+                    pairs = await asyncio.gather(*[_run(tc) for tc in msg.tool_calls])
+                    for tid, result in pairs:
+                        local_msgs.append({
+                            "role": "tool",
+                            "tool_call_id": tid,
+                            "content": json.dumps(result, ensure_ascii=False)[:8000],
+                        })
+                    continue  # loop back so model can now produce final JSON
+                # No tool call → final answer; force it through json mode now
+                # Re-call with response_format=json_object on the same context
+                final = await client.chat.completions.create(
+                    model="gpt-4o",
+                    messages=local_msgs + [{"role": "user", "content": "أرجع الآن الـJSON النهائي فقط."}],
+                    temperature=0.5,
+                    max_tokens=16000,
+                    response_format={"type": "json_object"},
+                )
+                content = (final.choices[0].message.content or "").strip()
+                break
+            else:
+                # 4 iterations of tool calls without final → force one more
+                final = await client.chat.completions.create(
+                    model="gpt-4o",
+                    messages=local_msgs + [{"role": "user", "content": "أرجع الـJSON النهائي الآن. لا أدوات إضافية."}],
+                    temperature=0.5,
+                    max_tokens=16000,
+                    response_format={"type": "json_object"},
+                )
+                content = (final.choices[0].message.content or "").strip()
         except Exception as e:
             last_error = f"OpenAI direct: {type(e).__name__}: {str(e)[:200]}"
             logger.warning(f"[FREEBUILD] OpenAI direct failed, trying emergent: {last_error}")
@@ -494,6 +550,29 @@ def _build_model_messages(session: Dict[str, Any], new_user_msg: str) -> List[Di
             msgs.append({"role": "system", "content": cblock})
     except Exception as _ce:
         logger.warning(f"[FREEBUILD] constraints inject failed: {_ce}")
+
+    # 🛠️ TOOL USAGE INSTRUCTIONS — empower the architect to call real tools
+    msgs.append({"role": "system", "content": (
+        "## 🛠️ نظام الأدوات (Tool Calling) — قدراتك الجديدة\n"
+        "أنت الآن agent يقدر **ينفّذ أدوات حقيقية** بدلاً من الاختراع. الأدوات المتاحة:\n\n"
+        "1. **`quran_reciter_lookup(name, surah)`** — يرجع روابط mp3quran.net الحقيقية لقارئ "
+        "محدد. **استخدمها لازم** قبل ما تكتب أي `<audio src='...'>` في موقع قرآن.\n"
+        "2. **`quran_verse_fetch(surah, ayah)`** — يجلب نص آية بالضبط من alquran.cloud. "
+        "**استخدمها لازم** قبل ما تعرض أي آية كنص (لأنك تحرّف).\n"
+        "3. **`web_search(query, num)`** — DuckDuckGo بحث حقيقي. استخدمها لجلب أمثلة، "
+        "منافسين، أرقام، شراكات.\n"
+        "4. **`web_fetch(url, max_chars)`** — يجلب نص صفحة فعلية. استخدمها بعد web_search "
+        "لاستخراج تفاصيل دقيقة.\n"
+        "5. **`generate_image_url(description)`** — توليد صورة AI لو احتجت URL مباشر "
+        "(عادة استعمل `@@IMG/auto@@` بدل هذا، أوفر).\n\n"
+        "### متى تستخدم الأدوات؟\n"
+        "- موقع قرآن → استدعِ `quran_reciter_lookup` لكل قارئ تبي تذكره. لا تخترع slugs.\n"
+        "- العميل طلب نموذج/مرجع/منافس → استدعِ `web_search` ثم `web_fetch` للنتيجة الأهم.\n"
+        "- آية محددة → استدعِ `quran_verse_fetch`.\n\n"
+        "### قاعدة ذهبية:\n"
+        "**ممنوع** تخترع رابط، رقم سورة، اسم سلج (slug)، أو إحصائية. لو احتجت بيانات "
+        "حقيقية، استدعِ الأداة المناسبة. هذا الفرق بين موقع احترافي وموقع شعبي.\n"
+    )})
 
     # 🔥 NEW IMAGE SYSTEM (Feb 2026) — every image is AI-generated server-side
     # The architect must NOT write hardcoded image URLs. It just writes <img>
