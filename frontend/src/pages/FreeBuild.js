@@ -74,6 +74,9 @@ const FreeBuild = () => {
   const [addingTab, setAddingTab] = useState(false);
   const [newTabLabel, setNewTabLabel] = useState('');
   const [newTabBrief, setNewTabBrief] = useState('');
+  const [constraints, setConstraints] = useState([]);
+  const [constraintsOpen, setConstraintsOpen] = useState(false);
+  const [newConstraintText, setNewConstraintText] = useState('');
   const chatEndRef = useRef(null);
 
   useEffect(() => {
@@ -132,6 +135,7 @@ const FreeBuild = () => {
       setOptions(d.options);
       setCredits(d.credits_balance);
       setTurns(d.turns);
+      if (d.constraints) setConstraints(d.constraints);
       if (d.html_updated) {
         setHtmlStarted(true);
         // Bust iframe cache to reload updated preview
@@ -256,6 +260,39 @@ const FreeBuild = () => {
     setAddingTab(false);
   };
 
+  const openConstraints = async () => {
+    if (!sessionId) return;
+    setConstraintsOpen(true);
+    try {
+      const d = await fetchJson(`/api/freebuild/v2/constraints/${sessionId}`);
+      setConstraints(d.constraints || []);
+    } catch (e) {
+      toast.error('فشل تحميل القيود: ' + e.message);
+    }
+  };
+
+  const addConstraint = async () => {
+    const rule = newConstraintText.trim();
+    if (rule.length < 3) { toast.error('اكتب القيد بوضوح'); return; }
+    try {
+      const d = await fetchJson('/api/freebuild/v2/constraints/add', {
+        method: 'POST',
+        body: JSON.stringify({ session_id: sessionId, rule, category: 'manual' }),
+      });
+      setConstraints(d.constraints || []);
+      setNewConstraintText('');
+      toast.success('تم حفظ القيد — الذكاء راح يحترمه في كل التحديثات القادمة');
+    } catch (e) { toast.error(e.message); }
+  };
+
+  const deleteConstraint = async (cid) => {
+    try {
+      const d = await fetchJson(`/api/freebuild/v2/constraints/${sessionId}/${cid}`, { method: 'DELETE' });
+      setConstraints(d.constraints || []);
+      toast.success('حُذف');
+    } catch (e) { toast.error(e.message); }
+  };
+
   const saveAsProject = async () => {
     const name = (projectName || 'موقعي').trim();
     try {
@@ -328,6 +365,19 @@ const FreeBuild = () => {
                 title="أعد رسم كل الصور بنمط مختلف (3 نقاط)"
               >
                 <Sparkles className="w-3 h-3" /> <span className="hidden sm:inline">صور جديدة</span>
+              </button>
+            )}
+            {htmlStarted && (
+              <button
+                onClick={openConstraints}
+                className="px-2.5 py-1 rounded-md bg-rose-500/15 border border-rose-400/30 text-rose-200 hover:bg-rose-500/25 flex items-center gap-1 relative"
+                data-testid="constraints-btn"
+                title="قيود وممنوعات دائمة"
+              >
+                <X className="w-3 h-3" /> <span className="hidden sm:inline">قيود</span>
+                {constraints.length > 0 && (
+                  <span className="absolute -top-1 -right-1 bg-rose-500 text-white text-[10px] rounded-full w-4 h-4 flex items-center justify-center">{constraints.length}</span>
+                )}
               </button>
             )}
             {htmlStarted && (
@@ -646,6 +696,76 @@ const FreeBuild = () => {
                 data-testid="add-tab-btn"
               >
                 {addingTab ? <><Loader2 className="w-4 h-4 animate-spin mr-2" /> الذكاء يبني الصفحة...</> : <><Plus className="w-4 h-4 mr-1" /> أضف وابني الصفحة</>}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* CONSTRAINTS MODAL */}
+      {constraintsOpen && (
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-start justify-center p-4 overflow-auto" onClick={() => setConstraintsOpen(false)} data-testid="constraints-modal">
+          <div className="bg-[#0c0c18] border border-rose-400/30 rounded-2xl max-w-2xl w-full p-6 my-10" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-2">
+              <h3 className="text-lg font-black flex items-center gap-2">
+                <X className="w-4 h-4 text-rose-400" /> القيود الدائمة (الممنوعات)
+              </h3>
+              <button onClick={() => setConstraintsOpen(false)} className="text-white/50 hover:text-white" data-testid="constraints-close">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <p className="text-xs text-white/55 mb-4 leading-relaxed">
+              هذي قواعد ثابتة الذكاء راح يحترمها في كل تحديث قادم — ما بترجع تتغيّر مع الوقت.
+              مثال: "ما أبي اللون الأحمر"، "ممنوع الإيموجي"، "لا تحط آيات قرآن مكتوبة".
+              <br/>
+              <span className="text-amber-300/80">💡 الذكاء يلتقط القيود تلقائياً من رسائلك — تقدر تشيك هنا أو تضيف يدوياً.</span>
+            </p>
+
+            <div className="space-y-2 mb-5 max-h-[40vh] overflow-y-auto">
+              {constraints.length === 0 ? (
+                <div className="text-center py-6 text-white/40 text-sm">لا توجد قيود محفوظة بعد</div>
+              ) : (
+                constraints.map((c) => (
+                  <div
+                    key={c.id}
+                    className="flex items-start gap-2 p-3 rounded-xl bg-rose-500/[0.06] border border-rose-400/20"
+                    data-testid={`constraint-row-${c.id}`}
+                  >
+                    <span className="text-[10px] uppercase tracking-wider px-2 py-0.5 rounded bg-rose-400/20 text-rose-200 flex-shrink-0">
+                      {c.category}
+                    </span>
+                    <div className="flex-1 text-sm text-white/85 leading-relaxed">{c.rule}</div>
+                    <button
+                      onClick={() => deleteConstraint(c.id)}
+                      className="text-rose-400 hover:text-rose-300 p-1 flex-shrink-0"
+                      title="حذف القيد"
+                      data-testid={`constraint-delete-${c.id}`}
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                ))
+              )}
+            </div>
+
+            <div className="border-t border-white/10 pt-4">
+              <div className="text-sm font-bold mb-2 flex items-center gap-2">
+                <Plus className="w-4 h-4 text-rose-400" /> أضف قيد يدوي
+              </div>
+              <Textarea
+                value={newConstraintText}
+                onChange={(e) => setNewConstraintText(e.target.value)}
+                placeholder="اكتب القيد بوضوح، مثلاً: 'ممنوع استخدام الخط Cairo' أو 'لا تحط أي صور بشرية'"
+                className="bg-black/40 border-white/15 mb-3 min-h-[70px]"
+                data-testid="new-constraint-text"
+              />
+              <Button
+                onClick={addConstraint}
+                disabled={!newConstraintText.trim()}
+                className="w-full bg-gradient-to-r from-rose-500 to-rose-600 hover:from-rose-400 hover:to-rose-500 text-white font-black"
+                data-testid="add-constraint-btn"
+              >
+                <Plus className="w-4 h-4 mr-1" /> احفظ القيد
               </Button>
             </div>
           </div>

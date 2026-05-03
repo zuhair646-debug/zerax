@@ -191,3 +191,4 @@ frontend/node_modules/.cache/default-development/7.pack
 
 # AI-generated images cache (regenerated on demand)
 backend/static/fb2_images/*.png
+frontend/node_modules/.cache/default-development/15.pack

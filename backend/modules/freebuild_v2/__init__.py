@@ -293,6 +293,11 @@ class NavEditIn(BaseModel):
     # For 'reorder'
     ordered_ids: Optional[List[str]] = None
 
+class ConstraintAddIn(BaseModel):
+    session_id: str
+    rule: str = Field(..., min_length=3, max_length=400)
+    category: Optional[str] = "manual"
+
 
 # ---- Helpers ----
 
@@ -471,6 +476,24 @@ def _build_model_messages(session: Dict[str, Any], new_user_msg: str) -> List[Di
         msgs.append({"role": "system", "content": LINKING_RULES})
     except Exception as _bpe:
         logger.warning(f"[FREEBUILD] blueprint inject failed: {_bpe}")
+
+    # ⚓ VERIFIED SOURCES — no invented URLs / names / statistics
+    try:
+        from .verified_sources import build_verified_sources_block
+        msgs.append({"role": "system", "content": build_verified_sources_block(domain_key)})
+    except Exception as _vse:
+        logger.warning(f"[FREEBUILD] verified sources inject failed: {_vse}")
+
+    # 🚫 PERSISTENT CONSTRAINTS — user's hard rules + optional edit scope
+    try:
+        from .constraints import render_constraints_block, detect_edit_scope
+        saved_constraints = session.get("constraints") or []
+        edit_scope = detect_edit_scope(new_user_msg or "")
+        cblock = render_constraints_block(saved_constraints, edit_scope)
+        if cblock:
+            msgs.append({"role": "system", "content": cblock})
+    except Exception as _ce:
+        logger.warning(f"[FREEBUILD] constraints inject failed: {_ce}")
 
     # 🔥 NEW IMAGE SYSTEM (Feb 2026) — every image is AI-generated server-side
     # The architect must NOT write hardcoded image URLs. It just writes <img>
@@ -665,6 +688,25 @@ def create_freebuild_v2_router(db, get_current_user) -> APIRouter:
             "timestamp": _now(),
         })
 
+        # 🚫 AUTO-EXTRACT CONSTRAINTS from the incoming user message and
+        # persist them on the session so every future turn respects them.
+        try:
+            from .constraints import extract_constraints_from_text
+            new_constraints = extract_constraints_from_text(payload.message)
+            if new_constraints:
+                existing = session.get("constraints") or []
+                # Deduplicate by (category, first 60 chars of rule)
+                seen_keys = {(c.get("category"), (c.get("rule") or "")[:60]) for c in existing}
+                for nc in new_constraints:
+                    k = (nc["category"], nc["rule"][:60])
+                    if k not in seen_keys:
+                        existing.append(nc)
+                        seen_keys.add(k)
+                session["constraints"] = existing
+                logger.info(f"[FREEBUILD] extracted {len(new_constraints)} constraint(s); total={len(existing)}")
+        except Exception as _cee:
+            logger.warning(f"[FREEBUILD] constraint extract failed: {_cee}")
+
         # Call the architect
         try:
             model_msgs = _build_model_messages(session, payload.message)
@@ -722,6 +764,7 @@ def create_freebuild_v2_router(db, get_current_user) -> APIRouter:
             "messages": session["messages"],
             "turns": session.get("turns", 0) + 1,
             "updated_at": _now(),
+            "constraints": session.get("constraints") or [],
         }
         if html_update:
             update_fields["html"] = html_update
@@ -744,6 +787,7 @@ def create_freebuild_v2_router(db, get_current_user) -> APIRouter:
             "turns": update_fields["turns"],
             "credits_spent_this_turn": charge,
             "credits_balance": await _credits(user["user_id"]),
+            "constraints": session.get("constraints") or [],
         }
 
     # ===== GET SESSION =====
@@ -765,6 +809,7 @@ def create_freebuild_v2_router(db, get_current_user) -> APIRouter:
             "turns": s.get("turns", 0),
             "complete": s.get("complete", False),
             "credits_spent": s.get("credits_spent", 0),
+            "constraints": s.get("constraints", []),
             "created_at": s.get("created_at"),
             "updated_at": s.get("updated_at"),
         }
@@ -986,6 +1031,55 @@ def create_freebuild_v2_router(db, get_current_user) -> APIRouter:
             )
             logger.exception(f"[FREEBUILD-V2] regen images failed: {e}")
             raise HTTPException(500, f"فشل التوليد. أعيدت النقاط. ({str(e)[:120]})")
+
+    # ===== CONSTRAINTS CRUD (persistent user rules) =====
+    @router.get("/constraints/{session_id}")
+    async def list_constraints(session_id: str, user=Depends(get_current_user)):
+        s = await db.freebuild_v2_sessions.find_one(
+            {"id": session_id, "user_id": user["user_id"]},
+            {"_id": 0, "constraints": 1},
+        )
+        if not s:
+            raise HTTPException(404, "session not found")
+        return {"constraints": s.get("constraints") or []}
+
+    @router.post("/constraints/add")
+    async def add_constraint(payload: ConstraintAddIn, user=Depends(get_current_user)):
+        s = await db.freebuild_v2_sessions.find_one(
+            {"id": payload.session_id, "user_id": user["user_id"]},
+            {"_id": 0, "constraints": 1},
+        )
+        if not s:
+            raise HTTPException(404, "session not found")
+        existing = s.get("constraints") or []
+        new_c = {
+            "id": f"m_{int(datetime.now(timezone.utc).timestamp() * 1000)}",
+            "category": payload.category or "manual",
+            "rule": payload.rule.strip(),
+            "raw_text": payload.rule.strip(),
+            "created_at": _now(),
+        }
+        existing.append(new_c)
+        await db.freebuild_v2_sessions.update_one(
+            {"id": payload.session_id},
+            {"$set": {"constraints": existing, "updated_at": _now()}}
+        )
+        return {"ok": True, "constraint": new_c, "constraints": existing}
+
+    @router.delete("/constraints/{session_id}/{constraint_id}")
+    async def delete_constraint(session_id: str, constraint_id: str, user=Depends(get_current_user)):
+        s = await db.freebuild_v2_sessions.find_one(
+            {"id": session_id, "user_id": user["user_id"]},
+            {"_id": 0, "constraints": 1},
+        )
+        if not s:
+            raise HTTPException(404, "session not found")
+        existing = [c for c in (s.get("constraints") or []) if c.get("id") != constraint_id]
+        await db.freebuild_v2_sessions.update_one(
+            {"id": session_id},
+            {"$set": {"constraints": existing, "updated_at": _now()}}
+        )
+        return {"ok": True, "constraints": existing}
 
     # ===== NAVIGATION EDITOR (rename/delete/add/reorder tabs) =====
     @router.post("/edit-nav")
