@@ -6,6 +6,31 @@
 ## User Language: Arabic (العربية)
 
 
+### 🆕 May 3, 2026 — RAILWAY DEPLOYMENT FIX + ENV VARS ✅
+
+**المشكلة**: المستخدم اشتكى "فشل تحديث" وللأسف موقعه المنشور على Railway كان عالق على نسخة Apr-9-2026 (شهر قديمة!) — الكود الجديد كله ما وصل للإنتاج.
+
+**سبب الفشل المكتشف**:
+1. آخر deployment على Railway كان FAILED بسبب: `ERROR: Could not find a version that satisfies emergentintegrations==0.1.1`
+2. Dockerfile كان فيه RUN منفصل لـemergentintegrations لكن requirements.txt يحتوي عليه أيضاً → pip install -r requirements.txt يفشل قبل ما يوصل للـRUN الثاني
+3. متغيرات البيئة `OPENAI_DIRECT_KEY` و `ELEVENLABS_API_KEY` كانت مفقودة من Railway (موجود فقط `OPENAI_API_KEY` بإسم خطأ)
+
+**الإصلاح**:
+- دمج طبقتي pip install في طبقة واحدة مع `--extra-index-url` للـ emergentintegrations CDN في Dockerfile
+- إضافة `OPENAI_DIRECT_KEY` و `ELEVENLABS_API_KEY` على Railway via API
+- Push commit `822ad2b` لـmain → Railway build SUCCESS في ~3 دقائق
+
+**اختبار E2E على Railway production**:
+- Health check: كل المفاتيح الـ3 الآن `true` ✅
+- جلسة "موقع قرآن مع 3 قراء" → الذكاء استدعى `quran_reciter_lookup` 3 مرات
+- HTML يحتوي **3 روابط mp3quran حقيقية**:
+  - `server11.mp3quran.net/sds/001.mp3` (السديس)
+  - `server7.mp3quran.net/shur/001.mp3` (الشريم)
+  - `server12.mp3quran.net/maher/001.mp3` (المعيقلي)
+
+**Commits جديدة**: `822ad2b` (Dockerfile fix) → push للـmain → Railway تم نشره بنجاح.
+
+
 ### 🆕 May 3, 2026 — TRUE AGENT SYSTEM with REAL TOOL CALLING ✅
 
 طلب المستخدم: "بدّل الـchatbot لذكاء حقيقي يستخدم أدوات + يبحث + يجيب من مصادر موثوقة بدل ما يخترع".
