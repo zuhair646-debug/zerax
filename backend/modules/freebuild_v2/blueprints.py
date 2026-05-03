@@ -91,6 +91,8 @@ BLUEPRINTS: Dict[str, Dict[str, Any]] = {
         "must_have_features": [
             "🎙️ زر تسجيل الصوت في #/memorize: يستخدم Web Audio API + MediaRecorder. عرض موجة الصوت visualizer مباشر.",
             "🤖 AI تصحيح: بعد تسجيل الطفل، يظهر pseudo-feedback (placeholder div بنفسجي) 'الذكاء يحلل التلاوة...' ثم rating ⭐⭐⭐⭐ + tips للتحسين. مكان للاتصال بـAPI لاحقاً.",
+            "📚 #/readers (مكتبة القرّاء): **إجباري عرض كل الـ20 قارئ** المتوفرين في الـverified library. Grid 3 أعمدة، كل بطاقة فيها صورة أيقونة (أول حرف من اسم القارئ على دائرة ذهبية)، الاسم، البلد، البايو، و`<audio controls>` بصوت السورة الكاملة. **استدعِ `quran_reciter_lookup` بدون name مرة وحدة** للحصول على كل الـ20.",
+            "🔢 سلكتر السور: dropdown في #/readers يضم 114 سورة. عند الاختيار، JavaScript يحدّث كل الـaudio elements بـURL السورة الجديدة (`server{server}.mp3quran.net/{slug}/{surah:03d}.mp3`).",
             "📈 خطة حفظ ذكية في #/lessons: التدرّج (سور قصيرة → طويلة) + repetition spaced — كل آية تتكرر بعد 1، 3، 7، 14 يوم.",
             "🏆 نقاط فورية: كل آية محفوظة = 10 نقاط، تجويد ممتاز = +5 bonus.",
             "💰 محفظة مكافآت قابلة للتحويل: الأب يحدد قيمة 100 نقطة (مثلاً 5 ريال) + يحوّل عبر #/transfer.",
