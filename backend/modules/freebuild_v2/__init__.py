@@ -498,6 +498,15 @@ async def _openai_architect_turn(messages_for_model: List[Dict[str, str]]) -> Di
                 except Exception:
                     pass
 
+            # 🕌 QURAN PLAYER widget post-processing: replace
+            # @@QURAN_PLAYER/N/style=X@@ placeholders with a fully-featured
+            # interactive per-ayah player.
+            try:
+                from .quran_player import inject_quran_players
+                h = inject_quran_players(h)
+            except Exception as _qpe:
+                logger.warning(f"[FREEBUILD] quran player inject failed: {_qpe}")
+
             # 🔊 AUDIO POST-PROCESSING — make all <audio> tags reliable + add
             # an automatic Surah selector that swaps URLs across all reciters.
             try:
