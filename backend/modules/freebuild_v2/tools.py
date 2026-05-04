@@ -211,6 +211,156 @@ async def generate_image_url(description: str, style_seed: str = "") -> Dict[str
 
 
 # ════════════════════════════════════════════════════════════════════════
+#  TOOL: Saudi Official Sources Lookup
+# ════════════════════════════════════════════════════════════════════════
+async def saudi_official_sources(domain: str) -> Dict[str, Any]:
+    """Return verified Saudi government / official sources for a given domain.
+    Use this whenever the user asks for a Saudi-context site (education, health,
+    sports, government services, real estate, etc) so the AI references real
+    institutions instead of inventing them.
+    """
+    sources = {
+        "education": [
+            {"name": "وزارة التعليم", "url": "https://moe.gov.sa", "desc": "الجهة الرسمية للتعليم في المملكة"},
+            {"name": "هيئة تقويم التعليم والتدريب", "url": "https://etec.gov.sa", "desc": "الجهة المُعتمِدة للمؤسسات التعليمية"},
+            {"name": "منصة مدرستي", "url": "https://schools.madrasati.sa", "desc": "المنصة الرسمية للتعليم عن بُعد"},
+            {"name": "منصة FutureX", "url": "https://www.futurex.sa", "desc": "تدريب مهني معتمد"},
+            {"name": "رواق", "url": "https://www.rwaq.org", "desc": "أكبر منصة تعليم عربية مفتوحة"},
+            {"name": "جامعة الملك سعود", "url": "https://www.ksu.edu.sa"},
+            {"name": "جامعة الإمام محمد بن سعود الإسلامية", "url": "https://www.imamu.edu.sa"},
+            {"name": "الجامعة الإسلامية بالمدينة المنورة", "url": "https://www.iu.edu.sa"},
+        ],
+        "health": [
+            {"name": "وزارة الصحة", "url": "https://moh.gov.sa"},
+            {"name": "صحة (مركز موثق)", "url": "https://sehha.sa"},
+            {"name": "الهيئة السعودية للتخصصات الصحية", "url": "https://scfhs.org.sa"},
+            {"name": "مستشفى الملك فيصل التخصصي", "url": "https://kfshrc.edu.sa"},
+            {"name": "تطبيق صحتي", "url": "https://www.moh.gov.sa/eServices/Pages/sehhty-app.aspx"},
+            {"name": "تطبيق توكلنا الصحة", "url": "https://ta.sdaia.gov.sa"},
+        ],
+        "sports": [
+            {"name": "وزارة الرياضة", "url": "https://mos.gov.sa"},
+            {"name": "الهيئة العامة للرياضة (سابقاً)", "url": "https://www.gsa.gov.sa"},
+            {"name": "الاتحاد السعودي لكرة القدم", "url": "https://www.saff.com.sa"},
+            {"name": "دوري روشن السعودي", "url": "https://www.spl.com.sa"},
+            {"name": "نادي الهلال", "url": "https://www.alhilal.com"},
+            {"name": "نادي النصر", "url": "https://www.alnassr.sa"},
+            {"name": "نادي الاتحاد", "url": "https://www.ittihadclub.com.sa"},
+            {"name": "نادي الأهلي", "url": "https://www.alahli.sa"},
+        ],
+        "religion": [
+            {"name": "وزارة الشؤون الإسلامية والدعوة والإرشاد", "url": "https://www.moia.gov.sa"},
+            {"name": "الرئاسة العامة لشؤون المسجد الحرام والمسجد النبوي", "url": "https://www.gph.gov.sa"},
+            {"name": "مجمع الملك فهد لطباعة المصحف الشريف", "url": "https://qurancomplex.gov.sa"},
+            {"name": "هيئة كبار العلماء", "url": "https://senagate.alifta.gov.sa"},
+            {"name": "رابطة العالم الإسلامي", "url": "https://themwl.org/ar"},
+        ],
+        "ecommerce": [
+            {"name": "هيئة التجارة الإلكترونية", "url": "https://mc.gov.sa"},
+            {"name": "معروف (تحقق المتاجر)", "url": "https://maroof.sa"},
+            {"name": "وزارة التجارة", "url": "https://mc.gov.sa"},
+            {"name": "هيئة المنشآت الصغيرة (منشآت)", "url": "https://www.monshaat.gov.sa"},
+        ],
+        "government": [
+            {"name": "منصة أبشر", "url": "https://www.absher.sa"},
+            {"name": "منصة توكلنا", "url": "https://ta.sdaia.gov.sa"},
+            {"name": "بوابة العمل عن بُعد", "url": "https://amlmenbiad.com"},
+            {"name": "منصة ناجز (وزارة العدل)", "url": "https://najiz.sa"},
+        ],
+        "realestate": [
+            {"name": "وزارة الشؤون البلدية والقروية والإسكان", "url": "https://www.momra.gov.sa"},
+            {"name": "هيئة العقار", "url": "https://rega.gov.sa"},
+            {"name": "صندوق التنمية العقارية (سكني)", "url": "https://sakani.sa"},
+            {"name": "إيجار", "url": "https://www.ejar.sa"},
+        ],
+        "tech": [
+            {"name": "وزارة الاتصالات وتقنية المعلومات", "url": "https://www.mcit.gov.sa"},
+            {"name": "هيئة الاتصالات وتقنية المعلومات (CITC)", "url": "https://citc.gov.sa"},
+            {"name": "الهيئة السعودية للذكاء الاصطناعي (سدايا)", "url": "https://sdaia.gov.sa"},
+            {"name": "الاتحاد السعودي للأمن السيبراني", "url": "https://safcsp.org.sa"},
+        ],
+    }
+    domain_lc = (domain or "").lower().strip()
+    # Heuristic mapping
+    cat = "government"
+    if any(k in domain_lc for k in ["تعليم", "education", "school", "academy", "مدرس"]):
+        cat = "education"
+    elif any(k in domain_lc for k in ["صحة", "health", "طب", "clinic", "مستشفى"]):
+        cat = "health"
+    elif any(k in domain_lc for k in ["رياض", "sports", "كرة", "نادي"]):
+        cat = "sports"
+    elif any(k in domain_lc for k in ["قرآن", "إسلام", "religion", "دين", "مسجد"]):
+        cat = "religion"
+    elif any(k in domain_lc for k in ["متجر", "shop", "ecommerce", "بيع", "تجارة"]):
+        cat = "ecommerce"
+    elif any(k in domain_lc for k in ["عقار", "real-estate", "بيت", "فيلا"]):
+        cat = "realestate"
+    elif any(k in domain_lc for k in ["تقنية", "tech", "ai", "ذكاء"]):
+        cat = "tech"
+
+    return {"ok": True, "category": cat, "sources": sources.get(cat, [])}
+
+
+async def sports_team_lookup(team_name: str) -> Dict[str, Any]:
+    """Look up a sports team using TheSportsDB free API. Returns players,
+    coach, stadium, recent results. Use for sports-club websites."""
+    if not team_name.strip():
+        return {"ok": False, "error": "team_name required"}
+    try:
+        async with httpx.AsyncClient(timeout=12.0) as client:
+            r = await client.get(
+                "https://www.thesportsdb.com/api/v1/json/3/searchteams.php",
+                params={"t": team_name},
+            )
+        if r.status_code != 200:
+            return {"ok": False, "error": f"HTTP {r.status_code}"}
+        data = r.json() or {}
+        teams = data.get("teams") or []
+        if not teams:
+            return {"ok": False, "error": "team not found"}
+        t = teams[0]
+        team_id = t.get("idTeam")
+        # Fetch players
+        players: List[Dict[str, str]] = []
+        try:
+            async with httpx.AsyncClient(timeout=10.0) as c2:
+                pr = await c2.get(
+                    "https://www.thesportsdb.com/api/v1/json/3/lookup_all_players.php",
+                    params={"id": team_id},
+                )
+            if pr.status_code == 200:
+                pd = pr.json() or {}
+                for p in (pd.get("player") or [])[:25]:
+                    players.append({
+                        "name": p.get("strPlayer", ""),
+                        "position": p.get("strPosition", ""),
+                        "nationality": p.get("strNationality", ""),
+                        "thumb": p.get("strThumb", ""),
+                        "number": p.get("strNumber", ""),
+                    })
+        except Exception:
+            pass
+        return {
+            "ok": True,
+            "team": {
+                "name": t.get("strTeam"),
+                "country": t.get("strCountry"),
+                "league": t.get("strLeague"),
+                "stadium": t.get("strStadium"),
+                "founded": t.get("intFormedYear"),
+                "description": (t.get("strDescriptionEN") or t.get("strDescriptionAR") or "")[:600],
+                "logo": t.get("strLogo") or t.get("strBadge"),
+                "banner": t.get("strBanner") or t.get("strFanart1"),
+                "website": t.get("strWebsite"),
+            },
+            "players_count": len(players),
+            "players": players,
+        }
+    except Exception as e:
+        return {"ok": False, "error": str(e)[:160]}
+
+
+# ════════════════════════════════════════════════════════════════════════
 #  TOOL REGISTRY (OpenAI function-calling schema)
 # ════════════════════════════════════════════════════════════════════════
 TOOL_SCHEMAS: List[Dict[str, Any]] = [
@@ -307,6 +457,59 @@ TOOL_SCHEMAS: List[Dict[str, Any]] = [
             },
         },
     },
+    {
+        "type": "function",
+        "function": {
+            "name": "saudi_official_sources",
+            "description": (
+                "Lookup VERIFIED Saudi government / institutional sources for a "
+                "given domain category. Use this whenever building any Saudi-context "
+                "website (education, health, sports, religion, ecommerce, realestate, "
+                "tech, government). Returns real URLs & names you should reference "
+                "in 'about', 'partners', or 'official sources' sections."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "domain": {
+                        "type": "string",
+                        "description": (
+                            "Free-form domain hint in Arabic or English. "
+                            "Categories: education, health, sports, religion, "
+                            "ecommerce, realestate, tech, government."
+                        ),
+                    },
+                },
+                "required": ["domain"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "sports_team_lookup",
+            "description": (
+                "Lookup a real sports team via TheSportsDB (free public API). "
+                "Returns team info + up to 25 real players with positions, "
+                "nationalities, photos, jersey numbers. Use for any sports/club "
+                "website to populate the players section with REAL data — never "
+                "invent player names."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "team_name": {
+                        "type": "string",
+                        "description": (
+                            "Team name in English (works best). e.g. 'Al Hilal', "
+                            "'Al Nassr', 'Real Madrid', 'Manchester United'."
+                        ),
+                    },
+                },
+                "required": ["team_name"],
+            },
+        },
+    },
 ]
 
 
@@ -317,6 +520,8 @@ TOOL_REGISTRY: Dict[str, Callable[..., Awaitable[Dict[str, Any]]]] = {
     "web_search": web_search,
     "web_fetch": web_fetch,
     "generate_image_url": generate_image_url,
+    "saudi_official_sources": saudi_official_sources,
+    "sports_team_lookup": sports_team_lookup,
 }
 
 
