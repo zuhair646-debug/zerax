@@ -6,6 +6,47 @@
 ## User Language: Arabic (العربية)
 
 
+### 🆕 May 4, 2026 — INTERACTIVE QURAN PLAYER + SAUDI SOURCES + REDESIGN MODE ✅
+
+طلب المستخدم: "ابي ذكاء صناعي متكامل قادر على انشاء اي متطلب… طلب قرآن مكتوب يجيبه واضح من مصادر معتمدة، طلب رياضة يجيب لاعبين حقيقيين، طلب تعليم في المملكة يجيب من المصادر السعودية… يفكّر مثل الإنسان."
+
+**ما تم بناؤه**:
+
+🕌 **Quran Player widget تفاعلي كامل** (`@@QURAN_PLAYER/N/style=X@@`):
+- Module جديد: `/app/backend/modules/freebuild_v2/quran_player.py`
+- 14 قارئ بصور avatar في شريط أفقي قابل للتمرير → اضغط لتبديل القارئ
+- كل آية مستقلة، تضغط عليها → تشتغل بصوت القارئ الحالي
+- زر تكرار الآية (loop) + تشغيل متصل + prev/next
+- الآية المُشغّلة الآن تُضاء بـamber glow + auto-scroll
+- 4 أنماط: classic (ذهبي تراثي)، modern (أزرق سماوي)، minimal (أبيض)، royal (بنفسجي)
+- يستخدم mp3 لكل آية منفصلة من everyayah.com (CDN موثوق)
+- يجلب نص الآية أوتوماتيك من alquran.cloud
+- AI يحطه بسطر واحد في HTML، السيرفر يحوّله لـwidget كامل
+
+🇸🇦 **Tool جديد: `saudi_official_sources(domain)`**:
+- 8 فئات + 40+ مصدر سعودي معتمد (moe.gov.sa للتعليم، saff.com.sa للرياضة، qurancomplex.gov.sa للقرآن، إلخ)
+- AI يستخدمها تلقائياً لأي موقع سعودي السياق
+
+⚽ **Tool جديد: `sports_team_lookup(team_name)`**:
+- يربط مع TheSportsDB API (مجاني، بدون key)
+- يرجع 25 لاعب حقيقي بأسماء/مراكز/جنسيات/صور/أرقام قمصان لأي نادي
+
+🎨 **Full Redesign mode**:
+- detect_edit_scope() الآن يميّز "غيّر التصميم كامل" / "صمّم من جديد" / "ما عجبني"
+- system prompt يُجبر AI على تغيير palette + layout + typography + nav style بنسبة 80%+
+- يحل شكوى "التعديل ما يغيّر شي"
+
+**E2E على Railway production**:
+- جلسة "موقع تحفيظ قرآن سعودي" → HTML 24KB مع:
+  - 1 Quran Player widget محقون ✅
+  - 6 روابط mp3quran.net حقيقية ✅
+  - 114 سورة في selector ✅
+  - 2 مصدر سعودي معتمد (qurancomplex.gov.sa + moia.gov.sa) ✅
+  - 4 صفحات SPA كاملة
+
+**Commits**: `92934db` → push `zuhair646-debug/zitex:main` ✅
+
+
 ### 🆕 May 3, 2026 — RAILWAY DEPLOYMENT FIX + ENV VARS ✅
 
 **المشكلة**: المستخدم اشتكى "فشل تحديث" وللأسف موقعه المنشور على Railway كان عالق على نسخة Apr-9-2026 (شهر قديمة!) — الكود الجديد كله ما وصل للإنتاج.
