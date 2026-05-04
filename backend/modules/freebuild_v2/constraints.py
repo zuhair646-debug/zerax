@@ -91,15 +91,20 @@ def extract_constraints_from_text(text: str) -> List[Dict[str, Any]]:
 # ────────────────────────────────────────────────────────────────────────
 # Returns None (full edit) or a scope hint like {"mode":"section", "target":"hero"}
 _EDIT_SCOPE_PATTERNS = [
+    # "غيّر التصميم كامل" / "صمّم من جديد" → full redesign signal
+    (r"(?:غيّر|بدّل|عدّل)\s+(?:التصميم|الهوية|الستايل|الشكل)\s*(?:كامل|كله|كامله|من\s+جديد)?",
+     "full_redesign"),
+    (r"(?:صمّم|اعمل|اصنع)\s+(?:من\s+جديد|تصميم\s+جديد|ستايل\s+جديد)",
+     "full_redesign"),
+    (r"(?:ما\s+(?:عجبني|عاجبني|راضي)|مو\s+حلو|مو\s+زين|مش\s+حلو|قبيح)",
+     "full_redesign"),
     # "عدّل القسم الفلاني بس" / "غيّر الهيرو فقط"
     (r"(?:عدّل|غيّر|عدل|بدّل)\s+(?:القسم|قسم|بلوك|جزء)\s+([^\s.،]+)(?:\s+(?:بس|فقط|لوحده))?",
      "section"),
     (r"(?:عدّل|غيّر)\s+(الهيرو|hero|الصفحة\s+الرئيسية|الفوتر|footer|النافبار|navbar)\s+(?:بس|فقط)?",
      "section"),
-    # "بس" keyword alone with context
     (r"(?:هذا|هذه|القسم\s+هذا|الهيرو\s+هذا).*(?:بس|فقط|لوحده)",
      "section"),
-    # "لا تلمس باقي الموقع"
     (r"لا\s+(?:تلمس|تغيّر|تمس)\s+باقي\s+(?:الموقع|الصفحات|الأقسام)",
      "preserve_others"),
 ]
@@ -153,7 +158,22 @@ def render_constraints_block(
         parts.append(
             "\n## 🔪 Surgical Edit Mode (نطاق هذه المرة فقط)\n"
         )
-        if edit_scope["mode"] == "section":
+        if edit_scope["mode"] == "full_redesign":
+            parts.append(
+                "🎨 المستخدم طلب **تصميم جديد كامل**. يعني:\n"
+                "1. **غيّر الهوية البصرية بالكامل** — palette جديد، خطوط جديدة، layout جديد، vibe جديد. "
+                "ممنوع تستنسخ التصميم القديم.\n"
+                "2. حافظ على نفس **المحتوى والصفحات**، لكن بـlook & feel مختلف تماماً.\n"
+                "3. اختر مزيج جريء (مثلاً: dark mode → light editorial، أو classic → bold neo-brutalist).\n"
+                "4. **لازم HTML يطلع مختلف بصرياً 80%+** عن النسخة السابقة. لو ما تغيّر، فشلت.\n"
+                "5. غيّر:\n"
+                "   - CSS variables (--primary, --bg, --text)\n"
+                "   - Hero layout (split → centered → full-bleed)\n"
+                "   - Card style (rounded → sharp / glass → flat / shadow → outline)\n"
+                "   - Typography (serif → sans → display)\n"
+                "   - Navigation (pills → underline / sidebar / floating)\n"
+            )
+        elif edit_scope["mode"] == "section":
             parts.append(
                 f"المستخدم طلب تعديل **قسم محدد فقط**: `{edit_scope['target']}`.\n"
                 "**قواعد صارمة**:\n"
