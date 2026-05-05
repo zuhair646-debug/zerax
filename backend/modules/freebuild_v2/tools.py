@@ -1,23 +1,33 @@
 """
-Tool Registry for the FreeBuild v2 Agent System.
+Tool Registry for the Zitex Agent System.
 
 Each tool is a callable async function with a JSON Schema describing its
-arguments (compatible with OpenAI function-calling). The architect agent
-can invoke any tool during a turn to fetch real data (Quran reciter URL,
-verse text, web page content, sports results) instead of hallucinating.
+arguments (compatible with OpenAI function-calling). The agent can invoke
+any tool during a turn to fetch real data, generate media, or build
+websites — instead of hallucinating.
 
-Available tools (all production-ready, no extra API keys required):
+Available tools:
     • quran_reciter_lookup   — verified mp3quran.net URLs
     • quran_verse_fetch      — real verse text via alquran.cloud API
     • web_fetch              — fetch + parse a real URL
     • web_search             — free DuckDuckGo HTML search
     • generate_image_url     — Nano Banana on-demand image
+    • saudi_official_sources — verified Saudi institution sources
+    • sports_team_lookup     — TheSportsDB real player rosters
+    • build_website          — generate complete HTML SPA from a brief
+    • update_website         — surgical edit existing site
+    • generate_audio         — ElevenLabs sound/music generation
 """
 from __future__ import annotations
 import asyncio
+import base64
+import hashlib
 import json
 import logging
+import os
 import re
+import uuid
+from pathlib import Path
 from typing import Any, Awaitable, Callable, Dict, List, Optional
 from urllib.parse import quote_plus
 
@@ -510,19 +520,87 @@ TOOL_SCHEMAS: List[Dict[str, Any]] = [
             },
         },
     },
+    {
+        "type": "function",
+        "function": {
+            "name": "build_website",
+            "description": (
+                "Generate a complete single-file HTML SPA from a brief. Use this "
+                "the FIRST time the user asks for a website. The brief MUST be "
+                "very detailed in Arabic: domain, audience, mood, must-have "
+                "sections, content hints. Returns the full HTML string. "
+                "After you call this, the website is shown live to the user."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "brief": {
+                        "type": "string",
+                        "description": "Detailed Arabic brief describing the site",
+                    },
+                    "style_direction": {
+                        "type": "string",
+                        "description": "Optional palette/layout/mood hint",
+                    },
+                },
+                "required": ["brief"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "update_website",
+            "description": (
+                "Apply a surgical edit to the current website HTML. Use AFTER "
+                "build_website when the user wants to change/add/remove specific "
+                "sections. The agent system auto-injects current_html — you only "
+                "provide the instructions in Arabic."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "instructions": {
+                        "type": "string",
+                        "description": "Specific Arabic instructions for the change",
+                    },
+                },
+                "required": ["instructions"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "generate_audio",
+            "description": (
+                "Generate ambient music or sound effects (1-22 seconds) via "
+                "ElevenLabs. Use for: background music for websites, intro jingles, "
+                "ambient soundscapes, audio logos. Returns a public MP3 URL the "
+                "user can embed in their site."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "description": {
+                        "type": "string",
+                        "description": "English description e.g. 'calm ambient piano for a meditation site'",
+                    },
+                    "duration_seconds": {
+                        "type": "number",
+                        "description": "1-22 seconds",
+                        "default": 8,
+                    },
+                },
+                "required": ["description"],
+            },
+        },
+    },
 ]
 
 
-# Map of tool name → callable
-TOOL_REGISTRY: Dict[str, Callable[..., Awaitable[Dict[str, Any]]]] = {
-    "quran_reciter_lookup": quran_reciter_lookup,
-    "quran_verse_fetch": quran_verse_fetch,
-    "web_search": web_search,
-    "web_fetch": web_fetch,
-    "generate_image_url": generate_image_url,
-    "saudi_official_sources": saudi_official_sources,
-    "sports_team_lookup": sports_team_lookup,
-}
+# Map of tool name → callable (populated at module bottom after all defs)
+TOOL_REGISTRY: Dict[str, Callable[..., Awaitable[Dict[str, Any]]]] = {}
 
 
 async def execute_tool_call(name: str, args: Dict[str, Any]) -> Dict[str, Any]:
@@ -537,3 +615,183 @@ async def execute_tool_call(name: str, args: Dict[str, Any]) -> Dict[str, Any]:
     except Exception as e:
         logger.exception(f"[TOOL:{name}] crashed")
         return {"ok": False, "error": str(e)[:200]}
+
+
+# ════════════════════════════════════════════════════════════════════════
+#  TOOL: Build Website (full SPA from a brief)
+# ════════════════════════════════════════════════════════════════════════
+WEBSITE_BUILDER_SYSTEM = """أنت مهندس واجهات أمامي عبقري. مهمتك: بناء موقع SPA كامل (HTML واحد) عربي RTL فخم بناء على وصف العميل.
+
+🎯 المعايير الإلزامية:
+1. **HTML واحد كامل**: يبدأ بـ `<!doctype html>` ينتهي بـ `</html>`. Inline CSS + JS داخل `<style>` و `<script>`.
+2. **RTL + خط Tajawal/Cairo + Arabic copy حقيقي**: ممنوع Lorem Ipsum. كل النصوص عربية ذات معنى.
+3. **SPA navigation**: كل القائمة تستخدم hash routing (`#/home`, `#/about`...). صفحات `<section data-page="home">` و JS بسيط يبدّلها.
+4. **تصميم مختلف 100%**: ممنوع تكرار نفس الـpalette/layout عبر المواقع. اختر هوية بصرية فريدة (gradient/colors/typography/grid).
+5. **Hero فخم + 4-8 أقسام محتوى متنوعة**: features, gallery, testimonials, pricing, FAQ, contact, إلخ.
+6. **صور**: استخدم `<img src="@@IMG/auto@@" alt="<وصف غني بالعربي>">` — السيرفر يولّدها بـNano Banana تلقائياً. ممنوع روابط Unsplash.
+7. **Animations**: إستخدم CSS transitions + transforms + scroll reveals.
+8. **Responsive**: mobile-first مع breakpoints عند 768/1024.
+9. **Accessibility**: aria-labels, focus states, semantic HTML.
+10. **عمق إنتاجي حقيقي**: لا تكتفِ بالأساسيات — أضف microinteractions, hover states, badges, stats counters.
+
+🔄 إذا أعطاك المستخدم HTML سابق وطلب تعديل، احتفظ بكل الأقسام ثم عدّل القسم/الجزء المطلوب فقط بدقة جراحية.
+
+أرجع HTML فقط، بدون شرح أو markdown."""
+
+
+async def build_website(brief: str, style_direction: str = "", current_html: str = "") -> Dict[str, Any]:
+    """Generate a complete single-file HTML SPA from a brief.
+    
+    Args:
+        brief: Arabic description of what the user wants
+        style_direction: Optional palette/layout hint (e.g. "minimalist + neon green")
+        current_html: If provided, this is treated as a refinement / next iteration
+    """
+    if not brief or len(brief.strip()) < 5:
+        return {"ok": False, "error": "brief too short"}
+    
+    direct_key = os.environ.get("OPENAI_DIRECT_KEY", "").strip()
+    if not direct_key:
+        return {"ok": False, "error": "OPENAI_DIRECT_KEY missing"}
+    
+    try:
+        from openai import AsyncOpenAI
+        client = AsyncOpenAI(api_key=direct_key)
+        
+        sys_prompt = WEBSITE_BUILDER_SYSTEM
+        if style_direction:
+            sys_prompt += f"\n\n🎨 توجيه أسلوب من المستخدم: {style_direction}"
+        
+        user_prompt = f"المطلوب: {brief}"
+        if current_html and len(current_html) > 200:
+            user_prompt = (
+                f"المطلوب (تعديل/تطوير): {brief}\n\n"
+                f"الـHTML الحالي:\n{current_html[:60000]}\n\n"
+                "أرجع الـHTML الكامل المُحدَّث."
+            )
+        
+        resp = await client.chat.completions.create(
+            model="gpt-4o",
+            messages=[
+                {"role": "system", "content": sys_prompt},
+                {"role": "user", "content": user_prompt},
+            ],
+            temperature=0.9,
+            max_tokens=16000,
+        )
+        html = (resp.choices[0].message.content or "").strip()
+        # Strip markdown fences if model added them
+        html = re.sub(r"^```(?:html)?\s*", "", html)
+        html = re.sub(r"\s*```\s*$", "", html)
+        if "<html" not in html.lower():
+            return {"ok": False, "error": "model did not return valid HTML"}
+        
+        # Post-process: replace @@IMG/auto@@ placeholders with AI-generated images
+        try:
+            from .image_gen import post_process_html_with_ai_images
+            html = await post_process_html_with_ai_images(html, style_seed=style_direction or brief[:40])
+        except Exception as e:
+            logger.warning(f"[BUILD_WEBSITE] image post-process failed: {e}")
+        
+        return {
+            "ok": True,
+            "html": html,
+            "size_kb": round(len(html) / 1024, 1),
+            "summary": f"موقع كامل مولّد ({round(len(html)/1024,1)} KB)",
+        }
+    except Exception as e:
+        logger.exception("[BUILD_WEBSITE] failed")
+        return {"ok": False, "error": str(e)[:200]}
+
+
+# ════════════════════════════════════════════════════════════════════════
+#  TOOL: Update Website (surgical edit)
+# ════════════════════════════════════════════════════════════════════════
+async def update_website(instructions: str, current_html: str = "") -> Dict[str, Any]:
+    """Apply a surgical edit to the current website HTML.
+    
+    Args:
+        instructions: Arabic instructions for the change
+        current_html: The existing site HTML (auto-injected by agent)
+    """
+    if not current_html or len(current_html) < 200:
+        return {"ok": False, "error": "no current_html — call build_website first"}
+    if not instructions:
+        return {"ok": False, "error": "instructions required"}
+    return await build_website(brief=instructions, current_html=current_html)
+
+
+# ════════════════════════════════════════════════════════════════════════
+#  TOOL: Generate Audio / Music (ElevenLabs Sound Effects)
+# ════════════════════════════════════════════════════════════════════════
+_AUDIO_DIR = Path("/app/backend/static/agent_audio")
+_AUDIO_DIR.mkdir(parents=True, exist_ok=True)
+
+
+async def generate_audio(description: str, duration_seconds: float = 8.0) -> Dict[str, Any]:
+    """Generate ambient music or sound effects via ElevenLabs Sound Generation.
+    
+    Args:
+        description: English/Arabic description (e.g. "calm ambient piano music for a meditation site")
+        duration_seconds: 1-22 seconds
+    """
+    if not description.strip():
+        return {"ok": False, "error": "description required"}
+    duration_seconds = max(1.0, min(22.0, float(duration_seconds)))
+    
+    api_key = os.environ.get("ELEVENLABS_API_KEY", "").strip()
+    if not api_key:
+        return {"ok": False, "error": "ELEVENLABS_API_KEY missing"}
+    
+    try:
+        async with httpx.AsyncClient(timeout=60.0) as client:
+            r = await client.post(
+                "https://api.elevenlabs.io/v1/sound-generation",
+                headers={
+                    "xi-api-key": api_key,
+                    "Content-Type": "application/json",
+                    "Accept": "audio/mpeg",
+                },
+                json={
+                    "text": description,
+                    "duration_seconds": duration_seconds,
+                    "prompt_influence": 0.5,
+                },
+            )
+        if r.status_code != 200:
+            return {"ok": False, "error": f"ElevenLabs HTTP {r.status_code}: {r.text[:200]}"}
+        
+        # Save and return URL
+        audio_id = hashlib.md5(f"{description}::{duration_seconds}::{uuid.uuid4()}".encode()).hexdigest()[:16]
+        fname = f"{audio_id}.mp3"
+        fpath = _AUDIO_DIR / fname
+        fpath.write_bytes(r.content)
+        
+        # Backend returns relative path; frontend serves via same origin (ingress)
+        public_url = f"/api/agent/audio/{fname}"
+        
+        return {
+            "ok": True,
+            "url": public_url,
+            "duration_seconds": duration_seconds,
+            "size_kb": round(len(r.content) / 1024, 1),
+            "summary": f"تم توليد الصوت ({round(len(r.content)/1024,1)} KB)",
+        }
+    except Exception as e:
+        logger.exception("[GENERATE_AUDIO] failed")
+        return {"ok": False, "error": str(e)[:200]}
+
+
+# Populate registry after all functions are defined
+TOOL_REGISTRY.update({
+    "quran_reciter_lookup": quran_reciter_lookup,
+    "quran_verse_fetch": quran_verse_fetch,
+    "web_search": web_search,
+    "web_fetch": web_fetch,
+    "generate_image_url": generate_image_url,
+    "saudi_official_sources": saudi_official_sources,
+    "sports_team_lookup": sports_team_lookup,
+    "build_website": build_website,
+    "update_website": update_website,
+    "generate_audio": generate_audio,
+})
