@@ -49,6 +49,7 @@ import StudioVideo from '@/pages/studio/StudioVideo';
 import ChatVideo from '@/pages/chat/ChatVideo';
 import ChatImage from '@/pages/chat/ChatImage';
 import FreeBuild from '@/pages/FreeBuild';
+import AIAgent from '@/pages/AIAgent';
 import AvatarSettings from '@/pages/AvatarSettings';
 import ChannelBridge from '@/pages/ChannelBridge';
 import AdminAICore from '@/pages/AdminAICore';
@@ -97,6 +98,7 @@ function App() {
         <Routes>
           <Route path="/" element={<LandingPage user={user} />} />
           <Route path="/build-from-zero" element={<ProtectedRoute><FreeBuild /></ProtectedRoute>} />
+          <Route path="/ai-agent" element={<ProtectedRoute><AIAgent /></ProtectedRoute>} />
           <Route path="/vrm-preview" element={<VrmPreview />} />
           <Route path="/demo" element={<DemoLanding />} />
           <Route path="/login" element={<LoginPage setUser={setUser} />} />
