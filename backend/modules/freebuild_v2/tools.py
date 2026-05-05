@@ -596,6 +596,71 @@ TOOL_SCHEMAS: List[Dict[str, Any]] = [
             },
         },
     },
+    {
+        "type": "function",
+        "function": {
+            "name": "set_theme",
+            "description": (
+                "Surgically rewrite ONLY the CSS theme (palette, fonts, mood) "
+                "without touching HTML structure or images. FAST (~5-10s). Use this "
+                "whenever the user wants color/typography/mood changes."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "palette": {"type": "string", "description": "e.g. 'dark navy + gold accents'"},
+                    "fonts": {"type": "string", "description": "e.g. 'modern sans-serif Arabic'"},
+                    "mood": {"type": "string", "description": "e.g. 'minimalist', 'luxury', 'playful'"},
+                },
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "add_page",
+            "description": (
+                "Append a new page (section) to the SPA + add a nav link. "
+                "Generates ONE focused section with content matching the brief. "
+                "FAST (~10-15s). Use whenever the user wants to add a page."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "label": {"type": "string", "description": "Arabic page label shown in nav"},
+                    "slug": {"type": "string", "description": "URL slug (auto-derived if omitted)"},
+                    "brief": {"type": "string", "description": "What goes on this page"},
+                },
+                "required": ["label"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "edit_section",
+            "description": (
+                "Surgical edit of ONE section in the current site. Use for any "
+                "targeted change like 'change the hero text', 'update the menu', "
+                "'add a contact form to the contact page'. FASTER and more reliable "
+                "than update_website. Always prefer this over update_website."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "target": {
+                        "type": "string",
+                        "description": "Section identifier hint: 'hero', 'menu', 'contact', 'pricing', 'home', 'about', 'features' etc.",
+                    },
+                    "instructions": {
+                        "type": "string",
+                        "description": "Arabic instructions describing the change",
+                    },
+                },
+                "required": ["target", "instructions"],
+            },
+        },
+    },
 ]
 
 
@@ -782,6 +847,278 @@ async def generate_audio(description: str, duration_seconds: float = 8.0) -> Dic
         return {"ok": False, "error": str(e)[:200]}
 
 
+# ════════════════════════════════════════════════════════════════════════
+#  SURGICAL TOOLS — fast, focused edits without full regeneration
+# ════════════════════════════════════════════════════════════════════════
+async def _gpt_rewrite(system: str, user: str, max_tokens: int = 4000) -> str:
+    """Helper: one-shot GPT-4o call returning a string (for surgical edits)."""
+    direct_key = os.environ.get("OPENAI_DIRECT_KEY", "").strip()
+    if not direct_key:
+        raise RuntimeError("OPENAI_DIRECT_KEY missing")
+    from openai import AsyncOpenAI
+    client = AsyncOpenAI(api_key=direct_key)
+    resp = await client.chat.completions.create(
+        model="gpt-4o",
+        messages=[
+            {"role": "system", "content": system},
+            {"role": "user", "content": user},
+        ],
+        temperature=0.7,
+        max_tokens=max_tokens,
+    )
+    return (resp.choices[0].message.content or "").strip()
+
+
+async def set_theme(
+    palette: str = "",
+    fonts: str = "",
+    mood: str = "",
+    current_html: str = "",
+) -> Dict[str, Any]:
+    """Surgically rewrite ONLY the <style>:root variables and typography.
+    Does NOT touch HTML structure or images. Fast (~5-10s)."""
+    if not current_html or len(current_html) < 200:
+        return {"ok": False, "error": "no current_html — call build_website first"}
+    
+    request_parts = []
+    if palette:
+        request_parts.append(f"palette: {palette}")
+    if fonts:
+        request_parts.append(f"fonts: {fonts}")
+    if mood:
+        request_parts.append(f"mood: {mood}")
+    if not request_parts:
+        return {"ok": False, "error": "provide at least one of: palette, fonts, mood"}
+    request = "; ".join(request_parts)
+    
+    # Extract first <style>...</style> block
+    style_match = re.search(r"(<style[^>]*>)([\s\S]*?)(</style>)", current_html, re.IGNORECASE)
+    if not style_match:
+        return {"ok": False, "error": "no <style> block found in current site"}
+    open_tag, css_body, close_tag = style_match.group(1), style_match.group(2), style_match.group(3)
+    
+    sys_prompt = (
+        "أنت خبير CSS. مهمتك: إعادة كتابة CSS مع تغيير الـtheme فقط (ألوان، خطوط، مزاج).\n"
+        "احتفظ بكل selectors والـlayout كما هو، غيّر:\n"
+        "- :root CSS variables (--primary, --bg, --text...)\n"
+        "- font-family declarations\n"
+        "- background gradients عامة\n"
+        "أرجع CSS فقط (بدون <style> tags، بدون شرح). التعليقات بالعربي مسموحة."
+    )
+    user_prompt = (
+        f"غيّر الـtheme حسب: {request}\n\n"
+        f"الـCSS الحالي:\n{css_body[:14000]}\n\n"
+        "أرجع الـCSS الكامل المحدّث."
+    )
+    try:
+        new_css = await _gpt_rewrite(sys_prompt, user_prompt, max_tokens=8000)
+        # Strip markdown fences if any
+        new_css = re.sub(r"^```(?:css)?\s*", "", new_css)
+        new_css = re.sub(r"\s*```\s*$", "", new_css)
+        if len(new_css) < 200 or "{" not in new_css:
+            return {"ok": False, "error": "model returned invalid CSS"}
+        new_html = current_html.replace(
+            open_tag + css_body + close_tag,
+            open_tag + "\n" + new_css + "\n" + close_tag,
+            1,
+        )
+        return {
+            "ok": True,
+            "html": new_html,
+            "size_kb": round(len(new_html) / 1024, 1),
+            "summary": f"تم تحديث الـtheme ({request})",
+        }
+    except Exception as e:
+        logger.exception("[SET_THEME] failed")
+        return {"ok": False, "error": str(e)[:200]}
+
+
+async def add_page(
+    label: str,
+    slug: str = "",
+    brief: str = "",
+    current_html: str = "",
+) -> Dict[str, Any]:
+    """Add a new page (section) to the SPA. Generates a focused new section,
+    appends it to the page list, and adds a nav link. Fast (~10-15s)."""
+    if not current_html or len(current_html) < 200:
+        return {"ok": False, "error": "no current_html — call build_website first"}
+    if not label.strip():
+        return {"ok": False, "error": "label required"}
+    
+    # Auto-derive slug if missing
+    if not slug:
+        slug = re.sub(r"[^a-z0-9-]", "-", label.lower())[:30] or f"page-{uuid.uuid4().hex[:6]}"
+    slug = slug.strip("-")
+    
+    # Check if slug already exists
+    if re.search(rf'data-page=["\']{re.escape(slug)}["\']', current_html):
+        return {"ok": False, "error": f"page with slug '{slug}' already exists"}
+    
+    sys_prompt = (
+        "أنت مهندس واجهات. مهمتك: إنشاء section واحد كامل لـSPA موجود.\n"
+        "القواعد:\n"
+        f"- Wrapper: <section data-page=\"{slug}\" class=\"page\">...</section>\n"
+        "- محتوى عربي حقيقي (ممنوع Lorem). hero عنوان + 4-8 cards/blocks + CTAs.\n"
+        "- استخدم نفس الـCSS variables الموجودة في الموقع (--primary, --bg, إلخ) — لا تكتب inline styles جديدة.\n"
+        "- صور كـ <img src=\"@@IMG/auto@@\" alt=\"<وصف عربي>\"> للمعالج التلقائي.\n"
+        "- روابط داخلية تستخدم #/slug.\n"
+        "أرجع HTML الـsection فقط (بدون <html><body><style> أو شرح)."
+    )
+    user_prompt = (
+        f"اسم الصفحة: {label}\n"
+        f"slug: {slug}\n"
+        f"وصف المحتوى: {brief or label}\n\n"
+        "أرجع section واحد كامل."
+    )
+    try:
+        new_section = await _gpt_rewrite(sys_prompt, user_prompt, max_tokens=4000)
+        new_section = re.sub(r"^```(?:html)?\s*", "", new_section)
+        new_section = re.sub(r"\s*```\s*$", "", new_section)
+        if "<section" not in new_section.lower():
+            return {"ok": False, "error": "model did not return a <section>"}
+        
+        # Post-process the new section's images only
+        try:
+            from .image_gen import post_process_html_with_ai_images
+            new_section = await post_process_html_with_ai_images(new_section, style_seed=label)
+        except Exception as e:
+            logger.warning(f"[ADD_PAGE] image post-process failed: {e}")
+        
+        # Inject section: append before last </main> or </body>
+        new_html = current_html
+        if "</main>" in new_html:
+            new_html = new_html.replace("</main>", f"\n{new_section}\n</main>", 1)
+        else:
+            new_html = new_html.replace("</body>", f"\n{new_section}\n</body>", 1)
+        
+        # Inject nav link: find first <nav>...</nav> and add a link
+        nav_match = re.search(r"(<nav[^>]*>)([\s\S]*?)(</nav>)", new_html, re.IGNORECASE)
+        if nav_match:
+            nav_open, nav_body, nav_close = nav_match.group(1), nav_match.group(2), nav_match.group(3)
+            link = f'<a href="#/{slug}" data-page-link="{slug}">{label}</a>'
+            new_nav_body = nav_body.rstrip() + "\n" + link + "\n"
+            new_html = new_html.replace(
+                nav_open + nav_body + nav_close,
+                nav_open + new_nav_body + nav_close,
+                1,
+            )
+        
+        return {
+            "ok": True,
+            "html": new_html,
+            "size_kb": round(len(new_html) / 1024, 1),
+            "slug": slug,
+            "summary": f"تم إضافة صفحة: {label} (#/{slug})",
+        }
+    except Exception as e:
+        logger.exception("[ADD_PAGE] failed")
+        return {"ok": False, "error": str(e)[:200]}
+
+
+async def edit_section(
+    target: str,
+    instructions: str,
+    current_html: str = "",
+) -> Dict[str, Any]:
+    """Surgical edit of ONE section in the current site.
+    
+    Args:
+        target: Section identifier hint (e.g. 'hero', 'menu', 'contact', 'home', 'pricing').
+                Matches data-page, id, class, or nearest h1/h2 text.
+        instructions: Arabic instructions for what to change in that section.
+    """
+    if not current_html or len(current_html) < 200:
+        return {"ok": False, "error": "no current_html — call build_website first"}
+    if not target.strip() or not instructions.strip():
+        return {"ok": False, "error": "target and instructions required"}
+    
+    # Find best matching section
+    target_lc = target.strip().lower()
+    section_pattern = re.compile(r"<section\b[^>]*>[\s\S]*?</section>", re.IGNORECASE)
+    sections = list(section_pattern.finditer(current_html))
+    if not sections:
+        return {"ok": False, "error": "no <section> tags found"}
+    
+    best_idx = -1
+    best_score = 0
+    for i, m in enumerate(sections):
+        block = m.group(0)
+        score = 0
+        # data-page attribute match
+        dp = re.search(r'data-page="([^"]+)"', block)
+        if dp and target_lc in dp.group(1).lower():
+            score += 10
+        # id attribute match
+        idm = re.search(r'\bid="([^"]+)"', block)
+        if idm and target_lc in idm.group(1).lower():
+            score += 8
+        # class attribute match
+        cm = re.search(r'\bclass="([^"]+)"', block)
+        if cm and target_lc in cm.group(1).lower():
+            score += 5
+        # heading text match
+        hm = re.search(r"<h[1-3][^>]*>([\s\S]{1,200}?)</h[1-3]>", block)
+        if hm and target_lc in hm.group(1).lower():
+            score += 6
+        # general body match
+        if target_lc in block[:2000].lower():
+            score += 1
+        if score > best_score:
+            best_score = score
+            best_idx = i
+    
+    if best_idx < 0 or best_score == 0:
+        return {"ok": False, "error": f"no section matching '{target}' — try a different keyword"}
+    
+    target_section = sections[best_idx].group(0)
+    
+    sys_prompt = (
+        "أنت محرّر HTML جراحي. مهمتك: تعديل section واحد فقط حسب التعليمات.\n"
+        "القواعد:\n"
+        "- احتفظ بـwrapper الـ<section> كما هو (id, class, data-page).\n"
+        "- استخدم نفس الـCSS classes الموجودة (لا تخترع جديدة بدون داعي).\n"
+        "- محتوى عربي حقيقي.\n"
+        "- صور: <img src=\"@@IMG/auto@@\" alt=\"<وصف>\"> أو احتفظ بالـURLs الموجودة كما هي.\n"
+        "أرجع الـsection الكامل المحدّث فقط (بدون شرح أو ```)."
+    )
+    user_prompt = (
+        f"التعليمات: {instructions}\n\n"
+        f"الـsection الحالي:\n{target_section[:14000]}\n\n"
+        "أرجع الـsection المحدّث."
+    )
+    try:
+        new_section = await _gpt_rewrite(sys_prompt, user_prompt, max_tokens=6000)
+        new_section = re.sub(r"^```(?:html)?\s*", "", new_section)
+        new_section = re.sub(r"\s*```\s*$", "", new_section)
+        if "<section" not in new_section.lower():
+            return {"ok": False, "error": "model did not return a <section>"}
+        
+        # Process only NEW @@IMG/auto@@ placeholders in the new section
+        if "@@IMG" in new_section:
+            try:
+                from .image_gen import post_process_html_with_ai_images
+                new_section = await post_process_html_with_ai_images(new_section, style_seed=target)
+            except Exception as e:
+                logger.warning(f"[EDIT_SECTION] image post-process failed: {e}")
+        
+        new_html = current_html.replace(target_section, new_section, 1)
+        
+        # Identify section label for summary
+        dp = re.search(r'data-page="([^"]+)"', target_section)
+        label = dp.group(1) if dp else target
+        return {
+            "ok": True,
+            "html": new_html,
+            "size_kb": round(len(new_html) / 1024, 1),
+            "edited": label,
+            "summary": f"تم تعديل قسم: {label}",
+        }
+    except Exception as e:
+        logger.exception("[EDIT_SECTION] failed")
+        return {"ok": False, "error": str(e)[:200]}
+
+
 # Populate registry after all functions are defined
 TOOL_REGISTRY.update({
     "quran_reciter_lookup": quran_reciter_lookup,
@@ -794,4 +1131,7 @@ TOOL_REGISTRY.update({
     "build_website": build_website,
     "update_website": update_website,
     "generate_audio": generate_audio,
+    "set_theme": set_theme,
+    "add_page": add_page,
+    "edit_section": edit_section,
 })
