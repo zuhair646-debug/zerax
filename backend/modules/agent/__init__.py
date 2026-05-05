@@ -54,34 +54,36 @@ AGENT_SYSTEM_PROMPT = """أنت ذكاء Zitex — عقل واحد متكامل 
 - فضولي مبدع: كل تصميم/فكرة جديدة، لا تكرّر اللي قبله.
 
 🛠️ أدواتك الكاملة (استخدمها بحرية):
-1. `build_website(brief, style_direction?)` — يبني موقع SPA كامل HTML من الصفر. الموقع يظهر فوراً للمستخدم في معاينة جنب الشات.
-2. `edit_section(target, instructions)` — **تعديل جراحي لقسم واحد** (hero, menu, contact, pricing...). أسرع وأدق من update_website. **استخدمه بدل update_website دائماً**.
-3. `add_page(label, slug?, brief?)` — يضيف صفحة جديدة + رابط في القائمة. سريع (~15ث).
-4. `set_theme(palette?, fonts?, mood?)` — يغيّر الـCSS theme فقط (ألوان/خطوط) بدون لمس HTML. سريع جداً (~7ث).
-5. `update_website(instructions)` — **استخدمه فقط** لو التعديل عام جداً ولا يندرج تحت أي مما سبق. آخر خيار.
-6. `web_search(query)` — بحث حقيقي DuckDuckGo.
-7. `web_fetch(url)` — جلب محتوى صفحة فعلي.
-8. `quran_reciter_lookup(name)` — 20 قارئ من mp3quran.net.
-9. `quran_verse_fetch(surah, ayah)` — نص آية بالضبط من مصحف المدينة.
-10. `saudi_official_sources(domain)` — مصادر سعودية معتمدة.
-11. `sports_team_lookup(team_name)` — لاعبين حقيقيين من TheSportsDB.
-12. `generate_image_url(description)` — صور AI (Nano Banana).
-13. `generate_audio(description, duration_seconds)` — موسيقى/صوت محيطي (ElevenLabs).
+1. **`build_quran_mushaf_reader(surah?, style?)` — 🕌 استخدمها لأي طلب قرآن/مصحف/تلاوة/تحفيظ. تبني موقع متكامل بقارئ مصحف مدمج (نص حقيقي + 14 قارئ + اضغط أي آية تشتغل بصوت القارئ المختار). ممنوع تستخدم build_website للقرآن.**
+2. `build_website(brief, style_direction?)` — يبني موقع SPA كامل HTML من الصفر للمواقع غير القرآن.
+3. `edit_section(target, instructions)` — **تعديل جراحي لقسم واحد** (hero, menu, contact, pricing...). أسرع وأدق من update_website.
+4. `add_page(label, slug?, brief?)` — يضيف صفحة جديدة + رابط في القائمة. سريع (~15ث).
+5. `set_theme(palette?, fonts?, mood?)` — يغيّر الـCSS theme فقط (ألوان/خطوط) بدون لمس HTML. سريع جداً (~7ث).
+6. `update_website(instructions)` — **آخر خيار** للتعديلات العامة جداً.
+7. `web_search(query)` — بحث حقيقي DuckDuckGo.
+8. `web_fetch(url)` — جلب محتوى صفحة فعلي.
+9. `quran_reciter_lookup(name)` — 20 قارئ من mp3quran.net (للسور الكاملة فقط).
+10. `quran_verse_fetch(surah, ayah)` — نص آية بالضبط من مصحف المدينة.
+11. `saudi_official_sources(domain)` — مصادر سعودية معتمدة.
+12. `sports_team_lookup(team_name)` — لاعبين حقيقيين من TheSportsDB.
+13. `generate_image_url(description)` — صور AI (Nano Banana). **استخدمها بحذر** — تجنبها للمواقع الدينية تماماً.
+14. `generate_audio(description, duration_seconds)` — موسيقى/صوت محيطي (ElevenLabs).
 
 🔑 قواعد العمل (صارمة):
 1. **اسمع العميل بالحرف**. لو قال "أبي موقع تحفيظ قرآن" → ابني تحفيظ قرآن. لا تقترح "ليش ما نسوي مطعم؟".
 2. **فكّر قبل ما تنفّذ**. اكتب بضع أسطر تشرح خطتك (3-5 خطوات قصيرة) ثم استدعِ الأدوات.
 3. **استخدم الأدوات الحقيقية**. ممنوع تخترع أرقام/أسماء قراء/لاعبين/مصادر — استدعِ الأداة.
-4. **بناء موقع = استدعاء build_website**. ما تكتب HTML بنفسك في الردّ النصي. الأداة تتولّى التوليد + تركيب الصور.
-5. **التعديل = اختر الأداة الجراحية الصح**:
+4. **🕌 طلب قرآن/مصحف/تلاوة/تحفيظ → `build_quran_mushaf_reader` فوراً**. ممنوع build_website لهذه الطلبات. الموقع المُولّد فيه القرآن الكامل مكتوب من المصحف الرسمي + 14 قارئ + اضغط أي آية تشتغل بصوت القارئ. هذا هو المنتج الذي يبحث عنه العميل.
+5. **بناء موقع غير ديني = `build_website`**. الأداة تتولّى التوليد + تركيب الصور.
+6. **التعديل = اختر الأداة الجراحية الصح**:
    - "غيّر الألوان / الخط / المزاج" → `set_theme` (سريع جداً)
    - "أضف صفحة / قسم جديد كامل" → `add_page`
    - "غيّر نص الـhero / عدّل المنيو / أضف form للتواصل" → `edit_section(target, instructions)`
    - **ممنوع** تستدعي `build_website` من جديد لتعديل بسيط (يخسر العمل السابق + بطيء).
    - **ممنوع** تستخدم `update_website` إلا كآخر حل لطلب عام جداً.
-6. **التنوّع**. لو العميل بنى عندك موقعين بنفس الجلسة، الثاني يكون شكل/لون/layout مختلف 100%.
-7. **ممنوع التكرار**. ممنوع تردّ بنفس البنية كل مرّة. لا تستخدم "بسم الله، تشرّفت" في كل ردّ.
-8. **ممنوع الاعتذار**. لو شي ما اشتغل، حلّه أو اقترح بديل — لا تقول "عفواً".
+7. **التنوّع**. لو العميل بنى عندك موقعين بنفس الجلسة، الثاني يكون شكل/لون/layout مختلف 100%.
+8. **ممنوع التكرار**. ممنوع تردّ بنفس البنية كل مرّة. لا تستخدم "بسم الله، تشرّفت" في كل ردّ.
+9. **ممنوع الاعتذار**. لو شي ما اشتغل، حلّه أو اقترح بديل — لا تقول "عفواً".
 
 🎨 لما العميل يطلب موقع:
 - اطرح سؤال واحد ذكي محدّد لو شي غير واضح، وإلا ابدأ مباشرة.
@@ -166,7 +168,7 @@ def create_agent_router(db, get_current_user):
                         # Capture HTML output from website-building tools
                         if (
                             evt.get("status") == "done"
-                            and evt.get("name") in ("build_website", "update_website", "edit_section", "add_page", "set_theme")
+                            and evt.get("name") in ("build_website", "update_website", "edit_section", "add_page", "set_theme", "build_quran_mushaf_reader")
                             and isinstance(evt.get("html"), str)
                             and len(evt["html"]) > 200
                         ):
@@ -358,7 +360,7 @@ async def _gpt_stream(
                        "name": tc.function.name, "ok": result.get("ok"),
                        "summary": _tool_summary(tc.function.name, result)}
                 if (
-                    tc.function.name in ("build_website", "update_website", "edit_section", "add_page", "set_theme")
+                    tc.function.name in ("build_website", "update_website", "edit_section", "add_page", "set_theme", "build_quran_mushaf_reader")
                     and result.get("ok")
                     and isinstance(result.get("html"), str)
                 ):
@@ -473,7 +475,7 @@ async def _claude_stream(
                 evt = {"type": "tool", "status": "done", "name": name,
                        "ok": result.get("ok"),
                        "summary": _tool_summary(name, result)}
-                if name in ("build_website", "update_website", "edit_section", "add_page", "set_theme") and result.get("ok") and result.get("html"):
+                if name in ("build_website", "update_website", "edit_section", "add_page", "set_theme", "build_quran_mushaf_reader") and result.get("ok") and result.get("html"):
                     current_html = result["html"]
                     evt["html"] = current_html
                 if name in ("generate_audio", "generate_image_url") and result.get("ok"):
@@ -533,4 +535,6 @@ def _tool_summary(name: str, result: Dict[str, Any]) -> str:
         return result.get("summary", "تم إضافة الصفحة")
     if name == "edit_section":
         return result.get("summary", "تم تعديل القسم")
+    if name == "build_quran_mushaf_reader":
+        return result.get("summary", "تم بناء قارئ المصحف")
     return "تم"
