@@ -134,9 +134,9 @@ const LandingPage = ({ user }) => {
 
         {/* STANDALONE FEATURED CTA */}
         <div
-          onClick={() => goOrRegister('/build-from-zero')}
+          onClick={() => goOrRegister('/ai-agent')}
           className="relative mb-8 cursor-pointer group rounded-2xl overflow-hidden border border-amber-400/30 hover:border-amber-300/60 transition-all hover:shadow-[0_20px_60px_-12px_rgba(245,158,11,0.5)]"
-          data-testid="hero-build-website-from-scratch"
+          data-testid="hero-ai-agent"
         >
           <div
             className="absolute inset-0 bg-cover bg-center scale-105 group-hover:scale-110 transition-transform duration-700"
@@ -149,13 +149,13 @@ const LandingPage = ({ user }) => {
             </div>
             <div className="flex-1 text-right">
               <div className="inline-block px-2 py-0.5 rounded-md bg-amber-400/20 border border-amber-300/40 text-amber-300 text-[10px] font-black tracking-wider mb-2">
-                ذكاء معماري · بدون قوالب
+                ذكاء واحد · 10 أدوات · معاينة مباشرة
               </div>
               <h2 className="text-2xl sm:text-3xl font-black text-white mb-1">
-                أنشئ موقعك من الصفر <span className="text-amber-300">بمحادثة ذكية</span>
+                ذكاء Zitex <span className="text-amber-300">يبني، يبحث، يولّد</span>
               </h2>
               <p className="text-white/75 text-xs sm:text-sm leading-relaxed">
-                المهندس الذكي يسألك نعم/لا — يبني لك موقعاً فريداً 100% يعكس خيالك (HTML + CSS + JS)
+                اكتب أي طلب — الذكاء يفكّر، يستدعي أدوات حقيقية (بحث، صور AI، صوت، قرآن، رياضة، مصادر سعودية)، ويبني موقعك live جنب الشات.
               </p>
             </div>
             <div className="flex-shrink-0">

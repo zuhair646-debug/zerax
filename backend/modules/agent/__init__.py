@@ -1,19 +1,24 @@
 """
-Zitex AI Agent — an open, conversational agent that behaves like Claude/ChatGPT.
+Zitex AI Agent — open thinking agent with full tool suite.
 
-Unlike the architect (which is rigid and optimised for HTML generation), this
-agent is a FREE-FORM chat that:
-    • Streams natural Arabic responses
-    • Calls the 7 FreeBuild v2 tools freely (up to 20 iterations)
-    • Keeps conversation memory across turns (MongoDB)
-    • Lets the user pick model: claude-sonnet-4-5 or gpt-4o
-    • Exposes the live tool activity so the user sees 'the thinking'
+This is THE single AI brain for Zitex. It thinks, listens, and executes.
+It can:
+    • Build complete websites (build_website / update_website)
+    • Search the web, fetch pages
+    • Lookup Quran reciters and verse text
+    • Lookup Saudi official sources
+    • Lookup real sports teams + players
+    • Generate AI images (Nano Banana)
+    • Generate ambient music / sound (ElevenLabs)
+    • Spawn specialist sub-agents (designer, researcher, copywriter)
 
 Endpoints:
-    POST /api/agent/chat         — stream responses
-    GET  /api/agent/conversations — list user conversations
-    GET  /api/agent/conversation/{id}
+    POST   /api/agent/chat                      — stream a turn (SSE)
+    GET    /api/agent/conversations             — list user conversations
+    GET    /api/agent/conversation/{id}         — full transcript + current_html
     DELETE /api/agent/conversation/{id}
+    GET    /api/agent/conversation/{id}/preview — serves current_html as text/html
+    GET    /api/agent/audio/{filename}          — serves generated MP3
 """
 from __future__ import annotations
 import os
@@ -22,10 +27,11 @@ import uuid
 import asyncio
 import logging
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException
-from fastapi.responses import StreamingResponse
+from fastapi.responses import StreamingResponse, HTMLResponse, FileResponse, Response
 from pydantic import BaseModel, Field
 
 logger = logging.getLogger(__name__)
@@ -38,44 +44,57 @@ def _now() -> str:
 # ════════════════════════════════════════════════════════════════════════
 #  System prompt — open, conversational, tool-using
 # ════════════════════════════════════════════════════════════════════════
-AGENT_SYSTEM_PROMPT = """أنت مساعد ذكاء اصطناعي عربي ذكي ومبدع (Zitex Agent).
+AGENT_SYSTEM_PROMPT = """أنت ذكاء Zitex — عقل واحد متكامل قادر يفكّر ويبني وينفّذ.
 
-🎯 شخصيتك:
-- تتحدث اللغة العربية بأسلوب سعودي طبيعي وحيوي (مو رسمي جاف)
-- مبدع، ما تعطي نفس الإجابة مرتين، تقترح زوايا جديدة
-- صادق — لو ما تعرف شي، تقول "ما أعرف" وتستخدم أدواتك
-- عملي — تفكّر خطوة خطوة، تشرح رأيك، وتسأل لما تحتاج توضيح
+🎯 شخصيتك (ثابتة، لا تتغيّر):
+- تتحدث عربية سعودية طبيعية واضحة (مو رسمي جاف).
+- مفكّر، تشرح خطواتك بوضوح.
+- صريح: لو ما تعرف شي → استدعِ أداة، لا تخترع.
+- حازم: لا تكرّر "عفواً/آسف" — نفّذ.
+- فضولي مبدع: كل تصميم/فكرة جديدة، لا تكرّر اللي قبله.
 
-🛠️ عندك أدوات حقيقية تقدر تستخدمها بحرية:
-- `web_search(query)` — بحث حقيقي في الإنترنت (DuckDuckGo)
-- `web_fetch(url)` — جلب محتوى أي صفحة فعلي
-- `quran_reciter_lookup(name)` — 20 قارئ بأصوات mp3quran.net حقيقية
-- `quran_verse_fetch(surah, ayah)` — نص أي آية من مصحف المدينة
-- `saudi_official_sources(domain)` — 40+ مصدر سعودي معتمد
-- `sports_team_lookup(team_name)` — لاعبين حقيقيين من TheSportsDB
-- `generate_image_url(description)` — توليد صور AI (Nano Banana)
+🛠️ أدواتك الكاملة (استخدمها بحرية):
+1. `build_website(brief, style_direction?)` — يبني موقع SPA كامل HTML من الصفر. الموقع يظهر فوراً للمستخدم في معاينة جنب الشات.
+2. `update_website(instructions)` — يعدّل الموقع الحالي تعديل جراحي (السيستم يحقن HTML تلقائياً).
+3. `web_search(query)` — بحث حقيقي DuckDuckGo.
+4. `web_fetch(url)` — جلب محتوى صفحة فعلي.
+5. `quran_reciter_lookup(name)` — 20 قارئ من mp3quran.net.
+6. `quran_verse_fetch(surah, ayah)` — نص آية بالضبط من مصحف المدينة.
+7. `saudi_official_sources(domain)` — مصادر سعودية معتمدة.
+8. `sports_team_lookup(team_name)` — لاعبين حقيقيين من TheSportsDB.
+9. `generate_image_url(description)` — صور AI (Nano Banana).
+10. `generate_audio(description, duration_seconds)` — موسيقى/صوت محيطي (ElevenLabs).
 
-🔑 قواعد ذهبية:
-1. **استخدم الأدوات بدل الاختراع**. لو المستخدم سأل عن قارئ، نادي رياضي، مؤسسة — استدعِ الأداة المناسبة.
-2. **فكّر قبل ما تستدعي الأداة** — قل للمستخدم "راح أبحث عن كذا…" قبل الاستدعاء.
-3. **اعرض نتائج الأدوات بتنسيق جميل** — استخدم markdown (جداول، قوائم، روابط).
-4. **لا تبني مواقع HTML كاملة** — هذي مهمة صفحة /build-from-zero. أنت للتفكير والاستشارة والبحث.
-5. **اقترح أفكار مختلفة** — لو المستخدم طلب تصميم، اقترح 3 زوايا مختلفة مو واحد.
-6. **تعلم من المحادثة** — لو المستخدم قال "ما أبي X" تذكّرها في باقي المحادثة.
+🔑 قواعد العمل (صارمة):
+1. **اسمع العميل بالحرف**. لو قال "أبي موقع تحفيظ قرآن" → ابني تحفيظ قرآن. لا تقترح "ليش ما نسوي مطعم؟".
+2. **فكّر قبل ما تنفّذ**. اكتب بضع أسطر تشرح خطتك (3-5 خطوات قصيرة) ثم استدعِ الأدوات.
+3. **استخدم الأدوات الحقيقية**. ممنوع تخترع أرقام/أسماء قراء/لاعبين/مصادر — استدعِ الأداة.
+4. **بناء موقع = استدعاء build_website**. ما تكتب HTML بنفسك في الردّ النصي. الأداة تتولّى التوليد + تركيب الصور.
+5. **التعديل = update_website**. أي طلب تعديل بعد البناء → استدعِ update_website بنفس الـthread.
+6. **التنوّع**. لو العميل بنى عندك موقعين بنفس الجلسة، الثاني يكون شكل/لون/layout مختلف 100%.
+7. **ممنوع التكرار**. ممنوع تردّ بنفس البنية كل مرّة. لا تستخدم "بسم الله، تشرّفت" في كل ردّ.
+8. **ممنوع الاعتذار**. لو شي ما اشتغل، حلّه أو اقترح بديل — لا تقول "عفواً".
 
-🎨 لما المستخدم يسأل عن أي موضوع سعودي:
-- استدعِ `saudi_official_sources(domain)` أولاً
-- ثم `web_search` لو احتجت أرقام أو تفاصيل حديثة
-- قدّم المعلومات بتنسيق جذّاب مع روابط المصادر
+🎨 لما العميل يطلب موقع:
+- اطرح سؤال واحد ذكي محدّد لو شي غير واضح، وإلا ابدأ مباشرة.
+- استدعِ الأدوات الموثّقة (saudi_official_sources, sports_team_lookup, quran_*) قبل build_website لو السياق يحتاج بيانات حقيقية.
+- ثم استدعِ `build_website` بـbrief عربي تفصيلي (300+ حرف) يصف الجمهور، الشعور، الأقسام المطلوبة، النصوص الموجزة، اقتراح palette.
+- بعد البناء، اعرض على العميل: "✅ بنيت لك الموقع. شف المعاينة على اليمين. تبيني أعدّل شي؟"
 
-💡 أمثلة على طريقة تفكيرك:
-المستخدم: "أفكار لموقع قرآن للأطفال"
-أنت: "فكرت في 3 زوايا مختلفة:
-1. **لعبة تحفيظ** — الطفل يكمل الآية، يكسب نجوم (gamification)
-2. **رحلة تفاعلية** — كل سورة = محطة في خريطة كرتونية
-3. **تحدي العائلة** — الأب يتابع تقدم الأبناء، مكافآت حقيقية
-أي واحدة تعجبك؟ أقدر أفصّل لك تفاصيل أكثر."
-"""
+🎵 لما العميل يطلب موسيقى/صوت:
+- استدعِ `generate_audio` بوصف إنجليزي دقيق (e.g. "calm Arabic-flavored ambient music with soft oud and ney").
+- ارجع له الرابط: "هذا الصوت 🎵 [رابط]".
+
+💡 أمثلة على تفكيرك:
+العميل: "أبي موقع لمطعم سعودي تراثي اسمه 'بيت الجد'"
+أنت: "تمام، بفكر معك:
+1. الفكرة: مطعم سعودي تراثي → palette ترابي/ذهبي + خط ديواني + صور تراث.
+2. الأقسام: hero مع شعار، عن الجد، المنيو (مأكولات شعبية)، الفروع، احجز طاولة، تواصل.
+3. اللغة: نبرة دافئة عائلية.
+الحين أبنيها لك..."
+[يستدعي build_website ببrief طويل تفصيلي]
+
+📏 طول الردّ النصي قبل/بعد الأدوات: قصير وعملي (3-8 أسطر). الذكاء في الأدوات والمخرجات، مو في الكلام الكثير."""
 
 
 # ════════════════════════════════════════════════════════════════════════
@@ -84,7 +103,11 @@ AGENT_SYSTEM_PROMPT = """أنت مساعد ذكاء اصطناعي عربي ذك
 class ChatIn(BaseModel):
     conversation_id: Optional[str] = None
     message: str = Field(..., min_length=1, max_length=4000)
-    model: Optional[str] = "claude-sonnet-4-5"  # or "gpt-4o"
+    model: Optional[str] = "gpt-4o"  # gpt-4o or claude-sonnet-4-5
+
+
+_AUDIO_DIR = Path("/app/backend/static/agent_audio")
+_AUDIO_DIR.mkdir(parents=True, exist_ok=True)
 
 
 def create_agent_router(db, get_current_user):
@@ -98,8 +121,10 @@ def create_agent_router(db, get_current_user):
             {"id": conv_id, "user_id": user["user_id"]}, {"_id": 0}
         )
         messages: List[Dict[str, Any]]
+        current_html: str = ""
         if conv:
             messages = conv.get("messages", [])
+            current_html = conv.get("current_html", "")
         else:
             messages = []
 
@@ -110,59 +135,64 @@ def create_agent_router(db, get_current_user):
             "timestamp": _now(),
         })
 
-        model_pick = (payload.model or "claude-sonnet-4-5").lower()
+        model_pick = (payload.model or "gpt-4o").lower()
 
         async def stream_generator():
+            nonlocal current_html
             try:
-                from modules.freebuild_v2.tools import TOOL_SCHEMAS, execute_tool_call
                 assistant_text = ""
                 tool_events: List[Dict[str, Any]] = []
+                new_html = current_html
 
+                # Single agent loop: GPT-4o with tools (Claude path uses different mechanism)
                 if model_pick.startswith("claude"):
-                    # Use emergentintegrations LlmChat with Claude + tools
-                    async for evt in _claude_stream(messages, AGENT_SYSTEM_PROMPT):
-                        if evt["type"] == "text":
-                            assistant_text += evt["content"]
-                            yield f"data: {json.dumps(evt, ensure_ascii=False)}\n\n"
-                        elif evt["type"] == "tool":
-                            tool_events.append(evt)
-                            yield f"data: {json.dumps(evt, ensure_ascii=False)}\n\n"
-                        elif evt["type"] == "done":
-                            yield f"data: {json.dumps(evt, ensure_ascii=False)}\n\n"
+                    gen = _claude_stream(messages, AGENT_SYSTEM_PROMPT, current_html)
                 else:
-                    # GPT-4o with tool-calling loop
-                    async for evt in _gpt_stream(messages, AGENT_SYSTEM_PROMPT):
-                        if evt["type"] == "text":
-                            assistant_text += evt["content"]
-                            yield f"data: {json.dumps(evt, ensure_ascii=False)}\n\n"
-                        elif evt["type"] == "tool":
-                            tool_events.append(evt)
-                            yield f"data: {json.dumps(evt, ensure_ascii=False)}\n\n"
-                        elif evt["type"] == "done":
-                            yield f"data: {json.dumps(evt, ensure_ascii=False)}\n\n"
+                    gen = _gpt_stream(messages, AGENT_SYSTEM_PROMPT, current_html)
+
+                async for evt in gen:
+                    if evt["type"] == "text":
+                        assistant_text += evt["content"]
+                    elif evt["type"] == "tool":
+                        tool_events.append(evt)
+                        # Capture HTML output from build_website / update_website
+                        if (
+                            evt.get("status") == "done"
+                            and evt.get("name") in ("build_website", "update_website")
+                            and isinstance(evt.get("html"), str)
+                            and len(evt["html"]) > 200
+                        ):
+                            new_html = evt["html"]
+                            # Notify frontend so it refreshes preview
+                            yield f"data: {json.dumps({'type':'html','length':len(new_html)})}\n\n"
+                    yield f"data: {json.dumps(evt, ensure_ascii=False)}\n\n"
 
                 # Persist
                 messages.append({
                     "role": "assistant",
                     "content": assistant_text,
-                    "tool_events": tool_events,
+                    "tool_events": [
+                        # strip large html payloads from stored events
+                        {k: v for k, v in e.items() if k != "html"}
+                        for e in tool_events
+                    ],
                     "timestamp": _now(),
                     "model": model_pick,
                 })
+                update_doc: Dict[str, Any] = {
+                    "id": conv_id,
+                    "user_id": user["user_id"],
+                    "messages": messages,
+                    "updated_at": _now(),
+                }
+                if new_html and new_html != current_html:
+                    update_doc["current_html"] = new_html
                 await db.agent_conversations.update_one(
                     {"id": conv_id},
-                    {"$set": {
-                        "id": conv_id,
-                        "user_id": user["user_id"],
-                        "messages": messages,
-                        "updated_at": _now(),
-                    },
-                    "$setOnInsert": {
-                        "created_at": _now(),
-                    }},
+                    {"$set": update_doc, "$setOnInsert": {"created_at": _now()}},
                     upsert=True,
                 )
-                yield f"data: {json.dumps({'type':'saved','conversation_id':conv_id})}\n\n"
+                yield f"data: {json.dumps({'type':'saved','conversation_id':conv_id,'has_html': bool(new_html)})}\n\n"
             except Exception as e:
                 logger.exception("[AGENT] chat stream failed")
                 err = {"type": "error", "message": str(e)[:240]}
@@ -181,7 +211,7 @@ def create_agent_router(db, get_current_user):
     async def list_conversations(user=Depends(get_current_user)):
         cur = db.agent_conversations.find(
             {"user_id": user["user_id"]},
-            {"_id": 0, "id": 1, "messages": {"$slice": 1}, "updated_at": 1},
+            {"_id": 0, "id": 1, "messages": {"$slice": 1}, "updated_at": 1, "current_html": 1},
         ).sort("updated_at", -1).limit(50)
         out = []
         async for c in cur:
@@ -191,6 +221,7 @@ def create_agent_router(db, get_current_user):
                 "id": c["id"],
                 "preview": preview,
                 "updated_at": c.get("updated_at"),
+                "has_html": bool(c.get("current_html")),
             })
         return {"conversations": out}
 
@@ -212,13 +243,49 @@ def create_agent_router(db, get_current_user):
             raise HTTPException(404, "not found")
         return {"ok": True}
 
+    @router.get("/conversation/{cid}/preview", response_class=HTMLResponse)
+    async def preview_html(cid: str):
+        """Public-ish preview (no auth — uses cid as random token)."""
+        c = await db.agent_conversations.find_one({"id": cid}, {"_id": 0, "current_html": 1})
+        if not c or not c.get("current_html"):
+            return HTMLResponse(_empty_preview_html(), status_code=200)
+        return HTMLResponse(c["current_html"], status_code=200)
+
+    @router.get("/audio/{filename}")
+    async def serve_audio(filename: str):
+        if "/" in filename or ".." in filename:
+            raise HTTPException(400, "invalid filename")
+        fp = _AUDIO_DIR / filename
+        if not fp.exists():
+            raise HTTPException(404, "not found")
+        return FileResponse(str(fp), media_type="audio/mpeg")
+
     return router
 
 
+def _empty_preview_html() -> str:
+    return """<!doctype html><html dir="rtl" lang="ar"><head><meta charset="utf-8">
+<title>معاينة Zitex</title>
+<style>
+body{margin:0;background:#0a0a12;color:#fff;font-family:'Tajawal',system-ui;display:grid;place-items:center;min-height:100vh;text-align:center}
+.empty{padding:40px;border-radius:24px;background:rgba(255,255,255,.04);border:1px solid rgba(245,158,11,.2)}
+h2{color:#fbbf24;font-weight:900}
+p{color:rgba(255,255,255,.5);font-size:14px;line-height:1.8}
+</style></head><body>
+<div class="empty">
+<h2>المعاينة جاهزة</h2>
+<p>اطلب من الذكاء يبني لك موقع<br>وستظهر هنا فوراً ✨</p>
+</div></body></html>"""
+
+
 # ════════════════════════════════════════════════════════════════════════
-#  GPT-4o streaming with tool-calling loop
+#  GPT-4o streaming with tool-calling loop (with current_html injection)
 # ════════════════════════════════════════════════════════════════════════
-async def _gpt_stream(messages: List[Dict[str, Any]], system: str):
+async def _gpt_stream(
+    messages: List[Dict[str, Any]],
+    system: str,
+    current_html: str,
+):
     """Yields events: {type: 'text'|'tool'|'done', ...}"""
     from openai import AsyncOpenAI
     from modules.freebuild_v2.tools import TOOL_SCHEMAS, execute_tool_call
@@ -228,19 +295,32 @@ async def _gpt_stream(messages: List[Dict[str, Any]], system: str):
         yield {"type": "error", "message": "OPENAI_DIRECT_KEY missing"}
         return
     client = AsyncOpenAI(api_key=key)
-    local = [{"role": "system", "content": system}]
+    local: List[Dict[str, Any]] = [{"role": "system", "content": system}]
+    if current_html:
+        local.append({
+            "role": "system",
+            "content": (
+                f"📐 السياق: العميل يملك حالياً موقع HTML قائم بحجم {len(current_html)} حرف. "
+                "أي طلب تعديل → استدعِ update_website. ممنوع تستخدم build_website من الصفر إلا "
+                "لو طلب صريح بـ'ابدأ من جديد' أو 'موقع جديد'."
+            ),
+        })
     for m in messages:
         if m["role"] in ("user", "assistant"):
-            local.append({"role": m["role"], "content": m.get("content", "")})
+            local.append({"role": m["role"], "content": m.get("content", "") or ""})
 
     for iteration in range(8):
-        resp = await client.chat.completions.create(
-            model="gpt-4o",
-            messages=local,
-            tools=TOOL_SCHEMAS,
-            tool_choice="auto",
-            temperature=0.85,
-        )
+        try:
+            resp = await client.chat.completions.create(
+                model="gpt-4o",
+                messages=local,
+                tools=TOOL_SCHEMAS,
+                tool_choice="auto",
+                temperature=0.85,
+            )
+        except Exception as e:
+            yield {"type": "error", "message": f"openai: {str(e)[:200]}"}
+            return
         msg = resp.choices[0].message
         if msg.tool_calls:
             local.append({
@@ -258,16 +338,37 @@ async def _gpt_stream(messages: List[Dict[str, Any]], system: str):
                     args = json.loads(tc.function.arguments or "{}")
                 except Exception:
                     args = {}
+                # Auto-inject current_html for update_website
+                if tc.function.name == "update_website":
+                    args["current_html"] = current_html
                 yield {"type": "tool", "status": "calling",
-                       "name": tc.function.name, "args": args}
+                       "name": tc.function.name,
+                       "args": {k: v for k, v in args.items() if k != "current_html"}}
                 result = await execute_tool_call(tc.function.name, args)
-                yield {"type": "tool", "status": "done",
+                # Update current_html if a website-building tool succeeded
+                evt = {"type": "tool", "status": "done",
                        "name": tc.function.name, "ok": result.get("ok"),
                        "summary": _tool_summary(tc.function.name, result)}
+                if (
+                    tc.function.name in ("build_website", "update_website")
+                    and result.get("ok")
+                    and isinstance(result.get("html"), str)
+                ):
+                    current_html = result["html"]
+                    evt["html"] = current_html  # captured by outer stream_generator
+                if tc.function.name == "generate_audio" and result.get("ok"):
+                    evt["url"] = result.get("url")
+                if tc.function.name == "generate_image_url" and result.get("ok"):
+                    evt["url"] = result.get("url")
+                yield evt
+                # Feed tool result back — but trim HTML payload from the conversation
+                tool_payload = {k: v for k, v in result.items() if k != "html"}
+                if "html" in result:
+                    tool_payload["html_size"] = len(result["html"])
                 local.append({
                     "role": "tool",
                     "tool_call_id": tc.id,
-                    "content": json.dumps(result, ensure_ascii=False)[:6000],
+                    "content": json.dumps(tool_payload, ensure_ascii=False)[:6000],
                 })
             continue
         text = msg.content or ""
@@ -275,7 +376,7 @@ async def _gpt_stream(messages: List[Dict[str, Any]], system: str):
         chunk_size = 40
         for i in range(0, len(text), chunk_size):
             yield {"type": "text", "content": text[i:i+chunk_size]}
-            await asyncio.sleep(0.02)
+            await asyncio.sleep(0.015)
         yield {"type": "done"}
         return
     yield {"type": "text", "content": "\n(وصلت للحد الأقصى من استخدام الأدوات — أرجع لك بما عندي الآن)"}
@@ -283,13 +384,15 @@ async def _gpt_stream(messages: List[Dict[str, Any]], system: str):
 
 
 # ════════════════════════════════════════════════════════════════════════
-#  Claude streaming via emergentintegrations
+#  Claude streaming via emergentintegrations (simulated tool-calling)
 # ════════════════════════════════════════════════════════════════════════
-async def _claude_stream(messages: List[Dict[str, Any]], system: str):
-    """Claude Sonnet 4.5 via emergentintegrations LlmChat.
-    Note: current LlmChat doesn't expose native tool calling, so we
-    do a simulated approach — the model returns JSON describing tool
-    calls when it wants them. Keeps streaming via text chunks."""
+async def _claude_stream(
+    messages: List[Dict[str, Any]],
+    system: str,
+    current_html: str,
+):
+    """Claude path: parses tool_call blocks from text. Less reliable than GPT-4o
+    for tool use, so we recommend GPT-4o for website building."""
     try:
         from emergentintegrations.llm.chat import LlmChat, UserMessage
     except Exception as e:
@@ -302,26 +405,25 @@ async def _claude_stream(messages: List[Dict[str, Any]], system: str):
         yield {"type": "error", "message": "EMERGENT_LLM_KEY missing"}
         return
 
-    # Prepend tool-usage instructions to the system prompt
     tool_hint = (
-        "\n\n🛠️ الأدوات المتاحة (تستدعيها بهذا الصيغة بالضبط عند الحاجة):\n"
-        "لاستدعاء أداة، اكتب في ردك block خاص:\n"
+        "\n\n🛠️ الأدوات المتاحة. لاستدعاء أداة، اكتب block بهذا الشكل بالضبط:\n"
         "```tool_call\n"
         "{\"name\":\"tool_name\",\"args\":{...}}\n"
         "```\n"
-        "سأقوم بتنفيذها وأرجع لك النتيجة، ثم تكمل ردك.\n"
-        "الأدوات: "
-        + ", ".join(s["function"]["name"] for s in TOOL_SCHEMAS)
+        "سأنفّذها وأرجع لك النتيجة، ثم تكمل ردّك.\n"
+        "الأدوات: " + ", ".join(s["function"]["name"] for s in TOOL_SCHEMAS)
     )
+    if current_html:
+        tool_hint += f"\n\n📐 يوجد موقع حالي ({len(current_html)} حرف). أي تعديل استخدم update_website."
 
     session_id = f"agent-{uuid.uuid4().hex[:12]}"
-    conversation_history_text = ""
+    history_text = ""
     for m in messages[:-1]:
         role = "المستخدم" if m["role"] == "user" else "أنت"
-        conversation_history_text += f"\n\n{role}: {m.get('content','')[:1000]}"
+        history_text += f"\n\n{role}: {m.get('content','')[:1000]}"
 
     last_user = messages[-1].get("content", "")
-    full_input = conversation_history_text + f"\n\nالمستخدم: {last_user}"
+    full_input = history_text + f"\n\nالمستخدم: {last_user}"
 
     chat = LlmChat(
         api_key=key,
@@ -338,17 +440,15 @@ async def _claude_stream(messages: List[Dict[str, Any]], system: str):
             return
 
         text = str(response or "")
-        # Parse tool_call blocks
         import re as _re
         tool_blocks = _re.findall(r"```tool_call\s*(\{[^`]+?\})\s*```", text)
 
         if tool_blocks:
-            # Stream the text BEFORE the first tool_call block
             pre_text = text.split("```tool_call")[0].strip()
             if pre_text:
                 for i in range(0, len(pre_text), 40):
                     yield {"type": "text", "content": pre_text[i:i+40]}
-                    await asyncio.sleep(0.02)
+                    await asyncio.sleep(0.015)
             results = []
             for blob in tool_blocks:
                 try:
@@ -357,25 +457,35 @@ async def _claude_stream(messages: List[Dict[str, Any]], system: str):
                     args = parsed.get("args", {})
                 except Exception:
                     continue
-                yield {"type": "tool", "status": "calling", "name": name, "args": args}
+                if name == "update_website":
+                    args["current_html"] = current_html
+                yield {"type": "tool", "status": "calling", "name": name,
+                       "args": {k: v for k, v in args.items() if k != "current_html"}}
                 result = await execute_tool_call(name, args)
-                yield {"type": "tool", "status": "done", "name": name,
+                evt = {"type": "tool", "status": "done", "name": name,
                        "ok": result.get("ok"),
                        "summary": _tool_summary(name, result)}
-                results.append({"name": name, "result": result})
+                if name in ("build_website", "update_website") and result.get("ok") and result.get("html"):
+                    current_html = result["html"]
+                    evt["html"] = current_html
+                if name in ("generate_audio", "generate_image_url") and result.get("ok"):
+                    evt["url"] = result.get("url")
+                yield evt
+                trimmed = {k: v for k, v in result.items() if k != "html"}
+                if "html" in result:
+                    trimmed["html_size"] = len(result["html"])
+                results.append({"name": name, "result": trimmed})
 
-            # Feed results back and continue
             results_text = "\n\nنتائج الأدوات:\n"
             for r in results:
                 trimmed = json.dumps(r["result"], ensure_ascii=False)[:3000]
                 results_text += f"• {r['name']}: {trimmed}\n"
-            full_input = results_text + "\n\nأكمل ردك للمستخدم بناءً على هذه النتائج (بدون tool_call جديد إلا لو ضروري جداً)."
+            full_input = results_text + "\n\nأكمل ردّك للمستخدم بناءً على النتائج (بدون tool_call جديد إلا لو ضروري)."
             continue
 
-        # No tool calls → stream text and done
         for i in range(0, len(text), 40):
             yield {"type": "text", "content": text[i:i+40]}
-            await asyncio.sleep(0.02)
+            await asyncio.sleep(0.015)
         yield {"type": "done"}
         return
 
@@ -392,8 +502,7 @@ def _tool_summary(name: str, result: Dict[str, Any]) -> str:
     if name == "web_fetch":
         return f"جلبت: {(result.get('title') or '')[:60]}"
     if name == "quran_reciter_lookup":
-        c = result.get("count", 0)
-        return f"{c} قارئ"
+        return f"{result.get('count', 0)} قارئ"
     if name == "quran_verse_fetch":
         return f"آية {result.get('surah')}:{result.get('ayah')}"
     if name == "saudi_official_sources":
@@ -404,4 +513,10 @@ def _tool_summary(name: str, result: Dict[str, Any]) -> str:
         return f"{t.get('name','')} ({result.get('players_count',0)} لاعب)"
     if name == "generate_image_url":
         return "تم توليد الصورة"
+    if name == "generate_audio":
+        return result.get("summary", "تم توليد الصوت")
+    if name == "build_website":
+        return result.get("summary", "تم بناء الموقع")
+    if name == "update_website":
+        return result.get("summary", "تم تحديث الموقع")
     return "تم"

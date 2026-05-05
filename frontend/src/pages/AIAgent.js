@@ -4,6 +4,7 @@ import { Textarea } from '@/components/ui/textarea';
 import {
   Send, Loader2, Sparkles, ArrowLeft, Trash2,
   Wrench, CheckCircle2, Clock, Plus, MessageSquare,
+  Eye, Code2, Download, ExternalLink, RefreshCw,
 } from 'lucide-react';
 import { Toaster, toast } from 'sonner';
 import { useNavigate } from 'react-router-dom';
@@ -16,12 +17,16 @@ export default function AIAgent() {
   const [input, setInput] = useState('');
   const [sending, setSending] = useState(false);
   const [conversationId, setConversationId] = useState(null);
-  const [model, setModel] = useState('claude-sonnet-4-5');
+  const [model, setModel] = useState('gpt-4o');
   const [conversations, setConversations] = useState([]);
   const [currentStream, setCurrentStream] = useState('');
   const [currentTools, setCurrentTools] = useState([]);
+  const [hasHtml, setHasHtml] = useState(false);
+  const [previewKey, setPreviewKey] = useState(0);
+  const [previewMode, setPreviewMode] = useState('preview'); // preview | mobile
+  const [showSidebar, setShowSidebar] = useState(false);
   const scrollRef = useRef(null);
-  const token = typeof window !== 'undefined' ? localStorage.getItem('zitex_token') : null;
+  const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
 
   useEffect(() => {
     if (!token) { nav('/login'); return; }
@@ -50,6 +55,9 @@ export default function AIAgent() {
       const d = await r.json();
       setMessages(d.messages || []);
       setConversationId(cid);
+      setHasHtml(!!d.current_html);
+      setPreviewKey((k) => k + 1);
+      setShowSidebar(false);
     } catch (e) { toast.error('فشل التحميل'); }
   };
 
@@ -58,6 +66,8 @@ export default function AIAgent() {
     setConversationId(null);
     setCurrentStream('');
     setCurrentTools([]);
+    setHasHtml(false);
+    setShowSidebar(false);
   };
 
   const deleteConversation = async (cid) => {
@@ -70,6 +80,22 @@ export default function AIAgent() {
       if (cid === conversationId) newChat();
       loadConversations();
     } catch (e) { toast.error(e.message); }
+  };
+
+  const downloadHtml = async () => {
+    if (!conversationId) return;
+    try {
+      const r = await fetch(`${API}/api/agent/conversation/${conversationId}/preview`);
+      const html = await r.text();
+      const blob = new Blob([html], { type: 'text/html' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `zitex-site-${conversationId.slice(0, 8)}.html`;
+      a.click();
+      URL.revokeObjectURL(url);
+      toast.success('تم تحميل الملف');
+    } catch (e) { toast.error('فشل التحميل'); }
   };
 
   const send = async () => {
@@ -117,8 +143,13 @@ export default function AIAgent() {
             } else if (evt.type === 'tool') {
               toolEvents.push(evt);
               setCurrentTools([...toolEvents]);
+            } else if (evt.type === 'html') {
+              setHasHtml(true);
+              setPreviewKey((k) => k + 1);
+              toast.success(`✨ الموقع جاهز (${(evt.length/1024).toFixed(0)} KB)`);
             } else if (evt.type === 'saved') {
               setConversationId(evt.conversation_id);
+              setHasHtml(!!evt.has_html);
               loadConversations();
             } else if (evt.type === 'error') {
               toast.error(evt.message);
@@ -141,13 +172,24 @@ export default function AIAgent() {
     }
   };
 
+  const previewSrc = conversationId
+    ? `${API}/api/agent/conversation/${conversationId}/preview?v=${previewKey}`
+    : null;
+
   return (
-    <div dir="rtl" className="min-h-screen bg-[#050505] text-white flex">
+    <div dir="rtl" className="h-screen bg-[#050505] text-white flex flex-col overflow-hidden">
       <Toaster richColors position="top-center" />
 
-      {/* Sidebar: conversations */}
-      <aside className="hidden md:flex w-64 flex-col border-e border-white/10 bg-black/40">
-        <div className="p-3 flex items-center gap-2 border-b border-white/10">
+      {/* Top bar (mobile + desktop) */}
+      <header className="h-14 px-3 md:px-4 border-b border-white/10 flex items-center justify-between bg-black/40 backdrop-blur z-20 flex-shrink-0">
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setShowSidebar((s) => !s)}
+            data-testid="toggle-sidebar"
+            className="md:hidden p-2 hover:bg-white/5 rounded"
+          >
+            <MessageSquare className="w-4 h-4" />
+          </button>
           <button onClick={() => nav('/')} className="p-1.5 hover:bg-white/5 rounded">
             <ArrowLeft className="w-4 h-4" />
           </button>
@@ -155,137 +197,205 @@ export default function AIAgent() {
             <Sparkles className="w-4 h-4 text-amber-400" /> Zitex AI
           </h1>
         </div>
-        <button
-          onClick={newChat}
-          data-testid="new-chat-btn"
-          className="m-3 px-3 py-2 rounded-lg bg-amber-500 text-black font-bold flex items-center gap-2 justify-center hover:bg-amber-400 transition"
-        >
-          <Plus className="w-4 h-4" /> محادثة جديدة
-        </button>
-        <div className="flex-1 overflow-y-auto px-2 space-y-1">
-          {conversations.length === 0 ? (
-            <div className="text-center text-white/40 text-xs p-4">لا توجد محادثات</div>
-          ) : conversations.map((c) => (
-            <div
-              key={c.id}
-              data-testid={`conv-${c.id}`}
-              onClick={() => loadConversation(c.id)}
-              className={`group p-2 rounded-lg cursor-pointer flex items-start gap-2 text-xs transition ${conversationId === c.id ? 'bg-amber-500/15 border border-amber-400/30' : 'hover:bg-white/5'}`}
-            >
-              <MessageSquare className="w-3.5 h-3.5 mt-0.5 flex-shrink-0 opacity-60" />
-              <span className="flex-1 line-clamp-2 leading-snug">{c.preview || 'محادثة'}</span>
-              <button
-                onClick={(e) => { e.stopPropagation(); deleteConversation(c.id); }}
-                className="opacity-0 group-hover:opacity-100 text-rose-400 hover:text-rose-300"
-              >
-                <Trash2 className="w-3 h-3" />
-              </button>
-            </div>
-          ))}
+        <div className="flex items-center gap-2">
+          <select
+            value={model}
+            onChange={(e) => setModel(e.target.value)}
+            data-testid="model-picker"
+            className="bg-black/40 border border-white/15 rounded-md px-2 py-1 text-[11px]"
+          >
+            <option value="gpt-4o">GPT-4o (موصى)</option>
+            <option value="claude-sonnet-4-5">Claude Sonnet 4.5</option>
+          </select>
+          <button
+            onClick={newChat}
+            data-testid="new-chat-btn"
+            className="px-3 py-1.5 rounded-md bg-amber-500 text-black text-xs font-bold flex items-center gap-1 hover:bg-amber-400"
+          >
+            <Plus className="w-3.5 h-3.5" /> جديدة
+          </button>
         </div>
-      </aside>
+      </header>
 
-      {/* Main chat */}
-      <main className="flex-1 flex flex-col">
-        {/* Header */}
-        <header className="px-4 py-3 border-b border-white/10 flex items-center justify-between bg-black/30 backdrop-blur">
-          <div className="flex items-center gap-3">
-            <h2 className="font-black text-base">مساعدك الذكي</h2>
-            <select
-              value={model}
-              onChange={(e) => setModel(e.target.value)}
-              data-testid="model-picker"
-              className="bg-black/40 border border-white/15 rounded-md px-2 py-1 text-xs"
-            >
-              <option value="claude-sonnet-4-5">Claude Sonnet 4.5</option>
-              <option value="gpt-4o">GPT-4o</option>
-            </select>
+      {/* Main 3-column layout */}
+      <div className="flex-1 flex overflow-hidden">
+        {/* Sidebar — conversations */}
+        <aside
+          className={`${showSidebar ? 'flex' : 'hidden md:flex'} flex-col w-64 border-e border-white/10 bg-black/30 flex-shrink-0`}
+        >
+          <div className="p-2 border-b border-white/10 text-[10px] uppercase tracking-widest text-white/40">
+            المحادثات
           </div>
-          <div className="text-[10px] text-white/40">
-            {messages.length} رسالة
-          </div>
-        </header>
-
-        {/* Messages */}
-        <div ref={scrollRef} className="flex-1 overflow-y-auto p-4 md:p-6 space-y-4">
-          {messages.length === 0 && !currentStream && (
-            <div className="max-w-2xl mx-auto text-center py-12">
-              <Sparkles className="w-12 h-12 text-amber-400 mx-auto mb-4" />
-              <h3 className="text-2xl font-black mb-2">كيف أقدر أساعدك اليوم؟</h3>
-              <p className="text-white/60 text-sm mb-6">
-                اسألني أي شي، أو جرّب واحد من الأمثلة:
-              </p>
-              <div className="grid md:grid-cols-2 gap-3">
-                {[
-                  '⚽ جيب لي لاعبين نادي الهلال الحاليين',
-                  '🕌 اقترح أفكار لموقع تحفيظ قرآن مبتكر',
-                  '🎓 المصادر التعليمية الرسمية في السعودية',
-                  '📖 نص سورة الفاتحة كامل من المصحف',
-                ].map((ex) => (
-                  <button
-                    key={ex}
-                    onClick={() => setInput(ex.replace(/^\W+\s/, ''))}
-                    data-testid="example-chip"
-                    className="text-start p-3 rounded-xl border border-white/10 bg-white/[0.03] hover:border-amber-400/30 hover:bg-amber-500/5 text-sm transition"
-                  >{ex}</button>
-                ))}
+          <div className="flex-1 overflow-y-auto px-2 py-2 space-y-1">
+            {conversations.length === 0 ? (
+              <div className="text-center text-white/40 text-xs p-4">لا توجد بعد</div>
+            ) : conversations.map((c) => (
+              <div
+                key={c.id}
+                data-testid={`conv-${c.id}`}
+                onClick={() => loadConversation(c.id)}
+                className={`group p-2 rounded-lg cursor-pointer flex items-start gap-2 text-xs transition ${conversationId === c.id ? 'bg-amber-500/15 border border-amber-400/30' : 'hover:bg-white/5'}`}
+              >
+                <MessageSquare className="w-3.5 h-3.5 mt-0.5 flex-shrink-0 opacity-60" />
+                <span className="flex-1 line-clamp-2 leading-snug">
+                  {c.preview || 'محادثة'}
+                  {c.has_html && <span className="ms-1 text-amber-400">●</span>}
+                </span>
+                <button
+                  onClick={(e) => { e.stopPropagation(); deleteConversation(c.id); }}
+                  className="opacity-0 group-hover:opacity-100 text-rose-400 hover:text-rose-300"
+                >
+                  <Trash2 className="w-3 h-3" />
+                </button>
               </div>
-            </div>
-          )}
+            ))}
+          </div>
+        </aside>
 
-          {messages.map((m, i) => (
-            <MessageBubble key={i} message={m} />
-          ))}
-
-          {(currentTools.length > 0 || currentStream) && (
-            <div className="max-w-3xl">
-              {currentTools.length > 0 && (
-                <div className="space-y-1.5 mb-2">
-                  {currentTools.map((t, i) => (
-                    <ToolPill key={i} tool={t} />
+        {/* Chat panel */}
+        <main className={`flex flex-col ${hasHtml ? 'lg:w-[42%] xl:w-[40%]' : 'flex-1'} border-e border-white/10 min-w-0`}>
+          <div ref={scrollRef} className="flex-1 overflow-y-auto p-4 md:p-6 space-y-4">
+            {messages.length === 0 && !currentStream && (
+              <div className="max-w-2xl mx-auto text-center py-12">
+                <Sparkles className="w-12 h-12 text-amber-400 mx-auto mb-4" />
+                <h3 className="text-2xl font-black mb-2">شنو نبني اليوم؟</h3>
+                <p className="text-white/60 text-sm mb-6">
+                  اطلب أي موقع، أي فكرة. أنا أفكّر معك وأبنيها مباشرة.
+                </p>
+                <div className="grid md:grid-cols-2 gap-3 text-start">
+                  {[
+                    { i: '🕌', t: 'موقع تحفيظ قرآن سعودي بـ5 قراء وأجر يومي' },
+                    { i: '⚽', t: 'موقع نادي الهلال مع لاعبيه الحاليين' },
+                    { i: '🍽️', t: 'مطعم سعودي تراثي اسمه "بيت الجد"' },
+                    { i: '🎨', t: 'بورتفوليو لمصمم جرافيك بألوان نيون' },
+                  ].map((ex) => (
+                    <button
+                      key={ex.t}
+                      onClick={() => setInput(ex.t)}
+                      data-testid="example-chip"
+                      className="p-3 rounded-xl border border-white/10 bg-white/[0.03] hover:border-amber-400/30 hover:bg-amber-500/5 text-sm transition flex items-start gap-2"
+                    >
+                      <span className="text-xl">{ex.i}</span>
+                      <span className="leading-snug">{ex.t}</span>
+                    </button>
                   ))}
                 </div>
-              )}
-              {currentStream && (
-                <div className="bg-white/[0.04] border border-white/10 rounded-2xl p-4">
-                  <div className="prose prose-invert prose-sm max-w-none whitespace-pre-wrap leading-relaxed">
-                    {currentStream}
-                    <span className="inline-block w-1.5 h-4 bg-amber-400 animate-pulse ms-1" />
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
-        </div>
+              </div>
+            )}
 
-        {/* Composer */}
-        <div className="p-3 border-t border-white/10 bg-black/40">
-          <div className="max-w-3xl mx-auto flex gap-2 items-end">
-            <Textarea
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' && !e.shiftKey) {
-                  e.preventDefault();
-                  send();
-                }
-              }}
-              placeholder="اكتب سؤالك هنا… (Shift+Enter لسطر جديد)"
-              data-testid="agent-input"
-              disabled={sending}
-              className="bg-black/60 border-white/15 min-h-[60px] max-h-[200px] resize-none"
-            />
-            <Button
-              onClick={send}
-              disabled={sending || !input.trim()}
-              data-testid="agent-send-btn"
-              className="bg-amber-500 hover:bg-amber-400 text-black font-black h-[60px] px-5"
-            >
-              {sending ? <Loader2 className="w-5 h-5 animate-spin" /> : <Send className="w-5 h-5" />}
-            </Button>
+            {messages.map((m, i) => (
+              <MessageBubble key={i} message={m} />
+            ))}
+
+            {(currentTools.length > 0 || currentStream) && (
+              <div className="max-w-3xl">
+                {currentTools.length > 0 && (
+                  <div className="space-y-1.5 mb-2">
+                    {currentTools.map((t, i) => (
+                      <ToolPill key={i} tool={t} />
+                    ))}
+                  </div>
+                )}
+                {currentStream && (
+                  <div className="bg-white/[0.04] border border-white/10 rounded-2xl p-4">
+                    <div className="prose prose-invert prose-sm max-w-none whitespace-pre-wrap leading-relaxed">
+                      {currentStream}
+                      <span className="inline-block w-1.5 h-4 bg-amber-400 animate-pulse ms-1" />
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
-        </div>
-      </main>
+
+          {/* Composer */}
+          <div className="p-3 border-t border-white/10 bg-black/40 flex-shrink-0">
+            <div className="flex gap-2 items-end">
+              <Textarea
+                value={input}
+                onChange={(e) => setInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    send();
+                  }
+                }}
+                placeholder="اكتب طلبك… (Shift+Enter سطر جديد)"
+                data-testid="agent-input"
+                disabled={sending}
+                className="bg-black/60 border-white/15 min-h-[60px] max-h-[200px] resize-none text-sm"
+              />
+              <Button
+                onClick={send}
+                disabled={sending || !input.trim()}
+                data-testid="agent-send-btn"
+                className="bg-amber-500 hover:bg-amber-400 text-black font-black h-[60px] px-5"
+              >
+                {sending ? <Loader2 className="w-5 h-5 animate-spin" /> : <Send className="w-5 h-5" />}
+              </Button>
+            </div>
+          </div>
+        </main>
+
+        {/* Live preview pane */}
+        {hasHtml && previewSrc && (
+          <section className="hidden lg:flex flex-col flex-1 bg-[#0a0a0f] min-w-0">
+            <div className="h-12 px-3 border-b border-white/10 flex items-center justify-between flex-shrink-0">
+              <div className="flex items-center gap-2 text-xs">
+                <Eye className="w-3.5 h-3.5 text-emerald-400" />
+                <span className="text-white/70">المعاينة المباشرة</span>
+              </div>
+              <div className="flex items-center gap-1">
+                <button
+                  onClick={() => setPreviewKey((k) => k + 1)}
+                  data-testid="refresh-preview"
+                  className="p-1.5 rounded hover:bg-white/5 text-white/60"
+                  title="تحديث"
+                >
+                  <RefreshCw className="w-3.5 h-3.5" />
+                </button>
+                <button
+                  onClick={() => setPreviewMode((m) => m === 'mobile' ? 'preview' : 'mobile')}
+                  data-testid="toggle-mobile"
+                  className={`px-2 py-1 rounded text-[10px] font-bold ${previewMode === 'mobile' ? 'bg-amber-500 text-black' : 'bg-white/5 text-white/60 hover:bg-white/10'}`}
+                >
+                  جوال
+                </button>
+                <button
+                  onClick={downloadHtml}
+                  data-testid="download-html"
+                  className="p-1.5 rounded hover:bg-white/5 text-white/60"
+                  title="تحميل HTML"
+                >
+                  <Download className="w-3.5 h-3.5" />
+                </button>
+                <a
+                  href={previewSrc}
+                  target="_blank"
+                  rel="noreferrer"
+                  data-testid="open-preview"
+                  className="p-1.5 rounded hover:bg-white/5 text-white/60"
+                  title="فتح في نافذة"
+                >
+                  <ExternalLink className="w-3.5 h-3.5" />
+                </a>
+              </div>
+            </div>
+            <div className="flex-1 overflow-auto bg-black flex items-start justify-center p-3">
+              <iframe
+                key={previewKey}
+                src={previewSrc}
+                title="معاينة الموقع"
+                data-testid="site-preview"
+                sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-modals"
+                className={`bg-white shadow-2xl shadow-amber-900/20 border border-white/10 rounded-lg ${
+                  previewMode === 'mobile' ? 'w-[375px] h-[680px]' : 'w-full h-full'
+                }`}
+              />
+            </div>
+          </section>
+        )}
+      </div>
     </div>
   );
 }
@@ -320,10 +430,11 @@ function MessageBubble({ message }) {
 
 function ToolPill({ tool }) {
   const isCalling = tool.status === 'calling';
+  const isAudio = tool.name === 'generate_audio' && tool.url;
   return (
     <div
       data-testid={`tool-${tool.name}`}
-      className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-xs border transition ${
+      className={`flex flex-wrap items-center gap-2 px-3 py-1.5 rounded-full text-xs border transition ${
         isCalling
           ? 'bg-amber-500/10 border-amber-400/30 text-amber-200'
           : tool.ok === false
@@ -338,9 +449,12 @@ function ToolPill({ tool }) {
       ) : (
         <CheckCircle2 className="w-3 h-3" />
       )}
-      <span className="font-mono">{tool.name}</span>
+      <span className="font-mono text-[10px]">{tool.name}</span>
       {!isCalling && tool.summary && (
         <span className="opacity-80">· {tool.summary}</span>
+      )}
+      {isAudio && (
+        <audio controls src={tool.url} className="h-7 max-w-full" />
       )}
     </div>
   );
