@@ -3102,6 +3102,11 @@ try:
     from modules.freebuild_v2 import create_freebuild_v2_router
     _fb2_router = create_freebuild_v2_router(db, get_current_user)
     app.include_router(_fb2_router)
+
+    # Zitex AI Agent — free-form conversational chat with tools
+    from modules.agent import create_agent_router
+    _agent_router = create_agent_router(db, get_current_user)
+    app.include_router(_agent_router)
     logging.getLogger(__name__).info("FreeBuild v2 module registered")
 except Exception as _fb2e:
     logging.getLogger(__name__).error(f"Failed to register freebuild v2 module: {_fb2e}", exc_info=True)
