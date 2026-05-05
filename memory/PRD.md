@@ -6,6 +6,49 @@
 ## User Language: Arabic (العربية)
 
 
+### 🆕 May 5, 2026 — UNIFIED THINKING AGENT (build_website + audio + live preview) ✅
+
+طلب المستخدم: "ركّز فقط على الذكاء الاصطناعي اللي ينشئ مواقع من الصفر بكامل الأدوات. ذكاء مفكّر مثلك، يجيب تصاميم جديدة دائماً، يسمع العميل، ينفّذ كلامه بالضبط. ما في عفواً. ما في تنوع شكل ثابت. لو ألف وكيل، نفس الذكاء."
+
+**ما تم بناؤه**:
+
+🛠️ **3 أدوات جديدة في `tools.py`**:
+1. `build_website(brief, style_direction?)` — يبني SPA كامل HTML من brief عربي تفصيلي. يستخدم GPT-4o + post-processing بـNano Banana للصور.
+2. `update_website(instructions)` — تعديل جراحي للموقع الحالي. الـcurrent_html يُحقن تلقائياً بواسطة الوكيل.
+3. `generate_audio(description, duration_seconds)` — توليد موسيقى محيطية / مؤثرات صوتية (1-22 ثانية) عبر ElevenLabs Sound Generation. ترجع mp3 URL جاهز للتضمين.
+
+🧠 **Agent module جديد (`/app/backend/modules/agent/__init__.py`)**:
+- `POST /api/agent/chat` — SSE streaming مع loop tool-calling (8 iterations max)
+- يحتفظ `current_html` لكل محادثة في MongoDB → يحقنه تلقائياً في `update_website`
+- `GET /api/agent/conversation/{id}/preview` — يقدّم الـHTML الحالي كـtext/html (للـiframe)
+- `GET /api/agent/audio/{filename}` — يقدّم الـmp3 المولّد
+- system prompt صارم: ممنوع اعتذار، ممنوع تكرار تصاميم، اسمع العميل بالحرف، استخدم الأدوات بدل الاختراع
+- يدعم نموذجين: GPT-4o (مع tool-calling أصلي) و Claude Sonnet 4.5 (مع tool_call blocks)
+
+🎨 **Frontend `AIAgent.js` (split-pane)**:
+- يسار: sidebar محادثات + chat panel + composer
+- يمين: iframe معاينة مباشرة (تظهر فقط لما `current_html` موجود)
+- preview controls: تحديث، تحميل HTML، فتح في tab جديد، toggle جوال/desktop
+- يعرض tool pills أثناء الاستدعاء (calling) وبعد الاكتمال (done)
+- inline `<audio controls>` للـgenerate_audio events
+- 4 example chips (موقع تحفيظ قرآن، نادي رياضي، مطعم تراثي، بورتفوليو)
+
+🐛 **Bug fix رئيسي**: AIAgent.js كان يقرأ التوكن من `localStorage.getItem('zitex_token')` لكن باقي التطبيق يستخدم `'token'` → كان يحوّل المستخدم على /login فوراً (the "login loop" bug). تم الإصلاح.
+
+🏠 **Landing page CTA**: زر الـhero الرئيسي الآن يوجّه على `/ai-agent` بدل `/build-from-zero` (data-testid=`hero-ai-agent`).
+
+**الأدوات المتاحة الكاملة (10)**:
+quran_reciter_lookup, quran_verse_fetch, web_search, web_fetch, generate_image_url, saudi_official_sources, sports_team_lookup, **build_website**, **update_website**, **generate_audio**
+
+**اختبار testing_agent_v3 (iteration 28)**:
+- Backend: 92% (12/13 tests passed). Issue واحد minor (path traversal في audio endpoint — محمي على ingress).
+- Frontend: 100% — auth، chat SSE streaming، tool calls، conversations sidebar كلها تعمل.
+- pytest file: `/app/backend/tests/test_agent_endpoints.py` (365 سطر)
+- E2E verified: agent استدعى quran_reciter_lookup ورجّع 3 قراء حقيقيين بـURLs من mp3quran.net
+
+**Commit**: `11f4c6a` + auto-commit `563a18d` → push `zuhair646-debug/zitex:main` ✅
+
+
 ### 🆕 May 4, 2026 — INTERACTIVE QURAN PLAYER + SAUDI SOURCES + REDESIGN MODE ✅
 
 طلب المستخدم: "ابي ذكاء صناعي متكامل قادر على انشاء اي متطلب… طلب قرآن مكتوب يجيبه واضح من مصادر معتمدة، طلب رياضة يجيب لاعبين حقيقيين، طلب تعليم في المملكة يجيب من المصادر السعودية… يفكّر مثل الإنسان."
