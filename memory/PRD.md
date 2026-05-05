@@ -6,6 +6,49 @@
 ## User Language: Arabic (العربية)
 
 
+### 🆕 May 5, 2026 — SURGICAL EDIT TOOLS (set_theme + add_page + edit_section) ✅
+
+طلب المستخدم: "كل تحديث على موقعي فشل تحديث + ابني add_page و set_theme كأدوات منفصلة عشان التحرير الجراحي يكون أسرع من إعادة توليد كامل"
+
+**سبب فشل التحديث المكتشف**: `update_website` كان يعيد توليد الموقع كامل عبر GPT-4o، اللي عنده cap 16K output tokens. مع موقع 50-60KB → التوليد يقطّع ويرجع HTML مكسور. الـimage post-process يشتغل على كل الصور حتى المُولّدة سابقاً.
+
+**الحل المُنفّذ — 3 أدوات جراحية في `tools.py`**:
+
+🎨 **`set_theme(palette?, fonts?, mood?)`**:
+- يستخرج `<style>...</style>` block من الـHTML الحالي
+- يستدعي GPT-4o لإعادة كتابة CSS فقط (لا HTML، لا صور)
+- يستبدل الـstyle block فقط
+- ~5-10 ثانية، موثوق 100%
+- استخدام: "غيّر اللون لذهبي" → set_theme(palette="dark + gold")
+
+📄 **`add_page(label, slug?, brief?)`**:
+- يولّد section جديد واحد فقط
+- post-process للصور الجديدة فقط (scoped)
+- يحقن `<a href="#/{slug}">` في `<nav>` تلقائياً
+- يضيف الـsection قبل `</main>`
+- ~10-15 ثانية مع صورة
+
+✏️ **`edit_section(target, instructions)`**:
+- يبحث عن الـsection بـscoring (data-page/id/class/heading)
+- يستدعي GPT-4o على الـsection فقط (مو الموقع كامل)
+- post-process للصور الجديدة فقط (يحفظ القديمة)
+- ~10 ثانية، يتجنب 16K cap
+
+🧠 **Agent system prompt محدّث**:
+- "التعديل = اختر الأداة الجراحية الصح" مع routing rules:
+  - ألوان/خط/مزاج → set_theme
+  - صفحة جديدة → add_page
+  - تعديل قسم → edit_section
+  - update_website = آخر خيار (deprecated for narrow edits)
+
+**اختبار مُحقّق محلياً**:
+- set_theme: ok=True, 537 chars, :root rewritten ✅
+- edit_section(about): ok=True, edited='about' ✅
+- add_page(contact): ok=True, has new section + nav link ✅
+
+**Commit**: `ee85db5` → push `zuhair646-debug/zitex:main` ✅
+
+
 ### 🆕 May 5, 2026 — UNIFIED THINKING AGENT (build_website + audio + live preview) ✅
 
 طلب المستخدم: "ركّز فقط على الذكاء الاصطناعي اللي ينشئ مواقع من الصفر بكامل الأدوات. ذكاء مفكّر مثلك، يجيب تصاميم جديدة دائماً، يسمع العميل، ينفّذ كلامه بالضبط. ما في عفواً. ما في تنوع شكل ثابت. لو ألف وكيل، نفس الذكاء."
