@@ -17,7 +17,7 @@ export default function AIAgent() {
   const [input, setInput] = useState('');
   const [sending, setSending] = useState(false);
   const [conversationId, setConversationId] = useState(null);
-  const [model, setModel] = useState('gpt-4o');
+  const [model, setModel] = useState('claude-sonnet-4-5');
   const [conversations, setConversations] = useState([]);
   const [currentStream, setCurrentStream] = useState('');
   const [currentTools, setCurrentTools] = useState([]);
@@ -204,8 +204,8 @@ export default function AIAgent() {
             data-testid="model-picker"
             className="bg-black/40 border border-white/15 rounded-md px-2 py-1 text-[11px]"
           >
-            <option value="gpt-4o">GPT-4o (موصى)</option>
-            <option value="claude-sonnet-4-5">Claude Sonnet 4.5</option>
+            <option value="claude-sonnet-4-5">Claude Sonnet 4.5 (موصى)</option>
+            <option value="gpt-4o">GPT-4o</option>
           </select>
           <button
             onClick={newChat}
@@ -428,30 +428,47 @@ function MessageBubble({ message }) {
   );
 }
 
+// Per-color class map (Tailwind needs literal classnames at compile time)
+const COLOR_CLASSES = {
+  amber: 'bg-amber-500/10 border-amber-400/30 text-amber-200',
+  sky: 'bg-sky-500/10 border-sky-400/30 text-sky-200',
+  fuchsia: 'bg-fuchsia-500/10 border-fuchsia-400/30 text-fuchsia-200',
+  emerald: 'bg-emerald-500/10 border-emerald-400/30 text-emerald-200',
+};
+
 function ToolPill({ tool }) {
   const isCalling = tool.status === 'calling';
   const isAudio = tool.name === 'generate_audio' && tool.url;
+  const meta = AGENT_META[tool.name] || { icon: '🔧', label: tool.name, color: 'amber' };
+  const colorClass = tool.ok === false
+    ? 'bg-rose-500/10 border-rose-400/30 text-rose-200'
+    : (COLOR_CLASSES[meta.color] || COLOR_CLASSES.amber);
   return (
     <div
       data-testid={`tool-${tool.name}`}
-      className={`flex flex-wrap items-center gap-2 px-3 py-1.5 rounded-full text-xs border transition ${
-        isCalling
-          ? 'bg-amber-500/10 border-amber-400/30 text-amber-200'
-          : tool.ok === false
-          ? 'bg-rose-500/10 border-rose-400/30 text-rose-200'
-          : 'bg-emerald-500/10 border-emerald-400/30 text-emerald-200'
-      }`}
+      className={`flex flex-wrap items-center gap-2 px-3 py-1.5 rounded-full text-xs border transition ${colorClass} ${isCalling ? 'animate-pulse' : ''}`}
     >
+      <span className="text-sm leading-none">{meta.icon}</span>
+      <span className="font-bold text-[11px]">{meta.label}</span>
       {isCalling ? (
-        <Clock className="w-3 h-3 animate-pulse" />
+        <Clock className="w-3 h-3 opacity-70" />
       ) : tool.ok === false ? (
-        <Wrench className="w-3 h-3" />
+        <Wrench className="w-3 h-3 opacity-70" />
       ) : (
-        <CheckCircle2 className="w-3 h-3" />
+        <CheckCircle2 className="w-3 h-3 opacity-70" />
       )}
-      <span className="font-mono text-[10px]">{tool.name}</span>
       {!isCalling && tool.summary && (
         <span className="opacity-80">· {tool.summary}</span>
+      )}
+      {tool.url && tool.name === 'publish_site' && tool.ok && (
+        <a
+          href={tool.url}
+          target="_blank"
+          rel="noreferrer"
+          className="underline hover:text-white"
+        >
+          {tool.url}
+        </a>
       )}
       {isAudio && (
         <audio controls src={tool.url} className="h-7 max-w-full" />
@@ -459,3 +476,30 @@ function ToolPill({ tool }) {
     </div>
   );
 }
+
+// Agent role mapping → icon + label + color
+const AGENT_META = {
+  // Workflow phases
+  analyze_intent: { icon: '🧠', label: 'Planner', color: 'sky' },
+  pick_design: { icon: '🎨', label: 'Designer', color: 'fuchsia' },
+  qa_html: { icon: '🧪', label: 'QA', color: 'emerald' },
+  publish_site: { icon: '🚀', label: 'Deployer', color: 'amber' },
+  // Builders
+  build_website: { icon: '🛠️', label: 'Builder', color: 'amber' },
+  build_quran_mushaf_reader: { icon: '🕌', label: 'Quran Builder', color: 'emerald' },
+  update_website: { icon: '🔧', label: 'Updater', color: 'amber' },
+  edit_section: { icon: '✏️', label: 'Editor', color: 'amber' },
+  add_page: { icon: '📄', label: 'Page Add', color: 'amber' },
+  set_theme: { icon: '🎨', label: 'Theme', color: 'fuchsia' },
+  // Research / data
+  web_search: { icon: '🔎', label: 'Researcher', color: 'sky' },
+  web_fetch: { icon: '🌐', label: 'Fetcher', color: 'sky' },
+  quran_reciter_lookup: { icon: '🎙️', label: 'Reciters', color: 'emerald' },
+  quran_verse_fetch: { icon: '📖', label: 'Verse', color: 'emerald' },
+  saudi_official_sources: { icon: '🇸🇦', label: 'KSA Sources', color: 'emerald' },
+  sports_team_lookup: { icon: '⚽', label: 'Sports', color: 'sky' },
+  geo_lookup: { icon: '🌍', label: 'Geo', color: 'sky' },
+  // Media
+  generate_image_url: { icon: '🖼️', label: 'Image AI', color: 'fuchsia' },
+  generate_audio: { icon: '🎵', label: 'Audio AI', color: 'fuchsia' },
+};

@@ -685,6 +685,87 @@ TOOL_SCHEMAS: List[Dict[str, Any]] = [
             },
         },
     },
+    {
+        "type": "function",
+        "function": {
+            "name": "analyze_intent",
+            "description": (
+                "🧠 PLANNER agent — analyze the user's brief and return a structured plan: "
+                "domain, audience, tone, sections, data_sources needed, integrations, mood. "
+                "ALWAYS call this FIRST when the user asks to build a new site (it's the "
+                "Planner phase of multi-agent workflow). Skip only for simple edits."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {"brief": {"type": "string"}},
+                "required": ["brief"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "pick_design",
+            "description": (
+                "🎨 DESIGNER agent — pick a unique visual direction (palette + typography + "
+                "layout style + mood). Call AFTER analyze_intent and AFTER any research, "
+                "BEFORE build_website. Ensures every site has a fresh distinct look."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "brief": {"type": "string"},
+                    "research_summary": {"type": "string", "description": "Optional summary of research findings"},
+                },
+                "required": ["brief"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "qa_html",
+            "description": (
+                "🧪 QA agent — scan the current site for issues (missing pages, empty "
+                "sections, broken images, leftover placeholders, Lorem Ipsum, RTL issues). "
+                "Returns a quality score 0-100 and a list of issues with severity. "
+                "ALWAYS call this AFTER build_website / build_quran_mushaf_reader to verify."
+            ),
+            "parameters": {"type": "object", "properties": {}},
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "geo_lookup",
+            "description": (
+                "🌍 Geo-lookup via free ip-api.com (no key needed). Returns country, city, "
+                "timezone, currency. Use for sites that need geo-localized content."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {"ip": {"type": "string", "description": "IP address or empty for server's own"}},
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "publish_site",
+            "description": (
+                "🚀 Publish the current_html as a public site at /p/{slug}. The user "
+                "gets a shareable URL they can send to anyone. Use when the user says "
+                "'publish', 'انشره', 'انشره للناس', 'أبي رابط أشاركه'."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "slug": {"type": "string", "description": "URL slug, auto-generated if empty"},
+                    "title": {"type": "string", "description": "Site title for the public page"},
+                },
+            },
+        },
+    },
 ]
 
 
@@ -749,13 +830,11 @@ async def build_website(brief: str, style_direction: str = "", current_html: str
         }
     
     direct_key = os.environ.get("OPENAI_DIRECT_KEY", "").strip()
-    if not direct_key:
-        return {"ok": False, "error": "OPENAI_DIRECT_KEY missing"}
+    emergent_key = os.environ.get("EMERGENT_LLM_KEY", "").strip()
+    if not direct_key and not emergent_key:
+        return {"ok": False, "error": "no LLM key configured"}
     
     try:
-        from openai import AsyncOpenAI
-        client = AsyncOpenAI(api_key=direct_key)
-        
         sys_prompt = WEBSITE_BUILDER_SYSTEM
         if style_direction:
             sys_prompt += f"\n\n🎨 توجيه أسلوب من المستخدم: {style_direction}"
@@ -768,16 +847,7 @@ async def build_website(brief: str, style_direction: str = "", current_html: str
                 "أرجع الـHTML الكامل المُحدَّث."
             )
         
-        resp = await client.chat.completions.create(
-            model="gpt-4o",
-            messages=[
-                {"role": "system", "content": sys_prompt},
-                {"role": "user", "content": user_prompt},
-            ],
-            temperature=0.9,
-            max_tokens=16000,
-        )
-        html = (resp.choices[0].message.content or "").strip()
+        html = await _gpt_rewrite(sys_prompt, user_prompt, max_tokens=16000, temperature=0.9)
         # Strip markdown fences if model added them
         html = re.sub(r"^```(?:html)?\s*", "", html)
         html = re.sub(r"\s*```\s*$", "", html)
@@ -883,23 +953,56 @@ async def generate_audio(description: str, duration_seconds: float = 8.0) -> Dic
 # ════════════════════════════════════════════════════════════════════════
 #  SURGICAL TOOLS — fast, focused edits without full regeneration
 # ════════════════════════════════════════════════════════════════════════
-async def _gpt_rewrite(system: str, user: str, max_tokens: int = 4000) -> str:
-    """Helper: one-shot GPT-4o call returning a string (for surgical edits)."""
+async def _gpt_rewrite(system: str, user: str, max_tokens: int = 4000, json_mode: bool = False, temperature: float = 0.7) -> str:
+    """Helper: one-shot LLM text generation. Tries OpenAI first, falls back to
+    Claude (via Emergent LLM Key) on quota/auth errors."""
     direct_key = os.environ.get("OPENAI_DIRECT_KEY", "").strip()
-    if not direct_key:
-        raise RuntimeError("OPENAI_DIRECT_KEY missing")
-    from openai import AsyncOpenAI
-    client = AsyncOpenAI(api_key=direct_key)
-    resp = await client.chat.completions.create(
-        model="gpt-4o",
-        messages=[
-            {"role": "system", "content": system},
-            {"role": "user", "content": user},
-        ],
-        temperature=0.7,
-        max_tokens=max_tokens,
-    )
-    return (resp.choices[0].message.content or "").strip()
+    last_err: Optional[Exception] = None
+    if direct_key:
+        try:
+            from openai import AsyncOpenAI
+            client = AsyncOpenAI(api_key=direct_key)
+            kwargs: Dict[str, Any] = {
+                "model": "gpt-4o",
+                "messages": [
+                    {"role": "system", "content": system},
+                    {"role": "user", "content": user},
+                ],
+                "temperature": temperature,
+                "max_tokens": max_tokens,
+            }
+            if json_mode:
+                kwargs["response_format"] = {"type": "json_object"}
+            resp = await client.chat.completions.create(**kwargs)
+            return (resp.choices[0].message.content or "").strip()
+        except Exception as e:
+            err_str = str(e).lower()
+            if "429" in err_str or "quota" in err_str or "billing" in err_str or "insufficient" in err_str or "401" in err_str:
+                logger.warning(f"[LLM] OpenAI failed ({err_str[:80]}), falling back to Claude")
+                last_err = e
+            else:
+                raise
+    # Claude fallback via emergentintegrations
+    emergent_key = os.environ.get("EMERGENT_LLM_KEY", "").strip()
+    if not emergent_key:
+        raise RuntimeError(f"OpenAI failed and no EMERGENT_LLM_KEY: {last_err}")
+    try:
+        from emergentintegrations.llm.chat import LlmChat, UserMessage
+        chat = LlmChat(
+            api_key=emergent_key,
+            session_id=f"rewrite-{uuid.uuid4().hex[:8]}",
+            system_message=system + ("\n\nأرجع JSON صالح فقط، لا شرح." if json_mode else ""),
+        )
+        chat.with_model("anthropic", "claude-sonnet-4-5")
+        result = await chat.send_message(UserMessage(text=user))
+        out = str(result or "").strip()
+        if json_mode:
+            # Strip markdown fences if Claude added them
+            out = re.sub(r"^```(?:json)?\s*", "", out)
+            out = re.sub(r"\s*```\s*$", "", out)
+        return out
+    except Exception as e:
+        raise RuntimeError(f"All LLMs failed: openai={last_err} · claude={e}")
 
 
 async def set_theme(
@@ -1153,6 +1256,194 @@ async def edit_section(
 
 
 # ════════════════════════════════════════════════════════════════════════
+#  ORCHESTRATION HELPERS — Planner, Designer, QA (multi-agent style)
+# ════════════════════════════════════════════════════════════════════════
+async def analyze_intent(brief: str) -> Dict[str, Any]:
+    """🧠 PLANNER agent — analyzes the user's brief and returns a structured plan."""
+    if not brief or len(brief.strip()) < 5:
+        return {"ok": False, "error": "brief too short"}
+    
+    sys_prompt = (
+        "أنت Planner Agent. مهمتك: تحليل طلب العميل وإرجاع خطة منظّمة JSON.\n"
+        "أرجع JSON فقط بهذا الشكل بالضبط:\n"
+        "{\n"
+        '  "domain": "<quran|sports|restaurant|ecommerce|education|medical|realestate|fintech|portfolio|generic>",\n'
+        '  "audience": "<وصف موجز للجمهور المستهدف>",\n'
+        '  "tone": "<formal|casual|friendly|luxury|playful|spiritual>",\n'
+        '  "sections": [<قائمة الأقسام المطلوبة>],\n'
+        '  "data_sources": [<أي بيانات حقيقية يحتاجها: quran_verse|reciters|sports_team|saudi_sources|web_search|geo_data|none>],\n'
+        '  "integrations": [<api| stripe| whatsapp| audio| video| none>],\n'
+        '  "mood": "<وصف بصري موجز للنمط>"\n'
+        "}\n"
+        "لا شرح، لا ```، JSON فقط."
+    )
+    try:
+        raw = await _gpt_rewrite(sys_prompt, f"الطلب: {brief}", max_tokens=1500, json_mode=True, temperature=0.5)
+        plan = json.loads(raw)
+        plan["ok"] = True
+        plan["agent"] = "planner"
+        plan["summary"] = f"المجال: {plan.get('domain','?')} · {len(plan.get('sections',[]))} قسم"
+        return plan
+    except Exception as e:
+        logger.exception("[ANALYZE_INTENT] failed")
+        return {"ok": False, "error": str(e)[:200]}
+
+
+async def pick_design(brief: str, research_summary: str = "") -> Dict[str, Any]:
+    """🎨 DESIGNER agent — picks visual direction (palette + typography + layout)."""
+    sys_prompt = (
+        "أنت Designer Agent. مهمتك: اختيار اتجاه بصري متماسك للموقع.\n"
+        "أرجع JSON فقط:\n"
+        "{\n"
+        '  "palette_name": "<اسم palette مبدع>",\n'
+        '  "primary_color": "#hex",\n'
+        '  "secondary_color": "#hex",\n'
+        '  "accent_color": "#hex",\n'
+        '  "bg_color": "#hex (داكن أو فاتح)",\n'
+        '  "text_color": "#hex",\n'
+        '  "heading_font": "<google font name e.g. Aref Ruqaa, Tajawal Black>",\n'
+        '  "body_font": "<google font name e.g. Tajawal>",\n'
+        '  "layout_style": "<asymmetric|grid|magazine|minimal|brutalist|luxe>",\n'
+        '  "mood_keywords": [<3-5 كلمات وصفية>]\n'
+        "}\n"
+        "اختر مزيجاً جريئاً مختلفاً عن المعتاد. لا تكرّر الذهبي/الأسود في كل موقع."
+    )
+    try:
+        user_msg = f"الطلب: {brief}"
+        if research_summary:
+            user_msg += f"\n\nنتائج البحث: {research_summary[:1500]}"
+        raw = await _gpt_rewrite(sys_prompt, user_msg, max_tokens=800, json_mode=True, temperature=0.95)
+        design = json.loads(raw)
+        design["ok"] = True
+        design["agent"] = "designer"
+        design["summary"] = f"{design.get('palette_name','?')} · {design.get('layout_style','?')}"
+        return design
+    except Exception as e:
+        logger.exception("[PICK_DESIGN] failed")
+        return {"ok": False, "error": str(e)[:200]}
+
+
+async def qa_html(current_html: str = "") -> Dict[str, Any]:
+    """🧪 QA agent — scans the current site and reports issues + auto-fix suggestions.
+    
+    Checks:
+        - All nav links have matching <section data-page="..."> targets
+        - No empty sections (sections with <p>... or just whitespace)
+        - All <img> have non-empty src
+        - No broken anchor refs
+    """
+    if not current_html or len(current_html) < 200:
+        return {"ok": False, "error": "no current_html"}
+    
+    issues: List[Dict[str, str]] = []
+    
+    # 1. Nav links → page targets
+    nav_links = re.findall(r'<a[^>]+href="#/([^"]+)"', current_html)
+    page_targets = set(re.findall(r'data-page="([^"]+)"', current_html))
+    missing_pages = [link for link in nav_links if link not in page_targets and link != "home"]
+    for mp in missing_pages:
+        issues.append({"severity": "high", "type": "missing_page", "detail": f"رابط #/{mp} في القائمة لكن ما فيه <section data-page=\"{mp}\">"})
+    
+    # 2. Empty sections
+    empty_sections = re.findall(r'<section[^>]*data-page="([^"]+)"[^>]*>\s*</section>', current_html)
+    for es in empty_sections:
+        issues.append({"severity": "medium", "type": "empty_section", "detail": f"قسم data-page=\"{es}\" فارغ"})
+    
+    # 3. Broken images
+    broken_imgs = re.findall(r'<img[^>]+src=""', current_html)
+    if broken_imgs:
+        issues.append({"severity": "medium", "type": "broken_image", "detail": f"{len(broken_imgs)} صور بدون src"})
+    
+    # 4. @@IMG/auto@@ leftovers (post-process didn't run)
+    leftover = current_html.count("@@IMG/")
+    if leftover > 0:
+        issues.append({"severity": "high", "type": "image_placeholder_leftover", "detail": f"{leftover} placeholder صور لم تُعالج"})
+    
+    # 5. Lorem Ipsum check
+    if "lorem ipsum" in current_html.lower() or "Lorem ipsum" in current_html:
+        issues.append({"severity": "high", "type": "lorem_ipsum", "detail": "نص Lorem Ipsum موجود — يجب استبداله"})
+    
+    # 6. RTL check
+    if 'dir="rtl"' not in current_html.lower():
+        issues.append({"severity": "low", "type": "no_rtl", "detail": "ما فيه dir=\"rtl\" في <html>"})
+    
+    score = max(0, 100 - sum(20 if i["severity"] == "high" else (10 if i["severity"] == "medium" else 5) for i in issues))
+    return {
+        "ok": True,
+        "agent": "qa",
+        "score": score,
+        "issues_count": len(issues),
+        "issues": issues,
+        "summary": f"الجودة: {score}/100 · {len(issues)} مشكلة",
+    }
+
+
+# ════════════════════════════════════════════════════════════════════════
+#  GEO TOOL (free, no API key needed)
+# ════════════════════════════════════════════════════════════════════════
+async def geo_lookup(ip: str = "") -> Dict[str, Any]:
+    """🌍 Lookup geographic info via free ip-api.com (no key needed).
+    
+    If ip is empty, looks up the requesting server's IP (fallback).
+    Use for content localization (currency, language hints, regional services).
+    """
+    target = ip.strip() if ip else ""
+    url = f"http://ip-api.com/json/{target}" if target else "http://ip-api.com/json"
+    try:
+        async with httpx.AsyncClient(timeout=8.0) as client:
+            r = await client.get(url, params={"fields": "status,country,countryCode,region,regionName,city,timezone,currency,query"})
+        if r.status_code != 200:
+            return {"ok": False, "error": f"HTTP {r.status_code}"}
+        d = r.json() or {}
+        if d.get("status") != "success":
+            return {"ok": False, "error": d.get("message", "lookup failed")}
+        return {
+            "ok": True,
+            "country": d.get("country"),
+            "country_code": d.get("countryCode"),
+            "region": d.get("regionName"),
+            "city": d.get("city"),
+            "timezone": d.get("timezone"),
+            "currency": d.get("currency"),
+            "ip": d.get("query"),
+            "summary": f"{d.get('city','?')}, {d.get('country','?')} ({d.get('countryCode','?')})",
+        }
+    except Exception as e:
+        return {"ok": False, "error": str(e)[:200]}
+
+
+# ════════════════════════════════════════════════════════════════════════
+#  PUBLISH TOOL — saves current_html to a public-accessible site
+# ════════════════════════════════════════════════════════════════════════
+async def publish_site(slug: str = "", title: str = "موقع زيتكس", current_html: str = "") -> Dict[str, Any]:
+    """🚀 Publish current_html as a public site at /p/{slug}.
+    
+    The agent system handles persistence — this tool just returns a request
+    payload that the agent will pass to the DB writer in __init__.py.
+    Requires current_html (auto-injected by agent) to prevent publish-before-build.
+    """
+    if not current_html or len(current_html) < 200:
+        return {
+            "ok": False,
+            "error": "ما فيه موقع للنشر — استدعِ build_website أو build_quran_mushaf_reader أولاً، ثم استدعِ publish_site.",
+        }
+    if not slug:
+        slug = uuid.uuid4().hex[:10]
+    slug = re.sub(r"[^a-z0-9-]", "-", slug.lower())[:40].strip("-")
+    if not slug:
+        slug = uuid.uuid4().hex[:10]
+    return {
+        "ok": True,
+        "agent": "deployer",
+        "_publish_request": True,  # marker for agent loop to handle DB write
+        "slug": slug,
+        "title": title,
+        "url_path": f"/api/p/{slug}",
+        "summary": f"تم تجهيز رابط النشر: /api/p/{slug}",
+    }
+
+
+# ════════════════════════════════════════════════════════════════════════
 #  TOOL: Build Quran Mushaf Reader (INTEGRATED full-page widget)
 # ════════════════════════════════════════════════════════════════════════
 async def build_quran_mushaf_reader(
@@ -1160,22 +1451,12 @@ async def build_quran_mushaf_reader(
     style: str = "classic",
     site_title: str = "مصحف زيتكس",
 ) -> Dict[str, Any]:
-    """Build a COMPLETE single-page Quran reader site with integrated widget.
-    
-    The widget combines:
-    - REAL Quran text fetched from alquran.cloud (Madinah Mushaf, no LLM rewriting)
-    - 14 verified reciter selector strip with avatars
-    - Click any verse → plays that ayah with the selected reciter
-    - Repeat / continuous play / prev / next controls
-    - 4 design styles: classic / modern / minimal / royal
-    
-    No random AI images. The site is purely calligraphic + the integrated widget.
-    
-    Args:
-        surah: Surah number 1-114
-        style: classic | modern | minimal | royal
-        site_title: Site title shown in header
-    """
+    """Build a COMPLETE single-page Quran reader site with integrated widget."""
+    # Coerce to int — Claude sometimes passes "1" as string
+    try:
+        surah = int(surah)
+    except (TypeError, ValueError):
+        return {"ok": False, "error": "surah must be an integer 1-114"}
     if not (1 <= surah <= 114):
         return {"ok": False, "error": "surah must be 1..114"}
     if style not in ("classic", "modern", "minimal", "royal"):
@@ -1408,4 +1689,9 @@ TOOL_REGISTRY.update({
     "add_page": add_page,
     "edit_section": edit_section,
     "build_quran_mushaf_reader": build_quran_mushaf_reader,
+    "analyze_intent": analyze_intent,
+    "pick_design": pick_design,
+    "qa_html": qa_html,
+    "geo_lookup": geo_lookup,
+    "publish_site": publish_site,
 })
