@@ -22,6 +22,7 @@ Endpoints:
 """
 from __future__ import annotations
 import os
+import re
 import json
 import uuid
 import asyncio
@@ -53,21 +54,32 @@ AGENT_SYSTEM_PROMPT = """أنت ذكاء Zitex — عقل واحد متكامل 
 - حازم: لا تكرّر "عفواً/آسف" — نفّذ.
 - فضولي مبدع: كل تصميم/فكرة جديدة، لا تكرّر اللي قبله.
 
-🛠️ أدواتك الكاملة (استخدمها بحرية):
-1. **`build_quran_mushaf_reader(surah?, style?)` — 🕌 استخدمها لأي طلب قرآن/مصحف/تلاوة/تحفيظ. تبني موقع متكامل بقارئ مصحف مدمج (نص حقيقي + 14 قارئ + اضغط أي آية تشتغل بصوت القارئ المختار). ممنوع تستخدم build_website للقرآن.**
-2. `build_website(brief, style_direction?)` — يبني موقع SPA كامل HTML من الصفر للمواقع غير القرآن.
-3. `edit_section(target, instructions)` — **تعديل جراحي لقسم واحد** (hero, menu, contact, pricing...). أسرع وأدق من update_website.
-4. `add_page(label, slug?, brief?)` — يضيف صفحة جديدة + رابط في القائمة. سريع (~15ث).
-5. `set_theme(palette?, fonts?, mood?)` — يغيّر الـCSS theme فقط (ألوان/خطوط) بدون لمس HTML. سريع جداً (~7ث).
-6. `update_website(instructions)` — **آخر خيار** للتعديلات العامة جداً.
-7. `web_search(query)` — بحث حقيقي DuckDuckGo.
-8. `web_fetch(url)` — جلب محتوى صفحة فعلي.
-9. `quran_reciter_lookup(name)` — 20 قارئ من mp3quran.net (للسور الكاملة فقط).
-10. `quran_verse_fetch(surah, ayah)` — نص آية بالضبط من مصحف المدينة.
-11. `saudi_official_sources(domain)` — مصادر سعودية معتمدة.
-12. `sports_team_lookup(team_name)` — لاعبين حقيقيين من TheSportsDB.
-13. `generate_image_url(description)` — صور AI (Nano Banana). **استخدمها بحذر** — تجنبها للمواقع الدينية تماماً.
-14. `generate_audio(description, duration_seconds)` — موسيقى/صوت محيطي (ElevenLabs).
+🛠️ أدواتك (إجمالي 19 أداة — استخدم الأنسب):
+
+📦 **خط البناء (workflow)** — للمواقع الجديدة، استدعِ بالترتيب:
+  1. `analyze_intent(brief)` — 🧠 Planner: يحلّل الطلب ويرجع خطة JSON
+  2. `web_search` / `quran_*` / `sports_*` / `saudi_official_sources` — 🔎 Researcher: حسب data_sources في الخطة
+  3. `pick_design(brief, research_summary)` — 🎨 Designer: يختار palette + typography + layout
+  4. **البناء الرئيسي** — اختر واحد فقط:
+     - `build_quran_mushaf_reader(surah, style)` — 🕌 لأي طلب قرآن/مصحف/تلاوة (ممنوع build_website)
+     - `build_website(brief, style_direction)` — 🛠️ Developer: لباقي المواقع
+  5. `qa_html()` — 🧪 QA: يفحص الجودة بعد البناء (يرجع score 0-100)
+  6. `publish_site(slug?, title?)` — 🚀 Deployer: لما العميل يقول "انشره"
+
+✏️ **التعديل الجراحي**:
+  - `set_theme(palette?, fonts?, mood?)` — تغيير الـtheme فقط (~7ث)
+  - `add_page(label, slug?, brief?)` — إضافة صفحة + nav link (~15ث)
+  - `edit_section(target, instructions)` — تعديل قسم محدد (~10ث)
+  - `update_website(instructions)` — آخر خيار، فقط للتعديلات العامة جداً
+
+📊 **الأدوات المساندة**:
+  - `web_search(query)`، `web_fetch(url)` — بحث وجلب من الإنترنت
+  - `quran_reciter_lookup`, `quran_verse_fetch` — قراء + آيات
+  - `saudi_official_sources(domain)` — مصادر سعودية معتمدة
+  - `sports_team_lookup(team_name)` — لاعبين حقيقيين
+  - `geo_lookup(ip?)` — معلومات جغرافية (دولة/عملة)
+  - `generate_image_url(description)` — صور AI (تجنبها للمواقع الدينية)
+  - `generate_audio(description, duration_seconds)` — موسيقى/صوت محيطي
 
 🔑 قواعد العمل (صارمة):
 1. **اسمع العميل بالحرف**. لو قال "أبي موقع تحفيظ قرآن" → ابني تحفيظ قرآن. لا تقترح "ليش ما نسوي مطعم؟".
@@ -84,6 +96,9 @@ AGENT_SYSTEM_PROMPT = """أنت ذكاء Zitex — عقل واحد متكامل 
 7. **التنوّع**. لو العميل بنى عندك موقعين بنفس الجلسة، الثاني يكون شكل/لون/layout مختلف 100%.
 8. **ممنوع التكرار**. ممنوع تردّ بنفس البنية كل مرّة. لا تستخدم "بسم الله، تشرّفت" في كل ردّ.
 9. **ممنوع الاعتذار**. لو شي ما اشتغل، حلّه أو اقترح بديل — لا تقول "عفواً".
+10. **ترتيب workflow صارم**: لازم تبني الموقع أولاً، ثم تنشر. ممنوع تستدعي `publish_site` قبل ما يكون فيه `build_*` ناجح. لو العميل قال "ابني وانشر" → خطوتك:
+    أولاً analyze_intent → ثم build_quran_mushaf_reader أو build_website (يحدث current_html) → ثم qa_html → ثم publish_site.
+11. **بعد النشر**: اعرض الرابط بوضوح للعميل بهذا الشكل: "🚀 موقعك مباشر على: <رابط>"
 
 🎨 لما العميل يطلب موقع:
 - اطرح سؤال واحد ذكي محدّد لو شي غير واضح، وإلا ابدأ مباشرة.
@@ -175,6 +190,28 @@ def create_agent_router(db, get_current_user):
                             new_html = evt["html"]
                             # Notify frontend so it refreshes preview
                             yield f"data: {json.dumps({'type':'html','length':len(new_html)})}\n\n"
+                        # Handle publish_site: persist current HTML under public slug
+                        if (
+                            evt.get("status") == "done"
+                            and evt.get("name") == "publish_site"
+                            and evt.get("_publish_request")
+                            and new_html
+                            and len(new_html) > 200
+                        ):
+                            slug = evt.get("slug") or uuid.uuid4().hex[:10]
+                            await db.public_agent_sites.update_one(
+                                {"slug": slug},
+                                {"$set": {
+                                    "slug": slug,
+                                    "title": evt.get("title") or "موقع زيتكس",
+                                    "html": new_html,
+                                    "owner_id": user["user_id"],
+                                    "updated_at": _now(),
+                                }, "$setOnInsert": {"created_at": _now()}},
+                                upsert=True,
+                            )
+                            evt["url"] = f"/api/p/{slug}"
+                            evt["summary"] = f"✅ نُشر على /api/p/{slug}"
                     yield f"data: {json.dumps(evt, ensure_ascii=False)}\n\n"
 
                 # Persist
@@ -273,6 +310,23 @@ def create_agent_router(db, get_current_user):
     return router
 
 
+def create_public_agent_router(db) -> APIRouter:
+    """Public router for serving published agent sites at /api/p/{slug}."""
+    router = APIRouter(prefix="/api", tags=["agent-public"])
+    
+    @router.get("/p/{slug}", response_class=HTMLResponse)
+    async def serve_published(slug: str):
+        slug = re.sub(r"[^a-z0-9-]", "", slug.lower())[:40]
+        if not slug:
+            raise HTTPException(404, "not found")
+        site = await db.public_agent_sites.find_one({"slug": slug}, {"_id": 0, "html": 1, "title": 1})
+        if not site or not site.get("html"):
+            return HTMLResponse(_empty_preview_html(), status_code=404)
+        return HTMLResponse(site["html"], status_code=200)
+    
+    return router
+
+
 def _empty_preview_html() -> str:
     return """<!doctype html><html dir="rtl" lang="ar"><head><meta charset="utf-8">
 <title>معاينة Zitex</title>
@@ -348,8 +402,8 @@ async def _gpt_stream(
                     args = json.loads(tc.function.arguments or "{}")
                 except Exception:
                     args = {}
-                # Auto-inject current_html for surgical website tools
-                if tc.function.name in ("update_website", "edit_section", "add_page", "set_theme"):
+                # Auto-inject current_html for surgical website tools + qa_html + publish_site
+                if tc.function.name in ("update_website", "edit_section", "add_page", "set_theme", "qa_html", "publish_site"):
                     args["current_html"] = current_html
                 yield {"type": "tool", "status": "calling",
                        "name": tc.function.name,
@@ -366,6 +420,15 @@ async def _gpt_stream(
                 ):
                     current_html = result["html"]
                     evt["html"] = current_html  # captured by outer stream_generator
+                # Mark publish_site events for outer handler to persist
+                if (
+                    tc.function.name == "publish_site"
+                    and result.get("ok")
+                    and result.get("_publish_request")
+                ):
+                    evt["_publish_request"] = True
+                    evt["slug"] = result.get("slug")
+                    evt["title"] = result.get("title")
                 if tc.function.name == "generate_audio" and result.get("ok"):
                     evt["url"] = result.get("url")
                 if tc.function.name == "generate_image_url" and result.get("ok"):
@@ -467,7 +530,7 @@ async def _claude_stream(
                     args = parsed.get("args", {})
                 except Exception:
                     continue
-                if name in ("update_website", "edit_section", "add_page", "set_theme"):
+                if name in ("update_website", "edit_section", "add_page", "set_theme", "qa_html", "publish_site"):
                     args["current_html"] = current_html
                 yield {"type": "tool", "status": "calling", "name": name,
                        "args": {k: v for k, v in args.items() if k != "current_html"}}
@@ -478,6 +541,10 @@ async def _claude_stream(
                 if name in ("build_website", "update_website", "edit_section", "add_page", "set_theme", "build_quran_mushaf_reader") and result.get("ok") and result.get("html"):
                     current_html = result["html"]
                     evt["html"] = current_html
+                if name == "publish_site" and result.get("ok") and result.get("_publish_request"):
+                    evt["_publish_request"] = True
+                    evt["slug"] = result.get("slug")
+                    evt["title"] = result.get("title")
                 if name in ("generate_audio", "generate_image_url") and result.get("ok"):
                     evt["url"] = result.get("url")
                 yield evt
@@ -537,4 +604,14 @@ def _tool_summary(name: str, result: Dict[str, Any]) -> str:
         return result.get("summary", "تم تعديل القسم")
     if name == "build_quran_mushaf_reader":
         return result.get("summary", "تم بناء قارئ المصحف")
+    if name == "analyze_intent":
+        return result.get("summary", "تم تحليل الطلب")
+    if name == "pick_design":
+        return result.get("summary", "تم اختيار التصميم")
+    if name == "qa_html":
+        return result.get("summary", "تم فحص الموقع")
+    if name == "geo_lookup":
+        return result.get("summary", "تم تحديد الموقع")
+    if name == "publish_site":
+        return result.get("summary", "تم تجهيز النشر")
     return "تم"
