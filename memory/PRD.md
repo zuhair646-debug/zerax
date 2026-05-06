@@ -6,6 +6,87 @@
 ## User Language: Arabic (العربية)
 
 
+### 🆕 May 6, 2026 — MULTI-AGENT ORCHESTRATION + PUBLIC PUBLISH + CLAUDE FALLBACK ✅
+
+**حالة المستخدم**: محبط جداً، يهدد بإيقاف العمل، طلب نظام متعدد الوكلاء (Planner/Researcher/Designer/Builder/QA/Deployer) مع نشر فوري ومفاتيح OpenAI نفدت.
+
+**الحل المُنفّذ — كله في commit واحد**:
+
+🧠 **5 أدوات Orchestration جديدة**:
+- `analyze_intent(brief)` — Planner: يحلّل الطلب ويرجع خطة JSON
+- `pick_design(brief)` — Designer: يختار palette/fonts/layout
+- `qa_html()` — QA: يفحص الموقع ويرجع score 0-100 + issues list
+- `geo_lookup(ip?)` — معلومات دولة/مدينة/عملة (ip-api.com مجاني)
+- `publish_site(slug?)` — Deployer: ينشر current_html على /api/p/{slug}
+
+🚀 **Public publish route**:
+- `GET /api/p/{slug}` يقدّم الموقع المنشور بدون auth (للمشاركة)
+- collection جديد `public_agent_sites` (slug, html, title, owner_id)
+- Guard: publish_site يفشل لو ما فيه current_html → يجبر agent يبني أولاً
+
+🔄 **Claude Fallback**:
+- helper `_gpt_rewrite` يحاول OpenAI أولاً، يفشل برشاقة على Claude عبر Emergent LLM Key لو OpenAI رجّع 429/quota/auth
+- النموذج الافتراضي في الـUI صار Claude Sonnet 4.5 (يستخدم المفتاح المجاني)
+- يحلّ مشكلة "نفد رصيد OpenAI" نهائياً
+
+🎨 **Frontend tool pills**:
+- كل أداة الآن تظهر بـrole label + لون مخصص:
+  - 🧠 Planner (sky) · 🎨 Designer (fuchsia) · 🧪 QA (emerald) · 🚀 Deployer (amber)
+  - 🛠️ Builder · 🔎 Researcher · 🌍 Geo · 🎵 Audio AI · 🖼️ Image AI · 🕌 Quran Builder
+- الرابط المنشور يظهر كـclickable link
+
+📜 **System prompt صارم**:
+- workflow ملزم: Planner → Researcher → Designer → Builder → QA → Deployer
+- ممنوع publish قبل build
+- بعد النشر: agent يعرض الرابط بصيغة "🚀 موقعك مباشر على: <رابط>"
+
+**اختبار E2E مُحقّق**:
+- "ابني قرآن للفاتحة وانشره باسم alquran123"
+- ✅ Planner: domain=quran, 7 sections
+- ✅ Builder: 21KB widget (14 قارئ + 7 آيات + audio)
+- ✅ QA: 100/100, 0 issues
+- ✅ Deployer: /api/p/alquran123 → الموقع يظهر مع كل المكوّنات شغّالة (مُحقّق بـscreenshot)
+
+**Commit**: `2fa11c0` → push `zuhair646-debug/zitex:main` ✅
+
+**ملاحظة شفافة للمستخدم**: ما يزال غير مُنفّذ من blueprint ChatGPT (يحتاج مفاتيح/ميزانية):
+- Pinecone (vector memory) — يحتاج API key مدفوع
+- SerpAPI / Perplexity API — مدفوع (لدينا web_search مجاني عبر DuckDuckGo)
+- Builder.io — مدفوع
+- Real-time collaborative edits (Socket.io) — يحتاج إعادة هندسة معمارية
+
+
+### 🆕 May 5, 2026 — INTEGRATED QURAN MUSHAF READER TOOL ✅
+
+**شكوى المستخدم** (مع تهديد بإيقاف العمل): "الذكاء يحط صور غرفة نوم في موقع قرآن. الأدوات الموجودة فاشلة. ما يفكر. أنا أبي قرآن مكتوب من المصادر الرسمية + خيارات قراء فوق كل صفحة + تضغط أي آية تشتغل بصوت القارئ المختار = منتج واحد متكامل، مو أدوات منفصلة. هذا الذكاء الصناعي الحقيقي."
+
+**الحل المُنفّذ — أداة `build_quran_mushaf_reader` متكاملة 100%**:
+
+📖 **النص**: حقيقي من `api.alquran.cloud/v1/surah/{N}/ar.alafasy` (مصحف المدينة بالتشكيل الكامل). **بدون كتابة من LLM** (يخرّب التشكيل).
+
+👥 **القراء**: 14 قارئ معتمد مع avatars + everyayah.com per-ayah audio:
+- العفاسي، السديس، الشريم، الحصري، المنشاوي، عبد الباسط، الغامدي
+- العجمي، الدوسري، الشاطري، الجهني، الحذيفي، أيوب، المعيقلي
+
+🎵 **التفاعل**: 
+- اضغط على القارئ → يصير الفعّال
+- اضغط على أي آية → تشغل بصوت القارئ المختار
+- زر تكرار + تشغيل متصل + prev/next
+- الآية المُشغّلة تُضاء بـamber glow
+
+🎨 **التصميم**: 4 أنماط (classic/modern/minimal/royal) + 114 سورة في selector + Aref Ruqaa للعنوان + Tajawal للنص + خلفية Islamic geometric SVG (لا صور عشوائية).
+
+🛡️ **حارس الـcontext**: build_website صار يكتشف الكلمات الدينية (قرآن/مصحف/تلاوة/تجويد/تحفيظ/قارئ/آية/سورة) ويرفض البناء مع hint يوجّه للأداة الصحيحة. **يحل bug "غرفة نوم في موقع قرآن"** نهائياً.
+
+🧠 **Agent system prompt محدّث**: قاعدة #4 صارمة "طلب قرآن → build_quran_mushaf_reader فوراً، ممنوع build_website".
+
+**اختبار E2E**:
+- "ابني لي موقع قرآن لتلاوة الفاتحة" → agent استدعى `build_quran_mushaf_reader(surah=1)` → 21KB page في 3 ثواني
+- screenshot يؤكد: عنوان فخم + selector 114 سورة + 14 قارئ avatars + 7 آيات الفاتحة بالتشكيل الصحيح + جميع الأزرار شغّالة
+
+**Commit**: `65cb115` → push `zuhair646-debug/zitex:main` ✅
+
+
 ### 🆕 May 5, 2026 — SURGICAL EDIT TOOLS (set_theme + add_page + edit_section) ✅
 
 طلب المستخدم: "كل تحديث على موقعي فشل تحديث + ابني add_page و set_theme كأدوات منفصلة عشان التحرير الجراحي يكون أسرع من إعادة توليد كامل"
