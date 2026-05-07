@@ -6,6 +6,43 @@
 ## User Language: Arabic (العربية)
 
 
+### 🆕 May 7, 2026 — ALL 5 FIXES FROM AGENT'S BUG REPORT ✅
+
+**تقرير الذكاء**: الذكاء أعطى تقرير مُرتّب بـ5 مشاكل وحلولها مع أولويات.
+
+**المُنفّذ — كل الـ5 في commit واحد**:
+
+🔴 **#1 (P0) — إصلاح الصوت + feedback بصري**:
+- `audio_snippet` مكتفي ذاتياً (يشتغل حتى لو primitives.js ما حُمّل)
+- dual-CDN URL builder (everyayah.com primary + fallback)
+- `ended` listener يشيل `.playing` لما الصوت ينتهي
+- `error` listener ينظّف الـstate ويسجّل warning
+- يدعم `.ayah-row` و `.verse` بنفس الوقت
+
+🔴 **#3 (P0) — مصدر مصحف المدينة موثوق**:
+- نستخدم `/v1/surah/{N}/quran-uthmani` (مصحف المدينة الرسم العثماني)
+- الذكاء ممنوع يعيد كتابة النص
+
+🟡 **#2 (P1) — خيار `layout` في inject_quran_blocks**:
+- `simple` (الافتراضي): قائمة عمودية
+- `mushaf_pages`: صفحتان متقابلتان على ورق برشمان
+- `kids_friendly`: cards كبيرة ملونة مع gradients + خط كبير
+
+🟢 **#4 (P2) — `build_quran_website` كـalias**:
+- alias لـ`build_creative_quran_site` (نفس الـimplementation، اسم بديل)
+
+🟢 **#5 (P2) — `edit_section` mode parameter**:
+- `mode`: "edit" (refine) أو "replace" (rewrite كامل مع الاحتفاظ بالـwrapper)
+- max input 14K → 30K حرف للأقسام الطويلة
+
+**اختبار محلي مُحقّق**:
+- ✅ mushaf_pages: ok=True، has mushaf-pages-container، 7 آيات
+- ✅ kids_friendly: ok=True، has kids-ayahs container + CSS
+- ✅ audio_snippet: urlFor() + RECITER_FOLDERS + error listener موجودين
+
+**Commit**: `34e9c40` → push `zuhair646-debug/zitex:main` ✅
+
+
 ### 🆕 May 7, 2026 — BULLETPROOF CREATIVE QURAN (Solution 1 + 4) ✅
 
 **شكوى الذكاء نفسه** (نقلها المستخدم): يقول الذكاء أنه يعرف 3 مشاكل ولا يقدر يحلها:
