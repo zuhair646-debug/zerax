@@ -62,7 +62,8 @@ AGENT_SYSTEM_PROMPT = """أنت ذكاء Zitex — عقل واحد متكامل 
   3. `pick_design(brief, research_summary)` — 🎨 Designer: يختار palette + typography + layout
   4. **البناء الرئيسي** — اختر بحرية:
      - 🕌 **قرآن بسيط** (مصحف فقط بدون أقسام إضافية): `build_quran_mushaf_reader(surah, style)` — قالب جاهز سريع
-     - 🎮 **قرآن إبداعي** (gaming/achievements/dashboard/أي تصميم خاص): `fetch_quran_blocks(surah)` ثم `build_website(brief)` مع تعليمات لزرع الكتل المُرجعة في تصميمك. **هذا هو المسار الإبداعي بالكامل** — لك حرية مطلقة في التصميم مع ضمان وجود القرآن الحقيقي + 14 قارئ + audio شغّال.
+     - 🎮 **قرآن إبداعي** (gaming/achievements/dashboard/أي تصميم خاص): استخدم `build_creative_quran_site(brief, surah)` — يضمن 100% أن الآيات الحقيقية + 14 قارئ + audio يظهرون داخل تصميمك (deterministic injection، لا يعتمد على LLM trust). **هذي الأداة الأمثل لأي طلب قرآن مع تصميم خاص.**
+     - 🩹 **إصلاح موقع موجود**: لو فيه موقع وقسم القرآن مكسور، استخدم `inject_quran_blocks(surah, target_selector?)` — يصلح القسم فوراً.
      - 🛠️ **بقية المواقع**: `build_website(brief, style_direction)` مباشرة.
   5. `qa_html()` — 🧪 QA: يفحص الجودة بعد البناء (يرجع score 0-100)
   6. `publish_site(slug?, title?)` — 🚀 Deployer: لما العميل يقول "انشره"
@@ -192,7 +193,7 @@ def create_agent_router(db, get_current_user):
                         # Capture HTML output from website-building tools
                         if (
                             evt.get("status") == "done"
-                            and evt.get("name") in ("build_website", "update_website", "edit_section", "add_page", "set_theme", "build_quran_mushaf_reader")
+                            and evt.get("name") in ("build_website", "update_website", "edit_section", "add_page", "set_theme", "build_quran_mushaf_reader", "build_creative_quran_site", "inject_quran_blocks")
                             and isinstance(evt.get("html"), str)
                             and len(evt["html"]) > 200
                         ):
@@ -419,8 +420,8 @@ async def _gpt_stream(
                     args = json.loads(tc.function.arguments or "{}")
                 except Exception:
                     args = {}
-                # Auto-inject current_html for surgical website tools + qa_html + publish_site
-                if tc.function.name in ("update_website", "edit_section", "add_page", "set_theme", "qa_html", "publish_site"):
+                # Auto-inject current_html for surgical website tools + qa_html + publish_site + inject_quran_blocks
+                if tc.function.name in ("update_website", "edit_section", "add_page", "set_theme", "qa_html", "publish_site", "inject_quran_blocks"):
                     args["current_html"] = current_html
                 yield {"type": "tool", "status": "calling",
                        "name": tc.function.name,
@@ -431,7 +432,7 @@ async def _gpt_stream(
                        "name": tc.function.name, "ok": result.get("ok"),
                        "summary": _tool_summary(tc.function.name, result)}
                 if (
-                    tc.function.name in ("build_website", "update_website", "edit_section", "add_page", "set_theme", "build_quran_mushaf_reader")
+                    tc.function.name in ("build_website", "update_website", "edit_section", "add_page", "set_theme", "build_quran_mushaf_reader", "build_creative_quran_site", "inject_quran_blocks")
                     and result.get("ok")
                     and isinstance(result.get("html"), str)
                 ):
@@ -547,7 +548,7 @@ async def _claude_stream(
                     args = parsed.get("args", {})
                 except Exception:
                     continue
-                if name in ("update_website", "edit_section", "add_page", "set_theme", "qa_html", "publish_site"):
+                if name in ("update_website", "edit_section", "add_page", "set_theme", "qa_html", "publish_site", "inject_quran_blocks"):
                     args["current_html"] = current_html
                 yield {"type": "tool", "status": "calling", "name": name,
                        "args": {k: v for k, v in args.items() if k != "current_html"}}
@@ -555,7 +556,7 @@ async def _claude_stream(
                 evt = {"type": "tool", "status": "done", "name": name,
                        "ok": result.get("ok"),
                        "summary": _tool_summary(name, result)}
-                if name in ("build_website", "update_website", "edit_section", "add_page", "set_theme", "build_quran_mushaf_reader") and result.get("ok") and result.get("html"):
+                if name in ("build_website", "update_website", "edit_section", "add_page", "set_theme", "build_quran_mushaf_reader", "build_creative_quran_site", "inject_quran_blocks") and result.get("ok") and result.get("html"):
                     current_html = result["html"]
                     evt["html"] = current_html
                 if name == "publish_site" and result.get("ok") and result.get("_publish_request"):
@@ -623,6 +624,10 @@ def _tool_summary(name: str, result: Dict[str, Any]) -> str:
         return result.get("summary", "تم بناء قارئ المصحف")
     if name == "fetch_quran_blocks":
         return result.get("summary", "تم جلب كتل القرآن")
+    if name == "build_creative_quran_site":
+        return result.get("summary", "تم بناء موقع قرآن إبداعي")
+    if name == "inject_quran_blocks":
+        return result.get("summary", "تم زرع كتل القرآن")
     if name == "analyze_intent":
         return result.get("summary", "تم تحليل الطلب")
     if name == "pick_design":
