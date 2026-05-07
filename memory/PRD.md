@@ -6,6 +6,37 @@
 ## User Language: Arabic (العربية)
 
 
+### 🆕 May 7, 2026 — GENERATIVE QURAN (no templates, unique every time) ✅
+
+**شكوى المستخدم الجوهرية**: "كل مرة أطلب قرآن يعطيني نفس التصميم بستايلات مكررة. هذا قالب محفوظ، مو ذكاء حقيقي. أبيه يفكر تصاميم مختلفة في كل مرة."
+
+**الحل المعماري — primitives + توليد حر**:
+
+📜 **ملف JS بدائل (`/app/backend/static/zitex_primitives_quran.js`)**:
+- يُقدَّم عبر `GET /api/agent/primitives/quran.js`
+- `ZitexQuran.RECITERS` (14 قارئ معتمد + everyayah folder slug)
+- `ZitexQuran.SURAHS` (114 سورة metadata: name, transliteration, type, ayah_count)
+- `ZitexQuran.fetchSurah(n)` → نص مصحف المدينة من alquran.cloud (مع cache)
+- `ZitexQuran.audioUrl(reciterId, surahN, ayahN)` → mp3 URL من everyayah.com
+- `ZitexQuran.formatAyahNumber(n)` → أرقام عربية ٠١٢٣
+
+🎨 **`build_quran_mushaf_reader` معاد كتابتها بالكامل**:
+- محذوف: hardcoded 4-style `_render_widget` template
+- مضاف: 12 layout seed × 12 palette seed × 8 motif seed × 10 title seed = **11,520 توليفة فريدة عشوائياً**
+- LLM (Claude/GPT-4o) يولّد HTML/CSS/JS من الصفر كل مرة (temperature=1.0)
+- قيد إلزامي: AI **ممنوع** يخترع أسماء قراء، يكتب القرآن، يحط روابط صوت — كل شيء عبر `ZitexQuran.*`
+- auto-inject script tag لو الـAI نسيها
+
+**اختبار التنوّع مُحقّق**:
+- نداء 1: "minimal monochrome reading mode" + "midnight navy + warm copper" → title "نور المصحف"
+- نداء 2: "calligraphic centerpiece on parchment" + "matte black + rose-gold" → title "ترتيل" + SVG arabesque borders
+- نفس الـinput، صفر تداخل في الـoutput
+
+**E2E مُحقّق**: chat → analyze_intent → build_quran (95/100 QA) → publish_site → `/api/p/q1` يقدّم تصميماً فريداً (navy+copper مع كل الـ14 قارئ).
+
+**Commit**: `c2557c4` → push `zuhair646-debug/zitex:main` ✅
+
+
 ### 🆕 May 6, 2026 — MULTI-AGENT ORCHESTRATION + PUBLIC PUBLISH + CLAUDE FALLBACK ✅
 
 **حالة المستخدم**: محبط جداً، يهدد بإيقاف العمل، طلب نظام متعدد الوكلاء (Planner/Researcher/Designer/Builder/QA/Deployer) مع نشر فوري ومفاتيح OpenAI نفدت.
