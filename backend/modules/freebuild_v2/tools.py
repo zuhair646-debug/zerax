@@ -108,7 +108,7 @@ async def quran_verse_fetch(surah: int, ayah: int) -> Dict[str, Any]:
 # ════════════════════════════════════════════════════════════════════════
 #  TOOL: Web Fetch (real URL → readable text + meta)
 # ════════════════════════════════════════════════════════════════════════
-async def web_fetch(url: str, max_chars: int = 5000) -> Dict[str, Any]:
+async def web_fetch(url: str, max_chars: int = 30000) -> Dict[str, Any]:
     """Fetch a real webpage and return cleaned text + meta. Use when you need
     to verify/extract real-world content (product details, references)."""
     if not url.startswith("http"):
@@ -442,7 +442,7 @@ TOOL_SCHEMAS: List[Dict[str, Any]] = [
                 "type": "object",
                 "properties": {
                     "url": {"type": "string"},
-                    "max_chars": {"type": "integer", "default": 5000},
+                    "max_chars": {"type": "integer", "default": 30000},
                 },
                 "required": ["url"],
             },
@@ -820,15 +820,6 @@ async def build_website(brief: str, style_direction: str = "", current_html: str
     if not brief or len(brief.strip()) < 5:
         return {"ok": False, "error": "brief too short"}
     
-    # Detect religious / Quran context — should redirect to dedicated reader
-    religious_keywords = ("قرآن", "قران", "مصحف", "تلاوة", "تجويد", "حفظ", "تحفيظ", "قارئ", "قراء", "آية", "سورة")
-    if any(k in brief for k in religious_keywords):
-        return {
-            "ok": False,
-            "error": "religious_context_detected",
-            "hint": "استخدم build_quran_mushaf_reader بدلاً من build_website لأي طلب يخص القرآن — يبني موقع متكامل بقارئ مصحف حقيقي + 14 قارئ + اضغط أي آية تشتغل.",
-        }
-    
     direct_key = os.environ.get("OPENAI_DIRECT_KEY", "").strip()
     emergent_key = os.environ.get("EMERGENT_LLM_KEY", "").strip()
     if not direct_key and not emergent_key:
@@ -1108,7 +1099,7 @@ async def add_page(
         "أرجع section واحد كامل."
     )
     try:
-        new_section = await _gpt_rewrite(sys_prompt, user_prompt, max_tokens=4000)
+        new_section = await _gpt_rewrite(sys_prompt, user_prompt, max_tokens=8000)
         new_section = re.sub(r"^```(?:html)?\s*", "", new_section)
         new_section = re.sub(r"\s*```\s*$", "", new_section)
         if "<section" not in new_section.lower():
@@ -1224,7 +1215,7 @@ async def edit_section(
         "أرجع الـsection المحدّث."
     )
     try:
-        new_section = await _gpt_rewrite(sys_prompt, user_prompt, max_tokens=6000)
+        new_section = await _gpt_rewrite(sys_prompt, user_prompt, max_tokens=10000)
         new_section = re.sub(r"^```(?:html)?\s*", "", new_section)
         new_section = re.sub(r"\s*```\s*$", "", new_section)
         if "<section" not in new_section.lower():
