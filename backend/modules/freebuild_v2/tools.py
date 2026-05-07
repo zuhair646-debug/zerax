@@ -656,6 +656,12 @@ TOOL_SCHEMAS: List[Dict[str, Any]] = [
                         "type": "string",
                         "description": "Arabic instructions describing the change",
                     },
+                    "mode": {
+                        "type": "string",
+                        "enum": ["edit", "replace"],
+                        "description": "edit = refine existing, replace = rewrite from scratch (keeping wrapper)",
+                        "default": "edit",
+                    },
                 },
                 "required": ["target", "instructions"],
             },
@@ -687,19 +693,43 @@ TOOL_SCHEMAS: List[Dict[str, Any]] = [
     {
         "type": "function",
         "function": {
+            "name": "build_quran_website",
+            "description": (
+                "🎮 Alias for build_creative_quran_site. Build a complete Quran "
+                "website with creative design + REAL Quran content guaranteed."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "brief": {"type": "string", "description": "Detailed Arabic brief"},
+                    "surah": {"type": "integer", "default": 1},
+                    "style_direction": {"type": "string"},
+                },
+                "required": ["brief"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
             "name": "inject_quran_blocks",
             "description": (
                 "🩹 FIX broken Quran section in an existing site. Use when "
                 "build_website built a site but the Quran section is empty/broken — "
-                "this tool injects REAL ayahs + reciters + audio into the matching "
-                "section (or appends a new one if none found). Auto-injects default "
-                "CSS if none exists. Guaranteed to work."
+                "this tool injects REAL ayahs + reciters + audio (with dual-CDN "
+                "fallback) into the matching section. Three layouts available."
             ),
             "parameters": {
                 "type": "object",
                 "properties": {
                     "surah": {"type": "integer", "default": 1},
                     "target_selector": {"type": "string", "description": "Optional hint for which section to fix"},
+                    "layout": {
+                        "type": "string",
+                        "enum": ["simple", "mushaf_pages", "kids_friendly"],
+                        "default": "simple",
+                        "description": "simple = standard list, mushaf_pages = facing pages on parchment, kids_friendly = large colorful cards",
+                    },
                 },
             },
         },
@@ -1210,6 +1240,7 @@ async def add_page(
 async def edit_section(
     target: str,
     instructions: str,
+    mode: str = "edit",
     current_html: str = "",
 ) -> Dict[str, Any]:
     """Surgical edit of ONE section in the current site.
@@ -1218,6 +1249,7 @@ async def edit_section(
         target: Section identifier hint (e.g. 'hero', 'menu', 'contact', 'home', 'pricing').
                 Matches data-page, id, class, or nearest h1/h2 text.
         instructions: Arabic instructions for what to change in that section.
+        mode: "edit" (refine existing) or "replace" (rewrite section from scratch).
     """
     if not current_html or len(current_html) < 200:
         return {"ok": False, "error": "no current_html — call build_website first"}
@@ -1273,11 +1305,18 @@ async def edit_section(
         "- صور: <img src=\"@@IMG/auto@@\" alt=\"<وصف>\"> أو احتفظ بالـURLs الموجودة كما هي.\n"
         "أرجع الـsection الكامل المحدّث فقط (بدون شرح أو ```)."
     )
-    user_prompt = (
-        f"التعليمات: {instructions}\n\n"
-        f"الـsection الحالي:\n{target_section[:14000]}\n\n"
-        "أرجع الـsection المحدّث."
-    )
+    if (mode or "edit").lower() == "replace":
+        user_prompt = (
+            f"التعليمات: {instructions}\n\n"
+            f"الـsection الحالي (احتفظ بالـwrapper opening فقط، اكتب المحتوى من الصفر):\n{target_section[:30000]}\n\n"
+            "أرجع section كامل مُعاد كتابته من الصفر بنفس الـwrapper attributes."
+        )
+    else:
+        user_prompt = (
+            f"التعليمات: {instructions}\n\n"
+            f"الـsection الحالي:\n{target_section[:30000]}\n\n"
+            "أرجع الـsection المحدّث (تعديل، احتفظ بالأجزاء غير المتأثرة)."
+        )
     try:
         new_section = await _gpt_rewrite(sys_prompt, user_prompt, max_tokens=10000)
         new_section = re.sub(r"^```(?:html)?\s*", "", new_section)
@@ -1820,9 +1859,9 @@ async def fetch_quran_blocks(surah: int = 1) -> Dict[str, Any]:
         return {"ok": False, "error": f"alquran.cloud unreachable: {e}"}
     
     ayahs_html = "\n".join(
-        f'<div class="ayah-row" data-ayah="{a.get("numberInSurah")}" role="button" tabindex="0">'
-        f'<span class="ayah-text">{a.get("text","")}</span>'
-        f'<span class="ayah-num" data-num="{a.get("numberInSurah")}">{a.get("numberInSurah")}</span>'
+        f'<div class="ayah-row verse" data-ayah="{a.get("numberInSurah")}" data-surah="{surah}" data-verse="{a.get("numberInSurah")}" role="button" tabindex="0">'
+        f'<span class="ayah-text verse-text-uthmani">{a.get("text","")}</span>'
+        f'<span class="ayah-num verse-number-arabic" data-num="{a.get("numberInSurah")}">{a.get("numberInSurah")}</span>'
         f'</div>'
         for a in ayahs_data
     )
@@ -1848,34 +1887,71 @@ async def fetch_quran_blocks(surah: int = 1) -> Dict[str, Any]:
     
     audio_snippet = """<script>
 (function(){
+  const RECITER_FOLDERS = {
+    'alafasy':'Alafasy_128kbps','sudais':'Abdurrahmaan_As-Sudais_192kbps',
+    'shuraim':'Saood_ash-Shuraym_128kbps','husary':'Husary_128kbps',
+    'minshawi':'Minshawi_Murattal_128kbps','abdulbasit':'Abdul_Basit_Murattal_192kbps',
+    'ghamdi':'Ghamadi_40kbps','ajmi':'ahmed_ibn_ali_al_ajamy_128kbps',
+    'dossary':'Yasser_Ad-Dussary_128kbps','shatri':'Abu_Bakr_Ash-Shaatree_128kbps',
+    'juhany':'abdullaah_3awwaad_al-juhaynee_128kbps','hthfi':'Hudhaify_128kbps',
+    'ayyub':'Muhammad_Ayyoub_128kbps','maher':'Maher_AlMuaiqly_64kbps'
+  };
   let activeReciter = 'alafasy';
   let currentAudio = null;
   const SURAH_N = """ + str(surah) + """;
   
-  function play(ayahN, el) {
-    if (currentAudio) { currentAudio.pause(); }
-    document.querySelectorAll('.ayah-row.playing').forEach(e => e.classList.remove('playing'));
-    if (el) el.classList.add('playing');
-    currentAudio = new Audio(window.ZitexQuran.audioUrl(activeReciter, SURAH_N, ayahN));
-    currentAudio.play().catch(e => console.error('audio failed:', e));
+  function pad3(n){ return String(n).padStart(3,'0'); }
+  function urlFor(rid, sN, aN){
+    const folder = RECITER_FOLDERS[rid] || 'Alafasy_128kbps';
+    return 'https://everyayah.com/data/' + folder + '/' + pad3(sN) + pad3(aN) + '.mp3';
   }
   
-  document.addEventListener('DOMContentLoaded', function(){
+  async function playAyah(ayahN, el){
+    if (currentAudio) { try { currentAudio.pause(); } catch(e){} }
+    document.querySelectorAll('.ayah-row.playing, .verse.playing').forEach(e => e.classList.remove('playing'));
+    if (el) el.classList.add('playing');
+    
+    const url = (window.ZitexQuran && window.ZitexQuran.audioUrl)
+      ? window.ZitexQuran.audioUrl(activeReciter, SURAH_N, ayahN)
+      : urlFor(activeReciter, SURAH_N, ayahN);
+    currentAudio = new Audio(url);
+    currentAudio.addEventListener('ended', () => { if (el) el.classList.remove('playing'); });
+    currentAudio.addEventListener('error', () => {
+      if (el) el.classList.remove('playing');
+      console.warn('[Quran] audio failed:', url);
+    });
+    try { await currentAudio.play(); }
+    catch (err) { if (el) el.classList.remove('playing'); console.warn('[Quran] play() rejected:', err); }
+  }
+  
+  function setActiveReciter(rid){
+    activeReciter = rid;
+    document.querySelectorAll('.reciter-card.active').forEach(e => e.classList.remove('active'));
+    document.querySelectorAll('.reciter-card[data-reciter="'+rid+'"]').forEach(e => e.classList.add('active'));
+  }
+  
+  function bind(){
     document.querySelectorAll('.reciter-card').forEach(btn => {
-      btn.addEventListener('click', function(){
-        activeReciter = this.dataset.reciter;
-        document.querySelectorAll('.reciter-card.active').forEach(e => e.classList.remove('active'));
-        this.classList.add('active');
-      });
+      if (btn.dataset.zqpBound === '1') return;
+      btn.dataset.zqpBound = '1';
+      btn.addEventListener('click', function(){ setActiveReciter(this.dataset.reciter); });
     });
-    document.querySelectorAll('.ayah-row').forEach(row => {
+    document.querySelectorAll('.ayah-row, .verse').forEach(row => {
+      if (row.dataset.zqpBound === '1') return;
+      row.dataset.zqpBound = '1';
       row.addEventListener('click', function(){
-        play(parseInt(this.dataset.ayah), this);
+        const an = parseInt(this.dataset.ayah || this.dataset.verse || '1', 10);
+        playAyah(an, this);
       });
     });
-    const firstReciter = document.querySelector('.reciter-card[data-reciter="alafasy"]');
-    if (firstReciter) firstReciter.classList.add('active');
-  });
+    setActiveReciter('alafasy');
+  }
+  
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', bind);
+  } else {
+    bind();
+  }
 })();
 </script>"""
     
@@ -2029,9 +2105,16 @@ async def build_creative_quran_site(
 async def inject_quran_blocks(
     surah: int = 1,
     target_selector: str = "",
+    layout: str = "simple",
     current_html: str = "",
 ) -> Dict[str, Any]:
-    """🩹 Inject real Quran blocks into an EXISTING site (fix broken section)."""
+    """🩹 Inject real Quran blocks into an EXISTING site (fix broken section).
+    
+    Args:
+        surah: 1-114
+        target_selector: Optional hint for which section to fix
+        layout: "simple" (default), "mushaf_pages" (facing pages), "kids_friendly" (large colorful cards)
+    """
     if not current_html or len(current_html) < 50:
         return {"ok": False, "error": "no current_html — use build_creative_quran_site instead"}
     
@@ -2054,10 +2137,32 @@ async def inject_quran_blocks(
             target_match = m
             break
     
-    inner = (
-        f'<div class="reciters-strip">{blocks["reciters_html"]}</div>\n'
-        f'<div class="ayahs-container">{blocks["ayahs_html"]}</div>'
-    )
+    # Build inner content based on layout
+    if layout == "mushaf_pages":
+        # Two facing pages, half ayahs each
+        ayahs_html = blocks["ayahs_html"]
+        ayah_blocks = [m for m in re.finditer(r'<div class="ayah-row[^"]*"[^>]*>[\s\S]*?</div>', ayahs_html)]
+        half = max(1, len(ayah_blocks) // 2)
+        right_page = "\n".join(ab.group(0) for ab in ayah_blocks[:half])
+        left_page = "\n".join(ab.group(0) for ab in ayah_blocks[half:])
+        inner = (
+            f'<div class="reciters-strip">{blocks["reciters_html"]}</div>\n'
+            f'<div class="mushaf-pages-container" style="display:grid;grid-template-columns:1fr 1fr;gap:1.5rem;direction:rtl">'
+            f'<div class="mushaf-page right-page" style="background:#fffaf0;color:#1a1a1a;padding:2rem;border-radius:.75rem;box-shadow:0 12px 36px rgba(0,0,0,.25)">{right_page}</div>'
+            f'<div class="mushaf-page left-page" style="background:#fffaf0;color:#1a1a1a;padding:2rem;border-radius:.75rem;box-shadow:0 12px 36px rgba(0,0,0,.25)">{left_page}</div>'
+            f'</div>'
+        )
+    elif layout == "kids_friendly":
+        inner = (
+            f'<div class="reciters-strip">{blocks["reciters_html"]}</div>\n'
+            f'<div class="kids-ayahs" style="display:grid;gap:1rem;max-width:780px;margin:0 auto">{blocks["ayahs_html"]}</div>'
+            f'<style>.kids-ayahs .ayah-row{{padding:1.8rem!important;border-radius:1.5rem!important;background:linear-gradient(135deg,#fef3c7,#fde68a)!important;border:3px solid #f59e0b!important;color:#1a1a1a!important}}.kids-ayahs .ayah-text{{font-size:1.9rem!important;color:#1a1a1a!important}}.kids-ayahs .ayah-num{{width:48px!important;height:48px!important;background:#dc2626!important;color:#fff!important;font-size:1.1rem!important}}.kids-ayahs .ayah-row.playing{{background:linear-gradient(135deg,#fbbf24,#f59e0b)!important;transform:scale(1.03)!important}}</style>'
+        )
+    else:  # simple (default)
+        inner = (
+            f'<div class="reciters-strip">{blocks["reciters_html"]}</div>\n'
+            f'<div class="ayahs-container">{blocks["ayahs_html"]}</div>'
+        )
     
     if target_match:
         opening = re.match(r"(<section\b[^>]*>)", target_match.group(0)).group(1)
@@ -2065,7 +2170,7 @@ async def inject_quran_blocks(
         new_html = new_html[: target_match.start()] + new_section + new_html[target_match.end():]
         location = "replaced existing quran section"
     else:
-        new_section = f'<section class="quran-section" id="quran-reader" style="padding:3rem 1rem;max-width:900px;margin:0 auto;">\n{inner}\n</section>'
+        new_section = f'<section class="quran-section" id="quran-reader" style="padding:3rem 1rem;max-width:1100px;margin:0 auto;">\n{inner}\n</section>'
         new_html = new_html.replace("</body>", new_section + "\n</body>", 1)
         location = "appended new quran section"
     
@@ -2119,6 +2224,7 @@ TOOL_REGISTRY.update({
     "build_quran_mushaf_reader": build_quran_mushaf_reader,
     "fetch_quran_blocks": fetch_quran_blocks,
     "build_creative_quran_site": build_creative_quran_site,
+    "build_quran_website": build_creative_quran_site,  # alias (alternate name)
     "inject_quran_blocks": inject_quran_blocks,
     "analyze_intent": analyze_intent,
     "pick_design": pick_design,

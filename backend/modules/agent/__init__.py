@@ -193,7 +193,7 @@ def create_agent_router(db, get_current_user):
                         # Capture HTML output from website-building tools
                         if (
                             evt.get("status") == "done"
-                            and evt.get("name") in ("build_website", "update_website", "edit_section", "add_page", "set_theme", "build_quran_mushaf_reader", "build_creative_quran_site", "inject_quran_blocks")
+                            and evt.get("name") in ("build_website", "update_website", "edit_section", "add_page", "set_theme", "build_quran_mushaf_reader", "build_creative_quran_site", "build_quran_website", "inject_quran_blocks")
                             and isinstance(evt.get("html"), str)
                             and len(evt["html"]) > 200
                         ):
@@ -432,7 +432,7 @@ async def _gpt_stream(
                        "name": tc.function.name, "ok": result.get("ok"),
                        "summary": _tool_summary(tc.function.name, result)}
                 if (
-                    tc.function.name in ("build_website", "update_website", "edit_section", "add_page", "set_theme", "build_quran_mushaf_reader", "build_creative_quran_site", "inject_quran_blocks")
+                    tc.function.name in ("build_website", "update_website", "edit_section", "add_page", "set_theme", "build_quran_mushaf_reader", "build_creative_quran_site", "build_quran_website", "inject_quran_blocks")
                     and result.get("ok")
                     and isinstance(result.get("html"), str)
                 ):
@@ -556,7 +556,7 @@ async def _claude_stream(
                 evt = {"type": "tool", "status": "done", "name": name,
                        "ok": result.get("ok"),
                        "summary": _tool_summary(name, result)}
-                if name in ("build_website", "update_website", "edit_section", "add_page", "set_theme", "build_quran_mushaf_reader", "build_creative_quran_site", "inject_quran_blocks") and result.get("ok") and result.get("html"):
+                if name in ("build_website", "update_website", "edit_section", "add_page", "set_theme", "build_quran_mushaf_reader", "build_creative_quran_site", "build_quran_website", "inject_quran_blocks") and result.get("ok") and result.get("html"):
                     current_html = result["html"]
                     evt["html"] = current_html
                 if name == "publish_site" and result.get("ok") and result.get("_publish_request"):
@@ -626,6 +626,8 @@ def _tool_summary(name: str, result: Dict[str, Any]) -> str:
         return result.get("summary", "تم جلب كتل القرآن")
     if name == "build_creative_quran_site":
         return result.get("summary", "تم بناء موقع قرآن إبداعي")
+    if name == "build_quran_website":
+        return result.get("summary", "تم بناء موقع قرآن")
     if name == "inject_quran_blocks":
         return result.get("summary", "تم زرع كتل القرآن")
     if name == "analyze_intent":
