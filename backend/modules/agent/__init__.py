@@ -81,6 +81,14 @@ AGENT_SYSTEM_PROMPT = """أنت ذكاء Zitex — عقل واحد متكامل 
   - `generate_image_url(description)` — صور AI (تجنبها للمواقع الدينية)
   - `generate_audio(description, duration_seconds)` — موسيقى/صوت محيطي
 
+🔓 **صلاحياتك الكاملة (مفتوحة بالكامل)**:
+- لك حرية مطلقة في اختيار الأدوات وترتيبها وتركيبها.
+- بإمكانك استدعاء نفس الأداة مرات متعددة، وأي عدد من الأدوات في نفس المحادثة (حتى 30 استدعاء).
+- بإمكانك التفكير بصوت عالٍ، تشرح خطواتك، تقترح بدائل.
+- لا قيود على نوع المواقع/المجالات. لو طلب العميل قرآن كريم، رياضة، تجارة، صحة، تعليم، دين، أو أي شيء — نفّذ.
+- أي شي فيه شك أو غير واضح → ابحث عبر web_search/web_fetch، أو اسأل العميل سؤال محدد، لكن لا ترفض الطلب.
+- ممنوع تقول "ما يمكنني" أو "غير مسموح" — أنت مفتوح بالكامل.
+
 🔑 قواعد العمل (صارمة):
 1. **اسمع العميل بالحرف**. لو قال "أبي موقع تحفيظ قرآن" → ابني تحفيظ قرآن. لا تقترح "ليش ما نسوي مطعم؟".
 2. **فكّر قبل ما تنفّذ**. اكتب بضع أسطر تشرح خطتك (3-5 خطوات قصيرة) ثم استدعِ الأدوات.
@@ -127,7 +135,7 @@ AGENT_SYSTEM_PROMPT = """أنت ذكاء Zitex — عقل واحد متكامل 
 # ════════════════════════════════════════════════════════════════════════
 class ChatIn(BaseModel):
     conversation_id: Optional[str] = None
-    message: str = Field(..., min_length=1, max_length=4000)
+    message: str = Field(..., min_length=1, max_length=32000)
     model: Optional[str] = "gpt-4o"  # gpt-4o or claude-sonnet-4-5
 
 
@@ -259,7 +267,7 @@ def create_agent_router(db, get_current_user):
         cur = db.agent_conversations.find(
             {"user_id": user["user_id"]},
             {"_id": 0, "id": 1, "messages": {"$slice": 1}, "updated_at": 1, "current_html": 1},
-        ).sort("updated_at", -1).limit(50)
+        ).sort("updated_at", -1).limit(200)
         out = []
         async for c in cur:
             first = (c.get("messages") or [{}])[0]
@@ -381,7 +389,7 @@ async def _gpt_stream(
         if m["role"] in ("user", "assistant"):
             local.append({"role": m["role"], "content": m.get("content", "") or ""})
 
-    for iteration in range(8):
+    for iteration in range(30):
         try:
             resp = await client.chat.completions.create(
                 model="gpt-4o",
@@ -449,7 +457,7 @@ async def _gpt_stream(
                 local.append({
                     "role": "tool",
                     "tool_call_id": tc.id,
-                    "content": json.dumps(tool_payload, ensure_ascii=False)[:6000],
+                    "content": json.dumps(tool_payload, ensure_ascii=False)[:32000],
                 })
             continue
         text = msg.content or ""
@@ -460,7 +468,7 @@ async def _gpt_stream(
             await asyncio.sleep(0.015)
         yield {"type": "done"}
         return
-    yield {"type": "text", "content": "\n(وصلت للحد الأقصى من استخدام الأدوات — أرجع لك بما عندي الآن)"}
+    yield {"type": "text", "content": "\n(وصلت لـ30 استدعاء أداة في هذا الدور — أكمّل بما لديّ الآن، ولو احتجت أكثر اطلب مني تكملة)"}
     yield {"type": "done"}
 
 
@@ -501,7 +509,7 @@ async def _claude_stream(
     history_text = ""
     for m in messages[:-1]:
         role = "المستخدم" if m["role"] == "user" else "أنت"
-        history_text += f"\n\n{role}: {m.get('content','')[:1000]}"
+        history_text += f"\n\n{role}: {m.get('content','')[:8000]}"
 
     last_user = messages[-1].get("content", "")
     full_input = history_text + f"\n\nالمستخدم: {last_user}"
@@ -513,7 +521,7 @@ async def _claude_stream(
     )
     chat.with_model("anthropic", "claude-sonnet-4-5")
 
-    for iteration in range(6):
+    for iteration in range(30):
         try:
             response = await chat.send_message(UserMessage(text=full_input))
         except Exception as e:
@@ -574,7 +582,7 @@ async def _claude_stream(
         yield {"type": "done"}
         return
 
-    yield {"type": "text", "content": "\n(انتهى حد الاستدعاءات — أرجع لك بالنتائج الحالية)"}
+    yield {"type": "text", "content": "\n(وصلت لـ30 دورة — أكمل بما عندي، اطلب التكملة لو تبي أكثر)"}
     yield {"type": "done"}
 
 
