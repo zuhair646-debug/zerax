@@ -6,6 +6,43 @@
 ## User Language: Arabic (العربية)
 
 
+### 🆕 May 7, 2026 — COMPLETE QURAN SITES GUARANTEED (pre-fetch + audit + retry) ✅
+
+**شكوى المستخدم**: "التصاميم متنوعة لكن ناقصة — وين الآيات؟ وين القراء؟ ما يشتغل audio. ابني أدوات تدقق وتتأكد بعينها، وما تعطيني موقع إلا وهي متأكدة شغّال."
+
+**الحل المعماري — 3 طبقات حماية**:
+
+🔒 **1. Server-side pre-fetch**:
+- الأداة تجلب نص السورة من alquran.cloud قبل ما تستدعي LLM
+- تبني كتلتين HTML جاهزتين:
+  - `ayahs_html_block`: كل الآيات بـ`data-ayah="N"` ونصها الحقيقي
+  - `reciters_html_block`: 14 قارئ بـ`data-reciter="id"`
+- LLM **يجبر** على نسخ الكتلتين كما هما → الآيات والقراء يظهرون فوراً عند فتح الصفحة (لا async)
+
+🧪 **2. Static audit (`_audit_quran_html`)**:
+- يعدّ `data-ayah` فريد → يجب يساوي عدد الآيات المتوقع
+- يعدّ `data-reciter` فريد → يجب يساوي 14
+- يتحقق من: primitives.js script، audioUrl wiring، click listener، surah selector
+- يرجع `{ok, ayahs_found, reciters_found, missing[]}`
+
+🔁 **3. Auto-retry loop (3 محاولات)**:
+- لو audit فشل → يعيد البناء مع قائمة صريحة بالناقص
+- LLM يصلح فقط النقص بدون يخرّب اللي شغّال
+- summary يعرض حالة Audit: "✅ مكتمل (7/7 آية · 14/14 قارئ)"
+
+**اختبار حي مُحقّق على `/api/p/qcomplete`**:
+- attempt=1, audit pass first try
+- Title: "تلاوة" (مختلف عن السابق)
+- Layout: Ottoman ornate frames
+- Palette: sage green + terracotta
+- ✅ كل الـ7 آيات بالتشكيل الكامل من بسم الله إلى ولا الضالين
+- ✅ كل الـ14 قارئ ظاهرين أزرار قابلة للضغط
+- ✅ click reciter → activeReciter changes
+- ✅ click ayah → audio plays + `.playing` class applied (Playwright تأكدت)
+
+**Commit**: `71d7d67` → push `zuhair646-debug/zitex:main` ✅
+
+
 ### 🆕 May 7, 2026 — GENERATIVE QURAN (no templates, unique every time) ✅
 
 **شكوى المستخدم الجوهرية**: "كل مرة أطلب قرآن يعطيني نفس التصميم بستايلات مكررة. هذا قالب محفوظ، مو ذكاء حقيقي. أبيه يفكر تصاميم مختلفة في كل مرة."
