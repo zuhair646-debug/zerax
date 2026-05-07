@@ -1484,22 +1484,11 @@ async def build_quran_mushaf_reader(
     style: str = "",  # IGNORED now — kept for backward compat
     site_title: str = "",
 ) -> Dict[str, Any]:
-    """🕌 GENERATIVE Quran site builder.
+    """🕌 GENERATIVE Quran site builder with server-side pre-fetched ayahs and audit retry.
     
-    Every call produces a UNIQUE design. The LLM freely invents:
-    - Layout strategy (12 seed directions, randomly mixed)
-    - Color palette (12 seed combinations)
-    - Typography pairing
-    - Interaction patterns
-    - Decorative motifs
-    
-    Real data primitives loaded via /api/agent/primitives/quran.js:
-    - ZitexQuran.RECITERS (14 verified reciters)
-    - ZitexQuran.SURAHS (114 surah metadata)
-    - ZitexQuran.fetchSurah(n) → real Madinah Mushaf text from alquran.cloud
-    - ZitexQuran.audioUrl(reciterId, surahN, ayahN) → everyayah.com mp3 URL
-    
-    The AI MUST use these primitives — never hardcode reciter names or audio URLs.
+    Pre-fetches the surah text from alquran.cloud server-side, embeds it inline
+    so ayahs are visible IMMEDIATELY (not on async load). Then runs a strict
+    static audit + retries up to 2x if essential elements are missing.
     """
     try:
         surah = int(surah)
@@ -1507,6 +1496,29 @@ async def build_quran_mushaf_reader(
         return {"ok": False, "error": "surah must be an integer 1-114"}
     if not (1 <= surah <= 114):
         return {"ok": False, "error": "surah must be 1..114"}
+    
+    # PRE-FETCH the actual ayahs server-side — never trust LLM to write them
+    try:
+        async with httpx.AsyncClient(timeout=12.0) as client:
+            r = await client.get(f"https://api.alquran.cloud/v1/surah/{surah}/quran-uthmani")
+        data = r.json() if r.status_code == 200 else {}
+        ayahs_data = (data.get("data") or {}).get("ayahs") or []
+        surah_meta = (data.get("data") or {})
+        if not ayahs_data:
+            return {"ok": False, "error": "failed to fetch surah from alquran.cloud"}
+    except Exception as e:
+        return {"ok": False, "error": f"alquran.cloud unreachable: {e}"}
+    
+    # Build the inline ayah HTML the LLM MUST embed verbatim
+    ayahs_inline = []
+    for a in ayahs_data:
+        n = a.get("numberInSurah")
+        text = a.get("text", "")
+        ayahs_inline.append({"n": n, "text": text})
+    
+    surah_name_ar = _get_surah_name_ar(surah)
+    surah_name_en = (surah_meta.get("englishName") or "").strip()
+    revelation_type = (surah_meta.get("revelationType") or "Meccan")
     
     # Random creative seeds for diversity
     layout_seed = _rand.choice(QURAN_LAYOUT_SEEDS)
@@ -1526,72 +1538,188 @@ async def build_quran_mushaf_reader(
         "مصحف القراء", "صدى التلاوة", "ترتيل", "مصحف الإمام",
     ])
     
+    # Build the verbatim ayah HTML block the LLM MUST embed (we won't trust LLM with text)
+    ayahs_html_block = "\n".join(
+        f'  <div class="ayah-row" data-ayah="{a["n"]}" role="button" tabindex="0">'
+        f'<span class="ayah-text">{a["text"]}</span>'
+        f'<span class="ayah-num" data-num="{a["n"]}">{a["n"]}</span>'
+        f'</div>'
+        for a in ayahs_inline
+    )
+    
+    # Build inline reciter strip block — LLM must embed too
+    RECITERS_LIST = [
+        {"id":"alafasy","name":"مشاري العفاسي"},{"id":"sudais","name":"عبد الرحمن السديس"},
+        {"id":"shuraim","name":"سعود الشريم"},{"id":"husary","name":"محمود الحصري"},
+        {"id":"minshawi","name":"محمد المنشاوي"},{"id":"abdulbasit","name":"عبد الباسط"},
+        {"id":"ghamdi","name":"سعد الغامدي"},{"id":"ajmi","name":"أحمد العجمي"},
+        {"id":"dossary","name":"ياسر الدوسري"},{"id":"shatri","name":"أبو بكر الشاطري"},
+        {"id":"juhany","name":"عبد الله الجهني"},{"id":"hthfi","name":"علي الحذيفي"},
+        {"id":"ayyub","name":"محمد أيوب"},{"id":"maher","name":"ماهر المعيقلي"},
+    ]
+    reciters_html_block = "\n".join(
+        f'  <button class="reciter-card" data-reciter="{r["id"]}" type="button">'
+        f'<span class="reciter-avatar">{r["name"][0]}</span>'
+        f'<span class="reciter-name">{r["name"]}</span>'
+        f'</button>'
+        for r in RECITERS_LIST
+    )
+    
     sys_prompt = f"""أنت معماري واجهات إسلامي عبقري. مهمتك: بناء صفحة HTML واحدة كاملة لقارئ قرآن SPA.
 
-🔒 قواعد البيانات (إلزامية، لا تخالفها):
-- النص الفعلي للقرآن يُجلب فقط عبر `await ZitexQuran.fetchSurah(N)` — ممنوع تكتب أي آية بنفسك (لا تشكيل، لا اختراع).
-- روابط الصوت فقط عبر `ZitexQuran.audioUrl(reciterId, surahN, ayahN)` — ممنوع mp3quran/youtube/أي مصدر آخر.
-- قراء الـ14 جاهزين في `ZitexQuran.RECITERS` — استخدمهم بدون تعديل.
-- أسماء السور الـ114 جاهزة في `ZitexQuran.SURAHS`.
-- يجب تضمين: `<script src="/api/agent/primitives/quran.js"></script>` قبل أي JS.
+🔒 قواعد البيانات (إلزامية صارمة):
+- يجب تضمين السكريبت: `<script src="/api/agent/primitives/quran.js"></script>` قبل أي JS تكتبه.
+- روابط الصوت فقط عبر `ZitexQuran.audioUrl(reciterId, surahN, ayahN)` (تستخدم everyayah.com).
+- ⚠️ سأعطيك كتلتين HTML جاهزتين (الآيات + القراء). يجب أن تنسخهما **حرفياً** داخل containers في موقعك. ممنوع تعديل النصوص أو الأسماء.
 
 🎨 الإلزام الإبداعي (اختلف 100% عن أي تصميم سابق):
 - اتجاه التصميم: {layout_seed}
 - لوحة الألوان: {palette_seed}
 - نمط الزخرفة: {motif_seed}
 - ممنوع تكرار الأسود/الذهبي التقليدي إلا لو palette_seed قال كذا.
-- ممنوع تستخدم أي layout/style شفته في موقع قرآن قبل.
 
-📋 المتطلبات الوظيفية:
+📋 المتطلبات الوظيفية الإلزامية:
 1. RTL، lang="ar"، Tajawal/Aref Ruqaa/Amiri Quran من Google Fonts.
-2. عند load: استدعِ `ZitexQuran.fetchSurah({surah})` واعرض الآيات.
-3. شريط/قائمة/ملف-تعريفات للقراء — عرض جميع الـ14 من `ZitexQuran.RECITERS`.
-4. ضغط على آية → تشغيل صوتها بالقارئ المختار عبر `ZitexQuran.audioUrl(reciterId, {surah}, ayahNumber)`.
-5. سيليكتر/قائمة لتغيير السورة (1-114) — أعد load عند التغيير.
-6. controls: تكرار / متصل / السابقة / التالية.
-7. الآية النشطة (currentAudio playing) تتميز بصرياً (glow / underline / scale).
-8. responsive (mobile + desktop).
-9. SVG decorations only (لا صور خارجية، لا Unsplash، لا AI images).
+2. ⚠️ كتلة الـ{len(ayahs_inline)} آية (ستُعطى لك) منسوخة كما هي داخل container.
+3. ⚠️ كتلة الـ14 قارئ (ستُعطى لك) منسوخة كما هي داخل container.
+4. **تنسيق ذكي**: لما المستخدم يفتح الصفحة، يشوف الآيات والقراء فوراً، **بدون** انتظار JS async.
+5. activeReciter (state) — أول قارئ افتراضياً (alafasy). الضغط على .reciter-card يبدّله.
+6. الضغط على .ayah-row → 
+   ```
+   const audio = new Audio(window.ZitexQuran.audioUrl(activeReciter, {surah}, parseInt(this.dataset.ayah)));
+   audio.play();
+   ```
+7. الآية اللي تُشغّل تأخذ class="playing" (glow/scale).
+8. controls: تكرار الآية / تشغيل متصل / السابقة / التالية.
+9. selectbox/menu لاختيار سورة 1-114 → يفتح `?s={{n}}` (نحن نعيد البناء).
+10. responsive، SVG decorations فقط.
 
 📦 المخرجات:
 - ملف HTML واحد كامل من `<!doctype html>` إلى `</html>`.
-- inline CSS و JS فقط.
-- ممنوع شرح، ممنوع markdown fences.
+- inline CSS و JS فقط، ممنوع شرح، ممنوع markdown fences.
 
-ابدع. كل سطر يعكس فكر معماري عظيم."""
+ابدع — لكن **تذكر**: بدون آيات ظاهرة + بدون 14 قارئ ظاهرين + بدون click listener = الموقع غير مكتمل ومرفوض."""
 
-    user_prompt = (
-        f"العنوان: {site_title}\n"
-        f"السورة الافتراضية: {surah} ({_get_surah_name_ar(surah)})\n"
-        "ابنِ الموقع الكامل الآن."
-    )
+    user_prompt = f"""العنوان: {site_title}
+السورة: {surah} ({surah_name_ar} / {surah_name_en}) — {revelation_type} — {len(ayahs_inline)} آية
+
+🔒 الكتلة 1 — الآيات (انسخها كما هي داخل container):
+
+```html
+{ayahs_html_block}
+```
+
+🔒 الكتلة 2 — القراء (انسخها كما هي داخل container منفصل):
+
+```html
+{reciters_html_block}
+```
+
+ابنِ الموقع الكامل الآن. الكتلتان أعلاه يجب أن تظهرا في الـHTML النهائي حرفياً."""
     
-    try:
-        html = await _gpt_rewrite(sys_prompt, user_prompt, max_tokens=14000, temperature=1.0)
-        # Strip markdown fences
-        html = re.sub(r"^```(?:html)?\s*", "", html)
-        html = re.sub(r"\s*```\s*$", "", html)
-        if "<html" not in html.lower():
-            return {"ok": False, "error": "model did not return valid HTML"}
-        # Ensure primitives script is included (auto-inject if AI forgot)
-        if "/api/agent/primitives/quran.js" not in html:
-            html = html.replace(
-                "</head>",
-                '<script src="/api/agent/primitives/quran.js"></script>\n</head>',
-                1,
+    # Build with audit-retry up to 3 attempts
+    last_html = ""
+    last_audit: Dict[str, Any] = {}
+    for attempt in range(3):
+        try:
+            html = await _gpt_rewrite(sys_prompt, user_prompt, max_tokens=14000, temperature=1.0)
+            html = re.sub(r"^```(?:html)?\s*", "", html)
+            html = re.sub(r"\s*```\s*$", "", html)
+            if "<html" not in html.lower():
+                continue
+            # Ensure primitives script is included
+            if "/api/agent/primitives/quran.js" not in html:
+                html = html.replace(
+                    "</head>",
+                    '<script src="/api/agent/primitives/quran.js"></script>\n</head>',
+                    1,
+                )
+            audit = _audit_quran_html(html, expected_ayahs=len(ayahs_inline))
+            last_html = html
+            last_audit = audit
+            if audit["ok"]:
+                return {
+                    "ok": True,
+                    "html": html,
+                    "size_kb": round(len(html) / 1024, 1),
+                    "surah": surah,
+                    "layout": layout_seed,
+                    "palette": palette_seed,
+                    "audit": audit,
+                    "attempts": attempt + 1,
+                    "summary": f"✅ قارئ قرآن مكتمل ({surah_name_ar} · {audit['ayahs_found']}/{len(ayahs_inline)} آية · {audit['reciters_found']}/14 قارئ)",
+                }
+            # Audit failed — append issues to the prompt and retry
+            issues_text = "\n".join(f"- {i}" for i in audit["missing"])
+            user_prompt = (
+                f"المحاولة السابقة فشلت في الـaudit:\n{issues_text}\n\n"
+                "أعد البناء — هذه المرة احرص أن:\n"
+                "1. الآيات الـ" + str(len(ayahs_inline)) + " كلها موجودة بصرياً (class='ayah').\n"
+                "2. الـ14 قارئ كلهم في عنصر يحمل صفة data-reciter أو class تحتوي على reciter.\n"
+                "3. <script src='/api/agent/primitives/quran.js'> موجود.\n"
+                "4. event listener على .ayah للضغط.\n\n"
+                f"السورة: {surah_name_ar}\n\nكتلة الآيات (انسخها):\n```html\n{ayahs_html_block}\n```"
             )
+        except Exception as e:
+            logger.exception("[BUILD_QURAN] attempt %d failed", attempt + 1)
+            last_audit = {"ok": False, "error": str(e)[:200]}
+    
+    # All retries failed — return last attempt with audit details
+    if last_html:
         return {
-            "ok": True,
-            "html": html,
-            "size_kb": round(len(html) / 1024, 1),
+            "ok": True,  # we have a result, just imperfect
+            "html": last_html,
+            "size_kb": round(len(last_html) / 1024, 1),
             "surah": surah,
-            "layout": layout_seed,
-            "palette": palette_seed,
-            "summary": f"تم بناء قارئ قرآن فريد (سورة {_get_surah_name_ar(surah)})",
+            "audit": last_audit,
+            "attempts": 3,
+            "warning": "audit_imperfect",
+            "summary": f"⚠️ بُني بعد 3 محاولات، الـaudit ناقص: {last_audit.get('missing', [])}",
         }
-    except Exception as e:
-        logger.exception("[BUILD_QURAN] failed")
-        return {"ok": False, "error": str(e)[:200]}
+    return {"ok": False, "error": last_audit.get("error", "all retries failed")}
+
+
+def _audit_quran_html(html: str, expected_ayahs: int) -> Dict[str, Any]:
+    """Static audit of generated Quran HTML. Verifies presence of essential
+    UI elements without needing a real browser."""
+    missing: List[str] = []
+    
+    # 1. Ayah rows rendered inline (count `data-ayah=` attributes — exact)
+    ayah_data_matches = re.findall(r'data-ayah="(\d+)"', html)
+    ayahs_found = len(set(ayah_data_matches))
+    if ayahs_found < expected_ayahs:
+        missing.append(f"ayahs: {ayahs_found}/{expected_ayahs} (need all {expected_ayahs} as <... data-ayah='N'>)")
+    
+    # 2. Reciter cards (count `data-reciter=` attributes)
+    reciter_data_matches = re.findall(r'data-reciter="([^"]+)"', html)
+    reciters_found = len(set(reciter_data_matches))
+    if reciters_found < 14:
+        missing.append(f"reciters: only {reciters_found}/14 found (need all 14 as <... data-reciter='id'>)")
+    
+    # 3. primitives.js script tag
+    if "/api/agent/primitives/quran.js" not in html:
+        missing.append("primitives script tag missing")
+    
+    # 4. audioUrl usage
+    if "audioUrl" not in html and "everyayah.com" not in html:
+        missing.append("no audio playback wiring (audioUrl never referenced)")
+    
+    # 5. click event listener
+    has_listener = bool(re.search(r"addEventListener\s*\(\s*['\"]click", html)) or "onclick" in html
+    if not has_listener:
+        missing.append("no click event listener (interactions broken)")
+    
+    # 6. Surah selector
+    if "<select" not in html and "?s=" not in html:
+        missing.append("no surah selector found")
+    
+    return {
+        "ok": len(missing) == 0,
+        "ayahs_found": ayahs_found,
+        "ayahs_expected": expected_ayahs,
+        "reciters_found": reciters_found,
+        "missing": missing,
+    }
 
 
 def _get_surah_name_ar(n: int) -> str:
