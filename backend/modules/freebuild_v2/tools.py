@@ -1444,233 +1444,159 @@ async def publish_site(slug: str = "", title: str = "موقع زيتكس", curre
 
 
 # ════════════════════════════════════════════════════════════════════════
-#  TOOL: Build Quran Mushaf Reader (INTEGRATED full-page widget)
+#  TOOL: Build Quran Site (GENERATIVE — never repeats)
 # ════════════════════════════════════════════════════════════════════════
+import random as _rand
+
+QURAN_LAYOUT_SEEDS = [
+    "vertical scroll mushaf with floating reciter dock at bottom",
+    "horizontal pages flipping like a real mushaf, swipe between pages",
+    "immersive single-ayah focus mode — one verse fills the screen, swipe to next",
+    "split view: left=reciters grid with stats, right=verses with translation hover",
+    "magazine layout: hero verse + sidebar of reciters as profile cards + bottom waveform player",
+    "gallery of reciter portraits, click one and verses appear in a luxe modal with audio",
+    "minimal monochrome reading mode with hidden controls, hover to reveal",
+    "calligraphic centerpiece: each ayah is a hand-drawn piece on parchment",
+    "ottoman-inspired ornate frames around each ayah, gold filigree, deep emerald bg",
+    "modernist brutalist: huge typography, black/white, single accent color, no decorations",
+    "night sky theme: deep navy with stars, ayahs glow softly when active",
+    "dawn theme: warm gradient (peach → gold), serene typography, slow fade animations",
+]
+
+QURAN_PALETTE_SEEDS = [
+    "deep emerald green + antique gold",
+    "midnight navy + warm copper",
+    "ivory parchment + chocolate brown + crimson",
+    "obsidian black + electric teal accent",
+    "burgundy maroon + soft cream",
+    "sage green + warm terracotta",
+    "royal purple + champagne gold",
+    "charcoal + dusty rose pink",
+    "pure white + jet black + single saffron accent",
+    "twilight blue + silver moonlight",
+    "desert sand + indigo + burnt orange",
+    "matte black + rose-gold + bone white",
+]
+
+
 async def build_quran_mushaf_reader(
     surah: int = 1,
-    style: str = "classic",
-    site_title: str = "مصحف زيتكس",
+    style: str = "",  # IGNORED now — kept for backward compat
+    site_title: str = "",
 ) -> Dict[str, Any]:
-    """Build a COMPLETE single-page Quran reader site with integrated widget."""
-    # Coerce to int — Claude sometimes passes "1" as string
+    """🕌 GENERATIVE Quran site builder.
+    
+    Every call produces a UNIQUE design. The LLM freely invents:
+    - Layout strategy (12 seed directions, randomly mixed)
+    - Color palette (12 seed combinations)
+    - Typography pairing
+    - Interaction patterns
+    - Decorative motifs
+    
+    Real data primitives loaded via /api/agent/primitives/quran.js:
+    - ZitexQuran.RECITERS (14 verified reciters)
+    - ZitexQuran.SURAHS (114 surah metadata)
+    - ZitexQuran.fetchSurah(n) → real Madinah Mushaf text from alquran.cloud
+    - ZitexQuran.audioUrl(reciterId, surahN, ayahN) → everyayah.com mp3 URL
+    
+    The AI MUST use these primitives — never hardcode reciter names or audio URLs.
+    """
     try:
         surah = int(surah)
     except (TypeError, ValueError):
         return {"ok": False, "error": "surah must be an integer 1-114"}
     if not (1 <= surah <= 114):
         return {"ok": False, "error": "surah must be 1..114"}
-    if style not in ("classic", "modern", "minimal", "royal"):
-        style = "classic"
+    
+    # Random creative seeds for diversity
+    layout_seed = _rand.choice(QURAN_LAYOUT_SEEDS)
+    palette_seed = _rand.choice(QURAN_PALETTE_SEEDS)
+    motif_seed = _rand.choice([
+        "Islamic geometric tessellation patterns (SVG)",
+        "Ottoman tughra-inspired calligraphic flourishes",
+        "Andalusian arabesque borders",
+        "Mamluk star-and-cross interlace",
+        "Persian floral arabesque",
+        "Modernist linework only — no traditional motifs",
+        "Pure typography focus — no decoration at all",
+        "Sacred geometry: hexagons, octagrams, golden-ratio spirals",
+    ])
+    site_title = site_title or _rand.choice([
+        "مصحف زيتكس", "مصحفي", "تلاوة", "نور المصحف", "آيات", "مرتل",
+        "مصحف القراء", "صدى التلاوة", "ترتيل", "مصحف الإمام",
+    ])
+    
+    sys_prompt = f"""أنت معماري واجهات إسلامي عبقري. مهمتك: بناء صفحة HTML واحدة كاملة لقارئ قرآن SPA.
+
+🔒 قواعد البيانات (إلزامية، لا تخالفها):
+- النص الفعلي للقرآن يُجلب فقط عبر `await ZitexQuran.fetchSurah(N)` — ممنوع تكتب أي آية بنفسك (لا تشكيل، لا اختراع).
+- روابط الصوت فقط عبر `ZitexQuran.audioUrl(reciterId, surahN, ayahN)` — ممنوع mp3quran/youtube/أي مصدر آخر.
+- قراء الـ14 جاهزين في `ZitexQuran.RECITERS` — استخدمهم بدون تعديل.
+- أسماء السور الـ114 جاهزة في `ZitexQuran.SURAHS`.
+- يجب تضمين: `<script src="/api/agent/primitives/quran.js"></script>` قبل أي JS.
+
+🎨 الإلزام الإبداعي (اختلف 100% عن أي تصميم سابق):
+- اتجاه التصميم: {layout_seed}
+- لوحة الألوان: {palette_seed}
+- نمط الزخرفة: {motif_seed}
+- ممنوع تكرار الأسود/الذهبي التقليدي إلا لو palette_seed قال كذا.
+- ممنوع تستخدم أي layout/style شفته في موقع قرآن قبل.
+
+📋 المتطلبات الوظيفية:
+1. RTL، lang="ar"، Tajawal/Aref Ruqaa/Amiri Quran من Google Fonts.
+2. عند load: استدعِ `ZitexQuran.fetchSurah({surah})` واعرض الآيات.
+3. شريط/قائمة/ملف-تعريفات للقراء — عرض جميع الـ14 من `ZitexQuran.RECITERS`.
+4. ضغط على آية → تشغيل صوتها بالقارئ المختار عبر `ZitexQuran.audioUrl(reciterId, {surah}, ayahNumber)`.
+5. سيليكتر/قائمة لتغيير السورة (1-114) — أعد load عند التغيير.
+6. controls: تكرار / متصل / السابقة / التالية.
+7. الآية النشطة (currentAudio playing) تتميز بصرياً (glow / underline / scale).
+8. responsive (mobile + desktop).
+9. SVG decorations only (لا صور خارجية، لا Unsplash، لا AI images).
+
+📦 المخرجات:
+- ملف HTML واحد كامل من `<!doctype html>` إلى `</html>`.
+- inline CSS و JS فقط.
+- ممنوع شرح، ممنوع markdown fences.
+
+ابدع. كل سطر يعكس فكر معماري عظيم."""
+
+    user_prompt = (
+        f"العنوان: {site_title}\n"
+        f"السورة الافتراضية: {surah} ({_get_surah_name_ar(surah)})\n"
+        "ابنِ الموقع الكامل الآن."
+    )
     
     try:
-        from .quran_player import _render_widget, _STYLE_PRESETS
-        widget_html = _render_widget(surah=surah, style_key=style, instance_id=f"q{surah}")
-        s = _STYLE_PRESETS.get(style, _STYLE_PRESETS["classic"])
+        html = await _gpt_rewrite(sys_prompt, user_prompt, max_tokens=14000, temperature=1.0)
+        # Strip markdown fences
+        html = re.sub(r"^```(?:html)?\s*", "", html)
+        html = re.sub(r"\s*```\s*$", "", html)
+        if "<html" not in html.lower():
+            return {"ok": False, "error": "model did not return valid HTML"}
+        # Ensure primitives script is included (auto-inject if AI forgot)
+        if "/api/agent/primitives/quran.js" not in html:
+            html = html.replace(
+                "</head>",
+                '<script src="/api/agent/primitives/quran.js"></script>\n</head>',
+                1,
+            )
+        return {
+            "ok": True,
+            "html": html,
+            "size_kb": round(len(html) / 1024, 1),
+            "surah": surah,
+            "layout": layout_seed,
+            "palette": palette_seed,
+            "summary": f"تم بناء قارئ قرآن فريد (سورة {_get_surah_name_ar(surah)})",
+        }
     except Exception as e:
-        return {"ok": False, "error": f"widget render failed: {e}"}
-    
-    # Wrap in a complete, beautiful, calligraphy-focused HTML page
-    bg = s["bg"]
-    accent = s["accent"]
-    text = s["text"]
-    border = s["border"]
-    
-    page = f"""<!doctype html>
-<html dir="rtl" lang="ar">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<title>{site_title}</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Amiri+Quran&family=Tajawal:wght@400;700;900&family=Aref+Ruqaa:wght@400;700&display=swap" rel="stylesheet">
-<style>
-  *{{box-sizing:border-box;margin:0;padding:0}}
-  body{{
-    font-family:'Tajawal',system-ui,sans-serif;
-    background:{bg};
-    color:{text};
-    min-height:100vh;
-    line-height:1.7;
-    overflow-x:hidden;
-  }}
-  /* Geometric Islamic ornament backdrop (pure SVG, no random images) */
-  body::before{{
-    content:'';
-    position:fixed;
-    inset:0;
-    pointer-events:none;
-    background:
-      radial-gradient(circle at 20% 30%, {accent}11 0%, transparent 40%),
-      radial-gradient(circle at 80% 70%, {accent}0a 0%, transparent 40%);
-    z-index:0;
-  }}
-  .ornament-pattern{{
-    position:fixed;
-    inset:0;
-    pointer-events:none;
-    opacity:.04;
-    background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='80' height='80' viewBox='0 0 80 80'><path d='M40 0 L80 40 L40 80 L0 40 Z M40 20 L60 40 L40 60 L20 40 Z' fill='none' stroke='{accent.replace('#','%23')}' stroke-width='1'/></svg>");
-    z-index:0;
-  }}
-  header{{
-    position:relative;
-    z-index:2;
-    padding:2.5rem 1.5rem 1rem;
-    text-align:center;
-  }}
-  .brand{{
-    font-family:'Aref Ruqaa',serif;
-    font-size:clamp(2rem,5vw,3.5rem);
-    font-weight:700;
-    color:{accent};
-    letter-spacing:.05em;
-    text-shadow:0 2px 24px {accent}55;
-  }}
-  .tagline{{
-    margin-top:.5rem;
-    font-size:1rem;
-    opacity:.7;
-    font-weight:400;
-  }}
-  .ornament-line{{
-    margin:1.5rem auto 0;
-    width:240px;
-    height:32px;
-    background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 240 32'><path d='M0 16 H100 M140 16 H240 M120 4 L132 16 L120 28 L108 16 Z' fill='none' stroke='{accent.replace('#','%23')}' stroke-width='1.5'/></svg>");
-    background-repeat:no-repeat;
-    background-position:center;
-    opacity:.7;
-  }}
-  main{{
-    position:relative;
-    z-index:2;
-    padding:1rem 1rem 4rem;
-  }}
-  /* Surah navigator */
-  .surah-nav{{
-    max-width:900px;
-    margin:0 auto 1.5rem;
-    display:flex;
-    gap:.75rem;
-    align-items:center;
-    justify-content:center;
-    flex-wrap:wrap;
-    padding:1rem;
-    background:{accent}0a;
-    border:1px solid {border};
-    border-radius:1rem;
-  }}
-  .surah-nav label{{
-    font-size:.9rem;
-    opacity:.7;
-  }}
-  .surah-nav select{{
-    padding:.6rem 1rem;
-    border-radius:.6rem;
-    background:{bg};
-    color:{text};
-    border:1px solid {accent}55;
-    font-family:inherit;
-    font-size:1rem;
-    cursor:pointer;
-    min-width:200px;
-  }}
-  footer{{
-    position:relative;
-    z-index:2;
-    padding:2rem 1rem;
-    text-align:center;
-    font-size:.85rem;
-    opacity:.6;
-    border-top:1px solid {border};
-    margin-top:2rem;
-  }}
-  footer a{{color:{accent};text-decoration:none}}
-  /* Smooth focus */
-  *:focus{{outline:2px solid {accent}88;outline-offset:2px}}
-  /* Mobile */
-  @media (max-width:640px){{
-    header{{padding:1.5rem 1rem .5rem}}
-    .brand{{font-size:1.75rem}}
-  }}
-</style>
-</head>
-<body>
-<div class="ornament-pattern"></div>
+        logger.exception("[BUILD_QURAN] failed")
+        return {"ok": False, "error": str(e)[:200]}
 
-<header>
-  <h1 class="brand">{site_title}</h1>
-  <div class="tagline">قراءة وتلاوة بأصوات أئمة الحرمين والقرّاء المعتمدين</div>
-  <div class="ornament-line"></div>
-</header>
 
-<main>
-  <!-- Surah selector -->
-  <div class="surah-nav">
-    <label for="surah-pick">انتقل إلى سورة:</label>
-    <select id="surah-pick" onchange="window.location.search='?s='+this.value">
-"""
-    
-    # Add 114 surah options
-    SURAHS = [
-        "الفاتحة", "البقرة", "آل عمران", "النساء", "المائدة", "الأنعام", "الأعراف",
-        "الأنفال", "التوبة", "يونس", "هود", "يوسف", "الرعد", "إبراهيم", "الحجر",
-        "النحل", "الإسراء", "الكهف", "مريم", "طه", "الأنبياء", "الحج", "المؤمنون",
-        "النور", "الفرقان", "الشعراء", "النمل", "القصص", "العنكبوت", "الروم",
-        "لقمان", "السجدة", "الأحزاب", "سبأ", "فاطر", "يس", "الصافات", "ص",
-        "الزمر", "غافر", "فصلت", "الشورى", "الزخرف", "الدخان", "الجاثية", "الأحقاف",
-        "محمد", "الفتح", "الحجرات", "ق", "الذاريات", "الطور", "النجم", "القمر",
-        "الرحمن", "الواقعة", "الحديد", "المجادلة", "الحشر", "الممتحنة", "الصف",
-        "الجمعة", "المنافقون", "التغابن", "الطلاق", "التحريم", "الملك", "القلم",
-        "الحاقة", "المعارج", "نوح", "الجن", "المزمل", "المدثر", "القيامة", "الإنسان",
-        "المرسلات", "النبأ", "النازعات", "عبس", "التكوير", "الانفطار", "المطففين",
-        "الانشقاق", "البروج", "الطارق", "الأعلى", "الغاشية", "الفجر", "البلد",
-        "الشمس", "الليل", "الضحى", "الشرح", "التين", "العلق", "القدر", "البينة",
-        "الزلزلة", "العاديات", "القارعة", "التكاثر", "العصر", "الهمزة", "الفيل",
-        "قريش", "الماعون", "الكوثر", "الكافرون", "النصر", "المسد", "الإخلاص",
-        "الفلق", "الناس",
-    ]
-    for idx, n in enumerate(SURAHS, start=1):
-        sel = " selected" if idx == surah else ""
-        page += f'      <option value="{idx}"{sel}>{idx}. {n}</option>\n'
-    
-    page += f"""    </select>
-  </div>
-
-  <!-- The integrated Mushaf widget -->
-  {widget_html}
-</main>
-
-<footer>
-  <div>المصدر النصّي: <a href="https://api.alquran.cloud" target="_blank">مصحف المدينة عبر alquran.cloud</a></div>
-  <div style="margin-top:.4rem">المصدر الصوتي: <a href="https://everyayah.com" target="_blank">EveryAyah · تلاوات معتمدة لكل آية منفصلة</a></div>
-  <div style="margin-top:.8rem;opacity:.5">صنع بـ <span style="color:{accent}">Zitex</span> · {site_title}</div>
-</footer>
-
-<script>
-  // Surah switching from URL ?s=N
-  (function(){{
-    var params = new URLSearchParams(window.location.search);
-    var s = parseInt(params.get('s')||'{surah}',10);
-    if (s && s >= 1 && s <= 114) {{
-      var sel = document.getElementById('surah-pick');
-      if (sel) sel.value = s;
-    }}
-  }})();
-</script>
-
-</body>
-</html>"""
-    
-    return {
-        "ok": True,
-        "html": page,
-        "size_kb": round(len(page) / 1024, 1),
-        "surah": surah,
-        "style": style,
-        "summary": f"تم بناء قارئ المصحف (سورة {SURAHS[surah-1]} · {style})",
-    }
+def _get_surah_name_ar(n: int) -> str:
+    SURAHS = ["الفاتحة","البقرة","آل عمران","النساء","المائدة","الأنعام","الأعراف","الأنفال","التوبة","يونس","هود","يوسف","الرعد","إبراهيم","الحجر","النحل","الإسراء","الكهف","مريم","طه","الأنبياء","الحج","المؤمنون","النور","الفرقان","الشعراء","النمل","القصص","العنكبوت","الروم","لقمان","السجدة","الأحزاب","سبأ","فاطر","يس","الصافات","ص","الزمر","غافر","فصلت","الشورى","الزخرف","الدخان","الجاثية","الأحقاف","محمد","الفتح","الحجرات","ق","الذاريات","الطور","النجم","القمر","الرحمن","الواقعة","الحديد","المجادلة","الحشر","الممتحنة","الصف","الجمعة","المنافقون","التغابن","الطلاق","التحريم","الملك","القلم","الحاقة","المعارج","نوح","الجن","المزمل","المدثر","القيامة","الإنسان","المرسلات","النبأ","النازعات","عبس","التكوير","الانفطار","المطففين","الانشقاق","البروج","الطارق","الأعلى","الغاشية","الفجر","البلد","الشمس","الليل","الضحى","الشرح","التين","العلق","القدر","البينة","الزلزلة","العاديات","القارعة","التكاثر","العصر","الهمزة","الفيل","قريش","الماعون","الكوثر","الكافرون","النصر","المسد","الإخلاص","الفلق","الناس"]
+    return SURAHS[n - 1] if 1 <= n <= 114 else "?"
 
 
 # Populate registry after all functions are defined
