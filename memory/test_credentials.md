@@ -44,3 +44,13 @@
 - CVC: any 3 digits (e.g., `123`)
 - ZIP: any (e.g., `12345`)
 
+## Zitex Auto-Coder (برمجة زيتاكس) — Owner-Only Codebase Agent
+- Route: `/admin/autocoder` (requires `is_owner=true` user)
+- First visit shows **Setup screen** → owner picks passcode (≥6 chars) → system generates 6 one-time recovery codes
+- Subsequent visits show **Lock screen** → enter passcode → 4-hour session token
+- Session token stored client-side in `localStorage.zitex_autocoder_session` and sent in `X-AutoCoder-Token` header
+- Forgot passcode? → "نسيت كلمة السر؟" → enter recovery code + new passcode (consumes the recovery code; if all 6 used, system regenerates a fresh batch)
+- All actions audited in `autocoder_audit` collection (visible via `GET /api/autocoder/audit`)
+- Tools available to the AI: `read_file`, `write_file`, `edit_file`, `delete_file`, `list_dir`, `search_code`, `run_command` (full bash), `restart_service`, `git_status`, `git_diff`, `git_commit_push`
+- Backend uses Claude Sonnet 4.5 via `EMERGENT_LLM_KEY`
+

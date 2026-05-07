@@ -3113,6 +3113,15 @@ try:
 except Exception as _fb2e:
     logging.getLogger(__name__).error(f"Failed to register freebuild v2 module: {_fb2e}", exc_info=True)
 
+# ============== AUTOCODER (Owner-only AI that programs Zitex itself) ==============
+try:
+    from modules.autocoder import create_autocoder_router
+    _ac_router = create_autocoder_router(db, get_current_user, require_owner)
+    app.include_router(_ac_router)
+    logging.getLogger(__name__).info("AutoCoder module registered")
+except Exception as _ace:
+    logging.getLogger(__name__).error(f"Failed to register autocoder module: {_ace}", exc_info=True)
+
 # ============== CHANNEL BRIDGE (Push Zitex-generated assets to owner's client websites) ==============
 try:
     from modules.bridge import create_bridge_router

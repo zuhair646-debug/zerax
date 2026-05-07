@@ -3,7 +3,7 @@ import { Navbar } from '@/components/Navbar';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { useNavigate } from 'react-router-dom';
-import { Users, FileText, CreditCard, Globe, Image, Video, Settings, Clock, CheckCircle, Activity, Coins, Brain } from 'lucide-react';
+import { Users, FileText, CreditCard, Globe, Image, Video, Settings, Clock, CheckCircle, Activity, Coins, Brain, Code2 } from 'lucide-react';
 
 const AdminDashboard = ({ user }) => {
   const navigate = useNavigate();
@@ -45,6 +45,7 @@ const AdminDashboard = ({ user }) => {
     { title: 'إدارة العملاء', desc: 'عرض وإدارة قائمة العملاء', path: '/admin/clients', icon: <Users className="w-6 h-6" />, color: 'from-purple-500 to-pink-500' },
     { title: 'النقاط والعروض', desc: 'إدارة النقاط والأسعار والعروض', path: '/admin/credits', icon: <Coins className="w-6 h-6" />, color: 'from-amber-500 to-yellow-500' },
     { title: 'تدريب الذكاء', desc: 'تعليم الذكاء الاصطناعي أمثلة احترافية', path: '/admin/training', icon: <Brain className="w-6 h-6" />, color: 'from-purple-500 to-pink-500' },
+    { title: 'برمجة زيتاكس 🔐', desc: 'ذكاء يعدّل كود المنصة بنفسه (للمالك فقط)', path: '/admin/autocoder', icon: <Code2 className="w-6 h-6" />, color: 'from-amber-500 to-orange-600', testId: 'admin-tile-autocoder' },
     { title: 'إدارة المواقع', desc: 'إضافة وتحديث المواقع', path: '/admin/websites', icon: <Globe className="w-6 h-6" />, color: 'from-orange-500 to-red-500' },
     { title: 'سجل النشاط', desc: 'تتبع جميع الأنشطة على المنصة', path: '/admin/activity', icon: <Activity className="w-6 h-6" />, color: 'from-cyan-500 to-blue-500' },
     { title: 'الإعدادات', desc: 'إعدادات الموقع ومعلومات الدفع', path: '/admin/settings', icon: <Settings className="w-6 h-6" />, color: 'from-gray-500 to-slate-600' },
@@ -88,6 +89,7 @@ const AdminDashboard = ({ user }) => {
                     <button
                       key={idx}
                       onClick={() => navigate(action.path)}
+                      data-testid={action.testId}
                       className="p-6 rounded-xl bg-slate-700/50 hover:bg-slate-700 transition-all text-right group border border-slate-600 hover:border-slate-500"
                     >
                       <div className={`w-12 h-12 rounded-xl bg-gradient-to-br ${action.color} flex items-center justify-center text-white mb-4 group-hover:scale-110 transition-transform`}>

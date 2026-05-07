@@ -6,6 +6,62 @@
 ## User Language: Arabic (العربية)
 
 
+### 🆕 May 7, 2026 — ZITEX AUTO-CODER (برمجة زيتاكس) — Owner-Only Self-Programming AI ✅
+
+**طلب المستخدم**: قسم خاص فيه ذكاء يقدر يبرمج الموقع بنفسه، يدخل على الريبو ويعدّل، صلاحيات كاملة (أي bash، read/write أي ملف، git push)، محمي برمز سري + نظام استرجاع قوي عشان لو نسي.
+
+**المُنفّذ في commit واحد**:
+
+🔐 **3 طبقات حماية**:
+1. `require_owner` على كل endpoint (role check من DB)
+2. Passcode (bcrypt-hashed) → جلسة 4 ساعات بـsession token
+3. كل عملية تنحفظ في `autocoder_audit` collection
+
+🔑 **نظام Recovery قوي**:
+- أول دخول: المالك يحدد كلمة سر → النظام يولّد **6 رموز استرجاع** (4-4-4-4 hex)
+- نسي كلمة السر؟ يدخل أي رمز + كلمة سر جديدة → النظام يستهلك الرمز ويلغي كل الجلسات السابقة
+- آخر رمز استُهلك؟ النظام يولّد **6 رموز جديدة** تلقائياً
+- الرموز محفوظة bcrypt-hashed (المالك لازم يحفظ النسخة الأصلية في Password Manager)
+
+🛠️ **11 أداة للذكاء (صلاحيات مفتوحة بالكامل)**:
+- `list_dir(path)` — قائمة مجلد
+- `read_file(path, start?, end?)` — قراءة (حد 4000 سطر)
+- `write_file(path, content)` — إنشاء/استبدال ملف
+- `edit_file(path, find, replace)` — استبدال نصي دقيق (يفشل لو find غير فريد)
+- `delete_file(path)` — حذف ملف
+- `search_code(pattern, path?, file_glob?)` — grep -rn
+- `run_command(cmd, cwd?, timeout?)` — أي bash (90s افتراضي)
+- `restart_service(backend|frontend|all)` — supervisorctl
+- `git_status()`, `git_diff(path?)`, `git_commit_push(message, files?)`
+
+🤖 **محرك الذكاء**: Claude Sonnet 4.5 عبر `EMERGENT_LLM_KEY` (لأن OpenAI quota خلصان)
+- 40 دورة أداة لكل turn
+- system prompt مخصص: مهندس senior سعودي، يقرا قبل ما يكتب، يـcommit بعد كل feature
+
+🎨 **Frontend** (`/app/frontend/src/pages/AdminAutoCoder.js`):
+- Lock screen أنيق (amber + dark) مع توجيه لـ "نسيت كلمة السر؟"
+- Setup wizard مع تأكيد كلمة السر + شاشة عرض الـ6 رموز (نسخ/تنزيل)
+- Recovery flow كامل من نفس الشاشة
+- Chat UI مطابق لـ AIAgent.js: tool pills قابلة للتوسيع، معاينة args/preview، session timer
+- 4 مقترحات جاهزة للمالك: "اعرض شجرة modules"، "اشرح كيف الـauth يشتغل"، إلخ
+
+🛣️ **Routes/Endpoints**:
+- Frontend: `/admin/autocoder` (محمي بـ `adminOnly` + check is_owner)
+- Backend: 11 endpoint كامل (`/setup`, `/unlock`, `/recover`, `/lock`, `/reset-passcode`, `/status`, `/chat`, `/conversations`, `/conversation/{id}`, `/audit`)
+
+**E2E مُحقّق عبر curl**:
+- ✅ `/setup` → 6 recovery codes
+- ✅ `/unlock` بكلمة صحيحة → session token
+- ✅ كلمة خاطئة → 401 + audit log "unlock_failed"
+- ✅ غير المالك → 403
+- ✅ `/chat` بدون session → 401
+- ✅ `/chat` مع session → AI استدعى read_file + list_dir + رجّع نتائج فعلية بالعربي
+- ✅ AI كتب ملف فعلي `/tmp/zitex_autocoder_marker.txt` (17B) ثم قرأه
+- ✅ Recovery: استهلك رمز، ضبط passcode جديد، القديم 401 / الجديد 200
+- ✅ Audit log يسجّل كل العمليات بـtools list
+
+
+
 ### 🆕 May 7, 2026 — ALL 5 FIXES FROM AGENT'S BUG REPORT ✅
 
 **تقرير الذكاء**: الذكاء أعطى تقرير مُرتّب بـ5 مشاكل وحلولها مع أولويات.

@@ -53,6 +53,7 @@ import AIAgent from '@/pages/AIAgent';
 import AvatarSettings from '@/pages/AvatarSettings';
 import ChannelBridge from '@/pages/ChannelBridge';
 import AdminAICore from '@/pages/AdminAICore';
+import AdminAutoCoder from '@/pages/AdminAutoCoder';
 import Companion from '@/pages/Companion';
 import '@/App.css';
 
@@ -147,6 +148,7 @@ function App() {
           <Route path="/dashboard/avatar" element={<ProtectedRoute><AvatarSettings user={user} /></ProtectedRoute>} />
           <Route path="/dashboard/bridge" element={<ProtectedRoute><ChannelBridge user={user} /></ProtectedRoute>} />
           <Route path="/admin/ai-core" element={<ProtectedRoute adminOnly><AdminAICore user={user} /></ProtectedRoute>} />
+          <Route path="/admin/autocoder" element={<ProtectedRoute adminOnly><AdminAutoCoder user={user} /></ProtectedRoute>} />
           <Route path="/companion" element={<ProtectedRoute><Companion user={user} setUser={setUser} /></ProtectedRoute>} />
         </Routes>
         {/* Global persistent avatars — appear on EVERY route except VRM preview */}
