@@ -6,6 +6,40 @@
 ## User Language: Arabic (العربية)
 
 
+### 🆕 May 7, 2026 — BULLETPROOF CREATIVE QURAN (Solution 1 + 4) ✅
+
+**شكوى الذكاء نفسه** (نقلها المستخدم): يقول الذكاء أنه يعرف 3 مشاكل ولا يقدر يحلها:
+1. `edit_section` ترفض HTML طويل (+500 سطر)
+2. `update_website` ممنوعة على القرآن  
+3. `build_website` تتجاهل الكتل المُرفقة (قسم المصحف يطلع فارغ/مكسور)
+
+**الحل المُنفّذ — Solution 1 + 4 من تقرير الذكاء**:
+
+🎮 **`build_creative_quran_site(brief, surah, style_direction)`**:
+- يجلب كتل القرآن مسبقاً (آيات + 14 قارئ)
+- يطلب من LLM يصمم الـwrapper فقط مع 2 placeholder comments: `<!-- ZITEX_QURAN_AYAHS -->` و `<!-- ZITEX_QURAN_RECITERS -->`
+- **DETERMINISTIC INJECTION** يستبدل الـcomments بالكتل الحقيقية بـcode (مش بثقة LLM)
+- auto-inject لـprimitives + audio_snippet دائماً
+- fallback لو LLM نسي placeholders → يلصق Quran section قبل `</body>`
+- audit + retry 3 مرات
+- **النتيجة**: حرية تصميم 100% (gaming/achievements/dashboard) + ضمان قرآن حقيقي شغّال
+
+🩹 **`inject_quran_blocks(surah, target_selector?)`**:
+- يبحث عن `<section>` فيها keyword (quran/mushaf/reader/مصحف/قرآن)
+- يستبدل محتواها بكتل القرآن الحقيقية
+- auto-append section لو ما لقى target
+- auto-inject default CSS لو الموقع ما عنده styling
+- يصلح أي موقع مكسور في turn واحد
+
+**Audit محدّث**: surah selector صار optional (المواقع الإبداعية مش لازم selector).
+
+**اختبار**:
+- Test 1: `build_creative_quran_site(gaming theme, kid-friendly)` → 7.6KB، 7/7 آية، 14/14 قارئ، تصميم gaming كامل ✅
+- Test 2: `inject_quran_blocks` على موقع مكسور (section فاضي) → 4.9KB، 7 آية، 14 قارئ، CSS مزروع تلقائياً، location="replaced existing quran section" ✅
+
+**Commit**: `62a49ad` → push `zuhair646-debug/zitex:main` ✅
+
+
 ### 🆕 May 7, 2026 — UNLOCK CREATIVE QURAN SITES (fetch_quran_blocks) ✅
 
 **شكوى المستخدم** (نقلاً عن ما قاله الذكاء نفسه): "ما أقدر أدمج موقع قرآن إبداعي gaming/achievements مع القرآن الحقيقي. النظام يجبرني أختار: قالب قرآن مقفل، أو تصميم حر بدون قرآن حقيقي."
