@@ -6,6 +6,33 @@
 ## User Language: Arabic (العربية)
 
 
+### 🆕 May 7, 2026 — UNLOCK CREATIVE QURAN SITES (fetch_quran_blocks) ✅
+
+**شكوى المستخدم** (نقلاً عن ما قاله الذكاء نفسه): "ما أقدر أدمج موقع قرآن إبداعي gaming/achievements مع القرآن الحقيقي. النظام يجبرني أختار: قالب قرآن مقفل، أو تصميم حر بدون قرآن حقيقي."
+
+**الحل المعماري — أداة `fetch_quran_blocks(surah)` جديدة**:
+
+📖 **ترجع قطع جاهزة للزرع**:
+- `ayahs_html`: `<div class="ayah-row" data-ayah="N">` × عدد الآيات (نص حقيقي من مصحف المدينة)
+- `reciters_html`: `<button class="reciter-card" data-reciter="id">` × 14 قارئ معتمد
+- `primitives_script`: `<script src="/api/agent/primitives/quran.js">`
+- `audio_snippet`: `<script>` كامل يربط ضغط القارئ + click-to-play على الآية
+- `surah_meta`: {n, name_ar, name_en, type, ayah_count}
+
+🛠️ **مساران للقرآن الآن**:
+- **Path A** (بسيط): `build_quran_mushaf_reader(surah, style)` → قالب جاهز سريع
+- **Path B** (إبداعي): `fetch_quran_blocks(surah)` → `build_website(brief)` مع تعليمات لزرع الكتل → **حرية تصميم 100% + قرآن حقيقي مضمون + صوت شغّال**
+
+**System prompt محدّث**:
+- إزالة قيد "ممنوع build_website لطلبات قرآن"
+- إضافة routing صريح: قرآن بسيط → Path A، قرآن إبداعي/gaming/dashboard → Path B
+- أمثلة استخدام في وصف الأداة للذكاء
+
+**اختبار**: fetch_quran_blocks(surah=1) → 1,300 حرف ayahs_html + 2,220 حرف reciters_html + 1,209 حرف audio_snippet، الكل قابل للزرع في build_website مع أي تصميم gaming/luxury/minimal.
+
+**Commit**: `6dd9fa4` → push `zuhair646-debug/zitex:main` ✅
+
+
 ### 🆕 May 7, 2026 — UNLOCK ALL PERMISSIONS (Full Freedom Mode) ✅
 
 **طلب المستخدم**: "الذكاء يقول أنا أبي أسوي شي بس مو مسموح. ادخل وشوف شنو ممنوع وأعطيه الصلاحيات الكاملة. اعطيه الحرية والأدوات كاملة."
