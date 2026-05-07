@@ -664,6 +664,27 @@ TOOL_SCHEMAS: List[Dict[str, Any]] = [
     {
         "type": "function",
         "function": {
+            "name": "fetch_quran_blocks",
+            "description": (
+                "🧩 Fetch real Quran content as ready-to-embed HTML blocks + audio JS. "
+                "USE THIS when you need REAL Quran (real text + 14 reciters + working "
+                "audio) inside a CUSTOM creative website (gaming theme, achievements, "
+                "parent dashboard, multi-page app, etc.). Workflow: call this FIRST to "
+                "get the blocks, then call build_website with a brief that includes "
+                "instructions to embed those exact blocks. This unlocks full creative "
+                "freedom for Quran sites — no more limited template."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "surah": {"type": "integer", "description": "Surah number 1-114", "default": 1},
+                },
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
             "name": "build_quran_mushaf_reader",
             "description": (
                 "🕌 USE THIS for ANY Quran/Mushaf/تلاوة/تحفيظ/قرآن request. "
@@ -1718,6 +1739,125 @@ def _get_surah_name_ar(n: int) -> str:
     return SURAHS[n - 1] if 1 <= n <= 114 else "?"
 
 
+# ════════════════════════════════════════════════════════════════════════
+#  TOOL: fetch_quran_blocks — gives the AI ready-to-embed HTML/JS pieces
+#  so it can integrate REAL Quran content into ANY creative design via
+#  build_website (gaming/achievements/parent dashboard, etc.)
+# ════════════════════════════════════════════════════════════════════════
+async def fetch_quran_blocks(surah: int = 1) -> Dict[str, Any]:
+    """🧩 Fetch real Quran data as ready-to-embed HTML/JS blocks.
+    
+    The AI can paste these blocks into ANY website design (built via
+    build_website with a custom brief). This unlocks full creative freedom
+    for Quran sites: gaming theme, achievement system, parent dashboard,
+    multi-page apps, etc. — all with REAL Quran text + 14 reciters.
+    
+    Returns:
+        ayahs_html: <div class="ayah-row" data-ayah="N">verse text + N</div> × ayah_count
+        reciters_html: <button class="reciter-card" data-reciter="id">name</button> × 14
+        primitives_script: <script src="/api/agent/primitives/quran.js"></script>
+        audio_snippet: minimal JS to wire ayah clicks to audio playback
+        surah_meta: {n, name_ar, name_en, type, ayah_count}
+    """
+    try:
+        surah = int(surah)
+    except (TypeError, ValueError):
+        return {"ok": False, "error": "surah must be an integer 1-114"}
+    if not (1 <= surah <= 114):
+        return {"ok": False, "error": "surah must be 1..114"}
+    
+    try:
+        async with httpx.AsyncClient(timeout=12.0) as client:
+            r = await client.get(f"https://api.alquran.cloud/v1/surah/{surah}/quran-uthmani")
+        data = r.json() if r.status_code == 200 else {}
+        ayahs_data = (data.get("data") or {}).get("ayahs") or []
+        meta = data.get("data") or {}
+        if not ayahs_data:
+            return {"ok": False, "error": "failed to fetch surah from alquran.cloud"}
+    except Exception as e:
+        return {"ok": False, "error": f"alquran.cloud unreachable: {e}"}
+    
+    ayahs_html = "\n".join(
+        f'<div class="ayah-row" data-ayah="{a.get("numberInSurah")}" role="button" tabindex="0">'
+        f'<span class="ayah-text">{a.get("text","")}</span>'
+        f'<span class="ayah-num" data-num="{a.get("numberInSurah")}">{a.get("numberInSurah")}</span>'
+        f'</div>'
+        for a in ayahs_data
+    )
+    
+    RECITERS_LIST = [
+        {"id":"alafasy","name":"مشاري العفاسي"},{"id":"sudais","name":"عبد الرحمن السديس"},
+        {"id":"shuraim","name":"سعود الشريم"},{"id":"husary","name":"محمود الحصري"},
+        {"id":"minshawi","name":"محمد المنشاوي"},{"id":"abdulbasit","name":"عبد الباسط"},
+        {"id":"ghamdi","name":"سعد الغامدي"},{"id":"ajmi","name":"أحمد العجمي"},
+        {"id":"dossary","name":"ياسر الدوسري"},{"id":"shatri","name":"أبو بكر الشاطري"},
+        {"id":"juhany","name":"عبد الله الجهني"},{"id":"hthfi","name":"علي الحذيفي"},
+        {"id":"ayyub","name":"محمد أيوب"},{"id":"maher","name":"ماهر المعيقلي"},
+    ]
+    reciters_html = "\n".join(
+        f'<button class="reciter-card" data-reciter="{r["id"]}" type="button">'
+        f'<span class="reciter-avatar">{r["name"][0]}</span>'
+        f'<span class="reciter-name">{r["name"]}</span>'
+        f'</button>'
+        for r in RECITERS_LIST
+    )
+    
+    primitives_script = '<script src="/api/agent/primitives/quran.js"></script>'
+    
+    audio_snippet = """<script>
+(function(){
+  let activeReciter = 'alafasy';
+  let currentAudio = null;
+  const SURAH_N = """ + str(surah) + """;
+  
+  function play(ayahN, el) {
+    if (currentAudio) { currentAudio.pause(); }
+    document.querySelectorAll('.ayah-row.playing').forEach(e => e.classList.remove('playing'));
+    if (el) el.classList.add('playing');
+    currentAudio = new Audio(window.ZitexQuran.audioUrl(activeReciter, SURAH_N, ayahN));
+    currentAudio.play().catch(e => console.error('audio failed:', e));
+  }
+  
+  document.addEventListener('DOMContentLoaded', function(){
+    document.querySelectorAll('.reciter-card').forEach(btn => {
+      btn.addEventListener('click', function(){
+        activeReciter = this.dataset.reciter;
+        document.querySelectorAll('.reciter-card.active').forEach(e => e.classList.remove('active'));
+        this.classList.add('active');
+      });
+    });
+    document.querySelectorAll('.ayah-row').forEach(row => {
+      row.addEventListener('click', function(){
+        play(parseInt(this.dataset.ayah), this);
+      });
+    });
+    const firstReciter = document.querySelector('.reciter-card[data-reciter="alafasy"]');
+    if (firstReciter) firstReciter.classList.add('active');
+  });
+})();
+</script>"""
+    
+    return {
+        "ok": True,
+        "ayahs_html": ayahs_html,
+        "reciters_html": reciters_html,
+        "primitives_script": primitives_script,
+        "audio_snippet": audio_snippet,
+        "surah_meta": {
+            "n": surah,
+            "name_ar": _get_surah_name_ar(surah),
+            "name_en": (meta.get("englishName") or "").strip(),
+            "type": meta.get("revelationType", "Meccan"),
+            "ayah_count": len(ayahs_data),
+        },
+        "summary": f"كتل قرآن جاهزة (سورة {_get_surah_name_ar(surah)} · {len(ayahs_data)} آية)",
+        "usage_hint": (
+            "اللصق في build_website: ضع primitives_script في <head>، ضع ayahs_html و reciters_html "
+            "داخل containers بأي تصميم تختاره، وضع audio_snippet قبل </body>. الكل سيعمل تلقائياً."
+        ),
+    }
+
+
 # Populate registry after all functions are defined
 TOOL_REGISTRY.update({
     "quran_reciter_lookup": quran_reciter_lookup,
@@ -1734,6 +1874,7 @@ TOOL_REGISTRY.update({
     "add_page": add_page,
     "edit_section": edit_section,
     "build_quran_mushaf_reader": build_quran_mushaf_reader,
+    "fetch_quran_blocks": fetch_quran_blocks,
     "analyze_intent": analyze_intent,
     "pick_design": pick_design,
     "qa_html": qa_html,
