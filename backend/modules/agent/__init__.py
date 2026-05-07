@@ -60,9 +60,10 @@ AGENT_SYSTEM_PROMPT = """أنت ذكاء Zitex — عقل واحد متكامل 
   1. `analyze_intent(brief)` — 🧠 Planner: يحلّل الطلب ويرجع خطة JSON
   2. `web_search` / `quran_*` / `sports_*` / `saudi_official_sources` — 🔎 Researcher: حسب data_sources في الخطة
   3. `pick_design(brief, research_summary)` — 🎨 Designer: يختار palette + typography + layout
-  4. **البناء الرئيسي** — اختر واحد فقط:
-     - `build_quran_mushaf_reader(surah, style)` — 🕌 لأي طلب قرآن/مصحف/تلاوة (ممنوع build_website)
-     - `build_website(brief, style_direction)` — 🛠️ Developer: لباقي المواقع
+  4. **البناء الرئيسي** — اختر بحرية:
+     - 🕌 **قرآن بسيط** (مصحف فقط بدون أقسام إضافية): `build_quran_mushaf_reader(surah, style)` — قالب جاهز سريع
+     - 🎮 **قرآن إبداعي** (gaming/achievements/dashboard/أي تصميم خاص): `fetch_quran_blocks(surah)` ثم `build_website(brief)` مع تعليمات لزرع الكتل المُرجعة في تصميمك. **هذا هو المسار الإبداعي بالكامل** — لك حرية مطلقة في التصميم مع ضمان وجود القرآن الحقيقي + 14 قارئ + audio شغّال.
+     - 🛠️ **بقية المواقع**: `build_website(brief, style_direction)` مباشرة.
   5. `qa_html()` — 🧪 QA: يفحص الجودة بعد البناء (يرجع score 0-100)
   6. `publish_site(slug?, title?)` — 🚀 Deployer: لما العميل يقول "انشره"
 
@@ -93,7 +94,7 @@ AGENT_SYSTEM_PROMPT = """أنت ذكاء Zitex — عقل واحد متكامل 
 1. **اسمع العميل بالحرف**. لو قال "أبي موقع تحفيظ قرآن" → ابني تحفيظ قرآن. لا تقترح "ليش ما نسوي مطعم؟".
 2. **فكّر قبل ما تنفّذ**. اكتب بضع أسطر تشرح خطتك (3-5 خطوات قصيرة) ثم استدعِ الأدوات.
 3. **استخدم الأدوات الحقيقية**. ممنوع تخترع أرقام/أسماء قراء/لاعبين/مصادر — استدعِ الأداة.
-4. **🕌 طلب قرآن/مصحف/تلاوة/تحفيظ → `build_quran_mushaf_reader` فوراً**. ممنوع build_website لهذه الطلبات. الموقع المُولّد فيه القرآن الكامل مكتوب من المصحف الرسمي + 14 قارئ + اضغط أي آية تشتغل بصوت القارئ. هذا هو المنتج الذي يبحث عنه العميل.
+4. **🕌 طلب قرآن/مصحف/تلاوة/تحفيظ**: إذا الطلب بسيط (مصحف فقط) → `build_quran_mushaf_reader`. إذا الطلب إبداعي/معقد (gaming، achievements، dashboards، أقسام إضافية، تصاميم خاصة) → `fetch_quran_blocks(surah)` أولاً، ثم `build_website(brief)` مع التعليمات التفصيلية لزرع الكتل. **النتيجة: قرآن حقيقي + تصميم إبداعي 100%، مدمج في موقع واحد.**
 5. **بناء موقع غير ديني = `build_website`**. الأداة تتولّى التوليد + تركيب الصور.
 6. **التعديل = اختر الأداة الجراحية الصح**:
    - "غيّر الألوان / الخط / المزاج" → `set_theme` (سريع جداً)
@@ -620,6 +621,8 @@ def _tool_summary(name: str, result: Dict[str, Any]) -> str:
         return result.get("summary", "تم تعديل القسم")
     if name == "build_quran_mushaf_reader":
         return result.get("summary", "تم بناء قارئ المصحف")
+    if name == "fetch_quran_blocks":
+        return result.get("summary", "تم جلب كتل القرآن")
     if name == "analyze_intent":
         return result.get("summary", "تم تحليل الطلب")
     if name == "pick_design":

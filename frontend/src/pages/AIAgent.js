@@ -487,6 +487,7 @@ const AGENT_META = {
   // Builders
   build_website: { icon: '🛠️', label: 'Builder', color: 'amber' },
   build_quran_mushaf_reader: { icon: '🕌', label: 'Quran Builder', color: 'emerald' },
+  fetch_quran_blocks: { icon: '📖', label: 'Quran Blocks', color: 'emerald' },
   update_website: { icon: '🔧', label: 'Updater', color: 'amber' },
   edit_section: { icon: '✏️', label: 'Editor', color: 'amber' },
   add_page: { icon: '📄', label: 'Page Add', color: 'amber' },
