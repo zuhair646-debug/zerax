@@ -489,6 +489,7 @@ const AGENT_META = {
   build_quran_mushaf_reader: { icon: '🕌', label: 'Quran Builder', color: 'emerald' },
   fetch_quran_blocks: { icon: '📖', label: 'Quran Blocks', color: 'emerald' },
   build_creative_quran_site: { icon: '🎮', label: 'Creative Quran', color: 'emerald' },
+  build_quran_website: { icon: '🎮', label: 'Quran Site', color: 'emerald' },
   inject_quran_blocks: { icon: '🩹', label: 'Quran Inject', color: 'emerald' },
   update_website: { icon: '🔧', label: 'Updater', color: 'amber' },
   edit_section: { icon: '✏️', label: 'Editor', color: 'amber' },
