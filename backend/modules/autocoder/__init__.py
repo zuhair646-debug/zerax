@@ -1055,6 +1055,9 @@ async def _autocoder_stream(messages: List[Dict[str, Any]]):
                "message": "لا يوجد ANTHROPIC_API_KEY ولا EMERGENT_LLM_KEY. أضف مفتاحك في /app/backend/.env"}
         return
 
+    # Build a runtime-truth banner so the AI cannot hallucinate about env/tools
+    env_banner = await _build_env_truth_banner()  # noqa: F821
+
     # Build Anthropic-format message history (skip the last user message; we'll send fresh)
     anthropic_msgs: List[Dict[str, Any]] = []
     for m in messages:
@@ -1071,7 +1074,7 @@ async def _autocoder_stream(messages: List[Dict[str, Any]]):
 
     # Mode 1: direct Anthropic SDK with native tool calling
     if keyinfo["mode"] == "direct":
-        async for evt in _stream_direct_anthropic(anthropic_msgs, keyinfo["key"]):
+        async for evt in _stream_direct_anthropic(anthropic_msgs, keyinfo["key"], env_banner):
             yield evt
         return
 
@@ -1080,7 +1083,49 @@ async def _autocoder_stream(messages: List[Dict[str, Any]]):
         yield evt
 
 
-async def _stream_direct_anthropic(anthropic_msgs: List[Dict[str, Any]], api_key: str):
+async def _build_env_truth_banner() -> str:
+    """Run actual checks so the AI sees the real state of the environment.
+    Prevents hallucinating that tools are 'missing' when they're installed."""
+    checks = []
+
+    async def has(cmd: str) -> bool:
+        try:
+            p = await asyncio.create_subprocess_shell(
+                f"command -v {cmd} >/dev/null 2>&1 && echo yes || echo no",
+                stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE,
+            )
+            out, _ = await asyncio.wait_for(p.communicate(), timeout=5)
+            return out.decode().strip() == "yes"
+        except Exception:
+            return False
+
+    git_ok = await has("git")
+    curl_ok = await has("curl")
+    jq_ok = await has("jq")
+    sup_ok = await has("supervisorctl")
+    on_railway = bool(os.environ.get("RAILWAY_ENVIRONMENT"))
+    has_gh = bool(os.environ.get("GITHUB_TOKEN", "").strip())
+    has_gh_repo = bool(os.environ.get("GITHUB_REPO", "").strip())
+    has_rw = bool(os.environ.get("RAILWAY_TOKEN", "").strip())
+    has_ant = os.environ.get("ANTHROPIC_API_KEY", "").startswith("sk-ant")
+
+    banner = "\n\n━━━━ 📊 الحالة الفعلية للبيئة (مُتحقّق منها قبل ما تردّ) ━━━━\n"
+    banner += f"البيئة: {'🚂 Railway production' if on_railway else '💻 Preview/local dev'}\n"
+    banner += f"الأدوات: git={'✅' if git_ok else '❌'}  curl={'✅' if curl_ok else '❌'}  "
+    banner += f"jq={'✅' if jq_ok else '❌'}  supervisorctl={'✅' if sup_ok else '❌ (طبيعي على Railway)'}\n"
+    banner += f"المفاتيح: ANTHROPIC_API_KEY={'✅ مستقل' if has_ant else '⚡ يستخدم Emergent'}  "
+    banner += f"GITHUB_TOKEN={'✅' if has_gh else '❌'}  GITHUB_REPO={'✅' if has_gh_repo else '❌'}  "
+    banner += f"RAILWAY_TOKEN={'✅' if has_rw else '❌'}\n"
+    if on_railway:
+        banner += "آلية الـcommit/push: تستنسخ /tmp/zitex_workdir تلقائياً عند أول استدعاء لـgit_*\n"
+        banner += "آلية الـrestart: استدعِ restart_service → يستخدم Railway API تلقائياً\n"
+    banner += "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
+    banner += "⛔ ممنوع تطلب من المالك يثبّت أو يضيف أي شي من اللي عُلّم بـ✅ فوق. هذي موجودة فعلاً.\n"
+    banner += "⛔ ممنوع تقول 'الأدوات ناقصة' أو 'يحتاج setup'. اشتغل مباشرة بالأدوات المتاحة.\n"
+    return banner
+
+
+async def _stream_direct_anthropic(anthropic_msgs: List[Dict[str, Any]], api_key: str, env_banner: str = ""):
     """Uses official anthropic SDK with native multi-tool calling."""
     try:
         from anthropic import AsyncAnthropic
@@ -1090,13 +1135,14 @@ async def _stream_direct_anthropic(anthropic_msgs: List[Dict[str, Any]], api_key
 
     client = AsyncAnthropic(api_key=api_key)
     msgs = list(anthropic_msgs)
+    sys_prompt = AUTOCODER_SYSTEM_PROMPT + (env_banner or "")
 
     for iteration in range(40):
         try:
             resp = await client.messages.create(
                 model="claude-sonnet-4-5",
                 max_tokens=8192,
-                system=AUTOCODER_SYSTEM_PROMPT,
+                system=sys_prompt,
                 tools=ANTHROPIC_TOOLS,
                 messages=msgs,
             )
