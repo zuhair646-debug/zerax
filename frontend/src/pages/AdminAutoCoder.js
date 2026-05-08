@@ -23,6 +23,8 @@ const TOOL_ICON = {
   git_status: GitBranch,
   git_diff: GitBranch,
   git_commit_push: GitBranch,
+  view_logs: ScrollText,
+  list_env: KeyRound,
 };
 
 const TOOL_LABEL = {
@@ -37,6 +39,8 @@ const TOOL_LABEL = {
   git_status: 'git status',
   git_diff: 'git diff',
   git_commit_push: 'commit + push',
+  view_logs: 'عرض السجلات',
+  list_env: 'متغيرات البيئة',
 };
 
 export default function AdminAutoCoder() {
