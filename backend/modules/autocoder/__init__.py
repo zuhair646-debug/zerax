@@ -310,7 +310,7 @@ async def tool_git_commit_push(message: str, files: Optional[List[str]] = None) 
     return r
 
 
-# Tool registry for the LLM
+# Tool registry for the LLM (legacy, used by UI for icons/labels)
 TOOL_DEFS: List[Dict[str, Any]] = [
     {"name": "list_dir", "desc": "list files and folders at path", "args": ["path"]},
     {"name": "read_file", "desc": "read file content (optionally start/end line numbers)", "args": ["path", "start?", "end?"]},
@@ -323,6 +323,129 @@ TOOL_DEFS: List[Dict[str, Any]] = [
     {"name": "git_status", "desc": "git status + last 5 commits", "args": []},
     {"name": "git_diff", "desc": "show current diff (optionally for path)", "args": ["path?"]},
     {"name": "git_commit_push", "desc": "stage all + commit + push to remote", "args": ["message", "files?"]},
+]
+
+# Anthropic-compatible tool schemas (native tool calling)
+ANTHROPIC_TOOLS = [
+    {
+        "name": "list_dir",
+        "description": "List files and folders at given path (relative to /app or absolute).",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "path": {"type": "string", "description": "directory path, default '.'"},
+            },
+            "required": [],
+        },
+    },
+    {
+        "name": "read_file",
+        "description": "Read a file's contents. Returns text with line numbers shown range.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "path": {"type": "string"},
+                "start": {"type": "integer", "description": "start line (1-indexed)"},
+                "end": {"type": "integer", "description": "end line"},
+            },
+            "required": ["path"],
+        },
+    },
+    {
+        "name": "write_file",
+        "description": "Create a new file or overwrite an existing one with the full new content.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "path": {"type": "string"},
+                "content": {"type": "string", "description": "full file content"},
+            },
+            "required": ["path", "content"],
+        },
+    },
+    {
+        "name": "edit_file",
+        "description": "Find a UNIQUE exact string in a file and replace it. Fails if find string is not unique or not found. Use for surgical edits.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "path": {"type": "string"},
+                "find": {"type": "string", "description": "exact text to find (must be unique)"},
+                "replace": {"type": "string", "description": "replacement text"},
+            },
+            "required": ["path", "find", "replace"],
+        },
+    },
+    {
+        "name": "delete_file",
+        "description": "Delete a single file (not a directory). For directories use run_command with rm -rf.",
+        "input_schema": {
+            "type": "object",
+            "properties": {"path": {"type": "string"}},
+            "required": ["path"],
+        },
+    },
+    {
+        "name": "search_code",
+        "description": "grep -rn pattern across codebase (excludes node_modules, .git, __pycache__, dist, build).",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "pattern": {"type": "string", "description": "regex pattern"},
+                "path": {"type": "string", "description": "search root, default '.'"},
+                "file_glob": {"type": "string", "description": "glob like '*.py' or '*.js'"},
+            },
+            "required": ["pattern"],
+        },
+    },
+    {
+        "name": "run_command",
+        "description": "Execute any bash command. Full power — use carefully. Default cwd /app, timeout 90s.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "cmd": {"type": "string"},
+                "cwd": {"type": "string"},
+                "timeout": {"type": "integer", "description": "seconds, max 300"},
+            },
+            "required": ["cmd"],
+        },
+    },
+    {
+        "name": "restart_service",
+        "description": "supervisorctl restart (backend, frontend, or all).",
+        "input_schema": {
+            "type": "object",
+            "properties": {"name": {"type": "string", "enum": ["backend", "frontend", "all"]}},
+            "required": ["name"],
+        },
+    },
+    {
+        "name": "git_status",
+        "description": "Show git status + last 5 commits.",
+        "input_schema": {"type": "object", "properties": {}, "required": []},
+    },
+    {
+        "name": "git_diff",
+        "description": "Show current uncommitted diff (optionally scoped to a path).",
+        "input_schema": {
+            "type": "object",
+            "properties": {"path": {"type": "string"}},
+            "required": [],
+        },
+    },
+    {
+        "name": "git_commit_push",
+        "description": "Stage files (or all if files=None) + commit with message + push to current remote branch.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "message": {"type": "string"},
+                "files": {"type": "array", "items": {"type": "string"}, "description": "list of paths to stage; if omitted, stages all"},
+            },
+            "required": ["message"],
+        },
+    },
 ]
 
 TOOL_HANDLERS = {
@@ -416,10 +539,31 @@ def create_autocoder_router(db, get_current_user, require_owner):
     @router.get("/status")
     async def status(owner=Depends(require_owner)):
         cfg = await _get_config()
+        keyinfo = _resolve_llm_key()
         return {
             "is_setup": bool(cfg and cfg.get("passcode_hash")),
             "owner_id": owner.get("id"),
             "session_ttl_hours": SESSION_TTL_HOURS,
+            "llm_mode": keyinfo["mode"],
+            "llm_label": keyinfo["label"],
+            "llm_source": keyinfo["source"],
+        }
+
+    @router.get("/key-status")
+    async def key_status(owner=Depends(require_owner)):
+        """Public-ish info (owner only) about which key is being used."""
+        keyinfo = _resolve_llm_key()
+        # Don't return the key itself — just metadata
+        return {
+            "mode": keyinfo["mode"],
+            "label": keyinfo["label"],
+            "source": keyinfo["source"],
+            "is_independent": keyinfo["mode"] == "direct",
+            "instructions": (
+                "أضف ANTHROPIC_API_KEY في إعدادات Railway (Variables) لجعل الذكاء مستقلاً تماماً عن نقاط Emergent."
+                if keyinfo["mode"] != "direct" else
+                "ممتاز — الذكاء يستخدم مفتاحك الخاص. لا تنخصم نقاط من Emergent."
+            ),
         }
 
     @router.post("/setup")
@@ -633,19 +777,147 @@ def create_autocoder_router(db, get_current_user, require_owner):
 
 
 # ════════════════════════════════════════════════════════════════════════
-# Claude streaming agent loop with autocoder tools
+# Key resolver — picks the user's own ANTHROPIC_API_KEY first, then falls
+# back to EMERGENT_LLM_KEY only as last resort.
+# ════════════════════════════════════════════════════════════════════════
+def _resolve_llm_key() -> Dict[str, Any]:
+    """Returns dict {key, source, mode} where mode is 'direct' or 'emergent'."""
+    direct = os.environ.get("ANTHROPIC_API_KEY", "").strip()
+    if direct and direct.startswith("sk-ant"):
+        return {"key": direct, "source": "ANTHROPIC_API_KEY", "mode": "direct",
+                "label": "🔓 مستقل — مفتاحك الخاص"}
+    emergent = os.environ.get("EMERGENT_LLM_KEY", "").strip()
+    if emergent:
+        return {"key": emergent, "source": "EMERGENT_LLM_KEY", "mode": "emergent",
+                "label": "⚡ مفتاح Emergent (نقاط تنخصم)"}
+    return {"key": "", "source": None, "mode": "missing", "label": "❌ لا يوجد مفتاح"}
+
+
+# ════════════════════════════════════════════════════════════════════════
+# Claude streaming via DIRECT Anthropic SDK with native tool calling.
+# Uses ANTHROPIC_API_KEY (user's own) when present, falls back to
+# EMERGENT_LLM_KEY (with emergentintegrations) only as last resort.
 # ════════════════════════════════════════════════════════════════════════
 async def _autocoder_stream(messages: List[Dict[str, Any]]):
     """Yields events: {type:'text'|'tool'|'done'|'error', ...}"""
+    keyinfo = _resolve_llm_key()
+    if keyinfo["mode"] == "missing":
+        yield {"type": "error",
+               "message": "لا يوجد ANTHROPIC_API_KEY ولا EMERGENT_LLM_KEY. أضف مفتاحك في /app/backend/.env"}
+        return
+
+    # Build Anthropic-format message history (skip the last user message; we'll send fresh)
+    anthropic_msgs: List[Dict[str, Any]] = []
+    for m in messages:
+        role = m.get("role")
+        if role not in ("user", "assistant"):
+            continue
+        content = m.get("content", "") or ""
+        if not content.strip():
+            continue
+        # If saved message had tool_events, we'd need to reconstruct content blocks,
+        # but our stored messages keep `content` as plain text + `tool_events` summary.
+        # For history purposes, plain text is sufficient (Claude will re-plan).
+        anthropic_msgs.append({"role": role, "content": content[:12000]})
+
+    # Mode 1: direct Anthropic SDK with native tool calling
+    if keyinfo["mode"] == "direct":
+        async for evt in _stream_direct_anthropic(anthropic_msgs, keyinfo["key"]):
+            yield evt
+        return
+
+    # Mode 2: emergentintegrations fallback (text-blob tool parsing — legacy)
+    async for evt in _stream_via_emergent(messages, keyinfo["key"]):
+        yield evt
+
+
+async def _stream_direct_anthropic(anthropic_msgs: List[Dict[str, Any]], api_key: str):
+    """Uses official anthropic SDK with native multi-tool calling."""
+    try:
+        from anthropic import AsyncAnthropic
+    except Exception as e:
+        yield {"type": "error", "message": f"anthropic SDK missing: {e}"}
+        return
+
+    client = AsyncAnthropic(api_key=api_key)
+    msgs = list(anthropic_msgs)
+
+    for iteration in range(40):
+        try:
+            resp = await client.messages.create(
+                model="claude-sonnet-4-5",
+                max_tokens=8192,
+                system=AUTOCODER_SYSTEM_PROMPT,
+                tools=ANTHROPIC_TOOLS,
+                messages=msgs,
+            )
+        except Exception as e:
+            yield {"type": "error", "message": f"anthropic api: {str(e)[:240]}"}
+            return
+
+        # Stream the text portion of this response
+        text_parts: List[str] = []
+        tool_uses: List[Dict[str, Any]] = []
+        assistant_blocks: List[Dict[str, Any]] = []  # for history
+
+        for block in resp.content:
+            btype = getattr(block, "type", None)
+            if btype == "text":
+                txt = getattr(block, "text", "") or ""
+                text_parts.append(txt)
+                assistant_blocks.append({"type": "text", "text": txt})
+                # stream chunked
+                for i in range(0, len(txt), 40):
+                    yield {"type": "text", "content": txt[i:i + 40]}
+                    await asyncio.sleep(0.01)
+            elif btype == "tool_use":
+                tu = {
+                    "id": block.id,
+                    "name": block.name,
+                    "input": dict(block.input) if block.input else {},
+                }
+                tool_uses.append(tu)
+                assistant_blocks.append({
+                    "type": "tool_use", "id": tu["id"], "name": tu["name"], "input": tu["input"],
+                })
+
+        # Persist assistant turn (text + tool_use blocks) into history
+        if assistant_blocks:
+            msgs.append({"role": "assistant", "content": assistant_blocks})
+
+        if resp.stop_reason == "end_turn" or not tool_uses:
+            yield {"type": "done"}
+            return
+
+        # Execute all tool calls in parallel — Claude supports multi-tool turns
+        tool_results_blocks = []
+        for tu in tool_uses:
+            yield {"type": "tool", "status": "calling", "name": tu["name"],
+                   "args": _trim_args_for_ui(tu["input"])}
+            result = await execute_autocoder_tool(tu["name"], tu["input"])
+            yield {"type": "tool", "status": "done", "name": tu["name"],
+                   "ok": result.get("ok", False),
+                   "summary": _summarize(tu["name"], result),
+                   "preview": _preview_for_ui(tu["name"], result)}
+            tool_results_blocks.append({
+                "type": "tool_result",
+                "tool_use_id": tu["id"],
+                "content": json.dumps(_trim_result_for_llm(result), ensure_ascii=False)[:14000],
+            })
+
+        msgs.append({"role": "user", "content": tool_results_blocks})
+
+    yield {"type": "text", "content": "\n(وصلت لـ40 دورة — أكمل بما عندي. اطلب تكملة لو تبي.)"}
+    yield {"type": "done"}
+
+
+async def _stream_via_emergent(messages: List[Dict[str, Any]], api_key: str):
+    """Fallback: emergentintegrations with text-blob tool parsing (legacy path).
+    Used only when ANTHROPIC_API_KEY is not set."""
     try:
         from emergentintegrations.llm.chat import LlmChat, UserMessage
     except Exception as e:
         yield {"type": "error", "message": f"emergentintegrations missing: {e}"}
-        return
-
-    key = os.environ.get("EMERGENT_LLM_KEY")
-    if not key:
-        yield {"type": "error", "message": "EMERGENT_LLM_KEY missing"}
         return
 
     tool_hint = (
@@ -653,7 +925,7 @@ async def _autocoder_stream(messages: List[Dict[str, Any]]):
         "```tool_call\n"
         '{"name":"<tool_name>","args":{...}}\n'
         "```\n"
-        "ممكن تستدعي عدة أدوات في نفس الردّ (block منفصل لكل واحدة). سأرجّع لك النتائج وتكمل.\n\n"
+        "ممكن تستدعي عدة أدوات في نفس الردّ (block منفصل لكل واحدة).\n\n"
         "**الأدوات المتاحة**:\n"
     )
     for t in TOOL_DEFS:
@@ -668,7 +940,7 @@ async def _autocoder_stream(messages: List[Dict[str, Any]]):
     full_input = (history_text + f"\n\nالمالك: {last_user}").strip()
 
     chat = LlmChat(
-        api_key=key,
+        api_key=api_key,
         session_id=session_id,
         system_message=AUTOCODER_SYSTEM_PROMPT + tool_hint,
     )
@@ -705,9 +977,9 @@ async def _autocoder_stream(messages: List[Dict[str, Any]]):
                 yield {"type": "tool", "status": "calling", "name": name,
                        "args": _trim_args_for_ui(args)}
                 result = await execute_autocoder_tool(name, args)
-                summary = _summarize(name, result)
                 yield {"type": "tool", "status": "done", "name": name,
-                       "ok": result.get("ok", False), "summary": summary,
+                       "ok": result.get("ok", False),
+                       "summary": _summarize(name, result),
                        "preview": _preview_for_ui(name, result)}
                 results.append({"name": name, "result": _trim_result_for_llm(result)})
 
@@ -715,17 +987,16 @@ async def _autocoder_stream(messages: List[Dict[str, Any]]):
             for r in results:
                 trimmed = json.dumps(r["result"], ensure_ascii=False)[:8000]
                 results_text += f"\n• {r['name']}: {trimmed}\n"
-            full_input = results_text + "\n\nأكمل ردّك للمالك (استدعِ أدوات أخرى لو تحتاج، وإلا اعرض ملخص قصير)."
+            full_input = results_text + "\n\nأكمل ردّك للمالك."
             continue
 
-        # No tool calls — final text
         for i in range(0, len(text), 40):
             yield {"type": "text", "content": text[i:i + 40]}
             await asyncio.sleep(0.01)
         yield {"type": "done"}
         return
 
-    yield {"type": "text", "content": "\n(وصلت لـ40 دورة استدعاء — أكمل بما عندي. اطلب تكملة لو تبي.)"}
+    yield {"type": "text", "content": "\n(وصلت لـ40 دورة)"}
     yield {"type": "done"}
 
 

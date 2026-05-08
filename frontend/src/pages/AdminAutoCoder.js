@@ -69,6 +69,7 @@ export default function AdminAutoCoder() {
   const [currentStream, setCurrentStream] = useState('');
   const [currentTools, setCurrentTools] = useState([]);
   const [showSidebar, setShowSidebar] = useState(false);
+  const [keyStatus, setKeyStatus] = useState(null);
   const scrollRef = useRef(null);
 
   // ---- bootstrap ----
@@ -90,6 +91,8 @@ export default function AdminAutoCoder() {
       if (!r.ok) throw new Error('status failed');
       const d = await r.json();
       if (!d.is_setup) { setPhase('setup'); return; }
+      // load key status (independent or fallback)
+      loadKeyStatus();
       // try restore session
       try {
         const stored = JSON.parse(localStorage.getItem(SESSION_KEY) || 'null');
@@ -109,6 +112,16 @@ export default function AdminAutoCoder() {
       toast.error('فشل تحميل الحالة');
       setPhase('locked');
     }
+  };
+
+  // ---- key status ----
+  const loadKeyStatus = async () => {
+    try {
+      const r = await fetch(`${API}/api/autocoder/key-status`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (r.ok) setKeyStatus(await r.json());
+    } catch (_) {}
   };
 
   // ---- setup ----
@@ -528,6 +541,17 @@ export default function AdminAutoCoder() {
 
         <main className="flex-1 flex flex-col min-w-0">
           <div ref={scrollRef} className="flex-1 overflow-y-auto p-4 md:p-6 space-y-4">
+            {keyStatus && !keyStatus.is_independent && (
+              <div data-testid="ac-fallback-warning" className="max-w-3xl mx-auto bg-amber-500/10 border border-amber-400/30 rounded-xl p-4 text-xs text-amber-200 leading-relaxed">
+                <div className="font-bold mb-1 flex items-center gap-1.5">
+                  <AlertTriangle className="w-3.5 h-3.5" />
+                  تنبيه: الذكاء يستخدم مفتاح Emergent — تنخصم نقاط من حسابك
+                </div>
+                <div className="text-amber-200/80">
+                  لجعل الذكاء مستقلاً 100% (بدون أي خصم نقاط)، أضف <code className="px-1 py-0.5 bg-black/40 rounded font-mono text-[11px]">ANTHROPIC_API_KEY</code> في إعدادات Railway → Variables. شوف الدليل في <code className="px-1 py-0.5 bg-black/40 rounded font-mono text-[11px]">/app/INDEPENDENCE_SETUP.md</code> داخل الكود.
+                </div>
+              </div>
+            )}
             {messages.length === 0 && !currentStream && (
               <div className="max-w-2xl mx-auto text-center py-12">
                 <ShieldCheck className="w-12 h-12 text-amber-400 mx-auto mb-4" />
@@ -671,6 +695,24 @@ function RecoveryDisplay({ codes, onDone }) {
         </div>
       </div>
     </div>
+  );
+}
+
+function KeyStatusBadge({ status }) {
+  if (!status) return null;
+  const independent = status.is_independent;
+  return (
+    <span
+      data-testid="ac-key-status"
+      title={status.instructions || ''}
+      className={`hidden md:inline-flex text-[10px] px-2 py-1 rounded-full items-center gap-1 border ${
+        independent
+          ? 'bg-emerald-500/10 border-emerald-400/30 text-emerald-300'
+          : 'bg-amber-500/10 border-amber-400/30 text-amber-300'
+      }`}
+    >
+      {status.label}
+    </span>
   );
 }
 
