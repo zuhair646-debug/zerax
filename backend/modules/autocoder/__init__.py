@@ -819,6 +819,19 @@ def create_autocoder_router(db, get_current_user, require_owner):
             ),
         }
 
+    @router.post("/emergency-reset")
+    async def emergency_reset(owner=Depends(require_owner)):
+        """Wipes the autocoder config completely (passcode + recovery codes + sessions).
+        After this, the next visit shows the Setup screen as if it's the first time.
+        Only the owner can call this (require_owner already enforces it)."""
+        await db.autocoder_config.delete_many({})
+        await db.autocoder_sessions.delete_many({})
+        await _audit("emergency_reset", owner.get("id"))
+        return {
+            "ok": True,
+            "message": "تم مسح الإعدادات. ارجع لصفحة برمجة زيتاكس لإعداد كلمة سر جديدة.",
+        }
+
     @router.post("/setup")
     async def setup(payload: SetupIn, owner=Depends(require_owner)):
         cfg = await _get_config()
