@@ -237,13 +237,17 @@ async def tool_read_file(path: str, start: int = 1, end: Optional[int] = None) -
         lines = text.splitlines()
         total = len(lines)
         if end is None:
-            end = min(start + 4000, total)
+            # OPT: default 800 lines instead of 4000 to save tokens
+            # AI can request more by passing explicit end=
+            end = min(start + 800, total)
         end = min(end, total)
         start = max(1, start)
         chunk = "\n".join(lines[start - 1:end])
         return {
             "ok": True, "path": str(p), "total_lines": total,
-            "shown": [start, end], "content": chunk[:200000],
+            "shown": [start, end], "content": chunk[:80000],
+            "hint": (f"showing {end-start+1}/{total} lines. Pass end={total} to read all."
+                     if end < total else None),
         }
     except Exception as e:
         return {"ok": False, "error": str(e)}
@@ -942,11 +946,17 @@ def create_autocoder_router(db, get_current_user, require_owner):
             try:
                 assistant_text = ""
                 tool_events: List[Dict[str, Any]] = []
+                usage_total = {"input": 0, "output": 0, "cached_read": 0, "cost_usd": 0.0}
                 async for evt in _autocoder_stream(messages):
                     if evt["type"] == "text":
                         assistant_text += evt["content"]
                     elif evt["type"] == "tool":
                         tool_events.append({k: v for k, v in evt.items() if k not in ("content",)})
+                    elif evt["type"] == "usage":
+                        usage_total["input"] += evt.get("input", 0)
+                        usage_total["output"] += evt.get("output", 0)
+                        usage_total["cached_read"] += evt.get("cached_read", 0)
+                        usage_total["cost_usd"] += evt.get("cost_usd", 0.0)
                     yield f"data: {json.dumps(evt, ensure_ascii=False)}\n\n"
 
                 messages.append({
@@ -967,8 +977,11 @@ def create_autocoder_router(db, get_current_user, require_owner):
                 )
                 await _audit("chat_turn", owner.get("id"), {
                     "conv_id": conv_id, "tools": [t.get("name") for t in tool_events],
+                    "cost_usd": round(usage_total["cost_usd"], 4),
+                    "input_tokens": usage_total["input"],
+                    "output_tokens": usage_total["output"],
                 })
-                yield f"data: {json.dumps({'type':'saved','conversation_id':conv_id})}\n\n"
+                yield f"data: {json.dumps({'type':'saved','conversation_id':conv_id, 'turn_cost': round(usage_total['cost_usd'], 4)})}\n\n"
             except Exception as e:
                 logger.exception("[AUTOCODER] chat stream failed")
                 yield f"data: {json.dumps({'type':'error','message': str(e)[:240]}, ensure_ascii=False)}\n\n"
@@ -1086,7 +1099,6 @@ async def _autocoder_stream(messages: List[Dict[str, Any]]):
 async def _build_env_truth_banner() -> str:
     """Run actual checks so the AI sees the real state of the environment.
     Prevents hallucinating that tools are 'missing' when they're installed."""
-    checks = []
 
     async def has(cmd: str) -> bool:
         try:
@@ -1126,7 +1138,13 @@ async def _build_env_truth_banner() -> str:
 
 
 async def _stream_direct_anthropic(anthropic_msgs: List[Dict[str, Any]], api_key: str, env_banner: str = ""):
-    """Uses official anthropic SDK with native multi-tool calling."""
+    """Uses official anthropic SDK with native multi-tool calling.
+    
+    Cost optimizations:
+    1. History pruning: keep only last MAX_HISTORY user/assistant turns
+    2. Prompt caching: system prompt + tools cached (90% cheaper for re-use)
+    3. Reduced max_tokens output (4096 instead of 8192)
+    """
     try:
         from anthropic import AsyncAnthropic
     except Exception as e:
@@ -1134,24 +1152,72 @@ async def _stream_direct_anthropic(anthropic_msgs: List[Dict[str, Any]], api_key
         return
 
     client = AsyncAnthropic(api_key=api_key)
-    msgs = list(anthropic_msgs)
-    sys_prompt = AUTOCODER_SYSTEM_PROMPT + (env_banner or "")
 
-    for iteration in range(40):
+    # ── OPTIMIZATION 1: History pruning ──
+    # Keep only the last 6 turns (3 user + 3 assistant pairs) to keep context small.
+    # The LLM still sees the conversation flow but old details are dropped.
+    MAX_HISTORY_TURNS = 6
+    if len(anthropic_msgs) > MAX_HISTORY_TURNS:
+        anthropic_msgs = anthropic_msgs[-MAX_HISTORY_TURNS:]
+
+    # ── OPTIMIZATION 2: Prompt caching ──
+    # Mark system prompt + tools with cache_control so Anthropic stores them.
+    # Subsequent requests in next 5 minutes pay 10% of normal price for these.
+    sys_prompt_text = AUTOCODER_SYSTEM_PROMPT + (env_banner or "")
+    system_blocks = [
+        {
+            "type": "text",
+            "text": sys_prompt_text,
+            "cache_control": {"type": "ephemeral"},
+        }
+    ]
+
+    # Cache the tools schema too (rarely changes)
+    cached_tools = list(ANTHROPIC_TOOLS)
+    if cached_tools:
+        cached_tools[-1] = {
+            **cached_tools[-1],
+            "cache_control": {"type": "ephemeral"},
+        }
+
+    msgs = list(anthropic_msgs)
+
+    for iteration in range(20):  # ── OPT 3: lowered from 40 to 20 ──
         try:
             resp = await client.messages.create(
                 model="claude-sonnet-4-5",
-                max_tokens=8192,
-                system=sys_prompt,
-                tools=ANTHROPIC_TOOLS,
+                max_tokens=4096,  # ── OPT 3: lowered from 8192 ──
+                system=system_blocks,
+                tools=cached_tools,
                 messages=msgs,
             )
         except Exception as e:
             yield {"type": "error", "message": f"anthropic api: {str(e)[:240]}"}
             return
 
+        # Track usage so we can show cost to the user
+        usage = getattr(resp, "usage", None)
+        if usage and iteration == 0:
+            in_tok = getattr(usage, "input_tokens", 0)
+            out_tok = getattr(usage, "output_tokens", 0)
+            cache_read = getattr(usage, "cache_read_input_tokens", 0) or 0
+            cache_write = getattr(usage, "cache_creation_input_tokens", 0) or 0
+            # Pricing (Claude Sonnet 4.5): $3/1M input, $15/1M output, $0.30/1M cached read, $3.75/1M cached write
+            cost = (
+                (in_tok - cache_read - cache_write) * 3 / 1_000_000
+                + cache_read * 0.30 / 1_000_000
+                + cache_write * 3.75 / 1_000_000
+                + out_tok * 15 / 1_000_000
+            )
+            yield {
+                "type": "usage",
+                "input": in_tok, "output": out_tok,
+                "cached_read": cache_read, "cached_write": cache_write,
+                "cost_usd": round(cost, 4),
+            }
+
         # Stream the text portion of this response
-        text_parts: List[str] = []
+        text_parts: List[str] = []  # noqa: F841
         tool_uses: List[Dict[str, Any]] = []
         assistant_blocks: List[Dict[str, Any]] = []  # for history
 
@@ -1308,8 +1374,8 @@ def _trim_args_for_ui(args: Dict[str, Any]) -> Dict[str, Any]:
 def _trim_result_for_llm(result: Dict[str, Any]) -> Dict[str, Any]:
     out = {}
     for k, v in result.items():
-        if isinstance(v, str) and len(v) > 12000:
-            out[k] = v[:12000] + f"\n...[truncated {len(v) - 12000} chars]"
+        if isinstance(v, str) and len(v) > 5000:  # OPT: was 12000
+            out[k] = v[:5000] + f"\n...[truncated {len(v) - 5000} chars]"
         else:
             out[k] = v
     return out
