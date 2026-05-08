@@ -1035,6 +1035,109 @@ def create_autocoder_router(db, get_current_user, require_owner):
         items = [a async for a in cur]
         return {"audit": items}
 
+    # ─────────────────────────────────────────────────────────────
+    # 📤 Upload endpoint (for images/files in chat)
+    # ─────────────────────────────────────────────────────────────
+    @router.post("/upload")
+    async def upload_file(
+        file: UploadFile = File(...),
+        request: Request = None
+    ):
+        """
+        رفع ملف (صورة/PDF/ملف) → يرجع URL أو base64
+        """
+        try:
+            # قراءة محتوى الملف
+            contents = await file.read()
+            
+            # التحقق من الحجم (max 10MB)
+            if len(contents) > 10 * 1024 * 1024:
+                raise HTTPException(400, "File too large (max 10MB)")
+            
+            # تحديد نوع الملف
+            content_type = file.content_type or "application/octet-stream"
+            
+            # تحويل لـ base64
+            import base64
+            b64_data = base64.b64encode(contents).decode('utf-8')
+            data_url = f"data:{content_type};base64,{b64_data}"
+            
+            return {
+                "success": True,
+                "filename": file.filename,
+                "content_type": content_type,
+                "size": len(contents),
+                "data_url": data_url  # يستخدم مباشرة في <img> أو Claude API
+            }
+            
+        except HTTPException:
+            raise
+        except Exception as e:
+            logger.error(f"Upload error: {e}", exc_info=True)
+            raise HTTPException(500, f"Upload failed: {str(e)}")
+
+    # ─────────────────────────────────────────────────────────────
+    # 🎤 Transcribe endpoint (audio → text via Whisper)
+    # ─────────────────────────────────────────────────────────────
+    @router.post("/transcribe")
+    async def transcribe_audio(
+        file: UploadFile = File(...),
+        request: Request = None
+    ):
+        """
+        تحويل ملف صوتي → نص باستخدام OpenAI Whisper API
+        """
+        try:
+            # قراءة محتوى الملف
+            contents = await file.read()
+            
+            # التحقق من الحجم (max 25MB - Whisper limit)
+            if len(contents) > 25 * 1024 * 1024:
+                raise HTTPException(400, "Audio file too large (max 25MB)")
+            
+            # التحقق من وجود OPENAI_API_KEY
+            openai_key = os.getenv("OPENAI_API_KEY")
+            if not openai_key:
+                raise HTTPException(500, "OPENAI_API_KEY not configured")
+            
+            # استدعاء Whisper API
+            import httpx
+            async with httpx.AsyncClient(timeout=60.0) as client:
+                files_data = {
+                    "file": (file.filename, contents, file.content_type or "audio/mpeg")
+                }
+                data = {
+                    "model": "whisper-1",
+                    "language": "ar"  # عربي (optional - Whisper يكتشف تلقائياً)
+                }
+                
+                response = await client.post(
+                    "https://api.openai.com/v1/audio/transcriptions",
+                    headers={"Authorization": f"Bearer {openai_key}"},
+                    files=files_data,
+                    data=data
+                )
+                
+                if response.status_code != 200:
+                    error_text = response.text
+                    logger.error(f"Whisper API error: {error_text}")
+                    raise HTTPException(500, f"Transcription failed: {error_text}")
+                
+                result = response.json()
+                transcription = result.get("text", "")
+                
+                return {
+                    "success": True,
+                    "text": transcription,
+                    "language": result.get("language", "ar")
+                }
+                
+        except HTTPException:
+            raise
+        except Exception as e:
+            logger.error(f"Transcribe error: {e}", exc_info=True)
+            raise HTTPException(500, f"Transcription failed: {str(e)}")
+
     return router
 
 
