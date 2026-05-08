@@ -272,6 +272,7 @@ export default function AdminAutoCoder() {
     setMessages((prev) => [...prev, { role: 'user', content: msg }]);
     setCurrentStream('');
     setCurrentTools([]);
+    let lastTurnCost = null;
 
     try {
       const r = await fetch(`${API}/api/autocoder/chat`, {
@@ -314,7 +315,17 @@ export default function AdminAutoCoder() {
               setCurrentTools([...toolEvents]);
             } else if (evt.type === 'saved') {
               setConversationId(evt.conversation_id);
+              if (evt.turn_cost !== undefined) {
+                lastTurnCost = evt.turn_cost;
+                if (evt.turn_cost >= 0.01) {
+                  toast.success(`💰 تكلفة هذه الرسالة: $${evt.turn_cost.toFixed(4)}`, { duration: 4000 });
+                }
+              }
               loadConversations();
+            } else if (evt.type === 'usage') {
+              // Real-time cost update — append to current tools list as a special pill
+              setCurrentTools((prev) => [...prev, { ...evt, _isUsage: true }]);
+              toolEvents.push({ ...evt, _isUsage: true });
             } else if (evt.type === 'error') {
               toast.error(evt.message);
             }
@@ -766,6 +777,19 @@ function MessageBubble({ m }) {
 }
 
 function ToolPill({ t }) {
+  // Special rendering for usage events
+  if (t._isUsage) {
+    return (
+      <div data-testid="usage-pill" className="my-1.5 rounded-lg border border-emerald-400/30 bg-emerald-500/[0.05] px-3 py-2 text-xs flex items-center gap-2">
+        <span>💰</span>
+        <span className="font-bold text-emerald-300">${(t.cost_usd ?? 0).toFixed(4)}</span>
+        <span className="text-white/50 text-[10px]">
+          {t.input?.toLocaleString()} in / {t.output?.toLocaleString()} out
+          {t.cached_read > 0 && <span className="ml-1 text-emerald-400">• {t.cached_read.toLocaleString()} cached (90% أرخص)</span>}
+        </span>
+      </div>
+    );
+  }
   const [open, setOpen] = useState(false);
   const Icon = TOOL_ICON[t.name] || Terminal;
   const isCalling = t.status === 'calling';
