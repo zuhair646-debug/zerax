@@ -475,15 +475,154 @@ async def _gpt_stream(
 
 
 # ════════════════════════════════════════════════════════════════════════
-#  Claude streaming via emergentintegrations (simulated tool-calling)
+# Claude streaming via DIRECT Anthropic SDK (preferred — uses user's own
+# ANTHROPIC_API_KEY) with emergentintegrations as fallback
 # ════════════════════════════════════════════════════════════════════════
 async def _claude_stream(
     messages: List[Dict[str, Any]],
     system: str,
     current_html: str,
 ):
-    """Claude path: parses tool_call blocks from text. Less reliable than GPT-4o
-    for tool use, so we recommend GPT-4o for website building."""
+    """Claude path. Tries direct Anthropic SDK first (uses owner's
+    ANTHROPIC_API_KEY — no Emergent points consumed). Falls back to
+    emergentintegrations only if the direct key is missing."""
+    direct_key = os.environ.get("ANTHROPIC_API_KEY", "").strip()
+    if direct_key.startswith("sk-ant"):
+        async for evt in _claude_stream_direct(messages, system, current_html, direct_key):
+            yield evt
+        return
+    async for evt in _claude_stream_emergent(messages, system, current_html):
+        yield evt
+
+
+async def _claude_stream_direct(
+    messages: List[Dict[str, Any]],
+    system: str,
+    current_html: str,
+    api_key: str,
+):
+    """Native tool calling via official anthropic SDK."""
+    try:
+        from anthropic import AsyncAnthropic
+    except Exception as e:
+        yield {"type": "error", "message": f"anthropic SDK missing: {e}"}
+        return
+    from modules.freebuild_v2.tools import TOOL_SCHEMAS, execute_tool_call
+
+    # Convert OpenAI-format tool schemas to Anthropic format
+    anthropic_tools = []
+    for s in TOOL_SCHEMAS:
+        fn = s.get("function") or {}
+        anthropic_tools.append({
+            "name": fn.get("name"),
+            "description": fn.get("description", "")[:1024],
+            "input_schema": fn.get("parameters") or {"type": "object", "properties": {}},
+        })
+
+    client = AsyncAnthropic(api_key=api_key)
+    sys_text = system
+    if current_html:
+        sys_text += (
+            f"\n\n📐 السياق: العميل يملك حالياً موقع HTML قائم بحجم {len(current_html)} حرف. "
+            "أي طلب تعديل → استدعِ أداة جراحية (set_theme/edit_section/add_page/update_website)."
+        )
+
+    msgs: List[Dict[str, Any]] = []
+    for m in messages:
+        if m.get("role") in ("user", "assistant"):
+            txt = (m.get("content") or "")[:12000]
+            if txt.strip():
+                msgs.append({"role": m["role"], "content": txt})
+
+    for iteration in range(30):
+        try:
+            resp = await client.messages.create(
+                model="claude-sonnet-4-5",
+                max_tokens=8192,
+                system=sys_text,
+                tools=anthropic_tools,
+                messages=msgs,
+            )
+        except Exception as e:
+            yield {"type": "error", "message": f"anthropic api: {str(e)[:240]}"}
+            return
+
+        tool_uses = []
+        assistant_blocks = []
+        for block in resp.content:
+            btype = getattr(block, "type", None)
+            if btype == "text":
+                txt = getattr(block, "text", "") or ""
+                assistant_blocks.append({"type": "text", "text": txt})
+                for i in range(0, len(txt), 40):
+                    yield {"type": "text", "content": txt[i:i + 40]}
+                    await asyncio.sleep(0.01)
+            elif btype == "tool_use":
+                tu = {"id": block.id, "name": block.name,
+                      "input": dict(block.input) if block.input else {}}
+                tool_uses.append(tu)
+                assistant_blocks.append({
+                    "type": "tool_use", "id": tu["id"],
+                    "name": tu["name"], "input": tu["input"],
+                })
+
+        if assistant_blocks:
+            msgs.append({"role": "assistant", "content": assistant_blocks})
+
+        if resp.stop_reason == "end_turn" or not tool_uses:
+            yield {"type": "done"}
+            return
+
+        tool_results_blocks = []
+        for tu in tool_uses:
+            args = tu["input"] or {}
+            if tu["name"] in ("update_website", "edit_section", "add_page", "set_theme",
+                              "qa_html", "publish_site", "inject_quran_blocks"):
+                args["current_html"] = current_html
+            yield {"type": "tool", "status": "calling", "name": tu["name"],
+                   "args": {k: v for k, v in args.items() if k != "current_html"}}
+            result = await execute_tool_call(tu["name"], args)
+            evt = {"type": "tool", "status": "done", "name": tu["name"],
+                   "ok": result.get("ok"),
+                   "summary": _tool_summary(tu["name"], result)}
+            if (
+                tu["name"] in ("build_website", "update_website", "edit_section",
+                                "add_page", "set_theme", "build_quran_mushaf_reader",
+                                "build_creative_quran_site", "build_quran_website",
+                                "inject_quran_blocks")
+                and result.get("ok") and isinstance(result.get("html"), str)
+            ):
+                current_html = result["html"]
+                evt["html"] = current_html
+            if tu["name"] == "publish_site" and result.get("ok") and result.get("_publish_request"):
+                evt["_publish_request"] = True
+                evt["slug"] = result.get("slug")
+                evt["title"] = result.get("title")
+            if tu["name"] in ("generate_audio", "generate_image_url") and result.get("ok"):
+                evt["url"] = result.get("url")
+            yield evt
+            trimmed = {k: v for k, v in result.items() if k != "html"}
+            if "html" in result:
+                trimmed["html_size"] = len(result["html"])
+            tool_results_blocks.append({
+                "type": "tool_result",
+                "tool_use_id": tu["id"],
+                "content": json.dumps(trimmed, ensure_ascii=False)[:14000],
+            })
+
+        msgs.append({"role": "user", "content": tool_results_blocks})
+
+    yield {"type": "text", "content": "\n(وصلت لـ30 استدعاء أداة)"}
+    yield {"type": "done"}
+
+
+async def _claude_stream_emergent(
+    messages: List[Dict[str, Any]],
+    system: str,
+    current_html: str,
+):
+    """Legacy emergentintegrations path (fallback when ANTHROPIC_API_KEY missing).
+    Uses text-blob tool parsing."""
     try:
         from emergentintegrations.llm.chat import LlmChat, UserMessage
     except Exception as e:
