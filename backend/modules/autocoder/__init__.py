@@ -100,12 +100,14 @@ AUTOCODER_SYSTEM_PROMPT = """أنت "برمجة زيتاكس" — مهندس ب�
 
 ⚙️ **التنفيذ**:
 - `run_command(cmd, cwd?)` — أي bash command (timeout 90s افتراضي)
-- `restart_service(name)` — backend/frontend (supervisorctl)
+- `restart_service(name)` — backend/frontend (محلياً supervisorctl، على Railway production يستخدم Railway API تلقائياً)
 
-🚀 **Git**:
-- `git_status()` — حالة الريبو
-- `git_diff(path?)` — diff الحالي
-- `git_commit_push(message, files?)` — commit + push للـmain
+📊 **مراقبة**:
+- `view_logs(service, lines?)` — يقرأ آخر N سطر من backend/frontend logs
+- `list_env(filter_prefix?)` — يعرض أسماء متغيرات البيئة (القيم السرّية مخفية)
+
+🚀 **Git** (يستخدم `GITHUB_TOKEN` من ENV تلقائياً للـpush):
+- `git_status()`, `git_diff(path?)`, `git_commit_push(message, files?)`
 
 📐 خريطة الكود (ملخص):
 - `/app/backend/server.py` — الـmain FastAPI app
@@ -280,34 +282,144 @@ async def tool_run_command(cmd: str, cwd: str = "/app", timeout: int = 90) -> Di
 async def tool_restart_service(name: str) -> Dict[str, Any]:
     if name not in ("backend", "frontend", "all"):
         return {"ok": False, "error": "name must be backend|frontend|all"}
+    # On Railway production, supervisor doesn't exist — use Railway API redeploy
+    rw_token = os.environ.get("RAILWAY_TOKEN", "").strip()
+    rw_service = os.environ.get("RAILWAY_SERVICE_ID", "").strip()
+    rw_env = os.environ.get("RAILWAY_ENVIRONMENT_ID", "").strip()
+    on_railway = bool(os.environ.get("RAILWAY_ENVIRONMENT"))
+    if on_railway and rw_token and rw_service and rw_env:
+        try:
+            import httpx
+            q = (
+                'mutation Redeploy($s: String!, $e: String!) { '
+                'serviceInstanceRedeploy(serviceId: $s, environmentId: $e) }'
+            )
+            async with httpx.AsyncClient(timeout=30) as c:
+                r = await c.post(
+                    "https://backboard.railway.com/graphql/v2",
+                    headers={"Authorization": f"Bearer {rw_token}",
+                             "Content-Type": "application/json"},
+                    json={"query": q, "variables": {"s": rw_service, "e": rw_env}},
+                )
+            data = r.json()
+            if "errors" in data:
+                return {"ok": False, "error": str(data["errors"])[:200]}
+            return {"ok": True, "exit_code": 0, "stdout":
+                    f"Railway redeploy triggered for service {rw_service[:8]}…",
+                    "method": "railway-api"}
+        except Exception as e:
+            return {"ok": False, "error": f"railway api: {e}"}
+    # Local fallback: supervisorctl
     target = "all" if name == "all" else name
     return await tool_run_command(f"sudo supervisorctl restart {target}")
 
 
 async def tool_git_status() -> Dict[str, Any]:
-    return await tool_run_command("git status --short && echo '---' && git log -5 --oneline")
+    return await tool_run_command(
+        "git status --short 2>&1 && echo '---' && git log -5 --oneline 2>&1 || echo 'git not available'"
+    )
 
 
 async def tool_git_diff(path: str = "") -> Dict[str, Any]:
     cmd = "git diff" if not path else f"git diff -- {shlex.quote(path)}"
-    r = await tool_run_command(cmd)
-    return r
+    return await tool_run_command(cmd)
 
 
 async def tool_git_commit_push(message: str, files: Optional[List[str]] = None) -> Dict[str, Any]:
-    """Stage, commit, and push to current branch."""
+    """Stage, commit, and push to current branch.
+    Auto-injects GITHUB_TOKEN into the remote URL for authenticated push."""
+    gh_token = os.environ.get("GITHUB_TOKEN", "").strip()
+    gh_repo = os.environ.get("GITHUB_REPO", "").strip()  # e.g. "owner/repo"
+
     parts = []
+    # Ensure git identity (no-op if already set)
+    parts.append('git config user.email "autocoder@zitex.com" 2>/dev/null || true')
+    parts.append('git config user.name "Zitex AutoCoder" 2>/dev/null || true')
+    parts.append('git config --global --add safe.directory /app 2>/dev/null || true')
+
+    # If we have a token, set the remote URL with embedded credentials (transient — only for this push)
+    if gh_token and gh_repo:
+        auth_url = f"https://x-access-token:{gh_token}@github.com/{gh_repo}.git"
+        parts.append(f'git remote set-url origin {shlex.quote(auth_url)} 2>/dev/null || git remote add origin {shlex.quote(auth_url)}')
+
+    # Stage
     if files:
         quoted = " ".join(shlex.quote(f) for f in files)
         parts.append(f"git add {quoted}")
     else:
         parts.append("git add -A")
-    safe_msg = message.replace('"', '\\"').replace("`", "\\`")
-    parts.append(f'git commit -m "{safe_msg}" || echo "nothing to commit"')
-    parts.append("git push origin HEAD")
+
+    safe_msg = message.replace('"', '\\"').replace("`", "\\`").replace("$", "\\$")
+    parts.append(f'git commit -m "{safe_msg}" || echo "(nothing to commit)"')
+
+    # Detect current branch (default to main if detached)
+    parts.append('BRANCH=$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo main)')
+    parts.append('[ "$BRANCH" = "HEAD" ] && BRANCH=main')
+    parts.append('git push origin "HEAD:$BRANCH" 2>&1')
+
     cmd = " && ".join(parts)
     r = await tool_run_command(cmd, timeout=120)
+    # Scrub token from output
+    if gh_token and isinstance(r.get("stdout"), str):
+        r["stdout"] = r["stdout"].replace(gh_token, "***GITHUB_TOKEN***")
+    if gh_token and isinstance(r.get("stderr"), str):
+        r["stderr"] = r["stderr"].replace(gh_token, "***GITHUB_TOKEN***")
     return r
+
+
+async def tool_view_logs(service: str = "backend", lines: int = 100) -> Dict[str, Any]:
+    """Read recent logs. Tries multiple known paths."""
+    if service not in ("backend", "frontend"):
+        return {"ok": False, "error": "service must be backend|frontend"}
+    candidates = [
+        f"/var/log/supervisor/{service}.err.log",
+        f"/var/log/supervisor/{service}.out.log",
+        f"/app/logs/{service}.log",
+        f"/tmp/logs/{service}.log",
+    ]
+    on_railway = bool(os.environ.get("RAILWAY_ENVIRONMENT"))
+    if on_railway:
+        # On Railway, app logs go to stdout — direct file logs may not exist.
+        # We'll return a hint to use Railway API or dashboard.
+        return {
+            "ok": True,
+            "method": "railway-stdout",
+            "info": "On Railway, application logs stream to Railway dashboard. View at: https://railway.app/dashboard → service → Deployments → View Logs",
+            "stdout": "(use Railway dashboard to view live logs)",
+        }
+    for p in candidates:
+        try:
+            from pathlib import Path as _P
+            fp = _P(p)
+            if fp.exists():
+                content = fp.read_text(encoding="utf-8", errors="replace")
+                tail = "\n".join(content.splitlines()[-lines:])
+                return {"ok": True, "path": str(fp), "lines": min(lines, len(content.splitlines())),
+                        "stdout": tail[:30000]}
+        except Exception:
+            continue
+    return {"ok": False, "error": "no log files found"}
+
+
+async def tool_list_env(filter_prefix: str = "") -> Dict[str, Any]:
+    """List ENV var names (NOT values) so the AI can see what's configured.
+    Sensitive values are never returned — only key names + masked previews."""
+    SAFE_PREFIXES = ("RAILWAY_", "BACKEND_", "FRONTEND_", "CORS_", "DB_", "PORT")
+    out = []
+    for k, v in sorted(os.environ.items()):
+        if filter_prefix and not k.startswith(filter_prefix):
+            continue
+        # Show value only for non-sensitive
+        is_sensitive = any(x in k.upper() for x in
+                           ("KEY", "TOKEN", "SECRET", "PASSWORD", "API"))
+        if is_sensitive:
+            preview = (v[:6] + "..." + v[-4:]) if v and len(v) > 14 else "***"
+            out.append({"name": k, "set": True, "preview": preview, "sensitive": True})
+        elif k.startswith(SAFE_PREFIXES) or k in ("PATH", "HOME"):
+            out.append({"name": k, "set": True, "value": v[:200], "sensitive": False})
+        else:
+            out.append({"name": k, "set": True, "preview": "***", "sensitive": True})
+    return {"ok": True, "count": len(out), "vars": out[:200]}
 
 
 # Tool registry for the LLM (legacy, used by UI for icons/labels)
@@ -323,6 +435,8 @@ TOOL_DEFS: List[Dict[str, Any]] = [
     {"name": "git_status", "desc": "git status + last 5 commits", "args": []},
     {"name": "git_diff", "desc": "show current diff (optionally for path)", "args": ["path?"]},
     {"name": "git_commit_push", "desc": "stage all + commit + push to remote", "args": ["message", "files?"]},
+    {"name": "view_logs", "desc": "read recent log lines (backend|frontend)", "args": ["service", "lines?"]},
+    {"name": "list_env", "desc": "list env var NAMES (values masked for secrets)", "args": ["filter_prefix?"]},
 ]
 
 # Anthropic-compatible tool schemas (native tool calling)
@@ -444,6 +558,29 @@ ANTHROPIC_TOOLS = [
                 "files": {"type": "array", "items": {"type": "string"}, "description": "list of paths to stage; if omitted, stages all"},
             },
             "required": ["message"],
+        },
+    },
+    {
+        "name": "view_logs",
+        "description": "Read recent application log lines for backend or frontend service.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "service": {"type": "string", "enum": ["backend", "frontend"]},
+                "lines": {"type": "integer", "description": "number of trailing lines, default 100"},
+            },
+            "required": ["service"],
+        },
+    },
+    {
+        "name": "list_env",
+        "description": "List environment variable NAMES with masked values (real values never returned for secrets). Lets you discover what's configured.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "filter_prefix": {"type": "string", "description": "optional prefix filter, e.g. 'RAILWAY_'"},
+            },
+            "required": [],
         },
     },
 ]
