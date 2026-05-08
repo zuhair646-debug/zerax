@@ -188,7 +188,7 @@ export default function AdminAutoCoder() {
       const r = await fetch(`${API}/api/autocoder/recover`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ recovery_code: recoveryCode, new_passcode: recoveryNewPass }),
+        body: JSON.stringify({ recovery_code: recoveryCode.trim().toUpperCase(), new_passcode: recoveryNewPass }),
       });
       const d = await r.json();
       if (!r.ok) throw new Error(d.detail || 'recover failed');
@@ -202,6 +202,19 @@ export default function AdminAutoCoder() {
     } catch (e) {
       toast.error('رمز استرجاع غير صالح');
     } finally { setRecoveryBusy(false); }
+  };
+
+  const doEmergencyReset = async () => {
+    if (!window.confirm('سيتم مسح كل إعدادات برمجة زيتاكس (كلمة السر + رموز الاسترجاع + الجلسات). بعدها ترجع لصفحة الإعداد لتختار كلمة سر جديدة. متأكد؟')) return;
+    try {
+      const r = await fetch(`${API}/api/autocoder/emergency-reset`, {
+        method: 'POST', headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!r.ok) throw new Error('failed');
+      localStorage.removeItem(SESSION_KEY);
+      toast.success('تم المسح. أعد تحميل الصفحة');
+      setTimeout(() => window.location.reload(), 1000);
+    } catch (e) { toast.error('فشل المسح'); }
   };
 
   const doLock = async () => {
@@ -474,6 +487,18 @@ export default function AdminAutoCoder() {
             >
               رجوع
             </button>
+            <div className="mt-6 pt-4 border-t border-white/10">
+              <p className="text-[11px] text-rose-300/70 mb-2 leading-relaxed">
+                ⚠️ ضايعة كلمة السر و الرموز ما تنفع؟ أنت المالك، تقدر تمسح كل شي وتبدأ من جديد:
+              </p>
+              <button
+                onClick={doEmergencyReset}
+                data-testid="emergency-reset-btn"
+                className="w-full py-2 rounded-lg bg-rose-500/15 border border-rose-400/30 hover:bg-rose-500/25 text-rose-300 text-xs font-bold"
+              >
+                🚨 مسح كل الإعدادات والبدء من جديد
+              </button>
+            </div>
           </>
         )}
       </LockShell>
