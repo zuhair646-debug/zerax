@@ -802,7 +802,8 @@ function MessageBubble({ m }) {
 }
 
 function ToolPill({ t }) {
-  // Special rendering for usage events
+  const [open, setOpen] = useState(false);
+  // Special rendering for usage events (must come AFTER hooks)
   if (t._isUsage) {
     return (
       <div data-testid="usage-pill" className="my-1.5 rounded-lg border border-emerald-400/30 bg-emerald-500/[0.05] px-3 py-2 text-xs flex items-center gap-2">
@@ -815,7 +816,6 @@ function ToolPill({ t }) {
       </div>
     );
   }
-  const [open, setOpen] = useState(false);
   const Icon = TOOL_ICON[t.name] || Terminal;
   const isCalling = t.status === 'calling';
   const isOk = t.ok !== false;
