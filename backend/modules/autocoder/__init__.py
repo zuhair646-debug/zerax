@@ -43,6 +43,7 @@ from pydantic import BaseModel, Field
 logger = logging.getLogger(__name__)
 
 REPO_ROOT = Path("/app")
+GIT_WORKDIR = Path("/tmp/zitex_workdir")  # Where the AI clones+commits the repo on production
 SESSION_TTL_HOURS = 4
 RECOVERY_CODE_COUNT = 6
 PASSCODE_MIN_LEN = 6
@@ -67,6 +68,50 @@ def _gen_recovery_code() -> str:
     # 4 groups of 4 hex chars: ABCD-1234-EF56-7890
     raw = secrets.token_hex(8).upper()
     return f"{raw[0:4]}-{raw[4:8]}-{raw[8:12]}-{raw[12:16]}"
+
+
+async def _ensure_git_workdir() -> Dict[str, Any]:
+    """Make sure /tmp/zitex_workdir is a fresh clone of the repo.
+    Used on Railway production where /app is not a git repo (only the build subdir).
+    Returns {ok, path, action} or {ok: False, error}.
+    """
+    gh_token = os.environ.get("GITHUB_TOKEN", "").strip()
+    gh_repo = os.environ.get("GITHUB_REPO", "").strip()
+    if not gh_token or not gh_repo:
+        return {"ok": False, "error": "GITHUB_TOKEN/GITHUB_REPO env vars missing — set them in Railway Variables"}
+
+    auth_url = f"https://x-access-token:{gh_token}@github.com/{gh_repo}.git"
+    if (GIT_WORKDIR / ".git").exists():
+        # Pull latest
+        proc = await asyncio.create_subprocess_shell(
+            f"cd {shlex.quote(str(GIT_WORKDIR))} && "
+            f"git remote set-url origin {shlex.quote(auth_url)} && "
+            f"git fetch origin && git reset --hard origin/HEAD",
+            stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE,
+        )
+        out, err = await asyncio.wait_for(proc.communicate(), timeout=120)
+        if proc.returncode != 0:
+            return {"ok": False, "error": (err or out).decode("utf-8", errors="replace")[:500]}
+        return {"ok": True, "path": str(GIT_WORKDIR), "action": "fetched"}
+
+    # Fresh clone
+    GIT_WORKDIR.parent.mkdir(parents=True, exist_ok=True)
+    proc = await asyncio.create_subprocess_shell(
+        f"git clone --depth 1 {shlex.quote(auth_url)} {shlex.quote(str(GIT_WORKDIR))}",
+        stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE,
+    )
+    out, err = await asyncio.wait_for(proc.communicate(), timeout=180)
+    if proc.returncode != 0:
+        return {"ok": False, "error": (err or out).decode("utf-8", errors="replace")[:500]}
+    # Configure identity
+    cfg = await asyncio.create_subprocess_shell(
+        f'cd {shlex.quote(str(GIT_WORKDIR))} && '
+        'git config user.email "autocoder@zitex.com" && '
+        'git config user.name "Zitex AutoCoder"',
+        stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE,
+    )
+    await cfg.communicate()
+    return {"ok": True, "path": str(GIT_WORKDIR), "action": "cloned"}
 
 
 # ════════════════════════════════════════════════════════════════════════
@@ -108,6 +153,15 @@ AUTOCODER_SYSTEM_PROMPT = """أنت "برمجة زيتاكس" — مهندس ب�
 
 🚀 **Git** (يستخدم `GITHUB_TOKEN` من ENV تلقائياً للـpush):
 - `git_status()`, `git_diff(path?)`, `git_commit_push(message, files?)`
+
+⚙️ **آلية الـcommit + push على Railway production**:
+- على بيئة Railway، الـcontainer ما فيه `.git` (Railway ينسخ subfolder `/backend` فقط).
+- لذلك أدوات `git_*` تستنسخ الريبو في `/tmp/zitex_workdir` تلقائياً عند أول استدعاء.
+- لما تستدعي `git_commit_push`:
+  1. يـsync تلقائياً كل تعديلاتك على `/app/backend` و `/app/frontend/src` و `/app/memory` لـ `/tmp/zitex_workdir`
+  2. يعمل `git add -A`, `git commit`, `git push` في الـworkdir
+  3. Railway يكتشف الـpush تلقائياً ويعيد البناء (~3-5 دقايق)
+- يعني: أنت **عدّل في `/app` كما لو كنت في dev** → استدعِ `git_commit_push` → Railway ينشر.
 
 📐 خريطة الكود (ملخص):
 - `/app/backend/server.py` — الـmain FastAPI app
@@ -325,55 +379,103 @@ async def tool_restart_service(name: str) -> Dict[str, Any]:
 
 
 async def tool_git_status() -> Dict[str, Any]:
+    setup = await _ensure_git_workdir()
+    if not setup.get("ok"):
+        return setup
     return await tool_run_command(
-        "git status --short 2>&1 && echo '---' && git log -5 --oneline 2>&1 || echo 'git not available'"
+        f"cd {shlex.quote(str(GIT_WORKDIR))} && "
+        "git status --short 2>&1 && echo '---' && git log -5 --oneline 2>&1"
     )
 
 
 async def tool_git_diff(path: str = "") -> Dict[str, Any]:
-    cmd = "git diff" if not path else f"git diff -- {shlex.quote(path)}"
+    setup = await _ensure_git_workdir()
+    if not setup.get("ok"):
+        return setup
+    cmd = f"cd {shlex.quote(str(GIT_WORKDIR))} && "
+    cmd += "git diff" if not path else f"git diff -- {shlex.quote(path)}"
     return await tool_run_command(cmd)
 
 
 async def tool_git_commit_push(message: str, files: Optional[List[str]] = None) -> Dict[str, Any]:
-    """Stage, commit, and push to current branch.
-    Auto-injects GITHUB_TOKEN into the remote URL for authenticated push."""
-    gh_token = os.environ.get("GITHUB_TOKEN", "").strip()
-    gh_repo = os.environ.get("GITHUB_REPO", "").strip()  # e.g. "owner/repo"
+    """Commit + push from the working clone (/tmp/zitex_workdir).
 
-    parts = []
-    # Ensure git identity (no-op if already set)
+    The agent's `write_file` and `edit_file` write to /app for live testing,
+    but to actually persist changes to GitHub, those changes must also exist
+    inside the working clone. We rsync them from /app to GIT_WORKDIR before
+    committing. This way the agent never has to worry about two paths.
+    """
+    setup = await _ensure_git_workdir()
+    if not setup.get("ok"):
+        return setup
+
+    gh_token = os.environ.get("GITHUB_TOKEN", "").strip()
+    gh_repo = os.environ.get("GITHUB_REPO", "").strip()
+    auth_url = f"https://x-access-token:{gh_token}@github.com/{gh_repo}.git" if gh_token and gh_repo else None
+
+    # Sync working files from /app into the workdir (only the relevant subdirs)
+    # This keeps /tmp/zitex_workdir in sync with the agent's edits to /app.
+    sync_cmds = []
+    sync_pairs = [
+        ("/app/backend", str(GIT_WORKDIR / "backend")),
+        ("/app/frontend/src", str(GIT_WORKDIR / "frontend/src")),
+        ("/app/frontend/public", str(GIT_WORKDIR / "frontend/public")),
+        ("/app/frontend/package.json", str(GIT_WORKDIR / "frontend/package.json")),
+        ("/app/memory", str(GIT_WORKDIR / "memory")),
+    ]
+    for src, dst in sync_pairs:
+        src_p = Path(src)
+        if not src_p.exists():
+            continue
+        if src_p.is_dir():
+            # rsync without --delete to be safe — agent must explicitly delete
+            sync_cmds.append(
+                f"mkdir -p {shlex.quote(dst)} && "
+                f"cp -r {shlex.quote(src)}/. {shlex.quote(dst)}/ 2>/dev/null || true"
+            )
+        else:
+            dst_dir = str(Path(dst).parent)
+            sync_cmds.append(f"mkdir -p {shlex.quote(dst_dir)} && cp {shlex.quote(src)} {shlex.quote(dst)}")
+
+    pre_sync = " && ".join(sync_cmds) if sync_cmds else "true"
+
+    parts = [f"cd {shlex.quote(str(GIT_WORKDIR))}"]
     parts.append('git config user.email "autocoder@zitex.com" 2>/dev/null || true')
     parts.append('git config user.name "Zitex AutoCoder" 2>/dev/null || true')
-    parts.append('git config --global --add safe.directory /app 2>/dev/null || true')
+    if auth_url:
+        parts.append(f'git remote set-url origin {shlex.quote(auth_url)} 2>/dev/null || true')
 
-    # If we have a token, set the remote URL with embedded credentials (transient — only for this push)
-    if gh_token and gh_repo:
-        auth_url = f"https://x-access-token:{gh_token}@github.com/{gh_repo}.git"
-        parts.append(f'git remote set-url origin {shlex.quote(auth_url)} 2>/dev/null || git remote add origin {shlex.quote(auth_url)}')
+    # Run the sync first (outside the workdir cd block)
+    full_cmd = f"{pre_sync} && " + " && ".join(parts)
 
     # Stage
     if files:
-        quoted = " ".join(shlex.quote(f) for f in files)
-        parts.append(f"git add {quoted}")
+        # Files are given as absolute /app paths or repo-relative — accept both
+        rel_files = []
+        for f in files:
+            if f.startswith("/app/"):
+                rel_files.append(f[5:])
+            else:
+                rel_files.append(f.lstrip("/"))
+        quoted = " ".join(shlex.quote(f) for f in rel_files)
+        full_cmd += f" && git add {quoted}"
     else:
-        parts.append("git add -A")
+        full_cmd += " && git add -A"
 
     safe_msg = message.replace('"', '\\"').replace("`", "\\`").replace("$", "\\$")
-    parts.append(f'git commit -m "{safe_msg}" || echo "(nothing to commit)"')
+    full_cmd += f' && git commit -m "{safe_msg}" 2>&1 || echo "(nothing to commit)"'
+    full_cmd += ' && BRANCH=$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo main)'
+    full_cmd += ' && [ "$BRANCH" = "HEAD" ] && BRANCH=main; git push origin "HEAD:$BRANCH" 2>&1'
 
-    # Detect current branch (default to main if detached)
-    parts.append('BRANCH=$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo main)')
-    parts.append('[ "$BRANCH" = "HEAD" ] && BRANCH=main')
-    parts.append('git push origin "HEAD:$BRANCH" 2>&1')
+    r = await tool_run_command(full_cmd, timeout=180)
 
-    cmd = " && ".join(parts)
-    r = await tool_run_command(cmd, timeout=120)
     # Scrub token from output
-    if gh_token and isinstance(r.get("stdout"), str):
-        r["stdout"] = r["stdout"].replace(gh_token, "***GITHUB_TOKEN***")
-    if gh_token and isinstance(r.get("stderr"), str):
-        r["stderr"] = r["stderr"].replace(gh_token, "***GITHUB_TOKEN***")
+    if gh_token:
+        for k in ("stdout", "stderr"):
+            if isinstance(r.get(k), str):
+                r[k] = r[k].replace(gh_token, "***GITHUB_TOKEN***")
+    r["workdir"] = str(GIT_WORKDIR)
+    r["synced"] = setup.get("action")
     return r
 
 
