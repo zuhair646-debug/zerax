@@ -3,7 +3,7 @@ import { Navbar } from '@/components/Navbar';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { useNavigate } from 'react-router-dom';
-import { Users, FileText, CreditCard, Globe, Image, Video, Settings, Clock, CheckCircle, Activity, Coins, Brain, Code2 } from 'lucide-react';
+import { Users, FileText, CreditCard, Globe, Image, Video, Settings, Clock, CheckCircle, Activity, Coins, Brain, Code2, ShieldCheck } from 'lucide-react';
 
 const AdminDashboard = ({ user }) => {
   const navigate = useNavigate();
@@ -46,6 +46,7 @@ const AdminDashboard = ({ user }) => {
     { title: 'النقاط والعروض', desc: 'إدارة النقاط والأسعار والعروض', path: '/admin/credits', icon: <Coins className="w-6 h-6" />, color: 'from-amber-500 to-yellow-500' },
     { title: 'تدريب الذكاء', desc: 'تعليم الذكاء الاصطناعي أمثلة احترافية', path: '/admin/training', icon: <Brain className="w-6 h-6" />, color: 'from-purple-500 to-pink-500' },
     { title: 'برمجة زيتاكس 🔐', desc: 'ذكاء يعدّل كود المنصة بنفسه (للمالك فقط)', path: '/admin/autocoder', icon: <Code2 className="w-6 h-6" />, color: 'from-amber-500 to-orange-600', testId: 'admin-tile-autocoder' },
+    { title: 'الاستقلالية والمفاتيح 🔓', desc: 'كل API keys مع روابط مباشرة للحصول عليها', path: '/admin/independence', icon: <ShieldCheck className="w-6 h-6" />, color: 'from-emerald-500 to-teal-600', testId: 'admin-tile-independence' },
     { title: 'إدارة المواقع', desc: 'إضافة وتحديث المواقع', path: '/admin/websites', icon: <Globe className="w-6 h-6" />, color: 'from-orange-500 to-red-500' },
     { title: 'سجل النشاط', desc: 'تتبع جميع الأنشطة على المنصة', path: '/admin/activity', icon: <Activity className="w-6 h-6" />, color: 'from-cyan-500 to-blue-500' },
     { title: 'الإعدادات', desc: 'إعدادات الموقع ومعلومات الدفع', path: '/admin/settings', icon: <Settings className="w-6 h-6" />, color: 'from-gray-500 to-slate-600' },

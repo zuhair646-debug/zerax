@@ -3122,6 +3122,15 @@ try:
 except Exception as _ace:
     logging.getLogger(__name__).error(f"Failed to register autocoder module: {_ace}", exc_info=True)
 
+# ============== INDEPENDENCE STATUS (Owner-only API key health dashboard) ==============
+try:
+    from modules.independence import create_independence_router
+    _ind_router = create_independence_router(db, require_owner)
+    app.include_router(_ind_router)
+    logging.getLogger(__name__).info("Independence module registered")
+except Exception as _inde:
+    logging.getLogger(__name__).error(f"Failed to register independence module: {_inde}", exc_info=True)
+
 # ============== CHANNEL BRIDGE (Push Zitex-generated assets to owner's client websites) ==============
 try:
     from modules.bridge import create_bridge_router
