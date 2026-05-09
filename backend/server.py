@@ -1,6 +1,7 @@
 from fastapi import FastAPI, APIRouter, HTTPException, Depends, UploadFile, File, Form
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-from fastapi.responses import StreamingResponse, Response
+from fastapi.responses import StreamingResponse, Response, FileResponse
+from fastapi.staticfiles import StaticFiles
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
@@ -3472,6 +3473,26 @@ async def serve_storage_file(file_path: str):
     except Exception as e:
         logger.error(f"Storage proxy error: {e}")
         raise HTTPException(status_code=500, detail="Failed to fetch file")
+
+# Mount static files
+STATIC_DIR = Path(__file__).parent / "static" / "app"
+if STATIC_DIR.exists():
+    app.mount("/static", StaticFiles(directory=str(STATIC_DIR.parent)), name="static")
+
+# Serve frontend (catch-all route for SPA)
+@app.get("/{full_path:path}")
+async def serve_frontend(full_path: str):
+    """Serve React frontend for all non-API routes"""
+    # Skip API routes
+    if full_path.startswith("api/"):
+        raise HTTPException(status_code=404, detail="Not Found")
+    
+    # Serve index.html for all other routes (SPA routing)
+    index_path = STATIC_DIR / "index.html"
+    if index_path.exists():
+        return FileResponse(str(index_path))
+    else:
+        raise HTTPException(status_code=404, detail="Frontend not built")
 
 # Include routers
 app.include_router(api_router)
