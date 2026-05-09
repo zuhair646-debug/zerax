@@ -1,0 +1,24 @@
+[phases.setup]
+nixPkgs = ["nodejs-18_x", "python311", "python311Packages.pip"]
+
+[phases.install]
+cmds = [
+    "echo '🔧 Installing backend dependencies...'",
+    "cd backend && pip install --no-cache-dir -r requirements.txt",
+    "echo '🔧 Installing frontend dependencies...'",
+    "cd frontend && npm install"
+]
+
+[phases.build]
+cmds = [
+    "echo '🏗️ Building frontend...'",
+    "cd frontend && npm run build",
+    "echo '📦 Copying frontend build to backend/static...'",
+    "rm -rf backend/static",
+    "cp -r frontend/build backend/static",
+    "echo '✅ Frontend copied to backend/static'",
+    "ls -lah backend/static | head -10"
+]
+
+[start]
+cmd = "cd backend && uvicorn server:app --host 0.0.0.0 --port $PORT"
