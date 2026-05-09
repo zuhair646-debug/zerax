@@ -1,3 +1,25 @@
+# ============================================
+# Stage 1: Build Frontend
+# ============================================
+FROM node:18-alpine AS frontend-builder
+
+WORKDIR /frontend
+
+# Copy frontend package files
+COPY frontend/package*.json ./
+
+# Install dependencies
+RUN yarn install --frozen-lockfile
+
+# Copy frontend source
+COPY frontend/ ./
+
+# Build frontend (output: /frontend/build)
+RUN yarn build
+
+# ============================================
+# Stage 2: Backend + Serve Frontend
+# ============================================
 FROM python:3.11-slim
 
 WORKDIR /app
@@ -13,10 +35,15 @@ RUN git config --global user.email "autocoder@zitex.com" \
     && git config --global init.defaultBranch main \
     && git config --global --add safe.directory /app
 
-COPY requirements.txt .
+# Install Python dependencies
+COPY backend/requirements.txt ./requirements.txt
 RUN pip install --no-cache-dir --extra-index-url https://d33sy5i8bnduwe.cloudfront.net/simple/ -r requirements.txt
 
-COPY . .
+# Copy backend code
+COPY backend/ ./
+
+# Copy frontend build from Stage 1
+COPY --from=frontend-builder /frontend/build ./static/app
 
 EXPOSE 8080
 
