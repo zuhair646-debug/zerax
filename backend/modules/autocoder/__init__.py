@@ -36,7 +36,7 @@ from datetime import datetime, timezone, timedelta
 from typing import Any, Dict, List, Optional
 
 import bcrypt
-from fastapi import APIRouter, Depends, HTTPException, Header, Request
+from fastapi import APIRouter, Depends, HTTPException, Header, Request, UploadFile, File, Form
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
