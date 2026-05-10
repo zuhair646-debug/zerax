@@ -1108,10 +1108,13 @@ def _bind_db_tool(db) -> None:
     TOOL_HANDLERS["db_query"] = _db_query_bound
 
 
-async def execute_autocoder_tool(name: str, args: Dict[str, Any]) -> Dict[str, Any]:
+async def execute_autocoder_tool(name: str, args: Optional[Dict[str, Any]]) -> Dict[str, Any]:
     handler = TOOL_HANDLERS.get(name)
     if not handler:
         return {"ok": False, "error": f"unknown tool: {name}"}
+    # Normalize args — small models sometimes pass null / non-dict
+    if args is None or not isinstance(args, dict):
+        args = {}
     try:
         return await handler(**args)
     except TypeError as e:
@@ -1476,7 +1479,19 @@ def create_autocoder_router(db, get_current_user, require_owner):
                 yield f"data: {json.dumps({'type':'saved','conversation_id':conv_id, 'turn_cost': round(usage_total['cost_usd'], 4)})}\n\n"
             except Exception as e:
                 logger.exception("[AUTOCODER] chat stream failed")
-                yield f"data: {json.dumps({'type':'error','message': str(e)[:240]}, ensure_ascii=False)}\n\n"
+                # Friendly Arabic error for the user
+                err_str = str(e)[:300]
+                friendly = err_str
+                low = err_str.lower()
+                if "noneType" in err_str or "'NoneType'" in err_str:
+                    friendly = f"خلل داخلي تم تجاوزه. حاول مرة ثانية. (التفاصيل: {err_str[:150]})"
+                elif "credit_balance" in low or "billing" in low:
+                    friendly = "رصيد Anthropic منخفض. بدّل الموديل لـLlama (Groq) — مجاني."
+                elif "rate" in low or "429" in low:
+                    friendly = "تجاوزت حد الطلبات. استنّى ~30 ثانية ثم حاول."
+                elif "timeout" in low:
+                    friendly = "الطلب استغرق وقت طويل. حاول مرة ثانية أو ابدأ محادثة جديدة."
+                yield f"data: {json.dumps({'type':'error','message': friendly}, ensure_ascii=False)}\n\n"
 
         return StreamingResponse(
             gen(),
@@ -1987,7 +2002,9 @@ async def _stream_via_emergent(messages: List[Dict[str, Any]], api_key: str):
     yield {"type": "done"}
 
 
-def _trim_args_for_ui(args: Dict[str, Any]) -> Dict[str, Any]:
+def _trim_args_for_ui(args: Optional[Dict[str, Any]]) -> Dict[str, Any]:
+    if not args or not isinstance(args, dict):
+        return {}
     out = {}
     for k, v in args.items():
         if isinstance(v, str) and len(v) > 200:
@@ -1997,7 +2014,9 @@ def _trim_args_for_ui(args: Dict[str, Any]) -> Dict[str, Any]:
     return out
 
 
-def _trim_result_for_llm(result: Dict[str, Any]) -> Dict[str, Any]:
+def _trim_result_for_llm(result: Optional[Dict[str, Any]]) -> Dict[str, Any]:
+    if not result or not isinstance(result, dict):
+        return {"ok": False, "error": "tool returned no result"}
     out = {}
     for k, v in result.items():
         if isinstance(v, str) and len(v) > 5000:  # OPT: was 12000

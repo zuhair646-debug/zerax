@@ -257,8 +257,11 @@ async def stream_via_groq(
         for tc in tool_calls:
             fn = tc.get("function") or {}
             name = fn.get("name", "")
+            raw_args = fn.get("arguments")
             try:
-                args = json.loads(fn.get("arguments") or "{}")
+                args = json.loads(raw_args) if raw_args else {}
+                if not isinstance(args, dict):
+                    args = {}
             except Exception as e:
                 yield {"type": "tool", "status": "done", "name": name or "?",
                        "ok": False, "summary": f"فشل parse args: {e}"}
@@ -318,8 +321,14 @@ def _compact_system_prompt_for_free_models(full_prompt: str) -> str:
         "**صلاحياتك مفتوحة بالكامل**: قراءة، كتابة، تعديل أي ملف؛ تنفيذ أي bash command؛ "
         "git commit و push للـGitHub.\n\n"
         "**AUTONOMOUS MODE**: لما المالك يطلب مهمة، اشتغل لين تخلّصها بالكامل (read → edit → "
-        "test → commit → push) قبل ما توقف. لا تطلب إذن بين الخطوات. لا تقل 'تم' وتنتظر.\n\n"
-        "**استخدام الأدوات** (مهم جداً):\n"
+        "test → commit → push) قبل ما توقف. لا تطلب إذن بين الخطوات.\n\n"
+        "**سير العمل الإلزامي لأي رد** (مهم جداً للتجربة):\n"
+        "1. **قبل أي أداة**: اكتب جملة قصيرة بالعربي تشرح وش راح تسوي. مثال: 'بفحص الموديل أولاً.'\n"
+        "2. **استدعِ الأداة** (read_file، list_dir، إلخ).\n"
+        "3. **بعد كل أداة**: اكتب جملة بالعربي تلخّص النتيجة. مثال: 'الملف فيه 200 سطر، فيه دالة كذا.'\n"
+        "4. **في نهاية المهمة**: اكتب ملخص واضح للمالك بكل اللي سويته (3-5 جمل).\n"
+        "**ممنوع** تستدعي أدوات ثم تسكت بدون أي نص. المالك يحتاج يفهم وش يصير.\n\n"
+        "**استخدام الأدوات** (مهم):\n"
         "- لا تخمّن. قبل أي تعديل، استدعِ `read_file` للملف.\n"
         "- لو تبحث عن نص في الكود، استدعِ `search_code`.\n"
         "- بعد أي تعديل python: استدعِ `pre_deploy_check` قبل الـcommit.\n"
@@ -334,7 +343,7 @@ def _compact_system_prompt_for_free_models(full_prompt: str) -> str:
         "1. اقرأ قبل ما تكتب.\n"
         "2. لا تخمّن environment — على Railway production فيه RAILWAY_* env vars؛ supervisorctl غير موجود (استخدم restart_service).\n"
         "3. لو edit_file فشل بـ'not unique' → استخدم occurrence=N أو replace_all=true.\n"
-        "4. الردود قصيرة وعملية. الذكاء في الأدوات.\n"
+        "4. تكلم بالعربي السعودي مع المالك. قصير وعملي بس واضح.\n"
         "5. لما تنتهي من المهمة بالكامل: اعمل commit + push، انتظر النشر، ثم أعطِ ملخصاً نهائياً.\n"
     )
 
