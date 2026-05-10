@@ -3473,6 +3473,11 @@ async def serve_storage_file(file_path: str):
         logger.error(f"Storage proxy error: {e}")
         raise HTTPException(status_code=500, detail="Failed to fetch file")
 
+# Mount static files for uploads and UI
+from fastapi.staticfiles import StaticFiles
+app.mount("/static", StaticFiles(directory="/app/static"), name="static_ui")
+app.mount("/backend-static", StaticFiles(directory="/app/backend/static"), name="static_backend")
+
 # Include routers
 app.include_router(api_router)
 app.include_router(chat_router, prefix="/api")
