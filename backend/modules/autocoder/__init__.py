@@ -171,7 +171,13 @@ AUTOCODER_SYSTEM_PROMPT = """أنت "برمجة زيتاكس" — مهندس ب�
 
 ✏️ **الكتابة**:
 - `write_file(path, content)` — ينشئ/يستبدل ملف كاملاً
-- `edit_file(path, find, replace)` — استبدال نصي دقيق
+- `edit_file(path, find, replace, occurrence?, replace_all?)` — استبدال نصي ذكي:
+  • وضع افتراضي: يلزم النص يكون unique في الملف.
+  • لو فشل بسبب التكرار: راح ترجع لك أرقام أسطر كل المطابقات. عندك 3 خيارات:
+    1. كبّر `find` (أضف سطر قبل/بعد) لتجعله unique.
+    2. أعد الاستدعاء مع `occurrence=N` للمطابقة رقم N.
+    3. أعد الاستدعاء مع `replace_all=true` لاستبدال الكل.
+  • **لا تستسلم** عند رسالة "not unique" — استخدم هذي الخيارات.
 - `delete_file(path)` — حذف ملف
 
 ⚙️ **التنفيذ**:
@@ -352,20 +358,79 @@ async def tool_write_file(path: str, content: str) -> Dict[str, Any]:
         return {"ok": False, "error": str(e)}
 
 
-async def tool_edit_file(path: str, find: str, replace: str) -> Dict[str, Any]:
+async def tool_edit_file(
+    path: str,
+    find: str,
+    replace: str,
+    occurrence: int = 0,
+    replace_all: bool = False,
+) -> Dict[str, Any]:
+    """Find-and-replace with smart fallbacks:
+      - default: requires UNIQUE match (safest)
+      - occurrence=N: replaces the Nth match (1-indexed) when there are duplicates
+      - replace_all=True: replaces ALL matches (use with care)
+    On non-unique error, returns line numbers of every match so the AI can add context.
+    """
     try:
         p = _resolve_path(path)
         if not p.exists():
             return {"ok": False, "error": f"file not found: {p}"}
         text = p.read_text(encoding="utf-8", errors="replace")
         if find not in text:
-            return {"ok": False, "error": "find string not found in file"}
+            return {"ok": False, "error": "find string not found in file",
+                    "hint": "تأكد من المسافات و newlines. جرّب search_code أولاً للعثور على النص الفعلي."}
         count = text.count(find)
+
+        # ── Path 1: replace_all = explicit batch replace ──
+        if replace_all:
+            new = text.replace(find, replace)
+            p.write_text(new, encoding="utf-8")
+            return {"ok": True, "path": str(p),
+                    "replacements": count, "mode": "replace_all",
+                    "new_size": len(new)}
+
+        # ── Path 2: occurrence-targeted replace (1-indexed) ──
+        if occurrence and occurrence >= 1:
+            if occurrence > count:
+                return {"ok": False, "error": f"occurrence={occurrence} but only {count} matches found"}
+            # Find the Nth occurrence's start index
+            idx = -1
+            for _ in range(occurrence):
+                idx = text.find(find, idx + 1)
+            new = text[:idx] + replace + text[idx + len(find):]
+            p.write_text(new, encoding="utf-8")
+            # Compute line number for the replaced location
+            line_no = text.count("\n", 0, idx) + 1
+            return {"ok": True, "path": str(p),
+                    "replacements": 1, "mode": f"occurrence_{occurrence}",
+                    "at_line": line_no, "new_size": len(new)}
+
+        # ── Path 3: unique-match strict (original behavior, default) ──
         if count > 1:
-            return {"ok": False, "error": f"find string is not unique ({count} matches) — make it more specific"}
+            # Find every match's line number to help the AI add context
+            line_nos: List[int] = []
+            i = 0
+            while True:
+                i = text.find(find, i)
+                if i < 0:
+                    break
+                line_nos.append(text.count("\n", 0, i) + 1)
+                i += 1
+                if len(line_nos) >= 20:
+                    break
+            return {
+                "ok": False,
+                "error": f"find string is not unique ({count} matches in this file)",
+                "match_lines": line_nos,
+                "hint": ("النص مكرّر في عدة أسطر. حلولك: "
+                         "(1) كبّر النص (أضف سطر قبله/بعده ليصير unique)، أو "
+                         "(2) أعد الاستدعاء مع occurrence=N (مثلاً occurrence=2 للمطابقة الثانية)، أو "
+                         "(3) أعد الاستدعاء مع replace_all=True لو كل المطابقات لازم تتغيّر."),
+            }
         new = text.replace(find, replace, 1)
         p.write_text(new, encoding="utf-8")
-        return {"ok": True, "path": str(p), "replacements": 1, "new_size": len(new)}
+        return {"ok": True, "path": str(p), "replacements": 1,
+                "mode": "unique", "new_size": len(new)}
     except Exception as e:
         return {"ok": False, "error": str(e)}
 
@@ -865,13 +930,15 @@ ANTHROPIC_TOOLS = [
     },
     {
         "name": "edit_file",
-        "description": "Find a UNIQUE exact string in a file and replace it. Fails if find string is not unique or not found. Use for surgical edits.",
+        "description": "Find-and-replace in a file. Three modes: (1) DEFAULT — requires unique match (safest). (2) occurrence=N — replace the Nth match (1-indexed) when find appears multiple times. (3) replace_all=True — replace every occurrence. On non-unique error, returns line numbers of all matches so you can add surrounding context.",
         "input_schema": {
             "type": "object",
             "properties": {
                 "path": {"type": "string"},
-                "find": {"type": "string", "description": "exact text to find (must be unique)"},
+                "find": {"type": "string", "description": "exact text to find"},
                 "replace": {"type": "string", "description": "replacement text"},
+                "occurrence": {"type": "integer", "description": "1-indexed: replace the Nth match. Use when find is intentionally non-unique."},
+                "replace_all": {"type": "boolean", "description": "replace EVERY occurrence (batch rename across file)"},
             },
             "required": ["path", "find", "replace"],
         },
