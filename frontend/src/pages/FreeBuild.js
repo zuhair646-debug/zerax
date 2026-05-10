@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
-import { Send, Loader2, Sparkles, ArrowRight, Save, ExternalLink, Trash2, Eye, RotateCcw, Check, GripVertical, Pencil, Plus, X, ChevronUp, ChevronDown } from 'lucide-react';
+import { Send, Loader2, Sparkles, ArrowRight, Save, ExternalLink, Trash2, Eye, RotateCcw, Check, GripVertical, Pencil, Plus, X, ChevronUp, ChevronDown, Paperclip, Mic, Square, Image as ImageIcon, Video } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -77,7 +77,14 @@ const FreeBuild = () => {
   const [constraints, setConstraints] = useState([]);
   const [constraintsOpen, setConstraintsOpen] = useState(false);
   const [newConstraintText, setNewConstraintText] = useState('');
+  const [attachments, setAttachments] = useState([]);
+  const [isRecording, setIsRecording] = useState(false);
+  const [recordingSeconds, setRecordingSeconds] = useState(0);
   const chatEndRef = useRef(null);
+  const fileInputRef = useRef(null);
+  const mediaRecorderRef = useRef(null);
+  const audioChunksRef = useRef([]);
+  const recordingTimerRef = useRef(null);
 
   useEffect(() => {
     if (!localStorage.getItem('token')) {
@@ -92,6 +99,17 @@ const FreeBuild = () => {
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, sending]);
+
+  useEffect(() => {
+    return () => {
+      if (recordingTimerRef.current) clearInterval(recordingTimerRef.current);
+      try {
+        if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+          mediaRecorderRef.current.stop();
+        }
+      } catch (_) {}
+    };
+  }, []);
 
   const begin = async () => {
     setLoading(true);
@@ -113,19 +131,41 @@ const FreeBuild = () => {
 
   const send = async (text) => {
     const msg = (text || input).trim();
-    if (!msg) { toast.error('اكتب جوابك'); return; }
+    const filesToSend = [...attachments];
+    if (!msg && filesToSend.length === 0) { toast.error('اكتب جوابك أو أرفق ملف'); return; }
     if (!sessionId) return;
     if (sending) return;
 
-    setMessages((m) => [...m, { role: 'user', content: msg }]);
+    const attachmentLabel = filesToSend.length
+      ? `\n\n📎 ${filesToSend.map((f) => f.name).join('، ')}`
+      : '';
+    setMessages((m) => [...m, { role: 'user', content: `${msg || 'أرسلت مرفقات للمعاينة'}${attachmentLabel}` }]);
     setInput('');
+    setAttachments([]);
     setSending(true);
 
     try {
-      const d = await fetchJson('/api/freebuild/v2/chat', {
-        method: 'POST',
-        body: JSON.stringify({ session_id: sessionId, message: msg }),
-      });
+      const token = localStorage.getItem('token');
+      let d;
+      if (filesToSend.length > 0) {
+        const fd = new FormData();
+        fd.append('session_id', sessionId);
+        fd.append('message', msg);
+        filesToSend.forEach((file) => fd.append('files', file, file.name));
+        const res = await fetch(`${API}/api/freebuild/v2/chat`, {
+          method: 'POST',
+          headers: token ? { Authorization: `Bearer ${token}` } : {},
+          body: fd,
+        });
+        const raw = await res.text();
+        try { d = raw ? JSON.parse(raw) : {}; } catch { d = { detail: raw }; }
+        if (!res.ok) throw new Error(d?.detail || `HTTP ${res.status}`);
+      } else {
+        d = await fetchJson('/api/freebuild/v2/chat', {
+          method: 'POST',
+          body: JSON.stringify({ session_id: sessionId, message: msg }),
+        });
+      }
       setMessages((m) => [...m, {
         role: 'assistant',
         content: d.assistant_message,
@@ -150,6 +190,93 @@ const FreeBuild = () => {
       setMessages((m) => m.slice(0, -1));
     }
     setSending(false);
+  };
+
+
+  const addFiles = (fileList) => {
+    const incoming = Array.from(fileList || []);
+    if (!incoming.length) return;
+    const allowed = incoming.filter((file) => {
+      if (!file.type.startsWith('image/') && !file.type.startsWith('video/') && !file.type.startsWith('audio/')) {
+        toast.error(`نوع الملف غير مدعوم: ${file.name}`);
+        return false;
+      }
+      if (file.size > 25 * 1024 * 1024) {
+        toast.error(`الملف كبير جداً: ${file.name}`);
+        return false;
+      }
+      return true;
+    });
+    setAttachments((prev) => [...prev, ...allowed].slice(0, 5));
+  };
+
+  const removeAttachment = (idx) => {
+    setAttachments((prev) => prev.filter((_, i) => i !== idx));
+  };
+
+  const startRecording = async () => {
+    if (isRecording || sending) return;
+    if (!navigator.mediaDevices?.getUserMedia || !window.MediaRecorder) {
+      toast.error('متصفحك ما يدعم تسجيل الصوت');
+      return;
+    }
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      let mimeType = 'audio/webm;codecs=opus';
+      if (!MediaRecorder.isTypeSupported(mimeType)) mimeType = 'audio/webm';
+      if (!MediaRecorder.isTypeSupported(mimeType)) mimeType = '';
+      const recorder = new MediaRecorder(stream, mimeType ? { mimeType } : undefined);
+      audioChunksRef.current = [];
+      recorder.ondataavailable = (e) => {
+        if (e.data && e.data.size > 0) audioChunksRef.current.push(e.data);
+      };
+      recorder.onstop = () => {
+        try { stream.getTracks().forEach((track) => track.stop()); } catch (_) {}
+        const type = recorder.mimeType || 'audio/webm';
+        const blob = new Blob(audioChunksRef.current, { type });
+        audioChunksRef.current = [];
+        if (blob.size < 800) {
+          toast.error('التسجيل قصير جداً');
+          return;
+        }
+        const ext = type.includes('mp4') ? 'mp4' : 'webm';
+        const file = new File([blob], `voice-${Date.now()}.${ext}`, { type });
+        setAttachments((prev) => [...prev, file].slice(0, 5));
+        toast.success('تم إرفاق التسجيل الصوتي');
+      };
+      mediaRecorderRef.current = recorder;
+      recorder.start();
+      setIsRecording(true);
+      setRecordingSeconds(0);
+      recordingTimerRef.current = setInterval(() => {
+        setRecordingSeconds((s) => {
+          if (s >= 60) {
+            stopRecording();
+            return s;
+          }
+          return s + 1;
+        });
+      }, 1000);
+    } catch (e) {
+      if (e.name === 'NotAllowedError') toast.error('اسمح للميكروفون من إعدادات المتصفح');
+      else toast.error('خطأ في التسجيل: ' + (e.message || 'غير معروف'));
+    }
+  };
+
+  const stopRecording = () => {
+    if (!isRecording) return;
+    setIsRecording(false);
+    if (recordingTimerRef.current) {
+      clearInterval(recordingTimerRef.current);
+      recordingTimerRef.current = null;
+    }
+    try {
+      if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+        mediaRecorderRef.current.stop();
+      }
+    } catch (e) {
+      toast.error('خطأ في إيقاف التسجيل');
+    }
   };
 
   const regenerateImages = async () => {
@@ -453,7 +580,53 @@ const FreeBuild = () => {
                 >{options?.[0] || 'نعم'}</button>
               </div>
             )}
+            {attachments.length > 0 && (
+              <div className="mb-2 flex flex-wrap gap-1.5" data-testid="freebuild-attachments-list">
+                {attachments.map((file, idx) => (
+                  <div key={`${file.name}-${idx}`} className="flex items-center gap-1.5 max-w-full px-2 py-1 rounded-lg bg-white/5 border border-white/10 text-[11px] text-white/75">
+                    {file.type.startsWith('image/') ? <ImageIcon className="w-3 h-3 text-emerald-300" /> : file.type.startsWith('video/') ? <Video className="w-3 h-3 text-sky-300" /> : <Mic className="w-3 h-3 text-rose-300" />}
+                    <span className="truncate max-w-[150px]">{file.name}</span>
+                    <button onClick={() => removeAttachment(idx)} className="text-white/40 hover:text-rose-300" disabled={sending} title="إزالة">
+                      <X className="w-3 h-3" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/*,video/*,audio/*"
+              multiple
+              className="hidden"
+              onChange={(e) => {
+                addFiles(e.target.files);
+                e.target.value = '';
+              }}
+              data-testid="freebuild-file-input"
+            />
             <div className="flex items-end gap-2" data-testid="chat-input-bar">
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                disabled={sending}
+                className="h-[42px] w-[42px] rounded-xl bg-white/5 border border-white/10 text-white/70 hover:text-amber-300 hover:border-amber-400/40 disabled:opacity-50 flex items-center justify-center"
+                title="إرفاق صورة أو فيديو"
+                data-testid="freebuild-attach-btn"
+              >
+                <Paperclip className="w-4 h-4" />
+              </button>
+              <button
+                type="button"
+                onClick={isRecording ? stopRecording : startRecording}
+                disabled={sending}
+                className={`h-[42px] min-w-[42px] px-3 rounded-xl border flex items-center justify-center gap-1.5 disabled:opacity-50 ${isRecording ? 'bg-rose-500/20 border-rose-400/50 text-rose-200 animate-pulse' : 'bg-white/5 border-white/10 text-white/70 hover:text-rose-300 hover:border-rose-400/40'}`}
+                title={isRecording ? 'إيقاف التسجيل' : 'تسجيل صوت'}
+                data-testid="freebuild-record-btn"
+              >
+                {isRecording ? <Square className="w-4 h-4" /> : <Mic className="w-4 h-4" />}
+                {isRecording && <span className="text-[11px] font-bold">{recordingSeconds}s</span>}
+              </button>
               <textarea
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
@@ -463,7 +636,7 @@ const FreeBuild = () => {
                     send();
                   }
                 }}
-                placeholder={questionType === 'yes_no' ? 'أو اكتب إجابة مخصّصة...' : (htmlStarted ? 'وسّع الموقع أو اطلب تعديل...' : 'اكتب جوابك هنا...')}
+                placeholder={questionType === 'yes_no' ? 'أو اكتب إجابة مخصّصة...' : (htmlStarted ? 'وسّع الموقع أو ارفق صورة/فيديو كمرجع...' : 'اكتب جوابك هنا...')}
                 rows={1}
                 disabled={sending}
                 className="flex-1 resize-none bg-black/50 border border-amber-400/20 rounded-xl px-3 py-2.5 text-white placeholder:text-white/35 focus:border-amber-400/60 focus:outline-none text-sm"
@@ -472,7 +645,7 @@ const FreeBuild = () => {
               />
               <Button
                 onClick={() => send()}
-                disabled={sending || !input.trim()}
+                disabled={sending || (!input.trim() && attachments.length === 0)}
                 className="bg-gradient-to-br from-amber-500 to-yellow-500 text-black font-black h-[42px] px-4 flex-shrink-0 disabled:opacity-50"
                 data-testid="chat-send-btn"
               >

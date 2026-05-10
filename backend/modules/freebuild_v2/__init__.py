@@ -39,7 +39,7 @@ import asyncio
 import logging
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
-from fastapi import APIRouter, HTTPException, Depends, Response
+from fastapi import APIRouter, HTTPException, Depends, Response, Request
 from pydantic import BaseModel, Field
 
 logger = logging.getLogger(__name__)
@@ -851,7 +851,49 @@ def create_freebuild_v2_router(db, get_current_user) -> APIRouter:
 
     # ===== CHAT =====
     @router.post("/chat")
-    async def chat(payload: ChatIn, user=Depends(get_current_user)):
+    async def chat(request: Request, user=Depends(get_current_user)):
+        """Chat turn for FreeBuild v2.
+
+        Supports the original JSON payload and multipart/form-data used by
+        client tools (image/video/audio). This keeps old clients working while
+        allowing attachments to reach the builder instead of failing validation.
+        """
+        content_type = (request.headers.get("content-type") or "").lower()
+        attachments: List[Dict[str, Any]] = []
+
+        if "multipart/form-data" in content_type:
+            form = await request.form()
+            session_id = str(form.get("session_id") or "").strip()
+            message = str(form.get("message") or "").strip()
+
+            for key, value in form.multi_items():
+                if hasattr(value, "filename") and hasattr(value, "read"):
+                    raw = await value.read()
+                    size = len(raw or b"")
+                    if size > 25 * 1024 * 1024:
+                        raise HTTPException(413, f"الملف {value.filename or key} أكبر من الحد المسموح 25MB")
+                    attachments.append({
+                        "field": key,
+                        "filename": value.filename or "attachment",
+                        "content_type": getattr(value, "content_type", None) or "application/octet-stream",
+                        "size": size,
+                    })
+
+            if attachments:
+                summary = "\n\n[مرفقات العميل]\n" + "\n".join(
+                    f"- {a['filename']} ({a['content_type']}, {a['size']} bytes)"
+                    for a in attachments
+                )
+                message = (message or "حلّل المرفقات وخذها كمرجع لتصميم الموقع.") + summary
+
+            payload = ChatIn(session_id=session_id, message=message)
+        else:
+            try:
+                body = await request.json()
+            except Exception:
+                raise HTTPException(400, "صيغة الطلب غير صحيحة. أرسل JSON أو multipart/form-data.")
+            payload = ChatIn(**body)
+
         session = await db.freebuild_v2_sessions.find_one(
             {"id": payload.session_id, "user_id": user["user_id"]}, {"_id": 0}
         )
@@ -863,11 +905,14 @@ def create_freebuild_v2_router(db, get_current_user) -> APIRouter:
             raise HTTPException(400, f"تم الوصول للحد الأقصى ({MAX_TURNS_PER_SESSION} دورات). احفظ الموقع وابدأ جلسة جديدة لو تبي تكمل.")
 
         # Append user message
-        session["messages"].append({
+        user_entry = {
             "role": "user",
             "content": payload.message,
             "timestamp": _now(),
-        })
+        }
+        if attachments:
+            user_entry["attachments"] = attachments
+        session["messages"].append(user_entry)
 
         # 🚫 AUTO-EXTRACT CONSTRAINTS from the incoming user message and
         # persist them on the session so every future turn respects them.
