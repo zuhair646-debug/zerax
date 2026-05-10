@@ -1,0 +1,372 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>اختبار رفع الصور - شات Zitex</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+        .container {
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            max-width: 800px;
+            width: 100%;
+            padding: 30px;
+        }
+        h1 {
+            color: #667eea;
+            margin-bottom: 10px;
+            font-size: 28px;
+        }
+        .description {
+            color: #666;
+            margin-bottom: 30px;
+            font-size: 14px;
+        }
+        .form-group {
+            margin-bottom: 20px;
+        }
+        label {
+            display: block;
+            margin-bottom: 8px;
+            color: #333;
+            font-weight: 600;
+        }
+        input[type="text"], textarea {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #e5e7eb;
+            border-radius: 10px;
+            font-size: 15px;
+            transition: all 0.3s;
+        }
+        input[type="text"]:focus, textarea:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+        textarea {
+            min-height: 100px;
+            resize: vertical;
+            font-family: inherit;
+        }
+        .file-input-wrapper {
+            position: relative;
+            overflow: hidden;
+            display: inline-block;
+            width: 100%;
+        }
+        .file-input-label {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            padding: 15px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border-radius: 10px;
+            cursor: pointer;
+            transition: transform 0.2s;
+            font-weight: 600;
+        }
+        .file-input-label:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px rgba(102, 126, 234, 0.3);
+        }
+        input[type="file"] {
+            position: absolute;
+            left: -9999px;
+        }
+        .image-preview {
+            display: none;
+            margin-top: 15px;
+            border: 2px solid #e5e7eb;
+            border-radius: 10px;
+            padding: 10px;
+        }
+        .image-preview img {
+            max-width: 100%;
+            max-height: 300px;
+            border-radius: 8px;
+        }
+        .image-info {
+            margin-top: 10px;
+            color: #666;
+            font-size: 13px;
+        }
+        .remove-image {
+            margin-top: 10px;
+            padding: 8px 16px;
+            background: #ef4444;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 13px;
+        }
+        .remove-image:hover {
+            background: #dc2626;
+        }
+        .submit-btn {
+            width: 100%;
+            padding: 15px;
+            background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+            color: white;
+            border: none;
+            border-radius: 12px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .submit-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px rgba(16, 185, 129, 0.3);
+        }
+        .submit-btn:disabled {
+            background: #9ca3af;
+            cursor: not-allowed;
+            transform: none;
+        }
+        .response {
+            margin-top: 30px;
+            padding: 20px;
+            background: #f3f4f6;
+            border-radius: 10px;
+            display: none;
+        }
+        .response h3 {
+            color: #333;
+            margin-bottom: 15px;
+        }
+        .response pre {
+            background: white;
+            padding: 15px;
+            border-radius: 8px;
+            overflow-x: auto;
+            font-size: 13px;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+        }
+        .message {
+            padding: 12px;
+            border-radius: 8px;
+            margin-bottom: 15px;
+            font-size: 14px;
+        }
+        .message.success {
+            background: #d1fae5;
+            color: #065f46;
+            border: 1px solid #10b981;
+        }
+        .message.error {
+            background: #fee2e2;
+            color: #991b1b;
+            border: 1px solid #ef4444;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🖼️ اختبار رفع الصور في الشات</h1>
+        <p class="description">اختبر رفع صورة مع رسالة للذكاء الاصطناعي</p>
+
+        <div id="messageArea"></div>
+
+        <form id="chatForm">
+            <div class="form-group">
+                <label for="sessionId">🔑 معرف الجلسة (Session ID)</label>
+                <input type="text" id="sessionId" name="sessionId" placeholder="أدخل session_id أو اتركه فارغ لإنشاء واحد جديد" />
+            </div>
+
+            <div class="form-group">
+                <label for="message">💬 الرسالة</label>
+                <textarea id="message" name="message" placeholder="اكتب رسالتك هنا..." required></textarea>
+            </div>
+
+            <div class="form-group">
+                <label>🖼️ صورة (اختياري)</label>
+                <div class="file-input-wrapper">
+                    <label for="imageFile" class="file-input-label">
+                        <span>📷</span>
+                        <span id="fileLabel">اختر صورة</span>
+                    </label>
+                    <input type="file" id="imageFile" name="image" accept="image/*" />
+                </div>
+                <div id="imagePreview" class="image-preview">
+                    <img id="previewImg" src="" alt="معاينة الصورة" />
+                    <div class="image-info" id="imageInfo"></div>
+                    <button type="button" class="remove-image" onclick="removeImage()">حذف الصورة</button>
+                </div>
+            </div>
+
+            <button type="submit" class="submit-btn" id="submitBtn">
+                📤 إرسال
+            </button>
+        </form>
+
+        <div id="response" class="response">
+            <h3>📩 الاستجابة من السيرفر:</h3>
+            <pre id="responseContent"></pre>
+        </div>
+    </div>
+
+    <script>
+        const imageFileInput = document.getElementById('imageFile');
+        const imagePreview = document.getElementById('imagePreview');
+        const previewImg = document.getElementById('previewImg');
+        const imageInfo = document.getElementById('imageInfo');
+        const fileLabel = document.getElementById('fileLabel');
+        const chatForm = document.getElementById('chatForm');
+        const messageArea = document.getElementById('messageArea');
+        const response = document.getElementById('response');
+        const responseContent = document.getElementById('responseContent');
+        const submitBtn = document.getElementById('submitBtn');
+
+        // معاينة الصورة
+        imageFileInput.addEventListener('change', function(e) {
+            const file = e.target.files[0];
+            if (file) {
+                // فحص حجم الملف (حد أقصى 10MB)
+                if (file.size > 10 * 1024 * 1024) {
+                    showMessage('حجم الصورة كبير جداً. الحد الأقصى 10MB', 'error');
+                    imageFileInput.value = '';
+                    return;
+                }
+
+                // فحص نوع الملف
+                if (!file.type.startsWith('image/')) {
+                    showMessage('يرجى اختيار ملف صورة فقط', 'error');
+                    imageFileInput.value = '';
+                    return;
+                }
+
+                // عرض المعاينة
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    previewImg.src = e.target.result;
+                    imagePreview.style.display = 'block';
+                    fileLabel.textContent = file.name;
+                    imageInfo.textContent = `الحجم: ${(file.size / 1024).toFixed(2)} KB | النوع: ${file.type}`;
+                };
+                reader.readAsDataURL(file);
+            }
+        });
+
+        // حذف الصورة
+        function removeImage() {
+            imageFileInput.value = '';
+            imagePreview.style.display = 'none';
+            fileLabel.textContent = 'اختر صورة';
+            previewImg.src = '';
+            imageInfo.textContent = '';
+        }
+
+        // عرض رسالة
+        function showMessage(text, type) {
+            const msg = document.createElement('div');
+            msg.className = `message ${type}`;
+            msg.textContent = text;
+            messageArea.appendChild(msg);
+            setTimeout(() => msg.remove(), 5000);
+        }
+
+        // إرسال النموذج
+        chatForm.addEventListener('submit', async function(e) {
+            e.preventDefault();
+            
+            const sessionId = document.getElementById('sessionId').value.trim();
+            const message = document.getElementById('message').value.trim();
+            const imageFile = imageFileInput.files[0];
+
+            if (!message) {
+                showMessage('يرجى كتابة رسالة', 'error');
+                return;
+            }
+
+            // إنشاء جلسة جديدة إذا لم يتم إدخال معرف
+            let finalSessionId = sessionId;
+            if (!finalSessionId) {
+                try {
+                    submitBtn.disabled = true;
+                    submitBtn.textContent = '⏳ جاري إنشاء جلسة...';
+                    
+                    const createResponse = await fetch('/api/v1/chat/sessions', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({
+                            title: 'اختبار رفع صورة',
+                            user_id: 'test-user-' + Date.now()
+                        })
+                    });
+
+                    if (!createResponse.ok) {
+                        throw new Error('فشل إنشاء الجلسة');
+                    }
+
+                    const sessionData = await createResponse.json();
+                    finalSessionId = sessionData.session_id;
+                    document.getElementById('sessionId').value = finalSessionId;
+                    showMessage(`تم إنشاء جلسة: ${finalSessionId}`, 'success');
+                } catch (error) {
+                    showMessage('خطأ في إنشاء الجلسة: ' + error.message, 'error');
+                    submitBtn.disabled = false;
+                    submitBtn.textContent = '📤 إرسال';
+                    return;
+                }
+            }
+
+            // إرسال الرسالة مع الصورة
+            try {
+                submitBtn.disabled = true;
+                submitBtn.textContent = '⏳ جاري الإرسال...';
+
+                const formData = new FormData();
+                formData.append('content', message);
+                
+                if (imageFile) {
+                    formData.append('image', imageFile);
+                }
+
+                const sendResponse = await fetch(`/api/v1/chat/sessions/${finalSessionId}/messages`, {
+                    method: 'POST',
+                    body: formData
+                });
+
+                const result = await sendResponse.json();
+
+                if (sendResponse.ok) {
+                    showMessage('✅ تم إرسال الرسالة بنجاح!', 'success');
+                    responseContent.textContent = JSON.stringify(result, null, 2);
+                    response.style.display = 'block';
+                    
+                    // تنظيف النموذج
+                    document.getElementById('message').value = '';
+                    removeImage();
+                } else {
+                    showMessage('❌ خطأ: ' + (result.detail || result.error || 'فشل الإرسال'), 'error');
+                    responseContent.textContent = JSON.stringify(result, null, 2);
+                    response.style.display = 'block';
+                }
+            } catch (error) {
+                showMessage('❌ خطأ في الاتصال: ' + error.message, 'error');
+            } finally {
+                submitBtn.disabled = false;
+                submitBtn.textContent = '📤 إرسال';
+            }
+        });
+    </script>
+</body>
+</html>
