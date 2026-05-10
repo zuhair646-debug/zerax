@@ -7,8 +7,8 @@ import {
   Search, FileEdit, FilePlus, FileX, RotateCw, ShieldCheck,
   AlertTriangle, Copy, ScrollText, MessageSquare,
   Globe, Download, Layers, FilePlus2, Database, Cpu, Sparkles, Zap,
-  Mic, Square, X,
 } from 'lucide-react';
+import ChatInput from '../components/ChatInput';
 
 const API = process.env.REACT_APP_BACKEND_URL;
 const SESSION_KEY = 'zitex_autocoder_session';
@@ -465,9 +465,17 @@ export default function AdminAutoCoder() {
     }
   };
 
-  const send = async () => {
-    const msg = input.trim();
-    if (!msg || sending) return;
+  const send = async (payload = null) => {
+    // Support both ChatInput onSend({text, files}) and legacy direct call
+    let msg, attachedFiles;
+    if (payload && typeof payload === 'object') {
+      msg = (payload.text || '').trim();
+      attachedFiles = payload.files || [];
+    } else {
+      msg = input.trim();
+      attachedFiles = [];
+    }
+    if ((!msg && attachedFiles.length === 0) || sending) return;
     setInput('');
     setSending(true);
     setMessages((prev) => [...prev, { role: 'user', content: msg }]);
@@ -481,6 +489,13 @@ export default function AdminAutoCoder() {
       fd.append('message', msg);
       if (conversationId) fd.append('conversation_id', conversationId);
       fd.append('model', model || 'claude');
+
+      // Attach files from ChatInput (if any)
+      if (attachedFiles && attachedFiles.length > 0) {
+        attachedFiles.forEach((f) => {
+          fd.append('attachments', f);
+        });
+      }
 
       const r = await fetch(`${API}/api/autocoder/chat`, {
         method: 'POST',
@@ -857,76 +872,17 @@ export default function AdminAutoCoder() {
           </div>
 
           <div className="border-t border-white/10 p-3 md:p-4 bg-black/40">
-            {isRecording && (
-              <div data-testid="ac-recording-bar" className="max-w-3xl mx-auto mb-2 flex items-center gap-3 px-4 py-2 bg-rose-500/10 border border-rose-400/30 rounded-xl">
-                <span className="relative flex w-3 h-3">
-                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-75"></span>
-                  <span className="relative inline-flex rounded-full h-3 w-3 bg-rose-500"></span>
-                </span>
-                <span className="text-rose-200 text-sm font-bold flex-1">
-                  جاري التسجيل... {Math.floor(recordingSeconds / 60)}:{String(recordingSeconds % 60).padStart(2, '0')}
-                  <span className="text-rose-300/60 text-xs font-normal ms-2">(حد أقصى 60 ثانية)</span>
-                </span>
-                <button
-                  onClick={cancelRecording}
-                  data-testid="ac-recording-cancel"
-                  title="إلغاء"
-                  className="p-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-white/70"
-                >
-                  <X className="w-4 h-4" />
-                </button>
-                <button
-                  onClick={stopRecording}
-                  data-testid="ac-recording-stop"
-                  title="إيقاف وتحويل"
-                  className="px-3 py-1.5 rounded-lg bg-rose-500 hover:bg-rose-400 text-white text-xs font-bold flex items-center gap-1"
-                >
-                  <Square className="w-3 h-3 fill-current" /> إيقاف
-                </button>
-              </div>
-            )}
-            {transcribing && (
-              <div data-testid="ac-transcribing-bar" className="max-w-3xl mx-auto mb-2 flex items-center gap-2 px-4 py-2 bg-amber-500/10 border border-amber-400/30 rounded-xl">
-                <Loader2 className="w-4 h-4 animate-spin text-amber-300" />
-                <span className="text-amber-200 text-sm">يحوّل الصوت لنص...</span>
-              </div>
-            )}
-            <div className="max-w-3xl mx-auto flex items-end gap-2">
-              <textarea
+            <div className="max-w-3xl mx-auto">
+              <ChatInput
                 value={input}
-                onChange={(e) => setInput(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); }
-                }}
-                rows={2}
-                disabled={isRecording}
-                placeholder={isRecording ? '🎙️ جاري التسجيل...' : 'اكتب أمرك للذكاء... أو اضغط الميكروفون لتسجل بصوتك'}
-                data-testid="ac-input"
-                className="flex-1 bg-black/40 border border-white/15 rounded-xl px-4 py-3 text-sm resize-none focus:border-amber-400 outline-none disabled:opacity-50"
+                onChange={setInput}
+                onSend={send}
+                placeholder="اكتب أمرك للذكاء... أو اضغط الميكروفون لتسجل بصوتك"
+                disabled={sending}
+                supportFiles={true}
+                supportVoice={true}
+                supportEmojis={true}
               />
-              <button
-                onClick={isRecording ? stopRecording : startRecording}
-                disabled={transcribing || sending}
-                data-testid="ac-mic-btn"
-                title={isRecording ? 'أوقف التسجيل' : 'سجّل صوتياً'}
-                className={`h-12 w-12 rounded-xl flex items-center justify-center disabled:opacity-50 transition ${
-                  isRecording
-                    ? 'bg-rose-500 hover:bg-rose-400 text-white animate-pulse'
-                    : 'bg-white/10 hover:bg-white/15 text-white border border-white/15'
-                }`}
-              >
-                {isRecording ? <Square className="w-5 h-5 fill-current" /> :
-                  transcribing ? <Loader2 className="w-5 h-5 animate-spin" /> :
-                  <Mic className="w-5 h-5" />}
-              </button>
-              <button
-                onClick={send}
-                disabled={sending || !input.trim() || isRecording || transcribing}
-                data-testid="ac-send"
-                className="h-12 w-12 rounded-xl bg-amber-500 hover:bg-amber-400 text-black flex items-center justify-center disabled:opacity-50"
-              >
-                {sending ? <Loader2 className="w-5 h-5 animate-spin" /> : <Send className="w-5 h-5" />}
-              </button>
             </div>
           </div>
         </main>
