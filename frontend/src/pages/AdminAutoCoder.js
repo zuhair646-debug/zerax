@@ -72,6 +72,30 @@ const MODEL_OPTIONS = [
   { id: 'gemini', label: 'Gemini 2.0 Flash', cost: 'مجاني — قدرة كبيرة', tone: 'sky', icon: Sparkles },
 ];
 
+// Map common backend error messages to friendlier guidance
+function humanizeAutocoderError(raw) {
+  const s = String(raw || '').toLowerCase();
+  if (s.includes('credit_balance_too_low') || s.includes('insufficient_quota') || s.includes('billing')) {
+    return 'رصيد Anthropic منخفض. حلّ سريع: بدّل الموديل من الأعلى إلى Llama 3.3 (Groq) — مجاني وسريع.';
+  }
+  if (s.includes('rate_limit') || s.includes('429') || s.includes('tpm') || s.includes('rpm')) {
+    return 'تجاوزت حدّ الطلبات لحظياً. استنّى ~30 ثانية وجرّب من جديد، أو بدّل الموديل.';
+  }
+  if (s.includes('groq_api_key غير') || s.includes('gemini_api_key غير')) {
+    return raw; // already in Arabic, descriptive
+  }
+  if (s.includes('groq') && s.includes('limit 12000')) {
+    return 'الـsystem prompt كبير على Groq Free Tier. ارفع لـDev Tier (مجاني، يحتاج بطاقة فقط) من console.groq.com/settings/billing، أو استخدم Claude.';
+  }
+  if (s.includes('overloaded') || s.includes('503')) {
+    return 'الخادم مزدحم لحظياً. حاول مرة ثانية بعد دقيقة.';
+  }
+  if (s.includes('session locked')) {
+    return 'انتهت الجلسة (4 ساعات). افتح القفل من جديد بكلمة السر.';
+  }
+  return `خطأ من الخادم: ${raw}`;
+}
+
 export default function AdminAutoCoder() {
   const nav = useNavigate();
   const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
@@ -451,14 +475,20 @@ export default function AdminAutoCoder() {
     let lastTurnCost = null;
 
     try {
+      // Backend now uses multipart/form-data (to support file attachments)
+      const fd = new FormData();
+      fd.append('message', msg);
+      if (conversationId) fd.append('conversation_id', conversationId);
+      fd.append('model', model || 'claude');
+
       const r = await fetch(`${API}/api/autocoder/chat`, {
         method: 'POST',
         headers: {
-          'Content-Type': 'application/json',
+          // NOTE: do NOT set Content-Type — fetch sets it automatically with the multipart boundary
           Authorization: `Bearer ${token}`,
           'X-AutoCoder-Token': acToken,
         },
-        body: JSON.stringify({ conversation_id: conversationId, message: msg, model }),
+        body: fd,
       });
       if (r.status === 401) {
         toast.error('انتهت الجلسة. ادخل كلمة السر مرة ثانية');
@@ -466,12 +496,19 @@ export default function AdminAutoCoder() {
         setPhase('locked');
         return;
       }
+      // If response is not ok and no SSE was produced, surface backend error explicitly
+      if (!r.ok && !r.body) {
+        let bodyText = '';
+        try { bodyText = (await r.text()).slice(0, 400); } catch (_) {}
+        throw new Error(`الخادم رفض الطلب (HTTP ${r.status}). ${bodyText}`);
+      }
       if (!r.body) throw new Error('no stream');
       const reader = r.body.getReader();
       const decoder = new TextDecoder();
       let buffer = '';
       let assistantText = '';
       let toolEvents = [];
+      let serverError = null;
 
       while (true) {
         const { value, done } = await reader.read();
@@ -503,15 +540,22 @@ export default function AdminAutoCoder() {
               setCurrentTools((prev) => [...prev, { ...evt, _isUsage: true }]);
               toolEvents.push({ ...evt, _isUsage: true });
             } else if (evt.type === 'error') {
-              toast.error(evt.message);
+              serverError = evt.message || 'حصل خطأ غير محدد';
+              toast.error(serverError, { duration: 7000 });
             }
           } catch (_) {}
         }
       }
 
+      // If we got an error and no actual content, show it inline so user understands what happened
+      if (serverError && !assistantText) {
+        const friendly = humanizeAutocoderError(serverError);
+        assistantText = `⚠️ ${friendly}`;
+      }
+
       setMessages((prev) => [
         ...prev,
-        { role: 'assistant', content: assistantText, tool_events: toolEvents },
+        { role: 'assistant', content: assistantText, tool_events: toolEvents, error: serverError },
       ]);
       setCurrentStream('');
       setCurrentTools([]);
@@ -1089,9 +1133,12 @@ function MessageBubble({ m }) {
       </div>
     );
   }
+  const isErrorOnly = !!m.error && (!m.tool_events || m.tool_events.length === 0);
   return (
-    <div className="bg-white/[0.04] border border-white/10 rounded-2xl p-4 max-w-3xl">
-      <div className="text-[10px] uppercase tracking-widest text-amber-400/80 mb-2">برمجة زيتاكس</div>
+    <div className={`rounded-2xl p-4 max-w-3xl border ${isErrorOnly ? 'bg-rose-500/[0.06] border-rose-400/30' : 'bg-white/[0.04] border-white/10'}`}>
+      <div className={`text-[10px] uppercase tracking-widest mb-2 ${isErrorOnly ? 'text-rose-300/80' : 'text-amber-400/80'}`}>
+        {isErrorOnly ? '⚠️ خطأ' : 'برمجة زيتاكس'}
+      </div>
       {(m.tool_events || []).map((t, i) => <ToolPill key={i} t={t} />)}
       {m.content && <div className="text-sm leading-relaxed whitespace-pre-wrap mt-2">{m.content}</div>}
     </div>
