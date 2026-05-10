@@ -1519,8 +1519,8 @@ def create_autocoder_router(db, get_current_user, require_owner):
             
             # التحقق من وجود OPENAI_API_KEY (يقبل OPENAI_DIRECT_KEY أو OPENAI_API_KEY)
             openai_key = (
-                os.getenv("OPENAI_API_KEY")
-                or os.getenv("OPENAI_DIRECT_KEY")
+                os.getenv("OPENAI_DIRECT_KEY")
+                or os.getenv("OPENAI_API_KEY")
                 or ""
             ).strip()
             if not openai_key:
