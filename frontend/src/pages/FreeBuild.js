@@ -1,12 +1,24 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
-import { Send, Loader2, Sparkles, ArrowRight, Save, ExternalLink, Trash2, Eye, RotateCcw, Check, GripVertical, Pencil, Plus, X, ChevronUp, ChevronDown, Paperclip, Mic, Square, Image as ImageIcon, Video } from 'lucide-react';
+import { Send, Loader2, Sparkles, ArrowRight, Save, ExternalLink, Trash2, Eye, RotateCcw, Check, GripVertical, Pencil, Plus, X, ChevronUp, ChevronDown, Paperclip, Mic, Square, Image as ImageIcon, Video, FileAudio } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 
 const API = process.env.REACT_APP_BACKEND_URL;
+const FREEBUILD_TOOLS_VERSION = 'tools-fix-2026-05-10-attachments-voice';
+
+const getFileKind = (file) => {
+  const type = (file?.type || '').toLowerCase();
+  const name = (file?.name || '').toLowerCase();
+  if (type.startsWith('image/') || /\.(png|jpe?g|webp|gif|svg|heic|heif)$/i.test(name)) return 'image';
+  if (type.startsWith('video/') || /\.(mp4|mov|webm|m4v|avi|mkv)$/i.test(name)) return 'video';
+  if (type.startsWith('audio/') || /\.(webm|mp3|m4a|aac|ogg|wav|mp4)$/i.test(name)) return 'audio';
+  return 'unknown';
+};
+
+const fileLabelIcon = (file) => getFileKind(file);
 
 const fileToBase64Payload = (file) => new Promise((resolve, reject) => {
   const reader = new FileReader();
@@ -236,19 +248,24 @@ const FreeBuild = () => {
 
   const addFiles = (fileList) => {
     const incoming = Array.from(fileList || []);
-    if (!incoming.length) return;
+    if (!incoming.length) return [];
     const allowed = incoming.filter((file) => {
-      if (!file.type.startsWith('image/') && !file.type.startsWith('video/') && !file.type.startsWith('audio/')) {
-        toast.error(`نوع الملف غير مدعوم: ${file.name}`);
+      const kind = getFileKind(file);
+      if (kind === 'unknown') {
+        toast.error(`نوع الملف غير مدعوم: ${file.name || 'ملف بدون اسم'}`);
         return false;
       }
       if (file.size > 25 * 1024 * 1024) {
-        toast.error(`الملف كبير جداً: ${file.name}`);
+        toast.error(`الملف كبير جداً: ${file.name || 'ملف'}`);
         return false;
       }
       return true;
     });
-    setAttachments((prev) => [...prev, ...allowed].slice(0, 5));
+    if (allowed.length) {
+      setAttachments((prev) => [...prev, ...allowed].slice(0, 5));
+      toast.success(`تم إرفاق ${allowed.length} ملف — اضغط زر الإرسال`);
+    }
+    return allowed;
   };
 
   const removeAttachment = (idx) => {
@@ -285,7 +302,7 @@ const FreeBuild = () => {
     } catch (e) {
       const file = new File([blob], filename, { type: type || 'audio/webm' });
       setAttachments((prev) => [...prev, file].slice(0, 5));
-      toast.error(`تعذر تحويل الصوت لنص، أرفقته كملف صوتي: ${e.message}`);
+      toast.warning(`تعذر تحويل الصوت لنص، أضفت التسجيل كمرفق صوتي — اضغط إرسال`);
     } finally {
       setTranscribing(false);
     }
@@ -666,8 +683,8 @@ const FreeBuild = () => {
               <div className="mb-2 flex flex-wrap gap-1.5" data-testid="freebuild-attachments-list">
                 {attachments.map((file, idx) => (
                   <div key={`${file.name}-${idx}`} className="flex items-center gap-1.5 max-w-full px-2 py-1 rounded-lg bg-white/5 border border-white/10 text-[11px] text-white/75">
-                    {file.type.startsWith('image/') ? <ImageIcon className="w-3 h-3 text-emerald-300" /> : file.type.startsWith('video/') ? <Video className="w-3 h-3 text-sky-300" /> : <Mic className="w-3 h-3 text-rose-300" />}
-                    <span className="truncate max-w-[150px]">{file.name}</span>
+                    {fileLabelIcon(file) === 'image' ? <ImageIcon className="w-3 h-3 text-emerald-300" /> : fileLabelIcon(file) === 'video' ? <Video className="w-3 h-3 text-sky-300" /> : <FileAudio className="w-3 h-3 text-rose-300" />}
+                    <span className="truncate max-w-[150px]">{file.name || 'ملف مرفق'}</span>
                     <button onClick={() => removeAttachment(idx)} className="text-white/40 hover:text-rose-300" disabled={sending} title="إزالة">
                       <X className="w-3 h-3" />
                     </button>
@@ -693,7 +710,7 @@ const FreeBuild = () => {
                 onClick={() => fileInputRef.current?.click()}
                 disabled={sending}
                 className="h-[42px] w-[42px] rounded-xl bg-white/5 border border-white/10 text-white/70 hover:text-amber-300 hover:border-amber-400/40 disabled:opacity-50 flex items-center justify-center"
-                title="إرفاق صورة أو فيديو"
+                title="إرفاق صورة أو فيديو أو صوت"
                 data-testid="freebuild-attach-btn"
               >
                 <Paperclip className="w-4 h-4" />
@@ -734,9 +751,9 @@ const FreeBuild = () => {
                 {sending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
               </Button>
             </div>
-            <div className="mt-1.5 text-[10px] text-white/35 flex justify-between">
+            <div className="mt-1.5 text-[10px] text-white/35 flex justify-between" data-tools-version={FREEBUILD_TOOLS_VERSION}>
               <span>{turns} دورة · {htmlStarted ? 'التصميم قيد البناء' : 'جمع فكرة'}</span>
-              <span>{htmlStarted ? '3 نقاط/تحديث' : 'الأسئلة مجانية'}</span>
+              <span>{htmlStarted ? '3 نقاط/تحديث' : 'الأسئلة مجانية'} · أدوات محدثة</span>
             </div>
           </div>
         </div>
