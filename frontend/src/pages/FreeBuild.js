@@ -8,6 +8,28 @@ import { Textarea } from '@/components/ui/textarea';
 
 const API = process.env.REACT_APP_BACKEND_URL;
 
+const fileToBase64Payload = (file) => new Promise((resolve, reject) => {
+  const reader = new FileReader();
+  reader.onload = () => resolve({
+    name: file.name,
+    filename: file.name,
+    type: file.type || 'application/octet-stream',
+    content_type: file.type || 'application/octet-stream',
+    size: file.size || 0,
+    data_url: reader.result,
+  });
+  reader.onerror = () => reject(reader.error || new Error('فشل قراءة الملف'));
+  reader.readAsDataURL(file);
+});
+
+const parseApiResponse = async (res) => {
+  const raw = await res.text();
+  let data;
+  try { data = raw ? JSON.parse(raw) : {}; } catch { data = { detail: raw }; }
+  if (!res.ok) throw new Error(data?.detail || data?.message || `HTTP ${res.status}`);
+  return data;
+};
+
 const fetchJson = async (url, options = {}) => {
   const token = localStorage.getItem('token');
   const headers = { 'Content-Type': 'application/json', ...(options.headers || {}) };
@@ -150,16 +172,34 @@ const FreeBuild = () => {
       if (filesToSend.length > 0) {
         const fd = new FormData();
         fd.append('session_id', sessionId);
-        fd.append('message', msg);
-        filesToSend.forEach((file) => fd.append('files', file, file.name));
-        const res = await fetch(`${API}/api/freebuild/v2/chat`, {
-          method: 'POST',
-          headers: token ? { Authorization: `Bearer ${token}` } : {},
-          body: fd,
+        fd.append('message', msg || 'حلّل المرفقات وخذها كمرجع لتصميم الموقع.');
+        filesToSend.forEach((file) => {
+          fd.append('files', file, file.name);
         });
-        const raw = await res.text();
-        try { d = raw ? JSON.parse(raw) : {}; } catch { d = { detail: raw }; }
-        if (!res.ok) throw new Error(d?.detail || `HTTP ${res.status}`);
+        try {
+          const res = await fetch(`${API}/api/freebuild/v2/chat`, {
+            method: 'POST',
+            headers: token ? { Authorization: `Bearer ${token}` } : {},
+            body: fd,
+          });
+          d = await parseApiResponse(res);
+        } catch (multipartError) {
+          // Some mobile browsers/proxies break multipart uploads. Fall back to JSON base64 metadata.
+          const encoded = await Promise.all(filesToSend.map(fileToBase64Payload));
+          const res = await fetch(`${API}/api/freebuild/v2/chat`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              ...(token ? { Authorization: `Bearer ${token}` } : {}),
+            },
+            body: JSON.stringify({
+              session_id: sessionId,
+              message: msg || 'حلّل المرفقات وخذها كمرجع لتصميم الموقع.',
+              attachments: encoded,
+            }),
+          });
+          d = await parseApiResponse(res);
+        }
       } else {
         d = await fetchJson('/api/freebuild/v2/chat', {
           method: 'POST',
@@ -222,9 +262,16 @@ const FreeBuild = () => {
     }
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      let mimeType = 'audio/webm;codecs=opus';
-      if (!MediaRecorder.isTypeSupported(mimeType)) mimeType = 'audio/webm';
-      if (!MediaRecorder.isTypeSupported(mimeType)) mimeType = '';
+      const supportedTypes = [
+        'audio/webm;codecs=opus',
+        'audio/webm',
+        'audio/mp4',
+        'audio/aac',
+        'audio/ogg;codecs=opus',
+      ];
+      const mimeType = supportedTypes.find((type) => {
+        try { return MediaRecorder.isTypeSupported(type); } catch (_) { return false; }
+      }) || '';
       const recorder = new MediaRecorder(stream, mimeType ? { mimeType } : undefined);
       audioChunksRef.current = [];
       recorder.ondataavailable = (e) => {
@@ -239,8 +286,8 @@ const FreeBuild = () => {
           toast.error('التسجيل قصير جداً');
           return;
         }
-        const ext = type.includes('mp4') ? 'mp4' : 'webm';
-        const file = new File([blob], `voice-${Date.now()}.${ext}`, { type });
+        const ext = type.includes('mp4') ? 'mp4' : type.includes('aac') ? 'aac' : type.includes('ogg') ? 'ogg' : 'webm';
+        const file = new File([blob], `voice-${Date.now()}.${ext}`, { type: type || 'audio/webm' });
         setAttachments((prev) => [...prev, file].slice(0, 5));
         toast.success('تم إرفاق التسجيل الصوتي');
       };
@@ -258,8 +305,12 @@ const FreeBuild = () => {
         });
       }, 1000);
     } catch (e) {
-      if (e.name === 'NotAllowedError') toast.error('اسمح للميكروفون من إعدادات المتصفح');
-      else toast.error('خطأ في التسجيل: ' + (e.message || 'غير معروف'));
+      if (e.name === 'NotAllowedError') {
+        toast.error('اسمح للميكروفون من إعدادات المتصفح');
+      } else {
+        toast.error('خطأ في التسجيل: ' + (e.message || e.name || 'غير معروف'));
+      }
+      console.error('FreeBuild recording error', e);
     }
   };
 

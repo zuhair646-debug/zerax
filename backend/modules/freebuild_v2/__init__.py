@@ -37,6 +37,7 @@ import json
 import uuid
 import asyncio
 import logging
+import base64
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 from fastapi import APIRouter, HTTPException, Depends, Response, Request
@@ -266,9 +267,19 @@ window.addEventListener('DOMContentLoaded', navigate);
 class StartIn(BaseModel):
     pass
 
+class ChatAttachmentIn(BaseModel):
+    name: Optional[str] = None
+    filename: Optional[str] = None
+    type: Optional[str] = None
+    content_type: Optional[str] = None
+    size: Optional[int] = None
+    data: Optional[str] = None
+    data_url: Optional[str] = None
+
 class ChatIn(BaseModel):
     session_id: str
-    message: str = Field(..., min_length=1, max_length=2000)
+    message: str = Field(default="", max_length=4000)
+    attachments: Optional[List[ChatAttachmentIn]] = None
 
 class SaveProjectIn(BaseModel):
     session_id: str
@@ -861,26 +872,49 @@ def create_freebuild_v2_router(db, get_current_user) -> APIRouter:
         content_type = (request.headers.get("content-type") or "").lower()
         attachments: List[Dict[str, Any]] = []
 
+        def _add_attachment_meta(field: str, filename: str, ctype: str, size: int) -> None:
+            if size > 25 * 1024 * 1024:
+                raise HTTPException(413, f"الملف {filename or field} أكبر من الحد المسموح 25MB")
+            attachments.append({
+                "field": field or "files",
+                "filename": filename or "attachment",
+                "content_type": ctype or "application/octet-stream",
+                "size": int(size or 0),
+            })
+
         if "multipart/form-data" in content_type:
-            form = await request.form()
-            session_id = str(form.get("session_id") or "").strip()
-            message = str(form.get("message") or "").strip()
+            try:
+                form = await request.form(max_files=8, max_fields=30)
+            except TypeError:
+                form = await request.form()
+            except Exception as exc:
+                logger.warning(f"[FREEBUILD-V2] multipart parse failed: {exc}")
+                raise HTTPException(400, "تعذر قراءة المرفقات. جرّب ملف أصغر أو أعد المحاولة.")
+
+            session_id = str(
+                form.get("session_id") or form.get("sessionId") or form.get("sid") or ""
+            ).strip()
+            message = str(
+                form.get("message") or form.get("text") or form.get("prompt") or form.get("content") or ""
+            ).strip()
 
             for key, value in form.multi_items():
                 if hasattr(value, "filename") and hasattr(value, "read"):
                     raw = await value.read()
-                    size = len(raw or b"")
-                    if size > 25 * 1024 * 1024:
-                        raise HTTPException(413, f"الملف {value.filename or key} أكبر من الحد المسموح 25MB")
-                    attachments.append({
-                        "field": key,
-                        "filename": value.filename or "attachment",
-                        "content_type": getattr(value, "content_type", None) or "application/octet-stream",
-                        "size": size,
-                    })
+                    _add_attachment_meta(
+                        key,
+                        getattr(value, "filename", None) or key,
+                        getattr(value, "content_type", None) or "application/octet-stream",
+                        len(raw or b""),
+                    )
+
+            if not session_id:
+                raise HTTPException(422, "session_id مفقود")
+            if not message and not attachments:
+                raise HTTPException(422, "اكتب رسالة أو أرفق ملف")
 
             if attachments:
-                summary = "\n\n[مرفقات العميل]\n" + "\n".join(
+                summary = "\n\n[مرفقات العميل وصلت للسيرفر]\n" + "\n".join(
                     f"- {a['filename']} ({a['content_type']}, {a['size']} bytes)"
                     for a in attachments
                 )
@@ -892,7 +926,46 @@ def create_freebuild_v2_router(db, get_current_user) -> APIRouter:
                 body = await request.json()
             except Exception:
                 raise HTTPException(400, "صيغة الطلب غير صحيحة. أرسل JSON أو multipart/form-data.")
+
+            # Accept flexible field names from deployed/older clients.
+            if "session_id" not in body:
+                body["session_id"] = body.get("sessionId") or body.get("sid") or ""
+            if "message" not in body:
+                body["message"] = body.get("text") or body.get("prompt") or body.get("content") or ""
+
+            for idx, item in enumerate(body.get("attachments") or body.get("files") or []):
+                if not isinstance(item, dict):
+                    continue
+                raw_data = item.get("data") or item.get("data_url") or item.get("base64") or ""
+                size = int(item.get("size") or 0)
+                if raw_data and not size:
+                    try:
+                        b64 = raw_data.split(",", 1)[1] if "," in raw_data else raw_data
+                        size = len(base64.b64decode(b64, validate=False))
+                    except Exception:
+                        size = 0
+                _add_attachment_meta(
+                    f"json_attachment_{idx}",
+                    item.get("filename") or item.get("name") or f"attachment-{idx + 1}",
+                    item.get("content_type") or item.get("type") or "application/octet-stream",
+                    size,
+                )
+
+            if attachments:
+                summary = "\n\n[مرفقات العميل وصلت للسيرفر]\n" + "\n".join(
+                    f"- {a['filename']} ({a['content_type']}, {a['size']} bytes)"
+                    for a in attachments
+                )
+                body["message"] = (body.get("message") or "حلّل المرفقات وخذها كمرجع لتصميم الموقع.") + summary
+
             payload = ChatIn(**body)
+            if not payload.message and not attachments:
+                raise HTTPException(422, "اكتب رسالة أو أرفق ملف")
+
+        logger.info(
+            f"[FREEBUILD-V2] chat received user={user.get('user_id')} session={payload.session_id} "
+            f"message_len={len(payload.message or '')} attachments={len(attachments)} content_type={content_type[:60]}"
+        )
 
         session = await db.freebuild_v2_sessions.find_one(
             {"id": payload.session_id, "user_id": user["user_id"]}, {"_id": 0}
