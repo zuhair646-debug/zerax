@@ -23,8 +23,8 @@ GROQ_URL = "https://api.groq.com/openai/v1/chat/completions"
 GROQ_MODEL = "llama-3.3-70b-versatile"
 GEMINI_BASE = "https://generativelanguage.googleapis.com/v1beta/models"
 GEMINI_MODEL = "gemini-2.0-flash-exp"
-MAX_HISTORY_TURNS = 6
-MAX_ITERATIONS = 15
+MAX_HISTORY_TURNS = 10
+MAX_ITERATIONS = 60
 
 
 # ════════════════════════════════════════════════════════════════════════
