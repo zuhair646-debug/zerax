@@ -1,1 +1,718 @@
-<!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>AutoCoder - Zitex AI</title><style>*{margin:0;padding:0;box-sizing:border-box}body{font-family:'Segoe UI',Tahoma,Geneva,Verdana,sans-serif;background:linear-gradient(135deg,#667eea 0%,#764ba2 100%);min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px}.container{background:white;border-radius:20px;box-shadow:0 20px 60px rgba(0,0,0,0.3);max-width:900px;width:100%;overflow:hidden}.header{background:linear-gradient(135deg,#667eea 0%,#764ba2 100%);color:white;padding:30px;text-align:center}.header h1{font-size:2.5em;margin-bottom:10px}.header p{opacity:0.9;font-size:1.1em}.auth-container{padding:60px 40px;text-align:center}.auth-container h2{color:#333;margin-bottom:30px;font-size:2em}.auth-form{max-width:400px;margin:0 auto}.input-group{margin-bottom:20px;text-align:right}.input-group label{display:block;margin-bottom:8px;color:#555;font-weight:600}.input-group input,.input-group textarea{width:100%;padding:12px 15px;border:2px solid #e0e0e0;border-radius:10px;font-size:1em;transition:all 0.3s;text-align:right}.input-group input:focus,.input-group textarea:focus{outline:none;border-color:#667eea}.input-group textarea{resize:vertical;min-height:100px;font-family:inherit}.btn{background:linear-gradient(135deg,#667eea 0%,#764ba2 100%);color:white;border:none;padding:15px 40px;border-radius:10px;font-size:1.1em;cursor:pointer;transition:transform 0.2s;width:100%;font-weight:600}.btn:hover{transform:translateY(-2px)}.btn:active{transform:translateY(0)}.chat-container{display:none;height:600px;display:flex;flex-direction:column}.chat-header{background:#f5f5f5;padding:20px;border-bottom:2px solid #e0e0e0;display:flex;justify-content:space-between;align-items:center}.user-info{display:flex;align-items:center;gap:15px}.user-avatar{width:50px;height:50px;border-radius:50%;background:linear-gradient(135deg,#667eea 0%,#764ba2 100%);display:flex;align-items:center;justify-content:center;color:white;font-size:1.5em;font-weight:bold}.user-details h3{color:#333;margin-bottom:5px}.user-details p{color:#666;font-size:0.9em}.logout-btn{background:#ff4757;color:white;border:none;padding:10px 20px;border-radius:8px;cursor:pointer;font-weight:600}.logout-btn:hover{background:#ff3838}.messages{flex:1;overflow-y:auto;padding:30px;background:#fafafa}.message{margin-bottom:20px;animation:fadeIn 0.3s}.message.user{text-align:left}.message.assistant{text-align:right}.message-bubble{display:inline-block;padding:15px 20px;border-radius:15px;max-width:70%;word-wrap:break-word}.user .message-bubble{background:linear-gradient(135deg,#667eea 0%,#764ba2 100%);color:white;border-bottom-left-radius:5px}.assistant .message-bubble{background:white;color:#333;border:2px solid #e0e0e0;border-bottom-right-radius:5px}.message-time{font-size:0.8em;opacity:0.7;margin-top:5px}.chat-input-container{background:white;padding:20px;border-top:2px solid #e0e0e0}.chat-input-form{display:flex;gap:10px}.chat-input{flex:1;padding:12px 15px;border:2px solid #e0e0e0;border-radius:10px;font-size:1em;text-align:right}.chat-input:focus{outline:none;border-color:#667eea}.send-btn{background:linear-gradient(135deg,#667eea 0%,#764ba2 100%);color:white;border:none;padding:12px 30px;border-radius:10px;cursor:pointer;font-weight:600}.send-btn:hover{opacity:0.9}.send-btn:disabled{opacity:0.5;cursor:not-allowed}@keyframes fadeIn{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}.hidden{display:none!important}.show{display:flex!important}</style></head><body><div class="container"><div class="header"><h1>🤖 AutoCoder</h1><p>مساعد البرمجة الذكي من Zitex</p></div><div class="auth-container" id="authContainer"><h2>🔐 تسجيل الدخول</h2><form class="auth-form" id="authForm"><div class="input-group"><label>الاسم:</label><input type="text" id="userName" required placeholder="أدخل اسمك"></div><div class="input-group"><label>الدور:</label><input type="text" id="userRole" required placeholder="مثال: مطور، مدير مشروع"></div><div class="input-group"><label>نبذة عنك (اختياري):</label><textarea id="userBio" placeholder="أخبرني عن نفسك وماذا تريد أن أساعدك به..."></textarea></div><button type="submit" class="btn">دخول</button></form></div><div class="chat-container hidden" id="chatContainer"><div class="chat-header"><div class="user-info"><div class="user-avatar" id="userAvatar"></div><div class="user-details"><h3 id="displayName"></h3><p id="displayRole"></p></div></div><button class="logout-btn" onclick="logout()">تسجيل خروج</button></div><div class="messages" id="messages"></div><div class="chat-input-container"><form class="chat-input-form" id="chatForm"><input type="text" class="chat-input" id="messageInput" placeholder="اكتب رسالتك هنا..." required><button type="submit" class="send-btn" id="sendBtn">إرسال</button></form></div></div></div></div><script>let userData=null;const authForm=document.getElementById('authForm');const chatForm=document.getElementById('chatForm');const authContainer=document.getElementById('authContainer');const chatContainer=document.getElementById('chatContainer');const messagesDiv=document.getElementById('messages');const messageInput=document.getElementById('messageInput');const sendBtn=document.getElementById('sendBtn');authForm.addEventListener('submit',function(e){e.preventDefault();const name=document.getElementById('userName').value;const role=document.getElementById('userRole').value;const bio=document.getElementById('userBio').value;userData={name:name,role:role,bio:bio,joinedAt:new Date().toISOString()};document.getElementById('userAvatar').textContent=name.charAt(0).toUpperCase();document.getElementById('displayName').textContent=name;document.getElementById('displayRole').textContent=role;authContainer.classList.add('hidden');chatContainer.classList.remove('hidden');chatContainer.style.display='flex';addMessage(`مرحباً ${name}! أنا AutoCoder، مساعدك الذكي. كيف أقدر أساعدك اليوم؟`,'assistant');if(bio){addMessage(`شكراً على المعلومات! فهمت أنك ${role}. ${bio?'سأساعدك بناءً على احتياجاتك.':''}`,'assistant')}});chatForm.addEventListener('submit',async function(e){e.preventDefault();const message=messageInput.value.trim();if(!message)return;addMessage(message,'user');messageInput.value='';sendBtn.disabled=true;sendBtn.textContent='جاري الإرسال...';try{const response=await fetch('/api/autocoder/chat',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({message:message,user_context:userData})});const data=await response.json();if(data.reply){addMessage(data.reply,'assistant')}else{addMessage('عذراً، حدث خطأ. حاول مرة أخرى.','assistant')}}catch(error){addMessage('خطأ في الاتصال بالخادم.','assistant')}finally{sendBtn.disabled=false;sendBtn.textContent='إرسال'}});function addMessage(text,sender){const messageDiv=document.createElement('div');messageDiv.className=`message ${sender}`;const bubble=document.createElement('div');bubble.className='message-bubble';bubble.textContent=text;const time=document.createElement('div');time.className='message-time';time.textContent=new Date().toLocaleTimeString('ar-SA',{hour:'2-digit',minute:'2-digit'});messageDiv.appendChild(bubble);messageDiv.appendChild(time);messagesDiv.appendChild(messageDiv);messagesDiv.scrollTop=messagesDiv.scrollHeight}function logout(){userData=null;authContainer.classList.remove('hidden');chatContainer.classList.add('hidden');messagesDiv.innerHTML='';document.getElementById('authForm').reset()}</script></body></html>
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AutoCoder - Zitex AI</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+        .container {
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            max-width: 900px;
+            width: 100%;
+            overflow: hidden;
+        }
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+        .header h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+        }
+        .header p {
+            opacity: 0.9;
+            font-size: 1.1em;
+        }
+        .auth-container {
+            padding: 60px 40px;
+            text-align: center;
+        }
+        .auth-container h2 {
+            color: #333;
+            margin-bottom: 30px;
+            font-size: 2em;
+        }
+        .auth-form {
+            max-width: 400px;
+            margin: 0 auto;
+        }
+        .input-group {
+            margin-bottom: 20px;
+            text-align: right;
+        }
+        .input-group label {
+            display: block;
+            margin-bottom: 8px;
+            color: #555;
+            font-weight: 600;
+        }
+        .input-group input, .input-group textarea {
+            width: 100%;
+            padding: 12px 15px;
+            border: 2px solid #e0e0e0;
+            border-radius: 10px;
+            font-size: 1em;
+            transition: all 0.3s;
+            text-align: right;
+        }
+        .input-group input:focus, .input-group textarea:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+        .input-group textarea {
+            resize: vertical;
+            min-height: 100px;
+            font-family: inherit;
+        }
+        .btn {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 15px 40px;
+            border-radius: 10px;
+            font-size: 1.1em;
+            cursor: pointer;
+            transition: transform 0.2s;
+            width: 100%;
+            font-weight: 600;
+        }
+        .btn:hover {
+            transform: translateY(-2px);
+        }
+        .btn:active {
+            transform: translateY(0);
+        }
+        .btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        .error-msg {
+            color: #ff4757;
+            margin-top: 10px;
+            font-size: 0.9em;
+        }
+        .chat-container {
+            display: none;
+            height: 600px;
+            flex-direction: column;
+        }
+        .chat-container.show {
+            display: flex !important;
+        }
+        .chat-header {
+            background: #f5f5f5;
+            padding: 20px;
+            border-bottom: 2px solid #e0e0e0;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .user-info {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+        .user-avatar {
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 1.5em;
+            font-weight: bold;
+        }
+        .user-details h3 {
+            color: #333;
+            margin-bottom: 5px;
+        }
+        .user-details p {
+            color: #666;
+            font-size: 0.9em;
+        }
+        .logout-btn {
+            background: #ff4757;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: 600;
+        }
+        .logout-btn:hover {
+            background: #ff3838;
+        }
+        .messages {
+            flex: 1;
+            overflow-y: auto;
+            padding: 30px;
+            background: #fafafa;
+        }
+        .message {
+            margin-bottom: 20px;
+            animation: fadeIn 0.3s;
+        }
+        .message.user {
+            text-align: left;
+        }
+        .message.assistant {
+            text-align: right;
+        }
+        .message-bubble {
+            display: inline-block;
+            padding: 15px 20px;
+            border-radius: 15px;
+            max-width: 70%;
+            word-wrap: break-word;
+            white-space: pre-wrap;
+        }
+        .user .message-bubble {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border-bottom-left-radius: 5px;
+        }
+        .assistant .message-bubble {
+            background: white;
+            color: #333;
+            border: 2px solid #e0e0e0;
+            border-bottom-right-radius: 5px;
+        }
+        .message-time {
+            font-size: 0.8em;
+            opacity: 0.7;
+            margin-top: 5px;
+        }
+        .attachment-preview {
+            margin-top: 10px;
+            max-width: 100%;
+        }
+        .attachment-preview img, .attachment-preview video {
+            max-width: 300px;
+            max-height: 200px;
+            border-radius: 10px;
+            margin-top: 10px;
+        }
+        .chat-input-container {
+            background: white;
+            padding: 20px;
+            border-top: 2px solid #e0e0e0;
+        }
+        .chat-tools {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 10px;
+            justify-content: flex-end;
+        }
+        .tool-btn {
+            background: #f0f0f0;
+            border: 2px solid #e0e0e0;
+            padding: 10px 15px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 1.2em;
+            transition: all 0.3s;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+        .tool-btn:hover {
+            background: #e0e0e0;
+            border-color: #667eea;
+        }
+        .tool-btn.active {
+            background: #667eea;
+            color: white;
+            border-color: #667eea;
+        }
+        .tool-btn small {
+            font-size: 0.7em;
+        }
+        .chat-input-form {
+            display: flex;
+            gap: 10px;
+            align-items: flex-end;
+        }
+        .chat-input {
+            flex: 1;
+            padding: 12px 15px;
+            border: 2px solid #e0e0e0;
+            border-radius: 10px;
+            font-size: 1em;
+            text-align: right;
+            resize: vertical;
+            min-height: 45px;
+            max-height: 150px;
+            font-family: inherit;
+        }
+        .chat-input:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+        .send-btn {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 12px 30px;
+            border-radius: 10px;
+            cursor: pointer;
+            font-weight: 600;
+            height: 45px;
+        }
+        .send-btn:hover {
+            opacity: 0.9;
+        }
+        .send-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        .hidden {
+            display: none !important;
+        }
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+        .pending-attachments {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            margin-bottom: 10px;
+            padding: 10px;
+            background: #f9f9f9;
+            border-radius: 8px;
+        }
+        .pending-attachment {
+            position: relative;
+            width: 80px;
+            height: 80px;
+            border-radius: 8px;
+            overflow: hidden;
+            border: 2px solid #e0e0e0;
+        }
+        .pending-attachment img, .pending-attachment video {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+        .pending-attachment .remove-btn {
+            position: absolute;
+            top: 2px;
+            right: 2px;
+            background: #ff4757;
+            color: white;
+            border: none;
+            border-radius: 50%;
+            width: 20px;
+            height: 20px;
+            cursor: pointer;
+            font-size: 0.8em;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🤖 AutoCoder</h1>
+            <p>مساعد البرمجة الذكي من Zitex</p>
+        </div>
+
+        <!-- Unlock Screen -->
+        <div class="auth-container" id="unlockContainer">
+            <h2>🔐 فتح القفل</h2>
+            <form class="auth-form" id="unlockForm">
+                <div class="input-group">
+                    <label>رمز الدخول:</label>
+                    <input type="password" id="passcode" required placeholder="أدخل رمز الدخول">
+                </div>
+                <button type="submit" class="btn" id="unlockBtn">فتح</button>
+                <div class="error-msg" id="unlockError"></div>
+            </form>
+        </div>
+
+        <!-- Chat Screen -->
+        <div class="chat-container" id="chatContainer">
+            <div class="chat-header">
+                <div class="user-info">
+                    <div class="user-avatar">🛠️</div>
+                    <div class="user-details">
+                        <h3>AutoCoder Session</h3>
+                        <p>مساعد البرمجة الذاتي</p>
+                    </div>
+                </div>
+                <button class="logout-btn" onclick="logout()">قفل</button>
+            </div>
+
+            <div class="messages" id="messages"></div>
+
+            <div class="chat-input-container">
+                <!-- Tools -->
+                <div class="chat-tools">
+                    <button class="tool-btn" id="voiceBtn" title="تسجيل صوتي">
+                        🎤
+                    </button>
+                    <button class="tool-btn" id="attachBtn" title="إرفاق صورة/فيديو">
+                        📎
+                    </button>
+                    <input type="file" id="fileInput" accept="image/*,video/*" multiple style="display: none;">
+                </div>
+
+                <!-- Pending Attachments Preview -->
+                <div id="pendingAttachments" class="pending-attachments hidden"></div>
+
+                <!-- Input Form -->
+                <form class="chat-input-form" id="chatForm">
+                    <textarea class="chat-input" id="messageInput" placeholder="اكتب رسالتك هنا..." rows="1" required></textarea>
+                    <button type="submit" class="send-btn" id="sendBtn">إرسال</button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let sessionToken = null;
+        let pendingFiles = [];
+        let isRecording = false;
+        let mediaRecorder = null;
+        let audioChunks = [];
+
+        const unlockForm = document.getElementById('unlockForm');
+        const unlockContainer = document.getElementById('unlockContainer');
+        const unlockError = document.getElementById('unlockError');
+        const unlockBtn = document.getElementById('unlockBtn');
+        const chatContainer = document.getElementById('chatContainer');
+        const chatForm = document.getElementById('chatForm');
+        const messageInput = document.getElementById('messageInput');
+        const messagesDiv = document.getElementById('messages');
+        const sendBtn = document.getElementById('sendBtn');
+        const voiceBtn = document.getElementById('voiceBtn');
+        const attachBtn = document.getElementById('attachBtn');
+        const fileInput = document.getElementById('fileInput');
+        const pendingAttachmentsDiv = document.getElementById('pendingAttachments');
+
+        // Auto-resize textarea
+        messageInput.addEventListener('input', function() {
+            this.style.height = 'auto';
+            this.style.height = Math.min(this.scrollHeight, 150) + 'px';
+        });
+
+        // Unlock Form Submit
+        unlockForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const passcode = document.getElementById('passcode').value.trim();
+            unlockError.textContent = '';
+            unlockBtn.disabled = true;
+            unlockBtn.textContent = 'جاري الفتح...';
+
+            try {
+                // Get owner token from localStorage (should be set by main app)
+                const ownerToken = localStorage.getItem('token');
+                if (!ownerToken) {
+                    throw new Error('يرجى تسجيل الدخول كمالك أولاً');
+                }
+
+                const response = await fetch('/api/autocoder/unlock', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${ownerToken}`
+                    },
+                    body: JSON.stringify({ passcode })
+                });
+
+                if (!response.ok) {
+                    const err = await response.json();
+                    throw new Error(err.detail || 'فشل فتح القفل');
+                }
+
+                const data = await response.json();
+                sessionToken = data.session_token;
+                localStorage.setItem('autocoder_session', sessionToken);
+                showChat();
+            } catch (error) {
+                unlockError.textContent = error.message;
+            } finally {
+                unlockBtn.disabled = false;
+                unlockBtn.textContent = 'فتح';
+            }
+        });
+
+        // Show Chat
+        function showChat() {
+            unlockContainer.classList.add('hidden');
+            chatContainer.classList.add('show');
+
+            // Welcome message
+            addMessage('assistant', `🎉 مرحباً! القفل مفتوح.\n\nأنا AutoCoder، جاهز لمساعدتك.\n\n✨ يمكنك:\n- إرسال رسائل نصية\n- 📎 إرفاق صور أو فيديوهات\n- 🎤 تسجيل رسائل صوتية\n\nماذا تريد أن تفعل؟`);
+        }
+
+        // Logout
+        function logout() {
+            sessionToken = null;
+            localStorage.removeItem('autocoder_session');
+            location.reload();
+        }
+
+        // Voice Recording
+        voiceBtn.addEventListener('click', async () => {
+            if (!isRecording) {
+                try {
+                    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                    mediaRecorder = new MediaRecorder(stream);
+                    audioChunks = [];
+
+                    mediaRecorder.ondataavailable = (event) => {
+                        audioChunks.push(event.data);
+                    };
+
+                    mediaRecorder.onstop = async () => {
+                        const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
+                        const file = new File([audioBlob], 'voice.webm', { type: 'audio/webm' });
+                        pendingFiles.push(file);
+                        updatePendingAttachments();
+                        stream.getTracks().forEach(track => track.stop());
+                    };
+
+                    mediaRecorder.start();
+                    isRecording = true;
+                    voiceBtn.classList.add('active');
+                    voiceBtn.innerHTML = '⏹️ <small>إيقاف</small>';
+                } catch (error) {
+                    alert('فشل الوصول للميكروفون: ' + error.message);
+                }
+            } else {
+                mediaRecorder.stop();
+                isRecording = false;
+                voiceBtn.classList.remove('active');
+                voiceBtn.innerHTML = '🎤';
+            }
+        });
+
+        // File Attach
+        attachBtn.addEventListener('click', () => {
+            fileInput.click();
+        });
+
+        fileInput.addEventListener('change', (e) => {
+            const files = Array.from(e.target.files);
+            pendingFiles.push(...files);
+            updatePendingAttachments();
+            fileInput.value = '';
+        });
+
+        // Update Pending Attachments Preview
+        function updatePendingAttachments() {
+            if (pendingFiles.length === 0) {
+                pendingAttachmentsDiv.classList.add('hidden');
+                pendingAttachmentsDiv.innerHTML = '';
+                return;
+            }
+
+            pendingAttachmentsDiv.classList.remove('hidden');
+            pendingAttachmentsDiv.innerHTML = '';
+
+            pendingFiles.forEach((file, index) => {
+                const preview = document.createElement('div');
+                preview.className = 'pending-attachment';
+
+                const removeBtn = document.createElement('button');
+                removeBtn.className = 'remove-btn';
+                removeBtn.textContent = '×';
+                removeBtn.onclick = () => {
+                    pendingFiles.splice(index, 1);
+                    updatePendingAttachments();
+                };
+
+                if (file.type.startsWith('image/')) {
+                    const img = document.createElement('img');
+                    img.src = URL.createObjectURL(file);
+                    preview.appendChild(img);
+                } else if (file.type.startsWith('video/')) {
+                    const video = document.createElement('video');
+                    video.src = URL.createObjectURL(file);
+                    preview.appendChild(video);
+                } else if (file.type.startsWith('audio/')) {
+                    preview.innerHTML = '🎤';
+                    preview.style.display = 'flex';
+                    preview.style.alignItems = 'center';
+                    preview.style.justifyContent = 'center';
+                    preview.style.fontSize = '2em';
+                }
+
+                preview.appendChild(removeBtn);
+                pendingAttachmentsDiv.appendChild(preview);
+            });
+        }
+
+        // Chat Form Submit
+        chatForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const message = messageInput.value.trim();
+
+            if (!message && pendingFiles.length === 0) return;
+            if (!sessionToken) {
+                alert('Session expired. Please unlock again.');
+                logout();
+                return;
+            }
+
+            sendBtn.disabled = true;
+            sendBtn.textContent = 'جاري الإرسال...';
+
+            // Show user message
+            if (message) {
+                addMessage('user', message, pendingFiles);
+            } else if (pendingFiles.length > 0) {
+                addMessage('user', '📎 مرفقات', pendingFiles);
+            }
+
+            messageInput.value = '';
+            messageInput.style.height = 'auto';
+
+            try {
+                const formData = new FormData();
+                formData.append('message', message || '');
+
+                // Append files
+                pendingFiles.forEach((file) => {
+                    formData.append('attachments', file);
+                });
+
+                const response = await fetch('/api/autocoder/chat', {
+                    method: 'POST',
+                    headers: {
+                        'X-Autocoder-Token': sessionToken
+                    },
+                    body: formData
+                });
+
+                if (!response.ok) {
+                    const err = await response.json();
+                    throw new Error(err.detail || 'فشل الإرسال');
+                }
+
+                // Read SSE stream
+                const reader = response.body.getReader();
+                const decoder = new TextDecoder();
+                let assistantText = '';
+                const assistantMsg = addMessage('assistant', '');
+
+                while (true) {
+                    const { done, value } = await reader.read();
+                    if (done) break;
+
+                    const chunk = decoder.decode(value, { stream: true });
+                    const lines = chunk.split('\n');
+
+                    for (const line of lines) {
+                        if (line.startsWith('data: ')) {
+                            const data = JSON.parse(line.slice(6));
+                            
+                            if (data.type === 'text') {
+                                assistantText += data.content;
+                                updateMessage(assistantMsg, assistantText);
+                            } else if (data.type === 'error') {
+                                assistantText += '\n\n❌ خطأ: ' + data.message;
+                                updateMessage(assistantMsg, assistantText);
+                            }
+                            // tool events can be logged if needed
+                        }
+                    }
+                }
+            } catch (error) {
+                addMessage('assistant', '❌ عذراً، حدث خطأ: ' + error.message);
+            } finally {
+                sendBtn.disabled = false;
+                sendBtn.textContent = 'إرسال';
+                pendingFiles = [];
+                updatePendingAttachments();
+            }
+        });
+
+        // Add Message to Chat
+        function addMessage(role, text, files = []) {
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `message ${role}`;
+
+            const bubble = document.createElement('div');
+            bubble.className = 'message-bubble';
+            bubble.textContent = text;
+
+            // Add file previews for user messages
+            if (role === 'user' && files.length > 0) {
+                const attachDiv = document.createElement('div');
+                attachDiv.className = 'attachment-preview';
+                files.forEach(file => {
+                    if (file.type.startsWith('image/')) {
+                        const img = document.createElement('img');
+                        img.src = URL.createObjectURL(file);
+                        attachDiv.appendChild(img);
+                    } else if (file.type.startsWith('video/')) {
+                        const video = document.createElement('video');
+                        video.src = URL.createObjectURL(file);
+                        video.controls = true;
+                        attachDiv.appendChild(video);
+                    }
+                });
+                bubble.appendChild(attachDiv);
+            }
+
+            const time = document.createElement('div');
+            time.className = 'message-time';
+            time.textContent = new Date().toLocaleTimeString('ar-SA', { 
+                hour: '2-digit', 
+                minute: '2-digit' 
+            });
+
+            messageDiv.appendChild(bubble);
+            messageDiv.appendChild(time);
+            messagesDiv.appendChild(messageDiv);
+            messagesDiv.scrollTop = messagesDiv.scrollHeight;
+            
+            return messageDiv; // return reference for updates
+        }
+
+        // Update existing message (for streaming)
+        function updateMessage(messageDiv, newText) {
+            const bubble = messageDiv.querySelector('.message-bubble');
+            bubble.textContent = newText;
+            messagesDiv.scrollTop = messagesDiv.scrollHeight;
+        }
+
+        // Check saved session
+        const savedSession = localStorage.getItem('autocoder_session');
+        if (savedSession) {
+            sessionToken = savedSession;
+            showChat();
+        }
+    </script>
+</body>
+</html>
