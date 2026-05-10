@@ -1349,27 +1349,53 @@ def create_autocoder_router(db, get_current_user, require_owner):
     # ---- Chat (gated by session token) ----
     @router.post("/chat")
     async def chat(
-        payload: ChatIn,
-        request: Request,
+        message: str = Form(...),
+        conversation_id: Optional[str] = Form(None),
+        model: Optional[str] = Form("claude"),
+        attachments: List[UploadFile] = File(default=[]),
+        request: Request = None,
         owner=Depends(require_owner),
         x_autocoder_token: Optional[str] = Header(None),
     ):
         if not await _check_session_token(x_autocoder_token or ""):
             raise HTTPException(401, "session locked or expired — unlock first")
 
-        conv_id = payload.conversation_id or str(uuid.uuid4())
+        conv_id = conversation_id or str(uuid.uuid4())
         conv = await db.autocoder_conversations.find_one(
             {"id": conv_id, "owner_id": owner.get("id")}, {"_id": 0}
         )
         messages: List[Dict[str, Any]] = conv["messages"] if conv else []
-        messages.append({"role": "user", "content": payload.message, "ts": _now()})
+        
+        # Build user message with attachments
+        user_content = message
+        if attachments:
+            # Save attachments to /app/backend/uploads
+            upload_dir = Path("/app/backend/uploads")
+            upload_dir.mkdir(exist_ok=True)
+            attachment_urls = []
+            for att in attachments:
+                # Sanitize filename
+                safe_name = re.sub(r'[^\w\.-]', '_', att.filename or 'file')
+                file_id = secrets.token_hex(8)
+                file_path = upload_dir / f"{file_id}_{safe_name}"
+                with file_path.open("wb") as f:
+                    content = await att.read()
+                    f.write(content)
+                # Construct URL (assume /uploads is served by nginx/fastapi)
+                file_url = f"/uploads/{file_id}_{safe_name}"
+                attachment_urls.append(file_url)
+            
+            # Append attachment info to user message
+            user_content += "\n\n📎 **المرفقات:**\n" + "\n".join([f"- {url}" for url in attachment_urls])
+        
+        messages.append({"role": "user", "content": user_content, "ts": _now()})
 
         async def gen():
             try:
                 assistant_text = ""
                 tool_events: List[Dict[str, Any]] = []
                 usage_total = {"input": 0, "output": 0, "cached_read": 0, "cost_usd": 0.0}
-                async for evt in _autocoder_stream(messages, model=payload.model or "claude"):
+                async for evt in _autocoder_stream(messages, model=model or "claude"):
                     if evt["type"] == "text":
                         assistant_text += evt["content"]
                     elif evt["type"] == "tool":

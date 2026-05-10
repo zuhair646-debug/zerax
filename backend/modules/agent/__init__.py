@@ -31,7 +31,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Form, UploadFile, File
 from fastapi.responses import StreamingResponse, HTMLResponse, FileResponse, Response
 from pydantic import BaseModel, Field
 
@@ -149,28 +149,46 @@ def create_agent_router(db, get_current_user):
     router = APIRouter(prefix="/api/agent", tags=["ai-agent"])
 
     @router.post("/chat")
-    async def chat(payload: ChatIn, user=Depends(get_current_user)):
+    async def chat(
+        message: str = Form(...),
+        model: str = Form("gpt-4o"),
+        conversation_id: Optional[str] = Form(None),
+        files: List[UploadFile] = File(default=[]),
+        user=Depends(get_current_user)
+    ):
         """Stream a conversational response. Uses SSE-style chunks."""
-        conv_id = payload.conversation_id or str(uuid.uuid4())
+        conv_id = conversation_id or str(uuid.uuid4())
         conv = await db.agent_conversations.find_one(
             {"id": conv_id, "user_id": user["user_id"]}, {"_id": 0}
         )
-        messages: List[Dict[str, Any]]
+        messages_list: List[Dict[str, Any]]
         current_html: str = ""
         if conv:
-            messages = conv.get("messages", [])
+            messages_list = conv.get("messages", [])
             current_html = conv.get("current_html", "")
         else:
-            messages = []
+            messages_list = []
+
+        # Process attachments
+        attachment_urls = []
+        if files:
+            upload_dir = Path("/app/backend/static/agent_uploads")
+            upload_dir.mkdir(parents=True, exist_ok=True)
+            for f in files:
+                if f.filename:
+                    fname = f"{uuid.uuid4().hex[:12]}_{f.filename}"
+                    fpath = upload_dir / fname
+                    content = await f.read()
+                    fpath.write_bytes(content)
+                    attachment_urls.append(f"/static/agent_uploads/{fname}")
 
         # Add user message
-        messages.append({
-            "role": "user",
-            "content": payload.message,
-            "timestamp": _now(),
-        })
+        user_msg = {"role": "user", "content": message, "timestamp": _now()}
+        if attachment_urls:
+            user_msg["attachments"] = attachment_urls
+        messages_list.append(user_msg)
 
-        model_pick = (payload.model or "gpt-4o").lower()
+        model_pick = (model or "gpt-4o").lower()
 
         async def stream_generator():
             nonlocal current_html
@@ -181,9 +199,9 @@ def create_agent_router(db, get_current_user):
 
                 # Single agent loop: GPT-4o with tools (Claude path uses different mechanism)
                 if model_pick.startswith("claude"):
-                    gen = _claude_stream(messages, AGENT_SYSTEM_PROMPT, current_html)
+                    gen = _claude_stream(messages_list, AGENT_SYSTEM_PROMPT, current_html)
                 else:
-                    gen = _gpt_stream(messages, AGENT_SYSTEM_PROMPT, current_html)
+                    gen = _gpt_stream(messages_list, AGENT_SYSTEM_PROMPT, current_html)
 
                 async for evt in gen:
                     if evt["type"] == "text":
@@ -225,7 +243,7 @@ def create_agent_router(db, get_current_user):
                     yield f"data: {json.dumps(evt, ensure_ascii=False)}\n\n"
 
                 # Persist
-                messages.append({
+                messages_list.append({
                     "role": "assistant",
                     "content": assistant_text,
                     "tool_events": [
@@ -239,7 +257,7 @@ def create_agent_router(db, get_current_user):
                 update_doc: Dict[str, Any] = {
                     "id": conv_id,
                     "user_id": user["user_id"],
-                    "messages": messages,
+                    "messages": messages_list,
                     "updated_at": _now(),
                 }
                 if new_html and new_html != current_html:

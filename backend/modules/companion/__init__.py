@@ -26,7 +26,7 @@ import asyncio
 import logging
 from datetime import datetime, timezone, timedelta, time as dtime
 from typing import Optional, Dict, Any, List
-from fastapi import APIRouter, HTTPException, Depends
+from fastapi import APIRouter, HTTPException, Depends, Form, UploadFile, File
 from pydantic import BaseModel, Field
 
 logger = logging.getLogger(__name__)
@@ -253,13 +253,32 @@ def create_companion_router(db, get_current_user) -> APIRouter:
 
     # ===== CHAT =====
     @router.post("/chat")
-    async def companion_chat(payload: ChatIn, user=Depends(get_current_user)):
+    async def companion_chat(
+        message: str = Form(...),
+        attachments: List[UploadFile] = File(None),
+        user=Depends(get_current_user)
+    ):
         profile = await _get_profile(db, user["user_id"])
         if not profile:
             raise HTTPException(400, "أنشئ ملفك الشخصي أولاً")
 
         memory = await _get_recent_memory(db, user["user_id"], limit=15)
         system = build_companion_system(profile, memory)
+
+        # Handle attachments
+        attachment_urls = []
+        if attachments:
+            import shutil
+            for att in attachments:
+                if att.filename:
+                    ext = os.path.splitext(att.filename)[1]
+                    safe_name = f"{uuid.uuid4().hex}{ext}"
+                    upload_dir = "/app/backend/uploads"
+                    os.makedirs(upload_dir, exist_ok=True)
+                    path = os.path.join(upload_dir, safe_name)
+                    with open(path, "wb") as f:
+                        shutil.copyfileobj(att.file, f)
+                    attachment_urls.append(f"/uploads/{safe_name}")
 
         try:
             from emergentintegrations.llm.chat import LlmChat, UserMessage
@@ -272,13 +291,19 @@ def create_companion_router(db, get_current_user) -> APIRouter:
                 system_message=system,
             )
             chat.with_model("anthropic", "claude-sonnet-4-5-20250929")
-            reply = await chat.send_message(UserMessage(text=payload.message))
+            
+            # Build user message with attachments
+            user_msg_text = message
+            if attachment_urls:
+                user_msg_text += f"\n[المرفقات: {', '.join(attachment_urls)}]"
+            
+            reply = await chat.send_message(UserMessage(text=user_msg_text))
         except Exception as e:
             logger.exception(f"[COMPANION] Chat failed: {e}")
             raise HTTPException(500, "حصل خطأ — حاول مرة ثانية")
 
         # Save both sides to memory
-        await _save_memory(db, user["user_id"], "user", payload.message, "chat")
+        await _save_memory(db, user["user_id"], "user", message, "chat")
         await _save_memory(db, user["user_id"], "assistant", reply, "chat")
 
         await db.companion_state.update_one(
@@ -290,6 +315,7 @@ def create_companion_router(db, get_current_user) -> APIRouter:
         return {
             "reply": reply,
             "from_char": profile.get("preferred_avatar", "zara"),
+            "attachments": attachment_urls,
         }
 
     # ===== VOICE CHAT (chat + TTS in one shot) =====
