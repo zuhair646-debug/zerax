@@ -1442,7 +1442,7 @@ class AIAssistant:
         )
         return result.modified_count > 0
     
-    async def process_message(self, session_id: str, user_id: str, message: str, settings: Dict[str, Any] = None) -> Dict:
+    async def process_message(self, session_id: str, user_id: str, message: str, settings: Dict[str, Any] = None, attachments: List[str] = None) -> Dict:
         settings = settings or {}
         
         session = await self.get_session(session_id, user_id)
@@ -1456,7 +1456,7 @@ class AIAssistant:
             "role": "user",
             "content": message,
             "message_type": "text",
-            "attachments": [],
+            "attachments": [{"type": "image", "url": url} for url in (attachments or [])],
             "metadata": {},
             "created_at": datetime.now(timezone.utc).isoformat()
         }
@@ -1486,7 +1486,7 @@ class AIAssistant:
             else:
                 try:
                     # Generate GPT response first
-                    ai_response, credits_used, has_buttons = await self._generate_with_gpt(session, message, request_type, credits, settings)
+                    ai_response, credits_used, has_buttons = await self._generate_with_gpt(session, message, request_type, credits, settings, attachments)
                     
                     # Process special commands in AI response
                     ai_response, extra_attachments, extra_credits = await self._process_ai_commands(
@@ -2484,7 +2484,7 @@ class AIAssistant:
             logger.error(f"Training examples error: {e}")
             return ""
     
-    async def _generate_with_gpt(self, session: Dict, message: str, request_type: str, credits: int, settings: Dict) -> Tuple[str, int, bool]:
+    async def _generate_with_gpt(self, session: Dict, message: str, request_type: str, credits: int, settings: Dict, user_attachments: List[str] = None) -> Tuple[str, int, bool]:
         # Build context about the project
         project_data = session.get("project_data", {})
         stage = session.get("conversation_stage", "initial")
@@ -2511,6 +2511,16 @@ class AIAssistant:
         image_urls = re.findall(r'(https?://\S+\.(?:png|jpg|jpeg|gif|webp))', message, re.IGNORECASE)
         # Also check for objstore URLs
         image_urls += re.findall(r'(https?://integrations\.emergentagent\.com/objstore/\S+)', message)
+        
+        # Add user-uploaded attachments
+        if user_attachments:
+            for att_url in user_attachments:
+                # Convert relative URL to full URL if needed
+                if att_url.startswith("/static/"):
+                    full_url = f"{BACKEND_URL}{att_url}" if BACKEND_URL else att_url
+                    image_urls.append(full_url)
+                else:
+                    image_urls.append(att_url)
         
         # KEY FEATURE: When user approves design (says ممتاز/ابنِ), find the last design image
         # and attach it so GPT-4o can SEE the design and build code that matches it

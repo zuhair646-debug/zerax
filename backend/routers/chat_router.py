@@ -2,12 +2,14 @@
 Zitex Chat API Router
 راوتر API للشات الذكي
 """
-from fastapi import APIRouter, HTTPException, Depends
+from fastapi import APIRouter, HTTPException, Depends, UploadFile, File, Form
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from pydantic import BaseModel
 from typing import Optional, Dict, Any, List
 import jwt
 import os
+import uuid
+import shutil
 
 router = APIRouter(prefix="/chat", tags=["Chat"])
 security = HTTPBearer()
@@ -140,19 +142,44 @@ async def get_session(
 @router.post("/sessions/{session_id}/messages")
 async def send_message(
     session_id: str,
-    request: SendMessageRequest,
+    message: str = Form(...),
+    settings: str = Form("{}"),
+    attachments: List[UploadFile] = File(None),
     current_user: dict = Depends(get_current_user)
 ):
-    """إرسال رسالة في جلسة"""
+    """إرسال رسالة في جلسة (مع دعم رفع الصور)"""
     if not ai_assistant:
         raise HTTPException(status_code=503, detail="AI service not available")
+    
+    # Parse settings from JSON string
+    import json
+    try:
+        settings_dict = json.loads(settings) if settings else {}
+    except:
+        settings_dict = {}
+    
+    # Handle attachments (images)
+    attachment_urls = []
+    if attachments:
+        for att in attachments:
+            if att.filename:
+                ext = os.path.splitext(att.filename)[1]
+                safe_name = f"{uuid.uuid4().hex}{ext}"
+                upload_dir = "/app/backend/static/uploads"
+                os.makedirs(upload_dir, exist_ok=True)
+                path = os.path.join(upload_dir, safe_name)
+                with open(path, "wb") as f:
+                    shutil.copyfileobj(att.file, f)
+                # Return URL that can be accessed via /static/uploads/
+                attachment_urls.append(f"/static/uploads/{safe_name}")
     
     try:
         result = await ai_assistant.process_message(
             session_id=session_id,
             user_id=current_user['user_id'],
-            message=request.message,
-            settings=request.settings
+            message=message,
+            settings=settings_dict,
+            attachments=attachment_urls  # Pass attachment URLs
         )
         return result
     except ValueError as e:
