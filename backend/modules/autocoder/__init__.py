@@ -1450,10 +1450,14 @@ def create_autocoder_router(db, get_current_user, require_owner):
             if len(contents) > 25 * 1024 * 1024:
                 raise HTTPException(400, "Audio file too large (max 25MB)")
             
-            # التحقق من وجود OPENAI_API_KEY
-            openai_key = os.getenv("OPENAI_API_KEY")
+            # التحقق من وجود OPENAI_API_KEY (يقبل OPENAI_DIRECT_KEY أو OPENAI_API_KEY)
+            openai_key = (
+                os.getenv("OPENAI_API_KEY")
+                or os.getenv("OPENAI_DIRECT_KEY")
+                or ""
+            ).strip()
             if not openai_key:
-                raise HTTPException(500, "OPENAI_API_KEY not configured")
+                raise HTTPException(500, "OPENAI_API_KEY (or OPENAI_DIRECT_KEY) not configured")
             
             # استدعاء Whisper API
             import httpx

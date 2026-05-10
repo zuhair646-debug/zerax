@@ -7,6 +7,7 @@ import {
   Search, FileEdit, FilePlus, FileX, RotateCw, ShieldCheck,
   AlertTriangle, Copy, ScrollText, MessageSquare,
   Globe, Download, Layers, FilePlus2, Database, Cpu, Sparkles, Zap,
+  Mic, Square, X,
 } from 'lucide-react';
 
 const API = process.env.REACT_APP_BACKEND_URL;
@@ -107,6 +108,16 @@ export default function AdminAutoCoder() {
     return localStorage.getItem(MODEL_KEY) || 'claude';
   });
   const [showModelMenu, setShowModelMenu] = useState(false);
+
+  // Voice recording state
+  const [isRecording, setIsRecording] = useState(false);
+  const [recordingSeconds, setRecordingSeconds] = useState(0);
+  const [transcribing, setTranscribing] = useState(false);
+  const mediaRecorderRef = useRef(null);
+  const audioChunksRef = useRef([]);
+  const recordingTimerRef = useRef(null);
+  const recordingCancelledRef = useRef(false);
+
   const scrollRef = useRef(null);
 
   // ---- bootstrap ----
@@ -308,6 +319,125 @@ export default function AdminAutoCoder() {
       if (cid === conversationId) newChat();
       loadConversations();
     } catch (_) {}
+  };
+
+  // ─────────────────────────────────────────────────
+  // 🎤 Voice recording (uses /api/autocoder/transcribe → Whisper)
+  // ─────────────────────────────────────────────────
+  const startRecording = async () => {
+    if (isRecording || transcribing) return;
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      toast.error('متصفحك ما يدعم تسجيل الصوت');
+      return;
+    }
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      // Pick a supported mimeType
+      let mimeType = 'audio/webm;codecs=opus';
+      if (!window.MediaRecorder?.isTypeSupported(mimeType)) {
+        mimeType = 'audio/webm';
+        if (!window.MediaRecorder?.isTypeSupported(mimeType)) {
+          mimeType = 'audio/mp4'; // Safari
+        }
+      }
+      const mr = new MediaRecorder(stream, mimeType ? { mimeType } : undefined);
+      audioChunksRef.current = [];
+      recordingCancelledRef.current = false;
+      mr.ondataavailable = (e) => {
+        if (e.data && e.data.size > 0) audioChunksRef.current.push(e.data);
+      };
+      mr.onstop = async () => {
+        // Stop all tracks
+        try { stream.getTracks().forEach((t) => t.stop()); } catch (_) {}
+        if (recordingCancelledRef.current) {
+          audioChunksRef.current = [];
+          return;
+        }
+        const blob = new Blob(audioChunksRef.current, { type: mr.mimeType || 'audio/webm' });
+        audioChunksRef.current = [];
+        if (blob.size < 800) {
+          toast.error('التسجيل قصير جداً');
+          return;
+        }
+        await transcribeAudio(blob);
+      };
+      mr.start();
+      mediaRecorderRef.current = mr;
+      setIsRecording(true);
+      setRecordingSeconds(0);
+      recordingTimerRef.current = setInterval(() => {
+        setRecordingSeconds((s) => {
+          if (s >= 60) {
+            // auto-stop at 60s
+            stopRecording();
+            return s;
+          }
+          return s + 1;
+        });
+      }, 1000);
+    } catch (e) {
+      console.error(e);
+      if (e.name === 'NotAllowedError') {
+        toast.error('رفضت إذن استخدام الميكروفون. اسمح من إعدادات المتصفح');
+      } else {
+        toast.error('تعذّر بدء التسجيل: ' + e.message);
+      }
+    }
+  };
+
+  const stopRecording = () => {
+    if (!isRecording) return;
+    setIsRecording(false);
+    if (recordingTimerRef.current) {
+      clearInterval(recordingTimerRef.current);
+      recordingTimerRef.current = null;
+    }
+    try {
+      if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+        mediaRecorderRef.current.stop();
+      }
+    } catch (_) {}
+  };
+
+  const cancelRecording = () => {
+    recordingCancelledRef.current = true;
+    stopRecording();
+    setRecordingSeconds(0);
+    toast.info('تم إلغاء التسجيل');
+  };
+
+  const transcribeAudio = async (blob) => {
+    setTranscribing(true);
+    try {
+      const fd = new FormData();
+      const ext = blob.type.includes('mp4') ? 'mp4' : 'webm';
+      fd.append('file', blob, `voice.${ext}`);
+      const r = await fetch(`${API}/api/autocoder/transcribe`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'X-AutoCoder-Token': acToken || '',
+        },
+        body: fd,
+      });
+      const d = await r.json();
+      if (!r.ok || !d.success) {
+        throw new Error(d.detail || 'transcription failed');
+      }
+      const text = (d.text || '').trim();
+      if (!text) {
+        toast.error('ما لقينا كلام في التسجيل');
+        return;
+      }
+      // Append to existing input rather than replace
+      setInput((prev) => (prev ? `${prev} ${text}` : text));
+      toast.success('تم التحويل لنص');
+    } catch (e) {
+      toast.error('فشل التحويل: ' + (e.message || ''));
+    } finally {
+      setTranscribing(false);
+      setRecordingSeconds(0);
+    }
   };
 
   const send = async () => {
@@ -682,6 +812,40 @@ export default function AdminAutoCoder() {
           </div>
 
           <div className="border-t border-white/10 p-3 md:p-4 bg-black/40">
+            {isRecording && (
+              <div data-testid="ac-recording-bar" className="max-w-3xl mx-auto mb-2 flex items-center gap-3 px-4 py-2 bg-rose-500/10 border border-rose-400/30 rounded-xl">
+                <span className="relative flex w-3 h-3">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-3 w-3 bg-rose-500"></span>
+                </span>
+                <span className="text-rose-200 text-sm font-bold flex-1">
+                  جاري التسجيل... {Math.floor(recordingSeconds / 60)}:{String(recordingSeconds % 60).padStart(2, '0')}
+                  <span className="text-rose-300/60 text-xs font-normal ms-2">(حد أقصى 60 ثانية)</span>
+                </span>
+                <button
+                  onClick={cancelRecording}
+                  data-testid="ac-recording-cancel"
+                  title="إلغاء"
+                  className="p-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-white/70"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+                <button
+                  onClick={stopRecording}
+                  data-testid="ac-recording-stop"
+                  title="إيقاف وتحويل"
+                  className="px-3 py-1.5 rounded-lg bg-rose-500 hover:bg-rose-400 text-white text-xs font-bold flex items-center gap-1"
+                >
+                  <Square className="w-3 h-3 fill-current" /> إيقاف
+                </button>
+              </div>
+            )}
+            {transcribing && (
+              <div data-testid="ac-transcribing-bar" className="max-w-3xl mx-auto mb-2 flex items-center gap-2 px-4 py-2 bg-amber-500/10 border border-amber-400/30 rounded-xl">
+                <Loader2 className="w-4 h-4 animate-spin text-amber-300" />
+                <span className="text-amber-200 text-sm">يحوّل الصوت لنص...</span>
+              </div>
+            )}
             <div className="max-w-3xl mx-auto flex items-end gap-2">
               <textarea
                 value={input}
@@ -690,13 +854,29 @@ export default function AdminAutoCoder() {
                   if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); }
                 }}
                 rows={2}
-                placeholder="اكتب أمرك للذكاء... مثال: اقرا server.py واشرح كيف الـauth يشتغل"
+                disabled={isRecording}
+                placeholder={isRecording ? '🎙️ جاري التسجيل...' : 'اكتب أمرك للذكاء... أو اضغط الميكروفون لتسجل بصوتك'}
                 data-testid="ac-input"
-                className="flex-1 bg-black/40 border border-white/15 rounded-xl px-4 py-3 text-sm resize-none focus:border-amber-400 outline-none"
+                className="flex-1 bg-black/40 border border-white/15 rounded-xl px-4 py-3 text-sm resize-none focus:border-amber-400 outline-none disabled:opacity-50"
               />
               <button
+                onClick={isRecording ? stopRecording : startRecording}
+                disabled={transcribing || sending}
+                data-testid="ac-mic-btn"
+                title={isRecording ? 'أوقف التسجيل' : 'سجّل صوتياً'}
+                className={`h-12 w-12 rounded-xl flex items-center justify-center disabled:opacity-50 transition ${
+                  isRecording
+                    ? 'bg-rose-500 hover:bg-rose-400 text-white animate-pulse'
+                    : 'bg-white/10 hover:bg-white/15 text-white border border-white/15'
+                }`}
+              >
+                {isRecording ? <Square className="w-5 h-5 fill-current" /> :
+                  transcribing ? <Loader2 className="w-5 h-5 animate-spin" /> :
+                  <Mic className="w-5 h-5" />}
+              </button>
+              <button
                 onClick={send}
-                disabled={sending || !input.trim()}
+                disabled={sending || !input.trim() || isRecording || transcribing}
                 data-testid="ac-send"
                 className="h-12 w-12 rounded-xl bg-amber-500 hover:bg-amber-400 text-black flex items-center justify-center disabled:opacity-50"
               >
