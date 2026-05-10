@@ -128,22 +128,34 @@ async def stream_via_groq(
         yield {"type": "error", "message": "GROQ_API_KEY غير مضبوط في Railway. اضفه ثم جرّب."}
         return
 
-    # Prune history
+    # Prune history (Groq has tighter context than Claude)
     if len(anthropic_msgs) > MAX_HISTORY_TURNS:
         anthropic_msgs = anthropic_msgs[-MAX_HISTORY_TURNS:]
 
-    msgs = anthropic_msgs_to_openai(anthropic_msgs, system_prompt)
+    # ── Compact system prompt for Groq (free tier has 12k TPM limit) ──
+    # The full Claude prompt is ~5k tokens. We compress to ~1.5k for Groq so
+    # tokens don't get blown on prompt, and Llama gets clearer tool guidance.
+    compact_prompt = _compact_system_prompt_for_free_models(system_prompt)
+
+    msgs = anthropic_msgs_to_openai(anthropic_msgs, compact_prompt)
     openai_tools = anthropic_tools_to_openai(tools_anthropic)
 
     total_in = total_out = 0
     for iteration in range(MAX_ITERATIONS):
         try:
-            async with httpx.AsyncClient(timeout=120) as c:
-                resp = await c.post(
+            text_buffer = ""
+            tool_calls_buffer: Dict[int, Dict[str, Any]] = {}
+            usage_data: Dict[str, int] = {}
+            finish_reason = None
+
+            async with httpx.AsyncClient(timeout=180) as c:
+                async with c.stream(
+                    "POST",
                     GROQ_URL,
                     headers={
                         "Authorization": f"Bearer {api_key}",
                         "Content-Type": "application/json",
+                        "Accept": "text/event-stream",
                     },
                     json={
                         "model": GROQ_MODEL,
@@ -152,65 +164,111 @@ async def stream_via_groq(
                         "tool_choice": "auto",
                         "temperature": 0.3,
                         "max_tokens": 4096,
+                        "stream": True,
+                        "stream_options": {"include_usage": True},
                     },
-                )
+                ) as resp:
+                    if resp.status_code != 200:
+                        body_text = ""
+                        try:
+                            body_text = (await resp.aread()).decode("utf-8", errors="replace")[:600]
+                        except Exception:
+                            body_text = "(no body)"
+                        yield {"type": "error",
+                               "message": _humanize_groq_error(resp.status_code, body_text)}
+                        return
+
+                    async for line in resp.aiter_lines():
+                        if not line or not line.startswith("data: "):
+                            continue
+                        payload = line[6:].strip()
+                        if payload == "[DONE]":
+                            break
+                        try:
+                            chunk = json.loads(payload)
+                        except Exception:
+                            continue
+
+                        # Capture usage (sent in last chunk)
+                        u = chunk.get("usage")
+                        if u:
+                            usage_data = u
+
+                        choices = chunk.get("choices") or []
+                        if not choices:
+                            continue
+                        delta = choices[0].get("delta") or {}
+                        finish_reason = choices[0].get("finish_reason") or finish_reason
+
+                        # Stream text delta
+                        text_delta = delta.get("content")
+                        if text_delta:
+                            text_buffer += text_delta
+                            yield {"type": "text", "content": text_delta}
+
+                        # Accumulate tool call deltas (OpenAI format streams in pieces)
+                        for tcd in (delta.get("tool_calls") or []):
+                            idx = tcd.get("index", 0)
+                            slot = tool_calls_buffer.setdefault(idx, {
+                                "id": "", "type": "function",
+                                "function": {"name": "", "arguments": ""},
+                            })
+                            if tcd.get("id"):
+                                slot["id"] = tcd["id"]
+                            fn = tcd.get("function") or {}
+                            if fn.get("name"):
+                                slot["function"]["name"] += fn["name"]
+                            if fn.get("arguments"):
+                                slot["function"]["arguments"] += fn["arguments"]
+        except httpx.ReadTimeout:
+            yield {"type": "error", "message": "Groq استغرق وقت أطول من المتوقع. حاول مرة ثانية."}
+            return
         except Exception as e:
-            yield {"type": "error", "message": f"groq api: {str(e)[:240]}"}
+            yield {"type": "error", "message": f"Groq exception: {str(e)[:240]}"}
             return
 
-        if resp.status_code != 200:
-            try:
-                err_body = resp.json()
-                err_msg = err_body.get("error", {}).get("message", resp.text[:300])
-            except Exception:
-                err_msg = resp.text[:300]
-            yield {"type": "error", "message": f"groq {resp.status_code}: {err_msg}"}
-            return
-
-        data = resp.json()
-        choice = (data.get("choices") or [{}])[0]
-        msg = choice.get("message") or {}
-        usage = data.get("usage") or {}
-        in_tok = usage.get("prompt_tokens", 0)
-        out_tok = usage.get("completion_tokens", 0)
-        total_in += in_tok
-        total_out += out_tok
-        if iteration == 0:
+        # Emit usage event (first iteration)
+        if iteration == 0 and usage_data:
+            in_tok = usage_data.get("prompt_tokens", 0)
+            out_tok = usage_data.get("completion_tokens", 0)
+            total_in += in_tok
+            total_out += out_tok
             yield {
                 "type": "usage",
                 "input": in_tok, "output": out_tok,
-                "cached_read": 0, "cost_usd": 0.0,  # Groq free tier
+                "cached_read": 0, "cost_usd": 0.0,
                 "provider": "groq",
             }
 
-        text = msg.get("content") or ""
-        tool_calls = msg.get("tool_calls") or []
+        tool_calls = list(tool_calls_buffer.values())
 
-        # Stream the text portion (chunked)
-        if text:
-            for i in range(0, len(text), 40):
-                yield {"type": "text", "content": text[i:i + 40]}
-                await asyncio.sleep(0.005)
-
-        # Append assistant turn to history
-        assistant_entry: Dict[str, Any] = {"role": "assistant", "content": text or ""}
+        # Build assistant entry for history
+        assistant_entry: Dict[str, Any] = {"role": "assistant", "content": text_buffer or ""}
         if tool_calls:
             assistant_entry["tool_calls"] = tool_calls
         msgs.append(assistant_entry)
 
-        finish_reason = choice.get("finish_reason")
+        # No tool calls → done
         if not tool_calls or finish_reason == "stop":
             yield {"type": "done"}
             return
 
         # Execute each tool call
         for tc in tool_calls:
-            fn = (tc.get("function") or {})
+            fn = tc.get("function") or {}
             name = fn.get("name", "")
             try:
                 args = json.loads(fn.get("arguments") or "{}")
-            except Exception:
-                args = {}
+            except Exception as e:
+                yield {"type": "tool", "status": "done", "name": name or "?",
+                       "ok": False, "summary": f"فشل parse args: {e}"}
+                msgs.append({
+                    "role": "tool",
+                    "tool_call_id": tc.get("id", ""),
+                    "name": name,
+                    "content": json.dumps({"ok": False, "error": "invalid JSON arguments"}),
+                })
+                continue
             yield {"type": "tool", "status": "calling", "name": name,
                    "args": trim_args_for_ui(args)}
             result = await execute_tool(name, args)
@@ -225,8 +283,60 @@ async def stream_via_groq(
                 "content": json.dumps(trim_result_for_llm(result), ensure_ascii=False)[:14000],
             })
 
-    yield {"type": "text", "content": "\n(وصلت لحد الـiterations — اطلب تكملة لو تبي.)"}
+    yield {"type": "text", "content": "\n(وصلت لحد iterations)"}
     yield {"type": "done"}
+
+
+# ────────────────────────────────────────────────────────────────────
+# Helpers for free models
+# ────────────────────────────────────────────────────────────────────
+def _humanize_groq_error(status_code: int, body_text: str) -> str:
+    """Convert Groq HTTP errors to clear Arabic messages."""
+    body_lower = body_text.lower()
+    if status_code == 429:
+        if "tpm" in body_lower or "tokens per minute" in body_lower:
+            return ("تجاوزت حد الـtokens/الدقيقة على Groq Free Tier (12,000 TPM). "
+                    "حلول: (1) استنّى ~30 ثانية وحاول، أو (2) ارفع لـDev Tier مجاناً من "
+                    "console.groq.com/settings/billing (يحتاج بطاقة، ما تنخصم)، أو (3) بدّل الموديل لـClaude.")
+        if "rpm" in body_lower or "requests per" in body_lower:
+            return "تجاوزت حد الطلبات/الدقيقة على Groq. استنّى دقيقة وحاول."
+        return "تجاوزت حد المعدّل على Groq. استنّى ثم حاول مرة ثانية."
+    if status_code == 401 or status_code == 403:
+        return "GROQ_API_KEY غير صالح أو منتهي. أنشئ key جديد من console.groq.com/keys"
+    if status_code == 413 or "too large" in body_lower or "context" in body_lower:
+        return "المحادثة كبرت كثير. ابدأ محادثة جديدة (زر '+ جديدة' فوق)."
+    if status_code >= 500:
+        return f"Groq يواجه مشكلة مؤقتة (HTTP {status_code}). حاول بعد دقيقة."
+    return f"Groq HTTP {status_code}: {body_text[:200]}"
+
+
+def _compact_system_prompt_for_free_models(full_prompt: str) -> str:
+    """Strip the verbose Claude-targeted system prompt down to the essentials
+    that smaller models like Llama actually use. Saves ~3000 tokens per call."""
+    return (
+        "أنت 'برمجة زيتاكس' — مهندس برمجيات سعودي يعمل على الكود الفعلي للمنصة في /app.\n\n"
+        "**صلاحياتك مفتوحة بالكامل**: قراءة، كتابة، تعديل أي ملف؛ تنفيذ أي bash command؛ "
+        "git commit و push للـGitHub.\n\n"
+        "**AUTONOMOUS MODE**: لما المالك يطلب مهمة، اشتغل لين تخلّصها بالكامل (read → edit → "
+        "test → commit → push) قبل ما توقف. لا تطلب إذن بين الخطوات. لا تقل 'تم' وتنتظر.\n\n"
+        "**استخدام الأدوات** (مهم جداً):\n"
+        "- لا تخمّن. قبل أي تعديل، استدعِ `read_file` للملف.\n"
+        "- لو تبحث عن نص في الكود، استدعِ `search_code`.\n"
+        "- بعد أي تعديل python: استدعِ `pre_deploy_check` قبل الـcommit.\n"
+        "- بعد الـpush: استدعِ `check_deployment_status` للتأكد من النشر.\n"
+        "- لو تكسّر الموقع: `rollback_to_last_good`.\n\n"
+        "**خريطة الكود**:\n"
+        "- /app/backend/server.py (FastAPI main)\n"
+        "- /app/backend/modules/<name>/__init__.py (modules: agent, autocoder, freebuild_v2, websites…)\n"
+        "- /app/frontend/src/App.js (router)\n"
+        "- /app/frontend/src/pages/<Name>.js, /components/<Name>.js\n\n"
+        "**قواعد ذهبية**:\n"
+        "1. اقرأ قبل ما تكتب.\n"
+        "2. لا تخمّن environment — على Railway production فيه RAILWAY_* env vars؛ supervisorctl غير موجود (استخدم restart_service).\n"
+        "3. لو edit_file فشل بـ'not unique' → استخدم occurrence=N أو replace_all=true.\n"
+        "4. الردود قصيرة وعملية. الذكاء في الأدوات.\n"
+        "5. لما تنتهي من المهمة بالكامل: اعمل commit + push، انتظر النشر، ثم أعطِ ملخصاً نهائياً.\n"
+    )
 
 
 # ════════════════════════════════════════════════════════════════════════
@@ -253,6 +363,7 @@ async def stream_via_gemini(
 
     contents = anthropic_msgs_to_gemini(anthropic_msgs)
     tools_gemini = anthropic_tools_to_gemini(tools_anthropic)
+    compact_sys = _compact_system_prompt_for_free_models(system_prompt)
 
     url = f"{GEMINI_BASE}/{GEMINI_MODEL}:generateContent?key={api_key}"
 
@@ -266,7 +377,7 @@ async def stream_via_gemini(
                     url,
                     headers={"Content-Type": "application/json"},
                     json={
-                        "systemInstruction": {"parts": [{"text": system_prompt}]},
+                        "systemInstruction": {"parts": [{"text": compact_sys}]},
                         "contents": contents,
                         "tools": tools_gemini,
                         "toolConfig": {"functionCallingConfig": {"mode": "AUTO"}},
