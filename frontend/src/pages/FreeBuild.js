@@ -117,6 +117,7 @@ const FreeBuild = () => {
   const [transcribing, setTranscribing] = useState(false);
   const chatEndRef = useRef(null);
   const fileInputRef = useRef(null);
+  const audioCaptureInputRef = useRef(null);
   const mediaRecorderRef = useRef(null);
   const audioChunksRef = useRef([]);
   const recordingTimerRef = useRef(null);
@@ -311,7 +312,9 @@ const FreeBuild = () => {
   const startRecording = async () => {
     if (isRecording || sending || transcribing) return;
     if (!navigator.mediaDevices?.getUserMedia || !window.MediaRecorder) {
-      toast.error('متصفحك ما يدعم تسجيل الصوت');
+      // Safari/iPhone وبعض المتصفحات تمنع MediaRecorder. التسجيل الأصلي من النظام أضمن.
+      audioCaptureInputRef.current?.click();
+      toast.message('إذا فتح مسجل الجوال، سجّل الصوت ثم اختره كمرفق');
       return;
     }
     try {
@@ -693,34 +696,53 @@ const FreeBuild = () => {
               </div>
             )}
             <input
+              id="freebuild-file-input"
               ref={fileInputRef}
               type="file"
               accept="image/*,video/*,audio/*"
               multiple
-              className="hidden"
+              className="sr-only"
               onChange={(e) => {
                 addFiles(e.target.files);
                 e.target.value = '';
               }}
               data-testid="freebuild-file-input"
             />
+            <input
+              ref={audioCaptureInputRef}
+              type="file"
+              accept="audio/*"
+              capture="microphone"
+              className="sr-only"
+              onChange={(e) => {
+                addFiles(e.target.files);
+                e.target.value = '';
+              }}
+              data-testid="freebuild-audio-capture-input"
+            />
             <div className="flex items-end gap-2" data-testid="chat-input-bar">
-              <button
-                type="button"
-                onClick={() => fileInputRef.current?.click()}
-                disabled={sending}
-                className="h-[42px] w-[42px] rounded-xl bg-white/5 border border-white/10 text-white/70 hover:text-amber-300 hover:border-amber-400/40 disabled:opacity-50 flex items-center justify-center"
+              <label
+                htmlFor="freebuild-file-input"
+                aria-disabled={sending}
+                className={`h-[42px] w-[42px] rounded-xl bg-white/5 border border-white/10 text-white/70 hover:text-amber-300 hover:border-amber-400/40 flex items-center justify-center cursor-pointer ${sending ? 'opacity-50 pointer-events-none' : ''}`}
                 title="إرفاق صورة أو فيديو أو صوت"
                 data-testid="freebuild-attach-btn"
               >
                 <Paperclip className="w-4 h-4" />
-              </button>
+              </label>
               <button
                 type="button"
-                onClick={isRecording ? stopRecording : startRecording}
+                onClick={() => {
+                  if (isRecording) return stopRecording();
+                  if (!navigator.mediaDevices?.getUserMedia || !window.MediaRecorder) {
+                    audioCaptureInputRef.current?.click();
+                    return;
+                  }
+                  return startRecording();
+                }}
                 disabled={sending || transcribing}
                 className={`h-[42px] min-w-[42px] px-3 rounded-xl border flex items-center justify-center gap-1.5 disabled:opacity-50 ${isRecording ? 'bg-rose-500/20 border-rose-400/50 text-rose-200 animate-pulse' : 'bg-white/5 border-white/10 text-white/70 hover:text-rose-300 hover:border-rose-400/40'}`}
-                title={isRecording ? 'إيقاف التسجيل وتحويله لنص' : 'تسجيل صوت'}
+                title={isRecording ? 'إيقاف التسجيل وتحويله لنص' : 'تسجيل صوت أو فتح مسجل الجوال'}
                 data-testid="freebuild-record-btn"
               >
                 {transcribing ? <Loader2 className="w-4 h-4 animate-spin" /> : isRecording ? <Square className="w-4 h-4" /> : <Mic className="w-4 h-4" />}
