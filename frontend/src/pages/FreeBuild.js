@@ -7,7 +7,7 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 
 const API = process.env.REACT_APP_BACKEND_URL;
-const FREEBUILD_TOOLS_VERSION = 'tools-fix-2026-05-10-attachments-voice';
+const FREEBUILD_TOOLS_VERSION = 'tools-fix-f54fee7-media-mobile';
 
 const getFileKind = (file) => {
   const type = (file?.type || '').toLowerCase();
@@ -724,11 +724,12 @@ const FreeBuild = () => {
               <label
                 htmlFor="freebuild-file-input"
                 aria-disabled={sending}
-                className={`h-[42px] w-[42px] rounded-xl bg-white/5 border border-white/10 text-white/70 hover:text-amber-300 hover:border-amber-400/40 flex items-center justify-center cursor-pointer ${sending ? 'opacity-50 pointer-events-none' : ''}`}
+                className={`h-[42px] min-w-[74px] px-3 rounded-xl bg-white/5 border border-white/10 text-white/80 hover:text-amber-300 hover:border-amber-400/40 flex items-center justify-center gap-1.5 cursor-pointer text-xs font-bold ${sending ? 'opacity-50 pointer-events-none' : ''}`}
                 title="إرفاق صورة أو فيديو أو صوت"
                 data-testid="freebuild-attach-btn"
               >
                 <Paperclip className="w-4 h-4" />
+                <span>إرفاق</span>
               </label>
               <button
                 type="button"
@@ -741,12 +742,12 @@ const FreeBuild = () => {
                   return startRecording();
                 }}
                 disabled={sending || transcribing}
-                className={`h-[42px] min-w-[42px] px-3 rounded-xl border flex items-center justify-center gap-1.5 disabled:opacity-50 ${isRecording ? 'bg-rose-500/20 border-rose-400/50 text-rose-200 animate-pulse' : 'bg-white/5 border-white/10 text-white/70 hover:text-rose-300 hover:border-rose-400/40'}`}
+                className={`h-[42px] min-w-[74px] px-3 rounded-xl border flex items-center justify-center gap-1.5 disabled:opacity-50 text-xs font-bold ${isRecording ? 'bg-rose-500/20 border-rose-400/50 text-rose-200 animate-pulse' : 'bg-white/5 border-white/10 text-white/80 hover:text-rose-300 hover:border-rose-400/40'}`}
                 title={isRecording ? 'إيقاف التسجيل وتحويله لنص' : 'تسجيل صوت أو فتح مسجل الجوال'}
                 data-testid="freebuild-record-btn"
               >
                 {transcribing ? <Loader2 className="w-4 h-4 animate-spin" /> : isRecording ? <Square className="w-4 h-4" /> : <Mic className="w-4 h-4" />}
-                {isRecording && <span className="text-[11px] font-bold">{recordingSeconds}s</span>}
+                <span>{isRecording ? `${recordingSeconds}s` : 'تسجيل'}</span>
               </button>
               <textarea
                 value={input}
@@ -775,7 +776,7 @@ const FreeBuild = () => {
             </div>
             <div className="mt-1.5 text-[10px] text-white/35 flex justify-between" data-tools-version={FREEBUILD_TOOLS_VERSION}>
               <span>{turns} دورة · {htmlStarted ? 'التصميم قيد البناء' : 'جمع فكرة'}</span>
-              <span>{htmlStarted ? '3 نقاط/تحديث' : 'الأسئلة مجانية'} · أدوات محدثة</span>
+              <span>{htmlStarted ? '3 نقاط/تحديث' : 'الأسئلة مجانية'} · أدوات مرفقات وصوت v2</span>
             </div>
           </div>
         </div>
