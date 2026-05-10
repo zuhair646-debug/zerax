@@ -692,41 +692,51 @@ async def tool_check_deployment_status() -> Dict[str, Any]:
     Wait ~2-4 minutes after push before calling."""
     rw_token = os.environ.get("RAILWAY_TOKEN", "").strip()
     rw_service = os.environ.get("RAILWAY_SERVICE_ID", "").strip()
-    if not rw_token or not rw_service:
-        return {"ok": False, "error": "RAILWAY_TOKEN/RAILWAY_SERVICE_ID not set"}
+    rw_env = os.environ.get("RAILWAY_ENVIRONMENT_ID", "").strip()
+    if not rw_token or not rw_service or not rw_env:
+        return {"ok": False, "error": "RAILWAY_TOKEN/RAILWAY_SERVICE_ID/RAILWAY_ENVIRONMENT_ID must all be set"}
     try:
         import httpx
+        # Railway v2 API: use serviceInstanceDeployments (NOT the old deployments(input:))
         q = (
-            'query GetDeps($s: String!) { deployments(input: {serviceId: $s}, first: 3) '
-            '{ edges { node { id status createdAt meta } } } }'
+            'query ServiceDeps($e: String!, $s: String!) { '
+            'serviceInstanceDeployments(environmentId: $e, serviceId: $s) { '
+            '  edges { node { id status createdAt url canRollback meta } } '
+            '} }'
         )
         async with httpx.AsyncClient(timeout=20) as c:
             r = await c.post(
                 "https://backboard.railway.com/graphql/v2",
-                headers={"Authorization": f"Bearer {rw_token}"},
-                json={"query": q, "variables": {"s": rw_service}},
+                headers={"Authorization": f"Bearer {rw_token}",
+                         "Content-Type": "application/json"},
+                json={"query": q, "variables": {"e": rw_env, "s": rw_service}},
             )
         data = r.json()
         if "errors" in data:
-            return {"ok": False, "error": str(data["errors"])[:300]}
-        deps = data.get("data", {}).get("deployments", {}).get("edges", [])
+            return {"ok": False, "error": str(data["errors"])[:400],
+                    "hint": "تأكد إن RAILWAY_TOKEN و RAILWAY_ENVIRONMENT_ID و RAILWAY_SERVICE_ID صحيحين"}
+        edges = (data.get("data", {}).get("serviceInstanceDeployments", {}) or {}).get("edges", [])
         out = []
-        for e in deps:
+        for e in edges[:5]:
             n = e["node"]
+            meta = n.get("meta") or {}
             out.append({
                 "id": n["id"],
                 "status": n["status"],
                 "createdAt": n["createdAt"],
-                "commit_sha": (n.get("meta") or {}).get("commitHash", "")[:8],
-                "commit_msg": ((n.get("meta") or {}).get("commitMessage", "") or "")[:80],
+                "url": n.get("url"),
+                "can_rollback": n.get("canRollback", False),
+                "commit_sha": (meta.get("commitHash") or "")[:8],
+                "commit_msg": ((meta.get("commitMessage") or "") or "")[:80],
             })
         latest = out[0] if out else None
         return {"ok": True, "latest": latest, "recent": out, "verdict":
                 ("✅ آخر deploy ناجح" if latest and latest["status"] == "SUCCESS" else
-                 "⏳ لسه يبني" if latest and latest["status"] in ("BUILDING", "DEPLOYING", "QUEUED") else
-                 "❌ فشل — استخدم rollback_to_last_good")}
+                 "⏳ لسه يبني" if latest and latest["status"] in ("BUILDING", "DEPLOYING", "QUEUED", "INITIALIZING") else
+                 "❌ فشل — استخدم rollback_to_last_good" if latest else
+                 "❓ ما لقينا أي deployment")}
     except Exception as e:
-        return {"ok": False, "error": str(e)}
+        return {"ok": False, "error": str(e)[:300]}
 
 
 async def tool_rollback_to_last_good() -> Dict[str, Any]:
@@ -741,29 +751,35 @@ async def tool_rollback_to_last_good() -> Dict[str, Any]:
         return setup
     rw_token = os.environ.get("RAILWAY_TOKEN", "").strip()
     rw_service = os.environ.get("RAILWAY_SERVICE_ID", "").strip()
-    if not rw_token or not rw_service:
-        return {"ok": False, "error": "RAILWAY_TOKEN/RAILWAY_SERVICE_ID not set"}
+    rw_env = os.environ.get("RAILWAY_ENVIRONMENT_ID", "").strip()
+    if not rw_token or not rw_service or not rw_env:
+        return {"ok": False, "error": "RAILWAY_TOKEN/RAILWAY_SERVICE_ID/RAILWAY_ENVIRONMENT_ID required"}
     try:
         import httpx
         q = (
-            'query GetDeps($s: String!) { deployments(input: {serviceId: $s}, first: 20) '
-            '{ edges { node { status meta } } } }'
+            'query ServiceDeps($e: String!, $s: String!) { '
+            'serviceInstanceDeployments(environmentId: $e, serviceId: $s) { '
+            '  edges { node { status meta } } '
+            '} }'
         )
         async with httpx.AsyncClient(timeout=20) as c:
             r = await c.post(
                 "https://backboard.railway.com/graphql/v2",
                 headers={"Authorization": f"Bearer {rw_token}"},
-                json={"query": q, "variables": {"s": rw_service}},
+                json={"query": q, "variables": {"e": rw_env, "s": rw_service}},
             )
-        deps = r.json().get("data", {}).get("deployments", {}).get("edges", [])
+        data = r.json()
+        if "errors" in data:
+            return {"ok": False, "error": str(data["errors"])[:400]}
+        edges = (data.get("data", {}).get("serviceInstanceDeployments", {}) or {}).get("edges", [])
         good_sha = None
-        for e in deps:
+        for e in edges:
             n = e["node"]
             if n["status"] == "SUCCESS" and (n.get("meta") or {}).get("commitHash"):
                 good_sha = n["meta"]["commitHash"]
                 break
         if not good_sha:
-            return {"ok": False, "error": "no recent successful deployment found in last 20"}
+            return {"ok": False, "error": "no recent successful deployment found"}
 
         gh_token = os.environ.get("GITHUB_TOKEN", "").strip()
         gh_repo = os.environ.get("GITHUB_REPO", "").strip()
@@ -786,7 +802,7 @@ async def tool_rollback_to_last_good() -> Dict[str, Any]:
         result["rolled_back_to"] = good_sha[:8]
         return result
     except Exception as e:
-        return {"ok": False, "error": str(e)}
+        return {"ok": False, "error": str(e)[:300]}
 
 
 # Tool registry for the LLM (legacy, used by UI for icons/labels)
