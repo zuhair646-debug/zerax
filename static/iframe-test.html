@@ -1,0 +1,13 @@
+<!DOCTYPE html>
+<html><head><title>iframe preview test</title></head>
+<body style="margin:0;background:#111">
+<iframe id="f" style="width:100vw;height:100vh;border:0" sandbox="allow-scripts allow-same-origin allow-forms allow-popups"></iframe>
+<script>
+const BACKEND='https://ai-cinematic-hub-2.preview.emergentagent.com';
+const code = `<!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="UTF-8"><title>اختبار</title></head><body><div id="game-world"></div><script src="/api/game-engine.js"><\/script><script>ZitexGame.init({genre:'strategy',buildings:7,trees:12,soldiers:4})<\/script></body></html>`;
+const patched = code.replace(/(src|href)=["'](\/api\/[^"']+)["']/g, '$1="'+BACKEND+'$2"');
+const f = document.getElementById('f');
+const d = f.contentDocument || f.contentWindow.document;
+d.open(); d.write(patched); d.close();
+</script>
+</body></html>

@@ -16,6 +16,7 @@ import React, { useState, useEffect, useRef, useCallback, lazy, Suspense } from 
 import { useNavigate } from 'react-router-dom';
 import { Send, Loader2, User, MessageCircle, Bell, Plus, Trash2, Settings, LogOut, Share2, Mic, Upload, X } from 'lucide-react';
 import { toast } from 'sonner';
+import ChatInput from '@/components/ChatInput';
 
 const VoiceStage = lazy(() => import('@/components/VoiceStage'));
 
@@ -51,12 +52,8 @@ export default function Companion() {
   const [onboardingStep, setOnboardingStep] = useState(0);
   const [installPromptShown, setInstallPromptShown] = useState(false);
   const [voiceOpen, setVoiceOpen] = useState(false);
-  const [attachments, setAttachments] = useState([]);
-  const [recording, setRecording] = useState(false);
   const scrollRef = useRef(null);
   const deferredPromptRef = useRef(null);
-  const fileInputRef = useRef(null);
-  const mediaRecorderRef = useRef(null);
 
   const tokenH = () => ({ Authorization: `Bearer ${localStorage.getItem('token')}` });
 
@@ -153,58 +150,20 @@ export default function Companion() {
     } catch (_) {}
   };
 
-  const handleFileSelect = (e) => {
-    const files = Array.from(e.target.files);
-    setAttachments(prev => [...prev, ...files]);
-    if (fileInputRef.current) fileInputRef.current.value = '';
-  };
 
-  const removeAttachment = (idx) => {
-    setAttachments(prev => prev.filter((_, i) => i !== idx));
-  };
 
-  const startRecording = async () => {
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      const recorder = new MediaRecorder(stream);
-      const chunks = [];
-      recorder.ondataavailable = (e) => chunks.push(e.data);
-      recorder.onstop = () => {
-        const blob = new Blob(chunks, { type: 'audio/webm' });
-        const file = new File([blob], `voice_${Date.now()}.webm`, { type: 'audio/webm' });
-        setAttachments(prev => [...prev, file]);
-        stream.getTracks().forEach(t => t.stop());
-      };
-      mediaRecorderRef.current = recorder;
-      recorder.start();
-      setRecording(true);
-    } catch (err) {
-      toast.error('فشل تسجيل الصوت');
-    }
-  };
-
-  const stopRecording = () => {
-    if (mediaRecorderRef.current && recording) {
-      mediaRecorderRef.current.stop();
-      setRecording(false);
-      mediaRecorderRef.current = null;
-    }
-  };
-
-  const sendMessage = async () => {
-    const text = input.trim();
-    if (!text || busy) return;
-    setInput('');
+  const sendMessage = async ({ text, files }) => {
+    if (!text.trim() || busy) return;
     const userMsg = { role: 'user', content: text };
-    if (attachments.length > 0) {
-      userMsg.attachments = attachments.map(f => f.name);
+    if (files.length > 0) {
+      userMsg.attachments = files.map(f => f.name);
     }
     setMessages(m => [...m, userMsg]);
     setBusy(true);
     try {
       const formData = new FormData();
       formData.append('message', text);
-      attachments.forEach(f => formData.append('files', f));
+      files.forEach(f => formData.append('files', f));
 
       const r = await fetch(`${API}/api/companion/chat`, {
         method: 'POST',
@@ -215,7 +174,7 @@ export default function Companion() {
       if (!r.ok) throw new Error(d.detail || 'فشل');
       setMessages(m => [...m, { role: 'assistant', content: d.reply, char: d.from_char }]);
     } catch (e) { toast.error(e.message); }
-    finally { setBusy(false); setAttachments([]); }
+    finally { setBusy(false); }
   };
 
   const promptInstall = async () => {

@@ -1,0 +1,805 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>💬 AutoCoder | Zitex</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #6D28D9 0%, #8B5CF6 100%);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+        
+        /* Unlock Screen */
+        #unlockScreen {
+            background: white;
+            padding: 40px;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            max-width: 450px;
+            width: 100%;
+            text-align: center;
+        }
+        #unlockScreen h1 {
+            font-size: 32px;
+            margin-bottom: 10px;
+            background: linear-gradient(135deg, #6D28D9 0%, #8B5CF6 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+        #unlockScreen p {
+            color: #666;
+            margin-bottom: 30px;
+        }
+        .unlock-input {
+            width: 100%;
+            padding: 15px;
+            border: 2px solid #E5E7EB;
+            border-radius: 12px;
+            font-size: 16px;
+            transition: all 0.3s;
+            margin-bottom: 20px;
+        }
+        .unlock-input:focus {
+            outline: none;
+            border-color: #8B5CF6;
+            box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.1);
+        }
+        .btn-unlock {
+            width: 100%;
+            padding: 15px;
+            background: linear-gradient(135deg, #6D28D9 0%, #8B5CF6 100%);
+            color: white;
+            border: none;
+            border-radius: 12px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.2s;
+        }
+        .btn-unlock:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px rgba(139, 92, 246, 0.3);
+        }
+        .unlock-error {
+            background: #FEE2E2;
+            color: #DC2626;
+            padding: 12px;
+            border-radius: 8px;
+            margin-top: 15px;
+            font-size: 14px;
+        }
+
+        /* Login Screen */
+        #loginScreen {
+            background: white;
+            padding: 40px;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            max-width: 450px;
+            width: 100%;
+            display: none;
+            text-align: center;
+        }
+        #loginScreen h1 {
+            font-size: 32px;
+            margin-bottom: 10px;
+            background: linear-gradient(135deg, #6D28D9 0%, #8B5CF6 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+        #loginScreen p {
+            color: #666;
+            margin-bottom: 30px;
+        }
+        .form-group {
+            margin-bottom: 20px;
+            text-align: right;
+        }
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            color: #333;
+            font-weight: 600;
+        }
+        .form-group input, .form-group textarea {
+            width: 100%;
+            padding: 12px 16px;
+            border: 2px solid #e0e0e0;
+            border-radius: 10px;
+            font-size: 15px;
+            font-family: inherit;
+            transition: border-color 0.3s;
+        }
+        .form-group input:focus, .form-group textarea:focus {
+            outline: none;
+            border-color: #8B5CF6;
+        }
+        .form-group textarea {
+            resize: vertical;
+            min-height: 80px;
+        }
+        .btn-login {
+            width: 100%;
+            padding: 14px;
+            background: linear-gradient(135deg, #6D28D9 0%, #8B5CF6 100%);
+            color: white;
+            border: none;
+            border-radius: 10px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.2s;
+        }
+        .btn-login:hover {
+            transform: translateY(-2px);
+        }
+        .btn-login:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        
+        /* Chat Screen */
+        #chatScreen {
+            display: none;
+            width: 100%;
+            max-width: 900px;
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            height: 90vh;
+            flex-direction: column;
+        }
+        .chat-header {
+            background: linear-gradient(135deg, #6D28D9 0%, #8B5CF6 100%);
+            color: white;
+            padding: 20px;
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            border-radius: 20px 20px 0 0;
+        }
+        .user-avatar {
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            background: white;
+            color: #6D28D9;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 24px;
+            font-weight: bold;
+        }
+        .user-info h2 {
+            font-size: 20px;
+            margin-bottom: 5px;
+        }
+        .user-info p {
+            font-size: 13px;
+            opacity: 0.9;
+        }
+        .chat-messages {
+            flex: 1;
+            overflow-y: auto;
+            padding: 20px;
+            background: #f7f7f7;
+        }
+        .message {
+            margin-bottom: 15px;
+            display: flex;
+            align-items: flex-start;
+            gap: 10px;
+        }
+        .message.user {
+            flex-direction: row-reverse;
+        }
+        .message-avatar {
+            width: 35px;
+            height: 35px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 16px;
+            flex-shrink: 0;
+        }
+        .message.user .message-avatar {
+            background: linear-gradient(135deg, #6D28D9 0%, #8B5CF6 100%);
+            color: white;
+        }
+        .message.assistant .message-avatar {
+            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+            color: white;
+        }
+        .message-bubble {
+            max-width: 70%;
+            padding: 12px 18px;
+            border-radius: 18px;
+            word-wrap: break-word;
+            line-height: 1.5;
+        }
+        .message.user .message-bubble {
+            background: linear-gradient(135deg, #6D28D9 0%, #8B5CF6 100%);
+            color: white;
+        }
+        .message.assistant .message-bubble {
+            background: white;
+            color: #333;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+        .input-area {
+            background: white;
+            padding: 20px;
+            border-top: 1px solid #e0e0e0;
+            border-radius: 0 0 20px 20px;
+        }
+        .input-wrapper {
+            display: flex;
+            gap: 10px;
+            align-items: flex-end;
+        }
+        .input-wrapper textarea {
+            flex: 1;
+            border: 2px solid #e0e0e0;
+            border-radius: 15px;
+            padding: 12px 16px;
+            font-size: 15px;
+            resize: none;
+            font-family: inherit;
+            max-height: 120px;
+        }
+        .input-wrapper textarea:focus {
+            outline: none;
+            border-color: #8B5CF6;
+        }
+        .btn-send {
+            width: 50px;
+            height: 50px;
+            border: none;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #6D28D9 0%, #8B5CF6 100%);
+            color: white;
+            font-size: 20px;
+            cursor: pointer;
+            transition: transform 0.2s;
+            flex-shrink: 0;
+        }
+        .btn-send:hover {
+            transform: scale(1.1);
+        }
+        .btn-attach {
+            width: 45px;
+            height: 45px;
+            border: 2px solid #e0e0e0;
+            border-radius: 50%;
+            background: white;
+            color: #666;
+            font-size: 20px;
+            cursor: pointer;
+            transition: all 0.2s;
+            flex-shrink: 0;
+        }
+        .btn-attach:hover {
+            background: #f7f7f7;
+            border-color: #8B5CF6;
+            color: #8B5CF6;
+            transform: scale(1.05);
+        }
+        .image-preview-container {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 10px;
+            flex-wrap: wrap;
+            padding: 0 5px;
+        }
+        .image-preview {
+            position: relative;
+            width: 70px;
+            height: 70px;
+            border-radius: 8px;
+            overflow: hidden;
+            border: 2px solid #e0e0e0;
+            background: #f0f0f0;
+        }
+        .image-preview img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+        .image-preview .remove-btn {
+            position: absolute;
+            top: 3px;
+            right: 3px;
+            width: 18px;
+            height: 18px;
+            border-radius: 50%;
+            background: rgba(220,38,38,0.9);
+            color: white;
+            border: none;
+            cursor: pointer;
+            font-size: 11px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+        }
+        .message-images {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            margin-top: 8px;
+        }
+        .message-image {
+            max-width: 200px;
+            max-height: 200px;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: transform 0.2s;
+        }
+        .message-image:hover {
+            transform: scale(1.05);
+        }
+        .typing {
+            display: none;
+            padding: 10px 15px;
+            background: white;
+            border-radius: 18px;
+            width: fit-content;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+        .typing.active {
+            display: block;
+        }
+        .typing span {
+            height: 8px;
+            width: 8px;
+            background: #8B5CF6;
+            border-radius: 50%;
+            display: inline-block;
+            margin: 0 2px;
+            animation: bounce 1.4s infinite ease-in-out;
+        }
+        .typing span:nth-child(1) { animation-delay: -0.32s; }
+        .typing span:nth-child(2) { animation-delay: -0.16s; }
+        @keyframes bounce {
+            0%, 80%, 100% { transform: scale(0); }
+            40% { transform: scale(1); }
+        }
+        @media (max-width: 768px) {
+            #chatScreen { height: 100vh; border-radius: 0; }
+            .chat-header { border-radius: 0; }
+            .input-area { border-radius: 0; }
+        }
+    </style>
+</head>
+<body>
+    <!-- Unlock Screen -->
+    <div id="unlockScreen">
+        <h1>🔐 برمجة زيتاكس</h1>
+        <p>أدخل كلمة السر للوصول</p>
+        <form id="unlockForm">
+            <div class="form-group">
+                <label>كلمة السر *</label>
+                <input type="password" id="passcode" required placeholder="أدخل كلمة السر">
+            </div>
+            <button type="submit" class="btn-login">فتح القفل 🔓</button>
+        </form>
+        <p id="unlockError" style="color: #dc2626; margin-top: 10px; display: none;"></p>
+    </div>
+
+    <!-- Login Screen -->
+    <div id="loginScreen" style="display: none;">
+        <h1>💬 AutoCoder</h1>
+        <p>مساعدك الذكي في البرمجة</p>
+        <form id="loginForm">
+            <div class="form-group">
+                <label>الاسم *</label>
+                <input type="text" id="userName" required placeholder="أدخل اسمك">
+            </div>
+            <div class="form-group">
+                <label>الدور</label>
+                <input type="text" id="userRole" placeholder="مطور، مدير، مصمم، إلخ">
+            </div>
+            <div class="form-group">
+                <label>نبذة تعريفية</label>
+                <textarea id="userBio" placeholder="أخبرنا عن نفسك (اختياري)"></textarea>
+            </div>
+            <button type="submit" class="btn-login">دخول 🚀</button>
+        </form>
+    </div>
+
+    <!-- Chat Screen -->
+    <div id="chatScreen">
+        <div class="chat-header">
+            <div class="user-avatar" id="headerAvatar"></div>
+            <div class="user-info">
+                <h2 id="headerName"></h2>
+                <p id="headerRole"></p>
+            </div>
+        </div>
+        <div class="chat-messages" id="chatMessages">
+            <div class="message assistant">
+                <div class="message-avatar">🤖</div>
+                <div class="message-bubble">
+                    مرحباً! أنا AutoCoder، مساعدك الذكي في البرمجة. كيف يمكنني مساعدتك اليوم؟
+                </div>
+            </div>
+        </div>
+        <div class="input-area">
+            <div id="imagePreviewContainer" class="image-preview-container"></div>
+            <div id="recordingIndicator" style="display: none; background: #ef4444; color: white; padding: 8px; border-radius: 8px; text-align: center; font-weight: bold; margin-bottom: 8px;">
+                🎤 جاري التسجيل... اضغط لإيقاف
+            </div>
+            <div class="input-wrapper">
+                <input type="file" id="imageInput" accept="image/*,video/*,audio/*,.pdf,.txt,.json,.js,.py,.html,.css" multiple style="display:none" onchange="handleImageSelect(event)">
+                <button id="voiceBtn" class="btn-attach" onclick="toggleVoiceRecording()" title="تسجيل صوتي" style="background: #ef4444;">🎤</button>
+                <button class="btn-attach" onclick="document.getElementById('imageInput').click()" title="إرفاق ملف">📎</button>
+                <textarea id="messageInput" placeholder="اكتب رسالتك هنا..." rows="1"></textarea>
+                <button class="btn-send" onclick="sendMessage()">➤</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let userData = null;
+        let conversationHistory = [];
+        let selectedImages = [];
+        let sessionToken = null;
+
+        // Wait for DOM to load
+        document.addEventListener('DOMContentLoaded', () => {
+            // Unlock Handler
+            document.getElementById('unlockForm').addEventListener('submit', async (e) => {
+                e.preventDefault();
+                const passcode = document.getElementById('passcode').value.trim();
+                const errorEl = document.getElementById('unlockError');
+                
+                if (!passcode) return;
+                
+                try {
+                    const response = await fetch('/api/autocoder/unlock', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ passcode })
+                    });
+                    
+                    if (!response.ok) {
+                        errorEl.textContent = '❌ كلمة سر خاطئة';
+                        errorEl.style.display = 'block';
+                        return;
+                    }
+                    
+                    const data = await response.json();
+                    sessionToken = data.session_token;
+                    
+                    // Switch to login screen
+                    document.getElementById('unlockScreen').style.display = 'none';
+                    document.getElementById('loginScreen').style.display = 'block';
+                } catch (error) {
+                    errorEl.textContent = '❌ فشل الاتصال بالخادم';
+                    errorEl.style.display = 'block';
+                }
+            });
+
+            // Login Handler
+            document.getElementById('loginForm').addEventListener('submit', (e) => {
+            e.preventDefault();
+            const name = document.getElementById('userName').value.trim();
+            const role = document.getElementById('userRole').value.trim();
+            const bio = document.getElementById('userBio').value.trim();
+            
+            if (!name) return;
+            
+            userData = { name, role, bio };
+            
+            // Update header
+            document.getElementById('headerAvatar').textContent = name.charAt(0).toUpperCase();
+            document.getElementById('headerName').textContent = name;
+            document.getElementById('headerRole').textContent = role || 'مستخدم';
+            
+            // Switch to chat
+            document.getElementById('loginScreen').style.display = 'none';
+            document.getElementById('chatScreen').style.display = 'flex';
+        });
+
+        // Auto-resize textarea
+        document.getElementById('messageInput').addEventListener('input', function() {
+            this.style.height = 'auto';
+            this.style.height = (this.scrollHeight) + 'px';
+        });
+
+        // Send on Enter (Shift+Enter for new line)
+        document.getElementById('messageInput').addEventListener('keydown', function(e) {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                sendMessage();
+            }
+        });
+
+        // Image handling
+        function handleImageSelect(event) {
+            const files = Array.from(event.target.files);
+            if (files.length === 0) return;
+            
+            files.forEach(file => {
+                if (selectedImages.length >= 5) {
+                    alert('يمكنك إرفاق حد أقصى 5 صور/فيديوهات');
+                    return;
+                }
+                
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    selectedImages.push({
+                        file: file,
+                        dataUrl: e.target.result,
+                        type: file.type
+                    });
+                    renderImagePreviews();
+                };
+                reader.readAsDataURL(file);
+            });
+            
+            event.target.value = ''; // Reset input
+        }
+
+        function renderImagePreviews() {
+            const container = document.getElementById('imagePreviewContainer');
+            container.innerHTML = '';
+            
+            selectedImages.forEach((img, index) => {
+                const preview = document.createElement('div');
+                preview.className = 'image-preview';
+                
+                let contentEl;
+                if (img.type.startsWith('video/')) {
+                    contentEl = document.createElement('video');
+                    contentEl.src = img.dataUrl;
+                    contentEl.muted = true;
+                    contentEl.style.maxWidth = '100px';
+                } else if (img.type.startsWith('audio/')) {
+                    contentEl = document.createElement('div');
+                    contentEl.textContent = '🎤';
+                    contentEl.style.fontSize = '40px';
+                    contentEl.style.padding = '20px';
+                } else if (img.type.startsWith('image/')) {
+                    contentEl = document.createElement('img');
+                    contentEl.src = img.dataUrl;
+                } else {
+                    // Other files (pdf, txt, etc)
+                    contentEl = document.createElement('div');
+                    contentEl.textContent = '📄';
+                    contentEl.style.fontSize = '40px';
+                    contentEl.style.padding = '20px';
+                }
+                
+                const removeBtn = document.createElement('button');
+                removeBtn.className = 'remove-btn';
+                removeBtn.textContent = '×';
+                removeBtn.onclick = () => removeImage(index);
+                
+                preview.appendChild(contentEl);
+                preview.appendChild(removeBtn);
+                container.appendChild(preview);
+            });
+        }
+
+        function removeImage(index) {
+            selectedImages.splice(index, 1);
+            renderImagePreviews();
+        }
+
+        function addMessage(sender, text, images = []) {
+            const messagesDiv = document.getElementById('chatMessages');
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `message ${sender}`;
+            
+            const avatar = document.createElement('div');
+            avatar.className = 'message-avatar';
+            avatar.textContent = sender === 'user' ? userData.name.charAt(0).toUpperCase() : '🤖';
+            
+            const bubble = document.createElement('div');
+            bubble.className = 'message-bubble';
+            
+            // Add text
+            if (text) {
+                const textNode = document.createElement('div');
+                textNode.textContent = text;
+                bubble.appendChild(textNode);
+            }
+            
+            // Add images
+            if (images && images.length > 0) {
+                const imagesContainer = document.createElement('div');
+                imagesContainer.className = 'message-images';
+                images.forEach(imgUrl => {
+                    const img = document.createElement('img');
+                    img.src = imgUrl;
+                    img.className = 'message-image';
+                    img.onclick = () => window.open(imgUrl, '_blank');
+                    imagesContainer.appendChild(img);
+                });
+                bubble.appendChild(imagesContainer);
+            }
+            
+            messageDiv.appendChild(avatar);
+            messageDiv.appendChild(bubble);
+            messagesDiv.appendChild(messageDiv);
+            messagesDiv.scrollTop = messagesDiv.scrollHeight;
+        }
+
+        function showTyping() {
+            const messagesDiv = document.getElementById('chatMessages');
+            const typingDiv = document.createElement('div');
+            typingDiv.id = 'typingIndicator';
+            typingDiv.className = 'message assistant';
+            typingDiv.innerHTML = `
+                <div class="message-avatar">🤖</div>
+                <div class="typing active">
+                    <span></span><span></span><span></span>
+                </div>
+            `;
+            messagesDiv.appendChild(typingDiv);
+            messagesDiv.scrollTop = messagesDiv.scrollHeight;
+        }
+
+        function hideTyping() {
+            const typing = document.getElementById('typingIndicator');
+            if (typing) typing.remove();
+        }
+
+        async function sendMessage() {
+            const input = document.getElementById('messageInput');
+            const message = input.value.trim();
+            if (!message && selectedImages.length === 0) return;
+            
+            // Prepare FormData
+            const formData = new FormData();
+            formData.append('message', message || 'أنظر للصورة/الفيديو المرفق');
+            
+            // Add attachments (backend expects 'attachments' key)
+            selectedImages.forEach(img => {
+                formData.append('attachments', img.file);
+            });
+            
+            // Add user message with images preview
+            addMessage('user', message, selectedImages.map(img => img.dataUrl));
+            
+            // Clear inputs
+            input.value = '';
+            input.style.height = 'auto';
+            selectedImages = [];
+            renderImagePreviews();
+            
+            // Show typing
+            showTyping();
+            
+            try {
+                const response = await fetch('/api/autocoder/chat', {
+                    method: 'POST',
+                    headers: {
+                        'X-Autocoder-Token': sessionToken
+                    },
+                    body: formData
+                });
+                
+                hideTyping();
+                
+                if (!response.ok) {
+                    addMessage('assistant', '❌ عذراً، حدث خطأ في الاتصال');
+                    return;
+                }
+                
+                const reader = response.body.getReader();
+                const decoder = new TextDecoder();
+                let assistantMessage = '';
+                let messageElement = null;
+                
+                while (true) {
+                    const {done, value} = await reader.read();
+                    if (done) break;
+                    
+                    const chunk = decoder.decode(value);
+                    const lines = chunk.split('\n');
+                    
+                    for (const line of lines) {
+                        if (line.startsWith('data: ')) {
+                            const data = line.slice(6);
+                            if (data === '[DONE]') continue;
+                            
+                            try {
+                                const parsed = JSON.parse(data);
+                                if (parsed.content) {
+                                    assistantMessage += parsed.content;
+                                    
+                                    if (!messageElement) {
+                                        const messagesDiv = document.getElementById('chatMessages');
+                                        messageElement = document.createElement('div');
+                                        messageElement.className = 'message assistant';
+                                        messageElement.innerHTML = `
+                                            <div class="message-avatar">🤖</div>
+                                            <div class="message-bubble"></div>
+                                        `;
+                                        messagesDiv.appendChild(messageElement);
+                                    }
+                                    
+                                    messageElement.querySelector('.message-bubble').textContent = assistantMessage;
+                                    messagesDiv.scrollTop = messagesDiv.scrollHeight;
+                                }
+                            } catch (e) {}
+                        }
+                    }
+                }
+                
+            } catch (error) {
+                hideTyping();
+                addMessage('assistant', '❌ فشل الاتصال بالخادم');
+                console.error(error);
+            }
+        }
+
+        // Voice Recording Functionality
+        let mediaRecorder = null;
+        let audioChunks = [];
+        let isRecording = false;
+
+        async function toggleVoiceRecording() {
+            if (!isRecording) {
+                // Start recording
+                try {
+                    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                    mediaRecorder = new MediaRecorder(stream);
+                    audioChunks = [];
+
+                    mediaRecorder.ondataavailable = (event) => {
+                        audioChunks.push(event.data);
+                    };
+
+                    mediaRecorder.onstop = async () => {
+                        const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
+                        const audioFile = new File([audioBlob], `voice_${Date.now()}.webm`, { type: 'audio/webm' });
+                        
+                        // Add to selectedImages array (will be sent as attachment)
+                        const reader = new FileReader();
+                        reader.onload = (e) => {
+                            selectedImages.push({
+                                file: audioFile,
+                                dataUrl: '🎤 تسجيل صوتي',
+                                type: 'audio/webm'
+                            });
+                            renderImagePreviews();
+                        };
+                        reader.readAsDataURL(audioFile);
+
+                        // Stop all tracks
+                        stream.getTracks().forEach(track => track.stop());
+                    };
+
+                    mediaRecorder.start();
+                    isRecording = true;
+                    document.getElementById('recordingIndicator').style.display = 'block';
+                    document.getElementById('voiceBtn').style.background = '#22c55e';
+                    document.getElementById('voiceBtn').textContent = '⏹️';
+                } catch (error) {
+                    alert('❌ فشل الوصول للميكروفون: ' + error.message);
+                }
+            } else {
+                // Stop recording
+                mediaRecorder.stop();
+                isRecording = false;
+                document.getElementById('recordingIndicator').style.display = 'none';
+                document.getElementById('voiceBtn').style.background = '#ef4444';
+                document.getElementById('voiceBtn').textContent = '🎤';
+            }
+        }
+
+        }); // End DOMContentLoaded
+    </script>
+</body>
+</html>
