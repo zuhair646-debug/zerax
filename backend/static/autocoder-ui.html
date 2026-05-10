@@ -297,8 +297,10 @@
         let userData = null;
         let conversationHistory = [];
 
-        // Login Handler
-        document.getElementById('loginForm').addEventListener('submit', (e) => {
+        // Wait for DOM to load
+        document.addEventListener('DOMContentLoaded', () => {
+            // Login Handler
+            document.getElementById('loginForm').addEventListener('submit', (e) => {
             e.preventDefault();
             const name = document.getElementById('userName').value.trim();
             const role = document.getElementById('userRole').value.trim();
@@ -412,6 +414,7 @@
                 console.error(error);
             }
         }
+        }); // End DOMContentLoaded
     </script>
 </body>
 </html>
