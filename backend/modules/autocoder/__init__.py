@@ -47,7 +47,7 @@ from .tools_extra import (
     EXTRA_ANTHROPIC_TOOLS, EXTRA_TOOL_DEFS,
     extra_summarize, extra_preview,
 )
-from .llm_providers import stream_via_groq, stream_via_gemini
+from .llm_providers import stream_via_groq, stream_via_gemini, stream_via_openai
 from .codebase_atlas import build_atlas_for_prompt
 
 logger = logging.getLogger(__name__)
@@ -1319,6 +1319,14 @@ def create_autocoder_router(db, get_current_user, require_owner):
                     "model": "gemini-2.5-flash",
                     "get_key_url": "https://aistudio.google.com/apikey",
                 },
+                "openai": {
+                    "available": bool((os.environ.get("OPENAI_API_KEY", "") or
+                                       os.environ.get("OPENAI_DIRECT_KEY", "")).strip()),
+                    "label": "GPT-5.5 (Codex)",
+                    "cost": "💎 مدفوع — الأقوى للبرمجة",
+                    "model": "gpt-5.5",
+                    "get_key_url": "https://platform.openai.com/api-keys",
+                },
             },
         }
 
@@ -1796,6 +1804,18 @@ async def _autocoder_stream(messages: List[Dict[str, Any]], model: str = "claude
         gem_key = os.environ.get("GEMINI_API_KEY", "").strip()
         async for evt in stream_via_gemini(
             anthropic_msgs, gem_key, sys_prompt_full, ANTHROPIC_TOOLS,
+            execute_autocoder_tool, _trim_args_for_ui,
+            _summarize, _preview_for_ui, _trim_result_for_llm,
+        ):
+            yield evt
+        return
+
+    if model == "openai" or model == "gpt5":
+        # GPT-5.5 — premium for coding. Accepts OPENAI_API_KEY or OPENAI_DIRECT_KEY.
+        oai_key = (os.environ.get("OPENAI_API_KEY", "") or
+                   os.environ.get("OPENAI_DIRECT_KEY", "")).strip()
+        async for evt in stream_via_openai(
+            anthropic_msgs, oai_key, sys_prompt_full, ANTHROPIC_TOOLS,
             execute_autocoder_tool, _trim_args_for_ui,
             _summarize, _preview_for_ui, _trim_result_for_llm,
         ):

@@ -67,6 +67,7 @@ const TOOL_LABEL = {
 };
 
 const MODEL_OPTIONS = [
+  { id: 'openai', label: 'GPT-5.5 (الأقوى للبرمجة)', cost: 'مدفوع — الأقوى', tone: 'violet', icon: Sparkles },
   { id: 'claude', label: 'Claude Sonnet 4.5', cost: 'مدفوع — الأذكى', tone: 'amber', icon: Sparkles },
   { id: 'groq', label: 'Llama 3.3 70B', cost: 'مجاني — سريع جداً', tone: 'emerald', icon: Zap },
   { id: 'gemini', label: 'Gemini 2.5 Flash', cost: 'مجاني — قدرة كبيرة', tone: 'sky', icon: Sparkles },
@@ -1015,6 +1016,7 @@ function ModelSelector({ value, onChange, open, setOpen, keyStatus }) {
     amber: 'bg-amber-500/10 border-amber-400/30 text-amber-300',
     emerald: 'bg-emerald-500/10 border-emerald-400/30 text-emerald-300',
     sky: 'bg-sky-500/10 border-sky-400/30 text-sky-300',
+    violet: 'bg-violet-500/10 border-violet-400/30 text-violet-300',
   }[tone] || 'bg-white/5 border-white/15 text-white/70');
 
   return (

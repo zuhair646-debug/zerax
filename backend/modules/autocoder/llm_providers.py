@@ -23,6 +23,8 @@ GROQ_URL = "https://api.groq.com/openai/v1/chat/completions"
 GROQ_MODEL = "llama-3.3-70b-versatile"
 GEMINI_BASE = "https://generativelanguage.googleapis.com/v1beta/models"
 GEMINI_MODEL = "gemini-2.5-flash"
+OPENAI_URL = "https://api.openai.com/v1/chat/completions"
+OPENAI_MODEL = "gpt-5.5"  # Latest GPT-5 — strongest model for coding (April 2026)
 MAX_HISTORY_TURNS = 10
 MAX_ITERATIONS = 60
 
@@ -288,6 +290,192 @@ async def stream_via_groq(
 
     yield {"type": "text", "content": "\n(وصلت لحد iterations)"}
     yield {"type": "done"}
+
+
+# ════════════════════════════════════════════════════════════════════════
+# OpenAI streamer (GPT-5.5 — premium for serious coding)
+# Uses same OpenAI tool-calling shape as Groq, with two key differences:
+#   1. max_completion_tokens instead of max_tokens
+#   2. No temperature support on GPT-5+ (model is fixed)
+# ════════════════════════════════════════════════════════════════════════
+async def stream_via_openai(
+    anthropic_msgs: List[Dict[str, Any]],
+    api_key: str,
+    system_prompt: str,
+    tools_anthropic: List[Dict[str, Any]],
+    execute_tool: Callable[[str, Dict[str, Any]], Awaitable[Dict[str, Any]]],
+    trim_args_for_ui: Callable[[Dict[str, Any]], Dict[str, Any]],
+    summarize: Callable[[str, Dict[str, Any]], str],
+    preview: Callable[[str, Dict[str, Any]], str],
+    trim_result_for_llm: Callable[[Dict[str, Any]], Dict[str, Any]],
+):
+    if not api_key:
+        yield {"type": "error",
+               "message": "OPENAI_API_KEY غير مضبوط في Railway. أضف مفتاحك من platform.openai.com/api-keys."}
+        return
+
+    if len(anthropic_msgs) > MAX_HISTORY_TURNS:
+        anthropic_msgs = anthropic_msgs[-MAX_HISTORY_TURNS:]
+
+    msgs = anthropic_msgs_to_openai(anthropic_msgs, system_prompt)
+    openai_tools = anthropic_tools_to_openai(tools_anthropic)
+
+    for iteration in range(MAX_ITERATIONS):
+        try:
+            text_buffer = ""
+            tool_calls_buffer: Dict[int, Dict[str, Any]] = {}
+            usage_data: Dict[str, int] = {}
+            finish_reason = None
+
+            async with httpx.AsyncClient(timeout=240) as c:
+                async with c.stream(
+                    "POST",
+                    OPENAI_URL,
+                    headers={
+                        "Authorization": f"Bearer {api_key}",
+                        "Content-Type": "application/json",
+                        "Accept": "text/event-stream",
+                    },
+                    json={
+                        "model": OPENAI_MODEL,
+                        "messages": msgs,
+                        "tools": openai_tools,
+                        "tool_choice": "auto",
+                        "max_completion_tokens": 8192,
+                        "stream": True,
+                        "stream_options": {"include_usage": True},
+                    },
+                ) as resp:
+                    if resp.status_code != 200:
+                        body_text = ""
+                        try:
+                            body_text = (await resp.aread()).decode("utf-8", errors="replace")[:600]
+                        except Exception:
+                            body_text = "(no body)"
+                        yield {"type": "error",
+                               "message": _humanize_openai_error(resp.status_code, body_text)}
+                        return
+
+                    async for line in resp.aiter_lines():
+                        if not line or not line.startswith("data: "):
+                            continue
+                        payload = line[6:].strip()
+                        if payload == "[DONE]":
+                            break
+                        try:
+                            chunk = json.loads(payload)
+                        except Exception:
+                            continue
+
+                        u = chunk.get("usage")
+                        if u:
+                            usage_data = u
+
+                        choices = chunk.get("choices") or []
+                        if not choices:
+                            continue
+                        delta = choices[0].get("delta") or {}
+                        finish_reason = choices[0].get("finish_reason") or finish_reason
+
+                        text_delta = delta.get("content")
+                        if text_delta:
+                            text_buffer += text_delta
+                            yield {"type": "text", "content": text_delta}
+
+                        for tcd in (delta.get("tool_calls") or []):
+                            idx = tcd.get("index", 0)
+                            slot = tool_calls_buffer.setdefault(idx, {
+                                "id": "", "type": "function",
+                                "function": {"name": "", "arguments": ""},
+                            })
+                            if tcd.get("id"):
+                                slot["id"] = tcd["id"]
+                            fn = tcd.get("function") or {}
+                            if fn.get("name"):
+                                slot["function"]["name"] += fn["name"]
+                            if fn.get("arguments"):
+                                slot["function"]["arguments"] += fn["arguments"]
+        except httpx.ReadTimeout:
+            yield {"type": "error", "message": "OpenAI استغرق وقت أطول. حاول مرة ثانية."}
+            return
+        except Exception as e:
+            yield {"type": "error", "message": f"OpenAI exception: {str(e)[:240]}"}
+            return
+
+        if iteration == 0 and usage_data:
+            in_tok = usage_data.get("prompt_tokens", 0)
+            out_tok = usage_data.get("completion_tokens", 0)
+            # GPT-5.5 pricing: roughly $3/1M input, $15/1M output (as of April 2026)
+            cost = in_tok * 3 / 1_000_000 + out_tok * 15 / 1_000_000
+            yield {
+                "type": "usage",
+                "input": in_tok, "output": out_tok,
+                "cached_read": 0, "cost_usd": round(cost, 4),
+                "provider": "openai",
+            }
+
+        tool_calls = list(tool_calls_buffer.values())
+        assistant_entry: Dict[str, Any] = {"role": "assistant", "content": text_buffer or ""}
+        if tool_calls:
+            assistant_entry["tool_calls"] = tool_calls
+        msgs.append(assistant_entry)
+
+        if not tool_calls or finish_reason == "stop":
+            yield {"type": "done"}
+            return
+
+        for tc in tool_calls:
+            fn = tc.get("function") or {}
+            name = fn.get("name", "")
+            raw_args = fn.get("arguments")
+            try:
+                args = json.loads(raw_args) if raw_args else {}
+                if not isinstance(args, dict):
+                    args = {}
+            except Exception as e:
+                yield {"type": "tool", "status": "done", "name": name or "?",
+                       "ok": False, "summary": f"فشل parse args: {e}"}
+                msgs.append({
+                    "role": "tool",
+                    "tool_call_id": tc.get("id", ""),
+                    "name": name,
+                    "content": json.dumps({"ok": False, "error": "invalid JSON arguments"}),
+                })
+                continue
+            yield {"type": "tool", "status": "calling", "name": name,
+                   "args": trim_args_for_ui(args)}
+            result = await execute_tool(name, args)
+            yield {"type": "tool", "status": "done", "name": name,
+                   "ok": result.get("ok", False),
+                   "summary": summarize(name, result),
+                   "preview": preview(name, result)}
+            msgs.append({
+                "role": "tool",
+                "tool_call_id": tc.get("id", ""),
+                "name": name,
+                "content": json.dumps(trim_result_for_llm(result), ensure_ascii=False)[:14000],
+            })
+
+    yield {"type": "text", "content": "\n(وصلت لحد iterations)"}
+    yield {"type": "done"}
+
+
+def _humanize_openai_error(status_code: int, body_text: str) -> str:
+    """Convert OpenAI HTTP errors to clear Arabic messages."""
+    body_lower = body_text.lower()
+    if status_code == 429:
+        if "insufficient_quota" in body_lower or "exceeded your current quota" in body_lower:
+            return "💰 رصيد OpenAI انتهى. أضف رصيد من platform.openai.com/settings/billing أو بدّل الموديل."
+        return "⏱️ تجاوزت حد الطلبات على OpenAI. استنّى ~30 ثانية."
+    if status_code in (401, 403):
+        return "🔑 OPENAI_API_KEY غير صالح. تأكد من المفتاح في Railway."
+    if status_code == 400 and ("model" in body_lower and "not exist" in body_lower):
+        return "🔍 الموديل المطلوب غير متاح في حسابك. أوصي بـClaude أو Gemini كبديل."
+    if status_code == 413 or "context" in body_lower:
+        return "📏 المحادثة كبرت. ابدأ محادثة جديدة (زر '+ جديدة')."
+    if status_code >= 500:
+        return f"🔄 OpenAI يواجه مشكلة مؤقتة (HTTP {status_code}). حاول بعد دقيقة."
+    return f"OpenAI HTTP {status_code}: {body_text[:200]}"
 
 
 # ────────────────────────────────────────────────────────────────────
