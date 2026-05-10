@@ -1287,9 +1287,9 @@ def create_autocoder_router(db, get_current_user, require_owner):
                 },
                 "gemini": {
                     "available": gemini_set,
-                    "label": "Gemini 2.0 Flash",
+                    "label": "Gemini 2.5 Flash",
                     "cost": "🆓 مجاني — قدرة كبيرة",
-                    "model": "gemini-2.0-flash-exp",
+                    "model": "gemini-2.5-flash",
                     "get_key_url": "https://aistudio.google.com/apikey",
                 },
             },

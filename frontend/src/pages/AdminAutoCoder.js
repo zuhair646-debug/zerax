@@ -69,7 +69,7 @@ const TOOL_LABEL = {
 const MODEL_OPTIONS = [
   { id: 'claude', label: 'Claude Sonnet 4.5', cost: 'مدفوع — الأذكى', tone: 'amber', icon: Sparkles },
   { id: 'groq', label: 'Llama 3.3 70B', cost: 'مجاني — سريع جداً', tone: 'emerald', icon: Zap },
-  { id: 'gemini', label: 'Gemini 2.0 Flash', cost: 'مجاني — قدرة كبيرة', tone: 'sky', icon: Sparkles },
+  { id: 'gemini', label: 'Gemini 2.5 Flash', cost: 'مجاني — قدرة كبيرة', tone: 'sky', icon: Sparkles },
 ];
 
 // Map common backend error messages to friendlier guidance
