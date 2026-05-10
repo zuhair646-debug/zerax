@@ -40,6 +40,10 @@ class SessionResponse(BaseModel):
 
 # Dependency to get current user
 async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security)):
+    # Allow demo mode for testing
+    if credentials.credentials == "demo_token":
+        return {'user_id': 'demo_user'}
+    
     try:
         payload = jwt.decode(credentials.credentials, JWT_SECRET, algorithms=['HS256'])
         user_id = payload.get('user_id')
@@ -170,8 +174,8 @@ async def send_message(
                 path = os.path.join(upload_dir, safe_name)
                 with open(path, "wb") as f:
                     shutil.copyfileobj(att.file, f)
-                # Return URL that can be accessed via /static/uploads/
-                attachment_urls.append(f"/static/uploads/{safe_name}")
+                # Return URL that can be accessed via /backend-static/uploads/
+                attachment_urls.append(f"/backend-static/uploads/{safe_name}")
     
     try:
         result = await ai_assistant.process_message(
