@@ -1347,18 +1347,51 @@ def create_autocoder_router(db, get_current_user, require_owner):
         return {"ok": True}
 
     # ---- Chat (gated by session token) ----
+    # Accepts BOTH application/json (legacy frontend) AND multipart/form-data (with file attachments).
+    # This dual-mode keeps backwards compatibility with older frontend builds.
     @router.post("/chat")
     async def chat(
-        message: str = Form(...),
-        conversation_id: Optional[str] = Form(None),
-        model: Optional[str] = Form("claude"),
-        attachments: List[UploadFile] = File(default=[]),
-        request: Request = None,
+        request: Request,
         owner=Depends(require_owner),
         x_autocoder_token: Optional[str] = Header(None),
     ):
         if not await _check_session_token(x_autocoder_token or ""):
             raise HTTPException(401, "session locked or expired — unlock first")
+
+        # Auto-detect content type to support both JSON and multipart bodies
+        content_type = (request.headers.get("content-type") or "").lower()
+        message: str = ""
+        conversation_id: Optional[str] = None
+        model: Optional[str] = "claude"
+        attachments: List[UploadFile] = []
+
+        if "application/json" in content_type:
+            try:
+                body = await request.json()
+            except Exception:
+                raise HTTPException(400, "invalid JSON body")
+            message = (body.get("message") or "").strip()
+            conversation_id = body.get("conversation_id")
+            model = body.get("model") or "claude"
+        else:
+            # multipart/form-data (or x-www-form-urlencoded)
+            try:
+                form = await request.form()
+            except Exception:
+                raise HTTPException(400, "invalid form body")
+            message = (form.get("message") or "").strip()
+            conversation_id = form.get("conversation_id") or None
+            model = form.get("model") or "claude"
+            for key in ("attachments",):
+                vals = form.getlist(key) if hasattr(form, "getlist") else []
+                for v in vals:
+                    if isinstance(v, UploadFile):
+                        attachments.append(v)
+
+        if not message:
+            raise HTTPException(422, "message field required")
+        if len(message) > 32000:
+            raise HTTPException(422, "message too long (max 32000 chars)")
 
         conv_id = conversation_id or str(uuid.uuid4())
         conv = await db.autocoder_conversations.find_one(
