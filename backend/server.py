@@ -751,54 +751,92 @@ async def transcribe_audio(
         raise HTTPException(status_code=503, detail="ميزة تحويل الصوت للنص معطلة مؤقتاً. ستتوفر قريباً!")
     
     emergent_key = os.environ.get('EMERGENT_LLM_KEY')
-    if not emergent_key:
+    openai_direct_key = os.environ.get('OPENAI_DIRECT_KEY') or os.environ.get('OPENAI_API_KEY')
+    if not emergent_key and not openai_direct_key:
         raise HTTPException(status_code=400, detail="خدمة التحويل الصوتي غير متاحة")
     
     # Check file size (max 25MB)
     content = await audio.read()
     if len(content) > 25 * 1024 * 1024:
         raise HTTPException(status_code=400, detail="حجم الملف أكبر من 25MB")
+    if len(content) < 200:
+        raise HTTPException(status_code=400, detail="ملف الصوت فارغ أو قصير جداً")
     
-    # Check file type
-    if audio.content_type and not any(t in audio.content_type for t in ['audio', 'webm', 'ogg']):
+    # Check file type. Some browsers send webm/mp4/aac/ogg or application/octet-stream for blobs.
+    allowed_hints = ['audio', 'webm', 'ogg', 'mp4', 'mpeg', 'mp3', 'aac', 'wav', 'octet-stream']
+    if audio.content_type and not any(t in audio.content_type.lower() for t in allowed_hints):
         raise HTTPException(status_code=400, detail=f"نوع الملف غير مدعوم: {audio.content_type}")
     
+    import tempfile
+    import os as os_module
+    suffix_map = {
+        'audio/mp4': '.mp4',
+        'audio/aac': '.aac',
+        'audio/ogg': '.ogg',
+        'audio/mpeg': '.mp3',
+        'audio/wav': '.wav',
+        'audio/webm': '.webm',
+    }
+    suffix = suffix_map.get((audio.content_type or '').split(';')[0].lower(), None)
+    if not suffix:
+        name = (audio.filename or '').lower()
+        suffix = '.mp4' if name.endswith('.mp4') else '.aac' if name.endswith('.aac') else '.ogg' if name.endswith('.ogg') else '.mp3' if name.endswith('.mp3') else '.wav' if name.endswith('.wav') else '.webm'
+    tmp_file_path = None
     try:
-        from emergentintegrations.llm.openai import OpenAISpeechToText
-        import tempfile
-        
-        with tempfile.NamedTemporaryFile(suffix='.webm', delete=False) as tmp_file:
+        with tempfile.NamedTemporaryFile(suffix=suffix, delete=False) as tmp_file:
             tmp_file.write(content)
             tmp_file_path = tmp_file.name
-        
-        stt = OpenAISpeechToText(api_key=emergent_key)
-        
-        with open(tmp_file_path, 'rb') as audio_file:
-            response = await stt.transcribe(
-                file=audio_file,
-                model="whisper-1",
-                language=language,
-                response_format="json"
-            )
-        
-        import os as os_module
-        os_module.unlink(tmp_file_path)
-        
+
+        text = ''
+        if openai_direct_key:
+            async with httpx.AsyncClient(timeout=60.0) as client_http:
+                with open(tmp_file_path, 'rb') as audio_file:
+                    files = {
+                        'file': (audio.filename or f'audio{suffix}', audio_file, audio.content_type or 'audio/webm'),
+                        'model': (None, 'whisper-1'),
+                        'language': (None, language or 'ar'),
+                        'response_format': (None, 'json'),
+                    }
+                    resp = await client_http.post(
+                        'https://api.openai.com/v1/audio/transcriptions',
+                        headers={'Authorization': f'Bearer {openai_direct_key}'},
+                        files=files,
+                    )
+            if resp.status_code >= 400:
+                raise HTTPException(status_code=500, detail=f"فشل تحويل الصوت: {resp.text[:300]}")
+            text = (resp.json().get('text') or '').strip()
+        else:
+            from emergentintegrations.llm.openai import OpenAISpeechToText
+            stt = OpenAISpeechToText(api_key=emergent_key)
+            with open(tmp_file_path, 'rb') as audio_file:
+                response = await stt.transcribe(
+                    file=audio_file,
+                    model="whisper-1",
+                    language=language,
+                    response_format="json"
+                )
+            text = (getattr(response, 'text', '') or '').strip()
+
         await log_activity(
             current_user['user_id'],
             "stt_transcribed",
             "create",
-            f"Transcribed audio: {response.text[:50]}...",
-            {"language": language, "chars": len(response.text)}
+            f"Transcribed audio: {text[:50]}...",
+            {"language": language, "chars": len(text), "content_type": audio.content_type}
         )
         
         return {
-            "text": response.text,
+            "text": text,
             "language": language
         }
         
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"خطأ في تحويل الصوت: {str(e)}")
+    finally:
+        if tmp_file_path and os_module.path.exists(tmp_file_path):
+            os_module.unlink(tmp_file_path)
 
 # ============== IMAGE GENERATION & EDITING ==============
 

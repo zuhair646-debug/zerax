@@ -13,6 +13,7 @@ const HIDDEN_ROUTES = [
 ];
 
 const HIDDEN_PREFIXES = [
+  '/build-from-zero',  // FreeBuild has its own recorder; global voice listener interferes with it
   '/sites/',          // public site preview
   '/client/',         // client subscription site
   '/driver/',         // driver dashboard

@@ -102,6 +102,7 @@ const FreeBuild = () => {
   const [attachments, setAttachments] = useState([]);
   const [isRecording, setIsRecording] = useState(false);
   const [recordingSeconds, setRecordingSeconds] = useState(0);
+  const [transcribing, setTranscribing] = useState(false);
   const chatEndRef = useRef(null);
   const fileInputRef = useRef(null);
   const mediaRecorderRef = useRef(null);
@@ -254,8 +255,44 @@ const FreeBuild = () => {
     setAttachments((prev) => prev.filter((_, i) => i !== idx));
   };
 
+  const transcribeVoiceBlob = async (blob, filename) => {
+    const token = localStorage.getItem('token');
+    if (!token) throw new Error('يلزم تسجيل الدخول');
+    const fd = new FormData();
+    fd.append('audio', blob, filename);
+    fd.append('language', 'ar');
+    const res = await fetch(`${API}/api/stt/transcribe`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}` },
+      body: fd,
+    });
+    const data = await parseApiResponse(res);
+    return (data.text || '').trim();
+  };
+
+  const handleRecordedBlob = async (blob, type, ext) => {
+    if (blob.size < 800) {
+      toast.error('التسجيل قصير جداً — اضغط وتكلم ثانيتين على الأقل');
+      return;
+    }
+    const filename = `voice-${Date.now()}.${ext}`;
+    setTranscribing(true);
+    try {
+      const text = await transcribeVoiceBlob(blob, filename);
+      if (!text) throw new Error('لم يرجع نص من التسجيل');
+      setInput((prev) => `${prev}${prev.trim() ? ' ' : ''}${text}`);
+      toast.success('تم تحويل التسجيل إلى نص');
+    } catch (e) {
+      const file = new File([blob], filename, { type: type || 'audio/webm' });
+      setAttachments((prev) => [...prev, file].slice(0, 5));
+      toast.error(`تعذر تحويل الصوت لنص، أرفقته كملف صوتي: ${e.message}`);
+    } finally {
+      setTranscribing(false);
+    }
+  };
+
   const startRecording = async () => {
-    if (isRecording || sending) return;
+    if (isRecording || sending || transcribing) return;
     if (!navigator.mediaDevices?.getUserMedia || !window.MediaRecorder) {
       toast.error('متصفحك ما يدعم تسجيل الصوت');
       return;
@@ -282,17 +319,11 @@ const FreeBuild = () => {
         const type = recorder.mimeType || 'audio/webm';
         const blob = new Blob(audioChunksRef.current, { type });
         audioChunksRef.current = [];
-        if (blob.size < 800) {
-          toast.error('التسجيل قصير جداً');
-          return;
-        }
         const ext = type.includes('mp4') ? 'mp4' : type.includes('aac') ? 'aac' : type.includes('ogg') ? 'ogg' : 'webm';
-        const file = new File([blob], `voice-${Date.now()}.${ext}`, { type: type || 'audio/webm' });
-        setAttachments((prev) => [...prev, file].slice(0, 5));
-        toast.success('تم إرفاق التسجيل الصوتي');
+        handleRecordedBlob(blob, type, ext);
       };
       mediaRecorderRef.current = recorder;
-      recorder.start();
+      recorder.start(1000);
       setIsRecording(true);
       setRecordingSeconds(0);
       recordingTimerRef.current = setInterval(() => {
@@ -308,7 +339,7 @@ const FreeBuild = () => {
       if (e.name === 'NotAllowedError') {
         toast.error('اسمح للميكروفون من إعدادات المتصفح');
       } else {
-        toast.error('خطأ في التسجيل: ' + (e.message || e.name || 'غير معروف'));
+        toast.error('خطأ في فتح الميكروفون: ' + (e.message || e.name || 'غير معروف'));
       }
       console.error('FreeBuild recording error', e);
     }
@@ -670,12 +701,12 @@ const FreeBuild = () => {
               <button
                 type="button"
                 onClick={isRecording ? stopRecording : startRecording}
-                disabled={sending}
+                disabled={sending || transcribing}
                 className={`h-[42px] min-w-[42px] px-3 rounded-xl border flex items-center justify-center gap-1.5 disabled:opacity-50 ${isRecording ? 'bg-rose-500/20 border-rose-400/50 text-rose-200 animate-pulse' : 'bg-white/5 border-white/10 text-white/70 hover:text-rose-300 hover:border-rose-400/40'}`}
-                title={isRecording ? 'إيقاف التسجيل' : 'تسجيل صوت'}
+                title={isRecording ? 'إيقاف التسجيل وتحويله لنص' : 'تسجيل صوت'}
                 data-testid="freebuild-record-btn"
               >
-                {isRecording ? <Square className="w-4 h-4" /> : <Mic className="w-4 h-4" />}
+                {transcribing ? <Loader2 className="w-4 h-4 animate-spin" /> : isRecording ? <Square className="w-4 h-4" /> : <Mic className="w-4 h-4" />}
                 {isRecording && <span className="text-[11px] font-bold">{recordingSeconds}s</span>}
               </button>
               <textarea
