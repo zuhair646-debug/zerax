@@ -21,7 +21,7 @@ class WebsiteProject(BaseModel):
     business_type: str = "company"   # store, restaurant, company, portfolio, real_estate, saas, blog
     template: str = "blank"
     lang: str = "ar"
-    direction: str = "rtl"
+    is_rtl: bool = True
     theme: Dict[str, Any] = Field(default_factory=lambda: {
         "primary": "#FFD700",
         "secondary": "#1a1f3a",
