@@ -14,7 +14,7 @@
  */
 import React, { useState, useEffect, useRef, useCallback, lazy, Suspense } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Send, Loader2, User, MessageCircle, Bell, Plus, Trash2, Settings, LogOut, Share2, Mic } from 'lucide-react';
+import { Send, Loader2, User, MessageCircle, Bell, Plus, Trash2, Settings, LogOut, Share2, Mic, Upload, X } from 'lucide-react';
 import { toast } from 'sonner';
 
 const VoiceStage = lazy(() => import('@/components/VoiceStage'));
@@ -51,8 +51,12 @@ export default function Companion() {
   const [onboardingStep, setOnboardingStep] = useState(0);
   const [installPromptShown, setInstallPromptShown] = useState(false);
   const [voiceOpen, setVoiceOpen] = useState(false);
+  const [attachments, setAttachments] = useState([]);
+  const [recording, setRecording] = useState(false);
   const scrollRef = useRef(null);
   const deferredPromptRef = useRef(null);
+  const fileInputRef = useRef(null);
+  const mediaRecorderRef = useRef(null);
 
   const tokenH = () => ({ Authorization: `Bearer ${localStorage.getItem('token')}` });
 
@@ -149,23 +153,69 @@ export default function Companion() {
     } catch (_) {}
   };
 
+  const handleFileSelect = (e) => {
+    const files = Array.from(e.target.files);
+    setAttachments(prev => [...prev, ...files]);
+    if (fileInputRef.current) fileInputRef.current.value = '';
+  };
+
+  const removeAttachment = (idx) => {
+    setAttachments(prev => prev.filter((_, i) => i !== idx));
+  };
+
+  const startRecording = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const recorder = new MediaRecorder(stream);
+      const chunks = [];
+      recorder.ondataavailable = (e) => chunks.push(e.data);
+      recorder.onstop = () => {
+        const blob = new Blob(chunks, { type: 'audio/webm' });
+        const file = new File([blob], `voice_${Date.now()}.webm`, { type: 'audio/webm' });
+        setAttachments(prev => [...prev, file]);
+        stream.getTracks().forEach(t => t.stop());
+      };
+      mediaRecorderRef.current = recorder;
+      recorder.start();
+      setRecording(true);
+    } catch (err) {
+      toast.error('فشل تسجيل الصوت');
+    }
+  };
+
+  const stopRecording = () => {
+    if (mediaRecorderRef.current && recording) {
+      mediaRecorderRef.current.stop();
+      setRecording(false);
+      mediaRecorderRef.current = null;
+    }
+  };
+
   const sendMessage = async () => {
     const text = input.trim();
     if (!text || busy) return;
     setInput('');
-    setMessages(m => [...m, { role: 'user', content: text }]);
+    const userMsg = { role: 'user', content: text };
+    if (attachments.length > 0) {
+      userMsg.attachments = attachments.map(f => f.name);
+    }
+    setMessages(m => [...m, userMsg]);
     setBusy(true);
     try {
+      const formData = new FormData();
+      formData.append('message', text);
+      attachments.forEach(f => formData.append('files', f));
+
       const r = await fetch(`${API}/api/companion/chat`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', ...tokenH() },
-        body: JSON.stringify({ message: text }),
+        headers: tokenH(),
+        body: formData,
       });
       const d = await r.json();
       if (!r.ok) throw new Error(d.detail || 'فشل');
       setMessages(m => [...m, { role: 'assistant', content: d.reply, char: d.from_char }]);
     } catch (e) { toast.error(e.message); }
-    finally { setBusy(false); }
+    finally { setBusy(false); setAttachments([]); }
   };
 
   const promptInstall = async () => {
@@ -300,20 +350,47 @@ export default function Companion() {
                 </div>
               )}
             </div>
-            <div className="p-3 border-t border-white/5 flex gap-2">
-              <input
-                value={input}
-                onChange={(e) => setInput(e.target.value)}
-                onKeyDown={(e) => { if (e.key === 'Enter') sendMessage(); }}
-                placeholder="اكتب لها..."
-                className="flex-1 px-4 py-3 bg-black/40 border border-white/10 focus:border-amber-400 rounded-full text-sm outline-none"
-                data-testid="companion-input"
-              />
-              <button onClick={sendMessage} disabled={busy || !input.trim()}
-                className="w-12 h-12 rounded-full bg-gradient-to-br from-amber-500 to-yellow-500 flex items-center justify-center text-black disabled:opacity-50"
-                data-testid="companion-send">
-                <Send className="w-5 h-5" />
-              </button>
+            <div className="border-t border-white/5">
+              {attachments.length > 0 && (
+                <div className="p-2 flex flex-wrap gap-1.5">
+                  {attachments.map((file, i) => (
+                    <div key={i} className="flex items-center gap-1 px-2 py-1 bg-white/5 rounded text-xs">
+                      <span className="truncate max-w-[120px]">{file.name}</span>
+                      <button onClick={() => removeAttachment(i)} className="text-red-400 hover:text-red-300">
+                        <X className="w-3 h-3" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+              <div className="p-3 flex gap-2">
+                <button
+                  onClick={() => fileInputRef.current?.click()}
+                  className="w-10 h-10 rounded-full bg-white/5 hover:bg-white/10 flex items-center justify-center"
+                  title="إرفاق ملف">
+                  <Upload className="w-4 h-4" />
+                </button>
+                <button
+                  onClick={recording ? stopRecording : startRecording}
+                  className={`w-10 h-10 rounded-full flex items-center justify-center ${recording ? 'bg-red-500/20 text-red-400' : 'bg-white/5 hover:bg-white/10'}`}
+                  title={recording ? 'إيقاف التسجيل' : 'تسجيل صوتي'}>
+                  <Mic className="w-4 h-4" />
+                </button>
+                <input
+                  value={input}
+                  onChange={(e) => setInput(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === 'Enter') sendMessage(); }}
+                  placeholder="اكتب لها..."
+                  className="flex-1 px-4 py-3 bg-black/40 border border-white/10 focus:border-amber-400 rounded-full text-sm outline-none"
+                  data-testid="companion-input"
+                />
+                <button onClick={sendMessage} disabled={busy || !input.trim()}
+                  className="w-12 h-12 rounded-full bg-gradient-to-br from-amber-500 to-yellow-500 flex items-center justify-center text-black disabled:opacity-50"
+                  data-testid="companion-send">
+                  <Send className="w-5 h-5" />
+                </button>
+                <input type="file" multiple ref={fileInputRef} onChange={handleFileSelect} className="hidden" />
+              </div>
             </div>
           </>
         )}
