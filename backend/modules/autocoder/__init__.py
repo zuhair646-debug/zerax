@@ -1781,8 +1781,30 @@ async def _autocoder_stream(messages: List[Dict[str, Any]], model: str = "claude
 
     # Mode 1: direct Anthropic SDK with native tool calling
     if keyinfo["mode"] == "direct":
+        billing_failed = False
         async for evt in _stream_direct_anthropic(anthropic_msgs, keyinfo["key"], env_banner):
+            # Detect billing/quota failures so we can auto-fallback to Groq
+            if evt.get("type") == "error":
+                msg = (evt.get("message") or "").lower()
+                if "رصيد" in evt.get("message", "") or "credit" in msg or "billing" in msg:
+                    billing_failed = True
+                    yield {"type": "text",
+                           "content": "\n\n⚡ Claude رصيده انتهى. أحوّلك تلقائياً لـLlama (Groq) المجاني...\n\n"}
+                    break
             yield evt
+
+        if billing_failed:
+            groq_key = os.environ.get("GROQ_API_KEY", "").strip()
+            if groq_key:
+                async for evt in stream_via_groq(
+                    anthropic_msgs, groq_key, sys_prompt_full, ANTHROPIC_TOOLS,
+                    execute_autocoder_tool, _trim_args_for_ui,
+                    _summarize, _preview_for_ui, _trim_result_for_llm,
+                ):
+                    yield evt
+            else:
+                yield {"type": "error",
+                       "message": "Claude رصيده انتهى ومافي GROQ_API_KEY للاحتياط. أضف Groq key مجاني من console.groq.com/keys."}
         return
 
     # Mode 2: emergentintegrations fallback (text-blob tool parsing — legacy)
@@ -1832,12 +1854,13 @@ async def _build_env_truth_banner() -> str:
 
 
 async def _stream_direct_anthropic(anthropic_msgs: List[Dict[str, Any]], api_key: str, env_banner: str = ""):
-    """Uses official anthropic SDK with native multi-tool calling.
+    """Uses official anthropic SDK with NATIVE STREAMING + multi-tool calling.
     
-    Cost optimizations:
-    1. History pruning: keep only last MAX_HISTORY user/assistant turns
-    2. Prompt caching: system prompt + tools cached (90% cheaper for re-use)
-    3. Reduced max_tokens output (4096 instead of 8192)
+    Key behaviors:
+    - Real SSE streaming (chars appear as Claude generates them, not chunked post-hoc)
+    - History pruning (last 8 turns)
+    - Prompt caching (system + tools cached, 90% cheaper on reuse)
+    - max_tokens=8192 (long enough for thorough analysis + multi-tool turns)
     """
     try:
         from anthropic import AsyncAnthropic
@@ -1847,26 +1870,17 @@ async def _stream_direct_anthropic(anthropic_msgs: List[Dict[str, Any]], api_key
 
     client = AsyncAnthropic(api_key=api_key)
 
-    # ── OPTIMIZATION 1: History pruning ──
-    # Keep only the last 6 turns (3 user + 3 assistant pairs) to keep context small.
-    # The LLM still sees the conversation flow but old details are dropped.
-    MAX_HISTORY_TURNS = 6
+    # History pruning — keep last 8 turns
+    MAX_HISTORY_TURNS = 8
     if len(anthropic_msgs) > MAX_HISTORY_TURNS:
         anthropic_msgs = anthropic_msgs[-MAX_HISTORY_TURNS:]
 
-    # ── OPTIMIZATION 2: Prompt caching ──
-    # Mark system prompt + tools with cache_control so Anthropic stores them.
-    # Subsequent requests in next 5 minutes pay 10% of normal price for these.
+    # Prompt caching for system + tools (90% cheaper on subsequent calls)
     sys_prompt_text = AUTOCODER_SYSTEM_PROMPT + (env_banner or "")
     system_blocks = [
-        {
-            "type": "text",
-            "text": sys_prompt_text,
-            "cache_control": {"type": "ephemeral"},
-        }
+        {"type": "text", "text": sys_prompt_text, "cache_control": {"type": "ephemeral"}}
     ]
 
-    # Cache the tools schema too (rarely changes)
     cached_tools = list(ANTHROPIC_TOOLS)
     if cached_tools:
         cached_tools[-1] = {
@@ -1876,75 +1890,138 @@ async def _stream_direct_anthropic(anthropic_msgs: List[Dict[str, Any]], api_key
 
     msgs = list(anthropic_msgs)
 
-    for iteration in range(60):  # ── AUTONOMOUS MODE: raised from 20 → 60 ──
+    for iteration in range(60):
+        text_parts: List[str] = []
+        tool_uses: List[Dict[str, Any]] = []
+        assistant_blocks: List[Dict[str, Any]] = []
+        # Per-tool-block accumulator (tool_use_delta streams JSON in pieces)
+        current_tool: Optional[Dict[str, Any]] = None
+        current_text: Optional[Dict[str, Any]] = None
+        usage_in_tok = 0
+        usage_out_tok = 0
+        cache_read = 0
+        cache_write = 0
+        stop_reason = None
+
         try:
-            resp = await client.messages.create(
+            async with client.messages.stream(
                 model="claude-sonnet-4-5",
-                max_tokens=4096,  # ── OPT 3: lowered from 8192 ──
+                max_tokens=8192,  # raised back from 4096 — let Claude breathe
                 system=system_blocks,
                 tools=cached_tools,
                 messages=msgs,
-            )
+            ) as stream:
+                async for event in stream:
+                    et = getattr(event, "type", None)
+
+                    if et == "content_block_start":
+                        block = event.content_block
+                        btype = getattr(block, "type", None)
+                        if btype == "text":
+                            current_text = {"type": "text", "text": ""}
+                        elif btype == "tool_use":
+                            current_tool = {
+                                "type": "tool_use",
+                                "id": getattr(block, "id", ""),
+                                "name": getattr(block, "name", ""),
+                                "input_json": "",
+                            }
+
+                    elif et == "content_block_delta":
+                        delta = event.delta
+                        dtype = getattr(delta, "type", None)
+                        if dtype == "text_delta" and current_text is not None:
+                            txt = getattr(delta, "text", "") or ""
+                            current_text["text"] += txt
+                            # Real streaming — yield each delta immediately
+                            yield {"type": "text", "content": txt}
+                        elif dtype == "input_json_delta" and current_tool is not None:
+                            current_tool["input_json"] += getattr(delta, "partial_json", "") or ""
+
+                    elif et == "content_block_stop":
+                        if current_text is not None:
+                            text_parts.append(current_text["text"])
+                            assistant_blocks.append(current_text)
+                            current_text = None
+                        elif current_tool is not None:
+                            try:
+                                inp = json.loads(current_tool["input_json"]) if current_tool["input_json"] else {}
+                                if not isinstance(inp, dict):
+                                    inp = {}
+                            except Exception:
+                                inp = {}
+                            tu = {
+                                "id": current_tool["id"],
+                                "name": current_tool["name"],
+                                "input": inp,
+                            }
+                            tool_uses.append(tu)
+                            assistant_blocks.append({
+                                "type": "tool_use",
+                                "id": tu["id"],
+                                "name": tu["name"],
+                                "input": tu["input"],
+                            })
+                            current_tool = None
+
+                    elif et == "message_delta":
+                        delta = event.delta
+                        sr = getattr(delta, "stop_reason", None)
+                        if sr:
+                            stop_reason = sr
+                        u = getattr(event, "usage", None)
+                        if u:
+                            usage_out_tok = getattr(u, "output_tokens", 0) or usage_out_tok
+
+                    elif et == "message_start":
+                        msg = getattr(event, "message", None)
+                        u = getattr(msg, "usage", None) if msg else None
+                        if u:
+                            usage_in_tok = getattr(u, "input_tokens", 0)
+                            cache_read = getattr(u, "cache_read_input_tokens", 0) or 0
+                            cache_write = getattr(u, "cache_creation_input_tokens", 0) or 0
         except Exception as e:
-            yield {"type": "error", "message": f"anthropic api: {str(e)[:240]}"}
+            err_str = str(e)
+            low = err_str.lower()
+            if "credit_balance" in low or "billing" in low:
+                yield {"type": "error", "message": "💰 رصيد Anthropic منخفض. بدّل الموديل لـLlama (Groq) من الزر أعلى الشاشة — مجاني."}
+            elif "rate" in low or "429" in low:
+                yield {"type": "error", "message": "⏱️ تجاوزت حد الطلبات على Anthropic. استنّى ~30 ثانية ثم حاول."}
+            elif "overloaded" in low or "529" in low:
+                yield {"type": "error", "message": "🔄 خوادم Anthropic مزدحمة لحظياً. حاول بعد دقيقة."}
+            elif "invalid" in low and "api" in low and "key" in low:
+                yield {"type": "error", "message": "🔑 ANTHROPIC_API_KEY غير صحيح. تأكد منه في Railway → Variables. أو بدّل لـLlama (Groq) من الزر أعلى."}
+            elif "authentication" in low or "401" in low:
+                yield {"type": "error", "message": "🔑 مفتاح Anthropic مرفوض. تحقق من ANTHROPIC_API_KEY في Railway."}
+            else:
+                yield {"type": "error", "message": f"anthropic: {err_str[:240]}"}
             return
 
-        # Track usage so we can show cost to the user
-        usage = getattr(resp, "usage", None)
-        if usage and iteration == 0:
-            in_tok = getattr(usage, "input_tokens", 0)
-            out_tok = getattr(usage, "output_tokens", 0)
-            cache_read = getattr(usage, "cache_read_input_tokens", 0) or 0
-            cache_write = getattr(usage, "cache_creation_input_tokens", 0) or 0
-            # Pricing (Claude Sonnet 4.5): $3/1M input, $15/1M output, $0.30/1M cached read, $3.75/1M cached write
+        # Emit usage event (first iteration only)
+        if iteration == 0 and usage_in_tok:
             cost = (
-                (in_tok - cache_read - cache_write) * 3 / 1_000_000
+                (usage_in_tok - cache_read - cache_write) * 3 / 1_000_000
                 + cache_read * 0.30 / 1_000_000
                 + cache_write * 3.75 / 1_000_000
-                + out_tok * 15 / 1_000_000
+                + usage_out_tok * 15 / 1_000_000
             )
             yield {
                 "type": "usage",
-                "input": in_tok, "output": out_tok,
+                "input": usage_in_tok, "output": usage_out_tok,
                 "cached_read": cache_read, "cached_write": cache_write,
                 "cost_usd": round(cost, 4),
+                "provider": "claude",
             }
 
-        # Stream the text portion of this response
-        text_parts: List[str] = []  # noqa: F841
-        tool_uses: List[Dict[str, Any]] = []
-        assistant_blocks: List[Dict[str, Any]] = []  # for history
-
-        for block in resp.content:
-            btype = getattr(block, "type", None)
-            if btype == "text":
-                txt = getattr(block, "text", "") or ""
-                text_parts.append(txt)
-                assistant_blocks.append({"type": "text", "text": txt})
-                # stream chunked
-                for i in range(0, len(txt), 40):
-                    yield {"type": "text", "content": txt[i:i + 40]}
-                    await asyncio.sleep(0.01)
-            elif btype == "tool_use":
-                tu = {
-                    "id": block.id,
-                    "name": block.name,
-                    "input": dict(block.input) if block.input else {},
-                }
-                tool_uses.append(tu)
-                assistant_blocks.append({
-                    "type": "tool_use", "id": tu["id"], "name": tu["name"], "input": tu["input"],
-                })
-
-        # Persist assistant turn (text + tool_use blocks) into history
         if assistant_blocks:
             msgs.append({"role": "assistant", "content": assistant_blocks})
 
-        if resp.stop_reason == "end_turn" or not tool_uses:
+        # Stop conditions
+        if stop_reason == "end_turn" or not tool_uses:
             yield {"type": "done"}
             return
 
-        # Execute all tool calls in parallel — Claude supports multi-tool turns
+        # Execute tool calls (sequential, in order)
         tool_results_blocks = []
         for tu in tool_uses:
             yield {"type": "tool", "status": "calling", "name": tu["name"],
@@ -1962,7 +2039,7 @@ async def _stream_direct_anthropic(anthropic_msgs: List[Dict[str, Any]], api_key
 
         msgs.append({"role": "user", "content": tool_results_blocks})
 
-    yield {"type": "text", "content": "\n(وصلت لـ40 دورة — أكمل بما عندي. اطلب تكملة لو تبي.)"}
+    yield {"type": "text", "content": "\n(وصلت لـ60 دورة. اطلب تكملة لو تبي.)"}
     yield {"type": "done"}
 
 
