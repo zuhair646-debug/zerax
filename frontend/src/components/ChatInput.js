@@ -1,163 +1,144 @@
 import { useState, useRef, useEffect } from 'react';
-import { Paperclip, Mic, Send, Image as ImageIcon, Video, Smile, X, StopCircle } from 'lucide-react';
+import { Paperclip, Mic, MicOff, Smile, Send, X, Image as ImageIcon, Video } from 'lucide-react';
 import { toast } from 'sonner';
 
-const API = process.env.REACT_APP_BACKEND_URL;
+const EMOJIS = ['😊', '😂', '❤️', '👍', '🎉', '🔥', '💡', '✨', '🚀', '💪', '🙏', '👏'];
 
-// Emoji picker بسيط
-const EMOJI_LIST = ['😊', '😂', '❤️', '👍', '🎉', '🔥', '💡', '✨', '🚀', '💪', '🙏', '👏'];
+export default function ChatInput({ 
+  onSend, 
+  placeholder = "اكتب رسالتك...", 
+  disabled = false,
+  supportFiles = true,
+  supportVoice = true,
+  supportEmojis = true,
+  value = '',
+  onChange = null
+}) {
+  const [message, setMessage] = useState(value);
+  const [files, setFiles] = useState([]);
 
-export default function ChatInput({ onSendMessage, onFileAttach, placeholder = "اكتب رسالتك..." }) {
-  const [message, setMessage] = useState('');
-  const [showEmoji, setShowEmoji] = useState(false);
+  // Sync with external value
+  useEffect(() => {
+    if (value !== undefined && value !== message) {
+      setMessage(value);
+    }
+  }, [value]);
   const [recording, setRecording] = useState(false);
-  const [attachedFiles, setAttachedFiles] = useState([]);
+  const [showEmojis, setShowEmojis] = useState(false);
+  const [recognizing, setRecognizing] = useState(false);
+  
   const fileInputRef = useRef(null);
   const mediaRecorderRef = useRef(null);
-  const audioChunksRef = useRef([]);
   const recognitionRef = useRef(null);
 
-  // تهيئة Speech Recognition
+  // Web Speech API للتعرف على الصوت
   useEffect(() => {
+    if (!supportVoice) return;
+    
     if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
       const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
       recognitionRef.current = new SpeechRecognition();
       recognitionRef.current.lang = 'ar-SA';
-      recognitionRef.current.continuous = false;
-      recognitionRef.current.interimResults = false;
+      recognitionRef.current.continuous = true;
+      recognitionRef.current.interimResults = true;
 
       recognitionRef.current.onresult = (event) => {
-        const transcript = event.results[0][0].transcript;
-        setMessage(prev => prev + ' ' + transcript);
-        toast.success('تم تحويل الصوت إلى نص');
+        let finalTranscript = '';
+        let interimTranscript = '';
+
+        for (let i = event.resultIndex; i < event.results.length; i++) {
+          const transcript = event.results[i][0].transcript;
+          if (event.results[i].isFinal) {
+            finalTranscript += transcript + ' ';
+          } else {
+            interimTranscript += transcript;
+          }
+        }
+
+        if (finalTranscript) {
+          setMessage(prev => prev + finalTranscript);
+        }
       };
 
       recognitionRef.current.onerror = (event) => {
         console.error('Speech recognition error:', event.error);
-        toast.error('فشل التعرف على الصوت');
+        setRecognizing(false);
         setRecording(false);
+        if (event.error !== 'no-speech') {
+          toast.error('خطأ في التعرف على الصوت');
+        }
       };
 
       recognitionRef.current.onend = () => {
-        setRecording(false);
-      };
-    }
-  }, []);
-
-  // بدء التسجيل الصوتي
-  const startRecording = async () => {
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      
-      // بدء التسجيل
-      mediaRecorderRef.current = new MediaRecorder(stream);
-      audioChunksRef.current = [];
-
-      mediaRecorderRef.current.ondataavailable = (event) => {
-        audioChunksRef.current.push(event.data);
-      };
-
-      mediaRecorderRef.current.onstop = async () => {
-        const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
-        
-        // إرسال الصوت للـbackend للتحويل
-        const formData = new FormData();
-        formData.append('audio', audioBlob, 'recording.webm');
-
-        try {
-          const token = localStorage.getItem('token');
-          const response = await fetch(`${API}/api/speech/transcribe`, {
-            method: 'POST',
-            headers: { Authorization: `Bearer ${token}` },
-            body: formData
-          });
-
-          if (response.ok) {
-            const data = await response.json();
-            setMessage(prev => prev + ' ' + data.text);
-            toast.success('تم تحويل الصوت إلى نص');
-          } else {
-            throw new Error('فشل التحويل');
-          }
-        } catch (error) {
-          console.error('Transcription error:', error);
-          // Fallback: استخدام Web Speech API
-          if (recognitionRef.current) {
-            recognitionRef.current.start();
-          } else {
-            toast.error('التعرف على الصوت غير مدعوم في متصفحك');
-          }
+        setRecognizing(false);
+        if (recording) {
+          recognitionRef.current.start();
         }
-
-        stream.getTracks().forEach(track => track.stop());
       };
-
-      mediaRecorderRef.current.start();
-      setRecording(true);
-      toast.info('جاري التسجيل... اضغط مرة أخرى للإيقاف');
-
-    } catch (error) {
-      console.error('Error accessing microphone:', error);
-      toast.error('لا يمكن الوصول للميكروفون');
     }
-  };
+  }, [supportVoice, recording]);
 
-  // إيقاف التسجيل
-  const stopRecording = () => {
-    if (mediaRecorderRef.current && recording) {
-      mediaRecorderRef.current.stop();
-      setRecording(false);
-    }
-  };
-
-  // التعامل مع اختيار الملفات
   const handleFileSelect = (e) => {
-    const files = Array.from(e.target.files);
-    const newFiles = files.map(file => ({
-      file,
-      preview: file.type.startsWith('image/') ? URL.createObjectURL(file) : null,
-      type: file.type.startsWith('image/') ? 'image' : 'video'
-    }));
-    
-    setAttachedFiles(prev => [...prev, ...newFiles]);
-    toast.success(`تم إرفاق ${files.length} ملف`);
-  };
-
-  // حذف ملف مرفق
-  const removeFile = (index) => {
-    setAttachedFiles(prev => {
-      const newFiles = [...prev];
-      if (newFiles[index].preview) {
-        URL.revokeObjectURL(newFiles[index].preview);
+    const selectedFiles = Array.from(e.target.files);
+    const validFiles = selectedFiles.filter(file => {
+      const isImage = file.type.startsWith('image/');
+      const isVideo = file.type.startsWith('video/');
+      const isValidSize = file.size <= 50 * 1024 * 1024; // 50MB
+      
+      if (!isImage && !isVideo) {
+        toast.error(`${file.name}: نوع الملف غير مدعوم`);
+        return false;
       }
-      newFiles.splice(index, 1);
-      return newFiles;
+      if (!isValidSize) {
+        toast.error(`${file.name}: الحجم أكبر من 50MB`);
+        return false;
+      }
+      return true;
     });
+
+    setFiles(prev => [...prev, ...validFiles]);
   };
 
-  // إضافة emoji
-  const addEmoji = (emoji) => {
-    setMessage(prev => prev + emoji);
-    setShowEmoji(false);
+  const removeFile = (index) => {
+    setFiles(prev => prev.filter((_, i) => i !== index));
   };
 
-  // إرسال الرسالة
-  const handleSend = () => {
-    if (!message.trim() && attachedFiles.length === 0) {
-      toast.error('اكتب رسالة أو أرفق ملف');
-      return;
+  const toggleRecording = async () => {
+    if (!recording) {
+      try {
+        if (recognitionRef.current) {
+          recognitionRef.current.start();
+          setRecognizing(true);
+        }
+        setRecording(true);
+        toast.success('بدأ التسجيل...');
+      } catch (error) {
+        console.error('Error starting recording:', error);
+        toast.error('فشل بدء التسجيل');
+      }
+    } else {
+      if (recognitionRef.current) {
+        recognitionRef.current.stop();
+      }
+      setRecording(false);
+      setRecognizing(false);
+      toast.success('توقف التسجيل');
     }
-
-    onSendMessage({
-      text: message.trim(),
-      files: attachedFiles.map(f => f.file)
-    });
-
-    setMessage('');
-    setAttachedFiles([]);
   };
 
-  // Enter للإرسال
+  const handleSend = () => {
+    if (!message.trim() && files.length === 0) return;
+    
+    onSend({ 
+      text: message.trim(), 
+      files: files 
+    });
+    
+    setMessage('');
+    setFiles([]);
+    setShowEmojis(false);
+  };
+
   const handleKeyPress = (e) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
@@ -165,129 +146,154 @@ export default function ChatInput({ onSendMessage, onFileAttach, placeholder = "
     }
   };
 
+  const addEmoji = (emoji) => {
+    setMessage(prev => prev + emoji);
+  };
+
   return (
-    <div className="border-t border-white/10 bg-zinc-900/50 backdrop-blur p-4">
+    <div className="relative">
       {/* معاينة الملفات المرفقة */}
-      {attachedFiles.length > 0 && (
-        <div className="flex gap-2 mb-3 overflow-x-auto pb-2">
-          {attachedFiles.map((item, index) => (
-            <div key={index} className="relative flex-shrink-0">
-              {item.type === 'image' ? (
-                <img 
-                  src={item.preview} 
-                  alt="preview" 
-                  className="w-20 h-20 object-cover rounded-lg border border-white/20"
-                />
-              ) : (
-                <div className="w-20 h-20 bg-zinc-800 rounded-lg border border-white/20 flex items-center justify-center">
-                  <Video className="w-8 h-8 text-amber-400" />
-                </div>
-              )}
+      {files.length > 0 && (
+        <div className="mb-3 flex flex-wrap gap-2">
+          {files.map((file, index) => (
+            <div key={index} className="relative group">
+              <div className="bg-zinc-800/50 rounded-lg p-2 pr-8 border border-white/10 flex items-center gap-2">
+                {file.type.startsWith('image/') ? (
+                  <ImageIcon className="w-4 h-4 text-amber-400" />
+                ) : (
+                  <Video className="w-4 h-4 text-amber-400" />
+                )}
+                <span className="text-sm text-white/70 max-w-[150px] truncate">
+                  {file.name}
+                </span>
+              </div>
               <button
                 onClick={() => removeFile(index)}
-                className="absolute -top-2 -right-2 bg-red-500 rounded-full p-1 hover:bg-red-600"
+                className="absolute top-1 left-1 bg-red-500 hover:bg-red-600 rounded-full p-0.5 opacity-0 group-hover:opacity-100 transition-opacity"
               >
-                <X className="w-3 h-3" />
+                <X className="w-3 h-3 text-white" />
               </button>
             </div>
           ))}
         </div>
       )}
 
-      {/* حقل الإدخال والأزرار */}
-      <div className="flex items-end gap-2">
-        {/* أزرار الإجراءات */}
-        <div className="flex gap-1">
-          {/* زر الصور/فيديو */}
-          <button
-            onClick={() => fileInputRef.current?.click()}
-            className="p-2.5 bg-white/5 hover:bg-white/10 rounded-xl transition-colors"
-            title="إرفاق صورة أو فيديو"
-          >
-            <Paperclip className="w-5 h-5 text-gray-400" />
-          </button>
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept="image/*,video/*"
-            multiple
-            onChange={handleFileSelect}
-            className="hidden"
-          />
-
-          {/* زر التسجيل الصوتي */}
-          <button
-            onClick={recording ? stopRecording : startRecording}
-            className={`p-2.5 rounded-xl transition-colors ${
-              recording 
-                ? 'bg-red-500 hover:bg-red-600 animate-pulse' 
-                : 'bg-white/5 hover:bg-white/10'
-            }`}
-            title={recording ? 'إيقاف التسجيل' : 'تسجيل صوتي'}
-          >
-            {recording ? (
-              <StopCircle className="w-5 h-5 text-white" />
-            ) : (
-              <Mic className="w-5 h-5 text-gray-400" />
-            )}
-          </button>
-
-          {/* زر Emoji */}
-          <div className="relative">
-            <button
-              onClick={() => setShowEmoji(!showEmoji)}
-              className="p-2.5 bg-white/5 hover:bg-white/10 rounded-xl transition-colors"
-              title="إضافة emoji"
-            >
-              <Smile className="w-5 h-5 text-gray-400" />
-            </button>
-
-            {showEmoji && (
-              <div className="absolute bottom-full mb-2 left-0 bg-zinc-800 border border-white/10 rounded-xl p-2 shadow-xl">
-                <div className="grid grid-cols-6 gap-1">
-                  {EMOJI_LIST.map((emoji, i) => (
-                    <button
-                      key={i}
-                      onClick={() => addEmoji(emoji)}
-                      className="text-2xl hover:bg-white/10 rounded p-1 transition-colors"
-                    >
-                      {emoji}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
+      {/* لوحة الإيموجي */}
+      {showEmojis && supportEmojis && (
+        <div className="absolute bottom-full mb-2 left-0 bg-zinc-900 border border-white/10 rounded-xl p-3 shadow-2xl">
+          <div className="grid grid-cols-6 gap-2">
+            {EMOJIS.map((emoji, i) => (
+              <button
+                key={i}
+                onClick={() => addEmoji(emoji)}
+                className="text-2xl hover:scale-125 transition-transform"
+              >
+                {emoji}
+              </button>
+            ))}
           </div>
         </div>
+      )}
 
-        {/* حقل النص */}
-        <textarea
-          value={message}
-          onChange={(e) => setMessage(e.target.value)}
-          onKeyPress={handleKeyPress}
-          placeholder={placeholder}
-          rows={1}
-          className="flex-1 bg-black/40 border border-white/15 rounded-xl px-4 py-3 
-                     focus:border-amber-400 outline-none resize-none min-h-[44px] max-h-32"
-          style={{ direction: 'rtl' }}
-        />
+      {/* حقل الإدخال */}
+      <div className="flex items-end gap-2">
+        <div className="flex-1 bg-black/40 border border-white/15 rounded-2xl p-3 focus-within:border-amber-400 transition-colors">
+          <div className="flex items-end gap-2">
+            {/* أزرار الإضافات */}
+            <div className="flex items-center gap-1 pb-1">
+              {/* رفع ملفات */}
+              {supportFiles && (
+                <>
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept="image/*,video/*"
+                    multiple
+                    onChange={handleFileSelect}
+                    className="hidden"
+                  />
+                  <button
+                    onClick={() => fileInputRef.current?.click()}
+                    disabled={disabled}
+                    className="p-2 hover:bg-white/10 rounded-lg transition-colors disabled:opacity-50"
+                    title="إضافة صورة أو فيديو"
+                  >
+                    <Paperclip className="w-5 h-5 text-white/70" />
+                  </button>
+                </>
+              )}
+
+              {/* تسجيل صوتي */}
+              {supportVoice && (
+                <button
+                  onClick={toggleRecording}
+                  disabled={disabled}
+                  className={`p-2 rounded-lg transition-all disabled:opacity-50 ${
+                    recording 
+                      ? 'bg-red-500 hover:bg-red-600 animate-pulse' 
+                      : 'hover:bg-white/10'
+                  }`}
+                  title={recording ? 'إيقاف التسجيل' : 'بدء التسجيل الصوتي'}
+                >
+                  {recording ? (
+                    <MicOff className="w-5 h-5 text-white" />
+                  ) : (
+                    <Mic className="w-5 h-5 text-white/70" />
+                  )}
+                </button>
+              )}
+
+              {/* إيموجي */}
+              {supportEmojis && (
+                <button
+                  onClick={() => setShowEmojis(!showEmojis)}
+                  disabled={disabled}
+                  className={`p-2 rounded-lg transition-colors disabled:opacity-50 ${
+                    showEmojis ? 'bg-white/10' : 'hover:bg-white/10'
+                  }`}
+                  title="إضافة إيموجي"
+                >
+                  <Smile className="w-5 h-5 text-white/70" />
+                </button>
+              )}
+            </div>
+
+            {/* حقل النص */}
+            <textarea
+              value={message}
+              onChange={(e) => {
+                setMessage(e.target.value);
+                if (onChange) onChange(e.target.value);
+              }}
+              onKeyPress={handleKeyPress}
+              placeholder={recording ? 'جاري التسجيل...' : placeholder}
+              disabled={disabled}
+              rows={1}
+              className="flex-1 bg-transparent text-white placeholder:text-white/40 outline-none resize-none min-h-[32px] max-h-[120px]"
+              style={{ 
+                direction: 'rtl',
+                fieldSizing: 'content'
+              }}
+            />
+          </div>
+        </div>
 
         {/* زر الإرسال */}
         <button
           onClick={handleSend}
-          disabled={!message.trim() && attachedFiles.length === 0}
-          className="p-2.5 bg-amber-500 hover:bg-amber-400 disabled:bg-white/5 
-                     disabled:text-gray-600 rounded-xl transition-colors"
-          title="إرسال"
+          disabled={disabled || (!message.trim() && files.length === 0)}
+          className="bg-amber-500 hover:bg-amber-400 disabled:bg-zinc-700 disabled:cursor-not-allowed p-3 rounded-2xl transition-colors"
         >
-          <Send className="w-5 h-5" />
+          <Send className="w-5 h-5 text-black" />
         </button>
       </div>
 
+      {/* مؤشر التسجيل */}
       {recording && (
-        <p className="text-xs text-red-400 mt-2 text-center animate-pulse">
-          🔴 جاري التسجيل... اضغط على زر الميكروفون للإيقاف
-        </p>
+        <div className="absolute -top-8 right-0 text-xs text-amber-400 flex items-center gap-2">
+          <span className="w-2 h-2 bg-red-500 rounded-full animate-pulse" />
+          جاري التسجيل والتحويل للنص...
+        </div>
       )}
     </div>
   );

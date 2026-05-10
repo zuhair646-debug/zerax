@@ -1,14 +1,13 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
-import { Textarea } from '@/components/ui/textarea';
 import {
   Send, Loader2, Sparkles, ArrowLeft, Trash2,
   Wrench, CheckCircle2, Clock, Plus, MessageSquare,
   Eye, Code2, Download, ExternalLink, RefreshCw,
-  Mic, Upload, X,
 } from 'lucide-react';
 import { Toaster, toast } from 'sonner';
 import { useNavigate } from 'react-router-dom';
+import ChatInput from '@/components/ChatInput';
 
 const API = process.env.REACT_APP_BACKEND_URL;
 
@@ -26,11 +25,7 @@ export default function AIAgent() {
   const [previewKey, setPreviewKey] = useState(0);
   const [previewMode, setPreviewMode] = useState('preview'); // preview | mobile
   const [showSidebar, setShowSidebar] = useState(false);
-  const [recording, setRecording] = useState(false);
-  const [attachments, setAttachments] = useState([]);
   const scrollRef = useRef(null);
-  const fileInputRef = useRef(null);
-  const mediaRecorderRef = useRef(null);
   const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
 
   useEffect(() => {
@@ -103,43 +98,9 @@ export default function AIAgent() {
     } catch (e) { toast.error('فشل التحميل'); }
   };
 
-  const handleFileAttach = () => fileInputRef.current?.click();
-  const handleFileChange = (e) => {
-    const files = Array.from(e.target.files || []);
-    setAttachments(prev => [...prev, ...files]);
-    e.target.value = '';
-  };
-  const removeAttachment = (idx) => setAttachments(prev => prev.filter((_, i) => i !== idx));
-
-  const toggleVoiceRecording = async () => {
-    if (recording) {
-      mediaRecorderRef.current?.stop();
-      setRecording(false);
-    } else {
-      try {
-        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-        const recorder = new MediaRecorder(stream);
-        const chunks = [];
-        recorder.ondataavailable = (e) => chunks.push(e.data);
-        recorder.onstop = () => {
-          const blob = new Blob(chunks, { type: 'audio/webm' });
-          const file = new File([blob], `voice-${Date.now()}.webm`, { type: 'audio/webm' });
-          setAttachments(prev => [...prev, file]);
-          stream.getTracks().forEach(t => t.stop());
-        };
-        mediaRecorderRef.current = recorder;
-        recorder.start();
-        setRecording(true);
-      } catch (err) {
-        toast.error('فشل الوصول للميكروفون');
-      }
-    }
-  };
-
-  const send = async () => {
-    const msg = input.trim();
+  const send = async ({ text, files }) => {
+    const msg = text.trim();
     if (!msg || sending) return;
-    setInput('');
     setSending(true);
     setMessages((prev) => [...prev, { role: 'user', content: msg }]);
     setCurrentStream('');
@@ -150,7 +111,7 @@ export default function AIAgent() {
       formData.append('message', msg);
       formData.append('model', model);
       if (conversationId) formData.append('conversation_id', conversationId);
-      attachments.forEach((file) => formData.append('files', file));
+      files.forEach((file) => formData.append('files', file));
 
       const r = await fetch(`${API}/api/agent/chat`, {
         method: 'POST',
@@ -206,7 +167,6 @@ export default function AIAgent() {
       toast.error('خطأ في الشبكة: ' + e.message);
     } finally {
       setSending(false);
-      setAttachments([]);
     }
   };
 
@@ -348,62 +308,15 @@ export default function AIAgent() {
 
           {/* Composer */}
           <div className="p-3 border-t border-white/10 bg-black/40 flex-shrink-0">
-            {attachments.length > 0 && (
-              <div className="flex flex-wrap gap-2 mb-2">
-                {attachments.map((file, idx) => (
-                  <div key={idx} className="flex items-center gap-2 bg-white/10 px-3 py-1 rounded-full text-xs">
-                    <span className="truncate max-w-[120px]">{file.name}</span>
-                    <button onClick={() => removeAttachment(idx)} className="hover:text-red-400">
-                      <X className="w-3 h-3" />
-                    </button>
-                  </div>
-                ))}
-              </div>
-            )}
-            <div className="flex gap-2 items-center mb-2">
-              <Button
-                onClick={toggleVoiceRecording}
-                disabled={sending}
-                size="sm"
-                variant={recording ? "destructive" : "outline"}
-                className={recording ? "animate-pulse" : ""}
-              >
-                <Mic className="w-4 h-4" />
-              </Button>
-              <Button onClick={handleFileAttach} disabled={sending} size="sm" variant="outline">
-                <Upload className="w-4 h-4" />
-              </Button>
-            </div>
-            <div className="flex gap-2 items-end">
-              <Textarea
-                value={input}
-                onChange={(e) => setInput(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' && !e.shiftKey) {
-                    e.preventDefault();
-                    send();
-                  }
-                }}
-                placeholder="اكتب طلبك… (Shift+Enter سطر جديد)"
-                data-testid="agent-input"
-                disabled={sending}
-                className="bg-black/60 border-white/15 min-h-[60px] max-h-[200px] resize-none text-sm"
-              />
-              <Button
-                onClick={send}
-                disabled={sending || !input.trim()}
-                data-testid="agent-send-btn"
-                className="bg-amber-500 hover:bg-amber-400 text-black font-black h-[60px] px-5"
-              >
-                {sending ? <Loader2 className="w-5 h-5 animate-spin" /> : <Send className="w-5 h-5" />}
-              </Button>
-            </div>
-            <input
-              type="file"
-              ref={fileInputRef}
-              onChange={handleFileChange}
-              multiple
-              className="hidden"
+            <ChatInput
+              value={input}
+              onChange={setInput}
+              onSend={send}
+              placeholder="اكتب طلبك… (Shift+Enter سطر جديد)"
+              disabled={sending}
+              supportFiles={true}
+              supportVoice={true}
+              supportEmojis={true}
             />
           </div>
         </main>
