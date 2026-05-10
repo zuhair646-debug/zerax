@@ -48,6 +48,7 @@ from .tools_extra import (
     extra_summarize, extra_preview,
 )
 from .llm_providers import stream_via_groq, stream_via_gemini
+from .codebase_atlas import build_atlas_for_prompt
 
 logger = logging.getLogger(__name__)
 
@@ -356,6 +357,7 @@ PROTECTED_PATHS = (
     "/app/backend/modules/autocoder/__init__.py",
     "/app/backend/modules/autocoder/llm_providers.py",
     "/app/backend/modules/autocoder/tools_extra.py",
+    "/app/backend/modules/autocoder/codebase_atlas.py",
 )
 
 
@@ -1777,7 +1779,9 @@ async def _autocoder_stream(messages: List[Dict[str, Any]], model: str = "claude
         anthropic_msgs.append({"role": role, "content": content[:12000]})
 
     # ── Route to alternative free providers ──
-    sys_prompt_full = AUTOCODER_SYSTEM_PROMPT + (env_banner or "")
+    # The AUTOCODER_SYSTEM_PROMPT carries the rules; the codebase_atlas adds
+    # full structural knowledge so the AI doesn't waste tokens scanning files.
+    sys_prompt_full = AUTOCODER_SYSTEM_PROMPT + (env_banner or "") + build_atlas_for_prompt()
     if model == "groq":
         groq_key = os.environ.get("GROQ_API_KEY", "").strip()
         async for evt in stream_via_groq(
@@ -1901,7 +1905,7 @@ async def _stream_direct_anthropic(anthropic_msgs: List[Dict[str, Any]], api_key
         anthropic_msgs = anthropic_msgs[-MAX_HISTORY_TURNS:]
 
     # Prompt caching for system + tools (90% cheaper on subsequent calls)
-    sys_prompt_text = AUTOCODER_SYSTEM_PROMPT + (env_banner or "")
+    sys_prompt_text = AUTOCODER_SYSTEM_PROMPT + (env_banner or "") + build_atlas_for_prompt()
     system_blocks = [
         {"type": "text", "text": sys_prompt_text, "cache_control": {"type": "ephemeral"}}
     ]

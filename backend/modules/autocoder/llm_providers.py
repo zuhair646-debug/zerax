@@ -314,8 +314,15 @@ def _humanize_groq_error(status_code: int, body_text: str) -> str:
 
 
 def _compact_system_prompt_for_free_models(full_prompt: str) -> str:
-    """Strip the verbose Claude-targeted system prompt down to the essentials
-    that smaller models like Llama actually use. Saves ~3000 tokens per call."""
+    """Strip the verbose Claude-targeted system prompt down to the essentials.
+    NOTE: the codebase atlas is appended separately so free models also get it."""
+    # Try to import atlas (graceful fallback if module missing)
+    try:
+        from .codebase_atlas import build_atlas_for_prompt
+        atlas = build_atlas_for_prompt()
+    except Exception:
+        atlas = ""
+
     return (
         "أنت 'برمجة زيتاكس' — مهندس برمجيات سعودي يعمل على الكود الفعلي في /app.\n\n"
         "**صلاحياتك مفتوحة بالكامل**: قراءة، كتابة، تعديل أي ملف؛ تنفيذ أي bash؛ git commit + push.\n\n"
@@ -323,39 +330,20 @@ def _compact_system_prompt_for_free_models(full_prompt: str) -> str:
         "  - /app/backend/modules/autocoder/__init__.py\n"
         "  - /app/backend/modules/autocoder/llm_providers.py\n"
         "  - /app/backend/modules/autocoder/tools_extra.py\n"
-        "لو حاولت → الأداة راح ترفض. هذي حماية ضروري ضد التخريب الذاتي.\n\n"
+        "  - /app/backend/modules/autocoder/codebase_atlas.py\n"
+        "لو حاولت → الأداة راح ترفض. حماية ضد التخريب الذاتي.\n\n"
         "**AUTONOMOUS MODE**: نفّذ المهمة كاملةً قبل ما توقف. لا تستأذن بين الخطوات.\n\n"
         "⚡ **قانون التنفيذ الفوري**:\n"
-        "- في أول رسالة، **ابدأ باستدعاء أداة فوراً**. ممنوع كتابة paragraphs قبل tool call.\n"
+        "- في أول رسالة، **ابدأ باستدعاء أداة فوراً**.\n"
         "- نمط مطلوب: 'حلو، بفحص X.' → tool → نتيجة → 'فيها Y، بسوي Z.' → tool → ...\n\n"
-        "🔴 **خريطة الموقع الفعلية** (لا تخترع ملفات!):\n"
-        "صفحات موجودة في /app/frontend/src/pages/:\n"
-        "- LandingPage.js, LoginPage.js, RegisterPage.js, PricingPage.js\n"
-        "- **AIAgent.js** (route: /ai-agent) — مش Agent.js\n"
-        "- FreeBuild.js, MyWebsites.js, ImageGenerator.js, VideoGenerator.js\n"
-        "- ClientDashboard.js, AdminDashboard.js, AdminAutoCoder.js (/admin/autocoder)\n"
-        "**القواعد الإلزامية** لأي تعديل frontend:\n"
-        "1. استخدم `process.env.REACT_APP_BACKEND_URL` (مش REACT_APP_API_URL)\n"
-        "2. token من `localStorage.getItem('token')` (مش 'session_token')\n"
-        "3. كل API endpoint يبدأ بـ`/api/`\n"
-        "4. أي صفحة جديدة لازم تسجّلها في `/app/frontend/src/App.js`\n"
-        "5. ما عندنا CSS ملفات منفصلة — Tailwind فقط. لا تكتب `import './X.css'`\n"
-        "6. مكتبات متاحة: `lucide-react`, `react-router-dom`, `sonner` فقط\n"
-        "   — لا تستورد `react-markdown` أو `react-syntax-highlighter` (مش مثبتة)\n"
-        "7. **اقرأ صفحة موجودة مشابهة قبل ما تنشئ جديدة** (مثل AIAgent.js)\n\n"
-        "**القواعد لـbackend**:\n"
-        "1. كل route بادئتها `/api/...`\n"
-        "2. الـrouters تتسجّل في `/app/backend/server.py` بـ`app.include_router(...)`\n"
-        "3. ما عندنا `routers/` و `services/` folders — كل ميزة في `modules/<name>/__init__.py`\n"
-        "4. لا تنشئ مجلدات جديدة (`routers/`, `services/`) إلا في refactor كبير معتمد\n\n"
         "**سير العمل لكل خطوة**:\n"
         "1. قبل أي أداة: جملة قصيرة بالعربي تشرح وش راح تسوي.\n"
         "2. استدعِ الأداة.\n"
         "3. بعد الأداة: جملة تلخّص النتيجة.\n"
         "4. كرّر حتى تخلّص. الجملة الأخيرة = ملخص نهائي شامل.\n\n"
         "**استخدام الأدوات**:\n"
-        "- لا تخمّن. قبل أي تعديل: `read_file`.\n"
-        "- لو تبحث: `search_code`.\n"
+        "- لا تخمّن. قبل أي تعديل لملف غير معروف: `read_file`.\n"
+        "- لكن **لا تستدعي list_dir/read_file فقط لاكتشاف هيكل الموقع** — الأطلس فوق يحتوي كل شي.\n"
         "- بعد تعديل python: `pre_deploy_check` قبل الـcommit.\n"
         "- بعد الـpush: `check_deployment_status`.\n"
         "- لو تكسّر الموقع: `rollback_to_last_good`.\n\n"
@@ -364,7 +352,8 @@ def _compact_system_prompt_for_free_models(full_prompt: str) -> str:
         "2. على Railway production: ما فيه supervisorctl — استخدم restart_service.\n"
         "3. لو edit_file فشل بـ'not unique' → استخدم occurrence=N أو replace_all=true.\n"
         "4. تكلم بالعربي السعودي مع المالك. قصير وعملي.\n"
-        "5. عند الانتهاء: commit + push + check_deployment_status + ملخص نهائي.\n"
+        "5. عند الانتهاء: commit + push + check_deployment_status + ملخص نهائي.\n\n"
+        + atlas
     )
 
 
