@@ -6,10 +6,12 @@ import {
   ArrowLeft, Terminal, FileCode, FolderTree, GitBranch,
   Search, FileEdit, FilePlus, FileX, RotateCw, ShieldCheck,
   AlertTriangle, Copy, ScrollText, MessageSquare,
+  Globe, Download, Layers, FilePlus2, Database, Cpu, Sparkles, Zap,
 } from 'lucide-react';
 
 const API = process.env.REACT_APP_BACKEND_URL;
 const SESSION_KEY = 'zitex_autocoder_session';
+const MODEL_KEY = 'zitex_autocoder_model';
 
 const TOOL_ICON = {
   list_dir: FolderTree,
@@ -25,6 +27,16 @@ const TOOL_ICON = {
   git_commit_push: GitBranch,
   view_logs: ScrollText,
   list_env: KeyRound,
+  pre_deploy_check: ShieldCheck,
+  check_deployment_status: ShieldCheck,
+  rollback_to_last_good: RotateCw,
+  // New power tools
+  web_search: Globe,
+  fetch_url: Download,
+  view_bulk_files: Layers,
+  apply_patch: FilePlus2,
+  db_query: Database,
+  ast_analyze: Cpu,
 };
 
 const TOOL_LABEL = {
@@ -41,7 +53,23 @@ const TOOL_LABEL = {
   git_commit_push: 'commit + push',
   view_logs: 'عرض السجلات',
   list_env: 'متغيرات البيئة',
+  pre_deploy_check: 'فحص قبل النشر',
+  check_deployment_status: 'حالة النشر',
+  rollback_to_last_good: 'استرجاع لآخر إصدار شغّال',
+  // New power tools
+  web_search: 'بحث في الإنترنت',
+  fetch_url: 'جلب URL',
+  view_bulk_files: 'قراءة عدة ملفات',
+  apply_patch: 'تطبيق patch',
+  db_query: 'استعلام قاعدة البيانات',
+  ast_analyze: 'تحليل AST',
 };
+
+const MODEL_OPTIONS = [
+  { id: 'claude', label: 'Claude Sonnet 4.5', cost: 'مدفوع — الأذكى', tone: 'amber', icon: Sparkles },
+  { id: 'groq', label: 'Llama 3.3 70B', cost: 'مجاني — سريع جداً', tone: 'emerald', icon: Zap },
+  { id: 'gemini', label: 'Gemini 2.0 Flash', cost: 'مجاني — قدرة كبيرة', tone: 'sky', icon: Sparkles },
+];
 
 export default function AdminAutoCoder() {
   const nav = useNavigate();
@@ -74,6 +102,11 @@ export default function AdminAutoCoder() {
   const [currentTools, setCurrentTools] = useState([]);
   const [showSidebar, setShowSidebar] = useState(false);
   const [keyStatus, setKeyStatus] = useState(null);
+  const [model, setModel] = useState(() => {
+    if (typeof window === 'undefined') return 'claude';
+    return localStorage.getItem(MODEL_KEY) || 'claude';
+  });
+  const [showModelMenu, setShowModelMenu] = useState(false);
   const scrollRef = useRef(null);
 
   // ---- bootstrap ----
@@ -295,7 +328,7 @@ export default function AdminAutoCoder() {
           Authorization: `Bearer ${token}`,
           'X-AutoCoder-Token': acToken,
         },
-        body: JSON.stringify({ conversation_id: conversationId, message: msg }),
+        body: JSON.stringify({ conversation_id: conversationId, message: msg, model }),
       });
       if (r.status === 401) {
         toast.error('انتهت الجلسة. ادخل كلمة السر مرة ثانية');
@@ -530,6 +563,17 @@ export default function AdminAutoCoder() {
           </h1>
         </div>
         <div className="flex items-center gap-2">
+          <ModelSelector
+            value={model}
+            onChange={(m) => {
+              setModel(m);
+              localStorage.setItem(MODEL_KEY, m);
+              setShowModelMenu(false);
+            }}
+            open={showModelMenu}
+            setOpen={setShowModelMenu}
+            keyStatus={keyStatus}
+          />
           <SessionTimer expiresAt={acExpiresAt} />
           <button
             onClick={newChat}
@@ -738,21 +782,94 @@ function RecoveryDisplay({ codes, onDone }) {
   );
 }
 
-function KeyStatusBadge({ status }) {
-  if (!status) return null;
-  const independent = status.is_independent;
+function ModelSelector({ value, onChange, open, setOpen, keyStatus }) {
+  const current = MODEL_OPTIONS.find((m) => m.id === value) || MODEL_OPTIONS[0];
+  const Icon = current.icon;
+  const providers = keyStatus?.providers || {};
+
+  const toneClass = (tone) => ({
+    amber: 'bg-amber-500/10 border-amber-400/30 text-amber-300',
+    emerald: 'bg-emerald-500/10 border-emerald-400/30 text-emerald-300',
+    sky: 'bg-sky-500/10 border-sky-400/30 text-sky-300',
+  }[tone] || 'bg-white/5 border-white/15 text-white/70');
+
   return (
-    <span
-      data-testid="ac-key-status"
-      title={status.instructions || ''}
-      className={`hidden md:inline-flex text-[10px] px-2 py-1 rounded-full items-center gap-1 border ${
-        independent
-          ? 'bg-emerald-500/10 border-emerald-400/30 text-emerald-300'
-          : 'bg-amber-500/10 border-amber-400/30 text-amber-300'
-      }`}
-    >
-      {status.label}
-    </span>
+    <div className="relative">
+      <button
+        onClick={() => setOpen(!open)}
+        data-testid="ac-model-selector"
+        title="اختر الموديل"
+        className={`text-[10px] md:text-[11px] px-2 md:px-3 py-1.5 rounded-full inline-flex items-center gap-1.5 border transition ${toneClass(current.tone)} hover:brightness-125`}
+      >
+        <Icon className="w-3 h-3" />
+        <span className="font-bold">{current.label}</span>
+      </button>
+      {open && (
+        <>
+          <div
+            className="fixed inset-0 z-40"
+            onClick={() => setOpen(false)}
+          />
+          <div
+            data-testid="ac-model-menu"
+            className="absolute end-0 mt-2 w-72 bg-[#0a0a0a] border border-white/15 rounded-xl shadow-2xl z-50 overflow-hidden"
+          >
+            <div className="p-2 border-b border-white/10 text-[10px] uppercase tracking-widest text-white/40">
+              الموديل المستخدم
+            </div>
+            <div className="p-1.5 space-y-1">
+              {MODEL_OPTIONS.map((m) => {
+                const providerInfo = providers[m.id];
+                const available = providerInfo?.available !== false;
+                const MIcon = m.icon;
+                const selected = value === m.id;
+                return (
+                  <button
+                    key={m.id}
+                    onClick={() => available && onChange(m.id)}
+                    disabled={!available}
+                    data-testid={`ac-model-option-${m.id}`}
+                    className={`w-full text-start p-2.5 rounded-lg flex items-start gap-2 transition ${
+                      selected ? 'bg-amber-500/10 border border-amber-400/30' :
+                      available ? 'hover:bg-white/5 border border-transparent' :
+                      'opacity-40 cursor-not-allowed border border-transparent'
+                    }`}
+                  >
+                    <MIcon className={`w-4 h-4 mt-0.5 flex-shrink-0 ${selected ? 'text-amber-300' : 'text-white/60'}`} />
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-sm font-bold">{m.label}</span>
+                        {selected && (
+                          <span className="text-[9px] bg-amber-500/20 text-amber-300 px-1.5 rounded">مختار</span>
+                        )}
+                      </div>
+                      <div className="text-[11px] text-white/50 mt-0.5">{m.cost}</div>
+                      {!available && providerInfo?.get_key_url && (
+                        <a
+                          href={providerInfo.get_key_url}
+                          target="_blank"
+                          rel="noreferrer"
+                          onClick={(e) => e.stopPropagation()}
+                          className="inline-block mt-1 text-[10px] text-sky-400 hover:text-sky-300 underline"
+                        >
+                          احصل على مفتاح مجاني →
+                        </a>
+                      )}
+                      {!available && !providerInfo?.get_key_url && (
+                        <div className="text-[10px] text-rose-300/70 mt-0.5">المفتاح غير مضبوط</div>
+                      )}
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+            <div className="p-2 border-t border-white/10 text-[10px] text-white/40 leading-relaxed">
+              💡 الموديلات المجانية ممتازة للمهام البسيطة (قراءة ملفات، تنفيذ أوامر). استخدم Claude للـrefactor المعقّد.
+            </div>
+          </div>
+        </>
+      )}
+    </div>
   );
 }
 

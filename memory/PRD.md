@@ -2911,6 +2911,24 @@ New endpoints (13): /public/{slug}/auth/{register,login,me}, /public/{slug}/orde
 ---
 
 ## Changelog
+### Feb 2026 — Auto-Coder: 6 New Power Tools + Multi-LLM (Groq + Gemini)
+- ✅ أضفت 6 أدوات قوية جديدة لـ Auto-Coder (مجموع الأدوات: 22)
+  - `web_search` — بحث DuckDuckGo (POST + lite fallback)، مجاني بدون مفتاح
+  - `fetch_url` — جلب أي URL كنص (HTML stripped)
+  - `view_bulk_files` — قراءة حتى 6 ملفات بضربة واحدة
+  - `apply_patch` — تطبيق unified-diff على عدة ملفات (مع dry_run)
+  - `db_query` — استعلام MongoDB للقراءة فقط (find/count/distinct)
+  - `ast_analyze` — تحليل Python AST (دوال/كلاسات/imports)
+- ✅ دعم 3 موديلات في Auto-Coder مع زر اختيار:
+  - **Claude Sonnet 4.5** (مدفوع — الأذكى)
+  - **Llama 3.3 70B (Groq)** — مجاني وسريع جداً، يحتاج `GROQ_API_KEY` من https://console.groq.com/keys
+  - **Gemini 2.0 Flash** — مجاني، يحتاج `GEMINI_API_KEY` من https://aistudio.google.com/apikey
+- ✅ كل موديل يستخدم Native Tool Calling (مش text parsing)
+- ✅ ملفات جديدة: `backend/modules/autocoder/tools_extra.py`, `backend/modules/autocoder/llm_providers.py`
+- ✅ `ChatIn` تستقبل `model: claude|groq|gemini` وتوجّه للـstreamer المناسب
+- ✅ `/api/autocoder/key-status` يرجع قائمة الموديلات المتوفرة + روابط الحصول على المفاتيح المجانية
+- ✅ Frontend: مكوّن `ModelSelector` مع dropdown، تخزين الاختيار في localStorage
+
 ### Feb 2026 — Website Studio v2 (Wizard + Top-Template Layout)
 - رقائق أنماط بصرية (10 variants) للقالب الواحد
 - Wizard تفاعلي بـ 10 خطوات مع تخطي مشروط
