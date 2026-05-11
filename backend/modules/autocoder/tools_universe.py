@@ -25,15 +25,13 @@ Plus credential vault helpers (vault_get/set/list/delete) wired up as AI tools.
 from __future__ import annotations
 import os
 import re
-import json
 import shutil
 import asyncio
 import importlib
 import importlib.util
-from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
-from .credentials_vault import vault_get, vault_set, vault_delete, vault_list, vault_has
+from .credentials_vault import vault_get, vault_set, vault_delete, vault_list
 
 # ────────────────────────────────────────────────────────────────────────
 # Catalog data model
