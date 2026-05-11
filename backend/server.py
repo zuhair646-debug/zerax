@@ -1,4 +1,4 @@
-from fastapi import FastAPI, APIRouter, HTTPException, Depends, UploadFile, File, Form
+from fastapi import FastAPI, APIRouter, HTTPException, Depends, UploadFile, File, Form, Header
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from fastapi.responses import StreamingResponse, Response
 from dotenv import load_dotenv
@@ -3001,6 +3001,93 @@ async def reject_all_pending(admin: dict = Depends(require_admin)):
         {"$set": {"status": "rejected"}}
     )
     return {"rejected": result.modified_count, "message": f"تم رفض {result.modified_count} قالب"}
+
+async def _validate_autocoder_session_token(token: str) -> bool:
+    """Validate AutoCoder unlock token without importing/modifying its protected module."""
+    if not token:
+        return False
+    try:
+        sess = await db.autocoder_sessions.find_one({"token": token}, {"_id": 0, "expires_at": 1})
+        if not sess:
+            return False
+        exp_raw = sess.get("expires_at")
+        exp = datetime.fromisoformat(exp_raw) if isinstance(exp_raw, str) else exp_raw
+        if exp and exp.tzinfo is None:
+            exp = exp.replace(tzinfo=timezone.utc)
+        return bool(exp and exp > datetime.now(timezone.utc))
+    except Exception as exc:
+        logging.warning(f"AutoCoder token validation failed: {exc}")
+        return False
+
+
+@api_router.post("/autocoder/analyze-attachment")
+async def analyze_autocoder_attachment(
+    file: UploadFile = File(...),
+    x_autocoder_token: Optional[str] = Header(None),
+):
+    """Analyze an uploaded image so AutoCoder can discuss it even if chat stream is text-only."""
+    if not await _validate_autocoder_session_token(x_autocoder_token or ""):
+        raise HTTPException(status_code=401, detail="session locked or expired — unlock first")
+
+    content_type = file.content_type or "application/octet-stream"
+    if not content_type.startswith("image/"):
+        return {
+            "ok": False,
+            "analysis": "الملف المرفق ليس صورة، لذلك لا يمكنني تحليله بصرياً. أرسل صورة بصيغة PNG أو JPG أو WebP.",
+            "content_type": content_type,
+        }
+
+    contents = await file.read()
+    if len(contents) > 8 * 1024 * 1024:
+        raise HTTPException(status_code=400, detail="Image too large (max 8MB)")
+
+    openai_key = (os.getenv("OPENAI_DIRECT_KEY") or os.getenv("OPENAI_API_KEY") or "").strip()
+    if not openai_key:
+        raise HTTPException(status_code=500, detail="OPENAI_DIRECT_KEY or OPENAI_API_KEY is not configured")
+
+    data_url = f"data:{content_type};base64,{base64.b64encode(contents).decode('utf-8')}"
+    prompt = (
+        "حلل الصورة المرفقة بالعربية بشكل عملي ومباشر. "
+        "اذكر: ماذا يظهر في الصورة، العناصر/النصوص المهمة، الألوان والأسلوب، "
+        "أي مشاكل أو ملاحظات، وكيف يمكن للمهندس أو المصمم الاستفادة منها. "
+        "إذا كانت الصورة لقطة شاشة لخطأ أو واجهة، استخرج الرسائل الظاهرة واقترح حل واضح."
+    )
+
+    try:
+        async with httpx.AsyncClient(timeout=60.0) as client:
+            response = await client.post(
+                "https://api.openai.com/v1/chat/completions",
+                headers={
+                    "Authorization": f"Bearer {openai_key}",
+                    "Content-Type": "application/json",
+                },
+                json={
+                    "model": "gpt-4o-mini",
+                    "messages": [
+                        {
+                            "role": "user",
+                            "content": [
+                                {"type": "text", "text": prompt},
+                                {"type": "image_url", "image_url": {"url": data_url}},
+                            ],
+                        }
+                    ],
+                    "max_tokens": 700,
+                },
+            )
+        if response.status_code >= 400:
+            detail = response.text[:500]
+            logging.warning(f"OpenAI vision failed: {response.status_code} {detail}")
+            raise HTTPException(status_code=502, detail="Vision analysis provider failed")
+        data = response.json()
+        analysis = (data.get("choices") or [{}])[0].get("message", {}).get("content", "").strip()
+        return {"ok": True, "analysis": analysis or "لم أتمكن من استخراج تحليل واضح من الصورة.", "content_type": content_type}
+    except HTTPException:
+        raise
+    except Exception as exc:
+        logging.error(f"Image analysis failed: {exc}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Image analysis failed")
+
 
 # ============== APP SETUP ==============
 
