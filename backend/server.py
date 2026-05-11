@@ -3082,32 +3082,33 @@ async def analyze_autocoder_attachment(
             logging.warning(f"OpenAI vision failed: {response.status_code} {detail}")
             anthropic_key = (os.getenv("ANTHROPIC_API_KEY") or "").strip()
             if anthropic_key:
-                anthropic_response = await client.post(
-                    "https://api.anthropic.com/v1/messages",
-                    headers={
-                        "x-api-key": anthropic_key,
-                        "anthropic-version": "2023-06-01",
-                        "Content-Type": "application/json",
-                    },
-                    json={
-                        "model": "claude-3-5-sonnet-20241022",
-                        "max_tokens": 900,
-                        "messages": [{
-                            "role": "user",
-                            "content": [
-                                {"type": "text", "text": prompt + f"\nاسم الملف: {user_hint}"},
-                                {
-                                    "type": "image",
-                                    "source": {
-                                        "type": "base64",
-                                        "media_type": content_type,
-                                        "data": image_b64,
+                async with httpx.AsyncClient(timeout=60.0) as fallback_client:
+                    anthropic_response = await fallback_client.post(
+                        "https://api.anthropic.com/v1/messages",
+                        headers={
+                            "x-api-key": anthropic_key,
+                            "anthropic-version": "2023-06-01",
+                            "Content-Type": "application/json",
+                        },
+                        json={
+                            "model": "claude-3-5-sonnet-20241022",
+                            "max_tokens": 900,
+                            "messages": [{
+                                "role": "user",
+                                "content": [
+                                    {"type": "text", "text": prompt + f"\nاسم الملف: {user_hint}"},
+                                    {
+                                        "type": "image",
+                                        "source": {
+                                            "type": "base64",
+                                            "media_type": content_type,
+                                            "data": image_b64,
+                                        },
                                     },
-                                },
-                            ],
-                        }],
-                    },
-                )
+                                ],
+                            }],
+                        },
+                    )
                 if anthropic_response.status_code < 400:
                     adata = anthropic_response.json()
                     chunks = adata.get("content") or []

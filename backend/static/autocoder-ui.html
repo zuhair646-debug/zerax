@@ -583,6 +583,19 @@
             renderImagePreviews();
         }
 
+        function normalizeImageUrl(imgUrl) {
+            if (!imgUrl) return '';
+            if (imgUrl.startsWith('data:') || imgUrl.startsWith('http://') || imgUrl.startsWith('https://')) return imgUrl;
+            if (imgUrl.startsWith('/')) return window.location.origin + imgUrl;
+            return imgUrl;
+        }
+
+        function extractImageUrls(text) {
+            if (!text) return [];
+            const matches = text.match(/https?:\/\/[^\s)"']+\.(?:png|jpg|jpeg|gif|webp)|\/(?:backend-static|uploads|static)\/[^\s)"']+\.(?:png|jpg|jpeg|gif|webp)/gi) || [];
+            return [...new Set(matches)].map(normalizeImageUrl);
+        }
+
         function addMessage(sender, text, images = []) {
             const messagesDiv = document.getElementById('chatMessages');
             const messageDiv = document.createElement('div');
@@ -606,10 +619,12 @@
             if (images && images.length > 0) {
                 const imagesContainer = document.createElement('div');
                 imagesContainer.className = 'message-images';
-                images.forEach(imgUrl => {
+                images.map(normalizeImageUrl).filter(Boolean).forEach(imgUrl => {
                     const img = document.createElement('img');
                     img.src = imgUrl;
                     img.className = 'message-image';
+                    img.alt = 'مرفق صورة';
+                    img.loading = 'lazy';
                     img.onclick = () => window.open(imgUrl, '_blank');
                     imagesContainer.appendChild(img);
                 });
@@ -684,9 +699,10 @@
                 }
             }
 
+            const finalUserRequest = message || 'اشرح الصورة المرفقة بالتفصيل: وش تشوف داخلها؟ اذكر العناصر والنصوص والألوان وأي ملاحظات مهمة.';
             formData.set(
                 'message',
-                `${message || 'علّق على الصورة المرفقة وحللها'}\n\n[تعليمات مهمة]\nإذا وجدت تحليلاً بصرياً تلقائياً بالأسفل، اعتمد عليه مباشرة واشرح الصورة للمالك بالعربية. لا تكتفِ بذكر أن هناك مرفقاً.\n[/تعليمات مهمة]\n\n${attachmentAnalyses.length > 0 ? `[تحليل بصري تلقائي للمرفقات]\n${attachmentAnalyses.join('\n\n')}\n[/تحليل بصري تلقائي]` : '[تنبيه] تم رفع مرفق لكن لم يتوفر تحليل بصري تلقائي؛ وضّح للمالك أن التحليل لم ينجح واذكر مسار/اسم المرفق إن ظهر لك.'}`
+                `${finalUserRequest}\n\n[تعليمات مهمة]\nإذا وجدت تحليلاً بصرياً تلقائياً بالأسفل، اعتمد عليه مباشرة واشرح الصورة للمالك بالعربية السعودية بشكل واضح. لا تكتفِ بذكر أن هناك مرفقاً، ولا ترد برد عام.\n[/تعليمات مهمة]\n\n${attachmentAnalyses.length > 0 ? `[تحليل بصري تلقائي للمرفقات]\n${attachmentAnalyses.join('\n\n')}\n[/تحليل بصري تلقائي]` : '[تنبيه] تم رفع مرفق لكن لم يتوفر تحليل بصري تلقائي؛ اطلب من المالك إعادة رفع الصورة أو اذكر أن التحليل البصري لم ينجح بدلاً من الرد العام.'}`
             );
             
             // Add user message with images preview
@@ -750,7 +766,23 @@
                                         messagesDiv.appendChild(messageElement);
                                     }
                                     
-                                    messageElement.querySelector('.message-bubble').textContent = assistantMessage;
+                                    const bubble = messageElement.querySelector('.message-bubble');
+                                    bubble.textContent = assistantMessage;
+                                    const responseImages = extractImageUrls(assistantMessage);
+                                    if (responseImages.length > 0 && !bubble.querySelector('.message-images')) {
+                                        const imagesContainer = document.createElement('div');
+                                        imagesContainer.className = 'message-images';
+                                        responseImages.forEach(imgUrl => {
+                                            const img = document.createElement('img');
+                                            img.src = imgUrl;
+                                            img.className = 'message-image';
+                                            img.alt = 'صورة في الرد';
+                                            img.loading = 'lazy';
+                                            img.onclick = () => window.open(imgUrl, '_blank');
+                                            imagesContainer.appendChild(img);
+                                        });
+                                        bubble.appendChild(imagesContainer);
+                                    }
                                     messagesDiv.scrollTop = messagesDiv.scrollHeight;
                                 }
                             } catch (e) {}

@@ -1109,7 +1109,6 @@ def render_design_to_html(design: dict) -> str:
     bg_img = canvas.get("background_image_url") or ""
     bg_color = canvas.get("background_color") or "#87CEEB"
     name = (design.get("name") or "لعبة Zitex").replace('"', "'")[:80]
-    genre = design.get("genre") or "strategy"
     elements = design.get("elements") or []
 
     # Build element HTML
@@ -1450,13 +1449,14 @@ class AIAssistant:
             raise ValueError("Session not found")
         
         credits = await self.get_user_credits(user_id)
+        user_attachment_urls = list(attachments or [])
         
         user_msg = {
             "id": str(uuid.uuid4()),
             "role": "user",
             "content": message,
             "message_type": "text",
-            "attachments": [{"type": "image", "url": url} for url in (attachments or [])],
+            "attachments": [{"type": "image", "url": url} for url in user_attachment_urls],
             "metadata": {},
             "created_at": datetime.now(timezone.utc).isoformat()
         }
@@ -1485,8 +1485,8 @@ class AIAssistant:
                 has_buttons = True
             else:
                 try:
-                    # Generate GPT response first
-                    ai_response, credits_used, has_buttons = await self._generate_with_gpt(session, message, request_type, credits, settings, attachments)
+                    # Generate GPT response first, including the images uploaded by the user in this turn.
+                    ai_response, credits_used, has_buttons = await self._generate_with_gpt(session, message, request_type, credits, settings, user_attachment_urls)
                     
                     # Process special commands in AI response
                     ai_response, extra_attachments, extra_credits = await self._process_ai_commands(
@@ -1766,15 +1766,24 @@ class AIAssistant:
         try:
             # Simple quality scoring
             score = 0
-            if "cdn.tailwindcss.com" in code: score += 2
-            if "font-awesome" in code.lower(): score += 1
-            if "gradient" in code: score += 1
-            if "hover:" in code: score += 1
-            if "transition" in code or "animation" in code: score += 1
-            if "addEventListener" in code or "onclick" in code.lower(): score += 1
-            if len(code) > 3000: score += 1
-            if "responsive" in code.lower() or "md:" in code: score += 1
-            if "Tajawal" in code: score += 1
+            if "cdn.tailwindcss.com" in code:
+                score += 2
+            if "font-awesome" in code.lower():
+                score += 1
+            if "gradient" in code:
+                score += 1
+            if "hover:" in code:
+                score += 1
+            if "transition" in code or "animation" in code:
+                score += 1
+            if "addEventListener" in code or "onclick" in code.lower():
+                score += 1
+            if len(code) > 3000:
+                score += 1
+            if "responsive" in code.lower() or "md:" in code:
+                score += 1
+            if "Tajawal" in code:
+                score += 1
             
             await self.db.code_quality_log.insert_one({
                 "session_id": session_id,
@@ -2512,15 +2521,19 @@ class AIAssistant:
         # Also check for objstore URLs
         image_urls += re.findall(r'(https?://integrations\.emergentagent\.com/objstore/\S+)', message)
         
-        # Add user-uploaded attachments
+        # Add user-uploaded attachments from this message.
+        # Router stores them as relative URLs like /backend-static/uploads/..., so make them public absolute URLs for vision APIs.
         if user_attachments:
             for att_url in user_attachments:
-                # Convert relative URL to full URL if needed
-                if att_url.startswith("/static/"):
-                    full_url = f"{BACKEND_URL}{att_url}" if BACKEND_URL else att_url
+                if not att_url:
+                    continue
+                if att_url.startswith("/"):
+                    full_url = f"{BACKEND_URL.rstrip('/')}{att_url}" if BACKEND_URL else att_url
                     image_urls.append(full_url)
                 else:
                     image_urls.append(att_url)
+            if image_urls:
+                system_prompt += "\nالمستخدم أرفق صورة/صور في الرسالة الحالية. حلل محتواها بصرياً بالعربية ولا تكتفِ بذكر وجود مرفق.\n"
         
         # KEY FEATURE: When user approves design (says ممتاز/ابنِ), find the last design image
         # and attach it so GPT-4o can SEE the design and build code that matches it
@@ -2614,7 +2627,13 @@ class AIAssistant:
                 messages = [{"role": "system", "content": system_prompt}]
                 for msg in session.get("messages", [])[-12:]:
                     messages.append({"role": msg["role"], "content": msg["content"]})
-                messages.append({"role": "user", "content": message})
+                if image_urls:
+                    content_parts = [{"type": "text", "text": full_prompt}]
+                    for img_url in image_urls[:3]:
+                        content_parts.append({"type": "image_url", "image_url": {"url": img_url}})
+                    messages.append({"role": "user", "content": content_parts})
+                else:
+                    messages.append({"role": "user", "content": message})
                 
                 completion = self.openai_client.chat.completions.create(
                     model="gpt-4o",
