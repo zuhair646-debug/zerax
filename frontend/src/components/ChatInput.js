@@ -1,21 +1,50 @@
 import { useState, useRef, useEffect } from 'react';
-import { Paperclip, Mic, MicOff, Smile, Send, X, Image as ImageIcon, Video } from 'lucide-react';
+import { Paperclip, Mic, MicOff, Smile, Send, X, Image as ImageIcon, Video, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 
+const API = process.env.REACT_APP_BACKEND_URL;
 const EMOJIS = ['😊', '😂', '❤️', '👍', '🎉', '🔥', '💡', '✨', '🚀', '💪', '🙏', '👏'];
 
-export default function ChatInput({ 
-  onSend, 
-  placeholder = "اكتب رسالتك...", 
+function getSupportedAudioMimeType() {
+  if (typeof window === 'undefined' || !window.MediaRecorder) return '';
+  const types = [
+    'audio/webm;codecs=opus',
+    'audio/webm',
+    'audio/mp4',
+    'audio/ogg;codecs=opus',
+    'audio/ogg',
+  ];
+  return types.find((type) => window.MediaRecorder.isTypeSupported(type)) || '';
+}
+
+function audioExtension(mimeType) {
+  if (mimeType.includes('mp4')) return 'mp4';
+  if (mimeType.includes('ogg')) return 'ogg';
+  if (mimeType.includes('mpeg')) return 'mp3';
+  if (mimeType.includes('wav')) return 'wav';
+  return 'webm';
+}
+
+export default function ChatInput({
+  onSend,
+  placeholder = 'اكتب رسالتك...',
   disabled = false,
   supportFiles = true,
   supportVoice = true,
   supportEmojis = true,
   value = '',
-  onChange = null
+  onChange = null,
 }) {
   const [message, setMessage] = useState(value);
   const [files, setFiles] = useState([]);
+  const [recording, setRecording] = useState(false);
+  const [transcribing, setTranscribing] = useState(false);
+  const [showEmojis, setShowEmojis] = useState(false);
+
+  const fileInputRef = useRef(null);
+  const mediaRecorderRef = useRef(null);
+  const mediaStreamRef = useRef(null);
+  const audioChunksRef = useRef([]);
 
   // Sync with external value
   useEffect(() => {
@@ -23,68 +52,86 @@ export default function ChatInput({
       setMessage(value);
     }
   }, [value]);
-  const [recording, setRecording] = useState(false);
-  const [showEmojis, setShowEmojis] = useState(false);
-  const [recognizing, setRecognizing] = useState(false);
-  
-  const fileInputRef = useRef(null);
-  const mediaRecorderRef = useRef(null);
-  const recognitionRef = useRef(null);
 
-  // Web Speech API للتعرف على الصوت
   useEffect(() => {
-    if (!supportVoice) return;
-    
-    if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
-      const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-      recognitionRef.current = new SpeechRecognition();
-      recognitionRef.current.lang = 'ar-SA';
-      recognitionRef.current.continuous = true;
-      recognitionRef.current.interimResults = true;
+    return () => {
+      if (mediaRecorderRef.current?.state === 'recording') {
+        mediaRecorderRef.current.stop();
+      }
+      mediaStreamRef.current?.getTracks?.().forEach((track) => track.stop());
+    };
+  }, []);
 
-      recognitionRef.current.onresult = (event) => {
-        let finalTranscript = '';
-        let interimTranscript = '';
+  const updateMessage = (nextValue) => {
+    setMessage(nextValue);
+    if (onChange) onChange(nextValue);
+  };
 
-        for (let i = event.resultIndex; i < event.results.length; i++) {
-          const transcript = event.results[i][0].transcript;
-          if (event.results[i].isFinal) {
-            finalTranscript += transcript + ' ';
-          } else {
-            interimTranscript += transcript;
-          }
-        }
+  const appendTranscript = (text) => {
+    if (!text?.trim()) return;
+    const normalized = text.trim();
+    updateMessage(`${message ? `${message.trim()} ` : ''}${normalized}`);
+  };
 
-        if (finalTranscript) {
-          setMessage(prev => prev + finalTranscript);
-        }
-      };
-
-      recognitionRef.current.onerror = (event) => {
-        console.error('Speech recognition error:', event.error);
-        setRecognizing(false);
-        setRecording(false);
-        if (event.error !== 'no-speech') {
-          toast.error('خطأ في التعرف على الصوت');
-        }
-      };
-
-      recognitionRef.current.onend = () => {
-        setRecognizing(false);
-        if (recording) {
-          recognitionRef.current.start();
-        }
-      };
+  const transcribeAudio = async (blob, mimeType) => {
+    const token = localStorage.getItem('token');
+    if (!token) {
+      toast.error('سجل الدخول أولاً لاستخدام التسجيل الصوتي');
+      return;
     }
-  }, [supportVoice, recording]);
+
+    if (!blob || blob.size < 300) {
+      toast.error('التسجيل قصير جداً، حاول مرة أخرى');
+      return;
+    }
+
+    setTranscribing(true);
+    try {
+      const formData = new FormData();
+      const extension = audioExtension(mimeType || blob.type || 'audio/webm');
+      formData.append('audio', blob, `voice-${Date.now()}.${extension}`);
+      formData.append('language', 'ar');
+
+      const response = await fetch(`${API}/api/stt/transcribe`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+        body: formData,
+      });
+
+      let data = {};
+      try {
+        data = await response.json();
+      } catch (_) {
+        data = {};
+      }
+
+      if (!response.ok) {
+        throw new Error(data.detail || data.message || 'فشل تحويل الصوت إلى نص');
+      }
+
+      const text = (data.text || '').trim();
+      if (!text) {
+        toast.error('لم يتم التعرف على صوت واضح، جرّب التسجيل لمدة أطول وبهدوء');
+        return;
+      }
+
+      appendTranscript(text);
+      toast.success('تم تحويل الصوت إلى نص');
+    } catch (error) {
+      console.error('Voice transcription error:', error);
+      toast.error(error.message || 'فشل تحويل الصوت إلى نص');
+    } finally {
+      setTranscribing(false);
+    }
+  };
 
   const handleFileSelect = (e) => {
-    const selectedFiles = Array.from(e.target.files);
-    const validFiles = selectedFiles.filter(file => {
+    const selectedFiles = Array.from(e.target.files || []);
+    const validFiles = selectedFiles.filter((file) => {
       const isImage = file.type.startsWith('image/');
       const isVideo = file.type.startsWith('video/');
       const isValidSize = file.size <= 50 * 1024 * 1024; // 50MB
-      
+
       if (!isImage && !isVideo) {
         toast.error(`${file.name}: نوع الملف غير مدعوم`);
         return false;
@@ -96,50 +143,105 @@ export default function ChatInput({
       return true;
     });
 
-    setFiles(prev => [...prev, ...validFiles]);
+    setFiles((prev) => [...prev, ...validFiles]);
+    if (e.target) e.target.value = '';
   };
 
   const removeFile = (index) => {
-    setFiles(prev => prev.filter((_, i) => i !== index));
+    setFiles((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  const startRecording = async () => {
+    if (!navigator.mediaDevices?.getUserMedia || !window.MediaRecorder) {
+      toast.error('متصفحك لا يدعم التسجيل الصوتي، جرّب Chrome أو Safari محدث');
+      return;
+    }
+
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const mimeType = getSupportedAudioMimeType();
+      const recorder = mimeType ? new MediaRecorder(stream, { mimeType }) : new MediaRecorder(stream);
+
+      audioChunksRef.current = [];
+      mediaStreamRef.current = stream;
+      mediaRecorderRef.current = recorder;
+
+      recorder.ondataavailable = (event) => {
+        if (event.data && event.data.size > 0) {
+          audioChunksRef.current.push(event.data);
+        }
+      };
+
+      recorder.onerror = (event) => {
+        console.error('MediaRecorder error:', event.error || event);
+        toast.error('حدث خطأ أثناء التسجيل');
+        setRecording(false);
+      };
+
+      recorder.onstop = async () => {
+        const chunks = audioChunksRef.current;
+        const finalMimeType = recorder.mimeType || mimeType || 'audio/webm';
+        mediaStreamRef.current?.getTracks?.().forEach((track) => track.stop());
+        mediaStreamRef.current = null;
+        mediaRecorderRef.current = null;
+        setRecording(false);
+
+        if (!chunks.length) {
+          toast.error('لم يتم التقاط صوت، تأكد من صلاحية الميكروفون');
+          return;
+        }
+
+        const blob = new Blob(chunks, { type: finalMimeType });
+        await transcribeAudio(blob, finalMimeType);
+      };
+
+      recorder.start(250);
+      setRecording(true);
+      toast.success('بدأ التسجيل... اضغط الميكروفون مرة ثانية للإيقاف');
+    } catch (error) {
+      console.error('Error starting recording:', error);
+      const denied = error?.name === 'NotAllowedError' || error?.name === 'SecurityError';
+      toast.error(denied ? 'اسمح للمتصفح باستخدام الميكروفون' : 'فشل بدء التسجيل الصوتي');
+      mediaStreamRef.current?.getTracks?.().forEach((track) => track.stop());
+      mediaStreamRef.current = null;
+      setRecording(false);
+    }
+  };
+
+  const stopRecording = () => {
+    const recorder = mediaRecorderRef.current;
+    if (recorder && recorder.state === 'recording') {
+      recorder.stop();
+    } else {
+      mediaStreamRef.current?.getTracks?.().forEach((track) => track.stop());
+      mediaStreamRef.current = null;
+      setRecording(false);
+    }
   };
 
   const toggleRecording = async () => {
-    if (!recording) {
-      try {
-        if (recognitionRef.current) {
-          recognitionRef.current.start();
-          setRecognizing(true);
-        }
-        setRecording(true);
-        toast.success('بدأ التسجيل...');
-      } catch (error) {
-        console.error('Error starting recording:', error);
-        toast.error('فشل بدء التسجيل');
-      }
+    if (disabled || transcribing) return;
+    if (recording) {
+      stopRecording();
     } else {
-      if (recognitionRef.current) {
-        recognitionRef.current.stop();
-      }
-      setRecording(false);
-      setRecognizing(false);
-      toast.success('توقف التسجيل');
+      await startRecording();
     }
   };
 
   const handleSend = () => {
-    if (!message.trim() && files.length === 0) return;
-    
-    onSend({ 
-      text: message.trim(), 
-      files: files 
+    if ((!message.trim() && files.length === 0) || disabled || recording || transcribing) return;
+
+    onSend({
+      text: message.trim(),
+      files,
     });
-    
-    setMessage('');
+
+    updateMessage('');
     setFiles([]);
     setShowEmojis(false);
   };
 
-  const handleKeyPress = (e) => {
+  const handleKeyDown = (e) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       handleSend();
@@ -147,8 +249,10 @@ export default function ChatInput({
   };
 
   const addEmoji = (emoji) => {
-    setMessage(prev => prev + emoji);
+    updateMessage(message + emoji);
   };
+
+  const busyVoice = recording || transcribing;
 
   return (
     <div className="relative">
@@ -156,7 +260,7 @@ export default function ChatInput({
       {files.length > 0 && (
         <div className="mb-3 flex flex-wrap gap-2">
           {files.map((file, index) => (
-            <div key={index} className="relative group">
+            <div key={`${file.name}-${index}`} className="relative group">
               <div className="bg-zinc-800/50 rounded-lg p-2 pr-8 border border-white/10 flex items-center gap-2">
                 {file.type.startsWith('image/') ? (
                   <ImageIcon className="w-4 h-4 text-amber-400" />
@@ -168,6 +272,7 @@ export default function ChatInput({
                 </span>
               </div>
               <button
+                type="button"
                 onClick={() => removeFile(index)}
                 className="absolute top-1 left-1 bg-red-500 hover:bg-red-600 rounded-full p-0.5 opacity-0 group-hover:opacity-100 transition-opacity"
               >
@@ -180,11 +285,12 @@ export default function ChatInput({
 
       {/* لوحة الإيموجي */}
       {showEmojis && supportEmojis && (
-        <div className="absolute bottom-full mb-2 left-0 bg-zinc-900 border border-white/10 rounded-xl p-3 shadow-2xl">
+        <div className="absolute bottom-full mb-2 left-0 bg-zinc-900 border border-white/10 rounded-xl p-3 shadow-2xl z-20">
           <div className="grid grid-cols-6 gap-2">
             {EMOJIS.map((emoji, i) => (
               <button
                 key={i}
+                type="button"
                 onClick={() => addEmoji(emoji)}
                 className="text-2xl hover:scale-125 transition-transform"
               >
@@ -213,8 +319,9 @@ export default function ChatInput({
                     className="hidden"
                   />
                   <button
+                    type="button"
                     onClick={() => fileInputRef.current?.click()}
-                    disabled={disabled}
+                    disabled={disabled || busyVoice}
                     className="p-2 hover:bg-white/10 rounded-lg transition-colors disabled:opacity-50"
                     title="إضافة صورة أو فيديو"
                   >
@@ -226,16 +333,21 @@ export default function ChatInput({
               {/* تسجيل صوتي */}
               {supportVoice && (
                 <button
+                  type="button"
                   onClick={toggleRecording}
-                  disabled={disabled}
+                  disabled={disabled || transcribing}
                   className={`p-2 rounded-lg transition-all disabled:opacity-50 ${
-                    recording 
-                      ? 'bg-red-500 hover:bg-red-600 animate-pulse' 
-                      : 'hover:bg-white/10'
+                    recording
+                      ? 'bg-red-500 hover:bg-red-600 animate-pulse'
+                      : transcribing
+                        ? 'bg-amber-500/20'
+                        : 'hover:bg-white/10'
                   }`}
-                  title={recording ? 'إيقاف التسجيل' : 'بدء التسجيل الصوتي'}
+                  title={recording ? 'إيقاف التسجيل وتحويله إلى نص' : 'بدء التسجيل الصوتي'}
                 >
-                  {recording ? (
+                  {transcribing ? (
+                    <Loader2 className="w-5 h-5 text-amber-300 animate-spin" />
+                  ) : recording ? (
                     <MicOff className="w-5 h-5 text-white" />
                   ) : (
                     <Mic className="w-5 h-5 text-white/70" />
@@ -246,8 +358,9 @@ export default function ChatInput({
               {/* إيموجي */}
               {supportEmojis && (
                 <button
+                  type="button"
                   onClick={() => setShowEmojis(!showEmojis)}
-                  disabled={disabled}
+                  disabled={disabled || busyVoice}
                   className={`p-2 rounded-lg transition-colors disabled:opacity-50 ${
                     showEmojis ? 'bg-white/10' : 'hover:bg-white/10'
                   }`}
@@ -261,18 +374,15 @@ export default function ChatInput({
             {/* حقل النص */}
             <textarea
               value={message}
-              onChange={(e) => {
-                setMessage(e.target.value);
-                if (onChange) onChange(e.target.value);
-              }}
-              onKeyPress={handleKeyPress}
-              placeholder={recording ? 'جاري التسجيل...' : placeholder}
-              disabled={disabled}
+              onChange={(e) => updateMessage(e.target.value)}
+              onKeyDown={handleKeyDown}
+              placeholder={recording ? 'جاري التسجيل... اضغط الميكروفون للإيقاف' : transcribing ? 'جاري تحويل الصوت إلى نص...' : placeholder}
+              disabled={disabled || recording || transcribing}
               rows={1}
-              className="flex-1 bg-transparent text-white placeholder:text-white/40 outline-none resize-none min-h-[32px] max-h-[120px]"
-              style={{ 
+              className="flex-1 bg-transparent text-white placeholder:text-white/40 outline-none resize-none min-h-[32px] max-h-[120px] disabled:opacity-60"
+              style={{
                 direction: 'rtl',
-                fieldSizing: 'content'
+                fieldSizing: 'content',
               }}
             />
           </div>
@@ -280,8 +390,9 @@ export default function ChatInput({
 
         {/* زر الإرسال */}
         <button
+          type="button"
           onClick={handleSend}
-          disabled={disabled || (!message.trim() && files.length === 0)}
+          disabled={disabled || recording || transcribing || (!message.trim() && files.length === 0)}
           className="bg-amber-500 hover:bg-amber-400 disabled:bg-zinc-700 disabled:cursor-not-allowed p-3 rounded-2xl transition-colors"
         >
           <Send className="w-5 h-5 text-black" />
@@ -289,10 +400,10 @@ export default function ChatInput({
       </div>
 
       {/* مؤشر التسجيل */}
-      {recording && (
+      {busyVoice && (
         <div className="absolute -top-8 right-0 text-xs text-amber-400 flex items-center gap-2">
-          <span className="w-2 h-2 bg-red-500 rounded-full animate-pulse" />
-          جاري التسجيل والتحويل للنص...
+          <span className={`w-2 h-2 rounded-full ${recording ? 'bg-red-500 animate-pulse' : 'bg-amber-400'}`} />
+          {recording ? 'جاري التسجيل... اضغط الميكروفون للإيقاف' : 'جاري تحويل الصوت إلى نص...'}
         </div>
       )}
     </div>

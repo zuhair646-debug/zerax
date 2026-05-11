@@ -98,17 +98,27 @@ export default function AIAgent() {
     } catch (e) { toast.error('فشل التحميل'); }
   };
 
-  const send = async ({ text, files }) => {
+  const send = async ({ text, files = [] }) => {
     const msg = text.trim();
-    if (!msg || sending) return;
+    const hasFiles = Array.isArray(files) && files.length > 0;
+    if ((!msg && !hasFiles) || sending) return;
+
+    const outgoingText = msg || 'حلّل المرفقات المرسلة.';
     setSending(true);
-    setMessages((prev) => [...prev, { role: 'user', content: msg }]);
+    setMessages((prev) => [
+      ...prev,
+      {
+        role: 'user',
+        content: outgoingText,
+        attachments: files.map((file) => ({ name: file.name, type: file.type })),
+      },
+    ]);
     setCurrentStream('');
     setCurrentTools([]);
 
     try {
       const formData = new FormData();
-      formData.append('message', msg);
+      formData.append('message', outgoingText);
       formData.append('model', model);
       if (conversationId) formData.append('conversation_id', conversationId);
       files.forEach((file) => formData.append('files', file));
@@ -407,6 +417,15 @@ function MessageBubble({ message }) {
         <div className="prose prose-invert prose-sm max-w-none whitespace-pre-wrap leading-relaxed">
           {message.content}
         </div>
+        {Array.isArray(message.attachments) && message.attachments.length > 0 && (
+          <div className="mt-3 flex flex-wrap gap-2">
+            {message.attachments.map((att, i) => (
+              <div key={`${att.name || 'file'}-${i}`} className="text-[11px] px-2 py-1 rounded-lg bg-black/30 border border-white/10 text-white/70">
+                📎 {att.name || att.url || 'مرفق'}
+              </div>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );

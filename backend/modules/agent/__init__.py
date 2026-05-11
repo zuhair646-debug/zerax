@@ -176,11 +176,12 @@ def create_agent_router(db, get_current_user):
             upload_dir.mkdir(parents=True, exist_ok=True)
             for f in files:
                 if f.filename:
-                    fname = f"{uuid.uuid4().hex[:12]}_{f.filename}"
+                    safe_original = Path(f.filename).name.replace("/", "_").replace("\\", "_")
+                    fname = f"{uuid.uuid4().hex[:12]}_{safe_original}"
                     fpath = upload_dir / fname
                     content = await f.read()
                     fpath.write_bytes(content)
-                    attachment_urls.append(f"/static/agent_uploads/{fname}")
+                    attachment_urls.append(f"/backend-static/agent_uploads/{fname}")
 
         # Add user message
         user_msg = {"role": "user", "content": message, "timestamp": _now()}
