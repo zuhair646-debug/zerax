@@ -4,24 +4,39 @@ import { Toaster, toast } from 'sonner';
 import {
   ArrowLeft, Loader2, ShieldCheck, ExternalLink, Copy, AlertTriangle,
   CheckCircle2, XCircle, Zap, Sparkles, CreditCard, BarChart3, Mic,
-  Brain, Code2, RefreshCw,
+  Brain, Code2, RefreshCw, Image as ImageIcon, Database, Mail, Rocket,
+  TrendingUp, Lock,
 } from 'lucide-react';
 
 const API = process.env.REACT_APP_BACKEND_URL;
 
 const CATEGORY_ICON = {
   ai: Brain,
+  media: ImageIcon,
   payments: CreditCard,
+  storage: Database,
+  messaging: Mail,
+  devops: Rocket,
+  analytics: TrendingUp,
+  auth: Lock,
   data: BarChart3,
   fallback: Sparkles,
 };
 
 const CATEGORY_LABEL = {
-  ai: 'الذكاء الاصطناعي والصوت',
-  payments: 'المدفوعات',
-  data: 'بيانات خارجية',
-  fallback: 'احتياطي (Emergent)',
+  ai: '🤖 الذكاء الاصطناعي',
+  media: '🎨 توليد الصور والفيديو والصوت',
+  payments: '💳 المدفوعات',
+  storage: '🗄️ التخزين وقواعد البيانات',
+  messaging: '📨 الإيميل والـSMS',
+  devops: '🚀 النشر والمراقبة',
+  analytics: '📊 التحليلات',
+  auth: '🔐 المصادقة',
+  data: '📈 بيانات خارجية',
+  fallback: '⚡ احتياطي (Emergent)',
 };
+
+const CATEGORY_ORDER = ['ai', 'media', 'payments', 'storage', 'messaging', 'devops', 'analytics', 'auth', 'data', 'fallback'];
 
 export default function AdminIndependence() {
   const nav = useNavigate();
@@ -109,10 +124,10 @@ export default function AdminIndependence() {
           <div className="flex items-center justify-between flex-wrap gap-4">
             <div>
               <h2 className="text-2xl md:text-3xl font-black mb-1">
-                {score}% مستقل
+                {score}% مستقل (أساسي)
               </h2>
               <p className="text-sm text-white/70">
-                {data.independent_count} من {data.total_count} خدمات تستخدم مفاتيحك الخاصة مباشرة
+                {data.independent_count} من {data.total_count} مفتاح أساسي ✦ {data.optional_set || 0} مفتاح اختياري إضافي مفعّل
               </p>
             </div>
             <div className="flex items-center gap-2">
@@ -151,13 +166,14 @@ export default function AdminIndependence() {
         </div>
 
         {/* Integration groups */}
-        {Object.keys(grouped).map((cat) => {
+        {CATEGORY_ORDER.filter((cat) => grouped[cat]?.length).map((cat) => {
           const Icon = CATEGORY_ICON[cat] || Brain;
           return (
             <div key={cat} className="mb-8">
               <h3 className="text-lg font-black mb-3 flex items-center gap-2">
                 <Icon className="w-5 h-5 text-amber-400" />
                 {CATEGORY_LABEL[cat] || cat}
+                <span className="text-xs font-normal text-white/40">({grouped[cat].length})</span>
               </h3>
               <div className="grid md:grid-cols-2 gap-3">
                 {grouped[cat].map((it) => <IntegrationCard key={it.id} it={it} />)}
@@ -203,7 +219,18 @@ function IntegrationCard({ it }) {
     >
       <div className="flex items-start justify-between gap-2 mb-2">
         <div className="min-w-0 flex-1">
-          <h4 className="font-black text-sm mb-0.5">{it.name_ar}</h4>
+          <h4 className="font-black text-sm mb-0.5 flex items-center gap-1.5 flex-wrap">
+            {it.name_ar}
+            {it.priority === 'high' && (
+              <span className="text-[9px] px-1.5 py-0.5 rounded-md bg-rose-500/20 border border-rose-400/40 text-rose-300 font-bold uppercase">أساسي</span>
+            )}
+            {it.priority === 'medium' && (
+              <span className="text-[9px] px-1.5 py-0.5 rounded-md bg-amber-500/20 border border-amber-400/40 text-amber-300 font-bold uppercase">مفيد</span>
+            )}
+            {it.priority === 'low' && (
+              <span className="text-[9px] px-1.5 py-0.5 rounded-md bg-white/10 border border-white/20 text-white/60 font-bold uppercase">اختياري</span>
+            )}
+          </h4>
           <p className="text-[11px] text-white/50">{it.name}</p>
         </div>
         <span className={`text-[10px] px-2 py-1 rounded-full border ${badgeMap[it.status_color]} whitespace-nowrap`}>
