@@ -5,7 +5,7 @@ import {
   ArrowLeft, Loader2, ShieldCheck, ExternalLink, Copy, AlertTriangle,
   CheckCircle2, XCircle, Zap, Sparkles, CreditCard, BarChart3, Mic,
   Brain, Code2, RefreshCw, Image as ImageIcon, Database, Mail, Rocket,
-  TrendingUp, Lock,
+  TrendingUp, Lock, HelpCircle, X, Play,
 } from 'lucide-react';
 
 const API = process.env.REACT_APP_BACKEND_URL;
@@ -43,6 +43,9 @@ export default function AdminIndependence() {
   const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [helpFor, setHelpFor] = useState(null);  // currently open tutorial integration_id
+  const [helpData, setHelpData] = useState(null); // loaded tutorial payload
+  const [helpLoading, setHelpLoading] = useState(false);
 
   const load = async () => {
     setLoading(true);
@@ -68,6 +71,26 @@ export default function AdminIndependence() {
     load();
     // eslint-disable-next-line
   }, []);
+
+  const openHelp = async (integrationId) => {
+    setHelpFor(integrationId);
+    setHelpLoading(true);
+    setHelpData(null);
+    try {
+      const r = await fetch(`${API}/api/admin/integration-tutorial/${integrationId}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!r.ok) throw new Error('failed');
+      setHelpData(await r.json());
+    } catch (e) {
+      toast.error('فشل تحميل الشرح');
+      setHelpFor(null);
+    } finally {
+      setHelpLoading(false);
+    }
+  };
+
+  const closeHelp = () => { setHelpFor(null); setHelpData(null); };
 
   if (loading || !data) {
     return (
@@ -176,7 +199,7 @@ export default function AdminIndependence() {
                 <span className="text-xs font-normal text-white/40">({grouped[cat].length})</span>
               </h3>
               <div className="grid md:grid-cols-2 gap-3">
-                {grouped[cat].map((it) => <IntegrationCard key={it.id} it={it} />)}
+                {grouped[cat].map((it) => <IntegrationCard key={it.id} it={it} onHelp={openHelp} />)}
               </div>
             </div>
           );
@@ -193,11 +216,20 @@ export default function AdminIndependence() {
           <RailwayCopyBlock items={data.integrations.filter(i => !i.is_independent && i.category !== 'fallback')} />
         </div>
       </div>
+
+      {/* Help / tutorial modal */}
+      {helpFor && (
+        <HelpModal
+          loading={helpLoading}
+          data={helpData}
+          onClose={closeHelp}
+        />
+      )}
     </div>
   );
 }
 
-function IntegrationCard({ it }) {
+function IntegrationCard({ it, onHelp }) {
   const copyVar = () => {
     navigator.clipboard.writeText(`${it.env_var}=`);
     toast.success(`نسخت اسم المتغير: ${it.env_var}`);
@@ -236,6 +268,16 @@ function IntegrationCard({ it }) {
         <span className={`text-[10px] px-2 py-1 rounded-full border ${badgeMap[it.status_color]} whitespace-nowrap`}>
           {it.status_label}
         </span>
+        {it.category !== 'fallback' && onHelp && (
+          <button
+            onClick={() => onHelp(it.id)}
+            data-testid={`help-btn-${it.id}`}
+            title="كيف أحصل على هذا المفتاح؟"
+            className="shrink-0 w-7 h-7 rounded-full bg-blue-500/15 hover:bg-blue-500/30 border border-blue-400/30 text-blue-300 flex items-center justify-center transition"
+          >
+            <HelpCircle className="w-3.5 h-3.5" />
+          </button>
+        )}
       </div>
       <p className="text-xs text-white/70 leading-relaxed mb-3">
         <span className="text-white/50">يشغّل:</span> {it.powers_ar}
@@ -317,5 +359,178 @@ function RailwayCopyBlock({ items }) {
         <Copy className="w-3.5 h-3.5" /> نسخ كل المتغيرات
       </button>
     </>
+  );
+}
+
+
+function HelpModal({ loading, data, onClose }) {
+  if (!loading && !data) return null;
+
+  const handleBackdrop = (e) => {
+    if (e.target === e.currentTarget) onClose();
+  };
+
+  const t = data?.tutorial;
+  const rt = data?.railway_tutorial;
+  const ig = data?.integration;
+  const copyVar = () => {
+    if (!ig?.env_var) return;
+    navigator.clipboard.writeText(ig.env_var);
+    toast.success(`نسخت: ${ig.env_var}`);
+  };
+
+  return (
+    <div
+      onClick={handleBackdrop}
+      data-testid="help-modal-backdrop"
+      className="fixed inset-0 z-[80] bg-black/85 backdrop-blur-sm flex items-start md:items-center justify-center p-4 overflow-y-auto"
+    >
+      <div
+        data-testid="help-modal"
+        className="bg-[#0a0a0a] border border-white/10 rounded-2xl max-w-2xl w-full my-8 overflow-hidden shadow-2xl"
+        dir="rtl"
+      >
+        {/* Header */}
+        <div className="flex items-center justify-between p-5 border-b border-white/10 bg-gradient-to-l from-blue-500/10 to-transparent">
+          <h3 className="font-black text-base flex items-center gap-2 text-white">
+            <HelpCircle className="w-5 h-5 text-blue-400" />
+            {loading ? 'تحميل...' : (t?.title_ar || 'شرح الإعداد')}
+          </h3>
+          <button
+            onClick={onClose}
+            data-testid="help-modal-close"
+            className="w-8 h-8 rounded-full bg-white/5 hover:bg-white/10 flex items-center justify-center"
+          >
+            <X className="w-4 h-4 text-white/70" />
+          </button>
+        </div>
+
+        <div className="p-5 max-h-[75vh] overflow-y-auto space-y-5">
+          {loading ? (
+            <div className="flex items-center justify-center py-12">
+              <Loader2 className="w-6 h-6 animate-spin text-blue-400" />
+            </div>
+          ) : (
+            <>
+              {/* Intro */}
+              {t?.intro_ar && (
+                <p className="text-sm text-white/75 leading-relaxed bg-blue-500/5 border border-blue-400/20 rounded-lg p-3">
+                  {t.intro_ar}
+                </p>
+              )}
+
+              {/* Pricing */}
+              {ig?.pricing_note_ar && (
+                <div className="text-xs text-white/60 bg-black/40 rounded-md px-3 py-2 flex items-center gap-2">
+                  💰 <span>{ig.pricing_note_ar}</span>
+                </div>
+              )}
+
+              {/* YouTube tutorial button */}
+              {t?.youtube_search && (
+                <a
+                  href={t.youtube_search}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  data-testid="help-watch-video"
+                  className="flex items-center gap-3 p-4 rounded-xl bg-gradient-to-l from-red-600/20 to-rose-600/10 border border-red-500/30 hover:border-red-500/60 transition group"
+                >
+                  <div className="w-12 h-12 rounded-full bg-red-600 group-hover:bg-red-500 flex items-center justify-center shrink-0">
+                    <Play className="w-5 h-5 text-white fill-white" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="font-bold text-sm text-white">شاهد فيديوهات شرح على YouTube</div>
+                    <div className="text-xs text-white/60">يفتح لك نتائج بحث على آخر الفيديوهات</div>
+                  </div>
+                  <ExternalLink className="w-4 h-4 text-white/60" />
+                </a>
+              )}
+
+              {/* Step-by-step */}
+              {t?.steps_ar && t.steps_ar.length > 0 && (
+                <div>
+                  <h4 className="font-black text-sm text-white mb-2 flex items-center gap-1.5">
+                    <span className="w-6 h-6 rounded-full bg-amber-500 text-black flex items-center justify-center text-xs font-bold">1</span>
+                    خطوات الحصول على المفتاح
+                  </h4>
+                  <ol className="space-y-2 pr-2">
+                    {t.steps_ar.map((step, i) => (
+                      <li key={i} className="flex gap-2.5 text-sm text-white/80 leading-relaxed">
+                        <span className="shrink-0 w-5 h-5 rounded-full bg-white/10 text-white/70 flex items-center justify-center text-[10px] font-bold mt-0.5">
+                          {i + 1}
+                        </span>
+                        <span>{step}</span>
+                      </li>
+                    ))}
+                  </ol>
+                </div>
+              )}
+
+              {/* Get key button */}
+              {ig?.console_url && (
+                <a
+                  href={ig.console_url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  data-testid="help-open-console"
+                  className="block text-center px-4 py-3 rounded-xl bg-amber-500 hover:bg-amber-400 text-black font-bold text-sm transition"
+                >
+                  <ExternalLink className="w-4 h-4 inline ml-1.5 -mt-0.5" />
+                  افتح صفحة الخدمة الرسمية
+                </a>
+              )}
+
+              {/* Variable name reminder */}
+              {ig?.env_var && (
+                <div className="bg-emerald-500/5 border border-emerald-400/30 rounded-lg p-3">
+                  <div className="text-xs text-emerald-300 mb-2 font-bold flex items-center gap-1.5">
+                    <CheckCircle2 className="w-3.5 h-3.5" />
+                    اسم المتغير في Railway
+                  </div>
+                  <button
+                    onClick={copyVar}
+                    className="font-mono text-sm bg-black/40 px-3 py-2 rounded-md w-full text-right text-amber-300 hover:bg-black/60 flex items-center justify-between gap-2"
+                  >
+                    <Copy className="w-3.5 h-3.5 text-white/50" />
+                    {ig.env_var}
+                  </button>
+                </div>
+              )}
+
+              {/* Railway tutorial */}
+              {rt?.steps_ar && rt.steps_ar.length > 0 && (
+                <details className="border border-white/10 rounded-xl overflow-hidden bg-white/[0.02]">
+                  <summary className="px-4 py-3 cursor-pointer text-sm font-bold flex items-center gap-2 hover:bg-white/5">
+                    <span className="w-6 h-6 rounded-full bg-purple-500 text-white flex items-center justify-center text-xs font-bold">2</span>
+                    {rt.title_ar}
+                    <span className="text-[10px] text-white/40 mr-auto">اضغط لفتح</span>
+                  </summary>
+                  <div className="p-4 pt-2 border-t border-white/10">
+                    <ol className="space-y-1.5 text-xs text-white/75">
+                      {rt.steps_ar.map((step, i) => (
+                        <li key={i} className="flex gap-2">
+                          <span className="text-white/40">{i + 1}.</span>
+                          <span>{step}</span>
+                        </li>
+                      ))}
+                    </ol>
+                    {rt.youtube_search && (
+                      <a
+                        href={rt.youtube_search}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="mt-3 inline-flex items-center gap-1.5 text-xs text-red-300 hover:text-red-200"
+                      >
+                        <Play className="w-3 h-3" /> فيديو شرح Railway
+                      </a>
+                    )}
+                  </div>
+                </details>
+              )}
+            </>
+          )}
+        </div>
+      </div>
+    </div>
   );
 }

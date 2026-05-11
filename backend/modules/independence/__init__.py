@@ -7,16 +7,31 @@ Endpoint: GET /api/admin/independence-status
 from __future__ import annotations
 import os
 from typing import Any, Dict, List
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
+
+try:
+    from modules.autocoder.credentials_vault import vault_get as _vault_get
+except Exception:
+    def _vault_get(_k: str):  # type: ignore
+        return None
+
+from .tutorials import get_tutorial, RAILWAY_TUTORIAL
 
 
 def _check(env_name: str, prefix: str = "") -> Dict[str, Any]:
-    val = os.environ.get(env_name, "").strip()
+    val = (os.environ.get(env_name) or "").strip()
+    source = "env" if val else None
+    if not val:
+        v2 = _vault_get(env_name)
+        if v2:
+            val = v2.strip()
+            source = "vault"
     is_set = bool(val)
     is_valid = is_set and (not prefix or val.startswith(prefix))
     return {
         "set": is_set,
         "valid_format": is_valid,
+        "source": source,
         "preview": (val[:8] + "..." + val[-4:]) if is_set and len(val) > 14 else ("***" if is_set else None),
     }
 
@@ -626,6 +641,7 @@ def create_independence_router(db, require_owner) -> APIRouter:
                 "configured": check["set"],
                 "valid_format": check["valid_format"],
                 "preview": check["preview"],
+                "key_source": check.get("source"),
                 "is_independent": is_independent,
                 "using_fallback": using_fallback,
                 "status_label": status_label,
@@ -638,7 +654,33 @@ def create_independence_router(db, require_owner) -> APIRouter:
             "optional_set": optional_set,
             "optional_total": optional_total,
             "integrations": items,
+            "railway_tutorial": RAILWAY_TUTORIAL,
             "owner_id": owner.get("id"),
+        }
+
+    @router.get("/integration-tutorial/{integration_id}")
+    async def tutorial(integration_id: str, owner=Depends(require_owner)):
+        """Return the per-integration tutorial (Arabic steps + YouTube search URL)."""
+        # Find integration
+        ig = next((i for i in INTEGRATIONS if i["id"] == integration_id), None)
+        if not ig:
+            raise HTTPException(status_code=404, detail=f"integration '{integration_id}' not found")
+        tut = get_tutorial(
+            integration_id,
+            name=ig.get("name", ""),
+            console_url=ig.get("console_url", ""),
+        )
+        return {
+            "ok": True,
+            "id": integration_id,
+            "integration": {
+                "name_ar": ig.get("name_ar"),
+                "env_var": ig.get("env_var"),
+                "console_url": ig.get("console_url"),
+                "pricing_note_ar": ig.get("pricing_note_ar"),
+            },
+            "tutorial": tut,
+            "railway_tutorial": RAILWAY_TUTORIAL,
         }
 
     return router
