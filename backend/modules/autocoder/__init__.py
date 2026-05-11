@@ -49,6 +49,7 @@ from .tools_extra import (
 )
 from .llm_providers import stream_via_groq, stream_via_gemini, stream_via_openai
 from .codebase_atlas import build_atlas_for_prompt
+from .codebase_atlas_v2 import build_atlas_v2_for_prompt
 from .tools_universe import (
     UNIVERSE_ANTHROPIC_TOOLS, UNIVERSE_TOOL_HANDLERS, UNIVERSE_TOOL_DEFS,
     universe_summarize, universe_preview, build_universe_for_prompt,
@@ -1802,7 +1803,7 @@ async def _autocoder_stream(messages: List[Dict[str, Any]], model: str = "claude
     # ── Route to alternative free providers ──
     # The AUTOCODER_SYSTEM_PROMPT carries the rules; the codebase_atlas adds
     # full structural knowledge so the AI doesn't waste tokens scanning files.
-    sys_prompt_full = AUTOCODER_SYSTEM_PROMPT + QUALITY_PROMPT_RULES + (env_banner or "") + build_atlas_for_prompt() + build_universe_for_prompt()
+    sys_prompt_full = AUTOCODER_SYSTEM_PROMPT + QUALITY_PROMPT_RULES + (env_banner or "") + build_atlas_for_prompt() + build_atlas_v2_for_prompt() + build_universe_for_prompt()
     if model == "groq":
         groq_key = os.environ.get("GROQ_API_KEY", "").strip()
         async for evt in stream_via_groq(
@@ -1938,7 +1939,7 @@ async def _stream_direct_anthropic(anthropic_msgs: List[Dict[str, Any]], api_key
         anthropic_msgs = anthropic_msgs[-MAX_HISTORY_TURNS:]
 
     # Prompt caching for system + tools (90% cheaper on subsequent calls)
-    sys_prompt_text = AUTOCODER_SYSTEM_PROMPT + QUALITY_PROMPT_RULES + (env_banner or "") + build_atlas_for_prompt() + build_universe_for_prompt()
+    sys_prompt_text = AUTOCODER_SYSTEM_PROMPT + QUALITY_PROMPT_RULES + (env_banner or "") + build_atlas_for_prompt() + build_atlas_v2_for_prompt() + build_universe_for_prompt()
     system_blocks = [
         {"type": "text", "text": sys_prompt_text, "cache_control": {"type": "ephemeral"}}
     ]
