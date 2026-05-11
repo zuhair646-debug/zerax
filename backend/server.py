@@ -8,7 +8,7 @@ import os
 import logging
 from pathlib import Path
 from pydantic import BaseModel, Field, ConfigDict, EmailStr
-from typing import List, Optional, Literal
+from typing import Any, Dict, List, Optional, Literal
 import uuid
 from datetime import datetime, timezone, timedelta
 import bcrypt
@@ -429,7 +429,7 @@ async def send_whatsapp_notification(message: str):
         async with httpx.AsyncClient() as client:
             try:
                 await client.get(url, timeout=10)
-            except:
+            except Exception:
                 pass
         
         logging.info(f"WhatsApp notification sent to {phone}")
@@ -767,7 +767,7 @@ async def transcribe_audio(
     if audio.content_type and not any(t in audio.content_type.lower() for t in allowed_hints):
         raise HTTPException(status_code=400, detail=f"نوع الملف غير مدعوم: {audio.content_type}")
     
-    import tempfile
+    import tempfile as tempfile_local
     import os as os_module
     suffix_map = {
         'audio/mp4': '.mp4',
@@ -783,7 +783,7 @@ async def transcribe_audio(
         suffix = '.mp4' if name.endswith('.mp4') else '.aac' if name.endswith('.aac') else '.ogg' if name.endswith('.ogg') else '.mp3' if name.endswith('.mp3') else '.wav' if name.endswith('.wav') else '.webm'
     tmp_file_path = None
     try:
-        with tempfile.NamedTemporaryFile(suffix=suffix, delete=False) as tmp_file:
+        with tempfile_local.NamedTemporaryFile(suffix=suffix, delete=False) as tmp_file:
             tmp_file.write(content)
             tmp_file_path = tmp_file.name
 
@@ -936,7 +936,7 @@ async def edit_image(request: ImageEditRequest, current_user: dict = Depends(get
             # Try to use a font, fallback to default
             try:
                 font = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", request.font_size)
-            except:
+            except Exception:
                 font = ImageFont.load_default()
             
             # Calculate text position
@@ -1835,7 +1835,7 @@ async def capture_payment_order(request: CaptureOrderRequest, current_user: dict
             f"المبلغ: ${order_doc.get('amount', 0)}\n"
             f"النقاط المضافة: {credits_to_add}"
         )
-    except:
+    except Exception:
         pass
     
     return {
@@ -2209,8 +2209,8 @@ STORAGE_URL = "https://integrations.emergentagent.com/objstore/api/v1/storage"
 EMERGENT_KEY = os.environ.get('EMERGENT_LLM_KEY')
 APP_NAME = "zitex-files"
 
-import requests as http_requests
-import tempfile
+import requests as http_requests  # noqa: E402
+import tempfile  # noqa: E402,F811
 
 _storage_key = None
 
@@ -3045,7 +3045,9 @@ async def analyze_autocoder_attachment(
     if not openai_key:
         raise HTTPException(status_code=500, detail="OPENAI_DIRECT_KEY or OPENAI_API_KEY is not configured")
 
-    data_url = f"data:{content_type};base64,{base64.b64encode(contents).decode('utf-8')}"
+    image_b64 = base64.b64encode(contents).decode('utf-8')
+    data_url = f"data:{content_type};base64,{image_b64}"
+    user_hint = (file.filename or "uploaded image").strip()
     prompt = (
         "حلل الصورة المرفقة بالعربية بشكل عملي ومباشر. "
         "اذكر: ماذا يظهر في الصورة، العناصر/النصوص المهمة، الألوان والأسلوب، "
@@ -3078,10 +3080,44 @@ async def analyze_autocoder_attachment(
         if response.status_code >= 400:
             detail = response.text[:500]
             logging.warning(f"OpenAI vision failed: {response.status_code} {detail}")
+            anthropic_key = (os.getenv("ANTHROPIC_API_KEY") or "").strip()
+            if anthropic_key:
+                anthropic_response = await client.post(
+                    "https://api.anthropic.com/v1/messages",
+                    headers={
+                        "x-api-key": anthropic_key,
+                        "anthropic-version": "2023-06-01",
+                        "Content-Type": "application/json",
+                    },
+                    json={
+                        "model": "claude-3-5-sonnet-20241022",
+                        "max_tokens": 900,
+                        "messages": [{
+                            "role": "user",
+                            "content": [
+                                {"type": "text", "text": prompt + f"\nاسم الملف: {user_hint}"},
+                                {
+                                    "type": "image",
+                                    "source": {
+                                        "type": "base64",
+                                        "media_type": content_type,
+                                        "data": image_b64,
+                                    },
+                                },
+                            ],
+                        }],
+                    },
+                )
+                if anthropic_response.status_code < 400:
+                    adata = anthropic_response.json()
+                    chunks = adata.get("content") or []
+                    analysis = "".join([c.get("text", "") for c in chunks if c.get("type") == "text"]).strip()
+                    return {"ok": True, "analysis": analysis or "لم أتمكن من استخراج تحليل واضح من الصورة.", "content_type": content_type, "provider": "anthropic"}
+                logging.warning(f"Anthropic vision fallback failed: {anthropic_response.status_code} {anthropic_response.text[:500]}")
             raise HTTPException(status_code=502, detail="Vision analysis provider failed")
         data = response.json()
         analysis = (data.get("choices") or [{}])[0].get("message", {}).get("content", "").strip()
-        return {"ok": True, "analysis": analysis or "لم أتمكن من استخراج تحليل واضح من الصورة.", "content_type": content_type}
+        return {"ok": True, "analysis": analysis or "لم أتمكن من استخراج تحليل واضح من الصورة.", "content_type": content_type, "provider": "openai"}
     except HTTPException:
         raise
     except Exception as exc:
@@ -3092,9 +3128,9 @@ async def analyze_autocoder_attachment(
 # ============== APP SETUP ==============
 
 # Import and setup chat router
-from routers import chat_router, set_ai_assistant, deployment_router, set_deployment_service
-from routers.websocket_router import router as websocket_router, set_ai_assistant as set_ws_ai_assistant
-from services import AIAssistant, DeploymentService
+from routers import chat_router, set_ai_assistant, deployment_router, set_deployment_service  # noqa: E402
+from routers.websocket_router import router as websocket_router, set_ai_assistant as set_ws_ai_assistant  # noqa: E402
+from services import AIAssistant, DeploymentService  # noqa: E402
 
 # Initialize AI Assistant
 ai_assistant = AIAssistant(
@@ -3599,9 +3635,11 @@ async def serve_storage_file(file_path: str):
         raise HTTPException(status_code=500, detail="Failed to fetch file")
 
 # Mount static files for uploads and UI
-from fastapi.staticfiles import StaticFiles
+from fastapi.staticfiles import StaticFiles  # noqa: E402
+Path("/app/backend/uploads").mkdir(parents=True, exist_ok=True)
 app.mount("/static", StaticFiles(directory="/app/static"), name="static_ui")
 app.mount("/backend-static", StaticFiles(directory="/app/backend/static"), name="static_backend")
+app.mount("/uploads", StaticFiles(directory="/app/backend/uploads"), name="autocoder_uploads")
 
 # Include routers
 app.include_router(api_router)

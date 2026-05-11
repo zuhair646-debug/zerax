@@ -224,6 +224,7 @@
             border-radius: 18px;
             word-wrap: break-word;
             line-height: 1.5;
+            white-space: pre-wrap;
         }
         .message.user .message-bubble {
             background: linear-gradient(135deg, #6D28D9 0%, #8B5CF6 100%);
@@ -335,10 +336,11 @@
             gap: 8px;
             flex-wrap: wrap;
             margin-top: 8px;
+            max-width: min(520px, 100%);
         }
         .message-image {
-            width: min(260px, 100%);
-            max-height: 260px;
+            width: min(420px, 100%);
+            max-height: 420px;
             object-fit: contain;
             background: #111827;
             border: 2px solid #E5E7EB;
@@ -346,6 +348,10 @@
             cursor: pointer;
             transition: transform 0.2s;
             display: block;
+            box-shadow: 0 8px 22px rgba(0,0,0,0.18);
+        }
+        .message.user .message-bubble:has(.message-images) {
+            max-width: min(560px, 92%);
         }
         .message-image:hover {
             transform: scale(1.05);
@@ -665,19 +671,23 @@
                             if (analysisData.analysis) {
                                 attachmentAnalyses.push(`تحليل الصورة (${img.file.name}):\n${analysisData.analysis}`);
                             }
+                        } else {
+                            const errorText = await analysisResponse.text().catch(() => '');
+                            attachmentAnalyses.push(`تعذر تحليل الصورة (${img.file.name}) قبل الإرسال. حالة الخدمة: ${analysisResponse.status}. ${errorText.slice(0, 180)}`);
                         }
                     } catch (analysisError) {
                         console.warn('Image analysis failed:', analysisError);
+                        attachmentAnalyses.push(`تعذر تحليل الصورة (${img.file.name}) قبل الإرسال بسبب خطأ اتصال: ${analysisError.message || analysisError}`);
                     }
+                } else if (img.type && img.type.startsWith('video/')) {
+                    attachmentAnalyses.push(`تم إرفاق فيديو (${img.file.name}). حالياً أستطيع رؤية اسم الملف فقط وليس تحليل محتوى الفيديو بصرياً.`);
                 }
             }
 
-            if (attachmentAnalyses.length > 0) {
-                formData.set(
-                    'message',
-                    `${message || 'علّق على الصورة المرفقة وحللها'}\n\n[تحليل بصري تلقائي للمرفقات]\n${attachmentAnalyses.join('\n\n')}\n[/تحليل بصري تلقائي]`
-                );
-            }
+            formData.set(
+                'message',
+                `${message || 'علّق على الصورة المرفقة وحللها'}\n\n[تعليمات مهمة]\nإذا وجدت تحليلاً بصرياً تلقائياً بالأسفل، اعتمد عليه مباشرة واشرح الصورة للمالك بالعربية. لا تكتفِ بذكر أن هناك مرفقاً.\n[/تعليمات مهمة]\n\n${attachmentAnalyses.length > 0 ? `[تحليل بصري تلقائي للمرفقات]\n${attachmentAnalyses.join('\n\n')}\n[/تحليل بصري تلقائي]` : '[تنبيه] تم رفع مرفق لكن لم يتوفر تحليل بصري تلقائي؛ وضّح للمالك أن التحليل لم ينجح واذكر مسار/اسم المرفق إن ظهر لك.'}`
+            );
             
             // Add user message with images preview
             addMessage('user', message || '📎 مرفق صورة/ملف', selectedImages.map(img => img.dataUrl));
