@@ -5,6 +5,37 @@
 
 ## User Language: Arabic (العربية)
 
+### 🆕 Feb 11, 2026 — TOOLS UNIVERSE (413 أداة عملية مترابطة) ✅
+
+**طلب المستخدم**: 300+ أداة (LLMs, DBs, Cloud, Image/Video, Web3, etc.) تعمل فعلياً ومترابطة، مو مجرد قائمة. ذكاء متكامل، تفكير واسع، فرص تنفيذ كثيرة.
+
+**المُنفّذ**:
+- `/app/backend/modules/autocoder/tools_universe.py` (1500+ سطر): كتالوج 413 أداة في 42 فئة، كل واحدة بـmetadata حقيقي (install_cmd, env_keys, docs_url, type).
+- `/app/backend/modules/autocoder/credentials_vault.py`: خزنة مفاتيح موحّدة (env → vault → owner-prompt).
+- 9 أدوات جديدة للـ AI:
+  1. `tool_universe_search(query, category?, limit?)` — بحث في الـ413 أداة
+  2. `tool_universe_info(tool)` — تفاصيل + هل مثبّتة + هل مفاتيحها مضبوطة
+  3. `tool_universe_install(tool, dry_run?, timeout?)` — تثبيت فعلي (pip/yarn/npm/apt/curl)
+  4. `tool_universe_status(tool?)` — ملخّص عام أو حالة أداة محددة
+  5. `tool_universe_credentials_required(tool?, set_key?, set_value?)` — قائمة مفاتيح ناقصة / حفظ مفتاح
+  6. `tool_universe_plan(goal?, template?)` — 8 قوالب جاهزة (rag-pipeline, image-saas, video-saas, agent-platform, mobile-app, ecommerce-store, ai-coder, web3-dapp) + plan ذكي حسب الـgoal
+  7. `vault_list` / `vault_set(key,value)` / `vault_delete(key)` — إدارة الخزنة
+- حقن `build_universe_for_prompt()` في الـ system prompt → الـ AI يعرف يستدعي الأدوات + يفهم الفئات والقواعد.
+- المفاتيح اللازمة موسومة بوضوح في كل entry، الأدوات اللي تحتاج مفاتيح "موضوعة على جنب" (109 أداة تحتاج keys حالياً) ومرئية عبر `tool_universe_credentials_required()`.
+
+**نتيجة**:
+- الـ AI صار يقدر "ثبّت Stripe + LangChain + Supabase وابني pipeline يربطهم" → ينفّذ فعلياً.
+- البحث الذكي يلقى أي أداة (شغّل `find_tool('Mongo')` → mongodb, `find_tool('react native')` → react-native).
+- خطّط متعدد الأدوات: `tool_universe_plan(goal='ابي تطبيق صور AI')` → image-saas template مع 6 أدوات.
+
+**Tested**:
+- 413 أداة تتحمّل ✅
+- 9 أدوات تنفّذ end-to-end عبر `execute_autocoder_tool` ✅
+- system prompt يضم Universe section ✅
+- vault set/get/delete يعمل ✅
+- install dry_run يطبع الأمر الصحيح ✅
+
+
 
 ### 🆕 May 7, 2026 — ZITEX AUTO-CODER (برمجة زيتاكس) — Owner-Only Self-Programming AI ✅
 
