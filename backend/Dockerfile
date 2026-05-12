@@ -2,17 +2,13 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
-# Install OS-level tools + Chromium for Playwright (real-browser testing by Auto-Coder)
+# Install OS-level tools so the autocoder can run git/curl/etc. on production
+# Note: Chromium intentionally NOT installed here — adds 500MB+ and slows builds.
+# browse_site() returns a clear "browser unavailable on this host" message if missing.
+# To enable browser testing on production: add ENABLE_BROWSER=1 env var and uncomment below.
 RUN apt-get update && apt-get install -y --no-install-recommends \
     git curl ca-certificates openssh-client jq \
-    chromium \
-    fonts-liberation libasound2 libatk-bridge2.0-0 libatk1.0-0 \
-    libatspi2.0-0 libcups2 libdbus-1-3 libdrm2 libgbm1 \
-    libnspr4 libnss3 libxcomposite1 libxdamage1 libxfixes3 libxkbcommon0 libxrandr2 \
     && rm -rf /var/lib/apt/lists/*
-
-ENV PLAYWRIGHT_CHROMIUM_PATH=/usr/bin/chromium \
-    PLAYWRIGHT_BROWSERS_PATH=/usr/lib/chromium
 
 # Configure default git identity (autocoder will override per-commit if needed)
 RUN git config --global user.email "autocoder@zitex.com" \
