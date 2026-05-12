@@ -40,6 +40,7 @@ export default function ChatInput({
   const [recording, setRecording] = useState(false);
   const [transcribing, setTranscribing] = useState(false);
   const [showEmojis, setShowEmojis] = useState(false);
+  const [filePreviews, setFilePreviews] = useState([]);
 
   const fileInputRef = useRef(null);
   const mediaRecorderRef = useRef(null);
@@ -61,6 +62,17 @@ export default function ChatInput({
       mediaStreamRef.current?.getTracks?.().forEach((track) => track.stop());
     };
   }, []);
+
+  useEffect(() => {
+    const previews = files.map((file) => ({
+      file,
+      url: file.type?.startsWith('image/') ? URL.createObjectURL(file) : '',
+    }));
+    setFilePreviews(previews);
+    return () => previews.forEach((preview) => {
+      if (preview.url) URL.revokeObjectURL(preview.url);
+    });
+  }, [files]);
 
   const updateMessage = (nextValue) => {
     setMessage(nextValue);
@@ -259,27 +271,40 @@ export default function ChatInput({
       {/* معاينة الملفات المرفقة */}
       {files.length > 0 && (
         <div className="mb-3 flex flex-wrap gap-2">
-          {files.map((file, index) => (
-            <div key={`${file.name}-${index}`} className="relative group">
-              <div className="bg-zinc-800/50 rounded-lg p-2 pr-8 border border-white/10 flex items-center gap-2">
-                {file.type.startsWith('image/') ? (
-                  <ImageIcon className="w-4 h-4 text-amber-400" />
-                ) : (
-                  <Video className="w-4 h-4 text-amber-400" />
-                )}
-                <span className="text-sm text-white/70 max-w-[150px] truncate">
-                  {file.name}
-                </span>
+          {files.map((file, index) => {
+            const preview = filePreviews[index];
+            const isImage = file.type.startsWith('image/');
+            return (
+              <div key={`${file.name}-${index}`} className="relative group">
+                <div className={`bg-zinc-800/50 overflow-hidden rounded-xl border border-white/10 ${isImage ? 'w-28' : 'p-2 pr-8 flex items-center gap-2'}`}>
+                  {isImage && preview?.url ? (
+                    <>
+                      <img src={preview.url} alt={file.name} className="h-20 w-full object-cover bg-zinc-900" />
+                      <div className="px-2 py-1 text-[10px] text-white/70 truncate">{file.name}</div>
+                    </>
+                  ) : (
+                    <>
+                      {isImage ? (
+                        <ImageIcon className="w-4 h-4 text-amber-400" />
+                      ) : (
+                        <Video className="w-4 h-4 text-amber-400" />
+                      )}
+                      <span className="text-sm text-white/70 max-w-[150px] truncate">
+                        {file.name}
+                      </span>
+                    </>
+                  )}
+                </div>
+                <button
+                  type="button"
+                  onClick={() => removeFile(index)}
+                  className="absolute top-1 left-1 bg-red-500 hover:bg-red-600 rounded-full p-0.5 opacity-0 group-hover:opacity-100 transition-opacity"
+                >
+                  <X className="w-3 h-3 text-white" />
+                </button>
               </div>
-              <button
-                type="button"
-                onClick={() => removeFile(index)}
-                className="absolute top-1 left-1 bg-red-500 hover:bg-red-600 rounded-full p-0.5 opacity-0 group-hover:opacity-100 transition-opacity"
-              >
-                <X className="w-3 h-3 text-white" />
-              </button>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
 

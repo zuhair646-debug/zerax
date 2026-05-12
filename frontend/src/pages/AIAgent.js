@@ -11,6 +11,31 @@ import ChatInput from '@/components/ChatInput';
 
 const API = process.env.REACT_APP_BACKEND_URL;
 
+function normalizeAttachment(att) {
+  if (!att) return null;
+  if (typeof att === 'string') {
+    const raw = att;
+    const url = raw.startsWith('blob:') || raw.startsWith('data:') || raw.startsWith('http')
+      ? raw
+      : `${API}${raw.startsWith('/') ? raw : `/${raw}`}`;
+    const cleanName = raw.split('/').pop() || 'مرفق';
+    return { url, name: cleanName, type: raw.match(/\.(png|jpe?g|gif|webp|bmp|svg)$/i) ? 'image/*' : '' };
+  }
+  const rawUrl = att.previewUrl || att.url || '';
+  const url = rawUrl
+    ? (rawUrl.startsWith('blob:') || rawUrl.startsWith('data:') || rawUrl.startsWith('http')
+      ? rawUrl
+      : `${API}${rawUrl.startsWith('/') ? rawUrl : `/${rawUrl}`}`)
+    : '';
+  const name = att.name || (rawUrl ? rawUrl.split('/').pop() : 'مرفق');
+  const type = att.type || (rawUrl.match(/\.(png|jpe?g|gif|webp|bmp|svg)$/i) ? 'image/*' : '');
+  return { ...att, url, name, type };
+}
+
+function isImageAttachment(att) {
+  return Boolean(att?.type?.startsWith?.('image/') || att?.url?.match?.(/\.(png|jpe?g|gif|webp|bmp|svg)(\?|$)/i));
+}
+
 export default function AIAgent() {
   const nav = useNavigate();
   const [messages, setMessages] = useState([]);
@@ -104,13 +129,19 @@ export default function AIAgent() {
     if ((!msg && !hasFiles) || sending) return;
 
     const outgoingText = msg || 'حلّل المرفقات المرسلة.';
+    const localAttachments = files.map((file) => ({
+      name: file.name,
+      type: file.type,
+      size: file.size,
+      previewUrl: file.type?.startsWith('image/') ? URL.createObjectURL(file) : '',
+    }));
     setSending(true);
     setMessages((prev) => [
       ...prev,
       {
         role: 'user',
         content: outgoingText,
-        attachments: files.map((file) => ({ name: file.name, type: file.type })),
+        attachments: localAttachments,
       },
     ]);
     setCurrentStream('');
@@ -128,6 +159,7 @@ export default function AIAgent() {
         headers: { Authorization: `Bearer ${token}` },
         body: formData,
       });
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
       if (!r.body) throw new Error('no stream');
       const reader = r.body.getReader();
       const decoder = new TextDecoder();
@@ -158,6 +190,25 @@ export default function AIAgent() {
             } else if (evt.type === 'saved') {
               setConversationId(evt.conversation_id);
               setHasHtml(!!evt.has_html);
+              if (Array.isArray(evt.attachments) && evt.attachments.length > 0) {
+                setMessages((prev) => {
+                  const next = [...prev];
+                  for (let i = next.length - 1; i >= 0; i -= 1) {
+                    if (next[i]?.role === 'user') {
+                      const previousAttachments = Array.isArray(next[i].attachments) ? next[i].attachments : [];
+                      next[i] = {
+                        ...next[i],
+                        attachments: evt.attachments.map((url, idx) => ({
+                          ...(previousAttachments[idx] || {}),
+                          url,
+                        })),
+                      };
+                      break;
+                    }
+                  }
+                  return next;
+                });
+              }
               loadConversations();
             } else if (evt.type === 'error') {
               toast.error(evt.message);
@@ -419,11 +470,35 @@ function MessageBubble({ message }) {
         </div>
         {Array.isArray(message.attachments) && message.attachments.length > 0 && (
           <div className="mt-3 flex flex-wrap gap-2">
-            {message.attachments.map((att, i) => (
-              <div key={`${att.name || 'file'}-${i}`} className="text-[11px] px-2 py-1 rounded-lg bg-black/30 border border-white/10 text-white/70">
-                📎 {att.name || att.url || 'مرفق'}
-              </div>
-            ))}
+            {message.attachments.map((rawAtt, i) => {
+              const att = normalizeAttachment(rawAtt);
+              if (!att) return null;
+              const image = isImageAttachment(att);
+              return (
+                <a
+                  key={`${att.name || 'file'}-${i}`}
+                  href={att.url || undefined}
+                  target={att.url ? '_blank' : undefined}
+                  rel="noreferrer"
+                  className={`group overflow-hidden rounded-xl bg-black/30 border border-white/10 text-white/70 ${image ? 'w-36' : 'px-2 py-1 text-[11px]'}`}
+                  title={att.name}
+                >
+                  {image && att.url ? (
+                    <>
+                      <img
+                        src={att.url}
+                        alt={att.name || 'مرفق صورة'}
+                        className="h-28 w-full object-cover bg-zinc-900 transition group-hover:scale-[1.02]"
+                        loading="lazy"
+                      />
+                      <div className="px-2 py-1 text-[10px] truncate">📎 {att.name || 'صورة'}</div>
+                    </>
+                  ) : (
+                    <>📎 {att.name || att.url || 'مرفق'}</>
+                  )}
+                </a>
+              );
+            })}
           </div>
         )}
       </div>

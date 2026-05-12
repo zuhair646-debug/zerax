@@ -209,6 +209,11 @@ def create_agent_router(db, get_current_user):
         messages_list.append(user_msg)
 
         model_pick = (model or "gpt-4o").lower()
+        # Claude path currently receives text-only history. If the user attached images,
+        # force the vision-capable GPT-4o path so the assistant can actually inspect them.
+        if attachment_image_parts and model_pick.startswith("claude"):
+            logger.info("[AGENT] switching image turn from %s to gpt-4o vision", model_pick)
+            model_pick = "gpt-4o"
 
         async def stream_generator():
             nonlocal current_html
@@ -291,7 +296,13 @@ def create_agent_router(db, get_current_user):
                     {"$set": update_doc, "$setOnInsert": {"created_at": _now()}},
                     upsert=True,
                 )
-                yield f"data: {json.dumps({'type':'saved','conversation_id':conv_id,'has_html': bool(new_html)})}\n\n"
+                saved_evt = {
+                    "type": "saved",
+                    "conversation_id": conv_id,
+                    "has_html": bool(new_html),
+                    "attachments": attachment_urls,
+                }
+                yield f"data: {json.dumps(saved_evt, ensure_ascii=False)}\n\n"
             except Exception as e:
                 logger.exception("[AGENT] chat stream failed")
                 err = {"type": "error", "message": str(e)[:240]}
