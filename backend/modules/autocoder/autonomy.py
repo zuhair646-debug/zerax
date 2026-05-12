@@ -54,21 +54,46 @@ async def _ensure_browser():
                 _BROWSER_PAGE = None
         try:
             from playwright.async_api import async_playwright
+        except ImportError as e:
+            raise RuntimeError(
+                "playwright not installed. Install: pip install playwright && playwright install chromium"
+            ) from e
+        try:
             pw = await async_playwright().start()
-            _BROWSER = await pw.chromium.launch(
-                headless=True,
-                args=["--no-sandbox", "--disable-setuid-sandbox", "--disable-dev-shm-usage"],
-                executable_path="/usr/bin/chromium",
-            )
-            _BROWSER_CONTEXT = await _BROWSER.new_context(
-                viewport={"width": 1280, "height": 800},
-                user_agent="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36",
-            )
-            _BROWSER_PAGE = await _BROWSER_CONTEXT.new_page()
-            return _BROWSER_PAGE
         except Exception as e:
-            logger.error(f"browser init failed: {e}")
-            raise
+            raise RuntimeError(f"playwright start failed: {e}") from e
+
+        # Try multiple chromium paths (Railway/Docker may have it in different locations)
+        chromium_paths = [
+            os.environ.get("PLAYWRIGHT_CHROMIUM_PATH"),
+            "/usr/bin/chromium",
+            "/usr/bin/chromium-browser",
+            "/usr/bin/google-chrome",
+            None,  # Let playwright find its own
+        ]
+        last_err = None
+        for path in chromium_paths:
+            try:
+                launch_kwargs = {
+                    "headless": True,
+                    "args": ["--no-sandbox", "--disable-setuid-sandbox", "--disable-dev-shm-usage"],
+                }
+                if path and os.path.exists(path):
+                    launch_kwargs["executable_path"] = path
+                _BROWSER = await pw.chromium.launch(**launch_kwargs)
+                break
+            except Exception as e:
+                last_err = e
+                continue
+        if _BROWSER is None:
+            raise RuntimeError(f"chromium launch failed (tried {chromium_paths}): {last_err}")
+
+        _BROWSER_CONTEXT = await _BROWSER.new_context(
+            viewport={"width": 1280, "height": 800},
+            user_agent="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36",
+        )
+        _BROWSER_PAGE = await _BROWSER_CONTEXT.new_page()
+        return _BROWSER_PAGE
 
 
 async def tool_browse_site(
@@ -172,6 +197,61 @@ async def tool_browser_reset() -> Dict[str, Any]:
     return {"ok": True, "reset": True}
 
 
+async def tool_create_test_user(
+    email: str = "",
+    password: str = "test123456",
+    name: str = "Test User",
+    role: str = "user",
+    balance: int = 100,
+) -> Dict[str, Any]:
+    """Create a test user account for testing flows. Returns the email/password
+    so the AI can then use browse_site to login as this user."""
+    import bcrypt
+    import uuid
+    from datetime import datetime, timezone
+    try:
+        from server import db
+    except Exception:
+        return {"ok": False, "error": "DB not accessible from this context"}
+
+    if not email:
+        # Auto-generate unique email
+        email = f"test_{uuid.uuid4().hex[:8]}@zitex.test"
+    # Check if exists
+    existing = await db.users.find_one({"email": email}, {"_id": 0, "id": 1})
+    if existing:
+        return {
+            "ok": True,
+            "already_exists": True,
+            "email": email,
+            "hint": f"Use this account with password='{password}' or call again with different email",
+        }
+    pw_hash = bcrypt.hashpw(password.encode(), bcrypt.gensalt()).decode()
+    doc = {
+        "id": str(uuid.uuid4()),
+        "email": email,
+        "password_hash": pw_hash,
+        "name": name,
+        "role": role if role in ("user", "admin", "super_admin", "owner") else "user",
+        "balance": int(balance),
+        "created_at": datetime.now(timezone.utc).isoformat(),
+        "is_test_account": True,
+    }
+    try:
+        await db.users.insert_one(doc.copy())
+    except Exception as e:
+        return {"ok": False, "error": str(e)}
+    return {
+        "ok": True,
+        "user_id": doc["id"],
+        "email": email,
+        "password": password,
+        "role": doc["role"],
+        "balance": balance,
+        "next": "استخدم browse_site للدخول بهذا الحساب واختبر الموقع",
+    }
+
+
 # ════════════════════════════════════════════════════════════════════════
 # 🚀 Execute and Deploy — one-shot cycle
 # ════════════════════════════════════════════════════════════════════════
@@ -246,18 +326,33 @@ AUTONOMY_ANTHROPIC_TOOLS: List[Dict[str, Any]] = [
             "commit_message": {"type": "string"},
         }, "required": []},
     },
+    {
+        "name": "create_test_user",
+        "description": ("Create a test user account in the DB instantly. Use when the owner asks you "
+                       "to 'test the site' or you need to login to verify a flow. Returns email + password "
+                       "you can then feed into browse_site → fill → click → screenshot."),
+        "input_schema": {"type": "object", "properties": {
+            "email": {"type": "string", "description": "اختياري — لو فاضي ينولّد تلقائياً"},
+            "password": {"type": "string"},
+            "name": {"type": "string"},
+            "role": {"type": "string", "description": "user|admin|super_admin"},
+            "balance": {"type": "integer", "description": "starting credits, default 100"},
+        }, "required": []},
+    },
 ]
 
 AUTONOMY_TOOL_DEFS: List[Dict[str, Any]] = [
     {"name": "browse_site", "desc": "real browser automation", "args": ["action", "url?", "selector?", "text?", "script?", "timeout?"]},
     {"name": "browser_reset", "desc": "reset stuck browser", "args": []},
     {"name": "git_push", "desc": "push to GitHub→Railway", "args": ["commit_message?"]},
+    {"name": "create_test_user", "desc": "instant test user", "args": ["email?", "password?", "name?", "role?", "balance?"]},
 ]
 
 AUTONOMY_TOOL_HANDLERS = {
     "browse_site": tool_browse_site,
     "browser_reset": tool_browser_reset,
     "git_push": tool_git_push,
+    "create_test_user": tool_create_test_user,
 }
 
 
@@ -325,4 +420,41 @@ AUTONOMY_PROMPT_RULES = """
    3. browse_site(action='click', selector='[data-testid=...]') — جرّب الزر
    4. browse_site(action='get_text', selector='...') — تأكد من المحتوى
    لو شفت bug → اصلحه → push → اختبر مرة ثانية. حلقة كاملة بدون تدخل.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+🎬 أمثلة كاملة — هذا اللي **يجب** تسويه (مو بس تقول):
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+❓ المالك: "اختبر الموقع وقولي وش رأيك"
+✅ الذكاء:
+   1. create_test_user()  → email + password
+   2. browse_site(navigate, https://...)
+   3. browse_site(fill, input[name=email], <email>)
+   4. browse_site(fill, input[name=password], <password>)
+   5. browse_site(click, button[type=submit])
+   6. browse_site(screenshot) → يحلل الصورة
+   7. browse_site(navigate, /admin/...)
+   8. browse_site(screenshot) → يحلل
+   9. record_lesson(summary='تجربة الموقع', lesson='شفت كذا وكذا')
+   10. يرد للمالك بملخص + screenshots paths
+   ❌ لا يقول: "ما عندي صلاحية"، "أحتاج حساب"، "لا أستطيع الدخول"
+
+❓ المالك: "صلح رفع الصور في الشات"
+✅ الذكاء:
+   1. code_lookup("ChatInput") → يلقى الملف + رقم السطر
+   2. read_file(ChatInput.js, range=N-5 to N+50) → يقرأ المنطقة
+   3. edit_file(...) → يصحّح FormData logic
+   4. verify_lint → ok
+   5. create_test_user → email/pwd
+   6. browse_site(navigate→login→navigate to chat→fill→upload→submit)
+   7. browse_site(screenshot) → يتأكد إن الصورة ظهرت
+   8. لو شغّال: git_push → record_lesson → يخبر المالك
+   9. لو ما شغّال: يعيد من خطوة 2 لين يضبط
+   ❌ لا يقول: "سأصلحه بعدين"، "هل تريد أن أكمل؟"
+
+❓ المالك: "اضف ميزة X"
+✅ الذكاء: ينفذ كامل الـ workflow → push → اختبار حقيقي → ملخص.
+   ❌ لا يقول: "ينقصني تفاصيل"، "لو تريد..."
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 """
