@@ -27,6 +27,8 @@ import json
 import uuid
 import asyncio
 import logging
+import base64
+import mimetypes
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -169,8 +171,10 @@ def create_agent_router(db, get_current_user):
         else:
             messages_list = []
 
-        # Process attachments
-        attachment_urls = []
+        # Process attachments. Keep public URLs for the UI/history, and keep compact
+        # base64 data URLs for the current turn so GPT-4o can actually see images.
+        attachment_urls: List[str] = []
+        attachment_image_parts: List[Dict[str, Any]] = []
         if files:
             upload_dir = Path("/app/backend/static/agent_uploads")
             upload_dir.mkdir(parents=True, exist_ok=True)
@@ -181,12 +185,27 @@ def create_agent_router(db, get_current_user):
                     fpath = upload_dir / fname
                     content = await f.read()
                     fpath.write_bytes(content)
-                    attachment_urls.append(f"/backend-static/agent_uploads/{fname}")
+                    public_url = f"/backend-static/agent_uploads/{fname}"
+                    attachment_urls.append(public_url)
+
+                    content_type = (f.content_type or mimetypes.guess_type(safe_original)[0] or "").lower()
+                    if content_type.startswith("image/") and content:
+                        # Avoid sending huge uploads to the vision model. UI still keeps the file.
+                        if len(content) <= 8 * 1024 * 1024:
+                            data_url = f"data:{content_type};base64,{base64.b64encode(content).decode('ascii')}"
+                            attachment_image_parts.append({
+                                "type": "image_url",
+                                "image_url": {"url": data_url},
+                            })
+                        else:
+                            logger.warning("Skipping oversized image attachment for vision: %s bytes", len(content))
 
         # Add user message
         user_msg = {"role": "user", "content": message, "timestamp": _now()}
         if attachment_urls:
             user_msg["attachments"] = attachment_urls
+            if attachment_image_parts:
+                user_msg["vision_images"] = attachment_image_parts
         messages_list.append(user_msg)
 
         model_pick = (model or "gpt-4o").lower()
@@ -255,10 +274,14 @@ def create_agent_router(db, get_current_user):
                     "timestamp": _now(),
                     "model": model_pick,
                 })
+                persisted_messages = [
+                    {k: v for k, v in msg.items() if k != "vision_images"}
+                    for msg in messages_list
+                ]
                 update_doc: Dict[str, Any] = {
                     "id": conv_id,
                     "user_id": user["user_id"],
-                    "messages": messages_list,
+                    "messages": persisted_messages,
                     "updated_at": _now(),
                 }
                 if new_html and new_html != current_html:
@@ -408,7 +431,22 @@ async def _gpt_stream(
         })
     for m in messages:
         if m["role"] in ("user", "assistant"):
-            local.append({"role": m["role"], "content": m.get("content", "") or ""})
+            text = m.get("content", "") or ""
+            if m["role"] == "user" and m.get("vision_images"):
+                content_parts: List[Dict[str, Any]] = [
+                    {
+                        "type": "text",
+                        "text": (
+                            f"{text}\n\n"
+                            "[المستخدم أرفق صورة/صور في هذه الرسالة. حلّل الصورة بصرياً بدقة "
+                            "وأجب على محتواها مباشرة، ولا تكتفِ بذكر اسم الموقع أو وجود مرفق.]"
+                        ),
+                    }
+                ]
+                content_parts.extend(m.get("vision_images", [])[:4])
+                local.append({"role": "user", "content": content_parts})
+            else:
+                local.append({"role": m["role"], "content": text})
 
     for iteration in range(30):
         try:
