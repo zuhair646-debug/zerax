@@ -62,6 +62,19 @@ from .code_index import (
     INDEX_ANTHROPIC_TOOLS, INDEX_TOOL_HANDLERS, INDEX_TOOL_DEFS,
     index_summarize, index_preview, INDEX_PROMPT_RULES, get_index,
 )
+from .safety_net import (
+    SAFETY_ANTHROPIC_TOOLS, SAFETY_TOOL_HANDLERS, SAFETY_TOOL_DEFS,
+    safety_summarize, safety_preview, SAFETY_PROMPT_RULES,
+    sanity_check as _sanity_check, make_snapshot, is_spine_file,
+)
+from .learning import (
+    LEARNING_ANTHROPIC_TOOLS, LEARNING_TOOL_HANDLERS, LEARNING_TOOL_DEFS,
+    learning_summarize, learning_preview, LEARNING_PROMPT_RULES,
+    bind_db as _bind_learning_db, build_lessons_for_prompt,
+    query_lessons as _query_lessons, get_stats as _learning_get_stats,
+    promote as _promote_lesson, archive as _archive_lesson,
+    add_lesson as _add_lesson,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -442,17 +455,34 @@ async def tool_read_file(path: str, start: int = 1, end: Optional[int] = None) -
 
 
 async def tool_write_file(path: str, content: str) -> Dict[str, Any]:
-    if _is_protected_path(path):
-        return _protection_error(path)
+    """Write file. Auto-snapshot + sanity-check on spine files.
+    Old PROTECTED_PATHS restrictions removed — full freedom + safety net."""
     try:
         p = _resolve_path(path)
+        # Sanity check (only blocks on actual errors, warnings allowed)
+        sanity = _sanity_check(str(p), content)
+        if not sanity["ok"]:
+            return {
+                "ok": False,
+                "rejected": "sanity_failed",
+                "errors": sanity["errors"],
+                "hint": "صحّح الأخطاء أو استدعِ sanity_check(path, content) قبل الكتابة الفعلية.",
+            }
+        # Auto-snapshot spine files
+        snap = None
+        if is_spine_file(str(p)) and p.exists():
+            snap = make_snapshot(str(p))
         p.parent.mkdir(parents=True, exist_ok=True)
         existed = p.exists()
         p.write_text(content, encoding="utf-8")
         return {
-            "ok": True, "path": str(p),
+            "ok": True,
+            "path": str(p),
             "action": "overwritten" if existed else "created",
             "size": len(content),
+            "snapshot": snap,
+            "warnings": sanity.get("warnings", []),
+            "is_spine": sanity.get("is_spine"),
         }
     except Exception as e:
         return {"ok": False, "error": str(e)}
@@ -465,9 +495,7 @@ async def tool_edit_file(
     occurrence: int = 0,
     replace_all: bool = False,
 ) -> Dict[str, Any]:
-    if _is_protected_path(path):
-        return _protection_error(path)
-    """Find-and-replace with smart fallbacks:
+    """Find-and-replace with smart fallbacks + auto-snapshot for spine files.
       - default: requires UNIQUE match (safest)
       - occurrence=N: replaces the Nth match (1-indexed) when there are duplicates
       - replace_all=True: replaces ALL matches (use with care)
@@ -483,33 +511,42 @@ async def tool_edit_file(
                     "hint": "تأكد من المسافات و newlines. جرّب search_code أولاً للعثور على النص الفعلي."}
         count = text.count(find)
 
+        # Helper: write new content with sanity-check + snapshot
+        def _safe_write(new_content: str, mode: str, extra: Dict[str, Any]) -> Dict[str, Any]:
+            sanity = _sanity_check(str(p), new_content)
+            if not sanity["ok"]:
+                return {
+                    "ok": False,
+                    "rejected": "sanity_failed",
+                    "errors": sanity["errors"],
+                    "hint": "التعديل لن يُطبَّق — صحّح الأخطاء وأعد المحاولة.",
+                    "mode": mode,
+                }
+            snap = make_snapshot(str(p)) if is_spine_file(str(p)) else None
+            p.write_text(new_content, encoding="utf-8")
+            return {"ok": True, "path": str(p), "mode": mode,
+                    "new_size": len(new_content), "snapshot": snap,
+                    "warnings": sanity.get("warnings", []),
+                    "is_spine": sanity.get("is_spine"), **extra}
+
         # ── Path 1: replace_all = explicit batch replace ──
         if replace_all:
             new = text.replace(find, replace)
-            p.write_text(new, encoding="utf-8")
-            return {"ok": True, "path": str(p),
-                    "replacements": count, "mode": "replace_all",
-                    "new_size": len(new)}
+            return _safe_write(new, "replace_all", {"replacements": count})
 
         # ── Path 2: occurrence-targeted replace (1-indexed) ──
         if occurrence and occurrence >= 1:
             if occurrence > count:
                 return {"ok": False, "error": f"occurrence={occurrence} but only {count} matches found"}
-            # Find the Nth occurrence's start index
             idx = -1
             for _ in range(occurrence):
                 idx = text.find(find, idx + 1)
             new = text[:idx] + replace + text[idx + len(find):]
-            p.write_text(new, encoding="utf-8")
-            # Compute line number for the replaced location
             line_no = text.count("\n", 0, idx) + 1
-            return {"ok": True, "path": str(p),
-                    "replacements": 1, "mode": f"occurrence_{occurrence}",
-                    "at_line": line_no, "new_size": len(new)}
+            return _safe_write(new, f"occurrence_{occurrence}", {"replacements": 1, "at_line": line_no})
 
         # ── Path 3: unique-match strict (original behavior, default) ──
         if count > 1:
-            # Find every match's line number to help the AI add context
             line_nos: List[int] = []
             i = 0
             while True:
@@ -526,28 +563,29 @@ async def tool_edit_file(
                 "match_lines": line_nos,
                 "hint": ("النص مكرّر في عدة أسطر. حلولك: "
                          "(1) كبّر النص (أضف سطر قبله/بعده ليصير unique)، أو "
-                         "(2) أعد الاستدعاء مع occurrence=N (مثلاً occurrence=2 للمطابقة الثانية)، أو "
-                         "(3) أعد الاستدعاء مع replace_all=True لو كل المطابقات لازم تتغيّر."),
+                         "(2) أعد الاستدعاء مع occurrence=N، أو "
+                         "(3) أعد الاستدعاء مع replace_all=True."),
             }
         new = text.replace(find, replace, 1)
-        p.write_text(new, encoding="utf-8")
-        return {"ok": True, "path": str(p), "replacements": 1,
-                "mode": "unique", "new_size": len(new)}
+        return _safe_write(new, "unique", {"replacements": 1})
     except Exception as e:
         return {"ok": False, "error": str(e)}
 
 
 async def tool_delete_file(path: str) -> Dict[str, Any]:
-    if _is_protected_path(path):
-        return _protection_error(path)
+    """Delete file. Auto-snapshot for spine files before deletion."""
     try:
         p = _resolve_path(path)
         if not p.exists():
             return {"ok": False, "error": "file not found"}
         if p.is_dir():
             return {"ok": False, "error": "use run_command(rm -rf) for directories"}
+        # Snapshot spine files before delete
+        snap = None
+        if is_spine_file(str(p)):
+            snap = make_snapshot(str(p))
         p.unlink()
-        return {"ok": True, "path": str(p), "action": "deleted"}
+        return {"ok": True, "path": str(p), "action": "deleted", "snapshot": snap}
     except Exception as e:
         return {"ok": False, "error": str(e)}
 
@@ -992,7 +1030,7 @@ TOOL_DEFS: List[Dict[str, Any]] = [
     {"name": "pre_deploy_check", "desc": "syntax + import sanity check before commit", "args": ["paths?"]},
     {"name": "check_deployment_status", "desc": "check Railway deployment success/fail", "args": []},
     {"name": "rollback_to_last_good", "desc": "revert to last successful Railway deployment", "args": []},
-] + EXTRA_TOOL_DEFS + UNIVERSE_TOOL_DEFS + QUALITY_TOOL_DEFS + INDEX_TOOL_DEFS
+] + EXTRA_TOOL_DEFS + UNIVERSE_TOOL_DEFS + QUALITY_TOOL_DEFS + INDEX_TOOL_DEFS + SAFETY_TOOL_DEFS + LEARNING_TOOL_DEFS
 
 # Anthropic-compatible tool schemas (native tool calling)
 ANTHROPIC_TOOLS = [
@@ -1162,7 +1200,7 @@ ANTHROPIC_TOOLS = [
         "description": "EMERGENCY: if the latest deployment failed and you can't fix it quickly, this finds the last SUCCESS commit on Railway and force-pushes to it, restoring the platform. Use as a last resort when stuck.",
         "input_schema": {"type": "object", "properties": {}, "required": []},
     },
-] + EXTRA_ANTHROPIC_TOOLS + UNIVERSE_ANTHROPIC_TOOLS + QUALITY_ANTHROPIC_TOOLS + INDEX_ANTHROPIC_TOOLS
+] + EXTRA_ANTHROPIC_TOOLS + UNIVERSE_ANTHROPIC_TOOLS + QUALITY_ANTHROPIC_TOOLS + INDEX_ANTHROPIC_TOOLS + SAFETY_ANTHROPIC_TOOLS + LEARNING_ANTHROPIC_TOOLS
 
 TOOL_HANDLERS = {
     "list_dir": tool_list_dir,
@@ -1196,6 +1234,10 @@ TOOL_HANDLERS.update(UNIVERSE_TOOL_HANDLERS)
 TOOL_HANDLERS.update(QUALITY_TOOL_HANDLERS)
 # Register Code Index tools
 TOOL_HANDLERS.update(INDEX_TOOL_HANDLERS)
+# Register Safety Net tools
+TOOL_HANDLERS.update(SAFETY_TOOL_HANDLERS)
+# Register Learning Journal tools
+TOOL_HANDLERS.update(LEARNING_TOOL_HANDLERS)
 
 # db_query is bound to the live MongoDB at router creation time
 _db_query_bound: Optional[Any] = None
@@ -1259,6 +1301,8 @@ def create_autocoder_router(db, get_current_user, require_owner):
 
     # Bind the db_query tool to the live MongoDB instance
     _bind_db_tool(db)
+    # Bind the Learning Journal to the DB
+    _bind_learning_db(db)
 
     # Pre-build code index in background so first AI request is fast
     try:
@@ -1658,6 +1702,51 @@ def create_autocoder_router(db, get_current_user, require_owner):
         return {"audit": items}
 
     # ─────────────────────────────────────────────────────────────
+    # 📚 Learning Journal endpoints (continuous learning)
+    # ─────────────────────────────────────────────────────────────
+    @router.get("/learning/stats")
+    async def learning_stats_route(owner=Depends(require_owner)):
+        return {"ok": True, **await _learning_get_stats()}
+
+    @router.get("/learning/lessons")
+    async def learning_lessons_route(
+        q: str = "",
+        limit: int = 50,
+        source: str = "",
+        owner=Depends(require_owner),
+    ):
+        limit = min(max(1, limit), 200)
+        items = await _query_lessons(query=q, limit=limit, source=source)
+        return {"ok": True, "count": len(items), "lessons": items}
+
+    @router.post("/learning/lessons")
+    async def learning_add_lesson_route(payload: Dict[str, Any], owner=Depends(require_owner)):
+        task_summary = (payload.get("task_summary") or "").strip()
+        lesson = (payload.get("lesson") or "").strip()
+        if not task_summary or not lesson:
+            raise HTTPException(status_code=400, detail="task_summary وlesson مطلوبين")
+        return await _add_lesson(
+            task_summary=task_summary,
+            lesson=lesson,
+            source=payload.get("source", "owner"),
+            actor_id=owner.get("id"),
+            code_pattern=payload.get("code_pattern"),
+            tags=payload.get("tags") or [],
+        )
+
+    @router.post("/learning/lessons/{lesson_id}/pin")
+    async def learning_pin_route(lesson_id: str, payload: Dict[str, Any] = None, owner=Depends(require_owner)):
+        pinned = bool((payload or {}).get("pinned", True))
+        return await _promote_lesson(lesson_id, pinned)
+
+    @router.post("/learning/lessons/{lesson_id}/archive")
+    async def learning_archive_route(lesson_id: str, payload: Dict[str, Any] = None, owner=Depends(require_owner)):
+        archived = bool((payload or {}).get("archived", True))
+        return await _archive_lesson(lesson_id, archived)
+
+
+
+    # ─────────────────────────────────────────────────────────────
     # 📤 Upload endpoint (for images/files in chat)
     # ─────────────────────────────────────────────────────────────
     @router.post("/upload")
@@ -1816,7 +1905,12 @@ async def _autocoder_stream(messages: List[Dict[str, Any]], model: str = "claude
     # ── Route to alternative free providers ──
     # The AUTOCODER_SYSTEM_PROMPT carries the rules; the codebase_atlas adds
     # full structural knowledge so the AI doesn't waste tokens scanning files.
-    sys_prompt_full = AUTOCODER_SYSTEM_PROMPT + QUALITY_PROMPT_RULES + INDEX_PROMPT_RULES + (env_banner or "") + build_atlas_for_prompt() + build_atlas_v2_for_prompt() + build_universe_for_prompt()
+    # Pull persistent lessons (continuous learning journal)
+    try:
+        lessons_block = await build_lessons_for_prompt(max_lessons=12)
+    except Exception:
+        lessons_block = ""
+    sys_prompt_full = AUTOCODER_SYSTEM_PROMPT + QUALITY_PROMPT_RULES + INDEX_PROMPT_RULES + SAFETY_PROMPT_RULES + LEARNING_PROMPT_RULES + (env_banner or "") + build_atlas_for_prompt() + build_atlas_v2_for_prompt() + build_universe_for_prompt() + lessons_block
     if model == "groq":
         groq_key = os.environ.get("GROQ_API_KEY", "").strip()
         async for evt in stream_via_groq(
@@ -1952,7 +2046,11 @@ async def _stream_direct_anthropic(anthropic_msgs: List[Dict[str, Any]], api_key
         anthropic_msgs = anthropic_msgs[-MAX_HISTORY_TURNS:]
 
     # Prompt caching for system + tools (90% cheaper on subsequent calls)
-    sys_prompt_text = AUTOCODER_SYSTEM_PROMPT + QUALITY_PROMPT_RULES + INDEX_PROMPT_RULES + (env_banner or "") + build_atlas_for_prompt() + build_atlas_v2_for_prompt() + build_universe_for_prompt()
+    try:
+        lessons_block = await build_lessons_for_prompt(max_lessons=12)
+    except Exception:
+        lessons_block = ""
+    sys_prompt_text = AUTOCODER_SYSTEM_PROMPT + QUALITY_PROMPT_RULES + INDEX_PROMPT_RULES + SAFETY_PROMPT_RULES + LEARNING_PROMPT_RULES + (env_banner or "") + build_atlas_for_prompt() + build_atlas_v2_for_prompt() + build_universe_for_prompt() + lessons_block
     system_blocks = [
         {"type": "text", "text": sys_prompt_text, "cache_control": {"type": "ephemeral"}}
     ]
@@ -2248,6 +2346,12 @@ def _preview_for_ui(name: str, result: Dict[str, Any]) -> str:
     ip = index_preview(name, result)
     if ip is not None:
         return ip
+    sp = safety_preview(name, result)
+    if sp is not None:
+        return sp
+    lp = learning_preview(name, result)
+    if lp is not None:
+        return lp
     if name == "read_file":
         return (result.get("content") or "")[:600]
     if name == "list_dir":
@@ -2282,6 +2386,12 @@ def _summarize(name: str, result: Dict[str, Any]) -> str:
     iss = index_summarize(name, result)
     if iss is not None:
         return iss
+    ss = safety_summarize(name, result)
+    if ss is not None:
+        return ss
+    ls = learning_summarize(name, result)
+    if ls is not None:
+        return ls
     if name == "read_file":
         return f"قرأت {result.get('total_lines',0)} سطر"
     if name == "list_dir":
