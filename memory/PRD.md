@@ -5,6 +5,53 @@
 
 ## User Language: Arabic (العربية)
 
+### 🆕 Feb 15, 2026 — MOBILE APP BUILDER + TASK MEMORY + MULTIMODAL UPLOAD ✅
+
+**ما تم في هذه الجلسة (commit `a03fef3`)**:
+
+📱 **Mobile App Builder (`/dashboard/apps`)** — جديد كلياً:
+- وحدة `/app/backend/modules/mobile_app_builder/__init__.py` (~310 سطر)
+- 9 endpoints: `/categories`, `/start`, `/chat`, `/session/{id}`, `/preview/{id}`, `/save`, `/projects`, `/project/{id}` (DELETE), `/public/{id}`
+- Split-pane UI: شات يسار + iPhone frame مع iframe معاينة مباشرة يمين (375×812)
+- 4 فئات: 🎮 لعبة · 📱 تطبيق · 🛠️ أداة · 🧒 للأطفال — chips جاهزة + free-text
+- LLM: OpenAI gpt-4o → fallback Claude Sonnet 4.5 (Emergent key). JSON response_format إجباري.
+- توليد HTML5 vanilla كامل (no React/Vue) — يشتغل فوراً في الـiframe
+- E2E مُختبر: `tic-tac-toe → 4068 bytes HTML شغّال` (real grid + click handlers + Tajawal RTL)
+- Save modal + Gallery modal لإدارة المشاريع المحفوظة (mongo collection `mobile_apps`)
+- ClientDashboard quick-action card "📱 باني تطبيقات الجوال" (badge: جديد)
+- Pricing: 3 نقاط/تحديث · حد 50 دورة/جلسة · المالك مجاناً
+
+🧠 **Task Memory wired into Autocoder** — يحل مشكلة "الذكاء ينسى":
+- ربط `/app/backend/modules/autocoder/task_memory.py` بـ`__init__.py`:
+  - استيراد `MEMORY_ANTHROPIC_TOOLS, MEMORY_TOOL_HANDLERS, MEMORY_PROMPT_RULES, build_session_brief`
+  - `_bind_memory_db(db)` عند إنشاء الـrouter
+  - حقن `build_session_brief()` في system prompt للـClaude (cached)
+  - تسجيل `memory_summarize/preview` helpers
+- 6 أدوات جديدة للذكاء: `active_tasks`, `task_resume`, `task_start`, `task_update`, `task_complete`, `was_file_read`
+- يعرض "🎯 المهام النشطة" في أول كل محادثة جديدة → الذكاء يكمل من حيث وقف بدل ما يبدأ من الصفر
+- اختبار E2E: start → update × 2 → brief generated بالعربي → complete ✅
+
+📸 **FreeBuild v2 — Multimodal Image Upload** (Reopened P1 fixed):
+- `/api/freebuild/v2/chat` الآن يقرأ الصور المرفوعة كـbase64 و**يمرّرها لـgpt-4o vision**
+- helper `_maybe_capture_image()`: ≤4 صور، ≤4MB لكل واحدة، image/png أو jpg أو webp
+- يعمل في كلا الـpath (multipart + JSON-base64 fallback)
+- في `_openai_architect_turn`: لو `user_images` موصول، يحوّل آخر user message لـcontent blocks ({text, image_url:high})
+- اختبار curl: رفع PNG → الذكاء ردّ "شفت الصورة" (= فعلاً شاف الصورة، مش بس filename)
+
+🚂 **Railway deploy** — مفعّل بالـDockerfile (railway.json يستخدم `"builder": "DOCKERFILE"`)
+
+**Files**: 6 changed, 870 insertions(+), 13 deletions(-)
+- NEW: `backend/modules/mobile_app_builder/__init__.py`
+- NEW: `frontend/src/pages/MobileAppBuilder.js`
+- MODIFIED: `backend/modules/autocoder/__init__.py` (task_memory wiring)
+- MODIFIED: `backend/modules/freebuild_v2/__init__.py` (multimodal images)
+- MODIFIED: `backend/server.py` (register mobile-app router)
+- MODIFIED: `frontend/src/App.js` + `ClientDashboard.js` (route + nav card)
+
+**Commit**: `a03fef3` on local `main` (await user `git push` to deploy)
+
+
+
 ### 🆕 Feb 11, 2026 — TOOLS UNIVERSE (413 أداة عملية مترابطة) ✅
 
 **طلب المستخدم**: 300+ أداة (LLMs, DBs, Cloud, Image/Video, Web3, etc.) تعمل فعلياً ومترابطة، مو مجرد قائمة. ذكاء متكامل، تفكير واسع، فرص تنفيذ كثيرة.
