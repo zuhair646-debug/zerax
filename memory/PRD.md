@@ -5,6 +5,36 @@
 
 ## User Language: Arabic (العربية)
 
+### 🆕 Feb 15, 2026 (الجولة 2) — MARKETPLACE + SANDBOX + LANDING REFRESH ✅
+
+**commit `519b4c6`** — 8 files, 931 insertions:
+
+🔥 **Mobile App Marketplace + Remix loop**:
+- صفحة جديدة `/dashboard/apps-market` — public marketplace بدون auth
+- 4 endpoints جديدة: `/marketplace`, `/publish/{id}`, `/unpublish/{id}`, `/remix/{id}`
+- Remix → نسخة بصمة جديدة (`session_id`) + الـHTML مزروع → المستخدم يعدّل ويحفظ كمشروعه
+- ✅ مُختبر E2E: انشر → ظهر في marketplace → remix → سيشن جديدة فيها greeting "تم نسخ القالب..."
+- ✅ Sort by 🔥 الأكثر Remix أو 🆕 الأحدث · فلتر فئة
+
+📦 **React Native (Expo) Export**:
+- `/api/mobile-app/export-rn/{id}` → 4 ملفات جاهزة (package.json + App.js + app.json + README.md)
+- App.js يلف الـHTML داخل WebView من react-native-webview
+- ✅ المستخدم يقدر يشغّل `npx expo start` بعد yarn install ويفتح على Expo Go
+- يدعم publish for App Store / Play Store عبر `eas build`
+
+🧪 **Sandbox Mode للـAuto-Coder** (`modules/autocoder/sandbox.py`):
+- 9 أدوات جديدة: `sandbox_init/status/read/write/run/validate/diff/promote/reset`
+- المسار `/tmp/zitex_sandbox` ينعكس فيه: backend/modules + server.py + frontend/src + memory
+- AST compile-check gate قبل ما `sandbox_promote` يقدر ينقل لـ/app
+- ✅ مُختبر: init → write new + modify → validate passes → broken syntax → validate fails 1 issue → reset
+- مجموع أدوات الـauto-coder: **71** (الـschemas الجديدة في system prompt)
+- `SANDBOX_PROMPT_RULES` يعلّم الذكاء متى يستخدم الـsandbox
+
+🏠 **Landing page refresh**:
+- Mobile App Builder + Marketplace انتقلوا للـliveCards مع badge متحرّك "✨ جديد"
+- soonCards نظّف (removed mobile + game since now shipped)
+- ✅ Screenshot يؤكد الـcards تظهر مع badge animation
+
 ### 🆕 Feb 15, 2026 — MOBILE APP BUILDER + TASK MEMORY + MULTIMODAL UPLOAD ✅
 
 **ما تم في هذه الجلسة (commit `a03fef3`)**:
