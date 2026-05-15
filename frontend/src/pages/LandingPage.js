@@ -14,6 +14,26 @@ const LandingPage = ({ user }) => {
   // Working sections (top)
   const liveCards = [
     {
+      type: 'mobile-app',
+      title: '📱 تطبيقات الجوال',
+      desc: 'باني محادثاتي + معاينة iPhone',
+      gradient: 'from-cyan-500/20 to-blue-500/10',
+      accent: '#06b6d4',
+      bgImage: 'https://images.unsplash.com/photo-1512941937669-90a1b58e7e9c?auto=format&fit=crop&w=800&q=70',
+      badge: 'جديد',
+      action: () => goOrRegister('/dashboard/apps'),
+    },
+    {
+      type: 'mobile-market',
+      title: '🔥 سوق التطبيقات',
+      desc: 'Remix تطبيقات المجتمع',
+      gradient: 'from-amber-500/20 to-orange-500/10',
+      accent: '#f59e0b',
+      bgImage: 'https://images.unsplash.com/photo-1551434678-e076c223a692?auto=format&fit=crop&w=800&q=70',
+      badge: 'جديد',
+      action: () => navigate('/dashboard/apps-market'),
+    },
+    {
       type: 'website-template',
       title: 'مواقع جاهزة',
       desc: '٢٥ قالب احترافي',
@@ -42,38 +62,29 @@ const LandingPage = ({ user }) => {
     },
   ];
 
-  // Coming-soon sections (bottom — visually muted, no actual entry)
+  // Coming-soon sections (bottom)
   const soonCards = [
-    {
-      type: 'mobile',
-      title: 'تطبيق موبايل',
-      desc: 'Flutter / Swift / Kotlin',
-      gradient: 'from-pink-500/20 to-rose-500/10',
-      accent: '#ec4899',
-      bgImage: 'https://images.unsplash.com/photo-1512941937669-90a1b58e7e9c?auto=format&fit=crop&w=800&q=70',
-      action: showSoon,
-    },
     {
       type: 'web-to-app',
       title: 'تحويل موقع لتطبيق',
-      desc: 'Web → Android/iOS',
+      desc: 'Web → Android/iOS APK',
       gradient: 'from-cyan-500/20 to-sky-500/10',
       accent: '#06b6d4',
       bgImage: 'https://images.unsplash.com/photo-1607252650355-f7fd0460ccdb?auto=format&fit=crop&w=800&q=70',
       action: showSoon,
     },
     {
-      type: 'game',
-      title: 'إنشاء الألعاب',
-      desc: 'Phaser / Three.js',
-      gradient: 'from-cyan-500/20 to-blue-500/10',
-      accent: '#0ea5e9',
-      bgImage: 'https://images.unsplash.com/photo-1493711662062-fa541adb3fc8?auto=format&fit=crop&w=800&q=70',
+      type: 'desktop-app',
+      title: 'تطبيقات سطح المكتب',
+      desc: 'Electron / Tauri',
+      gradient: 'from-violet-500/20 to-purple-500/10',
+      accent: '#8b5cf6',
+      bgImage: 'https://images.unsplash.com/photo-1593642632559-0c6d3fc62b89?auto=format&fit=crop&w=800&q=70',
       action: showSoon,
     },
   ];
 
-  const Card = ({ type, title, desc, gradient, accent, bgImage, action, soon = false }) => (
+  const Card = ({ type, title, desc, gradient, accent, bgImage, action, badge, soon = false }) => (
     <div
       onClick={action}
       className={`relative group rounded-xl overflow-hidden aspect-[4/3] sm:aspect-[5/4] border transition-all ${
@@ -98,6 +109,11 @@ const LandingPage = ({ user }) => {
       {soon && (
         <div className="absolute top-2 left-2 z-10 px-2 py-0.5 rounded-md bg-amber-400/90 text-black text-[10px] font-black tracking-wider">
           🔒 قريباً
+        </div>
+      )}
+      {!soon && badge && (
+        <div className="absolute top-2 left-2 z-10 px-2 py-0.5 rounded-md bg-gradient-to-r from-emerald-400 to-cyan-400 text-black text-[10px] font-black tracking-wider animate-pulse">
+          ✨ {badge}
         </div>
       )}
       <div className="relative h-full flex flex-col justify-end p-3 sm:p-4 text-right">

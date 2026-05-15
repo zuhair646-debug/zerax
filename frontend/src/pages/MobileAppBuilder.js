@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
-import { Send, Loader2, Sparkles, Save, ExternalLink, Smartphone, Gamepad2, AppWindow, Wrench, Baby, RotateCcw, Plus, ChevronRight, X, Eye } from 'lucide-react';
+import { Send, Loader2, Sparkles, Save, ExternalLink, Smartphone, Gamepad2, AppWindow, Wrench, Baby, RotateCcw, Plus, ChevronRight, X, Eye, Download } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
 const API = process.env.REACT_APP_BACKEND_URL;
@@ -91,6 +91,34 @@ export default function MobileAppBuilder() {
   const begin = async () => {
     setLoading(true);
     try {
+      // If user came from Marketplace via remix → resume that session
+      const remixSid = localStorage.getItem('zitex_mobile_remix_session');
+      if (remixSid) {
+        localStorage.removeItem('zitex_mobile_remix_session');
+        try {
+          const s = await fetchJson(`/api/mobile-app/session/${remixSid}`);
+          const cats = await fetchJson('/api/mobile-app/categories');
+          setSessionId(remixSid);
+          setMessages((s.messages || []).map((m) => ({
+            role: m.role, content: m.content, progressNote: m.progress_note,
+          })));
+          setQuestionType('text');
+          setOptions(null);
+          setCategories(cats.categories || []);
+          setHtmlStarted(!!s.html);
+          setIframeBust(Date.now());
+          setTurns(s.turns || 0);
+          // fetch credits separately
+          try {
+            const bal = await fetchJson('/api/user/balance');
+            setCredits(bal.credits || 0);
+          } catch {}
+          setLoading(false);
+          return;
+        } catch {
+          // fall through to fresh session
+        }
+      }
       const d = await fetchJson('/api/mobile-app/start', { method: 'POST', body: JSON.stringify({}) });
       setSessionId(d.session_id);
       setMessages([{ role: 'assistant', content: d.assistant_message, progressNote: null }]);
@@ -165,6 +193,35 @@ export default function MobileAppBuilder() {
     }
   };
 
+  const publishProject = async () => {
+    if (!savedProjectId) return;
+    try {
+      await fetchJson(`/api/mobile-app/publish/${savedProjectId}`, { method: 'POST' });
+      toast.success('تم النشر في السوق! غيرك يقدر يعمل Remix لتطبيقك');
+    } catch (e) { toast.error(e.message); }
+  };
+
+  const exportRN = async () => {
+    if (!savedProjectId) return;
+    try {
+      const d = await fetchJson(`/api/mobile-app/export-rn/${savedProjectId}`);
+      // Build a zip in-browser using simple text concatenation (one .txt download)
+      // To keep it simple, dump each file as a separate download
+      Object.entries(d.files).forEach(([name, content]) => {
+        const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = name;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+      });
+      toast.success('تم تنزيل ملفات React Native — افتح Terminal واتبع التعليمات في README.md');
+    } catch (e) { toast.error(e.message); }
+  };
+
   const openGallery = async () => {
     try {
       const d = await fetchJson('/api/mobile-app/projects');
@@ -202,6 +259,9 @@ export default function MobileAppBuilder() {
             <div className="px-2.5 py-1 rounded-full bg-cyan-500/10 border border-cyan-400/30 text-cyan-200 font-bold" data-testid="credits-pill">
               💎 {credits}
             </div>
+            <button onClick={() => navigate('/dashboard/apps-market')} className="px-3 py-1.5 rounded-full bg-amber-500/10 border border-amber-400/30 text-amber-200 hover:bg-amber-500/20 text-xs font-bold flex items-center gap-1" data-testid="market-btn">
+              🔥 السوق
+            </button>
             <button onClick={openGallery} className="px-3 py-1.5 rounded-full bg-white/5 border border-white/10 text-white/70 hover:text-cyan-300 hover:border-cyan-400/40 text-xs font-bold" data-testid="gallery-btn">
               معرض
             </button>
@@ -305,9 +365,17 @@ export default function MobileAppBuilder() {
             <div className="mt-1.5 flex items-center justify-between text-[10px] text-white/40">
               <span>{turns}/50 جولة · 3 نقاط/تحديث</span>
               {savedProjectId && (
-                <a href={`${API}/api/mobile-app/public/${savedProjectId}`} target="_blank" rel="noreferrer" className="text-emerald-300 hover:underline flex items-center gap-1" data-testid="public-link">
-                  <ExternalLink className="w-3 h-3" /> الرابط العام
-                </a>
+                <div className="flex items-center gap-1.5">
+                  <button onClick={publishProject} className="px-2 py-1 rounded-full bg-amber-500/15 hover:bg-amber-500/25 text-amber-200 border border-amber-400/30 text-[10px] font-bold flex items-center gap-1" data-testid="publish-btn">
+                    🔥 انشر للسوق
+                  </button>
+                  <button onClick={exportRN} className="px-2 py-1 rounded-full bg-fuchsia-500/15 hover:bg-fuchsia-500/25 text-fuchsia-200 border border-fuchsia-400/30 text-[10px] font-bold flex items-center gap-1" data-testid="export-rn-btn">
+                    <Download className="w-3 h-3" /> React Native
+                  </button>
+                  <a href={`${API}/api/mobile-app/public/${savedProjectId}`} target="_blank" rel="noreferrer" className="text-emerald-300 hover:underline flex items-center gap-1" data-testid="public-link">
+                    <ExternalLink className="w-3 h-3" /> رابط
+                  </a>
+                </div>
               )}
             </div>
           </div>

@@ -369,4 +369,187 @@ def create_mobile_app_router(db, get_current_user):
             raise HTTPException(404, "project not found")
         return Response(content=p["html"], media_type="text/html")
 
+    # ════════════════════════════════════════════════════════════════════
+    # 🎮 TEMPLATES MARKETPLACE — publish, browse, remix
+    # ════════════════════════════════════════════════════════════════════
+    @router.post("/publish/{project_id}")
+    async def publish_template(project_id: str, user=Depends(get_current_user)):
+        """Publish a saved project as a public template anyone can remix."""
+        proj = await db.mobile_apps.find_one(
+            {"id": project_id, "user_id": user["user_id"]}, {"_id": 0}
+        )
+        if not proj:
+            raise HTTPException(404, "project not found")
+        await db.mobile_apps.update_one(
+            {"id": project_id},
+            {"$set": {"published": True, "published_at": _now(), "remix_count": proj.get("remix_count", 0)}},
+        )
+        return {"ok": True, "public_url": f"/api/mobile-app/public/{project_id}"}
+
+    @router.post("/unpublish/{project_id}")
+    async def unpublish_template(project_id: str, user=Depends(get_current_user)):
+        r = await db.mobile_apps.update_one(
+            {"id": project_id, "user_id": user["user_id"]},
+            {"$set": {"published": False}},
+        )
+        if r.matched_count == 0:
+            raise HTTPException(404, "project not found")
+        return {"ok": True}
+
+    @router.get("/marketplace")
+    async def marketplace(category: Optional[str] = None, sort: str = "remix"):
+        """Public marketplace — no auth needed. Sort: 'remix' (popular) | 'new'."""
+        q: Dict[str, Any] = {"published": True}
+        if category and category != "all":
+            q["category"] = category
+        sort_field = "remix_count" if sort == "remix" else "published_at"
+        items = await db.mobile_apps.find(
+            q, {"_id": 0, "html": 0}
+        ).sort([(sort_field, -1)]).limit(60).to_list(60)
+        # Enrich with author name
+        for it in items:
+            try:
+                u = await db.users.find_one({"id": it.get("user_id")}, {"_id": 0, "name": 1})
+                it["author_name"] = (u or {}).get("name") or "مالك مجهول"
+            except Exception:
+                it["author_name"] = "مالك مجهول"
+        return {"templates": items, "count": len(items)}
+
+    @router.post("/remix/{project_id}")
+    async def remix_template(project_id: str, user=Depends(get_current_user)):
+        """Fork a published template into the user's own session so they can edit it."""
+        tpl = await db.mobile_apps.find_one(
+            {"id": project_id, "published": True}, {"_id": 0}
+        )
+        if not tpl:
+            raise HTTPException(404, "template not published or not found")
+        # Bump remix counter
+        await db.mobile_apps.update_one({"id": project_id}, {"$inc": {"remix_count": 1}})
+        # Create a fresh session seeded with the template's HTML
+        new_sid = str(uuid.uuid4())
+        greeting = (
+            f"تم نسخ القالب «{tpl.get('name', 'بدون اسم')}» — جاهز للتعديل. "
+            "وش تبيني أغيّر فيه؟ (ألوان، ميزات، أسماء، أي شي)"
+        )
+        doc = {
+            "id": new_sid,
+            "user_id": user["user_id"],
+            "messages": [{"role": "assistant", "content": greeting, "timestamp": _now()}],
+            "html": tpl["html"],
+            "turns": 0,
+            "complete": False,
+            "credits_spent": 0,
+            "remixed_from": project_id,
+            "created_at": _now(),
+            "updated_at": _now(),
+        }
+        await db.mobile_app_sessions.insert_one(doc.copy())
+        return {
+            "session_id": new_sid,
+            "assistant_message": greeting,
+            "next_question_type": "text",
+            "html_present": True,
+            "credits_balance": await _credits(user["user_id"]),
+        }
+
+    # ════════════════════════════════════════════════════════════════════
+    # 📦 REACT NATIVE / EXPO EXPORT
+    # ════════════════════════════════════════════════════════════════════
+    @router.get("/export-rn/{project_id}")
+    async def export_react_native(project_id: str, user=Depends(get_current_user)):
+        """Return a React Native (Expo) skeleton that wraps the generated HTML
+        in a WebView. The user can run it via `npx expo start` immediately."""
+        p = await db.mobile_apps.find_one(
+            {"id": project_id, "user_id": user["user_id"]}, {"_id": 0}
+        )
+        if not p:
+            raise HTTPException(404, "project not found")
+        html = (p.get("html") or "").replace("`", "\\`").replace("$", "\\$")
+        app_name = p.get("name", "ZitexApp")
+        # Sanitise app_name for the JS string
+        safe_name = app_name.replace('"', '\\"').replace("\n", " ")[:80]
+        package_json = {
+            "name": "zitex-app",
+            "version": "1.0.0",
+            "main": "node_modules/expo/AppEntry.js",
+            "scripts": {
+                "start": "expo start",
+                "android": "expo start --android",
+                "ios": "expo start --ios",
+                "web": "expo start --web",
+            },
+            "dependencies": {
+                "expo": "~50.0.0",
+                "react": "18.2.0",
+                "react-native": "0.73.0",
+                "react-native-webview": "13.6.4",
+            },
+        }
+        app_js = (
+            "import React from 'react';\n"
+            "import { SafeAreaView, StatusBar, StyleSheet } from 'react-native';\n"
+            "import { WebView } from 'react-native-webview';\n\n"
+            f"const APP_HTML = `{html}`;\n\n"
+            "export default function App() {\n"
+            "  return (\n"
+            "    <SafeAreaView style={styles.root}>\n"
+            "      <StatusBar barStyle=\"light-content\" backgroundColor=\"#0a0a14\" />\n"
+            "      <WebView\n"
+            "        originWhitelist={['*']}\n"
+            "        source={{ html: APP_HTML }}\n"
+            "        style={styles.web}\n"
+            "        javaScriptEnabled={true}\n"
+            "        domStorageEnabled={true}\n"
+            "      />\n"
+            "    </SafeAreaView>\n"
+            "  );\n"
+            "}\n\n"
+            "const styles = StyleSheet.create({\n"
+            "  root: { flex: 1, backgroundColor: '#0a0a14' },\n"
+            "  web: { flex: 1 },\n"
+            "});\n"
+        )
+        readme = (
+            f"# {safe_name}\n\n"
+            "تم توليد هذا المشروع تلقائياً عبر **Zitex Mobile App Builder**.\n\n"
+            "## كيف تشغّله محلياً\n\n"
+            "```bash\n"
+            "npm install -g expo-cli\n"
+            "yarn install\n"
+            "npx expo start\n"
+            "```\n\n"
+            "بعدها افتح Expo Go على جوالك واسكان QR code. التطبيق راح يفتح فوراً.\n"
+            "\n"
+            "## النشر على App Store / Play Store\n"
+            "```bash\n"
+            "npx eas build --platform ios\n"
+            "npx eas build --platform android\n"
+            "```\n"
+        )
+        return {
+            "ok": True,
+            "project_name": safe_name,
+            "files": {
+                "package.json": json.dumps(package_json, indent=2, ensure_ascii=False),
+                "App.js": app_js,
+                "README.md": readme,
+                "app.json": json.dumps({
+                    "expo": {
+                        "name": safe_name,
+                        "slug": safe_name.lower().replace(" ", "-")[:30],
+                        "version": "1.0.0",
+                        "orientation": "portrait",
+                        "icon": "./assets/icon.png",
+                        "userInterfaceStyle": "automatic",
+                        "splash": {"backgroundColor": "#0a0a14"},
+                        "assetBundlePatterns": ["**/*"],
+                        "ios": {"supportsTablet": True},
+                        "android": {"package": f"com.zitex.{safe_name.lower().replace(' ', '')[:20]}"},
+                        "web": {"favicon": "./assets/favicon.png"},
+                    }
+                }, indent=2, ensure_ascii=False),
+            },
+            "instructions": "نزّل الملفات، استخدم `yarn install` ثم `npx expo start`. يحتاج Node 18+ و Expo CLI.",
+        }
+
     return router
