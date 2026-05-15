@@ -61,6 +61,7 @@ const ClientDashboard = ({ user, setUser }) => {
     { title: '🎬 استوديو الفيديو', desc: 'فيديو Sora 2 باحتراف', icon: <Clapperboard className="w-6 h-6" />, path: '/studio/video', color: 'from-orange-500 to-red-500', badge: 'نقاط' },
     { title: '💬 شات الصور الذكي', desc: 'محادثة تفاعلية لبناء صورة', icon: <MessageSquare className="w-6 h-6" />, path: '/chat/image', color: 'from-pink-500 to-rose-500' },
     { title: '🎥 شات الفيديو الذكي', desc: 'محادثة تفاعلية لبناء فيديو', icon: <Video className="w-6 h-6" />, path: '/chat/video', color: 'from-amber-500 to-yellow-500' },
+    { title: '📱 باني تطبيقات الجوال', desc: 'ألعاب وأدوات وتطبيقات بمعاينة iPhone حية', icon: <PlusCircle className="w-6 h-6" />, path: '/dashboard/apps', color: 'from-cyan-500 to-blue-600', badge: 'جديد' },
     { title: '📱 رفيقتي على الجوال', desc: 'Zara/Layla كمساعدة شخصية يومية', icon: <Bot className="w-6 h-6" />, path: '/companion', color: 'from-fuchsia-500 to-pink-600', badge: 'جديد' },
     { title: '🤖 مساعدتي الذكية', desc: 'فعّل مساعدة AI لمتجرك', icon: <Bot className="w-6 h-6" />, path: '/dashboard/avatar', color: 'from-emerald-500 to-green-600', badge: '14 يوم مجاناً' },
     { title: '🌉 Channel Bridge', desc: 'انشر أصولك في متاجرك', icon: <Share2 className="w-6 h-6" />, path: '/dashboard/bridge', color: 'from-sky-500 to-cyan-500' },

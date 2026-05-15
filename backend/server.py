@@ -3293,6 +3293,15 @@ try:
 except Exception as _inde:
     logging.getLogger(__name__).error(f"Failed to register independence module: {_inde}", exc_info=True)
 
+# ============== MOBILE APP BUILDER (Conversational mobile-app maker) ==============
+try:
+    from modules.mobile_app_builder import create_mobile_app_router
+    _mob_router = create_mobile_app_router(db, get_current_user)
+    app.include_router(_mob_router)
+    logging.getLogger(__name__).info("Mobile App Builder module registered")
+except Exception as _mobe:
+    logging.getLogger(__name__).error(f"Failed to register mobile-app module: {_mobe}", exc_info=True)
+
 # ============== CHANNEL BRIDGE (Push Zitex-generated assets to owner's client websites) ==============
 try:
     from modules.bridge import create_bridge_router

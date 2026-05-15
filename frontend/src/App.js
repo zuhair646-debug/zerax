@@ -49,6 +49,7 @@ import StudioVideo from '@/pages/studio/StudioVideo';
 import ChatVideo from '@/pages/chat/ChatVideo';
 import ChatImage from '@/pages/chat/ChatImage';
 import FreeBuild from '@/pages/FreeBuild';
+import MobileAppBuilder from '@/pages/MobileAppBuilder';
 import AIAgent from '@/pages/AIAgent';
 import AvatarSettings from '@/pages/AvatarSettings';
 import ChannelBridge from '@/pages/ChannelBridge';
@@ -117,6 +118,7 @@ function App() {
           <Route path="/dashboard/websites" element={<ProtectedRoute><MyWebsites user={user} /></ProtectedRoute>} />
           <Route path="/dashboard/images" element={<ProtectedRoute><ImageGenerator user={user} /></ProtectedRoute>} />
           <Route path="/dashboard/videos" element={<ProtectedRoute><VideoGenerator user={user} /></ProtectedRoute>} />
+          <Route path="/dashboard/apps" element={<ProtectedRoute><MobileAppBuilder /></ProtectedRoute>} />
           
           <Route path="/admin" element={<ProtectedRoute adminOnly><AdminDashboard user={user} /></ProtectedRoute>} />
           <Route path="/admin/requests" element={<ProtectedRoute adminOnly><AdminRequests user={user} /></ProtectedRoute>} />

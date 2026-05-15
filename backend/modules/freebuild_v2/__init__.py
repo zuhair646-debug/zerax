@@ -317,14 +317,38 @@ def _now() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
-async def _openai_architect_turn(messages_for_model: List[Dict[str, str]]) -> Dict[str, Any]:
+async def _openai_architect_turn(messages_for_model: List[Dict[str, str]], user_images: Optional[List[Dict[str, str]]] = None) -> Dict[str, Any]:
     """Call an LLM with JSON response format, return parsed dict.
     Tries OPENAI_DIRECT_KEY first (user's own billing). Falls back to EMERGENT_LLM_KEY.
     Raises a specific HTTPException if neither key is configured.
+
+    If user_images is provided (list of {mime, b64, filename}), they are attached
+    to the LAST user message as multimodal content blocks (gpt-4o vision).
     """
     direct_key = os.environ.get("OPENAI_DIRECT_KEY", "").strip()
     emergent_key = os.environ.get("EMERGENT_LLM_KEY", "").strip()
     content = ""
+
+    # If images provided, transform the last user message into multimodal content blocks.
+    # This way gpt-4o can SEE the uploaded images.
+    if user_images:
+        messages_for_model = list(messages_for_model)
+        # Find last user message
+        for i in range(len(messages_for_model) - 1, -1, -1):
+            if messages_for_model[i].get("role") == "user":
+                original_text = messages_for_model[i].get("content", "")
+                if isinstance(original_text, str):
+                    blocks: List[Dict[str, Any]] = [{"type": "text", "text": original_text}]
+                    for img in user_images[:4]:
+                        blocks.append({
+                            "type": "image_url",
+                            "image_url": {
+                                "url": f"data:{img.get('mime','image/jpeg')};base64,{img.get('b64','')}",
+                                "detail": "high",
+                            },
+                        })
+                    messages_for_model[i] = {"role": "user", "content": blocks}
+                break
 
     last_error = None
 
@@ -871,6 +895,29 @@ def create_freebuild_v2_router(db, get_current_user) -> APIRouter:
         """
         content_type = (request.headers.get("content-type") or "").lower()
         attachments: List[Dict[str, Any]] = []
+        image_payloads: List[Dict[str, str]] = []  # base64-encoded images for multimodal LLM
+
+        def _maybe_capture_image(filename: str, ctype: str, raw: bytes) -> None:
+            """If the upload is an image (and reasonably sized), keep a base64 copy
+            so the LLM can SEE it (multimodal). Cap: 4 images, ≤4MB each."""
+            if len(image_payloads) >= 4:
+                return
+            ct = (ctype or "").lower()
+            name = (filename or "").lower()
+            is_image = ct.startswith("image/") or any(name.endswith(ext) for ext in (".png", ".jpg", ".jpeg", ".webp", ".gif"))
+            if not is_image:
+                return
+            if len(raw) > 4 * 1024 * 1024:
+                return
+            try:
+                b64 = base64.b64encode(raw).decode("ascii")
+                image_payloads.append({
+                    "mime": ct if ct.startswith("image/") else "image/jpeg",
+                    "b64": b64,
+                    "filename": filename or "image",
+                })
+            except Exception:
+                pass
 
         def _add_attachment_meta(field: str, filename: str, ctype: str, size: int) -> None:
             if size > 25 * 1024 * 1024:
@@ -901,12 +948,10 @@ def create_freebuild_v2_router(db, get_current_user) -> APIRouter:
             for key, value in form.multi_items():
                 if hasattr(value, "filename") and hasattr(value, "read"):
                     raw = await value.read()
-                    _add_attachment_meta(
-                        key,
-                        getattr(value, "filename", None) or key,
-                        getattr(value, "content_type", None) or "application/octet-stream",
-                        len(raw or b""),
-                    )
+                    fname = getattr(value, "filename", None) or key
+                    ctype = getattr(value, "content_type", None) or "application/octet-stream"
+                    _maybe_capture_image(fname, ctype, raw or b"")
+                    _add_attachment_meta(key, fname, ctype, len(raw or b""))
 
             if not session_id:
                 raise HTTPException(422, "session_id مفقود")
@@ -938,16 +983,24 @@ def create_freebuild_v2_router(db, get_current_user) -> APIRouter:
                     continue
                 raw_data = item.get("data") or item.get("data_url") or item.get("base64") or ""
                 size = int(item.get("size") or 0)
-                if raw_data and not size:
+                # Decode base64 once so we can optionally capture image for multimodal
+                decoded_bytes = b""
+                if raw_data:
                     try:
                         b64 = raw_data.split(",", 1)[1] if "," in raw_data else raw_data
-                        size = len(base64.b64decode(b64, validate=False))
+                        decoded_bytes = base64.b64decode(b64, validate=False)
+                        if not size:
+                            size = len(decoded_bytes)
                     except Exception:
-                        size = 0
+                        decoded_bytes = b""
+                fname = item.get("filename") or item.get("name") or f"attachment-{idx + 1}"
+                ctype = item.get("content_type") or item.get("type") or "application/octet-stream"
+                if decoded_bytes:
+                    _maybe_capture_image(fname, ctype, decoded_bytes)
                 _add_attachment_meta(
                     f"json_attachment_{idx}",
-                    item.get("filename") or item.get("name") or f"attachment-{idx + 1}",
-                    item.get("content_type") or item.get("type") or "application/octet-stream",
+                    fname,
+                    ctype,
                     size,
                 )
 
@@ -1009,7 +1062,7 @@ def create_freebuild_v2_router(db, get_current_user) -> APIRouter:
         # Call the architect
         try:
             model_msgs = _build_model_messages(session, payload.message)
-            ai = await _openai_architect_turn(model_msgs)
+            ai = await _openai_architect_turn(model_msgs, user_images=image_payloads)
         except Exception as e:
             err = str(e)[:400]
             logger.exception(f"[FREEBUILD-V2] architect call failed: {err}")
