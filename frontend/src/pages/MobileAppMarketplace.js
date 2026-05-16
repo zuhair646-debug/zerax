@@ -31,6 +31,8 @@ export default function MobileAppMarketplace() {
   const [category, setCategory] = useState('all');
   const [sort, setSort] = useState('remix');
   const [remixingId, setRemixingId] = useState(null);
+  const [topCreators, setTopCreators] = useState([]);
+  const [creatorsWindow, setCreatorsWindow] = useState('week');
 
   const load = async (cat, srt) => {
     setLoading(true);
@@ -46,6 +48,17 @@ export default function MobileAppMarketplace() {
   };
 
   useEffect(() => { load(category, sort); }, [category, sort]);
+
+  // Load top creators
+  useEffect(() => {
+    (async () => {
+      try {
+        const r = await fetch(`${API}/api/mobile-app/top-creators?window=${creatorsWindow}`);
+        const d = await r.json();
+        setTopCreators(d.creators || []);
+      } catch {}
+    })();
+  }, [creatorsWindow]);
 
   const remix = async (id) => {
     const token = localStorage.getItem('token');
@@ -123,6 +136,64 @@ export default function MobileAppMarketplace() {
           >🆕 الأحدث</button>
         </div>
       </div>
+
+      {/* TOP CREATORS LEADERBOARD */}
+      {topCreators.length > 0 && (
+        <div className="max-w-7xl mx-auto px-4 pb-2">
+          <div className="rounded-2xl bg-gradient-to-br from-amber-500/10 via-amber-500/5 to-transparent border border-amber-400/20 p-4">
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-sm font-black flex items-center gap-2 text-amber-100">
+                🏆 المبدعون الأكثر تأثيراً
+                <span className="text-[10px] text-amber-300/60 font-normal">(حسب عدد الـRemix)</span>
+              </h3>
+              <div className="flex gap-1">
+                {[
+                  { id: 'week', label: 'هذا الأسبوع' },
+                  { id: 'month', label: 'هذا الشهر' },
+                  { id: 'all', label: 'كل الوقت' },
+                ].map((w) => (
+                  <button
+                    key={w.id}
+                    onClick={() => setCreatorsWindow(w.id)}
+                    className={`px-2.5 py-1 rounded-full text-[10px] font-bold border transition ${
+                      creatorsWindow === w.id
+                        ? 'bg-amber-500/25 border-amber-400/50 text-amber-100'
+                        : 'bg-white/5 border-white/10 text-white/50 hover:text-white/80'
+                    }`}
+                    data-testid={`window-${w.id}`}
+                  >
+                    {w.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-2">
+              {topCreators.slice(0, 5).map((c) => (
+                <div
+                  key={c.user_id}
+                  className="px-3 py-2 rounded-xl bg-white/[0.04] border border-white/10 flex items-center gap-2"
+                  data-testid={`creator-${c.rank}`}
+                >
+                  <div className={`w-9 h-9 rounded-full flex items-center justify-center text-sm font-black flex-shrink-0 ${
+                    c.rank === 1 ? 'bg-gradient-to-br from-amber-400 to-yellow-600 text-black' :
+                    c.rank === 2 ? 'bg-gradient-to-br from-zinc-300 to-zinc-500 text-black' :
+                    c.rank === 3 ? 'bg-gradient-to-br from-orange-600 to-orange-800 text-white' :
+                    'bg-white/10 text-white/70'
+                  }`}>
+                    {c.rank === 1 ? '🥇' : c.rank === 2 ? '🥈' : c.rank === 3 ? '🥉' : `#${c.rank}`}
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <div className="text-xs font-bold truncate">{c.name}</div>
+                    <div className="text-[10px] text-amber-300/80">
+                      {c.total_remixes} remix · {c.apps_published} app
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* GRID */}
       <div className="max-w-7xl mx-auto px-4 pb-12">

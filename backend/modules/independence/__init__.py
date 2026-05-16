@@ -683,4 +683,51 @@ def create_independence_router(db, require_owner) -> APIRouter:
             "railway_tutorial": RAILWAY_TUTORIAL,
         }
 
+    @router.post("/where-to-get-key")
+    async def where_to_get_key_proxy(payload: dict, owner=Depends(require_owner)):
+        """Proxy to the auto-coder's web_search for live docs lookup.
+        Body: {service: 'stripe' | 'fal' | etc.}
+        """
+        service = (payload.get("service") or "").strip()
+        if not service:
+            raise HTTPException(400, "service مطلوب")
+        try:
+            from modules.autocoder.web_search import bind_db as _bws_bind, tool_where_to_get_key
+            _bws_bind(db)
+            result = await tool_where_to_get_key(service)
+            return result
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+
+    @router.post("/save-key")
+    async def save_key(payload: dict, owner=Depends(require_owner)):
+        """Save an integration API key directly into the encrypted credentials_vault.
+        Body: {service: 'stripe', value: 'sk_...', label?: '...'}
+        """
+        service = (payload.get("service") or "").strip().lower()
+        value = (payload.get("value") or "").strip()
+        if not service or not value:
+            raise HTTPException(400, "service و value مطلوبين")
+        try:
+            import base64
+            import hashlib
+            from cryptography.fernet import Fernet
+            from datetime import datetime, timezone
+            seed = (os.environ.get("JWT_SECRET", "") + os.environ.get("MONGO_URL", "")).encode()
+            key = base64.urlsafe_b64encode(hashlib.sha256(seed).digest())
+            enc = Fernet(key).encrypt(value.encode()).decode()
+            await db.credentials_vault.update_one(
+                {"service": service},
+                {"$set": {
+                    "service": service,
+                    "label": payload.get("label") or f"{service}_key",
+                    "value_encrypted": enc,
+                    "updated_at": datetime.now(timezone.utc).isoformat(),
+                }},
+                upsert=True,
+            )
+            return {"ok": True, "service": service, "saved": True}
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+
     return router

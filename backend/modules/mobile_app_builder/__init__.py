@@ -415,6 +415,52 @@ def create_mobile_app_router(db, get_current_user):
                 it["author_name"] = "مالك مجهول"
         return {"templates": items, "count": len(items)}
 
+    @router.get("/top-creators")
+    async def top_creators(window: str = "week"):
+        """🏆 Leaderboard of users whose published apps got the most remixes.
+        window: 'week' (last 7d) | 'month' (last 30d) | 'all'.
+        """
+        from datetime import datetime, timezone, timedelta
+        match: Dict[str, Any] = {"published": True}
+        if window == "week":
+            since = (datetime.now(timezone.utc) - timedelta(days=7)).isoformat()
+            match["published_at"] = {"$gte": since}
+        elif window == "month":
+            since = (datetime.now(timezone.utc) - timedelta(days=30)).isoformat()
+            match["published_at"] = {"$gte": since}
+        pipeline = [
+            {"$match": match},
+            {"$group": {
+                "_id": "$user_id",
+                "total_remixes": {"$sum": {"$ifNull": ["$remix_count", 0]}},
+                "apps_published": {"$sum": 1},
+                "latest_app_id": {"$last": "$id"},
+                "latest_app_name": {"$last": "$name"},
+                "latest_app_category": {"$last": "$category"},
+            }},
+            {"$sort": {"total_remixes": -1, "apps_published": -1}},
+            {"$limit": 10},
+        ]
+        rows = await db.mobile_apps.aggregate(pipeline).to_list(10)
+        out = []
+        for idx, r in enumerate(rows):
+            uid = r.get("_id")
+            u = await db.users.find_one({"id": uid}, {"_id": 0, "name": 1, "avatar": 1}) if uid else None
+            out.append({
+                "rank": idx + 1,
+                "user_id": uid,
+                "name": (u or {}).get("name") or "مبدع مجهول",
+                "avatar": (u or {}).get("avatar"),
+                "total_remixes": r.get("total_remixes", 0),
+                "apps_published": r.get("apps_published", 0),
+                "showcase": {
+                    "id": r.get("latest_app_id"),
+                    "name": r.get("latest_app_name"),
+                    "category": r.get("latest_app_category"),
+                },
+            })
+        return {"window": window, "creators": out, "count": len(out)}
+
     @router.post("/remix/{project_id}")
     async def remix_template(project_id: str, user=Depends(get_current_user)):
         """Fork a published template into the user's own session so they can edit it."""

@@ -46,6 +46,7 @@ export default function AdminIndependence() {
   const [helpFor, setHelpFor] = useState(null);  // currently open tutorial integration_id
   const [helpData, setHelpData] = useState(null); // loaded tutorial payload
   const [helpLoading, setHelpLoading] = useState(false);
+  const [aiHelperOpen, setAiHelperOpen] = useState(false);
 
   const load = async () => {
     setLoading(true);
@@ -154,6 +155,13 @@ export default function AdminIndependence() {
               </p>
             </div>
             <div className="flex items-center gap-2">
+              <button
+                onClick={() => setAiHelperOpen(true)}
+                className="px-3 py-1.5 rounded-lg bg-gradient-to-br from-cyan-500/20 to-blue-600/20 border border-cyan-400/40 text-cyan-100 text-xs font-bold flex items-center gap-1.5 hover:from-cyan-500/30 hover:to-blue-600/30 transition"
+                data-testid="ai-helper-btn"
+              >
+                <Sparkles className="w-4 h-4" /> ساعدني أكمل التكاملات
+              </button>
               {score >= 100 ? (
                 <span className="px-3 py-1.5 rounded-lg bg-emerald-500/20 border border-emerald-400/40 text-emerald-300 text-xs font-bold flex items-center gap-1.5">
                   <CheckCircle2 className="w-4 h-4" /> استقلال كامل
@@ -225,6 +233,178 @@ export default function AdminIndependence() {
           onClose={closeHelp}
         />
       )}
+
+      {/* 🤖 AI Helper modal — guided integration onboarding */}
+      {aiHelperOpen && (
+        <AiHelperModal
+          missing={data.integrations.filter(i => !i.is_independent && i.category !== 'fallback')}
+          token={token}
+          onClose={() => setAiHelperOpen(false)}
+          onSaved={() => { setAiHelperOpen(false); load(); }}
+        />
+      )}
+    </div>
+  );
+}
+
+// ════════════════════════════════════════════════════════════════════
+// AI Helper Modal — guided integration adder
+// ════════════════════════════════════════════════════════════════════
+function AiHelperModal({ missing, token, onClose, onSaved }) {
+  const [picked, setPicked] = useState(null);
+  const [docsLoading, setDocsLoading] = useState(false);
+  const [docs, setDocs] = useState(null);
+  const [keyValue, setKeyValue] = useState('');
+  const [saving, setSaving] = useState(false);
+
+  const lookupDocs = async (it) => {
+    setPicked(it);
+    setDocs(null);
+    setKeyValue('');
+    setDocsLoading(true);
+    try {
+      const r = await fetch(`${API}/api/admin/where-to-get-key`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ service: it.id }),
+      });
+      const d = await r.json();
+      if (!d.ok) throw new Error(d.error || 'فشل البحث');
+      setDocs(d);
+    } catch (e) {
+      toast.error(e.message);
+    }
+    setDocsLoading(false);
+  };
+
+  const saveKey = async () => {
+    if (!keyValue.trim()) { toast.error('الصق المفتاح أولاً'); return; }
+    if (!picked) return;
+    setSaving(true);
+    try {
+      const r = await fetch(`${API}/api/admin/save-key`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ service: picked.id, value: keyValue.trim() }),
+      });
+      const d = await r.json();
+      if (!d.ok) throw new Error(d.error || 'فشل الحفظ');
+      toast.success(`تم حفظ مفتاح ${picked.name_ar || picked.id} مشفّراً ✓`);
+      onSaved();
+    } catch (e) {
+      toast.error(e.message);
+    }
+    setSaving(false);
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4" onClick={onClose}>
+      <div
+        className="w-full max-w-3xl max-h-[90vh] overflow-y-auto bg-[#0a0a14] border border-cyan-400/30 rounded-2xl"
+        onClick={(e) => e.stopPropagation()}
+        data-testid="ai-helper-modal"
+        dir="rtl"
+      >
+        <div className="sticky top-0 bg-gradient-to-r from-cyan-500/10 to-blue-600/10 border-b border-cyan-400/20 px-6 py-4 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Sparkles className="w-5 h-5 text-cyan-300" />
+            <h3 className="font-black text-lg">المساعد الذكي للتكاملات</h3>
+          </div>
+          <button onClick={onClose} className="p-1 hover:bg-white/10 rounded">
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+
+        <div className="p-6">
+          {!picked && (
+            <>
+              <p className="text-sm text-white/60 mb-4">
+                {missing.length === 0
+                  ? '✅ كل التكاملات الأساسية مفعّلة. ما عندك مفتاح ناقص.'
+                  : `عندك ${missing.length} تكامل ناقص. اختر اللي تبي تضيفه — راح أبحث لك عن صفحة الـAPI keys الرسمية وأقدر أحفظ المفتاح مشفّراً مباشرة.`}
+              </p>
+              <div className="grid sm:grid-cols-2 gap-2">
+                {missing.map((it) => (
+                  <button
+                    key={it.id}
+                    onClick={() => lookupDocs(it)}
+                    className="text-right px-4 py-3 rounded-xl bg-white/[0.03] hover:bg-cyan-500/10 border border-white/10 hover:border-cyan-400/40 transition group"
+                    data-testid={`ai-helper-pick-${it.id}`}
+                  >
+                    <div className="font-bold text-sm">{it.name_ar || it.name}</div>
+                    <div className="text-[11px] text-white/50 mt-0.5">{it.env_var}</div>
+                  </button>
+                ))}
+              </div>
+            </>
+          )}
+
+          {picked && (
+            <>
+              <button onClick={() => { setPicked(null); setDocs(null); }} className="text-xs text-cyan-300 mb-3 hover:underline">
+                ← اختر تكامل آخر
+              </button>
+              <h4 className="text-xl font-black mb-1">{picked.name_ar || picked.name}</h4>
+              <code className="text-[11px] text-white/40">{picked.env_var}</code>
+
+              {docsLoading && (
+                <div className="mt-6 flex items-center gap-2 text-white/50 text-sm">
+                  <Loader2 className="w-4 h-4 animate-spin" /> أبحث في docs الرسمية...
+                </div>
+              )}
+
+              {docs && (
+                <>
+                  <div className="mt-5 p-4 rounded-xl bg-cyan-500/5 border border-cyan-400/20">
+                    <div className="text-[11px] text-cyan-300 font-bold mb-1.5">📝 ملخص الخطوات</div>
+                    <p className="text-sm text-white/85 leading-relaxed">{docs.answer || 'لا يوجد ملخص.'}</p>
+                  </div>
+
+                  <div className="mt-4">
+                    <div className="text-[11px] text-white/50 mb-2">🔗 الروابط الرسمية:</div>
+                    <div className="space-y-1.5">
+                      {(docs.top_3 || []).map((r, i) => (
+                        <a key={i} href={r.url} target="_blank" rel="noreferrer"
+                          className="flex items-center gap-2 px-3 py-2 rounded-lg bg-white/[0.03] hover:bg-white/[0.07] border border-white/5 text-xs group">
+                          <ExternalLink className="w-3 h-3 text-cyan-400 flex-shrink-0" />
+                          <div className="flex-1 min-w-0">
+                            <div className="font-bold truncate">{r.title}</div>
+                            <div className="text-[10px] text-white/40 truncate">{r.url}</div>
+                          </div>
+                        </a>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="mt-6 p-4 rounded-xl bg-emerald-500/5 border border-emerald-400/20">
+                    <div className="text-[11px] text-emerald-300 font-bold mb-2">🔐 احفظ المفتاح هنا (مشفّر):</div>
+                    <input
+                      type="password"
+                      value={keyValue}
+                      onChange={(e) => setKeyValue(e.target.value)}
+                      placeholder={`الصق مفتاح ${picked.name_ar || picked.id} هنا...`}
+                      className="w-full px-3 py-2 rounded-lg bg-black/40 border border-white/10 focus:border-emerald-400/50 text-white placeholder-white/30 outline-none text-sm font-mono"
+                      data-testid="ai-helper-key-input"
+                    />
+                    <div className="flex items-center justify-between mt-3">
+                      <p className="text-[10px] text-white/40">يُحفظ في credentials_vault بـAES-256 — ولا يصل لـEnv</p>
+                      <button
+                        onClick={saveKey}
+                        disabled={saving || !keyValue.trim()}
+                        className="px-4 py-1.5 rounded-lg bg-emerald-500/20 hover:bg-emerald-500/30 border border-emerald-400/40 text-emerald-100 text-xs font-bold disabled:opacity-40 flex items-center gap-1.5"
+                        data-testid="ai-helper-save-btn"
+                      >
+                        {saving ? <Loader2 className="w-3 h-3 animate-spin" /> : <Lock className="w-3 h-3" />}
+                        احفظ مشفّراً
+                      </button>
+                    </div>
+                  </div>
+                </>
+              )}
+            </>
+          )}
+        </div>
+      </div>
     </div>
   );
 }
