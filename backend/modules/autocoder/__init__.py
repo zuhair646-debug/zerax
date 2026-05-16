@@ -932,15 +932,30 @@ async def tool_pre_deploy_check(paths: Optional[List[str]] = None) -> Dict[str, 
     # 2. Try importing the autocoder module specifically (it's the most likely
     # to break itself, and breaking it = no more autocoder)
     if not paths or any("autocoder" in p for p in paths):
-        ir = await tool_run_command(
-            "cd /app/backend && python3 -c 'import sys; sys.path.insert(0, \".\"); "
-            "from modules.autocoder import create_autocoder_router' 2>&1",
-            timeout=15,
-        )
-        if not ir.get("ok"):
+        # Detect whether modules/ lives at /app/backend (dev) or /app (production)
+        backend_paths = [
+            ("/app/backend", "/app/backend"),
+            ("/app", "/app"),
+        ]
+        backend_dir = None
+        for check, _ in backend_paths:
+            if Path(check + "/modules/autocoder/__init__.py").exists():
+                backend_dir = check
+                break
+        if backend_dir:
+            ir = await tool_run_command(
+                f"cd {shlex.quote(backend_dir)} && python3 -c 'import sys; sys.path.insert(0, \".\"); "
+                "from modules.autocoder import create_autocoder_router' 2>&1",
+                timeout=15,
+            )
+            if not ir.get("ok"):
+                issues.append({"file": f"{backend_dir}/modules/autocoder",
+                               "type": "import_error",
+                               "error": (ir.get("stderr") or ir.get("stdout") or "")[:500]})
+        else:
             issues.append({"file": "modules/autocoder",
                            "type": "import_error",
-                           "error": (ir.get("stderr") or ir.get("stdout") or "")[:500]})
+                           "error": "could not locate backend/ or /app modules dir"})
 
     return {
         "ok": len(issues) == 0,

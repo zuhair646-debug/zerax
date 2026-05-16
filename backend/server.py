@@ -3537,6 +3537,35 @@ async def delete_user_element(el_id: str, current_user: dict = Depends(get_curre
 async def health_check():
     return {"status": "healthy", "service": "zitex-api"}
 
+# Version endpoint — exposes git commit so we can verify what's actually deployed
+@app.get("/api/version")
+async def api_version():
+    import subprocess as _sp
+    sha = ""
+    msg = ""
+    try:
+        sha = _sp.check_output(
+            ["git", "rev-parse", "--short=8", "HEAD"],
+            cwd="/app", stderr=_sp.DEVNULL, timeout=3,
+        ).decode().strip()
+        msg = _sp.check_output(
+            ["git", "log", "-1", "--pretty=%s", "HEAD"],
+            cwd="/app", stderr=_sp.DEVNULL, timeout=3,
+        ).decode().strip()[:120]
+    except Exception:
+        pass
+    # Production fallback: read from env (set in Dockerfile or Railway)
+    if not sha:
+        sha = os.environ.get("GIT_COMMIT", os.environ.get("RAILWAY_GIT_COMMIT_SHA", ""))[:8]
+        msg = os.environ.get("RAILWAY_GIT_COMMIT_MESSAGE", "")[:120]
+    return {
+        "service": "zitex-api",
+        "commit": sha or "unknown",
+        "commit_message": msg,
+        "deployed_at": os.environ.get("RAILWAY_DEPLOYMENT_DRAINING_SECONDS") or "n/a",
+        "endpoints_count": len([r for r in app.routes if hasattr(r, "path")]),
+    }
+
 # Serve static game engine (delegated to games module)
 try:
     from modules.games.routes import init_routes as _init_games_routes

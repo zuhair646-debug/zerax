@@ -30,6 +30,13 @@ RUN pip install --no-cache-dir --extra-index-url https://d33sy5i8bnduwe.cloudfro
 
 COPY . .
 
+# Bake the build-time commit SHA into the image so /api/version works on Railway
+# (where /app is not a git repo). Railway sets RAILWAY_GIT_COMMIT_SHA at build time.
+ARG RAILWAY_GIT_COMMIT_SHA=""
+ARG RAILWAY_GIT_COMMIT_MESSAGE=""
+ENV GIT_COMMIT=$RAILWAY_GIT_COMMIT_SHA
+ENV RAILWAY_GIT_COMMIT_MESSAGE=$RAILWAY_GIT_COMMIT_MESSAGE
+
 EXPOSE 8080
 
 CMD uvicorn server:app --host 0.0.0.0 --port ${PORT:-8080}
