@@ -39,6 +39,10 @@ INTEGRATIONS_CATALOG: List[Dict[str, Any]] = [
     {"id": "huggingface", "label": "HuggingFace", "env": ["HF_TOKEN"],
      "category": "llm-optional", "where": "https://huggingface.co/settings/tokens",
      "purpose": "وصول لآلاف نماذج open-source"},
+    # ───────── Web search (for Auto-Coder grounding) ─────────
+    {"id": "tavily", "label": "Tavily Web Search", "env": ["TAVILY_API_KEY"],
+     "category": "infra", "where": "https://app.tavily.com",
+     "purpose": "بحث ويب حي للأخبار/التوثيق (1000 credit/شهر مجاني)"},
     # ───────── Media generation ─────────
     {"id": "fal", "label": "Fal.ai", "env": ["FAL_KEY"],
      "category": "media", "where": "https://fal.ai/dashboard/keys",

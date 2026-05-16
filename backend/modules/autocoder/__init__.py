@@ -96,6 +96,11 @@ from .integrations_status import (
     INTEGRATIONS_ANTHROPIC_TOOLS, INTEGRATIONS_TOOL_HANDLERS, INTEGRATIONS_TOOL_DEFS,
     integrations_summarize, integrations_preview,
 )
+from .web_search import (
+    WEB_SEARCH_ANTHROPIC_TOOLS, WEB_SEARCH_TOOL_HANDLERS, WEB_SEARCH_TOOL_DEFS,
+    web_search_summarize, web_search_preview, WEB_SEARCH_PROMPT_RULES,
+    bind_db as _bind_websearch_db,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -1120,7 +1125,7 @@ TOOL_DEFS: List[Dict[str, Any]] = [
     {"name": "pre_deploy_check", "desc": "syntax + import sanity check before commit", "args": ["paths?"]},
     {"name": "check_deployment_status", "desc": "check Railway deployment success/fail", "args": []},
     {"name": "rollback_to_last_good", "desc": "revert to last successful Railway deployment", "args": []},
-] + EXTRA_TOOL_DEFS + UNIVERSE_TOOL_DEFS + QUALITY_TOOL_DEFS + INDEX_TOOL_DEFS + SAFETY_TOOL_DEFS + LEARNING_TOOL_DEFS + AUTONOMY_TOOL_DEFS + OPS_TOOL_DEFS + MEMORY_TOOL_DEFS + SANDBOX_TOOL_DEFS + INTEGRATIONS_TOOL_DEFS
+] + EXTRA_TOOL_DEFS + UNIVERSE_TOOL_DEFS + QUALITY_TOOL_DEFS + INDEX_TOOL_DEFS + SAFETY_TOOL_DEFS + LEARNING_TOOL_DEFS + AUTONOMY_TOOL_DEFS + OPS_TOOL_DEFS + MEMORY_TOOL_DEFS + SANDBOX_TOOL_DEFS + INTEGRATIONS_TOOL_DEFS + WEB_SEARCH_TOOL_DEFS
 
 # Anthropic-compatible tool schemas (native tool calling)
 ANTHROPIC_TOOLS = [
@@ -1290,7 +1295,7 @@ ANTHROPIC_TOOLS = [
         "description": "EMERGENCY: if the latest deployment failed and you can't fix it quickly, this finds the last SUCCESS commit on Railway and force-pushes to it, restoring the platform. Use as a last resort when stuck.",
         "input_schema": {"type": "object", "properties": {}, "required": []},
     },
-] + EXTRA_ANTHROPIC_TOOLS + UNIVERSE_ANTHROPIC_TOOLS + QUALITY_ANTHROPIC_TOOLS + INDEX_ANTHROPIC_TOOLS + SAFETY_ANTHROPIC_TOOLS + LEARNING_ANTHROPIC_TOOLS + AUTONOMY_ANTHROPIC_TOOLS + OPS_ANTHROPIC_TOOLS + MEMORY_ANTHROPIC_TOOLS + SANDBOX_ANTHROPIC_TOOLS + INTEGRATIONS_ANTHROPIC_TOOLS
+] + EXTRA_ANTHROPIC_TOOLS + UNIVERSE_ANTHROPIC_TOOLS + QUALITY_ANTHROPIC_TOOLS + INDEX_ANTHROPIC_TOOLS + SAFETY_ANTHROPIC_TOOLS + LEARNING_ANTHROPIC_TOOLS + AUTONOMY_ANTHROPIC_TOOLS + OPS_ANTHROPIC_TOOLS + MEMORY_ANTHROPIC_TOOLS + SANDBOX_ANTHROPIC_TOOLS + INTEGRATIONS_ANTHROPIC_TOOLS + WEB_SEARCH_ANTHROPIC_TOOLS
 
 TOOL_HANDLERS = {
     "list_dir": tool_list_dir,
@@ -1338,6 +1343,8 @@ TOOL_HANDLERS.update(MEMORY_TOOL_HANDLERS)
 TOOL_HANDLERS.update(SANDBOX_TOOL_HANDLERS)
 # Register Integrations Status tool (introspect missing keys)
 TOOL_HANDLERS.update(INTEGRATIONS_TOOL_HANDLERS)
+# Register Web Search tools (Tavily)
+TOOL_HANDLERS.update(WEB_SEARCH_TOOL_HANDLERS)
 
 # db_query is bound to the live MongoDB at router creation time
 _db_query_bound: Optional[Any] = None
@@ -1407,6 +1414,8 @@ def create_autocoder_router(db, get_current_user, require_owner):
     _bind_learning_db(db)
     # Bind the Task Memory to the DB (cross-session task continuity)
     _bind_memory_db(db)
+    # Bind the Web Search vault fallback to DB
+    _bind_websearch_db(db)
 
     # Pre-build code index in background so first AI request is fast
     try:
@@ -2158,7 +2167,7 @@ async def _stream_direct_anthropic(anthropic_msgs: List[Dict[str, Any]], api_key
         task_brief = await build_session_brief(max_tasks=3)
     except Exception:
         task_brief = ""
-    sys_prompt_text = AUTOCODER_SYSTEM_PROMPT + AUTONOMY_PROMPT_RULES + OPS_PROMPT_RULES + QUALITY_PROMPT_RULES + INDEX_PROMPT_RULES + SAFETY_PROMPT_RULES + LEARNING_PROMPT_RULES + MEMORY_PROMPT_RULES + SANDBOX_PROMPT_RULES + (env_banner or "") + build_atlas_for_prompt() + build_atlas_v2_for_prompt() + build_universe_for_prompt() + lessons_block + task_brief
+    sys_prompt_text = AUTOCODER_SYSTEM_PROMPT + AUTONOMY_PROMPT_RULES + OPS_PROMPT_RULES + QUALITY_PROMPT_RULES + INDEX_PROMPT_RULES + SAFETY_PROMPT_RULES + LEARNING_PROMPT_RULES + MEMORY_PROMPT_RULES + SANDBOX_PROMPT_RULES + WEB_SEARCH_PROMPT_RULES + (env_banner or "") + build_atlas_for_prompt() + build_atlas_v2_for_prompt() + build_universe_for_prompt() + lessons_block + task_brief
     system_blocks = [
         {"type": "text", "text": sys_prompt_text, "cache_control": {"type": "ephemeral"}}
     ]
@@ -2475,6 +2484,9 @@ def _preview_for_ui(name: str, result: Dict[str, Any]) -> str:
     ip = integrations_preview(name, result)
     if ip is not None:
         return ip
+    wp = web_search_preview(name, result)
+    if wp is not None:
+        return wp
     if name == "read_file":
         return (result.get("content") or "")[:600]
     if name == "list_dir":
@@ -2530,6 +2542,9 @@ def _summarize(name: str, result: Dict[str, Any]) -> str:
     is_s = integrations_summarize(name, result)
     if is_s is not None:
         return is_s
+    ws_s = web_search_summarize(name, result)
+    if ws_s is not None:
+        return ws_s
     if name == "read_file":
         return f"قرأت {result.get('total_lines',0)} سطر"
     if name == "list_dir":
