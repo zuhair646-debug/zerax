@@ -145,15 +145,45 @@ def _gen_recovery_code() -> str:
     return f"{raw[0:4]}-{raw[4:8]}-{raw[8:12]}-{raw[12:16]}"
 
 
+async def _get_github_creds() -> Dict[str, str]:
+    """Resolve GitHub creds from env first, fall back to encrypted vault.
+    Returns {token, repo} (either may be empty if not found)."""
+    token = os.environ.get("GITHUB_TOKEN", "").strip()
+    repo = os.environ.get("GITHUB_REPO", "").strip()
+    if token and repo:
+        return {"token": token, "repo": repo}
+    # Try the credentials vault (saved by the owner once, used across restarts)
+    try:
+        if _DB is None:
+            return {"token": token, "repo": repo}
+        doc = await _DB.credentials_vault.find_one({"service": "github"}, {"_id": 0})
+        if not doc:
+            return {"token": token, "repo": repo}
+        if not token:
+            enc = doc.get("value_encrypted") or ""
+            if enc:
+                import base64, hashlib
+                from cryptography.fernet import Fernet
+                seed = (os.environ.get("JWT_SECRET", "") + os.environ.get("MONGO_URL", "")).encode()
+                key = base64.urlsafe_b64encode(hashlib.sha256(seed).digest())
+                token = Fernet(key).decrypt(enc.encode()).decode()
+        if not repo:
+            repo = doc.get("repo") or ""
+    except Exception:
+        pass
+    return {"token": token, "repo": repo}
+
+
 async def _ensure_git_workdir() -> Dict[str, Any]:
     """Make sure /tmp/zitex_workdir is a fresh clone of the repo.
     Used on Railway production where /app is not a git repo (only the build subdir).
     Returns {ok, path, action} or {ok: False, error}.
     """
-    gh_token = os.environ.get("GITHUB_TOKEN", "").strip()
-    gh_repo = os.environ.get("GITHUB_REPO", "").strip()
+    creds = await _get_github_creds()
+    gh_token = creds["token"]
+    gh_repo = creds["repo"]
     if not gh_token or not gh_repo:
-        return {"ok": False, "error": "GITHUB_TOKEN/GITHUB_REPO env vars missing — set them in Railway Variables"}
+        return {"ok": False, "error": "GITHUB_TOKEN/GITHUB_REPO not configured (env or vault) — add via Independence page"}
 
     auth_url = f"https://x-access-token:{gh_token}@github.com/{gh_repo}.git"
     if (GIT_WORKDIR / ".git").exists():
@@ -723,8 +753,9 @@ async def tool_git_commit_push(message: str, files: Optional[List[str]] = None) 
     if not setup.get("ok"):
         return setup
 
-    gh_token = os.environ.get("GITHUB_TOKEN", "").strip()
-    gh_repo = os.environ.get("GITHUB_REPO", "").strip()
+    creds = await _get_github_creds()
+    gh_token = creds["token"]
+    gh_repo = creds["repo"]
     auth_url = f"https://x-access-token:{gh_token}@github.com/{gh_repo}.git" if gh_token and gh_repo else None
 
     # Sync working files from /app into the workdir (only the relevant subdirs)
@@ -1266,13 +1297,15 @@ TOOL_HANDLERS.update(SANDBOX_TOOL_HANDLERS)
 
 # db_query is bound to the live MongoDB at router creation time
 _db_query_bound: Optional[Any] = None
+_DB: Optional[Any] = None  # MongoDB instance (bound at router creation)
 
 
 def _bind_db_tool(db) -> None:
     """Called from create_autocoder_router to bind the db_query tool."""
-    global _db_query_bound
+    global _db_query_bound, _DB
     _db_query_bound = make_db_query_tool(db)
     TOOL_HANDLERS["db_query"] = _db_query_bound
+    _DB = db
 
 
 async def execute_autocoder_tool(name: str, args: Optional[Dict[str, Any]]) -> Dict[str, Any]:
