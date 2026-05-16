@@ -114,12 +114,18 @@ async def tool_verify_endpoint(
     if not url:
         return {"ok": False, "error": "url مطلوب"}
 
-    # If a relative path was passed, build full URL from REACT_APP_BACKEND_URL
+    # If a relative path was passed, build full URL from public backend URL
     if url.startswith("/"):
-        # try frontend env first, then default localhost
-        be = os.environ.get("REACT_APP_BACKEND_URL", "")
+        be = ""
+        # 1) Honour explicit override
+        be = os.environ.get("BACKEND_URL", "").strip() or os.environ.get("REACT_APP_BACKEND_URL", "").strip()
+        # 2) Railway-provided public hostname
         if not be:
-            # Read from frontend/.env
+            rw_dom = os.environ.get("RAILWAY_PUBLIC_DOMAIN", "").strip()
+            if rw_dom:
+                be = f"https://{rw_dom.lstrip('https://').lstrip('http://')}"
+        # 3) Frontend .env (development)
+        if not be:
             try:
                 env_path = Path("/app/frontend/.env")
                 if env_path.exists():
@@ -129,6 +135,7 @@ async def tool_verify_endpoint(
                             break
             except Exception:
                 pass
+        # 4) Final fallback — only acceptable in dev (not on Railway)
         if not be:
             be = "http://localhost:8001"
         url = be.rstrip("/") + url
@@ -273,6 +280,63 @@ async def tool_verify_full(
 
 
 # ════════════════════════════════════════════════════════════════════════
+# 5. frontend_check — yarn install/lint/build (requires Node in container)
+# ════════════════════════════════════════════════════════════════════════
+async def tool_frontend_check(
+    mode: str = "lint",
+    cwd: str = "/app/frontend",
+    timeout: int = 300,
+) -> Dict[str, Any]:
+    """Run frontend tooling (yarn). mode: 'lint' | 'install' | 'build'.
+
+    Requires Node.js + yarn inside the container (added in Dockerfile in 2026).
+    On Railway production: returns {ok: False, "node_unavailable"} if Node is
+    not yet installed in the running image — pushes containing the new
+    Dockerfile must complete first.
+    """
+    import subprocess
+    # Quick capability probe
+    try:
+        which = subprocess.run(["which", "yarn"], capture_output=True, text=True, timeout=5)
+        if which.returncode != 0:
+            return {"ok": False, "error": "yarn not installed in this container",
+                    "hint": "ادفع الـDockerfile الجديد (Node.js 20 + yarn) أو ركّب محلياً", "node_unavailable": True}
+    except Exception as e:
+        return {"ok": False, "error": f"cannot detect yarn: {e}", "node_unavailable": True}
+
+    cmd_map = {
+        "lint": "yarn lint --max-warnings 0 || npx eslint src --max-warnings 0",
+        "install": "yarn install --frozen-lockfile",
+        "build": "yarn build",
+        "type-check": "yarn type-check || npx tsc --noEmit",
+    }
+    cmd = cmd_map.get(mode)
+    if not cmd:
+        return {"ok": False, "error": f"unknown mode: {mode}. Use lint/install/build/type-check"}
+
+    try:
+        proc = await asyncio.create_subprocess_shell(
+            cmd, cwd=cwd,
+            stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE,
+        )
+        try:
+            stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=timeout)
+        except asyncio.TimeoutError:
+            try:
+                proc.kill()
+            except Exception:
+                pass
+            return {"ok": False, "error": f"timeout after {timeout}s", "mode": mode}
+        out = (stdout or b"").decode("utf-8", errors="replace")[:8000]
+        err = (stderr or b"").decode("utf-8", errors="replace")[:4000]
+        return {"ok": proc.returncode == 0, "exit_code": proc.returncode,
+                "stdout_tail": out[-3000:], "stderr_tail": err[-2000:],
+                "mode": mode, "cmd": cmd}
+    except Exception as e:
+        return {"ok": False, "error": str(e), "mode": mode}
+
+
+# ════════════════════════════════════════════════════════════════════════
 # Anthropic tool schemas
 # ════════════════════════════════════════════════════════════════════════
 QUALITY_ANTHROPIC_TOOLS: List[Dict[str, Any]] = [
@@ -317,6 +381,16 @@ QUALITY_ANTHROPIC_TOOLS: List[Dict[str, Any]] = [
             "log_service": {"type": "string"},
         }, "required": []},
     },
+    {
+        "name": "frontend_check",
+        "description": ("🔧 شغّل أدوات الـfrontend (yarn lint/install/build/type-check) داخل الحاوية. "
+                       "يحتاج Node.js + yarn (مضافة في Dockerfile). استخدمها للتأكد إن أي تعديل JSX/TS ما كسر شي قبل الـpush."),
+        "input_schema": {"type": "object", "properties": {
+            "mode": {"type": "string", "enum": ["lint", "install", "build", "type-check"], "description": "default lint"},
+            "cwd": {"type": "string", "description": "default /app/frontend"},
+            "timeout": {"type": "integer"},
+        }, "required": []},
+    },
 ]
 
 QUALITY_TOOL_DEFS: List[Dict[str, Any]] = [
@@ -324,6 +398,7 @@ QUALITY_TOOL_DEFS: List[Dict[str, Any]] = [
     {"name": "verify_endpoint", "desc": "real HTTP test", "args": ["url", "method?", "expected_status?", "contains?", "headers?", "body?"]},
     {"name": "verify_no_errors", "desc": "log scan for errors", "args": ["service?", "lines?"]},
     {"name": "verify_full", "desc": "composite verdict", "args": ["lint_path?", "endpoints?", "log_service?"]},
+    {"name": "frontend_check", "desc": "yarn lint/install/build", "args": ["mode?", "cwd?", "timeout?"]},
 ]
 
 QUALITY_TOOL_HANDLERS = {
@@ -331,6 +406,7 @@ QUALITY_TOOL_HANDLERS = {
     "verify_endpoint": tool_verify_endpoint,
     "verify_no_errors": tool_verify_no_errors,
     "verify_full": tool_verify_full,
+    "frontend_check": tool_frontend_check,
 }
 
 

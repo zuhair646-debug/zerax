@@ -92,6 +92,10 @@ from .sandbox import (
     SANDBOX_ANTHROPIC_TOOLS, SANDBOX_TOOL_HANDLERS, SANDBOX_TOOL_DEFS,
     sandbox_summarize, sandbox_preview, SANDBOX_PROMPT_RULES,
 )
+from .integrations_status import (
+    INTEGRATIONS_ANTHROPIC_TOOLS, INTEGRATIONS_TOOL_HANDLERS, INTEGRATIONS_TOOL_DEFS,
+    integrations_summarize, integrations_preview,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -162,7 +166,8 @@ async def _get_github_creds() -> Dict[str, str]:
         if not token:
             enc = doc.get("value_encrypted") or ""
             if enc:
-                import base64, hashlib
+                import base64
+                import hashlib
                 from cryptography.fernet import Fernet
                 seed = (os.environ.get("JWT_SECRET", "") + os.environ.get("MONGO_URL", "")).encode()
                 key = base64.urlsafe_b64encode(hashlib.sha256(seed).digest())
@@ -944,33 +949,54 @@ async def tool_pre_deploy_check(paths: Optional[List[str]] = None) -> Dict[str, 
 async def tool_check_deployment_status() -> Dict[str, Any]:
     """Check the status of the LAST Railway deployment (success/failed).
     Use after `git_commit_push` to confirm the deploy actually worked.
-    Wait ~2-4 minutes after push before calling."""
+    Wait ~2-4 minutes after push before calling.
+
+    Uses the current Railway GraphQL schema: `deployments(input: { serviceId, environmentId })`.
+    """
     rw_token = os.environ.get("RAILWAY_TOKEN", "").strip()
     rw_service = os.environ.get("RAILWAY_SERVICE_ID", "").strip()
     rw_env = os.environ.get("RAILWAY_ENVIRONMENT_ID", "").strip()
+    rw_project = os.environ.get("RAILWAY_PROJECT_ID", "").strip()
     if not rw_token or not rw_service or not rw_env:
         return {"ok": False, "error": "RAILWAY_TOKEN/RAILWAY_SERVICE_ID/RAILWAY_ENVIRONMENT_ID must all be set"}
     try:
         import httpx
-        # Railway v2 API: use serviceInstanceDeployments (NOT the old deployments(input:))
+        # Current Railway v2 schema (Feb 2026): deployments(input: {projectId,serviceId,environmentId})
         q = (
-            'query ServiceDeps($e: String!, $s: String!) { '
-            'serviceInstanceDeployments(environmentId: $e, serviceId: $s) { '
-            '  edges { node { id status createdAt url canRollback meta } } '
+            'query Deps($p: String, $s: String!, $e: String!) { '
+            'deployments(first: 5, input: { projectId: $p, serviceId: $s, environmentId: $e }) { '
+            '  edges { node { id status createdAt url canRollback meta staticUrl } } '
             '} }'
         )
+        variables = {"p": rw_project or None, "s": rw_service, "e": rw_env}
         async with httpx.AsyncClient(timeout=20) as c:
             r = await c.post(
                 "https://backboard.railway.com/graphql/v2",
                 headers={"Authorization": f"Bearer {rw_token}",
                          "Content-Type": "application/json"},
-                json={"query": q, "variables": {"e": rw_env, "s": rw_service}},
+                json={"query": q, "variables": variables},
             )
         data = r.json()
         if "errors" in data:
-            return {"ok": False, "error": str(data["errors"])[:400],
-                    "hint": "تأكد إن RAILWAY_TOKEN و RAILWAY_ENVIRONMENT_ID و RAILWAY_SERVICE_ID صحيحين"}
-        edges = (data.get("data", {}).get("serviceInstanceDeployments", {}) or {}).get("edges", [])
+            # Fallback: try without projectId (older accounts)
+            q2 = (
+                'query Deps($s: String!, $e: String!) { '
+                'deployments(first: 5, input: { serviceId: $s, environmentId: $e }) { '
+                '  edges { node { id status createdAt url canRollback meta staticUrl } } '
+                '} }'
+            )
+            async with httpx.AsyncClient(timeout=20) as c:
+                r = await c.post(
+                    "https://backboard.railway.com/graphql/v2",
+                    headers={"Authorization": f"Bearer {rw_token}",
+                             "Content-Type": "application/json"},
+                    json={"query": q2, "variables": {"s": rw_service, "e": rw_env}},
+                )
+            data = r.json()
+            if "errors" in data:
+                return {"ok": False, "error": str(data["errors"])[:400],
+                        "hint": "تأكد من توكنات Railway. الـschema تغيّر في 2026، استخدم RAILWAY_PROJECT_ID أيضاً."}
+        edges = (data.get("data", {}).get("deployments", {}) or {}).get("edges", [])
         out = []
         for e in edges[:5]:
             n = e["node"]
@@ -979,7 +1005,7 @@ async def tool_check_deployment_status() -> Dict[str, Any]:
                 "id": n["id"],
                 "status": n["status"],
                 "createdAt": n["createdAt"],
-                "url": n.get("url"),
+                "url": n.get("staticUrl") or n.get("url"),
                 "can_rollback": n.get("canRollback", False),
                 "commit_sha": (meta.get("commitHash") or "")[:8],
                 "commit_msg": ((meta.get("commitMessage") or "") or "")[:80],
@@ -1011,9 +1037,10 @@ async def tool_rollback_to_last_good() -> Dict[str, Any]:
         return {"ok": False, "error": "RAILWAY_TOKEN/RAILWAY_SERVICE_ID/RAILWAY_ENVIRONMENT_ID required"}
     try:
         import httpx
+        rw_project = os.environ.get("RAILWAY_PROJECT_ID", "").strip()
         q = (
-            'query ServiceDeps($e: String!, $s: String!) { '
-            'serviceInstanceDeployments(environmentId: $e, serviceId: $s) { '
+            'query Deps($p: String, $s: String!, $e: String!) { '
+            'deployments(first: 20, input: { projectId: $p, serviceId: $s, environmentId: $e }) { '
             '  edges { node { status meta } } '
             '} }'
         )
@@ -1021,12 +1048,27 @@ async def tool_rollback_to_last_good() -> Dict[str, Any]:
             r = await c.post(
                 "https://backboard.railway.com/graphql/v2",
                 headers={"Authorization": f"Bearer {rw_token}"},
-                json={"query": q, "variables": {"e": rw_env, "s": rw_service}},
+                json={"query": q, "variables": {"p": rw_project or None, "s": rw_service, "e": rw_env}},
             )
         data = r.json()
         if "errors" in data:
-            return {"ok": False, "error": str(data["errors"])[:400]}
-        edges = (data.get("data", {}).get("serviceInstanceDeployments", {}) or {}).get("edges", [])
+            # Fallback without projectId
+            q2 = (
+                'query Deps($s: String!, $e: String!) { '
+                'deployments(first: 20, input: { serviceId: $s, environmentId: $e }) { '
+                '  edges { node { status meta } } '
+                '} }'
+            )
+            async with httpx.AsyncClient(timeout=20) as c:
+                r = await c.post(
+                    "https://backboard.railway.com/graphql/v2",
+                    headers={"Authorization": f"Bearer {rw_token}"},
+                    json={"query": q2, "variables": {"s": rw_service, "e": rw_env}},
+                )
+            data = r.json()
+            if "errors" in data:
+                return {"ok": False, "error": str(data["errors"])[:400]}
+        edges = (data.get("data", {}).get("deployments", {}) or {}).get("edges", [])
         good_sha = None
         for e in edges:
             n = e["node"]
@@ -1078,7 +1120,7 @@ TOOL_DEFS: List[Dict[str, Any]] = [
     {"name": "pre_deploy_check", "desc": "syntax + import sanity check before commit", "args": ["paths?"]},
     {"name": "check_deployment_status", "desc": "check Railway deployment success/fail", "args": []},
     {"name": "rollback_to_last_good", "desc": "revert to last successful Railway deployment", "args": []},
-] + EXTRA_TOOL_DEFS + UNIVERSE_TOOL_DEFS + QUALITY_TOOL_DEFS + INDEX_TOOL_DEFS + SAFETY_TOOL_DEFS + LEARNING_TOOL_DEFS + AUTONOMY_TOOL_DEFS + OPS_TOOL_DEFS + MEMORY_TOOL_DEFS + SANDBOX_TOOL_DEFS
+] + EXTRA_TOOL_DEFS + UNIVERSE_TOOL_DEFS + QUALITY_TOOL_DEFS + INDEX_TOOL_DEFS + SAFETY_TOOL_DEFS + LEARNING_TOOL_DEFS + AUTONOMY_TOOL_DEFS + OPS_TOOL_DEFS + MEMORY_TOOL_DEFS + SANDBOX_TOOL_DEFS + INTEGRATIONS_TOOL_DEFS
 
 # Anthropic-compatible tool schemas (native tool calling)
 ANTHROPIC_TOOLS = [
@@ -1248,7 +1290,7 @@ ANTHROPIC_TOOLS = [
         "description": "EMERGENCY: if the latest deployment failed and you can't fix it quickly, this finds the last SUCCESS commit on Railway and force-pushes to it, restoring the platform. Use as a last resort when stuck.",
         "input_schema": {"type": "object", "properties": {}, "required": []},
     },
-] + EXTRA_ANTHROPIC_TOOLS + UNIVERSE_ANTHROPIC_TOOLS + QUALITY_ANTHROPIC_TOOLS + INDEX_ANTHROPIC_TOOLS + SAFETY_ANTHROPIC_TOOLS + LEARNING_ANTHROPIC_TOOLS + AUTONOMY_ANTHROPIC_TOOLS + OPS_ANTHROPIC_TOOLS + MEMORY_ANTHROPIC_TOOLS + SANDBOX_ANTHROPIC_TOOLS
+] + EXTRA_ANTHROPIC_TOOLS + UNIVERSE_ANTHROPIC_TOOLS + QUALITY_ANTHROPIC_TOOLS + INDEX_ANTHROPIC_TOOLS + SAFETY_ANTHROPIC_TOOLS + LEARNING_ANTHROPIC_TOOLS + AUTONOMY_ANTHROPIC_TOOLS + OPS_ANTHROPIC_TOOLS + MEMORY_ANTHROPIC_TOOLS + SANDBOX_ANTHROPIC_TOOLS + INTEGRATIONS_ANTHROPIC_TOOLS
 
 TOOL_HANDLERS = {
     "list_dir": tool_list_dir,
@@ -1294,6 +1336,8 @@ TOOL_HANDLERS.update(OPS_TOOL_HANDLERS)
 TOOL_HANDLERS.update(MEMORY_TOOL_HANDLERS)
 # Register Sandbox Mode tools (safe playground before production)
 TOOL_HANDLERS.update(SANDBOX_TOOL_HANDLERS)
+# Register Integrations Status tool (introspect missing keys)
+TOOL_HANDLERS.update(INTEGRATIONS_TOOL_HANDLERS)
 
 # db_query is bound to the live MongoDB at router creation time
 _db_query_bound: Optional[Any] = None
@@ -2428,6 +2472,9 @@ def _preview_for_ui(name: str, result: Dict[str, Any]) -> str:
     sp2 = sandbox_preview(name, result)
     if sp2 is not None:
         return sp2
+    ip = integrations_preview(name, result)
+    if ip is not None:
+        return ip
     if name == "read_file":
         return (result.get("content") or "")[:600]
     if name == "list_dir":
@@ -2480,6 +2527,9 @@ def _summarize(name: str, result: Dict[str, Any]) -> str:
     sb_s = sandbox_summarize(name, result)
     if sb_s is not None:
         return sb_s
+    is_s = integrations_summarize(name, result)
+    if is_s is not None:
+        return is_s
     if name == "read_file":
         return f"قرأت {result.get('total_lines',0)} سطر"
     if name == "list_dir":

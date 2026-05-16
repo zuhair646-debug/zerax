@@ -7,8 +7,17 @@ WORKDIR /app
 # browse_site() returns a clear "browser unavailable on this host" message if missing.
 # To enable browser testing on production: add ENABLE_BROWSER=1 env var and uncomment below.
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    git curl ca-certificates openssh-client jq \
+    git curl ca-certificates openssh-client jq gnupg build-essential \
     && rm -rf /var/lib/apt/lists/*
+
+# Install Node.js 20 LTS + npm + yarn so the autocoder can lint/build the frontend
+# locally inside the Railway container before pushing.
+# Node ~50MB, yarn ~5MB — acceptable trade-off for full-stack capability.
+RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
+    && apt-get install -y --no-install-recommends nodejs \
+    && npm install -g yarn@1.22.22 \
+    && rm -rf /var/lib/apt/lists/* \
+    && node --version && yarn --version
 
 # Configure default git identity (autocoder will override per-commit if needed)
 RUN git config --global user.email "autocoder@zitex.com" \
