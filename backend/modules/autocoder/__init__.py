@@ -101,6 +101,10 @@ from .web_search import (
     web_search_summarize, web_search_preview, WEB_SEARCH_PROMPT_RULES,
     bind_db as _bind_websearch_db,
 )
+from .railway_tools import (
+    RAILWAY_ANTHROPIC_TOOLS, RAILWAY_TOOL_HANDLERS, RAILWAY_TOOL_DEFS,
+    railway_summarize, railway_preview, bind_creds_getter as _bind_railway_creds,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -1174,7 +1178,7 @@ TOOL_DEFS: List[Dict[str, Any]] = [
     {"name": "pre_deploy_check", "desc": "syntax + import sanity check before commit", "args": ["paths?"]},
     {"name": "check_deployment_status", "desc": "check Railway deployment success/fail", "args": []},
     {"name": "rollback_to_last_good", "desc": "revert to last successful Railway deployment", "args": []},
-] + EXTRA_TOOL_DEFS + UNIVERSE_TOOL_DEFS + QUALITY_TOOL_DEFS + INDEX_TOOL_DEFS + SAFETY_TOOL_DEFS + LEARNING_TOOL_DEFS + AUTONOMY_TOOL_DEFS + OPS_TOOL_DEFS + MEMORY_TOOL_DEFS + SANDBOX_TOOL_DEFS + INTEGRATIONS_TOOL_DEFS + WEB_SEARCH_TOOL_DEFS
+] + EXTRA_TOOL_DEFS + UNIVERSE_TOOL_DEFS + QUALITY_TOOL_DEFS + INDEX_TOOL_DEFS + SAFETY_TOOL_DEFS + LEARNING_TOOL_DEFS + AUTONOMY_TOOL_DEFS + OPS_TOOL_DEFS + MEMORY_TOOL_DEFS + SANDBOX_TOOL_DEFS + INTEGRATIONS_TOOL_DEFS + WEB_SEARCH_TOOL_DEFS + RAILWAY_TOOL_DEFS
 
 # Anthropic-compatible tool schemas (native tool calling)
 ANTHROPIC_TOOLS = [
@@ -1344,7 +1348,7 @@ ANTHROPIC_TOOLS = [
         "description": "EMERGENCY: if the latest deployment failed and you can't fix it quickly, this finds the last SUCCESS commit on Railway and force-pushes to it, restoring the platform. Use as a last resort when stuck.",
         "input_schema": {"type": "object", "properties": {}, "required": []},
     },
-] + EXTRA_ANTHROPIC_TOOLS + UNIVERSE_ANTHROPIC_TOOLS + QUALITY_ANTHROPIC_TOOLS + INDEX_ANTHROPIC_TOOLS + SAFETY_ANTHROPIC_TOOLS + LEARNING_ANTHROPIC_TOOLS + AUTONOMY_ANTHROPIC_TOOLS + OPS_ANTHROPIC_TOOLS + MEMORY_ANTHROPIC_TOOLS + SANDBOX_ANTHROPIC_TOOLS + INTEGRATIONS_ANTHROPIC_TOOLS + WEB_SEARCH_ANTHROPIC_TOOLS
+] + EXTRA_ANTHROPIC_TOOLS + UNIVERSE_ANTHROPIC_TOOLS + QUALITY_ANTHROPIC_TOOLS + INDEX_ANTHROPIC_TOOLS + SAFETY_ANTHROPIC_TOOLS + LEARNING_ANTHROPIC_TOOLS + AUTONOMY_ANTHROPIC_TOOLS + OPS_ANTHROPIC_TOOLS + MEMORY_ANTHROPIC_TOOLS + SANDBOX_ANTHROPIC_TOOLS + INTEGRATIONS_ANTHROPIC_TOOLS + WEB_SEARCH_ANTHROPIC_TOOLS + RAILWAY_ANTHROPIC_TOOLS
 
 TOOL_HANDLERS = {
     "list_dir": tool_list_dir,
@@ -1394,6 +1398,8 @@ TOOL_HANDLERS.update(SANDBOX_TOOL_HANDLERS)
 TOOL_HANDLERS.update(INTEGRATIONS_TOOL_HANDLERS)
 # Register Web Search tools (Tavily)
 TOOL_HANDLERS.update(WEB_SEARCH_TOOL_HANDLERS)
+# Register Railway tools (redeploy, build logs, runtime logs, env vars)
+TOOL_HANDLERS.update(RAILWAY_TOOL_HANDLERS)
 
 # db_query is bound to the live MongoDB at router creation time
 _db_query_bound: Optional[Any] = None
@@ -1465,6 +1471,8 @@ def create_autocoder_router(db, get_current_user, require_owner):
     _bind_memory_db(db)
     # Bind the Web Search vault fallback to DB
     _bind_websearch_db(db)
+    # Bind Railway tools to credentials getter (env or vault)
+    _bind_railway_creds(_get_railway_creds)
 
     # Pre-build code index in background so first AI request is fast
     try:
@@ -2536,6 +2544,9 @@ def _preview_for_ui(name: str, result: Dict[str, Any]) -> str:
     wp = web_search_preview(name, result)
     if wp is not None:
         return wp
+    rp = railway_preview(name, result)
+    if rp is not None:
+        return rp
     if name == "read_file":
         return (result.get("content") or "")[:600]
     if name == "list_dir":
@@ -2594,6 +2605,9 @@ def _summarize(name: str, result: Dict[str, Any]) -> str:
     ws_s = web_search_summarize(name, result)
     if ws_s is not None:
         return ws_s
+    rs = railway_summarize(name, result)
+    if rs is not None:
+        return rs
     if name == "read_file":
         return f"قرأت {result.get('total_lines',0)} سطر"
     if name == "list_dir":
