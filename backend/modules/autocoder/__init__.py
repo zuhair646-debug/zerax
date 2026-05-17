@@ -1817,10 +1817,13 @@ def create_autocoder_router(db, get_current_user, require_owner):
             message = (form.get("message") or "").strip()
             conversation_id = form.get("conversation_id") or None
             model = form.get("model") or "claude"
-            for key in ("attachments",):
+            # Starlette's request.form() returns starlette.datastructures.UploadFile,
+            # while our annotation imports fastapi.UploadFile. A strict isinstance
+            # check can silently drop real uploads, so accept file-like upload objects.
+            for key in ("attachments", "files", "file"):
                 vals = form.getlist(key) if hasattr(form, "getlist") else []
                 for v in vals:
-                    if isinstance(v, UploadFile):
+                    if hasattr(v, "filename") and hasattr(v, "read"):
                         attachments.append(v)
 
         if not message and not attachments:
