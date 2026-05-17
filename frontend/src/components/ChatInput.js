@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import { Paperclip, Mic, MicOff, Smile, Send, X, Image as ImageIcon, Video, Loader2 } from 'lucide-react';
+import { Paperclip, Mic, MicOff, Smile, Send, X, Image as ImageIcon, Video, Loader2, FileText } from 'lucide-react';
 import { toast } from 'sonner';
 
 const API = process.env.REACT_APP_BACKEND_URL;
@@ -140,14 +140,8 @@ export default function ChatInput({
   const handleFileSelect = (e) => {
     const selectedFiles = Array.from(e.target.files || []);
     const validFiles = selectedFiles.filter((file) => {
-      const isImage = file.type.startsWith('image/');
-      const isVideo = file.type.startsWith('video/');
       const isValidSize = file.size <= 50 * 1024 * 1024; // 50MB
 
-      if (!isImage && !isVideo) {
-        toast.error(`${file.name}: نوع الملف غير مدعوم`);
-        return false;
-      }
       if (!isValidSize) {
         toast.error(`${file.name}: الحجم أكبر من 50MB`);
         return false;
@@ -274,6 +268,7 @@ export default function ChatInput({
           {files.map((file, index) => {
             const preview = filePreviews[index];
             const isImage = file.type.startsWith('image/');
+            const isVideo = file.type.startsWith('video/');
             return (
               <div key={`${file.name}-${index}`} className="relative group">
                 <div className={`bg-zinc-800/50 overflow-hidden rounded-xl border border-white/10 ${isImage ? 'w-28' : 'p-2 pr-8 flex items-center gap-2'}`}>
@@ -286,8 +281,10 @@ export default function ChatInput({
                     <>
                       {isImage ? (
                         <ImageIcon className="w-4 h-4 text-amber-400" />
-                      ) : (
+                      ) : isVideo ? (
                         <Video className="w-4 h-4 text-amber-400" />
+                      ) : (
+                        <FileText className="w-4 h-4 text-amber-400" />
                       )}
                       <span className="text-sm text-white/70 max-w-[150px] truncate">
                         {file.name}
@@ -338,7 +335,7 @@ export default function ChatInput({
                   <input
                     ref={fileInputRef}
                     type="file"
-                    accept="image/*,video/*"
+                    accept="image/*,video/*,.pdf,.txt,.md,.csv,.json,.doc,.docx,.xls,.xlsx,.zip"
                     multiple
                     onChange={handleFileSelect}
                     className="hidden"
@@ -348,7 +345,7 @@ export default function ChatInput({
                     onClick={() => fileInputRef.current?.click()}
                     disabled={disabled || busyVoice}
                     className="p-2 hover:bg-white/10 rounded-lg transition-colors disabled:opacity-50"
-                    title="إضافة صورة أو فيديو"
+                    title="إضافة صورة أو فيديو أو ملف"
                   >
                     <Paperclip className="w-5 h-5 text-white/70" />
                   </button>

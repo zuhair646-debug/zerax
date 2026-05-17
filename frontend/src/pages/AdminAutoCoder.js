@@ -478,7 +478,16 @@ export default function AdminAutoCoder() {
     if ((!msg && attachedFiles.length === 0) || sending) return;
     setInput('');
     setSending(true);
-    setMessages((prev) => [...prev, { role: 'user', content: msg }]);
+    setMessages((prev) => [...prev, {
+      role: 'user',
+      content: msg,
+      attachments: (attachedFiles || []).map((f) => ({
+        name: f.name,
+        type: f.type,
+        size: f.size,
+        previewUrl: f.type?.startsWith('image/') ? URL.createObjectURL(f) : '',
+      })),
+    }]);
     setCurrentStream('');
     setCurrentTools([]);
     let lastTurnCost = null;
@@ -1083,10 +1092,32 @@ function SessionTimer({ expiresAt }) {
 
 function MessageBubble({ m }) {
   if (m.role === 'user') {
+    const attachments = m.attachments || [];
     return (
       <div className="flex justify-end">
-        <div className="bg-amber-500/15 border border-amber-400/25 rounded-2xl rounded-br-sm px-4 py-3 max-w-2xl text-sm leading-relaxed whitespace-pre-wrap">
-          {m.content}
+        <div className="bg-amber-500/15 border border-amber-400/25 rounded-2xl rounded-br-sm px-4 py-3 max-w-2xl text-sm leading-relaxed">
+          {m.content && <div className="whitespace-pre-wrap">{m.content}</div>}
+          {attachments.length > 0 && (
+            <div className="mt-2 flex flex-wrap gap-2">
+              {attachments.map((a, idx) => {
+                const isImage = a.type?.startsWith('image/');
+                const src = a.previewUrl || (a.url ? `${API}${a.url}` : '');
+                const sizeKb = a.size ? `${Math.max(1, Math.round(a.size / 1024))}KB` : '';
+                return (
+                  <div key={`${a.name || a.url || 'file'}-${idx}`} className="rounded-xl overflow-hidden border border-amber-300/25 bg-black/25 max-w-[180px]">
+                    {isImage && src ? (
+                      <img src={src} alt={a.name || 'attachment'} className="w-full h-28 object-cover bg-black/40" />
+                    ) : (
+                      <div className="px-3 py-2 text-xs text-amber-100/90">📎 {a.name || a.url || 'ملف مرفق'}</div>
+                    )}
+                    <div className="px-2 py-1 text-[10px] text-amber-100/80 truncate">
+                      {a.name || 'مرفق'} {sizeKb && <span className="text-amber-100/50">• {sizeKb}</span>}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </div>
       </div>
     );

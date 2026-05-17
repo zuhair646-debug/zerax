@@ -26,6 +26,8 @@ import os
 import re
 import json
 import uuid
+import base64
+import mimetypes
 import shlex
 import asyncio
 import logging
@@ -1469,6 +1471,57 @@ async def execute_autocoder_tool(name: str, args: Optional[Dict[str, Any]]) -> D
         return {"ok": False, "error": str(e)}
 
 
+
+def _message_text_preview(content: Any, limit: int = 12000) -> str:
+    """Return a compact plain-text preview for history/UI/providers that do not support vision blocks."""
+    if isinstance(content, str):
+        return content[:limit]
+    if isinstance(content, list):
+        parts: List[str] = []
+        for block in content:
+            if not isinstance(block, dict):
+                continue
+            if block.get("type") == "text":
+                parts.append(str(block.get("text") or ""))
+            elif block.get("type") == "image":
+                source = block.get("source") or {}
+                media_type = source.get("media_type") or "image"
+                parts.append(f"[صورة مرفقة: {media_type} — متاحة للتحليل في Claude]")
+            elif block.get("type") == "tool_result":
+                parts.append(str(block.get("content") or ""))
+        return "\n".join(x for x in parts if x).strip()[:limit]
+    return str(content or "")[:limit]
+
+
+def _extract_message_plain_text(content: Any) -> str:
+    return _message_text_preview(content, 32000)
+
+
+def _safe_upload_name(filename: str) -> str:
+    original = Path(filename or "file").name.replace("/", "_").replace("\\", "_")
+    return re.sub(r'[^\w\.\-\u0600-\u06FF ]', '_', original).strip() or "file"
+
+
+def _anthropic_image_block(content: bytes, media_type: str) -> Optional[Dict[str, Any]]:
+    """Build an Anthropic vision block for supported image uploads."""
+    mt = (media_type or "").lower().split(";")[0].strip()
+    supported = {"image/jpeg", "image/png", "image/gif", "image/webp"}
+    if mt == "image/jpg":
+        mt = "image/jpeg"
+    if mt not in supported or not content:
+        return None
+    # Anthropic limit is model/API dependent; keep under a safe 8MB per image.
+    if len(content) > 8 * 1024 * 1024:
+        return None
+    return {
+        "type": "image",
+        "source": {
+            "type": "base64",
+            "media_type": mt,
+            "data": base64.b64encode(content).decode("ascii"),
+        },
+    }
+
 # ════════════════════════════════════════════════════════════════════════
 # Pydantic models
 # ════════════════════════════════════════════════════════════════════════
@@ -1772,8 +1825,8 @@ def create_autocoder_router(db, get_current_user, require_owner):
                     if isinstance(v, UploadFile):
                         attachments.append(v)
 
-        if not message:
-            raise HTTPException(422, "message field required")
+        if not message and not attachments:
+            raise HTTPException(422, "message or attachment required")
         if len(message) > 32000:
             raise HTTPException(422, "message too long (max 32000 chars)")
 
@@ -1782,37 +1835,68 @@ def create_autocoder_router(db, get_current_user, require_owner):
             {"id": conv_id, "owner_id": owner.get("id")}, {"_id": 0}
         )
         messages: List[Dict[str, Any]] = conv["messages"] if conv else []
-        
-        # Build user message with attachments
-        user_content = message
+
+        # Build current user turn. Images are sent to Claude as real vision blocks,
+        # not just saved URLs, so AutoCoder can actually inspect screenshots/photos.
+        attachment_meta: List[Dict[str, Any]] = []
+        attachment_summaries: List[str] = []
+        image_blocks: List[Dict[str, Any]] = []
         if attachments:
-            # Save attachments to /app/backend/uploads
             upload_dir = Path("/app/backend/uploads")
-            upload_dir.mkdir(exist_ok=True)
-            attachment_urls = []
-            for att in attachments:
-                # Sanitize filename
-                safe_name = re.sub(r'[^\w\.-]', '_', att.filename or 'file')
+            upload_dir.mkdir(parents=True, exist_ok=True)
+            for att in attachments[:6]:
+                safe_name = _safe_upload_name(att.filename or "file")
                 file_id = secrets.token_hex(8)
-                file_path = upload_dir / f"{file_id}_{safe_name}"
-                with file_path.open("wb") as f:
-                    content = await att.read()
-                    f.write(content)
-                # Construct URL (assume /uploads is served by nginx/fastapi)
-                file_url = f"/uploads/{file_id}_{safe_name}"
-                attachment_urls.append(file_url)
-            
-            # Append attachment info to user message
-            user_content += "\n\n📎 **المرفقات:**\n" + "\n".join([f"- {url}" for url in attachment_urls])
-        
-        messages.append({"role": "user", "content": user_content, "ts": _now()})
+                file_name = f"{file_id}_{safe_name}"
+                file_path = upload_dir / file_name
+                content = await att.read()
+                file_path.write_bytes(content)
+
+                content_type = (att.content_type or mimetypes.guess_type(safe_name)[0] or "application/octet-stream").lower()
+                file_url = f"/uploads/{file_name}"
+                meta = {
+                    "name": safe_name,
+                    "type": content_type,
+                    "size": len(content),
+                    "url": file_url,
+                }
+                attachment_meta.append(meta)
+                attachment_summaries.append(f"- {safe_name} ({content_type}, {len(content)} bytes): {file_url}")
+
+                image_block = _anthropic_image_block(content, content_type)
+                if image_block:
+                    image_blocks.append(image_block)
+
+        text_parts = []
+        if message:
+            text_parts.append(message)
+        if attachment_summaries:
+            text_parts.append("📎 المرفقات المستلمة:\n" + "\n".join(attachment_summaries))
+        if image_blocks:
+            text_parts.append("حلّل الصور المرفقة بصرياً، وإذا كانت screenshot من الموقع فاذكر المشكلة الظاهرة والخطوات المناسبة لإصلاحها.")
+        elif attachments:
+            text_parts.append("تنبيه: الملفات غير الصورية/الفيديوهات محفوظة كرابط للرجوع لها، لكن التحليل البصري المباشر متاح حالياً للصور المدعومة فقط JPEG/PNG/GIF/WebP.")
+
+        text_content = "\n\n".join(text_parts).strip() or "حلّل المرفقات المرسلة."
+        # Use vision blocks only for the live LLM request. Persist a plain-text
+        # version in Mongo so conversation history stays light and renderable.
+        if image_blocks:
+            llm_user_content: Any = [{"type": "text", "text": text_content}, *image_blocks]
+        else:
+            llm_user_content = text_content
+
+        user_msg = {"role": "user", "content": text_content, "ts": _now()}
+        if attachment_meta:
+            user_msg["attachments"] = attachment_meta
+        llm_messages = [*messages, {"role": "user", "content": llm_user_content, "ts": user_msg["ts"]}]
+        messages.append(user_msg)
 
         async def gen():
             try:
                 assistant_text = ""
                 tool_events: List[Dict[str, Any]] = []
                 usage_total = {"input": 0, "output": 0, "cached_read": 0, "cost_usd": 0.0}
-                async for evt in _autocoder_stream(messages, model=model or "claude"):
+                async for evt in _autocoder_stream(llm_messages, model=model or "claude"):
                     if evt["type"] == "text":
                         assistant_text += evt["content"]
                     elif evt["type"] == "tool":
@@ -1880,7 +1964,7 @@ def create_autocoder_router(db, get_current_user, require_owner):
             first = (c.get("messages") or [{}])[0]
             out.append({
                 "id": c["id"],
-                "preview": (first.get("content") or "")[:80],
+                "preview": _message_text_preview(first.get("content") or "", 80),
                 "updated_at": c.get("updated_at"),
             })
         return {"conversations": out}
@@ -2109,9 +2193,20 @@ async def _autocoder_stream(messages: List[Dict[str, Any]], model: str = "claude
         if role not in ("user", "assistant"):
             continue
         content = m.get("content", "") or ""
-        if not content.strip():
+        preview = _message_text_preview(content, 12000)
+        if not preview.strip():
             continue
-        anthropic_msgs.append({"role": role, "content": content[:12000]})
+        # Keep structured content blocks for Anthropic/Claude so image attachments
+        # reach the model. Alternate providers will coerce to text in their adapters.
+        if isinstance(content, list):
+            anthropic_msgs.append({"role": role, "content": content})
+        else:
+            anthropic_msgs.append({"role": role, "content": preview})
+
+    text_provider_msgs = [
+        {"role": m.get("role", "user"), "content": _message_text_preview(m.get("content", ""), 12000)}
+        for m in anthropic_msgs
+    ]
 
     # ── Route to alternative free providers ──
     # The AUTOCODER_SYSTEM_PROMPT carries the rules; the codebase_atlas adds
@@ -2125,7 +2220,7 @@ async def _autocoder_stream(messages: List[Dict[str, Any]], model: str = "claude
     if model == "groq":
         groq_key = os.environ.get("GROQ_API_KEY", "").strip()
         async for evt in stream_via_groq(
-            anthropic_msgs, groq_key, sys_prompt_full, ANTHROPIC_TOOLS,
+            text_provider_msgs, groq_key, sys_prompt_full, ANTHROPIC_TOOLS,
             execute_autocoder_tool, _trim_args_for_ui,
             _summarize, _preview_for_ui, _trim_result_for_llm,
         ):
@@ -2135,7 +2230,7 @@ async def _autocoder_stream(messages: List[Dict[str, Any]], model: str = "claude
     if model == "gemini":
         gem_key = os.environ.get("GEMINI_API_KEY", "").strip()
         async for evt in stream_via_gemini(
-            anthropic_msgs, gem_key, sys_prompt_full, ANTHROPIC_TOOLS,
+            text_provider_msgs, gem_key, sys_prompt_full, ANTHROPIC_TOOLS,
             execute_autocoder_tool, _trim_args_for_ui,
             _summarize, _preview_for_ui, _trim_result_for_llm,
         ):
@@ -2147,7 +2242,7 @@ async def _autocoder_stream(messages: List[Dict[str, Any]], model: str = "claude
         oai_key = (os.environ.get("OPENAI_API_KEY", "") or
                    os.environ.get("OPENAI_DIRECT_KEY", "")).strip()
         async for evt in stream_via_openai(
-            anthropic_msgs, oai_key, sys_prompt_full, ANTHROPIC_TOOLS,
+            text_provider_msgs, oai_key, sys_prompt_full, ANTHROPIC_TOOLS,
             execute_autocoder_tool, _trim_args_for_ui,
             _summarize, _preview_for_ui, _trim_result_for_llm,
         ):
@@ -2178,7 +2273,7 @@ async def _autocoder_stream(messages: List[Dict[str, Any]], model: str = "claude
             groq_key = os.environ.get("GROQ_API_KEY", "").strip()
             if groq_key:
                 async for evt in stream_via_groq(
-                    anthropic_msgs, groq_key, sys_prompt_full, ANTHROPIC_TOOLS,
+                    text_provider_msgs, groq_key, sys_prompt_full, ANTHROPIC_TOOLS,
                     execute_autocoder_tool, _trim_args_for_ui,
                     _summarize, _preview_for_ui, _trim_result_for_llm,
                 ):
@@ -2485,8 +2580,8 @@ async def _stream_via_emergent(messages: List[Dict[str, Any]], api_key: str):
     history_text = ""
     for m in messages[:-1]:
         role = "المالك" if m["role"] == "user" else "أنت"
-        history_text += f"\n\n{role}: {m.get('content','')[:6000]}"
-    last_user = messages[-1].get("content", "")
+        history_text += f"\n\n{role}: {_extract_message_plain_text(m.get('content', ''))[:6000]}"
+    last_user = _extract_message_plain_text(messages[-1].get("content", ""))
     full_input = (history_text + f"\n\nالمالك: {last_user}").strip()
 
     chat = LlmChat(
