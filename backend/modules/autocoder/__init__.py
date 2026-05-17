@@ -105,6 +105,10 @@ from .railway_tools import (
     RAILWAY_ANTHROPIC_TOOLS, RAILWAY_TOOL_HANDLERS, RAILWAY_TOOL_DEFS,
     railway_summarize, railway_preview, bind_creds_getter as _bind_railway_creds,
 )
+from .vercel_tools import (
+    VERCEL_ANTHROPIC_TOOLS, VERCEL_TOOL_HANDLERS, VERCEL_TOOL_DEFS,
+    vercel_summarize, vercel_preview, bind_creds_getter as _bind_vercel_creds,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -189,19 +193,53 @@ async def _get_github_creds() -> Dict[str, str]:
 
 
 async def _get_railway_creds() -> Dict[str, str]:
-    """Resolve Railway creds from env first, fall back to encrypted vault."""
-    token = os.environ.get("RAILWAY_TOKEN", "").strip()
+    """Resolve Railway creds. Prefers VAULT (user PAT) over env (which on Railway
+    is an internal service token that can't query the GraphQL API).
+    Returns dict with token/project/service/env (any may be empty)."""
+    # On Railway, the auto-injected RAILWAY_TOKEN is a service-scoped token
+    # that returns "Not Authorized" for project-level queries. So we ALWAYS
+    # check the vault first for a user-provided PAT.
+    token = ""
     project = os.environ.get("RAILWAY_PROJECT_ID", "").strip()
     service = os.environ.get("RAILWAY_SERVICE_ID", "").strip()
     env = os.environ.get("RAILWAY_ENVIRONMENT_ID", "").strip()
-    if token and service and env:
-        return {"token": token, "project": project, "service": service, "env": env}
+    try:
+        if _DB is not None:
+            doc = await _DB.credentials_vault.find_one({"service": "railway"}, {"_id": 0})
+            if doc:
+                enc = doc.get("value_encrypted") or ""
+                if enc:
+                    import base64
+                    import hashlib
+                    from cryptography.fernet import Fernet
+                    seed = (os.environ.get("JWT_SECRET", "") + os.environ.get("MONGO_URL", "")).encode()
+                    key = base64.urlsafe_b64encode(hashlib.sha256(seed).digest())
+                    token = Fernet(key).decrypt(enc.encode()).decode()
+                project = project or doc.get("project_id") or ""
+                service = service or doc.get("service_id") or ""
+                env = env or doc.get("environment_id") or ""
+    except Exception:
+        pass
+    # Fall back to env token ONLY if vault had nothing
+    if not token:
+        token = os.environ.get("RAILWAY_TOKEN", "").strip()
+    return {"token": token, "project": project, "service": service, "env": env}
+
+
+async def _get_vercel_creds() -> Dict[str, str]:
+    """Resolve Vercel creds: env first, then vault.
+    Returns {token, org, project}."""
+    token = os.environ.get("VERCEL_TOKEN", "").strip() or os.environ.get("VERCEL_API_TOKEN", "").strip()
+    org = os.environ.get("VERCEL_ORG_ID", "").strip() or os.environ.get("VERCEL_TEAM_ID", "").strip()
+    project = os.environ.get("VERCEL_PROJECT_ID", "").strip()
+    if token and project:
+        return {"token": token, "org": org, "project": project}
     try:
         if _DB is None:
-            return {"token": token, "project": project, "service": service, "env": env}
-        doc = await _DB.credentials_vault.find_one({"service": "railway"}, {"_id": 0})
+            return {"token": token, "org": org, "project": project}
+        doc = await _DB.credentials_vault.find_one({"service": "vercel"}, {"_id": 0})
         if not doc:
-            return {"token": token, "project": project, "service": service, "env": env}
+            return {"token": token, "org": org, "project": project}
         if not token:
             enc = doc.get("value_encrypted") or ""
             if enc:
@@ -211,12 +249,11 @@ async def _get_railway_creds() -> Dict[str, str]:
                 seed = (os.environ.get("JWT_SECRET", "") + os.environ.get("MONGO_URL", "")).encode()
                 key = base64.urlsafe_b64encode(hashlib.sha256(seed).digest())
                 token = Fernet(key).decrypt(enc.encode()).decode()
+        org = org or doc.get("org_id") or doc.get("team_id") or ""
         project = project or doc.get("project_id") or ""
-        service = service or doc.get("service_id") or ""
-        env = env or doc.get("environment_id") or ""
     except Exception:
         pass
-    return {"token": token, "project": project, "service": service, "env": env}
+    return {"token": token, "org": org, "project": project}
 
 
 async def _ensure_git_workdir() -> Dict[str, Any]:
@@ -1178,7 +1215,7 @@ TOOL_DEFS: List[Dict[str, Any]] = [
     {"name": "pre_deploy_check", "desc": "syntax + import sanity check before commit", "args": ["paths?"]},
     {"name": "check_deployment_status", "desc": "check Railway deployment success/fail", "args": []},
     {"name": "rollback_to_last_good", "desc": "revert to last successful Railway deployment", "args": []},
-] + EXTRA_TOOL_DEFS + UNIVERSE_TOOL_DEFS + QUALITY_TOOL_DEFS + INDEX_TOOL_DEFS + SAFETY_TOOL_DEFS + LEARNING_TOOL_DEFS + AUTONOMY_TOOL_DEFS + OPS_TOOL_DEFS + MEMORY_TOOL_DEFS + SANDBOX_TOOL_DEFS + INTEGRATIONS_TOOL_DEFS + WEB_SEARCH_TOOL_DEFS + RAILWAY_TOOL_DEFS
+] + EXTRA_TOOL_DEFS + UNIVERSE_TOOL_DEFS + QUALITY_TOOL_DEFS + INDEX_TOOL_DEFS + SAFETY_TOOL_DEFS + LEARNING_TOOL_DEFS + AUTONOMY_TOOL_DEFS + OPS_TOOL_DEFS + MEMORY_TOOL_DEFS + SANDBOX_TOOL_DEFS + INTEGRATIONS_TOOL_DEFS + WEB_SEARCH_TOOL_DEFS + RAILWAY_TOOL_DEFS + VERCEL_TOOL_DEFS
 
 # Anthropic-compatible tool schemas (native tool calling)
 ANTHROPIC_TOOLS = [
@@ -1348,7 +1385,7 @@ ANTHROPIC_TOOLS = [
         "description": "EMERGENCY: if the latest deployment failed and you can't fix it quickly, this finds the last SUCCESS commit on Railway and force-pushes to it, restoring the platform. Use as a last resort when stuck.",
         "input_schema": {"type": "object", "properties": {}, "required": []},
     },
-] + EXTRA_ANTHROPIC_TOOLS + UNIVERSE_ANTHROPIC_TOOLS + QUALITY_ANTHROPIC_TOOLS + INDEX_ANTHROPIC_TOOLS + SAFETY_ANTHROPIC_TOOLS + LEARNING_ANTHROPIC_TOOLS + AUTONOMY_ANTHROPIC_TOOLS + OPS_ANTHROPIC_TOOLS + MEMORY_ANTHROPIC_TOOLS + SANDBOX_ANTHROPIC_TOOLS + INTEGRATIONS_ANTHROPIC_TOOLS + WEB_SEARCH_ANTHROPIC_TOOLS + RAILWAY_ANTHROPIC_TOOLS
+] + EXTRA_ANTHROPIC_TOOLS + UNIVERSE_ANTHROPIC_TOOLS + QUALITY_ANTHROPIC_TOOLS + INDEX_ANTHROPIC_TOOLS + SAFETY_ANTHROPIC_TOOLS + LEARNING_ANTHROPIC_TOOLS + AUTONOMY_ANTHROPIC_TOOLS + OPS_ANTHROPIC_TOOLS + MEMORY_ANTHROPIC_TOOLS + SANDBOX_ANTHROPIC_TOOLS + INTEGRATIONS_ANTHROPIC_TOOLS + WEB_SEARCH_ANTHROPIC_TOOLS + RAILWAY_ANTHROPIC_TOOLS + VERCEL_ANTHROPIC_TOOLS
 
 TOOL_HANDLERS = {
     "list_dir": tool_list_dir,
@@ -1400,6 +1437,8 @@ TOOL_HANDLERS.update(INTEGRATIONS_TOOL_HANDLERS)
 TOOL_HANDLERS.update(WEB_SEARCH_TOOL_HANDLERS)
 # Register Railway tools (redeploy, build logs, runtime logs, env vars)
 TOOL_HANDLERS.update(RAILWAY_TOOL_HANDLERS)
+# Register Vercel tools (frontend deploy mirror)
+TOOL_HANDLERS.update(VERCEL_TOOL_HANDLERS)
 
 # db_query is bound to the live MongoDB at router creation time
 _db_query_bound: Optional[Any] = None
@@ -1473,6 +1512,8 @@ def create_autocoder_router(db, get_current_user, require_owner):
     _bind_websearch_db(db)
     # Bind Railway tools to credentials getter (env or vault)
     _bind_railway_creds(_get_railway_creds)
+    # Bind Vercel tools to credentials getter (env or vault)
+    _bind_vercel_creds(_get_vercel_creds)
 
     # Pre-build code index in background so first AI request is fast
     try:
@@ -2576,6 +2617,9 @@ def _preview_for_ui(name: str, result: Dict[str, Any]) -> str:
     rp = railway_preview(name, result)
     if rp is not None:
         return rp
+    vp = vercel_preview(name, result)
+    if vp is not None:
+        return vp
     if name == "read_file":
         return (result.get("content") or "")[:600]
     if name == "list_dir":
@@ -2637,6 +2681,9 @@ def _summarize(name: str, result: Dict[str, Any]) -> str:
     rs = railway_summarize(name, result)
     if rs is not None:
         return rs
+    vs = vercel_summarize(name, result)
+    if vs is not None:
+        return vs
     if name == "read_file":
         return f"قرأت {result.get('total_lines',0)} سطر"
     if name == "list_dir":

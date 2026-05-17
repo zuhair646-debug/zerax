@@ -15,9 +15,13 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # Node ~50MB, yarn ~5MB — acceptable trade-off for full-stack capability.
 RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
     && apt-get install -y --no-install-recommends nodejs \
-    && npm install -g yarn@1.22.22 \
+    && npm install -g yarn@1.22.22 vercel@39 \
     && rm -rf /var/lib/apt/lists/* \
-    && node --version && yarn --version
+    && node --version && yarn --version && vercel --version
+
+# Railway CLI for advanced ops (logs, vars, status) — installed via npm
+RUN npm install -g @railway/cli@3 \
+    && railway --version || echo "railway CLI install best-effort"
 
 # Configure default git identity (autocoder will override per-commit if needed)
 RUN git config --global user.email "autocoder@zitex.com" \

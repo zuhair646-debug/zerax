@@ -284,17 +284,38 @@ async def tool_verify_full(
 # ════════════════════════════════════════════════════════════════════════
 async def tool_frontend_check(
     mode: str = "lint",
-    cwd: str = "/app/frontend",
+    cwd: Optional[str] = None,
     timeout: int = 300,
 ) -> Dict[str, Any]:
     """Run frontend tooling (yarn). mode: 'lint' | 'install' | 'build'.
 
-    Requires Node.js + yarn inside the container (added in Dockerfile in 2026).
-    On Railway production: returns {ok: False, "node_unavailable"} if Node is
-    not yet installed in the running image — pushes containing the new
-    Dockerfile must complete first.
+    On Railway production, /app/frontend does NOT exist (only /backend was copied).
+    To run frontend tools there, we auto-clone the repo into /tmp/zitex_workdir
+    via the existing git tooling and use /tmp/zitex_workdir/frontend.
     """
     import subprocess
+    # Auto-resolve cwd: prefer /app/frontend (dev), fall back to cloned workdir (prod)
+    if cwd is None:
+        for candidate in ("/app/frontend", "/tmp/zitex_workdir/frontend"):
+            if Path(candidate, "package.json").exists():
+                cwd = candidate
+                break
+        if cwd is None:
+            # Trigger a workdir clone — try lazy import of the autocoder's git helper
+            try:
+                from modules.autocoder import _ensure_git_workdir
+                setup = await _ensure_git_workdir()
+                if setup.get("ok"):
+                    cand = Path(setup["path"], "frontend")
+                    if (cand / "package.json").exists():
+                        cwd = str(cand)
+            except Exception:
+                pass
+        if cwd is None:
+            return {"ok": False,
+                    "error": "package.json not found in /app/frontend or /tmp/zitex_workdir/frontend",
+                    "hint": "Run git_status / git_commit_push first to seed the workdir, or set GITHUB_TOKEN+GITHUB_REPO"}
+
     # Quick capability probe
     try:
         which = subprocess.run(["which", "yarn"], capture_output=True, text=True, timeout=5)
