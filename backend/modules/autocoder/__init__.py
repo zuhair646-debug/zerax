@@ -33,6 +33,7 @@ import asyncio
 import logging
 import secrets
 import subprocess
+import hashlib
 from pathlib import Path
 from datetime import datetime, timezone, timedelta
 from typing import Any, Dict, List, Optional
@@ -41,6 +42,11 @@ import bcrypt
 from fastapi import APIRouter, Depends, HTTPException, Header, Request, UploadFile, File, Form
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
+
+try:
+    from PIL import Image
+except Exception:  # pragma: no cover - optional runtime helper
+    Image = None
 
 # New: extra power tools + multi-LLM provider streamers
 from .tools_extra import (
@@ -1500,12 +1506,43 @@ def _safe_upload_name(filename: str) -> str:
     return re.sub(r'[^\w\.\-\u0600-\u06FF ]', '_', original).strip() or "file"
 
 
-def _anthropic_image_block(content: bytes, media_type: str) -> Optional[Dict[str, Any]]:
-    """Build an Anthropic vision block for supported image uploads."""
-    mt = (media_type or "").lower().split(";")[0].strip()
-    supported = {"image/jpeg", "image/png", "image/gif", "image/webp"}
+def _normalize_media_type(media_type: str, filename: str = "") -> str:
+    mt = (media_type or mimetypes.guess_type(filename or "")[0] or "application/octet-stream").lower().split(";")[0].strip()
     if mt == "image/jpg":
         mt = "image/jpeg"
+    return mt
+
+
+def _autocoder_upload_dir() -> Path:
+    """Single canonical upload directory mounted by server.py at /uploads."""
+    return Path(os.environ.get("AUTOCODER_UPLOAD_DIR", "/app/backend/uploads"))
+
+
+def _image_metadata(content: bytes, media_type: str) -> Dict[str, Any]:
+    meta: Dict[str, Any] = {"is_image": media_type.startswith("image/")}
+    if not meta["is_image"] or not content:
+        return meta
+    if Image is None:
+        meta["warning"] = "Pillow غير متاح؛ تعذر استخراج أبعاد الصورة محلياً"
+        return meta
+    try:
+        import io
+        with Image.open(io.BytesIO(content)) as img:
+            meta.update({
+                "width": int(img.width),
+                "height": int(img.height),
+                "format": str(img.format or "").lower() or None,
+                "mode": img.mode,
+            })
+    except Exception as e:
+        meta["warning"] = f"تعذر قراءة أبعاد الصورة: {str(e)[:120]}"
+    return meta
+
+
+def _anthropic_image_block(content: bytes, media_type: str) -> Optional[Dict[str, Any]]:
+    """Build an Anthropic vision block for supported image uploads."""
+    mt = _normalize_media_type(media_type)
+    supported = {"image/jpeg", "image/png", "image/gif", "image/webp"}
     if mt not in supported or not content:
         return None
     # Anthropic limit is model/API dependent; keep under a safe 8MB per image.
@@ -1519,6 +1556,20 @@ def _anthropic_image_block(content: bytes, media_type: str) -> Optional[Dict[str
             "data": base64.b64encode(content).decode("ascii"),
         },
     }
+
+
+def _vision_doctor_prompt(image_count: int) -> str:
+    return (
+        "أنت الآن طبيب جودة بصري لمنصة Zitex. حلّل الصور المرفقة فعلياً، ولا تعطِ وصفاً عاماً. "
+        f"عدد الصور القابلة للرؤية: {image_count}.\n"
+        "اكتب بالعربية وبشكل عملي:\n"
+        "1) ماذا يظهر في كل صورة بالتفصيل: الصفحة/التطبيق/العناصر/النصوص البارزة.\n"
+        "2) هل هي screenshot من موقع Zitex أو من موقع/تطبيق خارجي؟ وما الدليل؟\n"
+        "3) المشاكل المرئية المحددة: layout, responsive, contrast, spacing, overflow, broken UI, missing images, loading, errors.\n"
+        "4) خطورة كل مشكلة: عالي/متوسط/منخفض.\n"
+        "5) خطوات الإصلاح البرمجية المقترحة، والملفات المرجحة إذا كانت من Zitex.\n"
+        "6) إن كانت الصورة غير واضحة أو ليست من الموقع، قل ذلك صراحة ولا تخترع."
+    )
 
 # ════════════════════════════════════════════════════════════════════════
 # Pydantic models
@@ -1843,26 +1894,46 @@ def create_autocoder_router(db, get_current_user, require_owner):
         attachment_summaries: List[str] = []
         image_blocks: List[Dict[str, Any]] = []
         if attachments:
-            upload_dir = Path("/app/backend/uploads")
+            upload_dir = _autocoder_upload_dir()
             upload_dir.mkdir(parents=True, exist_ok=True)
             for att in attachments[:6]:
                 safe_name = _safe_upload_name(att.filename or "file")
+                content = await att.read()
+                if len(content) > 10 * 1024 * 1024:
+                    raise HTTPException(400, f"Attachment too large: {safe_name} (max 10MB)")
+                content_type = _normalize_media_type(att.content_type or "", safe_name)
+                digest = hashlib.sha256(content).hexdigest()
                 file_id = secrets.token_hex(8)
                 file_name = f"{file_id}_{safe_name}"
                 file_path = upload_dir / file_name
-                content = await att.read()
                 file_path.write_bytes(content)
 
-                content_type = (att.content_type or mimetypes.guess_type(safe_name)[0] or "application/octet-stream").lower()
                 file_url = f"/uploads/{file_name}"
+                img_meta = _image_metadata(content, content_type)
                 meta = {
+                    "id": file_id,
                     "name": safe_name,
+                    "stored_name": file_name,
                     "type": content_type,
                     "size": len(content),
+                    "sha256": digest,
                     "url": file_url,
+                    "stored_at": _now(),
+                    **img_meta,
                 }
                 attachment_meta.append(meta)
-                attachment_summaries.append(f"- {safe_name} ({content_type}, {len(content)} bytes): {file_url}")
+                dim = f", {meta.get('width')}x{meta.get('height')}" if meta.get("width") and meta.get("height") else ""
+                attachment_summaries.append(f"- {safe_name} ({content_type}{dim}, {len(content)} bytes, sha256={digest[:12]}…): {file_url}")
+
+                try:
+                    await db.autocoder_uploads.insert_one({
+                        **meta,
+                        "owner_id": owner.get("id"),
+                        "conversation_id": conv_id,
+                        "path": str(file_path),
+                    })
+                except Exception:
+                    logger.warning("failed to persist autocoder upload metadata", exc_info=True)
 
                 image_block = _anthropic_image_block(content, content_type)
                 if image_block:
@@ -1874,9 +1945,9 @@ def create_autocoder_router(db, get_current_user, require_owner):
         if attachment_summaries:
             text_parts.append("📎 المرفقات المستلمة:\n" + "\n".join(attachment_summaries))
         if image_blocks:
-            text_parts.append("حلّل الصور المرفقة بصرياً، وإذا كانت screenshot من الموقع فاذكر المشكلة الظاهرة والخطوات المناسبة لإصلاحها.")
+            text_parts.append(_vision_doctor_prompt(len(image_blocks)))
         elif attachments:
-            text_parts.append("تنبيه: الملفات غير الصورية/الفيديوهات محفوظة كرابط للرجوع لها، لكن التحليل البصري المباشر متاح حالياً للصور المدعومة فقط JPEG/PNG/GIF/WebP.")
+            text_parts.append("تنبيه: الملفات محفوظة في نظام المرفقات الدائم، لكن التحليل البصري المباشر متاح حالياً للصور المدعومة فقط JPEG/PNG/GIF/WebP وبحجم آمن.")
 
         text_content = "\n\n".join(text_parts).strip() or "حلّل المرفقات المرسلة."
         # Use vision blocks only for the live LLM request. Persist a plain-text
@@ -2048,40 +2119,79 @@ def create_autocoder_router(db, get_current_user, require_owner):
     @router.post("/upload")
     async def upload_file(
         file: UploadFile = File(...),
-        request: Request = None
+        request: Request = None,
+        owner=Depends(require_owner),
+        x_autocoder_token: Optional[str] = Header(None),
     ):
         """
-        رفع ملف (صورة/PDF/ملف) → يرجع URL أو base64
+        رفع ملف مستقل للـAutoCoder → يحفظه في /uploads ويرجع metadata قابلة للاستخدام.
+        لا يرجع base64 ضخم افتراضياً حتى لا نكسر الواجهة أو قاعدة البيانات.
         """
+        if not await _check_session_token(x_autocoder_token or ""):
+            raise HTTPException(401, "session locked or expired — unlock first")
         try:
-            # قراءة محتوى الملف
             contents = await file.read()
-            
-            # التحقق من الحجم (max 10MB)
             if len(contents) > 10 * 1024 * 1024:
                 raise HTTPException(400, "File too large (max 10MB)")
-            
-            # تحديد نوع الملف
-            content_type = file.content_type or "application/octet-stream"
-            
-            # تحويل لـ base64
-            import base64
-            b64_data = base64.b64encode(contents).decode('utf-8')
-            data_url = f"data:{content_type};base64,{b64_data}"
-            
-            return {
-                "success": True,
-                "filename": file.filename,
+
+            safe_name = _safe_upload_name(file.filename or "file")
+            content_type = _normalize_media_type(file.content_type or "", safe_name)
+            digest = hashlib.sha256(contents).hexdigest()
+            file_id = secrets.token_hex(8)
+            stored_name = f"{file_id}_{safe_name}"
+            upload_dir = _autocoder_upload_dir()
+            upload_dir.mkdir(parents=True, exist_ok=True)
+            file_path = upload_dir / stored_name
+            file_path.write_bytes(contents)
+            file_url = f"/uploads/{stored_name}"
+            img_meta = _image_metadata(contents, content_type)
+            meta = {
+                "id": file_id,
+                "filename": safe_name,
+                "stored_name": stored_name,
                 "content_type": content_type,
                 "size": len(contents),
-                "data_url": data_url  # يستخدم مباشرة في <img> أو Claude API
+                "sha256": digest,
+                "url": file_url,
+                "stored_at": _now(),
+                **img_meta,
             }
-            
+            try:
+                await db.autocoder_uploads.insert_one({
+                    **meta,
+                    "owner_id": owner.get("id"),
+                    "path": str(file_path),
+                    "source": "upload_endpoint",
+                })
+            except Exception:
+                logger.warning("failed to persist autocoder upload metadata", exc_info=True)
+
+            return {
+                "success": True,
+                **meta,
+                "vision_supported": _anthropic_image_block(contents, content_type) is not None,
+            }
         except HTTPException:
             raise
         except Exception as e:
             logger.error(f"Upload error: {e}", exc_info=True)
             raise HTTPException(500, f"Upload failed: {str(e)}")
+
+    @router.get("/uploads/recent")
+    async def recent_uploads(
+        limit: int = 20,
+        owner=Depends(require_owner),
+        x_autocoder_token: Optional[str] = Header(None),
+    ):
+        """آخر مرفقات AutoCoder مع metadata بدون كشف مسارات داخلية حساسة."""
+        if not await _check_session_token(x_autocoder_token or ""):
+            raise HTTPException(401, "session locked or expired — unlock first")
+        safe_limit = max(1, min(int(limit or 20), 100))
+        docs = await db.autocoder_uploads.find(
+            {"owner_id": owner.get("id")},
+            {"_id": 0, "path": 0},
+        ).sort("stored_at", -1).limit(safe_limit).to_list(safe_limit)
+        return {"ok": True, "uploads": docs}
 
     # ─────────────────────────────────────────────────────────────
     # 🎤 Transcribe endpoint (audio → text via Whisper)
