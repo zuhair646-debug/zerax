@@ -165,32 +165,30 @@ def _gen_recovery_code() -> str:
 
 
 async def _get_github_creds() -> Dict[str, str]:
-    """Resolve GitHub creds from env first, fall back to encrypted vault.
+    """Resolve GitHub creds. Prefers VAULT (user PAT) over env (which on Railway
+    may be a stale/wrong token causing 401 Unauthorized).
     Returns {token, repo} (either may be empty if not found)."""
-    token = os.environ.get("GITHUB_TOKEN", "").strip()
+    # Always check vault FIRST — Railway env GITHUB_TOKEN may be stale or wrong scope
+    token = ""
     repo = os.environ.get("GITHUB_REPO", "").strip()
-    if token and repo:
-        return {"token": token, "repo": repo}
-    # Try the credentials vault (saved by the owner once, used across restarts)
     try:
-        if _DB is None:
-            return {"token": token, "repo": repo}
-        doc = await _DB.credentials_vault.find_one({"service": "github"}, {"_id": 0})
-        if not doc:
-            return {"token": token, "repo": repo}
-        if not token:
-            enc = doc.get("value_encrypted") or ""
-            if enc:
-                import base64
-                import hashlib
-                from cryptography.fernet import Fernet
-                seed = (os.environ.get("JWT_SECRET", "") + os.environ.get("MONGO_URL", "")).encode()
-                key = base64.urlsafe_b64encode(hashlib.sha256(seed).digest())
-                token = Fernet(key).decrypt(enc.encode()).decode()
-        if not repo:
-            repo = doc.get("repo") or ""
+        if _DB is not None:
+            doc = await _DB.credentials_vault.find_one({"service": "github"}, {"_id": 0})
+            if doc:
+                enc = doc.get("value_encrypted") or ""
+                if enc:
+                    import base64
+                    import hashlib
+                    from cryptography.fernet import Fernet
+                    seed = (os.environ.get("JWT_SECRET", "") + os.environ.get("MONGO_URL", "")).encode()
+                    key = base64.urlsafe_b64encode(hashlib.sha256(seed).digest())
+                    token = Fernet(key).decrypt(enc.encode()).decode()
+                repo = repo or doc.get("repo") or ""
     except Exception:
         pass
+    # Fall back to env token ONLY if vault is empty
+    if not token:
+        token = os.environ.get("GITHUB_TOKEN", "").strip()
     return {"token": token, "repo": repo}
 
 
