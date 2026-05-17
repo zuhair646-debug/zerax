@@ -184,6 +184,37 @@ async def _get_github_creds() -> Dict[str, str]:
     return {"token": token, "repo": repo}
 
 
+async def _get_railway_creds() -> Dict[str, str]:
+    """Resolve Railway creds from env first, fall back to encrypted vault."""
+    token = os.environ.get("RAILWAY_TOKEN", "").strip()
+    project = os.environ.get("RAILWAY_PROJECT_ID", "").strip()
+    service = os.environ.get("RAILWAY_SERVICE_ID", "").strip()
+    env = os.environ.get("RAILWAY_ENVIRONMENT_ID", "").strip()
+    if token and service and env:
+        return {"token": token, "project": project, "service": service, "env": env}
+    try:
+        if _DB is None:
+            return {"token": token, "project": project, "service": service, "env": env}
+        doc = await _DB.credentials_vault.find_one({"service": "railway"}, {"_id": 0})
+        if not doc:
+            return {"token": token, "project": project, "service": service, "env": env}
+        if not token:
+            enc = doc.get("value_encrypted") or ""
+            if enc:
+                import base64
+                import hashlib
+                from cryptography.fernet import Fernet
+                seed = (os.environ.get("JWT_SECRET", "") + os.environ.get("MONGO_URL", "")).encode()
+                key = base64.urlsafe_b64encode(hashlib.sha256(seed).digest())
+                token = Fernet(key).decrypt(enc.encode()).decode()
+        project = project or doc.get("project_id") or ""
+        service = service or doc.get("service_id") or ""
+        env = env or doc.get("environment_id") or ""
+    except Exception:
+        pass
+    return {"token": token, "project": project, "service": service, "env": env}
+
+
 async def _ensure_git_workdir() -> Dict[str, Any]:
     """Make sure /tmp/zitex_workdir is a fresh clone of the repo.
     Used on Railway production where /app is not a git repo (only the build subdir).
@@ -699,11 +730,12 @@ async def tool_restart_service(name: str) -> Dict[str, Any]:
     if name not in ("backend", "frontend", "all"):
         return {"ok": False, "error": "name must be backend|frontend|all"}
     # On Railway production, supervisor doesn't exist — use Railway API redeploy
-    rw_token = os.environ.get("RAILWAY_TOKEN", "").strip()
-    rw_service = os.environ.get("RAILWAY_SERVICE_ID", "").strip()
-    rw_env = os.environ.get("RAILWAY_ENVIRONMENT_ID", "").strip()
+    creds = await _get_railway_creds()
+    rw_token = creds["token"]
+    rw_service = creds["service"]
+    rw_env = creds["env"]
     on_railway = bool(os.environ.get("RAILWAY_ENVIRONMENT"))
-    if on_railway and rw_token and rw_service and rw_env:
+    if rw_token and rw_service and rw_env and (on_railway or True):  # use Railway API whenever creds exist
         try:
             import httpx
             q = (
@@ -973,12 +1005,13 @@ async def tool_check_deployment_status() -> Dict[str, Any]:
 
     Uses the current Railway GraphQL schema: `deployments(input: { serviceId, environmentId })`.
     """
-    rw_token = os.environ.get("RAILWAY_TOKEN", "").strip()
-    rw_service = os.environ.get("RAILWAY_SERVICE_ID", "").strip()
-    rw_env = os.environ.get("RAILWAY_ENVIRONMENT_ID", "").strip()
-    rw_project = os.environ.get("RAILWAY_PROJECT_ID", "").strip()
+    creds = await _get_railway_creds()
+    rw_token = creds["token"]
+    rw_service = creds["service"]
+    rw_env = creds["env"]
+    rw_project = creds["project"]
     if not rw_token or not rw_service or not rw_env:
-        return {"ok": False, "error": "RAILWAY_TOKEN/RAILWAY_SERVICE_ID/RAILWAY_ENVIRONMENT_ID must all be set"}
+        return {"ok": False, "error": "RAILWAY_TOKEN/RAILWAY_SERVICE_ID/RAILWAY_ENVIRONMENT_ID must all be set (env or vault)"}
     try:
         import httpx
         # Current Railway v2 schema (Feb 2026): deployments(input: {projectId,serviceId,environmentId})
@@ -1050,14 +1083,15 @@ async def tool_rollback_to_last_good() -> Dict[str, Any]:
     setup = await _ensure_git_workdir()
     if not setup.get("ok"):
         return setup
-    rw_token = os.environ.get("RAILWAY_TOKEN", "").strip()
-    rw_service = os.environ.get("RAILWAY_SERVICE_ID", "").strip()
-    rw_env = os.environ.get("RAILWAY_ENVIRONMENT_ID", "").strip()
+    creds = await _get_railway_creds()
+    rw_token = creds["token"]
+    rw_service = creds["service"]
+    rw_env = creds["env"]
+    rw_project = creds["project"]
     if not rw_token or not rw_service or not rw_env:
-        return {"ok": False, "error": "RAILWAY_TOKEN/RAILWAY_SERVICE_ID/RAILWAY_ENVIRONMENT_ID required"}
+        return {"ok": False, "error": "RAILWAY_TOKEN/RAILWAY_SERVICE_ID/RAILWAY_ENVIRONMENT_ID required (env or vault)"}
     try:
         import httpx
-        rw_project = os.environ.get("RAILWAY_PROJECT_ID", "").strip()
         q = (
             'query Deps($p: String, $s: String!, $e: String!) { '
             'deployments(first: 20, input: { projectId: $p, serviceId: $s, environmentId: $e }) { '
