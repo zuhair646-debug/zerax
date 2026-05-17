@@ -285,6 +285,12 @@ class SaveProjectIn(BaseModel):
     session_id: str
     name: str = Field(..., min_length=1, max_length=80)
 
+class PublishIn(BaseModel):
+    session_id: Optional[str] = None
+    project_id: Optional[str] = None
+    name: Optional[str] = Field(default=None, max_length=80)
+    slug: Optional[str] = Field(default=None, max_length=60)
+
 class RefineIn(BaseModel):
     project_id: str
     instruction: str = Field(..., min_length=4, max_length=600)
@@ -514,24 +520,14 @@ async def _openai_architect_turn(messages_for_model: List[Dict[str, str]], user_
             logger.warning("[FREEBUILD] html_update missing <html>, discarding")
             data["html_update"] = None
         else:
-            # AI-GENERATE every image inline via Nano Banana, then save the
-            # resulting HTML. Falls back to Unsplash library only if AI fails.
+            # Fast path: never block the first website build on AI image generation.
+            # We use the curated image resolver immediately, while /regenerate-images
+            # remains available for premium AI-generated visuals after the site exists.
             try:
-                from .image_gen import post_process_html_with_ai_images
-                from .resources import resolve_image_for_keyword
-                h = await post_process_html_with_ai_images(
-                    h,
-                    style_seed="",
-                    fallback_resolver=resolve_image_for_keyword,
-                )
+                from .resources import post_process_html_images
+                h = post_process_html_images(h)
             except Exception as _imgerr:
-                logger.warning(f"[FREEBUILD] AI image post-process failed: {_imgerr}")
-                # Last-resort: keep old behavior so the page still renders
-                try:
-                    from .resources import post_process_html_images
-                    h = post_process_html_images(h)
-                except Exception:
-                    pass
+                logger.warning(f"[FREEBUILD] fast image post-process failed: {_imgerr}")
 
             # 🕌 QURAN PLAYER widget post-processing: replace
             # @@QURAN_PLAYER/N/style=X@@ placeholders with a fully-featured
@@ -711,29 +707,16 @@ def _build_model_messages(session: Dict[str, Any], new_user_msg: str) -> List[Di
         "حقيقية، استدعِ الأداة المناسبة. هذا الفرق بين موقع احترافي وموقع فاشل."
     )})
 
-    # 🔥 NEW IMAGE SYSTEM (Feb 2026) — every image is AI-generated server-side
-    # The architect must NOT write hardcoded image URLs. It just writes <img>
-    # with a vivid Arabic `alt=""` and (optionally) `@@IMG/<keyword>@@` as src.
-    # The server reads alt + nearest heading + class hint and generates a
-    # bespoke AI image (Nano Banana) for each <img>. Same alt → same image.
+    # Fast reliable images: first build uses curated server-side image resolver.
+    # Premium AI image generation is intentionally separated into /regenerate-images
+    # so the customer gets a complete website quickly and can enhance visuals later.
     msgs.append({"role": "system", "content": (
-        "## 🎨 نظام الصور الجديد (إجباري)\n"
-        "كل صورة في الموقع راح تُولَّد بالذكاء الاصطناعي تلقائياً (Gemini Nano Banana) "
-        "بناءً على وصف الـalt + أقرب عنوان h1/h2/h3 + اسم الكلاس.\n\n"
-        "**القواعد**:\n"
-        "1. اكتب `<img src=\"@@IMG/auto@@\" alt=\"<وصف عربي تفصيلي للمشهد المطلوب>\">` — "
-        "السيرفر يستبدل src بصورة AI حقيقية.\n"
-        "2. الـalt لازم يكون **وصف بصري غني بالعربي** (5-15 كلمة) عن المشهد المطلوب — "
-        "مو مجرد كلمة. مثلاً:\n"
-        "   - بدل `alt=\"مكافآت\"` اكتب `alt=\"كأس ذهبي وهدايا ملوّنة ونجوم متطايرة في احتفال بالأطفال\"`\n"
-        "   - بدل `alt=\"مسجد\"` اكتب `alt=\"المسجد النبوي الشريف وقت الغروب بإضاءة ذهبية روحانية\"`\n"
-        "   - بدل `alt=\"تلاوة\"` اكتب `alt=\"مصحف مفتوح بإضاءة دافئة وأحرف ذهبية وخلفية روحانية\"`\n"
-        "3. ممنوع كتابة روابط Unsplash مباشرة (images.unsplash.com/photo-xxxxx). السيرفر سيرفضها.\n"
-        "4. لـbackground-image في CSS: استعمل `background-image: url(@@IMG/auto@@)` "
-        "وضع class وصفي قوي على نفس العنصر (مثلاً `class=\"hero-rewards-section\"`) "
-        "ليلتقطه السيرفر كسياق.\n"
-        "5. الـalt هو **الـprompt** للذكاء — كلما كان أوضح وأغنى، الصورة تطلع أحسن.\n"
-        "6. لا تقلق من 'تكرار' الصور — الـcache عبر hash، ولكل alt مختلف صورة مختلفة.\n"
+        "## 🎨 نظام الصور السريع والموثوق\n"
+        "أول بناء لازم يكون سريع ومضمون. اكتب صوراً كالتالي فقط:\n"
+        "`<img src=\"@@IMG/auto@@\" alt=\"<وصف عربي بصري غني 5-15 كلمة>\">`.\n"
+        "السيرفر سيستبدلها فوراً بصور مناسبة من مكتبة موثوقة بدون انتظار توليد AI.\n"
+        "بعد حفظ الموقع يستطيع العميل استخدام زر/endpoint تجديد الصور لتوليد صور AI مخصصة.\n"
+        "ممنوع تعطيل البناء بانتظار صور، وممنوع روابط مكسورة أو src فارغ.\n"
     )})
 
     # Append the conversation history
@@ -823,6 +806,22 @@ def create_freebuild_v2_router(db, get_current_user) -> APIRouter:
              "$push": {"credit_history": {"amount": -amount, "reason": reason, "timestamp": _now()}}}
         )
         return r.modified_count > 0
+
+    def _slugify(value: str, fallback: str = "site") -> str:
+        s = (value or fallback).strip().lower()
+        s = re.sub(r"[^\w\u0600-\u06FF-]+", "-", s, flags=re.UNICODE)
+        s = re.sub(r"-+", "-", s).strip("-")
+        return (s or fallback)[:60]
+
+    async def _unique_slug(base: str) -> str:
+        base = _slugify(base)
+        slug = base
+        for i in range(1, 30):
+            exists = await db.freebuild_v2_projects.find_one({"public_slug": slug}, {"_id": 1})
+            if not exists:
+                return slug
+            slug = f"{base}-{i}"
+        return f"{base}-{uuid.uuid4().hex[:6]}"
 
     # ===== HEALTH / DIAGNOSTIC =====
     @router.get("/health")
@@ -1084,6 +1083,27 @@ def create_freebuild_v2_router(db, get_current_user) -> APIRouter:
             raise HTTPException(500, f"فشل الذكاء المعماري: {err[:140]}")
 
         html_update = ai.get("html_update")
+        quality_report = None
+        quality_guard_applied = False
+        if html_update:
+            try:
+                from .blueprints import detect_domain
+                from .quality import ensure_quality_or_fallback
+                brief_blob = " ".join(
+                    (m.get("content", "") for m in session.get("messages", []) if m.get("role") == "user")
+                )
+                domain_key = detect_domain(brief_blob + " " + payload.message)
+                html_update, quality_report, quality_guard_applied = ensure_quality_or_fallback(
+                    html_update,
+                    brief=brief_blob + " " + payload.message,
+                    previous_html=session.get("html") or "",
+                    domain_key=domain_key,
+                )
+                ai["html_update"] = html_update
+                if quality_guard_applied:
+                    ai["progress_note"] = (ai.get("progress_note") or "") + " — تم تطبيق ضمان الجودة تلقائياً."
+            except Exception as _qerr:
+                logger.warning(f"[FREEBUILD] quality gate failed open: {_qerr}")
         charge = 0
 
         # Deduct credits ONLY if this turn actually updated HTML
@@ -1121,6 +1141,9 @@ def create_freebuild_v2_router(db, get_current_user) -> APIRouter:
         if html_update:
             update_fields["html"] = html_update
             update_fields["credits_spent"] = session.get("credits_spent", 0) + charge
+            if quality_report:
+                update_fields["quality_report"] = quality_report
+                update_fields["quality_guard_applied"] = bool(quality_guard_applied)
         if ai["next_question_type"] == "done":
             update_fields["complete"] = True
 
@@ -1140,6 +1163,8 @@ def create_freebuild_v2_router(db, get_current_user) -> APIRouter:
             "credits_spent_this_turn": charge,
             "credits_balance": await _credits(user["user_id"]),
             "constraints": session.get("constraints") or [],
+            "quality_report": quality_report,
+            "quality_guard_applied": bool(quality_guard_applied),
         }
 
     # ===== GET SESSION =====
@@ -1162,6 +1187,11 @@ def create_freebuild_v2_router(db, get_current_user) -> APIRouter:
             "complete": s.get("complete", False),
             "credits_spent": s.get("credits_spent", 0),
             "constraints": s.get("constraints", []),
+            "quality_report": s.get("quality_report"),
+            "quality_guard_applied": s.get("quality_guard_applied", False),
+            "published": s.get("published", False),
+            "public_slug": s.get("public_slug"),
+            "public_url": f"/api/freebuild/v2/p/{s.get('public_slug')}" if s.get("public_slug") else None,
             "created_at": s.get("created_at"),
             "updated_at": s.get("updated_at"),
         }
@@ -1180,6 +1210,41 @@ def create_freebuild_v2_router(db, get_current_user) -> APIRouter:
                 media_type="text/html; charset=utf-8",
             )
         return Response(content=s["html"], media_type="text/html; charset=utf-8")
+
+    # ===== QUALITY REPORT =====
+    @router.get("/quality/{session_id}")
+    async def quality(session_id: str, user=Depends(get_current_user)):
+        s = await db.freebuild_v2_sessions.find_one(
+            {"id": session_id, "user_id": user["user_id"]}, {"_id": 0}
+        )
+        if not s:
+            raise HTTPException(404, "session not found")
+        html = s.get("html") or ""
+        if not html:
+            return {"ok": False, "score": 0, "summary": "لا يوجد موقع لفحصه بعد", "issues": []}
+        try:
+            from .blueprints import detect_domain
+            from .quality import build_quality_report
+            brief_blob = " ".join((m.get("content", "") for m in s.get("messages", []) if m.get("role") == "user"))
+            report = build_quality_report(html, detect_domain(brief_blob))
+            await db.freebuild_v2_sessions.update_one(
+                {"id": session_id},
+                {"$set": {"quality_report": report, "updated_at": _now()}}
+            )
+            return report
+        except Exception as e:
+            logger.exception(f"[FREEBUILD-V2] quality report failed: {e}")
+            raise HTTPException(500, f"فشل فحص الجودة: {str(e)[:120]}")
+
+    # ===== PUBLIC PUBLISHED SITE =====
+    @router.get("/p/{slug}")
+    async def public_published_site(slug: str):
+        p = await db.freebuild_v2_projects.find_one(
+            {"public_slug": slug, "published": True}, {"_id": 0, "html": 1}
+        )
+        if not p or not p.get("html"):
+            raise HTTPException(404, "published site not found")
+        return Response(content=p["html"], media_type="text/html; charset=utf-8")
 
     # ===== SAVE AS PERMANENT PROJECT =====
     @router.post("/save-as-project")
@@ -1201,6 +1266,7 @@ def create_freebuild_v2_router(db, get_current_user) -> APIRouter:
             "name": payload.name.strip(),
             "slug": f"{slug}-{pid[:6]}",
             "html": s["html"],
+            "quality_report": s.get("quality_report"),
             "credits_spent": s.get("credits_spent", 0),
             "version": 1,
             "history": [{"version": 1, "html": s["html"], "created_at": _now(), "instruction": "initial save"}],
@@ -1216,6 +1282,105 @@ def create_freebuild_v2_router(db, get_current_user) -> APIRouter:
             "ok": True,
             "project_id": pid,
             "preview_url": f"/api/freebuild/v2/project-preview/{pid}",
+            "quality_report": s.get("quality_report"),
+        }
+
+    # ===== PUBLISH SESSION/PROJECT =====
+    @router.post("/publish")
+    async def publish(payload: PublishIn, user=Depends(get_current_user)):
+        source: Optional[Dict[str, Any]] = None
+        if payload.project_id:
+            source = await db.freebuild_v2_projects.find_one(
+                {"id": payload.project_id, "user_id": user["user_id"]}, {"_id": 0}
+            )
+        elif payload.session_id:
+            source = await db.freebuild_v2_sessions.find_one(
+                {"id": payload.session_id, "user_id": user["user_id"]}, {"_id": 0}
+            )
+        if not source:
+            raise HTTPException(404, "site not found")
+        html = source.get("html") or ""
+        if not html:
+            raise HTTPException(400, "لا يوجد موقع جاهز للنشر")
+
+        try:
+            from .blueprints import detect_domain
+            from .quality import ensure_quality_or_fallback
+            brief_blob = " ".join((m.get("content", "") for m in source.get("messages", []) if m.get("role") == "user"))
+            if not brief_blob:
+                brief_blob = source.get("name") or payload.name or "موقع احترافي"
+            html, report, guard = ensure_quality_or_fallback(
+                html,
+                brief=brief_blob,
+                previous_html=html,
+                domain_key=detect_domain(brief_blob),
+            )
+        except Exception as e:
+            logger.warning(f"[FREEBUILD] publish quality check failed open: {e}")
+            report = source.get("quality_report") or {"ok": True, "score": 75, "summary": "تم النشر مع تعذر فحص الجودة"}
+            guard = False
+
+        requested_slug = payload.slug or payload.name or source.get("name") or source.get("id") or "site"
+        public_slug = await _unique_slug(requested_slug)
+        now = _now()
+
+        if payload.project_id:
+            project_id = payload.project_id
+            await db.freebuild_v2_projects.update_one(
+                {"id": project_id, "user_id": user["user_id"]},
+                {"$set": {
+                    "html": html,
+                    "quality_report": report,
+                    "quality_guard_applied": bool(guard),
+                    "published": True,
+                    "public_slug": public_slug,
+                    "published_at": now,
+                    "updated_at": now,
+                }}
+            )
+        else:
+            project_id = str(uuid.uuid4())
+            name = (payload.name or source.get("name") or "موقعي الجديد").strip()[:80]
+            proj = {
+                "id": project_id,
+                "user_id": user["user_id"],
+                "source_session_id": payload.session_id,
+                "name": name,
+                "slug": f"{_slugify(name)}-{project_id[:6]}",
+                "html": html,
+                "quality_report": report,
+                "quality_guard_applied": bool(guard),
+                "credits_spent": source.get("credits_spent", 0),
+                "version": 1,
+                "published": True,
+                "public_slug": public_slug,
+                "published_at": now,
+                "history": [{"version": 1, "html": html, "created_at": now, "instruction": "publish"}],
+                "created_at": now,
+                "updated_at": now,
+            }
+            await db.freebuild_v2_projects.insert_one(proj.copy())
+            await db.freebuild_v2_sessions.update_one(
+                {"id": payload.session_id, "user_id": user["user_id"]},
+                {"$set": {
+                    "saved_project_id": project_id,
+                    "published": True,
+                    "public_slug": public_slug,
+                    "quality_report": report,
+                    "quality_guard_applied": bool(guard),
+                    "complete": True,
+                    "updated_at": now,
+                }}
+            )
+
+        return {
+            "ok": True,
+            "project_id": project_id,
+            "public_slug": public_slug,
+            "public_url": f"/api/freebuild/v2/p/{public_slug}",
+            "preview_url": f"/api/freebuild/v2/project-preview/{project_id}",
+            "quality_report": report,
+            "quality_guard_applied": bool(guard),
         }
 
     # ===== LIST PROJECTS =====
@@ -1260,6 +1425,20 @@ def create_freebuild_v2_router(db, get_current_user) -> APIRouter:
             ]
             ai = await _openai_architect_turn(msgs)
             new_html = ai.get("html_update") or p.get("html")
+            quality_report = None
+            quality_guard_applied = False
+            try:
+                from .blueprints import detect_domain
+                from .quality import ensure_quality_or_fallback
+                brief = f"{p.get('name','')} {payload.instruction.strip()}"
+                new_html, quality_report, quality_guard_applied = ensure_quality_or_fallback(
+                    new_html,
+                    brief=brief,
+                    previous_html=p.get("html") or "",
+                    domain_key=detect_domain(brief),
+                )
+            except Exception as _qerr:
+                logger.warning(f"[FREEBUILD] refine quality gate failed open: {_qerr}")
             new_version = int(p.get("version", 1)) + 1
             history = list(p.get("history") or [])
             history.append({
@@ -1275,6 +1454,8 @@ def create_freebuild_v2_router(db, get_current_user) -> APIRouter:
                     "html": new_html,
                     "version": new_version,
                     "history": history,
+                    "quality_report": quality_report,
+                    "quality_guard_applied": bool(quality_guard_applied),
                     "updated_at": _now(),
                 }}
             )
@@ -1282,6 +1463,8 @@ def create_freebuild_v2_router(db, get_current_user) -> APIRouter:
                 "ok": True,
                 "version": new_version,
                 "credits_balance": await _credits(user["user_id"]),
+                "quality_report": quality_report,
+                "quality_guard_applied": bool(quality_guard_applied),
             }
         except Exception as e:
             # refund
