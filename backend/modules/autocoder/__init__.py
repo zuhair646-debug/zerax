@@ -2171,22 +2171,51 @@ async def _build_env_truth_banner() -> str:
     curl_ok = await has("curl")
     jq_ok = await has("jq")
     sup_ok = await has("supervisorctl")
+    node_ok = await has("node")
+    yarn_ok = await has("yarn")
+    npm_ok = await has("npm")
     on_railway = bool(os.environ.get("RAILWAY_ENVIRONMENT"))
+    # Check vault for tokens too (not just env)
     has_gh = bool(os.environ.get("GITHUB_TOKEN", "").strip())
     has_gh_repo = bool(os.environ.get("GITHUB_REPO", "").strip())
     has_rw = bool(os.environ.get("RAILWAY_TOKEN", "").strip())
+    has_tavily = bool(os.environ.get("TAVILY_API_KEY", "").strip())
+    if not has_gh and _DB is not None:
+        try:
+            d = await _DB.credentials_vault.find_one({"service": "github"}, {"_id": 0, "service": 1})
+            if d:
+                has_gh = True
+                has_gh_repo = True
+        except Exception:
+            pass
+    if not has_rw and _DB is not None:
+        try:
+            d = await _DB.credentials_vault.find_one({"service": "railway"}, {"_id": 0, "service": 1})
+            if d:
+                has_rw = True
+        except Exception:
+            pass
+    if not has_tavily and _DB is not None:
+        try:
+            d = await _DB.credentials_vault.find_one({"service": "tavily"}, {"_id": 0, "service": 1})
+            if d:
+                has_tavily = True
+        except Exception:
+            pass
     has_ant = os.environ.get("ANTHROPIC_API_KEY", "").startswith("sk-ant")
 
     banner = "\n\n━━━━ 📊 الحالة الفعلية للبيئة (مُتحقّق منها قبل ما تردّ) ━━━━\n"
     banner += f"البيئة: {'🚂 Railway production' if on_railway else '💻 Preview/local dev'}\n"
-    banner += f"الأدوات: git={'✅' if git_ok else '❌'}  curl={'✅' if curl_ok else '❌'}  "
+    banner += f"أدوات النظام: git={'✅' if git_ok else '❌'}  curl={'✅' if curl_ok else '❌'}  "
     banner += f"jq={'✅' if jq_ok else '❌'}  supervisorctl={'✅' if sup_ok else '❌ (طبيعي على Railway)'}\n"
+    banner += f"Frontend tools: node={'✅' if node_ok else '❌'}  yarn={'✅' if yarn_ok else '❌'}  npm={'✅' if npm_ok else '❌'}\n"
     banner += f"المفاتيح: ANTHROPIC_API_KEY={'✅ مستقل' if has_ant else '⚡ يستخدم Emergent'}  "
-    banner += f"GITHUB_TOKEN={'✅' if has_gh else '❌'}  GITHUB_REPO={'✅' if has_gh_repo else '❌'}  "
-    banner += f"RAILWAY_TOKEN={'✅' if has_rw else '❌'}\n"
+    banner += f"GITHUB={'✅' if has_gh and has_gh_repo else '❌'}  "
+    banner += f"RAILWAY={'✅' if has_rw else '❌'}  TAVILY={'✅' if has_tavily else '❌'}\n"
     if on_railway:
         banner += "آلية الـcommit/push: تستنسخ /tmp/zitex_workdir تلقائياً عند أول استدعاء لـgit_*\n"
         banner += "آلية الـrestart: استدعِ restart_service → يستخدم Railway API تلقائياً\n"
+        banner += "Railway tools: railway_redeploy / railway_build_logs / railway_runtime_logs / railway_env_vars\n"
     banner += "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
     banner += "⛔ ممنوع تطلب من المالك يثبّت أو يضيف أي شي من اللي عُلّم بـ✅ فوق. هذي موجودة فعلاً.\n"
     banner += "⛔ ممنوع تقول 'الأدوات ناقصة' أو 'يحتاج setup'. اشتغل مباشرة بالأدوات المتاحة.\n"
