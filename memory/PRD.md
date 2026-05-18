@@ -5,6 +5,33 @@
 
 ## User Language: Arabic (العربية)
 
+### 🆕 Feb 18, 2026 (الجولة 3) — VIDEO STUDIO v2 FRONTEND ✅
+
+**Commit `3441c58`** — pushed to `zuhair646-debug/zitex:main`.
+
+🎨 **صفحة جديدة `/chat/video-studio`** (`/app/frontend/src/pages/VideoStudio.js`, ~600 سطر RTL):
+- **Sidebar يسار**: قائمة السلاسل (مثل قنوات YouTube) + زر "+ سلسلة جديدة" + modal فيه: عنوان السلسلة، style direction إنجليزي مختصر، شخصيات (سطر لكل واحد بصيغة "الاسم: الوصف").
+- **قائمة الحلقات** تحت السلسلة المفعّلة، كل حلقة تظهر مع badge للمرحلة (script/storyboard/approved/rendered) بألوان مميزة.
+- **Pane وسط (حلقة جديدة)**: textarea للبريف + عدد لقطات + مدة لقطة (4/8/12s مع التسعير ظاهر) + زر "ولّد السيناريو".
+- **شات استشاري مجاني** أسفل: يستخدم `/api/video-studio/chat` (يدخل عبر `SectionAgent` فيه scope guard — لو سُئل عن صور/مواقع يحوّل للقسم الصحيح بزر).
+- **Pane حلقة موجودة**: عرض السيناريو (title + logline + characters + style) + grid معاينات (preview imgs أو final mp4 clips) + sticky action bar:
+  - مرحلة `script` → زر "ولّد معاينة الستوري بورد (مجاناً)"
+  - مرحلة `storyboard` → زر "أعد التوليد" + زر "موافق ابدأ الإنتاج" (مع confirm dialog يعرض التكلفة)
+  - مرحلة `approved` → زر "ابدأ الإنتاج النهائي" (هنا يخصم النقاط)
+  - مرحلة `rendered` → ✓ اكتمل + عرض video clips inline
+- **DataTestIds**: كل عنصر تفاعلي بـ`data-testid` kebab-case (vide-studio-page, new-series-btn, brief-input, storyboard-btn, approve-btn, render-btn، إلخ).
+- ربط على dashboard كـcard "🎬 استوديو الفيديو v2" بـbadge "جديد".
+
+**تكامل End-to-End**:
+- Frontend يستهلك جميع endpoints الـ7: `/series`, `/series/create`, `/series/{id}/episodes`, `/chat`, `/script`, `/storyboard`, `/approve`, `/render`, `/episode/{id}`.
+- Routing مضاف في `App.js` تحت `ProtectedRoute`.
+
+**اختبار**:
+- ✅ Screenshot يؤكد الصفحة تحمل بـRTL سعودي + sidebar + brief input + chat panel + amber theme.
+- ✅ Lint نظيف (0 issues).
+- ✅ كل الـbackend tests السابقة (30/30) still green.
+
+
 ### 🆕 Feb 18, 2026 (الجولة 2) — SHARED AGENT CORE + VIDEO STUDIO v2 ✅
 
 **طلب المستخدم**: نفس الذكاء (الأدوات + الكاش + Smart Router) ينتشر في كل الأقسام بتخصص دقيق + قسم فيديو بمراحل متتالية مع موافقة قبل الخصم + ذاكرة سلاسل (حلقات متتالية).
