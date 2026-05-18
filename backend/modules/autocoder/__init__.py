@@ -117,6 +117,11 @@ from .vercel_tools import (
     VERCEL_ANTHROPIC_TOOLS, VERCEL_TOOL_HANDLERS, VERCEL_TOOL_DEFS,
     vercel_summarize, vercel_preview, bind_creds_getter as _bind_vercel_creds,
 )
+from .model_router import (
+    ROUTER_ANTHROPIC_TOOLS, ROUTER_TOOL_HANDLERS, ROUTER_TOOL_DEFS,
+    router_summarize, router_preview, ROUTER_PROMPT_RULES,
+    bind_db as _bind_router_db,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -1221,7 +1226,7 @@ TOOL_DEFS: List[Dict[str, Any]] = [
     {"name": "pre_deploy_check", "desc": "syntax + import sanity check before commit", "args": ["paths?"]},
     {"name": "check_deployment_status", "desc": "check Railway deployment success/fail", "args": []},
     {"name": "rollback_to_last_good", "desc": "revert to last successful Railway deployment", "args": []},
-] + EXTRA_TOOL_DEFS + UNIVERSE_TOOL_DEFS + QUALITY_TOOL_DEFS + INDEX_TOOL_DEFS + SAFETY_TOOL_DEFS + LEARNING_TOOL_DEFS + AUTONOMY_TOOL_DEFS + OPS_TOOL_DEFS + MEMORY_TOOL_DEFS + SANDBOX_TOOL_DEFS + INTEGRATIONS_TOOL_DEFS + WEB_SEARCH_TOOL_DEFS + RAILWAY_TOOL_DEFS + VERCEL_TOOL_DEFS
+] + EXTRA_TOOL_DEFS + UNIVERSE_TOOL_DEFS + QUALITY_TOOL_DEFS + INDEX_TOOL_DEFS + SAFETY_TOOL_DEFS + LEARNING_TOOL_DEFS + AUTONOMY_TOOL_DEFS + OPS_TOOL_DEFS + MEMORY_TOOL_DEFS + SANDBOX_TOOL_DEFS + INTEGRATIONS_TOOL_DEFS + WEB_SEARCH_TOOL_DEFS + RAILWAY_TOOL_DEFS + VERCEL_TOOL_DEFS + ROUTER_TOOL_DEFS
 
 # Anthropic-compatible tool schemas (native tool calling)
 ANTHROPIC_TOOLS = [
@@ -1391,7 +1396,7 @@ ANTHROPIC_TOOLS = [
         "description": "EMERGENCY: if the latest deployment failed and you can't fix it quickly, this finds the last SUCCESS commit on Railway and force-pushes to it, restoring the platform. Use as a last resort when stuck.",
         "input_schema": {"type": "object", "properties": {}, "required": []},
     },
-] + EXTRA_ANTHROPIC_TOOLS + UNIVERSE_ANTHROPIC_TOOLS + QUALITY_ANTHROPIC_TOOLS + INDEX_ANTHROPIC_TOOLS + SAFETY_ANTHROPIC_TOOLS + LEARNING_ANTHROPIC_TOOLS + AUTONOMY_ANTHROPIC_TOOLS + OPS_ANTHROPIC_TOOLS + MEMORY_ANTHROPIC_TOOLS + SANDBOX_ANTHROPIC_TOOLS + INTEGRATIONS_ANTHROPIC_TOOLS + WEB_SEARCH_ANTHROPIC_TOOLS + RAILWAY_ANTHROPIC_TOOLS + VERCEL_ANTHROPIC_TOOLS
+] + EXTRA_ANTHROPIC_TOOLS + UNIVERSE_ANTHROPIC_TOOLS + QUALITY_ANTHROPIC_TOOLS + INDEX_ANTHROPIC_TOOLS + SAFETY_ANTHROPIC_TOOLS + LEARNING_ANTHROPIC_TOOLS + AUTONOMY_ANTHROPIC_TOOLS + OPS_ANTHROPIC_TOOLS + MEMORY_ANTHROPIC_TOOLS + SANDBOX_ANTHROPIC_TOOLS + INTEGRATIONS_ANTHROPIC_TOOLS + WEB_SEARCH_ANTHROPIC_TOOLS + RAILWAY_ANTHROPIC_TOOLS + VERCEL_ANTHROPIC_TOOLS + ROUTER_ANTHROPIC_TOOLS
 
 TOOL_HANDLERS = {
     "list_dir": tool_list_dir,
@@ -1445,6 +1450,8 @@ TOOL_HANDLERS.update(WEB_SEARCH_TOOL_HANDLERS)
 TOOL_HANDLERS.update(RAILWAY_TOOL_HANDLERS)
 # Register Vercel tools (frontend deploy mirror)
 TOOL_HANDLERS.update(VERCEL_TOOL_HANDLERS)
+# Register Smart Model Router tools (auto-pick cheapest capable LLM)
+TOOL_HANDLERS.update(ROUTER_TOOL_HANDLERS)
 
 # db_query is bound to the live MongoDB at router creation time
 _db_query_bound: Optional[Any] = None
@@ -1616,6 +1623,8 @@ def create_autocoder_router(db, get_current_user, require_owner):
     _bind_railway_creds(_get_railway_creds)
     # Bind Vercel tools to credentials getter (env or vault)
     _bind_vercel_creds(_get_vercel_creds)
+    # Bind Smart Router DB (for usage analytics + Moonshot vault key)
+    _bind_router_db(db)
 
     # Pre-build code index in background so first AI request is fast
     try:
@@ -2500,7 +2509,7 @@ async def _stream_direct_anthropic(anthropic_msgs: List[Dict[str, Any]], api_key
         task_brief = await build_session_brief(max_tasks=3)
     except Exception:
         task_brief = ""
-    sys_prompt_text = AUTOCODER_SYSTEM_PROMPT + AUTONOMY_PROMPT_RULES + OPS_PROMPT_RULES + QUALITY_PROMPT_RULES + INDEX_PROMPT_RULES + SAFETY_PROMPT_RULES + LEARNING_PROMPT_RULES + MEMORY_PROMPT_RULES + SANDBOX_PROMPT_RULES + WEB_SEARCH_PROMPT_RULES + (env_banner or "") + build_atlas_for_prompt() + build_atlas_v2_for_prompt() + build_universe_for_prompt() + lessons_block + task_brief
+    sys_prompt_text = AUTOCODER_SYSTEM_PROMPT + AUTONOMY_PROMPT_RULES + OPS_PROMPT_RULES + QUALITY_PROMPT_RULES + INDEX_PROMPT_RULES + SAFETY_PROMPT_RULES + LEARNING_PROMPT_RULES + MEMORY_PROMPT_RULES + SANDBOX_PROMPT_RULES + WEB_SEARCH_PROMPT_RULES + ROUTER_PROMPT_RULES + (env_banner or "") + build_atlas_for_prompt() + build_atlas_v2_for_prompt() + build_universe_for_prompt() + lessons_block + task_brief
     system_blocks = [
         {"type": "text", "text": sys_prompt_text, "cache_control": {"type": "ephemeral"}}
     ]
@@ -2826,6 +2835,9 @@ def _preview_for_ui(name: str, result: Dict[str, Any]) -> str:
     vp = vercel_preview(name, result)
     if vp is not None:
         return vp
+    rop = router_preview(name, result)
+    if rop is not None:
+        return rop
     if name == "read_file":
         return (result.get("content") or "")[:600]
     if name == "list_dir":
@@ -2890,6 +2902,9 @@ def _summarize(name: str, result: Dict[str, Any]) -> str:
     vs = vercel_summarize(name, result)
     if vs is not None:
         return vs
+    ros = router_summarize(name, result)
+    if ros is not None:
+        return ros
     if name == "read_file":
         return f"قرأت {result.get('total_lines',0)} سطر"
     if name == "list_dir":
