@@ -122,6 +122,11 @@ from .model_router import (
     router_summarize, router_preview, ROUTER_PROMPT_RULES,
     bind_db as _bind_router_db,
 )
+from .code_cache import (
+    CACHE_ANTHROPIC_TOOLS, CACHE_TOOL_HANDLERS, CACHE_TOOL_DEFS,
+    cache_summarize, cache_preview, CACHE_PROMPT_RULES,
+    bind_db as _bind_cache_db, annotate_read as _cache_annotate_read,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -584,12 +589,21 @@ async def tool_read_file(path: str, start: int = 1, end: Optional[int] = None) -
         end = min(end, total)
         start = max(1, start)
         chunk = "\n".join(lines[start - 1:end])
-        return {
+        result: Dict[str, Any] = {
             "ok": True, "path": str(p), "total_lines": total,
             "shown": [start, end], "content": chunk[:80000],
             "hint": (f"showing {end-start+1}/{total} lines. Pass end={total} to read all."
                      if end < total else None),
         }
+        # Attach cache annotation so the AI knows when it's re-reading and
+        # we track tokens-saved stats globally. Failure here is non-fatal.
+        try:
+            ann = await _cache_annotate_read(str(p), len(chunk))
+            if ann:
+                result["cache_info"] = ann
+        except Exception:
+            pass
+        return result
     except Exception as e:
         return {"ok": False, "error": str(e)}
 
@@ -615,6 +629,12 @@ async def tool_write_file(path: str, content: str) -> Dict[str, Any]:
         p.parent.mkdir(parents=True, exist_ok=True)
         existed = p.exists()
         p.write_text(content, encoding="utf-8")
+        # Invalidate code-cache entry for this file (content changed → SHA changed)
+        try:
+            from .code_cache import invalidate_file as _cache_invalidate
+            await _cache_invalidate(str(p))
+        except Exception:
+            pass
         return {
             "ok": True,
             "path": str(p),
@@ -664,6 +684,13 @@ async def tool_edit_file(
                 }
             snap = make_snapshot(str(p)) if is_spine_file(str(p)) else None
             p.write_text(new_content, encoding="utf-8")
+            # Invalidate cache entry — content changed
+            try:
+                from .code_cache import invalidate_file as _cache_invalidate
+                import asyncio as _asyncio
+                _task = _asyncio.get_event_loop().create_task(_cache_invalidate(str(p)))
+            except Exception:
+                pass
             return {"ok": True, "path": str(p), "mode": mode,
                     "new_size": len(new_content), "snapshot": snap,
                     "warnings": sanity.get("warnings", []),
@@ -1396,7 +1423,7 @@ ANTHROPIC_TOOLS = [
         "description": "EMERGENCY: if the latest deployment failed and you can't fix it quickly, this finds the last SUCCESS commit on Railway and force-pushes to it, restoring the platform. Use as a last resort when stuck.",
         "input_schema": {"type": "object", "properties": {}, "required": []},
     },
-] + EXTRA_ANTHROPIC_TOOLS + UNIVERSE_ANTHROPIC_TOOLS + QUALITY_ANTHROPIC_TOOLS + INDEX_ANTHROPIC_TOOLS + SAFETY_ANTHROPIC_TOOLS + LEARNING_ANTHROPIC_TOOLS + AUTONOMY_ANTHROPIC_TOOLS + OPS_ANTHROPIC_TOOLS + MEMORY_ANTHROPIC_TOOLS + SANDBOX_ANTHROPIC_TOOLS + INTEGRATIONS_ANTHROPIC_TOOLS + WEB_SEARCH_ANTHROPIC_TOOLS + RAILWAY_ANTHROPIC_TOOLS + VERCEL_ANTHROPIC_TOOLS + ROUTER_ANTHROPIC_TOOLS
+] + EXTRA_ANTHROPIC_TOOLS + UNIVERSE_ANTHROPIC_TOOLS + QUALITY_ANTHROPIC_TOOLS + INDEX_ANTHROPIC_TOOLS + SAFETY_ANTHROPIC_TOOLS + LEARNING_ANTHROPIC_TOOLS + AUTONOMY_ANTHROPIC_TOOLS + OPS_ANTHROPIC_TOOLS + MEMORY_ANTHROPIC_TOOLS + SANDBOX_ANTHROPIC_TOOLS + INTEGRATIONS_ANTHROPIC_TOOLS + WEB_SEARCH_ANTHROPIC_TOOLS + RAILWAY_ANTHROPIC_TOOLS + VERCEL_ANTHROPIC_TOOLS + ROUTER_ANTHROPIC_TOOLS + CACHE_ANTHROPIC_TOOLS
 
 TOOL_HANDLERS = {
     "list_dir": tool_list_dir,
@@ -1452,6 +1479,8 @@ TOOL_HANDLERS.update(RAILWAY_TOOL_HANDLERS)
 TOOL_HANDLERS.update(VERCEL_TOOL_HANDLERS)
 # Register Smart Model Router tools (auto-pick cheapest capable LLM)
 TOOL_HANDLERS.update(ROUTER_TOOL_HANDLERS)
+# Register Code Cache tools (token-savings: file + semantic Q&A cache)
+TOOL_HANDLERS.update(CACHE_TOOL_HANDLERS)
 
 # db_query is bound to the live MongoDB at router creation time
 _db_query_bound: Optional[Any] = None
@@ -1625,6 +1654,8 @@ def create_autocoder_router(db, get_current_user, require_owner):
     _bind_vercel_creds(_get_vercel_creds)
     # Bind Smart Router DB (for usage analytics + Moonshot vault key)
     _bind_router_db(db)
+    # Bind Code Cache (file SHA cache + semantic Q&A cache)
+    _bind_cache_db(db)
 
     # Pre-build code index in background so first AI request is fast
     try:
@@ -2509,7 +2540,7 @@ async def _stream_direct_anthropic(anthropic_msgs: List[Dict[str, Any]], api_key
         task_brief = await build_session_brief(max_tasks=3)
     except Exception:
         task_brief = ""
-    sys_prompt_text = AUTOCODER_SYSTEM_PROMPT + AUTONOMY_PROMPT_RULES + OPS_PROMPT_RULES + QUALITY_PROMPT_RULES + INDEX_PROMPT_RULES + SAFETY_PROMPT_RULES + LEARNING_PROMPT_RULES + MEMORY_PROMPT_RULES + SANDBOX_PROMPT_RULES + WEB_SEARCH_PROMPT_RULES + ROUTER_PROMPT_RULES + (env_banner or "") + build_atlas_for_prompt() + build_atlas_v2_for_prompt() + build_universe_for_prompt() + lessons_block + task_brief
+    sys_prompt_text = AUTOCODER_SYSTEM_PROMPT + AUTONOMY_PROMPT_RULES + OPS_PROMPT_RULES + QUALITY_PROMPT_RULES + INDEX_PROMPT_RULES + SAFETY_PROMPT_RULES + LEARNING_PROMPT_RULES + MEMORY_PROMPT_RULES + SANDBOX_PROMPT_RULES + WEB_SEARCH_PROMPT_RULES + ROUTER_PROMPT_RULES + CACHE_PROMPT_RULES + (env_banner or "") + build_atlas_for_prompt() + build_atlas_v2_for_prompt() + build_universe_for_prompt() + lessons_block + task_brief
     system_blocks = [
         {"type": "text", "text": sys_prompt_text, "cache_control": {"type": "ephemeral"}}
     ]
@@ -2838,6 +2869,9 @@ def _preview_for_ui(name: str, result: Dict[str, Any]) -> str:
     rop = router_preview(name, result)
     if rop is not None:
         return rop
+    cp = cache_preview(name, result)
+    if cp is not None:
+        return cp
     if name == "read_file":
         return (result.get("content") or "")[:600]
     if name == "list_dir":
@@ -2905,6 +2939,9 @@ def _summarize(name: str, result: Dict[str, Any]) -> str:
     ros = router_summarize(name, result)
     if ros is not None:
         return ros
+    cs = cache_summarize(name, result)
+    if cs is not None:
+        return cs
     if name == "read_file":
         return f"قرأت {result.get('total_lines',0)} سطر"
     if name == "list_dir":

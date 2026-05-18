@@ -5,6 +5,46 @@
 
 ## User Language: Arabic (العربية)
 
+### 🆕 Feb 18, 2026 — AUTO-CODER SMART CACHE (token-savings layer) ✅
+
+**طلب المستخدم**: "بنينا Smart Router للمزوّدين، الحين أبي نظام كاش/ذاكرة للأكواد عشان الذكاء ما يعيد تحليل نفس الملفات كل مرة ونوفّر التوكنز بشكل كبير."
+
+**المُنفّذ — وحدة `modules/autocoder/code_cache.py`** (~470 سطر):
+
+🔒 **3 طبقات كاش**:
+1. **File Hash Cache** (`autocoder_file_cache`): SHA-256 لكل ملف + ملخّص + بنية. لو الملف ما تغيّر → استرجع الملخّص بدل ما الذكاء يقرأه كاملاً.
+2. **Semantic Query Cache** (`autocoder_query_cache`): تخزين سؤال-جواب مع OpenAI `text-embedding-3-small` (1536d, $0.02/M tokens). cosine ≥ 0.92 = hit.
+3. **Stats** (`autocoder_cache_stats` singleton): عدّاد ضربات/إخفاقات + التوكنز الموفّرة الإجمالية.
+
+🛠️ **6 أدوات جديدة للذكاء** (الإجمالي الآن **91 أداة**):
+- `cache_check_file(path)` — فحص قبل القراءة
+- `cache_file_summary(path, summary, structure?)` — تخزين ملخّص ذاتي
+- `cache_query_similar(question)` — semantic lookup
+- `cache_save_answer(question, answer, files_used?, model?)` — حفظ جواب نهائي
+- `cache_invalidate(path?|scope?)` — تنظيف
+- `cache_stats()` — لوحة عدّادات
+
+🔄 **تكامل شفّاف**:
+- `tool_read_file` يستدعي `_cache_annotate_read` تلقائياً → يحقن `cache_info: {cache: HIT|MISS, summary, hint}` في كل قراءة.
+- `tool_write_file` و `tool_edit_file` يحذفون كاش الملف تلقائياً عند التعديل (SHA تغيّر).
+- `CACHE_PROMPT_RULES` يحقن في system prompt: "قبل أي `read_file`، استدعِ `cache_check_file` أولاً".
+
+📊 **التوفير المتوقع**:
+- ملف ٨٠٠ سطر = ~3,000 توكن. كل cache hit يوفّر هالقدر.
+- جلسة autonomous مع 30 قراءة ≈ 90,000 توكن موفّر = ~$0.27 على Claude Sonnet 4.5 أو ~$0.11 على GPT-5.
+- Semantic Q&A hit يوفّر 5,000-15,000 توكن لكل تكرار طلب مشابه.
+
+**اختبار**:
+- ✅ 11 pytest test في `/app/backend/tests/test_code_cache.py` (hit/miss، invalidation عند تغيّر SHA، stats، semantic exact-hash، tool wrappers shape).
+- ✅ E2E مع Mongo حقيقي: قراءة أولى MISS → upsert summary → قراءة ثانية HIT (707 توكن موفّر).
+- ✅ التسجيل في system prompt + ANTHROPIC_TOOLS verified (95 schema، 91 handler).
+
+**Files**:
+- NEW: `/app/backend/modules/autocoder/code_cache.py`
+- NEW: `/app/backend/tests/test_code_cache.py`
+- MODIFIED: `/app/backend/modules/autocoder/__init__.py` (imports + bind_db + tool registry + tool_read_file annotation + write/edit invalidation + system prompt + dispatchers)
+
+
 ### 🆕 Feb 15, 2026 (الجولة 2) — MARKETPLACE + SANDBOX + LANDING REFRESH ✅
 
 **commit `519b4c6`** — 8 files, 931 insertions:
