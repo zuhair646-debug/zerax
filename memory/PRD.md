@@ -5,6 +5,55 @@
 
 ## User Language: Arabic (العربية)
 
+### 🆕 Feb 18, 2026 (الجولة 2) — SHARED AGENT CORE + VIDEO STUDIO v2 ✅
+
+**طلب المستخدم**: نفس الذكاء (الأدوات + الكاش + Smart Router) ينتشر في كل الأقسام بتخصص دقيق + قسم فيديو بمراحل متتالية مع موافقة قبل الخصم + ذاكرة سلاسل (حلقات متتالية).
+
+**Commit `aa53080`** — pushed to `zuhair646-debug/zitex:main`.
+
+🧠 **Shared Agent Core** (`modules/shared/__init__.py`):
+- `SectionAgent(scope, ...)` — مصنع ذكاء موحّد لكل قسم.
+- 6 scopes معرّفة: `image`, `video`, `website`, `app`, `game`, `owner`.
+- لكل scope: persona سعودي، abilities، نموذج LLM مفضّل، خريطة redirects للأقسام الأخرى.
+- `detect_intent(text)` — يكشف نية المستخدم من أي رسالة → يوجّه للقسم الصحيح.
+- `out_of_scope_message()` — يبني رد لطيف يحوّل للقسم المناسب: "أخوي، روح قسم X من <route>".
+- Sessions persistent في `shared_agent_sessions` + Q&A cache في `shared_agent_qa_cache` (namespaced per scope، يستخدم نفس OpenAI embeddings).
+
+🎬 **Video Studio v2** (`modules/video_studio/__init__.py`) — Multi-stage pipeline:
+
+  1. **CHAT** (مجاني) — `/api/video-studio/chat` — محادثة باستخدام SectionAgent، مع سياق السلسلة إذا كانت موجودة.
+  2. **SCRIPT** (مجاني) — `/api/video-studio/script` — يولّد JSON منظّم: title, logline, characters, style, shots[]. مع شخصيات السلسلة وستايلها لو متّصل.
+  3. **STORYBOARD** (مجاني) — `/api/video-studio/storyboard` — يولّد صورة preview لكل لقطة عبر Nano Banana (Gemini) مع style seed موحّد. 3 frames بالتوازي.
+  4. **APPROVE** (gate مجاني) — `/api/video-studio/approve` — يأخذ snapshot للتكلفة + يتحقّق من الرصيد، **بدون خصم**.
+  5. **RENDER** (مدفوع) — `/api/video-studio/render` — يخصم النقاط ذرّياً، ثم ينتج كل لقطة عبر Sora 2. لو فشلت كل اللقطات، يرجّع النقاط تلقائياً.
+
+📺 **Series Memory** (Continuing Episodes):
+- `video_series`: `{id, user_id, title, style_direction, main_characters[], created_at}`.
+- `video_episodes`: `{id, series_id, episode_number, brief, script, shots[], storyboard[], stage, estimated_cost, credits_charged, final_clips[]}`.
+- عند إنشاء حلقة جديدة، الـscript generator يستلم سياق آخر 3 حلقات (loglines + style + characters) فيحافظ على الـlook & feel.
+- `GET /api/video-studio/series/{id}/episodes` — قائمة الحلقات مرتّبة.
+
+💰 **التسعير (مدفوع فقط عند Render)**:
+- لقطة ≤4 ثواني: 8 نقاط
+- لقطة ≤8 ثواني: 14 نقطة
+- لقطة ≤12 ثانية: 20 نقطة
+- Storyboard previews + تعديلات = 0 نقاط
+
+**اختبار**:
+- ✅ 13 pytest في `/app/backend/tests/test_shared_agent.py` (intent detection، redirects، session persistence، scope locking).
+- ✅ 6 pytest E2E في `/app/backend/tests/test_video_studio.py` (full pipeline، approve before storyboard rejected، render before approve rejected، insufficient credits blocks approve، series episode continuity).
+- ✅ Backend يستارت نظيف + endpoints registered (403 = auth wall، not 404).
+- ✅ مجموع 30/30 test passing (cache + shared + studio).
+
+**Files**:
+- NEW: `/app/backend/modules/shared/__init__.py` (~360 سطر)
+- NEW: `/app/backend/modules/shared/agent_core.py` (re-export)
+- NEW: `/app/backend/modules/video_studio/__init__.py` (~430 سطر)
+- NEW: `/app/backend/tests/test_shared_agent.py`
+- NEW: `/app/backend/tests/test_video_studio.py`
+- MODIFIED: `/app/backend/server.py` (mount video_studio + bind shared core)
+
+
 ### 🆕 Feb 18, 2026 — AUTO-CODER SMART CACHE (token-savings layer) ✅
 
 **طلب المستخدم**: "بنينا Smart Router للمزوّدين، الحين أبي نظام كاش/ذاكرة للأكواد عشان الذكاء ما يعيد تحليل نفس الملفات كل مرة ونوفّر التوكنز بشكل كبير."
