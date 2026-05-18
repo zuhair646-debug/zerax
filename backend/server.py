@@ -3232,6 +3232,23 @@ try:
 except Exception as _vwe:
     logging.getLogger(__name__).error(f"Failed to register video wizard module: {_vwe}", exc_info=True)
 
+# ============== VIDEO STUDIO v2 (Multi-stage workflow + series memory) ==============
+try:
+    from modules.video_studio import create_video_studio_router
+    _vs_router = create_video_studio_router(db, get_current_user)
+    app.include_router(_vs_router)
+    logging.getLogger(__name__).info("Video Studio v2 module registered")
+except Exception as _vse:
+    logging.getLogger(__name__).error(f"Failed to register video studio v2 module: {_vse}", exc_info=True)
+
+# ============== SHARED AGENT CORE — bind DB so SectionAgent works everywhere ==============
+try:
+    from modules.shared import bind_db as _shared_bind
+    _shared_bind(db)
+    logging.getLogger(__name__).info("Shared Agent Core bound to DB")
+except Exception as _se:
+    logging.getLogger(__name__).error(f"Failed to bind shared agent core: {_se}", exc_info=True)
+
 # ============== AI AVATAR (Animated assistant — main site + merchant subscription) ==============
 try:
     from modules.avatar import create_avatar_router
