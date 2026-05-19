@@ -160,7 +160,8 @@ def patched_llm():
 
     with patch("modules.video_studio._generate_script", new=AsyncMock(return_value=fake_script)) as ps, \
          patch("modules.video_studio._gen_storyboard_image", new=AsyncMock(return_value=fake_url)) as pi, \
-         patch("modules.video_studio._render_shot", new=AsyncMock(return_value=fake_clip)) as pr:
+         patch("modules.video_studio._render_shot", new=AsyncMock(return_value=fake_clip)) as pr, \
+         patch("modules.video_studio._owner_openai_key", return_value="sk-test-fake-key"):
         yield ps, pi, pr
 
 
