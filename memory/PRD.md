@@ -5,6 +5,33 @@
 
 ## User Language: Arabic (العربية)
 
+### 🆕 Feb 18, 2026 (الجولة 5) — NARRATION→FILM + COMMUNITY FEED + HYPERREAL ✅
+
+**Commit `dcae980`** — pushed + Vercel deploy READY على `zitex.vercel.app`.
+
+🎬 **رفع تسجيل اليوتيوبر → فيلم واقعي**:
+- `POST /api/video-studio/narration-to-script` — يستقبل audio file (mp3/m4a/wav/mp4 ≤25MB).
+- Whisper (مفتاح المالك) يفرّغ الصوت + التوقيتات.
+- GPT-4o يقسّم النص إلى لقطات سينمائية تحافظ على **كل كلمة من الراوي حرفياً**.
+- ستايل إجباري `hyperreal` يضمن: "shot on ARRI Alexa 65, real human actors, NO CGI look, indistinguishable from real footage, no anime, no illustration, no 3D rendering".
+- بطاقة UI بنفسجية في تبويب "محادثة" مع file picker + شرح "لا فرق عن لقطات فيلم حقيقي".
+
+🌐 **المجتمع (Community Feed)**:
+- `GET /api/video-studio/discover` — feed عام للحلقات المنشورة فقط (`share_slug != ""` و `stage = rendered`)، مرتّب حسب الأحدث.
+- لا محتوى خارجي — كل اللي يظهر مصنوع داخل المنصة.
+- `POST /discover/{id}/like` + `POST /discover/{id}/view` — تفاعل.
+- تبويب جديد "المجتمع" (5th tab) في `/chat/video-studio` فيه grid بـ3 أعمدة: thumbnail (يحترم aspect ratio)، title، logline، author، 👁️ views، ❤️ likes (click to increment)، "شاهد كامل" يفتح صفحة `/p/{slug}` العامة.
+
+🎨 **Hyperreal Art Style**:
+- ART_STYLES الآن فيها 11 ستايل (الجديد على رأس القائمة): **"واقعي تماماً (لا يُفرّق عن الحقيقي)"**.
+- prompt seed: `Shot on ARRI Alexa 65, anamorphic 35mm lenses, natural sunlight, subtle film grain, real human actors, documentary cinematography, photorealistic, indistinguishable from real footage, NO CGI look, no anime, no illustration, no 3D rendering, real-world physics`.
+
+✅ **تحققنا من الـDeployment**:
+- Vercel استلم الـcommit `dcae9802b8` وحالته READY.
+- زرنا `https://zitex.vercel.app/chat/video-studio` وأكدنا حضور `narration-upload-card`, `upload-narration-btn`, `community-tab`, `hyperreal` كلها live في الـbundle المنشور.
+- Screenshot يؤكد الواجهة الجديدة شغّالة على الموقع الرسمي.
+
+
 ### 🆕 Feb 18, 2026 (الجولة 4) — VIDEO STUDIO v2.1 — مفاتيح المالك + Multi-tab + سوشيال ✅
 
 **Commit `f26f22e`** — pushed to `zuhair646-debug/zitex:main`.
