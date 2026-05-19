@@ -5,6 +5,50 @@
 
 ## User Language: Arabic (العربية)
 
+### 🆕 Feb 18, 2026 (الجولة 4) — VIDEO STUDIO v2.1 — مفاتيح المالك + Multi-tab + سوشيال ✅
+
+**Commit `f26f22e`** — pushed to `zuhair646-debug/zitex:main`.
+
+**التحديثات الثلاث الكبيرة**:
+
+1️⃣ **مفاتيح المالك فقط (ما يخصم من المنصة)**:
+- `_owner_openai_key()` و `_owner_gemini_key()` يقرؤون من env أو credentials_vault **فقط**.
+- لا يوجد fallback لـEMERGENT_LLM_KEY أبداً في storyboard أو Sora 2 render.
+- لو مفتاح OpenAI الخاص بالمالك مفقود → خطأ واضح بالعربي: "ادخل /admin/independence وأضف OPENAI_DIRECT_KEY".
+- بانر تحذيري أحمر في الـsidebar لو المفتاح مش متوفّر + رابط مباشر لصفحة الإعداد.
+
+2️⃣ **Multi-tab UI** (4 تبويبات):
+- **محادثة**: شات استشاري حر + brief input لتوليد السيناريو.
+- **سيناريو القصة**: العنوان + logline + الشخصيات + الستايل + المشاهد بالعربي.
+- **سيناريو الحوار**: جدول فيه (#، المتحدث، الحوار باللغة الأساسية، الترجمة) — الترجمة عمود مستقل لو فُعّلت.
+- **ستوري بورد**: شبكة معاينات (صور أو فيديو نهائي).
+
+3️⃣ **إعدادات شاملة (Right panel)**:
+- **11 لغة**: عربي سعودي/مصري/كويتي/خليجي/فصيح + English + 日本語 + Français + Español + Türkçe + Urdu.
+- **10 ستايلات بصرية**: سينمائي، أنمي، 3D Animation، صور واقعية، كرتون، ألوان مائية، زيتية، نوار، سايبربانك، وثائقي.
+- **8 أنواع فيديو**: درامي، كوميدي، أكشن، وثائقي، تعليمي، إعلاني، رعب، رومنسي.
+- **3 نسب عرض**: 16:9 (يوتيوب)، 9:16 (تيك توك/ريلز)، 1:1 (إنستقرام).
+- **ترجمة مكتوبة**: لو الحوار بالياباني تقدر تخلي العربي يطلع subtitle.
+- **جنس صوت + عدد لقطات + مدة + توجيهات إضافية**.
+
+4️⃣ **النشر على السوشيال** (`POST /share` + `GET /p/{slug}`):
+- زر "أنشئ رابط مشاركة" → يولّد slug عام + صفحة HTML نظيفة `/api/video-studio/p/{slug}` بدون auth.
+- 5 منصّات (TikTok / Instagram / YouTube Shorts / X / Snapchat) — كل واحدة فيها:
+  - زر "افتح" يفتح صفحة الرفع.
+  - زر "انسخ النص + الهاشتاقات" يحط في الكليبورد كابشن جاهز.
+- زر "تنزيل الكل" يحفظ كل اللقطات MP4 مرة وحدة.
+
+**Files**:
+- MODIFIED: `/app/backend/modules/video_studio/__init__.py` (~770 سطر، rewrite)
+- MODIFIED: `/app/frontend/src/pages/VideoStudio.js` (~700 سطر، rewrite)
+- MODIFIED: `/app/backend/tests/test_video_studio.py` (patch `_owner_openai_key`)
+
+**اختبار**:
+- ✅ 30/30 pytest still green (cache + shared + studio E2E).
+- ✅ Screenshot يؤكد: 3 panes، 4 tabs، 11 لغة في dropdown، 10 ستايلات، 3 aspects، تنبيه "النكاء يستخدم مفتاحك الخاص"، الإعدادات كاملة بالعربي.
+- ✅ Lint نظيف (JS + Python).
+
+
 ### 🆕 Feb 18, 2026 (الجولة 3) — VIDEO STUDIO v2 FRONTEND ✅
 
 **Commit `3441c58`** — pushed to `zuhair646-debug/zitex:main`.
