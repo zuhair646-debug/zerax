@@ -214,7 +214,8 @@ def test_full_pipeline_script_storyboard_approve_render(app_db, patched_llm):
             assert ep["stage"] == "script"
             assert ep["episode_number"] == 1
             assert len(ep["shots"]) == 2
-            assert body["estimated_cost_credits"] == 14 + 14
+            # 8s × 2 shots @ new tier (≤15s = 25 credits each)
+            assert body["estimated_cost_credits"] == 25 + 25
             assert db.users.docs[0]["credits"] == 1000
             ep_id = ep["id"]
 
@@ -226,20 +227,20 @@ def test_full_pipeline_script_storyboard_approve_render(app_db, patched_llm):
             r = await c.post("/api/video-studio/approve",
                              json={"episode_id": ep_id, "confirmed": True})
             assert r.status_code == 200, r.text
-            assert r.json()["cost_to_be_charged_on_render"] == 28
+            assert r.json()["cost_to_be_charged_on_render"] == 50
             assert db.users.docs[0]["credits"] == 1000
 
             r = await c.post("/api/video-studio/render", json={"episode_id": ep_id})
             assert r.status_code == 200, r.text
             body = r.json()
-            assert body["credits_charged"] == 28
-            assert body["credits_remaining"] == 972
+            assert body["credits_charged"] == 50
+            assert body["credits_remaining"] == 950
             assert body["shots_rendered"] == 2
 
             r = await c.get(f"/api/video-studio/episode/{ep_id}")
             ep2 = r.json()["episode"]
             assert ep2["stage"] == "rendered"
-            assert ep2["credits_charged"] == 28
+            assert ep2["credits_charged"] == 50
 
     _run(run())
 

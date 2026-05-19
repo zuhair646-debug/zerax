@@ -5,6 +5,7 @@ import {
   Film, Plus, Loader2, Check, AlertCircle, Play, ArrowLeft,
   Clapperboard, Sparkles, ImageIcon, RotateCcw, Settings, MessageSquare,
   FileText, Languages, Share2, Copy, Download, Key, Upload, Users, Heart, Eye,
+  Maximize2, X, ExternalLink, Palette, Globe, Mic2, Layers, Clock, Coins,
 } from 'lucide-react';
 
 const API = process.env.REACT_APP_BACKEND_URL;
@@ -35,7 +36,13 @@ export default function VideoStudio() {
   const navigate = useNavigate();
 
   // Catalogues from backend
-  const [opts, setOpts] = useState({ languages: [], art_styles: [], genres: [], aspect_ratios: [], voice_genders: [], owner_key_configured: false });
+  const [opts, setOpts] = useState({
+    languages: [], art_styles: [], genres: [], aspect_ratios: [], voice_genders: [],
+    duration_tiers: [], owner_key_configured: false,
+    openai_keys_url: 'https://platform.openai.com/api-keys',
+    openai_billing_url: 'https://platform.openai.com/account/billing/overview',
+    sora_access_url: 'https://sora.com/onboarding',
+  });
 
   // Series + episodes
   const [series, setSeries] = useState([]);
@@ -53,16 +60,19 @@ export default function VideoStudio() {
   const [briefInput, setBriefInput] = useState('');
   const [settings, setSettings] = useState({
     shots: 4,
-    shot_duration: 8,
+    shot_duration: 15,
     language: 'ar-saudi',
     dialect_notes: '',
     subtitle_language: '',
-    art_style: 'cinematic',
+    art_style: 'hyperreal',
     genre: 'drama',
     aspect_ratio: '16x9',
     voice_gender: 'male',
     extra_directives: '',
   });
+
+  // Shot detail modal
+  const [shotModal, setShotModal] = useState(null); // shot object or null
 
   // Tabs in the episode pane
   const [tab, setTab] = useState('chat'); // chat | story | dialogue | storyboard
@@ -354,11 +364,18 @@ export default function VideoStudio() {
         </div>
 
         {!opts.owner_key_configured && (
-          <div className="mx-3 mt-3 bg-rose-500/10 border border-rose-500/40 rounded-lg p-3 text-[11px] text-rose-200" data-testid="missing-key-warning">
-            <div className="flex items-center gap-1.5 mb-1 font-semibold">
-              <Key className="w-3.5 h-3.5" /> مفتاحك مفقود
+          <div className="mx-3 mt-3 bg-gradient-to-br from-rose-500/15 to-rose-600/10 border border-rose-500/40 rounded-xl p-3 text-[11px] text-rose-100 space-y-2" data-testid="missing-key-warning">
+            <div className="flex items-center gap-1.5 font-semibold text-rose-200">
+              <Key className="w-3.5 h-3.5" /> مفتاح OpenAI مطلوب
             </div>
-            <div className="leading-5">أضف OPENAI_DIRECT_KEY في صفحة <a href="/admin/independence" className="underline text-rose-100">/admin/independence</a> عشان ما يُخصم من حساب المنصة.</div>
+            <div className="leading-5 text-rose-200/90">عشان ما يتم الخصم من المنصة، احتاج مفتاحك الخاص.</div>
+            <ol className="text-[10px] space-y-1.5 leading-5 text-rose-100/80 list-decimal pr-4">
+              <li>افتح <a href={opts.openai_keys_url} target="_blank" rel="noopener noreferrer" className="underline text-rose-200 hover:text-white" data-testid="openai-keys-link">platform.openai.com/api-keys ↗</a></li>
+              <li>اضغط <b>Create new secret key</b>، انسخه (يبدأ بـ<code className="bg-black/40 px-1 rounded">sk-</code>).</li>
+              <li>افتح <a href="/admin/independence" className="underline text-rose-200 hover:text-white" data-testid="independence-link">/admin/independence</a> والصق المفتاح في حقل <code className="bg-black/40 px-1 rounded">OPENAI_DIRECT_KEY</code>.</li>
+              <li>أضف رصيد من <a href={opts.openai_billing_url} target="_blank" rel="noopener noreferrer" className="underline text-rose-200 hover:text-white">billing ↗</a> (Sora 2 يحتاج رصيد).</li>
+              <li>للوصول لـSora 2: <a href={opts.sora_access_url} target="_blank" rel="noopener noreferrer" className="underline text-rose-200 hover:text-white">sora.com/onboarding ↗</a></li>
+            </ol>
           </div>
         )}
 
@@ -470,7 +487,7 @@ export default function VideoStudio() {
             <DialogueTab ep={activeEpisode} opts={opts} />
           )}
           {tab === 'storyboard' && (
-            <StoryboardTab ep={activeEpisode} api={API} />
+            <StoryboardTab ep={activeEpisode} api={API} onOpenShot={setShotModal} />
           )}
           {tab === 'community' && (
             <CommunityTab feed={discoverFeed} loaded={discoverLoaded} onLike={likeEpisode} onRefresh={loadDiscover} />
@@ -493,6 +510,9 @@ export default function VideoStudio() {
         <h3 className="text-sm font-semibold mb-3 flex items-center gap-2"><Settings className="w-4 h-4 text-amber-400" /> الإعدادات</h3>
         <SettingsForm opts={opts} settings={settings} setSettings={setSettings} />
       </aside>
+
+      {/* ── Shot Detail Modal ──────────────────────────────────── */}
+      {shotModal && <ShotModal shot={shotModal} api={API} onClose={() => setShotModal(null)} />}
 
       {/* ── New Series Modal ───────────────────────────────────── */}
       {showNewSeries && (
@@ -531,76 +551,170 @@ export default function VideoStudio() {
 }
 
 // ─────────────────────────────────────────────────────────────────────
-// Settings form (right panel)
+// Settings form (right panel) — Modern, grouped, color-coded
 // ─────────────────────────────────────────────────────────────────────
 function SettingsForm({ opts, settings, setSettings }) {
   const update = (k, v) => setSettings((s) => ({ ...s, [k]: v }));
+  const tiers = opts.duration_tiers || [];
+  const [customDuration, setCustomDuration] = React.useState(false);
+  // Estimate one-shot cost using tiers
+  const shotCost = React.useMemo(() => {
+    const d = parseInt(settings.shot_duration, 10) || 15;
+    const t = tiers.find((x) => d <= x.seconds);
+    if (t) return t.credits;
+    const extra = d - 120;
+    return Math.round(175 + extra * (opts.price_per_second_over_120 || 1.6));
+  }, [settings.shot_duration, tiers, opts.price_per_second_over_120]);
+  const totalCost = shotCost * (parseInt(settings.shots, 10) || 1);
+
   return (
     <div className="space-y-3 text-xs">
-      <Field label="اللغة الأساسية للحوار">
-        <select value={settings.language} onChange={(e) => update('language', e.target.value)}
-          className="w-full bg-zinc-900 border border-zinc-700 rounded-lg px-2 py-1.5" data-testid="settings-language">
-          {(opts.languages || []).map((l) => <option key={l.id} value={l.id}>{l.label}</option>)}
-        </select>
-      </Field>
-      <Field label="ملاحظات على اللهجة (اختياري)">
-        <input value={settings.dialect_notes} onChange={(e) => update('dialect_notes', e.target.value)}
-          placeholder="مثلاً: لهجة نجدية كلاسيكية" className="w-full bg-zinc-900 border border-zinc-700 rounded-lg px-2 py-1.5"
-          data-testid="settings-dialect" />
-      </Field>
-      <Field label="ترجمة مكتوبة (اختياري)">
-        <select value={settings.subtitle_language} onChange={(e) => update('subtitle_language', e.target.value)}
-          className="w-full bg-zinc-900 border border-zinc-700 rounded-lg px-2 py-1.5" data-testid="settings-subtitle">
-          <option value="">بدون ترجمة</option>
-          {(opts.languages || []).map((l) => <option key={l.id} value={l.id}>{l.label}</option>)}
-        </select>
-      </Field>
-      <Field label="نوع الرسم / الستايل">
-        <select value={settings.art_style} onChange={(e) => update('art_style', e.target.value)}
-          className="w-full bg-zinc-900 border border-zinc-700 rounded-lg px-2 py-1.5" data-testid="settings-style">
-          {(opts.art_styles || []).map((s) => <option key={s.id} value={s.id}>{s.label}</option>)}
-        </select>
-      </Field>
-      <Field label="نوع الفيديو">
-        <select value={settings.genre} onChange={(e) => update('genre', e.target.value)}
-          className="w-full bg-zinc-900 border border-zinc-700 rounded-lg px-2 py-1.5" data-testid="settings-genre">
-          {(opts.genres || []).map((g) => <option key={g.id} value={g.id}>{g.label}</option>)}
-        </select>
-      </Field>
-      <Field label="نسبة العرض (Aspect)">
-        <select value={settings.aspect_ratio} onChange={(e) => update('aspect_ratio', e.target.value)}
-          className="w-full bg-zinc-900 border border-zinc-700 rounded-lg px-2 py-1.5" data-testid="settings-aspect">
-          {(opts.aspect_ratios || []).map((a) => <option key={a.id} value={a.id}>{a.label}</option>)}
-        </select>
-      </Field>
-      <Field label="جنس الصوت الرئيسي">
-        <select value={settings.voice_gender} onChange={(e) => update('voice_gender', e.target.value)}
-          className="w-full bg-zinc-900 border border-zinc-700 rounded-lg px-2 py-1.5" data-testid="settings-voice">
-          {(opts.voice_genders || []).map((v) => <option key={v.id} value={v.id}>{v.label}</option>)}
-        </select>
-      </Field>
-      <div className="grid grid-cols-2 gap-2">
-        <Field label="عدد اللقطات">
-          <input type="number" min="1" max="12" value={settings.shots} onChange={(e) => update('shots', e.target.value)}
-            className="w-full bg-zinc-900 border border-zinc-700 rounded-lg px-2 py-1.5" data-testid="settings-shots" />
-        </Field>
-        <Field label="مدة كل لقطة (ث)">
-          <select value={settings.shot_duration} onChange={(e) => update('shot_duration', e.target.value)}
-            className="w-full bg-zinc-900 border border-zinc-700 rounded-lg px-2 py-1.5" data-testid="settings-shot-duration">
-            <option value="4">4ث · 8 نقاط</option>
-            <option value="8">8ث · 14 نقطة</option>
-            <option value="12">12ث · 20 نقطة</option>
+      {/* ── Cost preview pill ──────────────────────────────────────── */}
+      <div className="bg-gradient-to-br from-amber-500/20 to-orange-600/20 border border-amber-500/40 rounded-xl p-3" data-testid="cost-preview">
+        <div className="flex items-center justify-between mb-1">
+          <span className="text-amber-200 font-semibold flex items-center gap-1.5"><Coins className="w-3.5 h-3.5" /> التكلفة المتوقّعة</span>
+        </div>
+        <div className="text-[10px] text-zinc-300 leading-5">
+          {settings.shots} لقطة × {shotCost} نقطة = <b className="text-amber-300 text-sm">{totalCost} نقطة</b>
+        </div>
+        <div className="text-[9px] text-zinc-400 mt-0.5">يخصم فقط عند الموافقة على الإنتاج.</div>
+      </div>
+
+      {/* ── 🌍 Language group ──────────────────────────────────────── */}
+      <SettingsCard color="sky" icon={<Globe className="w-3.5 h-3.5" />} title="اللغة">
+        <Field label="لغة الحوار الأساسية">
+          <select value={settings.language} onChange={(e) => update('language', e.target.value)}
+            className="w-full bg-zinc-900 border border-sky-500/30 hover:border-sky-500/60 rounded-lg px-2 py-1.5" data-testid="settings-language">
+            {(opts.languages || []).map((l) => <option key={l.id} value={l.id}>{l.label}</option>)}
           </select>
         </Field>
+        <Field label="لهجة محدّدة (اختياري)">
+          <input value={settings.dialect_notes} onChange={(e) => update('dialect_notes', e.target.value)}
+            placeholder="مثلاً: نجدية، شامية…" className="w-full bg-zinc-900 border border-sky-500/30 hover:border-sky-500/60 rounded-lg px-2 py-1.5"
+            data-testid="settings-dialect" />
+        </Field>
+        <Field label="ترجمة مكتوبة (Subtitle)">
+          <select value={settings.subtitle_language} onChange={(e) => update('subtitle_language', e.target.value)}
+            className="w-full bg-zinc-900 border border-sky-500/30 hover:border-sky-500/60 rounded-lg px-2 py-1.5" data-testid="settings-subtitle">
+            <option value="">بدون ترجمة</option>
+            {(opts.languages || []).map((l) => <option key={l.id} value={l.id}>{l.label}</option>)}
+          </select>
+        </Field>
+      </SettingsCard>
+
+      {/* ── 🎨 Visual group ────────────────────────────────────────── */}
+      <SettingsCard color="violet" icon={<Palette className="w-3.5 h-3.5" />} title="الستايل البصري">
+        <Field label="نوع الرسم / الواقعية">
+          <select value={settings.art_style} onChange={(e) => update('art_style', e.target.value)}
+            className="w-full bg-zinc-900 border border-violet-500/30 hover:border-violet-500/60 rounded-lg px-2 py-1.5" data-testid="settings-style">
+            {(opts.art_styles || []).map((s) => <option key={s.id} value={s.id}>{s.label}</option>)}
+          </select>
+        </Field>
+        <Field label="نوع الفيديو (Genre)">
+          <select value={settings.genre} onChange={(e) => update('genre', e.target.value)}
+            className="w-full bg-zinc-900 border border-violet-500/30 hover:border-violet-500/60 rounded-lg px-2 py-1.5" data-testid="settings-genre">
+            {(opts.genres || []).map((g) => <option key={g.id} value={g.id}>{g.label}</option>)}
+          </select>
+        </Field>
+        <Field label="نسبة العرض">
+          <select value={settings.aspect_ratio} onChange={(e) => update('aspect_ratio', e.target.value)}
+            className="w-full bg-zinc-900 border border-violet-500/30 hover:border-violet-500/60 rounded-lg px-2 py-1.5" data-testid="settings-aspect">
+            {(opts.aspect_ratios || []).map((a) => <option key={a.id} value={a.id}>{a.label}</option>)}
+          </select>
+        </Field>
+      </SettingsCard>
+
+      {/* ── 🎙️ Audio group ────────────────────────────────────────── */}
+      <SettingsCard color="rose" icon={<Mic2 className="w-3.5 h-3.5" />} title="الصوت">
+        <Field label="جنس الصوت الرئيسي">
+          <select value={settings.voice_gender} onChange={(e) => update('voice_gender', e.target.value)}
+            className="w-full bg-zinc-900 border border-rose-500/30 hover:border-rose-500/60 rounded-lg px-2 py-1.5" data-testid="settings-voice">
+            {(opts.voice_genders || []).map((v) => <option key={v.id} value={v.id}>{v.label}</option>)}
+          </select>
+        </Field>
+      </SettingsCard>
+
+      {/* ── ⏱️ Duration + count group ──────────────────────────────── */}
+      <SettingsCard color="emerald" icon={<Clock className="w-3.5 h-3.5" />} title="المدّة والعدد">
+        <Field label="مدّة كل لقطة">
+          {!customDuration ? (
+            <div className="space-y-1.5">
+              <div className="grid grid-cols-2 gap-1.5">
+                {tiers.map((t) => (
+                  <button key={t.seconds} type="button"
+                    onClick={() => update('shot_duration', t.seconds)}
+                    className={`text-[10px] px-2 py-1.5 rounded-md border transition ${
+                      parseInt(settings.shot_duration, 10) === t.seconds
+                        ? 'bg-emerald-500 text-black border-emerald-400 font-semibold'
+                        : 'bg-zinc-900 border-emerald-500/30 text-zinc-200 hover:border-emerald-500/60'
+                    }`}
+                    data-testid={`duration-${t.seconds}`}>
+                    {t.label}
+                    <span className="block text-[9px] opacity-70 mt-0.5">{t.credits} ن</span>
+                  </button>
+                ))}
+              </div>
+              <button type="button" onClick={() => setCustomDuration(true)}
+                className="w-full text-[10px] text-emerald-300 underline hover:text-emerald-200" data-testid="enable-custom-duration">
+                مدّة مخصّصة (مفتوحة)
+              </button>
+            </div>
+          ) : (
+            <div className="space-y-1.5">
+              <div className="flex items-center gap-1.5">
+                <input type="number" min="4" max="300" value={settings.shot_duration}
+                  onChange={(e) => update('shot_duration', e.target.value)}
+                  className="flex-1 bg-zinc-900 border border-emerald-500/40 rounded-lg px-2 py-1.5"
+                  data-testid="custom-duration-input" />
+                <span className="text-zinc-400">ث</span>
+              </div>
+              <button type="button" onClick={() => { setCustomDuration(false); update('shot_duration', 15); }}
+                className="w-full text-[10px] text-zinc-400 underline hover:text-zinc-200">
+                ← رجوع للخيارات السريعة
+              </button>
+            </div>
+          )}
+        </Field>
+        <Field label="عدد اللقطات">
+          <input type="number" min="1" max="24" value={settings.shots} onChange={(e) => update('shots', e.target.value)}
+            className="w-full bg-zinc-900 border border-emerald-500/30 hover:border-emerald-500/60 rounded-lg px-2 py-1.5" data-testid="settings-shots" />
+        </Field>
+      </SettingsCard>
+
+      {/* ── ⚡ Advanced ───────────────────────────────────────────── */}
+      <SettingsCard color="zinc" icon={<Layers className="w-3.5 h-3.5" />} title="توجيهات إضافية">
+        <Field label="ملاحظات للذكاء">
+          <textarea value={settings.extra_directives} onChange={(e) => update('extra_directives', e.target.value)}
+            className="w-full bg-zinc-900 border border-zinc-700 hover:border-zinc-500 rounded-lg px-2 py-1.5 h-16"
+            placeholder="مثلاً: ركّز على لقطات قريبة، تجنّب الأماكن المغلقة…" data-testid="settings-directives" />
+        </Field>
+      </SettingsCard>
+
+      <div className="text-[10px] text-zinc-500 pt-2 border-t border-zinc-800 leading-5">
+        💡 الذكاء يستخدم مفتاح OpenAI الخاص بك، لا يخصم من المنصة.
       </div>
-      <Field label="توجيهات إضافية للذكاء (اختياري)">
-        <textarea value={settings.extra_directives} onChange={(e) => update('extra_directives', e.target.value)}
-          className="w-full bg-zinc-900 border border-zinc-700 rounded-lg px-2 py-1.5 h-16"
-          placeholder="مثلاً: ركّز على لقطات قريبة، أو تجنّب الأماكن المغلقة..." data-testid="settings-directives" />
-      </Field>
-      <div className="text-[10px] text-zinc-500 pt-2 border-t border-zinc-800">
-        💡 الذكاء يستخدم مفتاحك الخاص في OpenAI، لا يخصم من المنصة.
+    </div>
+  );
+}
+
+function SettingsCard({ color, icon, title, children }) {
+  const colorMap = {
+    sky: 'from-sky-500/15 to-sky-500/5 border-sky-500/30',
+    violet: 'from-violet-500/15 to-violet-500/5 border-violet-500/30',
+    rose: 'from-rose-500/15 to-rose-500/5 border-rose-500/30',
+    emerald: 'from-emerald-500/15 to-emerald-500/5 border-emerald-500/30',
+    zinc: 'from-zinc-700/30 to-zinc-700/10 border-zinc-700',
+  };
+  const titleColor = {
+    sky: 'text-sky-300', violet: 'text-violet-300', rose: 'text-rose-300',
+    emerald: 'text-emerald-300', zinc: 'text-zinc-300',
+  }[color];
+  return (
+    <div className={`bg-gradient-to-br ${colorMap[color]} border rounded-xl p-2.5 space-y-2`}>
+      <div className={`text-[11px] font-semibold flex items-center gap-1.5 ${titleColor}`}>
+        {icon} {title}
       </div>
+      {children}
     </div>
   );
 }
@@ -792,7 +906,7 @@ function DialogueTab({ ep, opts }) {
 // ─────────────────────────────────────────────────────────────────────
 // Tab: Storyboard grid
 // ─────────────────────────────────────────────────────────────────────
-function StoryboardTab({ ep, api }) {
+function StoryboardTab({ ep, api, onOpenShot }) {
   if (!ep) return <div className="p-8 text-center text-sm text-zinc-500">—</div>;
   const shots = ep.shots || [];
   const final = ep.final_clips || [];
@@ -803,10 +917,11 @@ function StoryboardTab({ ep, api }) {
           const clip = final.find((c) => c.n === shot.n);
           const preview = shot.preview_url ? `${api}${shot.preview_url}` : null;
           return (
-            <div key={i} className="bg-[#12161e] border border-zinc-800 rounded-xl overflow-hidden">
+            <button key={i} type="button" onClick={() => onOpenShot && onOpenShot({ ...shot, _clip: clip, _previewFull: preview })}
+              className="bg-[#12161e] border border-zinc-800 hover:border-amber-500/50 rounded-xl overflow-hidden text-right transition group" data-testid={`shot-card-${shot.n}`}>
               <div className="aspect-video bg-zinc-900 flex items-center justify-center relative">
                 {clip?.video_url ? (
-                  <video src={clip.video_url} controls className="w-full h-full object-cover" data-testid={`clip-${shot.n}`} />
+                  <video src={clip.video_url} className="w-full h-full object-cover" data-testid={`clip-${shot.n}`} muted />
                 ) : preview ? (
                   <img src={preview} alt={shot.title_ar} className="w-full h-full object-cover" data-testid={`preview-${shot.n}`} />
                 ) : (
@@ -816,16 +931,122 @@ function StoryboardTab({ ep, api }) {
                   </div>
                 )}
                 <div className="absolute top-1 right-1 bg-black/80 text-zinc-300 text-[10px] px-1.5 py-0.5 rounded">#{shot.n} · {shot.duration || 8}s</div>
+                <div className="absolute inset-0 bg-black/0 group-hover:bg-black/40 transition flex items-center justify-center opacity-0 group-hover:opacity-100">
+                  <div className="bg-amber-500 text-black text-xs px-3 py-1.5 rounded-full font-medium flex items-center gap-1.5">
+                    <Maximize2 className="w-3.5 h-3.5" /> تكبير
+                  </div>
+                </div>
               </div>
               <div className="p-2">
                 <div className="text-xs font-medium text-zinc-200 mb-1 truncate">{shot.title_ar}</div>
                 {shot.dialogue && (<div className="text-[10px] text-zinc-400 line-clamp-2">{shot.dialogue}</div>)}
               </div>
-            </div>
+            </button>
           );
         })}
       </div>
       {shots.length === 0 && (<div className="text-sm text-zinc-500 text-center py-12">ولّد ستوري بورد من الأسفل لمعاينة كل لقطة.</div>)}
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// Shot Modal — full-screen detail view (image + dialogue + scenario + cost)
+// ─────────────────────────────────────────────────────────────────────
+function ShotModal({ shot, api, onClose }) {
+  if (!shot) return null;
+  const preview = shot.preview_url ? `${api}${shot.preview_url}` : null;
+  const clip = shot._clip;
+  return (
+    <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto" onClick={onClose} data-testid="shot-modal">
+      <div className="bg-[#0e1118] border border-zinc-700 rounded-2xl max-w-5xl w-full max-h-[95vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+        <div className="sticky top-0 bg-[#0e1118]/95 backdrop-blur border-b border-zinc-800 px-5 py-3 flex items-center justify-between">
+          <h3 className="text-base font-semibold flex items-center gap-2">
+            <ImageIcon className="w-4 h-4 text-amber-400" />
+            لقطة {shot.n} · {shot.title_ar}
+            <span className="text-xs text-zinc-500 font-normal">· {shot.duration || 8}s</span>
+          </h3>
+          <button onClick={onClose} className="p-2 rounded-lg hover:bg-zinc-800" data-testid="close-shot-modal">
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 p-5">
+          {/* Media */}
+          <div className="space-y-3">
+            <div className="aspect-video bg-zinc-900 rounded-xl overflow-hidden border border-zinc-800">
+              {clip?.video_url ? (
+                <video src={clip.video_url} controls autoPlay className="w-full h-full object-contain" />
+              ) : preview ? (
+                <img src={preview} alt={shot.title_ar} className="w-full h-full object-contain" />
+              ) : (
+                <div className="w-full h-full flex items-center justify-center text-zinc-600">
+                  <ImageIcon className="w-12 h-12" />
+                </div>
+              )}
+            </div>
+            {preview && !clip?.video_url && (
+              <a href={preview} target="_blank" rel="noopener noreferrer"
+                className="text-xs text-amber-300 hover:text-amber-200 underline flex items-center gap-1.5">
+                <ExternalLink className="w-3 h-3" /> افتح الصورة بحجمها الأصلي
+              </a>
+            )}
+          </div>
+
+          {/* Details */}
+          <div className="space-y-3">
+            {shot.scenario_ar && (
+              <Section title="السيناريو" color="sky">
+                <p className="text-sm text-zinc-200 leading-7">{shot.scenario_ar}</p>
+              </Section>
+            )}
+            {shot.narration_ar && !shot.scenario_ar && (
+              <Section title="نص الراوي" color="sky">
+                <p className="text-sm text-zinc-200 leading-7">{shot.narration_ar}</p>
+              </Section>
+            )}
+            {shot.dialogue && (
+              <Section title={`الحوار${shot.dialogue_speaker ? ' · ' + shot.dialogue_speaker : ''}`} color="violet">
+                <p className="text-sm text-zinc-100 leading-7">{shot.dialogue}</p>
+                {shot.subtitle_translation && (
+                  <p className="text-xs text-zinc-400 mt-2 leading-6 pt-2 border-t border-zinc-800">
+                    <span className="text-zinc-500">ترجمة: </span>{shot.subtitle_translation}
+                  </p>
+                )}
+              </Section>
+            )}
+            {shot.visual_en && (
+              <Section title="الـPrompt البصري (إنجليزي)" color="emerald">
+                <p className="text-[11px] text-zinc-300 font-mono leading-6">{shot.visual_en}</p>
+              </Section>
+            )}
+            <Section title="المعلومات التقنية" color="zinc">
+              <div className="text-[11px] space-y-1 text-zinc-400">
+                <div className="flex justify-between"><span>المدّة:</span><b className="text-zinc-200">{shot.duration || 8} ثانية</b></div>
+                <div className="flex justify-between"><span>الحالة:</span>
+                  <b className={shot.preview_url ? 'text-emerald-300' : 'text-amber-300'}>
+                    {clip?.video_url ? 'فيديو نهائي ✓' : shot.preview_url ? 'معاينة جاهزة' : 'في الانتظار'}
+                  </b>
+                </div>
+              </div>
+            </Section>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function Section({ title, color, children }) {
+  const colors = {
+    sky: 'border-sky-500/30 from-sky-500/10', violet: 'border-violet-500/30 from-violet-500/10',
+    emerald: 'border-emerald-500/30 from-emerald-500/10', zinc: 'border-zinc-700 from-zinc-700/10',
+  };
+  const titleColors = { sky: 'text-sky-300', violet: 'text-violet-300', emerald: 'text-emerald-300', zinc: 'text-zinc-400' };
+  return (
+    <div className={`bg-gradient-to-br ${colors[color]} to-transparent border rounded-xl p-3`}>
+      <div className={`text-[10px] uppercase font-semibold tracking-wider mb-1.5 ${titleColors[color]}`}>{title}</div>
+      {children}
     </div>
   );
 }

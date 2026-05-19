@@ -40,19 +40,28 @@ def _now() -> str:
 
 
 # ════════════════════════════════════════════════════════════════════════
-# PRICING — credits only billed at render step
+# PRICING — credits only billed at render step.
+# Customer picks duration; longer = more credits. We allow up to 120s custom.
 # ════════════════════════════════════════════════════════════════════════
-PRICE_PER_SHOT_4S = 8
-PRICE_PER_SHOT_8S = 14
-PRICE_PER_SHOT_12S = 20
+PRICE_TIERS = [
+    {"max_seconds": 15,  "credits": 25,  "label": "15 ثانية"},
+    {"max_seconds": 30,  "credits": 45,  "label": "30 ثانية"},
+    {"max_seconds": 45,  "credits": 65,  "label": "45 ثانية"},
+    {"max_seconds": 60,  "credits": 85,  "label": "دقيقة"},
+    {"max_seconds": 90,  "credits": 130, "label": "دقيقة ونصف"},
+    {"max_seconds": 120, "credits": 175, "label": "دقيقتين"},
+]
+PRICE_PER_SECOND_OVER_120 = 1.6  # credits/sec for ultra-long custom durations
 
 
 def shot_price(duration_seconds: int) -> int:
-    if duration_seconds <= 4:
-        return PRICE_PER_SHOT_4S
-    if duration_seconds <= 8:
-        return PRICE_PER_SHOT_8S
-    return PRICE_PER_SHOT_12S
+    d = max(4, int(duration_seconds or 8))
+    for tier in PRICE_TIERS:
+        if d <= tier["max_seconds"]:
+            return tier["credits"]
+    # >120s — linear scaling
+    extra = d - 120
+    return int(PRICE_TIERS[-1]["credits"] + extra * PRICE_PER_SECOND_OVER_120)
 
 
 # ════════════════════════════════════════════════════════════════════════
@@ -167,8 +176,8 @@ class ScriptIn(BaseModel):
     series_id: Optional[str] = None
     brief: str = Field(..., min_length=4)
     episode_number: Optional[int] = None
-    requested_shots: int = Field(default=4, ge=1, le=12)
-    shot_duration: int = Field(default=8, ge=4, le=12)
+    requested_shots: int = Field(default=4, ge=1, le=24)
+    shot_duration: int = Field(default=15, ge=4, le=300)
     language: str = Field(default="ar-saudi")
     dialect_notes: str = ""
     subtitle_language: str = ""            # "" = no subtitle; else target lang id
@@ -428,7 +437,15 @@ def create_video_studio_router(db, get_current_user) -> APIRouter:
             "genres": GENRES,
             "aspect_ratios": ASPECT_RATIOS,
             "voice_genders": [{"id": "male", "label": "ذكر"}, {"id": "female", "label": "أنثى"}],
+            "duration_tiers": [
+                {"seconds": t["max_seconds"], "credits": t["credits"], "label": t["label"]}
+                for t in PRICE_TIERS
+            ],
+            "price_per_second_over_120": PRICE_PER_SECOND_OVER_120,
             "owner_key_configured": bool(_owner_openai_key()),
+            "openai_keys_url": "https://platform.openai.com/api-keys",
+            "openai_billing_url": "https://platform.openai.com/account/billing/overview",
+            "sora_access_url": "https://sora.com/onboarding",
         }
 
     # ── Series CRUD ────────────────────────────────────────────────────
