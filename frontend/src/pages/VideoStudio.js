@@ -4,7 +4,7 @@ import { toast } from 'sonner';
 import {
   Film, Plus, Loader2, Check, AlertCircle, Play, ArrowLeft,
   Clapperboard, Sparkles, ImageIcon, RotateCcw, Settings, MessageSquare,
-  FileText, Languages, Share2, Copy, Download, Key,
+  FileText, Languages, Share2, Copy, Download, Key, Upload, Users, Heart, Eye,
 } from 'lucide-react';
 
 const API = process.env.REACT_APP_BACKEND_URL;
@@ -74,6 +74,14 @@ export default function VideoStudio() {
 
   // Share state
   const [shareData, setShareData] = useState(null); // { slug, public_url, captions }
+
+  // Narration upload
+  const [narrationFile, setNarrationFile] = useState(null);
+  const narrationInputRef = useRef(null);
+
+  // Community / Discover
+  const [discoverFeed, setDiscoverFeed] = useState([]);
+  const [discoverLoaded, setDiscoverLoaded] = useState(false);
 
   const chatScrollRef = useRef(null);
 
@@ -217,6 +225,55 @@ export default function VideoStudio() {
       toast.success('تمت الموافقة. اضغط الإنتاج لبدء الخصم.');
     } catch (e) { toast.error(`فشل: ${e.message || ''}`); }
     finally { setBusyStage(''); }
+  };
+
+  const uploadNarration = async () => {
+    if (!narrationFile) return toast.error('اختر ملف صوت أولاً');
+    if (!opts.owner_key_configured) return toast.error('أضف مفتاح OpenAI من /admin/independence');
+    setBusyStage('narration');
+    try {
+      const fd = new FormData();
+      fd.append('audio', narrationFile);
+      fd.append('series_id', activeSeriesId || '');
+      fd.append('language', settings.language);
+      fd.append('art_style', settings.art_style);
+      fd.append('aspect_ratio', settings.aspect_ratio);
+      fd.append('max_shots', String(settings.shots || 8));
+      const r = await fetch(`${VS}/narration-to-script`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${localStorage.getItem('token') || ''}` },
+        body: fd,
+      });
+      const d = await r.json();
+      if (!r.ok) throw new Error(d?.detail || 'failed');
+      setActiveEpisode(d.episode);
+      setShareData(null);
+      toast.success(`السيناريو جاهز · ${d.shots_count} لقطات · ${d.transcribed_chars} حرف من صوتك`);
+      setNarrationFile(null);
+      if (narrationInputRef.current) narrationInputRef.current.value = '';
+      setTab('story');
+      loadEpisodes(activeSeriesId);
+    } catch (e) {
+      toast.error(`فشل: ${e.message || ''}`);
+    } finally {
+      setBusyStage('');
+    }
+  };
+
+  const loadDiscover = async () => {
+    try {
+      const r = await fetch(`${VS}/discover?limit=30`, { headers: authHeaders() });
+      const d = await r.json();
+      setDiscoverFeed(d.feed || []);
+      setDiscoverLoaded(true);
+    } catch { toast.error('فشل تحميل المجتمع'); }
+  };
+
+  const likeEpisode = async (epId) => {
+    try {
+      await fetch(`${VS}/discover/${epId}/like`, { method: 'POST', headers: authHeaders() });
+      setDiscoverFeed((f) => f.map((x) => x.id === epId ? { ...x, likes: (x.likes || 0) + 1 } : x));
+    } catch { /* silent */ }
   };
 
   const renderEpisode = async () => {
@@ -380,8 +437,9 @@ export default function VideoStudio() {
             { id: 'story',      label: 'سيناريو القصة',  icon: <FileText className="w-3.5 h-3.5" /> },
             { id: 'dialogue',   label: 'سيناريو الحوار', icon: <Languages className="w-3.5 h-3.5" /> },
             { id: 'storyboard', label: 'ستوري بورد',    icon: <ImageIcon className="w-3.5 h-3.5" /> },
+            { id: 'community',  label: 'المجتمع',        icon: <Users className="w-3.5 h-3.5" /> },
           ].map((t) => (
-            <button key={t.id} onClick={() => setTab(t.id)}
+            <button key={t.id} onClick={() => { setTab(t.id); if (t.id === 'community' && !discoverLoaded) loadDiscover(); }}
               className={`px-3 py-2 text-xs flex items-center gap-1.5 border-b-2 transition ${
                 tab === t.id ? 'border-amber-400 text-amber-200' : 'border-transparent text-zinc-400 hover:text-zinc-200'
               }`} data-testid={`tab-${t.id}`}>
@@ -400,6 +458,9 @@ export default function VideoStudio() {
               chatTurns={chatTurns} chatInput={chatInput} setChatInput={setChatInput}
               sendChat={sendChat} chatBusy={chatBusy}
               ownerKeyConfigured={opts.owner_key_configured}
+              narrationFile={narrationFile} setNarrationFile={setNarrationFile}
+              narrationInputRef={narrationInputRef} uploadNarration={uploadNarration}
+              narrationBusy={busyStage === 'narration'}
             />
           )}
           {tab === 'story' && (
@@ -410,6 +471,9 @@ export default function VideoStudio() {
           )}
           {tab === 'storyboard' && (
             <StoryboardTab ep={activeEpisode} api={API} />
+          )}
+          {tab === 'community' && (
+            <CommunityTab feed={discoverFeed} loaded={discoverLoaded} onLike={likeEpisode} onRefresh={loadDiscover} />
           )}
 
           {/* Sticky action bar (always visible when episode exists) */}
@@ -554,10 +618,12 @@ function Field({ label, children }) {
 // Tab: Chat (free conversation + brief input)
 // ─────────────────────────────────────────────────────────────────────
 function ChatTab({ activeEpisode, briefInput, setBriefInput, busy, onGenerate,
-                  chatTurns, chatInput, setChatInput, sendChat, chatBusy, ownerKeyConfigured }) {
+                  chatTurns, chatInput, setChatInput, sendChat, chatBusy, ownerKeyConfigured,
+                  narrationFile, setNarrationFile, narrationInputRef, uploadNarration, narrationBusy }) {
   return (
     <div className="max-w-3xl mx-auto p-6 space-y-5">
       {!activeEpisode && (
+        <>
         <div className="bg-[#12161e] border border-zinc-800 rounded-2xl p-5">
           <h2 className="text-base font-semibold mb-1 flex items-center gap-2"><Sparkles className="w-4 h-4 text-amber-400" /> ابدأ حلقة جديدة</h2>
           <p className="text-xs text-zinc-400 mb-3">اكتب الفكرة، اضبط الإعدادات من الجنب الأيمن، اضغط ولّد السيناريو.
@@ -572,6 +638,37 @@ function ChatTab({ activeEpisode, briefInput, setBriefInput, busy, onGenerate,
             {ownerKeyConfigured ? 'ولّد السيناريو' : 'أضف مفتاحك أولاً'}
           </button>
         </div>
+
+        <div className="bg-gradient-to-br from-indigo-500/10 to-violet-500/10 border border-indigo-500/30 rounded-2xl p-5" data-testid="narration-upload-card">
+          <h2 className="text-base font-semibold mb-1 flex items-center gap-2">
+            <Upload className="w-4 h-4 text-indigo-300" /> رفع تسجيل صوتك (للقصص الواقعية)
+          </h2>
+          <p className="text-xs text-zinc-300 mb-3 leading-6">
+            لو عندك راوي بصوتك أو قصة مسجّلة، ارفعها هنا. الذكاء يفرّغ الصوت (Whisper)
+            ثم يقسّم النص للقطات فيلمية واقعية ١٠٠٪ تتطابق مع كلامك. الستايل الافتراضي
+            <b className="text-amber-300"> "واقعي تماماً"</b> — ولا فرق عن لقطات فيلم حقيقي.
+          </p>
+          <input ref={narrationInputRef} type="file" accept="audio/*,video/*"
+            onChange={(e) => setNarrationFile(e.target.files?.[0] || null)}
+            className="block w-full text-xs text-zinc-300 file:bg-indigo-500 file:text-white file:px-3 file:py-1.5 file:rounded-md file:border-0 file:mr-3 mb-3"
+            data-testid="narration-file-input" />
+          {narrationFile && (
+            <div className="text-[11px] text-zinc-400 mb-2 flex items-center gap-2">
+              <span className="bg-zinc-800 px-2 py-1 rounded font-mono">{narrationFile.name}</span>
+              <span>{(narrationFile.size / 1024 / 1024).toFixed(2)} MB</span>
+            </div>
+          )}
+          <button onClick={uploadNarration} disabled={narrationBusy || !narrationFile || !ownerKeyConfigured}
+            className="w-full bg-indigo-500 hover:bg-indigo-400 disabled:opacity-50 text-white font-medium py-2.5 rounded-lg text-sm flex items-center justify-center gap-2"
+            data-testid="upload-narration-btn">
+            {narrationBusy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
+            رفع وتحويل لفيلم واقعي
+          </button>
+          <div className="text-[10px] text-zinc-500 mt-2 leading-5">
+            صيغ مدعومة: mp3, m4a, wav, mp4 · حد أقصى 25MB · Whisper يستخدم مفتاحك الخاص.
+          </div>
+        </div>
+        </>
       )}
 
       <div className="bg-[#12161e] border border-zinc-800 rounded-2xl p-5">
@@ -790,8 +887,66 @@ function ActionBar({ ep, busy, onStoryboard, onApprove, onRender, onShare, share
 }
 
 // ─────────────────────────────────────────────────────────────────────
-// Share panel (post-render)
+// Tab: Community / Discover (feed of public episodes)
 // ─────────────────────────────────────────────────────────────────────
+function CommunityTab({ feed, loaded, onLike, onRefresh }) {
+  return (
+    <div className="max-w-5xl mx-auto p-6" data-testid="community-tab">
+      <div className="flex items-center justify-between mb-4">
+        <div>
+          <h2 className="text-lg font-semibold flex items-center gap-2">
+            <Users className="w-5 h-5 text-amber-400" /> إبداعات المجتمع
+          </h2>
+          <p className="text-xs text-zinc-500 mt-1">كل اللي ينشره المستخدمون من حلقات على منصة زيتاكس فقط — لا محتوى خارجي.</p>
+        </div>
+        <button onClick={onRefresh} className="bg-zinc-800 hover:bg-zinc-700 text-xs px-3 py-1.5 rounded-lg flex items-center gap-1.5" data-testid="refresh-community-btn">
+          <RotateCcw className="w-3.5 h-3.5" /> تحديث
+        </button>
+      </div>
+
+      {!loaded && (<div className="text-center text-sm text-zinc-500 py-12">جاري التحميل…</div>)}
+      {loaded && feed.length === 0 && (
+        <div className="text-center text-sm text-zinc-500 py-12 bg-[#12161e] border border-zinc-800 rounded-2xl">
+          ما فيه حلقات منشورة بعد. كن أول واحد يشارك إبداعه.
+        </div>
+      )}
+
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        {feed.map((ep) => (
+          <div key={ep.id} className="bg-[#12161e] border border-zinc-800 rounded-2xl overflow-hidden hover:border-amber-500/40 transition" data-testid={`community-card-${ep.id}`}>
+            <div className={`bg-zinc-900 ${ep.aspect_ratio === '9x16' ? 'aspect-[9/16]' : ep.aspect_ratio === '1x1' ? 'aspect-square' : 'aspect-video'}`}>
+              {ep.first_clip_url ? (
+                <video src={ep.first_clip_url} controls className="w-full h-full object-cover" />
+              ) : (
+                <div className="w-full h-full flex items-center justify-center text-zinc-600">
+                  <Film className="w-12 h-12" />
+                </div>
+              )}
+            </div>
+            <div className="p-3 space-y-2">
+              <div className="text-sm font-medium truncate">{ep.title}</div>
+              <div className="text-[11px] text-zinc-400 line-clamp-2 leading-5">{ep.logline}</div>
+              <div className="flex items-center justify-between text-[10px] text-zinc-500 pt-2 border-t border-zinc-800">
+                <span>بواسطة <b className="text-zinc-300">{ep.author}</b></span>
+                <div className="flex items-center gap-2">
+                  <span className="flex items-center gap-1"><Eye className="w-3 h-3" /> {ep.views || 0}</span>
+                  <button onClick={() => onLike(ep.id)} className="flex items-center gap-1 hover:text-rose-400 transition" data-testid={`like-${ep.id}`}>
+                    <Heart className="w-3 h-3" /> {ep.likes || 0}
+                  </button>
+                </div>
+              </div>
+              <a href={ep.public_url} target="_blank" rel="noopener noreferrer"
+                className="block text-center text-[11px] bg-zinc-800 hover:bg-zinc-700 py-1.5 rounded text-zinc-200">
+                شاهد كامل ←
+              </a>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function SharePanel({ ep, shareData, onShare, busy, downloadAll }) {
   const copyToClipboard = (text) => {
     navigator.clipboard.writeText(text).then(() => toast.success('تم النسخ'));

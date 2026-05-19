@@ -28,7 +28,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form
 from fastapi.responses import FileResponse, HTMLResponse
 from pydantic import BaseModel, Field
 
@@ -73,6 +73,14 @@ LANGUAGE_OPTIONS = [
 ]
 
 ART_STYLES = [
+    {"id": "hyperreal",     "label": "واقعي تماماً (لا يُفرّق عن الحقيقي)",
+     "prompt_seed": (
+         "Shot on ARRI Alexa 65, anamorphic 35mm lenses, natural sunlight, "
+         "subtle film grain, real human actors, documentary cinematography, "
+         "photorealistic, indistinguishable from real footage, NO CGI look, "
+         "no artificial smoothing, no oversaturation, no anime, no illustration, "
+         "no 3D rendering, real-world physics"
+     )},
     {"id": "cinematic",     "label": "سينمائي واقعي",  "prompt_seed": "Cinematic 35mm film, natural lighting, shallow depth of field"},
     {"id": "anime",         "label": "أنمي",            "prompt_seed": "Modern Japanese anime style, vibrant colors, expressive eyes, Studio Ghibli mood"},
     {"id": "3d_animation",  "label": "أنيمشن ثلاثي الأبعاد", "prompt_seed": "Pixar-style 3D animation, soft global illumination, expressive characters"},
@@ -790,6 +798,201 @@ h1{{font-size:24px;margin:.5em 0 .2em;}}
 <div class="footer">صُنع بواسطة <b>زيتاكس</b></div>
 </div></body></html>"""
         return HTMLResponse(html)
+
+    # ── Narration → Film (YouTuber voiceover → cinematic film) ─────────
+    # Receives an audio file (mp3/m4a/wav) of someone narrating a story.
+    # Whisper transcribes (using OWNER's OpenAI key), GPT-4o segments it
+    # into scenes with cinematic visual prompts that follow the narration
+    # exactly. By default we apply the 'hyperreal' style so the output is
+    # indistinguishable from real footage.
+    @router.post("/narration-to-script")
+    async def narration_to_script(
+        audio: UploadFile = File(...),
+        series_id: str = Form(""),
+        language: str = Form("ar-saudi"),
+        art_style: str = Form("hyperreal"),
+        aspect_ratio: str = Form("16x9"),
+        max_shots: int = Form(8),
+        user=Depends(get_current_user),
+    ):
+        if audio is None:
+            raise HTTPException(400, "audio file is required")
+        key = _owner_openai_key()
+        if not key:
+            raise HTTPException(400, "ما فيه OPENAI_DIRECT_KEY خاص بك — أضفه من /admin/independence.")
+
+        # 1. Save upload + send to Whisper
+        suffix = (audio.filename or "audio.mp3").split(".")[-1][:6]
+        tmp_path = Path("/tmp") / f"narr_{uuid.uuid4().hex}.{suffix}"
+        try:
+            data = await audio.read()
+            if not data or len(data) < 1000:
+                raise HTTPException(400, "ملف الصوت فارغ أو صغير جداً")
+            if len(data) > 25 * 1024 * 1024:
+                raise HTTPException(413, "حجم الملف أكبر من 25MB — قسّمه أو اضغطه أولاً.")
+            tmp_path.write_bytes(data)
+        except HTTPException:
+            raise
+        except Exception as e:
+            raise HTTPException(500, f"فشل حفظ الملف: {e}")
+
+        try:
+            import httpx
+            async with httpx.AsyncClient(timeout=180.0) as client:
+                with open(tmp_path, "rb") as fh:
+                    files = {"file": (audio.filename or "audio.mp3", fh, "audio/mpeg")}
+                    r = await client.post(
+                        "https://api.openai.com/v1/audio/transcriptions",
+                        headers={"Authorization": f"Bearer {key}"},
+                        data={"model": "whisper-1", "response_format": "verbose_json"},
+                        files=files,
+                    )
+                if r.status_code != 200:
+                    raise HTTPException(503, f"Whisper رفض: {r.text[:200]}")
+                tx = r.json()
+                full_text = (tx.get("text") or "").strip()
+                segments = tx.get("segments") or []
+                if not full_text:
+                    raise HTTPException(500, "Whisper رجّع نص فارغ")
+        finally:
+            try:
+                tmp_path.unlink()
+            except Exception:
+                pass
+
+        # 2. Ask GPT to split into cinematic shots matching the narration
+        art = next((x for x in ART_STYLES if x["id"] == art_style), ART_STYLES[0])
+        sys_prompt = (
+            "أنت مخرج أفلام واقعية. عندك نص رواية صوتية كاملة. مهمتك تقسيمها "
+            "إلى لقطات سينمائية، كل لقطة:\n"
+            "  • تبقي نص الراوي EXACTLY كما هو (لا تغيّر كلمة من كلامه).\n"
+            "  • تختار toolkit بصري واقعي ١٠٠٪ يتطابق مع ما يقوله.\n"
+            "  • visual_en بالإنجليزية وصفاً صارماً للمشهد الحقيقي (no CGI look).\n"
+            "أرجع JSON: {title, logline, shots: [{n, narration_ar, visual_en, duration}]}\n"
+            f"الستايل البصري الإجباري في كل visual_en:\n{art['prompt_seed']}\n"
+            f"عدد لقطات تقديري: {max_shots} (يجوز أقل لو النص قصير).\n"
+            "مدة كل لقطة 4–12 ثانية حسب طول الجملة الصوتية."
+        )
+        user_prompt = (
+            f"النص الكامل بصوت الراوي:\n```\n{full_text[:6000]}\n```\n\n"
+            f"الـsegments من Whisper مع التوقيتات:\n"
+            + json.dumps([{"start": s.get("start"), "end": s.get("end"), "text": s.get("text")}
+                          for s in segments[:60]], ensure_ascii=False)[:4000]
+            + "\n\nأرجع JSON فقط."
+        )
+        async with httpx.AsyncClient(timeout=90.0) as client:
+            r = await client.post(
+                "https://api.openai.com/v1/chat/completions",
+                headers={"Authorization": f"Bearer {key}"},
+                json={
+                    "model": "gpt-4o",
+                    "messages": [
+                        {"role": "system", "content": sys_prompt},
+                        {"role": "user", "content": user_prompt},
+                    ],
+                    "response_format": {"type": "json_object"},
+                    "max_tokens": 4000,
+                },
+            )
+            if r.status_code != 200:
+                raise HTTPException(503, f"GPT رفض: {r.text[:200]}")
+            script = json.loads(r.json()["choices"][0]["message"]["content"])
+
+        shots = script.get("shots", []) or []
+        cost = sum(shot_price(int(sh.get("duration") or 8)) for sh in shots)
+
+        ep_id = str(uuid.uuid4())
+        ep_doc = {
+            "id": ep_id,
+            "user_id": user["user_id"],
+            "session_id": "narration",
+            "series_id": series_id or "",
+            "episode_number": 1,
+            "brief": f"[Narration upload] {full_text[:120]}…",
+            "narration_full_text": full_text,
+            "narration_segments": segments,
+            "language": language,
+            "subtitle_language": "",
+            "art_style": art_style,
+            "genre": "documentary",
+            "aspect_ratio": aspect_ratio,
+            "voice_gender": "narration_uploaded",
+            "use_uploaded_voice": True,
+            "script": script,
+            "shots": shots,
+            "storyboard": [],
+            "estimated_cost": cost,
+            "stage": "script",
+            "approved_at": None,
+            "rendered_at": None,
+            "credits_charged": 0,
+            "final_clips": [],
+            "share_slug": "",
+            "created_at": _now(),
+            "updated_at": _now(),
+        }
+        await db.video_episodes.insert_one(ep_doc.copy())
+        return {
+            "ok": True,
+            "episode": {k: v for k, v in ep_doc.items() if k != "_id" and k != "narration_segments"},
+            "estimated_cost_credits": cost,
+            "shots_count": len(shots),
+            "transcribed_chars": len(full_text),
+            "note": "تم تفريغ صوت الراوي وتقسيمه إلى لقطات. التالي: ولّد الستوري بورد، ثم وافق على الإنتاج.",
+        }
+
+    # ── DISCOVER — community feed of public episodes ───────────────────
+    @router.get("/discover")
+    async def discover(limit: int = 30, _=Depends(get_current_user)):
+        """Public-only feed of rendered + shared episodes from all users."""
+        cur = db.video_episodes.find(
+            {"share_slug": {"$ne": ""}, "stage": "rendered"},
+            {"_id": 0, "id": 1, "user_id": 1, "share_slug": 1,
+             "script": 1, "art_style": 1, "language": 1, "aspect_ratio": 1,
+             "final_clips": 1, "rendered_at": 1, "views": 1, "likes": 1},
+        ).sort([("rendered_at", -1)]).limit(min(100, max(1, limit)))
+        items = await cur.to_list(100)
+        # Decorate with thumbnail + first-clip URL + author display
+        feed = []
+        for ep in items:
+            clips = ep.get("final_clips") or []
+            first = next((c for c in clips if c.get("video_url")), None)
+            user_doc = await db.users.find_one({"id": ep.get("user_id")}, {"_id": 0, "name": 1, "username": 1})
+            feed.append({
+                "id": ep["id"],
+                "share_slug": ep.get("share_slug"),
+                "public_url": f"/api/video-studio/p/{ep.get('share_slug')}",
+                "title": (ep.get("script") or {}).get("title", "حلقة"),
+                "logline": (ep.get("script") or {}).get("logline", ""),
+                "art_style": ep.get("art_style"),
+                "language": ep.get("language"),
+                "aspect_ratio": ep.get("aspect_ratio"),
+                "first_clip_url": (first or {}).get("video_url"),
+                "shots_count": len(clips),
+                "views": ep.get("views", 0),
+                "likes": ep.get("likes", 0),
+                "rendered_at": ep.get("rendered_at"),
+                "author": (user_doc or {}).get("name") or (user_doc or {}).get("username") or "مستخدم",
+            })
+        return {"ok": True, "feed": feed, "count": len(feed)}
+
+    @router.post("/discover/{episode_id}/like")
+    async def like_episode(episode_id: str, _=Depends(get_current_user)):
+        r = await db.video_episodes.update_one(
+            {"id": episode_id, "share_slug": {"$ne": ""}, "stage": "rendered"},
+            {"$inc": {"likes": 1}},
+        )
+        if r.modified_count == 0:
+            raise HTTPException(404, "not shareable")
+        return {"ok": True}
+
+    @router.post("/discover/{episode_id}/view")
+    async def view_episode(episode_id: str, _=Depends(get_current_user)):
+        await db.video_episodes.update_one(
+            {"id": episode_id, "share_slug": {"$ne": ""}, "stage": "rendered"},
+            {"$inc": {"views": 1}},
+        )
+        return {"ok": True}
 
     # ── Static asset serving for storyboard previews ───────────────────
     @router.get("/storyboard-img/{filename}")
