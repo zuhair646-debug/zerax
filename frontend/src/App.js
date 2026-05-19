@@ -150,7 +150,8 @@ function App() {
           <Route path="/studio" element={<ProtectedRoute><StudioHub user={user} /></ProtectedRoute>} />
           <Route path="/studio/image" element={<ProtectedRoute><StudioImage user={user} /></ProtectedRoute>} />
           <Route path="/studio/video" element={<ProtectedRoute><StudioVideo user={user} /></ProtectedRoute>} />
-          <Route path="/chat/video" element={<ProtectedRoute><ChatVideo user={user} /></ProtectedRoute>} />
+          <Route path="/chat/video" element={<ProtectedRoute><VideoStudio /></ProtectedRoute>} />
+          <Route path="/chat/video-old" element={<ProtectedRoute><ChatVideo user={user} /></ProtectedRoute>} />
           <Route path="/chat/video-studio" element={<ProtectedRoute><VideoStudio /></ProtectedRoute>} />
           <Route path="/chat/image" element={<ProtectedRoute><ChatImage user={user} /></ProtectedRoute>} />
           <Route path="/dashboard/avatar" element={<ProtectedRoute><AvatarSettings user={user} /></ProtectedRoute>} />
