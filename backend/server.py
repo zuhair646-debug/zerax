@@ -3241,6 +3241,15 @@ try:
 except Exception as _vse:
     logging.getLogger(__name__).error(f"Failed to register video studio v2 module: {_vse}", exc_info=True)
 
+# ============== APP STUDIO v1 (Multi-type app builder + AI Producer + Import) ==============
+try:
+    from modules.app_studio import create_app_studio_router
+    _as_router = create_app_studio_router(db, get_current_user)
+    app.include_router(_as_router)
+    logging.getLogger(__name__).info("App Studio module registered")
+except Exception as _ase:
+    logging.getLogger(__name__).error(f"Failed to register app studio module: {_ase}", exc_info=True)
+
 # ============== SHARED AGENT CORE — bind DB so SectionAgent works everywhere ==============
 try:
     from modules.shared import bind_db as _shared_bind
