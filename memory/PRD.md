@@ -1,9 +1,69 @@
 # Zitex AI Platform - PRD
 
 ## Original Problem Statement
-منصة "Zitex" - ذكاء اصطناعي يولّد مواقع/ألعاب/صور/فيديو. الكل معزول في Modules. النشر يدوي إلى Railway.
+منصة "Zitex" - ذكاء اصطناعي يولّد مواقع/ألعاب/صور/فيديو/تطبيقات. الكل معزول في Modules. النشر يدوي إلى Railway.
 
 ## User Language: Arabic (العربية)
+
+### 🆕 Feb 21, 2026 — APP STUDIO v1 (INTEGRATED) ✅
+
+**طلب المستخدم**: "خلص لي كل اللي ذكرته. اه مرة واحدة ابي شي متكامل من الالف الى الياء. تصميم ممتاز. الشات لازم يكون متكامل، فيه الأدوات وفيه كل شي. ومرتب وفي ذكاء قادر على كل شي."
+
+**Auto-commit `7889a1a`** — pushed via Emergent platform.
+
+📱 **استوديو التطبيقات الجديد على `/chat/app-studio`**:
+
+**Backend** (`/app/backend/modules/app_studio/`):
+- `__init__.py` (~430 سطر): ١١ endpoint (options, projects CRUD, feature add/remove, import, producer-chat, build, conversation, public file serving)
+- `tools.py` (~250 سطر): **٨ أدوات AI** للمنتج التنفيذي (OpenAI function-calling):
+  1. `add_feature_to_project(feature_id)` — خصم نقاط
+  2. `remove_feature_from_project(feature_id)`
+  3. `list_features()`
+  4. `update_project_metadata(...)`
+  5. `build_project_now()` — يستدعي build engine
+  6. `suggest_app_icon_prompt()` — prompt لـNano Banana
+  7. `generate_marketing_copy(angle)` — نص تسويقي عربي
+  8. `recommend_next_steps()` — تحليل ذكي
+  - Tool loop يدور ٦ مرات في turn واحد (مثل Auto-Coder)
+  - Fallback لـClaude Sonnet عبر Emergent LLM key لو OpenAI ما اشتغل
+- `builder.py` (~370 سطر): **محرك توليد الكود الحقيقي**:
+  - **PWA**: index.html + manifest.json + sw.js + icons (PNG عبر PIL)
+  - **Hybrid**: PWA + capacitor.config.json + package.json
+  - **Native**: SwiftUI scaffold + Kotlin Jetpack Compose scaffold
+  - **FullStack**: frontend/ + backend/main.py (FastAPI) + admin/ + marketing/
+  - يولّد ZIP bundle قابل للتنزيل تلقائياً
+  - يحقن HTML المستورد من FreeBuild كـlegacy screen
+
+**Frontend** (`/app/frontend/src/pages/AppStudio.js` ~640 سطر):
+- **3-pane layout**: Sidebar (مشاريع) + Center (Chat/Features/Preview/Imports tabs) + Summary panel
+- **شات حقيقي** مع رسائل ثنائية الاتجاه + tool pills قابلة للتوسيع (args + result JSON)
+- **٦ Quick prompts**: اقتراح ميزات، خطوات إطلاق، إضافة لوحة تحكم، نص تسويقي، prompt أيقونة، البناء
+- **معاينة iframe حية**: mobile (390x760 iPhone frame) أو desktop، مع reload + open-in-tab
+- **زر "ابدأ البناء"** بـloader + خصم نقاط + redirect تلقائي لتاب المعاينة
+- **زر تنزيل zip** + رابط معاينة + count الملفات + حجم الـbundle
+- **Conversation persistence**: كل turn يُحفظ في `app_studio_conversations` collection
+
+**الـCatalogues**:
+- 4 أنواع تطبيقات: pwa (40ن), hybrid (80ن), native (120ن), fullstack (220ن)
+- 20 ميزة في 5 فئات: core / screen / money / addon / ai
+- استيراد من: spa_websites (FreeBuild) + mobile_apps (Mobile Builder)
+
+**اختبار**:
+- ✅ **17/17 backend tests passed** (testing_agent_v3 iteration_29)
+- ✅ **Frontend 100%** — sidebar، chat، tool pills، features marketplace، build، preview iframe
+- ✅ Smoke E2E: مشروع → producer-chat ("أضف auth_basic و profile و subscription") → ٣ tools استُدعيت → build → 11 ملف / 7.5KB zip
+- ✅ `/api/app-studio/build/{pid}/frontend/index.html` يرجّع 200 + HTML صحيح (public, no auth)
+- ✅ Conversation history مُسترجع بعد reload
+- ✅ Lint نظيف (JS + Python)
+
+**Files**:
+- NEW: `backend/modules/app_studio/builder.py`, `tools.py`
+- MODIFIED: `backend/modules/app_studio/__init__.py` (rewrite producer-chat → tool-calling loop + build endpoints)
+- REWRITE: `frontend/src/pages/AppStudio.js` (640 سطر، 3-pane + chat + preview)
+- MODIFIED: `frontend/src/App.js` (routes /chat/app-studio + /dashboard/app-studio)
+- MODIFIED: `frontend/src/pages/ClientDashboard.js` (كرت "📱 استوديو التطبيقات" مع badge "✨ جديد متكامل")
+- NEW: `backend/tests/test_app_studio.py` (مكتوب بواسطة testing agent)
+- MODIFIED: `.gitignore` (يستبعد `backend/static/app_studio_builds/`)
 
 ### 🆕 Feb 18, 2026 (الجولة 5) — NARRATION→FILM + COMMUNITY FEED + HYPERREAL ✅
 
