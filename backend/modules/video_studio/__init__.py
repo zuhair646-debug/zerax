@@ -370,28 +370,54 @@ async def _gen_storyboard_image(prompt: str, *, style_seed: str = "",
 # ════════════════════════════════════════════════════════════════════════
 # Sora 2 render — owner's OpenAI key (never EMERGENT_LLM_KEY)
 # ════════════════════════════════════════════════════════════════════════
-async def _render_shot(prompt: str, duration: int, *, aspect: str = "16x9") -> Optional[str]:
-    """Render via Sora 2 using the owner's own OpenAI account."""
+async def _render_shot(prompt: str, duration: int, *, aspect: str = "16x9") -> Dict[str, Any]:
+    """Render via Sora 2. Sora 2 only supports 4/8/12 second clips, so for
+    longer durations we split into multiple sub-clips and concat as a list.
+    Returns {ok, clips: [data_url, ...], error?}. Captures full error
+    details so the frontend can surface them.
+    """
     key = _owner_openai_key()
     if not key:
-        return None
+        return {"ok": False, "clips": [], "error": "no_openai_key"}
     try:
         from emergentintegrations.llm.openai.video_generation import OpenAIVideoGeneration  # type: ignore
-        gen = OpenAIVideoGeneration(api_key=key)
-        sora_dur = min(12, max(4, duration))
-        size = _aspect_to_size(aspect)
-        # Sora 2 currently supports 1280x720 and 720x1280 only — coerce square→16x9
-        if size not in ("1280x720", "720x1280"):
-            size = "1280x720"
-        video_bytes = gen.text_to_video(
-            prompt=prompt, model="sora-2",
-            size=size, duration=sora_dur, max_wait_time=600,
-        )
-        if video_bytes:
-            return "data:video/mp4;base64," + base64.b64encode(video_bytes).decode("utf-8")
     except Exception as e:
-        logger.error(f"sora render failed: {e}")
-    return None
+        return {"ok": False, "clips": [], "error": f"sora_lib_missing: {e}"}
+    size = _aspect_to_size(aspect)
+    if size not in ("1280x720", "720x1280"):
+        size = "1280x720"
+
+    # Sora 2 supports 4, 8, 12 seconds — split longer durations
+    target = max(4, int(duration or 8))
+    plan: List[int] = []
+    remaining = target
+    while remaining > 0:
+        chunk = 12 if remaining >= 12 else (8 if remaining >= 8 else 4)
+        plan.append(chunk)
+        remaining -= chunk
+    # cap to 6 sub-clips to avoid runaway costs
+    plan = plan[:6]
+
+    gen = OpenAIVideoGeneration(api_key=key)
+    clips: List[str] = []
+    last_error: Optional[str] = None
+    for sub_dur in plan:
+        try:
+            video_bytes = gen.text_to_video(
+                prompt=prompt, model="sora-2",
+                size=size, duration=sub_dur, max_wait_time=900,
+            )
+            if video_bytes:
+                clips.append("data:video/mp4;base64," + base64.b64encode(video_bytes).decode("utf-8"))
+            else:
+                last_error = "empty_response_from_sora"
+        except Exception as e:
+            last_error = f"{type(e).__name__}: {str(e)[:240]}"
+            logger.error(f"sora sub-clip failed (duration={sub_dur}): {last_error}")
+            break  # don't retry the rest if one failed (likely an auth/access issue)
+    if not clips:
+        return {"ok": False, "clips": [], "error": last_error or "no_clips_produced"}
+    return {"ok": True, "clips": clips, "error": last_error}
 
 
 # ════════════════════════════════════════════════════════════════════════
@@ -408,6 +434,29 @@ def _social_captions(script: Dict[str, Any]) -> Dict[str, str]:
         "youtube": f"{title}\n\n{logline}\n\n{hashtags}",
         "snapchat": f"{title}\n{logline}",
     }
+
+
+class ProductionAssetIn(BaseModel):
+    series_id: str = Field(..., min_length=1)
+    kind: str = Field(..., description="character|villain|location|prop|vehicle")
+    name: str = Field(..., min_length=1, max_length=120)
+    description: str = Field(..., min_length=4, max_length=2000)
+    art_style: str = Field(default="hyperreal")
+    attributes: Dict[str, Any] = {}
+
+
+class RelationshipIn(BaseModel):
+    series_id: str
+    from_asset_id: str
+    to_asset_id: str
+    kind: str = Field(..., description="loves|hates|allies|enemies|family|mentor|rival")
+    notes: str = ""
+
+
+class ProducerChatIn(BaseModel):
+    series_id: str
+    step: str = Field(..., description="discover|villains|heroes|locations|relationships|ready")
+    message: str = ""
 
 
 # ════════════════════════════════════════════════════════════════════════
@@ -652,7 +701,127 @@ def create_video_studio_router(db, get_current_user) -> APIRouter:
             "note": "تمّت الموافقة. عند استدعاء /render سيتم خصم النقاط مرة واحدة.",
         }
 
-    # ── Render (PAY here) ──────────────────────────────────────────────
+    # ── Render (PAY here) — background task with live status ──────────
+    async def _do_render(episode_id: str, user_id: str, cost: int) -> None:
+        ep = await db.video_episodes.find_one({"id": episode_id}, {"_id": 0})
+        if not ep:
+            return
+        aspect = ep.get("aspect_ratio") or "16x9"
+        shots = ep.get("shots") or []
+        total = len(shots)
+        final_clips: List[Dict[str, Any]] = []
+        failed = 0
+        last_error: Optional[str] = None
+
+        await db.video_episodes.update_one(
+            {"id": episode_id},
+            {"$set": {
+                "render_status": {
+                    "running": True, "phase": "starting",
+                    "completed": 0, "total": total, "errors": [],
+                    "started_at": _now(),
+                },
+                "updated_at": _now(),
+            }},
+        )
+
+        for idx, shot in enumerate(shots):
+            n = shot.get("n", idx + 1)
+            prompt = shot.get("visual_en") or shot.get("title_ar") or ""
+            sub = shot.get("subtitle_translation")
+            if sub:
+                prompt = f"{prompt}. Include caption text reading: {sub}"
+            duration = int(shot.get("duration") or 8)
+
+            await db.video_episodes.update_one(
+                {"id": episode_id},
+                {"$set": {
+                    "render_status.phase": f"shot_{n}",
+                    "render_status.current_shot": n,
+                    "render_status.completed": idx,
+                    "render_status.updated_at": _now(),
+                }},
+            )
+
+            result = await _render_shot(prompt, duration, aspect=aspect)
+            if result.get("ok") and result.get("clips"):
+                # Concat note: we keep sub-clips as separate URLs; FE plays them sequentially
+                final_clips.append({
+                    "n": n,
+                    "title_ar": shot.get("title_ar"),
+                    "dialogue": shot.get("dialogue"),
+                    "subtitle_translation": sub,
+                    "duration": duration,
+                    "video_url": result["clips"][0],  # primary clip
+                    "sub_clips": result["clips"],     # full list (for >12s shots)
+                    "ok": True,
+                })
+            else:
+                failed += 1
+                last_error = result.get("error") or "unknown"
+                final_clips.append({
+                    "n": n,
+                    "title_ar": shot.get("title_ar"),
+                    "duration": duration,
+                    "video_url": None,
+                    "ok": False,
+                    "error": last_error,
+                })
+                await db.video_episodes.update_one(
+                    {"id": episode_id},
+                    {"$push": {"render_status.errors": {"n": n, "error": last_error}}},
+                )
+
+        # Refund if everything failed
+        if failed == total and total > 0:
+            await db.users.update_one(
+                {"id": user_id},
+                {"$inc": {"credits": cost},
+                 "$push": {"credit_history": {
+                     "amount": cost,
+                     "reason": f"refund_render_ep_{ep.get('episode_number')}_all_failed",
+                     "timestamp": _now(),
+                 }}}
+            )
+            await db.video_episodes.update_one(
+                {"id": episode_id},
+                {"$set": {
+                    "stage": "approved",
+                    "updated_at": _now(),
+                    "last_error": last_error or "all_failed",
+                    "render_status": {
+                        "running": False, "phase": "failed_refunded",
+                        "completed": total, "total": total,
+                        "errors": [{"n": c.get("n"), "error": c.get("error")} for c in final_clips if not c.get("ok")],
+                        "finished_at": _now(),
+                    },
+                }},
+            )
+            return
+
+        await db.video_episodes.update_one(
+            {"id": episode_id},
+            {"$set": {
+                "stage": "rendered",
+                "rendered_at": _now(),
+                "credits_charged": cost,
+                "final_clips": final_clips,
+                "updated_at": _now(),
+                "render_status": {
+                    "running": False,
+                    "phase": "completed" if failed == 0 else "completed_with_errors",
+                    "completed": total, "total": total,
+                    "shots_failed": failed,
+                    "finished_at": _now(),
+                },
+            }},
+        )
+        if ep.get("series_id"):
+            await db.video_series.update_one(
+                {"id": ep["series_id"]},
+                {"$set": {"updated_at": _now()}},
+            )
+
     @router.post("/render")
     async def render(payload: RenderIn, user=Depends(get_current_user)):
         ep = await db.video_episodes.find_one(
@@ -664,10 +833,8 @@ def create_video_studio_router(db, get_current_user) -> APIRouter:
             raise HTTPException(400, f"episode stage='{ep.get('stage')}' — must approve first")
         if not _owner_openai_key():
             raise HTTPException(400,
-                "ما فيه مفتاح OpenAI خاص بك. الإنتاج يتطلب OPENAI_DIRECT_KEY عشان "
-                "ما يتم الخصم من حساب المنصة.")
+                "ما فيه مفتاح OpenAI خاص بك. الإنتاج يتطلب OPENAI_DIRECT_KEY.")
         cost = ep.get("estimated_cost", 0)
-        aspect = ep.get("aspect_ratio") or "16x9"
 
         deduct = await db.users.update_one(
             {"id": user["user_id"], "credits": {"$gte": cost}},
@@ -681,70 +848,35 @@ def create_video_studio_router(db, get_current_user) -> APIRouter:
         if deduct.modified_count == 0:
             raise HTTPException(402, f"رصيد غير كافٍ ({cost} نقطة).")
 
-        final_clips: List[Dict[str, Any]] = []
-        failed = 0
-        for shot in (ep.get("shots") or []):
-            prompt = shot.get("visual_en") or shot.get("title_ar") or ""
-            # Add subtitle hint as overlay text in the visual prompt only if present
-            sub = shot.get("subtitle_translation")
-            if sub:
-                prompt = f"{prompt}. Include caption text reading: {sub}"
-            duration = int(shot.get("duration") or 8)
-            clip = await _render_shot(prompt, duration, aspect=aspect)
-            final_clips.append({
-                "n": shot.get("n"),
-                "title_ar": shot.get("title_ar"),
-                "dialogue": shot.get("dialogue"),
-                "subtitle_translation": sub,
-                "duration": duration,
-                "video_url": clip,
-                "ok": clip is not None,
-            })
-            if clip is None:
-                failed += 1
-
-        if failed == len(final_clips) and final_clips:
-            await db.users.update_one(
-                {"id": user["user_id"]},
-                {"$inc": {"credits": cost},
-                 "$push": {"credit_history": {
-                     "amount": cost,
-                     "reason": f"refund_video_studio_ep_{ep.get('episode_number')}_all_failed",
-                     "timestamp": _now(),
-                 }}}
-            )
-            await db.video_episodes.update_one(
-                {"id": ep["id"]},
-                {"$set": {"stage": "approved", "updated_at": _now(),
-                          "last_error": "all shots failed to render"}}
-            )
-            raise HTTPException(500, "فشل إنتاج جميع اللقطات. تمت إعادة النقاط.")
-
+        # Mark rendering immediately so any concurrent /render is rejected
         await db.video_episodes.update_one(
             {"id": ep["id"]},
-            {"$set": {
-                "stage": "rendered",
-                "rendered_at": _now(),
-                "credits_charged": cost,
-                "final_clips": final_clips,
-                "updated_at": _now(),
-            }}
+            {"$set": {"stage": "rendering", "updated_at": _now()}},
         )
-        if ep.get("series_id"):
-            await db.video_series.update_one(
-                {"id": ep["series_id"]},
-                {"$set": {"updated_at": _now()}},
-            )
+        # Kick off background task — return immediately so the UI can poll
+        asyncio.create_task(_do_render(ep["id"], user["user_id"], cost))
 
         return {
             "ok": True,
             "episode_id": ep["id"],
-            "clips": final_clips,
-            "shots_rendered": len(final_clips) - failed,
-            "shots_failed": failed,
-            "credits_charged": cost,
+            "background": True,
+            "estimated_cost_credits": cost,
             "credits_remaining": await _get_credits(user["user_id"]),
+            "poll_url": f"/api/video-studio/render-status/{ep['id']}",
+            "note": "بدأ الإنتاج في الخلفية. تابع التقدّم من صفحة /chat/video/render.",
         }
+
+    @router.get("/render-status/{episode_id}")
+    async def render_status(episode_id: str, user=Depends(get_current_user)):
+        ep = await db.video_episodes.find_one(
+            {"id": episode_id, "user_id": user["user_id"]},
+            {"_id": 0, "id": 1, "stage": 1, "render_status": 1,
+             "final_clips": 1, "credits_charged": 1, "shots": 1, "script": 1,
+             "episode_number": 1, "last_error": 1},
+        )
+        if not ep:
+            raise HTTPException(404, "episode not found")
+        return {"ok": True, "episode": ep}
 
     @router.get("/episode/{episode_id}")
     async def get_episode(episode_id: str, user=Depends(get_current_user)):
@@ -956,6 +1088,211 @@ h1{{font-size:24px;margin:.5em 0 .2em;}}
             "shots_count": len(shots),
             "transcribed_chars": len(full_text),
             "note": "تم تفريغ صوت الراوي وتقسيمه إلى لقطات. التالي: ولّد الستوري بورد، ثم وافق على الإنتاج.",
+        }
+
+    # ── PRODUCTION STUDIO: Characters / Locations / Props (PAID) ──────
+    # Each asset = 1 image generation + persistence. Charged immediately
+    # because they're standalone deliverables the user can re-use across
+    # episodes. Cost depends on quality tier.
+    ASSET_KINDS = {
+        "character": {"label_ar": "شخصية", "cost": 6,
+                      "style_seed": "Full body character reference sheet, neutral pose, plain background, "
+                                    "consistent design for series re-use, T-pose, sharp facial details"},
+        "villain":   {"label_ar": "شخصية شريرة", "cost": 6,
+                      "style_seed": "Full body villain character reference sheet, menacing pose, "
+                                    "dark lighting, plain background, consistent design for series re-use"},
+        "location":  {"label_ar": "مكان / موقع", "cost": 5,
+                      "style_seed": "Wide establishing shot, environment design, no characters, "
+                                    "consistent lighting for series re-use, atmospheric"},
+        "prop":      {"label_ar": "غرض / دعامة", "cost": 3,
+                      "style_seed": "Product/prop reference, isolated on neutral background, "
+                                    "clean angle, ready for compositing"},
+        "vehicle":   {"label_ar": "وسيلة نقل", "cost": 4,
+                      "style_seed": "Vehicle 3/4 reference shot, isolated on neutral background, clean lighting"},
+    }
+
+    class _UnusedPlaceholder(BaseModel):  # noqa: F841 — kept to preserve indentation
+        pass
+
+    @router.post("/production/asset")
+    async def create_asset(payload: ProductionAssetIn, user=Depends(get_current_user)):
+        kind_meta = ASSET_KINDS.get(payload.kind)
+        if not kind_meta:
+            raise HTTPException(400, f"kind غير معروف: {payload.kind}")
+        if not _owner_openai_key():
+            raise HTTPException(400, "أضف OPENAI_DIRECT_KEY قبل بناء الأصول.")
+        # Verify series ownership
+        s = await db.video_series.find_one(
+            {"id": payload.series_id, "user_id": user["user_id"]}, {"_id": 0, "id": 1}
+        )
+        if not s:
+            raise HTTPException(404, "series not found")
+        cost = kind_meta["cost"]
+        # Atomic credits deduction
+        deduct = await db.users.update_one(
+            {"id": user["user_id"], "credits": {"$gte": cost}},
+            {"$inc": {"credits": -cost},
+             "$push": {"credit_history": {
+                 "amount": -cost,
+                 "reason": f"production_{payload.kind}_{payload.name[:40]}",
+                 "timestamp": _now(),
+             }}},
+        )
+        if deduct.modified_count == 0:
+            raise HTTPException(402, f"رصيد غير كافٍ ({cost} نقطة).")
+
+        art = next((x for x in ART_STYLES if x["id"] == payload.art_style), ART_STYLES[0])
+        full_prompt = (
+            f"{payload.description}. "
+            f"{kind_meta['style_seed']}. "
+            f"{art['prompt_seed']}"
+        )
+        url = await _gen_storyboard_image(full_prompt, style_seed="", aspect="1x1")
+        if not url:
+            # refund on failure
+            await db.users.update_one(
+                {"id": user["user_id"]},
+                {"$inc": {"credits": cost},
+                 "$push": {"credit_history": {
+                     "amount": cost,
+                     "reason": f"refund_production_{payload.kind}_failed",
+                     "timestamp": _now(),
+                 }}},
+            )
+            raise HTTPException(500, "فشل توليد الصورة — تمت إعادة النقاط.")
+
+        doc = {
+            "id": str(uuid.uuid4()),
+            "user_id": user["user_id"],
+            "series_id": payload.series_id,
+            "kind": payload.kind,
+            "kind_label_ar": kind_meta["label_ar"],
+            "name": payload.name,
+            "description": payload.description,
+            "image_url": url,
+            "art_style": payload.art_style,
+            "attributes": payload.attributes,
+            "cost_paid": cost,
+            "created_at": _now(),
+        }
+        await db.production_assets.insert_one(doc.copy())
+        return {
+            "ok": True,
+            "asset": {k: v for k, v in doc.items() if k != "_id"},
+            "credits_charged": cost,
+            "credits_remaining": await _get_credits(user["user_id"]),
+        }
+
+    @router.get("/production/series/{series_id}/assets")
+    async def list_assets(series_id: str, user=Depends(get_current_user)):
+        cur = db.production_assets.find(
+            {"series_id": series_id, "user_id": user["user_id"]}, {"_id": 0}
+        ).sort([("created_at", -1)]).limit(200)
+        items = await cur.to_list(200)
+        # Also include relationships
+        rels_cur = db.production_relationships.find(
+            {"series_id": series_id, "user_id": user["user_id"]}, {"_id": 0}
+        ).limit(500)
+        relationships = await rels_cur.to_list(500)
+        return {"ok": True, "assets": items, "relationships": relationships}
+
+    @router.delete("/production/asset/{asset_id}")
+    async def delete_asset(asset_id: str, user=Depends(get_current_user)):
+        r = await db.production_assets.delete_one({"id": asset_id, "user_id": user["user_id"]})
+        # Drop any relationships referencing it
+        await db.production_relationships.delete_many(
+            {"user_id": user["user_id"],
+             "$or": [{"from_asset_id": asset_id}, {"to_asset_id": asset_id}]}
+        )
+        return {"ok": True, "deleted": r.deleted_count}
+
+    @router.post("/production/relationship")
+    async def create_relationship(payload: RelationshipIn, user=Depends(get_current_user)):
+        if payload.from_asset_id == payload.to_asset_id:
+            raise HTTPException(400, "علاقة الشخصية بنفسها غير مسموحة")
+        doc = {
+            "id": str(uuid.uuid4()),
+            "user_id": user["user_id"],
+            "series_id": payload.series_id,
+            "from_asset_id": payload.from_asset_id,
+            "to_asset_id": payload.to_asset_id,
+            "kind": payload.kind,
+            "notes": payload.notes,
+            "created_at": _now(),
+        }
+        await db.production_relationships.insert_one(doc.copy())
+        return {"ok": True, "relationship": {k: v for k, v in doc.items() if k != "_id"}}
+
+    @router.delete("/production/relationship/{rel_id}")
+    async def delete_relationship(rel_id: str, user=Depends(get_current_user)):
+        r = await db.production_relationships.delete_one({"id": rel_id, "user_id": user["user_id"]})
+        return {"ok": True, "deleted": r.deleted_count}
+
+    # AI Producer wizard — guides the user step by step through universe-building
+    @router.post("/production/producer-chat")
+    async def producer_chat(payload: ProducerChatIn, user=Depends(get_current_user)):
+        s = await db.video_series.find_one(
+            {"id": payload.series_id, "user_id": user["user_id"]}, {"_id": 0}
+        )
+        if not s:
+            raise HTTPException(404, "series not found")
+        # Fetch existing assets for context
+        a_cur = db.production_assets.find(
+            {"series_id": payload.series_id, "user_id": user["user_id"]}, {"_id": 0, "kind": 1, "name": 1, "description": 1}
+        ).limit(50)
+        assets = await a_cur.to_list(50)
+        chars = [a for a in assets if a.get("kind") in ("character", "villain")]
+        locs = [a for a in assets if a.get("kind") == "location"]
+
+        try:
+            from modules.shared import SectionAgent
+        except Exception:
+            raise HTTPException(503, "shared agent core unavailable")
+
+        step_hints = {
+            "discover": "ساعد العميل يحدّد: ١) النوع (رعب/أكشن/درامي/أنمي…) ٢) المزاج العام ٣) الجمهور المستهدف. اقترح أفكاراً جريئة.",
+            "villains": "ساعده يبني فريق الأشرار. اسأل عن دافع كل شرير، مظهره، قوّته، نقطة ضعفه. أوصِ بإنشاء كل شخصية عبر زر '+ شخصية شريرة'.",
+            "heroes":  "ساعده يبني فريق الأبطال. اسأل عن عدد الأبطال، خلفياتهم، تخصّص كل واحد، شخصيته. أوصِ بإنشاء كل شخصية.",
+            "locations": "ساعده يصمّم الأماكن الرئيسية (المدينة، البحر، السفينة، المستودع). كل مكان = أصل مستقل تدفع عليه.",
+            "relationships": "اقترح خريطة علاقات بين الشخصيات (يحب/يكره/حليف/عدو/عائلة/معلم/منافس). كلما زادت العلاقات، عمقت الحبكة.",
+            "ready": "كل العالم جاهز. اشرح كيف العميل يستخدم هذه الشخصيات والأماكن في كتابة الحلقات.",
+        }
+        extra_persona = (
+            f"\n\n🎬 وضع منتج تنفيذي (Production Studio). السلسلة: {s.get('title')}. "
+            f"الستايل المرجعي: {s.get('style_direction') or '—'}.\n"
+            f"المرحلة الحالية: **{payload.step}** — {step_hints.get(payload.step, '')}\n\n"
+            f"الشخصيات المسجّلة حتى الآن ({len(chars)}): "
+            + (", ".join(f"{c['name']} ({c['kind']})" for c in chars[:10]) or "(لا شيء)")
+            + f"\nالأماكن المسجّلة ({len(locs)}): "
+            + (", ".join(c["name"] for c in locs[:10]) or "(لا شيء)")
+            + "\n\nقواعد سلوكك: تكلّم كمنتج فاهم، اقترح عدد شخصيات معقول، حفّز العميل يستثمر "
+            "في بناء عالمه (كل أصل مدفوع لكن يُعاد استخدامه عبر كل الحلقات → ROI ممتاز). "
+            "في كل ردّ، اعطِ خياراً واحداً واضحاً + سعره + زر إجراء يستدعيه العميل."
+        )
+        agent = SectionAgent("video", extra_persona=extra_persona, strict_scope=False)
+        result = await agent.chat(user["user_id"], payload.message or "ابدأ الإرشاد",
+                                  session_id=f"prod_{payload.series_id}_{payload.step}")
+        return {
+            "ok": True,
+            "step": payload.step,
+            "reply": result.get("reply"),
+            "session_id": result.get("session_id"),
+            "context": {
+                "characters_count": len(chars),
+                "locations_count": len(locs),
+                "asset_kinds": list(ASSET_KINDS.keys()),
+                "asset_costs": {k: v["cost"] for k, v in ASSET_KINDS.items()},
+            },
+        }
+
+    @router.get("/production/asset-kinds")
+    async def list_asset_kinds(_=Depends(get_current_user)):
+        return {
+            "ok": True,
+            "kinds": [
+                {"id": k, "label_ar": v["label_ar"], "cost": v["cost"]}
+                for k, v in ASSET_KINDS.items()
+            ],
         }
 
     # ── DISCOVER — community feed of public episodes ───────────────────

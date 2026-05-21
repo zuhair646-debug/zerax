@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
+import ProductionTab from './ProductionTab';
 import {
   Film, Plus, Loader2, Check, AlertCircle, Play, ArrowLeft,
   Clapperboard, Sparkles, ImageIcon, RotateCcw, Settings, MessageSquare,
@@ -289,7 +290,6 @@ export default function VideoStudio() {
   const renderEpisode = async () => {
     if (!activeEpisode) return;
     setBusyStage('render');
-    toast.info('بدأ الإنتاج… قد يستغرق دقائق', { duration: 8000 });
     try {
       const r = await fetch(`${VS}/render`, {
         method: 'POST', headers: authHeaders(),
@@ -297,9 +297,9 @@ export default function VideoStudio() {
       });
       const d = await r.json();
       if (!r.ok) throw new Error(d?.detail || 'failed');
-      setActiveEpisode((ep) => ({ ...ep, stage: 'rendered', final_clips: d.clips, credits_charged: d.credits_charged }));
-      toast.success(`اكتمل · ${d.shots_rendered} لقطات · خُصم ${d.credits_charged} نقطة`);
-      loadEpisodes(activeSeriesId);
+      toast.success('بدأ الإنتاج في الخلفية…');
+      // Navigate to the dedicated render-progress page
+      navigate(`/chat/video/render/${activeEpisode.id}`);
     } catch (e) { toast.error(`فشل الإنتاج: ${e.message || ''}`); }
     finally { setBusyStage(''); }
   };
@@ -451,6 +451,7 @@ export default function VideoStudio() {
         <div className="border-b border-zinc-800 px-4 flex items-center gap-1 bg-[#0e1118]/60">
           {[
             { id: 'chat',       label: 'محادثة',         icon: <MessageSquare className="w-3.5 h-3.5" /> },
+            { id: 'production', label: 'بناء العالم',    icon: <Sparkles className="w-3.5 h-3.5" /> },
             { id: 'story',      label: 'سيناريو القصة',  icon: <FileText className="w-3.5 h-3.5" /> },
             { id: 'dialogue',   label: 'سيناريو الحوار', icon: <Languages className="w-3.5 h-3.5" /> },
             { id: 'storyboard', label: 'ستوري بورد',    icon: <ImageIcon className="w-3.5 h-3.5" /> },
@@ -479,6 +480,9 @@ export default function VideoStudio() {
               narrationInputRef={narrationInputRef} uploadNarration={uploadNarration}
               narrationBusy={busyStage === 'narration'}
             />
+          )}
+          {tab === 'production' && (
+            <ProductionTab seriesId={activeSeriesId} />
           )}
           {tab === 'story' && (
             <StoryTab ep={activeEpisode} />

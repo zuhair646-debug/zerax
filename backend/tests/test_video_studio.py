@@ -158,9 +158,11 @@ def patched_llm():
     fake_url = "/api/video-studio/storyboard-img/abcd1234.png"
     fake_clip = "data:video/mp4;base64,AAAA"
 
+    fake_clip_result = {"ok": True, "clips": ["data:video/mp4;base64,AAAA"], "error": None}
+
     with patch("modules.video_studio._generate_script", new=AsyncMock(return_value=fake_script)) as ps, \
          patch("modules.video_studio._gen_storyboard_image", new=AsyncMock(return_value=fake_url)) as pi, \
-         patch("modules.video_studio._render_shot", new=AsyncMock(return_value=fake_clip)) as pr, \
+         patch("modules.video_studio._render_shot", new=AsyncMock(return_value=fake_clip_result)) as pr, \
          patch("modules.video_studio._owner_openai_key", return_value="sk-test-fake-key"):
         yield ps, pi, pr
 
@@ -233,9 +235,20 @@ def test_full_pipeline_script_storyboard_approve_render(app_db, patched_llm):
             r = await c.post("/api/video-studio/render", json={"episode_id": ep_id})
             assert r.status_code == 200, r.text
             body = r.json()
-            assert body["credits_charged"] == 50
+            # New async flow returns background=True; poll status until done
+            assert body.get("background") is True
+            assert body["estimated_cost_credits"] == 50
             assert body["credits_remaining"] == 950
-            assert body["shots_rendered"] == 2
+            # Allow background task to finish
+            await asyncio.sleep(0.05)
+            for _ in range(20):
+                r = await c.get(f"/api/video-studio/render-status/{ep_id}")
+                ep_state = r.json()["episode"]
+                if ep_state.get("stage") == "rendered":
+                    break
+                await asyncio.sleep(0.05)
+            assert ep_state["stage"] == "rendered"
+            assert ep_state["credits_charged"] == 50
 
             r = await c.get(f"/api/video-studio/episode/{ep_id}")
             ep2 = r.json()["episode"]

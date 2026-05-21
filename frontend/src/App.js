@@ -49,6 +49,7 @@ import StudioVideo from '@/pages/studio/StudioVideo';
 import ChatVideo from '@/pages/chat/ChatVideo';
 import ChatImage from '@/pages/chat/ChatImage';
 import VideoStudio from '@/pages/VideoStudio';
+import VideoRender from '@/pages/VideoRender';
 import FreeBuild from '@/pages/FreeBuild';
 import MobileAppBuilder from '@/pages/MobileAppBuilder';
 import MobileAppMarketplace from '@/pages/MobileAppMarketplace';
@@ -151,6 +152,7 @@ function App() {
           <Route path="/studio/image" element={<ProtectedRoute><StudioImage user={user} /></ProtectedRoute>} />
           <Route path="/studio/video" element={<ProtectedRoute><StudioVideo user={user} /></ProtectedRoute>} />
           <Route path="/chat/video" element={<ProtectedRoute><VideoStudio /></ProtectedRoute>} />
+          <Route path="/chat/video/render/:episodeId" element={<ProtectedRoute><VideoRender /></ProtectedRoute>} />
           <Route path="/chat/video-old" element={<ProtectedRoute><ChatVideo user={user} /></ProtectedRoute>} />
           <Route path="/chat/video-studio" element={<ProtectedRoute><VideoStudio /></ProtectedRoute>} />
           <Route path="/chat/image" element={<ProtectedRoute><ChatImage user={user} /></ProtectedRoute>} />
