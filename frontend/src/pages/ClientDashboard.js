@@ -3,7 +3,7 @@ import { Navbar } from '@/components/Navbar';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { useNavigate } from 'react-router-dom';
-import { PlusCircle, FileText, Globe, Image, Video, Coins, Crown, Gift, Sparkles, Bot, Share2, MessageSquare, Clapperboard } from 'lucide-react';
+import { PlusCircle, FileText, Globe, Image, Video, Coins, Crown, Gift, Sparkles, Bot, Share2, MessageSquare, Clapperboard, Smartphone } from 'lucide-react';
 import SiteBannerStories from '@/components/SiteBannerStories';
 
 const ClientDashboard = ({ user, setUser }) => {
@@ -61,7 +61,8 @@ const ClientDashboard = ({ user, setUser }) => {
     { title: '🎬 استوديو الفيديو', desc: 'فيديو Sora 2 باحتراف', icon: <Clapperboard className="w-6 h-6" />, path: '/studio/video', color: 'from-orange-500 to-red-500', badge: 'نقاط' },
     { title: '💬 شات الصور الذكي', desc: 'محادثة تفاعلية لبناء صورة', icon: <MessageSquare className="w-6 h-6" />, path: '/chat/image', color: 'from-pink-500 to-rose-500' },
     { title: '🎬 استوديو الفيديو', desc: 'شات + سيناريو + ستوري بورد + رفع صوتك → فيلم واقعي + مجتمع', icon: <Video className="w-6 h-6" />, path: '/chat/video', color: 'from-amber-500 to-orange-600', badge: 'محدّث' },
-    { title: '📱 باني تطبيقات الجوال', desc: 'ألعاب وأدوات وتطبيقات بمعاينة iPhone حية', icon: <PlusCircle className="w-6 h-6" />, path: '/dashboard/apps', color: 'from-cyan-500 to-blue-600', badge: 'جديد' },
+    { title: '📱 استوديو التطبيقات', desc: 'AI Producer + Tools + توليد كود PWA/Capacitor/Native + معاينة حية + ربط مع مواقعك', icon: <Smartphone className="w-6 h-6" />, path: '/chat/app-studio', color: 'from-indigo-500 to-violet-600', badge: '✨ جديد متكامل' },
+    { title: '📱 باني تطبيقات الجوال (الكلاسيكي)', desc: 'ألعاب وأدوات وتطبيقات بمعاينة iPhone حية', icon: <PlusCircle className="w-6 h-6" />, path: '/dashboard/apps', color: 'from-cyan-500 to-blue-600' },
     { title: '📱 رفيقتي على الجوال', desc: 'Zara/Layla كمساعدة شخصية يومية', icon: <Bot className="w-6 h-6" />, path: '/companion', color: 'from-fuchsia-500 to-pink-600', badge: 'جديد' },
     { title: '🤖 مساعدتي الذكية', desc: 'فعّل مساعدة AI لمتجرك', icon: <Bot className="w-6 h-6" />, path: '/dashboard/avatar', color: 'from-emerald-500 to-green-600', badge: '14 يوم مجاناً' },
     { title: '🌉 Channel Bridge', desc: 'انشر أصولك في متاجرك', icon: <Share2 className="w-6 h-6" />, path: '/dashboard/bridge', color: 'from-sky-500 to-cyan-500' },

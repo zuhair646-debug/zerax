@@ -27,12 +27,22 @@ import os
 import re
 import uuid
 import json
+import asyncio
 import logging
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException
+from fastapi.responses import FileResponse, JSONResponse, Response
 from pydantic import BaseModel, Field
+
+from .builder import build_project, project_build_dir, BUILD_ROOT
+from .tools import (
+    APP_STUDIO_TOOLS,
+    ToolRuntime,
+    execute_app_studio_tool,
+    system_prompt as build_system_prompt,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -163,10 +173,10 @@ def create_app_studio_router(db, get_current_user) -> APIRouter:
     router = APIRouter(prefix="/api/app-studio", tags=["app-studio"])
 
     try:
-        from modules.shared import bind_db as _shared_bind, SectionAgent
+        from modules.shared import bind_db as _shared_bind
         _shared_bind(db)
     except Exception:
-        SectionAgent = None  # type: ignore
+        pass
 
     async def _get_credits(user_id: str) -> int:
         d = await db.users.find_one({"id": user_id}, {"_id": 0, "credits": 1})
@@ -385,7 +395,7 @@ def create_app_studio_router(db, get_current_user) -> APIRouter:
             "note": f"تم استيراد {import_record['label']} كنقطة بداية. الذكاء سيستخدم بنيته في توليد التطبيق.",
         }
 
-    # ── AI App Producer (step-by-step wizard) ─────────────────────────
+    # ── AI App Producer (tool-calling, multi-iteration) ───────────────
     @router.post("/producer-chat")
     async def producer_chat(payload: AppProducerChatIn, user=Depends(get_current_user)):
         proj = await db.app_projects.find_one(
@@ -393,63 +403,222 @@ def create_app_studio_router(db, get_current_user) -> APIRouter:
         )
         if not proj:
             raise HTTPException(404, "project not found")
-        if SectionAgent is None:
-            raise HTTPException(503, "shared agent core unavailable")
 
-        # Pull existing features for context
-        feats_cur = db.app_project_features.find(
-            {"project_id": payload.project_id}, {"_id": 0, "feature_id": 1}
-        )
-        feats = await feats_cur.to_list(200)
-        feat_ids = [f.get("feature_id") for f in feats]
-        cat_by_id = {f["id"]: f for f in FEATURE_CATALOG}
+        # Persistent conversation per project
+        conv_id = f"app_studio_{payload.project_id}"
+        conv = await db.app_studio_conversations.find_one({"id": conv_id, "user_id": user["user_id"]}, {"_id": 0})
+        if not conv:
+            conv = {"id": conv_id, "user_id": user["user_id"], "project_id": payload.project_id,
+                    "messages": [], "created_at": _now()}
+            await db.app_studio_conversations.insert_one(conv.copy())
 
-        ptype = next((t for t in PROJECT_TYPES if t["id"] == proj.get("type")), {})
-        step_hints = {
-            "discover": (
-                "ساعد العميل يحدّد المشكلة اللي يحلّها التطبيق + جمهوره المستهدف. "
-                "اقترح ٣ أفكار جريئة لتمييز تطبيقه عن المنافسين."
-            ),
-            "features": (
-                "اقترح الميزات الجوهرية المناسبة لنوع التطبيق. لا تقترح أكثر من ٤ "
-                "ميزات في الرد الواحد، اشرح ROI كل وحدة. كل ميزة لها سعر — اعرضه. "
-                "حفّز العميل يضيفها بزر '+'."
-            ),
-            "addons": (
-                "اقترح الإضافات: لوحة تحكم للمالك (لإدارة المستخدمين)، موقع تسويقي "
-                "(للتسويق على Google)، مدونة (للـSEO). كل وحدة تزيد قيمة المنتج بشكل ضخم."
-            ),
-            "launch": (
-                "العميل وصل لمرحلة البناء. راجع معه القائمة، اقترح أي ميزة ضرورية ناقصة، "
-                "ثم اشرح خطوات النشر حسب نوع المشروع."
-            ),
-        }
-        extra_persona = (
-            f"\n\n📱 وضع منتج تنفيذي لتطبيقات. المشروع: {proj.get('title')} "
-            f"(نوع: {ptype.get('label_ar')}). "
-            f"الجمهور: {proj.get('target_audience') or '—'}. "
-            f"المرحلة الحالية: **{payload.step}** — {step_hints.get(payload.step, '')}\n\n"
-            f"الميزات المضافة حتى الآن ({len(feat_ids)}): "
-            + (", ".join(cat_by_id.get(fid, {}).get("label_ar", fid) for fid in feat_ids[:15]) or "(لا شيء)")
-            + "\n\nقواعد سلوكك:\n"
-            "- تكلم كمنتج فاهم سعودي. أعطِ نصيحة عملية في كل رد.\n"
-            "- لا تطلق تطبيقاً ناقصاً. ذكّر العميل بأي ميزة ضرورية مفقودة "
-            "(مثلاً: لو في اشتراكات فلازم تسجيل دخول).\n"
-            "- لا تقترح أكثر من خيار واحد بسعره في كل رد، خلّه يقرر."
+        # Append user message
+        user_msg = (payload.message or "أرشدني").strip()[:4000]
+        await db.app_studio_conversations.update_one(
+            {"id": conv_id}, {"$push": {"messages": {"role": "user", "content": user_msg, "ts": _now()}}}
         )
-        agent = SectionAgent("app", extra_persona=extra_persona, strict_scope=False)
-        result = await agent.chat(user["user_id"], payload.message or "أرشدني",
-                                  session_id=f"app_{payload.project_id}_{payload.step}")
+        # Reload after push
+        conv = await db.app_studio_conversations.find_one({"id": conv_id}, {"_id": 0})
+
+        feats = await db.app_project_features.find(
+            {"project_id": payload.project_id}, {"_id": 0}
+        ).sort([("created_at", 1)]).to_list(200)
+
+        runtime = ToolRuntime(
+            db=db, user_id=user["user_id"], project_id=payload.project_id,
+            feature_catalog=FEATURE_CATALOG, project_types=PROJECT_TYPES,
+            build_fn=build_project,
+        )
+
+        sys_prompt = build_system_prompt(proj, feats, FEATURE_CATALOG, PROJECT_TYPES)
+        history = conv.get("messages", [])[-16:]
+
+        # Try OpenAI gpt-4o first, fallback to Claude via emergent
+        direct_key = os.environ.get("OPENAI_DIRECT_KEY", "").strip() or os.environ.get("OPENAI_API_KEY", "").strip()
+        emergent_key = os.environ.get("EMERGENT_LLM_KEY", "").strip()
+
+        tool_pills: List[Dict[str, Any]] = []
+        final_reply = ""
+
+        if direct_key:
+            try:
+                from openai import AsyncOpenAI
+                client = AsyncOpenAI(api_key=direct_key)
+                messages = [{"role": "system", "content": sys_prompt}]
+                for m in history:
+                    if m.get("role") in ("user", "assistant"):
+                        messages.append({"role": m["role"], "content": (m.get("content") or "")[:4000]})
+
+                for _iter in range(6):
+                    resp = await client.chat.completions.create(
+                        model="gpt-4o",
+                        messages=messages,
+                        temperature=0.5,
+                        max_tokens=1500,
+                        tools=APP_STUDIO_TOOLS,
+                        tool_choice="auto",
+                    )
+                    msg = resp.choices[0].message
+                    if msg.tool_calls:
+                        messages.append({
+                            "role": "assistant",
+                            "content": msg.content or "",
+                            "tool_calls": [
+                                {"id": tc.id, "type": "function",
+                                 "function": {"name": tc.function.name, "arguments": tc.function.arguments}}
+                                for tc in msg.tool_calls
+                            ],
+                        })
+                        async def _run(tc):
+                            try:
+                                args = json.loads(tc.function.arguments or "{}")
+                            except Exception:
+                                args = {}
+                            result = await execute_app_studio_tool(runtime, tc.function.name, args)
+                            tool_pills.append({
+                                "name": tc.function.name, "args": args, "result": result,
+                            })
+                            return tc.id, json.dumps(result, ensure_ascii=False)[:8000]
+                        pairs = await asyncio.gather(*[_run(tc) for tc in msg.tool_calls])
+                        for tid, content in pairs:
+                            messages.append({"role": "tool", "tool_call_id": tid, "content": content})
+                        continue
+                    final_reply = (msg.content or "").strip()
+                    break
+            except Exception as e:
+                logger.warning(f"openai producer-chat failed: {e}")
+                final_reply = ""
+
+        # Fallback: Claude via emergent (no native tool-calling here for simplicity)
+        if not final_reply and emergent_key:
+            try:
+                from emergentintegrations.llm.chat import LlmChat, UserMessage
+                chat = LlmChat(
+                    api_key=emergent_key,
+                    session_id=f"app-studio-{payload.project_id[:8]}",
+                    system_message=sys_prompt + "\n\nملاحظة: في هذا الوضع لا تستخدم أدوات. أعطِ نصيحة نصية مباشرة.",
+                )
+                chat.with_model("anthropic", "claude-sonnet-4-5")
+                final_reply = await chat.send_message(UserMessage(text=user_msg))
+                final_reply = (final_reply or "").strip()
+            except Exception as e:
+                logger.error(f"claude fallback failed: {e}")
+
+        if not final_reply:
+            final_reply = "ما قدرت أرد الحين. تأكّد من مفاتيح الذكاء في `/admin/independence` أو حاول مرة ثانية."
+
+        await db.app_studio_conversations.update_one(
+            {"id": conv_id},
+            {"$push": {"messages": {
+                "role": "assistant", "content": final_reply,
+                "tools": tool_pills, "ts": _now(),
+            }}, "$set": {"updated_at": _now()}},
+        )
         return {
             "ok": True,
+            "reply": final_reply,
+            "tools": tool_pills,
             "step": payload.step,
-            "reply": result.get("reply"),
-            "session_id": result.get("session_id"),
-            "context": {
-                "features_count": len(feat_ids),
-                "project_type": proj.get("type"),
-                "imports_count": len(proj.get("imports") or []),
-            },
+            "session_id": conv_id,
         }
+
+    # ── Conversation messages ─────────────────────────────────────────
+    @router.get("/conversation/{project_id}")
+    async def get_conversation(project_id: str, user=Depends(get_current_user)):
+        conv_id = f"app_studio_{project_id}"
+        conv = await db.app_studio_conversations.find_one(
+            {"id": conv_id, "user_id": user["user_id"]}, {"_id": 0}
+        )
+        return {"ok": True, "messages": (conv or {}).get("messages", [])}
+
+    @router.delete("/conversation/{project_id}")
+    async def reset_conversation(project_id: str, user=Depends(get_current_user)):
+        conv_id = f"app_studio_{project_id}"
+        r = await db.app_studio_conversations.delete_one(
+            {"id": conv_id, "user_id": user["user_id"]}
+        )
+        return {"ok": True, "deleted": r.deleted_count}
+
+    # ── Build / Preview / Download ────────────────────────────────────
+    @router.post("/build/{project_id}")
+    async def build_now(project_id: str, user=Depends(get_current_user)):
+        proj = await db.app_projects.find_one(
+            {"id": project_id, "user_id": user["user_id"]}, {"_id": 0}
+        )
+        if not proj:
+            raise HTTPException(404, "project not found")
+        ptype = next((t for t in PROJECT_TYPES if t["id"] == proj.get("type")), None)
+        if not ptype:
+            raise HTTPException(400, "نوع غير معروف")
+        cost = ptype["build_cost"]
+
+        # Owner bypass
+        u = await db.users.find_one({"id": user["user_id"]}, {"_id": 0, "credits": 1, "is_owner": 1})
+        if not (u or {}).get("is_owner"):
+            deduct = await db.users.update_one(
+                {"id": user["user_id"], "credits": {"$gte": cost}},
+                {"$inc": {"credits": -cost},
+                 "$push": {"credit_history": {
+                     "amount": -cost,
+                     "reason": f"app_studio_build_{project_id}",
+                     "timestamp": _now(),
+                 }}},
+            )
+            if deduct.modified_count == 0:
+                raise HTTPException(402, f"رصيد غير كافٍ ({cost} نقطة للبناء النهائي).")
+
+        feats = await db.app_project_features.find(
+            {"project_id": project_id}, {"_id": 0}
+        ).sort([("created_at", 1)]).to_list(200)
+        try:
+            res = build_project(proj, feats)
+        except Exception as e:
+            logger.error(f"build failed: {e}", exc_info=True)
+            # refund on hard failure
+            if not (u or {}).get("is_owner"):
+                await db.users.update_one(
+                    {"id": user["user_id"]},
+                    {"$inc": {"credits": cost},
+                     "$push": {"credit_history": {
+                         "amount": cost,
+                         "reason": f"app_studio_build_refund_{project_id}",
+                         "timestamp": _now(),
+                     }}},
+                )
+            raise HTTPException(500, f"فشل البناء: {str(e)[:200]}")
+
+        await db.app_projects.update_one(
+            {"id": project_id},
+            {"$set": {"stage": "built", "build_output": res, "updated_at": _now()}},
+        )
+        new_credits = (await db.users.find_one({"id": user["user_id"]}, {"_id": 0, "credits": 1}) or {}).get("credits", 0)
+        return {"ok": True, "build": res, "credits_charged": cost, "credits_remaining": new_credits}
+
+    @router.get("/build/{project_id}/{path:path}")
+    async def serve_build_file(project_id: str, path: str):
+        # Public so the iframe / share-page can fetch the artefact without auth header gymnastics
+        bdir = os.path.join(BUILD_ROOT, project_id)
+        # Prevent traversal
+        if ".." in path or path.startswith("/"):
+            raise HTTPException(400, "bad path")
+        full = os.path.join(bdir, path)
+        if not os.path.isfile(full):
+            raise HTTPException(404, "file not found")
+        # Sensible MIME guesses
+        media = None
+        if path.endswith(".html"): media = "text/html; charset=utf-8"
+        elif path.endswith(".json"): media = "application/json; charset=utf-8"
+        elif path.endswith(".js"): media = "application/javascript; charset=utf-8"
+        elif path.endswith(".css"): media = "text/css; charset=utf-8"
+        elif path.endswith(".png"): media = "image/png"
+        elif path.endswith(".zip"): media = "application/zip"
+        elif path.endswith(".md"): media = "text/markdown; charset=utf-8"
+        return FileResponse(full, media_type=media)
+
+    # ── AI App Producer (step-by-step wizard) ─────────────────────────
+    # legacy alias kept for backward compat: just delegate to producer-chat
+    @router.post("/producer-chat-legacy")
+    async def producer_chat_legacy(payload: AppProducerChatIn, user=Depends(get_current_user)):
+        return await producer_chat(payload, user)  # type: ignore
 
     return router

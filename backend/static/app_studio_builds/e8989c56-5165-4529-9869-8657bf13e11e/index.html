@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+<meta name="theme-color" content="#6366f1" />
+<title>TEST_مشروع البناء</title>
+<link rel="manifest" href="manifest.json" />
+<link rel="apple-touch-icon" href="icons/icon-192.png" />
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Tajawal','Cairo',system-ui,sans-serif;background:#0b0d12;color:#f1f5f9;min-height:100vh;display:flex;flex-direction:column}
+header{background:linear-gradient(135deg,#6366f1 0%,#6366f1cc 100%);padding:48px 20px 24px;text-align:center;color:#fff}
+header h1{font-size:28px;font-weight:800;margin-bottom:8px}
+header p{opacity:.9;font-size:14px;line-height:1.7}
+main{flex:1;padding:24px 16px 100px;max-width:600px;margin:0 auto;width:100%}
+section[data-screen]:not(.active){display:none}
+.card{background:#12161e;border:1px solid #1f2937;border-radius:18px;padding:18px;margin-bottom:14px}
+.card h2{font-size:18px;margin-bottom:8px}
+.card p{color:#94a3b8;font-size:14px;line-height:1.8}
+.btn{display:inline-block;background:#6366f1;color:#fff;padding:12px 20px;border-radius:12px;text-decoration:none;border:none;font-weight:700;font-family:inherit;cursor:pointer;font-size:14px;width:100%;margin-top:8px}
+.btn.outline{background:transparent;border:1px solid #6366f1;color:#6366f1}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.stat{background:#1a1f2c;border-radius:14px;padding:16px;text-align:center}
+.stat b{color:#6366f1;font-size:22px;display:block}
+.stat span{font-size:11px;color:#64748b}
+input,textarea{background:#1a1f2c;border:1px solid #1f2937;border-radius:12px;padding:12px;color:#f1f5f9;font-family:inherit;font-size:14px;width:100%}
+.chat-msg{background:#1a1f2c;border-radius:14px;padding:12px;margin-bottom:8px;font-size:14px}
+.chat-msg.me{background:#6366f133;text-align:left}
+.legacy-embed{transform:scale(.5);transform-origin:top right;width:200%;height:200vh;overflow:hidden}
+nav.tabbar{position:fixed;bottom:0;left:0;right:0;background:#0e1118;border-top:1px solid #1f2937;display:flex;justify-content:space-around;padding:12px env(safe-area-inset-right) calc(12px + env(safe-area-inset-bottom)) env(safe-area-inset-left);z-index:50}
+.tab{background:transparent;border:0;color:#64748b;font-family:inherit;font-size:12px;font-weight:600;padding:6px 10px;cursor:pointer;border-radius:8px}
+.tab.active{background:#6366f122;color:#6366f1}
+</style>
+</head>
+<body>
+<header>
+  <h1>TEST_مشروع البناء</h1>
+  <p>تطبيق للبناء</p>
+</header>
+<main id="app">
+  <section data-screen="home" class="active">
+  <div class="card">
+    <h2>👋 أهلاً بك في TEST_مشروع البناء</h2>
+    <p>تطبيق للبناء</p>
+    
+  </div>
+  <div class="grid">
+    <div class="stat"><b>0</b><span>المستخدمون</span></div>
+    <div class="stat"><b>0</b><span>المشتركون</span></div>
+    <div class="stat"><b>4.9★</b><span>التقييم</span></div>
+    <div class="stat"><b>قريباً</b><span>المتجر</span></div>
+  </div>
+  <div class="card" style="margin-top:14px">
+    <h2>ابدأ الآن</h2>
+    <p>هذا تطبيق مبدئي مُولّد من زيتاكس. كل صفحة وميزة في الـtabs أسفل الشاشة قابلة للتعديل.</p>
+    <button class="btn" onclick="alert('متاح بعد الربط مع backend')">إنشاء حساب</button>
+  </div>
+</section>
+</main>
+<nav class="tabbar">
+  <button class="tab active" data-target="home">الرئيسية</button>
+</nav>
+<script>
+// Mini tab-router
+const tabs = document.querySelectorAll('.tab');
+const screens = document.querySelectorAll('section[data-screen]');
+function show(name){
+  tabs.forEach(t=>t.classList.toggle('active', t.dataset.target===name));
+  screens.forEach(s=>{ s.classList.toggle('active', s.dataset.screen===name); s.hidden = s.dataset.screen!==name; });
+}
+tabs.forEach(t=>t.addEventListener('click',()=>show(t.dataset.target)));
+// Default to first screen
+show(document.querySelector('section[data-screen]').dataset.screen);
+
+// PWA install prompt
+let deferredPrompt;
+window.addEventListener('beforeinstallprompt', e=>{ e.preventDefault(); deferredPrompt = e; });
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('sw.js').catch(console.error);
+}
+</script>
+</body>
+</html>
