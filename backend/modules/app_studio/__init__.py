@@ -32,7 +32,7 @@ import logging
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form
 from fastapi.responses import FileResponse, JSONResponse, Response
 from pydantic import BaseModel, Field
 
@@ -42,6 +42,14 @@ from .tools import (
     ToolRuntime,
     execute_app_studio_tool,
     system_prompt as build_system_prompt,
+)
+from .attachments import (
+    store_attachment,
+    list_attachments,
+    delete_attachment,
+    fetch_recent_for_vision,
+    build_attachment_system_message,
+    MAX_ATTACHMENTS_PER_PROJECT,
 )
 
 logger = logging.getLogger(__name__)
@@ -424,13 +432,20 @@ def create_app_studio_router(db, get_current_user) -> APIRouter:
             {"project_id": payload.project_id}, {"_id": 0}
         ).sort([("created_at", 1)]).to_list(200)
 
+        # ── Pull attachments (images + PDFs) for vision ─────────────
+        att_payload = await fetch_recent_for_vision(
+            db, payload.project_id, user["user_id"]
+        )
+        att_system_msg = build_attachment_system_message(att_payload)
+
         runtime = ToolRuntime(
             db=db, user_id=user["user_id"], project_id=payload.project_id,
             feature_catalog=FEATURE_CATALOG, project_types=PROJECT_TYPES,
             build_fn=build_project,
         )
 
-        sys_prompt = build_system_prompt(proj, feats, FEATURE_CATALOG, PROJECT_TYPES)
+        sys_prompt = build_system_prompt(proj, feats, FEATURE_CATALOG, PROJECT_TYPES,
+                                          attachments_summary=att_system_msg or "")
         history = conv.get("messages", [])[-16:]
 
         # Try OpenAI gpt-4o first, fallback to Claude via emergent
@@ -448,6 +463,24 @@ def create_app_studio_router(db, get_current_user) -> APIRouter:
                 for m in history:
                     if m.get("role") in ("user", "assistant"):
                         messages.append({"role": m["role"], "content": (m.get("content") or "")[:4000]})
+
+                # Inject vision content blocks on the latest user message
+                if att_payload.get("images"):
+                    # Find last user message and convert to multimodal content blocks
+                    for i in range(len(messages) - 1, -1, -1):
+                        if messages[i].get("role") == "user":
+                            base_text = messages[i]["content"] if isinstance(messages[i]["content"], str) else ""
+                            blocks: List[Dict[str, Any]] = [{"type": "text", "text": base_text}]
+                            for img in att_payload["images"]:
+                                blocks.append({
+                                    "type": "image_url",
+                                    "image_url": {
+                                        "url": f"data:{img['mime']};base64,{img['b64']}",
+                                        "detail": "high",
+                                    },
+                                })
+                            messages[i]["content"] = blocks
+                            break
 
                 for _iter in range(6):
                     resp = await client.chat.completions.create(
@@ -614,6 +647,69 @@ def create_app_studio_router(db, get_current_user) -> APIRouter:
         elif path.endswith(".zip"): media = "application/zip"
         elif path.endswith(".md"): media = "text/markdown; charset=utf-8"
         return FileResponse(full, media_type=media)
+
+    # ── Attachments: upload design mockups (images + PDF) ──────────────
+    @router.post("/project/{project_id}/upload")
+    async def upload_attachment(
+        project_id: str,
+        files: List[UploadFile] = File(...),
+        note: str = Form(""),
+        user=Depends(get_current_user),
+    ):
+        proj = await db.app_projects.find_one(
+            {"id": project_id, "user_id": user["user_id"]}, {"_id": 0, "id": 1}
+        )
+        if not proj:
+            raise HTTPException(404, "project not found")
+        stored: List[Dict[str, Any]] = []
+        errors: List[Dict[str, str]] = []
+        for f in (files or [])[:MAX_ATTACHMENTS_PER_PROJECT]:
+            try:
+                raw = await f.read()
+                if not raw:
+                    continue
+                doc = await store_attachment(
+                    db, user_id=user["user_id"], project_id=project_id,
+                    filename=f.filename or "file", content_type=f.content_type or "",
+                    raw=raw, note=note,
+                )
+                stored.append(doc)
+            except ValueError as ve:
+                errors.append({"filename": f.filename or "", "error": str(ve)})
+            except Exception as e:
+                logger.error(f"upload failed: {e}", exc_info=True)
+                errors.append({"filename": f.filename or "", "error": "تعذّر معالجة الملف."})
+        return {"ok": True, "stored": stored, "errors": errors}
+
+    @router.get("/project/{project_id}/attachments")
+    async def get_attachments(project_id: str, user=Depends(get_current_user)):
+        items = await list_attachments(db, project_id, user["user_id"])
+        return {"ok": True, "items": items, "count": len(items),
+                "max_per_project": MAX_ATTACHMENTS_PER_PROJECT}
+
+    @router.delete("/attachment/{attachment_id}")
+    async def remove_attachment(attachment_id: str, user=Depends(get_current_user)):
+        deleted = await delete_attachment(db, attachment_id, user["user_id"])
+        return {"ok": True, "deleted": deleted}
+
+    @router.get("/attachment/{attachment_id}/raw")
+    async def attachment_raw(attachment_id: str, user=Depends(get_current_user)):
+        from .attachments import get_attachment_full
+        import base64 as _b64
+        doc = await get_attachment_full(db, attachment_id, user["user_id"])
+        if not doc:
+            raise HTTPException(404, "attachment not found")
+        if doc.get("kind") == "image" and doc.get("b64"):
+            raw = _b64.b64decode(doc["b64"])
+            return Response(content=raw, media_type=doc.get("mime") or "image/jpeg")
+        if doc.get("kind") == "pdf":
+            # We don't keep the binary, only extracted text. Return text instead.
+            return JSONResponse({
+                "kind": "pdf",
+                "filename": doc.get("filename"),
+                "text": (doc.get("text") or "")[:30000],
+            })
+        raise HTTPException(404, "no raw payload")
 
     # ── AI App Producer (step-by-step wizard) ─────────────────────────
     # legacy alias kept for backward compat: just delegate to producer-chat

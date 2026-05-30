@@ -6,7 +6,8 @@ import {
   Trash2, Layers, Megaphone, Coins, ShoppingBag, Wand2, Upload,
   Globe, Box, Code2, AppWindow, CheckCircle2, Info, Download,
   Hammer, Eye, RotateCw, ExternalLink, Settings as SettingsIcon,
-  ChevronDown, ChevronUp, Wrench, Send,
+  ChevronDown, ChevronUp, Wrench, Send, Image as ImageIcon, FileText,
+  Paperclip, X, Palette,
 } from 'lucide-react';
 
 const API = process.env.REACT_APP_BACKEND_URL;
@@ -26,11 +27,12 @@ const TYPE_COLOR = {
 const CAT_ICON = { core: Box, screen: Layers, money: Coins, addon: Megaphone, ai: Sparkles };
 
 const QUICK_PROMPTS = [
+  'حلّل التصاميم اللي رفعتها واستخرج الـbrief',
   'اقترح ميزات أساسية لمشروعي',
   'حلّل خطوات الإطلاق المتبقية',
   'أضف لوحة تحكم للمالك',
-  'ولّد لي نص تسويقي عربي للصفحة الرئيسية',
-  'اعطني prompt لتوليد أيقونة التطبيق',
+  'ولّد نص تسويقي عربي للصفحة الرئيسية',
+  'جهّز حزمة النشر للمتاجر',
   'ابدأ البناء النهائي الآن',
 ];
 
@@ -57,6 +59,11 @@ export default function AppStudio() {
   // Build
   const [buildBusy, setBuildBusy] = useState(false);
 
+  // Attachments (multimodal input)
+  const [attachments, setAttachments] = useState([]);
+  const [uploadBusy, setUploadBusy] = useState(false);
+  const fileInputRef = useRef(null);
+
   // ── Bootstrap ─────────────────────────────────────────────────────
   useEffect(() => {
     fetch(`${AS}/options`, { headers: auth() }).then((r) => r.json()).then((d) => d.ok && setOpts(d));
@@ -71,7 +78,7 @@ export default function AppStudio() {
   useEffect(() => { loadProjects(); }, [loadProjects]);
 
   const loadProject = useCallback(async (pid) => {
-    if (!pid) { setActive(null); setFeatures([]); setMessages([]); return; }
+    if (!pid) { setActive(null); setFeatures([]); setMessages([]); setAttachments([]); return; }
     try {
       const r = await fetch(`${AS}/projects/${pid}`, { headers: auth() });
       const d = await r.json();
@@ -80,9 +87,45 @@ export default function AppStudio() {
       const cr = await fetch(`${AS}/conversation/${pid}`, { headers: auth() });
       const cd = await cr.json();
       setMessages(cd.messages || []);
+      const ar = await fetch(`${AS}/project/${pid}/attachments`, { headers: auth() });
+      const ad = await ar.json();
+      setAttachments(ad.items || []);
     } catch { toast.error('فشل تحميل المشروع'); }
   }, []);
   useEffect(() => { loadProject(activeId); }, [activeId, loadProject]);
+
+  // ── Attachments ─────────────────────────────────────────────────
+  const uploadFiles = useCallback(async (filesList) => {
+    if (!activeId || !filesList?.length) return;
+    setUploadBusy(true);
+    const fd = new FormData();
+    for (const f of filesList) fd.append('files', f);
+    try {
+      const r = await fetch(`${AS}/project/${activeId}/upload`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${localStorage.getItem('token') || ''}` },
+        body: fd,
+      });
+      const d = await r.json();
+      if (!r.ok) throw new Error(d?.detail || 'failed');
+      toast.success(`✅ تم رفع ${d.stored.length} ملف${d.errors?.length ? ` (فشل ${d.errors.length})` : ''}`);
+      if (d.errors?.length) d.errors.forEach((e) => toast.error(`${e.filename}: ${e.error}`));
+      // Reload attachments
+      const ar = await fetch(`${AS}/project/${activeId}/attachments`, { headers: auth() });
+      const ad = await ar.json();
+      setAttachments(ad.items || []);
+    } catch (e) { toast.error(`فشل الرفع: ${e.message || ''}`); }
+    finally { setUploadBusy(false); }
+  }, [activeId]);
+
+  const removeAttachment = useCallback(async (aid) => {
+    if (!window.confirm('احذف الملف؟')) return;
+    try {
+      await fetch(`${AS}/attachment/${aid}`, { method: 'DELETE', headers: auth() });
+      setAttachments((prev) => prev.filter((a) => a.id !== aid));
+      toast.success('تم الحذف');
+    } catch (e) { toast.error(`فشل: ${e.message || ''}`); }
+  }, []);
 
   useEffect(() => {
     if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
@@ -257,10 +300,11 @@ export default function AppStudio() {
         {active && (
           <div className="border-b border-zinc-800 px-4 flex items-center gap-1 bg-[#0e1118]/60 overflow-x-auto">
             {[
-              { id: 'chat',     label: 'محادثة الذكاء', icon: <MessageSquare className="w-3.5 h-3.5" /> },
-              { id: 'features', label: 'الميزات',        icon: <Wand2 className="w-3.5 h-3.5" /> },
-              { id: 'preview',  label: 'معاينة',          icon: <Eye className="w-3.5 h-3.5" />, disabled: !buildOut },
-              { id: 'imports',  label: 'المستوردات',     icon: <Upload className="w-3.5 h-3.5" /> },
+              { id: 'chat',        label: 'محادثة الذكاء', icon: <MessageSquare className="w-3.5 h-3.5" /> },
+              { id: 'attachments', label: `المرفقات${attachments.length ? ` (${attachments.length})` : ''}`, icon: <Paperclip className="w-3.5 h-3.5" /> },
+              { id: 'features',    label: 'الميزات',        icon: <Wand2 className="w-3.5 h-3.5" /> },
+              { id: 'preview',     label: 'معاينة',          icon: <Eye className="w-3.5 h-3.5" />, disabled: !buildOut },
+              { id: 'imports',     label: 'المستوردات',     icon: <Upload className="w-3.5 h-3.5" /> },
             ].map((t) => (
               <button key={t.id} onClick={() => !t.disabled && setTab(t.id)} disabled={t.disabled}
                 className={`px-3 py-2 text-xs flex items-center gap-1.5 border-b-2 transition whitespace-nowrap ${
@@ -280,7 +324,12 @@ export default function AppStudio() {
             <EmptyState types={opts.project_types} onCreate={() => setShowNew(true)} />
           ) : tab === 'chat' ? (
             <ChatPane messages={messages} chatBusy={chatBusy} input={input} setInput={setInput}
-              onSend={send} scrollRef={scrollRef} project={active} />
+              onSend={send} scrollRef={scrollRef} project={active}
+              attachments={attachments} onUpload={uploadFiles} onRemoveAtt={removeAttachment}
+              uploadBusy={uploadBusy} fileInputRef={fileInputRef} />
+          ) : tab === 'attachments' ? (
+            <AttachmentsPane attachments={attachments} onUpload={uploadFiles}
+              onRemove={removeAttachment} uploadBusy={uploadBusy} project={active} />
           ) : tab === 'features' ? (
             <FeaturesPane opts={opts} ownedIds={ownedIds} features={features}
               onAdd={addFeature} onRemove={removeFeature} catalog={featsByCat} />
@@ -319,6 +368,40 @@ export default function AppStudio() {
                     <span className="truncate">{f.label_ar}</span>
                     <span className="text-amber-300 shrink-0">{f.cost}ن</span>
                   </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {active.design_brief && (
+            <div className="mb-4 p-3 bg-emerald-500/10 border border-emerald-500/30 rounded-xl" data-testid="brief-mini">
+              <div className="text-[10px] text-emerald-300 mb-1.5 uppercase flex items-center gap-1"><Palette className="w-3 h-3" /> Design Brief مطبّق</div>
+              <div className="flex gap-1 mb-1.5">
+                {(active.design_brief.palette || []).slice(0, 6).map((c, i) => (
+                  <div key={i} className="w-5 h-5 rounded border border-zinc-700" style={{ background: c }} title={c} />
+                ))}
+              </div>
+              {active.design_brief.layout_style && (
+                <div className="text-[10px] text-zinc-300 leading-5 truncate" title={active.design_brief.layout_style}>
+                  {active.design_brief.layout_style}
+                </div>
+              )}
+            </div>
+          )}
+
+          {attachments.length > 0 && (
+            <div className="mb-4">
+              <div className="text-[10px] text-zinc-500 mb-1.5 uppercase flex items-center gap-1"><Paperclip className="w-3 h-3" /> مرفقات ({attachments.length})</div>
+              <div className="flex gap-1 flex-wrap">
+                {attachments.slice(0, 6).map((a) => (
+                  a.kind === 'image' ? (
+                    <img key={a.id} src={`${AS}/attachment/${a.id}/raw`} alt={a.filename}
+                      className="w-9 h-9 rounded border border-zinc-700 object-cover" title={a.filename} />
+                  ) : (
+                    <div key={a.id} className="w-9 h-9 rounded border border-zinc-700 bg-zinc-900 flex items-center justify-center" title={a.filename}>
+                      <FileText className="w-4 h-4 text-rose-300" />
+                    </div>
+                  )
                 ))}
               </div>
             </div>
@@ -406,7 +489,8 @@ function EmptyState({ types, onCreate }) {
 }
 
 // ─── Chat pane (real chat with tool pills) ──────────────────────────
-function ChatPane({ messages, chatBusy, input, setInput, onSend, scrollRef, project }) {
+function ChatPane({ messages, chatBusy, input, setInput, onSend, scrollRef, project,
+                    attachments = [], onUpload, onRemoveAtt, uploadBusy, fileInputRef }) {
   return (
     <div className="h-full flex flex-col">
       <div ref={scrollRef} className="flex-1 overflow-y-auto p-6 space-y-4" data-testid="chat-scroll">
@@ -414,10 +498,13 @@ function ChatPane({ messages, chatBusy, input, setInput, onSend, scrollRef, proj
           <div className="max-w-2xl mx-auto bg-gradient-to-br from-indigo-500/10 to-violet-500/10 border border-indigo-500/30 rounded-2xl p-5 text-center">
             <Sparkles className="w-7 h-7 text-indigo-300 mx-auto mb-2" />
             <h3 className="text-lg font-bold mb-2">المنتج التنفيذي بالخدمة</h3>
-            <p className="text-sm text-zinc-300 leading-7 mb-4">
-              أنا ذكاء عملي للتطبيقات. أقدر أضيف ميزات، أبني الكود، أولّد نص تسويقي، أو أرشدك لخطوات الإطلاق.
-              مشروعك: <b className="text-indigo-200">{project?.title}</b>
+            <p className="text-sm text-zinc-300 leading-7 mb-3">
+              أنا ذكاء عملي للتطبيقات. أقدر <b className="text-indigo-200">أشوف صور التصاميم اللي ترفعها (PNG/JPG/PDF)</b>،
+              وأبني التطبيق بنفس الألوان والشاشات. أرفق ملفاتك من زر 📎، أو اكتب اللي تبيه.
             </p>
+            <div className="text-xs text-amber-200 bg-amber-500/10 border border-amber-500/30 rounded-lg p-2 mb-4">
+              💡 ارفق mockups/مخططات → الذكاء يحلّلها → يستخرج design brief → يبني التطبيق متطابق مع تصميمك.
+            </div>
             <div className="flex flex-wrap gap-2 justify-center">
               {QUICK_PROMPTS.map((p) => (
                 <button key={p} onClick={() => onSend(p)}
@@ -437,15 +524,51 @@ function ChatPane({ messages, chatBusy, input, setInput, onSend, scrollRef, proj
           </div>
         )}
       </div>
+
+      {/* Attachment thumbnails strip */}
+      {attachments.length > 0 && (
+        <div className="border-t border-zinc-800 bg-[#0e1118] px-4 py-2 overflow-x-auto" data-testid="att-strip">
+          <div className="flex items-center gap-2">
+            <span className="text-[10px] text-zinc-500 shrink-0 flex items-center gap-1"><Paperclip className="w-3 h-3" /> {attachments.length} مرفق:</span>
+            {attachments.map((a) => (
+              <div key={a.id} className="relative shrink-0 group" data-testid={`att-thumb-${a.id}`}>
+                {a.kind === 'image' ? (
+                  <img src={`${AS}/attachment/${a.id}/raw`} alt={a.filename}
+                    className="w-14 h-14 rounded-lg border border-zinc-700 object-cover" />
+                ) : (
+                  <div className="w-14 h-14 rounded-lg border border-zinc-700 bg-zinc-900 flex flex-col items-center justify-center">
+                    <FileText className="w-5 h-5 text-rose-300" />
+                    <span className="text-[8px] text-zinc-400 mt-0.5">PDF</span>
+                  </div>
+                )}
+                <button onClick={() => onRemoveAtt(a.id)} title={`حذف ${a.filename}`}
+                  className="absolute -top-1 -left-1 w-4 h-4 bg-rose-500 hover:bg-rose-400 rounded-full text-white text-[10px] flex items-center justify-center opacity-0 group-hover:opacity-100">
+                  <X className="w-2.5 h-2.5" />
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       <div className="border-t border-zinc-800 bg-[#0e1118] p-4">
-        <div className="max-w-3xl mx-auto flex gap-2">
+        <div className="max-w-3xl mx-auto flex gap-2 items-center">
+          <input ref={fileInputRef} type="file" multiple accept="image/*,application/pdf,.pdf,.png,.jpg,.jpeg,.webp"
+            className="hidden" onChange={(e) => { onUpload(e.target.files); e.target.value = ''; }}
+            data-testid="chat-file-input" />
+          <button onClick={() => fileInputRef.current?.click()} disabled={uploadBusy}
+            title="ارفق صور التصاميم أو ملف PDF"
+            className="p-2.5 bg-zinc-800 hover:bg-indigo-500/30 border border-zinc-700 rounded-xl text-zinc-300 disabled:opacity-50"
+            data-testid="chat-attach-btn">
+            {uploadBusy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Paperclip className="w-4 h-4" />}
+          </button>
           <textarea value={input} onChange={(e) => setInput(e.target.value)}
             onKeyDown={(e) => {
               if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); onSend(); }
             }}
             disabled={chatBusy} rows={1}
             className="flex-1 bg-zinc-900 border border-zinc-700 focus:border-indigo-500/50 rounded-xl px-4 py-2.5 text-sm resize-none outline-none"
-            placeholder="اطلب من الذكاء أي شي — يضيف ميزات، يبني، يحلّل، أو يولّد نص تسويقي…"
+            placeholder="اطلب من الذكاء أي شي — يضيف ميزات، يبني، يحلّل تصاميمك، يولّد نص تسويقي…"
             data-testid="chat-input" />
           <button onClick={() => onSend()} disabled={chatBusy || !input.trim()}
             className="bg-gradient-to-br from-indigo-500 to-violet-500 hover:from-indigo-400 hover:to-violet-400 disabled:opacity-50 text-white font-semibold px-5 rounded-xl text-sm flex items-center gap-1.5"
@@ -455,6 +578,103 @@ function ChatPane({ messages, chatBusy, input, setInput, onSend, scrollRef, proj
           </button>
         </div>
       </div>
+    </div>
+  );
+}
+
+// ─── Attachments pane (manage uploaded designs) ────────────────────
+function AttachmentsPane({ attachments, onUpload, onRemove, uploadBusy, project }) {
+  const ref = useRef(null);
+  const brief = project?.design_brief;
+  return (
+    <div className="overflow-y-auto h-full">
+      <div className="max-w-4xl mx-auto p-6 space-y-4">
+        <div className="bg-gradient-to-br from-indigo-500/10 to-violet-500/10 border border-indigo-500/30 rounded-2xl p-5">
+          <div className="flex items-center gap-2 mb-2"><Paperclip className="w-5 h-5 text-indigo-300" /><h2 className="text-lg font-bold">تصاميم العميل</h2></div>
+          <p className="text-sm text-zinc-300 leading-7 mb-4">
+            ارفع <b>صور mockups, مخططات السكين، أو ملفات PDF</b> فيها مواصفات التطبيق.
+            الذكاء راح يحلّلها بصرياً ويستخرج: الألوان، التايبوجرافي، أسماء الشاشات، ستايل التصميم.
+            محرك البناء راح يلتزم بها حرفياً عند توليد الكود.
+          </p>
+          <input ref={ref} type="file" multiple accept="image/*,application/pdf,.pdf,.png,.jpg,.jpeg,.webp"
+            className="hidden" onChange={(e) => { onUpload(e.target.files); e.target.value = ''; }}
+            data-testid="att-file-input" />
+          <button onClick={() => ref.current?.click()} disabled={uploadBusy}
+            className="w-full bg-gradient-to-br from-indigo-500 to-violet-500 hover:from-indigo-400 hover:to-violet-400 disabled:opacity-50 text-white font-semibold py-2.5 rounded-xl text-sm flex items-center justify-center gap-2"
+            data-testid="att-upload-btn">
+            {uploadBusy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
+            ارفع تصاميم / مخططات / PDF
+          </button>
+          <div className="text-[10px] text-zinc-500 mt-2 text-center">
+            مسموح: PNG, JPG, WEBP (حتى 4MB), PDF (حتى 12MB). الحد {12} ملف لكل مشروع.
+          </div>
+        </div>
+
+        {brief && (
+          <div className="bg-[#12161e] border border-emerald-500/30 rounded-2xl p-4" data-testid="design-brief-card">
+            <div className="flex items-center gap-2 mb-3">
+              <Palette className="w-4 h-4 text-emerald-300" />
+              <h3 className="text-sm font-bold text-emerald-200">Design Brief مُستخرج (يطبّقه البناء)</h3>
+            </div>
+            <div className="space-y-2 text-xs">
+              <div className="flex items-center gap-2">
+                <span className="text-zinc-500 w-20">Palette:</span>
+                <div className="flex gap-1">
+                  {(brief.palette || []).map((c, i) => (
+                    <div key={i} className="w-6 h-6 rounded border border-zinc-700" style={{ background: c }} title={c} />
+                  ))}
+                </div>
+                <span className="text-zinc-400 font-mono text-[10px]">{(brief.palette || []).join(' · ')}</span>
+              </div>
+              {brief.layout_style && <Row k="ستايل:" v={brief.layout_style} />}
+              {brief.navigation && <Row k="تنقل:" v={brief.navigation} />}
+              {brief.typography && <Row k="تايبو:" v={brief.typography} />}
+              {brief.screens?.length > 0 && <Row k="شاشات:" v={brief.screens.join(' · ')} />}
+              {brief.notes && <Row k="ملاحظات:" v={brief.notes} />}
+            </div>
+          </div>
+        )}
+
+        {attachments.length === 0 ? (
+          <div className="bg-[#12161e] border border-zinc-800 rounded-2xl p-8 text-center text-sm text-zinc-500">
+            ما فيه مرفقات بعد. ارفع تصاميمك أعلاه عشان الذكاء يبني التطبيق متطابق معها.
+          </div>
+        ) : (
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            {attachments.map((a) => (
+              <div key={a.id} className="bg-[#12161e] border border-zinc-800 rounded-xl overflow-hidden group" data-testid={`att-card-${a.id}`}>
+                {a.kind === 'image' ? (
+                  <img src={`${AS}/attachment/${a.id}/raw`} alt={a.filename}
+                    className="w-full h-40 object-cover bg-zinc-900" />
+                ) : (
+                  <div className="w-full h-40 bg-zinc-900 flex flex-col items-center justify-center">
+                    <FileText className="w-10 h-10 text-rose-300 mb-1" />
+                    <span className="text-[10px] text-zinc-400">PDF · {a.pdf_chars || 0} حرف</span>
+                  </div>
+                )}
+                <div className="p-2">
+                  <div className="text-xs font-medium truncate" title={a.filename}>{a.filename}</div>
+                  <div className="flex items-center justify-between mt-1">
+                    <span className="text-[10px] text-zinc-500">{Math.round((a.size || 0) / 1024)}KB</span>
+                    <button onClick={() => onRemove(a.id)} className="text-rose-300 hover:text-rose-200" data-testid={`att-del-${a.id}`}>
+                      <Trash2 className="w-3 h-3" />
+                    </button>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function Row({ k, v }) {
+  return (
+    <div className="flex items-start gap-2">
+      <span className="text-zinc-500 shrink-0">{k}</span>
+      <span className="text-zinc-200 leading-6">{v}</span>
     </div>
   );
 }
@@ -494,6 +714,8 @@ function ToolPill({ t }) {
     suggest_app_icon_prompt: { icon: <Sparkles className="w-3 h-3" />, color: 'fuchsia', label: 'prompt للأيقونة' },
     generate_marketing_copy: { icon: <Megaphone className="w-3 h-3" />, color: 'cyan', label: 'نص تسويقي' },
     recommend_next_steps: { icon: <Wand2 className="w-3 h-3" />, color: 'amber', label: 'خطوات تالية' },
+    analyze_uploaded_designs: { icon: <Palette className="w-3 h-3" />, color: 'emerald', label: 'حلّل التصاميم' },
+    generate_store_assets: { icon: <ShoppingBag className="w-3 h-3" />, color: 'sky', label: 'حزمة المتاجر' },
   };
   const meta = labels[t.name] || { icon: <Wrench className="w-3 h-3" />, color: 'zinc', label: t.name };
   return (

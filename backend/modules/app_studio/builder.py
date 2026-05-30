@@ -54,6 +54,13 @@ def _build_pwa_html(project: Dict[str, Any], features: List[Dict[str, Any]],
     desc = project.get("description") or "تطبيق تم توليده عبر زيتاكس"
     color = _safe_color(project.get("primary_color"))
     audience = project.get("target_audience") or ""
+    brief = project.get("design_brief") or {}
+    brief_palette = [c for c in (brief.get("palette") or []) if isinstance(c, str) and c.startswith("#")]
+    if brief.get("primary_color"):
+        color = _safe_color(brief["primary_color"], color)
+    accent = brief_palette[1] if len(brief_palette) > 1 else color
+    bg_dark = brief_palette[2] if len(brief_palette) > 2 else "#0b0d12"
+    brief_screens = [s for s in (brief.get("screens") or []) if isinstance(s, str)]
 
     feat_ids = {f.get("feature_id") for f in features}
     has_auth = "auth_basic" in feat_ids or "auth_social" in feat_ids
@@ -78,7 +85,7 @@ def _build_pwa_html(project: Dict[str, Any], features: List[Dict[str, Any]],
 
     tabs = ['<button class="tab active" data-target="home">الرئيسية</button>']
     screens = []
-    screens.append(_screen_home(title, desc, audience))
+    screens.append(_screen_home(title, desc, audience, brief))
     if has_search:
         tabs.append('<button class="tab" data-target="search">بحث</button>')
         screens.append(_screen_search())
@@ -95,8 +102,20 @@ def _build_pwa_html(project: Dict[str, Any], features: List[Dict[str, Any]],
         tabs.append('<button class="tab" data-target="auth">حسابي</button>')
         screens.append(_screen_auth())
 
+    # Inject extra screens from design brief (custom names the user gave us)
+    for i, sname in enumerate(brief_screens[:6]):
+        sid = f"brief{i+1}"
+        # avoid colliding with the default screens already added
+        if sname in ("الرئيسية", "بحث", "شات", "خريطة", "إعدادات", "حسابي"):
+            continue
+        tabs.append(f'<button class="tab" data-target="{sid}">{sname[:14]}</button>')
+        screens.append(_screen_brief(sid, sname, brief))
+
     screens_html = "\n".join(screens) + embedded_section
     tabs_html = "\n      ".join(tabs)
+    brief_meta = ""
+    if brief:
+        brief_meta = f"<!-- Design Brief honoured: layout={brief.get('layout_style')}; nav={brief.get('navigation')}; typo={brief.get('typography')} -->"
 
     return f"""<!doctype html>
 <html lang="ar" dir="rtl">
@@ -105,21 +124,23 @@ def _build_pwa_html(project: Dict[str, Any], features: List[Dict[str, Any]],
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
 <meta name="theme-color" content="{color}" />
 <title>{title}</title>
+{brief_meta}
 <link rel="manifest" href="manifest.json" />
 <link rel="apple-touch-icon" href="icons/icon-192.png" />
 <style>
 *{{box-sizing:border-box;margin:0;padding:0}}
-body{{font-family:'Tajawal','Cairo',system-ui,sans-serif;background:#0b0d12;color:#f1f5f9;min-height:100vh;display:flex;flex-direction:column}}
-header{{background:linear-gradient(135deg,{color} 0%,{color}cc 100%);padding:48px 20px 24px;text-align:center;color:#fff}}
+body{{font-family:'Tajawal','Cairo',system-ui,sans-serif;background:{bg_dark};color:#f1f5f9;min-height:100vh;display:flex;flex-direction:column}}
+header{{background:linear-gradient(135deg,{color} 0%,{accent} 100%);padding:48px 20px 24px;text-align:center;color:#fff}}
 header h1{{font-size:28px;font-weight:800;margin-bottom:8px}}
 header p{{opacity:.9;font-size:14px;line-height:1.7}}
 main{{flex:1;padding:24px 16px 100px;max-width:600px;margin:0 auto;width:100%}}
 section[data-screen]:not(.active){{display:none}}
 .card{{background:#12161e;border:1px solid #1f2937;border-radius:18px;padding:18px;margin-bottom:14px}}
-.card h2{{font-size:18px;margin-bottom:8px}}
+.card h2{{font-size:18px;margin-bottom:8px;color:{accent}}}
 .card p{{color:#94a3b8;font-size:14px;line-height:1.8}}
 .btn{{display:inline-block;background:{color};color:#fff;padding:12px 20px;border-radius:12px;text-decoration:none;border:none;font-weight:700;font-family:inherit;cursor:pointer;font-size:14px;width:100%;margin-top:8px}}
 .btn.outline{{background:transparent;border:1px solid {color};color:{color}}}
+.btn.accent{{background:{accent}}}
 .grid{{display:grid;grid-template-columns:1fr 1fr;gap:12px}}
 .stat{{background:#1a1f2c;border-radius:14px;padding:16px;text-align:center}}
 .stat b{{color:{color};font-size:22px;display:block}}
@@ -128,9 +149,11 @@ input,textarea{{background:#1a1f2c;border:1px solid #1f2937;border-radius:12px;p
 .chat-msg{{background:#1a1f2c;border-radius:14px;padding:12px;margin-bottom:8px;font-size:14px}}
 .chat-msg.me{{background:{color}33;text-align:left}}
 .legacy-embed{{transform:scale(.5);transform-origin:top right;width:200%;height:200vh;overflow:hidden}}
-nav.tabbar{{position:fixed;bottom:0;left:0;right:0;background:#0e1118;border-top:1px solid #1f2937;display:flex;justify-content:space-around;padding:12px env(safe-area-inset-right) calc(12px + env(safe-area-inset-bottom)) env(safe-area-inset-left);z-index:50}}
-.tab{{background:transparent;border:0;color:#64748b;font-family:inherit;font-size:12px;font-weight:600;padding:6px 10px;cursor:pointer;border-radius:8px}}
+nav.tabbar{{position:fixed;bottom:0;left:0;right:0;background:#0e1118;border-top:1px solid #1f2937;display:flex;justify-content:space-around;padding:12px env(safe-area-inset-right) calc(12px + env(safe-area-inset-bottom)) env(safe-area-inset-left);z-index:50;overflow-x:auto}}
+.tab{{background:transparent;border:0;color:#64748b;font-family:inherit;font-size:12px;font-weight:600;padding:6px 10px;cursor:pointer;border-radius:8px;white-space:nowrap}}
 .tab.active{{background:{color}22;color:{color}}}
+.palette-strip{{display:flex;gap:6px;margin-top:10px}}
+.palette-strip span{{flex:1;height:24px;border-radius:6px}}
 </style>
 </head>
 <body>
@@ -145,7 +168,6 @@ nav.tabbar{{position:fixed;bottom:0;left:0;right:0;background:#0e1118;border-top
   {tabs_html}
 </nav>
 <script>
-// Mini tab-router
 const tabs = document.querySelectorAll('.tab');
 const screens = document.querySelectorAll('section[data-screen]');
 function show(name){{
@@ -153,10 +175,7 @@ function show(name){{
   screens.forEach(s=>{{ s.classList.toggle('active', s.dataset.screen===name); s.hidden = s.dataset.screen!==name; }});
 }}
 tabs.forEach(t=>t.addEventListener('click',()=>show(t.dataset.target)));
-// Default to first screen
 show(document.querySelector('section[data-screen]').dataset.screen);
-
-// PWA install prompt
 let deferredPrompt;
 window.addEventListener('beforeinstallprompt', e=>{{ e.preventDefault(); deferredPrompt = e; }});
 if ('serviceWorker' in navigator) {{
@@ -167,12 +186,23 @@ if ('serviceWorker' in navigator) {{
 </html>"""
 
 
-def _screen_home(title, desc, audience):
+def _screen_home(title, desc, audience, brief=None):
+    brief = brief or {}
+    palette = (brief.get("palette") or [])[:5]
+    palette_html = ""
+    if palette:
+        spans = "".join(f'<span style="background:{c}"></span>' for c in palette)
+        palette_html = f'<div class="palette-strip" title="palette من تصاميمك">{spans}</div>'
+    layout_note = ""
+    if brief.get("layout_style"):
+        layout_note = f'<p style="margin-top:8px;color:#94a3b8;font-size:12px">🎨 ستايل التصميم: {brief["layout_style"]}</p>'
     return f"""<section data-screen="home" class="active">
   <div class="card">
     <h2>👋 أهلاً بك في {title}</h2>
     <p>{desc}</p>
     {('<p style="margin-top:8px;color:#94a3b8">الجمهور المستهدف: '+audience+'</p>') if audience else ''}
+    {layout_note}
+    {palette_html}
   </div>
   <div class="grid">
     <div class="stat"><b>0</b><span>المستخدمون</span></div>
@@ -182,8 +212,23 @@ def _screen_home(title, desc, audience):
   </div>
   <div class="card" style="margin-top:14px">
     <h2>ابدأ الآن</h2>
-    <p>هذا تطبيق مبدئي مُولّد من زيتاكس. كل صفحة وميزة في الـtabs أسفل الشاشة قابلة للتعديل.</p>
+    <p>هذا تطبيق مبدئي مُولّد من زيتاكس بناءً على {('التصاميم اللي رفعتها' if brief else 'مواصفاتك')}. كل صفحة في الـtabs قابلة للتعديل.</p>
     <button class="btn" onclick="alert('متاح بعد الربط مع backend')">إنشاء حساب</button>
+  </div>
+</section>"""
+
+
+def _screen_brief(sid, sname, brief=None):
+    brief = brief or {}
+    return f"""<section data-screen="{sid}">
+  <div class="card">
+    <h2>{sname}</h2>
+    <p>هذه الشاشة مستخرجة من التصميم اللي رفعته. {('ستايل: ' + brief.get('layout_style','')) if brief.get('layout_style') else ''}</p>
+    <div class="grid" style="margin-top:12px">
+      <div class="stat"><b>—</b><span>عنصر 1</span></div>
+      <div class="stat"><b>—</b><span>عنصر 2</span></div>
+    </div>
+    <button class="btn accent" style="margin-top:12px">إجراء رئيسي</button>
   </div>
 </section>"""
 
