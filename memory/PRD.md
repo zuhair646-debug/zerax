@@ -5,6 +5,93 @@
 
 ## User Language: Arabic (العربية)
 
+### 🆕 Feb 21, 2026 (الجولة 2) — APP STUDIO MULTIMODAL + STORE WIZARD ✅
+
+**طلب المستخدم**: "لازم يكون الذكاء الصناعي قادر على استقبال الصور والخرائط. مثلاً يجي عميل عنده صور للتصاميم حق الموقع بشكل كامل جاهزة مع الصفحات. المفترض الذكاء مجرد ما يرسل العميل صورة للمخطط، يفهم المشروع كامل ويبدأ ينفذ بنفس التصاميم. يستخدم التصاميم المرسلة له في PDF وكذا."
+
+**Auto-commits** عبر منصة Emergent.
+
+📎 **رفع المرفقات (Multimodal)**:
+- `attachments.py` جديد: يقبل **PNG/JPG/WEBP** (حتى 4MB) و **PDF** (حتى 12MB).
+- ضغط تلقائي للصور: max 1600px JPEG q=82 → توفير bytes.
+- استخراج نص PDF عبر pypdf (50 صفحة، 30K حرف).
+- Cap: 12 مرفق لكل مشروع (الأقدم يُحذف تلقائياً).
+- collection جديد: `app_studio_attachments`.
+- 4 endpoints جديدة:
+  - `POST /api/app-studio/project/{pid}/upload` (multipart)
+  - `GET /api/app-studio/project/{pid}/attachments`
+  - `DELETE /api/app-studio/attachment/{aid}`
+  - `GET /api/app-studio/attachment/{aid}/raw` (صور كـbinary, PDFs كـtext JSON)
+
+👁️ **GPT-4o Vision في producer-chat**:
+- `fetch_recent_for_vision()` يجلب آخر 6 صور + 18K حرف من PDFs.
+- Producer-chat يحقن `image_url` content blocks في آخر user message → الذكاء يشوف التصاميم فعلياً.
+- نص PDFs يُحقن كـsystem message قبل system prompt الأساسي.
+- `build_attachment_system_message()` يخبر الذكاء بقواعد التعامل مع المرفقات ("اعتبرها مصدر الحقيقة. لا تخترع شي يخالفها").
+
+🎨 **أداة `analyze_uploaded_designs`** (الأهم):
+- الذكاء يستدعيها بعد فحص الصور → يستخرج JSON مهيكل:
+  - `palette`: 3-8 hex colors
+  - `screens`: أسماء الشاشات بالعربي
+  - `layout_style`: وصف الستايل
+  - `navigation`: نمط التنقل (bottom-tabs / top-nav / sidebar / drawer)
+  - `typography`: تلميحات الخط
+  - `primary_color`: اللون الرئيسي
+  - `notes`: ملاحظات هامة
+- يُحفظ على `project.design_brief` و يُحدّث `project.primary_color`.
+
+🏗️ **محرك البناء يحترم Design Brief** (`builder.py`):
+- `_build_pwa_html` الآن يقرأ `project.design_brief`:
+  - `color` ← `brief.primary_color`
+  - `accent` ← `brief.palette[1]`
+  - `bg_dark` ← `brief.palette[2]`
+  - Header gradient = `color → accent` (بدل `color → color cc`)
+  - Card titles بـ`accent` color
+  - زر `.btn.accent` جديد
+  - **شاشات مخصصة من `brief.screens`**: كل اسم شاشة جديد يُضاف tab + section عبر `_screen_brief`
+  - palette-strip معروض في الـHome screen
+  - تعليق HTML comment: `Design Brief honoured`
+  - ستايل التصميم معروض كـ"🎨 ستايل التصميم: ..." في الـHome
+
+📱 **أداة `generate_store_assets`** (App Store Submission Wizard):
+- `store_title` (30 حرف) + `subtitle` (80 حرف) + `full_description_ar` (Arabic، 1500+ حرف)
+- `keywords`: 8 كلمات مستخرجة تلقائياً من العنوان/الوصف
+- `screenshot_prompts`: 5 prompts سينمائية (Hero, Feed, Detail, Profile, Success) — جاهزة للـNano Banana
+- `submission_guide`:
+  - **app_store_ar**: 7 خطوات Apple ($99/سنة، Bundle ID، Archive، Review)
+  - **play_store_ar**: 7 خطوات Google Play ($25 مرة واحدة، AAB، testing tracks)
+- يُحفظ على `project.store_assets`.
+
+📲 **Frontend** (`AppStudio.js`):
+- زر 📎 paperclip في chat composer → يفتح file picker متعدد
+- شريط مصغّر `att-strip` فوق الـcomposer: thumbnails + زر حذف بالـhover
+- Tab جديد "📎 المرفقات (N)" بـbadge العدد
+- `AttachmentsPane`:
+  - زر رفع كبير + شرح وافي
+  - بطاقة "Design Brief مُستخرج" بكل التفاصيل (palette swatches, layout, screens, notes)
+  - Grid معاينات للصور + PDF placeholders
+- Summary panel يمين:
+  - بطاقة "DESIGN BRIEF مطبّق" بـpalette swatches + layout note
+  - شريط "📎 مرفقات (N)" بـthumbnails صغيرة
+- Quick Prompts محدّثة: "حلّل التصاميم"، "جهّز حزمة النشر للمتاجر"
+- Tool pills جديدة: `analyze_uploaded_designs` (palette icon, emerald), `generate_store_assets` (shopping icon, sky)
+
+**اختبار** (testing_agent_v3 iteration_30):
+- ✅ **Backend 10/10 (100%)**: upload PNG/PDF/reject, list/delete attachments, raw fetch, vision pipeline saves design_brief, store_assets generated, build honours palette + layout_style
+- ✅ **Frontend 100%**: المرفقات tab, AttachmentsPane, paperclip btn, att-strip, brief-mini, design-brief-card
+- ✅ Smoke E2E: رفعت PNG (navy+orange) → AI استخرج `["#0b1d3a","#f4a261"]` → build ولّد HTML فيه نفس الألوان + palette-strip + ستايل "بسيط + بانر"
+
+**Files**:
+- NEW: `backend/modules/app_studio/attachments.py` (~210 سطر)
+- MODIFIED: `backend/modules/app_studio/__init__.py` (4 attachment endpoints + vision integration)
+- MODIFIED: `backend/modules/app_studio/tools.py` (analyze_uploaded_designs + generate_store_assets + system_prompt v2)
+- MODIFIED: `backend/modules/app_studio/builder.py` (design_brief honoured: palette/accent/bg + custom screens + palette-strip)
+- MODIFIED: `frontend/src/pages/AppStudio.js` (~970 سطر: AttachmentsPane + ChatPane upgraded + summary brief-mini)
+- MODIFIED: `backend/requirements.txt` (+ pypdf==6.12.0)
+
+⚠️ **PUSH PENDING**: 7 commits ahead of origin/main. Use "Save to Github" feature.
+
+
 ### 🆕 Feb 21, 2026 — APP STUDIO v1 (INTEGRATED) ✅
 
 **طلب المستخدم**: "خلص لي كل اللي ذكرته. اه مرة واحدة ابي شي متكامل من الالف الى الياء. تصميم ممتاز. الشات لازم يكون متكامل، فيه الأدوات وفيه كل شي. ومرتب وفي ذكاء قادر على كل شي."
