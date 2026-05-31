@@ -308,10 +308,14 @@ async def stream_via_openai(
     summarize: Callable[[str, Dict[str, Any]], str],
     preview: Callable[[str, Dict[str, Any]], str],
     trim_result_for_llm: Callable[[Dict[str, Any]], Dict[str, Any]],
+    *,
+    api_url: str = OPENAI_URL,
+    model: str = OPENAI_MODEL,
+    provider_label: str = "OPENAI",
 ):
     if not api_key:
         yield {"type": "error",
-               "message": "OPENAI_API_KEY غير مضبوط في Railway. أضف مفتاحك من platform.openai.com/api-keys."}
+               "message": f"{provider_label}_API_KEY غير مضبوط في Railway."}
         return
 
     if len(anthropic_msgs) > MAX_HISTORY_TURNS:
@@ -330,14 +334,14 @@ async def stream_via_openai(
             async with httpx.AsyncClient(timeout=240) as c:
                 async with c.stream(
                     "POST",
-                    OPENAI_URL,
+                    api_url,
                     headers={
                         "Authorization": f"Bearer {api_key}",
                         "Content-Type": "application/json",
                         "Accept": "text/event-stream",
                     },
                     json={
-                        "model": OPENAI_MODEL,
+                        "model": model,
                         "messages": msgs,
                         "tools": openai_tools,
                         "tool_choice": "auto",
@@ -411,7 +415,7 @@ async def stream_via_openai(
                 "type": "usage",
                 "input": in_tok, "output": out_tok,
                 "cached_read": 0, "cost_usd": round(cost, 4),
-                "provider": "openai",
+                "provider": provider_label.lower(),
             }
 
         tool_calls = list(tool_calls_buffer.values())
@@ -684,3 +688,31 @@ async def stream_via_gemini(
 
     yield {"type": "text", "content": "\n(وصلت لحد الـiterations — اطلب تكملة لو تبي.)"}
     yield {"type": "done"}
+
+
+# ════════════════════════════════════════════════════════════════════════
+# Kimi (Moonshot AI) and DeepSeek — both expose OpenAI-compatible API
+# ════════════════════════════════════════════════════════════════════════
+KIMI_URL = "https://api.moonshot.ai/v1/chat/completions"
+KIMI_MODEL = "kimi-k2-turbo-preview"
+
+DEEPSEEK_URL = "https://api.deepseek.com/v1/chat/completions"
+DEEPSEEK_MODEL = "deepseek-chat"
+
+
+async def stream_via_kimi(*args, **kwargs):
+    """Stream via Kimi K2.6 (Moonshot AI). OpenAI-compatible API."""
+    kwargs.setdefault("api_url", KIMI_URL)
+    kwargs.setdefault("model", KIMI_MODEL)
+    kwargs.setdefault("provider_label", "MOONSHOT")
+    async for evt in stream_via_openai(*args, **kwargs):
+        yield evt
+
+
+async def stream_via_deepseek(*args, **kwargs):
+    """Stream via DeepSeek V3. OpenAI-compatible API."""
+    kwargs.setdefault("api_url", DEEPSEEK_URL)
+    kwargs.setdefault("model", DEEPSEEK_MODEL)
+    kwargs.setdefault("provider_label", "DEEPSEEK")
+    async for evt in stream_via_openai(*args, **kwargs):
+        yield evt

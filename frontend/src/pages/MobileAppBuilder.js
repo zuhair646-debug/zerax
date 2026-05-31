@@ -241,10 +241,10 @@ export default function MobileAppBuilder() {
   };
 
   return (
-    <div className="min-h-screen bg-[#06060f] text-white" dir="rtl" data-testid="mobile-app-builder">
+    <div className="min-h-screen bg-[#06060f] text-white flex flex-col" dir="rtl" data-testid="mobile-app-builder">
       {/* HEADER */}
-      <div className="border-b border-cyan-400/15 bg-[#0a0a14]/80 backdrop-blur-md sticky top-0 z-30">
-        <div className="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between">
+      <div className="border-b border-cyan-400/15 bg-[#0a0a14]/80 backdrop-blur-md sticky top-0 z-30 flex-shrink-0">
+        <div className="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between flex-wrap gap-2">
           <div className="flex items-center gap-2">
             <button onClick={() => navigate('/dashboard')} className="p-2 rounded-lg hover:bg-white/5" data-testid="back-btn">
               <ChevronRight className="w-5 h-5 rotate-180" />
@@ -255,7 +255,7 @@ export default function MobileAppBuilder() {
               <div className="text-[10px] text-white/40">دردشة → معاينة مباشرة → احفظ</div>
             </div>
           </div>
-          <div className="flex items-center gap-2 text-xs">
+          <div className="flex items-center gap-2 text-xs flex-wrap">
             <div className="px-2.5 py-1 rounded-full bg-cyan-500/10 border border-cyan-400/30 text-cyan-200 font-bold" data-testid="credits-pill">
               💎 {credits}
             </div>
@@ -273,11 +273,11 @@ export default function MobileAppBuilder() {
       </div>
 
       {/* MAIN GRID: chat (left) + iPhone preview (right) */}
-      <div className="max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-[1fr_400px] gap-4 p-4 h-[calc(100vh-65px)]">
+      <div className="flex-1 min-h-0 max-w-7xl mx-auto w-full grid grid-cols-1 lg:grid-cols-[1fr_400px] gap-4 p-4 overflow-hidden">
         {/* CHAT PANEL */}
-        <div className="flex flex-col bg-[#0a0a14]/60 border border-cyan-400/15 rounded-2xl overflow-hidden">
+        <div className="flex flex-col bg-[#0a0a14]/60 border border-cyan-400/15 rounded-2xl overflow-hidden min-h-[60vh] lg:min-h-0">
           {/* Messages */}
-          <div ref={scrollRef} className="flex-1 overflow-y-auto p-4">
+          <div ref={scrollRef} className="flex-1 overflow-y-auto p-4 min-h-0">
             {messages.map((m, i) => (
               <Bubble key={i} role={m.role} content={m.content} progressNote={m.progressNote} />
             ))}
