@@ -2383,11 +2383,49 @@ async def _autocoder_stream(messages: List[Dict[str, Any]], model: str = "claude
     """Yields events: {type:'text'|'tool'|'done'|'error', ...}
 
     Routes to the chosen provider:
+      - 'auto' (smart router): picks cheapest *capable* provider per turn
       - 'claude' (default): direct Anthropic SDK with native tool calling (highest quality)
-      - 'groq': Llama 3.3 70B via Groq (FREE, fast, supports tool calling)
-      - 'gemini': Gemini 2.0 Flash via Google (FREE tier, supports tool calling)
+      - 'openai' / 'gpt5': GPT-5.5 via OpenAI
+      - 'kimi' / 'moonshot': Kimi K2.6 (Chinese, cheap+strong)
+      - 'deepseek': DeepSeek V3 (Chinese, cheapest coder)
+      - 'groq': Llama 3.3 70B via Groq (FREE, fast)
+      - 'gemini': Gemini 2.5 Flash via Google (FREE)
     """
     keyinfo = _resolve_llm_key()
+
+    # ── Smart Auto Router ─────────────────────────────────────────────
+    auto_decision: Optional[Dict[str, str]] = None
+    if model == "auto":
+        try:
+            from .auto_router import pick_provider, explain_for_ui
+            # Find the last user message text + check for image attachments
+            last_user_text = ""
+            has_images = False
+            for m in reversed(messages):
+                if m.get("role") == "user":
+                    c = m.get("content")
+                    if isinstance(c, str):
+                        last_user_text = c
+                    elif isinstance(c, list):
+                        for blk in c:
+                            if isinstance(blk, dict):
+                                if blk.get("type") == "text":
+                                    last_user_text += " " + (blk.get("text") or "")
+                                elif blk.get("type") in ("image", "image_url"):
+                                    has_images = True
+                    break
+            auto_decision = pick_provider(last_user_text, has_images, keyinfo["mode"])
+            model = auto_decision["provider"]
+            # Emit a pill so the UI shows what was chosen
+            yield {"type": "auto_route",
+                   "provider": auto_decision["provider"],
+                   "task": auto_decision["task"],
+                   "reason": auto_decision["reason"],
+                   "est_cost_usd_per_turn": auto_decision["est_cost_usd_per_turn"],
+                   "fallback_chain": auto_decision["fallback_chain"]}
+        except Exception as e:
+            logger.error(f"auto_router failed: {e}", exc_info=True)
+            model = "claude"  # safe default
 
     # Build a runtime-truth banner so the AI cannot hallucinate about env/tools
     env_banner = await _build_env_truth_banner()  # noqa: F821

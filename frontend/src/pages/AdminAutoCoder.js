@@ -67,6 +67,7 @@ const TOOL_LABEL = {
 };
 
 const MODEL_OPTIONS = [
+  { id: 'auto', label: '🤖 Auto Smart (مُوصى به)', cost: 'يختار أرخص نموذج قادر تلقائياً', tone: 'amber', icon: Zap },
   { id: 'openai', label: 'GPT-5.5 (الأقوى للبرمجة)', cost: 'مدفوع — الأقوى', tone: 'violet', icon: Sparkles },
   { id: 'claude', label: 'Claude Sonnet 4.5', cost: 'مدفوع — الأذكى', tone: 'amber', icon: Sparkles },
   { id: 'kimi', label: 'Kimi K2.6 (Moonshot 🇨🇳)', cost: 'مدفوع — أرخص بكثير', tone: 'sky', icon: Sparkles },
@@ -131,8 +132,8 @@ export default function AdminAutoCoder() {
   const [showSidebar, setShowSidebar] = useState(false);
   const [keyStatus, setKeyStatus] = useState(null);
   const [model, setModel] = useState(() => {
-    if (typeof window === 'undefined') return 'claude';
-    return localStorage.getItem(MODEL_KEY) || 'claude';
+    if (typeof window === 'undefined') return 'auto';
+    return localStorage.getItem(MODEL_KEY) || 'auto';
   });
   const [showModelMenu, setShowModelMenu] = useState(false);
 
@@ -562,6 +563,11 @@ export default function AdminAutoCoder() {
                 }
               }
               loadConversations();
+            } else if (evt.type === 'auto_route') {
+              // Smart Router decided which provider to use
+              toolEvents.push({ ...evt, _isAutoRoute: true });
+              setCurrentTools([...toolEvents]);
+              toast.success(`🤖 Auto: ${evt.task} → ${evt.provider}`, { duration: 3500, description: evt.reason });
             } else if (evt.type === 'usage') {
               // Real-time cost update — append to current tools list as a special pill
               setCurrentTools((prev) => [...prev, { ...evt, _isUsage: true }]);
@@ -1138,6 +1144,25 @@ function MessageBubble({ m }) {
 
 function ToolPill({ t }) {
   const [open, setOpen] = useState(false);
+  // Auto Smart Router decision pill
+  if (t._isAutoRoute) {
+    return (
+      <div data-testid="auto-route-pill" className="my-1.5 rounded-lg border border-amber-400/40 bg-gradient-to-l from-amber-500/[0.10] to-amber-500/[0.04] px-3 py-2 text-xs flex items-center gap-2">
+        <Zap className="w-3.5 h-3.5 text-amber-300" />
+        <span className="font-bold text-amber-200">Auto Smart</span>
+        <span className="text-white/50">·</span>
+        <span className="text-white/70">{t.task}</span>
+        <span className="text-white/30">→</span>
+        <span className="font-bold text-amber-300">{t.provider}</span>
+        <span className="text-white/40 truncate flex-1">{t.reason}</span>
+        {t.est_cost_usd_per_turn !== undefined && (
+          <span className="text-[10px] text-emerald-300/80 font-mono shrink-0">
+            ~${t.est_cost_usd_per_turn.toFixed(4)}
+          </span>
+        )}
+      </div>
+    );
+  }
   // Special rendering for usage events (must come AFTER hooks)
   if (t._isUsage) {
     return (
