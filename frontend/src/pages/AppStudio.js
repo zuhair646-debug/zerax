@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
+import ChatShellLayout from '@/components/ChatShellLayout';
 import {
   Smartphone, Plus, Loader2, Check, ArrowLeft, Sparkles, MessageSquare,
   Trash2, Layers, Megaphone, Coins, ShoppingBag, Wand2, Upload,
@@ -63,6 +64,17 @@ export default function AppStudio() {
   const [attachments, setAttachments] = useState([]);
   const [uploadBusy, setUploadBusy] = useState(false);
   const fileInputRef = useRef(null);
+
+  // User credits for the shell top bar
+  const [credits, setCredits] = useState(0);
+  useEffect(() => {
+    fetch(`${process.env.REACT_APP_BACKEND_URL}/api/auth/me`, {
+      headers: { Authorization: `Bearer ${localStorage.getItem('token') || ''}` },
+    })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => d && setCredits(d.user?.credits ?? d.credits ?? 0))
+      .catch(() => {});
+  }, []);
 
   // ── Bootstrap ─────────────────────────────────────────────────────
   useEffect(() => {
@@ -229,218 +241,189 @@ export default function AppStudio() {
   const totalCost = ownedCost + buildCost;
   const buildOut = active?.build_output;
 
-  return (
-    <div className="min-h-screen bg-[#0b0d12] text-zinc-100 flex" dir="rtl" data-testid="app-studio-page">
-      {/* ── LEFT Sidebar: projects ───────────────────────────────── */}
-      <aside className="w-64 border-l border-zinc-800 bg-[#0e1118] flex flex-col shrink-0">
-        <div className="p-4 border-b border-zinc-800 flex items-center gap-3">
-          <button onClick={() => navigate('/dashboard')} className="p-2 rounded-lg hover:bg-zinc-800" data-testid="back-btn">
-            <ArrowLeft className="w-4 h-4" />
-          </button>
-          <div className="flex items-center gap-2">
-            <Smartphone className="w-5 h-5 text-indigo-400" />
-            <h1 className="text-sm font-semibold">استوديو التطبيقات</h1>
-          </div>
-        </div>
-        <button onClick={() => setShowNew(true)}
-          className="m-3 px-3 py-2 bg-gradient-to-br from-indigo-500 to-violet-500 hover:from-indigo-400 hover:to-violet-400 rounded-lg text-sm font-semibold text-white flex items-center justify-center gap-2 shadow-lg shadow-indigo-500/20"
-          data-testid="new-project-btn">
-          <Plus className="w-4 h-4" /> مشروع جديد
-        </button>
-        <div className="flex-1 overflow-y-auto px-3 pb-3">
-          <div className="text-xs text-zinc-500 px-2 pb-2">مشاريعك ({projects.length})</div>
-          {projects.length === 0 && <div className="text-xs text-zinc-600 px-2 py-6 text-center">ما عندك مشاريع.</div>}
-          {projects.map((p) => {
-            const Icon = TYPE_ICON[p.type] || Smartphone;
-            return (
-              <button key={p.id} onClick={() => setActiveId(p.id)}
-                className={`w-full text-right px-3 py-2 mb-1 rounded-lg text-sm transition ${
-                  activeId === p.id ? 'bg-indigo-500/15 text-indigo-100 border border-indigo-500/30'
-                                    : 'hover:bg-zinc-800 text-zinc-300 border border-transparent'
-                }`} data-testid={`project-item-${p.id}`}>
-                <div className="flex items-center gap-2">
-                  <Icon className="w-3.5 h-3.5 text-zinc-400 shrink-0" />
-                  <span className="font-medium truncate">{p.title}</span>
-                </div>
-                <div className="text-[10px] text-zinc-500 mt-0.5">{p.type_label} · {p.features_count || 0} ميزة</div>
-              </button>
-            );
-          })}
-        </div>
-      </aside>
+  // Map projects to ChatShell sessions format
+  const shellSessions = projects.map((p) => ({
+    id: p.id,
+    title: p.title,
+    preview: p.description || p.type_label,
+    turns: p.features_count || 0,
+    complete: !!p.build_output,
+    updated_at: p.updated_at,
+  }));
 
-      {/* ── CENTER pane ──────────────────────────────────────────── */}
-      <main className="flex-1 flex flex-col min-w-0">
-        <header className="border-b border-zinc-800 px-6 py-3 flex items-center justify-between bg-[#0e1118]">
-          <div className="min-w-0">
-            {active ? (
-              <>
-                <div className="text-sm font-semibold truncate flex items-center gap-2">
-                  {active.title}
-                  <span className={`text-[10px] px-2 py-0.5 rounded-full bg-gradient-to-br ${TYPE_COLOR[active.type] || ''} border`}>{active.type_label}</span>
-                  {buildOut && <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/20 border border-emerald-500/40 text-emerald-200">مبني ✓</span>}
-                </div>
-                <div className="text-xs text-zinc-500 truncate mt-0.5">{active.description || 'بلا وصف'}</div>
-              </>
+  return (
+    <ChatShellLayout
+      title="استوديو التطبيقات"
+      sessions={shellSessions}
+      activeId={activeId}
+      onSelect={setActiveId}
+      onNewChat={() => setShowNew(true)}
+      onDelete={async (pid) => {
+        if (!window.confirm('احذف المشروع نهائياً؟')) return;
+        await fetch(`${AS}/projects/${pid}`, { method: 'DELETE', headers: auth() });
+        if (activeId === pid) setActiveId('');
+        loadProjects();
+      }}
+      credits={credits}
+      emptyHint="أنشئ تطبيقك الأول لتبدأ"
+      rightExtras={active && (
+        <button onClick={openImport}
+          className="text-[11px] px-2.5 py-1 rounded-full bg-white/5 border border-white/10 hover:bg-white/10 flex items-center gap-1" data-testid="import-existing-btn">
+          <Upload className="w-3 h-3" /> استيراد
+        </button>
+      )}>
+      <div className="h-full flex" dir="rtl" data-testid="app-studio-page">
+        {/* CENTER PANE */}
+        <div className="flex-1 flex flex-col min-w-0">
+          {/* Project header */}
+          {active && (
+            <div className="border-b border-white/10 px-4 py-2.5 bg-white/[0.02]">
+              <div className="text-sm font-semibold truncate flex items-center gap-2">
+                {active.title}
+                <span className={`text-[10px] px-2 py-0.5 rounded-full bg-gradient-to-br ${TYPE_COLOR[active.type] || ''} border`}>{active.type_label}</span>
+                {buildOut && <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/20 border border-emerald-500/40 text-emerald-200">مبني ✓</span>}
+              </div>
+              <div className="text-[11px] text-white/40 truncate mt-0.5">{active.description || 'بلا وصف'}</div>
+            </div>
+          )}
+
+          {/* Tabs */}
+          {active && (
+            <div className="border-b border-white/10 px-4 flex items-center gap-1 bg-white/[0.02] overflow-x-auto">
+              {[
+                { id: 'chat',        label: 'محادثة الذكاء', icon: <MessageSquare className="w-3.5 h-3.5" /> },
+                { id: 'attachments', label: `المرفقات${attachments.length ? ` (${attachments.length})` : ''}`, icon: <Paperclip className="w-3.5 h-3.5" /> },
+                { id: 'features',    label: 'الميزات',        icon: <Wand2 className="w-3.5 h-3.5" /> },
+                { id: 'preview',     label: 'معاينة',          icon: <Eye className="w-3.5 h-3.5" />, disabled: !buildOut },
+                { id: 'imports',     label: 'المستوردات',     icon: <Upload className="w-3.5 h-3.5" /> },
+              ].map((t) => (
+                <button key={t.id} onClick={() => !t.disabled && setTab(t.id)} disabled={t.disabled}
+                  className={`px-3 py-2 text-xs flex items-center gap-1.5 border-b-2 transition whitespace-nowrap ${
+                    tab === t.id ? 'border-cyan-400 text-cyan-200'
+                                : t.disabled ? 'border-transparent text-zinc-600 cursor-not-allowed'
+                                              : 'border-transparent text-zinc-400 hover:text-zinc-200'
+                  }`} data-testid={`tab-${t.id}`}>
+                  {t.icon} {t.label}
+                  {t.disabled && <span className="text-[9px] text-zinc-600">(ابنِ أولاً)</span>}
+                </button>
+              ))}
+            </div>
+          )}
+
+          <div className="flex-1 min-h-0 overflow-hidden">
+            {!active ? (
+              <EmptyState types={opts.project_types} onCreate={() => setShowNew(true)} />
+            ) : tab === 'chat' ? (
+              <ChatPane messages={messages} chatBusy={chatBusy} input={input} setInput={setInput}
+                onSend={send} scrollRef={scrollRef} project={active}
+                attachments={attachments} onUpload={uploadFiles} onRemoveAtt={removeAttachment}
+                uploadBusy={uploadBusy} fileInputRef={fileInputRef} />
+            ) : tab === 'attachments' ? (
+              <AttachmentsPane attachments={attachments} onUpload={uploadFiles}
+                onRemove={removeAttachment} uploadBusy={uploadBusy} project={active} />
+            ) : tab === 'features' ? (
+              <FeaturesPane opts={opts} ownedIds={ownedIds} features={features}
+                onAdd={addFeature} onRemove={removeFeature} catalog={featsByCat} />
+            ) : tab === 'preview' ? (
+              <PreviewPane build={buildOut} pid={activeId} />
             ) : (
-              <div className="text-sm text-zinc-400">اختر مشروع أو أنشئ جديد</div>
+              <ImportsPane project={active} onImportOpen={openImport} />
             )}
           </div>
-          {active && (
-            <div className="flex items-center gap-2">
-              <button onClick={openImport}
-                className="text-xs px-3 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 flex items-center gap-1.5" data-testid="import-existing-btn">
-                <Upload className="w-3 h-3" /> استيراد سابق
-              </button>
-            </div>
-          )}
-        </header>
+        </div>
 
-        {/* Tabs */}
+        {/* RIGHT Summary panel */}
         {active && (
-          <div className="border-b border-zinc-800 px-4 flex items-center gap-1 bg-[#0e1118]/60 overflow-x-auto">
-            {[
-              { id: 'chat',        label: 'محادثة الذكاء', icon: <MessageSquare className="w-3.5 h-3.5" /> },
-              { id: 'attachments', label: `المرفقات${attachments.length ? ` (${attachments.length})` : ''}`, icon: <Paperclip className="w-3.5 h-3.5" /> },
-              { id: 'features',    label: 'الميزات',        icon: <Wand2 className="w-3.5 h-3.5" /> },
-              { id: 'preview',     label: 'معاينة',          icon: <Eye className="w-3.5 h-3.5" />, disabled: !buildOut },
-              { id: 'imports',     label: 'المستوردات',     icon: <Upload className="w-3.5 h-3.5" /> },
-            ].map((t) => (
-              <button key={t.id} onClick={() => !t.disabled && setTab(t.id)} disabled={t.disabled}
-                className={`px-3 py-2 text-xs flex items-center gap-1.5 border-b-2 transition whitespace-nowrap ${
-                  tab === t.id ? 'border-indigo-400 text-indigo-200'
-                              : t.disabled ? 'border-transparent text-zinc-600 cursor-not-allowed'
-                                            : 'border-transparent text-zinc-400 hover:text-zinc-200'
-                }`} data-testid={`tab-${t.id}`}>
-                {t.icon} {t.label}
-                {t.disabled && <span className="text-[9px] text-zinc-600">(ابنِ أولاً)</span>}
-              </button>
-            ))}
-          </div>
+          <aside className="w-72 border-r border-white/10 bg-white/[0.02] p-4 overflow-y-auto shrink-0 hidden xl:block" data-testid="summary-panel">
+            <h3 className="text-sm font-semibold mb-3 flex items-center gap-2"><ShoppingBag className="w-4 h-4 text-cyan-400" /> ملخّص المشروع</h3>
+            <div className="bg-gradient-to-br from-cyan-500/15 to-blue-500/10 border border-cyan-500/40 rounded-xl p-3 mb-3">
+              <div className="text-[10px] text-cyan-200 mb-1">إجمالي التكلفة</div>
+              <div className="text-3xl font-extrabold text-cyan-100">{totalCost}<span className="text-xs font-normal text-cyan-300 mr-1">نقطة</span></div>
+              <div className="text-[10px] text-zinc-400 mt-1 leading-5">ميزات: {ownedCost}ن · بناء: {buildCost}ن</div>
+            </div>
+            <div className="space-y-1.5 text-xs mb-4">
+              <SumRow label="النوع" value={active.type_label} />
+              <SumRow label="الميزات" value={features.length} />
+              <SumRow label="المستوردات" value={(active.imports || []).length} />
+              <SumRow label="المرحلة" value={active.stage} />
+            </div>
+            {features.length > 0 && (
+              <div className="mb-4">
+                <div className="text-[10px] text-zinc-500 mb-1.5 uppercase">الميزات المضافة</div>
+                <div className="space-y-1">
+                  {features.slice(0, 8).map((f) => (
+                    <div key={f.id} className="text-[11px] bg-white/5 border border-white/10 rounded-md px-2 py-1 flex items-center justify-between">
+                      <span className="truncate">{f.label_ar}</span>
+                      <span className="text-amber-300 shrink-0">{f.cost}ن</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+            {active.design_brief && (
+              <div className="mb-4 p-3 bg-emerald-500/10 border border-emerald-500/30 rounded-xl" data-testid="brief-mini">
+                <div className="text-[10px] text-emerald-300 mb-1.5 uppercase flex items-center gap-1"><Palette className="w-3 h-3" /> Design Brief مطبّق</div>
+                <div className="flex gap-1 mb-1.5">
+                  {(active.design_brief.palette || []).slice(0, 6).map((c, i) => (
+                    <div key={i} className="w-5 h-5 rounded border border-white/10" style={{ background: c }} title={c} />
+                  ))}
+                </div>
+                {active.design_brief.layout_style && (
+                  <div className="text-[10px] text-zinc-300 leading-5 truncate" title={active.design_brief.layout_style}>
+                    {active.design_brief.layout_style}
+                  </div>
+                )}
+              </div>
+            )}
+            {attachments.length > 0 && (
+              <div className="mb-4">
+                <div className="text-[10px] text-zinc-500 mb-1.5 uppercase flex items-center gap-1"><Paperclip className="w-3 h-3" /> مرفقات ({attachments.length})</div>
+                <div className="flex gap-1 flex-wrap">
+                  {attachments.slice(0, 6).map((a) => (
+                    a.kind === 'image' ? (
+                      <img key={a.id} src={`${AS}/attachment/${a.id}/raw`} alt={a.filename}
+                        className="w-9 h-9 rounded border border-white/10 object-cover" title={a.filename} />
+                    ) : (
+                      <div key={a.id} className="w-9 h-9 rounded border border-white/10 bg-white/5 flex items-center justify-center" title={a.filename}>
+                        <FileText className="w-4 h-4 text-rose-300" />
+                      </div>
+                    )
+                  ))}
+                </div>
+              </div>
+            )}
+            <button onClick={buildNow} disabled={buildBusy}
+              className="w-full bg-gradient-to-br from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 disabled:opacity-50 text-black font-bold py-2.5 rounded-lg text-sm flex items-center justify-center gap-1.5 shadow-lg shadow-emerald-500/20"
+              data-testid="build-final-btn">
+              {buildBusy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Hammer className="w-4 h-4" />}
+              {buildOut ? `أعد البناء (${buildCost}ن)` : `ابدأ البناء (${buildCost}ن)`}
+            </button>
+            <div className="text-[10px] text-zinc-500 mt-2 leading-5 text-center">يولّد كود كامل + zip قابل للتنزيل.</div>
+            {buildOut && (
+              <div className="mt-4 pt-4 border-t border-white/10 space-y-2">
+                <a href={`${API}${buildOut.zip_url}`} download
+                  className="block bg-white/5 hover:bg-white/10 text-white text-xs px-3 py-2 rounded-lg flex items-center justify-center gap-1.5"
+                  data-testid="download-zip-btn">
+                  <Download className="w-3.5 h-3.5" /> تنزيل المشروع كاملاً (.zip)
+                </a>
+                {buildOut.preview_url && (
+                  <a href={`${API}${buildOut.preview_url}`} target="_blank" rel="noreferrer"
+                    className="block bg-white/5 hover:bg-white/10 text-white text-xs px-3 py-2 rounded-lg flex items-center justify-center gap-1.5"
+                    data-testid="open-preview-btn">
+                    <ExternalLink className="w-3.5 h-3.5" /> افتح المعاينة في تبويب جديد
+                  </a>
+                )}
+                <div className="text-[10px] text-zinc-500 text-center">{buildOut.files?.length} ملف · {((buildOut.bundle_size || 0) / 1024).toFixed(1)}KB</div>
+              </div>
+            )}
+          </aside>
         )}
 
-        <div className="flex-1 overflow-hidden">
-          {!active ? (
-            <EmptyState types={opts.project_types} onCreate={() => setShowNew(true)} />
-          ) : tab === 'chat' ? (
-            <ChatPane messages={messages} chatBusy={chatBusy} input={input} setInput={setInput}
-              onSend={send} scrollRef={scrollRef} project={active}
-              attachments={attachments} onUpload={uploadFiles} onRemoveAtt={removeAttachment}
-              uploadBusy={uploadBusy} fileInputRef={fileInputRef} />
-          ) : tab === 'attachments' ? (
-            <AttachmentsPane attachments={attachments} onUpload={uploadFiles}
-              onRemove={removeAttachment} uploadBusy={uploadBusy} project={active} />
-          ) : tab === 'features' ? (
-            <FeaturesPane opts={opts} ownedIds={ownedIds} features={features}
-              onAdd={addFeature} onRemove={removeFeature} catalog={featsByCat} />
-          ) : tab === 'preview' ? (
-            <PreviewPane build={buildOut} pid={activeId} />
-          ) : (
-            <ImportsPane project={active} onImportOpen={openImport} />
-          )}
-        </div>
-      </main>
-
-      {/* ── RIGHT Summary panel ──────────────────────────────────── */}
-      {active && (
-        <aside className="w-80 border-r border-zinc-800 bg-[#0e1118] p-4 overflow-y-auto shrink-0" data-testid="summary-panel">
-          <h3 className="text-sm font-semibold mb-3 flex items-center gap-2"><ShoppingBag className="w-4 h-4 text-indigo-400" /> ملخّص المشروع</h3>
-
-          <div className="bg-gradient-to-br from-indigo-500/15 to-violet-500/10 border border-indigo-500/40 rounded-xl p-3 mb-3">
-            <div className="text-[10px] text-indigo-200 mb-1">إجمالي التكلفة</div>
-            <div className="text-3xl font-extrabold text-indigo-100">{totalCost}<span className="text-xs font-normal text-indigo-300 mr-1">نقطة</span></div>
-            <div className="text-[10px] text-zinc-400 mt-1 leading-5">ميزات: {ownedCost}ن · بناء: {buildCost}ن</div>
-          </div>
-
-          <div className="space-y-1.5 text-xs mb-4">
-            <SumRow label="النوع" value={active.type_label} />
-            <SumRow label="الميزات" value={features.length} />
-            <SumRow label="المستوردات" value={(active.imports || []).length} />
-            <SumRow label="المرحلة" value={active.stage} />
-          </div>
-
-          {features.length > 0 && (
-            <div className="mb-4">
-              <div className="text-[10px] text-zinc-500 mb-1.5 uppercase">الميزات المضافة</div>
-              <div className="space-y-1">
-                {features.slice(0, 8).map((f) => (
-                  <div key={f.id} className="text-[11px] bg-zinc-900 border border-zinc-800 rounded-md px-2 py-1 flex items-center justify-between">
-                    <span className="truncate">{f.label_ar}</span>
-                    <span className="text-amber-300 shrink-0">{f.cost}ن</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {active.design_brief && (
-            <div className="mb-4 p-3 bg-emerald-500/10 border border-emerald-500/30 rounded-xl" data-testid="brief-mini">
-              <div className="text-[10px] text-emerald-300 mb-1.5 uppercase flex items-center gap-1"><Palette className="w-3 h-3" /> Design Brief مطبّق</div>
-              <div className="flex gap-1 mb-1.5">
-                {(active.design_brief.palette || []).slice(0, 6).map((c, i) => (
-                  <div key={i} className="w-5 h-5 rounded border border-zinc-700" style={{ background: c }} title={c} />
-                ))}
-              </div>
-              {active.design_brief.layout_style && (
-                <div className="text-[10px] text-zinc-300 leading-5 truncate" title={active.design_brief.layout_style}>
-                  {active.design_brief.layout_style}
-                </div>
-              )}
-            </div>
-          )}
-
-          {attachments.length > 0 && (
-            <div className="mb-4">
-              <div className="text-[10px] text-zinc-500 mb-1.5 uppercase flex items-center gap-1"><Paperclip className="w-3 h-3" /> مرفقات ({attachments.length})</div>
-              <div className="flex gap-1 flex-wrap">
-                {attachments.slice(0, 6).map((a) => (
-                  a.kind === 'image' ? (
-                    <img key={a.id} src={`${AS}/attachment/${a.id}/raw`} alt={a.filename}
-                      className="w-9 h-9 rounded border border-zinc-700 object-cover" title={a.filename} />
-                  ) : (
-                    <div key={a.id} className="w-9 h-9 rounded border border-zinc-700 bg-zinc-900 flex items-center justify-center" title={a.filename}>
-                      <FileText className="w-4 h-4 text-rose-300" />
-                    </div>
-                  )
-                ))}
-              </div>
-            </div>
-          )}
-
-          <button onClick={buildNow} disabled={buildBusy}
-            className="w-full bg-gradient-to-br from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 disabled:opacity-50 text-black font-bold py-2.5 rounded-lg text-sm flex items-center justify-center gap-1.5 shadow-lg shadow-emerald-500/20"
-            data-testid="build-final-btn">
-            {buildBusy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Hammer className="w-4 h-4" />}
-            {buildOut ? `أعد البناء (${buildCost}ن)` : `ابدأ البناء (${buildCost}ن)`}
-          </button>
-          <div className="text-[10px] text-zinc-500 mt-2 leading-5 text-center">
-            يولّد كود كامل + zip قابل للتنزيل.
-          </div>
-
-          {buildOut && (
-            <div className="mt-4 pt-4 border-t border-zinc-800 space-y-2">
-              <a href={`${API}${buildOut.zip_url}`} download
-                className="block bg-zinc-800 hover:bg-zinc-700 text-zinc-100 text-xs px-3 py-2 rounded-lg flex items-center justify-center gap-1.5"
-                data-testid="download-zip-btn">
-                <Download className="w-3.5 h-3.5" /> تنزيل المشروع كاملاً (.zip)
-              </a>
-              {buildOut.preview_url && (
-                <a href={`${API}${buildOut.preview_url}`} target="_blank" rel="noreferrer"
-                  className="block bg-zinc-800 hover:bg-zinc-700 text-zinc-100 text-xs px-3 py-2 rounded-lg flex items-center justify-center gap-1.5"
-                  data-testid="open-preview-btn">
-                  <ExternalLink className="w-3.5 h-3.5" /> افتح المعاينة في تبويب جديد
-                </a>
-              )}
-              <div className="text-[10px] text-zinc-500 text-center">{buildOut.files?.length} ملف · {((buildOut.bundle_size || 0) / 1024).toFixed(1)}KB</div>
-            </div>
-          )}
-        </aside>
-      )}
-
-      {showNew && <NewProjectModal opts={opts} onClose={() => setShowNew(false)}
-        onCreated={(p) => { setShowNew(false); loadProjects(); setActiveId(p.id); }} />}
-      {showImport && <ImportModal items={importable} onClose={() => setShowImport(false)} onImport={doImport} />}
-    </div>
+        {showNew && <NewProjectModal opts={opts} onClose={() => setShowNew(false)}
+          onCreated={(p) => { setShowNew(false); loadProjects(); setActiveId(p.id); }} />}
+        {showImport && <ImportModal items={importable} onClose={() => setShowImport(false)} onImport={doImport} />}
+      </div>
+    </ChatShellLayout>
   );
 }
 
