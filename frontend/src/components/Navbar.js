@@ -3,85 +3,26 @@ import { Link, useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { LogOut, LayoutDashboard, Shield, Menu, X } from 'lucide-react';
 
-// شعار Zitex — حرف Z هندسي مع orbits متعددة تدور بشكل ذكي + قلب نابض
+// شعار Zitex — الصورة المعتمدة (L1: ملكي تراثي ذهبي) + حركة دوران لطيفة في المكان
 export const ZitexLogo = ({ size = 'md', animated = true }) => {
   const px = { sm: 32, md: 44, lg: 64, xl: 96 }[size] || 44;
-  const uid = React.useId();
+  // pick small image for sm/md, large for lg/xl — saves bandwidth
+  const src = px <= 48 ? '/zitex-logo-sm.png' : '/zitex-logo.png';
   return (
     <span
-      className={`zitex-logo-wrap ${animated ? 'zitex-logo-animated' : ''}`}
+      className={`zitex-logo-img-wrap ${animated ? 'zitex-logo-img-animated' : ''}`}
       style={{ width: px, height: px, display: 'inline-block', position: 'relative' }}
       aria-label="Zitex"
     >
-      <svg
-        viewBox="0 0 120 120"
+      <img
+        src={src}
+        alt="Zitex"
         width={px}
         height={px}
-        fill="none"
-        xmlns="http://www.w3.org/2000/svg"
-        style={{ overflow: 'visible' }}
-      >
-        <defs>
-          <linearGradient id={`zg-${uid}`} x1="0" y1="0" x2="1" y2="1">
-            <stop offset="0%" stopColor="#fef3c7" />
-            <stop offset="35%" stopColor="#fbbf24" />
-            <stop offset="70%" stopColor="#f59e0b" />
-            <stop offset="100%" stopColor="#92400e" />
-          </linearGradient>
-          <linearGradient id={`zgs-${uid}`} x1="0" y1="0" x2="1" y2="0">
-            <stop offset="0%" stopColor="#fbbf24" stopOpacity="0" />
-            <stop offset="50%" stopColor="#fde68a" stopOpacity="1" />
-            <stop offset="100%" stopColor="#fbbf24" stopOpacity="0" />
-          </linearGradient>
-          <filter id={`zglow-${uid}`} x="-50%" y="-50%" width="200%" height="200%">
-            <feGaussianBlur stdDeviation="1.8" result="b" />
-            <feMerge>
-              <feMergeNode in="b" />
-              <feMergeNode in="SourceGraphic" />
-            </feMerge>
-          </filter>
-        </defs>
-
-        {/* outer orbit — thin dotted, rotates CCW slow */}
-        <g className="zitex-orbit-outer" style={{ transformOrigin: '60px 60px' }}>
-          <circle cx="60" cy="60" r="54" stroke={`url(#zg-${uid})`} strokeWidth="0.8" strokeDasharray="2 5" fill="none" opacity="0.45" />
-          <circle cx="60" cy="6" r="1.8" fill="#fbbf24" />
-        </g>
-
-        {/* middle orbit — arc with glowing head, rotates CW */}
-        <g className="zitex-orbit-mid" style={{ transformOrigin: '60px 60px' }}>
-          <path d="M 60 16 A 44 44 0 0 1 104 60" stroke={`url(#zg-${uid})`} strokeWidth="1.6" strokeLinecap="round" fill="none" opacity="0.7" />
-          <circle cx="104" cy="60" r="2.6" fill="#fde68a" />
-        </g>
-
-        {/* inner orbit — small fast counter-spin */}
-        <g className="zitex-orbit-inner" style={{ transformOrigin: '60px 60px' }}>
-          <circle cx="60" cy="60" r="36" stroke="#fbbf24" strokeWidth="0.5" fill="none" opacity="0.25" />
-          <circle cx="60" cy="24" r="1.5" fill="#fff7ed" />
-        </g>
-
-        {/* the Z letter — modern beveled with gradient sweep */}
-        <g filter={`url(#zglow-${uid})`} className="zitex-letter-pulse">
-          {/* main Z shape — angular, modern */}
-          <path
-            d="M 36 36 L 84 36 L 84 44 L 50 76 L 84 76 L 84 84 L 36 84 L 36 76 L 70 44 L 36 44 Z"
-            fill={`url(#zg-${uid})`}
-            stroke="#fcd34d"
-            strokeWidth="0.5"
-            strokeLinejoin="miter"
-          />
-          {/* shimmer overlay that sweeps across the Z */}
-          <path
-            d="M 36 36 L 84 36 L 84 44 L 50 76 L 84 76 L 84 84 L 36 84 L 36 76 L 70 44 L 36 44 Z"
-            fill={`url(#zgs-${uid})`}
-            className="zitex-letter-shimmer"
-          />
-        </g>
-
-        {/* corner accents — diagonal dots */}
-        <circle cx="36" cy="36" r="1.5" fill="#fef3c7" className="zitex-corner-tl" />
-        <circle cx="84" cy="84" r="1.5" fill="#fef3c7" className="zitex-corner-br" />
-      </svg>
+        className="zitex-logo-img"
+        draggable={false}
+        style={{ width: '100%', height: '100%', objectFit: 'contain', userSelect: 'none' }}
+      />
     </span>
   );
 };

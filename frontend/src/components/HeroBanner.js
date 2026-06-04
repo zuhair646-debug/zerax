@@ -205,21 +205,23 @@ export default function HeroBanner({ onGo }) {
 // ─────────────────────────────────────────────────────────
 function MotionLayer({ type, accent }) {
   if (type === 'orbit') {
-    // Zitex brand slide: 3 concentric orbits + pulsing center
+    // Zitex brand slide: official L1 logo image rotating gently + radiating glow
     return (
-      <div className="absolute right-4 sm:right-8 top-1/2 -translate-y-1/2 pointer-events-none" style={{ width: 110, height: 110 }}>
-        <svg viewBox="0 0 120 120" width="100%" height="100%" style={{ overflow: 'visible' }}>
-          <g style={{ transformOrigin: '60px 60px', transformBox: 'fill-box' }} className="hb-orbit-cw-slow">
-            <circle cx="60" cy="60" r="54" stroke={accent} strokeWidth="0.7" strokeDasharray="3 6" fill="none" opacity=".5" />
-            <circle cx="60" cy="6" r="2.5" fill="#fde68a" />
-          </g>
-          <g style={{ transformOrigin: '60px 60px', transformBox: 'fill-box' }} className="hb-orbit-ccw">
-            <circle cx="60" cy="60" r="40" stroke={accent} strokeWidth="0.9" fill="none" opacity=".35" />
-            <circle cx="100" cy="60" r="2" fill="#fef3c7" />
-          </g>
-          <circle cx="60" cy="60" r="14" fill={accent} opacity=".18" className="hb-center-pulse" />
-          <text x="60" y="68" textAnchor="middle" fontSize="28" fontWeight="900" fill={accent} fontFamily="system-ui">Z</text>
-        </svg>
+      <div
+        className="absolute right-4 sm:right-8 top-1/2 -translate-y-1/2 pointer-events-none flex items-center justify-center"
+        style={{ width: 120, height: 120 }}
+      >
+        {/* radiating glow rings */}
+        <span className="hb-brand-ring" style={{ borderColor: accent }} />
+        <span className="hb-brand-ring hb-brand-ring-2" style={{ borderColor: accent }} />
+        <img
+          src="/zitex-logo.png"
+          alt="Zitex"
+          className="hb-brand-logo"
+          width={106}
+          height={106}
+          style={{ width: 106, height: 106, objectFit: 'contain' }}
+        />
       </div>
     );
   }

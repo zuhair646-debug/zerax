@@ -18,39 +18,37 @@ html {
   }
 }
 
-/* ─── Zitex animated logo (3 orbits + shimmer + pulse) ─── */
-.zitex-logo-wrap { line-height: 0; vertical-align: middle; }
-.zitex-logo-wrap svg { display: block; }
+/* ─── Zitex official logo (image L1 — royal Z) ─── */
+.zitex-logo-img-wrap { line-height: 0; vertical-align: middle; }
+.zitex-logo-img { display: block; will-change: transform, filter; }
 
-@keyframes zitex-spin-cw  { from { transform: rotate(0deg); }   to { transform: rotate(360deg); } }
-@keyframes zitex-spin-ccw { from { transform: rotate(360deg); } to { transform: rotate(0deg); } }
-@keyframes zitex-letter-pulse {
-  0%, 100% { filter: drop-shadow(0 0 0 rgba(251,191,36,0)); }
-  50%      { filter: drop-shadow(0 0 6px rgba(251,191,36,.65)); }
+/* Gentle "in-place" rotation: 0° → 8° → -8° → 0° + soft glow pulse */
+@keyframes zitex-img-rotate {
+  0%, 100% { transform: rotate(0deg) scale(1); }
+  25%      { transform: rotate(6deg) scale(1.02); }
+  50%      { transform: rotate(0deg) scale(1.04); }
+  75%      { transform: rotate(-6deg) scale(1.02); }
 }
-@keyframes zitex-shimmer-sweep {
-  0%   { opacity: 0; transform: translateX(-30px); }
-  35%  { opacity: 1; }
-  60%  { opacity: 1; }
-  100% { opacity: 0; transform: translateX(30px); }
+@keyframes zitex-img-glow {
+  0%, 100% { filter: drop-shadow(0 0 4px rgba(251,191,36,.35)) drop-shadow(0 0 12px rgba(245,158,11,.18)); }
+  50%      { filter: drop-shadow(0 0 10px rgba(251,191,36,.7))  drop-shadow(0 0 24px rgba(245,158,11,.4)); }
 }
-@keyframes zitex-corner-blink {
-  0%, 100% { opacity: .3; }
-  50%      { opacity: 1; }
+.zitex-logo-img-animated .zitex-logo-img {
+  animation:
+    zitex-img-rotate 7s ease-in-out infinite,
+    zitex-img-glow   3.4s ease-in-out infinite;
+  transform-origin: center center;
 }
-
-.zitex-logo-animated .zitex-orbit-outer  { animation: zitex-spin-ccw 14s linear infinite; transform-box: fill-box; transform-origin: 60px 60px; }
-.zitex-logo-animated .zitex-orbit-mid    { animation: zitex-spin-cw  6s  linear infinite; transform-box: fill-box; transform-origin: 60px 60px; }
-.zitex-logo-animated .zitex-orbit-inner  { animation: zitex-spin-cw  3.2s linear infinite; transform-box: fill-box; transform-origin: 60px 60px; }
-.zitex-logo-animated .zitex-letter-pulse { animation: zitex-letter-pulse 2.6s ease-in-out infinite; transform-origin: 60px 60px; transform-box: fill-box; }
-.zitex-logo-animated .zitex-letter-shimmer { animation: zitex-shimmer-sweep 3.4s ease-in-out infinite; transform-origin: 60px 60px; transform-box: fill-box; }
-.zitex-logo-animated .zitex-corner-tl    { animation: zitex-corner-blink 2s ease-in-out infinite; }
-.zitex-logo-animated .zitex-corner-br    { animation: zitex-corner-blink 2s ease-in-out infinite; animation-delay: 1s; }
-
-/* Hover: everything speeds up */
-.zitex-logo-wrap:hover .zitex-orbit-outer { animation-duration: 4s; }
-.zitex-logo-wrap:hover .zitex-orbit-mid   { animation-duration: 1.8s; }
-.zitex-logo-wrap:hover .zitex-orbit-inner { animation-duration: 1s; }
+/* On hover: spin a full circle */
+@keyframes zitex-img-spin-cw {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+.zitex-logo-img-wrap:hover .zitex-logo-img {
+  animation:
+    zitex-img-spin-cw 2.4s linear infinite,
+    zitex-img-glow    1.6s ease-in-out infinite;
+}
 
 /* ─── HeroBanner motion graphics ───────────────────────── */
 @keyframes hb-progress {
@@ -63,6 +61,34 @@ html {
 @keyframes hb-orbit-ccw { from { transform: rotate(360deg); } to { transform: rotate(0deg); } }
 .hb-orbit-cw-slow { animation: hb-orbit-cw 18s linear infinite; }
 .hb-orbit-ccw     { animation: hb-orbit-ccw 8s linear infinite; }
+
+/* Hero banner brand-slide: rotating L1 logo + expanding rings */
+@keyframes hb-brand-spin {
+  0%, 100% { transform: rotate(0deg) scale(1); }
+  25%      { transform: rotate(6deg) scale(1.03); }
+  50%      { transform: rotate(0deg) scale(1.06); }
+  75%      { transform: rotate(-6deg) scale(1.03); }
+}
+@keyframes hb-brand-ring {
+  0%   { transform: scale(.6); opacity: .55; }
+  100% { transform: scale(1.5); opacity: 0; }
+}
+.hb-brand-logo {
+  animation: hb-brand-spin 6.5s ease-in-out infinite;
+  filter: drop-shadow(0 0 12px rgba(251,191,36,.5)) drop-shadow(0 0 28px rgba(245,158,11,.3));
+  position: relative;
+  z-index: 2;
+}
+.hb-brand-ring {
+  position: absolute;
+  width: 120px;
+  height: 120px;
+  border-radius: 50%;
+  border: 1.5px solid;
+  animation: hb-brand-ring 3.2s ease-out infinite;
+  opacity: 0;
+}
+.hb-brand-ring-2 { animation-delay: 1.6s; }
 
 @keyframes hb-center-pulse {
   0%, 100% { opacity: .18; transform-origin: center; transform: scale(1); }
