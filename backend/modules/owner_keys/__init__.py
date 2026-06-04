@@ -387,18 +387,31 @@ async def _check_elevenlabs_balance() -> Optional[Dict[str, Any]]:
         async with httpx.AsyncClient(timeout=8.0) as c:
             r = await c.get("https://api.elevenlabs.io/v1/user/subscription",
                             headers={"xi-api-key": key})
-            if r.status_code != 200:
-                return None
-            data = r.json()
-            used = int(data.get("character_count", 0))
-            limit = int(data.get("character_limit", 0))
-            remaining = max(0, limit - used)
-            return {
-                "credits_remaining": remaining,
-                "credits_used": used,
-                "credits_limit": limit,
-                "tier": data.get("tier", "unknown"),
-            }
+            if r.status_code == 200:
+                data = r.json()
+                used = int(data.get("character_count", 0))
+                limit = int(data.get("character_limit", 0))
+                remaining = max(0, limit - used)
+                return {
+                    "credits_remaining": remaining,
+                    "credits_used": used,
+                    "credits_limit": limit,
+                    "tier": data.get("tier", "unknown"),
+                }
+            # Key works for TTS but lacks "user_read" — verify by hitting TTS endpoint
+            if r.status_code == 401:
+                # Probe TTS endpoint with a tiny generation to confirm it can produce audio
+                probe = await c.post(
+                    "https://api.elevenlabs.io/v1/text-to-speech/21m00Tcm4TlvDq8ikWAM",
+                    headers={"xi-api-key": key, "Content-Type": "application/json"},
+                    json={"text": ".", "model_id": "eleven_multilingual_v2"},
+                )
+                if probe.status_code == 200:
+                    return {
+                        "tier": "active",
+                        "tts_works": True,
+                        "note_ar": "المفتاح يعمل للتوليد. لا يدعم قراءة الرصيد (صلاحيات مقيّدة).",
+                    }
     except Exception as e:
         logger.debug(f"elevenlabs balance check failed: {e}")
     return None
