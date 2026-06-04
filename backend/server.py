@@ -3310,6 +3310,15 @@ try:
 except Exception as _ace:
     logging.getLogger(__name__).error(f"Failed to register autocoder module: {_ace}", exc_info=True)
 
+# ============== AUTOCODER META (Owner-only capability + integration roadmap) ==============
+try:
+    from modules.autocoder_meta import create_autocoder_meta_router
+    _ac_meta_router = create_autocoder_meta_router(db, get_current_user, require_owner)
+    app.include_router(_ac_meta_router)
+    logging.getLogger(__name__).info("AutoCoder Meta module registered")
+except Exception as _acme:
+    logging.getLogger(__name__).error(f"Failed to register autocoder meta module: {_acme}", exc_info=True)
+
 # ============== INDEPENDENCE STATUS (Owner-only API key health dashboard) ==============
 try:
     from modules.independence import create_independence_router
