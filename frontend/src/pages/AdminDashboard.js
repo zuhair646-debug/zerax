@@ -48,6 +48,7 @@ const AdminDashboard = ({ user }) => {
     { title: 'برمجة زيتاكس 🔐', desc: 'ذكاء يعدّل كود المنصة بنفسه (للمالك فقط)', path: '/admin/autocoder', icon: <Code2 className="w-6 h-6" />, color: 'from-amber-500 to-orange-600', testId: 'admin-tile-autocoder' },
     { title: 'الاستقلالية والمفاتيح 🔓', desc: 'كل API keys مع روابط مباشرة للحصول عليها', path: '/admin/independence', icon: <ShieldCheck className="w-6 h-6" />, color: 'from-emerald-500 to-teal-600', testId: 'admin-tile-independence' },
     { title: 'نمو الذكاء 🧠', desc: 'الدروس اللي يتعلمها الذكاء يومياً من تفاعلاتك', path: '/admin/learning', icon: <Sparkles className="w-6 h-6" />, color: 'from-pink-500 to-rose-600', testId: 'admin-tile-learning' },
+    { title: 'جاهزية الذكاء 🚀', desc: 'حالة نماذج AI والتكاملات الناقصة وروابط الارتقاء', path: '/admin/ai-readiness', icon: <Brain className="w-6 h-6" />, color: 'from-violet-500 to-amber-500', testId: 'admin-tile-ai-readiness' },
     { title: 'إدارة المواقع', desc: 'إضافة وتحديث المواقع', path: '/admin/websites', icon: <Globe className="w-6 h-6" />, color: 'from-orange-500 to-red-500' },
     { title: 'سجل النشاط', desc: 'تتبع جميع الأنشطة على المنصة', path: '/admin/activity', icon: <Activity className="w-6 h-6" />, color: 'from-cyan-500 to-blue-500' },
     { title: 'الإعدادات', desc: 'إعدادات الموقع ومعلومات الدفع', path: '/admin/settings', icon: <Settings className="w-6 h-6" />, color: 'from-gray-500 to-slate-600' },
