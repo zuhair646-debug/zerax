@@ -3756,6 +3756,7 @@ from fastapi.staticfiles import StaticFiles  # noqa: E402
 Path("/app/backend/uploads").mkdir(parents=True, exist_ok=True)
 app.mount("/static", StaticFiles(directory="/app/static"), name="static_ui")
 app.mount("/backend-static", StaticFiles(directory="/app/backend/static"), name="static_backend")
+app.mount("/api/static", StaticFiles(directory="/app/backend/static"), name="static_api")
 app.mount("/uploads", StaticFiles(directory="/app/backend/uploads"), name="autocoder_uploads")
 
 # Include routers
