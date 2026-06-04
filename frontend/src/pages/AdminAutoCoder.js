@@ -681,7 +681,30 @@ export default function AdminAutoCoder() {
       setCurrentStream('');
       setCurrentTools([]);
     } catch (e) {
-      toast.error('خطأ في الشبكة: ' + e.message);
+      // Network / disconnect mid-stream: persist what we already got + a friendly note,
+      // so the user doesn't lose their conversation state and can simply retry.
+      const partial = assistantText || '';
+      const isAbort = e?.name === 'AbortError';
+      const friendly = isAbort
+        ? 'انقطع الاتصال — اضغط "تحديث" أو أعد إرسال آخر سؤال للمتابعة.'
+        : `انقطع الاتصال: ${e.message}. المحادثة محفوظة — أكمل من نفس النقطة.`;
+      setMessages((prev) => [
+        ...prev,
+        {
+          role: 'assistant',
+          content: partial
+            ? `${partial}\n\n⚠️ ${friendly}`
+            : `⚠️ ${friendly}`,
+          tool_events: toolEvents,
+          error: e.message,
+          partial: true,
+        },
+      ]);
+      setCurrentStream('');
+      setCurrentTools([]);
+      toast.error(friendly, { duration: 5000 });
+      // Refresh conversation list so the user sees the in-flight save (if any) from backend
+      try { loadConversations(); } catch (_) {}
     } finally { setSending(false); }
   };
 

@@ -2188,28 +2188,39 @@ def create_autocoder_router(db, get_current_user, require_owner):
         llm_messages = [*messages, {"role": "user", "content": llm_user_content, "ts": user_msg["ts"]}]
         messages.append(user_msg)
 
-        async def gen():
-            try:
-                assistant_text = ""
-                tool_events: List[Dict[str, Any]] = []
-                usage_total = {"input": 0, "output": 0, "cached_read": 0, "cost_usd": 0.0}
-                async for evt in _autocoder_stream(llm_messages, model=model or "claude"):
-                    if evt["type"] == "text":
-                        assistant_text += evt["content"]
-                    elif evt["type"] == "tool":
-                        tool_events.append({k: v for k, v in evt.items() if k not in ("content",)})
-                    elif evt["type"] == "usage":
-                        usage_total["input"] += evt.get("input", 0)
-                        usage_total["output"] += evt.get("output", 0)
-                        usage_total["cached_read"] += evt.get("cached_read", 0)
-                        usage_total["cost_usd"] += evt.get("cost_usd", 0.0)
-                    yield f"data: {json.dumps(evt, ensure_ascii=False)}\n\n"
+        # ── Persist user turn immediately so a network drop doesn't lose it ──
+        await db.autocoder_conversations.update_one(
+            {"id": conv_id},
+            {"$set": {
+                "id": conv_id,
+                "owner_id": owner.get("id"),
+                "messages": messages,
+                "updated_at": _now(),
+            }, "$setOnInsert": {"created_at": _now()}},
+            upsert=True,
+        )
 
+        async def gen():
+            assistant_text = ""
+            tool_events: List[Dict[str, Any]] = []
+            usage_total = {"input": 0, "output": 0, "cached_read": 0, "cost_usd": 0.0}
+            saved_to_db = False
+
+            async def _persist_assistant_turn(extra_marker: str = ""):
+                """Append assistant turn to conversation. Safe to call multiple times — won't double-append."""
+                nonlocal saved_to_db
+                if saved_to_db:
+                    return
+                final_text = assistant_text + (("\n\n" + extra_marker) if (extra_marker and assistant_text) else extra_marker)
+                if not final_text.strip() and not tool_events:
+                    saved_to_db = True
+                    return  # nothing useful to save
                 messages.append({
                     "role": "assistant",
-                    "content": assistant_text,
+                    "content": final_text,
                     "tool_events": tool_events,
                     "ts": _now(),
+                    "partial": bool(extra_marker),
                 })
                 await db.autocoder_conversations.update_one(
                     {"id": conv_id},
@@ -2226,10 +2237,39 @@ def create_autocoder_router(db, get_current_user, require_owner):
                     "cost_usd": round(usage_total["cost_usd"], 4),
                     "input_tokens": usage_total["input"],
                     "output_tokens": usage_total["output"],
+                    "partial": bool(extra_marker),
                 })
+                saved_to_db = True
+
+            try:
+                async for evt in _autocoder_stream(llm_messages, model=model or "claude"):
+                    if evt["type"] == "text":
+                        assistant_text += evt["content"]
+                    elif evt["type"] == "tool":
+                        tool_events.append({k: v for k, v in evt.items() if k not in ("content",)})
+                    elif evt["type"] == "usage":
+                        usage_total["input"] += evt.get("input", 0)
+                        usage_total["output"] += evt.get("output", 0)
+                        usage_total["cached_read"] += evt.get("cached_read", 0)
+                        usage_total["cost_usd"] += evt.get("cost_usd", 0.0)
+                    yield f"data: {json.dumps(evt, ensure_ascii=False)}\n\n"
+
+                await _persist_assistant_turn()
                 yield f"data: {json.dumps({'type':'saved','conversation_id':conv_id, 'turn_cost': round(usage_total['cost_usd'], 4)})}\n\n"
+            except asyncio.CancelledError:
+                # Client disconnected mid-stream → still save whatever we have so it's not lost.
+                try:
+                    await _persist_assistant_turn(extra_marker="⚠️ انقطع الاتصال")
+                except Exception:
+                    pass
+                raise
             except Exception as e:
                 logger.exception("[AUTOCODER] chat stream failed")
+                # Save any partial assistant text we accumulated before the failure
+                try:
+                    await _persist_assistant_turn(extra_marker=f"⚠️ خطأ: {str(e)[:120]}")
+                except Exception:
+                    pass
                 # Friendly Arabic error for the user
                 err_str = str(e)[:300]
                 friendly = err_str

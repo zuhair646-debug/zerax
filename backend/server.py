@@ -3353,6 +3353,15 @@ try:
 except Exception as _acme:
     logging.getLogger(__name__).error(f"Failed to register autocoder meta module: {_acme}", exc_info=True)
 
+# ============== MARKETING SUITE (Owner-only AI marketing auto-pilot) ==============
+try:
+    from modules.marketing import create_marketing_router
+    _mkt_router = create_marketing_router(db, require_owner)
+    api_router.include_router(_mkt_router)
+    logging.getLogger(__name__).info("Marketing module registered")
+except Exception as _mke:
+    logging.getLogger(__name__).error(f"Failed to register marketing module: {_mke}", exc_info=True)
+
 # ============== OWNER API KEYS (Live balance + payment links + alerts) ==============
 try:
     from modules.owner_keys import create_keys_router
