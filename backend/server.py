@@ -3163,6 +3163,16 @@ try:
 except Exception as _be:
     logging.getLogger(__name__).error(f"Failed to register billing module: {_be}", exc_info=True)
 
+
+# ============== FINANCE AI (owner intelligence for payments/credits) ==============
+try:
+    from modules.finance_ai import create_finance_ai_router
+    _finance_ai_router = create_finance_ai_router(db, get_current_user, require_owner)
+    app.include_router(_finance_ai_router)
+    logging.getLogger(__name__).info("Finance AI module registered")
+except Exception as _fae:
+    logging.getLogger(__name__).error(f"Failed to register finance AI module: {_fae}", exc_info=True)
+
 # ============== SOURCE CODE DOWNLOADER (owner-only) ==============
 try:
     from modules.source.routes import init_routes as init_source_routes
