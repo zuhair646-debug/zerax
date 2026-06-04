@@ -59,6 +59,7 @@ import AvatarSettings from '@/pages/AvatarSettings';
 import ChannelBridge from '@/pages/ChannelBridge';
 import AdminAICore from '@/pages/AdminAICore';
 import AdminAutoCoder from '@/pages/AdminAutoCoder';
+import AdminQualityRouter from '@/pages/AdminQualityRouter';
 import AdminIndependence from '@/pages/AdminIndependence';
 import AdminLearning from '@/pages/AdminLearning';
 import Companion from '@/pages/Companion';

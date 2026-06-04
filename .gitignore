@@ -212,3 +212,4 @@ backend/static/app_studio_builds/
 .railway_token
 .github_token
 frontend/node_modules/.cache/default-development/53.pack
+frontend/node_modules/.cache/default-development/56.pack

@@ -2294,6 +2294,58 @@ def create_autocoder_router(db, get_current_user, require_owner):
         return {"audit": items}
 
     # ─────────────────────────────────────────────────────────────
+    # 🎨 Media Router — quality-first selection (owner only)
+    # ─────────────────────────────────────────────────────────────
+    @router.get("/media/catalog")
+    async def media_catalog(owner=Depends(require_owner)):
+        from .media_router import catalog
+        return catalog()
+
+    @router.post("/media/pick/image")
+    async def media_pick_image(payload: Dict[str, Any], owner=Depends(require_owner)):
+        from .media_router import pick_image_model
+        prompt = (payload.get("prompt") or "").strip()
+        priority = payload.get("priority") or "quality"
+        if not prompt:
+            raise HTTPException(422, "prompt required")
+        return pick_image_model(prompt, priority=priority)
+
+    @router.post("/media/pick/video")
+    async def media_pick_video(payload: Dict[str, Any], owner=Depends(require_owner)):
+        from .media_router import pick_video_model
+        prompt = (payload.get("prompt") or "").strip()
+        duration = int(payload.get("duration") or 5)
+        priority = payload.get("priority") or "quality"
+        if not prompt:
+            raise HTTPException(422, "prompt required")
+        return pick_video_model(prompt, duration_seconds=duration, priority=priority)
+
+    @router.post("/media/pick/edit")
+    async def media_pick_edit(payload: Dict[str, Any], owner=Depends(require_owner)):
+        from .media_router import pick_image_edit_model
+        prompt = (payload.get("prompt") or "").strip()
+        return pick_image_edit_model(prompt)
+
+    @router.post("/media/pick/voice")
+    async def media_pick_voice(payload: Dict[str, Any], owner=Depends(require_owner)):
+        from .media_router import pick_voice_model
+        text = (payload.get("text") or "").strip()
+        return pick_voice_model(text)
+
+    @router.post("/router/pick")
+    async def llm_router_pick(payload: Dict[str, Any], owner=Depends(require_owner)):
+        """Preview which LLM the quality-first router would pick for a prompt."""
+        from .auto_router import pick_provider, explain_for_ui
+        prompt = (payload.get("prompt") or "").strip()
+        has_attachments = bool(payload.get("has_attachments"))
+        if not prompt:
+            raise HTTPException(422, "prompt required")
+        keyinfo = _resolve_llm_key()
+        decision = pick_provider(prompt, has_attachments=has_attachments, keyinfo_mode=keyinfo["mode"])
+        decision["explanation"] = explain_for_ui(decision)
+        return decision
+
+    # ─────────────────────────────────────────────────────────────
     # 📚 Learning Journal endpoints (continuous learning)
     # ─────────────────────────────────────────────────────────────
     @router.get("/learning/stats")
