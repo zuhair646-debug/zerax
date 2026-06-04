@@ -1,8 +1,9 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { Send, Loader2, Sparkles, Save, ExternalLink, Smartphone, Gamepad2, AppWindow, Wrench, Baby, RotateCcw, Plus, ChevronRight, X, Eye, Download } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import ChatShellLayout from '@/components/ChatShellLayout';
 
 const API = process.env.REACT_APP_BACKEND_URL;
 
@@ -74,15 +75,63 @@ export default function MobileAppBuilder() {
   const [saveCategory, setSaveCategory] = useState('app');
   const [galleryOpen, setGalleryOpen] = useState(false);
   const [projects, setProjects] = useState([]);
+  const [sessions, setSessions] = useState([]);
 
   const scrollRef = useRef(null);
+
+  // ── Sessions list for the shell sidebar ──────────────────────────
+  const loadSessions = useCallback(async () => {
+    try {
+      const d = await fetchJson('/api/mobile-app/sessions');
+      setSessions(d.items || []);
+    } catch (_) { /* silent */ }
+  }, []);
 
   useEffect(() => {
     const token = localStorage.getItem('token');
     if (!token) navigate('/login');
-    else begin();
+    else { begin(); loadSessions(); }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // refresh sessions list every time the current session id changes
+  useEffect(() => { if (sessionId) loadSessions(); }, [sessionId, loadSessions]);
+
+  // Switch to an existing session
+  const switchToSession = async (sid) => {
+    if (sid === sessionId) return;
+    try {
+      setLoading(true);
+      const s = await fetchJson(`/api/mobile-app/session/${sid}`);
+      const cats = await fetchJson('/api/mobile-app/categories');
+      setSessionId(sid);
+      setMessages((s.messages || []).map((m) => ({
+        role: m.role, content: m.content, progressNote: m.progress_note,
+      })));
+      setQuestionType('text');
+      setOptions(null);
+      setCategories(cats.categories || []);
+      setHtmlStarted(!!s.html);
+      setIframeBust(Date.now());
+      setTurns(s.turns || 0);
+    } catch (e) {
+      toast.error(`فشل التحميل: ${e.message}`);
+    } finally { setLoading(false); }
+  };
+
+  const removeSession = async (sid) => {
+    if (!window.confirm('احذف هذه الجلسة؟')) return;
+    try {
+      await fetchJson(`/api/mobile-app/session/${sid}`, { method: 'DELETE' });
+      setSessions((prev) => prev.filter((s) => s.id !== sid));
+      if (sid === sessionId) {
+        setSessionId(null);
+        setMessages([]);
+        begin();
+      }
+      toast.success('تم الحذف');
+    } catch (e) { toast.error(`فشل: ${e.message}`); }
+  };
 
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' });
@@ -241,44 +290,33 @@ export default function MobileAppBuilder() {
   };
 
   return (
-    <div className="min-h-screen bg-[#06060f] text-white flex flex-col" dir="rtl" data-testid="mobile-app-builder">
-      {/* HEADER */}
-      <div className="border-b border-cyan-400/15 bg-[#0a0a14]/80 backdrop-blur-md sticky top-0 z-30 flex-shrink-0">
-        <div className="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between flex-wrap gap-2">
-          <div className="flex items-center gap-2">
-            <button onClick={() => navigate('/dashboard')} className="p-2 rounded-lg hover:bg-white/5" data-testid="back-btn">
-              <ChevronRight className="w-5 h-5 rotate-180" />
-            </button>
-            <Smartphone className="w-6 h-6 text-cyan-400" />
-            <div>
-              <div className="font-black text-sm">باني تطبيقات الجوال</div>
-              <div className="text-[10px] text-white/40">دردشة → معاينة مباشرة → احفظ</div>
-            </div>
-          </div>
-          <div className="flex items-center gap-2 text-xs flex-wrap">
-            <div className="px-2.5 py-1 rounded-full bg-cyan-500/10 border border-cyan-400/30 text-cyan-200 font-bold" data-testid="credits-pill">
-              💎 {credits}
-            </div>
-            <button onClick={() => navigate('/dashboard/apps-market')} className="px-3 py-1.5 rounded-full bg-amber-500/10 border border-amber-400/30 text-amber-200 hover:bg-amber-500/20 text-xs font-bold flex items-center gap-1" data-testid="market-btn">
-              🔥 السوق
-            </button>
-            <button onClick={openGallery} className="px-3 py-1.5 rounded-full bg-white/5 border border-white/10 text-white/70 hover:text-cyan-300 hover:border-cyan-400/40 text-xs font-bold" data-testid="gallery-btn">
-              معرض
-            </button>
-            <button onClick={begin} className="px-3 py-1.5 rounded-full bg-cyan-500/10 border border-cyan-400/30 text-cyan-200 hover:bg-cyan-500/20 text-xs font-bold flex items-center gap-1" data-testid="new-session-btn">
-              <RotateCcw className="w-3 h-3" /> جلسة جديدة
-            </button>
-          </div>
-        </div>
-      </div>
-
-      {/* MAIN GRID: chat (left) + iPhone preview (right) */}
-      <div className="flex-1 min-h-0 max-w-7xl mx-auto w-full grid grid-cols-1 lg:grid-cols-[1fr_400px] gap-4 p-4 overflow-hidden">
-        {/* CHAT PANEL */}
-        <div className="flex flex-col bg-[#0a0a14]/60 border border-cyan-400/15 rounded-2xl overflow-hidden min-h-[60vh] lg:min-h-0">
-          {/* Messages */}
-          <div ref={scrollRef} className="flex-1 overflow-y-auto p-4 min-h-0">
-            {messages.map((m, i) => (
+    <ChatShellLayout
+      title="إنشاء التطبيقات من الصفر"
+      sessions={sessions}
+      activeId={sessionId}
+      onSelect={switchToSession}
+      onNewChat={begin}
+      onDelete={removeSession}
+      credits={credits}
+      emptyHint="ابدأ تطبيقك الأول"
+      rightExtras={(
+        <>
+          <button onClick={() => navigate('/dashboard/apps-market')} className="text-[11px] px-2.5 py-1 rounded-full bg-amber-500/10 border border-amber-400/30 text-amber-200 hover:bg-amber-500/20 font-bold flex items-center gap-1" data-testid="market-btn">
+            🔥 السوق
+          </button>
+          <button onClick={openGallery} className="text-[11px] px-2.5 py-1 rounded-full bg-white/5 border border-white/10 hover:bg-white/10 font-bold flex items-center gap-1" data-testid="gallery-btn">
+            معرض
+          </button>
+        </>
+      )}>
+      <div className="h-full flex flex-col" dir="rtl" data-testid="mobile-app-builder">
+        {/* MAIN GRID: chat (left) + iPhone preview (right) */}
+        <div className="flex-1 min-h-0 max-w-7xl mx-auto w-full grid grid-cols-1 lg:grid-cols-[1fr_400px] gap-4 p-4 overflow-hidden">
+          {/* CHAT PANEL */}
+          <div className="flex flex-col bg-[#0a0a14]/60 border border-cyan-400/15 rounded-2xl overflow-hidden min-h-[60vh] lg:min-h-0">
+            {/* Messages */}
+            <div ref={scrollRef} className="flex-1 overflow-y-auto p-4 min-h-0">
+              {messages.map((m, i) => (
               <Bubble key={i} role={m.role} content={m.content} progressNote={m.progressNote} />
             ))}
             {sending && (
@@ -484,5 +522,6 @@ export default function MobileAppBuilder() {
         </div>
       )}
     </div>
+  </ChatShellLayout>
   );
 }

@@ -308,6 +308,37 @@ def create_mobile_app_router(db, get_current_user):
             "complete": update_fields.get("complete", session.get("complete", False)),
         }
 
+    @router.get("/sessions")
+    async def list_sessions(user=Depends(get_current_user)):
+        cur = db.mobile_app_sessions.find(
+            {"user_id": user["user_id"]},
+            {"_id": 0, "id": 1, "title": 1, "messages": 1, "category": 1,
+             "saved": 1, "created_at": 1, "updated_at": 1},
+        ).sort([("updated_at", -1)]).limit(50)
+        items = []
+        async for s in cur:
+            msgs = s.get("messages") or []
+            preview = next((m["content"][:60].strip() for m in msgs
+                            if m.get("role") == "user" and m.get("content")), "")
+            items.append({
+                "id": s["id"],
+                "title": (s.get("title") or preview or "تطبيق بلا اسم")[:80],
+                "preview": preview[:80],
+                "turns": len([m for m in msgs if m.get("role") == "user"]),
+                "category": s.get("category"),
+                "saved": bool(s.get("saved")),
+                "updated_at": s.get("updated_at"),
+                "created_at": s.get("created_at"),
+            })
+        return {"ok": True, "items": items, "count": len(items)}
+
+    @router.delete("/session/{session_id}")
+    async def delete_session(session_id: str, user=Depends(get_current_user)):
+        r = await db.mobile_app_sessions.delete_one(
+            {"id": session_id, "user_id": user["user_id"]}
+        )
+        return {"ok": True, "deleted": r.deleted_count}
+
     @router.get("/session/{session_id}")
     async def get_session(session_id: str, user=Depends(get_current_user)):
         s = await db.mobile_app_sessions.find_one(
