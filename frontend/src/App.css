@@ -98,6 +98,52 @@ html {
 }
 .hb-grid-breathe { animation: hb-grid-breathe 4.2s ease-in-out infinite; }
 
+/* ─── Logo picker variants ─────────────────────────────── */
+.zlp-wrap svg { display: block; }
+
+/* Variant 1 — Minimal: gentle pulse + shimmer */
+@keyframes zlp-minimal-pulse {
+  0%, 100% { filter: drop-shadow(0 0 0 rgba(251,191,36,0)); }
+  50%      { filter: drop-shadow(0 0 8px rgba(251,191,36,.5)); }
+}
+@keyframes zlp-minimal-shine {
+  0%   { opacity: 0; transform: translateX(-30px); }
+  40%  { opacity: 1; }
+  100% { opacity: 0; transform: translateX(30px); }
+}
+.zlp-minimal-pulse { animation: zlp-minimal-pulse 3s ease-in-out infinite; transform-origin: 50px 50px; transform-box: fill-box; }
+.zlp-minimal-shine { animation: zlp-minimal-shine 4s ease-in-out infinite; transform-origin: 50px 50px; transform-box: fill-box; }
+
+/* Variant 2 — Constellation: stars twinkle */
+@keyframes zlp-star-twinkle {
+  0%, 100% { opacity: .25; transform: scale(.7); }
+  50%      { opacity: 1;   transform: scale(1.4); }
+}
+.zlp-star-twinkle { animation: zlp-star-twinkle 2.4s ease-in-out infinite; transform-origin: center; transform-box: fill-box; }
+
+/* Variant 3 — Neon: breathing outline */
+@keyframes zlp-neon-breathe {
+  0%, 100% { filter: drop-shadow(0 0 3px rgba(251,191,36,.6)) drop-shadow(0 0 6px rgba(245,158,11,.4)); opacity: .92; }
+  50%      { filter: drop-shadow(0 0 8px rgba(251,191,36,.9)) drop-shadow(0 0 16px rgba(245,158,11,.7)); opacity: 1; }
+}
+.zlp-neon-breathe { animation: zlp-neon-breathe 2.8s ease-in-out infinite; }
+
+/* Variant 4 — Stacked 3D: subtle tilt */
+@keyframes zlp-stacked-tilt {
+  0%, 100% { transform: perspective(400px) rotateY(-8deg) rotateX(2deg); }
+  50%      { transform: perspective(400px) rotateY(8deg)  rotateX(-2deg); }
+}
+.zlp-stacked-tilt { animation: zlp-stacked-tilt 4.5s ease-in-out infinite; transform-origin: center; transform-box: fill-box; }
+
+/* Variant 5 — Liquid: wave moving */
+@keyframes zlp-liquid-wave {
+  0%   { transform: translateY(50px) translateX(0); }
+  50%  { transform: translateY(-25px) translateX(-10px); }
+  100% { transform: translateY(-90px) translateX(0); }
+}
+.zlp-liquid-wave { animation: zlp-liquid-wave 5s ease-in-out infinite; }
+
+
 
 
 
