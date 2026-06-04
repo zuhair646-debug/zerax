@@ -48,9 +48,37 @@ const AdminDashboard = ({ user }) => {
     { title: 'برمجة زيتاكس 🔐', desc: 'ذكاء يعدّل كود المنصة بنفسه (للمالك فقط)', path: '/admin/autocoder', icon: <Code2 className="w-6 h-6" />, color: 'from-amber-500 to-orange-600', testId: 'admin-tile-autocoder' },
     { title: 'الاستقلالية والمفاتيح 🔓', desc: 'كل API keys مع روابط مباشرة للحصول عليها', path: '/admin/independence', icon: <ShieldCheck className="w-6 h-6" />, color: 'from-emerald-500 to-teal-600', testId: 'admin-tile-independence' },
     { title: 'نمو الذكاء 🧠', desc: 'الدروس اللي يتعلمها الذكاء يومياً من تفاعلاتك', path: '/admin/learning', icon: <Sparkles className="w-6 h-6" />, color: 'from-pink-500 to-rose-600', testId: 'admin-tile-learning' },
+    { title: 'جاهزية الذكاء 🚀', desc: 'حالة نماذج AI والتكاملات الناقصة وروابط الارتقاء', path: '/admin/ai-readiness', icon: <Brain className="w-6 h-6" />, color: 'from-violet-500 to-amber-500', testId: 'admin-tile-ai-readiness' },
     { title: 'إدارة المواقع', desc: 'إضافة وتحديث المواقع', path: '/admin/websites', icon: <Globe className="w-6 h-6" />, color: 'from-orange-500 to-red-500' },
     { title: 'سجل النشاط', desc: 'تتبع جميع الأنشطة على المنصة', path: '/admin/activity', icon: <Activity className="w-6 h-6" />, color: 'from-cyan-500 to-blue-500' },
     { title: 'الإعدادات', desc: 'إعدادات الموقع ومعلومات الدفع', path: '/admin/settings', icon: <Settings className="w-6 h-6" />, color: 'from-gray-500 to-slate-600' },
+  ];
+
+  const aiCommandCards = [
+    {
+      title: 'برمجة زيتاكس',
+      desc: 'اطلب مني أبني/أصلح/أختبر وأنشر، مع خطوات واضحة وخلاصة مربعة في النهاية.',
+      path: '/admin/autocoder',
+      icon: <Code2 className="w-5 h-5" />,
+      badge: 'تنفيذ مباشر',
+      testId: 'admin-ai-command-autocoder',
+    },
+    {
+      title: 'جاهزية الذكاء',
+      desc: 'شوف نماذج AI، التكاملات الناقصة، روابط المفاتيح، وأولويات ترقية Zitex.',
+      path: '/admin/ai-readiness',
+      icon: <Brain className="w-5 h-5" />,
+      badge: 'تقرير شامل',
+      testId: 'admin-ai-command-readiness',
+    },
+    {
+      title: 'الاستقلالية والمفاتيح',
+      desc: 'روابط الخدمات المطلوبة مثل Sentry وR2 وOpenRouter وFal وStripe.',
+      path: '/admin/independence',
+      icon: <ShieldCheck className="w-5 h-5" />,
+      badge: 'مفاتيح ناقصة',
+      testId: 'admin-ai-command-keys',
+    },
   ];
 
   return (
@@ -63,6 +91,42 @@ const AdminDashboard = ({ user }) => {
             لوحة تحكم الأدمن
           </h1>
           <p className="text-gray-400">نظرة شاملة على المنصة</p>
+        </div>
+
+        <div data-testid="admin-ai-command-center" className="mb-8 overflow-hidden rounded-3xl border border-amber-400/20 bg-gradient-to-br from-amber-500/15 via-slate-800 to-slate-950 p-6 shadow-2xl shadow-amber-500/10">
+          <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
+            <div className="max-w-2xl">
+              <div className="mb-3 inline-flex items-center gap-2 rounded-full border border-emerald-400/20 bg-emerald-500/10 px-3 py-1 text-xs font-bold text-emerald-200">
+                <CheckCircle className="h-4 w-4" /> مركز الذكاء مفعّل
+              </div>
+              <h2 className="text-2xl font-black text-white md:text-3xl">إذا ما شفت التغيير: ابدأ من هنا</h2>
+              <p className="mt-3 text-sm leading-7 text-slate-300">
+                رتّبت لك مدخل واضح لكل ما يخص ذكاء Zitex: اطلب تنفيذ مهام من برمجة زيتاكس، راقب جاهزية الذكاء، وشوف المفاتيح والخدمات الناقصة بروابط مباشرة.
+              </p>
+            </div>
+            <div className="grid min-w-[280px] grid-cols-2 gap-3 text-center">
+              <div className="rounded-2xl border border-white/10 bg-black/25 p-4">
+                <div className="text-2xl font-black text-amber-300">4</div>
+                <div className="text-xs text-slate-400">نماذج AI أساسية</div>
+              </div>
+              <div className="rounded-2xl border border-white/10 bg-black/25 p-4">
+                <div className="text-2xl font-black text-emerald-300">LIVE</div>
+                <div className="text-xs text-slate-400">Railway + Vercel</div>
+              </div>
+            </div>
+          </div>
+          <div className="mt-5 grid gap-3 md:grid-cols-3">
+            {aiCommandCards.map((card) => (
+              <button key={card.path} data-testid={card.testId} onClick={() => navigate(card.path)} className="group rounded-2xl border border-white/10 bg-black/25 p-4 text-right transition hover:-translate-y-0.5 hover:border-amber-300/40 hover:bg-black/35">
+                <div className="mb-3 flex items-center justify-between gap-2">
+                  <span className="rounded-xl bg-amber-500/15 p-2 text-amber-300">{card.icon}</span>
+                  <span className="rounded-full bg-white/10 px-2.5 py-1 text-[11px] font-bold text-white/70">{card.badge}</span>
+                </div>
+                <h3 className="mb-1 font-black text-white group-hover:text-amber-200">{card.title}</h3>
+                <p className="text-xs leading-6 text-slate-400">{card.desc}</p>
+              </button>
+            ))}
+          </div>
         </div>
 
         {loading ? (

@@ -17,6 +17,17 @@ import base64
 import httpx
 import io
 
+try:
+    import sentry_sdk
+    from sentry_sdk.integrations.fastapi import FastApiIntegration
+    from sentry_sdk.integrations.starlette import StarletteIntegration
+    SENTRY_AVAILABLE = True
+except ImportError:
+    sentry_sdk = None
+    FastApiIntegration = None
+    StarletteIntegration = None
+    SENTRY_AVAILABLE = False
+
 # AI Features disabled for independent hosting
 # To enable: install openai, elevenlabs, Pillow and configure API keys
 AI_FEATURES_ENABLED = True
@@ -49,6 +60,19 @@ except ImportError:
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
+
+# Initialize Sentry error monitoring (backend)
+SENTRY_DSN = os.environ.get('SENTRY_DSN')
+if SENTRY_AVAILABLE and SENTRY_DSN:
+    sentry_sdk.init(
+        dsn=SENTRY_DSN,
+        integrations=[StarletteIntegration(transaction_style='endpoint'), FastApiIntegration(transaction_style='endpoint')],
+        traces_sample_rate=float(os.environ.get('SENTRY_TRACES_SAMPLE_RATE', '0.1')),
+        profiles_sample_rate=float(os.environ.get('SENTRY_PROFILES_SAMPLE_RATE', '0.0')),
+        environment=os.environ.get('RAILWAY_ENVIRONMENT_NAME') or os.environ.get('RAILWAY_ENVIRONMENT') or 'production',
+        release=os.environ.get('RAILWAY_GIT_COMMIT_SHA'),
+        send_default_pii=False,
+    )
 
 mongo_url = os.environ['MONGO_URL']
 client = AsyncIOMotorClient(mongo_url)
@@ -3163,6 +3187,16 @@ try:
 except Exception as _be:
     logging.getLogger(__name__).error(f"Failed to register billing module: {_be}", exc_info=True)
 
+
+# ============== FINANCE AI (owner intelligence for payments/credits) ==============
+try:
+    from modules.finance_ai import create_finance_ai_router
+    _finance_ai_router = create_finance_ai_router(db, get_current_user, require_owner)
+    app.include_router(_finance_ai_router)
+    logging.getLogger(__name__).info("Finance AI module registered")
+except Exception as _fae:
+    logging.getLogger(__name__).error(f"Failed to register finance AI module: {_fae}", exc_info=True)
+
 # ============== SOURCE CODE DOWNLOADER (owner-only) ==============
 try:
     from modules.source.routes import init_routes as init_source_routes
@@ -3309,6 +3343,15 @@ try:
     logging.getLogger(__name__).info("AutoCoder module registered")
 except Exception as _ace:
     logging.getLogger(__name__).error(f"Failed to register autocoder module: {_ace}", exc_info=True)
+
+# ============== AUTOCODER META (Owner-only capability + integration roadmap) ==============
+try:
+    from modules.autocoder_meta import create_autocoder_meta_router
+    _ac_meta_router = create_autocoder_meta_router(db, get_current_user, require_owner)
+    app.include_router(_ac_meta_router)
+    logging.getLogger(__name__).info("AutoCoder Meta module registered")
+except Exception as _acme:
+    logging.getLogger(__name__).error(f"Failed to register autocoder meta module: {_acme}", exc_info=True)
 
 # ============== INDEPENDENCE STATUS (Owner-only API key health dashboard) ==============
 try:

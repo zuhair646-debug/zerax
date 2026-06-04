@@ -7,12 +7,71 @@ import {
   Search, FileEdit, FilePlus, FileX, RotateCw, ShieldCheck,
   AlertTriangle, Copy, ScrollText, MessageSquare,
   Globe, Download, Layers, FilePlus2, Database, Cpu, Sparkles, Zap,
+  Activity, CheckCircle2, XCircle, Rocket, PackageCheck, BrainCircuit, Gauge,
+  ClipboardList, Link as LinkIcon, Lightbulb, Target, Hammer, Compass,
+  CheckSquare, TimerReset, Workflow, Wand2, ExternalLink, ListChecks,
 } from 'lucide-react';
 import ChatInput from '../components/ChatInput';
 
 const API = process.env.REACT_APP_BACKEND_URL;
 const SESSION_KEY = 'zitex_autocoder_session';
 const MODEL_KEY = 'zitex_autocoder_model';
+
+const OWNER_MISSION_STEPS = [
+  { title: 'أفهم الطلب', desc: 'ألخّص الهدف، أحدد الملفات/الخدمات، وأوضح لك وش راح أبني.', icon: Target, tone: 'amber' },
+  { title: 'أنفّذ فعلياً', desc: 'أقرأ الكود، أعدل بدقة، وأعرض لك الأدوات اللي استخدمتها لحظة بلحظة.', icon: Hammer, tone: 'sky' },
+  { title: 'أختبر وأثبت', desc: 'أشغّل فحوصات lint/endpoints/deploy قبل ما أقول خلصت.', icon: CheckSquare, tone: 'emerald' },
+  { title: 'أعطيك خلاصة مربعة', desc: 'روابط، نواقص، اقتراحات، المطلوب منك، وخطوة التطوير التالية.', icon: ClipboardList, tone: 'violet' },
+];
+
+const OWNER_QUICK_PROMPTS = [
+  'افحص نفسك كـ AutoCoder وطلع لي تقرير نواقصك وقدراتك وخطة ترقيتك القادمة',
+  'رتّب لي خطة تطوير قسم برمجة زيتاكس لمدة أسبوع بالأولويات والروابط المطلوبة',
+  'اعمل health check شامل للمنصة ثم أعطني خلاصة مربعة بما يحتاجه Zitex الآن',
+  'اقترح تحسين واجهة جديدة للمالك ثم نفّذها واختبرها وانشرها',
+];
+
+function toneClasses(tone) {
+  const map = {
+    amber: 'from-amber-500/20 to-amber-500/5 border-amber-400/25 text-amber-200',
+    sky: 'from-sky-500/20 to-sky-500/5 border-sky-400/25 text-sky-200',
+    emerald: 'from-emerald-500/20 to-emerald-500/5 border-emerald-400/25 text-emerald-200',
+    violet: 'from-violet-500/20 to-violet-500/5 border-violet-400/25 text-violet-200',
+    rose: 'from-rose-500/20 to-rose-500/5 border-rose-400/25 text-rose-200',
+  };
+  return map[tone] || map.amber;
+}
+
+function extractUrls(text = '') {
+  const urls = String(text).match(/https?:\/\/[^\s)\]}<>"']+/g) || [];
+  return [...new Set(urls.map((u) => u.replace(/[.,،]+$/, '')))].slice(0, 8);
+}
+
+function pickLines(text = '', keywords = [], limit = 4) {
+  const lines = String(text).split('\n').map((l) => l.replace(/^[-*•\d.)\s]+/, '').trim()).filter(Boolean);
+  const picked = [];
+  for (const line of lines) {
+    if (keywords.some((k) => line.includes(k)) && !picked.includes(line)) picked.push(line);
+    if (picked.length >= limit) break;
+  }
+  return picked;
+}
+
+function buildMessageInsights(message) {
+  const text = message?.content || '';
+  const tools = message?.tool_events || [];
+  const failedTools = tools.filter((t) => t.ok === false).length;
+  const callingTools = tools.filter((t) => t.status === 'calling').length;
+  const okTools = tools.filter((t) => t.ok !== false && t.status !== 'calling').length;
+  return {
+    urls: extractUrls(text),
+    needed: pickLines(text, ['أحتاج', 'المطلوب', 'أرسل', 'زودني', 'ناقص', 'نحتاج'], 5),
+    suggestions: pickLines(text, ['اقتراح', 'أنصح', 'الأفضل', 'المرحلة', 'الخطوة القادمة', 'نقدر'], 5),
+    warnings: pickLines(text, ['تحذير', 'تنبيه', 'خطر', 'مهم', '⚠️'], 3),
+    okTools, failedTools, callingTools, toolCount: tools.length,
+    status: message?.error ? 'error' : failedTools > 0 ? 'warning' : callingTools > 0 ? 'working' : 'ready',
+  };
+}
 
 const TOOL_ICON = {
   list_dir: FolderTree,
@@ -136,6 +195,12 @@ export default function AdminAutoCoder() {
   });
   const [showModelMenu, setShowModelMenu] = useState(false);
 
+  // AutoCoder capability command center
+  const [metaReport, setMetaReport] = useState(null);
+  const [roadmap, setRoadmap] = useState(null);
+  const [metaLoading, setMetaLoading] = useState(false);
+  const [showMetaPanel, setShowMetaPanel] = useState(true);
+
   // Voice recording state
   const [isRecording, setIsRecording] = useState(false);
   const [recordingSeconds, setRecordingSeconds] = useState(0);
@@ -177,6 +242,7 @@ export default function AdminAutoCoder() {
             setAcExpiresAt(stored.expires_at);
             setPhase('unlocked');
             loadConversations(stored.token);
+            setTimeout(() => loadMetaReport(), 0);
             return;
           }
           localStorage.removeItem(SESSION_KEY);
@@ -247,6 +313,7 @@ export default function AdminAutoCoder() {
       setPhase('unlocked');
       toast.success('تم فتح القفل');
       loadConversations(d.session_token);
+      setTimeout(() => loadMetaReport(), 0);
     } catch (e) {
       toast.error('كلمة السر خاطئة');
     } finally { setUnlockBusy(false); }
@@ -315,6 +382,28 @@ export default function AdminAutoCoder() {
       const d = await r.json();
       setConversations(d.conversations || []);
     } catch (_) {}
+  };
+
+  const loadMetaReport = async () => {
+    if (!token) return;
+    setMetaLoading(true);
+    try {
+      const [capRes, roadRes] = await Promise.all([
+        fetch(`${API}/api/autocoder-meta/capabilities`, { headers: { Authorization: `Bearer ${token}` } }),
+        fetch(`${API}/api/autocoder-meta/roadmap`, { headers: { Authorization: `Bearer ${token}` } }),
+      ]);
+      const capData = await capRes.json();
+      const roadData = await roadRes.json();
+      if (!capRes.ok) throw new Error(capData.detail || 'capabilities failed');
+      if (!roadRes.ok) throw new Error(roadData.detail || 'roadmap failed');
+      setMetaReport(capData);
+      setRoadmap(roadData);
+    } catch (e) {
+      console.warn('AutoCoder meta load failed', e);
+      toast.error('تعذر تحميل لوحة القدرات');
+    } finally {
+      setMetaLoading(false);
+    }
   };
 
   const loadConversation = async (cid) => {
@@ -800,6 +889,16 @@ export default function AdminAutoCoder() {
           />
           <SessionTimer expiresAt={acExpiresAt} />
           <button
+            onClick={() => {
+              setShowMetaPanel((v) => !v);
+              if (!metaReport && !metaLoading) loadMetaReport();
+            }}
+            data-testid="ac-meta-toggle"
+            className={`hidden sm:inline-flex px-3 py-1.5 rounded-md text-xs font-bold items-center gap-1 border transition ${showMetaPanel ? 'bg-sky-500/15 border-sky-400/30 text-sky-200' : 'bg-white/5 border-white/10 text-white/70 hover:text-white'}`}
+          >
+            <Gauge className="w-3.5 h-3.5" /> مركز القدرات
+          </button>
+          <button
             onClick={newChat}
             data-testid="ac-new-chat"
             className="px-3 py-1.5 rounded-md bg-amber-500 text-black text-xs font-bold flex items-center gap-1 hover:bg-amber-400"
@@ -849,6 +948,15 @@ export default function AdminAutoCoder() {
 
         <main className="flex-1 flex flex-col min-w-0">
           <div ref={scrollRef} className="flex-1 overflow-y-auto p-4 md:p-6 space-y-4">
+            <OwnerMissionPanel
+              metaReport={metaReport}
+              roadmap={roadmap}
+              metaLoading={metaLoading}
+              messagesCount={messages.length}
+              onPrompt={(text) => setInput(text)}
+              onRefresh={loadMetaReport}
+            />
+
             {keyStatus && !keyStatus.is_independent && (
               <div data-testid="ac-fallback-warning" className="max-w-3xl mx-auto bg-amber-500/10 border border-amber-400/30 rounded-xl p-4 text-xs text-amber-200 leading-relaxed">
                 <div className="font-bold mb-1 flex items-center gap-1.5">
@@ -860,38 +968,17 @@ export default function AdminAutoCoder() {
                 </div>
               </div>
             )}
+            {showMetaPanel && (
+              <AutoCoderCommandCenter
+                report={metaReport}
+                roadmap={roadmap}
+                loading={metaLoading}
+                onRefresh={loadMetaReport}
+              />
+            )}
+
             {messages.length === 0 && !currentStream && (
-              <div className="max-w-2xl mx-auto text-center py-12">
-                <ShieldCheck className="w-12 h-12 text-amber-400 mx-auto mb-4" />
-                <h3 className="text-2xl font-black mb-2">شنو نبرمج اليوم؟</h3>
-                <p className="text-white/60 text-sm mb-6 leading-relaxed">
-                  هذا ذكاء برمجة متخصص. عنده وصول كامل لقاعدة الكود حقّك.<br/>
-                  يقرا، يكتب، ينفّذ أوامر، ويعمل commit + push للـGitHub.
-                </p>
-                <div className="grid md:grid-cols-2 gap-3 text-start">
-                  {[
-                    'أضف صفحة جديدة /admin/logs تعرض آخر 100 سجل من autocoder_audit',
-                    'اعرض شجرة /app/backend/modules وقل لي وش وظيفة كل module',
-                    'اقرا /app/backend/server.py واشرح لي كيف الـauth يشتغل',
-                    'سوّي fix لأي bug تشوفه بعد ما تشغّل pytest على /app/backend/tests',
-                  ].map((ex) => (
-                    <button
-                      key={ex}
-                      onClick={() => setInput(ex)}
-                      data-testid="ac-example-chip"
-                      className="p-3 rounded-xl border border-white/10 bg-white/[0.03] hover:border-amber-400/30 hover:bg-amber-500/5 text-sm transition leading-snug"
-                    >
-                      {ex}
-                    </button>
-                  ))}
-                </div>
-                <div className="mt-8 inline-flex items-start gap-2 text-[11px] text-amber-300/60 bg-amber-500/5 border border-amber-500/15 rounded-lg p-3 max-w-md mx-auto">
-                  <AlertTriangle className="w-3.5 h-3.5 mt-0.5 flex-shrink-0" />
-                  <div className="text-start leading-relaxed">
-                    صلاحيات مفتوحة بالكامل (read/write/exec/git push). راجع كل عملية قبل ما توافق.
-                  </div>
-                </div>
-              </div>
+              <WelcomePromptBoard onPrompt={(text) => setInput(text)} />
             )}
 
             {messages.map((m, i) => <MessageBubble key={i} m={m} />)}
@@ -928,6 +1015,68 @@ export default function AdminAutoCoder() {
 // ════════════════════════════════════════════════════════════════════════
 // Sub-components
 // ════════════════════════════════════════════════════════════════════════
+
+function OwnerMissionPanel({ metaReport, roadmap, metaLoading, messagesCount, onPrompt, onRefresh }) {
+  const capabilities = metaReport?.capabilities || metaReport?.summary?.capabilities || [];
+  const roadmapItems = roadmap?.phases || roadmap?.items || roadmap?.roadmap || [];
+  const visibleCapabilities = Array.isArray(capabilities) ? capabilities.slice(0, 4) : [];
+  const firstRoadmap = Array.isArray(roadmapItems) ? roadmapItems[0] : null;
+  return (
+    <section data-testid="ac-owner-mission-panel" className="max-w-6xl mx-auto rounded-3xl border border-amber-400/20 bg-[radial-gradient(circle_at_top_right,rgba(245,158,11,0.16),transparent_35%),linear-gradient(135deg,rgba(24,24,27,0.92),rgba(3,7,18,0.92))] shadow-2xl shadow-amber-950/20 overflow-hidden">
+      <div className="p-5 md:p-6 border-b border-white/10 flex flex-col lg:flex-row gap-5 lg:items-center lg:justify-between">
+        <div className="flex items-start gap-4">
+          <div className="w-14 h-14 rounded-2xl bg-amber-500 text-black flex items-center justify-center shadow-lg shadow-amber-500/20"><Wand2 className="w-7 h-7" /></div>
+          <div>
+            <div className="flex flex-wrap items-center gap-2 mb-1"><h2 className="text-xl md:text-2xl font-black">غرفة قيادة برمجة زيتاكس</h2><span className="text-[10px] px-2 py-1 rounded-full bg-emerald-500/10 border border-emerald-400/20 text-emerald-300">Owner AI Command</span></div>
+            <p className="text-sm text-white/65 leading-relaxed max-w-2xl">هذه الصفحة صارت مخصصة لتطويري أنا: أفهم طلبك، أعرض خطوات التنفيذ، أوضح الأدوات، وأرتّب لك في النهاية خلاصة مربعة فيها الروابط والنواقص والاقتراحات.</p>
+          </div>
+        </div>
+        <div className="grid grid-cols-3 gap-2 min-w-[260px]">
+          <MiniMetric label="المحادثات" value={messagesCount || 0} icon={MessageSquare} tone="amber" />
+          <MiniMetric label="القدرات" value={visibleCapabilities.length || '—'} icon={BrainCircuit} tone="sky" />
+          <button onClick={onRefresh} data-testid="ac-refresh-command" className="rounded-2xl border border-white/10 bg-white/[0.04] hover:bg-white/[0.08] p-3 text-start transition"><div className="flex items-center gap-2 text-violet-200 text-xs font-bold"><RotateCw className={`w-4 h-4 ${metaLoading ? 'animate-spin' : ''}`} /> تحديث</div><div className="text-[10px] text-white/40 mt-1">قدرات/خارطة</div></button>
+        </div>
+      </div>
+      <div className="p-5 md:p-6 grid xl:grid-cols-[1.15fr_0.85fr] gap-5">
+        <div className="grid sm:grid-cols-2 gap-3">
+          {OWNER_MISSION_STEPS.map((step) => { const Icon = step.icon; return (<div key={step.title} className={`rounded-2xl border bg-gradient-to-br p-4 ${toneClasses(step.tone)}`}><div className="flex items-center gap-2 font-black mb-2"><Icon className="w-4 h-4" /> {step.title}</div><p className="text-xs text-white/65 leading-relaxed">{step.desc}</p></div>); })}
+        </div>
+        <div className="rounded-2xl border border-white/10 bg-black/25 p-4">
+          <div className="flex items-center justify-between gap-3 mb-3"><div className="font-black flex items-center gap-2"><Compass className="w-4 h-4 text-amber-300" /> مهام تطويري السريعة</div><span className="text-[10px] text-white/40">اضغط لإرسال أمر جاهز</span></div>
+          <div className="space-y-2">{OWNER_QUICK_PROMPTS.map((prompt, idx) => (<button key={prompt} onClick={() => onPrompt(prompt)} data-testid={`ac-owner-prompt-${idx}`} className="w-full text-start rounded-xl border border-white/10 bg-white/[0.03] hover:border-amber-400/35 hover:bg-amber-500/10 px-3 py-2 text-xs leading-relaxed transition">{prompt}</button>))}</div>
+          {firstRoadmap && (<div className="mt-3 rounded-xl border border-sky-400/20 bg-sky-500/5 p-3 text-xs text-sky-100/80"><div className="font-bold text-sky-200 mb-1 flex items-center gap-1"><Workflow className="w-3.5 h-3.5" /> أولوية من الخارطة</div><div className="line-clamp-2">{firstRoadmap.title || firstRoadmap.name || firstRoadmap.summary || JSON.stringify(firstRoadmap).slice(0, 120)}</div></div>)}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function MiniMetric({ label, value, icon: Icon, tone }) {
+  return (<div className={`rounded-2xl border bg-gradient-to-br p-3 ${toneClasses(tone)}`}><div className="flex items-center gap-2 text-xs font-bold"><Icon className="w-4 h-4" /> {label}</div><div className="text-xl font-black mt-1">{value}</div></div>);
+}
+
+function WelcomePromptBoard({ onPrompt }) {
+  const examples = [
+    { title: 'طوّرني أنا', text: 'افحص قسم برمجة زيتاكس واقترح 10 ترقيات للواجهة والذكاء ثم نفّذ الأعلى أولوية', icon: BrainCircuit, tone: 'amber' },
+    { title: 'فحص شامل', text: 'اعمل health check شامل للمنصة والذكاء والتكاملات ثم أعطني تقرير مرتب وخلاصة مربعة', icon: Activity, tone: 'emerald' },
+    { title: 'خطة أسبوع', text: 'اكتب خطة تطوير AutoCoder لمدة أسبوع: يوم بيوم، الأدوات المطلوبة، والنتيجة النهائية', icon: TimerReset, tone: 'sky' },
+    { title: 'تصميم فاخر', text: 'صمّم تجربة مستخدم أفخم لقسم المالك مع خطوات تنفيذ واختبار ونشر', icon: Sparkles, tone: 'violet' },
+  ];
+  return (<div data-testid="ac-welcome-board" className="max-w-5xl mx-auto py-8"><div className="text-center mb-6"><div className="inline-flex w-16 h-16 rounded-3xl bg-amber-500/15 border border-amber-400/30 items-center justify-center mb-4 shadow-xl shadow-amber-500/10"><Terminal className="w-7 h-7 text-amber-400" /></div><h3 className="text-2xl font-black mb-2">وش نطوّر في برمجة زيتاكس؟</h3><p className="text-white/60 text-sm leading-relaxed max-w-2xl mx-auto">اختر أمر جاهز أو اكتب بصوتك. الردود هنا منظمة: فهم الطلب ← التنفيذ ← الأدوات ← الإثبات ← خلاصة مربعة.</p></div><div className="grid md:grid-cols-2 gap-3">{examples.map((ex, idx) => { const Icon = ex.icon; return (<button key={ex.title} onClick={() => onPrompt(ex.text)} data-testid={`ac-example-chip-${idx}`} className={`text-start rounded-2xl border bg-gradient-to-br p-4 hover:scale-[1.01] transition ${toneClasses(ex.tone)}`}><div className="flex items-center gap-2 font-black mb-2"><Icon className="w-4 h-4" /> {ex.title}</div><p className="text-xs text-white/65 leading-relaxed">{ex.text}</p></button>); })}</div><div className="mt-5 rounded-2xl border border-amber-400/20 bg-amber-500/5 p-4 text-xs text-amber-100/75 flex items-start gap-2"><AlertTriangle className="w-4 h-4 mt-0.5 text-amber-300 shrink-0" /><div>صلاحياتي قوية جداً: قراءة/كتابة/تنفيذ/نشر. لذلك الواجهة تعرض لك الأدوات والخطوات حتى تتابع وش يصير لحظة بلحظة.</div></div></div>);
+}
+
+function AssistantSummaryBox({ message }) {
+  const insights = buildMessageInsights(message);
+  const hasContent = insights.urls.length || insights.needed.length || insights.suggestions.length || insights.warnings.length || insights.toolCount;
+  if (!hasContent) return null;
+  const statusTone = insights.status === 'error' ? 'rose' : insights.status === 'warning' ? 'amber' : 'emerald';
+  return (<div data-testid="ac-summary-box" className={`mt-4 rounded-2xl border bg-gradient-to-br p-4 ${toneClasses(statusTone)}`}><div className="flex items-center justify-between gap-3 mb-3"><div className="font-black flex items-center gap-2"><ClipboardList className="w-4 h-4" /> خلاصة التنفيذ</div><div className="text-[10px] text-white/45">تتولّد تلقائياً من الرد والأدوات</div></div><div className="grid md:grid-cols-2 gap-3"><SummaryMiniCard title="حالة الأدوات" icon={ListChecks} items={[`الأدوات المستخدمة: ${insights.toolCount}`, `نجح: ${insights.okTools}`, insights.failedTools ? `تعثر: ${insights.failedTools}` : 'لا توجد أدوات متعثرة']} /><SummaryMiniCard title="المطلوب/النواقص" icon={Target} items={insights.needed.length ? insights.needed : ['لا يوجد طلب واضح منك في هذا الرد.']} /><SummaryMiniCard title="اقتراحات قادمة" icon={Lightbulb} items={insights.suggestions.length ? insights.suggestions : ['اسألني عن الخطوة التالية أو اضغط أحد أوامر التطوير السريعة.']} /><SummaryMiniCard title="روابط مهمة" icon={LinkIcon} items={insights.urls.length ? insights.urls : ['ما فيه روابط داخل هذا الرد.']} isLinks /></div>{insights.warnings.length > 0 && (<div className="mt-3 rounded-xl border border-rose-400/25 bg-rose-500/10 p-3"><div className="font-bold text-rose-200 text-xs mb-1 flex items-center gap-1"><AlertTriangle className="w-3.5 h-3.5" /> تنبيهات</div><ul className="space-y-1 text-xs text-white/70 list-disc pe-4">{insights.warnings.map((item, i) => <li key={i}>{item}</li>)}</ul></div>)}</div>);
+}
+
+function SummaryMiniCard({ title, icon: Icon, items, isLinks = false }) {
+  return (<div className="rounded-xl border border-white/10 bg-black/25 p-3 min-h-[112px]"><div className="font-bold text-xs mb-2 flex items-center gap-1.5"><Icon className="w-3.5 h-3.5" /> {title}</div><ul className="space-y-1.5 text-[11px] text-white/68 leading-relaxed">{items.slice(0, 5).map((item, idx) => (<li key={`${item}-${idx}`} className="break-words">{isLinks && String(item).startsWith('http') ? (<a href={item} target="_blank" rel="noreferrer" className="text-sky-300 hover:text-sky-200 inline-flex items-center gap-1"><ExternalLink className="w-3 h-3" /> {item}</a>) : item}</li>))}</ul></div>);
+}
+
 function LockShell({ title, children }) {
   return (
     <div dir="rtl" className="min-h-screen bg-[#050505] text-white flex items-center justify-center p-6">
@@ -993,6 +1142,165 @@ function RecoveryDisplay({ codes, onDone }) {
           </button>
         </div>
       </div>
+    </div>
+  );
+}
+
+
+function AutoCoderCommandCenter({ report, roadmap, loading, onRefresh }) {
+  const integrations = report?.recommended_integrations || [];
+  const capabilities = report?.capabilities || [];
+  const providers = report?.llm_providers || [];
+  const phases = roadmap?.phases || [];
+  const configuredIntegrations = integrations.filter((i) => i.status === 'configured').length;
+  const partialIntegrations = integrations.filter((i) => i.status === 'partial').length;
+  const missingIntegrations = integrations.filter((i) => i.status === 'missing').length;
+  const configuredProviders = providers.filter((p) => p.configured).length;
+  const readiness = integrations.length ? Math.round(((configuredIntegrations + partialIntegrations * 0.45) / integrations.length) * 100) : 0;
+  const topNext = integrations.filter((i) => i.status !== 'configured').slice(0, 5);
+
+  const statusTone = {
+    configured: 'border-emerald-400/30 bg-emerald-500/10 text-emerald-200',
+    partial: 'border-amber-400/30 bg-amber-500/10 text-amber-200',
+    missing: 'border-rose-400/25 bg-rose-500/10 text-rose-200',
+  };
+  const statusText = { configured: 'جاهز', partial: 'جزئي', missing: 'ناقص' };
+
+  return (
+    <section data-testid="ac-command-center" className="max-w-6xl mx-auto mb-5 overflow-hidden rounded-[1.75rem] border border-white/10 bg-gradient-to-br from-zinc-950 via-black to-zinc-950 shadow-2xl shadow-amber-950/10">
+      <div className="relative p-5 md:p-6">
+        <div className="absolute inset-0 pointer-events-none opacity-70">
+          <div className="absolute -top-24 end-10 w-72 h-72 rounded-full bg-amber-500/10 blur-3xl" />
+          <div className="absolute top-10 -start-20 w-72 h-72 rounded-full bg-sky-500/10 blur-3xl" />
+          <div className="absolute bottom-0 start-1/3 w-64 h-64 rounded-full bg-emerald-500/10 blur-3xl" />
+        </div>
+
+        <div className="relative flex flex-col lg:flex-row lg:items-start justify-between gap-5">
+          <div className="min-w-0">
+            <div className="inline-flex items-center gap-2 rounded-full border border-amber-400/25 bg-amber-500/10 px-3 py-1 text-[11px] text-amber-200 mb-3">
+              <BrainCircuit className="w-3.5 h-3.5" /> AutoCoder Intelligence OS
+            </div>
+            <h2 className="text-2xl md:text-4xl font-black tracking-tight mb-2">مركز قدرات برمجة زيتاكس</h2>
+            <p className="text-sm md:text-base text-white/60 leading-relaxed max-w-3xl">
+              لوحة تنفيذية تعرض وش أقدر أسوي الآن، أي مفاتيح شغالة، وش النواقص الأعلى أثراً عشان أصير أقوى وأكثر استقلالية.
+            </p>
+          </div>
+          <button onClick={onRefresh} disabled={loading} data-testid="ac-meta-refresh" className="shrink-0 inline-flex items-center justify-center gap-2 rounded-xl bg-white/10 hover:bg-white/15 border border-white/15 px-4 py-2 text-sm font-bold disabled:opacity-50">
+            {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <RotateCw className="w-4 h-4" />}
+            تحديث الفحص
+          </button>
+        </div>
+
+        <div className="relative grid grid-cols-2 lg:grid-cols-4 gap-3 mt-6">
+          <MetaStat icon={ShieldCheck} label="قدرات تنفيذية" value={capabilities.length || '—'} tone="amber" hint="قراءة/كتابة/اختبار/نشر" />
+          <MetaStat icon={Cpu} label="نماذج LLM جاهزة" value={`${configuredProviders}/${providers.length || '—'}`} tone="sky" hint="مع fallback حسب المهمة" />
+          <MetaStat icon={PackageCheck} label="تكاملات جاهزة" value={`${configuredIntegrations}/${integrations.length || '—'}`} tone="emerald" hint={`${partialIntegrations} جزئي · ${missingIntegrations} ناقص`} />
+          <MetaStat icon={Gauge} label="جاهزية المنظومة" value={integrations.length ? `${readiness}%` : '—'} tone="violet" hint="حسب مفاتيح التكاملات" />
+        </div>
+
+        {!report && loading && (
+          <div className="relative mt-5 rounded-2xl border border-white/10 bg-white/[0.03] p-6 text-center text-white/60">
+            <Loader2 className="w-6 h-6 animate-spin mx-auto mb-2 text-amber-300" />
+            جاري تحميل تقرير القدرات...
+          </div>
+        )}
+
+        {report && (
+          <div className="relative grid xl:grid-cols-12 gap-4 mt-5">
+            <div className="xl:col-span-5 rounded-2xl border border-white/10 bg-white/[0.035] p-4">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="font-black flex items-center gap-2"><Activity className="w-4 h-4 text-amber-300" /> القدرات الحالية</h3>
+                <span className="text-[10px] text-white/40">{report.generated_at ? new Date(report.generated_at).toLocaleString('ar') : ''}</span>
+              </div>
+              <div className="grid sm:grid-cols-2 gap-2">
+                {capabilities.slice(0, 8).map((c) => (
+                  <div key={c.id || c.name} className="rounded-xl border border-white/10 bg-black/25 p-3 hover:border-amber-400/25 transition">
+                    <div className="text-sm font-bold text-white mb-1">{c.name_ar || c.name || c.id}</div>
+                    <div className="text-[11px] text-white/50 leading-relaxed">{(c.details_ar || c.description_ar || c.description || c.id || '').toString()}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="xl:col-span-4 rounded-2xl border border-white/10 bg-white/[0.035] p-4">
+              <h3 className="font-black flex items-center gap-2 mb-4"><Rocket className="w-4 h-4 text-sky-300" /> خارطة التطوير</h3>
+              <div className="space-y-3">
+                {phases.slice(0, 7).map((p, idx) => (
+                  <div key={p.phase} className="flex gap-3 group">
+                    <div className="flex flex-col items-center">
+                      <div className="w-8 h-8 rounded-full bg-sky-500/15 border border-sky-400/30 text-sky-200 flex items-center justify-center text-xs font-black">{p.phase}</div>
+                      {idx !== phases.slice(0, 7).length - 1 && <div className="w-px flex-1 bg-white/10 mt-2" />}
+                    </div>
+                    <div className="pb-2 min-w-0">
+                      <div className="text-sm font-bold group-hover:text-sky-200 transition">{p.title}</div>
+                      <div className="text-[11px] text-white/50 leading-relaxed">{p.outcome}</div>
+                      <div className="flex flex-wrap gap-1 mt-1">
+                        {(p.keys || []).map((k) => <span key={k} className="rounded bg-black/35 border border-white/10 px-1.5 py-0.5 text-[10px] font-mono text-white/55">{k}</span>)}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="xl:col-span-3 rounded-2xl border border-white/10 bg-white/[0.035] p-4">
+              <h3 className="font-black flex items-center gap-2 mb-4"><KeyRound className="w-4 h-4 text-emerald-300" /> أهم النواقص</h3>
+              <div className="space-y-2">
+                {topNext.length === 0 ? (
+                  <div className="rounded-xl border border-emerald-400/25 bg-emerald-500/10 p-3 text-sm text-emerald-200">كل التكاملات المقترحة جاهزة 👑</div>
+                ) : topNext.map((i) => (
+                  <div key={i.id} className="rounded-xl border border-white/10 bg-black/25 p-3">
+                    <div className="flex items-center justify-between gap-2 mb-1">
+                      <div className="font-bold text-sm truncate">{i.name}</div>
+                      <span className={`shrink-0 rounded-full border px-2 py-0.5 text-[10px] ${statusTone[i.status] || statusTone.missing}`}>{statusText[i.status] || i.status}</span>
+                    </div>
+                    <p className="text-[11px] text-white/50 leading-relaxed mb-2">{i.why_ar}</p>
+                    <div className="flex flex-wrap gap-1">
+                      {(i.env_vars || []).slice(0, 4).map((v) => <code key={v} className="rounded bg-white/5 px-1.5 py-0.5 text-[10px] text-amber-200/80">{v}</code>)}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="xl:col-span-12 grid md:grid-cols-2 lg:grid-cols-3 gap-3">
+              {providers.map((p) => (
+                <div key={p.id} className="rounded-2xl border border-white/10 bg-black/25 p-3 flex items-start gap-3">
+                  <div className={`mt-0.5 rounded-xl p-2 ${p.configured ? 'bg-emerald-500/10 text-emerald-300' : 'bg-rose-500/10 text-rose-300'}`}>
+                    {p.configured ? <CheckCircle2 className="w-4 h-4" /> : <XCircle className="w-4 h-4" />}
+                  </div>
+                  <div className="min-w-0">
+                    <div className="text-sm font-bold">{p.name}</div>
+                    <div className="text-[11px] text-white/45">{p.configured ? 'مفتاح متوفر' : `ينقص ${p.env}`}</div>
+                    <div className="flex flex-wrap gap-1 mt-1">
+                      {(p.best_for || []).slice(0, 3).map((b) => <span key={b} className="rounded-full bg-white/5 px-2 py-0.5 text-[10px] text-white/45">{b}</span>)}
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+    </section>
+  );
+}
+
+function MetaStat({ icon: Icon, label, value, hint, tone }) {
+  const tones = {
+    amber: 'from-amber-500/20 to-orange-500/5 border-amber-400/25 text-amber-200',
+    sky: 'from-sky-500/20 to-cyan-500/5 border-sky-400/25 text-sky-200',
+    emerald: 'from-emerald-500/20 to-teal-500/5 border-emerald-400/25 text-emerald-200',
+    violet: 'from-violet-500/20 to-fuchsia-500/5 border-violet-400/25 text-violet-200',
+  };
+  return (
+    <div className={`rounded-2xl border bg-gradient-to-br p-4 ${tones[tone] || tones.amber}`}>
+      <div className="flex items-center justify-between mb-3">
+        <span className="text-xs text-white/55">{label}</span>
+        <Icon className="w-4 h-4" />
+      </div>
+      <div className="text-2xl md:text-3xl font-black text-white">{value}</div>
+      <div className="text-[11px] text-white/45 mt-1">{hint}</div>
     </div>
   );
 }
@@ -1155,6 +1463,7 @@ function MessageBubble({ m }) {
       </div>
       {(m.tool_events || []).map((t, i) => <ToolPill key={i} t={t} />)}
       {m.content && <div className="text-sm leading-relaxed whitespace-pre-wrap mt-2">{m.content}</div>}
+      <AssistantSummaryBox message={m} />
     </div>
   );
 }
