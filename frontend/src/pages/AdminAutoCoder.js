@@ -7,6 +7,7 @@ import {
   Search, FileEdit, FilePlus, FileX, RotateCw, ShieldCheck,
   AlertTriangle, Copy, ScrollText, MessageSquare,
   Globe, Download, Layers, FilePlus2, Database, Cpu, Sparkles, Zap,
+  Activity, CheckCircle2, XCircle, Rocket, PackageCheck, BrainCircuit, Gauge,
 } from 'lucide-react';
 import ChatInput from '../components/ChatInput';
 
@@ -137,6 +138,12 @@ export default function AdminAutoCoder() {
   });
   const [showModelMenu, setShowModelMenu] = useState(false);
 
+  // AutoCoder capability command center
+  const [metaReport, setMetaReport] = useState(null);
+  const [roadmap, setRoadmap] = useState(null);
+  const [metaLoading, setMetaLoading] = useState(false);
+  const [showMetaPanel, setShowMetaPanel] = useState(true);
+
   // Voice recording state
   const [isRecording, setIsRecording] = useState(false);
   const [recordingSeconds, setRecordingSeconds] = useState(0);
@@ -178,6 +185,7 @@ export default function AdminAutoCoder() {
             setAcExpiresAt(stored.expires_at);
             setPhase('unlocked');
             loadConversations(stored.token);
+            setTimeout(() => loadMetaReport(), 0);
             return;
           }
           localStorage.removeItem(SESSION_KEY);
@@ -248,6 +256,7 @@ export default function AdminAutoCoder() {
       setPhase('unlocked');
       toast.success('تم فتح القفل');
       loadConversations(d.session_token);
+      setTimeout(() => loadMetaReport(), 0);
     } catch (e) {
       toast.error('كلمة السر خاطئة');
     } finally { setUnlockBusy(false); }
@@ -316,6 +325,28 @@ export default function AdminAutoCoder() {
       const d = await r.json();
       setConversations(d.conversations || []);
     } catch (_) {}
+  };
+
+  const loadMetaReport = async () => {
+    if (!token) return;
+    setMetaLoading(true);
+    try {
+      const [capRes, roadRes] = await Promise.all([
+        fetch(`${API}/api/autocoder-meta/capabilities`, { headers: { Authorization: `Bearer ${token}` } }),
+        fetch(`${API}/api/autocoder-meta/roadmap`, { headers: { Authorization: `Bearer ${token}` } }),
+      ]);
+      const capData = await capRes.json();
+      const roadData = await roadRes.json();
+      if (!capRes.ok) throw new Error(capData.detail || 'capabilities failed');
+      if (!roadRes.ok) throw new Error(roadData.detail || 'roadmap failed');
+      setMetaReport(capData);
+      setRoadmap(roadData);
+    } catch (e) {
+      console.warn('AutoCoder meta load failed', e);
+      toast.error('تعذر تحميل لوحة القدرات');
+    } finally {
+      setMetaLoading(false);
+    }
   };
 
   const loadConversation = async (cid) => {
@@ -783,6 +814,16 @@ export default function AdminAutoCoder() {
           />
           <SessionTimer expiresAt={acExpiresAt} />
           <button
+            onClick={() => {
+              setShowMetaPanel((v) => !v);
+              if (!metaReport && !metaLoading) loadMetaReport();
+            }}
+            data-testid="ac-meta-toggle"
+            className={`hidden sm:inline-flex px-3 py-1.5 rounded-md text-xs font-bold items-center gap-1 border transition ${showMetaPanel ? 'bg-sky-500/15 border-sky-400/30 text-sky-200' : 'bg-white/5 border-white/10 text-white/70 hover:text-white'}`}
+          >
+            <Gauge className="w-3.5 h-3.5" /> مركز القدرات
+          </button>
+          <button
             onClick={newChat}
             data-testid="ac-new-chat"
             className="px-3 py-1.5 rounded-md bg-amber-500 text-black text-xs font-bold flex items-center gap-1 hover:bg-amber-400"
@@ -843,6 +884,15 @@ export default function AdminAutoCoder() {
                 </div>
               </div>
             )}
+            {showMetaPanel && (
+              <AutoCoderCommandCenter
+                report={metaReport}
+                roadmap={roadmap}
+                loading={metaLoading}
+                onRefresh={loadMetaReport}
+              />
+            )}
+
             {messages.length === 0 && !currentStream && (
               <div className="max-w-2xl mx-auto text-center py-12">
                 <ShieldCheck className="w-12 h-12 text-amber-400 mx-auto mb-4" />
@@ -976,6 +1026,165 @@ function RecoveryDisplay({ codes, onDone }) {
           </button>
         </div>
       </div>
+    </div>
+  );
+}
+
+
+function AutoCoderCommandCenter({ report, roadmap, loading, onRefresh }) {
+  const integrations = report?.recommended_integrations || [];
+  const capabilities = report?.capabilities || [];
+  const providers = report?.llm_providers || [];
+  const phases = roadmap?.phases || [];
+  const configuredIntegrations = integrations.filter((i) => i.status === 'configured').length;
+  const partialIntegrations = integrations.filter((i) => i.status === 'partial').length;
+  const missingIntegrations = integrations.filter((i) => i.status === 'missing').length;
+  const configuredProviders = providers.filter((p) => p.configured).length;
+  const readiness = integrations.length ? Math.round(((configuredIntegrations + partialIntegrations * 0.45) / integrations.length) * 100) : 0;
+  const topNext = integrations.filter((i) => i.status !== 'configured').slice(0, 5);
+
+  const statusTone = {
+    configured: 'border-emerald-400/30 bg-emerald-500/10 text-emerald-200',
+    partial: 'border-amber-400/30 bg-amber-500/10 text-amber-200',
+    missing: 'border-rose-400/25 bg-rose-500/10 text-rose-200',
+  };
+  const statusText = { configured: 'جاهز', partial: 'جزئي', missing: 'ناقص' };
+
+  return (
+    <section data-testid="ac-command-center" className="max-w-6xl mx-auto mb-5 overflow-hidden rounded-[1.75rem] border border-white/10 bg-gradient-to-br from-zinc-950 via-black to-zinc-950 shadow-2xl shadow-amber-950/10">
+      <div className="relative p-5 md:p-6">
+        <div className="absolute inset-0 pointer-events-none opacity-70">
+          <div className="absolute -top-24 end-10 w-72 h-72 rounded-full bg-amber-500/10 blur-3xl" />
+          <div className="absolute top-10 -start-20 w-72 h-72 rounded-full bg-sky-500/10 blur-3xl" />
+          <div className="absolute bottom-0 start-1/3 w-64 h-64 rounded-full bg-emerald-500/10 blur-3xl" />
+        </div>
+
+        <div className="relative flex flex-col lg:flex-row lg:items-start justify-between gap-5">
+          <div className="min-w-0">
+            <div className="inline-flex items-center gap-2 rounded-full border border-amber-400/25 bg-amber-500/10 px-3 py-1 text-[11px] text-amber-200 mb-3">
+              <BrainCircuit className="w-3.5 h-3.5" /> AutoCoder Intelligence OS
+            </div>
+            <h2 className="text-2xl md:text-4xl font-black tracking-tight mb-2">مركز قدرات برمجة زيتاكس</h2>
+            <p className="text-sm md:text-base text-white/60 leading-relaxed max-w-3xl">
+              لوحة تنفيذية تعرض وش أقدر أسوي الآن، أي مفاتيح شغالة، وش النواقص الأعلى أثراً عشان أصير أقوى وأكثر استقلالية.
+            </p>
+          </div>
+          <button onClick={onRefresh} disabled={loading} data-testid="ac-meta-refresh" className="shrink-0 inline-flex items-center justify-center gap-2 rounded-xl bg-white/10 hover:bg-white/15 border border-white/15 px-4 py-2 text-sm font-bold disabled:opacity-50">
+            {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <RotateCw className="w-4 h-4" />}
+            تحديث الفحص
+          </button>
+        </div>
+
+        <div className="relative grid grid-cols-2 lg:grid-cols-4 gap-3 mt-6">
+          <MetaStat icon={ShieldCheck} label="قدرات تنفيذية" value={capabilities.length || '—'} tone="amber" hint="قراءة/كتابة/اختبار/نشر" />
+          <MetaStat icon={Cpu} label="نماذج LLM جاهزة" value={`${configuredProviders}/${providers.length || '—'}`} tone="sky" hint="مع fallback حسب المهمة" />
+          <MetaStat icon={PackageCheck} label="تكاملات جاهزة" value={`${configuredIntegrations}/${integrations.length || '—'}`} tone="emerald" hint={`${partialIntegrations} جزئي · ${missingIntegrations} ناقص`} />
+          <MetaStat icon={Gauge} label="جاهزية المنظومة" value={integrations.length ? `${readiness}%` : '—'} tone="violet" hint="حسب مفاتيح التكاملات" />
+        </div>
+
+        {!report && loading && (
+          <div className="relative mt-5 rounded-2xl border border-white/10 bg-white/[0.03] p-6 text-center text-white/60">
+            <Loader2 className="w-6 h-6 animate-spin mx-auto mb-2 text-amber-300" />
+            جاري تحميل تقرير القدرات...
+          </div>
+        )}
+
+        {report && (
+          <div className="relative grid xl:grid-cols-12 gap-4 mt-5">
+            <div className="xl:col-span-5 rounded-2xl border border-white/10 bg-white/[0.035] p-4">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="font-black flex items-center gap-2"><Activity className="w-4 h-4 text-amber-300" /> القدرات الحالية</h3>
+                <span className="text-[10px] text-white/40">{report.generated_at ? new Date(report.generated_at).toLocaleString('ar') : ''}</span>
+              </div>
+              <div className="grid sm:grid-cols-2 gap-2">
+                {capabilities.slice(0, 8).map((c) => (
+                  <div key={c.id || c.name} className="rounded-xl border border-white/10 bg-black/25 p-3 hover:border-amber-400/25 transition">
+                    <div className="text-sm font-bold text-white mb-1">{c.name_ar || c.name || c.id}</div>
+                    <div className="text-[11px] text-white/50 leading-relaxed">{(c.details_ar || c.description_ar || c.description || c.id || '').toString()}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="xl:col-span-4 rounded-2xl border border-white/10 bg-white/[0.035] p-4">
+              <h3 className="font-black flex items-center gap-2 mb-4"><Rocket className="w-4 h-4 text-sky-300" /> خارطة التطوير</h3>
+              <div className="space-y-3">
+                {phases.slice(0, 7).map((p, idx) => (
+                  <div key={p.phase} className="flex gap-3 group">
+                    <div className="flex flex-col items-center">
+                      <div className="w-8 h-8 rounded-full bg-sky-500/15 border border-sky-400/30 text-sky-200 flex items-center justify-center text-xs font-black">{p.phase}</div>
+                      {idx !== phases.slice(0, 7).length - 1 && <div className="w-px flex-1 bg-white/10 mt-2" />}
+                    </div>
+                    <div className="pb-2 min-w-0">
+                      <div className="text-sm font-bold group-hover:text-sky-200 transition">{p.title}</div>
+                      <div className="text-[11px] text-white/50 leading-relaxed">{p.outcome}</div>
+                      <div className="flex flex-wrap gap-1 mt-1">
+                        {(p.keys || []).map((k) => <span key={k} className="rounded bg-black/35 border border-white/10 px-1.5 py-0.5 text-[10px] font-mono text-white/55">{k}</span>)}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="xl:col-span-3 rounded-2xl border border-white/10 bg-white/[0.035] p-4">
+              <h3 className="font-black flex items-center gap-2 mb-4"><KeyRound className="w-4 h-4 text-emerald-300" /> أهم النواقص</h3>
+              <div className="space-y-2">
+                {topNext.length === 0 ? (
+                  <div className="rounded-xl border border-emerald-400/25 bg-emerald-500/10 p-3 text-sm text-emerald-200">كل التكاملات المقترحة جاهزة 👑</div>
+                ) : topNext.map((i) => (
+                  <div key={i.id} className="rounded-xl border border-white/10 bg-black/25 p-3">
+                    <div className="flex items-center justify-between gap-2 mb-1">
+                      <div className="font-bold text-sm truncate">{i.name}</div>
+                      <span className={`shrink-0 rounded-full border px-2 py-0.5 text-[10px] ${statusTone[i.status] || statusTone.missing}`}>{statusText[i.status] || i.status}</span>
+                    </div>
+                    <p className="text-[11px] text-white/50 leading-relaxed mb-2">{i.why_ar}</p>
+                    <div className="flex flex-wrap gap-1">
+                      {(i.env_vars || []).slice(0, 4).map((v) => <code key={v} className="rounded bg-white/5 px-1.5 py-0.5 text-[10px] text-amber-200/80">{v}</code>)}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="xl:col-span-12 grid md:grid-cols-2 lg:grid-cols-3 gap-3">
+              {providers.map((p) => (
+                <div key={p.id} className="rounded-2xl border border-white/10 bg-black/25 p-3 flex items-start gap-3">
+                  <div className={`mt-0.5 rounded-xl p-2 ${p.configured ? 'bg-emerald-500/10 text-emerald-300' : 'bg-rose-500/10 text-rose-300'}`}>
+                    {p.configured ? <CheckCircle2 className="w-4 h-4" /> : <XCircle className="w-4 h-4" />}
+                  </div>
+                  <div className="min-w-0">
+                    <div className="text-sm font-bold">{p.name}</div>
+                    <div className="text-[11px] text-white/45">{p.configured ? 'مفتاح متوفر' : `ينقص ${p.env}`}</div>
+                    <div className="flex flex-wrap gap-1 mt-1">
+                      {(p.best_for || []).slice(0, 3).map((b) => <span key={b} className="rounded-full bg-white/5 px-2 py-0.5 text-[10px] text-white/45">{b}</span>)}
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+    </section>
+  );
+}
+
+function MetaStat({ icon: Icon, label, value, hint, tone }) {
+  const tones = {
+    amber: 'from-amber-500/20 to-orange-500/5 border-amber-400/25 text-amber-200',
+    sky: 'from-sky-500/20 to-cyan-500/5 border-sky-400/25 text-sky-200',
+    emerald: 'from-emerald-500/20 to-teal-500/5 border-emerald-400/25 text-emerald-200',
+    violet: 'from-violet-500/20 to-fuchsia-500/5 border-violet-400/25 text-violet-200',
+  };
+  return (
+    <div className={`rounded-2xl border bg-gradient-to-br p-4 ${tones[tone] || tones.amber}`}>
+      <div className="flex items-center justify-between mb-3">
+        <span className="text-xs text-white/55">{label}</span>
+        <Icon className="w-4 h-4" />
+      </div>
+      <div className="text-2xl md:text-3xl font-black text-white">{value}</div>
+      <div className="text-[11px] text-white/45 mt-1">{hint}</div>
     </div>
   );
 }
