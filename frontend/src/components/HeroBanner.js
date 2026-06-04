@@ -205,22 +205,19 @@ export default function HeroBanner({ onGo }) {
 // ─────────────────────────────────────────────────────────
 function MotionLayer({ type, accent }) {
   if (type === 'orbit') {
-    // Zitex brand slide: official L1 logo image rotating gently + radiating glow
+    // Zitex brand slide: transparent L1 logo, gentle float + glow only (no rings, no box)
     return (
       <div
         className="absolute right-4 sm:right-8 top-1/2 -translate-y-1/2 pointer-events-none flex items-center justify-center"
         style={{ width: 120, height: 120 }}
       >
-        {/* radiating glow rings */}
-        <span className="hb-brand-ring" style={{ borderColor: accent }} />
-        <span className="hb-brand-ring hb-brand-ring-2" style={{ borderColor: accent }} />
         <img
           src="/zitex-logo.png"
           alt="Zitex"
           className="hb-brand-logo"
-          width={106}
-          height={106}
-          style={{ width: 106, height: 106, objectFit: 'contain' }}
+          width={112}
+          height={112}
+          style={{ width: 112, height: 112, objectFit: 'contain' }}
         />
       </div>
     );

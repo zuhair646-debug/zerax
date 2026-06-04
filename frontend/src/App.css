@@ -22,32 +22,35 @@ html {
 .zitex-logo-img-wrap { line-height: 0; vertical-align: middle; }
 .zitex-logo-img { display: block; will-change: transform, filter; }
 
-/* Gentle "in-place" rotation: 0° → 8° → -8° → 0° + soft glow pulse */
-@keyframes zitex-img-rotate {
-  0%, 100% { transform: rotate(0deg) scale(1); }
-  25%      { transform: rotate(6deg) scale(1.02); }
-  50%      { transform: rotate(0deg) scale(1.04); }
-  75%      { transform: rotate(-6deg) scale(1.02); }
+/* Gentle floating + breathing glow that lives INSIDE the Z's golden surface */
+@keyframes zitex-img-float {
+  0%, 100% { transform: rotate(0deg) translateY(0) scale(1); }
+  25%      { transform: rotate(4deg)  translateY(-1px) scale(1.02); }
+  50%      { transform: rotate(0deg)  translateY(0)    scale(1.035); }
+  75%      { transform: rotate(-4deg) translateY(-1px) scale(1.02); }
 }
 @keyframes zitex-img-glow {
-  0%, 100% { filter: drop-shadow(0 0 4px rgba(251,191,36,.35)) drop-shadow(0 0 12px rgba(245,158,11,.18)); }
-  50%      { filter: drop-shadow(0 0 10px rgba(251,191,36,.7))  drop-shadow(0 0 24px rgba(245,158,11,.4)); }
+  0%, 100% { filter: drop-shadow(0 0 3px rgba(251,191,36,.45)) drop-shadow(0 0 8px rgba(245,158,11,.25)) brightness(1); }
+  50%      { filter: drop-shadow(0 0 8px rgba(251,191,36,.85)) drop-shadow(0 0 18px rgba(245,158,11,.55)) brightness(1.12); }
 }
 .zitex-logo-img-animated .zitex-logo-img {
   animation:
-    zitex-img-rotate 7s ease-in-out infinite,
-    zitex-img-glow   3.4s ease-in-out infinite;
+    zitex-img-float 8s ease-in-out infinite,
+    zitex-img-glow  3.6s ease-in-out infinite;
   transform-origin: center center;
 }
-/* On hover: spin a full circle */
+/* On hover: full slow spin + brighter pulse */
 @keyframes zitex-img-spin-cw {
   from { transform: rotate(0deg); }
   to   { transform: rotate(360deg); }
 }
 .zitex-logo-img-wrap:hover .zitex-logo-img {
   animation:
-    zitex-img-spin-cw 2.4s linear infinite,
-    zitex-img-glow    1.6s ease-in-out infinite;
+    zitex-img-spin-cw 3.6s linear infinite,
+    zitex-img-glow    1.8s ease-in-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .zitex-logo-img-animated .zitex-logo-img { animation: zitex-img-glow 4s ease-in-out infinite; }
 }
 
 /* ─── HeroBanner motion graphics ───────────────────────── */
@@ -62,33 +65,19 @@ html {
 .hb-orbit-cw-slow { animation: hb-orbit-cw 18s linear infinite; }
 .hb-orbit-ccw     { animation: hb-orbit-ccw 8s linear infinite; }
 
-/* Hero banner brand-slide: rotating L1 logo + expanding rings */
+/* Hero banner brand-slide: rotating L1 logo (transparent, no rings) */
 @keyframes hb-brand-spin {
   0%, 100% { transform: rotate(0deg) scale(1); }
-  25%      { transform: rotate(6deg) scale(1.03); }
-  50%      { transform: rotate(0deg) scale(1.06); }
-  75%      { transform: rotate(-6deg) scale(1.03); }
-}
-@keyframes hb-brand-ring {
-  0%   { transform: scale(.6); opacity: .55; }
-  100% { transform: scale(1.5); opacity: 0; }
+  25%      { transform: rotate(5deg)  scale(1.03); }
+  50%      { transform: rotate(0deg)  scale(1.06); }
+  75%      { transform: rotate(-5deg) scale(1.03); }
 }
 .hb-brand-logo {
-  animation: hb-brand-spin 6.5s ease-in-out infinite;
-  filter: drop-shadow(0 0 12px rgba(251,191,36,.5)) drop-shadow(0 0 28px rgba(245,158,11,.3));
+  animation: hb-brand-spin 7s ease-in-out infinite;
+  filter: drop-shadow(0 0 10px rgba(251,191,36,.5)) drop-shadow(0 0 22px rgba(245,158,11,.32));
   position: relative;
   z-index: 2;
 }
-.hb-brand-ring {
-  position: absolute;
-  width: 120px;
-  height: 120px;
-  border-radius: 50%;
-  border: 1.5px solid;
-  animation: hb-brand-ring 3.2s ease-out infinite;
-  opacity: 0;
-}
-.hb-brand-ring-2 { animation-delay: 1.6s; }
 
 @keyframes hb-center-pulse {
   0%, 100% { opacity: .18; transform-origin: center; transform: scale(1); }
