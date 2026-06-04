@@ -20,7 +20,7 @@ import secrets
 from datetime import datetime, timezone, timedelta
 from typing import Optional, List, Dict, Any
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Body
 from pydantic import BaseModel, Field
 
 from .personas import PERSONAS, PERSONA_MAP
@@ -71,6 +71,20 @@ def create_marketing_router(db, require_owner_dep):
         "auto_approve": False,
     }
     scheduler_task: Dict[str, Optional[asyncio.Task]] = {"task": None}
+
+    # ── Inject saved credentials into os.environ at startup ──
+    async def _restore_credentials():
+        import os
+        try:
+            cur = db.marketing_credentials.find({}, {"_id": 0})
+            async for doc in cur:
+                key = doc.get("key")
+                val = doc.get("value")
+                if key and val:
+                    os.environ[key] = val
+            logger.info("[marketing] credentials restored from DB")
+        except Exception:
+            logger.exception("[marketing] credentials restore failed")
 
     async def _save_post(post: Dict[str, Any], status: str = "draft") -> Dict[str, Any]:
         doc = {
@@ -151,6 +165,82 @@ def create_marketing_router(db, require_owner_dep):
     @router.get("/channels")
     async def channels_status(owner=Depends(require_owner_dep)):
         return {"channels": get_all_status()}
+
+    @router.get("/credentials/{channel}")
+    async def get_channel_credentials(channel: str, owner=Depends(require_owner_dep)):
+        """Return stored (masked) credentials for a channel."""
+        from .connectors import CONNECTORS as _CONNS
+        if channel not in _CONNS:
+            raise HTTPException(404, "channel not found")
+        fields = _CONNS[channel].get("fields", [])
+        result = {}
+        for f in fields:
+            doc = await db.marketing_credentials.find_one({"key": f["key"]}, {"_id": 0, "value": 1})
+            v = doc.get("value") if doc else None
+            if not v:
+                import os
+                v = os.environ.get(f["key"], "")
+            # mask secrets
+            if v and f.get("secret"):
+                if len(v) > 12:
+                    masked = v[:4] + "•" * 8 + v[-4:]
+                else:
+                    masked = "•" * len(v)
+                result[f["key"]] = {"value": masked, "has_value": True}
+            else:
+                result[f["key"]] = {"value": v or "", "has_value": bool(v)}
+        return {"channel": channel, "fields": fields, "values": result}
+
+    @router.post("/credentials/{channel}")
+    async def save_channel_credentials(channel: str, payload: Dict[str, str] = Body(...), owner=Depends(require_owner_dep)):
+        """Save credentials for a channel.
+        Body: {"TELEGRAM_BOT_TOKEN": "...", "TELEGRAM_CHANNEL_ID": "@xxx"}
+        Empty/masked values (containing •) are ignored to preserve existing.
+        """
+        import os
+        from .connectors import CONNECTORS as _CONNS
+        if channel not in _CONNS:
+            raise HTTPException(404, "channel not found")
+        valid_keys = {f["key"] for f in _CONNS[channel].get("fields", [])}
+        saved = 0
+        for k, v in payload.items():
+            if k not in valid_keys:
+                continue
+            if not v or "•" in v:
+                continue  # skip empty/masked
+            v = v.strip()
+            await db.marketing_credentials.update_one(
+                {"key": k},
+                {"$set": {"key": k, "value": v, "channel": channel, "updated_at": _now()}},
+                upsert=True,
+            )
+            os.environ[k] = v  # live inject
+            saved += 1
+        return {"ok": True, "saved": saved, "channel": channel, "configured": _CONNS[channel]["is_configured"]()}
+
+    @router.delete("/credentials/{channel}/{key}")
+    async def delete_credential(channel: str, key: str, owner=Depends(require_owner_dep)):
+        import os
+        await db.marketing_credentials.delete_one({"key": key})
+        os.environ.pop(key, None)
+        return {"ok": True}
+
+    @router.post("/test-publish/{channel}")
+    async def test_publish(channel: str, payload: Dict[str, Any] = Body(default={}), owner=Depends(require_owner_dep)):
+        """Send a test message to verify the channel is wired up correctly."""
+        from .connectors import publish_to as _pub
+        test_post = {
+            "text": payload.get("text") or "🤖 رسالة اختبار من Zitex Marketing Suite ✨\nلو وصلتك = القناة شغّالة 100%!",
+            "image_url": None,
+            "topic": "اختبار",
+            "to_number": payload.get("to_number"),
+        }
+        try:
+            r = await _pub(channel, test_post)
+            return {"ok": True, **r}
+        except Exception as e:
+            return {"ok": False, "error": str(e)[:300]}
+
 
     @router.post("/generate")
     async def generate_one(payload: GenerateIn, owner=Depends(require_owner_dep)):
@@ -265,6 +355,7 @@ def create_marketing_router(db, require_owner_dep):
     # ── Restore scheduler state on startup ──
     async def _restore():
         try:
+            await _restore_credentials()  # inject saved keys into os.environ
             st = await db.marketing_settings.find_one({"_id": "scheduler"}, {"_id": 0})
             if st and st.get("running"):
                 scheduler_state.update(st)

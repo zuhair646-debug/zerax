@@ -482,7 +482,10 @@ def extra_summarize(name: str, result: Dict[str, Any]) -> Optional[str]:
     if not result.get("ok", False):
         return f"فشل: {(result.get('error') or '')[:120]}"
     if name == "web_search":
-        return f"{result.get('count', 0)} نتيجة بحث"
+        # Tolerate both schemas: DuckDuckGo 'count' or Tavily 'result_count'
+        n = result.get("count") or result.get("result_count") or len(result.get("results") or [])
+        rt = result.get("response_time_sec")
+        return f"{n} نتيجة بحث" + (f" • {rt}ث" if rt else "")
     if name == "fetch_url":
         return f"{result.get('status')} • {result.get('length', 0)} حرف"
     if name == "view_bulk_files":
@@ -511,7 +514,11 @@ def extra_preview(name: str, result: Dict[str, Any]) -> Optional[str]:
         return result["error"][:300]
     if name == "web_search":
         rs = result.get("results", [])
-        return "\n".join(f"• {r['title']}\n  {r['url']}\n  {r['snippet'][:150]}" for r in rs[:5])
+        # Tolerate both schemas: DuckDuckGo uses 'snippet', Tavily uses 'content'
+        return "\n".join(
+            f"• {r.get('title', '')}\n  {r.get('url', '')}\n  {(r.get('snippet') or r.get('content') or '')[:150]}"
+            for r in rs[:5]
+        )
     if name == "fetch_url":
         return (result.get("content") or "")[:500]
     if name == "view_bulk_files":

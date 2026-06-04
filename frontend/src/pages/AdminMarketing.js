@@ -393,38 +393,15 @@ export default function AdminMarketing({ user }) {
         {/* ─── CHANNELS TAB ─── */}
         {tab === 'channels' && (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {Object.entries(channelStatus).map(([key, c]) => {
-              const Icon = CHANNEL_ICONS[key] || Send;
-              return (
-                <Card key={key} className="bg-zinc-950/60 border-white/10">
-                  <CardContent className="p-5">
-                    <div className="flex items-center gap-3 mb-3">
-                      <div className="w-11 h-11 rounded-xl flex items-center justify-center"
-                           style={{ background: `${c.color}25`, border: `1px solid ${c.color}50` }}>
-                        <Icon className="w-5 h-5" style={{ color: c.color }} />
-                      </div>
-                      <div className="flex-1">
-                        <div className="text-base font-bold text-white">{c.label}</div>
-                        <div className="text-[11px] text-white/55">{c.cost}</div>
-                      </div>
-                      {c.configured
-                        ? <span className="text-[10px] font-black px-2 py-1 rounded bg-emerald-500/15 text-emerald-300 border border-emerald-400/30">متصل</span>
-                        : <span className="text-[10px] font-black px-2 py-1 rounded bg-white/5 text-white/45 border border-white/10">غير متصل</span>}
-                    </div>
-                    {!c.configured && (
-                      <div className="bg-amber-500/5 border border-amber-400/20 rounded-lg p-3 mt-2">
-                        <div className="text-[11px] font-bold text-amber-300 mb-1.5 flex items-center gap-1">
-                          <AlertCircle className="w-3.5 h-3.5" />خطوات الربط:
-                        </div>
-                        <ol className="text-[11px] text-white/70 space-y-1 list-decimal list-inside">
-                          {(c.setup_steps || []).map((s, i) => <li key={i}>{s}</li>)}
-                        </ol>
-                      </div>
-                    )}
-                  </CardContent>
-                </Card>
-              );
-            })}
+            {Object.entries(channelStatus).map(([key, c]) => (
+              <ChannelCard
+                key={key}
+                channelKey={key}
+                channel={c}
+                token={token}
+                onSaved={() => { loadOverview(); }}
+              />
+            ))}
           </div>
         )}
 
@@ -542,6 +519,156 @@ function StatCard({ label, value, icon: Icon, color = 'amber' }) {
       <div className="text-2xl font-black text-white">{value}</div>
       <div className="text-[10px] text-white/55 mt-0.5">{label}</div>
     </div>
+  );
+}
+
+function ChannelCard({ channelKey, channel, token, onSaved }) {
+  const Icon = CHANNEL_ICONS[channelKey] || Send;
+  const [open, setOpen] = useState(false);
+  const [values, setValues] = useState({});
+  const [loading, setLoading] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [testing, setTesting] = useState(false);
+  const [hasValues, setHasValues] = useState({});
+
+  const loadCreds = async () => {
+    setLoading(true);
+    try {
+      const r = await fetch(`${API}/api/marketing/credentials/${channelKey}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const d = await r.json();
+      const vals = {};
+      const has = {};
+      Object.entries(d.values || {}).forEach(([k, v]) => {
+        vals[k] = v.value || '';
+        has[k] = v.has_value;
+      });
+      setValues(vals);
+      setHasValues(has);
+    } catch (e) { toast.error('فشل تحميل البيانات'); }
+    finally { setLoading(false); }
+  };
+
+  const toggleOpen = () => {
+    const next = !open;
+    setOpen(next);
+    if (next && Object.keys(values).length === 0) loadCreds();
+  };
+
+  const save = async () => {
+    setSaving(true);
+    try {
+      const r = await fetch(`${API}/api/marketing/credentials/${channelKey}`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify(values),
+      });
+      const d = await r.json();
+      if (d.ok) {
+        toast.success(`✅ تم الحفظ (${d.saved} حقل) — ${d.configured ? 'القناة متصلة' : 'لازال بعض الحقول ناقص'}`);
+        loadCreds();
+        if (onSaved) onSaved();
+      } else { toast.error(d.detail || 'فشل'); }
+    } catch (e) { toast.error('خطأ: ' + e.message); }
+    finally { setSaving(false); }
+  };
+
+  const test = async () => {
+    setTesting(true);
+    try {
+      const r = await fetch(`${API}/api/marketing/test-publish/${channelKey}`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({}),
+      });
+      const d = await r.json();
+      if (d.ok) toast.success(`✨ نجح الاختبار — تحقق من ${channel.label}`);
+      else toast.error(`❌ ${d.error}`);
+    } catch (e) { toast.error('خطأ: ' + e.message); }
+    finally { setTesting(false); }
+  };
+
+  return (
+    <Card className="bg-zinc-950/60 border-white/10">
+      <CardContent className="p-5">
+        <div className="flex items-center gap-3 mb-3">
+          <div className="w-11 h-11 rounded-xl flex items-center justify-center"
+               style={{ background: `${channel.color}25`, border: `1px solid ${channel.color}50` }}>
+            <Icon className="w-5 h-5" style={{ color: channel.color }} />
+          </div>
+          <div className="flex-1">
+            <div className="text-base font-bold text-white">{channel.label}</div>
+            <div className="text-[11px] text-white/55">{channel.cost}</div>
+          </div>
+          {channel.configured
+            ? <span className="text-[10px] font-black px-2 py-1 rounded bg-emerald-500/15 text-emerald-300 border border-emerald-400/30">متصل</span>
+            : <span className="text-[10px] font-black px-2 py-1 rounded bg-white/5 text-white/45 border border-white/10">غير متصل</span>}
+        </div>
+
+        {!open && (
+          <Button
+            onClick={toggleOpen}
+            size="sm"
+            className="w-full bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-400/30"
+            data-testid={`channel-${channelKey}-open`}
+          >
+            {channel.configured ? '🔧 تعديل البيانات' : '➕ إضافة البيانات'}
+          </Button>
+        )}
+
+        {open && (
+          <div className="space-y-3 pt-2 border-t border-white/8">
+            {loading && (
+              <div className="flex items-center justify-center py-6">
+                <Loader2 className="w-5 h-5 animate-spin text-amber-400" />
+              </div>
+            )}
+            {!loading && (channel.fields || []).map((f) => (
+              <div key={f.key}>
+                <label className="text-[11px] font-bold text-amber-300 mb-1 block">
+                  {f.label} {f.required && <span className="text-rose-400">*</span>}
+                  {hasValues[f.key] && f.secret && <span className="text-[9px] text-emerald-400 mr-2">(محفوظ — اتركه فارغاً ليبقى كما هو)</span>}
+                </label>
+                <Input
+                  value={values[f.key] || ''}
+                  onChange={(e) => setValues({ ...values, [f.key]: e.target.value })}
+                  placeholder={f.placeholder}
+                  type={f.secret ? 'password' : 'text'}
+                  className="bg-black/40 border-white/15 font-mono text-xs"
+                  data-testid={`channel-${channelKey}-field-${f.key}`}
+                />
+              </div>
+            ))}
+            <div className="bg-amber-500/5 border border-amber-400/20 rounded-lg p-3">
+              <div className="text-[11px] font-bold text-amber-300 mb-1.5 flex items-center gap-1">
+                <AlertCircle className="w-3.5 h-3.5" />كيف تحصل على البيانات:
+              </div>
+              <ol className="text-[11px] text-white/70 space-y-1 list-decimal list-inside">
+                {(channel.setup_steps || []).map((s, i) => <li key={i}>{s}</li>)}
+              </ol>
+            </div>
+            <div className="flex items-center gap-2">
+              <Button onClick={save} disabled={saving} size="sm"
+                      className="bg-amber-500 hover:bg-amber-400 text-black font-bold"
+                      data-testid={`channel-${channelKey}-save`}>
+                {saving ? <Loader2 className="w-3 h-3 animate-spin" /> : <CheckCircle2 className="w-3 h-3" />}
+                حفظ
+              </Button>
+              {channel.configured && (
+                <Button onClick={test} disabled={testing} size="sm" variant="outline"
+                        className="border-emerald-400/30 text-emerald-300"
+                        data-testid={`channel-${channelKey}-test`}>
+                  {testing ? <Loader2 className="w-3 h-3 animate-spin" /> : <Send className="w-3 h-3" />}
+                  اختبار
+                </Button>
+              )}
+              <Button onClick={() => setOpen(false)} size="sm" variant="ghost" className="text-white/55 mr-auto">إلغاء</Button>
+            </div>
+          </div>
+        )}
+      </CardContent>
+    </Card>
   );
 }
 

@@ -1,11 +1,8 @@
 """Channel connectors — Telegram / Discord / Email (Resend) / Twitter / WhatsApp.
 
-Each connector exposes:
-  - publish(text, image_url) → returns external_id
-  - reply(to_user, text) → respond to inbound message
-  - is_configured() → bool
-
-Missing credentials raise a clear ValueError so the UI knows what to ask for.
+Credentials live in os.environ. They are populated from DB at startup
+(see routes.create_marketing_router._restore_credentials) and updated live
+when the owner saves new credentials via the API.
 """
 import os
 import logging
@@ -178,6 +175,8 @@ def instagram_is_configured() -> bool:
 
 
 # ─── Registry ───────────────────────────────────────────────
+# `fields` describes which env vars each connector needs. The UI renders
+# these as a form; saving writes them to DB + injects into os.environ.
 CONNECTORS = {
     "telegram": {
         "publish": telegram_publish,
@@ -187,12 +186,16 @@ CONNECTORS = {
         "color": "#26A5E4",
         "cost": "مجاني",
         "needs_image": False,
+        "fields": [
+            {"key": "TELEGRAM_BOT_TOKEN", "label": "Bot Token", "placeholder": "1234567890:AAH...", "secret": True, "required": True},
+            {"key": "TELEGRAM_CHANNEL_ID", "label": "Channel ID أو @username", "placeholder": "@zitex_official أو -1001234567", "secret": False, "required": True},
+        ],
         "setup_steps": [
             "افتح @BotFather في Telegram",
             "أرسل /newbot ثم سمّ البوت ZitexBot",
-            "احفظ الـ Token الذي يعطيك إياه",
-            "أنشئ قناة عامة @zitexai واجعل البوت admin فيها",
-            "أضف TELEGRAM_BOT_TOKEN و TELEGRAM_CHANNEL_ID لـ Railway env",
+            "انسخ الـ Token الذي يعطيك إياه",
+            "أنشئ قناة عامة (مثل @zitex_official) واجعل البوت admin فيها",
+            "الصق الـ Token و اسم القناة في الحقول أعلاه واضغط حفظ",
         ],
     },
     "discord": {
@@ -203,11 +206,14 @@ CONNECTORS = {
         "color": "#5865F2",
         "cost": "مجاني",
         "needs_image": False,
+        "fields": [
+            {"key": "DISCORD_WEBHOOK_URL", "label": "Webhook URL", "placeholder": "https://discord.com/api/webhooks/...", "secret": True, "required": True},
+        ],
         "setup_steps": [
             "افتح سيرفر Discord الخاص بك",
-            "Server Settings → Integrations → Webhooks",
-            "Create Webhook → اختر القناة → انسخ الـ URL",
-            "أضف DISCORD_WEBHOOK_URL لـ Railway env",
+            "Server Settings → Integrations → Webhooks → New Webhook",
+            "اختر القناة → Copy Webhook URL",
+            "الصقه في الحقل أعلاه واضغط حفظ",
         ],
     },
     "email": {
@@ -218,9 +224,15 @@ CONNECTORS = {
         "color": "#EA580C",
         "cost": "مجاني حتى 3000 إيميل/شهر",
         "needs_image": False,
+        "fields": [
+            {"key": "RESEND_API_KEY", "label": "Resend API Key", "placeholder": "re_xxxxx", "secret": True, "required": True},
+            {"key": "RESEND_FROM", "label": "From عنوان المرسل", "placeholder": "Zitex <noreply@zitex.com>", "secret": False, "required": False},
+            {"key": "MARKETING_NEWSLETTER_LIST", "label": "قائمة بريد (مفصولة بفواصل)", "placeholder": "user1@example.com, user2@example.com", "secret": False, "required": False},
+        ],
         "setup_steps": [
-            "RESEND_API_KEY متوفر بالفعل ✅",
-            "أضف MARKETING_NEWSLETTER_LIST قائمة بريد مفصولة بفاصلة",
+            "سجّل في resend.com (مجاني)",
+            "Dashboard → API Keys → Create",
+            "أضف الـ key في الحقل أعلاه",
         ],
     },
     "twitter": {
@@ -231,10 +243,13 @@ CONNECTORS = {
         "color": "#1DA1F2",
         "cost": "$100/شهر (Basic plan)",
         "needs_image": False,
+        "fields": [
+            {"key": "TWITTER_BEARER_TOKEN", "label": "Bearer Token", "placeholder": "AAAAAAAAAAAA...", "secret": True, "required": True},
+        ],
         "setup_steps": [
-            "اشترك بـ Twitter Developer Basic plan",
-            "أنشئ App → احصل على Bearer Token",
-            "أضف TWITTER_BEARER_TOKEN لـ Railway env",
+            "اشترك في developer.twitter.com → Basic plan ($100/شهر)",
+            "Create Project → Create App → احصل على Bearer Token",
+            "الصقه في الحقل أعلاه",
         ],
     },
     "whatsapp": {
@@ -245,11 +260,17 @@ CONNECTORS = {
         "color": "#25D366",
         "cost": "Twilio Sandbox مجاني، Production ~$0.005/رسالة",
         "needs_image": False,
+        "fields": [
+            {"key": "TWILIO_ACCOUNT_SID", "label": "Account SID", "placeholder": "AC...", "secret": True, "required": True},
+            {"key": "TWILIO_AUTH_TOKEN", "label": "Auth Token", "placeholder": "...", "secret": True, "required": True},
+            {"key": "TWILIO_WHATSAPP_FROM", "label": "WhatsApp From (sandbox افتراضي)", "placeholder": "whatsapp:+14155238886", "secret": False, "required": False},
+            {"key": "MARKETING_WHATSAPP_TEST", "label": "رقم تجريبي للنشر (+966...)", "placeholder": "+9665xxxxxxxx", "secret": False, "required": False},
+        ],
         "setup_steps": [
-            "افتح حساب على twilio.com",
+            "سجّل في twilio.com",
             "Activate WhatsApp Sandbox (مجاني للتجربة)",
-            "انسخ Account SID و Auth Token",
-            "أضفهم لـ Railway env",
+            "Console Dashboard → انسخ Account SID + Auth Token",
+            "الصقهم في الحقول أعلاه",
         ],
     },
     "instagram": {
@@ -260,12 +281,15 @@ CONNECTORS = {
         "color": "#E1306C",
         "cost": "مجاني (يحتاج Business account)",
         "needs_image": True,
+        "fields": [
+            {"key": "INSTAGRAM_ACCESS_TOKEN", "label": "Long-Lived Access Token", "placeholder": "EAAB...", "secret": True, "required": True},
+            {"key": "INSTAGRAM_BUSINESS_ID", "label": "Business Account ID", "placeholder": "17841...", "secret": False, "required": True},
+        ],
         "setup_steps": [
-            "حوّل حساب Instagram لـ Business Account",
-            "اربطه بـ Facebook Page",
-            "أنشئ Meta App على developers.facebook.com",
-            "احصل على Long-Lived Access Token + Business Account ID",
-            "أضفهم لـ Railway env",
+            "حوّل حساب Instagram → Business Account واربطه بصفحة Facebook",
+            "developers.facebook.com → Create App → Add Instagram product",
+            "Graph API Explorer → احصل على Long-Lived Token",
+            "الصقهم في الحقول أعلاه",
         ],
     },
 }
@@ -280,6 +304,7 @@ def get_all_status() -> Dict[str, Any]:
             "cost": meta["cost"],
             "configured": meta["is_configured"](),
             "needs_image": meta["needs_image"],
+            "fields": meta.get("fields", []),
             "setup_steps": meta["setup_steps"],
         }
         for name, meta in CONNECTORS.items()
