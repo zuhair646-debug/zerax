@@ -1,5 +1,25 @@
 # Zitex AI Platform - PRD
 
+## 🎬 Video Studio Roadmap (saved Feb 2026)
+**Inspiration**: Viralux AI — short cinematic videos with goal-based optimization.
+
+**Must-have features (priority)**:
+1. **Unlimited duration** — REMOVE the 12s cap. Calculate cost dynamically per second and show to user before generation.
+2. **Goal-Based Modes**: Max Watch Time / Max Engagement / Balanced (like Viralux's 3 modes).
+3. **Image → Video Wizard**: upload product image → generate cinematic ad video (Runway/Veo).
+4. **Performance Insights**: AI explains why each shot was structured this way.
+5. **Stats Dashboard**: count of videos generated, total seconds, total cost, top-performing prompts.
+6. **History grid**: thumbnails of every video user generated, click to re-edit or re-generate.
+7. **Cinematic AI Engines** to add:
+   - Veo 3.1 (Google) — best 4K + native audio
+   - Runway Gen-4 — marketers' favourite
+   - Pika 2 — fast social content
+   - MiniMax (via fal.ai) — cheapest
+   - Sora 2 (already wired)
+8. **Cost calculator**: live preview "هذا الفيديو راح يكلّفك X نقطة (Y ريال)" before generation.
+
+---
+
 ## Original Problem Statement
 منصة "Zitex" - ذكاء اصطناعي يولّد مواقع/ألعاب/صور/فيديو/تطبيقات. الكل معزول في Modules. النشر يدوي إلى Railway.
 
