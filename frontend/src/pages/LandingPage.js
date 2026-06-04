@@ -11,54 +11,130 @@ const LandingPage = ({ user }) => {
   const goOrRegister = (target) => navigate(user ? target : '/register');
   const showSoon = () => toast.info('🛠️ هذا القسم قيد التحضير — قريباً!', { duration: 2200 });
 
-  // Working sections (top)
-  const liveCards = [
+  // Organized sections by category
+  const categories = [
     {
-      type: 'mobile-app',
-      title: '📱 تطبيقات الجوال',
-      desc: 'باني محادثاتي + معاينة iPhone',
-      gradient: 'from-cyan-500/20 to-blue-500/10',
-      accent: '#06b6d4',
-      bgImage: 'https://images.unsplash.com/photo-1512941937669-90a1b58e7e9c?auto=format&fit=crop&w=800&q=70',
-      badge: 'جديد',
-      action: () => goOrRegister('/dashboard/apps'),
-    },
-    {
-      type: 'mobile-market',
-      title: '🔥 سوق التطبيقات',
-      desc: 'Remix تطبيقات المجتمع',
-      gradient: 'from-amber-500/20 to-orange-500/10',
-      accent: '#f59e0b',
-      bgImage: 'https://images.unsplash.com/photo-1551434678-e076c223a692?auto=format&fit=crop&w=800&q=70',
-      badge: 'جديد',
-      action: () => navigate('/dashboard/apps-market'),
-    },
-    {
-      type: 'website-template',
-      title: 'مواقع جاهزة',
-      desc: '٢٥ قالب احترافي',
-      gradient: 'from-emerald-500/20 to-teal-500/10',
+      id: 'websites',
+      label: 'المواقع',
       accent: '#10b981',
-      bgImage: 'https://images.unsplash.com/photo-1467232004584-a241de8bcf5d?auto=format&fit=crop&w=800&q=70',
-      action: () => goOrRegister('/websites'),
+      cards: [
+        {
+          type: 'website-freebuild',
+          title: 'إنشاء موقع من الصفر',
+          desc: 'FreeBuild — تصميم حصري',
+          gradient: 'from-emerald-500/20 to-teal-500/10',
+          accent: '#10b981',
+          bgImage: 'https://images.unsplash.com/photo-1467232004584-a241de8bcf5d?auto=format&fit=crop&w=800&q=70',
+          action: () => goOrRegister('/ai-agent'),
+        },
+        {
+          type: 'website-template',
+          title: 'مواقع جاهزة',
+          desc: '٢٥ قالب احترافي',
+          gradient: 'from-teal-500/20 to-emerald-500/10',
+          accent: '#14b8a6',
+          bgImage: 'https://images.unsplash.com/photo-1559028012-481c04fa702d?auto=format&fit=crop&w=800&q=70',
+          action: () => goOrRegister('/websites'),
+        },
+      ],
     },
     {
-      type: 'image',
-      title: 'إنشاء الصور',
-      desc: 'GPT Image 1 / Nano Banana',
-      gradient: 'from-purple-500/20 to-violet-500/10',
+      id: 'apps',
+      label: 'التطبيقات',
+      accent: '#06b6d4',
+      cards: [
+        {
+          type: 'app-builder',
+          title: 'إنشاء تطبيق من الصفر',
+          desc: 'React Native + Flutter + Native',
+          gradient: 'from-cyan-500/20 to-blue-500/10',
+          accent: '#06b6d4',
+          bgImage: 'https://images.unsplash.com/photo-1512941937669-90a1b58e7e9c?auto=format&fit=crop&w=800&q=70',
+          badge: 'مطوّر',
+          action: () => goOrRegister('/app-builder'),
+        },
+        {
+          type: 'app-continue',
+          title: 'تطبيق قابل للإكمال',
+          desc: 'ارفع كودك ونكمل معك',
+          gradient: 'from-blue-500/20 to-indigo-500/10',
+          accent: '#3b82f6',
+          bgImage: 'https://images.unsplash.com/photo-1555066931-4365d14bab8c?auto=format&fit=crop&w=800&q=70',
+          badge: 'جديد',
+          action: () => goOrRegister('/app-builder?mode=continue'),
+        },
+        {
+          type: 'mobile-market',
+          title: 'سوق التطبيقات',
+          desc: 'Remix تطبيقات المجتمع',
+          gradient: 'from-amber-500/20 to-orange-500/10',
+          accent: '#f59e0b',
+          bgImage: 'https://images.unsplash.com/photo-1551434678-e076c223a692?auto=format&fit=crop&w=800&q=70',
+          action: () => navigate('/dashboard/apps-market'),
+        },
+      ],
+    },
+    {
+      id: 'games',
+      label: 'الألعاب',
+      accent: '#84cc16',
+      cards: [
+        {
+          type: 'game-web',
+          title: 'مواقع ألعاب',
+          desc: 'HTML5 / Phaser / Three.js',
+          gradient: 'from-lime-500/20 to-green-500/10',
+          accent: '#84cc16',
+          bgImage: 'https://images.unsplash.com/photo-1493711662062-fa541adb3fc8?auto=format&fit=crop&w=800&q=70',
+          badge: 'قريباً',
+          action: () => goOrRegister('/games/web'),
+        },
+        {
+          type: 'game-mobile',
+          title: 'تطبيقات ألعاب',
+          desc: 'Unity / Godot + 3D Tools',
+          gradient: 'from-green-500/20 to-emerald-500/10',
+          accent: '#22c55e',
+          bgImage: 'https://images.unsplash.com/photo-1542751371-adc38448a05e?auto=format&fit=crop&w=800&q=70',
+          badge: 'قريباً',
+          action: () => goOrRegister('/games/mobile'),
+        },
+      ],
+    },
+    {
+      id: 'media',
+      label: 'الصور والفيديوهات',
       accent: '#a855f7',
-      bgImage: 'https://images.unsplash.com/photo-1502691876148-a84978e59af8?auto=format&fit=crop&w=800&q=70',
-      action: () => goOrRegister('/chat/image'),
-    },
-    {
-      type: 'video',
-      title: 'إنشاء الفيديوهات',
-      desc: 'Sora 2 — سيناريو ذكي',
-      gradient: 'from-orange-500/20 to-red-500/10',
-      accent: '#f97316',
-      bgImage: 'https://images.unsplash.com/photo-1485846234645-a62644f84728?auto=format&fit=crop&w=800&q=70',
-      action: () => goOrRegister('/chat/video'),
+      cards: [
+        {
+          type: 'image',
+          title: 'إنشاء الصور',
+          desc: 'Flux Pro Ultra · Nano Banana',
+          gradient: 'from-purple-500/20 to-violet-500/10',
+          accent: '#a855f7',
+          bgImage: 'https://images.unsplash.com/photo-1502691876148-a84978e59af8?auto=format&fit=crop&w=800&q=70',
+          action: () => goOrRegister('/chat/image'),
+        },
+        {
+          type: 'video',
+          title: 'إنشاء الفيديوهات',
+          desc: 'Veo 3 · Kling · Sora 2',
+          gradient: 'from-rose-500/20 to-pink-500/10',
+          accent: '#f43f5e',
+          bgImage: 'https://images.unsplash.com/photo-1485846234645-a62644f84728?auto=format&fit=crop&w=800&q=70',
+          action: () => goOrRegister('/chat/video'),
+        },
+        {
+          type: 'voice',
+          title: 'الأصوات واللهجات',
+          desc: 'ElevenLabs · سعودي طبيعي',
+          gradient: 'from-sky-500/20 to-cyan-500/10',
+          accent: '#0ea5e9',
+          bgImage: 'https://images.unsplash.com/photo-1478737270239-2f02b77fc618?auto=format&fit=crop&w=800&q=70',
+          badge: 'جديد',
+          action: () => goOrRegister('/chat/voice'),
+        },
+      ],
     },
   ];
 
@@ -182,14 +258,35 @@ const LandingPage = ({ user }) => {
           </div>
         </div>
 
-        {/* WORKING SECTIONS */}
-        <div className="text-center mb-4">
+        {/* WORKING SECTIONS — GROUPED BY CATEGORY */}
+        <div className="text-center mb-6">
           <div className="text-xs font-bold text-amber-300/70 tracking-widest mb-1">الأقسام المتاحة</div>
           <div className="h-px w-20 mx-auto bg-gradient-to-r from-transparent via-amber-400/40 to-transparent"></div>
         </div>
-        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 sm:gap-4">
-          {liveCards.map((c) => <Card key={c.type} {...c} />)}
-        </div>
+
+        {categories.map((cat) => (
+          <section key={cat.id} className="mb-9" data-testid={`category-${cat.id}`}>
+            <div className="flex items-center gap-3 mb-3">
+              <div
+                className="h-px flex-1"
+                style={{ background: `linear-gradient(to left, transparent, ${cat.accent}40, transparent)` }}
+              />
+              <div
+                className="px-3 py-1 rounded-full border text-[11px] font-bold tracking-wider"
+                style={{ borderColor: `${cat.accent}40`, color: cat.accent, background: `${cat.accent}10` }}
+              >
+                {cat.label}
+              </div>
+              <div
+                className="h-px flex-1"
+                style={{ background: `linear-gradient(to right, transparent, ${cat.accent}40, transparent)` }}
+              />
+            </div>
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 sm:gap-4">
+              {cat.cards.map((c) => <Card key={c.type} {...c} />)}
+            </div>
+          </section>
+        ))}
 
         {/* COMING SOON SECTIONS */}
         <div className="text-center mb-4 mt-10">
