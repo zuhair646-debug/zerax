@@ -1,5 +1,27 @@
 # Zitex AI Platform - PRD
 
+### 🆕 Jun 4, 2026 — UI ARCHITECTURE: Categorized Landing + AppBuilder + GamesHub ✅
+
+**طلب المستخدم**: تقسيم `LandingPage` لأقسام واضحة (مواقع/تطبيقات/ألعاب/ميديا) + `AppBuilder` موحّد بـ4 أوضاع (React Native / Flutter / Native / قابل للإكمال) **بسايدبار بدل tabs** + `GamesHub` placeholder.
+
+**ما تم في هذه الجلسة**:
+- ✅ ربط `AppBuilder.js` (425 سطر) و `GamesHub.js` (150 سطر) في `App.js` routes:
+  - `/app-builder` (4 modes كروت بـicons + accent colors + tech stack)
+  - `/games/web` (Phaser/Three.js/PixiJS/p5.js)
+  - `/games/mobile` (Unity/Godot/Unreal/Blender + 8 3D capabilities)
+- ✅ تثبيت `@sentry/react@10.56.0` (كان مفقود يكسر التطبيق بالكامل)
+- ✅ Lint نظيف على الـ4 ملفات (0 errors)
+- ✅ Visual smoke tested — Landing categorized بصرياً، AppBuilder + GamesHub يحمّلون مع auth صحيح
+
+**Files**:
+- MODIFIED: `frontend/src/App.js` (+5 imports/routes)
+- VERIFIED EXISTING: `frontend/src/pages/AppBuilder.js`, `GamesHub.js`, `LandingPage.js`
+- INSTALLED: `@sentry/react`
+
+**P1 المقبل**: ربط أدوات الـsidebar الفعلية في AppBuilder (GitHub/DB/Keys/Files)، صفحات Pricing & Onboarding، Section Profiles ↔ Image/Video Studio.
+
+---
+
 ## 🎬 Video Studio Roadmap (saved Feb 2026)
 **Inspiration**: Viralux AI — short cinematic videos with goal-based optimization.
 

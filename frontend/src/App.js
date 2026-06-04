@@ -55,6 +55,8 @@ import MobileAppBuilder from '@/pages/MobileAppBuilder';
 import AppStudio from '@/pages/AppStudio';
 import MobileAppMarketplace from '@/pages/MobileAppMarketplace';
 import AIAgent from '@/pages/AIAgent';
+import AppBuilder from '@/pages/AppBuilder';
+import GamesHub from '@/pages/GamesHub';
 import AvatarSettings from '@/pages/AvatarSettings';
 import ChannelBridge from '@/pages/ChannelBridge';
 import AdminAICore from '@/pages/AdminAICore';
@@ -111,6 +113,9 @@ function App() {
           <Route path="/" element={<LandingPage user={user} />} />
           <Route path="/build-from-zero" element={<ProtectedRoute><FreeBuild /></ProtectedRoute>} />
           <Route path="/ai-agent" element={<ProtectedRoute><AIAgent /></ProtectedRoute>} />
+          <Route path="/app-builder" element={<ProtectedRoute><AppBuilder user={user} /></ProtectedRoute>} />
+          <Route path="/games/web" element={<ProtectedRoute><GamesHub user={user} kind="web" /></ProtectedRoute>} />
+          <Route path="/games/mobile" element={<ProtectedRoute><GamesHub user={user} kind="mobile" /></ProtectedRoute>} />
           <Route path="/vrm-preview" element={<VrmPreview />} />
           <Route path="/demo" element={<DemoLanding />} />
           <Route path="/login" element={<LoginPage setUser={setUser} />} />
