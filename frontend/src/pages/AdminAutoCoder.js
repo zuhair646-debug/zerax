@@ -67,13 +67,12 @@ const TOOL_LABEL = {
 };
 
 const MODEL_OPTIONS = [
-  { id: 'auto', label: '🤖 Auto Smart (مُوصى به)', cost: 'يختار أرخص نموذج قادر تلقائياً', tone: 'amber', icon: Zap },
-  { id: 'openai', label: 'GPT-5.5 (الأقوى للبرمجة)', cost: 'مدفوع — الأقوى', tone: 'violet', icon: Sparkles },
-  { id: 'claude', label: 'Claude Sonnet 4.5', cost: 'مدفوع — الأذكى', tone: 'amber', icon: Sparkles },
-  { id: 'kimi', label: 'Kimi K2.6 (Moonshot 🇨🇳)', cost: 'مدفوع — أرخص بكثير', tone: 'sky', icon: Sparkles },
-  { id: 'deepseek', label: 'DeepSeek V3 (🇨🇳 للبرمجة)', cost: 'مدفوع — رخيص جداً', tone: 'emerald', icon: Sparkles },
-  { id: 'groq', label: 'Llama 3.3 70B', cost: 'مجاني — سريع جداً', tone: 'emerald', icon: Zap },
-  { id: 'gemini', label: 'Gemini 2.5 Flash', cost: 'مجاني — قدرة كبيرة', tone: 'sky', icon: Sparkles },
+  { id: 'auto', label: '🤖 موجّه الجودة (موصى)', cost: 'يختار أعلى جودة متاحة تلقائياً', tone: 'amber', icon: Zap },
+  { id: 'claude', label: 'Claude Sonnet 4.5 (الأذكى)', cost: 'Premium — Q10', tone: 'amber', icon: Sparkles },
+  { id: 'openai', label: 'GPT-5.5 (الأقوى)', cost: 'Premium — Q10', tone: 'violet', icon: Sparkles },
+  { id: 'gemini', label: 'Gemini 3 Pro (سياق طويل)', cost: 'Premium — Q9-10', tone: 'sky', icon: Sparkles },
+  { id: 'deepseek', label: 'DeepSeek V3 (🇨🇳 reasoning)', cost: 'Strong — Q8-9', tone: 'emerald', icon: Sparkles },
+  { id: 'kimi', label: 'Kimi K2 (🇨🇳 عربي طبيعي)', cost: 'Strong — Q8-9', tone: 'sky', icon: Sparkles },
 ];
 
 // Map common backend error messages to friendlier guidance
@@ -768,6 +767,24 @@ export default function AdminAutoCoder() {
             <ShieldCheck className="w-4 h-4 text-amber-400" /> برمجة زيتاكس
             <span className="text-[10px] text-amber-300/60 font-normal me-1">(Owner Only)</span>
           </h1>
+          <div className="hidden md:flex items-center gap-1 me-3 ms-2 border-s border-amber-500/20 ps-3">
+            <button
+              onClick={() => nav('/admin/sections')}
+              data-testid="ac-link-sections"
+              title="مركز الأقسام الذكية"
+              className="px-2 py-1 rounded text-[11px] bg-zinc-800/60 hover:bg-zinc-700 text-zinc-300 hover:text-amber-300 flex items-center gap-1"
+            >
+              <Layers className="w-3 h-3" /> الأقسام
+            </button>
+            <button
+              onClick={() => nav('/admin/quality-router')}
+              data-testid="ac-link-quality"
+              title="موجّه الجودة"
+              className="px-2 py-1 rounded text-[11px] bg-zinc-800/60 hover:bg-zinc-700 text-zinc-300 hover:text-amber-300 flex items-center gap-1"
+            >
+              <Sparkles className="w-3 h-3" /> موجّه الجودة
+            </button>
+          </div>
         </div>
         <div className="flex items-center gap-2">
           <ModelSelector

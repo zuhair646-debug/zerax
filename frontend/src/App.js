@@ -60,6 +60,7 @@ import ChannelBridge from '@/pages/ChannelBridge';
 import AdminAICore from '@/pages/AdminAICore';
 import AdminAutoCoder from '@/pages/AdminAutoCoder';
 import AdminQualityRouter from '@/pages/AdminQualityRouter';
+import AdminSections from '@/pages/AdminSections';
 import AdminIndependence from '@/pages/AdminIndependence';
 import AdminLearning from '@/pages/AdminLearning';
 import Companion from '@/pages/Companion';
@@ -164,6 +165,8 @@ function App() {
           <Route path="/dashboard/bridge" element={<ProtectedRoute><ChannelBridge user={user} /></ProtectedRoute>} />
           <Route path="/admin/ai-core" element={<ProtectedRoute adminOnly><AdminAICore user={user} /></ProtectedRoute>} />
           <Route path="/admin/autocoder" element={<ProtectedRoute adminOnly><AdminAutoCoder user={user} /></ProtectedRoute>} />
+          <Route path="/admin/quality-router" element={<ProtectedRoute adminOnly><AdminQualityRouter user={user} /></ProtectedRoute>} />
+          <Route path="/admin/sections" element={<ProtectedRoute adminOnly><AdminSections user={user} /></ProtectedRoute>} />
           <Route path="/admin/independence" element={<ProtectedRoute adminOnly><AdminIndependence user={user} /></ProtectedRoute>} />
           <Route path="/admin/learning" element={<ProtectedRoute adminOnly><AdminLearning user={user} /></ProtectedRoute>} />
           <Route path="/companion" element={<ProtectedRoute><Companion user={user} setUser={setUser} /></ProtectedRoute>} />

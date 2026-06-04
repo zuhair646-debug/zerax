@@ -2346,6 +2346,35 @@ def create_autocoder_router(db, get_current_user, require_owner):
         return decision
 
     # ─────────────────────────────────────────────────────────────
+    # 🎯 Section AI Profiles — Per-section AI expert + diversity
+    # ─────────────────────────────────────────────────────────────
+    @router.get("/sections")
+    async def sections_list(owner=Depends(require_owner)):
+        from .section_profiles import list_sections
+        return {"sections": list_sections(owner=True)}
+
+    @router.get("/sections/{section_id}")
+    async def section_detail(section_id: str, owner=Depends(require_owner)):
+        from .section_profiles import get_section_detail
+        d = get_section_detail(section_id)
+        if not d:
+            raise HTTPException(404, "section not found")
+        return d
+
+    @router.post("/sections/{section_id}/pick")
+    async def section_pick(section_id: str, payload: Dict[str, Any], owner=Depends(require_owner)):
+        from .section_profiles import pick_for_section
+        seed = payload.get("seed")
+        try:
+            seed_int = int(seed) if seed is not None else None
+        except Exception:
+            seed_int = None
+        result = pick_for_section(section_id, seed=seed_int)
+        if "error" in result:
+            raise HTTPException(404, result["error"])
+        return result
+
+    # ─────────────────────────────────────────────────────────────
     # 📚 Learning Journal endpoints (continuous learning)
     # ─────────────────────────────────────────────────────────────
     @router.get("/learning/stats")
