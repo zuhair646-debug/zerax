@@ -858,6 +858,14 @@ export default function AdminAutoCoder() {
           </h1>
           <div className="hidden md:flex items-center gap-1 me-3 ms-2 border-s border-amber-500/20 ps-3">
             <button
+              onClick={() => nav('/admin/api-keys')}
+              data-testid="ac-link-keys"
+              title="مفاتيح الذكاء الصناعي والرصيد"
+              className="px-2 py-1 rounded text-[11px] bg-zinc-800/60 hover:bg-zinc-700 text-zinc-300 hover:text-amber-300 flex items-center gap-1"
+            >
+              <ShieldCheck className="w-3 h-3" /> المفاتيح
+            </button>
+            <button
               onClick={() => nav('/admin/sections')}
               data-testid="ac-link-sections"
               title="مركز الأقسام الذكية"

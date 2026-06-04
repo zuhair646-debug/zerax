@@ -3353,6 +3353,15 @@ try:
 except Exception as _acme:
     logging.getLogger(__name__).error(f"Failed to register autocoder meta module: {_acme}", exc_info=True)
 
+# ============== OWNER API KEYS (Live balance + payment links + alerts) ==============
+try:
+    from modules.owner_keys import create_keys_router
+    _keys_router = create_keys_router(db, get_current_user, require_owner)
+    app.include_router(_keys_router)
+    logging.getLogger(__name__).info("Owner Keys module registered")
+except Exception as _kse:
+    logging.getLogger(__name__).error(f"Failed to register owner_keys module: {_kse}", exc_info=True)
+
 # ============== INDEPENDENCE STATUS (Owner-only API key health dashboard) ==============
 try:
     from modules.independence import create_independence_router

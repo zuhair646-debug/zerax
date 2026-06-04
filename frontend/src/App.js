@@ -61,6 +61,7 @@ import AdminAICore from '@/pages/AdminAICore';
 import AdminAutoCoder from '@/pages/AdminAutoCoder';
 import AdminQualityRouter from '@/pages/AdminQualityRouter';
 import AdminSections from '@/pages/AdminSections';
+import AdminApiKeys from '@/pages/AdminApiKeys';
 import AdminIndependence from '@/pages/AdminIndependence';
 import AdminAIReadiness from '@/pages/AdminAIReadiness';
 import AdminLearning from '@/pages/AdminLearning';
@@ -168,6 +169,7 @@ function App() {
           <Route path="/admin/autocoder" element={<ProtectedRoute adminOnly><AdminAutoCoder user={user} /></ProtectedRoute>} />
           <Route path="/admin/quality-router" element={<ProtectedRoute adminOnly><AdminQualityRouter user={user} /></ProtectedRoute>} />
           <Route path="/admin/sections" element={<ProtectedRoute adminOnly><AdminSections user={user} /></ProtectedRoute>} />
+          <Route path="/admin/api-keys" element={<ProtectedRoute adminOnly><AdminApiKeys user={user} /></ProtectedRoute>} />
           <Route path="/admin/independence" element={<ProtectedRoute adminOnly><AdminIndependence user={user} /></ProtectedRoute>} />
           <Route path="/admin/ai-readiness" element={<ProtectedRoute adminOnly><AdminAIReadiness user={user} /></ProtectedRoute>} />
           <Route path="/admin/learning" element={<ProtectedRoute adminOnly><AdminLearning user={user} /></ProtectedRoute>} />
