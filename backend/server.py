@@ -17,6 +17,17 @@ import base64
 import httpx
 import io
 
+try:
+    import sentry_sdk
+    from sentry_sdk.integrations.fastapi import FastApiIntegration
+    from sentry_sdk.integrations.starlette import StarletteIntegration
+    SENTRY_AVAILABLE = True
+except ImportError:
+    sentry_sdk = None
+    FastApiIntegration = None
+    StarletteIntegration = None
+    SENTRY_AVAILABLE = False
+
 # AI Features disabled for independent hosting
 # To enable: install openai, elevenlabs, Pillow and configure API keys
 AI_FEATURES_ENABLED = True
@@ -49,6 +60,19 @@ except ImportError:
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
+
+# Initialize Sentry error monitoring (backend)
+SENTRY_DSN = os.environ.get('SENTRY_DSN')
+if SENTRY_AVAILABLE and SENTRY_DSN:
+    sentry_sdk.init(
+        dsn=SENTRY_DSN,
+        integrations=[StarletteIntegration(transaction_style='endpoint'), FastApiIntegration(transaction_style='endpoint')],
+        traces_sample_rate=float(os.environ.get('SENTRY_TRACES_SAMPLE_RATE', '0.1')),
+        profiles_sample_rate=float(os.environ.get('SENTRY_PROFILES_SAMPLE_RATE', '0.0')),
+        environment=os.environ.get('RAILWAY_ENVIRONMENT_NAME') or os.environ.get('RAILWAY_ENVIRONMENT') or 'production',
+        release=os.environ.get('RAILWAY_GIT_COMMIT_SHA'),
+        send_default_pii=False,
+    )
 
 mongo_url = os.environ['MONGO_URL']
 client = AsyncIOMotorClient(mongo_url)
