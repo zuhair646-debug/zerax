@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button';
 import { useNavigate } from 'react-router-dom';
 import { Sparkles } from 'lucide-react';
 import SiteBannerStories from '@/components/SiteBannerStories';
+import HeroBanner from '@/components/HeroBanner';
 
 const LandingPage = ({ user }) => {
   const navigate = useNavigate();
@@ -222,35 +223,9 @@ const LandingPage = ({ user }) => {
           </p>
         </div>
 
-        {/* STANDALONE FEATURED CTA — short, focused, no AI-Agent box */}
-        <div
-          onClick={() => goOrRegister('/ai-agent')}
-          className="relative mb-10 cursor-pointer group rounded-2xl overflow-hidden border border-amber-400/25 hover:border-amber-300/60 transition-all hover:shadow-[0_20px_60px_-12px_rgba(245,158,11,0.45)]"
-          data-testid="hero-ai-agent"
-        >
-          <div className="absolute inset-0 bg-gradient-to-l from-amber-950/60 via-zinc-950 to-zinc-900" />
-          <div className="absolute inset-0 opacity-30" style={{
-            backgroundImage: 'radial-gradient(circle at 20% 50%, rgba(251,191,36,0.25), transparent 40%), radial-gradient(circle at 80% 30%, rgba(245,158,11,0.2), transparent 45%)',
-          }} />
-          <div className="relative px-5 sm:px-8 py-5 sm:py-6 flex items-center gap-4 sm:gap-6">
-            <div className="flex-shrink-0">
-              <ZitexLogo size="lg" />
-            </div>
-            <div className="flex-1 text-right min-w-0">
-              <div className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-amber-400/15 border border-amber-300/30 text-amber-300 text-[10px] font-black tracking-wider mb-1.5">
-                <Sparkles className="w-3 h-3" /> ذكاء واحد · معاينة مباشرة
-              </div>
-              <h2 className="text-xl sm:text-2xl font-black text-white leading-tight">
-                اكتب طلبك — والذكاء <span className="text-amber-300">يبني، يبحث، يولّد</span>
-              </h2>
-              <p className="hidden sm:block text-white/60 text-xs mt-1">
-                موقع، تطبيق، صور، فيديو، صوت — في شات واحد بمعاينة جنبه.
-              </p>
-            </div>
-            <div className="flex-shrink-0 px-4 sm:px-5 py-2.5 sm:py-3 rounded-xl bg-gradient-to-r from-amber-400 to-yellow-500 text-black font-black text-sm whitespace-nowrap shadow-lg group-hover:scale-105 transition-transform">
-              ابدأ →
-            </div>
-          </div>
+        {/* Rotating hero banner — 5 slides (Zitex/Video/Image/Game/App), 8s each */}
+        <div className="mb-10">
+          <HeroBanner onGo={goOrRegister} />
         </div>
 
         {/* WORKING SECTIONS — GROUPED BY CATEGORY */}

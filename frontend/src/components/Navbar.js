@@ -3,7 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { LogOut, LayoutDashboard, Shield, Menu, X } from 'lucide-react';
 
-// شعار Zitex — SVG حيّ بدون مربع، يدور برفق وله توهج ذهبي
+// شعار Zitex — حرف Z هندسي مع orbits متعددة تدور بشكل ذكي + قلب نابض
 export const ZitexLogo = ({ size = 'md', animated = true }) => {
   const px = { sm: 32, md: 44, lg: 64, xl: 96 }[size] || 44;
   const uid = React.useId();
@@ -14,7 +14,7 @@ export const ZitexLogo = ({ size = 'md', animated = true }) => {
       aria-label="Zitex"
     >
       <svg
-        viewBox="0 0 100 100"
+        viewBox="0 0 120 120"
         width={px}
         height={px}
         fill="none"
@@ -23,49 +23,64 @@ export const ZitexLogo = ({ size = 'md', animated = true }) => {
       >
         <defs>
           <linearGradient id={`zg-${uid}`} x1="0" y1="0" x2="1" y2="1">
-            <stop offset="0%" stopColor="#fde68a" />
-            <stop offset="45%" stopColor="#f59e0b" />
-            <stop offset="100%" stopColor="#b45309" />
+            <stop offset="0%" stopColor="#fef3c7" />
+            <stop offset="35%" stopColor="#fbbf24" />
+            <stop offset="70%" stopColor="#f59e0b" />
+            <stop offset="100%" stopColor="#92400e" />
           </linearGradient>
-          <radialGradient id={`zh-${uid}`} cx="50%" cy="50%" r="50%">
-            <stop offset="0%" stopColor="rgba(251,191,36,0.55)" />
-            <stop offset="60%" stopColor="rgba(245,158,11,0.15)" />
-            <stop offset="100%" stopColor="rgba(0,0,0,0)" />
-          </radialGradient>
+          <linearGradient id={`zgs-${uid}`} x1="0" y1="0" x2="1" y2="0">
+            <stop offset="0%" stopColor="#fbbf24" stopOpacity="0" />
+            <stop offset="50%" stopColor="#fde68a" stopOpacity="1" />
+            <stop offset="100%" stopColor="#fbbf24" stopOpacity="0" />
+          </linearGradient>
           <filter id={`zglow-${uid}`} x="-50%" y="-50%" width="200%" height="200%">
-            <feGaussianBlur stdDeviation="2.4" result="b" />
+            <feGaussianBlur stdDeviation="1.8" result="b" />
             <feMerge>
               <feMergeNode in="b" />
               <feMergeNode in="SourceGraphic" />
             </feMerge>
           </filter>
         </defs>
-        {/* halo glow */}
-        <circle cx="50" cy="50" r="46" fill={`url(#zh-${uid})`} className="zitex-logo-halo" />
-        {/* rotating thin arc */}
-        <g className="zitex-logo-orbit" style={{ transformOrigin: '50px 50px' }}>
-          <path
-            d="M 50 8 A 42 42 0 0 1 92 50"
-            stroke={`url(#zg-${uid})`}
-            strokeWidth="2"
-            strokeLinecap="round"
-            fill="none"
-            opacity="0.55"
-          />
-          <circle cx="92" cy="50" r="2.4" fill="#fde68a" />
+
+        {/* outer orbit — thin dotted, rotates CCW slow */}
+        <g className="zitex-orbit-outer" style={{ transformOrigin: '60px 60px' }}>
+          <circle cx="60" cy="60" r="54" stroke={`url(#zg-${uid})`} strokeWidth="0.8" strokeDasharray="2 5" fill="none" opacity="0.45" />
+          <circle cx="60" cy="6" r="1.8" fill="#fbbf24" />
         </g>
-        {/* the Z letter (handcrafted, no box) */}
-        <g filter={`url(#zglow-${uid})`}>
+
+        {/* middle orbit — arc with glowing head, rotates CW */}
+        <g className="zitex-orbit-mid" style={{ transformOrigin: '60px 60px' }}>
+          <path d="M 60 16 A 44 44 0 0 1 104 60" stroke={`url(#zg-${uid})`} strokeWidth="1.6" strokeLinecap="round" fill="none" opacity="0.7" />
+          <circle cx="104" cy="60" r="2.6" fill="#fde68a" />
+        </g>
+
+        {/* inner orbit — small fast counter-spin */}
+        <g className="zitex-orbit-inner" style={{ transformOrigin: '60px 60px' }}>
+          <circle cx="60" cy="60" r="36" stroke="#fbbf24" strokeWidth="0.5" fill="none" opacity="0.25" />
+          <circle cx="60" cy="24" r="1.5" fill="#fff7ed" />
+        </g>
+
+        {/* the Z letter — modern beveled with gradient sweep */}
+        <g filter={`url(#zglow-${uid})`} className="zitex-letter-pulse">
+          {/* main Z shape — angular, modern */}
           <path
-            d="M 26 26 L 74 26 L 74 36 L 42 64 L 74 64 L 74 74 L 26 74 L 26 64 L 58 36 L 26 36 Z"
+            d="M 36 36 L 84 36 L 84 44 L 50 76 L 84 76 L 84 84 L 36 84 L 36 76 L 70 44 L 36 44 Z"
             fill={`url(#zg-${uid})`}
-            stroke="#fbbf24"
-            strokeWidth="0.6"
-            strokeLinejoin="round"
+            stroke="#fcd34d"
+            strokeWidth="0.5"
+            strokeLinejoin="miter"
+          />
+          {/* shimmer overlay that sweeps across the Z */}
+          <path
+            d="M 36 36 L 84 36 L 84 44 L 50 76 L 84 76 L 84 84 L 36 84 L 36 76 L 70 44 L 36 44 Z"
+            fill={`url(#zgs-${uid})`}
+            className="zitex-letter-shimmer"
           />
         </g>
-        {/* tiny sparkle dot */}
-        <circle cx="74" cy="26" r="2" fill="#fff7ed" className="zitex-logo-spark" />
+
+        {/* corner accents — diagonal dots */}
+        <circle cx="36" cy="36" r="1.5" fill="#fef3c7" className="zitex-corner-tl" />
+        <circle cx="84" cy="84" r="1.5" fill="#fef3c7" className="zitex-corner-br" />
       </svg>
     </span>
   );

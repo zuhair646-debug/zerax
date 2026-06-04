@@ -18,26 +18,87 @@ html {
   }
 }
 
-/* ─── Zitex animated logo ─────────────────────────────── */
+/* ─── Zitex animated logo (3 orbits + shimmer + pulse) ─── */
 .zitex-logo-wrap { line-height: 0; vertical-align: middle; }
 .zitex-logo-wrap svg { display: block; }
 
-@keyframes zitex-orbit-rotate {
-  from { transform: rotate(0deg); }
-  to   { transform: rotate(360deg); }
+@keyframes zitex-spin-cw  { from { transform: rotate(0deg); }   to { transform: rotate(360deg); } }
+@keyframes zitex-spin-ccw { from { transform: rotate(360deg); } to { transform: rotate(0deg); } }
+@keyframes zitex-letter-pulse {
+  0%, 100% { filter: drop-shadow(0 0 0 rgba(251,191,36,0)); }
+  50%      { filter: drop-shadow(0 0 6px rgba(251,191,36,.65)); }
 }
-@keyframes zitex-halo-pulse {
-  0%, 100% { opacity: .55; transform: scale(1); }
-  50%      { opacity: 1;   transform: scale(1.08); }
+@keyframes zitex-shimmer-sweep {
+  0%   { opacity: 0; transform: translateX(-30px); }
+  35%  { opacity: 1; }
+  60%  { opacity: 1; }
+  100% { opacity: 0; transform: translateX(30px); }
 }
-@keyframes zitex-spark-pulse {
-  0%, 100% { opacity: 0; r: 1.2; }
-  50%      { opacity: 1; r: 2.6; }
+@keyframes zitex-corner-blink {
+  0%, 100% { opacity: .3; }
+  50%      { opacity: 1; }
 }
-.zitex-logo-animated .zitex-logo-orbit  { animation: zitex-orbit-rotate 9s linear infinite; transform-box: fill-box; transform-origin: 50px 50px; }
-.zitex-logo-animated .zitex-logo-halo   { animation: zitex-halo-pulse 3.6s ease-in-out infinite; transform-origin: 50px 50px; transform-box: fill-box; }
-.zitex-logo-animated .zitex-logo-spark  { animation: zitex-spark-pulse 2.2s ease-in-out infinite; }
-.zitex-logo-wrap:hover .zitex-logo-orbit { animation-duration: 2.4s; }
+
+.zitex-logo-animated .zitex-orbit-outer  { animation: zitex-spin-ccw 14s linear infinite; transform-box: fill-box; transform-origin: 60px 60px; }
+.zitex-logo-animated .zitex-orbit-mid    { animation: zitex-spin-cw  6s  linear infinite; transform-box: fill-box; transform-origin: 60px 60px; }
+.zitex-logo-animated .zitex-orbit-inner  { animation: zitex-spin-cw  3.2s linear infinite; transform-box: fill-box; transform-origin: 60px 60px; }
+.zitex-logo-animated .zitex-letter-pulse { animation: zitex-letter-pulse 2.6s ease-in-out infinite; transform-origin: 60px 60px; transform-box: fill-box; }
+.zitex-logo-animated .zitex-letter-shimmer { animation: zitex-shimmer-sweep 3.4s ease-in-out infinite; transform-origin: 60px 60px; transform-box: fill-box; }
+.zitex-logo-animated .zitex-corner-tl    { animation: zitex-corner-blink 2s ease-in-out infinite; }
+.zitex-logo-animated .zitex-corner-br    { animation: zitex-corner-blink 2s ease-in-out infinite; animation-delay: 1s; }
+
+/* Hover: everything speeds up */
+.zitex-logo-wrap:hover .zitex-orbit-outer { animation-duration: 4s; }
+.zitex-logo-wrap:hover .zitex-orbit-mid   { animation-duration: 1.8s; }
+.zitex-logo-wrap:hover .zitex-orbit-inner { animation-duration: 1s; }
+
+/* ─── HeroBanner motion graphics ───────────────────────── */
+@keyframes hb-progress {
+  from { width: 0%; }
+  to   { width: 100%; }
+}
+.hero-banner-progress { animation: hb-progress linear forwards; }
+
+@keyframes hb-orbit-cw  { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+@keyframes hb-orbit-ccw { from { transform: rotate(360deg); } to { transform: rotate(0deg); } }
+.hb-orbit-cw-slow { animation: hb-orbit-cw 18s linear infinite; }
+.hb-orbit-ccw     { animation: hb-orbit-ccw 8s linear infinite; }
+
+@keyframes hb-center-pulse {
+  0%, 100% { opacity: .18; transform-origin: center; transform: scale(1); }
+  50%      { opacity: .45; transform: scale(1.18); }
+}
+.hb-center-pulse { animation: hb-center-pulse 2.4s ease-in-out infinite; transform-box: fill-box; transform-origin: center; }
+
+/* Video scanline sweep */
+@keyframes hb-scan-sweep {
+  0%   { transform: translateX(-100%); }
+  100% { transform: translateX(800%); }
+}
+.hb-scan-sweep { animation: hb-scan-sweep 3.4s linear infinite; }
+
+/* Image floating pixels */
+@keyframes hb-pixel-float {
+  0%, 100% { transform: translateY(0) scale(1); opacity: .4; }
+  50%      { transform: translateY(-12px) scale(1.3); opacity: .9; }
+}
+.hb-pixel-float { animation: hb-pixel-float ease-in-out infinite; }
+
+/* Game pulsing rings */
+@keyframes hb-ring-pulse {
+  0%   { transform: scale(0.4); opacity: .8; }
+  100% { transform: scale(2.4); opacity: 0; }
+}
+.hb-ring-pulse { animation: hb-ring-pulse 2.7s ease-out infinite; }
+
+/* App grid breathing */
+@keyframes hb-grid-breathe {
+  0%, 100% { opacity: .15; background-size: 24px 24px; }
+  50%      { opacity: .35; background-size: 28px 28px; }
+}
+.hb-grid-breathe { animation: hb-grid-breathe 4.2s ease-in-out infinite; }
+
+
 
 
 
