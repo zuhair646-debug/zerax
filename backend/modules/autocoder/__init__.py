@@ -2872,7 +2872,12 @@ async def _stream_direct_anthropic(anthropic_msgs: List[Dict[str, Any]], api_key
         {"type": "text", "text": sys_prompt_text, "cache_control": {"type": "ephemeral"}}
     ]
 
-    cached_tools = list(ANTHROPIC_TOOLS)
+    # Deduplicate tools by name (keep last — most recent/comprehensive version wins).
+    # Anthropic rejects requests with duplicate tool names.
+    _seen_names = {}
+    for _t in ANTHROPIC_TOOLS:
+        _seen_names[_t["name"]] = _t  # later overwrites earlier
+    cached_tools = list(_seen_names.values())
     if cached_tools:
         cached_tools[-1] = {
             **cached_tools[-1],

@@ -46,11 +46,19 @@
 
 ## Zitex Auto-Coder (برمجة زيتاكس) — Owner-Only Codebase Agent
 - Route: `/admin/autocoder` (requires `is_owner=true` user)
+- **🔑 Current passcode (Jun 2026)**: `zitex2026`
+- **Recovery codes** (use once each if you forget the passcode):
+  - `5702-2746-0033-A0B1`
+  - `60F3-BBB7-2628-CE0E`
+  - `8709-73CF-1C0E-FCDC`
+  - `47D8-124D-3183-3BE9`
+  - `832D-222C-D803-0402`
+  - `6266-B1DE-07D6-7912`
 - First visit shows **Setup screen** → owner picks passcode (≥6 chars) → system generates 6 one-time recovery codes
 - Subsequent visits show **Lock screen** → enter passcode → 4-hour session token
 - Session token stored client-side in `localStorage.zitex_autocoder_session` and sent in `X-AutoCoder-Token` header
 - Forgot passcode? → "نسيت كلمة السر؟" → enter recovery code + new passcode (consumes the recovery code; if all 6 used, system regenerates a fresh batch)
 - All actions audited in `autocoder_audit` collection (visible via `GET /api/autocoder/audit`)
 - Tools available to the AI: `read_file`, `write_file`, `edit_file`, `delete_file`, `list_dir`, `search_code`, `run_command` (full bash), `restart_service`, `git_status`, `git_diff`, `git_commit_push`
-- Backend uses Claude Sonnet 4.5 via `EMERGENT_LLM_KEY`
+- Backend uses Claude Sonnet 4.5 via owner's `ANTHROPIC_API_KEY` (synced from Railway production)
 
