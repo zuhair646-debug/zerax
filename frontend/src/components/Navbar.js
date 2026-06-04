@@ -3,23 +3,71 @@ import { Link, useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { LogOut, LayoutDashboard, Shield, Menu, X } from 'lucide-react';
 
-// اللوغو الذهبي الجديد
-const ZITEX_LOGO_URL = "https://static.prod-images.emergentagent.com/jobs/d28c1cbc-c039-46df-a176-2e32ebb0f715/images/f7f88c5a96c3a3978fb84a31dd4d6b922be1568a9083c93bf3cef363e8c17387.png";
-
-export const ZitexLogo = ({ size = 'md', light = false }) => {
-  const sizes = {
-    sm: 'w-8 h-8',
-    md: 'w-10 h-10',
-    lg: 'w-14 h-14',
-    xl: 'w-20 h-20'
-  };
-  
+// شعار Zitex — SVG حيّ بدون مربع، يدور برفق وله توهج ذهبي
+export const ZitexLogo = ({ size = 'md', animated = true }) => {
+  const px = { sm: 32, md: 44, lg: 64, xl: 96 }[size] || 44;
+  const uid = React.useId();
   return (
-    <img 
-      src={ZITEX_LOGO_URL} 
-      alt="Zitex" 
-      className={`${sizes[size]} object-contain`}
-    />
+    <span
+      className={`zitex-logo-wrap ${animated ? 'zitex-logo-animated' : ''}`}
+      style={{ width: px, height: px, display: 'inline-block', position: 'relative' }}
+      aria-label="Zitex"
+    >
+      <svg
+        viewBox="0 0 100 100"
+        width={px}
+        height={px}
+        fill="none"
+        xmlns="http://www.w3.org/2000/svg"
+        style={{ overflow: 'visible' }}
+      >
+        <defs>
+          <linearGradient id={`zg-${uid}`} x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0%" stopColor="#fde68a" />
+            <stop offset="45%" stopColor="#f59e0b" />
+            <stop offset="100%" stopColor="#b45309" />
+          </linearGradient>
+          <radialGradient id={`zh-${uid}`} cx="50%" cy="50%" r="50%">
+            <stop offset="0%" stopColor="rgba(251,191,36,0.55)" />
+            <stop offset="60%" stopColor="rgba(245,158,11,0.15)" />
+            <stop offset="100%" stopColor="rgba(0,0,0,0)" />
+          </radialGradient>
+          <filter id={`zglow-${uid}`} x="-50%" y="-50%" width="200%" height="200%">
+            <feGaussianBlur stdDeviation="2.4" result="b" />
+            <feMerge>
+              <feMergeNode in="b" />
+              <feMergeNode in="SourceGraphic" />
+            </feMerge>
+          </filter>
+        </defs>
+        {/* halo glow */}
+        <circle cx="50" cy="50" r="46" fill={`url(#zh-${uid})`} className="zitex-logo-halo" />
+        {/* rotating thin arc */}
+        <g className="zitex-logo-orbit" style={{ transformOrigin: '50px 50px' }}>
+          <path
+            d="M 50 8 A 42 42 0 0 1 92 50"
+            stroke={`url(#zg-${uid})`}
+            strokeWidth="2"
+            strokeLinecap="round"
+            fill="none"
+            opacity="0.55"
+          />
+          <circle cx="92" cy="50" r="2.4" fill="#fde68a" />
+        </g>
+        {/* the Z letter (handcrafted, no box) */}
+        <g filter={`url(#zglow-${uid})`}>
+          <path
+            d="M 26 26 L 74 26 L 74 36 L 42 64 L 74 64 L 74 74 L 26 74 L 26 64 L 58 36 L 26 36 Z"
+            fill={`url(#zg-${uid})`}
+            stroke="#fbbf24"
+            strokeWidth="0.6"
+            strokeLinejoin="round"
+          />
+        </g>
+        {/* tiny sparkle dot */}
+        <circle cx="74" cy="26" r="2" fill="#fff7ed" className="zitex-logo-spark" />
+      </svg>
+    </span>
   );
 };
 

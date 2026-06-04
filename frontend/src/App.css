@@ -18,6 +18,29 @@ html {
   }
 }
 
+/* ─── Zitex animated logo ─────────────────────────────── */
+.zitex-logo-wrap { line-height: 0; vertical-align: middle; }
+.zitex-logo-wrap svg { display: block; }
+
+@keyframes zitex-orbit-rotate {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+@keyframes zitex-halo-pulse {
+  0%, 100% { opacity: .55; transform: scale(1); }
+  50%      { opacity: 1;   transform: scale(1.08); }
+}
+@keyframes zitex-spark-pulse {
+  0%, 100% { opacity: 0; r: 1.2; }
+  50%      { opacity: 1; r: 2.6; }
+}
+.zitex-logo-animated .zitex-logo-orbit  { animation: zitex-orbit-rotate 9s linear infinite; transform-box: fill-box; transform-origin: 50px 50px; }
+.zitex-logo-animated .zitex-logo-halo   { animation: zitex-halo-pulse 3.6s ease-in-out infinite; transform-origin: 50px 50px; transform-box: fill-box; }
+.zitex-logo-animated .zitex-logo-spark  { animation: zitex-spark-pulse 2.2s ease-in-out infinite; }
+.zitex-logo-wrap:hover .zitex-logo-orbit { animation-duration: 2.4s; }
+
+
+
 /* Custom scrollbar */
 ::-webkit-scrollbar {
   width: 6px;

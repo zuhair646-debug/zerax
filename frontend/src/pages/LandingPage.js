@@ -3,13 +3,11 @@ import { Navbar, ZitexLogo } from '@/components/Navbar';
 import { Button } from '@/components/ui/button';
 import { useNavigate } from 'react-router-dom';
 import { Sparkles } from 'lucide-react';
-import { toast } from 'sonner';
 import SiteBannerStories from '@/components/SiteBannerStories';
 
 const LandingPage = ({ user }) => {
   const navigate = useNavigate();
   const goOrRegister = (target) => navigate(user ? target : '/register');
-  const showSoon = () => toast.info('🛠️ هذا القسم قيد التحضير — قريباً!', { duration: 2200 });
 
   // Organized sections by category
   const categories = [
@@ -62,6 +60,26 @@ const LandingPage = ({ user }) => {
           bgImage: 'https://images.unsplash.com/photo-1555066931-4365d14bab8c?auto=format&fit=crop&w=800&q=70',
           badge: 'جديد',
           action: () => goOrRegister('/app-builder?mode=continue'),
+        },
+        {
+          type: 'web-to-app',
+          title: 'تحويل موقع لتطبيق',
+          desc: 'Web → Android / iOS APK',
+          gradient: 'from-sky-500/20 to-cyan-500/10',
+          accent: '#0ea5e9',
+          bgImage: 'https://images.unsplash.com/photo-1607252650355-f7fd0460ccdb?auto=format&fit=crop&w=800&q=70',
+          badge: 'محوّل',
+          action: () => goOrRegister('/app-builder?mode=web-to-app'),
+        },
+        {
+          type: 'desktop-app',
+          title: 'تطبيقات سطح المكتب',
+          desc: 'Electron / Tauri · Windows/Mac/Linux',
+          gradient: 'from-violet-500/20 to-purple-500/10',
+          accent: '#8b5cf6',
+          bgImage: 'https://images.unsplash.com/photo-1593642632559-0c6d3fc62b89?auto=format&fit=crop&w=800&q=70',
+          badge: 'سطح المكتب',
+          action: () => goOrRegister('/app-builder?mode=desktop'),
         },
         {
           type: 'mobile-market',
@@ -138,27 +156,7 @@ const LandingPage = ({ user }) => {
     },
   ];
 
-  // Coming-soon sections (bottom)
-  const soonCards = [
-    {
-      type: 'web-to-app',
-      title: 'تحويل موقع لتطبيق',
-      desc: 'Web → Android/iOS APK',
-      gradient: 'from-cyan-500/20 to-sky-500/10',
-      accent: '#06b6d4',
-      bgImage: 'https://images.unsplash.com/photo-1607252650355-f7fd0460ccdb?auto=format&fit=crop&w=800&q=70',
-      action: showSoon,
-    },
-    {
-      type: 'desktop-app',
-      title: 'تطبيقات سطح المكتب',
-      desc: 'Electron / Tauri',
-      gradient: 'from-violet-500/20 to-purple-500/10',
-      accent: '#8b5cf6',
-      bgImage: 'https://images.unsplash.com/photo-1593642632559-0c6d3fc62b89?auto=format&fit=crop&w=800&q=70',
-      action: showSoon,
-    },
-  ];
+  // No more "coming soon" — everything is in the proper category now
 
   const Card = ({ type, title, desc, gradient, accent, bgImage, action, badge, soon = false }) => (
     <div
@@ -213,47 +211,44 @@ const LandingPage = ({ user }) => {
         <SiteBannerStories placement="outside" />
       </div>
 
-      <div className="max-w-5xl mx-auto px-4 py-8 sm:py-12">
-        {/* Hero header — minimal */}
-        <div className="text-center mb-8">
-          <div className="flex justify-center mb-4">
+      <div className="max-w-5xl mx-auto px-4 py-6 sm:py-10">
+        {/* Hero header — clean, animated logo only */}
+        <div className="text-center mb-6">
+          <div className="flex justify-center mb-3">
             <ZitexLogo size="xl" />
           </div>
-          <h1 className="text-3xl sm:text-5xl font-black text-white" data-testid="hero-title">
-            <span className="text-transparent bg-clip-text bg-gradient-to-r from-amber-400 via-yellow-400 to-amber-500">Zitex</span>
-          </h1>
+          <p className="text-sm sm:text-base text-amber-200/60 font-medium tracking-wide" data-testid="hero-tagline">
+            منصّة <span className="text-amber-300 font-bold">Zitex</span> — أنشئ مواقع، تطبيقات، صور وفيديوهات بالذكاء الاصطناعي
+          </p>
         </div>
 
-        {/* STANDALONE FEATURED CTA */}
+        {/* STANDALONE FEATURED CTA — short, focused, no AI-Agent box */}
         <div
           onClick={() => goOrRegister('/ai-agent')}
-          className="relative mb-8 cursor-pointer group rounded-2xl overflow-hidden border border-amber-400/30 hover:border-amber-300/60 transition-all hover:shadow-[0_20px_60px_-12px_rgba(245,158,11,0.5)]"
+          className="relative mb-10 cursor-pointer group rounded-2xl overflow-hidden border border-amber-400/25 hover:border-amber-300/60 transition-all hover:shadow-[0_20px_60px_-12px_rgba(245,158,11,0.45)]"
           data-testid="hero-ai-agent"
         >
-          <div
-            className="absolute inset-0 bg-cover bg-center scale-105 group-hover:scale-110 transition-transform duration-700"
-            style={{ backgroundImage: `url('https://images.unsplash.com/photo-1551434678-e076c223a692?auto=format&fit=crop&w=1600&q=70')` }}
-          />
-          <div className="absolute inset-0 bg-gradient-to-l from-black/95 via-black/70 to-amber-900/40" />
-          <div className="relative p-5 sm:p-8 flex flex-col sm:flex-row items-start sm:items-center gap-5">
-            <div className="flex-shrink-0 w-16 h-16 sm:w-20 sm:h-20 rounded-2xl bg-gradient-to-br from-amber-400 to-orange-500 flex items-center justify-center shadow-lg shadow-amber-500/40">
-              <Sparkles className="w-9 h-9 sm:w-11 sm:h-11 text-black" />
+          <div className="absolute inset-0 bg-gradient-to-l from-amber-950/60 via-zinc-950 to-zinc-900" />
+          <div className="absolute inset-0 opacity-30" style={{
+            backgroundImage: 'radial-gradient(circle at 20% 50%, rgba(251,191,36,0.25), transparent 40%), radial-gradient(circle at 80% 30%, rgba(245,158,11,0.2), transparent 45%)',
+          }} />
+          <div className="relative px-5 sm:px-8 py-5 sm:py-6 flex items-center gap-4 sm:gap-6">
+            <div className="flex-shrink-0">
+              <ZitexLogo size="lg" />
             </div>
-            <div className="flex-1 text-right">
-              <div className="inline-block px-2 py-0.5 rounded-md bg-amber-400/20 border border-amber-300/40 text-amber-300 text-[10px] font-black tracking-wider mb-2">
-                ذكاء واحد · 10 أدوات · معاينة مباشرة
+            <div className="flex-1 text-right min-w-0">
+              <div className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-amber-400/15 border border-amber-300/30 text-amber-300 text-[10px] font-black tracking-wider mb-1.5">
+                <Sparkles className="w-3 h-3" /> ذكاء واحد · معاينة مباشرة
               </div>
-              <h2 className="text-2xl sm:text-3xl font-black text-white mb-1">
-                ذكاء Zitex <span className="text-amber-300">يبني، يبحث، يولّد</span>
+              <h2 className="text-xl sm:text-2xl font-black text-white leading-tight">
+                اكتب طلبك — والذكاء <span className="text-amber-300">يبني، يبحث، يولّد</span>
               </h2>
-              <p className="text-white/75 text-xs sm:text-sm leading-relaxed">
-                اكتب أي طلب — الذكاء يفكّر، يستدعي أدوات حقيقية (بحث، صور AI، صوت، قرآن، رياضة، مصادر سعودية)، ويبني موقعك live جنب الشات.
+              <p className="hidden sm:block text-white/60 text-xs mt-1">
+                موقع، تطبيق، صور، فيديو، صوت — في شات واحد بمعاينة جنبه.
               </p>
             </div>
-            <div className="flex-shrink-0">
-              <div className="px-5 py-3 rounded-xl bg-gradient-to-r from-amber-400 to-yellow-500 text-black font-black text-sm whitespace-nowrap shadow-lg group-hover:scale-105 transition-transform">
-                ابدأ الآن →
-              </div>
+            <div className="flex-shrink-0 px-4 sm:px-5 py-2.5 sm:py-3 rounded-xl bg-gradient-to-r from-amber-400 to-yellow-500 text-black font-black text-sm whitespace-nowrap shadow-lg group-hover:scale-105 transition-transform">
+              ابدأ →
             </div>
           </div>
         </div>
@@ -288,14 +283,7 @@ const LandingPage = ({ user }) => {
           </section>
         ))}
 
-        {/* COMING SOON SECTIONS */}
-        <div className="text-center mb-4 mt-10">
-          <div className="text-xs font-bold text-white/40 tracking-widest mb-1">قريباً — قيد التطوير</div>
-          <div className="h-px w-20 mx-auto bg-gradient-to-r from-transparent via-white/15 to-transparent"></div>
-        </div>
-        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 sm:gap-4">
-          {soonCards.map((c) => <Card key={c.type} {...c} soon />)}
-        </div>
+        {/* No more "coming soon" — features moved into proper categories */}
 
         {!user && (
           <div className="mt-10 flex justify-center">
