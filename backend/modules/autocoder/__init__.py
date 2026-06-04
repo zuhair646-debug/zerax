@@ -322,7 +322,36 @@ async def _ensure_git_workdir() -> Dict[str, Any]:
 # ════════════════════════════════════════════════════════════════════════
 AUTOCODER_SYSTEM_PROMPT = """أنت "برمجة زيتاكس" — مهندس برمجيات خبير، تعمل مباشرة على الكود الفعلي لمنصة Zitex.
 
-🔐 وضع الصلاحيات: مفتوح بالكامل + AUTONOMOUS MODE.
+📌 **هويتك ومهمتك بكل صراحة**:
+- اسمك: **برمجة زيتاكس** (Auto-Coder للمالك).
+- المالك يكلّمك من `/admin/autocoder` على zitex.vercel.app.
+- مهمتك الوحيدة: **تطوير منصة Zitex فقط** — أي إضافة، تعديل، إصلاح، صيانة، نشر، اختبار.
+- مستودعك على GitHub: `zuhair646-debug/zitex` (branch: main).
+- شغّال على Railway (`zitex-production.up.railway.app`) + Vercel (`zitex.vercel.app`).
+- لو المالك يطلب يبني موقع داخلي جديد ضمن المنصة، نفّذ — كل المواقع داخل نفس الـrepo، يحتفظ بهم في `/app/backend/modules/<name>/` + `/app/frontend/src/pages/<Name>.js`.
+
+🎯 **أول رسالة في كل محادثة جديدة**:
+ابدأ بسطر واحد فقط يوضّح: "أنا برمجة زيتاكس · شغّال على repo `zitex` · عندي [X] صلاحية + [Y] أداة. وش تبيني أسوي؟"
+ثم انتظر طلبه. **لا تستعرض كل قدراتك بدون داعي**.
+
+🔐 **صلاحياتك (أعلنها بصدق عند الحاجة)**:
+- ✅ كامل الـ`/app` (كود backend + frontend + tests)
+- ✅ Git (commit, push, rollback) عبر `zuhair646-debug` token
+- ✅ Railway (نشر, env vars, logs) عبر Railway API
+- ✅ Vercel (نشر, env vars, logs) عبر Vercel API
+- ✅ MongoDB (read + بعض الـwrites، مع حماية للـusers/payments)
+- ✅ Web search + URL fetch
+- ✅ توليد صور (Nano Banana / GPT-Image-1)
+- ✅ توليد صوت (ElevenLabs / OpenAI TTS)
+- ✅ توليد فيديو (Sora 2)
+- ✅ Screenshot للصفحات (Playwright)
+- ❌ ما تقدر تعدّل ملفاتك الذاتية (autocoder/*) — حماية ضد التخريب
+- ❌ ما تقدر تشتري شي بفلوس المالك بدون إذنه الصريح
+
+💬 **لو محتاج وصول لشي ما عندك**:
+قل بصراحة: "أحتاج وصول لـX (مثلاً: Twilio API key) — يا ريت تضيفه في Railway env vars باسم TWILIO_API_KEY".
+
+🔐 وضع الصلاحيات: AUTONOMOUS MODE.
 - عندك حرية كاملة لقراءة وكتابة وتعديل أي ملف داخل /app.
 - تقدر تشغّل أي أمر bash (git, yarn, pip, pytest, supervisorctl, إلخ).
 - تقدر تـcommit وتدفع للـGitHub.
@@ -1462,7 +1491,93 @@ ANTHROPIC_TOOLS = [
         "description": "EMERGENCY: if the latest deployment failed and you can't fix it quickly, this finds the last SUCCESS commit on Railway and force-pushes to it, restoring the platform. Use as a last resort when stuck.",
         "input_schema": {"type": "object", "properties": {}, "required": []},
     },
-] + EXTRA_ANTHROPIC_TOOLS + UNIVERSE_ANTHROPIC_TOOLS + QUALITY_ANTHROPIC_TOOLS + INDEX_ANTHROPIC_TOOLS + SAFETY_ANTHROPIC_TOOLS + LEARNING_ANTHROPIC_TOOLS + AUTONOMY_ANTHROPIC_TOOLS + OPS_ANTHROPIC_TOOLS + MEMORY_ANTHROPIC_TOOLS + SANDBOX_ANTHROPIC_TOOLS + INTEGRATIONS_ANTHROPIC_TOOLS + WEB_SEARCH_ANTHROPIC_TOOLS + RAILWAY_ANTHROPIC_TOOLS + VERCEL_ANTHROPIC_TOOLS + ROUTER_ANTHROPIC_TOOLS + CACHE_ANTHROPIC_TOOLS
+] + EXTRA_ANTHROPIC_TOOLS + UNIVERSE_ANTHROPIC_TOOLS + QUALITY_ANTHROPIC_TOOLS + INDEX_ANTHROPIC_TOOLS + SAFETY_ANTHROPIC_TOOLS + LEARNING_ANTHROPIC_TOOLS + AUTONOMY_ANTHROPIC_TOOLS + OPS_ANTHROPIC_TOOLS + MEMORY_ANTHROPIC_TOOLS + SANDBOX_ANTHROPIC_TOOLS + INTEGRATIONS_ANTHROPIC_TOOLS + WEB_SEARCH_ANTHROPIC_TOOLS + RAILWAY_ANTHROPIC_TOOLS + VERCEL_ANTHROPIC_TOOLS + ROUTER_ANTHROPIC_TOOLS + CACHE_ANTHROPIC_TOOLS + [
+    # ══ Media generation (Nano Banana, ElevenLabs, Sora, Playwright) ══
+    {
+        "name": "generate_image",
+        "description": "Generate an image via Nano Banana (Gemini, primary) or GPT-Image-1 (fallback). Use for logos, hero images, illustrations, mock UI screenshots. Returns a public URL under /static/autocoder_media/. ALWAYS prefer this over telling the user to make images themselves.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "prompt": {"type": "string", "description": "Detailed visual description in English (works better than Arabic for images)."},
+                "style": {"type": "string", "description": "modern / minimalist / cinematic / cartoon / 3d / arabic-calligraphy", "default": "modern"},
+                "aspect": {"type": "string", "enum": ["1:1", "16:9", "9:16", "4:3"], "default": "1:1"},
+            },
+            "required": ["prompt"],
+        },
+    },
+    {
+        "name": "generate_audio",
+        "description": "Generate Arabic/English voiceover via ElevenLabs (primary) or OpenAI TTS (fallback). Use for narration, welcome messages, ads.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "text": {"type": "string", "description": "Text to speak (≤4000 chars). Arabic supported."},
+                "voice": {"type": "string", "enum": ["arabic_male", "arabic_female", "english_male", "english_female"], "default": "arabic_male"},
+            },
+            "required": ["text"],
+        },
+    },
+    {
+        "name": "generate_video",
+        "description": "Trigger Sora 2 video generation (1-30 sec). Returns job_id immediately. Use tool_check_video_status to poll until status='completed' (1-3 min).",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "prompt": {"type": "string"},
+                "seconds": {"type": "integer", "default": 5, "minimum": 1, "maximum": 30},
+                "aspect": {"type": "string", "enum": ["16:9", "9:16", "1:1"], "default": "16:9"},
+            },
+            "required": ["prompt"],
+        },
+    },
+    {
+        "name": "check_video_status",
+        "description": "Poll a Sora 2 video job. Returns status (queued/in_progress/completed/failed) and the video URL when completed.",
+        "input_schema": {
+            "type": "object",
+            "properties": {"job_id": {"type": "string"}},
+            "required": ["job_id"],
+        },
+    },
+    {
+        "name": "screenshot_page",
+        "description": "Open any URL in a headless Chromium and capture a JPEG screenshot. Use this to verify a deployed page visually before announcing completion, or to compare before/after changes.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "url": {"type": "string"},
+                "width": {"type": "integer", "default": 1366},
+                "height": {"type": "integer", "default": 768},
+                "full_page": {"type": "boolean", "default": False},
+                "wait_ms": {"type": "integer", "default": 2000, "description": "ms to wait after page load before capture"},
+            },
+            "required": ["url"],
+        },
+    },
+    {
+        "name": "seed_db",
+        "description": "Insert test documents into a MongoDB collection. Protected collections (users, payments, credit_history) are refused. All seeded docs get _test_seed=True so they can be cleaned later with tool_clear_test_seed.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "collection": {"type": "string"},
+                "docs": {"type": "array", "items": {"type": "object"}},
+                "drop_first": {"type": "boolean", "default": False},
+            },
+            "required": ["collection", "docs"],
+        },
+    },
+    {
+        "name": "clear_test_seed",
+        "description": "Delete all _test_seed=True documents from a collection.",
+        "input_schema": {
+            "type": "object",
+            "properties": {"collection": {"type": "string"}},
+            "required": ["collection"],
+        },
+    },
+]
 
 TOOL_HANDLERS = {
     "list_dir": tool_list_dir,
@@ -1481,6 +1596,13 @@ TOOL_HANDLERS = {
     "pre_deploy_check": tool_pre_deploy_check,
     "check_deployment_status": tool_check_deployment_status,
     "rollback_to_last_good": tool_rollback_to_last_good,
+    # ── Media generation tools (Feb 2026) ──
+    "generate_image": __import__("modules.autocoder.media_tools", fromlist=["tool_generate_image"]).tool_generate_image,
+    "generate_audio": __import__("modules.autocoder.media_tools", fromlist=["tool_generate_audio"]).tool_generate_audio,
+    "generate_video": __import__("modules.autocoder.media_tools", fromlist=["tool_generate_video"]).tool_generate_video,
+    "check_video_status": __import__("modules.autocoder.media_tools", fromlist=["tool_check_video_status"]).tool_check_video_status,
+    "screenshot_page": __import__("modules.autocoder.media_tools", fromlist=["tool_screenshot_page"]).tool_screenshot_page,
+    # seed_db / clear_test_seed bound at router-creation (needs db) — see _bind_db_tool
     # ── New power tools (web/files/db/ast) ──
     "web_search": tool_web_search,
     "fetch_url": tool_fetch_url,
@@ -1532,6 +1654,14 @@ def _bind_db_tool(db) -> None:
     _db_query_bound = make_db_query_tool(db)
     TOOL_HANDLERS["db_query"] = _db_query_bound
     _DB = db
+    # Bind media tools that need a db instance
+    from .media_tools import tool_seed_db, tool_clear_test_seed
+    async def _seed(collection, docs, drop_first=False):
+        return await tool_seed_db(db, collection, docs, drop_first)
+    async def _clear(collection):
+        return await tool_clear_test_seed(db, collection)
+    TOOL_HANDLERS["seed_db"] = _seed
+    TOOL_HANDLERS["clear_test_seed"] = _clear
 
 
 async def execute_autocoder_tool(name: str, args: Optional[Dict[str, Any]]) -> Dict[str, Any]:
