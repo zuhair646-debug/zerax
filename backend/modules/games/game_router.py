@@ -414,6 +414,34 @@ async def _auto_learn_from_exchange(
 
 
 # ═══════════════════════════════════════════════════════════════
+# 🚀 Async helper — run the live-site build off-thread so the HTTP
+# request returns immediately (LLM builds can take 60-180s).
+# ═══════════════════════════════════════════════════════════════
+async def _run_build_in_background(db, project_id: str, requester_id: str):
+    try:
+        from modules.games.builder import build_and_deploy
+        result = await build_and_deploy(db, project_id, requester_id)
+        if result.get("ok"):
+            await db.game_projects.update_one(
+                {"id": project_id},
+                {"$set": {"build_status": "ready", "build_error": None}},
+            )
+            logger.info(f"[games][build] success project={project_id} size={result.get('size_bytes')}")
+        else:
+            await db.game_projects.update_one(
+                {"id": project_id},
+                {"$set": {"build_status": "error", "build_error": result.get("error") or "unknown"}},
+            )
+            logger.warning(f"[games][build] failure project={project_id} err={result.get('error')}")
+    except Exception as e:
+        await db.game_projects.update_one(
+            {"id": project_id},
+            {"$set": {"build_status": "error", "build_error": str(e)[:300]}},
+        )
+        logger.error(f"[games][build] exception project={project_id}: {e}")
+
+
+# ═══════════════════════════════════════════════════════════════
 # 🎯 Router Factory
 # ═══════════════════════════════════════════════════════════════
 def create_game_router(db, get_current_user):
@@ -728,6 +756,18 @@ def create_game_router(db, get_current_user):
 - هدف المرحلة: {phase_info['description']}
 
 {approved_context}{tech_guide}
+
+═══════════════════════════════════════════════════════════════
+🚀 **قدرة جديدة — البناء والنشر الحي (LIVE DEPLOY)**
+═══════════════════════════════════════════════════════════════
+انت الآن تقدر تنشر الموقع كاملاً على رابط حي يقدر العميل يفتحه! لما المالك يقول
+"ارفع لي اللايف" أو "ابني الموقع" أو "ابي اشوف على اللايف" أو أي طلب مشابه:
+✅ قول له بثقة: "تمام! اضغط زر **🚀 ابني وانشر اللايف** فوق (في تبويب 📡 البث المباشر)
+   وراح أبني الموقع كامل (HTML + CSS + Three.js إذا 3D) وأنشره على رابط حي خلال
+   60-180 ثانية. الرابط راح يطلع لك تقدر تشاركه مع أي شخص."
+❌ ممنوع تقول "أنا ما أقدر أنشر" أو "ما أقدر أرفع للايف" — هذي القدرة مفعّلة الآن.
+ملاحظة: زر البناء يستخدم Claude Sonnet 4.5 لتوليد الموقع بناءً على الذاكرة + الأصول
+المعتمدة + الصور المرجعية. كل ما اعتمد المالك أصول أكثر، الموقع يطلع أجمل وأدق.
 
 ═══════════════════════════════════════════════════════════════
 🚨 **قواعد العمل الإلزامية — يمنع كسرها مهما حصل**
@@ -1630,5 +1670,73 @@ def create_game_router(db, get_current_user):
             }
         )
         return {"ok": True}
-    
+
+    # ───────────────────────────────────────────────────────────
+    # 🚀 POST /project/{id}/build — kick off background build, return immediately
+    # GET  /project/{id}/build-info — current build metadata + status
+    # ───────────────────────────────────────────────────────────
+    @router.post("/project/{project_id}/build")
+    async def build_live_site(project_id: str, user=Depends(get_current_user)):
+        """Kick off background build job. Returns 202 immediately — UI polls /build-info for status."""
+        proj = await db.game_projects.find_one({"id": project_id})
+        if not proj:
+            raise HTTPException(404, "Project not found")
+        if proj.get("user_id") != user["user_id"]:
+            raise HTTPException(403, "Not your project")
+        # Prevent double-fires
+        if proj.get("build_status") == "building":
+            return {"ok": True, "status": "building", "started_at": proj.get("build_started_at")}
+        await db.game_projects.update_one(
+            {"id": project_id},
+            {"$set": {
+                "build_status": "building",
+                "build_error": None,
+                "build_started_at": datetime.now(timezone.utc).isoformat(),
+            }},
+        )
+        import asyncio as _aio_b
+        _aio_b.create_task(_run_build_in_background(db, project_id, user["user_id"]))
+        return {"ok": True, "status": "building", "poll_url": f"/api/games/project/{project_id}/build-info"}
+
+    @router.get("/project/{project_id}/build-info")
+    async def build_info(project_id: str, user=Depends(get_current_user)):
+        proj = await db.game_projects.find_one(
+            {"id": project_id, "user_id": user["user_id"]},
+            {"preview_url": 1, "last_built_at": 1, "build_size_bytes": 1,
+             "build_status": 1, "build_error": 1, "build_started_at": 1, "_id": 0},
+        )
+        if not proj:
+            raise HTTPException(404, "Project not found")
+        return {
+            "preview_url": proj.get("preview_url"),
+            "last_built_at": proj.get("last_built_at"),
+            "build_size_bytes": proj.get("build_size_bytes"),
+            "status": proj.get("build_status") or ("ready" if proj.get("preview_url") else "idle"),
+            "error": proj.get("build_error"),
+            "started_at": proj.get("build_started_at"),
+        }
+
+    # ───────────────────────────────────────────────────────────
+    # 🌐 GET /games-live/{project_id}/ — serve the live built bundle (public)
+    # Note: kept under /api/ so Kubernetes ingress routes it to the backend.
+    # The url stamped on `project.preview_url` is /api/games-live/{id}/
+    # ───────────────────────────────────────────────────────────
+    @router.get("/games-live/{project_id}/")
+    @router.get("/games-live/{project_id}")
+    async def serve_live_bundle(project_id: str):
+        from fastapi.responses import HTMLResponse
+        from modules.games.builder import load_bundle_html
+        html = await load_bundle_html(db, project_id)
+        if not html:
+            return HTMLResponse(
+                "<!doctype html><html dir='rtl'><head><meta charset='utf-8'>"
+                "<title>الموقع غير منشور بعد</title>"
+                "<style>body{font-family:system-ui;background:#0a0a0a;color:#fff;display:flex;align-items:center;justify-content:center;height:100vh;margin:0;text-align:center}"
+                ".card{padding:2rem;border:1px solid #333;border-radius:1rem;max-width:480px}</style></head>"
+                "<body><div class='card'><h1>🛠️ الموقع غير منشور بعد</h1>"
+                "<p>روح للاستوديو واضغط زر <b>🚀 ابني وانشر اللايف</b> عشان يطلع لك الموقع هنا.</p></div></body></html>",
+                status_code=404,
+            )
+        return HTMLResponse(html)
+
     return router

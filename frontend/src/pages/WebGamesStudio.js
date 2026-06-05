@@ -15,6 +15,7 @@ import ImageLightbox from '@/components/ImageLightbox';
 import MyProjectsModal from '@/components/games/MyProjectsModal';
 import AINotesPanel from '@/components/games/AINotesPanel';
 import SafeAssetImage from '@/components/games/SafeAssetImage';
+import BuildLiveButton from '@/components/games/BuildLiveButton';
 
 const API = process.env.REACT_APP_BACKEND_URL;
 
@@ -592,19 +593,34 @@ export default function WebGamesStudio({ user }) {
           {activeTab === 'live' && (
             <div className="flex-1 overflow-y-auto p-6 bg-black/40" data-testid="tab-content-live">
               <div className="max-w-3xl mx-auto space-y-4">
-                <h2 className="text-lg font-bold text-cyan-300 flex items-center gap-2">
-                  <span>📡</span><span>البث المباشر — معاينة المشروع</span>
-                </h2>
-                <p className="text-xs text-zinc-400">هنا تشوف اللعبة وهي تتبني خطوة بخطوة. كل عنصر معتمد يظهر مباشرة.</p>
+                <div className="flex items-center justify-between gap-3 flex-wrap">
+                  <div>
+                    <h2 className="text-lg font-bold text-cyan-300 flex items-center gap-2">
+                      <span>📡</span><span>البث المباشر — معاينة المشروع</span>
+                    </h2>
+                    <p className="text-xs text-zinc-400 mt-1">اضغط "ابني وانشر اللايف" والـ AI يبني الموقع كامل ويطلق رابط حي تشوفه هنا.</p>
+                  </div>
+                  <BuildLiveButton
+                    projectId={project?.id}
+                    accentColor="amber"
+                    onBuilt={async () => {
+                      // Refresh project to get latest preview_url
+                      try {
+                        const r = await fetch(`${API}/api/games/project/${project.id}`, { headers: { Authorization: `Bearer ${token}` } });
+                        if (r.ok) { const d = await r.json(); if (d.project) setProject(d.project); }
+                      } catch (_) { /* ignore */ }
+                    }}
+                  />
+                </div>
                 {project?.preview_url ? (
-                  <div className="rounded-xl border border-cyan-500/30 overflow-hidden bg-black">
-                    <iframe src={project.preview_url} className="w-full" style={{ height: '70vh' }} title="Live Preview" />
+                  <div className="rounded-xl border border-cyan-500/30 overflow-hidden bg-black" data-testid="live-iframe-wrapper">
+                    <iframe src={project.preview_url.startsWith('http') ? project.preview_url : `${API}${project.preview_url}`} className="w-full" style={{ height: '70vh' }} title="Live Preview" sandbox="allow-scripts allow-same-origin allow-popups allow-forms" />
                   </div>
                 ) : (
                   <div className="rounded-xl border border-white/10 bg-black/40 p-8 text-center">
                     <div className="text-5xl mb-3">🎬</div>
                     <p className="text-zinc-300 font-bold mb-2">لا يوجد بث مباشر بعد</p>
-                    <p className="text-xs text-zinc-500">سيظهر هنا تلقائياً بعد ما تعتمد عناصر اللعبة (قلعة، حقول، شخصيات) ويبدأ AI بناء العالم.</p>
+                    <p className="text-xs text-zinc-500">اضغط الزر فوق وراح يبني AI الموقع ويطلق لك رابط حي خلال 60-180 ثانية.</p>
                   </div>
                 )}
                 {/* Show approved 3D models as a grid preview */}

@@ -1,0 +1,871 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ترافيان - بناء الإمبراطورية</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script async src="https://unpkg.com/es-module-shims@1.6.3/dist/es-module-shims.js"></script>
+    <script type="importmap">
+    {
+      "imports": {
+        "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+        "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+      }
+    }
+    </script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;900&display=swap');
+        
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Cairo', sans-serif;
+        }
+
+        body {
+            overflow-x: hidden;
+            background: linear-gradient(135deg, #1a0f0a 0%, #2d1810 100%);
+        }
+
+        #canvas-container {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 0;
+        }
+
+        .content-overlay {
+            position: relative;
+            z-index: 1;
+        }
+
+        .glass-panel {
+            background: rgba(0, 0, 0, 0.7);
+            backdrop-filter: blur(10px);
+            border: 2px solid rgba(255, 215, 0, 0.3);
+            border-radius: 12px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+        }
+
+        .resource-card {
+            background: linear-gradient(135deg, rgba(139, 69, 19, 0.8) 0%, rgba(101, 67, 33, 0.8) 100%);
+            border: 2px solid rgba(218, 165, 32, 0.5);
+            transition: all 0.3s ease;
+        }
+
+        .resource-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 30px rgba(218, 165, 32, 0.4);
+            border-color: rgba(218, 165, 32, 0.9);
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #b8860b 0%, #daa520 100%);
+            border: 2px solid #ffd700;
+            color: #1a0f0a;
+            font-weight: 700;
+            transition: all 0.3s ease;
+            text-shadow: 0 1px 2px rgba(255, 255, 255, 0.3);
+        }
+
+        .btn-primary:hover {
+            background: linear-gradient(135deg, #daa520 0%, #ffd700 100%);
+            transform: scale(1.05);
+            box-shadow: 0 5px 20px rgba(255, 215, 0, 0.5);
+        }
+
+        .btn-secondary {
+            background: linear-gradient(135deg, #8b4513 0%, #a0522d 100%);
+            border: 2px solid #cd853f;
+            color: #fff;
+            font-weight: 600;
+            transition: all 0.3s ease;
+        }
+
+        .btn-secondary:hover {
+            background: linear-gradient(135deg, #a0522d 0%, #cd853f 100%);
+            transform: scale(1.05);
+        }
+
+        .building-slot {
+            background: rgba(101, 67, 33, 0.6);
+            border: 3px dashed rgba(218, 165, 32, 0.4);
+            transition: all 0.3s ease;
+            cursor: pointer;
+        }
+
+        .building-slot:hover {
+            background: rgba(139, 69, 19, 0.8);
+            border-color: rgba(218, 165, 32, 0.8);
+            transform: scale(1.02);
+        }
+
+        .building-active {
+            background: linear-gradient(135deg, rgba(139, 69, 19, 0.9) 0%, rgba(160, 82, 45, 0.9) 100%);
+            border: 3px solid #daa520;
+        }
+
+        .pulse {
+            animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% {
+                opacity: 1;
+            }
+            50% {
+                opacity: .7;
+            }
+        }
+
+        .glow {
+            animation: glow 2s ease-in-out infinite alternate;
+        }
+
+        @keyframes glow {
+            from {
+                text-shadow: 0 0 5px #ffd700, 0 0 10px #ffd700, 0 0 15px #ffd700;
+            }
+            to {
+                text-shadow: 0 0 10px #ffd700, 0 0 20px #ffd700, 0 0 30px #ffd700;
+            }
+        }
+
+        .header-banner {
+            background: linear-gradient(180deg, rgba(0, 0, 0, 0.9) 0%, rgba(0, 0, 0, 0.7) 100%);
+            border-bottom: 3px solid #daa520;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.8);
+        }
+
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.8);
+            z-index: 1000;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .modal.active {
+            display: flex;
+        }
+
+        .modal-content {
+            background: linear-gradient(135deg, #1a0f0a 0%, #2d1810 100%);
+            border: 3px solid #daa520;
+            border-radius: 16px;
+            padding: 2rem;
+            max-width: 90%;
+            max-height: 90vh;
+            overflow-y: auto;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.9);
+        }
+
+        .pixel-icon {
+            image-rendering: pixelated;
+            image-rendering: -moz-crisp-edges;
+            image-rendering: crisp-edges;
+        }
+
+        .stat-bar {
+            background: rgba(0, 0, 0, 0.5);
+            border-radius: 8px;
+            overflow: hidden;
+            height: 24px;
+            border: 1px solid rgba(218, 165, 32, 0.3);
+        }
+
+        .stat-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #b8860b 0%, #daa520 100%);
+            transition: width 0.5s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #fff;
+            font-size: 12px;
+            font-weight: 700;
+        }
+
+        .tab-button {
+            padding: 0.75rem 1.5rem;
+            background: rgba(101, 67, 33, 0.5);
+            border: 2px solid transparent;
+            color: #daa520;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-weight: 600;
+        }
+
+        .tab-button:hover {
+            background: rgba(139, 69, 19, 0.7);
+        }
+
+        .tab-button.active {
+            background: rgba(139, 69, 19, 0.9);
+            border-color: #daa520;
+            color: #ffd700;
+        }
+
+        .notification {
+            position: fixed;
+            top: 100px;
+            right: 20px;
+            background: linear-gradient(135deg, #1a0f0a 0%, #2d1810 100%);
+            border: 2px solid #daa520;
+            border-radius: 8px;
+            padding: 1rem 1.5rem;
+            color: #ffd700;
+            font-weight: 600;
+            transform: translateX(400px);
+            transition: transform 0.3s ease;
+            z-index: 2000;
+            box-shadow: 0 5px 20px rgba(0, 0, 0, 0.8);
+        }
+
+        .notification.show {
+            transform: translateX(0);
+        }
+
+        @media (max-width: 768px) {
+            .modal-content {
+                padding: 1rem;
+            }
+            
+            .notification {
+                right: 10px;
+                left: 10px;
+                top: 80px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div id="canvas-container"></div>
+    
+    <div class="content-overlay">
+        <header class="header-banner p-4 sticky top-0 z-50">
+            <div class="container mx-auto flex items-center justify-between">
+                <div class="flex items-center gap-4">
+                    <div class="w-12 h-12 bg-gradient-to-br from-yellow-600 to-yellow-800 rounded-lg flex items-center justify-center border-2 border-yellow-400">
+                        <span class="text-2xl">🏰</span>
+                    </div>
+                    <h1 class="text-3xl md:text-4xl font-black text-yellow-400 glow">ترافيان</h1>
+                </div>
+                <div class="flex gap-2 md:gap-4">
+                    <div class="glass-panel px-3 py-2 flex items-center gap-2">
+                        <span class="text-2xl">🪙</span>
+                        <span class="text-yellow-400 font-bold" id="gold-display">0</span>
+                    </div>
+                    <div class="glass-panel px-3 py-2 flex items-center gap-2">
+                        <span class="text-2xl">🌾</span>
+                        <span class="text-green-400 font-bold" id="food-display">0</span>
+                    </div>
+                    <div class="glass-panel px-3 py-2 flex items-center gap-2">
+                        <span class="text-2xl">🪵</span>
+                        <span class="text-amber-400 font-bold" id="wood-display">0</span>
+                    </div>
+                </div>
+            </div>
+        </header>
+
+        <main class="container mx-auto p-4 mt-8">
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                <div class="lg:col-span-2">
+                    <div class="glass-panel p-6 mb-6">
+                        <div class="flex gap-2 mb-4 overflow-x-auto">
+                            <button class="tab-button active" data-tab="village">القرية</button>
+                            <button class="tab-button" data-tab="buildings">المباني</button>
+                            <button class="tab-button" data-tab="army">الجيش</button>
+                            <button class="tab-button" data-tab="map">الخريطة</button>
+                        </div>
+
+                        <div id="village-tab" class="tab-content">
+                            <h2 class="text-2xl font-bold text-yellow-400 mb-6 flex items-center gap-3">
+                                <span>🏘️</span>
+                                قريتك
+                            </h2>
+                            <div class="grid grid-cols-2 md:grid-cols-3 gap-4" id="village-grid">
+                                <div class="building-slot rounded-lg p-6 text-center" data-slot="0">
+                                    <div class="text-4xl mb-2">➕</div>
+                                    <div class="text-yellow-400 font-semibold text-sm">موقع فارغ</div>
+                                </div>
+                                <div class="building-slot rounded-lg p-6 text-center" data-slot="1">
+                                    <div class="text-4xl mb-2">➕</div>
+                                    <div class="text-yellow-400 font-semibold text-sm">موقع فارغ</div>
+                                </div>
+                                <div class="building-slot rounded-lg p-6 text-center" data-slot="2">
+                                    <div class="text-4xl mb-2">➕</div>
+                                    <div class="text-yellow-400 font-semibold text-sm">موقع فارغ</div>
+                                </div>
+                                <div class="building-slot rounded-lg p-6 text-center" data-slot="3">
+                                    <div class="text-4xl mb-2">➕</div>
+                                    <div class="text-yellow-400 font-semibold text-sm">موقع فارغ</div>
+                                </div>
+                                <div class="building-slot rounded-lg p-6 text-center" data-slot="4">
+                                    <div class="text-4xl mb-2">➕</div>
+                                    <div class="text-yellow-400 font-semibold text-sm">موقع فارغ</div>
+                                </div>
+                                <div class="building-slot rounded-lg p-6 text-center" data-slot="5">
+                                    <div class="text-4xl mb-2">➕</div>
+                                    <div class="text-yellow-400 font-semibold text-sm">موقع فارغ</div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div id="buildings-tab" class="tab-content hidden">
+                            <h2 class="text-2xl font-bold text-yellow-400 mb-6 flex items-center gap-3">
+                                <span>🏗️</span>
+                                المباني المتاحة
+                            </h2>
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4" id="buildings-list">
+                            </div>
+                        </div>
+
+                        <div id="army-tab" class="tab-content hidden">
+                            <h2 class="text-2xl font-bold text-yellow-400 mb-6 flex items-center gap-3">
+                                <span>⚔️</span>
+                                جيشك
+                            </h2>
+                            <div class="glass-panel p-6 text-center">
+                                <div class="text-6xl mb-4">🛡️</div>
+                                <p class="text-gray-400 text-lg">لا توجد وحدات عسكرية بعد</p>
+                                <p class="text-gray-500 mt-2">قم ببناء ثكنة لتدريب الجنود</p>
+                            </div>
+                        </div>
+
+                        <div id="map-tab" class="tab-content hidden">
+                            <h2 class="text-2xl font-bold text-yellow-400 mb-6 flex items-center gap-3">
+                                <span>🗺️</span>
+                                خريطة العالم
+                            </h2>
+                            <div class="glass-panel p-6">
+                                <div class="grid grid-cols-5 gap-2">
+                                </div>
+                                <p class="text-center text-gray-400 mt-4">موقعك محدد بالنجمة ⭐</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="lg:col-span-1">
+                    <div class="glass-panel p-6 mb-6">
+                        <h3 class="text-xl font-bold text-yellow-400 mb-4 flex items-center gap-2">
+                            <span>📊</span>
+                            إحصائيات القرية
+                        </h3>
+                        <div class="space-y-4">
+                            <div>
+                                <div class="flex justify-between mb-1">
+                                    <span class="text-gray-300 text-sm">السكان</span>
+                                    <span class="text-yellow-400 font-bold" id="population">0/100</span>
+                                </div>
+                                <div class="stat-bar">
+                                    <div class="stat-fill" style="width: 0%" id="population-bar"></div>
+                                </div>
+                            </div>
+                            <div>
+                                <div class="flex justify-between mb-1">
+                                    <span class="text-gray-300 text-sm">مستوى القلعة</span>
+                                    <span class="text-yellow-400 font-bold" id="castle-level">0</span>
+                                </div>
+                            </div>
+                            <div>
+                                <div class="flex justify-between mb-1">
+                                    <span class="text-gray-300 text-sm">عدد المباني</span>
+                                    <span class="text-yellow-400 font-bold" id="building-count">0</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="glass-panel p-6 mb-6">
+                        <h3 class="text-xl font-bold text-yellow-400 mb-4 flex items-center gap-2">
+                            <span>📈</span>
+                            إنتاج الموارد
+                        </h3>
+                        <div class="space-y-3">
+                            <div class="flex items-center justify-between p-3 bg-black bg-opacity-30 rounded-lg">
+                                <div class="flex items-center gap-2">
+                                    <span class="text-2xl">🪙</span>
+                                    <span class="text-gray-300">ذهب/ساعة</span>
+                                </div>
+                                <span class="text-yellow-400 font-bold" id="gold-rate">+0</span>
+                            </div>
+                            <div class="flex items-center justify-between p-3 bg-black bg-opacity-30 rounded-lg">
+                                <div class="flex items-center gap-2">
+                                    <span class="text-2xl">🌾</span>
+                                    <span class="text-gray-300">طعام/ساعة</span>
+                                </div>
+                                <span class="text-green-400 font-bold" id="food-rate">+0</span>
+                            </div>
+                            <div class="flex items-center justify-between p-3 bg-black bg-opacity-30 rounded-lg">
+                                <div class="flex items-center gap-2">
+                                    <span class="text-2xl">🪵</span>
+                                    <span class="text-gray-300">خشب/ساعة</span>
+                                </div>
+                                <span class="text-amber-400 font-bold" id="wood-rate">+0</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="resource-card p-6 rounded-lg">
+                        <h3 class="text-xl font-bold text-yellow-400 mb-4 flex items-center gap-2">
+                            <span>🎯</span>
+                            مهام البداية
+                        </h3>
+                        <div class="space-y-3">
+                            <div class="p-3 bg-black bg-opacity-40 rounded-lg border-r-4 border-yellow-600">
+                                <p class="text-gray-200 font-semibold mb-1">ابنِ أول مبنى</p>
+                                <p class="text-gray-400 text-sm">المكافأة: 50 🪙</p>
+                            </div>
+                            <div class="p-3 bg-black bg-opacity-40 rounded-lg border-r-4 border-gray-600">
+                                <p class="text-gray-400 font-semibold mb-1">اجمع 100 ذهب</p>
+                                <p class="text-gray-500 text-sm">المكافأة: 20 🌾</p>
+                            </div>
+                            <div class="p-3 bg-black bg-opacity-40 rounded-lg border-r-4 border-gray-600">
+                                <p class="text-gray-400 font-semibold mb-1">طوّر قلعتك</p>
+                                <p class="text-gray-500 text-sm">المكافأة: 100 🪵</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <div class="modal" id="build-modal">
+        <div class="modal-content max-w-2xl">
+            <div class="flex justify-between items-center mb-6">
+                <h2 class="text-2xl font-bold text-yellow-400" id="modal-title">بناء مبنى جديد</h2>
+                <button class="text-gray-400 hover:text-white text-3xl" onclick="closeModal()">&times;</button>
+            </div>
+            <div id="modal-body"></div>
+        </div>
+    </div>
+
+    <div class="notification" id="notification"></div>
+
+    <script type="module">
+        import * as THREE from 'three';
+
+        // Game State
+        const gameState = {
+            resources: {
+                gold: 0,
+                food: 0,
+                wood: 0
+            },
+            production: {
+                gold: 0,
+                food: 0,
+                wood: 0
+            },
+            population: 0,
+            maxPopulation: 100,
+            castleLevel: 0,
+            buildings: {},
+            selectedSlot: null
+        };
+
+        // Building Definitions
+        const buildingTypes = {
+            farm: {
+                name: 'مزرعة',
+                icon: '🌾',
+                description: 'تنتج الطعام لسكان قريتك',
+                cost: { gold: 0, food: 0, wood: 10 },
+                production: { food: 5 },
+                buildTime: 3000,
+                population: 5
+            },
+            lumbermill: {
+                name: 'منشرة خشب',
+                icon: '🪵',
+                description: 'تنتج الخشب للبناء',
+                cost: { gold: 0, food: 5, wood: 5 },
+                production: { wood: 3 },
+                buildTime: 3000,
+                population: 5
+            },
+            goldmine: {
+                name: 'منجم ذهب',
+                icon: '🪙',
+                description: 'ينتج الذهب للتطوير',
+                cost: { gold: 0, food: 10, wood: 10 },
+                production: { gold: 2 },
+                buildTime: 5000,
+                population: 8
+            },
+            house: {
+                name: 'بيت',
+                icon: '🏠',
+                description: 'يزيد عدد السكان المتاح',
+                cost: { gold: 5, food: 5, wood: 15 },
+                production: {},
+                buildTime: 4000,
+                population: -20
+            },
+            barracks: {
+                name: 'ثكنة',
+                icon: '⚔️',
+                description: 'تدرب الجنود للدفاع والهجوم',
+                cost: { gold: 20, food: 15, wood: 30 },
+                production: {},
+                buildTime: 8000,
+                population: 10
+            },
+            castle: {
+                name: 'قلعة',
+                icon: '🏰',
+                description: 'مركز قيادة قريتك',
+                cost: { gold: 50, food: 30, wood: 50 },
+                production: { gold: 5 },
+                buildTime: 10000,
+                population: 15
+            }
+        };
+
+        // Three.js Scene Setup
+        let scene, camera, renderer, castle;
+        
+        function initThreeJS() {
+            scene = new THREE.Scene();
+            scene.fog = new THREE.Fog(0x1a0f0a, 10, 50);
+            
+            camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+            camera.position.set(0, 5, 15);
+            camera.lookAt(0, 2, 0);
+            
+            renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.setClearColor(0x000000, 0);
+            document.getElementById('canvas-container').appendChild(renderer.domElement);
+            
+            // Lighting
+            const ambientLight = new THREE.AmbientLight(0xff9944, 0.4);
+            scene.add(ambientLight);
+            
+            const directionalLight = new THREE.DirectionalLight(0xffaa55, 0.8);
+            directionalLight.position.set(5, 10, 5);
+            scene.add(directionalLight);
+            
+            const pointLight = new THREE.PointLight(0xffcc66, 1, 50);
+            pointLight.position.set(0, 8, 0);
+            scene.add(pointLight);
+            
+            // Castle Structure
+            const castleGroup = new THREE.Group();
+            
+            // Base
+            const baseGeometry = new THREE.BoxGeometry(8, 0.5, 8);
+            const baseMaterial = new THREE.MeshPhongMaterial({ color: 0x654321 });
+            const base = new THREE.Mesh(baseGeometry, baseMaterial);
+            base.position.y = 0.25;
+            castleGroup.add(base);
+            
+            // Main Tower
+            const towerGeometry = new THREE.CylinderGeometry(1.5, 1.8, 6, 8);
+            const towerMaterial = new THREE.MeshPhongMaterial({ color: 0x8b6f47 });
+            const mainTower = new THREE.Mesh(towerGeometry, towerMaterial);
+            mainTower.position.y = 3.5;
+            castleGroup.add(mainTower);
+            
+            // Tower Roof
+            const roofGeometry = new THREE.ConeGeometry(2, 2, 8);
+            const roofMaterial = new THREE.MeshPhongMaterial({ color: 0xb8860b });
+            const roof = new THREE.Mesh(roofGeometry, roofMaterial);
+            roof.position.y = 7.5;
+            castleGroup.add(roof);
+            
+            // Side Towers
+            for (let i = 0; i < 4; i++) {
+                const angle = (i * Math.PI) / 2;
+                const x = Math.cos(angle) * 3;
+                const z = Math.sin(angle) * 3;
+                
+                const sideTowerGeometry = new THREE.CylinderGeometry(0.8, 1, 4, 6);
+                const sideTower = new THREE.Mesh(sideTowerGeometry, towerMaterial);
+                sideTower.position.set(x, 2.5, z);
+                castleGroup.add(sideTower);
+                
+                const sideRoofGeometry = new THREE.ConeGeometry(1.2, 1.5, 6);
+                const sideRoof = new THREE.Mesh(sideRoofGeometry, roofMaterial);
+                sideRoof.position.set(x, 5.25, z);
+                castleGroup.add(sideRoof);
+            }
+            
+            // Walls
+            const wallGeometry = new THREE.BoxGeometry(8, 3, 0.5);
+            const wallMaterial = new THREE.MeshPhongMaterial({ color: 0x8b6f47 });
+            
+            const wallPositions = [
+                { pos: [0, 2, 3.75], rot: [0, 0, 0] },
+                { pos: [0, 2, -3.75], rot: [0, 0, 0] },
+                { pos: [3.75, 2, 0], rot: [0, Math.PI / 2, 0] },
+                { pos: [-3.75, 2, 0], rot: [0, Math.PI / 2, 0] }
+            ];
+            
+            wallPositions.forEach(w => {
+                const wall = new THREE.Mesh(wallGeometry, wallMaterial);
+                wall.position.set(...w.pos);
+                wall.rotation.set(...w.rot);
+                castleGroup.add(wall);
+            });
+            
+            castle = castleGroup;
+            scene.add(castle);
+            
+            // Ground
+            const groundGeometry = new THREE.PlaneGeometry(50, 50);
+            const groundMaterial = new THREE.MeshPhongMaterial({ 
+                color: 0x2d5016,
+                side: THREE.DoubleSide 
+            });
+            const ground = new THREE.Mesh(groundGeometry, groundMaterial);
+            ground.rotation.x = -Math.PI / 2;
+            ground.position.y = 0;
+            scene.add(ground);
+            
+            animate();
+        }
+        
+        function animate() {
+            requestAnimationFrame(animate);
+            
+            if (castle) {
+                castle.rotation.y += 0.002;
+            }
+            
+            renderer.render(scene, camera);
+        }
+        
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+        // Game Logic
+        function updateDisplay() {
+            document.getElementById('gold-display').textContent = Math.floor(gameState.resources.gold);
+            document.getElementById('food-display').textContent = Math.floor(gameState.resources.food);
+            document.getElementById('wood-display').textContent = Math.floor(gameState.resources.wood);
+            
+            document.getElementById('gold-rate').textContent = '+' + gameState.production.gold;
+            document.getElementById('food-rate').textContent = '+' + gameState.production.food;
+            document.getElementById('wood-rate').textContent = '+' + gameState.production.wood;
+            
+            const popPercent = (gameState.population / gameState.maxPopulation) * 100;
+            document.getElementById('population').textContent = `${gameState.population}/${gameState.maxPopulation}`;
+            document.getElementById('population-bar').style.width = popPercent + '%';
+            
+            document.getElementById('castle-level').textContent = gameState.castleLevel;
+            document.getElementById('building-count').textContent = Object.keys(gameState.buildings).length;
+        }
+
+        function produceResources() {
+            gameState.resources.gold += gameState.production.gold / 60;
+            gameState.resources.food += gameState.production.food / 60;
+            gameState.resources.wood += gameState.production.wood / 60;
+            updateDisplay();
+        }
+
+        function canAfford(cost) {
+            return gameState.resources.gold >= cost.gold &&
+                   gameState.resources.food >= cost.food &&
+                   gameState.resources.wood >= cost.wood;
+        }
+
+        function deductResources(cost) {
+            gameState.resources.gold -= cost.gold;
+            gameState.resources.food -= cost.food;
+            gameState.resources.wood -= cost.wood;
+            updateDisplay();
+        }
+
+        function showNotification(message) {
+            const notif = document.getElementById('notification');
+            notif.textContent = message;
+            notif.classList.add('show');
+            setTimeout(() => {
+                notif.classList.remove('show');
+            }, 3000);
+        }
+
+        function buildBuilding(slotId, buildingType) {
+            const building = buildingTypes[buildingType];
+            
+            if (!canAfford(building.cost)) {
+                showNotification('موارد غير كافية! ❌');
+                return;
+            }
+            
+            if (gameState.population + building.population > gameState.maxPopulation && building.population > 0) {
+                showNotification('تحتاج لمزيد من المساكن! 🏠');
+                return;
+            }
+            
+            deductResources(building.cost);
+            
+            const slot = document.querySelector(`[data-slot="${slotId}"]`);
+            slot.classList.add('building-active', 'pulse');
+            slot.innerHTML = `
+                <div class="text-4xl mb-2">${building.icon}</div>
+                <div class="text-yellow-400 font-semibold text-sm">${building.name}</div>
+                <div class="text-gray-400 text-xs mt-1">⏳ جاري البناء...</div>
+            `;
+            
+            setTimeout(() => {
+                gameState.buildings[slotId] = {
+                    type: buildingType,
+                    level: 1
+                };
+                
+                if (building.production.gold) gameState.production.gold += building.production.gold;
+                if (building.production.food) gameState.production.food += building.production.food;
+                if (building.production.wood) gameState.production.wood += building.production.wood;
+                
+                if (building.population > 0) {
+                    gameState.population += building.population;
+                } else {
+                    gameState.maxPopulation += Math.abs(building.population);
+                }
+                
+                if (buildingType === 'castle') {
+                    gameState.castleLevel++;
+                }
+                
+                slot.classList.remove('pulse');
+                slot.innerHTML = `
+                    <div class="text-4xl mb-2">${building.icon}</div>
+                    <div class="text-yellow-400 font-semibold text-sm">${building.name}</div>
+                    <div class="text-green-400 text-xs mt-1">✓ المستوى 1</div>
+                `;
+                
+                updateDisplay();
+                closeModal();
+                showNotification(`تم بناء ${building.name} بنجاح! ✨`);
+            }, building.buildTime);
+        }
+
+        function openBuildMenu(slotId) {
+            if (gameState.buildings[slotId]) {
+                showNotification('هذا الموقع مشغول بالفعل');
+                return;
+            }
+            
+            gameState.selectedSlot = slotId;
+            
+            let html = '<div class="grid grid-cols-1 md:grid-cols-2 gap-4">';
+            
+            Object.keys(buildingTypes).forEach(key => {
+                const building = buildingTypes[key];
+                const canBuild = canAfford(building.cost);
+                
+                html += `
+                    <div class="resource-card p-4 rounded-lg ${canBuild ? 'cursor-pointer hover:scale-105' : 'opacity-50'}" 
+                         onclick="${canBuild ? `buildBuilding('${slotId}', '${key}')` : ''}">
+                        <div class="text-5xl mb-3 text-center">${building.icon}</div>
+                        <h3 class="text-xl font-bold text-yellow-400 text-center mb-2">${building.name}</h3>
+                        <p class="text-gray-400 text-sm text-center mb-3">${building.description}</p>
+                        <div class="space-y-1 text-sm">
+                            ${building.cost.gold > 0 ? `<div class="flex justify-between"><span>🪙 ذهب:</span><span class="text-yellow-400">${building.cost.gold}</span></div>` : ''}
+                            ${building.cost.food > 0 ? `<div class="flex justify-between"><span>🌾 طعام:</span><span class="text-green-400">${building.cost.food}</span></div>` : ''}
+                            ${building.cost.wood > 0 ? `<div class="flex justify-between"><span>🪵 خشب:</span><span class="text-amber-400">${building.cost.wood}</span></div>` : ''}
+                        </div>
+                        ${!canBuild ? '<p class="text-red-400 text-center mt-2 text-xs">موارد غير كافية</p>' : ''}
+                    </div>
+                `;
+            });
+            
+            html += '</div>';
+            
+            document.getElementById('modal-body').innerHTML = html;
+            document.getElementById('build-modal').classList.add('active');
+        }
+
+        window.closeModal = function() {
+            document.getElementById('build-modal').classList.remove('active');
+        }
+
+        window.buildBuilding = buildBuilding;
+
+        // Tab System
+        document.querySelectorAll('.tab-button').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const tab = btn.dataset.tab;
+                
+                document.querySelectorAll('.tab-button').forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                
+                document.querySelectorAll('.tab-content').forEach(c => c.classList.add('hidden'));
+                document.getElementById(tab + '-tab').classList.remove('hidden');
+                
+                if (tab === 'map') {
+                    generateMap();
+                }
+            });
+        });
+
+        function generateMap() {
+            const mapContainer = document.querySelector('#map-tab .grid');
+            mapContainer.innerHTML = '';
+            
+            for (let i = 0; i < 25; i++) {
+                const isCenter = i === 12;
+                const tile = document.createElement('div');
+                tile.className = 'aspect-square rounded flex items-center justify-center text-2xl';
+                
+                if (isCenter) {
+                    tile.classList.add('bg-yellow-600', 'border-2', 'border-yellow-400');
+                    tile.textContent = '⭐';
+                } else {
+                    const random = Math.random();
+                    if (random > 0.7) {
+                        tile.classList.add('bg-green-900');
+                        tile.textContent = '🌲';
+                    } else if (random > 0.5) {
+                        tile.classList.add('bg-blue-900');
+                        tile.textContent = '💧';
+                    } else {
+                        tile.classList.add('bg-green-800');
+                        tile.textContent = '🌾';
+                    }
+                }
+                
+                mapContainer.appendChild(tile);
+            }
+        }
+
+        // Building slots click handlers
+        document.querySelectorAll('.building-slot').forEach(slot => {
+            slot.addEventListener('click', () => {
+                const slotId = slot.dataset.slot;
+                openBuildMenu(slotId);
+            });
+        });
+
+        // Initialize
+        initThreeJS();
+        updateDisplay();
+        setInterval(produceResources, 1000);
+        
+        // Starting resources for testing
+        gameState.resources.wood = 20;
+        gameState.resources.food = 20;
+        gameState.resources.gold = 10;
+        updateDisplay();
+        
+        showNotification('مرحباً بك في ترافيان! ابدأ ببناء قريتك 🏰');
+    </script>
+</body>
+</html>
