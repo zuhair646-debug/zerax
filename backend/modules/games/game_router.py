@@ -1380,9 +1380,14 @@ def create_game_router(db, get_current_user):
         except Exception as fal_err:
             logger.exception(f"[games] FAL tools failed: {fal_err}")
 
-        # 🩹 SAFETY NET: If AI promised an image but failed to write any <<IMG_PRO>> tag,
-        # force-generate from context. Handles BOTH past-tense ("ولّدت") AND future/intent
-        # tense ("راح أولّد، خلّيني أولّد، بأرسم، أرسم لك") since the AI flips between them.
+        # 🩹 SAFETY NET v3 — Catches THREE bug modes the AI exhibits:
+        #   (a) AI wrote a tag with broken syntax (newlines mid-tag, missing >>, weird chars)
+        #       → parser missed it, but we can still extract the user-visible prompt from it.
+        #   (b) AI wrote NO tag but promised an image (future or past tense Arabic).
+        #   (c) AI ended with "اعتمد ولا تبي نعدّل؟" — that question only makes sense if an
+        #       image exists. If none exists, we MUST produce one.
+        # The check `not generated_assets` is the only gate now — we no longer let the existence
+        # of a (potentially-broken) <<img tag block recovery.
         if not generated_assets:
             promise_phrases = [
                 # past tense — "it's done"
@@ -1393,40 +1398,88 @@ def create_game_router(db, get_current_user):
                 "راح أولّد", "راح أرسم", "بأولّد", "بأرسم", "خلّيني أولّد", "خليني أولّد",
                 "خلّيني أرسم", "خليني أرسم", "خلّيني أحضّر", "خليني أحضر",
                 "أولّد لك", "أولد لك", "أرسم لك", "بأحضّر لك", "بأحضر لك",
-                "حضّرت لك", "بأطلع لك", "راح أطلع", "بأجهّز لك",
+                "حضّرت لك", "بأطلع لك", "راح أطلع", "بأجهّز لك", "خلني أولّد", "خلني أرسم",
                 # approval-request pattern (AI asks for approval without producing anything)
                 "اعتمد ولا تي نعدّل", "اعتمد ولا تبي نعدّل", "اعتمد ولا نعدّل",
                 "تعتمد ولا نعدّل", "وش رايك بالصورة", "كيف الصورة فوق",
+                "اعتمدها ولا نعدّل", "تعتمد ولا تعدّل", "نعتمد ولا نعدل",
+                # broader visual nouns — if AI talks about it as if produced, recover
+                "نموذج لـ", "كعيّنة أولى", "كعينة أولى", "كنموذج أولي", "مشهد أولي",
+                "concept art", "هذا المشهد", "تشوف الصورة", "شوف فوق", "شوف الصورة",
             ]
             ai_lower = (ai_message or "").lower()
-            promised = any(p in (ai_message or "") or p.lower() in ai_lower for p in promise_phrases)
-            has_any_tag = "<<img" in ai_lower or "<<3d" in ai_lower or "<<music" in ai_lower or "<<model" in ai_lower
-            if promised and not has_any_tag:
-                logger.warning(f"[games] AI promised image but no tag — triggering safety net for project {project_id}")
+            ai_text = (ai_message or "")
+            promised = any(p in ai_text or p.lower() in ai_lower for p in promise_phrases)
+
+            # 🔎 Detect ANY broken/malformed asset tag in the AI's text.
+            # If the user-visible text contains `<<...>>` blocks the parser couldn't decode,
+            # we extract their inner contents as the prompt (the AI clearly intended an image).
+            import re as _re_sn
+            broken_tag_match = None
+            broken_blocks = _re_sn.findall(r"<<\s*[^>]*?>>", ai_text, flags=_re_sn.DOTALL)
+            if broken_blocks:
+                # Pick the longest block (most likely the IMG_PRO with detailed prompt)
+                broken_tag_match = max(broken_blocks, key=len)
+
+            should_fire = (not generated_assets) and (promised or broken_tag_match is not None)
+            logger.warning(
+                f"[games][safety-net] decision project={project_id} "
+                f"promised={promised} broken_tag={'yes' if broken_tag_match else 'no'} "
+                f"will_fire={should_fire} ai_msg_head={ai_text[:140]!r}"
+            )
+
+            if should_fire:
                 try:
                     from modules.games.fal_tools import generate_flux_pro
                     from modules.games.persistence import persist_bytes as _persist
-                    # 🧠 Build a smart prompt — the user often types junk like "اجرب من جديد",
-                    # so we prefer the AI's OWN description (it just named what it wants to draw),
-                    # falling back to user message + project title.
-                    import re as _re_sn
-                    ai_desc = (ai_message or "")
-                    # Strip the promise/question phrases so the prompt is the actual description
+
+                    # 🧠 Build the smartest possible prompt
+                    # Priority 1: contents of any broken <<...>> tag (AI's exact intent).
+                    # Priority 2: AI's description text minus the promise/question noise.
+                    # Priority 3: user message (only if not junk).
+                    prompt_from_broken = ""
+                    if broken_tag_match:
+                        # Strip the brackets + tag-name prefix to get the inner prompt
+                        inner = _re_sn.sub(r"^<<\s*[A-Za-z_\-\s]{0,20}[:：\-]?\s*", "", broken_tag_match)
+                        inner = _re_sn.sub(r"\s*>>$", "", inner)
+                        prompt_from_broken = _re_sn.sub(r"\s+", " ", inner).strip()[:500]
+
+                    ai_desc = ai_text
+                    # Remove the broken tag block from the description so we don't double-include it
+                    if broken_tag_match:
+                        ai_desc = ai_desc.replace(broken_tag_match, " ")
                     for noise in promise_phrases + ["اعتمد", "نعدّل", "نعدل", "تبي", "ولّد لك", "ولد لك"]:
-                        ai_desc = _re_sn.sub(re.escape(noise), " ", ai_desc, flags=_re_sn.IGNORECASE)
-                    ai_desc = _re_sn.sub(r"[*_`>#]+", " ", ai_desc)  # markdown
+                        ai_desc = _re_sn.sub(_re_sn.escape(noise), " ", ai_desc, flags=_re_sn.IGNORECASE)
+                    ai_desc = _re_sn.sub(r"[*_`>#]+", " ", ai_desc)
                     ai_desc = _re_sn.sub(r"\s+", " ", ai_desc).strip()[:400]
-                    # If user's message is a useful prompt, prepend it; ignore junk like "try again"
+
                     user_msg = (message or "").strip()
-                    user_junk = any(j in user_msg.lower() for j in ("اجرب", "حاول", "مرة ثانية", "try again", "retry", "كرر"))
+                    user_junk = any(j in user_msg.lower() for j in ("اجرب", "حاول", "مرة ثانية", "try again", "retry", "كرر", "اعد"))
                     user_part = "" if user_junk or len(user_msg) < 4 else user_msg[:200]
-                    fallback_prompt = (
-                        f"{project.get('title') or 'game scene'}: "
-                        f"{user_part + ' — ' if user_part else ''}{ai_desc}"
-                    ).strip(" :,—")
-                    fa = await generate_flux_pro(fallback_prompt, project_id, style_profile=(project.get('style_profile') or 'stylized'))
+
+                    title = project.get('title') or 'game scene'
+                    if prompt_from_broken:
+                        # The AI literally wrote this — trust it as the primary prompt
+                        fallback_prompt = f"{title}: {prompt_from_broken}"
+                    elif ai_desc:
+                        fallback_prompt = f"{title}: {user_part + ' — ' if user_part else ''}{ai_desc}"
+                    else:
+                        fallback_prompt = f"{title} — {user_part or 'cinematic concept art'}"
+                    fallback_prompt = fallback_prompt.strip(" :,—")
+
+                    logger.warning(
+                        f"[games][safety-net] firing project={project_id} "
+                        f"source={'broken_tag' if prompt_from_broken else 'ai_desc'} "
+                        f"prompt={fallback_prompt[:200]!r}"
+                    )
+
+                    fa = await generate_flux_pro(
+                        fallback_prompt, project_id,
+                        style_profile=(project.get('style_profile') or 'stylized'),
+                    )
                     fa["phase_id"] = phase_id
                     fa["safety_net"] = True
+                    fa["safety_net_source"] = "broken_tag" if prompt_from_broken else "ai_description"
                     raw_b = fa.pop("_bytes", None)
                     if raw_b:
                         try:
@@ -1438,14 +1491,18 @@ def create_game_router(db, get_current_user):
                         {"id": project_id},
                         {"$push": {"assets.images": fa}}
                     )
-                    # Append a short note so the user knows the AI tripped but we recovered
                     ai_message = (ai_message or "") + (
                         "\n\n_ℹ️ تم توليد الصورة تلقائياً عبر safety-net "
-                        "لأن AI نسي يكتب الوسم — تقدر تعدّلها أو ترفضها._"
+                        "لأن AI ما كتب وسم صحيح — تقدر تعدّلها أو ترفضها._"
                     )
-                    logger.info(f"[games] safety-net generated asset {fa['id']} for project {project_id}")
+                    logger.info(f"[games][safety-net] ✅ generated asset {fa['id']} project={project_id}")
                 except Exception as sn_err:
-                    logger.exception(f"[games] safety-net generation failed: {sn_err}")
+                    logger.exception(f"[games][safety-net] failed: {sn_err}")
+                    # Last-resort: tell the user explicitly what happened
+                    ai_message = (ai_message or "") + (
+                        f"\n\n_⚠️ حاولت أولّد الصورة تلقائياً لكن فشل التوليد: {str(sn_err)[:120]}. "
+                        f"جرّب ترسل طلب أوضح، مثلاً: \"ارسم لي شخصية المزارع watercolor isometric\"._"
+                    )
 
         # 🧹 Strip ALL raw asset tags from the user-visible message so the user
         # never sees <<IMG_PRO ...>> or stray broken syntax. The generated assets
@@ -2249,7 +2306,7 @@ def create_game_router(db, get_current_user):
         return {
             "ok": True,
             "service": "games",
-            "build_marker": "v8_2026_06_05_safety_net_future_tense",  # bump when shipping features
+            "build_marker": "v9_2026_06_05_broken_tag_recovery",  # bump when shipping features
             "features": {
                 "image_generation": True,
                 "vision_verification": True,
