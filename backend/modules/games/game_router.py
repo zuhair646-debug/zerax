@@ -258,7 +258,7 @@ def create_game_router(db, get_current_user):
         
         project = {
             "id": project_id,
-            "user_id": user["id"],
+            "user_id": user["user_id"],
             "game_type": payload.game_type,
             "title": payload.title,
             "description": payload.description,
@@ -293,7 +293,7 @@ def create_game_router(db, get_current_user):
     async def list_projects(user=Depends(get_current_user)):
         """List all game projects for current user"""
         projects = await db.game_projects.find(
-            {"user_id": user["id"]},
+            {"user_id": user["user_id"]},
             {"_id": 0}
         ).sort("created_at", -1).to_list(100)
         return {"projects": projects}
@@ -305,7 +305,7 @@ def create_game_router(db, get_current_user):
     async def get_project(project_id: str, user=Depends(get_current_user)):
         """Get full project details"""
         project = await db.game_projects.find_one(
-            {"id": project_id, "user_id": user["id"]},
+            {"id": project_id, "user_id": user["user_id"]},
             {"_id": 0}
         )
         if not project:
@@ -330,7 +330,7 @@ def create_game_router(db, get_current_user):
     ):
         """AI chat with memory system and approval flow"""
         project = await db.game_projects.find_one(
-            {"id": project_id, "user_id": user["id"]}
+            {"id": project_id, "user_id": user["user_id"]}
         )
         if not project:
             raise HTTPException(404, "Project not found")
@@ -342,9 +342,14 @@ def create_game_router(db, get_current_user):
         if not phase_info:
             raise HTTPException(400, "Invalid phase")
         
-        # Check credits
-        if user.get("balance", 0) < phase_info["credits"]:
-            raise HTTPException(402, "Insufficient credits")
+        # Load user doc for accurate credits + owner bypass
+        user_doc = await db.users.find_one({"id": user["user_id"]}, {"_id": 0, "credits": 1, "is_owner": 1, "role": 1}) or {}
+        user_credits = int(user_doc.get("credits") or 0)
+        user_is_owner = bool(user_doc.get("is_owner") or user_doc.get("role") == "owner")
+
+        # Check credits (owner bypasses)
+        if not user_is_owner and user_credits < phase_info["credits"]:
+            raise HTTPException(402, f"رصيد غير كافٍ — تحتاج {phase_info['credits']} نقطة (لديك {user_credits})")
         
         # Build AI context with memory
         approved_context = ""
@@ -424,7 +429,7 @@ Respond in Arabic for explanations, but keep code/technical content in English.
         # Call Gemini
         try:
             async with httpx.AsyncClient(timeout=120.0) as client:
-                gemini_url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:generateContent?key={GEMINI_KEY}"
+                gemini_url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key={GEMINI_KEY}"
                 
                 parts = [{"text": message}]
                 # TODO: Add image support if attachments contain images
@@ -471,7 +476,7 @@ Respond in Arabic for explanations, but keep code/technical content in English.
                     # Generate image if prompt provided
                     if asset_entry["image_prompt"] and GEMINI_KEY:
                         try:
-                            img_url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:generateContent?key={GEMINI_KEY}"
+                            img_url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key={GEMINI_KEY}"
                             img_response = await client.post(img_url, json={
                                 "contents": [{
                                     "parts": [{
@@ -515,18 +520,19 @@ Respond in Arabic for explanations, but keep code/technical content in English.
             }
         )
         
-        # Deduct credits
-        await db.users.update_one(
-            {"id": user["id"]},
-            {"$inc": {"balance": -phase_info["credits"]}}
-        )
-        
+        # Deduct credits (skip for owner)
+        if not user_is_owner:
+            await db.users.update_one(
+                {"id": user["user_id"]},
+                {"$inc": {"credits": -phase_info["credits"]}}
+            )
+
         return {
             "ok": True,
             "message": ai_message,
             "generated_assets": generated_assets,
-            "credits_used": phase_info["credits"],
-            "remaining_balance": user.get("balance", 0) - phase_info["credits"]
+            "credits_used": 0 if user_is_owner else phase_info["credits"],
+            "remaining_balance": user_credits if user_is_owner else (user_credits - phase_info["credits"])
         }
     
     # ───────────────────────────────────────────────────────────
@@ -540,7 +546,7 @@ Respond in Arabic for explanations, but keep code/technical content in English.
     ):
         """Client approves or rejects an asset"""
         project = await db.game_projects.find_one(
-            {"id": project_id, "user_id": user["id"]}
+            {"id": project_id, "user_id": user["user_id"]}
         )
         if not project:
             raise HTTPException(404, "Project not found")
@@ -595,7 +601,7 @@ Respond in Arabic for explanations, but keep code/technical content in English.
     async def unlock_phase(project_id: str, phase_id: str, user=Depends(get_current_user)):
         """Unlock a phase (no restrictions)"""
         project = await db.game_projects.find_one(
-            {"id": project_id, "user_id": user["id"]}
+            {"id": project_id, "user_id": user["user_id"]}
         )
         if not project:
             raise HTTPException(404, "Project not found")
@@ -630,7 +636,7 @@ Respond in Arabic for explanations, but keep code/technical content in English.
     ):
         """Manually add asset (for testing or external uploads)"""
         project = await db.game_projects.find_one(
-            {"id": project_id, "user_id": user["id"]}
+            {"id": project_id, "user_id": user["user_id"]}
         )
         if not project:
             raise HTTPException(404, "Project not found")
@@ -668,7 +674,7 @@ Respond in Arabic for explanations, but keep code/technical content in English.
     ):
         """Set live preview URL for the game"""
         await db.game_projects.update_one(
-            {"id": project_id, "user_id": user["id"]},
+            {"id": project_id, "user_id": user["user_id"]},
             {
                 "$set": {
                     "preview_url": preview_url,
