@@ -11,6 +11,7 @@ Endpoints:
   POST /api/games/project/{id}/phase — تأكيد مرحلة + الانتقال للتالي
 """
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
+from fastapi.responses import HTMLResponse
 from typing import Optional, List, Dict, Any
 from pydantic import BaseModel
 import uuid
@@ -558,5 +559,31 @@ def create_game_router(db, get_current_user):
             raise HTTPException(404, "المشروع غير موجود")
         
         return {"ok": True, "project": project}
+    
+    # ═══════════════════════════════════════════════════════════
+    # 🎮 Play Game (Public)
+    # ═══════════════════════════════════════════════════════════
+    @router.get("/play/{game_id}", response_class=HTMLResponse)
+    async def play_game(game_id: str):
+        """Play a deployed game directly (no auth required)."""
+        project = await db.game_projects.find_one(
+            {"id": game_id, "phase": "deployed"},
+            {"_id": 0, "code": 1, "idea": 1, "gdd": 1}
+        )
+        if not project or not project.get("code"):
+            return HTMLResponse(
+                content="""
+                <html>
+                <head><title>Game Not Found</title></head>
+                <body style="font-family: Arial; text-align: center; padding: 50px;">
+                    <h1>🎮 اللعبة غير موجودة</h1>
+                    <p>المعرف غير صحيح أو اللعبة لم يتم نشرها بعد.</p>
+                </body>
+                </html>
+                """,
+                status_code=404
+            )
+        
+        return HTMLResponse(content=project["code"], status_code=200)
     
     return router
