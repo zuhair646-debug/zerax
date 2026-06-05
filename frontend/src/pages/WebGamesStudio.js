@@ -3,7 +3,8 @@ import { useNavigate } from 'react-router-dom';
 import { 
   Gamepad2, Send, Paperclip, Loader2, Check, X, 
   Eye, Code, Image, FileText, Package, Sparkles,
-  ArrowRight, ArrowLeft, Lock, Unlock, CheckCircle2, HelpCircle
+  ArrowRight, ArrowLeft, Lock, Unlock, CheckCircle2, HelpCircle,
+  Brain, FolderOpen
 } from 'lucide-react';
 import { toast } from 'sonner';
 import TechInfoModal from '@/components/TechInfoModal';
@@ -11,6 +12,8 @@ import VoiceRecorderButton from '@/components/VoiceRecorderButton';
 import QuickActions from '@/components/QuickActions';
 import StorageBadge from '@/components/StorageBadge';
 import ImageLightbox from '@/components/ImageLightbox';
+import MyProjectsModal from '@/components/games/MyProjectsModal';
+import AINotesPanel from '@/components/games/AINotesPanel';
 
 const API = process.env.REACT_APP_BACKEND_URL;
 
@@ -30,9 +33,11 @@ export default function WebGamesStudio({ user }) {
   const [loading, setLoading] = useState(false);
   const [activePhase, setActivePhase] = useState('discovery');
   const [infoTech, setInfoTech] = useState(null); // tech ID for info modal
-  const [activeTab, setActiveTab] = useState('chat'); // chat | live | approved
+  const [activeTab, setActiveTab] = useState('chat'); // chat | live | approved | notes
   const [resuming, setResuming] = useState(false);
   const [lightbox, setLightbox] = useState(null); // {src, alt}
+  const [myProjectsOpen, setMyProjectsOpen] = useState(false);
+  const [notesRefreshSignal, setNotesRefreshSignal] = useState(0);
   
   const chatEndRef = useRef(null);
   const fileInputRef = useRef(null);
@@ -148,6 +153,9 @@ export default function WebGamesStudio({ user }) {
       setAttachments([]);
       toast.success(`✨ ${data.credits_used} نقطة — ${data.message.substring(0, 50)}...`);
       
+      // Signal the Notes panel to re-fetch (backend auto-refreshes notes every few messages)
+      setNotesRefreshSignal(s => s + 1);
+
       setTimeout(() => chatEndRef.current?.scrollIntoView({ behavior: 'smooth' }), 100);
     } catch (e) {
       toast.error(e.message);
@@ -230,16 +238,29 @@ export default function WebGamesStudio({ user }) {
     return (
       <div dir="rtl" className="min-h-screen bg-gradient-to-br from-zinc-950 via-zinc-900 to-amber-950/20 text-white p-6">
         <div className="max-w-4xl mx-auto">
-          {/* Back button */}
-          <button
-            type="button"
-            onClick={() => navigate('/dashboard/games')}
-            className="mb-4 inline-flex items-center gap-2 px-3 py-2 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-zinc-300 hover:text-white transition-all"
-            data-testid="back-to-games-dashboard"
-          >
-            <ArrowRight className="w-4 h-4" />
-            <span className="text-sm font-medium">رجوع لاستوديو الألعاب</span>
-          </button>
+          {/* Top nav row — My Projects (left) + Back (right) — same size as before */}
+          <div className="mb-4 flex items-center justify-between gap-2">
+            <button
+              type="button"
+              onClick={() => setMyProjectsOpen(true)}
+              className="inline-flex items-center gap-2 px-3 py-2 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-zinc-300 hover:text-white transition-all"
+              data-testid="open-my-projects"
+              title="افتح كل مشاريعك ومحادثاتك السابقة"
+            >
+              <FolderOpen className="w-4 h-4" />
+              <span className="text-sm font-medium">مشاريعي السابقة</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => navigate('/dashboard/games')}
+              className="inline-flex items-center gap-2 px-3 py-2 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-zinc-300 hover:text-white transition-all"
+              data-testid="back-to-games-dashboard"
+            >
+              <ArrowRight className="w-4 h-4" />
+              <span className="text-sm font-medium">رجوع لاستوديو الألعاب</span>
+            </button>
+          </div>
 
           {/* Header */}
           <div className="flex items-center gap-4 mb-8">
@@ -342,6 +363,13 @@ export default function WebGamesStudio({ user }) {
           />
         )}
 
+        {/* My Projects Modal — visible from select-tech step */}
+        <MyProjectsModal
+          open={myProjectsOpen}
+          onClose={() => setMyProjectsOpen(false)}
+          accentColor="amber"
+        />
+
         {/* Image Lightbox — click any image to enlarge */}
         {lightbox && (
           <ImageLightbox
@@ -376,6 +404,16 @@ export default function WebGamesStudio({ user }) {
           >
             <ArrowRight className="w-4 h-4" />
             <span className="text-xs font-medium hidden sm:inline">رجوع</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setMyProjectsOpen(true)}
+            className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-zinc-300 hover:text-white transition-all"
+            data-testid="open-my-projects-chat"
+            title="افتح مشاريعي السابقة"
+          >
+            <FolderOpen className="w-4 h-4" />
+            <span className="text-xs font-medium hidden sm:inline">مشاريعي</span>
           </button>
           <Gamepad2 className="w-6 h-6 text-amber-400" />
           <div>
@@ -494,6 +532,14 @@ export default function WebGamesStudio({ user }) {
                 return count > 0 ? <span className="ms-1.5 text-[10px] bg-emerald-500/20 px-1.5 py-0.5 rounded-full">{count}</span> : null;
               })()}
             </button>
+            <button
+              onClick={() => setActiveTab('notes')}
+              data-testid="tab-notes"
+              className={`px-4 py-2.5 text-sm font-bold border-b-2 transition-all flex items-center gap-1.5 ${activeTab === 'notes' ? 'text-violet-300 border-violet-400' : 'text-zinc-400 border-transparent hover:text-white'}`}
+            >
+              <Brain className="w-3.5 h-3.5" />
+              <span>ذاكرة AI</span>
+            </button>
             <div className="flex-1" />
             {resuming && (
               <div className="text-xs text-zinc-500 flex items-center gap-1.5 px-2">
@@ -607,6 +653,14 @@ export default function WebGamesStudio({ user }) {
                 )}
               </div>
             </div>
+          )}
+
+          {activeTab === 'notes' && (
+            <AINotesPanel
+              projectId={project?.id}
+              accentColor="amber"
+              refreshSignal={notesRefreshSignal}
+            />
           )}
 
           {activeTab === 'chat' && (
@@ -903,6 +957,13 @@ export default function WebGamesStudio({ user }) {
           onClose={() => setLightbox(null)}
         />
       )}
+
+      {/* My Projects Modal — visible from chat step */}
+      <MyProjectsModal
+        open={myProjectsOpen}
+        onClose={() => setMyProjectsOpen(false)}
+        accentColor="amber"
+      />
     </div>
   );
 }

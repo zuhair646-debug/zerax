@@ -225,6 +225,86 @@ class AssetApproval(BaseModel):
     feedback: Optional[str] = None
 
 # ═══════════════════════════════════════════════════════════════
+# 🧠 Async helper — auto-refresh AI notes/GDD in the background
+# ═══════════════════════════════════════════════════════════════
+async def _auto_refresh_notes(db, project_id: str):
+    """Regenerate the project's AI memory/GDD from full chat history.
+    Called as a background asyncio task after every few messages so the user
+    can see a live-updating Game Design Document in the "ذاكرة AI" tab.
+    """
+    try:
+        project = await db.game_projects.find_one({"id": project_id})
+        if not project:
+            return
+        all_msgs = []
+        for ph_id, ph in (project.get("phases") or {}).items():
+            for m in (ph.get("messages") or [])[-20:]:
+                all_msgs.append(
+                    f"[{ph_id}] U: {(m.get('user') or '')[:200]}\nA: {(m.get('assistant') or '')[:400]}"
+                )
+        chat_digest = "\n\n".join(all_msgs[-30:])
+        if not chat_digest:
+            return
+        summary_prompt = (
+            "أنت محرر فني لمشروع لعبة. اقرأ محادثة المالك مع AI واكتب ملخصاً مفصّلاً ومستديماً "
+            "(Living Project Memory / Game Design Document) بصيغة Markdown يضم: الرؤية العامة، "
+            "نوع اللعبة، الجمهور المستهدف، الـart style المتفق عليه، العناصر المعتمدة (قائمة)، "
+            "القرارات الرئيسية، ما تم إنجازه، ما تبقى. اكتبها بضمير المتكلم 'أنا فهمت كذا'. "
+            "نقاط مرقّمة، عربية واضحة، حد 1500 كلمة.\n\n"
+            f"تفاصيل المشروع:\nالعنوان: {project.get('title','')}\nالوصف: {project.get('description','')}\n\n"
+            f"المحادثة:\n{chat_digest[:30000]}"
+        )
+        gemini_key = os.environ.get("GEMINI_API_KEY", "")
+        anthropic_key = os.environ.get("ANTHROPIC_API_KEY", "")
+        notes = ""
+        try:
+            if gemini_key:
+                async with httpx.AsyncClient(timeout=60.0) as cli:
+                    r = await cli.post(
+                        f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={gemini_key}",
+                        json={
+                            "contents": [{"parts": [{"text": summary_prompt}]}],
+                            "generationConfig": {"temperature": 0.3, "maxOutputTokens": 3000},
+                        },
+                    )
+                    if r.status_code == 200:
+                        notes = (
+                            r.json().get("candidates", [{}])[0]
+                            .get("content", {}).get("parts", [{}])[0]
+                            .get("text", "")
+                        )
+            if not notes and anthropic_key:
+                async with httpx.AsyncClient(timeout=60.0) as cli:
+                    r = await cli.post(
+                        "https://api.anthropic.com/v1/messages",
+                        headers={
+                            "x-api-key": anthropic_key,
+                            "anthropic-version": "2023-06-01",
+                            "content-type": "application/json",
+                        },
+                        json={
+                            "model": "claude-sonnet-4-5-20250929",
+                            "max_tokens": 3000,
+                            "messages": [{"role": "user", "content": summary_prompt}],
+                        },
+                    )
+                    if r.status_code == 200:
+                        blocks = r.json().get("content", [])
+                        notes = "".join(b.get("text", "") for b in blocks if b.get("type") == "text")
+        except Exception as llm_err:
+            logger.warning(f"[games][auto-notes] LLM call failed: {llm_err}")
+            return
+        if notes:
+            await db.game_projects.update_one(
+                {"id": project_id},
+                {"$set": {"ai_notes": notes, "notes_updated_at": datetime.now(timezone.utc).isoformat()}},
+            )
+            logger.info(f"[games][auto-notes] refreshed notes for project {project_id} ({len(notes)} chars)")
+    except Exception as e:
+        logger.warning(f"[games][auto-notes] background refresh failed: {e}")
+
+
+# ═══════════════════════════════════════════════════════════════
 # 🎯 Router Factory
 # ═══════════════════════════════════════════════════════════════
 def create_game_router(db, get_current_user):
@@ -335,18 +415,6 @@ def create_game_router(db, get_current_user):
         project.pop("_id", None)
         
         return {"ok": True, "project": project}
-    
-    # ───────────────────────────────────────────────────────────
-    # 📋 GET /projects — List user projects
-    # ───────────────────────────────────────────────────────────
-    @router.get("/projects")
-    async def list_projects(user=Depends(get_current_user)):
-        """List all game projects for current user"""
-        projects = await db.game_projects.find(
-            {"user_id": user["user_id"]},
-            {"_id": 0}
-        ).sort("created_at", -1).to_list(100)
-        return {"projects": projects}
     
     # ───────────────────────────────────────────────────────────
     # 📋 GET /project/{project_id} — Get project details
@@ -524,6 +592,14 @@ def create_game_router(db, get_current_user):
                 f.write(content)
             attachments.append({"filename": filename, "path": file_path, "size": len(content)})
         
+        # ─── AI persistent notes: inject existing project notes into system_prompt ───
+        existing_notes = project.get("ai_notes", "").strip()
+        notes_block = ""
+        if existing_notes:
+            notes_block = f"\n\n═══ 📝 ملاحظاتك الحالية عن المشروع (من جلسات سابقة — لا تعيد سؤال أي شي مذكور هنا) ═══\n{existing_notes[:4000]}\n═══\n"
+
+        system_prompt = system_prompt + notes_block
+
         # Call Gemini (with Claude fallback if quota exceeded)
         ai_message = None
         # ─── VISION: include last 3 generated images so AI can SEE its previous outputs ───
@@ -763,6 +839,20 @@ def create_game_router(db, get_current_user):
                 {"$inc": {"credits": -phase_info["credits"]}}
             )
 
+        # ─── 🧠 Auto-refresh AI notes/GDD every 4 messages (background, non-blocking) ───
+        try:
+            total_msgs = 0
+            fresh_proj = await db.game_projects.find_one({"id": project_id}, {"phases": 1})
+            if fresh_proj:
+                for ph_data in (fresh_proj.get("phases") or {}).values():
+                    total_msgs += len(ph_data.get("messages") or [])
+            # Trigger on first message and then every 4 messages
+            if total_msgs == 1 or (total_msgs > 0 and total_msgs % 4 == 0):
+                import asyncio as _aio
+                _aio.create_task(_auto_refresh_notes(db, project_id))
+        except Exception as auto_err:
+            logger.warning(f"[games] auto notes refresh skipped: {auto_err}")
+
         return {
             "ok": True,
             "message": ai_message,
@@ -770,6 +860,103 @@ def create_game_router(db, get_current_user):
             "credits_used": 0 if user_is_owner else phase_info["credits"],
             "remaining_balance": user_credits if user_is_owner else (user_credits - phase_info["credits"])
         }
+
+    # ───────────────────────────────────────────────────────────
+    # 📝 GET /project/{project_id}/notes — AI's running summary of the project
+    # ───────────────────────────────────────────────────────────
+    @router.get("/project/{project_id}/notes")
+    async def get_project_notes(project_id: str, user=Depends(get_current_user)):
+        project = await db.game_projects.find_one({"id": project_id, "user_id": user["user_id"]})
+        if not project:
+            raise HTTPException(404, "Project not found")
+        return {"notes": project.get("ai_notes", ""), "updated_at": project.get("notes_updated_at")}
+
+    # ───────────────────────────────────────────────────────────
+    # 📝 POST /project/{project_id}/notes/refresh — regenerate AI notes from full chat history
+    # ───────────────────────────────────────────────────────────
+    @router.post("/project/{project_id}/notes/refresh")
+    async def refresh_project_notes(project_id: str, user=Depends(get_current_user)):
+        project = await db.game_projects.find_one({"id": project_id, "user_id": user["user_id"]})
+        if not project:
+            raise HTTPException(404, "Project not found")
+        # Build a digest from all phase messages
+        all_msgs = []
+        for ph_id, ph in (project.get("phases") or {}).items():
+            for m in (ph.get("messages") or [])[-20:]:
+                all_msgs.append(f"[{ph_id}] U: {(m.get('user') or '')[:200]}\nA: {(m.get('assistant') or '')[:400]}")
+        chat_digest = "\n\n".join(all_msgs[-30:])  # last 30 exchanges
+        if not chat_digest:
+            return {"notes": "", "updated": False}
+        gemini_key = os.environ.get("GEMINI_API_KEY", "")
+        anthropic_key = os.environ.get("ANTHROPIC_API_KEY", "")
+        summary_prompt = (
+            "أنت محرر فني لمشروع لعبة. اقرأ محادثة المالك مع AI أدناه واكتب ملخصاً مفصّلاً ومستديماً (Living Project Memory) "
+            "بصيغة Markdown يضم: الرؤية العامة، نوع اللعبة، الجمهور، الـart style المتفق عليه، العناصر المعتمدة "
+            "(قائمة)، القرارات الرئيسية، ما تم إنجازه، ما تبقى. اكتبها بضمير المتكلم 'أنا فهمت كذا وكذا'. "
+            "نقاط مرقّمة، عربية واضحة. حد 1500 كلمة.\n\n"
+            f"تفاصيل المشروع:\nالعنوان: {project.get('title','')}\nالوصف: {project.get('description','')}\n\n"
+            f"المحادثة:\n{chat_digest[:30000]}"
+        )
+        notes = ""
+        try:
+            if gemini_key:
+                async with httpx.AsyncClient(timeout=60.0) as cli:
+                    r = await cli.post(
+                        f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={gemini_key}",
+                        json={"contents": [{"parts": [{"text": summary_prompt}]}], "generationConfig": {"temperature": 0.3, "maxOutputTokens": 3000}},
+                    )
+                    if r.status_code == 200:
+                        notes = r.json().get("candidates", [{}])[0].get("content", {}).get("parts", [{}])[0].get("text", "")
+            if not notes and anthropic_key:
+                async with httpx.AsyncClient(timeout=60.0) as cli:
+                    r = await cli.post(
+                        "https://api.anthropic.com/v1/messages",
+                        headers={"x-api-key": anthropic_key, "anthropic-version": "2023-06-01", "content-type": "application/json"},
+                        json={"model": "claude-sonnet-4-5-20250929", "max_tokens": 3000, "messages": [{"role": "user", "content": summary_prompt}]},
+                    )
+                    if r.status_code == 200:
+                        blocks = r.json().get("content", [])
+                        notes = "".join(b.get("text", "") for b in blocks if b.get("type") == "text")
+        except Exception as e:
+            logger.warning(f"[games] notes refresh failed: {e}")
+        if notes:
+            await db.game_projects.update_one(
+                {"id": project_id},
+                {"$set": {"ai_notes": notes, "notes_updated_at": datetime.now(timezone.utc).isoformat()}},
+            )
+        return {"notes": notes, "updated": bool(notes)}
+
+    # ───────────────────────────────────────────────────────────
+    # 📂 GET /projects — list all current user's projects (for "My Projects" page)
+    # ───────────────────────────────────────────────────────────
+    @router.get("/projects")
+    async def list_user_projects(user=Depends(get_current_user), game_type: Optional[str] = None):
+        from modules.games.billing import get_project_storage_info
+        query = {"user_id": user["user_id"]}
+        if game_type:
+            query["game_type"] = game_type
+        cursor = db.game_projects.find(query, {"_id": 0}).sort("created_at", -1)
+        items = []
+        async for p in cursor:
+            info = get_project_storage_info(p)
+            items.append({
+                "id": p["id"],
+                "title": p.get("title", ""),
+                "description": (p.get("description") or "")[:200],
+                "game_type": p.get("game_type"),
+                "programming_type": p.get("programming_type"),
+                "current_phase": p.get("current_phase"),
+                "created_at": p.get("created_at"),
+                "updated_at": p.get("updated_at"),
+                "tier": info.get("tier"),
+                "tier_label": info.get("tier_label"),
+                "size_mb": info.get("size_mb"),
+                "limit_mb": info.get("limit_mb"),
+                "expires_at": info.get("expires_at"),
+                "has_notes": bool(p.get("ai_notes")),
+                "asset_count": sum(len(p.get("assets", {}).get(k, [])) for k in ("images", "models3d", "audio", "videos")),
+            })
+        return {"projects": items}
     
     # ───────────────────────────────────────────────────────────
     # 💰 GET /project/{project_id}/billing — storage usage + tier info

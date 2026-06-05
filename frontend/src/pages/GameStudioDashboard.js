@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Gamepad2, Globe, Smartphone, Sparkles, ArrowRight, Zap } from 'lucide-react';
+import { Gamepad2, Globe, Smartphone, Sparkles, ArrowRight, Zap, FolderOpen } from 'lucide-react';
+import MyProjectsModal from '@/components/games/MyProjectsModal';
 
 const API = process.env.REACT_APP_BACKEND_URL;
 
@@ -9,6 +10,7 @@ export default function GameStudioDashboard({ user }) {
   const [credits, setCredits] = useState(null);
   const [projects, setProjects] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [myProjectsOpen, setMyProjectsOpen] = useState(false);
   const token = localStorage.getItem('token');
 
   useEffect(() => {
@@ -82,16 +84,32 @@ export default function GameStudioDashboard({ user }) {
         </div>
         
         <div className="relative max-w-7xl mx-auto px-6 py-16">
-          {/* Back to home button */}
-          <button
-            type="button"
-            onClick={() => navigate('/')}
-            className="mb-6 inline-flex items-center gap-2 px-3 py-2 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-zinc-300 hover:text-white transition-all"
-            data-testid="back-to-home"
-          >
-            <ArrowRight className="w-4 h-4" />
-            <span className="text-sm font-medium">رجوع للرئيسية</span>
-          </button>
+          {/* Top navigation row: My Projects (left) + Back home (right) */}
+          <div className="mb-6 flex items-center justify-between">
+            <button
+              type="button"
+              onClick={() => setMyProjectsOpen(true)}
+              className="inline-flex items-center gap-2 px-3 py-2 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-zinc-300 hover:text-white transition-all"
+              data-testid="open-my-projects"
+              title="افتح كل مشاريعك ومحادثاتك السابقة"
+            >
+              <FolderOpen className="w-4 h-4" />
+              <span className="text-sm font-medium">مشاريعي السابقة</span>
+              {projects.length > 0 && (
+                <span className="text-[10px] bg-amber-500/20 text-amber-300 px-1.5 py-0.5 rounded-full border border-amber-500/30">{projects.length}</span>
+              )}
+            </button>
+
+            <button
+              type="button"
+              onClick={() => navigate('/')}
+              className="inline-flex items-center gap-2 px-3 py-2 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-zinc-300 hover:text-white transition-all"
+              data-testid="back-to-home"
+            >
+              <ArrowRight className="w-4 h-4" />
+              <span className="text-sm font-medium">رجوع للرئيسية</span>
+            </button>
+          </div>
 
           <div className="flex items-center gap-3 mb-6">
             <div className="p-3 rounded-2xl bg-gradient-to-br from-amber-500 to-orange-500">
@@ -208,39 +226,50 @@ export default function GameStudioDashboard({ user }) {
             <h2 className="text-2xl font-bold mb-6">مشاريعك الأخيرة</h2>
             
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {projects.slice(0, 6).map(project => (
+              {projects.slice(0, 6).map(project => {
+                const phase = project.current_phase || project.phase || 'discovery';
+                const gameType = project.game_type || project.type;
+                return (
                 <div
                   key={project.id}
-                  onClick={() => navigate(project.type === 'web_game' ? `/dashboard/games/web?project=${project.id}` : `/dashboard/games/app?project=${project.id}`)}
+                  onClick={() => navigate(gameType === 'web' ? `/dashboard/games/web?project=${project.id}` : `/dashboard/games/app?project=${project.id}`)}
                   className="bg-zinc-900/50 backdrop-blur border border-white/10 rounded-2xl p-6 hover:border-white/20 transition-all cursor-pointer"
                 >
                   <div className="flex items-start justify-between mb-4">
                     <div>
-                      <h3 className="font-bold text-lg mb-1">{project.gdd?.title || 'مشروع جديد'}</h3>
-                      <p className="text-xs text-zinc-400">{project.type === 'web_game' ? 'لعبة ويب' : 'لعبة تطبيق'}</p>
+                      <h3 className="font-bold text-lg mb-1">{project.title || project.gdd?.title || 'مشروع جديد'}</h3>
+                      <p className="text-xs text-zinc-400">{gameType === 'web' ? 'لعبة ويب' : 'لعبة تطبيق'}</p>
                     </div>
                     <span className={`px-2 py-1 rounded-full text-xs ${
-                      project.phase === 'deployed' ? 'bg-green-500/20 text-green-400' :
-                      project.phase.includes('review') ? 'bg-amber-500/20 text-amber-400' :
+                      phase === 'deployed' ? 'bg-green-500/20 text-green-400' :
+                      phase.includes('review') ? 'bg-amber-500/20 text-amber-400' :
                       'bg-blue-500/20 text-blue-400'
                     }`}>
-                      {project.phase}
+                      {phase}
                     </span>
                   </div>
                   
                   <div className="text-sm text-zinc-400 mb-4">
-                    <span className="text-amber-400 font-semibold">{project.credits_spent}</span> نقطة مستخدمة
+                    <span className="text-amber-400 font-semibold">{project.asset_count ?? project.credits_spent ?? 0}</span> {project.asset_count != null ? 'أصل' : 'نقطة'}
                   </div>
                   
                   <div className="text-xs text-zinc-500">
-                    {new Date(project.created_at).toLocaleDateString('ar-SA')}
+                    {project.created_at ? new Date(project.created_at).toLocaleDateString('ar-SA') : ''}
                   </div>
                 </div>
-              ))}
+                );
+              })}
             </div>
           </div>
         )}
       </div>
+
+      {/* My Projects Modal */}
+      <MyProjectsModal
+        open={myProjectsOpen}
+        onClose={() => setMyProjectsOpen(false)}
+        accentColor="amber"
+      />
     </div>
   );
 }
