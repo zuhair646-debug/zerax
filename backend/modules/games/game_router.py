@@ -834,7 +834,7 @@ def create_game_router(db, get_current_user):
 | "ابني الموقع/أنشر للايف" | زر 🚀 "ابني وانشر اللايف" في تبويب 📡 البث المباشر | "اضغط الزر فوق وراح أبني كل شي ك Claude Sonnet 4.5 خلال 60-180 ثانية وأطلق رابط حي" |
 | "عدّل هذي الصورة" / "خلّي الإضاءة أحلى" | زر ✏️ "عدّل الصورة" على كل أصل (Flux Redux img2img) | "صف لي التعديل بدقة وراح أعيد توليدها كنسخة جديدة (تبقى الأصلية محفوظة)" |
 | "اختبر الموقع/راجعه" | زر 🔬 "تحليل QA" في تبويب البث المباشر | "تمام، Claude راح يفحص الـ HTML ويعطيني تقرير قوة/أخطاء/أداء/accessibility" |
-| "ولّد صورة/موسيقى/3D" | تكتب التاج `<<IMG_PRO: prompt>>` أو `<<MUSIC: prompt>>` أو `<<MODEL3D: prompt>>` في ردك | الأصل يطلع تلقائياً للاعتماد |
+| "ولّد صورة/موسيقى/3D" | تكتب التاج بدقة في ردك: `<<IMG_PRO: english cinematic prompt>>` أو `<<3D: prompt>>` أو `<<MUSIC: prompt | dur: 30>>` | الأصل يطلع تلقائياً للاعتماد |
 | "ابحث في الإنترنت" | (الميزة قادمة) | "هذي القدرة قيد البناء" |
 
 **🎮 تفاصيل المشروع:**
@@ -1102,7 +1102,18 @@ def create_game_router(db, get_current_user):
         generated_assets = []
         try:
             import re
-            img_tags = re.findall(r'<<IMG:\s*(.+?)>>', ai_message, re.DOTALL)
+            # Accept many variants the LLM may produce: <<IMG: ...>>, <<IMAGE ...>>, <<IMG-EN: ...>>
+            # but EXCLUDE the IMG_PRO/3D/MODEL3D variants (handled by Fal tools further down).
+            img_tags_re = re.compile(
+                r"<<\s*"
+                r"(?:IMG|IMAGE|PICTURE|DRAFT[_\s-]?IMG)"
+                r"(?![_\s-]?PRO|[_\s-]?ULTRA)"  # don't match IMG_PRO
+                r"\s*[:：\-]?\s*"
+                r"(.+?)"
+                r"\s*>>",
+                re.DOTALL | re.IGNORECASE,
+            )
+            img_tags = img_tags_re.findall(ai_message)
             if img_tags:
                 emergent_key = os.environ.get('EMERGENT_LLM_KEY', '')
                 if not emergent_key:
@@ -1236,7 +1247,20 @@ def create_game_router(db, get_current_user):
                     logger.info(f"[games][fal] generated {fa['type']} asset {fa['id']} for project {project_id}")
         except Exception as fal_err:
             logger.exception(f"[games] FAL tools failed: {fal_err}")
-        
+
+        # 🧹 Strip ALL raw asset tags from the user-visible message so the user
+        # never sees <<IMG_PRO ...>> or stray broken syntax. The generated assets
+        # are returned separately in `generated_assets` and rendered as image cards.
+        import re as _re_strip
+        ai_message = _re_strip.sub(
+            r"<<\s*(?:IMG|IMAGE|PICTURE|DRAFT[_\s-]?IMG|IMG[_\s-]?PRO|3D|MODEL[_\s-]?3D|3D[_\s-]?MODEL|ANIM(?:ATE)?|MUSIC|SOUNDTRACK|SFX|SOUND[_\s-]?FX)\s*[:：\-]?[^>]*?>>",
+            "",
+            ai_message,
+            flags=_re_strip.IGNORECASE,
+        ).strip()
+        # Collapse multiple blank lines produced by tag removal
+        ai_message = _re_strip.sub(r"\n{3,}", "\n\n", ai_message)
+
         # Save to conversation
         conversation_entry = {
             "user": message,

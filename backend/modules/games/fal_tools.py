@@ -274,7 +274,32 @@ async def generate_sfx(prompt: str, project_id: str, duration: int = 5) -> Dict[
 # ════════════════════════════════════════════════════════════════
 # Tag parser + dispatcher
 # ════════════════════════════════════════════════════════════════
-TAG_RE = re.compile(r"<<(IMG_PRO|3D|ANIMATE|MUSIC|SFX):\s*(.+?)>>", re.DOTALL)
+# Accept: <<IMG_PRO: ...>>, <<MODEL3D ...>>, <<3D-MODEL ...>>, full-width colon, missing colon, etc.
+# Normalised tag names below mapped to canonical generator types.
+TAG_RE = re.compile(
+    r"<<\s*"
+    r"(IMG[_\s-]?PRO|MODEL[_\s-]?3D|3D[_\s-]?MODEL|3D|ANIM(?:ATE)?|SOUNDTRACK|MUSIC|SOUND[_\s-]?FX|SFX)"
+    r"\s*[:：\-]?\s*"
+    r"(.+?)"
+    r"\s*>>",
+    re.DOTALL | re.IGNORECASE,
+)
+
+
+def _canon_tag(raw: str) -> str:
+    """Map the many shapes the LLM may produce to one of the canonical types."""
+    t = (raw or "").strip().upper().replace("-", "_").replace(" ", "_")
+    if t in ("IMG_PRO", "IMGPRO"):
+        return "IMG_PRO"
+    if t in ("3D", "MODEL_3D", "MODEL3D", "3D_MODEL", "3DMODEL"):
+        return "3D"
+    if t in ("ANIM", "ANIMATE"):
+        return "ANIMATE"
+    if t in ("MUSIC", "SOUNDTRACK"):
+        return "MUSIC"
+    if t in ("SFX", "SOUND_FX", "SOUNDFX"):
+        return "SFX"
+    return t
 
 
 async def parse_and_generate_assets(
@@ -295,7 +320,8 @@ async def parse_and_generate_assets(
     matches = matches[:max_assets_per_turn]
     tasks = []
 
-    for tag_type, raw_body in matches:
+    for raw_tag_type, raw_body in matches:
+        tag_type = _canon_tag(raw_tag_type)
         body = raw_body.strip()
         try:
             if tag_type == "IMG_PRO":
