@@ -521,10 +521,11 @@ def create_game_router(db, get_current_user):
                 f.write(content)
             attachments.append({"filename": filename, "path": file_path, "size": len(content)})
         
-        # Call Gemini
+        # Call Gemini (with Claude fallback if quota exceeded)
+        ai_message = None
         try:
             async with httpx.AsyncClient(timeout=120.0) as client:
-                gemini_url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key={GEMINI_KEY}"
+                gemini_url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={GEMINI_KEY}"
                 
                 parts = [{"text": message}]
                 # TODO: Add image support if attachments contain images
@@ -535,16 +536,52 @@ def create_game_router(db, get_current_user):
                     "generationConfig": {"temperature": 0.7, "maxOutputTokens": 8000}
                 })
                 
-                if response.status_code != 200:
-                    logger.error(f"Gemini error: {response.text}")
-                    raise HTTPException(500, "AI service error")
-                
-                data = response.json()
-                ai_message = data.get("candidates", [{}])[0].get("content", {}).get("parts", [{}])[0].get("text", "Error generating response")
-        
-        except Exception as e:
-            logger.error(f"Chat error: {e}")
-            raise HTTPException(500, str(e))
+                if response.status_code == 200:
+                    data = response.json()
+                    ai_message = data.get("candidates", [{}])[0].get("content", {}).get("parts", [{}])[0].get("text", "")
+                elif response.status_code in (429, 403):
+                    logger.warning(f"[games] Gemini quota/forbidden ({response.status_code}) — falling back to Claude")
+                    ai_message = None  # trigger fallback below
+                else:
+                    logger.error(f"[games] Gemini error {response.status_code}: {response.text[:300]}")
+                    ai_message = None
+        except Exception as gem_err:
+            logger.warning(f"[games] Gemini call failed: {gem_err} — trying Claude fallback")
+            ai_message = None
+
+        # Fallback to Claude if Gemini quota exceeded or failed
+        if not ai_message:
+            try:
+                anthropic_key = os.environ.get("ANTHROPIC_API_KEY", "")
+                if not anthropic_key:
+                    raise RuntimeError("No fallback LLM available (ANTHROPIC_API_KEY missing)")
+                async with httpx.AsyncClient(timeout=120.0) as client:
+                    claude_resp = await client.post(
+                        "https://api.anthropic.com/v1/messages",
+                        headers={
+                            "x-api-key": anthropic_key,
+                            "anthropic-version": "2023-06-01",
+                            "content-type": "application/json",
+                        },
+                        json={
+                            "model": "claude-sonnet-4-5-20250929",
+                            "max_tokens": 4000,
+                            "system": system_prompt,
+                            "messages": [{"role": "user", "content": message}],
+                        },
+                    )
+                    if claude_resp.status_code != 200:
+                        logger.error(f"[games] Claude fallback failed {claude_resp.status_code}: {claude_resp.text[:300]}")
+                        raise HTTPException(500, "AI service error (both Gemini and Claude failed)")
+                    cdata = claude_resp.json()
+                    blocks = cdata.get("content", [])
+                    ai_message = "".join(b.get("text", "") for b in blocks if b.get("type") == "text") or "Error generating response"
+                    logger.info("[games] used Claude fallback successfully")
+            except HTTPException:
+                raise
+            except Exception as cl_err:
+                logger.exception(f"[games] Claude fallback exception: {cl_err}")
+                raise HTTPException(500, "AI service unavailable — يرجى المحاولة بعد دقائق")
         
         # ─────────────────────────────────────────────────────
         # 🎨 Parse <<IMG: prompt | style: ...>> tags from AI response
