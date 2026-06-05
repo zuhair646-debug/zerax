@@ -1,6 +1,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import { Brain, Loader2, RefreshCw, FileText } from 'lucide-react';
 import { toast } from 'sonner';
+import StyleProfileSelector from './StyleProfileSelector';
 
 const API = process.env.REACT_APP_BACKEND_URL;
 
@@ -9,7 +10,7 @@ const API = process.env.REACT_APP_BACKEND_URL;
  * user can see at any time exactly what the AI remembers, and refresh it on demand.
  * Used as the 4th tab in WebGamesStudio / AppGamesStudio.
  */
-export default function AINotesPanel({ projectId, accentColor = 'amber', refreshSignal = 0 }) {
+export default function AINotesPanel({ projectId, accentColor = 'amber', refreshSignal = 0, styleProfile = 'stylized' }) {
   const token = localStorage.getItem('token');
   const [notes, setNotes] = useState('');
   const [updatedAt, setUpdatedAt] = useState(null);

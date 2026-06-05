@@ -417,6 +417,89 @@ async def _auto_learn_from_exchange(
 # 🚀 Async helper — run the live-site build off-thread so the HTTP
 # request returns immediately (LLM builds can take 60-180s).
 # ═══════════════════════════════════════════════════════════════
+async def _auto_vision_verify(db, project_id: str, asset_id: str, image_bytes: bytes, prompt: str):
+    """Have Claude SEE the generated image and verify it matches the prompt.
+    Stores a `verification` dict on the asset:
+      { match: 0-100, issues: [str], suggestions: [str], analyzed_at: iso }
+    Owner can read it from the asset dict on the frontend (warning badge if match<70).
+    """
+    try:
+        import base64 as _b64v
+        anthropic_key = os.environ.get("ANTHROPIC_API_KEY", "")
+        if not anthropic_key or not prompt or not image_bytes:
+            return
+        b64 = _b64v.b64encode(image_bytes).decode()
+        review_prompt = (
+            "أنت art director محترف. هذه صورة ولّدها AI بناءً على الـ prompt التالي:\n"
+            f"\"{prompt[:600]}\"\n\n"
+            "افحص الصورة فحص دقيق وأرجع JSON فقط (بدون markdown fences):\n"
+            "{\n"
+            '  "match": رقم 0-100 يمثل نسبة مطابقة الصورة للـ prompt,\n'
+            '  "issues": ["مشكلة 1", "مشكلة 2"] حد أقصى 4 — أي خلل بصري أو فني أو منطقي،\n'
+            '  "suggestions": ["اقتراح إعادة توليد دقيق 1", "..."] حد أقصى 3,\n'
+            '  "verdict": "✅ ممتاز" أو "⚠️ تعديل ينصح به" أو "❌ يلزم إعادة توليد"\n'
+            "}\n"
+            "كن صارم: لو فيه يد فيها 6 أصابع، أو عمارة عائمة، أو نص محرّف، أو نسب جسم غلط، اذكرها."
+        )
+        async with httpx.AsyncClient(timeout=60.0) as cli:
+            r = await cli.post(
+                "https://api.anthropic.com/v1/messages",
+                headers={
+                    "x-api-key": anthropic_key,
+                    "anthropic-version": "2023-06-01",
+                    "content-type": "application/json",
+                },
+                json={
+                    "model": "claude-sonnet-4-5-20250929",
+                    "max_tokens": 600,
+                    "messages": [{
+                        "role": "user",
+                        "content": [
+                            {"type": "image", "source": {"type": "base64", "media_type": "image/png", "data": b64}},
+                            {"type": "text", "text": review_prompt},
+                        ],
+                    }],
+                },
+            )
+            if r.status_code != 200:
+                return
+            blocks = r.json().get("content", [])
+            raw = "".join(b.get("text", "") for b in blocks if b.get("type") == "text").strip()
+        import json as _json_v
+        import re as _re_v
+        cleaned = _re_v.sub(r"^```(?:json)?|```$", "", raw, flags=_re_v.MULTILINE).strip()
+        try:
+            parsed = _json_v.loads(cleaned)
+        except Exception:
+            return
+        verification = {
+            "match": int(parsed.get("match") or 0),
+            "issues": parsed.get("issues") or [],
+            "suggestions": parsed.get("suggestions") or [],
+            "verdict": parsed.get("verdict") or "",
+            "analyzed_at": datetime.now(timezone.utc).isoformat(),
+        }
+        # Find and patch the asset inside the assets.images bucket
+        proj = await db.game_projects.find_one({"id": project_id}, {"assets.images": 1})
+        if not proj:
+            return
+        imgs = (proj.get("assets") or {}).get("images") or []
+        patched = False
+        for a in imgs:
+            if a.get("id") == asset_id:
+                a["verification"] = verification
+                patched = True
+                break
+        if patched:
+            await db.game_projects.update_one(
+                {"id": project_id},
+                {"$set": {"assets.images": imgs}},
+            )
+            logger.info(f"[games][vision-verify] asset={asset_id} match={verification['match']}")
+    except Exception as e:
+        logger.warning(f"[games][vision-verify] background exception: {e}")
+
+
 async def _run_build_in_background(db, project_id: str, requester_id: str):
     try:
         from modules.games.builder import build_and_deploy
@@ -847,6 +930,28 @@ def create_game_router(db, get_current_user):
 {approved_context}{tech_guide}
 
 ═══════════════════════════════════════════════════════════════
+🎨 **قواعد التوليد الاحترافي للصور (AAA Studio Level)**
+═══════════════════════════════════════════════════════════════
+الـ style profile الحالي لهذا المشروع: **{project.get('style_profile', 'stylized')}** (realistic | stylized | anime | low_poly | pixel)
+النظام يضيف تلقائياً booster احترافي لكل prompt — لكنك لازم تكتب prompt قوي بنفسك أيضاً:
+
+✅ **قواعد كتابة الـ prompt (إلزامي):**
+1. **اكتب بالإنجليزية** — Flux/SDXL يفهمون الإنجليزية بدقة أعلى ٤×.
+2. **محدد جداً**: ذكر نوع المادة (stone، wood، metal)، الإضاءة (golden hour، moonlit، neon)، الزاوية (isometric، 3/4 view، top-down، over-shoulder).
+3. **مرجع بصري واضح**: "in the style of Fortnite battle royale arena" أو "Genshin Impact landscape" أو "Octopath Traveler 2D-HD".
+4. **منطق فيزيائي**: لا تطلب "house floating in cloud" إلا لو كان الـ design intent. ولا أعضاء جسم مكسرة (يدّ بـ 6 أصابع).
+5. **ركّز على عنصر واحد** لكل prompt — لا تخلط مشهد كامل في prompt واحد. لو تبي قرية، ولّد القلعة منفصلة عن الحقول.
+
+✅ **القياسات (Aspect Ratio):**
+   - landscape (16:9) → key art، خلفية، splash
+   - portrait (9:16) → شخصية، splash mobile
+   - square (1:1) → أيقونة، avatar، asset card
+
+🚫 **ممنوع نهائياً:** "childish drawing", "amateur sketch", "stick figure", "doodle" — النظام يحذف هذي الكلمات أوتوماتيكياً.
+
+👁️ **التحقق التلقائي**: بعد كل صورة، Claude يفحصها بصرياً ويعطي verdict (✅ ممتاز / ⚠️ تحتاج تعديل / ❌ يلزم إعادة). إذا match < 70% النظام يقترح إعادة التوليد مجاناً.
+
+═══════════════════════════════════════════════════════════════
 🚨 **قواعد العمل الإلزامية — يمنع كسرها مهما حصل**
 ═══════════════════════════════════════════════════════════════
 
@@ -1218,7 +1323,12 @@ def create_game_router(db, get_current_user):
             else:
                 from modules.games.fal_tools import parse_and_generate_assets
                 from modules.games.persistence import persist_bytes as _persist
-                fal_assets = await parse_and_generate_assets(ai_message, project_id, max_assets_per_turn=3)
+                # Get project's preferred style (defaults to AAA stylized realism)
+                _style = (project.get("style_profile") or "stylized")
+                fal_assets = await parse_and_generate_assets(
+                    ai_message, project_id, max_assets_per_turn=3,
+                    style_profile=_style, db=db,
+                )
                 for fa in fal_assets:
                     fa["phase_id"] = phase_id
                     # 🔒 Pull out the raw bytes (set by fal_tools) and persist to GridFS so
@@ -1231,6 +1341,13 @@ def create_game_router(db, get_current_user):
                             await _persist(db, fa["id"], raw, ct_map.get(fa.get("type"), "application/octet-stream"), project_id)
                         except Exception as p_err:
                             logger.warning(f"[games][fal] GridFS persist failed for {fa.get('id')}: {p_err}")
+                    # 👁️ Auto-vision verify generated images (fire-and-forget so we don't slow the response)
+                    if fa.get("type") == "image" and raw and len(raw) < 6_000_000:
+                        try:
+                            import asyncio as _aio_v
+                            _aio_v.create_task(_auto_vision_verify(db, project_id, fa["id"], raw, fa.get("prompt", "")))
+                        except Exception as ve:
+                            logger.warning(f"[games][vision-verify] schedule failed: {ve}")
                     generated_assets.append(fa)
                     # Save to appropriate asset bucket in the project doc
                     bucket = "images" if fa["type"] in ("image",) else (
@@ -1925,5 +2042,36 @@ def create_game_router(db, get_current_user):
             "report": proj.get("last_qa_report"),
             "at": proj.get("last_qa_at"),
         }
+
+    # ───────────────────────────────────────────────────────────
+    # 🎨 PUT /project/{id}/style-profile — set the art-direction preset
+    # Valid: realistic, stylized (default), anime, low_poly, pixel
+    # ───────────────────────────────────────────────────────────
+    @router.put("/project/{project_id}/style-profile")
+    async def set_style_profile(project_id: str, request: Request, user=Depends(get_current_user)):
+        body = await request.json()
+        style = (body.get("style_profile") or "").strip().lower()
+        if style not in ("realistic", "stylized", "anime", "low_poly", "pixel"):
+            raise HTTPException(400, "Invalid style_profile")
+        r = await db.game_projects.update_one(
+            {"id": project_id, "user_id": user["user_id"]},
+            {"$set": {"style_profile": style}},
+        )
+        if r.matched_count == 0:
+            raise HTTPException(404, "Project not found")
+        return {"ok": True, "style_profile": style}
+
+    # ───────────────────────────────────────────────────────────
+    # 📊 GET /admin/unparsed-tags — owner sees AI tag variations the parser missed
+    # ───────────────────────────────────────────────────────────
+    @router.get("/admin/unparsed-tags")
+    async def list_unparsed_tags(user=Depends(get_current_user), limit: int = 50):
+        u = await db.users.find_one({"id": user["user_id"]}, {"is_owner": 1, "role": 1})
+        if not (u and (u.get("is_owner") or u.get("role") == "owner")):
+            raise HTTPException(403, "Owner only")
+        items = []
+        async for it in db.games_unparsed_tags.find({}, {"_id": 0}).sort("count", -1).limit(min(limit, 200)):
+            items.append(it)
+        return {"items": items, "total": len(items)}
 
     return router

@@ -64,14 +64,76 @@ async def _fal_submit(model_endpoint: str, arguments: Dict[str, Any]) -> Dict[st
 
 
 # ════════════════════════════════════════════════════════════════
+# 🎨 PROMPT BOOSTER — auto-augments every image prompt so the result
+# matches AAA-studio quality (Fortnite / Epic Games / Riot Games level).
+# Picks the right "style anchor" depending on the project's style_profile.
+# ════════════════════════════════════════════════════════════════
+STYLE_PROFILES = {
+    "realistic": (
+        "AAA game studio quality, photorealistic textures, Unreal Engine 5 render, "
+        "ray-traced global illumination, volumetric lighting, 8K ultra-detailed, "
+        "cinematic depth of field, ArtStation trending, masterpiece"
+    ),
+    "stylized": (
+        "AAA stylized realism in the style of Fortnite and Riot Games, "
+        "soft physically-based shaders, hand-painted textures with PBR depth, "
+        "cinematic key lighting, vibrant saturated colors, Unreal Engine 5, "
+        "ultra-detailed, ArtStation hero quality"
+    ),
+    "anime": (
+        "high-end anime game art, Genshin Impact style, cel-shaded with subtle gradients, "
+        "vibrant colors, sharp linework, cinematic composition, masterpiece quality, 8K"
+    ),
+    "low_poly": (
+        "modern low-poly game art, clean flat shading, vibrant pastel palette, "
+        "soft ambient occlusion, isometric or 3/4 view, professional polish"
+    ),
+    "pixel": (
+        "premium 32-bit pixel art, crisp pixels, careful anti-aliasing, "
+        "vibrant retro palette, professional game studio quality (Octopath Traveler caliber)"
+    ),
+}
+
+_BANNED_TERMS = ("childish", "amateur", "scribble", "doodle", "stick figure", "rough sketch")
+
+
+def boost_prompt(prompt: str, style_profile: str = "stylized") -> str:
+    """Auto-augment a raw prompt with quality boosters & a style anchor.
+    The booster is only added if the prompt doesn't already contain its own
+    explicit style anchor (e.g. user wrote "pixel art" — we trust them).
+    """
+    p = (prompt or "").strip()
+    lowered = p.lower()
+    # If the AI already specified the strong style anchors, don't double-boost
+    has_anchor = any(
+        kw in lowered
+        for kw in (
+            "unreal engine", "octane", "render", "8k", "4k ultra",
+            "photorealistic", "fortnite", "genshin", "pixel art",
+            "low poly", "cel-shade", "cel shade", "anime style",
+        )
+    )
+    if has_anchor:
+        booster = ""
+    else:
+        booster = ", " + STYLE_PROFILES.get(style_profile, STYLE_PROFILES["stylized"])
+    # Strip banned amateur-quality terms users might accidentally include
+    for bad in _BANNED_TERMS:
+        if bad in lowered:
+            p = re.sub(re.escape(bad), "", p, flags=re.IGNORECASE)
+    return f"{p}{booster}".strip(" ,")
+
+
+# ════════════════════════════════════════════════════════════════
 # 1) Flux Pro Ultra 1.1 — cinematic hero image
 # ════════════════════════════════════════════════════════════════
-async def generate_flux_pro(prompt: str, project_id: str, aspect_ratio: str = "16:9") -> Dict[str, Any]:
+async def generate_flux_pro(prompt: str, project_id: str, aspect_ratio: str = "16:9", style_profile: str = "stylized") -> Dict[str, Any]:
     """High-end cinematic image generation. ~$0.06/image, ~10-20 sec."""
+    boosted = boost_prompt(prompt, style_profile=style_profile)
     result = await _fal_submit(
         "fal-ai/flux-pro/v1.1-ultra",
         {
-            "prompt": prompt,
+            "prompt": boosted,
             "aspect_ratio": aspect_ratio,
             "num_images": 1,
             "enable_safety_checker": True,
@@ -306,6 +368,8 @@ async def parse_and_generate_assets(
     ai_response: str,
     project_id: str,
     max_assets_per_turn: int = 3,
+    style_profile: str = "stylized",
+    db=None,
 ) -> List[Dict[str, Any]]:
     """
     Parse all asset tags from the AI's response and generate them concurrently.
@@ -314,6 +378,30 @@ async def parse_and_generate_assets(
     The basic <<IMG: ...>> tag is NOT handled here (kept in game_router for backward compat).
     """
     matches = TAG_RE.findall(ai_response)
+    # 📊 Learn from unparsed tag attempts (anything with <<…>> brackets we didn't match)
+    if db is not None:
+        try:
+            all_brackets = re.findall(r"<<[^>]{1,200}>>", ai_response)
+            matched_raw = set()
+            for raw_t, raw_b in matches:
+                matched_raw.add(f"<<{raw_t}:{raw_b}".strip())
+            for raw in all_brackets:
+                # Cheap check — if regex didn't match it, it's unparsed
+                if not TAG_RE.search(raw):
+                    from datetime import datetime as _dt, timezone as _tz
+                    await db.games_unparsed_tags.update_one(
+                        {"raw": raw[:300]},
+                        {
+                            "$inc": {"count": 1},
+                            "$set": {"last_seen": _dt.now(_tz.utc).isoformat(),
+                                      "last_project": project_id},
+                            "$setOnInsert": {"first_seen": _dt.now(_tz.utc).isoformat()},
+                        },
+                        upsert=True,
+                    )
+        except Exception as ue:
+            logger.warning(f"[fal][unparsed-log] skipped: {ue}")
+
     if not matches:
         return []
 
@@ -325,7 +413,7 @@ async def parse_and_generate_assets(
         body = raw_body.strip()
         try:
             if tag_type == "IMG_PRO":
-                tasks.append(generate_flux_pro(body, project_id))
+                tasks.append(generate_flux_pro(body, project_id, style_profile=style_profile))
             elif tag_type == "3D":
                 tasks.append(generate_3d_model(body, project_id))
             elif tag_type == "ANIMATE":

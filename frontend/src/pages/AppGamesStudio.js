@@ -638,6 +638,7 @@ export default function AppGamesStudio({ user }) {
                               <SafeAssetImage
                                 src={`${API}${a.image_url}`}
                                 cdnUrl={a.cdn_url}
+                                verification={a.verification}
                                 alt={a.name}
                                 onClick={() => setLightbox({ src: `${API}${a.image_url}`, alt: a.name, cdnUrl: a.cdn_url })}
                                 className="w-full aspect-square object-cover cursor-zoom-in hover:opacity-90 transition-opacity"
@@ -679,6 +680,7 @@ export default function AppGamesStudio({ user }) {
               projectId={project?.id}
               accentColor="blue"
               refreshSignal={notesRefreshSignal}
+              styleProfile={project?.style_profile || 'stylized'}
             />
           )}
 
@@ -720,6 +722,7 @@ export default function AppGamesStudio({ user }) {
                                 <SafeAssetImage
                                   src={fullUrl}
                                   cdnUrl={a.cdn_url}
+                                  verification={a.verification}
                                   alt={a.name}
                                   onClick={() => setLightbox({ src: fullUrl, alt: a.name, cdnUrl: a.cdn_url })}
                                   className="w-full max-w-md object-cover cursor-zoom-in hover:opacity-90 transition-opacity"
