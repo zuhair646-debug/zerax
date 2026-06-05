@@ -57,7 +57,13 @@ export default function GameStudioDashboard({ user }) {
     <div dir="rtl" className="min-h-screen bg-zinc-950 text-white">
       {/* Hero Section */}
       <div className="relative overflow-hidden bg-gradient-to-br from-zinc-900 via-purple-900/20 to-zinc-900 border-b border-white/10">
-        <div className="absolute inset-0 bg-[url('/grid.svg')] opacity-10" />
+        {/* Grid background pattern with CSS */}
+        <div className="absolute inset-0 opacity-5">
+          <div className="absolute inset-0" style={{
+            backgroundImage: 'linear-gradient(rgba(255,255,255,.05) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,.05) 1px, transparent 1px)',
+            backgroundSize: '50px 50px'
+          }} />
+        </div>
         
         <div className="relative max-w-7xl mx-auto px-6 py-16">
           <div className="flex items-center gap-3 mb-6">
