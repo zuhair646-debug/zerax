@@ -56,7 +56,6 @@ import AppStudio from '@/pages/AppStudio';
 import MobileAppMarketplace from '@/pages/MobileAppMarketplace';
 import AIAgent from '@/pages/AIAgent';
 import AppBuilder from '@/pages/AppBuilder';
-import GamesHub from '@/pages/GamesHub';
 import GameStudioDashboard from '@/pages/GameStudioDashboard';
 import WebGamesStudio from '@/pages/WebGamesStudio';
 import AppGamesStudio from '@/pages/AppGamesStudio';
