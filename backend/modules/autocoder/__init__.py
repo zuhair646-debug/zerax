@@ -136,7 +136,7 @@ logger = logging.getLogger(__name__)
 
 # Maximum git commits per chat session (raised from 15 to 100 — autonomous mode).
 # User explicitly requested unlimited operation; 100 is a sanity cap to prevent runaway loops.
-MAX_COMMITS_PER_SESSION = 100
+MAX_COMMITS_PER_SESSION = 1000  # raised from 100 — allow long deep refactoring sessions
 
 
 # Per-session commit counter (resets per process — good enough)
@@ -651,15 +651,18 @@ async def tool_read_file(path: str, start: int = 1, end: Optional[int] = None) -
         lines = text.splitlines()
         total = len(lines)
         if end is None:
-            # OPT: default 800 lines instead of 4000 to save tokens
-            # AI can request more by passing explicit end=
-            end = min(start + 800, total)
+            # Default 4000 lines (was 800) — read whole files in one call so the AI
+            # doesn't have to chain multiple reads and lose context mid-analysis.
+            end = min(start + 4000, total)
         end = min(end, total)
         start = max(1, start)
         chunk = "\n".join(lines[start - 1:end])
         result: Dict[str, Any] = {
             "ok": True, "path": str(p), "total_lines": total,
-            "shown": [start, end], "content": chunk[:80000],
+            "shown": [start, end],
+            # Cap at 400K chars (was 80K) — well within Claude 200K context window
+            # for a single tool result.
+            "content": chunk[:400000],
             "hint": (f"showing {end-start+1}/{total} lines. Pass end={total} to read all."
                      if end < total else None),
         }
@@ -847,7 +850,11 @@ async def tool_search_code(pattern: str, path: str = ".", file_glob: str = "") -
         return {"ok": False, "error": str(e)}
 
 
-async def tool_run_command(cmd: str, cwd: str = "/app", timeout: int = 90) -> Dict[str, Any]:
+async def tool_run_command(cmd: str, cwd: str = "/app", timeout: int = 300) -> Dict[str, Any]:
+    """Run any bash command. Default timeout raised 90s → 300s (5 min) so long ops
+    like 'yarn build' / 'pip install' / 'pytest /app/backend/tests' don't get killed.
+    Output cap raised from 50K/20K → 200K/80K so multi-screen logs survive.
+    """
     try:
         cwd_p = _resolve_path(cwd)
         proc = await asyncio.create_subprocess_shell(
@@ -862,8 +869,8 @@ async def tool_run_command(cmd: str, cwd: str = "/app", timeout: int = 90) -> Di
             except Exception:
                 pass
             return {"ok": False, "error": f"command timed out after {timeout}s"}
-        out = (stdout or b"").decode("utf-8", errors="replace")[:50000]
-        err = (stderr or b"").decode("utf-8", errors="replace")[:20000]
+        out = (stdout or b"").decode("utf-8", errors="replace")[:200000]
+        err = (stderr or b"").decode("utf-8", errors="replace")[:80000]
         return {
             "ok": proc.returncode == 0,
             "exit_code": proc.returncode,
@@ -2878,12 +2885,14 @@ async def _build_env_truth_banner() -> str:
 
 async def _stream_direct_anthropic(anthropic_msgs: List[Dict[str, Any]], api_key: str, env_banner: str = ""):
     """Uses official anthropic SDK with NATIVE STREAMING + multi-tool calling.
-    
-    Key behaviors:
-    - Real SSE streaming (chars appear as Claude generates them, not chunked post-hoc)
-    - History pruning (last 8 turns)
+
+    Behaviors (June 2026 — limits removed):
+    - Real SSE streaming (chars appear as Claude generates them)
+    - History pruning: last 30 turns (was 8) — long memory for deep debugging sessions
     - Prompt caching (system + tools cached, 90% cheaper on reuse)
-    - max_tokens=8192 (long enough for thorough analysis + multi-tool turns)
+    - max_tokens=16384 (was 8192) + AUTO-CONTINUE if stop_reason='max_tokens'
+    - 200 iterations max (was 60) — enough for complex multi-step refactors
+    - Per-tool result up to 50K chars to LLM (was 14K) — full file reads
     """
     try:
         from anthropic import AsyncAnthropic
@@ -2893,8 +2902,8 @@ async def _stream_direct_anthropic(anthropic_msgs: List[Dict[str, Any]], api_key
 
     client = AsyncAnthropic(api_key=api_key)
 
-    # History pruning — keep last 8 turns
-    MAX_HISTORY_TURNS = 8
+    # History pruning — keep last 30 turns (long debugging sessions)
+    MAX_HISTORY_TURNS = 30
     if len(anthropic_msgs) > MAX_HISTORY_TURNS:
         anthropic_msgs = anthropic_msgs[-MAX_HISTORY_TURNS:]
 
@@ -2926,7 +2935,7 @@ async def _stream_direct_anthropic(anthropic_msgs: List[Dict[str, Any]], api_key
 
     msgs = list(anthropic_msgs)
 
-    for iteration in range(60):
+    for iteration in range(200):
         text_parts: List[str] = []
         tool_uses: List[Dict[str, Any]] = []
         assistant_blocks: List[Dict[str, Any]] = []
@@ -2942,7 +2951,7 @@ async def _stream_direct_anthropic(anthropic_msgs: List[Dict[str, Any]], api_key
         try:
             async with client.messages.stream(
                 model="claude-sonnet-4-5",
-                max_tokens=8192,  # raised back from 4096 — let Claude breathe
+                max_tokens=16384,  # raised from 8192 — let Claude write long thorough responses
                 system=system_blocks,
                 tools=cached_tools,
                 messages=msgs,
@@ -3054,15 +3063,38 @@ async def _stream_direct_anthropic(anthropic_msgs: List[Dict[str, Any]], api_key
 
         # Stop conditions
         if stop_reason == "end_turn" or not tool_uses:
+            # Auto-continue if Claude was cut off at max_tokens with no tool calls — let it finish
+            if stop_reason == "max_tokens" and not tool_uses:
+                # Nudge the assistant to continue naturally
+                msgs.append({"role": "user", "content": "تابع/أكمل من حيث وقفت بدون أي مقدمة أو اعتذار."})
+                continue
             yield {"type": "done"}
             return
 
+        # If max_tokens but we DID get tool calls, execute them then loop continues normally.
         # Execute tool calls (sequential, in order)
+        # Execute tool calls (sequential, in order)
+        # Wrap each tool call in a heartbeat-pumped task so Cloudflare/proxies
+        # don't kill the SSE stream when a tool runs for > 60 seconds.
         tool_results_blocks = []
         for tu in tool_uses:
             yield {"type": "tool", "status": "calling", "name": tu["name"],
                    "args": _trim_args_for_ui(tu["input"])}
-            result = await execute_autocoder_tool(tu["name"], tu["input"])
+
+            # Run the tool in a background task and emit heartbeats every 15s
+            # until it completes. This keeps the SSE channel alive.
+            tool_task = asyncio.create_task(execute_autocoder_tool(tu["name"], tu["input"]))
+            elapsed = 0
+            while not tool_task.done():
+                try:
+                    await asyncio.wait_for(asyncio.shield(tool_task), timeout=15)
+                    break  # tool finished
+                except asyncio.TimeoutError:
+                    elapsed += 15
+                    yield {"type": "tool", "status": "running", "name": tu["name"],
+                           "elapsed_sec": elapsed}
+            result = await tool_task
+
             yield {"type": "tool", "status": "done", "name": tu["name"],
                    "ok": result.get("ok", False),
                    "summary": _summarize(tu["name"], result),
@@ -3070,12 +3102,12 @@ async def _stream_direct_anthropic(anthropic_msgs: List[Dict[str, Any]], api_key
             tool_results_blocks.append({
                 "type": "tool_result",
                 "tool_use_id": tu["id"],
-                "content": json.dumps(_trim_result_for_llm(result), ensure_ascii=False)[:14000],
+                "content": json.dumps(_trim_result_for_llm(result), ensure_ascii=False)[:60000],
             })
 
         msgs.append({"role": "user", "content": tool_results_blocks})
 
-    yield {"type": "text", "content": "\n(وصلت لـ60 دورة. اطلب تكملة لو تبي.)"}
+    yield {"type": "text", "content": "\n(وصلت لـ200 دورة. اطلب تكملة لو تبي.)"}
     yield {"type": "done"}
 
 
@@ -3181,12 +3213,18 @@ def _trim_args_for_ui(args: Optional[Dict[str, Any]]) -> Dict[str, Any]:
 
 
 def _trim_result_for_llm(result: Optional[Dict[str, Any]]) -> Dict[str, Any]:
+    """Trim per-field strings before sending tool_result back to the LLM.
+
+    Raised from 5K to 50K chars (Jun 2026) — Claude can now read whole files
+    in one tool call so it doesn't get cut off mid-analysis. The outer
+    json.dumps in the caller still caps the full block at 60K chars.
+    """
     if not result or not isinstance(result, dict):
         return {"ok": False, "error": "tool returned no result"}
     out = {}
     for k, v in result.items():
-        if isinstance(v, str) and len(v) > 5000:  # OPT: was 12000
-            out[k] = v[:5000] + f"\n...[truncated {len(v) - 5000} chars]"
+        if isinstance(v, str) and len(v) > 50000:
+            out[k] = v[:50000] + f"\n...[truncated {len(v) - 50000} chars]"
         else:
             out[k] = v
     return out
