@@ -65,8 +65,7 @@ const ClientDashboard = ({ user, setUser }) => {
     { title: '📱 رفيقتي على الجوال', desc: 'Zara/Layla كمساعدة شخصية يومية', icon: <Bot className="w-6 h-6" />, path: '/companion', color: 'from-fuchsia-500 to-pink-600', badge: 'جديد' },
     { title: '🤖 مساعدتي الذكية', desc: 'فعّل مساعدة AI لمتجرك', icon: <Bot className="w-6 h-6" />, path: '/dashboard/avatar', color: 'from-emerald-500 to-green-600', badge: '14 يوم مجاناً' },
     { title: '🌉 Channel Bridge', desc: 'انشر أصولك في متاجرك', icon: <Share2 className="w-6 h-6" />, path: '/dashboard/bridge', color: 'from-sky-500 to-cyan-500' },
-    { title: '🎮 استوديو ألعاب الويب', desc: 'أنشئ ألعاب HTML5 احترافية خطوة بخطوة', icon: <Gamepad2 className="w-6 h-6" />, path: '/dashboard/games/web', color: 'from-violet-500 to-purple-600', badge: '🎯 تدريجي' },
-    { title: '🕹️ استوديو التطبيقات', desc: 'ألعاب موبايل/PC ثلاثية الأبعاد من الفكرة للنشر', icon: <Gamepad2 className="w-6 h-6" />, path: '/dashboard/games/app', color: 'from-rose-500 to-pink-600', badge: '3D' },
+    { title: '🎮 استوديو الألعاب', desc: 'ألعاب ويب HTML5 + تطبيقات 3D للموبايل والـPC — احترافي ومتدرج', icon: <Gamepad2 className="w-6 h-6" />, path: '/dashboard/games', color: 'from-violet-500 to-purple-600', badge: '🔥 جديد' },
     { title: 'طلباتي', desc: 'عرض وإدارة طلباتك', icon: <FileText className="w-6 h-6" />, path: '/dashboard/requests', color: 'from-green-500 to-emerald-500' },
     { title: 'مواقعي', desc: 'عرض المواقع المنجزة', icon: <Globe className="w-6 h-6" />, path: '/dashboard/websites', color: 'from-indigo-500 to-purple-500' },
   ];
