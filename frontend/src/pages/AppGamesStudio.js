@@ -3,9 +3,10 @@ import { useNavigate } from 'react-router-dom';
 import { 
   Smartphone, Send, Paperclip, Loader2, Check, X, 
   Eye, Code, Image, FileText, Package, Sparkles,
-  ArrowRight, Lock, Unlock, CheckCircle2
+  ArrowRight, Lock, Unlock, CheckCircle2, HelpCircle
 } from 'lucide-react';
 import { toast } from 'sonner';
+import TechInfoModal from '@/components/TechInfoModal';
 
 const API = process.env.REACT_APP_BACKEND_URL;
 
@@ -24,6 +25,7 @@ export default function AppGamesStudio({ user }) {
   const [attachments, setAttachments] = useState([]);
   const [loading, setLoading] = useState(false);
   const [activePhase, setActivePhase] = useState('discovery');
+  const [infoTech, setInfoTech] = useState(null);
   
   const chatEndRef = useRef(null);
   const fileInputRef = useRef(null);
@@ -186,6 +188,17 @@ export default function AppGamesStudio({ user }) {
     return (
       <div dir="rtl" className="min-h-screen bg-gradient-to-br from-zinc-950 via-zinc-900 to-blue-950/20 text-white p-6">
         <div className="max-w-4xl mx-auto">
+          {/* Back button */}
+          <button
+            type="button"
+            onClick={() => navigate('/dashboard/games')}
+            className="mb-4 inline-flex items-center gap-2 px-3 py-2 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-zinc-300 hover:text-white transition-all"
+            data-testid="back-to-games-dashboard"
+          >
+            <ArrowRight className="w-4 h-4" />
+            <span className="text-sm font-medium">رجوع لاستوديو الألعاب</span>
+          </button>
+
           <div className="flex items-center gap-4 mb-8">
             <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center">
               <Smartphone className="w-8 h-8 text-white" />
@@ -197,19 +210,33 @@ export default function AppGamesStudio({ user }) {
           </div>
 
           <div className="bg-zinc-900/50 backdrop-blur border border-white/10 rounded-2xl p-6 mb-6">
-            <h2 className="text-xl font-bold mb-4">⚙️ اختر نوع البرمجة</h2>
+            <h2 className="text-xl font-bold mb-2">⚙️ اختر نوع البرمجة</h2>
+            <p className="text-xs text-zinc-500 mb-4">اضغط على <HelpCircle className="inline w-3.5 h-3.5 text-blue-300" /> لمعرفة الفرق بين كل منصة (3D، الأداء، الجمهور)</p>
             <div className="grid md:grid-cols-2 gap-4">
               {programmingTypes.map(tech => (
-                <button
+                <div
                   key={tech.id}
                   onClick={() => setSelectedTech(tech.id)}
-                  className={`p-4 rounded-xl border-2 transition-all text-right ${
+                  className={`relative p-4 rounded-xl border-2 transition-all text-right cursor-pointer ${
                     selectedTech === tech.id
                       ? 'border-blue-500 bg-blue-500/10'
                       : 'border-white/10 bg-black/20 hover:border-white/20'
                   }`}
+                  data-testid={`tech-card-${tech.id}`}
                 >
-                  <div className="font-bold text-lg">{tech.name}</div>
+                  {/* (?) button */}
+                  <button
+                    type="button"
+                    onClick={(e) => { e.stopPropagation(); setInfoTech(tech.id); }}
+                    className="absolute top-2 left-2 w-7 h-7 rounded-full bg-black/40 hover:bg-black/70 border border-white/20 hover:border-blue-400/60 flex items-center justify-center transition-all hover:scale-110"
+                    data-testid={`tech-info-btn-${tech.id}`}
+                    aria-label={`معلومات عن ${tech.name}`}
+                    title="ما هذا؟ اضغط لمعرفة المزيد"
+                  >
+                    <HelpCircle className="w-3.5 h-3.5 text-blue-200" />
+                  </button>
+
+                  <div className="font-bold text-lg pl-9">{tech.name}</div>
                   <div className="text-sm text-zinc-400">{tech.desc}</div>
                   {selectedTech === tech.id && (
                     <div className="mt-2 flex items-center gap-2 text-blue-400">
@@ -217,7 +244,7 @@ export default function AppGamesStudio({ user }) {
                       <span className="text-sm">محدد</span>
                     </div>
                   )}
-                </button>
+                </div>
               ))}
             </div>
           </div>
@@ -259,6 +286,15 @@ export default function AppGamesStudio({ user }) {
             )}
           </button>
         </div>
+
+        {/* Tech Info Modal */}
+        {infoTech && (
+          <TechInfoModal
+            techId={infoTech}
+            onClose={() => setInfoTech(null)}
+            onSelect={(id) => setSelectedTech(id)}
+          />
+        )}
       </div>
     );
   }
@@ -274,6 +310,16 @@ export default function AppGamesStudio({ user }) {
     <div dir="rtl" className="h-screen bg-zinc-950 text-white flex flex-col">
       <div className="bg-zinc-900/80 backdrop-blur border-b border-white/10 px-6 py-4 flex items-center justify-between">
         <div className="flex items-center gap-4">
+          <button
+            type="button"
+            onClick={() => navigate('/dashboard/games')}
+            className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-zinc-300 hover:text-white transition-all"
+            data-testid="back-from-chat"
+            title="رجوع لاستوديو الألعاب"
+          >
+            <ArrowRight className="w-4 h-4" />
+            <span className="text-xs font-medium hidden sm:inline">رجوع</span>
+          </button>
           <Smartphone className="w-6 h-6 text-blue-400" />
           <div>
             <h1 className="font-bold text-lg">{project?.title}</h1>

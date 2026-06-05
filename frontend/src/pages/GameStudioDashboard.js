@@ -82,6 +82,17 @@ export default function GameStudioDashboard({ user }) {
         </div>
         
         <div className="relative max-w-7xl mx-auto px-6 py-16">
+          {/* Back to home button */}
+          <button
+            type="button"
+            onClick={() => navigate('/')}
+            className="mb-6 inline-flex items-center gap-2 px-3 py-2 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-zinc-300 hover:text-white transition-all"
+            data-testid="back-to-home"
+          >
+            <ArrowRight className="w-4 h-4" />
+            <span className="text-sm font-medium">رجوع للرئيسية</span>
+          </button>
+
           <div className="flex items-center gap-3 mb-6">
             <div className="p-3 rounded-2xl bg-gradient-to-br from-amber-500 to-orange-500">
               <Gamepad2 className="w-8 h-8 text-black" />
