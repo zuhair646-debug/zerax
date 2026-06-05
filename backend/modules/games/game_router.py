@@ -648,6 +648,18 @@ def create_game_router(db, get_current_user):
                                     logger.info(f"[games] generated image asset {asset_id} for project {project_id}")
                         except Exception as gen_err:
                             logger.exception(f"[games] image generation failed: {gen_err}")
+                            # Push a visible error asset so the user knows generation failed
+                            err_asset = {
+                                "id": str(uuid.uuid4()),
+                                "type": "error",
+                                "subtype": "image-fail",
+                                "name": prompt_text[:80],
+                                "error": str(gen_err)[:200],
+                                "phase_id": phase_id,
+                                "approved": False,
+                                "created_at": datetime.now(timezone.utc).isoformat(),
+                            }
+                            generated_assets.append(err_asset)
         except Exception as parse_err:
             logger.warning(f"[games] image-tag parsing failed: {parse_err}")
 

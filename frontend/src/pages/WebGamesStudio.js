@@ -28,9 +28,44 @@ export default function WebGamesStudio({ user }) {
   const [loading, setLoading] = useState(false);
   const [activePhase, setActivePhase] = useState('discovery');
   const [infoTech, setInfoTech] = useState(null); // tech ID for info modal
+  const [activeTab, setActiveTab] = useState('chat'); // chat | live | approved
+  const [resuming, setResuming] = useState(false);
   
   const chatEndRef = useRef(null);
   const fileInputRef = useRef(null);
+
+  // 🔄 Auto-resume project from URL on mount (?project=ID)
+  // This prevents data loss on accidental refresh/disconnect
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const pid = params.get('project');
+    if (!pid || !token) return;
+    setResuming(true);
+    fetch(`${API}/api/games/project/${pid}`, { headers: { Authorization: `Bearer ${token}` } })
+      .then(r => r.ok ? r.json() : Promise.reject(r))
+      .then(data => {
+        if (data?.project) {
+          setProject(data.project);
+          setStep('chat');
+          setActivePhase(data.project.current_phase || 'discovery');
+          toast.success('✅ تم استرجاع المشروع من حيث وقفت');
+        }
+      })
+      .catch(() => toast.error('فشل استرجاع المشروع — قد يكون محذوف'))
+      .finally(() => setResuming(false));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // 🔗 Sync project ID to URL whenever it changes (so refresh resumes correctly)
+  useEffect(() => {
+    if (project?.id) {
+      const url = new URL(window.location.href);
+      if (url.searchParams.get('project') !== project.id) {
+        url.searchParams.set('project', project.id);
+        window.history.replaceState({}, '', url.toString());
+      }
+    }
+  }, [project?.id]);
 
   // Fetch programming types
   useEffect(() => {
@@ -413,10 +448,153 @@ export default function WebGamesStudio({ user }) {
           </div>
         </div>
 
-        {/* CENTER: Chat */}
+        {/* CENTER: Tabs (Chat / Live / Approved) */}
         <div className="flex-1 flex flex-col">
-          {/* Messages */}
-          <div className="flex-1 overflow-y-auto p-6 space-y-4">
+          {/* Tab Bar */}
+          <div className="flex border-b border-white/10 bg-zinc-900/40 px-2 gap-1" data-testid="studio-tabs">
+            <button
+              onClick={() => setActiveTab('chat')}
+              data-testid="tab-chat"
+              className={`px-4 py-2.5 text-sm font-bold border-b-2 transition-all ${activeTab === 'chat' ? 'text-amber-300 border-amber-400' : 'text-zinc-400 border-transparent hover:text-white'}`}
+            >
+              💬 المحادثة
+              {messages.length > 0 && (
+                <span className="ms-1.5 text-[10px] bg-amber-500/20 px-1.5 py-0.5 rounded-full">{messages.length}</span>
+              )}
+            </button>
+            <button
+              onClick={() => setActiveTab('live')}
+              data-testid="tab-live"
+              className={`px-4 py-2.5 text-sm font-bold border-b-2 transition-all ${activeTab === 'live' ? 'text-cyan-300 border-cyan-400' : 'text-zinc-400 border-transparent hover:text-white'}`}
+            >
+              📡 البث المباشر
+            </button>
+            <button
+              onClick={() => setActiveTab('approved')}
+              data-testid="tab-approved"
+              className={`px-4 py-2.5 text-sm font-bold border-b-2 transition-all ${activeTab === 'approved' ? 'text-emerald-300 border-emerald-400' : 'text-zinc-400 border-transparent hover:text-white'}`}
+            >
+              ✅ المعتمدات
+              {(() => {
+                const count = Object.values(allAssets).flat().filter(a => a?.approved).length;
+                return count > 0 ? <span className="ms-1.5 text-[10px] bg-emerald-500/20 px-1.5 py-0.5 rounded-full">{count}</span> : null;
+              })()}
+            </button>
+            <div className="flex-1" />
+            {resuming && (
+              <div className="text-xs text-zinc-500 flex items-center gap-1.5 px-2">
+                <Loader2 className="w-3 h-3 animate-spin" />
+                <span>جاري الاسترجاع...</span>
+              </div>
+            )}
+            <div className="text-[10px] text-zinc-500 flex items-center gap-1.5 px-2">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+              <span>محفوظ تلقائياً</span>
+            </div>
+          </div>
+
+          {/* TAB CONTENT */}
+          {activeTab === 'live' && (
+            <div className="flex-1 overflow-y-auto p-6 bg-black/40" data-testid="tab-content-live">
+              <div className="max-w-3xl mx-auto space-y-4">
+                <h2 className="text-lg font-bold text-cyan-300 flex items-center gap-2">
+                  <span>📡</span><span>البث المباشر — معاينة المشروع</span>
+                </h2>
+                <p className="text-xs text-zinc-400">هنا تشوف اللعبة وهي تتبني خطوة بخطوة. كل عنصر معتمد يظهر مباشرة.</p>
+                {project?.preview_url ? (
+                  <div className="rounded-xl border border-cyan-500/30 overflow-hidden bg-black">
+                    <iframe src={project.preview_url} className="w-full" style={{ height: '70vh' }} title="Live Preview" />
+                  </div>
+                ) : (
+                  <div className="rounded-xl border border-white/10 bg-black/40 p-8 text-center">
+                    <div className="text-5xl mb-3">🎬</div>
+                    <p className="text-zinc-300 font-bold mb-2">لا يوجد بث مباشر بعد</p>
+                    <p className="text-xs text-zinc-500">سيظهر هنا تلقائياً بعد ما تعتمد عناصر اللعبة (قلعة، حقول، شخصيات) ويبدأ AI بناء العالم.</p>
+                  </div>
+                )}
+                {/* Show approved 3D models as a grid preview */}
+                {(allAssets.models3d || []).filter(a => a.approved).length > 0 && (
+                  <div className="space-y-2">
+                    <h3 className="text-sm font-bold text-cyan-300">🧊 موديلات 3D معتمدة في اللعبة</h3>
+                    <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+                      {(allAssets.models3d || []).filter(a => a.approved).map(a => (
+                        <a key={a.id} href={`https://gltf-viewer.donmccurdy.com/?model=${encodeURIComponent(`${API}${a.model_url}`)}`} target="_blank" rel="noopener noreferrer"
+                           className="p-3 rounded-lg bg-cyan-500/10 border border-cyan-500/30 hover:border-cyan-400/60 text-center">
+                          <div className="text-2xl mb-1">🧊</div>
+                          <div className="text-xs text-cyan-100 truncate">{a.name}</div>
+                        </a>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {activeTab === 'approved' && (
+            <div className="flex-1 overflow-y-auto p-6 bg-black/40" data-testid="tab-content-approved">
+              <div className="max-w-5xl mx-auto space-y-6">
+                <div>
+                  <h2 className="text-lg font-bold text-emerald-300 flex items-center gap-2">
+                    <span>✅</span><span>الأصول المعتمدة في هذا المشروع</span>
+                  </h2>
+                  <p className="text-xs text-zinc-400">كل صورة أو موديل أو صوت ضغطت ✓ عليه يظهر هنا بشكل دائم — حتى لو سكرت الموقع.</p>
+                </div>
+                {Object.entries({
+                  images: { label: '🎨 الصور المعتمدة', color: 'amber' },
+                  models3d: { label: '🧊 موديلات 3D معتمدة', color: 'cyan' },
+                  audio: { label: '🎵 موسيقى وصوتيات معتمدة', color: 'violet' },
+                  videos: { label: '🎬 فيديوهات معتمدة', color: 'rose' },
+                }).map(([bucket, meta]) => {
+                  const items = (allAssets[bucket] || []).filter(a => a.approved);
+                  if (items.length === 0) return null;
+                  return (
+                    <div key={bucket} className="space-y-2">
+                      <h3 className={`text-sm font-bold text-${meta.color}-300`}>{meta.label} · {items.length}</h3>
+                      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
+                        {items.map(a => (
+                          <div key={a.id} className={`rounded-lg border border-${meta.color}-500/30 bg-black/30 overflow-hidden`}>
+                            {a.image_url && (
+                              <img src={`${API}${a.image_url}`} alt={a.name} className="w-full aspect-square object-cover" loading="lazy" />
+                            )}
+                            {a.model_url && (
+                              <a href={`https://gltf-viewer.donmccurdy.com/?model=${encodeURIComponent(`${API}${a.model_url}`)}`} target="_blank" rel="noopener noreferrer"
+                                 className="block aspect-square bg-cyan-500/10 flex items-center justify-center text-4xl">
+                                🧊
+                              </a>
+                            )}
+                            {a.audio_url && (
+                              <div className="p-3 aspect-square flex flex-col justify-center bg-violet-500/10">
+                                <div className="text-3xl text-center mb-2">{a.type === 'music' ? '🎵' : '🔊'}</div>
+                                <audio src={`${API}${a.audio_url}`} controls className="w-full" />
+                              </div>
+                            )}
+                            {a.video_url && (
+                              <video src={`${API}${a.video_url}`} controls className="w-full aspect-video" />
+                            )}
+                            <div className="p-2">
+                              <div className="text-[10px] text-zinc-300 truncate font-bold">{a.name}</div>
+                              <div className="text-[9px] text-zinc-500">{a.subtype || a.style}</div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })}
+                {Object.values(allAssets).flat().filter(a => a?.approved).length === 0 && (
+                  <div className="text-center text-zinc-500 mt-12">
+                    <div className="text-5xl mb-3">📭</div>
+                    <p className="font-bold mb-1">لا توجد أصول معتمدة بعد</p>
+                    <p className="text-xs">ارجع للمحادثة، اطلب صور أو موديلات، واضغط ✓ معتمد على اللي يعجبك.</p>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {activeTab === 'chat' && (
+          <div className="flex-1 overflow-y-auto p-6 space-y-4" data-testid="tab-content-chat">
             {messages.length === 0 && (
               <div className="text-center text-zinc-500 mt-12">
                 <div className="text-6xl mb-4">{phaseIcon(activePhase)}</div>
@@ -466,6 +644,23 @@ export default function WebGamesStudio({ user }) {
                           const is3D = a.type === '3d';
                           const isVid = a.type === 'video';
                           const isAudio = a.type === 'music' || a.type === 'sfx';
+                          const isErr = a.type === 'error';
+                          if (isErr) {
+                            return (
+                              <div key={a.id} className="rounded-xl border border-red-500/40 bg-red-500/10 p-4 text-right">
+                                <div className="flex items-center gap-2 text-red-300 font-bold mb-1">
+                                  <span>⚠️</span><span>فشل توليد الأصل</span>
+                                </div>
+                                <div className="text-xs text-zinc-300 mb-1">المطلوب: {a.name}</div>
+                                <div className="text-[10px] text-red-200/70 break-all">{a.error}</div>
+                                <button
+                                  onClick={() => setMessage(`أعد توليد: ${a.name}`)}
+                                  className="mt-2 text-xs px-3 py-1.5 bg-red-500/20 hover:bg-red-500/30 border border-red-400/40 rounded-lg text-red-100 font-bold"
+                                  data-testid={`retry-asset-${a.id}`}
+                                >↻ إعادة المحاولة</button>
+                              </div>
+                            );
+                          }
                           const url = a.image_url || a.model_url || a.video_url || a.audio_url;
                           const fullUrl = url ? `${API}${url}` : null;
                           const subtypeBadge = a.subtype || a.style || a.type;
@@ -539,8 +734,9 @@ export default function WebGamesStudio({ user }) {
             ))}
             <div ref={chatEndRef} />
           </div>
+          )}
 
-          {/* Input */}
+          {/* Input — appears below all tabs but only relevant for chat */}
           <div className="border-t border-white/10 p-4 bg-zinc-900/50">
             {/* Quick Action Suggestions */}
             <QuickActions
