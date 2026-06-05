@@ -105,7 +105,7 @@ const LandingPage = ({ user }) => {
           gradient: 'from-lime-500/20 to-green-500/10',
           accent: '#84cc16',
           bgImage: 'https://images.unsplash.com/photo-1493711662062-fa541adb3fc8?auto=format&fit=crop&w=800&q=70',
-          badge: 'قريباً',
+          badge: 'جديد',
           action: () => goOrRegister('/games/web'),
         },
         {
@@ -115,7 +115,7 @@ const LandingPage = ({ user }) => {
           gradient: 'from-green-500/20 to-emerald-500/10',
           accent: '#22c55e',
           bgImage: 'https://images.unsplash.com/photo-1542751371-adc38448a05e?auto=format&fit=crop&w=800&q=70',
-          badge: 'قريباً',
+          badge: 'جديد',
           action: () => goOrRegister('/games/mobile'),
         },
       ],
