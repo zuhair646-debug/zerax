@@ -412,7 +412,7 @@ export default function AppGamesStudio({ user }) {
                 <div className="flex justify-start">
                   <div className="bg-zinc-800/50 border border-white/10 rounded-2xl rounded-bl-sm px-4 py-3 max-w-3xl">
                     <div className="text-sm whitespace-pre-wrap">
-                      {(msg.assistant || '').replace(/<<IMG:[\s\S]*?>>/g, '').trim()}
+                      {(msg.assistant || '').replace(/<<[\s\S]*?>>/g, '').replace(/\n{3,}/g, '\n\n').trim()}
                     </div>
                     {msg.generated_assets?.length > 0 && (
                       <div className="mt-4 space-y-3" data-testid="inline-assets">
