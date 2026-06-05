@@ -3653,11 +3653,11 @@ async def api_version():
         "endpoints_count": len([r for r in app.routes if hasattr(r, "path")]),
     }
 
-# Serve static game engine (delegated to games module)
+# Game Studio (Web Games + App Games)
 try:
-    from modules.games.routes import init_routes as _init_games_routes
-    _games_router = _init_games_routes()
-    app.include_router(_games_router, prefix="/api")
+    from modules.games.game_router import create_game_router
+    _games_router = create_game_router(db, get_current_user)
+    app.include_router(_games_router)  # router already has /api prefix
 except Exception as _ge:
     logging.getLogger(__name__).error(f"games module failed: {_ge}")
 

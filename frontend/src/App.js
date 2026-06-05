@@ -57,6 +57,11 @@ import MobileAppMarketplace from '@/pages/MobileAppMarketplace';
 import AIAgent from '@/pages/AIAgent';
 import AppBuilder from '@/pages/AppBuilder';
 import GamesHub from '@/pages/GamesHub';
+import GameStudioDashboard from '@/pages/GameStudioDashboard';
+import WebGamesStudio from '@/pages/WebGamesStudio';
+import AppGamesStudio from '@/pages/AppGamesStudio';
+import WebGameProject from '@/pages/WebGameProject';
+import AppGameProject from '@/pages/AppGameProject';
 import LogoPicker from '@/pages/LogoPicker';
 import AdminMarketing from '@/pages/AdminMarketing';
 import AvatarSettings from '@/pages/AvatarSettings';
@@ -116,8 +121,11 @@ function App() {
           <Route path="/build-from-zero" element={<ProtectedRoute><FreeBuild /></ProtectedRoute>} />
           <Route path="/ai-agent" element={<ProtectedRoute><AIAgent /></ProtectedRoute>} />
           <Route path="/app-builder" element={<ProtectedRoute><AppBuilder user={user} /></ProtectedRoute>} />
-          <Route path="/games/web" element={<ProtectedRoute><GamesHub user={user} kind="web" /></ProtectedRoute>} />
-          <Route path="/games/mobile" element={<ProtectedRoute><GamesHub user={user} kind="mobile" /></ProtectedRoute>} />
+          <Route path="/dashboard/games" element={<ProtectedRoute><GameStudioDashboard user={user} /></ProtectedRoute>} />
+          <Route path="/dashboard/games/web" element={<ProtectedRoute><WebGamesStudio user={user} /></ProtectedRoute>} />
+          <Route path="/dashboard/games/app" element={<ProtectedRoute><AppGamesStudio user={user} /></ProtectedRoute>} />
+          <Route path="/dashboard/games/web/:id" element={<ProtectedRoute><WebGameProject user={user} /></ProtectedRoute>} />
+          <Route path="/dashboard/games/app/:id" element={<ProtectedRoute><AppGameProject user={user} /></ProtectedRoute>} />
           <Route path="/logo-picker" element={<LogoPicker />} />
           <Route path="/admin/marketing" element={<ProtectedRoute adminOnly><AdminMarketing user={user} /></ProtectedRoute>} />
           <Route path="/vrm-preview" element={<VrmPreview />} />
