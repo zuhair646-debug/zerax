@@ -187,6 +187,7 @@ export default function AdminAutoCoder() {
   const [sending, setSending] = useState(false);
   const [currentStream, setCurrentStream] = useState('');
   const [currentTools, setCurrentTools] = useState([]);
+  const abortRef = useRef(null);  // controls live SSE — owner can stop mid-stream
   const [showSidebar, setShowSidebar] = useState(false);
   const [keyStatus, setKeyStatus] = useState(null);
   const [model, setModel] = useState(() => {
@@ -597,6 +598,12 @@ export default function AdminAutoCoder() {
         });
       }
 
+      // Owner-controlled abort: clicking the stop button cancels the SSE stream.
+      // Backend's CancelledError handler will persist any partial assistant text
+      // so nothing is lost — the conversation can resume on next send.
+      const ac = new AbortController();
+      abortRef.current = ac;
+
       const r = await fetch(`${API}/api/autocoder/chat`, {
         method: 'POST',
         headers: {
@@ -605,6 +612,7 @@ export default function AdminAutoCoder() {
           'X-AutoCoder-Token': acToken,
         },
         body: fd,
+        signal: ac.signal,
       });
       if (r.status === 401) {
         toast.error('انتهت الجلسة. ادخل كلمة السر مرة ثانية');
@@ -686,26 +694,34 @@ export default function AdminAutoCoder() {
       const partial = assistantText || '';
       const isAbort = e?.name === 'AbortError';
       const friendly = isAbort
-        ? 'انقطع الاتصال — اضغط "تحديث" أو أعد إرسال آخر سؤال للمتابعة.'
+        ? '⏸ تم الإيقاف بطلبك — كل ما عمله الذكاء حتى الآن محفوظ. اكتب توجيه جديد أو "كمّل" للمتابعة.'
         : `انقطع الاتصال: ${e.message}. المحادثة محفوظة — أكمل من نفس النقطة.`;
       setMessages((prev) => [
         ...prev,
         {
           role: 'assistant',
           content: partial
-            ? `${partial}\n\n⚠️ ${friendly}`
-            : `⚠️ ${friendly}`,
+            ? `${partial}\n\n${isAbort ? '⏸' : '⚠️'} ${friendly}`
+            : `${isAbort ? '⏸' : '⚠️'} ${friendly}`,
           tool_events: toolEvents,
-          error: e.message,
+          error: isAbort ? null : e.message,
           partial: true,
+          aborted: isAbort,
         },
       ]);
       setCurrentStream('');
       setCurrentTools([]);
-      toast.error(friendly, { duration: 5000 });
+      if (isAbort) {
+        toast.success(friendly, { duration: 4000 });
+      } else {
+        toast.error(friendly, { duration: 5000 });
+      }
       // Refresh conversation list so the user sees the in-flight save (if any) from backend
       try { loadConversations(); } catch (_) {}
-    } finally { setSending(false); }
+    } finally {
+      setSending(false);
+      abortRef.current = null;
+    }
   };
 
   useEffect(() => {
@@ -1025,11 +1041,32 @@ export default function AdminAutoCoder() {
 
           <div className="border-t border-white/10 p-3 md:p-4 bg-black/40">
             <div className="max-w-3xl mx-auto">
+              {sending && (
+                <div className="flex items-center justify-between gap-3 mb-2 px-3 py-2 rounded-lg bg-amber-500/10 border border-amber-400/30">
+                  <div className="flex items-center gap-2">
+                    <Loader2 className="w-4 h-4 text-amber-400 animate-spin" />
+                    <span className="text-xs text-amber-200 font-bold">الذكاء يفكر ويشتغل...</span>
+                  </div>
+                  <button
+                    onClick={() => {
+                      if (abortRef.current) {
+                        abortRef.current.abort();
+                        toast.info('⏸ تم الإيقاف — أكمل بكتابة "كمّل" أو أضف تعليمات إضافية', { duration: 4000 });
+                      }
+                    }}
+                    data-testid="autocoder-stop-btn"
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-rose-500/20 hover:bg-rose-500/30 border border-rose-400/30 text-rose-200 text-xs font-bold transition"
+                  >
+                    <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><rect x="6" y="5" width="4" height="14" rx="1" /><rect x="14" y="5" width="4" height="14" rx="1" /></svg>
+                    إيقاف
+                  </button>
+                </div>
+              )}
               <ChatInput
                 value={input}
                 onChange={setInput}
                 onSend={send}
-                placeholder="اكتب أمرك للذكاء... أو اضغط الميكروفون لتسجل بصوتك"
+                placeholder={sending ? "اضغط إيقاف فوق لتعديل التعليمات..." : "اكتب أمرك للذكاء... أو اضغط الميكروفون لتسجل بصوتك"}
                 disabled={sending}
                 supportFiles={true}
                 supportVoice={true}
