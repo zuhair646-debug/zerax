@@ -9,6 +9,7 @@ import { toast } from 'sonner';
 import TechInfoModal from '@/components/TechInfoModal';
 import VoiceRecorderButton from '@/components/VoiceRecorderButton';
 import QuickActions from '@/components/QuickActions';
+import StorageBadge from '@/components/StorageBadge';
 
 const API = process.env.REACT_APP_BACKEND_URL;
 
@@ -337,6 +338,7 @@ export default function AppGamesStudio({ user }) {
             </span>
           </div>
           
+          <StorageBadge projectId={project?.id} />
           {project?.preview_url && (
             <a href={project.preview_url} target="_blank" rel="noopener noreferrer"
                className="px-4 py-2 bg-blue-500/20 text-blue-400 border border-blue-500/30 rounded-lg hover:bg-blue-500/30 flex items-center gap-2">

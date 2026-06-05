@@ -3239,6 +3239,25 @@ try:
 except Exception as _oe:
     logging.getLogger(__name__).error(f"Failed to register operator module: {_oe}", exc_info=True)
 
+# ============== GAMES BILLING CLEANUP (nightly) ==============
+@app.on_event("startup")
+async def _start_games_cleanup_scheduler():
+    import asyncio as _asyncio
+    async def _runner():
+        from modules.games.billing import cleanup_expired_projects
+        while True:
+            try:
+                result = await cleanup_expired_projects(db)
+                if result["deleted_projects"] > 0:
+                    logging.getLogger(__name__).info(
+                        f"[games][billing] auto-cleanup deleted "
+                        f"{result['deleted_projects']} projects, {result['deleted_files']} files"
+                    )
+            except Exception as e:
+                logging.getLogger(__name__).warning(f"games cleanup error: {e}")
+            await _asyncio.sleep(6 * 3600)  # every 6 hours
+    _asyncio.create_task(_runner())
+
 # ============== AFFILIATE (Paid marketing program) ==============
 try:
     from modules.affiliate.routes import init_routes as init_affiliate_routes

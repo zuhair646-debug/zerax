@@ -667,24 +667,44 @@ def create_game_router(db, get_current_user):
         # 🎮 FAL.AI tools: <<IMG_PRO>> <<3D>> <<ANIMATE>> <<MUSIC>> <<SFX>>
         # ─────────────────────────────────────────────────────
         try:
-            from modules.games.fal_tools import parse_and_generate_assets
-            fal_assets = await parse_and_generate_assets(ai_message, project_id, max_assets_per_turn=3)
-            for fa in fal_assets:
-                fa["phase_id"] = phase_id
-                generated_assets.append(fa)
-                # Save to appropriate asset bucket in the project doc
-                bucket = "images" if fa["type"] in ("image",) else (
-                    "models3d" if fa["type"] == "3d" else (
-                        "audio" if fa["type"] in ("music", "sfx") else (
-                            "videos" if fa["type"] == "video" else "images"
+            # Storage-quota gate: don't generate expensive assets if project is over its tier limit
+            from modules.games.billing import get_project_storage_info
+            fresh_project = await db.game_projects.find_one({"id": project_id})
+            storage_info = get_project_storage_info(fresh_project) if fresh_project else None
+            if storage_info and storage_info.get("over_quota"):
+                logger.warning(
+                    f"[games] project {project_id} over quota "
+                    f"({storage_info['size_mb']}/{storage_info['limit_mb']}MB) — skipping fal generation"
+                )
+                generated_assets.append({
+                    "id": str(uuid.uuid4()),
+                    "type": "error",
+                    "subtype": "quota-exceeded",
+                    "name": "تجاوزت حد الباقة",
+                    "error": f"المشروع وصل {storage_info['size_mb']} MB من أصل {storage_info['limit_mb']} MB ({storage_info['tier_label']}). رقّ الباقة لإنشاء أصول إضافية.",
+                    "phase_id": phase_id,
+                    "approved": False,
+                    "created_at": datetime.now(timezone.utc).isoformat(),
+                })
+            else:
+                from modules.games.fal_tools import parse_and_generate_assets
+                fal_assets = await parse_and_generate_assets(ai_message, project_id, max_assets_per_turn=3)
+                for fa in fal_assets:
+                    fa["phase_id"] = phase_id
+                    generated_assets.append(fa)
+                    # Save to appropriate asset bucket in the project doc
+                    bucket = "images" if fa["type"] in ("image",) else (
+                        "models3d" if fa["type"] == "3d" else (
+                            "audio" if fa["type"] in ("music", "sfx") else (
+                                "videos" if fa["type"] == "video" else "images"
+                            )
                         )
                     )
-                )
-                await db.game_projects.update_one(
-                    {"id": project_id},
-                    {"$push": {f"assets.{bucket}": fa}}
-                )
-                logger.info(f"[games][fal] generated {fa['type']} asset {fa['id']} for project {project_id}")
+                    await db.game_projects.update_one(
+                        {"id": project_id},
+                        {"$push": {f"assets.{bucket}": fa}}
+                    )
+                    logger.info(f"[games][fal] generated {fa['type']} asset {fa['id']} for project {project_id}")
         except Exception as fal_err:
             logger.exception(f"[games] FAL tools failed: {fal_err}")
         
@@ -719,6 +739,60 @@ def create_game_router(db, get_current_user):
             "credits_used": 0 if user_is_owner else phase_info["credits"],
             "remaining_balance": user_credits if user_is_owner else (user_credits - phase_info["credits"])
         }
+    
+    # ───────────────────────────────────────────────────────────
+    # 💰 GET /project/{project_id}/billing — storage usage + tier info
+    # ───────────────────────────────────────────────────────────
+    @router.get("/project/{project_id}/billing")
+    async def get_project_billing(project_id: str, user=Depends(get_current_user)):
+        """Return tier, current storage usage, limit, expiry date, percent used."""
+        from modules.games.billing import get_project_storage_info, TIERS
+        project = await db.game_projects.find_one({"id": project_id, "user_id": user["user_id"]})
+        if not project:
+            raise HTTPException(404, "Project not found")
+        info = get_project_storage_info(project)
+        info["all_tiers"] = TIERS  # so frontend can show upgrade options
+        return info
+
+    # ───────────────────────────────────────────────────────────
+    # 🪙 POST /project/{project_id}/upgrade — switch project tier
+    # Note: real Stripe checkout is handled at /api/billing/checkout
+    # ───────────────────────────────────────────────────────────
+    @router.post("/project/{project_id}/upgrade")
+    async def upgrade_project_tier(project_id: str, tier: str = Form(...), user=Depends(get_current_user)):
+        """Mark project as upgraded after successful payment.
+        Only callable internally or via verified webhook in production.
+        For owner role we allow direct upgrade (no payment required)."""
+        from modules.games.billing import TIERS
+        if tier not in TIERS:
+            raise HTTPException(400, f"Unknown tier: {tier}")
+        # Verify ownership
+        project = await db.game_projects.find_one({"id": project_id, "user_id": user["user_id"]})
+        if not project:
+            raise HTTPException(404, "Project not found")
+        # Owner can switch tier freely; regular users would go through Stripe checkout first
+        user_doc = await db.users.find_one({"id": user["user_id"]}, {"role": 1, "is_owner": 1})
+        is_owner = bool((user_doc or {}).get("is_owner") or (user_doc or {}).get("role") == "owner")
+        if not is_owner and tier != "free":
+            raise HTTPException(402, "الترقية تتطلب الدفع — استخدم /api/billing/checkout")
+        await db.game_projects.update_one(
+            {"id": project_id},
+            {"$set": {"billing_tier": tier, "tier_updated_at": datetime.now(timezone.utc).isoformat()}}
+        )
+        return {"ok": True, "tier": tier}
+
+    # ───────────────────────────────────────────────────────────
+    # 🧹 POST /admin/games/cleanup-expired — manual trigger (also runs nightly)
+    # ───────────────────────────────────────────────────────────
+    @router.post("/admin/cleanup-expired")
+    async def cleanup_expired(user=Depends(get_current_user)):
+        """Owner-only: delete expired free-tier projects + their files."""
+        user_doc = await db.users.find_one({"id": user["user_id"]}, {"role": 1, "is_owner": 1})
+        if not (user_doc and (user_doc.get("is_owner") or user_doc.get("role") == "owner")):
+            raise HTTPException(403, "Owner only")
+        from modules.games.billing import cleanup_expired_projects
+        result = await cleanup_expired_projects(db)
+        return {"ok": True, **result}
     
     # ───────────────────────────────────────────────────────────
     # ✅ POST /project/{project_id}/approve-asset — Approve/reject asset

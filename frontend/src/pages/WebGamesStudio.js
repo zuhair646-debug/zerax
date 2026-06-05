@@ -9,6 +9,7 @@ import { toast } from 'sonner';
 import TechInfoModal from '@/components/TechInfoModal';
 import VoiceRecorderButton from '@/components/VoiceRecorderButton';
 import QuickActions from '@/components/QuickActions';
+import StorageBadge from '@/components/StorageBadge';
 
 const API = process.env.REACT_APP_BACKEND_URL;
 
@@ -379,6 +380,7 @@ export default function WebGamesStudio({ user }) {
           </span>
         </div>
         <div className="flex items-center gap-3">
+          <StorageBadge projectId={project?.id} />
           {project?.preview_url && (
             <a
               href={project.preview_url}
