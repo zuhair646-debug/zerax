@@ -8,13 +8,16 @@ export default function GameStudioDashboard({ user }) {
   const navigate = useNavigate();
   const [credits, setCredits] = useState(null);
   const [projects, setProjects] = useState([]);
+  const [loading, setLoading] = useState(true);
   const token = localStorage.getItem('token');
 
   useEffect(() => {
     fetchProjects();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const fetchProjects = async () => {
+    setLoading(true);
     try {
       const res = await fetch(`${API}/api/games/projects`, {
         headers: { Authorization: `Bearer ${token}` }
@@ -22,7 +25,9 @@ export default function GameStudioDashboard({ user }) {
       const data = await res.json();
       setProjects(data.projects || []);
     } catch (e) {
-      console.error(e);
+      console.error('Error fetching projects:', e);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -52,6 +57,17 @@ export default function GameStudioDashboard({ user }) {
       timeline: '1-4 أسابيع',
     },
   ];
+
+  if (loading) {
+    return (
+      <div dir="rtl" className="min-h-screen bg-zinc-950 text-white flex items-center justify-center">
+        <div className="text-center">
+          <div className="w-16 h-16 border-4 border-amber-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+          <p className="text-zinc-400">جاري تحميل استوديو الألعاب...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div dir="rtl" className="min-h-screen bg-zinc-950 text-white">

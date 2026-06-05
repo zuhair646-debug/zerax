@@ -36,6 +36,7 @@ export default function AppGamesStudio({ user }) {
       .then(r => r.json())
       .then(data => setProgrammingTypes(data.types || []))
       .catch(e => toast.error(e.message));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Create project
