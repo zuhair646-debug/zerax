@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { 
   Smartphone, Send, Paperclip, Loader2, Check, X, 
   Eye, Code, Image, FileText, Package, Sparkles,
@@ -42,11 +42,12 @@ export default function AppGamesStudio({ user }) {
   const chatEndRef = useRef(null);
   const fileInputRef = useRef(null);
 
-  // 🔄 Auto-resume project from URL on mount (?project=ID) — parity with WebGamesStudio
+  // 🔄 Auto-resume project — re-runs on URL change so MyProjectsModal switching works
   useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
+    const params = new URLSearchParams(location.search);
     const pid = params.get('project');
     if (!pid || !token) return;
+    if (project?.id === pid) return;
     setResuming(true);
     fetch(`${API}/api/games/project/${pid}`, { headers: { Authorization: `Bearer ${token}` } })
       .then(r => r.ok ? r.json() : Promise.reject(r))
@@ -55,13 +56,14 @@ export default function AppGamesStudio({ user }) {
           setProject(data.project);
           setStep('chat');
           setActivePhase(data.project.current_phase || 'discovery');
+          setActiveTab('chat');
           toast.success('✅ تم استرجاع المشروع من حيث وقفت');
         }
       })
       .catch(() => toast.error('فشل استرجاع المشروع — قد يكون محذوف'))
       .finally(() => setResuming(false));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [location.search]);
 
   // 🔗 Sync project ID to URL whenever it changes
   useEffect(() => {

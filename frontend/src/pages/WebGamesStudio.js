@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { 
   Gamepad2, Send, Paperclip, Loader2, Check, X, 
   Eye, Code, Image, FileText, Package, Sparkles,
@@ -19,6 +19,7 @@ const API = process.env.REACT_APP_BACKEND_URL;
 
 export default function WebGamesStudio({ user }) {
   const navigate = useNavigate();
+  const location = useLocation();
   const token = localStorage.getItem('token');
   
   const [step, setStep] = useState('select_tech'); // select_tech | chat
@@ -42,12 +43,14 @@ export default function WebGamesStudio({ user }) {
   const chatEndRef = useRef(null);
   const fileInputRef = useRef(null);
 
-  // 🔄 Auto-resume project from URL on mount (?project=ID)
-  // This prevents data loss on accidental refresh/disconnect
+  // 🔄 Auto-resume project from URL — re-runs whenever ?project= changes so
+  // switching from one project to another via MyProjectsModal works correctly.
   useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
+    const params = new URLSearchParams(location.search);
     const pid = params.get('project');
     if (!pid || !token) return;
+    // Don't refetch if we already have this project loaded
+    if (project?.id === pid) return;
     setResuming(true);
     fetch(`${API}/api/games/project/${pid}`, { headers: { Authorization: `Bearer ${token}` } })
       .then(r => r.ok ? r.json() : Promise.reject(r))
@@ -56,13 +59,14 @@ export default function WebGamesStudio({ user }) {
           setProject(data.project);
           setStep('chat');
           setActivePhase(data.project.current_phase || 'discovery');
+          setActiveTab('chat');
           toast.success('✅ تم استرجاع المشروع من حيث وقفت');
         }
       })
       .catch(() => toast.error('فشل استرجاع المشروع — قد يكون محذوف'))
       .finally(() => setResuming(false));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [location.search]);
 
   // 🔗 Sync project ID to URL whenever it changes (so refresh resumes correctly)
   useEffect(() => {

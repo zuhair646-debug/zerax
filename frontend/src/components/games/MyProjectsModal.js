@@ -44,16 +44,9 @@ export default function MyProjectsModal({ open, onClose, filterGameType = null, 
       ? `/dashboard/games/web?project=${p.id}`
       : `/dashboard/games/app?project=${p.id}`;
     onClose?.();
-    // Navigate then force-refresh so the studio mounts and reads the project param fresh
+    // Plain navigate is enough — studios listen to location.search via useLocation
+    // and re-fetch the project automatically when the URL changes.
     navigate(path);
-    // Small delay then reload (only needed if we're already on the same route)
-    setTimeout(() => {
-      if (window.location.search.includes(`project=${p.id}`)) {
-        // Already loaded — nothing to do.
-      } else {
-        window.location.href = path; // safe fallback
-      }
-    }, 50);
   };
 
   const accent = {
