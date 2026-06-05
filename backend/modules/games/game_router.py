@@ -1065,7 +1065,7 @@ def create_game_router(db, get_current_user):
     @router.get("/projects")
     async def list_user_projects(user=Depends(get_current_user), game_type: Optional[str] = None):
         from modules.games.billing import get_project_storage_info
-        query = {"user_id": user["user_id"]}
+        query = {"user_id": user["user_id"], "deleted_at": {"$in": [None, ""]}}
         if game_type:
             query["game_type"] = game_type
         cursor = db.game_projects.find(query, {"_id": 0}).sort("created_at", -1)
@@ -1090,6 +1090,154 @@ def create_game_router(db, get_current_user):
                 "asset_count": sum(len(p.get("assets", {}).get(k, [])) for k in ("images", "models3d", "audio", "videos")),
             })
         return {"projects": items}
+
+    # ───────────────────────────────────────────────────────────
+    # 🗑️ Soft-delete & restore — 30-day trash bin
+    # ───────────────────────────────────────────────────────────
+    TRASH_DAYS = 30
+
+    @router.delete("/project/{project_id}")
+    async def soft_delete_project(project_id: str, user=Depends(get_current_user)):
+        """Move project to trash. Auto-purged after 30 days. Restorable until then."""
+        r = await db.game_projects.update_one(
+            {"id": project_id, "user_id": user["user_id"]},
+            {"$set": {"deleted_at": datetime.now(timezone.utc).isoformat()}},
+        )
+        if r.matched_count == 0:
+            raise HTTPException(404, "Project not found")
+        return {"ok": True, "trashed": True, "expires_in_days": TRASH_DAYS}
+
+    @router.post("/project/{project_id}/restore")
+    async def restore_project(project_id: str, user=Depends(get_current_user)):
+        """Restore a trashed project."""
+        r = await db.game_projects.update_one(
+            {"id": project_id, "user_id": user["user_id"]},
+            {"$set": {"deleted_at": None}},
+        )
+        if r.matched_count == 0:
+            raise HTTPException(404, "Project not found")
+        return {"ok": True, "restored": True}
+
+    @router.delete("/project/{project_id}/asset/{asset_id}")
+    async def soft_delete_asset(project_id: str, asset_id: str, user=Depends(get_current_user)):
+        """Soft-delete an asset (image / 3d / audio / video) by stamping deleted_at."""
+        project = await db.game_projects.find_one({"id": project_id, "user_id": user["user_id"]})
+        if not project:
+            raise HTTPException(404, "Project not found")
+        now_iso = datetime.now(timezone.utc).isoformat()
+        # Update inside assets buckets
+        modified = False
+        assets = project.get("assets") or {}
+        for bucket in ("images", "models3d", "audio", "videos"):
+            items = assets.get(bucket) or []
+            for a in items:
+                if a.get("id") == asset_id and not a.get("deleted_at"):
+                    a["deleted_at"] = now_iso
+                    modified = True
+            if modified:
+                await db.game_projects.update_one(
+                    {"id": project_id},
+                    {"$set": {f"assets.{bucket}": items}},
+                )
+                break
+        # Also stamp the asset inside any phase message's generated_assets so chat history reflects deletion
+        phases = project.get("phases") or {}
+        for ph_id, ph in phases.items():
+            msgs = ph.get("messages") or []
+            ph_modified = False
+            for m in msgs:
+                for a in (m.get("generated_assets") or []):
+                    if a.get("id") == asset_id and not a.get("deleted_at"):
+                        a["deleted_at"] = now_iso
+                        ph_modified = True
+            if ph_modified:
+                await db.game_projects.update_one(
+                    {"id": project_id},
+                    {"$set": {f"phases.{ph_id}.messages": msgs}},
+                )
+                modified = True
+        if not modified:
+            raise HTTPException(404, "Asset not found")
+        return {"ok": True, "trashed": True, "expires_in_days": TRASH_DAYS}
+
+    @router.post("/project/{project_id}/asset/{asset_id}/restore")
+    async def restore_asset(project_id: str, asset_id: str, user=Depends(get_current_user)):
+        """Restore a soft-deleted asset."""
+        project = await db.game_projects.find_one({"id": project_id, "user_id": user["user_id"]})
+        if not project:
+            raise HTTPException(404, "Project not found")
+        modified = False
+        assets = project.get("assets") or {}
+        for bucket in ("images", "models3d", "audio", "videos"):
+            items = assets.get(bucket) or []
+            for a in items:
+                if a.get("id") == asset_id and a.get("deleted_at"):
+                    a["deleted_at"] = None
+                    modified = True
+            if modified:
+                await db.game_projects.update_one(
+                    {"id": project_id},
+                    {"$set": {f"assets.{bucket}": items}},
+                )
+                break
+        phases = project.get("phases") or {}
+        for ph_id, ph in phases.items():
+            msgs = ph.get("messages") or []
+            ph_modified = False
+            for m in msgs:
+                for a in (m.get("generated_assets") or []):
+                    if a.get("id") == asset_id and a.get("deleted_at"):
+                        a["deleted_at"] = None
+                        ph_modified = True
+            if ph_modified:
+                await db.game_projects.update_one(
+                    {"id": project_id},
+                    {"$set": {f"phases.{ph_id}.messages": msgs}},
+                )
+                modified = True
+        if not modified:
+            raise HTTPException(404, "Asset not found")
+        return {"ok": True, "restored": True}
+
+    @router.get("/trash")
+    async def list_trash(user=Depends(get_current_user)):
+        """List all soft-deleted projects + assets for the current user (≤30 days old)."""
+        from datetime import timedelta
+        cutoff = (datetime.now(timezone.utc) - timedelta(days=TRASH_DAYS)).isoformat()
+        # Trashed projects (not yet purged)
+        trashed_projects = []
+        async for p in db.game_projects.find(
+            {"user_id": user["user_id"], "deleted_at": {"$gte": cutoff}}, {"_id": 0}
+        ).sort("deleted_at", -1):
+            trashed_projects.append({
+                "id": p["id"],
+                "title": p.get("title", ""),
+                "description": (p.get("description") or "")[:120],
+                "game_type": p.get("game_type"),
+                "deleted_at": p.get("deleted_at"),
+            })
+        # Trashed assets across all (still-alive) projects
+        trashed_assets = []
+        async for p in db.game_projects.find(
+            {"user_id": user["user_id"], "deleted_at": {"$in": [None, ""]}}, {"_id": 0}
+        ):
+            for bucket in ("images", "models3d", "audio", "videos"):
+                for a in (p.get("assets", {}) or {}).get(bucket, []) or []:
+                    if a.get("deleted_at") and a["deleted_at"] >= cutoff:
+                        trashed_assets.append({
+                            "id": a["id"],
+                            "project_id": p["id"],
+                            "project_title": p.get("title", ""),
+                            "name": a.get("name") or a.get("prompt", "")[:80],
+                            "type": a.get("type"),
+                            "image_url": a.get("image_url"),
+                            "audio_url": a.get("audio_url"),
+                            "video_url": a.get("video_url"),
+                            "model_url": a.get("model_url"),
+                            "cdn_url": a.get("cdn_url"),
+                            "deleted_at": a["deleted_at"],
+                        })
+        return {"projects": trashed_projects, "assets": trashed_assets, "expires_in_days": TRASH_DAYS}
     
     # ───────────────────────────────────────────────────────────
     # 💰 GET /project/{project_id}/billing — storage usage + tier info

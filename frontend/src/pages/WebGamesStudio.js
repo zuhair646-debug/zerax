@@ -227,6 +227,27 @@ export default function WebGamesStudio({ user }) {
     }
   };
 
+  // 🗑️ Soft-delete asset
+  const handleDeleteAsset = async (assetId) => {
+    if (!project?.id) return;
+    if (!window.confirm('نقل الأصل لسلة المهملات؟ (قابل للاسترداد 30 يوم)')) return;
+    try {
+      const res = await fetch(`${API}/api/games/project/${project.id}/asset/${assetId}`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) throw new Error('Failed to delete');
+      const projectRes = await fetch(`${API}/api/games/project/${project.id}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const projectData = await projectRes.json();
+      setProject(projectData.project);
+      toast.success('🗑️ تم النقل لسلة المهملات');
+    } catch (e) {
+      toast.error('فشل الحذف');
+    }
+  };
+
   const phaseIcon = (id) => {
     const icons = {
       discovery: '🔍', mechanics: '⚙️', characters: '🎭',
@@ -620,14 +641,23 @@ export default function WebGamesStudio({ user }) {
                   audio: { label: '🎵 موسيقى وصوتيات معتمدة', color: 'violet' },
                   videos: { label: '🎬 فيديوهات معتمدة', color: 'rose' },
                 }).map(([bucket, meta]) => {
-                  const items = (allAssets[bucket] || []).filter(a => a.approved);
+                  const items = (allAssets[bucket] || []).filter(a => a.approved && !a.deleted_at);
                   if (items.length === 0) return null;
                   return (
                     <div key={bucket} className="space-y-2">
                       <h3 className={`text-sm font-bold text-${meta.color}-300`}>{meta.label} · {items.length}</h3>
                       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
                         {items.map(a => (
-                          <div key={a.id} className={`rounded-lg border border-${meta.color}-500/30 bg-black/30 overflow-hidden`}>
+                          <div key={a.id} className={`relative rounded-lg border border-${meta.color}-500/30 bg-black/30 overflow-hidden group`}>
+                            <button
+                              type="button"
+                              onClick={(e) => { e.stopPropagation(); handleDeleteAsset(a.id); }}
+                              data-testid={`delete-asset-${a.id}`}
+                              title="نقل لسلة المهملات"
+                              className="absolute top-1.5 left-1.5 z-10 w-7 h-7 rounded-md bg-black/70 hover:bg-rose-500/80 border border-white/20 text-white opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center"
+                            >
+                              <X className="w-4 h-4" />
+                            </button>
                             {a.image_url && (
                               <SafeAssetImage
                                 src={`${API}${a.image_url}`}
@@ -903,7 +933,8 @@ export default function WebGamesStudio({ user }) {
           <h2 className="font-bold mb-3 text-amber-400">🎨 مكتبة الأصول</h2>
           
           {Object.entries(allAssets).map(([type, assets]) => {
-            if (assets.length === 0) return null;
+            const visibleAssets = (assets || []).filter(a => !a?.deleted_at);
+            if (visibleAssets.length === 0) return null;
             
             const typeIcons = {
               characters: <Package className="w-4 h-4" />,
@@ -920,16 +951,25 @@ export default function WebGamesStudio({ user }) {
                   <span>{type}</span>
                 </div>
                 <div className="space-y-2">
-                  {assets.map(asset => (
+                  {visibleAssets.map(asset => (
                     <div
                       key={asset.id}
-                      className={`p-3 rounded-lg border ${
+                      className={`relative p-3 rounded-lg border ${
                         asset.approved
                           ? 'bg-green-500/10 border-green-500/30'
                           : 'bg-black/20 border-white/10'
                       }`}
                     >
-                      <div className="text-sm font-bold mb-1">{asset.name}</div>
+                      <button
+                        type="button"
+                        onClick={() => handleDeleteAsset(asset.id)}
+                        data-testid={`delete-asset-${asset.id}`}
+                        title="نقل لسلة المهملات"
+                        className="absolute top-1.5 left-1.5 w-6 h-6 rounded-md bg-black/40 hover:bg-rose-500/30 border border-white/10 hover:border-rose-400/40 text-zinc-400 hover:text-rose-200 flex items-center justify-center"
+                      >
+                        <X className="w-3.5 h-3.5" />
+                      </button>
+                      <div className="text-sm font-bold mb-1 pe-7">{asset.name}</div>
                       <div className="text-xs text-zinc-500 mb-2">{asset.description}</div>
                       {!asset.approved && (
                         <div className="flex gap-2">
