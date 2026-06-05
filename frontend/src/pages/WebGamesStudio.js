@@ -7,6 +7,8 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import TechInfoModal from '@/components/TechInfoModal';
+import VoiceRecorderButton from '@/components/VoiceRecorderButton';
+import QuickActions from '@/components/QuickActions';
 
 const API = process.env.REACT_APP_BACKEND_URL;
 
@@ -463,6 +465,13 @@ export default function WebGamesStudio({ user }) {
 
           {/* Input */}
           <div className="border-t border-white/10 p-4 bg-zinc-900/50">
+            {/* Quick Action Suggestions */}
+            <QuickActions
+              currentPhase={activePhase}
+              accentColor="amber"
+              onSelect={(prompt) => setMessage(prompt)}
+            />
+
             {attachments.length > 0 && (
               <div className="mb-3 flex gap-2 flex-wrap">
                 {attachments.map((file, i) => (
@@ -477,7 +486,7 @@ export default function WebGamesStudio({ user }) {
               </div>
             )}
 
-            <div className="flex gap-3">
+            <div className="flex gap-2 sm:gap-3">
               <input
                 type="file"
                 ref={fileInputRef}
@@ -488,21 +497,30 @@ export default function WebGamesStudio({ user }) {
               <button
                 onClick={() => fileInputRef.current?.click()}
                 className="px-4 py-3 bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl"
+                data-testid="attach-file-btn"
+                title="أرفق ملف"
               >
                 <Paperclip className="w-5 h-5" />
               </button>
+              <VoiceRecorderButton
+                accentColor="amber"
+                disabled={loading}
+                onTranscript={(text) => setMessage((m) => (m ? `${m.trim()} ${text}` : text))}
+              />
               <input
                 type="text"
-                placeholder="اكتب رسالتك هنا..."
+                placeholder="اكتب أو سجّل صوت..."
                 value={message}
                 onChange={e => setMessage(e.target.value)}
                 onKeyDown={e => e.key === 'Enter' && !e.shiftKey && handleSendMessage()}
                 className="flex-1 bg-black/40 border border-white/15 rounded-xl px-4 py-3 outline-none focus:border-amber-400"
+                data-testid="chat-input"
               />
               <button
                 onClick={handleSendMessage}
                 disabled={loading || (!message.trim() && attachments.length === 0)}
                 className="px-6 py-3 bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-400 hover:to-orange-500 disabled:from-zinc-700 disabled:to-zinc-800 text-black font-bold rounded-xl flex items-center gap-2"
+                data-testid="chat-send-btn"
               >
                 {loading ? (
                   <Loader2 className="w-5 h-5 animate-spin" />
