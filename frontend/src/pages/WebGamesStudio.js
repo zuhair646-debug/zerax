@@ -10,6 +10,7 @@ import TechInfoModal from '@/components/TechInfoModal';
 import VoiceRecorderButton from '@/components/VoiceRecorderButton';
 import QuickActions from '@/components/QuickActions';
 import StorageBadge from '@/components/StorageBadge';
+import ImageLightbox from '@/components/ImageLightbox';
 
 const API = process.env.REACT_APP_BACKEND_URL;
 
@@ -31,6 +32,7 @@ export default function WebGamesStudio({ user }) {
   const [infoTech, setInfoTech] = useState(null); // tech ID for info modal
   const [activeTab, setActiveTab] = useState('chat'); // chat | live | approved
   const [resuming, setResuming] = useState(false);
+  const [lightbox, setLightbox] = useState(null); // {src, alt}
   
   const chatEndRef = useRef(null);
   const fileInputRef = useRef(null);
@@ -339,6 +341,16 @@ export default function WebGamesStudio({ user }) {
             onSelect={(id) => setSelectedTech(id)}
           />
         )}
+
+        {/* Image Lightbox — click any image to enlarge */}
+        {lightbox && (
+          <ImageLightbox
+            src={lightbox.src}
+            alt={lightbox.alt}
+            downloadName={`${(lightbox.alt || 'asset').slice(0, 40).replace(/\s+/g, '_')}.png`}
+            onClose={() => setLightbox(null)}
+          />
+        )}
       </div>
     );
   }
@@ -557,7 +569,9 @@ export default function WebGamesStudio({ user }) {
                         {items.map(a => (
                           <div key={a.id} className={`rounded-lg border border-${meta.color}-500/30 bg-black/30 overflow-hidden`}>
                             {a.image_url && (
-                              <img src={`${API}${a.image_url}`} alt={a.name} className="w-full aspect-square object-cover" loading="lazy" />
+                              <img src={`${API}${a.image_url}`} alt={a.name}
+                                   onClick={() => setLightbox({ src: `${API}${a.image_url}`, alt: a.name })}
+                                   className="w-full aspect-square object-cover cursor-zoom-in hover:opacity-90 transition-opacity" loading="lazy" />
                             )}
                             {a.model_url && (
                               <a href={`https://gltf-viewer.donmccurdy.com/?model=${encodeURIComponent(`${API}${a.model_url}`)}`} target="_blank" rel="noopener noreferrer"
@@ -670,7 +684,8 @@ export default function WebGamesStudio({ user }) {
                             <div key={a.id} className="border border-amber-500/20 rounded-xl overflow-hidden bg-black/30">
                               {isImg && fullUrl && (
                                 <img src={fullUrl} alt={a.name} loading="lazy"
-                                     className="w-full max-w-md object-cover"
+                                     onClick={() => setLightbox({ src: fullUrl, alt: a.name })}
+                                     className="w-full max-w-md object-cover cursor-zoom-in hover:opacity-90 transition-opacity"
                                      data-testid={`generated-asset-${a.id}`} />
                               )}
                               {is3D && fullUrl && (
@@ -878,6 +893,16 @@ export default function WebGamesStudio({ user }) {
           )}
         </div>
       </div>
+
+      {/* Image Lightbox for chat step */}
+      {lightbox && (
+        <ImageLightbox
+          src={lightbox.src}
+          alt={lightbox.alt}
+          downloadName={`${(lightbox.alt || 'asset').slice(0, 40).replace(/\s+/g, '_')}.png`}
+          onClose={() => setLightbox(null)}
+        />
+      )}
     </div>
   );
 }

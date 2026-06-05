@@ -500,8 +500,8 @@ def create_game_router(db, get_current_user):
    - الأسماء التقنية وأسماء الـAPIs بالإنجليزية (Three.js, Phaser, Node.js)
    - لا تكتب كود طويل في مرحلة Discovery — الكود يجي في مرحلة Programming
 
-**8. ذاكرة العمل**
-   عندك سجل المحادثة كامل ولديك Previously Approved Assets. لا تعيد طرح ما تم اعتماده.
+**8. ذاكرة العمل + Vision**
+   عندك سجل المحادثة كامل + Previously Approved Assets. وكذلك **تشوف فعلياً** آخر ٣ صور ولّدتها (مدمجة في رسالة المستخدم تلقائياً كـimage blocks). لما المستخدم يقول "هذي الصورة مش جودة" تقدر تحلّلها بصرياً وتقترح تعديل دقيق (مثلاً: "أشوف الزاوية غامقة جداً، خلّيني أزيد إضاءة الـrim light"). لا تعيد طرح ما تم اعتماده.
 
 ═══════════════════════════════════════════════════════════════
 🎯 **في كل رد التزم بهذا الترتيب**:
@@ -526,12 +526,40 @@ def create_game_router(db, get_current_user):
         
         # Call Gemini (with Claude fallback if quota exceeded)
         ai_message = None
+        # ─── VISION: include last 3 generated images so AI can SEE its previous outputs ───
+        vision_parts = []
+        try:
+            import base64 as _b64
+            recent_imgs = []
+            phase_messages = project.get("phases", {}).get(phase_id, {}).get("messages", [])
+            for past_msg in reversed(phase_messages[-5:]):
+                for a in (past_msg.get("generated_assets") or []):
+                    if a.get("type") == "image" and a.get("image_url"):
+                        recent_imgs.append(a)
+                        if len(recent_imgs) >= 3:
+                            break
+                if len(recent_imgs) >= 3:
+                    break
+            for a in recent_imgs:
+                # Convert API URL to local file path
+                # image_url is "/api/games/asset-image/{pid}/{aid}.png"
+                fname = a["image_url"].rsplit("/", 1)[-1]
+                fpath = f"/app/backend/uploads/games/{project_id}/assets/{fname}"
+                if os.path.exists(fpath) and os.path.getsize(fpath) < 7_500_000:  # < 7.5 MB safety
+                    with open(fpath, "rb") as f:
+                        b64 = _b64.b64encode(f.read()).decode()
+                    vision_parts.append({"inline_data": {"mime_type": "image/png", "data": b64}})
+            if vision_parts:
+                vision_parts.append({"text": f"(أعلاه آخر {len(vision_parts)} صور ولّدتها — اعرضها بصرياً قبل ما تقترح التعديل القادم.)"})
+                logger.info(f"[games][vision] attached {len(vision_parts)-1} images for project {project_id}")
+        except Exception as ve:
+            logger.warning(f"[games] vision context build failed: {ve}")
+
         try:
             async with httpx.AsyncClient(timeout=120.0) as client:
                 gemini_url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={GEMINI_KEY}"
                 
-                parts = [{"text": message}]
-                # TODO: Add image support if attachments contain images
+                parts = vision_parts + [{"text": message}]
                 
                 response = await client.post(gemini_url, json={
                     "system_instruction": {"parts": [{"text": system_prompt}]},

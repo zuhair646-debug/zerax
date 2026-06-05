@@ -10,6 +10,7 @@ import TechInfoModal from '@/components/TechInfoModal';
 import VoiceRecorderButton from '@/components/VoiceRecorderButton';
 import QuickActions from '@/components/QuickActions';
 import StorageBadge from '@/components/StorageBadge';
+import ImageLightbox from '@/components/ImageLightbox';
 
 const API = process.env.REACT_APP_BACKEND_URL;
 
@@ -29,6 +30,7 @@ export default function AppGamesStudio({ user }) {
   const [loading, setLoading] = useState(false);
   const [activePhase, setActivePhase] = useState('discovery');
   const [infoTech, setInfoTech] = useState(null);
+  const [lightbox, setLightbox] = useState(null);
   
   const chatEndRef = useRef(null);
   const fileInputRef = useRef(null);
@@ -428,7 +430,8 @@ export default function AppGamesStudio({ user }) {
                             <div key={a.id} className="border border-blue-500/20 rounded-xl overflow-hidden bg-black/30">
                               {isImg && fullUrl && (
                                 <img src={fullUrl} alt={a.name} loading="lazy"
-                                     className="w-full max-w-md object-cover"
+                                     onClick={() => setLightbox({ src: fullUrl, alt: a.name })}
+                                     className="w-full max-w-md object-cover cursor-zoom-in hover:opacity-90 transition-opacity"
                                      data-testid={`generated-asset-${a.id}`} />
                               )}
                               {is3D && fullUrl && (
@@ -594,6 +597,14 @@ export default function AppGamesStudio({ user }) {
           )}
         </div>
       </div>
+      {lightbox && (
+        <ImageLightbox
+          src={lightbox.src}
+          alt={lightbox.alt}
+          downloadName={`${(lightbox.alt || 'asset').slice(0, 40).replace(/\s+/g, '_')}.png`}
+          onClose={() => setLightbox(null)}
+        />
+      )}
     </div>
   );
 }
