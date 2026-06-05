@@ -127,6 +127,10 @@ from .code_cache import (
     cache_summarize, cache_preview, CACHE_PROMPT_RULES,
     bind_db as _bind_cache_db, annotate_read as _cache_annotate_read,
 )
+from .superpowers import (
+    SUPERPOWERS_ANTHROPIC_TOOLS, SUPERPOWERS_HANDLERS, SUPERPOWERS_TOOL_DEFS,
+    SUPERPOWERS_PROMPT_RULES,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -1547,7 +1551,7 @@ ANTHROPIC_TOOLS = [
         "description": "EMERGENCY: if the latest deployment failed and you can't fix it quickly, this finds the last SUCCESS commit on Railway and force-pushes to it, restoring the platform. Use as a last resort when stuck.",
         "input_schema": {"type": "object", "properties": {}, "required": []},
     },
-] + EXTRA_ANTHROPIC_TOOLS + UNIVERSE_ANTHROPIC_TOOLS + QUALITY_ANTHROPIC_TOOLS + INDEX_ANTHROPIC_TOOLS + SAFETY_ANTHROPIC_TOOLS + LEARNING_ANTHROPIC_TOOLS + AUTONOMY_ANTHROPIC_TOOLS + OPS_ANTHROPIC_TOOLS + MEMORY_ANTHROPIC_TOOLS + SANDBOX_ANTHROPIC_TOOLS + INTEGRATIONS_ANTHROPIC_TOOLS + WEB_SEARCH_ANTHROPIC_TOOLS + RAILWAY_ANTHROPIC_TOOLS + VERCEL_ANTHROPIC_TOOLS + ROUTER_ANTHROPIC_TOOLS + CACHE_ANTHROPIC_TOOLS + [
+] + EXTRA_ANTHROPIC_TOOLS + UNIVERSE_ANTHROPIC_TOOLS + QUALITY_ANTHROPIC_TOOLS + INDEX_ANTHROPIC_TOOLS + SAFETY_ANTHROPIC_TOOLS + LEARNING_ANTHROPIC_TOOLS + AUTONOMY_ANTHROPIC_TOOLS + OPS_ANTHROPIC_TOOLS + MEMORY_ANTHROPIC_TOOLS + SANDBOX_ANTHROPIC_TOOLS + INTEGRATIONS_ANTHROPIC_TOOLS + WEB_SEARCH_ANTHROPIC_TOOLS + RAILWAY_ANTHROPIC_TOOLS + VERCEL_ANTHROPIC_TOOLS + ROUTER_ANTHROPIC_TOOLS + CACHE_ANTHROPIC_TOOLS + SUPERPOWERS_ANTHROPIC_TOOLS + [
     # ══ Media generation (Nano Banana, ElevenLabs, Sora, Playwright) ══
     {
         "name": "generate_image",
@@ -1698,6 +1702,8 @@ TOOL_HANDLERS.update(VERCEL_TOOL_HANDLERS)
 TOOL_HANDLERS.update(ROUTER_TOOL_HANDLERS)
 # Register Code Cache tools (token-savings: file + semantic Q&A cache)
 TOOL_HANDLERS.update(CACHE_TOOL_HANDLERS)
+# Register Superpowers tools (project_context / screenshot_url / plan_* / update_prd / project_health)
+TOOL_HANDLERS.update(SUPERPOWERS_HANDLERS)
 
 # db_query is bound to the live MongoDB at router creation time
 _db_query_bound: Optional[Any] = None
@@ -2767,7 +2773,7 @@ async def _autocoder_stream(messages: List[Dict[str, Any]], model: str = "claude
         lessons_block = await build_lessons_for_prompt(max_lessons=12)
     except Exception:
         lessons_block = ""
-    sys_prompt_full = AUTOCODER_SYSTEM_PROMPT + AUTONOMY_PROMPT_RULES + OPS_PROMPT_RULES + QUALITY_PROMPT_RULES + INDEX_PROMPT_RULES + SAFETY_PROMPT_RULES + LEARNING_PROMPT_RULES + (env_banner or "") + build_atlas_for_prompt() + build_atlas_v2_for_prompt() + build_universe_for_prompt() + lessons_block
+    sys_prompt_full = AUTOCODER_SYSTEM_PROMPT + AUTONOMY_PROMPT_RULES + OPS_PROMPT_RULES + QUALITY_PROMPT_RULES + INDEX_PROMPT_RULES + SAFETY_PROMPT_RULES + LEARNING_PROMPT_RULES + SUPERPOWERS_PROMPT_RULES + (env_banner or "") + build_atlas_for_prompt() + build_atlas_v2_for_prompt() + build_universe_for_prompt() + lessons_block
     if model == "groq":
         groq_key = os.environ.get("GROQ_API_KEY", "").strip()
         async for evt in stream_via_groq(
@@ -2965,7 +2971,7 @@ async def _stream_direct_anthropic(anthropic_msgs: List[Dict[str, Any]], api_key
         task_brief = await build_session_brief(max_tasks=3)
     except Exception:
         task_brief = ""
-    sys_prompt_text = AUTOCODER_SYSTEM_PROMPT + AUTONOMY_PROMPT_RULES + OPS_PROMPT_RULES + QUALITY_PROMPT_RULES + INDEX_PROMPT_RULES + SAFETY_PROMPT_RULES + LEARNING_PROMPT_RULES + MEMORY_PROMPT_RULES + SANDBOX_PROMPT_RULES + WEB_SEARCH_PROMPT_RULES + ROUTER_PROMPT_RULES + CACHE_PROMPT_RULES + (env_banner or "") + build_atlas_for_prompt() + build_atlas_v2_for_prompt() + build_universe_for_prompt() + lessons_block + task_brief
+    sys_prompt_text = AUTOCODER_SYSTEM_PROMPT + AUTONOMY_PROMPT_RULES + OPS_PROMPT_RULES + QUALITY_PROMPT_RULES + INDEX_PROMPT_RULES + SAFETY_PROMPT_RULES + LEARNING_PROMPT_RULES + MEMORY_PROMPT_RULES + SANDBOX_PROMPT_RULES + WEB_SEARCH_PROMPT_RULES + ROUTER_PROMPT_RULES + CACHE_PROMPT_RULES + SUPERPOWERS_PROMPT_RULES + (env_banner or "") + build_atlas_for_prompt() + build_atlas_v2_for_prompt() + build_universe_for_prompt() + lessons_block + task_brief
     system_blocks = [
         {"type": "text", "text": sys_prompt_text, "cache_control": {"type": "ephemeral"}}
     ]
@@ -3148,11 +3154,24 @@ async def _stream_direct_anthropic(anthropic_msgs: List[Dict[str, Any]], api_key
                    "ok": result.get("ok", False),
                    "summary": _summarize(tu["name"], result),
                    "preview": _preview_for_ui(tu["name"], result)}
-            tool_results_blocks.append({
-                "type": "tool_result",
-                "tool_use_id": tu["id"],
-                "content": json.dumps(_trim_result_for_llm(result), ensure_ascii=False)[:60000],
-            })
+            # Special handling: screenshot_url → embed image as Vision block so Claude SEES the screenshot
+            if tu["name"] == "screenshot_url" and result.get("ok") and result.get("image_b64"):
+                img_b64 = result.get("image_b64") or ""
+                meta = {k: v for k, v in result.items() if k != "image_b64"}
+                tool_results_blocks.append({
+                    "type": "tool_result",
+                    "tool_use_id": tu["id"],
+                    "content": [
+                        {"type": "image", "source": {"type": "base64", "media_type": "image/jpeg", "data": img_b64}},
+                        {"type": "text", "text": json.dumps(meta, ensure_ascii=False)[:8000]},
+                    ],
+                })
+            else:
+                tool_results_blocks.append({
+                    "type": "tool_result",
+                    "tool_use_id": tu["id"],
+                    "content": json.dumps(_trim_result_for_llm(result), ensure_ascii=False)[:60000],
+                })
 
         msgs.append({"role": "user", "content": tool_results_blocks})
 
@@ -3333,6 +3352,19 @@ def _preview_for_ui(name: str, result: Dict[str, Any]) -> str:
         return cp
     if name == "read_file":
         return (result.get("content") or "")[:600]
+    if name == "screenshot_url":
+        kb = result.get("image_size_kb") or 0
+        title = result.get("title") or ""
+        errs = len(result.get("console_errors") or [])
+        return f"📸 {kb}KB · title={title[:60]} · console_errors={errs}"
+    if name == "project_context":
+        return (result.get("prd") or "")[:600]
+    if name == "project_health":
+        return (result.get("supervisor") or "")[:600]
+    if name in ("plan_create", "plan_update", "plan_show"):
+        return result.get("summary") or json.dumps(result, ensure_ascii=False)[:300]
+    if name == "update_prd":
+        return result.get("summary") or "PRD updated"
     if name == "list_dir":
         ents = result.get("entries") or []
         return "\n".join(f"{'📁' if e['type']=='dir' else '📄'} {e['name']}" for e in ents[:30])

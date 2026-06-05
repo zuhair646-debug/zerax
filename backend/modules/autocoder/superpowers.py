@@ -355,27 +355,40 @@ SUPERPOWERS_ANTHROPIC_TOOLS = [
 ]
 
 SUPERPOWERS_HANDLERS = {
-    "project_context": lambda args: tool_project_context(),
-    "screenshot_url": lambda args: tool_screenshot_url(
-        url=args.get("url", ""),
-        viewport=args.get("viewport", "1920x1080"),
-        wait_ms=int(args.get("wait_ms", 3000)),
-    ),
-    "plan_create": lambda args: tool_plan_create(
-        title=args.get("title", ""),
-        items=args.get("items", []),
-    ),
-    "plan_update": lambda args: tool_plan_update(
-        index=int(args.get("index", 0)),
-        done=args.get("done"),
-        skipped=args.get("skipped"),
-        new_text=args.get("new_text"),
-    ),
-    "plan_show": lambda args: tool_plan_show(),
-    "update_prd": lambda args: tool_update_prd(
-        section=args.get("section", ""),
-        content=args.get("content", ""),
-        append=args.get("append", True),
-    ),
-    "project_health": lambda args: tool_project_health(),
+    "project_context": tool_project_context,
+    "screenshot_url": tool_screenshot_url,
+    "plan_create": tool_plan_create,
+    "plan_update": tool_plan_update,
+    "plan_show": tool_plan_show,
+    "update_prd": tool_update_prd,
+    "project_health": tool_project_health,
 }
+
+
+SUPERPOWERS_PROMPT_RULES = """
+
+🦸‍♂️ **قدرات خارقة جديدة (Superpowers)** — استخدمها بذكاء:
+
+1. **`project_context`** — استدعها **أول شي** في أي محادثة جديدة (قبل أي قراءة ملف). ترجع لك PRD + CHANGELOG + design_guidelines + test_credentials + آخر 15 commit + git status. هذي ذاكرتك بين الجلسات. لا تعيد كل اشتغلت عليه قبل — اقرأ السياق أولاً.
+
+2. **`screenshot_url`** — بعد أي push على Vercel/Railway، خذ screenshot للـURL المنشور وتأكد إن التغيير ظهر فعلاً. الصورة ترجع base64 وأنت قادر تشوفها (Vision). افتح console_errors لو فيه أخطاء.
+
+3. **`plan_create` + `plan_update` + `plan_show`** — قبل أي مهمة معقدة (3+ خطوات)، أنشئ TodoList واضحة. حدّث كل خطوة لما تخلصها. هذا يخلّي المالك يشوف تقدّمك.
+
+4. **`update_prd`** — بعد كل feature مكتمل، أضف entry جديد لـ `/app/memory/PRD.md` (وعلى CHANGELOG.md تلقائياً) عشان الجلسات القادمة تعرف وش بنيت.
+
+5. **`project_health`** — قبل أي تشخيص لمشكلة، شغّلها لتفهم حالة supervisor + آخر backend/frontend logs + git status.
+
+⚡️ **القاعدة الذهبية**: لا تشتغل أعمى. اقرأ السياق → خطّط → نفّذ → تحقّق بـscreenshot → حدّث الـPRD.
+"""
+
+
+SUPERPOWERS_TOOL_DEFS: List[Dict[str, Any]] = [
+    {"name": "project_context", "desc": "read PRD/CHANGELOG/design/creds/commits", "args": []},
+    {"name": "screenshot_url", "desc": "capture live URL via playwright", "args": ["url", "viewport?", "wait_ms?"]},
+    {"name": "plan_create", "desc": "create TodoList", "args": ["title", "items"]},
+    {"name": "plan_update", "desc": "update TodoList item", "args": ["index", "done?", "skipped?", "new_text?"]},
+    {"name": "plan_show", "desc": "show current TodoList", "args": []},
+    {"name": "update_prd", "desc": "append entry to PRD.md + CHANGELOG.md", "args": ["section", "content", "append?"]},
+    {"name": "project_health", "desc": "supervisor+logs+git status", "args": []},
+]

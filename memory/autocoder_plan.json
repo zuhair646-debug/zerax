@@ -1,0 +1,23 @@
+{
+  "plan_id": "dd6bf936ecdd",
+  "title": "اختبار",
+  "items": [
+    {
+      "text": "أ",
+      "done": true,
+      "skipped": false
+    },
+    {
+      "text": "ب",
+      "done": false,
+      "skipped": false
+    },
+    {
+      "text": "ج",
+      "done": false,
+      "skipped": false
+    }
+  ],
+  "created_at": "2026-06-05T09:48:45.068062+00:00",
+  "updated_at": "2026-06-05T09:48:45.068348+00:00"
+}

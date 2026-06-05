@@ -1,5 +1,11 @@
 # Zitex AI Platform - PRD
 
+### 🆕 Jun 5 2026 — AutoCoder Superpowers wired ✅
+
+الـ7 أدوات (project_context, screenshot_url, plan_*, update_prd, project_health) صارت متاحة للـAutoCoder. screenshot_url يربط Vision passthrough تلقائياً.
+
+---
+
 ### 🆕 Jun 4, 2026 — UI ARCHITECTURE: Categorized Landing + AppBuilder + GamesHub ✅
 
 **طلب المستخدم**: تقسيم `LandingPage` لأقسام واضحة (مواقع/تطبيقات/ألعاب/ميديا) + `AppBuilder` موحّد بـ4 أوضاع (React Native / Flutter / Native / قابل للإكمال) **بسايدبار بدل tabs** + `GamesHub` placeholder.
