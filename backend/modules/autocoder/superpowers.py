@@ -91,7 +91,7 @@ async def tool_project_context() -> Dict[str, Any]:
 
 
 # ─── Tool 2: screenshot_url (Vision) ───────────────────────
-async def tool_screenshot_url(url: str, viewport: str = "1920x1080", wait_ms: int = 3000) -> Dict[str, Any]:
+async def tool_screenshot_url(url: str, viewport: str = "1920x1080", wait_ms: int = 5000) -> Dict[str, Any]:
     """Capture a screenshot of a live URL using Playwright.
 
     Returns base64-encoded JPEG. The AutoCoder router will convert this
@@ -119,11 +119,18 @@ async def main():
         page.on('console', lambda m: errors.append(f'[{{m.type}}] {{m.text[:200]}}') if m.type in ('error','warning') else None)
         page.on('pageerror', lambda e: errors.append(f'[pageerror] {{str(e)[:200]}}'))
         try:
-            await page.goto({url!r}, wait_until='domcontentloaded', timeout=25000)
+            # First domcontentloaded so we don't block forever on slow third-party scripts
+            await page.goto({url!r}, wait_until='domcontentloaded', timeout=45000)
+            # Then try to reach networkidle so React/SPAs finish rendering
+            try:
+                await page.wait_for_load_state('networkidle', timeout=15000)
+            except Exception:
+                pass
             await page.wait_for_timeout({wait_ms})
             img = await page.screenshot(type='jpeg', quality=55, full_page=False)
             title = await page.title()
             body_len = len(await page.locator('body').text_content() or '')
+            body_preview = (await page.locator('body').text_content() or '')[:600]
             url_final = page.url
         finally:
             await browser.close()
@@ -133,6 +140,7 @@ async def main():
             'title': title,
             'url_final': url_final,
             'body_len': body_len,
+            'body_preview': body_preview,
             'console_errors': errors[:20],
         }}))
 
@@ -142,7 +150,7 @@ asyncio.run(main())
             "python3", "-c", script,
             stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE,
         )
-        stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=60)
+        stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=90)
         if proc.returncode != 0:
             return {"ok": False, "error": f"playwright failed: {(stderr or b'').decode()[:500]}"}
         data = json.loads(stdout.decode())
@@ -153,10 +161,11 @@ asyncio.run(main())
             "title": data.get("title"),
             "url_final": data.get("url_final"),
             "body_text_length": data.get("body_len"),
+            "body_preview": data.get("body_preview", ""),
             "console_errors": data.get("console_errors", []),
             "summary": (
-                f"screenshot of {url} captured · title='{data.get('title','')}' · "
-                f"body_text={data.get('body_len',0)} chars · "
+                f"📸 screenshot of {url} · title='{(data.get('title') or '')[:50]}' · "
+                f"body={data.get('body_len',0)} chars · "
                 f"console_errors={len(data.get('console_errors',[]))}"
             ),
         }

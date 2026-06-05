@@ -2320,8 +2320,9 @@ def create_autocoder_router(db, get_current_user, require_owner):
                 yield f"data: {json.dumps({'type':'saved','conversation_id':conv_id, 'turn_cost': round(usage_total['cost_usd'], 4)})}\n\n"
             except asyncio.CancelledError:
                 # Client disconnected mid-stream → still save whatever we have so it's not lost.
+                # asyncio.shield() prevents the cancellation from killing the persist call itself.
                 try:
-                    await _persist_assistant_turn(extra_marker="⚠️ انقطع الاتصال")
+                    await asyncio.shield(_persist_assistant_turn(extra_marker="⚠️ انقطع الاتصال"))
                 except Exception:
                     pass
                 raise
@@ -2329,7 +2330,7 @@ def create_autocoder_router(db, get_current_user, require_owner):
                 logger.exception("[AUTOCODER] chat stream failed")
                 # Save any partial assistant text we accumulated before the failure
                 try:
-                    await _persist_assistant_turn(extra_marker=f"⚠️ خطأ: {str(e)[:120]}")
+                    await asyncio.shield(_persist_assistant_turn(extra_marker=f"⚠️ خطأ: {str(e)[:120]}"))
                 except Exception:
                     pass
                 # Friendly Arabic error for the user
