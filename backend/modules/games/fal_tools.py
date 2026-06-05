@@ -377,6 +377,22 @@ async def parse_and_generate_assets(
 
     The basic <<IMG: ...>> tag is NOT handled here (kept in game_router for backward compat).
     """
+    # 🎨 LoRA lookup — if this project has a trained style LoRA we'll route IMG_PRO through it
+    project_lora_url: Optional[str] = None
+    project_trigger_word: str = ""
+    if db is not None:
+        try:
+            _proj = await db.game_projects.find_one(
+                {"id": project_id},
+                {"lora.status": 1, "lora.lora_url": 1, "lora.trigger_word": 1},
+            )
+            _l = (_proj or {}).get("lora") or {}
+            if _l.get("status") == "ready" and _l.get("lora_url"):
+                project_lora_url = _l.get("lora_url")
+                project_trigger_word = _l.get("trigger_word") or ""
+        except Exception:
+            pass
+
     matches = TAG_RE.findall(ai_response)
     # 📊 Learn from unparsed tag attempts (anything with <<…>> brackets we didn't match)
     if db is not None:
@@ -413,7 +429,14 @@ async def parse_and_generate_assets(
         body = raw_body.strip()
         try:
             if tag_type == "IMG_PRO":
-                tasks.append(generate_flux_pro(body, project_id, style_profile=style_profile))
+                if project_lora_url:
+                    # Route through trained LoRA for style-locked output
+                    from modules.games.lora_training import generate_with_project_lora
+                    tasks.append(generate_with_project_lora(
+                        body, project_id, project_lora_url, project_trigger_word
+                    ))
+                else:
+                    tasks.append(generate_flux_pro(body, project_id, style_profile=style_profile))
             elif tag_type == "3D":
                 tasks.append(generate_3d_model(body, project_id))
             elif tag_type == "ANIMATE":

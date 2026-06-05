@@ -1377,6 +1377,49 @@ def create_game_router(db, get_current_user):
         except Exception as fal_err:
             logger.exception(f"[games] FAL tools failed: {fal_err}")
 
+        # 🩹 SAFETY NET: If AI promised an image ("الصورة جاهزة", "ولّدت", "إليك الصورة")
+        # but failed to write any <<IMG_PRO>> tag, force-generate from context.
+        if not generated_assets:
+            promise_phrases = [
+                "الصورة جاهزة", "الصورة فوق", "ولّدت", "ولدت الصورة", "إليك الصورة",
+                "هذه الصورة", "image is ready", "generated the image", "تم التوليد",
+            ]
+            ai_lower = (ai_message or "").lower()
+            promised = any(p in ai_message or p.lower() in ai_lower for p in promise_phrases)
+            has_any_tag = "<<img" in ai_lower or "<<3d" in ai_lower or "<<music" in ai_lower or "<<model" in ai_lower
+            if promised and not has_any_tag:
+                logger.warning(f"[games] AI promised image but no tag — triggering safety net for project {project_id}")
+                try:
+                    from modules.games.fal_tools import generate_flux_pro
+                    from modules.games.persistence import persist_bytes as _persist
+                    # Build a prompt from the user's intent (last 400 chars) + project context
+                    fallback_prompt = (
+                        f"{(project.get('title') or 'game scene')}: {(message or '')[:300]}. "
+                        f"Style: cinematic, ultra-detailed."
+                    )
+                    fa = await generate_flux_pro(fallback_prompt, project_id, style_profile=(project.get('style_profile') or 'stylized'))
+                    fa["phase_id"] = phase_id
+                    fa["safety_net"] = True
+                    raw_b = fa.pop("_bytes", None)
+                    if raw_b:
+                        try:
+                            await _persist(db, fa["id"], raw_b, "image/png", project_id)
+                        except Exception:
+                            pass
+                    generated_assets.append(fa)
+                    await db.game_projects.update_one(
+                        {"id": project_id},
+                        {"$push": {"assets.images": fa}}
+                    )
+                    # Append a short note so the user knows the AI tripped but we recovered
+                    ai_message = (ai_message or "") + (
+                        "\n\n_ℹ️ تم توليد الصورة تلقائياً عبر safety-net "
+                        "لأن AI نسي يكتب الوسم — تقدر تعدّلها أو ترفضها._"
+                    )
+                    logger.info(f"[games] safety-net generated asset {fa['id']} for project {project_id}")
+                except Exception as sn_err:
+                    logger.exception(f"[games] safety-net generation failed: {sn_err}")
+
         # 🧹 Strip ALL raw asset tags from the user-visible message so the user
         # never sees <<IMG_PRO ...>> or stray broken syntax. The generated assets
         # are returned separately in `generated_assets` and rendered as image cards.
@@ -2087,6 +2130,88 @@ def create_game_router(db, get_current_user):
         return {"items": items, "total": len(items)}
 
     # ───────────────────────────────────────────────────────────
+    # 🎨 LoRA STYLE TRAINING — train a project-specific Flux LoRA on
+    # the approved images so future generations stay 100% consistent.
+    # ───────────────────────────────────────────────────────────
+    @router.post("/project/{project_id}/train-style")
+    async def start_style_training(project_id: str, user=Depends(get_current_user)):
+        proj = await db.game_projects.find_one(
+            {"id": project_id, "user_id": user["user_id"]},
+            {"assets.images": 1, "lora": 1, "title": 1},
+        )
+        if not proj:
+            raise HTTPException(404, "Project not found")
+
+        # Block double-trigger while already in flight
+        cur = (proj.get("lora") or {})
+        if cur.get("status") in ("queued", "training"):
+            return {"ok": True, "already_running": True, **cur}
+
+        # Sanity-check we have enough approved images
+        imgs = ((proj.get("assets") or {}).get("images") or [])
+        approved = [a for a in imgs if a.get("approved")]
+        from modules.games.lora_training import MIN_TRAIN_IMAGES, run_style_training_background
+        if len(approved) < MIN_TRAIN_IMAGES:
+            raise HTTPException(
+                400,
+                f"تحتاج على الأقل {MIN_TRAIN_IMAGES} صور معتمدة لتدريب نمط (الحالي: {len(approved)})."
+            )
+
+        await db.game_projects.update_one(
+            {"id": project_id},
+            {"$set": {
+                "lora.status": "queued",
+                "lora.error": None,
+                "lora.started_at": datetime.now(timezone.utc).isoformat(),
+            }},
+        )
+
+        # Fire-and-forget background task. Training takes 5-10 min.
+        import asyncio as _aio
+        _aio.create_task(run_style_training_background(db, project_id))
+
+        return {
+            "ok": True,
+            "status": "queued",
+            "num_images": len(approved),
+            "message": "بدأ تدريب نمط الصور. خذ راحة ~5-10 دقايق ثم رجع تابع الحالة.",
+        }
+
+    @router.get("/project/{project_id}/train-style")
+    async def get_style_training_status(project_id: str, user=Depends(get_current_user)):
+        proj = await db.game_projects.find_one(
+            {"id": project_id, "user_id": user["user_id"]},
+            {"lora": 1, "assets.images": 1},
+        )
+        if not proj:
+            raise HTTPException(404, "Project not found")
+        cur = (proj.get("lora") or {})
+        imgs = ((proj.get("assets") or {}).get("images") or [])
+        approved_count = sum(1 for a in imgs if a.get("approved"))
+        return {
+            "ok": True,
+            "status": cur.get("status") or "idle",   # idle | queued | training | ready | error
+            "lora_url": cur.get("lora_url"),
+            "trigger_word": cur.get("trigger_word"),
+            "num_images": cur.get("num_images"),
+            "error": cur.get("error"),
+            "started_at": cur.get("started_at"),
+            "finished_at": cur.get("finished_at"),
+            "approved_images_available": approved_count,
+        }
+
+    @router.delete("/project/{project_id}/train-style")
+    async def reset_style_training(project_id: str, user=Depends(get_current_user)):
+        """Owner-only: wipe the trained LoRA so the project falls back to default Flux Pro Ultra."""
+        r = await db.game_projects.update_one(
+            {"id": project_id, "user_id": user["user_id"]},
+            {"$unset": {"lora": ""}},
+        )
+        if r.matched_count == 0:
+            raise HTTPException(404, "Project not found")
+        return {"ok": True, "reset": True}
+
+    # ───────────────────────────────────────────────────────────
     # 🩺 GET /health — public lightweight diagnostic for production debug
     # Returns version markers so the owner can verify backend deployment.
     # ───────────────────────────────────────────────────────────
@@ -2097,7 +2222,7 @@ def create_game_router(db, get_current_user):
         return {
             "ok": True,
             "service": "games",
-            "build_marker": "v6_2026_06_05_override_fix",  # bump when shipping features
+            "build_marker": "v7_2026_06_05_lora_style_training",  # bump when shipping features
             "features": {
                 "image_generation": True,
                 "vision_verification": True,
@@ -2108,6 +2233,7 @@ def create_game_router(db, get_current_user):
                 "soft_delete_trash": True,
                 "override_socratic_when_explicit": True,  # ← commit fd8f2de
                 "tag_parser_lenient": True,  # ← commit 0f7ddda
+                "lora_style_training": True,  # ← NEW: per-project Flux LoRA
             },
             "fal_configured": bool(os.environ.get("FAL_KEY")),
             "anthropic_configured": bool(os.environ.get("ANTHROPIC_API_KEY")),

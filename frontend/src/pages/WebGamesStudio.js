@@ -18,6 +18,7 @@ import SafeAssetImage from '@/components/games/SafeAssetImage';
 import BuildLiveButton from '@/components/games/BuildLiveButton';
 import QAAnalyzeButton from '@/components/games/QAAnalyzeButton';
 import EditAssetButton from '@/components/games/EditAssetButton';
+import StyleTrainingPanel from '@/components/games/StyleTrainingPanel';
 
 const API = process.env.REACT_APP_BACKEND_URL;
 
@@ -654,6 +655,11 @@ export default function WebGamesStudio({ user }) {
                   </h2>
                   <p className="text-xs text-zinc-400">كل صورة أو موديل أو صوت ضغطت ✓ عليه يظهر هنا بشكل دائم — حتى لو سكرت الموقع.</p>
                 </div>
+                <StyleTrainingPanel
+                  projectId={project?.id}
+                  approvedImagesCount={(allAssets.images || []).filter(a => a?.approved).length}
+                  accentColor="amber"
+                />
                 {Object.entries({
                   images: { label: '🎨 الصور المعتمدة', color: 'amber' },
                   models3d: { label: '🧊 موديلات 3D معتمدة', color: 'cyan' },
