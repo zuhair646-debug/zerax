@@ -305,6 +305,115 @@ async def _auto_refresh_notes(db, project_id: str):
 
 
 # ═══════════════════════════════════════════════════════════════
+# 📚 Async helper — Auto-extract & store a lesson learned from each
+# game-studio exchange. Reuses the AutoCoder learning journal so all
+# AI sub-systems share one growing brain visible at /admin/learning.
+# ═══════════════════════════════════════════════════════════════
+async def _auto_learn_from_exchange(
+    db,
+    project_id: str,
+    project_title: str,
+    game_type: str,
+    user_msg: str,
+    ai_msg: str,
+    actor_id: str,
+    had_uploads: bool,
+):
+    """Decide if this exchange contains a teachable signal; if yes, store
+    a concise lesson in `autocoder_lessons` so it appears in the admin
+    learning dashboard alongside AutoCoder's own lessons."""
+    try:
+        if not user_msg or not ai_msg or len(user_msg.strip()) < 5:
+            return
+        gemini_key = os.environ.get("GEMINI_API_KEY", "")
+        anthropic_key = os.environ.get("ANTHROPIC_API_KEY", "")
+        # Lightweight prompt — ask LLM to either extract a lesson or say "skip"
+        meta_prompt = (
+            "أنت محرر يبني journal تعلم لمساعد AI يبني ألعاب. "
+            "اقرأ تبادل المالك مع AI. لو فيه درس مفيد للمستقبل (تفضيل بصري، نمط أخطاء، "
+            "أسلوب يحبه المالك، خطوة سير عمل ذكية)، استخرج درساً واحداً قصيراً. لو لا، رد \"SKIP\".\n\n"
+            f"السياق: {game_type} game studio | المشروع: {project_title}\n"
+            f"المالك رفع صور مرجعية؟ {'نعم' if had_uploads else 'لا'}\n\n"
+            f"رسالة المالك: {user_msg[:800]}\n\n"
+            f"رد AI: {ai_msg[:1500]}\n\n"
+            "أجب بـ JSON فقط:\n"
+            "{\"skip\": true} → لو ما فيه درس\n"
+            "{\"skip\": false, \"summary\": \"≤120 حرف وصف للسياق\", \"lesson\": \"≤300 حرف الدرس بالعربي\", \"tags\": [\"game-studio\", \"web\" أو \"app\", بقية tags]} → لو فيه درس"
+        )
+        raw = ""
+        try:
+            if gemini_key:
+                async with httpx.AsyncClient(timeout=40.0) as cli:
+                    r = await cli.post(
+                        f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={gemini_key}",
+                        json={
+                            "contents": [{"parts": [{"text": meta_prompt}]}],
+                            "generationConfig": {"temperature": 0.2, "maxOutputTokens": 400, "responseMimeType": "application/json"},
+                        },
+                    )
+                    if r.status_code == 200:
+                        raw = (r.json().get("candidates", [{}])[0]
+                               .get("content", {}).get("parts", [{}])[0]
+                               .get("text", ""))
+            if not raw and anthropic_key:
+                async with httpx.AsyncClient(timeout=40.0) as cli:
+                    r = await cli.post(
+                        "https://api.anthropic.com/v1/messages",
+                        headers={"x-api-key": anthropic_key, "anthropic-version": "2023-06-01", "content-type": "application/json"},
+                        json={
+                            "model": "claude-sonnet-4-5-20250929",
+                            "max_tokens": 400,
+                            "messages": [{"role": "user", "content": meta_prompt}],
+                        },
+                    )
+                    if r.status_code == 200:
+                        blocks = r.json().get("content", [])
+                        raw = "".join(b.get("text", "") for b in blocks if b.get("type") == "text")
+        except Exception as le:
+            logger.warning(f"[games][auto-learn] LLM call failed: {le}")
+            return
+        if not raw:
+            return
+        import json as _json
+        import re as _re
+        # Strip potential ```json fences
+        cleaned = _re.sub(r"^```(?:json)?|```$", "", raw.strip(), flags=_re.MULTILINE).strip()
+        try:
+            parsed = _json.loads(cleaned)
+        except Exception:
+            return
+        if parsed.get("skip"):
+            return
+        summary = (parsed.get("summary") or "").strip()
+        lesson = (parsed.get("lesson") or "").strip()
+        if not summary or not lesson:
+            return
+        tags = parsed.get("tags") or []
+        if not isinstance(tags, list):
+            tags = []
+        tags = [str(t)[:30] for t in tags][:8]
+        if "game-studio" not in tags:
+            tags.append("game-studio")
+        if game_type and game_type not in tags:
+            tags.append(game_type)
+        # Store
+        try:
+            from modules.autocoder.learning import add_lesson
+            await add_lesson(
+                task_summary=summary[:400],
+                lesson=lesson[:1200],
+                source="user",
+                actor_id=actor_id,
+                tags=tags,
+            )
+            logger.info(f"[games][auto-learn] stored lesson for project {project_id} | tags={tags}")
+        except Exception as se:
+            logger.warning(f"[games][auto-learn] store failed: {se}")
+    except Exception as e:
+        logger.warning(f"[games][auto-learn] background exception: {e}")
+
+
+# ═══════════════════════════════════════════════════════════════
 # 🎯 Router Factory
 # ═══════════════════════════════════════════════════════════════
 def create_game_router(db, get_current_user):
@@ -696,17 +805,39 @@ def create_game_router(db, get_current_user):
 ═══════════════════════════════════════════════════════════════
 """
         
-        # Handle file uploads
+        # Handle file uploads — save to disk + GridFS, prepare base64 for vision
         attachments = []
+        uploaded_images_for_vision = []  # base64-encoded image dicts (for Gemini parts)
         for file in files:
             content = await file.read()
             filename = file.filename or "untitled"
-            # Store file
             file_path = f"/app/backend/uploads/games/{project_id}/{filename}"
             os.makedirs(os.path.dirname(file_path), exist_ok=True)
             with open(file_path, "wb") as f:
                 f.write(content)
             attachments.append({"filename": filename, "path": file_path, "size": len(content)})
+            # 🖼️ Encode images so the AI can actually SEE them, not just read filenames
+            lower = filename.lower()
+            if lower.endswith((".png", ".jpg", ".jpeg", ".webp", ".gif")) and len(content) < 7_500_000:
+                import base64 as _b64u
+                mime = "image/png"
+                if lower.endswith((".jpg", ".jpeg")):
+                    mime = "image/jpeg"
+                elif lower.endswith(".webp"):
+                    mime = "image/webp"
+                elif lower.endswith(".gif"):
+                    mime = "image/gif"
+                uploaded_images_for_vision.append({
+                    "inline_data": {"mime_type": mime, "data": _b64u.b64encode(content).decode()},
+                    "filename": filename,
+                })
+                # Also persist to GridFS so the reference survives container redeploys
+                try:
+                    from modules.games.persistence import persist_bytes as _persist_u
+                    ref_id = f"ref_{project_id}_{filename}"
+                    await _persist_u(db, ref_id, content, mime, project_id)
+                except Exception as _pe:
+                    logger.warning(f"[games] GridFS persist of user attachment failed: {_pe}")
         
         # ─── AI persistent notes: inject existing project notes into system_prompt ───
         existing_notes = project.get("ai_notes", "").strip()
@@ -747,6 +878,27 @@ def create_game_router(db, get_current_user):
         except Exception as ve:
             logger.warning(f"[games] vision context build failed: {ve}")
 
+        # 🔥 PRIORITY: User-uploaded reference images go FIRST (before AI's own outputs)
+        if uploaded_images_for_vision:
+            ref_block = []
+            ref_block.append({"text": (
+                f"═══ 🎯 صور مرجعية من المالك ({len(uploaded_images_for_vision)} صورة) ═══\n"
+                "هذه صور رفعها المالك كمرجع لما يبيه. مهمتك الإلزامية:\n"
+                "1. حلّل كل صورة بدقة عالية: نمط الألوان، التركيب الفني، الأسلوب (واقعي/كرتوني/3D/2D)، التفاصيل، الأجواء، الإضاءة.\n"
+                "2. اطلع منها مفاهيم بصرية محددة تطبّقها مباشرة في كل أصل قادم تولّده — لا تطلع برّا الصندوق.\n"
+                "3. ابدأ ردك بـ: \"شفت الصورة/الصور وفهمت منها: ...\" واذكر 3-4 ملاحظات دقيقة.\n"
+                "4. اسأل المالك أسئلة ذكية مبنية على ما شفته (مو أسئلة عامة)."
+            )})
+            for ref in uploaded_images_for_vision:
+                ref_block.append({"inline_data": ref["inline_data"]})
+            ref_block.append({"text": (
+                "═══ نهاية الصور المرجعية ═══\n"
+                "تذكير: أي توليد قادم لازم يطابق الـ style اللي شفته أعلاه."
+            )})
+            # Prepend so the model sees references BEFORE its own past outputs
+            vision_parts = ref_block + vision_parts
+            logger.info(f"[games][vision] user uploaded {len(uploaded_images_for_vision)} reference images for project {project_id}")
+
         try:
             async with httpx.AsyncClient(timeout=120.0) as client:
                 gemini_url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={GEMINI_KEY}"
@@ -778,6 +930,26 @@ def create_game_router(db, get_current_user):
                 anthropic_key = os.environ.get("ANTHROPIC_API_KEY", "")
                 if not anthropic_key:
                     raise RuntimeError("No fallback LLM available (ANTHROPIC_API_KEY missing)")
+                # Build multi-part content for Claude (text + images)
+                claude_content = []
+                # User-uploaded reference images get top priority
+                for ref in uploaded_images_for_vision:
+                    claude_content.append({
+                        "type": "image",
+                        "source": {
+                            "type": "base64",
+                            "media_type": ref["inline_data"]["mime_type"],
+                            "data": ref["inline_data"]["data"],
+                        },
+                    })
+                if uploaded_images_for_vision:
+                    claude_content.append({"type": "text", "text": (
+                        f"المالك رفع {len(uploaded_images_for_vision)} صورة مرجعية أعلاه. حلّلها بدقة "
+                        "(الأسلوب، الألوان، التفاصيل، الأجواء) واطلع منها مفاهيم بصرية تطبّقها مباشرة. "
+                        "ابدأ ردك بـ \"شفت الصورة وفهمت منها: ...\".\n\n"
+                    )})
+                claude_content.append({"type": "text", "text": message})
+
                 async with httpx.AsyncClient(timeout=120.0) as client:
                     claude_resp = await client.post(
                         "https://api.anthropic.com/v1/messages",
@@ -790,7 +962,7 @@ def create_game_router(db, get_current_user):
                             "model": "claude-sonnet-4-5-20250929",
                             "max_tokens": 4000,
                             "system": system_prompt,
-                            "messages": [{"role": "user", "content": message}],
+                            "messages": [{"role": "user", "content": claude_content}],
                         },
                     )
                     if claude_resp.status_code != 200:
@@ -985,6 +1157,23 @@ def create_game_router(db, get_current_user):
                 _aio.create_task(_auto_refresh_notes(db, project_id))
         except Exception as auto_err:
             logger.warning(f"[games] auto notes refresh skipped: {auto_err}")
+
+        # ─── 📚 Auto-learning hook: extract & store a lesson from this exchange ───
+        # Same MongoDB collection as AutoCoder learning journal — owner sees these at /admin/learning.
+        try:
+            import asyncio as _aio2
+            _aio2.create_task(_auto_learn_from_exchange(
+                db=db,
+                project_id=project_id,
+                project_title=project.get("title", ""),
+                game_type=project.get("game_type", "web"),
+                user_msg=message,
+                ai_msg=ai_message,
+                actor_id=user["user_id"],
+                had_uploads=len(uploaded_images_for_vision) > 0,
+            ))
+        except Exception as learn_err:
+            logger.warning(f"[games] auto-learn skipped: {learn_err}")
 
         return {
             "ok": True,
