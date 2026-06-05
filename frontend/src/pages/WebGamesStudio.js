@@ -157,7 +157,15 @@ export default function WebGamesStudio({ user }) {
       const projectData = await projectRes.json();
       setProject(projectData.project);
       
-      toast.success(approved ? '✅ تم الاعتماد' : '❌ تم الرفض');
+      if (approved) {
+        toast.success('✅ تم اعتماد الـAsset — الذكاء سيستخدمه في المراحل القادمة', {
+          duration: 4000
+        });
+      } else {
+        toast.error('❌ تم رفض الـAsset — يمكنك طلب تعديل في الشات', {
+          duration: 4000
+        });
+      }
     } catch (e) {
       toast.error(e.message);
     }
@@ -277,6 +285,14 @@ export default function WebGamesStudio({ user }) {
             <h1 className="font-bold text-lg">{project?.title}</h1>
             <p className="text-sm text-zinc-400">{currentPhaseInfo?.title}</p>
           </div>
+        </div>
+        
+        {/* Programming Type Badge */}
+        <div className="flex items-center gap-2 px-4 py-2 bg-amber-500/10 border border-amber-500/30 rounded-lg">
+          <Code className="w-4 h-4 text-amber-400" />
+          <span className="text-sm font-medium text-amber-300">
+            {programmingTypes.find(t => t.id === project?.programming_type)?.name || project?.programming_type}
+          </span>
         </div>
         <div className="flex items-center gap-3">
           {project?.preview_url && (

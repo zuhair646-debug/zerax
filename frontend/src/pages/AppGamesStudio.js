@@ -155,7 +155,15 @@ export default function AppGamesStudio({ user }) {
       const projectData = await projectRes.json();
       setProject(projectData.project);
       
-      toast.success(approved ? '✅ معتمد' : '❌ مرفوض');
+      if (approved) {
+        toast.success('✅ تم اعتماد الـAsset — الذكاء سيستخدمه في المراحل القادمة', {
+          duration: 4000
+        });
+      } else {
+        toast.error('❌ تم رفض الـAsset — يمكنك طلب تعديل في الشات', {
+          duration: 4000
+        });
+      }
     } catch (e) {
       toast.error(e.message);
     }
@@ -272,6 +280,14 @@ export default function AppGamesStudio({ user }) {
           </div>
         </div>
         <div className="flex items-center gap-3">
+          {/* Programming Type Badge */}
+          <div className="flex items-center gap-2 px-3 py-2 bg-amber-500/10 border border-amber-500/30 rounded-lg">
+            <Code className="w-4 h-4 text-amber-400" />
+            <span className="text-sm font-medium text-amber-300">
+              {programmingTypes.find(t => t.id === project?.programming_type)?.name || project?.programming_type}
+            </span>
+          </div>
+          
           {project?.preview_url && (
             <a href={project.preview_url} target="_blank" rel="noopener noreferrer"
                className="px-4 py-2 bg-blue-500/20 text-blue-400 border border-blue-500/30 rounded-lg hover:bg-blue-500/30 flex items-center gap-2">
