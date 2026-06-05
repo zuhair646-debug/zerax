@@ -123,6 +123,9 @@ function App() {
           <Route path="/dashboard/games" element={<ProtectedRoute><GameStudioDashboard user={user} /></ProtectedRoute>} />
           <Route path="/dashboard/games/web" element={<ProtectedRoute><WebGamesStudio user={user} /></ProtectedRoute>} />
           <Route path="/dashboard/games/app" element={<ProtectedRoute><AppGamesStudio user={user} /></ProtectedRoute>} />
+          {/* Public /games/web route — redirects to dashboard if logged in, otherwise to register */}
+          <Route path="/games/web" element={user ? <Navigate to="/dashboard/games/web" /> : <Navigate to="/register" />} />
+          <Route path="/games/mobile" element={user ? <Navigate to="/dashboard/games/app" /> : <Navigate to="/register" />} />
           <Route path="/dashboard/games/web/:id" element={<ProtectedRoute><WebGameProject user={user} /></ProtectedRoute>} />
           <Route path="/dashboard/games/app/:id" element={<ProtectedRoute><AppGameProject user={user} /></ProtectedRoute>} />
           <Route path="/logo-picker" element={<LogoPicker />} />
