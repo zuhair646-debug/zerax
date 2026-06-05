@@ -976,7 +976,10 @@ def create_game_router(db, get_current_user):
    لو قلت "راح أولّد لك صورة" أو "خلّيني أحضّر لك tower view" — لازم في **نفس الرد** يطلع `<<IMG_PRO: ...>>` كامل.
    ❌ ممنوع: "انتظر لحظات وراح يطلع الموقع" (بدون وسم) — هذا كاذب، النظام ما يولّد إلا لما يشوف وسم.
    ❌ ممنوع: "شوف فوق" (ما فيه شي فوق إذا ما كتبت وسم).
-   ✅ المطلوب: إذا قلت "راح أولّد" → اكتب الوسم في نفس الرسالة فوراً.
+   ❌ ممنوع: تقول "اعتمد ولا تبي نعدّل؟" بدون ما تكتب وسم — السؤال هذا معناه إن في صورة موجودة، إذا ما كتبت الوسم ما في صورة!
+   ❌ ممنوع: تقول "راح أولّد" + "---" + "اعتمد؟" — الـ`---` مو وسم! لازم الوسم نصياً: `<<IMG_PRO: prompt english>>`.
+   ✅ المطلوب: إذا قلت "راح أولّد" → اكتب الوسم في نفس الرسالة فوراً قبل أي سؤال اعتماد.
+   ✅ القاعدة الذهبية: **كل رسالة فيها "اعتمد ولا نعدّل؟" لازم تحتوي على `<<IMG_PRO: ...>>` قبلها**.
 
 **3. خيارات بدل قرارات — قدّم A/B/C**
    بدل ما تفرض اختيار، اعطه ٢-٣ خيارات مع شرح:
@@ -1377,26 +1380,50 @@ def create_game_router(db, get_current_user):
         except Exception as fal_err:
             logger.exception(f"[games] FAL tools failed: {fal_err}")
 
-        # 🩹 SAFETY NET: If AI promised an image ("الصورة جاهزة", "ولّدت", "إليك الصورة")
-        # but failed to write any <<IMG_PRO>> tag, force-generate from context.
+        # 🩹 SAFETY NET: If AI promised an image but failed to write any <<IMG_PRO>> tag,
+        # force-generate from context. Handles BOTH past-tense ("ولّدت") AND future/intent
+        # tense ("راح أولّد، خلّيني أولّد، بأرسم، أرسم لك") since the AI flips between them.
         if not generated_assets:
             promise_phrases = [
+                # past tense — "it's done"
                 "الصورة جاهزة", "الصورة فوق", "ولّدت", "ولدت الصورة", "إليك الصورة",
                 "هذه الصورة", "image is ready", "generated the image", "تم التوليد",
+                "ولّدت لك", "ولدت لك", "صوّرتها", "خلّصت الصورة",
+                # future/intent tense — "I will generate"
+                "راح أولّد", "راح أرسم", "بأولّد", "بأرسم", "خلّيني أولّد", "خليني أولّد",
+                "خلّيني أرسم", "خليني أرسم", "خلّيني أحضّر", "خليني أحضر",
+                "أولّد لك", "أولد لك", "أرسم لك", "بأحضّر لك", "بأحضر لك",
+                "حضّرت لك", "بأطلع لك", "راح أطلع", "بأجهّز لك",
+                # approval-request pattern (AI asks for approval without producing anything)
+                "اعتمد ولا تي نعدّل", "اعتمد ولا تبي نعدّل", "اعتمد ولا نعدّل",
+                "تعتمد ولا نعدّل", "وش رايك بالصورة", "كيف الصورة فوق",
             ]
             ai_lower = (ai_message or "").lower()
-            promised = any(p in ai_message or p.lower() in ai_lower for p in promise_phrases)
+            promised = any(p in (ai_message or "") or p.lower() in ai_lower for p in promise_phrases)
             has_any_tag = "<<img" in ai_lower or "<<3d" in ai_lower or "<<music" in ai_lower or "<<model" in ai_lower
             if promised and not has_any_tag:
                 logger.warning(f"[games] AI promised image but no tag — triggering safety net for project {project_id}")
                 try:
                     from modules.games.fal_tools import generate_flux_pro
                     from modules.games.persistence import persist_bytes as _persist
-                    # Build a prompt from the user's intent (last 400 chars) + project context
+                    # 🧠 Build a smart prompt — the user often types junk like "اجرب من جديد",
+                    # so we prefer the AI's OWN description (it just named what it wants to draw),
+                    # falling back to user message + project title.
+                    import re as _re_sn
+                    ai_desc = (ai_message or "")
+                    # Strip the promise/question phrases so the prompt is the actual description
+                    for noise in promise_phrases + ["اعتمد", "نعدّل", "نعدل", "تبي", "ولّد لك", "ولد لك"]:
+                        ai_desc = _re_sn.sub(re.escape(noise), " ", ai_desc, flags=_re_sn.IGNORECASE)
+                    ai_desc = _re_sn.sub(r"[*_`>#]+", " ", ai_desc)  # markdown
+                    ai_desc = _re_sn.sub(r"\s+", " ", ai_desc).strip()[:400]
+                    # If user's message is a useful prompt, prepend it; ignore junk like "try again"
+                    user_msg = (message or "").strip()
+                    user_junk = any(j in user_msg.lower() for j in ("اجرب", "حاول", "مرة ثانية", "try again", "retry", "كرر"))
+                    user_part = "" if user_junk or len(user_msg) < 4 else user_msg[:200]
                     fallback_prompt = (
-                        f"{(project.get('title') or 'game scene')}: {(message or '')[:300]}. "
-                        f"Style: cinematic, ultra-detailed."
-                    )
+                        f"{project.get('title') or 'game scene'}: "
+                        f"{user_part + ' — ' if user_part else ''}{ai_desc}"
+                    ).strip(" :,—")
                     fa = await generate_flux_pro(fallback_prompt, project_id, style_profile=(project.get('style_profile') or 'stylized'))
                     fa["phase_id"] = phase_id
                     fa["safety_net"] = True
@@ -2222,7 +2249,7 @@ def create_game_router(db, get_current_user):
         return {
             "ok": True,
             "service": "games",
-            "build_marker": "v7_2026_06_05_lora_style_training",  # bump when shipping features
+            "build_marker": "v8_2026_06_05_safety_net_future_tense",  # bump when shipping features
             "features": {
                 "image_generation": True,
                 "vision_verification": True,
