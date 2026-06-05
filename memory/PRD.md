@@ -1,6 +1,36 @@
 # Zitex AI Platform - PRD
 
 ### 🔥 Jun 5 2026 — AutoCoder LIVE TEST: fixed /games/web routing autonomously
+### 🆕 Jun 5 2026 — Game Studio: "My Projects" + 4th "🧠 ذاكرة AI" tab ✅
+
+**طلب المستخدم (رسالة 752)**: 
+- (1) زر "مشاريعي السابقة" يكون في الزاوية اليسرى العلوية بنفس حجم زر "رجوع" اليمين، يفتح Modal فيه كل المحادثات السابقة عشان ما يفقد أي معلومة.
+- (2) النافذة الرابعة "ذاكرة AI / GDD" داخل نفس إطار التبويبات (Chat/Live/Approved) — تعرض ملخص حي للمشروع يتحدث تلقائياً.
+
+**ما تم في هذه الجلسة (تم اختباره: Backend 10/10 ✅، Frontend 100% ✅)**:
+- ✅ NEW: `/app/frontend/src/components/games/MyProjectsModal.js` — Modal reusable يعرض كل مشاريع المستخدم (web + app) مع بحث، badges، حالة الذاكرة، حجم التخزين، ووقت آخر تعديل. يدعم filter حسب game_type.
+- ✅ NEW: `/app/frontend/src/components/games/AINotesPanel.js` — Panel للتبويب الرابع، يعرض الـGDD المستديم مع زر "تحديث الآن" + auto-refresh signal من المحادثة.
+- ✅ `GameStudioDashboard.js`: زر "📂 مشاريعي السابقة" (يسار) + "رجوع للرئيسية" (يمين) بنفس الحجم/التصميم. إصلاح حقل `current_phase` بدل `phase` للمشاريع المسترجعة.
+- ✅ `WebGamesStudio.js`: زر "مشاريعي" مضاف في خطوة اختيار التقنية + في الـtop-bar للمحادثة. تبويب رابع 🧠 ذاكرة AI بـviolet accent.
+- ✅ `AppGamesStudio.js`: parity كامل — أضيف نظام التبويبات (chat/live/approved/notes)، AINotesPanel بـblue accent، auto-resume من `?project=` parameter (لم يكن موجوداً سابقاً).
+- ✅ Backend: `game_router.py` يشغّل `_auto_refresh_notes(db, project_id)` كـbackground asyncio task في الرسالة الأولى وكل 4 رسائل (Gemini أولاً، Claude fallback). تم حذف endpoint مكرر للـ`/projects`.
+- ✅ AI Notes تم توليدها بنجاح في الاختبار (5283 حرف Arabic Markdown — Living Project Memory format).
+
+**Endpoints**: `GET /api/games/projects`, `GET /api/games/project/{id}/notes`, `POST /api/games/project/{id}/notes/refresh` (كلها تشتغل 100%).
+
+**Test File**: `/app/backend/tests/test_games_projects_notes.py` (10 test cases, all passing).
+
+**ملاحظات**:
+- React warning عن nested `<button>` لا يزال موجود (pre-existing، غير معطّل، غير ذو صلة بهذا التغيير).
+- التحذير الـpre-existing "Error fetching stats" في ClientDashboard لا علاقة له بهذا التغيير.
+
+**P1 المقبل**: 
+- اقتراحات لتحسين AI الاستوديو (قوالب جاهزة، تحليل توازن، تصدير GDD PDF).
+- ربط أدوات AppBuilder sidebar (GitHub/DB/Keys).
+- صفحات Pricing & Onboarding.
+
+---
+
 
 - Owner reported: clicking Games button on Landing → blank page
 - Main agent acted as owner, sent task via /api/autocoder/chat as owner
