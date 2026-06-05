@@ -16,6 +16,8 @@ import MyProjectsModal from '@/components/games/MyProjectsModal';
 import AINotesPanel from '@/components/games/AINotesPanel';
 import SafeAssetImage from '@/components/games/SafeAssetImage';
 import BuildLiveButton from '@/components/games/BuildLiveButton';
+import QAAnalyzeButton from '@/components/games/QAAnalyzeButton';
+import EditAssetButton from '@/components/games/EditAssetButton';
 
 const API = process.env.REACT_APP_BACKEND_URL;
 
@@ -611,6 +613,7 @@ export default function WebGamesStudio({ user }) {
                       } catch (_) { /* ignore */ }
                     }}
                   />
+                  {project?.preview_url && <QAAnalyzeButton projectId={project?.id} accentColor="amber" />}
                 </div>
                 {project?.preview_url ? (
                   <div className="rounded-xl border border-cyan-500/30 overflow-hidden bg-black" data-testid="live-iframe-wrapper">
@@ -674,6 +677,17 @@ export default function WebGamesStudio({ user }) {
                             >
                               <X className="w-4 h-4" />
                             </button>
+                            {bucket === 'images' && (
+                              <EditAssetButton
+                                projectId={project?.id}
+                                assetId={a.id}
+                                accentColor="amber"
+                                onEdited={async () => {
+                                  const r = await fetch(`${API}/api/games/project/${project.id}`, { headers: { Authorization: `Bearer ${token}` } });
+                                  if (r.ok) { const d = await r.json(); setProject(d.project); }
+                                }}
+                              />
+                            )}
                             {a.image_url && (
                               <SafeAssetImage
                                 src={`${API}${a.image_url}`}

@@ -12,7 +12,7 @@
   Web Games: 8 phases (Discovery → Deployment)
   App Games: 9 phases (Discovery → Store Publishing)
 """
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, Request
 from typing import Optional, List, Dict, Any
 from pydantic import BaseModel
 import uuid
@@ -442,6 +442,78 @@ async def _run_build_in_background(db, project_id: str, requester_id: str):
 
 
 # ═══════════════════════════════════════════════════════════════
+# 🔬 Async helper — QA analysis of the built HTML (Claude)
+# ═══════════════════════════════════════════════════════════════
+async def _run_qa_in_background(db, project_id: str):
+    try:
+        from modules.games.builder import load_bundle_html
+        html = await load_bundle_html(db, project_id)
+        if not html:
+            await db.game_projects.update_one(
+                {"id": project_id},
+                {"$set": {"qa_status": "error", "qa_error": "No build yet — click 'ابني وانشر اللايف' first."}},
+            )
+            return
+        anthropic_key = os.environ.get("ANTHROPIC_API_KEY", "")
+        if not anthropic_key:
+            await db.game_projects.update_one(
+                {"id": project_id},
+                {"$set": {"qa_status": "error", "qa_error": "Anthropic key not configured"}},
+            )
+            return
+        review_prompt = (
+            "أنت QA Lead محترف. اقرأ HTML اللعبة وأعطني تقرير QA بالعربية فيه:\n"
+            "1) ✅ نقاط القوة (3 نقاط)\n"
+            "2) 🐛 أخطاء/مشاكل محتملة (مع شرح كيف نصلحها)\n"
+            "3) ⚡ تحسينات الأداء (lazy load، z-index، DOM size، CSS الزائد)\n"
+            "4) ♿ accessibility (alt texts، aria-labels، keyboard nav)\n"
+            "5) 📱 responsiveness (هل يشتغل صح على mobile؟)\n"
+            "6) 🎯 توصيات نهائية مرتبة بالأولوية.\n"
+            "اكتب التقرير بـ Markdown. حد ٢٠٠٠ كلمة.\n\n"
+            f"═══ HTML للمراجعة (حجم: {len(html.encode('utf-8'))} bytes) ═══\n"
+            f"{html[:60000]}"
+        )
+        async with httpx.AsyncClient(timeout=240.0) as cli:
+            r = await cli.post(
+                "https://api.anthropic.com/v1/messages",
+                headers={
+                    "x-api-key": anthropic_key,
+                    "anthropic-version": "2023-06-01",
+                    "content-type": "application/json",
+                },
+                json={
+                    "model": "claude-sonnet-4-5-20250929",
+                    "max_tokens": 3000,
+                    "messages": [{"role": "user", "content": review_prompt}],
+                },
+            )
+            if r.status_code != 200:
+                await db.game_projects.update_one(
+                    {"id": project_id},
+                    {"$set": {"qa_status": "error", "qa_error": f"Claude HTTP {r.status_code}"}},
+                )
+                return
+            blocks = r.json().get("content", [])
+            report = "".join(b.get("text", "") for b in blocks if b.get("type") == "text")
+        await db.game_projects.update_one(
+            {"id": project_id},
+            {"$set": {
+                "qa_status": "ready",
+                "qa_error": None,
+                "last_qa_report": report,
+                "last_qa_at": datetime.now(timezone.utc).isoformat(),
+            }},
+        )
+        logger.info(f"[games][qa] ready project={project_id} report={len(report)} chars")
+    except Exception as e:
+        await db.game_projects.update_one(
+            {"id": project_id},
+            {"$set": {"qa_status": "error", "qa_error": str(e)[:300]}},
+        )
+        logger.error(f"[games][qa] exception project={project_id}: {e}")
+
+
+# ═══════════════════════════════════════════════════════════════
 # 🎯 Router Factory
 # ═══════════════════════════════════════════════════════════════
 def create_game_router(db, get_current_user):
@@ -746,7 +818,24 @@ def create_game_router(db, get_current_user):
             }
             tech_guide = f"\n\n**💻 Technical Stack:**\nYou MUST use: {tech_map.get(project['programming_type'], project['programming_type'])}\n"
         
-        system_prompt = f"""أنت **مدير إنتاج لعبة محترف** (Senior Game Producer) يعمل على مشروع لعبة {project['game_type']} بأعلى مستويات الجودة الإنتاجية.
+        system_prompt = f"""أنت **مدير إنتاج لعبة محترف ومنفّذ مباشر** (Senior Game Producer & Auto-Executor) في منصة Zitex. أنت **لست مجرد مستشار** — عندك أدوات حقيقية تنفّذ بنفسك بالكبسة، ولازم توجّه المالك لها مباشرة.
+
+🚨 **أنت ممنوع تقول أي صيغة من هذي الجمل:**
+❌ "أنا لا أكتب الكود البرمجي" — كاذب، عندك زر يكتب HTML/CSS/JS كامل
+❌ "أنا لا أرفع للايف" — كاذب، الزر ينشر فعلاً على رابط حي
+❌ "لا أمتلك أدوات رسم/تعديل" — كاذب، عندك Flux Pro Ultra + Redux img2img
+❌ "لا أستطيع QA/اختبار" — كاذب، عندك endpoint يحلل الموقع المبني
+❌ "أنا مجرد producer وأحتاج مبرمج بشري" — منصة Zitex أوتوماتيكية بالكامل
+
+✅ **أدواتك الفعلية (تذكر بكل ثقة عند الطلب):**
+
+| طلب المالك | أداتك | كيف تجاوب |
+|---|---|---|
+| "ابني الموقع/أنشر للايف" | زر 🚀 "ابني وانشر اللايف" في تبويب 📡 البث المباشر | "اضغط الزر فوق وراح أبني كل شي ك Claude Sonnet 4.5 خلال 60-180 ثانية وأطلق رابط حي" |
+| "عدّل هذي الصورة" / "خلّي الإضاءة أحلى" | زر ✏️ "عدّل الصورة" على كل أصل (Flux Redux img2img) | "صف لي التعديل بدقة وراح أعيد توليدها كنسخة جديدة (تبقى الأصلية محفوظة)" |
+| "اختبر الموقع/راجعه" | زر 🔬 "تحليل QA" في تبويب البث المباشر | "تمام، Claude راح يفحص الـ HTML ويعطيني تقرير قوة/أخطاء/أداء/accessibility" |
+| "ولّد صورة/موسيقى/3D" | تكتب التاج `<<IMG_PRO: prompt>>` أو `<<MUSIC: prompt>>` أو `<<MODEL3D: prompt>>` في ردك | الأصل يطلع تلقائياً للاعتماد |
+| "ابحث في الإنترنت" | (الميزة قادمة) | "هذي القدرة قيد البناء" |
 
 **🎮 تفاصيل المشروع:**
 - العنوان: {project['title']}
@@ -756,18 +845,6 @@ def create_game_router(db, get_current_user):
 - هدف المرحلة: {phase_info['description']}
 
 {approved_context}{tech_guide}
-
-═══════════════════════════════════════════════════════════════
-🚀 **قدرة جديدة — البناء والنشر الحي (LIVE DEPLOY)**
-═══════════════════════════════════════════════════════════════
-انت الآن تقدر تنشر الموقع كاملاً على رابط حي يقدر العميل يفتحه! لما المالك يقول
-"ارفع لي اللايف" أو "ابني الموقع" أو "ابي اشوف على اللايف" أو أي طلب مشابه:
-✅ قول له بثقة: "تمام! اضغط زر **🚀 ابني وانشر اللايف** فوق (في تبويب 📡 البث المباشر)
-   وراح أبني الموقع كامل (HTML + CSS + Three.js إذا 3D) وأنشره على رابط حي خلال
-   60-180 ثانية. الرابط راح يطلع لك تقدر تشاركه مع أي شخص."
-❌ ممنوع تقول "أنا ما أقدر أنشر" أو "ما أقدر أرفع للايف" — هذي القدرة مفعّلة الآن.
-ملاحظة: زر البناء يستخدم Claude Sonnet 4.5 لتوليد الموقع بناءً على الذاكرة + الأصول
-المعتمدة + الصور المرجعية. كل ما اعتمد المالك أصول أكثر، الموقع يطلع أجمل وأدق.
 
 ═══════════════════════════════════════════════════════════════
 🚨 **قواعد العمل الإلزامية — يمنع كسرها مهما حصل**
@@ -1738,5 +1815,91 @@ def create_game_router(db, get_current_user):
                 status_code=404,
             )
         return HTMLResponse(html)
+
+    # ───────────────────────────────────────────────────────────
+    # ✏️ POST /project/{id}/asset/{aid}/edit — Flux Redux img2img edit
+    # ───────────────────────────────────────────────────────────
+    @router.post("/project/{project_id}/asset/{asset_id}/edit")
+    async def edit_asset(
+        project_id: str,
+        asset_id: str,
+        request: Request,
+        user=Depends(get_current_user)
+    ):
+        """Re-imagine an existing asset using Flux Redux. Body: { edit_prompt: str }"""
+        body = await request.json()
+        edit_prompt = (body.get("edit_prompt") or "").strip()
+        if not edit_prompt:
+            raise HTTPException(400, "edit_prompt required")
+        proj = await db.game_projects.find_one({"id": project_id, "user_id": user["user_id"]})
+        if not proj:
+            raise HTTPException(404, "Project not found")
+        # Find source asset (use CDN url if available — survives redeploys)
+        src_asset = None
+        for bucket in ("images",):
+            for a in (proj.get("assets", {}) or {}).get(bucket, []) or []:
+                if a.get("id") == asset_id and not a.get("deleted_at"):
+                    src_asset = a
+                    break
+        if not src_asset:
+            raise HTTPException(404, "Source asset not found")
+        src_url = src_asset.get("cdn_url") or src_asset.get("image_url") or ""
+        # If only local URL, build absolute
+        if src_url.startswith("/api/"):
+            src_url = f"{os.environ.get('REACT_APP_BACKEND_URL', '')}{src_url}"
+        try:
+            from modules.games.fal_tools import edit_image_with_prompt
+            from modules.games.persistence import persist_bytes as _persist
+            new_asset = await edit_image_with_prompt(src_url, edit_prompt, project_id)
+            raw = new_asset.pop("_bytes", None)
+            if raw:
+                try:
+                    await _persist(db, new_asset["id"], raw, "image/png", project_id)
+                except Exception as pe:
+                    logger.warning(f"[edit] persist failed: {pe}")
+            new_asset["phase_id"] = src_asset.get("phase_id")
+            new_asset["edited_from"] = asset_id
+            await db.game_projects.update_one(
+                {"id": project_id},
+                {"$push": {"assets.images": new_asset}},
+            )
+            return {"ok": True, "asset": {k: v for k, v in new_asset.items() if not k.startswith("_")}}
+        except Exception as e:
+            logger.exception(f"[edit] failed: {e}")
+            raise HTTPException(500, f"Edit failed: {str(e)[:200]}")
+
+    # ───────────────────────────────────────────────────────────
+    # 🔬 POST /project/{id}/qa-analyze — Claude reviews the live HTML
+    # ───────────────────────────────────────────────────────────
+    @router.post("/project/{project_id}/qa-analyze")
+    async def qa_analyze_live(project_id: str, user=Depends(get_current_user)):
+        """Kick off async QA review. Returns 202 immediately, poll /qa-status."""
+        proj = await db.game_projects.find_one({"id": project_id, "user_id": user["user_id"]})
+        if not proj:
+            raise HTTPException(404, "Project not found")
+        if proj.get("qa_status") == "running":
+            return {"ok": True, "status": "running"}
+        await db.game_projects.update_one(
+            {"id": project_id},
+            {"$set": {"qa_status": "running", "qa_error": None}},
+        )
+        import asyncio as _aio_qa
+        _aio_qa.create_task(_run_qa_in_background(db, project_id))
+        return {"ok": True, "status": "running"}
+
+    @router.get("/project/{project_id}/qa-status")
+    async def qa_status(project_id: str, user=Depends(get_current_user)):
+        proj = await db.game_projects.find_one(
+            {"id": project_id, "user_id": user["user_id"]},
+            {"qa_status": 1, "qa_error": 1, "last_qa_report": 1, "last_qa_at": 1, "_id": 0},
+        )
+        if not proj:
+            raise HTTPException(404, "Project not found")
+        return {
+            "status": proj.get("qa_status") or "idle",
+            "error": proj.get("qa_error"),
+            "report": proj.get("last_qa_report"),
+            "at": proj.get("last_qa_at"),
+        }
 
     return router

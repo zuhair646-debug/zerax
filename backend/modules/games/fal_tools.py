@@ -354,3 +354,55 @@ async def parse_and_generate_assets(
         else:
             results.append(res)
     return results
+
+
+# ════════════════════════════════════════════════════════════════
+# 8) Flux Pro Redux — edit / re-style an EXISTING image
+# Useful when owner says "ابي اعدل الصورة الفلانية" or "خلّي الإضاءة أحلى"
+# ════════════════════════════════════════════════════════════════
+async def edit_image_with_prompt(
+    source_image_url: str,
+    edit_prompt: str,
+    project_id: str,
+    aspect_ratio: str = "16:9",
+) -> Dict[str, Any]:
+    """Use Flux Pro Redux (img2img) to re-imagine an existing asset.
+    Returns a NEW asset dict (id, image_url, cdn_url, _bytes, ...).
+    The original image is preserved — caller keeps both versions.
+    """
+    result = await _fal_submit(
+        "fal-ai/flux-pro/v1.1-ultra/redux",
+        {
+            "image_url": source_image_url,
+            "prompt": edit_prompt,
+            "aspect_ratio": aspect_ratio,
+            "num_images": 1,
+            "enable_safety_checker": True,
+            "safety_tolerance": "5",
+            "output_format": "png",
+        },
+    )
+    img_url = (result.get("images") or [{}])[0].get("url")
+    if not img_url:
+        raise RuntimeError(f"flux redux returned no image: {result}")
+    asset_id = str(uuid.uuid4())
+    dest = f"{UPLOAD_ROOT}/{project_id}/assets/{asset_id}.png"
+    await _download_to(img_url, dest)
+    try:
+        with open(dest, "rb") as fh:
+            img_bytes = fh.read()
+    except Exception:
+        img_bytes = None
+    return {
+        "id": asset_id,
+        "type": "image",
+        "subtype": "flux-redux-edit",
+        "image_url": f"/api/games/asset-image/{project_id}/{asset_id}.png",
+        "cdn_url": img_url,
+        "_bytes": img_bytes,
+        "prompt": edit_prompt,
+        "name": edit_prompt[:80],
+        "source_image_url": source_image_url,  # provenance
+        "approved": False,
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    }
