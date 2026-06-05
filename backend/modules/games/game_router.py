@@ -240,6 +240,21 @@ def create_game_router(db, get_current_user):
         if game_type not in PROGRAMMING_TYPES:
             raise HTTPException(400, f"Invalid game_type: {game_type}")
         return {"types": PROGRAMMING_TYPES[game_type]}
+
+    # ───────────────────────────────────────────────────────────
+    # 🖼️ GET /asset-image/{project_id}/{filename} — serve generated PNG
+    # ───────────────────────────────────────────────────────────
+    @router.get("/asset-image/{project_id}/{filename}")
+    async def serve_asset_image(project_id: str, filename: str):
+        """Serve generated game asset image (public, no auth — needed for <img src> in chat)."""
+        from fastapi.responses import FileResponse
+        # Sanitize filename to prevent path traversal
+        if "/" in filename or ".." in filename or not filename.endswith(".png"):
+            raise HTTPException(400, "Invalid filename")
+        path = f"/app/backend/uploads/games/{project_id}/assets/{filename}"
+        if not os.path.exists(path):
+            raise HTTPException(404, "Asset not found")
+        return FileResponse(path, media_type="image/png")
     
     # ───────────────────────────────────────────────────────────
     # 📋 POST /project — Create new game project
@@ -270,7 +285,8 @@ def create_game_router(db, get_current_user):
                 "environments": [],
                 "ui": [],
                 "code": [],
-                "docs": []
+                "docs": [],
+                "images": []
             },
             "approved_assets": [],  # Memory system
             "preview_url": None,
@@ -375,43 +391,74 @@ def create_game_router(db, get_current_user):
             }
             tech_guide = f"\n\n**💻 Technical Stack:**\nYou MUST use: {tech_map.get(project['programming_type'], project['programming_type'])}\n"
         
-        system_prompt = f"""You are a professional game developer AI working on a {project['game_type']} game project.
+        system_prompt = f"""أنت **مدير إنتاج لعبة محترف** (Senior Game Producer) يعمل على مشروع لعبة {project['game_type']} بأعلى مستويات الجودة الإنتاجية.
 
-**Project Details:**
-- Title: {project['title']}
-- Description: {project['description']}
-- Programming Type: {project['programming_type']}
-- Current Phase: {phase_info['title']}
-
-**Phase Objective:**
-{phase_info['description']}
-
-**Deliverables Expected:**
-{', '.join(phase_info['deliverables'])}
+**🎮 تفاصيل المشروع:**
+- العنوان: {project['title']}
+- الوصف: {project['description']}
+- نوع البرمجة: {project['programming_type']}
+- المرحلة الحالية: {phase_info['title']}
+- هدف المرحلة: {phase_info['description']}
 
 {approved_context}{tech_guide}
 
-**CRITICAL RULES:**
-1. 🚫 NO PLACEHOLDERS — Generate ACTUAL, PRODUCTION-READY content
-2. 💻 For code: Write COMPLETE, WORKING code files (full game loop, collision detection, rendering)
-   - Example: If HTML5 Canvas, include full index.html + game.js with actual sprite rendering
-   - Include ALL necessary functions (init, update, render, input handling)
-3. 🎨 For assets: Provide DETAILED visual descriptions for AI image generation
-   - Example: "Character: 32x32px pixel art knight, blue armor, holding silver sword, idle stance, transparent background"
-4. 📄 For docs: Write COMPREHENSIVE Game Design Document with mechanics breakdown
-5. 🔗 Reference approved assets when building on previous work
-6. 📦 Structure output as JSON when delivering assets:
-   ```json
-   {{
-     "asset_type": "character|environment|ui|code|doc",
-     "name": "Asset name",
-     "description": "Detailed description",
-     "content": "Full content or code",
-     "image_prompt": "Detailed prompt for image AI (if visual asset)"
-   }}
-   ```
+═══════════════════════════════════════════════════════════════
+🚨 **قواعد العمل الإلزامية — يمنع كسرها مهما حصل**
+═══════════════════════════════════════════════════════════════
 
-Respond in Arabic for explanations, but keep code/technical content in English.
+**1. التريّث الإنتاجي — لا تستعجل أبداً**
+   ❌ ممنوع تماماً: إنتاج GDD ضخم أو ٥ أصول دفعة واحدة في رسالة واحدة
+   ✅ المطلوب: ركّز على **عنصر واحد فقط** في كل رد، ثم انتظر الموافقة قبل الانتقال
+
+**2. الحوار السقراطي — اسأل قبل ما تنفّذ**
+   كل رد يجب أن يبدأ بـ١-٣ أسئلة دقيقة للمالك، مثلاً:
+   - "قبل ما أصمم القرية، عندي ٣ أسئلة سريعة:
+      • هل تبيها قرية في الصحراء أم بين الجبال أم على شاطئ البحر؟
+      • الحقول والمباني الصناعية في نفس الـpage ولا نقسّمهم؟
+      • الـart style: realistic 3D / pixel art / cel-shaded cartoon؟"
+
+**3. خيارات بدل قرارات — قدّم A/B/C**
+   بدل ما تفرض اختيار، اعطه ٢-٣ خيارات مع شرح:
+   - "خيار A: حقول قمح ذهبية مع تأثير ضوء غروب الشمس (واقعية، استهلاك بطارية أعلى)
+      خيار B: حقول pixel-art بألوان زاهية (أسرع، أخف، أنسب للجوّال)
+      خيار C: حقول cel-shaded بستايل cartoon (وسط، حلو على الكمبيوتر)"
+
+**4. توليد الصور الحقيقية — استخدم وسم `<<IMG: ...>>`**
+   لما المالك يوافق على عنصر بصري، أنتج صورة حقيقية فعلاً بإضافة سطر في ردك:
+   ```
+   <<IMG: A detailed top-down view of a wheat field at sunset, golden hour lighting, isometric perspective, lush green grass borders, small wooden fence, cinematic style, ultra-detailed, 4K | style: realistic>>
+   ```
+   ⚠️ كتب الـprompt **بالإنجليزية الدقيقة** + style واحد من: realistic / pixel-art / cel-shaded / cartoon / isometric / 3d-render
+   ⚠️ صورة واحدة كحد أقصى في كل رد. سيقوم النظام بتوليدها فعلياً ورفعها على استضافتنا، وتظهر للمالك خلال ٢٠ ثانية.
+
+**5. اعتماد رسمي قبل الانتقال — bouton موافقة**
+   كل عنصر صورة جديد ينتج: يظهر للمالك مع زر "✓ معتمد" أو "↻ عدّل". لا تنتقل لخطوة ثانية قبل ما يضغط معتمد.
+   لو قال "عدّل" → اسأل "وش بالضبط تبي تعدّل؟ اللون / الزاوية / الإضاءة / الستايل / التفاصيل؟"
+
+**6. تسلسل هرمي ذكي للمراحل**
+   مثال لـ Discovery & GDD لـلعبة استراتيجية مثل ترافيان:
+   - Step 1: اعرف الجمهور المستهدف + المنصة (سؤال واحد فقط)
+   - Step 2: حدّد الـcore loop (٣ خيارات)
+   - Step 3: قسّم العالم لطبقات (قرية / حقول / مدن / معارك)
+   - Step 4: لكل طبقة، اقترح art style واحد → ولّد صورة عيّنة واحدة
+   - Step 5: المالك يعتمد → احفظ كـapproved asset → انتقل للطبقة التالية
+
+**7. أسلوب الكتابة**
+   - بالعربية السعودية الطبيعية (الفصحى البسيطة)
+   - فقرات قصيرة، نقاط رصاص، ايموجي بسيطة
+   - الأسماء التقنية وأسماء الـAPIs بالإنجليزية (Three.js, Phaser, Node.js)
+   - لا تكتب كود طويل في مرحلة Discovery — الكود يجي في مرحلة Programming
+
+**8. ذاكرة العمل**
+   عندك سجل المحادثة كامل ولديك Previously Approved Assets. لا تعيد طرح ما تم اعتماده.
+
+═══════════════════════════════════════════════════════════════
+🎯 **في كل رد التزم بهذا الترتيب**:
+1. تلخيص بسطر واحد لمكانك في الـworkflow ("✓ بعدما اعتمدنا [X]، الخطوة الجاية: [Y]")
+2. أسئلة دقيقة (١-٣)، أو خيارات (A/B/C)
+3. لو المالك أكّد عنصر بصري في الرسالة السابقة → سطر `<<IMG: ...>>` واحد فقط
+4. سؤال ختامي: "نعتمد ونمشي، ولا تبي تعدّل شي؟"
+═══════════════════════════════════════════════════════════════
 """
         
         # Handle file uploads
@@ -451,57 +498,73 @@ Respond in Arabic for explanations, but keep code/technical content in English.
             logger.error(f"Chat error: {e}")
             raise HTTPException(500, str(e))
         
-        # Parse AI response for assets (if JSON structured)
+        # ─────────────────────────────────────────────────────
+        # 🎨 Parse <<IMG: prompt | style: ...>> tags from AI response
+        # and generate REAL images via OpenAI GPT-Image-1 (emergent key)
+        # ─────────────────────────────────────────────────────
         generated_assets = []
         try:
-            # Try to extract JSON assets from response
             import re
-            json_blocks = re.findall(r'```json\s*(\{.*?\})\s*```', ai_message, re.DOTALL)
-            for block in json_blocks:
-                asset_data = json.loads(block)
-                if asset_data.get("asset_type") and asset_data.get("name"):
-                    asset_id = str(uuid.uuid4())
-                    asset_entry = {
-                        "id": asset_id,
-                        "type": asset_data["asset_type"],
-                        "name": asset_data["name"],
-                        "description": asset_data.get("description", ""),
-                        "content": asset_data.get("content", ""),
-                        "image_prompt": asset_data.get("image_prompt"),
-                        "image_url": None,
-                        "approved": False,
-                        "created_at": datetime.now(timezone.utc).isoformat()
-                    }
-                    
-                    # Generate image if prompt provided
-                    if asset_entry["image_prompt"] and GEMINI_KEY:
+            img_tags = re.findall(r'<<IMG:\s*(.+?)>>', ai_message, re.DOTALL)
+            if img_tags:
+                emergent_key = os.environ.get('EMERGENT_LLM_KEY', '')
+                if not emergent_key:
+                    logger.warning("[games] EMERGENT_LLM_KEY missing — cannot generate real images")
+                else:
+                    from emergentintegrations.llm.openai.image_generation import OpenAIImageGeneration
+                    img_gen = OpenAIImageGeneration(api_key=emergent_key)
+                    for raw_tag in img_tags[:2]:  # max 2 images per turn
+                        tag = raw_tag.strip()
+                        # Extract style if pipe-separated
+                        if '|' in tag and 'style:' in tag:
+                            prompt_part, style_part = tag.split('|', 1)
+                            prompt_text = prompt_part.strip()
+                            style_label = style_part.replace('style:', '').strip()
+                        else:
+                            prompt_text = tag
+                            style_label = 'realistic'
+                        # Compose final prompt
+                        final_prompt = f"{prompt_text}. Style: {style_label}. High-quality game asset, professional production-ready."
                         try:
-                            img_url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key={GEMINI_KEY}"
-                            img_response = await client.post(img_url, json={
-                                "contents": [{
-                                    "parts": [{
-                                        "text": f"Generate a game asset image: {asset_entry['image_prompt']}"
-                                    }]
-                                }],
-                                "generationConfig": {"temperature": 0.9}
-                            })
-                            if img_response.status_code == 200:
-                                # Note: Gemini doesn't return images directly, need image generation service
-                                # For now, store prompt for manual/external generation
-                                asset_entry["image_url"] = f"/api/games/generate-asset-image/{asset_id}"
-                        except Exception as img_err:
-                            logger.warning(f"Image generation failed: {img_err}")
-                    
-                    generated_assets.append(asset_entry)
-                    
-                    # Add to project assets
-                    asset_category = asset_data["asset_type"] + "s" if asset_data["asset_type"] in ["character", "environment"] else asset_data["asset_type"]
-                    await db.game_projects.update_one(
-                        {"id": project_id},
-                        {"$push": {f"assets.{asset_category}": asset_entry}}
-                    )
+                            images = await img_gen.generate_images(
+                                prompt=final_prompt,
+                                model='gpt-image-1',
+                                number_of_images=1,
+                            )
+                            # images is list of bytes
+                            if images and len(images) > 0:
+                                img_bytes = images[0] if isinstance(images[0], (bytes, bytearray)) else None
+                                if img_bytes is None and isinstance(images[0], dict):
+                                    img_bytes = images[0].get('image_bytes') or images[0].get('data')
+                                if img_bytes:
+                                    asset_id = str(uuid.uuid4())
+                                    asset_dir = f"/app/backend/uploads/games/{project_id}/assets"
+                                    os.makedirs(asset_dir, exist_ok=True)
+                                    img_path = f"{asset_dir}/{asset_id}.png"
+                                    with open(img_path, "wb") as f:
+                                        f.write(img_bytes)
+                                    img_url = f"/api/games/asset-image/{project_id}/{asset_id}.png"
+                                    asset_entry = {
+                                        "id": asset_id,
+                                        "type": "image",
+                                        "name": prompt_text[:80],
+                                        "description": prompt_text,
+                                        "style": style_label,
+                                        "image_url": img_url,
+                                        "phase_id": phase_id,
+                                        "approved": False,
+                                        "created_at": datetime.now(timezone.utc).isoformat(),
+                                    }
+                                    generated_assets.append(asset_entry)
+                                    await db.game_projects.update_one(
+                                        {"id": project_id},
+                                        {"$push": {"assets.images": asset_entry}}
+                                    )
+                                    logger.info(f"[games] generated image asset {asset_id} for project {project_id}")
+                        except Exception as gen_err:
+                            logger.exception(f"[games] image generation failed: {gen_err}")
         except Exception as parse_err:
-            logger.warning(f"Asset parsing failed (normal if no JSON): {parse_err}")
+            logger.warning(f"[games] image-tag parsing failed: {parse_err}")
         
         # Save to conversation
         conversation_entry = {
