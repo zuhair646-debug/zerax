@@ -255,6 +255,40 @@ def create_game_router(db, get_current_user):
         if not os.path.exists(path):
             raise HTTPException(404, "Asset not found")
         return FileResponse(path, media_type="image/png")
+
+    @router.get("/asset-3d/{project_id}/{filename}")
+    async def serve_asset_3d(project_id: str, filename: str):
+        """Serve generated 3D model (.glb) — used by Three.js viewer in frontend."""
+        from fastapi.responses import FileResponse
+        if "/" in filename or ".." in filename or not filename.endswith(".glb"):
+            raise HTTPException(400, "Invalid filename")
+        path = f"/app/backend/uploads/games/{project_id}/3d/{filename}"
+        if not os.path.exists(path):
+            raise HTTPException(404, "3D model not found")
+        return FileResponse(path, media_type="model/gltf-binary")
+
+    @router.get("/asset-video/{project_id}/{filename}")
+    async def serve_asset_video(project_id: str, filename: str):
+        """Serve generated video clip (Kling/Sora output)."""
+        from fastapi.responses import FileResponse
+        if "/" in filename or ".." in filename or not filename.endswith(".mp4"):
+            raise HTTPException(400, "Invalid filename")
+        path = f"/app/backend/uploads/games/{project_id}/videos/{filename}"
+        if not os.path.exists(path):
+            raise HTTPException(404, "Video not found")
+        return FileResponse(path, media_type="video/mp4")
+
+    @router.get("/asset-audio/{project_id}/{filename}")
+    async def serve_asset_audio(project_id: str, filename: str):
+        """Serve generated music (.wav from CassetteAI) or SFX (.mp3 from ElevenLabs)."""
+        from fastapi.responses import FileResponse
+        if "/" in filename or ".." in filename or not (filename.endswith(".mp3") or filename.endswith(".wav")):
+            raise HTTPException(400, "Invalid filename")
+        path = f"/app/backend/uploads/games/{project_id}/audio/{filename}"
+        if not os.path.exists(path):
+            raise HTTPException(404, "Audio not found")
+        media = "audio/wav" if filename.endswith(".wav") else "audio/mpeg"
+        return FileResponse(path, media_type=media)
     
     # ───────────────────────────────────────────────────────────
     # 📋 POST /project — Create new game project
@@ -423,13 +457,27 @@ def create_game_router(db, get_current_user):
       خيار B: حقول pixel-art بألوان زاهية (أسرع، أخف، أنسب للجوّال)
       خيار C: حقول cel-shaded بستايل cartoon (وسط، حلو على الكمبيوتر)"
 
-**4. توليد الصور الحقيقية — استخدم وسم `<<IMG: ...>>`**
-   لما المالك يوافق على عنصر بصري، أنتج صورة حقيقية فعلاً بإضافة سطر في ردك:
-   ```
-   <<IMG: A detailed top-down view of a wheat field at sunset, golden hour lighting, isometric perspective, lush green grass borders, small wooden fence, cinematic style, ultra-detailed, 4K | style: realistic>>
-   ```
-   ⚠️ كتب الـprompt **بالإنجليزية الدقيقة** + style واحد من: realistic / pixel-art / cel-shaded / cartoon / isometric / 3d-render
-   ⚠️ صورة واحدة كحد أقصى في كل رد. سيقوم النظام بتوليدها فعلياً ورفعها على استضافتنا، وتظهر للمالك خلال ٢٠ ثانية.
+**4. أدوات الإنتاج الفنية — استخدم الوسم المناسب لكل مهمة**
+   عندك ٦ أدوات إنتاجية حقيقية تشتغل على استضافتنا. استخدم وسم واحد فقط لكل رد (إلا في الحالات الخاصة).
+
+   📸 `<<IMG: english prompt | style: ...>>` — لوحة سريعة (OpenAI gpt-image-1، رخيصة، 10 ثواني). للـdrafts والـmoodboards.
+   
+   🎨 `<<IMG_PRO: english prompt with rich details>>` — **لوحة سينمائية 4K** (Flux Pro Ultra، 0.06$، 15 ثانية). للـhero shots، الـkey art، الـtitle screens، الـcharacter portraits النهائية.
+   
+   🧊 `<<3D: english prompt for 3D object>>` — **موديل 3D حقيقي (.glb)** (Hyper3D Rodin، 0.30$، 1-3 دقائق). للشخصيات، الـbuildings، الـvehicles. الـoutput .glb يفتح في Three.js/Unity/Blender مباشرة.
+   
+   🎬 `<<ANIMATE: english motion prompt | img: ABSOLUTE_IMAGE_URL>>` — **تحريك صورة معتمدة لفيديو 5 ثوان** (Kling 1.6، 0.50$، 1-2 دقيقة). استخدمه فقط بعد ما يعتمد المالك صورة. الـimg URL = الـURL الكامل للصورة المعتمدة (مثلاً: `https://zitex.vercel.app/api/games/asset-image/PROJECT_ID/ASSET_ID.png`).
+   
+   🎵 `<<MUSIC: english music mood/genre prompt | dur: 30>>` — **موسيقى خلفية للعبة** (CassetteAI، 0.03$، 30 ثانية). مثل: `<<MUSIC: epic medieval battle orchestral with drums | dur: 60>>`
+   
+   🔊 `<<SFX: english sound description | dur: 3>>` — **مؤثر صوتي** (Stable Audio، 0.01$). مثل: `<<SFX: metal sword clash with echo | dur: 2>>` أو `<<SFX: coin collection jingle, retro 8-bit | dur: 1>>`
+
+   ⚠️ قواعد صارمة:
+   - الـprompt **بالإنجليزية الدقيقة** فقط (الموديلات ما تفهم عربي جيداً)
+   - **وسم واحد لكل رد** عادةً. صورة + موسيقى = استثناء مقبول
+   - **انتظر اعتماد المالك** قبل ما تنتقل لخطوة جديدة (لا تنتج 5 أصول دفعة واحدة)
+   - ولّد `<<3D>>` فقط بعد ما يعتمد المالك الصورة المرجعية بالـ`<<IMG_PRO>>` أولاً
+   - `<<ANIMATE>>` يحتاج URL صورة معتمدة موجودة — لا تخترع URL
 
 **5. اعتماد رسمي قبل الانتقال — bouton موافقة**
    كل عنصر صورة جديد ينتج: يظهر للمالك مع زر "✓ معتمد" أو "↻ عدّل". لا تنتقل لخطوة ثانية قبل ما يضغط معتمد.
@@ -565,6 +613,31 @@ def create_game_router(db, get_current_user):
                             logger.exception(f"[games] image generation failed: {gen_err}")
         except Exception as parse_err:
             logger.warning(f"[games] image-tag parsing failed: {parse_err}")
+
+        # ─────────────────────────────────────────────────────
+        # 🎮 FAL.AI tools: <<IMG_PRO>> <<3D>> <<ANIMATE>> <<MUSIC>> <<SFX>>
+        # ─────────────────────────────────────────────────────
+        try:
+            from modules.games.fal_tools import parse_and_generate_assets
+            fal_assets = await parse_and_generate_assets(ai_message, project_id, max_assets_per_turn=3)
+            for fa in fal_assets:
+                fa["phase_id"] = phase_id
+                generated_assets.append(fa)
+                # Save to appropriate asset bucket in the project doc
+                bucket = "images" if fa["type"] in ("image",) else (
+                    "models3d" if fa["type"] == "3d" else (
+                        "audio" if fa["type"] in ("music", "sfx") else (
+                            "videos" if fa["type"] == "video" else "images"
+                        )
+                    )
+                )
+                await db.game_projects.update_one(
+                    {"id": project_id},
+                    {"$push": {f"assets.{bucket}": fa}}
+                )
+                logger.info(f"[games][fal] generated {fa['type']} asset {fa['id']} for project {project_id}")
+        except Exception as fal_err:
+            logger.exception(f"[games] FAL tools failed: {fal_err}")
         
         # Save to conversation
         conversation_entry = {

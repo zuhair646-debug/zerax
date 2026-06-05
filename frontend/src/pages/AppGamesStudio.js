@@ -414,47 +414,74 @@ export default function AppGamesStudio({ user }) {
                     </div>
                     {msg.generated_assets?.length > 0 && (
                       <div className="mt-4 space-y-3" data-testid="inline-assets">
-                        {msg.generated_assets.map((a) => (
-                          <div key={a.id} className="border border-blue-500/20 rounded-xl overflow-hidden bg-black/30">
-                            <img
-                              src={`${API}${a.image_url}`}
-                              alt={a.name}
-                              loading="lazy"
-                              className="w-full max-w-md object-cover"
-                              data-testid={`generated-asset-${a.id}`}
-                            />
-                            <div className="px-3 py-2 flex items-center justify-between gap-2">
-                              <div className="text-xs text-zinc-400 truncate flex-1">
-                                <span className="text-blue-300 font-bold">{a.style || 'realistic'}</span>
-                                <span className="mx-1">·</span>
-                                <span>{a.name?.slice(0, 60)}</span>
-                              </div>
-                              {!a.approved ? (
-                                <div className="flex gap-1.5 shrink-0">
-                                  <button
-                                    onClick={() => handleApproveAsset(a.id, true)}
-                                    className="text-xs px-2.5 py-1 bg-emerald-500/20 hover:bg-emerald-500/30 border border-emerald-400/40 text-emerald-200 rounded-lg font-bold"
-                                    data-testid={`approve-asset-${a.id}`}
-                                  >
-                                    ✓ معتمد
-                                  </button>
-                                  <button
-                                    onClick={() => {
-                                      setMessage(`عدّل الصورة السابقة: `);
-                                      handleApproveAsset(a.id, false);
-                                    }}
-                                    className="text-xs px-2.5 py-1 bg-amber-500/20 hover:bg-amber-500/30 border border-amber-400/40 text-amber-200 rounded-lg font-bold"
-                                    data-testid={`iterate-asset-${a.id}`}
-                                  >
-                                    ↻ عدّل
-                                  </button>
-                                </div>
-                              ) : (
-                                <span className="text-xs px-2 py-1 bg-emerald-500/20 border border-emerald-400/40 text-emerald-200 rounded-lg shrink-0">✓ معتمد</span>
+                        {msg.generated_assets.map((a) => {
+                          const isImg = a.type === 'image';
+                          const is3D = a.type === '3d';
+                          const isVid = a.type === 'video';
+                          const isAudio = a.type === 'music' || a.type === 'sfx';
+                          const url = a.image_url || a.model_url || a.video_url || a.audio_url;
+                          const fullUrl = url ? `${API}${url}` : null;
+                          const subtypeBadge = a.subtype || a.style || a.type;
+                          return (
+                            <div key={a.id} className="border border-blue-500/20 rounded-xl overflow-hidden bg-black/30">
+                              {isImg && fullUrl && (
+                                <img src={fullUrl} alt={a.name} loading="lazy"
+                                     className="w-full max-w-md object-cover"
+                                     data-testid={`generated-asset-${a.id}`} />
                               )}
+                              {is3D && fullUrl && (
+                                <div className="p-3 flex flex-col gap-2" data-testid={`generated-asset-${a.id}`}>
+                                  <div className="flex items-center gap-2 text-blue-300 text-sm font-bold">
+                                    <span>🧊</span><span>موديل 3D جاهز (.glb)</span>
+                                  </div>
+                                  <a href={fullUrl} download
+                                     className="text-xs px-3 py-2 bg-blue-500/15 hover:bg-blue-500/25 border border-blue-400/40 rounded-lg text-blue-100 text-center font-bold">
+                                    ⬇️ تنزيل الموديل (.glb)
+                                  </a>
+                                  <a href={`https://gltf-viewer.donmccurdy.com/?model=${encodeURIComponent(fullUrl)}`}
+                                     target="_blank" rel="noopener noreferrer"
+                                     className="text-xs px-3 py-2 bg-cyan-500/15 hover:bg-cyan-500/25 border border-cyan-400/40 rounded-lg text-cyan-100 text-center font-bold">
+                                    🔍 معاينة 3D
+                                  </a>
+                                </div>
+                              )}
+                              {isVid && fullUrl && (
+                                <video src={fullUrl} controls className="w-full max-w-md"
+                                       data-testid={`generated-asset-${a.id}`} />
+                              )}
+                              {isAudio && fullUrl && (
+                                <div className="p-3 flex flex-col gap-2" data-testid={`generated-asset-${a.id}`}>
+                                  <div className="text-xs text-blue-300 font-bold">
+                                    {a.type === 'music' ? '🎵 موسيقى خلفية' : '🔊 مؤثر صوتي'} · {a.duration_sec}s
+                                  </div>
+                                  <audio src={fullUrl} controls className="w-full" />
+                                </div>
+                              )}
+                              <div className="px-3 py-2 flex items-center justify-between gap-2 bg-black/40">
+                                <div className="text-xs text-zinc-400 truncate flex-1">
+                                  <span className="text-blue-300 font-bold">{subtypeBadge}</span>
+                                  <span className="mx-1">·</span>
+                                  <span>{a.name?.slice(0, 60)}</span>
+                                </div>
+                                {!a.approved ? (
+                                  <div className="flex gap-1.5 shrink-0">
+                                    <button onClick={() => handleApproveAsset(a.id, true)}
+                                      className="text-xs px-2.5 py-1 bg-emerald-500/20 hover:bg-emerald-500/30 border border-emerald-400/40 text-emerald-200 rounded-lg font-bold"
+                                      data-testid={`approve-asset-${a.id}`}>✓ معتمد</button>
+                                    <button onClick={() => {
+                                        setMessage(`عدّل ${isImg ? 'الصورة' : is3D ? 'الموديل 3D' : isVid ? 'الفيديو' : 'الصوت'} السابق: `);
+                                        handleApproveAsset(a.id, false);
+                                      }}
+                                      className="text-xs px-2.5 py-1 bg-amber-500/20 hover:bg-amber-500/30 border border-amber-400/40 text-amber-200 rounded-lg font-bold"
+                                      data-testid={`iterate-asset-${a.id}`}>↻ عدّل</button>
+                                  </div>
+                                ) : (
+                                  <span className="text-xs px-2 py-1 bg-emerald-500/20 border border-emerald-400/40 text-emerald-200 rounded-lg shrink-0">✓ معتمد</span>
+                                )}
+                              </div>
                             </div>
-                          </div>
-                        ))}
+                          );
+                        })}
                       </div>
                     )}
                   </div>
