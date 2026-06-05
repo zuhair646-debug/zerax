@@ -86,11 +86,19 @@ async def generate_flux_pro(prompt: str, project_id: str, aspect_ratio: str = "1
     asset_id = str(uuid.uuid4())
     dest = f"{UPLOAD_ROOT}/{project_id}/assets/{asset_id}.png"
     await _download_to(img_url, dest)
+    # Read the bytes back so caller can also persist to GridFS (survives redeploys)
+    try:
+        with open(dest, "rb") as fh:
+            img_bytes = fh.read()
+    except Exception:
+        img_bytes = None
     return {
         "id": asset_id,
         "type": "image",
         "subtype": "flux-pro-ultra",
         "image_url": f"/api/games/asset-image/{project_id}/{asset_id}.png",
+        "cdn_url": img_url,  # 🔒 Fal CDN URL as fallback (lives ~weeks)
+        "_bytes": img_bytes,  # 🔒 caller must pop & persist to GridFS then delete this key
         "prompt": prompt,
         "name": prompt[:80],
         "approved": False,
@@ -128,11 +136,18 @@ async def generate_3d_model(prompt: str, project_id: str, reference_image_url: O
     asset_id = str(uuid.uuid4())
     dest = f"{UPLOAD_ROOT}/{project_id}/3d/{asset_id}.glb"
     await _download_to(model_url, dest, timeout=180.0)
+    try:
+        with open(dest, "rb") as fh:
+            file_bytes = fh.read()
+    except Exception:
+        file_bytes = None
     return {
         "id": asset_id,
         "type": "3d",
         "subtype": "hyper3d-rodin" if not reference_image_url else "trellis",
         "model_url": f"/api/games/asset-3d/{project_id}/{asset_id}.glb",
+        "cdn_url": model_url,
+        "_bytes": file_bytes,
         "prompt": prompt,
         "name": prompt[:80],
         "approved": False,
@@ -160,11 +175,18 @@ async def animate_image(prompt: str, image_url: str, project_id: str, duration: 
     asset_id = str(uuid.uuid4())
     dest = f"{UPLOAD_ROOT}/{project_id}/videos/{asset_id}.mp4"
     await _download_to(video_url, dest, timeout=180.0)
+    try:
+        with open(dest, "rb") as fh:
+            file_bytes = fh.read()
+    except Exception:
+        file_bytes = None
     return {
         "id": asset_id,
         "type": "video",
         "subtype": "kling-1.6",
         "video_url": f"/api/games/asset-video/{project_id}/{asset_id}.mp4",
+        "cdn_url": video_url,
+        "_bytes": file_bytes,
         "prompt": prompt,
         "name": prompt[:80],
         "duration_sec": duration,
@@ -191,11 +213,18 @@ async def generate_music(prompt: str, project_id: str, duration: int = 30) -> Di
     asset_id = str(uuid.uuid4())
     dest = f"{UPLOAD_ROOT}/{project_id}/audio/{asset_id}.wav"
     await _download_to(audio_url, dest)
+    try:
+        with open(dest, "rb") as fh:
+            file_bytes = fh.read()
+    except Exception:
+        file_bytes = None
     return {
         "id": asset_id,
         "type": "music",
         "subtype": "cassetteai",
         "audio_url": f"/api/games/asset-audio/{project_id}/{asset_id}.wav",
+        "cdn_url": audio_url,
+        "_bytes": file_bytes,
         "prompt": prompt,
         "name": prompt[:80],
         "duration_sec": duration,
@@ -222,11 +251,18 @@ async def generate_sfx(prompt: str, project_id: str, duration: int = 5) -> Dict[
     asset_id = str(uuid.uuid4())
     dest = f"{UPLOAD_ROOT}/{project_id}/audio/{asset_id}.wav"
     await _download_to(audio_url, dest)
+    try:
+        with open(dest, "rb") as fh:
+            file_bytes = fh.read()
+    except Exception:
+        file_bytes = None
     return {
         "id": asset_id,
         "type": "sfx",
         "subtype": "cassetteai-sfx",
         "audio_url": f"/api/games/asset-audio/{project_id}/{asset_id}.wav",
+        "cdn_url": audio_url,
+        "_bytes": file_bytes,
         "prompt": prompt,
         "name": prompt[:80],
         "duration_sec": duration,

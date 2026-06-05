@@ -326,49 +326,165 @@ def create_game_router(db, get_current_user):
     # ───────────────────────────────────────────────────────────
     @router.get("/asset-image/{project_id}/{filename}")
     async def serve_asset_image(project_id: str, filename: str):
-        """Serve generated game asset image (public, no auth — needed for <img src> in chat)."""
-        from fastapi.responses import FileResponse
-        # Sanitize filename to prevent path traversal
+        """Serve generated game asset image with 3-level persistence fallback:
+        local disk → MongoDB GridFS → cdn_url redirect → 404.
+        Ensures images survive container redeploys (ephemeral disk on Railway/Vercel).
+        """
+        from fastapi.responses import FileResponse, Response, RedirectResponse
+        from modules.games.persistence import (
+            load_bytes as _gridfs_load,
+            lookup_asset_in_project as _lookup,
+            warm_cache as _warm,
+        )
         if "/" in filename or ".." in filename or not filename.endswith(".png"):
             raise HTTPException(400, "Invalid filename")
         path = f"/app/backend/uploads/games/{project_id}/assets/{filename}"
-        if not os.path.exists(path):
-            raise HTTPException(404, "Asset not found")
-        return FileResponse(path, media_type="image/png")
+        # 1. Local disk
+        if os.path.exists(path):
+            return FileResponse(path, media_type="image/png")
+        asset_id = filename[:-4]  # strip ".png"
+        # 2. GridFS
+        data = await _gridfs_load(db, asset_id)
+        if data:
+            await _warm(path, data)  # repopulate local cache
+            return Response(content=data, media_type="image/png")
+        # 3. cdn_url redirect (Fal CDN)
+        asset = await _lookup(db, project_id, asset_id)
+        cdn = (asset or {}).get("cdn_url")
+        if cdn:
+            return RedirectResponse(url=cdn, status_code=302)
+        raise HTTPException(404, "Asset not found")
 
     @router.get("/asset-3d/{project_id}/{filename}")
     async def serve_asset_3d(project_id: str, filename: str):
-        """Serve generated 3D model (.glb) — used by Three.js viewer in frontend."""
-        from fastapi.responses import FileResponse
+        """Serve generated 3D model (.glb) with same 3-level fallback."""
+        from fastapi.responses import FileResponse, Response, RedirectResponse
+        from modules.games.persistence import (
+            load_bytes as _gridfs_load,
+            lookup_asset_in_project as _lookup,
+            warm_cache as _warm,
+        )
         if "/" in filename or ".." in filename or not filename.endswith(".glb"):
             raise HTTPException(400, "Invalid filename")
         path = f"/app/backend/uploads/games/{project_id}/3d/{filename}"
-        if not os.path.exists(path):
-            raise HTTPException(404, "3D model not found")
-        return FileResponse(path, media_type="model/gltf-binary")
+        if os.path.exists(path):
+            return FileResponse(path, media_type="model/gltf-binary")
+        asset_id = filename[:-4]
+        data = await _gridfs_load(db, asset_id)
+        if data:
+            await _warm(path, data)
+            return Response(content=data, media_type="model/gltf-binary")
+        asset = await _lookup(db, project_id, asset_id)
+        cdn = (asset or {}).get("cdn_url")
+        if cdn:
+            return RedirectResponse(url=cdn, status_code=302)
+        raise HTTPException(404, "3D model not found")
 
     @router.get("/asset-video/{project_id}/{filename}")
     async def serve_asset_video(project_id: str, filename: str):
-        """Serve generated video clip (Kling/Sora output)."""
-        from fastapi.responses import FileResponse
+        """Serve generated video (.mp4) with same 3-level fallback."""
+        from fastapi.responses import FileResponse, Response, RedirectResponse
+        from modules.games.persistence import (
+            load_bytes as _gridfs_load,
+            lookup_asset_in_project as _lookup,
+            warm_cache as _warm,
+        )
         if "/" in filename or ".." in filename or not filename.endswith(".mp4"):
             raise HTTPException(400, "Invalid filename")
         path = f"/app/backend/uploads/games/{project_id}/videos/{filename}"
-        if not os.path.exists(path):
-            raise HTTPException(404, "Video not found")
-        return FileResponse(path, media_type="video/mp4")
+        if os.path.exists(path):
+            return FileResponse(path, media_type="video/mp4")
+        asset_id = filename[:-4]
+        data = await _gridfs_load(db, asset_id)
+        if data:
+            await _warm(path, data)
+            return Response(content=data, media_type="video/mp4")
+        asset = await _lookup(db, project_id, asset_id)
+        cdn = (asset or {}).get("cdn_url")
+        if cdn:
+            return RedirectResponse(url=cdn, status_code=302)
+        raise HTTPException(404, "Video not found")
 
     @router.get("/asset-audio/{project_id}/{filename}")
     async def serve_asset_audio(project_id: str, filename: str):
-        """Serve generated music (.wav from CassetteAI) or SFX (.mp3 from ElevenLabs)."""
-        from fastapi.responses import FileResponse
+        """Serve generated audio (.wav/.mp3) with same 3-level fallback."""
+        from fastapi.responses import FileResponse, Response, RedirectResponse
+        from modules.games.persistence import (
+            load_bytes as _gridfs_load,
+            lookup_asset_in_project as _lookup,
+            warm_cache as _warm,
+        )
         if "/" in filename or ".." in filename or not (filename.endswith(".mp3") or filename.endswith(".wav")):
             raise HTTPException(400, "Invalid filename")
         path = f"/app/backend/uploads/games/{project_id}/audio/{filename}"
-        if not os.path.exists(path):
-            raise HTTPException(404, "Audio not found")
         media = "audio/wav" if filename.endswith(".wav") else "audio/mpeg"
-        return FileResponse(path, media_type=media)
+        if os.path.exists(path):
+            return FileResponse(path, media_type=media)
+        asset_id = filename.rsplit(".", 1)[0]
+        data = await _gridfs_load(db, asset_id)
+        if data:
+            await _warm(path, data)
+            return Response(content=data, media_type=media)
+        asset = await _lookup(db, project_id, asset_id)
+        cdn = (asset or {}).get("cdn_url")
+        if cdn:
+            return RedirectResponse(url=cdn, status_code=302)
+        raise HTTPException(404, "Audio not found")
+
+    # ───────────────────────────────────────────────────────────
+    # 🛟 POST /admin/backfill-assets — one-time bulk persist all local assets
+    # ───────────────────────────────────────────────────────────
+    @router.post("/admin/backfill-assets")
+    async def backfill_assets_to_gridfs(user=Depends(get_current_user)):
+        """Owner-only: scan every project's local assets folder and push all
+        existing files into MongoDB GridFS so they survive future redeploys.
+        Idempotent — re-running is safe (existing GridFS entries are replaced).
+        """
+        # Verify owner via DB lookup (get_current_user only returns user_id/role)
+        u = await db.users.find_one({"id": user["user_id"]}, {"is_owner": 1, "role": 1})
+        if not (u and (u.get("is_owner") or u.get("role") == "owner")):
+            raise HTTPException(403, "Owner only")
+        from modules.games.persistence import persist_bytes as _persist
+        root = "/app/backend/uploads/games"
+        if not os.path.isdir(root):
+            return {"ok": True, "scanned": 0, "persisted": 0, "skipped": 0}
+        scanned = 0
+        persisted = 0
+        skipped = 0
+        ext_to_ct = {
+            ".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg",
+            ".glb": "model/gltf-binary",
+            ".mp4": "video/mp4",
+            ".wav": "audio/wav", ".mp3": "audio/mpeg",
+        }
+        for project_id in os.listdir(root):
+            pdir = os.path.join(root, project_id)
+            if not os.path.isdir(pdir):
+                continue
+            for kind in ("assets", "3d", "videos", "audio"):
+                kdir = os.path.join(pdir, kind)
+                if not os.path.isdir(kdir):
+                    continue
+                for fname in os.listdir(kdir):
+                    fpath = os.path.join(kdir, fname)
+                    if not os.path.isfile(fpath):
+                        continue
+                    scanned += 1
+                    asset_id, ext = os.path.splitext(fname)
+                    ct = ext_to_ct.get(ext.lower(), "application/octet-stream")
+                    try:
+                        with open(fpath, "rb") as fh:
+                            data = fh.read()
+                        ok = await _persist(db, asset_id, data, ct, project_id)
+                        if ok:
+                            persisted += 1
+                        else:
+                            skipped += 1
+                    except Exception as e:
+                        logger.warning(f"[backfill] failed {fpath}: {e}")
+                        skipped += 1
+        logger.info(f"[backfill] scanned={scanned} persisted={persisted} skipped={skipped}")
+        return {"ok": True, "scanned": scanned, "persisted": persisted, "skipped": skipped}
     
     # ───────────────────────────────────────────────────────────
     # 📋 POST /project — Create new game project
@@ -735,6 +851,12 @@ def create_game_router(db, get_current_user):
                                     img_path = f"{asset_dir}/{asset_id}.png"
                                     with open(img_path, "wb") as f:
                                         f.write(img_bytes)
+                                    # 🔒 Persist to GridFS so the image survives container redeploys
+                                    try:
+                                        from modules.games.persistence import persist_bytes as _persist
+                                        await _persist(db, asset_id, img_bytes, "image/png", project_id)
+                                    except Exception as p_err:
+                                        logger.warning(f"[games] GridFS persist failed for {asset_id}: {p_err}")
                                     img_url = f"/api/games/asset-image/{project_id}/{asset_id}.png"
                                     asset_entry = {
                                         "id": asset_id,
@@ -795,9 +917,20 @@ def create_game_router(db, get_current_user):
                 })
             else:
                 from modules.games.fal_tools import parse_and_generate_assets
+                from modules.games.persistence import persist_bytes as _persist
                 fal_assets = await parse_and_generate_assets(ai_message, project_id, max_assets_per_turn=3)
                 for fa in fal_assets:
                     fa["phase_id"] = phase_id
+                    # 🔒 Pull out the raw bytes (set by fal_tools) and persist to GridFS so
+                    # the asset survives container redeploys. Then strip _bytes before saving to DB.
+                    raw = fa.pop("_bytes", None)
+                    if raw:
+                        try:
+                            ct_map = {"image": "image/png", "3d": "model/gltf-binary",
+                                       "video": "video/mp4", "music": "audio/wav", "sfx": "audio/wav"}
+                            await _persist(db, fa["id"], raw, ct_map.get(fa.get("type"), "application/octet-stream"), project_id)
+                        except Exception as p_err:
+                            logger.warning(f"[games][fal] GridFS persist failed for {fa.get('id')}: {p_err}")
                     generated_assets.append(fa)
                     # Save to appropriate asset bucket in the project doc
                     bucket = "images" if fa["type"] in ("image",) else (

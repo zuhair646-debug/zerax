@@ -14,6 +14,7 @@ import StorageBadge from '@/components/StorageBadge';
 import ImageLightbox from '@/components/ImageLightbox';
 import MyProjectsModal from '@/components/games/MyProjectsModal';
 import AINotesPanel from '@/components/games/AINotesPanel';
+import SafeAssetImage from '@/components/games/SafeAssetImage';
 
 const API = process.env.REACT_APP_BACKEND_URL;
 
@@ -575,9 +576,13 @@ export default function AppGamesStudio({ user }) {
                         {items.map(a => (
                           <div key={a.id} className={`rounded-lg border border-${meta.color}-500/30 bg-black/30 overflow-hidden`}>
                             {a.image_url && (
-                              <img src={`${API}${a.image_url}`} alt={a.name}
-                                   onClick={() => setLightbox({ src: `${API}${a.image_url}`, alt: a.name })}
-                                   className="w-full aspect-square object-cover cursor-zoom-in hover:opacity-90 transition-opacity" loading="lazy" />
+                              <SafeAssetImage
+                                src={`${API}${a.image_url}`}
+                                cdnUrl={a.cdn_url}
+                                alt={a.name}
+                                onClick={() => setLightbox({ src: `${API}${a.image_url}`, alt: a.name, cdnUrl: a.cdn_url })}
+                                className="w-full aspect-square object-cover cursor-zoom-in hover:opacity-90 transition-opacity"
+                              />
                             )}
                             {a.audio_url && (
                               <div className="p-3 aspect-square flex flex-col justify-center bg-violet-500/10">
@@ -653,10 +658,14 @@ export default function AppGamesStudio({ user }) {
                           return (
                             <div key={a.id} className="border border-blue-500/20 rounded-xl overflow-hidden bg-black/30">
                               {isImg && fullUrl && (
-                                <img src={fullUrl} alt={a.name} loading="lazy"
-                                     onClick={() => setLightbox({ src: fullUrl, alt: a.name })}
-                                     className="w-full max-w-md object-cover cursor-zoom-in hover:opacity-90 transition-opacity"
-                                     data-testid={`generated-asset-${a.id}`} />
+                                <SafeAssetImage
+                                  src={fullUrl}
+                                  cdnUrl={a.cdn_url}
+                                  alt={a.name}
+                                  onClick={() => setLightbox({ src: fullUrl, alt: a.name, cdnUrl: a.cdn_url })}
+                                  className="w-full max-w-md object-cover cursor-zoom-in hover:opacity-90 transition-opacity"
+                                  data-testid={`generated-asset-${a.id}`}
+                                />
                               )}
                               {is3D && fullUrl && (
                                 <div className="p-3 flex flex-col gap-2" data-testid={`generated-asset-${a.id}`}>
