@@ -1,6 +1,10 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, Loader2, Send, Check, AlertCircle, Sparkles } from 'lucide-react';
+import { 
+  Gamepad2, Send, Paperclip, Loader2, Check, X, 
+  Eye, Code, Image, FileText, Package, Sparkles,
+  ArrowRight, Lock, Unlock, CheckCircle2
+} from 'lucide-react';
 import { toast } from 'sonner';
 
 const API = process.env.REACT_APP_BACKEND_URL;
@@ -8,225 +12,515 @@ const API = process.env.REACT_APP_BACKEND_URL;
 export default function WebGamesStudio({ user }) {
   const navigate = useNavigate();
   const token = localStorage.getItem('token');
+  
+  const [step, setStep] = useState('select_tech'); // select_tech | chat
+  const [programmingTypes, setProgrammingTypes] = useState([]);
+  const [selectedTech, setSelectedTech] = useState(null);
+  const [projectTitle, setProjectTitle] = useState('');
+  const [projectDesc, setProjectDesc] = useState('');
+  
+  const [project, setProject] = useState(null);
+  const [message, setMessage] = useState('');
+  const [attachments, setAttachments] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [activePhase, setActivePhase] = useState('discovery');
+  
+  const chatEndRef = useRef(null);
+  const fileInputRef = useRef(null);
 
-  const [projects, setProjects] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [showNewProject, setShowNewProject] = useState(false);
-  const [idea, setIdea] = useState('');
-  const [creating, setCreating] = useState(false);
-
-  // ═══════════════════════════════════════════════════════════
-  // Load Projects
-  // ═══════════════════════════════════════════════════════════
+  // Fetch programming types
   useEffect(() => {
-    fetchProjects();
+    fetch(`${API}/api/games/programming-types?game_type=web`, {
+      headers: { Authorization: `Bearer ${token}` }
+    })
+      .then(r => r.json())
+      .then(data => setProgrammingTypes(data.types || []))
+      .catch(e => toast.error(e.message));
   }, []);
 
-  const fetchProjects = async () => {
-    try {
-      const res = await fetch(`${API}/api/games/projects`, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      const data = await res.json();
-      if (data.ok) {
-        setProjects(data.projects.filter(p => p.type === 'web_game'));
-      }
-    } catch (err) {
-      toast.error('خطأ في تحميل المشاريع');
-    } finally {
-      setLoading(false);
+  // Create project
+  const handleCreateProject = async () => {
+    if (!selectedTech || !projectTitle.trim()) {
+      toast.error('اختر نوع البرمجة وأدخل عنوان المشروع');
+      return;
     }
-  };
-
-  // ═══════════════════════════════════════════════════════════
-  // Create New Project
-  // ═══════════════════════════════════════════════════════════
-  const handleCreate = async () => {
-    if (!idea.trim()) return toast.error('اكتب فكرة اللعبة أولاً');
     
-    setCreating(true);
+    setLoading(true);
     try {
-      const res = await fetch(`${API}/api/games/web/start`, {
+      const res = await fetch(`${API}/api/games/project`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`
         },
-        body: JSON.stringify({ idea, game_type: 'web' })
+        body: JSON.stringify({
+          game_type: 'web',
+          title: projectTitle,
+          description: projectDesc,
+          programming_type: selectedTech
+        })
       });
-      const data = await res.json();
       
-      if (data.ok) {
-        toast.success('تم إنشاء المشروع!');
-        navigate(`/dashboard/games/web/${data.project_id}`);
-      } else {
-        toast.error(data.error || 'فشل الإنشاء');
-      }
-    } catch (err) {
-      toast.error('خطأ في الإنشاء');
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.detail || 'Failed to create project');
+      
+      setProject(data.project);
+      setStep('chat');
+      toast.success('🎮 مشروع جديد جاهز!');
+    } catch (e) {
+      toast.error(e.message);
     } finally {
-      setCreating(false);
+      setLoading(false);
     }
   };
 
-  // ═══════════════════════════════════════════════════════════
-  // UI
-  // ═══════════════════════════════════════════════════════════
-  if (loading) {
+  // Send message
+  const handleSendMessage = async () => {
+    if (!message.trim() && attachments.length === 0) return;
+    
+    setLoading(true);
+    const formData = new FormData();
+    formData.append('message', message);
+    formData.append('phase_id', activePhase);
+    attachments.forEach(file => formData.append('files', file));
+    
+    try {
+      const res = await fetch(`${API}/api/games/project/${project.id}/chat`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+        body: formData
+      });
+      
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.detail || 'فشل الإرسال');
+      
+      // Reload project
+      const projectRes = await fetch(`${API}/api/games/project/${project.id}`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      const projectData = await projectRes.json();
+      setProject(projectData.project);
+      
+      setMessage('');
+      setAttachments([]);
+      toast.success(`✨ ${data.credits_used} نقطة — ${data.message.substring(0, 50)}...`);
+      
+      setTimeout(() => chatEndRef.current?.scrollIntoView({ behavior: 'smooth' }), 100);
+    } catch (e) {
+      toast.error(e.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Unlock phase
+  const handleUnlockPhase = async (phaseId) => {
+    try {
+      const res = await fetch(`${API}/api/games/project/${project.id}/unlock-phase?phase_id=${phaseId}`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (!res.ok) throw new Error('Failed to unlock');
+      
+      setActivePhase(phaseId);
+      
+      // Reload project
+      const projectRes = await fetch(`${API}/api/games/project/${project.id}`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      const projectData = await projectRes.json();
+      setProject(projectData.project);
+      
+      toast.success('🔓 المرحلة مفتوحة');
+    } catch (e) {
+      toast.error(e.message);
+    }
+  };
+
+  // Approve asset
+  const handleApproveAsset = async (assetId, approved) => {
+    try {
+      const res = await fetch(`${API}/api/games/project/${project.id}/approve-asset`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({ asset_id: assetId, approved, feedback: null })
+      });
+      if (!res.ok) throw new Error('Failed to approve');
+      
+      // Reload project
+      const projectRes = await fetch(`${API}/api/games/project/${project.id}`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      const projectData = await projectRes.json();
+      setProject(projectData.project);
+      
+      toast.success(approved ? '✅ تم الاعتماد' : '❌ تم الرفض');
+    } catch (e) {
+      toast.error(e.message);
+    }
+  };
+
+  const phaseIcon = (id) => {
+    const icons = {
+      discovery: '🔍', mechanics: '⚙️', characters: '🎭',
+      environment: '🏞️', assets: '🎨', programming: '💻',
+      testing: '🧪', deployment: '🚀'
+    };
+    return icons[id] || '📦';
+  };
+
+  // ═══════════════════════════════════════════════════════════════
+  // STEP 1: Select Tech Stack
+  // ═══════════════════════════════════════════════════════════════
+  if (step === 'select_tech') {
     return (
-      <div className="min-h-screen bg-zinc-950 flex items-center justify-center">
-        <Loader2 className="w-8 h-8 text-amber-400 animate-spin" />
+      <div dir="rtl" className="min-h-screen bg-gradient-to-br from-zinc-950 via-zinc-900 to-amber-950/20 text-white p-6">
+        <div className="max-w-4xl mx-auto">
+          {/* Header */}
+          <div className="flex items-center gap-4 mb-8">
+            <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-amber-500 to-orange-600 flex items-center justify-center">
+              <Gamepad2 className="w-8 h-8 text-black" />
+            </div>
+            <div>
+              <h1 className="text-3xl font-bold">🎮 Web Games Studio</h1>
+              <p className="text-zinc-400">اختر نوع البرمجة وابدأ مشروعك</p>
+            </div>
+          </div>
+
+          {/* Tech Stack Selection */}
+          <div className="bg-zinc-900/50 backdrop-blur border border-white/10 rounded-2xl p-6 mb-6">
+            <h2 className="text-xl font-bold mb-4">⚙️ اختر نوع البرمجة</h2>
+            <div className="grid md:grid-cols-2 gap-4">
+              {programmingTypes.map(tech => (
+                <button
+                  key={tech.id}
+                  onClick={() => setSelectedTech(tech.id)}
+                  className={`p-4 rounded-xl border-2 transition-all text-right ${
+                    selectedTech === tech.id
+                      ? 'border-amber-500 bg-amber-500/10'
+                      : 'border-white/10 bg-black/20 hover:border-white/20'
+                  }`}
+                >
+                  <div className="font-bold text-lg">{tech.name}</div>
+                  <div className="text-sm text-zinc-400">{tech.desc}</div>
+                  {selectedTech === tech.id && (
+                    <div className="mt-2 flex items-center gap-2 text-amber-400">
+                      <Check className="w-4 h-4" />
+                      <span className="text-sm">محدد</span>
+                    </div>
+                  )}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Project Info */}
+          <div className="bg-zinc-900/50 backdrop-blur border border-white/10 rounded-2xl p-6 mb-6">
+            <h2 className="text-xl font-bold mb-4">📝 معلومات المشروع</h2>
+            <input
+              type="text"
+              placeholder="عنوان اللعبة (مثال: لعبة منصات 2D)"
+              value={projectTitle}
+              onChange={e => setProjectTitle(e.target.value)}
+              className="w-full bg-black/40 border border-white/15 rounded-xl px-4 py-3 mb-4 outline-none focus:border-amber-400"
+            />
+            <textarea
+              placeholder="وصف مختصر (اختياري)"
+              value={projectDesc}
+              onChange={e => setProjectDesc(e.target.value)}
+              rows={3}
+              className="w-full bg-black/40 border border-white/15 rounded-xl px-4 py-3 outline-none focus:border-amber-400 resize-none"
+            />
+          </div>
+
+          {/* Create Button */}
+          <button
+            onClick={handleCreateProject}
+            disabled={!selectedTech || !projectTitle.trim() || loading}
+            className="w-full bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-400 hover:to-orange-500 disabled:from-zinc-700 disabled:to-zinc-800 text-black font-bold rounded-xl py-4 transition-all flex items-center justify-center gap-2"
+          >
+            {loading ? (
+              <>
+                <Loader2 className="w-5 h-5 animate-spin" />
+                <span>جاري الإنشاء...</span>
+              </>
+            ) : (
+              <>
+                <Sparkles className="w-5 h-5" />
+                <span>ابدأ المشروع</span>
+                <ArrowRight className="w-5 h-5" />
+              </>
+            )}
+          </button>
+        </div>
       </div>
     );
   }
 
+  // ═══════════════════════════════════════════════════════════════
+  // STEP 2: Chat Interface (3-pane)
+  // ═══════════════════════════════════════════════════════════════
+  const currentPhaseInfo = project?.phases_definitions?.find(p => p.id === activePhase);
+  const messages = project?.phases?.[activePhase]?.messages || [];
+  const allAssets = project?.assets || {};
+
   return (
-    <div dir="rtl" className="min-h-screen bg-zinc-950 text-white">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        
-        {/* Header */}
-        <div className="flex items-center justify-between mb-8">
-          <div className="flex items-center gap-4">
-            <button
-              onClick={() => navigate('/dashboard/games')}
-              className="p-2 hover:bg-white/5 rounded-lg transition"
-            >
-              <ArrowLeft className="w-5 h-5" />
-            </button>
-            <div>
-              <h1 className="text-3xl font-bold">🎮 ألعاب الويب</h1>
-              <p className="text-zinc-400 mt-1">HTML5 Games — تعمل على أي متصفح</p>
-            </div>
+    <div dir="rtl" className="h-screen bg-zinc-950 text-white flex flex-col">
+      {/* Top Bar */}
+      <div className="bg-zinc-900/80 backdrop-blur border-b border-white/10 px-6 py-4 flex items-center justify-between">
+        <div className="flex items-center gap-4">
+          <Gamepad2 className="w-6 h-6 text-amber-400" />
+          <div>
+            <h1 className="font-bold text-lg">{project?.title}</h1>
+            <p className="text-sm text-zinc-400">{currentPhaseInfo?.title}</p>
           </div>
-          <button
-            onClick={() => setShowNewProject(true)}
-            className="px-6 py-3 bg-gradient-to-r from-blue-500 to-cyan-500 rounded-xl font-bold hover:opacity-90 transition flex items-center gap-2"
-          >
-            <Sparkles className="w-5 h-5" />
-            مشروع جديد
-          </button>
         </div>
-
-        {/* New Project Modal */}
-        {showNewProject && (
-          <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-            <div className="bg-zinc-900 rounded-2xl border border-white/10 max-w-2xl w-full p-8">
-              <h2 className="text-2xl font-bold mb-4">💡 فكرة اللعبة</h2>
-              <p className="text-zinc-400 mb-6">
-                اكتب وصف مختصر للعبة اللي تبيها — الذكاء الاصطناعي راح يساعدك تبنيها خطوة بخطوة
-              </p>
-              
-              <textarea
-                value={idea}
-                onChange={e => setIdea(e.target.value)}
-                placeholder="مثال: لعبة platformer ثنائية الأبعاد، البطل يجمع عملات ذهبية ويتجنب الأعداء، مستوحاة من ماريو..."
-                className="w-full h-32 bg-black/40 border border-white/15 rounded-xl px-4 py-3 outline-none focus:border-cyan-400 transition resize-none"
-                dir="rtl"
-              />
-
-              <div className="flex gap-3 mt-6">
-                <button
-                  onClick={handleCreate}
-                  disabled={creating || !idea.trim()}
-                  className="flex-1 px-6 py-3 bg-gradient-to-r from-blue-500 to-cyan-500 rounded-xl font-bold disabled:opacity-50 disabled:cursor-not-allowed hover:opacity-90 transition flex items-center justify-center gap-2"
-                >
-                  {creating ? (
-                    <>
-                      <Loader2 className="w-5 h-5 animate-spin" />
-                      جاري الإنشاء...
-                    </>
-                  ) : (
-                    <>
-                      <Sparkles className="w-5 h-5" />
-                      ابدأ المشروع
-                    </>
-                  )}
-                </button>
-                <button
-                  onClick={() => setShowNewProject(false)}
-                  className="px-6 py-3 bg-white/5 hover:bg-white/10 rounded-xl font-bold transition"
-                >
-                  إلغاء
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Projects List */}
-        {projects.length === 0 ? (
-          <div className="text-center py-20">
-            <div className="w-20 h-20 rounded-full bg-white/5 flex items-center justify-center mx-auto mb-4">
-              <Sparkles className="w-10 h-10 text-zinc-600" />
-            </div>
-            <h3 className="text-xl font-bold text-zinc-400 mb-2">ما عندك مشاريع بعد</h3>
-            <p className="text-zinc-500 mb-6">ابدأ مشروعك الأول الحين!</p>
-            <button
-              onClick={() => setShowNewProject(true)}
-              className="px-6 py-3 bg-gradient-to-r from-blue-500 to-cyan-500 rounded-xl font-bold hover:opacity-90 transition"
+        <div className="flex items-center gap-3">
+          {project?.preview_url && (
+            <a
+              href={project.preview_url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="px-4 py-2 bg-amber-500/20 text-amber-400 border border-amber-500/30 rounded-lg hover:bg-amber-500/30 flex items-center gap-2"
             >
-              إنشاء مشروع
-            </button>
+              <Eye className="w-4 h-4" />
+              <span>Live Preview</span>
+            </a>
+          )}
+          <div className="px-4 py-2 bg-white/5 rounded-lg text-sm">
+            💰 {user?.balance || 0} نقطة
           </div>
-        ) : (
-          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {projects.map(project => {
-              const phases = project.phases || [];
-              const current = project.current_phase || 0;
-              const progress = (current / phases.length) * 100;
+        </div>
+      </div>
+
+      {/* Main Layout: 3 Panes */}
+      <div className="flex-1 flex overflow-hidden">
+        {/* LEFT: Phases Sidebar */}
+        <div className="w-64 bg-zinc-900/50 border-l border-white/10 p-4 overflow-y-auto">
+          <h2 className="font-bold mb-3 text-amber-400">📋 المراحل</h2>
+          <div className="space-y-2">
+            {project?.phases_definitions?.map(phase => {
+              const phaseData = project.phases[phase.id];
+              const isActive = activePhase === phase.id;
+              const isLocked = phaseData.status === 'locked';
               
               return (
-                <div
-                  key={project.id}
-                  onClick={() => navigate(`/dashboard/games/web/${project.id}`)}
-                  className="group bg-zinc-900/50 backdrop-blur border border-white/10 rounded-2xl p-6 hover:border-cyan-400/50 transition cursor-pointer"
+                <button
+                  key={phase.id}
+                  onClick={() => !isLocked && setActivePhase(phase.id)}
+                  disabled={isLocked}
+                  className={`w-full text-right p-3 rounded-lg border transition-all ${
+                    isActive
+                      ? 'bg-amber-500/20 border-amber-500/50 text-amber-300'
+                      : isLocked
+                      ? 'bg-black/20 border-white/5 text-zinc-600 cursor-not-allowed'
+                      : 'bg-black/20 border-white/10 hover:border-white/20'
+                  }`}
                 >
-                  <div className="flex items-start justify-between mb-4">
-                    <div className="flex-1">
-                      <h3 className="font-bold text-lg mb-1 line-clamp-1">{project.idea}</h3>
-                      <p className="text-sm text-zinc-400">
-                        {new Date(project.created_at).toLocaleDateString('ar-SA')}
-                      </p>
-                    </div>
-                    {project.status === 'completed' && (
-                      <div className="w-8 h-8 rounded-full bg-green-500/20 flex items-center justify-center">
-                        <Check className="w-4 h-4 text-green-400" />
-                      </div>
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="text-sm font-bold">{phaseIcon(phase.id)} {phase.title.replace(/🔍|⚙️|🎭|🏞️|🎨|💻|🧪|🚀/g, '').trim()}</span>
+                    {isLocked ? (
+                      <Lock className="w-3 h-3" />
+                    ) : phaseData.status === 'completed' ? (
+                      <CheckCircle2 className="w-3 h-3 text-green-400" />
+                    ) : (
+                      <Unlock className="w-3 h-3 text-amber-400" />
                     )}
                   </div>
-
-                  {/* Progress */}
-                  <div className="mb-4">
-                    <div className="flex items-center justify-between text-xs text-zinc-500 mb-2">
-                      <span>المرحلة {current + 1} من {phases.length}</span>
-                      <span>{Math.round(progress)}%</span>
-                    </div>
-                    <div className="h-2 bg-black/40 rounded-full overflow-hidden">
-                      <div
-                        className="h-full bg-gradient-to-r from-blue-500 to-cyan-500 transition-all duration-500"
-                        style={{ width: `${progress}%` }}
-                      />
-                    </div>
-                  </div>
-
-                  {/* Current Phase */}
-                  {phases[current] && (
-                    <div className="text-sm text-zinc-400">
-                      <span className="text-cyan-400 font-semibold">المرحلة الحالية:</span> {phases[current].title}
-                    </div>
+                  <div className="text-xs text-zinc-500">{phase.credits} نقطة</div>
+                  {isLocked && (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleUnlockPhase(phase.id);
+                      }}
+                      className="mt-2 w-full text-xs bg-amber-500/10 border border-amber-500/30 rounded px-2 py-1 hover:bg-amber-500/20"
+                    >
+                      🔓 فتح
+                    </button>
                   )}
-
-                  {/* Credits Spent */}
-                  <div className="mt-4 pt-4 border-t border-white/5 flex items-center justify-between text-sm">
-                    <span className="text-zinc-500">مصروف</span>
-                    <span className="text-amber-400 font-bold">{project.total_credits_spent || 0} نقطة</span>
-                  </div>
-                </div>
+                </button>
               );
             })}
           </div>
-        )}
+        </div>
 
+        {/* CENTER: Chat */}
+        <div className="flex-1 flex flex-col">
+          {/* Messages */}
+          <div className="flex-1 overflow-y-auto p-6 space-y-4">
+            {messages.length === 0 && (
+              <div className="text-center text-zinc-500 mt-12">
+                <div className="text-6xl mb-4">{phaseIcon(activePhase)}</div>
+                <h3 className="text-xl font-bold mb-2">{currentPhaseInfo?.title}</h3>
+                <p className="text-sm">{currentPhaseInfo?.description}</p>
+                <div className="mt-4 text-xs">
+                  <strong>المخرجات المتوقعة:</strong>
+                  <div className="flex flex-wrap gap-2 justify-center mt-2">
+                    {currentPhaseInfo?.deliverables?.map(d => (
+                      <span key={d} className="px-2 py-1 bg-white/5 rounded">{d}</span>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {messages.map((msg, i) => (
+              <div key={i} className="space-y-3">
+                {/* User */}
+                <div className="flex justify-end">
+                  <div className="bg-amber-500/20 border border-amber-500/30 rounded-2xl rounded-br-sm px-4 py-3 max-w-2xl">
+                    <div className="text-sm">{msg.user}</div>
+                    {msg.attachments?.length > 0 && (
+                      <div className="mt-2 flex gap-2 flex-wrap">
+                        {msg.attachments.map((att, j) => (
+                          <div key={j} className="text-xs bg-black/30 px-2 py-1 rounded flex items-center gap-1">
+                            <Paperclip className="w-3 h-3" />
+                            <span>{att.filename}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Assistant */}
+                <div className="flex justify-start">
+                  <div className="bg-zinc-800/50 border border-white/10 rounded-2xl rounded-bl-sm px-4 py-3 max-w-3xl">
+                    <div className="text-sm whitespace-pre-wrap">{msg.assistant}</div>
+                  </div>
+                </div>
+              </div>
+            ))}
+            <div ref={chatEndRef} />
+          </div>
+
+          {/* Input */}
+          <div className="border-t border-white/10 p-4 bg-zinc-900/50">
+            {attachments.length > 0 && (
+              <div className="mb-3 flex gap-2 flex-wrap">
+                {attachments.map((file, i) => (
+                  <div key={i} className="px-3 py-2 bg-amber-500/10 border border-amber-500/30 rounded-lg flex items-center gap-2 text-sm">
+                    <Paperclip className="w-4 h-4" />
+                    <span>{file.name}</span>
+                    <button onClick={() => setAttachments(attachments.filter((_, j) => j !== i))}>
+                      <X className="w-4 h-4 hover:text-red-400" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            <div className="flex gap-3">
+              <input
+                type="file"
+                ref={fileInputRef}
+                multiple
+                onChange={e => setAttachments([...attachments, ...Array.from(e.target.files)])}
+                className="hidden"
+              />
+              <button
+                onClick={() => fileInputRef.current?.click()}
+                className="px-4 py-3 bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl"
+              >
+                <Paperclip className="w-5 h-5" />
+              </button>
+              <input
+                type="text"
+                placeholder="اكتب رسالتك هنا..."
+                value={message}
+                onChange={e => setMessage(e.target.value)}
+                onKeyDown={e => e.key === 'Enter' && !e.shiftKey && handleSendMessage()}
+                className="flex-1 bg-black/40 border border-white/15 rounded-xl px-4 py-3 outline-none focus:border-amber-400"
+              />
+              <button
+                onClick={handleSendMessage}
+                disabled={loading || (!message.trim() && attachments.length === 0)}
+                className="px-6 py-3 bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-400 hover:to-orange-500 disabled:from-zinc-700 disabled:to-zinc-800 text-black font-bold rounded-xl flex items-center gap-2"
+              >
+                {loading ? (
+                  <Loader2 className="w-5 h-5 animate-spin" />
+                ) : (
+                  <Send className="w-5 h-5" />
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {/* RIGHT: Assets Library */}
+        <div className="w-80 bg-zinc-900/50 border-r border-white/10 p-4 overflow-y-auto">
+          <h2 className="font-bold mb-3 text-amber-400">🎨 مكتبة الأصول</h2>
+          
+          {Object.entries(allAssets).map(([type, assets]) => {
+            if (assets.length === 0) return null;
+            
+            const typeIcons = {
+              characters: <Package className="w-4 h-4" />,
+              environments: <Image className="w-4 h-4" />,
+              ui: <Code className="w-4 h-4" />,
+              code: <FileText className="w-4 h-4" />,
+              docs: <FileText className="w-4 h-4" />
+            };
+            
+            return (
+              <div key={type} className="mb-4">
+                <div className="flex items-center gap-2 text-sm font-bold text-zinc-400 mb-2">
+                  {typeIcons[type]}
+                  <span>{type}</span>
+                </div>
+                <div className="space-y-2">
+                  {assets.map(asset => (
+                    <div
+                      key={asset.id}
+                      className={`p-3 rounded-lg border ${
+                        asset.approved
+                          ? 'bg-green-500/10 border-green-500/30'
+                          : 'bg-black/20 border-white/10'
+                      }`}
+                    >
+                      <div className="text-sm font-bold mb-1">{asset.name}</div>
+                      <div className="text-xs text-zinc-500 mb-2">{asset.description}</div>
+                      {!asset.approved && (
+                        <div className="flex gap-2">
+                          <button
+                            onClick={() => handleApproveAsset(asset.id, true)}
+                            className="flex-1 px-2 py-1 bg-green-500/20 border border-green-500/30 rounded text-xs hover:bg-green-500/30 flex items-center justify-center gap-1"
+                          >
+                            <Check className="w-3 h-3" />
+                            <span>اعتماد</span>
+                          </button>
+                          <button
+                            onClick={() => handleApproveAsset(asset.id, false)}
+                            className="flex-1 px-2 py-1 bg-red-500/20 border border-red-500/30 rounded text-xs hover:bg-red-500/30 flex items-center justify-center gap-1"
+                          >
+                            <X className="w-3 h-3" />
+                            <span>رفض</span>
+                          </button>
+                        </div>
+                      )}
+                      {asset.approved && (
+                        <div className="text-xs text-green-400 flex items-center gap-1">
+                          <CheckCircle2 className="w-3 h-3" />
+                          <span>معتمد</span>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            );
+          })}
+
+          {Object.values(allAssets).every(arr => arr.length === 0) && (
+            <div className="text-center text-zinc-600 text-sm mt-8">
+              لا توجد أصول بعد
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );

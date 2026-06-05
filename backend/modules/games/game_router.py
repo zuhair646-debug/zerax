@@ -1,12 +1,16 @@
 """
-🎮 Game Studio Router — Web Games + App Games (Phase-Based Workflow) v2.0
+🎮 Game Studio Router v3.0 — Professional Game Development Workflow
 
-Features:
-  • 8 مراحل لـWeb Games، 9 لـApp Games
-  • دعم رفع ملفات (مراجع، صور، GDD)
-  • تخزين منظّم للـassets (characters, environments, ui, code, docs)
-  • لا قيود — كل المراحل مفتوحة للتجربة والتعديل
-  • Gemini Flash 2.5 للذكاء السريع
+✨ NEW FEATURES:
+  • Programming Type Selection (Flutter, Native Android/iOS, React Native, Unity, HTML5)
+  • Live Preview URL for each stage
+  • Asset Storage with approval system
+  • Memory system — AI remembers approved assets
+  • Professional AI prompts for actual code generation
+
+📋 Workflow:
+  Web Games: 8 phases (Discovery → Deployment)
+  App Games: 9 phases (Discovery → Store Publishing)
 """
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form
 from typing import Optional, List, Dict, Any
@@ -17,8 +21,30 @@ import logging
 import os
 import httpx
 import base64
+import json
 
 logger = logging.getLogger(__name__)
+
+# ═══════════════════════════════════════════════════════════════
+# 🎯 Programming Types
+# ═══════════════════════════════════════════════════════════════
+PROGRAMMING_TYPES = {
+    "web": [
+        {"id": "html5_canvas", "name": "HTML5 Canvas (Pure)", "desc": "رسم مباشر بدون مكتبات"},
+        {"id": "phaser", "name": "Phaser.js", "desc": "محرك ألعاب 2D احترافي"},
+        {"id": "threejs", "name": "Three.js", "desc": "ألعاب 3D في المتصفح"},
+        {"id": "unity_webgl", "name": "Unity WebGL", "desc": "تصدير من Unity للويب"},
+        {"id": "custom", "name": "Custom Framework", "desc": "إطار عمل خاص"}
+    ],
+    "app": [
+        {"id": "flutter", "name": "Flutter", "desc": "تطبيق واحد لـ Android + iOS"},
+        {"id": "native_android", "name": "Native Android (Kotlin)", "desc": "Android فقط"},
+        {"id": "native_ios", "name": "Native iOS (Swift)", "desc": "iOS فقط"},
+        {"id": "react_native", "name": "React Native", "desc": "JavaScript لكلا المنصتين"},
+        {"id": "unity", "name": "Unity", "desc": "محرك ألعاب احترافي"},
+        {"id": "godot", "name": "Godot", "desc": "محرك مفتوح المصدر"}
+    ]
+}
 
 # ═══════════════════════════════════════════════════════════════
 # 🎯 Phase Definitions (Web Games)
@@ -29,56 +55,70 @@ WEB_GAME_PHASES = [
         "title": "🔍 Discovery & GDD",
         "description": "فهم الفكرة + كتابة Game Design Document",
         "credits": 50,
-        "deliverables": ["GDD.md", "Genre", "Target Audience", "Core Mechanics"]
+        "deliverables": ["GDD.md", "Genre", "Target Audience", "Core Mechanics"],
+        "requires_approval": True
     },
     {
         "id": "mechanics",
         "title": "⚙️ Core Mechanics Design",
         "description": "تصميم آليات اللعب الأساسية",
         "credits": 100,
-        "deliverables": ["Mechanics Doc", "Flowchart", "Prototype Sketch"]
+        "deliverables": ["Mechanics Doc", "Flowchart", "Prototype Sketch"],
+        "requires_approval": True
     },
     {
         "id": "characters",
         "title": "🎭 Character Design",
         "description": "تصميم الشخصيات (مظهر، قدرات، animations)",
         "credits": 150,
-        "deliverables": ["Character Sheets", "Concept Art", "Sprite Assets"]
+        "deliverables": ["Character Sheets", "Concept Art", "Sprite Assets"],
+        "requires_approval": True,
+        "asset_type": "characters"
     },
     {
         "id": "environment",
         "title": "🏞️ Environment Design",
         "description": "تصميم البيئات (خلفيات، tiles، obstacles)",
         "credits": 200,
-        "deliverables": ["Environment Sketches", "Tileset", "Background Assets"]
+        "deliverables": ["Environment Sketches", "Tileset", "Background Assets"],
+        "requires_approval": True,
+        "asset_type": "environments"
     },
     {
         "id": "assets",
         "title": "🎨 Assets Generation",
         "description": "توليد كل الأصول (UI, sounds, effects)",
         "credits": 100,
-        "deliverables": ["UI Kit", "Sound Effects", "Visual Effects"]
+        "deliverables": ["UI Kit", "Sound Effects", "Visual Effects"],
+        "requires_approval": True,
+        "asset_type": "ui"
     },
     {
         "id": "programming",
         "title": "💻 Programming & Integration",
         "description": "برمجة اللعبة + تكامل الأصول",
         "credits": 300,
-        "deliverables": ["Playable Build", "Source Code", "Documentation"]
+        "deliverables": ["Playable Build", "Source Code", "Documentation"],
+        "requires_approval": False,
+        "asset_type": "code",
+        "generates_preview": True
     },
     {
         "id": "testing",
         "title": "🧪 Testing & QA",
         "description": "اختبار شامل + إصلاح bugs",
         "credits": 100,
-        "deliverables": ["Test Report", "Bug Fixes", "Performance Optimization"]
+        "deliverables": ["Test Report", "Bug Fixes", "Performance Optimization"],
+        "requires_approval": False
     },
     {
         "id": "deployment",
         "title": "🚀 Deployment & Delivery",
         "description": "نشر اللعبة + تسليم نهائي",
         "credits": 150,
-        "deliverables": ["Live Game URL", "Source Package", "User Guide"]
+        "deliverables": ["Live Game URL", "Source Package", "User Guide"],
+        "requires_approval": False,
+        "generates_preview": True
     }
 ]
 
@@ -91,476 +131,468 @@ APP_GAME_PHASES = [
         "title": "🔍 Discovery & GDD",
         "description": "فهم الفكرة + Game Design Document",
         "credits": 80,
-        "deliverables": ["GDD.md", "Platform Choice", "Monetization Strategy"]
+        "deliverables": ["GDD.md", "Platform Choice", "Monetization Strategy"],
+        "requires_approval": True
     },
     {
         "id": "architecture",
         "title": "🏗️ Architecture & Tech Stack",
-        "description": "اختيار المحرك (Unity/Godot/Flutter) + بنية المشروع",
+        "description": "اختيار المحرك + بنية المشروع",
         "credits": 120,
-        "deliverables": ["Tech Stack Doc", "Project Structure", "Dependencies"]
+        "deliverables": ["Tech Stack Doc", "Project Structure", "Dependencies"],
+        "requires_approval": True
     },
     {
-        "id": "ui_ux",
-        "title": "🎨 UI/UX Design",
-        "description": "تصميم واجهات + تجربة المستخدم",
+        "id": "mechanics",
+        "title": "⚙️ Core Mechanics Design",
+        "description": "تصميم آليات اللعب",
         "credits": 150,
-        "deliverables": ["Wireframes", "Mockups", "Interactive Prototype"]
+        "deliverables": ["Mechanics Doc", "Flowchart", "Prototype"],
+        "requires_approval": True
     },
     {
         "id": "characters",
-        "title": "🎭 Character & Asset Design",
-        "description": "تصميم الشخصيات + الأصول المرئية",
+        "title": "🎭 Character Design",
+        "description": "تصميم الشخصيات",
         "credits": 200,
-        "deliverables": ["Character Models", "Animations", "Icon Set"]
+        "deliverables": ["Character Sheets", "3D Models", "Animations"],
+        "requires_approval": True,
+        "asset_type": "characters"
     },
     {
-        "id": "backend",
-        "title": "🔧 Backend & Multiplayer",
-        "description": "بناء الـbackend (leaderboards, accounts, multiplayer)",
+        "id": "environment",
+        "title": "🏞️ Environment Design",
+        "description": "تصميم البيئات",
         "credits": 250,
-        "deliverables": ["API Endpoints", "Database Schema", "Auth System"]
+        "deliverables": ["Environment Sketches", "3D Assets", "Lighting Setup"],
+        "requires_approval": True,
+        "asset_type": "environments"
+    },
+    {
+        "id": "assets",
+        "title": "🎨 Assets & UI",
+        "description": "توليد UI + sound + effects",
+        "credits": 150,
+        "deliverables": ["UI Mockups", "Sound Library", "Particle Effects"],
+        "requires_approval": True,
+        "asset_type": "ui"
     },
     {
         "id": "programming",
-        "title": "💻 Core Programming",
-        "description": "برمجة اللعبة + تكامل الأصول",
+        "title": "💻 Programming & Integration",
+        "description": "برمجة التطبيق + تكامل",
         "credits": 400,
-        "deliverables": ["Alpha Build", "Core Gameplay", "Source Code"]
+        "deliverables": ["APK/IPA Build", "Source Code", "Documentation"],
+        "requires_approval": False,
+        "asset_type": "code",
+        "generates_preview": True
     },
     {
         "id": "testing",
         "title": "🧪 Testing & QA",
-        "description": "اختبار على أجهزة حقيقية + إصلاح bugs",
+        "description": "اختبار شامل",
         "credits": 150,
-        "deliverables": ["Beta Build", "Test Report", "Device Compatibility"]
+        "deliverables": ["Test Report", "Bug Fixes", "Performance"],
+        "requires_approval": False
     },
     {
-        "id": "store_deployment",
-        "title": "🚀 Store Deployment",
-        "description": "نشر على App Store / Google Play",
-        "credits": 300,
-        "deliverables": ["App Store Listing", "APK/IPA", "Store Approval"]
-    },
-    {
-        "id": "live_ops",
-        "title": "📊 Live Ops & Updates",
-        "description": "إدارة + تحديثات بعد النشر",
-        "credits": 100,
-        "deliverables": ["Update Plan", "Analytics Setup", "User Support"]
+        "id": "publishing",
+        "title": "📱 Store Publishing",
+        "description": "نشر على Play Store / App Store",
+        "credits": 200,
+        "deliverables": ["Store Listing", "Screenshots", "Published APK/IPA"],
+        "requires_approval": False,
+        "generates_preview": True
     }
 ]
 
 # ═══════════════════════════════════════════════════════════════
-# 🤖 Gemini Flash 2.5 Helper
+# 🎯 Pydantic Models
 # ═══════════════════════════════════════════════════════════════
-async def call_gemini(system: str, user_msg: str, history: List[Dict], images: List[bytes] = []) -> str:
-    """استدعاء Gemini 2.5 Flash مع دعم الصور."""
-    key = os.environ.get("GEMINI_API_KEY")
-    if not key:
-        raise HTTPException(500, "GEMINI_API_KEY not configured")
-    
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={key}"
-    
-    # Build contents
-    contents = []
-    
-    # History
-    for msg in history[-10:]:
-        contents.append({
-            "role": "user" if msg["role"] == "user" else "model",
-            "parts": [{"text": msg["content"]}]
-        })
-    
-    # Current message + images
-    current_parts = [{"text": f"{system}\n\n{user_msg}"}]
-    for img_bytes in images:
-        current_parts.append({
-            "inline_data": {
-                "mime_type": "image/jpeg",
-                "data": base64.b64encode(img_bytes).decode()
-            }
-        })
-    contents.append({"role": "user", "parts": current_parts})
-    
-    async with httpx.AsyncClient(timeout=60) as client:
-        resp = await client.post(url, json={"contents": contents})
-        if resp.status_code != 200:
-            logger.error(f"Gemini error: {resp.text}")
-            raise HTTPException(500, f"Gemini failed: {resp.status_code}")
-        
-        data = resp.json()
-        return data["candidates"][0]["content"]["parts"][0]["text"]
+class ProjectCreate(BaseModel):
+    game_type: str  # "web" or "app"
+    title: str
+    description: str
+    programming_type: str  # from PROGRAMMING_TYPES
+
+class ChatMessage(BaseModel):
+    message: str
+    phase_id: Optional[str] = None
+
+class AssetApproval(BaseModel):
+    asset_id: str
+    approved: bool
+    feedback: Optional[str] = None
 
 # ═══════════════════════════════════════════════════════════════
-# 🎯 Router Creation
+# 🎯 Router Factory
 # ═══════════════════════════════════════════════════════════════
 def create_game_router(db, get_current_user):
     router = APIRouter(prefix="/api/games", tags=["games"])
+    GEMINI_KEY = os.getenv("GEMINI_API_KEY", "")
     
-    # ═══════════════════════════════════════════════════════════
-    # 🟢 Web Games — Start
-    # ═══════════════════════════════════════════════════════════
-    @router.post("/web/start")
-    async def start_web_game(idea: str = Form(...), user=Depends(get_current_user)):
-        """بداية مشروع Web Game."""
+    # ───────────────────────────────────────────────────────────
+    # 📋 GET /programming-types — List available tech stacks
+    # ───────────────────────────────────────────────────────────
+    @router.get("/programming-types")
+    async def get_programming_types(game_type: str):
+        """Return available programming types for web or app"""
+        if game_type not in PROGRAMMING_TYPES:
+            raise HTTPException(400, f"Invalid game_type: {game_type}")
+        return {"types": PROGRAMMING_TYPES[game_type]}
+    
+    # ───────────────────────────────────────────────────────────
+    # 📋 POST /project — Create new game project
+    # ───────────────────────────────────────────────────────────
+    @router.post("/project")
+    async def create_project(payload: ProjectCreate, user=Depends(get_current_user)):
+        """Create new game project with programming type selection"""
         project_id = str(uuid.uuid4())
+        
+        # Validate programming type
+        valid_types = [t["id"] for t in PROGRAMMING_TYPES.get(payload.game_type, [])]
+        if payload.programming_type not in valid_types:
+            raise HTTPException(400, f"Invalid programming_type for {payload.game_type}")
+        
+        phases = WEB_GAME_PHASES if payload.game_type == "web" else APP_GAME_PHASES
         
         project = {
             "id": project_id,
             "user_id": user["id"],
-            "type": "web_game",
-            "idea": idea,
-            "phases": WEB_GAME_PHASES,
-            "current_phase": 0,
-            "status": "in_progress",
-            "messages": [],
+            "game_type": payload.game_type,
+            "title": payload.title,
+            "description": payload.description,
+            "programming_type": payload.programming_type,
+            "current_phase": "discovery",
+            "phases": {p["id"]: {"status": "locked", "progress": 0, "messages": []} for p in phases},
             "assets": {
                 "characters": [],
                 "environments": [],
                 "ui": [],
-                "sounds": [],
                 "code": [],
                 "docs": []
             },
+            "approved_assets": [],  # Memory system
+            "preview_url": None,
             "created_at": datetime.now(timezone.utc).isoformat(),
-            "total_credits_spent": 0
+            "updated_at": datetime.now(timezone.utc).isoformat()
         }
         
-        # Phase 1 intro
-        phase = WEB_GAME_PHASES[0]
-        intro = f"""# {phase['title']}
-
-{phase['description']}
-
-**التكلفة**: {phase['credits']} نقطة  
-**ما راح نسلّمه**:  
-{chr(10).join(f"• {d}" for d in phase['deliverables'])}
-
----
-
-**عشان نبدأ، حدثني أكثر عن اللعبة**:
-1. وش نوع اللعبة (platformer, puzzle, RPG, strategy...)?
-2. مين الجمهور المستهدف (أطفال، مراهقين، كبار)?
-3. وش الميزة الرئيسية اللي تبيها تميّز اللعبة؟
-
-يمكنك أيضاً رفع صور مرجعية أو مستندات GDD إذا عندك.
-        """.strip()
-        
-        project["messages"].append({
-            "id": str(uuid.uuid4()),
-            "role": "assistant",
-            "content": intro,
-            "phase": 0,
-            "timestamp": datetime.now(timezone.utc).isoformat()
-        })
+        # Unlock first phase
+        project["phases"]["discovery"]["status"] = "active"
         
         await db.game_projects.insert_one(project)
+        project.pop("_id", None)
         
-        return {
-            "ok": True,
-            "project_id": project_id,
-            "message": intro
-        }
+        return {"ok": True, "project": project}
     
-    # ═══════════════════════════════════════════════════════════
-    # 🟢 Web Games — Chat
-    # ═══════════════════════════════════════════════════════════
-    @router.post("/web/chat")
-    async def web_game_chat(
-        message: Optional[str] = Form(None),
-        files: List[UploadFile] = File(default=[]),
-        audio: Optional[UploadFile] = File(None),
-        user=Depends(get_current_user)
-    ):
-        """محادثة Web Game مع دعم رفع ملفات."""
-        # احصل على آخر مشروع web_game للعميل
-        project = await db.game_projects.find_one(
-            {"user_id": user["id"], "type": "web_game"},
-            sort=[("created_at", -1)]
-        )
-        if not project:
-            raise HTTPException(404, "لم تبدأ أي مشروع بعد. ابدأ مشروع جديد أولاً.")
-        
-        # رفع الملفات (إذا موجودة)
-        attachments = []
-        images_bytes = []
-        for f in files:
-            content = await f.read()
-            filename = f"{uuid.uuid4()}_{f.filename}"
-            # حفظ في /tmp أو S3 (هنا نبسّطها بـbase64 في DB)
-            attachments.append({
-                "name": f.filename,
-                "type": f.content_type,
-                "size": len(content),
-                "data": base64.b64encode(content).decode() if len(content) < 100000 else None
-            })
-            if f.content_type.startswith("image/"):
-                images_bytes.append(content)
-        
-        # أضف رسالة العميل
-        user_msg = {
-            "id": str(uuid.uuid4()),
-            "role": "user",
-            "content": message or "📎 ملفات مرفقة",
-            "attachments": attachments,
-            "timestamp": datetime.now(timezone.utc).isoformat()
-        }
-        project["messages"].append(user_msg)
-        
-        # الـphase الحالي
-        phase_idx = project["current_phase"]
-        phase = WEB_GAME_PHASES[phase_idx] if phase_idx < len(WEB_GAME_PHASES) else WEB_GAME_PHASES[-1]
-        
-        # System prompt
-        system = f"""أنت مصمم ألعاب ويب محترف.
-
-**المشروع**: {project['idea']}
-
-**المرحلة الحالية**: {phase['title']}
-{phase['description']}
-
-**يجب تسليم**:
-{chr(10).join(f"• {d}" for d in phase['deliverables'])}
-
-**دورك**:
-- اسأل أسئلة محددة عشان تفهم احتياجات العميل
-- اقترح تصاميم وأفكار احترافية
-- لما تكمل المرحلة، اعرض ملخص واضح واطلب الموافقة
-- استخدم markdown للتنسيق
-- **لا قيود** — العميل حر في التجربة والتعديل
-
-إذا رفع العميل صور، حللها واقترح أفكار بناءً عليها.
-""".strip()
-        
-        # استدعِ Gemini
-        response = await call_gemini(system, message or "شف الصور المرفقة", project["messages"][-10:], images_bytes)
-        
-        # أضف رد الذكاء
-        ai_msg = {
-            "id": str(uuid.uuid4()),
-            "role": "assistant",
-            "content": response,
-            "phase": phase_idx,
-            "timestamp": datetime.now(timezone.utc).isoformat()
-        }
-        project["messages"].append(ai_msg)
-        
-        # حفظ
-        await db.game_projects.update_one(
-            {"id": project["id"]},
-            {"$set": {
-                "messages": project["messages"],
-                "assets": project.get("assets", {})
-            }}
-        )
-        
-        return {
-            "ok": True,
-            "messages": project["messages"],
-            "assets": project.get("assets", {}),
-            "current_phase": phase_idx
-        }
-    
-    # ═══════════════════════════════════════════════════════════
-    # 🟢 App Games — Start
-    # ═══════════════════════════════════════════════════════════
-    @router.post("/app/start")
-    async def start_app_game(idea: str = Form(...), user=Depends(get_current_user)):
-        """بداية مشروع App Game."""
-        project_id = str(uuid.uuid4())
-        
-        project = {
-            "id": project_id,
-            "user_id": user["id"],
-            "type": "app_game",
-            "idea": idea,
-            "phases": APP_GAME_PHASES,
-            "current_phase": 0,
-            "status": "in_progress",
-            "messages": [],
-            "assets": {
-                "characters": [],
-                "ui": [],
-                "code": [],
-                "builds": [],
-                "docs": []
-            },
-            "created_at": datetime.now(timezone.utc).isoformat(),
-            "total_credits_spent": 0
-        }
-        
-        phase = APP_GAME_PHASES[0]
-        intro = f"""# {phase['title']}
-
-{phase['description']}
-
-**التكلفة**: {phase['credits']} نقطة  
-**ما راح نسلّمه**:  
-{chr(10).join(f"• {d}" for d in phase['deliverables'])}
-
----
-
-**عشان نبدأ، حدثني عن التطبيق**:
-1. المنصة المستهدفة (iOS, Android, كلاهما)?
-2. نوع اللعبة (2D, 3D, Puzzle, Multiplayer...)?
-3. الميزانية والجدول الزمني المتوقع؟
-4. أي ألعاب مشابهة تعجبك (مرجع)?
-        """.strip()
-        
-        project["messages"].append({
-            "id": str(uuid.uuid4()),
-            "role": "assistant",
-            "content": intro,
-            "phase": 0,
-            "timestamp": datetime.now(timezone.utc).isoformat()
-        })
-        
-        await db.game_projects.insert_one(project)
-        
-        return {
-            "ok": True,
-            "project_id": project_id,
-            "message": intro
-        }
-    
-    # ═══════════════════════════════════════════════════════════
-    # 🟢 App Games — Chat
-    # ═══════════════════════════════════════════════════════════
-    @router.post("/app/chat")
-    async def app_game_chat(
-        message: Optional[str] = Form(None),
-        files: List[UploadFile] = File(default=[]),
-        audio: Optional[UploadFile] = File(None),
-        user=Depends(get_current_user)
-    ):
-        """محادثة App Game مع دعم رفع ملفات."""
-        project = await db.game_projects.find_one(
-            {"user_id": user["id"], "type": "app_game"},
-            sort=[("created_at", -1)]
-        )
-        if not project:
-            raise HTTPException(404, "لم تبدأ أي مشروع بعد. ابدأ مشروع جديد أولاً.")
-        
-        # رفع الملفات
-        attachments = []
-        images_bytes = []
-        for f in files:
-            content = await f.read()
-            attachments.append({
-                "name": f.filename,
-                "type": f.content_type,
-                "size": len(content)
-            })
-            if f.content_type.startswith("image/"):
-                images_bytes.append(content)
-        
-        user_msg = {
-            "id": str(uuid.uuid4()),
-            "role": "user",
-            "content": message or "📎 ملفات مرفقة",
-            "attachments": attachments,
-            "timestamp": datetime.now(timezone.utc).isoformat()
-        }
-        project["messages"].append(user_msg)
-        
-        phase_idx = project["current_phase"]
-        phase = APP_GAME_PHASES[phase_idx] if phase_idx < len(APP_GAME_PHASES) else APP_GAME_PHASES[-1]
-        
-        system = f"""أنت مطوّر ألعاب تطبيقات محترف.
-
-**المشروع**: {project['idea']}
-
-**المرحلة**: {phase['title']}
-{phase['description']}
-
-**يجب تسليم**:
-{chr(10).join(f"• {d}" for d in phase['deliverables'])}
-
-**دورك**:
-- اقترح محركات (Unity 3D, Godot, Flutter لـ2D)
-- صمم UI/UX احترافي
-- خطط لـmultiplayer/backend إذا مطلوب
-- وضّح خطوات النشر على المتاجر
-- **لا قيود** — كل الأفكار مقبولة
-""".strip()
-        
-        response = await call_gemini(system, message or "شف الصور", project["messages"][-10:], images_bytes)
-        
-        ai_msg = {
-            "id": str(uuid.uuid4()),
-            "role": "assistant",
-            "content": response,
-            "phase": phase_idx,
-            "timestamp": datetime.now(timezone.utc).isoformat()
-        }
-        project["messages"].append(ai_msg)
-        
-        await db.game_projects.update_one(
-            {"id": project["id"]},
-            {"$set": {"messages": project["messages"]}}
-        )
-        
-        return {
-            "ok": True,
-            "messages": project["messages"],
-            "assets": project.get("assets", {}),
-            "current_phase": phase_idx
-        }
-    
-    # ═══════════════════════════════════════════════════════════
-    # 📋 Projects List
-    # ═══════════════════════════════════════════════════════════
+    # ───────────────────────────────────────────────────────────
+    # 📋 GET /projects — List user projects
+    # ───────────────────────────────────────────────────────────
     @router.get("/projects")
     async def list_projects(user=Depends(get_current_user)):
-        """قائمة مشاريع العميل."""
+        """List all game projects for current user"""
         projects = await db.game_projects.find(
             {"user_id": user["id"]},
             {"_id": 0}
         ).sort("created_at", -1).to_list(100)
-        return {"ok": True, "projects": projects}
+        return {"projects": projects}
     
-    # ═══════════════════════════════════════════════════════════
-    # 📋 Project Details
-    # ═══════════════════════════════════════════════════════════
+    # ───────────────────────────────────────────────────────────
+    # 📋 GET /project/{project_id} — Get project details
+    # ───────────────────────────────────────────────────────────
     @router.get("/project/{project_id}")
     async def get_project(project_id: str, user=Depends(get_current_user)):
-        """تفاصيل مشروع."""
+        """Get full project details"""
         project = await db.game_projects.find_one(
             {"id": project_id, "user_id": user["id"]},
             {"_id": 0}
         )
         if not project:
-            raise HTTPException(404, "المشروع غير موجود")
-        return {"ok": True, "project": project}
+            raise HTTPException(404, "Project not found")
+        
+        # Add phase definitions
+        phases_def = WEB_GAME_PHASES if project["game_type"] == "web" else APP_GAME_PHASES
+        project["phases_definitions"] = phases_def
+        
+        return {"project": project}
     
-    # ═══════════════════════════════════════════════════════════
-    # ✅ Approve Phase
-    # ═══════════════════════════════════════════════════════════
-    @router.post("/project/{project_id}/phase")
-    async def approve_phase(project_id: str, user=Depends(get_current_user)):
-        """تأكيد المرحلة والانتقال للتالي."""
+    # ───────────────────────────────────────────────────────────
+    # 💬 POST /project/{project_id}/chat — Phase-aware chat
+    # ───────────────────────────────────────────────────────────
+    @router.post("/project/{project_id}/chat")
+    async def chat(
+        project_id: str,
+        message: str = Form(...),
+        phase_id: Optional[str] = Form(None),
+        files: List[UploadFile] = File(default=[]),
+        user=Depends(get_current_user)
+    ):
+        """AI chat with memory system and approval flow"""
         project = await db.game_projects.find_one(
             {"id": project_id, "user_id": user["id"]}
         )
         if not project:
-            raise HTTPException(404, "المشروع غير موجود")
+            raise HTTPException(404, "Project not found")
         
-        current = project["current_phase"]
-        phases = project["phases"]
+        phase_id = phase_id or project["current_phase"]
+        phases_def = WEB_GAME_PHASES if project["game_type"] == "web" else APP_GAME_PHASES
+        phase_info = next((p for p in phases_def if p["id"] == phase_id), None)
         
-        if current >= len(phases) - 1:
-            return {"ok": False, "error": "أنت في المرحلة الأخيرة"}
+        if not phase_info:
+            raise HTTPException(400, "Invalid phase")
         
-        # انتقل للمرحلة التالية
-        next_phase = current + 1
+        # Check credits
+        if user.get("balance", 0) < phase_info["credits"]:
+            raise HTTPException(402, "Insufficient credits")
+        
+        # Build AI context with memory
+        approved_context = ""
+        if project.get("approved_assets"):
+            approved_context = "\n\n📌 **Previously Approved Assets (use these!):**\n"
+            for asset in project["approved_assets"]:
+                approved_context += f"- {asset['type']}: {asset['name']} — {asset.get('description', 'N/A')}\n"
+        
+        system_prompt = f"""You are a professional game developer AI working on a {project['game_type']} game project.
+
+**Project Details:**
+- Title: {project['title']}
+- Description: {project['description']}
+- Programming Type: {project['programming_type']}
+- Current Phase: {phase_info['title']}
+
+**Phase Objective:**
+{phase_info['description']}
+
+**Deliverables Expected:**
+{', '.join(phase_info['deliverables'])}
+
+{approved_context}
+
+**Instructions:**
+1. Generate ACTUAL, PRODUCTION-READY content (not placeholders)
+2. For code: write complete, working code with proper structure
+3. For assets: provide detailed descriptions that can be used by image AI
+4. For docs: write comprehensive, professional documentation
+5. Reference approved assets when building on previous work
+6. Be concise but complete
+
+Respond in Arabic for explanations, but keep code/technical content in English.
+"""
+        
+        # Handle file uploads
+        attachments = []
+        for file in files:
+            content = await file.read()
+            filename = file.filename or "untitled"
+            # Store file
+            file_path = f"/app/backend/uploads/games/{project_id}/{filename}"
+            os.makedirs(os.path.dirname(file_path), exist_ok=True)
+            with open(file_path, "wb") as f:
+                f.write(content)
+            attachments.append({"filename": filename, "path": file_path, "size": len(content)})
+        
+        # Call Gemini
+        try:
+            async with httpx.AsyncClient(timeout=120.0) as client:
+                gemini_url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:generateContent?key={GEMINI_KEY}"
+                
+                parts = [{"text": message}]
+                # TODO: Add image support if attachments contain images
+                
+                response = await client.post(gemini_url, json={
+                    "system_instruction": {"parts": [{"text": system_prompt}]},
+                    "contents": [{"parts": parts, "role": "user"}],
+                    "generationConfig": {"temperature": 0.7, "maxOutputTokens": 8000}
+                })
+                
+                if response.status_code != 200:
+                    logger.error(f"Gemini error: {response.text}")
+                    raise HTTPException(500, "AI service error")
+                
+                data = response.json()
+                ai_message = data.get("candidates", [{}])[0].get("content", {}).get("parts", [{}])[0].get("text", "Error generating response")
+        
+        except Exception as e:
+            logger.error(f"Chat error: {e}")
+            raise HTTPException(500, str(e))
+        
+        # Save to conversation
+        conversation_entry = {
+            "user": message,
+            "assistant": ai_message,
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "attachments": attachments
+        }
+        
         await db.game_projects.update_one(
             {"id": project_id},
-            {"$set": {"current_phase": next_phase}}
+            {
+                "$push": {f"phases.{phase_id}.messages": conversation_entry},
+                "$set": {"updated_at": datetime.now(timezone.utc).isoformat()}
+            }
         )
         
-        project["current_phase"] = next_phase
+        # Deduct credits
+        await db.users.update_one(
+            {"id": user["id"]},
+            {"$inc": {"balance": -phase_info["credits"]}}
+        )
         
-        return {"ok": True, "project": project}
+        return {
+            "ok": True,
+            "message": ai_message,
+            "credits_used": phase_info["credits"],
+            "remaining_balance": user.get("balance", 0) - phase_info["credits"]
+        }
+    
+    # ───────────────────────────────────────────────────────────
+    # ✅ POST /project/{project_id}/approve-asset — Approve/reject asset
+    # ───────────────────────────────────────────────────────────
+    @router.post("/project/{project_id}/approve-asset")
+    async def approve_asset(
+        project_id: str,
+        payload: AssetApproval,
+        user=Depends(get_current_user)
+    ):
+        """Client approves or rejects an asset"""
+        project = await db.game_projects.find_one(
+            {"id": project_id, "user_id": user["id"]}
+        )
+        if not project:
+            raise HTTPException(404, "Project not found")
+        
+        # Find asset in project.assets
+        asset = None
+        asset_type = None
+        for atype, assets_list in project.get("assets", {}).items():
+            for a in assets_list:
+                if a.get("id") == payload.asset_id:
+                    asset = a
+                    asset_type = atype
+                    break
+        
+        if not asset:
+            raise HTTPException(404, "Asset not found")
+        
+        # Update approval status
+        asset["approved"] = payload.approved
+        asset["feedback"] = payload.feedback
+        
+        # If approved, add to memory
+        if payload.approved:
+            await db.game_projects.update_one(
+                {"id": project_id},
+                {
+                    "$push": {
+                        "approved_assets": {
+                            "id": asset["id"],
+                            "type": asset_type,
+                            "name": asset.get("name", "Unnamed"),
+                            "description": asset.get("description", ""),
+                            "url": asset.get("url"),
+                            "approved_at": datetime.now(timezone.utc).isoformat()
+                        }
+                    }
+                }
+            )
+        
+        # Update asset in place
+        await db.game_projects.update_one(
+            {"id": project_id},
+            {"$set": {f"assets.{asset_type}": project["assets"][asset_type]}}
+        )
+        
+        return {"ok": True, "asset": asset}
+    
+    # ───────────────────────────────────────────────────────────
+    # 🔓 POST /project/{project_id}/unlock-phase — Unlock next phase
+    # ───────────────────────────────────────────────────────────
+    @router.post("/project/{project_id}/unlock-phase")
+    async def unlock_phase(project_id: str, phase_id: str, user=Depends(get_current_user)):
+        """Unlock a phase (no restrictions)"""
+        project = await db.game_projects.find_one(
+            {"id": project_id, "user_id": user["id"]}
+        )
+        if not project:
+            raise HTTPException(404, "Project not found")
+        
+        if phase_id not in project["phases"]:
+            raise HTTPException(400, "Invalid phase")
+        
+        await db.game_projects.update_one(
+            {"id": project_id},
+            {
+                "$set": {
+                    f"phases.{phase_id}.status": "active",
+                    "current_phase": phase_id,
+                    "updated_at": datetime.now(timezone.utc).isoformat()
+                }
+            }
+        )
+        
+        return {"ok": True}
+    
+    # ───────────────────────────────────────────────────────────
+    # 🎨 POST /project/{project_id}/add-asset — Manually add asset
+    # ───────────────────────────────────────────────────────────
+    @router.post("/project/{project_id}/add-asset")
+    async def add_asset(
+        project_id: str,
+        asset_type: str,
+        name: str,
+        description: str,
+        url: Optional[str] = None,
+        user=Depends(get_current_user)
+    ):
+        """Manually add asset (for testing or external uploads)"""
+        project = await db.game_projects.find_one(
+            {"id": project_id, "user_id": user["id"]}
+        )
+        if not project:
+            raise HTTPException(404, "Project not found")
+        
+        if asset_type not in ["characters", "environments", "ui", "code", "docs"]:
+            raise HTTPException(400, "Invalid asset_type")
+        
+        asset = {
+            "id": str(uuid.uuid4()),
+            "name": name,
+            "description": description,
+            "url": url,
+            "approved": False,
+            "created_at": datetime.now(timezone.utc).isoformat()
+        }
+        
+        await db.game_projects.update_one(
+            {"id": project_id},
+            {
+                "$push": {f"assets.{asset_type}": asset},
+                "$set": {"updated_at": datetime.now(timezone.utc).isoformat()}
+            }
+        )
+        
+        return {"ok": True, "asset": asset}
+    
+    # ───────────────────────────────────────────────────────────
+    # 🌐 POST /project/{project_id}/set-preview — Set live preview URL
+    # ───────────────────────────────────────────────────────────
+    @router.post("/project/{project_id}/set-preview")
+    async def set_preview(
+        project_id: str,
+        preview_url: str,
+        user=Depends(get_current_user)
+    ):
+        """Set live preview URL for the game"""
+        await db.game_projects.update_one(
+            {"id": project_id, "user_id": user["id"]},
+            {
+                "$set": {
+                    "preview_url": preview_url,
+                    "updated_at": datetime.now(timezone.utc).isoformat()
+                }
+            }
+        )
+        return {"ok": True}
     
     return router
