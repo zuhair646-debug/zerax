@@ -2086,4 +2086,33 @@ def create_game_router(db, get_current_user):
             items.append(it)
         return {"items": items, "total": len(items)}
 
+    # ───────────────────────────────────────────────────────────
+    # 🩺 GET /health — public lightweight diagnostic for production debug
+    # Returns version markers so the owner can verify backend deployment.
+    # ───────────────────────────────────────────────────────────
+    @router.get("/health")
+    async def health_check():
+        """Anyone can hit this to verify backend is up + which version is live.
+        Use from any browser: GET /api/games/health → shows the latest features."""
+        return {
+            "ok": True,
+            "service": "games",
+            "build_marker": "v6_2026_06_05_override_fix",  # bump when shipping features
+            "features": {
+                "image_generation": True,
+                "vision_verification": True,
+                "style_profiles": ["realistic", "stylized", "anime", "low_poly", "pixel"],
+                "live_deploy": True,
+                "image_edit_redux": True,
+                "qa_analyze": True,
+                "soft_delete_trash": True,
+                "override_socratic_when_explicit": True,  # ← commit fd8f2de
+                "tag_parser_lenient": True,  # ← commit 0f7ddda
+            },
+            "fal_configured": bool(os.environ.get("FAL_KEY")),
+            "anthropic_configured": bool(os.environ.get("ANTHROPIC_API_KEY")),
+            "gemini_configured": bool(os.environ.get("GEMINI_API_KEY")),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+        }
+
     return router
