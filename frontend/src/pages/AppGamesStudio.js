@@ -433,14 +433,22 @@ export default function AppGamesStudio({ user }) {
               const isLocked = phaseData.status === 'locked';
               
               return (
-                <button
+                <div
                   key={phase.id}
+                  role="button"
+                  tabIndex={isLocked ? -1 : 0}
+                  aria-disabled={isLocked}
                   onClick={() => !isLocked && setActivePhase(phase.id)}
-                  disabled={isLocked}
+                  onKeyDown={(e) => {
+                    if (!isLocked && (e.key === 'Enter' || e.key === ' ')) {
+                      e.preventDefault();
+                      setActivePhase(phase.id);
+                    }
+                  }}
                   className={`w-full text-right p-3 rounded-lg border transition-all ${
                     isActive ? 'bg-blue-500/20 border-blue-500/50 text-blue-300' :
                     isLocked ? 'bg-black/20 border-white/5 text-zinc-600 cursor-not-allowed' :
-                    'bg-black/20 border-white/10 hover:border-white/20'
+                    'bg-black/20 border-white/10 hover:border-white/20 cursor-pointer'
                   }`}
                 >
                   <div className="flex items-center justify-between mb-1">
@@ -452,12 +460,13 @@ export default function AppGamesStudio({ user }) {
                   <div className="text-xs text-zinc-500">{phase.credits} نقطة</div>
                   {isLocked && (
                     <button
+                      type="button"
                       onClick={(e) => { e.stopPropagation(); handleUnlockPhase(phase.id); }}
                       className="mt-2 w-full text-xs bg-blue-500/10 border border-blue-500/30 rounded px-2 py-1 hover:bg-blue-500/20">
                       🔓 فتح
                     </button>
                   )}
-                </button>
+                </div>
               );
             })}
           </div>

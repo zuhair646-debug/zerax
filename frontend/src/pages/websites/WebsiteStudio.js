@@ -1884,8 +1884,8 @@ export default function WebsiteStudio({ user }) {
             <button onClick={() => { setProject(null); setActiveCategory(null); }} className="p-2 md:px-3 md:py-2 bg-white/10 hover:bg-white/20 rounded-lg flex items-center gap-1.5" data-testid="new-site-btn">
               <Plus className="w-4 h-4" /><span className="hidden md:inline text-xs">جديد</span>
             </button>
-            <button onClick={() => { loadProjects(); setShowLibrary(true); }} className="p-2 md:px-3 md:py-2 bg-white/10 hover:bg-white/20 rounded-lg flex items-center gap-1.5" data-testid="library-btn">
-              <FolderOpen className="w-4 h-4" /><span className="hidden md:inline text-xs">مواقعي ({projects.length})</span>
+            <button onClick={() => { loadProjects(); setShowLibrary(true); }} className="p-2 md:px-3 md:py-2 bg-yellow-500/15 hover:bg-yellow-500/25 border border-yellow-500/40 text-yellow-200 rounded-lg flex items-center gap-1.5 font-bold" data-testid="library-btn" title="مواقعي السابقة">
+              <FolderOpen className="w-4 h-4" /><span className="text-xs whitespace-nowrap">مواقعي{projects.length > 0 ? ` (${projects.length})` : ''}</span>
             </button>
             <button onClick={openLogoStudio} disabled={!project} className="p-2 md:px-3 md:py-2 bg-gradient-to-r from-purple-500/20 to-pink-500/20 hover:from-purple-500/30 hover:to-pink-500/30 border border-purple-400/30 rounded-lg flex items-center gap-1.5 disabled:opacity-40" data-testid="gen-logo-btn" title="استوديو توليد اللوقو بالذكاء الاصطناعي">
               <Sparkles className="w-4 h-4 text-purple-300" />
