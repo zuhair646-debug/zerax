@@ -2412,9 +2412,12 @@ def create_game_router(db, get_current_user):
         from modules.games.creds_store import kv_get as _kvg
 
         result = {
-            "server_egress_test": None,    # can we reach fal.ai at all?
-            "stored_key": None,             # what key is in MongoDB?
-            "fal_direct_response": None,    # what does Fal say to our request?
+            "server_egress_test": None,
+            "stored_key": None,
+            "fal_direct_response": None,
+            "emergent_key_set": bool(os.environ.get("EMERGENT_LLM_KEY")),  # 🆕 fallback requirement
+            "emergent_key_preview": (os.environ.get("EMERGENT_LLM_KEY", "")[:10] + "...") if os.environ.get("EMERGENT_LLM_KEY") else None,
+            "openai_fallback_test": None,  # 🆕 prove fallback works
             "diagnosis": "",
         }
 
@@ -2468,6 +2471,23 @@ def create_game_router(db, get_current_user):
         except Exception as e:
             result["fal_direct_response"] = f"EXCEPTION: {e}"
             result["diagnosis"] = f"❌ Could not call Fal API: {e}"
+
+        # 4) Test the OpenAI fallback — does it actually work on this server?
+        try:
+            em_key = os.environ.get("EMERGENT_LLM_KEY", "")
+            if not em_key:
+                result["openai_fallback_test"] = "❌ EMERGENT_LLM_KEY not set on Railway — fallback impossible"
+                result["diagnosis"] += " | ⚠️ CRITICAL: Fallback won't work — ask user to add EMERGENT_LLM_KEY to Railway env"
+            else:
+                from emergentintegrations.llm.openai.image_generation import OpenAIImageGeneration
+                ig = OpenAIImageGeneration(api_key=em_key)
+                imgs = await ig.generate_images(prompt="tiny red dot", model="gpt-image-1", number_of_images=1)
+                if imgs and len(imgs) > 0 and len(imgs[0]) > 100:
+                    result["openai_fallback_test"] = f"✅ OpenAI fallback WORKS (returned {len(imgs[0])} bytes)"
+                else:
+                    result["openai_fallback_test"] = "❌ OpenAI returned empty"
+        except Exception as e:
+            result["openai_fallback_test"] = f"❌ EXCEPTION: {str(e)[:300]}"
 
         return result
 
@@ -2821,7 +2841,7 @@ def create_game_router(db, get_current_user):
         return {
             "ok": True,
             "service": "games",
-            "build_marker": "v17_2026_06_06_openai_image_fallback",
+            "build_marker": "v18_2026_06_06_diagnose_check_emergent_key",
             "features": {
                 "image_generation": True,
                 "vision_verification": True,
