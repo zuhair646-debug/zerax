@@ -3699,6 +3699,15 @@ try:
 except Exception as _ape:
     logging.getLogger(__name__).error(f"asset_pipeline module failed: {_ape}")
 
+# 🛠️ Game Toolkit — remaining 6 advanced tools (version history, FSM gen, physics, 3D, itch, analytics)
+try:
+    from modules.game_toolkit import create_router as _gt_create
+    _gt_router = _gt_create(db, get_current_user)
+    app.include_router(_gt_router)
+    logging.getLogger(__name__).info("✅ game_toolkit router mounted (versions, FSM, physics, 3D, itch, analytics)")
+except Exception as _gte:
+    logging.getLogger(__name__).error(f"game_toolkit module failed: {_gte}")
+
 
 @app.get("/api/iframe-test")
 async def serve_iframe_test():

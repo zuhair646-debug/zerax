@@ -3279,7 +3279,7 @@ def create_game_router(db, get_current_user):
         return {
             "ok": True,
             "service": "games",
-            "build_marker": "v24_2026_02_07_visual_similarity_full_runtime",
+            "build_marker": "v25_2026_02_07_all_24_tasks_complete",
             "features": {
                 "image_generation": True,
                 "vision_verification": True,
