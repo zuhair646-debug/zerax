@@ -1,6 +1,26 @@
 # Zitex AI Platform - PRD
 
-### 🛡️ Feb 8 2026 — Zitex Security Center (10 طبقات) + غرفة التحكم الأمنية ✅
+### 🛡️ Feb 8 2026 — Zitex Security Center (14 طبقات) + غرفة التحكم الأمنية ✅✅ (موسّع)
+
+**نواقص حرجة تم سدّها في هذه الجلسة**:
+- ✅ **L1 rate limiter** — مربوط فعلياً بـ `slowapi` (300 req/min/IP) مع honoring X-Forwarded-For
+- ✅ **L11 Honeypot traps** — 21 مسار شائع (`.env`, `wp-admin`, `phpmyadmin`, `.git`, `xmlrpc.php`...) + frontend catch-all يبلّغ عن المسارات خارج `/api/*` عبر `/api/security/honeypot-report` (محمي ضد abuse)
+- ✅ **L12 Bad User-Agent filter** — 16 توقيع (sqlmap, nikto, nmap, nuclei, gobuster, ...) → حظر IP 1س فوراً
+- ✅ **L13 JWT revocation + Logout** — `/api/auth/logout` يضيف التوكن لـ blacklist، و`get_current_user` يرفض التوكنات المُلغاة
+- ✅ **L14 Password strength validator** — يرفض كلمات سر أقل من 8 أحرف / بدون أرقام أو حروف / من قائمة الكلمات الشائعة
+- ✅ **Real IP audit** — `/auth/login` و`/auth/logout` يكتبون real IP من X-Forwarded-For
+
+**اختبارات شاملة**:
+- iteration_32: 13/13 PASS (L1-L10 الأساسية)
+- iteration_33: 18/18 PASS (L11-L14 الجديدة)
+- iteration_34: 22/22 PASS (إغلاق فجوة honeypot غير-/api + real IP)
+
+**Endpoints عامة (بدون auth)**:
+- `POST /api/security/honeypot-report` — frontend يبلّغ عن مسحات الـ scanners (محمي بـ rate limit + IP block)
+
+---
+
+
 
 **ميزة الجلسة**: نظام أمن سيبراني كامل بقيادة AI + لوحة تحكم Admin مباشرة على `/admin/security`.
 

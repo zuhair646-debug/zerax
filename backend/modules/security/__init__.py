@@ -546,8 +546,18 @@ def create_public_router():
     @pub.post("/honeypot-report")
     async def honeypot_report(request: Request):
         """🛡️ L11 — Frontend reports a non-API honeypot hit (e.g. /.env, /wp-admin).
-        Bans the IP for 1 hour and records a high-severity alert."""
+        Bans the IP for 1 hour and records a high-severity alert.
+        Rate-limited internally to 5 reports/IP/minute to prevent abuse."""
         ip = get_real_ip(request)
+        # Internal rate limit (anti-abuse on the reporter itself)
+        now = time.time()
+        bucket = _login_failures.setdefault(f"hpr::{ip}", [])
+        bucket[:] = [t for t in bucket if (now - t) <= 60]
+        if len(bucket) >= 5:
+            return JSONResponse(
+                {"ok": False, "detail": "too many reports"}, status_code=429
+            )
+        bucket.append(now)
         try:
             body = await request.json()
         except Exception:
