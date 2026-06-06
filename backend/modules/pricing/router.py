@@ -208,22 +208,46 @@ def create_router(db, get_current_user, get_admin_user):
         first_purchase = prev_purchases == 0
 
         custom_id = str(uuid.uuid4())[:30]
-        try:
-            paypal = await create_order(
-                amount_usd=total,
-                return_url=body.return_url,
-                cancel_url=body.cancel_url,
-                description=description,
-                custom_id=custom_id,
-            )
-        except Exception as e:
-            log.error(f"PayPal create_order failed: {e}")
-            raise HTTPException(status_code=502, detail=f"PayPal خطأ: {str(e)[:120]}")
+        provider = (body.provider or "paypal").lower()
+        approval_url = None
+        order_ref = None
+
+        if provider == "lemonsqueezy":
+            from .lemonsqueezy_client import create_checkout as ls_create
+            try:
+                ls = await ls_create(
+                    amount_usd=total,
+                    product_name=description,
+                    customer_email=user["email"],
+                    customer_name=user.get("name", "العميل"),
+                    custom_data={"custom_id": custom_id, "user_id": user_id, "item_id": body.item_id},
+                    redirect_url=body.return_url,
+                )
+                approval_url = ls["checkout_url"]
+                order_ref = ls["checkout_id"]
+            except Exception as e:
+                log.error(f"Lemon Squeezy checkout failed: {e}")
+                raise HTTPException(status_code=502, detail=f"Lemon Squeezy خطأ: {str(e)[:120]}")
+        else:
+            try:
+                paypal = await create_order(
+                    amount_usd=total,
+                    return_url=body.return_url,
+                    cancel_url=body.cancel_url,
+                    description=description,
+                    custom_id=custom_id,
+                )
+                approval_url = paypal["approval_url"]
+                order_ref = paypal["order_id"]
+            except Exception as e:
+                log.error(f"PayPal create_order failed: {e}")
+                raise HTTPException(status_code=502, detail=f"PayPal خطأ: {str(e)[:120]}")
 
         # Persist pending order
         now = datetime.now(timezone.utc).isoformat()
         await db.paypal_orders.insert_one({
-            "order_id": paypal["order_id"],
+            "order_id": order_ref,
+            "provider": provider,
             "custom_id": custom_id,
             "user_id": user_id,
             "user_email": user["email"],
@@ -239,14 +263,15 @@ def create_router(db, get_current_user, get_admin_user):
             "first_purchase_bonus": first_purchase,
             "promo_code": body.promo_code,
             "status": "CREATED",
-            "approval_url": paypal["approval_url"],
+            "approval_url": approval_url,
             "created_at": now,
             "updated_at": now,
         })
 
         return {
-            "order_id": paypal["order_id"],
-            "approval_url": paypal["approval_url"],
+            "order_id": order_ref,
+            "provider": provider,
+            "approval_url": approval_url,
             "total_usd": total,
             "subtotal_usd": subtotal,
             "discount_usd": discount,
