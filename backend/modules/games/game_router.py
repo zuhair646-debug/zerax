@@ -2333,6 +2333,8 @@ def create_game_router(db, get_current_user):
             raise HTTPException(403, "Owner only")
         body = await request.json()
         new_key = (body.get("fal_key") or body.get("key") or "").strip()
+        # Optional: comma-separated list of additional backup keys
+        backup_keys_raw = (body.get("fal_keys") or "").strip()
         if not new_key or ":" not in new_key:
             raise HTTPException(400, "صيغة المفتاح غير صحيحة. لازم يكون مثل: <uuid>:<hash>")
 
@@ -2361,6 +2363,12 @@ def create_game_router(db, get_current_user):
         try:
             from modules.autocoder.credentials_vault import vault_set as _vset
             _vset("FAL_KEY", new_key)
+            # If backup keys were provided, save them as a multi-key rotation list
+            if backup_keys_raw:
+                backups = [k.strip() for k in backup_keys_raw.split(",") if k.strip() and ":" in k]
+                if backups:
+                    full_list = ",".join([new_key] + backups)
+                    _vset("FAL_KEYS", full_list)
         except Exception as e:
             logger.exception(f"[games][set-fal-key] vault_set failed: {e}")
             raise HTTPException(500, "حُفِظ المفتاح في الذاكرة بس فشل حفظه على القرص")
@@ -2415,6 +2423,27 @@ def create_game_router(db, get_current_user):
             "live_test": live_status,
             "live_error": live_error,
         }
+
+    # ═════════════════════════════════════════════════════════════
+    # 🏘️ SCENE COMPOSER — dmag N approved assets into ONE unified scene
+    # ═════════════════════════════════════════════════════════════
+    @router.post("/project/{project_id}/compose-scene")
+    async def compose_scene_endpoint(project_id: str, request: Request, user=Depends(get_current_user)):
+        body = await request.json()
+        asset_ids = body.get("asset_ids") or []
+        description = (body.get("description") or "").strip()
+        style = (body.get("style") or "isometric top-down").strip()
+        if not description:
+            raise HTTPException(400, "description مطلوب — وش تبي يطلع في المشهد؟")
+        try:
+            from modules.games.scene_composer import compose_scene
+            asset = await compose_scene(db, project_id, user, asset_ids, description, style)
+        except ValueError as e:
+            raise HTTPException(400, str(e))
+        except Exception as e:
+            logger.exception(f"[compose] failed: {e}")
+            raise HTTPException(500, f"فشل دمج المشهد: {str(e)[:200]}")
+        return {"ok": True, "asset": asset}
 
     # ═════════════════════════════════════════════════════════════
     # 🗺️  LEVEL DESIGN GENERATOR (Claude → tilemap JSON)
@@ -2666,7 +2695,7 @@ def create_game_router(db, get_current_user):
         return {
             "ok": True,
             "service": "games",
-            "build_marker": "v11_2026_06_05_pro_studio_6_features",  # bump when shipping features
+            "build_marker": "v12_2026_06_06_scene_composer_multikey",  # bump when shipping features
             "features": {
                 "image_generation": True,
                 "vision_verification": True,
@@ -2678,12 +2707,14 @@ def create_game_router(db, get_current_user):
                 "override_socratic_when_explicit": True,
                 "tag_parser_lenient": True,
                 "lora_style_training": True,
-                "voice_acting": True,               # 🎙️ NEW
-                "level_design_generator": True,    # 🗺️ NEW
-                "multiplayer_scaffolds": True,     # 🌐 NEW
-                "lora_marketplace": True,          # 🛒 NEW
-                "unity_sdk_export": True,          # 🎮 NEW
-                "sprite_sheets": True,             # 🎞️ NEW
+                "voice_acting": True,
+                "level_design_generator": True,
+                "multiplayer_scaffolds": True,
+                "lora_marketplace": True,
+                "unity_sdk_export": True,
+                "sprite_sheets": True,
+                "scene_composer": True,            # 🏘️ NEW: merge approved assets
+                "fal_key_rotation": True,          # 🔄 NEW: multi-key fallback
             },
             "fal_configured": bool(os.environ.get("FAL_KEY")),
             "anthropic_configured": bool(os.environ.get("ANTHROPIC_API_KEY")),

@@ -32,22 +32,65 @@ UPLOAD_ROOT = "/app/backend/uploads/games"
 
 
 def _ensure_fal_key() -> str:
-    # 1) Vault first — lets the owner override a bad Railway env value at runtime
+    """Resolve a working FAL_KEY. Supports multi-key rotation:
+       vault entry FAL_KEYS = "k1,k2,k3" is tried in order.
+    """
+    candidates: list[str] = []
     try:
         from modules.autocoder.credentials_vault import vault_get as _vget
-        v = (_vget("FAL_KEY") or _vget("FAL_API_KEY") or "").strip()
-        if v:
-            os.environ["FAL_KEY"] = v
-            return v
+        # Multi-key (comma-separated)
+        multi = (_vget("FAL_KEYS") or "").strip()
+        if multi:
+            candidates += [k.strip() for k in multi.split(",") if k.strip()]
+        # Single primary
+        single = (_vget("FAL_KEY") or _vget("FAL_API_KEY") or "").strip()
+        if single and single not in candidates:
+            candidates.append(single)
     except Exception:
         pass
-    # 2) Env (the original behaviour)
-    key = os.environ.get("FAL_KEY") or os.environ.get("FAL_API_KEY") or ""
-    if not key:
-        raise RuntimeError("FAL_KEY missing — set it in /app/backend/.env")
-    # fal-client reads from FAL_KEY env var automatically
-    os.environ["FAL_KEY"] = key
-    return key
+    # Env as final fallback
+    envk = (os.environ.get("FAL_KEY") or os.environ.get("FAL_API_KEY") or "").strip()
+    if envk and envk not in candidates:
+        candidates.append(envk)
+
+    if not candidates:
+        raise RuntimeError("FAL_KEY missing — set it via FalKeyManager or /app/backend/.env")
+
+    # Quick "first one wins" — actual failover happens at call-site with retries.
+    # We store the full list on the env so call-sites can iterate.
+    os.environ["FAL_KEY"] = candidates[0]
+    os.environ["_FAL_KEYS_LIST"] = ",".join(candidates)
+    return candidates[0]
+
+
+def _try_fal_with_rotation(fn, *, max_retries: int = None):
+    """Run a sync fal_client call, rotating through all known keys when one
+    fails with 'invalid key credentials' or 'unauthorized'. Returns the first
+    successful response, or re-raises the last error.
+    """
+    _ensure_fal_key()
+    keys = (os.environ.get("_FAL_KEYS_LIST") or os.environ.get("FAL_KEY") or "").split(",")
+    keys = [k.strip() for k in keys if k.strip()]
+    if not keys:
+        raise RuntimeError("No FAL keys available")
+    if max_retries is None:
+        max_retries = len(keys)
+    last_err = None
+    import logging as _l
+    log = _l.getLogger(__name__)
+    for i, k in enumerate(keys[:max_retries]):
+        try:
+            os.environ["FAL_KEY"] = k
+            return fn()
+        except Exception as e:
+            msg = str(e).lower()
+            last_err = e
+            if any(t in msg for t in ("invalid key credentials", "unauthorized", "forbidden", "401", "403")):
+                log.warning(f"[fal-rotate] key #{i+1} ({k[:8]}...) failed: {msg[:80]} — trying next")
+                continue
+            # Other errors (network, 5xx, prompt safety) — don't waste keys
+            raise
+    raise last_err if last_err else RuntimeError("All FAL keys exhausted")
 
 
 async def _download_to(url: str, dest_path: str, timeout: float = 120.0) -> None:

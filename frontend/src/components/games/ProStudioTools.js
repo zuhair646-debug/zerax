@@ -1,12 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import {
   Sparkles, X, Mic, Map, Network, Store, Package, Film,
-  Download, Loader2, CheckCircle2, AlertCircle, Upload, Star
+  Download, Loader2, CheckCircle2, AlertCircle, Upload, Star, Layers
 } from 'lucide-react';
 
 const API = process.env.REACT_APP_BACKEND_URL;
 
 const TABS = [
+  { id: 'compose',     label: 'Scene Composer', icon: Layers,  desc: 'دمج الأصول المعتمدة في مشهد واحد' },
   { id: 'voice',       label: 'Voice Acting',  icon: Mic,     desc: 'تحويل حوار لصوت احترافي' },
   { id: 'level',       label: 'Level Design',  icon: Map,     desc: 'توليد خرائط مستويات' },
   { id: 'sprite',      label: 'Sprite Sheets', icon: Film,    desc: 'إطارات أنيميشن جاهزة للمحركات' },
@@ -18,7 +19,7 @@ const TABS = [
 export default function ProStudioTools({ projectId, projectTitle = '', accentColor = 'amber' }) {
   const token = (typeof localStorage !== 'undefined' && localStorage.getItem('token')) || '';
   const [open, setOpen] = useState(false);
-  const [tab, setTab] = useState('voice');
+  const [tab, setTab] = useState('compose');
   const accent = accentColor === 'amber' ? 'amber' : 'blue';
 
   return (
@@ -72,6 +73,7 @@ export default function ProStudioTools({ projectId, projectTitle = '', accentCol
 
             {/* Body */}
             <div className="flex-1 overflow-y-auto p-5">
+              {tab === 'compose'     && <ComposePanel     projectId={projectId} token={token} accent={accent} />}
               {tab === 'voice'       && <VoicePanel       projectId={projectId} token={token} accent={accent} />}
               {tab === 'level'       && <LevelPanel       projectId={projectId} token={token} accent={accent} />}
               {tab === 'sprite'      && <SpritePanel      projectId={projectId} token={token} accent={accent} />}
@@ -83,6 +85,159 @@ export default function ProStudioTools({ projectId, projectTitle = '', accentCol
         </div>
       )}
     </>
+  );
+}
+
+// ═════════════════════════════════════════════════════════════════════════
+// SCENE COMPOSER PANEL — merge approved assets into one cohesive scene
+// ═════════════════════════════════════════════════════════════════════════
+function ComposePanel({ projectId, token, accent }) {
+  const [assets, setAssets] = useState([]);
+  const [selected, setSelected] = useState(new Set());
+  const [description, setDescription] = useState('');
+  const [style, setStyle] = useState('isometric top-down');
+  const [busy, setBusy] = useState(false);
+  const [result, setResult] = useState(null);
+  const [err, setErr] = useState('');
+
+  useEffect(() => {
+    if (!projectId) return;
+    (async () => {
+      try {
+        const r = await fetch(`${API}/api/games/project/${projectId}`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        const d = await r.json();
+        const imgs = ((d.project?.assets?.images) || []).filter(a => a?.approved && a?.cdn_url);
+        setAssets(imgs);
+      } catch (_) { /* ignore */ }
+    })();
+  }, [projectId, token]);
+
+  const toggle = (id) => {
+    setSelected(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  };
+
+  const compose = async () => {
+    setErr(''); setResult(null); setBusy(true);
+    try {
+      const r = await fetch(`${API}/api/games/project/${projectId}/compose-scene`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          asset_ids: Array.from(selected),
+          description,
+          style,
+        }),
+      });
+      const d = await r.json();
+      if (!r.ok) throw new Error(d.detail || 'فشل الدمج');
+      setResult(d.asset);
+    } catch (e) { setErr(e.message); }
+    finally { setBusy(false); }
+  };
+
+  return (
+    <div className="space-y-4 text-right">
+      <div>
+        <h3 className={`text-${accent}-200 font-bold mb-1`}>🏘️ Scene Composer</h3>
+        <p className="text-xs text-zinc-400">
+          اختار 2-4 صور معتمدة (✓)، اكتب وصف المشهد، والنظام يدمجهم في صورة واحدة موحدة
+          مع الحفاظ على شكل كل أصل. مثالي لإنشاء قرية كاملة من شخصيات + مباني معتمدة.
+        </p>
+      </div>
+
+      {/* Asset selector */}
+      <div>
+        <div className="text-xs text-zinc-300 font-bold mb-2">
+          الأصول المعتمدة ({assets.length}) — اختر 2 إلى 4
+        </div>
+        {assets.length === 0 ? (
+          <div className="text-xs text-zinc-500 bg-black/40 rounded-lg p-4 text-center">
+            ما عندك صور معتمدة بعد. ولّد صور، اعتمدها (✓)، ثم ارجع هنا.
+          </div>
+        ) : (
+          <div className="grid grid-cols-4 gap-2 max-h-48 overflow-y-auto">
+            {assets.map(a => (
+              <button
+                key={a.id}
+                onClick={() => toggle(a.id)}
+                data-testid={`compose-asset-${a.id}`}
+                className={`relative rounded-lg overflow-hidden border-2 transition-all ${
+                  selected.has(a.id)
+                    ? `border-${accent}-400 ring-2 ring-${accent}-400/50`
+                    : 'border-white/10 hover:border-white/30'
+                }`}
+              >
+                <img src={a.cdn_url} alt={a.name} className="w-full h-20 object-cover" />
+                {selected.has(a.id) && (
+                  <div className={`absolute inset-0 bg-${accent}-500/30 flex items-center justify-center`}>
+                    <CheckCircle2 className={`w-6 h-6 text-${accent}-200`} />
+                  </div>
+                )}
+                <div className="absolute bottom-0 inset-x-0 bg-black/70 text-[9px] text-white px-1 py-0.5 truncate">
+                  {a.name?.slice(0, 30)}
+                </div>
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+
+      <div>
+        <label className="text-xs text-zinc-300 block mb-1">وصف المشهد</label>
+        <textarea
+          rows={3}
+          value={description}
+          onChange={e => setDescription(e.target.value)}
+          data-testid="compose-desc-input"
+          className="w-full bg-black/40 border border-white/10 rounded-lg px-3 py-2 text-sm"
+          placeholder="ساحة قرية، التاجر يقف أمام المخبز، المحارب بقرب البئر، الأطفال يلعبون في الخلفية"
+        />
+      </div>
+
+      <div>
+        <label className="text-xs text-zinc-300 block mb-1">المنظور</label>
+        <select value={style} onChange={e => setStyle(e.target.value)}
+                data-testid="compose-style-select"
+                className="w-full bg-black/40 border border-white/10 rounded-lg px-3 py-2 text-sm">
+          <option value="isometric top-down">Isometric top-down (مثل Stardew Valley)</option>
+          <option value="side view">Side view (2D platformer)</option>
+          <option value="top-down 2D">Top-down 2D (مثل Pokemon)</option>
+          <option value="cinematic wide shot">Cinematic wide shot</option>
+          <option value="close-up portrait">Close-up portrait</option>
+        </select>
+      </div>
+
+      {err && <div className="text-xs text-rose-300 bg-rose-500/10 p-2 rounded">{err}</div>}
+
+      {result && (
+        <div className="space-y-2">
+          <div className={`text-xs text-${accent}-200 font-bold`}>
+            ✅ تم الدمج — مدمج من {result.source_asset_ids?.length} أصول
+          </div>
+          <img src={result.cdn_url} alt={result.name}
+               className="w-full rounded-lg border-2 border-emerald-500/30" />
+          <p className="text-[10px] text-zinc-500">
+            الصورة محفوظة في "الأصول المعتمدة" — تقدر تعتمدها أو تعدّلها من المحادثة.
+          </p>
+        </div>
+      )}
+
+      <button
+        onClick={compose}
+        disabled={busy || selected.size < 2 || !description.trim() || !projectId}
+        data-testid="compose-btn"
+        className={`text-xs font-bold px-4 py-2 rounded-lg bg-${accent}-500 hover:bg-${accent}-400 text-black flex items-center gap-2 disabled:opacity-40`}
+      >
+        {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Layers className="w-4 h-4" />}
+        {busy ? 'يدمج…' : `ادمج ${selected.size} أصول في مشهد واحد`}
+      </button>
+    </div>
   );
 }
 
