@@ -1341,9 +1341,28 @@ def create_game_router(db, get_current_user):
         # ─── VISION: include approved images (cross-phase) + recent current-phase images ───
         vision_parts = []
         approved_index_map = []  # parallel array: index → asset metadata for the model
-        try:
-            import base64 as _b64
 
+        def _encode_image_for_vision(fpath: str) -> Optional[tuple[str, str]]:
+            """Read image, downsize to fit Claude/Gemini limits (max 1024px, JPEG q85).
+            Returns (mime_type, base64_string) or None on failure."""
+            try:
+                from PIL import Image
+                import io as _io
+                with Image.open(fpath) as im:
+                    im = im.convert("RGB")
+                    # Resize so longest edge ≤ 1024 (keeps detail while staying small)
+                    longest = max(im.size)
+                    if longest > 1024:
+                        ratio = 1024 / longest
+                        im = im.resize((int(im.size[0]*ratio), int(im.size[1]*ratio)), Image.LANCZOS)
+                    buf = _io.BytesIO()
+                    im.save(buf, format="JPEG", quality=82, optimize=True)
+                    import base64 as _b64
+                    return ("image/jpeg", _b64.b64encode(buf.getvalue()).decode())
+            except Exception as _e:
+                logger.warning(f"[games][vision] encode failed for {fpath}: {_e}")
+                return None
+        try:
             # 🔵 PRIORITY 1: All approved images across ALL phases (max 6 — newest first)
             approved_imgs_attached = 0
             seen_ids = set()
@@ -1358,19 +1377,20 @@ def create_game_router(db, get_current_user):
                                 and a.get("image_url") and a.get("id") not in seen_ids):
                             fname = a["image_url"].rsplit("/", 1)[-1]
                             fpath = f"/app/backend/uploads/games/{project_id}/assets/{fname}"
-                            if os.path.exists(fpath) and os.path.getsize(fpath) < 7_500_000:
-                                with open(fpath, "rb") as f:
-                                    b64 = _b64.b64encode(f.read()).decode()
-                                approved_index_map.append({
-                                    "index": approved_imgs_attached + 1,
-                                    "id": a.get("id"),
-                                    "name": (a.get("name") or "asset")[:80],
-                                    "subtype": a.get("subtype") or "image",
-                                    "phase": past_phase_id,
-                                })
-                                vision_parts.append({"inline_data": {"mime_type": "image/png", "data": b64}})
-                                seen_ids.add(a.get("id"))
-                                approved_imgs_attached += 1
+                            if os.path.exists(fpath):
+                                enc = _encode_image_for_vision(fpath)
+                                if enc:
+                                    mime, b64 = enc
+                                    approved_index_map.append({
+                                        "index": approved_imgs_attached + 1,
+                                        "id": a.get("id"),
+                                        "name": (a.get("name") or "asset")[:80],
+                                        "subtype": a.get("subtype") or "image",
+                                        "phase": past_phase_id,
+                                    })
+                                    vision_parts.append({"inline_data": {"mime_type": mime, "data": b64}})
+                                    seen_ids.add(a.get("id"))
+                                    approved_imgs_attached += 1
                 if approved_imgs_attached >= 6:
                     break
 
@@ -1409,11 +1429,12 @@ def create_game_router(db, get_current_user):
             for a in recent_imgs:
                 fname = a["image_url"].rsplit("/", 1)[-1]
                 fpath = f"/app/backend/uploads/games/{project_id}/assets/{fname}"
-                if os.path.exists(fpath) and os.path.getsize(fpath) < 7_500_000:
-                    with open(fpath, "rb") as f:
-                        b64 = _b64.b64encode(f.read()).decode()
-                    vision_parts.append({"inline_data": {"mime_type": "image/png", "data": b64}})
-                    recent_added += 1
+                if os.path.exists(fpath):
+                    enc = _encode_image_for_vision(fpath)
+                    if enc:
+                        mime, b64 = enc
+                        vision_parts.append({"inline_data": {"mime_type": mime, "data": b64}})
+                        recent_added += 1
             if recent_added:
                 vision_parts.append({"text": f"(آخر {recent_added} صور ولّدتها في المرحلة الحالية — قيد المراجعة، ما اعتمدت بعد.)"})
 
@@ -1478,23 +1499,50 @@ def create_game_router(db, get_current_user):
                     raise RuntimeError("No fallback LLM available (ANTHROPIC_API_KEY missing)")
                 # Build multi-part content for Claude (text + images)
                 claude_content = []
-                # User-uploaded reference images get top priority
-                for ref in uploaded_images_for_vision:
-                    claude_content.append({
-                        "type": "image",
-                        "source": {
-                            "type": "base64",
-                            "media_type": ref["inline_data"]["mime_type"],
-                            "data": ref["inline_data"]["data"],
-                        },
-                    })
-                if uploaded_images_for_vision:
+
+                # 🟢 PRIORITY 1: convert vision_parts (Gemini format) → Claude format
+                # vision_parts items are either {"inline_data": {...}} OR {"text": "..."}
+                # Claude needs {"type": "image", "source": {...}} OR {"type": "text", "text": "..."}
+                for vp in vision_parts:
+                    if "inline_data" in vp:
+                        claude_content.append({
+                            "type": "image",
+                            "source": {
+                                "type": "base64",
+                                "media_type": vp["inline_data"]["mime_type"],
+                                "data": vp["inline_data"]["data"],
+                            },
+                        })
+                    elif "text" in vp:
+                        claude_content.append({"type": "text", "text": vp["text"]})
+
+                # 🟡 PRIORITY 2: user-uploaded reference images (already merged into vision_parts above,
+                # but kept here for the explanatory text that follows them)
+                if uploaded_images_for_vision and not vision_parts:
+                    # legacy path — only fires when no approved/recent images existed
+                    for ref in uploaded_images_for_vision:
+                        claude_content.append({
+                            "type": "image",
+                            "source": {
+                                "type": "base64",
+                                "media_type": ref["inline_data"]["mime_type"],
+                                "data": ref["inline_data"]["data"],
+                            },
+                        })
+                if uploaded_images_for_vision and not any(
+                    "رفع" in c.get("text", "") for c in claude_content if c.get("type") == "text"
+                ):
                     claude_content.append({"type": "text", "text": (
                         f"المالك رفع {len(uploaded_images_for_vision)} صورة مرجعية أعلاه. حلّلها بدقة "
                         "(الأسلوب، الألوان، التفاصيل، الأجواء) واطلع منها مفاهيم بصرية تطبّقها مباشرة. "
                         "ابدأ ردك بـ \"شفت الصورة وفهمت منها: ...\".\n\n"
                     )})
                 claude_content.append({"type": "text", "text": message})
+
+                logger.info(
+                    f"[games][claude] sending {sum(1 for c in claude_content if c.get('type')=='image')} images "
+                    f"+ {sum(1 for c in claude_content if c.get('type')=='text')} text blocks"
+                )
 
                 async with httpx.AsyncClient(timeout=120.0) as client:
                     claude_resp = await client.post(
@@ -3150,7 +3198,7 @@ def create_game_router(db, get_current_user):
         return {
             "ok": True,
             "service": "games",
-            "build_marker": "v20_2026_02_07_approved_vision_img_ref_compose",
+            "build_marker": "v21_2026_02_07_claude_vision_fix",
             "features": {
                 "image_generation": True,
                 "vision_verification": True,
