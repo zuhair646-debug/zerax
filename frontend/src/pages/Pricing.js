@@ -1,9 +1,10 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
-import { Sparkles, Check, Zap, Crown, Rocket, Building2, Tag } from 'lucide-react';
+import { Sparkles, Check, Zap, Crown, Rocket, Building2, Tag, CreditCard } from 'lucide-react';
 
 const API = process.env.REACT_APP_BACKEND_URL;
+const PAYPAL_CLIENT_ID = 'ATLgrd23Yei2wrCUaJTsS2jY8CirmvDOtb3U9uRN7K7p9um7sBrpQ-uUP_b2uU6K05OMhzFa-U9fhupN';
 
 const PLAN_ICONS = {
   free: <Sparkles className="w-6 h-6" />,
