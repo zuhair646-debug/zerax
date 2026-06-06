@@ -511,7 +511,7 @@ async def generate_sfx(prompt: str, project_id: str, duration: int = 5) -> Dict[
 # Normalised tag names below mapped to canonical generator types.
 TAG_RE = re.compile(
     r"<<\s*"
-    r"(IMG[_\s-]?PRO|IMG[_\s-]?REF|IMG[_\s-]?EDIT|COMPOSE|MODEL[_\s-]?3D|3D[_\s-]?MODEL|3D|ANIM(?:ATE)?|SOUNDTRACK|MUSIC|SOUND[_\s-]?FX|SFX)"
+    r"(IMG[_\s-]?PRO|IMG[_\s-]?REF|IMG[_\s-]?EDIT|COMPOSE|BATCH|MODEL[_\s-]?3D|3D[_\s-]?MODEL|3D|ANIM(?:ATE)?|SOUNDTRACK|MUSIC|SOUND[_\s-]?FX|SFX)"
     r"\s*[:：\-]?\s*"
     r"(.+?)"
     r"\s*>>",
@@ -530,6 +530,8 @@ def _canon_tag(raw: str) -> str:
         return "IMG_EDIT"
     if t in ("COMPOSE",):
         return "COMPOSE"
+    if t in ("BATCH",):
+        return "BATCH"
     if t in ("3D", "MODEL_3D", "MODEL3D", "3D_MODEL", "3DMODEL"):
         return "3D"
     if t in ("ANIM", "ANIMATE"):
@@ -702,6 +704,62 @@ async def parse_and_generate_assets(
                     tasks.append(generate_flux_pro(scene_desc, project_id, style_profile=style_profile))
                 else:
                     tasks.append(_compose_scene_from_refs(ref_paths, scene_desc, project_id))
+            elif tag_type == "BATCH":
+                # syntax: <<BATCH: english prompt | count: 6 | variations: slight|moderate|high>>
+                # Returns N images generated in parallel, all variants of the same prompt.
+                # Variations are seeded by appending subtle modifiers per index.
+                prompt_part = body
+                count = 4
+                variations = "slight"
+                # Parse all "key: value" pairs after the first "|"
+                if "|" in body:
+                    segments = [s.strip() for s in body.split("|")]
+                    prompt_part = segments[0]
+                    for seg in segments[1:]:
+                        kv = re.match(r"\s*(count|variations|var)\s*[:=]\s*(.+)", seg, re.IGNORECASE)
+                        if kv:
+                            k = kv.group(1).lower()
+                            v = kv.group(2).strip()
+                            if k == "count":
+                                try:
+                                    count = max(2, min(int(v), 6))  # cap 2..6 for cost
+                                except Exception:
+                                    pass
+                            elif k in ("variations", "var"):
+                                vv = v.lower()
+                                if vv in ("slight", "moderate", "high"):
+                                    variations = vv
+                # Build N variant prompts
+                variant_modifiers = {
+                    "slight": [
+                        "early morning soft light",
+                        "midday bright sunlight",
+                        "warm golden hour",
+                        "blue hour twilight",
+                        "overcast diffused light",
+                        "slightly different camera angle, same subject",
+                    ],
+                    "moderate": [
+                        "morning, slightly younger growth",
+                        "midday, fully mature",
+                        "evening, autumn tones",
+                        "after rain, glossy",
+                        "windy, motion in foliage",
+                        "wider shot showing surroundings",
+                    ],
+                    "high": [
+                        "lush variant, very rich detail",
+                        "minimal variant, sparse",
+                        "stylized variant, painterly",
+                        "realistic variant, photoreal",
+                        "stormy variant, dramatic mood",
+                        "night variant, with moonlight",
+                    ],
+                }
+                mods = variant_modifiers[variations]
+                for i in range(count):
+                    variant_prompt = f"{prompt_part}. Variant {i+1}/{count}: {mods[i % len(mods)]}."
+                    tasks.append(generate_flux_pro(variant_prompt, project_id, style_profile=style_profile))
             elif tag_type == "3D":
                 tasks.append(generate_3d_model(body, project_id))
             elif tag_type == "ANIMATE":

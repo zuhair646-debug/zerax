@@ -1066,12 +1066,44 @@ def create_game_router(db, get_current_user):
         if not user_is_owner and user_credits < phase_info["credits"]:
             raise HTTPException(402, f"رصيد غير كافٍ — تحتاج {phase_info['credits']} نقطة (لديك {user_credits})")
         
-        # Build AI context with memory
+        # Build AI context with memory — pull approved assets directly from phases (cross-phase)
         approved_context = ""
-        if project.get("approved_assets"):
-            approved_context = "\n\n📌 **Previously Approved Assets (use these!):**\n"
-            for asset in project["approved_assets"]:
-                approved_context += f"- {asset['type']}: {asset['name']} — {asset.get('description', 'N/A')}\n"
+        approved_assets_index: list[dict] = []
+        for _phase_id, _phase in (project.get("phases") or {}).items():
+            for _msg in (_phase.get("messages") or []):
+                for _a in (_msg.get("generated_assets") or []):
+                    if _a.get("approved") and not _a.get("deleted_at"):
+                        approved_assets_index.append({
+                            "id": _a.get("id"),
+                            "type": _a.get("type"),
+                            "name": (_a.get("name") or "asset")[:80],
+                            "subtype": _a.get("subtype") or _a.get("type"),
+                            "phase": _phase_id,
+                        })
+        if approved_assets_index:
+            # Sort newest first (approximate by reverse of natural insertion)
+            approved_assets_index = list(reversed(approved_assets_index))[:30]
+            listing = "\n".join(
+                f"  • id=`{a['id']}` [{a['type']}] {a['name']} — مرحلة [{a['phase']}]"
+                for a in approved_assets_index
+            )
+            approved_context = (
+                "\n\n═══════════════════════════════════════════════════════════════\n"
+                f"📌 **الأصول المعتمدة سابقاً ({len(approved_assets_index)})** — استخدم IDs منها مباشرة\n"
+                "═══════════════════════════════════════════════════════════════\n"
+                f"{listing}\n\n"
+                "🚨 **قواعد إلزامية لمنع توليد عشوائي**:\n"
+                "1. **ممنوع** تستخدم `<<IMG_PRO>>` لتوليد شي شبيه أو مكرر لأصل معتمد. استخدم بدلاً:\n"
+                "   • `<<IMG_REF: english new subject | ref: ID_من_الفوق>>` (style-lock)\n"
+                "   • `<<IMG_EDIT: english edit instruction | ref: ID>>` (تعديل دقيق)\n"
+                "   • `<<COMPOSE: scene description | refs: id1, id2, id3>>` (دمج ٢-٤ معتمدة)\n"
+                "   • `<<BATCH: english prompt | count: 6 | variations: slight>>` (٦ variations دفعة واحدة)\n"
+                "2. لو المالك قال \"عدّل الإضاءة\" أو \"خل الزاوية كذا\" → استخدم `IMG_EDIT` مع id الصورة المعتمدة\n"
+                "3. لو المالك قال \"اجمع الكل في مشهد\" → استخدم `COMPOSE` مع كل IDs المعنية\n"
+                "4. لو المالك قال \"أعطني ٦ حقول قمح\" → استخدم `BATCH count: 6` (مو ٦ تاجات IMG_PRO)\n"
+                "5. لو شك في أي ID، اطلب من المالك يأكد رقم الصورة #N من الـvision أعلاه\n"
+                "═══════════════════════════════════════════════════════════════\n"
+            )
         
         # Build enhanced system prompt based on phase
         tech_guide = ""
@@ -2312,13 +2344,51 @@ def create_game_router(db, get_current_user):
                 }
             )
         
-        # Update asset in place
+        # Update asset in place (assets bucket)
         await db.game_projects.update_one(
             {"id": project_id},
             {"$set": {f"assets.{asset_type}": project["assets"][asset_type]}}
         )
-        
-        return {"ok": True, "asset": asset}
+
+        # 🚨 CRITICAL: ALSO mirror the approval into messages[].generated_assets[]
+        # The vision context reads from THIS path, not from project.assets.
+        # Without this sync, the AI sees old approved=False even after the owner clicks ✓.
+        # Also inject a system message into the chat history so the AI gets an explicit
+        # "✅ asset N was approved" event the next time it responds.
+        phases = project.get("phases", {}) or {}
+        approval_event_msg = None
+        for ph_id, ph in phases.items():
+            msgs = ph.get("messages") or []
+            patched = False
+            for m in msgs:
+                for ga in (m.get("generated_assets") or []):
+                    if ga.get("id") == payload.asset_id:
+                        ga["approved"] = bool(payload.approved)
+                        ga["approval_feedback"] = payload.feedback
+                        ga["approval_timestamp"] = datetime.now(timezone.utc).isoformat()
+                        patched = True
+            if patched:
+                # Append an explicit "approval event" pseudo-message so the AI sees it
+                # in chat history on next turn (NOT counted as a user/assistant turn for billing).
+                approval_event_msg = {
+                    "role": "system",
+                    "content": (
+                        f"{'✅ APPROVED' if payload.approved else '↻ REJECTED'}: "
+                        f"asset id=`{payload.asset_id}` ({asset.get('name','')[:60]})"
+                        + (f" — feedback: {payload.feedback}" if payload.feedback else "")
+                    ),
+                    "ts": datetime.now(timezone.utc).isoformat(),
+                    "event_type": "asset_approval",
+                    "asset_id": payload.asset_id,
+                    "approved": bool(payload.approved),
+                }
+                msgs.append(approval_event_msg)
+                await db.game_projects.update_one(
+                    {"id": project_id},
+                    {"$set": {f"phases.{ph_id}.messages": msgs}},
+                )
+
+        return {"ok": True, "asset": asset, "synced_to_messages": approval_event_msg is not None}
     
     # ───────────────────────────────────────────────────────────
     # 🔓 POST /project/{project_id}/unlock-phase — Unlock next phase
@@ -3198,7 +3268,7 @@ def create_game_router(db, get_current_user):
         return {
             "ok": True,
             "service": "games",
-            "build_marker": "v21_2026_02_07_claude_vision_fix",
+            "build_marker": "v22_2026_02_07_approval_sync_batch_forced_tags",
             "features": {
                 "image_generation": True,
                 "vision_verification": True,
