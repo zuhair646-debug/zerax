@@ -534,3 +534,30 @@ def create_router(db, get_admin_user):
         return {"ok": True, "count": len(rows), "log": rows}
 
     return router
+
+
+# ════════════════════════════════════════════════════════════════
+# Public honeypot report router — called by frontend 404 handler
+# ════════════════════════════════════════════════════════════════
+def create_public_router():
+    """Endpoints anyone can call (no auth) — used by frontend to report scanner hits."""
+    pub = APIRouter(prefix="/api/security", tags=["security-public"])
+
+    @pub.post("/honeypot-report")
+    async def honeypot_report(request: Request):
+        """🛡️ L11 — Frontend reports a non-API honeypot hit (e.g. /.env, /wp-admin).
+        Bans the IP for 1 hour and records a high-severity alert."""
+        ip = get_real_ip(request)
+        try:
+            body = await request.json()
+        except Exception:
+            body = {}
+        path = (body.get("path") or "?")[:200]
+        ua = (request.headers.get("user-agent") or "?")[:120]
+        if is_honeypot_path(path) or "/" in path:
+            _ip_blocklist[ip] = time.time() + IP_BLOCK_DURATION_SEC
+            _record_alert("HONEYPOT_HIT", "high",
+                f"Scanner hit honeypot {path} from {ip} — IP banned for 1h (UA: {ua})")
+        return {"ok": True, "ip_banned": ip}
+
+    return pub

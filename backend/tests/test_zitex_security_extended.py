@@ -132,6 +132,136 @@ class TestL11Honeypot:
 
 
 # ════════════════════════════════════════════════════════════════
+# L11 — NEW: Public honeypot-report endpoint (frontend catch-all)
+# ════════════════════════════════════════════════════════════════
+class TestL11HoneypotReport:
+    """Tests the new POST /api/security/honeypot-report endpoint added
+    to close the non-/api scanner gap flagged in iteration_33."""
+
+    def test_honeypot_report_env_bans_ip_and_records_alert(self, admin_headers):
+        ip = "33.33.33.33"
+        unblock_ip(admin_headers, ip)
+        # 1. POST honeypot report with /.env path
+        r = requests.post(
+            f"{BASE_URL}/api/security/honeypot-report",
+            json={"path": "/.env"},
+            headers={"X-Forwarded-For": ip, "User-Agent": CLEAN_UA},
+            timeout=10,
+        )
+        assert r.status_code == 200, f"expected 200, got {r.status_code}: {r.text[:200]}"
+        body = r.json()
+        assert body.get("ok") is True, f"unexpected body: {body}"
+        assert body.get("ip_banned") == ip, f"ip_banned mismatch: {body}"
+
+        # 2. Fetch security status — HONEYPOT_HIT must be in recent alerts
+        s = requests.get(
+            f"{BASE_URL}/api/admin/security/status",
+            headers=admin_headers,
+            timeout=15,
+        )
+        assert s.status_code == 200, s.text[:200]
+        alerts = s.json().get("recent_alerts", [])
+        kinds = {a.get("kind") for a in alerts}
+        assert "HONEYPOT_HIT" in kinds, f"HONEYPOT_HIT not in alerts: {kinds}"
+        # Verify alert references the IP (field name is 'message')
+        env_alerts = [a for a in alerts if a.get("kind") == "HONEYPOT_HIT" and ip in (a.get("message") or "")]
+        assert env_alerts, f"no HONEYPOT_HIT alert references {ip}: {alerts[:5]}"
+
+        # 3. Any follow-up request from same IP must be blocked
+        r3 = requests.get(
+            f"{BASE_URL}/api/games/projects",
+            headers={"X-Forwarded-For": ip, "User-Agent": CLEAN_UA},
+            timeout=10,
+        )
+        assert r3.status_code == 403, f"expected IP-block 403, got {r3.status_code}: {r3.text[:200]}"
+        unblock_ip(admin_headers, ip)
+
+    def test_honeypot_report_wpadmin_records_alert_for_ip(self, admin_headers):
+        ip = "44.44.44.44"
+        unblock_ip(admin_headers, ip)
+        r = requests.post(
+            f"{BASE_URL}/api/security/honeypot-report",
+            json={"path": "/wp-admin"},
+            headers={"X-Forwarded-For": ip, "User-Agent": CLEAN_UA},
+            timeout=10,
+        )
+        assert r.status_code == 200, f"expected 200, got {r.status_code}: {r.text[:200]}"
+        assert r.json().get("ip_banned") == ip
+
+        s = requests.get(
+            f"{BASE_URL}/api/admin/security/status",
+            headers=admin_headers,
+            timeout=15,
+        )
+        assert s.status_code == 200
+        alerts = s.json().get("recent_alerts", [])
+        ip_alerts = [a for a in alerts if a.get("kind") == "HONEYPOT_HIT" and ip in (a.get("message") or "")]
+        assert ip_alerts, f"no HONEYPOT_HIT alert references {ip}: {alerts[:5]}"
+        unblock_ip(admin_headers, ip)
+
+    def test_frontend_catchall_file_exists(self):
+        """Validates that the React catch-all HoneypotCatcher page is wired."""
+        import os
+        hp_path = "/app/frontend/src/pages/HoneypotCatcher.js"
+        assert os.path.exists(hp_path), f"{hp_path} missing"
+        app_js = "/app/frontend/src/App.js"
+        assert os.path.exists(app_js), f"{app_js} missing"
+        with open(app_js) as f:
+            content = f.read()
+        assert "HoneypotCatcher" in content, "App.js does not import HoneypotCatcher"
+        assert 'path="*"' in content, 'catch-all <Route path="*" ...> missing in App.js'
+        assert "<HoneypotCatcher" in content, "<HoneypotCatcher /> element not used in App.js"
+
+
+# ════════════════════════════════════════════════════════════════
+# L4 — NEW: /auth/logout writes audit-log with real IP (not '?')
+# ════════════════════════════════════════════════════════════════
+class TestL4LogoutRealIP:
+    def test_logout_audit_log_records_real_ip(self, admin_headers):
+        ip = "55.55.55.55"
+        # Login fresh from this IP
+        r = requests.post(
+            f"{BASE_URL}/api/auth/login",
+            json={"email": ADMIN_EMAIL, "password": ADMIN_PASSWORD},
+            headers={"X-Forwarded-For": ip, "User-Agent": CLEAN_UA},
+            timeout=15,
+        )
+        assert r.status_code == 200, r.text[:200]
+        tok = r.json()["token"]
+
+        # Logout from same IP
+        lo = requests.post(
+            f"{BASE_URL}/api/auth/logout",
+            headers={"Authorization": f"Bearer {tok}", "X-Forwarded-For": ip, "User-Agent": CLEAN_UA},
+            timeout=10,
+        )
+        assert lo.status_code == 200, lo.text[:200]
+        time.sleep(1)
+
+        # Fetch audit-log; most recent logout row should carry our IP (not '?')
+        a = requests.get(
+            f"{BASE_URL}/api/admin/security/audit-log?limit=200",
+            headers=admin_headers,
+            timeout=15,
+        )
+        assert a.status_code == 200, a.text[:200]
+        rows = a.json().get("log", [])
+        logout_rows = [r for r in rows if r.get("kind") == "logout"]
+        assert logout_rows, f"no logout rows in audit log; sample: {rows[:5]}"
+        # Check that at least one logout has the real IP we used
+        real_ip_rows = [r for r in logout_rows if r.get("ip") == ip]
+        assert real_ip_rows, (
+            f"no logout row has ip={ip}; recent logout rows: "
+            f"{[(r.get('ip'), r.get('ts')) for r in logout_rows[:5]]}"
+        )
+        # And the most recent logout overall must not be '?'
+        most_recent_logout = logout_rows[0]
+        assert most_recent_logout.get("ip") not in ("?", "", None), (
+            f"most recent logout still has placeholder ip: {most_recent_logout}"
+        )
+
+
+# ════════════════════════════════════════════════════════════════
 # L12 — Bad User-Agent filter
 # ════════════════════════════════════════════════════════════════
 class TestL12BadUserAgent:
@@ -258,7 +388,8 @@ class TestL14PasswordStrength:
 class TestL1RateLimit:
     def test_burst_triggers_429(self, admin_headers):
         from concurrent.futures import ThreadPoolExecutor
-        ip = "1.1.1.99"
+        # Use a unique IP per run to avoid stale bans from previous runs
+        ip = f"77.77.77.{int(time.time()) % 200 + 30}"
         unblock_ip(admin_headers, ip)
         h = {"X-Forwarded-For": ip, "User-Agent": CLEAN_UA}
 

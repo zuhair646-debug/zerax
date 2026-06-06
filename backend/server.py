@@ -728,6 +728,7 @@ async def google_exchange(body: GoogleExchangeIn):
 
 @api_router.post("/auth/logout")
 async def logout(
+    request: Request,
     credentials: HTTPAuthorizationCredentials = Depends(security),
     current_user: dict = Depends(get_current_user),
 ):
@@ -736,10 +737,11 @@ async def logout(
         from modules.security import revoke_token, write_audit, get_real_ip
         revoke_token(credentials.credentials)
         try:
-            from fastapi import Request as _R
-            # Best-effort audit log (ip unknown at this layer; use placeholder)
-            await write_audit(db, "logout", current_user.get('user_id', '?'), "?",
-                              {"role": current_user.get('role', '?')})
+            await write_audit(
+                db, "logout", current_user.get('user_id', '?'),
+                get_real_ip(request),
+                {"role": current_user.get('role', '?')},
+            )
         except Exception:
             pass
     except Exception:
@@ -3826,12 +3828,14 @@ except Exception as _gee:
 try:
     from modules.security import (
         create_router as _sec_create,
+        create_public_router as _sec_public,
         security_headers_middleware as _sec_headers,
         ip_block_middleware as _sec_ipblock,
         security_scheduler as _sec_scheduler,
     )
     _sec_router = _sec_create(db, require_admin)
     app.include_router(_sec_router)
+    app.include_router(_sec_public())
     app.middleware("http")(_sec_headers)
     app.middleware("http")(_sec_ipblock)
     # Launch periodic AI scanner in the background

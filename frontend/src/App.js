@@ -75,6 +75,7 @@ import AdminIndependence from '@/pages/AdminIndependence';
 import AdminAIReadiness from '@/pages/AdminAIReadiness';
 import AdminLearning from '@/pages/AdminLearning';
 import SecurityControlRoom from '@/pages/SecurityControlRoom';
+import HoneypotCatcher from '@/pages/HoneypotCatcher';
 import Companion from '@/pages/Companion';
 import '@/App.css';
 
@@ -199,6 +200,8 @@ function App() {
           <Route path="/admin/learning" element={<ProtectedRoute adminOnly><AdminLearning user={user} /></ProtectedRoute>} />
           <Route path="/admin/security" element={<ProtectedRoute adminOnly><SecurityControlRoom user={user} /></ProtectedRoute>} />
           <Route path="/companion" element={<ProtectedRoute><Companion user={user} setUser={setUser} /></ProtectedRoute>} />
+          {/* 🛡️ Honeypot catch-all — bans scanners hitting /.env, /wp-admin, etc. */}
+          <Route path="*" element={<HoneypotCatcher />} />
         </Routes>
         {/* Global persistent avatars — appear on EVERY route except VRM preview */}
         <GlobalAvatarMount />

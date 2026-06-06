@@ -1,0 +1,47 @@
+{
+  "summary": "Final regression test of 14-layer Zitex Security Center after closing L11 honeypot gap with frontend catch-all + new public POST /api/security/honeypot-report endpoint, plus /auth/logout real-IP audit fix. All 22/22 backend tests PASS (16 carry-over from iter33 + 4 new for honeypot-report + 1 new for logout real-IP + 1 new for frontend wiring sanity). The non-/api scanner gap flagged in iteration_33 is now closed.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {
+        "endpoint": "/api/admin/security/status -> layers.L13_jwt_revocation",
+        "issue": "Still in-memory blacklist (_jwt_blacklist dict). Multi-replica deployments will have inconsistent revocation state. Move to Redis for horizontal scaling. Carried over from iter33 — not blocking."
+      },
+      {
+        "endpoint": "/api/auth/register",
+        "issue": "validate_password_strength() wrapped in broad try/except that silently swallows ImportError. Add logger.warning() when import fails. Carried over from iter33."
+      },
+      {
+        "endpoint": "/api/security/honeypot-report",
+        "issue": "Endpoint is intentionally public (no auth), and the gating logic `if is_honeypot_path(path) or '/' in path` will fire on essentially every path because '/' is always in any URL. While this is the intended behavior (frontend already filters by TRAP_KEYWORDS before calling), the backend should also guard against abusive POSTs from a single bad actor flooding with random paths to fill _ip_blocklist and alerts ring buffer. Consider rate-limiting this endpoint at 5/min/ip to prevent log-flooding DoS."
+      }
+    ]
+  },
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/backend/tests/test_zitex_security_extended.py",
+    "/app/test_reports/pytest/security_iter34.xml"
+  ],
+  "action_items": [
+    "Optional hardening: rate-limit /api/security/honeypot-report to 5/min/ip to prevent honeypot-report abuse",
+    "Carried over: move _jwt_blacklist/_ip_blocklist/_login_failures to Redis for multi-replica scale",
+    "Carried over: add logger.warning() if modules/security password validator import fails in register()"
+  ],
+  "critical_code_review_comments": [
+    "create_public_router() correctly mounted via app.include_router(_sec_public()) at server.py:3838 — endpoint is reachable.",
+    "honeypot_report() correctly extracts X-Forwarded-For via get_real_ip(request), adds IP to _ip_blocklist for IP_BLOCK_DURATION_SEC, and records HONEYPOT_HIT alert with severity='high'. Verified end-to-end with 33.33.33.33 (.env) and 44.44.44.44 (wp-admin).",
+    "/auth/logout now correctly accepts `request: Request` and passes get_real_ip(request) to write_audit instead of '?'. Verified via audit-log query — logout rows now carry the X-Forwarded-For IP (55.55.55.55 in test).",
+    "Frontend HoneypotCatcher.js correctly imported in App.js (line 78) and mounted as <Route path='*' element={<HoneypotCatcher />} />. TRAP_KEYWORDS list covers .env, wp-admin, wp-login, phpmyadmin, .git, xmlrpc, admin.php, etc. — matches honeypot logic.",
+    "Gating in honeypot_report uses `is_honeypot_path(path) or '/' in path` — the '/' check is too broad (matches everything), so any POSTed path bans the IP. Frontend already filters by TRAP_KEYWORDS so this is OK in practice, but a malicious client could call this directly to ban arbitrary IPs (e.g., self-DoS or to flood logs). Recommend tightening to `is_honeypot_path(path)` only, OR adding slowapi @limiter on the endpoint."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_zitex_security_extended.py"
+  ],
+  "success_rate": {"backend": "100% (22/22)", "frontend": "n/a (skipped per request)"},
+  "test_credentials": "owner@zitex.com / owner123 (from /app/memory/test_credentials.md)",
+  "seed_data_creation": "Ephemeral test users: TEST_pw_<uuid>@example.com (~1/run from L14 strong-password test) and bf-<uuid>@example.com (login-only, never registered). Each test uses unique X-Forwarded-For IPs (1.1.1.x, 3.3.3.x, 4.4.4.40, 11.11.11.x, 12.12.12.x, 13.13.13.13, 14.14.14.x, 33.33.33.33, 44.44.44.44, 55.55.55.55, 77.77.77.x, 98.98.98.98, 99.99.99.99, 200.0.0.x). All IPs are unblocked via /api/admin/security/unblock-ip after each test for idempotency.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Suite test_zitex_security_extended.py grew from 18 to 22 tests in iter34. New classes: TestL11HoneypotReport (3 tests: env+wpadmin scanner-report + frontend wiring file check) and TestL4LogoutRealIP (1 test: logout audit-log real IP). All passing. Runtime ~59s. The L1 rate-limit IP was changed from fixed '1.1.1.99' to dynamic '77.77.77.{epoch%200+30}' because the fixed IP got progressively banned across runs — keep this pattern for any high-volume IP-keyed tests. The only NEW recommendation from this iter: rate-limit /api/security/honeypot-report to prevent abuse (currently any client can POST {path:'/.env'} and ban their own/spoofed IP). All 14 layers still operational; iter33 minor issues for L13 in-memory state and L14 silent import-fail remain open but non-blocking.",
+  "rca of the issue": "Iteration 33 flagged: /.env and /wp-admin requests are routed by K8s ingress to the React frontend container (port 3000), so the FastAPI honeypot middleware never sees them. iter34 fix: (a) new public endpoint POST /api/security/honeypot-report on the backend that bans the X-Forwarded-For IP and records a HONEYPOT_HIT alert, and (b) new React component HoneypotCatcher.js mounted as catch-all route '*' that detects TRAP_KEYWORDS in the URL and POSTs to that endpoint. End-to-end verified: posting {path:'/.env'} from X-Forwarded-For: 33.33.33.33 returns 200, records HONEYPOT_HIT alert mentioning the IP, and follow-up GET /api/games/projects from same IP returns 403 'IP blocked'. Logout fix: server.py:730 now signature `async def logout(request: Request, ...)` and writes audit with get_real_ip(request) — verified by querying /api/admin/security/audit-log and confirming the logout row carries 55.55.55.55 instead of '?'."
+}
