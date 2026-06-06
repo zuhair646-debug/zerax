@@ -21,6 +21,7 @@ import ProStudioTools from '@/components/games/ProStudioTools';
 import EditAssetButton from '@/components/games/EditAssetButton';
 import StyleTrainingPanel from '@/components/games/StyleTrainingPanel';
 import FalKeyManager from '@/components/games/FalKeyManager';
+import ApprovedAssetsGallery from '@/components/games/ApprovedAssetsGallery';
 
 const API = process.env.REACT_APP_BACKEND_URL;
 
@@ -57,6 +58,7 @@ export default function WebGamesStudio({ user, gameType = 'web', studioConfig = 
   const [activeTab, setActiveTab] = useState('chat'); // chat | live | approved | notes
   const [resuming, setResuming] = useState(false);
   const [lightbox, setLightbox] = useState(null); // {src, alt}
+  const [galleryOpen, setGalleryOpen] = useState(false); // 📦 Approved assets gallery panel
   const [myProjectsOpen, setMyProjectsOpen] = useState(false);
   const [notesRefreshSignal, setNotesRefreshSignal] = useState(0);
   
@@ -986,9 +988,30 @@ export default function WebGamesStudio({ user, gameType = 'web', studioConfig = 
                   <Send className="w-5 h-5" />
                 )}
               </button>
+              <button
+                onClick={() => setGalleryOpen(true)}
+                className="px-3 py-3 bg-zinc-800 hover:bg-amber-500/20 border border-amber-500/40 text-amber-200 rounded-xl flex items-center gap-1.5 text-sm font-semibold whitespace-nowrap"
+                data-testid="open-gallery-btn"
+                title="افتح معرض الأصول المعتمدة ونسخ IDs"
+              >
+                📦 المعتمدة
+              </button>
             </div>
           </div>
         </div>
+
+        {/* 📦 Approved Assets Gallery (slide-in panel) */}
+        {galleryOpen && project && (
+          <ApprovedAssetsGallery
+            projectId={project.id}
+            token={token}
+            onClose={() => setGalleryOpen(false)}
+            onInsertTag={(tag) => {
+              setMessage((m) => (m ? `${m.trim()} ${tag}` : tag));
+              setGalleryOpen(false);
+            }}
+          />
+        )}
 
         {/* RIGHT: Assets Library */}
         <div className="w-80 bg-zinc-900/50 border-r border-white/10 p-4 overflow-y-auto">
