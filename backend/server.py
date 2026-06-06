@@ -3680,6 +3680,25 @@ try:
 except Exception as _ge:
     logging.getLogger(__name__).error(f"games module failed: {_ge}")
 
+# 🎮 Zitex Game Runtime — Backend-as-a-Service for AI-generated games
+# Provides auth/save/leaderboard/achievements/multiplayer/SDK for every project.
+try:
+    from modules.game_runtime import create_router as _gr_create
+    _gr_router = _gr_create(db)
+    app.include_router(_gr_router)
+    logging.getLogger(__name__).info("✅ game_runtime router mounted (player auth, saves, leaderboards, WS multiplayer, SDK)")
+except Exception as _gre:
+    logging.getLogger(__name__).error(f"game_runtime module failed: {_gre}")
+
+# 🎨 Asset Pipeline — image optimization, WebP variants, project export (MD/HTML/JSON)
+try:
+    from modules.asset_pipeline import create_router as _ap_create
+    _ap_router = _ap_create(db, get_current_user)
+    app.include_router(_ap_router)
+    logging.getLogger(__name__).info("✅ asset_pipeline router mounted (image optimize, export GDD)")
+except Exception as _ape:
+    logging.getLogger(__name__).error(f"asset_pipeline module failed: {_ape}")
+
 
 @app.get("/api/iframe-test")
 async def serve_iframe_test():

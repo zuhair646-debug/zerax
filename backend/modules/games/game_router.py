@@ -1200,7 +1200,18 @@ def create_game_router(db, get_current_user):
 | **"خل الصورة الجديدة بنفس ستايل اللي اعتمدنا"** | تكتب: `<<IMG_REF: english new subject | ref: ASSET_ID_من_قائمة_المعتمدة>>` (style-lock عبر Nano Banana) | الـAI ينسخ visual DNA من الصورة المعتمدة ويطبقه على الموضوع الجديد |
 | **"عدّل الصورة المعتمدة الفلانية (إضاءة/زاوية)"** | تكتب: `<<IMG_EDIT: english edit instruction | ref: ASSET_ID>>` | تعديل دقيق على نفس الصورة بدون توليد من الصفر |
 | **"اجمع صور القمح والحديد والخشب في مشهد قرية"** | تكتب: `<<COMPOSE: village layout description | refs: id1, id2, id3>>` (دمج 2-4 أصول معتمدة) | مشهد واحد متماسك بكل الأصول |
+| **"أعطني 6 حقول قمح متغيرة"** | تكتب: `<<BATCH: english prompt | count: 6 | variations: slight\|moderate\|high>>` | 6 صور متوازية في توليد واحد بدل ست جولات |
+| **"خلّي اللعبة تحفظ progress / leaderboards / multiplayer"** | استخدم Zitex Runtime SDK: ضع `<script src="{BACKEND_URL}/api/game-runtime/{project_id}/sdk.js"></script>` ثم `ZitexGame.guest()`/`save()`/`leaderboard.submit()`/`unlock()`/`join('room')` | كل اللعبة تستفيد من backend Zitex بدون استضافة خارجية |
 | "ابحث في الإنترنت" | (الميزة قادمة) | "هذي القدرة قيد البناء" |
+
+🎮 **Zitex Game Runtime SDK** (P0 الجديد): أي لعبة تبنيها بـ`<<BUILD>>` يقدر يستخدم endpoints جاهزة من نفس Zitex:
+- `ZitexGame.guest()` / `signup()` / `login()` — تسجيل لاعبين بدون أي استضافة
+- `ZitexGame.save(obj)` / `load()` — حفظ progress عبر الأجهزة (cross-device)
+- `ZitexGame.leaderboard.submit(score)` / `top()` / `myRank()` — leaderboards حية
+- `ZitexGame.unlock('first_blood')` / `achievements()` — إنجازات
+- `ZitexGame.join('room-1')` — Multiplayer WebSocket حي (chat + state sync)
+
+→ هذا يحوّل الـHTML5 game من static إلى **MMO حقيقي** بدون أي backend خارجي. لما يطلب المالك multiplayer/leaderboards/save، **استخدم SDK مباشرة** بدل ما تقول "نحتاج استضافة".
 
 ⚠️ **قاعدة ذهبية للأصول المعتمدة**: لو فوق في الـvision تظهر صور معتمدة سابقاً، **ممنوع** تعيد توليدها من الصفر. لو المالك يبيها بسياق جديد → استخدم `IMG_REF`. لو يبيها معدّلة → `IMG_EDIT`. لو يبيها مع بقية الأصول في مشهد → `COMPOSE`. هذا يضمن تماسك بصري احترافي ويوفر نقاط على المالك.
 
@@ -3268,7 +3279,7 @@ def create_game_router(db, get_current_user):
         return {
             "ok": True,
             "service": "games",
-            "build_marker": "v22_2026_02_07_approval_sync_batch_forced_tags",
+            "build_marker": "v23_2026_02_07_game_runtime_full_stack",
             "features": {
                 "image_generation": True,
                 "vision_verification": True,
