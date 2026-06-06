@@ -60,20 +60,21 @@ export default function FalKeyManager({ accentColor = 'amber' }) {
 
   return (
     <>
-      {/* Always-visible floating pill — red if broken, green if working */}
+      {/* Always-visible floating pill — red if broken, green if working
+          Positioned bottom-LEFT (top-LEFT on mobile) to avoid the orange mic button on the right */}
       <button
         type="button"
         onClick={() => setOpen(true)}
         data-testid="fal-key-manager-btn"
-        className={`fixed bottom-6 right-6 z-40 px-3 py-2 rounded-full shadow-xl border-2 flex items-center gap-2 text-xs font-bold transition-all hover:scale-105 ${
+        className={`fixed bottom-6 left-6 z-[60] px-4 py-2.5 rounded-full shadow-2xl border-2 flex items-center gap-2 text-sm font-bold transition-all hover:scale-105 ${
           broken
             ? 'bg-rose-500 hover:bg-rose-400 text-white border-rose-300 animate-pulse'
-            : 'bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-200 border-emerald-400/40'
+            : 'bg-emerald-500 hover:bg-emerald-400 text-white border-emerald-300'
         }`}
         title={broken ? 'مفتاح Fal فاسد — اضغط للإصلاح' : 'مفتاح Fal شغّال'}
       >
-        <Key className="w-3.5 h-3.5" />
-        <span>{broken ? '🔴 FAL مكسور' : '🟢 FAL'}</span>
+        <Key className="w-4 h-4" />
+        <span>{broken ? '🔴 إصلاح مفتاح FAL' : (status?.live_test === 'working' ? '🟢 FAL شغّال' : '🔑 اختبار FAL')}</span>
       </button>
 
       {open && (
