@@ -36,6 +36,23 @@ export default function Pricing({ user }) {
     })();
   }, []);
 
+  // Load PayPal SDK with messaging component (Pay in 4 / Pay Monthly badges)
+  useEffect(() => {
+    if (window.paypal) return;
+    const script = document.createElement('script');
+    script.src = `https://www.paypal.com/sdk/js?client-id=${PAYPAL_CLIENT_ID}&components=messages&currency=USD`;
+    script.async = true;
+    script.onload = () => {
+      // Re-render messages after script loads
+      if (window.paypal && window.paypal.Messages) {
+        document.querySelectorAll('[data-pp-message]').forEach(el => {
+          try { window.paypal.Messages({ amount: el.dataset.ppAmount, placement: 'product' }).render(el); } catch {}
+        });
+      }
+    };
+    document.body.appendChild(script);
+  }, []);
+
   const validatePromo = async (baseAmount, itemType) => {
     if (!promoCode || !user) return null;
     try {
@@ -204,7 +221,7 @@ export default function Pricing({ user }) {
                     )}
                   </div>
 
-                  <ul className="space-y-3 mb-8 flex-1">
+                  <ul className="space-y-3 mb-6 flex-1">
                     {(plan.features_ar || []).map((f, i) => (
                       <li key={i} className="flex gap-2 text-sm text-zinc-300">
                         <Check className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
@@ -212,6 +229,19 @@ export default function Pricing({ user }) {
                       </li>
                     ))}
                   </ul>
+
+                  {plan.pay_later_eligible && !isFree && !isEnt && (
+                    <div className="mb-4 p-3 rounded-lg bg-blue-500/10 border border-blue-500/30 text-xs">
+                      <div className="flex items-center gap-2 text-blue-300 font-bold mb-1">
+                        <CreditCard className="w-3.5 h-3.5" /> ادفع على 4 دفعات بدون فوائد
+                      </div>
+                      <div className="text-blue-200/80">
+                        4 × ${(price / 4).toFixed(2)} • مع PayPal • للعملاء في 🇺🇸 🇬🇧 🇪🇺 🇦🇺
+                      </div>
+                      {/* PayPal-rendered messaging badge (shown only to supported regions) */}
+                      <div data-pp-message data-pp-amount={price} className="mt-2 hidden" />
+                    </div>
+                  )}
 
                   <button
                     disabled={isFree || isEnt || checkingOut === `subscription-${plan.id}`}
@@ -262,6 +292,14 @@ export default function Pricing({ user }) {
                     </div>
                   )}
                 </div>
+                {pack.pay_later_eligible && (
+                  <div className="mb-4 p-3 rounded-lg bg-blue-500/10 border border-blue-500/30 text-xs">
+                    <div className="flex items-center gap-2 text-blue-300 font-bold mb-1">
+                      <CreditCard className="w-3.5 h-3.5" /> أو 4 دفعات × ${(pack.price_usd / 4).toFixed(2)}
+                    </div>
+                    <div className="text-blue-200/80">بدون فوائد • PayPal • مدعومة في 🇺🇸 🇬🇧 🇪🇺 🇦🇺</div>
+                  </div>
+                )}
                 <button
                   onClick={() => checkout('pack', pack.id)}
                   disabled={checkingOut === `pack-${pack.id}`}

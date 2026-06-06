@@ -39,6 +39,7 @@ PLANS: List[Dict[str, Any]] = [
         "price_yearly_usd": 0,
         "credits_per_month": 100,
         "highlight": False,
+        "pay_later_eligible": False,
         "order": 1,
         "features_ar": [
             "100 شعلة شهرياً",
@@ -52,9 +53,10 @@ PLANS: List[Dict[str, Any]] = [
         "name": "Starter",
         "name_ar": "البداية",
         "price_monthly_usd": 9,
-        "price_yearly_usd": 90,   # 2 months free
+        "price_yearly_usd": 90,
         "credits_per_month": 12000,
         "highlight": False,
+        "pay_later_eligible": False,
         "order": 2,
         "features_ar": [
             "12,000 شعلة شهرياً",
@@ -71,7 +73,8 @@ PLANS: List[Dict[str, Any]] = [
         "price_monthly_usd": 29,
         "price_yearly_usd": 290,
         "credits_per_month": 50000,
-        "highlight": True,    # Recommended badge
+        "highlight": True,
+        "pay_later_eligible": False,  # below $30 Pay in 4 minimum
         "order": 3,
         "features_ar": [
             "50,000 شعلة شهرياً",
@@ -85,10 +88,11 @@ PLANS: List[Dict[str, Any]] = [
         "id": "studio",
         "name": "Studio",
         "name_ar": "الاستوديو",
-        "price_monthly_usd": 79,
-        "price_yearly_usd": 790,
+        "price_monthly_usd": 82,        # was $79, +$3 installment buffer
+        "price_yearly_usd": 820,        # was $790
         "credits_per_month": 150000,
         "highlight": False,
+        "pay_later_eligible": True,
         "order": 4,
         "features_ar": [
             "150,000 شعلة شهرياً",
@@ -96,16 +100,18 @@ PLANS: List[Dict[str, Any]] = [
             "Voice Agent (LiveKit)",
             "تخزين GridFS موسّع",
             "دعم أولوية",
+            "✨ متاح الدفع على 4 أقساط بدون فوائد",
         ],
     },
     {
         "id": "pro_studio",
         "name": "Pro Studio",
         "name_ar": "الاستوديو الاحترافي",
-        "price_monthly_usd": 199,
-        "price_yearly_usd": 1990,
+        "price_monthly_usd": 209,       # was $199, +$10 installment buffer
+        "price_yearly_usd": 2090,       # was $1990
         "credits_per_month": 450000,
         "highlight": False,
+        "pay_later_eligible": True,
         "order": 5,
         "features_ar": [
             "450,000 شعلة شهرياً",
@@ -113,16 +119,18 @@ PLANS: List[Dict[str, Any]] = [
             "وصول API كامل",
             "Webhooks + Custom integrations",
             "SLA 99.9%",
+            "✨ متاح الدفع على 4 أقساط + Pay Monthly",
         ],
     },
     {
         "id": "enterprise",
         "name": "Enterprise",
         "name_ar": "المؤسسة",
-        "price_monthly_usd": -1,   # Contact us
+        "price_monthly_usd": -1,
         "price_yearly_usd": -1,
-        "credits_per_month": 0,    # Custom
+        "credits_per_month": 0,
         "highlight": False,
+        "pay_later_eligible": True,
         "order": 6,
         "features_ar": [
             "حسب الطلب — تواصل مباشرة",
@@ -139,11 +147,11 @@ PLANS: List[Dict[str, Any]] = [
 # Credit packs (pay-as-you-go top-ups)
 # ════════════════════════════════════════════════════════════════
 CREDIT_PACKS: List[Dict[str, Any]] = [
-    {"id": "pack_mini",     "name_ar": "Mini",     "price_usd": 5,   "credits": 5000,   "bonus_pct": 0,   "order": 1},
-    {"id": "pack_standard", "name_ar": "Standard", "price_usd": 20,  "credits": 22000,  "bonus_pct": 10,  "order": 2},
-    {"id": "pack_power",    "name_ar": "Power",    "price_usd": 50,  "credits": 60000,  "bonus_pct": 20,  "order": 3, "popular": True},
-    {"id": "pack_mega",     "name_ar": "Mega",     "price_usd": 100, "credits": 130000, "bonus_pct": 30,  "order": 4},
-    {"id": "pack_ultra",    "name_ar": "Ultra",    "price_usd": 250, "credits": 350000, "bonus_pct": 40,  "order": 5},
+    {"id": "pack_mini",     "name_ar": "Mini",     "price_usd": 5,    "credits": 5000,   "bonus_pct": 0,   "order": 1, "pay_later_eligible": False},
+    {"id": "pack_standard", "name_ar": "Standard", "price_usd": 20,   "credits": 22000,  "bonus_pct": 10,  "order": 2, "pay_later_eligible": False},
+    {"id": "pack_power",    "name_ar": "Power",    "price_usd": 52,   "credits": 60000,  "bonus_pct": 20,  "order": 3, "popular": True, "pay_later_eligible": True},   # was $50, +$2 buffer
+    {"id": "pack_mega",     "name_ar": "Mega",     "price_usd": 105,  "credits": 130000, "bonus_pct": 30,  "order": 4, "pay_later_eligible": True},                    # was $100, +$5 buffer
+    {"id": "pack_ultra",    "name_ar": "Ultra",    "price_usd": 259,  "credits": 350000, "bonus_pct": 40,  "order": 5, "pay_later_eligible": True},                    # was $250, +$9 buffer
 ]
 
 
