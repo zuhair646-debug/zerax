@@ -2380,6 +2380,25 @@ def create_game_router(db, get_current_user):
             "preview": new_key[:8] + "..." + new_key[-4:],
         }
 
+    @router.delete("/admin/fal-key")
+    async def admin_delete_fal_key(user=Depends(get_current_user)):
+        """Wipe ALL stored FAL keys (FAL_KEY + FAL_KEYS) from the vault.
+        Owner can then start fresh with new keys."""
+        u = await db.users.find_one({"id": user["user_id"]}, {"is_owner": 1, "role": 1})
+        if not (u and (u.get("is_owner") or u.get("role") == "owner")):
+            raise HTTPException(403, "Owner only")
+        try:
+            from modules.autocoder.credentials_vault import vault_set as _vset
+            _vset("FAL_KEY", "")
+            _vset("FAL_KEYS", "")
+            # Also clear the in-process env so next call resolves fresh
+            os.environ.pop("FAL_KEY", None)
+            os.environ.pop("_FAL_KEYS_LIST", None)
+            logger.warning(f"[games][delete-fal-key] owner={user['user_id']} wiped all FAL keys")
+        except Exception as e:
+            raise HTTPException(500, f"فشل المسح: {e}")
+        return {"ok": True, "message": "تم مسح كل مفاتيح FAL من الـvault. أضف مفاتيح جديدة الحين."}
+
     @router.get("/admin/fal-key-status")
     async def admin_fal_key_status(user=Depends(get_current_user)):
         u = await db.users.find_one({"id": user["user_id"]}, {"is_owner": 1, "role": 1})
@@ -2695,7 +2714,7 @@ def create_game_router(db, get_current_user):
         return {
             "ok": True,
             "service": "games",
-            "build_marker": "v12_2026_06_06_scene_composer_multikey",  # bump when shipping features
+            "build_marker": "v13_2026_06_06_fal_delete_multikey_ui",
             "features": {
                 "image_generation": True,
                 "vision_verification": True,

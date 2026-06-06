@@ -14,8 +14,10 @@ export default function FalKeyManager({ accentColor = 'amber' }) {
   const [status, setStatus] = useState(null);
   const [busy, setBusy] = useState(false);
   const [keyInput, setKeyInput] = useState('');
+  const [backupKeys, setBackupKeys] = useState('');
   const [msg, setMsg] = useState('');
   const [err, setErr] = useState('');
+  const [confirmDelete, setConfirmDelete] = useState(false);
 
   const fetchStatus = async () => {
     if (!token) return;
@@ -43,16 +45,38 @@ export default function FalKeyManager({ accentColor = 'amber' }) {
       const r = await fetch(`${API}/api/games/admin/set-fal-key`, {
         method: 'POST',
         headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ fal_key: keyInput.trim() }),
+        body: JSON.stringify({
+          fal_key: keyInput.trim(),
+          fal_keys: backupKeys.trim(),  // optional comma-separated backups
+        }),
       });
       const d = await r.json();
       if (!r.ok) throw new Error(d.detail || 'فشل الحفظ');
       setMsg(d.message || '✅ تم بنجاح');
-      setKeyInput('');
+      setKeyInput(''); setBackupKeys('');
       await fetchStatus();
       setTimeout(() => setOpen(false), 1500);
     } catch (e) {
       setErr(e.message || 'خطأ غير معروف');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handleDelete = async () => {
+    setErr(''); setMsg(''); setBusy(true);
+    try {
+      const r = await fetch(`${API}/api/games/admin/fal-key`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const d = await r.json();
+      if (!r.ok) throw new Error(d.detail || 'فشل المسح');
+      setMsg('🗑️ ' + (d.message || 'تم المسح'));
+      setConfirmDelete(false);
+      await fetchStatus();
+    } catch (e) {
+      setErr(e.message);
     } finally {
       setBusy(false);
     }
@@ -132,7 +156,7 @@ export default function FalKeyManager({ accentColor = 'amber' }) {
 
             {/* Input */}
             <div className="space-y-2">
-              <label className="text-xs text-zinc-300 font-bold">المفتاح الجديد</label>
+              <label className="text-xs text-zinc-300 font-bold">المفتاح الأساسي</label>
               <input
                 type="text"
                 value={keyInput}
@@ -142,18 +166,21 @@ export default function FalKeyManager({ accentColor = 'amber' }) {
                 data-testid="fal-key-input"
                 className={`w-full px-3 py-2 bg-black/40 border border-${accentColor}-500/30 rounded-lg text-sm text-white font-mono focus:outline-none focus:border-${accentColor}-400 placeholder:text-zinc-600`}
               />
-              <p className="text-[11px] text-zinc-500 leading-relaxed">
-                المفتاح الصحيح اللي حصلناه من اختباره محلياً:
-                <code className="block mt-1 text-[10px] text-amber-200 bg-black/40 p-2 rounded break-all border border-amber-500/20" dir="ltr">
-                  4782b6fe-9755-4a7f-a056-5823c3e1f195:1e228cad0e08fed2eeea7005d7aba309
-                </code>
-                <button
-                  onClick={() => setKeyInput('4782b6fe-9755-4a7f-a056-5823c3e1f195:1e228cad0e08fed2eeea7005d7aba309')}
-                  className="mt-1.5 text-[11px] text-amber-300 hover:text-amber-200 underline"
-                  data-testid="fal-key-paste-suggested"
-                >
-                  📋 الصق المفتاح المقترح
-                </button>
+
+              <label className="text-xs text-zinc-300 font-bold pt-2 block">
+                مفاتيح backup (اختياري — للأمان)
+              </label>
+              <textarea
+                rows={3}
+                value={backupKeys}
+                onChange={(e) => setBackupKeys(e.target.value)}
+                placeholder="key2,key3,key4 ← مفصولة بفاصلة"
+                dir="ltr"
+                data-testid="fal-keys-backup-input"
+                className={`w-full px-3 py-2 bg-black/40 border border-white/10 rounded-lg text-xs text-white font-mono focus:outline-none focus:border-${accentColor}-400 placeholder:text-zinc-600`}
+              />
+              <p className="text-[10px] text-zinc-500 leading-relaxed">
+                لو المفتاح الأساسي فشل، النظام بيجرّب الـbackups تلقائياً. مفصولة بفاصلة (,) بدون مسافات.
               </p>
             </div>
 
@@ -172,20 +199,34 @@ export default function FalKeyManager({ accentColor = 'amber' }) {
             )}
 
             {/* Actions */}
-            <div className="mt-4 flex gap-2 justify-end">
+            <div className="mt-4 flex flex-wrap gap-2 justify-between">
               <button
-                onClick={() => !busy && setOpen(false)}
+                onClick={() => confirmDelete ? handleDelete() : setConfirmDelete(true)}
                 disabled={busy}
-                className="text-xs px-4 py-2 rounded-lg border border-white/10 text-zinc-300 hover:bg-white/5 disabled:opacity-40"
-              >إلغاء</button>
-              <button
-                onClick={handleSave}
-                disabled={busy || !keyInput.trim() || keyInput.length < 30}
-                data-testid="fal-key-save-btn"
-                className={`text-xs px-4 py-2 rounded-lg bg-${accentColor}-500 hover:bg-${accentColor}-400 text-black font-bold flex items-center gap-1.5 disabled:opacity-40 disabled:cursor-not-allowed`}
+                data-testid="fal-key-delete-btn"
+                className={`text-xs px-3 py-2 rounded-lg border ${
+                  confirmDelete
+                    ? 'bg-rose-500 hover:bg-rose-400 text-white border-rose-300'
+                    : 'border-rose-500/40 text-rose-300 hover:bg-rose-500/10'
+                } font-bold flex items-center gap-1.5 disabled:opacity-40`}
               >
-                {busy ? <><Loader2 className="w-3.5 h-3.5 animate-spin" /> يختبر…</> : 'احفظ واختبر'}
+                🗑️ {confirmDelete ? 'تأكيد المسح؟' : 'امسح كل المفاتيح'}
               </button>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => !busy && setOpen(false)}
+                  disabled={busy}
+                  className="text-xs px-4 py-2 rounded-lg border border-white/10 text-zinc-300 hover:bg-white/5 disabled:opacity-40"
+                >إلغاء</button>
+                <button
+                  onClick={handleSave}
+                  disabled={busy || !keyInput.trim() || keyInput.length < 30}
+                  data-testid="fal-key-save-btn"
+                  className={`text-xs px-4 py-2 rounded-lg bg-${accentColor}-500 hover:bg-${accentColor}-400 text-black font-bold flex items-center gap-1.5 disabled:opacity-40 disabled:cursor-not-allowed`}
+                >
+                  {busy ? <><Loader2 className="w-3.5 h-3.5 animate-spin" /> يختبر…</> : 'احفظ واختبر'}
+                </button>
+              </div>
             </div>
           </div>
         </div>
