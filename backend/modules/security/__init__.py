@@ -277,21 +277,32 @@ def _record_alert(kind: str, severity: str, message: str) -> None:
 
 async def _send_alert_email(to: str, resend_key: str, alert: Dict[str, Any]):
     try:
+        from_email = os.environ.get("FROM_EMAIL", "onboarding@resend.dev")
+        from_name = os.environ.get("FROM_NAME", "Zitex Security")
         async with httpx.AsyncClient(timeout=10) as c:
-            await c.post(
+            r = await c.post(
                 "https://api.resend.com/emails",
                 headers={"Authorization": f"Bearer {resend_key}", "Content-Type": "application/json"},
                 json={
-                    "from": "Zitex Security <security@zitex.app>",
+                    "from": f"{from_name} <{from_email}>",
                     "to": [to],
-                    "subject": f"🚨 [{alert['severity'].upper()}] {alert['kind']}",
-                    "html": f"<h2>Zitex Security Alert</h2>"
-                            f"<p><b>Kind:</b> {alert['kind']}</p>"
-                            f"<p><b>Severity:</b> {alert['severity']}</p>"
-                            f"<p><b>Time:</b> {alert['ts']}</p>"
-                            f"<p><b>Message:</b> {alert['message']}</p>",
+                    "subject": f"🚨 [{alert['severity'].upper()}] {alert['kind']} — Zitex Security",
+                    "html": (
+                        f"<div style='font-family:-apple-system,Segoe UI,sans-serif;max-width:600px;margin:auto;padding:24px;background:#0a0a0a;color:#fff'>"
+                        f"<h1 style='color:#ef4444;margin:0 0 12px'>🛡️ Zitex Security Alert</h1>"
+                        f"<div style='background:#1f1f1f;border-left:4px solid #ef4444;padding:16px;border-radius:8px;margin:16px 0'>"
+                        f"<p><b>النوع / Kind:</b> <code>{alert['kind']}</code></p>"
+                        f"<p><b>الخطورة / Severity:</b> <span style='color:#f59e0b'>{alert['severity'].upper()}</span></p>"
+                        f"<p><b>الوقت / Time:</b> {alert['ts']}</p>"
+                        f"<p><b>التفاصيل / Message:</b><br>{alert['message']}</p>"
+                        f"</div>"
+                        f"<p style='color:#888;font-size:12px'>افتح غرفة التحكم الأمنية: <a href='https://zitex.app/admin/security' style='color:#fbbf24'>/admin/security</a></p>"
+                        f"</div>"
+                    ),
                 },
             )
+            if r.status_code >= 400:
+                logger.warning(f"resend rejected: {r.status_code} {r.text[:200]}")
     except Exception as e:
         logger.warning(f"email alert failed: {e}")
 
@@ -532,6 +543,28 @@ def create_router(db, get_admin_user):
         limit = max(1, min(limit, 500))
         rows = await db.audit_log.find({}, {"_id": 0}).sort("ts", -1).limit(limit).to_list(length=limit)
         return {"ok": True, "count": len(rows), "log": rows}
+
+    @router.post("/test-email")
+    async def test_email(admin=Depends(get_admin_user)):
+        """🧪 Send a test email to SECURITY_ALERT_EMAIL to verify L8 delivery."""
+        to = os.environ.get("SECURITY_ALERT_EMAIL")
+        key = os.environ.get("RESEND_API_KEY")
+        if not to:
+            return {"ok": False, "error": "SECURITY_ALERT_EMAIL not configured"}
+        if not key:
+            return {"ok": False, "error": "RESEND_API_KEY not configured"}
+        test_alert = {
+            "kind": "TEST_EMAIL",
+            "severity": "high",
+            "message": "هذا إيميل اختباري من Zitex Security Center — إذا وصلك يعني نظام التنبيهات شغّال ✅",
+            "ts": datetime.now(timezone.utc).isoformat(),
+            "id": "test",
+        }
+        try:
+            await _send_alert_email(to, key, test_alert)
+            return {"ok": True, "sent_to": to, "from": os.environ.get("FROM_EMAIL", "onboarding@resend.dev")}
+        except Exception as e:
+            return {"ok": False, "error": str(e)[:300]}
 
     return router
 
