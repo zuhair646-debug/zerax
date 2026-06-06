@@ -3708,6 +3708,15 @@ try:
 except Exception as _gte:
     logging.getLogger(__name__).error(f"game_toolkit module failed: {_gte}")
 
+# 🎨 Game Extras — final 6 features (style_dna, batch approve, auto-tag, preview, prompts, comments)
+try:
+    from modules.game_extras import create_router as _ge_create
+    _ge_router = _ge_create(db, get_current_user)
+    app.include_router(_ge_router)
+    logging.getLogger(__name__).info("✅ game_extras router mounted (style DNA, batch approve, auto-tag, preview, prompts, comments)")
+except Exception as _gee:
+    logging.getLogger(__name__).error(f"game_extras module failed: {_gee}")
+
 
 @app.get("/api/iframe-test")
 async def serve_iframe_test():

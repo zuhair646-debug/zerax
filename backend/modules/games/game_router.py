@@ -3332,7 +3332,7 @@ def create_game_router(db, get_current_user):
         return {
             "ok": True,
             "service": "games",
-            "build_marker": "v28_2026_02_07_placeholder_validator",
+            "build_marker": "v29_2026_02_07_all_gaps_closed",
             "features": {
                 "image_generation": True,
                 "vision_verification": True,
