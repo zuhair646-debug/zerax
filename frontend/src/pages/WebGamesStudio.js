@@ -786,112 +786,119 @@ export default function WebGamesStudio({ user }) {
                   </div>
                 </div>
 
-                {/* Assistant */}
+                {/* Assistant — text bubble only */}
                 <div className="flex justify-start">
                   <div className="bg-zinc-800/50 border border-white/10 rounded-2xl rounded-bl-sm px-4 py-3 max-w-3xl">
                     <div className="text-sm whitespace-pre-wrap">
                       {(msg.assistant || '').replace(/<<[\s\S]*?>>/g, '').replace(/\n{3,}/g, '\n\n').trim()}
                     </div>
-                    {/* Inline generated assets (images, 3D, music, SFX, video — all via fal.ai or OpenAI) */}
-                    {msg.generated_assets?.length > 0 && (
-                      <div className="mt-4 space-y-3" data-testid="inline-assets">
-                        {msg.generated_assets.map((a) => {
-                          const isImg = a.type === 'image';
-                          const is3D = a.type === '3d';
-                          const isVid = a.type === 'video';
-                          const isAudio = a.type === 'music' || a.type === 'sfx';
-                          const isErr = a.type === 'error';
-                          if (isErr) {
-                            return (
-                              <div key={a.id} className="rounded-xl border border-red-500/40 bg-red-500/10 p-4 text-right">
-                                <div className="flex items-center gap-2 text-red-300 font-bold mb-1">
-                                  <span>⚠️</span><span>فشل توليد الأصل</span>
-                                </div>
-                                <div className="text-xs text-zinc-300 mb-1">المطلوب: {a.name}</div>
-                                <div className="text-[10px] text-red-200/70 break-all">{a.error}</div>
-                                <button
-                                  onClick={() => setMessage(`أعد توليد: ${a.name}`)}
-                                  className="mt-2 text-xs px-3 py-1.5 bg-red-500/20 hover:bg-red-500/30 border border-red-400/40 rounded-lg text-red-100 font-bold"
-                                  data-testid={`retry-asset-${a.id}`}
-                                >↻ إعادة المحاولة</button>
-                              </div>
-                            );
-                          }
-                          const url = a.image_url || a.model_url || a.video_url || a.audio_url;
-                          const fullUrl = url ? `${API}${url}` : null;
-                          const subtypeBadge = a.subtype || a.style || a.type;
-                          return (
-                            <div key={a.id} className="border border-amber-500/20 rounded-xl overflow-hidden bg-black/30">
-                              {isImg && fullUrl && (
-                                <SafeAssetImage
-                                  src={fullUrl}
-                                  cdnUrl={a.cdn_url}
-                                  verification={a.verification}
-                                  alt={a.name}
-                                  onClick={() => setLightbox({ src: fullUrl, alt: a.name, cdnUrl: a.cdn_url })}
-                                  className="w-full max-w-md object-cover cursor-zoom-in hover:opacity-90 transition-opacity"
-                                  data-testid={`generated-asset-${a.id}`}
-                                />
-                              )}
-                              {is3D && fullUrl && (
-                                <div className="p-3 flex flex-col gap-2" data-testid={`generated-asset-${a.id}`}>
-                                  <div className="flex items-center gap-2 text-amber-300 text-sm font-bold">
-                                    <span>🧊</span>
-                                    <span>موديل 3D جاهز (.glb)</span>
-                                  </div>
-                                  <a href={fullUrl} download
-                                     className="text-xs px-3 py-2 bg-amber-500/15 hover:bg-amber-500/25 border border-amber-400/40 rounded-lg text-amber-100 text-center font-bold">
-                                    ⬇️ تنزيل الموديل (.glb)
-                                  </a>
-                                  <a href={`https://gltf-viewer.donmccurdy.com/?model=${encodeURIComponent(fullUrl)}`}
-                                     target="_blank" rel="noopener noreferrer"
-                                     className="text-xs px-3 py-2 bg-cyan-500/15 hover:bg-cyan-500/25 border border-cyan-400/40 rounded-lg text-cyan-100 text-center font-bold">
-                                    🔍 معاينة 3D في المتصفح
-                                  </a>
-                                </div>
-                              )}
-                              {isVid && fullUrl && (
-                                <video src={fullUrl} controls
-                                       className="w-full max-w-md"
-                                       data-testid={`generated-asset-${a.id}`} />
-                              )}
-                              {isAudio && fullUrl && (
-                                <div className="p-3 flex flex-col gap-2" data-testid={`generated-asset-${a.id}`}>
-                                  <div className="text-xs text-amber-300 font-bold">
-                                    {a.type === 'music' ? '🎵 موسيقى خلفية' : '🔊 مؤثر صوتي'} · {a.duration_sec}s
-                                  </div>
-                                  <audio src={fullUrl} controls className="w-full" />
-                                </div>
-                              )}
-                              <div className="px-3 py-2 flex items-center justify-between gap-2 bg-black/40">
-                                <div className="text-xs text-zinc-400 truncate flex-1">
-                                  <span className="text-amber-300 font-bold">{subtypeBadge}</span>
-                                  <span className="mx-1">·</span>
-                                  <span>{a.name?.slice(0, 60)}</span>
-                                </div>
-                                {!a.approved ? (
-                                  <div className="flex gap-1.5 shrink-0">
-                                    <button onClick={() => handleApproveAsset(a.id, true)}
-                                      className="text-xs px-2.5 py-1 bg-emerald-500/20 hover:bg-emerald-500/30 border border-emerald-400/40 text-emerald-200 rounded-lg font-bold"
-                                      data-testid={`approve-asset-${a.id}`}>✓ معتمد</button>
-                                    <button onClick={() => {
-                                        setMessage(`عدّل ${isImg ? 'الصورة' : is3D ? 'الموديل 3D' : isVid ? 'الفيديو' : 'الصوت'} السابق: `);
-                                        handleApproveAsset(a.id, false);
-                                      }}
-                                      className="text-xs px-2.5 py-1 bg-amber-500/20 hover:bg-amber-500/30 border border-amber-400/40 text-amber-200 rounded-lg font-bold"
-                                      data-testid={`iterate-asset-${a.id}`}>↻ عدّل</button>
-                                  </div>
-                                ) : (
-                                  <span className="text-xs px-2 py-1 bg-emerald-500/20 border border-emerald-400/40 text-emerald-200 rounded-lg shrink-0">✓ معتمد</span>
-                                )}
-                              </div>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    )}
                   </div>
                 </div>
+
+                {/* 🎨 Generated assets — SEPARATE card below the chat bubble (per user request) */}
+                {msg.generated_assets?.length > 0 && (
+                  <div className="mt-2 space-y-3 pl-2 pr-2 md:pl-4 md:pr-4" data-testid="inline-assets">
+                    {msg.generated_assets.map((a) => {
+                      const isImg = a.type === 'image';
+                      const is3D = a.type === '3d';
+                      const isVid = a.type === 'video';
+                      const isAudio = a.type === 'music' || a.type === 'sfx';
+                      const isErr = a.type === 'error';
+                      if (isErr) {
+                        return (
+                          <div key={a.id} className="rounded-xl border border-red-500/40 bg-red-500/10 p-4 text-right">
+                            <div className="flex items-center gap-2 text-red-300 font-bold mb-1">
+                              <span>⚠️</span><span>فشل توليد الأصل</span>
+                            </div>
+                            <div className="text-xs text-zinc-300 mb-1">المطلوب: {a.name}</div>
+                            <div className="text-[10px] text-red-200/70 break-all">{a.error}</div>
+                            <button
+                              onClick={() => setMessage(`أعد توليد: ${a.name}`)}
+                              className="mt-2 text-xs px-3 py-1.5 bg-red-500/20 hover:bg-red-500/30 border border-red-400/40 rounded-lg text-red-100 font-bold"
+                              data-testid={`retry-asset-${a.id}`}
+                            >↻ إعادة المحاولة</button>
+                          </div>
+                        );
+                      }
+                      const url = a.image_url || a.model_url || a.video_url || a.audio_url;
+                      const fullUrl = url ? `${API}${url}` : null;
+                      const subtypeBadge = a.subtype || a.style || a.type;
+                      return (
+                        <div key={a.id} className="border-2 border-amber-500/40 rounded-xl overflow-hidden bg-gradient-to-br from-amber-500/5 to-orange-500/5 shadow-lg shadow-amber-500/10">
+                          {a.safety_net && (
+                            <div className="px-3 py-1.5 bg-amber-500/15 border-b border-amber-500/30 text-[10px] text-amber-200 flex items-center gap-1.5">
+                              <span>🛟</span>
+                              <span>تم التوليد التلقائي (Safety-Net) — مصدر: {a.safety_net_source === 'broken_tag' ? 'الوسم المُصلَح' : 'وصف الـAI'}</span>
+                            </div>
+                          )}
+                          {isImg && fullUrl && (
+                            <SafeAssetImage
+                              src={fullUrl}
+                              cdnUrl={a.cdn_url}
+                              verification={a.verification}
+                              alt={a.name}
+                              onClick={() => setLightbox({ src: fullUrl, alt: a.name, cdnUrl: a.cdn_url })}
+                              className="w-full max-w-2xl object-cover cursor-zoom-in hover:opacity-90 transition-opacity"
+                              data-testid={`generated-asset-${a.id}`}
+                            />
+                          )}
+                          {is3D && fullUrl && (
+                            <div className="p-3 flex flex-col gap-2" data-testid={`generated-asset-${a.id}`}>
+                              <div className="flex items-center gap-2 text-amber-300 text-sm font-bold">
+                                <span>🧊</span>
+                                <span>موديل 3D جاهز (.glb)</span>
+                              </div>
+                              <a href={fullUrl} download
+                                 className="text-xs px-3 py-2 bg-amber-500/15 hover:bg-amber-500/25 border border-amber-400/40 rounded-lg text-amber-100 text-center font-bold">
+                                ⬇️ تنزيل الموديل (.glb)
+                              </a>
+                              <a href={`https://gltf-viewer.donmccurdy.com/?model=${encodeURIComponent(fullUrl)}`}
+                                 target="_blank" rel="noopener noreferrer"
+                                 className="text-xs px-3 py-2 bg-cyan-500/15 hover:bg-cyan-500/25 border border-cyan-400/40 rounded-lg text-cyan-100 text-center font-bold">
+                                🔍 معاينة 3D في المتصفح
+                              </a>
+                            </div>
+                          )}
+                          {isVid && fullUrl && (
+                            <video src={fullUrl} controls
+                                   className="w-full max-w-2xl"
+                                   data-testid={`generated-asset-${a.id}`} />
+                          )}
+                          {isAudio && fullUrl && (
+                            <div className="p-3 flex flex-col gap-2" data-testid={`generated-asset-${a.id}`}>
+                              <div className="text-xs text-amber-300 font-bold">
+                                {a.type === 'music' ? '🎵 موسيقى خلفية' : '🔊 مؤثر صوتي'} · {a.duration_sec}s
+                              </div>
+                              <audio src={fullUrl} controls className="w-full" />
+                            </div>
+                          )}
+                          <div className="px-3 py-2 flex items-center justify-between gap-2 bg-black/40">
+                            <div className="text-xs text-zinc-400 truncate flex-1">
+                              <span className="text-amber-300 font-bold">{subtypeBadge}</span>
+                              <span className="mx-1">·</span>
+                              <span>{a.name?.slice(0, 60)}</span>
+                            </div>
+                            {!a.approved ? (
+                              <div className="flex gap-1.5 shrink-0">
+                                <button onClick={() => handleApproveAsset(a.id, true)}
+                                  className="text-xs px-2.5 py-1 bg-emerald-500/20 hover:bg-emerald-500/30 border border-emerald-400/40 text-emerald-200 rounded-lg font-bold"
+                                  data-testid={`approve-asset-${a.id}`}>✓ معتمد</button>
+                                <button onClick={() => {
+                                    setMessage(`عدّل ${isImg ? 'الصورة' : is3D ? 'الموديل 3D' : isVid ? 'الفيديو' : 'الصوت'} السابق: `);
+                                    handleApproveAsset(a.id, false);
+                                  }}
+                                  className="text-xs px-2.5 py-1 bg-amber-500/20 hover:bg-amber-500/30 border border-amber-400/40 text-amber-200 rounded-lg font-bold"
+                                  data-testid={`iterate-asset-${a.id}`}>↻ عدّل</button>
+                              </div>
+                            ) : (
+                              <span className="text-xs px-2 py-1 bg-emerald-500/20 border border-emerald-400/40 text-emerald-200 rounded-lg shrink-0">✓ معتمد</span>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
             ))}
             <div ref={chatEndRef} />
