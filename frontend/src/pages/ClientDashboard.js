@@ -19,22 +19,22 @@ const ClientDashboard = ({ user, setUser }) => {
         return;
       }
       
+      // Race against a 8s timeout — never block UI on slow APIs
+      const withTimeout = (p) => Promise.race([
+        p.catch(() => null),
+        new Promise((res) => setTimeout(() => res(null), 8000))
+      ]);
+      
       try {
         const [requestsRes, websitesRes, userRes] = await Promise.all([
-          fetch(`${process.env.REACT_APP_BACKEND_URL}/api/requests`, {
-            headers: { 'Authorization': `Bearer ${token}` }
-          }),
-          fetch(`${process.env.REACT_APP_BACKEND_URL}/api/websites`, {
-            headers: { 'Authorization': `Bearer ${token}` }
-          }),
-          fetch(`${process.env.REACT_APP_BACKEND_URL}/api/auth/me`, {
-            headers: { 'Authorization': `Bearer ${token}` }
-          })
+          withTimeout(fetch(`${process.env.REACT_APP_BACKEND_URL}/api/requests`, { headers: { 'Authorization': `Bearer ${token}` } })),
+          withTimeout(fetch(`${process.env.REACT_APP_BACKEND_URL}/api/websites`, { headers: { 'Authorization': `Bearer ${token}` } })),
+          withTimeout(fetch(`${process.env.REACT_APP_BACKEND_URL}/api/auth/me`, { headers: { 'Authorization': `Bearer ${token}` } }))
         ]);
 
-        const requests = requestsRes.ok ? await requestsRes.json() : [];
-        const websites = websitesRes.ok ? await websitesRes.json() : [];
-        const userData = userRes.ok ? await userRes.json() : null;
+        const requests = requestsRes && requestsRes.ok ? await requestsRes.json() : [];
+        const websites = websitesRes && websitesRes.ok ? await websitesRes.json() : [];
+        const userData = userRes && userRes.ok ? await userRes.json() : null;
         
         if (userData && userData.id) {
           setUser(userData);
@@ -96,7 +96,7 @@ const ClientDashboard = ({ user, setUser }) => {
         </div>
 
         {loading && (
-          <div className="text-center py-4 text-amber-400/60 text-sm">جاري تحميل بياناتك...</div>
+          <div className="text-center py-4 text-amber-400/40 text-xs">جاري تحديث الإحصائيات...</div>
         )}
         {(
           <>

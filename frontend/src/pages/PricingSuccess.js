@@ -8,30 +8,55 @@ const API = process.env.REACT_APP_BACKEND_URL;
 export default function PricingSuccess({ user }) {
   const [params] = useSearchParams();
   const navigate = useNavigate();
-  const orderId = params.get('order') || localStorage.getItem('pending_order_id');
-  const [state, setState] = useState('capturing'); // capturing | success | error
+  // PayPal returns with ?token=ORDER_ID&PayerID=XXX as default. Read both.
+  const orderId = params.get('order') || params.get('token') || localStorage.getItem('pending_order_id');
+  const [state, setState] = useState('capturing');
   const [result, setResult] = useState(null);
   const [errorMsg, setErrorMsg] = useState('');
 
   useEffect(() => {
-    if (!orderId || !user) {
+    if (!user) return;
+    if (!orderId) {
       setState('error');
-      setErrorMsg('لا يوجد طلب نشط — أعد المحاولة من صفحة التسعير');
+      setErrorMsg('لم نجد رقم الطلب — راجع الفواتير في لوحة الفوترة');
       return;
     }
     (async () => {
+      const token = localStorage.getItem('token');
+      // Try capture (may already be captured by PayPal auto-capture or earlier call)
       try {
-        const token = localStorage.getItem('token');
         const r = await axios.post(
           `${API}/api/pricing/capture`,
           { order_id: orderId },
-          { headers: { Authorization: `Bearer ${token}` } }
+          { headers: { Authorization: `Bearer ${token}` }, timeout: 20000 }
         );
         setResult(r.data);
         setState('success');
         localStorage.removeItem('pending_order_id');
+        return;
       } catch (e) {
-        setErrorMsg(e.response?.data?.detail || 'فشل تحصيل الدفعة');
+        // If capture failed, check if the order is actually completed by querying invoices
+        try {
+          const inv = await axios.get(`${API}/api/pricing/invoices`, {
+            headers: { Authorization: `Bearer ${token}` }
+          });
+          const matched = (inv.data.invoices || []).find(i => i.order_id === orderId);
+          if (matched) {
+            // Payment WAS processed — show success state
+            setResult({
+              ok: true,
+              already_captured: true,
+              credits_added: matched.credits_added,
+              bonus_credits: matched.bonus_credits,
+              invoice: matched,
+              new_balance: null,
+            });
+            setState('success');
+            localStorage.removeItem('pending_order_id');
+            return;
+          }
+        } catch {}
+        setErrorMsg(e.response?.data?.detail || 'تعذر تأكيد الدفع. إذا تم خصم المبلغ، رصيدك سيتحدث خلال دقائق — راجع لوحة الفوترة');
         setState('error');
       }
     })();
