@@ -1,4 +1,41 @@
 # Zitex AI Platform - PRD
+### 🎯 Feb 7 2026 — الإصلاح النهائي: Claude fallback يحصل الصور المعتمدة (v21) ✅
+
+**التشخيص من الـAI نفسه**: كان يقول "I am blind to approved assets — I receive them as text only".
+
+**السبب الحقيقي اللي كان ضايع**: 
+- Gemini path كان يستلم `vision_parts` فيها الصور المعتمدة ✅
+- **Claude fallback path كان يتجاهل `vision_parts` ويرسل فقط الصور اللي رفعها المالك يدوياً** ❌
+- لما يخلص Gemini quota (وارد جداً على Railway مع حركة كثيرة) → Claude يجاوب بدون رؤية للأصول → بالضبط الشكوى اللي وصلت
+
+**الإصلاح**:
+1. Claude content array الحين يدور على كل `vision_parts` ويحوّل:
+   - `{"inline_data": {mime_type, data}}` → `{"type": "image", "source": {"type": "base64", "media_type": ..., "data": ...}}`
+   - `{"text": ...}` → `{"type": "text", "text": ...}`
+2. **Helper `_encode_image_for_vision`**:
+   - يحوّل PNG → JPEG q82
+   - resize للحد الأقصى 1024px
+   - **تخفيض 98.8% في الحجم** (1.8MB → 22KB) — مريح لـClaude 5MB limit
+3. الـheaders والـtext labels (مثل `═══ ✅ الصور المعتمدة سابقاً ═══`) تنتقل صح لـClaude
+
+**النتيجة المتوقعة**: المالك يكتب "صف الصورة المعتمدة" → Claude يصف فعلياً (مو يقول "I cannot see").
+
+**ملف معدّل**: `/app/backend/modules/games/game_router.py` — claude_content build + image encoder helper.
+
+**اختبار**:
+- ✅ Image encoder شغّال (98.8% reduction tested)
+- ✅ Tag regex/parser صحيح
+- ✅ approved-assets endpoint ✓
+- ✅ Railway استلم commit `d9ac452` ونشره في 50s
+- ✅ build_marker `v21_2026_02_07_claude_vision_fix` live
+
+**خط الـvision النهائي الحين**:
+1. Gemini أولاً (مع 6 صور معتمدة + 3 صور أخيرة + uploads)
+2. لو Gemini quota → Claude بنفس الـcontent بالضبط (مع تحويل format)
+3. الـAI شايف فعلياً كل ما اعتمد المالك سابقاً
+
+---
+
 ### 🎯 Feb 7 2026 — حل جذري لمشكلة الـAI ما يشوف الصور المعتمدة ✅
 
 **المشكلة الجوهرية** (تشخيص الذكاء نفسه داخل Game Studio): الـAI كان يحصل قائمة الصور المعتمدة **كنصوص فقط** (أسماء + وصف)، فلما يولّد صور جديدة كان يبدأ من الصفر ويطلع بستايل مختلف كل مرة → عدم تماسك بصري.
