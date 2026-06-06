@@ -2398,6 +2398,79 @@ def create_game_router(db, get_current_user):
             "test_error": test_error,
         }
 
+    @router.get("/admin/fal-diagnose")
+    async def admin_fal_diagnose(user=Depends(get_current_user)):
+        """Deep diagnostic — owner-only. Shows EXACTLY what Fal.ai says when called
+        from this production server. Reveals whether it's a network issue, key issue,
+        or account issue."""
+        u = await db.users.find_one({"id": user["user_id"]}, {"is_owner": 1, "role": 1})
+        if not (u and (u.get("is_owner") or u.get("role") == "owner")):
+            raise HTTPException(403, "Owner only")
+
+        import httpx as _h
+        import asyncio as _aio
+        from modules.games.creds_store import kv_get as _kvg
+
+        result = {
+            "server_egress_test": None,    # can we reach fal.ai at all?
+            "stored_key": None,             # what key is in MongoDB?
+            "fal_direct_response": None,    # what does Fal say to our request?
+            "diagnosis": "",
+        }
+
+        # 1) Basic connectivity test — can we reach fal.ai at all?
+        try:
+            async with _h.AsyncClient(timeout=10) as cli:
+                r = await cli.get("https://fal.ai")
+                result["server_egress_test"] = f"OK ({r.status_code})"
+        except Exception as e:
+            result["server_egress_test"] = f"BLOCKED: {e}"
+            result["diagnosis"] = "❌ Railway server cannot reach fal.ai at all (firewall/DNS issue)"
+            return result
+
+        # 2) Get stored key
+        stored = (await _kvg("FAL_KEY") or "").strip()
+        if not stored:
+            result["stored_key"] = "EMPTY in MongoDB"
+            result["diagnosis"] = "❌ No FAL_KEY saved. Save a key via the modal first."
+            return result
+        result["stored_key"] = f"{stored[:10]}...{stored[-6:]} (length {len(stored)})"
+
+        # 3) Direct HTTP call to Fal — get raw response
+        try:
+            async with _h.AsyncClient(timeout=30) as cli:
+                r = await cli.post(
+                    "https://queue.fal.run/fal-ai/flux/schnell",
+                    headers={
+                        "Authorization": f"Key {stored}",
+                        "Content-Type": "application/json",
+                    },
+                    json={"prompt": "test apple", "num_inference_steps": 1, "image_size": "square"},
+                )
+                result["fal_direct_response"] = {
+                    "status_code": r.status_code,
+                    "headers": dict(r.headers),
+                    "body": r.text[:600],
+                }
+                if r.status_code == 200:
+                    result["diagnosis"] = "✅ Fal accepted the key from this server. Image gen should work — try again."
+                elif r.status_code in (401, 403):
+                    result["diagnosis"] = (
+                        "❌ Fal rejected the key (HTTP {}) FROM THIS SERVER. "
+                        "Since the same key works from elsewhere, this means EITHER: "
+                        "(a) your Fal account has IP restrictions enabled, "
+                        "(b) the account needs additional verification (KYC/billing), or "
+                        "(c) Railway egress IPs are blocked by Fal. "
+                        "Check fal.ai/dashboard → Settings → API Keys → make sure 'IP whitelist' is empty/disabled."
+                    ).format(r.status_code)
+                else:
+                    result["diagnosis"] = f"⚠️ Fal returned HTTP {r.status_code} — see body for details"
+        except Exception as e:
+            result["fal_direct_response"] = f"EXCEPTION: {e}"
+            result["diagnosis"] = f"❌ Could not call Fal API: {e}"
+
+        return result
+
     @router.delete("/admin/fal-key")
     async def admin_delete_fal_key(user=Depends(get_current_user)):
         """Wipe ALL stored FAL keys (FAL_KEY + FAL_KEYS) from the vault.
@@ -2748,7 +2821,7 @@ def create_game_router(db, get_current_user):
         return {
             "ok": True,
             "service": "games",
-            "build_marker": "v15_2026_06_06_button_hidden_keys_save_unconditional",
+            "build_marker": "v16_2026_06_06_fal_diagnose",
             "features": {
                 "image_generation": True,
                 "vision_verification": True,
