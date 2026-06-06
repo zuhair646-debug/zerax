@@ -2296,6 +2296,102 @@ def create_game_router(db, get_current_user):
         return {"ok": True, "reset": True}
 
     # ───────────────────────────────────────────────────────────
+    # 🔑 ADMIN: hot-swap the FAL_KEY at runtime (no Railway redeploy needed)
+    # The new value is tested against fal.ai BEFORE saving — invalid keys
+    # are rejected with a clear error. Stored in the JSON vault, which
+    # _ensure_fal_key() reads BEFORE falling back to the (possibly bad) env.
+    # ───────────────────────────────────────────────────────────
+    @router.post("/admin/set-fal-key")
+    async def admin_set_fal_key(request: Request, user=Depends(get_current_user)):
+        u = await db.users.find_one({"id": user["user_id"]}, {"is_owner": 1, "role": 1})
+        if not (u and (u.get("is_owner") or u.get("role") == "owner")):
+            raise HTTPException(403, "Owner only")
+        body = await request.json()
+        new_key = (body.get("fal_key") or body.get("key") or "").strip()
+        if not new_key or ":" not in new_key:
+            raise HTTPException(400, "صيغة المفتاح غير صحيحة. لازم يكون مثل: <uuid>:<hash>")
+
+        # 🧪 Test the key against fal.ai — generate a tiny 1-step image (schnell, ~$0.0003)
+        import asyncio as _aio
+        try:
+            os.environ["FAL_KEY"] = new_key  # set temporarily for the test
+            import fal_client
+            def _sync_test():
+                handler = fal_client.submit(
+                    "fal-ai/flux/schnell",
+                    arguments={"prompt": "test", "num_inference_steps": 1, "image_size": "square"},
+                )
+                return handler.get()
+            loop = _aio.get_event_loop()
+            result = await loop.run_in_executor(None, _sync_test)
+            if not result or not result.get("images"):
+                raise HTTPException(400, "Fal رفض المفتاح: ما أرجع صورة اختبارية")
+        except HTTPException:
+            raise
+        except Exception as e:
+            err = str(e)[:200]
+            raise HTTPException(400, f"المفتاح فاسد — Fal.ai رفضه: {err}")
+
+        # ✅ Key works. Save to the JSON vault so future requests use it.
+        try:
+            from modules.autocoder.credentials_vault import vault_set as _vset
+            _vset("FAL_KEY", new_key)
+        except Exception as e:
+            logger.exception(f"[games][set-fal-key] vault_set failed: {e}")
+            raise HTTPException(500, "حُفِظ المفتاح في الذاكرة بس فشل حفظه على القرص")
+
+        logger.warning(f"[games][set-fal-key] owner={user['user_id']} updated FAL_KEY (preview={new_key[:8]}...{new_key[-4:]})")
+        return {
+            "ok": True,
+            "message": "تم تحديث FAL_KEY واختباره ضد Fal.ai بنجاح — جرّب توليد صورة الحين.",
+            "preview": new_key[:8] + "..." + new_key[-4:],
+        }
+
+    @router.get("/admin/fal-key-status")
+    async def admin_fal_key_status(user=Depends(get_current_user)):
+        u = await db.users.find_one({"id": user["user_id"]}, {"is_owner": 1, "role": 1})
+        if not (u and (u.get("is_owner") or u.get("role") == "owner")):
+            raise HTTPException(403, "Owner only")
+        # Probe both sources
+        env_v = (os.environ.get("FAL_KEY") or "").strip()
+        vault_v = ""
+        try:
+            from modules.autocoder.credentials_vault import vault_get as _vget
+            vault_v = (_vget("FAL_KEY") or "").strip()
+        except Exception:
+            pass
+        # Quick live test (uses whichever wins per _ensure_fal_key rules)
+        live_status = "unknown"
+        live_error = None
+        try:
+            from modules.games.fal_tools import _ensure_fal_key
+            import asyncio as _aio2
+            _ensure_fal_key()
+            import fal_client
+            def _sync_probe():
+                handler = fal_client.submit(
+                    "fal-ai/flux/schnell",
+                    arguments={"prompt": "test", "num_inference_steps": 1, "image_size": "square"},
+                )
+                return handler.get()
+            loop = _aio2.get_event_loop()
+            await loop.run_in_executor(None, _sync_probe)
+            live_status = "working"
+        except Exception as e:
+            live_status = "broken"
+            live_error = str(e)[:200]
+        return {
+            "ok": True,
+            "env_set": bool(env_v),
+            "env_preview": (env_v[:8] + "..." + env_v[-4:]) if env_v else None,
+            "vault_set": bool(vault_v),
+            "vault_preview": (vault_v[:8] + "..." + vault_v[-4:]) if vault_v else None,
+            "active_source": "vault" if vault_v else ("env" if env_v else "none"),
+            "live_test": live_status,
+            "live_error": live_error,
+        }
+
+    # ───────────────────────────────────────────────────────────
     # 🩺 GET /health — public lightweight diagnostic for production debug
     # Returns version markers so the owner can verify backend deployment.
     # ───────────────────────────────────────────────────────────
@@ -2306,7 +2402,7 @@ def create_game_router(db, get_current_user):
         return {
             "ok": True,
             "service": "games",
-            "build_marker": "v9_2026_06_05_broken_tag_recovery",  # bump when shipping features
+            "build_marker": "v10_2026_06_05_fal_key_hot_swap",  # bump when shipping features
             "features": {
                 "image_generation": True,
                 "vision_verification": True,
