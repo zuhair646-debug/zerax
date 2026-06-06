@@ -8,8 +8,8 @@ const API = process.env.REACT_APP_BACKEND_URL;
 export default function PricingSuccess({ user }) {
   const [params] = useSearchParams();
   const navigate = useNavigate();
-  // PayPal returns with ?token=ORDER_ID&PayerID=XXX as default. Read both.
-  const orderId = params.get('order') || params.get('token') || localStorage.getItem('pending_order_id');
+  // PayPal returns ?token=ORDER_ID, Lemon Squeezy returns ?order_id=ID — read all
+  const orderId = params.get('order') || params.get('token') || params.get('order_id') || localStorage.getItem('pending_order_id');
   const [state, setState] = useState('capturing');
   const [result, setResult] = useState(null);
   const [errorMsg, setErrorMsg] = useState('');

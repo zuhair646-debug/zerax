@@ -25,6 +25,7 @@ export default function Pricing({ user }) {
   const [promoResult, setPromoResult] = useState(null);
   const [loading, setLoading] = useState(false);
   const [checkingOut, setCheckingOut] = useState(null);
+  const [provider, setProvider] = useState('lemonsqueezy'); // 'paypal' | 'lemonsqueezy'
 
   useEffect(() => {
     (async () => {
@@ -85,6 +86,7 @@ export default function Pricing({ user }) {
           item_id: itemId,
           billing_cycle: billingCycle,
           promo_code: promoCode || null,
+          provider: provider,
           return_url: `${origin}/pricing/success`,
           cancel_url: `${origin}/pricing`,
         },
@@ -153,7 +155,7 @@ export default function Pricing({ user }) {
       </div>
 
       {/* Promo input */}
-      <div className="max-w-md mx-auto px-6 mb-12 flex gap-2">
+      <div className="max-w-md mx-auto px-6 mb-6 flex gap-2">
         <div className="flex-1 relative">
           <Tag className="w-4 h-4 absolute right-3 top-1/2 -translate-y-1/2 text-zinc-500" />
           <input
@@ -172,6 +174,29 @@ export default function Pricing({ user }) {
         >
           LAUNCH50
         </button>
+      </div>
+
+      {/* Payment provider selector */}
+      <div className="max-w-md mx-auto px-6 mb-12">
+        <div className="text-center text-xs text-zinc-500 mb-2">طريقة الدفع المفضلة</div>
+        <div className="grid grid-cols-2 gap-2">
+          <button
+            onClick={() => setProvider('lemonsqueezy')}
+            data-testid="provider-lemonsqueezy"
+            className={`p-3 rounded-lg border-2 text-sm font-bold transition ${provider === 'lemonsqueezy' ? 'border-amber-500 bg-amber-500/10 text-amber-400' : 'border-zinc-800 bg-zinc-900 text-zinc-500'}`}
+          >
+            🍋 بطاقة / Apple Pay / Google Pay
+            <div className="text-xs font-normal text-zinc-500 mt-1">يدعم السعودية والخليج 🇸🇦</div>
+          </button>
+          <button
+            onClick={() => setProvider('paypal')}
+            data-testid="provider-paypal"
+            className={`p-3 rounded-lg border-2 text-sm font-bold transition ${provider === 'paypal' ? 'border-blue-500 bg-blue-500/10 text-blue-400' : 'border-zinc-800 bg-zinc-900 text-zinc-500'}`}
+          >
+            💙 PayPal
+            <div className="text-xs font-normal text-zinc-500 mt-1">+ تقسيط Pay-in-4 🇺🇸 🇪🇺</div>
+          </button>
+        </div>
       </div>
 
       {/* Content */}

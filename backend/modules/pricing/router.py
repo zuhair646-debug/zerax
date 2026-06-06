@@ -53,6 +53,7 @@ class CheckoutRequest(BaseModel):
     promo_code: Optional[str] = None
     return_url: str
     cancel_url: str
+    provider: str = Field("paypal", description="'paypal' or 'lemonsqueezy'")
 
 
 class CaptureRequest(BaseModel):
@@ -572,6 +573,35 @@ def create_router(db, get_current_user, get_admin_user):
     @admin_router.delete("/promos/{code}")
     async def delete_promo(code: str, admin=Depends(get_admin_user)):
         await db.promo_codes.update_one({"code": code.upper()}, {"$set": {"active": False}})
+        return {"ok": True, "code": code.upper(), "deactivated": True}
+
+    @admin_router.get("/promos")
+    async def list_promos(admin=Depends(get_admin_user)):
+        rows = await db.promo_codes.find({}, {"_id": 0}).sort("created_at", -1).to_list(length=100)
+        return {"promos": rows}
+
+    @admin_router.post("/test-paypal")
+    async def test_paypal(admin=Depends(get_admin_user)):
+        """Verify PayPal creds work by creating + immediately voiding a test order."""
+        try:
+            result = await create_order(
+                amount_usd=1.00,
+                return_url="https://zitex.app/billing/test-return",
+                cancel_url="https://zitex.app/billing/test-cancel",
+                description="Zitex PayPal credential test",
+            )
+            return {
+                "ok": True,
+                "mode": os.environ.get("PAYPAL_MODE", "live"),
+                "order_id": result["order_id"],
+                "approval_url": result["approval_url"],
+                "status": result.get("status"),
+            }
+        except Exception as e:
+            return {"ok": False, "error": str(e)[:300]}
+
+    return router, admin_router
+"$set": {"active": False}})
         return {"ok": True, "code": code.upper(), "deactivated": True}
 
     @admin_router.get("/promos")
