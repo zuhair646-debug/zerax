@@ -1,6 +1,56 @@
 # Zitex AI Platform - PRD
 
-### 🛡️ Feb 8 2026 — Zitex Security Center (14 طبقات) + غرفة التحكم الأمنية ✅✅ (موسّع)
+### 💰 Feb 8 2026 — نظام البيع الكامل (Pricing + PayPal LIVE + PDF Invoices + Credits) ✅
+
+**ميزة الجلسة**: نظام بيع و فوترة متكامل بعرض إطلاق 50% خصم + خصم تلقائي للشعلات عند الاستخدام.
+
+**📊 المكونات الكاملة**:
+
+#### Backend (`/app/backend/modules/pricing/`)
+- `catalog.py` — مصدر واحد للأسعار (6 باقات + 5 حزم + كل تكاليف الخدمات بالشفافية)
+- `seeds.py` — تعبئة افتراضية idempotent + indexes
+- `credits.py` — `get_balance`, `add_credits`, `deduct_credits`, `charge_user` (atomic conditional decrement)
+- `paypal_client.py` — PayPal v2 REST API (LIVE mode، يدعم sandbox عبر PAYPAL_MODE)
+- `promos.py` — validate_and_apply_promo + redeem_promo
+- `invoices.py` — PDF عربية بـ Amiri font + arabic-reshaper + python-bidi + إرسال بريدي عبر Resend
+- `router.py` — 13 endpoint عام/مستخدم + 6 admin
+
+#### Endpoints
+- `GET /api/pricing/plans` `/packs` `/service-costs` `/tax-config`
+- `POST /api/pricing/promo/check`
+- `GET /api/pricing/me` `/invoices` `/invoices/{id}/pdf`
+- `POST /api/pricing/checkout` `/capture` `/invoices/{id}/resend` `/test-charge`
+- Admin: `/api/admin/pricing/stats` `/orders` `/promos` `/test-paypal` + CRUD
+
+#### Frontend
+- `/pricing` — صفحة عامة بـ tabs (اشتراك/حزم) + toggle شهري/سنوي + promo input
+- `/billing` — رصيد + اشتراك حالي + قائمة فواتير + سجل عمليات + 4 أزرار اختبار خصم
+- `/pricing/success` — confirmation بعد PayPal + download PDF + new balance
+- `/admin/pricing` — إحصائيات + قائمة طلبات + قائمة promos
+
+#### Pricing model
+- 1 شعلة = $0.001 (1000 شعلة = $1)
+- متوسط الهامش 150% (الحد الأدنى المطلوب 50%)
+- Plans: Free $0 / Starter $9 / **Indie $29 (الأكثر شعبية)** / Studio $79 / Pro Studio $199 / Enterprise
+- خصم سنوي مدمج 16% (شهرين مجاناً)
+- Packs: Mini $5 / Standard $20 (+10%) / **Power $50 (+20%، الأكثر طلباً)** / Mega $100 (+30%) / Ultra $250 (+40%)
+- Promos: `LAUNCH50` (50% خصم على أول اشتراك، حد $100) + `WELCOME25` (25% بونص للحزم)
+- First purchase bonus: +25% credits تلقائياً
+- Tax: enabled=true, rate=0% (جاهز للضريبة المستقبلية)
+
+#### اختبارات
+- iteration_35: **25/25 PASS** (PayPal LIVE, PDF, Resend, promos, admin, regression)
+- اختبار حي: مستخدم جديد، خصم 10 شعلات، رفض overcharge بـ HTTP 402
+
+#### Resend مفعّل
+- مفتاح: `re_dzXgkb3L_NVzwUmTuzx3uDfZ4bY47yPBU` في `.env`
+- مرسِل حالي: `onboarding@resend.dev` (مؤقت حتى يتحقق دومين zitex.app)
+- مستقبل التنبيهات: `zuhair646@gmail.com` (مؤقت حتى الدومين يتفعّل، ثم نحوّل لـ zitex.zx0@gmail.com)
+- الفواتير ترسل لإيميل العميل مع PDF مرفقة
+
+---
+
+
 
 **نواقص حرجة تم سدّها في هذه الجلسة**:
 - ✅ **L1 rate limiter** — مربوط فعلياً بـ `slowapi` (300 req/min/IP) مع honoring X-Forwarded-For

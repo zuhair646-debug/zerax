@@ -50,6 +50,21 @@ export default function Billing({ user }) {
     }
   };
 
+  const testCharge = async (serviceKey) => {
+    try {
+      const token = localStorage.getItem('token');
+      const r = await axios.post(
+        `${API}/api/pricing/test-charge?service_key=${serviceKey}`,
+        {},
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      alert(`✅ تم خصم ${r.data.credits_charged} شعلة (${r.data.label_ar})\nرصيدك الجديد: ${Math.floor(r.data.new_balance).toLocaleString()}`);
+      refresh();
+    } catch (e) {
+      alert(`❌ ${e.response?.data?.detail || 'فشل الخصم'}`);
+    }
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen bg-zinc-950 text-white flex items-center justify-center" dir="rtl">
@@ -95,6 +110,28 @@ export default function Billing({ user }) {
           >
             شحن المزيد
           </button>
+        </div>
+
+        {/* Test charge widget — verify deduction works */}
+        <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-6 mb-8">
+          <h2 className="text-lg font-bold mb-3">🧪 تجربة خصم الشعلات</h2>
+          <p className="text-zinc-500 text-sm mb-4">
+            اضغط زر لمحاكاة استخدام خدمة وتأكد إن الشعلات تُخصم من رصيدك (بدون استدعاء AI فعلياً).
+          </p>
+          <div className="flex flex-wrap gap-2">
+            <button onClick={() => testCharge('chat_message')} data-testid="test-charge-chat" className="px-4 py-2 bg-zinc-800 hover:bg-zinc-700 rounded-lg text-sm">
+              رسالة شات (10 شعلات)
+            </button>
+            <button onClick={() => testCharge('image_nano_banana')} data-testid="test-charge-image" className="px-4 py-2 bg-zinc-800 hover:bg-zinc-700 rounded-lg text-sm">
+              صورة Nano Banana (80 شعلة)
+            </button>
+            <button onClick={() => testCharge('video_fal_5s')} data-testid="test-charge-video" className="px-4 py-2 bg-zinc-800 hover:bg-zinc-700 rounded-lg text-sm">
+              فيديو Fal 5ث (250 شعلة)
+            </button>
+            <button onClick={() => testCharge('voice_eleven_min')} data-testid="test-charge-voice" className="px-4 py-2 bg-zinc-800 hover:bg-zinc-700 rounded-lg text-sm">
+              صوت ElevenLabs/د (1000 شعلة)
+            </button>
+          </div>
         </div>
 
         {/* Active subscription */}

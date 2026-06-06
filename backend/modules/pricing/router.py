@@ -416,6 +416,29 @@ def create_router(db, get_current_user, get_admin_user):
             "invoice": response_invoice,
         }
 
+    @router.post("/test-charge")
+    async def test_charge(
+        service_key: str = "image_nano_banana",
+        current_user: dict = Depends(get_current_user),
+    ):
+        """🧪 Simulates an AI service charge so the user can verify
+        credit deduction works without actually invoking an AI provider."""
+        from .credits import charge_user, get_balance
+        from .catalog import SERVICE_COSTS
+        if service_key not in SERVICE_COSTS:
+            raise HTTPException(status_code=400, detail=f"خدمة غير معروفة: {service_key}")
+        try:
+            new_balance = await charge_user(db, current_user["user_id"], service_key)
+            return {
+                "ok": True,
+                "service": service_key,
+                "label_ar": SERVICE_COSTS[service_key]["label"],
+                "credits_charged": SERVICE_COSTS[service_key]["credits"],
+                "new_balance": new_balance,
+            }
+        except ValueError as e:
+            raise HTTPException(status_code=402, detail=str(e))
+
     @router.get("/invoices")
     async def list_my_invoices(current_user: dict = Depends(get_current_user)):
         rows = await db.invoices.find(
