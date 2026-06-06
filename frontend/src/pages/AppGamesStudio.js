@@ -19,6 +19,7 @@ import BuildLiveButton from '@/components/games/BuildLiveButton';
 import QAAnalyzeButton from '@/components/games/QAAnalyzeButton';
 import EditAssetButton from '@/components/games/EditAssetButton';
 import StyleTrainingPanel from '@/components/games/StyleTrainingPanel';
+import FalKeyManager from '@/components/games/FalKeyManager';
 
 const API = process.env.REACT_APP_BACKEND_URL;
 
@@ -949,6 +950,9 @@ export default function AppGamesStudio({ user }) {
         onClose={() => setMyProjectsOpen(false)}
         accentColor="blue"
       />
+
+      {/* Owner-only Fal-key fixer */}
+      <FalKeyManager accentColor="indigo" />
     </div>
   );
 }
