@@ -24,10 +24,23 @@ import FalKeyManager from '@/components/games/FalKeyManager';
 
 const API = process.env.REACT_APP_BACKEND_URL;
 
-export default function WebGamesStudio({ user }) {
+export default function WebGamesStudio({ user, gameType = 'web', studioConfig = null }) {
   const navigate = useNavigate();
   const location = useLocation();
   const token = localStorage.getItem('token');
+
+  // 🎬 Studio personality (default = games, can be overridden for cinema/app)
+  const cfg = studioConfig || {
+    title: '🎮 Web Games Studio',
+    subtitle: 'اختر نوع البرمجة وابدأ مشروعك',
+    icon: 'gamepad',
+    accentColor: 'amber',
+    sectionLabel: '⚙️ اختر نوع البرمجة',
+    sectionHint: 'اضغط على (?) لمعرفة الفرق بين كل نوع',
+    projectLabelTitle: 'عنوان اللعبة (مثال: لعبة منصات 2D)',
+    backRoute: '/dashboard/games',
+    storeKey: 'web',
+  };
   
   const [step, setStep] = useState('select_tech'); // select_tech | chat
   const [programmingTypes, setProgrammingTypes] = useState([]);
@@ -88,7 +101,7 @@ export default function WebGamesStudio({ user }) {
 
   // Fetch programming types
   useEffect(() => {
-    fetch(`${API}/api/games/programming-types?game_type=web`, {
+    fetch(`${API}/api/games/programming-types?game_type=${gameType}`, {
       headers: { Authorization: `Bearer ${token}` }
     })
       .then(r => r.json())
@@ -113,7 +126,7 @@ export default function WebGamesStudio({ user }) {
           Authorization: `Bearer ${token}`
         },
         body: JSON.stringify({
-          game_type: 'web',
+          game_type: gameType,
           title: projectTitle,
           description: projectDesc,
           programming_type: selectedTech
@@ -300,15 +313,15 @@ export default function WebGamesStudio({ user }) {
               <Gamepad2 className="w-8 h-8 text-black" />
             </div>
             <div>
-              <h1 className="text-3xl font-bold">🎮 Web Games Studio</h1>
-              <p className="text-zinc-400">اختر نوع البرمجة وابدأ مشروعك</p>
+              <h1 className="text-3xl font-bold">{cfg.title}</h1>
+              <p className="text-zinc-400">{cfg.subtitle}</p>
             </div>
           </div>
 
           {/* Tech Stack Selection */}
           <div className="bg-zinc-900/50 backdrop-blur border border-white/10 rounded-2xl p-6 mb-6">
-            <h2 className="text-xl font-bold mb-2">⚙️ اختر نوع البرمجة</h2>
-            <p className="text-xs text-zinc-500 mb-4">اضغط على <HelpCircle className="inline w-3.5 h-3.5 text-amber-300" /> لمعرفة الفرق بين كل نوع</p>
+            <h2 className="text-xl font-bold mb-2">{cfg.sectionLabel}</h2>
+            <p className="text-xs text-zinc-500 mb-4">{cfg.sectionHint}</p>
             <div className="grid md:grid-cols-2 gap-4">
               {programmingTypes.map(tech => (
                 <div
@@ -351,7 +364,7 @@ export default function WebGamesStudio({ user }) {
             <h2 className="text-xl font-bold mb-4">📝 معلومات المشروع</h2>
             <input
               type="text"
-              placeholder="عنوان اللعبة (مثال: لعبة منصات 2D)"
+              placeholder={cfg.projectLabelTitle}
               value={projectTitle}
               onChange={e => setProjectTitle(e.target.value)}
               className="w-full bg-black/40 border border-white/15 rounded-xl px-4 py-3 mb-4 outline-none focus:border-amber-400"
@@ -429,7 +442,7 @@ export default function WebGamesStudio({ user }) {
         <div className="flex items-center gap-4">
           <button
             type="button"
-            onClick={() => navigate('/dashboard/games')}
+            onClick={() => navigate(cfg.backRoute)}
             className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-zinc-300 hover:text-white transition-all"
             data-testid="back-from-chat"
             title="رجوع لاستوديو الألعاب"

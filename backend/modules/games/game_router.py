@@ -43,7 +43,18 @@ PROGRAMMING_TYPES = {
         {"id": "react_native", "name": "React Native", "desc": "JavaScript لكلا المنصتين"},
         {"id": "unity", "name": "Unity", "desc": "محرك ألعاب احترافي"},
         {"id": "godot", "name": "Godot", "desc": "محرك مفتوح المصدر"}
-    ]
+    ],
+    # 🎬 Cinema Studio — same Socratic flow as games, but for video creation
+    "cinema": [
+        {"id": "cinematic_film", "name": "🎬 فيلم سينمائي", "desc": "فيلم قصير/طويل بجودة سينما — درامي/أكشن/خيال"},
+        {"id": "music_video",    "name": "🎵 فيديو كليب",   "desc": "كليب موسيقي مع لقطات فنية متزامنة مع الإيقاع"},
+        {"id": "promo_ad",       "name": "📢 إعلان منتج",   "desc": "إعلان احترافي 15-60 ثانية يبيع المنتج بقوة"},
+        {"id": "documentary",    "name": "📖 وثائقي",       "desc": "محتوى وثائقي بأسلوب Netflix مع رواية"},
+        {"id": "animation_2d",   "name": "🎨 رسوم متحركة 2D", "desc": "أنيميشن قصصي بأسلوب Disney/Studio Ghibli"},
+        {"id": "action_episode", "name": "⚔️ حلقة أكشن طويلة", "desc": "حلقة 10-40 دقيقة، سيناريو كامل بمشاهد متعددة (تكلفة عالية)"},
+        {"id": "educational",    "name": "🎓 محتوى تعليمي",  "desc": "فيديو تعليمي/تثقيفي مع رسوم توضيحية وتعليق"},
+        {"id": "social_short",   "name": "📱 فيديو سوشل قصير", "desc": "Reels/TikTok/Shorts 15-30 ثانية"},
+    ],
 }
 
 # ═══════════════════════════════════════════════════════════════
@@ -207,8 +218,87 @@ APP_GAME_PHASES = [
 ]
 
 # ═══════════════════════════════════════════════════════════════
-# 🎯 Pydantic Models
+# 🎬 Phase Definitions (Cinema Studio — Films, Episodes, Promos)
+# Reuses the games engine: chat, safety-net, asset gen, approvals.
 # ═══════════════════════════════════════════════════════════════
+CINEMA_PHASES = [
+    {
+        "id": "discovery",
+        "title": "🎬 الفكرة والتركيز",
+        "description": "نفهم الفكرة، الجمهور، النغمة، الطول، الميزانية المتوقعة",
+        "credits": 50,
+        "deliverables": ["Treatment", "Target Audience", "Tone & Style", "Duration Estimate"],
+        "requires_approval": True,
+    },
+    {
+        "id": "script",
+        "title": "📝 السيناريو والحوار",
+        "description": "كتابة سيناريو كامل مشهد-بمشهد مع الحوار الكامل بالعربي/الإنجليزي",
+        "credits": 120,
+        "deliverables": ["Full Screenplay", "Scene Breakdown", "Dialogue", "Action Notes"],
+        "requires_approval": True,
+        "asset_type": "docs",
+    },
+    {
+        "id": "storyboard",
+        "title": "🎨 الستوري بورد واللقطات",
+        "description": "صورة سينمائية AAA لكل مشهد (16:9) — اللقطات الرئيسية للقطف",
+        "credits": 200,
+        "deliverables": ["Hero Shots", "Scene Stills", "Camera Angles", "Mood Boards"],
+        "requires_approval": True,
+        "asset_type": "images",
+    },
+    {
+        "id": "voice",
+        "title": "🎙️ الأصوات والرواية",
+        "description": "توليد تعليق صوتي عربي/إنجليزي + حوار شخصيات (تستمع وتعتمد)",
+        "credits": 150,
+        "deliverables": ["Narration Track", "Character Voices", "Dialogue Lines"],
+        "requires_approval": True,
+        "asset_type": "audio",
+    },
+    {
+        "id": "music",
+        "title": "🎵 الموسيقى والمؤثرات",
+        "description": "موسيقى تصويرية + SFX (انفجارات، خطوات، طبيعة) — تستمع وتعتمد",
+        "credits": 100,
+        "deliverables": ["Soundtrack", "Sound Effects", "Ambient Loops"],
+        "requires_approval": True,
+        "asset_type": "audio",
+    },
+    {
+        "id": "edit",
+        "title": "🎞️ المونتاج والإخراج النهائي",
+        "description": "دمج اللقطات + الصوت + الموسيقى في فيديو نهائي بجودة سينما",
+        "credits": 400,
+        "deliverables": ["Edited Video", "Color Grade", "Transitions", "Final Render"],
+        "requires_approval": False,
+        "asset_type": "videos",
+        "generates_preview": True,
+    },
+    {
+        "id": "publish",
+        "title": "🌐 النشر والتوزيع",
+        "description": "تصدير بصيغ TikTok / YouTube / Instagram + رابط مشاركة",
+        "credits": 80,
+        "deliverables": ["Platform-Optimized Cuts", "Thumbnail", "Caption", "Share Link"],
+        "requires_approval": False,
+    },
+]
+
+
+# ═══════════════════════════════════════════════════════════════
+# Helper: pick the right phases list for any game_type
+# ═══════════════════════════════════════════════════════════════
+def _phases_for(game_type: str):
+    if game_type == "cinema":
+        return CINEMA_PHASES
+    if game_type == "app":
+        return APP_GAME_PHASES
+    return WEB_GAME_PHASES
+
+
+
 class ProjectCreate(BaseModel):
     game_type: str  # "web" or "app"
     title: str
@@ -614,6 +704,64 @@ def create_game_router(db, get_current_user):
         return {"types": PROGRAMMING_TYPES[game_type]}
 
     # ───────────────────────────────────────────────────────────
+    # 💰 POST /cinema/cost-preview — estimate cost for a long-form video
+    # ───────────────────────────────────────────────────────────
+    @router.post("/cinema/cost-preview")
+    async def cinema_cost_preview(payload: dict, user=Depends(get_current_user)):
+        """Estimate credits needed for a cinema project given duration & quality tier.
+        Body: { duration_sec: int, quality: 'standard'|'premium'|'cinematic', voice: bool, music: bool }
+        Returns: { total_credits, breakdown, scenes_estimated }
+        """
+        duration_sec = int(payload.get("duration_sec", 60))
+        quality = (payload.get("quality") or "premium").lower()
+        with_voice = bool(payload.get("voice", True))
+        with_music = bool(payload.get("music", True))
+
+        # ⏱️ Each scene ≈ 8 seconds of final video (cinematic pacing)
+        scenes = max(1, (duration_sec + 7) // 8)
+        # 💰 Per-scene credit cost by quality (covers: 1 image + 1 voice line + 1 sfx + render slice)
+        per_scene = {
+            "standard": 30,   # gpt-image-1 standard
+            "premium": 50,    # gpt-image-1 high + Nano Banana fallback
+            "cinematic": 90,  # Fal Flux Pro Ultra hero shots
+        }.get(quality, 50)
+
+        image_cost = scenes * per_scene
+        voice_cost = scenes * 8 if with_voice else 0   # ~8 credits per voice line
+        music_cost = ((duration_sec + 29) // 30) * 15 if with_music else 0  # 15 credits per 30s track
+        sfx_cost = scenes * 5
+        render_cost = max(60, duration_sec // 2)   # final compose/render fee
+        overhead = 40   # chat/script/storyboard discovery
+
+        total = image_cost + voice_cost + music_cost + sfx_cost + render_cost + overhead
+
+        # Surge warning for long-form
+        warning = None
+        if duration_sec >= 600:  # 10+ minutes
+            warning = (
+                f"⚠️ هذا فيديو طويل ({duration_sec//60} دقيقة). "
+                f"التكلفة المتوقعة {total} نقطة. تأكد إن رصيدك يكفي قبل البدء."
+            )
+
+        return {
+            "ok": True,
+            "scenes_estimated": scenes,
+            "duration_sec": duration_sec,
+            "quality": quality,
+            "total_credits": total,
+            "breakdown": {
+                "discovery_overhead": overhead,
+                "storyboard_images": image_cost,
+                "voice_narration": voice_cost,
+                "music_track": music_cost,
+                "sound_effects": sfx_cost,
+                "final_render": render_cost,
+            },
+            "warning": warning,
+            "currency": "credits",
+        }
+
+    # ───────────────────────────────────────────────────────────
     # 🖼️ GET /asset-image/{project_id}/{filename} — serve generated PNG
     # ───────────────────────────────────────────────────────────
     @router.get("/asset-image/{project_id}/{filename}")
@@ -791,7 +939,7 @@ def create_game_router(db, get_current_user):
         if payload.programming_type not in valid_types:
             raise HTTPException(400, f"Invalid programming_type for {payload.game_type}")
         
-        phases = WEB_GAME_PHASES if payload.game_type == "web" else APP_GAME_PHASES
+        phases = _phases_for(payload.game_type)
         
         project = {
             "id": project_id,
@@ -838,7 +986,7 @@ def create_game_router(db, get_current_user):
             raise HTTPException(404, "Project not found")
         
         # Add phase definitions
-        phases_def = WEB_GAME_PHASES if project["game_type"] == "web" else APP_GAME_PHASES
+        phases_def = _phases_for(project["game_type"])
         project["phases_definitions"] = phases_def
         
         return {"project": project}
@@ -862,7 +1010,7 @@ def create_game_router(db, get_current_user):
             raise HTTPException(404, "Project not found")
         
         phase_id = phase_id or project["current_phase"]
-        phases_def = WEB_GAME_PHASES if project["game_type"] == "web" else APP_GAME_PHASES
+        phases_def = _phases_for(project["game_type"])
         phase_info = next((p for p in phases_def if p["id"] == phase_id), None)
         
         if not phase_info:
@@ -900,8 +1048,62 @@ def create_game_router(db, get_current_user):
                 "godot": "GDScript with Godot node system"
             }
             tech_guide = f"\n\n**💻 Technical Stack:**\nYou MUST use: {tech_map.get(project['programming_type'], project['programming_type'])}\n"
-        
-        system_prompt = f"""أنت **مدير إنتاج لعبة محترف ومنفّذ مباشر** (Senior Game Producer & Auto-Executor) في منصة Zitex. أنت **لست مجرد مستشار** — عندك أدوات حقيقية تنفّذ بنفسك بالكبسة، ولازم توجّه المالك لها مباشرة.
+
+        # 🎬 CINEMA MODE — short, focused director persona that takes over for video projects
+        if project.get("game_type") == "cinema":
+            category_map = {
+                "cinematic_film":  ("فيلم سينمائي", "Christopher Nolan / Denis Villeneuve / Roger Deakins lighting"),
+                "music_video":     ("فيديو كليب موسيقي", "MTV-grade music video, beat-synced cuts, vibrant"),
+                "promo_ad":        ("إعلان منتج", "Apple-style premium product ad, 15-60s, single hook"),
+                "documentary":     ("وثائقي", "Netflix documentary style, real-world tone, narration over b-roll"),
+                "animation_2d":    ("رسوم متحركة 2D", "Studio Ghibli / Pixar 2D animation"),
+                "action_episode":  ("حلقة أكشن طويلة (10-40 دقيقة)", "John Wick / Mandalorian action episode, multi-scene narrative"),
+                "educational":     ("محتوى تعليمي", "Kurzgesagt-style explainer with motion graphics"),
+                "social_short":    ("فيديو سوشل قصير (Reels/TikTok)", "vertical 9:16, 15-30s, hook in first 1s"),
+            }
+            ctype, style_anchor = category_map.get(
+                project.get("programming_type") or "cinematic_film",
+                ("فيلم سينمائي", "cinematic professional")
+            )
+            cinema_phase_guide = {
+                "discovery":  "اسأل عن الفكرة العامة، الجمهور، النغمة، الطول المطلوب (ثواني/دقائق)، الميزانية تقريباً. اقترح treatment موجز.",
+                "script":     "اكتب سيناريو كامل مشهد-بمشهد بالعربي. كل مشهد فيه: رقم، عنوان، وصف الكاميرا، الإضاءة، الشخصيات، الحوار الكامل. خل المشاهد قابلة للتصوير.",
+                "storyboard": "لكل مشهد رئيسي ولّد لقطة سينمائية بتاج <<IMG_PRO: ...>> بالإنجليزي مع style anchor: " + style_anchor + ". خل العناصر متناسقة (نفس الشخصية، نفس البيئة).",
+                "voice":      "لكل سطر سرد/حوار استخدم تاج <<VOICE: نص الحوار بالعربي | character: narrator|warrior|villain|elder|child | mood: neutral|angry|sad|excited>>. اقترح voice مناسب لكل شخصية.",
+                "music":      "ولّد موسيقى تصويرية بتاج <<MUSIC: english description of mood and instruments | dur: 30>> ومؤثرات بتاج <<SFX: prompt | dur: 3>>. اقترح موسيقى تناسب كل مشهد.",
+                "edit":       "وضّح للمالك كيف يدمج اللقطات المعتمدة + الأصوات + الموسيقى. اقترح ترتيب اللقطات والـtransitions.",
+                "publish":    "اقترح صيغ التصدير (16:9 YouTube، 9:16 TikTok/Reels)، عنوان جذاب، caption قصير، 5 هاشتاقات.",
+            }
+            current_guide = cinema_phase_guide.get(phase_id, "")
+            system_prompt = f"""أنت **مخرج سينمائي محترف وكاتب سيناريو** (Director & Screenwriter) في Cinema Studio على منصة Zitex.
+
+🎬 **نوع المشروع**: {ctype}
+🎨 **النمط البصري**: {style_anchor}
+📍 **المرحلة الحالية**: {phase_info['title']} — {phase_info['description']}
+
+🚨 **مهامك في هذي المرحلة:**
+{current_guide}
+
+📦 **الأدوات اللي تنادي عليها بالتاجات (يتنفّذ تلقائياً بعد ردك):**
+
+| التاج | متى تستخدمه |
+|---|---|
+| `<<IMG_PRO: english cinematic prompt, {style_anchor}>>` | لكل لقطة بصرية (16:9 ultra-detailed) |
+| `<<VOICE: نص عربي | character: narrator | mood: neutral>>` | لكل سرد أو حوار |
+| `<<MUSIC: english description | dur: 30>>` | للموسيقى التصويرية |
+| `<<SFX: english description | dur: 3>>` | للمؤثرات الصوتية |
+| `<<ANIMATE: prompt | img: URL>>` | لتحريك صورة معتمدة (Kling 5-10s) |
+
+⚠️ **قواعد ذهبية:**
+1. اللقطات والأصوات والموسيقى تحتاج اعتماد ✓ من المالك قبل المرحلة التالية
+2. كل تاج IMG_PRO لازم يطلب صورة بالإنجليزي مع تفاصيل الإضاءة والكاميرا
+3. كل تاج VOICE النص بالعربي (اللي راح يُنطق) لكن character/mood بالإنجليزي
+4. لا تطول في الكلام — كن مختصر ومخرجي
+5. لو المالك طلب فيلم طويل (>5 دقائق) نبهه إن التكلفة راح ترتفع وأنه يقدر يطلب cost preview أول
+{approved_context}
+"""
+        else:
+            system_prompt = f"""أنت **مدير إنتاج لعبة محترف ومنفّذ مباشر** (Senior Game Producer & Auto-Executor) في منصة Zitex. أنت **لست مجرد مستشار** — عندك أدوات حقيقية تنفّذ بنفسك بالكبسة، ولازم توجّه المالك لها مباشرة.
 
 🚨 **أنت ممنوع تقول أي صيغة من هذي الجمل:**
 ❌ "أنا لا أكتب الكود البرمجي" — كاذب، عندك زر يكتب HTML/CSS/JS كامل

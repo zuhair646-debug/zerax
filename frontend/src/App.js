@@ -58,6 +58,7 @@ import AIAgent from '@/pages/AIAgent';
 import AppBuilder from '@/pages/AppBuilder';
 import GameStudioDashboard from '@/pages/GameStudioDashboard';
 import WebGamesStudio from '@/pages/WebGamesStudio';
+import CinemaStudio from '@/pages/CinemaStudio';
 import AppGamesStudio from '@/pages/AppGamesStudio';
 import WebGameProject from '@/pages/WebGameProject';
 import AppGameProject from '@/pages/AppGameProject';
@@ -123,6 +124,9 @@ function App() {
           <Route path="/dashboard/games" element={<ProtectedRoute><GameStudioDashboard user={user} /></ProtectedRoute>} />
           <Route path="/dashboard/games/web" element={<ProtectedRoute><WebGamesStudio user={user} /></ProtectedRoute>} />
           <Route path="/dashboard/games/app" element={<ProtectedRoute><AppGamesStudio user={user} /></ProtectedRoute>} />
+          {/* 🎬 Cinema Studio — same Socratic flow as games, for video creation */}
+          <Route path="/dashboard/cinema" element={<ProtectedRoute><CinemaStudio user={user} /></ProtectedRoute>} />
+          <Route path="/cinema" element={user ? <Navigate to="/dashboard/cinema" /> : <Navigate to="/register" />} />
           {/* Public /games/web route — redirects to dashboard if logged in, otherwise to register */}
           <Route path="/games/web" element={user ? <Navigate to="/dashboard/games/web" /> : <Navigate to="/register" />} />
           <Route path="/games/mobile" element={user ? <Navigate to="/dashboard/games/app" /> : <Navigate to="/register" />} />
