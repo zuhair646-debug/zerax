@@ -1201,7 +1201,7 @@ def create_game_router(db, get_current_user):
 | **"عدّل الصورة المعتمدة الفلانية (إضاءة/زاوية)"** | تكتب: `<<IMG_EDIT: english edit instruction | ref: ASSET_ID>>` | تعديل دقيق على نفس الصورة بدون توليد من الصفر |
 | **"اجمع صور القمح والحديد والخشب في مشهد قرية"** | تكتب: `<<COMPOSE: village layout description | refs: id1, id2, id3>>` (دمج 2-4 أصول معتمدة) | مشهد واحد متماسك بكل الأصول |
 | **"أعطني 6 حقول قمح متغيرة"** | تكتب: `<<BATCH: english prompt | count: 6 | variations: slight\|moderate\|high>>` | 6 صور متوازية في توليد واحد بدل ست جولات |
-| **"خلّي اللعبة تحفظ progress / leaderboards / multiplayer"** | استخدم Zitex Runtime SDK: ضع `<script src="{BACKEND_URL}/api/game-runtime/{project_id}/sdk.js"></script>` ثم `ZitexGame.guest()`/`save()`/`leaderboard.submit()`/`unlock()`/`join('room')` | كل اللعبة تستفيد من backend Zitex بدون استضافة خارجية |
+| **"خلّي اللعبة تحفظ progress / leaderboards / multiplayer"** | استخدم Zitex Runtime SDK: ضع `<script src="https://zitex-production.up.railway.app/api/game-runtime/{project_id}/sdk.js"></script>` ثم `ZitexGame.guest()`/`save()`/`leaderboard.submit()`/`unlock()`/`join('room')` | كل اللعبة تستفيد من backend Zitex بدون استضافة خارجية |
 | "ابحث في الإنترنت" | (الميزة قادمة) | "هذي القدرة قيد البناء" |
 
 🎮 **Zitex Game Runtime SDK** (P0 الجديد): أي لعبة تبنيها بـ`<<BUILD>>` يقدر يستخدم endpoints جاهزة من نفس Zitex:
@@ -3279,7 +3279,7 @@ def create_game_router(db, get_current_user):
         return {
             "ok": True,
             "service": "games",
-            "build_marker": "v25_2026_02_07_all_24_tasks_complete",
+            "build_marker": "v26_2026_02_07_fix_chat_500",
             "features": {
                 "image_generation": True,
                 "vision_verification": True,
