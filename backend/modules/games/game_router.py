@@ -2359,19 +2359,26 @@ def create_game_router(db, get_current_user):
             err = str(e)[:200]
             raise HTTPException(400, f"المفتاح فاسد — Fal.ai رفضه: {err}")
 
-        # ✅ Key works. Save to the JSON vault so future requests use it.
+        # ✅ Key works. Save to BOTH MongoDB (persistent) AND JSON vault (legacy)
+        from modules.games.creds_store import kv_set as _kvset
+        await _kvset("FAL_KEY", new_key, user["user_id"])
         try:
             from modules.autocoder.credentials_vault import vault_set as _vset
             _vset("FAL_KEY", new_key)
-            # If backup keys were provided, save them as a multi-key rotation list
-            if backup_keys_raw:
-                backups = [k.strip() for k in backup_keys_raw.split(",") if k.strip() and ":" in k]
-                if backups:
-                    full_list = ",".join([new_key] + backups)
+        except Exception:
+            pass  # MongoDB is the source of truth; JSON is optional
+
+        # If backup keys were provided, save them as a multi-key rotation list
+        if backup_keys_raw:
+            backups = [k.strip() for k in backup_keys_raw.split(",") if k.strip() and ":" in k]
+            if backups:
+                full_list = ",".join([new_key] + backups)
+                await _kvset("FAL_KEYS", full_list, user["user_id"])
+                try:
+                    from modules.autocoder.credentials_vault import vault_set as _vset
                     _vset("FAL_KEYS", full_list)
-        except Exception as e:
-            logger.exception(f"[games][set-fal-key] vault_set failed: {e}")
-            raise HTTPException(500, "حُفِظ المفتاح في الذاكرة بس فشل حفظه على القرص")
+                except Exception:
+                    pass
 
         logger.warning(f"[games][set-fal-key] owner={user['user_id']} updated FAL_KEY (preview={new_key[:8]}...{new_key[-4:]})")
         return {
@@ -2388,10 +2395,18 @@ def create_game_router(db, get_current_user):
         if not (u and (u.get("is_owner") or u.get("role") == "owner")):
             raise HTTPException(403, "Owner only")
         try:
-            from modules.autocoder.credentials_vault import vault_set as _vset
-            _vset("FAL_KEY", "")
-            _vset("FAL_KEYS", "")
-            # Also clear the in-process env so next call resolves fresh
+            # Wipe MongoDB (primary source of truth)
+            from modules.games.creds_store import kv_delete as _kvdel
+            await _kvdel("FAL_KEY")
+            await _kvdel("FAL_KEYS")
+            # Also wipe JSON vault for completeness
+            try:
+                from modules.autocoder.credentials_vault import vault_set as _vset
+                _vset("FAL_KEY", "")
+                _vset("FAL_KEYS", "")
+            except Exception:
+                pass
+            # In-process env
             os.environ.pop("FAL_KEY", None)
             os.environ.pop("_FAL_KEYS_LIST", None)
             logger.warning(f"[games][delete-fal-key] owner={user['user_id']} wiped all FAL keys")
@@ -2404,12 +2419,18 @@ def create_game_router(db, get_current_user):
         u = await db.users.find_one({"id": user["user_id"]}, {"is_owner": 1, "role": 1})
         if not (u and (u.get("is_owner") or u.get("role") == "owner")):
             raise HTTPException(403, "Owner only")
-        # Probe both sources
+        # Probe ALL sources
         env_v = (os.environ.get("FAL_KEY") or "").strip()
         vault_v = ""
+        mongo_v = ""
         try:
             from modules.autocoder.credentials_vault import vault_get as _vget
             vault_v = (_vget("FAL_KEY") or "").strip()
+        except Exception:
+            pass
+        try:
+            from modules.games.creds_store import kv_get as _kvg
+            mongo_v = (await _kvg("FAL_KEY") or "").strip()
         except Exception:
             pass
         # Quick live test (uses whichever wins per _ensure_fal_key rules)
@@ -2438,7 +2459,9 @@ def create_game_router(db, get_current_user):
             "env_preview": (env_v[:8] + "..." + env_v[-4:]) if env_v else None,
             "vault_set": bool(vault_v),
             "vault_preview": (vault_v[:8] + "..." + vault_v[-4:]) if vault_v else None,
-            "active_source": "vault" if vault_v else ("env" if env_v else "none"),
+            "mongo_set": bool(mongo_v),     # ← NEW (persistent across restarts)
+            "mongo_preview": (mongo_v[:8] + "..." + mongo_v[-4:]) if mongo_v else None,
+            "active_source": "mongo" if mongo_v else ("vault" if vault_v else ("env" if env_v else "none")),
             "live_test": live_status,
             "live_error": live_error,
         }
@@ -2714,7 +2737,7 @@ def create_game_router(db, get_current_user):
         return {
             "ok": True,
             "service": "games",
-            "build_marker": "v13_2026_06_06_fal_delete_multikey_ui",
+            "build_marker": "v14_2026_06_06_mongo_persistent_keys",
             "features": {
                 "image_generation": True,
                 "vision_verification": True,

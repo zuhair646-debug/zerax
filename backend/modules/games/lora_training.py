@@ -51,7 +51,16 @@ MAX_TRAIN_IMAGES = 30
 
 
 def _ensure_fal_key() -> str:
-    # 1) Vault first — lets the owner override a bad Railway env value at runtime
+    # 1) MongoDB (PERSISTENT — survives Railway restarts)
+    try:
+        from modules.games.creds_store import kv_get_sync as _kvg
+        v = (_kvg("FAL_KEY") or "").strip()
+        if v:
+            os.environ["FAL_KEY"] = v
+            return v
+    except Exception:
+        pass
+    # 2) Vault (JSON file)
     try:
         from modules.autocoder.credentials_vault import vault_get as _vget
         v = (_vget("FAL_KEY") or _vget("FAL_API_KEY") or "").strip()
@@ -60,7 +69,7 @@ def _ensure_fal_key() -> str:
             return v
     except Exception:
         pass
-    # 2) Env
+    # 3) Env
     key = os.environ.get("FAL_KEY") or os.environ.get("FAL_API_KEY") or ""
     if not key:
         raise RuntimeError("FAL_KEY missing — set it in /app/backend/.env")

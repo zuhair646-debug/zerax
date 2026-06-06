@@ -32,32 +32,48 @@ UPLOAD_ROOT = "/app/backend/uploads/games"
 
 
 def _ensure_fal_key() -> str:
-    """Resolve a working FAL_KEY. Supports multi-key rotation:
-       vault entry FAL_KEYS = "k1,k2,k3" is tried in order.
+    """Resolve a working FAL_KEY. Source priority:
+       1. MongoDB credentials_kv  ← PERSISTS across Railway restarts ✅
+       2. Local JSON vault       ← legacy / dev
+       3. Env variable           ← Railway fallback
+       Supports multi-key rotation via FAL_KEYS = "k1,k2,k3".
     """
     candidates: list[str] = []
+
+    # 1) MongoDB (PERSISTENT)
+    try:
+        from modules.games.creds_store import kv_get_sync as _kvg
+        multi_db = (_kvg("FAL_KEYS") or "").strip()
+        if multi_db:
+            candidates += [k.strip() for k in multi_db.split(",") if k.strip()]
+        single_db = (_kvg("FAL_KEY") or "").strip()
+        if single_db and single_db not in candidates:
+            candidates.append(single_db)
+    except Exception:
+        pass
+
+    # 2) JSON vault (legacy)
     try:
         from modules.autocoder.credentials_vault import vault_get as _vget
-        # Multi-key (comma-separated)
         multi = (_vget("FAL_KEYS") or "").strip()
         if multi:
-            candidates += [k.strip() for k in multi.split(",") if k.strip()]
-        # Single primary
+            for k in [k.strip() for k in multi.split(",") if k.strip()]:
+                if k not in candidates:
+                    candidates.append(k)
         single = (_vget("FAL_KEY") or _vget("FAL_API_KEY") or "").strip()
         if single and single not in candidates:
             candidates.append(single)
     except Exception:
         pass
-    # Env as final fallback
+
+    # 3) Env
     envk = (os.environ.get("FAL_KEY") or os.environ.get("FAL_API_KEY") or "").strip()
     if envk and envk not in candidates:
         candidates.append(envk)
 
     if not candidates:
-        raise RuntimeError("FAL_KEY missing — set it via FalKeyManager or /app/backend/.env")
+        raise RuntimeError("FAL_KEY missing — set it via FalKeyManager")
 
-    # Quick "first one wins" — actual failover happens at call-site with retries.
-    # We store the full list on the env so call-sites can iterate.
     os.environ["FAL_KEY"] = candidates[0]
     os.environ["_FAL_KEYS_LIST"] = ",".join(candidates)
     return candidates[0]
