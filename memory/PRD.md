@@ -1,4 +1,49 @@
 # Zitex AI Platform - PRD
+### 🎯 Feb 7 2026 — 4 إصلاحات حاسمة لـworkflow الأصول المعتمدة (v22) ✅
+
+**سياق**: المستخدم نقل قائمة الـAI بـ7 ميزات ناقصة. أغلبها مبني بالفعل في v20/v21 — الـAI ما كان يعرف بوجودها. هذا الكوميت يجبر معرفته + يصلح bug خفي + يضيف BATCH.
+
+**4 إصلاحات**:
+
+1. **🚨 Bug خفي مكتشف**: `approve-asset` endpoint كان يحدّث `project.assets.images[].approved` بس — **مايحدّث الـ`phases[].messages[].generated_assets[].approved`** اللي منها vision context يقرأ. فلما المالك يضغط ✓، الـAI كان يشوف approved=False في الـvision!
+   - **الإصلاح**: مزامنة تلقائية للمكانين + حقن system message `"✅ APPROVED: asset id=..."` في phase history.
+
+2. **🎯 system prompt محسّن**: 
+   - يدرج كل الأصول المعتمدة مع IDs explicit (`id=xxx`)
+   - 5 قواعد إلزامية: "ممنوع IMG_PRO إذا فيه أصل معتمد شبيه"
+   - جدول مباشر للتاجات مع أمثلة استخدام
+
+3. **⚡ تاج جديد `<<BATCH: prompt | count: N | variations: slight|moderate|high>>`**:
+   - يولّد 2-6 variations بـ`asyncio.gather` (متوازية، مو متسلسلة)
+   - 3 مستويات variation: slight (إضاءة فقط) / moderate (تفاصيل) / high (أسلوب)
+   - يحل: "أبي 6 حقول قمح" بدل ما يأخذ 6 جولات
+
+4. **📂 Cross-phase approved-assets index**: 
+   - يسحب `approved=True` من `phases[].messages[].generated_assets[]` (وين فعلاً يعيشون)
+   - حتى 30 عنصر بـIDs+type+phase
+   - vision يلصق 6 صور
+
+**ملفات معدلة**:
+- `/app/backend/modules/games/game_router.py` — approve sync + system prompt + cross-phase index
+- `/app/backend/modules/games/fal_tools.py` — BATCH tag في TAG_RE/_canon_tag/parse_and_generate_assets
+
+**اختبار**:
+- ✅ approve toggle → messages synced (verified via mongo + curl)
+- ✅ event log message appended
+- ✅ BATCH parsed correctly
+- ✅ Railway: build_marker `v22_2026_02_07_approval_sync_batch_forced_tags` live
+
+**5 ميزات من قائمة الـAI** (الحالة):
+1. ✅ Asset Retrieval → endpoint موجود من v20 (`/approved-assets`)
+2. ✅ Composition → `<<COMPOSE>>` موجود من v20
+3. ✅ Asset Editing → `<<IMG_EDIT>>` موجود من v20
+4. ✅ Style Reference Lock → `<<IMG_REF>>` موجود من v20
+5. ✅ Approval Status Callback → v22 (sync + event log)
+6. ⏳ Workflow Templates per genre → للتالي
+7. ✅ Batch Generation → `<<BATCH>>` v22
+
+---
+
 ### 🎯 Feb 7 2026 — الإصلاح النهائي: Claude fallback يحصل الصور المعتمدة (v21) ✅
 
 **التشخيص من الـAI نفسه**: كان يقول "I am blind to approved assets — I receive them as text only".
