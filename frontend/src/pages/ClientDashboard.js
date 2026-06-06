@@ -95,9 +95,10 @@ const ClientDashboard = ({ user, setUser }) => {
           </Button>
         </div>
 
-        {loading ? (
-          <div className="text-center py-12 text-white">جاري التحميل...</div>
-        ) : (
+        {loading && (
+          <div className="text-center py-4 text-amber-400/60 text-sm">جاري تحميل بياناتك...</div>
+        )}
+        {(
           <>
             {/* Free Trials Banner */}
             {(user?.free_images > 0 || user?.free_videos > 0 || user?.free_website_trial) && (

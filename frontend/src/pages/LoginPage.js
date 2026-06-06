@@ -28,7 +28,7 @@ const LoginPage = ({ setUser }) => {
       localStorage.setItem('user', JSON.stringify(data.user));
       setUser(data.user);
       toast.success(`أهلاً ${data.user.name}!`);
-      navigate(data.user.role === 'admin' ? '/admin' : '/dashboard');
+      navigate(['admin', 'owner', 'super_admin'].includes(data.user.role) || data.user.is_owner ? '/admin' : '/dashboard');
     } catch (e2) {
       toast.error(e2.message);
     } finally {

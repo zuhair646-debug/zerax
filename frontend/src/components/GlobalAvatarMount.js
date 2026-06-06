@@ -20,9 +20,8 @@ const HIDDEN_PREFIXES = [
 ];
 
 export default function GlobalAvatarMount() {
-  const location = useLocation();
-  const path = location.pathname;
-  if (HIDDEN_ROUTES.includes(path)) return null;
-  if (HIDDEN_PREFIXES.some((p) => path.startsWith(p))) return null;
-  return <ZitexDuoLauncher />;
+  // 🛑 Temporarily hidden globally — voice agent will be re-enabled later
+  // The orange floating mic was distracting users; voice input is already
+  // available inside each individual chat module.
+  return null;
 }
