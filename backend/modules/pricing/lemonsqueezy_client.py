@@ -46,16 +46,22 @@ async def create_checkout(
 
     # Find any active variant on this store to use as base (we override the price)
     async with httpx.AsyncClient(timeout=20) as c:
-        # 1. List variants
-        r = await c.get(
-            f"{LS_BASE}/variants?filter[store_id]={store_id}&page[size]=1",
+        # 1. List products → pick first one → fetch its variants
+        rp = await c.get(
+            f"{LS_BASE}/products?filter[store_id]={store_id}&page[size]=1",
             headers=_headers(),
         )
-        if r.status_code != 200 or not r.json().get("data"):
-            # No product exists — create a default one
-            variant_id = await _ensure_default_product(store_id)
-        else:
-            variant_id = r.json()["data"][0]["id"]
+        prods = rp.json().get("data", []) if rp.status_code == 200 else []
+        if not prods:
+            raise RuntimeError(
+                "No product exists on Lemon Squeezy store. "
+                "Please create one at https://app.lemonsqueezy.com/products"
+            )
+        pid = prods[0]["id"]
+        rv = await c.get(f"{LS_BASE}/products/{pid}/variants", headers=_headers())
+        if rv.status_code != 200 or not rv.json().get("data"):
+            raise RuntimeError(f"No variants found for product {pid}")
+        variant_id = rv.json()["data"][0]["id"]
 
         # 2. Create the checkout with custom price (in cents)
         amount_cents = int(round(float(amount_usd) * 100))
