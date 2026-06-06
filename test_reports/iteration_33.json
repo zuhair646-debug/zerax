@@ -1,0 +1,54 @@
+{
+  "summary": "Tested the 14-layer Zitex Security Center (L1 rate limit, L11 honeypot, L12 bad-UA filter, L13 JWT revocation, L14 password strength) plus regression on L2/L3/L4 and /status. 18/18 backend tests PASS against the live preview URL.",
+  "backend_issues": {
+    "critical": [
+      {
+        "endpoint": "/.env, /wp-admin, /phpmyadmin, /wp-login.php, /.git/config, /xmlrpc.php (non-/api honeypot paths)",
+        "issue": "L11 honeypot middleware NEVER fires for non-/api/* paths because the Kubernetes ingress routes those paths to the React frontend container (port 3000), not the FastAPI backend (port 8001). Requests to /.env or /wp-admin return HTTP 200 with the SPA HTML — the attacker is never blocked and no HONEYPOT_HIT alert is recorded. Only the /api/.env, /api/admin.php entries in HONEYPOT_PATHS actually trigger the trap because they reach the backend. The spec explicitly required '/.env or /wp-admin' to return 404 + block IP, so the L11 protection is effectively defeated for the most common scanner paths.",
+        "priority": "HIGH"
+      }
+    ],
+    "minor": [
+      {
+        "endpoint": "/api/auth/logout",
+        "issue": "Audit-log write hard-codes ip='?' instead of extracting the real IP via get_real_ip(request). Add `request: Request` to the signature and call get_real_ip(request)."
+      },
+      {
+        "endpoint": "/api/admin/security/status -> layers.L13_jwt_revocation",
+        "issue": "Counter shows the in-memory blacklist length only. Since storage is in-memory dict, multi-replica deployments (Railway scaled-out) will have inconsistent revocation state — a token revoked on replica A is still valid on replica B. Move _jwt_blacklist to Redis for production scale."
+      },
+      {
+        "endpoint": "/api/auth/register",
+        "issue": "validate_password_strength() is wrapped in a broad try/except that silently swallows ImportError. If modules/security ever fails to import, weak passwords would be accepted silently. Log a warning when the import fails."
+      }
+    ]
+  },
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/backend/tests/test_zitex_security_extended.py",
+    "/app/test_reports/pytest/security_extended.xml"
+  ],
+  "action_items": [
+    "FIX L11 honeypot for non-/api paths: either (a) add an ingress rewrite rule that routes ^/(\\.env|wp-admin|wp-login|phpmyadmin|\\.git|xmlrpc\\.php).* to the backend, OR (b) implement a parallel React-side check in frontend/public/index.html or a top-level React route that POSTs the suspicious path to /api/admin/security/honeypot-report so the IP is blocked, OR (c) drop those non-/api entries from HONEYPOT_PATHS and document that only /api/<honeypot> works. Currently the spec promise that '/.env returns 404 and blocks IP' is FALSE.",
+    "Pass real IP to /api/auth/logout audit-log write (currently hard-coded '?').",
+    "Consider moving _jwt_blacklist, _ip_blocklist, _login_failures, _locked_until to Redis for horizontal scaling."
+  ],
+  "critical_code_review_comments": [
+    "L11 honeypot architecturally cannot intercept /.env and /wp-admin in this K8s setup — the ingress steals those paths for the frontend container before the backend middleware runs. The HONEYPOT_PATHS set must either be limited to /api/* paths or the ingress rules must be changed.",
+    "L13 JWT revocation uses SHA-256 of the full token as the blacklist key — good practice, avoids storing raw tokens. But entries are pruned only when revoke_token() is called next; long-running processes with infrequent logouts will leave expired entries in memory. Add a periodic cleanup task or check on lookup.",
+    "L14 validate_password_strength has a hard-coded English common-password list ({'password','12345678','qwerty12','admin123','owner123','11111111','00000000'}) — consider expanding to Arabic common passwords and import a wordlist for production-grade weakness detection.",
+    "register() catches `except Exception: pass` around the password validator import — if modules/security ever fails to import (typo/syntax error during a deploy), L14 silently degrades and weak passwords sail through registration. Add explicit logger.warning().",
+    "/api/auth/logout uses `await write_audit(db, 'logout', user_id, '?', ...)` — IP is always '?' since the function signature does not accept Request. Refactor to extract real IP.",
+    "slowapi default_limits=['300/minute'] is per-IP (good), and verified working under load (320 parallel requests yielded many 429s with Arabic detail + retry_after_sec=60). The Retry-After header is correctly set."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_zitex_security_extended.py"
+  ],
+  "success_rate": {"backend": "100% (18/18)", "frontend": "n/a (skipped per request)"},
+  "test_credentials": "owner@zitex.com / owner123 (from /app/memory/test_credentials.md)",
+  "seed_data_creation": "Test creates ephemeral users: TEST_pw_<uuid>@example.com (L14 strong-password success path creates ~1 user per run). Brute-force test uses bf-<uuid>@example.com (never registered — only attempted login). Each test uses unique X-Forwarded-For IPs (1.1.1.99, 3.3.3.x, 4.4.4.40, 11.11.11.x, 12.12.12.x, 13.13.13.13, 14.14.14.x, 98.98.98.98, 99.99.99.99, 200.0.0.x). All IPs are unblocked via /api/admin/security/unblock-ip at the end of each test to keep the suite idempotent.",
+  "retest_needed": true,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "test_zitex_security_extended.py is self-contained, idempotent, runs in ~38s. The ONLY architectural issue is L11 honeypot non-/api paths — see action_items. After main agent fixes ingress routing (or removes non-/api entries from HONEYPOT_PATHS), update test_honeypot_api_env_returns_404 to also exercise /.env, /wp-admin to confirm. L1/L2/L3/L4/L12/L13/L14 + /status (all 14 layers) + regression all green. The 18 tests are organized by class: TestL11Honeypot, TestL12BadUserAgent, TestL13JWTRevocation, TestL14PasswordStrength, TestL1RateLimit, TestL3BruteForce, TestL4AuditLog, TestSecurityStatus14Layers, TestRegression, TestSecurityHeaders. Existing test_zitex_security_center.py (L1-L10 baseline from iter32) was not modified.",
+  "rca of the issue": "L11 honeypot: K8s ingress routes paths matching ^/api/* to backend (port 8001) and everything else to frontend (port 3000). The honeypot middleware is registered on the FastAPI app, so it only sees /api/* requests. Verified with: curl /.env -> 200 HTML (React SPA); curl /api/.env -> 404 (honeypot fires + IP banned). Mitigation options listed in action_items. L1 rate-limit test originally failed because sequential network requests to the preview URL took ~250ms each, spreading 320 calls over ~80s and never exceeding the 300/min threshold within any 60s window. Fixed by using ThreadPoolExecutor(max_workers=40) to fire all 320 requests concurrently — slowapi then returns hundreds of 429s with the expected Arabic detail + Retry-After header."
+}

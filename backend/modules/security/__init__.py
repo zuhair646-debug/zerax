@@ -37,6 +37,94 @@ LOCKOUT_WINDOW_SEC = 300         # 5min sliding window
 LOCKOUT_DURATION_SEC = 900       # 15min lockout
 IP_BLOCK_DURATION_SEC = 3600     # 1h auto-block
 
+# L11 — Honeypot trap paths (instant 1-hour IP ban on any hit)
+HONEYPOT_PATHS = {
+    "/wp-admin", "/wp-login.php", "/wp-content", "/wordpress",
+    "/.env", "/.env.local", "/.env.production", "/.git/config",
+    "/phpmyadmin", "/pma", "/phpinfo.php", "/admin.php",
+    "/server-status", "/.aws/credentials", "/config.json",
+    "/api/.env", "/api/admin.php", "/xmlrpc.php",
+    "/vendor/phpunit", "/HNAP1/", "/cgi-bin/.%2e/",
+}
+
+# L12 — Suspicious User-Agent signatures (auto-ban)
+BAD_USER_AGENT_PATTERNS = [
+    "sqlmap", "nikto", "nmap", "masscan", "wpscan", "acunetix",
+    "havij", "metasploit", "burpsuite", "dirbuster", "gobuster",
+    "feroxbuster", "joomscan", "nuclei", "zgrab", "censys",
+]
+
+# L13 — Revoked JWT blacklist (for /auth/logout)
+_jwt_blacklist: Dict[str, float] = {}  # jti/token_prefix → expires_at
+
+
+# ════════════════════════════════════════════════════════════════
+# L11 — Honeypot detector (call from middleware)
+# ════════════════════════════════════════════════════════════════
+def is_honeypot_path(path: str) -> bool:
+    p = (path or "").lower().rstrip("/")
+    if p in HONEYPOT_PATHS:
+        return True
+    # Generic patterns
+    if any(x in p for x in (".env", "wp-admin", "wp-login", "phpmyadmin", "/.git/", "/.aws/", "phpinfo")):
+        return True
+    return False
+
+
+# ════════════════════════════════════════════════════════════════
+# L12 — Suspicious User-Agent detector
+# ════════════════════════════════════════════════════════════════
+def is_suspicious_ua(user_agent: str) -> Optional[str]:
+    ua = (user_agent or "").lower()
+    if not ua:
+        return None
+    for pattern in BAD_USER_AGENT_PATTERNS:
+        if pattern in ua:
+            return pattern
+    return None
+
+
+# ════════════════════════════════════════════════════════════════
+# L13 — JWT revocation (for logout)
+# ════════════════════════════════════════════════════════════════
+def revoke_token(token: str, expires_in_sec: int = 7 * 24 * 3600) -> None:
+    """Add token to blacklist until its natural expiry."""
+    key = hashlib.sha256(token.encode("utf-8")).hexdigest()[:32]
+    _jwt_blacklist[key] = time.time() + expires_in_sec
+    # Prune expired entries
+    now = time.time()
+    expired = [k for k, v in _jwt_blacklist.items() if v < now]
+    for k in expired:
+        _jwt_blacklist.pop(k, None)
+
+
+def is_token_revoked(token: str) -> bool:
+    if not token:
+        return False
+    key = hashlib.sha256(token.encode("utf-8")).hexdigest()[:32]
+    exp = _jwt_blacklist.get(key)
+    if exp and exp > time.time():
+        return True
+    return False
+
+
+# ════════════════════════════════════════════════════════════════
+# L14 — Password strength validator
+# ════════════════════════════════════════════════════════════════
+def validate_password_strength(password: str) -> Optional[str]:
+    """Returns Arabic error message if weak, else None."""
+    if not password:
+        return "كلمة المرور مطلوبة"
+    if len(password) < 8:
+        return "كلمة المرور قصيرة جداً (الحد الأدنى 8 أحرف)"
+    if password.lower() in {"password", "12345678", "qwerty12", "admin123", "owner123", "11111111", "00000000"}:
+        return "كلمة المرور ضعيفة جداً وضمن قائمة كلمات السر الشائعة"
+    has_letter = any(c.isalpha() for c in password)
+    has_digit = any(c.isdigit() for c in password)
+    if not (has_letter and has_digit):
+        return "كلمة المرور يجب أن تحتوي على حروف وأرقام معاً"
+    return None
+
 
 # ════════════════════════════════════════════════════════════════
 # Real client IP extraction (honors X-Forwarded-For from K8s ingress)
@@ -81,6 +169,24 @@ async def security_headers_middleware(request: Request, call_next):
 async def ip_block_middleware(request: Request, call_next):
     ip = get_real_ip(request)
     now = time.time()
+    path = request.url.path or ""
+
+    # L11 — Honeypot trap: instant 1h IP ban + alert
+    if is_honeypot_path(path):
+        _ip_blocklist[ip] = now + IP_BLOCK_DURATION_SEC
+        _record_alert("HONEYPOT_HIT", "high",
+            f"Scanner hit honeypot {path} from {ip} — IP banned for 1h (UA: {request.headers.get('user-agent','?')[:80]})")
+        return JSONResponse({"detail": "Not Found"}, status_code=404)
+
+    # L12 — Suspicious User-Agent: instant 1h IP ban + alert
+    bad_ua = is_suspicious_ua(request.headers.get("user-agent", ""))
+    if bad_ua:
+        _ip_blocklist[ip] = now + IP_BLOCK_DURATION_SEC
+        _record_alert("BAD_USER_AGENT", "high",
+            f"Attacker tool '{bad_ua}' detected from {ip} on {path} — IP banned for 1h")
+        return JSONResponse({"detail": "Forbidden"}, status_code=403)
+
+    # L7 — Active IP blocklist enforcement
     unblock = _ip_blocklist.get(ip)
     if unblock and unblock > now:
         return JSONResponse(
@@ -384,6 +490,10 @@ def create_router(db, get_admin_user):
                 "L8_email_alerts": "🟢 ready" if os.environ.get("RESEND_API_KEY") else "🟡 RESEND_API_KEY missing",
                 "L9_backups": f"🟢 active ({len(backups)} snapshots)",
                 "L10_periodic_scan": "🟢 every 60min",
+                "L11_honeypot_traps": f"🟢 active ({len(HONEYPOT_PATHS)} paths)",
+                "L12_bad_ua_filter": f"🟢 active ({len(BAD_USER_AGENT_PATTERNS)} signatures)",
+                "L13_jwt_revocation": f"🟢 active ({len([v for v in _jwt_blacklist.values() if v > time.time()])} revoked)",
+                "L14_password_strength": "🟢 active (min 8, letters+digits, no common)",
             },
             "counters": {
                 "login_failures_5min": login_failures_total,

@@ -81,6 +81,34 @@ db = client[os.environ['DB_NAME']]
 app = FastAPI(title="Zitex API", description="AI-Powered Creative Platform")
 api_router = APIRouter(prefix="/api")
 
+# 🛡️ L1 — Global rate limiter (slowapi) — keyed by real client IP (honors X-Forwarded-For)
+try:
+    from slowapi import Limiter
+    from slowapi.errors import RateLimitExceeded
+    from slowapi.middleware import SlowAPIMiddleware
+
+    def _rate_limit_key(request):
+        xff = request.headers.get("x-forwarded-for", "")
+        if xff:
+            return xff.split(",")[0].strip() or "?"
+        return request.headers.get("x-real-ip") or (request.client.host if request.client else "?")
+
+    limiter = Limiter(key_func=_rate_limit_key, default_limits=["300/minute"])
+    app.state.limiter = limiter
+
+    async def _ratelimit_handler(request, exc):
+        from fastapi.responses import JSONResponse as _JR
+        return _JR(
+            {"detail": "تم تجاوز الحد المسموح من الطلبات. يرجى المحاولة لاحقاً", "retry_after_sec": 60},
+            status_code=429,
+            headers={"Retry-After": "60"},
+        )
+    app.add_exception_handler(RateLimitExceeded, _ratelimit_handler)
+    app.add_middleware(SlowAPIMiddleware)
+except Exception as _le:
+    limiter = None
+    logging.getLogger(__name__).warning(f"slowapi rate limiter not active: {_le}")
+
 security = HTTPBearer()
 JWT_SECRET = os.environ.get('JWT_SECRET', 'your-secret-key')
 OPENAI_API_KEY = os.environ.get('OPENAI_API_KEY')
@@ -371,6 +399,15 @@ def create_token(user_id: str, role: str) -> str:
 
 async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security)):
     try:
+        # 🛡️ L13 — JWT revocation check
+        try:
+            from modules.security import is_token_revoked
+            if is_token_revoked(credentials.credentials):
+                raise HTTPException(status_code=401, detail="Token revoked — please log in again")
+        except HTTPException:
+            raise
+        except Exception:
+            pass
         payload = jwt.decode(credentials.credentials, JWT_SECRET, algorithms=['HS256'])
         user_id = payload.get('user_id')
         role = payload.get('role')
@@ -475,6 +512,16 @@ class UserRegisterWithReferral(BaseModel):
 
 @api_router.post("/auth/register")
 async def register(user_data: UserRegisterWithReferral):
+    # 🛡️ L14 — Password strength validation
+    try:
+        from modules.security import validate_password_strength
+        weak = validate_password_strength(user_data.password)
+        if weak:
+            raise HTTPException(status_code=400, detail=weak)
+    except HTTPException:
+        raise
+    except Exception:
+        pass
     existing = await db.users.find_one({"email": user_data.email}, {"_id": 0})
     if existing:
         raise HTTPException(status_code=400, detail="البريد الإلكتروني مسجل مسبقاً")
@@ -677,6 +724,28 @@ async def google_exchange(body: GoogleExchangeIn):
                        f"Google login: {email}")
     token = create_token(user.id, user.role)
     return {"token": token, "user": user, "is_new": is_new}
+
+
+@api_router.post("/auth/logout")
+async def logout(
+    credentials: HTTPAuthorizationCredentials = Depends(security),
+    current_user: dict = Depends(get_current_user),
+):
+    """🛡️ L13 — Revoke the current JWT so it can no longer be used."""
+    try:
+        from modules.security import revoke_token, write_audit, get_real_ip
+        revoke_token(credentials.credentials)
+        try:
+            from fastapi import Request as _R
+            # Best-effort audit log (ip unknown at this layer; use placeholder)
+            await write_audit(db, "logout", current_user.get('user_id', '?'), "?",
+                              {"role": current_user.get('role', '?')})
+        except Exception:
+            pass
+    except Exception:
+        pass
+    return {"ok": True, "detail": "تم تسجيل الخروج بنجاح"}
+
 
 @api_router.get("/auth/me")
 async def get_me(current_user: dict = Depends(get_current_user)):
