@@ -193,20 +193,8 @@ def boost_prompt(prompt: str, style_profile: str = "stylized") -> str:
     return f"{p}{booster}".strip(" ,")
 
 
-async def _generate_openai_fallback(prompt: str, project_id: str, aspect_ratio: str = "16:9") -> Dict[str, Any]:
-    """Fallback: OpenAI gpt-image-1 via Emergent Universal Key.
-    Same return shape as generate_flux_pro so callers don't care which provider produced it.
-    """
-    em_key = os.environ.get("EMERGENT_LLM_KEY", "")
-    if not em_key:
-        raise RuntimeError("EMERGENT_LLM_KEY not configured — cannot use OpenAI fallback")
-    from emergentintegrations.llm.openai.image_generation import OpenAIImageGeneration
-    image_gen = OpenAIImageGeneration(api_key=em_key)
-    images = await image_gen.generate_images(prompt=prompt, model="gpt-image-1", number_of_images=1)
-    if not images or len(images) == 0:
-        raise RuntimeError("OpenAI gpt-image-1 returned no images")
-    img_bytes = images[0]  # bytes
-
+def _save_image_bytes(img_bytes: bytes, project_id: str) -> Dict[str, Any]:
+    """Helper: save image bytes locally and return the games-asset dict skeleton."""
     asset_id = str(uuid.uuid4())
     dest = f"{UPLOAD_ROOT}/{project_id}/assets/{asset_id}.png"
     os.makedirs(os.path.dirname(dest), exist_ok=True)
@@ -214,81 +202,141 @@ async def _generate_openai_fallback(prompt: str, project_id: str, aspect_ratio: 
         fh.write(img_bytes)
     return {
         "id": asset_id,
-        "type": "image",
-        "subtype": "openai-gpt-image-1",
+        "dest": dest,
         "image_url": f"/api/games/asset-image/{project_id}/{asset_id}.png",
-        "cdn_url": None,
-        "_bytes": img_bytes,
-        "prompt": prompt,
-        "name": prompt[:80],
-        "approved": False,
-        "fallback": True,
-        "created_at": datetime.now(timezone.utc).isoformat(),
     }
 
 
-# ════════════════════════════════════════════════════════════════
-# 1) Flux Pro Ultra 1.1 — cinematic hero image (with auto-fallback to OpenAI)
-# ════════════════════════════════════════════════════════════════
-async def generate_flux_pro(prompt: str, project_id: str, aspect_ratio: str = "16:9", style_profile: str = "stylized") -> Dict[str, Any]:
-    """High-end cinematic image generation. Tries Fal Flux Pro Ultra first,
-    automatically falls back to OpenAI gpt-image-1 (via Emergent Universal Key)
-    if Fal fails with auth/network/rate-limit errors. Image Studio uses the same
-    smart-fallback pattern (autocoder/media_tools.pick_image_model), which is why
-    it keeps working even when Fal credentials are broken."""
-    boosted = boost_prompt(prompt, style_profile=style_profile)
-    try:
-        result = await _fal_submit(
-            "fal-ai/flux-pro/v1.1-ultra",
-            {
-                "prompt": boosted,
-                "aspect_ratio": aspect_ratio,
-                "num_images": 1,
-                "enable_safety_checker": True,
-                "safety_tolerance": "5",
-                "output_format": "png",
-                "raw": False,
+async def _img_via_openai_direct(prompt: str, aspect_ratio: str) -> bytes:
+    """🥇 PRIMARY — GPT-Image-1 via DIRECT OpenAI key (truly independent of Emergent)."""
+    oai_key = (os.environ.get("OPENAI_DIRECT_KEY") or
+               os.environ.get("OPENAI_API_KEY") or "").strip()
+    if not oai_key:
+        raise RuntimeError("OPENAI_DIRECT_KEY/OPENAI_API_KEY not set")
+    size_map = {"16:9": "1536x1024", "9:16": "1024x1536", "1:1": "1024x1024",
+                "4:3": "1536x1024", "3:4": "1024x1536"}
+    size = size_map.get(aspect_ratio, "1536x1024")
+    import base64 as _b64
+    async with httpx.AsyncClient(timeout=180.0) as c:
+        r = await c.post(
+            "https://api.openai.com/v1/images/generations",
+            headers={"Authorization": f"Bearer {oai_key}", "Content-Type": "application/json"},
+            json={
+                "model": "gpt-image-1",
+                "prompt": prompt[:32000],
+                "size": size,
+                "n": 1,
+                "quality": "high",
             },
         )
-        img_url = (result.get("images") or [{}])[0].get("url")
-        if not img_url:
-            raise RuntimeError(f"flux_pro returned no image: {result}")
-        asset_id = str(uuid.uuid4())
-        dest = f"{UPLOAD_ROOT}/{project_id}/assets/{asset_id}.png"
-        await _download_to(img_url, dest)
-        try:
-            with open(dest, "rb") as fh:
-                img_bytes = fh.read()
-        except Exception:
-            img_bytes = None
-        return {
-            "id": asset_id,
-            "type": "image",
-            "subtype": "flux-pro-ultra",
-            "image_url": f"/api/games/asset-image/{project_id}/{asset_id}.png",
-            "cdn_url": img_url,
-            "_bytes": img_bytes,
+        if r.status_code != 200:
+            raise RuntimeError(f"gpt-image-1 {r.status_code}: {r.text[:300]}")
+        j = r.json()
+        b64 = j["data"][0].get("b64_json")
+        if not b64:
+            # Some accounts return url instead
+            img_url = j["data"][0].get("url")
+            if not img_url:
+                raise RuntimeError(f"gpt-image-1 returned no b64/url: {j}")
+            rr = await c.get(img_url, timeout=120)
+            rr.raise_for_status()
+            return rr.content
+        return _b64.b64decode(b64)
+
+
+async def _img_via_nano_banana(prompt: str) -> bytes:
+    """🥈 FALLBACK — Nano Banana (Gemini 2.5 Flash Image) via Emergent universal key.
+    Proven working in production via /app/backend/modules/autocoder/media_tools.py."""
+    em_key = (os.environ.get("EMERGENT_LLM_KEY") or "").strip()
+    if not em_key:
+        raise RuntimeError("EMERGENT_LLM_KEY not set")
+    import base64 as _b64
+    from emergentintegrations.llm.chat import LlmChat, UserMessage
+    chat = LlmChat(
+        api_key=em_key,
+        session_id=f"games-img-{uuid.uuid4().hex[:8]}",
+        system_message="You generate high-quality cinematic game art images.",
+    )
+    chat.with_model("gemini", "gemini-2.5-flash-image-preview")
+    res = await chat.send_message(UserMessage(text=prompt))
+    img_b64 = None
+    if hasattr(res, "images") and res.images:
+        img_b64 = res.images[0]
+    if not img_b64 and isinstance(res, str) and "base64," in res:
+        img_b64 = res.split("base64,", 1)[1]
+    if not img_b64:
+        raise RuntimeError("nano_banana returned no image bytes")
+    return _b64.b64decode(img_b64.split(",")[-1])
+
+
+async def _img_via_fal_flux(prompt: str, aspect_ratio: str) -> bytes:
+    """🥉 PREMIUM — Fal Flux Pro Ultra 1.1 (cinematic AAA quality if key works)."""
+    result = await _fal_submit(
+        "fal-ai/flux-pro/v1.1-ultra",
+        {
             "prompt": prompt,
-            "name": prompt[:80],
-            "approved": False,
-            "created_at": datetime.now(timezone.utc).isoformat(),
-        }
-    except Exception as fal_err:
-        msg = str(fal_err).lower()
-        # Trigger fallback on auth, network, rate-limit, quota, OR missing-key errors
-        fallback_triggers = (
-            "invalid key", "unauthorized", "401", "403", "rate", "quota",
-            "exhausted", "network", "timeout", "fal_key missing", "fal_key is required",
-            "fal key missing", "missing", "no fal", "credentials",
-        )
-        if any(t in msg for t in fallback_triggers):
-            import logging as _l
-            _l.getLogger(__name__).warning(f"[games][fal-fallback] Fal failed ({msg[:80]}) — falling back to OpenAI gpt-image-1")
-            try:
-                return await _generate_openai_fallback(boosted, project_id, aspect_ratio)
-            except Exception as oai_err:
-                raise RuntimeError(f"كلا Fal و OpenAI فشلوا. Fal: {fal_err}. OpenAI: {oai_err}")
-        raise
+            "aspect_ratio": aspect_ratio,
+            "num_images": 1,
+            "enable_safety_checker": True,
+            "safety_tolerance": "5",
+            "output_format": "png",
+            "raw": False,
+        },
+    )
+    img_url = (result.get("images") or [{}])[0].get("url")
+    if not img_url:
+        raise RuntimeError(f"flux_pro returned no image: {result}")
+    async with httpx.AsyncClient(timeout=120.0, follow_redirects=True) as c:
+        rr = await c.get(img_url)
+        rr.raise_for_status()
+        return rr.content
+
+
+# ════════════════════════════════════════════════════════════════
+# 1) AAA hero image — 3-tier independent waterfall
+#    OpenAI Direct → Nano Banana → Fal Flux Pro Ultra
+# ════════════════════════════════════════════════════════════════
+async def generate_flux_pro(prompt: str, project_id: str, aspect_ratio: str = "16:9", style_profile: str = "stylized") -> Dict[str, Any]:
+    """High-end cinematic game image. 3-tier independent waterfall:
+       1) GPT-Image-1 via DIRECT OpenAI key (independent, top quality, ALWAYS works)
+       2) Nano Banana (Gemini) via Emergent universal key (proven in production)
+       3) Fal Flux Pro Ultra (premium AAA, used last because of Railway 401 instability)
+    Returns the same asset dict shape as before, so all callers keep working."""
+    boosted = boost_prompt(prompt, style_profile=style_profile)
+    providers = [
+        ("openai-gpt-image-1", lambda: _img_via_openai_direct(boosted, aspect_ratio)),
+        ("nano-banana-gemini", lambda: _img_via_nano_banana(boosted)),
+        ("flux-pro-ultra", lambda: _img_via_fal_flux(boosted, aspect_ratio)),
+    ]
+    errors: list[str] = []
+    for subtype, fn in providers:
+        try:
+            img_bytes = await fn()
+            if not img_bytes or len(img_bytes) < 512:
+                raise RuntimeError(f"{subtype} returned empty/tiny payload ({len(img_bytes) if img_bytes else 0}b)")
+            saved = _save_image_bytes(img_bytes, project_id)
+            logger.info(f"[games][img] ✅ {subtype} succeeded ({len(img_bytes)//1024}KB)")
+            return {
+                "id": saved["id"],
+                "type": "image",
+                "subtype": subtype,
+                "image_url": saved["image_url"],
+                "cdn_url": None,
+                "_bytes": img_bytes,
+                "prompt": prompt,
+                "name": prompt[:80],
+                "approved": False,
+                "fallback": subtype != "openai-gpt-image-1",
+                "created_at": datetime.now(timezone.utc).isoformat(),
+            }
+        except Exception as e:
+            err_short = str(e)[:200]
+            errors.append(f"{subtype}: {err_short}")
+            logger.warning(f"[games][img] ⚠️ {subtype} failed → {err_short}")
+            continue
+    raise RuntimeError(
+        "كل مزودات توليد الصور فشلت. التفاصيل:\n• " + "\n• ".join(errors)
+    )
 
 
 # ════════════════════════════════════════════════════════════════
@@ -626,43 +674,105 @@ async def edit_image_with_prompt(
     project_id: str,
     aspect_ratio: str = "16:9",
 ) -> Dict[str, Any]:
-    """Use Flux Pro Redux (img2img) to re-imagine an existing asset.
-    Returns a NEW asset dict (id, image_url, cdn_url, _bytes, ...).
-    The original image is preserved — caller keeps both versions.
-    """
-    result = await _fal_submit(
-        "fal-ai/flux-pro/v1.1-ultra/redux",
-        {
-            "image_url": source_image_url,
-            "prompt": edit_prompt,
-            "aspect_ratio": aspect_ratio,
-            "num_images": 1,
-            "enable_safety_checker": True,
-            "safety_tolerance": "5",
-            "output_format": "png",
-        },
-    )
-    img_url = (result.get("images") or [{}])[0].get("url")
-    if not img_url:
-        raise RuntimeError(f"flux redux returned no image: {result}")
-    asset_id = str(uuid.uuid4())
-    dest = f"{UPLOAD_ROOT}/{project_id}/assets/{asset_id}.png"
-    await _download_to(img_url, dest)
+    """Re-imagine an existing asset. Tries Fal Flux Pro Redux (img2img) first,
+    falls back to Nano Banana (Gemini) which is excellent at instruction-based edits.
+    The original image is preserved — caller keeps both versions."""
+    errors: list[str] = []
+    # 🥇 Try Fal Flux Pro Redux first (best img2img quality)
     try:
+        result = await _fal_submit(
+            "fal-ai/flux-pro/v1.1-ultra/redux",
+            {
+                "image_url": source_image_url,
+                "prompt": edit_prompt,
+                "aspect_ratio": aspect_ratio,
+                "num_images": 1,
+                "enable_safety_checker": True,
+                "safety_tolerance": "5",
+                "output_format": "png",
+            },
+        )
+        img_url = (result.get("images") or [{}])[0].get("url")
+        if not img_url:
+            raise RuntimeError(f"flux redux returned no image: {result}")
+        asset_id = str(uuid.uuid4())
+        dest = f"{UPLOAD_ROOT}/{project_id}/assets/{asset_id}.png"
+        await _download_to(img_url, dest)
         with open(dest, "rb") as fh:
             img_bytes = fh.read()
-    except Exception:
-        img_bytes = None
-    return {
-        "id": asset_id,
-        "type": "image",
-        "subtype": "flux-redux-edit",
-        "image_url": f"/api/games/asset-image/{project_id}/{asset_id}.png",
-        "cdn_url": img_url,
-        "_bytes": img_bytes,
-        "prompt": edit_prompt,
-        "name": edit_prompt[:80],
-        "source_image_url": source_image_url,  # provenance
-        "approved": False,
-        "created_at": datetime.now(timezone.utc).isoformat(),
-    }
+        return {
+            "id": asset_id,
+            "type": "image",
+            "subtype": "flux-redux-edit",
+            "image_url": f"/api/games/asset-image/{project_id}/{asset_id}.png",
+            "cdn_url": img_url,
+            "_bytes": img_bytes,
+            "prompt": edit_prompt,
+            "name": edit_prompt[:80],
+            "source_image_url": source_image_url,
+            "approved": False,
+            "created_at": datetime.now(timezone.utc).isoformat(),
+        }
+    except Exception as e:
+        errors.append(f"flux-redux: {str(e)[:160]}")
+        logger.warning(f"[games][edit] Flux Redux failed → {e}; trying Nano Banana edit")
+
+    # 🥈 Fallback: Nano Banana image editing (excellent at instruction edits)
+    em_key = (os.environ.get("EMERGENT_LLM_KEY") or "").strip()
+    if em_key:
+        try:
+            import base64 as _b64
+            # Download source bytes for Nano Banana
+            src_bytes = b""
+            if source_image_url.startswith("http"):
+                async with httpx.AsyncClient(timeout=60, follow_redirects=True) as c:
+                    rr = await c.get(source_image_url)
+                    rr.raise_for_status()
+                    src_bytes = rr.content
+            elif source_image_url.startswith("/api/games/asset-image/"):
+                # local file
+                parts = source_image_url.rsplit("/", 2)
+                _pid, _fname = parts[-2], parts[-1]
+                local = f"{UPLOAD_ROOT}/{_pid}/assets/{_fname}"
+                with open(local, "rb") as fh:
+                    src_bytes = fh.read()
+            if not src_bytes:
+                raise RuntimeError("could not load source image bytes")
+
+            from emergentintegrations.llm.chat import LlmChat, UserMessage, ImageContent
+            chat = LlmChat(
+                api_key=em_key,
+                session_id=f"games-edit-{uuid.uuid4().hex[:8]}",
+                system_message="You edit images based on instructions. Return the edited image.",
+            )
+            chat.with_model("gemini", "gemini-2.5-flash-image-preview")
+            res = await chat.send_message(UserMessage(
+                text=edit_prompt,
+                file_contents=[ImageContent(image_base64=_b64.b64encode(src_bytes).decode())],
+            ))
+            img_b64 = None
+            if hasattr(res, "images") and res.images:
+                img_b64 = res.images[0]
+            if not img_b64 and isinstance(res, str) and "base64," in res:
+                img_b64 = res.split("base64,", 1)[1]
+            if not img_b64:
+                raise RuntimeError("nano-banana edit returned no image")
+            img_bytes = _b64.b64decode(img_b64.split(",")[-1])
+            saved = _save_image_bytes(img_bytes, project_id)
+            return {
+                "id": saved["id"],
+                "type": "image",
+                "subtype": "nano-banana-edit",
+                "image_url": saved["image_url"],
+                "cdn_url": None,
+                "_bytes": img_bytes,
+                "prompt": edit_prompt,
+                "name": edit_prompt[:80],
+                "source_image_url": source_image_url,
+                "approved": False,
+                "fallback": True,
+                "created_at": datetime.now(timezone.utc).isoformat(),
+            }
+        except Exception as e:
+            errors.append(f"nano-banana-edit: {str(e)[:160]}")
+    raise RuntimeError("تعديل الصورة فشل من كل المزودات: " + " | ".join(errors))

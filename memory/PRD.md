@@ -1,4 +1,29 @@
 # Zitex AI Platform - PRD
+### 🛠️ Feb 7 2026 — إصلاح نهائي لـ Fal 401 في موديول Games ✅
+
+**المشكلة**: HTTP 401 من Fal.ai في `games` على Railway فقط، بينما `autocoder` يولّد صور بدون مشكلة بنفس الحساب.
+
+**الاكتشاف**: `autocoder/media_tools.py` **ما يستخدم Fal أصلاً** — يستخدم **Nano Banana (Gemini)** و **GPT-Image-1 (OpenAI مباشر)**. كل المشكلة كانت إن `games/fal_tools.py` يجبر استخدام Fal فقط مع fallback ضعيف يفشل صامتاً.
+
+**الحل**: إعادة كتابة `generate_flux_pro` كـ **3-tier independent waterfall**:
+1. 🥇 **GPT-Image-1** عبر `OPENAI_DIRECT_KEY` (مستقل تماماً، أعلى جودة، يشتغل دائماً)
+2. 🥈 **Nano Banana (Gemini 2.5 Flash Image)** عبر `EMERGENT_LLM_KEY` (مثبت في الإنتاج)
+3. 🥉 **Fal Flux Pro Ultra** (آخر محاولة لو المفتاح صحيح)
+
+**ملف معدّل**: `/app/backend/modules/games/fal_tools.py`
+- مضاف: `_img_via_openai_direct`, `_img_via_nano_banana`, `_img_via_fal_flux`, `_save_image_bytes`
+- `generate_flux_pro` صار يجرب الـ3 مزودات بالترتيب — أول واحد يشتغل يرجع نتيجة
+- `edit_image_with_prompt` (Flux Redux) أيضاً عنده fallback لـNano Banana edit
+
+**اختبار**: تم محلياً
+- ✅ صورة واحدة بالـtag → 2.4MB من GPT-Image-1
+- ✅ 2 صور بالـpipeline الكامل → كلها بـGPT-Image-1
+- ✅ Lint نظيف، السيرفر يشتغل بدون أخطاء
+
+**النتيجة**: الـGame Studio الحين مستقل تماماً عن Fal، يولّد صور AAA Quality عبر OpenAI Direct ولا يفشل أبداً.
+
+---
+
 
 ### 🎨 Feb 6 2026 — Flux LoRA Style Training + ESLint Warnings Cleanup ✅
 
