@@ -145,10 +145,10 @@ export default function FalKeyManager({ accentColor = 'amber' }) {
               <p className="text-[11px] text-zinc-500 leading-relaxed">
                 المفتاح الصحيح اللي حصلناه من اختباره محلياً:
                 <code className="block mt-1 text-[10px] text-amber-200 bg-black/40 p-2 rounded break-all border border-amber-500/20" dir="ltr">
-                  e016ba3b-d074-45c9-99a3-fc5168fe52e5:b653c35dfe685396dc45f6b83457623b
+                  4782b6fe-9755-4a7f-a056-5823c3e1f195:1e228cad0e08fed2eeea7005d7aba309
                 </code>
                 <button
-                  onClick={() => setKeyInput('e016ba3b-d074-45c9-99a3-fc5168fe52e5:b653c35dfe685396dc45f6b83457623b')}
+                  onClick={() => setKeyInput('4782b6fe-9755-4a7f-a056-5823c3e1f195:1e228cad0e08fed2eeea7005d7aba309')}
                   className="mt-1.5 text-[11px] text-amber-300 hover:text-amber-200 underline"
                   data-testid="fal-key-paste-suggested"
                 >
