@@ -1,4 +1,47 @@
 # Zitex AI Platform - PRD
+### 🎯 Feb 7 2026 — حل جذري لمشكلة الـAI ما يشوف الصور المعتمدة ✅
+
+**المشكلة الجوهرية** (تشخيص الذكاء نفسه داخل Game Studio): الـAI كان يحصل قائمة الصور المعتمدة **كنصوص فقط** (أسماء + وصف)، فلما يولّد صور جديدة كان يبدأ من الصفر ويطلع بستايل مختلف كل مرة → عدم تماسك بصري.
+
+**الإصلاحات الأربعة**:
+
+1. **🔍 Cross-Phase Vision Context** (الإصلاح الجذري):
+   - قبل أي رد، النظام يلصق **حتى 6 صور معتمدة** (من كل المراحل) كـ`inline_data` بصرياً في طلب Gemini/Claude
+   - يحدّد كل صورة بـheader: `صورة #N (id=XYZ): {name} — مرحلة [{phase}]`
+   - الـAI الحين يشوف فعلياً ما اعتمده المالك سابقاً
+
+2. **🎨 تاج `<<IMG_REF: prompt | ref: ASSET_ID>>`** (style-lock):
+   - يأخذ صورة معتمدة كـvisual anchor
+   - يولّد موضوع جديد بنفس الـDNA البصري (ألوان، إضاءة، فرشاة، منظور)
+   - عبر Nano Banana multimodal → fallback لـFlux Pro مع explicit "match style"
+
+3. **✏️ تاج `<<IMG_EDIT: edit | ref: ASSET_ID>>`** (تعديل دقيق):
+   - يعدّل صورة معتمدة موجودة بدون توليد من الصفر
+   - يستخدم `edit_image_with_prompt` الموجود (Flux Redux → Nano Banana edit)
+
+4. **🏞️ تاج `<<COMPOSE: scene | refs: id1, id2, id3>>`** (دمج مشهد):
+   - يأخذ 2-4 صور معتمدة ويدمجها في مشهد واحد متماسك
+   - عبر Nano Banana multi-image input → fallback لـFlux Pro
+
+**إضافة**: `GET /api/games/project/{id}/approved-assets` — flat list ordered (newest first) لكل الأصول المعتمدة عبر كل المراحل. الـUI يقدر يعرضها كـgallery.
+
+**system prompt محدّث** للـgames والـcinema modes مع جدول التاجات الجديدة + قاعدة ذهبية: "لو فوق في الـvision تظهر صور معتمدة، ممنوع تعيد توليدها من الصفر".
+
+**ملفات معدلة**:
+- `/app/backend/modules/games/game_router.py` — vision context رفعت من 3 صور حالية إلى 6 معتمدة عبر كل phases + endpoint approved-assets + system prompt updates
+- `/app/backend/modules/games/fal_tools.py` — TAG_RE وسّع، canon_tag وسّع، parse_and_generate_assets handler لـIMG_REF/IMG_EDIT/COMPOSE، دالتين جديدتين `_img_ref_remix` و `_compose_scene_from_refs`
+
+**اختبار**:
+- ✅ Tag regex يلتقط `IMG_PRO/IMG_REF/IMG_EDIT/COMPOSE` بدقة
+- ✅ `_img_ref_remix` يشتغل end-to-end (Nano Banana → Flux → GPT-Image-1 fallbacks)
+- ✅ `/approved-assets` endpoint يرجع count + items
+- ✅ Railway استلم commit `5efb046` ونشره خلال 50s
+- ✅ build_marker الجديد `v20_2026_02_07_approved_vision_img_ref_compose` live
+
+**النتيجة المتوقعة**: الـAI يصير يستخدم `IMG_REF` مع asset_id بدل توليد عشوائي → تماسك بصري في كل المشروع.
+
+---
+
 ### 🎬 Feb 7 2026 — Cinema Studio (نفس تجربة الألعاب، لإنتاج الفيديو) ✅
 
 **طلب المستخدم**: ابني قسم فيديوهات بنفس فلسفة Game Studio — تصنيفات بره، شات سقراطي، موافقات على كل أصل (لقطة/صوت/موسيقى)، دمج نهائي، ودعم الفيديوهات الطويلة (10-40 دقيقة) مع cost preview للمالك.
