@@ -1066,45 +1066,97 @@ def create_game_router(db, get_current_user):
         if not user_is_owner and user_credits < phase_info["credits"]:
             raise HTTPException(402, f"رصيد غير كافٍ — تحتاج {phase_info['credits']} نقطة (لديك {user_credits})")
         
-        # Build AI context with memory — pull approved assets directly from phases (cross-phase)
+        # Build AI context with memory — UNION of approved assets from BOTH storage paths:
+        #   • phases[].messages[].generated_assets[]  (new — populated after v22 sync fix)
+        #   • assets.images[]                          (legacy — pre-v22 approvals)
         approved_context = ""
         approved_assets_index: list[dict] = []
+        seen_ids_ac: set = set()
+        _public_backend = (
+            os.environ.get("PUBLIC_BACKEND_URL")
+            or "https://zitex-production.up.railway.app"
+        )
+
+        # Path A: phases (new approvals)
         for _phase_id, _phase in (project.get("phases") or {}).items():
             for _msg in (_phase.get("messages") or []):
                 for _a in (_msg.get("generated_assets") or []):
-                    if _a.get("approved") and not _a.get("deleted_at"):
+                    if (_a.get("approved") and not _a.get("deleted_at")
+                            and _a.get("id") and _a.get("id") not in seen_ids_ac):
+                        seen_ids_ac.add(_a["id"])
                         approved_assets_index.append({
-                            "id": _a.get("id"),
+                            "id": _a["id"],
                             "type": _a.get("type"),
                             "name": (_a.get("name") or "asset")[:80],
                             "subtype": _a.get("subtype") or _a.get("type"),
                             "phase": _phase_id,
+                            "image_url": _a.get("image_url"),
+                            "audio_url": _a.get("audio_url"),
+                            "video_url": _a.get("video_url"),
+                            "model_url": _a.get("model_url"),
                         })
+
+        # Path B: legacy assets.images bucket (backfill for pre-v22 approvals)
+        for _atype, _alist in (project.get("assets") or {}).items():
+            for _a in (_alist or []):
+                if (_a.get("approved") and _a.get("id") and _a.get("id") not in seen_ids_ac):
+                    seen_ids_ac.add(_a["id"])
+                    approved_assets_index.append({
+                        "id": _a["id"],
+                        "type": _atype.rstrip("s") if _atype.endswith("s") else _atype,  # images→image
+                        "name": (_a.get("name") or "asset")[:80],
+                        "subtype": _a.get("subtype") or _atype,
+                        "phase": "(legacy)",
+                        "image_url": _a.get("image_url") or _a.get("url"),
+                    })
+
         if approved_assets_index:
-            # Sort newest first (approximate by reverse of natural insertion)
+            # newest first (reverse natural insertion order)
             approved_assets_index = list(reversed(approved_assets_index))[:30]
-            listing = "\n".join(
-                f"  • id=`{a['id']}` [{a['type']}] {a['name']} — مرحلة [{a['phase']}]"
-                for a in approved_assets_index
-            )
+            # Build a CRYSTAL-CLEAR table with IDs + absolute URLs the AI can copy-paste
+            rows = []
+            for i, a in enumerate(approved_assets_index, 1):
+                rel = a.get("image_url") or a.get("audio_url") or a.get("video_url") or a.get("model_url") or ""
+                abs_url = (_public_backend + rel) if rel and rel.startswith("/") else (rel or "")
+                rows.append(
+                    f"#{i:>2}  ID=`{a['id']}`  type={a['type']:<6}  name={a['name'][:60]}\n"
+                    f"      URL: {abs_url}"
+                )
+            listing = "\n".join(rows)
             approved_context = (
-                "\n\n═══════════════════════════════════════════════════════════════\n"
-                f"📌 **الأصول المعتمدة سابقاً ({len(approved_assets_index)})** — استخدم IDs منها مباشرة\n"
-                "═══════════════════════════════════════════════════════════════\n"
-                f"{listing}\n\n"
-                "🚨 **قواعد إلزامية لمنع توليد عشوائي**:\n"
-                "1. **ممنوع** تستخدم `<<IMG_PRO>>` لتوليد شي شبيه أو مكرر لأصل معتمد. استخدم بدلاً:\n"
-                "   • `<<IMG_REF: english new subject | ref: ID_من_الفوق>>` (style-lock)\n"
-                "   • `<<IMG_EDIT: english edit instruction | ref: ID>>` (تعديل دقيق)\n"
-                "   • `<<COMPOSE: scene description | refs: id1, id2, id3>>` (دمج ٢-٤ معتمدة)\n"
-                "   • `<<BATCH: english prompt | count: 6 | variations: slight>>` (٦ variations دفعة واحدة)\n"
-                "2. لو المالك قال \"عدّل الإضاءة\" أو \"خل الزاوية كذا\" → استخدم `IMG_EDIT` مع id الصورة المعتمدة\n"
-                "3. لو المالك قال \"اجمع الكل في مشهد\" → استخدم `COMPOSE` مع كل IDs المعنية\n"
-                "4. لو المالك قال \"أعطني ٦ حقول قمح\" → استخدم `BATCH count: 6` (مو ٦ تاجات IMG_PRO)\n"
-                "5. لو شك في أي ID، اطلب من المالك يأكد رقم الصورة #N من الـvision أعلاه\n"
-                "═══════════════════════════════════════════════════════════════\n"
+                "\n\n═══════════════════════════════════════════════════════════════════\n"
+                f"📌 الأصول المعتمدة ({len(approved_assets_index)}) — استخدم IDs/URLs مباشرة\n"
+                "═══════════════════════════════════════════════════════════════════\n"
+                f"{listing}\n"
+                "═══════════════════════════════════════════════════════════════════\n\n"
+                "🚨 **قواعد إلزامية لمنع توليد عشوائي** (تطبيقها فوري):\n"
+                "1. **ممنوع** `<<IMG_PRO>>` لتوليد شي شبيه لأصل في القائمة فوق. بدّلها بـ:\n"
+                "   • `<<IMG_REF: english new subject | ref: ID>>` (style-lock من ID القائمة)\n"
+                "   • `<<IMG_EDIT: english edit | ref: ID>>` (تعديل دقيق على نفس الصورة)\n"
+                "   • `<<COMPOSE: english scene | refs: id1, id2, id3>>` (دمج 2-4 معتمدة)\n"
+                "   • `<<BATCH: english prompt | count: 6 | variations: slight>>` (6 variations)\n"
+                "   • `<<ANIMATE: english motion prompt | img: ABSOLUTE_URL_من_الجدول>>` (تحريك Kling 5-10s)\n"
+                "2. لو المالك قال 'عدّل الإضاءة' → IMG_EDIT مع ID الأصل المعني\n"
+                "3. لو قال 'اجمع كل الموارد' → COMPOSE مع IDs المتعددة\n"
+                "4. لو قال '6 حقول قمح' → BATCH count:6 (تاج واحد، 6 صور دفعة)\n"
+                "5. لو قال 'حرّك الصورة' → ANIMATE مع URL من العمود فوق\n"
+                "═══════════════════════════════════════════════════════════════════\n"
             )
-        
+
+        # 💰 Add budget/cost summary so AI can warn owner when expensive
+        try:
+            _txs = await db.credit_transactions.find(
+                {"project_id": project_id}, {"_id": 0, "amount": 1, "type": 1, "reason": 1}
+            ).to_list(length=500)
+            _spent = sum(abs(t.get("amount", 0)) for t in _txs if t.get("type") in ("spend", "debit"))
+            _user_balance = (await db.users.find_one({"user_id": user["user_id"]}, {"credits": 1}) or {}).get("credits", 0)
+            approved_context += (
+                f"\n💰 **ميزانية المشروع**: مصروف {int(_spent)} نقطة · رصيد المالك المتبقي: {int(_user_balance)} نقطة\n"
+                "(لو المالك طلب شي مكلف جداً، اعرض التكلفة التقريبية قبل التنفيذ)\n"
+            )
+        except Exception:
+            pass
+
         # Build enhanced system prompt based on phase
         tech_guide = ""
         if phase_id == "programming":
@@ -3279,7 +3331,7 @@ def create_game_router(db, get_current_user):
         return {
             "ok": True,
             "service": "games",
-            "build_marker": "v26_2026_02_07_fix_chat_500",
+            "build_marker": "v27_2026_02_07_full_asset_id_table_budget",
             "features": {
                 "image_generation": True,
                 "vision_verification": True,
