@@ -1,4 +1,4 @@
-from fastapi import FastAPI, APIRouter, HTTPException, Depends, UploadFile, File, Form, Header
+from fastapi import FastAPI, APIRouter, HTTPException, Depends, UploadFile, File, Form, Header, Request
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from fastapi.responses import StreamingResponse, Response
 from dotenv import load_dotenv
@@ -548,21 +548,57 @@ async def register(user_data: UserRegisterWithReferral):
     }
 
 @api_router.post("/auth/login")
-async def login(credentials: UserLogin):
+async def login(credentials: UserLogin, request: Request):
+    # 🛡️ Brute-force protection (L3) — refuse if locked
+    try:
+        from modules.security import check_brute_force, register_login_attempt, write_audit, get_real_ip
+        ip = get_real_ip(request)
+        locked_for = check_brute_force(ip, credentials.email)
+        if locked_for:
+            raise HTTPException(
+                status_code=429,
+                detail=f"الحساب مقفول بسبب محاولات فاشلة متكررة. حاول بعد {locked_for // 60} دقيقة"
+            )
+    except HTTPException:
+        raise
+    except Exception:
+        check_brute_force = register_login_attempt = write_audit = None  # type: ignore
+        ip = (request.client.host if request.client else "?") or "?"
+
     user_doc = await db.users.find_one({"email": credentials.email}, {"_id": 0})
     if not user_doc or not verify_password(credentials.password, user_doc['password']):
+        # Register failed attempt
+        try:
+            if register_login_attempt:
+                register_login_attempt(ip, credentials.email, success=False)
+            if write_audit:
+                await write_audit(db, "login_failed", credentials.email, ip, {"reason": "bad_credentials"})
+        except Exception:
+            pass
         raise HTTPException(status_code=401, detail="Invalid credentials")
-    
+
     if not user_doc.get('is_active', True):
+        try:
+            if write_audit:
+                await write_audit(db, "login_blocked", credentials.email, ip, {"reason": "account_deactivated"})
+        except Exception:
+            pass
         raise HTTPException(status_code=403, detail="Account is deactivated")
-    
+
     for field in ['free_images', 'free_videos', 'free_website_trial']:
         if field not in user_doc:
             user_doc[field] = 0 if field != 'free_website_trial' else False
-    
+
     user = User(**{k: v for k, v in user_doc.items() if k != 'password'})
     await log_activity(user.id, "user_login", "create", "User logged in")
-    
+    try:
+        if register_login_attempt:
+            register_login_attempt(ip, credentials.email, success=True)
+        if write_audit:
+            await write_audit(db, "login_success", user.email, ip, {"user_id": user.id, "role": user.role})
+    except Exception:
+        pass
+
     token = create_token(user.id, user.role)
     return {"token": token, "user": user}
 
@@ -3716,6 +3752,28 @@ try:
     logging.getLogger(__name__).info("✅ game_extras router mounted (style DNA, batch approve, auto-tag, preview, prompts, comments)")
 except Exception as _gee:
     logging.getLogger(__name__).error(f"game_extras module failed: {_gee}")
+
+# 🛡️ Zitex Security Center — 10-layer enterprise protection + admin control room
+try:
+    from modules.security import (
+        create_router as _sec_create,
+        security_headers_middleware as _sec_headers,
+        ip_block_middleware as _sec_ipblock,
+        security_scheduler as _sec_scheduler,
+    )
+    _sec_router = _sec_create(db, require_admin)
+    app.include_router(_sec_router)
+    app.middleware("http")(_sec_headers)
+    app.middleware("http")(_sec_ipblock)
+    # Launch periodic AI scanner in the background
+    @app.on_event("startup")
+    async def _start_security_scheduler():
+        import asyncio as _a
+        _a.create_task(_sec_scheduler(db, interval_minutes=60))
+        logging.getLogger(__name__).info("🛡️ Security scheduler started (AI audit every 60min, backup every 12h)")
+    logging.getLogger(__name__).info("✅ security module mounted (10 layers + admin /api/admin/security/* + scheduler)")
+except Exception as _sece:
+    logging.getLogger(__name__).error(f"security module failed: {_sece}")
 
 
 @app.get("/api/iframe-test")

@@ -3,7 +3,7 @@ import { Navbar } from '@/components/Navbar';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { useNavigate } from 'react-router-dom';
-import { Users, FileText, CreditCard, Globe, Image, Video, Settings, Clock, CheckCircle, Activity, Coins, Brain, Code2, ShieldCheck, Sparkles } from 'lucide-react';
+import { Users, FileText, CreditCard, Globe, Image, Video, Settings, Clock, CheckCircle, Activity, Coins, Brain, Code2, ShieldCheck, Sparkles, ShieldAlert } from 'lucide-react';
 
 const AdminDashboard = ({ user }) => {
   const navigate = useNavigate();
@@ -45,6 +45,7 @@ const AdminDashboard = ({ user }) => {
     { title: 'إدارة العملاء', desc: 'عرض وإدارة قائمة العملاء', path: '/admin/clients', icon: <Users className="w-6 h-6" />, color: 'from-purple-500 to-pink-500' },
     { title: 'النقاط والعروض', desc: 'إدارة النقاط والأسعار والعروض', path: '/admin/credits', icon: <Coins className="w-6 h-6" />, color: 'from-amber-500 to-yellow-500' },
     { title: 'تدريب الذكاء', desc: 'تعليم الذكاء الاصطناعي أمثلة احترافية', path: '/admin/training', icon: <Brain className="w-6 h-6" />, color: 'from-purple-500 to-pink-500' },
+    { title: 'غرفة التحكم الأمنية 🛡️', desc: 'حماية 10 طبقات · فحص AI مستمر · IPs محظورة · نسخ احتياطي · سجل أحداث', path: '/admin/security', icon: <ShieldAlert className="w-6 h-6" />, color: 'from-red-500 to-rose-600', testId: 'admin-tile-security' },
     { title: 'برمجة زيتاكس 🔐', desc: 'ذكاء يعدّل كود المنصة بنفسه (للمالك فقط)', path: '/admin/autocoder', icon: <Code2 className="w-6 h-6" />, color: 'from-amber-500 to-orange-600', testId: 'admin-tile-autocoder' },
     { title: 'مركز التسويق الذكي 📣', desc: 'ذكاء يولّد، يجدول، وينشر تلقائياً عبر 6 منصات (Telegram/Twitter/IG/...)', path: '/admin/marketing', icon: <Sparkles className="w-6 h-6" />, color: 'from-pink-500 to-amber-500', testId: 'admin-tile-marketing' },
     { title: 'الاستقلالية والمفاتيح 🔓', desc: 'كل API keys مع روابط مباشرة للحصول عليها', path: '/admin/independence', icon: <ShieldCheck className="w-6 h-6" />, color: 'from-emerald-500 to-teal-600', testId: 'admin-tile-independence' },

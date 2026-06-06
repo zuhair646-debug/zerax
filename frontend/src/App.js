@@ -74,6 +74,7 @@ import AdminApiKeys from '@/pages/AdminApiKeys';
 import AdminIndependence from '@/pages/AdminIndependence';
 import AdminAIReadiness from '@/pages/AdminAIReadiness';
 import AdminLearning from '@/pages/AdminLearning';
+import SecurityControlRoom from '@/pages/SecurityControlRoom';
 import Companion from '@/pages/Companion';
 import '@/App.css';
 
@@ -196,6 +197,7 @@ function App() {
           <Route path="/admin/independence" element={<ProtectedRoute adminOnly><AdminIndependence user={user} /></ProtectedRoute>} />
           <Route path="/admin/ai-readiness" element={<ProtectedRoute adminOnly><AdminAIReadiness user={user} /></ProtectedRoute>} />
           <Route path="/admin/learning" element={<ProtectedRoute adminOnly><AdminLearning user={user} /></ProtectedRoute>} />
+          <Route path="/admin/security" element={<ProtectedRoute adminOnly><SecurityControlRoom user={user} /></ProtectedRoute>} />
           <Route path="/companion" element={<ProtectedRoute><Companion user={user} setUser={setUser} /></ProtectedRoute>} />
         </Routes>
         {/* Global persistent avatars — appear on EVERY route except VRM preview */}
