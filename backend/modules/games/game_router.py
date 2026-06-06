@@ -2821,7 +2821,7 @@ def create_game_router(db, get_current_user):
         return {
             "ok": True,
             "service": "games",
-            "build_marker": "v16_2026_06_06_fal_diagnose",
+            "build_marker": "v17_2026_06_06_openai_image_fallback",
             "features": {
                 "image_generation": True,
                 "vision_verification": True,

@@ -193,48 +193,102 @@ def boost_prompt(prompt: str, style_profile: str = "stylized") -> str:
     return f"{p}{booster}".strip(" ,")
 
 
-# ════════════════════════════════════════════════════════════════
-# 1) Flux Pro Ultra 1.1 — cinematic hero image
-# ════════════════════════════════════════════════════════════════
-async def generate_flux_pro(prompt: str, project_id: str, aspect_ratio: str = "16:9", style_profile: str = "stylized") -> Dict[str, Any]:
-    """High-end cinematic image generation. ~$0.06/image, ~10-20 sec."""
-    boosted = boost_prompt(prompt, style_profile=style_profile)
-    result = await _fal_submit(
-        "fal-ai/flux-pro/v1.1-ultra",
-        {
-            "prompt": boosted,
-            "aspect_ratio": aspect_ratio,
-            "num_images": 1,
-            "enable_safety_checker": True,
-            "safety_tolerance": "5",
-            "output_format": "png",
-            "raw": False,
-        },
-    )
-    img_url = (result.get("images") or [{}])[0].get("url")
-    if not img_url:
-        raise RuntimeError(f"flux_pro returned no image: {result}")
+async def _generate_openai_fallback(prompt: str, project_id: str, aspect_ratio: str = "16:9") -> Dict[str, Any]:
+    """Fallback: OpenAI gpt-image-1 via Emergent Universal Key.
+    Same return shape as generate_flux_pro so callers don't care which provider produced it.
+    """
+    em_key = os.environ.get("EMERGENT_LLM_KEY", "")
+    if not em_key:
+        raise RuntimeError("EMERGENT_LLM_KEY not configured — cannot use OpenAI fallback")
+    from emergentintegrations.llm.openai.image_generation import OpenAIImageGeneration
+    image_gen = OpenAIImageGeneration(api_key=em_key)
+    images = await image_gen.generate_images(prompt=prompt, model="gpt-image-1", number_of_images=1)
+    if not images or len(images) == 0:
+        raise RuntimeError("OpenAI gpt-image-1 returned no images")
+    img_bytes = images[0]  # bytes
+
     asset_id = str(uuid.uuid4())
     dest = f"{UPLOAD_ROOT}/{project_id}/assets/{asset_id}.png"
-    await _download_to(img_url, dest)
-    # Read the bytes back so caller can also persist to GridFS (survives redeploys)
-    try:
-        with open(dest, "rb") as fh:
-            img_bytes = fh.read()
-    except Exception:
-        img_bytes = None
+    os.makedirs(os.path.dirname(dest), exist_ok=True)
+    with open(dest, "wb") as fh:
+        fh.write(img_bytes)
     return {
         "id": asset_id,
         "type": "image",
-        "subtype": "flux-pro-ultra",
+        "subtype": "openai-gpt-image-1",
         "image_url": f"/api/games/asset-image/{project_id}/{asset_id}.png",
-        "cdn_url": img_url,  # 🔒 Fal CDN URL as fallback (lives ~weeks)
-        "_bytes": img_bytes,  # 🔒 caller must pop & persist to GridFS then delete this key
+        "cdn_url": None,
+        "_bytes": img_bytes,
         "prompt": prompt,
         "name": prompt[:80],
         "approved": False,
+        "fallback": True,
         "created_at": datetime.now(timezone.utc).isoformat(),
     }
+
+
+# ════════════════════════════════════════════════════════════════
+# 1) Flux Pro Ultra 1.1 — cinematic hero image (with auto-fallback to OpenAI)
+# ════════════════════════════════════════════════════════════════
+async def generate_flux_pro(prompt: str, project_id: str, aspect_ratio: str = "16:9", style_profile: str = "stylized") -> Dict[str, Any]:
+    """High-end cinematic image generation. Tries Fal Flux Pro Ultra first,
+    automatically falls back to OpenAI gpt-image-1 (via Emergent Universal Key)
+    if Fal fails with auth/network/rate-limit errors. Image Studio uses the same
+    smart-fallback pattern (autocoder/media_tools.pick_image_model), which is why
+    it keeps working even when Fal credentials are broken."""
+    boosted = boost_prompt(prompt, style_profile=style_profile)
+    try:
+        result = await _fal_submit(
+            "fal-ai/flux-pro/v1.1-ultra",
+            {
+                "prompt": boosted,
+                "aspect_ratio": aspect_ratio,
+                "num_images": 1,
+                "enable_safety_checker": True,
+                "safety_tolerance": "5",
+                "output_format": "png",
+                "raw": False,
+            },
+        )
+        img_url = (result.get("images") or [{}])[0].get("url")
+        if not img_url:
+            raise RuntimeError(f"flux_pro returned no image: {result}")
+        asset_id = str(uuid.uuid4())
+        dest = f"{UPLOAD_ROOT}/{project_id}/assets/{asset_id}.png"
+        await _download_to(img_url, dest)
+        try:
+            with open(dest, "rb") as fh:
+                img_bytes = fh.read()
+        except Exception:
+            img_bytes = None
+        return {
+            "id": asset_id,
+            "type": "image",
+            "subtype": "flux-pro-ultra",
+            "image_url": f"/api/games/asset-image/{project_id}/{asset_id}.png",
+            "cdn_url": img_url,
+            "_bytes": img_bytes,
+            "prompt": prompt,
+            "name": prompt[:80],
+            "approved": False,
+            "created_at": datetime.now(timezone.utc).isoformat(),
+        }
+    except Exception as fal_err:
+        msg = str(fal_err).lower()
+        # Trigger fallback on auth, network, rate-limit, quota, OR missing-key errors
+        fallback_triggers = (
+            "invalid key", "unauthorized", "401", "403", "rate", "quota",
+            "exhausted", "network", "timeout", "fal_key missing", "fal_key is required",
+            "fal key missing", "missing", "no fal", "credentials",
+        )
+        if any(t in msg for t in fallback_triggers):
+            import logging as _l
+            _l.getLogger(__name__).warning(f"[games][fal-fallback] Fal failed ({msg[:80]}) — falling back to OpenAI gpt-image-1")
+            try:
+                return await _generate_openai_fallback(boosted, project_id, aspect_ratio)
+            except Exception as oai_err:
+                raise RuntimeError(f"كلا Fal و OpenAI فشلوا. Fal: {fal_err}. OpenAI: {oai_err}")
+        raise
 
 
 # ════════════════════════════════════════════════════════════════
