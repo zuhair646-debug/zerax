@@ -67,7 +67,7 @@ export default function Pricing({ user }) {
           item_id: itemId,
           billing_cycle: billingCycle,
           promo_code: promoCode || null,
-          return_url: `${origin}/pricing/success?order={order_id}`,
+          return_url: `${origin}/pricing/success`,
           cancel_url: `${origin}/pricing`,
         },
         { headers: { Authorization: `Bearer ${token}` } }
