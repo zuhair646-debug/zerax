@@ -1,4 +1,56 @@
 # Zitex AI Platform - PRD
+### 🎬 Feb 7 2026 — Cinema Studio (نفس تجربة الألعاب، لإنتاج الفيديو) ✅
+
+**طلب المستخدم**: ابني قسم فيديوهات بنفس فلسفة Game Studio — تصنيفات بره، شات سقراطي، موافقات على كل أصل (لقطة/صوت/موسيقى)، دمج نهائي، ودعم الفيديوهات الطويلة (10-40 دقيقة) مع cost preview للمالك.
+
+**ما تم تنفيذه**:
+
+1. **8 تصنيفات فيديو** (بدل تقنيات البرمجة):
+   - 🎬 فيلم سينمائي (Nolan/Villeneuve style)
+   - 🎵 فيديو كليب موسيقي
+   - 📢 إعلان منتج (Apple-style 15-60s)
+   - 📖 وثائقي (Netflix-style)
+   - 🎨 رسوم متحركة 2D (Ghibli/Pixar)
+   - ⚔️ حلقة أكشن طويلة (10-40 min, John Wick style)
+   - 🎓 محتوى تعليمي (Kurzgesagt-style)
+   - 📱 فيديو سوشل قصير (Reels/TikTok 9:16)
+
+2. **7 مراحل سينمائية** بدل مراحل البرمجة:
+   `discovery → script → storyboard → voice → music → edit → publish`
+
+3. **System Prompt متحوّل** — لما `game_type=cinema`، الذكاء يصير "مخرج سينمائي وكاتب سيناريو" بدل "Game Producer". اختبر فعلياً وأنتج treatment احترافي بدون أي تعديل بشري.
+
+4. **Cost Preview Endpoint**: `POST /api/games/cinema/cost-preview`
+   - يحسب: مشاهد × صور + voice + music + sfx + render + overhead
+   - 3 مستويات جودة (standard/premium/cinematic)
+   - تحذير تلقائي للفيديوهات الطويلة (≥10 دقيقة)
+   - مثال: 10 دقيقة cinematic = 8,365 نقطة (75 مشهد)
+
+5. **Frontend**: `CinemaStudio.js` — wrapper نظيف فوق `WebGamesStudio.js`:
+   - WebGamesStudio يقبل `gameType` و `studioConfig` props
+   - CinemaStudio يمررها مع تخصيصات السينما
+   - نفس colors/UX/approvals — مالك واحد يتنقل بين الاستوديوهين بسلاسة
+
+6. **Routing**: `/dashboard/cinema` (محمي بـauth) + tile في ClientDashboard بـrose-amber gradient.
+
+**ملفات معدلة/مضافة**:
+- `/app/backend/modules/games/game_router.py` — CINEMA_PHASES + cinema in PROGRAMMING_TYPES + cinema-mode system prompt + cost-preview endpoint
+- `/app/frontend/src/pages/CinemaStudio.js` (new, 28 lines — wrapper)
+- `/app/frontend/src/pages/WebGamesStudio.js` — معامل بـ`gameType` و `studioConfig`
+- `/app/frontend/src/App.js` — route /dashboard/cinema
+- `/app/frontend/src/pages/ClientDashboard.js` — tile جديد
+
+**اختبار**:
+- ✅ GET /api/games/programming-types?game_type=cinema → 8 تصنيفات
+- ✅ POST /api/games/project مع game_type=cinema → 7 phases تظهر
+- ✅ POST /api/games/cinema/cost-preview → breakdown شفاف + warning
+- ✅ Chat مع cinema project → الذكاء يرد كمخرج: "Cinema Studio — Apple-style Premium Product Ad" مع treatment 3-لقطات
+- ✅ Screenshot الـ`/dashboard/cinema` يعرض 8 تصنيفات + نموذج إنشاء مشروع
+
+**يحتاج push**: `Save to GitHub` (commit `80c749f`) → Railway ينشر تلقائياً.
+
+---
+
 ### 🛠️ Feb 7 2026 — إصلاح نهائي لـ Fal 401 في موديول Games ✅
 
 **المشكلة**: HTTP 401 من Fal.ai في `games` على Railway فقط، بينما `autocoder` يولّد صور بدون مشكلة بنفس الحساب.
