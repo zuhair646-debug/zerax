@@ -17,6 +17,7 @@ import AINotesPanel from '@/components/games/AINotesPanel';
 import SafeAssetImage from '@/components/games/SafeAssetImage';
 import BuildLiveButton from '@/components/games/BuildLiveButton';
 import QAAnalyzeButton from '@/components/games/QAAnalyzeButton';
+import ProStudioTools from '@/components/games/ProStudioTools';
 import EditAssetButton from '@/components/games/EditAssetButton';
 import StyleTrainingPanel from '@/components/games/StyleTrainingPanel';
 import FalKeyManager from '@/components/games/FalKeyManager';
@@ -616,6 +617,7 @@ export default function WebGamesStudio({ user }) {
                     }}
                   />
                   {project?.preview_url && <QAAnalyzeButton projectId={project?.id} accentColor="amber" />}
+                  <ProStudioTools projectId={project?.id} projectTitle={project?.title} accentColor="amber" />
                 </div>
                 {project?.preview_url ? (
                   <div className="rounded-xl border border-cyan-500/30 overflow-hidden bg-black" data-testid="live-iframe-wrapper">

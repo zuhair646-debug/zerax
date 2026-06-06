@@ -1380,6 +1380,31 @@ def create_game_router(db, get_current_user):
         except Exception as fal_err:
             logger.exception(f"[games] FAL tools failed: {fal_err}")
 
+        # 🎙️ VOICE parser — picks up <<VOICE: dialogue | character: name>> tags
+        try:
+            from modules.games.voice_tools import parse_and_generate_voices
+            voice_assets = await parse_and_generate_voices(ai_message, project_id)
+            for va in voice_assets:
+                if va.get("type") == "error":
+                    generated_assets.append(va)
+                    continue
+                va["phase_id"] = phase_id
+                raw = va.pop("_bytes", None)
+                if raw:
+                    try:
+                        from modules.games.persistence import persist_bytes as _persist
+                        await _persist(db, va["id"], raw, "audio/mpeg", project_id)
+                    except Exception:
+                        pass
+                generated_assets.append(va)
+                await db.game_projects.update_one(
+                    {"id": project_id},
+                    {"$push": {"assets.voices": va}}
+                )
+                logger.info(f"[games][voice] generated voice {va['id']} for project {project_id}")
+        except Exception as ve:
+            logger.exception(f"[games] voice parser failed: {ve}")
+
         # 🩹 SAFETY NET v3 — Catches THREE bug modes the AI exhibits:
         #   (a) AI wrote a tag with broken syntax (newlines mid-tag, missing >>, weird chars)
         #       → parser missed it, but we can still extract the user-visible prompt from it.
@@ -2391,6 +2416,245 @@ def create_game_router(db, get_current_user):
             "live_error": live_error,
         }
 
+    # ═════════════════════════════════════════════════════════════
+    # 🗺️  LEVEL DESIGN GENERATOR (Claude → tilemap JSON)
+    # ═════════════════════════════════════════════════════════════
+    @router.post("/project/{project_id}/generate-level")
+    async def generate_level_endpoint(project_id: str, request: Request, user=Depends(get_current_user)):
+        proj = await db.game_projects.find_one(
+            {"id": project_id, "user_id": user["user_id"]},
+            {"id": 1, "title": 1},
+        )
+        if not proj:
+            raise HTTPException(404, "Project not found")
+        body = await request.json()
+        description = (body.get("description") or "").strip()
+        if not description:
+            raise HTTPException(400, "description مطلوب")
+        size = max(10, min(40, int(body.get("size") or 20)))
+        style = (body.get("style") or "top-down").strip()
+
+        try:
+            from modules.games.level_design import generate_level
+            level = await generate_level(description, size=size, style=style)
+        except Exception as e:
+            logger.exception(f"[level] gen failed: {e}")
+            raise HTTPException(500, f"فشل توليد المستوى: {str(e)[:200]}")
+
+        await db.game_projects.update_one(
+            {"id": project_id},
+            {"$push": {"assets.levels": level},
+             "$set": {"updated_at": datetime.now(timezone.utc).isoformat()}},
+        )
+        return {"ok": True, "level": level}
+
+    @router.get("/project/{project_id}/levels")
+    async def list_levels(project_id: str, user=Depends(get_current_user)):
+        proj = await db.game_projects.find_one(
+            {"id": project_id, "user_id": user["user_id"]},
+            {"assets.levels": 1},
+        )
+        if not proj:
+            raise HTTPException(404, "Project not found")
+        return {"ok": True, "levels": ((proj.get("assets") or {}).get("levels") or [])}
+
+    # ═════════════════════════════════════════════════════════════
+    # 🌐 MULTIPLAYER NETCODE SCAFFOLDS
+    # ═════════════════════════════════════════════════════════════
+    @router.post("/multiplayer-scaffold")
+    async def multiplayer_scaffold_endpoint(request: Request, user=Depends(get_current_user)):
+        body = await request.json()
+        stack = (body.get("stack") or "colyseus").lower()
+        max_players = max(2, min(64, int(body.get("max_players") or 8)))
+        game_type = (body.get("game_type") or "co-op").strip()
+        try:
+            from modules.games.multiplayer_scaffolds import generate_scaffold
+            scaffold = generate_scaffold(stack, max_players, game_type)
+        except ValueError as e:
+            raise HTTPException(400, str(e))
+        return {"ok": True, **scaffold}
+
+    @router.get("/multiplayer-scaffold/{project_id}/download")
+    async def multiplayer_scaffold_download(
+        project_id: str,
+        stack: str = "colyseus",
+        max_players: int = 8,
+        game_type: str = "co-op",
+        user=Depends(get_current_user),
+    ):
+        """Same scaffold but as a downloadable .zip."""
+        proj = await db.game_projects.find_one(
+            {"id": project_id, "user_id": user["user_id"]}, {"id": 1, "title": 1}
+        )
+        if not proj:
+            raise HTTPException(404, "Project not found")
+        import io as _io, zipfile as _zf
+        from fastapi.responses import StreamingResponse
+        from modules.games.multiplayer_scaffolds import generate_scaffold
+        try:
+            scaffold = generate_scaffold(stack, max_players, game_type)
+        except ValueError as e:
+            raise HTTPException(400, str(e))
+        buf = _io.BytesIO()
+        with _zf.ZipFile(buf, "w", compression=_zf.ZIP_DEFLATED) as zfp:
+            for fname, content in scaffold["files"].items():
+                zfp.writestr(f"{stack}/{fname}", content)
+        buf.seek(0)
+        return StreamingResponse(
+            buf,
+            media_type="application/zip",
+            headers={"Content-Disposition": f'attachment; filename="zitex-{stack}-{project_id[:8]}.zip"'},
+        )
+
+    # ═════════════════════════════════════════════════════════════
+    # 🛒 LORA MARKETPLACE
+    # ═════════════════════════════════════════════════════════════
+    @router.post("/marketplace/publish")
+    async def marketplace_publish(request: Request, user=Depends(get_current_user)):
+        body = await request.json()
+        from modules.games.marketplace import publish_lora
+        try:
+            entry = await publish_lora(
+                db, user,
+                project_id=body.get("project_id"),
+                title=body.get("title", ""),
+                description=body.get("description", ""),
+                tags=body.get("tags") or [],
+                price=int(body.get("price") or 0),
+            )
+        except ValueError as e:
+            raise HTTPException(400, str(e))
+        return {"ok": True, "entry": entry}
+
+    @router.get("/marketplace")
+    async def marketplace_list(
+        search: str = "",
+        tags: str = "",
+        sort: str = "popular",
+        page: int = 1,
+        page_size: int = 20,
+    ):
+        from modules.games.marketplace import list_marketplace
+        tag_list = [t.strip() for t in tags.split(",") if t.strip()] if tags else None
+        return await list_marketplace(db, search, tag_list, sort, page, page_size)
+
+    @router.post("/marketplace/{marketplace_id}/install")
+    async def marketplace_install(marketplace_id: str, request: Request, user=Depends(get_current_user)):
+        body = await request.json()
+        target = body.get("target_project_id")
+        if not target:
+            raise HTTPException(400, "target_project_id مطلوب")
+        from modules.games.marketplace import install_lora
+        try:
+            r = await install_lora(db, user, marketplace_id, target)
+        except ValueError as e:
+            raise HTTPException(400, str(e))
+        return r
+
+    @router.post("/marketplace/{marketplace_id}/rate")
+    async def marketplace_rate(marketplace_id: str, request: Request, user=Depends(get_current_user)):
+        body = await request.json()
+        rating = int(body.get("rating") or 5)
+        from modules.games.marketplace import rate_lora
+        try:
+            return await rate_lora(db, user, marketplace_id, rating)
+        except ValueError as e:
+            raise HTTPException(400, str(e))
+
+    # ═════════════════════════════════════════════════════════════
+    # 🎮 UNITY SDK EXPORTER
+    # ═════════════════════════════════════════════════════════════
+    @router.get("/project/{project_id}/unity-manifest")
+    async def unity_manifest(project_id: str, request: Request):
+        """Public manifest endpoint — no auth required so Unity at runtime
+        can fetch it. Only approved assets are returned."""
+        proj = await db.game_projects.find_one(
+            {"id": project_id},
+            {"id": 1, "title": 1, "assets": 1, "lora": 1, "is_public_unity": 1, "user_id": 1},
+        )
+        if not proj:
+            raise HTTPException(404, "Project not found")
+        # If not marked public, require auth
+        if not proj.get("is_public_unity"):
+            try:
+                user = await get_current_user(request)  # type: ignore
+                if user.get("user_id") != proj.get("user_id"):
+                    raise HTTPException(403, "Project not public; owner only")
+            except HTTPException:
+                raise
+            except Exception:
+                raise HTTPException(403, "Project not public; owner only")
+        base = str(request.base_url).rstrip("/")
+        from modules.games.unity_sdk import build_manifest_json
+        return build_manifest_json(proj, base)
+
+    @router.get("/project/{project_id}/unity-sdk.zip")
+    async def unity_sdk_zip(project_id: str, request: Request, user=Depends(get_current_user)):
+        proj = await db.game_projects.find_one(
+            {"id": project_id, "user_id": user["user_id"]},
+            {"id": 1, "title": 1, "assets": 1, "lora": 1},
+        )
+        if not proj:
+            raise HTTPException(404, "Project not found")
+        from modules.games.unity_sdk import build_zip
+        from fastapi.responses import StreamingResponse
+        import io as _io
+        base = str(request.base_url).rstrip("/")
+        blob = build_zip(proj, base)
+        return StreamingResponse(
+            _io.BytesIO(blob),
+            media_type="application/zip",
+            headers={"Content-Disposition": f'attachment; filename="zitex-unity-{project_id[:8]}.zip"'},
+        )
+
+    @router.post("/project/{project_id}/unity-public")
+    async def toggle_unity_public(project_id: str, request: Request, user=Depends(get_current_user)):
+        body = await request.json()
+        is_public = bool(body.get("is_public"))
+        r = await db.game_projects.update_one(
+            {"id": project_id, "user_id": user["user_id"]},
+            {"$set": {"is_public_unity": is_public}},
+        )
+        if r.matched_count == 0:
+            raise HTTPException(404, "Project not found")
+        return {"ok": True, "is_public_unity": is_public}
+
+    # ═════════════════════════════════════════════════════════════
+    # 🎞️ SPRITE-SHEET GENERATION (game-ready animation frames)
+    # ═════════════════════════════════════════════════════════════
+    @router.post("/project/{project_id}/sprite-sheet")
+    async def sprite_sheet_endpoint(project_id: str, request: Request, user=Depends(get_current_user)):
+        proj = await db.game_projects.find_one(
+            {"id": project_id, "user_id": user["user_id"]}, {"id": 1}
+        )
+        if not proj:
+            raise HTTPException(404, "Project not found")
+        body = await request.json()
+        character = (body.get("character") or "").strip()
+        action = (body.get("action") or "walk").strip().lower()
+        frames = max(4, min(16, int(body.get("frames") or 8)))
+        if not character:
+            raise HTTPException(400, "character مطلوب — وصف الشخصية")
+        try:
+            from modules.games.sprite_sheets import generate_sprite_sheet
+            sheet = await generate_sprite_sheet(character, action, project_id, frames)
+        except Exception as e:
+            logger.exception(f"[sprite-sheet] failed: {e}")
+            raise HTTPException(500, f"فشل توليد sprite-sheet: {str(e)[:200]}")
+
+        raw = sheet.pop("_bytes", None)
+        if raw:
+            try:
+                from modules.games.persistence import persist_bytes as _persist
+                await _persist(db, sheet["id"], raw, "image/png", project_id)
+            except Exception:
+                pass
+        await db.game_projects.update_one(
+            {"id": project_id},
+            {"$push": {"assets.sprite_sheets": sheet}},
+        )
+        return {"ok": True, "sprite_sheet": sheet}
+
     # ───────────────────────────────────────────────────────────
     # 🩺 GET /health — public lightweight diagnostic for production debug
     # Returns version markers so the owner can verify backend deployment.
@@ -2402,7 +2666,7 @@ def create_game_router(db, get_current_user):
         return {
             "ok": True,
             "service": "games",
-            "build_marker": "v10_2026_06_05_fal_key_hot_swap",  # bump when shipping features
+            "build_marker": "v11_2026_06_05_pro_studio_6_features",  # bump when shipping features
             "features": {
                 "image_generation": True,
                 "vision_verification": True,
@@ -2411,9 +2675,15 @@ def create_game_router(db, get_current_user):
                 "image_edit_redux": True,
                 "qa_analyze": True,
                 "soft_delete_trash": True,
-                "override_socratic_when_explicit": True,  # ← commit fd8f2de
-                "tag_parser_lenient": True,  # ← commit 0f7ddda
-                "lora_style_training": True,  # ← NEW: per-project Flux LoRA
+                "override_socratic_when_explicit": True,
+                "tag_parser_lenient": True,
+                "lora_style_training": True,
+                "voice_acting": True,               # 🎙️ NEW
+                "level_design_generator": True,    # 🗺️ NEW
+                "multiplayer_scaffolds": True,     # 🌐 NEW
+                "lora_marketplace": True,          # 🛒 NEW
+                "unity_sdk_export": True,          # 🎮 NEW
+                "sprite_sheets": True,             # 🎞️ NEW
             },
             "fal_configured": bool(os.environ.get("FAL_KEY")),
             "anthropic_configured": bool(os.environ.get("ANTHROPIC_API_KEY")),
