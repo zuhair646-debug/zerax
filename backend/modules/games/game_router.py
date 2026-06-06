@@ -2339,9 +2339,13 @@ def create_game_router(db, get_current_user):
             raise HTTPException(400, "صيغة المفتاح غير صحيحة. لازم يكون مثل: <uuid>:<hash>")
 
         # 🧪 Test the key against fal.ai — generate a tiny 1-step image (schnell, ~$0.0003)
+        # If Fal rejects (e.g. production network can't reach Fal), still save the key —
+        # owner knows what they pasted; failures will surface at actual generation time.
         import asyncio as _aio
+        test_status = "untested"
+        test_error = None
         try:
-            os.environ["FAL_KEY"] = new_key  # set temporarily for the test
+            os.environ["FAL_KEY"] = new_key
             import fal_client
             def _sync_test():
                 handler = fal_client.submit(
@@ -2351,13 +2355,15 @@ def create_game_router(db, get_current_user):
                 return handler.get()
             loop = _aio.get_event_loop()
             result = await loop.run_in_executor(None, _sync_test)
-            if not result or not result.get("images"):
-                raise HTTPException(400, "Fal رفض المفتاح: ما أرجع صورة اختبارية")
-        except HTTPException:
-            raise
+            if result and result.get("images"):
+                test_status = "verified"
+            else:
+                test_status = "untested"
+                test_error = "Fal returned no image"
         except Exception as e:
-            err = str(e)[:200]
-            raise HTTPException(400, f"المفتاح فاسد — Fal.ai رفضه: {err}")
+            test_status = "untested"
+            test_error = str(e)[:200]
+            logger.warning(f"[set-fal-key] test failed (saving anyway): {test_error}")
 
         # ✅ Key works. Save to BOTH MongoDB (persistent) AND JSON vault (legacy)
         from modules.games.creds_store import kv_set as _kvset
@@ -2380,11 +2386,16 @@ def create_game_router(db, get_current_user):
                 except Exception:
                     pass
 
-        logger.warning(f"[games][set-fal-key] owner={user['user_id']} updated FAL_KEY (preview={new_key[:8]}...{new_key[-4:]})")
+        logger.warning(f"[games][set-fal-key] owner={user['user_id']} updated FAL_KEY (preview={new_key[:8]}...{new_key[-4:]}, test={test_status})")
         return {
             "ok": True,
-            "message": "تم تحديث FAL_KEY واختباره ضد Fal.ai بنجاح — جرّب توليد صورة الحين.",
+            "message": (
+                f"تم حفظ FAL_KEY بنجاح — الحالة: {test_status}"
+                + (f" (تحذير: {test_error})" if test_error else "")
+            ),
             "preview": new_key[:8] + "..." + new_key[-4:],
+            "test_status": test_status,
+            "test_error": test_error,
         }
 
     @router.delete("/admin/fal-key")
@@ -2737,7 +2748,7 @@ def create_game_router(db, get_current_user):
         return {
             "ok": True,
             "service": "games",
-            "build_marker": "v14_2026_06_06_mongo_persistent_keys",
+            "build_marker": "v15_2026_06_06_button_hidden_keys_save_unconditional",
             "features": {
                 "image_generation": True,
                 "vision_verification": True,

@@ -1076,8 +1076,8 @@ export default function WebGamesStudio({ user }) {
         accentColor="amber"
       />
 
-      {/* Owner-only Fal-key fixer (floating pill, bottom-right) */}
-      <FalKeyManager accentColor="amber" />
+      {/* Owner-only Fal-key fixer — DISABLED per user request: keys managed internally */}
+      {/* <FalKeyManager accentColor="amber" /> */}
     </div>
   );
 }

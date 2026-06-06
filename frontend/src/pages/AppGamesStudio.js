@@ -953,8 +953,8 @@ export default function AppGamesStudio({ user }) {
         accentColor="blue"
       />
 
-      {/* Owner-only Fal-key fixer */}
-      <FalKeyManager accentColor="indigo" />
+      {/* Owner-only Fal-key fixer — DISABLED per user request: keys managed internally */}
+      {/* <FalKeyManager accentColor="indigo" /> */}
     </div>
   );
 }
