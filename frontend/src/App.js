@@ -76,6 +76,10 @@ import AdminAIReadiness from '@/pages/AdminAIReadiness';
 import AdminLearning from '@/pages/AdminLearning';
 import SecurityControlRoom from '@/pages/SecurityControlRoom';
 import HoneypotCatcher from '@/pages/HoneypotCatcher';
+import Pricing from '@/pages/Pricing';
+import Billing from '@/pages/Billing';
+import PricingSuccess from '@/pages/PricingSuccess';
+import PricingAdmin from '@/pages/PricingAdmin';
 import Companion from '@/pages/Companion';
 import '@/App.css';
 
@@ -141,7 +145,7 @@ function App() {
           <Route path="/login" element={<LoginPage setUser={setUser} />} />
           <Route path="/register" element={<RegisterPage setUser={setUser} />} />
           <Route path="/auth-callback" element={<AuthCallback setUser={setUser} />} />
-          <Route path="/pricing" element={<PricingPage user={user} />} />
+          <Route path="/pricing-old" element={<PricingPage user={user} />} />
           <Route path="/payment" element={<ProtectedRoute><PaymentPage user={user} /></ProtectedRoute>} />
           
           <Route path="/dashboard" element={<ProtectedRoute><ClientDashboard user={user} setUser={setUser} /></ProtectedRoute>} />
@@ -199,7 +203,12 @@ function App() {
           <Route path="/admin/ai-readiness" element={<ProtectedRoute adminOnly><AdminAIReadiness user={user} /></ProtectedRoute>} />
           <Route path="/admin/learning" element={<ProtectedRoute adminOnly><AdminLearning user={user} /></ProtectedRoute>} />
           <Route path="/admin/security" element={<ProtectedRoute adminOnly><SecurityControlRoom user={user} /></ProtectedRoute>} />
+          <Route path="/admin/pricing" element={<ProtectedRoute adminOnly><PricingAdmin user={user} /></ProtectedRoute>} />
           <Route path="/companion" element={<ProtectedRoute><Companion user={user} setUser={setUser} /></ProtectedRoute>} />
+          {/* 💰 Pricing & Billing */}
+          <Route path="/pricing" element={<Pricing user={user} />} />
+          <Route path="/billing" element={<ProtectedRoute><Billing user={user} /></ProtectedRoute>} />
+          <Route path="/pricing/success" element={<ProtectedRoute><PricingSuccess user={user} /></ProtectedRoute>} />
           {/* 🛡️ Honeypot catch-all — bans scanners hitting /.env, /wp-admin, etc. */}
           <Route path="*" element={<HoneypotCatcher />} />
         </Routes>

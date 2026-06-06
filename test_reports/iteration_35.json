@@ -1,0 +1,35 @@
+{
+  "summary": "Full backend test of Zitex Pricing & Billing system (iteration_35). 25/25 tests passed covering catalog endpoints, promo engine, user billing flow with real PayPal LIVE order creation, admin endpoints, auth guards, PDF generation, and regression for auth + security center.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_pricing_billing.py",
+    "/app/test_reports/pytest/pricing_billing_iter35.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "router.py is ~580 lines — still manageable but approaching the 700-line guideline. Future additions (refunds, webhook handlers) should split capture/invoice logic into a service module.",
+    "Invoice PDFs are stored base64-encoded inside the Mongo document (pdf_b64). For scale, switch to GridFS or S3 — large documents will slow down list queries even with the projection.",
+    "checkout endpoint performs a count_documents on paypal_orders every call to detect first purchase. Add an index on {user_id, status} or set a boolean flag on user doc after first capture for O(1) lookups.",
+    "Promo redemption inside /capture is wrapped in a best-effort try/except — silent failures hide bugs. Recommend at least bumping a metric/log severity to ERROR when this fails.",
+    "/admin/pricing/test-paypal creates a real LIVE $1 order on every admin click — acceptable since no human approves, but consider adding a confirmation flag or rate-limit to avoid log noise in PayPal dashboard.",
+    "TAX_CONFIG.country is hard-coded 'SA' in the catalog but tax_config endpoint returns full doc — fine for now, but when multiple currencies/countries are added this needs a per-user/region lookup."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_pricing_billing.py (NEW)"
+  ],
+  "success_rate": {"backend": "100%", "frontend": "N/A (skipped per request)"},
+  "test_credentials": "Admin owner@zitex.com / owner123 from /app/memory/test_credentials.md. Test user registered dynamically via /api/auth/register (must use .com TLD — .test is rejected as reserved by pydantic EmailStr).",
+  "seed_data_creation": "Each run registers one fresh TEST_pricing_<uuid>@example.com user; LAUNCH50 redeemed once on that user (max_uses_per_user=1). Admin creates+deactivates TESTBLACK20_<rand> promo. Multiple PayPal LIVE orders (subscription Indie $14.50 + pack Power $50 + admin test-paypal $1) are created each run — they remain CREATED/never captured (no human approves). 2 default promos LAUNCH50 + WELCOME25 confirmed seeded.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Backend BASE_URL is loaded from REACT_APP_BACKEND_URL with /app/frontend/.env fallback. Use @example.com (not .test/.localhost) for register payloads. fresh_user fixture has session scope so promo LAUNCH50 (max_uses_per_user=1) is only redeemed once across the whole run. PayPal is LIVE — checkouts return real paypal.com approval_url. NEVER call /api/pricing/capture in tests (would charge real cards if approved). PDF smoke test imports modules.pricing.invoices.generate_invoice_pdf directly with a mock dict — verifies %PDF header + non-trivial size, doesn't validate Arabic glyph rendering visually. To extend, add tests for: /api/pricing/invoices/{id}/pdf download after a real capture (cannot without payment), pack with promo, yearly billing_cycle pricing.",
+  "rca of the issue": "N/A — all tests pass first time after fixing two test-script issues: (1) test file missing fallback for REACT_APP_BACKEND_URL when pytest is run outside of supervisor context, (2) pydantic EmailStr rejects .test TLD as reserved — switched to @example.com."
+}

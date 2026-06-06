@@ -3849,6 +3849,25 @@ except Exception as _sece:
     logging.getLogger(__name__).error(f"security module failed: {_sece}")
 
 
+# 💰 Pricing & Billing — credit-based subscription + PayPal + PDF invoices
+try:
+    from modules.pricing import create_router as _pr_create, seed_pricing_defaults
+
+    _pr_user_router, _pr_admin_router = _pr_create(db, get_current_user, require_admin)
+    app.include_router(_pr_user_router)
+    app.include_router(_pr_admin_router)
+
+    @app.on_event("startup")
+    async def _seed_pricing():
+        await seed_pricing_defaults(db)
+        logging.getLogger(__name__).info("✅ pricing module ready (plans/packs/promos seeded)")
+
+    logging.getLogger(__name__).info("✅ pricing router mounted (/api/pricing/* + /api/admin/pricing/*)")
+except Exception as _pre:
+    import traceback as _tb
+    logging.getLogger(__name__).error(f"pricing module failed: {_pre}\n{_tb.format_exc()[:500]}")
+
+
 @app.get("/api/iframe-test")
 async def serve_iframe_test():
     """Deprecated — handled by modules.games.routes. Kept as fallback."""
