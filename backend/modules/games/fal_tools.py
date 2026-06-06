@@ -601,6 +601,24 @@ async def parse_and_generate_assets(
         return []
 
     matches = matches[:max_assets_per_turn]
+    # 🚨 SAFETY: drop tags that look like template placeholders (AI emitting literal 'prompt'/'ID')
+    _PLACEHOLDER_PATTERNS = re.compile(
+        r"^(prompt|english\s+prompt|english\s+new\s+subject|english\s+edit|english\s+scene|english\s+motion\s+prompt|description|ID|ASSET_ID|<.*>|placeholder)\s*$",
+        re.IGNORECASE,
+    )
+    filtered_matches = []
+    for raw_tag, raw_body in matches:
+        body_text = (raw_body or "").strip()
+        if _PLACEHOLDER_PATTERNS.match(body_text):
+            logger.warning(f"[fal] dropping placeholder tag <<{raw_tag}: {body_text}>> — AI used template text literally")
+            continue
+        # Also reject tags whose first segment is bare 'prompt'
+        first_seg = body_text.split("|", 1)[0].strip()
+        if _PLACEHOLDER_PATTERNS.match(first_seg):
+            logger.warning(f"[fal] dropping tag with placeholder first segment: {body_text[:80]}")
+            continue
+        filtered_matches.append((raw_tag, raw_body))
+    matches = filtered_matches
     tasks = []
 
     # 🔍 Build a quick lookup of project's approved images by asset_id (for IMG_REF/IMG_EDIT/COMPOSE)

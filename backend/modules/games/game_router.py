@@ -1131,15 +1131,16 @@ def create_game_router(db, get_current_user):
                 "═══════════════════════════════════════════════════════════════════\n\n"
                 "🚨 **قواعد إلزامية لمنع توليد عشوائي** (تطبيقها فوري):\n"
                 "1. **ممنوع** `<<IMG_PRO>>` لتوليد شي شبيه لأصل في القائمة فوق. بدّلها بـ:\n"
-                "   • `<<IMG_REF: english new subject | ref: ID>>` (style-lock من ID القائمة)\n"
-                "   • `<<IMG_EDIT: english edit | ref: ID>>` (تعديل دقيق على نفس الصورة)\n"
-                "   • `<<COMPOSE: english scene | refs: id1, id2, id3>>` (دمج 2-4 معتمدة)\n"
-                "   • `<<BATCH: english prompt | count: 6 | variations: slight>>` (6 variations)\n"
-                "   • `<<ANIMATE: english motion prompt | img: ABSOLUTE_URL_من_الجدول>>` (تحريك Kling 5-10s)\n"
-                "2. لو المالك قال 'عدّل الإضاءة' → IMG_EDIT مع ID الأصل المعني\n"
-                "3. لو قال 'اجمع كل الموارد' → COMPOSE مع IDs المتعددة\n"
-                "4. لو قال '6 حقول قمح' → BATCH count:6 (تاج واحد، 6 صور دفعة)\n"
-                "5. لو قال 'حرّك الصورة' → ANIMATE مع URL من العمود فوق\n"
+                "   • `<<IMG_REF: a silver mountain peak | ref: <استبدل_بـID_حقيقي_من_الجدول>>` ← انسخ ID حرفياً من العمود فوق\n"
+                "   • `<<IMG_EDIT: brighten the lighting and add morning mist | ref: <ID_حقيقي>>` ← مع ID حرفي\n"
+                "   • `<<COMPOSE: a peaceful village scene combining the resources | refs: <ID1>, <ID2>, <ID3>>` ← مع IDs حرفية\n"
+                "   • `<<BATCH: golden wheat field isometric AAA | count: 6 | variations: slight>>` ← prompt حقيقي\n"
+                "   • `<<ANIMATE: gentle wind rustling through the wheat | img: <ABSOLUTE_URL_من_العمود_فوق>>` ← URL حرفي\n"
+                "⚠️ **مهم جداً**: لا تكتب أبداً كلمة 'prompt' أو 'ID' حرفياً في التاج — استبدلها دائماً بقيمة حقيقية من الجدول.\n"
+                "2. لو المالك قال 'عدّل الإضاءة' → IMG_EDIT مع ID الأصل المعني (انسخ ID من العمود)\n"
+                "3. لو قال 'اجمع كل الموارد' → COMPOSE مع IDs حقيقية متعددة\n"
+                "4. لو قال '6 حقول قمح' → BATCH count:6 (تاج واحد، prompt إنجليزي كامل)\n"
+                "5. لو قال 'حرّك الصورة' → ANIMATE مع URL كامل من العمود (يبدأ بـhttps://)\n"
                 "═══════════════════════════════════════════════════════════════════\n"
             )
 
@@ -3331,7 +3332,7 @@ def create_game_router(db, get_current_user):
         return {
             "ok": True,
             "service": "games",
-            "build_marker": "v27_2026_02_07_full_asset_id_table_budget",
+            "build_marker": "v28_2026_02_07_placeholder_validator",
             "features": {
                 "image_generation": True,
                 "vision_verification": True,
