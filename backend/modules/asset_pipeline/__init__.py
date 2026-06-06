@@ -240,4 +240,113 @@ def create_router(db, get_current_user):
         # Default: markdown
         return Response(content=body, media_type="text/markdown; charset=utf-8")
 
+    # ────────────────────────────────────────────────────────────
+    # 5️⃣ Visual Similarity API (task 19)
+    # POST /api/asset-pipeline/visual-compare
+    # Body: { url_a, url_b }  OR  { asset_id_a, asset_id_b, project_id }
+    # Uses GPT-4o Vision via OPENAI_DIRECT_KEY (independent, no Emergent).
+    # ────────────────────────────────────────────────────────────
+    @router.post("/visual-compare")
+    async def visual_compare(payload: Dict[str, Any], user=Depends(get_current_user)):
+        """Returns a structured similarity score + analysis using GPT-4o Vision."""
+        import base64 as _b64
+        import httpx
+
+        # Resolve image bytes for both sides
+        def _local_to_bytes(project_id: str, asset_id: str) -> Optional[bytes]:
+            fpath = f"/app/backend/uploads/games/{project_id}/assets/{asset_id}.png"
+            if os.path.exists(fpath):
+                with open(fpath, "rb") as f:
+                    return f.read()
+            return None
+
+        async def _url_to_bytes(url: str) -> Optional[bytes]:
+            try:
+                if url.startswith("/api/games/asset-image/"):
+                    parts = url.rsplit("/", 2)
+                    pid, fname = parts[-2], parts[-1].replace(".png", "")
+                    return _local_to_bytes(pid, fname)
+                async with httpx.AsyncClient(timeout=30) as c:
+                    r = await c.get(url, follow_redirects=True)
+                    r.raise_for_status()
+                    return r.content
+            except Exception as e:
+                logger.warning(f"[visual-compare] url fetch failed: {e}")
+                return None
+
+        bytes_a = bytes_b = None
+        if payload.get("asset_id_a") and payload.get("asset_id_b") and payload.get("project_id"):
+            pid = payload["project_id"]
+            bytes_a = _local_to_bytes(pid, payload["asset_id_a"])
+            bytes_b = _local_to_bytes(pid, payload["asset_id_b"])
+        elif payload.get("url_a") and payload.get("url_b"):
+            bytes_a = await _url_to_bytes(payload["url_a"])
+            bytes_b = await _url_to_bytes(payload["url_b"])
+        if not bytes_a or not bytes_b:
+            raise HTTPException(400, "could not resolve both images")
+
+        # Use GPT-4o for vision comparison via direct OpenAI key
+        oai_key = os.environ.get("OPENAI_DIRECT_KEY") or os.environ.get("OPENAI_API_KEY") or ""
+        if not oai_key:
+            raise HTTPException(500, "OPENAI_DIRECT_KEY missing")
+
+        # Downscale to keep request small
+        try:
+            from PIL import Image
+            import io as _io
+            def _shrink(b: bytes) -> str:
+                with Image.open(_io.BytesIO(b)) as im:
+                    im = im.convert("RGB")
+                    if max(im.size) > 768:
+                        ratio = 768 / max(im.size)
+                        im = im.resize((int(im.size[0]*ratio), int(im.size[1]*ratio)), Image.LANCZOS)
+                    out = _io.BytesIO()
+                    im.save(out, format="JPEG", quality=80)
+                    return _b64.b64encode(out.getvalue()).decode()
+            b64_a, b64_b = _shrink(bytes_a), _shrink(bytes_b)
+        except Exception as e:
+            raise HTTPException(500, f"image preprocess failed: {e}")
+
+        prompt = (
+            "Compare these two images carefully and respond ONLY with a JSON object of shape:\n"
+            "{\n"
+            '  "similarity_score": 0.0-1.0,\n'
+            '  "color_match": 0.0-1.0,\n'
+            '  "composition_match": 0.0-1.0,\n'
+            '  "style_match": 0.0-1.0,\n'
+            '  "differences": ["list of visual differences"],\n'
+            '  "suggestions": ["list of edits to make image B closer to image A"],\n'
+            '  "verdict": "EXCELLENT" | "GOOD_MATCH" | "NEEDS_ADJUSTMENT" | "POOR_MATCH"\n'
+            "}\n"
+            "Image A is the REFERENCE. Image B is the candidate. Be precise and quantitative."
+        )
+
+        async with httpx.AsyncClient(timeout=60) as c:
+            r = await c.post(
+                "https://api.openai.com/v1/chat/completions",
+                headers={"Authorization": f"Bearer {oai_key}", "Content-Type": "application/json"},
+                json={
+                    "model": "gpt-4o-mini",  # cost-effective vision model
+                    "max_tokens": 600,
+                    "messages": [{
+                        "role": "user",
+                        "content": [
+                            {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{b64_a}"}},
+                            {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{b64_b}"}},
+                            {"type": "text", "text": prompt},
+                        ],
+                    }],
+                    "response_format": {"type": "json_object"},
+                },
+            )
+            if r.status_code != 200:
+                raise HTTPException(502, f"openai vision error: {r.status_code} {r.text[:200]}")
+            data = r.json()
+            raw = data["choices"][0]["message"]["content"]
+            try:
+                parsed = json.loads(raw)
+            except Exception:
+                parsed = {"raw": raw}
+        return {"ok": True, "analysis": parsed}
+
     return router
