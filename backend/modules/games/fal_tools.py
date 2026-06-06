@@ -511,7 +511,7 @@ async def generate_sfx(prompt: str, project_id: str, duration: int = 5) -> Dict[
 # Normalised tag names below mapped to canonical generator types.
 TAG_RE = re.compile(
     r"<<\s*"
-    r"(IMG[_\s-]?PRO|MODEL[_\s-]?3D|3D[_\s-]?MODEL|3D|ANIM(?:ATE)?|SOUNDTRACK|MUSIC|SOUND[_\s-]?FX|SFX)"
+    r"(IMG[_\s-]?PRO|IMG[_\s-]?REF|IMG[_\s-]?EDIT|COMPOSE|MODEL[_\s-]?3D|3D[_\s-]?MODEL|3D|ANIM(?:ATE)?|SOUNDTRACK|MUSIC|SOUND[_\s-]?FX|SFX)"
     r"\s*[:：\-]?\s*"
     r"(.+?)"
     r"\s*>>",
@@ -524,6 +524,12 @@ def _canon_tag(raw: str) -> str:
     t = (raw or "").strip().upper().replace("-", "_").replace(" ", "_")
     if t in ("IMG_PRO", "IMGPRO"):
         return "IMG_PRO"
+    if t in ("IMG_REF", "IMGREF"):
+        return "IMG_REF"
+    if t in ("IMG_EDIT", "IMGEDIT"):
+        return "IMG_EDIT"
+    if t in ("COMPOSE",):
+        return "COMPOSE"
     if t in ("3D", "MODEL_3D", "MODEL3D", "3D_MODEL", "3DMODEL"):
         return "3D"
     if t in ("ANIM", "ANIMATE"):
@@ -595,6 +601,43 @@ async def parse_and_generate_assets(
     matches = matches[:max_assets_per_turn]
     tasks = []
 
+    # 🔍 Build a quick lookup of project's approved images by asset_id (for IMG_REF/IMG_EDIT/COMPOSE)
+    approved_by_id: Dict[str, Dict[str, Any]] = {}
+    if db is not None:
+        try:
+            _proj_full = await db.game_projects.find_one(
+                {"id": project_id},
+                {"phases": 1},
+            )
+            for _phase in ((_proj_full or {}).get("phases") or {}).values():
+                for _msg in (_phase.get("messages") or []):
+                    for _a in (_msg.get("generated_assets") or []):
+                        if (_a.get("type") == "image" and _a.get("approved")
+                                and _a.get("id") and _a.get("image_url")):
+                            approved_by_id[_a["id"]] = _a
+        except Exception as _le:
+            logger.warning(f"[fal] approved lookup failed: {_le}")
+
+    def _resolve_ref(ref_str: str) -> Optional[str]:
+        """Given an asset id or partial id, return the full local file path
+        if the image exists on disk. Returns None if missing."""
+        ref_str = (ref_str or "").strip()
+        if not ref_str:
+            return None
+        # Exact id match first
+        asset = approved_by_id.get(ref_str)
+        if not asset:
+            # Try prefix match (LLM may abbreviate UUID)
+            for aid, a in approved_by_id.items():
+                if aid.startswith(ref_str) or ref_str.startswith(aid[:8]):
+                    asset = a
+                    break
+        if not asset:
+            return None
+        fname = (asset.get("image_url") or "").rsplit("/", 1)[-1]
+        fpath = f"{UPLOAD_ROOT}/{project_id}/assets/{fname}"
+        return fpath if os.path.exists(fpath) else None
+
     for raw_tag_type, raw_body in matches:
         tag_type = _canon_tag(raw_tag_type)
         body = raw_body.strip()
@@ -608,6 +651,57 @@ async def parse_and_generate_assets(
                     ))
                 else:
                     tasks.append(generate_flux_pro(body, project_id, style_profile=style_profile))
+            elif tag_type == "IMG_REF":
+                # syntax: <<IMG_REF: english prompt | ref: ASSET_ID>>
+                ref_id, prompt_part = "", body
+                if "ref:" in body.lower():
+                    parts = re.split(r"\|", body, maxsplit=1)
+                    prompt_part = parts[0].strip()
+                    if len(parts) > 1:
+                        ref_id = re.sub(r"^\s*ref\s*[:=]\s*", "", parts[1].strip(), flags=re.IGNORECASE).strip()
+                ref_path = _resolve_ref(ref_id)
+                if not ref_path:
+                    logger.warning(f"[fal] IMG_REF: ref '{ref_id}' not found in approved — falling back to plain IMG_PRO")
+                    tasks.append(generate_flux_pro(prompt_part, project_id, style_profile=style_profile))
+                else:
+                    # Use Flux Redux to remix the approved image with the new prompt
+                    # (keeps style/colors/composition while changing the subject)
+                    tasks.append(_img_ref_remix(ref_path, prompt_part, project_id, style_profile))
+            elif tag_type == "IMG_EDIT":
+                # syntax: <<IMG_EDIT: edit prompt | ref: ASSET_ID>>
+                ref_id, edit_prompt = "", body
+                if "ref:" in body.lower():
+                    parts = re.split(r"\|", body, maxsplit=1)
+                    edit_prompt = parts[0].strip()
+                    if len(parts) > 1:
+                        ref_id = re.sub(r"^\s*ref\s*[:=]\s*", "", parts[1].strip(), flags=re.IGNORECASE).strip()
+                ref_path = _resolve_ref(ref_id)
+                if not ref_path:
+                    logger.warning(f"[fal] IMG_EDIT: ref '{ref_id}' not found — skipping")
+                    continue
+                # Build a /api/games/asset-image URL for edit_image_with_prompt
+                asset = approved_by_id.get(ref_id) or next(
+                    (a for aid, a in approved_by_id.items() if aid.startswith(ref_id)),
+                    None,
+                )
+                if asset:
+                    tasks.append(edit_image_with_prompt(asset["image_url"], edit_prompt, project_id))
+            elif tag_type == "COMPOSE":
+                # syntax: <<COMPOSE: scene description | refs: id1, id2, id3>>
+                refs_str, scene_desc = "", body
+                if "refs:" in body.lower() or "ref:" in body.lower():
+                    parts = re.split(r"\|", body, maxsplit=1)
+                    scene_desc = parts[0].strip()
+                    if len(parts) > 1:
+                        refs_str = re.sub(r"^\s*refs?\s*[:=]\s*", "", parts[1].strip(), flags=re.IGNORECASE).strip()
+                ref_ids = [r.strip() for r in re.split(r"[,،]", refs_str) if r.strip()]
+                ref_paths = [_resolve_ref(rid) for rid in ref_ids]
+                ref_paths = [p for p in ref_paths if p]
+                if len(ref_paths) < 2:
+                    logger.warning(f"[fal] COMPOSE: need ≥2 valid refs (got {len(ref_paths)}) — falling back to IMG_PRO")
+                    tasks.append(generate_flux_pro(scene_desc, project_id, style_profile=style_profile))
+                else:
+                    tasks.append(_compose_scene_from_refs(ref_paths, scene_desc, project_id))
             elif tag_type == "3D":
                 tasks.append(generate_3d_model(body, project_id))
             elif tag_type == "ANIMATE":
@@ -776,3 +870,168 @@ async def edit_image_with_prompt(
         except Exception as e:
             errors.append(f"nano-banana-edit: {str(e)[:160]}")
     raise RuntimeError("تعديل الصورة فشل من كل المزودات: " + " | ".join(errors))
+
+
+# ════════════════════════════════════════════════════════════════
+# 9) IMG_REF — generate a NEW image that locks onto an approved image's style
+# Uses Nano Banana (Gemini) with the approved image as a style anchor.
+# Falls back to Flux Pro Ultra with a textual style-extraction prompt if vision fails.
+# ════════════════════════════════════════════════════════════════
+async def _img_ref_remix(
+    ref_local_path: str,
+    new_prompt: str,
+    project_id: str,
+    style_profile: str = "stylized",
+) -> Dict[str, Any]:
+    """Generate a new image that copies the visual DNA of the reference image
+    but renders a NEW subject defined by `new_prompt`.
+    Order:
+      1) Nano Banana (Gemini) — accepts image + text, best for style-lock.
+      2) Flux Pro Ultra fallback (textual style anchor only).
+    """
+    em_key = (os.environ.get("EMERGENT_LLM_KEY") or "").strip()
+    if em_key:
+        try:
+            import base64 as _b64
+            with open(ref_local_path, "rb") as fh:
+                ref_bytes = fh.read()
+            from emergentintegrations.llm.chat import LlmChat, UserMessage
+            try:
+                from emergentintegrations.llm.chat import ImageContent  # type: ignore
+            except Exception:
+                ImageContent = None  # type: ignore
+            chat = LlmChat(
+                api_key=em_key,
+                session_id=f"games-imgref-{uuid.uuid4().hex[:8]}",
+                system_message=(
+                    "You are an expert game art director. Given a reference image and a new subject, "
+                    "you render the new subject in the EXACT same style (colors, lighting, brushwork, "
+                    "perspective, mood) as the reference."
+                ),
+            )
+            chat.with_model("gemini", "gemini-2.5-flash-image-preview")
+            prompt = (
+                f"Reference style attached. Render this new subject in the EXACT same visual DNA: "
+                f"{new_prompt}. Match the reference's lighting angle, color palette, brush style, "
+                f"and perspective. Output a single high-quality image."
+            )
+            msg_args: Dict[str, Any] = {"text": prompt}
+            if ImageContent is not None:
+                try:
+                    msg_args["file_contents"] = [ImageContent(image_base64=_b64.b64encode(ref_bytes).decode())]
+                except Exception:
+                    pass
+            res = await chat.send_message(UserMessage(**msg_args))
+            img_b64 = None
+            if hasattr(res, "images") and res.images:
+                img_b64 = res.images[0]
+            if not img_b64 and isinstance(res, str) and "base64," in res:
+                img_b64 = res.split("base64,", 1)[1]
+            if img_b64:
+                img_bytes = _b64.b64decode(img_b64.split(",")[-1])
+                saved = _save_image_bytes(img_bytes, project_id)
+                logger.info(f"[games][img_ref] ✅ nano-banana style-locked render ({len(img_bytes)//1024}KB)")
+                return {
+                    "id": saved["id"],
+                    "type": "image",
+                    "subtype": "img-ref-nano-banana",
+                    "image_url": saved["image_url"],
+                    "cdn_url": None,
+                    "_bytes": img_bytes,
+                    "prompt": new_prompt,
+                    "name": new_prompt[:80],
+                    "approved": False,
+                    "ref_source": ref_local_path,
+                    "created_at": datetime.now(timezone.utc).isoformat(),
+                }
+        except Exception as e:
+            logger.warning(f"[games][img_ref] nano-banana failed: {e} — trying Flux Pro fallback")
+
+    # Fallback: plain Flux Pro Ultra with an explicit "match this style" anchor
+    augmented = f"{new_prompt}. Style: identical to the previously approved asset (same palette, lighting, perspective, brush). Maintain visual consistency."
+    return await generate_flux_pro(augmented, project_id, style_profile=style_profile)
+
+
+# ════════════════════════════════════════════════════════════════
+# 10) COMPOSE — combine multiple approved images into one cohesive scene
+# Uses existing scene_composer module (Flux Redux multi-image merge).
+# ════════════════════════════════════════════════════════════════
+async def _compose_scene_from_refs(
+    ref_local_paths: List[str],
+    scene_description: str,
+    project_id: str,
+) -> Dict[str, Any]:
+    """Combine 2-4 approved images into one cohesive composite scene.
+    Uses Nano Banana (Gemini) — supports multi-image input + text instruction.
+    Falls back to Flux Pro Ultra with strong textual description if Gemini fails.
+    """
+    em_key = (os.environ.get("EMERGENT_LLM_KEY") or "").strip()
+    refs = ref_local_paths[:4]
+    if em_key and refs:
+        try:
+            import base64 as _b64
+            from emergentintegrations.llm.chat import LlmChat, UserMessage
+            try:
+                from emergentintegrations.llm.chat import ImageContent  # type: ignore
+            except Exception:
+                ImageContent = None  # type: ignore
+            chat = LlmChat(
+                api_key=em_key,
+                session_id=f"games-compose-{uuid.uuid4().hex[:8]}",
+                system_message=(
+                    "You are a master art director. Compose ONE cohesive cinematic scene that "
+                    "includes all the reference subjects in a single environment with unified "
+                    "lighting and color grade. Maintain each reference's identity."
+                ),
+            )
+            chat.with_model("gemini", "gemini-2.5-flash-image-preview")
+            prompt = (
+                f"Compose ONE cohesive cinematic scene that includes ALL of the reference subjects "
+                f"in a single environment. {scene_description}. Maintain each reference's "
+                f"identity (silhouette, palette, signature details). Apply a unified light source, "
+                f"color grade, and depth-of-field. AAA studio composition."
+            )
+            msg_args: Dict[str, Any] = {"text": prompt}
+            if ImageContent is not None:
+                file_contents = []
+                for p in refs:
+                    try:
+                        with open(p, "rb") as fh:
+                            file_contents.append(ImageContent(image_base64=_b64.b64encode(fh.read()).decode()))
+                    except Exception:
+                        pass
+                if file_contents:
+                    msg_args["file_contents"] = file_contents
+            res = await chat.send_message(UserMessage(**msg_args))
+            img_b64 = None
+            if hasattr(res, "images") and res.images:
+                img_b64 = res.images[0]
+            if not img_b64 and isinstance(res, str) and "base64," in res:
+                img_b64 = res.split("base64,", 1)[1]
+            if img_b64:
+                img_bytes = _b64.b64decode(img_b64.split(",")[-1])
+                saved = _save_image_bytes(img_bytes, project_id)
+                logger.info(f"[games][compose] ✅ nano-banana composed scene from {len(refs)} refs ({len(img_bytes)//1024}KB)")
+                return {
+                    "id": saved["id"],
+                    "type": "image",
+                    "subtype": "compose-nano-banana",
+                    "image_url": saved["image_url"],
+                    "cdn_url": None,
+                    "_bytes": img_bytes,
+                    "prompt": scene_description,
+                    "name": scene_description[:80],
+                    "approved": False,
+                    "composed_from": len(refs),
+                    "created_at": datetime.now(timezone.utc).isoformat(),
+                }
+        except Exception as e:
+            logger.warning(f"[games][compose] nano-banana failed: {e} — falling back to Flux Pro textual")
+    # Fallback: Flux Pro Ultra with a detailed compositional prompt
+    listing = ", ".join(f"subject #{i+1} (preserve its identity)" for i in range(len(refs)))
+    prompt = (
+        f"Single cinematic composition featuring: {listing}, arranged in a believable layout. "
+        f"Scene goal: {scene_description}. Cohesive lighting from one source, unified color grade, "
+        f"AAA game studio composition, ultra-detailed."
+    )
+    return await generate_flux_pro(prompt, project_id, style_profile="stylized")

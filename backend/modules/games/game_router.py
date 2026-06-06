@@ -990,6 +990,47 @@ def create_game_router(db, get_current_user):
         project["phases_definitions"] = phases_def
         
         return {"project": project}
+
+    # ───────────────────────────────────────────────────────────
+    # 📸 GET /project/{project_id}/approved-assets — flat list of all approved images
+    # Lets the UI (and the AI) browse approved assets across all phases.
+    # ───────────────────────────────────────────────────────────
+    @router.get("/project/{project_id}/approved-assets")
+    async def list_approved_assets(project_id: str, user=Depends(get_current_user)):
+        """Return a flat, ordered list of all approved assets in this project.
+        Each item: { id, type, name, image_url, subtype, phase, approved_at }.
+        Newest first. UI can render this as a gallery; AI can reference items
+        by id in <<IMG_REF: ... | ref: ID>> tags."""
+        project = await db.game_projects.find_one(
+            {"id": project_id, "user_id": user["user_id"]},
+            {"phases": 1, "_id": 0}
+        )
+        if not project:
+            raise HTTPException(404, "Project not found")
+        items: list[dict] = []
+        for phase_id_key, phase in (project.get("phases") or {}).items():
+            for msg in (phase.get("messages") or []):
+                for a in (msg.get("generated_assets") or []):
+                    if not a.get("approved"):
+                        continue
+                    if a.get("deleted_at"):
+                        continue
+                    items.append({
+                        "id": a.get("id"),
+                        "type": a.get("type"),
+                        "name": a.get("name") or "asset",
+                        "image_url": a.get("image_url"),
+                        "audio_url": a.get("audio_url"),
+                        "video_url": a.get("video_url"),
+                        "model_url": a.get("model_url"),
+                        "cdn_url": a.get("cdn_url"),
+                        "subtype": a.get("subtype"),
+                        "phase": phase_id_key,
+                        "created_at": a.get("created_at"),
+                    })
+        # Newest first
+        items.sort(key=lambda x: x.get("created_at") or "", reverse=True)
+        return {"count": len(items), "assets": items}
     
     # ───────────────────────────────────────────────────────────
     # 💬 POST /project/{project_id}/chat — Phase-aware chat
@@ -1088,7 +1129,10 @@ def create_game_router(db, get_current_user):
 
 | التاج | متى تستخدمه |
 |---|---|
-| `<<IMG_PRO: english cinematic prompt, {style_anchor}>>` | لكل لقطة بصرية (16:9 ultra-detailed) |
+| `<<IMG_PRO: english cinematic prompt, {style_anchor}>>` | لقطة جديدة من الصفر (16:9 ultra-detailed) |
+| `<<IMG_REF: english prompt | ref: ASSET_ID>>` | **🔥 موضوع جديد بنفس ستايل صورة معتمدة** (style-lock) |
+| `<<IMG_EDIT: english edit prompt | ref: ASSET_ID>>` | تعديل دقيق على صورة معتمدة (إضاءة/زاوية/لون) |
+| `<<COMPOSE: scene description | refs: id1, id2, id3>>` | دمج 2-4 صور معتمدة في مشهد واحد متماسك |
 | `<<VOICE: نص عربي | character: narrator | mood: neutral>>` | لكل سرد أو حوار |
 | `<<MUSIC: english description | dur: 30>>` | للموسيقى التصويرية |
 | `<<SFX: english description | dur: 3>>` | للمؤثرات الصوتية |
@@ -1096,10 +1140,11 @@ def create_game_router(db, get_current_user):
 
 ⚠️ **قواعد ذهبية:**
 1. اللقطات والأصوات والموسيقى تحتاج اعتماد ✓ من المالك قبل المرحلة التالية
-2. كل تاج IMG_PRO لازم يطلب صورة بالإنجليزي مع تفاصيل الإضاءة والكاميرا
-3. كل تاج VOICE النص بالعربي (اللي راح يُنطق) لكن character/mood بالإنجليزي
-4. لا تطول في الكلام — كن مختصر ومخرجي
-5. لو المالك طلب فيلم طويل (>5 دقائق) نبهه إن التكلفة راح ترتفع وأنه يقدر يطلب cost preview أول
+2. **لو عندك صور معتمدة سابقاً (تظهر فوق في الـvision)**: استخدم `IMG_REF` أو `COMPOSE` بـasset_id — لا تعيد توليد من الصفر
+3. كل تاج IMG_PRO لازم يطلب صورة بالإنجليزي مع تفاصيل الإضاءة والكاميرا
+4. كل تاج VOICE النص بالعربي (اللي راح يُنطق) لكن character/mood بالإنجليزي
+5. لا تطول في الكلام — كن مختصر ومخرجي
+6. لو المالك طلب فيلم طويل (>5 دقائق) نبهه إن التكلفة راح ترتفع وأنه يقدر يطلب cost preview أول
 {approved_context}
 """
         else:
@@ -1120,7 +1165,12 @@ def create_game_router(db, get_current_user):
 | "عدّل هذي الصورة" / "خلّي الإضاءة أحلى" | زر ✏️ "عدّل الصورة" على كل أصل (Flux Redux img2img) | "صف لي التعديل بدقة وراح أعيد توليدها كنسخة جديدة (تبقى الأصلية محفوظة)" |
 | "اختبر الموقع/راجعه" | زر 🔬 "تحليل QA" في تبويب البث المباشر | "تمام، Claude راح يفحص الـ HTML ويعطيني تقرير قوة/أخطاء/أداء/accessibility" |
 | "ولّد صورة/موسيقى/3D" | تكتب التاج بدقة في ردك: `<<IMG_PRO: english cinematic prompt>>` أو `<<3D: prompt>>` أو `<<MUSIC: prompt | dur: 30>>` | الأصل يطلع تلقائياً للاعتماد |
+| **"خل الصورة الجديدة بنفس ستايل اللي اعتمدنا"** | تكتب: `<<IMG_REF: english new subject | ref: ASSET_ID_من_قائمة_المعتمدة>>` (style-lock عبر Nano Banana) | الـAI ينسخ visual DNA من الصورة المعتمدة ويطبقه على الموضوع الجديد |
+| **"عدّل الصورة المعتمدة الفلانية (إضاءة/زاوية)"** | تكتب: `<<IMG_EDIT: english edit instruction | ref: ASSET_ID>>` | تعديل دقيق على نفس الصورة بدون توليد من الصفر |
+| **"اجمع صور القمح والحديد والخشب في مشهد قرية"** | تكتب: `<<COMPOSE: village layout description | refs: id1, id2, id3>>` (دمج 2-4 أصول معتمدة) | مشهد واحد متماسك بكل الأصول |
 | "ابحث في الإنترنت" | (الميزة قادمة) | "هذي القدرة قيد البناء" |
+
+⚠️ **قاعدة ذهبية للأصول المعتمدة**: لو فوق في الـvision تظهر صور معتمدة سابقاً، **ممنوع** تعيد توليدها من الصفر. لو المالك يبيها بسياق جديد → استخدم `IMG_REF`. لو يبيها معدّلة → `IMG_EDIT`. لو يبيها مع بقية الأصول في مشهد → `COMPOSE`. هذا يضمن تماسك بصري احترافي ويوفر نقاط على المالك.
 
 **🎮 تفاصيل المشروع:**
 - العنوان: {project['title']}
@@ -1288,32 +1338,89 @@ def create_game_router(db, get_current_user):
 
         # Call Gemini (with Claude fallback if quota exceeded)
         ai_message = None
-        # ─── VISION: include last 3 generated images so AI can SEE its previous outputs ───
+        # ─── VISION: include approved images (cross-phase) + recent current-phase images ───
         vision_parts = []
+        approved_index_map = []  # parallel array: index → asset metadata for the model
         try:
             import base64 as _b64
+
+            # 🔵 PRIORITY 1: All approved images across ALL phases (max 6 — newest first)
+            approved_imgs_attached = 0
+            seen_ids = set()
+            for past_phase_id, past_phase in (project.get("phases") or {}).items():
+                for past_msg in reversed(past_phase.get("messages") or []):
+                    if approved_imgs_attached >= 6:
+                        break
+                    for a in (past_msg.get("generated_assets") or []):
+                        if approved_imgs_attached >= 6:
+                            break
+                        if (a.get("type") == "image" and a.get("approved")
+                                and a.get("image_url") and a.get("id") not in seen_ids):
+                            fname = a["image_url"].rsplit("/", 1)[-1]
+                            fpath = f"/app/backend/uploads/games/{project_id}/assets/{fname}"
+                            if os.path.exists(fpath) and os.path.getsize(fpath) < 7_500_000:
+                                with open(fpath, "rb") as f:
+                                    b64 = _b64.b64encode(f.read()).decode()
+                                approved_index_map.append({
+                                    "index": approved_imgs_attached + 1,
+                                    "id": a.get("id"),
+                                    "name": (a.get("name") or "asset")[:80],
+                                    "subtype": a.get("subtype") or "image",
+                                    "phase": past_phase_id,
+                                })
+                                vision_parts.append({"inline_data": {"mime_type": "image/png", "data": b64}})
+                                seen_ids.add(a.get("id"))
+                                approved_imgs_attached += 1
+                if approved_imgs_attached >= 6:
+                    break
+
+            # If approved images attached, add a header explaining what they are
+            if vision_parts:
+                listing = "\n".join(
+                    f"  • صورة #{m['index']} (id={m['id']}): {m['name']} — مرحلة [{m['phase']}]"
+                    for m in approved_index_map
+                )
+                header = (
+                    f"═══ ✅ الصور المعتمدة سابقاً في هذا المشروع ({approved_imgs_attached}) ═══\n"
+                    "هذي صور انت ولّدتها والمالك اعتمدها ✓. شوفها بصرياً الحين قبل أي رد.\n"
+                    "📌 **قواعد إلزامية**:\n"
+                    "1) لو المالك يسأل عن شي تم اعتماده، **لا تعيد توليده** — اشر له بـ \"صورة #N\".\n"
+                    "2) لو تبي توليد جديد لازم يطابق ستايلها → استخدم: `<<IMG_REF: english prompt | ref: ID_من_القائمة_فوق>>`\n"
+                    "3) لو تبي تركّب عدة صور معتمدة في مشهد واحد → استخدم: `<<COMPOSE: scene description | refs: id1, id2, id3>>` (دمج Flux Redux).\n"
+                    "4) لو تبي تعديل دقيق على صورة معتمدة (إضاءة/زاوية/لون) → استخدم: `<<IMG_EDIT: english edit prompt | ref: ID>>`\n\n"
+                    f"قائمة الصور المعتمدة:\n{listing}\n"
+                    "═══ نهاية الصور المعتمدة ═══"
+                )
+                vision_parts = [{"text": header}] + vision_parts
+
+            # 🟡 PRIORITY 2: Recent generated images in CURRENT phase (not yet approved)
             recent_imgs = []
             phase_messages = project.get("phases", {}).get(phase_id, {}).get("messages", [])
             for past_msg in reversed(phase_messages[-5:]):
                 for a in (past_msg.get("generated_assets") or []):
-                    if a.get("type") == "image" and a.get("image_url"):
+                    if (a.get("type") == "image" and a.get("image_url")
+                            and a.get("id") not in seen_ids):
                         recent_imgs.append(a)
                         if len(recent_imgs) >= 3:
                             break
                 if len(recent_imgs) >= 3:
                     break
+            recent_added = 0
             for a in recent_imgs:
-                # Convert API URL to local file path
-                # image_url is "/api/games/asset-image/{pid}/{aid}.png"
                 fname = a["image_url"].rsplit("/", 1)[-1]
                 fpath = f"/app/backend/uploads/games/{project_id}/assets/{fname}"
-                if os.path.exists(fpath) and os.path.getsize(fpath) < 7_500_000:  # < 7.5 MB safety
+                if os.path.exists(fpath) and os.path.getsize(fpath) < 7_500_000:
                     with open(fpath, "rb") as f:
                         b64 = _b64.b64encode(f.read()).decode()
                     vision_parts.append({"inline_data": {"mime_type": "image/png", "data": b64}})
-            if vision_parts:
-                vision_parts.append({"text": f"(أعلاه آخر {len(vision_parts)} صور ولّدتها — اعرضها بصرياً قبل ما تقترح التعديل القادم.)"})
-                logger.info(f"[games][vision] attached {len(vision_parts)-1} images for project {project_id}")
+                    recent_added += 1
+            if recent_added:
+                vision_parts.append({"text": f"(آخر {recent_added} صور ولّدتها في المرحلة الحالية — قيد المراجعة، ما اعتمدت بعد.)"})
+
+            logger.info(
+                f"[games][vision] project={project_id} approved={approved_imgs_attached} "
+                f"recent={recent_added} total_parts={len(vision_parts)}"
+            )
         except Exception as ve:
             logger.warning(f"[games] vision context build failed: {ve}")
 
@@ -3043,7 +3150,7 @@ def create_game_router(db, get_current_user):
         return {
             "ok": True,
             "service": "games",
-            "build_marker": "v19_2026_02_07_independent_image_waterfall",
+            "build_marker": "v20_2026_02_07_approved_vision_img_ref_compose",
             "features": {
                 "image_generation": True,
                 "vision_verification": True,
