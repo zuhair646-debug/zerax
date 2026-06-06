@@ -2841,7 +2841,7 @@ def create_game_router(db, get_current_user):
         return {
             "ok": True,
             "service": "games",
-            "build_marker": "v18_2026_06_06_diagnose_check_emergent_key",
+            "build_marker": "v19_2026_02_07_independent_image_waterfall",
             "features": {
                 "image_generation": True,
                 "vision_verification": True,
