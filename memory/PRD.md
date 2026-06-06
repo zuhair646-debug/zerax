@@ -1,4 +1,43 @@
 # Zitex AI Platform - PRD
+
+### 🛡️ Feb 8 2026 — Zitex Security Center (10 طبقات) + غرفة التحكم الأمنية ✅
+
+**ميزة الجلسة**: نظام أمن سيبراني كامل بقيادة AI + لوحة تحكم Admin مباشرة على `/admin/security`.
+
+**Layers مفعّلة**:
+- L1 Global rate limiter (slowapi مثبت — جاهز للتفعيل عند الحاجة)
+- L2 Security headers (HSTS / X-Frame DENY / nosniff / CSP / Referrer-Policy / Permissions-Policy)
+- L3 Brute-force lockout (5 محاولات في 5د → قفل 15د على الحساب + حظر IP 1س)
+- L4 Audit log (`audit_log` collection — login_success/login_failed/login_blocked)
+- L5 File upload validator (MIME + size 25MB + filename safety)
+- L6 AI Security Auditor (GPT-4o-mini يفحص آخر 24س كل 60د → CLEAR/ELEVATED/ATTACK)
+- L7 IP blocklist middleware (يردّ 403 مباشرة قبل وصول الطلب)
+- L8 Email alerts (Resend — جاهز عند إضافة RESEND_API_KEY)
+- L9 MongoDB backup (كل 12س + يحفظ آخر 7 أيام)
+- L10 Periodic scan (background scheduler يدمج L6+L9)
+
+**Backend Endpoints (admin-only)**:
+- `GET  /api/admin/security/status` — Master dashboard (10 layer indicators + counters + recent_alerts + backups)
+- `POST /api/admin/security/scan-now` — يشغّل AI audit فوراً
+- `POST /api/admin/security/backup-now` — backup snapshot فوري
+- `POST /api/admin/security/unblock-ip?ip=...` — إلغاء حظر
+- `POST /api/admin/security/unlock-account?ip=...&username=...`
+- `GET  /api/admin/security/audit-log?limit=100`
+
+**Frontend**:
+- `/app/frontend/src/pages/SecurityControlRoom.js` — مربوط في `App.js` على `/admin/security`
+- بطاقة "غرفة التحكم الأمنية 🛡️" في AdminDashboard
+
+**Helpers مهمة**:
+- `get_real_ip(request)` — يقرأ X-Forwarded-For من K8s ingress (بدلاً من client.host الذي يتبدّل)
+- `check_brute_force()` / `register_login_attempt()` — مربوطين في `/api/auth/login`
+- `write_audit()` — يكتب كل محاولة دخول إلى `audit_log`
+
+**اختبارات**: 13/13 PASS عبر testing_agent (iteration_32.json) — تشمل headers, brute-force, scan, backup, unblock, regression.
+
+---
+
+
 ### 🎉 Feb 7 2026 — 24/24 المهام مكتملة — Zitex منصة ألعاب AAA كاملة (v25) ✅
 
 **ميزة جديدة الجلسة**: `/app/backend/modules/game_toolkit/` — ينجز آخر 6 مهام:
