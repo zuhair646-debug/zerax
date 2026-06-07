@@ -1,5 +1,49 @@
 # Zitex AI Platform - PRD
 
+### 🆕 Feb 8 2026 — FreeBuild Smart Drift Gate (P0 Critical Fix) ✅
+
+**المشكلة المُبلَّغ عنها**: الذكاء في FreeBuild لا يقدر يضيف أقسام جديدة لموقع موجود — قيود drift-lock مفرطة كانت تحجب أي تعديل يتجاوز 55% حتى لو كان مجرد إضافة شرعية.
+
+**جذر المشكلة**: 
+- `_structural_drift_ratio` كان يضيف +0.4 إذا length الجديد > 1.8x القديم (إضافة قسم كبير = drift فوري 0.8+).
+- الـgate كان يطلب توكن `<<DESIGN_CHANGE_REQUEST>>` لكن المستخدم اللي طلب إضافة بسيطة، الذكاء ما يطلع التوكن.
+- النتيجة: أي رغبة في "ضيف قسم اتصال" أو "زود قسم منتجات" → رسالة حجب صادمة ولا تتنفّذ.
+
+**الحل المطبَّق** (`/app/backend/modules/freebuild/freebuild_chat.py`):
+
+1. **`_detect_user_intent(message)`**: regex ذكي يصنّف الرسالة:
+   - `additive`: "ضيف، أضف، زود، حط قسم، أبي قسم، add, append, more section, also, زيادة..."
+   - `redesign`: "غيّر كل شي، صمم من جديد، من الصفر، redesign, from scratch..."
+   - `modify`: غير ذلك (تعديل صغير على نفس البنية)
+
+2. **`_is_additive_change(prev, new)`**: يفحص إن:
+   - sections ≥ القديم، divs ≥ 85% من القديم، navs محفوظة
+   - header & footer محفوظَين (إذا كانوا موجودين أصلاً)
+   - الـlength لم يتقلّص < 90% من القديم
+
+3. **drift gate ذكي بدل 0.55 الصارم**:
+   - `intent=redesign` → اسمح (المستخدم طلب صراحة)
+   - `intent=additive` + `is_additive=True` → اسمح (إضافة شرعية)
+   - `is_destructive` (حذف header/footer/قلّص sections بـ40%+) → احجب
+   - drift > 0.85 (catastrophic) + لا redesign → احجب
+   - threshold عام رُفع من 0.55 إلى 0.85
+
+4. **Length sanity**: السماح بنمو حتى 3.5x (كان 1.8x فقط). تقلّص < 0.5x = catastrophic.
+
+5. **System prompt محدَّث** ليوضح للذكاء بصراحة:
+   - "الإضافة (Additive)" مسموحة بحرية تامة — لا تحتاج توكن خاص
+   - "التعديل الجزئي (Modify)" مسموح
+   - "إعادة التصميم (Redesign)" تحتاج إذن العميل أولاً + توكن `<<DESIGN_CHANGE_REQUEST>>`
+   - نصيحة عملية: "انسخ كامل الـHTML الحالي ثم أضف القسم الجديد كـ`<section id=...>` قبل الـ`</body>` — لا تحذف ولا تختصر"
+
+**اختبار وحدة (4 سيناريوهات)**:
+- ✅ إضافة قسم About بسيط: drift=0.33, intent=additive → ALLOWED
+- ✅ إضافة قسمين كبار يضاعفون length 4x: drift=0.72, intent=additive, additive=True → ALLOWED (قبلاً: blocked)
+- ✅ حذف header+footer: destructive=True → BLOCKED (الحماية مازالت شغّالة)
+- ✅ "غيّر كل شي" → intent=redesign → ALLOWED
+
+---
+
 ### 🆕 Feb 8 2026 — FreeBuild Polish + Game Studio Prompt + App Conversion UI ✅
 
 **ما تم في الجلسة الحالية**:

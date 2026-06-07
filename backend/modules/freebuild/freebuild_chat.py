@@ -200,11 +200,62 @@ def _structural_drift_ratio(prev_sig: Dict[str, Any], new_sig: Dict[str, Any]) -
         m = max(a, b, 1)
         total += abs(a - b) / m
     total /= len(keys)
-    # Length drift: if new HTML is <60% or >180% of locked, that's a red flag
+    # Length drift: only flag if NEW is drastically SHORTER (destructive)
+    # or absurdly longer (likely garbage). Additive growth is normal.
     len_ratio = new_sig.get("length", 0) / max(prev_sig.get("length", 1), 1)
-    if len_ratio < 0.6 or len_ratio > 1.8:
-        total += 0.4
+    if len_ratio < 0.5 or len_ratio > 3.5:
+        total += 0.3
     return min(1.0, total)
+
+
+def _is_additive_change(prev_sig: Dict[str, Any], new_sig: Dict[str, Any]) -> bool:
+    """
+    True if the new HTML kept all major old structural elements AND added more.
+    Adding sections/divs while keeping header/footer/nav is a legitimate edit.
+    """
+    if not prev_sig.get("length"):
+        return True
+    # All major elements preserved or grown
+    preserved = (
+        new_sig.get("sections", 0) >= prev_sig.get("sections", 0)
+        and new_sig.get("divs", 0) >= int(prev_sig.get("divs", 0) * 0.85)
+        and new_sig.get("navs", 0) >= prev_sig.get("navs", 0)
+        and (not prev_sig.get("header") or new_sig.get("header"))
+        and (not prev_sig.get("footer") or new_sig.get("footer"))
+    )
+    # And new HTML is at least the same size (not destructive shrink)
+    grew = new_sig.get("length", 0) >= int(prev_sig.get("length", 1) * 0.9)
+    return preserved and grew
+
+
+# Intent detection on user's latest message — distinguishes additive edits
+# from "wipe everything and redo" requests so the drift gate doesn't punish
+# legitimate growth.
+_INTENT_ADDITIVE_RE = re.compile(
+    r"(ضي?ف|أضف|اضف|زو?د|حط|أبي\s+قسم|أبي\s+ميزة|ابي\s+قسم|"
+    r"أضف\s+قسم|اضف\s+قسم|أحتاج\s+قسم|أحتاج\s+صفحة|"
+    r"\badd\b|\bappend\b|\binsert\b|\bmore\s+section|new\s+section|"
+    r"also|كمان|بعد|زيادة|توسيع|expand)",
+    re.IGNORECASE,
+)
+_INTENT_REDESIGN_RE = re.compile(
+    r"(غيّ?ر\s+كل|صمم\s+من\s+جديد|تصميم\s+جديد\s+كلي|من\s+الصفر|أبدأ\s+من\s+جديد|"
+    r"ابدأ\s+من\s+الصفر|اعد\s+التصميم|أعد\s+التصميم|تصميم\s+آخر|تصميم\s+مختلف\s+كلي|"
+    r"\bredesign\b|\brebuild\b|from\s+scratch|start\s+over|completely\s+new)",
+    re.IGNORECASE,
+)
+
+
+def _detect_user_intent(user_msg: str) -> str:
+    """Returns 'additive' | 'redesign' | 'modify'."""
+    if not user_msg:
+        return "modify"
+    msg = user_msg.strip()
+    if _INTENT_REDESIGN_RE.search(msg):
+        return "redesign"
+    if _INTENT_ADDITIVE_RE.search(msg):
+        return "additive"
+    return "modify"
 
 
 def _strip_tags(text: str) -> str:
@@ -653,16 +704,27 @@ def make_freebuild_chat_router(db, get_current_user):
             "🚨 قواعد ثقة صارمة (النظام يفحصها تلقائياً ويرفض رسالتك لو كذبت):\n"
             "1. لو قلت 'إليك 3 تصاميم' أو 'نزّلت تصاميم' → **يجب** يكون عندك 3 بلوكات ```html``` فعلية في نفس الرسالة. وإلا النظام راح يطلب منك إعادة الرد.\n"
             "2. لو قلت 'حدّثت المعاينة' أو 'أضفت قسم X' → **يجب** يكون عندك بلوك ```html``` فعلي في نفس الرسالة. وإلا النظام يرفض ويطلب إعادة.\n"
-            "3. **قفل التصميم**: بعد ما العميل يعتمد تصميم، **لا تغيّر بنيته الكلية**. التعديلات الجائزة:\n"
-            "   - تبديل النصوص ✓\n"
-            "   - تبديل الصور ✓\n"
-            "   - تبديل الألوان الثانوية ✓\n"
-            "   - إضافة قسم جديد في نفس الستايل ✓\n"
-            "   المحظور: تغيير شامل للـlayout، إعادة ترتيب الأقسام، تغيير الـtypography الأساسية ✗\n"
-            "   لو العميل طلب تغيير جذري، اسأله صراحة: 'هذا تغيير كبير سيمسح تصميمك الحالي. متأكد؟' مع <<OPT: نعم>> <<OPT: لا>>\n"
-            "   إذا أردت تغيير التصميم كاملاً بإذن العميل، ابدأ رسالتك بـ <<DESIGN_CHANGE_REQUEST: السبب>>\n"
+            "3. **قفل التصميم الذكي** (مهم — اقرأه بتأنّي):\n"
+            "   النظام يفرّق تلقائياً بين 3 حالات. **مو محتاج توكن خاص**:\n"
+            "   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+            "   ✅ **الإضافة (Additive)** — مسموحة بحرية تامة بدون قيود:\n"
+            "     • العميل قال: 'ضيف قسم About'، 'زود نموذج تواصل'، 'حط قسم منتجات'\n"
+            "     • أنت تكتب الـHTML الجديد **كامل** = كل القديم محفوظ + القسم الجديد فوقه/تحته\n"
+            "     • القاعدة الذهبية: **لا تحذف header، لا تحذف footer، لا تقلّص sections موجودة**\n"
+            "     • النظام راح يكتشف إنها إضافة شرعية ويمررها بدون حجب\n"
+            "   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+            "   ✅ **التعديل الجزئي (Modify)** — مسموح:\n"
+            "     • تبديل نصوص، صور، ألوان ثانوية، روابط، أسعار\n"
+            "     • تحسين قسم موجود (مثلاً: تجميل بطاقات المنتجات)\n"
+            "   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+            "   ⚠️ **إعادة التصميم الكاملة (Redesign)** — تحتاج إذن العميل أولاً:\n"
+            "     • تغيير الـlayout الأساسي، حذف الـheader/footer، typography مختلفة كلياً\n"
+            "     • اسأل: 'هذا تغيير كبير سيغيّر تصميمك الحالي. متأكد؟' مع <<OPT: نعم>> <<OPT: لا>>\n"
+            "     • لما العميل يوافق، ابدأ رسالتك بـ <<DESIGN_CHANGE_REQUEST: السبب>>\n"
+            "   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+            "   💡 **نصيحة عملية**: لما العميل يطلب إضافة قسم، **انسخ كامل الـHTML الحالي** ثم أضف القسم الجديد كـ`<section id='new-name'>...</section>` قبل الـ`</body>` مباشرة (أو في المكان المنطقي حسب الـnav). لا تختصر ولا تحذف.\n"
             "4. قبل ما تقول 'تم' أو 'حدّثت'، **افحص بنفسك**: هل الكود اللي كتبته يحتوي فعلاً على التغيير المطلوب؟ إذا لا، صحّحه قبل الإرسال.\n"
-            "7. عدّل تدريجياً — لا تعيد بناء كل شي من جديد كل مرة. حافظ على الـDesign اللي اختاره العميل.\n"
+            "5. عدّل تدريجياً — لا تعيد بناء كل شي من جديد كل مرة. حافظ على الـDesign اللي اختاره العميل.\n"
             "\n"
             "🎯 خيارات قابلة للضغط (مهم جداً لتسهيل التجربة):\n"
             "⚠️ قاعدة ذهبية: **اطرح سؤال واحد فقط في كل رسالة** ومعه خياراته. لا تطرح 5 أسئلة دفعة وحدة!\n"
@@ -717,23 +779,53 @@ def make_freebuild_chat_router(db, get_current_user):
                 if retry_result.get("ok"):
                     ai_text = retry_result["content"]
 
-            # Design-drift gate — if user has an approved design and new HTML differs
-            # structurally by >55%, refuse silent rebuild without explicit user consent.
+            # Design-drift gate — smart guard that distinguishes:
+            #   • Additive edits (user asked to ADD a section)     → ALLOW
+            #   • Explicit redesign (user said "غيّر كل شي")        → ALLOW
+            #   • Destructive shrink (AI deleted header/footer)    → BLOCK
+            #   • Catastrophic drift > 0.85                        → BLOCK
+            # Old behaviour blocked at 0.55 which punished legit additions.
             if proj.get("current_html"):
                 new_full = _extract_html(ai_text)
                 if new_full and "<<DESIGN_CHANGE_REQUEST" not in ai_text.upper():
                     prev_sig = _design_signature(proj["current_html"])
                     new_sig = _design_signature(new_full)
                     drift = _structural_drift_ratio(prev_sig, new_sig)
-                    if drift > 0.55:
-                        logger.warning(f"freebuild design drift blocked: {drift:.2f}")
+                    user_intent = _detect_user_intent(message or "")
+                    is_additive = _is_additive_change(prev_sig, new_sig)
+                    # AI is destructive if it shrank a major element it had before
+                    is_destructive = (
+                        (prev_sig.get("header") and not new_sig.get("header"))
+                        or (prev_sig.get("footer") and not new_sig.get("footer"))
+                        or (new_sig.get("sections", 0) < int(prev_sig.get("sections", 0) * 0.6))
+                        or (new_sig.get("length", 0) < int(prev_sig.get("length", 1) * 0.55))
+                    )
+                    should_block = False
+                    if user_intent == "redesign":
+                        should_block = False  # user asked for redesign
+                    elif user_intent == "additive" and is_additive:
+                        should_block = False  # legit growth
+                    elif is_destructive and user_intent != "redesign":
+                        should_block = True   # AI silently deleted parts
+                    elif drift > 0.85 and user_intent != "redesign":
+                        should_block = True   # catastrophic non-additive change
+                    if should_block:
+                        logger.warning(
+                            f"freebuild design drift blocked: drift={drift:.2f} "
+                            f"intent={user_intent} additive={is_additive} destructive={is_destructive}"
+                        )
                         ai_text = (
-                            "⚠️ لاحظت إن التعديل سيغيّر تصميمك المعتمد بشكل كبير.\n\n"
+                            "⚠️ لاحظت إن التعديل سيغيّر تصميمك المعتمد بشكل كبير وقد يحذف أقسام مهمة.\n\n"
                             "لحماية شغلك، حفظت **التصميم الأصلي كما هو** ولم أطبّق التغيير.\n\n"
                             "هل تأكد إنك تبي تغيير جذري؟ اختر:\n"
                             "<<OPT: نعم — أبي تصميم جديد كلياً (ابدأ من الصفر)>>\n"
                             "<<OPT: لا — اكتفِ بتعديلات صغيرة على التصميم الحالي>>\n"
                             "<<OPT: أرني الفرق قبل التطبيق>>"
+                        )
+                    else:
+                        logger.info(
+                            f"freebuild drift OK: drift={drift:.2f} intent={user_intent} "
+                            f"additive={is_additive}"
                         )
 
         except HTTPException:
