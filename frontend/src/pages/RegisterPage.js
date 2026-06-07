@@ -65,7 +65,7 @@ const RegisterPage = ({ setUser }) => {
           toast.success('تم إنشاء الحساب بنجاح!');
         }
         
-        navigate('/chat');
+        navigate('/');
       } else {
         toast.error(data.detail || 'فشل إنشاء الحساب');
       }

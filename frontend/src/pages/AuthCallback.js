@@ -50,10 +50,10 @@ export default function AuthCallback({ setUser }) {
         if (typeof setUser === 'function') setUser(d.user);
 
         // Wipe the fragment from URL so it doesn't leak into history
-        window.history.replaceState(null, '', '/dashboard');
+        window.history.replaceState(null, '', '/');
 
         toast.success(d.is_new ? `🎉 أهلاً بك ${d.user.name}!` : `أهلاً ${d.user.name}!`);
-        navigate(d.user.role === 'admin' ? '/admin' : '/dashboard', { replace: true });
+        navigate(d.user.role === 'admin' ? '/admin' : '/', { replace: true });
       } catch (e) {
         toast.error(e.message || 'حدث خطأ');
         navigate('/login', { replace: true });

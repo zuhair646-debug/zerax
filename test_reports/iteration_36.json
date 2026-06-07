@@ -1,0 +1,52 @@
+{
+  "summary": "Comprehensive E2E audit: registration, login redirect, navigation, credit deduction, pricing checkout (LS+PayPal), full route tour, and mobile responsiveness. Confirmed critical post-login redirect bug and a runtime-error overlay on mobile /pricing.",
+  "backend_issues": {
+    "critical": [
+      {"endpoint": "/api/generate/image", "issue": "Image generation endpoint accepts `prompt` as QUERY parameter (not JSON body) and does NOT integrate with the new pricing/credits system. It only decrements `free_images` counter on the user document. Pricing balance is never touched, no transaction is written. The user cannot verify credit deduction on an actual paid action because no paid path through this endpoint exists.", "priority": "CRITICAL"}
+    ],
+    "minor": [
+      {"endpoint": "/api/chat sessions endpoint (used by /chat page)", "issue": "Frontend repeatedly logs 'Error fetching sessions: TypeError: Failed to fetch' on /chat page. Endpoint either CORS-blocked, missing, or returns network error. Verify the actual URL in bundle.js:221280 (likely /api/chat/sessions or similar)."},
+      {"endpoint": "/api/.../stats (used by ClientDashboard)", "issue": "Console error 'Error fetching stats: TypeError: Failed to fetch' fires repeatedly when /dashboard renders. Same root cause likely."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "App.js Route '/' (lines 127-131)", "issue": "Root route hard-redirects any logged-in user to /dashboard (or /admin for owners). This OVERRIDES the recent fix in LoginPage.js line 31 (navigate to '/') and RegisterPage.js line 68 (navigate to '/') and AuthCallback.js line 56. Verified: after login as new user, URL becomes /dashboard. Clicking the Zitex logo (href='/') from /dashboard ALSO redirects right back to /dashboard. The user's #1 complaint (after login should go to landing) is NOT fixed.", "selector": "/", "priority": "CRITICAL"},
+      {"component": "Pricing page (mobile, 375x667)", "issue": "Big red 'Uncaught runtime errors / Script error' overlay appears on top of /pricing on mobile viewport. Triggered by PayPal JS SDK throwing 'zoid destroyed all components' + repeated 422 PayPal SDK calls. Blocks ENTIRE pricing screen on mobile/iPhone Safari (which is the user's primary device).", "selector": "/pricing", "priority": "CRITICAL"},
+      {"component": "Navbar (logged-in)", "issue": "Logged-in users have NO working way to navigate back to the public landing page. The logo and any href='/' link round-trip back to /dashboard via App.js. Must add an explicit /landing route or conditionally render LandingPage at '/' when a query/flag is present.", "selector": "header a[href='/']", "priority": "HIGH"}
+    ],
+    "integration_issues": [
+      {"flow": "Post-login navigation", "issue": "LoginPage.js navigates to '/' but App.js root route bounces user to /dashboard. Net effect = same as before the fix.", "affected_selectors": ["[data-testid='login-submit-btn']"]},
+      {"flow": "Image generation credit deduction", "issue": "Endpoint exists at /api/generate/image (not /api/images/generate), takes `prompt` as a query string param, and does NOT touch the new pricing/credits balance. Verified balance stays at 20 before & after, transactions list stays empty. Pricing module is effectively disconnected from product usage.", "affected_selectors": ["[data-testid='generate-image-btn']"]},
+      {"flow": "Pricing checkout buttons", "issue": "VERIFIED WORKING when called with full payload: Lemon Squeezy returns https://zitex.lemonsqueezy.com/checkout/custom/... ; PayPal returns https://www.paypal.com/checkoutnow?token=... . Backend endpoint OK. Provider toggle generates valid URLs for both.", "affected_selectors": []}
+    ],
+    "design_issues": [
+      {"screen": "/pricing mobile", "issues": ["Runtime-error overlay covers checkout buttons", "PayPal SDK messages component fails to load (422) on mobile"]},
+      {"screen": "/dashboard", "issues": ["Permanent console-error spam from fetchStats — may indicate hidden broken widget"]}
+    ]
+  },
+  "test_report_links": ["/app/test_reports/iteration_36.json"],
+  "action_items": [
+    "FIX App.js lines 127-131: do NOT auto-redirect logged-in users from '/' to /dashboard. Render <LandingPage user={user}/> for everyone, and add an explicit /admin redirect only when owner intentionally goes there. This is the root cause of the user's complaint.",
+    "FIX /pricing mobile crash: wrap the PayPal SDK initialization in an error boundary OR delay the SDK injection until viewport >= md, OR only inject the PayPal script when provider==='paypal' AND user clicks a PayPal plan. Currently PayPal SDK throws on every /pricing load on small screens.",
+    "WIRE /api/generate/image (and /api/generate/video, /api/images/edit) to the new pricing credit system: deduct from pricing balance, write a transaction. Right now product usage and credits are completely disconnected.",
+    "Fix /api/generate/image signature: accept JSON body { prompt, size } instead of query param (standard FastAPI pattern with Pydantic model).",
+    "Investigate /chat fetchSessions and /dashboard fetchStats 'Failed to fetch' errors — likely missing or moved endpoints.",
+    "After fixing App.js '/' route, verify: (a) fresh login → '/' shows landing, (b) clicking logo from anywhere → landing, (c) explicit /dashboard nav-link in Navbar for logged-in users to reach their dashboard."
+  ],
+  "critical_code_review_comments": [
+    "App.js (lines 127-131) directly contradicts LoginPage.js/RegisterPage.js/AuthCallback.js redirect targets. Single source of truth violation.",
+    "server.py line 974: @api_router.post('/generate/image') uses query param for prompt and bypasses the new pricing module. Two parallel credit systems exist (legacy free_images counter + new pricing balance). Must consolidate.",
+    "Pricing.js: PayPal <PayPalScriptProvider> appears to mount unconditionally, throwing 'zoid destroyed all components' on remount / small screens. Consider lazy-mount only when needed.",
+    "ProtectedRoute redirects non-admin to /dashboard (line 118), reinforcing the same bug.",
+    "Console errors should not loop infinitely (fetchStats / fetchSessions) — add retry/backoff + visible error state."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "85% (checkout works, image-gen disconnected from credits)", "frontend": "60% (login redirect broken, mobile pricing crashes)"},
+  "test_credentials": "owner@zitex.com / owner123 (verified); fresh test users created e2e_audit_<ts>@test.com / Test1234! (20 starting credits each)",
+  "seed_data_creation": "Created 2 fresh non-owner accounts via /api/auth/register for navigation/credit testing (cleanup not done — emails start with e2e_audit_).",
+  "retest_needed": true,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Main agent's claimed fix (post-login → '/') is overridden by App.js root route. To repro: register any new user, after login URL is /dashboard not /. Pricing checkout API works when called with full payload (item_type, item_id, billing_cycle, provider, return_url, cancel_url) — both LS and PayPal return valid https://... URLs. Owner login redirects to /admin correctly. Mobile /pricing shows a CRA error overlay due to PayPal SDK. /api/generate/image takes prompt as query param and does not deduct pricing credits — only the legacy free_images counter (so credit-deduction E2E cannot be validated until the product/credit integration is built).",
+  "rca of the issue": "Login redirect bug: LoginPage.js line 31 navigates to '/' for non-owners, but App.js (BrowserRouter) line 127-131 contains: `<Route path='/' element={ user ? <Navigate to=... /dashboard ... /> : <LandingPage/> }/>`. When the user is logged-in (which they are after handleSubmit completes), the root route component is the <Navigate> not <LandingPage>, so React Router immediately replaces /dashboard. Mitigation: either remove the user-conditional in the '/' route (always render LandingPage), or create a separate /home or /landing route the post-login flow can target."
+}
