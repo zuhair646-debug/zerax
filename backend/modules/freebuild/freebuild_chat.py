@@ -217,6 +217,7 @@ def _now():
 class ProjectIn(BaseModel):
     name: str
     description: str = ""
+    category_id: Optional[str] = None  # if set → template-based mode (websites)
 
 
 class ChatIn(BaseModel):
@@ -235,14 +236,24 @@ def make_freebuild_chat_router(db, get_current_user):
     @router.post("/project")
     async def create_project(payload: ProjectIn, user=Depends(get_current_user)):
         pid = str(uuid.uuid4())
+        category_meta = None
+        if payload.category_id:
+            try:
+                from modules.websites.catalog import CATEGORIES
+                category_meta = next((c for c in CATEGORIES if c["id"] == payload.category_id), None)
+            except Exception:
+                category_meta = None
         await db.freebuild_projects.insert_one({
             "id": pid,
             "user_id": user["user_id"],
-            "website_type": "custom",  # legacy field, kept for compatibility
+            "website_type": "template" if payload.category_id else "custom",
+            "category_id": payload.category_id,
+            "category_name": (category_meta or {}).get("name"),
+            "category_icon": (category_meta or {}).get("icon"),
             "name": payload.name.strip()[:120],
             "description": payload.description.strip()[:1500],
             "status": "active",
-            "current_phase": "discovery",
+            "current_phase": "design" if payload.category_id else "discovery",
             "messages": [],
             "approved_assets": [],
             "current_html": None,
@@ -428,10 +439,31 @@ def make_freebuild_chat_router(db, get_current_user):
                 "ركّز على إجابات تقنية مختصرة فقط لما يسأل.\n"
             )
 
+        # Template-based project (Websites Studio mode)
+        template_ctx = ""
+        if proj.get("category_id"):
+            cat_name = proj.get("category_name", "")
+            cat_id = proj.get("category_id", "")
+            template_ctx = (
+                f"\n\n🏷️ مشروع قائم على قالب جاهز (Template Mode):\n"
+                f"الفئة: {cat_name} ({cat_id})\n"
+                "📌 سلوك خاص بالقوالب:\n"
+                "- العميل اختار قالباً من فئة محددة. لا تسأل أسئلة استكشاف طويلة.\n"
+                "- في رسالتك الأولى، اطرح 3 تصاميم variants لنفس الفئة بأنماط مختلفة:\n"
+                "  • Variant 1: أناقة كلاسيكية\n"
+                "  • Variant 2: حداثة معاصرة (glassmorphism)\n"
+                "  • Variant 3: مينيمال نظيف\n"
+                "  كل واحد <!DOCTYPE html>...</html> كامل (≤300 سطر) مع Tailwind CDN ومحتوى مناسب للفئة.\n"
+                "- بعد ما يختار، خذ معلوماته (اسم النشاط، رقم تواصل، عنوان) عبر <<OPT>> قدر الإمكان.\n"
+                "- لا تعيد تصميم القالب — فقط استبدل النصوص والصور والألوان الثانوية.\n"
+            )
+
+
         extra_ctx = (
             f"اسم المشروع: {proj['name']}\n"
             f"وصف المشروع: {proj['description'] or '(لم يحدد العميل وصفاً بعد — اسأله ودَوّن)'}\n"
             f"{assets_for_use}"
+            f"{template_ctx}"
             f"{guided_ctx}\n"
             "📌 بروتوكول الإنشاء من الصفر (مهم جداً):\n"
             "1. ابدأ بالاستماع — اسأل العميل عن: نشاطه/فكرته، جمهوره المستهدف، الإحساس المطلوب، أمثلة ملهمة.\n"
