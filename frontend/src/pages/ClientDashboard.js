@@ -5,6 +5,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { useNavigate } from 'react-router-dom';
 import { PlusCircle, FileText, Globe, Image, Video, Coins, Crown, Gift, Sparkles, Bot, Share2, MessageSquare, Clapperboard, Smartphone, Gamepad2 } from 'lucide-react';
 import SiteBannerStories from '@/components/SiteBannerStories';
+import { BackButton } from '@/components/BackButton';
 
 const ClientDashboard = ({ user, setUser }) => {
   const navigate = useNavigate();
@@ -56,19 +57,17 @@ const ClientDashboard = ({ user, setUser }) => {
   }, [setUser]);
 
   const quickActions = [
-    { title: 'طلب موقع جديد', desc: 'أنشئ موقعك بالذكاء الاصطناعي', icon: <PlusCircle className="w-6 h-6" />, path: '/dashboard/new-request', color: 'from-blue-500 to-cyan-500' },
-    { title: '🎨 استوديو الصور', desc: 'صور احترافية بسيناريو عميق', icon: <Image className="w-6 h-6" />, path: '/studio/image', color: 'from-purple-500 to-violet-600', badge: 'نقاط' },
-    { title: '🎬 استوديو الفيديو', desc: 'فيديو Sora 2 باحتراف', icon: <Clapperboard className="w-6 h-6" />, path: '/studio/video', color: 'from-orange-500 to-red-500', badge: 'نقاط' },
-    { title: '💬 شات الصور الذكي', desc: 'محادثة تفاعلية لبناء صورة', icon: <MessageSquare className="w-6 h-6" />, path: '/chat/image', color: 'from-pink-500 to-rose-500' },
-    { title: '🎬 استوديو الفيديو', desc: 'شات + سيناريو + ستوري بورد + رفع صوتك → فيلم واقعي + مجتمع', icon: <Video className="w-6 h-6" />, path: '/chat/video', color: 'from-amber-500 to-orange-600', badge: 'محدّث' },
+    { title: '🎨 استوديو الصور', desc: 'صور احترافية بسيناريو عميق + شات تفاعلي', icon: <Image className="w-6 h-6" />, path: '/studio/image', color: 'from-purple-500 to-violet-600', badge: 'نقاط' },
+    { title: '🎬 استوديو الفيديو', desc: 'فيديو Sora 2 + سيناريو + ستوري بورد + رفع صوتك', icon: <Clapperboard className="w-6 h-6" />, path: '/studio/video', color: 'from-orange-500 to-red-500', badge: 'نقاط' },
     { title: '📱 إنشاء التطبيقات من الصفر', desc: 'ألعاب وأدوات وتطبيقات بمحادثة AI ذكية مع معاينة iPhone حية', icon: <Smartphone className="w-6 h-6" />, path: '/dashboard/apps', color: 'from-cyan-500 to-blue-600', badge: '⚡ AI' },
+    { title: '🎮 استوديو الألعاب', desc: 'ألعاب ويب HTML5 + تطبيقات 3D للموبايل والـPC', icon: <Gamepad2 className="w-6 h-6" />, path: '/dashboard/games', color: 'from-violet-500 to-purple-600', badge: '🔥 جديد' },
+    { title: '🎬 استوديو السينما', desc: 'أفلام + إعلانات + موسيقى + حلقات طويلة', icon: <Clapperboard className="w-6 h-6" />, path: '/dashboard/cinema', color: 'from-rose-500 to-amber-600', badge: '⭐ جديد' },
+    { title: '🌐 طلب موقع جديد', desc: 'أنشئ موقعك بالذكاء الاصطناعي', icon: <PlusCircle className="w-6 h-6" />, path: '/dashboard/new-request', color: 'from-blue-500 to-cyan-500' },
     { title: '📱 رفيقتي على الجوال', desc: 'Zara/Layla كمساعدة شخصية يومية', icon: <Bot className="w-6 h-6" />, path: '/companion', color: 'from-fuchsia-500 to-pink-600', badge: 'جديد' },
     { title: '🤖 مساعدتي الذكية', desc: 'فعّل مساعدة AI لمتجرك', icon: <Bot className="w-6 h-6" />, path: '/dashboard/avatar', color: 'from-emerald-500 to-green-600', badge: '14 يوم مجاناً' },
     { title: '🌉 Channel Bridge', desc: 'انشر أصولك في متاجرك', icon: <Share2 className="w-6 h-6" />, path: '/dashboard/bridge', color: 'from-sky-500 to-cyan-500' },
-    { title: '🎮 استوديو الألعاب', desc: 'ألعاب ويب HTML5 + تطبيقات 3D للموبايل والـPC — احترافي ومتدرج', icon: <Gamepad2 className="w-6 h-6" />, path: '/dashboard/games', color: 'from-violet-500 to-purple-600', badge: '🔥 جديد' },
-    { title: '🎬 استوديو السينما', desc: 'أفلام + إعلانات + موسيقى + حلقات طويلة — نفس تجربة الألعاب لكن سينمائية', icon: <Clapperboard className="w-6 h-6" />, path: '/dashboard/cinema', color: 'from-rose-500 to-amber-600', badge: '⭐ جديد' },
-    { title: 'طلباتي', desc: 'عرض وإدارة طلباتك', icon: <FileText className="w-6 h-6" />, path: '/dashboard/requests', color: 'from-green-500 to-emerald-500' },
-    { title: 'مواقعي', desc: 'عرض المواقع المنجزة', icon: <Globe className="w-6 h-6" />, path: '/dashboard/websites', color: 'from-indigo-500 to-purple-500' },
+    { title: '📄 طلباتي', desc: 'عرض وإدارة طلباتك', icon: <FileText className="w-6 h-6" />, path: '/dashboard/requests', color: 'from-green-500 to-emerald-500' },
+    { title: '🌍 مواقعي', desc: 'عرض المواقع المنجزة', icon: <Globe className="w-6 h-6" />, path: '/dashboard/websites', color: 'from-indigo-500 to-purple-500' },
   ];
 
   return (
@@ -81,6 +80,9 @@ const ClientDashboard = ({ user, setUser }) => {
       </div>
 
       <div className="container mx-auto px-4 md:px-8 max-w-7xl pt-8 pb-12">
+        <div className="mb-6">
+          <BackButton to="/" label="الصفحة الرئيسية" />
+        </div>
         <div className="mb-8 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
           <div>
             <h1 className="text-3xl font-bold text-white mb-2" data-testid="dashboard-title">

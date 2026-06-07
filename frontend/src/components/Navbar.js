@@ -1,7 +1,7 @@
 import React from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
-import { LogOut, LayoutDashboard, Shield, Menu, X } from 'lucide-react';
+import { LogOut, LayoutDashboard, Shield, Menu, X, ArrowRight } from 'lucide-react';
 
 // شعار Zitex — الصورة المعتمدة (L1: ملكي تراثي ذهبي) + حركة دوران لطيفة في المكان
 export const ZitexLogo = ({ size = 'md', animated = true }) => {
@@ -29,7 +29,19 @@ export const ZitexLogo = ({ size = 'md', animated = true }) => {
 
 export const Navbar = ({ user, transparent = false, setUser }) => {
   const navigate = useNavigate();
+  const location = useLocation();
   const [isMenuOpen, setIsMenuOpen] = React.useState(false);
+
+  // Show "back" arrow on every page EXCEPT the landing page itself.
+  const showBack = location.pathname !== '/' && location.pathname !== '';
+
+  const handleBack = () => {
+    if (window.history.length > 1 && location.key !== 'default') {
+      navigate(-1);
+    } else {
+      navigate('/');
+    }
+  };
 
   const handleLogout = () => {
     localStorage.removeItem('token');
@@ -46,10 +58,23 @@ export const Navbar = ({ user, transparent = false, setUser }) => {
     <nav className={`fixed top-0 left-0 right-0 z-50 ${transparent ? 'bg-[#0a0a12]/90 backdrop-blur-xl border-b border-amber-500/10' : 'bg-[#0a0a12]/95 backdrop-blur-md border-b border-amber-500/20'}`}>
       <div className="container mx-auto px-4 md:px-8 max-w-7xl">
         <div className="flex items-center justify-between h-16">
-          <Link to="/" className="flex items-center gap-3" data-testid="navbar-logo">
-            <ZitexLogo size="md" />
-            <span className="text-2xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-amber-400 to-yellow-500">Zitex</span>
-          </Link>
+          <div className="flex items-center gap-2">
+            {showBack && (
+              <button
+                onClick={handleBack}
+                data-testid="navbar-back-btn"
+                className="inline-flex items-center justify-center w-9 h-9 rounded-lg bg-slate-800/70 hover:bg-amber-500/10 text-gray-300 hover:text-amber-400 border border-slate-700 hover:border-amber-500/40 transition-all"
+                title="رجوع"
+                aria-label="رجوع"
+              >
+                <ArrowRight className="w-4 h-4" />
+              </button>
+            )}
+            <Link to="/" className="flex items-center gap-3" data-testid="navbar-logo">
+              <ZitexLogo size="md" />
+              <span className="text-2xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-amber-400 to-yellow-500">Zitex</span>
+            </Link>
+          </div>
 
           {/* Desktop Menu */}
           <div className="hidden md:flex items-center gap-4">
