@@ -134,8 +134,10 @@ function App() {
         <Routes>
           {/* Root: ALWAYS show landing. Logged-in users can click on dashboard CTA to navigate. */}
           <Route path="/" element={<LandingPage user={user} />} />
-          <Route path="/build-from-zero" element={<ProtectedRoute><FreeBuild /></ProtectedRoute>} />
-          <Route path="/ai-agent" element={<ProtectedRoute><AIAgent /></ProtectedRoute>} />
+          <Route path="/build-from-zero" element={<Navigate to="/freebuild/chat" replace />} />
+          <Route path="/build-from-zero-legacy" element={<ProtectedRoute><FreeBuild /></ProtectedRoute>} />
+          <Route path="/ai-agent" element={<Navigate to="/freebuild/chat" replace />} />
+          <Route path="/ai-agent-legacy" element={<ProtectedRoute><AIAgent /></ProtectedRoute>} />
           <Route path="/app-builder" element={<ProtectedRoute><AppBuilder user={user} /></ProtectedRoute>} />
           <Route path="/dashboard/games" element={<ProtectedRoute><GameStudioDashboard user={user} /></ProtectedRoute>} />
           <Route path="/dashboard/games/web" element={<ProtectedRoute><WebGamesStudio user={user} /></ProtectedRoute>} />

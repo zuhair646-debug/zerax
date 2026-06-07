@@ -218,11 +218,12 @@ const LandingPage = ({ user }) => {
         {
           type: 'website-freebuild',
           title: 'إنشاء موقع من الصفر',
-          desc: 'FreeBuild — تصميم حصري',
+          desc: 'شات ذكي · توليد أصول · معاينة حية',
           gradient: 'from-emerald-500/20 to-teal-500/10',
           accent: '#10b981',
           bgImage: 'https://images.unsplash.com/photo-1467232004584-a241de8bcf5d?auto=format&fit=crop&w=800&q=70',
-          action: () => goOrRegister('/ai-agent'),
+          badge: 'جديد',
+          action: () => goOrRegister('/freebuild/chat'),
         },
         {
           type: 'website-template',
