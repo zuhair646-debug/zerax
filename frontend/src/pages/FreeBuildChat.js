@@ -1306,7 +1306,15 @@ function ChatWorkspace({ projectId }) {
       fd.append('message', msgText || '(انظر للصورة المرفقة)');
       filesToSend.forEach((f) => fd.append('files', f));
       if (refAsset?.id) fd.append('reference_asset_id', refAsset.id);
-      const r = await fetch(`${API}/api/freebuild-chat/project/${projectId}/chat`, {
+      // Use the new tool-using AGENT endpoint when there are no file attachments
+      // (the agent path supports Claude Sonnet 4.5 native tool calls with full
+      // self-validation). Falls back to the classic /chat endpoint for vision /
+      // voice / file uploads which the agent path doesn't process yet.
+      const useAgent = filesToSend.length === 0 && !refAsset?.id;
+      const endpoint = useAgent
+        ? `${API}/api/freebuild-chat/project/${projectId}/agent-chat`
+        : `${API}/api/freebuild-chat/project/${projectId}/chat`;
+      const r = await fetch(endpoint, {
         method: 'POST',
         headers: { Authorization: `Bearer ${token}` },
         body: fd,

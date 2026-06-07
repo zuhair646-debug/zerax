@@ -2108,6 +2108,77 @@ def make_freebuild_chat_router(db, get_current_user):
             "html_length": len(target.get("html", "")),
         }
 
+    # ═══════════════════════════════════════════════════════════════
+    # AGENT-CHAT — Claude tool-using agent (Anthropic native tools).
+    # Same architecture as the platform AI: real tools, iterative
+    # self-correction, no hidden state.
+    # ═══════════════════════════════════════════════════════════════
+    @router.post("/project/{pid}/agent-chat")
+    async def agent_chat(
+        pid: str,
+        message: str = Form(...),
+        user=Depends(get_current_user),
+    ):
+        proj = await db.freebuild_projects.find_one(
+            {"id": pid, "user_id": user["user_id"]}, {"_id": 0}
+        )
+        if not proj:
+            raise HTTPException(404, "مشروع غير موجود")
+        try:
+            from .freebuild_agent import run_agent_turn
+        except Exception:
+            logger.exception("agent import failed")
+            raise HTTPException(500, "agent module unavailable")
+
+        history = proj.get("messages") or []
+        result = await run_agent_turn(
+            project=proj,
+            user_message=message,
+            history_messages=history,
+        )
+        if not result.get("ok"):
+            raise HTTPException(502, result.get("error", "agent failed"))
+
+        summary = result["summary"]
+        new_html = result.get("new_html")
+        options = result.get("options") or []
+        iterations = result.get("iterations", 0)
+        snapshots = result.get("snapshots") or []
+
+        # Persist results
+        update_set: Dict[str, Any] = {"updated_at": _now()}
+        push_ops: Dict[str, Any] = {
+            "messages": {
+                "$each": [
+                    {"role": "user", "content": message, "timestamp": _now(),
+                     "pending_assets": [], "attachments": [], "reference": None,
+                     "answer_meta": None},
+                    {"role": "assistant", "content": summary, "timestamp": _now(),
+                     "pending_assets": [], "had_html": bool(new_html),
+                     "options": options, "design_variants": [],
+                     "agent_iterations": iterations,
+                     "model_used": result.get("model_used")},
+                ]
+            }
+        }
+        if new_html:
+            update_set["current_html"] = new_html
+        if snapshots:
+            push_ops["html_snapshots"] = {"$each": snapshots, "$slice": -20}
+        await db.freebuild_projects.update_one(
+            {"id": pid},
+            {"$push": push_ops, "$set": update_set},
+        )
+        return {
+            "response": summary,
+            "html_updated": bool(new_html),
+            "options": options,
+            "agent_iterations": iterations,
+            "model_used": result.get("model_used"),
+            "task_label": f"🤖 Agent (Claude Sonnet 4.5 · {iterations} خطوة)",
+            "tool_log": result.get("tool_log", []),
+        }
+
     return router
 
 
