@@ -219,21 +219,6 @@ def _fix_dead_navigation_links(html: str) -> tuple[str, int]:
         return html, 0
     fixed_count = 0
 
-    def _to_anchor(match):
-        nonlocal fixed_count
-        raw = match.group(2)
-        # extract base filename without extension
-        base = re.sub(r'\.html?|\.php|\.aspx?', '', raw, flags=re.IGNORECASE)
-        base = base.strip('/').split('/')[-1].split('?')[0].split('#')[0]
-        # normalize: lowercase, only alnum + dash
-        anchor = re.sub(r'[^a-zA-Z0-9_\-]', '-', base).strip('-').lower() or 'home'
-        # common index page → #home
-        if anchor in ('index', 'main', 'home'):
-            anchor = 'home'
-        fixed_count += 1
-        return f'{match.group(1)}#{anchor}{match.group(1)}'.replace(match.group(1), '"', 1).replace(match.group(1), '"', 1)
-
-    # simpler safe replacement: use a callable that returns the new href
     def _replace_dead(match):
         nonlocal fixed_count
         raw = match.group(2)
@@ -248,6 +233,99 @@ def _fix_dead_navigation_links(html: str) -> tuple[str, int]:
     html = _DEAD_LINK_RE.sub(_replace_dead, html)
     html = _ROUTE_LINK_RE.sub(_replace_dead, html)
     return html, fixed_count
+
+
+def _comprehensive_validation(html: str) -> List[Dict[str, Any]]:
+    """
+    Find every issue in the generated HTML that would break the user experience.
+    Returns list of {severity, code, message, hint} for the AI to fix.
+    """
+    if not html:
+        return []
+    issues: List[Dict[str, Any]] = []
+
+    # Issue 1: broken anchor links
+    broken = _verify_anchor_links(html)
+    if broken:
+        issues.append({
+            "severity": "high",
+            "code": "broken_anchors",
+            "message": f"روابط nav تشير لأقسام غير موجودة: {', '.join('#'+a for a in broken[:5])}",
+            "hint": "أضف <section id=\"X\"> لكل anchor مفقود، أو احذفه من الـnav.",
+            "broken": broken,
+        })
+
+    # Issue 2: nav exists but no <section> tags at all
+    has_nav = bool(re.search(r"<nav\b", html, re.IGNORECASE))
+    section_count = len(re.findall(r"<section\b[^>]*\bid\s*=\s*[\"']", html, re.IGNORECASE))
+    if has_nav and section_count == 0:
+        issues.append({
+            "severity": "high",
+            "code": "no_sections",
+            "message": "في nav بس ما في أي <section id=\"...\"> — الصفحة بدون محتوى ينتقل له.",
+            "hint": "أضف <section id=\"X\"> لكل رابط في الـnav.",
+        })
+
+    # Issue 3: placeholder/empty sections (e.g., "قيد البناء")
+    empty_sections = []
+    for m in re.finditer(
+        r'<section\b[^>]*\bid\s*=\s*[\"\']([a-zA-Z0-9_\-]+)[\"\'][^>]*>([\s\S]*?)</section>',
+        html, re.IGNORECASE,
+    ):
+        sec_id = m.group(1)
+        content = re.sub(r"<[^>]+>", "", m.group(2)).strip()
+        if len(content) < 30 or any(p in content for p in ["قيد البناء", "placeholder", "Coming soon", "TODO"]):
+            empty_sections.append(sec_id)
+    if len(empty_sections) >= 2:
+        issues.append({
+            "severity": "medium",
+            "code": "empty_sections",
+            "message": f"أقسام placeholder فاضية: {', '.join('#'+s for s in empty_sections[:4])}",
+            "hint": "املأها بمحتوى حقيقي. استخدم REPLACE_SECTION لكل قسم لحاله.",
+            "sections": empty_sections,
+        })
+
+    # Issue 4: tab/SPA mode without showPage() routing
+    has_page_class = bool(re.search(r'class\s*=\s*[\"\'][^\"\']*\bpage\b', html, re.IGNORECASE))
+    has_showpage_fn = bool(re.search(r"function\s+showPage|showPage\s*=\s*function|showPage\s*=\s*\(", html, re.IGNORECASE))
+    if has_page_class and not has_showpage_fn:
+        issues.append({
+            "severity": "high",
+            "code": "missing_routing_js",
+            "message": "في أقسام بـclass='page' لكن ما في showPage() JS — الـtabs ما تشتغل.",
+            "hint": "أضف الـboilerplate JS اللي يخفي/يظهر الـpages عند الضغط على nav.",
+        })
+
+    # Issue 5: malformed HTML (no closing body/html)
+    lower = html.lower()
+    if "<body" in lower and "</body>" not in lower:
+        issues.append({"severity": "high", "code": "no_body_close", "message": "ناقص </body>", "hint": "أغلق الـ<body>."})
+    if "<html" in lower and "</html>" not in lower:
+        issues.append({"severity": "high", "code": "no_html_close", "message": "ناقص </html>", "hint": "أغلق الـ<html>."})
+
+    # Issue 6: still has dead links after rewrite (shouldn't happen but safety net)
+    if _DEAD_LINK_RE.search(html) or _ROUTE_LINK_RE.search(html):
+        issues.append({
+            "severity": "high",
+            "code": "still_dead_links",
+            "message": "لازال في روابط لصفحات منفصلة (page.html / /route)",
+            "hint": "استبدلها بـ#anchors داخل نفس الـHTML.",
+        })
+
+    return issues
+
+
+def _build_fix_prompt(issues: List[Dict[str, Any]]) -> str:
+    """Constructs a precise correction prompt the AI must apply."""
+    lines = ["⚠️ تنبيه نظام داخلي (لا تظهره للعميل): فحص النظام كشف المشاكل التالية في ردك:"]
+    lines.append("")
+    for idx, iss in enumerate(issues, 1):
+        sev = "🔴" if iss["severity"] == "high" else "🟡"
+        lines.append(f"{sev} {idx}. **{iss['code']}**: {iss['message']}")
+        lines.append(f"   💡 الحل: {iss['hint']}")
+    lines.append("")
+    lines.append("أعد إصدار الـHTML مع تطبيق كل الإصلاحات أعلاه. استخدم `<<REPLACE_SECTION>>` لقسم محدد، أو ```html``` كامل إذا كانت أكثر من قسم.")
+    return "\n".join(lines)
 
 
 def _summarize_html(html: str) -> str:
@@ -1259,32 +1337,46 @@ def make_freebuild_chat_router(db, get_current_user):
                     ai_text = retry_result["content"]
                     model_used = retry_result.get("model_used", model_used)
 
-            # ── Self-correction loop — if generated HTML has broken anchors,
-            # ask a stronger reasoning model to fix them. One pass only.
-            quick_html = _extract_html(ai_text)
-            if quick_html:
-                broken = _verify_anchor_links(quick_html)
-                if broken and len(broken) >= 2:
-                    logger.warning(f"freebuild auto-fix: {len(broken)} broken anchors")
-                    fix_msgs = msg_list + [
-                        {"role": "assistant", "content": ai_text},
-                        {"role": "user", "content": (
-                            "⚠️ تنبيه نظام داخلي (لا تظهره للمستخدم): "
-                            f"الكود فيه روابط معطوبة لأقسام غير موجودة: {', '.join('#'+a for a in broken[:5])}. "
-                            "أعد إصدار نفس الكود مع إصلاح: إما أنشئ الـsections المفقودة، أو احذف الروابط الميتة من الـnav."
-                        )},
-                    ]
-                    fix_result = await zitex_chat(
-                        agent="freebuild",
-                        messages=fix_msgs,
-                        user_id=user["user_id"],
-                        extra_context=extra_ctx,
-                        requires_vision=False,
-                        task_type_override="reasoning_hard",
-                    )
-                    if fix_result.get("ok") and _extract_html(fix_result["content"]):
-                        ai_text = fix_result["content"]
-                        model_used = f"{model_used} + {fix_result.get('model_used', 'fix')}"
+            # ── AGENTIC REPAIR LOOP — up to 3 iterations of self-correction.
+            # The AI runs comprehensive validation (dead links, missing sections,
+            # placeholder content, malformed HTML, missing JS routing) and
+            # automatically fixes issues by re-prompting itself.
+            agent_iterations = 0
+            for _attempt in range(3):
+                quick_html = _extract_html(ai_text)
+                if not quick_html:
+                    break  # no HTML to validate (chat-only response)
+                # Apply best-effort dead-link auto-rewrite before validation
+                quick_html, _ = _fix_dead_navigation_links(quick_html)
+                issues = _comprehensive_validation(quick_html)
+                high_severity = [i for i in issues if i["severity"] == "high"]
+                if not high_severity:
+                    break  # clean — done
+                logger.warning(
+                    f"freebuild agentic loop iter={_attempt+1} issues={len(issues)} "
+                    f"high={len(high_severity)} codes={[i['code'] for i in issues]}"
+                )
+                fix_prompt = _build_fix_prompt(issues)
+                fix_msgs = msg_list + [
+                    {"role": "assistant", "content": ai_text},
+                    {"role": "user", "content": fix_prompt},
+                ]
+                fix_result = await zitex_chat(
+                    agent="freebuild",
+                    messages=fix_msgs,
+                    user_id=user["user_id"],
+                    extra_context=extra_ctx,
+                    requires_vision=False,
+                    task_type_override="reasoning_hard",
+                )
+                if not fix_result.get("ok"):
+                    break
+                new_text = fix_result["content"]
+                if not _extract_html(new_text):
+                    break  # AI didn't produce HTML in the fix attempt
+                ai_text = new_text
+                model_used = f"{model_used.split(' + ')[0]} + {fix_result.get('model_used', 'fix')}×{_attempt+1}"
+                agent_iterations += 1
 
             # Design-drift gate — smart guard that distinguishes:
             #   • Conversational (user asked "what can you do?")     → SKIP entirely
@@ -1506,6 +1598,7 @@ def make_freebuild_chat_router(db, get_current_user):
             "html_updated": bool(new_html),
             "task_label": task_label,
             "model_used": model_used,
+            "agent_iterations": agent_iterations,
         }
 
     # ===== Approve a design variant (when AI offered 2-3 designs) =====

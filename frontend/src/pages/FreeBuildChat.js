@@ -1317,10 +1317,13 @@ function ChatWorkspace({ projectId }) {
       }
       const data = await r.json();
       if (data.html_updated) {
-        toast.success('✨ تم تحديث المعاينة الحية', {
+        const iters = data.agent_iterations || 0;
+        const msg = iters > 0
+          ? `✨ تم تحديث المعاينة (🔁 ${iters} إصلاح تلقائي)`
+          : '✨ تم تحديث المعاينة الحية';
+        toast.success(msg, {
           action: { label: 'افتح', onClick: () => setActiveTab('live') },
         });
-        // Auto-switch to the live preview tab so the user sees the update
         setActiveTab((prev) => (prev === 'chat' ? 'live' : prev));
       }
       // Capture which AI model worked on this turn (for UI display)
