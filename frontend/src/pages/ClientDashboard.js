@@ -11,17 +11,17 @@ import SiteBannerStories from '@/components/SiteBannerStories';
 import { BackButton } from '@/components/BackButton';
 
 const QUICK_ACTIONS = [
-  { title: '🎨 استوديو الصور', desc: 'صور احترافية بسيناريو عميق + شات تفاعلي', icon: Image, path: '/studio/image', color: 'from-purple-500 to-violet-600', badge: 'نقاط' },
-  { title: '🎬 استوديو الفيديو', desc: 'Sora 2 + سيناريو + ستوري بورد + رفع صوتك', icon: Clapperboard, path: '/studio/video', color: 'from-orange-500 to-red-500', badge: 'نقاط' },
-  { title: '📱 إنشاء التطبيقات', desc: 'ألعاب وأدوات بمحادثة AI + معاينة iPhone حية', icon: Smartphone, path: '/dashboard/apps', color: 'from-cyan-500 to-blue-600', badge: '⚡ AI' },
-  { title: '🎮 استوديو الألعاب', desc: 'ألعاب HTML5 + تطبيقات 3D للموبايل والـPC', icon: Gamepad2, path: '/dashboard/games', color: 'from-violet-500 to-purple-600', badge: '🔥 جديد' },
-  { title: '🎬 استوديو السينما', desc: 'أفلام + إعلانات + موسيقى + حلقات طويلة', icon: Clapperboard, path: '/dashboard/cinema', color: 'from-rose-500 to-amber-600', badge: '⭐ جديد' },
-  { title: '🌐 طلب موقع جديد', desc: 'أنشئ موقعك بالذكاء الاصطناعي', icon: PlusCircle, path: '/dashboard/new-request', color: 'from-blue-500 to-cyan-500' },
-  { title: '📱 رفيقتي على الجوال', desc: 'Zara/Layla كمساعدة شخصية يومية', icon: Bot, path: '/companion', color: 'from-fuchsia-500 to-pink-600', badge: 'جديد' },
-  { title: '🤖 مساعدتي الذكية', desc: 'فعّل مساعدة AI لمتجرك', icon: Bot, path: '/dashboard/avatar', color: 'from-emerald-500 to-green-600', badge: '14 يوم مجاناً' },
-  { title: '🌉 Channel Bridge', desc: 'انشر أصولك في متاجرك', icon: Share2, path: '/dashboard/bridge', color: 'from-sky-500 to-cyan-500' },
-  { title: '📄 طلباتي', desc: 'عرض وإدارة طلباتك', icon: FileText, path: '/dashboard/requests', color: 'from-green-500 to-emerald-500' },
-  { title: '🌍 مواقعي', desc: 'عرض المواقع المنجزة', icon: Globe, path: '/dashboard/websites', color: 'from-indigo-500 to-purple-500' },
+  { title: 'استوديو الصور', desc: 'صور احترافية بسيناريو عميق + شات تفاعلي', icon: Image, path: '/studio/image', accent: '#a78bfa', gradient: 'from-purple-500/30 to-violet-500/10', bgImage: 'https://images.unsplash.com/photo-1542038784456-1ea8e935640e?auto=format&fit=crop&w=800&q=70', badge: 'نقاط' },
+  { title: 'استوديو الفيديو', desc: 'Sora 2 + سيناريو + ستوري بورد + رفع صوتك', icon: Clapperboard, path: '/studio/video', accent: '#fb923c', gradient: 'from-orange-500/30 to-red-500/10', bgImage: 'https://images.unsplash.com/photo-1485846234645-a62644f84728?auto=format&fit=crop&w=800&q=70', badge: 'نقاط' },
+  { title: 'إنشاء التطبيقات', desc: 'ألعاب وأدوات بمحادثة AI + معاينة iPhone حية', icon: Smartphone, path: '/dashboard/apps', accent: '#22d3ee', gradient: 'from-cyan-500/30 to-blue-500/10', bgImage: 'https://images.unsplash.com/photo-1512941937669-90a1b58e7e9c?auto=format&fit=crop&w=800&q=70', badge: '⚡ AI' },
+  { title: 'استوديو الألعاب', desc: 'ألعاب HTML5 + تطبيقات 3D للموبايل والـPC', icon: Gamepad2, path: '/dashboard/games', accent: '#a855f7', gradient: 'from-violet-500/30 to-purple-500/10', bgImage: 'https://images.unsplash.com/photo-1593305841991-05c297ba4575?auto=format&fit=crop&w=800&q=70', badge: '🔥 جديد' },
+  { title: 'استوديو السينما', desc: 'أفلام + إعلانات + موسيقى + حلقات طويلة', icon: Clapperboard, path: '/dashboard/cinema', accent: '#f472b6', gradient: 'from-rose-500/30 to-amber-500/10', bgImage: 'https://images.unsplash.com/photo-1485846234645-a62644f84728?auto=format&fit=crop&w=800&q=70', badge: '⭐ جديد' },
+  { title: 'طلب موقع جديد', desc: 'أنشئ موقعك بالذكاء الاصطناعي', icon: PlusCircle, path: '/dashboard/new-request', accent: '#3b82f6', gradient: 'from-blue-500/30 to-cyan-500/10', bgImage: 'https://images.unsplash.com/photo-1467232004584-a241de8bcf5d?auto=format&fit=crop&w=800&q=70' },
+  { title: 'رفيقتي على الجوال', desc: 'Zara/Layla كمساعدة شخصية يومية', icon: Bot, path: '/companion', accent: '#e879f9', gradient: 'from-fuchsia-500/30 to-pink-500/10', bgImage: 'https://images.unsplash.com/photo-1551434678-e076c223a692?auto=format&fit=crop&w=800&q=70', badge: 'جديد' },
+  { title: 'مساعدتي الذكية', desc: 'فعّل مساعدة AI لمتجرك', icon: Bot, path: '/dashboard/avatar', accent: '#10b981', gradient: 'from-emerald-500/30 to-green-500/10', bgImage: 'https://images.unsplash.com/photo-1556761175-5973dc0f32e7?auto=format&fit=crop&w=800&q=70', badge: '14 يوم مجاناً' },
+  { title: 'Channel Bridge', desc: 'انشر أصولك في متاجرك المتعددة', icon: Share2, path: '/dashboard/bridge', accent: '#0ea5e9', gradient: 'from-sky-500/30 to-cyan-500/10', bgImage: 'https://images.unsplash.com/photo-1557804506-669a67965ba0?auto=format&fit=crop&w=800&q=70' },
+  { title: 'طلباتي', desc: 'عرض وإدارة طلباتك', icon: FileText, path: '/dashboard/requests', accent: '#22c55e', gradient: 'from-green-500/30 to-emerald-500/10', bgImage: 'https://images.unsplash.com/photo-1454165804606-c3d57bc86b40?auto=format&fit=crop&w=800&q=70' },
+  { title: 'مواقعي', desc: 'عرض المواقع المنجزة', icon: Globe, path: '/dashboard/websites', accent: '#6366f1', gradient: 'from-indigo-500/30 to-purple-500/10', bgImage: 'https://images.unsplash.com/photo-1460925895917-afdab827c52f?auto=format&fit=crop&w=800&q=70' },
 ];
 
 const ClientDashboard = ({ user, setUser }) => {
@@ -175,14 +175,14 @@ const ClientDashboard = ({ user, setUser }) => {
           </Card>
         </div>
 
-        {/* Quick Actions Grid — clean, performant, mobile-first */}
-        <Card className="bg-slate-800/80 border-slate-700">
+        {/* Quick Actions Grid — vibrant cards with background images, matching landing page style */}
+        <Card className="bg-slate-800/60 border-slate-700">
           <CardHeader className="pb-4">
             <CardTitle className="text-white text-lg">الإجراءات السريعة</CardTitle>
             <CardDescription className="text-gray-400 text-sm">اختر ما تريد فعله</CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+            <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
               {QUICK_ACTIONS.map((action, idx) => {
                 const Icon = action.icon;
                 return (
@@ -192,19 +192,49 @@ const ClientDashboard = ({ user, setUser }) => {
                     tabIndex={0}
                     onClick={go(action.path)}
                     onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); navigate(action.path); } }}
-                    className="quick-action-card p-5 rounded-xl bg-slate-700/40 border border-slate-600/60 cursor-pointer text-right"
+                    className="quick-action-card relative rounded-xl overflow-hidden aspect-[4/3] sm:aspect-[5/4] border border-white/10 cursor-pointer text-right"
                     data-testid={`action-${idx}`}
                   >
+                    {/* Background photo */}
+                    <div
+                      className="absolute inset-0 bg-cover bg-center"
+                      style={{ backgroundImage: `url('${action.bgImage}')`, transform: 'scale(1.08)' }}
+                    />
+                    {/* Color tint */}
+                    <div className={`absolute inset-0 bg-gradient-to-tr ${action.gradient}`} />
+                    {/* Dark gradient bottom for text readability */}
+                    <div className="absolute inset-0 bg-gradient-to-t from-black via-black/70 to-black/10" />
+
+                    {/* Accent dot top-left */}
+                    <div
+                      className="absolute top-2 right-2 w-2 h-2 rounded-full"
+                      style={{ background: action.accent, boxShadow: `0 0 10px ${action.accent}` }}
+                    />
+
+                    {/* Badge */}
                     {action.badge && (
-                      <span className="absolute top-3 left-3 text-[10px] bg-green-500 text-white px-2 py-0.5 rounded-full font-medium">
+                      <div className="absolute top-2 left-2 z-10 px-2 py-0.5 rounded-md bg-gradient-to-r from-amber-400 to-yellow-500 text-black text-[10px] font-black tracking-wider">
                         {action.badge}
-                      </span>
+                      </div>
                     )}
-                    <div className={`w-11 h-11 rounded-lg bg-gradient-to-br ${action.color} flex items-center justify-center text-white mb-3`}>
-                      <Icon className="w-5 h-5" />
+
+                    {/* Icon mid-top */}
+                    <div className="absolute top-3 right-1/2 translate-x-1/2 sm:top-4 sm:right-auto sm:left-3 sm:translate-x-0 z-10">
+                      <div
+                        className="w-10 h-10 rounded-lg bg-black/40 backdrop-blur-md border border-white/15 flex items-center justify-center"
+                        style={{ boxShadow: `0 0 14px ${action.accent}40` }}
+                      >
+                        <Icon className="w-5 h-5" style={{ color: action.accent }} />
+                      </div>
                     </div>
-                    <h3 className="text-base font-semibold text-white mb-1">{action.title}</h3>
-                    <p className="text-xs text-gray-400 leading-relaxed">{action.desc}</p>
+
+                    {/* Text bottom */}
+                    <div className="relative h-full flex flex-col justify-end p-3 sm:p-4">
+                      <h3 className="text-white font-black text-sm sm:text-base mb-0.5" style={{ textShadow: '0 2px 8px rgba(0,0,0,.5)' }}>
+                        {action.title}
+                      </h3>
+                      <p className="text-[10px] sm:text-xs text-white/80 font-medium leading-relaxed">{action.desc}</p>
+                    </div>
                   </div>
                 );
               })}

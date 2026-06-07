@@ -77,68 +77,73 @@ export const Navbar = ({ user, transparent = false, setUser }) => {
           </div>
 
           {/* Desktop Menu */}
-          <div className="hidden md:flex items-center gap-4">
-            <Link to="/pricing" className="text-sm font-medium text-gray-400 hover:text-amber-400 transition-colors">
+          <div className="hidden md:flex items-center gap-3">
+            <Link
+              to="/pricing"
+              className="navbar-link text-sm font-medium text-gray-300 px-3 py-2 rounded-lg"
+              data-testid="navbar-pricing-link"
+            >
               الأسعار
             </Link>
             {user ? (
               <>
-                <Button
-                  variant="outline"
+                <button
+                  type="button"
                   onClick={() => navigate(isAdmin ? '/admin' : '/dashboard')}
                   data-testid="navbar-dashboard-btn"
-                  className="border-slate-700 text-gray-300 hover:bg-slate-800 hover:text-amber-400"
+                  className="navbar-btn inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-slate-700 text-gray-300 text-sm font-medium"
                 >
-                  {isAdmin ? <Shield className="w-4 h-4 me-2" /> : <LayoutDashboard className="w-4 h-4 me-2" />}
+                  {isAdmin ? <Shield className="w-4 h-4" /> : <LayoutDashboard className="w-4 h-4" />}
                   {isAdmin ? 'لوحة الأدمن' : 'لوحة التحكم'}
-                </Button>
+                </button>
                 {isAdmin && (
-                  <Button
-                    variant="outline"
+                  <button
+                    type="button"
                     onClick={() => navigate('/operator')}
                     data-testid="navbar-operator-btn"
-                    className="border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/10"
-                    title="إدارة عملاء الوكالة (Agency Mode)"
+                    className="navbar-btn inline-flex items-center gap-1.5 px-3 py-2 rounded-lg border border-emerald-500/30 text-emerald-400 text-sm"
+                    title="إدارة عملاء الوكالة"
                   >
-                    🧑‍💼 الوكالة
-                  </Button>
+                    الوكالة
+                  </button>
                 )}
-                <Button
-                  variant="outline"
+                <button
+                  type="button"
                   onClick={() => navigate('/affiliate')}
                   data-testid="navbar-affiliate-btn"
-                  className="border-yellow-500/30 text-yellow-400 hover:bg-yellow-500/10"
+                  className="navbar-btn inline-flex items-center gap-1.5 px-3 py-2 rounded-lg border border-yellow-500/30 text-yellow-400 text-sm"
                   title="برنامج التسويق بالعمولة"
                 >
-                  🤝 الإحالة
-                </Button>
-                <Button 
-                  variant="outline" 
-                  onClick={handleLogout} 
-                  data-testid="navbar-logout-btn" 
-                  className="border-slate-700 text-gray-300 hover:bg-red-500/10 hover:text-red-400 hover:border-red-500/30"
+                  الإحالة
+                </button>
+                <button
+                  type="button"
+                  onClick={handleLogout}
+                  data-testid="navbar-logout-btn"
+                  className="navbar-btn inline-flex items-center gap-2 px-3 py-2 rounded-lg border border-slate-700 text-gray-300 text-sm"
                 >
-                  <LogOut className="w-4 h-4 me-2" />
+                  <LogOut className="w-4 h-4" />
                   خروج
-                </Button>
+                </button>
               </>
             ) : (
               <>
-                <Button 
-                  variant="ghost" 
-                  onClick={() => navigate('/login')} 
-                  data-testid="navbar-login-btn" 
-                  className="text-gray-300 hover:text-amber-400 hover:bg-amber-500/10"
+                <button
+                  type="button"
+                  onClick={() => navigate('/login')}
+                  data-testid="navbar-login-btn"
+                  className="navbar-btn px-4 py-2 text-gray-300 text-sm rounded-lg"
                 >
                   دخول
-                </Button>
-                <Button 
-                  onClick={() => navigate('/register')} 
-                  data-testid="navbar-register-btn" 
-                  className="bg-gradient-to-r from-amber-600 to-yellow-600 hover:from-amber-700 hover:to-yellow-700 shadow-lg shadow-amber-500/20"
+                </button>
+                <button
+                  type="button"
+                  onClick={() => navigate('/register')}
+                  data-testid="navbar-register-btn"
+                  className="navbar-btn-primary px-4 py-2 rounded-lg text-sm font-semibold text-black"
                 >
                   ابدأ مجاناً
-                </Button>
+                </button>
               </>
             )}
           </div>

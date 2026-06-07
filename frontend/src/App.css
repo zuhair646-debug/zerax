@@ -4,9 +4,46 @@
   -moz-osx-font-smoothing: grayscale;
 }
 
-/* ── Quick Action Cards (Dashboard) — completely static, no glow, no flash ──
-   100% static appearance. ZERO hover animations, ZERO transitions.
-   Only :active gives a brief darken on press (instant, no fade). */
+/* ── Navbar buttons & links — instant tap, no glow, clean hover ── */
+.navbar-link,
+.navbar-btn,
+.navbar-btn-primary {
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+  user-select: none;
+  -webkit-user-select: none;
+  transition: background-color 0.12s ease, color 0.12s ease, border-color 0.12s ease;
+  cursor: pointer;
+}
+.navbar-btn-primary {
+  background: linear-gradient(135deg, #FFD700 0%, #FFA500 100%);
+  border: none;
+  box-shadow: 0 4px 14px rgba(255, 165, 0, 0.25);
+}
+@media (hover: hover) and (pointer: fine) {
+  .navbar-link:hover {
+    background-color: rgba(251, 191, 36, 0.08);
+    color: rgb(251, 191, 36);
+  }
+  .navbar-btn:hover {
+    background-color: rgba(30, 41, 59, 0.6);
+  }
+  .navbar-btn-primary:hover {
+    box-shadow: 0 6px 20px rgba(255, 165, 0, 0.4);
+    transform: translateY(-1px);
+  }
+}
+.navbar-link:active,
+.navbar-btn:active {
+  background-color: rgba(71, 85, 105, 0.6);
+}
+.navbar-btn-primary:active {
+  transform: scale(0.97);
+}
+
+/* ── Quick Action Cards (Dashboard) — vibrant photos, no glow, no flash ──
+   The cards now have background images + gradients (like landing page).
+   Hover does nothing (static). Press gives a brief darken cue. */
 .quick-action-card {
   position: relative;
   -webkit-tap-highlight-color: transparent;
@@ -15,6 +52,7 @@
   -webkit-user-select: none;
   transition: none !important;
   animation: none !important;
+  will-change: auto;
 }
 .quick-action-card *,
 .quick-action-card *::before,
@@ -22,16 +60,14 @@
   transition: none !important;
   animation: none !important;
 }
-/* No hover effects at all — keep the card visually identical at rest, on hover, on focus. */
+/* No hover change at all — cards stay visually identical. */
 .quick-action-card:hover {
-  background-color: rgba(51, 65, 85, 0.4) !important;
-  border-color: rgba(71, 85, 105, 0.6) !important;
   transform: none !important;
   box-shadow: none !important;
 }
-/* Press feedback only — instant, brief, no fade. */
+/* Press feedback: ONE subtle scale-down (instant, no fade) — gives a tactile cue without "glow". */
 .quick-action-card:active {
-  background-color: rgba(71, 85, 105, 0.7) !important;
+  transform: scale(0.985) !important;
 }
 .quick-action-card:focus {
   outline: none;
