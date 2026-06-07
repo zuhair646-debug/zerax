@@ -4024,12 +4024,18 @@ async def zitex_ai_chat(req: ZitexAIRequest, current_user: dict = Depends(get_cu
     )
     if not result.get("ok"):
         raise HTTPException(status_code=502, detail=result.get("error", "AI failed"))
-    # Strip internal info from response
-    return {
+
+    # Only owners/admins see model_used (security: don't leak which model we route to)
+    is_admin = current_user.get("role") in ("owner", "admin", "super_admin") or current_user.get("is_owner")
+    response = {
         "content": result.get("content"),
-        "model_used": result.get("model_used"),
         "agent": result.get("agent"),
     }
+    if is_admin:
+        response["model_used"] = result.get("model_used")
+        response["cost_estimate_usd"] = result.get("cost_estimate_usd")
+        response["fallback_chain"] = result.get("fallback_chain", [])
+    return response
 
 
 # Include routers

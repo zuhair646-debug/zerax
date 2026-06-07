@@ -140,7 +140,15 @@ MODELS: Dict[str, Dict[str, Any]] = {
         "capabilities": {"function_calling": True, "json_mode": True, "vision": False},
         "good_at": ["quick_qa", "speed", "simple"],
     },
-    # ─────────── Gemini ───────────
+    # ─────────── Gemini 2.5 Pro (premium quality) ───────────
+    "gemini-2.5-pro": {
+        "provider": "gemini",
+        "context": 2_000_000,
+        "input_per_1m": 1.25,
+        "output_per_1m": 5.00,
+        "capabilities": {"function_calling": True, "json_mode": True, "vision": True},
+        "good_at": ["reasoning_hard", "long_context", "vision", "design"],
+    },
     "gemini-2.5-flash": {
         "provider": "gemini",
         "context": 1_000_000,
@@ -152,27 +160,65 @@ MODELS: Dict[str, Dict[str, Any]] = {
 }
 
 
-# Task → priority ladder (cheapest acceptable first → expensive fallback)
+# ═══════════════════════════════════════════════════════════════════════════
+# QUALITY-FIRST LADDERS (Feb 2026)
+# Order: BEST QUALITY first → fallback to next best if provider missing.
+# Price is the tie-breaker only when quality is comparable.
+# ═══════════════════════════════════════════════════════════════════════════
 TASK_LADDERS: Dict[str, List[str]] = {
-    "coding":          ["kimi-k2.6", "deepseek-chat", "claude-sonnet-4-5", "gpt-4o"],
-    "long_context":    ["kimi-k2.6", "gemini-2.5-flash", "claude-sonnet-4-5"],
-    "creative_write":  ["deepseek-chat", "claude-sonnet-4-5", "gpt-4o", "kimi-k2.6"],
-    "reasoning_hard":  ["deepseek-reasoner", "gpt-5", "claude-opus-4-5", "claude-sonnet-4-5"],
-    "quick_qa":        ["gemini-2.5-flash", "llama-3.3-70b-versatile", "gpt-4o-mini"],
-    "translation":     ["gemini-2.5-flash", "gpt-4o-mini", "claude-sonnet-4-5"],
-    "classification":  ["gemini-2.5-flash", "gpt-4o-mini", "llama-3.3-70b-versatile"],
-    "vision":          ["gemini-2.5-flash", "gpt-4o", "glm-4.6", "moonshot-v1-128k-vision-preview"],
-    "arabic":          ["claude-sonnet-4-5", "deepseek-chat", "gpt-4o", "gemini-2.5-flash"],
-    "agentic":         ["claude-sonnet-4-5", "kimi-k2.6", "gpt-4o"],
-    "json_strict":     ["gpt-4o-mini", "deepseek-chat", "kimi-k2.6", "gemini-2.5-flash"],
-    # NEW dedicated lanes
-    "design":          ["glm-4.6", "deepseek-chat", "claude-sonnet-4-5", "gpt-4o"],
-    "ui_ux":           ["glm-4.6", "deepseek-chat", "claude-sonnet-4-5"],
-    "website_build":   ["kimi-k2.6", "deepseek-chat", "claude-sonnet-4-5", "gpt-4o"],
-    "mobile_app":      ["kimi-k2.6", "deepseek-chat", "claude-sonnet-4-5"],
-    "game_dev":        ["kimi-k2.6", "deepseek-chat", "claude-sonnet-4-5", "gpt-4o"],
-    "image_brief":     ["deepseek-chat", "claude-sonnet-4-5", "gemini-2.5-flash"],
-    "video_script":    ["claude-sonnet-4-5", "deepseek-chat", "gpt-4o"],
+    # 💻 General coding — Claude Sonnet 4.5 is the SOTA for coding agents
+    "coding":          ["claude-sonnet-4-5", "gpt-4o", "claude-opus-4-5", "kimi-k2.6", "deepseek-chat"],
+
+    # 📚 Very long documents — Gemini 2.5 (1-2M ctx) crushes
+    "long_context":    ["gemini-2.5-pro", "gemini-2.5-flash", "claude-sonnet-4-5", "kimi-k2.6"],
+
+    # ✍️ Creative writing — Claude leads, GPT-5/4o as alt voices
+    "creative_write":  ["claude-opus-4-5", "claude-sonnet-4-5", "gpt-4o", "deepseek-chat"],
+
+    # 🧠 Hard reasoning / math / planning
+    "reasoning_hard":  ["gpt-5", "claude-opus-4-5", "gemini-2.5-pro", "deepseek-reasoner", "claude-sonnet-4-5"],
+
+    # ⚡ Fast Q&A — quality decent, speed matters more
+    "quick_qa":        ["claude-sonnet-4-5", "gemini-2.5-flash", "gpt-4o", "llama-3.3-70b-versatile"],
+
+    # 🌐 Translation
+    "translation":     ["claude-sonnet-4-5", "gpt-4o", "gemini-2.5-pro", "gemini-2.5-flash"],
+
+    # 🏷️ Classification — speed matters, quality similar
+    "classification":  ["claude-sonnet-4-5", "gpt-4o-mini", "gemini-2.5-flash"],
+
+    # 👁️ Vision — Claude Sonnet + GPT-4o are state of the art
+    "vision":          ["claude-sonnet-4-5", "gpt-4o", "gemini-2.5-pro", "gemini-2.5-flash"],
+
+    # 🇸🇦 Arabic — Claude Opus dominates, Sonnet very close, GPT-4o solid
+    "arabic":          ["claude-opus-4-5", "claude-sonnet-4-5", "gpt-4o", "gemini-2.5-pro"],
+
+    # 🤖 Agentic / tool use — Claude leads
+    "agentic":         ["claude-opus-4-5", "claude-sonnet-4-5", "gpt-4o", "kimi-k2.6"],
+
+    # 📦 Strict JSON output
+    "json_strict":     ["claude-sonnet-4-5", "gpt-4o", "gpt-4o-mini", "gemini-2.5-flash"],
+
+    # 🎨 Design / UI / UX — best Arabic + visual taste
+    "design":          ["claude-opus-4-5", "claude-sonnet-4-5", "gpt-4o", "glm-4.6", "deepseek-chat"],
+    "ui_ux":           ["claude-opus-4-5", "claude-sonnet-4-5", "gpt-4o", "glm-4.6"],
+
+    # 🌐 Website build — Claude for clean React/HTML
+    "website_build":   ["claude-opus-4-5", "claude-sonnet-4-5", "gpt-4o", "kimi-k2.6"],
+
+    # 📱 Mobile App — Claude excels at React Native patterns
+    "mobile_app":      ["claude-opus-4-5", "claude-sonnet-4-5", "gpt-4o", "kimi-k2.6"],
+
+    # 🎮 Game dev
+    "game_dev":        ["claude-sonnet-4-5", "gpt-4o", "kimi-k2.6", "deepseek-chat"],
+
+    # 🎬 Video/script creative
+    "video_script":    ["claude-opus-4-5", "claude-sonnet-4-5", "gpt-4o", "deepseek-chat"],
+
+    # 🖼️ Image brief writing (English prompts from Arabic ideas)
+    "image_brief":     ["claude-sonnet-4-5", "gpt-4o", "deepseek-chat", "gemini-2.5-flash"],
+
+    # 💬 Support / FAQ — fast + decent
     "support_chat":    ["claude-sonnet-4-5", "gpt-4o", "gemini-2.5-flash"],
 }
 
