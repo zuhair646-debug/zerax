@@ -383,13 +383,30 @@ _INTENT_REDESIGN_RE = re.compile(
     r"\bredesign\b|\brebuild\b|from\s+scratch|start\s+over|completely\s+new)",
     re.IGNORECASE,
 )
+# Conversational / non-executive messages (questions about capability, self-talk,
+# meta questions). These should NEVER trigger drift gate even if AI responds
+# with sample HTML.
+_INTENT_CONVERSATIONAL_RE = re.compile(
+    r"(تكلم|كلّم|اشرح|وضّح|من\s+أنت|مين\s+أنت|كيف\s+تشتغل|"
+    r"وش\s+تقدر|ايش\s+تقدر|قدراتك|مميزاتك|إمكانياتك|قدر?اتك|"
+    r"فحص|تحدّث|قول\s+لي|اخبرني|اعرض\s+علي|"
+    r"\bwhat\s+can\s+you|how\s+do\s+you|tell\s+me\s+about|"
+    r"who\s+are\s+you|explain|describe|capabilities|"
+    r"اسأل|سؤال|متى|لماذا|ليش|ليه)",
+    re.IGNORECASE,
+)
 
 
 def _detect_user_intent(user_msg: str) -> str:
-    """Returns 'additive' | 'redesign' | 'modify'."""
+    """Returns 'conversational' | 'additive' | 'redesign' | 'modify'."""
     if not user_msg:
         return "modify"
     msg = user_msg.strip()
+    # Conversational takes precedence (no code change implied)
+    if _INTENT_CONVERSATIONAL_RE.search(msg) and not (
+        _INTENT_ADDITIVE_RE.search(msg) or _INTENT_REDESIGN_RE.search(msg)
+    ):
+        return "conversational"
     if _INTENT_REDESIGN_RE.search(msg):
         return "redesign"
     if _INTENT_ADDITIVE_RE.search(msg):
@@ -420,6 +437,12 @@ def _classify_freebuild_task(
         return ("reasoning_hard", "🛠️ يصلّح أخطاء برمجية (GPT-5 / Opus)")
 
     msg = (user_msg or "").lower()
+
+    # Conversational / meta question — quick chat response, no code work needed
+    if _INTENT_CONVERSATIONAL_RE.search(user_msg or "") and not (
+        _INTENT_ADDITIVE_RE.search(user_msg or "") or _INTENT_REDESIGN_RE.search(user_msg or "")
+    ):
+        return ("arabic", "💬 يحاور (Claude Opus — أفضل عربي)")
 
     # Big existing project → need long context (Kimi 256K)
     if has_current_html and current_html_len > 30_000:
@@ -945,6 +968,14 @@ def make_freebuild_chat_router(db, get_current_user):
             "═══════════════════════════════════════════════════════════════\n"
             "أنت **مطوّر مُنفّذ** مو مستشار. الافتراضي = **اكتب الكود الآن**.\n"
             "\n"
+            "💬 **لكن: ميّز بين 3 أنواع رسائل**:\n"
+            "  🟦 **سؤال محادثة (Conversational)** — مثل: 'كلّم عن نفسك'، 'وش قدراتك'، 'كيف تشتغل'، 'اشرح لي'، 'فحص ذاتي':\n"
+            "     → جاوب نص فقط بدون HTML. لا تكتب ```html``` ولا تاقات. حوار طبيعي مهذّب.\n"
+            "  🟢 **طلب تنفيذي** — مثل: 'ابني، اعمل، نفّذ، صمم، اكتب، ضيف، عدّل، غيّر':\n"
+            "     → اكتب الكود فوراً بدون أي سؤال موافقة. هذا الافتراضي.\n"
+            "  🟡 **طلب توضيح/تخطيط** — مثل: 'قبل ما تبني، شرح الخطة':\n"
+            "     → اكتب الخطة + الـshell معاً في نفس الرسالة. لا تنتظر موافقة على الخطة.\n"
+            "\n"
             "🟢 **متى تكتب HTML فوراً بدون أي سؤال موافقة**:\n"
             "  • أول مرة في المشروع (current_html فاضي) → اكتب الـshell كاملاً فوراً.\n"
             "  • العميل قال 'ابني، اعمل، نفّذ، صمم لي، اكتب' → اكتب الكود فوراً.\n"
@@ -962,6 +993,7 @@ def make_freebuild_chat_router(db, get_current_user):
             "  • الكذب بقولك 'تم' بدون كتابة كود فعلي.\n"
             "  • تأخير الكود بحجة 'انتظر موافقة' في الحالات اللي ما تحتاج موافقة.\n"
             "  • قول 'نظامي يمنعني' أو 'في قيد على' — **ما في قيد يمنعك**. اكتب وامضِ.\n"
+            "  • كتابة HTML عرضي في رسالة محادثة (سؤال meta) — جاوب نص فقط.\n"
             "═══════════════════════════════════════════════════════════════\n"
             "\n"
             "🚨 قواعد ثقة (فحص ذاتي قبل الإرسال — مو عقوبات، بس صدق مع العميل):\n"
@@ -1084,17 +1116,24 @@ def make_freebuild_chat_router(db, get_current_user):
                         model_used = f"{model_used} + {fix_result.get('model_used', 'fix')}"
 
             # Design-drift gate — smart guard that distinguishes:
-            #   • Additive edits (user asked to ADD a section)     → ALLOW
-            #   • Explicit redesign (user said "غيّر كل شي")        → ALLOW
-            #   • Destructive shrink (AI deleted header/footer)    → BLOCK
-            #   • Catastrophic drift > 0.85                        → BLOCK
+            #   • Conversational (user asked "what can you do?")     → SKIP entirely
+            #   • Additive edits (user asked to ADD a section)       → ALLOW
+            #   • Explicit redesign (user said "غيّر كل شي")          → ALLOW
+            #   • Destructive shrink (AI deleted header/footer)      → BLOCK
+            #   • Catastrophic drift > 0.85                          → BLOCK
             if proj.get("current_html"):
                 new_full = _extract_html(ai_text)
+                user_intent = _detect_user_intent(message or "")
+                # For conversational/meta turns, never overwrite the saved site
+                # — even if the AI accidentally pasted demo HTML.
+                if user_intent == "conversational":
+                    logger.info("freebuild conversational turn: skipping HTML save")
+                    # Force-strip the demo HTML so it doesn't enter current_html
+                    new_full = None
                 if new_full:
                     prev_sig = _design_signature(proj["current_html"])
                     new_sig = _design_signature(new_full)
                     drift = _structural_drift_ratio(prev_sig, new_sig)
-                    user_intent = _detect_user_intent(message or "")
                     is_additive = _is_additive_change(prev_sig, new_sig)
                     # AI is destructive if it shrank a major element it had before
                     is_destructive = (
@@ -1153,7 +1192,12 @@ def make_freebuild_chat_router(db, get_current_user):
             })
 
         # Detect HTML for live preview (extracted BEFORE stripping)
-        all_variants = _extract_all_html_variants(ai_text)
+        # Skip entirely on conversational turns (user asked a meta question).
+        is_conversational = (
+            proj.get("current_html")
+            and _detect_user_intent(message or "") == "conversational"
+        )
+        all_variants = [] if is_conversational else _extract_all_html_variants(ai_text)
         # If AI produced 2+ HTML blocks → design variants (user picks one);
         # otherwise the single block becomes current_html immediately.
         new_html = None
