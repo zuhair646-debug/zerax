@@ -1,5 +1,11 @@
 # Test Credentials
 
+## Audit Test User (created Feb 8 2026 — for non-owner E2E tests)
+- Email: `audit_1780793976@test.com`
+- Password: `Test1234!`
+- Role: regular user
+- Starting credits: 20
+
 ## Platform Owner (Admin)
 - URL: `/login`
 - Email: `owner@zitex.com`

@@ -38,14 +38,15 @@ export default function Pricing({ user }) {
     })();
   }, []);
 
-  // Load PayPal SDK with messaging component (Pay in 4 / Pay Monthly badges)
+  // Load PayPal SDK ONLY when user picks PayPal (avoids mobile crash + 422 spam)
   useEffect(() => {
+    if (provider !== 'paypal') return;
     if (window.paypal) return;
     const script = document.createElement('script');
     script.src = `https://www.paypal.com/sdk/js?client-id=${PAYPAL_CLIENT_ID}&components=messages&currency=USD`;
     script.async = true;
+    script.onerror = () => {}; // swallow load errors silently
     script.onload = () => {
-      // Re-render messages after script loads
       if (window.paypal && window.paypal.Messages) {
         document.querySelectorAll('[data-pp-message]').forEach(el => {
           try { window.paypal.Messages({ amount: el.dataset.ppAmount, placement: 'product' }).render(el); } catch {}
@@ -53,7 +54,7 @@ export default function Pricing({ user }) {
       }
     };
     document.body.appendChild(script);
-  }, []);
+  }, [provider]);
 
   const validatePromo = async (baseAmount, itemType) => {
     if (!promoCode || !user) return null;

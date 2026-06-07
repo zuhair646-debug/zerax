@@ -973,30 +973,41 @@ async def transcribe_audio(
 
 @api_router.post("/generate/image")
 async def generate_image(prompt: str, current_user: dict = Depends(get_current_user)):
-    """Generate image - TEMPORARILY DISABLED for independent hosting"""
+    """Generate image — charges credits via pricing module (with legacy free_images fallback)."""
     if not AI_FEATURES_ENABLED:
         raise HTTPException(status_code=503, detail="ميزة توليد الصور معطلة مؤقتاً. ستتوفر قريباً بعد إعداد OpenAI API!")
-    
+
     user_doc = await db.users.find_one({"id": current_user['user_id']}, {"_id": 0})
-    
-    is_owner = user_doc.get('is_owner', False)
+
+    is_owner = user_doc.get('is_owner', False) or user_doc.get('role') in ('owner', 'admin', 'super_admin')
     has_subscription = await check_user_subscription(current_user['user_id'], "images")
     free_images = user_doc.get('free_images', 0)
-    
+
     is_free_use = False
-    
+    charge_method = None  # 'owner' | 'subscription' | 'free_quota' | 'credits'
+
     if is_owner:
-        pass
+        charge_method = 'owner'
     elif has_subscription:
-        pass
+        charge_method = 'subscription'
     elif free_images > 0:
         is_free_use = True
+        charge_method = 'free_quota'
         await db.users.update_one(
             {"id": current_user['user_id']},
             {"$inc": {"free_images": -1}}
         )
     else:
-        raise HTTPException(status_code=403, detail="لا يوجد لديك رصيد مجاني أو اشتراك")
+        # ── New: charge from pricing credits balance ────────────────
+        from modules.pricing.credits import charge_user
+        try:
+            new_balance = await charge_user(
+                db, current_user['user_id'], "image_gpt_standard",
+                meta={"prompt_preview": prompt[:60]},
+            )
+            charge_method = 'credits'
+        except ValueError as e:
+            raise HTTPException(status_code=402, detail=str(e))
     
     try:
         # Use OpenAI DALL-E for image generation

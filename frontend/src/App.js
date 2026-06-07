@@ -123,12 +123,8 @@ function App() {
     <div className="App" dir="rtl">
       <BrowserRouter>
         <Routes>
-          {/* Root: logged-in users go straight to their dashboard, guests see landing */}
-          <Route path="/" element={
-            user
-              ? <Navigate to={(['admin','owner','super_admin'].includes(user.role) || user.is_owner) ? '/admin' : '/dashboard'} replace />
-              : <LandingPage user={user} />
-          } />
+          {/* Root: ALWAYS show landing. Logged-in users can click on dashboard CTA to navigate. */}
+          <Route path="/" element={<LandingPage user={user} />} />
           <Route path="/build-from-zero" element={<ProtectedRoute><FreeBuild /></ProtectedRoute>} />
           <Route path="/ai-agent" element={<ProtectedRoute><AIAgent /></ProtectedRoute>} />
           <Route path="/app-builder" element={<ProtectedRoute><AppBuilder user={user} /></ProtectedRoute>} />
