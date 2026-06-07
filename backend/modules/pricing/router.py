@@ -466,6 +466,7 @@ def create_router(db, get_current_user, get_admin_user):
             raise HTTPException(status_code=402, detail=str(e))
 
     @router.post("/lemonsqueezy-webhook")
+    @router.post("/ls-webhook")
     async def lemonsqueezy_webhook(request: Request):
         """🍋 Receives order_created events from Lemon Squeezy → grants credits + invoice.
 
