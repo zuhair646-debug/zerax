@@ -12,8 +12,10 @@
   touch-action: manipulation;
   user-select: none;
   -webkit-user-select: none;
-  transition: background-color 0.12s ease, color 0.12s ease, border-color 0.12s ease;
   cursor: pointer;
+  /* NO transitions by default — keeps buttons 100% stable. */
+  transition: none !important;
+  animation: none !important;
 }
 .navbar-btn-primary {
   background: linear-gradient(135deg, #FFD700 0%, #FFA500 100%);
@@ -22,23 +24,51 @@
 }
 @media (hover: hover) and (pointer: fine) {
   .navbar-link:hover {
-    background-color: rgba(251, 191, 36, 0.08);
+    background-color: rgba(251, 191, 36, 0.06);
     color: rgb(251, 191, 36);
   }
   .navbar-btn:hover {
-    background-color: rgba(30, 41, 59, 0.6);
+    background-color: rgba(30, 41, 59, 0.5);
   }
   .navbar-btn-primary:hover {
     box-shadow: 0 6px 20px rgba(255, 165, 0, 0.4);
-    transform: translateY(-1px);
   }
 }
 .navbar-link:active,
 .navbar-btn:active {
-  background-color: rgba(71, 85, 105, 0.6);
+  background-color: rgba(71, 85, 105, 0.5);
 }
 .navbar-btn-primary:active {
   transform: scale(0.97);
+}
+
+/* ── Persistent Gold Promo Strip (top of every page) ── */
+.promo-strip {
+  background: linear-gradient(90deg, #FFD700 0%, #FFA500 50%, #FFD700 100%);
+  background-size: 200% 100%;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.15);
+  box-shadow: 0 2px 8px rgba(255, 165, 0, 0.25);
+  overflow: hidden;
+  animation: promo-gradient 8s linear infinite;
+}
+.promo-shine {
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 30%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.4), transparent);
+  animation: promo-shine 4s ease-in-out infinite;
+  pointer-events: none;
+}
+@keyframes promo-gradient {
+  0% { background-position: 0% 0%; }
+  100% { background-position: 200% 0%; }
+}
+@keyframes promo-shine {
+  0% { left: -30%; }
+  50% { left: 130%; }
+  100% { left: 130%; }
 }
 
 /* ── Quick Action Cards (Dashboard) — vibrant photos, no glow, no flash ──

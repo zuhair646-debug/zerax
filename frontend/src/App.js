@@ -1,6 +1,7 @@
 import React from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { Toaster } from '@/components/ui/sonner';
+import PromoStrip from '@/components/PromoStrip';
 import LandingPage from '@/pages/LandingPage';
 import DemoLanding from '@/pages/DemoLanding';
 import VrmPreview from '@/pages/VrmPreview';
@@ -9,6 +10,9 @@ import GlobalAvatarMount from '@/components/GlobalAvatarMount';
 import LoginPage from '@/pages/LoginPage';
 import RegisterPage from '@/pages/RegisterPage';
 import ClientDashboard from '@/pages/ClientDashboard';
+import MyImages from '@/pages/MyImages';
+import MyVideos from '@/pages/MyVideos';
+import SocialAccounts from '@/pages/SocialAccounts';
 import NewRequest from '@/pages/NewRequest';
 import MyRequests from '@/pages/MyRequests';
 import RequestDetails from '@/pages/RequestDetails';
@@ -122,6 +126,7 @@ function App() {
   return (
     <div className="App" dir="rtl">
       <BrowserRouter>
+        <PromoStrip />
         <Routes>
           {/* Root: ALWAYS show landing. Logged-in users can click on dashboard CTA to navigate. */}
           <Route path="/" element={<LandingPage user={user} />} />
@@ -150,6 +155,16 @@ function App() {
           <Route path="/payment" element={<ProtectedRoute><PaymentPage user={user} /></ProtectedRoute>} />
           
           <Route path="/dashboard" element={<ProtectedRoute><ClientDashboard user={user} setUser={setUser} /></ProtectedRoute>} />
+          {/* My Library vault pages */}
+          <Route path="/dashboard/my-images" element={<ProtectedRoute><MyImages user={user} setUser={setUser} /></ProtectedRoute>} />
+          <Route path="/dashboard/my-videos" element={<ProtectedRoute><MyVideos user={user} setUser={setUser} /></ProtectedRoute>} />
+          <Route path="/dashboard/my-apps" element={<ProtectedRoute><Navigate to="/dashboard/games" replace /></ProtectedRoute>} />
+          {/* Sharing & social */}
+          <Route path="/dashboard/social-accounts" element={<ProtectedRoute><SocialAccounts user={user} setUser={setUser} /></ProtectedRoute>} />
+          <Route path="/dashboard/share" element={<ProtectedRoute><Navigate to="/dashboard/my-images" replace /></ProtectedRoute>} />
+          <Route path="/dashboard/share-history" element={<ProtectedRoute><Navigate to="/dashboard/my-images" replace /></ProtectedRoute>} />
+          <Route path="/dashboard/downloads" element={<ProtectedRoute><Navigate to="/dashboard/my-images" replace /></ProtectedRoute>} />
+          <Route path="/dashboard/profile" element={<ProtectedRoute><Navigate to="/dashboard" replace /></ProtectedRoute>} />
           <Route path="/dashboard/new-request" element={<ProtectedRoute><NewRequest user={user} /></ProtectedRoute>} />
           <Route path="/dashboard/requests" element={<ProtectedRoute><MyRequests user={user} /></ProtectedRoute>} />
           <Route path="/dashboard/requests/:id" element={<ProtectedRoute><RequestDetails user={user} /></ProtectedRoute>} />

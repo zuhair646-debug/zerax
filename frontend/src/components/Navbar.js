@@ -31,6 +31,16 @@ export const Navbar = ({ user, transparent = false, setUser }) => {
   const navigate = useNavigate();
   const location = useLocation();
   const [isMenuOpen, setIsMenuOpen] = React.useState(false);
+  const [promoShown, setPromoShown] = React.useState(true);
+
+  // Sync with PromoStrip's dismiss state to adjust top offset
+  React.useEffect(() => {
+    const check = () => setPromoShown(sessionStorage.getItem('zitex_promo_dismissed') !== '1');
+    check();
+    window.addEventListener('storage', check);
+    const interval = setInterval(check, 500);
+    return () => { window.removeEventListener('storage', check); clearInterval(interval); };
+  }, []);
 
   // Show "back" arrow on every page EXCEPT the landing page itself.
   const showBack = location.pathname !== '/' && location.pathname !== '';
@@ -55,7 +65,10 @@ export const Navbar = ({ user, transparent = false, setUser }) => {
   const isAdmin = user?.role === 'admin' || user?.role === 'super_admin' || user?.role === 'owner' || user?.is_owner;
 
   return (
-    <nav className={`fixed top-0 left-0 right-0 z-50 ${transparent ? 'bg-[#0a0a12]/90 backdrop-blur-xl border-b border-amber-500/10' : 'bg-[#0a0a12]/95 backdrop-blur-md border-b border-amber-500/20'}`}>
+    <nav
+      className={`fixed left-0 right-0 z-50 ${transparent ? 'bg-[#0a0a12]/90 backdrop-blur-xl border-b border-amber-500/10' : 'bg-[#0a0a12]/95 backdrop-blur-md border-b border-amber-500/20'}`}
+      style={{ top: promoShown ? '32px' : '0' }}
+    >
       <div className="container mx-auto px-4 md:px-8 max-w-7xl">
         <div className="flex items-center justify-between h-16">
           <div className="flex items-center gap-2">
