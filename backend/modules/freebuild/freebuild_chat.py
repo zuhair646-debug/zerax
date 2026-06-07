@@ -60,9 +60,8 @@ def _now():
 
 # Pydantic models — MUST be at module level (FastAPI resolves via globals)
 class ProjectIn(BaseModel):
-    website_type: str
     name: str
-    description: str
+    description: str = ""
 
 
 class ChatIn(BaseModel):
@@ -80,25 +79,23 @@ def make_freebuild_chat_router(db, get_current_user):
     # ===== Create project =====
     @router.post("/project")
     async def create_project(payload: ProjectIn, user=Depends(get_current_user)):
-        wtype = next((w for w in WEBSITE_TYPES if w["id"] == payload.website_type), None)
-        if not wtype:
-            raise HTTPException(400, "نوع موقع غير صالح")
         pid = str(uuid.uuid4())
         await db.freebuild_projects.insert_one({
             "id": pid,
             "user_id": user["user_id"],
-            "website_type": payload.website_type,
+            "website_type": "custom",  # legacy field, kept for compatibility
             "name": payload.name.strip()[:120],
             "description": payload.description.strip()[:1500],
             "status": "active",
-            "messages": [],  # chat history
-            "approved_assets": [],  # approved images/sections
-            "current_html": None,  # latest generated HTML
+            "current_phase": "discovery",
+            "messages": [],
+            "approved_assets": [],
+            "current_html": None,
             "preview_url": None,
             "created_at": _now(),
             "updated_at": _now(),
         })
-        return {"id": pid, "website_type": payload.website_type, "name": payload.name}
+        return {"id": pid, "name": payload.name}
 
     # ===== List projects =====
     @router.get("/projects")
@@ -134,8 +131,7 @@ def make_freebuild_chat_router(db, get_current_user):
         msg_list = [{"role": m["role"], "content": m["content"]} for m in history]
         msg_list.append({"role": "user", "content": payload.message})
 
-        # Context for the agent
-        wtype = next((w for w in WEBSITE_TYPES if w["id"] == proj["website_type"]), {})
+        # Context for the agent (no website type — fully open / from scratch)
         # List of approved assets with URLs so the AI can reference them
         assets_for_use = ""
         if proj.get("approved_assets"):
@@ -145,18 +141,19 @@ def make_freebuild_chat_router(db, get_current_user):
                     assets_for_use += f'  • {a["type"]}: "{a["prompt"][:50]}" → {a["image_url"]}\n'
 
         extra_ctx = (
-            f"نوع الموقع: {wtype.get('title')}\n"
             f"اسم المشروع: {proj['name']}\n"
-            f"وصف المشروع: {proj['description']}\n"
+            f"وصف المشروع: {proj['description'] or '(لم يحدد العميل وصفاً بعد — اسأله ودَوّن)'}\n"
             f"{assets_for_use}\n"
-            "📌 بروتوكول التنفيذ التدريجي (مهم جداً):\n"
-            "1. لما تحتاج صورة جديدة، اكتبها بصيغة تاق فقط (لا تضعها داخل HTML):\n"
+            "📌 بروتوكول الإنشاء من الصفر (مهم جداً):\n"
+            "1. ابدأ بالاستماع — اسأل العميل عن: نشاطه/فكرته، جمهوره المستهدف، الإحساس المطلوب، أمثلة ملهمة.\n"
+            "2. اقترح 2-3 اتجاهات تصميم مختلفة (ألوان/typography/تخطيط) قبل ما تنفذ شي.\n"
+            "3. لما يختار اتجاه، نفّذ بإصدار صغير (Hero فقط) واستشره قبل بناء الباقي.\n"
+            "4. لما تحتاج صورة، اكتبها بصيغة تاق فقط (لا تضعها داخل HTML):\n"
             "   <<HERO: english description>>  أو  <<LOGO: brand>>  أو  <<BANNER_AR: نص>>  أو  <<ICON: ...>>\n"
             "   النظام راح يولّدها تلقائياً ويعرضها للمستخدم لاعتمادها.\n"
-            "2. بعد ما المستخدم يعتمد الصور (تشوفها في 'صور جاهزة معتمدة' أعلاه)، استخدم URL مباشر في الـ HTML.\n"
-            "3. لما تكتب HTML نهائي للمعاينة، اكتبه داخل ```html ... ``` ويكون <!DOCTYPE html>...</html> كامل مع Tailwind CDN و RTL.\n"
-            "4. ابدأ بطرح 2-3 أفكار تصميم مختصرة، ثم استشر المستخدم، ثم نفّذ.\n"
-            "5. عدّل تدريجياً — لا تعيد بناء كل شي من جديد كل مرة.\n"
+            "5. بعد ما المستخدم يعتمد الصور (تشوفها في 'صور جاهزة معتمدة' أعلاه)، استخدم URL مباشر في الـ HTML.\n"
+            "6. لما تكتب HTML للمعاينة، اكتبه داخل ```html ... ``` ويكون <!DOCTYPE html>...</html> كامل مع Tailwind CDN و RTL.\n"
+            "7. عدّل تدريجياً — لا تعيد بناء كل شي من جديد كل مرة.\n"
         )
 
         try:
