@@ -47,7 +47,7 @@ AGENTS: Dict[str, Dict[str, Any]] = {
     "freebuild": {
         "task_type": "website_build",
         "budget": "best",
-        "max_tokens": 8000,
+        "max_tokens": 16000,
         "system_prompt": """أنت "مهندس Zitex لإنشاء المواقع" — متخصص حصراً في بناء المواقع الاحترافية بالـ HTML/CSS/JavaScript و React.
 
 🧠 طريقة تفكيرك (مهمة جداً):

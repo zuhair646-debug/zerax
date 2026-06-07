@@ -76,6 +76,14 @@ def _extract_html(text: str) -> Optional[str]:
     m = HTML_FALLBACK_RE.search(text)
     if m:
         return m.group(1).strip()
+    # Salvage truncated stream: ```html <!DOCTYPE...  with no closing ``` or </html>
+    open_fence = re.search(r"```(?:html|HTML)?\s*(<!DOCTYPE[\s\S]+|<html[\s\S]+)$", text, re.IGNORECASE)
+    if open_fence:
+        partial = open_fence.group(1).strip()
+        # Try to auto-close common tags
+        if "</html>" not in partial.lower():
+            partial += "\n</body></html>"
+        return partial
     return None
 
 
@@ -103,15 +111,42 @@ def _strip_tags(text: str) -> str:
 # Strip code blocks from chat display (code lives ONLY in Live Preview).
 # We hide HTML/CSS/JS code by default — user can pay to receive the code.
 _CODE_BLOCK_RE = re.compile(r"```[a-zA-Z]*\n?[\s\S]*?```", re.MULTILINE)
+# Unclosed/truncated fenced code: ```html ... <end-of-stream>
+_UNCLOSED_FENCE_RE = re.compile(r"```[a-zA-Z]*\n?[\s\S]*$", re.MULTILINE)
+# Raw HTML without fences (full <!DOCTYPE ... </html>)
+_RAW_HTML_DOC_RE = re.compile(r"(<!DOCTYPE\s+html[\s\S]+?</html>)", re.IGNORECASE)
+# Raw HTML fragment leak: large <body|<div|<section ... potentially unclosed
+_RAW_HTML_FRAGMENT_RE = re.compile(
+    r"(<(?:html|head|body|section|div|main|header|footer|nav)\b[\s\S]{50,})$",
+    re.IGNORECASE,
+)
+# Inline CSS/JS that may leak
+_RAW_CSS_LEAK_RE = re.compile(r"<style[\s\S]*?</style>", re.IGNORECASE)
+_RAW_JS_LEAK_RE = re.compile(r"<script[\s\S]*?</script>", re.IGNORECASE)
 
 
 def _strip_code_from_chat(text: str) -> str:
-    """Remove fenced code blocks from displayed chat text and replace with a friendly notice.
-    Code is kept in current_html for Live Preview only."""
-    has_code = bool(_CODE_BLOCK_RE.search(text))
-    cleaned = _CODE_BLOCK_RE.sub("\n*✨ تم تحديث المعاينة الحية — افتح تبويب المعاينة للمشاهدة*\n", text)
-    if has_code:
-        cleaned = re.sub(r"\n{3,}", "\n\n", cleaned)
+    """Remove fenced + raw code from displayed chat text. Code is kept in current_html.
+    Aggressive multi-pass strip to handle truncated/partial AI output."""
+    original_had_code = bool(
+        _CODE_BLOCK_RE.search(text) or _RAW_HTML_DOC_RE.search(text) or _RAW_HTML_FRAGMENT_RE.search(text)
+    )
+    cleaned = _CODE_BLOCK_RE.sub("", text)
+    # Truncated fence (AI got cut off mid-stream)
+    cleaned = _UNCLOSED_FENCE_RE.sub("", cleaned)
+    # Standalone raw HTML doc (no fence)
+    cleaned = _RAW_HTML_DOC_RE.sub("", cleaned)
+    cleaned = _RAW_CSS_LEAK_RE.sub("", cleaned)
+    cleaned = _RAW_JS_LEAK_RE.sub("", cleaned)
+    # Raw HTML fragment trailing leak
+    cleaned = _RAW_HTML_FRAGMENT_RE.sub("", cleaned)
+    if original_had_code:
+        cleaned = cleaned.strip()
+        if cleaned:
+            cleaned = cleaned + "\n\n*✨ تم تحديث المعاينة الحية — افتح تبويب المعاينة للمشاهدة*"
+        else:
+            cleaned = "✨ تم تحديث المعاينة الحية — افتح تبويب المعاينة للمشاهدة"
+    cleaned = re.sub(r"\n{3,}", "\n\n", cleaned)
     return cleaned.strip()
 
 
@@ -411,10 +446,24 @@ def make_freebuild_chat_router(db, get_current_user):
             "   اكتب فقط مقدمة قصيرة مثل: 'جاهز! حدّثت المعاينة الحية — شوفها في تبويب المعاينة 👀' ثم الكود.\n"
             "   لا تكتب: 'إليك ما عملته في الكود: لقد استخدمت emerald-500...' — هذي تفاصيل ما تهم المستخدم العادي.\n"
             "\n"
+            "🚫 قاعدة الحظر الكامل لتسريب الكود:\n"
+            "• ❌ لا تكتب أي كود HTML/CSS/JS خارج بلوك ```html ... ``` مغلق.\n"
+            "• ❌ لا تكتب أمثلة كود قصيرة كمثل `<button class=\"...\">` في النص العادي.\n"
+            "• ❌ لا تذكر أسماء classes/Tailwind أو خصائص CSS في الرسائل النصية.\n"
+            "• ❌ لا تطرح كود ناقص أبداً — إما كامل من <!DOCTYPE> إلى </html> أو لا تطرح أصلاً.\n"
+            "• إذا الموقع طويل جداً (>700 سطر)، قسّمه على مراحل: في كل رسالة اكتب نسخة كاملة لكن مختصرة، ثم اسأل: 'هل تبي أزود قسم X؟' وانتظر الرد.\n"
+            "\n"
+            "🛑 قاعدة عدم التوقف وسط الكود (مهمة جداً):\n"
+            "• إذا حسيت إن المساحة المتاحة لا تكفي لكتابة الـHTML كامل، **لا تبدأ كتابة الكود أصلاً**.\n"
+            "• بدل ذلك، اسأل سؤالاً ذكياً يقلّص النطاق: 'في الجولة الأولى، أركّز على Hero + قسم المنتجات فقط، أم تبي footer أيضاً؟'\n"
+            "• استخدم خيارات قابلة للضغط <<OPT: ...>> لتسهيل الرد.\n"
+            "• الهدف: كل رسالة تحتوي إما (شرح وأسئلة) أو (كود HTML كامل ومغلق). لا تخلط بينهما إذا الكود ما راح يكتمل.\n"
+            "\n"
             "🎨 تصاميم متعددة (Design Variants) — اللب الذكي:\n"
             "عند تقديم خيارات تصميم للعميل، اكتب 2-3 صفحات HTML كاملة في رسالة واحدة — كل واحدة في ```html ...``` block منفصل.\n"
             "النظام راح يعرضها للعميل كـ live mini-previews يضغط عليها ويختار وحدة → اللي يختاره يصير current_html مباشرة بدون تغيير.\n"
             "كل variant يجب أن يكون كامل ومستقل (<!DOCTYPE html>...</html>) مع Tailwind CDN ومحتوى وهمي (Lorem) لكنه مرتب.\n"
+            "اجعل كل variant مختصر (200-300 سطر max) عشان كلهم يكتملوا في رسالة وحدة.\n"
             "أمثلة على متى تستخدم variants: 'وش الأنسب: تصميم 1 (داكن فاخر) ولا 2 (فاتح ناعم) ولا 3 (مينيمال)؟'\n"
             "بعد ما العميل يختار، عدّل عليه تدريجياً — لا تعيد تصميم من الصفر.\n"
             "\n"
