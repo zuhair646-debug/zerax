@@ -3456,6 +3456,15 @@ try:
 except Exception as _fbe:
     logging.getLogger(__name__).error(f"Failed to register freebuild module: {_fbe}", exc_info=True)
 
+# ============== FREE-BUILD CHAT (Game-Studio-style conversational + asset approval) ==============
+try:
+    from modules.freebuild.freebuild_chat import make_freebuild_chat_router
+    _fbc_router = make_freebuild_chat_router(db, get_current_user)
+    api_router.include_router(_fbc_router)
+    logging.getLogger(__name__).info("FreeBuild Chat module registered")
+except Exception as _fbce:
+    logging.getLogger(__name__).error(f"Failed to register freebuild_chat: {_fbce}", exc_info=True)
+
 # ============== FREE-BUILD V2 (Conversational LIVE builder with side preview) ==============
 try:
     from modules.freebuild_v2 import create_freebuild_v2_router

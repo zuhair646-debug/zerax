@@ -16,6 +16,7 @@ import SocialAccounts from '@/pages/SocialAccounts';
 import QuickShare from '@/pages/QuickShare';
 import ShareHistory from '@/pages/ShareHistory';
 import Profile from '@/pages/Profile';
+import FreeBuildChat from '@/pages/FreeBuildChat';
 import NewRequest from '@/pages/NewRequest';
 import MyRequests from '@/pages/MyRequests';
 import RequestDetails from '@/pages/RequestDetails';
@@ -168,6 +169,8 @@ function App() {
           <Route path="/dashboard/share-history" element={<ProtectedRoute><ShareHistory user={user} setUser={setUser} /></ProtectedRoute>} />
           <Route path="/dashboard/downloads" element={<ProtectedRoute><MyImages user={user} setUser={setUser} /></ProtectedRoute>} />
           <Route path="/dashboard/profile" element={<ProtectedRoute><Profile user={user} setUser={setUser} /></ProtectedRoute>} />
+          <Route path="/freebuild/chat" element={<ProtectedRoute><FreeBuildChat user={user} setUser={setUser} /></ProtectedRoute>} />
+          <Route path="/freebuild/chat/:id" element={<ProtectedRoute><FreeBuildChat user={user} setUser={setUser} /></ProtectedRoute>} />
           <Route path="/dashboard/new-request" element={<ProtectedRoute><NewRequest user={user} /></ProtectedRoute>} />
           <Route path="/dashboard/requests" element={<ProtectedRoute><MyRequests user={user} /></ProtectedRoute>} />
           <Route path="/dashboard/requests/:id" element={<ProtectedRoute><RequestDetails user={user} /></ProtectedRoute>} />
