@@ -1316,7 +1316,13 @@ function ChatWorkspace({ projectId }) {
         throw new Error(err.detail || 'فشل الإرسال');
       }
       const data = await r.json();
-      if (data.html_updated) toast.success('✨ تم تحديث المعاينة الحية');
+      if (data.html_updated) {
+        toast.success('✨ تم تحديث المعاينة الحية', {
+          action: { label: 'افتح', onClick: () => setActiveTab('live') },
+        });
+        // Auto-switch to the live preview tab so the user sees the update
+        setActiveTab((prev) => (prev === 'chat' ? 'live' : prev));
+      }
       // Capture which AI model worked on this turn (for UI display)
       if (data.task_label || data.model_used) {
         setLastTask({ label: data.task_label || '', model: data.model_used || '' });
@@ -1396,7 +1402,12 @@ function ChatWorkspace({ projectId }) {
         throw new Error(err.detail || 'فشل الإرسال');
       }
       const data = await r.json();
-      if (data.html_updated) toast.success('✨ تم تحديث المعاينة الحية');
+      if (data.html_updated) {
+        toast.success('✨ تم تحديث المعاينة الحية', {
+          action: { label: 'افتح', onClick: () => setActiveTab('live') },
+        });
+        setActiveTab((prev) => (prev === 'chat' ? 'live' : prev));
+      }
       const pr = await fetch(`${API}/api/freebuild-chat/project/${projectId}`, { headers: { Authorization: `Bearer ${token}` } });
       if (pr.ok) setProject(await pr.json());
     } catch (e) {
