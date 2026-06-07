@@ -186,6 +186,26 @@ def _verify_anchor_links(html: str) -> List[str]:
     return broken
 
 
+def _summarize_html(html: str) -> str:
+    """Short description of an HTML snapshot for the version-history UI."""
+    if not html:
+        return "(فارغ)"
+    title_m = re.search(r"<title[^>]*>([^<]+)</title>", html, re.IGNORECASE)
+    title = title_m.group(1).strip()[:40] if title_m else ""
+    section_ids = re.findall(r'<section\b[^>]*\bid\s*=\s*["\']([a-zA-Z0-9_\-]+)["\']', html, re.IGNORECASE)
+    sec_count = len(section_ids)
+    length_kb = len(html) // 1024
+    parts = []
+    if title:
+        parts.append(f'"{title}"')
+    if sec_count:
+        parts.append(f"{sec_count} قسم")
+        if section_ids[:3]:
+            parts.append(f"({', '.join('#'+s for s in section_ids[:3])}{'...' if sec_count > 3 else ''})")
+    parts.append(f"~{length_kb}KB" if length_kb else f"{len(html)}B")
+    return " · ".join(parts)
+
+
 def _extract_html(text: str) -> Optional[str]:
     m = HTML_BLOCK_RE.search(text)
     if m:
@@ -872,6 +892,24 @@ def make_freebuild_chat_router(db, get_current_user):
             "   النظام يحميك فقط من خطأ واحد: حذف header أو footer بالخطأ. أي إضافة أو تعديل → يمر بدون مشكلة.\n"
             "4. قبل ما تقول 'تم'، **افحص بنفسك**: هل الكود فعلاً يحتوي التغيير؟ إذا لا، صحّحه قبل الإرسال.\n"
             "\n"
+            "🛡️ **بروتوكول إعادة التصميم (Redesign Protocol) — مهم جداً تتبعه حرفياً**:\n"
+            "❌ كان في الماضي مشكلة: العميل قال 'تصميم جديد' فحذفت كل الكود وضاع تقدّمه. **لا يحدث هذا مرة ثانية أبداً**.\n"
+            "\n"
+            "📋 **الخطوات الإلزامية لما يطلب العميل تصميم جديد كلياً**:\n"
+            "  **خطوة 1 (تأكيد)**: اطرح **سؤال واحد فقط** وانتظر الرد:\n"
+            "    'هل تأكد إنك تبي تصميم جديد كلياً مختلف عن الحالي؟ <<OPT: نعم — صمم لي تصميم جديد>> <<OPT: لا — اكتفِ بتعديلات>>'\n"
+            "    **مهم**: لا تنفّذ شي. لا تحذف شي. انتظر إجابة العميل.\n"
+            "  **خطوة 2 (اقتراح)**: إذا قال 'نعم'، اقترح **التصميم الجديد كاملاً في رسالة جديدة** كـPreview (variant واحد كامل):\n"
+            "    اكتب ```html <!DOCTYPE>...</html>``` بالشكل الجديد كله. \n"
+            "    اختم بـ: 'هذا التصميم الجديد المقترح — هل تعتمده وأطبّقه على موقعك؟ <<OPT: نعم — طبّق هذا التصميم>> <<OPT: لا — رجّع التصميم الأصلي>> <<OPT: عدّل في الجديد>>'\n"
+            "    **هام**: حتى لو الـbackend حفظ النسخة الأصلية كـsnapshot، اطرح هذا السؤال للوضوح للعميل.\n"
+            "  **خطوة 3 (تطبيق ذكي)**: إذا اعتمد العميل التصميم الجديد:\n"
+            "    • **احتفظ بالـbusiness logic**: أي `<script>` فيه functions حقيقية (audio player, navigation handlers, data fetching) — انسخه كما هو للتصميم الجديد.\n"
+            "    • **احتفظ بالـsection ids**: لو القسم القديم `<section id=\"quran\">` كان فيه قائمة سور حقيقية، التصميم الجديد لازم يحتفظ بـ`id=\"quran\"` ومحتواه الوظيفي — فقط غيّر الـlayout والألوان والـclasses.\n"
+            "    • **التصميم الجديد = الشكل فقط، مو إعادة برمجة**. لا تحذف بيانات حقيقية أنشأها العميل.\n"
+            "\n"
+            "💾 **شبكة الأمان**: النظام يحفظ تلقائياً نسخة من الـHTML قبل أي تعديل (آخر 20 نسخة). العميل يقدر يضغط 'استرجاع' أي وقت ويرجع لأي نسخة سابقة. هذا يحميه — لكن مع ذلك، **لا تعتمد عليه**. اتّبع البروتوكول.\n"
+            "\n"
             "🎯 خيارات قابلة للضغط (مهم جداً لتسهيل التجربة):\n"
             "⚠️ قاعدة ذهبية: **اطرح سؤال واحد فقط في كل رسالة** ومعه خياراته. لا تطرح 5 أسئلة دفعة وحدة!\n"
             "لكل سؤال له إجابات محتملة، اكتب الخيارات بصيغة تاقات منفصلة:\n"
@@ -1071,19 +1109,36 @@ def make_freebuild_chat_router(db, get_current_user):
 
         # Save chat message + pending assets
         update_set = {"updated_at": _now()}
+        push_ops: Dict[str, Any] = {
+            "messages": {
+                "$each": [
+                    {"role": "user", "content": message, "timestamp": _now(), "pending_assets": [], "attachments": attachment_meta, "reference": reference_meta, "answer_meta": parsed_answer_meta},
+                    {"role": "assistant", "content": clean_text, "timestamp": _now(), "pending_assets": pending_assets, "had_html": bool(new_html), "options": options, "design_variants": design_variants},
+                ]
+            }
+        }
         if new_html:
+            # ── AUTO-SNAPSHOT — before overwriting current_html, archive the
+            # previous version so the user can restore if AI makes a mistake.
+            # Keep last 20 snapshots only.
+            old_html = proj.get("current_html")
+            if old_html and old_html != new_html:
+                snapshot = {
+                    "id": str(uuid.uuid4()),
+                    "html": old_html,
+                    "created_at": _now(),
+                    "user_msg": (message or "")[:200],
+                    "summary": _summarize_html(old_html),
+                }
+                push_ops["html_snapshots"] = {
+                    "$each": [snapshot],
+                    "$slice": -20,  # keep last 20
+                }
             update_set["current_html"] = new_html
         await db.freebuild_projects.update_one(
             {"id": pid},
             {
-                "$push": {
-                    "messages": {
-                        "$each": [
-                            {"role": "user", "content": message, "timestamp": _now(), "pending_assets": [], "attachments": attachment_meta, "reference": reference_meta, "answer_meta": parsed_answer_meta},
-                            {"role": "assistant", "content": clean_text, "timestamp": _now(), "pending_assets": pending_assets, "had_html": bool(new_html), "options": options, "design_variants": design_variants},
-                        ]
-                    }
-                },
+                "$push": push_ops,
                 "$set": update_set,
             },
         )
@@ -1120,14 +1175,28 @@ def make_freebuild_chat_router(db, get_current_user):
                 break
         if not variant_html:
             raise HTTPException(404, "التصميم غير موجود")
+        # Snapshot the previous design before swapping (safety net)
+        update_doc: Dict[str, Any] = {"$set": {
+            "current_html": variant_html,
+            "approved_design_id": variant_id,
+            "approved_design_sig": _design_signature(variant_html),
+            "updated_at": _now(),
+        }}
+        old_html = proj.get("current_html")
+        if old_html and old_html != variant_html:
+            update_doc["$push"] = {"html_snapshots": {
+                "$each": [{
+                    "id": str(uuid.uuid4()),
+                    "html": old_html,
+                    "created_at": _now(),
+                    "user_msg": "[تصميم سابق قبل اعتماد variant جديد]",
+                    "summary": _summarize_html(old_html),
+                }],
+                "$slice": -20,
+            }}
         await db.freebuild_projects.update_one(
             {"id": pid},
-            {"$set": {
-                "current_html": variant_html,
-                "approved_design_id": variant_id,
-                "approved_design_sig": _design_signature(variant_html),
-                "updated_at": _now(),
-            }},
+            update_doc,
         )
         return {"ok": True, "html_length": len(variant_html)}
 
@@ -1507,6 +1576,89 @@ def make_freebuild_chat_router(db, get_current_user):
             }},
         )
         return result
+
+    # ═══════════════════════════════════════════════════════════════
+    # HTML SNAPSHOTS — every overwrite of current_html auto-archives the
+    # previous version. User can list, preview, and restore.
+    # ═══════════════════════════════════════════════════════════════
+    @router.get("/project/{pid}/snapshots")
+    async def list_snapshots(pid: str, user=Depends(get_current_user)):
+        proj = await db.freebuild_projects.find_one(
+            {"id": pid, "user_id": user["user_id"]},
+            {"_id": 0, "html_snapshots": 1, "current_html": 1},
+        )
+        if not proj:
+            raise HTTPException(404)
+        snaps = proj.get("html_snapshots") or []
+        # newest first, strip the full html from listing (only summaries)
+        items = []
+        for s in reversed(snaps):
+            items.append({
+                "id": s.get("id"),
+                "created_at": s.get("created_at"),
+                "user_msg": s.get("user_msg", "")[:200],
+                "summary": s.get("summary") or _summarize_html(s.get("html", "")),
+                "size": len(s.get("html") or ""),
+            })
+        current_summary = _summarize_html(proj.get("current_html") or "")
+        return {
+            "ok": True,
+            "snapshots": items,
+            "current_summary": current_summary,
+            "count": len(items),
+        }
+
+    @router.get("/project/{pid}/snapshots/{sid}/preview")
+    async def preview_snapshot(pid: str, sid: str, user=Depends(get_current_user)):
+        proj = await db.freebuild_projects.find_one(
+            {"id": pid, "user_id": user["user_id"]},
+            {"_id": 0, "html_snapshots": 1},
+        )
+        if not proj:
+            raise HTTPException(404)
+        for s in (proj.get("html_snapshots") or []):
+            if s.get("id") == sid:
+                return {"ok": True, "html": s.get("html", ""), "created_at": s.get("created_at")}
+        raise HTTPException(404, "نسخة غير موجودة")
+
+    @router.post("/project/{pid}/snapshots/{sid}/restore")
+    async def restore_snapshot(pid: str, sid: str, user=Depends(get_current_user)):
+        proj = await db.freebuild_projects.find_one(
+            {"id": pid, "user_id": user["user_id"]}, {"_id": 0}
+        )
+        if not proj:
+            raise HTTPException(404)
+        target = None
+        for s in (proj.get("html_snapshots") or []):
+            if s.get("id") == sid:
+                target = s
+                break
+        if not target:
+            raise HTTPException(404, "نسخة غير موجودة")
+        # Push current_html as a NEW snapshot (so restore is reversible)
+        push_doc: Dict[str, Any] = {}
+        if proj.get("current_html"):
+            push_doc["html_snapshots"] = {
+                "$each": [{
+                    "id": str(uuid.uuid4()),
+                    "html": proj["current_html"],
+                    "created_at": _now(),
+                    "user_msg": f"[نسخة محفوظة تلقائياً قبل استرجاع {sid[:8]}]",
+                    "summary": _summarize_html(proj["current_html"]),
+                }],
+                "$slice": -20,
+            }
+        update_doc: Dict[str, Any] = {
+            "$set": {"current_html": target["html"], "updated_at": _now()},
+        }
+        if push_doc:
+            update_doc["$push"] = push_doc
+        await db.freebuild_projects.update_one({"id": pid}, update_doc)
+        return {
+            "ok": True,
+            "restored_summary": target.get("summary") or _summarize_html(target.get("html", "")),
+            "html_length": len(target.get("html", "")),
+        }
 
     return router
 

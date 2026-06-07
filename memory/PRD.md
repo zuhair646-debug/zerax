@@ -1,5 +1,47 @@
 # Zitex AI Platform - PRD
 
+### 🆕 Feb 8 2026 — Auto-Snapshots + Redesign Protocol (حماية ضد فقدان الكود) ✅
+
+**حادثة المستخدم**: قبل ساعتين، كان عنده موقع قرآن جزئي (قائمة سور + قائمة قراء)، طلب "تصميم جديد" — الذكاء فسّرها كـ "ابنِ من الصفر" وحذف كل الكود وضاع التقدم. تعليمات الذكاء كانت متضاربة: "لا تغيّر التصميم" + "ابنِ من الصفر".
+
+**الحل الثلاثي**:
+
+#### 1) Auto-Snapshots (شبكة الأمان التلقائية) ✅
+- في كل تحديث لـ`current_html` (سواء من الـchat أو من `approve-design`)، الـbackend يحفظ النسخة القديمة في `html_snapshots[]` تلقائياً.
+- Cap: آخر 20 نسخة (`$slice: -20`).
+- كل snapshot: `{id, html, created_at, user_msg, summary}` حيث summary = `"العنوان · N قسم (#hero,#quran...) · 4.2KB"`.
+
+**Endpoints الجديدة** (`/app/backend/modules/freebuild/freebuild_chat.py`):
+- `GET /project/{pid}/snapshots` — قائمة بـsummaries (بدون HTML الكامل)
+- `GET /project/{pid}/snapshots/{sid}/preview` — يجيب HTML معاينة
+- `POST /project/{pid}/snapshots/{sid}/restore` — يسترجع + يحفظ الحالية كـsnapshot جديد (reversible)
+
+#### 2) Snapshots UI (FreeBuildChat.js) ✅
+- زر "📜 السجل" في الـheader بجانب "إنهاء المشروع"
+- `SnapshotsModal` بـ2 أعمدة:
+  - يسار: قائمة النسخ مع timestamp + الطلب الأصلي + زر "استرجاع هذي النسخة"
+  - يمين: iframe معاينة حية للنسخة المختارة
+- النسخة الحالية معروضة بحاشية خضراء في الأعلى
+- Restore يطلب confirmation + يحفظ الحالية تلقائياً قبل الاسترجاع
+
+#### 3) Redesign Protocol (في System Prompt) ✅
+بروتوكول 3 خطوات إلزامي لما العميل يطلب "تصميم جديد":
+1. **سؤال واحد فقط** (مع OPT options) — انتظر الإجابة، **لا تحذف شي**
+2. **اقتراح كاملاً** كـvariant في رسالة منفصلة (preview) + سؤال اعتماد ثاني
+3. **تطبيق ذكي**: احتفظ بالـbusiness logic (`<script>`, section ids بمحتواها الوظيفي) — غيّر **الشكل فقط** مو الـبرمجة
+
+**Note**: ذكر صريح في الـprompt: "النظام يحفظ snapshots تلقائياً — لكن لا تعتمد عليه، اتّبع البروتوكول"
+
+**اختبار E2E (curl)**:
+- ✅ create project → list snapshots (empty)
+- ✅ inject 2 snapshots via Mongo → list يعرضهم بترتيب newest-first
+- ✅ preview snap1 → يرجع HTML كامل
+- ✅ restore snap2 → success + current_html محدّث + snapshot جديد محفوظ من الحالة السابقة
+
+**Screenshot**: SnapshotsModal تظهر 3 snapshots بشكل سليم، النسخة الحالية بـbadge أخضر، أزرار restore بـamber tint، لوحة معاينة فاضية في الانتظار.
+
+---
+
 ### 🆕 Feb 8 2026 — FreeBuild Empowerment Pass (إزالة لغة الخوف من الذكاء) ✅
 
 **اكتشاف مهم**: الذكاء عنده **16,000 token** فعلياً لكل رد (≈ 4000 سطر HTML)، لكن الـsystem prompt الأصلي كان مليان لغة دفاعية ("حدودك الصارمة"، "ممنوع"، "قفل التصميم"، "النظام يرفض رسالتك") جعلته يحدّ نفسه عند 700-800 سطر ويعتقد إن النظام يمنعه من التعديل.
