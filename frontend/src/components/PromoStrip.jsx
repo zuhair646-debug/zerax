@@ -28,6 +28,7 @@ export const PromoStrip = () => {
     e.stopPropagation();
     sessionStorage.setItem('zitex_promo_dismissed', '1');
     setDismissed(true);
+    window.dispatchEvent(new CustomEvent('zitex:promo-change', { detail: { shown: false } }));
   };
 
   return (

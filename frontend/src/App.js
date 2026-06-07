@@ -13,6 +13,9 @@ import ClientDashboard from '@/pages/ClientDashboard';
 import MyImages from '@/pages/MyImages';
 import MyVideos from '@/pages/MyVideos';
 import SocialAccounts from '@/pages/SocialAccounts';
+import QuickShare from '@/pages/QuickShare';
+import ShareHistory from '@/pages/ShareHistory';
+import Profile from '@/pages/Profile';
 import NewRequest from '@/pages/NewRequest';
 import MyRequests from '@/pages/MyRequests';
 import RequestDetails from '@/pages/RequestDetails';
@@ -161,10 +164,10 @@ function App() {
           <Route path="/dashboard/my-apps" element={<ProtectedRoute><Navigate to="/dashboard/games" replace /></ProtectedRoute>} />
           {/* Sharing & social */}
           <Route path="/dashboard/social-accounts" element={<ProtectedRoute><SocialAccounts user={user} setUser={setUser} /></ProtectedRoute>} />
-          <Route path="/dashboard/share" element={<ProtectedRoute><Navigate to="/dashboard/my-images" replace /></ProtectedRoute>} />
-          <Route path="/dashboard/share-history" element={<ProtectedRoute><Navigate to="/dashboard/my-images" replace /></ProtectedRoute>} />
-          <Route path="/dashboard/downloads" element={<ProtectedRoute><Navigate to="/dashboard/my-images" replace /></ProtectedRoute>} />
-          <Route path="/dashboard/profile" element={<ProtectedRoute><Navigate to="/dashboard" replace /></ProtectedRoute>} />
+          <Route path="/dashboard/share" element={<ProtectedRoute><QuickShare user={user} setUser={setUser} /></ProtectedRoute>} />
+          <Route path="/dashboard/share-history" element={<ProtectedRoute><ShareHistory user={user} setUser={setUser} /></ProtectedRoute>} />
+          <Route path="/dashboard/downloads" element={<ProtectedRoute><MyImages user={user} setUser={setUser} /></ProtectedRoute>} />
+          <Route path="/dashboard/profile" element={<ProtectedRoute><Profile user={user} setUser={setUser} /></ProtectedRoute>} />
           <Route path="/dashboard/new-request" element={<ProtectedRoute><NewRequest user={user} /></ProtectedRoute>} />
           <Route path="/dashboard/requests" element={<ProtectedRoute><MyRequests user={user} /></ProtectedRoute>} />
           <Route path="/dashboard/requests/:id" element={<ProtectedRoute><RequestDetails user={user} /></ProtectedRoute>} />
