@@ -3,7 +3,11 @@
 Mirrors the Game Studio pattern: project → chat → tag-driven asset generation → approval.
 """
 from __future__ import annotations
-import os, re, uuid, logging, asyncio
+import os
+import re
+import uuid
+import logging
+import asyncio
 from datetime import datetime, timezone
 from typing import Optional, List, Dict, Any
 from fastapi import APIRouter, HTTPException, Depends, Form
@@ -25,6 +29,29 @@ WEBSITE_TYPES = [
 
 # Tag regex for asset generation in AI responses
 TAG_RE = re.compile(r"<<\s*(HERO|SECTION_BG|LOGO|PRODUCT|ICON|BANNER_AR|GALLERY)\s*[:：]\s*([^>]+?)\s*>>", re.IGNORECASE)
+
+# HTML code-block extractor (```html ... ``` or ```<html> ... ```)
+HTML_BLOCK_RE = re.compile(r"```(?:html|HTML)?\s*(<!DOCTYPE[\s\S]+?</html>|<html[\s\S]+?</html>)\s*```", re.IGNORECASE)
+# Fallback: any code block containing full HTML
+HTML_FALLBACK_RE = re.compile(r"(<!DOCTYPE[\s\S]+?</html>|<html[\s\S]+?</html>)", re.IGNORECASE)
+
+
+def _extract_html(text: str) -> Optional[str]:
+    m = HTML_BLOCK_RE.search(text)
+    if m:
+        return m.group(1).strip()
+    m = HTML_FALLBACK_RE.search(text)
+    if m:
+        return m.group(1).strip()
+    return None
+
+
+def _strip_tags(text: str) -> str:
+    """Remove <<TAG: ...>> markers from displayed text and collapse blank lines."""
+    cleaned = TAG_RE.sub("", text)
+    # Collapse 3+ consecutive newlines to 2
+    cleaned = re.sub(r"\n{3,}", "\n\n", cleaned)
+    return cleaned.strip()
 
 
 def _now():
@@ -101,13 +128,7 @@ def make_freebuild_chat_router(db, get_current_user):
         if not proj:
             raise HTTPException(404, "المشروع غير موجود")
 
-        # Build memory: include approved assets summary
-        approved_summary = ""
-        if proj.get("approved_assets"):
-            approved_summary = "\n\n📦 الأصول المعتمدة سابقاً (لا تكررها):\n"
-            for a in proj["approved_assets"][-10:]:
-                approved_summary += f"  • {a.get('type','asset')}: {a.get('prompt','')[:60]}\n"
-
+        # Build memory: approved assets summary moved below with URLs
         # Build conversation history (last 12 turns)
         history = proj.get("messages", [])[-12:]
         msg_list = [{"role": m["role"], "content": m["content"]} for m in history]
@@ -115,17 +136,27 @@ def make_freebuild_chat_router(db, get_current_user):
 
         # Context for the agent
         wtype = next((w for w in WEBSITE_TYPES if w["id"] == proj["website_type"]), {})
+        # List of approved assets with URLs so the AI can reference them
+        assets_for_use = ""
+        if proj.get("approved_assets"):
+            assets_for_use = "\n\n🖼️ صور جاهزة معتمدة (استخدمها مباشرة بالـ URL):\n"
+            for a in proj["approved_assets"][-15:]:
+                if a.get("image_url"):
+                    assets_for_use += f'  • {a["type"]}: "{a["prompt"][:50]}" → {a["image_url"]}\n'
+
         extra_ctx = (
             f"نوع الموقع: {wtype.get('title')}\n"
             f"اسم المشروع: {proj['name']}\n"
             f"وصف المشروع: {proj['description']}\n"
-            f"{approved_summary}\n"
-            "📌 طريقة التنفيذ:\n"
-            "- لما تحتاج صورة قسم، اكتب: <<HERO: english prompt>> أو <<SECTION_BG: prompt>>\n"
-            "- لما تحتاج شعار: <<LOGO: brand description>>\n"
-            "- لما تحتاج بانر عربي: <<BANNER_AR: نص عربي>>\n"
-            "- لما تحتاج أيقونة: <<ICON: english>>\n"
-            "- اطرح أسئلة قبل التنفيذ. اقترح 3 اتجاهات تصميم. اعتمد قبل التنفيذ.\n"
+            f"{assets_for_use}\n"
+            "📌 بروتوكول التنفيذ التدريجي (مهم جداً):\n"
+            "1. لما تحتاج صورة جديدة، اكتبها بصيغة تاق فقط (لا تضعها داخل HTML):\n"
+            "   <<HERO: english description>>  أو  <<LOGO: brand>>  أو  <<BANNER_AR: نص>>  أو  <<ICON: ...>>\n"
+            "   النظام راح يولّدها تلقائياً ويعرضها للمستخدم لاعتمادها.\n"
+            "2. بعد ما المستخدم يعتمد الصور (تشوفها في 'صور جاهزة معتمدة' أعلاه)، استخدم URL مباشر في الـ HTML.\n"
+            "3. لما تكتب HTML نهائي للمعاينة، اكتبه داخل ```html ... ``` ويكون <!DOCTYPE html>...</html> كامل مع Tailwind CDN و RTL.\n"
+            "4. ابدأ بطرح 2-3 أفكار تصميم مختصرة، ثم استشر المستخدم، ثم نفّذ.\n"
+            "5. عدّل تدريجياً — لا تعيد بناء كل شي من جديد كل مرة.\n"
         )
 
         try:
@@ -160,19 +191,26 @@ def make_freebuild_chat_router(db, get_current_user):
                 "created_at": _now(),
             })
 
+        # Detect HTML for live preview
+        new_html = _extract_html(ai_text)
+        clean_text = _strip_tags(ai_text)
+
         # Save chat message + pending assets
+        update_set = {"updated_at": _now()}
+        if new_html:
+            update_set["current_html"] = new_html
         await db.freebuild_projects.update_one(
             {"id": pid},
             {
                 "$push": {
                     "messages": {
                         "$each": [
-                            {"role": "user", "content": payload.message, "timestamp": _now()},
-                            {"role": "assistant", "content": ai_text, "timestamp": _now(), "pending_assets": pending_assets},
+                            {"role": "user", "content": payload.message, "timestamp": _now(), "pending_assets": []},
+                            {"role": "assistant", "content": clean_text, "timestamp": _now(), "pending_assets": pending_assets, "had_html": bool(new_html)},
                         ]
                     }
                 },
-                "$set": {"updated_at": _now()},
+                "$set": update_set,
             },
         )
 
@@ -181,8 +219,9 @@ def make_freebuild_chat_router(db, get_current_user):
             asyncio.create_task(_generate_assets_bg(db, pid, pending_assets))
 
         return {
-            "response": ai_text,
+            "response": clean_text,
             "pending_assets": pending_assets,
+            "html_updated": bool(new_html),
         }
 
     # ===== Approve asset =====
@@ -209,6 +248,41 @@ def make_freebuild_chat_router(db, get_current_user):
         )
         return {"ok": True}
 
+    # ===== Compile final HTML with approved asset URLs =====
+    @router.post("/project/{pid}/compile")
+    async def compile_html(pid: str, user=Depends(get_current_user)):
+        proj = await db.freebuild_projects.find_one({"id": pid, "user_id": user["user_id"]}, {"_id": 0})
+        if not proj:
+            raise HTTPException(404)
+        html = proj.get("current_html") or ""
+        if not html:
+            raise HTTPException(400, "لا يوجد HTML للتجميع. اطلب من الذكاء توليد الصفحة أولاً.")
+        # Inject approved asset URLs by type — replace placeholder src markers
+        for a in proj.get("approved_assets", []):
+            url = a.get("image_url")
+            if not url:
+                continue
+            atype = a.get("type", "").upper()
+            # replace any data-tag="HERO" src or placeholder
+            html = html.replace(f"{{{{ASSET:{atype}}}}}", url)
+            html = html.replace(f"PLACEHOLDER_{atype}", url)
+        await db.freebuild_projects.update_one(
+            {"id": pid},
+            {"$set": {"compiled_html": html, "updated_at": _now()}},
+        )
+        return {"ok": True, "html_length": len(html)}
+
+    # ===== Delete project =====
+    @router.delete("/project/{pid}")
+    async def delete_project(pid: str, user=Depends(get_current_user)):
+        r = await db.freebuild_projects.update_one(
+            {"id": pid, "user_id": user["user_id"]},
+            {"$set": {"status": "deleted", "updated_at": _now()}},
+        )
+        if r.matched_count == 0:
+            raise HTTPException(404)
+        return {"ok": True}
+
     return router
 
 
@@ -225,17 +299,23 @@ async def _generate_assets_bg(db, pid: str, assets: List[Dict[str, Any]]):
             r = await generate_flux_pro(prompt=a["prompt"], project_id=pid, aspect_ratio=ar, style_profile="cinematic")
             url = r.get("image_url") or r.get("url")
             await db.freebuild_projects.update_one(
-                {"id": pid, "messages.pending_assets.id": a["id"]},
+                {"id": pid},
                 {"$set": {
-                    "messages.$[].pending_assets.$[asset].image_url": url,
-                    "messages.$[].pending_assets.$[asset].status": "ready",
+                    "messages.$[msg].pending_assets.$[asset].image_url": url,
+                    "messages.$[msg].pending_assets.$[asset].status": "ready",
                 }},
-                array_filters=[{"asset.id": a["id"]}],
+                array_filters=[
+                    {"msg.pending_assets.id": a["id"]},
+                    {"asset.id": a["id"]},
+                ],
             )
         except Exception as e:
             logger.warning(f"asset gen failed for {a['id']}: {e}")
             await db.freebuild_projects.update_one(
-                {"id": pid, "messages.pending_assets.id": a["id"]},
-                {"$set": {"messages.$[].pending_assets.$[asset].status": "failed"}},
-                array_filters=[{"asset.id": a["id"]}],
+                {"id": pid},
+                {"$set": {"messages.$[msg].pending_assets.$[asset].status": "failed"}},
+                array_filters=[
+                    {"msg.pending_assets.id": a["id"]},
+                    {"asset.id": a["id"]},
+                ],
             )
