@@ -206,6 +206,58 @@ def _summarize_html(html: str) -> str:
     return " · ".join(parts)
 
 
+def _build_self_verification(proj: Dict[str, Any]) -> str:
+    """
+    Tell the AI what its previous turn actually did. This closes the feedback
+    loop: AI sees if changes applied, what's in current_html, which sections
+    exist, and whether anything was blocked.
+    """
+    lines = ["", "🔬 **حالة المشروع الفعلية الآن (Self-Inspection — مهمة)**:"]
+    current = proj.get("current_html") or ""
+    if not current:
+        lines.append("  • current_html: فارغ — لم تكتب أي كود بعد. ابدأ بكتابة shell.")
+    else:
+        section_ids = re.findall(
+            r'<section\b[^>]*\bid\s*=\s*["\']([a-zA-Z0-9_\-]+)["\']',
+            current, re.IGNORECASE,
+        )
+        broken = _verify_anchor_links(current)
+        title_m = re.search(r"<title[^>]*>([^<]+)</title>", current, re.IGNORECASE)
+        lines.append(f"  • حجم current_html: {len(current):,} حرف (~{len(current)//1024} KB)")
+        if title_m:
+            lines.append(f"  • عنوان الصفحة: \"{title_m.group(1).strip()[:60]}\"")
+        if section_ids:
+            lines.append(f"  • الأقسام الموجودة فعلاً ({len(section_ids)}): {', '.join('#'+s for s in section_ids[:10])}{'...' if len(section_ids)>10 else ''}")
+        else:
+            lines.append("  • ⚠️ لا يوجد <section id=\"...\"> في الـHTML — أضف ids للأقسام عشان الـnav يعمل.")
+        if broken:
+            lines.append(f"  • ⚠️ روابط nav معطوبة (ما لها أقسام مطابقة): {', '.join('#'+a for a in broken[:5])}")
+    # Check last assistant message for block info
+    msgs = proj.get("messages") or []
+    for m in reversed(msgs):
+        if m.get("role") == "assistant":
+            block = m.get("block_info")
+            if block and block.get("blocked"):
+                lines.append("")
+                lines.append("🚫 **تنبيه: ردك السابق رُفض من النظام**:")
+                lines.append(f"  • السبب: {block.get('reason')}")
+                lines.append(f"  • انخفض الحجم من {block.get('old_length')} إلى {block.get('new_length')} حرف")
+                lines.append(f"  • Drift: {block.get('drift')}")
+                lines.append("  • 💡 الحل: استخدم `<<APPEND_SECTION>>` أو `<<REPLACE_SECTION>>` بدل ما تعيد كتابة الـHTML من الصفر.")
+            had_html = m.get("had_html")
+            sections_applied = m.get("sections_applied", 0)
+            if had_html or sections_applied:
+                lines.append("")
+                lines.append("✅ **آخر تعديل اشتغل**:")
+                if had_html:
+                    lines.append("  • تم استبدال current_html كاملاً")
+                if sections_applied:
+                    lines.append(f"  • تم دمج {sections_applied} قسم/أقسام عبر Section Builder")
+            break
+    lines.append("")
+    return "\n".join(lines)
+
+
 def _extract_html(text: str) -> Optional[str]:
     m = HTML_BLOCK_RE.search(text)
     if m:
@@ -843,7 +895,8 @@ def make_freebuild_chat_router(db, get_current_user):
 
 
         extra_ctx = (
-            f"اسم المشروع: {proj['name']}\n"
+            _build_self_verification(proj)
+            + f"اسم المشروع: {proj['name']}\n"
             f"وصف المشروع: {proj['description'] or '(لم يحدد العميل وصفاً بعد — اسأله ودَوّن)'}\n"
             f"{assets_for_use}"
             f"{template_ctx}"
@@ -1122,6 +1175,7 @@ def make_freebuild_chat_router(db, get_current_user):
             #   • Explicit redesign (user said "غيّر كل شي")          → ALLOW
             #   • Destructive shrink (AI deleted header/footer)      → BLOCK
             #   • Catastrophic drift > 0.85                          → BLOCK
+            last_block_info = None  # populated below if drift gate blocks
             if proj.get("current_html"):
                 new_full = _extract_html(ai_text)
                 user_intent = _detect_user_intent(message or "")
@@ -1144,19 +1198,31 @@ def make_freebuild_chat_router(db, get_current_user):
                         or (new_sig.get("length", 0) < int(prev_sig.get("length", 1) * 0.55))
                     )
                     should_block = False
+                    block_reason = ""
                     if user_intent == "redesign":
                         should_block = False  # user asked for redesign
                     elif user_intent == "additive" and is_additive:
                         should_block = False  # legit growth
                     elif is_destructive and user_intent != "redesign":
-                        should_block = True   # AI silently deleted parts
+                        should_block = True
+                        block_reason = "destructive_shrink"
                     elif drift > 0.85 and user_intent != "redesign":
-                        should_block = True   # catastrophic non-additive change
+                        should_block = True
+                        block_reason = "catastrophic_drift"
                     if should_block:
                         logger.warning(
-                            f"freebuild design drift blocked: drift={drift:.2f} "
+                            f"freebuild design drift blocked: drift={drift:.2f} reason={block_reason} "
                             f"intent={user_intent} additive={is_additive} destructive={is_destructive}"
                         )
+                        # Record on assistant message for self-verification next turn
+                        last_block_info = {
+                            "blocked": True,
+                            "reason": block_reason,
+                            "drift": round(drift, 2),
+                            "is_destructive": is_destructive,
+                            "old_length": prev_sig.get("length"),
+                            "new_length": new_sig.get("length"),
+                        }
                         ai_text = (
                             "⚠️ لاحظت إن التعديل سيغيّر تصميمك المعتمد بشكل كبير وقد يحذف أقسام مهمة.\n\n"
                             "لحماية شغلك، حفظت **التصميم الأصلي كما هو** ولم أطبّق التغيير.\n\n"
@@ -1278,7 +1344,7 @@ def make_freebuild_chat_router(db, get_current_user):
             "messages": {
                 "$each": [
                     {"role": "user", "content": message, "timestamp": _now(), "pending_assets": [], "attachments": attachment_meta, "reference": reference_meta, "answer_meta": parsed_answer_meta},
-                    {"role": "assistant", "content": clean_text, "timestamp": _now(), "pending_assets": pending_assets, "had_html": bool(new_html), "options": options, "design_variants": design_variants},
+                    {"role": "assistant", "content": clean_text, "timestamp": _now(), "pending_assets": pending_assets, "had_html": bool(new_html), "options": options, "design_variants": design_variants, "block_info": last_block_info, "sections_applied": sections_applied},
                 ]
             }
         }
