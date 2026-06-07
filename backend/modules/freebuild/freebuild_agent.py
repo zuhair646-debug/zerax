@@ -325,28 +325,23 @@ async def run_agent_turn(
 ) -> Dict[str, Any]:
     """
     Run one agentic turn. The AI may call multiple tools before issuing finish().
-    Tries Anthropic Claude first; falls back to Kimi K2.6 (Moonshot, OpenAI-
-    compatible tool API) if Anthropic is unavailable or out of credits.
+    Anthropic Claude ONLY — same family as the platform AI. Fallback chain:
+      1. Direct ANTHROPIC_API_KEY
+      2. EMERGENT_LLM_KEY via Emergent's gateway (proxies to Claude)
     """
-    # Try providers in priority order
     providers_to_try = []
     if os.environ.get("ANTHROPIC_API_KEY", "").strip():
         providers_to_try.append(("anthropic", model))
-    # OpenAI gpt-4o has rock-solid native tool calling (Kimi's k2.6/k2.5
-    # require reasoning_content which breaks our tool flow). Prefer OpenAI
-    # over Moonshot for the tool-using agent.
-    if os.environ.get("OPENAI_DIRECT_KEY", "").strip() or os.environ.get("OPENAI_API_KEY", "").strip():
-        providers_to_try.append(("openai", "gpt-4o"))
-    if os.environ.get("MOONSHOT_API_KEY", "").strip():
-        providers_to_try.append(("moonshot", "moonshot-v1-32k"))
+    if os.environ.get("EMERGENT_LLM_KEY", "").strip():
+        providers_to_try.append(("emergent_anthropic", model))
     if not providers_to_try:
-        return {"ok": False, "error": "no AI provider configured"}
+        return {"ok": False, "error": "Claude key required (ANTHROPIC_API_KEY or EMERGENT_LLM_KEY)"}
 
     last_err = None
     for provider, prov_model in providers_to_try:
         try:
-            if provider == "anthropic":
-                result = await _run_anthropic_agent(project, user_message, history_messages, max_iterations, prov_model)
+            if provider in ("anthropic", "emergent_anthropic"):
+                result = await _run_anthropic_agent(project, user_message, history_messages, max_iterations, prov_model, use_emergent=(provider == "emergent_anthropic"))
             else:
                 result = await _run_openai_compat_agent(project, user_message, history_messages, max_iterations, provider, prov_model)
             if result.get("ok"):
@@ -369,6 +364,7 @@ async def _run_anthropic_agent(
     history_messages: List[Dict[str, str]],
     max_iterations: int,
     model: str,
+    use_emergent: bool = False,
 ) -> Dict[str, Any]:
     """Anthropic native tool-use agent loop."""
     try:
@@ -376,19 +372,36 @@ async def _run_anthropic_agent(
     except Exception:
         return {"ok": False, "error": "anthropic SDK missing"}
 
-    api_key = os.environ.get("ANTHROPIC_API_KEY", "")
-    if not api_key:
-        return {"ok": False, "error": "ANTHROPIC_API_KEY not configured"}
-
-    client = AsyncAnthropic(api_key=api_key)
+    if use_emergent:
+        api_key = os.environ.get("EMERGENT_LLM_KEY", "")
+        if not api_key:
+            return {"ok": False, "error": "EMERGENT_LLM_KEY not configured"}
+        client = AsyncAnthropic(
+            api_key=api_key,
+            base_url="https://integrations.emergentagent.com/llm/anthropic",
+        )
+    else:
+        api_key = os.environ.get("ANTHROPIC_API_KEY", "")
+        if not api_key:
+            return {"ok": False, "error": "ANTHROPIC_API_KEY not configured"}
+        client = AsyncAnthropic(api_key=api_key)
     ctx = FreeBuildToolContext(project)
 
     initial_state = _exec_tool(ctx, "read_current_html", {})
+    template_note = ""
+    cat_id = project.get("category_id")
+    if cat_id:
+        template_note = (
+            f"\n  📦 وضع القالب: المشروع مبني على قالب جاهز من فئة '{cat_id}'. "
+            "حافظ على الـlayout والـsections الأساسية للقالب — عدّل النصوص والصور والألوان فقط. "
+            "لا تعيد تصميم القالب من الصفر إلا إذا طلب العميل صراحة.\n"
+        )
     state_summary = (
         f"📍 السياق:\n"
         f"  اسم المشروع: {project.get('name','?')}\n"
         f"  الوصف: {project.get('description','(لم يحدّد)')}\n"
         f"  الموقع الحالي: {initial_state.get('summary','(فارغ)')}\n"
+        f"{template_note}"
     )
 
     messages: List[Dict[str, Any]] = []
@@ -493,11 +506,20 @@ async def _run_openai_compat_agent(
     ctx = FreeBuildToolContext(project)
 
     initial_state = _exec_tool(ctx, "read_current_html", {})
+    template_note = ""
+    cat_id = project.get("category_id")
+    if cat_id:
+        template_note = (
+            f"\n  📦 وضع القالب: المشروع مبني على قالب جاهز من فئة '{cat_id}'. "
+            "حافظ على الـlayout والـsections الأساسية للقالب — عدّل النصوص والصور والألوان فقط. "
+            "لا تعيد تصميم القالب من الصفر إلا إذا طلب العميل صراحة.\n"
+        )
     state_summary = (
         f"📍 السياق:\n"
         f"  اسم المشروع: {project.get('name','?')}\n"
         f"  الوصف: {project.get('description','(لم يحدّد)')}\n"
         f"  الموقع الحالي: {initial_state.get('summary','(فارغ)')}\n"
+        f"{template_note}"
     )
 
     # Convert tool schema to OpenAI format
@@ -623,16 +645,14 @@ async def stream_agent_turn(
     yield _sse("start", {"message": "🚀 الذكاء بدأ التحليل..."})
     await asyncio.sleep(0)
 
-    # Try Anthropic → OpenAI → Moonshot (Moonshot last because of thinking-mode quirks)
+    # Anthropic ONLY — same family as the platform AI (Claude). No GPT, no Kimi:
+    # those models produce subpar visual designs in Arabic. If credits run out,
+    # we surface a clear Arabic error so the owner can top up.
     providers = []
     if os.environ.get("ANTHROPIC_API_KEY", "").strip():
         providers.append(("anthropic", "claude-sonnet-4-5-20250929"))
-    if os.environ.get("OPENAI_DIRECT_KEY", "").strip() or os.environ.get("OPENAI_API_KEY", "").strip():
-        providers.append(("openai", "gpt-4o"))
-    if os.environ.get("MOONSHOT_API_KEY", "").strip():
-        providers.append(("moonshot", "moonshot-v1-32k"))
     if not providers:
-        yield _sse("error", {"message": "لا يوجد مزود ذكاء متاح"})
+        yield _sse("error", {"message": "لا يوجد مفتاح Anthropic — أضف ANTHROPIC_API_KEY"})
         return
 
     last_err = None
@@ -674,17 +694,33 @@ async def _stream_one_provider(
         ctx_holder["ctx"] = ctx
 
     initial_state = _exec_tool(ctx, "read_current_html", {})
+    template_note = ""
+    cat_id = project.get("category_id")
+    if cat_id:
+        template_note = (
+            f"\n  📦 وضع القالب: المشروع مبني على قالب جاهز من فئة '{cat_id}'. "
+            "حافظ على الـlayout والـsections الأساسية للقالب — عدّل النصوص والصور والألوان فقط. "
+            "لا تعيد تصميم القالب من الصفر إلا إذا طلب العميل صراحة.\n"
+        )
     state_summary = (
         f"📍 السياق:\n"
         f"  اسم المشروع: {project.get('name','?')}\n"
         f"  الوصف: {project.get('description','(لم يحدّد)')}\n"
         f"  الموقع الحالي: {initial_state.get('summary','(فارغ)')}\n"
+        f"{template_note}"
     )
 
     # Build conversation
-    if provider == "anthropic":
+    if provider in ("anthropic", "emergent_anthropic"):
         from anthropic import AsyncAnthropic
-        client = AsyncAnthropic(api_key=os.environ.get("ANTHROPIC_API_KEY", ""))
+        if provider == "emergent_anthropic":
+            # Emergent's universal key — same Anthropic SDK, different gateway
+            client = AsyncAnthropic(
+                api_key=os.environ.get("EMERGENT_LLM_KEY", ""),
+                base_url="https://integrations.emergentagent.com/llm/anthropic",
+            )
+        else:
+            client = AsyncAnthropic(api_key=os.environ.get("ANTHROPIC_API_KEY", ""))
         messages: List[Dict[str, Any]] = []
         sys_prompt = AGENT_SYSTEM_PROMPT
     else:
@@ -713,7 +749,7 @@ async def _stream_one_provider(
     for step in range(max_iterations):
         iterations += 1
 
-        if provider == "anthropic":
+        if provider in ("anthropic", "emergent_anthropic"):
             try:
                 resp = await client.messages.create(
                     model=model, system=sys_prompt, max_tokens=8000,
@@ -722,7 +758,10 @@ async def _stream_one_provider(
             except Exception as e:
                 msg = f"{type(e).__name__}: {str(e)[:200]}"
                 if any(k in msg.lower() for k in ["credit", "balance", "401", "402", "429", "quota"]):
-                    raise _ProviderUnavailable(msg)
+                    raise _ProviderUnavailable(
+                        "⚠️ رصيد Anthropic منتهي. لتفعيل الذكاء، يحتاج المالك "
+                        "شحن الرصيد من: console.anthropic.com/settings/billing"
+                    )
                 raise
             model_used = getattr(resp, "model", model)
             text_chunks: List[str] = []
@@ -787,7 +826,7 @@ async def _stream_one_provider(
                 summary = (tu["input"].get("summary") or "").strip()
                 options = [o for o in (tu["input"].get("options") or []) if isinstance(o, str)][:4]
                 ctx.log("finish", tu["input"], "finished")
-                if provider == "anthropic":
+                if provider in ("anthropic", "emergent_anthropic"):
                     messages.append({"role": "user", "content": [{"type": "tool_result", "tool_use_id": tu["id"], "content": "finished"}]})
                 else:
                     messages.append({"role": "tool", "tool_call_id": tu["id"], "content": "finished"})
@@ -813,7 +852,7 @@ async def _stream_one_provider(
                     snippet = f" — قسم #{tu['input'].get('id','?')}"
                 yield _sse("tool", {"name": tu["name"], "phase": "done", "label": label_done + snippet, "step": iterations})
                 await asyncio.sleep(0)
-                if provider == "anthropic":
+                if provider in ("anthropic", "emergent_anthropic"):
                     messages.append({"role": "user", "content": [{"type": "tool_result", "tool_use_id": tu["id"], "content": json.dumps(result, ensure_ascii=False)[:6000]}]})
                 else:
                     messages.append({"role": "tool", "tool_call_id": tu["id"], "content": json.dumps(result, ensure_ascii=False)[:6000]})
