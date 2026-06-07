@@ -61,9 +61,10 @@ export const Navbar = ({ user, transparent = false, setUser }) => {
           <div className="flex items-center gap-2">
             {showBack && (
               <button
+                type="button"
                 onClick={handleBack}
                 data-testid="navbar-back-btn"
-                className="inline-flex items-center justify-center w-9 h-9 rounded-lg bg-slate-800/70 hover:bg-amber-500/10 text-gray-300 hover:text-amber-400 border border-slate-700 hover:border-amber-500/40 transition-all"
+                className="navbar-btn inline-flex items-center justify-center w-9 h-9 rounded-lg bg-slate-800/50 text-gray-300 border border-slate-700"
                 title="رجوع"
                 aria-label="رجوع"
               >
@@ -149,8 +150,13 @@ export const Navbar = ({ user, transparent = false, setUser }) => {
           </div>
 
           {/* Mobile Menu Button */}
-          <button className="md:hidden p-2 rounded-lg hover:bg-slate-800" onClick={() => setIsMenuOpen(!isMenuOpen)}>
-            {isMenuOpen ? <X className="text-amber-400" /> : <Menu className="text-amber-400" />}
+          <button
+            type="button"
+            className="navbar-btn md:hidden p-2 rounded-lg border border-slate-700"
+            onClick={() => setIsMenuOpen(!isMenuOpen)}
+            aria-label="القائمة"
+          >
+            {isMenuOpen ? <X className="text-amber-400 w-5 h-5" /> : <Menu className="text-amber-400 w-5 h-5" />}
           </button>
         </div>
 
@@ -158,39 +164,46 @@ export const Navbar = ({ user, transparent = false, setUser }) => {
         {isMenuOpen && (
           <div className="md:hidden py-4 border-t border-amber-500/10">
             <div className="flex flex-col gap-2">
-              <Link to="/pricing" className="py-2 text-gray-300 hover:text-amber-400">الأسعار</Link>
+              <button
+                type="button"
+                onClick={() => { navigate('/pricing'); setIsMenuOpen(false); }}
+                className="navbar-link text-right py-2.5 px-3 text-gray-300 rounded-lg"
+              >
+                الأسعار
+              </button>
               {user ? (
                 <>
-                  <Button 
-                    variant="ghost" 
-                    onClick={() => { navigate(isAdmin ? '/admin' : '/dashboard'); setIsMenuOpen(false); }} 
-                    className="justify-start text-gray-300"
+                  <button
+                    type="button"
+                    onClick={() => { navigate(isAdmin ? '/admin' : '/dashboard'); setIsMenuOpen(false); }}
+                    className="navbar-btn text-right py-2.5 px-3 text-gray-300 rounded-lg border border-slate-700"
                   >
                     لوحة التحكم
-                  </Button>
-                  <Button 
-                    variant="ghost" 
-                    onClick={handleLogout} 
-                    className="justify-start text-red-400"
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleLogout}
+                    className="navbar-btn text-right py-2.5 px-3 text-red-400 rounded-lg border border-slate-700"
                   >
                     خروج
-                  </Button>
+                  </button>
                 </>
               ) : (
                 <>
-                  <Button 
-                    variant="ghost" 
-                    onClick={() => { navigate('/login'); setIsMenuOpen(false); }} 
-                    className="justify-start text-gray-300"
+                  <button
+                    type="button"
+                    onClick={() => { navigate('/login'); setIsMenuOpen(false); }}
+                    className="navbar-btn text-right py-2.5 px-3 text-gray-300 rounded-lg border border-slate-700"
                   >
                     دخول
-                  </Button>
-                  <Button 
-                    onClick={() => { navigate('/register'); setIsMenuOpen(false); }} 
-                    className="bg-gradient-to-r from-amber-600 to-yellow-600"
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => { navigate('/register'); setIsMenuOpen(false); }}
+                    className="navbar-btn-primary text-right py-2.5 px-4 rounded-lg font-semibold text-black"
                   >
                     ابدأ مجاناً
-                  </Button>
+                  </button>
                 </>
               )}
             </div>

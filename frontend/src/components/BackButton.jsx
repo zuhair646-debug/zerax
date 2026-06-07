@@ -7,6 +7,7 @@ import { ArrowRight, Home } from 'lucide-react';
  * • If browser history exists → goes back one step.
  * • Otherwise → falls back to homepage `/`.
  * • Always shows a tiny home icon to "escape" to landing in one click.
+ * • Uses .navbar-btn / .navbar-btn-icon CSS classes (no glow, instant tap).
  */
 export const BackButton = ({ to = null, label = 'رجوع', className = '' }) => {
   const navigate = useNavigate();
@@ -25,18 +26,21 @@ export const BackButton = ({ to = null, label = 'رجوع', className = '' }) =>
   return (
     <div className={`flex items-center gap-2 ${className}`} data-testid="back-button-wrapper">
       <button
+        type="button"
         onClick={handleBack}
         data-testid="back-button"
-        className="inline-flex items-center gap-2 px-3 py-2 rounded-lg bg-slate-800/70 hover:bg-slate-700 text-gray-300 hover:text-white border border-slate-600 hover:border-slate-500 transition-all text-sm"
+        className="navbar-btn inline-flex items-center gap-2 px-3.5 py-2 rounded-lg border border-slate-700 text-gray-300 text-sm"
       >
         <ArrowRight className="w-4 h-4" />
         <span>{label}</span>
       </button>
       <button
+        type="button"
         onClick={() => navigate('/')}
         data-testid="home-button"
-        className="inline-flex items-center justify-center w-9 h-9 rounded-lg bg-slate-800/70 hover:bg-slate-700 text-gray-300 hover:text-white border border-slate-600 hover:border-slate-500 transition-all"
+        className="navbar-btn inline-flex items-center justify-center w-9 h-9 rounded-lg border border-slate-700 text-gray-300"
         title="الصفحة الرئيسية"
+        aria-label="الصفحة الرئيسية"
       >
         <Home className="w-4 h-4" />
       </button>
