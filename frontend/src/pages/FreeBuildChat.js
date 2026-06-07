@@ -1030,6 +1030,7 @@ function ChatWorkspace({ projectId }) {
   const [lightboxAsset, setLightboxAsset] = useState(null);
   const [finalizeOpen, setFinalizeOpen] = useState(false);
   const [connectionsOpen, setConnectionsOpen] = useState(false);
+  const [thinkingStage, setThinkingStage] = useState(0);
   const [loading, setLoading] = useState(false);
   const [activePhase, setActivePhase] = useState('discovery');
   const [activeTab, setActiveTab] = useState('chat'); // chat | live | approved
@@ -1102,6 +1103,7 @@ function ChatWorkspace({ projectId }) {
   const send = async () => {
     if ((!message.trim() && attachments.length === 0 && !replyToAsset) || loading) return;
     setLoading(true);
+    setThinkingStage(0);
     const token = localStorage.getItem('token');
     const msgText = message;
     const filesToSend = attachments;
@@ -1109,6 +1111,21 @@ function ChatWorkspace({ projectId }) {
     setMessage('');
     setAttachments([]);
     setReplyToAsset(null);
+
+    // Progressive "thinking" stages while AI generates
+    const stages = [
+      '🔍 يحلل طلبك...',
+      '📐 يخطط بنية الموقع...',
+      '🎨 يختار الألوان والأقسام...',
+      '💻 يكتب الكود تدريجياً...',
+      '✅ يتحقق من جودة العمل...',
+    ];
+    let stage = 0;
+    const stageTimer = setInterval(() => {
+      stage = Math.min(stage + 1, stages.length - 1);
+      setThinkingStage(stage);
+    }, 6000);
+
     try {
       const fd = new FormData();
       fd.append('message', msgText || '(انظر للصورة المرفقة)');
@@ -1134,9 +1151,20 @@ function ChatWorkspace({ projectId }) {
       setAttachments(filesToSend);
       setReplyToAsset(refAsset);
     } finally {
+      clearInterval(stageTimer);
       setLoading(false);
+      setThinkingStage(0);
     }
   };
+
+  // Thinking stage labels (referenced inside JSX)
+  const THINKING_STAGES = [
+    '🔍 يحلل طلبك...',
+    '📐 يخطط بنية الموقع...',
+    '🎨 يختار الألوان والأقسام...',
+    '💻 يكتب الكود تدريجياً...',
+    '✅ يتحقق من جودة العمل...',
+  ];
 
   const approve = useCallback(async (aid) => {
     const token = localStorage.getItem('token');
@@ -1491,45 +1519,58 @@ function ChatWorkspace({ projectId }) {
 
                     {/* Design variants — live HTML mini previews user can pick */}
                     {m.role === 'assistant' && m.design_variants && m.design_variants.length > 1 && (
-                      <div className="mt-3 grid sm:grid-cols-2 lg:grid-cols-3 gap-2" data-testid={`variants-${i}`}>
+                      <div className="mt-3 grid sm:grid-cols-2 lg:grid-cols-3 gap-3" data-testid={`variants-${i}`}>
                         {m.design_variants.map((v, idx) => {
                           const isChosen = project.approved_design_id === v.id;
                           return (
                             <div
                               key={v.id}
-                              className={`rounded-lg overflow-hidden border ${isChosen ? 'border-emerald-400 ring-2 ring-emerald-400/40' : 'border-white/15 hover:border-emerald-400/60'} transition-all bg-black/40`}
+                              className={`rounded-xl overflow-hidden border-2 ${isChosen ? 'border-emerald-400 ring-2 ring-emerald-400/40' : 'border-white/15 hover:border-emerald-400/60'} transition-all bg-zinc-950 group`}
                               data-testid={`variant-card-${v.id}`}
                             >
-                              <div className="relative aspect-video bg-white overflow-hidden">
+                              <button
+                                type="button"
+                                onClick={() => setLightboxAsset({ id: v.id, type: 'تصميم', prompt: v.label, image_url: '', html: v.html })}
+                                className="relative block w-full aspect-[4/3] overflow-hidden bg-white"
+                                aria-label="تكبير التصميم"
+                                data-testid={`zoom-variant-${v.id}`}
+                              >
                                 <iframe
                                   title={v.label}
                                   srcDoc={v.html}
                                   sandbox=""
-                                  className="w-[1400px] h-[800px] origin-top-left scale-[0.22]"
-                                  style={{ pointerEvents: 'none' }}
+                                  scrolling="no"
+                                  className="absolute top-0 left-0 pointer-events-none"
+                                  style={{
+                                    width: '320%',
+                                    height: '320%',
+                                    transform: 'scale(0.3125)',
+                                    transformOrigin: '0 0',
+                                    border: 'none',
+                                  }}
                                 />
-                                <button
-                                  type="button"
-                                  onClick={() => setLightboxAsset({ id: v.id, type: 'تصميم', prompt: v.label, image_url: '', html: v.html })}
-                                  className="absolute inset-0 bg-black/0 hover:bg-black/30 transition-all"
-                                  aria-label="تكبير"
-                                />
-                              </div>
-                              <div className="p-2 flex items-center justify-between gap-2">
-                                <span className="text-[11px] text-zinc-300 font-bold flex items-center gap-1">
-                                  <span className={`w-4 h-4 rounded-full flex items-center justify-center text-[9px] font-black ${isChosen ? 'bg-emerald-500 text-black' : 'bg-zinc-700 text-zinc-300'}`}>{idx + 1}</span>
-                                  {v.label}
-                                </span>
+                                <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent group-hover:from-black/30 transition-all" />
+                                <div className="absolute bottom-2 right-2 px-2 py-1 rounded-md bg-black/60 backdrop-blur text-[10px] text-white font-bold flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                  <ZoomIn className="w-3 h-3" /> اضغط للتكبير
+                                </div>
+                                <div className="absolute top-2 right-2">
+                                  <span className={`w-6 h-6 rounded-full flex items-center justify-center text-[11px] font-black shadow-lg ${isChosen ? 'bg-emerald-500 text-black' : 'bg-black/70 text-white'}`}>
+                                    {idx + 1}
+                                  </span>
+                                </div>
+                              </button>
+                              <div className="p-2.5 flex items-center justify-between gap-2 bg-zinc-900">
+                                <span className="text-xs text-zinc-200 font-bold truncate">{v.label}</span>
                                 {isChosen ? (
-                                  <span className="text-[10px] text-emerald-300 font-bold">✓ مُعتمد</span>
+                                  <span className="text-[10px] text-emerald-300 font-bold whitespace-nowrap">✓ مُعتمد</span>
                                 ) : (
                                   <button
                                     type="button"
                                     onClick={() => approveDesign(v.id)}
                                     data-testid={`approve-variant-${v.id}`}
-                                    className="px-2 py-1 rounded bg-emerald-500/20 hover:bg-emerald-500/40 border border-emerald-400/40 text-emerald-200 text-[10px] font-black"
+                                    className="px-2.5 py-1 rounded-lg bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-400 hover:to-teal-500 text-black text-[10px] font-black shrink-0"
                                   >
-                                    اعتمد هذا
+                                    اعتمد
                                   </button>
                                 )}
                               </div>
@@ -1619,6 +1660,29 @@ function ChatWorkspace({ projectId }) {
                 </div>
               ))}
               <div ref={chatEndRef} />
+              {loading && (
+                <div className="flex justify-start" data-testid="thinking-bubble">
+                  <div className="max-w-[85%] rounded-2xl px-4 py-3 bg-zinc-800/70 border border-emerald-400/30">
+                    <div className="flex items-center gap-2 mb-2">
+                      <div className="flex gap-1">
+                        <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                        <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" style={{ animationDelay: '0.15s' }} />
+                        <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" style={{ animationDelay: '0.3s' }} />
+                      </div>
+                      <span className="text-sm font-bold text-emerald-200">{THINKING_STAGES[thinkingStage]}</span>
+                    </div>
+                    <div className="flex gap-1.5">
+                      {THINKING_STAGES.map((_, idx) => (
+                        <div
+                          key={idx}
+                          className={`h-1 flex-1 rounded-full transition-colors ${idx <= thinkingStage ? 'bg-emerald-400' : 'bg-white/10'}`}
+                        />
+                      ))}
+                    </div>
+                    <p className="text-[10px] text-zinc-400 mt-1.5">قد تستغرق المعالجة 30-60 ثانية للتصاميم الكبيرة</p>
+                  </div>
+                </div>
+              )}
             </div>
           )}
 
