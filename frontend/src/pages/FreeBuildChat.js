@@ -486,7 +486,6 @@ function FinalizeModal({ open, projectId, projectName, onClose, onConverted, onU
         if (!r.ok) {
           const err = await r.json().catch(() => ({}));
           toast.error(err.detail || 'يجب إكمال الموقع أولاً');
-          if (!cancelled) onClose();
           return;
         }
         const d = await r.json();
@@ -495,7 +494,7 @@ function FinalizeModal({ open, projectId, projectName, onClose, onConverted, onU
     };
     load();
     return () => { cancelled = true; };
-  }, [open, projectId, onClose]);
+  }, [open, projectId]);
 
   const choose = async (pathId, priceUsd) => {
     if (pathId === 'host_with_us') {
@@ -1039,16 +1038,52 @@ function ChatWorkspace({ projectId }) {
   const chatEndRef = useRef(null);
   const fileInputRef = useRef(null);
 
-  // Fetch + poll project state
+  // Pause polling while modals are open (avoids modal flicker on re-render)
+  const pollPausedRef = useRef(false);
+  useEffect(() => {
+    pollPausedRef.current = finalizeOpen || connectionsOpen || !!lightboxAsset;
+  }, [finalizeOpen, connectionsOpen, lightboxAsset]);
+
+  // Manual force-refresh of project (used by 'Refresh' button)
+  const [previewKey, setPreviewKey] = useState(0);
+  const refreshProject = useCallback(async () => {
+    const token = localStorage.getItem('token');
+    try {
+      const r = await fetch(`${API}/api/freebuild-chat/project/${projectId}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (r.ok) {
+        const d = await r.json();
+        setProject(d);
+        setPreviewKey((k) => k + 1); // force iframe remount
+        toast.success('🔄 تم تحديث المعاينة');
+      }
+    } catch (e) {
+      toast.error('فشل التحديث');
+    }
+  }, [projectId]);
+
+  // Fetch + poll project state (skip update if nothing changed)
   useEffect(() => {
     let cancelled = false;
     const token = localStorage.getItem('token');
     const tick = async () => {
+      if (pollPausedRef.current) return;
       try {
         const r = await fetch(`${API}/api/freebuild-chat/project/${projectId}`, { headers: { Authorization: `Bearer ${token}` } });
         if (r.ok && !cancelled) {
           const d = await r.json();
-          setProject(d);
+          setProject((prev) => {
+            // Skip setState if nothing meaningful changed (avoids child re-renders)
+            if (prev && prev.updated_at === d.updated_at && prev.messages?.length === d.messages?.length) {
+              return prev;
+            }
+            // Force iframe remount only if HTML actually changed
+            if (prev && prev.current_html !== d.current_html) {
+              setPreviewKey((k) => k + 1);
+            }
+            return d;
+          });
         }
       } catch (e) { /* silent */ }
     };
@@ -1594,6 +1629,16 @@ function ChatWorkspace({ projectId }) {
                   <Eye className="w-4 h-4" /> <span>المعاينة الحية</span>
                 </h2>
                 <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={refreshProject}
+                    data-testid="refresh-preview-btn"
+                    title="جلب آخر إصدار من الذكاء وإعادة تحميل المعاينة"
+                    className="px-3 py-1.5 rounded-lg bg-white/5 hover:bg-emerald-500/20 border border-emerald-400/30 text-emerald-200 text-xs font-bold flex items-center gap-1.5"
+                  >
+                    <ArrowRight className="w-3.5 h-3.5 rotate-180" />
+                    <span>تحديث</span>
+                  </button>
                   {project.current_html && (
                     <>
                       <button
@@ -1662,6 +1707,7 @@ function ChatWorkspace({ projectId }) {
                 )}
                 {project.current_html ? (
                   <iframe
+                    key={previewKey}
                     title="Live Preview"
                     data-testid="preview-iframe"
                     srcDoc={project.current_html}
