@@ -61,7 +61,61 @@ def _strip_tags(text: str) -> str:
 
 def _extract_options(text: str) -> List[str]:
     """Pull clickable choices out of AI response: <<OPT: ...>>."""
-    return [m.group(1).strip() for m in OPT_RE.finditer(text)]
+    opts = [m.group(1).strip() for m in OPT_RE.finditer(text)]
+    if opts:
+        return opts
+    items, _ = _extract_options_fallback(text)
+    return items
+
+
+# Fallback patterns when AI forgets <<OPT>> but still writes a list under a question.
+_LIST_LINE_RE = re.compile(r"^\s*(?:(?:[-•*]|\d+[\.\)]|[\u0660-\u0669]+[\.\)])\s+)(.+?)\s*$")
+
+
+def _extract_options_fallback(text: str):
+    """If the message contains a question followed by a numbered/bulleted list,
+    treat the list items as clickable options. Returns (items, lines_to_strip_set)."""
+    stripped = _strip_tags(text)
+    if "؟" not in stripped and "?" not in stripped:
+        return [], set()
+    # Strip code blocks — never pull options from inside ```html ... ```
+    cleaned = re.sub(r"```[\s\S]+?```", "", stripped)
+    lines = cleaned.split("\n")
+    items: List[str] = []
+    consumed_lines: List[str] = []
+    found_question = False
+    current_block_items: List[str] = []
+    current_block_lines: List[str] = []
+    for line in lines:
+        m = _LIST_LINE_RE.match(line)
+        if m:
+            current_block_items.append(m.group(1).strip())
+            current_block_lines.append(line)
+        else:
+            if current_block_items and len(current_block_items) >= 2:
+                items = current_block_items[:]
+                consumed_lines = current_block_lines[:]
+            current_block_items = []
+            current_block_lines = []
+            if "؟" in line or "?" in line:
+                found_question = True
+                items = []
+                consumed_lines = []
+    if current_block_items and len(current_block_items) >= 2:
+        items = current_block_items
+        consumed_lines = current_block_lines
+    if not found_question and not items:
+        return [], set()
+    cleaned_items = []
+    for it in items[:8]:
+        x = re.sub(r"\*\*(.+?)\*\*", r"\1", it)
+        x = re.sub(r"\*(.+?)\*", r"\1", x)
+        x = x.rstrip(":：،,. ")
+        if 1 <= len(x) <= 80:
+            cleaned_items.append(x)
+    if len(cleaned_items) < 2:
+        return [], set()
+    return cleaned_items, set(consumed_lines)
 
 
 def _now():
@@ -319,7 +373,17 @@ def make_freebuild_chat_router(db, get_current_user):
         # Detect HTML for live preview
         new_html = _extract_html(ai_text)
         clean_text = _strip_tags(ai_text)
-        options = _extract_options(ai_text)
+        # First try OPT tags; if none, fall back to numbered/bulleted lists after a question.
+        opt_tag_items = [m.group(1).strip() for m in OPT_RE.finditer(ai_text)]
+        if opt_tag_items:
+            options = opt_tag_items
+        else:
+            fb_items, fb_lines = _extract_options_fallback(ai_text)
+            options = fb_items
+            # Strip the consumed list lines from displayed text so we don't show twice.
+            if fb_lines:
+                kept = [ln for ln in clean_text.split("\n") if ln not in fb_lines]
+                clean_text = re.sub(r"\n{3,}", "\n\n", "\n".join(kept)).strip()
 
         # Save chat message + pending assets
         update_set = {"updated_at": _now()}
