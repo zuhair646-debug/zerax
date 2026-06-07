@@ -2145,7 +2145,6 @@ def make_freebuild_chat_router(db, get_current_user):
         iterations = result.get("iterations", 0)
         snapshots = result.get("snapshots") or []
 
-        # Persist results
         update_set: Dict[str, Any] = {"updated_at": _now()}
         push_ops: Dict[str, Any] = {
             "messages": {
@@ -2175,9 +2174,97 @@ def make_freebuild_chat_router(db, get_current_user):
             "options": options,
             "agent_iterations": iterations,
             "model_used": result.get("model_used"),
-            "task_label": f"🤖 Agent (Claude Sonnet 4.5 · {iterations} خطوة)",
+            "task_label": f"🤖 Agent ({iterations} خطوة)",
             "tool_log": result.get("tool_log", []),
         }
+
+    @router.post("/project/{pid}/agent-chat-stream")
+    async def agent_chat_stream(
+        pid: str,
+        message: str = Form(...),
+        user=Depends(get_current_user),
+    ):
+        """SSE endpoint: streams 'thinking' events as the agent works."""
+        proj = await db.freebuild_projects.find_one(
+            {"id": pid, "user_id": user["user_id"]}, {"_id": 0}
+        )
+        if not proj:
+            raise HTTPException(404, "مشروع غير موجود")
+        try:
+            from .freebuild_agent import stream_agent_turn, FreeBuildToolContext, _exec_tool
+            from fastapi.responses import StreamingResponse
+        except Exception:
+            logger.exception("agent import failed")
+            raise HTTPException(500, "agent module unavailable")
+
+        history = proj.get("messages") or []
+        # We need to capture the final state to persist; we re-parse SSE in a tee.
+        captured: Dict[str, Any] = {"summary": "", "options": [], "iterations": 0,
+                                     "model_used": "", "html_updated": False,
+                                     "new_html": None, "snapshots": []}
+        # Track changes via a parallel context
+        tracking_ctx = FreeBuildToolContext(proj)
+
+        async def event_stream():
+            from .freebuild_agent import stream_agent_turn as _s
+            ctx_holder: Dict[str, Any] = {}
+            async for chunk in _s(proj, message, history, ctx_holder=ctx_holder):
+                if "event: done" in chunk:
+                    try:
+                        data_line = [ln for ln in chunk.split("\n") if ln.startswith("data:")][0][5:].strip()
+                        done = json.loads(data_line)
+                        captured["summary"] = done.get("summary", "")
+                        captured["options"] = done.get("options") or []
+                        captured["iterations"] = done.get("iterations", 0)
+                        captured["model_used"] = done.get("model_used", "")
+                        captured["html_updated"] = done.get("html_updated", False)
+                    except Exception:
+                        pass
+                yield chunk
+            # After streaming, grab final HTML/snapshots from the tool context
+            final_ctx = ctx_holder.get("ctx")
+            new_html = final_ctx.current_html if (final_ctx and final_ctx.changes_made > 0) else None
+            snapshots = final_ctx.snapshots_to_create if final_ctx else []
+            try:
+                update_set: Dict[str, Any] = {"updated_at": _now()}
+                push_ops: Dict[str, Any] = {
+                    "messages": {
+                        "$each": [
+                            {"role": "user", "content": message, "timestamp": _now(),
+                             "pending_assets": [], "attachments": [],
+                             "reference": None, "answer_meta": None},
+                            {"role": "assistant", "content": captured["summary"],
+                             "timestamp": _now(), "pending_assets": [],
+                             "had_html": bool(new_html),
+                             "options": captured["options"],
+                             "design_variants": [],
+                             "agent_iterations": captured["iterations"],
+                             "model_used": captured["model_used"]},
+                        ]
+                    }
+                }
+                if new_html:
+                    update_set["current_html"] = new_html
+                if snapshots:
+                    push_ops["html_snapshots"] = {"$each": snapshots, "$slice": -20}
+                await db.freebuild_projects.update_one(
+                    {"id": pid},
+                    {"$push": push_ops, "$set": update_set},
+                )
+            except Exception:
+                logger.exception("agent stream: persist failed")
+
+        return StreamingResponse(
+            event_stream(),
+            media_type="text/event-stream",
+            headers={
+                "Cache-Control": "no-cache",
+                "X-Accel-Buffering": "no",
+                "Connection": "keep-alive",
+            },
+        )
+
+    return router
 
     return router
 

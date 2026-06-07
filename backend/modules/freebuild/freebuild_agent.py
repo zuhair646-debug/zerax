@@ -17,13 +17,14 @@ Tools exposed to Claude:
 """
 
 from __future__ import annotations
+import asyncio
 import json
 import logging
 import os
 import re
 import uuid
 from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional
+from typing import Any, AsyncGenerator, Dict, List, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -577,3 +578,259 @@ async def _run_openai_compat_agent(
         "model_used": model_used,
         "changes_made": ctx.changes_made,
     }
+
+
+# ─── STREAMING AGENT (Server-Sent Events) ──────────────────────────────────
+# Emits live "thinking" events for the user — each tool call becomes a
+# visible step in the chat. Same logic as run_agent_turn but yields SSE.
+
+TOOL_LABELS_AR: Dict[str, Dict[str, str]] = {
+    "read_current_html":  {"running": "🔍 يقرأ الموقع الحالي ويحلل بنيته...",
+                            "done": "✅ قرأ الموقع — تعرّف على الأقسام والروابط"},
+    "list_sections":      {"running": "📋 يعرض كل أقسام الموقع...",
+                            "done": "✅ سجّل قائمة الأقسام"},
+    "validate_html":      {"running": "🩺 يفحص جودة الكود والروابط...",
+                            "done": "✅ انتهى من الفحص"},
+    "search_html":        {"running": "🔎 يبحث داخل الكود...",
+                            "done": "✅ انتهى البحث"},
+    "write_full_html":    {"running": "✏️ يكتب موقع كامل من الصفر...",
+                            "done": "✅ كتب الـHTML الجديد"},
+    "apply_section":      {"running": "🔧 يطبّق قسم محدد بدقة...",
+                            "done": "✅ تم تطبيق القسم"},
+    "update_nav":         {"running": "🗺️ يحدّث قائمة التنقّل (nav)...",
+                            "done": "✅ تم تحديث القائمة"},
+    "finish":             {"running": "📝 يجهّز التقرير النهائي...",
+                            "done": "✅ جاهز"},
+}
+
+
+def _sse(event: str, data: Dict[str, Any]) -> str:
+    return f"event: {event}\ndata: {json.dumps(data, ensure_ascii=False)}\n\n"
+
+
+async def stream_agent_turn(
+    project: Dict[str, Any],
+    user_message: str,
+    history_messages: List[Dict[str, str]],
+    max_iterations: int = 8,
+    ctx_holder: Optional[Dict[str, Any]] = None,
+) -> AsyncGenerator[str, None]:
+    """SSE generator: yields live thinking events while the agent works.
+
+    If ctx_holder is provided, populates it with the final FreeBuildToolContext
+    so the caller can persist current_html/snapshots after streaming completes.
+    """
+    yield _sse("start", {"message": "🚀 الذكاء بدأ التحليل..."})
+    await asyncio.sleep(0)
+
+    # Try Anthropic → OpenAI → Moonshot (Moonshot last because of thinking-mode quirks)
+    providers = []
+    if os.environ.get("ANTHROPIC_API_KEY", "").strip():
+        providers.append(("anthropic", "claude-sonnet-4-5-20250929"))
+    if os.environ.get("OPENAI_DIRECT_KEY", "").strip() or os.environ.get("OPENAI_API_KEY", "").strip():
+        providers.append(("openai", "gpt-4o"))
+    if os.environ.get("MOONSHOT_API_KEY", "").strip():
+        providers.append(("moonshot", "moonshot-v1-32k"))
+    if not providers:
+        yield _sse("error", {"message": "لا يوجد مزود ذكاء متاح"})
+        return
+
+    last_err = None
+    for provider, model in providers:
+        try:
+            yield _sse("provider", {"name": provider, "model": model, "message": f"🧠 يستخدم {model}"})
+            await asyncio.sleep(0)
+            async for chunk in _stream_one_provider(project, user_message, history_messages, max_iterations, provider, model, ctx_holder=ctx_holder):
+                yield chunk
+            return
+        except _ProviderUnavailable as e:
+            last_err = str(e)
+            yield _sse("fallback", {"from": provider, "reason": str(e)[:120]})
+            await asyncio.sleep(0)
+            continue
+        except Exception as e:
+            yield _sse("error", {"message": f"{provider}: {type(e).__name__}: {str(e)[:200]}"})
+            return
+    yield _sse("error", {"message": f"كل المزودات فشلت: {last_err}"})
+
+
+class _ProviderUnavailable(Exception):
+    """Raised to trigger fallback to the next provider."""
+    pass
+
+
+async def _stream_one_provider(
+    project: Dict[str, Any],
+    user_message: str,
+    history_messages: List[Dict[str, str]],
+    max_iterations: int,
+    provider: str,
+    model: str,
+    ctx_holder: Optional[Dict[str, Any]] = None,
+) -> AsyncGenerator[str, None]:
+    """Run the tool loop for one provider, yielding SSE chunks per step."""
+    ctx = FreeBuildToolContext(project)
+    if ctx_holder is not None:
+        ctx_holder["ctx"] = ctx
+
+    initial_state = _exec_tool(ctx, "read_current_html", {})
+    state_summary = (
+        f"📍 السياق:\n"
+        f"  اسم المشروع: {project.get('name','?')}\n"
+        f"  الوصف: {project.get('description','(لم يحدّد)')}\n"
+        f"  الموقع الحالي: {initial_state.get('summary','(فارغ)')}\n"
+    )
+
+    # Build conversation
+    if provider == "anthropic":
+        from anthropic import AsyncAnthropic
+        client = AsyncAnthropic(api_key=os.environ.get("ANTHROPIC_API_KEY", ""))
+        messages: List[Dict[str, Any]] = []
+        sys_prompt = AGENT_SYSTEM_PROMPT
+    else:
+        from openai import AsyncOpenAI
+        if provider == "moonshot":
+            client = AsyncOpenAI(api_key=os.environ.get("MOONSHOT_API_KEY", ""),
+                                 base_url="https://api.moonshot.ai/v1")
+        else:
+            client = AsyncOpenAI(api_key=os.environ.get("OPENAI_DIRECT_KEY") or os.environ.get("OPENAI_API_KEY", ""))
+        messages = [{"role": "system", "content": AGENT_SYSTEM_PROMPT}]
+        sys_prompt = None
+        openai_tools = [{"type": "function", "function": {"name": t["name"], "description": t["description"], "parameters": t["input_schema"]}} for t in TOOLS_SCHEMA]
+
+    for m in history_messages[-12:]:
+        if m.get("role") in ("user", "assistant"):
+            c = m.get("content", "")
+            if isinstance(c, str) and c.strip():
+                messages.append({"role": m["role"], "content": c})
+    messages.append({"role": "user", "content": f"{state_summary}\n\nالطلب: {user_message}"})
+
+    iterations = 0
+    summary = ""
+    options: List[str] = []
+    model_used = model
+
+    for step in range(max_iterations):
+        iterations += 1
+
+        if provider == "anthropic":
+            try:
+                resp = await client.messages.create(
+                    model=model, system=sys_prompt, max_tokens=8000,
+                    tools=TOOLS_SCHEMA, messages=messages,
+                )
+            except Exception as e:
+                msg = f"{type(e).__name__}: {str(e)[:200]}"
+                if any(k in msg.lower() for k in ["credit", "balance", "401", "402", "429", "quota"]):
+                    raise _ProviderUnavailable(msg)
+                raise
+            model_used = getattr(resp, "model", model)
+            text_chunks: List[str] = []
+            tool_uses = []
+            assistant_blocks = []
+            for block in resp.content:
+                bt = getattr(block, "type", "")
+                if bt == "text":
+                    text_chunks.append(block.text)
+                    assistant_blocks.append({"type": "text", "text": block.text})
+                elif bt == "tool_use":
+                    assistant_blocks.append({"type": "tool_use", "id": block.id, "name": block.name, "input": block.input})
+                    tool_uses.append({"id": block.id, "name": block.name, "input": block.input})
+            messages.append({"role": "assistant", "content": assistant_blocks})
+        else:
+            try:
+                resp = await client.chat.completions.create(
+                    model=model, messages=messages, tools=openai_tools, max_tokens=8000,
+                )
+            except Exception as e:
+                msg = f"{type(e).__name__}: {str(e)[:200]}"
+                if any(k in msg.lower() for k in ["credit", "balance", "not found", "401", "402", "429", "quota", "permission"]):
+                    raise _ProviderUnavailable(msg)
+                raise
+            model_used = getattr(resp, "model", model)
+            choice = resp.choices[0].message
+            text_chunks = [choice.content] if choice.content else []
+            tool_uses = []
+            assistant_msg = {"role": "assistant", "content": choice.content or None}
+            if choice.tool_calls:
+                assistant_msg["tool_calls"] = [
+                    {"id": tc.id, "type": "function", "function": {"name": tc.function.name, "arguments": tc.function.arguments}}
+                    for tc in choice.tool_calls
+                ]
+                for tc in choice.tool_calls:
+                    try:
+                        args = json.loads(tc.function.arguments or "{}")
+                    except Exception:
+                        args = {}
+                    tool_uses.append({"id": tc.id, "name": tc.function.name, "input": args})
+            messages.append(assistant_msg)
+
+        # Emit any inline "thinking" text the model produced (Claude often does this between tool calls)
+        for txt in text_chunks:
+            if txt and txt.strip():
+                yield _sse("thinking", {"text": txt.strip()[:400]})
+                await asyncio.sleep(0)
+
+        if not tool_uses:
+            # No more tools — model wrapped up with text
+            summary = "\n".join(text_chunks).strip()
+            break
+
+        # Execute each tool, emit "tool" events
+        finished = False
+        for tu in tool_uses:
+            label_in = TOOL_LABELS_AR.get(tu["name"], {}).get("running", f"🔧 {tu['name']}...")
+            yield _sse("tool", {"name": tu["name"], "phase": "running", "label": label_in, "step": iterations})
+            await asyncio.sleep(0)
+
+            if tu["name"] == "finish":
+                summary = (tu["input"].get("summary") or "").strip()
+                options = [o for o in (tu["input"].get("options") or []) if isinstance(o, str)][:4]
+                ctx.log("finish", tu["input"], "finished")
+                if provider == "anthropic":
+                    messages.append({"role": "user", "content": [{"type": "tool_result", "tool_use_id": tu["id"], "content": "finished"}]})
+                else:
+                    messages.append({"role": "tool", "tool_call_id": tu["id"], "content": "finished"})
+                finished = True
+                yield _sse("tool", {"name": "finish", "phase": "done", "label": TOOL_LABELS_AR["finish"]["done"], "step": iterations})
+                await asyncio.sleep(0)
+            else:
+                result = _exec_tool(ctx, tu["name"], tu["input"])
+                ctx.log(tu["name"], tu["input"], result)
+                label_done = TOOL_LABELS_AR.get(tu["name"], {}).get("done", "✅ تم")
+                # Add a short result snippet to the label
+                snippet = ""
+                if tu["name"] == "validate_html":
+                    issues = result.get("issues") or []
+                    snippet = f" — {len(issues)} مشكلة" if issues else " — لا مشاكل"
+                elif tu["name"] == "list_sections":
+                    snippet = f" — {result.get('count', 0)} قسم"
+                elif tu["name"] == "read_current_html":
+                    snippet = f" — {result.get('length', 0)} حرف"
+                elif tu["name"] == "write_full_html":
+                    snippet = f" — {result.get('new_length', 0)} حرف"
+                elif tu["name"] == "apply_section":
+                    snippet = f" — قسم #{tu['input'].get('id','?')}"
+                yield _sse("tool", {"name": tu["name"], "phase": "done", "label": label_done + snippet, "step": iterations})
+                await asyncio.sleep(0)
+                if provider == "anthropic":
+                    messages.append({"role": "user", "content": [{"type": "tool_result", "tool_use_id": tu["id"], "content": json.dumps(result, ensure_ascii=False)[:6000]}]})
+                else:
+                    messages.append({"role": "tool", "tool_call_id": tu["id"], "content": json.dumps(result, ensure_ascii=False)[:6000]})
+
+        if finished:
+            break
+
+    # Final summary
+    yield _sse("done", {
+        "summary": summary or "تم.",
+        "options": options,
+        "iterations": iterations,
+        "model_used": model_used,
+        "html_updated": ctx.changes_made > 0,
+        "tool_log": ctx.tool_log,
+    })
+
+    # Persist to DB happens at the endpoint level (we return ctx via closure helpers below)
+    # We attach the final state to the generator via a side-channel — see endpoint.
+    return

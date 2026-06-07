@@ -1306,14 +1306,113 @@ function ChatWorkspace({ projectId }) {
       fd.append('message', msgText || '(انظر للصورة المرفقة)');
       filesToSend.forEach((f) => fd.append('files', f));
       if (refAsset?.id) fd.append('reference_asset_id', refAsset.id);
-      // Use the new tool-using AGENT endpoint when there are no file attachments
-      // (the agent path supports Claude Sonnet 4.5 native tool calls with full
-      // self-validation). Falls back to the classic /chat endpoint for vision /
-      // voice / file uploads which the agent path doesn't process yet.
+      // Use streaming agent endpoint when no files attached (so user sees the AI's
+      // live thinking — every tool call streams into the chat as a visible step)
       const useAgent = filesToSend.length === 0 && !refAsset?.id;
-      const endpoint = useAgent
-        ? `${API}/api/freebuild-chat/project/${projectId}/agent-chat`
-        : `${API}/api/freebuild-chat/project/${projectId}/chat`;
+      if (useAgent) {
+        // Stream Server-Sent Events; render each step live
+        const r = await fetch(`${API}/api/freebuild-chat/project/${projectId}/agent-chat-stream`, {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${token}` },
+          body: fd,
+        });
+        if (!r.ok) throw new Error(`HTTP ${r.status}`);
+        const reader = r.body.getReader();
+        const decoder = new TextDecoder();
+        let buf = '';
+        let finalSummary = '';
+        let finalOptions = [];
+        let liveSteps = [];
+        let htmlUpdated = false;
+        const stepsHolderId = `agent-steps-${Date.now()}`;
+        // Push a placeholder assistant message we'll update live
+        setProject((p) => p ? {
+          ...p,
+          messages: [...(p.messages || []),
+            { role: 'user', content: msgText, timestamp: new Date().toISOString(), reference: refAsset, attachments: [] },
+            { role: 'assistant', content: '', timestamp: new Date().toISOString(),
+              agent_steps: [], agent_streaming: true, agent_holder_id: stepsHolderId },
+          ],
+        } : p);
+
+        const updateLive = () => {
+          setProject((p) => {
+            if (!p) return p;
+            const msgs = [...(p.messages || [])];
+            for (let i = msgs.length - 1; i >= 0; i--) {
+              if (msgs[i].agent_holder_id === stepsHolderId) {
+                msgs[i] = { ...msgs[i], agent_steps: [...liveSteps], content: finalSummary || msgs[i].content };
+                break;
+              }
+            }
+            return { ...p, messages: msgs };
+          });
+        };
+
+        while (true) {
+          const { value, done } = await reader.read();
+          if (done) break;
+          buf += decoder.decode(value, { stream: true });
+          let idx;
+          while ((idx = buf.indexOf('\n\n')) !== -1) {
+            const raw = buf.slice(0, idx);
+            buf = buf.slice(idx + 2);
+            const lines = raw.split('\n');
+            let eventName = 'message';
+            let dataStr = '';
+            for (const ln of lines) {
+              if (ln.startsWith('event:')) eventName = ln.slice(6).trim();
+              else if (ln.startsWith('data:')) dataStr = ln.slice(5).trim();
+            }
+            if (!dataStr) continue;
+            let payload;
+            try { payload = JSON.parse(dataStr); } catch { continue; }
+            if (eventName === 'start' || eventName === 'provider' || eventName === 'fallback') {
+              liveSteps.push({ kind: eventName, ...payload });
+            } else if (eventName === 'thinking') {
+              liveSteps.push({ kind: 'thinking', text: payload.text });
+            } else if (eventName === 'tool') {
+              liveSteps.push({ kind: 'tool', ...payload });
+            } else if (eventName === 'done') {
+              finalSummary = payload.summary || '';
+              finalOptions = payload.options || [];
+              htmlUpdated = !!payload.html_updated;
+              setLastTask({ label: `🤖 Agent (${payload.iterations || 0} خطوة)`, model: payload.model_used || '' });
+            } else if (eventName === 'error') {
+              liveSteps.push({ kind: 'error', message: payload.message });
+            }
+            updateLive();
+          }
+        }
+        // Finalize: mark message as not streaming
+        setProject((p) => {
+          if (!p) return p;
+          const msgs = [...(p.messages || [])];
+          for (let i = msgs.length - 1; i >= 0; i--) {
+            if (msgs[i].agent_holder_id === stepsHolderId) {
+              msgs[i] = { ...msgs[i], agent_streaming: false, options: finalOptions, content: finalSummary };
+              break;
+            }
+          }
+          return { ...p, messages: msgs };
+        });
+        if (htmlUpdated) {
+          toast.success('✨ تم تحديث المعاينة الحية', {
+            action: { label: 'افتح', onClick: () => setActiveTab('live') },
+          });
+          setActiveTab((prev) => (prev === 'chat' ? 'live' : prev));
+          // refresh full project to get new current_html
+          const pr = await fetch(`${API}/api/freebuild-chat/project/${projectId}`, { headers: { Authorization: `Bearer ${token}` } });
+          if (pr.ok) setProject(await pr.json());
+        }
+        // Skip the rest of the legacy path
+        setMessage('');
+        setLoading(false);
+        clearInterval(stageTimer);
+        setThinkingStage(0);
+        return;
+      }
+      const endpoint = `${API}/api/freebuild-chat/project/${projectId}/chat`;
       const r = await fetch(endpoint, {
         method: 'POST',
         headers: { Authorization: `Bearer ${token}` },
@@ -1729,6 +1828,69 @@ function ChatWorkspace({ projectId }) {
                     <div className="text-sm leading-relaxed">
                       <MarkdownText>{m.content}</MarkdownText>
                     </div>
+
+                    {/* Agent live thinking — visible while the agent reasons/calls tools */}
+                    {m.role === 'assistant' && Array.isArray(m.agent_steps) && m.agent_steps.length > 0 && (
+                      <div className="mt-3 space-y-1.5" data-testid={`agent-steps-${i}`}>
+                        {m.agent_steps.map((s, sIdx) => {
+                          if (s.kind === 'thinking') {
+                            return (
+                              <div key={sIdx} className="flex gap-2 text-xs text-zinc-400 bg-zinc-900/50 border-r-2 border-cyan-500/40 px-3 py-1.5 rounded">
+                                <span className="text-cyan-300">💭</span>
+                                <span className="italic">{s.text}</span>
+                              </div>
+                            );
+                          }
+                          if (s.kind === 'tool') {
+                            const isDone = s.phase === 'done';
+                            return (
+                              <div key={sIdx} className={`flex gap-2 text-[11px] px-3 py-1.5 rounded border ${
+                                isDone
+                                  ? 'bg-emerald-500/5 border-emerald-400/20 text-emerald-200'
+                                  : 'bg-amber-500/5 border-amber-400/30 text-amber-200 animate-pulse'
+                              }`}>
+                                <span>{s.label}</span>
+                              </div>
+                            );
+                          }
+                          if (s.kind === 'provider') {
+                            return (
+                              <div key={sIdx} className="text-[10px] text-zinc-500 px-3">
+                                {s.message}
+                              </div>
+                            );
+                          }
+                          if (s.kind === 'fallback') {
+                            return (
+                              <div key={sIdx} className="text-[10px] text-amber-400 px-3">
+                                ⚠️ {s.from} غير متاح — التحويل لمزود آخر
+                              </div>
+                            );
+                          }
+                          if (s.kind === 'error') {
+                            return (
+                              <div key={sIdx} className="text-[10px] text-red-400 px-3">
+                                ❌ {s.message}
+                              </div>
+                            );
+                          }
+                          if (s.kind === 'start') {
+                            return (
+                              <div key={sIdx} className="text-[10px] text-cyan-400 px-3">
+                                {s.message}
+                              </div>
+                            );
+                          }
+                          return null;
+                        })}
+                        {m.agent_streaming && (
+                          <div className="text-[10px] text-zinc-500 px-3 italic flex items-center gap-2">
+                            <span className="inline-block w-2 h-2 rounded-full bg-cyan-400 animate-pulse" />
+                            يعمل...
+                          </div>
+                        )}
+                      </div>
+                    )}
 
                     {/* Design variants — live HTML mini previews user can pick */}
                     {m.role === 'assistant' && m.design_variants && m.design_variants.length > 1 && (
