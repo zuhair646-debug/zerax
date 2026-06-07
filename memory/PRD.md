@@ -1,5 +1,14 @@
 # Zitex AI Platform - PRD
 
+### 🍋 Feb 8 2026 — Lemon Squeezy Webhook Handler ✅
+- **Endpoint**: `POST /api/pricing/lemonsqueezy-webhook` (+ alias `/ls-webhook`)
+- **Security**: HMAC-SHA256 signature verification via `X-Signature` header
+- **Secret**: `LEMONSQUEEZY_WEBHOOK_SECRET` env var (local + Railway)
+- **Events handled**: `order_created`, `order_paid`
+- **Flow**: Verify signature → lookup pending order by `custom_id` → add credits + bonus → activate subscription (if any) → redeem promo → generate Arabic PDF invoice → email via Resend → mark order COMPLETED
+- **E2E Tested**: ✅ User credits added (200), invoice ZTX-202606-00001 generated, status flips to COMPLETED
+- **User TODO**: Set webhook URL in Lemon Squeezy dashboard to `https://zitex-production.up.railway.app/api/pricing/lemonsqueezy-webhook` AND add `LEMONSQUEEZY_WEBHOOK_SECRET` to Railway env vars
+
 ### 💰 Feb 8 2026 — نظام البيع الكامل (Pricing + PayPal LIVE + PDF Invoices + Credits) ✅
 
 **ميزة الجلسة**: نظام بيع و فوترة متكامل بعرض إطلاق 50% خصم + خصم تلقائي للشعلات عند الاستخدام.
