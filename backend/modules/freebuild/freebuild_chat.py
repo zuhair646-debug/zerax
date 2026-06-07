@@ -417,13 +417,13 @@ def _classify_freebuild_task(
     to the user as live progress.
     """
     if is_retry_for_fix:
-        return ("reasoning_hard", "🛠️ يصلّح أخطاء برمجية")
+        return ("reasoning_hard", "🛠️ يصلّح أخطاء برمجية (GPT-5 / Opus)")
 
     msg = (user_msg or "").lower()
 
-    # Big existing project → need long context
+    # Big existing project → need long context (Kimi 256K)
     if has_current_html and current_html_len > 30_000:
-        return ("long_context", "📚 يحلّل موقع كبير (256K context)")
+        return ("long_context", "📚 يحلّل موقع كبير (Kimi 256K)")
 
     # Variant / multi-design request → design specialty
     variant_re = re.compile(
@@ -433,7 +433,7 @@ def _classify_freebuild_task(
     )
     # First time (no current_html) OR explicit visual exploration → design
     if not has_current_html or variant_re.search(msg):
-        return ("design", "🎨 يصمم (Claude Opus — أعلى ذوق بصري)")
+        return ("design", "🎨 يصمم (Claude Opus 4.5)")
 
     # Debug/fix request → reasoning
     fix_re = re.compile(
@@ -443,10 +443,20 @@ def _classify_freebuild_task(
         re.IGNORECASE,
     )
     if fix_re.search(msg):
-        return ("reasoning_hard", "🧠 يحلّل المشكلة (نموذج تفكير عميق)")
+        return ("reasoning_hard", "🧠 يحلّل ويصحّح (GPT-5 / Opus)")
 
-    # Code add/modify → website_build
-    return ("website_build", "💻 يكتب الكود (Kimi K2.6 / Claude)")
+    # Complex code request (multiple sections, advanced features) → coding_strong
+    complex_re = re.compile(
+        r"(مشغل|player|navigation|router|تفاعلي|interactive|"
+        r"شريط\s+تحكم|controls|api\s+call|fetch|قاعدة\s+بيانات|"
+        r"database|backend|auth|تسجيل\s+دخول|state\s+management)",
+        re.IGNORECASE,
+    )
+    if complex_re.search(msg):
+        return ("coding_strong", "⚡ كود متقدم (Kimi K2.6 + Opus)")
+
+    # Code add/modify → website_build (Kimi K2.6 leads)
+    return ("website_build", "💻 يكتب الكود (Kimi K2.6)")
 
 
 def _strip_tags(text: str) -> str:

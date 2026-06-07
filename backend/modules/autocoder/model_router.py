@@ -166,11 +166,14 @@ MODELS: Dict[str, Dict[str, Any]] = {
 # Price is the tie-breaker only when quality is comparable.
 # ═══════════════════════════════════════════════════════════════════════════
 TASK_LADDERS: Dict[str, List[str]] = {
-    # 💻 General coding — Claude Sonnet 4.5 is the SOTA for coding agents
-    "coding":          ["claude-sonnet-4-5", "gpt-4o", "claude-opus-4-5", "kimi-k2.6", "deepseek-chat"],
+    # 💻 General coding — Kimi K2.6 (#1 SWE-bench, 256K) → Claude Sonnet → GPT-5
+    "coding":          ["kimi-k2.6", "claude-sonnet-4-5", "claude-opus-4-5", "gpt-4o", "deepseek-chat"],
 
-    # 📚 Very long documents — Gemini 2.5 (1-2M ctx) crushes
-    "long_context":    ["gemini-2.5-pro", "gemini-2.5-flash", "claude-sonnet-4-5", "kimi-k2.6"],
+    # 🚀 Hard coding (big refactors, complex logic) — Kimi K2.6 + Claude Opus dual
+    "coding_strong":   ["kimi-k2.6", "claude-opus-4-5", "claude-sonnet-4-5", "gpt-5", "deepseek-reasoner"],
+
+    # 📚 Very long documents — Kimi K2.6 (256K) → Gemini 2.5 Pro (1M)
+    "long_context":    ["kimi-k2.6", "gemini-2.5-pro", "gemini-2.5-flash", "claude-sonnet-4-5"],
 
     # ✍️ Creative writing — Claude leads, GPT-5/4o as alt voices
     "creative_write":  ["claude-opus-4-5", "claude-sonnet-4-5", "gpt-4o", "deepseek-chat"],
@@ -203,14 +206,15 @@ TASK_LADDERS: Dict[str, List[str]] = {
     "design":          ["claude-opus-4-5", "claude-sonnet-4-5", "gpt-4o", "glm-4.6", "deepseek-chat"],
     "ui_ux":           ["claude-opus-4-5", "claude-sonnet-4-5", "gpt-4o", "glm-4.6"],
 
-    # 🌐 Website build — Claude for clean React/HTML
-    "website_build":   ["claude-opus-4-5", "claude-sonnet-4-5", "gpt-4o", "kimi-k2.6"],
+    # 🌐 Website build — Kimi K2.6 leads (256K ctx, top SWE-bench coding, cheap),
+    # Claude Opus as quality fallback, Sonnet+GPT-4o as wider net.
+    "website_build":   ["kimi-k2.6", "claude-opus-4-5", "claude-sonnet-4-5", "gpt-4o"],
 
-    # 📱 Mobile App — Claude excels at React Native patterns
-    "mobile_app":      ["claude-opus-4-5", "claude-sonnet-4-5", "gpt-4o", "kimi-k2.6"],
+    # 📱 Mobile App — Kimi K2.6 great at React Native; Claude for polish
+    "mobile_app":      ["kimi-k2.6", "claude-opus-4-5", "claude-sonnet-4-5", "gpt-4o"],
 
-    # 🎮 Game dev
-    "game_dev":        ["claude-sonnet-4-5", "gpt-4o", "kimi-k2.6", "deepseek-chat"],
+    # 🎮 Game dev — Kimi K2.6 for code, Claude for game design narrative
+    "game_dev":        ["kimi-k2.6", "claude-sonnet-4-5", "gpt-4o", "deepseek-chat"],
 
     # 🎬 Video/script creative
     "video_script":    ["claude-opus-4-5", "claude-sonnet-4-5", "gpt-4o", "deepseek-chat"],
@@ -242,6 +246,57 @@ def _provider_ready(provider: str) -> bool:
     if provider == "openai" and (os.environ.get("OPENAI_API_KEY") or "").strip():
         return True
     return False
+
+
+async def hydrate_keys_from_vault(db) -> Dict[str, bool]:
+    """
+    On startup, decrypt provider keys stored in `credentials_vault` and
+    expose them via os.environ so `_provider_ready` / direct SDK clients
+    can find them.  Returns a map of {provider: was_loaded}.
+    """
+    if db is None:
+        return {}
+    service_to_env = {
+        "openai":    "OPENAI_DIRECT_KEY",
+        "anthropic": "ANTHROPIC_API_KEY",
+        "moonshot":  "MOONSHOT_API_KEY",
+        "groq":      "GROQ_API_KEY",
+        "gemini":    "GEMINI_API_KEY",
+        "deepseek":  "DEEPSEEK_API_KEY",
+        "zhipu":     "ZHIPU_API_KEY",
+    }
+    loaded: Dict[str, bool] = {}
+    try:
+        import base64
+        import hashlib
+        from cryptography.fernet import Fernet
+        seed = (os.environ.get("JWT_SECRET", "") + os.environ.get("MONGO_URL", "")).encode()
+        if not seed:
+            return loaded
+        key = base64.urlsafe_b64encode(hashlib.sha256(seed).digest())
+        fernet = Fernet(key)
+        cursor = db.credentials_vault.find({}, {"_id": 0, "service": 1, "value_encrypted": 1})
+        async for doc in cursor:
+            service = (doc.get("service") or "").lower()
+            env_var = service_to_env.get(service)
+            if not env_var:
+                continue
+            if (os.environ.get(env_var) or "").strip():
+                loaded[service] = True
+                continue  # already set; don't override
+            enc = doc.get("value_encrypted") or ""
+            if not enc:
+                continue
+            try:
+                plaintext = fernet.decrypt(enc.encode()).decode().strip()
+                if plaintext:
+                    os.environ[env_var] = plaintext
+                    loaded[service] = True
+            except Exception as e:
+                logger.warning(f"hydrate_keys: failed to decrypt {service}: {e}")
+    except Exception as e:
+        logger.warning(f"hydrate_keys_from_vault failed: {e}")
+    return loaded
 
 
 _DB = None
@@ -338,10 +393,8 @@ def pick_model(
     # Budget shaping: 'cheap' = pick the cheapest in the ladder even if it's last
     if budget == "cheap":
         ladder.sort(key=lambda m: MODELS[m]["output_per_1m"])
-    elif budget == "best":
-        # Keep the top-quality model first regardless of price
-        quality_order = ["gpt-5", "claude-sonnet-4-5", "gpt-4o", "kimi-k2.6"]
-        ladder.sort(key=lambda m: quality_order.index(m) if m in quality_order else 99)
+    # 'best' = respect the ladder order (already curated best-first per task)
+    # No reordering — task-specific ladders know their winners (e.g. coding → Kimi K2.6)
 
     # Filter to providers with credentials configured AND capabilities matching
     needs = []

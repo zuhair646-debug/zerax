@@ -3359,6 +3359,21 @@ except Exception as _oe:
 
 # ============== GAMES BILLING CLEANUP (nightly) ==============
 @app.on_event("startup")
+async def _hydrate_provider_keys_from_vault():
+    """Pull provider API keys from credentials_vault into os.environ so the
+    model router can pick the cheapest+strongest available model."""
+    try:
+        from modules.autocoder.model_router import hydrate_keys_from_vault
+        loaded = await hydrate_keys_from_vault(db)
+        if loaded:
+            logging.getLogger(__name__).info(
+                f"[startup] provider keys hydrated from vault: {sorted(loaded.keys())}"
+            )
+    except Exception as _ke:
+        logging.getLogger(__name__).warning(f"hydrate provider keys failed: {_ke}")
+
+
+@app.on_event("startup")
 async def _start_games_cleanup_scheduler():
     import asyncio as _asyncio
     async def _runner():
