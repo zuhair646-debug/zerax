@@ -1287,19 +1287,9 @@ function ChatWorkspace({ projectId }) {
     setAttachments([]);
     setReplyToAsset(null);
 
-    // Progressive "thinking" stages while AI generates
-    const stages = [
-      '🔍 يحلل طلبك...',
-      '📐 يخطط بنية الموقع...',
-      '🎨 يختار الألوان والأقسام...',
-      '💻 يكتب الكود تدريجياً...',
-      '✅ يتحقق من جودة العمل...',
-    ];
-    let stage = 0;
-    const stageTimer = setInterval(() => {
-      stage = Math.min(stage + 1, stages.length - 1);
-      setThinkingStage(stage);
-    }, 6000);
+    // Live thinking is now driven by SSE events from the agent (see agent_steps).
+    // The legacy fake-stage timer is gone — real tool calls stream into the UI.
+    const stageTimer = null;
 
     try {
       const fd = new FormData();
@@ -1452,14 +1442,8 @@ function ChatWorkspace({ projectId }) {
     }
   };
 
-  // Thinking stage labels (referenced inside JSX)
-  const THINKING_STAGES = [
-    '🔍 يحلل طلبك...',
-    '📐 يخطط بنية الموقع...',
-    '🎨 يختار الألوان والأقسام...',
-    '💻 يكتب الكود تدريجياً...',
-    '✅ يتحقق من جودة العمل...',
-  ];
+  // Note: legacy THINKING_STAGES removed — replaced by live SSE agent steps
+  // streamed directly into the assistant message bubble (see agent_steps in JSX).
 
   const approve = useCallback(async (aid) => {
     const token = localStorage.getItem('token');
@@ -2048,24 +2032,13 @@ function ChatWorkspace({ projectId }) {
               )}
               {loading && (
                 <div className="flex justify-start" data-testid="thinking-bubble">
-                  <div className="max-w-[85%] rounded-2xl px-4 py-3 bg-zinc-800/70 border border-emerald-400/30">
-                    <div className="flex items-center gap-2 mb-2">
-                      <div className="flex gap-1">
-                        <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-                        <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" style={{ animationDelay: '0.15s' }} />
-                        <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" style={{ animationDelay: '0.3s' }} />
-                      </div>
-                      <span className="text-sm font-bold text-emerald-200">{THINKING_STAGES[thinkingStage]}</span>
-                    </div>
-                    <div className="flex gap-1.5">
-                      {THINKING_STAGES.map((_, idx) => (
-                        <div
-                          key={idx}
-                          className={`h-1 flex-1 rounded-full transition-colors ${idx <= thinkingStage ? 'bg-emerald-400' : 'bg-white/10'}`}
-                        />
-                      ))}
-                    </div>
-                    <p className="text-[10px] text-zinc-400 mt-1.5">قد تستغرق المعالجة 30-60 ثانية للتصاميم الكبيرة</p>
+                  <div className="inline-flex items-center gap-2 rounded-full px-3 py-1.5 bg-zinc-900/60 border border-cyan-400/20">
+                    <span className="flex gap-1">
+                      <span className="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-pulse" />
+                      <span className="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-pulse" style={{ animationDelay: '0.2s' }} />
+                      <span className="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-pulse" style={{ animationDelay: '0.4s' }} />
+                    </span>
+                    <span className="text-[11px] text-zinc-400">يبدأ الذكاء العمل...</span>
                   </div>
                 </div>
               )}
