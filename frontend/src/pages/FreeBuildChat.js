@@ -3,9 +3,10 @@ import { useParams, useNavigate } from 'react-router-dom';
 import {
   Globe, Send, Loader2, Sparkles, Eye, ArrowRight, ArrowLeft,
   CheckCircle2, Check, Image as ImageIcon, FolderOpen, Code,
-  Monitor, Smartphone, Trash2, MessageSquare,
+  Monitor, Smartphone, Trash2, MessageSquare, Paperclip, X,
 } from 'lucide-react';
 import { toast } from 'sonner';
+import VoiceRecorderButton from '@/components/VoiceRecorderButton';
 
 const API = process.env.REACT_APP_BACKEND_URL;
 
@@ -220,12 +221,14 @@ function ChatWorkspace({ projectId }) {
   const navigate = useNavigate();
   const [project, setProject] = useState(null);
   const [message, setMessage] = useState('');
+  const [attachments, setAttachments] = useState([]);
   const [loading, setLoading] = useState(false);
   const [activePhase, setActivePhase] = useState('discovery');
   const [activeTab, setActiveTab] = useState('chat'); // chat | live | approved
   const [previewMode, setPreviewMode] = useState('desktop');
   const [myProjectsOpen, setMyProjectsOpen] = useState(false);
   const chatEndRef = useRef(null);
+  const fileInputRef = useRef(null);
 
   // Fetch + poll project state
   useEffect(() => {
@@ -253,16 +256,21 @@ function ChatWorkspace({ projectId }) {
   }, [project?.messages?.length, activeTab]);
 
   const send = async () => {
-    if (!message.trim() || loading) return;
+    if ((!message.trim() && attachments.length === 0) || loading) return;
     setLoading(true);
     const token = localStorage.getItem('token');
     const msgText = message;
+    const filesToSend = attachments;
     setMessage('');
+    setAttachments([]);
     try {
+      const fd = new FormData();
+      fd.append('message', msgText || '(انظر للصورة المرفقة)');
+      filesToSend.forEach((f) => fd.append('files', f));
       const r = await fetch(`${API}/api/freebuild-chat/project/${projectId}/chat`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ message: msgText }),
+        headers: { Authorization: `Bearer ${token}` },
+        body: fd,
       });
       if (!r.ok) {
         const err = await r.json().catch(() => ({}));
@@ -276,6 +284,7 @@ function ChatWorkspace({ projectId }) {
     } catch (e) {
       toast.error(e.message);
       setMessage(msgText); // restore on error
+      setAttachments(filesToSend);
     } finally {
       setLoading(false);
     }
@@ -471,6 +480,16 @@ function ChatWorkspace({ projectId }) {
                       ? 'bg-emerald-500/15 border border-emerald-500/30 text-emerald-50'
                       : 'bg-zinc-800/70 border border-white/10 text-zinc-100'
                   }`}>
+                    {m.attachments && m.attachments.length > 0 && (
+                      <div className="mb-2 flex gap-1.5 flex-wrap">
+                        {m.attachments.map((att, j) => (
+                          <div key={j} className="px-2 py-1 bg-black/30 rounded-md flex items-center gap-1.5 text-[10px] text-emerald-200">
+                            <Paperclip className="w-3 h-3" />
+                            <span className="truncate max-w-[120px]">{att.name}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                     <p className="text-sm whitespace-pre-wrap leading-relaxed">{m.content}</p>
                     {m.had_html && (
                       <p className="text-cyan-400 text-[11px] mt-2 flex items-center gap-1">
@@ -608,10 +627,63 @@ function ChatWorkspace({ projectId }) {
 
           {/* Input bar (always visible at bottom) */}
           <div className="border-t border-white/10 p-3 sm:p-4 bg-zinc-900/50 shrink-0">
-            <div className="flex gap-2 sm:gap-3">
+            {/* Attached file chips */}
+            {attachments.length > 0 && (
+              <div className="mb-2 flex gap-2 flex-wrap" data-testid="attachment-chips">
+                {attachments.map((file, i) => (
+                  <div key={i} className="px-2.5 py-1.5 bg-emerald-500/10 border border-emerald-500/30 rounded-lg flex items-center gap-2 text-xs">
+                    <Paperclip className="w-3.5 h-3.5 text-emerald-300" />
+                    <span className="text-emerald-100 max-w-[140px] truncate">{file.name}</span>
+                    <button
+                      type="button"
+                      onClick={() => setAttachments(attachments.filter((_, j) => j !== i))}
+                      data-testid={`remove-attachment-${i}`}
+                      className="text-zinc-400 hover:text-red-400"
+                      aria-label="إزالة المرفق"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            <div className="flex gap-2">
+              {/* Hidden file input */}
+              <input
+                type="file"
+                ref={fileInputRef}
+                accept="image/*"
+                multiple
+                onChange={(e) => {
+                  const newFiles = Array.from(e.target.files || []);
+                  setAttachments((prev) => [...prev, ...newFiles].slice(0, 4));
+                  e.target.value = '';
+                }}
+                className="hidden"
+                data-testid="file-input-hidden"
+              />
+              {/* Attach button */}
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                disabled={loading}
+                data-testid="attach-file-btn"
+                title="أرفق صورة (Hero مرجعي، شعار قديم، إلهام...)"
+                className="px-3 py-3 bg-white/5 hover:bg-emerald-500/20 hover:border-emerald-400/40 border border-white/10 rounded-xl transition-all text-zinc-300 hover:text-emerald-200 disabled:opacity-50"
+              >
+                <Paperclip className="w-5 h-5" />
+              </button>
+              {/* Voice recorder */}
+              <VoiceRecorderButton
+                accentColor="emerald"
+                disabled={loading}
+                onTranscript={(text) => setMessage((m) => (m ? `${m.trim()} ${text}` : text))}
+              />
+              {/* Text input */}
               <input
                 type="text"
-                placeholder="اكتب طلبك للذكاء (مثل: ابغى hero بألوان دافئة)..."
+                placeholder="اكتب أو سجّل صوت أو ارفع صورة..."
                 value={message}
                 onChange={(e) => setMessage(e.target.value)}
                 onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && send()}
@@ -619,10 +691,11 @@ function ChatWorkspace({ projectId }) {
                 data-testid="chat-input"
                 className="flex-1 bg-black/40 border border-white/15 rounded-xl px-4 py-3 outline-none focus:border-emerald-400 text-sm"
               />
+              {/* Send */}
               <button
                 type="button"
                 onClick={send}
-                disabled={loading || !message.trim()}
+                disabled={loading || (!message.trim() && attachments.length === 0)}
                 data-testid="chat-send-btn"
                 className="px-5 py-3 bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-400 hover:to-teal-500 disabled:from-zinc-700 disabled:to-zinc-800 text-black font-bold rounded-xl flex items-center gap-2"
               >

@@ -10,8 +10,9 @@ import logging
 import asyncio
 from datetime import datetime, timezone
 from typing import Optional, List, Dict, Any
-from fastapi import APIRouter, HTTPException, Depends, Form
+from fastapi import APIRouter, HTTPException, Depends, Form, UploadFile, File
 from pydantic import BaseModel
+import base64
 
 logger = logging.getLogger(__name__)
 
@@ -116,20 +117,50 @@ def make_freebuild_chat_router(db, get_current_user):
             raise HTTPException(404, "المشروع غير موجود")
         return proj
 
-    # ===== Chat (the core flow — like games) =====
+    # ===== Chat (the core flow — multipart: text + optional image attachments) =====
     @router.post("/project/{pid}/chat")
-    async def chat(pid: str, payload: ChatIn, user=Depends(get_current_user)):
+    async def chat(
+        pid: str,
+        message: str = Form(...),
+        files: List[UploadFile] = File(default=[]),
+        user=Depends(get_current_user),
+    ):
         proj = await db.freebuild_projects.find_one(
             {"id": pid, "user_id": user["user_id"]}, {"_id": 0}
         )
         if not proj:
             raise HTTPException(404, "المشروع غير موجود")
 
-        # Build memory: approved assets summary moved below with URLs
+        # Read uploaded image files → base64 (for vision context)
+        vision_images: List[Dict[str, Any]] = []
+        attachment_meta: List[Dict[str, str]] = []
+        for f in files[:4]:  # max 4 images per turn
+            try:
+                data = await f.read()
+                if len(data) > 6 * 1024 * 1024:  # 6 MB
+                    continue
+                ctype = (f.content_type or "image/png").lower()
+                if not ctype.startswith("image/"):
+                    continue
+                b64 = base64.b64encode(data).decode()
+                vision_images.append({
+                    "type": "image",
+                    "source": {"type": "base64", "media_type": ctype, "data": b64},
+                })
+                attachment_meta.append({"name": f.filename or "image", "type": ctype, "size": len(data)})
+            except Exception as _e:
+                logger.warning(f"freebuild attachment read failed: {_e}")
+
         # Build conversation history (last 12 turns)
         history = proj.get("messages", [])[-12:]
         msg_list = [{"role": m["role"], "content": m["content"]} for m in history]
-        msg_list.append({"role": "user", "content": payload.message})
+
+        # Current user turn: text + (optional) images
+        if vision_images:
+            user_content: Any = [{"type": "text", "text": message}] + vision_images
+        else:
+            user_content = message
+        msg_list.append({"role": "user", "content": user_content})
 
         # Context for the agent (no website type — fully open / from scratch)
         # List of approved assets with URLs so the AI can reference them
@@ -163,6 +194,7 @@ def make_freebuild_chat_router(db, get_current_user):
                 messages=msg_list,
                 user_id=user["user_id"],
                 extra_context=extra_ctx,
+                requires_vision=bool(vision_images),
             )
             if not result.get("ok"):
                 raise HTTPException(502, "خطأ في الذكاء الاصطناعي")
@@ -202,7 +234,7 @@ def make_freebuild_chat_router(db, get_current_user):
                 "$push": {
                     "messages": {
                         "$each": [
-                            {"role": "user", "content": payload.message, "timestamp": _now(), "pending_assets": []},
+                            {"role": "user", "content": message, "timestamp": _now(), "pending_assets": [], "attachments": attachment_meta},
                             {"role": "assistant", "content": clean_text, "timestamp": _now(), "pending_assets": pending_assets, "had_html": bool(new_html)},
                         ]
                     }

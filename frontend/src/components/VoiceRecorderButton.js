@@ -153,6 +153,8 @@ export default function VoiceRecorderButton({ onTranscript, accentColor = 'amber
     ? 'bg-amber-500/20 border-amber-500/60 text-amber-200'
     : accentColor === 'blue'
     ? 'bg-white/5 hover:bg-blue-500/20 hover:border-blue-400/40 border-white/10 text-blue-200'
+    : accentColor === 'emerald'
+    ? 'bg-white/5 hover:bg-emerald-500/20 hover:border-emerald-400/40 border-white/10 text-emerald-200'
     : 'bg-white/5 hover:bg-amber-500/20 hover:border-amber-400/40 border-white/10 text-amber-200';
 
   const label = recording
