@@ -186,8 +186,10 @@ const ClientDashboard = ({ user, setUser }) => {
                   {quickActions.map((action, idx) => (
                     <button
                       key={idx}
+                      type="button"
                       onClick={() => navigate(action.path)}
-                      className="p-6 rounded-xl bg-slate-700/50 hover:bg-slate-700 transition-all text-right group border border-slate-600 hover:border-slate-500 relative"
+                      className="p-6 rounded-xl bg-slate-700/50 hover:bg-slate-700 active:bg-slate-600 transition-all text-right group border border-slate-600 hover:border-slate-500 relative cursor-pointer touch-manipulation"
+                      style={{ WebkitTapHighlightColor: 'rgba(255,255,255,0.1)' }}
                       data-testid={`action-${idx}`}
                     >
                       {action.badge && (

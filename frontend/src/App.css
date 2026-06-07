@@ -4,6 +4,20 @@
   -moz-osx-font-smoothing: grayscale;
 }
 
+/* ── iOS Safari fix: make every clickable element respond on the FIRST tap ──
+   Without this, iOS treats the first tap as "hover" and requires a SECOND tap
+   to actually trigger onClick. */
+@media (hover: none) and (pointer: coarse) {
+  button, a, [role="button"], [data-testid] {
+    -webkit-tap-highlight-color: rgba(255, 215, 0, 0.15);
+    touch-action: manipulation;
+  }
+  /* Drop sticky :hover styles on touch — they cause the "double-tap" UX */
+  *:hover {
+    transition: none !important;
+  }
+}
+
 /* Smooth scrolling */
 html {
   scroll-behavior: smooth;
