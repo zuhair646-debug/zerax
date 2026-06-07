@@ -4,43 +4,49 @@
   -moz-osx-font-smoothing: grayscale;
 }
 
-/* ── Quick Action Cards (Dashboard) — instant tap on every device ──
-   Using position:relative for the badge anchor + GPU-accelerated transforms
-   for buttery-smooth feedback on hover/active. */
+/* ── Quick Action Cards (Dashboard) — completely static, no glow, no flash ──
+   100% static appearance. ZERO hover animations, ZERO transitions.
+   Only :active gives a brief darken on press (instant, no fade). */
 .quick-action-card {
   position: relative;
-  transition: background-color 0.18s ease, border-color 0.18s ease, transform 0.18s ease;
   -webkit-tap-highlight-color: transparent;
   touch-action: manipulation;
   user-select: none;
   -webkit-user-select: none;
-  will-change: transform, background-color;
+  transition: none !important;
+  animation: none !important;
 }
-@media (hover: hover) {
-  .quick-action-card:hover {
-    background-color: rgba(51, 65, 85, 0.7);
-    border-color: rgb(100, 116, 139);
-    transform: translateY(-2px);
-  }
+.quick-action-card *,
+.quick-action-card *::before,
+.quick-action-card *::after {
+  transition: none !important;
+  animation: none !important;
 }
+/* No hover effects at all — keep the card visually identical at rest, on hover, on focus. */
+.quick-action-card:hover {
+  background-color: rgba(51, 65, 85, 0.4) !important;
+  border-color: rgba(71, 85, 105, 0.6) !important;
+  transform: none !important;
+  box-shadow: none !important;
+}
+/* Press feedback only — instant, brief, no fade. */
 .quick-action-card:active {
-  background-color: rgba(71, 85, 105, 0.8);
-  transform: scale(0.98);
+  background-color: rgba(71, 85, 105, 0.7) !important;
+}
+.quick-action-card:focus {
+  outline: none;
 }
 .quick-action-card:focus-visible {
   outline: 2px solid rgb(251, 191, 36);
   outline-offset: 2px;
 }
 
-/* ── iOS Safari fix: make every clickable element respond on the FIRST tap ──
-   Without this, iOS treats the first tap as "hover" and requires a SECOND tap
-   to actually trigger onClick. */
+/* ── iOS Safari fix: make every clickable element respond on the FIRST tap ── */
 @media (hover: none) and (pointer: coarse) {
   button, a, [role="button"], [data-testid] {
     -webkit-tap-highlight-color: rgba(255, 215, 0, 0.15);
     touch-action: manipulation;
   }
-  /* Drop sticky :hover styles on touch — they cause the "double-tap" UX */
   *:hover {
     transition: none !important;
   }

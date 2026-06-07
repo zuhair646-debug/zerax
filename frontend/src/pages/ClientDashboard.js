@@ -192,7 +192,7 @@ const ClientDashboard = ({ user, setUser }) => {
                     tabIndex={0}
                     onClick={go(action.path)}
                     onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); navigate(action.path); } }}
-                    className="quick-action-card group p-5 rounded-xl bg-slate-700/40 border border-slate-600/60 cursor-pointer text-right"
+                    className="quick-action-card p-5 rounded-xl bg-slate-700/40 border border-slate-600/60 cursor-pointer text-right"
                     data-testid={`action-${idx}`}
                   >
                     {action.badge && (
