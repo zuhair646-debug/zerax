@@ -1,5 +1,41 @@
 # Zitex AI Platform - PRD
 
+### 🆕 Jun 7 2026 — FreeBuild Live Token Streaming (يكتب أمامك حرف-حرف) ✅
+
+**المشكلة**: المستخدم اشتكى إنه "صار ما يكتب له، صار بس يقعد يفكر وما يرد". الـ AI يعلق في وضع "يحلل..." لدقائق طويلة بدون أي رد.
+
+**السبب الجذري**:
+- `_stream_one_provider()` في `freebuild_agent.py` كان يستخدم `client.messages.create()` (وضع **non-streaming**) — الذي يقفل الـ event loop حتى يرجع Claude بالرد الكامل (30-90 ثانية لكل خطوة، × حتى 8 خطوات = 4-8 دقائق صمت)
+- لا توجد heartbeats خلال الانتظار → Cloudflare/Railway proxies تقطع الاتصال بعد 30-60 ثانية
+- النص لا يطلع للمستخدم إلا بعد ما يخلص Claude نهائياً
+
+**الحل**:
+1. **تحويل لـ Anthropic streaming حقيقي**: استبدال `messages.create()` بـ `messages.stream()` async context manager
+2. **بث live tokens**: لكل text token من Claude، نطلق `text_delta` SSE event فوراً
+3. **حدث `text_end`** لقفل الفقرة عند `content_block_stop`
+4. **Frontend**: إضافة `kind: 'live_text'` للـ `agent_steps` يعرض النص live مع typing cursor (`█`)
+5. **OpenAI fallback path**: أبقيت `thinking` events كما هي للـ providers الأخرى (مع إنهم محظورين الحين)
+
+**الاختبار (curl)**:
+```
+event: text_delta  data: {"text": "م", "step": 1}
+event: text_delta  data: {"text": "رحباً! 👋\n\nأنا هنا...", "step": 1}
+event: text_delta  data: {"text": "متى ما كنت مستعداً...", "step": 1}
+event: text_end    data: {"step": 1}
+event: tool        data: {"name": "finish", "phase": "done"}
+event: done        data: {...}
+```
+
+✅ النص يطلع خلال 1-2 ثانية ويتدفق حرف-حرف (مثل المنصة الرئيسية)
+✅ المستخدم يشوف الـ AI يكتب أمامه بدل ما يحدّق في spinner
+
+**ملفات معدّلة**:
+- `/app/backend/modules/freebuild/freebuild_agent.py` (تعديل `_stream_one_provider`)
+- `/app/frontend/src/pages/FreeBuildChat.js` (إضافة `live_text` step rendering)
+
+---
+
+
 ### 🆕 Feb 8 2026 — Adaptive Task Routing + Self-Correction (الذكاء مفتوح بلا قيود) ✅
 
 **المشكلة**: الذكاء كان نموذج واحد (Claude Sonnet) لكل المهام — تصميم، كود، debug. ضعيف في بعضها وقوي في بعضها. + ما كان يتعلّم من أخطائه.

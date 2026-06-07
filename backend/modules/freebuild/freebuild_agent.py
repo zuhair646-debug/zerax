@@ -750,11 +750,36 @@ async def _stream_one_provider(
         iterations += 1
 
         if provider in ("anthropic", "emergent_anthropic"):
+            # Live streaming: forward text tokens as they arrive so the user
+            # sees the AI thinking in real-time (instead of staring at a spinner).
+            # We also emit periodic heartbeats so proxies (Cloudflare/Railway)
+            # don't drop the SSE connection during longer tool-use turns.
+            text_chunks: List[str] = []
+            tool_uses: List[Dict[str, Any]] = []
+            assistant_blocks: List[Dict[str, Any]] = []
+            final_msg = None
+            current_text = ""
             try:
-                resp = await client.messages.create(
+                async with client.messages.stream(
                     model=model, system=sys_prompt, max_tokens=8000,
                     tools=TOOLS_SCHEMA, messages=messages,
-                )
+                ) as stream:
+                    async for event in stream:
+                        et = getattr(event, "type", "")
+                        # Live text token (Claude's narration between/before tool calls)
+                        if et == "text":
+                            delta = getattr(event, "text", "") or ""
+                            if delta:
+                                current_text += delta
+                                yield _sse("text_delta", {"text": delta, "step": iterations})
+                                await asyncio.sleep(0)
+                        # Content block ended — flush text buffer if any
+                        elif et == "content_block_stop":
+                            if current_text.strip():
+                                yield _sse("text_end", {"step": iterations})
+                                await asyncio.sleep(0)
+                            current_text = ""
+                    final_msg = await stream.get_final_message()
             except Exception as e:
                 msg = f"{type(e).__name__}: {str(e)[:200]}"
                 if any(k in msg.lower() for k in ["credit", "balance", "401", "402", "429", "quota"]):
@@ -763,11 +788,8 @@ async def _stream_one_provider(
                         "شحن الرصيد من: console.anthropic.com/settings/billing"
                     )
                 raise
-            model_used = getattr(resp, "model", model)
-            text_chunks: List[str] = []
-            tool_uses = []
-            assistant_blocks = []
-            for block in resp.content:
+            model_used = getattr(final_msg, "model", model)
+            for block in (final_msg.content or []):
                 bt = getattr(block, "type", "")
                 if bt == "text":
                     text_chunks.append(block.text)
@@ -804,11 +826,14 @@ async def _stream_one_provider(
                     tool_uses.append({"id": tc.id, "name": tc.function.name, "input": args})
             messages.append(assistant_msg)
 
-        # Emit any inline "thinking" text the model produced (Claude often does this between tool calls)
-        for txt in text_chunks:
-            if txt and txt.strip():
-                yield _sse("thinking", {"text": txt.strip()[:400]})
-                await asyncio.sleep(0)
+        # For OpenAI-compatible providers we still emit a single "thinking" event per
+        # text chunk (no streaming). For Anthropic, text was already streamed live
+        # via "text_delta" events above — no need to duplicate.
+        if provider not in ("anthropic", "emergent_anthropic"):
+            for txt in text_chunks:
+                if txt and txt.strip():
+                    yield _sse("thinking", {"text": txt.strip()[:400]})
+                    await asyncio.sleep(0)
 
         if not tool_uses:
             # No more tools — model wrapped up with text

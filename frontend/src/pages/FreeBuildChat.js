@@ -1361,6 +1361,19 @@ function ChatWorkspace({ projectId }) {
               liveSteps.push({ kind: eventName, ...payload });
             } else if (eventName === 'thinking') {
               liveSteps.push({ kind: 'thinking', text: payload.text });
+            } else if (eventName === 'text_delta') {
+              // Live streaming text from Claude — append to the current text bubble.
+              // If the last step is an open "live_text" bubble, extend it; else create one.
+              const last = liveSteps[liveSteps.length - 1];
+              if (last && last.kind === 'live_text' && last.open) {
+                last.text = (last.text || '') + (payload.text || '');
+              } else {
+                liveSteps.push({ kind: 'live_text', text: payload.text || '', open: true, step: payload.step });
+              }
+            } else if (eventName === 'text_end') {
+              // Close the current live_text bubble so subsequent text starts a new one
+              const last = liveSteps[liveSteps.length - 1];
+              if (last && last.kind === 'live_text') last.open = false;
             } else if (eventName === 'tool') {
               liveSteps.push({ kind: 'tool', ...payload });
             } else if (eventName === 'done') {
@@ -1822,6 +1835,15 @@ function ChatWorkspace({ projectId }) {
                               <div key={sIdx} className="flex gap-2 text-xs text-zinc-400 bg-zinc-900/50 border-r-2 border-cyan-500/40 px-3 py-1.5 rounded">
                                 <span className="text-cyan-300">💭</span>
                                 <span className="italic">{s.text}</span>
+                              </div>
+                            );
+                          }
+                          if (s.kind === 'live_text') {
+                            // Live streaming text from Claude (typing animation)
+                            return (
+                              <div key={sIdx} className="text-sm leading-relaxed text-zinc-100 bg-zinc-900/40 border-r-2 border-emerald-500/50 px-3 py-2 rounded whitespace-pre-wrap">
+                                {s.text}
+                                {s.open && <span className="inline-block w-1.5 h-4 bg-emerald-400 ml-0.5 align-middle animate-pulse" />}
                               </div>
                             );
                           }
