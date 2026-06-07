@@ -453,7 +453,7 @@ async def _call_provider(provider: str, model_id: str, info: Dict[str, Any],
                           timeout: int) -> Dict[str, Any]:
     """Provider-specific dispatch. Returns {ok, content, usage, error?}."""
 
-    if provider in ("openai", "moonshot", "groq"):
+    if provider in ("openai", "moonshot", "groq", "zhipu", "deepseek"):
         # OpenAI-compatible SDK
         try:
             from openai import AsyncOpenAI
@@ -465,6 +465,12 @@ async def _call_provider(provider: str, model_id: str, info: Dict[str, Any],
         elif provider == "moonshot":
             api_key = await _moonshot_key()
             base_url = info.get("base_url") or "https://api.moonshot.ai/v1"
+        elif provider == "zhipu":
+            api_key = os.environ.get("ZHIPU_API_KEY", "")
+            base_url = "https://api.z.ai/api/paas/v4"
+        elif provider == "deepseek":
+            api_key = os.environ.get("DEEPSEEK_API_KEY", "")
+            base_url = "https://api.deepseek.com/v1"
         else:  # groq
             api_key = os.environ.get("GROQ_API_KEY", "")
             base_url = "https://api.groq.com/openai/v1"
