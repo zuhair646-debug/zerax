@@ -7,6 +7,8 @@ import {
   ZoomIn, Reply, Download,
 } from 'lucide-react';
 import { toast } from 'sonner';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import VoiceRecorderButton from '@/components/VoiceRecorderButton';
 
 const API = process.env.REACT_APP_BACKEND_URL;
@@ -293,6 +295,145 @@ function Lightbox({ open, asset, onClose, onReply, onApprove }) {
 }
 
 // ─────────────────────────────────────────────────────────────
+// MARKDOWN TEXT (styled prose for AI messages)
+// ─────────────────────────────────────────────────────────────
+const MD_COMPONENTS = {
+  h1: ({ node, ...p }) => <h1 className="text-base font-black text-emerald-200 mt-3 mb-2 first:mt-0" {...p} />,
+  h2: ({ node, ...p }) => <h2 className="text-base font-black text-emerald-200 mt-3 mb-2 first:mt-0" {...p} />,
+  h3: ({ node, ...p }) => <h3 className="text-sm font-black text-emerald-300 mt-2.5 mb-1.5 first:mt-0" {...p} />,
+  p:  ({ node, ...p }) => <p className="text-sm leading-relaxed my-1.5" {...p} />,
+  strong: ({ node, ...p }) => <strong className="font-bold text-emerald-100" {...p} />,
+  em: ({ node, ...p }) => <em className="italic text-emerald-100" {...p} />,
+  ul: ({ node, ...p }) => <ul className="my-2 space-y-1 pr-5 list-disc marker:text-emerald-400 text-sm" {...p} />,
+  ol: ({ node, ...p }) => <ol className="my-2 space-y-1 pr-5 list-decimal marker:text-emerald-400 marker:font-bold text-sm" {...p} />,
+  li: ({ node, ...p }) => <li className="leading-relaxed" {...p} />,
+  a:  ({ node, ...p }) => <a className="text-cyan-400 hover:text-cyan-300 underline" target="_blank" rel="noreferrer" {...p} />,
+  code: ({ inline, node, ...p }) =>
+    inline
+      ? <code className="px-1 py-0.5 rounded bg-black/40 text-amber-200 text-[12px] font-mono" {...p} />
+      : <code className="block p-3 rounded-lg bg-black/50 text-amber-100 text-[12px] font-mono overflow-x-auto" {...p} />,
+  pre: ({ node, ...p }) => <pre className="my-2 overflow-x-auto" {...p} />,
+  blockquote: ({ node, ...p }) => <blockquote className="border-r-2 border-emerald-500/40 pr-3 my-2 text-zinc-300 italic" {...p} />,
+};
+
+function MarkdownText({ children }) {
+  return (
+    <div className="prose prose-invert max-w-none" dir="rtl">
+      <ReactMarkdown remarkPlugins={[remarkGfm]} components={MD_COMPONENTS}>
+        {children || ''}
+      </ReactMarkdown>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────
+// OPTIONS PICKER (clickable pills the AI offers)
+// ─────────────────────────────────────────────────────────────
+function OptionsPicker({ messageIdx, options, savedAnswer, onConfirm }) {
+  const [selected, setSelected] = useState([]);
+  const [comment, setComment] = useState('');
+  const [confirming, setConfirming] = useState(false);
+
+  // If user already answered this question (saved on a later user turn), show the answer locked
+  if (savedAnswer) {
+    return (
+      <div className="mt-3 flex flex-wrap gap-1.5" data-testid={`options-locked-${messageIdx}`}>
+        {options.map((opt, i) => {
+          const isPicked = savedAnswer.picks?.includes(opt);
+          return (
+            <span
+              key={i}
+              className={`px-2.5 py-1 rounded-full text-[11px] font-bold border ${
+                isPicked
+                  ? 'bg-emerald-500/30 border-emerald-400/60 text-emerald-100'
+                  : 'bg-zinc-800/40 border-white/5 text-zinc-500 line-through opacity-60'
+              }`}
+            >
+              {isPicked && '✓ '}{opt}
+            </span>
+          );
+        })}
+      </div>
+    );
+  }
+
+  const toggle = (opt) => {
+    setSelected((prev) => prev.includes(opt) ? prev.filter((x) => x !== opt) : [...prev, opt]);
+  };
+
+  const submit = async () => {
+    if (selected.length === 0 && !comment.trim()) {
+      toast.error('اختر خياراً أو اكتب تعليقاً');
+      return;
+    }
+    setConfirming(true);
+    try {
+      await onConfirm({ picks: selected, comment: comment.trim() });
+    } finally {
+      setConfirming(false);
+    }
+  };
+
+  return (
+    <div className="mt-3" data-testid={`options-${messageIdx}`}>
+      <div className="flex flex-wrap gap-1.5">
+        {options.map((opt, i) => {
+          const isSelected = selected.includes(opt);
+          return (
+            <button
+              key={i}
+              type="button"
+              onClick={() => toggle(opt)}
+              disabled={confirming}
+              data-testid={`option-${messageIdx}-${i}`}
+              className={`px-3 py-1.5 rounded-full text-xs font-bold border transition-all ${
+                isSelected
+                  ? 'bg-emerald-500 border-emerald-400 text-black shadow-lg shadow-emerald-500/30'
+                  : 'bg-white/5 border-white/15 text-zinc-200 hover:border-emerald-400/50 hover:bg-emerald-500/10'
+              }`}
+            >
+              {isSelected && <Check className="w-3 h-3 inline -mt-0.5 ml-1" />}
+              {opt}
+            </button>
+          );
+        })}
+      </div>
+      {selected.length > 0 && (
+        <p className="text-[11px] text-emerald-400 mt-2 font-bold">
+          ✓ اخترت {selected.length} {selected.length === 1 ? 'خيار' : 'خيارات'}
+        </p>
+      )}
+      <div className="mt-3 flex gap-2">
+        <input
+          type="text"
+          placeholder="اكتب تعليق (اختياري)..."
+          value={comment}
+          onChange={(e) => setComment(e.target.value)}
+          onKeyDown={(e) => e.key === 'Enter' && submit()}
+          disabled={confirming}
+          data-testid={`option-comment-${messageIdx}`}
+          className="flex-1 bg-black/30 border border-white/10 rounded-lg px-3 py-2 text-xs outline-none focus:border-emerald-400"
+        />
+        <button
+          type="button"
+          onClick={submit}
+          disabled={confirming || (selected.length === 0 && !comment.trim())}
+          data-testid={`option-confirm-${messageIdx}`}
+          className="px-4 py-2 bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-400 hover:to-teal-500 disabled:from-zinc-700 disabled:to-zinc-800 text-black font-bold text-xs rounded-lg flex items-center gap-1.5"
+        >
+          {confirming ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : (
+            <>
+              <ArrowLeft className="w-3.5 h-3.5" />
+              <span>تأكيد</span>
+            </>
+          )}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────
 // STEP 2: Chat Workspace (Game Studio style)
 // ─────────────────────────────────────────────────────────────
 function ChatWorkspace({ projectId }) {
@@ -384,6 +525,40 @@ function ChatWorkspace({ projectId }) {
       const pr = await fetch(`${API}/api/freebuild-chat/project/${projectId}`, { headers: { Authorization: `Bearer ${token}` } });
       if (pr.ok) setProject(await pr.json());
     } else toast.error('فشل');
+  }, [projectId]);
+
+  // Send a structured answer for an options question (called from OptionsPicker)
+  const submitOptionAnswer = useCallback(async ({ picks, comment }) => {
+    const token = localStorage.getItem('token');
+    let textParts = [];
+    if (picks.length > 0) {
+      textParts.push(picks.length === 1 ? `اخترت: ${picks[0]}` : `اخترت: ${picks.join('، ')}`);
+    }
+    if (comment) textParts.push(comment);
+    const fd = new FormData();
+    fd.append('message', textParts.join('\n\n'));
+    // Mark the answer so the UI can lock it
+    fd.append('answer_meta', JSON.stringify({ picks, comment }));
+    try {
+      setLoading(true);
+      const r = await fetch(`${API}/api/freebuild-chat/project/${projectId}/chat`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+        body: fd,
+      });
+      if (!r.ok) {
+        const err = await r.json().catch(() => ({}));
+        throw new Error(err.detail || 'فشل الإرسال');
+      }
+      const data = await r.json();
+      if (data.html_updated) toast.success('✨ تم تحديث المعاينة الحية');
+      const pr = await fetch(`${API}/api/freebuild-chat/project/${projectId}`, { headers: { Authorization: `Bearer ${token}` } });
+      if (pr.ok) setProject(await pr.json());
+    } catch (e) {
+      toast.error(e.message);
+    } finally {
+      setLoading(false);
+    }
   }, [projectId]);
 
   if (!project) {
@@ -595,7 +770,19 @@ function ChatWorkspace({ projectId }) {
                         ))}
                       </div>
                     )}
-                    <p className="text-sm whitespace-pre-wrap leading-relaxed">{m.content}</p>
+                    <div className="text-sm leading-relaxed">
+                      <MarkdownText>{m.content}</MarkdownText>
+                    </div>
+
+                    {/* Clickable options the AI offered */}
+                    {m.role === 'assistant' && m.options && m.options.length > 0 && (
+                      <OptionsPicker
+                        messageIdx={i}
+                        options={m.options}
+                        savedAnswer={messages[i + 1]?.role === 'user' ? messages[i + 1]?.answer_meta : null}
+                        onConfirm={submitOptionAnswer}
+                      />
+                    )}
                     {m.had_html && (
                       <p className="text-cyan-400 text-[11px] mt-2 flex items-center gap-1">
                         <Eye className="w-3 h-3" />

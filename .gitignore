@@ -211,3 +211,4 @@ frontend/.env
 *.env
 backend/backups/
 
+frontend/node_modules/.cache/default-development/28.pack

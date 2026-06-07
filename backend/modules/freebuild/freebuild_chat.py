@@ -31,6 +31,9 @@ WEBSITE_TYPES = [
 # Tag regex for asset generation in AI responses
 TAG_RE = re.compile(r"<<\s*(HERO|SECTION_BG|LOGO|PRODUCT|ICON|BANNER_AR|GALLERY)\s*[:：]\s*([^>]+?)\s*>>", re.IGNORECASE)
 
+# Clickable choices the AI offers to the user
+OPT_RE = re.compile(r"<<\s*OPT\s*[:：]\s*([^>]+?)\s*>>", re.IGNORECASE)
+
 # HTML code-block extractor (```html ... ``` or ```<html> ... ```)
 HTML_BLOCK_RE = re.compile(r"```(?:html|HTML)?\s*(<!DOCTYPE[\s\S]+?</html>|<html[\s\S]+?</html>)\s*```", re.IGNORECASE)
 # Fallback: any code block containing full HTML
@@ -50,9 +53,15 @@ def _extract_html(text: str) -> Optional[str]:
 def _strip_tags(text: str) -> str:
     """Remove <<TAG: ...>> markers from displayed text and collapse blank lines."""
     cleaned = TAG_RE.sub("", text)
+    cleaned = OPT_RE.sub("", cleaned)
     # Collapse 3+ consecutive newlines to 2
     cleaned = re.sub(r"\n{3,}", "\n\n", cleaned)
     return cleaned.strip()
+
+
+def _extract_options(text: str) -> List[str]:
+    """Pull clickable choices out of AI response: <<OPT: ...>>."""
+    return [m.group(1).strip() for m in OPT_RE.finditer(text)]
 
 
 def _now():
@@ -124,6 +133,7 @@ def make_freebuild_chat_router(db, get_current_user):
         message: str = Form(...),
         files: List[UploadFile] = File(default=[]),
         reference_asset_id: str = Form(default=""),
+        answer_meta: str = Form(default=""),
         user=Depends(get_current_user),
     ):
         proj = await db.freebuild_projects.find_one(
@@ -131,6 +141,20 @@ def make_freebuild_chat_router(db, get_current_user):
         )
         if not proj:
             raise HTTPException(404, "المشروع غير موجود")
+
+        # Parse answer_meta JSON (sent when user clicks AI's offered options)
+        parsed_answer_meta: Optional[Dict[str, Any]] = None
+        if answer_meta:
+            try:
+                import json as _json
+                am = _json.loads(answer_meta)
+                if isinstance(am, dict):
+                    parsed_answer_meta = {
+                        "picks": list(am.get("picks", []))[:10],
+                        "comment": str(am.get("comment", ""))[:500],
+                    }
+            except Exception:
+                pass
 
         # Read uploaded image files → base64 (for vision context)
         vision_images: List[Dict[str, Any]] = []
@@ -236,6 +260,27 @@ def make_freebuild_chat_router(db, get_current_user):
             "5. بعد ما المستخدم يعتمد الصور (تشوفها في 'صور جاهزة معتمدة' أعلاه)، استخدم URL مباشر في الـ HTML.\n"
             "6. لما تكتب HTML للمعاينة، اكتبه داخل ```html ... ``` ويكون <!DOCTYPE html>...</html> كامل مع Tailwind CDN و RTL.\n"
             "7. عدّل تدريجياً — لا تعيد بناء كل شي من جديد كل مرة.\n"
+            "\n"
+            "🎯 خيارات قابلة للضغط (مهم جداً لتسهيل التجربة):\n"
+            "⚠️ قاعدة ذهبية: **اطرح سؤال واحد فقط في كل رسالة** ومعه خياراته. لا تطرح 5 أسئلة دفعة وحدة!\n"
+            "لكل سؤال له إجابات محتملة، اكتب الخيارات بصيغة تاقات منفصلة:\n"
+            "   <<OPT: نص الخيار الأول>>\n"
+            "   <<OPT: نص الخيار الثاني>>\n"
+            "   <<OPT: نص الخيار الثالث>>\n"
+            "هذي راح تظهر للمستخدم كأزرار خضراء يضغط عليها بدل ما يكتب.\n"
+            "أمثلة (سؤال واحد فقط لكل رسالة!):\n"
+            "  • 'وش نوع الجمهور المستهدف؟ <<OPT: شباب>> <<OPT: عائلات>> <<OPT: محترفون>> <<OPT: غير ذلك (سيكتب)>>'\n"
+            "  • 'إيش الإحساس اللي تبيه؟ <<OPT: فاخر وراقي>> <<OPT: عصري وحديث>> <<OPT: دافئ ومريح>> <<OPT: جريء ومثير>>'\n"
+            "اكتب 3-5 خيارات لكل سؤال. اجعل آخر خيار غالباً 'غير ذلك' أو 'أبي أوضح بنفسي' عشان يقدر يكتب حر.\n"
+            "بعد إجابة المستخدم، اشكره مختصراً ثم اطرح السؤال التالي. التدفق التدريجي يخلي التجربة سلسة.\n"
+            "استخدم العربية في الخيارات.\n"
+            "\n"
+            "🎨 تنسيق النص (markdown):\n"
+            "- استخدم **bold** للنقاط المهمة\n"
+            "- استخدم ### للعناوين الفرعية فقط (لا تستخدم # كبير)\n"
+            "- استخدم قوائم - أو 1. للنقاط\n"
+            "- إيموجي بسيط ✨ 🎨 ✅ باعتدال\n"
+            "- اجعل الرسائل قصيرة (3-6 أسطر) وحوارية\n"
         )
 
         try:
@@ -274,6 +319,7 @@ def make_freebuild_chat_router(db, get_current_user):
         # Detect HTML for live preview
         new_html = _extract_html(ai_text)
         clean_text = _strip_tags(ai_text)
+        options = _extract_options(ai_text)
 
         # Save chat message + pending assets
         update_set = {"updated_at": _now()}
@@ -285,8 +331,8 @@ def make_freebuild_chat_router(db, get_current_user):
                 "$push": {
                     "messages": {
                         "$each": [
-                            {"role": "user", "content": message, "timestamp": _now(), "pending_assets": [], "attachments": attachment_meta, "reference": reference_meta},
-                            {"role": "assistant", "content": clean_text, "timestamp": _now(), "pending_assets": pending_assets, "had_html": bool(new_html)},
+                            {"role": "user", "content": message, "timestamp": _now(), "pending_assets": [], "attachments": attachment_meta, "reference": reference_meta, "answer_meta": parsed_answer_meta},
+                            {"role": "assistant", "content": clean_text, "timestamp": _now(), "pending_assets": pending_assets, "had_html": bool(new_html), "options": options},
                         ]
                     }
                 },
