@@ -1147,6 +1147,93 @@ def make_freebuild_chat_router(db, get_current_user):
         )
         return {"ok": True, "repo_url": repo_url, "pages_url_hint": pages_url}
 
+    # ═══════════════════════════════════════════════════════════════
+    # APP CONVERSION ENDPOINTS — convert a finished FreeBuild website
+    # into a downloadable PWA / Capacitor (Android+iOS) / Expo bundle.
+    # ═══════════════════════════════════════════════════════════════
+    @router.get("/app-conversion/{aid}")
+    async def get_app_conversion(aid: str, user=Depends(get_current_user)):
+        doc = await db.app_conversion_projects.find_one(
+            {"id": aid, "user_id": user["user_id"]}, {"_id": 0}
+        )
+        if not doc:
+            raise HTTPException(404, "تحويل غير موجود")
+        return doc
+
+    @router.patch("/app-conversion/{aid}")
+    async def update_app_conversion(
+        aid: str,
+        name: Optional[str] = Form(None),
+        package_id: Optional[str] = Form(None),
+        primary_color: Optional[str] = Form(None),
+        app_type: Optional[str] = Form(None),  # pwa | hybrid
+        user=Depends(get_current_user),
+    ):
+        update: Dict[str, Any] = {"updated_at": _now()}
+        if name is not None:
+            update["name"] = name.strip()[:80]
+        if package_id is not None:
+            # normalize: only lowercase + dots + dashes
+            pkg = re.sub(r"[^a-z0-9.\-]", "", package_id.lower()) or "com.zitex.app"
+            update["package_id"] = pkg[:80]
+        if primary_color is not None and primary_color.startswith("#"):
+            update["primary_color"] = primary_color[:7]
+        if app_type in ("pwa", "hybrid"):
+            update["app_type"] = app_type
+        r = await db.app_conversion_projects.update_one(
+            {"id": aid, "user_id": user["user_id"]},
+            {"$set": update},
+        )
+        if r.matched_count == 0:
+            raise HTTPException(404)
+        return {"ok": True, **{k: v for k, v in update.items() if k != "updated_at"}}
+
+    @router.post("/app-conversion/{aid}/build")
+    async def build_app_conversion(aid: str, user=Depends(get_current_user)):
+        doc = await db.app_conversion_projects.find_one(
+            {"id": aid, "user_id": user["user_id"]}, {"_id": 0}
+        )
+        if not doc:
+            raise HTTPException(404)
+        if not doc.get("current_html"):
+            raise HTTPException(400, "لا يوجد HTML للتحويل — أكمل الموقع أولاً")
+
+        # adapt to the app_studio.builder.build_project signature
+        try:
+            from modules.app_studio.builder import build_project
+        except Exception:
+            logger.exception("app_studio.builder import failed")
+            raise HTTPException(500, "محرّك البناء غير متاح")
+
+        app_type = doc.get("app_type") or "pwa"
+        if app_type not in ("pwa", "hybrid"):
+            app_type = "pwa"
+
+        pseudo_project = {
+            "id": aid,
+            "type": app_type,
+            "title": doc.get("name", "تطبيق Zitex"),
+            "description": doc.get("description", ""),
+            "primary_color": doc.get("primary_color", "#10b981"),
+            "package_id": doc.get("package_id", "com.zitex.app"),
+            "imports": [{"kind": "freebuild_site", "html_snapshot": doc["current_html"]}],
+        }
+        try:
+            result = build_project(pseudo_project, features=[])
+        except Exception as e:
+            logger.exception("build_project failed")
+            raise HTTPException(500, f"فشل البناء: {str(e)[:120]}")
+
+        await db.app_conversion_projects.update_one(
+            {"id": aid},
+            {"$set": {
+                "status": "built",
+                "last_build": result,
+                "updated_at": _now(),
+            }},
+        )
+        return result
+
     return router
 
 

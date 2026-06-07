@@ -1,5 +1,45 @@
 # Zitex AI Platform - PRD
 
+### 🆕 Feb 8 2026 — FreeBuild Polish + Game Studio Prompt + App Conversion UI ✅
+
+**ما تم في الجلسة الحالية**:
+
+#### 1) FreeBuild UI Polish ✅
+- **Iframe scaling للـ Design Variants**: `transform: scale(0.3125)` مع `width: 320%` يخلي مصغّرات التصاميم تظهر بدل البيضاء (سطر 1538-1551 في `FreeBuildChat.js`).
+- **Live Thinking bubble**: 5 مراحل مع `setInterval` كل 6 ثواني (🔍 يحلل → 📐 يخطط → 🎨 يختار → 💻 يكتب → ✅ يتحقق). progress bar متدرج + `data-testid="thinking-bubble"` (سطر 1663-1685).
+- **Action Plan prompt**: نص يفرض على الذكاء كتابة "📋 خطة الموقع" قبل بناء أي موقع متعدد الأقسام (قرآن/متجر/تعليم) — سطر 636-650 في `freebuild_chat.py`.
+
+#### 2) Game Studio Prompt Adherence Fix (P1 متكرر) ✅
+- مضاف بلوك جديد في رأس الـsystem_prompt: **PHASE-AWARE EXECUTION** يفرض على الذكاء توليد فوري بلا أسئلة عندما المرحلة `characters/assets/storyboard/level_design/world_design`.
+- أي ذكر لأصل بصري في هذي المراحل = `<<IMG_PRO>>` فوراً في نفس الرد.
+- batch mode + continuity rule (IMG_REF + ASSET_ID) مذكّرين بوضوح.
+- ملف: `/app/backend/modules/games/game_router.py` (سطر 1236-1262 الجديدة).
+
+#### 3) App Conversion UI (P1) — `/apps/convert/:id` ✅
+- **Backend** (`/app/backend/modules/freebuild/freebuild_chat.py`): 3 endpoints جديدة:
+  - `GET /api/freebuild-chat/app-conversion/{aid}` — يجلب مشروع التحويل
+  - `PATCH /api/freebuild-chat/app-conversion/{aid}` — يحدّث (name, package_id, primary_color, app_type)
+  - `POST /api/freebuild-chat/app-conversion/{aid}/build` — يستعمل `app_studio.builder.build_project` لإنتاج ZIP
+- **Frontend** (`/app/frontend/src/pages/AppsConvert.js`, 376 سطر):
+  - اختيار نوع التطبيق: **PWA** أو **Hybrid (Capacitor — Android + iOS)**
+  - حقول: اسم التطبيق، Package ID، اللون الأساسي (color picker)
+  - زر "ابدأ بناء التطبيق" → يبني ZIP فعلي + معاينة iframe
+  - بعد البناء: روابط "تنزيل ZIP" + "افتح المعاينة" + خطوات نشر iOS/Android بـnpm/cap commands
+  - لوحة يمين: معاينة الموقع المصدر بـiframe
+- **Route**: `/apps/convert/:id` مضافة في `App.js`
+- **Integration**: زر "تحويل لتطبيق" في `FinalizeModal` يستدعي `convert-to-app` ثم `navigate('/apps/convert/${appId}')` تلقائياً.
+
+**اختبار E2E (curl)**:
+- ✅ Login → create FreeBuild project
+- ✅ Inject HTML → convert-to-app (returns app_id)
+- ✅ PATCH metadata (name=تجريبي, app_type=hybrid, package=com.test.app, color=#10b981)
+- ✅ POST build → 8 ملفات (4.6 KB): `www/index.html`, `www/manifest.json`, `www/sw.js`, `www/icons/*`, `capacitor.config.json`, `package.json`, `README.md`
+- ✅ Preview URL HTTP 200 (4550 bytes) + ZIP HTTP 200 (4691 bytes)
+
+**Screenshots**: AppsConvert يعرض app type picker (Hybrid مختار)، info form، build result mit "تم البناء بنجاح ✓"، أزرار تنزيل/معاينة، وخطوات نشر iOS/Android.
+
+---
+
 ### 🍋 Feb 8 2026 — Lemon Squeezy Webhook Handler ✅
 - **Endpoint**: `POST /api/pricing/lemonsqueezy-webhook` (+ alias `/ls-webhook`)
 - **Security**: HMAC-SHA256 signature verification via `X-Signature` header

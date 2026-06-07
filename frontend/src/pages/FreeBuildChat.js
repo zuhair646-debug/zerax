@@ -1963,7 +1963,8 @@ function ChatWorkspace({ projectId }) {
         onClose={() => setFinalizeOpen(false)}
         onConverted={(appId) => {
           setFinalizeOpen(false);
-          toast.success(`تم النقل! ID: ${appId.slice(0, 8)}...`);
+          toast.success('🚀 جاري فتح محوّل التطبيق...');
+          navigate(`/apps/convert/${appId}`);
         }}
         onUnlocked={async () => {
           // Refresh project to pick up code_unlocked flag
