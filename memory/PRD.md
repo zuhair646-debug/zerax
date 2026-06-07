@@ -1,5 +1,39 @@
 # Zitex AI Platform - PRD
 
+### 🆕 Feb 8 2026 — FreeBuild Section Builder (P0 — كسر حاجز الـ2000 سطر) ✅
+
+**المشكلة الجذرية**: الذكاء **فعلياً لا يقدر** يكتب 2000-3000 سطر في رد واحد. لما يطلب العميل موقع بـ7 أقسام كبيرة (قرآن + تحفيظ + تفسير + صوتيات + إعدادات...)، الذكاء يكتب Hero فقط ويكذب "تم الإنجاز". الأزرار ترجع للأعلى لأن الأقسام مو موجودة فعلاً.
+
+**الحل المعماري**: نظام بناء تدريجي (Section Builder) حيث الذكاء يكتب **قسم واحد لكل رسالة** والـbackend يدمجه في current_html تلقائياً.
+
+**التاقات الجديدة**:
+- `<<APPEND_SECTION id="X">>...<</APPEND_SECTION>>` → يُدرَج قبل `</body>`
+- `<<REPLACE_SECTION id="X">>...<</REPLACE_SECTION>>` → يستبدل `<section id="X">` موجود
+- `<<UPDATE_NAV>>home,الرئيسية|quran,القرآن|...<</UPDATE_NAV>>` → يحدّث nav links
+
+**الدوال المضافة في `/app/backend/modules/freebuild/freebuild_chat.py`**:
+- `_extract_section_directives(text)`: يستخرج كل الـAPPEND/REPLACE/NAV من رد الذكاء
+- `_merge_sections(current, appends, replaces, nav)`: دمج جراحي بـregex (يحفظ كل القديم)
+- `_splice_before_body_close()`: حقن fragment قبل `</body>`
+- `_strip_section_directives()`: حذف التاقات من الـchat (العميل ما يشوفها)
+- `_verify_anchor_links(html)`: يرجع لائحة `href="#X"` بدون `<section id="X">` (يكشف الأزرار المعطوبة)
+
+**الاستراتيجية الجديدة في System Prompt (4 جولات لموقع كبير)**:
+- **جولة 1 (Shell)**: ```html بـ200-400 سطر فقط: header + nav (بـanchors لكل الأقسام) + 7 sections فاضية placeholder + footer + scroll-behavior: smooth.```
+- **جولة 2+**: `<<REPLACE_SECTION id="quran">>...` لملء قسم واحد كامل (~150-300 سطر) بدون إعادة كتابة الـHTML كله
+- **التحقق التلقائي**: الـtruthfulness validator الجديد يقبل APPEND/REPLACE كدليل تنفيذ (مو يطلب HTML كامل)
+
+**اختبار وحدة (5 سيناريوهات)**:
+- ✅ APPEND يضيف #quran ويحفظ #home و</body>
+- ✅ REPLACE يستبدل #home ويحفظ #quran  
+- ✅ UPDATE_NAV يدخل href="#audio" داخل أول `<nav>`
+- ✅ broken anchor detection: `[#missing]`
+- ✅ strip directives: الـchat بـدون أي ذكر للتاقات
+
+**النتيجة المتوقعة**: لما العميل يطلب موقع قرآن بـ7 أقسام، الذكاء يكتب shell (350 سطر) في الجولة الأولى، ثم في الجولات 2-8 يملأ قسم بقسم (200 سطر/قسم) — كل قسم رد منفصل تحت الـ700 سطر limit. الأزرار تشتغل لأن الـanchors موجودة من الـshell.
+
+---
+
 ### 🆕 Feb 8 2026 — FreeBuild Smart Drift Gate (P0 Critical Fix) ✅
 
 **المشكلة المُبلَّغ عنها**: الذكاء في FreeBuild لا يقدر يضيف أقسام جديدة لموقع موجود — قيود drift-lock مفرطة كانت تحجب أي تعديل يتجاوز 55% حتى لو كان مجرد إضافة شرعية.

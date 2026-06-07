@@ -68,6 +68,123 @@ HTML_BLOCK_RE = re.compile(r"```(?:html|HTML)?\s*(<!DOCTYPE[\s\S]+?</html>|<html
 # Fallback: any code block containing full HTML
 HTML_FALLBACK_RE = re.compile(r"(<!DOCTYPE[\s\S]+?</html>|<html[\s\S]+?</html>)", re.IGNORECASE)
 
+# ─── SECTION BUILDER (incremental HTML construction) ─────────────────────
+# The AI can write a single section instead of the whole page. The backend
+# splices it into the existing current_html. This lets the AI build large
+# sites (Quran, e-commerce, ...) one section per turn without hitting the
+# response-size limit. Examples:
+#   <<APPEND_SECTION id="contact">...</APPEND_SECTION>>   — adds before </body>
+#   <<REPLACE_SECTION id="hero">...</REPLACE_SECTION>>    — overwrites a section
+#   <<UPDATE_NAV>>home,الرئيسية|quran,القرآن|contact,تواصل<</UPDATE_NAV>>
+APPEND_SECTION_RE = re.compile(
+    r"<<\s*APPEND_SECTION\s+id\s*=\s*[\"']([a-zA-Z0-9_\-]+)[\"']\s*>>([\s\S]*?)<<\s*/\s*APPEND_SECTION\s*>>",
+    re.IGNORECASE,
+)
+REPLACE_SECTION_RE = re.compile(
+    r"<<\s*REPLACE_SECTION\s+id\s*=\s*[\"']([a-zA-Z0-9_\-]+)[\"']\s*>>([\s\S]*?)<<\s*/\s*REPLACE_SECTION\s*>>",
+    re.IGNORECASE,
+)
+UPDATE_NAV_RE = re.compile(
+    r"<<\s*UPDATE_NAV\s*>>([\s\S]*?)<<\s*/\s*UPDATE_NAV\s*>>",
+    re.IGNORECASE,
+)
+
+
+def _merge_sections(current_html: str, append_sections: List[tuple], replace_sections: List[tuple], nav_items: Optional[List[tuple]] = None) -> Optional[str]:
+    """
+    Splice new/updated sections into the existing HTML.
+    - append_sections: [(id, html_fragment), ...] inserted before </body>
+    - replace_sections: [(id, html_fragment), ...] overwrites <section id="X">...</section>
+    - nav_items: [(id, label), ...] rewrites the nav <a href="#id"> list (best-effort)
+    Returns merged HTML or None on failure.
+    """
+    if not current_html:
+        return None
+    html = current_html
+    # 1. REPLACE: find existing <section id="X"> ... </section> and swap
+    for sec_id, frag in replace_sections:
+        frag = frag.strip()
+        # Ensure fragment is wrapped in a section tag if not already
+        if not re.match(r"\s*<(section|div|main|article)\b", frag, re.IGNORECASE):
+            frag = f'<section id="{sec_id}">{frag}</section>'
+        pattern = re.compile(
+            r"<section\b[^>]*\bid\s*=\s*[\"']" + re.escape(sec_id) + r"[\"'][^>]*>[\s\S]*?</section>",
+            re.IGNORECASE,
+        )
+        if pattern.search(html):
+            html = pattern.sub(lambda m: frag, html, count=1)
+        else:
+            # If section with that id doesn't exist yet, append it
+            html = _splice_before_body_close(html, frag)
+    # 2. APPEND: insert each new section just before </body>
+    for sec_id, frag in append_sections:
+        frag = frag.strip()
+        if not re.match(r"\s*<(section|div|main|article)\b", frag, re.IGNORECASE):
+            frag = f'<section id="{sec_id}">{frag}</section>'
+        # Avoid duplicates: if a section with this id already exists, REPLACE instead
+        dup_pattern = re.compile(
+            r"<section\b[^>]*\bid\s*=\s*[\"']" + re.escape(sec_id) + r"[\"'][^>]*>[\s\S]*?</section>",
+            re.IGNORECASE,
+        )
+        if dup_pattern.search(html):
+            html = dup_pattern.sub(lambda m: frag, html, count=1)
+        else:
+            html = _splice_before_body_close(html, frag)
+    # 3. UPDATE_NAV: replace anchors inside first <nav>...</nav>
+    if nav_items:
+        nav_html = "\n".join(
+            f'        <a href="#{nid}" class="px-3 py-2 hover:text-emerald-400 transition">{label}</a>'
+            for nid, label in nav_items
+        )
+        nav_pattern = re.compile(r"(<nav\b[^>]*>)([\s\S]*?)(</nav>)", re.IGNORECASE)
+        if nav_pattern.search(html):
+            html = nav_pattern.sub(lambda m: m.group(1) + "\n" + nav_html + "\n      " + m.group(3), html, count=1)
+    return html
+
+
+def _splice_before_body_close(html: str, fragment: str) -> str:
+    """Insert fragment immediately before </body>, or append if no </body>."""
+    if "</body>" in html.lower():
+        return re.sub(r"</body>", fragment + "\n</body>", html, count=1, flags=re.IGNORECASE)
+    if "</html>" in html.lower():
+        return re.sub(r"</html>", fragment + "\n</html>", html, count=1, flags=re.IGNORECASE)
+    return html + "\n" + fragment
+
+
+def _extract_section_directives(text: str) -> Dict[str, Any]:
+    """Pull APPEND/REPLACE/UPDATE_NAV directives out of the AI response."""
+    appends = [(m.group(1), m.group(2)) for m in APPEND_SECTION_RE.finditer(text)]
+    replaces = [(m.group(1), m.group(2)) for m in REPLACE_SECTION_RE.finditer(text)]
+    nav_items: List[tuple] = []
+    nav_m = UPDATE_NAV_RE.search(text)
+    if nav_m:
+        for pair in nav_m.group(1).split("|"):
+            parts = [p.strip() for p in pair.split(",", 1)]
+            if len(parts) == 2 and parts[0] and parts[1]:
+                nav_items.append((parts[0], parts[1]))
+    return {"appends": appends, "replaces": replaces, "nav_items": nav_items}
+
+
+def _strip_section_directives(text: str) -> str:
+    """Remove section directive tags from displayed chat text (they're internal)."""
+    text = APPEND_SECTION_RE.sub("", text)
+    text = REPLACE_SECTION_RE.sub("", text)
+    text = UPDATE_NAV_RE.sub("", text)
+    return text
+
+
+def _verify_anchor_links(html: str) -> List[str]:
+    """Return list of broken anchor links (nav href="#X" with no <section id="X">)."""
+    if not html:
+        return []
+    anchors = re.findall(r'href\s*=\s*["\']#([a-zA-Z0-9_\-]+)["\']', html, re.IGNORECASE)
+    section_ids = set(re.findall(r'<(?:section|div|main|article)\b[^>]*\bid\s*=\s*["\']([a-zA-Z0-9_\-]+)["\']', html, re.IGNORECASE))
+    broken = []
+    for a in anchors:
+        if a not in ("", "top", "#") and a not in section_ids:
+            broken.append(a)
+    return broken
+
 
 def _extract_html(text: str) -> Optional[str]:
     m = HTML_BLOCK_RE.search(text)
@@ -121,6 +238,7 @@ def _validate_truthfulness(ai_text: str) -> Optional[str]:
     html_count = len(_extract_all_html_variants(ai_text))
     has_opts = bool(OPT_RE.search(ai_text))
     has_assets = bool(TAG_RE.search(ai_text))
+    has_section_dirs = bool(APPEND_SECTION_RE.search(ai_text) or REPLACE_SECTION_RE.search(ai_text))
     claim_variants = bool(_CLAIM_VARIANTS_RE.search(ai_text))
     claim_update = bool(_CLAIM_UPDATE_RE.search(ai_text))
 
@@ -131,11 +249,12 @@ def _validate_truthfulness(ai_text: str) -> Optional[str]:
             "أعد الرد: أرسل 3 صفحات <!DOCTYPE html>...</html> كاملة، كل واحدة في ```html ...``` block منفصل، "
             "أو اعترف بصراحة إنك تحتاج معلومات أكثر قبل التصميم."
         )
-    # Rule 2: claimed an update was made but produced no HTML and no asset/option tags
-    if claim_update and html_count == 0 and not has_assets and not has_opts:
+    # Rule 2: claimed an update was made but produced no HTML/section/asset/option tags
+    if claim_update and html_count == 0 and not has_section_dirs and not has_assets and not has_opts:
         return (
-            "ادّعيت إنك حدّثت المعاينة أو أضفت قسماً، لكن لم تُصدر أي HTML. "
-            "أعد الرد: إما أصدر بلوك ```html ...``` كامل بالتعديل، أو اعترف بصراحة إنك لم تطبّق التغيير."
+            "ادّعيت إنك حدّثت المعاينة أو أضفت قسماً، لكن لم تُصدر أي HTML أو APPEND_SECTION/REPLACE_SECTION. "
+            "أعد الرد: إما أصدر بلوك ```html ...``` كامل، أو استخدم <<APPEND_SECTION id=\"...\">>...<</APPEND_SECTION>> لإضافة قسم، "
+            "أو اعترف بصراحة إنك لم تطبّق التغيير."
         )
     # Rule 3: count mismatch — "5 تصاميم" but actually produced 3
     count_match = re.search(
@@ -650,6 +769,42 @@ def make_freebuild_chat_router(db, get_current_user):
             "• استخدم خيارات قابلة للضغط <<OPT: ...>> لتسهيل الرد.\n"
             "• الهدف: كل رسالة تحتوي إما (شرح وأسئلة) أو (كود HTML كامل ومغلق). لا تخلط بينهما إذا الكود ما راح يكتمل.\n"
             "\n"
+            "🏗️ **اللب الذكي: استراتيجية البناء التدريجي (Section Builder) — مهمة جداً للمواقع الكبيرة:**\n"
+            "❌ خطأ شائع: محاولة كتابة موقع 7 أقسام (قرآن + تحفيظ + تفسير + صوتيات + إعدادات + ...) في رسالة واحدة → يتقطّع في المنتصف ويصير كذبة.\n"
+            "✅ الحل: **اكتب الـshell أولاً، ثم املأ قسم بقسم في رسائل لاحقة**.\n"
+            "\n"
+            "📋 **خطة موقع كبير على 3-7 جولات**:\n"
+            "  • **الجولة 1 (Shell)**: ```html بـ200-400 سطر فقط: <!DOCTYPE> + Tailwind CDN + RTL + header + nav (روابط لكل الأقسام بـ#anchors) + 7 أقسام **فاضية** فيها فقط placeholder بسيط: `<section id=\"quran\" class=\"min-h-screen py-20\"><h2>قسم القرآن (قيد البناء)</h2></section>` + footer.``` ← هذا الكامل في رسالة وحدة.\n"
+            "  • **الجولة 2**: استخدم `<<REPLACE_SECTION id=\"quran\">>` لملء قسم القرآن كامل بالميزات الحقيقية (audio player + قائمة سور + قارئ). ما تكتب باقي الـHTML — فقط محتوى القسم الجديد. الحجم: ~150-300 سطر.\n"
+            "  • **الجولة 3**: `<<REPLACE_SECTION id=\"audio\">>` لقسم الصوتيات.\n"
+            "  • وهكذا لكل قسم.\n"
+            "\n"
+            "🔧 **صيغة الـsection directives** (الـbackend يدمجها تلقائياً في current_html — أنت ما تحتاج تعيد كتابة الموقع):\n"
+            "```\n"
+            "<<APPEND_SECTION id=\"contact\">>\n"
+            "<section id=\"contact\" class=\"py-20 bg-zinc-900\">\n"
+            "  <div class=\"container mx-auto px-6\">\n"
+            "    <h2 class=\"text-4xl font-bold mb-8\">تواصل معنا</h2>\n"
+            "    <form>...</form>\n"
+            "  </div>\n"
+            "</section>\n"
+            "<</APPEND_SECTION>>\n"
+            "```\n"
+            "  • `APPEND_SECTION`: لإضافة قسم **جديد** (يُدرج قبل `</body>`).\n"
+            "  • `REPLACE_SECTION`: لاستبدال قسم موجود بنفس الـid.\n"
+            "  • `UPDATE_NAV`: لتحديث الـnav links — مثال: `<<UPDATE_NAV>>home,الرئيسية|quran,القرآن|contact,تواصل<</UPDATE_NAV>>`.\n"
+            "\n"
+            "⚠️ **متى تستخدم Section Builder vs HTML كامل**:\n"
+            "  • موقع بقسم أو اثنين فقط (~500 سطر إجمالي) → اكتب ```html``` كامل في رسالة واحدة.\n"
+            "  • موقع بـ3+ أقسام كبيرة (قرآن، متجر، تعليم) → **ابدأ بـshell، ثم section-by-section**.\n"
+            "  • تعديل قسم واحد فقط في موقع موجود → `REPLACE_SECTION` (لا تعيد كامل الـHTML).\n"
+            "  • إضافة قسم جديد لموقع موجود → `APPEND_SECTION`.\n"
+            "\n"
+            "🔗 **قاعدة الروابط الفعلية (تجنّب الأزرار المعطوبة)**:\n"
+            "  • كل زر/رابط في الـnav أو الـCTA يجب يشير لـanchor فعلي موجود: `<a href=\"#quran\">القرآن</a>` فقط لو فيه `<section id=\"quran\">` فعلاً في الـHTML.\n"
+            "  • النظام يفحص تلقائياً ويسجّل تحذير لو نَفّى الذكاء على روابط معطوبة.\n"
+            "  • للـscroll smooth، أضف `<style>html { scroll-behavior: smooth; }</style>` في الـhead.\n"
+            "\n"
             "🎨 تصاميم متعددة (Design Variants) — اللب الذكي:\n"
             "عند تقديم خيارات تصميم للعميل، اكتب 2-3 صفحات HTML كاملة في رسالة واحدة — كل واحدة في ```html ...``` block منفصل.\n"
             "النظام راح يعرضها للعميل كـ live mini-previews يضغط عليها ويختار وحدة → اللي يختاره يصير current_html مباشرة بدون تغيير.\n"
@@ -692,7 +847,8 @@ def make_freebuild_chat_router(db, get_current_user):
             "  • #quran: قائمة السور + قارئ تفاعلي\n"
             "  • #audio: صوتيات MP3 مع controls\n"
             "  • #settings: تخصيص\n"
-            "  هل أبدأ بهذي الخطة؟ <<OPT: نعم>> <<OPT: عدّل الخطة>>\n"
+            "  هل أبدأ بهذي الخطة؟ <<OPT: نعم، ابدأ بـshell>> <<OPT: عدّل الخطة>>\n"
+            "**بعد موافقة العميل، اتبع استراتيجية Section Builder (موضحة فوق)**: shell أولاً، ثم كل قسم لحاله بـ`REPLACE_SECTION`.\n"
             "\n"
             "🔗 لما تبني موقع متعدد الأقسام:\n"
             "• استخدم anchors `<section id='quran'>` مع navigation `<a href='#quran'>`\n"
@@ -865,6 +1021,39 @@ def make_freebuild_chat_router(db, get_current_user):
         elif len(all_variants) == 1:
             new_html = all_variants[0]
 
+        # ── SECTION BUILDER: if AI used <<APPEND_SECTION>> / <<REPLACE_SECTION>>
+        # directives instead of a full HTML block, splice them into existing
+        # current_html. This is how the AI builds large multi-section sites
+        # incrementally (one section per turn) without busting the response cap.
+        section_dirs = _extract_section_directives(ai_text)
+        sections_applied = 0
+        if (section_dirs["appends"] or section_dirs["replaces"] or section_dirs["nav_items"]):
+            base_html = new_html or proj.get("current_html")
+            if base_html:
+                merged = _merge_sections(
+                    base_html,
+                    section_dirs["appends"],
+                    section_dirs["replaces"],
+                    section_dirs["nav_items"],
+                )
+                if merged:
+                    new_html = merged
+                    sections_applied = (
+                        len(section_dirs["appends"])
+                        + len(section_dirs["replaces"])
+                        + (1 if section_dirs["nav_items"] else 0)
+                    )
+                    logger.info(
+                        f"freebuild sections merged: append={len(section_dirs['appends'])} "
+                        f"replace={len(section_dirs['replaces'])} nav={bool(section_dirs['nav_items'])}"
+                    )
+
+        # ── Anchor sanity check: if nav has #X but no <section id="X">, log warning
+        if new_html:
+            broken = _verify_anchor_links(new_html)
+            if broken:
+                logger.warning(f"freebuild broken anchors: {broken[:5]}")
+
         # Strip code blocks from chat display — code is private/paid feature.
         # If we have design variants, replace all blocks with a single one-line notice;
         # otherwise replace each block with the "updated live preview" notice.
@@ -874,6 +1063,10 @@ def make_freebuild_chat_router(db, get_current_user):
             chat_text = (chat_text + "\n\n*🎨 شوف التصاميم تحت — اختر اللي يعجبك*").strip()
         else:
             chat_text = _strip_code_from_chat(ai_text)
+        # Strip section directives from chat (internal-only)
+        chat_text = _strip_section_directives(chat_text)
+        if sections_applied > 0:
+            chat_text = (chat_text + f"\n\n*✨ تم تحديث المعاينة الحية — {sections_applied} قسم/أقسام جديدة*").strip()
         clean_text = _strip_tags(chat_text)
         # First try OPT tags; if none, fall back to numbered/bulleted lists after a question.
         opt_tag_items = [m.group(1).strip() for m in OPT_RE.finditer(ai_text)]
