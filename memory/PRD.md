@@ -1,5 +1,42 @@
 # Zitex AI Platform - PRD
 
+### 🆕 Feb 8 2026 — Adaptive Task Routing + Self-Correction (الذكاء مفتوح بلا قيود) ✅
+
+**المشكلة**: الذكاء كان نموذج واحد (Claude Sonnet) لكل المهام — تصميم، كود، debug. ضعيف في بعضها وقوي في بعضها. + ما كان يتعلّم من أخطائه.
+
+**الحل**:
+
+**1️⃣ Adaptive Task Routing (`_classify_freebuild_task`)**:
+لكل turn، الـbackend يحلل الرسالة + حالة المشروع ويختار نموذج متخصص:
+
+| الموقف | task_type | النموذج الأول |
+|--------|-----------|---------------|
+| موقع جديد (no current_html) أو "اقترح تصاميم" | `design` | Claude Opus 4.5 (أعلى ذوق بصري) |
+| HTML موجود > 30K (موقع ضخم) | `long_context` | Kimi K2.6 (256K context) |
+| "ما يشتغل، أصلح، broken, fix" | `reasoning_hard` | GPT-5 / Claude Opus |
+| إضافة/تعديل قسم عادي | `website_build` | Kimi K2.6 → Claude Sonnet |
+
+**2️⃣ Self-Correction Loop**:
+بعد ما الذكاء يولّد HTML، الـbackend يفحص `_verify_anchor_links` تلقائياً. لو 2+ روابط معطوبة → استدعاء ثاني بـ`reasoning_hard` model مع رسالة "هذي المشاكل، صحّحها" — pass واحد فقط لمنع الـ infinite loops.
+
+**3️⃣ zitex_chat parameter جديد**: `task_type_override` يسمح للـcallers يطغوا على routing الـagent الافتراضي بدون كسر backwards compat.
+
+**4️⃣ Model Badge في الـUI**:
+- Backend يرجع `task_label` + `model_used` في response
+- Frontend يعرض شارة صغيرة تحت آخر رد AI: "🎨 يصمم · claude-opus-4-5"
+- يعطي العميل ثقة وشفافية كاملة في إيش يشتغل وراء الكواليس
+
+**اختبار (7 سيناريوهات)**:
+- ✅ "أبي موقع لمطعم" → design (Claude Opus)
+- ✅ "اقترح علي 3 تصاميم" → design
+- ✅ "ضيف قسم اتصل بنا" → website_build
+- ✅ "الزر ما يشتغل" → reasoning_hard
+- ✅ "غيّر اللون لأخضر" → website_build
+- ✅ موقع 50K حرف → long_context
+- ✅ retry للإصلاح → reasoning_hard
+
+---
+
 ### 🆕 Feb 8 2026 — Auto-Snapshots + Redesign Protocol (حماية ضد فقدان الكود) ✅
 
 **حادثة المستخدم**: قبل ساعتين، كان عنده موقع قرآن جزئي (قائمة سور + قائمة قراء)، طلب "تصميم جديد" — الذكاء فسّرها كـ "ابنِ من الصفر" وحذف كل الكود وضاع التقدم. تعليمات الذكاء كانت متضاربة: "لا تغيّر التصميم" + "ابنِ من الصفر".
