@@ -123,6 +123,7 @@ def make_freebuild_chat_router(db, get_current_user):
         pid: str,
         message: str = Form(...),
         files: List[UploadFile] = File(default=[]),
+        reference_asset_id: str = Form(default=""),
         user=Depends(get_current_user),
     ):
         proj = await db.freebuild_projects.find_one(
@@ -151,15 +152,65 @@ def make_freebuild_chat_router(db, get_current_user):
             except Exception as _e:
                 logger.warning(f"freebuild attachment read failed: {_e}")
 
+        # If user is replying to a specific in-chat asset, pull it from DB and add to vision
+        reference_meta: Optional[Dict[str, Any]] = None
+        if reference_asset_id:
+            ref_asset = None
+            for m in proj.get("messages", []):
+                for a in (m.get("pending_assets") or []):
+                    if a.get("id") == reference_asset_id:
+                        ref_asset = a
+                        break
+                if ref_asset:
+                    break
+            if not ref_asset:
+                for a in proj.get("approved_assets", []):
+                    if a.get("id") == reference_asset_id:
+                        ref_asset = a
+                        break
+            if ref_asset and ref_asset.get("image_url"):
+                try:
+                    import httpx
+                    img_url = ref_asset["image_url"]
+                    # HTTP fetch (works for both internal-routed and external URLs)
+                    abs_url = img_url
+                    if abs_url.startswith("/"):
+                        backend_internal = os.environ.get("BACKEND_INTERNAL_URL", "http://localhost:8001")
+                        abs_url = f"{backend_internal.rstrip('/')}{abs_url}"
+                    async with httpx.AsyncClient(timeout=15) as cli:
+                        rr = await cli.get(abs_url)
+                        if rr.status_code == 200 and rr.content:
+                            ctype = rr.headers.get("content-type", "image/png").split(";")[0]
+                            b64 = base64.b64encode(rr.content).decode()
+                            vision_images.append({
+                                "type": "image",
+                                "source": {"type": "base64", "media_type": ctype, "data": b64},
+                            })
+                            reference_meta = {
+                                "asset_id": reference_asset_id,
+                                "type": ref_asset.get("type", "asset"),
+                                "image_url": ref_asset.get("image_url"),
+                                "prompt": ref_asset.get("prompt", ""),
+                            }
+                except Exception as e:
+                    logger.warning(f"freebuild reference fetch failed: {e}")
+
         # Build conversation history (last 12 turns)
         history = proj.get("messages", [])[-12:]
         msg_list = [{"role": m["role"], "content": m["content"]} for m in history]
 
         # Current user turn: text + (optional) images
+        prefix_text = message
+        if reference_meta:
+            prefix_text = (
+                f"[ردّ المستخدم على الصورة المرفقة "
+                f"(النوع: {reference_meta['type']}، البرومبت الأصلي: {reference_meta['prompt'][:80]})]\n\n"
+                f"{message}"
+            )
         if vision_images:
-            user_content: Any = [{"type": "text", "text": message}] + vision_images
+            user_content: Any = [{"type": "text", "text": prefix_text}] + vision_images
         else:
-            user_content = message
+            user_content = prefix_text
         msg_list.append({"role": "user", "content": user_content})
 
         # Context for the agent (no website type — fully open / from scratch)
@@ -234,7 +285,7 @@ def make_freebuild_chat_router(db, get_current_user):
                 "$push": {
                     "messages": {
                         "$each": [
-                            {"role": "user", "content": message, "timestamp": _now(), "pending_assets": [], "attachments": attachment_meta},
+                            {"role": "user", "content": message, "timestamp": _now(), "pending_assets": [], "attachments": attachment_meta, "reference": reference_meta},
                             {"role": "assistant", "content": clean_text, "timestamp": _now(), "pending_assets": pending_assets, "had_html": bool(new_html)},
                         ]
                     }

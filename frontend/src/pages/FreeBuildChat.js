@@ -4,6 +4,7 @@ import {
   Globe, Send, Loader2, Sparkles, Eye, ArrowRight, ArrowLeft,
   CheckCircle2, Check, Image as ImageIcon, FolderOpen, Code,
   Monitor, Smartphone, Trash2, MessageSquare, Paperclip, X,
+  ZoomIn, Reply, Download,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import VoiceRecorderButton from '@/components/VoiceRecorderButton';
@@ -215,6 +216,83 @@ function MyProjectsModal({ open, onClose, onSelect }) {
 }
 
 // ─────────────────────────────────────────────────────────────
+// LIGHTBOX (click-to-zoom + reply)
+// ─────────────────────────────────────────────────────────────
+function Lightbox({ open, asset, onClose, onReply, onApprove }) {
+  useEffect(() => {
+    if (!open) return undefined;
+    const onKey = (e) => { if (e.key === 'Escape') onClose(); };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [open, onClose]);
+
+  if (!open || !asset) return null;
+  const fullUrl = asset.image_url?.startsWith('http') ? asset.image_url : `${API}${asset.image_url}`;
+  return (
+    <div
+      className="fixed inset-0 z-[60] bg-black/90 backdrop-blur-sm flex items-center justify-center p-4"
+      onClick={onClose}
+      data-testid="lightbox"
+    >
+      <button
+        type="button"
+        onClick={onClose}
+        data-testid="lightbox-close"
+        className="absolute top-4 right-4 w-10 h-10 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-white z-10"
+        aria-label="إغلاق"
+      >
+        <X className="w-5 h-5" />
+      </button>
+
+      <div className="max-w-6xl w-full max-h-[90vh] flex flex-col gap-4" onClick={(e) => e.stopPropagation()}>
+        <div className="flex-1 overflow-hidden rounded-2xl bg-black/40 border border-white/10 flex items-center justify-center">
+          <img
+            src={fullUrl}
+            alt={asset.prompt || 'asset'}
+            className="max-w-full max-h-[75vh] object-contain"
+            data-testid="lightbox-img"
+          />
+        </div>
+        <div className="flex flex-wrap items-center justify-between gap-3 bg-zinc-900/70 border border-white/10 rounded-xl p-3">
+          <div className="min-w-0 flex-1">
+            <p className="text-xs text-emerald-300 font-bold">{asset.type}</p>
+            <p className="text-xs text-zinc-400 truncate">{asset.prompt}</p>
+          </div>
+          <div className="flex items-center gap-2 shrink-0">
+            <a
+              href={fullUrl}
+              download
+              data-testid="lightbox-download"
+              className="px-3 py-2 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-zinc-200 text-xs font-bold flex items-center gap-1.5"
+            >
+              <Download className="w-3.5 h-3.5" /> تنزيل
+            </a>
+            {onApprove && !asset.approved && (
+              <button
+                type="button"
+                onClick={() => { onApprove(asset.id); onClose(); }}
+                data-testid="lightbox-approve"
+                className="px-3 py-2 rounded-lg bg-emerald-500/20 hover:bg-emerald-500/30 border border-emerald-400/40 text-emerald-200 text-xs font-bold flex items-center gap-1.5"
+              >
+                <Check className="w-3.5 h-3.5" /> اعتمد
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={() => { onReply(asset); onClose(); }}
+              data-testid="lightbox-reply"
+              className="px-3 py-2 rounded-lg bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-400 hover:to-teal-500 text-black text-xs font-bold flex items-center gap-1.5"
+            >
+              <Reply className="w-3.5 h-3.5" /> ردّ على الصورة
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────
 // STEP 2: Chat Workspace (Game Studio style)
 // ─────────────────────────────────────────────────────────────
 function ChatWorkspace({ projectId }) {
@@ -222,6 +300,8 @@ function ChatWorkspace({ projectId }) {
   const [project, setProject] = useState(null);
   const [message, setMessage] = useState('');
   const [attachments, setAttachments] = useState([]);
+  const [replyToAsset, setReplyToAsset] = useState(null); // {id, type, image_url, prompt}
+  const [lightboxAsset, setLightboxAsset] = useState(null);
   const [loading, setLoading] = useState(false);
   const [activePhase, setActivePhase] = useState('discovery');
   const [activeTab, setActiveTab] = useState('chat'); // chat | live | approved
@@ -256,17 +336,20 @@ function ChatWorkspace({ projectId }) {
   }, [project?.messages?.length, activeTab]);
 
   const send = async () => {
-    if ((!message.trim() && attachments.length === 0) || loading) return;
+    if ((!message.trim() && attachments.length === 0 && !replyToAsset) || loading) return;
     setLoading(true);
     const token = localStorage.getItem('token');
     const msgText = message;
     const filesToSend = attachments;
+    const refAsset = replyToAsset;
     setMessage('');
     setAttachments([]);
+    setReplyToAsset(null);
     try {
       const fd = new FormData();
       fd.append('message', msgText || '(انظر للصورة المرفقة)');
       filesToSend.forEach((f) => fd.append('files', f));
+      if (refAsset?.id) fd.append('reference_asset_id', refAsset.id);
       const r = await fetch(`${API}/api/freebuild-chat/project/${projectId}/chat`, {
         method: 'POST',
         headers: { Authorization: `Bearer ${token}` },
@@ -285,6 +368,7 @@ function ChatWorkspace({ projectId }) {
       toast.error(e.message);
       setMessage(msgText); // restore on error
       setAttachments(filesToSend);
+      setReplyToAsset(refAsset);
     } finally {
       setLoading(false);
     }
@@ -480,6 +564,27 @@ function ChatWorkspace({ projectId }) {
                       ? 'bg-emerald-500/15 border border-emerald-500/30 text-emerald-50'
                       : 'bg-zinc-800/70 border border-white/10 text-zinc-100'
                   }`}>
+                    {/* Quoted asset (WhatsApp-style reply) */}
+                    {m.reference && m.reference.image_url && (
+                      <button
+                        type="button"
+                        onClick={() => setLightboxAsset(m.reference)}
+                        data-testid={`message-ref-${i}`}
+                        className="mb-2 flex items-stretch gap-2 bg-black/30 border-r-2 border-emerald-400 rounded-lg overflow-hidden w-full text-right hover:bg-black/40"
+                      >
+                        <img
+                          src={m.reference.image_url.startsWith('http') ? m.reference.image_url : `${API}${m.reference.image_url}`}
+                          alt=""
+                          className="w-12 h-12 object-cover shrink-0"
+                        />
+                        <div className="py-1.5 px-2 min-w-0 flex-1">
+                          <p className="text-[10px] text-emerald-300 font-bold flex items-center gap-1">
+                            <Reply className="w-3 h-3" /> ردّ على {m.reference.type}
+                          </p>
+                          <p className="text-[10px] text-zinc-400 truncate">{m.reference.prompt}</p>
+                        </div>
+                      </button>
+                    )}
                     {m.attachments && m.attachments.length > 0 && (
                       <div className="mb-2 flex gap-1.5 flex-wrap">
                         {m.attachments.map((att, j) => (
@@ -503,9 +608,31 @@ function ChatWorkspace({ projectId }) {
                     {m.pending_assets && m.pending_assets.length > 0 && (
                       <div className="mt-3 grid sm:grid-cols-2 gap-2">
                         {m.pending_assets.map((a) => (
-                          <div key={a.id} className="rounded-lg bg-black/40 border border-emerald-500/20 overflow-hidden" data-testid={`pending-asset-${a.id}`}>
+                          <div key={a.id} className="rounded-lg bg-black/40 border border-emerald-500/20 overflow-hidden group" data-testid={`pending-asset-${a.id}`}>
                             {a.image_url ? (
-                              <img src={a.image_url.startsWith('http') ? a.image_url : `${API}${a.image_url}`} alt="" className="w-full aspect-video object-cover" />
+                              <div className="relative">
+                                <button
+                                  type="button"
+                                  onClick={() => setLightboxAsset(a)}
+                                  data-testid={`zoom-asset-${a.id}`}
+                                  className="block w-full"
+                                  aria-label="تكبير الصورة"
+                                >
+                                  <img src={a.image_url.startsWith('http') ? a.image_url : `${API}${a.image_url}`} alt="" className="w-full aspect-video object-cover transition-transform group-hover:scale-[1.02]" />
+                                </button>
+                                <div className="absolute inset-0 bg-black/0 group-hover:bg-black/30 transition-all flex items-center justify-center gap-2 pointer-events-none opacity-0 group-hover:opacity-100">
+                                  <span className="pointer-events-auto">
+                                    <button type="button" onClick={() => setLightboxAsset(a)} className="px-2.5 py-1.5 rounded-lg bg-white/15 backdrop-blur text-white text-xs font-bold flex items-center gap-1.5 hover:bg-white/25">
+                                      <ZoomIn className="w-3.5 h-3.5" /> تكبير
+                                    </button>
+                                  </span>
+                                  <span className="pointer-events-auto">
+                                    <button type="button" onClick={() => setReplyToAsset(a)} data-testid={`reply-asset-${a.id}`} className="px-2.5 py-1.5 rounded-lg bg-emerald-500/80 backdrop-blur text-black text-xs font-bold flex items-center gap-1.5 hover:bg-emerald-400">
+                                      <Reply className="w-3.5 h-3.5" /> ردّ
+                                    </button>
+                                  </span>
+                                </div>
+                              </div>
                             ) : (
                               <div className="w-full aspect-video bg-zinc-900 flex items-center justify-center text-xs text-zinc-500">
                                 {a.status === 'failed' ? '❌ فشل التوليد' : (
@@ -606,19 +733,30 @@ function ChatWorkspace({ projectId }) {
               ) : (
                 <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
                   {approvedAssets.map((a) => (
-                    <div key={a.id} className="rounded-xl overflow-hidden border border-violet-500/30 bg-black/30">
+                    <button
+                      key={a.id}
+                      type="button"
+                      onClick={() => setLightboxAsset(a)}
+                      data-testid={`approved-asset-${a.id}`}
+                      className="rounded-xl overflow-hidden border border-violet-500/30 bg-black/30 hover:border-violet-400 transition-all text-right group"
+                    >
                       {a.image_url && (
-                        <img
-                          src={a.image_url.startsWith('http') ? a.image_url : `${API}${a.image_url}`}
-                          alt=""
-                          className="w-full aspect-square object-cover"
-                        />
+                        <div className="relative">
+                          <img
+                            src={a.image_url.startsWith('http') ? a.image_url : `${API}${a.image_url}`}
+                            alt=""
+                            className="w-full aspect-square object-cover transition-transform group-hover:scale-[1.04]"
+                          />
+                          <div className="absolute inset-0 bg-black/0 group-hover:bg-black/40 transition-all flex items-center justify-center">
+                            <ZoomIn className="w-6 h-6 text-white opacity-0 group-hover:opacity-100 transition-opacity" />
+                          </div>
+                        </div>
                       )}
                       <div className="p-2">
                         <p className="text-[10px] text-violet-300 font-bold">{a.type}</p>
                         <p className="text-[10px] text-zinc-500 truncate">{a.prompt}</p>
                       </div>
-                    </div>
+                    </button>
                   ))}
                 </div>
               )}
@@ -627,6 +765,32 @@ function ChatWorkspace({ projectId }) {
 
           {/* Input bar (always visible at bottom) */}
           <div className="border-t border-white/10 p-3 sm:p-4 bg-zinc-900/50 shrink-0">
+            {/* Reply-to-asset quote chip (WhatsApp-style) */}
+            {replyToAsset && (
+              <div className="mb-2 flex items-stretch gap-2 bg-black/40 border-r-2 border-emerald-400 rounded-lg overflow-hidden" data-testid="reply-quote">
+                <img
+                  src={replyToAsset.image_url?.startsWith('http') ? replyToAsset.image_url : `${API}${replyToAsset.image_url}`}
+                  alt=""
+                  className="w-14 h-14 object-cover shrink-0"
+                />
+                <div className="py-2 px-2 min-w-0 flex-1">
+                  <p className="text-[11px] text-emerald-300 font-bold flex items-center gap-1">
+                    <Reply className="w-3.5 h-3.5" /> ردّ على {replyToAsset.type}
+                  </p>
+                  <p className="text-[11px] text-zinc-400 truncate">{replyToAsset.prompt}</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setReplyToAsset(null)}
+                  data-testid="reply-quote-remove"
+                  className="px-3 text-zinc-400 hover:text-red-400"
+                  aria-label="إلغاء الرد"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+            )}
+
             {/* Attached file chips */}
             {attachments.length > 0 && (
               <div className="mb-2 flex gap-2 flex-wrap" data-testid="attachment-chips">
@@ -695,7 +859,7 @@ function ChatWorkspace({ projectId }) {
               <button
                 type="button"
                 onClick={send}
-                disabled={loading || (!message.trim() && attachments.length === 0)}
+                disabled={loading || (!message.trim() && attachments.length === 0 && !replyToAsset)}
                 data-testid="chat-send-btn"
                 className="px-5 py-3 bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-400 hover:to-teal-500 disabled:from-zinc-700 disabled:to-zinc-800 text-black font-bold rounded-xl flex items-center gap-2"
               >
@@ -710,6 +874,13 @@ function ChatWorkspace({ projectId }) {
         open={myProjectsOpen}
         onClose={() => setMyProjectsOpen(false)}
         onSelect={(pid) => navigate(`/freebuild/chat/${pid}`)}
+      />
+      <Lightbox
+        open={!!lightboxAsset}
+        asset={lightboxAsset}
+        onClose={() => setLightboxAsset(null)}
+        onReply={(a) => setReplyToAsset(a)}
+        onApprove={approve}
       />
     </div>
   );
