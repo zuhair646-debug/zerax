@@ -186,6 +186,70 @@ def _verify_anchor_links(html: str) -> List[str]:
     return broken
 
 
+# Match dead links — pointing to a .html file, a relative path, or a site route.
+# We deliberately exclude: http(s)://, #anchors, mailto:, tel:, javascript:, blob:, data:
+_DEAD_LINK_RE = re.compile(
+    r'href\s*=\s*(["\'])\s*('
+    r'(?!https?://)'   # not external URL
+    r'(?!#)'           # not anchor
+    r'(?!mailto:)(?!tel:)(?!javascript:)(?!blob:)(?!data:)'
+    r'(?!\{)'          # not a template placeholder
+    r'[^"\']*?'
+    r'(?:\.html?|\.php|\.aspx?)'  # local file
+    r'[^"\']*?'
+    r')\1',
+    re.IGNORECASE,
+)
+# Catch route-style links like href="/dua" or href="./about"
+_ROUTE_LINK_RE = re.compile(
+    r'href\s*=\s*(["\'])\s*'
+    r'(?!https?://)(?!#)(?!mailto:)(?!tel:)(?!javascript:)(?!blob:)(?!data:)(?!\{)'
+    r'(/[a-zA-Z][a-zA-Z0-9_\-/]*|\./[a-zA-Z][a-zA-Z0-9_\-/]*)'
+    r'\1',
+    re.IGNORECASE,
+)
+
+
+def _fix_dead_navigation_links(html: str) -> tuple[str, int]:
+    """
+    Rewrite cross-page links into in-page anchors. Live preview is a single
+    iframe srcdoc — multi-file navigation cannot work. Returns (fixed_html, count).
+    """
+    if not html:
+        return html, 0
+    fixed_count = 0
+
+    def _to_anchor(match):
+        nonlocal fixed_count
+        raw = match.group(2)
+        # extract base filename without extension
+        base = re.sub(r'\.html?|\.php|\.aspx?', '', raw, flags=re.IGNORECASE)
+        base = base.strip('/').split('/')[-1].split('?')[0].split('#')[0]
+        # normalize: lowercase, only alnum + dash
+        anchor = re.sub(r'[^a-zA-Z0-9_\-]', '-', base).strip('-').lower() or 'home'
+        # common index page → #home
+        if anchor in ('index', 'main', 'home'):
+            anchor = 'home'
+        fixed_count += 1
+        return f'{match.group(1)}#{anchor}{match.group(1)}'.replace(match.group(1), '"', 1).replace(match.group(1), '"', 1)
+
+    # simpler safe replacement: use a callable that returns the new href
+    def _replace_dead(match):
+        nonlocal fixed_count
+        raw = match.group(2)
+        base = re.sub(r'\.html?|\.php|\.aspx?', '', raw, flags=re.IGNORECASE)
+        base = base.strip('/').split('/')[-1].split('?')[0].split('#')[0]
+        anchor = re.sub(r'[^a-zA-Z0-9_\-]', '-', base).strip('-').lower() or 'home'
+        if anchor in ('index', 'main', 'home'):
+            anchor = 'home'
+        fixed_count += 1
+        return f'href="#{anchor}"'
+
+    html = _DEAD_LINK_RE.sub(_replace_dead, html)
+    html = _ROUTE_LINK_RE.sub(_replace_dead, html)
+    return html, fixed_count
+
+
 def _summarize_html(html: str) -> str:
     """Short description of an HTML snapshot for the version-history UI."""
     if not html:
@@ -963,6 +1027,59 @@ def make_freebuild_chat_router(db, get_current_user):
             "  • النظام يفحص تلقائياً ويسجّل تحذير لو نَفّى الذكاء على روابط معطوبة.\n"
             "  • للـscroll smooth، أضف `<style>html { scroll-behavior: smooth; }</style>` في الـhead.\n"
             "\n"
+            "🚦 **قاعدة التنقّل بين الصفحات (مهمة جداً — تمنع 'الصفحة البيضاء')**:\n"
+            "❌ **ممنوع منعاً باتاً** استخدام: `<a href=\"page2.html\">` أو `<a href=\"quran.html\">` أو `<a href=\"./about.html\">` أو `<a href=\"/dua\">`.\n"
+            "   السبب: المعاينة الحية عبارة عن **iframe بـsrcdoc** — ما يقدر يفتح ملفات منفصلة. أي رابط لصفحة منفصلة = شاشة بيضاء فارغة.\n"
+            "\n"
+            "✅ **الحل الإلزامي: Single Page App (SPA) داخل HTML واحد**:\n"
+            "   كل 'صفحة' = `<section id=\"X\">` داخل نفس الـHTML. كل الروابط `<a href=\"#X\">`.\n"
+            "   مثال موقع قرآن متعدد 'الصفحات':\n"
+            "   ```html\n"
+            "   <nav>\n"
+            "     <a href=\"#home\">الرئيسية</a>\n"
+            "     <a href=\"#quran\">القرآن</a>\n"
+            "     <a href=\"#dua\">الأدعية</a>\n"
+            "     <a href=\"#tafsir\">التفسير</a>\n"
+            "   </nav>\n"
+            "   <section id=\"home\">...</section>\n"
+            "   <section id=\"quran\">...</section>\n"
+            "   <section id=\"dua\">...</section>\n"
+            "   <section id=\"tafsir\">...</section>\n"
+            "   ```\n"
+            "\n"
+            "🎬 **خيار A — تنقل سلس بـscroll** (الأبسط، يكفي معظم المواقع):\n"
+            "   فقط `<style>html { scroll-behavior: smooth; } section { min-height: 100vh; padding: 4rem 2rem; }</style>`\n"
+            "   النقر على رابط nav ينزل بسلاسة للقسم. الكل مرئي في صفحة واحدة طويلة.\n"
+            "\n"
+            "🎬 **خيار B — Tabs/Views (يخفي/يظهر الأقسام)** (للمواقع التي تبدو متعددة الصفحات):\n"
+            "   استخدم هذا الـboilerplate في كل موقع متعدد 'الأقسام':\n"
+            "   ```html\n"
+            "   <style>\n"
+            "     .page { display: none; min-height: 90vh; }\n"
+            "     .page.active { display: block; animation: fadeIn 0.3s ease; }\n"
+            "     @keyframes fadeIn { from { opacity:0; transform: translateY(10px); } to { opacity:1; transform:none; } }\n"
+            "     nav a.active-link { color: var(--accent, #10b981); border-bottom: 2px solid currentColor; }\n"
+            "   </style>\n"
+            "   <section id=\"home\" class=\"page active\">...</section>\n"
+            "   <section id=\"quran\" class=\"page\">...</section>\n"
+            "   <script>\n"
+            "     function showPage(id) {\n"
+            "       document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));\n"
+            "       const target = document.getElementById(id);\n"
+            "       if (target) { target.classList.add('active'); window.scrollTo({top:0,behavior:'smooth'}); }\n"
+            "       document.querySelectorAll('nav a').forEach(a => a.classList.toggle('active-link', a.getAttribute('href') === '#' + id));\n"
+            "       history.replaceState(null, '', '#' + id);\n"
+            "     }\n"
+            "     document.querySelectorAll('nav a[href^=\"#\"]').forEach(a => {\n"
+            "       a.addEventListener('click', e => { e.preventDefault(); showPage(a.getAttribute('href').slice(1)); });\n"
+            "     });\n"
+            "     // initial route from URL hash\n"
+            "     const initial = (location.hash || '#home').slice(1);\n"
+            "     showPage(initial);\n"
+            "   </script>\n"
+            "   ```\n"
+            "   هذا boilerplate **ثابت** — انسخه كما هو في أي موقع متعدد الصفحات.\n"
+            "\n"
             "🎨 تصاميم متعددة (Design Variants) — اللب الذكي:\n"
             "عند تقديم خيارات تصميم للعميل، اكتب 2-3 صفحات HTML كاملة في رسالة واحدة — كل واحدة في ```html ...``` block منفصل.\n"
             "النظام راح يعرضها للعميل كـ live mini-previews يضغط عليها ويختار وحدة → اللي يختاره يصير current_html مباشرة بدون تغيير.\n"
@@ -1308,6 +1425,11 @@ def make_freebuild_chat_router(db, get_current_user):
 
         # ── Anchor sanity check: if nav has #X but no <section id="X">, log warning
         if new_html:
+            # Auto-fix dead navigation links (href="page.html" or href="/dua")
+            # that would produce blank screens in the iframe preview.
+            new_html, fixed_dead = _fix_dead_navigation_links(new_html)
+            if fixed_dead:
+                logger.info(f"freebuild auto-fixed {fixed_dead} dead navigation link(s)")
             broken = _verify_anchor_links(new_html)
             if broken:
                 logger.warning(f"freebuild broken anchors: {broken[:5]}")
