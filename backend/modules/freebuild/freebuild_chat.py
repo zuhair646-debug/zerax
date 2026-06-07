@@ -59,6 +59,21 @@ def _strip_tags(text: str) -> str:
     return cleaned.strip()
 
 
+# Strip code blocks from chat display (code lives ONLY in Live Preview).
+# We hide HTML/CSS/JS code by default — user can pay to receive the code.
+_CODE_BLOCK_RE = re.compile(r"```[a-zA-Z]*\n?[\s\S]*?```", re.MULTILINE)
+
+
+def _strip_code_from_chat(text: str) -> str:
+    """Remove fenced code blocks from displayed chat text and replace with a friendly notice.
+    Code is kept in current_html for Live Preview only."""
+    has_code = bool(_CODE_BLOCK_RE.search(text))
+    cleaned = _CODE_BLOCK_RE.sub("\n*✨ تم تحديث المعاينة الحية — افتح تبويب المعاينة للمشاهدة*\n", text)
+    if has_code:
+        cleaned = re.sub(r"\n{3,}", "\n\n", cleaned)
+    return cleaned.strip()
+
+
 def _extract_options(text: str) -> List[str]:
     """Pull clickable choices out of AI response: <<OPT: ...>>."""
     opts = [m.group(1).strip() for m in OPT_RE.finditer(text)]
@@ -313,6 +328,9 @@ def make_freebuild_chat_router(db, get_current_user):
             "   النظام راح يولّدها تلقائياً ويعرضها للمستخدم لاعتمادها.\n"
             "5. بعد ما المستخدم يعتمد الصور (تشوفها في 'صور جاهزة معتمدة' أعلاه)، استخدم URL مباشر في الـ HTML.\n"
             "6. لما تكتب HTML للمعاينة، اكتبه داخل ```html ... ``` ويكون <!DOCTYPE html>...</html> كامل مع Tailwind CDN و RTL.\n"
+            "   ⚠️ المستخدم لن يرى الكود داخل الشات — الكود يُعرض فقط في 'المعاينة الحية'. لا تشرح الكود ولا تذكر تفاصيل تقنية في رسائلك.\n"
+            "   اكتب فقط مقدمة قصيرة مثل: 'جاهز! حدّثت المعاينة الحية — شوفها في تبويب المعاينة 👀' ثم الكود.\n"
+            "   لا تكتب: 'إليك ما عملته في الكود: لقد استخدمت emerald-500...' — هذي تفاصيل ما تهم المستخدم العادي.\n"
             "7. عدّل تدريجياً — لا تعيد بناء كل شي من جديد كل مرة.\n"
             "\n"
             "🎯 خيارات قابلة للضغط (مهم جداً لتسهيل التجربة):\n"
@@ -370,9 +388,11 @@ def make_freebuild_chat_router(db, get_current_user):
                 "created_at": _now(),
             })
 
-        # Detect HTML for live preview
+        # Detect HTML for live preview (extracted BEFORE stripping)
         new_html = _extract_html(ai_text)
-        clean_text = _strip_tags(ai_text)
+        # Strip code blocks from chat display — code is private/paid feature
+        chat_text = _strip_code_from_chat(ai_text)
+        clean_text = _strip_tags(chat_text)
         # First try OPT tags; if none, fall back to numbered/bulleted lists after a question.
         opt_tag_items = [m.group(1).strip() for m in OPT_RE.finditer(ai_text)]
         if opt_tag_items:
@@ -472,6 +492,92 @@ def make_freebuild_chat_router(db, get_current_user):
         if r.matched_count == 0:
             raise HTTPException(404)
         return {"ok": True}
+
+    # ===== Finalization options (when user wants to publish/take ownership) =====
+    @router.get("/project/{pid}/finalize-options")
+    async def finalize_options(pid: str, user=Depends(get_current_user)):
+        proj = await db.freebuild_projects.find_one(
+            {"id": pid, "user_id": user["user_id"]}, {"_id": 0, "id": 1, "name": 1, "current_html": 1}
+        )
+        if not proj:
+            raise HTTPException(404)
+        if not proj.get("current_html"):
+            raise HTTPException(400, "أكمل الموقع أولاً — لا يوجد محتوى نهائي بعد")
+        return {
+            "ready": True,
+            "paths": [
+                {
+                    "id": "host_with_us",
+                    "title": "🏠 استضف معنا على Zitex",
+                    "price_usd": 0,
+                    "subtitle": "مجاني تماماً — موقعك على دومين Zitex، نتولى الاستضافة والصيانة",
+                    "features": [
+                        "نشر فوري على نطاق zitex.com",
+                        "SSL مجاني وأداء عالي",
+                        "تعديل لاحق عبر نفس الشات",
+                        "لا تحتاج خبرة تقنية",
+                    ],
+                    "cta": "انشر موقعي الآن",
+                },
+                {
+                    "id": "take_code_self",
+                    "title": "💻 استلم الكود (مبرمج)",
+                    "price_usd": 49,
+                    "subtitle": "بتنشره بنفسك على GitHub/Vercel/Cloudflare — أنت محترف وعندك خبرة",
+                    "features": [
+                        "كل ملفات HTML/CSS/JS",
+                        "صور بحجم Production",
+                        "ملف README فيه طريقة النشر",
+                        "بدون أي إرشاد إضافي",
+                    ],
+                    "cta": "اشترِ الكود بـ $49",
+                },
+                {
+                    "id": "take_code_guided",
+                    "title": "🎓 الكود + إرشاد كامل",
+                    "price_usd": 99,
+                    "subtitle": "الذكاء يمشي معك خطوة بخطوة — يربط GitHub repo، يدفع لـVercel، يضبط الدومين",
+                    "features": [
+                        "كل اللي في الباقة السابقة",
+                        "الذكاء يتصل بمستودعاتك",
+                        "يضبط CI/CD ودومين مخصص",
+                        "دعم 30 يوم على المشاكل التقنية",
+                    ],
+                    "cta": "اشترِ الإرشاد الكامل بـ $99",
+                },
+            ],
+        }
+
+    # ===== Convert this website project to an App project (placeholder for apps module) =====
+    @router.post("/project/{pid}/convert-to-app")
+    async def convert_to_app(pid: str, user=Depends(get_current_user)):
+        proj = await db.freebuild_projects.find_one(
+            {"id": pid, "user_id": user["user_id"]}, {"_id": 0}
+        )
+        if not proj:
+            raise HTTPException(404)
+        if not proj.get("current_html"):
+            raise HTTPException(400, "أكمل الموقع قبل التحويل لتطبيق")
+        app_id = str(uuid.uuid4())
+        await db.app_conversion_projects.insert_one({
+            "id": app_id,
+            "source_kind": "freebuild",
+            "source_id": pid,
+            "user_id": user["user_id"],
+            "name": f"{proj['name']} (تطبيق)",
+            "description": proj.get("description", ""),
+            "current_html": proj.get("current_html"),
+            "approved_assets": proj.get("approved_assets", []),
+            "messages": [],
+            "status": "discovery",
+            "created_at": _now(),
+            "updated_at": _now(),
+        })
+        await db.freebuild_projects.update_one(
+            {"id": pid},
+            {"$set": {"converted_to_app_id": app_id, "updated_at": _now()}},
+        )
+        return {"ok": True, "app_id": app_id}
 
     return router
 

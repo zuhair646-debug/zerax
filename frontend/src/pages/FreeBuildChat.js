@@ -4,7 +4,8 @@ import {
   Globe, Send, Loader2, Sparkles, Eye, ArrowRight, ArrowLeft,
   CheckCircle2, Check, Image as ImageIcon, FolderOpen, Code,
   Monitor, Smartphone, Trash2, MessageSquare, Paperclip, X,
-  ZoomIn, Reply, Download, ExternalLink,
+  ZoomIn, Reply, Download, ExternalLink, Rocket, Smartphone as Phone,
+  Crown,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import ReactMarkdown from 'react-markdown';
@@ -450,6 +451,198 @@ function OptionsPicker({ messageIdx, options, savedAnswer, onConfirm }) {
 }
 
 // ─────────────────────────────────────────────────────────────
+// FINALIZE PROJECT MODAL (Hosting / Take Code / Guided)
+// ─────────────────────────────────────────────────────────────
+function FinalizeModal({ open, projectId, projectName, onClose, onConverted }) {
+  const [paths, setPaths] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [busy, setBusy] = useState('');
+
+  useEffect(() => {
+    if (!open) return undefined;
+    let cancelled = false;
+    const load = async () => {
+      setLoading(true);
+      try {
+        const token = localStorage.getItem('token');
+        const r = await fetch(`${API}/api/freebuild-chat/project/${projectId}/finalize-options`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (!r.ok) {
+          const err = await r.json().catch(() => ({}));
+          toast.error(err.detail || 'يجب إكمال الموقع أولاً');
+          if (!cancelled) onClose();
+          return;
+        }
+        const d = await r.json();
+        if (!cancelled) setPaths(d.paths || []);
+      } finally { if (!cancelled) setLoading(false); }
+    };
+    load();
+    return () => { cancelled = true; };
+  }, [open, projectId, onClose]);
+
+  const choose = async (pathId, priceUsd) => {
+    if (priceUsd > 0) {
+      toast.info(`💳 الدفع لباقة "${pathId}" — قريباً (سيتم ربط Lemon Squeezy)`);
+      return;
+    }
+    setBusy(pathId);
+    try {
+      // For host_with_us: future call to /publish endpoint
+      toast.success('🚀 موقعك سينشر على Zitex قريباً — جاري الإعداد');
+    } finally {
+      setBusy('');
+    }
+  };
+
+  const convertToApp = async () => {
+    setBusy('convert');
+    try {
+      const token = localStorage.getItem('token');
+      const r = await fetch(`${API}/api/freebuild-chat/project/${projectId}/convert-to-app`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const d = await r.json();
+      if (!r.ok) throw new Error(d.detail || 'فشل التحويل');
+      toast.success('✓ تم نقل المشروع لقسم التطبيقات');
+      onConverted?.(d.app_id);
+    } catch (e) {
+      toast.error(e.message);
+    } finally { setBusy(''); }
+  };
+
+  if (!open) return null;
+  return (
+    <div className="fixed inset-0 z-[55] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto" onClick={onClose}>
+      <div
+        className="bg-zinc-900 border border-emerald-500/30 rounded-2xl max-w-5xl w-full my-8 shadow-2xl shadow-emerald-500/10"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="p-5 border-b border-white/10 flex items-center justify-between">
+          <div>
+            <h3 className="text-xl font-black flex items-center gap-2">
+              <Rocket className="w-6 h-6 text-emerald-400" />
+              <span>إنهاء المشروع</span>
+            </h3>
+            <p className="text-xs text-zinc-500 mt-1">{projectName} — اختر كيف تكمل من هنا</p>
+          </div>
+          <button type="button" onClick={onClose} className="text-zinc-400 hover:text-white p-2" data-testid="finalize-close">
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+
+        <div className="p-5">
+          {loading ? (
+            <div className="text-center py-12 text-zinc-400">
+              <Loader2 className="w-6 h-6 animate-spin mx-auto mb-2" />
+              <p className="text-sm">جاري التحميل...</p>
+            </div>
+          ) : (
+            <div className="grid md:grid-cols-3 gap-4">
+              {paths.map((p, i) => {
+                const isFree = p.price_usd === 0;
+                return (
+                  <div
+                    key={p.id}
+                    data-testid={`finalize-path-${p.id}`}
+                    className={`relative rounded-xl border p-5 flex flex-col transition-all hover:scale-[1.02] ${
+                      isFree
+                        ? 'border-emerald-400/60 bg-gradient-to-b from-emerald-500/15 to-zinc-900'
+                        : i === 2
+                        ? 'border-amber-400/40 bg-gradient-to-b from-amber-500/10 to-zinc-900'
+                        : 'border-cyan-400/40 bg-gradient-to-b from-cyan-500/10 to-zinc-900'
+                    }`}
+                  >
+                    {isFree && (
+                      <div className="absolute -top-3 left-1/2 -translate-x-1/2 px-3 py-1 rounded-full bg-emerald-500 text-black text-[10px] font-black">
+                        ✨ الأنسب
+                      </div>
+                    )}
+                    {i === 2 && (
+                      <div className="absolute -top-3 left-1/2 -translate-x-1/2 px-3 py-1 rounded-full bg-amber-500 text-black text-[10px] font-black flex items-center gap-1">
+                        <Crown className="w-3 h-3" /> الأكثر طلباً
+                      </div>
+                    )}
+                    <h4 className="text-base font-black mb-1">{p.title}</h4>
+                    <p className="text-3xl font-black mb-1">
+                      {isFree ? (
+                        <span className="text-emerald-300">مجاناً</span>
+                      ) : (
+                        <span className="text-white">${p.price_usd}</span>
+                      )}
+                    </p>
+                    <p className="text-xs text-zinc-400 mb-4 leading-relaxed">{p.subtitle}</p>
+                    <ul className="space-y-1.5 mb-5 text-xs text-zinc-300 flex-1">
+                      {p.features.map((f, j) => (
+                        <li key={j} className="flex items-start gap-2">
+                          <Check className="w-3.5 h-3.5 text-emerald-400 shrink-0 mt-0.5" />
+                          <span>{f}</span>
+                        </li>
+                      ))}
+                    </ul>
+                    <button
+                      type="button"
+                      onClick={() => choose(p.id, p.price_usd)}
+                      disabled={busy === p.id}
+                      data-testid={`finalize-btn-${p.id}`}
+                      className={`w-full py-2.5 rounded-lg font-black text-sm transition-all ${
+                        isFree
+                          ? 'bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-400 hover:to-teal-500 text-black'
+                          : i === 2
+                          ? 'bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-400 hover:to-orange-500 text-black'
+                          : 'bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-black'
+                      }`}
+                    >
+                      {busy === p.id ? <Loader2 className="w-4 h-4 animate-spin mx-auto" /> : p.cta}
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+
+        {/* Convert to App */}
+        <div className="p-5 border-t border-white/10 bg-gradient-to-r from-violet-500/5 to-fuchsia-500/5 rounded-b-2xl">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+            <div className="flex items-center gap-3">
+              <div className="w-12 h-12 rounded-xl bg-violet-500/20 flex items-center justify-center">
+                <Phone className="w-6 h-6 text-violet-300" />
+              </div>
+              <div>
+                <h4 className="font-black text-base flex items-center gap-2">
+                  حوّل الموقع لتطبيق موبايل
+                  <span className="text-[9px] bg-violet-500/30 text-violet-200 px-1.5 py-0.5 rounded">BETA</span>
+                </h4>
+                <p className="text-xs text-zinc-400 mt-0.5">ينتقل المشروع لقسم التطبيقات + ذكاء متخصص يكمل التحويل</p>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={convertToApp}
+              disabled={busy === 'convert'}
+              data-testid="convert-to-app-btn"
+              className="px-5 py-2.5 rounded-lg bg-gradient-to-r from-violet-500 to-fuchsia-600 hover:from-violet-400 hover:to-fuchsia-500 text-white font-black text-sm flex items-center gap-2 shadow-lg shadow-violet-500/20 whitespace-nowrap"
+            >
+              {busy === 'convert' ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                <>
+                  <Phone className="w-4 h-4" />
+                  <span>تحويل لتطبيق</span>
+                </>
+              )}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────
 // STEP 2: Chat Workspace (Game Studio style)
 // ─────────────────────────────────────────────────────────────
 function ChatWorkspace({ projectId }) {
@@ -459,6 +652,7 @@ function ChatWorkspace({ projectId }) {
   const [attachments, setAttachments] = useState([]);
   const [replyToAsset, setReplyToAsset] = useState(null); // {id, type, image_url, prompt}
   const [lightboxAsset, setLightboxAsset] = useState(null);
+  const [finalizeOpen, setFinalizeOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [activePhase, setActivePhase] = useState('discovery');
   const [activeTab, setActiveTab] = useState('chat'); // chat | live | approved
@@ -628,6 +822,19 @@ function ChatWorkspace({ projectId }) {
           </div>
         </div>
         <div className="flex items-center gap-2 shrink-0">
+          {project.current_html && (
+            <button
+              type="button"
+              onClick={() => setFinalizeOpen(true)}
+              data-testid="open-finalize"
+              className="px-3 py-1.5 rounded-lg bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-400 hover:to-teal-500 text-black text-xs font-black flex items-center gap-1.5 shadow-lg shadow-emerald-500/20"
+              title="نشر / استلام / تحويل"
+            >
+              <Rocket className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">إنهاء المشروع</span>
+              <span className="sm:hidden">إنهاء</span>
+            </button>
+          )}
           <div className="px-3 py-1.5 bg-emerald-500/10 border border-emerald-500/30 rounded-lg flex items-center gap-1.5">
             <Sparkles className="w-3.5 h-3.5 text-emerald-400" />
             <span className="text-xs text-emerald-300 font-bold hidden sm:inline">من الصفر</span>
@@ -1124,6 +1331,16 @@ function ChatWorkspace({ projectId }) {
         onClose={() => setLightboxAsset(null)}
         onReply={(a) => setReplyToAsset(a)}
         onApprove={approve}
+      />
+      <FinalizeModal
+        open={finalizeOpen}
+        projectId={projectId}
+        projectName={project.name}
+        onClose={() => setFinalizeOpen(false)}
+        onConverted={(appId) => {
+          setFinalizeOpen(false);
+          toast.success(`تم النقل! ID: ${appId.slice(0, 8)}...`);
+        }}
       />
     </div>
   );
