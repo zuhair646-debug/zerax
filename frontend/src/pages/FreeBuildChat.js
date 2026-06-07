@@ -5,7 +5,7 @@ import {
   CheckCircle2, Check, Image as ImageIcon, FolderOpen, Code,
   Monitor, Smartphone, Trash2, MessageSquare, Paperclip, X,
   ZoomIn, Reply, Download, ExternalLink, Rocket, Smartphone as Phone,
-  Crown,
+  Crown, Github, Globe2, Cloud, Link2, Copy, FileText, Plug,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import ReactMarkdown from 'react-markdown';
@@ -453,7 +453,7 @@ function OptionsPicker({ messageIdx, options, savedAnswer, onConfirm }) {
 // ─────────────────────────────────────────────────────────────
 // FINALIZE PROJECT MODAL (Hosting / Take Code / Guided)
 // ─────────────────────────────────────────────────────────────
-function FinalizeModal({ open, projectId, projectName, onClose, onConverted }) {
+function FinalizeModal({ open, projectId, projectName, onClose, onConverted, onUnlocked }) {
   const [paths, setPaths] = useState([]);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState('');
@@ -483,17 +483,29 @@ function FinalizeModal({ open, projectId, projectName, onClose, onConverted }) {
   }, [open, projectId, onClose]);
 
   const choose = async (pathId, priceUsd) => {
-    if (priceUsd > 0) {
-      toast.info(`💳 الدفع لباقة "${pathId}" — قريباً (سيتم ربط Lemon Squeezy)`);
+    if (pathId === 'host_with_us') {
+      toast.success('🚀 موقعك سينشر على Zitex قريباً — جاري الإعداد');
       return;
     }
+    // Paid tiers: unlock (MOCKED — Lemon Squeezy wiring later)
+    const tier = pathId === 'take_code_guided' ? 'guided' : 'code_only';
     setBusy(pathId);
     try {
-      // For host_with_us: future call to /publish endpoint
-      toast.success('🚀 موقعك سينشر على Zitex قريباً — جاري الإعداد');
-    } finally {
-      setBusy('');
-    }
+      const token = localStorage.getItem('token');
+      const fd = new FormData();
+      fd.append('tier', tier);
+      const r = await fetch(`${API}/api/freebuild-chat/project/${projectId}/unlock`, {
+        method: 'POST', headers: { Authorization: `Bearer ${token}` }, body: fd,
+      });
+      if (!r.ok) {
+        const err = await r.json().catch(() => ({}));
+        throw new Error(err.detail || 'فشل التفعيل');
+      }
+      toast.success(`✅ تم تفعيل باقة ${priceUsd > 0 ? `$${priceUsd}` : ''} — اربط حساباتك`);
+      onUnlocked?.();
+    } catch (e) {
+      toast.error(e.message);
+    } finally { setBusy(''); }
   };
 
   const convertToApp = async () => {
@@ -643,6 +655,356 @@ function FinalizeModal({ open, projectId, projectName, onClose, onConverted }) {
 }
 
 // ─────────────────────────────────────────────────────────────
+// CONNECTIONS PANEL (GitHub / Vercel / Cloudflare / Domain)
+// ─────────────────────────────────────────────────────────────
+const PROVIDERS = [
+  {
+    id: 'github',
+    title: 'GitHub',
+    icon: Github,
+    color: 'from-gray-700 to-gray-900',
+    accent: 'gray',
+    docs: 'https://github.com/settings/tokens?type=beta',
+    docsLabel: 'احصل على Personal Access Token',
+    hint: 'الصلاحيات: Contents (Read/Write) + Workflows. اللي تتم منه عمليات النشر.',
+    placeholder: 'ghp_xxxxxxxxxxxxxxxxx',
+    needsExtra: false,
+  },
+  {
+    id: 'vercel',
+    title: 'Vercel',
+    icon: Globe2,
+    color: 'from-black to-zinc-700',
+    accent: 'zinc',
+    docs: 'https://vercel.com/account/tokens',
+    docsLabel: 'احصل على Vercel API Token',
+    hint: 'لنشر الموقع تلقائياً مع CDN عالمي.',
+    placeholder: 'vercel_xxxxxxxxxxxx',
+    needsExtra: false,
+  },
+  {
+    id: 'cloudflare',
+    title: 'Cloudflare',
+    icon: Cloud,
+    color: 'from-orange-500 to-amber-600',
+    accent: 'orange',
+    docs: 'https://dash.cloudflare.com/profile/api-tokens',
+    docsLabel: 'احصل على API Token',
+    hint: 'لإدارة DNS والدومين والـ Pages.',
+    placeholder: 'cf_xxxxxxxxxxxxxxxx',
+    needsExtra: false,
+  },
+  {
+    id: 'domain',
+    title: 'دومين مخصص',
+    icon: Link2,
+    color: 'from-emerald-500 to-teal-600',
+    accent: 'emerald',
+    docs: null,
+    docsLabel: '',
+    hint: 'ادخل الدومين اللي تبي تربطه (مثل: myshop.com).',
+    placeholder: 'example.com',
+    needsExtra: false,
+  },
+];
+
+function ConnectionsPanel({ open, projectId, onClose }) {
+  const [connections, setConnections] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [drafts, setDrafts] = useState({}); // {github: 'ghp_...', vercel: '...'}
+  const [busy, setBusy] = useState('');
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const token = localStorage.getItem('token');
+      const r = await fetch(`${API}/api/freebuild-chat/project/${projectId}/connections`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (r.ok) {
+        const d = await r.json();
+        setConnections(d.connections || []);
+      }
+    } finally { setLoading(false); }
+  }, [projectId]);
+
+  useEffect(() => {
+    if (!open) return undefined;
+    let cancelled = false;
+    (async () => { if (!cancelled) await load(); })();
+    return () => { cancelled = true; };
+  }, [open, load]);
+
+  const save = async (providerId) => {
+    const token = (drafts[providerId] || '').trim();
+    if (!token) { toast.error('أدخل القيمة أولاً'); return; }
+    setBusy(providerId);
+    try {
+      const authToken = localStorage.getItem('token');
+      const fd = new FormData();
+      fd.append('token', token);
+      const r = await fetch(`${API}/api/freebuild-chat/project/${projectId}/connections/${providerId}`, {
+        method: 'POST', headers: { Authorization: `Bearer ${authToken}` }, body: fd,
+      });
+      if (!r.ok) {
+        const err = await r.json().catch(() => ({}));
+        throw new Error(err.detail || 'فشل الحفظ');
+      }
+      toast.success(`✅ تم ربط ${providerId}`);
+      setDrafts((d) => ({ ...d, [providerId]: '' }));
+      await load();
+    } catch (e) {
+      toast.error(e.message);
+    } finally { setBusy(''); }
+  };
+
+  const remove = async (providerId) => {
+    if (!window.confirm('إلغاء الربط؟')) return;
+    setBusy(`del-${providerId}`);
+    try {
+      const authToken = localStorage.getItem('token');
+      await fetch(`${API}/api/freebuild-chat/project/${projectId}/connections/${providerId}`, {
+        method: 'DELETE', headers: { Authorization: `Bearer ${authToken}` },
+      });
+      await load();
+    } finally { setBusy(''); }
+  };
+
+  if (!open) return null;
+  return (
+    <div className="fixed inset-0 z-[58] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto" onClick={onClose}>
+      <div className="bg-zinc-900 border border-emerald-500/30 rounded-2xl max-w-4xl w-full my-8 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+        <div className="p-5 border-b border-white/10 flex items-center justify-between">
+          <div>
+            <h3 className="text-xl font-black flex items-center gap-2">
+              <Plug className="w-6 h-6 text-emerald-400" />
+              <span>اتصالات النشر</span>
+            </h3>
+            <p className="text-xs text-zinc-500 mt-1">اربط حساباتك وخلي الذكاء يتولى النشر بهدوء خطوة بخطوة</p>
+          </div>
+          <button type="button" onClick={onClose} className="text-zinc-400 hover:text-white p-2" data-testid="connections-close">
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+
+        <div className="p-5 space-y-3">
+          {loading ? (
+            <div className="text-center py-10 text-zinc-400">
+              <Loader2 className="w-6 h-6 animate-spin mx-auto mb-2" />
+              <p className="text-sm">جاري التحميل...</p>
+            </div>
+          ) : PROVIDERS.map((p) => {
+            const Icon = p.icon;
+            const existing = connections.find((c) => c.provider === p.id);
+            const draft = drafts[p.id] || '';
+            return (
+              <div key={p.id} data-testid={`conn-card-${p.id}`} className={`rounded-xl border bg-gradient-to-l ${p.color} bg-opacity-10 p-4`}>
+                <div className="flex items-center justify-between gap-3 mb-2">
+                  <div className="flex items-center gap-2.5">
+                    <div className="w-9 h-9 rounded-lg bg-black/40 flex items-center justify-center shrink-0">
+                      <Icon className="w-5 h-5 text-white" />
+                    </div>
+                    <div>
+                      <h4 className="font-black text-sm">{p.title}</h4>
+                      <p className="text-[11px] text-zinc-300/70">{p.hint}</p>
+                    </div>
+                  </div>
+                  {existing ? (
+                    <div className="flex items-center gap-2 shrink-0">
+                      <span className="px-2 py-1 rounded-full bg-emerald-500/20 border border-emerald-400/40 text-emerald-200 text-[10px] font-bold flex items-center gap-1">
+                        <Check className="w-3 h-3" />
+                        {existing.mask}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => remove(p.id)}
+                        disabled={busy === `del-${p.id}`}
+                        data-testid={`conn-remove-${p.id}`}
+                        className="text-zinc-400 hover:text-red-400 p-1"
+                        aria-label="إلغاء"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  ) : (
+                    <span className="px-2 py-1 rounded-full bg-zinc-700/40 border border-white/10 text-zinc-400 text-[10px] font-bold">
+                      غير مربوط
+                    </span>
+                  )}
+                </div>
+                {!existing && (
+                  <div className="mt-3 space-y-2">
+                    <div className="flex gap-2">
+                      <input
+                        type="password"
+                        placeholder={p.placeholder}
+                        value={draft}
+                        onChange={(e) => setDrafts((d) => ({ ...d, [p.id]: e.target.value }))}
+                        data-testid={`conn-input-${p.id}`}
+                        className="flex-1 bg-black/40 border border-white/10 rounded-lg px-3 py-2 text-sm text-emerald-100 font-mono outline-none focus:border-emerald-400"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => save(p.id)}
+                        disabled={busy === p.id || !draft.trim()}
+                        data-testid={`conn-save-${p.id}`}
+                        className="px-4 py-2 rounded-lg bg-emerald-500 hover:bg-emerald-400 disabled:bg-zinc-700 disabled:text-zinc-500 text-black text-xs font-black flex items-center gap-1.5"
+                      >
+                        {busy === p.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : 'احفظ'}
+                      </button>
+                    </div>
+                    {p.docs && (
+                      <a
+                        href={p.docs}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="inline-flex items-center gap-1.5 text-[11px] text-cyan-400 hover:text-cyan-300 underline"
+                      >
+                        <ExternalLink className="w-3 h-3" /> {p.docsLabel}
+                      </a>
+                    )}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+
+        <div className="p-4 border-t border-white/10 bg-black/30 rounded-b-2xl text-xs text-zinc-400">
+          🔐 جميع المفاتيح تُحفظ مشفّرة في قاعدة البيانات (Fernet AES). لا يتم عرضها بعد الحفظ.
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────
+// CODE ACTIONS PANEL (after code is unlocked)
+// ─────────────────────────────────────────────────────────────
+function CodeActions({ project, projectId, onOpenConnections }) {
+  const [pushing, setPushing] = useState(false);
+  const [repoName, setRepoName] = useState(() =>
+    (project.name || 'zitex-site')
+      .toLowerCase()
+      .replace(/[^a-z0-9\s-]/g, '')
+      .trim()
+      .replace(/\s+/g, '-')
+      .slice(0, 40) || 'zitex-site'
+  );
+
+  const copyAll = async () => {
+    try {
+      await navigator.clipboard.writeText(project.current_html || '');
+      toast.success('✓ تم نسخ الكود الكامل');
+    } catch {
+      toast.error('فشل النسخ');
+    }
+  };
+
+  const downloadHtml = () => {
+    const blob = new Blob([project.current_html || ''], { type: 'text/html;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${repoName || 'site'}.html`;
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+    toast.success('✓ تم التنزيل');
+  };
+
+  const exportPdf = () => {
+    // Print-to-PDF via opening the iframe content with auto print
+    const win = window.open('', '_blank');
+    if (!win) { toast.error('السماح بالنوافذ المنبثقة مطلوب'); return; }
+    win.document.write(project.current_html || '');
+    win.document.close();
+    setTimeout(() => { try { win.print(); } catch (e) { /* user can press Cmd+P */ } }, 700);
+    toast.info('اختر "حفظ كـ PDF" من نافذة الطباعة');
+  };
+
+  const pushToGithub = async () => {
+    if (!repoName.trim()) { toast.error('أدخل اسم المستودع'); return; }
+    setPushing(true);
+    try {
+      const token = localStorage.getItem('token');
+      const fd = new FormData();
+      fd.append('repo_name', repoName.trim());
+      fd.append('private', 'false');
+      const r = await fetch(`${API}/api/freebuild-chat/project/${projectId}/push-to-github`, {
+        method: 'POST', headers: { Authorization: `Bearer ${token}` }, body: fd,
+      });
+      const d = await r.json();
+      if (!r.ok) {
+        if ((d.detail || '').includes('ربط GitHub')) {
+          toast.error('اربط GitHub أولاً من زر "الاتصالات"');
+          onOpenConnections?.();
+          return;
+        }
+        throw new Error(d.detail || 'فشل النشر');
+      }
+      toast.success('🚀 تم نشر الموقع على GitHub!');
+      window.open(d.repo_url, '_blank', 'noopener,noreferrer');
+    } catch (e) {
+      toast.error(e.message);
+    } finally { setPushing(false); }
+  };
+
+  return (
+    <div className="rounded-xl border border-amber-500/30 bg-gradient-to-r from-amber-500/5 to-orange-500/5 p-3" data-testid="code-actions">
+      <div className="flex items-center justify-between mb-2.5">
+        <h4 className="text-sm font-black text-amber-200 flex items-center gap-2">
+          <Crown className="w-4 h-4 text-amber-400" /> <span>أدوات الاستقلالية</span>
+        </h4>
+        <button
+          type="button"
+          onClick={onOpenConnections}
+          data-testid="open-connections-from-actions"
+          className="text-[11px] text-cyan-400 hover:text-cyan-300 flex items-center gap-1"
+        >
+          <Plug className="w-3 h-3" /> الاتصالات
+        </button>
+      </div>
+      <div className="flex flex-wrap gap-2 mb-3">
+        <button type="button" onClick={copyAll} data-testid="code-copy-btn"
+          className="px-3 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-zinc-200 text-xs font-bold flex items-center gap-1.5">
+          <Copy className="w-3.5 h-3.5" /> نسخ الكود
+        </button>
+        <button type="button" onClick={downloadHtml} data-testid="code-download-btn"
+          className="px-3 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-zinc-200 text-xs font-bold flex items-center gap-1.5">
+          <Download className="w-3.5 h-3.5" /> تنزيل HTML
+        </button>
+        <button type="button" onClick={exportPdf} data-testid="code-pdf-btn"
+          className="px-3 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-zinc-200 text-xs font-bold flex items-center gap-1.5">
+          <FileText className="w-3.5 h-3.5" /> PDF
+        </button>
+      </div>
+      <div className="flex gap-2 items-center">
+        <Github className="w-4 h-4 text-zinc-400 shrink-0" />
+        <input
+          type="text"
+          placeholder="اسم المستودع"
+          value={repoName}
+          onChange={(e) => setRepoName(e.target.value)}
+          data-testid="github-repo-input"
+          className="flex-1 bg-black/40 border border-white/10 rounded-lg px-3 py-1.5 text-xs font-mono outline-none focus:border-emerald-400"
+        />
+        <button type="button" onClick={pushToGithub} disabled={pushing}
+          data-testid="push-to-github-btn"
+          className="px-3 py-1.5 rounded-lg bg-gradient-to-r from-zinc-700 to-zinc-900 hover:from-zinc-600 hover:to-zinc-800 text-white text-xs font-bold flex items-center gap-1.5">
+          {pushing ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Github className="w-3.5 h-3.5" />}
+          <span>ادفع لـ GitHub</span>
+        </button>
+      </div>
+      {project.github_repo_url && (
+        <p className="mt-2 text-[11px] text-emerald-400">
+          ✓ آخر دفعة: <a href={project.github_repo_url} target="_blank" rel="noreferrer" className="underline hover:text-emerald-300">{project.github_repo_url.replace('https://github.com/', '')}</a>
+        </p>
+      )}
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────
 // STEP 2: Chat Workspace (Game Studio style)
 // ─────────────────────────────────────────────────────────────
 function ChatWorkspace({ projectId }) {
@@ -653,6 +1015,7 @@ function ChatWorkspace({ projectId }) {
   const [replyToAsset, setReplyToAsset] = useState(null); // {id, type, image_url, prompt}
   const [lightboxAsset, setLightboxAsset] = useState(null);
   const [finalizeOpen, setFinalizeOpen] = useState(false);
+  const [connectionsOpen, setConnectionsOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [activePhase, setActivePhase] = useState('discovery');
   const [activeTab, setActiveTab] = useState('chat'); // chat | live | approved
@@ -822,6 +1185,18 @@ function ChatWorkspace({ projectId }) {
           </div>
         </div>
         <div className="flex items-center gap-2 shrink-0">
+          {project.code_unlocked && (
+            <button
+              type="button"
+              onClick={() => setConnectionsOpen(true)}
+              data-testid="open-connections"
+              className="px-3 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 border border-emerald-400/30 text-emerald-200 text-xs font-bold flex items-center gap-1.5"
+              title="ربط GitHub / Vercel / Cloudflare"
+            >
+              <Plug className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">الاتصالات</span>
+            </button>
+          )}
           {project.current_html && (
             <button
               type="button"
@@ -1145,14 +1520,21 @@ function ChatWorkspace({ projectId }) {
                   </div>
                 </div>
               </div>
-              <div className="flex-1 overflow-auto p-4 flex items-start justify-center">
+              <div className="flex-1 overflow-auto p-4 flex items-start justify-center flex-col gap-3">
+                {project.code_unlocked && (
+                  <CodeActions
+                    project={project}
+                    projectId={projectId}
+                    onOpenConnections={() => setConnectionsOpen(true)}
+                  />
+                )}
                 {project.current_html ? (
                   <iframe
                     title="Live Preview"
                     data-testid="preview-iframe"
                     srcDoc={project.current_html}
                     sandbox="allow-scripts allow-same-origin"
-                    className={`bg-white rounded-lg shadow-2xl border border-white/10 transition-all ${previewMode === 'mobile' ? 'w-[375px]' : 'w-full max-w-5xl'}`}
+                    className={`bg-white rounded-lg shadow-2xl border border-white/10 transition-all ${previewMode === 'mobile' ? 'w-[375px] self-center' : 'w-full max-w-5xl self-center'}`}
                     style={{ height: '100%', minHeight: '600px' }}
                   />
                 ) : (
@@ -1341,6 +1723,19 @@ function ChatWorkspace({ projectId }) {
           setFinalizeOpen(false);
           toast.success(`تم النقل! ID: ${appId.slice(0, 8)}...`);
         }}
+        onUnlocked={async () => {
+          // Refresh project to pick up code_unlocked flag
+          const token = localStorage.getItem('token');
+          const pr = await fetch(`${API}/api/freebuild-chat/project/${projectId}`, { headers: { Authorization: `Bearer ${token}` } });
+          if (pr.ok) setProject(await pr.json());
+          setFinalizeOpen(false);
+          setConnectionsOpen(true);
+        }}
+      />
+      <ConnectionsPanel
+        open={connectionsOpen}
+        projectId={projectId}
+        onClose={() => setConnectionsOpen(false)}
       />
     </div>
   );

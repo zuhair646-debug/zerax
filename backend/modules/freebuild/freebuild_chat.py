@@ -8,13 +8,42 @@ import re
 import uuid
 import logging
 import asyncio
+import hashlib
 from datetime import datetime, timezone
 from typing import Optional, List, Dict, Any
 from fastapi import APIRouter, HTTPException, Depends, Form, UploadFile, File
 from pydantic import BaseModel
 import base64
+from cryptography.fernet import Fernet, InvalidToken
 
 logger = logging.getLogger(__name__)
+
+
+def _get_fernet() -> Fernet:
+    """Derive a deterministic Fernet from JWT_SECRET (already a strong secret).
+    Tokens stored encrypted at rest in MongoDB."""
+    seed = os.environ.get("JWT_SECRET", "fallback-dev-secret-do-not-use")
+    key = base64.urlsafe_b64encode(hashlib.sha256(seed.encode()).digest())
+    return Fernet(key)
+
+
+def _enc(plain: str) -> str:
+    return _get_fernet().encrypt(plain.encode()).decode()
+
+
+def _dec(cipher: str) -> Optional[str]:
+    try:
+        return _get_fernet().decrypt(cipher.encode()).decode()
+    except (InvalidToken, ValueError):
+        return None
+
+
+def _mask(token: str) -> str:
+    if not token:
+        return ""
+    if len(token) <= 8:
+        return "•••"
+    return f"{token[:4]}••••••{token[-4:]}"
 
 # ─── Website types (like game types) ───
 WEBSITE_TYPES = [
@@ -315,10 +344,48 @@ def make_freebuild_chat_router(db, get_current_user):
                 if a.get("image_url"):
                     assets_for_use += f'  • {a["type"]}: "{a["prompt"][:50]}" → {a["image_url"]}\n'
 
+        # Connection / deployment context (only in guided independence mode)
+        guided_ctx = ""
+        if proj.get("code_unlocked") and proj.get("tier") == "guided":
+            conns = await db.freebuild_connections.find(
+                {"project_id": pid, "user_id": user["user_id"]},
+                {"_id": 0, "provider": 1, "mask": 1, "extra": 1},
+            ).to_list(length=10)
+            conn_map = {c["provider"]: c for c in conns}
+            guided_ctx = (
+                "\n\n🚀 وضع الاستقلالية المُرشَدة (Premium Guided $99):\n"
+                "العميل اشترى باقة الإرشاد الكامل. وظيفتك الآن مرشد نشر فعلي خطوة بخطوة.\n"
+                "📋 حالة الاتصالات الحالية:\n"
+                f"  • GitHub: {'✅ مربوط (' + conn_map['github']['mask'] + ')' if 'github' in conn_map else '❌ غير مربوط — اطلب من العميل ربطه من زر الاتصالات'}\n"
+                f"  • Vercel: {'✅ مربوط (' + conn_map['vercel']['mask'] + ')' if 'vercel' in conn_map else '❌ غير مربوط'}\n"
+                f"  • Cloudflare: {'✅ مربوط (' + conn_map['cloudflare']['mask'] + ')' if 'cloudflare' in conn_map else '❌ غير مربوط'}\n"
+                f"  • Domain: {'✅ ' + conn_map['domain'].get('extra', '') if 'domain' in conn_map else '❌ غير محدد'}\n"
+                "\n"
+                "🎯 خطوات الإرشاد التدريجية (بطيء ومنظم، لا تستعجل):\n"
+                "1. تأكد من ربط GitHub أولاً — اشرح للعميل كيف يولّد PAT (Personal Access Token):\n"
+                "   - يدخل: https://github.com/settings/tokens?type=beta → Generate new token\n"
+                "   - الصلاحيات المطلوبة: Contents (Read/Write) + Workflows (Read/Write)\n"
+                "   - يلصق التوكن في 'إعدادات الاتصالات' (سيظهر زر أعلى الشات)\n"
+                "2. بعد ربط GitHub، اقترح اسم للمستودع واطلب الموافقة، ثم سأل العميل يضغط زر 'ادفع لـ GitHub' في تبويب المعاينة الحية.\n"
+                "3. بعد رفع الكود، أرشده لتفعيل GitHub Pages أو ربط Vercel.\n"
+                "4. لما يطلب دومين مخصص، اطلب منه ربط Cloudflare token وأرشده لإعداد DNS records.\n"
+                "5. اعطه فيديو-مرجعي أو screenshot وصفية لكل خطوة (وصف بالكلمات).\n"
+                "✋ تذكير: لا تستعجل! اشرح كل خطوة بهدوء وتأكد من فهم العميل قبل الانتقال.\n"
+                "إذا العميل بدا متعجلاً، ذكّره بفائدة كل خطوة.\n"
+            )
+        elif proj.get("code_unlocked"):
+            guided_ctx = (
+                "\n\n💻 وضع استلام الكود ($49):\n"
+                "العميل اشترى الكود فقط — هو مبرمج محترف لا يحتاج إرشاد طويل. كن مختصراً وموجزاً.\n"
+                "يقدر يستعمل أزرار 'نسخ الكود' و 'تحميل HTML' و 'دفع لـ GitHub' (إذا ربط token).\n"
+                "ركّز على إجابات تقنية مختصرة فقط لما يسأل.\n"
+            )
+
         extra_ctx = (
             f"اسم المشروع: {proj['name']}\n"
             f"وصف المشروع: {proj['description'] or '(لم يحدد العميل وصفاً بعد — اسأله ودَوّن)'}\n"
-            f"{assets_for_use}\n"
+            f"{assets_for_use}"
+            f"{guided_ctx}\n"
             "📌 بروتوكول الإنشاء من الصفر (مهم جداً):\n"
             "1. ابدأ بالاستماع — اسأل العميل عن: نشاطه/فكرته، جمهوره المستهدف، الإحساس المطلوب، أمثلة ملهمة.\n"
             "2. اقترح 2-3 اتجاهات تصميم مختلفة (ألوان/typography/تخطيط) قبل ما تنفذ شي.\n"
@@ -578,6 +645,151 @@ def make_freebuild_chat_router(db, get_current_user):
             {"$set": {"converted_to_app_id": app_id, "updated_at": _now()}},
         )
         return {"ok": True, "app_id": app_id}
+
+    # ===== INDEPENDENCE TOOLKIT =====
+    # Unlock the code/independence tier (mocked payment — wire Lemon Squeezy later)
+    @router.post("/project/{pid}/unlock")
+    async def unlock_independence(
+        pid: str,
+        tier: str = Form(...),  # "code_only" ($49) | "guided" ($99)
+        user=Depends(get_current_user),
+    ):
+        if tier not in ("code_only", "guided"):
+            raise HTTPException(400, "tier غير صالح")
+        r = await db.freebuild_projects.update_one(
+            {"id": pid, "user_id": user["user_id"]},
+            {"$set": {
+                "code_unlocked": True,
+                "tier": tier,
+                "unlocked_at": _now(),
+                "updated_at": _now(),
+            }},
+        )
+        if r.matched_count == 0:
+            raise HTTPException(404)
+        return {"ok": True, "tier": tier}
+
+    # Save a deployment provider token (encrypted at rest)
+    @router.post("/project/{pid}/connections/{provider}")
+    async def save_connection(
+        pid: str,
+        provider: str,
+        token: str = Form(...),
+        extra: str = Form(default=""),
+        user=Depends(get_current_user),
+    ):
+        if provider not in ("github", "vercel", "cloudflare", "domain"):
+            raise HTTPException(400, "provider غير مدعوم")
+        proj = await db.freebuild_projects.find_one({"id": pid, "user_id": user["user_id"]}, {"_id": 0, "id": 1})
+        if not proj:
+            raise HTTPException(404)
+        await db.freebuild_connections.update_one(
+            {"project_id": pid, "user_id": user["user_id"], "provider": provider},
+            {"$set": {
+                "project_id": pid,
+                "user_id": user["user_id"],
+                "provider": provider,
+                "token_enc": _enc(token.strip()),
+                "extra": extra,
+                "mask": _mask(token.strip()),
+                "updated_at": _now(),
+            }, "$setOnInsert": {"created_at": _now()}},
+            upsert=True,
+        )
+        return {"ok": True, "mask": _mask(token.strip())}
+
+    @router.get("/project/{pid}/connections")
+    async def list_connections(pid: str, user=Depends(get_current_user)):
+        cursor = db.freebuild_connections.find(
+            {"project_id": pid, "user_id": user["user_id"]},
+            {"_id": 0, "provider": 1, "mask": 1, "extra": 1, "created_at": 1, "updated_at": 1},
+        )
+        items = await cursor.to_list(length=20)
+        return {"connections": items}
+
+    @router.delete("/project/{pid}/connections/{provider}")
+    async def delete_connection(pid: str, provider: str, user=Depends(get_current_user)):
+        await db.freebuild_connections.delete_one(
+            {"project_id": pid, "user_id": user["user_id"], "provider": provider},
+        )
+        return {"ok": True}
+
+    # Push current HTML to a GitHub repo (creates if not exists, pushes index.html)
+    @router.post("/project/{pid}/push-to-github")
+    async def push_to_github(
+        pid: str,
+        repo_name: str = Form(...),
+        private: bool = Form(default=False),
+        user=Depends(get_current_user),
+    ):
+        proj = await db.freebuild_projects.find_one(
+            {"id": pid, "user_id": user["user_id"]}, {"_id": 0}
+        )
+        if not proj:
+            raise HTTPException(404)
+        if not proj.get("current_html"):
+            raise HTTPException(400, "لا يوجد HTML للنشر")
+        conn = await db.freebuild_connections.find_one(
+            {"project_id": pid, "user_id": user["user_id"], "provider": "github"},
+            {"_id": 0, "token_enc": 1},
+        )
+        if not conn:
+            raise HTTPException(400, "ربط GitHub أولاً من إعدادات الاتصالات")
+        token = _dec(conn["token_enc"]) if conn.get("token_enc") else None
+        if not token:
+            raise HTTPException(400, "GitHub token غير صالح — أعد ربطه")
+
+        import httpx
+        headers = {
+            "Authorization": f"Bearer {token}",
+            "Accept": "application/vnd.github+json",
+            "X-GitHub-Api-Version": "2022-11-28",
+        }
+        async with httpx.AsyncClient(timeout=30) as cli:
+            # 1) Get authenticated user
+            u_r = await cli.get("https://api.github.com/user", headers=headers)
+            if u_r.status_code != 200:
+                raise HTTPException(400, f"فشل التحقق من GitHub: {u_r.status_code}")
+            owner = u_r.json().get("login")
+            # 2) Create repo (or ignore if exists)
+            cr_r = await cli.post(
+                "https://api.github.com/user/repos",
+                headers=headers,
+                json={"name": repo_name, "private": private, "auto_init": True, "description": f"Built with Zitex — {proj.get('name','')}"},
+            )
+            if cr_r.status_code not in (201, 422):  # 422 = already exists
+                raise HTTPException(400, f"فشل إنشاء المستودع: {cr_r.status_code} — {cr_r.text[:120]}")
+            # 3) Get current SHA of index.html (if exists)
+            sha = None
+            get_f = await cli.get(
+                f"https://api.github.com/repos/{owner}/{repo_name}/contents/index.html",
+                headers=headers,
+            )
+            if get_f.status_code == 200:
+                sha = get_f.json().get("sha")
+            # 4) PUT index.html
+            content_b64 = base64.b64encode(proj["current_html"].encode()).decode()
+            payload = {
+                "message": f"Update from Zitex — {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M')}",
+                "content": content_b64,
+            }
+            if sha:
+                payload["sha"] = sha
+            put_r = await cli.put(
+                f"https://api.github.com/repos/{owner}/{repo_name}/contents/index.html",
+                headers=headers,
+                json=payload,
+            )
+            if put_r.status_code not in (200, 201):
+                raise HTTPException(400, f"فشل رفع الملف: {put_r.status_code} — {put_r.text[:120]}")
+
+        repo_url = f"https://github.com/{owner}/{repo_name}"
+        pages_url = f"https://{owner}.github.io/{repo_name}/"
+        await db.freebuild_projects.update_one(
+            {"id": pid},
+            {"$set": {"github_repo_url": repo_url, "updated_at": _now()}},
+        )
+        return {"ok": True, "repo_url": repo_url, "pages_url_hint": pages_url}
 
     return router
 
