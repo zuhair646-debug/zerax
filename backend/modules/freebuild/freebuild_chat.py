@@ -31,6 +31,17 @@ def _now():
     return datetime.now(timezone.utc).isoformat()
 
 
+# Pydantic models — MUST be at module level (FastAPI resolves via globals)
+class ProjectIn(BaseModel):
+    website_type: str
+    name: str
+    description: str
+
+
+class ChatIn(BaseModel):
+    message: str
+
+
 def make_freebuild_chat_router(db, get_current_user):
     router = APIRouter(prefix="/freebuild-chat", tags=["freebuild-chat"])
 
@@ -40,11 +51,6 @@ def make_freebuild_chat_router(db, get_current_user):
         return {"types": WEBSITE_TYPES}
 
     # ===== Create project =====
-    class ProjectIn(BaseModel):
-        website_type: str
-        name: str
-        description: str
-
     @router.post("/project")
     async def create_project(payload: ProjectIn, user=Depends(get_current_user)):
         wtype = next((w for w in WEBSITE_TYPES if w["id"] == payload.website_type), None)
@@ -87,9 +93,6 @@ def make_freebuild_chat_router(db, get_current_user):
         return proj
 
     # ===== Chat (the core flow — like games) =====
-    class ChatIn(BaseModel):
-        message: str
-
     @router.post("/project/{pid}/chat")
     async def chat(pid: str, payload: ChatIn, user=Depends(get_current_user)):
         proj = await db.freebuild_projects.find_one(
