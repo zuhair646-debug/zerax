@@ -465,6 +465,162 @@ def create_router(db, get_current_user, get_admin_user):
         except ValueError as e:
             raise HTTPException(status_code=402, detail=str(e))
 
+    @router.post("/lemonsqueezy-webhook")
+    async def lemonsqueezy_webhook(request: Request):
+        """🍋 Receives order_created events from Lemon Squeezy → grants credits + invoice.
+
+        LS sends events with HMAC-SHA256 signature in X-Signature header,
+        signed with the secret you set in dashboard webhook settings.
+        """
+        import hmac, hashlib
+        body_bytes = await request.body()
+        signature = request.headers.get("x-signature", "")
+        secret = os.environ.get("LEMONSQUEEZY_WEBHOOK_SECRET", "")
+        if secret:
+            expected = hmac.new(secret.encode(), body_bytes, hashlib.sha256).hexdigest()
+            if not hmac.compare_digest(expected, signature):
+                raise HTTPException(status_code=401, detail="Invalid signature")
+        try:
+            payload = await request.json()
+        except Exception:
+            raise HTTPException(status_code=400, detail="Invalid JSON")
+
+        event = (payload.get("meta") or {}).get("event_name", "")
+        if event not in ("order_created", "order_paid"):
+            return {"ok": True, "ignored": event}
+
+        # Extract order details
+        data = payload.get("data") or {}
+        attrs = data.get("attributes") or {}
+        custom_data = ((payload.get("meta") or {}).get("custom_data")) or {}
+        custom_id = custom_data.get("custom_id")
+        user_id = custom_data.get("user_id")
+        if not custom_id or not user_id:
+            log.warning(f"LS webhook missing custom data: {custom_data}")
+            return {"ok": False, "error": "missing custom data"}
+
+        # Lookup our pending order
+        order = await db.paypal_orders.find_one({"custom_id": custom_id})
+        if not order:
+            log.warning(f"LS webhook: no matching order for custom_id={custom_id}")
+            return {"ok": False, "error": "order not found"}
+        if order.get("status") == "COMPLETED":
+            return {"ok": True, "already_processed": True}
+
+        # ── Process the same way as PayPal capture ───────────
+        credits_to_add = int(order["credits_to_add"])
+        bonus_credits = 0
+        if order.get("first_purchase_bonus"):
+            bonus_credits = int(credits_to_add * FIRST_PURCHASE_BONUS_PCT / 100)
+        total_credits = credits_to_add + bonus_credits
+
+        await add_credits(
+            db, user_id, total_credits,
+            reason=f"purchase:{order['item_type']}:{order['item_id']}",
+            meta={"order_id": order["order_id"], "bonus": bonus_credits, "provider": "lemonsqueezy"},
+        )
+
+        # Activate subscription
+        if order["item_type"] == "subscription":
+            days = 365 if order["billing_cycle"] == "yearly" else 30
+            expires_at = (datetime.now(timezone.utc) + timedelta(days=days)).isoformat()
+            await db.user_subscriptions.update_many(
+                {"user_id": user_id, "active": True},
+                {"$set": {"active": False, "updated_at": datetime.now(timezone.utc).isoformat()}},
+            )
+            await db.user_subscriptions.insert_one({
+                "id": str(uuid.uuid4()),
+                "user_id": user_id,
+                "plan_id": order["item_id"],
+                "billing_cycle": order["billing_cycle"],
+                "active": True,
+                "started_at": datetime.now(timezone.utc).isoformat(),
+                "expires_at": expires_at,
+                "order_id": order["order_id"],
+                "amount_paid_usd": order["total_usd"],
+            })
+            await db.users.update_one(
+                {"id": user_id},
+                {"$set": {"plan": order["item_id"], "plan_expires_at": expires_at}},
+            )
+
+        # Promo
+        if order.get("promo_code"):
+            try:
+                await redeem_promo(db, order["promo_code"], user_id, order["order_id"], order.get("discount_usd", 0))
+            except Exception:
+                pass
+
+        # Invoice
+        invoice_number = await next_invoice_number(db)
+        now = datetime.now(timezone.utc)
+        tax_cfg = await db.pricing_config.find_one({"_key": "tax"}, {"_id": 0}) or TAX_CONFIG
+        if order["item_type"] == "subscription":
+            plan = await db.pricing_plans.find_one({"id": order["item_id"]}, {"_id": 0})
+            item_desc = f"اشتراك {plan.get('name_ar', '')} - {('سنوي' if order['billing_cycle']=='yearly' else 'شهري')}"
+        else:
+            pack = await db.credit_packs.find_one({"id": order["item_id"]}, {"_id": 0})
+            item_desc = f"حزمة {pack.get('name_ar', '')} - {pack.get('credits', 0):,} شعلة"
+
+        invoice_doc = {
+            "id": str(uuid.uuid4()),
+            "invoice_number": invoice_number,
+            "user_id": user_id,
+            "customer_name": order.get("user_name", ""),
+            "customer_email": order.get("user_email", ""),
+            "order_id": order["order_id"],
+            "provider": "lemonsqueezy",
+            "item_type": order["item_type"],
+            "item_id": order["item_id"],
+            "items": [{"desc": item_desc, "qty": 1, "unit_price": order["base_usd"], "total": order["base_usd"]}],
+            "subtotal_usd": order["base_usd"],
+            "discount_usd": order.get("discount_usd", 0),
+            "promo_code": order.get("promo_code", ""),
+            "tax_enabled": tax_cfg.get("enabled", True),
+            "tax_rate_pct": tax_cfg.get("rate_percent", 0),
+            "tax_label": tax_cfg.get("label", "ضريبة"),
+            "tax_id": tax_cfg.get("tax_id", ""),
+            "tax_usd": order.get("tax_usd", 0),
+            "total_usd": order["total_usd"],
+            "credits_added": total_credits,
+            "bonus_credits": bonus_credits,
+            "issued_at": now.isoformat(),
+            "issued_at_display": now.strftime("%Y-%m-%d %H:%M UTC"),
+            "created_at": now.isoformat(),
+        }
+        import base64 as _b64
+        pdf_bytes = generate_invoice_pdf(invoice_doc)
+        invoice_doc["pdf_b64"] = _b64.b64encode(pdf_bytes).decode("ascii")
+        invoice_doc["pdf_size_bytes"] = len(pdf_bytes)
+        await db.invoices.insert_one(invoice_doc)
+
+        await db.paypal_orders.update_one(
+            {"custom_id": custom_id},
+            {"$set": {
+                "status": "COMPLETED",
+                "captured_at": now.isoformat(),
+                "invoice_number": invoice_number,
+                "credits_added": total_credits,
+                "ls_event": event,
+                "updated_at": now.isoformat(),
+            }},
+        )
+
+        # Send email
+        try:
+            await send_invoice_email(
+                to_email=order["user_email"],
+                customer_name=order.get("user_name", "العميل"),
+                invoice_number=invoice_number,
+                pdf_bytes=pdf_bytes,
+                total_usd=order["total_usd"],
+                credits_added=total_credits,
+            )
+        except Exception as e:
+            log.warning(f"LS invoice email failed: {e}")
+
+        return {"ok": True, "credits_added": total_credits, "invoice": invoice_number}
+
     @router.get("/invoices")
     async def list_my_invoices(current_user: dict = Depends(get_current_user)):
         rows = await db.invoices.find(
