@@ -99,6 +99,82 @@ def _extract_all_html_variants(text: str) -> List[str]:
     return items
 
 
+# ─── TRUTHFULNESS VALIDATION ──────────────────────────────────────────────
+# Phrases the AI uses to claim it produced output
+_CLAIM_VARIANTS_RE = re.compile(
+    r"(تصاميم\s+(?:متعددة|مختلفة|جاهزة|مقترحة)|إليك\s+(?:\d+|عدة|تصاميم)|"
+    r"اخترت\s+لك\s+تصاميم|نزّلت\s+تصاميم|قدّمت\s+لك|تجد\s+\d+\s+تصاميم|"
+    r"3\s+(?:خيارات|تصاميم|variants)|three\s+(?:designs|options))",
+    re.IGNORECASE,
+)
+_CLAIM_UPDATE_RE = re.compile(
+    r"(حدّثت\s+المعاينة|تم\s+التحديث|أضفت\s+(?:قسم|زر|الخاصية)|نشرت|"
+    r"updated\s+the\s+preview|added\s+the\s+section|"
+    r"تم\s+(?:بنجاح|إضافة|التعديل)\s|"
+    r"خلصت\s+التحديث)",
+    re.IGNORECASE,
+)
+
+
+def _validate_truthfulness(ai_text: str) -> Optional[str]:
+    """Return error message if AI lied about producing content; None if OK."""
+    html_count = len(_extract_all_html_variants(ai_text))
+    has_opts = bool(OPT_RE.search(ai_text))
+    has_assets = bool(TAG_RE.search(ai_text))
+    claim_variants = bool(_CLAIM_VARIANTS_RE.search(ai_text))
+    claim_update = bool(_CLAIM_UPDATE_RE.search(ai_text))
+
+    # Rule 1: claimed multiple designs/variants but produced <2 HTML blocks
+    if claim_variants and html_count < 2:
+        return (
+            "ادّعيت إنك قدّمت تصاميم متعددة، لكن لم تُصدر بلوكات HTML فعلية. "
+            "أعد الرد: أرسل 3 صفحات <!DOCTYPE html>...</html> كاملة، كل واحدة في ```html ...``` block منفصل، "
+            "أو اعترف بصراحة إنك تحتاج معلومات أكثر قبل التصميم."
+        )
+    # Rule 2: claimed an update was made but produced no HTML and no asset/option tags
+    if claim_update and html_count == 0 and not has_assets and not has_opts:
+        return (
+            "ادّعيت إنك حدّثت المعاينة أو أضفت قسماً، لكن لم تُصدر أي HTML. "
+            "أعد الرد: إما أصدر بلوك ```html ...``` كامل بالتعديل، أو اعترف بصراحة إنك لم تطبّق التغيير."
+        )
+    return None
+
+
+# ─── DESIGN-DRIFT DETECTION ───────────────────────────────────────────────
+def _design_signature(html: str) -> Dict[str, Any]:
+    """Cheap structural fingerprint: counts of major sections + length bucket."""
+    if not html:
+        return {"length": 0, "sections": 0, "header": False, "footer": False, "navs": 0}
+    h = html.lower()
+    return {
+        "length": len(html),
+        "sections": h.count("<section"),
+        "divs": h.count("<div"),
+        "header": "<header" in h,
+        "footer": "<footer" in h,
+        "navs": h.count("<nav"),
+        "h1s": h.count("<h1"),
+    }
+
+
+def _structural_drift_ratio(prev_sig: Dict[str, Any], new_sig: Dict[str, Any]) -> float:
+    """0.0 = identical structure, 1.0 = completely different."""
+    if not prev_sig.get("length"):
+        return 0.0
+    keys = ["sections", "divs", "navs", "h1s"]
+    total = 0.0
+    for k in keys:
+        a, b = prev_sig.get(k, 0), new_sig.get(k, 0)
+        m = max(a, b, 1)
+        total += abs(a - b) / m
+    total /= len(keys)
+    # Length drift: if new HTML is <60% or >180% of locked, that's a red flag
+    len_ratio = new_sig.get("length", 0) / max(prev_sig.get("length", 1), 1)
+    if len_ratio < 0.6 or len_ratio > 1.8:
+        total += 0.4
+    return min(1.0, total)
+
+
 def _strip_tags(text: str) -> str:
     """Remove <<TAG: ...>> markers from displayed text and collapse blank lines."""
     cleaned = TAG_RE.sub("", text)
@@ -506,6 +582,19 @@ def make_freebuild_chat_router(db, get_current_user):
             "  ⚠️ نموذج التواصل: لم أضفه بعد — سأضيفه في الجولة القادمة\n"
             "إذا قلت 'أضفت X' بدون فعلاً تضيفه في الكود → هذي خيانة لثقة العميل. الصدق أولاً.\n"
             "إذا في عنصر معطوب أو رابط فارغ، اذكر ذلك بصراحة كـ ⚠️ بدل ما تخفيها.\n"
+            "\n"
+            "🚨 قواعد ثقة صارمة (النظام يفحصها تلقائياً ويرفض رسالتك لو كذبت):\n"
+            "1. لو قلت 'إليك 3 تصاميم' أو 'نزّلت تصاميم' → **يجب** يكون عندك 3 بلوكات ```html``` فعلية في نفس الرسالة. وإلا النظام راح يطلب منك إعادة الرد.\n"
+            "2. لو قلت 'حدّثت المعاينة' أو 'أضفت قسم X' → **يجب** يكون عندك بلوك ```html``` فعلي في نفس الرسالة. وإلا النظام يرفض ويطلب إعادة.\n"
+            "3. **قفل التصميم**: بعد ما العميل يعتمد تصميم، **لا تغيّر بنيته الكلية**. التعديلات الجائزة:\n"
+            "   - تبديل النصوص ✓\n"
+            "   - تبديل الصور ✓\n"
+            "   - تبديل الألوان الثانوية ✓\n"
+            "   - إضافة قسم جديد في نفس الستايل ✓\n"
+            "   المحظور: تغيير شامل للـlayout، إعادة ترتيب الأقسام، تغيير الـtypography الأساسية ✗\n"
+            "   لو العميل طلب تغيير جذري، اسأله صراحة: 'هذا تغيير كبير سيمسح تصميمك الحالي. متأكد؟' مع <<OPT: نعم>> <<OPT: لا>>\n"
+            "   إذا أردت تغيير التصميم كاملاً بإذن العميل، ابدأ رسالتك بـ <<DESIGN_CHANGE_REQUEST: السبب>>\n"
+            "4. قبل ما تقول 'تم' أو 'حدّثت'، **افحص بنفسك**: هل الكود اللي كتبته يحتوي فعلاً على التغيير المطلوب؟ إذا لا، صحّحه قبل الإرسال.\n"
             "7. عدّل تدريجياً — لا تعيد بناء كل شي من جديد كل مرة. حافظ على الـDesign اللي اختاره العميل.\n"
             "\n"
             "🎯 خيارات قابلة للضغط (مهم جداً لتسهيل التجربة):\n"
@@ -542,6 +631,44 @@ def make_freebuild_chat_router(db, get_current_user):
             if not result.get("ok"):
                 raise HTTPException(502, "خطأ في الذكاء الاصطناعي")
             ai_text = result["content"]
+
+            # Truthfulness gate — if AI lied about producing variants/updates, retry once
+            error_msg = _validate_truthfulness(ai_text)
+            if error_msg:
+                logger.warning(f"freebuild AI lied: {error_msg[:80]}")
+                retry_msgs = msg_list + [
+                    {"role": "assistant", "content": ai_text},
+                    {"role": "user", "content": f"⚠️ تنبيه نظام داخلي (لا تظهره للمستخدم): {error_msg}"},
+                ]
+                retry_result = await zitex_chat(
+                    agent="freebuild",
+                    messages=retry_msgs,
+                    user_id=user["user_id"],
+                    extra_context=extra_ctx,
+                    requires_vision=bool(vision_images),
+                )
+                if retry_result.get("ok"):
+                    ai_text = retry_result["content"]
+
+            # Design-drift gate — if user has an approved design and new HTML differs
+            # structurally by >55%, refuse silent rebuild without explicit user consent.
+            if proj.get("current_html"):
+                new_full = _extract_html(ai_text)
+                if new_full and "<<DESIGN_CHANGE_REQUEST" not in ai_text.upper():
+                    prev_sig = _design_signature(proj["current_html"])
+                    new_sig = _design_signature(new_full)
+                    drift = _structural_drift_ratio(prev_sig, new_sig)
+                    if drift > 0.55:
+                        logger.warning(f"freebuild design drift blocked: {drift:.2f}")
+                        ai_text = (
+                            "⚠️ لاحظت إن التعديل سيغيّر تصميمك المعتمد بشكل كبير.\n\n"
+                            "لحماية شغلك، حفظت **التصميم الأصلي كما هو** ولم أطبّق التغيير.\n\n"
+                            "هل تأكد إنك تبي تغيير جذري؟ اختر:\n"
+                            "<<OPT: نعم — أبي تصميم جديد كلياً (ابدأ من الصفر)>>\n"
+                            "<<OPT: لا — اكتفِ بتعديلات صغيرة على التصميم الحالي>>\n"
+                            "<<OPT: أرني الفرق قبل التطبيق>>"
+                        )
+
         except HTTPException:
             raise
         except Exception as e:
@@ -657,6 +784,7 @@ def make_freebuild_chat_router(db, get_current_user):
             {"$set": {
                 "current_html": variant_html,
                 "approved_design_id": variant_id,
+                "approved_design_sig": _design_signature(variant_html),
                 "updated_at": _now(),
             }},
         )
