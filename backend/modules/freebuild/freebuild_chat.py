@@ -137,6 +137,38 @@ def _validate_truthfulness(ai_text: str) -> Optional[str]:
             "ادّعيت إنك حدّثت المعاينة أو أضفت قسماً، لكن لم تُصدر أي HTML. "
             "أعد الرد: إما أصدر بلوك ```html ...``` كامل بالتعديل، أو اعترف بصراحة إنك لم تطبّق التغيير."
         )
+    # Rule 3: count mismatch — "5 تصاميم" but actually produced 3
+    count_match = re.search(
+        r"(?:قدّمت|أنشأت|صممت|نزّلت|أرسلت|إليك|اخترت\s+لك|تجد)\s+(\d+|ثلاث|أربع|خمس|ست|سبع|ثمان|تسع|عشر)\s+(?:تصاميم|تصميم|variants?|designs?|options?)",
+        ai_text,
+        re.IGNORECASE,
+    )
+    if count_match:
+        word = count_match.group(1)
+        word_map = {"ثلاث": 3, "أربع": 4, "خمس": 5, "ست": 6, "سبع": 7, "ثمان": 8, "تسع": 9, "عشر": 10}
+        try:
+            claimed = int(word) if word.isdigit() else word_map.get(word, 0)
+        except (ValueError, KeyError):
+            claimed = 0
+        if claimed >= 2 and html_count != claimed:
+            return (
+                f"ادّعيت إنك قدّمت {claimed} تصاميم لكن أنتجت {html_count} فقط. "
+                f"عدّ الـ```html``` blocks في ردك قبل إرساله. "
+                f"إما أنتج {claimed} بلوكات فعلاً، أو عدّل الرقم في النص ليطابق العدد الفعلي."
+            )
+    # Rule 4: design variants that use EXTERNAL image URLs (we forbid this for variants)
+    if html_count >= 2:
+        all_v = _extract_all_html_variants(ai_text)
+        external_urls = 0
+        for v in all_v:
+            if re.search(r'<img[^>]+src=["\']https?://(?!fonts\.googleapis\.com|cdn\.tailwindcss\.com)', v):
+                external_urls += 1
+        if external_urls > 0:
+            return (
+                f"{external_urls} من تصاميمك تحتوي على صور خارجية (URLs). "
+                "التصاميم يجب تكون مستقلة 100% — استخدم gradient backgrounds، SVG inline، أو emoji كـplaceholders. "
+                "أعد التصاميم بدون أي img src='http...' خارجي."
+            )
     return None
 
 
@@ -574,6 +606,23 @@ def make_freebuild_chat_router(db, get_current_user):
             "اجعل كل variant مختصر (200-300 سطر max) عشان كلهم يكتملوا في رسالة وحدة.\n"
             "أمثلة على متى تستخدم variants: 'وش الأنسب: تصميم 1 (داكن فاخر) ولا 2 (فاتح ناعم) ولا 3 (مينيمال)؟'\n"
             "بعد ما العميل يختار، عدّل عليه تدريجياً — لا تعيد تصميم من الصفر.\n"
+            "\n"
+            "🚫 قاعدة الـ Variants النظيفة (مهمة جداً):\n"
+            "• ❌ ممنوع تماماً استخدام صور خارجية في الـvariants — لا <img src='https://...'> ولا <img src='/api/...'>.\n"
+            "• ❌ ممنوع <<HERO:>>, <<LOGO:>>, <<BANNER_AR:>>, <<ICON:>> في رسالة الـvariants. الـvariants يجب تكون مستقلة وفورية.\n"
+            "• ✅ استخدم بدائل CSS/SVG/Emoji كـ placeholders:\n"
+            "   - خلفيات: linear-gradient, radial-gradient, conic-gradient, mesh-gradient\n"
+            "   - أشكال: SVG inline (<svg viewBox=...>...</svg>)، CSS shapes، Tailwind shapes\n"
+            "   - رموز: 🍽️🌹💎🚗🏠⚡ كـicons كبيرة بـ text-6xl\n"
+            "   - placeholder للصور: <div class='aspect-video bg-gradient-to-br from-rose-500 to-amber-500'></div>\n"
+            "• السبب: الـvariant اللي يشوفه العميل = الكود اللي ينتقل للايف **بدون تغيير**. لا انتظار لـFal.ai.\n"
+            "\n"
+            "🔢 قاعدة العدّ الذاتي (الذكاء يفحص نفسه قبل الإرسال):\n"
+            "قبل ما تكتب جملة فيها رقم تصاميم، **عُدّ بالفعل** كم ```html``` block أنت كاتبها.\n"
+            "إذا قلت 'إليك 5 تصاميم' يجب فعلاً يكون عندك 5 بلوكات HTML كاملة (وليس 3 أو 4).\n"
+            "إذا قلت 'إليك 3 تصاميم' وأنتجت 2 → النظام يرفض رسالتك ويعيدها لك.\n"
+            "الأسلم: قُل 'إليك تصاميم' (بدون رقم) ثم أنتج اللي تقدر عليه فعلاً.\n"
+            "أو: لو تبي تذكر رقم، اكتب التصاميم أولاً، ثم عُدّها، ثم اكتب الجملة برقم صحيح.\n"
             "\n"
             "✅ التحقق الذاتي (لا تكذب على العميل):\n"
             "بعد ما تنشئ أي قسم جديد في الـHTML، اختتم رسالتك بـ checklist واضح:\n"
