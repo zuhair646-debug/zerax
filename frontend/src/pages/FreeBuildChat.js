@@ -249,12 +249,23 @@ function Lightbox({ open, asset, onClose, onReply, onApprove }) {
 
       <div className="max-w-6xl w-full max-h-[90vh] flex flex-col gap-4" onClick={(e) => e.stopPropagation()}>
         <div className="flex-1 overflow-hidden rounded-2xl bg-black/40 border border-white/10 flex items-center justify-center">
-          <img
-            src={fullUrl}
-            alt={asset.prompt || 'asset'}
-            className="max-w-full max-h-[75vh] object-contain"
-            data-testid="lightbox-img"
-          />
+          {asset.html ? (
+            <iframe
+              title={asset.prompt || 'design'}
+              data-testid="lightbox-iframe"
+              srcDoc={asset.html}
+              sandbox="allow-scripts allow-same-origin"
+              className="bg-white w-full max-h-[75vh]"
+              style={{ height: '75vh' }}
+            />
+          ) : (
+            <img
+              src={fullUrl}
+              alt={asset.prompt || 'asset'}
+              className="max-w-full max-h-[75vh] object-contain"
+              data-testid="lightbox-img"
+            />
+          )}
         </div>
         <div className="flex flex-wrap items-center justify-between gap-3 bg-zinc-900/70 border border-white/10 rounded-xl p-3">
           <div className="min-w-0 flex-1">
@@ -262,15 +273,17 @@ function Lightbox({ open, asset, onClose, onReply, onApprove }) {
             <p className="text-xs text-zinc-400 truncate">{asset.prompt}</p>
           </div>
           <div className="flex items-center gap-2 shrink-0">
-            <a
-              href={fullUrl}
-              download
-              data-testid="lightbox-download"
-              className="px-3 py-2 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-zinc-200 text-xs font-bold flex items-center gap-1.5"
-            >
-              <Download className="w-3.5 h-3.5" /> تنزيل
-            </a>
-            {onApprove && !asset.approved && (
+            {!asset.html && (
+              <a
+                href={fullUrl}
+                download
+                data-testid="lightbox-download"
+                className="px-3 py-2 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-zinc-200 text-xs font-bold flex items-center gap-1.5"
+              >
+                <Download className="w-3.5 h-3.5" /> تنزيل
+              </a>
+            )}
+            {onApprove && !asset.approved && !asset.html && (
               <button
                 type="button"
                 onClick={() => { onApprove(asset.id); onClose(); }}
@@ -280,14 +293,16 @@ function Lightbox({ open, asset, onClose, onReply, onApprove }) {
                 <Check className="w-3.5 h-3.5" /> اعتمد
               </button>
             )}
-            <button
-              type="button"
-              onClick={() => { onReply(asset); onClose(); }}
-              data-testid="lightbox-reply"
-              className="px-3 py-2 rounded-lg bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-400 hover:to-teal-500 text-black text-xs font-bold flex items-center gap-1.5"
-            >
-              <Reply className="w-3.5 h-3.5" /> ردّ على الصورة
-            </button>
+            {!asset.html && (
+              <button
+                type="button"
+                onClick={() => { onReply(asset); onClose(); }}
+                data-testid="lightbox-reply"
+                className="px-3 py-2 rounded-lg bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-400 hover:to-teal-500 text-black text-xs font-bold flex items-center gap-1.5"
+              >
+                <Reply className="w-3.5 h-3.5" /> ردّ على الصورة
+              </button>
+            )}
           </div>
         </div>
       </div>
@@ -1100,6 +1115,21 @@ function ChatWorkspace({ projectId }) {
     } else toast.error('فشل');
   }, [projectId]);
 
+  const approveDesign = useCallback(async (variantId) => {
+    const token = localStorage.getItem('token');
+    const fd = new FormData();
+    fd.append('variant_id', variantId);
+    const r = await fetch(`${API}/api/freebuild-chat/project/${projectId}/approve-design`, {
+      method: 'POST', headers: { Authorization: `Bearer ${token}` }, body: fd,
+    });
+    if (r.ok) {
+      toast.success('✨ تم اعتماد التصميم — شاهده في المعاينة الحية');
+      const pr = await fetch(`${API}/api/freebuild-chat/project/${projectId}`, { headers: { Authorization: `Bearer ${token}` } });
+      if (pr.ok) setProject(await pr.json());
+      setActiveTab('live');
+    } else toast.error('فشل');
+  }, [projectId]);
+
   // Send a structured answer for an options question (called from OptionsPicker)
   const submitOptionAnswer = useCallback(async ({ picks, comment }) => {
     const token = localStorage.getItem('token');
@@ -1227,29 +1257,81 @@ function ChatWorkspace({ projectId }) {
           <div className="space-y-2">
             {PHASES.map((phase) => {
               const isActive = activePhase === phase.id;
+              // Compute a per-phase status hint
+              let stat = '';
+              const qcount = messages.filter((mm) => mm.role === 'assistant' && (mm.options || []).length > 0).length;
+              const variantsCount = messages.reduce((s, mm) => s + (mm.design_variants?.length || 0), 0);
+              if (phase.id === 'discovery') stat = `${qcount} سؤال طُرح`;
+              else if (phase.id === 'design')   stat = variantsCount > 0 ? `${variantsCount} تصميم` : 'بانتظار خيارات';
+              else if (phase.id === 'assets')   stat = `${approvedAssets.length} معتمد`;
+              else if (phase.id === 'build')    stat = project.code_unlocked ? '🔓 مفتوح' : '🔒 مقفل';
+              else if (phase.id === 'preview')  stat = project.current_html ? '✓ جاهز' : '—';
+              else if (phase.id === 'deploy')   stat = project.github_repo_url ? '✓ منشور' : '—';
+
+              const handleClick = () => {
+                setActivePhase(phase.id);
+                // Functional routing — each phase opens the right context
+                if (phase.id === 'assets') setActiveTab('approved');
+                else if (phase.id === 'preview') setActiveTab('live');
+                else if (phase.id === 'build') {
+                  if (project.code_unlocked) setActiveTab('live');
+                  else setFinalizeOpen(true);
+                } else if (phase.id === 'deploy') {
+                  if (project.code_unlocked) setConnectionsOpen(true);
+                  else setFinalizeOpen(true);
+                } else {
+                  setActiveTab('chat');
+                }
+              };
+
               return (
                 <button
                   key={phase.id}
                   type="button"
-                  onClick={() => setActivePhase(phase.id)}
+                  onClick={handleClick}
                   data-testid={`phase-${phase.id}`}
                   className={`w-full text-right p-3 rounded-lg border transition-all ${
                     isActive
                       ? 'bg-emerald-500/15 border-emerald-500/50 text-emerald-200'
-                      : 'bg-black/20 border-white/10 hover:border-white/20 text-zinc-300'
+                      : 'bg-black/20 border-white/10 hover:border-emerald-400/30 text-zinc-300'
                   }`}
                 >
-                  <div className="flex items-center justify-between mb-1">
-                    <span className="text-sm font-bold flex items-center gap-1.5">
-                      <span>{phase.icon}</span><span>{phase.title}</span>
+                  <div className="flex items-center justify-between mb-1 gap-1">
+                    <span className="text-sm font-bold flex items-center gap-1.5 min-w-0">
+                      <span>{phase.icon}</span><span className="truncate">{phase.title}</span>
                     </span>
-                    {isActive && <Check className="w-3.5 h-3.5 text-emerald-400" />}
+                    {isActive && <Check className="w-3.5 h-3.5 text-emerald-400 shrink-0" />}
                   </div>
                   <p className="text-[10px] text-zinc-500 leading-tight">{phase.desc}</p>
+                  <p className="text-[10px] mt-1 text-emerald-300/80 font-bold">{stat}</p>
                 </button>
               );
             })}
           </div>
+
+          {/* Lock-state mini card for "Build" phase */}
+          {!project.code_unlocked && (
+            <div className="mt-4 rounded-lg border border-amber-500/30 bg-gradient-to-b from-amber-500/10 to-zinc-900 p-3">
+              <div className="flex items-center gap-2 mb-1">
+                <span className="w-7 h-7 rounded-md bg-amber-500/20 flex items-center justify-center">
+                  <Crown className="w-3.5 h-3.5 text-amber-300" />
+                </span>
+                <h4 className="text-xs font-black text-amber-200">الكود مقفل</h4>
+              </div>
+              <p className="text-[10px] text-amber-100/70 leading-relaxed mb-2">
+                الموقع جاهز للعرض. للاطلاع على الكود ودفعه لـ GitHub، فعّل باقة الاستقلالية.
+              </p>
+              <button
+                type="button"
+                onClick={() => setFinalizeOpen(true)}
+                data-testid="phase-unlock-btn"
+                className="w-full py-1.5 rounded-md bg-amber-500 hover:bg-amber-400 text-black text-[11px] font-black"
+                disabled={!project.current_html}
+              >
+                {project.current_html ? 'افتح الباقات' : 'أكمل الموقع أولاً'}
+              </button>
+            </div>
+          )}
         </div>
 
         {/* CENTER: Tabs content */}
@@ -1371,6 +1453,56 @@ function ChatWorkspace({ projectId }) {
                     <div className="text-sm leading-relaxed">
                       <MarkdownText>{m.content}</MarkdownText>
                     </div>
+
+                    {/* Design variants — live HTML mini previews user can pick */}
+                    {m.role === 'assistant' && m.design_variants && m.design_variants.length > 1 && (
+                      <div className="mt-3 grid sm:grid-cols-2 lg:grid-cols-3 gap-2" data-testid={`variants-${i}`}>
+                        {m.design_variants.map((v, idx) => {
+                          const isChosen = project.approved_design_id === v.id;
+                          return (
+                            <div
+                              key={v.id}
+                              className={`rounded-lg overflow-hidden border ${isChosen ? 'border-emerald-400 ring-2 ring-emerald-400/40' : 'border-white/15 hover:border-emerald-400/60'} transition-all bg-black/40`}
+                              data-testid={`variant-card-${v.id}`}
+                            >
+                              <div className="relative aspect-video bg-white overflow-hidden">
+                                <iframe
+                                  title={v.label}
+                                  srcDoc={v.html}
+                                  sandbox=""
+                                  className="w-[1400px] h-[800px] origin-top-left scale-[0.22]"
+                                  style={{ pointerEvents: 'none' }}
+                                />
+                                <button
+                                  type="button"
+                                  onClick={() => setLightboxAsset({ id: v.id, type: 'تصميم', prompt: v.label, image_url: '', html: v.html })}
+                                  className="absolute inset-0 bg-black/0 hover:bg-black/30 transition-all"
+                                  aria-label="تكبير"
+                                />
+                              </div>
+                              <div className="p-2 flex items-center justify-between gap-2">
+                                <span className="text-[11px] text-zinc-300 font-bold flex items-center gap-1">
+                                  <span className={`w-4 h-4 rounded-full flex items-center justify-center text-[9px] font-black ${isChosen ? 'bg-emerald-500 text-black' : 'bg-zinc-700 text-zinc-300'}`}>{idx + 1}</span>
+                                  {v.label}
+                                </span>
+                                {isChosen ? (
+                                  <span className="text-[10px] text-emerald-300 font-bold">✓ مُعتمد</span>
+                                ) : (
+                                  <button
+                                    type="button"
+                                    onClick={() => approveDesign(v.id)}
+                                    data-testid={`approve-variant-${v.id}`}
+                                    className="px-2 py-1 rounded bg-emerald-500/20 hover:bg-emerald-500/40 border border-emerald-400/40 text-emerald-200 text-[10px] font-black"
+                                  >
+                                    اعتمد هذا
+                                  </button>
+                                )}
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
 
                     {/* Clickable options the AI offered */}
                     {m.role === 'assistant' && m.options && m.options.length > 0 && (

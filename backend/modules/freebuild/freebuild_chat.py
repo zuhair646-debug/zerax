@@ -79,6 +79,18 @@ def _extract_html(text: str) -> Optional[str]:
     return None
 
 
+def _extract_all_html_variants(text: str) -> List[str]:
+    """Return ALL HTML blocks in the message (used for design variants)."""
+    items: List[str] = []
+    for m in HTML_BLOCK_RE.finditer(text):
+        items.append(m.group(1).strip())
+    if not items:
+        # fallback for ungated <html>...</html>
+        for m in HTML_FALLBACK_RE.finditer(text):
+            items.append(m.group(1).strip())
+    return items
+
+
 def _strip_tags(text: str) -> str:
     """Remove <<TAG: ...>> markers from displayed text and collapse blank lines."""
     cleaned = TAG_RE.sub("", text)
@@ -398,7 +410,22 @@ def make_freebuild_chat_router(db, get_current_user):
             "   ⚠️ المستخدم لن يرى الكود داخل الشات — الكود يُعرض فقط في 'المعاينة الحية'. لا تشرح الكود ولا تذكر تفاصيل تقنية في رسائلك.\n"
             "   اكتب فقط مقدمة قصيرة مثل: 'جاهز! حدّثت المعاينة الحية — شوفها في تبويب المعاينة 👀' ثم الكود.\n"
             "   لا تكتب: 'إليك ما عملته في الكود: لقد استخدمت emerald-500...' — هذي تفاصيل ما تهم المستخدم العادي.\n"
-            "7. عدّل تدريجياً — لا تعيد بناء كل شي من جديد كل مرة.\n"
+            "\n"
+            "🎨 تصاميم متعددة (Design Variants) — اللب الذكي:\n"
+            "عند تقديم خيارات تصميم للعميل، اكتب 2-3 صفحات HTML كاملة في رسالة واحدة — كل واحدة في ```html ...``` block منفصل.\n"
+            "النظام راح يعرضها للعميل كـ live mini-previews يضغط عليها ويختار وحدة → اللي يختاره يصير current_html مباشرة بدون تغيير.\n"
+            "كل variant يجب أن يكون كامل ومستقل (<!DOCTYPE html>...</html>) مع Tailwind CDN ومحتوى وهمي (Lorem) لكنه مرتب.\n"
+            "أمثلة على متى تستخدم variants: 'وش الأنسب: تصميم 1 (داكن فاخر) ولا 2 (فاتح ناعم) ولا 3 (مينيمال)؟'\n"
+            "بعد ما العميل يختار، عدّل عليه تدريجياً — لا تعيد تصميم من الصفر.\n"
+            "\n"
+            "✅ التحقق الذاتي (لا تكذب على العميل):\n"
+            "بعد ما تنشئ أي قسم جديد في الـHTML، اختتم رسالتك بـ checklist واضح:\n"
+            "  ✓ Hero: موجود ويحتوي زر CTA يشير إلى #contact\n"
+            "  ✓ المنتجات: 3 cards مع صور placeholder\n"
+            "  ⚠️ نموذج التواصل: لم أضفه بعد — سأضيفه في الجولة القادمة\n"
+            "إذا قلت 'أضفت X' بدون فعلاً تضيفه في الكود → هذي خيانة لثقة العميل. الصدق أولاً.\n"
+            "إذا في عنصر معطوب أو رابط فارغ، اذكر ذلك بصراحة كـ ⚠️ بدل ما تخفيها.\n"
+            "7. عدّل تدريجياً — لا تعيد بناء كل شي من جديد كل مرة. حافظ على الـDesign اللي اختاره العميل.\n"
             "\n"
             "🎯 خيارات قابلة للضغط (مهم جداً لتسهيل التجربة):\n"
             "⚠️ قاعدة ذهبية: **اطرح سؤال واحد فقط في كل رسالة** ومعه خياراته. لا تطرح 5 أسئلة دفعة وحدة!\n"
@@ -456,9 +483,30 @@ def make_freebuild_chat_router(db, get_current_user):
             })
 
         # Detect HTML for live preview (extracted BEFORE stripping)
-        new_html = _extract_html(ai_text)
-        # Strip code blocks from chat display — code is private/paid feature
-        chat_text = _strip_code_from_chat(ai_text)
+        all_variants = _extract_all_html_variants(ai_text)
+        # If AI produced 2+ HTML blocks → design variants (user picks one);
+        # otherwise the single block becomes current_html immediately.
+        new_html = None
+        design_variants: List[Dict[str, str]] = []
+        if len(all_variants) >= 2:
+            for idx, html in enumerate(all_variants[:4]):  # cap at 4
+                design_variants.append({
+                    "id": str(uuid.uuid4()),
+                    "label": f"تصميم #{idx + 1}",
+                    "html": html,
+                })
+        elif len(all_variants) == 1:
+            new_html = all_variants[0]
+
+        # Strip code blocks from chat display — code is private/paid feature.
+        # If we have design variants, replace all blocks with a single one-line notice;
+        # otherwise replace each block with the "updated live preview" notice.
+        if design_variants:
+            chat_text = _CODE_BLOCK_RE.sub("", ai_text).strip()
+            chat_text = re.sub(r"\n{3,}", "\n\n", chat_text)
+            chat_text = (chat_text + "\n\n*🎨 شوف التصاميم تحت — اختر اللي يعجبك*").strip()
+        else:
+            chat_text = _strip_code_from_chat(ai_text)
         clean_text = _strip_tags(chat_text)
         # First try OPT tags; if none, fall back to numbered/bulleted lists after a question.
         opt_tag_items = [m.group(1).strip() for m in OPT_RE.finditer(ai_text)]
@@ -483,7 +531,7 @@ def make_freebuild_chat_router(db, get_current_user):
                     "messages": {
                         "$each": [
                             {"role": "user", "content": message, "timestamp": _now(), "pending_assets": [], "attachments": attachment_meta, "reference": reference_meta, "answer_meta": parsed_answer_meta},
-                            {"role": "assistant", "content": clean_text, "timestamp": _now(), "pending_assets": pending_assets, "had_html": bool(new_html), "options": options},
+                            {"role": "assistant", "content": clean_text, "timestamp": _now(), "pending_assets": pending_assets, "had_html": bool(new_html), "options": options, "design_variants": design_variants},
                         ]
                     }
                 },
@@ -500,6 +548,38 @@ def make_freebuild_chat_router(db, get_current_user):
             "pending_assets": pending_assets,
             "html_updated": bool(new_html),
         }
+
+    # ===== Approve a design variant (when AI offered 2-3 designs) =====
+    @router.post("/project/{pid}/approve-design")
+    async def approve_design(
+        pid: str,
+        variant_id: str = Form(...),
+        user=Depends(get_current_user),
+    ):
+        proj = await db.freebuild_projects.find_one(
+            {"id": pid, "user_id": user["user_id"]}, {"_id": 0}
+        )
+        if not proj:
+            raise HTTPException(404)
+        variant_html: Optional[str] = None
+        for m in proj.get("messages", []):
+            for v in (m.get("design_variants") or []):
+                if v.get("id") == variant_id:
+                    variant_html = v.get("html")
+                    break
+            if variant_html:
+                break
+        if not variant_html:
+            raise HTTPException(404, "التصميم غير موجود")
+        await db.freebuild_projects.update_one(
+            {"id": pid},
+            {"$set": {
+                "current_html": variant_html,
+                "approved_design_id": variant_id,
+                "updated_at": _now(),
+            }},
+        )
+        return {"ok": True, "html_length": len(variant_html)}
 
     # ===== Approve asset =====
     @router.post("/project/{pid}/asset/{aid}/approve")
