@@ -3985,6 +3985,53 @@ app.mount("/backend-static", StaticFiles(directory="/app/backend/static"), name=
 app.mount("/api/static", StaticFiles(directory="/app/backend/static"), name="static_api")
 app.mount("/uploads", StaticFiles(directory="/app/backend/uploads"), name="autocoder_uploads")
 
+
+# ═══════════════════════════════════════════════════════════════════
+# 🧠 ZITEX AI — Unified Intelligence Layer (Smart Router + Boundaries)
+# ═══════════════════════════════════════════════════════════════════
+from modules.zitex_ai import zitex_chat as _zitex_chat, list_agents as _list_agents
+
+
+class ZitexAIRequest(BaseModel):
+    agent: str = Field(..., description="freebuild|mobile_app|game_studio|cinema|image_studio|avatar|support|marketing")
+    messages: List[Dict[str, str]] = Field(..., description="Chat history [{role, content}]")
+    extra_context: Optional[str] = None
+
+
+@api_router.get("/ai/agents")
+async def list_zitex_agents():
+    """Returns metadata for every Zitex AI agent (admin/debug)."""
+    return {"agents": _list_agents()}
+
+
+@api_router.post("/ai/chat")
+async def zitex_ai_chat(req: ZitexAIRequest, current_user: dict = Depends(get_current_user)):
+    """
+    Universal AI chat endpoint — routes to the best model with strict boundaries.
+
+    Example:
+        POST /api/ai/chat
+        {
+          "agent": "freebuild",
+          "messages": [{"role":"user","content":"اعمل لي موقع بيع قهوة"}]
+        }
+    """
+    result = await _zitex_chat(
+        agent=req.agent,
+        messages=req.messages,
+        user_id=current_user["user_id"],
+        extra_context=req.extra_context,
+    )
+    if not result.get("ok"):
+        raise HTTPException(status_code=502, detail=result.get("error", "AI failed"))
+    # Strip internal info from response
+    return {
+        "content": result.get("content"),
+        "model_used": result.get("model_used"),
+        "agent": result.get("agent"),
+    }
+
+
 # Include routers
 app.include_router(api_router)
 app.include_router(chat_router, prefix="/api")

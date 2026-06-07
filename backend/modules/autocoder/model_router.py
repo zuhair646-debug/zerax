@@ -32,7 +32,7 @@ logger = logging.getLogger(__name__)
 
 # Per-1M-token pricing (Feb 2026, USD). Lower = cheaper.
 MODELS: Dict[str, Dict[str, Any]] = {
-    # ─────────── Moonshot Kimi ───────────
+    # ─────────── Moonshot Kimi (Chinese — excellent coding & 256K context) ───────────
     "kimi-k2.6": {
         "provider": "moonshot",
         "base_url": "https://api.moonshot.ai/v1",
@@ -59,6 +59,35 @@ MODELS: Dict[str, Dict[str, Any]] = {
         "output_per_1m": 1.20,
         "capabilities": {"function_calling": True, "json_mode": True, "vision": True},
         "good_at": ["vision", "long_context"],
+    },
+    # ─────────── DeepSeek V3.2 (Chinese — design/creative powerhouse, very cheap) ───────────
+    "deepseek-chat": {
+        "provider": "deepseek",
+        "base_url": "https://api.deepseek.com/v1",
+        "context": 128_000,
+        "input_per_1m": 0.27,
+        "output_per_1m": 1.10,
+        "capabilities": {"function_calling": True, "json_mode": True, "vision": False},
+        "good_at": ["design", "ui_ux", "creative_write", "coding", "arabic"],
+    },
+    "deepseek-reasoner": {
+        "provider": "deepseek",
+        "base_url": "https://api.deepseek.com/v1",
+        "context": 128_000,
+        "input_per_1m": 0.55,
+        "output_per_1m": 2.19,
+        "capabilities": {"function_calling": False, "json_mode": True, "vision": False},
+        "good_at": ["reasoning_hard", "math", "coding"],
+    },
+    # ─────────── Zhipu GLM-4.6 (Chinese — best design/UI generation as of Feb 2026) ───────────
+    "glm-4.6": {
+        "provider": "zhipu",
+        "base_url": "https://open.bigmodel.cn/api/paas/v4",
+        "context": 200_000,
+        "input_per_1m": 0.60,
+        "output_per_1m": 2.20,
+        "capabilities": {"function_calling": True, "json_mode": True, "vision": True},
+        "good_at": ["design", "ui_ux", "vision", "creative_write", "arabic"],
     },
     # ─────────── OpenAI ───────────
     "gpt-4o": {
@@ -94,6 +123,14 @@ MODELS: Dict[str, Dict[str, Any]] = {
         "capabilities": {"function_calling": True, "json_mode": False, "vision": True},
         "good_at": ["arabic", "creative_write", "coding", "agentic"],
     },
+    "claude-opus-4-5": {
+        "provider": "anthropic",
+        "context": 200_000,
+        "input_per_1m": 15.00,
+        "output_per_1m": 75.00,
+        "capabilities": {"function_calling": True, "json_mode": False, "vision": True},
+        "good_at": ["arabic", "creative_write", "reasoning_hard", "agentic"],
+    },
     # ─────────── Groq (FREE tier — super fast) ───────────
     "llama-3.3-70b-versatile": {
         "provider": "groq",
@@ -117,17 +154,26 @@ MODELS: Dict[str, Dict[str, Any]] = {
 
 # Task → priority ladder (cheapest acceptable first → expensive fallback)
 TASK_LADDERS: Dict[str, List[str]] = {
-    "coding":          ["kimi-k2.6", "claude-sonnet-4-5", "gpt-4o"],
+    "coding":          ["kimi-k2.6", "deepseek-chat", "claude-sonnet-4-5", "gpt-4o"],
     "long_context":    ["kimi-k2.6", "gemini-2.5-flash", "claude-sonnet-4-5"],
-    "creative_write":  ["claude-sonnet-4-5", "gpt-4o", "kimi-k2.6"],
-    "reasoning_hard":  ["gpt-5", "claude-sonnet-4-5", "kimi-k2.6"],
+    "creative_write":  ["deepseek-chat", "claude-sonnet-4-5", "gpt-4o", "kimi-k2.6"],
+    "reasoning_hard":  ["deepseek-reasoner", "gpt-5", "claude-opus-4-5", "claude-sonnet-4-5"],
     "quick_qa":        ["gemini-2.5-flash", "llama-3.3-70b-versatile", "gpt-4o-mini"],
     "translation":     ["gemini-2.5-flash", "gpt-4o-mini", "claude-sonnet-4-5"],
     "classification":  ["gemini-2.5-flash", "gpt-4o-mini", "llama-3.3-70b-versatile"],
-    "vision":          ["gemini-2.5-flash", "gpt-4o", "moonshot-v1-128k-vision-preview"],
-    "arabic":          ["claude-sonnet-4-5", "gpt-4o", "gemini-2.5-flash"],
+    "vision":          ["gemini-2.5-flash", "gpt-4o", "glm-4.6", "moonshot-v1-128k-vision-preview"],
+    "arabic":          ["claude-sonnet-4-5", "deepseek-chat", "gpt-4o", "gemini-2.5-flash"],
     "agentic":         ["claude-sonnet-4-5", "kimi-k2.6", "gpt-4o"],
-    "json_strict":     ["gpt-4o-mini", "kimi-k2.6", "gemini-2.5-flash"],
+    "json_strict":     ["gpt-4o-mini", "deepseek-chat", "kimi-k2.6", "gemini-2.5-flash"],
+    # NEW dedicated lanes
+    "design":          ["glm-4.6", "deepseek-chat", "claude-sonnet-4-5", "gpt-4o"],
+    "ui_ux":           ["glm-4.6", "deepseek-chat", "claude-sonnet-4-5"],
+    "website_build":   ["kimi-k2.6", "deepseek-chat", "claude-sonnet-4-5", "gpt-4o"],
+    "mobile_app":      ["kimi-k2.6", "deepseek-chat", "claude-sonnet-4-5"],
+    "game_dev":        ["kimi-k2.6", "deepseek-chat", "claude-sonnet-4-5", "gpt-4o"],
+    "image_brief":     ["deepseek-chat", "claude-sonnet-4-5", "gemini-2.5-flash"],
+    "video_script":    ["claude-sonnet-4-5", "deepseek-chat", "gpt-4o"],
+    "support_chat":    ["claude-sonnet-4-5", "gpt-4o", "gemini-2.5-flash"],
 }
 
 
@@ -138,6 +184,8 @@ def _provider_ready(provider: str) -> bool:
         "moonshot": "MOONSHOT_API_KEY",
         "groq": "GROQ_API_KEY",
         "gemini": "GEMINI_API_KEY",
+        "deepseek": "DEEPSEEK_API_KEY",
+        "zhipu": "ZHIPU_API_KEY",
     }
     var = env_map.get(provider)
     if not var:

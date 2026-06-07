@@ -224,33 +224,45 @@ async def _generate_html_with_claude(brief: str) -> str:
     """Call OpenAI gpt-4o (user's DIRECT API key) with the architect prompt + brief.
     Returns the raw HTML string. Raises on failure.
 
-    We use the user's own OpenAI key so the platform is fully independent
-    from any third-party LLM credit pools.
+    Routes through Zitex AI Smart Router → picks the BEST model for website-build task
+    (Kimi K2.6 → DeepSeek → Claude Sonnet → GPT-4o). Auto fallback if any provider fails.
     """
-    direct_key = os.environ.get("OPENAI_DIRECT_KEY", "").strip()
-    if not direct_key:
-        # Last-resort fallback: emergent
-        from emergentintegrations.llm.chat import LlmChat, UserMessage
-        api_key = os.environ.get("EMERGENT_LLM_KEY")
-        if not api_key:
-            raise RuntimeError("No LLM key available")
-        chat = LlmChat(api_key=api_key, session_id=f"fb-{uuid.uuid4()}", system_message=ARCHITECT_PROMPT)
-        chat.with_model("anthropic", "claude-sonnet-4-5-20250929")
-        out = await chat.send_message(UserMessage(text=brief))
-    else:
-        from openai import AsyncOpenAI
-        client = AsyncOpenAI(api_key=direct_key)
-        # gpt-4o is fast, good HTML generator, broadly available on user's key
-        resp = await client.chat.completions.create(
-            model="gpt-4o",
-            messages=[
-                {"role": "system", "content": ARCHITECT_PROMPT},
-                {"role": "user", "content": brief},
-            ],
-            temperature=0.85,
-            max_tokens=8000,
+    # NEW: route through unified Zitex AI layer with boundaries
+    try:
+        from modules.zitex_ai import zitex_chat
+        result = await zitex_chat(
+            agent="freebuild",
+            messages=[{"role": "user", "content": brief}],
+            override_system=ARCHITECT_PROMPT,  # FreeBuild has its own detailed architect prompt
         )
-        out = (resp.choices[0].message.content or "")
+        if result.get("ok"):
+            out = result.get("content", "")
+        else:
+            raise RuntimeError(f"zitex_chat failed: {result.get('error')}")
+    except Exception as e:
+        # Fallback to legacy direct call
+        direct_key = os.environ.get("OPENAI_DIRECT_KEY", "").strip()
+        if not direct_key:
+            from emergentintegrations.llm.chat import LlmChat, UserMessage
+            api_key = os.environ.get("EMERGENT_LLM_KEY")
+            if not api_key:
+                raise RuntimeError("No LLM key available")
+            chat = LlmChat(api_key=api_key, session_id=f"fb-{uuid.uuid4()}", system_message=ARCHITECT_PROMPT)
+            chat.with_model("anthropic", "claude-sonnet-4-5-20250929")
+            out = await chat.send_message(UserMessage(text=brief))
+        else:
+            from openai import AsyncOpenAI
+            client = AsyncOpenAI(api_key=direct_key)
+            resp = await client.chat.completions.create(
+                model="gpt-4o",
+                messages=[
+                    {"role": "system", "content": ARCHITECT_PROMPT},
+                    {"role": "user", "content": brief},
+                ],
+                temperature=0.85,
+                max_tokens=8000,
+            )
+            out = (resp.choices[0].message.content or "")
 
     text = (out or "").strip()
     # Strip accidental markdown fences if AI ignored instructions

@@ -121,7 +121,28 @@ async def _llm_turn(messages: List[Dict[str, str]]) -> Dict[str, Any]:
     raw = ""
     last_err = None
 
-    if direct_key:
+    # NEW: route through Zitex AI Smart Router first (best model + boundaries)
+    try:
+        from modules.zitex_ai import zitex_chat
+        sys_combined = "\n\n".join(m["content"] for m in messages if m["role"] == "system")
+        user_msgs = [m for m in messages if m["role"] != "system"]
+        result = await zitex_chat(
+            agent="mobile_app",
+            messages=user_msgs,
+            override_system=sys_combined + "\n\n⚠️ ردّك لازم يكون JSON صالح فقط.",
+        )
+        if result.get("ok"):
+            raw = (result.get("content") or "").strip()
+            if raw.startswith("```"):
+                raw = raw.split("```", 2)[1] if "```" in raw[3:] else raw
+                if raw.startswith("json"):
+                    raw = raw[4:].strip()
+                raw = raw.rstrip("`").strip()
+    except Exception as e:
+        last_err = f"zitex_ai: {type(e).__name__}: {str(e)[:200]}"
+        logger.warning(f"[MOBILE-APP] zitex_ai failed: {last_err}")
+
+    if not raw and direct_key:
         try:
             from openai import AsyncOpenAI
             client = AsyncOpenAI(api_key=direct_key)
