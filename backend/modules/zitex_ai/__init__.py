@@ -251,6 +251,7 @@ async def zitex_chat(
     override_system: Optional[str] = None,
     requires_vision: bool = False,
     extra_context: Optional[str] = None,
+    task_type_override: Optional[str] = None,
 ) -> Dict[str, Any]:
     """
     Single entry point for every AI call in Zitex.
@@ -261,8 +262,10 @@ async def zitex_chat(
         user_id: Optional user ID for cost tracking.
         override_system: If provided, replaces the default agent system prompt.
         requires_vision: True if messages contain images (will route to vision-capable model).
-        extra_context: Optional extra info to append to system prompt
-                       (e.g. "User credits: 50" or "Current page: /dashboard").
+        extra_context: Optional extra info to append to system prompt.
+        task_type_override: Force a specific task_type (e.g. "design", "coding",
+                            "reasoning_hard") to override the agent's default routing.
+                            Used by freebuild for per-turn adaptive model selection.
 
     Returns:
         {ok, content, model_used, provider, cost_estimate_usd, fallback_chain, agent}
@@ -279,7 +282,7 @@ async def zitex_chat(
 
     result = await smart_complete(
         messages=full_messages,
-        task_type=cfg["task_type"],
+        task_type=task_type_override or cfg["task_type"],
         requires_vision=requires_vision,
         budget=cfg.get("budget", "balanced"),
         max_tokens=cfg.get("max_tokens", 4000),
@@ -288,8 +291,9 @@ async def zitex_chat(
     result["agent"] = agent
     if user_id and result.get("ok"):
         logger.info(
-            "[zitex_ai] agent=%s user=%s model=%s cost=$%.4f",
-            agent, user_id, result.get("model_used"), result.get("cost_estimate_usd", 0)
+            "[zitex_ai] agent=%s user=%s task=%s model=%s cost=$%.4f",
+            agent, user_id, task_type_override or cfg["task_type"],
+            result.get("model_used"), result.get("cost_estimate_usd", 0)
         )
     return result
 

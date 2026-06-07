@@ -397,6 +397,58 @@ def _detect_user_intent(user_msg: str) -> str:
     return "modify"
 
 
+# ─── ADAPTIVE TASK ROUTING — pick the right LLM specialty per turn ─────
+# The Smart Orchestrator already maps task_type → priority list of models.
+# Here we pick the best task_type based on what THIS turn actually needs:
+#   • "design"        → Claude Opus 4.5 (best visual taste, variant generation)
+#   • "website_build" → Kimi K2.6 / Claude Sonnet (clean HTML/JS generation)
+#   • "reasoning_hard"→ GPT-5/Opus (debugging broken code, fixing logic)
+#   • "long_context"  → Kimi K2.6 (256K context for huge multi-section sites)
+
+def _classify_freebuild_task(
+    user_msg: str,
+    has_current_html: bool,
+    current_html_len: int,
+    is_retry_for_fix: bool = False,
+) -> tuple[str, str]:
+    """
+    Returns (task_type, reason_label) — task_type for the orchestrator,
+    and a human-readable label like "🎨 توليد تصاميم (Claude Opus)" surfaced
+    to the user as live progress.
+    """
+    if is_retry_for_fix:
+        return ("reasoning_hard", "🛠️ يصلّح أخطاء برمجية")
+
+    msg = (user_msg or "").lower()
+
+    # Big existing project → need long context
+    if has_current_html and current_html_len > 30_000:
+        return ("long_context", "📚 يحلّل موقع كبير (256K context)")
+
+    # Variant / multi-design request → design specialty
+    variant_re = re.compile(
+        r"(تصاميم|variants?|خيارات\s+تصميم|اقترح|نمط|أنماط|"
+        r"design\s+options?|show\s+me\s+(?:designs?|options))",
+        re.IGNORECASE,
+    )
+    # First time (no current_html) OR explicit visual exploration → design
+    if not has_current_html or variant_re.search(msg):
+        return ("design", "🎨 يصمم (Claude Opus — أعلى ذوق بصري)")
+
+    # Debug/fix request → reasoning
+    fix_re = re.compile(
+        r"(أصلح|اصلح|fix|debug|مكسور|ما\s+يشتغل|مو\s+شغّال|"
+        r"خطأ|error|broken|doesn'?t\s+work|not\s+working|"
+        r"الزر\s+ما|الرابط\s+ما)",
+        re.IGNORECASE,
+    )
+    if fix_re.search(msg):
+        return ("reasoning_hard", "🧠 يحلّل المشكلة (نموذج تفكير عميق)")
+
+    # Code add/modify → website_build
+    return ("website_build", "💻 يكتب الكود (Kimi K2.6 / Claude)")
+
+
 def _strip_tags(text: str) -> str:
     """Remove <<TAG: ...>> markers from displayed text and collapse blank lines."""
     cleaned = TAG_RE.sub("", text)
@@ -951,6 +1003,14 @@ def make_freebuild_chat_router(db, get_current_user):
             "- اجعل الرسائل قصيرة (3-6 أسطر) وحوارية\n"
         )
 
+        # ── Adaptive task routing — pick the right model for this turn
+        task_type, task_label = _classify_freebuild_task(
+            user_msg=message or "",
+            has_current_html=bool(proj.get("current_html")),
+            current_html_len=len(proj.get("current_html") or ""),
+        )
+        logger.info(f"freebuild route: task={task_type} label={task_label}")
+
         try:
             from modules.zitex_ai import zitex_chat
             result = await zitex_chat(
@@ -959,10 +1019,12 @@ def make_freebuild_chat_router(db, get_current_user):
                 user_id=user["user_id"],
                 extra_context=extra_ctx,
                 requires_vision=bool(vision_images),
+                task_type_override=task_type,
             )
             if not result.get("ok"):
                 raise HTTPException(502, "خطأ في الذكاء الاصطناعي")
             ai_text = result["content"]
+            model_used = result.get("model_used", "unknown")
 
             # Truthfulness gate — if AI lied about producing variants/updates, retry once
             error_msg = _validate_truthfulness(ai_text)
@@ -978,9 +1040,38 @@ def make_freebuild_chat_router(db, get_current_user):
                     user_id=user["user_id"],
                     extra_context=extra_ctx,
                     requires_vision=bool(vision_images),
+                    task_type_override=task_type,
                 )
                 if retry_result.get("ok"):
                     ai_text = retry_result["content"]
+                    model_used = retry_result.get("model_used", model_used)
+
+            # ── Self-correction loop — if generated HTML has broken anchors,
+            # ask a stronger reasoning model to fix them. One pass only.
+            quick_html = _extract_html(ai_text)
+            if quick_html:
+                broken = _verify_anchor_links(quick_html)
+                if broken and len(broken) >= 2:
+                    logger.warning(f"freebuild auto-fix: {len(broken)} broken anchors")
+                    fix_msgs = msg_list + [
+                        {"role": "assistant", "content": ai_text},
+                        {"role": "user", "content": (
+                            "⚠️ تنبيه نظام داخلي (لا تظهره للمستخدم): "
+                            f"الكود فيه روابط معطوبة لأقسام غير موجودة: {', '.join('#'+a for a in broken[:5])}. "
+                            "أعد إصدار نفس الكود مع إصلاح: إما أنشئ الـsections المفقودة، أو احذف الروابط الميتة من الـnav."
+                        )},
+                    ]
+                    fix_result = await zitex_chat(
+                        agent="freebuild",
+                        messages=fix_msgs,
+                        user_id=user["user_id"],
+                        extra_context=extra_ctx,
+                        requires_vision=False,
+                        task_type_override="reasoning_hard",
+                    )
+                    if fix_result.get("ok") and _extract_html(fix_result["content"]):
+                        ai_text = fix_result["content"]
+                        model_used = f"{model_used} + {fix_result.get('model_used', 'fix')}"
 
             # Design-drift gate — smart guard that distinguishes:
             #   • Additive edits (user asked to ADD a section)     → ALLOW
@@ -1170,6 +1261,8 @@ def make_freebuild_chat_router(db, get_current_user):
             "response": clean_text,
             "pending_assets": pending_assets,
             "html_updated": bool(new_html),
+            "task_label": task_label,
+            "model_used": model_used,
         }
 
     # ===== Approve a design variant (when AI offered 2-3 designs) =====

@@ -1205,6 +1205,7 @@ function ChatWorkspace({ projectId }) {
   const [connectionsOpen, setConnectionsOpen] = useState(false);
   const [snapshotsOpen, setSnapshotsOpen] = useState(false);
   const [thinkingStage, setThinkingStage] = useState(0);
+  const [lastTask, setLastTask] = useState(null); // {label, model}
   const [loading, setLoading] = useState(false);
   const [activePhase, setActivePhase] = useState('discovery');
   const [activeTab, setActiveTab] = useState('chat'); // chat | live | approved
@@ -1316,6 +1317,10 @@ function ChatWorkspace({ projectId }) {
       }
       const data = await r.json();
       if (data.html_updated) toast.success('✨ تم تحديث المعاينة الحية');
+      // Capture which AI model worked on this turn (for UI display)
+      if (data.task_label || data.model_used) {
+        setLastTask({ label: data.task_label || '', model: data.model_used || '' });
+      }
       // Refresh
       const pr = await fetch(`${API}/api/freebuild-chat/project/${projectId}`, { headers: { Authorization: `Bearer ${token}` } });
       if (pr.ok) setProject(await pr.json());
@@ -1846,6 +1851,17 @@ function ChatWorkspace({ projectId }) {
                 </div>
               ))}
               <div ref={chatEndRef} />
+              {!loading && lastTask && (lastTask.label || lastTask.model) && (
+                <div className="flex justify-start" data-testid="last-task-badge">
+                  <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-zinc-900/60 border border-cyan-400/20 text-[10px] text-zinc-400">
+                    <span className="w-1.5 h-1.5 rounded-full bg-cyan-400" />
+                    <span className="text-cyan-200">{lastTask.label}</span>
+                    {lastTask.model && (
+                      <span className="text-zinc-500 font-mono" dir="ltr">· {lastTask.model.split('+')[0].trim()}</span>
+                    )}
+                  </div>
+                </div>
+              )}
               {loading && (
                 <div className="flex justify-start" data-testid="thinking-bubble">
                   <div className="max-w-[85%] rounded-2xl px-4 py-3 bg-zinc-800/70 border border-emerald-400/30">
