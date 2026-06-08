@@ -26,6 +26,7 @@ from .data_factory import (
     seed_restaurant, seed_to_js,
     render_categories_html, render_products_html,
     render_admin_orders_html, render_admin_customers_html,
+    render_admin_full_app,
 )
 
 logger = logging.getLogger(__name__)
@@ -563,6 +564,30 @@ async def generate_ready_site(
     #     This replaces marker comments OR placeholder divs the AI may have left,
     #     guaranteeing visible content even if the AI didn't write render code.
     merged = _inject_prebuilt_html(merged, seed)
+
+    # 4c) Inject the COMPLETE pre-built admin + driver app (login + dashboard + tabs)
+    #     This guarantees ?admin=1 and ?driver=1 always work with working buttons.
+
+    # First — strip any AI-generated `?admin=1` or `?driver=1` handlers that use
+    # destructive `document.body.innerHTML = ...` patterns. Those wipe out our
+    # injected modules and replace them with broken unstyled forms.
+    ai_admin_handler_re = re.compile(
+        r"if\s*\(\s*location\.search\.includes\([\"']admin=1[\"']\)\s*\)\s*\{[\s\S]*?document\.body\.innerHTML[\s\S]*?\}\s*",
+        re.MULTILINE,
+    )
+    merged = ai_admin_handler_re.sub("/* AI admin handler removed by Zitex */", merged)
+    ai_driver_handler_re = re.compile(
+        r"if\s*\(\s*location\.search\.includes\([\"']driver=1[\"']\)\s*\)\s*\{[\s\S]*?document\.body\.innerHTML[\s\S]*?\}\s*",
+        re.MULTILINE,
+    )
+    merged = ai_driver_handler_re.sub("/* AI driver handler removed by Zitex */", merged)
+
+    # Also remove any AI-generated `<div id="adminLogin">` or similar broken UIs
+    # so our zx-admin-root is the only admin UI present.
+    merged = re.sub(r'<div id="adminLogin"[\s\S]*?</div>\s*</div>', '', merged)
+
+    admin_module = render_admin_full_app(seed, admin_creds["email"], admin_creds["password"])
+    merged = merged.replace("</body>", admin_module + "\n</body>")
 
     # 5) Enforce credentials + branding
     merged = _enforce_branding_and_credentials(merged, admin_creds)

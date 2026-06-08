@@ -502,3 +502,282 @@ def render_admin_customers_html(seed: Dict[str, Any]) -> str:
 </tr>''')
     return "\n".join(rows)
 
+
+def render_admin_full_app(seed: Dict[str, Any], admin_email: str, admin_password: str) -> str:
+    """Complete pre-built Admin login + 7-tab dashboard (HTML + CSS + JS). Drop-in module."""
+    orders_rows = render_admin_orders_html(seed)
+    customers_rows = render_admin_customers_html(seed)
+
+    # Drivers cards
+    drivers_html = ""
+    for d in seed["drivers"]:
+        status_color = "#22c55e" if d["status"] == "متاح" else ("#f59e0b" if d["status"] == "في توصيل" else "#888")
+        drivers_html += f'''
+<div class="zx-driver-card">
+  <div class="zx-driver-head"><strong>{d["name"]}</strong><span class="status-badge" style="background:{status_color}20;color:{status_color}">{d["status"]}</span></div>
+  <div class="zx-driver-info">
+    <div>📞 <span dir="ltr">{d["phone"]}</span></div>
+    <div>🛵 {d["deliveries_today"]} توصيلة اليوم</div>
+    <div>⭐ {d["rating"]} تقييم</div>
+    <div>📍 {d["area"]}</div>
+  </div>
+  <div class="zx-driver-actions"><a href="https://wa.me/{d["phone"].replace("+","")}" target="_blank">واتساب</a><button>تعليق</button></div>
+</div>'''
+
+    # Top dishes bar chart
+    top_dishes_html = ""
+    max_sold = max((td["sold"] for td in seed["analytics"]["top_dishes"]), default=1)
+    for td in seed["analytics"]["top_dishes"]:
+        width_pct = round(td["sold"] / max_sold * 100)
+        top_dishes_html += f'''
+<div class="zx-bar-row"><span class="zx-bar-label">{td["name"]}</span>
+  <div class="zx-bar-track"><div class="zx-bar-fill" style="width:{width_pct}%"></div></div>
+  <span class="zx-bar-val">{td["sold"]} × {td["revenue"]} ر.س</span></div>'''
+
+    analytics = seed["analytics"]["today"]
+
+    return f"""
+<!-- ═══ Zitex Admin Module ═══ -->
+<style>
+#zx-admin-root,#zx-driver-root{{display:none;font-family:'Tajawal',sans-serif;direction:rtl}}
+#zx-admin-root.active,#zx-driver-root.active{{display:block;position:fixed;inset:0;background:#f3f4f6;z-index:9999;overflow-y:auto}}
+.zx-login{{min-height:100vh;display:flex;align-items:center;justify-content:center;background:linear-gradient(135deg,#1a1a1a,#374151)}}
+.zx-login-card{{background:#fff;padding:40px;border-radius:18px;width:380px;box-shadow:0 30px 80px rgba(0,0,0,.3)}}
+.zx-login-card h2{{font-size:22px;font-weight:900;margin-bottom:6px;text-align:center;color:#0a0a0a}}
+.zx-login-card p{{font-size:12px;color:#666;text-align:center;margin-bottom:24px}}
+.zx-login-card input{{width:100%;padding:13px 14px;border:1px solid #e5e7eb;border-radius:10px;margin-bottom:12px;font-family:inherit;font-size:14px}}
+.zx-login-card button{{width:100%;padding:13px;background:#a52a2a;color:#fff;border:none;border-radius:10px;font-weight:900;cursor:pointer;font-size:14px}}
+.zx-login-err{{color:#dc2626;font-size:12px;margin-top:8px;text-align:center;display:none}}
+.zx-admin-shell{{display:grid;grid-template-columns:240px 1fr;min-height:100vh}}
+.zx-side{{background:#0f172a;color:#fff;padding:20px 14px}}
+.zx-side .brand{{font-size:18px;font-weight:900;color:#fbbf24;margin-bottom:24px;text-align:center}}
+.zx-side a{{display:block;padding:11px 14px;color:#cbd5e1;text-decoration:none;border-radius:8px;margin-bottom:4px;font-size:13px;cursor:pointer}}
+.zx-side a:hover,.zx-side a.active{{background:#1e293b;color:#fbbf24}}
+.zx-side .logout{{margin-top:30px;color:#ef4444}}
+.zx-main{{padding:24px;overflow-y:auto}}
+.zx-topbar{{display:flex;justify-content:space-between;align-items:center;margin-bottom:24px}}
+.zx-topbar h1{{font-size:22px;font-weight:900;color:#0a0a0a}}
+.zx-metrics{{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:24px}}
+.zx-metric{{background:#fff;padding:18px;border-radius:14px;box-shadow:0 2px 8px rgba(0,0,0,.05)}}
+.zx-metric .lbl{{font-size:11px;color:#888;margin-bottom:6px;letter-spacing:1px}}
+.zx-metric .val{{font-size:24px;font-weight:900;color:#0a0a0a}}
+.zx-metric .delta{{font-size:11px;color:#22c55e;margin-top:4px}}
+.zx-card{{background:#fff;border-radius:14px;padding:20px;box-shadow:0 2px 8px rgba(0,0,0,.05);margin-bottom:18px}}
+.zx-card h3{{font-size:16px;font-weight:900;margin-bottom:14px;color:#0a0a0a}}
+.zx-table{{width:100%;border-collapse:collapse;font-size:12px}}
+.zx-table th{{text-align:right;padding:10px 8px;font-weight:700;color:#888;border-bottom:1px solid #e5e7eb;font-size:11px;letter-spacing:1px}}
+.zx-table td{{padding:11px 8px;border-bottom:1px solid #f3f4f6;color:#0a0a0a}}
+.status-badge{{padding:4px 10px;border-radius:99px;font-size:11px;font-weight:700;display:inline-block}}
+.btn-sm{{padding:5px 12px;border-radius:6px;border:1px solid #e5e7eb;background:#f9fafb;color:#0a0a0a;font-size:11px;cursor:pointer;text-decoration:none;display:inline-block}}
+.zx-bar-row{{display:grid;grid-template-columns:140px 1fr 140px;gap:12px;align-items:center;margin-bottom:10px;font-size:12px}}
+.zx-bar-track{{background:#f3f4f6;height:8px;border-radius:99px;overflow:hidden}}
+.zx-bar-fill{{height:100%;background:linear-gradient(90deg,#a52a2a,#fbbf24);border-radius:99px}}
+.zx-driver-card{{background:#fff;border-radius:14px;padding:18px;margin-bottom:12px;box-shadow:0 2px 8px rgba(0,0,0,.05)}}
+.zx-driver-head{{display:flex;justify-content:space-between;margin-bottom:10px;font-size:14px}}
+.zx-driver-info{{display:grid;grid-template-columns:repeat(2,1fr);gap:6px;font-size:12px;color:#666;margin-bottom:10px}}
+.zx-driver-actions a,.zx-driver-actions button{{padding:6px 14px;border-radius:6px;border:none;font-size:11px;font-weight:700;cursor:pointer;text-decoration:none;margin-left:6px}}
+.zx-driver-actions a{{background:#22c55e;color:#fff}}
+.zx-driver-actions button{{background:#f3f4f6;color:#0a0a0a}}
+.zx-section{{display:none}}
+.zx-section.active{{display:block}}
+.zx-tutorial{{position:fixed;inset:0;background:rgba(0,0,0,.7);display:flex;align-items:center;justify-content:center;z-index:10000}}
+.zx-tutorial-card{{background:#fff;padding:30px;border-radius:18px;max-width:480px;text-align:center}}
+.zx-tutorial-card h3{{font-size:20px;font-weight:900;margin-bottom:10px}}
+.zx-tutorial-card p{{color:#666;font-size:14px;margin-bottom:20px}}
+.zx-tutorial-card button{{padding:11px 28px;background:#a52a2a;color:#fff;border:none;border-radius:99px;font-weight:900;cursor:pointer}}
+/* Driver app */
+#zx-driver-root.active{{background:#0f172a;color:#fff}}
+.zx-driver-shell{{max-width:480px;margin:0 auto;padding:20px}}
+.zx-driver-top{{background:#1e293b;padding:18px;border-radius:14px;margin-bottom:14px;text-align:center}}
+.zx-delivery{{background:#1e293b;border-radius:12px;padding:14px;margin-bottom:10px}}
+.zx-delivery h4{{font-size:14px;margin-bottom:6px}}
+.zx-delivery .addr{{font-size:11px;color:#94a3b8;margin-bottom:10px}}
+.zx-delivery-actions{{display:flex;gap:6px;flex-wrap:wrap}}
+.zx-delivery-actions a,.zx-delivery-actions button{{flex:1;padding:8px;border-radius:6px;border:none;font-size:10px;font-weight:700;cursor:pointer;text-align:center;text-decoration:none}}
+.zx-delivery-actions .wa{{background:#22c55e;color:#fff}}
+.zx-delivery-actions .map{{background:#3b82f6;color:#fff}}
+.zx-delivery-actions .status{{background:#fbbf24;color:#000}}
+</style>
+
+<div id="zx-admin-root">
+  <!-- Login -->
+  <div class="zx-login" id="zx-admin-login-screen">
+    <div class="zx-login-card">
+      <h2>🔐 لوحة تحكم المطعم</h2>
+      <p>أدخل بيانات الدخول للوصول</p>
+      <input type="email" id="zx-admin-email" placeholder="البريد الإلكتروني" />
+      <input type="password" id="zx-admin-pass" placeholder="كلمة المرور" />
+      <button onclick="zxAdminLogin()">دخول</button>
+      <div class="zx-login-err" id="zx-admin-err">بيانات الدخول غير صحيحة</div>
+    </div>
+  </div>
+  <!-- Dashboard -->
+  <div class="zx-admin-shell" id="zx-admin-shell" style="display:none">
+    <aside class="zx-side">
+      <div class="brand">🍽️ لوحة الإدارة</div>
+      <a class="active" onclick="zxShow('overview',this)">📊 نظرة عامة</a>
+      <a onclick="zxShow('orders',this)">📦 الطلبات</a>
+      <a onclick="zxShow('menu',this)">🍕 القائمة</a>
+      <a onclick="zxShow('customers',this)">👥 العملاء</a>
+      <a onclick="zxShow('drivers',this)">🛵 السائقين</a>
+      <a onclick="zxShow('reports',this)">📈 التقارير</a>
+      <a onclick="zxShow('settings',this)">⚙️ الإعدادات</a>
+      <a class="logout" onclick="zxAdminLogout()">🚪 تسجيل خروج</a>
+    </aside>
+    <main class="zx-main">
+      <div class="zx-topbar"><h1 id="zx-page-title">نظرة عامة</h1><span style="color:#888;font-size:12px">مرحباً بك في لوحة التحكم</span></div>
+
+      <div class="zx-section active" id="zx-overview">
+        <div class="zx-metrics">
+          <div class="zx-metric"><div class="lbl">طلبات اليوم</div><div class="val">{analytics["orders"]}</div><div class="delta">+12% عن أمس</div></div>
+          <div class="zx-metric"><div class="lbl">إيرادات اليوم</div><div class="val">{analytics["revenue"]} ر.س</div><div class="delta">+8% عن أمس</div></div>
+          <div class="zx-metric"><div class="lbl">متوسط الطلب</div><div class="val">{analytics["avg_order"]} ر.س</div><div class="delta">+3% عن أمس</div></div>
+          <div class="zx-metric"><div class="lbl">الطبق الأكثر مبيعاً</div><div class="val" style="font-size:14px">{analytics["top_dish"]}</div><div class="delta">⭐ مميز</div></div>
+        </div>
+        <div class="zx-card"><h3>📦 أحدث الطلبات</h3><table class="zx-table"><thead><tr><th>رقم الطلب</th><th>العميل</th><th>الهاتف</th><th>الأصناف</th><th>المبلغ</th><th>الحالة</th><th>الوقت</th><th></th></tr></thead><tbody id="admin-orders-tbody">{orders_rows}</tbody></table></div>
+        <div class="zx-card"><h3>📊 أكثر الأطباق مبيعاً (هذا الأسبوع)</h3>{top_dishes_html}</div>
+      </div>
+
+      <div class="zx-section" id="zx-orders">
+        <div class="zx-card"><h3>📦 جميع الطلبات</h3><table class="zx-table"><thead><tr><th>رقم</th><th>العميل</th><th>الهاتف</th><th>الأصناف</th><th>المبلغ</th><th>الحالة</th><th>الوقت</th><th></th></tr></thead><tbody>{orders_rows}</tbody></table></div>
+      </div>
+
+      <div class="zx-section" id="zx-menu">
+        <div class="zx-card"><h3>🍕 إدارة القائمة</h3><p style="color:#666;font-size:13px;margin-bottom:14px">إجمالي المنتجات: {len(seed["products"])}</p>
+        <button class="btn-sm" style="background:#22c55e;color:#fff;border-color:#22c55e;padding:8px 16px">+ إضافة طبق جديد</button>
+        <table class="zx-table" style="margin-top:14px"><thead><tr><th>المنتج</th><th>الفئة</th><th>السعر</th><th>السعرات</th><th>التقييم</th><th>الإجراءات</th></tr></thead><tbody>
+        {"".join(f'<tr><td><strong>{p["name"]}</strong></td><td>{p["category"]}</td><td>{p["price"]} ر.س</td><td>{p["calories"]} kcal</td><td>⭐ {p["rating"]}</td><td><button class="btn-sm">تعديل</button> <button class="btn-sm" style="color:#dc2626">حذف</button></td></tr>' for p in seed["products"][:20])}
+        </tbody></table></div>
+      </div>
+
+      <div class="zx-section" id="zx-customers">
+        <div class="zx-card"><h3>👥 العملاء (CRM)</h3><table class="zx-table"><thead><tr><th>الاسم</th><th>الهاتف</th><th>الطلبات</th><th>الإنفاق</th><th>النقاط</th><th>المحفظة</th><th>الحالة</th><th>تواصل</th></tr></thead><tbody id="admin-customers-tbody">{customers_rows}</tbody></table></div>
+      </div>
+
+      <div class="zx-section" id="zx-drivers">
+        <div class="zx-card"><h3>🛵 السائقين</h3>{drivers_html}</div>
+      </div>
+
+      <div class="zx-section" id="zx-reports">
+        <div class="zx-card"><h3>📈 تقرير الأسبوع</h3>
+        <div class="zx-metrics"><div class="zx-metric"><div class="lbl">طلبات الأسبوع</div><div class="val">{seed["analytics"]["week"]["orders"]}</div></div><div class="zx-metric"><div class="lbl">إيرادات الأسبوع</div><div class="val">{seed["analytics"]["week"]["revenue"]} ر.س</div></div><div class="zx-metric"><div class="lbl">نمو</div><div class="val">+{seed["analytics"]["week"]["growth_pct"]}%</div></div></div>
+        {top_dishes_html}</div>
+      </div>
+
+      <div class="zx-section" id="zx-settings">
+        <div class="zx-card"><h3>⚙️ إعدادات المطعم</h3>
+        <label style="font-size:12px;font-weight:700">اسم المطعم</label>
+        <input type="text" value="{seed["branding"]["name"]}" style="width:100%;padding:10px;border:1px solid #e5e7eb;border-radius:8px;margin:6px 0 14px"/>
+        <label style="font-size:12px;font-weight:700">الهاتف</label>
+        <input type="text" value="{seed["branding"]["phone"]}" style="width:100%;padding:10px;border:1px solid #e5e7eb;border-radius:8px;margin:6px 0 14px"/>
+        <label style="font-size:12px;font-weight:700">الإيميل</label>
+        <input type="email" value="{seed["branding"]["email"]}" style="width:100%;padding:10px;border:1px solid #e5e7eb;border-radius:8px;margin:6px 0 14px"/>
+        <label style="font-size:12px;font-weight:700">العنوان</label>
+        <input type="text" value="{seed["branding"]["address"]}" style="width:100%;padding:10px;border:1px solid #e5e7eb;border-radius:8px;margin:6px 0 14px"/>
+        <button style="background:#22c55e;color:#fff;padding:10px 24px;border:none;border-radius:8px;font-weight:900;cursor:pointer">حفظ التغييرات</button>
+        </div>
+      </div>
+    </main>
+  </div>
+</div>
+
+<script>
+const ZX_ADMIN_EMAIL = "{admin_email}";
+const ZX_ADMIN_PASS = "{admin_password}";
+function zxAdminLogin(){{
+  const e = document.getElementById('zx-admin-email').value.trim();
+  const p = document.getElementById('zx-admin-pass').value.trim();
+  if(e === ZX_ADMIN_EMAIL && p === ZX_ADMIN_PASS){{
+    localStorage.setItem('zx_admin_session','ok');
+    document.getElementById('zx-admin-login-screen').style.display='none';
+    document.getElementById('zx-admin-shell').style.display='grid';
+    if(!localStorage.getItem('zx_tutorial_done')) zxShowTutorial();
+  }} else {{ document.getElementById('zx-admin-err').style.display='block'; }}
+}}
+function zxAdminLogout(){{ localStorage.removeItem('zx_admin_session'); location.reload(); }}
+function zxShow(name, link){{
+  document.querySelectorAll('#zx-admin-root .zx-section').forEach(s=>s.classList.remove('active'));
+  document.getElementById('zx-'+name)?.classList.add('active');
+  document.querySelectorAll('#zx-admin-root .zx-side a').forEach(a=>a.classList.remove('active'));
+  if(link) link.classList.add('active');
+  document.getElementById('zx-page-title').textContent = link ? link.textContent.replace(/^[^أ-ي]+/,'').trim() : 'نظرة عامة';
+}}
+function zxShowTutorial(){{
+  const overlay = document.createElement('div'); overlay.className='zx-tutorial';
+  overlay.innerHTML = '<div class="zx-tutorial-card"><h3>🎉 أهلاً بك في لوحة التحكم</h3><p>كل اللي تحتاجه لإدارة مطعمك في مكان واحد: الطلبات، القائمة، العملاء، السائقين، التقارير. جرّب التنقل من القائمة الجانبية.</p><button onclick="this.closest(\\'.zx-tutorial\\').remove();localStorage.setItem(\\'zx_tutorial_done\\',\\'1\\');">ابدأ الإدارة</button></div>';
+  document.body.appendChild(overlay);
+}}
+// Auto-open on ?admin=1
+if (location.search.includes('admin=1')) {{
+  document.getElementById('zx-admin-root').classList.add('active');
+  if(localStorage.getItem('zx_admin_session')==='ok'){{
+    document.getElementById('zx-admin-login-screen').style.display='none';
+    document.getElementById('zx-admin-shell').style.display='grid';
+  }}
+}}
+</script>
+
+<!-- ═══ Driver Module ═══ -->
+<div id="zx-driver-root">
+  <div class="zx-login" id="zx-driver-login-screen">
+    <div class="zx-login-card">
+      <h2>🛵 تطبيق السائق</h2>
+      <p>أدخل رقمك والـ PIN للدخول</p>
+      <input type="text" id="zx-driver-phone" placeholder="رقم الهاتف" />
+      <input type="password" id="zx-driver-pin" placeholder="PIN (1234)" />
+      <button onclick="zxDriverLogin()">دخول</button>
+      <div class="zx-login-err" id="zx-driver-err">رقم أو PIN غير صحيح</div>
+    </div>
+  </div>
+  <div class="zx-driver-shell" id="zx-driver-shell" style="display:none">
+    <div class="zx-driver-top"><h3 style="font-size:18px;margin-bottom:6px" id="zx-driver-name">السائق</h3><span style="font-size:12px;color:#94a3b8">توصيلات اليوم: <strong id="zx-driver-count">0</strong></span></div>
+    <div id="zx-driver-deliveries"></div>
+    <button onclick="zxDriverLogout()" style="margin-top:14px;width:100%;padding:12px;background:#ef4444;color:#fff;border:none;border-radius:8px;font-weight:900">تسجيل خروج</button>
+  </div>
+</div>
+<script>
+const ZX_DRIVERS = window.ADMIN_DATA?.drivers || [];
+const ZX_DRIVER_ORDERS = (window.ADMIN_DATA?.orders || []).filter(o => o.status !== 'تم التسليم');
+function zxDriverLogin(){{
+  const p = document.getElementById('zx-driver-phone').value.trim();
+  const pin = document.getElementById('zx-driver-pin').value.trim();
+  const driver = ZX_DRIVERS.find(d => d.phone.replace(/[^0-9]/g,'').endsWith(p.replace(/[^0-9]/g,'').slice(-7)));
+  if(driver && pin === '1234'){{
+    localStorage.setItem('zx_driver_session', driver.name);
+    document.getElementById('zx-driver-login-screen').style.display='none';
+    document.getElementById('zx-driver-shell').style.display='block';
+    zxRenderDeliveries(driver.name);
+  }} else {{ document.getElementById('zx-driver-err').style.display='block'; }}
+}}
+function zxDriverLogout(){{ localStorage.removeItem('zx_driver_session'); location.reload(); }}
+function zxRenderDeliveries(name){{
+  document.getElementById('zx-driver-name').textContent = 'مرحباً '+name;
+  const my = ZX_DRIVER_ORDERS.filter(o => o.driver === name);
+  document.getElementById('zx-driver-count').textContent = my.length;
+  const ctr = document.getElementById('zx-driver-deliveries');
+  ctr.innerHTML = my.length === 0 ? '<div style="text-align:center;padding:40px;color:#94a3b8">لا توجد توصيلات حالياً</div>' : my.map(o => `
+    <div class="zx-delivery">
+      <h4>${{o.id}} · ${{o.customer}}</h4>
+      <div class="addr">📍 ${{o.address}}</div>
+      <div style="font-size:11px;color:#94a3b8;margin-bottom:10px">${{o.items.length}} صنف · ${{o.total}} ر.س · ${{o.payment}}</div>
+      <div class="zx-delivery-actions">
+        <a class="wa" href="https://wa.me/${{o.phone.replace('+','')}}" target="_blank">واتساب</a>
+        <a class="map" href="https://maps.google.com/?q=${{encodeURIComponent(o.address)}}" target="_blank">خريطة</a>
+        <button class="status" onclick="this.textContent='تم التسليم ✓';this.style.background='#22c55e';this.style.color='#fff'">${{o.status}}</button>
+      </div>
+    </div>
+  `).join('');
+}}
+if (location.search.includes('driver=1')) {{
+  document.getElementById('zx-driver-root').classList.add('active');
+  const sess = localStorage.getItem('zx_driver_session');
+  if(sess){{
+    document.getElementById('zx-driver-login-screen').style.display='none';
+    document.getElementById('zx-driver-shell').style.display='block';
+    zxRenderDeliveries(sess);
+  }}
+}}
+</script>
+"""
+
+
