@@ -42,11 +42,12 @@ from .catalog import (
     get_pattern,
     get_type,
 )
-from .agent import generate_ready_site
+from .agent import generate_ready_site, refine_ready_site
 
 logger = logging.getLogger(__name__)
 
 GENERATE_COST = 40
+REFINE_COST = 5  # cost per AI refinement chat message
 
 
 # ---- Pydantic Models ----
@@ -84,6 +85,10 @@ class GenerateIn(BaseModel):
     session_id: str
 
 
+class RefineIn(BaseModel):
+    message: str = Field(..., min_length=2, max_length=2000)
+
+
 def _now() -> str:
     return datetime.now(timezone.utc).isoformat()
 
@@ -107,12 +112,14 @@ async def _run_generation(db, session_id: str, user_id: str) -> None:
         enabled = sess.get("features") or []
         features_full = [f for f in RESTAURANT_FEATURES if f["id"] in enabled]
 
-        html = await generate_ready_site(
+        result = await generate_ready_site(
             type_id=type_id,
             pattern=pattern,
             branding=branding,
             features=features_full,
         )
+        html = result["html"]
+        admin_creds = result["admin_credentials"]
 
         project_id = str(uuid.uuid4())
         slug = (branding.get("business_name", "site") or "site").strip().replace(" ", "-").lower()[:40] or "site"
@@ -125,6 +132,8 @@ async def _run_generation(db, session_id: str, user_id: str) -> None:
             "branding": branding,
             "features": enabled,
             "html": html,
+            "admin_credentials": admin_creds,
+            "refinement_history": [],
             "name": branding.get("business_name", "موقعي"),
             "slug": f"{slug}-{project_id[:6]}",
             "credits_spent": GENERATE_COST,
@@ -375,5 +384,59 @@ def create_ready_sites_router(db, get_current_user) -> APIRouter:
         if r.deleted_count == 0:
             raise HTTPException(404, "المشروع غير موجود")
         return {"ok": True}
+
+    # ---- AI Refinement Chat ----
+    @router.post("/refine/{project_id}")
+    async def refine(project_id: str, payload: RefineIn, user=Depends(get_current_user)):
+        """Apply a natural-language change to the site's HTML via AI."""
+        p = await db.ready_sites_projects.find_one(
+            {"id": project_id, "user_id": user["user_id"]}, {"_id": 0}
+        )
+        if not p:
+            raise HTTPException(404, "المشروع غير موجود")
+
+        ok = await _deduct(user["user_id"], REFINE_COST, "ready_sites_refine")
+        if not ok:
+            raise HTTPException(402, f"رصيدك ما يكفي ({REFINE_COST} نقاط لكل تعديل)")
+
+        try:
+            new_html = await refine_ready_site(p["html"], payload.message.strip())
+            new_version = int(p.get("version", 1)) + 1
+            history_entry = {
+                "version": new_version,
+                "message": payload.message.strip()[:500],
+                "timestamp": _now(),
+            }
+            await db.ready_sites_projects.update_one(
+                {"id": project_id},
+                {
+                    "$set": {"html": new_html, "version": new_version, "updated_at": _now()},
+                    "$push": {"refinement_history": history_entry},
+                }
+            )
+            return {
+                "ok": True,
+                "version": new_version,
+                "preview_url": f"/api/ready-sites/preview/{project_id}",
+                "credits_remaining": await _credits(user["user_id"]),
+                "message": payload.message.strip()[:200],
+            }
+        except Exception as e:
+            await _refund(user["user_id"], REFINE_COST, f"refund_refine_failed: {str(e)[:80]}")
+            logger.exception(f"[READY_SITES] refine failed: {e}")
+            raise HTTPException(500, f"فشل التعديل. تمت إعادة النقاط. ({str(e)[:120]})")
+
+    @router.get("/refine/{project_id}/history")
+    async def refine_history(project_id: str, user=Depends(get_current_user)):
+        p = await db.ready_sites_projects.find_one(
+            {"id": project_id, "user_id": user["user_id"]},
+            {"_id": 0, "refinement_history": 1, "version": 1}
+        )
+        if not p:
+            raise HTTPException(404, "المشروع غير موجود")
+        return {
+            "history": p.get("refinement_history", []),
+            "current_version": p.get("version", 1),
+        }
 
     return router

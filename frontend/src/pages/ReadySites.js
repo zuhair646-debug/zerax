@@ -591,34 +591,7 @@ function StepFeatures({ groups, enabled, toggle, onNext, onBack, busy }) {
 
 function StepGenerate({ cost, readyInfo, generating, generated, onGenerate, onBack }) {
   if (generated) {
-    const previewUrl = `${API}${generated.preview_url}`;
-    return (
-      <div data-testid="ready-sites-success">
-        <h2 style={sectionTitle}>✅ تم بناء موقعك</h2>
-        <div style={{ ...cardStyle, padding: 0, overflow: 'hidden' }}>
-          <iframe
-            data-testid="ready-sites-preview-iframe"
-            src={previewUrl}
-            title="preview"
-            style={{ width: '100%', height: 600, border: 0, background: '#fff' }}
-          />
-        </div>
-        <div style={{ ...navRow, gap: 12 }}>
-          <a
-            href={previewUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            data-testid="open-preview-btn"
-            style={{ ...primaryBtn, textDecoration: 'none', display: 'inline-block' }}
-          >
-            افتح في نافذة جديدة ↗
-          </a>
-          <button data-testid="new-build-btn" onClick={() => window.location.reload()} style={ghostBtn}>
-            ابنِ موقع آخر
-          </button>
-        </div>
-      </div>
-    );
+    return <SuccessPanel generated={generated} />;
   }
 
   return (
@@ -646,6 +619,184 @@ function StepGenerate({ cost, readyInfo, generating, generated, onGenerate, onBa
       </div>
       <div style={navRow}>
         <button data-testid="back-btn" disabled={generating} onClick={onBack} style={ghostBtn}>← رجوع</button>
+      </div>
+    </div>
+  );
+}
+
+/* ============== Success Panel (Preview + Admin Creds + AI Refinement Chat) ============== */
+
+function SuccessPanel({ generated }) {
+  const [project, setProject] = useState(null);
+  const [refineMsg, setRefineMsg] = useState('');
+  const [refining, setRefining] = useState(false);
+  const [history, setHistory] = useState([]);
+  const [iframeKey, setIframeKey] = useState(0);
+  const previewUrl = `${API}${generated.preview_url}`;
+
+  useEffect(() => {
+    fetch(`${API}/api/ready-sites/project/${generated.project_id}`, { headers: authHeaders() })
+      .then((r) => r.json())
+      .then((p) => {
+        setProject(p);
+        setHistory(p.refinement_history || []);
+      })
+      .catch(() => {});
+  }, [generated.project_id]);
+
+  const handleRefine = async () => {
+    if (!refineMsg.trim() || refineMsg.trim().length < 3) {
+      toast.error('اكتب طلب التعديل بوضوح');
+      return;
+    }
+    setRefining(true);
+    try {
+      const r = await fetch(`${API}/api/ready-sites/refine/${generated.project_id}`, {
+        method: 'POST',
+        headers: authHeaders(),
+        body: JSON.stringify({ message: refineMsg.trim() }),
+      });
+      if (!r.ok) {
+        const t = await r.text();
+        throw new Error(t.slice(0, 200));
+      }
+      const res = await r.json();
+      setHistory((h) => [
+        ...h,
+        { version: res.version, message: refineMsg.trim(), timestamp: new Date().toISOString() },
+      ]);
+      setRefineMsg('');
+      setIframeKey((k) => k + 1); // force iframe reload
+      toast.success(`تم التعديل · إصدار ${res.version}`);
+    } catch (e) {
+      toast.error(e.message);
+    } finally {
+      setRefining(false);
+    }
+  };
+
+  const copy = (text, label) => {
+    navigator.clipboard.writeText(text);
+    toast.success(`تم نسخ ${label}`);
+  };
+
+  const creds = project?.admin_credentials;
+  const adminUrl = `${previewUrl}?admin=1`;
+  const driverUrl = `${previewUrl}?driver=1`;
+
+  return (
+    <div data-testid="ready-sites-success">
+      <h2 style={sectionTitle}>✅ تم بناء موقعك — كل اللي تحتاجه جاهز</h2>
+
+      {/* Admin credentials card */}
+      {creds && (
+        <div data-testid="admin-credentials-card" style={{ ...cardStyle, background: 'linear-gradient(135deg,#0f1e0f,#0e0e0e)', borderColor: '#22c55e30' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14 }}>
+            <span style={{ fontSize: 22 }}>🔐</span>
+            <div>
+              <div style={{ fontWeight: 900, color: '#22c55e', fontSize: 15 }}>بيانات الدخول للوحة التحكم</div>
+              <div style={{ color: '#888', fontSize: 12, marginTop: 2 }}>احفظها — تستخدمها لإدارة الطلبات والقائمة والحجوزات</div>
+            </div>
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+            <CredField label="البريد" value={creds.email} onCopy={() => copy(creds.email, 'البريد')} />
+            <CredField label="كلمة المرور" value={creds.password} onCopy={() => copy(creds.password, 'كلمة المرور')} mono />
+          </div>
+          <div style={{ display: 'flex', gap: 10, marginTop: 14, flexWrap: 'wrap' }}>
+            <a href={adminUrl} target="_blank" rel="noopener noreferrer" data-testid="admin-link" style={{ ...ghostBtn, borderColor: '#22c55e', color: '#22c55e', padding: '10px 20px', textDecoration: 'none' }}>
+              افتح لوحة التحكم ↗
+            </a>
+            <a href={driverUrl} target="_blank" rel="noopener noreferrer" data-testid="driver-link" style={{ ...ghostBtn, padding: '10px 20px', textDecoration: 'none' }}>
+              تطبيق السائق ↗
+            </a>
+          </div>
+        </div>
+      )}
+
+      {/* Preview */}
+      <div style={{ ...cardStyle, padding: 0, overflow: 'hidden' }}>
+        <div style={{ background: '#1a1a1a', padding: '10px 16px', display: 'flex', alignItems: 'center', gap: 8, borderBottom: '1px solid #222' }}>
+          <span style={{ width: 10, height: 10, borderRadius: 99, background: '#ef4444' }} />
+          <span style={{ width: 10, height: 10, borderRadius: 99, background: '#f59e0b' }} />
+          <span style={{ width: 10, height: 10, borderRadius: 99, background: '#22c55e' }} />
+          <span style={{ flex: 1, fontSize: 11, color: '#666', textAlign: 'center' }}>{previewUrl}</span>
+        </div>
+        <iframe
+          key={iframeKey}
+          data-testid="ready-sites-preview-iframe"
+          src={previewUrl}
+          title="preview"
+          style={{ width: '100%', height: 640, border: 0, background: '#fff' }}
+        />
+      </div>
+
+      {/* AI Refinement Chat */}
+      <div data-testid="refine-chat-panel" style={{ ...cardStyle, background: 'linear-gradient(135deg,#0e0820,#0e0e0e)', borderColor: '#a855f730' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14 }}>
+          <span style={{ fontSize: 22 }}>💬</span>
+          <div>
+            <div style={{ fontWeight: 900, color: '#c084fc', fontSize: 15 }}>عدّل موقعك بالـ AI</div>
+            <div style={{ color: '#888', fontSize: 12, marginTop: 2 }}>اكتب أي تعديل بلغتك — لون، نص، قسم جديد. كل تعديل بـ 5 نقاط فقط</div>
+          </div>
+        </div>
+        <textarea
+          data-testid="refine-input"
+          value={refineMsg}
+          onChange={(e) => setRefineMsg(e.target.value)}
+          placeholder="مثال: غيّر لون الخلفية للأخضر الغامق، أضف قسم 'وصفاتنا الخاصة'، صغّر حجم خط القائمة"
+          rows={3}
+          disabled={refining}
+          style={{ ...inputStyle, resize: 'vertical', minHeight: 80 }}
+        />
+        <div style={{ display: 'flex', gap: 10, marginTop: 12, alignItems: 'center' }}>
+          <button
+            data-testid="refine-submit-btn"
+            disabled={refining || !refineMsg.trim()}
+            onClick={handleRefine}
+            style={{ ...primaryBtn, background: 'linear-gradient(90deg,#a855f7,#ec4899)', opacity: refining || !refineMsg.trim() ? 0.5 : 1 }}
+          >
+            {refining ? '⏳ يعدّل...' : '✨ طبّق التعديل'}
+          </button>
+          <span style={{ color: '#666', fontSize: 12 }}>التعديل قد يستغرق 30-90 ثانية</span>
+        </div>
+        {history.length > 0 && (
+          <div data-testid="refine-history" style={{ marginTop: 18, borderTop: '1px solid #222', paddingTop: 14 }}>
+            <div style={{ color: '#888', fontSize: 11, marginBottom: 10, letterSpacing: 2 }}>سجل التعديلات</div>
+            {history.slice().reverse().map((h, i) => (
+              <div key={i} style={{ padding: '8px 12px', background: '#0a0a0a', borderRadius: 8, marginBottom: 6, fontSize: 12, color: '#aaa', display: 'flex', justifyContent: 'space-between' }}>
+                <span>{h.message}</span>
+                <span style={{ color: '#c084fc', fontWeight: 900, fontSize: 10 }}>v{h.version}</span>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      <div style={{ ...navRow, gap: 12 }}>
+        <a
+          href={previewUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          data-testid="open-preview-btn"
+          style={{ ...primaryBtn, textDecoration: 'none', display: 'inline-block' }}
+        >
+          افتح في نافذة جديدة ↗
+        </a>
+        <button data-testid="new-build-btn" onClick={() => window.location.reload()} style={ghostBtn}>
+          ابنِ موقع آخر
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function CredField({ label, value, onCopy, mono }) {
+  return (
+    <div style={{ background: '#0a0a0a', border: '1px solid #1a1a1a', borderRadius: 10, padding: 12 }}>
+      <div style={{ color: '#666', fontSize: 10, letterSpacing: 2, marginBottom: 6 }}>{label}</div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        <code style={{ flex: 1, color: '#fff', fontSize: 13, fontFamily: mono ? 'Menlo,monospace' : 'inherit', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{value}</code>
+        <button onClick={onCopy} data-testid={`copy-${label}`} style={{ padding: '4px 10px', borderRadius: 6, border: '1px solid #333', background: '#1a1a1a', color: '#fbbf24', cursor: 'pointer', fontSize: 11, fontWeight: 700 }}>نسخ</button>
       </div>
     </div>
   );
