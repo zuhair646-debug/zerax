@@ -5,6 +5,7 @@ Mirrors the Game Studio pattern: project → chat → tag-driven asset generatio
 from __future__ import annotations
 import os
 import re
+import json
 import uuid
 import logging
 import asyncio
@@ -2209,7 +2210,8 @@ def make_freebuild_chat_router(db, get_current_user):
             from .freebuild_agent import stream_agent_turn as _s
             ctx_holder: Dict[str, Any] = {}
             async for chunk in _s(proj, message, history, ctx_holder=ctx_holder):
-                if "event: done" in chunk:
+                # Match the SSE event line exactly (chunks always start with 'event: <name>\n')
+                if chunk.startswith("event: done\n"):
                     try:
                         data_line = [ln for ln in chunk.split("\n") if ln.startswith("data:")][0][5:].strip()
                         done = json.loads(data_line)
@@ -2219,7 +2221,7 @@ def make_freebuild_chat_router(db, get_current_user):
                         captured["model_used"] = done.get("model_used", "")
                         captured["html_updated"] = done.get("html_updated", False)
                     except Exception:
-                        pass
+                        logger.exception("agent stream: failed to parse done event")
                 yield chunk
             # After streaming, grab final HTML/snapshots from the tool context
             final_ctx = ctx_holder.get("ctx")
