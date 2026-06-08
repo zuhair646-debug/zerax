@@ -1,6 +1,63 @@
 # Zitex Changelog
 
 
+## 2026-02-15 (g) — 💰 PayPal Payouts + 🎫 Support Tickets + 🤖 AI FAQ + 🔔 Notifications ✅
+
+### نظام السحب (PayPal Payouts) — `/app/backend/modules/affiliate/payouts.py`
+- المسوّق يضيف PayPal email (إجباري) → يضغط "طلب تحويل"
+- يدخل المبلغ ($25 حد أدنى) → يشوف معاينة فورية:
+  - المبلغ المطلوب
+  - **رسوم $2** (محسوبة من جهتنا)
+  - المبلغ الذي يستلمه = طلب − رسوم
+- **الرصيد يُقفل** فوراً (locked_in_payouts) عشان ما يطلب طلبين
+- **Notification للأدمن**: "💰 طلب تحويل جديد: $50 (يستلم $48)"
+- الأدمن في `/admin/payouts` يشوف:
+  - بيانات المسوّق + بريد PayPal + زر "افتح PayPal مع pre-filled email"
+  - زر **"تأكيد التحويل"** → ينتقل المبلغ من locked → paid_total
+  - زر **"رفض"** مع سبب → الرصيد يرجع للـ pending_balance
+- **Notification للمسوّق** عند التأكيد/الرفض
+
+### نظام الدعم الفني — `/app/backend/modules/support/__init__.py`
+**`SupportWidget` floating component** — زر دائري purple/pink في زاوية كل صفحة (مع SupportWidget user check):
+- **Tab 1 "اسأل"**: العميل يكتب سؤاله → `/api/support/ai-quick-answer`:
+  - FAQ lookup أولاً (7 مواضيع شائعة: payouts/affiliate/language/pricing/website/game/...)
+  - إذا ما لقى، يستخدم Claude Sonnet 4.5 كـ fallback (يجاوب بإيجاز)
+  - يظهر زر "لم تحل مشكلتي → أرسل تذكرة" إذا الـ AI غير واثق
+- **Tab 2 "تذكرة جديدة"**: subject + body + category (support/suggestion/bug/feature/payout) + priority
+  - **AI Auto-Reply**: عند الإنشاء، النظام يلقّم FAQ، يضيف رداً تلقائياً من AI، الـ ticket يصير `replied` مباشرة
+  - Notification للأدمن
+- **Tab 3 "تذاكري"**: قائمة تذاكر المستخدم → ضغطة → thread كامل مع admin messages مميّزة بلون
+- العميل يقدر يرد على الأدمن من نفس الـ widget، الأدمن يستقبل notification
+
+### Notifications System (in-app)
+- `GET /api/notifications/me` → قائمة + عداد unread
+- `POST /api/notifications/{id}/read` + `POST /api/notifications/mark-all-read`
+- مستخدمة من: payout_request, payout_paid, payout_rejected, support_new, support_reply, support_user_reply
+
+### Admin pages
+- **`/admin/payouts`** (`PayoutsAdmin.js`): قائمة طلبات السحب (filter pending/paid/rejected/all) + ضغطة تأكيد/رفض
+- **AdminDashboard tile**: "طلبات السحب 💰" أضيف
+
+### اختبار live
+- `POST /api/support/ai-quick-answer` بسؤال "كيف اسحب فلوسي" → رد FAQ كامل بالعربية ✅ (`source: faq, confident: true`)
+- `/api/affiliate/me/payout-info` للـ non-affiliate → 403 "أنت لست مسوّقاً" ✅
+- كل الـ endpoints مسجلة و 403 لـ unauthenticated ✅
+
+### ملفات جديدة
+- `/app/backend/modules/support/__init__.py`
+- `/app/backend/modules/affiliate/payouts.py`
+- `/app/frontend/src/components/SupportWidget.js`
+- `/app/frontend/src/pages/PayoutsAdmin.js`
+
+### ملفات معدلة
+- `/app/backend/server.py` (تسجيل 2 routers جدد)
+- `/app/frontend/src/App.js` (SupportWidget + PayoutsAdmin route)
+- `/app/frontend/src/pages/AffiliateDashboard.js` (Payout panel كامل + history)
+- `/app/frontend/src/pages/AdminDashboard.js` (tile جديد)
+
+---
+
+
 ## 2026-02-15 (f) — 📈 Affiliate Tracking System (Click → Signup → Paid Funnel) ✅
 
 **طلب المستخدم**: نظام مسوّقين احترافي — وين يحطون روابطهم، إحصائياتهم الداخلية، كم شخص دخل، أماكن النشر، عدد النشرات لكل رابط. + مدى تأثيرهم الفعلي.
