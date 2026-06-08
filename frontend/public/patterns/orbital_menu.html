@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html dir="rtl" lang="ar"><head><meta charset="UTF-8"><title>Orbital Menu</title>
+<link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;700;900&display=swap" rel="stylesheet">
+<style>
+*{margin:0;padding:0;box-sizing:border-box;font-family:'Tajawal',sans-serif}
+body{background:radial-gradient(circle at center,#0a1929 0%,#000 80%);color:#fff;height:100vh;overflow:hidden;position:relative}
+.bar{display:flex;justify-content:space-between;align-items:center;padding:18px 24px;border-bottom:1px solid rgba(6,182,212,.15)}
+.b{color:#06b6d4;font-weight:900;font-size:20px;letter-spacing:2px}
+.o{display:flex;gap:14px;font-size:11px;color:#888}
+.orbit{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:380px;height:380px;animation:spin 30s linear infinite}
+@keyframes spin{to{transform:translate(-50%,-50%) rotate(360deg)}}
+.orbit::before,.orbit::after{content:"";position:absolute;inset:0;border:1px dashed rgba(6,182,212,.2);border-radius:50%}
+.orbit::after{inset:-50px;border-color:rgba(6,182,212,.1)}
+.center{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:140px;height:140px;border-radius:50%;background:radial-gradient(circle,#06b6d4,#1e40af);display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;box-shadow:0 0 60px rgba(6,182,212,.6);z-index:5}
+.center b{font-size:22px;font-weight:900;color:#fff}
+.center small{color:rgba(255,255,255,.7);font-size:10px;margin-top:4px}
+.node{position:absolute;width:64px;height:64px;border-radius:50%;background:#0f172a;border:2px solid #06b6d4;display:flex;align-items:center;justify-content:center;font-size:24px;color:#06b6d4;box-shadow:0 0 20px rgba(6,182,212,.4);animation:spin2 30s linear infinite}
+@keyframes spin2{to{transform:rotate(-360deg)}}
+.node:nth-child(1){top:0;left:50%;transform:translateX(-50%)}
+.node:nth-child(2){top:50%;right:0;transform:translateY(-50%)}
+.node:nth-child(3){bottom:0;left:50%;transform:translateX(-50%)}
+.node:nth-child(4){top:50%;left:0;transform:translateY(-50%)}
+.node:nth-child(5){top:15%;right:15%}
+.node:nth-child(6){bottom:15%;left:15%}
+.foot{position:absolute;bottom:20px;left:0;right:0;text-align:center;color:#666;font-size:10px;letter-spacing:2px}
+</style></head><body>
+<div class="bar"><div class="b">ZAYTAR</div><div class="o"><span>عربي</span><span>FR</span><span>EN</span></div></div>
+<div class="orbit">
+<div class="node">🍴</div><div class="node">🚚</div><div class="node">📅</div><div class="node">🛒</div><div class="node">⭐</div><div class="node">🎁</div>
+</div>
+<div class="center"><b>زعتر</b><small>ابدأ هنا</small></div>
+<div class="foot">حرّك الدائرة لاستكشاف الخدمات</div>
+</body></html>

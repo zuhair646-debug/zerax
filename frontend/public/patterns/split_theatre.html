@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html dir="rtl" lang="ar"><head><meta charset="UTF-8"><title>Split Theatre</title>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;900&family=Tajawal:wght@400;700;900&display=swap" rel="stylesheet">
+<style>
+*{margin:0;padding:0;box-sizing:border-box;font-family:'Tajawal',sans-serif}
+body{background:#000;color:#fff;height:100vh;display:flex;overflow:hidden}
+.left{flex:1;background:#0f0f0f;padding:26px;border-left:1px solid rgba(245,158,11,.2)}
+.logo{font-family:'Playfair Display',serif;font-size:30px;font-weight:900;color:#f59e0b;letter-spacing:-1px}
+.tag{color:#666;font-size:11px;margin-top:4px;margin-bottom:24px;letter-spacing:2px}
+.sec{margin-bottom:18px}
+.sec h4{color:#f59e0b;font-size:11px;text-transform:uppercase;letter-spacing:3px;margin-bottom:10px}
+.item{display:flex;justify-content:space-between;padding:10px 0;border-bottom:1px dotted #222;font-size:12px}
+.name{color:#fff}
+.price{color:#f59e0b;font-weight:700}
+.right{flex:1;background:url('https://images.unsplash.com/photo-1565299624946-b28f40a0ae38?w=800') center/cover;position:relative}
+.right::after{content:"";position:absolute;inset:0;background:linear-gradient(180deg,transparent 40%,rgba(0,0,0,.85))}
+.float{position:absolute;bottom:30px;left:30px;right:30px;z-index:2}
+.float h2{font-family:'Playfair Display',serif;font-size:32px;font-weight:900;color:#fff;line-height:1}
+.play{margin-top:14px;display:inline-flex;align-items:center;gap:10px;padding:10px 20px;background:rgba(255,255,255,.1);backdrop-filter:blur(20px);border:1px solid rgba(255,255,255,.2);border-radius:99px;font-size:12px;color:#fff}
+</style></head><body>
+<div class="left">
+<div class="logo">SAVORE</div><div class="tag">FINE DINING · EST 2026</div>
+<div class="sec"><h4>المقبلات</h4>
+<div class="item"><span class="name">حمّص بالكمأة</span><span class="price">$24</span></div>
+<div class="item"><span class="name">سلطة الكزبرة</span><span class="price">$18</span></div></div>
+<div class="sec"><h4>الرئيسية</h4>
+<div class="item"><span class="name">لحم واغيو A5</span><span class="price">$120</span></div>
+<div class="item"><span class="name">سمك القاروص</span><span class="price">$85</span></div></div>
+<div class="sec"><h4>الحلويات</h4>
+<div class="item"><span class="name">سوفليه شوكولاتة</span><span class="price">$28</span></div></div>
+</div>
+<div class="right"><div class="float"><h2>حِكاية في<br>كل لقمة</h2><div class="play">▶  شاهد العرض</div></div></div>
+</body></html>

@@ -51,7 +51,7 @@ RESTAURANT_PATTERNS: List[Dict[str, Any]] = [
         "name_ar": "الهلال النيوني",
         "vibe": "NEON · 3D PLATES · GEN-Z",
         "vibe_ar": "نيون · أطباق ثلاثية الأبعاد · جيل Z",
-        "preview_url": "/restaurant-styles-preview.html#neon",
+        "preview_url": "/patterns/neon_crescent.html",
         "design_directive": (
             "Top pill-nav with neon glow. Radial gradient hero (deep purple → black). "
             "Bold gradient title (yellow→pink). 3 floating 3D circular 'plates' with neon shadow "
@@ -67,7 +67,7 @@ RESTAURANT_PATTERNS: List[Dict[str, Any]] = [
         "name_ar": "المسرح المنقسم",
         "vibe": "CINEMATIC · 50/50 · LUXURY",
         "vibe_ar": "سينمائي · 50/50 · فاخر",
-        "preview_url": "/restaurant-styles-preview.html#split",
+        "preview_url": "/patterns/split_theatre.html",
         "design_directive": (
             "Full-height 50/50 vertical split layout. LEFT half: dark luxury menu (printed-book feel) "
             "with serif headings, dotted leaders between dish names and prices, sections like Starters/Mains/Desserts. "
@@ -84,7 +84,7 @@ RESTAURANT_PATTERNS: List[Dict[str, Any]] = [
         "name_ar": "القائمة المدارية",
         "vibe": "FUTURISTIC · ORBIT · UNIQUE",
         "vibe_ar": "مستقبلي · مدار دائري · فريد",
-        "preview_url": "/restaurant-styles-preview.html#orbit",
+        "preview_url": "/patterns/orbital_menu.html",
         "design_directive": (
             "Hero centered on a glowing cyan/blue circular 'core' with the brand name inside. "
             "Around the core: 6 floating service nodes (delivery, reservations, menu, gallery, gift, reviews) "
@@ -101,7 +101,7 @@ RESTAURANT_PATTERNS: List[Dict[str, Any]] = [
         "name_ar": "الفسيفساء السائلة",
         "vibe": "BOLD · ASYMMETRIC · ZEN-Z",
         "vibe_ar": "جريء · غير متناسق · Z-Zen",
-        "preview_url": "/restaurant-styles-preview.html#mosaic",
+        "preview_url": "/patterns/mosaic_liquid.html",
         "design_directive": (
             "Hero is a 3-column asymmetric bento grid: one BIG tile (red→black gradient) showcasing the signature dish, "
             "and 4 smaller tiles (vegan, spicy, reservations, drive-thru) in liquid-shaped border radius (e.g. 32px 8px 32px 8px). "

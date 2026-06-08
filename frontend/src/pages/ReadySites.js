@@ -6,10 +6,11 @@ const API = process.env.REACT_APP_BACKEND_URL;
 
 const STEP_LABELS = [
   { id: 1, label: 'النوع' },
-  { id: 2, label: 'النمط' },
-  { id: 3, label: 'العلامة' },
-  { id: 4, label: 'الميزات' },
-  { id: 5, label: 'التوليد' },
+  { id: 2, label: 'الفيديو' },
+  { id: 3, label: 'النمط' },
+  { id: 4, label: 'العلامة' },
+  { id: 5, label: 'الميزات' },
+  { id: 6, label: 'التوليد' },
 ];
 
 const authHeaders = () => ({
@@ -96,7 +97,7 @@ export default function ReadySites({ user }) {
       const sid = await ensureSession();
       await post('/select-type', { session_id: sid, type_id: tid });
       setTypeId(tid);
-      setStep(2);
+      setStep(2);  // → promo video
     } catch (e) {
       toast.error(e.message);
     } finally {
@@ -109,7 +110,7 @@ export default function ReadySites({ user }) {
     try {
       await post('/select-pattern', { session_id: sessionId, pattern_id: pid });
       setPatternId(pid);
-      setStep(3);
+      setStep(4);  // → branding
     } catch (e) {
       toast.error(e.message);
     } finally {
@@ -127,7 +128,7 @@ export default function ReadySites({ user }) {
       const res = await post('/branding', { session_id: sessionId, ...branding });
       const def = res.default_enabled || [];
       setEnabled(def);
-      setStep(4);
+      setStep(5);  // → features
     } catch (e) {
       toast.error(e.message);
     } finally {
@@ -144,7 +145,7 @@ export default function ReadySites({ user }) {
     try {
       const res = await post('/features', { session_id: sessionId, enabled });
       setReadyInfo(res);
-      setStep(5);
+      setStep(6);  // → generate
     } catch (e) {
       toast.error(e.message);
     } finally {
@@ -201,40 +202,48 @@ export default function ReadySites({ user }) {
           <StepTypes types={catalog.types} onPick={handlePickType} busy={busy} />
         )}
         {step === 2 && (
-          <StepPatterns
-            patterns={restaurantPatterns}
-            onPick={handlePickPattern}
-            busy={busy}
+          <StepPromoVideo
+            typeId={typeId}
+            type={catalog.types.find((t) => t.id === typeId)}
+            onContinue={() => setStep(3)}
             onBack={() => setStep(1)}
           />
         )}
         {step === 3 && (
+          <StepPatterns
+            patterns={restaurantPatterns}
+            onPick={handlePickPattern}
+            busy={busy}
+            onBack={() => setStep(2)}
+          />
+        )}
+        {step === 4 && (
           <StepBranding
             value={branding}
             onChange={setBranding}
             onNext={handleBranding}
-            onBack={() => setStep(2)}
-            busy={busy}
-          />
-        )}
-        {step === 4 && (
-          <StepFeatures
-            groups={featureCategories}
-            enabled={enabled}
-            toggle={toggleFeature}
-            onNext={handleFeatures}
             onBack={() => setStep(3)}
             busy={busy}
           />
         )}
         {step === 5 && (
+          <StepFeatures
+            groups={featureCategories}
+            enabled={enabled}
+            toggle={toggleFeature}
+            onNext={handleFeatures}
+            onBack={() => setStep(4)}
+            busy={busy}
+          />
+        )}
+        {step === 6 && (
           <StepGenerate
             cost={catalog.generate_cost}
             readyInfo={readyInfo}
             generating={generating}
             generated={generated}
             onGenerate={handleGenerate}
-            onBack={() => setStep(4)}
+            onBack={() => setStep(5)}
           />
         )}
       </div>
@@ -251,7 +260,7 @@ function Header({ step }) {
         <div>
           <div style={{ fontSize: 12, color: '#fbbf24', letterSpacing: 4, marginBottom: 6 }}>ZITEX · المواقع الجاهزة</div>
           <h1 style={{ fontSize: 36, fontWeight: 900, margin: 0, lineHeight: 1, background: 'linear-gradient(90deg,#fbbf24,#ec4899)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
-            ابنِ موقع مطعمك في 5 خطوات
+            ابنِ موقع مطعمك في 6 خطوات
           </h1>
           <p style={{ color: '#9ca3af', marginTop: 8, fontSize: 14 }}>AI يبني من الصفر · 4 أنماط بصرية حصرية · 24 ميزة كاملة</p>
         </div>
@@ -312,10 +321,83 @@ function StepTypes({ types, onPick, busy }) {
   );
 }
 
+function StepPromoVideo({ typeId, type, onContinue, onBack }) {
+  // Inline animated CSS showcase (always loads, no external video deps).
+  // FUTURE: replace with real Sora 2 AI-generated promo per business name & cuisine.
+  const poster = type?.preview_color || '#f59e0b';
+  const showcaseImages = {
+    restaurant: [
+      'https://images.unsplash.com/photo-1565299624946-b28f40a0ae38?w=1200&q=80',
+      'https://images.unsplash.com/photo-1551782450-a2132b4ba21d?w=1200&q=80',
+      'https://images.unsplash.com/photo-1565958011703-44f9829ba187?w=1200&q=80',
+      'https://images.unsplash.com/photo-1546833999-b9f581a1996d?w=1200&q=80',
+    ],
+  };
+  const images = showcaseImages[typeId] || showcaseImages.restaurant;
+  return (
+    <div data-testid="step-promo-video">
+      <h2 style={sectionTitle}>🎬 معاينة تجربتك</h2>
+      <p style={{ color: '#9ca3af', marginBottom: 22, fontSize: 14 }}>
+        نموذج لنوع التجربة اللي بنبنيها لك. شوف الإيقاع واستمر لاختيار النمط البصري.
+      </p>
+      <style>{`
+        @keyframes rsPromoSlide {
+          0%,22% { opacity:1; transform:scale(1.05) }
+          25%,100% { opacity:0; transform:scale(1) }
+        }
+        .rs-frame { position:absolute; inset:0; background-size:cover; background-position:center; opacity:0; animation: rsPromoSlide 16s infinite; }
+        .rs-frame.f0 { animation-delay: 0s }
+        .rs-frame.f1 { animation-delay: 4s }
+        .rs-frame.f2 { animation-delay: 8s }
+        .rs-frame.f3 { animation-delay: 12s }
+        @keyframes rsPromoText {
+          0%,15% { opacity:0; transform:translateY(20px) }
+          22%,78% { opacity:1; transform:translateY(0) }
+          85%,100% { opacity:0; transform:translateY(-20px) }
+        }
+        .rs-text { animation: rsPromoText 4s ease-in-out infinite; }
+        @keyframes rsPromoDot {
+          0%,22% { background:#fbbf24; transform:scale(1.4) }
+          25%,100% { background:#333; transform:scale(1) }
+        }
+        .rs-dot { animation: rsPromoDot 16s infinite; }
+      `}</style>
+      <div data-testid="promo-video" style={{ ...cardStyle, padding: 0, overflow: 'hidden', borderRadius: 22, position: 'relative', height: 460, background: '#000', marginBottom: 14 }}>
+        {images.map((src, i) => (
+          <div key={i} className={`rs-frame f${i}`} style={{ backgroundImage: `url(${src})` }} />
+        ))}
+        <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(180deg, rgba(0,0,0,.15) 0%, rgba(0,0,0,.55) 60%, rgba(0,0,0,.92) 100%)' }} />
+        <div style={{ position: 'absolute', top: 20, left: 20, padding: '8px 16px', borderRadius: 99, background: 'rgba(0,0,0,.75)', backdropFilter: 'blur(20px)', color: poster, fontWeight: 900, fontSize: 11, letterSpacing: 2, border: `1px solid ${poster}40`, display: 'flex', alignItems: 'center', gap: 8 }}>
+          <span style={{ width: 8, height: 8, borderRadius: 99, background: poster, boxShadow: `0 0 12px ${poster}` }} />
+          مباشر · PROMO
+        </div>
+        <div className="rs-text" style={{ position: 'absolute', bottom: 36, right: 36, left: 36, textAlign: 'right' }}>
+          <div style={{ fontSize: 48, fontWeight: 900, color: '#fff', textShadow: '0 4px 30px rgba(0,0,0,.9)', marginBottom: 12, background: 'linear-gradient(90deg,#fff,#fbbf24)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', lineHeight: 1 }}>
+            {type?.name_ar}
+          </div>
+          <div style={{ color: '#fff', opacity: .92, fontSize: 16, textShadow: '0 2px 20px rgba(0,0,0,1)', maxWidth: 600 }}>
+            {type?.tagline_ar}
+          </div>
+        </div>
+      </div>
+      <div style={{ display: 'flex', gap: 10, marginBottom: 14, justifyContent: 'center' }}>
+        {images.map((_, i) => (
+          <span key={i} className="rs-dot" style={{ width: 8, height: 8, borderRadius: 99, background: '#333', animationDelay: `${i * 4}s` }} />
+        ))}
+      </div>
+      <div style={navRow}>
+        <button data-testid="back-btn" onClick={onBack} style={ghostBtn}>← رجوع</button>
+        <button data-testid="promo-continue-btn" onClick={onContinue} style={primaryBtn}>التالي — اختر النمط ←</button>
+      </div>
+    </div>
+  );
+}
+
+
 function StepPatterns({ patterns, onPick, busy, onBack }) {
   return (
     <div>
-      <h2 style={sectionTitle}>2️⃣ اختر النمط البصري</h2>
+      <h2 style={sectionTitle}>3️⃣ اختر النمط البصري</h2>
       <p style={{ color: '#9ca3af', marginBottom: 22, fontSize: 14 }}>كل نمط يضم نفس الـ24 ميزة، لكن AI يبني التصميم من الصفر بأسلوب مختلف.</p>
       <div style={gridStyle(2)}>
         {patterns.map((p) => (
@@ -338,9 +420,9 @@ function StepPatterns({ patterns, onPick, busy, onBack }) {
               </div>
             </div>
             <iframe
-              src={`/restaurant-styles-preview.html#${p.id}`}
+              src={p.preview_url || `/patterns/${p.id}.html`}
               title={p.name}
-              style={{ width: '100%', height: 280, border: 0, background: '#000', pointerEvents: 'none' }}
+              style={{ width: '100%', height: 300, border: 0, background: '#000', pointerEvents: 'none' }}
               scrolling="no"
             />
           </button>
@@ -367,7 +449,7 @@ function StepBranding({ value, onChange, onNext, onBack, busy }) {
   };
   return (
     <div>
-      <h2 style={sectionTitle}>3️⃣ هوية مطعمك</h2>
+      <h2 style={sectionTitle}>4️⃣ هوية مطعمك</h2>
       <div style={cardStyle}>
         <Field label="اسم المطعم">
           <input
@@ -462,7 +544,7 @@ function StepFeatures({ groups, enabled, toggle, onNext, onBack, busy }) {
   const labels = { core: 'الأساسيات', marketing: 'تسويق', social: 'تفاعل', operations: 'تشغيل', admin: 'إدارة' };
   return (
     <div>
-      <h2 style={sectionTitle}>4️⃣ الميزات (مفعّلة تلقائياً)</h2>
+      <h2 style={sectionTitle}>5️⃣ الميزات (مفعّلة تلقائياً)</h2>
       <p style={{ color: '#9ca3af', marginBottom: 18, fontSize: 14 }}>كل المطاعم تحصل على 24 ميزة كاملة. اضغط على الميزة لإلغاء تفعيلها.</p>
       {Object.keys(groups).map((cat) => (
         <div key={cat} style={{ marginBottom: 22 }}>
@@ -541,7 +623,7 @@ function StepGenerate({ cost, readyInfo, generating, generated, onGenerate, onBa
 
   return (
     <div>
-      <h2 style={sectionTitle}>5️⃣ توليد الموقع</h2>
+      <h2 style={sectionTitle}>6️⃣ توليد الموقع</h2>
       <div style={cardStyle}>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 16, marginBottom: 22 }}>
           <Metric label="التكلفة" value={`${cost} نقطة`} />
