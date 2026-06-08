@@ -2079,13 +2079,23 @@ function ChatWorkspace({ projectId }) {
               )}
               {loading && (
                 <div className="flex justify-start" data-testid="thinking-bubble">
-                  <div className="inline-flex items-center gap-2 rounded-full px-3 py-1.5 bg-zinc-900/60 border border-cyan-400/20">
-                    <span className="flex gap-1">
-                      <span className="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-pulse" />
-                      <span className="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-pulse" style={{ animationDelay: '0.2s' }} />
-                      <span className="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-pulse" style={{ animationDelay: '0.4s' }} />
+                  <div className="inline-flex items-center gap-3 rounded-full pl-4 pr-2 py-1.5 bg-gradient-to-r from-cyan-500/10 via-emerald-500/10 to-cyan-500/10 border border-cyan-400/30 relative overflow-hidden">
+                    {/* Animated shimmer sweep */}
+                    <span className="absolute inset-0 ai-think-shimmer bg-gradient-to-r from-transparent via-cyan-400/25 to-transparent pointer-events-none" />
+                    {/* Pulsing logo with glow ring */}
+                    <span className="relative flex items-center justify-center w-8 h-8 ai-think-bounce">
+                      <span className="absolute inset-0 rounded-full bg-cyan-400/40 blur-md animate-ping" />
+                      <span className="absolute inset-0 rounded-full bg-emerald-400/30 blur animate-pulse" />
+                      <img
+                        src="/zitex-logo-sm.png"
+                        alt="Zitex"
+                        className="relative w-7 h-7 rounded-full object-contain ai-think-spin"
+                        style={{ filter: 'drop-shadow(0 0 6px rgba(34,211,238,0.8))' }}
+                      />
                     </span>
-                    <span className="text-[11px] text-zinc-400">يبدأ الذكاء العمل...</span>
+                    <span className="text-[12px] font-semibold bg-gradient-to-r from-cyan-300 via-emerald-300 to-cyan-300 bg-clip-text text-transparent">
+                      رُوح تحلل وتكتب...
+                    </span>
                   </div>
                 </div>
               )}

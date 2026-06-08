@@ -167,6 +167,27 @@ html {
   .zitex-logo-img-animated .zitex-logo-img { animation: zitex-img-glow 4s ease-in-out infinite; }
 }
 
+/* ─── AI thinking indicator (FreeBuild chat) ──────────────── */
+@keyframes ai-think-shimmer {
+  0%   { transform: translateX(100%); }
+  100% { transform: translateX(-100%); }
+}
+@keyframes ai-think-spin {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+@keyframes ai-think-bounce {
+  0%, 100% { transform: translateY(0) scale(1); }
+  50%      { transform: translateY(-2px) scale(1.06); }
+}
+.ai-think-shimmer { animation: ai-think-shimmer 2.4s linear infinite; }
+.ai-think-spin    { animation: ai-think-spin 3.8s linear infinite; }
+.ai-think-bounce  { animation: ai-think-bounce 1.6s ease-in-out infinite; }
+@media (prefers-reduced-motion: reduce) {
+  .ai-think-shimmer, .ai-think-spin, .ai-think-bounce { animation: none; }
+}
+
+
 /* ─── HeroBanner motion graphics ───────────────────────── */
 @keyframes hb-progress {
   from { width: 0%; }
