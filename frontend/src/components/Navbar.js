@@ -2,6 +2,7 @@ import React from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { LogOut, LayoutDashboard, Shield, Menu, X, ArrowRight } from 'lucide-react';
+import LanguagePicker from '@/components/LanguagePicker';
 
 // شعار Zitex — الصورة المعتمدة (L1: ملكي تراثي ذهبي) + حركة دوران لطيفة في المكان
 export const ZitexLogo = ({ size = 'md', animated = true }) => {
@@ -92,6 +93,7 @@ export const Navbar = ({ user, transparent = false, setUser }) => {
 
           {/* Desktop Menu */}
           <div className="hidden md:flex items-center gap-3">
+            <LanguagePicker />
             <Link
               to="/pricing"
               className="navbar-link text-sm font-medium text-gray-300 px-3 py-2 rounded-lg"

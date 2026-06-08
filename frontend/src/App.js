@@ -1,5 +1,6 @@
 import React from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import '@/i18n';  // initialize i18next + apply persisted language on app boot
 import { Toaster } from '@/components/ui/sonner';
 import PromoStrip from '@/components/PromoStrip';
 import LandingPage from '@/pages/LandingPage';

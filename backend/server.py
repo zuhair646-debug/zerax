@@ -3444,6 +3444,14 @@ try:
 except Exception as _se:
     logging.getLogger(__name__).error(f"Failed to bind shared agent core: {_se}", exc_info=True)
 
+# ============== I18N (on-demand translation via Claude for 100+ languages) ==============
+try:
+    from modules.i18n import translate_router as _i18n_router
+    app.include_router(_i18n_router, prefix="/api")
+    logging.getLogger(__name__).info("i18n translate endpoint registered")
+except Exception as _i18ne:
+    logging.getLogger(__name__).error(f"Failed to register i18n module: {_i18ne}", exc_info=True)
+
 # ============== AI AVATAR (Animated assistant — main site + merchant subscription) ==============
 try:
     from modules.avatar import create_avatar_router
