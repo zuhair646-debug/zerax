@@ -1376,6 +1376,17 @@ function ChatWorkspace({ projectId }) {
               if (last && last.kind === 'live_text') last.open = false;
             } else if (eventName === 'tool') {
               liveSteps.push({ kind: 'tool', ...payload });
+            } else if (eventName === 'tool_building') {
+              // Update or push a "building" indicator so user sees Claude
+              // actively generating HTML (instead of staring at silence)
+              const last = liveSteps[liveSteps.length - 1];
+              if (last && last.kind === 'tool_building' && last.step === payload.step && !last.done) {
+                last.bytes = payload.bytes;
+                last.label = payload.label;
+                if (payload.done) last.done = true;
+              } else {
+                liveSteps.push({ kind: 'tool_building', ...payload });
+              }
             } else if (eventName === 'done') {
               finalSummary = payload.summary || '';
               finalOptions = payload.options || [];
@@ -1383,6 +1394,8 @@ function ChatWorkspace({ projectId }) {
               setLastTask({ label: `🤖 Agent (${payload.iterations || 0} خطوة)`, model: payload.model_used || '' });
             } else if (eventName === 'error') {
               liveSteps.push({ kind: 'error', message: payload.message });
+            } else if (eventName === 'ping') {
+              // Heartbeat — keeps proxies alive during long tool generation. No UI.
             }
             updateLive();
           }
@@ -1844,6 +1857,18 @@ function ChatWorkspace({ projectId }) {
                               <div key={sIdx} className="text-sm leading-relaxed text-zinc-100 bg-zinc-900/40 border-r-2 border-emerald-500/50 px-3 py-2 rounded whitespace-pre-wrap">
                                 {s.text}
                                 {s.open && <span className="inline-block w-1.5 h-4 bg-emerald-400 ml-0.5 align-middle animate-pulse" />}
+                              </div>
+                            );
+                          }
+                          if (s.kind === 'tool_building') {
+                            // Live progress while Claude generates a large HTML payload
+                            return (
+                              <div key={sIdx} className={`flex gap-2 text-[11px] px-3 py-1.5 rounded border ${
+                                s.done
+                                  ? 'bg-emerald-500/5 border-emerald-400/20 text-emerald-200'
+                                  : 'bg-blue-500/5 border-blue-400/30 text-blue-200 animate-pulse'
+                              }`}>
+                                <span>{s.label}</span>
                               </div>
                             );
                           }

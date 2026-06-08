@@ -748,47 +748,115 @@ async def _stream_one_provider(
 
     for step in range(max_iterations):
         iterations += 1
+        logger.info(f"[agent-stream] iter={iterations} start (provider={provider})")
 
         if provider in ("anthropic", "emergent_anthropic"):
-            # Live streaming: forward text tokens as they arrive so the user
-            # sees the AI thinking in real-time (instead of staring at a spinner).
-            # We also emit periodic heartbeats so proxies (Cloudflare/Railway)
-            # don't drop the SSE connection during longer tool-use turns.
+            # Live streaming with heartbeats: Claude's stream goes silent for 30-90s
+            # while generating large tool inputs (e.g. write_full_html with 8000 tokens).
+            # Proxies (Kubernetes ingress, Cloudflare, Railway) drop SSE connections
+            # after ~60s of silence. To prevent that, we run the stream in a producer
+            # task and emit ":ping" SSE comments every 5s while waiting.
             text_chunks: List[str] = []
             tool_uses: List[Dict[str, Any]] = []
             assistant_blocks: List[Dict[str, Any]] = []
             final_msg = None
             current_text = ""
+            tool_input_bytes = 0  # progress counter while tool input streams in
+            last_tool_emit = 0
+            queue: asyncio.Queue = asyncio.Queue()
+            _SENTINEL_FINAL = "__final__"
+            _SENTINEL_ERROR = "__error__"
+
+            async def _produce_events():
+                try:
+                    async with client.messages.stream(
+                        model=model, system=sys_prompt, max_tokens=4000,
+                        tools=TOOLS_SCHEMA, messages=messages,
+                    ) as st:
+                        async for ev in st:
+                            await queue.put(("event", ev))
+                        fm = await st.get_final_message()
+                    await queue.put((_SENTINEL_FINAL, fm))
+                except Exception as exc:
+                    await queue.put((_SENTINEL_ERROR, exc))
+
+            producer = asyncio.create_task(_produce_events())
+            stream_err: Optional[BaseException] = None
             try:
-                async with client.messages.stream(
-                    model=model, system=sys_prompt, max_tokens=8000,
-                    tools=TOOLS_SCHEMA, messages=messages,
-                ) as stream:
-                    async for event in stream:
-                        et = getattr(event, "type", "")
-                        # Live text token (Claude's narration between/before tool calls)
-                        if et == "text":
-                            delta = getattr(event, "text", "") or ""
-                            if delta:
-                                current_text += delta
-                                yield _sse("text_delta", {"text": delta, "step": iterations})
-                                await asyncio.sleep(0)
-                        # Content block ended — flush text buffer if any
-                        elif et == "content_block_stop":
-                            if current_text.strip():
-                                yield _sse("text_end", {"step": iterations})
-                                await asyncio.sleep(0)
-                            current_text = ""
-                    final_msg = await stream.get_final_message()
-            except Exception as e:
-                msg = f"{type(e).__name__}: {str(e)[:200]}"
+                while True:
+                    try:
+                        kind, payload = await asyncio.wait_for(queue.get(), timeout=3.0)
+                    except asyncio.TimeoutError:
+                        # Heartbeat: emit a real SSE event (not just a comment) so
+                        # K8s/Cloudflare proxies count it as active traffic and don't
+                        # cut the connection during long tool_use generation phases.
+                        yield _sse("ping", {"t": int(asyncio.get_event_loop().time()), "step": iterations})
+                        await asyncio.sleep(0)
+                        continue
+                    if kind == _SENTINEL_FINAL:
+                        final_msg = payload
+                        break
+                    if kind == _SENTINEL_ERROR:
+                        stream_err = payload
+                        break
+                    event = payload
+                    et = getattr(event, "type", "")
+                    # Live text token (Claude's narration between/before tool calls)
+                    if et == "text":
+                        delta = getattr(event, "text", "") or ""
+                        if delta:
+                            current_text += delta
+                            yield _sse("text_delta", {"text": delta, "step": iterations})
+                            await asyncio.sleep(0)
+                    # Tool input JSON streaming — emit progress so the proxy/UI doesn't
+                    # think the connection died while Claude generates a big payload.
+                    elif et == "input_json":
+                        partial = getattr(event, "partial_json", "") or ""
+                        tool_input_bytes += len(partial)
+                        if tool_input_bytes - last_tool_emit >= 500:
+                            yield _sse("tool_building", {
+                                "bytes": tool_input_bytes,
+                                "step": iterations,
+                                "label": f"⚙️ يولّد الكود... ({tool_input_bytes:,} حرف)",
+                            })
+                            await asyncio.sleep(0)
+                            last_tool_emit = tool_input_bytes
+                    # Content block ended — flush text/tool buffers
+                    elif et == "content_block_stop":
+                        if current_text.strip():
+                            yield _sse("text_end", {"step": iterations})
+                            await asyncio.sleep(0)
+                        if tool_input_bytes > 0:
+                            yield _sse("tool_building", {
+                                "bytes": tool_input_bytes,
+                                "step": iterations,
+                                "label": f"✨ تم توليد الكود ({tool_input_bytes:,} حرف)",
+                                "done": True,
+                            })
+                            await asyncio.sleep(0)
+                        current_text = ""
+                        tool_input_bytes = 0
+                        last_tool_emit = 0
+            finally:
+                if not producer.done():
+                    producer.cancel()
+                    try:
+                        await producer
+                    except (asyncio.CancelledError, Exception):
+                        pass
+
+            if stream_err is not None:
+                logger.exception("agent stream: anthropic stream failed", exc_info=stream_err)
+                msg = f"{type(stream_err).__name__}: {str(stream_err)[:200]}"
                 if any(k in msg.lower() for k in ["credit", "balance", "401", "402", "429", "quota"]):
                     raise _ProviderUnavailable(
                         "⚠️ رصيد Anthropic منتهي. لتفعيل الذكاء، يحتاج المالك "
                         "شحن الرصيد من: console.anthropic.com/settings/billing"
                     )
-                raise
+                raise stream_err
             model_used = getattr(final_msg, "model", model)
+            stop_reason = getattr(final_msg, "stop_reason", "?")
+            logger.info(f"[agent-stream] iter={iterations} stream done. stop_reason={stop_reason} content_blocks={len(final_msg.content or [])}")
             for block in (final_msg.content or []):
                 bt = getattr(block, "type", "")
                 if bt == "text":
@@ -886,6 +954,7 @@ async def _stream_one_provider(
             break
 
     # Final summary
+    logger.info(f"[agent-stream] finalizing: iterations={iterations} summary_len={len(summary)} html_changes={ctx.changes_made}")
     yield _sse("done", {
         "summary": summary or "تم.",
         "options": options,
