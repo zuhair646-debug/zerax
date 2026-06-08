@@ -1,6 +1,59 @@
 # Zitex Changelog
 
 
+## 2026-02-15 (e) — 🧠 Client Intelligence Center (Admin 360° View + AI Insights) ✅
+
+**طلب المستخدم**: لوحة admin فيها تقرير مفصل لكل عميل: محادثاته، مواقعه، تطبيقاته، صوره، فيديوهاته، نشاطه، مدفوعاته، اهتماماته. الـ AI يقترح حملات إعلانية مستهدفة. **الأهم: read-only — الأدمن يطلع فقط، ما يعدل ولا يحاكي**.
+
+**Backend** (`/app/backend/modules/admin/client_intelligence.py` — جديد، 617 سطر):
+
+7 endpoints أدمن فقط (يطلب role ∈ {admin, super_admin, owner}):
+- `GET /api/admin/intelligence/clients` — قائمة عملاء مع: total_spent_usd, order_count, engagement, last_active, counts (websites/games/images/videos/chats). Sortable بـ `last_active|total_spent|created_at|name`.
+- `GET /api/admin/intelligence/clients/{id}/360` — تقرير شامل: user, spend, activity heatmap (30 يوم) + recent IPs + engagement score (0-100).
+- `GET /api/admin/intelligence/clients/{id}/conversations` — محادثات من 3 مصادر (freebuild_projects.messages, chat_sessions, game_projects).
+- `GET /api/admin/intelligence/clients/{id}/projects` — websites + games + apps + conversion_projects.
+- `GET /api/admin/intelligence/clients/{id}/media` — images + videos.
+- `GET /api/admin/intelligence/clients/{id}/payments` — orders + credit_transactions.
+- `GET /api/admin/intelligence/clients/{id}/sessions` — activity_logs مع IP/action/type/timestamp.
+- `POST /api/admin/intelligence/clients/{id}/ai-insights` — Claude يحلل المحادثات + الـ prompts + المدفوعات ويرد JSON:
+  - profile_summary, top_interests, industry_guess, tone_style, buying_intent (low/medium/high)
+  - lifecycle_stage (explorer/active_builder/loyal/churning/whale)
+  - satisfaction_signal (negative/neutral/positive)
+  - suggested_campaigns [{title, channel: email/whatsapp/in_app/ads, message, offer}]
+  - upsell_ideas, risk_flags, next_best_action
+- التقرير يُكاش في `client_intelligence_reports` collection (upsert per user).
+
+**Frontend** (`/app/frontend/src/pages/ClientIntelligence.js` — جديد، 470 سطر):
+- 2-pane layout: قائمة عملاء يمين (search + sort) + main panel يسار
+- Header card: اسم + email + country + plan + engagement score + total spent
+- 7 tabs: Overview / Conversations / Projects / Media / Payments / Sessions / AI Insights
+- Conversations tab: viewer بـ rolling message log (read-only، لا input)
+- Projects tab: cards منفصلة لـ websites/games/apps مع html_length و credits_spent
+- Media tab: gallery للصور + player للفيديوهات
+- AI Insights tab: زر "توليد التقرير" → عرض غني للنتائج (campaign cards, interest tags, upsell list, risk alerts)
+
+**Route**: `/admin/intelligence` (protected by `ProtectedRoute adminOnly`)
+**AdminDashboard tile**: "مركز ذكاء العملاء 🧠" أضيف مع icon Sparkles + amber→orange gradient.
+
+**اختبار live (curl on owner@zitex.com)**:
+- `GET /clients` → 51 عميل، اول واحد له 52 websites, 9 games, 4 images, 23 videos, 199 chats ✅
+- `GET /clients/{owner_id}/360` → engagement=100/100, counts كاملة ✅
+- `GET /clients/{owner_id}/projects` → 52 websites, 9 games, 3 apps ✅
+- 403 لغير الأدمن ✅
+
+**ملفات جديدة**:
+- `/app/backend/modules/admin/__init__.py`
+- `/app/backend/modules/admin/client_intelligence.py`
+- `/app/frontend/src/pages/ClientIntelligence.js`
+
+**ملفات معدّلة**:
+- `/app/backend/server.py` (تسجيل router)
+- `/app/frontend/src/App.js` (route + import)
+- `/app/frontend/src/pages/AdminDashboard.js` (tile جديد)
+
+---
+
+
 ## 2026-02-15 (d) — 💰 Dynamic Pricing Markup + AI Multi-Language + Global Picker ✅
 
 **طلب المستخدم**: "للغات غير العربية نضيف $3 على كل باقة كتكلفة ترجمة. وفحص شامل لكل أجزاء المنصة. والذكاء الاصطناعي يرد بلغة المستخدم."

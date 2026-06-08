@@ -5,6 +5,7 @@ import { Toaster } from '@/components/ui/sonner';
 import PromoStrip from '@/components/PromoStrip';
 import DetectedLanguageBanner from '@/components/DetectedLanguageBanner';
 import FloatingLanguagePicker from '@/components/FloatingLanguagePicker';
+import ClientIntelligence from '@/pages/ClientIntelligence';
 import LandingPage from '@/pages/LandingPage';
 import DemoLanding from '@/pages/DemoLanding';
 import VrmPreview from '@/pages/VrmPreview';
@@ -235,6 +236,7 @@ function App() {
           <Route path="/admin/learning" element={<ProtectedRoute adminOnly><AdminLearning user={user} /></ProtectedRoute>} />
           <Route path="/admin/security" element={<ProtectedRoute adminOnly><SecurityControlRoom user={user} /></ProtectedRoute>} />
           <Route path="/admin/pricing" element={<ProtectedRoute adminOnly><PricingAdmin user={user} /></ProtectedRoute>} />
+          <Route path="/admin/intelligence" element={<ProtectedRoute adminOnly><ClientIntelligence user={user} /></ProtectedRoute>} />
           <Route path="/companion" element={<ProtectedRoute><Companion user={user} setUser={setUser} /></ProtectedRoute>} />
           {/* 💰 Pricing & Billing */}
           <Route path="/pricing" element={<Pricing user={user} />} />

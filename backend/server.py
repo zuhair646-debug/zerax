@@ -3452,6 +3452,15 @@ try:
 except Exception as _i18ne:
     logging.getLogger(__name__).error(f"Failed to register i18n module: {_i18ne}", exc_info=True)
 
+# ============== CLIENT INTELLIGENCE CENTER (admin-only 360° client reports) ==============
+try:
+    from modules.admin.client_intelligence import build_router as _build_intel_router
+    _intel_router = _build_intel_router(db, get_current_user)
+    app.include_router(_intel_router, prefix="/api")
+    logging.getLogger(__name__).info("client intelligence router registered")
+except Exception as _ie:
+    logging.getLogger(__name__).error(f"Failed to register client intelligence: {_ie}", exc_info=True)
+
 # ============== AI AVATAR (Animated assistant — main site + merchant subscription) ==============
 try:
     from modules.avatar import create_avatar_router
