@@ -795,7 +795,7 @@ async def _stream_one_provider(
             async def _produce_events():
                 try:
                     async with client.messages.stream(
-                        model=model, system=sys_prompt, max_tokens=8000,
+                        model=model, system=sys_prompt, max_tokens=5000,
                         tools=TOOLS_SCHEMA, messages=messages,
                     ) as st:
                         async for ev in st:

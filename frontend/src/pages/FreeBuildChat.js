@@ -1423,23 +1423,25 @@ function ChatWorkspace({ projectId }) {
           }
         }
         // GRACEFUL INTERRUPTION HANDLING:
-        // If the stream ended (e.g. proxy timeout, network blip) without a 'done' event,
-        // synthesize a helpful summary so the user isn't left staring at half-typed code.
+        // If the stream ended (proxy timeout, network blip) without a 'done' event,
+        // synthesize a helpful summary that PRESERVES the work shown above.
         if (!streamReceivedDone) {
-          const completedTools = liveSteps.filter((s) => s.kind === 'tool' && s.phase === 'done');
+          // Collect the AI's last narration so it stays visible as the message body
+          const allNarration = liveSteps
+            .filter((s) => s.kind === 'live_text' && (s.text || '').trim())
+            .map((s) => s.text.trim())
+            .join('\n\n');
+          const completedTools = liveSteps.filter((s) => s.kind === 'tool' && s.phase === 'done').length;
           const builtTools = liveSteps.filter((s) => s.kind === 'tool_building' && s.done);
-          const lastNarration = [...liveSteps].reverse().find((s) => s.kind === 'live_text' && (s.text || '').trim());
-          const fragments = [];
-          if (lastNarration) fragments.push(lastNarration.text.trim());
-          if (completedTools.length) {
-            fragments.push(`⚙️ نفّذت ${completedTools.length} خطوة قبل ما ينقطع الاتصال.`);
-          }
-          if (builtTools.length) {
-            fragments.push(`✅ خلّصت كتابة الكود (${builtTools[0].bytes?.toLocaleString() || '?'} حرف) لكن ما قدرت أحفظه.`);
-          }
-          fragments.push('🔄 تبيني أكمل من حيث وقفت؟ ابعث "كمّل" أو أعد المحاولة.');
-          finalSummary = fragments.join('\n\n');
-          setLastTask({ label: '⚠️ تم القطع', model: '' });
+          const codeBytes = builtTools.reduce((acc, b) => acc + (b.bytes || 0), 0);
+          // Build summary: keep narration intact, append a small interruption note
+          const interruptNote = codeBytes > 0
+            ? `\n\n💾 خلصت من كتابة ~${codeBytes.toLocaleString()} حرف لكن الاتصال انقطع قبل ما أحفظ. ابعث "كمّل" أكمل من حيث وقفت.`
+            : completedTools > 0
+              ? `\n\n⏸️ نفّذت ${completedTools} خطوة وانقطع الاتصال. ابعث "كمّل" نكمل.`
+              : `\n\n⏸️ انقطع الاتصال قبل ما أبدأ. أعد المحاولة من فضلك.`;
+          finalSummary = allNarration ? allNarration + interruptNote : interruptNote.trim();
+          setLastTask({ label: '⏸️ انقطع', model: '' });
         }
         // Finalize: mark message as not streaming
         setProject((p) => {
