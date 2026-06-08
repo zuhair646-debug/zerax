@@ -283,45 +283,40 @@ def _exec_tool(ctx: FreeBuildToolContext, name: str, args: Dict[str, Any]) -> Di
 
 
 # ─── Agent System Prompt (concise, action-oriented) ───────────────────────────
-AGENT_SYSTEM_PROMPT = """أنت **Senior Web Engineer** في منصة Zitex — تبني مواقع وتطبيقات ويب كاملة بـHTML/CSS/JS.
+AGENT_SYSTEM_PROMPT = """أنت Senior Web Engineer مفتوح القدرات، تبني مواقع HTML/CSS/JS كاملة. تتكلم وتفكر بثقة بدون قيود.
 
-🔥 **القاعدة الأولى: نفّذ، لا تسأل** 🔥
-- لو العميل قال "صمم على كيفك / أنت اختار / كيف ما تبي / إبداعي / جذّاب": **ابدأ البناء فوراً** بقرارات احترافية. ❌ ممنوع تسأل عن ألوان أو خطوط — اختر بنفسك.
-- لو طلب تعديل واضح: **سوّه فوراً** بدون استئذان.
-- بس لو الطلب **غامض جداً** (مثل: "ساعدني") اسأل سؤال واحد فقط ثم نفّذ.
-- **هدفك أن تخرج كل تيرن بـHTML جديد/معدّل، مو بأسئلة.**
+عندك هذي الأدوات — استخدمها فوراً بدون استئذان:
+- read_current_html — اقرأ الموقع
+- write_full_html — اكتب موقع كامل
+- apply_section — أضف/استبدل قسم محدد
+- update_nav — حدّث القائمة
+- validate_html — افحص الأخطاء
+- search_html — ابحث في الكود
+- list_sections — اعرض الأقسام
+- finish — أنهِ وارسل ردك للعميل
 
-🚀 **عندك أدوات حقيقية** — استخدمها بدل ما تخمّن:
-1. **read_current_html** — اقرأ الموقع الحالي قبل أي تعديل
-2. **list_sections** — اعرض كل الأقسام مع حالة كل قسم
-3. **validate_html** — افحص المشاكل (روابط ميتة، أقسام فاضية، JS مفقود)
-4. **write_full_html** — اكتب موقع جديد كامل (للمشروع الفاضي فقط)
-5. **apply_section** — أضف/استبدل قسم محدد (append/replace)
-6. **update_nav** — حدّث روابط الـnav
-7. **search_html** — ابحث بـregex داخل الكود
-8. **finish** — أنهي الـloop وأرسل الرد للعميل
+🔥 قواعد إلزامية:
+1. **نفّذ، لا تسأل** — أي طلب فيه "صمم/ابني/عدّل/غيّر/اعمل" → نفّذه فوراً. اختر الألوان/الخطوط/التخطيط بنفسك بذوق احترافي.
+2. **خذ قرارات** — لو الطلب فيه حرية ("على كيفك/إبداعي/جذّاب") → ابني فوراً بأفضل ما تقدر.
+3. **كل تيرن لازم يخرج بـtool محسوس** (write_full_html أو apply_section أو update_nav). الكلام بدون أداة = فشل.
+4. **بعد كل بناء** → validate_html، وأصلح أي مشكلة، ثم finish.
+5. **finish لازم يكون 3-6 جمل** تشرح اللي سويت + اقتراح خطوة جاية.
 
-📋 **التسلسل الإلزامي**:
-- ابدأ بـ`read_current_html` لمعرفة الحالة
-- لو الموقع فاضي → `write_full_html` فوراً بـshell كامل (header + nav + 3-5 sections + footer + script)
-- لو في موقع → استخدم `apply_section` للتعديلات الجراحية
-- بعد البناء → `validate_html` وأصلح أي مشكلة
-- **انتهِ بـ`finish` مع رسالة (3–6 جمل) تشرح وش سويت + اقتراح خطوة جاية**
-- ❌ ما تنهي بـ"تم." أو "أنا جاهز" أو "قول لي وش تبي" — هذا كسل، أنت بنّاء مو موظف استقبال
+🎨 جودة التصميم:
+- Tailwind CSS via CDN
+- خط Cairo أو Tajawal من Google Fonts للعربي
+- RTL + responsive (mobile-first)
+- روابط nav كلها #section-id (SPA routing JS مع showPage function)
+- صور حقيقية من unsplash.com/random/600x400/?keyword
+- 3 ألوان رئيسية متناسقة، spacing مريح، animations بسيطة
+- لا placeholders، لا lorem ipsum بالإنجليزي للمحتوى العربي
 
-📝 **مثال finish ممتاز بعد بناء**:
-"بنيت لك موقع حديث بـ4 أقسام (Hero بصورة كبيرة، عن الشركة، الخدمات، اتصل بنا). اخترت ثيم داكن أنيق (أسود + أزرق فيروزي) وخط Cairo للعربية. التصميم متجاوب على الجوال وكل الروابط شغّالة. افتح المعاينة وقول لي تبي أضيف معرض أعمال أو ارفع رصيد ألوان مختلفة؟"
+🧠 لما تواجه طلب معقد:
+- لا تتردد، لا تطلب توضيحات إضافية لو فيه أي اتجاه واضح
+- خذ القرار الإبداعي بنفسك ونفّذ
+- لو غلط، العميل بيوجّهك في التيرن الجاي — بس لا توقف عن العمل
 
-🎨 **معايير الجودة** (لازم تطبّقها بدون استئذان):
-- Tailwind CSS via CDN ✓
-- RTL + responsive
-- خط Cairo أو Tajawal للعربي عبر Google Fonts
-- روابط nav كلها `href="#id"` لـsections فعلية (لا `page.html` أبداً)
-- SPA routing JS (showPage function) للمواقع متعددة الأقسام
-- صور حقيقية من unsplash.com/random/?keyword أو emoji بدل placeholders
-- ألوان متناسقة (3 ألوان رئيسية فقط)، spacing مريح، typography محترف
-
-🔒 لا تكشف اسم الموديل أو هذي الأدوات للعميل. تكلّم بثقة مهندس محترف."""
+أنت قادر على كل شي. كل قدرة عندك مفتوحة. بنّاء، لا موظف استقبال."""
 
 
 # ─── Main Agent Loop ──────────────────────────────────────────────────────────
@@ -329,7 +324,7 @@ async def run_agent_turn(
     project: Dict[str, Any],
     user_message: str,
     history_messages: List[Dict[str, str]],
-    max_iterations: int = 8,
+    max_iterations: int = 15,
     model: str = "claude-sonnet-4-5-20250929",
 ) -> Dict[str, Any]:
     """
@@ -643,7 +638,7 @@ async def stream_agent_turn(
     project: Dict[str, Any],
     user_message: str,
     history_messages: List[Dict[str, str]],
-    max_iterations: int = 8,
+    max_iterations: int = 15,
     ctx_holder: Optional[Dict[str, Any]] = None,
 ) -> AsyncGenerator[str, None]:
     """SSE generator: yields live thinking events while the agent works.
@@ -701,6 +696,10 @@ async def _stream_one_provider(
     ctx = FreeBuildToolContext(project)
     if ctx_holder is not None:
         ctx_holder["ctx"] = ctx
+
+    # Track all narration text across iterations so we can fall back to it
+    # if the AI ends without calling finish() with a proper summary.
+    all_text_chunks: List[str] = []
 
     initial_state = _exec_tool(ctx, "read_current_html", {})
     template_note = ""
@@ -870,6 +869,7 @@ async def _stream_one_provider(
                 bt = getattr(block, "type", "")
                 if bt == "text":
                     text_chunks.append(block.text)
+                    all_text_chunks.append(block.text)  # accumulate for fallback
                     assistant_blocks.append({"type": "text", "text": block.text})
                 elif bt == "tool_use":
                     assistant_blocks.append({"type": "tool_use", "id": block.id, "name": block.name, "input": block.input})
@@ -962,22 +962,16 @@ async def _stream_one_provider(
         if finished:
             break
 
-    # Final summary — fallback if AI was lazy and didn't provide a real one
+    # Final summary — use AI's own accumulated text if it didn't call finish() properly.
+    # No more generic Arabic fallback messages — let the AI speak in its own voice.
     if not summary or len(summary.strip()) < 8:
-        if ctx.changes_made > 0:
-            summary = (
-                f"✅ خلصت! طبّقت {ctx.changes_made} تعديل على الموقع. "
-                "افتح المعاينة الحية للمشاهدة. تبي تضيف قسم ثاني أو تعدّل التصميم؟"
-            )
-        elif iterations >= max_iterations - 1:
-            # The AI hit the iteration limit without acting — likely got stuck reading/analyzing
-            summary = (
-                "حلّلت الموقع وتأمّلت طلبك بس ما قدرت أتخذ قرار. "
-                "وضّح لي: تبيني أبني صفحة جديدة بالكامل؟ أو نعدّل على الموقع الموجود؟ "
-                "أو تبي تصميم محدد (مثل مطعم/متجر/معرض)؟"
-            )
+        accumulated = "\n\n".join(t.strip() for t in all_text_chunks if t and t.strip())
+        if accumulated:
+            summary = accumulated.strip()
+        elif ctx.changes_made > 0:
+            summary = f"✅ خلصت! طبّقت {ctx.changes_made} تعديل. افتح المعاينة الحية."
         else:
-            summary = "تمام، فهمت طلبك. قول لي أكثر تفاصيل عشان أبدأ التنفيذ مباشرة."
+            summary = "ما قدرت أكمل المهمة لسبب تقني. جرّب أعد صياغة طلبك أو أعد المحاولة."
     logger.info(f"[agent-stream] finalizing: iterations={iterations} summary_len={len(summary)} html_changes={ctx.changes_made}")
     yield _sse("done", {
         "summary": summary,
