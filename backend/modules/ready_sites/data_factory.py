@@ -503,6 +503,176 @@ def render_admin_customers_html(seed: Dict[str, Any]) -> str:
     return "\n".join(rows)
 
 
+def render_cart_module(seed: Dict[str, Any]) -> str:
+    """Pre-built cart drawer + working addToCart + checkout flow. Overrides any AI-defined cart."""
+    brand_phone = seed["branding"]["whatsapp"]
+    return f"""
+<!-- ═══ Zitex Cart Module ═══ -->
+<style>
+#zx-cart-btn{{position:fixed;bottom:24px;left:24px;width:62px;height:62px;border-radius:50%;background:#a52a2a;color:#fff;border:none;cursor:pointer;box-shadow:0 10px 30px rgba(165,42,42,.4);z-index:9000;font-size:24px;transition:transform .2s}}
+#zx-cart-btn:hover{{transform:scale(1.08)}}
+#zx-cart-badge{{position:absolute;top:-6px;right:-6px;background:#fbbf24;color:#000;width:24px;height:24px;border-radius:50%;font-size:12px;font-weight:900;display:flex;align-items:center;justify-content:center}}
+#zx-cart-drawer{{position:fixed;top:0;right:-420px;width:400px;height:100vh;background:#fff;box-shadow:-10px 0 40px rgba(0,0,0,.2);z-index:9100;transition:right .3s ease;display:flex;flex-direction:column;direction:rtl;font-family:'Tajawal',sans-serif}}
+#zx-cart-drawer.open{{right:0}}
+.zx-cart-head{{background:#0f172a;color:#fff;padding:20px;display:flex;justify-content:space-between;align-items:center}}
+.zx-cart-head h3{{font-size:18px;font-weight:900;color:#fff}}
+.zx-cart-close{{background:none;border:none;color:#fff;font-size:22px;cursor:pointer}}
+.zx-cart-items{{flex:1;overflow-y:auto;padding:14px}}
+.zx-cart-item{{display:flex;gap:10px;padding:12px;border-bottom:1px solid #f3f4f6;align-items:center}}
+.zx-cart-item img{{width:60px;height:60px;border-radius:8px;object-fit:cover}}
+.zx-cart-item .info{{flex:1;min-width:0}}
+.zx-cart-item .name{{font-weight:700;color:#0a0a0a;font-size:13px}}
+.zx-cart-item .price{{color:#a52a2a;font-weight:900;font-size:13px}}
+.zx-qty{{display:flex;align-items:center;gap:6px;background:#f9fafb;border-radius:99px;padding:3px}}
+.zx-qty button{{width:24px;height:24px;border-radius:50%;border:none;background:#fff;cursor:pointer;font-weight:900;color:#a52a2a}}
+.zx-cart-foot{{padding:16px;background:#f9fafb;border-top:1px solid #e5e7eb}}
+.zx-total{{display:flex;justify-content:space-between;margin-bottom:12px;font-size:17px;font-weight:900;color:#0a0a0a}}
+.zx-checkout-btn{{width:100%;padding:13px;background:#a52a2a;color:#fff;border:none;border-radius:10px;font-weight:900;cursor:pointer;font-size:14px}}
+.zx-empty{{text-align:center;padding:40px;color:#888;font-size:13px}}
+#zx-toast{{position:fixed;bottom:100px;left:24px;background:#22c55e;color:#fff;padding:12px 20px;border-radius:99px;font-weight:700;font-size:13px;z-index:9500;opacity:0;transition:opacity .3s;direction:rtl}}
+#zx-toast.show{{opacity:1}}
+#zx-checkout-modal{{position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:9200;display:none;align-items:center;justify-content:center;direction:rtl}}
+#zx-checkout-modal.open{{display:flex}}
+.zx-checkout-card{{background:#fff;border-radius:18px;width:480px;max-width:92vw;max-height:90vh;overflow-y:auto;padding:24px}}
+.zx-checkout-card h3{{font-size:20px;font-weight:900;margin-bottom:14px;color:#0a0a0a}}
+.zx-checkout-card input,.zx-checkout-card select,.zx-checkout-card textarea{{width:100%;padding:11px 14px;border:1px solid #e5e7eb;border-radius:10px;margin-bottom:10px;font-family:inherit;font-size:13px}}
+.zx-pay-grid{{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:14px}}
+.zx-pay-opt{{padding:10px;border:1px solid #e5e7eb;border-radius:8px;text-align:center;cursor:pointer;font-size:11px;font-weight:700}}
+.zx-pay-opt.sel{{border-color:#a52a2a;background:#fef2f2;color:#a52a2a}}
+.zx-conf{{text-align:center;padding:20px}}
+.zx-conf h2{{color:#22c55e;font-size:24px;margin-bottom:8px}}
+.zx-conf .oid{{font-family:monospace;background:#f3f4f6;padding:8px 18px;border-radius:99px;display:inline-block;margin:10px 0;font-weight:900}}
+</style>
+
+<button id="zx-cart-btn" onclick="zxCartToggle()">🛒<span id="zx-cart-badge" style="display:none">0</span></button>
+<div id="zx-cart-drawer">
+  <div class="zx-cart-head"><h3>🛒 سلتك</h3><button class="zx-cart-close" onclick="zxCartToggle()">✕</button></div>
+  <div class="zx-cart-items" id="zx-cart-items"><div class="zx-empty">السلة فارغة</div></div>
+  <div class="zx-cart-foot"><div class="zx-total"><span>الإجمالي:</span><span><span id="zx-cart-total">0</span> ر.س</span></div><button class="zx-checkout-btn" onclick="zxOpenCheckout()">إتمام الطلب →</button></div>
+</div>
+<div id="zx-toast">تمت الإضافة</div>
+
+<div id="zx-checkout-modal">
+  <div class="zx-checkout-card" id="zx-checkout-content"></div>
+</div>
+
+<script>
+(function(){{
+  const CART_KEY = 'zx_restaurant_cart';
+  function getCart(){{ try{{return JSON.parse(localStorage.getItem(CART_KEY)||'[]')}} catch(e){{return []}} }}
+  function setCart(c){{ localStorage.setItem(CART_KEY, JSON.stringify(c)); zxRenderCart(); }}
+  window.addToCart = function(pid){{
+    const prod = (window.SITE?.products || []).find(p => p.id === pid);
+    if(!prod) return console.warn('Product not found:', pid);
+    const cart = getCart();
+    const ex = cart.find(i => i.id === pid);
+    if(ex) ex.qty = (ex.qty||1) + 1;
+    else cart.push({{id: prod.id, name: prod.name, price: prod.price, img: prod.img, qty: 1}});
+    setCart(cart);
+    const t = document.getElementById('zx-toast');
+    t.textContent = '✓ تمت إضافة ' + prod.name;
+    t.classList.add('show');
+    setTimeout(() => t.classList.remove('show'), 1800);
+  }};
+  window.openCart = window.addToCart; // alias
+  window.zxCartToggle = function(){{ document.getElementById('zx-cart-drawer').classList.toggle('open'); }};
+  window.zxRenderCart = function(){{
+    const cart = getCart();
+    const ctr = document.getElementById('zx-cart-items');
+    const badge = document.getElementById('zx-cart-badge');
+    const total = cart.reduce((s,i) => s + (i.price * (i.qty||1)), 0);
+    document.getElementById('zx-cart-total').textContent = total.toFixed(2);
+    const totalQty = cart.reduce((s,i) => s + (i.qty||1), 0);
+    badge.style.display = totalQty > 0 ? 'flex' : 'none';
+    badge.textContent = totalQty;
+    if(!cart.length){{ ctr.innerHTML = '<div class="zx-empty">السلة فارغة</div>'; return; }}
+    ctr.innerHTML = cart.map(i => `
+      <div class="zx-cart-item">
+        <img src="${{i.img}}" alt="">
+        <div class="info"><div class="name">${{i.name}}</div><div class="price">${{(i.price * (i.qty||1)).toFixed(2)}} ر.س</div></div>
+        <div class="zx-qty">
+          <button onclick="zxCartQty('${{i.id}}',-1)">−</button>
+          <span style="min-width:18px;text-align:center;font-weight:700">${{i.qty||1}}</span>
+          <button onclick="zxCartQty('${{i.id}}',1)">+</button>
+        </div>
+      </div>`).join('');
+  }};
+  window.zxCartQty = function(pid, delta){{
+    const cart = getCart();
+    const it = cart.find(i => i.id === pid);
+    if(!it) return;
+    it.qty = (it.qty||1) + delta;
+    setCart(it.qty <= 0 ? cart.filter(i => i.id !== pid) : cart);
+  }};
+  // Checkout flow
+  let checkoutStep = 1;
+  let checkoutData = {{type:'delivery', payment:'Mada'}};
+  window.zxOpenCheckout = function(){{
+    const cart = getCart();
+    if(!cart.length){{ alert('السلة فارغة'); return; }}
+    checkoutStep = 1;
+    document.getElementById('zx-checkout-modal').classList.add('open');
+    zxRenderCheckout();
+  }};
+  window.zxCloseCheckout = function(){{ document.getElementById('zx-checkout-modal').classList.remove('open'); }};
+  function zxRenderCheckout(){{
+    const c = document.getElementById('zx-checkout-content');
+    const cart = getCart();
+    const total = cart.reduce((s,i) => s + (i.price * (i.qty||1)), 0);
+    if(checkoutStep === 1){{
+      c.innerHTML = `<h3>1️⃣ نوع الطلب والعنوان</h3>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:14px">
+          <button class="zx-pay-opt ${{checkoutData.type==='delivery'?'sel':''}}" onclick="checkoutData.type='delivery';zxRenderCheckout()">🛵 توصيل</button>
+          <button class="zx-pay-opt ${{checkoutData.type==='pickup'?'sel':''}}" onclick="checkoutData.type='pickup';zxRenderCheckout()">🏪 استلام</button>
+        </div>
+        ${{checkoutData.type==='delivery' ? `
+          <input placeholder="المدينة" id="zx-city" />
+          <input placeholder="الحي" id="zx-dist" />
+          <input placeholder="الشارع" id="zx-street" />
+          <input placeholder="رقم المبنى / الشقة" id="zx-bld" />` : '<p style="color:#666;font-size:13px;margin-bottom:14px">جاهز خلال 20 دقيقة من تأكيد الطلب</p>'}}
+        <input placeholder="اسمك" id="zx-name" />
+        <input placeholder="رقم الهاتف +966..." id="zx-phone" />
+        <div style="display:flex;gap:8px;margin-top:14px">
+          <button class="zx-checkout-btn" onclick="zxCheckoutNext()">التالي ←</button>
+          <button class="zx-checkout-btn" style="background:#e5e7eb;color:#0a0a0a" onclick="zxCloseCheckout()">إلغاء</button>
+        </div>`;
+    }} else if (checkoutStep === 2){{
+      const opts = ['Mada','Visa','Apple Pay','STC Pay','Tap','كاش'];
+      c.innerHTML = `<h3>2️⃣ طريقة الدفع</h3>
+        <div class="zx-pay-grid">${{opts.map(o => `<div class="zx-pay-opt ${{checkoutData.payment===o?'sel':''}}" onclick="checkoutData.payment='${{o}}';zxRenderCheckout()">${{o}}</div>`).join('')}}</div>
+        <div style="background:#f9fafb;padding:14px;border-radius:10px;margin-bottom:14px">
+          <div style="font-size:13px;color:#666;margin-bottom:6px">ملخص الطلب:</div>
+          ${{cart.map(i => `<div style="display:flex;justify-content:space-between;font-size:12px;margin:4px 0"><span>${{i.name}} × ${{i.qty||1}}</span><span>${{(i.price*(i.qty||1)).toFixed(2)}} ر.س</span></div>`).join('')}}
+          <div style="border-top:1px solid #e5e7eb;margin-top:8px;padding-top:8px;display:flex;justify-content:space-between;font-weight:900"><span>الإجمالي:</span><span>${{total.toFixed(2)}} ر.س</span></div>
+        </div>
+        <div style="display:flex;gap:8px"><button class="zx-checkout-btn" onclick="zxCheckoutNext()">تأكيد الدفع</button><button class="zx-checkout-btn" style="background:#e5e7eb;color:#0a0a0a" onclick="checkoutStep=1;zxRenderCheckout()">رجوع</button></div>`;
+    }} else {{
+      const oid = 'ORD-' + Math.floor(Math.random()*9000 + 1000);
+      c.innerHTML = `<div class="zx-conf"><h2>✓ تم الطلب بنجاح</h2><p style="color:#666;font-size:13px">سنبدأ في تجهيز طلبك فوراً</p><div class="oid">${{oid}}</div>
+        <div style="display:flex;justify-content:space-around;margin:20px 0;font-size:11px">
+          <div>✓ تم الاستلام</div><div style="opacity:.4">→ تحضير</div><div style="opacity:.4">→ في الطريق</div><div style="opacity:.4">→ توصيل</div>
+        </div>
+        <a href="https://wa.me/{brand_phone}?text=استفسار%20عن%20الطلب%20${{oid}}" target="_blank" style="display:inline-block;padding:10px 24px;background:#22c55e;color:#fff;border-radius:99px;text-decoration:none;font-weight:900;margin-top:8px">📱 تواصل واتساب</a>
+        <button class="zx-checkout-btn" style="margin-top:14px" onclick="localStorage.removeItem('zx_restaurant_cart');zxRenderCart();zxCloseCheckout()">إنهاء</button></div>`;
+    }}
+  }}
+  window.zxCheckoutNext = function(){{
+    if(checkoutStep === 1){{
+      const name = document.getElementById('zx-name')?.value?.trim();
+      const phone = document.getElementById('zx-phone')?.value?.trim();
+      if(!name || !phone){{ alert('املأ الاسم والهاتف'); return; }}
+      checkoutData.name = name; checkoutData.phone = phone;
+    }}
+    checkoutStep++;
+    zxRenderCheckout();
+  }};
+  document.addEventListener('DOMContentLoaded', zxRenderCart);
+  zxRenderCart();
+}})();
+</script>
+"""
+
+
 def render_admin_full_app(seed: Dict[str, Any], admin_email: str, admin_password: str) -> str:
     """Complete pre-built Admin login + 7-tab dashboard (HTML + CSS + JS). Drop-in module."""
     orders_rows = render_admin_orders_html(seed)

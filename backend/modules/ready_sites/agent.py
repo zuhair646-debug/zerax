@@ -26,7 +26,7 @@ from .data_factory import (
     seed_restaurant, seed_to_js,
     render_categories_html, render_products_html,
     render_admin_orders_html, render_admin_customers_html,
-    render_admin_full_app,
+    render_admin_full_app, render_cart_module,
 )
 
 logger = logging.getLogger(__name__)
@@ -588,6 +588,11 @@ async def generate_ready_site(
 
     admin_module = render_admin_full_app(seed, admin_creds["email"], admin_creds["password"])
     merged = merged.replace("</body>", admin_module + "\n</body>")
+
+    # 4d) Inject pre-built CART drawer + working addToCart + checkout flow
+    #     This overrides any broken AI-defined cart with a guaranteed-working one.
+    cart_module = render_cart_module(seed)
+    merged = merged.replace("</body>", cart_module + "\n</body>")
 
     # 5) Enforce credentials + branding
     merged = _enforce_branding_and_credentials(merged, admin_creds)
