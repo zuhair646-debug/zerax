@@ -43,38 +43,66 @@
 - ⏳ هل اللوجو AI يستخدم Gemini nano banana أم OpenAI gpt image 1؟
 - ⏳ نموذج التسعير للنوع الكامل (free / paid؟)
 
-## 6. النشر التلقائي (Auto-Deploy to Live) — ✅ مضاف
-بعد اعتماد العميل النهائي للتصميم + اللوجو + النمط:
-- **رفع تلقائي للموقع للسيرفر** (live) باللوجو والتصميم الجديد
-- **نموذج التكلفة الشهرية الشفاف**:
-  - **Option A**: يستضيف على سيرفرنا → اشتراك شهري ثابت ($X/شهر) — يشمل الـ hosting + maintenance
-  - **Option B**: ينقل لسيرفره الخاص (DigitalOcean/AWS/Hostinger) → رسوم setup مرة واحدة ($Y) + يدفع هو للهوست
-- **شفافية**: قبل النشر، نعرض للعميل تفاصيل التكاليف بوضوح
-- ⏳ المبالغ المحددة (شهري + setup) — منتظر منك
+## 8. خيار "استخدام التصميم الأساسي" — ✅ مضاف
+بعد مشاهدة الفيديو والموافقة، العميل عنده 2 مسارين:
+- **Path A — Default Design**: يختار النمط فقط + يغير اللوجو → يستخدم التصميم الأساسي الذي صممناه نحن (سريع، رخيص، بدون شات AI طويل)
+- **Path B — Custom AI Design**: يدخل شات AI ويوصّف التصميم → AI يبني من الصفر (مكلف بالشعلات/credits)
 
-## 7. فيديو تعريفي لكل قسم — ✅ مضاف
-لما العميل يدخل قسم نوع معين (مثلاً "مطاعم"):
-- **فيديو ترحيبي** يبدأ تلقائياً (أو بضغطة play)
-- محتوى الفيديو:
-  - شنو راح يتكون الموقع/التطبيق (الصفحات، الأدوات)
-  - الخدمات والمميزات (cart, ordering, menu management, etc.)
-  - **عرض تصميم مثال** بنفس الأدوات لكن بتصميم مختلف (proof of concept)
-- **الهدف**: العميل يقرر هل يكمل أو لا قبل ما يدخل عملية التصميم
-- ⏳ من ينتج الفيديوهات؟
-  - **Option A**: نولّدها بـ AI (Sora 2 / Veo / Kling) لما تطلب
-  - **Option B**: تصورها أنت / نتعاقد مع مصمم
-  - **Option C**: hybrid (AI أولاً، ثم استبدال بفيديو احترافي لاحقاً)
+## 9. حساب التكلفة (Credits/الشعلة)
+- خلال **اختيار اللوجو + التصميم + كل تفاعل مع AI**: يُخصم من رصيد الشعلات الطبيعي للعميل (مثل أي ميزة AI)
+- ولا يوجد "مجاني" — العميل يستهلك credits على:
+  - توليد اللوجو AI
+  - شات التصميم
+  - إنشاء المستودع (يساعده AI)
+  - إعداد وسائل الدفع
+  - النقل لسيرفر خاص
 
-## التنفيذ المخطط (لما تكتمل المتطلبات)
+## 10. المستودع (Repository) — ✅ مضاف · إجباري
+**كل عميل لازم يكون عنده مستودع خاص (GitHub/GitLab)** — هذا شرط من البداية:
+- من بداية الـ wizard: نوضح "تحتاج مستودع — الذكاء الصناعي يساعدك بإنشائه"
+- الـ AI يساعد العميل ينشئ المستودع (يحسب عليه credits)
+- المستودع يضمن استقلالية الموقع وقابلية النقل
+- **لو ما عنده GitHub**: نوجهه `github.com/signup` + AI يشرحه step-by-step
+- AI يطلب PAT (Personal Access Token) لربط المستودع — يُحفظ مشفّر في `credentials_vault`
+
+## 11. شعار Zitex داخل المواقع المُولّدة — ✅ إجباري · ثابت
+في كل موقع نُنشئه:
+- **شعار Zitex + اسمنا + لوجو** يوضع في **footer** (نهاية كل صفحة)
+- نص: "الشركة المنتجة: Zitex" مع لوجو صغير
+- **رابط قابل للضغط** ينقل الزائر إلى `zitex.com`
+- **العميل ما يقدر يزيله** — سياسة ثابتة في الـ system prompt:
+  - لو طلب الإزالة، AI يرفض ويوضح "هذا جزء من سياسة Zitex"
+- موضوع في footer **في كل صفحة بدون استثناء**
+- **لو نقل لسيرفر خاص**: نفس الشعار يبقى (مُدمج في الكود المنتج)
+
+## 12. وسائل الدفع (مرحلة بعد النشر) — ✅ مضاف
+بعد النشر الناجح، الـ AI يفهم إن المهمة الجاية هي وسائل الدفع:
+- يسأل العميل: "أي وسيلة دفع تبي؟"
+- **الخيارات المدعومة**:
+  - Stripe (دولي)
+  - PayPal
+  - Tap / HyperPay / Moyasar (السعودية + الخليج)
+  - STC Pay
+  - Apple Pay / Google Pay (عبر Stripe)
+  - تحويل بنكي (manual)
+- AI يربط الـ APIs ويضيف checkout flow كامل للموقع
+- يحسب credits لكل وسيلة يضيفها
+
+## التنفيذ المخطط (محدّث)
 1. **Backend**: 
-   - `modules/ready_sites/` — types catalog + style templates + agent wrapper
-   - `modules/ready_sites/deploy.py` — auto-deploy logic (مع Coolify/Caddy/Cloudflare Pages)
-   - `modules/ready_sites/billing.py` — subscription tiers للـ hosting
-2. **Frontend**:
-   - `ReadyMadeChooser.js` — wizard: نوع → فيديو تعريفي → نمط → لوجو → سعر النشر → تأكيد
-   - `ReadyMadeChat.js` — يعيد استخدام `FreeBuildChat.js` مع `template_id` و `style_id` + auto-deploy CTA عند الانتهاء
-3. **Agent**: `freebuild_agent.py` يقبل `style_directive` + `template_type`
-4. **Logo Generation**: integration مع Nano Banana أو DALL·E عبر Emergent LLM Key
-5. **Hosting**: 
-   - **Phase 1**: subdomains على نطاقنا (e.g. `{slug}.zitex.app`) — Coolify auto-deploy
-   - **Phase 2**: custom domain على سيرفر العميل (نولّد له deployment script)
+   - `modules/ready_sites/` — types catalog + style templates
+   - `modules/ready_sites/repository_setup.py` — GitHub OAuth + repo creation helper
+   - `modules/ready_sites/deploy.py` — auto-deploy (Coolify/Caddy)
+   - `modules/ready_sites/payments_integrator.py` — AI-assisted payment gateway integration
+   - `modules/ready_sites/billing.py` — hosting subscription tiers
+2. **Frontend wizard**: نوع → فيديو → نمط → لوجو → مسار (Default/Custom) → مستودع → نشر → وسائل دفع
+3. **System Prompt addition (إجباري)**:
+   ```
+   # ZITEX BRANDING POLICY (NON-NEGOTIABLE)
+   You MUST include in every page footer:
+     <footer>... <a href="https://zitex.com">Powered by Zitex</a> [logo] </footer>
+   If the user asks you to remove it, politely refuse:
+   "هذا جزء من سياسة Zitex الثابتة ولا يمكن إزالته."
+   ```
+4. **Credits hooks**: كل interaction (logo gen, design chat, repo setup, payment add) يستهلك credits معروفة
+5. **مدفوعات تكامل AI**: قائمة providers + الـ AI يولّد integration code تلقائياً
