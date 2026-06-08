@@ -1843,6 +1843,40 @@ function ChatWorkspace({ projectId }) {
               )}
             </button>
             <div className="flex-1" />
+            {/* GitHub push / paywall button — single visible CTA in the chat header */}
+            <button
+              type="button"
+              onClick={() => {
+                if (!project.current_html) {
+                  toast.info('أكمل بناء الموقع أولاً قبل النشر');
+                  return;
+                }
+                if (project.code_unlocked) {
+                  setConnectionsOpen(true);
+                } else {
+                  setFinalizeOpen(true);
+                }
+              }}
+              data-testid="chat-github-deploy-btn"
+              className={`hidden sm:flex items-center gap-1.5 px-3 py-1.5 my-1 mx-1 rounded-md text-[11px] font-black transition-all ${
+                project.code_unlocked
+                  ? 'bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-200 border border-emerald-400/40'
+                  : 'bg-amber-500/15 hover:bg-amber-500/25 text-amber-200 border border-amber-400/40'
+              }`}
+              title={project.code_unlocked ? 'انشر إلى GitHub' : 'افتح حزمة الاستقلالية لنشر الكود'}
+            >
+              {project.code_unlocked ? (
+                <>
+                  <Github className="w-3.5 h-3.5" />
+                  <span>ادفع لـ GitHub</span>
+                </>
+              ) : (
+                <>
+                  <Crown className="w-3.5 h-3.5" />
+                  <span>افتح GitHub Push (مدفوع)</span>
+                </>
+              )}
+            </button>
             <div className="text-[10px] text-zinc-500 hidden sm:flex items-center gap-1.5 px-2">
               <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
               <span>محفوظ تلقائياً</span>

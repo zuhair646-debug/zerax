@@ -1875,6 +1875,14 @@ def make_freebuild_chat_router(db, get_current_user):
         )
         if not proj:
             raise HTTPException(404)
+        # 💳 PAYWALL: GitHub push is a premium feature — user must unlock
+        # via the Finalize/Independence purchase first.
+        if not proj.get("code_unlocked"):
+            raise HTTPException(
+                402,  # Payment Required
+                "PAYWALL: حزمة الاستقلالية مطلوبة للنشر على GitHub. افتح زر "
+                "'تفعيل الاستقلالية' وادفع الحزمة الواحدة ($49) لفتح الميزة."
+            )
         if not proj.get("current_html"):
             raise HTTPException(400, "لا يوجد HTML للنشر")
         conn = await db.freebuild_connections.find_one(

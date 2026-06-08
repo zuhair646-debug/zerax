@@ -355,7 +355,7 @@ async def run_agent_turn(
     project: Dict[str, Any],
     user_message: str,
     history_messages: List[Dict[str, str]],
-    max_iterations: int = 15,
+    max_iterations: int = 40,
     model: str = "claude-sonnet-4-5-20250929",
 ) -> Dict[str, Any]:
     """
@@ -669,7 +669,7 @@ async def stream_agent_turn(
     project: Dict[str, Any],
     user_message: str,
     history_messages: List[Dict[str, str]],
-    max_iterations: int = 15,
+    max_iterations: int = 40,
     ctx_holder: Optional[Dict[str, Any]] = None,
 ) -> AsyncGenerator[str, None]:
     """SSE generator: yields live thinking events while the agent works.
