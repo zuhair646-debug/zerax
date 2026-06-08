@@ -1417,9 +1417,28 @@ function ChatWorkspace({ projectId }) {
             action: { label: 'افتح', onClick: () => setActiveTab('live') },
           });
           setActiveTab((prev) => (prev === 'chat' ? 'live' : prev));
-          // refresh full project to get new current_html
+          // refresh project HTML/snapshots but preserve local messages
+          // (DB doesn't have agent_steps — refetching would erase the live narration
+          // bubbles the user just watched, making the response feel "wiped")
           const pr = await fetch(`${API}/api/freebuild-chat/project/${projectId}`, { headers: { Authorization: `Bearer ${token}` } });
-          if (pr.ok) setProject(await pr.json());
+          if (pr.ok) {
+            const fresh = await pr.json();
+            setProject((p) => {
+              if (!p) return fresh;
+              // Keep our local messages (they have agent_steps); take new HTML/snapshots from server
+              const localMsgs = p.messages || [];
+              const dbMsgs = fresh.messages || [];
+              // Merge: use local messages but adopt any new server-only fields (had_html, etc.)
+              const merged = localMsgs.map((lm) => {
+                if (!lm.agent_holder_id) return lm;
+                const dbCounter = dbMsgs.find(
+                  (dm) => dm.role === lm.role && (dm.content || '').slice(0, 40) === (lm.content || '').slice(0, 40)
+                );
+                return dbCounter ? { ...lm, had_html: dbCounter.had_html, agent_iterations: dbCounter.agent_iterations } : lm;
+              });
+              return { ...fresh, messages: merged };
+            });
+          }
         }
         // Skip the rest of the legacy path
         setMessage('');
@@ -1914,12 +1933,6 @@ function ChatWorkspace({ projectId }) {
                           }
                           return null;
                         })}
-                        {m.agent_streaming && (
-                          <div className="text-[10px] text-zinc-500 px-3 italic flex items-center gap-2">
-                            <span className="inline-block w-2 h-2 rounded-full bg-cyan-400 animate-pulse" />
-                            يعمل...
-                          </div>
-                        )}
                       </div>
                     )}
 

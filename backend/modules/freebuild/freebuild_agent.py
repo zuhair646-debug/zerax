@@ -301,7 +301,10 @@ AGENT_SYSTEM_PROMPT = """أنت **Senior Web Engineer** في منصة Zitex — 
 - لو في موقع → استخدم `apply_section` للتعديلات الجراحية. لا تكتب الموقع من الصفر مرة ثانية
 - بعد أي تغيير → `validate_html` للتأكد ما في مشاكل
 - لو وجدت مشكلة → أصلحها بـtool ثاني (لا تتجاهل)
-- انتهِ بـ`finish` مع رسالة عربية قصيرة للعميل + خيارات اختيارية
+- انتهِ بـ`finish` مع **رسالة عربية واضحة (3–6 جمل)** تشرح للعميل بالضبط شنو سويت + اقتراحات للخطوة الجاية. ❌ ما تنهي بـ"تم." فقط — العميل يحتاج يفهم اللي صار.
+
+📝 **مثال رسالة finish ممتازة**:
+"بنيت لك موقع المطعم بـ3 أقسام: الواجهة الرئيسية، قائمة الطعام، واتصل بنا. استخدمت ألوان دافئة (أحمر/كريمي) وخط عريض للعناوين. الروابط الداخلية شغّالة وموقعك متجاوب على الجوال. تبي أضيف قسم الحجز أو معرض صور للأطباق؟"
 
 🎨 **معايير الجودة**:
 - Tailwind CSS via CDN ✓
@@ -953,10 +956,18 @@ async def _stream_one_provider(
         if finished:
             break
 
-    # Final summary
+    # Final summary — fallback to a meaningful default if AI gave a thin one
+    if not summary or len(summary.strip()) < 8:
+        if ctx.changes_made > 0:
+            summary = (
+                f"✅ خلصت! طبّقت {ctx.changes_made} تعديل على الموقع. "
+                "افتح المعاينة الحية للمشاهدة. تبي تضيف قسم ثاني أو تعدّل التصميم؟"
+            )
+        else:
+            summary = "أنا جاهز — قول لي وش تبي نسوي بالضبط وأبدأ على طول."
     logger.info(f"[agent-stream] finalizing: iterations={iterations} summary_len={len(summary)} html_changes={ctx.changes_made}")
     yield _sse("done", {
-        "summary": summary or "تم.",
+        "summary": summary,
         "options": options,
         "iterations": iterations,
         "model_used": model_used,
