@@ -120,6 +120,7 @@ async def _run_generation(db, session_id: str, user_id: str) -> None:
         )
         html = result["html"]
         admin_creds = result["admin_credentials"]
+        seed_summary = result.get("seed_summary", {})
 
         project_id = str(uuid.uuid4())
         slug = (branding.get("business_name", "site") or "site").strip().replace(" ", "-").lower()[:40] or "site"
@@ -133,6 +134,7 @@ async def _run_generation(db, session_id: str, user_id: str) -> None:
             "features": enabled,
             "html": html,
             "admin_credentials": admin_creds,
+            "seed_summary": seed_summary,
             "refinement_history": [],
             "name": branding.get("business_name", "موقعي"),
             "slug": f"{slug}-{project_id[:6]}",

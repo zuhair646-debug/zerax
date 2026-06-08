@@ -1,15 +1,16 @@
 """Ready Sites — AI generation agent.
 
-Quality strategy:
-  1) MULTI-PASS: 2 sequential calls (Shell+Menu+Gallery → Cart+Admin+Driver+Footer) merged.
-  2) STRICT enforcement: every button has working onclick → opens real modal/section.
-  3) Admin credentials baked into the site (login at ?admin=1).
-  4) Refinement chat: post-generation `refine()` function that mutates existing HTML
-     according to a user's natural-language change request.
+Hybrid quality strategy (post Feb 2026):
+  • Python DATA FACTORY (data_factory.py) generates ALL seed data deterministically:
+    branding, hours, 6 categories, 60 products w/ Saudi pricing + calories + ingredients,
+    30 sample orders, 20 customers, 5 drivers, analytics, reviews.
+  • The seed JS (`window.SITE = {...}; window.ADMIN_DATA = {...};`) is INJECTED into
+    the AI's pass 1 output AT THE TOP OF THE <script> block deterministically — so the
+    AI doesn't waste any of its 16K token budget on data generation.
+  • AI focuses ONLY on the UI shell: HTML structure, CSS, routing JS, modals,
+    admin dashboard layout. Result: ALWAYS 60+ products, 30 orders, 20 customers.
 
-Provider chain (all async — never blocks the event loop):
-  1) Zitex unified router (Claude/OpenAI true async)
-  2) Direct AsyncOpenAI gpt-4o using OPENAI_DIRECT_KEY (final fallback)
+Provider chain (all async): zitex_chat → AsyncOpenAI gpt-4o direct.
 """
 from __future__ import annotations
 
@@ -20,6 +21,8 @@ import logging
 import secrets
 import string
 from typing import Any, Dict, List, Optional
+
+from .data_factory import seed_restaurant, seed_to_js
 
 logger = logging.getLogger(__name__)
 
@@ -312,6 +315,7 @@ def _build_pass1_brief(
     pattern: Dict[str, Any],
     branding: Dict[str, Any],
     features: List[Dict[str, Any]],
+    seed: Dict[str, Any],
 ) -> str:
     name = branding.get("business_name", "مطعمي")
     tagline = branding.get("tagline", "")
@@ -326,22 +330,11 @@ def _build_pass1_brief(
     else:
         logo_block = f"Use a bold typographic wordmark with the text '{logo_text}'."
 
-    photo_ids = [
-        "photo-1565299624946-b28f40a0ae38", "photo-1551782450-a2132b4ba21d",
-        "photo-1565958011703-44f9829ba187", "photo-1546833999-b9f581a1996d",
-        "photo-1559339352-11d035aa65de", "photo-1567620905732-2d1ec7ab7445",
-        "photo-1540189549336-e6e99c3679fe", "photo-1572441713132-c542fc4fe282",
-        "photo-1574484284002-952d92456975", "photo-1601050690597-df0568f70950",
-        "photo-1555939594-58d7cb561ad1", "photo-1517248135467-4c7edcad34c4",
-        "photo-1414235077428-338989a2e8c0", "photo-1504674900247-0877df9cc836",
-        "photo-1484980972926-edee96e0960d", "photo-1467003909585-2f8a72700288",
-    ]
-    photo_block = "\n".join(
-        f"- https://images.unsplash.com/{pid}?auto=format&fit=crop&w=1600&q=80"
-        for pid in photo_ids
-    )
-
     features_block = "\n".join(f"- [{f['id']}] {f['name_ar']}" for f in features)
+
+    # Compact data shape preview (so AI knows the structure to consume — NOT to regenerate)
+    cat_preview = ", ".join(f"{c['id']} ({c['name']})" for c in seed["categories"])
+    sample_product = seed["products"][0]
 
     return f"""## BUSINESS BRIEF
 - Business name: {name}
@@ -359,10 +352,23 @@ def _build_pass1_brief(
 ## ENABLED FEATURES
 {features_block}
 
-## CURATED PHOTO LIBRARY — USE ONLY THESE IDs
-{photo_block}
+## DATA LAYER — DO NOT GENERATE — IT WILL BE INJECTED
+The platform will inject `window.SITE` automatically. Your JS code must READ from it but NEVER define it.
+window.SITE shape (read-only — already populated with 60 products, 6 categories, hours, branding, reviews):
 
-OUTPUT PASS 1 NOW.
+  window.SITE.branding = {{ name, tagline, phone, whatsapp, email, address, city, instagram }}
+  window.SITE.hours = {{ saturday: {{open, close}}, ..., friday: {{open, close}} }}
+  window.SITE.categories = [ {{ id, name, desc, img }} ]   // 6 items
+  window.SITE.products = [ {{ id, category, name, price, calories, desc, ingredients[], tags[], img, prep_time, rating, reviews_count, is_new, is_popular }} ]   // 60 items
+  window.SITE.reviews = [ {{ name, stars, date, text }} ]   // 5 items
+
+Categories preview: {cat_preview}
+Sample product: {sample_product['name']} (price={sample_product['price']} ر.س, calories={sample_product['calories']}, category={sample_product['category']})
+
+YOUR JOB: build the UI shell. Render menus, products, reviews FROM `window.SITE`.
+DO NOT write `window.SITE = {{...}}` — the platform owns that data.
+
+OUTPUT PASS 1 NOW (DOCTYPE → <!-- ENDPASS1 -->). NO MARKDOWN.
 """
 
 
@@ -371,12 +377,14 @@ def _build_pass2_brief(
     branding: Dict[str, Any],
     features: List[Dict[str, Any]],
     admin_creds: Dict[str, str],
+    seed: Dict[str, Any],
     pass1_html: str,
 ) -> str:
     name = branding.get("business_name", "مطعمي")
     features_block = "\n".join(f"- [{f['id']}] {f['name_ar']}" for f in features)
-    # truncate pass1 to last 2000 chars (we only need context, not the full text)
     pass1_tail = pass1_html[-2500:] if len(pass1_html) > 2500 else pass1_html
+    sample_order = seed["orders"][0]
+    sample_customer = seed["customers"][0]
     return f"""## BUSINESS
 - Name: {name}
 - Pattern: {pattern['id']} (palette: {", ".join(pattern.get('palette', []))})
@@ -388,15 +396,26 @@ Password: {admin_creds['password']}
 ## ENABLED FEATURES
 {features_block}
 
-## EXISTING HTML — END OF PASS 1 (the very last portion for context)
+## DATA LAYER — DO NOT GENERATE — IT WILL BE INJECTED
+The platform owns `window.SITE` and `window.ADMIN_DATA`. Your JS must READ from them but NEVER define them.
+
+  window.ADMIN_DATA.orders = [ {{ id, customer, phone, items[], total, status, time, payment, address, driver }} ]   // 30 orders
+  window.ADMIN_DATA.customers = [ {{ name, phone, total_orders, total_spent, last_order, loyalty_points, status, wallet }} ]   // 20 customers
+  window.ADMIN_DATA.drivers = [ {{ name, phone, status, deliveries_today, rating, area }} ]   // 5 drivers
+  window.ADMIN_DATA.analytics = {{ today: {{orders, revenue, avg_order, top_dish}}, week: {{...}}, top_dishes: [{{name, sold, revenue}}] }}
+
+Sample order: {sample_order['id']} → {sample_order['customer']} ({sample_order['phone']}), total={sample_order['total']} ر.س, status={sample_order['status']}
+Sample customer: {sample_customer['name']} → {sample_customer['phone']}, orders={sample_customer['total_orders']}, status={sample_customer['status']}
+
+## EXISTING HTML — END OF PASS 1
 {pass1_tail}
 
 ## YOUR JOB
-Append everything from `<!-- BEGINPASS2 -->` to `</html>` covering:
-cart drawer · checkout · reservation modal · branch selector · admin login + dashboard ·
-driver app · rich 4-column footer · Powered by Zitex strip.
+Build PASS 2: cart drawer + checkout modal + reservation form (in footer) + admin login + admin dashboard
+(7 sections reading from `window.ADMIN_DATA`) + tutorial overlay + driver app (reads ADMIN_DATA.drivers
+filtered by name) + 4-column rich footer.
 
-OUTPUT PASS 2 NOW.
+OUTPUT PASS 2 NOW (<!-- BEGINPASS2 --> → </html>). NO MARKDOWN.
 """
 
 
@@ -506,39 +525,72 @@ async def generate_ready_site(
     branding: Dict[str, Any],
     features: List[Dict[str, Any]],
 ) -> Dict[str, Any]:
-    """Generate via TWO-PASS strategy → much richer output.
+    """Generate via TWO-PASS + Python data factory injection → guaranteed-rich output.
 
-    Returns: {"html": str, "admin_credentials": {"email": ..., "password": ...}}
+    The Python data factory produces ALL seed data (60 products, 30 orders, 20 customers,
+    5 drivers, analytics, reviews). The AI focuses ONLY on UI shell. Then we inject the
+    seed JS into the merged HTML deterministically.
     """
     admin_creds = _gen_admin_credentials(branding.get("business_name", ""))
 
-    # PASS 1
-    pass1_user = _build_pass1_brief(pattern, branding, features)
+    # 1) Python data factory — deterministic seed
+    seed = seed_restaurant(
+        business_name=branding.get("business_name", "مطعمي"),
+        tagline=branding.get("tagline", ""),
+    )
+    seed_js = seed_to_js(seed)
+
+    # 2) AI builds the UI shell only
+    pass1_user = _build_pass1_brief(pattern, branding, features, seed)
     pass1_html = await _call_llm(PASS1_SYSTEM, pass1_user, max_tokens=16000)
     logger.info(f"[READY_SITES] pass1 size: {len(pass1_html)}")
 
-    # PASS 2
-    pass2_user = _build_pass2_brief(pattern, branding, features, admin_creds, pass1_html)
+    pass2_user = _build_pass2_brief(pattern, branding, features, admin_creds, seed, pass1_html)
     pass2_html = await _call_llm(PASS2_SYSTEM, pass2_user, max_tokens=16000)
     logger.info(f"[READY_SITES] pass2 size: {len(pass2_html)}")
 
-    # MERGE
+    # 3) Merge
     merged = _merge_passes(pass1_html, pass2_html)
+
+    # 4) Inject the seed JS at the top of the first <script> block
+    merged = _inject_seed(merged, seed_js)
+
+    # 5) Enforce credentials + branding
     merged = _enforce_branding_and_credentials(merged, admin_creds)
     logger.info(f"[READY_SITES] merged size: {len(merged)}")
 
     if "<html" not in merged.lower() or "</html>" not in merged.lower():
         raise RuntimeError("Merged output is not valid HTML document")
 
-    return {"html": merged, "admin_credentials": admin_creds}
+    return {"html": merged, "admin_credentials": admin_creds, "seed_summary": {
+        "products": len(seed["products"]),
+        "orders": len(seed["orders"]),
+        "customers": len(seed["customers"]),
+        "drivers": len(seed["drivers"]),
+    }}
+
+
+def _inject_seed(html: str, seed_js: str) -> str:
+    """Inject the seed JS at the top of the first <script> tag.
+    If the AI already wrote a placeholder `window.SITE = ...` we replace it.
+    """
+    # Remove any AI-generated window.SITE or window.ADMIN_DATA assignments (we own the data)
+    html = re.sub(r"window\.SITE\s*=\s*\{[\s\S]*?\}\s*;", "", html, count=1)
+    html = re.sub(r"window\.ADMIN_DATA\s*=\s*\{[\s\S]*?\}\s*;", "", html, count=1)
+
+    # Insert our seed JS right after the first opening <script> tag (no attributes or with attributes)
+    marker_re = re.compile(r"(<script\b[^>]*>)", re.IGNORECASE)
+    m = marker_re.search(html)
+    if m:
+        idx = m.end()
+        return html[:idx] + "\n/* ── Zitex seed data — INJECTED ── */\n" + seed_js + "\n/* ── end seed ── */\n" + html[idx:]
+    # No <script> found — append one before </body>
+    seed_block = f'\n<script>\n/* ── Zitex seed data — INJECTED ── */\n{seed_js}\n</script>\n'
+    return html.replace("</body>", seed_block + "</body>")
 
 
 async def refine_ready_site(current_html: str, change_request: str) -> str:
-    """Apply a natural-language refinement to an existing site's HTML.
-
-    Used by the post-generation refinement chat — owner says e.g.
-    'غيّر لون الخلفية للأخضر' or 'أضف قسم وصفاتنا الخاصة'.
-    """
+    """Apply a natural-language refinement to an existing site's HTML."""
     user_msg = f"""## CHANGE REQUEST (apply surgically)
 {change_request}
 
@@ -548,11 +600,9 @@ async def refine_ready_site(current_html: str, change_request: str) -> str:
 OUTPUT THE FULL UPDATED HTML NOW (entire document, doctype to </html>)."""
     new_html = await _call_llm(REFINE_SYSTEM, user_msg, max_tokens=16000)
 
-    # Strip fences (already done in _call_llm) and validate
     if "<html" not in new_html.lower() or "</html>" not in new_html.lower():
         raise RuntimeError("Refinement output is not valid HTML")
 
-    # Re-enforce Zitex branding (in case AI dropped it)
     if "zitex.com" not in new_html.lower():
         new_html = new_html.replace(
             "</body>",
