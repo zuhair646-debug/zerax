@@ -3532,6 +3532,15 @@ try:
 except Exception as _fbe:
     logging.getLogger(__name__).error(f"Failed to register freebuild module: {_fbe}", exc_info=True)
 
+# ============== READY-MADE SITES (Wizard-driven deep vertical AI builder) ==============
+try:
+    from modules.ready_sites import create_ready_sites_router
+    _rs_router = create_ready_sites_router(db, get_current_user)
+    app.include_router(_rs_router)
+    logging.getLogger(__name__).info("Ready Sites module registered")
+except Exception as _rse:
+    logging.getLogger(__name__).error(f"Failed to register ready_sites module: {_rse}", exc_info=True)
+
 # ============== FREE-BUILD CHAT (Game-Studio-style conversational + asset approval) ==============
 try:
     from modules.freebuild.freebuild_chat import make_freebuild_chat_router

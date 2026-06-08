@@ -1,0 +1,66 @@
+{
+  "summary": "Tested Ready Sites module (/api/ready-sites/*). 9/9 fast backend tests PASS (catalog, full wizard flow, validations, low-credit 402). Full generation E2E confirmed via inspection: 5 projects already generated for owner (70KB Arabic HTML, contains <html, <style, zitex.com footer, content-type text/html). HOWEVER discovered a CRITICAL backend issue: during AI generation (~2-3 min) the entire FastAPI event loop is blocked — ALL endpoints (status polling, /catalog, /auth/login) return ReadTimeout. This breaks the frontend polling UX. Frontend redirect-without-auth → /login PASSES; deeper wizard UI walkthrough was aborted because backend was unresponsive due to in-flight generation from the integration test.",
+  "backend_issues": {
+    "critical": [
+      {
+        "endpoint": "/api/ready-sites/generate (background task)",
+        "issue": "Event loop is BLOCKED during AI generation. While `asyncio.create_task(_run_generation(...))` is used, the underlying LLM call (zitex_chat → LiteLLM or emergentintegrations LlmChat) appears to make blocking sync calls. Result: every other API call to the backend times out for the ~2-3 min generation window — including /api/ready-sites/status/{sid} polling, /api/auth/login, even /api/ready-sites/catalog. Reproduced 100% across 3 attempts. Server log shows LiteLLM call running 18:57:22 → 18:59:59 (2m37s); during that window curl to /catalog returned 000 timeout. This will break user-facing polling in production.",
+        "priority": "CRITICAL"
+      }
+    ],
+    "minor": [
+      {
+        "endpoint": "/api/ready-sites/preview/{id}",
+        "issue": "Response content-type header is duplicated: `text/html; charset=utf-8; charset=utf-8`. Caused by FastAPI auto-appending `; charset=utf-8` to a media_type that already includes it. Fix: use `media_type='text/html'` (no charset) in Response()."
+      }
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [
+      {
+        "flow": "Generation polling in ReadySites.js (lines 158-175)",
+        "issue": "Frontend polls /status every 3s for up to 5 min — but during the generation window the backend event loop is blocked, so each poll fetch will hang/timeout. User UX will be broken even though generation eventually completes server-side.",
+        "affected_selectors": ["[data-testid='generate-btn']"]
+      }
+    ],
+    "design_issues": [
+      {
+        "screen": "ReadySites wizard",
+        "issues": [
+          "All data-testid attributes are correctly present (verified in code review). Page redirects unauthenticated users to /login as expected."
+        ]
+      }
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_ready_sites.py",
+    "/app/test_reports/pytest/ready_sites_results.xml",
+    "/app/test_reports/pytest/ready_sites_gen_results.xml"
+  ],
+  "action_items": [
+    "FIX CRITICAL: Make the AI generation truly non-blocking. Options: (a) verify zitex_chat / LlmChat use async HTTP (httpx async, litellm.acompletion) — if sync, switch to async. (b) Run the LLM call in a thread pool: `await asyncio.get_event_loop().run_in_executor(None, sync_call)` or use `loop.run_in_executor`. (c) Move generation to a separate worker process / Celery / background dedicated event loop. Until fixed, polling will time out and frontend UX is broken.",
+    "Fix duplicated charset in /api/ready-sites/preview/{id} Response — use media_type='text/html' (FastAPI appends charset automatically).",
+    "Consider adding a generation_started_at timestamp check in /status so an orphaned 'generating' phase older than X minutes auto-recovers."
+  ],
+  "critical_code_review_comments": [
+    "modules/ready_sites/__init__.py uses `asyncio.create_task(_run_generation(...))` which is correct in intent, BUT only works if every awaited call inside _run_generation is truly async-non-blocking. The downstream zitex_chat / emergentintegrations LlmChat must NOT make blocking sync HTTP calls — needs verification.",
+    "modules/ready_sites/__init__.py L322: returns started:True even if no LLM provider key is configured — the failure surfaces only later in /status as last_error after credits are deducted+refunded. Could pre-flight check provider availability before deducting.",
+    "modules/ready_sites/agent.py L156: chat.with_max_tokens(16000) is in a bare try/except — silently ignored if unsupported. Add a debug log.",
+    "modules/ready_sites/__init__.py L368: `media_type='text/html; charset=utf-8'` causes duplicate charset in response header — drop the explicit charset.",
+    "Session cleanup: ready_sites_sessions documents are never expired/cleaned up — consider a TTL index on created_at."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_ready_sites.py (created — 10 pytest tests covering catalog, full wizard, validation, credit gate, full generation→preview)"
+  ],
+  "success_rate": {
+    "backend": "90% (9/10 pytest cases pass; the generation E2E test FAILED only because status polling timed out — the project itself was created successfully as verified via direct DB/projects query. Core functionality works, but polling is broken under load.)",
+    "frontend": "20% (only the unauth → /login redirect verified; wizard UI walkthrough aborted because backend was unresponsive from concurrent in-flight generations. data-testid coverage in code is good.)"
+  },
+  "test_credentials": "owner@zitex.com / owner123 (used). audit_1780793976@test.com / Test1234! (used for 402 test).",
+  "seed_data_creation": "Created 5 test ready-sites projects on owner account (TEST_AutoGen, TEST_مطعم زيتاكس, etc.). Generation costs 40 credits each — owner spent ~200 credits during the integration test attempts. Cleanup not done because the integration test failed before reaching DELETE step.",
+  "retest_needed": true,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "The CRITICAL event-loop-blocking bug is the headline finding — when /generate is triggered, no other request to the backend succeeds for ~2-3 minutes until the LLM call completes. To re-test this fix: trigger /generate once, then immediately curl /api/ready-sites/catalog within the next 60s — it must respond quickly (<1s). Use the existing test file /app/backend/tests/test_ready_sites.py — non-gen tests pass instantly; the TestGenerationIntegration test should pass once the blocking issue is fixed. Note: a previous generation test left 5 test projects on owner's account that should be cleaned up. The OpenAI direct fallback works (gpt-4o produced 70KB Arabic HTML successfully); Claude path also works (per earlier 18:57 log). The minor double-charset bug in preview endpoint is easy: drop the explicit charset in Response(media_type=...).",
+  "rca_of_the_issue": "Root cause of CRITICAL: FastAPI runs on a single async event loop. `asyncio.create_task` schedules the coroutine on the same loop. If any function inside (zitex_chat or its provider chain) calls blocking sync I/O (e.g., LiteLLM `completion()` instead of `acompletion()`, or requests.post instead of httpx async), the entire loop stalls. Evidence: backend log shows LiteLLM call 'LiteLLM completion()' (not 'acompletion()') running from 18:57:22 to 18:59:59 — during this window, ALL HTTP requests to the backend timed out. Mitigation: (1) Use async LLM call paths everywhere (`litellm.acompletion`, `httpx.AsyncClient`). (2) Wrap blocking calls in `loop.run_in_executor(None, ...)`. (3) Better: move generation to a dedicated background worker (Celery/RQ) so the API process stays responsive."
+}

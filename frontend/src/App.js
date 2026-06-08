@@ -98,6 +98,7 @@ import Billing from '@/pages/Billing';
 import PricingSuccess from '@/pages/PricingSuccess';
 import PricingAdmin from '@/pages/PricingAdmin';
 import Companion from '@/pages/Companion';
+import ReadySites from '@/pages/ReadySites';
 import '@/App.css';
 
 function App() {
@@ -247,6 +248,9 @@ function App() {
           <Route path="/admin/affiliates" element={<ProtectedRoute adminOnly><AffiliatesAdmin user={user} /></ProtectedRoute>} />
           <Route path="/admin/payouts" element={<ProtectedRoute adminOnly><PayoutsAdmin user={user} /></ProtectedRoute>} />
           <Route path="/companion" element={<ProtectedRoute><Companion user={user} setUser={setUser} /></ProtectedRoute>} />
+          {/* 🏪 Ready Sites — Wizard-driven AI restaurant site builder */}
+          <Route path="/ready-sites" element={<ProtectedRoute><ReadySites user={user} /></ProtectedRoute>} />
+          <Route path="/dashboard/ready-sites" element={<ProtectedRoute><ReadySites user={user} /></ProtectedRoute>} />
           {/* 💰 Pricing & Billing */}
           <Route path="/pricing" element={<Pricing user={user} />} />
           <Route path="/billing" element={<ProtectedRoute><Billing user={user} /></ProtectedRoute>} />
