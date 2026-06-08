@@ -94,12 +94,18 @@ i18n.use(initReactI18next).init({
   returnEmptyString: false,
 });
 
-// Apply <html dir="rtl|ltr"> & lang attribute on every change
+// Apply <html dir="rtl|ltr"> & lang attribute on every change, AND kick off
+// the live DOM translator so every visible Arabic/English string on the page
+// is rewritten into the user's chosen language (cached forever per browser).
 function applyLangSideEffects(code) {
   try {
     document.documentElement.lang = code;
     document.documentElement.dir = isRTL(code) ? 'rtl' : 'ltr';
     localStorage.setItem('zitex_lang', code);
+    // Live full-page translation via Claude (lazy-import so the bundle stays small)
+    import('./pageTranslator').then(({ applyPageLanguage }) => {
+      applyPageLanguage(code);
+    });
   } catch (_) { /* SSR-safe */ }
 }
 applyLangSideEffects(i18n.language);
