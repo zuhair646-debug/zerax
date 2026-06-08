@@ -6,6 +6,7 @@ import {
   Share2, Plus, Trash2, ExternalLink, Sparkles, BarChart3,
   Twitter, Instagram, Facebook, Youtube, Music, MessageCircle,
   Globe, Activity, Eye, Smartphone, Monitor, Tablet, Loader2,
+  Wallet, CheckCircle2, XCircle, Mail,
 } from 'lucide-react';
 
 const API = process.env.REACT_APP_BACKEND_URL;
@@ -53,6 +54,12 @@ export default function AffiliateDashboard({ user }) {
   const [linkBuilder, setLinkBuilder] = useState(null);
   const [lbPlatform, setLbPlatform] = useState('twitter');
   const [lbCampaign, setLbCampaign] = useState('default');
+  const [payoutInfo, setPayoutInfo] = useState(null);
+  const [payoutAmount, setPayoutAmount] = useState('');
+  const [paypalEmail, setPaypalEmail] = useState('');
+  const [paypalSaving, setPaypalSaving] = useState(false);
+  const [requestingPayout, setRequestingPayout] = useState(false);
+  const [payoutHistory, setPayoutHistory] = useState([]);
 
   const load = async () => {
     setLoading(true);
@@ -61,6 +68,14 @@ export default function AffiliateDashboard({ user }) {
       if (r1.ok) setData(await r1.json());
       const r2 = await api('/api/affiliate/me/posts');
       if (r2.ok) setPosts((await r2.json()).items || []);
+      const r3 = await api('/api/affiliate/me/payout-info');
+      if (r3.ok) {
+        const d = await r3.json();
+        setPayoutInfo(d);
+        setPaypalEmail(d.paypal_email || '');
+      }
+      const r4 = await api('/api/affiliate/me/payouts');
+      if (r4.ok) setPayoutHistory((await r4.json()).items || []);
     } finally { setLoading(false); }
   };
 
@@ -71,6 +86,41 @@ export default function AffiliateDashboard({ user }) {
 
   useEffect(() => { load(); }, []);
   useEffect(() => { buildLink(); }, [lbPlatform, lbCampaign]);
+
+  const savePaypal = async () => {
+    if (!paypalEmail.match(/^[^\s@]+@[^\s@]+\.[^\s@]+$/)) { toast.error('بريد PayPal غير صحيح'); return; }
+    setPaypalSaving(true);
+    try {
+      const r = await api('/api/affiliate/me/paypal-email', {
+        method: 'POST', body: JSON.stringify({ paypal_email: paypalEmail }),
+      });
+      if (r.ok) { toast.success('تم حفظ بريد PayPal'); load(); }
+      else { const e = await r.json().catch(() => ({})); toast.error(e.detail || 'فشل'); }
+    } finally { setPaypalSaving(false); }
+  };
+
+  const requestPayout = async () => {
+    const amt = parseFloat(payoutAmount);
+    if (!amt || amt < (payoutInfo?.min_payout_usd || 25)) {
+      toast.error(`الحد الأدنى $${payoutInfo?.min_payout_usd || 25}`); return;
+    }
+    if (!payoutInfo?.paypal_email) { toast.error('أضف بريد PayPal أولاً'); return; }
+    setRequestingPayout(true);
+    try {
+      const r = await api('/api/affiliate/me/payout/request', {
+        method: 'POST', body: JSON.stringify({ amount_usd: amt }),
+      });
+      if (r.ok) {
+        const d = await r.json();
+        toast.success(`تم إرسال طلب سحب $${d.amount_requested} (تستلم $${d.amount_net})`);
+        setPayoutAmount('');
+        load();
+      } else {
+        const e = await r.json().catch(() => ({}));
+        toast.error(e.detail || 'فشل');
+      }
+    } finally { setRequestingPayout(false); }
+  };
 
   const copy = (txt) => {
     navigator.clipboard?.writeText(txt);
@@ -188,6 +238,113 @@ export default function AffiliateDashboard({ user }) {
             <div className="text-3xl font-black text-white" data-no-translate="true">{s.paid_conversion_pct}%</div>
             <div className="text-[11px] text-zinc-500 mt-1">جودة عملاءك</div>
           </div>
+        </div>
+
+        {/* Payout panel */}
+        <div className="bg-gradient-to-br from-emerald-500/10 to-amber-500/5 border border-emerald-400/30 rounded-2xl p-5 mb-6">
+          <div className="flex items-center gap-2 mb-3">
+            <Wallet className="w-5 h-5 text-emerald-400" />
+            <h3 className="font-bold">سحب الأرباح عبر PayPal</h3>
+          </div>
+          <div className="grid md:grid-cols-2 gap-4">
+            {/* Left: PayPal email */}
+            <div>
+              <label className="text-xs text-zinc-400 mb-1 block flex items-center gap-1">
+                <Mail className="w-3 h-3" /> بريد PayPal (مطلوب)
+              </label>
+              <div className="flex gap-2">
+                <input
+                  type="email"
+                  value={paypalEmail}
+                  onChange={(e) => setPaypalEmail(e.target.value)}
+                  placeholder="your@paypal.com"
+                  className="flex-1 bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2 text-sm"
+                  data-testid="paypal-email-input"
+                />
+                <button
+                  onClick={savePaypal}
+                  disabled={paypalSaving}
+                  data-testid="save-paypal-btn"
+                  className="bg-emerald-500/20 border border-emerald-400/40 text-emerald-300 rounded-lg px-3 py-2 text-xs font-bold"
+                >
+                  {paypalSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : 'حفظ'}
+                </button>
+              </div>
+              {payoutInfo?.paypal_email && (
+                <div className="text-[10px] text-emerald-400 mt-1 flex items-center gap-1">
+                  <CheckCircle2 className="w-3 h-3" /> مُفعّل: <span data-no-translate="true">{payoutInfo.paypal_email}</span>
+                </div>
+              )}
+              <p className="text-[10px] text-zinc-500 mt-2">
+                ⚠️ ضروري يكون عندك حساب PayPal — هذي الطريقة الوحيدة لتحويل أموالك.
+              </p>
+            </div>
+
+            {/* Right: Request payout */}
+            <div>
+              <label className="text-xs text-zinc-400 mb-1 block">المبلغ المراد سحبه (USD)</label>
+              <input
+                type="number"
+                min={payoutInfo?.min_payout_usd || 25}
+                step="0.01"
+                value={payoutAmount}
+                onChange={(e) => setPayoutAmount(e.target.value)}
+                placeholder={`الحد الأدنى $${payoutInfo?.min_payout_usd || 25}`}
+                className="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2 text-sm mb-2"
+                data-testid="payout-amount"
+              />
+              {payoutAmount && parseFloat(payoutAmount) > 0 && (
+                <div className="bg-black/30 rounded-lg p-2 text-xs space-y-1 mb-2">
+                  <div className="flex justify-between">
+                    <span className="text-zinc-400">المبلغ المطلوب:</span>
+                    <span data-no-translate="true">${parseFloat(payoutAmount).toFixed(2)}</span>
+                  </div>
+                  <div className="flex justify-between text-red-300">
+                    <span>رسوم التحويل:</span>
+                    <span data-no-translate="true">-${(payoutInfo?.fee_usd || 2).toFixed(2)}</span>
+                  </div>
+                  <div className="flex justify-between font-bold text-emerald-300 border-t border-zinc-800 pt-1">
+                    <span>تستلم:</span>
+                    <span data-no-translate="true">${(parseFloat(payoutAmount) - (payoutInfo?.fee_usd || 2)).toFixed(2)}</span>
+                  </div>
+                </div>
+              )}
+              <button
+                onClick={requestPayout}
+                disabled={requestingPayout || !paypalEmail || !payoutAmount}
+                data-testid="request-payout-btn"
+                className="w-full bg-gradient-to-r from-emerald-500 to-amber-500 text-zinc-950 rounded-lg py-2.5 font-bold disabled:opacity-50 flex items-center justify-center gap-1"
+              >
+                {requestingPayout ? <Loader2 className="w-4 h-4 animate-spin" /> : <Wallet className="w-4 h-4" />}
+                طلب التحويل
+              </button>
+              <p className="text-[10px] text-zinc-500 mt-1 text-center">
+                المعالجة خلال 24-48 ساعة
+              </p>
+            </div>
+          </div>
+
+          {/* History */}
+          {payoutHistory.length > 0 && (
+            <div className="mt-4 pt-4 border-t border-zinc-800">
+              <div className="text-xs text-zinc-400 mb-2">سجل التحويلات</div>
+              <div className="space-y-1.5">
+                {payoutHistory.slice(0, 6).map((p) => (
+                  <div key={p.id} className="bg-black/30 rounded p-2 flex items-center justify-between text-xs">
+                    <div className="flex items-center gap-2">
+                      {p.status === 'paid' ? <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" /> :
+                       p.status === 'rejected' ? <XCircle className="w-3.5 h-3.5 text-red-400" /> :
+                       <Loader2 className="w-3.5 h-3.5 text-amber-400 animate-spin" />}
+                      <span data-no-translate="true">${p.amount_requested_usd}</span>
+                      <span className="text-zinc-500">→</span>
+                      <span data-no-translate="true">${p.amount_net_usd}</span>
+                    </div>
+                    <span className="text-zinc-500 text-[10px]" data-no-translate="true">{(p.requested_at || '').slice(0, 10)}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Link Builder */}

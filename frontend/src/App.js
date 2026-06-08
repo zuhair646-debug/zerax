@@ -5,9 +5,11 @@ import { Toaster } from '@/components/ui/sonner';
 import PromoStrip from '@/components/PromoStrip';
 import DetectedLanguageBanner from '@/components/DetectedLanguageBanner';
 import FloatingLanguagePicker from '@/components/FloatingLanguagePicker';
+import SupportWidget from '@/components/SupportWidget';
 import ClientIntelligence from '@/pages/ClientIntelligence';
 import AffiliateDashboard from '@/pages/AffiliateDashboard';
 import AffiliatesAdmin from '@/pages/AffiliatesAdmin';
+import PayoutsAdmin from '@/pages/PayoutsAdmin';
 import LandingPage from '@/pages/LandingPage';
 import DemoLanding from '@/pages/DemoLanding';
 import VrmPreview from '@/pages/VrmPreview';
@@ -140,6 +142,7 @@ function App() {
         <PromoStrip />
         <DetectedLanguageBanner />
         <FloatingLanguagePicker />
+        <SupportWidget user={user} />
         <Routes>
           {/* Root: ALWAYS show landing. Logged-in users can click on dashboard CTA to navigate. */}
           <Route path="/" element={<LandingPage user={user} />} />
@@ -242,6 +245,7 @@ function App() {
           <Route path="/affiliate" element={<ProtectedRoute><AffiliateDashboard user={user} /></ProtectedRoute>} />
           <Route path="/affiliate/dashboard" element={<ProtectedRoute><AffiliateDashboard user={user} /></ProtectedRoute>} />
           <Route path="/admin/affiliates" element={<ProtectedRoute adminOnly><AffiliatesAdmin user={user} /></ProtectedRoute>} />
+          <Route path="/admin/payouts" element={<ProtectedRoute adminOnly><PayoutsAdmin user={user} /></ProtectedRoute>} />
           <Route path="/companion" element={<ProtectedRoute><Companion user={user} setUser={setUser} /></ProtectedRoute>} />
           {/* 💰 Pricing & Billing */}
           <Route path="/pricing" element={<Pricing user={user} />} />

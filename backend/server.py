@@ -3486,6 +3486,25 @@ try:
 except Exception as _ate:
     logging.getLogger(__name__).error(f"Failed to register affiliate tracking: {_ate}", exc_info=True)
 
+# ============== SUPPORT + NOTIFICATIONS ==============
+try:
+    from modules.support import build_router as _build_support, notify_factory
+    _support_router = _build_support(db, get_current_user)
+    app.include_router(_support_router, prefix="/api")
+    logging.getLogger(__name__).info("support router registered")
+except Exception as _se:
+    logging.getLogger(__name__).error(f"Failed to register support: {_se}", exc_info=True)
+
+# ============== AFFILIATE PAYOUTS (PayPal payouts with $2 fee) ==============
+try:
+    from modules.affiliate.payouts import build_router as _build_payouts
+    _payout_notify = notify_factory(db)
+    _payouts_router = _build_payouts(db, get_current_user, _payout_notify)
+    app.include_router(_payouts_router, prefix="/api")
+    logging.getLogger(__name__).info("affiliate payouts router registered")
+except Exception as _pe:
+    logging.getLogger(__name__).error(f"Failed to register affiliate payouts: {_pe}", exc_info=True)
+
 # ============== AI AVATAR (Animated assistant — main site + merchant subscription) ==============
 try:
     from modules.avatar import create_avatar_router
