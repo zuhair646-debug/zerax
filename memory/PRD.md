@@ -1,5 +1,34 @@
 # Zitex AI Platform - PRD
 
+
+### 🆕 Jun 8 2026 — Ready Sites: Unified Footer + Zitex Tracker + UX Fixes ✅
+
+**Issues fixed (all P0):**
+1. **زر "أضف للسلة" + تبويبات التصنيفات** كانوا ما يستجيبون → الآن يشتغلون عبر **Global Click Delegation** على `document` يلتقط أي زر بـ `.prod-add` أو `[data-pid]` بغض النظر عمّن ولّده (AI أو Python injection).
+2. **AI ينسى `</body>`** → أضفنا `_merge_passes` يضمن وجود `</body>` و `</html>` + دالة `_safe_inject_before_body_end` تحقن قبل `</html>` لو `</body>` مفقود. هذا أصلح ضياع كل الـ modules المحقونة (Admin, Cart, Footer, Enhancements).
+
+**New features:**
+- **Unified Zitex Footer** (`render_zitex_enhancements`): 4 أعمدة (Brand+Social / ساعات / روابط سريعة / تواصل + خريطة) + شريط نهاية فيه شعار Zitex مع رابط تتبّع `https://zitex.com/?ref={project_id}`.
+- **Reservation Modal** (`#zx-resv-modal`): يفتح من زر "احجز طاولة" بدل النافبار. حقول: اسم، جوال، تاريخ، وقت، عدد، ملاحظات. يحفظ في `localStorage.zx_reservations` لمشاهدته في لوحة الأدمن.
+- **تواصل معنا Button**: في النافبار يعمل smooth scroll لقسم `#zx-contact-section` بالفوتر (إيميل clickable، جوال clickable، خريطة Google Maps مدمجة).
+- **Reviews Auto-Slider**: 5 آراء تتبدّل كل 5 ثوانٍ مع dots للتنقّل اليدوي.
+- **Category Filter Pills**: شريط Sticky يظهر عند الـ scroll لفلترة المنتجات.
+- **Zitex Branding Tracker** (Backend):
+  - `GET /api/ready-sites/track-visit/{project_id}` — 1x1 pixel يزيد عداد الزيارات.
+  - `GET /api/ready-sites/admin/owned-sites` — endpoint لأدمن Zitex يعرض كل المواقع المبنيّة عبر المنصة مع إحصائيات الزيارات.
+  - يُحفظ `visits_count` + `last_visit_at` في `ready_sites_projects`.
+
+**AI Prompt updates (PASS1/PASS2)**: قلنا للـ AI لا يبني footer/reservation/cart — المنصة تملكها. ولا يضع "احجز طاولة" أو "تواصل" بالنافبار.
+
+**Testing**: ✅ Playwright E2E مرّت — كل الأزرار شغّالة، Modal يفتح، Cart يضيف، Slider يدور، Tracker link موجود بـ project_id الصحيح.
+
+**Files touched**:
+- `/app/backend/modules/ready_sites/data_factory.py` (+ `render_zitex_enhancements`).
+- `/app/backend/modules/ready_sites/agent.py` (`_merge_passes`, `_safe_inject_before_body_end`, generate_ready_site accepts `project_id`).
+- `/app/backend/modules/ready_sites/__init__.py` (tracker endpoints, pre-generates project_id).
+
+---
+
 ### 🆕 Feb 8 2026 — Ready Sites (المواقع الجاهزة) Wizard ✅
 
 **الفكرة**: معالج 5 خطوات (Type → Pattern → Branding → Features → Generate) لبناء موقع مطعم متكامل بـ AI من الصفر، بدون قوالب جاهزة، مع التزام صارم بالنمط البصري المختار.

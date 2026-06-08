@@ -27,6 +27,7 @@ from .data_factory import (
     render_categories_html, render_products_html,
     render_admin_orders_html, render_admin_customers_html,
     render_admin_full_app, render_cart_module,
+    render_zitex_enhancements,
 )
 
 logger = logging.getLogger(__name__)
@@ -125,9 +126,12 @@ PRODUCT DETAIL PAGE (view-product-detail — populated dynamically)
 ═══════════════════════════════════════════════════════════════════
 NAV / HEADER / HERO
 ═══════════════════════════════════════════════════════════════════
-- Sticky top nav with 6 links: الرئيسية(#/) القائمة(#/menu) المعرض(#/#gallery) العروض(#/#specials) عن المطعم(#/about) تواصل (scroll to footer).
-- A single "احجز طاولة" CTA in nav that scrolls to the footer's reservation form (smooth-scroll).
-- Hero embodies the visual pattern. ONE CTA only — "تصفح القائمة" → #/menu.
+- Sticky top nav with these 5 links ONLY:
+  الرئيسية(#/) · القائمة(#/menu) · المعرض(#/#gallery) · العروض(#/#specials) · عن المطعم(#/about)
+- DO NOT add "احجز طاولة" link in the nav — the platform owns the reservation modal.
+- DO NOT add "تواصل / Contact" link — the platform injects a unified contact section in the footer.
+- Hero embodies the visual pattern. ONE CTA only — "تصفّح القائمة" → #/menu.
+- DO NOT BUILD ANY FOOTER. The platform injects a complete unified footer (hours, contact, social, Zitex tracking).
 
 ═══════════════════════════════════════════════════════════════════
 REVIEWS + LOYALTY (on home view)
@@ -150,13 +154,13 @@ You will be given the existing HTML so far and must APPEND from `<!-- BEGINPASS2
 ═══════════════════════════════════════════════════════════════════
 WHAT TO BUILD
 ═══════════════════════════════════════════════════════════════════
-1. Cart sliding drawer (window.openCart, addToCart, removeFromCart, updateQty, getCartTotal).
-2. Checkout modal (3 steps: address → payment → confirmation).
-3. Reservation form INSIDE THE FOOTER (date / time / party / name / phone — validated, saved).
+1. Cart sliding drawer — the platform injects a fully-working cart. DO NOT build your own cart drawer.
+2. Checkout modal — also platform-injected. SKIP.
+3. Reservation form — platform owns this. SKIP.
 4. Branch selector dropdown logic.
 5. **Admin Dashboard PRE-POPULATED** (?admin=1) — see CRITICAL section below.
 6. **Driver App PRE-POPULATED** (?driver=1).
-7. Rich 4-column FOOTER.
+7. FOOTER — DO NOT build any footer. Platform injects a complete unified footer.
 8. Closing </body></html>.
 
 ═══════════════════════════════════════════════════════════════════
@@ -482,7 +486,8 @@ async def _call_llm(system: str, user: str, max_tokens: int = 16000) -> str:
 
 
 def _merge_passes(pass1: str, pass2: str) -> str:
-    """Merge pass1 (ends at <!-- ENDPASS1 -->) and pass2 (starts at <!-- BEGINPASS2 -->)."""
+    """Merge pass1 (ends at <!-- ENDPASS1 -->) and pass2 (starts at <!-- BEGINPASS2 -->).
+    Guarantees the final HTML has both </body> and </html> for safe injection later."""
     # Clean pass1: ensure it ends with the marker
     p1 = pass1.strip()
     if "<!-- ENDPASS1 -->" in p1:
@@ -495,31 +500,34 @@ def _merge_passes(pass1: str, pass2: str) -> str:
     if "<!-- BEGINPASS2 -->" in p2:
         p2 = p2.split("<!-- BEGINPASS2 -->", 1)[1].lstrip()
 
-    # If p2 doesn't end with </html>, append it
-    if "</html>" not in p2:
-        if "</body>" not in p2:
-            p2 = p2 + "\n</body>\n</html>"
-        else:
-            p2 = p2 + "\n</html>"
+    merged = f"{p1}\n{p2}"
 
-    return f"{p1}\n{p2}"
+    # GUARANTEE </body> and </html> exist (AI sometimes omits </body>)
+    if "</html>" in merged.lower() and "</body>" not in merged.lower():
+        merged = re.sub(r"</html>\s*$", "</body>\n</html>", merged, flags=re.IGNORECASE)
+    elif "</body>" not in merged.lower() and "</html>" not in merged.lower():
+        merged = merged + "\n</body>\n</html>"
+    elif "</body>" in merged.lower() and "</html>" not in merged.lower():
+        merged = merged + "\n</html>"
+
+    return merged
+
+
+def _safe_inject_before_body_end(html: str, payload: str) -> str:
+    """Insert payload before </body>. If </body> missing, insert before </html>. Else append."""
+    if "</body>" in html.lower():
+        idx = html.lower().rfind("</body>")
+        return html[:idx] + payload + "\n" + html[idx:]
+    if "</html>" in html.lower():
+        idx = html.lower().rfind("</html>")
+        return html[:idx] + payload + "\n</body>\n" + html[idx:]
+    return html + "\n" + payload + "\n</body>\n</html>"
 
 
 def _enforce_branding_and_credentials(html: str, admin_creds: Dict[str, str]) -> str:
-    """Make sure Zitex footer + correct admin credentials are present."""
-    # Replace placeholder credentials if AI used them literally
+    """Replace placeholder credentials. Zitex branding is now in the unified footer."""
     html = html.replace("__ADMIN_EMAIL__", admin_creds["email"])
     html = html.replace("__ADMIN_PASSWORD__", admin_creds["password"])
-
-    # Defensive Zitex footer
-    if "zitex.com" not in html.lower():
-        zitex_tag = (
-            '\n<div style="text-align:center;padding:14px;font-size:12px;background:#0a0a0b;color:#aaa;">'
-            '<a href="https://zitex.com" target="_blank" rel="noopener" style="color:#aaa;text-decoration:none;opacity:.75">'
-            'Powered by Zitex'
-            '</a></div>\n'
-        )
-        html = html.replace("</body>", f"{zitex_tag}</body>")
     return html
 
 
@@ -529,6 +537,7 @@ async def generate_ready_site(
     pattern: Dict[str, Any],
     branding: Dict[str, Any],
     features: List[Dict[str, Any]],
+    project_id: str = "",
 ) -> Dict[str, Any]:
     """Generate via TWO-PASS + Python data factory injection → guaranteed-rich output.
 
@@ -587,12 +596,29 @@ async def generate_ready_site(
     merged = re.sub(r'<div id="adminLogin"[\s\S]*?</div>\s*</div>', '', merged)
 
     admin_module = render_admin_full_app(seed, admin_creds["email"], admin_creds["password"])
-    merged = merged.replace("</body>", admin_module + "\n</body>")
+    merged = _safe_inject_before_body_end(merged, admin_module)
 
     # 4d) Inject pre-built CART drawer + working addToCart + checkout flow
     #     This overrides any broken AI-defined cart with a guaranteed-working one.
     cart_module = render_cart_module(seed)
-    merged = merged.replace("</body>", cart_module + "\n</body>")
+    merged = _safe_inject_before_body_end(merged, cart_module)
+
+    # 4e) Strip AI-generated <footer> entirely + احجز طاولة nav links → we own the footer & resv.
+    merged = re.sub(r"<footer\b[\s\S]*?</footer>", "", merged, flags=re.IGNORECASE)
+    # Strip nav links containing "احجز طاولة" / "reservation" / "book a table" (defensive)
+    merged = re.sub(
+        r'<a\b[^>]*>\s*(?:احجز\s*طاول[^<]*|reserve|book\s*table|reservation)[^<]*</a>',
+        '', merged, flags=re.IGNORECASE
+    )
+    # Strip any "Powered by Zitex" mini-footer the AI may have produced (we add our own)
+    merged = re.sub(
+        r'<div\b[^>]*>[^<]*Powered by Zitex[\s\S]{0,300}?</div>',
+        '', merged, flags=re.IGNORECASE
+    )
+
+    # 4f) Inject UNIFIED Zitex enhancements module (footer, slider, modals, click delegation)
+    enhancements = render_zitex_enhancements(seed, project_id=project_id)
+    merged = _safe_inject_before_body_end(merged, enhancements)
 
     # 5) Enforce credentials + branding
     merged = _enforce_branding_and_credentials(merged, admin_creds)
@@ -621,7 +647,7 @@ def _inject_seed(html: str, seed_js: str) -> str:
         idx = m.end()
         return html[:idx] + "\n/* ── Zitex seed data — INJECTED ── */\n" + seed_js + "\n/* ── end seed ── */\n" + html[idx:]
     seed_block = f'\n<script>\n/* ── Zitex seed data — INJECTED ── */\n{seed_js}\n</script>\n'
-    return html.replace("</body>", seed_block + "</body>")
+    return _safe_inject_before_body_end(html, seed_block)
 
 
 def _inject_prebuilt_html(html: str, seed: Dict[str, Any]) -> str:
@@ -701,7 +727,7 @@ def _inject_prebuilt_html(html: str, seed: Dict[str, Any]) -> str:
   <div class="prod-grid">{prods_html}</div>
 </section>
 """
-        html = html.replace("</body>", fallback_styles + fallback_section + "</body>")
+        html = _safe_inject_before_body_end(html, fallback_styles + fallback_section)
 
     return html
 

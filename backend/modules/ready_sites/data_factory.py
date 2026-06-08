@@ -673,6 +673,363 @@ def render_cart_module(seed: Dict[str, Any]) -> str:
 """
 
 
+def render_zitex_enhancements(seed: Dict[str, Any], project_id: str = "") -> str:
+    """Unified enhancements: global add-to-cart delegation, category filter, reservation modal,
+    contact smooth-scroll, reviews slider, and clean Zitex footer with tracking link.
+
+    This is injected near </body> AFTER the AI's HTML, so it overrides AI behaviour.
+    """
+    reviews = seed.get("reviews", [])
+    branding = seed.get("branding", {})
+    cats = seed.get("categories", [])
+    # Build reviews slide HTML
+    review_slides = ""
+    for i, r in enumerate(reviews):
+        stars = "★" * int(r.get("stars", 5)) + "☆" * (5 - int(r.get("stars", 5)))
+        review_slides += f'''
+<div class="zx-rev-slide" data-idx="{i}">
+  <div class="zx-rev-stars">{stars}</div>
+  <p class="zx-rev-text">"{r["text"]}"</p>
+  <div class="zx-rev-meta"><strong>{r["name"]}</strong> · <span>{r["date"]}</span></div>
+</div>'''
+
+    # Build hours rows for contact
+    hours_rows = ""
+    day_ar = {"saturday":"السبت","sunday":"الأحد","monday":"الإثنين","tuesday":"الثلاثاء",
+              "wednesday":"الأربعاء","thursday":"الخميس","friday":"الجمعة"}
+    for k, v in seed.get("hours", {}).items():
+        hours_rows += f'<div class="zx-hour-row"><span>{day_ar.get(k,k)}</span><span dir="ltr">{v["open"]} - {v["close"]}</span></div>'
+
+    # Build category filter pills
+    cat_pills = '<button class="zx-cat-pill active" data-cat="all">الكل</button>'
+    for c in cats:
+        cat_pills += f'<button class="zx-cat-pill" data-cat="{c["id"]}">{c["name"]}</button>'
+
+    track_url = f"https://zitex.com/?ref={project_id}" if project_id else "https://zitex.com"
+    map_q = (branding.get("address") or branding.get("city") or "Riyadh").replace(" ", "+")
+
+    return f"""
+<!-- ═══ Zitex Enhancements Module ═══ -->
+<style>
+/* Reservation modal */
+#zx-resv-modal,#zx-contact-modal{{position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:9300;display:none;align-items:center;justify-content:center;direction:rtl;font-family:'Tajawal',sans-serif}}
+#zx-resv-modal.open,#zx-contact-modal.open{{display:flex}}
+.zx-resv-card{{background:#fff;border-radius:18px;width:480px;max-width:92vw;padding:28px;position:relative;max-height:90vh;overflow-y:auto}}
+.zx-resv-card h3{{font-size:22px;font-weight:900;margin-bottom:6px;color:#0a0a0a;text-align:center}}
+.zx-resv-card .zx-sub{{font-size:13px;color:#666;text-align:center;margin-bottom:20px}}
+.zx-resv-card input,.zx-resv-card select{{width:100%;padding:13px 14px;border:1px solid #e5e7eb;border-radius:10px;margin-bottom:11px;font-family:inherit;font-size:14px;background:#fafafa}}
+.zx-resv-card input:focus,.zx-resv-card select:focus{{border-color:#a52a2a;outline:none;background:#fff}}
+.zx-resv-btn{{width:100%;padding:13px;background:linear-gradient(135deg,#a52a2a,#7a1f1f);color:#fff;border:none;border-radius:10px;font-weight:900;cursor:pointer;font-size:15px;letter-spacing:.5px;margin-top:6px}}
+.zx-modal-x{{position:absolute;top:14px;left:14px;background:#f3f4f6;border:none;width:36px;height:36px;border-radius:50%;font-size:18px;cursor:pointer;color:#666}}
+.zx-resv-ok{{display:none;text-align:center;padding:20px}}
+.zx-resv-ok.show{{display:block}}
+.zx-resv-ok .ico{{font-size:54px;color:#22c55e;margin-bottom:10px}}
+.zx-resv-ok h4{{font-size:20px;font-weight:900;margin-bottom:8px}}
+.zx-resv-ok p{{color:#666;font-size:13px}}
+
+/* Category filter pills (sticky, shown on menu) */
+#zx-cat-bar{{position:sticky;top:60px;background:rgba(255,255,255,.96);backdrop-filter:blur(12px);z-index:50;padding:14px;display:none;border-bottom:1px solid #e5e7eb;direction:rtl}}
+#zx-cat-bar.show{{display:block}}
+#zx-cat-bar-inner{{max-width:1200px;margin:0 auto;display:flex;gap:8px;overflow-x:auto;flex-wrap:nowrap;padding:0 14px;scrollbar-width:none}}
+#zx-cat-bar-inner::-webkit-scrollbar{{display:none}}
+.zx-cat-pill{{padding:8px 18px;border-radius:99px;border:1px solid #e5e7eb;background:#fff;color:#0a0a0a;font-weight:700;font-size:13px;cursor:pointer;white-space:nowrap;flex-shrink:0;font-family:inherit;transition:all .2s}}
+.zx-cat-pill:hover{{border-color:#a52a2a;color:#a52a2a}}
+.zx-cat-pill.active{{background:#a52a2a;color:#fff;border-color:#a52a2a;box-shadow:0 4px 14px rgba(165,42,42,.3)}}
+
+/* Reviews slider */
+#zx-rev-slider{{max-width:900px;margin:60px auto;padding:0 20px;text-align:center;direction:rtl}}
+#zx-rev-slider h2{{font-size:30px;font-weight:900;margin-bottom:8px;color:#0a0a0a}}
+#zx-rev-slider .zx-rev-sub{{color:#666;margin-bottom:32px;font-size:14px}}
+.zx-rev-stage{{position:relative;min-height:200px;background:linear-gradient(135deg,#fef7ed,#fff);border-radius:24px;padding:36px 28px;box-shadow:0 12px 40px rgba(0,0,0,.08);overflow:hidden}}
+.zx-rev-slide{{position:absolute;inset:36px 28px;opacity:0;transform:translateX(40px);transition:opacity .55s,transform .55s;text-align:center}}
+.zx-rev-slide.active{{opacity:1;transform:translateX(0);position:relative;inset:auto}}
+.zx-rev-stars{{color:#fbbf24;font-size:22px;letter-spacing:3px;margin-bottom:12px}}
+.zx-rev-text{{font-size:18px;line-height:1.8;color:#0a0a0a;margin-bottom:14px;font-style:italic;font-weight:500}}
+.zx-rev-meta{{color:#666;font-size:13px}}
+.zx-rev-dots{{display:flex;justify-content:center;gap:8px;margin-top:18px}}
+.zx-rev-dot{{width:10px;height:10px;border-radius:50%;background:#d1d5db;border:none;cursor:pointer;transition:all .2s;padding:0}}
+.zx-rev-dot.active{{width:30px;border-radius:99px;background:#a52a2a}}
+
+/* Unified Zitex footer */
+#zx-footer{{background:#0a0a0b;color:#cbd5e1;padding:50px 24px 0;direction:rtl;font-family:'Tajawal',sans-serif}}
+#zx-footer-inner{{max-width:1200px;margin:0 auto}}
+.zx-foot-grid{{display:grid;grid-template-columns:1.4fr 1fr 1fr 1.2fr;gap:36px;padding-bottom:36px}}
+@media(max-width:900px){{.zx-foot-grid{{grid-template-columns:1fr 1fr;gap:30px}}}}
+@media(max-width:560px){{.zx-foot-grid{{grid-template-columns:1fr}}}}
+.zx-foot-col h4{{color:#fbbf24;font-size:14px;font-weight:900;margin-bottom:14px;letter-spacing:.5px}}
+.zx-foot-col p,.zx-foot-col a{{color:#94a3b8;font-size:13px;line-height:2;text-decoration:none;display:block}}
+.zx-foot-col a:hover{{color:#fff}}
+.zx-foot-brand{{font-size:24px;font-weight:900;color:#fff;margin-bottom:8px}}
+.zx-foot-tagline{{color:#94a3b8;font-size:13px;line-height:1.8;margin-bottom:16px}}
+.zx-social{{display:flex;gap:10px;margin-top:14px}}
+.zx-social a{{width:38px;height:38px;border-radius:50%;background:#1e293b;display:flex;align-items:center;justify-content:center;font-size:16px;transition:all .2s}}
+.zx-social a:hover{{background:#a52a2a;transform:translateY(-3px)}}
+.zx-hour-row{{display:flex;justify-content:space-between;padding:4px 0;font-size:12px;color:#94a3b8;border-bottom:1px dashed #1e293b}}
+.zx-hour-row:last-child{{border:none}}
+#zx-contact-section{{scroll-margin-top:80px}}
+.zx-contact-list{{display:grid;gap:8px}}
+.zx-contact-list a{{display:flex;align-items:center;gap:10px;padding:9px 12px;background:#1e293b;border-radius:10px;color:#cbd5e1;font-size:13px;transition:all .2s}}
+.zx-contact-list a:hover{{background:#a52a2a;color:#fff;transform:translateX(-3px)}}
+.zx-contact-list .zx-ico{{font-size:16px}}
+.zx-map-mini{{margin-top:10px;width:100%;height:140px;border:none;border-radius:10px;background:#1e293b}}
+
+/* Zitex tracker bar */
+.zx-zitex-bar{{border-top:1px solid #1e293b;padding:18px 0;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:14px}}
+.zx-zitex-copy{{color:#64748b;font-size:12px}}
+.zx-zitex-brand{{display:flex;align-items:center;gap:10px;text-decoration:none;padding:8px 14px;border-radius:99px;background:linear-gradient(135deg,rgba(251,191,36,.1),rgba(165,42,42,.1));border:1px solid rgba(251,191,36,.2);transition:all .25s}}
+.zx-zitex-brand:hover{{background:linear-gradient(135deg,rgba(251,191,36,.2),rgba(165,42,42,.2));border-color:#fbbf24;transform:translateY(-2px)}}
+.zx-zitex-logo{{width:28px;height:28px;border-radius:50%;background:linear-gradient(135deg,#fbbf24,#a52a2a);display:flex;align-items:center;justify-content:center;color:#fff;font-weight:900;font-size:13px}}
+.zx-zitex-text{{display:flex;flex-direction:column;line-height:1.2}}
+.zx-zitex-text small{{color:#64748b;font-size:10px}}
+.zx-zitex-text strong{{color:#fbbf24;font-size:13px;font-weight:900}}
+.zx-pay-icons{{display:flex;gap:8px;align-items:center}}
+.zx-pay-icons span{{padding:5px 10px;background:#1e293b;border-radius:6px;font-size:10px;color:#94a3b8;font-weight:700}}
+
+/* Hide AI-generated reservation/contact links in nav */
+.zx-nav-hidden{{display:none !important}}
+</style>
+
+<!-- Reservation Modal -->
+<div id="zx-resv-modal">
+  <div class="zx-resv-card">
+    <button class="zx-modal-x" onclick="zxResvClose()">✕</button>
+    <div id="zx-resv-form-wrap">
+      <h3>🍽️ احجز طاولتك</h3>
+      <p class="zx-sub">احجز مكانك مسبقاً وضمن لك أجواء مميزة</p>
+      <input type="text" id="zx-resv-name" placeholder="الاسم الكامل" />
+      <input type="tel" id="zx-resv-phone" placeholder="رقم الجوال +966..." />
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+        <input type="date" id="zx-resv-date" />
+        <input type="time" id="zx-resv-time" />
+      </div>
+      <select id="zx-resv-party">
+        <option value="2">2 أشخاص</option>
+        <option value="4" selected>4 أشخاص</option>
+        <option value="6">6 أشخاص</option>
+        <option value="8">8 أشخاص</option>
+        <option value="10">10+ أشخاص</option>
+      </select>
+      <input type="text" id="zx-resv-notes" placeholder="ملاحظات (اختياري) — مناسبة، حساسية..." />
+      <button class="zx-resv-btn" onclick="zxResvSubmit()">تأكيد الحجز</button>
+    </div>
+    <div class="zx-resv-ok" id="zx-resv-ok">
+      <div class="ico">✓</div>
+      <h4>تم استلام طلب الحجز</h4>
+      <p>سنتواصل معك خلال دقائق لتأكيد الموعد. شكراً لاختيارك لنا 🌹</p>
+      <button class="zx-resv-btn" style="margin-top:18px" onclick="zxResvClose()">رجوع</button>
+    </div>
+  </div>
+</div>
+
+<!-- Sticky Category Filter Bar -->
+<div id="zx-cat-bar"><div id="zx-cat-bar-inner">{cat_pills}</div></div>
+
+<!-- Reviews Auto-Slider -->
+<section id="zx-rev-slider">
+  <h2>آراء عملائنا</h2>
+  <p class="zx-rev-sub">قالوا عنا ما لم نقله عن أنفسنا</p>
+  <div class="zx-rev-stage" id="zx-rev-stage">{review_slides}</div>
+  <div class="zx-rev-dots" id="zx-rev-dots"></div>
+</section>
+
+<!-- ═══ Unified Zitex Footer ═══ -->
+<footer id="zx-footer">
+  <div id="zx-footer-inner">
+    <div class="zx-foot-grid">
+      <div class="zx-foot-col">
+        <div class="zx-foot-brand">{branding.get('name','مطعمي')}</div>
+        <p class="zx-foot-tagline">{branding.get('tagline','نقدّم لك تجربة طعام لا تُنسى — مذاق أصيل وأجواء مميزة في كل زيارة.')}</p>
+        <div class="zx-social">
+          <a href="https://instagram.com/{(branding.get('instagram') or '').replace('@','')}" target="_blank" rel="noopener" aria-label="Instagram">📷</a>
+          <a href="https://wa.me/{branding.get('whatsapp','966512345678')}" target="_blank" rel="noopener" aria-label="WhatsApp">💬</a>
+          <a href="https://twitter.com/{(branding.get('instagram') or '').replace('@','')}" target="_blank" rel="noopener" aria-label="Twitter">🐦</a>
+          <a href="https://tiktok.com/@{(branding.get('instagram') or '').replace('@','')}" target="_blank" rel="noopener" aria-label="TikTok">🎵</a>
+        </div>
+      </div>
+
+      <div class="zx-foot-col">
+        <h4>ساعات العمل</h4>
+        {hours_rows}
+      </div>
+
+      <div class="zx-foot-col">
+        <h4>روابط سريعة</h4>
+        <a href="#/">الرئيسية</a>
+        <a href="#/menu">القائمة</a>
+        <a href="javascript:zxResvOpen()">احجز طاولة</a>
+        <a href="#zx-contact-section" onclick="zxScrollContact(event)">تواصل معنا</a>
+        <a href="?admin=1" target="_blank">لوحة الإدارة</a>
+      </div>
+
+      <div class="zx-foot-col" id="zx-contact-section">
+        <h4>تواصل معنا</h4>
+        <div class="zx-contact-list">
+          <a href="tel:{branding.get('phone','+966512345678')}"><span class="zx-ico">📞</span><span dir="ltr">{branding.get('phone','+966512345678')}</span></a>
+          <a href="https://wa.me/{branding.get('whatsapp','966512345678')}" target="_blank"><span class="zx-ico">💬</span>واتساب</a>
+          <a href="mailto:{branding.get('email','info@brand.sa')}"><span class="zx-ico">✉️</span><span style="word-break:break-all">{branding.get('email','info@brand.sa')}</span></a>
+          <a href="https://maps.google.com/?q={map_q}" target="_blank"><span class="zx-ico">📍</span>{branding.get('address','الرياض')}</a>
+        </div>
+        <iframe class="zx-map-mini" loading="lazy" src="https://maps.google.com/maps?q={map_q}&output=embed" referrerpolicy="no-referrer-when-downgrade"></iframe>
+      </div>
+    </div>
+
+    <div class="zx-zitex-bar">
+      <div class="zx-zitex-copy">© {branding.get('name','مطعمي')} {seed.get('year', 2026)} — جميع الحقوق محفوظة</div>
+      <div class="zx-pay-icons">
+        <span>Mada</span><span>Visa</span><span>Apple Pay</span><span>STC Pay</span>
+      </div>
+      <a class="zx-zitex-brand" href="{track_url}" target="_blank" rel="noopener" data-zx-tracker="{project_id}">
+        <div class="zx-zitex-logo">Z</div>
+        <div class="zx-zitex-text">
+          <small>صُنع بواسطة</small>
+          <strong>Zitex</strong>
+        </div>
+      </a>
+    </div>
+  </div>
+</footer>
+
+<script>
+(function(){{
+  /* ═══ 1. Global Add-to-Cart click delegation ═══ */
+  document.addEventListener('click', function(e){{
+    const btn = e.target.closest('.prod-add,[data-pid],.add-to-cart,[data-add-cart]');
+    if(!btn) return;
+    const pid = btn.getAttribute('data-pid') || btn.getAttribute('data-product-id') || btn.dataset.pid;
+    if(!pid) return;
+    e.preventDefault();
+    if(typeof window.addToCart === 'function') window.addToCart(pid);
+  }}, true);
+
+  /* ═══ 2. Category filter pill delegation ═══ */
+  let curCat = 'all';
+  function applyCatFilter(cat){{
+    curCat = cat;
+    document.querySelectorAll('.zx-cat-pill').forEach(p => p.classList.toggle('active', p.dataset.cat === cat));
+    document.querySelectorAll('[data-category]').forEach(card => {{
+      const c = card.getAttribute('data-category');
+      card.style.display = (cat === 'all' || c === cat) ? '' : 'none';
+    }});
+  }}
+  document.addEventListener('click', function(e){{
+    const pill = e.target.closest('.zx-cat-pill');
+    if(pill){{ e.preventDefault(); applyCatFilter(pill.dataset.cat); return; }}
+    /* AI-generated category cards */
+    const card = e.target.closest('.cat-card,[data-cat],[data-category-link]');
+    if(card && (card.dataset.cat || card.getAttribute('data-cat'))){{
+      const cat = card.dataset.cat || card.getAttribute('data-cat');
+      if(cat){{
+        applyCatFilter(cat);
+        document.getElementById('zx-cat-bar')?.classList.add('show');
+        const prodSec = document.querySelector('[data-category]')?.parentElement;
+        if(prodSec) setTimeout(() => prodSec.scrollIntoView({{behavior:'smooth',block:'start'}}), 50);
+      }}
+    }}
+  }}, false);
+
+  /* show cat-bar when user scrolls past the categories grid */
+  const catBar = document.getElementById('zx-cat-bar');
+  if(catBar){{
+    const obs = new IntersectionObserver((entries) => {{
+      entries.forEach(en => {{
+        if(en.target.matches('[data-category]')) catBar.classList.toggle('show', en.isIntersecting);
+      }});
+    }}, {{threshold: 0.05}});
+    setTimeout(() => {{
+      document.querySelectorAll('[data-category]').forEach(p => obs.observe(p));
+    }}, 600);
+  }}
+
+  /* ═══ 3. Reservation modal ═══ */
+  window.zxResvOpen = function(){{
+    document.getElementById('zx-resv-modal').classList.add('open');
+    document.getElementById('zx-resv-ok').classList.remove('show');
+    document.getElementById('zx-resv-form-wrap').style.display = 'block';
+  }};
+  window.zxResvClose = function(){{ document.getElementById('zx-resv-modal').classList.remove('open'); }};
+  window.zxResvSubmit = function(){{
+    const name = document.getElementById('zx-resv-name').value.trim();
+    const phone = document.getElementById('zx-resv-phone').value.trim();
+    const date = document.getElementById('zx-resv-date').value;
+    const time = document.getElementById('zx-resv-time').value;
+    if(!name || !phone || !date || !time){{ alert('املأ كل الحقول المطلوبة'); return; }}
+    /* persist to localStorage so admin can see */
+    const resvs = JSON.parse(localStorage.getItem('zx_reservations')||'[]');
+    resvs.push({{name, phone, date, time, party: document.getElementById('zx-resv-party').value,
+      notes: document.getElementById('zx-resv-notes').value, ts: Date.now()}});
+    localStorage.setItem('zx_reservations', JSON.stringify(resvs));
+    document.getElementById('zx-resv-form-wrap').style.display = 'none';
+    document.getElementById('zx-resv-ok').classList.add('show');
+  }};
+
+  /* ═══ 4. Smooth scroll for contact ═══ */
+  window.zxScrollContact = function(e){{
+    if(e) e.preventDefault();
+    const el = document.getElementById('zx-contact-section');
+    if(el) el.scrollIntoView({{behavior:'smooth', block:'start'}});
+    if(history.replaceState) history.replaceState(null,'','#zx-contact');
+  }};
+
+  /* ═══ 5. Intercept legacy nav links ═══ */
+  document.addEventListener('click', function(e){{
+    const a = e.target.closest('a');
+    if(!a) return;
+    const txt = (a.textContent || '').trim();
+    const href = (a.getAttribute('href') || '').toLowerCase();
+    /* احجز طاولة → open modal */
+    if(/احجز\\s*طاول|reserve|reservation|book\\s*table/i.test(txt) || href.includes('reservation') || href === '#reserve' || href === '#reservation') {{
+      e.preventDefault(); zxResvOpen(); return;
+    }}
+    /* تواصل / contact → smooth scroll to footer contact */
+    if(/تواصل|اتصل|contact/i.test(txt) && !/whatsapp|wa\\.me|tel:|mailto:/i.test(href)) {{
+      const isPlainLink = href === '#' || href === '' || href.startsWith('#contact') || href.endsWith('contact') || href.endsWith('contact-us');
+      if(isPlainLink){{ e.preventDefault(); zxScrollContact(); return; }}
+    }}
+  }}, true);
+
+  /* ═══ 6. Reviews auto-slider ═══ */
+  const stage = document.getElementById('zx-rev-stage');
+  const dots = document.getElementById('zx-rev-dots');
+  if(stage && dots){{
+    const slides = stage.querySelectorAll('.zx-rev-slide');
+    if(slides.length){{
+      slides.forEach((s,i) => {{
+        const d = document.createElement('button');
+        d.className = 'zx-rev-dot' + (i===0?' active':'');
+        d.setAttribute('aria-label','مراجعة ' + (i+1));
+        d.onclick = () => zxRev(i);
+        dots.appendChild(d);
+      }});
+      slides[0].classList.add('active');
+      let cur = 0;
+      window.zxRev = function(idx){{
+        slides[cur].classList.remove('active');
+        document.querySelectorAll('.zx-rev-dot')[cur].classList.remove('active');
+        cur = idx % slides.length;
+        slides[cur].classList.add('active');
+        document.querySelectorAll('.zx-rev-dot')[cur].classList.add('active');
+      }};
+      setInterval(() => zxRev(cur + 1), 5000);
+    }}
+  }}
+
+  /* ═══ 7. Zitex tracker ping ═══ */
+  const trkLink = document.querySelector('[data-zx-tracker]');
+  if(trkLink){{
+    const pid = trkLink.getAttribute('data-zx-tracker');
+    if(pid){{
+      /* fire-and-forget visit ping (non-blocking) */
+      try{{
+        const img = new Image();
+        img.src = 'https://zitex.com/api/ready-sites/track-visit/' + pid + '?t=' + Date.now();
+      }}catch(_){{}}
+    }}
+  }}
+}})();
+</script>
+"""
+
+
 def render_admin_full_app(seed: Dict[str, Any], admin_email: str, admin_password: str) -> str:
     """Complete pre-built Admin login + 7-tab dashboard (HTML + CSS + JS). Drop-in module."""
     orders_rows = render_admin_orders_html(seed)

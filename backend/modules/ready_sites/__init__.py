@@ -112,17 +112,20 @@ async def _run_generation(db, session_id: str, user_id: str) -> None:
         enabled = sess.get("features") or []
         features_full = [f for f in RESTAURANT_FEATURES if f["id"] in enabled]
 
+        # Pre-generate project_id so Zitex tracking link is unique per site.
+        project_id = str(uuid.uuid4())
+
         result = await generate_ready_site(
             type_id=type_id,
             pattern=pattern,
             branding=branding,
             features=features_full,
+            project_id=project_id,
         )
         html = result["html"]
         admin_creds = result["admin_credentials"]
         seed_summary = result.get("seed_summary", {})
 
-        project_id = str(uuid.uuid4())
         slug = (branding.get("business_name", "site") or "site").strip().replace(" ", "-").lower()[:40] or "site"
         project = {
             "id": project_id,
@@ -386,6 +389,50 @@ def create_ready_sites_router(db, get_current_user) -> APIRouter:
         if r.deleted_count == 0:
             raise HTTPException(404, "المشروع غير موجود")
         return {"ok": True}
+
+    # ---- Zitex Branding Tracker (public) ----
+    @router.get("/track-visit/{project_id}")
+    async def track_visit(project_id: str):
+        """Fired from the Zitex footer pixel. Records that an end-customer saw the site."""
+        try:
+            await db.ready_sites_projects.update_one(
+                {"id": project_id},
+                {
+                    "$inc": {"visits_count": 1},
+                    "$set": {"last_visit_at": _now()},
+                },
+            )
+        except Exception:
+            pass
+        # 1x1 transparent GIF
+        gif = b"GIF89a\x01\x00\x01\x00\x80\x00\x00\xff\xff\xff\x00\x00\x00,\x00\x00\x00\x00\x01\x00\x01\x00\x00\x02\x02D\x01\x00;"
+        return Response(content=gif, media_type="image/gif",
+                        headers={"Cache-Control": "no-store, no-cache, must-revalidate, max-age=0"})
+
+    # ---- Zitex Admin: view ALL ready-site projects across all tenants ----
+    @router.get("/admin/owned-sites")
+    async def admin_owned_sites(user=Depends(get_current_user)):
+        """Returns every Ready Site we've ever built. Used by Zitex's own admin dashboard
+        to track customer sites that carry our branded footer link."""
+        if not user.get("is_admin"):
+            raise HTTPException(403, "صلاحيات المسؤول مطلوبة")
+        cursor = db.ready_sites_projects.find(
+            {},
+            {"_id": 0, "html": 0, "admin_credentials": 0, "refinement_history": 0}
+        ).sort("created_at", -1)
+        items = await cursor.to_list(length=500)
+        # Enrich with the live preview link
+        for it in items:
+            it["preview_url"] = f"/api/ready-sites/preview/{it['id']}"
+            it["track_url"] = f"https://zitex.com/?ref={it['id']}"
+        # Aggregate totals
+        total_sites = len(items)
+        total_visits = sum(int(it.get("visits_count", 0) or 0) for it in items)
+        return {
+            "sites": items,
+            "total_sites": total_sites,
+            "total_visits": total_visits,
+        }
 
     # ---- AI Refinement Chat ----
     @router.post("/refine/{project_id}")
