@@ -1339,6 +1339,7 @@ function ChatWorkspace({ projectId }) {
           });
         };
 
+        let streamReceivedDone = false;
         while (true) {
           const { value, done } = await reader.read();
           if (done) break;
@@ -1377,17 +1378,20 @@ function ChatWorkspace({ projectId }) {
             } else if (eventName === 'tool') {
               liveSteps.push({ kind: 'tool', ...payload });
             } else if (eventName === 'tool_building') {
-              // Update or push a "building" indicator so user sees Claude
-              // actively generating HTML (instead of staring at silence)
+              // Update or push a "building" indicator. Now also carries a live
+              // snippet of the code being typed — like Cursor/Claude's editor.
               const last = liveSteps[liveSteps.length - 1];
               if (last && last.kind === 'tool_building' && last.step === payload.step && !last.done) {
                 last.bytes = payload.bytes;
                 last.label = payload.label;
+                last.snippet = payload.snippet;
+                last.tool_name = payload.tool_name || last.tool_name;
                 if (payload.done) last.done = true;
               } else {
                 liveSteps.push({ kind: 'tool_building', ...payload });
               }
             } else if (eventName === 'done') {
+              streamReceivedDone = true;
               finalSummary = payload.summary || '';
               finalOptions = payload.options || [];
               htmlUpdated = !!payload.html_updated;
@@ -1399,6 +1403,25 @@ function ChatWorkspace({ projectId }) {
             }
             updateLive();
           }
+        }
+        // GRACEFUL INTERRUPTION HANDLING:
+        // If the stream ended (e.g. proxy timeout, network blip) without a 'done' event,
+        // synthesize a helpful summary so the user isn't left staring at half-typed code.
+        if (!streamReceivedDone) {
+          const completedTools = liveSteps.filter((s) => s.kind === 'tool' && s.phase === 'done');
+          const builtTools = liveSteps.filter((s) => s.kind === 'tool_building' && s.done);
+          const lastNarration = [...liveSteps].reverse().find((s) => s.kind === 'live_text' && (s.text || '').trim());
+          const fragments = [];
+          if (lastNarration) fragments.push(lastNarration.text.trim());
+          if (completedTools.length) {
+            fragments.push(`⚙️ نفّذت ${completedTools.length} خطوة قبل ما ينقطع الاتصال.`);
+          }
+          if (builtTools.length) {
+            fragments.push(`✅ خلّصت كتابة الكود (${builtTools[0].bytes?.toLocaleString() || '?'} حرف) لكن ما قدرت أحفظه.`);
+          }
+          fragments.push('🔄 تبيني أكمل من حيث وقفت؟ ابعث "كمّل" أو أعد المحاولة.');
+          finalSummary = fragments.join('\n\n');
+          setLastTask({ label: '⚠️ تم القطع', model: '' });
         }
         // Finalize: mark message as not streaming
         setProject((p) => {
@@ -1880,14 +1903,29 @@ function ChatWorkspace({ projectId }) {
                             );
                           }
                           if (s.kind === 'tool_building') {
-                            // Live progress while Claude generates a large HTML payload
+                            // Live "editor" view: shows real code snippets being
+                            // typed by Claude (Cursor/Bolt-style), not just a counter.
+                            const snippet = (s.snippet || '').trim();
+                            const isDone = !!s.done;
                             return (
-                              <div key={sIdx} className={`flex gap-2 text-[11px] px-3 py-1.5 rounded border ${
-                                s.done
-                                  ? 'bg-emerald-500/5 border-emerald-400/20 text-emerald-200'
-                                  : 'bg-blue-500/5 border-blue-400/30 text-blue-200 animate-pulse'
+                              <div key={sIdx} className={`rounded-lg overflow-hidden border ${
+                                isDone
+                                  ? 'border-emerald-400/30 bg-emerald-500/5'
+                                  : 'border-cyan-400/40 bg-zinc-950/80'
                               }`}>
-                                <span>{s.label}</span>
+                                <div className={`px-3 py-1.5 text-[11px] font-bold flex items-center gap-2 ${
+                                  isDone ? 'text-emerald-200' : 'text-cyan-200'
+                                }`}>
+                                  <span className={isDone ? '' : 'animate-pulse'}>
+                                    {isDone ? '✓' : '●'}
+                                  </span>
+                                  <span>{s.label}</span>
+                                </div>
+                                {!isDone && snippet && (
+                                  <pre className="px-3 pb-2 m-0 text-[10.5px] leading-snug text-cyan-100/80 overflow-hidden font-mono whitespace-pre-wrap break-all" dir="ltr" style={{ maxHeight: '5.5rem', textAlign: 'left' }}>
+                                    <code>{snippet}<span className="inline-block w-1 h-3 bg-cyan-300 ml-0.5 align-middle animate-pulse" /></code>
+                                  </pre>
+                                )}
                               </div>
                             );
                           }

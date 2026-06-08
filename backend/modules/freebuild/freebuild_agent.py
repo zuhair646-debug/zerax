@@ -771,6 +771,8 @@ async def _stream_one_provider(
             current_text = ""
             tool_input_bytes = 0  # progress counter while tool input streams in
             last_tool_emit = 0
+            tool_input_snapshot = ""  # live snapshot of streaming tool JSON
+            current_tool_name = ""  # which tool is currently being built
             queue: asyncio.Queue = asyncio.Queue()
             _SENTINEL_FINAL = "__final__"
             _SENTINEL_ERROR = "__error__"
@@ -778,7 +780,7 @@ async def _stream_one_provider(
             async def _produce_events():
                 try:
                     async with client.messages.stream(
-                        model=model, system=sys_prompt, max_tokens=4000,
+                        model=model, system=sys_prompt, max_tokens=8000,
                         tools=TOOLS_SCHEMA, messages=messages,
                     ) as st:
                         async for ev in st:
@@ -816,16 +818,42 @@ async def _stream_one_provider(
                             current_text += delta
                             yield _sse("text_delta", {"text": delta, "step": iterations})
                             await asyncio.sleep(0)
-                    # Tool input JSON streaming — emit progress so the proxy/UI doesn't
-                    # think the connection died while Claude generates a big payload.
+                    # New content block — could be a tool_use; track its name
+                    elif et == "content_block_start":
+                        cb = getattr(event, "content_block", None)
+                        if cb is not None and getattr(cb, "type", "") == "tool_use":
+                            current_tool_name = getattr(cb, "name", "") or ""
+                            tool_input_snapshot = ""
+                            tool_input_bytes = 0
+                            last_tool_emit = 0
+                            # Friendly Arabic label for the tool we're about to build
+                            tool_label_ar = TOOL_LABELS_AR.get(current_tool_name, {}).get("running", f"⚙️ {current_tool_name}")
+                            yield _sse("tool_building", {
+                                "step": iterations,
+                                "tool_name": current_tool_name,
+                                "snippet": "",
+                                "bytes": 0,
+                                "label": tool_label_ar,
+                                "starting": True,
+                            })
+                            await asyncio.sleep(0)
+                    # Tool input JSON streaming — emit live snippets so the user
+                    # sees actual code being typed (Cursor/Claude style), not just a counter.
                     elif et == "input_json":
                         partial = getattr(event, "partial_json", "") or ""
-                        tool_input_bytes += len(partial)
-                        if tool_input_bytes - last_tool_emit >= 500:
+                        tool_input_snapshot += partial
+                        tool_input_bytes = len(tool_input_snapshot)
+                        # Throttle: emit at most every ~400 bytes so we don't flood the wire
+                        if tool_input_bytes - last_tool_emit >= 400 or last_tool_emit == 0:
+                            # Send the LAST ~280 chars as a live snippet (the "typing tail")
+                            # so the UI shows real code scrolling, like a terminal.
+                            tail = tool_input_snapshot[-280:] if len(tool_input_snapshot) > 280 else tool_input_snapshot
                             yield _sse("tool_building", {
-                                "bytes": tool_input_bytes,
                                 "step": iterations,
-                                "label": f"⚙️ يولّد الكود... ({tool_input_bytes:,} حرف)",
+                                "tool_name": current_tool_name,
+                                "snippet": tail,
+                                "bytes": tool_input_bytes,
+                                "label": f"⚙️ يكتب الكود... ({tool_input_bytes:,} حرف)",
                             })
                             await asyncio.sleep(0)
                             last_tool_emit = tool_input_bytes
@@ -836,8 +864,10 @@ async def _stream_one_provider(
                             await asyncio.sleep(0)
                         if tool_input_bytes > 0:
                             yield _sse("tool_building", {
-                                "bytes": tool_input_bytes,
                                 "step": iterations,
+                                "tool_name": current_tool_name,
+                                "snippet": "",
+                                "bytes": tool_input_bytes,
                                 "label": f"✨ تم توليد الكود ({tool_input_bytes:,} حرف)",
                                 "done": True,
                             })
@@ -845,6 +875,8 @@ async def _stream_one_provider(
                         current_text = ""
                         tool_input_bytes = 0
                         last_tool_emit = 0
+                        tool_input_snapshot = ""
+                        current_tool_name = ""
             finally:
                 if not producer.done():
                     producer.cancel()
