@@ -116,16 +116,19 @@ async def generate_ready_site(
 ) -> str:
     """Generate a full ready-site HTML.
 
-    Provider chain:
-      1) Zitex unified router (Claude Sonnet 4.5 via Emergent LLM key)
-      2) Direct emergentintegrations LlmChat (Claude Sonnet 4.5)
-      3) Direct OpenAI gpt-4o using OPENAI_DIRECT_KEY (final fallback when budget is exhausted)
+    Provider chain (all ASYNC — never blocks the event loop):
+      1) Zitex unified router (Claude/OpenAI via AsyncAnthropic/AsyncOpenAI)
+      2) Direct AsyncOpenAI gpt-4o using OPENAI_DIRECT_KEY (final fallback)
+
+    NOTE: We intentionally do NOT use emergentintegrations.LlmChat as a fallback
+    because its underlying litellm.completion() is SYNC and blocks the event loop
+    for the full 60-180s of generation, breaking concurrent /status polling.
     """
     brief = _build_brief(type_id, pattern, branding, features)
     text: str = ""
     last_err: str = ""
 
-    # 1) Try Zitex unified router
+    # 1) Try Zitex unified router (true async via AsyncAnthropic / AsyncOpenAI)
     try:
         from modules.zitex_ai import zitex_chat
         result = await zitex_chat(
@@ -137,38 +140,18 @@ async def generate_ready_site(
             text = result.get("content", "") or ""
         else:
             last_err = str(result.get("error", ""))
+            logger.warning(f"[READY_SITES] zitex_chat returned not-ok: {last_err[:200]}")
     except Exception as e:
         last_err = str(e)
-        logger.warning(f"[READY_SITES] zitex_chat failed, falling back: {e}")
+        logger.warning(f"[READY_SITES] zitex_chat exception, falling back: {e}")
 
-    # 2) Fallback to direct emergentintegrations LlmChat (Claude Sonnet 4.5)
-    if not text:
-        try:
-            from emergentintegrations.llm.chat import LlmChat, UserMessage
-            api_key = os.environ.get("EMERGENT_LLM_KEY")
-            if api_key:
-                chat = LlmChat(
-                    api_key=api_key,
-                    session_id=f"ready-sites-{uuid.uuid4()}",
-                    system_message=SYSTEM_PROMPT,
-                )
-                chat.with_model("anthropic", "claude-sonnet-4-5-20250929")
-                try:
-                    chat.with_max_tokens(16000)
-                except Exception:
-                    pass
-                text = await chat.send_message(UserMessage(text=brief)) or ""
-        except Exception as e:
-            last_err = str(e)
-            logger.warning(f"[READY_SITES] LlmChat fallback failed: {e}")
-
-    # 3) Final fallback — direct OpenAI gpt-4o (uses owner's direct key)
+    # 2) Final fallback — direct AsyncOpenAI gpt-4o (uses owner's direct key, true async)
     if not text:
         direct_key = os.environ.get("OPENAI_DIRECT_KEY", "").strip()
         if direct_key:
             try:
                 from openai import AsyncOpenAI
-                client = AsyncOpenAI(api_key=direct_key)
+                client = AsyncOpenAI(api_key=direct_key, timeout=180.0)
                 resp = await client.chat.completions.create(
                     model="gpt-4o",
                     messages=[
@@ -180,7 +163,7 @@ async def generate_ready_site(
                 )
                 text = (resp.choices[0].message.content or "")
             except Exception as e:
-                last_err = str(e)
+                last_err = f"OpenAI direct: {type(e).__name__}: {str(e)[:200]}"
                 logger.exception(f"[READY_SITES] OpenAI direct fallback failed: {e}")
 
     if not text:

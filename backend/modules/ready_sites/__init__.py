@@ -365,7 +365,7 @@ def create_ready_sites_router(db, get_current_user) -> APIRouter:
         )
         if not p or not p.get("html"):
             raise HTTPException(404, "preview not found")
-        return Response(content=p["html"], media_type="text/html; charset=utf-8")
+        return Response(content=p["html"], media_type="text/html")
 
     @router.delete("/project/{project_id}")
     async def delete_project(project_id: str, user=Depends(get_current_user)):

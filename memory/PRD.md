@@ -1,5 +1,41 @@
 # Zitex AI Platform - PRD
 
+### 🆕 Feb 8 2026 — Ready Sites (المواقع الجاهزة) Wizard ✅
+
+**الفكرة**: معالج 5 خطوات (Type → Pattern → Branding → Features → Generate) لبناء موقع مطعم متكامل بـ AI من الصفر، بدون قوالب جاهزة، مع التزام صارم بالنمط البصري المختار.
+
+**المكتمل**:
+- **Backend** (`/app/backend/modules/ready_sites/`):
+  - `catalog.py`: 4 أنواع مواقع (المطاعم فقط متاحة حالياً) + 4 أنماط بصرية للمطاعم (Neon Crescent / Split Theatre / Orbital Menu / Mosaic Liquid) + 24 ميزة (سلة، توصيل، حجوزات، لوحة إدارة، تطبيق سائق، إلخ).
+  - `agent.py`: توليد HTML كامل مع system prompt صارم يفرض RTL، النمط البصري، تطبيق كل الميزات المُفعّلة (real cart/reservations/admin via localStorage)، وفوتر `Powered by Zitex` ثابت.
+  - `__init__.py`: راوتر `/api/ready-sites/*` مع 5 خطوات + توليد **async background task** + endpoint للـ polling عبر `/status/{sid}` + معاينة `/preview/{id}` + قائمة + حذف.
+- **Frontend** (`/app/frontend/src/pages/ReadySites.js`): واجهة 5 خطوات RTL مع stepper + iframes للمعاينات + رفع لوجو (file→data URL) + اختيار ميزات + polling حي للتوليد.
+- **Route**: `/ready-sites` و `/dashboard/ready-sites` (محمي).
+- **Dashboard**: أضفنا كرت "المواقع الجاهزة" في `ClientDashboard.js`.
+
+**Provider chain (true async — لا يحجب event loop)**:
+1. `zitex_chat` (يمر عبر `model_router.smart_complete` → AsyncAnthropic/AsyncOpenAI)
+2. AsyncOpenAI gpt-4o مباشر باستخدام `OPENAI_DIRECT_KEY`
+
+**⚠️ ملاحظة هامة**: تم استبعاد `emergentintegrations.LlmChat` كـ fallback لأن `litellm.completion()` الداخلي **synchronous** ويحجب الـ event loop طوال فترة التوليد (60-180 ثانية)، مما يعطّل كل الـ endpoints الأخرى (catalog/status polling/login). استبدلناه بـ AsyncOpenAI مباشرة.
+
+**تكلفة التوليد**: 40 نقطة لكل موقع. عند فشل التوليد، النقاط ترجع تلقائياً.
+
+**اختبار E2E تم**: 
+- ✅ كتالوج صحيح (4 أنواع، 4 أنماط، 24 ميزة).
+- ✅ الـ Wizard كامل من البدء حتى التوليد.
+- ✅ التوليد async — `/catalog` يجاوب في ~150ms حتى أثناء التوليد.
+- ✅ HTML كامل (45KB - 70KB) بنمط Neon Crescent (وردي/بنفسجي/أصفر) أو Orbital Menu (سيراميك/تركواز) مع RTL + نص عربي حقيقي + فوتر Zitex.
+
+**Pending P1 (مرحلة لاحقة)**:
+- Sora 2 promo video بعد اختيار النوع.
+- تفعيل أنواع: متجر، عيادة، عقارات.
+- ربط بوابات دفع حقيقية داخل المواقع المُولّدة.
+- Capacitor.js لتحويل الموقع لتطبيق PWA/APK.
+
+---
+
+
 ### 🆕 Jun 7 2026 — FreeBuild Live Token Streaming (يكتب أمامك حرف-حرف) ✅
 
 **المشكلة**: المستخدم اشتكى إنه "صار ما يكتب له، صار بس يقعد يفكر وما يرد". الـ AI يعلق في وضع "يحلل..." لدقائق طويلة بدون أي رد.
