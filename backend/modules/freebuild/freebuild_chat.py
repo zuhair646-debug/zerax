@@ -2203,58 +2203,91 @@ def make_freebuild_chat_router(db, get_current_user):
         captured: Dict[str, Any] = {"summary": "", "options": [], "iterations": 0,
                                      "model_used": "", "html_updated": False,
                                      "new_html": None, "snapshots": []}
-        # Track changes via a parallel context
-        tracking_ctx = FreeBuildToolContext(proj)
+        # Note: changes are tracked via ctx_holder["ctx"] populated by stream_agent_turn
 
         async def event_stream():
             from .freebuild_agent import stream_agent_turn as _s
             ctx_holder: Dict[str, Any] = {}
-            async for chunk in _s(proj, message, history, ctx_holder=ctx_holder):
-                # Match the SSE event line exactly (chunks always start with 'event: <name>\n')
-                if chunk.startswith("event: done\n"):
-                    try:
-                        data_line = [ln for ln in chunk.split("\n") if ln.startswith("data:")][0][5:].strip()
-                        done = json.loads(data_line)
-                        captured["summary"] = done.get("summary", "")
-                        captured["options"] = done.get("options") or []
-                        captured["iterations"] = done.get("iterations", 0)
-                        captured["model_used"] = done.get("model_used", "")
-                        captured["html_updated"] = done.get("html_updated", False)
-                    except Exception:
-                        logger.exception("agent stream: failed to parse done event")
-                yield chunk
-            # After streaming, grab final HTML/snapshots from the tool context
-            final_ctx = ctx_holder.get("ctx")
-            new_html = final_ctx.current_html if (final_ctx and final_ctx.changes_made > 0) else None
-            snapshots = final_ctx.snapshots_to_create if final_ctx else []
+            last_persisted_changes = 0
             try:
-                update_set: Dict[str, Any] = {"updated_at": _now()}
-                push_ops: Dict[str, Any] = {
-                    "messages": {
-                        "$each": [
-                            {"role": "user", "content": message, "timestamp": _now(),
-                             "pending_assets": [], "attachments": [],
-                             "reference": None, "answer_meta": None},
-                            {"role": "assistant", "content": captured["summary"],
-                             "timestamp": _now(), "pending_assets": [],
-                             "had_html": bool(new_html),
-                             "options": captured["options"],
-                             "design_variants": [],
-                             "agent_iterations": captured["iterations"],
-                             "model_used": captured["model_used"]},
-                        ]
+                async for chunk in _s(proj, message, history, ctx_holder=ctx_holder):
+                    # Match the SSE event line exactly (chunks always start with 'event: <name>\n')
+                    if chunk.startswith("event: done\n"):
+                        try:
+                            data_line = [ln for ln in chunk.split("\n") if ln.startswith("data:")][0][5:].strip()
+                            done = json.loads(data_line)
+                            captured["summary"] = done.get("summary", "")
+                            captured["options"] = done.get("options") or []
+                            captured["iterations"] = done.get("iterations", 0)
+                            captured["model_used"] = done.get("model_used", "")
+                            captured["html_updated"] = done.get("html_updated", False)
+                        except Exception:
+                            logger.exception("agent stream: failed to parse done event")
+                    # ⚡ MID-STREAM CHECKPOINT: every time a tool finishes successfully
+                    # AND the HTML has new changes, write the latest HTML to the DB
+                    # right away. This way if the client disconnects (proxy timeout,
+                    # tab close, network drop), the work isn't lost.
+                    if chunk.startswith("event: tool\n") and '"phase": "done"' in chunk:
+                        ctx_now = ctx_holder.get("ctx")
+                        if ctx_now and ctx_now.changes_made > last_persisted_changes and ctx_now.current_html:
+                            try:
+                                await db.freebuild_projects.update_one(
+                                    {"id": pid},
+                                    {"$set": {"current_html": ctx_now.current_html,
+                                              "updated_at": _now(),
+                                              "agent_in_progress": True}},
+                                )
+                                last_persisted_changes = ctx_now.changes_made
+                                logger.info(f"[agent-stream] mid-stream HTML checkpoint saved (changes={last_persisted_changes})")
+                            except Exception:
+                                logger.exception("mid-stream checkpoint failed")
+                    yield chunk
+            finally:
+                # Final persist runs even if the client disconnected mid-stream.
+                final_ctx = ctx_holder.get("ctx")
+                new_html = final_ctx.current_html if (final_ctx and final_ctx.changes_made > 0) else None
+                snapshots = final_ctx.snapshots_to_create if final_ctx else []
+                # If no done event received (interrupted), synthesize a summary
+                # from any narration the AI managed to produce
+                if not captured.get("summary"):
+                    if final_ctx and final_ctx.changes_made > 0:
+                        captured["summary"] = (
+                            f"⏸️ توقفت بشكل مفاجئ بعد {final_ctx.changes_made} تعديل. "
+                            "العمل محفوظ — ابعث 'كمّل' وأكمل من حيث وقفت."
+                        )
+                    else:
+                        captured["summary"] = (
+                            "⏸️ انقطع الاتصال قبل ما أبدأ. أعد إرسال طلبك من فضلك."
+                        )
+                    captured["html_updated"] = bool(new_html)
+                try:
+                    update_set: Dict[str, Any] = {"updated_at": _now(), "agent_in_progress": False}
+                    push_ops: Dict[str, Any] = {
+                        "messages": {
+                            "$each": [
+                                {"role": "user", "content": message, "timestamp": _now(),
+                                 "pending_assets": [], "attachments": [],
+                                 "reference": None, "answer_meta": None},
+                                {"role": "assistant", "content": captured["summary"],
+                                 "timestamp": _now(), "pending_assets": [],
+                                 "had_html": bool(new_html),
+                                 "options": captured["options"],
+                                 "design_variants": [],
+                                 "agent_iterations": captured["iterations"],
+                                 "model_used": captured["model_used"]},
+                            ]
+                        }
                     }
-                }
-                if new_html:
-                    update_set["current_html"] = new_html
-                if snapshots:
-                    push_ops["html_snapshots"] = {"$each": snapshots, "$slice": -20}
-                await db.freebuild_projects.update_one(
-                    {"id": pid},
-                    {"$push": push_ops, "$set": update_set},
-                )
-            except Exception:
-                logger.exception("agent stream: persist failed")
+                    if new_html:
+                        update_set["current_html"] = new_html
+                    if snapshots:
+                        push_ops["html_snapshots"] = {"$each": snapshots, "$slice": -20}
+                    await db.freebuild_projects.update_one(
+                        {"id": pid},
+                        {"$push": push_ops, "$set": update_set},
+                    )
+                except Exception:
+                    logger.exception("agent stream: final persist failed")
 
         return StreamingResponse(
             event_stream(),

@@ -1212,7 +1212,28 @@ function ChatWorkspace({ projectId }) {
   const [previewMode, setPreviewMode] = useState('desktop');
   const [myProjectsOpen, setMyProjectsOpen] = useState(false);
   const chatEndRef = useRef(null);
+  const chatScrollRef = useRef(null);
+  const userScrolledUpRef = useRef(false);
   const fileInputRef = useRef(null);
+
+  // Auto-scroll to bottom when AI streams new content — UNLESS the user has
+  // scrolled up to read earlier output (we respect their intent).
+  const isAtBottom = useCallback(() => {
+    const el = chatScrollRef.current;
+    if (!el) return true;
+    return el.scrollHeight - el.scrollTop - el.clientHeight < 80;
+  }, []);
+  const onChatScroll = useCallback(() => {
+    userScrolledUpRef.current = !isAtBottom();
+  }, [isAtBottom]);
+  const scrollToBottomSoon = useCallback(() => {
+    if (userScrolledUpRef.current) return;
+    const el = chatScrollRef.current;
+    if (!el) return;
+    requestAnimationFrame(() => {
+      try { el.scrollTo({ top: el.scrollHeight, behavior: 'auto' }); } catch (_) { /* ignore */ }
+    });
+  }, []);
 
   // Pause polling while modals are open (avoids modal flicker on re-render)
   const pollPausedRef = useRef(false);
@@ -1355,6 +1376,8 @@ function ChatWorkspace({ projectId }) {
             }
             return { ...p, messages: msgs };
           });
+          // Auto-scroll to bottom so user sees the live typing without scrolling
+          scrollToBottomSoon();
         };
 
         let streamReceivedDone = false;
@@ -1828,7 +1851,7 @@ function ChatWorkspace({ projectId }) {
 
           {/* Tab Content */}
           {activeTab === 'chat' && (
-            <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4" data-testid="chat-messages">
+            <div ref={chatScrollRef} onScroll={onChatScroll} className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4" data-testid="chat-messages">
               {messages.length === 0 && (
                 <div className="text-center py-12 max-w-2xl mx-auto">
                   <Sparkles className="w-12 h-12 mx-auto mb-4 text-emerald-400/60" />
