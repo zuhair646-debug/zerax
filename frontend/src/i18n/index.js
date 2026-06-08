@@ -3,6 +3,7 @@ import i18n from 'i18next';
 import { initReactI18next } from 'react-i18next';
 import { isRTL } from './languages';
 import { getInitialLanguage, detectGeoLanguageInBackground, hasManualChoice } from './geoLanguage';
+import { applyPageLanguage } from './pageTranslator';
 
 // Core UI strings — Arabic & English are fully hand-translated.
 // All other languages fall back to English; future translations can
@@ -103,10 +104,10 @@ function applyLangSideEffects(code) {
     document.documentElement.lang = code;
     document.documentElement.dir = isRTL(code) ? 'rtl' : 'ltr';
     localStorage.setItem('zitex_lang', code);
-    // Live full-page translation via Claude (lazy-import so the bundle stays small)
-    import('./pageTranslator').then(({ applyPageLanguage }) => {
-      applyPageLanguage(code);
-    });
+    // Live full-page translation via Claude — runs synchronously (no lazy
+    // chunk) so language changes ALWAYS apply, even if the browser has
+    // an aggressive cache or a stale dynamic import chunk.
+    applyPageLanguage(code);
   } catch (_) { /* SSR-safe */ }
 }
 applyLangSideEffects(i18n.language);
@@ -122,6 +123,12 @@ if (typeof window !== 'undefined' && !hasManualChoice()) {
     detectGeoLanguageInBackground(i18n.language, (geoCode) => {
       if (geoCode && geoCode !== i18n.language) {
         i18n.changeLanguage(geoCode);
+        // Let the UI know so a small banner can offer "Keep Arabic"
+        try {
+          window.dispatchEvent(new CustomEvent('zitex:lang-auto-detected', {
+            detail: { code: geoCode },
+          }));
+        } catch (_) { /* */ }
       }
     });
   }, 600);

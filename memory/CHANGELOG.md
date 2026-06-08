@@ -1,6 +1,47 @@
 # Zitex Changelog
 
 
+## 2026-02-15 (c) — 🚀 تغيير اللغة الفوري الكامل + Auto-Detect + Banner ✅
+
+**الشكوى**: "لما أغير اللغة لازم أعمل refresh، والأقسام الأساسية (إنشاء المواقع، التطبيقات...) ما تتغير". + "اسم الموقع Zitex ما يتغير".
+
+**Root cause** (3 طبقات):
+1. **Lazy chunk loading**: `pageTranslator` كان lazy-imported، فلو فشل chunk، الترجمة ما تشتغل.
+2. **Early return عند `target === currentTarget`**: منع re-sweep بعد re-renders من React.
+3. **خنق Connection pool**: الـ sweeps المتعددة المتداخلة تطلق نفس fetch لنفس النصوص متوازية → الـ proxy connection pool يتشبع → كل الـ requests تنتظر إلى الأبد.
+
+**الحل**:
+- **استيراد مباشر** لـ `pageTranslator` (مش lazy) — يضمن توفره دايماً
+- **شطب الـ early return** — كل تغيير لغة يطلق re-sweep كامل
+- **Multiple staggered sweeps** (400ms, 1.2s, 2.8s, 5.5s, 9s, 14s) للقبض على المحتوى الـ lazy / async
+- **Scroll-listener sweep** debounced 180ms — للأقسام تحت الـ fold
+- **Single-flight sweep mutex** (`sweepRunning`/`sweepQueued`) — sweep واحد فقط في وقت واحد
+- **In-flight fetch deduplication** (`inflight: Map<key, Promise>`) — لا تطلب نفس النص مرتين متوازية
+- **Parallel chunk fetching** عبر `Promise.all` (بدل sequential)
+- **`data-no-translate="true"`** على Navbar logo (اسم Zitex) + LanguagePicker trigger + options + DetectedLanguageBanner
+
+**نتائج الاختبار (Playwright live)**:
+| السيناريو | leftover_count |
+|-----------|----------------|
+| AR → EN (16s wait) | **0** ✅ |
+| EN → FR (16s wait) | **1** (~99%) ✅ |
+| FR → AR (3s) | restore فوري بدون reload ✅ |
+
+اسم "Zitex" بقي **Zitex** في الـ 3 لغات بدون أي ترجمة.
+
+**الميزة الإضافية**: `DetectedLanguageBanner` — toast صغير يظهر لما الـ geo detection يغير اللغة، يعرض "🇫🇷 Français · تم اكتشاف لغتك تلقائياً" مع زر "العربية" للتراجع. يختفي بعد 8 ثواني أو dismiss.
+
+**ملفات معدلة/جديدة**:
+- `/app/frontend/src/i18n/pageTranslator.js` (مكتوب من جديد — single-flight + dedup + Promise.all)
+- `/app/frontend/src/i18n/index.js` (direct import + custom event dispatch)
+- `/app/frontend/src/components/DetectedLanguageBanner.js` (جديد)
+- `/app/frontend/src/components/Navbar.js` (`data-no-translate` على logo)
+- `/app/frontend/src/components/LanguagePicker.js` (`data-no-translate` على trigger)
+- `/app/frontend/src/App.js` (تركيب `<DetectedLanguageBanner />`)
+
+---
+
+
 ## 2026-02-15 (b) — 🌐 Auto-Detect Visitor Language by Geo + Browser ✅
 
 **الطلب**: المستخدم يبي اللغة تتعين تلقائياً حسب منطقة الزائر، بدون ما يحتاج يفتح الـ Picker. ولو غيّر يدوياً، نحترم اختياره.

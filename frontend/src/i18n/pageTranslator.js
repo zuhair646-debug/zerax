@@ -117,6 +117,23 @@ function setNodeValue(node, value) {
 }
 
 // -------- API --------
+// Track in-flight fetches so we never request the same string twice
+// concurrently (multiple overlapping sweeps were saturating the proxy
+// connection pool and starving all but the last call).
+const inflight = new Map(); // `${target}::${src}` -> Promise<string|null>
+let sweepRunning = false;
+
+async function fetchOneCached(src, target) {
+  // 1) memCache / localStorage
+  const c = cacheGet(src, target);
+  if (c) return c;
+  // 2) in-flight de-dup
+  const k = memKey(src, target);
+  if (inflight.has(k)) return inflight.get(k);
+  // 3) launch a single-string fetch is too expensive — we batch in callers
+  return null;
+}
+
 async function fetchBatch(texts, target) {
   try {
     const r = await fetch(`${API}/api/i18n/translate-batch`, {
@@ -178,22 +195,67 @@ async function translateNodes(nodes, target) {
 
   if (!toFetch.length) return;
 
-  // Fetch in chunks
-  for (let i = 0; i < toFetch.length; i += BATCH_SIZE) {
-    const chunk = toFetch.slice(i, i + BATCH_SIZE);
-    const translations = await fetchBatch(chunk, target);
-    if (!translations) continue;
-    chunk.forEach((src, j) => {
-      const out = (translations[j] || '').trim();
-      if (!out || out === src) return;
-      cacheSet(src, target, out);
-      const list = groups.get(src) || [];
-      for (const n of list) {
-        if (n.nodeValue !== out) setNodeValue(n, out);
-        currentOf.set(n, out);
-      }
-    });
+  // Filter out strings already being fetched by a concurrent call.
+  // For those, just await the existing promise instead of issuing a
+  // duplicate request (this is what saturated the proxy).
+  const reallyNeed = [];
+  const awaitingExisting = [];
+  for (const src of toFetch) {
+    const k = memKey(src, target);
+    if (inflight.has(k)) {
+      awaitingExisting.push({ src, p: inflight.get(k) });
+    } else {
+      reallyNeed.push(src);
+    }
   }
+
+  // Issue one merged batch for everything that isn't already in flight.
+  const chunks = [];
+  for (let i = 0; i < reallyNeed.length; i += BATCH_SIZE) {
+    chunks.push(reallyNeed.slice(i, i + BATCH_SIZE));
+  }
+
+  await Promise.all(chunks.map(async (chunk) => {
+    // Register this chunk as in-flight so a sibling sweep skips it
+    const chunkPromise = fetchBatch(chunk, target);
+    chunk.forEach((src) => inflight.set(memKey(src, target), chunkPromise.then((arr) => {
+      if (!arr) return null;
+      const idx = chunk.indexOf(src);
+      return idx >= 0 ? (arr[idx] || null) : null;
+    })));
+    try {
+      const translations = await chunkPromise;
+      if (translations) {
+        chunk.forEach((src, j) => {
+          const out = (translations[j] || '').trim();
+          if (!out || out === src) return;
+          cacheSet(src, target, out);
+          const list = groups.get(src) || [];
+          for (const n of list) {
+            if (n.nodeValue !== out) setNodeValue(n, out);
+            currentOf.set(n, out);
+          }
+        });
+      }
+    } finally {
+      // Always clear in-flight entries (success or fail) so future
+      // sweeps can retry if needed.
+      chunk.forEach((src) => inflight.delete(memKey(src, target)));
+    }
+  }));
+
+  // For strings that were already in flight when we started, await
+  // their result and apply it to our local groups too.
+  await Promise.all(awaitingExisting.map(async ({ src, p }) => {
+    const out = await p;
+    if (!out || out === src) return;
+    cacheSet(src, target, out);
+    const list = groups.get(src) || [];
+    for (const n of list) {
+      if (n.nodeValue !== out) setNodeValue(n, out);
+      currentOf.set(n, out);
+    }
+  }));
 }
 
 // -------- queue + debounce --------
@@ -263,6 +325,20 @@ function stopObserver() {
 
 // -------- public entry --------
 let initialBoot = true;
+let scrollHandler = null;
+let scrollDebounce = null;
+
+function attachScrollSweep() {
+  if (scrollHandler) return;
+  scrollHandler = () => {
+    if (scrollDebounce) clearTimeout(scrollDebounce);
+    scrollDebounce = setTimeout(() => sweepAndTranslate(), 180);
+  };
+  window.addEventListener('scroll', scrollHandler, { passive: true });
+  // Also catch resize / orientation as they can reveal lazy content
+  window.addEventListener('resize', scrollHandler, { passive: true });
+}
+
 export async function applyPageLanguage(targetCode) {
   if (!targetCode) return;
   // On very first call we just record the current language; nothing to
@@ -277,18 +353,57 @@ export async function applyPageLanguage(targetCode) {
       const all = collectTextNodes(document.body);
       await translateNodes(all, targetCode);
       startObserver();
+      // A few staggered sweeps catch Hero/Carousel/cards that React
+      // renders asynchronously (route lazy-load, intersection reveals).
+      setTimeout(() => sweepAndTranslate(), 600);
+      setTimeout(() => sweepAndTranslate(), 1800);
+      setTimeout(() => sweepAndTranslate(), 4000);
+      setTimeout(() => sweepAndTranslate(), 8000);
+      setTimeout(() => sweepAndTranslate(), 13000);
     } else {
       startObserver();
     }
+    attachScrollSweep();
     return;
   }
 
-  if (targetCode === currentTarget) return;
+  // Allow re-running with the same language to catch newly-rendered
+  // content (the early `return` here was the cause of "language change
+  // doesn't update everything until I refresh").
   currentTarget = targetCode;
   stopObserver();
   const all = collectTextNodes(document.body);
   await translateNodes(all, targetCode);
   startObserver();
+  // Re-sweep several times after a change to catch lazy / off-screen
+  // / re-rendered content + safety nets for slow Claude responses.
+  setTimeout(() => sweepAndTranslate(), 400);
+  setTimeout(() => sweepAndTranslate(), 1200);
+  setTimeout(() => sweepAndTranslate(), 2800);
+  setTimeout(() => sweepAndTranslate(), 5500);
+  setTimeout(() => sweepAndTranslate(), 9000);
+  setTimeout(() => sweepAndTranslate(), 14000);
+  attachScrollSweep();
+}
+
+/** Re-scan the entire document.body and translate anything still in
+ *  the source language. Cheap because cached strings are O(1) and we
+ *  only hit the API for genuinely new text. Single-flight: if a sweep
+ *  is already running, this call is queued (one slot only). */
+let sweepQueued = false;
+async function sweepAndTranslate() {
+  if (!currentTarget) return;
+  if (sweepRunning) { sweepQueued = true; return; }
+  sweepRunning = true;
+  try {
+    do {
+      sweepQueued = false;
+      const all = collectTextNodes(document.body);
+      if (all.length) await translateNodes(all, currentTarget);
+    } while (sweepQueued);
+  } finally {
+    sweepRunning = false;
+  }
 }
 
 // Exported for debugging in the browser console

@@ -3,6 +3,7 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import '@/i18n';  // initialize i18next + apply persisted language on app boot
 import { Toaster } from '@/components/ui/sonner';
 import PromoStrip from '@/components/PromoStrip';
+import DetectedLanguageBanner from '@/components/DetectedLanguageBanner';
 import LandingPage from '@/pages/LandingPage';
 import DemoLanding from '@/pages/DemoLanding';
 import VrmPreview from '@/pages/VrmPreview';
@@ -133,6 +134,7 @@ function App() {
     <div className="App" dir="rtl">
       <BrowserRouter>
         <PromoStrip />
+        <DetectedLanguageBanner />
         <Routes>
           {/* Root: ALWAYS show landing. Logged-in users can click on dashboard CTA to navigate. */}
           <Route path="/" element={<LandingPage user={user} />} />

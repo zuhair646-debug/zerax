@@ -49,6 +49,7 @@ export default function LanguagePicker({ compact = false }) {
         type="button"
         onClick={() => setOpen(true)}
         data-testid="lang-picker-trigger"
+        data-no-translate="true"
         className={`inline-flex items-center gap-2 rounded-full border border-white/15 bg-zinc-900/70 hover:bg-zinc-800/90 text-white transition-all ${
           compact ? 'p-2' : 'px-3 py-1.5 text-sm font-bold'
         }`}

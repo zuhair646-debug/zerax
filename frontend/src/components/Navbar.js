@@ -85,7 +85,7 @@ export const Navbar = ({ user, transparent = false, setUser }) => {
                 <ArrowRight className="w-4 h-4" />
               </button>
             )}
-            <Link to="/" className="flex items-center gap-3" data-testid="navbar-logo">
+            <Link to="/" className="flex items-center gap-3" data-testid="navbar-logo" data-no-translate="true">
               <ZitexLogo size="md" />
               <span className="text-2xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-amber-400 to-yellow-500">Zitex</span>
             </Link>
