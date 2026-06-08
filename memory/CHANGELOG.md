@@ -1,6 +1,38 @@
 # Zitex Changelog
 
 
+## 2026-02-15 (b) — 🌐 Auto-Detect Visitor Language by Geo + Browser ✅
+
+**الطلب**: المستخدم يبي اللغة تتعين تلقائياً حسب منطقة الزائر، بدون ما يحتاج يفتح الـ Picker. ولو غيّر يدوياً، نحترم اختياره.
+
+**الحل** — اكتشاف بثلاث طبقات (`/app/frontend/src/i18n/geoLanguage.js`):
+1. **Manual override يفوز دايماً**: مفتاح `zitex_lang_manual` في localStorage — يُحفظ فقط عند الاختيار اليدوي من Picker
+2. **Browser language (instant)**: `navigator.language` (مثلاً `fr-FR` → `fr`) — يُطبَّق قبل أول render
+3. **IP geolocation (background)**: ipapi.co + ipwho.is + geojs.io (fallbacks) — يرفع اللغة لـ country-based لو الزائر فرنسي ومتصفحه إنجليزي
+
+**خريطة دولة → لغة** (curated): 130+ دولة مغطّاة (الخليج + شمال أفريقيا → ar، أوروبا → اللغات المحلية، أمريكا اللاتينية → es/pt، آسيا → اللغة الرئيسية لكل دولة...).
+
+**حماية ضد الـ override الخاطئ**: لو `navigator.language` يطابق اللغة الحالية، ما نسمح للـ geo IP يبدلها (المستخدم وضع لغة متصفحه قصداً).
+
+**التحقق (Screenshot Test)**:
+- ✅ زائر بـ `navigator.language = fr-FR` يفتح الصفحة → كل النصوص ظهرت بالفرنسي مباشرة:
+  - "Commencer gratuitement" (Start Free)
+  - "Connexion" (Login)
+  - "Tarifs" (Pricing)
+  - "Construisez votre jeu" (Build your game)
+  - "Plateforme Zitex — Créez des sites, applications, images et vidéos par IA"
+  - شريط الإعلان: "Réduction de 20% sur l'abonnement Premium cette semaine · Utilisez le code ZITEX20"
+- ✅ لما المستخدم يختار يدوياً من Picker، يُحفظ كـ manual choice → ما يُتدخّل فيه مرة ثانية
+- ✅ الـ geo detection يجري بعد 600ms من البوت (ما يبطئ أول render)
+
+**ملفات معدّلة/جديدة**:
+- `/app/frontend/src/i18n/geoLanguage.js` (جديد — 145 سطر)
+- `/app/frontend/src/i18n/index.js` (استبدال `localStorage.getItem('zitex_lang') || 'ar'` بـ `getInitialLanguage()` + background geo invocation)
+- `/app/frontend/src/components/LanguagePicker.js` (`markManualChoice(code)` عند الاختيار اليدوي)
+
+---
+
+
 ## 2026-02-15 — 🌍 Dynamic Full-Page Translation (97+ Languages) ✅
 
 **المشكلة**: المستخدم اشتكى إن تغيير اللغة من Language Picker ما يترجم النصوص العربية الموجودة على الصفحة فعلياً.

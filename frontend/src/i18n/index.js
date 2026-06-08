@@ -2,6 +2,7 @@
 import i18n from 'i18next';
 import { initReactI18next } from 'react-i18next';
 import { isRTL } from './languages';
+import { getInitialLanguage, detectGeoLanguageInBackground, hasManualChoice } from './geoLanguage';
 
 // Core UI strings — Arabic & English are fully hand-translated.
 // All other languages fall back to English; future translations can
@@ -88,7 +89,7 @@ const resources = {
 
 i18n.use(initReactI18next).init({
   resources,
-  lng: localStorage.getItem('zitex_lang') || 'ar',
+  lng: getInitialLanguage(),
   fallbackLng: 'en',
   interpolation: { escapeValue: false },
   returnEmptyString: false,
@@ -110,6 +111,21 @@ function applyLangSideEffects(code) {
 }
 applyLangSideEffects(i18n.language);
 i18n.on('languageChanged', applyLangSideEffects);
+
+// Background geo-IP detection — runs once on first boot ONLY if the visitor
+// has not manually picked a language. Upgrades the UI language to match
+// the visitor's country (e.g. browser=en but visitor in France → fr).
+// The user can always override later from the LanguagePicker.
+if (typeof window !== 'undefined' && !hasManualChoice()) {
+  // Defer so it doesn't block initial render
+  setTimeout(() => {
+    detectGeoLanguageInBackground(i18n.language, (geoCode) => {
+      if (geoCode && geoCode !== i18n.language) {
+        i18n.changeLanguage(geoCode);
+      }
+    });
+  }, 600);
+}
 
 // On-demand machine translation — when a string isn't in our hand-curated
 // resources, the UI can call this to translate via Claude and cache it

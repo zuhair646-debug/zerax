@@ -1,6 +1,7 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { WORLD_LANGUAGES, LANG_BY_CODE } from '../i18n/languages';
+import { markManualChoice } from '../i18n/geoLanguage';
 import { Globe, Search, X, Check } from 'lucide-react';
 
 /**
@@ -36,6 +37,7 @@ export default function LanguagePicker({ compact = false }) {
   }, [open]);
 
   const pick = (code) => {
+    markManualChoice(code);
     i18n.changeLanguage(code);
     setOpen(false);
     setQuery('');
