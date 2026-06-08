@@ -511,7 +511,7 @@ class UserRegisterWithReferral(BaseModel):
     affiliate_code: Optional[str] = None  # 🆕 paid affiliate program
 
 @api_router.post("/auth/register")
-async def register(user_data: UserRegisterWithReferral):
+async def register(user_data: UserRegisterWithReferral, request: Request):
     # 🛡️ L14 — Password strength validation
     try:
         from modules.security import validate_password_strength
@@ -580,6 +580,22 @@ async def register(user_data: UserRegisterWithReferral):
             await record_signup(db, user.id, user_data.affiliate_code)
         except Exception as _ae:
             logging.getLogger(__name__).warning(f"affiliate signup hook failed: {_ae}")
+
+    # 🆕 Click→signup attribution: read tracking cookie set by /api/r/{code}
+    try:
+        click_id = request.cookies.get("zitex_aff_click")
+        if click_id:
+            from modules.affiliate.tracking import build_router as _ignored  # ensure module imported
+            await db.affiliate_clicks.update_one(
+                {"id": click_id},
+                {"$set": {
+                    "converted_to_signup": True,
+                    "signup_user_id": user.id,
+                    "signup_at": datetime.utcnow(),
+                }},
+            )
+    except Exception as _ce:
+        logging.getLogger(__name__).warning(f"affiliate click-bind hook failed: {_ce}")
     
     token = create_token(user.id, user.role)
     
@@ -3460,6 +3476,15 @@ try:
     logging.getLogger(__name__).info("client intelligence router registered")
 except Exception as _ie:
     logging.getLogger(__name__).error(f"Failed to register client intelligence: {_ie}", exc_info=True)
+
+# ============== AFFILIATE TRACKING (clicks, posts, source detection, impact analysis) ==============
+try:
+    from modules.affiliate.tracking import build_router as _build_aff_tracking
+    _aff_track_router = _build_aff_tracking(db, get_current_user)
+    app.include_router(_aff_track_router, prefix="/api")
+    logging.getLogger(__name__).info("affiliate tracking router registered")
+except Exception as _ate:
+    logging.getLogger(__name__).error(f"Failed to register affiliate tracking: {_ate}", exc_info=True)
 
 # ============== AI AVATAR (Animated assistant — main site + merchant subscription) ==============
 try:

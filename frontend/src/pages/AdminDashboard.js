@@ -44,6 +44,7 @@ const AdminDashboard = ({ user }) => {
     { title: 'إدارة المدفوعات', desc: 'مراجعة والموافقة على المدفوعات', path: '/admin/payments', icon: <CreditCard className="w-6 h-6" />, color: 'from-green-500 to-emerald-500' },
     { title: 'إدارة العملاء', desc: 'عرض وإدارة قائمة العملاء', path: '/admin/clients', icon: <Users className="w-6 h-6" />, color: 'from-purple-500 to-pink-500' },
     { title: 'مركز ذكاء العملاء 🧠', desc: 'تقرير 360° لكل عميل + اقتراح حملات إعلانية مستهدفة بالذكاء الاصطناعي', path: '/admin/intelligence', icon: <Sparkles className="w-6 h-6" />, color: 'from-amber-500 to-orange-600', testId: 'admin-tile-intelligence' },
+    { title: 'مركز المسوّقين 📈', desc: 'تتبع نقرات وإحصائيات كل مسوّق + مدى تأثيره الحقيقي وأفضل منشوراته', path: '/admin/affiliates', icon: <Sparkles className="w-6 h-6" />, color: 'from-pink-500 to-purple-600', testId: 'admin-tile-affiliates' },
     { title: 'النقاط والعروض', desc: 'إدارة النقاط والأسعار والعروض', path: '/admin/credits', icon: <Coins className="w-6 h-6" />, color: 'from-amber-500 to-yellow-500' },
     { title: 'تدريب الذكاء', desc: 'تعليم الذكاء الاصطناعي أمثلة احترافية', path: '/admin/training', icon: <Brain className="w-6 h-6" />, color: 'from-purple-500 to-pink-500' },
     { title: 'غرفة التحكم الأمنية 🛡️', desc: 'حماية 10 طبقات · فحص AI مستمر · IPs محظورة · نسخ احتياطي · سجل أحداث', path: '/admin/security', icon: <ShieldAlert className="w-6 h-6" />, color: 'from-red-500 to-rose-600', testId: 'admin-tile-security' },
