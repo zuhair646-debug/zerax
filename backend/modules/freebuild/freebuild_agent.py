@@ -669,7 +669,7 @@ async def stream_agent_turn(
     project: Dict[str, Any],
     user_message: str,
     history_messages: List[Dict[str, str]],
-    max_iterations: int = 40,
+    max_iterations: int = 100,
     ctx_holder: Optional[Dict[str, Any]] = None,
     user_language: str = "ar",
 ) -> AsyncGenerator[str, None]:
@@ -835,8 +835,12 @@ async def _stream_one_provider(
 
             async def _produce_events():
                 try:
+                    # max_tokens 16K (up from 5K) — Sonnet 4.5 supports 64K output;
+                    # 16K gives the agent enough headroom to emit full HTML sections
+                    # in a single shot without truncating mid-JSON which was causing
+                    # the "starts writing then restarts" issue users were reporting.
                     async with client.messages.stream(
-                        model=model, system=sys_prompt, max_tokens=5000,
+                        model=model, system=sys_prompt, max_tokens=16000,
                         tools=TOOLS_SCHEMA, messages=messages,
                     ) as st:
                         async for ev in st:
@@ -963,6 +967,20 @@ async def _stream_one_provider(
                     assistant_blocks.append({"type": "tool_use", "id": block.id, "name": block.name, "input": block.input})
                     tool_uses.append({"id": block.id, "name": block.name, "input": block.input})
             messages.append({"role": "assistant", "content": assistant_blocks})
+
+            # 🆕 Auto-resume on truncation: if the model hit max_tokens without
+            # completing its work, push a continuation prompt so it picks up
+            # exactly where it left off — completely transparent to the user.
+            # This is what fixes the "starts writing then restarts" bug.
+            if stop_reason == "max_tokens" and not tool_uses:
+                yield _sse("info", {"message": "📝 يكمل توليد المحتوى..."})
+                await asyncio.sleep(0)
+                messages.append({
+                    "role": "user",
+                    "content": "أكمل من حيث توقفت بالضبط بدون إعادة. لا تكرر ما كتبت سابقاً، استمر في النقطة التالية مباشرة.",
+                })
+                iterations += 1
+                continue
         else:
             try:
                 resp = await client.chat.completions.create(
