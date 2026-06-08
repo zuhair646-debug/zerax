@@ -118,6 +118,7 @@ export default function LanguagePicker({ compact = false }) {
                         type="button"
                         onClick={() => pick(l.code)}
                         data-testid={`lang-option-${l.code}`}
+                        data-no-translate="true"
                         className={`flex items-center gap-3 px-3 py-2 rounded-lg border transition-all text-right ${
                           active
                             ? 'bg-emerald-500/15 border-emerald-400/50 text-emerald-200'

@@ -1,6 +1,35 @@
 # Zitex Changelog
 
 
+## 2026-02-15 — 🌍 Dynamic Full-Page Translation (97+ Languages) ✅
+
+**المشكلة**: المستخدم اشتكى إن تغيير اللغة من Language Picker ما يترجم النصوص العربية الموجودة على الصفحة فعلياً.
+
+**الحل** (`/app/frontend/src/i18n/pageTranslator.js` — أعيدت كتابته كامل):
+- **MutationObserver قوي** يراقب `childList + subtree + characterData` معاً
+- **معالجة re-renders من React**: لما React يبدل nodeValue للنص الأصلي (شائع جداً بسبب state updates)، نعيد تطبيق الترجمة من الكاش فوراً بدون API call
+- **WeakMap لكل عقدة**: تخزين النص الأصلي + الترجمة المطبّقة حالياً لكل text node — يمكّن:
+  - الرجوع للعربي بدون reload (instant restore)
+  - منع double-translation
+- **Self-mutation guard (`isApplying`)**: علم يحمي من اللوبات اللانهائية
+- **كاش ثنائي**: في-الذاكرة `Map` + localStorage (cache forever per browser)
+- **Debounced batching**: تجميع 250ms ثم batch من 35 نص في طلب واحد لـ Claude
+- **استثناءات ذكية**: scripts/styles/code/inputs/contenteditable/`data-no-translate="true"`/إيموجي/أرقام بحتة
+
+**التحقق (Screenshot Test)**:
+- ✅ الصفحة العربية → اختيار English → كل النصوص اتترجمت (Start Free, Login, Pricing, Zitex AI Platform, Create your website or app with AI, Cinematic videos with Sora 2, …)
+- ✅ `html.lang=en` و `html.dir=ltr` يتحدثان فوراً
+- ✅ شريط الإعلان العلوي يتترجم
+- ✅ Language Picker نفسه محمي بـ `data-no-translate` (الأسماء الأصلية تبقى بلغتها)
+- ✅ Claude batch endpoint `/api/i18n/translate-batch` يرد 200 OK وترجمات دقيقة
+
+**ملفات معدّلة**:
+- `/app/frontend/src/i18n/pageTranslator.js` (re-write كامل، ~270 سطر)
+- `/app/frontend/src/components/LanguagePicker.js` (إضافة `data-no-translate="true"`)
+
+---
+
+
 ## 2026-06-05T09:49:30 — 🆕 Jun 5 2026 — AutoCoder Superpowers wired ✅
 
 الـ7 أدوات (project_context, screenshot_url, plan_*, update_prd, project_health) صارت متاحة للـAutoCoder. screenshot_url يربط Vision passthrough تلقائياً.
