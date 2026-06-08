@@ -1220,6 +1220,12 @@ function ChatWorkspace({ projectId }) {
     pollPausedRef.current = finalizeOpen || connectionsOpen || snapshotsOpen || !!lightboxAsset;
   }, [finalizeOpen, connectionsOpen, snapshotsOpen, lightboxAsset]);
 
+  // Also pause polling while an SSE chat stream is in flight — the local state
+  // has the optimistic user msg + the live-typing AI reply which the DB doesn't
+  // yet know about. A poll-replace here would WIPE the in-progress chat.
+  const loadingRef = useRef(false);
+  useEffect(() => { loadingRef.current = loading; }, [loading]);
+
   // Manual force-refresh of project (used by 'Refresh' button)
   const [previewKey, setPreviewKey] = useState(0);
   const refreshProject = useCallback(async () => {
@@ -1244,12 +1250,21 @@ function ChatWorkspace({ projectId }) {
     let cancelled = false;
     const token = localStorage.getItem('token');
     const tick = async () => {
-      if (pollPausedRef.current) return;
+      // Don't poll while a stream is actively writing to local state, OR while
+      // any local message has streaming=true. Both cases mean local state is
+      // ahead of the DB and a DB-replace would WIPE the user's just-sent
+      // message + the live AI reply mid-flight.
+      if (pollPausedRef.current || loadingRef.current) return;
       try {
         const r = await fetch(`${API}/api/freebuild-chat/project/${projectId}`, { headers: { Authorization: `Bearer ${token}` } });
         if (r.ok && !cancelled) {
           const d = await r.json();
           setProject((prev) => {
+            // Never overwrite a project that has more (newer) messages locally
+            // — the DB hasn't caught up to our optimistic update yet.
+            if (prev && (prev.messages?.length || 0) > (d.messages?.length || 0)) {
+              return prev;
+            }
             // Skip setState if nothing meaningful changed (avoids child re-renders)
             if (prev && prev.updated_at === d.updated_at && prev.messages?.length === d.messages?.length) {
               return prev;
