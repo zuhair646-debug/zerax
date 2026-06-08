@@ -43,10 +43,38 @@
 - ⏳ هل اللوجو AI يستخدم Gemini nano banana أم OpenAI gpt image 1؟
 - ⏳ نموذج التسعير للنوع الكامل (free / paid؟)
 
+## 6. النشر التلقائي (Auto-Deploy to Live) — ✅ مضاف
+بعد اعتماد العميل النهائي للتصميم + اللوجو + النمط:
+- **رفع تلقائي للموقع للسيرفر** (live) باللوجو والتصميم الجديد
+- **نموذج التكلفة الشهرية الشفاف**:
+  - **Option A**: يستضيف على سيرفرنا → اشتراك شهري ثابت ($X/شهر) — يشمل الـ hosting + maintenance
+  - **Option B**: ينقل لسيرفره الخاص (DigitalOcean/AWS/Hostinger) → رسوم setup مرة واحدة ($Y) + يدفع هو للهوست
+- **شفافية**: قبل النشر، نعرض للعميل تفاصيل التكاليف بوضوح
+- ⏳ المبالغ المحددة (شهري + setup) — منتظر منك
+
+## 7. فيديو تعريفي لكل قسم — ✅ مضاف
+لما العميل يدخل قسم نوع معين (مثلاً "مطاعم"):
+- **فيديو ترحيبي** يبدأ تلقائياً (أو بضغطة play)
+- محتوى الفيديو:
+  - شنو راح يتكون الموقع/التطبيق (الصفحات، الأدوات)
+  - الخدمات والمميزات (cart, ordering, menu management, etc.)
+  - **عرض تصميم مثال** بنفس الأدوات لكن بتصميم مختلف (proof of concept)
+- **الهدف**: العميل يقرر هل يكمل أو لا قبل ما يدخل عملية التصميم
+- ⏳ من ينتج الفيديوهات؟
+  - **Option A**: نولّدها بـ AI (Sora 2 / Veo / Kling) لما تطلب
+  - **Option B**: تصورها أنت / نتعاقد مع مصمم
+  - **Option C**: hybrid (AI أولاً، ثم استبدال بفيديو احترافي لاحقاً)
+
 ## التنفيذ المخطط (لما تكتمل المتطلبات)
-1. **Backend**: `modules/ready_sites/` — types catalog + style templates + agent wrapper
+1. **Backend**: 
+   - `modules/ready_sites/` — types catalog + style templates + agent wrapper
+   - `modules/ready_sites/deploy.py` — auto-deploy logic (مع Coolify/Caddy/Cloudflare Pages)
+   - `modules/ready_sites/billing.py` — subscription tiers للـ hosting
 2. **Frontend**:
-   - `ReadyMadeChooser.js` — اختيار النوع + النمط + اللوجو (3-step wizard)
-   - `ReadyMadeChat.js` — يعيد استخدام `FreeBuildChat.js` مع `template_id` و `style_id`
-3. **Agent**: `freebuild_agent.py` يقبل `style_directive` يحقنه في system prompt
+   - `ReadyMadeChooser.js` — wizard: نوع → فيديو تعريفي → نمط → لوجو → سعر النشر → تأكيد
+   - `ReadyMadeChat.js` — يعيد استخدام `FreeBuildChat.js` مع `template_id` و `style_id` + auto-deploy CTA عند الانتهاء
+3. **Agent**: `freebuild_agent.py` يقبل `style_directive` + `template_type`
 4. **Logo Generation**: integration مع Nano Banana أو DALL·E عبر Emergent LLM Key
+5. **Hosting**: 
+   - **Phase 1**: subdomains على نطاقنا (e.g. `{slug}.zitex.app`) — Coolify auto-deploy
+   - **Phase 2**: custom domain على سيرفر العميل (نولّد له deployment script)
