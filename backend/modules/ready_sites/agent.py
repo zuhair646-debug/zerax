@@ -22,7 +22,11 @@ import secrets
 import string
 from typing import Any, Dict, List, Optional
 
-from .data_factory import seed_restaurant, seed_to_js
+from .data_factory import (
+    seed_restaurant, seed_to_js,
+    render_categories_html, render_products_html,
+    render_admin_orders_html, render_admin_customers_html,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -555,6 +559,11 @@ async def generate_ready_site(
     # 4) Inject the seed JS at the top of the first <script> block
     merged = _inject_seed(merged, seed_js)
 
+    # 4b) Inject pre-built HTML for categories, products, admin tables
+    #     This replaces marker comments OR placeholder divs the AI may have left,
+    #     guaranteeing visible content even if the AI didn't write render code.
+    merged = _inject_prebuilt_html(merged, seed)
+
     # 5) Enforce credentials + branding
     merged = _enforce_branding_and_credentials(merged, admin_creds)
     logger.info(f"[READY_SITES] merged size: {len(merged)}")
@@ -572,21 +581,99 @@ async def generate_ready_site(
 
 def _inject_seed(html: str, seed_js: str) -> str:
     """Inject the seed JS at the top of the first <script> tag.
-    If the AI already wrote a placeholder `window.SITE = ...` we replace it.
+    Removes any AI-generated `window.SITE` / `window.ADMIN_DATA` assignments first.
     """
-    # Remove any AI-generated window.SITE or window.ADMIN_DATA assignments (we own the data)
     html = re.sub(r"window\.SITE\s*=\s*\{[\s\S]*?\}\s*;", "", html, count=1)
     html = re.sub(r"window\.ADMIN_DATA\s*=\s*\{[\s\S]*?\}\s*;", "", html, count=1)
-
-    # Insert our seed JS right after the first opening <script> tag (no attributes or with attributes)
     marker_re = re.compile(r"(<script\b[^>]*>)", re.IGNORECASE)
     m = marker_re.search(html)
     if m:
         idx = m.end()
         return html[:idx] + "\n/* ── Zitex seed data — INJECTED ── */\n" + seed_js + "\n/* ── end seed ── */\n" + html[idx:]
-    # No <script> found — append one before </body>
     seed_block = f'\n<script>\n/* ── Zitex seed data — INJECTED ── */\n{seed_js}\n</script>\n'
     return html.replace("</body>", seed_block + "</body>")
+
+
+def _inject_prebuilt_html(html: str, seed: Dict[str, Any]) -> str:
+    """Inject pre-built HTML for the menu grid, products grid, and admin tables.
+
+    Looks for marker containers and either replaces their inner content or appends to them.
+    Markers (in priority order):
+      - <div id="categories-grid"> / <div id="menu-grid">
+      - <div id="products-grid"> / <div id="all-products">
+      - <tbody id="admin-orders-tbody"> / <tbody id="admin-customers-tbody">
+    If the AI didn't include any markers at all, we APPEND a full menu section before </body>.
+    """
+    cats_html = render_categories_html(seed)
+    prods_html = render_products_html(seed)
+    orders_html = render_admin_orders_html(seed)
+    customers_html = render_admin_customers_html(seed)
+
+    found_any = False
+    for marker_id in ("categories-grid", "menu-grid", "menu_grid"):
+        pat = re.compile(rf'(<div\b[^>]*id=["\']{marker_id}["\'][^>]*>)([\s\S]*?)(</div>)', re.IGNORECASE)
+        m = pat.search(html)
+        if m:
+            html = html[:m.end(1)] + "\n" + cats_html + "\n" + html[m.start(3):]
+            found_any = True
+            break
+
+    for marker_id in ("products-grid", "all-products", "products_grid"):
+        pat = re.compile(rf'(<div\b[^>]*id=["\']{marker_id}["\'][^>]*>)([\s\S]*?)(</div>)', re.IGNORECASE)
+        m = pat.search(html)
+        if m:
+            html = html[:m.end(1)] + "\n" + prods_html + "\n" + html[m.start(3):]
+            break
+
+    for marker_id, content in (("admin-orders-tbody", orders_html), ("admin-customers-tbody", customers_html)):
+        pat = re.compile(rf'(<tbody\b[^>]*id=["\']{marker_id}["\'][^>]*>)([\s\S]*?)(</tbody>)', re.IGNORECASE)
+        m = pat.search(html)
+        if m:
+            html = html[:m.end(1)] + "\n" + content + "\n" + html[m.start(3):]
+
+    # If AI didn't include any menu markers, inject a fallback menu section near the end
+    if not found_any:
+        fallback_styles = """
+<style id="zitex-injected-menu-styles">
+#zitex-menu-fallback { max-width:1200px; margin:60px auto; padding:0 20px; }
+#zitex-menu-fallback h2 { font-size:32px; text-align:center; margin-bottom:30px; }
+#zitex-menu-fallback .cat-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:20px; margin-bottom:60px; }
+@media(max-width:768px){ #zitex-menu-fallback .cat-grid { grid-template-columns:1fr } }
+.cat-card { background:#fff; border-radius:18px; overflow:hidden; box-shadow:0 6px 24px rgba(0,0,0,.1); transition:transform .2s; text-decoration:none; color:inherit; display:block; }
+.cat-card:hover { transform:translateY(-6px); }
+.cat-img { height:200px; background-size:cover; background-position:center; }
+.cat-body { padding:18px; text-align:center; }
+.cat-name { font-size:20px; font-weight:900; margin-bottom:6px; }
+.cat-desc { color:#666; font-size:13px; margin-bottom:10px; }
+.cat-cta { color:#a52a2a; font-weight:700; font-size:13px; }
+.prod-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:18px; }
+@media(max-width:768px){ .prod-grid { grid-template-columns:1fr } }
+.product-card { background:#fff; border-radius:14px; overflow:hidden; box-shadow:0 4px 14px rgba(0,0,0,.08); }
+.prod-img { height:180px; background-size:cover; background-position:center; position:relative; }
+.prod-cal { position:absolute; top:10px; right:10px; background:rgba(0,0,0,.7); color:#fff; padding:4px 10px; border-radius:99px; font-size:11px; }
+.prod-new { position:absolute; top:10px; left:10px; background:#22c55e; color:#fff; padding:4px 10px; border-radius:99px; font-size:11px; font-weight:900; }
+.prod-pop { position:absolute; bottom:10px; right:10px; background:rgba(245,158,11,.95); color:#000; padding:4px 10px; border-radius:99px; font-size:11px; font-weight:900; }
+.prod-body { padding:14px; }
+.prod-tags { display:flex; gap:5px; margin-bottom:6px; }
+.ptag { background:#fef3c7; color:#a52a2a; padding:2px 8px; border-radius:99px; font-size:10px; font-weight:700; }
+.prod-name { font-size:17px; font-weight:900; margin-bottom:4px; }
+.prod-desc { color:#666; font-size:12px; line-height:1.5; margin-bottom:10px; min-height:36px; }
+.prod-foot { display:flex; justify-content:space-between; align-items:center; }
+.prod-price { font-size:18px; font-weight:900; color:#a52a2a; }
+.prod-add { background:#a52a2a; color:#fff; border:none; padding:8px 16px; border-radius:99px; font-weight:900; font-size:12px; cursor:pointer; transition:transform .15s; }
+.prod-add:hover { transform:scale(1.05); }
+</style>"""
+        fallback_section = f"""
+<section id="zitex-menu-fallback">
+  <h2>منيو المطعم</h2>
+  <div class="cat-grid">{cats_html}</div>
+  <h2 id="all-products-title">كل الأصناف</h2>
+  <div class="prod-grid">{prods_html}</div>
+</section>
+"""
+        html = html.replace("</body>", fallback_styles + fallback_section + "</body>")
+
+    return html
 
 
 async def refine_ready_site(current_html: str, change_request: str) -> str:

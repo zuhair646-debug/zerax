@@ -403,11 +403,7 @@ def seed_restaurant(business_name: str, tagline: str = "", phone: str = "", emai
 
 
 def seed_to_js(seed: Dict[str, Any]) -> str:
-    """Return JS code that defines window.SITE and window.ADMIN_DATA from the seed.
-
-    This goes INTO the brief so the AI knows the exact data shape to consume,
-    but the AI does NOT regenerate it — the platform injects the final JS.
-    """
+    """Return JS code that defines window.SITE and window.ADMIN_DATA from the seed."""
     site = {
         "branding": seed["branding"],
         "hours": seed["hours"],
@@ -425,3 +421,84 @@ def seed_to_js(seed: Dict[str, Any]) -> str:
         "window.SITE = " + json.dumps(site, ensure_ascii=False) + ";\n"
         "window.ADMIN_DATA = " + json.dumps(admin, ensure_ascii=False) + ";\n"
     )
+
+
+def render_categories_html(seed: Dict[str, Any]) -> str:
+    """Build the 6-category grid HTML directly in Python (guarantees visibility)."""
+    cards = []
+    for c in seed["categories"]:
+        cards.append(f'''
+<a href="#/category/{c["id"]}" class="cat-card" data-cat="{c["id"]}">
+  <div class="cat-img" style="background-image:url('{c["img"]}')"></div>
+  <div class="cat-body">
+    <h3 class="cat-name">{c["name"]}</h3>
+    <p class="cat-desc">{c["desc"]}</p>
+    <span class="cat-cta">تصفّح ←</span>
+  </div>
+</a>''')
+    return "\n".join(cards)
+
+
+def render_products_html(seed: Dict[str, Any]) -> str:
+    """Build all 60 product cards HTML directly in Python — grouped by category."""
+    cards = []
+    for p in seed["products"]:
+        tags_html = "".join(f'<span class="ptag">{t}</span>' for t in p.get("tags", [])[:3])
+        cards.append(f'''
+<article class="product-card" data-category="{p["category"]}" data-name="{p["name"]}" data-tags="{','.join(p.get('tags',[]))}">
+  <div class="prod-img" style="background-image:url('{p["img"]}')">
+    <span class="prod-cal">{p["calories"]} سعرة</span>
+    {'<span class="prod-new">جديد</span>' if p.get("is_new") else ''}
+    {'<span class="prod-pop">⭐ مميز</span>' if p.get("is_popular") else ''}
+  </div>
+  <div class="prod-body">
+    <div class="prod-tags">{tags_html}</div>
+    <h4 class="prod-name">{p["name"]}</h4>
+    <p class="prod-desc">{p["desc"]}</p>
+    <div class="prod-foot">
+      <span class="prod-price">{p["price"]} ر.س</span>
+      <button class="prod-add" onclick="window.addToCart && window.addToCart('{p["id"]}')" data-pid="{p["id"]}">أضف للسلة</button>
+    </div>
+  </div>
+</article>''')
+    return "\n".join(cards)
+
+
+def render_admin_orders_html(seed: Dict[str, Any]) -> str:
+    """Pre-built admin orders table HTML."""
+    rows = []
+    status_colors = {"تم الاستلام": "#3b82f6", "قيد التحضير": "#f59e0b", "في الطريق": "#a855f7", "تم التسليم": "#22c55e"}
+    for o in seed["orders"][:15]:
+        items_count = sum(it.get("qty", 1) for it in o.get("items", []))
+        color = status_colors.get(o["status"], "#888")
+        rows.append(f'''
+<tr>
+  <td><strong>{o["id"]}</strong></td>
+  <td>{o["customer"]}</td>
+  <td dir="ltr">{o["phone"]}</td>
+  <td>{items_count} صنف</td>
+  <td><strong>{o["total"]} ر.س</strong></td>
+  <td><span class="status-badge" style="background:{color}20;color:{color};border:1px solid {color}40">{o["status"]}</span></td>
+  <td>{o["time"]}</td>
+  <td><button class="btn-sm">عرض</button></td>
+</tr>''')
+    return "\n".join(rows)
+
+
+def render_admin_customers_html(seed: Dict[str, Any]) -> str:
+    rows = []
+    for c in seed["customers"][:12]:
+        badge_color = "#a855f7" if c["status"] == "VIP" else ("#22c55e" if c["status"] == "منتظم" else "#3b82f6")
+        rows.append(f'''
+<tr>
+  <td><strong>{c["name"]}</strong></td>
+  <td dir="ltr">{c["phone"]}</td>
+  <td>{c["total_orders"]}</td>
+  <td>{c["total_spent"]} ر.س</td>
+  <td>{c["loyalty_points"]} نقطة</td>
+  <td>{c["wallet"]} ر.س</td>
+  <td><span class="status-badge" style="background:{badge_color}20;color:{badge_color}">{c["status"]}</span></td>
+  <td><a href="https://wa.me/{c['phone'].replace('+','')}" target="_blank" class="btn-sm" style="background:#22c55e;color:#fff">واتساب</a></td>
+</tr>''')
+    return "\n".join(rows)
+
