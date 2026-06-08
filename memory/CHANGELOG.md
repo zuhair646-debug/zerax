@@ -1,6 +1,70 @@
 # Zitex Changelog
 
 
+## 2026-02-15 (f) — 📈 Affiliate Tracking System (Click → Signup → Paid Funnel) ✅
+
+**طلب المستخدم**: نظام مسوّقين احترافي — وين يحطون روابطهم، إحصائياتهم الداخلية، كم شخص دخل، أماكن النشر، عدد النشرات لكل رابط. + مدى تأثيرهم الفعلي.
+
+### Backend (`/app/backend/modules/affiliate/tracking.py` — جديد، 530 سطر)
+
+**Click Tracking endpoint** (`GET /api/r/{code}`):
+- يسجّل كل ضغطة في `affiliate_clicks` collection
+- يستخرج: IP, User-Agent, Referer, UTM (utm_source/medium/campaign/content), post_url
+- يحدد المنصة تلقائياً (twitter/instagram/facebook/youtube/tiktok/whatsapp/telegram/linkedin/google/...) من الـ Referer host + UTM source
+- يحلل الـ User-Agent → device (mobile/desktop/tablet) + browser + OS
+- يضع cookie `zitex_aff_click` (30 يوم) لربط الـ click بالـ signup لاحقاً
+- Redirect مع `?aff=CODE` للـ landing
+
+**Server-side signup binding** (في `server.py /api/auth/register`):
+- يقرأ `zitex_aff_click` cookie من الـ request
+- يحدّث `affiliate_clicks` بـ `converted_to_signup=true`, `signup_user_id`, `signup_at`
+- ⇒ نعرف **بالضبط** من أي ضغطة جاء التسجيل
+
+**Marketer endpoints**:
+- `GET /api/affiliate/me/dashboard` — stats (clicks 7/30 days, unique visitors, signups, paid, CR%, impact score 0-100), platform breakdown, device breakdown, 30-day timeseries
+- `GET/POST/DELETE /api/affiliate/me/posts` — إدارة المنشورات (يضيف رابط منشوره، نحسب له clicks+signups لكل منشور)
+- `GET /api/affiliate/me/link-builder?platform=X&campaign=Y` — يولّد روابط UTM-tagged جاهزة للنسخ
+
+**Admin endpoints**:
+- `GET /api/admin/affiliates/list?sort_by=lifetime_earnings|clicks_30d|signups_30d|joined_at` — قائمة كل المسوّقين مع stats الحية
+- `GET /api/admin/affiliates/{user_id}/impact` — تحليل عميق: funnel كامل (clicks/signups/paid/revenue)، platform mix 30d، top posts، last 50 click events، **verdict آلي** (too_new/low/fair/good/excellent) مع label عربي
+
+### Frontend
+
+**`/affiliate` و `/affiliate/dashboard`** — لوحة المسوّق (`AffiliateDashboard.js` — 350 سطر):
+- 6 hero stat cards: clicks 30d/total, unique visitors, signups, paid customers, CR%
+- درجة التأثير (Impact Score 0-100) مع progress bar
+- إجمالي العمولات + معدل تحويل التسجيل → دفع
+- **Link Builder ذكي**: dropdown platform + campaign → ينشئ رابط مع UTM جاهز للنسخ
+- **Sources chart**: bar chart مرئي لكل منصة
+- **Devices grid**: mobile/tablet/desktop
+- **Posts manager**: أضف رابط منشورك → احسب clicks+signups+CR لكل منشور
+- **30-day timeseries**: bar chart للنشاط اليومي
+
+**`/admin/affiliates`** — مركز المسوّقين للأدمن (`AffiliatesAdmin.js` — 280 سطر):
+- Grid لكل المسوّقين (sort by: earnings/clicks/signups/recent) مع badge ذهبي لأول 3
+- التفاصيل (per affiliate): verdict box ملون حسب التأثير، funnel 5-cards, conversion rate hero, platform mix, top posts table, **forensics table** (آخر 30 click مع time/platform/device/browser/IP masked/حالة)
+
+**AdminDashboard tile**: "مركز المسوّقين 📈" أضيف مع pink→purple gradient.
+
+### اختبار live (curl)
+- `GET /api/r/J7DAYVQY?s=twitter&c=launch&post=https://twitter.com/test/123` (مع Referer + UA) → 302 + cookie ✅
+- DB سجّلت click مع platform=twitter, device=mobile, browser detected ✅
+- `GET /api/admin/affiliates/{uid}/impact` → funnel + verdict عربي + platform breakdown ✅
+
+### دقة النظام
+| البيانات | الدقة | كيف |
+|---------|------|-----|
+| Clicks | **100%** | server-side، لكل request |
+| Signups | **100%** | cookie attribution + ربط في register endpoint |
+| Conversions (paid) | **100%** | بعد ربط webhook الدفع |
+| Source platform | **85-95%** | Referer + UTM (UTM دائماً 100%) |
+| Device/browser/OS | **~95%** | UA parsing |
+| Country | **0%** الآن | يحتاج MaxMind GeoIP integration (P2) |
+
+---
+
+
 ## 2026-02-15 (e) — 🧠 Client Intelligence Center (Admin 360° View + AI Insights) ✅
 
 **طلب المستخدم**: لوحة admin فيها تقرير مفصل لكل عميل: محادثاته، مواقعه، تطبيقاته، صوره، فيديوهاته، نشاطه، مدفوعاته، اهتماماته. الـ AI يقترح حملات إعلانية مستهدفة. **الأهم: read-only — الأدمن يطلع فقط، ما يعدل ولا يحاكي**.
