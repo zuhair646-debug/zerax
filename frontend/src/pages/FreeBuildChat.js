@@ -1316,14 +1316,17 @@ function ChatWorkspace({ projectId }) {
         let htmlUpdated = false;
         const stepsHolderId = `agent-steps-${Date.now()}`;
         // Push a placeholder assistant message we'll update live
-        setProject((p) => p ? {
-          ...p,
-          messages: [...(p.messages || []),
-            { role: 'user', content: msgText, timestamp: new Date().toISOString(), reference: refAsset, attachments: [] },
-            { role: 'assistant', content: '', timestamp: new Date().toISOString(),
-              agent_steps: [], agent_streaming: true, agent_holder_id: stepsHolderId },
-          ],
-        } : p);
+        setProject((p) => {
+          if (!p) return p;
+          return {
+            ...p,
+            messages: [...(p.messages || []),
+              { role: 'user', content: msgText, timestamp: new Date().toISOString(), reference: refAsset, attachments: [] },
+              { role: 'assistant', content: '', timestamp: new Date().toISOString(),
+                agent_steps: [], agent_streaming: true, agent_holder_id: stepsHolderId },
+            ],
+          };
+        });
 
         const updateLive = () => {
           setProject((p) => {
