@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html dir="ltr" lang="en"><head><meta charset="UTF-8"><title>Rustic Plank</title>
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;700;900&family=Tajawal:wght@400;700;900&display=swap" rel="stylesheet">
+<style>
+*{margin:0;padding:0;box-sizing:border-box;font-family:'Poppins',sans-serif}
+body{height:100vh;overflow:hidden;background:#3d2614;background-image:repeating-linear-gradient(90deg,rgba(0,0,0,.25) 0,rgba(0,0,0,.25) 1px,transparent 1px,transparent 80px),repeating-linear-gradient(0deg,rgba(255,255,255,.03) 0,rgba(255,255,255,.03) 1px,transparent 1px,transparent 40px),linear-gradient(180deg,#5d3a1f,#3d2614);padding:18px;position:relative;overflow:hidden}
+body::before,body::after{content:"";position:absolute;width:100px;height:100px;background-size:contain;background-repeat:no-repeat;background-position:center;z-index:1}
+body::before{top:-8px;left:-10px;background-image:url('https://images.unsplash.com/photo-1596040033229-a9821ebd058d?w=300&q=80');border-radius:50%;filter:drop-shadow(0 6px 12px rgba(0,0,0,.4))}
+body::after{bottom:0;right:0;width:140px;height:140px;background-image:url('https://images.unsplash.com/photo-1573821663912-6df460f9c684?w=300&q=80')}
+.card{background:#fff;border-radius:20px;height:100%;padding:24px 30px;display:flex;flex-direction:column;box-shadow:0 30px 80px rgba(0,0,0,.5);position:relative;z-index:2;overflow:hidden}
+.win-dot{position:absolute;top:18px;left:24px;display:flex;gap:6px}
+.win-dot span{width:9px;height:9px;border-radius:50%;background:#ddd}
+.nav{display:flex;justify-content:space-between;align-items:center;margin-top:18px;margin-bottom:6px}
+.logo{display:flex;align-items:center;gap:6px}
+.logo .b{width:28px;height:28px;background:linear-gradient(135deg,#0ea5e9,#3b82f6);color:#fff;font-weight:900;border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:13px}
+.logo span{font-weight:900;color:#0a0a0a;font-size:13px}
+.links{display:flex;gap:18px;font-size:10px;font-weight:700;color:#666}
+.links .on{color:#dc2626}
+.main{flex:1;display:flex;align-items:center;position:relative}
+.board{position:absolute;left:-6px;top:50%;transform:translateY(-50%);width:240px;height:240px;background:url('https://images.unsplash.com/photo-1551782450-a2132b4ba21d?w=400&q=80') center/cover;border-radius:50%;box-shadow:0 14px 40px rgba(0,0,0,.25)}
+.fries{position:absolute;left:170px;top:14%;font-size:90px;transform:rotate(-25deg);opacity:.85}
+.copy{margin-left:280px;flex:1}
+.copy .small{font-size:10px;letter-spacing:3px;color:#999;font-weight:700;margin-bottom:6px}
+.copy h1{font-weight:900;font-size:42px;line-height:.95;color:#0a0a0a;letter-spacing:-1px}
+.copy h1 .red{color:#dc2626;display:block;font-size:60px;letter-spacing:-2px}
+.copy p{margin-top:10px;font-size:11px;color:#666;max-width:280px;line-height:1.5}
+.copy .cta{margin-top:14px;display:inline-block;padding:11px 30px;background:#dc2626;color:#fff;font-weight:900;font-size:11px;letter-spacing:2px;border-radius:99px}
+.dots{position:absolute;bottom:18px;left:50%;transform:translateX(-50%);display:flex;gap:8px;font-size:11px;color:#999;font-weight:900}
+.dots .on{color:#dc2626;border-bottom:2px solid #dc2626;padding-bottom:2px}
+</style></head><body>
+<div class="card">
+  <div class="win-dot"><span style="background:#dc2626"></span><span style="background:#fbbf24"></span><span style="background:#22c55e"></span></div>
+  <div class="nav"><div class="logo"><div class="b">S5</div><span>SERV5 GRILL</span></div><div class="links"><span>HOME</span><span class="on">SPECIAL MENU</span><span>FOODS</span><span>DRINKS</span><span>CONTACT</span></div></div>
+  <div class="main">
+    <div class="board"></div>
+    <div class="fries">🍟</div>
+    <div class="copy">
+      <div class="small">ONE - STOP</div>
+      <h1>DELICIOUS<span class="red">FOODS PLACE.</span></h1>
+      <p>Farm-to-table burgers, hand-pressed daily. A neighborhood favorite since 2019.</p>
+      <span class="cta">ORDER NOW</span>
+    </div>
+  </div>
+  <div class="dots"><span>01</span><span class="on">02</span><span>03</span><span>04</span></div>
+</div>
+</body></html>

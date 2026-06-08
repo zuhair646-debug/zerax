@@ -262,7 +262,7 @@ function Header({ step }) {
           <h1 style={{ fontSize: 36, fontWeight: 900, margin: 0, lineHeight: 1, background: 'linear-gradient(90deg,#fbbf24,#ec4899)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
             ابنِ موقع مطعمك في 6 خطوات
           </h1>
-          <p style={{ color: '#9ca3af', marginTop: 8, fontSize: 14 }}>AI يبني من الصفر · 4 أنماط بصرية حصرية · 24 ميزة كاملة</p>
+          <p style={{ color: '#9ca3af', marginTop: 8, fontSize: 14 }}>AI يبني من الصفر · 6 أنماط بصرية حصرية · 24 ميزة كاملة</p>
         </div>
       </div>
       <div style={{ display: 'flex', gap: 8 }}>

@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html dir="ltr" lang="en"><head><meta charset="UTF-8"><title>Fork Noir</title>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,700;0,900;1,700&family=Tajawal:wght@400;700;900&display=swap" rel="stylesheet">
+<style>
+*{margin:0;padding:0;box-sizing:border-box;font-family:'Tajawal',sans-serif}
+body{background:#0a0a0a;color:#fff;height:100vh;overflow:hidden;display:flex}
+.left{flex:0 0 48%;padding:24px 32px;display:flex;flex-direction:column;justify-content:space-between;position:relative;z-index:2}
+.logo{font-family:'Playfair Display',serif;color:#c8a97e;font-size:14px;letter-spacing:6px;font-weight:900}
+.logo small{display:block;font-size:9px;letter-spacing:3px;margin-top:2px;opacity:.65}
+.nav{display:flex;gap:22px;font-size:10px;letter-spacing:2px;color:#e8d5b7;opacity:.85;margin-top:6px}
+.nav span.active{color:#fff;border-bottom:1px solid #c8a97e;padding-bottom:2px}
+.hero{margin-top:30px}
+.hero .small{font-size:9px;color:#c8a97e;letter-spacing:4px;margin-bottom:14px;font-weight:700}
+.hero h1{font-family:'Playfair Display',serif;font-style:italic;font-weight:700;font-size:42px;line-height:1.05;color:#fff}
+.hero h1 span{display:block;font-style:normal;font-weight:900;color:#e8d5b7;letter-spacing:-1px}
+.cta{margin-top:24px;display:inline-block;padding:11px 28px;border:1px solid #c8a97e;color:#c8a97e;background:transparent;font-size:11px;letter-spacing:3px;font-weight:700;width:fit-content}
+.chips{display:flex;gap:6px;flex-wrap:nowrap;overflow:hidden}
+.chip{padding:7px 14px;border:1px solid #2a2a2a;border-radius:99px;font-size:9px;color:#888;background:#0e0e0e}
+.chip.on{background:#c8a97e;color:#0a0a0a;border-color:#c8a97e;font-weight:900}
+.right{flex:1;background:url('https://images.unsplash.com/photo-1565958011703-44f9829ba187?w=900&q=80') center/cover;position:relative}
+.right::before{content:"";position:absolute;inset:0;background:linear-gradient(90deg,#0a0a0a 0%,transparent 40%)}
+</style></head><body>
+<div class="left">
+  <div>
+    <div class="logo">LA BELLA<small>RISTORANTE</small></div>
+    <div class="nav"><span class="active">Home</span><span>Menu</span><span>Gallery</span><span>About</span></div>
+  </div>
+  <div class="hero">
+    <div class="small">SINCE · 2018</div>
+    <h1>A genuine taste of<span>Italian cuisine</span></h1>
+    <a class="cta">ORDER NOW</a>
+  </div>
+  <div class="chips"><span class="chip on">Mains</span><span class="chip">Pizza</span><span class="chip">Pasta</span><span class="chip">Drinks</span></div>
+</div>
+<div class="right"></div>
+</body></html>

@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html dir="rtl" lang="ar"><head><meta charset="UTF-8"><title>Saudi Heritage</title>
+<link href="https://fonts.googleapis.com/css2?family=Amiri:wght@700&family=Tajawal:wght@400;700;900&display=swap" rel="stylesheet">
+<style>
+*{margin:0;padding:0;box-sizing:border-box;font-family:'Tajawal',sans-serif}
+body{background:#fdfaf6;color:#1a1a1a;height:100vh;overflow:hidden}
+.head{background:#7a1f2b;color:#fff;padding:14px 30px;display:flex;justify-content:space-between;align-items:center}
+.brand{display:flex;align-items:center;gap:10px}
+.crest{width:38px;height:38px;border-radius:50%;background:linear-gradient(135deg,#b89968,#fff);display:flex;align-items:center;justify-content:center;font-size:18px}
+.brand-name{font-family:'Amiri',serif;font-weight:700;font-size:16px;letter-spacing:1px}
+.brand-name small{display:block;font-size:8px;letter-spacing:3px;opacity:.7;margin-top:2px}
+.nav{display:flex;gap:20px;font-size:11px;font-weight:700}
+.hero{height:42%;background:linear-gradient(110deg,#3b2417,#1a1a1a);display:flex;align-items:center;padding:0 32px;position:relative;overflow:hidden}
+.plate{width:240px;height:240px;border-radius:50%;background:url('https://images.unsplash.com/photo-1574484284002-952d92456975?w=600&q=80') center/cover;border:8px solid #b89968;box-shadow:0 20px 60px rgba(0,0,0,.6);flex-shrink:0;position:relative}
+.plate::before{content:"";position:absolute;inset:-22px;border:1px dashed #b89968;border-radius:50%;opacity:.5}
+.copy{margin-right:34px;color:#fff}
+.copy h1{font-family:'Amiri',serif;font-size:34px;font-weight:700;color:#fff;line-height:1}
+.copy p{margin-top:10px;font-size:12px;opacity:.7;max-width:280px;line-height:1.6}
+.copy .pill{margin-top:14px;display:inline-block;padding:8px 22px;border:1px solid #b89968;color:#b89968;border-radius:99px;font-size:11px;font-weight:700}
+.menu{padding:18px 30px}
+.title{text-align:center;margin-bottom:16px}
+.title .div{width:80px;height:1px;background:#b89968;margin:6px auto;position:relative}
+.title .div::before{content:"◆";position:absolute;top:-7px;left:50%;transform:translateX(-50%);color:#b89968;background:#fdfaf6;padding:0 6px;font-size:10px}
+.title h3{font-family:'Amiri',serif;color:#7a1f2b;font-size:18px;font-weight:700}
+.grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}
+.card{background:#fff;border-radius:10px;padding:10px;text-align:center;box-shadow:0 4px 14px rgba(122,31,43,.08);border:1px solid #f5e9e0}
+.card .pic{width:54px;height:54px;border-radius:50%;background-size:cover;background-position:center;margin:0 auto 6px;border:2px solid #b89968}
+.card .n{font-size:10px;font-weight:900;color:#7a1f2b}
+.card .s{font-size:8px;color:#999;margin-top:2px}
+</style></head><body>
+<div class="head"><div class="brand"><div class="crest">👑</div><div class="brand-name">وليمة شاه<small>RESTAURANT</small></div></div>
+<div class="nav"><span>الرئيسية</span><span>القائمة</span><span>المعرض</span><span>تواصل</span></div></div>
+<div class="hero">
+  <div class="plate"></div>
+  <div class="copy"><h1>مطعم وليمة شاه</h1><p>نقدم أشهى الأطباق التي تلبي كل الأذواق، من المشويات الطازجة إلى المندي الأصيل</p><span class="pill">للاتصال بنا</span></div>
+</div>
+<div class="menu">
+  <div class="title"><h3>منيو المطعم</h3><div class="div"></div></div>
+  <div class="grid">
+    <div class="card"><div class="pic" style="background-image:url('https://images.unsplash.com/photo-1565299624946-b28f40a0ae38?w=200&q=80')"></div><div class="n">البيتزا</div><div class="s">منيو الغداء</div></div>
+    <div class="card"><div class="pic" style="background-image:url('https://images.unsplash.com/photo-1546833999-b9f581a1996d?w=200&q=80')"></div><div class="n">السلطات</div><div class="s">طازج اليوم</div></div>
+    <div class="card"><div class="pic" style="background-image:url('https://images.unsplash.com/photo-1559339352-11d035aa65de?w=200&q=80')"></div><div class="n">قسم اللحوم</div><div class="s">مشاوي</div></div>
+    <div class="card"><div class="pic" style="background-image:url('https://images.unsplash.com/photo-1572441713132-c542fc4fe282?w=200&q=80')"></div><div class="n">حلا صنعاني</div><div class="s">حلويات</div></div>
+  </div>
+</div>
+</body></html>

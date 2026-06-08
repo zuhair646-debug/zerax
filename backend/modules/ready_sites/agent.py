@@ -45,6 +45,36 @@ This site must FEEL like a finished, production-ready product on first preview.
 - The HTML output must include AT LEAST 12 named sections (id="menu", id="reservations", etc.).
 
 ═══════════════════════════════════════════════════════════════════════
+HOMEPAGE CLEANLINESS — STRICT (NEW RULE — DO NOT VIOLATE)
+═══════════════════════════════════════════════════════════════════════
+The HOMEPAGE / HERO / MIDDLE SECTIONS must stay VISUALLY CLEAN and feel like a fine-art magazine.
+The FOLLOWING ELEMENTS MUST APPEAR ONLY IN THE FOOTER (or in a dedicated single section directly above the footer):
+
+- WhatsApp button or link
+- Phone number
+- Reservation form (date / time / party / phone)
+- Opening hours table (days × hours)
+- Email contact form
+- Address + map
+- Social media icons (Instagram / Twitter / Facebook / TikTok)
+- Newsletter signup
+- Branch selector
+
+FORBIDDEN: floating chat bubbles on the bottom-right, mid-page "Book a table" widgets,
+sticky WhatsApp icons hovering over content, contact CTAs in the hero or menu sections.
+
+The HERO must showcase ONLY: brand name, tagline, ONE primary CTA (Order/Menu/Reserve choose ONE), and food imagery.
+The MIDDLE sections must showcase ONLY: menu, gallery, specials, about, reviews, loyalty.
+
+Build a comprehensive, sectioned, RICH FOOTER (≥ 400px tall) that contains a 4-column layout:
+  Column 1: Brand logo + short paragraph + social icons row
+  Column 2: Opening hours table + "Open now / Closed" live badge
+  Column 3: Reservation FORM (date, time, party size, name, phone, submit button)
+  Column 4: Contact info (address, phone clickable, email, WhatsApp button) + small map embed placeholder
+And a bottom footer-bar with: copyright + payment-method icons + Powered by Zitex link.
+═══════════════════════════════════════════════════════════════════════
+
+═══════════════════════════════════════════════════════════════════════
 VISUAL PATTERN COMPLIANCE (CRITICAL)
 ═══════════════════════════════════════════════════════════════════════
 You will be given a "design_directive" describing the EXACT visual language to follow.
@@ -67,17 +97,15 @@ localStorage where persistence is needed:
 - **delivery**: Address form + map placeholder (use a CSS-drawn map illustration) + 3-step order tracker
   (received → preparing → on the way → delivered).
 - **pickup**: Toggle in checkout between "توصيل" and "استلام من المطعم" + ready-time picker.
-- **reservations**: Full form (date picker, time slot, party size 1-10, name, phone, special notes).
-  Validated, saves to localStorage `restaurant_reservations` and lists past reservations.
+- **reservations**: Reservation form lives ONLY inside the footer's Column 3 (date picker, time slot, party size, name, phone). Validated, saves to localStorage `restaurant_reservations`.
 - **gallery**: ≥8 food photos in a masonry/grid layout with hover zoom + lightbox on click.
 - **specials**: "Dish of the day" featured card + a "اليوم فقط" badge + countdown timer.
 - **loyalty**: Points display in header (mock-login → localStorage `loyalty_points`), rules card
   ("نقطة لكل ريال"), and a "استبدل النقاط" button with sample rewards.
 - **reviews**: Star rating + writable review form persisted to localStorage `restaurant_reviews`
   and listed below as cards (use the saved name + stars + text + date).
-- **contact**: WhatsApp floating button + phone + email + working Google Maps iframe-style placeholder
-  showing restaurant location with marker.
-- **hours**: Live "OPEN / CLOSED" badge computed from current time + days/hours table.
+- **contact**: WhatsApp + phone + email + address — ALL inside the footer's Column 4 ONLY.
+- **hours**: Live "OPEN / CLOSED" badge + days/hours table — inside the footer's Column 2 ONLY.
 - **branches**: Branch selector dropdown that filters menu and changes contact info.
 - **languages**: AR/EN toggle that swaps `dir` and text content using `data-ar`/`data-en` attributes.
 - **search**: Live search input that filters the menu grid.

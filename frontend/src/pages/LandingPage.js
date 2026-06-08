@@ -228,7 +228,7 @@ const LandingPage = ({ user }) => {
         {
           type: 'website-template',
           title: 'مواقع جاهزة',
-          desc: 'معالج ٦ خطوات · ٤ أنماط حصرية · ٢٤ ميزة',
+          desc: 'معالج ٦ خطوات · ٦ أنماط حصرية · ٢٤ ميزة',
           gradient: 'from-teal-500/20 to-emerald-500/10',
           accent: '#14b8a6',
           bgImage: 'https://images.unsplash.com/photo-1559028012-481c04fa702d?auto=format&fit=crop&w=800&q=70',
