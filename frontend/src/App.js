@@ -4,6 +4,7 @@ import '@/i18n';  // initialize i18next + apply persisted language on app boot
 import { Toaster } from '@/components/ui/sonner';
 import PromoStrip from '@/components/PromoStrip';
 import DetectedLanguageBanner from '@/components/DetectedLanguageBanner';
+import FloatingLanguagePicker from '@/components/FloatingLanguagePicker';
 import LandingPage from '@/pages/LandingPage';
 import DemoLanding from '@/pages/DemoLanding';
 import VrmPreview from '@/pages/VrmPreview';
@@ -135,6 +136,7 @@ function App() {
       <BrowserRouter>
         <PromoStrip />
         <DetectedLanguageBanner />
+        <FloatingLanguagePicker />
         <Routes>
           {/* Root: ALWAYS show landing. Logged-in users can click on dashboard CTA to navigate. */}
           <Route path="/" element={<LandingPage user={user} />} />

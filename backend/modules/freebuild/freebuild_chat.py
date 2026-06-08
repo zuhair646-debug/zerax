@@ -2191,6 +2191,7 @@ def make_freebuild_chat_router(db, get_current_user):
     async def agent_chat_stream(
         pid: str,
         message: str = Form(...),
+        user_language: str = Form("ar"),
         user=Depends(get_current_user),
     ):
         """SSE endpoint: streams 'thinking' events as the agent works."""
@@ -2218,7 +2219,7 @@ def make_freebuild_chat_router(db, get_current_user):
             ctx_holder: Dict[str, Any] = {}
             last_persisted_changes = 0
             try:
-                async for chunk in _s(proj, message, history, ctx_holder=ctx_holder):
+                async for chunk in _s(proj, message, history, ctx_holder=ctx_holder, user_language=user_language):
                     # Match the SSE event line exactly (chunks always start with 'event: <name>\n')
                     if chunk.startswith("event: done\n"):
                         try:

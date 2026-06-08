@@ -1,6 +1,64 @@
 # Zitex Changelog
 
 
+## 2026-02-15 (d) — 💰 Dynamic Pricing Markup + AI Multi-Language + Global Picker ✅
+
+**طلب المستخدم**: "للغات غير العربية نضيف $3 على كل باقة كتكلفة ترجمة. وفحص شامل لكل أجزاء المنصة. والذكاء الاصطناعي يرد بلغة المستخدم."
+
+**ما تم تنفيذه:**
+
+### 1️⃣ Dynamic Pricing Markup
+- `/app/frontend/src/i18n/pricingMarkup.js` (جديد): helper `applyMarkup` + `getMarkup` + `markupHint`
+- **العربي**: $0 markup (السعر الأصلي يبقى كما هو)
+- **بقية اللغات**: +$3 USD (≈ 11 SAR) لكل باقة مدفوعة (الباقة المجانية تبقى $0)
+- لكل سعر مدفوع: badge أخضر صغير "Includes +$3 international support"
+- مطبّق في `Pricing.js` للـ plans و packs ومستوى الـ Pay-in-4 يحتسب من السعر المعدّل
+
+### 2️⃣ AI يرد بلغة المستخدم (FreeBuild Chat)
+- **Frontend**: `FreeBuildChat.js` يرسل `user_language` field مع كل request للـ agent-chat-stream
+- **Backend**: 
+  - `freebuild_chat.py`: استقبال `user_language: str = Form("ar")` وتمريره للـ `stream_agent_turn`
+  - `freebuild_agent.py`: `stream_agent_turn(...)` + `_stream_one_provider(...)` يقبلون `user_language`
+  - يُحقَن `_lang_directive` في الـ system prompt بصيغة طبيعية:
+    ```
+    # LANGUAGE
+    The user's UI is currently set to: French (code: fr). 
+    You MUST write ALL of your conversational replies in French...
+    ```
+  - مدعوم لـ 24+ لغة بأسماء طبيعية للنموذج (Arabic Saudi dialect, English, French, Spanish, German, Italian, Portuguese, Russian, Chinese, Japanese, Korean, Turkish, Hindi, Urdu, Persian, Hebrew, Dutch, Polish, Indonesian, Thai, Vietnamese, Malay, Filipino, Bengali)
+
+### 3️⃣ FloatingLanguagePicker العالمي
+- `/app/frontend/src/components/FloatingLanguagePicker.js` (جديد)
+- زر globe دائري في الزاوية السفلية لكل صفحة (يدعم RTL/LTR)
+- مخفي في `/login`, `/register`, `/auth/*` (الـ focus على النموذج)
+- يضمن إن الزائر العالمي يقدر يغير اللغة من أي صفحة، حتى لو الصفحة ما عندها Navbar (مثل `/pricing`)
+
+### 4️⃣ data-no-translate موسّع
+- `Pricing.js`: على عناصر الأسعار `$X` (الأرقام ما تتترجم - لو تتترجم تصير "$XX" بترجمة "translated")
+- `FloatingLanguagePicker`: محمي بـ `data-no-translate` (شأنه شأن LanguagePicker الأصلي)
+- يضمن إن أسماء العملات والأرقام تظل حرفية
+
+**اختبار live على `/pricing`**:
+| لغة | الأسعار |
+|----|---------|
+| AR | $0, $9, $29, $79, $199 |
+| EN | $0, **$12**, **$32**, **$82**, **$202** (مع badge "Includes +$3...") |
+
+كل صفحة `/pricing` ترجمت بنجاح: "Build, Create, Innovate Without limits", "Choose the package that fits your ambition...", "Monthly subscription plans", "Top-up bundles", "Indie/Starter/Free", "Preferred payment method".
+
+**ملفات معدلة/جديدة**:
+- `/app/frontend/src/i18n/pricingMarkup.js` (جديد)
+- `/app/frontend/src/components/FloatingLanguagePicker.js` (جديد)
+- `/app/frontend/src/pages/Pricing.js` (markup للأسعار)
+- `/app/frontend/src/pages/PricingPage.js` (markup للـ legacy /pricing-old)
+- `/app/frontend/src/pages/FreeBuildChat.js` (إرسال user_language)
+- `/app/frontend/src/App.js` (`<FloatingLanguagePicker />`)
+- `/app/backend/modules/freebuild/freebuild_chat.py` (`user_language: str = Form`)
+- `/app/backend/modules/freebuild/freebuild_agent.py` (`_lang_directive` injection)
+
+---
+
+
 ## 2026-02-15 (c) — 🚀 تغيير اللغة الفوري الكامل + Auto-Detect + Banner ✅
 
 **الشكوى**: "لما أغير اللغة لازم أعمل refresh، والأقسام الأساسية (إنشاء المواقع، التطبيقات...) ما تتغير". + "اسم الموقع Zitex ما يتغير".

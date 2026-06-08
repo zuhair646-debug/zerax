@@ -1330,6 +1330,13 @@ function ChatWorkspace({ projectId }) {
     try {
       const fd = new FormData();
       fd.append('message', msgText || '(انظر للصورة المرفقة)');
+      // Pass the user's UI language so the AI replies in the same language
+      try {
+        const lang = (typeof window !== 'undefined' && window.localStorage)
+          ? (localStorage.getItem('zitex_lang_manual') || localStorage.getItem('zitex_lang') || 'ar')
+          : 'ar';
+        fd.append('user_language', lang);
+      } catch (_) { fd.append('user_language', 'ar'); }
       filesToSend.forEach((f) => fd.append('files', f));
       if (refAsset?.id) fd.append('reference_asset_id', refAsset.id);
       // Use streaming agent endpoint when no files attached (so user sees the AI's

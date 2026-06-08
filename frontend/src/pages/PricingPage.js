@@ -3,12 +3,15 @@ import { Navbar } from '@/components/Navbar';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
 import { toast } from 'sonner';
+import { useTranslation } from 'react-i18next';
+import { applyMarkup, markupHint } from '@/i18n/pricingMarkup';
 import { 
   Check, Star, Zap, Image, Video, Globe, Gift, 
   Users, Crown, Sparkles, Copy, Share2
 } from 'lucide-react';
 
 const PricingPage = ({ user }) => {
+  const { i18n } = useTranslation();
   const [pricing, setPricing] = useState(null);
   const [referralInfo, setReferralInfo] = useState(null);
   const [userBalance, setUserBalance] = useState(null);
@@ -186,9 +189,21 @@ const PricingPage = ({ user }) => {
                   
                   <CardContent>
                     <div className="mb-6">
-                      <span className="text-4xl font-bold text-white">{pkg.price_sar}</span>
-                      <span className="text-gray-400 mr-1">ر.س</span>
-                      <span className="text-gray-500 text-sm block">≈ ${pkg.price_usd}</span>
+                      {(() => {
+                        const p = applyMarkup(pkg.price_sar, pkg.price_usd, i18n.language);
+                        return (
+                          <>
+                            <span className="text-4xl font-bold text-white" data-no-translate="true">{p.sar}</span>
+                            <span className="text-gray-400 mr-1">ر.س</span>
+                            <span className="text-gray-500 text-sm block" data-no-translate="true">≈ ${p.usd}</span>
+                            {p.applies && (
+                              <span className="block text-[10px] text-emerald-400/80 mt-1" title={markupHint(i18n.language)}>
+                                {markupHint(i18n.language)}
+                              </span>
+                            )}
+                          </>
+                        );
+                      })()}
                     </div>
                     
                     <ul className="space-y-3 text-gray-300 text-sm">
@@ -252,8 +267,20 @@ const PricingPage = ({ user }) => {
                   
                   <CardContent>
                     <div className="mb-4">
-                      <span className="text-3xl font-bold text-white">{sub.price_sar}</span>
-                      <span className="text-gray-400 mr-1">ر.س/شهر</span>
+                      {(() => {
+                        const p = applyMarkup(sub.price_sar, sub.price_usd || 0, i18n.language);
+                        return (
+                          <>
+                            <span className="text-3xl font-bold text-white" data-no-translate="true">{p.sar}</span>
+                            <span className="text-gray-400 mr-1">ر.س/شهر</span>
+                            {p.applies && (
+                              <span className="block text-[10px] text-emerald-400/80 mt-1">
+                                {markupHint(i18n.language)}
+                              </span>
+                            )}
+                          </>
+                        );
+                      })()}
                     </div>
                     
                     <ul className="space-y-2">

@@ -1,6 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
+import { useTranslation } from 'react-i18next';
+import { applyMarkup, markupHint, getMarkup } from '@/i18n/pricingMarkup';
 import { Sparkles, Check, Zap, Crown, Rocket, Building2, Tag, CreditCard } from 'lucide-react';
 
 const API = process.env.REACT_APP_BACKEND_URL;
@@ -17,6 +19,7 @@ const PLAN_ICONS = {
 
 export default function Pricing({ user }) {
   const navigate = useNavigate();
+  const { i18n } = useTranslation();
   const [plans, setPlans] = useState([]);
   const [packs, setPacks] = useState([]);
   const [cycle, setCycle] = useState('monthly');
@@ -205,10 +208,13 @@ export default function Pricing({ user }) {
         {tab === 'plans' ? (
           <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
             {plans.map((plan) => {
-              const price = cycle === 'yearly' ? plan.price_yearly_usd : plan.price_monthly_usd;
+              const basePrice = cycle === 'yearly' ? plan.price_yearly_usd : plan.price_monthly_usd;
               const isFree = plan.price_monthly_usd === 0;
               const isEnt = plan.price_monthly_usd === -1;
               const highlight = plan.highlight;
+              // Apply +$3 markup for non-Arabic visitors on paid plans only
+              const markup = (isFree || isEnt) ? { sar: 0, usd: 0, applies: false } : getMarkup(i18n.language);
+              const price = basePrice + (markup.usd * (cycle === 'yearly' ? 12 : 1));
               return (
                 <div
                   key={plan.id}
@@ -232,13 +238,18 @@ export default function Pricing({ user }) {
                     {isEnt ? (
                       <div className="text-3xl font-bold">تواصل معنا</div>
                     ) : isFree ? (
-                      <div className="text-4xl font-bold">$0</div>
+                      <div className="text-4xl font-bold" data-no-translate="true">$0</div>
                     ) : (
                       <div>
                         <div className="flex items-baseline gap-1">
-                          <span className="text-4xl font-bold">${price}</span>
+                          <span className="text-4xl font-bold" data-no-translate="true">${price}</span>
                           <span className="text-zinc-500 text-sm">/{cycle === 'yearly' ? 'سنة' : 'شهر'}</span>
                         </div>
+                        {markup.applies && (
+                          <div className="text-[10px] text-emerald-400/80 mt-1">
+                            {markupHint(i18n.language)}
+                          </div>
+                        )}
                         {!isFree && cycle === 'monthly' && (
                           <div className="text-xs text-emerald-400 mt-1">
                             {plan.credits_per_month.toLocaleString()} شعلة/شهر = ${(plan.credits_per_month / 1000).toFixed(0)} قيمة
@@ -294,7 +305,10 @@ export default function Pricing({ user }) {
           </div>
         ) : (
           <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {packs.map((pack) => (
+            {packs.map((pack) => {
+              const m = getMarkup(i18n.language);
+              const adjPrice = pack.price_usd + m.usd;
+              return (
               <div
                 key={pack.id}
                 data-testid={`pack-card-${pack.id}`}
@@ -306,7 +320,12 @@ export default function Pricing({ user }) {
                   </div>
                 )}
                 <h3 className="text-2xl font-bold mb-1">{pack.name_ar}</h3>
-                <div className="text-4xl font-bold text-amber-400 my-4">${pack.price_usd}</div>
+                <div className="text-4xl font-bold text-amber-400 my-4" data-no-translate="true">${adjPrice}</div>
+                {m.applies && (
+                  <div className="text-[10px] text-emerald-400/80 -mt-2 mb-3">
+                    {markupHint(i18n.language)}
+                  </div>
+                )}
                 <div className="space-y-2 text-sm mb-6">
                   <div className="flex justify-between">
                     <span className="text-zinc-400">الشعلات:</span>
@@ -322,7 +341,7 @@ export default function Pricing({ user }) {
                 {pack.pay_later_eligible && (
                   <div className="mb-4 p-3 rounded-lg bg-blue-500/10 border border-blue-500/30 text-xs">
                     <div className="flex items-center gap-2 text-blue-300 font-bold mb-1">
-                      <CreditCard className="w-3.5 h-3.5" /> أو 4 دفعات × ${(pack.price_usd / 4).toFixed(2)}
+                      <CreditCard className="w-3.5 h-3.5" /> أو 4 دفعات × ${(adjPrice / 4).toFixed(2)}
                     </div>
                     <div className="text-blue-200/80">بدون فوائد • PayPal • مدعومة في 🇺🇸 🇬🇧 🇪🇺 🇦🇺</div>
                   </div>
@@ -336,7 +355,8 @@ export default function Pricing({ user }) {
                   {checkingOut === `pack-${pack.id}` ? 'جاري التحويل...' : 'اشترِ الآن'}
                 </button>
               </div>
-            ))}
+              );
+            })}
           </div>
         )}
 

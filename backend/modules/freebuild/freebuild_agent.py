@@ -671,11 +671,14 @@ async def stream_agent_turn(
     history_messages: List[Dict[str, str]],
     max_iterations: int = 40,
     ctx_holder: Optional[Dict[str, Any]] = None,
+    user_language: str = "ar",
 ) -> AsyncGenerator[str, None]:
     """SSE generator: yields live thinking events while the agent works.
 
     If ctx_holder is provided, populates it with the final FreeBuildToolContext
     so the caller can persist current_html/snapshots after streaming completes.
+
+    user_language: ISO 639-1 code from the UI; AI will reply in that language.
     """
     yield _sse("start", {"message": "🚀 الذكاء بدأ التحليل..."})
     await asyncio.sleep(0)
@@ -695,7 +698,7 @@ async def stream_agent_turn(
         try:
             yield _sse("provider", {"name": provider, "model": model, "message": f"🧠 يستخدم {model}"})
             await asyncio.sleep(0)
-            async for chunk in _stream_one_provider(project, user_message, history_messages, max_iterations, provider, model, ctx_holder=ctx_holder):
+            async for chunk in _stream_one_provider(project, user_message, history_messages, max_iterations, provider, model, ctx_holder=ctx_holder, user_language=user_language):
                 yield chunk
             return
         except _ProviderUnavailable as e:
@@ -722,6 +725,7 @@ async def _stream_one_provider(
     provider: str,
     model: str,
     ctx_holder: Optional[Dict[str, Any]] = None,
+    user_language: str = "ar",
 ) -> AsyncGenerator[str, None]:
     """Run the tool loop for one provider, yielding SSE chunks per step."""
     ctx = FreeBuildToolContext(project)
@@ -750,6 +754,27 @@ async def _stream_one_provider(
     )
 
     # Build conversation
+    # Inject the user's UI language so the AI replies in the same language.
+    # Build a human-readable language name for the system prompt.
+    _LANG_NAMES = {
+        "ar": "Arabic (Saudi dialect)", "en": "English", "fr": "French", "es": "Spanish",
+        "de": "German", "it": "Italian", "pt": "Portuguese", "ru": "Russian",
+        "zh": "Chinese", "ja": "Japanese", "ko": "Korean", "tr": "Turkish",
+        "hi": "Hindi", "ur": "Urdu", "fa": "Persian", "he": "Hebrew",
+        "nl": "Dutch", "pl": "Polish", "id": "Indonesian", "th": "Thai",
+        "vi": "Vietnamese", "ms": "Malay", "fil": "Filipino", "bn": "Bengali",
+    }
+    _lang_human = _LANG_NAMES.get(user_language, user_language)
+    _lang_directive = (
+        f"\n\n# LANGUAGE\n"
+        f"The user's UI is currently set to: **{_lang_human}** (code: `{user_language}`). "
+        f"You MUST write ALL of your conversational replies, summaries, button labels, "
+        f"option suggestions, and explanations in {_lang_human}. Generated HTML/CSS/JS "
+        f"website code stays language-agnostic, BUT any visible website text (headings, "
+        f"buttons, copy) you write inside the HTML MUST also be in {_lang_human} unless "
+        f"the user explicitly requests a different language for the site itself.\n"
+    )
+
     if provider in ("anthropic", "emergent_anthropic"):
         from anthropic import AsyncAnthropic
         if provider == "emergent_anthropic":
@@ -761,7 +786,7 @@ async def _stream_one_provider(
         else:
             client = AsyncAnthropic(api_key=os.environ.get("ANTHROPIC_API_KEY", ""))
         messages: List[Dict[str, Any]] = []
-        sys_prompt = AGENT_SYSTEM_PROMPT
+        sys_prompt = AGENT_SYSTEM_PROMPT + _lang_directive
     else:
         from openai import AsyncOpenAI
         if provider == "moonshot":
@@ -769,7 +794,7 @@ async def _stream_one_provider(
                                  base_url="https://api.moonshot.ai/v1")
         else:
             client = AsyncOpenAI(api_key=os.environ.get("OPENAI_DIRECT_KEY") or os.environ.get("OPENAI_API_KEY", ""))
-        messages = [{"role": "system", "content": AGENT_SYSTEM_PROMPT}]
+        messages = [{"role": "system", "content": AGENT_SYSTEM_PROMPT + _lang_directive}]
         sys_prompt = None
         openai_tools = [{"type": "function", "function": {"name": t["name"], "description": t["description"], "parameters": t["input_schema"]}} for t in TOOLS_SCHEMA]
 
