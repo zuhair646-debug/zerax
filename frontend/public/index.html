@@ -10,10 +10,11 @@
         <meta property="og:type" content="website" />
         <link rel="icon" href="%PUBLIC_URL%/favicon.ico" />
         <link rel="manifest" href="%PUBLIC_URL%/manifest.json" />
-        <link rel="apple-touch-icon" href="%PUBLIC_URL%/icons/icon-180.png" />
-        <link rel="apple-touch-icon" sizes="152x152" href="%PUBLIC_URL%/icons/icon-152.png" />
-        <link rel="apple-touch-icon" sizes="167x167" href="%PUBLIC_URL%/icons/icon-167.png" />
-        <link rel="apple-touch-icon" sizes="180x180" href="%PUBLIC_URL%/icons/icon-180.png" />
+        <link rel="apple-touch-icon" href="%PUBLIC_URL%/icons/ios-180.png" />
+        <link rel="apple-touch-icon" sizes="120x120" href="%PUBLIC_URL%/icons/ios-120.png" />
+        <link rel="apple-touch-icon" sizes="152x152" href="%PUBLIC_URL%/icons/ios-152.png" />
+        <link rel="apple-touch-icon" sizes="167x167" href="%PUBLIC_URL%/icons/ios-167.png" />
+        <link rel="apple-touch-icon" sizes="180x180" href="%PUBLIC_URL%/icons/ios-180.png" />
         <meta name="apple-mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
         <meta name="apple-mobile-web-app-title" content="Zitex" />
@@ -83,32 +84,44 @@
             // Capture install prompt (Android/Chrome) — show our own custom button
             var deferredPrompt = null;
             var installBtn = document.getElementById('zitex-pwa-install');
+            // Check if user previously installed (saved flag) or currently in standalone mode
+            var isInStandalone =
+                window.matchMedia('(display-mode: standalone)').matches ||
+                window.navigator.standalone === true;
+            var alreadyInstalled =
+                isInStandalone || localStorage.getItem('zx_pwa_installed') === '1';
+            if (alreadyInstalled && installBtn) {
+                installBtn.style.display = 'none';
+                // If we're running inside the installed PWA, mark it permanently
+                if (isInStandalone) localStorage.setItem('zx_pwa_installed', '1');
+            }
             window.addEventListener('beforeinstallprompt', function (e) {
                 e.preventDefault();
                 deferredPrompt = e;
-                if (installBtn) installBtn.style.display = 'inline-flex';
+                if (installBtn && !alreadyInstalled) installBtn.style.display = 'inline-flex';
             });
             if (installBtn) {
                 installBtn.addEventListener('click', function () {
                     if (!deferredPrompt) return;
                     deferredPrompt.prompt();
-                    deferredPrompt.userChoice.then(function () {
+                    deferredPrompt.userChoice.then(function (choice) {
+                        if (choice && choice.outcome === 'accepted') {
+                            localStorage.setItem('zx_pwa_installed', '1');
+                        }
                         deferredPrompt = null;
                         installBtn.style.display = 'none';
                     });
                 });
             }
             window.addEventListener('appinstalled', function () {
+                localStorage.setItem('zx_pwa_installed', '1');
                 if (installBtn) installBtn.style.display = 'none';
                 console.log('[Zitex PWA] App installed successfully');
             });
 
-            // iOS Safari has no beforeinstallprompt — show hint button once for new visitors
+            // iOS Safari has no beforeinstallprompt — show hint button (only if not installed yet)
             var isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
-            var isInStandalone =
-                window.matchMedia('(display-mode: standalone)').matches ||
-                window.navigator.standalone === true;
-            if (isIOS && !isInStandalone && installBtn) {
+            if (isIOS && !alreadyInstalled && installBtn) {
                 installBtn.innerHTML =
                     '<span style="font-size:18px">📱</span><span>ثبّت Zitex على شاشتك</span>';
                 installBtn.style.display = 'inline-flex';
@@ -172,6 +185,7 @@
                     '</div>' +
                     '<div style="text-align:center;padding:12px;background:linear-gradient(135deg,rgba(124,58,237,.15),rgba(168,85,247,.08));border:1px solid rgba(124,58,237,.3);border-radius:12px"><div style="font-size:24px;margin-bottom:4px">🎉</div><p style="color:#fff;font-size:13px;font-weight:700;margin-bottom:4px">بعد التثبيت</p><p style="color:#9ca3af;font-size:11px;line-height:1.6">راح تلقى أيقونة Zitex على شاشتك الرئيسية، افتحها زي أي تطبيق ✨</p></div>' +
                     '<button id="zx-ios-got-it" style="width:100%;margin-top:14px;padding:14px;background:linear-gradient(135deg,#7c3aed,#a855f7);color:#fff;border:none;border-radius:12px;font-family:inherit;font-size:14px;font-weight:900;cursor:pointer">فهمت، خلّني أجرّب الآن</button>' +
+                    '<button id="zx-ios-already" style="width:100%;margin-top:8px;padding:12px;background:transparent;color:#9ca3af;border:1px solid #2a2a3e;border-radius:12px;font-family:inherit;font-size:13px;font-weight:700;cursor:pointer">✓ ثبّتته من قبل — لا تذكّرني مرة ثانية</button>' +
                     '</div>' +
                     '<style>@keyframes zxpulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.7;transform:scale(.97)}}@keyframes zxarrow{0%,100%{transform:translateY(0)}50%{transform:translateY(6px)}}</style>';
                 document.body.appendChild(modal);
@@ -182,6 +196,12 @@
                     modal.remove();
                 });
                 document.getElementById('zx-ios-got-it').addEventListener('click', function () {
+                    modal.remove();
+                });
+                document.getElementById('zx-ios-already').addEventListener('click', function () {
+                    localStorage.setItem('zx_pwa_installed', '1');
+                    var btn = document.getElementById('zitex-pwa-install');
+                    if (btn) btn.style.display = 'none';
                     modal.remove();
                 });
             }
