@@ -1,5 +1,42 @@
 # Zitex AI Platform - PRD
 
+### 🆕 Feb 9 2026 — Phase 2 Checkout + Branches + Smart Socials ✅
+**Completed in this session (continuation):**
+- ✅ **Multi-branch Map (Leaflet + OpenStreetMap, no API key)**: Checkout now embeds a live map with 4 stocked branches (Riyadh Olaya, Riyadh Malaz, Jeddah Tahlia, Dammam Corniche). Branches plotted with custom markers + popups.
+- ✅ **Haversine distance + auto-locate**: `locate-me` button uses `navigator.geolocation`, plots a user marker + dashed polyline to nearest branch, sorts the branch list by real km distance, tags closest one "NEAREST".
+- ✅ **Stock availability alert**: Each branch has an `out_of_stock` list. If the nearest branch is missing any cart items, a yellow alert appears with 2 actions: **"Ship from another branch"** (auto-switches to a branch with full stock + bumps to Express shipping) or **"Remove from cart"**.
+- ✅ **4 Shipping methods**: Standard (2-4d, 15 SAR), Express (24h, 35 SAR), Same-day (4h, 55 SAR), Pickup from branch (FREE). Selection styled with purple highlight, totals add shipping fee.
+- ✅ **Country-aware Social Networks**: New `SOCIAL_PRESETS` map. Each market loads its own platforms:
+   - 🇨🇳 China: WeChat, Weibo, Douyin, Xiaohongshu, QQ
+   - 🇯🇵 Japan: LINE, X, Instagram, YouTube
+   - 🇰🇷 Korea: KakaoTalk, Naver, Instagram, YouTube
+   - 🇷🇺 Russia: VK, Telegram, Odnoklassniki, YouTube
+   - 🇮🇷 Iran: Telegram, Instagram, Aparat
+   - 🇮🇳 India: WhatsApp, Instagram, X, YouTube, Facebook
+   - Gulf/EU/US/AU: X, Snapchat, Instagram, TikTok, YouTube, WhatsApp
+- ✅ **Custom Social Admin Modal**: "+ Add custom social" button opens a modal where admins can:
+   - Upload an icon/logo image (PNG/JPG/SVG, max 512KB, base64 stored)
+   - Enter name + direct URL
+   - Save & publish — appears in footer alongside built-in icons as a circular avatar with image
+   - Delete any custom item from the list (stored in localStorage `zx_custom_socials`)
+
+**Files**:
+- `/app/frontend/public/mockups/app_mode_full.html` (Leaflet + maps + branches + custom socials)
+
+
+
+
+### 🆕 Feb 9 2026 — Phase 1 UI Polish (App Mode) ✅
+**Completed in this session:**
+- ✅ **Full English Localization**: All hardcoded Arabic strings (الريال→SAR, اشتري→Buy, الرجوع→Back, etc.) replaced with `tx()` helper. New `CURRENCY_SYMBOLS_EN` map so SAR shows as "SAR" instead of "ر.س" when EN is active. Account/Orders pages also use data-key.
+- ✅ **Cinematic Main Banner**: New layered banner with stacked Unsplash images (Ken Burns auto-zoom, 3 images rotating every 6s), sheen sweep overlay, and a reserved `<video>` element ready for future video CDN integration. External video CDNs (Pixabay/Mixkit/Pexels) blocked from preview env, so animated image fallback used (visually equivalent to motion video).
+- ✅ **Beauty & Makeup Banner**: Category renamed to "تجميل ومكياج / Beauty & Makeup" with high-quality makeup brushes Unsplash image + matching video URL queued.
+- ✅ **Social Media Footer**: New "Follow Us / تابعنا" column with circular Font Awesome icons for X (Twitter), Snapchat, Instagram, TikTok, YouTube, WhatsApp with hover color transitions.
+- ✅ **Re-render on language/market switch**: `toggleLang()` and `switchMarket()` now re-render active view (category/orders/account) so dynamic text updates without page reload.
+
+**File**: `/app/frontend/public/mockups/app_mode_full.html`
+
+
 
 ### 🆕 Jun 9 2026 — Ready Sites: Global Market Localization Engine ✅
 
