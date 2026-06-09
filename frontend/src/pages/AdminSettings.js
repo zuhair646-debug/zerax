@@ -6,6 +6,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { toast } from 'sonner';
 import { Settings, Building2, CreditCard, Save, MessageCircle } from 'lucide-react';
+import PWAInstallCard from '@/components/PWAInstallCard';
 
 const AdminSettings = ({ user }) => {
   const [loading, setLoading] = useState(false);
@@ -190,6 +191,11 @@ const AdminSettings = ({ user }) => {
             {loading ? 'جاري الحفظ...' : 'حفظ الإعدادات'}
           </Button>
         </form>
+
+        {/* PWA Install Section — always available for re-install */}
+        <div className="mt-6">
+          <PWAInstallCard />
+        </div>
       </div>
     </div>
   );

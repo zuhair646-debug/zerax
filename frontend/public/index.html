@@ -84,21 +84,28 @@
             // Capture install prompt (Android/Chrome) — show our own custom button
             var deferredPrompt = null;
             var installBtn = document.getElementById('zerax-pwa-install');
-            // Check if user previously installed (saved flag) or currently in standalone mode
+            // Check if user is CURRENTLY running inside the installed PWA
             var isInStandalone =
                 window.matchMedia('(display-mode: standalone)').matches ||
                 window.navigator.standalone === true;
-            var alreadyInstalled =
-                isInStandalone || localStorage.getItem('zx_pwa_installed') === '1';
-            if (alreadyInstalled && installBtn) {
+            // If running standalone, mark it; otherwise we let the browser decide via beforeinstallprompt
+            if (isInStandalone) {
+                try { localStorage.setItem('zx_pwa_installed', '1'); } catch (_) {}
+                if (installBtn) installBtn.style.display = 'none';
+            } else if (localStorage.getItem('zx_pwa_installed') === '1' && installBtn) {
+                // We THINK it's installed (flag set), but user may have uninstalled.
+                // Hide button for now — beforeinstallprompt will re-show it if Chrome detects re-installable state.
                 installBtn.style.display = 'none';
-                // If we're running inside the installed PWA, mark it permanently
-                if (isInStandalone) localStorage.setItem('zx_pwa_installed', '1');
             }
             window.addEventListener('beforeinstallprompt', function (e) {
                 e.preventDefault();
                 deferredPrompt = e;
-                if (installBtn && !alreadyInstalled) installBtn.style.display = 'inline-flex';
+                // Expose globally so React PWAInstallCard can also use it from Profile page
+                window.__zxDeferredPrompt = e;
+                // Chrome firing this event means the app IS installable right now (i.e. NOT currently installed)
+                // → clear stale flag and re-show the button
+                try { localStorage.removeItem('zx_pwa_installed'); } catch (_) {}
+                if (installBtn) installBtn.style.display = 'inline-flex';
             });
             if (installBtn) {
                 installBtn.addEventListener('click', function () {
@@ -106,22 +113,23 @@
                     deferredPrompt.prompt();
                     deferredPrompt.userChoice.then(function (choice) {
                         if (choice && choice.outcome === 'accepted') {
-                            localStorage.setItem('zx_pwa_installed', '1');
+                            try { localStorage.setItem('zx_pwa_installed', '1'); } catch (_) {}
                         }
                         deferredPrompt = null;
+                        window.__zxDeferredPrompt = null;
                         installBtn.style.display = 'none';
                     });
                 });
             }
             window.addEventListener('appinstalled', function () {
-                localStorage.setItem('zx_pwa_installed', '1');
+                try { localStorage.setItem('zx_pwa_installed', '1'); } catch (_) {}
                 if (installBtn) installBtn.style.display = 'none';
                 console.log('[Zerax PWA] App installed successfully');
             });
 
-            // iOS Safari has no beforeinstallprompt — show hint button (only if not installed yet)
+            // iOS Safari has no beforeinstallprompt — show hint button (only if not currently in standalone)
             var isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
-            if (isIOS && !alreadyInstalled && installBtn) {
+            if (isIOS && !isInStandalone && installBtn) {
                 installBtn.innerHTML =
                     '<span style="font-size:18px">📱</span><span>ثبّت Zerax على شاشتك</span>';
                 installBtn.style.display = 'inline-flex';
@@ -129,6 +137,8 @@
                     showIOSInstallGuide();
                 });
             }
+            // Expose iOS guide globally so React PWAInstallCard can call it
+            window.showIOSInstallGuide = showIOSInstallGuide;
 
             // ═══════════════════ iOS Visual Install Guide ═══════════════════
             function showIOSInstallGuide() {

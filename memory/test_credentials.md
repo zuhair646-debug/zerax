@@ -10,6 +10,7 @@
 - URL: `/login`
 - Email: `owner@zerax.com`
 - Password: `owner123`
+- **Note**: Domain migrated from `@zitex.com` to `@zerax.com` during the Zerax rebrand (Feb 16 2026).
 
 ## Demo Site — Cozy Cafe Demo
 

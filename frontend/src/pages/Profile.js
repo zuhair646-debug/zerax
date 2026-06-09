@@ -4,6 +4,7 @@ import { BackButton } from '@/components/BackButton';
 import { useNavigate } from 'react-router-dom';
 import { User, Mail, Lock, Smartphone, Crown, Sparkles, Calendar } from 'lucide-react';
 import { toast } from 'sonner';
+import PWAInstallCard from '@/components/PWAInstallCard';
 
 const Profile = ({ user, setUser }) => {
   const navigate = useNavigate();
@@ -135,7 +136,7 @@ const Profile = ({ user, setUser }) => {
         </div>
 
         {/* Devices */}
-        <div className="rounded-2xl bg-slate-800/40 border border-slate-700 p-5">
+        <div className="rounded-2xl bg-slate-800/40 border border-slate-700 p-5 mb-4">
           <h3 className="text-white font-black text-sm mb-4 flex items-center gap-2">
             <Smartphone className="w-4 h-4 text-amber-400" /> الأجهزة المتصلة
           </h3>
@@ -149,6 +150,9 @@ const Profile = ({ user, setUser }) => {
           </div>
           <p className="text-xs text-gray-500 mt-3 text-center">قريباً: عرض كل الأجهزة + إدارة الجلسات</p>
         </div>
+
+        {/* PWA Install — always available so user can re-install after deletion */}
+        <PWAInstallCard />
       </div>
     </div>
   );
