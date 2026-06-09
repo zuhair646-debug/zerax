@@ -317,14 +317,30 @@ const RATES = {SAR:1,AED:0.98,KWD:0.082,QAR:0.97,BHD:0.10,OMR:0.103,IQD:350,SYP:
 
 // 12 products with multi-language names
 const PRODUCTS = [
+  // Electronics
   {id:'p1',cat:'electronics',ar:'سماعات لاسلكية فاخرة',en:'Premium Wireless Headphones',descAr:'صوت نقي · إلغاء ضوضاء · 30 ساعة',descEn:'Pure sound · ANC · 30hr battery',sar:599,img:'https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=500'},
   {id:'p2',cat:'electronics',ar:'ساعة ذكية رياضية',en:'Smart Sports Watch',descAr:'GPS · مقاومة للماء · شاشة AMOLED',descEn:'GPS · Water resistant · AMOLED',sar:1290,img:'https://images.unsplash.com/photo-1546868871-7041f2a55e12?w=500'},
+  {id:'p11',cat:'electronics',ar:'جوال آيفون 16 برو',en:'iPhone 16 Pro',descAr:'ذاكرة 256GB · 3 كاميرات · A18 Bionic',descEn:'256GB · Triple cam · A18 Bionic',sar:5499,img:'https://images.unsplash.com/photo-1592750475338-74b7b21085ab?w=500'},
+  {id:'p12',cat:'electronics',ar:'لابتوب ماك بوك إير',en:'MacBook Air M3',descAr:'13.6 إنش · M3 · 16GB رام · 512GB',descEn:'13.6" · M3 · 16GB RAM · 512GB',sar:6890,img:'https://images.unsplash.com/photo-1496181133206-80ce9b88a853?w=500'},
+  {id:'p13',cat:'electronics',ar:'سماعة AirPods Pro',en:'AirPods Pro 2',descAr:'إلغاء ضوضاء نشط · شحن لاسلكي MagSafe',descEn:'Active ANC · MagSafe wireless charging',sar:990,img:'https://images.unsplash.com/photo-1606220945770-b5b6c2c55bf1?w=500'},
+  // Fashion
   {id:'p3',cat:'fashion',ar:'قميص قطني فاخر',en:'Premium Cotton Shirt',descAr:'قطن مصري 100% · جميع المقاسات',descEn:'100% Egyptian cotton · All sizes',sar:185,img:'https://images.unsplash.com/photo-1521572163474-6864f9cf17ab?w=500'},
   {id:'p4',cat:'fashion',ar:'حذاء رياضي مودرن',en:'Modern Sneakers',descAr:'مقاس 36-46 · 3 ألوان متوفرة',descEn:'Size 36-46 · 3 colors available',sar:399,img:'https://images.unsplash.com/photo-1542291026-7eec264c27ff?w=500'},
   {id:'p5',cat:'fashion',ar:'ساعة كلاسيكية',en:'Classic Watch',descAr:'حركة سويسرية · ضمان سنتين',descEn:'Swiss movement · 2-year warranty',sar:890,img:'https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=500'},
+  {id:'p14',cat:'fashion',ar:'جاكيت جلد طبيعي',en:'Genuine Leather Jacket',descAr:'جلد بقر فاخر · بطانة دافئة · صناعة يدوية',descEn:'Premium cowhide · Warm lining · Handmade',sar:1290,img:'https://images.unsplash.com/photo-1551028719-00167b16eac5?w=500'},
+  {id:'p15',cat:'fashion',ar:'بنطلون جينز',en:'Slim Fit Jeans',descAr:'قطن مرن · قص حديث · أزرق غامق',descEn:'Stretch denim · Slim fit · Dark blue',sar:275,img:'https://images.unsplash.com/photo-1542272604-787c3835535d?w=500'},
+  {id:'p16',cat:'fashion',ar:'حقيبة جلد للسيدات',en:'Leather Tote Bag',descAr:'جلد طبيعي · 3 جيوب داخلية · أنيقة',descEn:'Real leather · 3 inner pockets · Elegant',sar:560,img:'https://images.unsplash.com/photo-1584917865442-de89df76afd3?w=500'},
+  // Beauty
   {id:'p6',cat:'beauty',ar:'سيروم فيتامين C',en:'Vitamin C Serum',descAr:'يضيء البشرة · 30مل · بدون مواد ضارة',descEn:'Brightens skin · 30ml · Clean formula',sar:245,img:'https://images.unsplash.com/photo-1556228720-195a672e8a03?w=500'},
   {id:'p7',cat:'beauty',ar:'عطر شرقي فاخر',en:'Luxury Oriental Perfume',descAr:'عود · مسك · ثبات 12 ساعة',descEn:'Oud · Musk · 12hr longevity',sar:1450,img:'https://images.unsplash.com/photo-1541643600914-78b084683601?w=500'},
+  {id:'p17',cat:'beauty',ar:'كريم مرطب يومي',en:'Daily Moisturizer',descAr:'هياليورونيك أسيد · يومي · لكل أنواع البشرة',descEn:'Hyaluronic acid · For all skin types',sar:180,img:'https://images.unsplash.com/photo-1570554886111-e80fcca6a029?w=500'},
+  {id:'p18',cat:'beauty',ar:'باليت ميك آب احترافية',en:'Pro Makeup Palette',descAr:'24 لون · ثبات طويل · يلائم كل المناسبات',descEn:'24 shades · Long lasting · All occasions',sar:320,img:'https://images.unsplash.com/photo-1596462502278-27bfdc403348?w=500'},
+  {id:'p19',cat:'beauty',ar:'مكواة شعر سيراميك',en:'Ceramic Hair Straightener',descAr:'حماية للشعر · يصلح للمزدوج · 230°',descEn:'Hair protection · Dual voltage · 230°',sar:450,img:'https://images.unsplash.com/photo-1522338242992-e1a54906a8da?w=500'},
+  // Home
   {id:'p8',cat:'home',ar:'مكنسة لاسلكية',en:'Cordless Vacuum',descAr:'شفط قوي · بطارية 60 دقيقة',descEn:'Powerful suction · 60min battery',sar:1890,img:'https://images.unsplash.com/photo-1558317374-067fb5f30001?w=500'},
+  {id:'p20',cat:'home',ar:'مصباح ليد ذكي',en:'Smart LED Lamp',descAr:'16 مليون لون · يعمل بالصوت · Alexa & Google',descEn:'16M colors · Voice controlled · Alexa & Google',sar:240,img:'https://images.unsplash.com/photo-1565814329452-e1efa11c5b89?w=500'},
+  {id:'p21',cat:'home',ar:'مكينة قهوة إيطالية',en:'Italian Espresso Machine',descAr:'ضغط 15 بار · رغوة حليب · إيطالية الصنع',descEn:'15-bar pressure · Milk frother · Made in Italy',sar:2450,img:'https://images.unsplash.com/photo-1610632380989-680fe40816c6?w=500'},
+  {id:'p22',cat:'home',ar:'وسادة طبية',en:'Memory Foam Pillow',descAr:'فوم طبي · يدعم الرقبة · غطاء قابل للغسيل',descEn:'Memory foam · Neck support · Washable cover',sar:165,img:'https://images.unsplash.com/photo-1631049307264-da0ec9d70304?w=500'},
 ];
 const CATS=[
   {id:'electronics',ar:'إلكترونيات',en:'Electronics',ico:'📱'},
@@ -528,9 +544,24 @@ function renderCategoryPage(catId){
   document.getElementById('cat-banner-tag').textContent=CURRENT_LANG==='ar'?theme.tagAr:theme.tagEn;
   document.getElementById('cat-banner-title').textContent=CURRENT_LANG==='ar'?cat.ar:cat.en;
   document.getElementById('cat-banner-sub').textContent=CURRENT_LANG==='ar'?'اكتشف أفضل المنتجات في هذا القسم':'Discover the best products in this category';
-  document.getElementById('cat-banner-emoji').textContent=theme.emoji;
   // Filter products for this category
   const filtered=PRODUCTS.filter(p=>p.cat===catId);
+  // Animated product carousel as banner background (instead of static emoji)
+  const emoji=document.getElementById('cat-banner-emoji');
+  if(filtered.length>=3){
+    emoji.innerHTML=filtered.slice(0,4).map((p,i)=>`<img src="${p.img}" alt="" style="position:absolute;width:90px;height:90px;border-radius:12px;object-fit:cover;box-shadow:0 8px 24px rgba(0,0,0,.4);animation:cat-float${i} ${5+i}s ease-in-out infinite;animation-delay:${i*.6}s;opacity:.9" />`).join('');
+    // Inject animations once
+    if(!document.getElementById('cat-anim-style')){
+      const st=document.createElement('style');st.id='cat-anim-style';
+      st.textContent=`@keyframes cat-float0{0%,100%{transform:translate(0,0) rotate(-5deg)}50%{transform:translate(8px,-8px) rotate(5deg)}}@keyframes cat-float1{0%,100%{transform:translate(60px,20px) rotate(8deg)}50%{transform:translate(50px,5px) rotate(-3deg)}}@keyframes cat-float2{0%,100%{transform:translate(120px,-10px) rotate(-2deg)}50%{transform:translate(135px,10px) rotate(6deg)}}@keyframes cat-float3{0%,100%{transform:translate(180px,15px) rotate(4deg)}50%{transform:translate(165px,-5px) rotate(-7deg)}}`;
+      document.head.appendChild(st);
+    }
+    emoji.style.cssText='position:absolute;left:-30px;top:50%;transform:translateY(-50%);width:280px;height:140px;opacity:.95';
+  } else {
+    // Fallback: emoji if not enough products
+    emoji.innerHTML='';emoji.textContent=theme.emoji;
+    emoji.style.cssText='position:absolute;left:-20px;top:50%;transform:translateY(-50%);font-size:140px;opacity:.25';
+  }
   document.getElementById('cat-count-title').textContent=(CURRENT_LANG==='ar'?'المنتجات':'Products')+' ('+filtered.length+')';
   const grid=document.getElementById('cat-products');
   if(!filtered.length){
