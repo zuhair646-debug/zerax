@@ -85,9 +85,9 @@ def _build_config(
 
 
 def _inject_config_and_pwa(html: str, config: dict, project_id: str) -> str:
-    """Inject the runtime config + PWA manifest + Zerax branding badge into the template."""
+    """Inject the runtime config + PWA manifest + Zerax branding footer into the template."""
     cfg_json = json.dumps(config, ensure_ascii=False)
-    injection = (
+    head_injection = (
         '<link rel="manifest" href="/api/ready-sites/manifest/' + project_id + '.webmanifest">\n'
         '<meta name="theme-color" content="' + config["PRIMARY_COLOR"] + '">\n'
         '<meta name="apple-mobile-web-app-capable" content="yes">\n'
@@ -95,44 +95,45 @@ def _inject_config_and_pwa(html: str, config: dict, project_id: str) -> str:
         '<meta name="apple-mobile-web-app-title" content="' + config["BRAND"] + '">\n'
         '<script>window.ZERAX_CONFIG=' + cfg_json + ';</script>\n'
         '<style>'
-        '@keyframes zerax-shimmer{0%,100%{box-shadow:0 4px 16px rgba(168,85,247,.25),0 0 0 1px rgba(168,85,247,.2)}50%{box-shadow:0 6px 24px rgba(236,72,153,.5),0 0 0 1px rgba(236,72,153,.5)}}'
-        '@keyframes zerax-glow{0%,100%{filter:drop-shadow(0 0 2px #a855f7)}50%{filter:drop-shadow(0 0 8px #ec4899)}}'
-        '.zerax-badge{position:fixed;bottom:14px;inset-inline-start:14px;z-index:99998;'
-        'display:flex;align-items:center;gap:8px;padding:8px 14px;border-radius:99px;'
-        'background:linear-gradient(135deg,rgba(10,10,20,.92),rgba(20,10,40,.92));backdrop-filter:blur(10px);'
-        'color:#fff;text-decoration:none;font-size:11px;font-weight:700;letter-spacing:.5px;'
-        'border:1px solid rgba(168,85,247,.3);animation:zerax-shimmer 3s ease-in-out infinite;'
-        'transition:transform .25s;font-family:-apple-system,Tajawal,sans-serif;direction:ltr}'
-        '.zerax-badge:hover{transform:translateY(-2px) scale(1.05)}'
-        '.zerax-badge .zerax-z{width:22px;height:22px;border-radius:50%;background:linear-gradient(135deg,#7c3aed,#ec4899);'
-        'display:inline-flex;align-items:center;justify-content:center;color:#fff;font-size:13px;font-weight:900;'
-        'animation:zerax-glow 2.5s ease-in-out infinite}'
-        '.zerax-badge .zerax-txt{display:flex;flex-direction:column;line-height:1.1}'
-        '.zerax-badge .zerax-txt small{color:#9ca3af;font-size:8px;letter-spacing:1.5px;font-weight:600}'
-        '.zerax-badge .zerax-txt b{color:#fff;font-size:11px;letter-spacing:2px;font-weight:900}'
-        '@media print{.zerax-badge{display:none}}'
+        # Gold shimmer for the in-footer brand mark — does NOT float over the page
+        '@keyframes zerax-gold-shine{0%,100%{background-position:0% 50%}50%{background-position:100% 50%}}'
+        '@keyframes zerax-gold-glow{0%,100%{filter:drop-shadow(0 0 4px rgba(212,175,55,.35))}'
+        '50%{filter:drop-shadow(0 0 12px rgba(212,175,55,.75))}}'
+        # Wrapper: full-width band placed AFTER the site footer
+        '.zerax-credit{display:flex;justify-content:center;align-items:center;'
+        'padding:20px 16px;background:#000;border-top:1px solid rgba(212,175,55,.18);position:relative}'
+        '.zerax-credit::before{content:"";position:absolute;left:0;right:0;top:-1px;height:1px;'
+        'background:linear-gradient(90deg,transparent,rgba(212,175,55,.6),transparent)}'
+        # The clickable pill (matches Zerax logo: dark glass + gold accents)
+        '.zerax-credit a{display:inline-flex;align-items:center;gap:10px;padding:9px 18px;border-radius:99px;'
+        'background:linear-gradient(135deg,#0a0a14,#0e0a18);border:1px solid rgba(212,175,55,.35);'
+        'text-decoration:none;animation:zerax-gold-glow 3s ease-in-out infinite;transition:transform .25s}'
+        '.zerax-credit a:hover{transform:translateY(-1px) scale(1.03)}'
+        '.zerax-credit .zerax-mark{width:22px;height:22px;border-radius:50%;display:inline-flex;'
+        'align-items:center;justify-content:center;font-weight:900;font-size:13px;color:#0a0a14;'
+        'background:linear-gradient(135deg,#f4d77a,#c8a049,#d4af37);background-size:200% 100%;'
+        'animation:zerax-gold-shine 4s linear infinite;font-family:"Cormorant Garamond",serif}'
+        '.zerax-credit .zerax-txt{display:flex;flex-direction:column;line-height:1.15;font-family:-apple-system,Tajawal,sans-serif}'
+        '.zerax-credit .zerax-txt small{color:#9ca3af;font-size:9px;letter-spacing:2.5px;font-weight:700;text-transform:uppercase}'
+        '.zerax-credit .zerax-txt b{font-size:13px;letter-spacing:3px;font-weight:900;'
+        'background:linear-gradient(135deg,#f4d77a,#d4af37,#b8862f);background-size:200% 100%;'
+        '-webkit-background-clip:text;background-clip:text;color:transparent;'
+        'animation:zerax-gold-shine 4s linear infinite}'
+        '@media print{.zerax-credit{display:none}}'
         '</style>\n'
     )
-    html = html.replace("</head>", injection + "</head>", 1)
+    html = html.replace("</head>", head_injection + "</head>", 1)
 
-    # Fixed branding badge (always visible) + PWA gating script
-    body_injection = (
-        '<a class="zerax-badge" href="https://zerax.com?ref=' + project_id + '" target="_blank" rel="noopener" aria-label="Powered by Zerax">'
-        '<span class="zerax-z">Z</span>'
-        '<span class="zerax-txt"><small>POWERED BY</small><b>ZERAX</b></span>'
-        '</a>\n'
+    # PWA gating script: runs ONCE on page load
+    pwa_script = (
         '<script>'
         '(function(){'
-        # PWA gating: check subscription status; only enable install + SW if pwa_enabled
         "var pid='" + project_id + "';"
         "fetch('/api/care/pwa-status/'+pid).then(function(r){return r.json()}).then(function(s){"
         "  window.ZERAX_PWA_ENABLED=!!s.pwa_enabled;"
-        # If subscription inactive: remove manifest link so new visitors can't install
         "  if(!s.pwa_enabled){"
-        "    var m=document.querySelector('link[rel=manifest]');if(m)m.remove();"
-        "    return;"
+        "    var m=document.querySelector('link[rel=manifest]');if(m)m.remove();return;"
         "  }"
-        # If enabled: register service worker (so the site behaves like an app)
         "  if('serviceWorker' in navigator){"
         "    navigator.serviceWorker.register('/sw.js').catch(function(){});"
         "  }"
@@ -140,7 +141,20 @@ def _inject_config_and_pwa(html: str, config: dict, project_id: str) -> str:
         '})();'
         '</script>\n'
     )
-    html = html.replace("</body>", body_injection + "</body>", 1)
+
+    # In-flow branding band — placed at the absolute end of the document
+    # (after the site footer, before </body>). Does not float, does not overlap UI.
+    brand_band = (
+        '<div class="zerax-credit" role="contentinfo" aria-label="Powered by Zerax">'
+        '<a href="https://zerax.com?ref=' + project_id + '" target="_blank" rel="noopener">'
+        '<span class="zerax-mark">Z</span>'
+        '<span class="zerax-txt"><small>POWERED BY</small><b>ZERAX</b></span>'
+        '</a>'
+        '</div>\n'
+        # Hide legacy in-template brand pill (any variant) so we only have ONE brand mark
+        '<style>.zx-zerax-brand,.zx-zitex-brand,.zx-zerax-bar a.zx-zerax-brand{display:none!important}</style>\n'
+    )
+    html = html.replace("</body>", brand_band + pwa_script + "</body>", 1)
     return html
 
 
