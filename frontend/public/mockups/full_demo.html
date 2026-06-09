@@ -1,0 +1,362 @@
+<!DOCTYPE html>
+<html dir="rtl" lang="ar"><head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Zitex Complete — Storefront + Admin + Driver + Account</title>
+<link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;700;900&display=swap" rel="stylesheet">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'Tajawal',sans-serif;background:#f3f4f6;color:#0a0a0a;direction:rtl}
+.top{background:#fff;padding:14px 18px;display:flex;align-items:center;gap:12px;box-shadow:0 2px 10px rgba(0,0,0,.05);position:sticky;top:0;z-index:60}
+.logo{font-weight:900;font-size:22px;color:#7c3aed;cursor:pointer}
+.spacer{flex:1}
+.pill{padding:9px 14px;background:#f3f4f6;border:none;border-radius:99px;font-family:inherit;font-size:13px;font-weight:700;cursor:pointer;text-decoration:none;color:#374151;display:inline-flex;align-items:center;gap:6px}
+.pill:hover{background:#e5e7eb}
+.pill.primary{background:#7c3aed;color:#fff}.pill.primary:hover{background:#6d28d9}
+.view{display:none;padding:20px;max-width:1200px;margin:0 auto}
+.view.active{display:block}
+.hero-card{background:linear-gradient(135deg,#7c3aed,#ec4899);color:#fff;padding:40px 30px;border-radius:20px;margin-bottom:30px}
+.hero-card h1{font-size:30px;margin-bottom:8px;font-weight:900}
+.hero-card p{opacity:.9}
+.tabs{display:flex;gap:8px;margin-bottom:20px;overflow-x:auto;scrollbar-width:none}
+.tab{padding:10px 18px;background:#fff;border:1px solid #e5e7eb;border-radius:99px;font-family:inherit;font-size:13px;font-weight:700;cursor:pointer;white-space:nowrap}
+.tab.active{background:#7c3aed;color:#fff;border-color:#7c3aed}
+.grid-cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:16px}
+.card{background:#fff;border-radius:16px;padding:18px;border:1px solid #f3f4f6}
+.stat-card{padding:22px}
+.stat-card .val{font-size:32px;font-weight:900;margin-bottom:4px}
+.stat-card .lbl{font-size:13px;color:#6b7280}
+.table{width:100%;border-collapse:collapse;background:#fff;border-radius:14px;overflow:hidden}
+.table th,.table td{padding:12px 14px;text-align:right;border-bottom:1px solid #f3f4f6;font-size:13px}
+.table th{background:#fafafa;font-weight:900}
+.btn{padding:10px 18px;background:#7c3aed;color:#fff;border:none;border-radius:10px;font-family:inherit;font-size:13px;font-weight:700;cursor:pointer}
+.btn.ghost{background:#f3f4f6;color:#374151}.btn.ghost:hover{background:#e5e7eb}
+.btn.danger{background:#ef4444}
+.field{margin-bottom:12px}
+.field label{display:block;font-size:12px;font-weight:700;margin-bottom:5px;color:#374151}
+.field input,.field select,.field textarea{width:100%;padding:11px 14px;border:1px solid #e5e7eb;border-radius:10px;font-family:inherit;font-size:14px;background:#fff}
+.form-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.badge{padding:3px 10px;border-radius:99px;font-size:11px;font-weight:700;display:inline-block}
+.b-new{background:#fef3c7;color:#92400e}
+.b-prep{background:#ddd6fe;color:#5b21b6}
+.b-way{background:#bfdbfe;color:#1e40af}
+.b-done{background:#bbf7d0;color:#166534}
+.login-box{max-width:400px;margin:60px auto;background:#fff;padding:36px 28px;border-radius:20px;box-shadow:0 12px 40px rgba(0,0,0,.08)}
+.login-box h2{font-size:24px;margin-bottom:6px;text-align:center;font-weight:900}
+.login-box .sub{text-align:center;color:#6b7280;margin-bottom:24px;font-size:13px}
+.role-pills{display:flex;gap:8px;margin-bottom:20px;justify-content:center}
+.role-pill{padding:8px 14px;background:#f3f4f6;border:1px solid #e5e7eb;border-radius:99px;cursor:pointer;font-family:inherit;font-size:12px;font-weight:700}
+.role-pill.active{background:#7c3aed;color:#fff;border-color:#7c3aed}
+.hint{background:#fef3c7;padding:10px 14px;border-radius:10px;font-size:12px;color:#92400e;margin-bottom:14px}
+.sidebar-layout{display:grid;grid-template-columns:240px 1fr;gap:20px}
+.sidebar{background:#fff;border-radius:16px;padding:20px;height:fit-content}
+.sidebar h3{font-size:14px;font-weight:900;margin-bottom:14px;color:#7c3aed}
+.sidebar a{display:flex;align-items:center;gap:10px;padding:10px 12px;color:#374151;text-decoration:none;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer;margin-bottom:4px}
+.sidebar a:hover{background:#f3f4f6}
+.sidebar a.active{background:#7c3aed;color:#fff}
+@media(max-width:768px){.sidebar-layout{grid-template-columns:1fr}.sidebar{display:flex;gap:6px;overflow-x:auto;padding:10px}.sidebar h3{display:none}.sidebar a{margin:0;flex-shrink:0}.form-grid{grid-template-columns:1fr}}
+</style></head>
+<body>
+
+<header class="top">
+  <div class="logo" onclick="go('store')">سوقي 🛒</div>
+  <div class="spacer"></div>
+  <a class="pill" onclick="go('store')">🏪 المتجر</a>
+  <a class="pill" onclick="go('account')">👤 حسابي</a>
+  <a class="pill primary" id="login-btn" onclick="go('login')">🔐 دخول</a>
+  <a class="pill primary" id="logout-btn" onclick="logout()" style="display:none">خروج</a>
+</header>
+
+<!-- ═══ STOREFRONT (default view) ═══ -->
+<div class="view active" id="v-store">
+  <div class="hero-card">
+    <h1>سوقي — متجرك المتكامل</h1>
+    <p>منصة كاملة: للزبائن · للتجار · للسائقين · بـ 49 سوق دولي</p>
+  </div>
+  <div class="grid-cards">
+    <div class="card" onclick="go('account')" style="cursor:pointer"><h3 style="margin-bottom:8px;font-size:17px">👤 سجّل كعميل</h3><p style="font-size:13px;color:#6b7280">تسوق + تتبع طلباتك + احفظ عناوينك + نقاط ولاء</p></div>
+    <div class="card" onclick="loginAs('admin')" style="cursor:pointer"><h3 style="margin-bottom:8px;font-size:17px">👨‍💼 لوحة التاجر</h3><p style="font-size:13px;color:#6b7280">أضف منتجات + إدارة طلبات + تحليلات + إعدادات الدفع</p></div>
+    <div class="card" onclick="loginAs('driver')" style="cursor:pointer"><h3 style="margin-bottom:8px;font-size:17px">🛵 تطبيق السائق</h3><p style="font-size:13px;color:#6b7280">استقبل الطلبات + تحديث الحالة + خرائط التسليم</p></div>
+  </div>
+  <div style="margin-top:30px"><a class="btn" href="/mockups/app_mode_full.html">🔗 شوف واجهة المتجر الكاملة (Storefront)</a></div>
+</div>
+
+<!-- ═══ LOGIN ═══ -->
+<div class="view" id="v-login">
+  <div class="login-box">
+    <h2>🔐 تسجيل الدخول</h2>
+    <p class="sub">اختر دورك للدخول</p>
+    <div class="role-pills">
+      <button class="role-pill active" data-role="customer" onclick="selectRole('customer')">عميل</button>
+      <button class="role-pill" data-role="admin" onclick="selectRole('admin')">تاجر</button>
+      <button class="role-pill" data-role="driver" onclick="selectRole('driver')">سائق</button>
+    </div>
+    <div class="hint" id="login-hint">💡 للتجربة: admin@demo.com / 123456 (يشتغل لكل الأدوار)</div>
+    <div class="field"><label>البريد الإلكتروني</label><input id="li-email" placeholder="admin@demo.com" value="admin@demo.com"></div>
+    <div class="field"><label>كلمة المرور</label><input id="li-pass" type="password" placeholder="123456" value="123456"></div>
+    <button class="btn" style="width:100%;padding:13px;font-size:15px" onclick="doLogin()">دخول</button>
+    <p style="text-align:center;margin-top:14px;font-size:12px;color:#6b7280">ما عندك حساب؟ <a onclick="signUp()" style="color:#7c3aed;cursor:pointer;font-weight:700">سجّل الآن</a></p>
+  </div>
+</div>
+
+<!-- ═══ ADMIN PANEL ═══ -->
+<div class="view" id="v-admin">
+  <div class="sidebar-layout">
+    <aside class="sidebar">
+      <h3>لوحة التاجر</h3>
+      <a class="active" data-tab="dashboard" onclick="adminTab('dashboard')">📊 الرئيسية</a>
+      <a data-tab="products" onclick="adminTab('products')">📦 المنتجات</a>
+      <a data-tab="orders" onclick="adminTab('orders')">🛒 الطلبات</a>
+      <a data-tab="customers" onclick="adminTab('customers')">👥 العملاء</a>
+      <a data-tab="drivers" onclick="adminTab('drivers')">🛵 السائقين</a>
+      <a data-tab="payments" onclick="adminTab('payments')">💳 الدفع</a>
+      <a data-tab="settings" onclick="adminTab('settings')">⚙️ الإعدادات</a>
+    </aside>
+    <div>
+      <!-- DASHBOARD -->
+      <div data-pane="dashboard">
+        <h2 style="margin-bottom:18px;font-size:22px">📊 لوحة التحكم</h2>
+        <div class="grid-cards">
+          <div class="card stat-card"><div class="val" style="color:#7c3aed">147</div><div class="lbl">طلبات اليوم</div></div>
+          <div class="card stat-card"><div class="val" style="color:#22c55e">12,450 ر.س</div><div class="lbl">إيرادات اليوم</div></div>
+          <div class="card stat-card"><div class="val" style="color:#f59e0b">38</div><div class="lbl">عميل جديد</div></div>
+          <div class="card stat-card"><div class="val" style="color:#ef4444">5</div><div class="lbl">طلبات قيد التحضير</div></div>
+        </div>
+        <div class="card" style="margin-top:20px">
+          <h3 style="margin-bottom:14px;font-size:16px">📈 أحدث الطلبات</h3>
+          <table class="table"><thead><tr><th>الرقم</th><th>العميل</th><th>المبلغ</th><th>الحالة</th></tr></thead><tbody id="dash-orders"></tbody></table>
+        </div>
+      </div>
+
+      <!-- PRODUCTS -->
+      <div data-pane="products" style="display:none">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:18px">
+          <h2 style="font-size:22px">📦 المنتجات</h2>
+          <button class="btn" onclick="showAddProduct()">+ إضافة منتج</button>
+        </div>
+        <div id="add-product-form" style="display:none" class="card" style="margin-bottom:18px">
+          <h3 style="margin-bottom:14px">إضافة منتج جديد</h3>
+          <div class="form-grid">
+            <div class="field"><label>اسم المنتج</label><input id="np-name"></div>
+            <div class="field"><label>السعر (ر.س)</label><input id="np-price" type="number"></div>
+            <div class="field"><label>التصنيف</label><select id="np-cat"><option>إلكترونيات</option><option>أزياء</option><option>تجميل</option><option>منزل</option></select></div>
+            <div class="field"><label>المخزون</label><input id="np-stock" type="number" value="100"></div>
+          </div>
+          <div class="field"><label>الوصف</label><textarea id="np-desc" rows="3"></textarea></div>
+          <div class="field"><label>رابط الصورة</label><input id="np-img" placeholder="https://..." value="https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=500"></div>
+          <button class="btn" onclick="addProduct()">حفظ المنتج</button>
+          <button class="btn ghost" onclick="showAddProduct(false)" style="margin-right:8px">إلغاء</button>
+        </div>
+        <div class="grid-cards" id="products-list"></div>
+      </div>
+
+      <!-- ORDERS -->
+      <div data-pane="orders" style="display:none">
+        <h2 style="margin-bottom:18px;font-size:22px">🛒 الطلبات</h2>
+        <table class="table"><thead><tr><th>الرقم</th><th>العميل</th><th>المنتجات</th><th>المبلغ</th><th>الحالة</th><th>السائق</th></tr></thead><tbody id="orders-list"></tbody></table>
+      </div>
+
+      <!-- CUSTOMERS -->
+      <div data-pane="customers" style="display:none">
+        <h2 style="margin-bottom:18px;font-size:22px">👥 العملاء</h2>
+        <table class="table"><thead><tr><th>الاسم</th><th>الجوال</th><th>الطلبات</th><th>المنفق</th></tr></thead><tbody id="customers-list"></tbody></table>
+      </div>
+
+      <!-- DRIVERS -->
+      <div data-pane="drivers" style="display:none">
+        <h2 style="margin-bottom:18px;font-size:22px">🛵 السائقين</h2>
+        <div class="grid-cards" id="drivers-list"></div>
+      </div>
+
+      <!-- PAYMENTS -->
+      <div data-pane="payments" style="display:none">
+        <h2 style="margin-bottom:18px;font-size:22px">💳 بوابات الدفع</h2>
+        <div class="hint">⚠️ هذه الإعدادات حسب سوقك (السعودية 🇸🇦). فعّل البوابات التي عندك حساب فيها.</div>
+        <div class="grid-cards" id="payments-list"></div>
+      </div>
+
+      <!-- SETTINGS -->
+      <div data-pane="settings" style="display:none">
+        <h2 style="margin-bottom:18px;font-size:22px">⚙️ الإعدادات</h2>
+        <div class="card">
+          <div class="field"><label>اسم المتجر</label><input value="سوقي" id="set-name"></div>
+          <div class="field"><label>الجوال</label><input value="+966512345678"></div>
+          <div class="field"><label>الإيميل</label><input value="info@suqi.sa"></div>
+          <div class="field"><label>الرقم الضريبي (ZATCA)</label><input placeholder="300xxxxxxxx0003"></div>
+          <div class="field"><label>السجل التجاري (CR)</label><input placeholder="10xxxxxxxx"></div>
+          <button class="btn">حفظ الإعدادات</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ DRIVER APP ═══ -->
+<div class="view" id="v-driver">
+  <h2 style="margin-bottom:18px;font-size:22px">🛵 طلبات اليوم</h2>
+  <div class="grid-cards" id="driver-orders"></div>
+</div>
+
+<!-- ═══ CUSTOMER ACCOUNT ═══ -->
+<div class="view" id="v-account">
+  <div class="sidebar-layout">
+    <aside class="sidebar">
+      <h3>حسابي</h3>
+      <a class="active" data-tab="profile" onclick="acctTab('profile')">👤 الملف الشخصي</a>
+      <a data-tab="orders" onclick="acctTab('orders')">📋 طلباتي</a>
+      <a data-tab="addresses" onclick="acctTab('addresses')">📍 العناوين</a>
+      <a data-tab="loyalty" onclick="acctTab('loyalty')">🎁 نقاط الولاء</a>
+    </aside>
+    <div>
+      <div data-acct-pane="profile">
+        <h2 style="font-size:22px;margin-bottom:16px">الملف الشخصي</h2>
+        <div class="card">
+          <div class="field"><label>الاسم</label><input id="cust-name" value="عبدالله أحمد"></div>
+          <div class="field"><label>الجوال</label><input value="+966551234567"></div>
+          <div class="field"><label>الإيميل</label><input value="abdullah@email.com"></div>
+          <button class="btn">حفظ</button>
+        </div>
+      </div>
+      <div data-acct-pane="orders" style="display:none">
+        <h2 style="font-size:22px;margin-bottom:16px">طلباتي</h2>
+        <div class="grid-cards" id="my-orders"></div>
+      </div>
+      <div data-acct-pane="addresses" style="display:none">
+        <h2 style="font-size:22px;margin-bottom:16px">عناويني</h2>
+        <div class="card">
+          <h4 style="margin-bottom:8px">🏠 المنزل</h4>
+          <p style="color:#6b7280">حي العليا، الرياض، السعودية</p>
+        </div>
+      </div>
+      <div data-acct-pane="loyalty" style="display:none">
+        <h2 style="font-size:22px;margin-bottom:16px">🎁 نقاط الولاء</h2>
+        <div class="hero-card"><h1>1,247 نقطة</h1><p>تكفي خصم 50 ر.س على طلبك القادم</p></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+const API=window.location.origin;
+const STORE_KEY='zx_demo_store';
+const SAMPLE_DATA={
+  products:[
+    {id:'p1',name:'سماعات لاسلكية',price:599,cat:'إلكترونيات',stock:45,img:'https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=400'},
+    {id:'p2',name:'ساعة ذكية',price:1290,cat:'إلكترونيات',stock:23,img:'https://images.unsplash.com/photo-1546868871-7041f2a55e12?w=400'},
+    {id:'p3',name:'قميص قطن فاخر',price:185,cat:'أزياء',stock:120,img:'https://images.unsplash.com/photo-1521572163474-6864f9cf17ab?w=400'},
+    {id:'p4',name:'حذاء رياضي',price:399,cat:'أزياء',stock:60,img:'https://images.unsplash.com/photo-1542291026-7eec264c27ff?w=400'},
+  ],
+  orders:[
+    {id:'#ORD-1247',customer:'محمد أحمد',phone:'+966551111111',items:'سماعات + ساعة',total:1889,status:'new',driver:'-'},
+    {id:'#ORD-1246',customer:'سارة خالد',phone:'+966552222222',items:'قميص قطن',total:185,status:'prep',driver:'أحمد'},
+    {id:'#ORD-1245',customer:'فيصل الخالدي',phone:'+966553333333',items:'حذاء رياضي ×2',total:798,status:'way',driver:'خالد'},
+    {id:'#ORD-1244',customer:'نورة العتيبي',phone:'+966554444444',items:'ساعة ذكية',total:1290,status:'done',driver:'سلطان'},
+    {id:'#ORD-1243',customer:'بدر السبيعي',phone:'+966555555555',items:'سماعات',total:599,status:'done',driver:'أحمد'},
+  ],
+  customers:[
+    {name:'محمد أحمد',phone:'+966551111111',orders:12,spent:4500},
+    {name:'سارة خالد',phone:'+966552222222',orders:8,spent:2890},
+    {name:'فيصل الخالدي',phone:'+966553333333',orders:23,spent:8910},
+    {name:'نورة العتيبي',phone:'+966554444444',orders:5,spent:1290},
+  ],
+  drivers:[
+    {name:'أحمد السبيعي',phone:'+966551010101',status:'متاح',deliveries:8,rating:4.9},
+    {name:'خالد العتيبي',phone:'+966552020202',status:'في توصيل',deliveries:6,rating:4.8},
+    {name:'سلطان القحطاني',phone:'+966553030303',status:'استراحة',deliveries:4,rating:4.7},
+  ],
+};
+const STATUS_LABELS={new:{txt:'جديد',cls:'b-new'},prep:{txt:'قيد التحضير',cls:'b-prep'},way:{txt:'في الطريق',cls:'b-way'},done:{txt:'تم التسليم',cls:'b-done'}};
+
+let STORE=JSON.parse(localStorage.getItem(STORE_KEY))||SAMPLE_DATA;
+let CUR_ROLE=localStorage.getItem('zx_role')||null;
+function save(){localStorage.setItem(STORE_KEY,JSON.stringify(STORE))}
+
+function go(view){
+  document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));
+  document.getElementById('v-'+view).classList.add('active');
+  if(view==='admin')renderAdmin();
+  if(view==='driver')renderDriver();
+  if(view==='account')renderAccount();
+}
+function loginAs(role){go('login');selectRole(role)}
+function selectRole(r){document.querySelectorAll('.role-pill').forEach(p=>p.classList.toggle('active',p.dataset.role===r));window._role=r;
+  const hints={customer:'💡 للتجربة: customer@demo.com / 123456',admin:'💡 للتجربة: admin@demo.com / 123456',driver:'💡 للتجربة: driver@demo.com / 123456'};
+  document.getElementById('login-hint').textContent=hints[r];
+  document.getElementById('li-email').value=r+'@demo.com';
+}
+function doLogin(){
+  const pass=document.getElementById('li-pass').value;
+  if(pass!=='123456'){alert('كلمة المرور خطأ. استخدم: 123456');return;}
+  CUR_ROLE=window._role||'customer';
+  localStorage.setItem('zx_role',CUR_ROLE);
+  document.getElementById('login-btn').style.display='none';
+  document.getElementById('logout-btn').style.display='inline-flex';
+  document.getElementById('logout-btn').textContent='خروج ('+CUR_ROLE+')';
+  go(CUR_ROLE==='admin'?'admin':CUR_ROLE==='driver'?'driver':'account');
+}
+function logout(){CUR_ROLE=null;localStorage.removeItem('zx_role');document.getElementById('login-btn').style.display='inline-flex';document.getElementById('logout-btn').style.display='none';go('store')}
+function signUp(){alert('سيتم إنشاء حساب باستخدام: ' + document.getElementById('li-email').value + '\\n(تسجيل تجريبي - استخدم 123456 لتسجيل الدخول)')}
+
+// ADMIN
+function adminTab(t){
+  document.querySelectorAll('#v-admin [data-tab]').forEach(a=>a.classList.toggle('active',a.dataset.tab===t));
+  document.querySelectorAll('#v-admin [data-pane]').forEach(p=>p.style.display=p.dataset.pane===t?'block':'none');
+  if(t==='products')renderProducts();
+  if(t==='orders')renderOrders();
+  if(t==='customers')renderCustomers();
+  if(t==='drivers')renderDrivers();
+  if(t==='payments')renderPayments();
+}
+function renderAdmin(){
+  document.getElementById('dash-orders').innerHTML=STORE.orders.slice(0,5).map(o=>`<tr><td><b>${o.id}</b></td><td>${o.customer}</td><td>${o.total} ر.س</td><td><span class="badge ${STATUS_LABELS[o.status].cls}">${STATUS_LABELS[o.status].txt}</span></td></tr>`).join('');
+}
+function renderProducts(){
+  document.getElementById('products-list').innerHTML=STORE.products.map(p=>`<div class="card"><img src="${p.img}" style="width:100%;height:140px;object-fit:cover;border-radius:10px;margin-bottom:10px"><h4 style="margin-bottom:4px">${p.name}</h4><p style="color:#6b7280;font-size:12px;margin-bottom:8px">${p.cat} · مخزون: ${p.stock}</p><div style="display:flex;justify-content:space-between;align-items:center"><b style="color:#7c3aed">${p.price} ر.س</b><div><button class="btn ghost" style="padding:5px 10px;font-size:11px">تعديل</button><button class="btn danger" style="padding:5px 10px;font-size:11px;margin-right:4px" onclick="delProduct('${p.id}')">حذف</button></div></div></div>`).join('');
+}
+function showAddProduct(show=true){document.getElementById('add-product-form').style.display=show?'block':'none'}
+function addProduct(){
+  const name=document.getElementById('np-name').value;
+  if(!name){alert('اكتب اسم المنتج');return;}
+  STORE.products.unshift({id:'p'+Date.now(),name,price:parseFloat(document.getElementById('np-price').value)||0,cat:document.getElementById('np-cat').value,stock:parseInt(document.getElementById('np-stock').value)||0,img:document.getElementById('np-img').value});
+  save();showAddProduct(false);renderProducts();
+  document.getElementById('np-name').value='';document.getElementById('np-price').value='';document.getElementById('np-desc').value='';
+}
+function delProduct(id){if(confirm('حذف المنتج؟')){STORE.products=STORE.products.filter(p=>p.id!==id);save();renderProducts();}}
+function renderOrders(){
+  document.getElementById('orders-list').innerHTML=STORE.orders.map(o=>`<tr><td><b>${o.id}</b></td><td>${o.customer}</td><td style="font-size:12px;color:#6b7280">${o.items}</td><td><b>${o.total} ر.س</b></td><td><span class="badge ${STATUS_LABELS[o.status].cls}">${STATUS_LABELS[o.status].txt}</span></td><td>${o.driver}</td></tr>`).join('');
+}
+function renderCustomers(){
+  document.getElementById('customers-list').innerHTML=STORE.customers.map(c=>`<tr><td><b>${c.name}</b></td><td dir="ltr">${c.phone}</td><td>${c.orders}</td><td><b>${c.spent} ر.س</b></td></tr>`).join('');
+}
+function renderDrivers(){
+  document.getElementById('drivers-list').innerHTML=STORE.drivers.map(d=>`<div class="card"><h4 style="margin-bottom:6px">${d.name}</h4><p style="color:#6b7280;font-size:12px;margin-bottom:8px" dir="ltr">${d.phone}</p><div style="display:flex;justify-content:space-between;font-size:12px"><span class="badge ${d.status==='متاح'?'b-done':d.status==='في توصيل'?'b-way':'b-new'}">${d.status}</span><span>⭐ ${d.rating} · ${d.deliveries} توصيل</span></div></div>`).join('');
+}
+async function renderPayments(){
+  const r=await fetch(API+'/api/ready-sites/market/sa');
+  const m=await r.json();
+  document.getElementById('payments-list').innerHTML=(m.payment_gateways||[]).map(g=>`<div class="card"><div style="display:flex;justify-content:space-between;align-items:start;margin-bottom:8px"><h4>${g.name}</h4><label style="cursor:pointer"><input type="checkbox" ${g.popular?'checked':''}> فعّل</label></div><p style="color:#6b7280;font-size:12px">${g.tagline||g.type}</p></div>`).join('');
+}
+
+// DRIVER
+function renderDriver(){
+  document.getElementById('driver-orders').innerHTML=STORE.orders.filter(o=>o.status!=='done').map(o=>`<div class="card"><div style="display:flex;justify-content:space-between;margin-bottom:10px"><b>${o.id}</b><span class="badge ${STATUS_LABELS[o.status].cls}">${STATUS_LABELS[o.status].txt}</span></div><p style="margin-bottom:6px"><b>${o.customer}</b></p><p style="color:#6b7280;font-size:12px;margin-bottom:6px" dir="ltr">${o.phone}</p><p style="margin-bottom:10px">📦 ${o.items}</p><p style="margin-bottom:12px"><b style="color:#7c3aed">${o.total} ر.س</b></p><button class="btn" onclick="updateOrderStatus('${o.id}','prep')">قبول</button><button class="btn ghost" onclick="updateOrderStatus('${o.id}','way')" style="margin-right:6px">في الطريق</button><button class="btn ghost" onclick="updateOrderStatus('${o.id}','done')" style="margin-right:6px">تسليم</button></div>`).join('')||'<p style="text-align:center;color:#6b7280;padding:40px">لا توجد طلبات نشطة 🎉</p>';
+}
+function updateOrderStatus(oid,st){
+  const o=STORE.orders.find(o=>o.id===oid);if(!o)return;
+  o.status=st;save();renderDriver();
+}
+
+// ACCOUNT
+function acctTab(t){
+  document.querySelectorAll('#v-account [data-tab]').forEach(a=>a.classList.toggle('active',a.dataset.tab===t));
+  document.querySelectorAll('#v-account [data-acct-pane]').forEach(p=>p.style.display=p.dataset.acctPane===t?'block':'none');
+  if(t==='orders')renderMyOrders();
+}
+function renderAccount(){}
+function renderMyOrders(){
+  document.getElementById('my-orders').innerHTML=STORE.orders.slice(0,3).map(o=>`<div class="card"><div style="display:flex;justify-content:space-between;margin-bottom:10px"><b>${o.id}</b><span class="badge ${STATUS_LABELS[o.status].cls}">${STATUS_LABELS[o.status].txt}</span></div><p>📦 ${o.items}</p><p style="margin-top:8px"><b style="color:#7c3aed">${o.total} ر.س</b></p></div>`).join('');
+}
+
+// Restore session
+if(CUR_ROLE){document.getElementById('login-btn').style.display='none';document.getElementById('logout-btn').style.display='inline-flex';document.getElementById('logout-btn').textContent='خروج ('+CUR_ROLE+')'}
+</script>
+</body></html>
