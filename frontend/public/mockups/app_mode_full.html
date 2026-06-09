@@ -30,6 +30,8 @@ body{font-family:var(--font,'Tajawal'),sans-serif;background:#f3f4f6;color:#0a0a
 .quick-cats{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;padding:6px 16px 14px}
 .q-cat{background:#fff;border-radius:14px;padding:13px 6px;text-align:center;border:1px solid #f3f4f6;cursor:pointer;transition:transform .15s}
 .q-cat:active{transform:scale(.95)}
+.q-cat.active-cat{background:#7c3aed;border-color:#7c3aed}
+.q-cat.active-cat span,.q-cat.active-cat .ico{color:#fff}
 .q-cat .ico{font-size:26px;margin-bottom:5px}
 .q-cat span{font-size:11px;color:#0a0a0a;font-weight:700;display:block}
 /* SECTIONS */
@@ -264,14 +266,14 @@ const RATES = {SAR:1,AED:0.98,KWD:0.082,QAR:0.97,BHD:0.10,OMR:0.103,IQD:350,SYP:
 
 // 12 products with multi-language names
 const PRODUCTS = [
-  {id:'p1',cat:'electronics',ar:'سماعات لاسلكية فاخرة',en:'Premium Wireless Headphones',sar:599,img:'https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=500'},
-  {id:'p2',cat:'electronics',ar:'ساعة ذكية رياضية',en:'Smart Sports Watch',sar:1290,img:'https://images.unsplash.com/photo-1546868871-7041f2a55e12?w=500'},
-  {id:'p3',cat:'fashion',ar:'قميص قطني فاخر',en:'Premium Cotton Shirt',sar:185,img:'https://images.unsplash.com/photo-1521572163474-6864f9cf17ab?w=500'},
-  {id:'p4',cat:'fashion',ar:'حذاء رياضي مودرن',en:'Modern Sneakers',sar:399,img:'https://images.unsplash.com/photo-1542291026-7eec264c27ff?w=500'},
-  {id:'p5',cat:'fashion',ar:'ساعة كلاسيكية',en:'Classic Watch',sar:890,img:'https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=500'},
-  {id:'p6',cat:'beauty',ar:'سيروم فيتامين C',en:'Vitamin C Serum',sar:245,img:'https://images.unsplash.com/photo-1556228720-195a672e8a03?w=500'},
-  {id:'p7',cat:'beauty',ar:'عطر شرقي فاخر',en:'Luxury Oriental Perfume',sar:1450,img:'https://images.unsplash.com/photo-1541643600914-78b084683601?w=500'},
-  {id:'p8',cat:'home',ar:'مكنسة لاسلكية',en:'Cordless Vacuum',sar:1890,img:'https://images.unsplash.com/photo-1558317374-067fb5f30001?w=500'},
+  {id:'p1',cat:'electronics',ar:'سماعات لاسلكية فاخرة',en:'Premium Wireless Headphones',descAr:'صوت نقي · إلغاء ضوضاء · 30 ساعة',descEn:'Pure sound · ANC · 30hr battery',sar:599,img:'https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=500'},
+  {id:'p2',cat:'electronics',ar:'ساعة ذكية رياضية',en:'Smart Sports Watch',descAr:'GPS · مقاومة للماء · شاشة AMOLED',descEn:'GPS · Water resistant · AMOLED',sar:1290,img:'https://images.unsplash.com/photo-1546868871-7041f2a55e12?w=500'},
+  {id:'p3',cat:'fashion',ar:'قميص قطني فاخر',en:'Premium Cotton Shirt',descAr:'قطن مصري 100% · جميع المقاسات',descEn:'100% Egyptian cotton · All sizes',sar:185,img:'https://images.unsplash.com/photo-1521572163474-6864f9cf17ab?w=500'},
+  {id:'p4',cat:'fashion',ar:'حذاء رياضي مودرن',en:'Modern Sneakers',descAr:'مقاس 36-46 · 3 ألوان متوفرة',descEn:'Size 36-46 · 3 colors available',sar:399,img:'https://images.unsplash.com/photo-1542291026-7eec264c27ff?w=500'},
+  {id:'p5',cat:'fashion',ar:'ساعة كلاسيكية',en:'Classic Watch',descAr:'حركة سويسرية · ضمان سنتين',descEn:'Swiss movement · 2-year warranty',sar:890,img:'https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=500'},
+  {id:'p6',cat:'beauty',ar:'سيروم فيتامين C',en:'Vitamin C Serum',descAr:'يضيء البشرة · 30مل · بدون مواد ضارة',descEn:'Brightens skin · 30ml · Clean formula',sar:245,img:'https://images.unsplash.com/photo-1556228720-195a672e8a03?w=500'},
+  {id:'p7',cat:'beauty',ar:'عطر شرقي فاخر',en:'Luxury Oriental Perfume',descAr:'عود · مسك · ثبات 12 ساعة',descEn:'Oud · Musk · 12hr longevity',sar:1450,img:'https://images.unsplash.com/photo-1541643600914-78b084683601?w=500'},
+  {id:'p8',cat:'home',ar:'مكنسة لاسلكية',en:'Cordless Vacuum',descAr:'شفط قوي · بطارية 60 دقيقة',descEn:'Powerful suction · 60min battery',sar:1890,img:'https://images.unsplash.com/photo-1558317374-067fb5f30001?w=500'},
 ];
 const CATS=[
   {id:'electronics',ar:'إلكترونيات',en:'Electronics',ico:'📱'},
@@ -408,16 +410,26 @@ function formatPrice(sar){
   return noDecimal.includes(CURRENT_MARKET.currency)?Math.round(v).toLocaleString():v.toFixed(2);
 }
 
+let activeCat='all';
 function renderProducts(){
-  document.getElementById('products').innerHTML=PRODUCTS.map(p=>{
+  const filtered = activeCat==='all'?PRODUCTS:PRODUCTS.filter(p=>p.cat===activeCat);
+  const t=TRANS[CURRENT_LANG]||TRANS.en;
+  const grid=document.getElementById('products');
+  if(!filtered.length){
+    grid.innerHTML=`<div style="grid-column:1/-1;text-align:center;padding:40px 20px;color:#9ca3af"><div style="font-size:48px;margin-bottom:10px">📭</div><b>${CURRENT_LANG==='ar'?'لا توجد منتجات في هذا القسم':'No products in this category'}</b></div>`;
+    return;
+  }
+  grid.innerHTML=filtered.map(p=>{
     const name=CURRENT_LANG==='ar'?p.ar:p.en;
-    return `<div class="p-card"><img src="${p.img}"><div class="p-info"><div class="name">${name}</div><div class="desc">${(CURRENT_MARKET.symbol||'')} ${formatPrice(p.sar)}</div><div class="p-row"><div class="p-price">${CURRENT_MARKET.symbol} ${formatPrice(p.sar)}</div><button class="add-btn" onclick="addToCart('${p.id}')">+</button></div></div></div>`;
+    const desc=CURRENT_LANG==='ar'?(p.descAr||''):(p.descEn||'');
+    return `<div class="p-card"><img src="${p.img}" alt="${name}"><div class="p-info"><div class="name">${name}</div><div class="desc">${desc}</div><div class="p-row"><div class="p-price">${CURRENT_MARKET.symbol} ${formatPrice(p.sar)}</div><button class="add-btn" onclick="addToCart('${p.id}')" aria-label="add">+</button></div></div></div>`;
   }).join('');
 }
 
 function renderCategories(){
-  document.getElementById('cats').innerHTML=CATS.map(c=>`<div class="q-cat"><div class="ico">${c.ico}</div><span>${CURRENT_LANG==='ar'?c.ar:c.en}</span></div>`).join('');
+  document.getElementById('cats').innerHTML=CATS.map(c=>`<div class="q-cat ${c.id===activeCat?'active-cat':''}" onclick="filterCat('${c.id}')"><div class="ico">${c.ico}</div><span>${CURRENT_LANG==='ar'?c.ar:c.en}</span></div>`).join('');
 }
+function filterCat(id){activeCat=id;renderCategories();renderProducts();window.scrollTo({top:document.getElementById('products').offsetTop-100,behavior:'smooth'});}
 
 let bannerIdx=0;
 function renderBanner(){
@@ -517,6 +529,22 @@ function submitReservation(){
 }
 
 function scrollContact(){document.getElementById('contact-section').scrollIntoView({behavior:'smooth'})}
+
+// ═══════════════════════ SEARCH ═══════════════════════
+let searchQuery='';
+document.getElementById('search').addEventListener('input',e=>{
+  searchQuery=e.target.value.trim().toLowerCase();
+  if(!searchQuery){renderProducts();return;}
+  const matched=PRODUCTS.filter(p=>p.ar.toLowerCase().includes(searchQuery)||p.en.toLowerCase().includes(searchQuery));
+  const t=TRANS[CURRENT_LANG]||TRANS.en;
+  const grid=document.getElementById('products');
+  if(!matched.length){grid.innerHTML=`<div style="grid-column:1/-1;text-align:center;padding:40px 20px;color:#9ca3af"><div style="font-size:48px;margin-bottom:10px">🔍</div><b>${CURRENT_LANG==='ar'?'لا توجد نتائج':'No results found'}</b></div>`;return;}
+  grid.innerHTML=matched.map(p=>{
+    const name=CURRENT_LANG==='ar'?p.ar:p.en;
+    const desc=CURRENT_LANG==='ar'?(p.descAr||''):(p.descEn||'');
+    return `<div class="p-card"><img src="${p.img}" alt="${name}"><div class="p-info"><div class="name">${name}</div><div class="desc">${desc}</div><div class="p-row"><div class="p-price">${CURRENT_MARKET.symbol} ${formatPrice(p.sar)}</div><button class="add-btn" onclick="addToCart('${p.id}')">+</button></div></div></div>`;
+  }).join('');
+});
 
 init();
 </script>
