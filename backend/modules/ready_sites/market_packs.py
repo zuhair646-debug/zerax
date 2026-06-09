@@ -403,6 +403,646 @@ MARKET_PACKS: Dict[str, Dict[str, Any]] = {
       {"id": "christmas", "name_en": "Holiday Season", "month": 12, "size": "HUGE"},
     ],
   },
+
+  # ═══════════════════════════════════════ EUROPE ═══════════════════════════════════════
+  "gb": {
+    "id": "gb", "name_ar": "بريطانيا", "name_en": "United Kingdom", "flag": "🇬🇧",
+    "language": "en", "direction": "ltr", "font": "Inter",
+    "currency": "GBP", "symbol": "£", "number_format": "1,234.56",
+    "tax": {"name_en": "VAT", "rate": 20},
+    "payment_gateways": [
+      {"id": "stripe_uk", "name": "Stripe", "type": "gateway", "popular": True},
+      {"id": "paypal", "name": "PayPal", "type": "wallet", "popular": True},
+      {"id": "apple_pay", "name": "Apple Pay", "type": "wallet"},
+      {"id": "google_pay", "name": "Google Pay", "type": "wallet"},
+      {"id": "klarna", "name": "Klarna", "type": "bnpl"},
+      {"id": "clearpay", "name": "Clearpay", "type": "bnpl"},
+      {"id": "amazon_pay", "name": "Amazon Pay", "type": "wallet"},
+    ],
+    "shipping_carriers": [
+      {"id": "royal_mail", "name": "Royal Mail", "days": "1-3", "popular": True},
+      {"id": "dpd_uk", "name": "DPD", "days": "1-2"},
+      {"id": "hermes_uk", "name": "Hermes (Evri)", "days": "2-4"},
+    ],
+    "chat_apps": [{"id": "whatsapp", "name": "WhatsApp"}, {"id": "imessage", "name": "iMessage"}],
+    "seasonal_promos": [{"id": "boxing_day", "name_en": "Boxing Day", "month": 12, "day": 26, "size": "BIG"}],
+  },
+
+  "fr": {
+    "id": "fr", "name_ar": "فرنسا", "name_en": "France", "flag": "🇫🇷",
+    "language": "fr", "direction": "ltr", "font": "Inter",
+    "currency": "EUR", "symbol": "€", "number_format": "1 234,56",
+    "tax": {"name_en": "TVA", "rate": 20},
+    "payment_gateways": [
+      {"id": "stripe", "name": "Stripe", "type": "gateway", "popular": True},
+      {"id": "paypal", "name": "PayPal", "type": "wallet", "popular": True},
+      {"id": "apple_pay", "name": "Apple Pay", "type": "wallet"},
+      {"id": "klarna", "name": "Klarna", "type": "bnpl"},
+      {"id": "alma", "name": "Alma", "type": "bnpl", "tagline": "Paiement en plusieurs fois"},
+      {"id": "cb", "name": "Carte Bancaire", "type": "card"},
+    ],
+    "shipping_carriers": [
+      {"id": "la_poste", "name": "La Poste", "days": "2-4", "popular": True},
+      {"id": "chronopost", "name": "Chronopost", "days": "1-2"},
+      {"id": "colissimo", "name": "Colissimo", "days": "2-3"},
+    ],
+    "chat_apps": [{"id": "whatsapp", "name": "WhatsApp"}, {"id": "instagram_dm", "name": "Instagram"}],
+    "seasonal_promos": [{"id": "soldes", "name_en": "Soldes d'été/hiver", "size": "BIG"}],
+  },
+
+  "de": {
+    "id": "de", "name_ar": "ألمانيا", "name_en": "Germany", "flag": "🇩🇪",
+    "language": "de", "direction": "ltr", "font": "Inter",
+    "currency": "EUR", "symbol": "€", "number_format": "1.234,56",
+    "tax": {"name_en": "MwSt", "rate": 19},
+    "payment_gateways": [
+      {"id": "klarna", "name": "Klarna", "type": "bnpl", "popular": True, "tagline": "Sofortüberweisung"},
+      {"id": "sepa", "name": "SEPA Lastschrift", "type": "transfer", "popular": True},
+      {"id": "giropay", "name": "Giropay", "type": "transfer"},
+      {"id": "paypal", "name": "PayPal", "type": "wallet"},
+      {"id": "sofort", "name": "Sofort", "type": "transfer"},
+      {"id": "apple_pay", "name": "Apple Pay", "type": "wallet"},
+    ],
+    "shipping_carriers": [
+      {"id": "dhl", "name": "DHL", "days": "1-2", "popular": True},
+      {"id": "hermes_de", "name": "Hermes", "days": "2-4"},
+      {"id": "dpd_de", "name": "DPD", "days": "1-3"},
+    ],
+    "chat_apps": [{"id": "whatsapp", "name": "WhatsApp"}, {"id": "telegram", "name": "Telegram"}],
+    "seasonal_promos": [{"id": "weihnachten", "name_en": "Weihnachten", "month": 12, "size": "HUGE"}],
+  },
+
+  "it": {
+    "id": "it", "name_ar": "إيطاليا", "name_en": "Italy", "flag": "🇮🇹",
+    "language": "it", "direction": "ltr", "font": "Inter",
+    "currency": "EUR", "symbol": "€", "number_format": "1.234,56",
+    "tax": {"name_en": "IVA", "rate": 22},
+    "payment_gateways": [
+      {"id": "stripe", "name": "Stripe", "type": "gateway"},
+      {"id": "paypal", "name": "PayPal", "type": "wallet", "popular": True},
+      {"id": "satispay", "name": "Satispay", "type": "wallet", "tagline": "App italiana"},
+      {"id": "scalapay", "name": "Scalapay", "type": "bnpl"},
+      {"id": "klarna", "name": "Klarna", "type": "bnpl"},
+      {"id": "postepay", "name": "PostePay", "type": "card"},
+    ],
+    "shipping_carriers": [
+      {"id": "poste_italiane", "name": "Poste Italiane", "days": "2-4"},
+      {"id": "brt", "name": "BRT (Bartolini)", "days": "1-3"},
+      {"id": "sda", "name": "SDA Express", "days": "1-3"},
+    ],
+    "chat_apps": [{"id": "whatsapp", "name": "WhatsApp"}],
+  },
+
+  "es": {
+    "id": "es", "name_ar": "إسبانيا", "name_en": "Spain", "flag": "🇪🇸",
+    "language": "es", "direction": "ltr", "font": "Inter",
+    "currency": "EUR", "symbol": "€", "number_format": "1.234,56",
+    "tax": {"name_en": "IVA", "rate": 21},
+    "payment_gateways": [
+      {"id": "stripe", "name": "Stripe", "type": "gateway"},
+      {"id": "paypal", "name": "PayPal", "type": "wallet", "popular": True},
+      {"id": "bizum", "name": "Bizum", "type": "wallet", "popular": True, "tagline": "Pago instantáneo"},
+      {"id": "klarna", "name": "Klarna", "type": "bnpl"},
+      {"id": "aplazame", "name": "Aplazame", "type": "bnpl"},
+    ],
+    "shipping_carriers": [
+      {"id": "correos", "name": "Correos", "days": "2-4"},
+      {"id": "seur", "name": "SEUR", "days": "1-2"},
+      {"id": "mrw", "name": "MRW", "days": "1-2"},
+    ],
+    "chat_apps": [{"id": "whatsapp", "name": "WhatsApp"}],
+  },
+
+  "nl": {
+    "id": "nl", "name_ar": "هولندا", "name_en": "Netherlands", "flag": "🇳🇱",
+    "language": "nl", "direction": "ltr", "font": "Inter",
+    "currency": "EUR", "symbol": "€", "number_format": "1.234,56",
+    "tax": {"name_en": "BTW", "rate": 21},
+    "payment_gateways": [
+      {"id": "ideal", "name": "iDEAL", "type": "transfer", "popular": True, "tagline": "70% من المعاملات الهولندية"},
+      {"id": "klarna", "name": "Klarna", "type": "bnpl"},
+      {"id": "bancontact", "name": "Bancontact", "type": "card"},
+      {"id": "paypal", "name": "PayPal", "type": "wallet"},
+      {"id": "stripe", "name": "Stripe", "type": "gateway"},
+    ],
+    "shipping_carriers": [
+      {"id": "postnl", "name": "PostNL", "days": "1-2", "popular": True},
+      {"id": "dhl_nl", "name": "DHL Parcel", "days": "1-2"},
+    ],
+    "chat_apps": [{"id": "whatsapp", "name": "WhatsApp"}],
+  },
+
+  "ch": {
+    "id": "ch", "name_ar": "سويسرا", "name_en": "Switzerland", "flag": "🇨🇭",
+    "language": "de", "direction": "ltr", "font": "Inter",
+    "currency": "CHF", "symbol": "CHF", "number_format": "1'234.56",
+    "tax": {"name_en": "MWST", "rate": 7.7},
+    "payment_gateways": [
+      {"id": "twint", "name": "TWINT", "type": "wallet", "popular": True, "tagline": "تطبيق الدفع السويسري"},
+      {"id": "postfinance", "name": "PostFinance", "type": "card"},
+      {"id": "klarna", "name": "Klarna", "type": "bnpl"},
+      {"id": "stripe", "name": "Stripe", "type": "gateway"},
+      {"id": "paypal", "name": "PayPal", "type": "wallet"},
+    ],
+    "shipping_carriers": [
+      {"id": "swiss_post", "name": "Swiss Post", "days": "1-2"},
+      {"id": "dhl_ch", "name": "DHL Switzerland", "days": "1-3"},
+    ],
+    "chat_apps": [{"id": "whatsapp", "name": "WhatsApp"}],
+  },
+
+  "se": {
+    "id": "se", "name_ar": "السويد", "name_en": "Sweden", "flag": "🇸🇪",
+    "language": "sv", "direction": "ltr", "font": "Inter",
+    "currency": "SEK", "symbol": "kr", "number_format": "1 234,56",
+    "tax": {"name_en": "Moms", "rate": 25},
+    "payment_gateways": [
+      {"id": "swish", "name": "Swish", "type": "wallet", "popular": True, "tagline": "تطبيق الدفع السويدي"},
+      {"id": "klarna", "name": "Klarna", "type": "bnpl", "popular": True, "tagline": "صناعة سويدية"},
+      {"id": "bankgiro", "name": "Bankgiro", "type": "transfer"},
+      {"id": "stripe", "name": "Stripe", "type": "gateway"},
+    ],
+    "shipping_carriers": [
+      {"id": "postnord", "name": "PostNord", "days": "1-3"},
+      {"id": "dhl_se", "name": "DHL Sweden", "days": "1-2"},
+    ],
+    "chat_apps": [{"id": "whatsapp", "name": "WhatsApp"}, {"id": "messenger", "name": "Messenger"}],
+  },
+
+  "ru": {
+    "id": "ru", "name_ar": "روسيا", "name_en": "Russia", "flag": "🇷🇺",
+    "language": "ru", "direction": "ltr", "font": "Inter",
+    "currency": "RUB", "symbol": "₽", "number_format": "1 234,56",
+    "tax": {"name_en": "НДС (VAT)", "rate": 20},
+    "payment_gateways": [
+      {"id": "mir", "name": "МИР (Mir)", "type": "card", "popular": True, "tagline": "نظام الدفع الروسي الوطني"},
+      {"id": "yoomoney", "name": "ЮMoney (Yandex)", "type": "wallet", "popular": True},
+      {"id": "sberpay", "name": "SberPay", "type": "wallet"},
+      {"id": "tinkoff", "name": "Tinkoff Pay", "type": "wallet"},
+      {"id": "qiwi", "name": "QIWI", "type": "wallet"},
+      {"id": "cod", "name": "Наложенный платёж", "type": "cash", "popular": True},
+    ],
+    "shipping_carriers": [
+      {"id": "russian_post", "name": "Почта России", "days": "5-14"},
+      {"id": "sdek", "name": "СДЭК (CDEK)", "days": "2-5", "popular": True},
+      {"id": "boxberry", "name": "Boxberry", "days": "3-7"},
+    ],
+    "chat_apps": [
+      {"id": "telegram", "name": "Telegram", "popular": True},
+      {"id": "vk", "name": "VK Messenger"},
+      {"id": "whatsapp", "name": "WhatsApp"},
+    ],
+  },
+
+  # ═══════════════════════════════════════ NORTH AFRICA ═══════════════════════════════════════
+  "ma": {
+    "id": "ma", "name_ar": "المغرب", "name_en": "Morocco", "flag": "🇲🇦",
+    "language": "ar", "direction": "rtl", "font": "Tajawal",
+    "currency": "MAD", "symbol": "د.م", "number_format": "1 234,56",
+    "tax": {"name_ar": "ضريبة القيمة المضافة", "rate": 20},
+    "payment_gateways": [
+      {"id": "cmi", "name": "CMI", "type": "card", "popular": True, "tagline": "بوابة الدفع المغربية"},
+      {"id": "youcanpay", "name": "YouCan Pay", "type": "gateway"},
+      {"id": "payzone_ma", "name": "PayZone", "type": "gateway"},
+      {"id": "cod", "name": "الدفع عند الاستلام", "type": "cash", "popular": True},
+    ],
+    "shipping_carriers": [
+      {"id": "amana", "name": "Amana", "days": "1-3"},
+      {"id": "barid_almaghrib", "name": "Barid Al-Maghrib", "days": "2-5"},
+      {"id": "ctm_express", "name": "CTM Messagerie", "days": "1-3"},
+    ],
+    "chat_apps": [{"id": "whatsapp", "name": "WhatsApp"}, {"id": "instagram_dm", "name": "Instagram"}],
+  },
+
+  "dz": {
+    "id": "dz", "name_ar": "الجزائر", "name_en": "Algeria", "flag": "🇩🇿",
+    "language": "ar", "direction": "rtl", "font": "Tajawal",
+    "currency": "DZD", "symbol": "د.ج", "number_format": "1 234,56",
+    "tax": {"name_ar": "ضريبة القيمة المضافة", "rate": 19},
+    "payment_gateways": [
+      {"id": "satim", "name": "SATIM (CIB/Edahabia)", "type": "card", "popular": True},
+      {"id": "baridi_mob", "name": "BaridiMob", "type": "wallet"},
+      {"id": "cod", "name": "الدفع عند الاستلام", "type": "cash", "popular": True},
+    ],
+    "shipping_carriers": [
+      {"id": "yalidine", "name": "Yalidine Express", "days": "1-3", "popular": True},
+      {"id": "algerie_poste", "name": "Algérie Poste", "days": "2-5"},
+      {"id": "zr_express", "name": "ZR Express", "days": "1-3"},
+    ],
+    "chat_apps": [{"id": "whatsapp", "name": "WhatsApp"}, {"id": "facebook_messenger", "name": "Messenger"}],
+  },
+
+  "tn": {
+    "id": "tn", "name_ar": "تونس", "name_en": "Tunisia", "flag": "🇹🇳",
+    "language": "ar", "direction": "rtl", "font": "Tajawal",
+    "currency": "TND", "symbol": "د.ت", "number_format": "1 234,567",
+    "tax": {"name_ar": "ضريبة القيمة المضافة", "rate": 19},
+    "payment_gateways": [
+      {"id": "click_to_pay", "name": "Click to Pay (Tunisie)", "type": "card"},
+      {"id": "konnect", "name": "Konnect", "type": "gateway"},
+      {"id": "edinar", "name": "e-Dinar", "type": "wallet"},
+      {"id": "cod", "name": "الدفع عند الاستلام", "type": "cash", "popular": True},
+    ],
+    "shipping_carriers": [
+      {"id": "rapid_post_tn", "name": "Rapid Poste", "days": "2-4"},
+      {"id": "first_delivery", "name": "First Delivery", "days": "1-2"},
+    ],
+    "chat_apps": [{"id": "whatsapp", "name": "WhatsApp"}, {"id": "facebook_messenger", "name": "Messenger"}],
+  },
+
+  "ly": {
+    "id": "ly", "name_ar": "ليبيا", "name_en": "Libya", "flag": "🇱🇾",
+    "language": "ar", "direction": "rtl", "font": "Tajawal",
+    "currency": "LYD", "symbol": "ل.د", "number_format": "1,234.567",
+    "tax": {"rate": 0},
+    "payment_gateways": [
+      {"id": "moamalat", "name": "Moamalat", "type": "wallet"},
+      {"id": "sadad_ly", "name": "Sadad Libya", "type": "transfer"},
+      {"id": "cod", "name": "الدفع عند الاستلام", "type": "cash", "popular": True},
+    ],
+    "shipping_carriers": [
+      {"id": "libyan_post", "name": "Libya Post", "days": "2-5"},
+      {"id": "private_ly", "name": "نقل خاص", "days": "1-3"},
+    ],
+    "chat_apps": [{"id": "whatsapp", "name": "WhatsApp"}, {"id": "facebook_messenger", "name": "Messenger"}],
+  },
+
+  "sd": {
+    "id": "sd", "name_ar": "السودان", "name_en": "Sudan", "flag": "🇸🇩",
+    "language": "ar", "direction": "rtl", "font": "Tajawal",
+    "currency": "SDG", "symbol": "ج.س", "number_format": "1,234.56",
+    "tax": {"name_ar": "ضريبة القيمة المضافة", "rate": 17},
+    "payment_gateways": [
+      {"id": "bankak", "name": "Bankak (بنكك)", "type": "wallet", "popular": True},
+      {"id": "fawry_sd", "name": "Fawry Sudan", "type": "wallet"},
+      {"id": "cod", "name": "الدفع عند الاستلام", "type": "cash", "popular": True},
+    ],
+    "shipping_carriers": [{"id": "sudan_post", "name": "Sudan Post"}, {"id": "aramex", "name": "Aramex"}],
+    "chat_apps": [{"id": "whatsapp", "name": "WhatsApp"}],
+  },
+
+  # ═══════════════════════════════════════ OTHER ARAB ═══════════════════════════════════════
+  "ye": {
+    "id": "ye", "name_ar": "اليمن", "name_en": "Yemen", "flag": "🇾🇪",
+    "language": "ar", "direction": "rtl", "font": "Tajawal",
+    "currency": "YER", "symbol": "ر.ي", "number_format": "1,234",
+    "tax": {"rate": 0},
+    "payment_gateways": [
+      {"id": "alkuraimi", "name": "بنك الكريمي", "type": "wallet"},
+      {"id": "cac_pay", "name": "CAC Pay", "type": "wallet"},
+      {"id": "cod", "name": "الدفع عند الاستلام", "type": "cash", "popular": True},
+    ],
+    "shipping_carriers": [{"id": "yemen_post", "name": "بريد اليمن"}, {"id": "private_ye", "name": "نقل خاص"}],
+    "chat_apps": [{"id": "whatsapp", "name": "WhatsApp"}, {"id": "telegram", "name": "Telegram"}],
+  },
+
+  "ps": {
+    "id": "ps", "name_ar": "فلسطين", "name_en": "Palestine", "flag": "🇵🇸",
+    "language": "ar", "direction": "rtl", "font": "Tajawal",
+    "currency": "ILS", "symbol": "₪", "number_format": "1,234.56",
+    "tax": {"name_ar": "ضريبة المبيعات", "rate": 17},
+    "payment_gateways": [
+      {"id": "jawwalpay", "name": "JawwalPay", "type": "wallet"},
+      {"id": "paltel", "name": "PalTel Pay", "type": "wallet"},
+      {"id": "cod", "name": "الدفع عند الاستلام", "type": "cash", "popular": True},
+    ],
+    "shipping_carriers": [{"id": "wassel", "name": "وصّل"}, {"id": "aramex", "name": "Aramex"}],
+    "chat_apps": [{"id": "whatsapp", "name": "WhatsApp"}],
+  },
+
+  # ═══════════════════════════════════════ SOUTH/SOUTHEAST ASIA ═══════════════════════════════════════
+  "pk": {
+    "id": "pk", "name_ar": "باكستان", "name_en": "Pakistan", "flag": "🇵🇰",
+    "language": "ur", "direction": "rtl", "font": "Noto Nastaliq Urdu",
+    "currency": "PKR", "symbol": "₨", "number_format": "1,234.56",
+    "tax": {"name_en": "GST", "rate": 17},
+    "payment_gateways": [
+      {"id": "easypaisa", "name": "EasyPaisa", "type": "wallet", "popular": True},
+      {"id": "jazzcash", "name": "JazzCash", "type": "wallet", "popular": True},
+      {"id": "sadapay", "name": "SadaPay", "type": "wallet"},
+      {"id": "nayapay", "name": "NayaPay", "type": "wallet"},
+      {"id": "cod", "name": "Cash on Delivery", "type": "cash", "popular": True},
+    ],
+    "shipping_carriers": [
+      {"id": "tcs", "name": "TCS", "days": "1-3"},
+      {"id": "leopards", "name": "Leopards Courier", "days": "2-4"},
+      {"id": "mnp", "name": "M&P", "days": "2-4"},
+    ],
+    "chat_apps": [{"id": "whatsapp", "name": "WhatsApp"}],
+  },
+
+  "bd": {
+    "id": "bd", "name_ar": "بنغلاديش", "name_en": "Bangladesh", "flag": "🇧🇩",
+    "language": "bn", "direction": "ltr", "font": "Noto Sans Bengali",
+    "currency": "BDT", "symbol": "৳", "number_format": "1,234.56",
+    "tax": {"name_en": "VAT", "rate": 15},
+    "payment_gateways": [
+      {"id": "bkash", "name": "bKash", "type": "wallet", "popular": True},
+      {"id": "nagad", "name": "Nagad", "type": "wallet", "popular": True},
+      {"id": "rocket", "name": "Rocket (DBBL)", "type": "wallet"},
+      {"id": "sslcommerz", "name": "SSLCommerz", "type": "gateway"},
+      {"id": "cod", "name": "Cash on Delivery", "type": "cash", "popular": True},
+    ],
+    "shipping_carriers": [
+      {"id": "pathao", "name": "Pathao Courier", "days": "1-2"},
+      {"id": "redx", "name": "RedX", "days": "1-3"},
+      {"id": "steadfast", "name": "Steadfast", "days": "1-2"},
+    ],
+    "chat_apps": [{"id": "whatsapp", "name": "WhatsApp"}, {"id": "messenger", "name": "Messenger"}],
+  },
+
+  "id": {
+    "id": "id", "name_ar": "إندونيسيا", "name_en": "Indonesia", "flag": "🇮🇩",
+    "language": "id", "direction": "ltr", "font": "Inter",
+    "currency": "IDR", "symbol": "Rp", "number_format": "1.234,56",
+    "tax": {"name_en": "PPN", "rate": 11},
+    "payment_gateways": [
+      {"id": "gopay", "name": "GoPay", "type": "wallet", "popular": True},
+      {"id": "ovo", "name": "OVO", "type": "wallet", "popular": True},
+      {"id": "dana", "name": "DANA", "type": "wallet"},
+      {"id": "shopeepay", "name": "ShopeePay", "type": "wallet"},
+      {"id": "linkaja", "name": "LinkAja", "type": "wallet"},
+      {"id": "qris", "name": "QRIS", "type": "qr", "popular": True},
+      {"id": "cod", "name": "Cash on Delivery", "type": "cash"},
+    ],
+    "shipping_carriers": [
+      {"id": "jne", "name": "JNE", "days": "1-3", "popular": True},
+      {"id": "jnt", "name": "J&T Express", "days": "1-3", "popular": True},
+      {"id": "sicepat", "name": "SiCepat", "days": "1-2"},
+      {"id": "gosend", "name": "GoSend", "days": "same-day"},
+    ],
+    "chat_apps": [{"id": "whatsapp", "name": "WhatsApp", "popular": True}, {"id": "line", "name": "LINE"}],
+  },
+
+  "my": {
+    "id": "my", "name_ar": "ماليزيا", "name_en": "Malaysia", "flag": "🇲🇾",
+    "language": "ms", "direction": "ltr", "font": "Inter",
+    "currency": "MYR", "symbol": "RM", "number_format": "1,234.56",
+    "tax": {"name_en": "SST", "rate": 8},
+    "payment_gateways": [
+      {"id": "grabpay", "name": "GrabPay", "type": "wallet", "popular": True},
+      {"id": "touch_n_go", "name": "Touch 'n Go eWallet", "type": "wallet", "popular": True},
+      {"id": "boost", "name": "Boost", "type": "wallet"},
+      {"id": "shopeepay_my", "name": "ShopeePay", "type": "wallet"},
+      {"id": "fpx", "name": "FPX (Online Banking)", "type": "transfer", "popular": True},
+      {"id": "duitnow", "name": "DuitNow QR", "type": "qr"},
+    ],
+    "shipping_carriers": [
+      {"id": "poslaju", "name": "Pos Laju", "days": "1-3"},
+      {"id": "ninjavan", "name": "Ninja Van", "days": "1-3"},
+      {"id": "jnt_my", "name": "J&T Express", "days": "1-3"},
+    ],
+    "chat_apps": [{"id": "whatsapp", "name": "WhatsApp", "popular": True}],
+  },
+
+  "th": {
+    "id": "th", "name_ar": "تايلاند", "name_en": "Thailand", "flag": "🇹🇭",
+    "language": "th", "direction": "ltr", "font": "Noto Sans Thai",
+    "currency": "THB", "symbol": "฿", "number_format": "1,234.56",
+    "tax": {"name_en": "VAT", "rate": 7},
+    "payment_gateways": [
+      {"id": "promptpay", "name": "PromptPay", "type": "qr", "popular": True, "tagline": "نظام الدفع التايلاندي الوطني"},
+      {"id": "truemoney", "name": "TrueMoney Wallet", "type": "wallet"},
+      {"id": "rabbit_linepay", "name": "Rabbit LINE Pay", "type": "wallet"},
+      {"id": "scb_easy", "name": "SCB Easy", "type": "wallet"},
+      {"id": "cod", "name": "Cash on Delivery", "type": "cash"},
+    ],
+    "shipping_carriers": [
+      {"id": "kerry", "name": "Kerry Express", "days": "1-2", "popular": True},
+      {"id": "flash_express", "name": "Flash Express", "days": "1-2"},
+      {"id": "thailand_post", "name": "Thailand Post", "days": "2-4"},
+    ],
+    "chat_apps": [{"id": "line", "name": "LINE", "popular": True}, {"id": "whatsapp", "name": "WhatsApp"}],
+  },
+
+  "ph": {
+    "id": "ph", "name_ar": "الفلبين", "name_en": "Philippines", "flag": "🇵🇭",
+    "language": "fil", "direction": "ltr", "font": "Inter",
+    "currency": "PHP", "symbol": "₱", "number_format": "1,234.56",
+    "tax": {"name_en": "VAT", "rate": 12},
+    "payment_gateways": [
+      {"id": "gcash", "name": "GCash", "type": "wallet", "popular": True},
+      {"id": "paymaya", "name": "Maya (PayMaya)", "type": "wallet", "popular": True},
+      {"id": "grabpay_ph", "name": "GrabPay", "type": "wallet"},
+      {"id": "instapay", "name": "InstaPay", "type": "transfer"},
+      {"id": "cod", "name": "Cash on Delivery", "type": "cash", "popular": True},
+    ],
+    "shipping_carriers": [
+      {"id": "lbc", "name": "LBC Express", "days": "1-3"},
+      {"id": "jnt_ph", "name": "J&T Express", "days": "1-2"},
+      {"id": "ninja_van_ph", "name": "Ninja Van", "days": "1-3"},
+    ],
+    "chat_apps": [{"id": "whatsapp", "name": "WhatsApp"}, {"id": "messenger", "name": "Messenger", "popular": True}],
+  },
+
+  "vn": {
+    "id": "vn", "name_ar": "فيتنام", "name_en": "Vietnam", "flag": "🇻🇳",
+    "language": "vi", "direction": "ltr", "font": "Inter",
+    "currency": "VND", "symbol": "₫", "number_format": "1.234.567",
+    "tax": {"name_en": "VAT", "rate": 10},
+    "payment_gateways": [
+      {"id": "momo", "name": "MoMo", "type": "wallet", "popular": True},
+      {"id": "zalopay", "name": "ZaloPay", "type": "wallet", "popular": True},
+      {"id": "vnpay", "name": "VNPAY-QR", "type": "qr"},
+      {"id": "viettelpay", "name": "ViettelPay", "type": "wallet"},
+      {"id": "cod", "name": "Cash on Delivery", "type": "cash", "popular": True},
+    ],
+    "shipping_carriers": [
+      {"id": "ghn", "name": "GHN Express", "days": "1-3"},
+      {"id": "ghtk", "name": "Giao Hang Tiet Kiem", "days": "2-4"},
+      {"id": "vietnam_post", "name": "Vietnam Post", "days": "2-5"},
+    ],
+    "chat_apps": [{"id": "zalo", "name": "Zalo", "popular": True}, {"id": "messenger", "name": "Messenger"}],
+  },
+
+  # ═══════════════════════════════════════ AMERICAS ═══════════════════════════════════════
+  "ca": {
+    "id": "ca", "name_ar": "كندا", "name_en": "Canada", "flag": "🇨🇦",
+    "language": "en", "direction": "ltr", "font": "Inter",
+    "currency": "CAD", "symbol": "C$", "number_format": "1,234.56",
+    "tax": {"name_en": "GST/HST/PST", "rate": "5-15", "note": "Province-dependent"},
+    "payment_gateways": [
+      {"id": "stripe_ca", "name": "Stripe", "type": "gateway"},
+      {"id": "paypal", "name": "PayPal", "type": "wallet", "popular": True},
+      {"id": "interac", "name": "Interac e-Transfer", "type": "transfer", "popular": True, "tagline": "نظام الدفع الكندي"},
+      {"id": "apple_pay", "name": "Apple Pay", "type": "wallet"},
+      {"id": "klarna", "name": "Klarna", "type": "bnpl"},
+      {"id": "afterpay", "name": "Afterpay", "type": "bnpl"},
+    ],
+    "shipping_carriers": [
+      {"id": "canada_post", "name": "Canada Post", "days": "2-7"},
+      {"id": "purolator", "name": "Purolator", "days": "1-3"},
+      {"id": "ups_ca", "name": "UPS Canada", "days": "1-3"},
+    ],
+    "chat_apps": [{"id": "imessage", "name": "iMessage"}, {"id": "whatsapp", "name": "WhatsApp"}],
+  },
+
+  "mx": {
+    "id": "mx", "name_ar": "المكسيك", "name_en": "Mexico", "flag": "🇲🇽",
+    "language": "es", "direction": "ltr", "font": "Inter",
+    "currency": "MXN", "symbol": "$", "number_format": "1,234.56",
+    "tax": {"name_en": "IVA", "rate": 16},
+    "payment_gateways": [
+      {"id": "mercado_pago", "name": "Mercado Pago", "type": "wallet", "popular": True},
+      {"id": "oxxo", "name": "OXXO", "type": "cash", "popular": True, "tagline": "ادفع نقداً في 19,000+ متجر"},
+      {"id": "spei", "name": "SPEI", "type": "transfer"},
+      {"id": "kueski_pay", "name": "Kueski Pay", "type": "bnpl"},
+      {"id": "paypal", "name": "PayPal", "type": "wallet"},
+      {"id": "stripe_mx", "name": "Stripe", "type": "gateway"},
+    ],
+    "shipping_carriers": [
+      {"id": "fedex_mx", "name": "FedEx Mexico", "days": "1-3"},
+      {"id": "estafeta", "name": "Estafeta", "days": "1-3"},
+      {"id": "dhl_mx", "name": "DHL Mexico", "days": "1-2"},
+    ],
+    "chat_apps": [{"id": "whatsapp", "name": "WhatsApp", "popular": True}, {"id": "messenger", "name": "Messenger"}],
+  },
+
+  "br": {
+    "id": "br", "name_ar": "البرازيل", "name_en": "Brazil", "flag": "🇧🇷",
+    "language": "pt", "direction": "ltr", "font": "Inter",
+    "currency": "BRL", "symbol": "R$", "number_format": "1.234,56",
+    "tax": {"name_en": "ICMS", "rate": "17-19", "note": "State-dependent"},
+    "payment_gateways": [
+      {"id": "pix", "name": "PIX", "type": "qr", "popular": True, "tagline": "تحويل فوري برازيلي - مجاني"},
+      {"id": "boleto", "name": "Boleto Bancário", "type": "cash", "popular": True},
+      {"id": "mercado_pago_br", "name": "Mercado Pago", "type": "wallet"},
+      {"id": "pagseguro", "name": "PagSeguro", "type": "gateway"},
+      {"id": "picpay", "name": "PicPay", "type": "wallet"},
+      {"id": "stripe_br", "name": "Stripe", "type": "gateway"},
+    ],
+    "shipping_carriers": [
+      {"id": "correios", "name": "Correios", "days": "3-10", "popular": True},
+      {"id": "jadlog", "name": "Jadlog", "days": "1-3"},
+      {"id": "mercado_envios", "name": "Mercado Envios", "days": "1-5"},
+    ],
+    "chat_apps": [{"id": "whatsapp", "name": "WhatsApp", "popular": True}, {"id": "telegram", "name": "Telegram"}],
+  },
+
+  "ar": {
+    "id": "ar", "name_ar": "الأرجنتين", "name_en": "Argentina", "flag": "🇦🇷",
+    "language": "es", "direction": "ltr", "font": "Inter",
+    "currency": "ARS", "symbol": "$", "number_format": "1.234,56",
+    "tax": {"name_en": "IVA", "rate": 21},
+    "payment_gateways": [
+      {"id": "mercado_pago_ar", "name": "Mercado Pago", "type": "wallet", "popular": True},
+      {"id": "rapipago", "name": "Rapipago", "type": "cash"},
+      {"id": "pago_facil", "name": "Pago Fácil", "type": "cash"},
+      {"id": "modo", "name": "MODO", "type": "wallet"},
+    ],
+    "shipping_carriers": [
+      {"id": "correo_argentino", "name": "Correo Argentino", "days": "3-7"},
+      {"id": "andreani", "name": "Andreani", "days": "1-3"},
+      {"id": "oca", "name": "OCA", "days": "1-3"},
+    ],
+    "chat_apps": [{"id": "whatsapp", "name": "WhatsApp", "popular": True}],
+  },
+
+  # ═══════════════════════════════════════ AFRICA ═══════════════════════════════════════
+  "za": {
+    "id": "za", "name_ar": "جنوب أفريقيا", "name_en": "South Africa", "flag": "🇿🇦",
+    "language": "en", "direction": "ltr", "font": "Inter",
+    "currency": "ZAR", "symbol": "R", "number_format": "1,234.56",
+    "tax": {"name_en": "VAT", "rate": 15},
+    "payment_gateways": [
+      {"id": "payfast", "name": "PayFast", "type": "gateway", "popular": True},
+      {"id": "yoco", "name": "Yoco", "type": "gateway"},
+      {"id": "snapscan", "name": "SnapScan", "type": "qr"},
+      {"id": "zapper", "name": "Zapper", "type": "qr"},
+      {"id": "ozow", "name": "Ozow", "type": "transfer"},
+      {"id": "paypal", "name": "PayPal", "type": "wallet"},
+    ],
+    "shipping_carriers": [
+      {"id": "courier_guy", "name": "The Courier Guy", "days": "1-3"},
+      {"id": "ram", "name": "RAM Couriers", "days": "1-2"},
+      {"id": "sa_post", "name": "SA Post Office", "days": "3-7"},
+    ],
+    "chat_apps": [{"id": "whatsapp", "name": "WhatsApp", "popular": True}],
+  },
+
+  "ng": {
+    "id": "ng", "name_ar": "نيجيريا", "name_en": "Nigeria", "flag": "🇳🇬",
+    "language": "en", "direction": "ltr", "font": "Inter",
+    "currency": "NGN", "symbol": "₦", "number_format": "1,234.56",
+    "tax": {"name_en": "VAT", "rate": 7.5},
+    "payment_gateways": [
+      {"id": "paystack", "name": "Paystack", "type": "gateway", "popular": True},
+      {"id": "flutterwave", "name": "Flutterwave", "type": "gateway", "popular": True},
+      {"id": "opay", "name": "OPay", "type": "wallet"},
+      {"id": "palmpay", "name": "PalmPay", "type": "wallet"},
+      {"id": "interswitch", "name": "Interswitch", "type": "gateway"},
+    ],
+    "shipping_carriers": [
+      {"id": "gig_logistics", "name": "GIG Logistics", "days": "1-3"},
+      {"id": "nipost", "name": "NIPOST", "days": "3-7"},
+      {"id": "kwik", "name": "Kwik Delivery", "days": "same-day"},
+    ],
+    "chat_apps": [{"id": "whatsapp", "name": "WhatsApp", "popular": True}],
+  },
+
+  "ke": {
+    "id": "ke", "name_ar": "كينيا", "name_en": "Kenya", "flag": "🇰🇪",
+    "language": "en", "direction": "ltr", "font": "Inter",
+    "currency": "KES", "symbol": "KSh", "number_format": "1,234.56",
+    "tax": {"name_en": "VAT", "rate": 16},
+    "payment_gateways": [
+      {"id": "mpesa", "name": "M-Pesa", "type": "wallet", "popular": True, "tagline": "الأشهر في أفريقيا"},
+      {"id": "airtel_money", "name": "Airtel Money", "type": "wallet"},
+      {"id": "flutterwave_ke", "name": "Flutterwave", "type": "gateway"},
+      {"id": "pesapal", "name": "Pesapal", "type": "gateway"},
+    ],
+    "shipping_carriers": [
+      {"id": "sendy", "name": "Sendy", "days": "same-day"},
+      {"id": "g4s_ke", "name": "G4S Kenya", "days": "1-3"},
+      {"id": "kenya_post", "name": "Posta Kenya", "days": "3-7"},
+    ],
+    "chat_apps": [{"id": "whatsapp", "name": "WhatsApp", "popular": True}],
+  },
+
+  # ═══════════════════════════════════════ OCEANIA ═══════════════════════════════════════
+  "au": {
+    "id": "au", "name_ar": "أستراليا", "name_en": "Australia", "flag": "🇦🇺",
+    "language": "en", "direction": "ltr", "font": "Inter",
+    "currency": "AUD", "symbol": "A$", "number_format": "1,234.56",
+    "tax": {"name_en": "GST", "rate": 10},
+    "payment_gateways": [
+      {"id": "stripe_au", "name": "Stripe", "type": "gateway", "popular": True},
+      {"id": "afterpay_au", "name": "Afterpay", "type": "bnpl", "popular": True, "tagline": "صناعة أسترالية"},
+      {"id": "zip", "name": "Zip", "type": "bnpl"},
+      {"id": "paypal", "name": "PayPal", "type": "wallet"},
+      {"id": "apple_pay", "name": "Apple Pay", "type": "wallet"},
+      {"id": "bpay", "name": "BPAY", "type": "transfer"},
+      {"id": "payid", "name": "PayID", "type": "transfer"},
+    ],
+    "shipping_carriers": [
+      {"id": "auspost", "name": "Australia Post", "days": "1-5"},
+      {"id": "startrack", "name": "StarTrack", "days": "1-3"},
+      {"id": "couriers_please", "name": "Couriers Please", "days": "1-3"},
+    ],
+    "chat_apps": [{"id": "whatsapp", "name": "WhatsApp"}, {"id": "imessage", "name": "iMessage"}],
+  },
+
+  "tr": {
+    "id": "tr", "name_ar": "تركيا", "name_en": "Turkey", "flag": "🇹🇷",
+    "language": "tr", "direction": "ltr", "font": "Inter",
+    "currency": "TRY", "symbol": "₺", "number_format": "1.234,56",
+    "tax": {"name_en": "KDV", "rate": 20},
+    "payment_gateways": [
+      {"id": "iyzico", "name": "iyzico", "type": "gateway", "popular": True},
+      {"id": "paytr", "name": "PayTR", "type": "gateway"},
+      {"id": "papara", "name": "Papara", "type": "wallet", "popular": True},
+      {"id": "ininal", "name": "ininal", "type": "wallet"},
+      {"id": "bkm_express", "name": "BKM Express", "type": "wallet"},
+      {"id": "stripe_tr", "name": "Stripe", "type": "gateway"},
+    ],
+    "shipping_carriers": [
+      {"id": "yurtici", "name": "Yurtiçi Kargo", "days": "1-2", "popular": True},
+      {"id": "mng", "name": "MNG Kargo", "days": "1-2"},
+      {"id": "ptt", "name": "PTT Kargo", "days": "2-4"},
+      {"id": "aras", "name": "Aras Kargo", "days": "1-3"},
+    ],
+    "chat_apps": [{"id": "whatsapp", "name": "WhatsApp", "popular": True}],
+  },
 }
 # fmt: on
 

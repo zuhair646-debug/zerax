@@ -1,6 +1,60 @@
 # Zitex AI Platform - PRD
 
 
+### 🆕 Jun 9 2026 — Ready Sites: Global Market Localization Engine ✅
+
+**استراتيجية معمارية جديدة (Visual Preview First, Code Last):**
+- **3 نماذج بصرية فقط** بدل 24 (تخفيض جذري للـ bugs)
+- كل نموذج يخدم كل الأقسام بتغيير المحتوى فقط
+- HTML Mockups قابلة للمعاينة قبل أي بناء برمجي
+- **Pre-built ثابت، مختبر، ما يتغيّر = جودة 100%**
+
+**Files**:
+- `/app/frontend/public/mockups/app_mode.html` (Mobile App style - مثل نون)
+- `/app/frontend/public/mockups/story_mode.html` (Cinematic - مطعم فاخر)
+- `/app/frontend/public/mockups/showroom_mode.html` (3D Showroom - مجوهرات فاخرة)
+- `/app/frontend/public/mockups/market_demo.html` (Live Market Switcher)
+
+**Global Market Localization Engine — 49 Markets:**
+
+| المنطقة | الدول |
+|---|---|
+| **الخليج** (6) | 🇸🇦 🇦🇪 🇰🇼 🇶🇦 🇧🇭 🇴🇲 |
+| **الشام والعراق** (5) | 🇮🇶 🇸🇾 🇯🇴 🇱🇧 🇵🇸 |
+| **شمال أفريقيا** (6) | 🇪🇬 🇲🇦 🇩🇿 🇹🇳 🇱🇾 🇸🇩 |
+| **باقي العرب** (2) | 🇾🇪 🇮🇷 |
+| **آسيا الكبرى** (5) | 🇨🇳 🇯🇵 🇰🇷 🇮🇳 🇹🇷 |
+| **جنوب وشرق آسيا** (7) | 🇵🇰 🇧🇩 🇮🇩 🇲🇾 🇹🇭 🇵🇭 🇻🇳 |
+| **أوروبا الغربية** (8) | 🇬🇧 🇫🇷 🇩🇪 🇮🇹 🇪🇸 🇳🇱 🇨🇭 🇸🇪 |
+| **أوروبا الشرقية** (1) | 🇷🇺 |
+| **الأمريكتان** (5) | 🇺🇸 🇨🇦 🇲🇽 🇧🇷 🇦🇷 |
+| **أفريقيا** (3) | 🇿🇦 🇳🇬 🇰🇪 |
+| **أوقيانوسيا** (1) | 🇦🇺 |
+
+**Each Market Pack Contains:**
+- Language code + direction (RTL/LTR) + font family
+- Currency + symbol + number format
+- Local payment gateways (Mada/KNET/Alipay/Pix/M-Pesa/iDEAL/etc.)
+- Local shipping carriers (SMSA/SF Express/Yamato/Royal Mail/etc.)
+- Local chat apps (WhatsApp/WeChat/LINE/KakaoTalk/Telegram/Zalo/etc.)
+- Tax system (VAT/GST/Sales Tax)
+- Seasonal promotions (11.11, Black Friday, Ramadan, Diwali, etc.)
+- E-invoice compliance (ZATCA, Fapiao, etc.)
+
+**API Endpoints (live):**
+- `GET /api/ready-sites/markets` → list of 49 markets
+- `GET /api/ready-sites/market/{id}` → full market pack
+- `GET /api/ready-sites/detect-market` → auto-detect from IP
+
+**Files**: 
+- `/app/backend/modules/ready_sites/market_packs.py` (49 markets, ~800 lines)
+- `/app/backend/modules/ready_sites/__init__.py` (market endpoints)
+
+**Demo Test Result**: Switched between SA→CN→JP→KW→US → الموقع يتحوّل كاملاً (لغة، اتجاه، عملة، خط، بوابات دفع، شحن، تواصل، ضرائب) في < 200ms.
+
+---
+
+
 ### 🆕 Jun 9 2026 — Ready Sites: All 4 Business Types Fully Supported ✅
 
 **The platform now generates 4 distinct business types with the SAME pipeline:**
