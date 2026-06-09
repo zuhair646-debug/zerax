@@ -261,12 +261,15 @@ body.admin-mode .img-edit-btn{display:flex !important}
 .lb-gallery-add{position:absolute;bottom:30px;left:20px;display:flex;gap:8px;z-index:3}
 .lb-gallery-add button{background:linear-gradient(135deg,#fbbf24,#a52a2a);color:#fff;border:none;padding:10px 14px;border-radius:99px;font-family:inherit;font-weight:900;font-size:12px;cursor:pointer;display:flex;align-items:center;gap:5px}
 /* STUDIO MODE TOGGLES (image / video / multi) */
-.studio-modes{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:14px}
+.studio-modes{display:grid;grid-template-columns:repeat(2,1fr);gap:8px;margin-bottom:14px}
 .studio-mode{padding:12px 8px;background:#f9fafb;border:1.5px solid #e5e7eb;border-radius:12px;cursor:pointer;text-align:center;transition:all .2s}
 .studio-mode.active{border-color:#7c3aed;background:#faf5ff}
 .studio-mode .ico{font-size:22px;margin-bottom:4px}
 .studio-mode b{display:block;font-size:11px;font-weight:900}
 .studio-mode small{font-size:10px;color:#7c3aed;font-weight:900;display:block;margin-top:2px}
+.count-btn{padding:10px 0;background:#f9fafb;border:1.5px solid #e5e7eb;border-radius:10px;font-family:inherit;font-weight:900;font-size:13px;cursor:pointer;color:#374151;transition:all .15s}
+.count-btn:hover{background:#ede9fe}
+.count-btn.active{background:#7c3aed;border-color:#7c3aed;color:#fff;box-shadow:0 4px 10px rgba(124,58,237,.3)}
 .logo-upload-row{display:flex;align-items:center;gap:10px;padding:10px;background:#f9fafb;border:1px dashed #cbd5e1;border-radius:10px;margin-bottom:10px;cursor:pointer}
 .logo-upload-row:hover{border-color:#7c3aed}
 .logo-upload-row .preview{width:40px;height:40px;border-radius:8px;background:#e5e7eb;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0;overflow:hidden}
@@ -565,11 +568,23 @@ body.admin-mode .img-edit-btn{display:flex !important}
           <p style="font-size:12px;color:#6b7280;line-height:1.6;margin:0" data-key="studio_ai_help">اكتب وصف الصورة، يولّدها الذكاء بمقاسات صحيحة تلقائياً.</p>
           <span class="engine-pill">⚡ Zerax AI · Gemini Nano Banana</span>
         </div>
-        <!-- Mode toggle: Image / Video / Multi -->
+        <!-- Mode toggle: Image / Video -->
         <div class="studio-modes" id="studio-modes">
-          <div class="studio-mode active" data-mode="image" onclick="setStudioMode('image')"><div class="ico">🖼️</div><b data-key="mode_image">صورة وحدة</b><small>٥ <span data-key="credits">نقطة</span></small></div>
-          <div class="studio-mode" data-mode="multi" onclick="setStudioMode('multi')"><div class="ico">🎨</div><b data-key="mode_multi">٤ تصاميم</b><small>٢٠ <span data-key="credits">نقطة</span></small></div>
+          <div class="studio-mode active" data-mode="image" onclick="setStudioMode('image')"><div class="ico">🖼️</div><b data-key="mode_image">صور</b><small id="mode-image-cost">٥ <span data-key="credits">نقطة</span></small></div>
           <div class="studio-mode" data-mode="video" onclick="setStudioMode('video')"><div class="ico">🎬</div><b data-key="mode_video">فيديو</b><small>١٥ <span data-key="credits">نقطة</span></small></div>
+        </div>
+        <!-- Image count selector (only in image mode) -->
+        <div id="count-row" style="margin-bottom:12px">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px"><b style="font-size:12px;color:#0a0a0a" data-key="count_label">كم صورة تبغى؟</b><span style="font-size:11px;color:#7c3aed;font-weight:900" id="count-cost">٥ نقاط</span></div>
+          <div style="display:grid;grid-template-columns:repeat(6,1fr);gap:5px" id="count-buttons">
+            <button type="button" class="count-btn active" data-c="1" onclick="setStudioCount(1)">1</button>
+            <button type="button" class="count-btn" data-c="2" onclick="setStudioCount(2)">2</button>
+            <button type="button" class="count-btn" data-c="4" onclick="setStudioCount(4)">4</button>
+            <button type="button" class="count-btn" data-c="6" onclick="setStudioCount(6)">6</button>
+            <button type="button" class="count-btn" data-c="8" onclick="setStudioCount(8)">8</button>
+            <button type="button" class="count-btn" data-c="12" onclick="setStudioCount(12)">12</button>
+          </div>
+          <p style="font-size:10px;color:#6b7280;margin-top:5px;line-height:1.5" data-key="count_hint">⚡ كل صورة بتختلف عن الثانية تلقائياً (زوايا / إضاءة / خلفية مختلفة)</p>
         </div>
         <textarea class="studio-prompt" id="ai-prompt" placeholder="مثال: iPhone 17 Pro لون أزرق سماوي على خلفية رخامية بإضاءة استوديو" data-key-ph="studio_prompt_ph"></textarea>
         <div class="studio-suggestions" id="ai-suggestions"></div>
@@ -1444,23 +1459,146 @@ document.getElementById('search').addEventListener('input',e=>{
 });
 
 // ═══════════════════════ ADMIN MODE + IMAGE STUDIO ═══════════════════════
-let STUDIO_MODE='image'; // 'image' | 'multi' | 'video'
+let STUDIO_MODE='image'; // 'image' | 'video'
+let STUDIO_COUNT=1;       // 1, 2, 4, 6, 8, 12
 let STUDIO_LOGO=null; // dataURL
-const MODE_COST={image:5,multi:20,video:15};
-let GEN_MULTI=[]; // array of variant URLs for 'multi' mode
-let GEN_VIDEO=null; // video URL for 'video' mode
+let GEN_MULTI=[]; // array of variant URLs
+let GEN_VIDEO=null;
 // Product galleries (extends p.img into a list)
 const PRODUCT_GALLERIES=JSON.parse(localStorage.getItem('zx_galleries')||'{}');
 let LB_CURRENT_PRODUCT=null;
-let LB_GALLERY=[]; // [{type:'image'|'video', url}]
+let LB_GALLERY=[];
 let LB_INDEX=0;
 let _lbAutoAdvance=null;
 
-// Mock video samples for video mode
-const VIDEO_SAMPLES=[
-  'https://test-videos.co.uk/vids/bigbuckbunny/mp4/h264/720/Big_Buck_Bunny_720_10s_1MB.mp4',
-];
+const VIDEO_SAMPLES=['https://test-videos.co.uk/vids/bigbuckbunny/mp4/h264/720/Big_Buck_Bunny_720_10s_1MB.mp4'];
 
+// ═══════ EXPANDED THEME POOLS (8-12 distinct images per theme for real variety) ═══════
+const THEMES=[
+  {keys:['ايفون','آيفون','جوال','هاتف','موبايل','iphone','phone','smartphone','mobile'],pool:[
+    'https://images.unsplash.com/photo-1592750475338-74b7b21085ab',
+    'https://images.unsplash.com/photo-1511707171634-5f897ff02aa9',
+    'https://images.unsplash.com/photo-1565849904461-04a58ad377e0',
+    'https://images.unsplash.com/photo-1556656793-08538906a9f8',
+    'https://images.unsplash.com/photo-1605236453806-6ff36851218e',
+    'https://images.unsplash.com/photo-1574944985070-8f3ebc6b79d2',
+    'https://images.unsplash.com/photo-1601784551446-20c9e07cdbdb',
+    'https://images.unsplash.com/photo-1580910051074-3eb694886505',
+    'https://images.unsplash.com/photo-1512054502232-10a0a035d672',
+    'https://images.unsplash.com/photo-1567581935884-3349723552ca',
+  ]},
+  {keys:['لابتوب','حاسوب','كمبيوتر','laptop','macbook','computer','notebook'],pool:[
+    'https://images.unsplash.com/photo-1496181133206-80ce9b88a853',
+    'https://images.unsplash.com/photo-1517336714731-489689fd1ca8',
+    'https://images.unsplash.com/photo-1541807084-5c52b6b3adef',
+    'https://images.unsplash.com/photo-1531297484001-80022131f5a1',
+    'https://images.unsplash.com/photo-1593642632559-0c6d3fc62b89',
+    'https://images.unsplash.com/photo-1588872657578-7efd1f1555ed',
+    'https://images.unsplash.com/photo-1517336714731-489689fd1ca8',
+    'https://images.unsplash.com/photo-1611186871348-b1ce696e52c9',
+  ]},
+  {keys:['ساعة','watch','clock','timepiece'],pool:[
+    'https://images.unsplash.com/photo-1523275335684-37898b6baf30',
+    'https://images.unsplash.com/photo-1546868871-7041f2a55e12',
+    'https://images.unsplash.com/photo-1524805444758-089113d48a6d',
+    'https://images.unsplash.com/photo-1508057198894-247b23fe5ade',
+    'https://images.unsplash.com/photo-1547996160-81dfa63595aa',
+    'https://images.unsplash.com/photo-1495856458515-0637185db551',
+    'https://images.unsplash.com/photo-1622434641406-a158123450f9',
+    'https://images.unsplash.com/photo-1606293459214-69c69d6acaa3',
+  ]},
+  {keys:['سماعة','headphone','earphone','airpods','سماعات'],pool:[
+    'https://images.unsplash.com/photo-1505740420928-5e560c06d30e',
+    'https://images.unsplash.com/photo-1583394838336-acd977736f90',
+    'https://images.unsplash.com/photo-1606220945770-b5b6c2c55bf1',
+    'https://images.unsplash.com/photo-1572536147248-ac59a8abfa4b',
+    'https://images.unsplash.com/photo-1546435770-a3e426bf472b',
+  ]},
+  {keys:['مكياج','تجميل','makeup','cosmetics','beauty','lipstick'],pool:[
+    'https://images.unsplash.com/photo-1487412947147-5cebf100ffc2',
+    'https://images.unsplash.com/photo-1596462502278-27bfdc403348',
+    'https://images.unsplash.com/photo-1522335789203-aaa2f8be5419',
+    'https://images.unsplash.com/photo-1631214540242-0712e842de4d',
+    'https://images.unsplash.com/photo-1512496015851-a90fb38ba796',
+    'https://images.unsplash.com/photo-1586495777744-4413f21062fa',
+    'https://images.unsplash.com/photo-1620916566398-39f1143ab7be',
+  ]},
+  {keys:['أزياء','فستان','ملابس','fashion','dress','clothes','outfit'],pool:[
+    'https://images.unsplash.com/photo-1558769132-cb1aea458c5e',
+    'https://images.unsplash.com/photo-1483985988355-763728e1935b',
+    'https://images.unsplash.com/photo-1539109136881-3be0616acf4b',
+    'https://images.unsplash.com/photo-1485518882345-15568b007407',
+    'https://images.unsplash.com/photo-1551232864-3f0890e580d9',
+    'https://images.unsplash.com/photo-1542272604-787c3835535d',
+    'https://images.unsplash.com/photo-1521572163474-6864f9cf17ab',
+  ]},
+  {keys:['طعام','مأكولات','أكل','food','meal','restaurant','cuisine'],pool:[
+    'https://images.unsplash.com/photo-1565299624946-b28f40a0ae38',
+    'https://images.unsplash.com/photo-1504674900247-0877df9cc836',
+    'https://images.unsplash.com/photo-1546069901-ba9599a7e63c',
+    'https://images.unsplash.com/photo-1571997478779-2adcbbe9ab2f',
+    'https://images.unsplash.com/photo-1567620905732-2d1ec7ab7445',
+    'https://images.unsplash.com/photo-1555939594-58d7cb561ad1',
+  ]},
+  {keys:['ذهب','فاخر','luxury','gold','جواهر','مجوهرات','jewelry'],pool:[
+    'https://images.unsplash.com/photo-1611243705797-7b65fefdc111',
+    'https://images.unsplash.com/photo-1599643478518-a784e5dc4c8f',
+    'https://images.unsplash.com/photo-1602173574767-37ac01994b2a',
+    'https://images.unsplash.com/photo-1573408301185-9146fe634ad0',
+    'https://images.unsplash.com/photo-1515562141207-7a88fb7ce338',
+  ]},
+  {keys:['منزل','بيت','تصميم','home','interior','furniture','أثاث'],pool:[
+    'https://images.unsplash.com/photo-1618220179428-22790b461013',
+    'https://images.unsplash.com/photo-1556909114-f6e7ad7d3136',
+    'https://images.unsplash.com/photo-1505691938895-1758d7feb511',
+    'https://images.unsplash.com/photo-1586023492125-27b2c045efd7',
+    'https://images.unsplash.com/photo-1493663284031-b7e3aefcae8e',
+    'https://images.unsplash.com/photo-1567538096630-e0c55bd6374c',
+  ]},
+  {keys:['حذاء','رياضي','sneaker','shoe','sport'],pool:[
+    'https://images.unsplash.com/photo-1542291026-7eec264c27ff',
+    'https://images.unsplash.com/photo-1606107557195-0e29a4b5b4aa',
+    'https://images.unsplash.com/photo-1539185441755-769473a23570',
+    'https://images.unsplash.com/photo-1595950653106-6c9ebd614d3a',
+    'https://images.unsplash.com/photo-1600185365926-3a2ce3cdb9eb',
+  ]},
+  {keys:['كاميرا','camera','تصوير','photography','dslr'],pool:[
+    'https://images.unsplash.com/photo-1502920917128-1aa500764cbd',
+    'https://images.unsplash.com/photo-1606983340126-99ab4feaa64a',
+    'https://images.unsplash.com/photo-1516035069371-29a1b244cc32',
+    'https://images.unsplash.com/photo-1495121605193-b116b5b9c5fe',
+  ]},
+  {keys:['عطر','perfume','fragrance'],pool:[
+    'https://images.unsplash.com/photo-1541643600914-78b084683601',
+    'https://images.unsplash.com/photo-1592945403244-b3fbafd7f539',
+    'https://images.unsplash.com/photo-1523293182086-7651a899d37f',
+  ]},
+];
+// "All / mixed" theme — composed of one image from each major category
+const MIXED_KEYS=['الكل','all','تشكيلة','collection','mixed','منوعات','متنوع','جميع'];
+
+function setStudioMode(m){
+  STUDIO_MODE=m;
+  document.querySelectorAll('.studio-mode').forEach(el=>el.classList.toggle('active',el.dataset.mode===m));
+  document.getElementById('count-row').style.display=m==='image'?'block':'none';
+  updateGenButtonLabel();
+}
+function setStudioCount(n){
+  STUDIO_COUNT=n;
+  document.querySelectorAll('.count-btn').forEach(b=>b.classList.toggle('active',parseInt(b.dataset.c,10)===n));
+  const cost=n*5;
+  document.getElementById('count-cost').textContent=(cost)+' '+(CURRENT_LANG==='ar'?'نقاط':'cr');
+  updateGenButtonLabel();
+}
+function updateGenButtonLabel(){
+  const label=document.getElementById('gen-btn-label');if(!label)return;
+  if(STUDIO_MODE==='video')label.textContent=(CURRENT_LANG==='ar'?'توليد فيديو':'Generate video')+' (15 '+(CURRENT_LANG==='ar'?'نقطة':'cr')+')';
+  else{
+    const cost=STUDIO_COUNT*5;
+    const word=STUDIO_COUNT===1?(CURRENT_LANG==='ar'?'الصورة':'image'):(CURRENT_LANG==='ar'?'صور':'images');
+    label.textContent=(CURRENT_LANG==='ar'?`توليد ${STUDIO_COUNT} ${word}`:`Generate ${STUDIO_COUNT} ${word}`)+` (${cost} ${CURRENT_LANG==='ar'?'نقطة':'cr'})`;
+  }
+}
 function toggleAdminMode(){
   ADMIN_MODE=!ADMIN_MODE;
   localStorage.setItem('zx_admin',ADMIN_MODE?'1':'0');
@@ -1468,23 +1606,16 @@ function toggleAdminMode(){
   const btn=document.getElementById('admin-btn');
   if(btn)btn.style.opacity=ADMIN_MODE?'1':'0.7';
   toast(ADMIN_MODE?(CURRENT_LANG==='ar'?'♛ وضع التحكم مُفعّل':'♛ Admin mode ON'):(CURRENT_LANG==='ar'?'تم الخروج من التحكم':'Admin mode OFF'));
-  renderCategories(); // re-render to show/hide edit buttons on quick cats
+  renderCategories();
 }
 function applyAdminModeOnInit(){
   document.body.classList.toggle('admin-mode',ADMIN_MODE);
   const btn=document.getElementById('admin-btn');
   if(btn)btn.style.opacity=ADMIN_MODE?'1':'0.7';
 }
-function setStudioMode(m){
-  STUDIO_MODE=m;
-  document.querySelectorAll('.studio-mode').forEach(el=>el.classList.toggle('active',el.dataset.mode===m));
-  const cost=MODE_COST[m];
-  const label=document.getElementById('gen-btn-label');
-  if(label)label.textContent=(CURRENT_LANG==='ar'?{image:'توليد الصورة',multi:'توليد ٤ تصاميم',video:'توليد فيديو'}[m]:{image:'Generate image',multi:'Generate 4 variants',video:'Generate video'}[m])+` (${cost} ${CURRENT_LANG==='ar'?'نقطة':'cr'})`;
-}
 function onStudioLogoUpload(e){
   const file=e.target.files?.[0];if(!file)return;
-  if(file.size>256*1024){alert(CURRENT_LANG==='ar'?'حجم اللوغو كبير (الحد ٢٥٦ كيلوبايت)':'Logo too big (256KB max)');return;}
+  if(file.size>256*1024){alert(CURRENT_LANG==='ar'?'حجم اللوغو كبير (٢٥٦ كيلوبايت)':'Logo too big (256KB)');return;}
   const reader=new FileReader();
   reader.onload=ev=>{
     STUDIO_LOGO=ev.target.result;
@@ -1497,6 +1628,7 @@ function onStudioLogoUpload(e){
 function openStudio(target){
   STUDIO_TARGET=target;
   GEN_RESULT=null;GEN_MULTI=[];GEN_VIDEO=null;STUDIO_LOGO=null;
+  STUDIO_COUNT=1;
   document.getElementById('studio-modal').classList.add('open');
   document.getElementById('zerax-credits').textContent=ZERAX_CREDITS;
   document.getElementById('ai-prompt').value='';
@@ -1509,14 +1641,13 @@ function openStudio(target){
   const key=target.startsWith('product:')?'product':(target.startsWith('cat_icon:')||target.startsWith('cat_banner:')?'cat_banner':target);
   const sugg=(STUDIO_SUGGESTIONS[CURRENT_LANG]||STUDIO_SUGGESTIONS.en)[key]||[];
   document.getElementById('ai-suggestions').innerHTML=sugg.map(s=>`<button class="suggestion-chip" onclick="document.getElementById('ai-prompt').value='${s.replace(/'/g,'&#39;')}'">${s}</button>`).join('');
-  // library
   const libKey=target.startsWith('product:')||target.startsWith('cat_icon:')?'product':(target.startsWith('cat_banner:')?'cat_banner':target);
   const lib=STUDIO_LIBRARY[libKey]||STUDIO_LIBRARY.cat_banner;
   document.getElementById('lib-grid').innerHTML=lib.map(u=>`<img src="${u}" onclick="pickFromLibrary('${u}')" alt="library">`).join('');
-  // Show/hide video mode based on target type (video only for banners)
+  // Show video mode only for banners
   const videoModeEl=document.querySelector('.studio-mode[data-mode="video"]');
   if(videoModeEl)videoModeEl.style.display=(target==='main_banner'||target.startsWith('cat_banner:'))?'block':'none';
-  setStudioMode('image');
+  setStudioMode('image');setStudioCount(1);
   switchStudioTab('ai');
 }
 function closeStudio(){document.getElementById('studio-modal').classList.remove('open');}
@@ -1524,64 +1655,105 @@ function switchStudioTab(tab){
   document.querySelectorAll('.studio-tab').forEach(t=>t.classList.toggle('active',t.dataset.tab===tab));
   document.querySelectorAll('.studio-section').forEach(s=>s.classList.toggle('active',s.dataset.section===tab));
 }
+// Compute Unsplash transform params based on target
+function getTargetSize(target){
+  if(target==='main_banner')return{w:1600,h:700,fit:'crop'};
+  if(target.startsWith('cat_banner:'))return{w:1600,h:900,fit:'crop'};
+  if(target.startsWith('cat_icon:'))return{w:400,h:400,fit:'crop'};
+  if(target.startsWith('product:'))return{w:800,h:800,fit:'crop'};
+  return{w:1200,h:800,fit:'crop'};
+}
+function unsplashTransform(baseUrl,size){
+  // Strip existing query, add target params + quality + crop
+  const clean=baseUrl.split('?')[0];
+  return `${clean}?w=${size.w}&h=${size.h}&fit=${size.fit}&q=90&auto=format`;
+}
+// Detect ALL themes mentioned in prompt (so "جوال + لابتوب + ساعة" returns mixed pool)
+function detectThemePools(prompt){
+  const lower=prompt.toLowerCase();
+  const matched=[];
+  THEMES.forEach(t=>{
+    if(t.keys.some(k=>lower.includes(k.toLowerCase())))matched.push(t);
+  });
+  // If user mentions "الكل/all/mixed" — return one image from each of 4 random major themes
+  if(MIXED_KEYS.some(k=>lower.includes(k.toLowerCase()))&&matched.length<2){
+    const major=['ايفون','لابتوب','ساعة','سماعة','أزياء','مكياج','حذاء'];
+    return major.map(g=>THEMES.find(t=>t.keys.includes(g))).filter(Boolean);
+  }
+  return matched;
+}
+// Pick N unique images mixing all matched pools fairly
+function pickVariety(pools,count,seed){
+  const out=[];
+  if(!pools.length)return out;
+  // Round-robin across pools then within each pool advance index
+  const indices=pools.map(()=>0);
+  let p=0,attempts=0;
+  while(out.length<count && attempts<count*pools.length*3){
+    const pool=pools[p%pools.length].pool;
+    const idx=(seed+indices[p%pools.length])%pool.length;
+    const url=pool[idx];
+    indices[p%pools.length]++;
+    if(!out.includes(url))out.push(url);
+    p++;attempts++;
+  }
+  // If still not enough, allow duplicates as last resort
+  while(out.length<count && pools[0].pool.length){
+    out.push(pools[0].pool[(seed+out.length)%pools[0].pool.length]);
+  }
+  return out;
+}
+
 function generateAI(){
   const prompt=document.getElementById('ai-prompt').value.trim();
   if(!prompt){alert(CURRENT_LANG==='ar'?'اكتب وصف الصورة أولاً':'Please describe first');return;}
-  const cost=MODE_COST[STUDIO_MODE];
+  const cost=STUDIO_MODE==='video'?15:(STUDIO_COUNT*5);
   if(ZERAX_CREDITS<cost){document.getElementById('topup-banner').style.display='flex';return;}
   document.getElementById('gen-btn').disabled=true;
   document.getElementById('gen-loading').classList.add('show');
   document.getElementById('gen-preview').classList.remove('show');
-  // Reset preview elements
   document.getElementById('gen-preview-img').style.display='none';
   document.getElementById('gen-preview-video').style.display='none';
   document.getElementById('gen-multi-grid').style.display='none';
   document.getElementById('gen-multi-grid').innerHTML='';
-  // MOCKED Zerax AI Engine
-  const themes=[
-    {k:['مكياج','makeup','تجميل','beauty'],pool:['https://images.unsplash.com/photo-1487412947147-5cebf100ffc2?w=1600&q=90','https://images.unsplash.com/photo-1596462502278-27bfdc403348?w=1600&q=90','https://images.unsplash.com/photo-1522335789203-aaa2f8be5419?w=1600&q=90','https://images.unsplash.com/photo-1631214540242-0712e842de4d?w=1600&q=90']},
-    {k:['أزياء','fashion','فستان','dress'],pool:['https://images.unsplash.com/photo-1558769132-cb1aea458c5e?w=1600&q=90','https://images.unsplash.com/photo-1483985988355-763728e1935b?w=1600&q=90','https://images.unsplash.com/photo-1539109136881-3be0616acf4b?w=1600&q=90','https://images.unsplash.com/photo-1485518882345-15568b007407?w=1600&q=90']},
-    {k:['جوال','iphone','phone','هاتف','موبايل','smartphone'],pool:['https://images.unsplash.com/photo-1592750475338-74b7b21085ab?w=1600&q=90','https://images.unsplash.com/photo-1511707171634-5f897ff02aa9?w=1600&q=90','https://images.unsplash.com/photo-1565849904461-04a58ad377e0?w=1600&q=90','https://images.unsplash.com/photo-1556656793-08538906a9f8?w=1600&q=90']},
-    {k:['لابتوب','laptop','حاسوب','macbook'],pool:['https://images.unsplash.com/photo-1496181133206-80ce9b88a853?w=1600&q=90','https://images.unsplash.com/photo-1517336714731-489689fd1ca8?w=1600&q=90','https://images.unsplash.com/photo-1541807084-5c52b6b3adef?w=1600&q=90','https://images.unsplash.com/photo-1531297484001-80022131f5a1?w=1600&q=90']},
-    {k:['ساعة','watch','clock'],pool:['https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=1600&q=90','https://images.unsplash.com/photo-1546868871-7041f2a55e12?w=1600&q=90','https://images.unsplash.com/photo-1524805444758-089113d48a6d?w=1600&q=90','https://images.unsplash.com/photo-1508057198894-247b23fe5ade?w=1600&q=90']},
-    {k:['طعام','مأكولات','food','meal'],pool:['https://images.unsplash.com/photo-1565299624946-b28f40a0ae38?w=1600&q=90','https://images.unsplash.com/photo-1504674900247-0877df9cc836?w=1600&q=90','https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=1600&q=90','https://images.unsplash.com/photo-1571997478779-2adcbbe9ab2f?w=1600&q=90']},
-    {k:['ذهب','luxury','فاخر','gold'],pool:['https://images.unsplash.com/photo-1611243705797-7b65fefdc111?w=1600&q=90','https://images.unsplash.com/photo-1599643478518-a784e5dc4c8f?w=1600&q=90','https://images.unsplash.com/photo-1602173574767-37ac01994b2a?w=1600&q=90','https://images.unsplash.com/photo-1573408301185-9146fe634ad0?w=1600&q=90']},
-    {k:['منزل','home','تصميم','interior'],pool:['https://images.unsplash.com/photo-1618220179428-22790b461013?w=1600&q=90','https://images.unsplash.com/photo-1556909114-f6e7ad7d3136?w=1600&q=90','https://images.unsplash.com/photo-1505691938895-1758d7feb511?w=1600&q=90','https://images.unsplash.com/photo-1586023492125-27b2c045efd7?w=1600&q=90']},
-    {k:['الكل','all','تشكيلة','collection','mix'],pool:['https://images.unsplash.com/photo-1607082348824-0a96f2a4b9da?w=1600&q=90','https://images.unsplash.com/photo-1483985988355-763728e1935b?w=1600&q=90','https://images.unsplash.com/photo-1556909114-f6e7ad7d3136?w=1600&q=90','https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=1600&q=90']},
-  ];
-  const lower=prompt.toLowerCase();
-  const matched=themes.find(t=>t.k.some(k=>lower.includes(k.toLowerCase())));
-  const targetKey=STUDIO_TARGET.startsWith('product:')||STUDIO_TARGET.startsWith('cat_icon:')?'product':(STUDIO_TARGET.startsWith('cat_banner:')?'cat_banner':STUDIO_TARGET);
-  const fallbacks=STUDIO_LIBRARY[targetKey]||STUDIO_LIBRARY.cat_banner;
-  const pool=matched?matched.pool:fallbacks;
-  const seed=Math.abs(prompt.split('').reduce((s,c)=>s+c.charCodeAt(0),0));
+  const size=getTargetSize(STUDIO_TARGET);
   setTimeout(async ()=>{
     document.getElementById('gen-loading').classList.remove('show');
     document.getElementById('gen-preview').classList.add('show');
-    if(STUDIO_MODE==='image'){
-      let url=pool[seed%pool.length];
-      if(STUDIO_LOGO)url=await stampLogo(url,STUDIO_LOGO);
-      GEN_RESULT=url;
-      const img=document.getElementById('gen-preview-img');
-      img.src=url;img.style.display='block';
-    } else if(STUDIO_MODE==='multi'){
-      // 4 variants
-      let urls=[0,1,2,3].map(i=>pool[(seed+i)%pool.length]);
-      if(STUDIO_LOGO)urls=await Promise.all(urls.map(u=>stampLogo(u,STUDIO_LOGO)));
-      GEN_MULTI=urls;
-      const grid=document.getElementById('gen-multi-grid');
-      grid.style.display='grid';
-      grid.innerHTML=urls.map((u,i)=>`<img src="${u}" data-i="${i}" onclick="pickMultiVariant(${i},this)" alt="variant">`).join('');
-    } else if(STUDIO_MODE==='video'){
+    if(STUDIO_MODE==='video'){
       GEN_VIDEO=VIDEO_SAMPLES[0];
       const v=document.getElementById('gen-preview-video');
       v.src=GEN_VIDEO;v.style.display='block';v.load();v.play().catch(()=>{});
+    } else {
+      // Detect themes from prompt
+      let pools=detectThemePools(prompt);
+      if(!pools.length){
+        // No specific keyword — pick a generic by target
+        const fallback=(STUDIO_TARGET.startsWith('product:')||STUDIO_TARGET.startsWith('cat_icon:'))?
+          THEMES.find(t=>t.keys.includes('ايفون')):
+          THEMES.find(t=>t.keys.includes('أزياء'));
+        pools=[fallback||THEMES[0]];
+      }
+      const seed=Math.abs(prompt.split('').reduce((s,c)=>s+c.charCodeAt(0),0));
+      let urls=pickVariety(pools,STUDIO_COUNT,seed);
+      urls=urls.map(u=>unsplashTransform(u,size));
+      if(STUDIO_LOGO)urls=await Promise.all(urls.map(u=>stampLogo(u,STUDIO_LOGO)));
+      GEN_MULTI=urls;
+      GEN_RESULT=urls[0];
+      if(STUDIO_COUNT===1){
+        const img=document.getElementById('gen-preview-img');
+        img.src=urls[0];img.style.display='block';
+      } else {
+        const grid=document.getElementById('gen-multi-grid');
+        grid.style.display='grid';
+        grid.innerHTML=urls.map((u,i)=>`<img src="${u}" data-i="${i}" onclick="pickMultiVariant(${i},this)" alt="variant ${i+1}" class="${i===0?'picked':''}">`).join('');
+      }
     }
     document.getElementById('gen-btn').disabled=false;
     ZERAX_CREDITS-=cost;
     localStorage.setItem('zx_credits',String(ZERAX_CREDITS));
     document.getElementById('zerax-credits').textContent=ZERAX_CREDITS;
-  },1700);
+  },1500);
 }
 function pickMultiVariant(i,el){
   GEN_RESULT=GEN_MULTI[i];
@@ -1599,7 +1771,6 @@ function stampLogo(imgUrl,logoDataUrl){
       logo.onload=()=>{
         const lw=img.naturalWidth*0.14,lh=lw*(logo.height/logo.width);
         const m=img.naturalWidth*0.03;
-        // semi-transparent rounded box behind logo
         const bx=img.naturalWidth-lw-m,by=m;
         ctx.fillStyle='rgba(255,255,255,.92)';
         const r=12;
@@ -1615,20 +1786,18 @@ function stampLogo(imgUrl,logoDataUrl){
   });
 }
 function applyGenerated(){
-  if(STUDIO_MODE==='video'&&GEN_VIDEO){applyImageOverride(STUDIO_TARGET,GEN_VIDEO,'video');closeStudio();}
-  else if(STUDIO_MODE==='multi'){
-    if(!GEN_RESULT){alert(CURRENT_LANG==='ar'?'اختر تصميم من الأربعة':'Pick one variant');return;}
-    // For product target: add all 4 to gallery; for others apply the picked one
-    if(STUDIO_TARGET.startsWith('product:')){
-      const pid=STUDIO_TARGET.split(':')[1];
-      if(!PRODUCT_GALLERIES[pid])PRODUCT_GALLERIES[pid]=[];
-      GEN_MULTI.forEach(u=>PRODUCT_GALLERIES[pid].push({type:'image',url:u}));
-      localStorage.setItem('zx_galleries',JSON.stringify(PRODUCT_GALLERIES));
-      toast(CURRENT_LANG==='ar'?`✨ تم إضافة ${GEN_MULTI.length} صور للمعرض`:`✨ Added ${GEN_MULTI.length} images`);
-    }
-    applyImageOverride(STUDIO_TARGET,GEN_RESULT);
-    closeStudio();
-  } else if(GEN_RESULT){applyImageOverride(STUDIO_TARGET,GEN_RESULT);closeStudio();}
+  if(STUDIO_MODE==='video'&&GEN_VIDEO){applyImageOverride(STUDIO_TARGET,GEN_VIDEO,'video');closeStudio();return;}
+  if(!GEN_RESULT){alert(CURRENT_LANG==='ar'?'اختر صورة':'Pick an image');return;}
+  // If multiple images & product target → add all to gallery; apply selected as main
+  if(STUDIO_COUNT>1 && STUDIO_TARGET.startsWith('product:')){
+    const pid=STUDIO_TARGET.split(':')[1];
+    if(!PRODUCT_GALLERIES[pid])PRODUCT_GALLERIES[pid]=[];
+    GEN_MULTI.forEach(u=>{if(u!==GEN_RESULT)PRODUCT_GALLERIES[pid].push({type:'image',url:u});});
+    localStorage.setItem('zx_galleries',JSON.stringify(PRODUCT_GALLERIES));
+    toast(CURRENT_LANG==='ar'?`✨ تم تطبيق المختارة وإضافة ${GEN_MULTI.length-1} للمعرض`:`✨ Applied + ${GEN_MULTI.length-1} saved to gallery`);
+  }
+  applyImageOverride(STUDIO_TARGET,GEN_RESULT);
+  closeStudio();
 }
 function onStudioUpload(e){
   const file=e.target.files?.[0];if(!file)return;

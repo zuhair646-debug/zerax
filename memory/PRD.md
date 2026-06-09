@@ -1,5 +1,39 @@
 # Zitex AI Platform - PRD
 
+### 🆕 Feb 9 2026 — Phase 5: Precise Prompts, Image Count Selector, Multi-Theme Mixing ✅
+**Completed in this session (fixes + enhancements based on user testing feedback):**
+
+**🐛 Bug fixed**: User reported that asking for "صورة مشتركة بين جوال ولابتوب وساعة" was returning duplicate laptop images only. Root cause: the keyword matcher took only the **first** matched theme. Now fixed with proper multi-theme detection.
+
+**✨ New features**:
+- ✅ **Image Count Selector**: 6 quick-pick buttons in Studio AI tab (1 / 2 / 4 / 6 / 8 / 12 images). Each generation costs `count × 5` credits. Live cost preview updates on click.
+- ✅ **Multi-Theme Mixing**: `detectThemePools()` now scans the prompt for **all** matched themes (e.g. ايفون + لابتوب + ساعة) and `pickVariety()` does **round-robin** across all matched pools to produce a truly mixed result. Real variety guaranteed — no duplicates unless pool is exhausted.
+- ✅ **Expanded Theme Pools**: each theme now has 8-12 distinct curated Unsplash images (was 4). Themes:
+   - 📱 Phones (10 images)
+   - 💻 Laptops (8 images)
+   - ⌚ Watches (8 images)
+   - 🎧 Headphones (5)
+   - 💄 Makeup (7)
+   - 👗 Fashion (7)
+   - 🍕 Food (6)
+   - 💎 Jewelry/Gold (5)
+   - 🏠 Home (6)
+   - 👟 Shoes/Sports (5)
+   - 📸 Cameras (4)
+   - 🌹 Perfume (3)
+- ✅ **"الكل/All" smart fallback**: when user mentions "الكل" or "mixed" without specific category, system picks one image from each of 7 major categories (phone, laptop, watch, headphone, fashion, makeup, shoes) — perfect for the top "All" quick-category icon.
+- ✅ **Target-aware sizing**: `getTargetSize()` now returns the exact W×H per target type:
+   - Main banner: 1600×700
+   - Category banner: 1600×900
+   - Quick-category icon: 400×400 (square)
+   - Product image: 800×800 (square)
+   - `unsplashTransform()` rewrites the Unsplash URL with `&w=...&h=...&fit=crop&q=90&auto=format` so the image arrives pre-cropped to the right aspect ratio.
+- ✅ **Removed "Multi" mode** (was hardcoded to 4): replaced with the flexible count selector. Cleaner UX.
+
+**File**: `/app/frontend/public/mockups/app_mode_full.html` (refactored Studio JS, ~+150 lines theme data)
+
+
+
 ### 🆕 Feb 9 2026 — Phase 4: Multi-Variant Gen + Product Gallery + Logo Stamp + Video Mode ✅
 **Completed in this session (continuation):**
 - ✅ **3 Studio Generation Modes**:
