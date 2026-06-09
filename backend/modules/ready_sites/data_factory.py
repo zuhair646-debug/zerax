@@ -886,6 +886,13 @@ def render_zitex_enhancements(seed: Dict[str, Any], project_id: str = "") -> str
         </div>
       </a>
     </div>
+    <div style="text-align:center;padding:12px 0 18px;border-top:1px solid #1e293b">
+      <a href="https://zitex.com/showcase" target="_blank" rel="noopener" data-zx-showcase style="color:#64748b;font-size:11px;text-decoration:none;display:inline-flex;align-items:center;gap:6px">
+        <span>✨</span>
+        <span>شاهد <strong style="color:#fbbf24" data-zx-showcase-count>+100</strong> موقع آخر مبني على منصة Zitex</span>
+        <span>←</span>
+      </a>
+    </div>
   </div>
 </footer>
 
@@ -1013,17 +1020,27 @@ def render_zitex_enhancements(seed: Dict[str, Any], project_id: str = "") -> str
     }}
   }}
 
-  /* ═══ 7. Zitex tracker ping ═══ */
+  /* ═══ 7. Zitex tracker ping + dynamic site count ═══ */
   const trkLink = document.querySelector('[data-zx-tracker]');
   if(trkLink){{
     const pid = trkLink.getAttribute('data-zx-tracker');
     if(pid){{
-      /* fire-and-forget visit ping (non-blocking) */
       try{{
         const img = new Image();
         img.src = 'https://zitex.com/api/ready-sites/track-visit/' + pid + '?t=' + Date.now();
       }}catch(_){{}}
     }}
+  }}
+  const countEl = document.querySelector('[data-zx-showcase-count]');
+  if(countEl){{
+    try{{
+      fetch('https://zitex.com/api/ready-sites/showcase?limit=1')
+        .then(r => r.ok ? r.json() : null)
+        .then(d => {{
+          if(d && d.total_built){{ countEl.textContent = '+' + d.total_built; }}
+        }})
+        .catch(()=>{{}});
+    }}catch(_){{}}
   }}
 }})();
 </script>

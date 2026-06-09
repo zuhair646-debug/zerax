@@ -409,6 +409,45 @@ def create_ready_sites_router(db, get_current_user) -> APIRouter:
         return Response(content=gif, media_type="image/gif",
                         headers={"Cache-Control": "no-store, no-cache, must-revalidate, max-age=0"})
 
+    # ---- Public Showcase — every site built on Zitex (social proof gallery) ----
+    @router.get("/showcase")
+    async def public_showcase(limit: int = 60, type_id: Optional[str] = None):
+        """Public gallery of every site ever built on the Zitex platform.
+        Used as social proof on https://zitex.com/showcase and linked from every
+        generated site's Zitex footer link."""
+        query: Dict[str, Any] = {}
+        if type_id:
+            query["type_id"] = type_id
+        cursor = db.ready_sites_projects.find(
+            query,
+            {"_id": 0, "id": 1, "name": 1, "type_id": 1, "pattern_id": 1,
+             "branding": 1, "slug": 1, "created_at": 1, "visits_count": 1}
+        ).sort("created_at", -1).limit(max(1, min(limit, 200)))
+        items = await cursor.to_list(length=200)
+
+        # Enrich each item with display data + preview URL
+        out = []
+        for it in items:
+            branding = it.get("branding") or {}
+            out.append({
+                "id": it.get("id"),
+                "name": it.get("name") or branding.get("business_name") or "موقع زيتاكس",
+                "tagline": branding.get("tagline", ""),
+                "type_id": it.get("type_id"),
+                "pattern_id": it.get("pattern_id"),
+                "city": branding.get("city", ""),
+                "logo_url": branding.get("logo_url", ""),
+                "logo_text": branding.get("logo_text") or branding.get("business_name", ""),
+                "preview_url": f"/api/ready-sites/preview/{it['id']}",
+                "created_at": it.get("created_at"),
+                "visits": int(it.get("visits_count", 0) or 0),
+            })
+        return {
+            "sites": out,
+            "count": len(out),
+            "total_built": await db.ready_sites_projects.count_documents({}),
+        }
+
     # ---- Zitex Admin: view ALL ready-site projects across all tenants ----
     @router.get("/admin/owned-sites")
     async def admin_owned_sites(user=Depends(get_current_user)):
