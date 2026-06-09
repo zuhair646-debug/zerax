@@ -1,5 +1,29 @@
 # Zitex AI Platform - PRD
 
+### 🆕 Feb 9 2026 — Phase 3: Image Studio + Lightbox + Brand Crown Logo ✅
+**Completed in this session (continuation):**
+- ✅ **Zerax Crown Logo** (footer): rebuilt the "Made by Zerax" logo as a circular gold/red gradient badge with a CSS-rendered crown above the **Z** (no emoji — pure SVG-like polygon clip-path so it scales crisply on all devices).
+- ✅ **Admin Mode** (♛ button in header): toggles a body class that reveals an edit ✨ button on every editable image — main banner, category banner, every product card image. Persists in localStorage.
+- ✅ **Image Studio Modal** (universal image editor for any target):
+   - **AI tab**: textarea + 4 contextual prompt chips (Arabic & English). On generate: shows spinner → returns a curated themed Unsplash image based on prompt keywords (mocked — production hook would call Zerax `/api/image/generate`). Costs **5 Zerax credits** per generation, balance shown live with crown icon.
+   - **Upload tab**: drag-drop file upload (PNG/JPG/WebP, max 2MB, base64). No credits cost.
+   - **Library tab**: 6 curated images per target type (main_banner, cat_banner, product). Click to apply, no credits cost.
+   - **Top-up banner**: appears when balance <5, mocked +100 credits button (production via Stripe).
+- ✅ **Image Overrides Persistence**: all generated/uploaded/picked images stored in localStorage `zx_img_overrides` map keyed by target (e.g. `main_banner`, `cat_banner:beauty`, `product:p11`). Live re-applied on every page load.
+- ✅ **Lightbox** (zoom + pan): clicking any product image opens fullscreen overlay with:
+   - Zoom in/out buttons (+ / −) and reset (⟲) in floating control bar
+   - Live "100% / 200%" zoom indicator chip
+   - Mouse-wheel zoom, double-tap to toggle 1×↔2×
+   - Drag-to-pan with mouse or touch
+   - Auto-fetches highest resolution variant of the image (w=1600, q=90)
+- ✅ **Cinematic category images**: replaced generic Unsplash photos with dramatic full-bleed shots — close-up makeup for Beauty, fashion editorial for Fashion, tech-with-neon for Electronics, food artistry for Food, modern interior for Home.
+
+**File**: `/app/frontend/public/mockups/app_mode_full.html` (~280 lines added)
+
+⚠️ **Mocked**: AI image generation (returns themed Unsplash by keyword matching). Top-up Stripe flow (just adds 100 credits to localStorage).
+
+
+
 ### 🆕 Feb 9 2026 — Phase 2 Checkout + Branches + Smart Socials ✅
 **Completed in this session (continuation):**
 - ✅ **Multi-branch Map (Leaflet + OpenStreetMap, no API key)**: Checkout now embeds a live map with 4 stocked branches (Riyadh Olaya, Riyadh Malaz, Jeddah Tahlia, Dammam Corniche). Branches plotted with custom markers + popups.

@@ -188,6 +188,67 @@ body{font-family:var(--font,'Tajawal'),sans-serif;background:#f3f4f6;color:#0a0a
 .upload-zone:hover{border-color:#7c3aed;background:#faf5ff}
 .upload-zone.has-preview{padding:0;border:none;background:transparent}
 .upload-zone img{max-width:80px;max-height:80px;border-radius:50%;object-fit:cover;margin:0 auto;display:block}
+/* IMAGE STUDIO + ADMIN MODE + LIGHTBOX */
+.admin-toggle{background:linear-gradient(135deg,#fbbf24,#a52a2a);color:#fff !important}
+body.admin-mode .img-edit-btn{display:flex !important}
+.img-edit-btn{display:none;position:absolute;top:6px;right:6px;width:30px;height:30px;border-radius:50%;background:linear-gradient(135deg,#fbbf24,#a52a2a);color:#fff;border:none;font-size:14px;cursor:pointer;z-index:20;box-shadow:0 4px 12px rgba(0,0,0,.35);align-items:center;justify-content:center}
+.img-edit-btn:hover{transform:scale(1.1)}
+[dir="rtl"] .img-edit-btn{right:auto;left:6px}
+.editable-img-host{position:relative}
+.studio-modal{display:none;position:fixed;inset:0;background:rgba(0,0,0,.72);z-index:400;align-items:center;justify-content:center;padding:14px}
+.studio-modal.open{display:flex}
+.studio{background:#fff;border-radius:20px;max-width:560px;width:100%;max-height:92vh;overflow-y:auto;padding:0}
+.studio-head{padding:18px 20px;border-bottom:1px solid #f3f4f6;display:flex;justify-content:space-between;align-items:center}
+.studio-head h3{font-size:17px;font-weight:900;display:flex;align-items:center;gap:8px}
+.studio-credits{background:linear-gradient(135deg,#fef3c7,#fde68a);border:1px solid #f59e0b;border-radius:99px;padding:5px 12px;font-size:11px;font-weight:900;color:#92400e;display:flex;align-items:center;gap:5px}
+.studio-tabs{display:flex;border-bottom:1px solid #f3f4f6;background:#f9fafb}
+.studio-tab{flex:1;padding:14px;background:none;border:none;font-family:inherit;font-weight:900;font-size:12px;color:#6b7280;cursor:pointer;border-bottom:3px solid transparent;transition:all .2s}
+.studio-tab.active{color:#7c3aed;border-bottom-color:#7c3aed;background:#fff}
+.studio-body{padding:18px 20px}
+.studio-section{display:none}
+.studio-section.active{display:block}
+.studio-prompt{width:100%;padding:14px;border:1.5px solid #e5e7eb;border-radius:12px;font-family:inherit;font-size:13px;min-height:90px;resize:vertical;outline:none;line-height:1.6}
+.studio-prompt:focus{border-color:#7c3aed}
+.studio-suggestions{display:flex;flex-wrap:wrap;gap:6px;margin:10px 0}
+.suggestion-chip{padding:6px 12px;background:#f3f4f6;border:none;border-radius:99px;font-family:inherit;font-size:11px;font-weight:700;color:#374151;cursor:pointer}
+.suggestion-chip:hover{background:#ede9fe;color:#7c3aed}
+.gen-btn{width:100%;padding:14px;background:linear-gradient(135deg,#7c3aed,#a855f7);color:#fff;border:none;border-radius:12px;font-family:inherit;font-weight:900;font-size:14px;cursor:pointer;margin-top:12px;display:flex;align-items:center;justify-content:center;gap:8px}
+.gen-btn:disabled{opacity:.6;cursor:not-allowed}
+.gen-loading{display:none;text-align:center;padding:30px 14px}
+.gen-loading.show{display:block}
+.gen-loading .spin{width:48px;height:48px;border:4px solid #ede9fe;border-top-color:#7c3aed;border-radius:50%;animation:spin 1s linear infinite;margin:0 auto 14px}
+@keyframes spin{to{transform:rotate(360deg)}}
+.gen-preview{margin-top:14px;display:none}
+.gen-preview.show{display:block}
+.gen-preview img{width:100%;border-radius:12px;border:2px solid #7c3aed;box-shadow:0 8px 24px rgba(124,58,237,.3)}
+.gen-apply{width:100%;padding:13px;background:#22c55e;color:#fff;border:none;border-radius:10px;font-family:inherit;font-weight:900;font-size:13px;cursor:pointer;margin-top:10px}
+.studio-upload{border:2.5px dashed #cbd5e1;border-radius:14px;padding:36px 18px;text-align:center;cursor:pointer;transition:all .2s;background:#f9fafb}
+.studio-upload:hover{border-color:#7c3aed;background:#faf5ff}
+.studio-upload .ico{font-size:48px;margin-bottom:10px}
+.studio-upload b{display:block;font-size:14px;font-weight:900;color:#0a0a0a;margin-bottom:4px}
+.studio-upload small{font-size:11px;color:#6b7280}
+.lib-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:10px}
+.lib-grid img{width:100%;height:110px;object-fit:cover;border-radius:10px;cursor:pointer;border:2px solid transparent;transition:all .2s}
+.lib-grid img:hover{border-color:#7c3aed;transform:scale(1.02)}
+.topup-banner{background:linear-gradient(135deg,#fef3c7,#fed7aa);border:1px solid #f59e0b;border-radius:12px;padding:12px;margin-top:12px;display:flex;align-items:center;gap:10px}
+.topup-banner .info{flex:1;font-size:12px;color:#78350f;line-height:1.5}
+.topup-banner button{padding:8px 14px;background:#a52a2a;color:#fff;border:none;border-radius:8px;font-family:inherit;font-weight:900;font-size:11px;cursor:pointer;white-space:nowrap}
+/* LIGHTBOX */
+.lb-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.95);z-index:500;align-items:center;justify-content:center;overflow:hidden}
+.lb-overlay.open{display:flex}
+.lb-stage{position:relative;width:100%;height:100%;display:flex;align-items:center;justify-content:center;overflow:hidden;touch-action:none}
+.lb-img{max-width:92%;max-height:88%;transition:transform .25s ease;cursor:grab;user-select:none;-webkit-user-drag:none;will-change:transform}
+.lb-img.dragging{transition:none;cursor:grabbing}
+.lb-controls{position:absolute;bottom:30px;left:50%;transform:translateX(-50%);display:flex;gap:10px;background:rgba(0,0,0,.6);padding:10px 14px;border-radius:99px;backdrop-filter:blur(10px);z-index:2}
+.lb-controls button{width:44px;height:44px;border-radius:50%;background:#fff;border:none;font-size:18px;font-weight:900;cursor:pointer;color:#0a0a0a;display:flex;align-items:center;justify-content:center}
+.lb-controls button:hover{background:#7c3aed;color:#fff}
+.lb-close{position:absolute;top:20px;right:20px;width:44px;height:44px;border-radius:50%;background:rgba(255,255,255,.9);border:none;font-size:20px;cursor:pointer;color:#0a0a0a;z-index:2}
+.lb-info{position:absolute;top:20px;left:20px;color:#fff;background:rgba(0,0,0,.5);padding:8px 14px;border-radius:99px;font-size:12px;backdrop-filter:blur(6px);z-index:2}
+.p-card img{cursor:zoom-in}
+/* Quick Cat image background */
+.q-cat{position:relative;overflow:hidden}
+.q-cat .ico{font-size:26px;margin-bottom:5px;position:relative;z-index:2}
+.q-cat span{position:relative;z-index:2}
 /* FOOTER */
 .zx-footer{background:#0f172a;color:#cbd5e1;padding:36px 18px 14px;direction:var(--dir,rtl);margin-top:30px;border-radius:24px 24px 0 0}
 .zx-foot-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:24px;margin-bottom:24px}
@@ -197,7 +258,9 @@ body{font-family:var(--font,'Tajawal'),sans-serif;background:#f3f4f6;color:#0a0a
 .zx-zerax-bar{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;padding-top:18px;border-top:1px solid #1e293b}
 .zx-copy{color:#64748b;font-size:11px}
 .zx-zerax-brand{display:flex;align-items:center;gap:8px;text-decoration:none;padding:6px 12px;border-radius:99px;background:linear-gradient(135deg,rgba(251,191,36,.1),rgba(165,42,42,.1));border:1px solid rgba(251,191,36,.2)}
-.zx-zerax-logo{width:24px;height:24px;border-radius:50%;background:linear-gradient(135deg,#fbbf24,#a52a2a);display:flex;align-items:center;justify-content:center;color:#fff;font-weight:900;font-size:12px}
+.zx-zerax-logo{width:32px;height:32px;border-radius:50%;background:linear-gradient(135deg,#fbbf24 0%,#dc2626 60%,#7c2d12 100%);display:flex;align-items:center;justify-content:center;color:#fff;font-weight:900;font-size:14px;position:relative;box-shadow:0 3px 10px rgba(251,191,36,.4),inset 0 1px 2px rgba(255,255,255,.4);overflow:visible}
+.zx-zerax-logo::before{content:'';position:absolute;top:-7px;left:50%;transform:translateX(-50%);width:18px;height:8px;background:linear-gradient(180deg,#fde68a 0%,#fbbf24 100%);clip-path:polygon(0% 100%,15% 30%,25% 60%,40% 0%,55% 60%,70% 30%,85% 60%,100% 0%,100% 100%);filter:drop-shadow(0 1px 2px rgba(0,0,0,.4))}
+.zx-zerax-logo::after{content:'';position:absolute;top:-1px;left:50%;transform:translateX(-50%);width:14px;height:2px;background:#fbbf24;border-radius:1px}
 .zx-zerax-text{display:flex;flex-direction:column;line-height:1.1}
 .zx-zerax-text small{color:#64748b;font-size:9px}
 .zx-zerax-text strong{color:#fbbf24;font-size:12px;font-weight:900}
@@ -211,6 +274,7 @@ body{font-family:var(--font,'Tajawal'),sans-serif;background:#f3f4f6;color:#0a0a
   <input class="search" id="search" placeholder="ابحث...">
   <button class="pill-btn" onclick="toggleLang()" data-key="lang_btn"><span id="lang-flag">🇸🇦</span> <span id="lang-label">عربي</span></button>
   <button class="pill-btn" onclick="toggleMarketPopover(event)" id="market-btn">🌍 <span id="market-label">السعودية</span></button>
+  <button class="pill-btn admin-toggle" id="admin-btn" onclick="toggleAdminMode()" title="وضع التحكم" style="padding:8px 10px"><span style="font-size:14px">♛</span></button>
   <button class="cart-btn" onclick="openCart()">🛒<span class="cart-badge" id="cart-badge">0</span></button>
 </header>
 
@@ -221,8 +285,9 @@ body{font-family:var(--font,'Tajawal'),sans-serif;background:#f3f4f6;color:#0a0a
 </div>
 
 <!-- BANNER -->
-<div class="banner" id="banner">
-  <div class="banner-img-stack">
+<div class="banner editable-img-host" id="banner">
+  <button class="img-edit-btn" onclick="openStudio('main_banner')" title="تحرير الصورة">✨</button>
+  <div class="banner-img-stack" id="banner-img-stack">
     <img src="https://images.unsplash.com/photo-1607082348824-0a96f2a4b9da?w=1600&q=85" alt="shopping bags" />
     <img src="https://images.unsplash.com/photo-1607083206869-4c7672e72a8a?w=1600&q=85" alt="boutique" />
     <img src="https://images.unsplash.com/photo-1483985988355-763728e1935b?w=1600&q=85" alt="fashion" />
@@ -387,7 +452,8 @@ body{font-family:var(--font,'Tajawal'),sans-serif;background:#f3f4f6;color:#0a0a
 <section id="view-category" style="display:none;padding:0 16px 24px" data-view-section>
   <button class="back-btn" onclick="showView('home')" style="display:flex;align-items:center;gap:6px;background:transparent;border:none;color:#7c3aed;font-family:inherit;font-weight:900;font-size:14px;cursor:pointer;padding:8px 0">← <span data-key="back">رجوع</span></button>
   <!-- Cinematic full-bleed banner: image/video covers ENTIRE banner area -->
-  <div id="cat-banner" style="height:240px;border-radius:18px;position:relative;overflow:hidden;margin-bottom:16px;color:#fff;box-shadow:0 10px 30px rgba(0,0,0,.15);background:linear-gradient(135deg,#7c3aed,#ec4899,#f59e0b);background-size:200% 200%;animation:cat-grad-shift 8s ease-in-out infinite">
+  <div id="cat-banner" class="editable-img-host" style="height:240px;border-radius:18px;position:relative;overflow:hidden;margin-bottom:16px;color:#fff;box-shadow:0 10px 30px rgba(0,0,0,.15);background:linear-gradient(135deg,#7c3aed,#ec4899,#f59e0b);background-size:200% 200%;animation:cat-grad-shift 8s ease-in-out infinite">
+    <button class="img-edit-btn" onclick="openStudio('cat_banner:'+activeCat)" title="تحرير الصورة">✨</button>
     <!-- Full-bleed background image (always loads instantly) -->
     <img id="cat-banner-img" alt="" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;z-index:1;animation:cat-kenburns 18s ease-in-out infinite alternate" />
     <!-- Optional video on top (only when loaded) -->
@@ -449,8 +515,118 @@ body{font-family:var(--font,'Tajawal'),sans-serif;background:#f3f4f6;color:#0a0a
   </div>
 </section>
 
+<!-- ═══════════════════ IMAGE STUDIO MODAL (AI Generate / Upload / Library) ═══════════════════ -->
+<div class="studio-modal" id="studio-modal" onclick="if(event.target===this)closeStudio()">
+  <div class="studio">
+    <div class="studio-head">
+      <h3>✨ <span data-key="studio_title">استوديو الصور الذكي</span></h3>
+      <div style="display:flex;align-items:center;gap:8px">
+        <div class="studio-credits" title="رصيدك في Zerax">♛ <span id="zerax-credits">50</span> <span data-key="credits">نقطة</span></div>
+        <button class="close-btn" onclick="closeStudio()">✕</button>
+      </div>
+    </div>
+    <div class="studio-tabs">
+      <button class="studio-tab active" data-tab="ai" onclick="switchStudioTab('ai')">✨ <span data-key="studio_ai">توليد بالذكاء الاصطناعي</span></button>
+      <button class="studio-tab" data-tab="upload" onclick="switchStudioTab('upload')">📤 <span data-key="studio_upload">رفع</span></button>
+      <button class="studio-tab" data-tab="library" onclick="switchStudioTab('library')">📚 <span data-key="studio_lib">مكتبة</span></button>
+    </div>
+    <div class="studio-body">
+      <!-- AI TAB -->
+      <div class="studio-section active" data-section="ai">
+        <p style="font-size:12px;color:#6b7280;margin-bottom:10px;line-height:1.6" data-key="studio_ai_help">اكتب وصف الصورة اللي تبيها (مثلاً: "خلفية مكياج فاخر مع ورود وإضاءة ذهبية")، يولّدها الذكاء الاصطناعي بمقاسات البنر الصحيحة تلقائياً.</p>
+        <textarea class="studio-prompt" id="ai-prompt" placeholder="مثال: عرض أزياء فاخر مع إضاءة سينمائية وألوان دافئة" data-key-ph="studio_prompt_ph"></textarea>
+        <div class="studio-suggestions" id="ai-suggestions"></div>
+        <button class="gen-btn" id="gen-btn" onclick="generateAI()">✨ <span data-key="studio_generate">توليد الصورة (٥ نقاط)</span></button>
+        <div class="topup-banner" id="topup-banner" style="display:none">
+          <div class="info"><b data-key="low_credits">رصيدك منخفض!</b><br><span data-key="low_credits_sub">اشحن نقاط Zerax عشان تكمل التوليد.</span></div>
+          <button onclick="topupCredits()" data-key="topup">شحن الرصيد</button>
+        </div>
+        <div class="gen-loading" id="gen-loading"><div class="spin"></div><b data-key="generating">جاري التوليد...</b><p style="font-size:12px;color:#6b7280;margin-top:6px" data-key="generating_sub">ثواني ويصير عندك صورة احترافية</p></div>
+        <div class="gen-preview" id="gen-preview"><img id="gen-preview-img" alt="generated"><button class="gen-apply" onclick="applyGenerated()">✅ <span data-key="studio_apply">تطبيق الصورة على البنر</span></button></div>
+      </div>
+      <!-- UPLOAD TAB -->
+      <div class="studio-section" data-section="upload">
+        <input type="file" id="studio-file" accept="image/*" style="display:none" onchange="onStudioUpload(event)">
+        <div class="studio-upload" onclick="document.getElementById('studio-file').click()">
+          <div class="ico">📤</div>
+          <b data-key="studio_upload_title">ارفع صورة من جهازك</b>
+          <small data-key="studio_upload_sub">PNG · JPG · WebP (يفضل ١٦٠٠×٧٠٠ للبنر)</small>
+        </div>
+        <p style="font-size:11px;color:#6b7280;margin-top:12px;line-height:1.6;text-align:center" data-key="studio_upload_note">✓ الصورة يتم اقتصاصها تلقائياً بمقاسات البنر · بدون خصم نقاط</p>
+      </div>
+      <!-- LIBRARY TAB -->
+      <div class="studio-section" data-section="library">
+        <p style="font-size:12px;color:#6b7280;margin-bottom:12px" data-key="studio_lib_help">صور احترافية جاهزة — اختر اللي يناسبك (بدون نقاط):</p>
+        <div class="lib-grid" id="lib-grid"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════ LIGHTBOX (Zoomable product images) ═══════════════════ -->
+<div class="lb-overlay" id="lightbox" onclick="if(event.target===this)closeLightbox()">
+  <div class="lb-info" id="lb-info">100%</div>
+  <button class="lb-close" onclick="closeLightbox()">✕</button>
+  <div class="lb-stage" id="lb-stage">
+    <img class="lb-img" id="lb-img" alt="" draggable="false">
+  </div>
+  <div class="lb-controls">
+    <button onclick="lbZoom(-0.25)" title="تصغير">−</button>
+    <button onclick="lbReset()" title="إعادة">⟲</button>
+    <button onclick="lbZoom(0.25)" title="تكبير">+</button>
+  </div>
+</div>
+
 <script>
 const API = window.location.origin;
+
+// ═══════════════════════ ZERAX CREDITS + ADMIN MODE + IMAGE OVERRIDES ═══════════════════════
+let ZERAX_CREDITS=parseInt(localStorage.getItem('zx_credits')||'50',10);
+let ADMIN_MODE=localStorage.getItem('zx_admin')==='1';
+let STUDIO_TARGET=null;
+let GEN_RESULT=null;
+const IMG_OVERRIDES=JSON.parse(localStorage.getItem('zx_img_overrides')||'{}');
+
+const STUDIO_LIBRARY={
+  main_banner:[
+    'https://images.unsplash.com/photo-1607082348824-0a96f2a4b9da?w=1600&q=85',
+    'https://images.unsplash.com/photo-1607083206869-4c7672e72a8a?w=1600&q=85',
+    'https://images.unsplash.com/photo-1483985988355-763728e1935b?w=1600&q=85',
+    'https://images.unsplash.com/photo-1556909114-f6e7ad7d3136?w=1600&q=85',
+    'https://images.unsplash.com/photo-1611243705797-7b65fefdc111?w=1600&q=85',
+    'https://images.unsplash.com/photo-1607083206325-caf1edba7a83?w=1600&q=85',
+  ],
+  cat_banner:[
+    'https://images.unsplash.com/photo-1565299624946-b28f40a0ae38?w=1600&q=85',
+    'https://images.unsplash.com/photo-1487412947147-5cebf100ffc2?w=1600&q=85',
+    'https://images.unsplash.com/photo-1558769132-cb1aea458c5e?w=1600&q=85',
+    'https://images.unsplash.com/photo-1550009158-9ebf69173e03?w=1600&q=85',
+    'https://images.unsplash.com/photo-1618220179428-22790b461013?w=1600&q=85',
+    'https://images.unsplash.com/photo-1503454537195-1dcabb73ffb9?w=1600&q=85',
+  ],
+  product:[
+    'https://images.unsplash.com/photo-1607082348824-0a96f2a4b9da?w=800&q=85',
+    'https://images.unsplash.com/photo-1556909114-f6e7ad7d3136?w=800&q=85',
+    'https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=800&q=85',
+    'https://images.unsplash.com/photo-1542291026-7eec264c27ff?w=800&q=85',
+    'https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=800&q=85',
+    'https://images.unsplash.com/photo-1556228720-195a672e8a03?w=800&q=85',
+  ],
+};
+
+const STUDIO_SUGGESTIONS={
+  ar:{
+    main_banner:['عرض تخفيضات الجمعة البيضاء بإضاءة سينمائية','بنر فاخر للأزياء الراقية مع ذهب','بنر ربيعي مشرق بألوان زاهية','منتجات تقنية حديثة بإضاءة نيون'],
+    cat_banner:['خلفية مكياج فاخر بإضاءة وردية','عرض إلكترونيات بإضاءة نيون','عرض أزياء بمنظر استوديو','مأكولات شهية مضاءة فنياً'],
+    product:['منتج باحترافية على خلفية بيضاء','منتج بإضاءة دراماتيكية','منتج على رخام فاخر'],
+  },
+  en:{
+    main_banner:['Black Friday sale banner cinematic light','Luxury fashion banner with gold','Bright vivid spring banner','Modern tech products neon'],
+    cat_banner:['Luxury makeup background rose lighting','Electronics neon display','Fashion runway studio shot','Gourmet food artistic lighting'],
+    product:['Pro product shot white background','Product dramatic lighting','Product on luxury marble'],
+  }
+};
+
 const RATES = {SAR:1,AED:0.98,KWD:0.082,QAR:0.97,BHD:0.10,OMR:0.103,IQD:350,SYP:3400,JOD:0.19,LBP:24000,EGP:13,IRR:11200,YER:67,ILS:1,CNY:1.93,JPY:40,KRW:360,INR:22,USD:0.267,GBP:0.21,EUR:0.25,CHF:0.24,SEK:2.8,RUB:24,TRY:9.1,MAD:2.7,DZD:36,TND:0.83,LYD:1.3,SDG:160,PKR:75,BDT:32,IDR:4200,MYR:1.25,THB:9.5,PHP:15.3,VND:6500,CAD:0.36,MXN:5.4,BRL:1.6,ARS:270,ZAR:5.0,NGN:430,KES:34,AUD:0.41};
 
 // ═══════════════════════ BRANCHES (Multi-branch eCommerce) ═══════════════════════
@@ -609,12 +785,14 @@ async function init(){
   try{const r=await fetch(API+'/api/ready-sites/detect-market');const d=await r.json();mid=d.market_id||'sa';}catch(_){}
   await loadMarket(mid);
   buildMarketList();
+  applyAllOverrides();
   renderUI();
   renderProducts();
   renderCategories();
   startBannerSlider();
   startReviewSlider();
   updateCart();
+  applyAdminModeOnInit();
   document.body.addEventListener('click',()=>{document.getElementById('market-popover').classList.remove('open')});
 }
 
@@ -792,7 +970,7 @@ function renderProducts(){
   grid.innerHTML=filtered.map(p=>{
     const name=CURRENT_LANG==='ar'?p.ar:p.en;
     const desc=CURRENT_LANG==='ar'?(p.descAr||''):(p.descEn||'');
-    return `<div class="p-card"><img src="${p.img}" alt="${name}"><div class="p-info"><div class="name">${name}</div><div class="desc">${desc}</div><div class="p-row"><div class="p-price">${curSym()} ${formatPrice(p.sar)}</div><button class="add-btn" onclick="addToCart('${p.id}')" aria-label="add">+</button></div></div></div>`;
+    return `<div class="p-card"><div class="editable-img-host"><img src="${p.img}" alt="${name}"><button class="img-edit-btn" onclick="event.stopPropagation();openStudio('product:${p.id}')" title="تحرير">✨</button></div><div class="p-info"><div class="name">${name}</div><div class="desc">${desc}</div><div class="p-row"><div class="p-price">${curSym()} ${formatPrice(p.sar)}</div><button class="add-btn" onclick="event.stopPropagation();addToCart('${p.id}')" aria-label="add">+</button></div></div></div>`;
   }).join('');
 }
 
@@ -854,16 +1032,24 @@ const CAT_VIDEOS={
   kids:'https://cdn.pixabay.com/video/2019/01/02/20305-309901537_large.mp4',
 };
 
-// Category banner images (full-bleed, high-quality Unsplash)
+// Category banner images (HIGH-QUALITY, dramatic, full-bleed cinematic shots)
 const CAT_IMAGES={
-  food:'https://images.unsplash.com/photo-1504674900247-0877df9cc836?w=1600&q=85',
-  fashion:'https://images.unsplash.com/photo-1483985988355-763728e1935b?w=1600&q=85',
-  beauty:'https://images.unsplash.com/photo-1596462502278-27bfdc403348?w=1600&q=85',
-  makeup:'https://images.unsplash.com/photo-1512496015851-a90fb38ba796?w=1600&q=85',
-  electronics:'https://images.unsplash.com/photo-1498049794561-7780e7231661?w=1600&q=85',
-  home:'https://images.unsplash.com/photo-1556909114-f6e7ad7d3136?w=1600&q=85',
-  sport:'https://images.unsplash.com/photo-1517649763962-0c623066013b?w=1600&q=85',
-  kids:'https://images.unsplash.com/photo-1545558014-8692077e9b5c?w=1600&q=85',
+  food:'https://images.unsplash.com/photo-1565299624946-b28f40a0ae38?w=1600&q=90&auto=format&fit=crop',
+  fashion:'https://images.unsplash.com/photo-1558769132-cb1aea458c5e?w=1600&q=90&auto=format&fit=crop',
+  beauty:'https://images.unsplash.com/photo-1487412947147-5cebf100ffc2?w=1600&q=90&auto=format&fit=crop',
+  makeup:'https://images.unsplash.com/photo-1487412947147-5cebf100ffc2?w=1600&q=90&auto=format&fit=crop',
+  electronics:'https://images.unsplash.com/photo-1550009158-9ebf69173e03?w=1600&q=90&auto=format&fit=crop',
+  home:'https://images.unsplash.com/photo-1618220179428-22790b461013?w=1600&q=90&auto=format&fit=crop',
+  sport:'https://images.unsplash.com/photo-1517649763962-0c623066013b?w=1600&q=90&auto=format&fit=crop',
+  kids:'https://images.unsplash.com/photo-1503454537195-1dcabb73ffb9?w=1600&q=90&auto=format&fit=crop',
+};
+
+// Mini icons for the Quick Categories (top of home) — vivid emoji-style category vibes
+const CAT_ICONS={
+  electronics:'https://images.unsplash.com/photo-1468495244123-6c6c332eeece?w=200&q=80&fit=crop',
+  fashion:'https://images.unsplash.com/photo-1558769132-cb1aea458c5e?w=200&q=80&fit=crop',
+  beauty:'https://images.unsplash.com/photo-1522335789203-aaa2f8be5419?w=200&q=80&fit=crop',
+  home:'https://images.unsplash.com/photo-1618220179428-22790b461013?w=200&q=80&fit=crop',
 };
 
 function renderCategoryPage(catId){
@@ -876,9 +1062,10 @@ function renderCategoryPage(catId){
   document.getElementById('cat-banner-sub').textContent=CURRENT_LANG==='ar'?'اكتشف '+filtered.length+' منتج مختار بعناية':'Discover '+filtered.length+' carefully curated items';
   const ctaEl=document.getElementById('cat-banner-cta');
   if(ctaEl)ctaEl.textContent=tx('shop_now');
-  // Full-bleed background image (always loads)
+  // Full-bleed background image (always loads) — use override if set
   const img=document.getElementById('cat-banner-img');
-  img.src=CAT_IMAGES[catId]||CAT_IMAGES.fashion;
+  const overrideKey='cat_banner:'+catId;
+  img.src=IMG_OVERRIDES[overrideKey]||CAT_IMAGES[catId]||CAT_IMAGES.fashion;
   // Optional video on top (fades in when ready)
   const vid=document.getElementById('cat-banner-video');
   vid.style.opacity='0';
@@ -896,7 +1083,7 @@ function renderCategoryPage(catId){
   grid.innerHTML=filtered.map(p=>{
     const name=CURRENT_LANG==='ar'?p.ar:p.en;
     const desc=CURRENT_LANG==='ar'?(p.descAr||''):(p.descEn||'');
-    return `<div class="p-card"><img src="${p.img}" alt="${name}"><div class="p-info"><div class="name">${name}</div><div class="desc">${desc}</div><div class="p-row"><div class="p-price">${curSym()} ${formatPrice(p.sar)}</div><button class="add-btn" onclick="addToCart('${p.id}')">+</button></div></div></div>`;
+    return `<div class="p-card"><div class="editable-img-host"><img src="${p.img}" alt="${name}"><button class="img-edit-btn" onclick="event.stopPropagation();openStudio('product:${p.id}')" title="تحرير">✨</button></div><div class="p-info"><div class="name">${name}</div><div class="desc">${desc}</div><div class="p-row"><div class="p-price">${curSym()} ${formatPrice(p.sar)}</div><button class="add-btn" onclick="event.stopPropagation();addToCart('${p.id}')">+</button></div></div></div>`;
   }).join('');
 }
 
@@ -1182,9 +1369,180 @@ document.getElementById('search').addEventListener('input',e=>{
   grid.innerHTML=matched.map(p=>{
     const name=CURRENT_LANG==='ar'?p.ar:p.en;
     const desc=CURRENT_LANG==='ar'?(p.descAr||''):(p.descEn||'');
-    return `<div class="p-card"><img src="${p.img}" alt="${name}"><div class="p-info"><div class="name">${name}</div><div class="desc">${desc}</div><div class="p-row"><div class="p-price">${curSym()} ${formatPrice(p.sar)}</div><button class="add-btn" onclick="addToCart('${p.id}')">+</button></div></div></div>`;
+    return `<div class="p-card"><div class="editable-img-host"><img src="${p.img}" alt="${name}"><button class="img-edit-btn" onclick="event.stopPropagation();openStudio('product:${p.id}')" title="تحرير">✨</button></div><div class="p-info"><div class="name">${name}</div><div class="desc">${desc}</div><div class="p-row"><div class="p-price">${curSym()} ${formatPrice(p.sar)}</div><button class="add-btn" onclick="event.stopPropagation();addToCart('${p.id}')">+</button></div></div></div>`;
   }).join('');
 });
+
+// ═══════════════════════ ADMIN MODE + IMAGE STUDIO ═══════════════════════
+function toggleAdminMode(){
+  ADMIN_MODE=!ADMIN_MODE;
+  localStorage.setItem('zx_admin',ADMIN_MODE?'1':'0');
+  document.body.classList.toggle('admin-mode',ADMIN_MODE);
+  const btn=document.getElementById('admin-btn');
+  if(btn)btn.style.opacity=ADMIN_MODE?'1':'0.7';
+  toast(ADMIN_MODE?(CURRENT_LANG==='ar'?'♛ وضع التحكم مُفعّل':'♛ Admin mode ON'):(CURRENT_LANG==='ar'?'تم الخروج من التحكم':'Admin mode OFF'));
+}
+function applyAdminModeOnInit(){
+  document.body.classList.toggle('admin-mode',ADMIN_MODE);
+  const btn=document.getElementById('admin-btn');
+  if(btn)btn.style.opacity=ADMIN_MODE?'1':'0.7';
+}
+function openStudio(target){
+  STUDIO_TARGET=target;
+  GEN_RESULT=null;
+  document.getElementById('studio-modal').classList.add('open');
+  document.getElementById('zerax-credits').textContent=ZERAX_CREDITS;
+  document.getElementById('ai-prompt').value='';
+  document.getElementById('gen-preview').classList.remove('show');
+  document.getElementById('gen-loading').classList.remove('show');
+  document.getElementById('topup-banner').style.display=ZERAX_CREDITS<5?'flex':'none';
+  // suggestions
+  const key=target.startsWith('product:')||target.startsWith('cat_icon:')?'product':target;
+  const sugg=(STUDIO_SUGGESTIONS[CURRENT_LANG]||STUDIO_SUGGESTIONS.en)[key]||[];
+  document.getElementById('ai-suggestions').innerHTML=sugg.map(s=>`<button class="suggestion-chip" onclick="document.getElementById('ai-prompt').value='${s.replace(/'/g,'&#39;')}'">${s}</button>`).join('');
+  // library
+  const lib=STUDIO_LIBRARY[key]||STUDIO_LIBRARY.cat_banner;
+  document.getElementById('lib-grid').innerHTML=lib.map(u=>`<img src="${u}" onclick="pickFromLibrary('${u}')" alt="library">`).join('');
+  switchStudioTab('ai');
+}
+function closeStudio(){document.getElementById('studio-modal').classList.remove('open');}
+function switchStudioTab(tab){
+  document.querySelectorAll('.studio-tab').forEach(t=>t.classList.toggle('active',t.dataset.tab===tab));
+  document.querySelectorAll('.studio-section').forEach(s=>s.classList.toggle('active',s.dataset.section===tab));
+}
+function generateAI(){
+  const prompt=document.getElementById('ai-prompt').value.trim();
+  if(!prompt){alert(CURRENT_LANG==='ar'?'اكتب وصف الصورة أولاً':'Please describe the image first');return;}
+  if(ZERAX_CREDITS<5){document.getElementById('topup-banner').style.display='flex';return;}
+  document.getElementById('gen-btn').disabled=true;
+  document.getElementById('gen-loading').classList.add('show');
+  document.getElementById('gen-preview').classList.remove('show');
+  // MOCKED AI: simulate generation by picking from a curated set + Unsplash query
+  const seed=Math.abs(prompt.split('').reduce((s,c)=>s+c.charCodeAt(0),0));
+  // Map prompt keywords to themed image
+  const themes=[
+    {k:['مكياج','makeup','تجميل','beauty'],u:'https://images.unsplash.com/photo-1487412947147-5cebf100ffc2?w=1600&q=90'},
+    {k:['أزياء','fashion','فستان','dress','clothes'],u:'https://images.unsplash.com/photo-1558769132-cb1aea458c5e?w=1600&q=90'},
+    {k:['طعام','مأكولات','food','meal','restaurant'],u:'https://images.unsplash.com/photo-1565299624946-b28f40a0ae38?w=1600&q=90'},
+    {k:['تقني','تكنولوجيا','electronics','tech','phone'],u:'https://images.unsplash.com/photo-1550009158-9ebf69173e03?w=1600&q=90'},
+    {k:['منزل','home','تصميم','interior'],u:'https://images.unsplash.com/photo-1618220179428-22790b461013?w=1600&q=90'},
+    {k:['ذهب','gold','luxury','فاخر','luxurious'],u:'https://images.unsplash.com/photo-1611243705797-7b65fefdc111?w=1600&q=90'},
+    {k:['ربيع','spring','زهور','flowers'],u:'https://images.unsplash.com/photo-1487530811176-3780de880c2d?w=1600&q=90'},
+  ];
+  const lower=prompt.toLowerCase();
+  const matched=themes.find(t=>t.k.some(k=>lower.includes(k.toLowerCase())));
+  const fallbacks=STUDIO_LIBRARY[STUDIO_TARGET.startsWith('product:')||STUDIO_TARGET.startsWith('cat_icon:')?'product':STUDIO_TARGET]||STUDIO_LIBRARY.cat_banner;
+  const url=matched?matched.u:fallbacks[seed%fallbacks.length];
+  setTimeout(()=>{
+    GEN_RESULT=url;
+    document.getElementById('gen-loading').classList.remove('show');
+    document.getElementById('gen-preview-img').src=url;
+    document.getElementById('gen-preview').classList.add('show');
+    document.getElementById('gen-btn').disabled=false;
+    ZERAX_CREDITS-=5;
+    localStorage.setItem('zx_credits',String(ZERAX_CREDITS));
+    document.getElementById('zerax-credits').textContent=ZERAX_CREDITS;
+  },1800);
+}
+function applyGenerated(){if(GEN_RESULT){applyImageOverride(STUDIO_TARGET,GEN_RESULT);closeStudio();}}
+function onStudioUpload(e){
+  const file=e.target.files?.[0];if(!file)return;
+  if(file.size>2*1024*1024){alert(CURRENT_LANG==='ar'?'الصورة كبيرة (الحد ٢ ميجابايت)':'Image too big (2MB max)');return;}
+  const reader=new FileReader();
+  reader.onload=ev=>{applyImageOverride(STUDIO_TARGET,ev.target.result);closeStudio();};
+  reader.readAsDataURL(file);
+}
+function pickFromLibrary(url){applyImageOverride(STUDIO_TARGET,url);closeStudio();}
+function topupCredits(){
+  // MOCKED: simulate adding 100 credits
+  ZERAX_CREDITS+=100;
+  localStorage.setItem('zx_credits',String(ZERAX_CREDITS));
+  document.getElementById('zerax-credits').textContent=ZERAX_CREDITS;
+  document.getElementById('topup-banner').style.display='none';
+  alert(CURRENT_LANG==='ar'?'✓ تم شحن ١٠٠ نقطة (محاكاة - في الإنتاج تتم عبر Stripe)':'✓ Added 100 credits (mocked - production via Stripe)');
+}
+function applyImageOverride(target,url){
+  IMG_OVERRIDES[target]=url;
+  localStorage.setItem('zx_img_overrides',JSON.stringify(IMG_OVERRIDES));
+  // Live-apply
+  if(target==='main_banner'){
+    const stack=document.getElementById('banner-img-stack');
+    if(stack){stack.innerHTML=`<img src="${url}" alt="banner" style="opacity:1;animation:bnr-fade 18s linear infinite">`;}
+  } else if(target.startsWith('cat_banner:')){
+    document.getElementById('cat-banner-img').src=url;
+  } else if(target.startsWith('product:')){
+    const id=target.split(':')[1];
+    const p=PRODUCTS.find(x=>x.id===id);if(p)p.img=url;
+    renderProducts();
+    if(document.getElementById('view-category').style.display==='block')renderCategoryPage(activeCat);
+  }
+  toast(CURRENT_LANG==='ar'?'✨ تم تطبيق الصورة الجديدة':'✨ Image applied');
+}
+function toast(msg){
+  const el=document.createElement('div');
+  el.textContent=msg;
+  el.style.cssText='position:fixed;bottom:100px;left:50%;transform:translateX(-50%);background:#0a0a0a;color:#fff;padding:12px 22px;border-radius:99px;font-weight:900;font-size:13px;z-index:600;box-shadow:0 8px 24px rgba(0,0,0,.3);animation:fadeOut 2.5s forwards';
+  document.body.appendChild(el);
+  setTimeout(()=>el.remove(),2500);
+}
+const _toastKf=document.createElement('style');_toastKf.textContent='@keyframes fadeOut{0%,70%{opacity:1}100%{opacity:0;transform:translate(-50%,20px)}}';document.head.appendChild(_toastKf);
+
+// ═══════════════════════ LIGHTBOX (Pan + Zoom) ═══════════════════════
+let _lbScale=1,_lbX=0,_lbY=0,_lbStartX=0,_lbStartY=0,_lbDragging=false;
+function openLightbox(url){
+  const img=document.getElementById('lb-img');
+  img.src=url;
+  _lbScale=1;_lbX=0;_lbY=0;
+  applyLbTransform();
+  document.getElementById('lightbox').classList.add('open');
+  document.body.style.overflow='hidden';
+}
+function closeLightbox(){document.getElementById('lightbox').classList.remove('open');document.body.style.overflow='';}
+function lbZoom(delta){_lbScale=Math.max(0.5,Math.min(5,_lbScale+delta));applyLbTransform();}
+function lbReset(){_lbScale=1;_lbX=0;_lbY=0;applyLbTransform();}
+function applyLbTransform(){
+  const img=document.getElementById('lb-img');
+  if(!img)return;
+  img.style.transform=`translate(${_lbX}px,${_lbY}px) scale(${_lbScale})`;
+  document.getElementById('lb-info').textContent=Math.round(_lbScale*100)+'%';
+}
+(function setupLightboxDrag(){
+  const stage=document.getElementById('lb-stage');
+  if(!stage)return;
+  const img=document.getElementById('lb-img');
+  const start=e=>{const t=e.touches?e.touches[0]:e;_lbStartX=t.clientX-_lbX;_lbStartY=t.clientY-_lbY;_lbDragging=true;img.classList.add('dragging');};
+  const move=e=>{if(!_lbDragging)return;const t=e.touches?e.touches[0]:e;_lbX=t.clientX-_lbStartX;_lbY=t.clientY-_lbStartY;applyLbTransform();};
+  const end=()=>{_lbDragging=false;img.classList.remove('dragging');};
+  stage.addEventListener('mousedown',start);stage.addEventListener('mousemove',move);window.addEventListener('mouseup',end);
+  stage.addEventListener('touchstart',start,{passive:true});stage.addEventListener('touchmove',move,{passive:true});stage.addEventListener('touchend',end);
+  stage.addEventListener('wheel',e=>{e.preventDefault();lbZoom(e.deltaY<0?0.15:-0.15);},{passive:false});
+  // Double-tap to zoom
+  let lastTap=0;
+  stage.addEventListener('click',e=>{if(e.target.id==='lb-img'){const now=Date.now();if(now-lastTap<350){_lbScale===1?lbZoom(1):lbReset();}lastTap=now;}});
+})();
+
+// Hook product images to lightbox (delegated)
+document.addEventListener('click',e=>{
+  // Ignore admin edit buttons and add-to-cart buttons
+  if(e.target.closest('.img-edit-btn,.add-btn,.qty-btn'))return;
+  const img=e.target.closest('.p-card img');
+  if(!img)return;
+  openLightbox(img.src.replace(/w=\d+/,'w=1600').replace(/q=\d+/,'q=90'));
+});
+
+// Apply image overrides on initial render
+function applyAllOverrides(){
+  if(IMG_OVERRIDES.main_banner){
+    const stack=document.getElementById('banner-img-stack');
+    if(stack){stack.innerHTML=`<img src="${IMG_OVERRIDES.main_banner}" alt="banner" style="opacity:1;animation:bnr-fade 18s linear infinite">`;}
+  }
+  Object.keys(IMG_OVERRIDES).forEach(k=>{
+    if(k.startsWith('product:')){
+      const id=k.split(':')[1];
+      const p=PRODUCTS.find(x=>x.id===id);if(p)p.img=IMG_OVERRIDES[k];
+    }
+  });
+}
 
 init();
 </script>
