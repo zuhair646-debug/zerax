@@ -1,6 +1,42 @@
 # Zitex Changelog
 
 
+## 2026-02-17 — 🎬 Admin Control Panel + Promo Video Studio + Inline Recharge Gateway ✅
+
+Major UX consolidation per user's explicit Saudi-Arabic requests.
+
+### 1. Admin Control Panel (ACP) — `#acp-modal`
+Replaced the scattered admin workflow with a unified merchant dashboard that auto-opens when the ♛ button is toggled.
+- **Tabs**: 📦 Products · 🎬 Video Studio
+- **Credits bar**: Live Zerax balance + inline `+ شحن` button (always visible)
+- **Product editor**: name / price / category / official URL / description
+- **AI Auto-Fill button**: relocated FROM inside the Image Studio TO the ACP product form (per user request). Calls existing `/api/image-studio/product-info` and renders variants (colors swatches + warranty link). Costs 10 credits.
+- **Image Studio button**: opens the gallery editor for the current product (kept as secondary action, no longer the primary entry-point for AI)
+
+### 2. Promo Video Studio — `POST /api/promo-video/*`
+NEW backend router `/app/backend/routers/video_studio_router.py` (~527 lines). Three-stage pipeline:
+1. **Storyboard** (`/storyboard`): Gemini 2.5 Flash generates JSON storyboard — title + N scenes × (narration · visual_prompt · text_overlay) tuned to duration (15/30/45/60s) and tone (energetic/luxury/warm/tech). Cost: 5 credits.
+2. **Zerax Voice Engine** (TTS): Abstracted under voice IDs `zerax_male_deep`, `zerax_male_warm`, `zerax_female_warm`, `zerax_female_clear`. Currently powered by OpenAI `tts-1-hd` via `EMERGENT_LLM_KEY` (designed to be swapped with Zerax's own voice provider later — single mapping in `ZERAX_VOICE_MAP`).
+3. **Video render** (`/generate`): ffmpeg pipeline — scene images → per-scene clips with ken-burns zoom → concat → optional logo watermark overlay → title + CTA drawtext (Noto Arabic font) → mux with padded TTS audio → final 1080×1920 vertical MP4 at `/api/static/videos/{id}.mp4`. Cost: 5 credits per 5 seconds.
+
+### 3. Inline Recharge Gateway — `#rch-modal`
+User explicitly requested credits be topped up **without leaving the merchant's site** (no redirect to the main Zerax wallet).
+- **4 packages**: Starter (500/49 SAR), Pro (2500/199 SAR, default + "الأكثر طلباً" badge), Agency (6000/449), Enterprise (15000/999)
+- **5 payment methods**: Mada · Visa · Mastercard · Apple Pay · STC Pay
+- **Backend `/recharge`**: INTENTIONALLY MOCKED — simulates 400 ms gateway latency, returns transaction ID + receipt number. Placeholder for the real Zerax wallet API.
+- **Skeleton-free open**: Falls back to static packages instantly, then refreshes from API in background.
+
+### 4. Cleanup
+- Removed the old `#info-panel-wrap` (Product Info AI) from inside the Image Studio modal — its function is now exclusive to the Admin Control Panel.
+- `startAddProduct(catId)` no longer creates a stub product immediately; it routes through ACP so the merchant fills metadata first, then opens the Image Studio with a real product context.
+- Added `ffmpeg` + `fonts-noto-core` to the system (for video stitching + Arabic title overlays).
+
+### 5. Tests
+- `/app/backend/tests/test_promo_video.py` — 7 pytest cases (health, storyboard, packages, 3× recharge variants, real 15-second video render with MP4 validation). Passes in ~30 seconds.
+- Testing agent verified end-to-end UI flows (iteration_39): 100 % backend, 100 % frontend.
+
+
+
 ## 2026-02-16 — 🏗️ Template-First Engine: 3 Master Templates Production-Ready ✅
 
 **Architectural pivot complete.** Replaced AI code generation for Ready Sites with 3 hand-crafted, feature-complete master HTML templates that hydrate from JSON + Market Packs. Zero hallucinations, 100% deterministic output.

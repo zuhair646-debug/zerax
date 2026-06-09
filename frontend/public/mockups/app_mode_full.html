@@ -2852,20 +2852,23 @@ async function openRecharge(){
   document.getElementById('rch-modal').classList.add('open');
   document.getElementById('rch-body-main').style.display='block';
   document.getElementById('rch-success').classList.remove('show');
+  // Render fallback packages instantly to avoid flash of empty modal
   if(!RCH_PACKAGES.length){
-    try{
-      const res=await fetch(API+'/api/promo-video/packages');
-      const data=await res.json();
-      RCH_PACKAGES=data.packages||[];
-    }catch(_){RCH_PACKAGES=[
+    RCH_PACKAGES=[
       {id:'starter',credits:500,price_sar:49,label_ar:'البداية'},
       {id:'pro',credits:2500,price_sar:199,label_ar:'المحترف'},
       {id:'agency',credits:6000,price_sar:449,label_ar:'الوكالة'},
       {id:'enterprise',credits:15000,price_sar:999,label_ar:'المؤسسي'}
-    ];}
+    ];
   }
   rchRenderPackages();
   rchUpdateButton();
+  // Refresh from API in background (in case prices/tiers change)
+  try{
+    const res=await fetch(API+'/api/promo-video/packages');
+    const data=await res.json();
+    if(data.packages?.length){RCH_PACKAGES=data.packages;rchRenderPackages();rchUpdateButton();}
+  }catch(_){}
 }
 function closeRecharge(){document.getElementById('rch-modal').classList.remove('open');}
 function rchRenderPackages(){

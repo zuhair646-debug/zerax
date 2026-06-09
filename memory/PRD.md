@@ -1,5 +1,34 @@
 # Zitex AI Platform - PRD
 
+
+### 🆕 Feb 17 2026 — Phase 14: Admin Control Panel + Promo Video Studio + Inline Recharge ✅
+**User asks fulfilled (3 of 3):**
+1. ✅ AI Product Info generator was MOVED from inside the Image Studio modal into a brand-new **Admin Control Panel** (`#acp-modal`) — opens automatically when the merchant toggles ♛ admin mode. Tab `📦 المنتجات` has a full product editor (name/price/category/URL/description) with the `🤖 ولّد المعلومات` button right there.
+2. ✅ **Promo Video Studio** built end-to-end (tab `🎬 Video Studio` inside ACP). User picks: duration (15/30/45/60 s), tone (energetic/luxury/warm/tech), Zerax voice (4 abstracted voices), CTA. Click "ولّد القصة" → Gemini storyboard → "ولّد الفيديو" → real MP4 produced by ffmpeg + OpenAI TTS pipeline. Saves to `/api/static/videos/{id}.mp4`. Tested: 15-second video renders in ~28-35 s.
+3. ✅ **Inline Recharge Gateway** (`#rch-modal`): 4 credit packages + 5 Saudi payment methods (mada/visa/mc/applepay/stcpay). Top-up happens inline (no redirect to main Zerax site). Backend endpoint is intentionally MOCKED as a placeholder for the user's own Zerax wallet provider — confirmed by user.
+
+**Zerax Voice abstraction**: TTS is exposed as 4 brand voice IDs (zerax_male_deep / zerax_male_warm / zerax_female_warm / zerax_female_clear) mapped internally to OpenAI `tts-1-hd`. User explicitly said the voice provider will move to Zerax's own service later — swap is one dict change in `ZERAX_VOICE_MAP`.
+
+**Test coverage**: 7-case pytest at `/app/backend/tests/test_promo_video.py` + testing agent iteration_39 reports 100 % pass on both backend (7/7) and frontend flows (all spec'd flows).
+
+**Files Modified:**
+- `/app/backend/routers/video_studio_router.py` (NEW, ~527 lines)
+- `/app/backend/server.py` (registered router)
+- `/app/frontend/public/mockups/app_mode_full.html` (NEW ACP + Video Studio + Recharge modals; removed old `#info-panel-wrap`; rerouted `startAddProduct` through ACP; `toggleAdminMode` auto-opens ACP)
+- `/app/memory/test_credentials.md` (ACP + promo-video endpoint docs)
+- System: installed `ffmpeg` + `fonts-noto-core` (Arabic title overlays).
+
+**Remaining tasks (next session):**
+- 🚚 Driver app UI / delivery management in Care Portal (P1)
+- 💳 Tabby & Tamara installment integration (P1)
+- 🧙 Refactor React `ReadySites.js` wizard to match Template-First (P2)
+- 📤 "Share on Social Media" AI post generator in Care Portal (P2)
+- 📑 ZATCA Phase 2 e-invoicing (XML + PDF/A-3 + QR) (P2)
+- 🧠 Unify AI agents via `claude_core.py` (P2)
+- 📞 Voice agent / Call-Center AI (LiveKit + ElevenLabs) (P2)
+- 🎮 Fix Game Studio prompt adherence (P2)
+
+
 ### 🆕 Feb 9 2026 — Phase 13: AI Variants (Colors / Sizes / Warranty) on PDP ✅
 **User feedback fulfilled**: "ضيف خيارات للمعلومات - ألوان (تغيّر الصورة)، مقاسات، ضمان مع رابط - الذكاء يبحث ويجيبها"
 
