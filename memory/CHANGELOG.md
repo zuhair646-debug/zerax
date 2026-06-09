@@ -1,6 +1,74 @@
 # Zitex Changelog
 
 
+## 2026-02-16 — 🏗️ Template-First Engine: 3 Master Templates Production-Ready ✅
+
+**Architectural pivot complete.** Replaced AI code generation for Ready Sites with 3 hand-crafted, feature-complete master HTML templates that hydrate from JSON + Market Packs. Zero hallucinations, 100% deterministic output.
+
+### 1. App Mode — `app_mode_full.html` (سوقي 🛒)
+E-commerce mobile-first template for stores, marketplaces, food delivery, etc.
+- **Cart & Checkout**: Full add/remove/quantity, tax calc per market, payment selection
+- **Search**: Live filter by Arabic + English product names
+- **Category filter**: 8 categories with active state
+- **49-market localization**: Auto-detect on load, dropdown switch, currency conversion (RATES map), payment gateways + shipping carriers swap dynamically
+- **Reviews carousel**: 3 testimonials auto-rotating every 5s
+- **Banner slider**: 3 hero promos auto-cycling
+- **Reservation modal** + WhatsApp link from market
+- **Bottom nav** (mobile app feel)
+- **Cart persistence**: localStorage `zx_cart`
+
+### 2. Story Mode — `story_mode_full.html` (N O I R)
+Cinematic narrative template for restaurants, cafés, services, boutique experiences.
+- **Hero**: Full-bleed image with double CTA (Menu / Reserve)
+- **Story chapters**: 2-column narrative section
+- **Menu**: 8 dishes across 4 tabs (Starters/Mains/Desserts/Drinks) — add to cart works
+- **Gallery**: 8-image grid with hover zoom
+- **Reviews**: Auto-rotating large-format testimonials
+- **Reservation form**: name/phone/date/time/guests/notes with success state
+- **Cart & Checkout**: Same engine as App Mode, restyled in elegant gold/black
+- **49-market localization**: Phone format, currency, payments, hours
+- **Floating nav**: Becomes opaque on scroll
+
+### 3. Showroom Mode — `showroom_mode_full.html` (A R Y A)
+Luxury 3D portfolio template for jewelry, watches, real estate, fine art, cars.
+- **3D Floating grid**: 9 products with perspective tilt (rotateY -6°/0°/+6° pattern)
+- **Ambient background**: Animated gradient orbs + drifting starfield
+- **Product detail modal**: Full-screen split image/info with "Add to Cart" + "WhatsApp Consult" buttons (deep-link to wa.me)
+- **HUD stats bar**: EST. year / clients / gold purity / certification
+- **Consultation form**: Private viewing booking with interest dropdown (rings/necklaces/bracelets/watches)
+- **Reviews**: Italic serif quotes with auto-rotation
+- **Cart & Checkout**: Same engine, restyled with gold accents
+- **Categories**: 5 luxury tabs (all/rings/necklaces/bracelets/watches)
+
+### Shared Infrastructure
+- **Backend endpoints** (already live): `GET /api/ready-sites/markets`, `GET /api/ready-sites/market/{id}`, `GET /api/ready-sites/detect-market`
+- **Currency RATES map**: 43+ currencies converted from SAR baseline
+- **Universal i18n pattern**: `data-key`, `data-key-ph`, `data-key-opt` + `_html` suffix for innerHTML
+- **Universal market popover**: same UX across all 3 templates
+- **Zitex footer**: Branded "CRAFTED BY ZITEX" footer with link to zitex.com
+- **Pushed to GitHub**: 2 commits (`93c634b`, `51407c4`) on main branch
+
+### Tested
+- ✅ App Mode: SAR→USD ($159.93 from 599 SAR), category filter, cart with VAT 15%
+- ✅ Story Mode: Mains filter (3/3), USD price conversion ($76.09 from 285 SAR)
+- ✅ Showroom Mode: Rings filter (3/3), UAE Dirham (د.إ 47,530 from 48,500 SAR), detail modal opens
+- ✅ Zero JS errors across all 3 templates
+- ✅ All 49 markets selectable, payment gateways auto-render
+
+### Files Created/Modified
+- `/app/frontend/public/mockups/app_mode_full.html` (created + polished)
+- `/app/frontend/public/mockups/story_mode_full.html` (created)
+- `/app/frontend/public/mockups/showroom_mode_full.html` (created)
+
+### Next
+- Wire React Wizard (`ReadySites.js`) to template-first engine — deprecate legacy `agent.py` AI pipeline
+- Multi-Service Hub toggle (multi-department businesses)
+- Zitex Care Portal (post-delivery client dashboard)
+- Real payment gateway integrations (Mada/Tabby/Tamara/Stripe/Alipay)
+- ZATCA Phase 2 e-invoicing
+
+
+
 ## 2026-02-15 (g) — 💰 PayPal Payouts + 🎫 Support Tickets + 🤖 AI FAQ + 🔔 Notifications ✅
 
 ### نظام السحب (PayPal Payouts) — `/app/backend/modules/affiliate/payouts.py`
