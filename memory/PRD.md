@@ -1,5 +1,31 @@
 # Zitex AI Platform - PRD
 
+### 🆕 Feb 9 2026 — Phase 10: Full-Image Quick Cats + Saved Library + Add-Product + Default Galleries ✅
+**User requests fulfilled:**
+
+🎯 **Quick Categories with full-bleed images**
+- Reworked `.q-cat` CSS: now `aspect-ratio:1`, `border-radius:18px`, with absolute `.q-cat-bg` div carrying `background-image:url(...)` filling the whole square.
+- Gradient overlay (top transparent → bottom dark) keeps the emoji + label legible on top of the image.
+- When admin generates via Studio for `cat_icon:<id>`, the image now fills the entire square seamlessly (no more tiny emoji-on-color block).
+
+💾 **Saved Images Library**
+- New `SAVED_IMAGES` localStorage array (`zx_saved_images`), capped at 30 to avoid storage bloat.
+- "💾 حفظ في مكتبتي" button added next to "✅ تطبيق" inside the generation preview. Stores the picked variant (or all variants for multi-mode).
+- New Studio tab "💾 محفوظاتي" renders a 2-column grid with delete `✕` buttons and prompt-preview captions. Clicking applies to the current `STUDIO_TARGET`.
+- Empty state: "📭 ما عندك صور محفوظة بعد. ولّد صورة واضغط 💾 حفظ."
+
+➕ **Add-Product Card (Admin Mode)**
+- New `.add-product-card` CSS rendered at the end of every category grid (and as standalone block when category is empty). Only visible when `body.admin-mode` is on.
+- Click handler: `startAddProduct(catId)` creates a placeholder product with placeholder image, prepends to `PRODUCTS`, re-renders the category, and opens Image Studio targeting the new product. Generated image flows through `applyImageOverride('product:<id>', url)` and replaces the placeholder.
+
+🖼️ **Default 4-Image Galleries per Product**
+- `ensureDefaultGalleries()` runs in `init()`. For each existing product, if `PRODUCT_GALLERIES[id]` is empty, it seeds 4 entries: `p.img` + 3 themed Unsplash variants matching `p.cat` (electronics/fashion/beauty/home each has 3 dedicated alt photos).
+- Lightbox now ALWAYS shows the thumbnail strip + prev/next arrows + auto-advance for every product — even on first visit.
+
+**File**: `/app/frontend/public/mockups/app_mode_full.html` (+CSS for q-cat/add-card/saved-grid, +JS for save/restore/add-product/default-galleries)
+
+
+
 ### 🔥 Feb 9 2026 — Phase 9: REAL AI INTEGRATION (Gemini Nano Banana) ✅
 **User feedback (frustrated, justified)**: "كاتب لايفون مطلع لك صورة فيل. وين الدقة؟ الـ AI اللي عندك مو حقيقي. اربط مع الذكاء الصناعي الفعلي عندي."
 

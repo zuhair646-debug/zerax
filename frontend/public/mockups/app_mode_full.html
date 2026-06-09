@@ -315,6 +315,33 @@ body.admin-mode .img-edit-btn{display:flex !important}
 .clarify-opt{padding:11px 8px;background:#faf5ff;border:1.5px solid #ede9fe;border-radius:10px;font-family:inherit;font-weight:900;font-size:12px;color:#7c3aed;cursor:pointer;transition:all .15s}
 .clarify-opt:hover{background:#7c3aed;color:#fff}
 .studio{position:relative}
+/* QUICK CATEGORIES - Full image background (covers entire square) */
+.q-cat{position:relative;overflow:hidden;aspect-ratio:1;min-height:90px;border-radius:18px;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;padding:10px 6px;cursor:pointer;background:linear-gradient(135deg,#7c3aed,#ec4899);color:#fff;box-shadow:0 4px 12px rgba(0,0,0,.1);transition:all .2s}
+.q-cat:hover{transform:translateY(-3px);box-shadow:0 8px 24px rgba(0,0,0,.18)}
+.q-cat.active-cat{box-shadow:0 6px 20px rgba(124,58,237,.45);transform:translateY(-2px)}
+.q-cat .q-cat-bg{position:absolute;inset:0;background-size:cover;background-position:center;z-index:1}
+.q-cat::after{content:'';position:absolute;inset:0;background:linear-gradient(180deg,rgba(0,0,0,.05) 30%,rgba(0,0,0,.65) 100%);z-index:2;pointer-events:none}
+.q-cat .ico{font-size:22px;position:relative;z-index:3;text-shadow:0 2px 6px rgba(0,0,0,.5);margin-bottom:2px}
+.q-cat span{position:relative;z-index:3;font-size:11px;font-weight:900;color:#fff;text-shadow:0 1px 4px rgba(0,0,0,.7);text-align:center;line-height:1.2}
+/* ADD-PRODUCT placeholder card (admin only) */
+.add-product-card{display:none;border:2.5px dashed #cbd5e1;border-radius:18px;background:#f9fafb;min-height:240px;align-items:center;justify-content:center;flex-direction:column;cursor:pointer;transition:all .2s;color:#6b7280}
+.add-product-card:hover{border-color:#7c3aed;background:#faf5ff;color:#7c3aed;transform:translateY(-2px)}
+.add-product-card .plus{font-size:48px;font-weight:300;line-height:1;margin-bottom:8px}
+.add-product-card b{font-size:13px;font-weight:900}
+.add-product-card small{font-size:10px;margin-top:4px;line-height:1.4;text-align:center;padding:0 12px}
+body.admin-mode .add-product-card{display:flex}
+/* SAVED IMAGES BANNER */
+.gen-actions{display:flex;gap:8px;margin-top:10px}
+.gen-actions button{flex:1;padding:12px;border:none;border-radius:10px;font-family:inherit;font-weight:900;font-size:12px;cursor:pointer}
+.btn-save-img{background:#fff;color:#7c3aed;border:1.5px solid #7c3aed !important}
+.btn-save-img:hover{background:#faf5ff}
+.btn-apply-img{background:#22c55e;color:#fff}
+.saved-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:8px}
+.saved-card{position:relative;border-radius:10px;overflow:hidden;cursor:pointer;border:2px solid transparent}
+.saved-card:hover{border-color:#7c3aed}
+.saved-card img{width:100%;aspect-ratio:1;object-fit:cover;display:block}
+.saved-card .del{position:absolute;top:4px;right:4px;width:22px;height:22px;background:rgba(220,38,38,.9);color:#fff;border:none;border-radius:50%;cursor:pointer;font-weight:900;font-size:11px;display:flex;align-items:center;justify-content:center}
+.saved-card .meta{position:absolute;bottom:0;left:0;right:0;background:linear-gradient(transparent,rgba(0,0,0,.75));color:#fff;padding:14px 6px 6px;font-size:9px;font-weight:700;line-height:1.3}
 /* FOOTER */
 .zx-footer{background:#0f172a;color:#cbd5e1;padding:36px 18px 14px;direction:var(--dir,rtl);margin-top:30px;border-radius:24px 24px 0 0}
 .zx-foot-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:24px;margin-bottom:24px}
@@ -601,9 +628,10 @@ body.admin-mode .img-edit-btn{display:flex !important}
       </div>
     </div>
     <div class="studio-tabs">
-      <button class="studio-tab active" data-tab="ai" onclick="switchStudioTab('ai')">✨ <span data-key="studio_ai">توليد بالذكاء الاصطناعي</span></button>
+      <button class="studio-tab active" data-tab="ai" onclick="switchStudioTab('ai')">✨ <span data-key="studio_ai">توليد</span></button>
       <button class="studio-tab" data-tab="upload" onclick="switchStudioTab('upload')">📤 <span data-key="studio_upload">رفع</span></button>
       <button class="studio-tab" data-tab="library" onclick="switchStudioTab('library')">📚 <span data-key="studio_lib">مكتبة</span></button>
+      <button class="studio-tab" data-tab="saved" onclick="switchStudioTab('saved');renderSavedImages()">💾 <span data-key="studio_saved">محفوظاتي</span></button>
     </div>
     <div class="studio-body">
       <!-- AI TAB -->
@@ -688,7 +716,10 @@ body.admin-mode .img-edit-btn{display:flex !important}
           <img id="gen-preview-img" alt="generated">
           <video id="gen-preview-video" controls playsinline style="width:100%;border-radius:12px;border:2px solid #7c3aed;display:none"></video>
           <div class="multi-grid" id="gen-multi-grid" style="display:none"></div>
-          <button class="gen-apply" id="gen-apply-btn" onclick="applyGenerated()">✅ <span data-key="studio_apply">تطبيق على البنر</span></button>
+          <div class="gen-actions">
+            <button class="btn-save-img" onclick="saveCurrentImage()">💾 <span data-key="studio_save">حفظ في مكتبتي</span></button>
+            <button class="btn-apply-img" id="gen-apply-btn" onclick="applyGenerated()">✅ <span data-key="studio_apply">تطبيق</span></button>
+          </div>
         </div>
       </div>
       <!-- UPLOAD TAB -->
@@ -705,6 +736,12 @@ body.admin-mode .img-edit-btn{display:flex !important}
       <div class="studio-section" data-section="library">
         <p style="font-size:12px;color:#6b7280;margin-bottom:12px" data-key="studio_lib_help">صور احترافية جاهزة — اختر اللي يناسبك (بدون نقاط):</p>
         <div class="lib-grid" id="lib-grid"></div>
+      </div>
+      <!-- SAVED IMAGES TAB -->
+      <div class="studio-section" data-section="saved">
+        <p style="font-size:12px;color:#6b7280;margin-bottom:12px" data-key="saved_help">الصور اللي ولّدتها سابقاً وحفظتها — اضغط للتطبيق على الهدف الحالي:</p>
+        <div class="saved-grid" id="saved-grid"></div>
+        <p id="saved-empty" style="text-align:center;color:#9ca3af;font-size:12px;padding:30px 10px;display:none" data-key="saved_empty">📭 ما عندك صور محفوظة بعد. ولّد صورة واضغط 💾 حفظ.</p>
       </div>
     </div>
   </div>
@@ -944,6 +981,7 @@ async function init(){
   await loadMarket(mid);
   buildMarketList();
   applyAllOverrides();
+  ensureDefaultGalleries();
   renderUI();
   renderProducts();
   renderCategories();
@@ -1137,12 +1175,12 @@ function renderCategories(){
     const overrideKey='cat_icon:'+c.id;
     const overrideObj=IMG_OVERRIDES[overrideKey];
     const overrideUrl=overrideObj?(typeof overrideObj==='string'?overrideObj:overrideObj.url):null;
-    const bgStyle=overrideUrl?`background-image:linear-gradient(rgba(0,0,0,.35),rgba(0,0,0,.55)),url('${overrideUrl}');background-size:cover;background-position:center;color:#fff`:'';
-    const iconStyle=overrideUrl?'color:#fff;text-shadow:0 2px 6px rgba(0,0,0,.6)':'';
-    const spanStyle=overrideUrl?'color:#fff !important':'';
-    return `<div class="q-cat editable-img-host ${c.id===activeCat?'active-cat':''}" onclick="filterCat('${c.id}')" style="${bgStyle}">
+    const fallbackImg=CAT_IMAGES[c.id]||CAT_IMAGES.fashion;
+    const bgUrl=overrideUrl||fallbackImg;
+    return `<div class="q-cat editable-img-host ${c.id===activeCat?'active-cat':''}" onclick="filterCat('${c.id}')">
+      <div class="q-cat-bg" style="background-image:url('${bgUrl}')"></div>
       <button class="img-edit-btn" onclick="event.stopPropagation();openStudio('cat_icon:${c.id}')" title="تحرير">✨</button>
-      <div class="ico" style="${iconStyle}">${c.ico}</div><span style="${spanStyle}">${CURRENT_LANG==='ar'?c.ar:c.en}</span>
+      <div class="ico">${c.ico}</div><span>${CURRENT_LANG==='ar'?c.ar:c.en}</span>
     </div>`;
   }).join('');
 }
@@ -1246,14 +1284,14 @@ function renderCategoryPage(catId){
   document.getElementById('cat-count-title').textContent=(CURRENT_LANG==='ar'?'المنتجات':'Products')+' ('+filtered.length+')';
   const grid=document.getElementById('cat-products');
   if(!filtered.length){
-    grid.innerHTML=`<div style="grid-column:1/-1;text-align:center;padding:40px 20px;color:#9ca3af"><div style="font-size:48px;margin-bottom:10px">📭</div><b>${CURRENT_LANG==='ar'?'لا توجد منتجات حالياً':'No products yet'}</b></div>`;
+    grid.innerHTML=`<div style="grid-column:1/-1;text-align:center;padding:40px 20px;color:#9ca3af"><div style="font-size:48px;margin-bottom:10px">📭</div><b>${CURRENT_LANG==='ar'?'لا توجد منتجات حالياً':'No products yet'}</b></div><div class="add-product-card" onclick="startAddProduct('${catId}')"><div class="plus">+</div><b>${CURRENT_LANG==='ar'?'إضافة منتج جديد':'Add new product'}</b><small>${CURRENT_LANG==='ar'?'يفتح استوديو الصور للتوليد':'Opens Image Studio'}</small></div>`;
     return;
   }
   grid.innerHTML=filtered.map(p=>{
     const name=CURRENT_LANG==='ar'?p.ar:p.en;
     const desc=CURRENT_LANG==='ar'?(p.descAr||''):(p.descEn||'');
     return `<div class="p-card"><div class="editable-img-host"><img src="${p.img}" alt="${name}"><button class="img-edit-btn" onclick="event.stopPropagation();openStudio('product:${p.id}')" title="تحرير">✨</button></div><div class="p-info"><div class="name">${name}</div><div class="desc">${desc}</div><div class="p-row"><div class="p-price">${curSym()} ${formatPrice(p.sar)}</div><button class="add-btn" onclick="event.stopPropagation();addToCart('${p.id}')">+</button></div></div></div>`;
-  }).join('');
+  }).join('')+`<div class="add-product-card" onclick="startAddProduct('${catId}')"><div class="plus">+</div><b>${CURRENT_LANG==='ar'?'إضافة منتج جديد':'Add new product'}</b><small>${CURRENT_LANG==='ar'?'يفتح استوديو الصور لتوليد منتج بصورة احترافية':'Opens Image Studio to generate a product'}</small></div>`;
 }
 
 // ═══════════════════════ ORDERS ═══════════════════════
@@ -2047,6 +2085,66 @@ function applyImageOverride(target,url,type){
   }
   toast(CURRENT_LANG==='ar'?'✨ تم تطبيق الصورة الجديدة':'✨ Image applied');
 }
+// ═══════════════════════ SAVED IMAGES LIBRARY ═══════════════════════
+const SAVED_IMAGES=JSON.parse(localStorage.getItem('zx_saved_images')||'[]');
+function saveCurrentImage(){
+  if(!GEN_RESULT){alert(CURRENT_LANG==='ar'?'ولّد صورة أولاً':'Generate first');return;}
+  const item={id:'s_'+Date.now(),url:GEN_RESULT,prompt:document.getElementById('ai-prompt').value.trim().slice(0,80),target:STUDIO_TARGET,savedAt:Date.now()};
+  if(STUDIO_COUNT>1 && GEN_MULTI.length){
+    GEN_MULTI.forEach((u,i)=>{
+      if(u===GEN_RESULT){SAVED_IMAGES.unshift({...item,url:u});return;}
+      SAVED_IMAGES.unshift({...item,id:'s_'+Date.now()+'_'+i,url:u});
+    });
+  } else SAVED_IMAGES.unshift(item);
+  while(SAVED_IMAGES.length>30)SAVED_IMAGES.pop();
+  try{localStorage.setItem('zx_saved_images',JSON.stringify(SAVED_IMAGES));}catch(_){toast(CURRENT_LANG==='ar'?'مساحة التخزين ممتلئة':'Storage full');return;}
+  toast(CURRENT_LANG==='ar'?'💾 تم حفظ الصورة في مكتبتك':'💾 Image saved to library');
+}
+function renderSavedImages(){
+  const host=document.getElementById('saved-grid');
+  const empty=document.getElementById('saved-empty');
+  if(!host)return;
+  if(!SAVED_IMAGES.length){host.innerHTML='';if(empty)empty.style.display='block';return;}
+  if(empty)empty.style.display='none';
+  host.innerHTML=SAVED_IMAGES.map(s=>`<div class="saved-card" onclick="applySavedImage('${s.id}')"><img src="${s.url}" alt=""><button class="del" onclick="event.stopPropagation();deleteSavedImage('${s.id}')">✕</button><div class="meta">${(s.prompt||'').slice(0,40)}</div></div>`).join('');
+}
+function applySavedImage(id){
+  const item=SAVED_IMAGES.find(s=>s.id===id);
+  if(!item)return;
+  applyImageOverride(STUDIO_TARGET,item.url);
+  closeStudio();
+}
+function deleteSavedImage(id){
+  const idx=SAVED_IMAGES.findIndex(s=>s.id===id);
+  if(idx>=0){SAVED_IMAGES.splice(idx,1);localStorage.setItem('zx_saved_images',JSON.stringify(SAVED_IMAGES));renderSavedImages();}
+}
+
+// ═══════════════════════ ADD-PRODUCT ═══════════════════════
+function startAddProduct(catId){
+  const newId='custom_'+Date.now();
+  PRODUCTS.unshift({id:newId,cat:catId,ar:'منتج جديد',en:'New Product',descAr:'اضغط ✨ لتوليد صورة',descEn:'Click ✨ to generate',sar:0,img:'https://via.placeholder.com/800x800/ede9fe/7c3aed?text=%E2%9C%A8'});
+  renderProducts();
+  if(document.getElementById('view-category').style.display==='block')renderCategoryPage(catId);
+  openStudio('product:'+newId);
+}
+
+// ═══════════════════════ DEFAULT MULTI-IMAGE GALLERIES ═══════════════════════
+function ensureDefaultGalleries(){
+  const variantPool={
+    electronics:['https://images.unsplash.com/photo-1511707171634-5f897ff02aa9?w=800&q=85','https://images.unsplash.com/photo-1592750475338-74b7b21085ab?w=800&q=85','https://images.unsplash.com/photo-1574944985070-8f3ebc6b79d2?w=800&q=85'],
+    fashion:['https://images.unsplash.com/photo-1483985988355-763728e1935b?w=800&q=85','https://images.unsplash.com/photo-1539109136881-3be0616acf4b?w=800&q=85','https://images.unsplash.com/photo-1551232864-3f0890e580d9?w=800&q=85'],
+    beauty:['https://images.unsplash.com/photo-1596462502278-27bfdc403348?w=800&q=85','https://images.unsplash.com/photo-1522335789203-aaa2f8be5419?w=800&q=85','https://images.unsplash.com/photo-1487412947147-5cebf100ffc2?w=800&q=85'],
+    home:['https://images.unsplash.com/photo-1618220179428-22790b461013?w=800&q=85','https://images.unsplash.com/photo-1556909114-f6e7ad7d3136?w=800&q=85','https://images.unsplash.com/photo-1586023492125-27b2c045efd7?w=800&q=85'],
+  };
+  PRODUCTS.forEach(p=>{
+    if(PRODUCT_GALLERIES[p.id]&&PRODUCT_GALLERIES[p.id].length>1)return;
+    const pool=variantPool[p.cat]||variantPool.home;
+    PRODUCT_GALLERIES[p.id]=[{type:'image',url:p.img}].concat(pool.slice(0,3).map(u=>({type:'image',url:u})));
+  });
+  try{localStorage.setItem('zx_galleries',JSON.stringify(PRODUCT_GALLERIES));}catch(_){}
+}
+
+
 function toast(msg){
   const el=document.createElement('div');
   el.textContent=msg;
