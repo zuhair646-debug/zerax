@@ -108,16 +108,81 @@
             var isInStandalone =
                 window.matchMedia('(display-mode: standalone)').matches ||
                 window.navigator.standalone === true;
-            if (isIOS && !isInStandalone && installBtn && !localStorage.getItem('zx_ios_hint_dismissed')) {
+            if (isIOS && !isInStandalone && installBtn) {
                 installBtn.innerHTML =
-                    '<span style="font-size:18px">📱</span><span>أضف Zitex للشاشة الرئيسية</span>';
+                    '<span style="font-size:18px">📱</span><span>ثبّت Zitex على شاشتك</span>';
                 installBtn.style.display = 'inline-flex';
                 installBtn.addEventListener('click', function () {
-                    alert(
-                        'لتثبيت Zitex على آيفون:\n\n١. اضغط زر المشاركة ⎙\n٢. اختر "إضافة إلى الشاشة الرئيسية"\n٣. اضغط "إضافة"'
-                    );
-                    localStorage.setItem('zx_ios_hint_dismissed', '1');
-                    installBtn.style.display = 'none';
+                    showIOSInstallGuide();
+                });
+            }
+
+            // ═══════════════════ iOS Visual Install Guide ═══════════════════
+            function showIOSInstallGuide() {
+                if (document.getElementById('zx-ios-guide')) return;
+                var modal = document.createElement('div');
+                modal.id = 'zx-ios-guide';
+                modal.style.cssText =
+                    'position:fixed;inset:0;background:rgba(0,0,0,.88);z-index:100000;display:flex;align-items:center;justify-content:center;padding:16px;backdrop-filter:blur(8px);font-family:"IBM Plex Sans Arabic",sans-serif;direction:rtl';
+                modal.innerHTML =
+                    '<div style="background:#0e0e1a;border:1px solid rgba(124,58,237,.3);border-radius:20px;max-width:420px;width:100%;max-height:92vh;overflow-y:auto;padding:24px 22px;position:relative;box-shadow:0 30px 80px rgba(124,58,237,.3)">' +
+                    '<button id="zx-ios-close" style="position:absolute;top:14px;left:14px;background:#1a1a2e;border:none;color:#fff;width:32px;height:32px;border-radius:50%;font-size:16px;cursor:pointer">✕</button>' +
+                    '<div style="text-align:center;margin-bottom:20px"><div style="font-size:42px;margin-bottom:8px">📱</div><h2 style="color:#fff;font-size:20px;font-weight:900;margin-bottom:6px">ثبّت Zitex على آيفونك</h2><p style="color:#9ca3af;font-size:13px;line-height:1.7">٣ خطوات سهلة — أقل من ٢٠ ثانية</p></div>' +
+                    // STEP 1
+                    '<div style="background:#15152a;border:1px solid rgba(124,58,237,.2);border-radius:14px;padding:16px;margin-bottom:12px">' +
+                    '<div style="display:flex;align-items:center;gap:10px;margin-bottom:12px"><div style="background:linear-gradient(135deg,#7c3aed,#a855f7);color:#fff;width:30px;height:30px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:900;font-size:14px">١</div><b style="color:#fff;font-size:15px">اضغط زرّ المشاركة في Safari</b></div>' +
+                    '<div style="background:#000;border-radius:10px;padding:14px;position:relative;border:1px solid #222">' +
+                    // mock Safari bottom bar
+                    '<div style="display:flex;align-items:center;justify-content:space-around;background:#1c1c1e;border-radius:12px;padding:10px 8px">' +
+                    '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#6b7280" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg>' +
+                    '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#6b7280" stroke-width="2"><path d="M9 18l6-6-6-6"/></svg>' +
+                    // share icon highlighted
+                    '<div style="position:relative;padding:8px;background:rgba(124,58,237,.25);border:2px solid #a855f7;border-radius:8px;animation:zxpulse 1.4s infinite">' +
+                    '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#a855f7" stroke-width="2.4"><path d="M4 12v8a2 2 0 002 2h12a2 2 0 002-2v-8"/><polyline points="16 6 12 2 8 6"/><line x1="12" y1="2" x2="12" y2="15"/></svg>' +
+                    '</div>' +
+                    '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#6b7280" stroke-width="2"><path d="M2 3h6a4 4 0 014 4v14a3 3 0 00-3-3H2zM22 3h-6a4 4 0 00-4 4v14a3 3 0 013-3h7z"/></svg>' +
+                    '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#6b7280" stroke-width="2"><rect x="4" y="4" width="16" height="16" rx="2"/></svg>' +
+                    '</div>' +
+                    // arrow pointing
+                    '<div style="position:absolute;top:-2px;right:42%;color:#a855f7;font-size:22px;animation:zxarrow 1.4s infinite">↓</div>' +
+                    '</div>' +
+                    '<p style="color:#9ca3af;font-size:12px;margin-top:10px;line-height:1.6">في شريط Safari السفلي، اضغط على أيقونة المربع مع السهم لأعلى</p>' +
+                    '</div>' +
+                    // STEP 2
+                    '<div style="background:#15152a;border:1px solid rgba(124,58,237,.2);border-radius:14px;padding:16px;margin-bottom:12px">' +
+                    '<div style="display:flex;align-items:center;gap:10px;margin-bottom:12px"><div style="background:linear-gradient(135deg,#7c3aed,#a855f7);color:#fff;width:30px;height:30px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:900;font-size:14px">٢</div><b style="color:#fff;font-size:15px">اختر "إضافة إلى الشاشة الرئيسية"</b></div>' +
+                    '<div style="background:#000;border-radius:10px;padding:10px;border:1px solid #222">' +
+                    // mock action sheet rows
+                    '<div style="background:#1c1c1e;border-radius:10px;padding:4px"><div style="display:flex;align-items:center;gap:10px;padding:10px;border-bottom:1px solid #2a2a2a"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#6b7280" stroke-width="2"><path d="M21 11.5a8.38 8.38 0 01-.9 3.8 8.5 8.5 0 01-7.6 4.7 8.38 8.38 0 01-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 01-.9-3.8 8.5 8.5 0 014.7-7.6 8.38 8.38 0 013.8-.9h.5a8.48 8.48 0 018 8v.5z"/></svg><span style="color:#9ca3af;font-size:13px">رسالة</span></div>' +
+                    '<div style="display:flex;align-items:center;gap:10px;padding:10px;border-bottom:1px solid #2a2a2a"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#6b7280" stroke-width="2"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg><span style="color:#9ca3af;font-size:13px">البريد</span></div>' +
+                    // highlighted row
+                    '<div style="display:flex;align-items:center;gap:10px;padding:12px 10px;background:rgba(124,58,237,.18);border:2px solid #a855f7;border-radius:8px;margin:4px;animation:zxpulse 1.4s infinite"><div style="width:22px;height:22px;background:#fff;border-radius:5px;display:flex;align-items:center;justify-content:center;color:#000;font-weight:900;font-size:14px">+</div><span style="color:#fff;font-size:13px;font-weight:700;flex:1">إضافة إلى الشاشة الرئيسية</span><span style="color:#a855f7;font-size:18px">←</span></div>' +
+                    '<div style="display:flex;align-items:center;gap:10px;padding:10px"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#6b7280" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/></svg><span style="color:#9ca3af;font-size:13px">نسخ</span></div>' +
+                    '</div></div>' +
+                    '<p style="color:#9ca3af;font-size:12px;margin-top:10px;line-height:1.6">انزل قليلاً في القائمة لين تشوف "إضافة إلى الشاشة الرئيسية"</p>' +
+                    '</div>' +
+                    // STEP 3
+                    '<div style="background:#15152a;border:1px solid rgba(124,58,237,.2);border-radius:14px;padding:16px;margin-bottom:16px">' +
+                    '<div style="display:flex;align-items:center;gap:10px;margin-bottom:12px"><div style="background:linear-gradient(135deg,#7c3aed,#a855f7);color:#fff;width:30px;height:30px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:900;font-size:14px">٣</div><b style="color:#fff;font-size:15px">اضغط "إضافة" في الزاوية</b></div>' +
+                    '<div style="background:#000;border-radius:10px;padding:14px;border:1px solid #222">' +
+                    '<div style="display:flex;justify-content:space-between;align-items:center;padding-bottom:12px;border-bottom:1px solid #1a1a1a;margin-bottom:12px"><span style="color:#6b7280;font-size:13px">إلغاء</span><b style="color:#fff;font-size:14px">إلى الشاشة الرئيسية</b><span style="background:#a855f7;color:#fff;font-size:12px;padding:5px 14px;border-radius:8px;font-weight:700;animation:zxpulse 1.4s infinite">إضافة</span></div>' +
+                    '<div style="display:flex;align-items:center;gap:10px"><div style="width:44px;height:44px;background:linear-gradient(135deg,#7c3aed,#08080f);border-radius:10px;display:flex;align-items:center;justify-content:center;color:#fff;font-weight:900;font-size:18px">Z</div><div style="flex:1"><b style="color:#fff;font-size:13px;display:block">Zitex</b><span style="color:#6b7280;font-size:11px">ai-cinematic-hub-2.preview...</span></div></div>' +
+                    '</div>' +
+                    '<p style="color:#9ca3af;font-size:12px;margin-top:10px;line-height:1.6">اضغط زرّ "إضافة" البنفسجي في الزاوية اليمنى — وانتهيت! ✓</p>' +
+                    '</div>' +
+                    '<div style="text-align:center;padding:12px;background:linear-gradient(135deg,rgba(124,58,237,.15),rgba(168,85,247,.08));border:1px solid rgba(124,58,237,.3);border-radius:12px"><div style="font-size:24px;margin-bottom:4px">🎉</div><p style="color:#fff;font-size:13px;font-weight:700;margin-bottom:4px">بعد التثبيت</p><p style="color:#9ca3af;font-size:11px;line-height:1.6">راح تلقى أيقونة Zitex على شاشتك الرئيسية، افتحها زي أي تطبيق ✨</p></div>' +
+                    '<button id="zx-ios-got-it" style="width:100%;margin-top:14px;padding:14px;background:linear-gradient(135deg,#7c3aed,#a855f7);color:#fff;border:none;border-radius:12px;font-family:inherit;font-size:14px;font-weight:900;cursor:pointer">فهمت، خلّني أجرّب الآن</button>' +
+                    '</div>' +
+                    '<style>@keyframes zxpulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.7;transform:scale(.97)}}@keyframes zxarrow{0%,100%{transform:translateY(0)}50%{transform:translateY(6px)}}</style>';
+                document.body.appendChild(modal);
+                modal.addEventListener('click', function (e) {
+                    if (e.target === modal) modal.remove();
+                });
+                document.getElementById('zx-ios-close').addEventListener('click', function () {
+                    modal.remove();
+                });
+                document.getElementById('zx-ios-got-it').addEventListener('click', function () {
+                    modal.remove();
                 });
             }
         </script>
