@@ -85,7 +85,7 @@ def _build_config(
 
 
 def _inject_config_and_pwa(html: str, config: dict, project_id: str) -> str:
-    """Inject the runtime config + PWA manifest into the template head."""
+    """Inject the runtime config + PWA manifest + Zerax branding badge into the template."""
     cfg_json = json.dumps(config, ensure_ascii=False)
     injection = (
         '<link rel="manifest" href="/api/ready-sites/manifest/' + project_id + '.webmanifest">\n'
@@ -94,19 +94,53 @@ def _inject_config_and_pwa(html: str, config: dict, project_id: str) -> str:
         '<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">\n'
         '<meta name="apple-mobile-web-app-title" content="' + config["BRAND"] + '">\n'
         '<script>window.ZERAX_CONFIG=' + cfg_json + ';</script>\n'
+        '<style>'
+        '@keyframes zerax-shimmer{0%,100%{box-shadow:0 4px 16px rgba(168,85,247,.25),0 0 0 1px rgba(168,85,247,.2)}50%{box-shadow:0 6px 24px rgba(236,72,153,.5),0 0 0 1px rgba(236,72,153,.5)}}'
+        '@keyframes zerax-glow{0%,100%{filter:drop-shadow(0 0 2px #a855f7)}50%{filter:drop-shadow(0 0 8px #ec4899)}}'
+        '.zerax-badge{position:fixed;bottom:14px;inset-inline-start:14px;z-index:99998;'
+        'display:flex;align-items:center;gap:8px;padding:8px 14px;border-radius:99px;'
+        'background:linear-gradient(135deg,rgba(10,10,20,.92),rgba(20,10,40,.92));backdrop-filter:blur(10px);'
+        'color:#fff;text-decoration:none;font-size:11px;font-weight:700;letter-spacing:.5px;'
+        'border:1px solid rgba(168,85,247,.3);animation:zerax-shimmer 3s ease-in-out infinite;'
+        'transition:transform .25s;font-family:-apple-system,Tajawal,sans-serif;direction:ltr}'
+        '.zerax-badge:hover{transform:translateY(-2px) scale(1.05)}'
+        '.zerax-badge .zerax-z{width:22px;height:22px;border-radius:50%;background:linear-gradient(135deg,#7c3aed,#ec4899);'
+        'display:inline-flex;align-items:center;justify-content:center;color:#fff;font-size:13px;font-weight:900;'
+        'animation:zerax-glow 2.5s ease-in-out infinite}'
+        '.zerax-badge .zerax-txt{display:flex;flex-direction:column;line-height:1.1}'
+        '.zerax-badge .zerax-txt small{color:#9ca3af;font-size:8px;letter-spacing:1.5px;font-weight:600}'
+        '.zerax-badge .zerax-txt b{color:#fff;font-size:11px;letter-spacing:2px;font-weight:900}'
+        '@media print{.zerax-badge{display:none}}'
+        '</style>\n'
     )
-    # Insert just before </head>
     html = html.replace("</head>", injection + "</head>", 1)
 
-    # Register service worker at end of body (so the site is installable when delivered to client domain)
-    sw_register = (
+    # Fixed branding badge (always visible) + PWA gating script
+    body_injection = (
+        '<a class="zerax-badge" href="https://zerax.com?ref=' + project_id + '" target="_blank" rel="noopener" aria-label="Powered by Zerax">'
+        '<span class="zerax-z">Z</span>'
+        '<span class="zerax-txt"><small>POWERED BY</small><b>ZERAX</b></span>'
+        '</a>\n'
         '<script>'
-        "if('serviceWorker' in navigator && window.ZERAX_CONFIG && window.ZERAX_CONFIG.PWA_ENABLED!==false){"
-        "navigator.serviceWorker.register('/sw.js').catch(()=>{});"
-        "}"
+        '(function(){'
+        # PWA gating: check subscription status; only enable install + SW if pwa_enabled
+        "var pid='" + project_id + "';"
+        "fetch('/api/care/pwa-status/'+pid).then(function(r){return r.json()}).then(function(s){"
+        "  window.ZERAX_PWA_ENABLED=!!s.pwa_enabled;"
+        # If subscription inactive: remove manifest link so new visitors can't install
+        "  if(!s.pwa_enabled){"
+        "    var m=document.querySelector('link[rel=manifest]');if(m)m.remove();"
+        "    return;"
+        "  }"
+        # If enabled: register service worker (so the site behaves like an app)
+        "  if('serviceWorker' in navigator){"
+        "    navigator.serviceWorker.register('/sw.js').catch(function(){});"
+        "  }"
+        "}).catch(function(){});"
+        '})();'
         '</script>\n'
     )
-    html = html.replace("</body>", sw_register + "</body>", 1)
+    html = html.replace("</body>", body_injection + "</body>", 1)
     return html
 
 
