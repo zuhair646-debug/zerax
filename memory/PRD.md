@@ -1,5 +1,24 @@
 # Zitex AI Platform - PRD
 
+### 🆕 Feb 9 2026 — Phase 7: Theme Pool Cleanup (Headphones Bug Fix) ✅
+**User report**: User typed "سماعة رأس" in Studio prompt and got **iPhone images** instead of headphones.
+**Root cause**: In `THEMES` dictionary, the "سماعة" keyword was mapped to `id:'phone'` (same as iPhone). So `STYLE_POOLS[style].phone` was returned — phones, not headphones.
+
+**Fix applied:**
+- ✅ **Dedicated headphone pool**: Mapped "سماعة/سماعات/headphone/earphone/airpods/headset/earbuds" to its own `id:'headphone'`
+- ✅ **Added headphone images** to all 4 styles (white/lifestyle/creative/package): 6 white-bg shots, 4 lifestyle shots, 2 creative shots, 2 package shots — totaling 14 distinct genuine headphone images
+- ✅ **Cleaned mismatched URLs**: removed `photo-1611162617474-5b21e879e113` (which was an elephant) from `lifestyle.phone` and other cross-contaminated entries
+- ✅ **Added missing watch/laptop coverage**: extended `lifestyle/creative/package` styles to include watch and laptop sub-pools so mixing always returns expected products
+
+**Result verified by screenshot:**
+- "سماعة رأس" → 6 different headphones ✓
+- "سماعات احترافية متعددة الأنواع" → 6 varied headphones ✓
+- "جوال + سماعة + ساعة" → phone + watch + headphone + 1 lifestyle scene ✓
+
+**File**: `/app/frontend/public/mockups/app_mode_full.html`
+
+
+
 ### 🆕 Feb 9 2026 — Phase 6: Context-Aware Studio (Style/Angle/Auto-Prompt) ✅
 **User feedback addressed**: "الذكاء يكون عارف القسم ويسأل خلفية بيضاء ولا طبيعية، ويولّد عدة زوايا للمنتج (أمام/خلف/يمين/يسار/كرتون)"
 
