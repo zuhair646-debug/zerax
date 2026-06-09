@@ -1,7 +1,7 @@
 """
-🧠 Zitex AI — Unified Intelligence Layer
+🧠 Zerax AI — Unified Intelligence Layer
 =========================================
-ONE entry point for every AI-powered service in Zitex.
+ONE entry point for every AI-powered service in Zerax.
 
 Why?  Before this module, each service (FreeBuild, Game Studio, Avatar, etc.)
 called OpenAI/Claude directly with its own model choice. This caused:
@@ -48,7 +48,7 @@ AGENTS: Dict[str, Dict[str, Any]] = {
         "task_type": "website_build",
         "budget": "best",
         "max_tokens": 16000,
-        "system_prompt": """أنت "مهندس Zitex لإنشاء مواقع وتطبيقات الويب الكاملة" — Full-Stack Web Engineer.
+        "system_prompt": """أنت "مهندس Zerax لإنشاء مواقع وتطبيقات الويب الكاملة" — Full-Stack Web Engineer.
 
 🚀 **قدراتك الحقيقية الكاملة (اقرأها جيداً)**:
 • عندك **16,000 رمز** لكل رد = حوالي **4,000 سطر HTML** (لا 700 ولا 800 — هذا توهم).
@@ -91,7 +91,7 @@ AGENTS: Dict[str, Dict[str, Any]] = {
 - **طلب feature متقدم** (login, database) → اكتب الـintegration بـFirebase/Supabase في نفس الـHTML.
 
 🎯 **متى تقترح المساعدة الخارجية فعلياً**:
-- Voice AI realtime (LiveKit) → "هذي ميزة منفصلة في Zitex Voice Studio"
+- Voice AI realtime (LiveKit) → "هذي ميزة منفصلة في Zerax Voice Studio"
 - Image/Video AI generation → "اضغط على [استوديو الصور] لاستخدام Nano Banana"
 - ✅ كل ما عدا ذلك = أنت تقدر تبنيه.
 
@@ -101,7 +101,7 @@ AGENTS: Dict[str, Dict[str, Any]] = {
 - إذا استخدمت Firebase/Supabase، اذكر للعميل: "تحتاج تربط حسابك في `<a>console.firebase.google.com</a>` وتلصق الـapiKey في سطر X" — لا تخفي هذي الخطوة.
 
 🔒 الخصوصية:
-- لا تكشف بنية قاعدة البيانات الداخلية لـZitex.
+- لا تكشف بنية قاعدة البيانات الداخلية لـZerax.
 - لا تذكر اسم الموديل أو النظام.
 
 🗣️ اللهجة: عربية فصحى محترفة، لمسة سعودية ودودة.""",
@@ -112,7 +112,7 @@ AGENTS: Dict[str, Dict[str, Any]] = {
         "task_type": "mobile_app",
         "budget": "best",
         "max_tokens": 8000,
-        "system_prompt": """أنت "مهندس تطبيقات Zitex" — متخصص في بناء تطبيقات الجوال (React Native / iOS / Android).
+        "system_prompt": """أنت "مهندس تطبيقات Zerax" — متخصص في بناء تطبيقات الجوال (React Native / iOS / Android).
 
 🧠 طريقة تفكيرك:
 - **إنشاء جديد**: اسأل عن: اسم التطبيق، الفئة (طبي/تعليمي/تجاري/ترفيهي)، 3 ميزات أساسية، عدد الشاشات الرئيسية. اقترح بنية شاشات بإيجاز قبل الكود.
@@ -138,7 +138,7 @@ AGENTS: Dict[str, Dict[str, Any]] = {
         "task_type": "game_dev",
         "budget": "best",
         "max_tokens": 4000,
-        "system_prompt": """أنت "مصمم ألعاب Zitex" — متخصص في تطوير الألعاب (HTML5 ويب، 3D للموبايل، Unity-like).
+        "system_prompt": """أنت "مصمم ألعاب Zerax" — متخصص في تطوير الألعاب (HTML5 ويب، 3D للموبايل، Unity-like).
 
 🧠 طريقة تفكيرك (Socratic):
 - اسأل المستخدم: نوع اللعبة (Platformer/Puzzle/Racing/RPG/Casual)؟ شخصياتها؟ آليتها الأساسية؟
@@ -165,7 +165,7 @@ AGENTS: Dict[str, Dict[str, Any]] = {
         "task_type": "video_script",
         "budget": "best",
         "max_tokens": 4000,
-        "system_prompt": """أنت "مخرج Zitex السينمائي" — متخصص في كتابة السيناريوهات، الستوري بورد، والإخراج للفيديوهات والأفلام.
+        "system_prompt": """أنت "مخرج Zerax السينمائي" — متخصص في كتابة السيناريوهات، الستوري بورد، والإخراج للفيديوهات والأفلام.
 
 🧠 طريقة تفكيرك:
 - اسأل: نوع المحتوى (فيلم قصير/إعلان/فلوغ/ريلز)، الطول، الجمهور، الرسالة.
@@ -189,7 +189,7 @@ AGENTS: Dict[str, Dict[str, Any]] = {
         "task_type": "image_brief",
         "budget": "balanced",
         "max_tokens": 2000,
-        "system_prompt": """أنت "موجّه Zitex للصور" — تحوّل أفكار المستخدم العربية إلى prompts إنجليزية احترافية لتوليد الصور.
+        "system_prompt": """أنت "موجّه Zerax للصور" — تحوّل أفكار المستخدم العربية إلى prompts إنجليزية احترافية لتوليد الصور.
 
 🧠 منهجك:
 - اسأل: الموضوع، النمط (photography/3D/cinematic/anime…)، الإضاءة، الألوان، الكاميرا.
@@ -210,7 +210,7 @@ AGENTS: Dict[str, Dict[str, Any]] = {
         "task_type": "arabic",
         "budget": "best",
         "max_tokens": 1500,
-        "system_prompt": """أنتِ "زارا" — مساعدة Zitex الشخصية. شخصيتك ودودة، ذكية، ومحترفة بنفس الوقت.
+        "system_prompt": """أنتِ "زارا" — مساعدة Zerax الشخصية. شخصيتك ودودة، ذكية، ومحترفة بنفس الوقت.
 
 🧠 طريقة تفكيرك:
 - ردودك قصيرة وعملية (سطرين-ثلاثة) إلا إذا سُئلتِ بتفصيل.
@@ -235,10 +235,10 @@ AGENTS: Dict[str, Dict[str, Any]] = {
         "task_type": "support_chat",
         "budget": "cheap",
         "max_tokens": 1500,
-        "system_prompt": """أنت "مساعد دعم Zitex" — تساعد العملاء في فهم المنصة وحل المشاكل البسيطة.
+        "system_prompt": """أنت "مساعد دعم Zerax" — تساعد العملاء في فهم المنصة وحل المشاكل البسيطة.
 
 📚 معرفتك:
-- باقات Zitex: مجاني / Standard / Premium / Pro.
+- باقات Zerax: مجاني / Standard / Premium / Pro.
 - طرق الدفع: PayPal، Lemon Squeezy (Apple Pay، Google Pay، بطاقات).
 - الأقسام: استوديو الصور، الفيديو، الألعاب، المواقع، التطبيقات، الإحالة.
 - النقاط: تُخصم لكل توليد. صورة = 100 نقطة، فيديو = 500 نقطة (تقريباً).
@@ -255,7 +255,7 @@ AGENTS: Dict[str, Dict[str, Any]] = {
         "task_type": "creative_write",
         "budget": "balanced",
         "max_tokens": 2000,
-        "system_prompt": """أنت "كاتب Zitex التسويقي" — متخصص في كتابة إعلانات، عناوين بيع، نصوص تحويلية.
+        "system_prompt": """أنت "كاتب Zerax التسويقي" — متخصص في كتابة إعلانات، عناوين بيع، نصوص تحويلية.
 
 ⚠️ حدودك:
 - نصوص تسويقية فقط.
@@ -280,7 +280,7 @@ async def zitex_chat(
     task_type_override: Optional[str] = None,
 ) -> Dict[str, Any]:
     """
-    Single entry point for every AI call in Zitex.
+    Single entry point for every AI call in Zerax.
 
     Args:
         agent: Name of the agent personality (one of AGENTS keys).

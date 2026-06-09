@@ -1,7 +1,7 @@
 /**
- * ZitexDuo — the signature dual AI assistants: Zara (زارا) + Layla (ليلى).
+ * ZeraxDuo — the signature dual AI assistants: Zara (زارا) + Layla (ليلى).
  *
- * Permanent bottom-of-screen companions for the main Zitex site.
+ * Permanent bottom-of-screen companions for the main Zerax site.
  *
  * Features:
  *   - Always visible: both peek from the bottom corners (idle animations)
@@ -57,7 +57,7 @@ function detectIntent(userText) {
   return null;
 }
 
-export default function ZitexDuo() {
+export default function ZeraxDuo() {
   const navigate = useNavigate();
   const [openChar, setOpenChar] = useState(null);  // 'zara' | 'layla' | null
   const [messages, setMessages] = useState([]);

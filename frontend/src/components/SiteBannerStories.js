@@ -1,5 +1,5 @@
 /**
- * SiteBannerStories — luxurious rotating banner + Stories ribbon for Zitex's own site.
+ * SiteBannerStories — luxurious rotating banner + Stories ribbon for Zerax's own site.
  *
  * Renders:
  *   • A full-width hero banner that auto-rotates between admin-managed slides

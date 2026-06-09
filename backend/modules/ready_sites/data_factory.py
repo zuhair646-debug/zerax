@@ -507,7 +507,7 @@ def render_cart_module(seed: Dict[str, Any]) -> str:
     """Pre-built cart drawer + working addToCart + checkout flow. Overrides any AI-defined cart."""
     brand_phone = seed["branding"]["whatsapp"]
     return f"""
-<!-- ═══ Zitex Cart Module ═══ -->
+<!-- ═══ Zerax Cart Module ═══ -->
 <style>
 #zx-cart-btn{{position:fixed;bottom:24px;left:24px;width:62px;height:62px;border-radius:50%;background:#a52a2a;color:#fff;border:none;cursor:pointer;box-shadow:0 10px 30px rgba(165,42,42,.4);z-index:9000;font-size:24px;transition:transform .2s}}
 #zx-cart-btn:hover{{transform:scale(1.08)}}
@@ -675,7 +675,7 @@ def render_cart_module(seed: Dict[str, Any]) -> str:
 
 def render_zitex_enhancements(seed: Dict[str, Any], project_id: str = "") -> str:
     """Unified enhancements: global add-to-cart delegation, category filter, reservation modal,
-    contact smooth-scroll, reviews slider, and clean Zitex footer with tracking link.
+    contact smooth-scroll, reviews slider, and clean Zerax footer with tracking link.
 
     This is injected near </body> AFTER the AI's HTML, so it overrides AI behaviour.
     """
@@ -705,11 +705,11 @@ def render_zitex_enhancements(seed: Dict[str, Any], project_id: str = "") -> str
     for c in cats:
         cat_pills += f'<button class="zx-cat-pill" data-cat="{c["id"]}">{c["name"]}</button>'
 
-    track_url = f"https://zitex.com/?ref={project_id}" if project_id else "https://zitex.com"
+    track_url = f"https://zerax.com/?ref={project_id}" if project_id else "https://zerax.com"
     map_q = (branding.get("address") or branding.get("city") or "Riyadh").replace(" ", "+")
 
     return f"""
-<!-- ═══ Zitex Enhancements Module ═══ -->
+<!-- ═══ Zerax Enhancements Module ═══ -->
 <style>
 /* Reservation modal */
 #zx-resv-modal,#zx-contact-modal{{position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:9300;display:none;align-items:center;justify-content:center;direction:rtl;font-family:'Tajawal',sans-serif}}
@@ -750,7 +750,7 @@ def render_zitex_enhancements(seed: Dict[str, Any], project_id: str = "") -> str
 .zx-rev-dot{{width:10px;height:10px;border-radius:50%;background:#d1d5db;border:none;cursor:pointer;transition:all .2s;padding:0}}
 .zx-rev-dot.active{{width:30px;border-radius:99px;background:#a52a2a}}
 
-/* Unified Zitex footer */
+/* Unified Zerax footer */
 #zx-footer{{background:#0a0a0b;color:#cbd5e1;padding:50px 24px 0;direction:rtl;font-family:'Tajawal',sans-serif}}
 #zx-footer-inner{{max-width:1200px;margin:0 auto}}
 .zx-foot-grid{{display:grid;grid-template-columns:1.4fr 1fr 1fr 1.2fr;gap:36px;padding-bottom:36px}}
@@ -773,7 +773,7 @@ def render_zitex_enhancements(seed: Dict[str, Any], project_id: str = "") -> str
 .zx-contact-list .zx-ico{{font-size:16px}}
 .zx-map-mini{{margin-top:10px;width:100%;height:140px;border:none;border-radius:10px;background:#1e293b}}
 
-/* Zitex tracker bar */
+/* Zerax tracker bar */
 .zx-zitex-bar{{border-top:1px solid #1e293b;padding:18px 0;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:14px}}
 .zx-zitex-copy{{color:#64748b;font-size:12px}}
 .zx-zitex-brand{{display:flex;align-items:center;gap:10px;text-decoration:none;padding:8px 14px;border-radius:99px;background:linear-gradient(135deg,rgba(251,191,36,.1),rgba(165,42,42,.1));border:1px solid rgba(251,191,36,.2);transition:all .25s}}
@@ -832,7 +832,7 @@ def render_zitex_enhancements(seed: Dict[str, Any], project_id: str = "") -> str
   <div class="zx-rev-dots" id="zx-rev-dots"></div>
 </section>
 
-<!-- ═══ Unified Zitex Footer ═══ -->
+<!-- ═══ Unified Zerax Footer ═══ -->
 <footer id="zx-footer">
   <div id="zx-footer-inner">
     <div class="zx-foot-grid">
@@ -882,14 +882,14 @@ def render_zitex_enhancements(seed: Dict[str, Any], project_id: str = "") -> str
         <div class="zx-zitex-logo">Z</div>
         <div class="zx-zitex-text">
           <small>صُنع بواسطة</small>
-          <strong>Zitex</strong>
+          <strong>Zerax</strong>
         </div>
       </a>
     </div>
     <div style="text-align:center;padding:12px 0 18px;border-top:1px solid #1e293b">
-      <a href="https://zitex.com/showcase" target="_blank" rel="noopener" data-zx-showcase style="color:#64748b;font-size:11px;text-decoration:none;display:inline-flex;align-items:center;gap:6px">
+      <a href="https://zerax.com/showcase" target="_blank" rel="noopener" data-zx-showcase style="color:#64748b;font-size:11px;text-decoration:none;display:inline-flex;align-items:center;gap:6px">
         <span>✨</span>
-        <span>شاهد <strong style="color:#fbbf24" data-zx-showcase-count>+100</strong> موقع آخر مبني على منصة Zitex</span>
+        <span>شاهد <strong style="color:#fbbf24" data-zx-showcase-count>+100</strong> موقع آخر مبني على منصة Zerax</span>
         <span>←</span>
       </a>
     </div>
@@ -1020,21 +1020,21 @@ def render_zitex_enhancements(seed: Dict[str, Any], project_id: str = "") -> str
     }}
   }}
 
-  /* ═══ 7. Zitex tracker ping + dynamic site count ═══ */
+  /* ═══ 7. Zerax tracker ping + dynamic site count ═══ */
   const trkLink = document.querySelector('[data-zx-tracker]');
   if(trkLink){{
     const pid = trkLink.getAttribute('data-zx-tracker');
     if(pid){{
       try{{
         const img = new Image();
-        img.src = 'https://zitex.com/api/ready-sites/track-visit/' + pid + '?t=' + Date.now();
+        img.src = 'https://zerax.com/api/ready-sites/track-visit/' + pid + '?t=' + Date.now();
       }}catch(_){{}}
     }}
   }}
   const countEl = document.querySelector('[data-zx-showcase-count]');
   if(countEl){{
     try{{
-      fetch('https://zitex.com/api/ready-sites/showcase?limit=1')
+      fetch('https://zerax.com/api/ready-sites/showcase?limit=1')
         .then(r => r.ok ? r.json() : null)
         .then(d => {{
           if(d && d.total_built){{ countEl.textContent = '+' + d.total_built; }}
@@ -1081,7 +1081,7 @@ def render_admin_full_app(seed: Dict[str, Any], admin_email: str, admin_password
     analytics = seed["analytics"]["today"]
 
     return f"""
-<!-- ═══ Zitex Admin Module ═══ -->
+<!-- ═══ Zerax Admin Module ═══ -->
 <style>
 #zx-admin-root,#zx-driver-root{{display:none;font-family:'Tajawal',sans-serif;direction:rtl}}
 #zx-admin-root.active,#zx-driver-root.active{{display:block;position:fixed;inset:0;background:#f3f4f6;z-index:9999;overflow-y:auto}}

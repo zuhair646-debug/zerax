@@ -46,7 +46,7 @@ def chatbot_widget(slug: str, project: dict) -> str:
       <input id="zxai-input" type="text" placeholder="اكتب سؤالك..." />
       <button id="zxai-send">📤</button>
     </div>
-    <div style="font-size:9px;text-align:center;opacity:.4;padding:4px">مدعوم بـ Zitex AI</div>
+    <div style="font-size:9px;text-align:center;opacity:.4;padding:4px">مدعوم بـ Zerax AI</div>
   </div>
 </div>
 <style>

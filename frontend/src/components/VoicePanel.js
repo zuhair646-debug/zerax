@@ -194,7 +194,7 @@ export default function VoicePanel({ open, onClose, user }) {
             from_voice: true,
             ts: Date.now(),
           }));
-          // Separate key for ZitexDuoLauncher to re-open panel after navigation
+          // Separate key for ZeraxDuoLauncher to re-open panel after navigation
           sessionStorage.setItem('zitex_voice_reopen', JSON.stringify({ ts: Date.now() }));
           toast.success(`تمام! أخذك إلى ${d.intent.intent === 'image' ? 'قسم الصور' : d.intent.intent === 'video' ? 'قسم الفيديو' : 'القسم المطلوب'}`);
           setTimeout(() => navigate(route), 1200);

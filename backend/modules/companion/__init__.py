@@ -1,5 +1,5 @@
 """
-Zitex Companion — Personal AI companion (Zara/Layla) for mobile PWA.
+Zerax Companion — Personal AI companion (Zara/Layla) for mobile PWA.
 
 Features:
     - Deep personal profile (age, role, schedule, exams, diet, goals, family, etc.)

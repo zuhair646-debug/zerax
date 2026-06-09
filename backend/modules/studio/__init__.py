@@ -1,5 +1,5 @@
 """
-Zitex Studio Module — deep AI generation studio for merchants/clients.
+Zerax Studio Module — deep AI generation studio for merchants/clients.
 
 Provides three premium studio endpoints:
     POST /api/studio/image/generate   — deep scenario-driven image generation

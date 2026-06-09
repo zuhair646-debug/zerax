@@ -1,5 +1,5 @@
 """
-Zitex Shipping System Tests — Iteration 17
+Zerax Shipping System Tests — Iteration 17
 ═══════════════════════════════════════════
 Tests for the new shipping integration:
 1. GET /api/websites/shipping/providers — returns 6 SA providers
@@ -22,7 +22,7 @@ if not BASE_URL:
     BASE_URL = "https://ai-cinematic-hub-2.preview.emergentagent.com"
 
 # Test credentials from /app/memory/test_credentials.md
-OWNER_EMAIL = "owner@zitex.com"
+OWNER_EMAIL = "owner@zerax.com"
 OWNER_PASSWORD = "owner123"
 TEST_SLUG = "cozy-cafe-demo"
 SITE_CUSTOMER_PHONE = "0501122334"

@@ -9,9 +9,9 @@ import { Sparkles, X } from 'lucide-react';
  */
 const PROMO = {
   text: 'خصم 20% على باقة Premium الأسبوع · استخدم الكود',
-  code: 'ZITEX20',
+  code: 'ZERAX20',
   cta: 'اشتري الآن',
-  href: '/pricing?promo=ZITEX20',
+  href: '/pricing?promo=ZERAX20',
 };
 
 export const PromoStrip = () => {

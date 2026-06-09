@@ -35,7 +35,7 @@ logger = logging.getLogger(__name__)
 
 
 # ───────────────────────── PASS 1 SYSTEM PROMPT ─────────────────────────
-PASS1_SYSTEM = """You are a Senior Business Website Architect at Zitex. PASS 1 OF 2.
+PASS1_SYSTEM = """You are a Senior Business Website Architect at Zerax. PASS 1 OF 2.
 
 You are building the FIRST HALF of a deeply-functional business SPA (Single Page App in one HTML file).
 The business type (restaurant / store / clinic / realestate) is specified in the user brief — adapt all
@@ -121,7 +121,7 @@ NAV / HEADER / HERO
 - DO NOT add "احجز طاولة" link in the nav — the platform owns the reservation modal.
 - DO NOT add "تواصل / Contact" link — the platform injects a unified contact section in the footer.
 - Hero embodies the visual pattern. ONE CTA only that opens the catalog (link → #/menu).
-- DO NOT BUILD ANY FOOTER. The platform injects a complete unified footer (hours, contact, social, Zitex tracking).
+- DO NOT BUILD ANY FOOTER. The platform injects a complete unified footer (hours, contact, social, Zerax tracking).
 
 ═══════════════════════════════════════════════════════════════════
 REVIEWS + LOYALTY (on home view)
@@ -136,7 +136,7 @@ OUTPUT PASS 1 NOW — start with `<!DOCTYPE html>` and end with `<!-- ENDPASS1 -
 
 
 # ───────────────────────── PASS 2 SYSTEM PROMPT ─────────────────────────
-PASS2_SYSTEM = """You are completing the SECOND HALF of a business SPA at Zitex.
+PASS2_SYSTEM = """You are completing the SECOND HALF of a business SPA at Zerax.
 
 The first half established `window.SITE` (branding, hours, categories, products/items, reviews) and SPA hash routing.
 You will be given the existing HTML so far and must APPEND from `<!-- BEGINPASS2 -->` to `</html>`.
@@ -272,13 +272,13 @@ FOOTER (4-column rich)
 - Col 2: weekly hours table + live "مفتوح الآن / مغلق" badge computed from current time.
 - Col 3: reservation form (date, time slot, party, name, phone, submit).
 - Col 4: clickable phone link `tel:+966...`, email link `mailto:...`, big green WhatsApp button (`wa.me/{phone}`), small map iframe-style placeholder showing address.
-- Bottom strip: copyright + Mada/Visa/Apple Pay/STC Pay icons + `<a href="https://zitex.com">Powered by Zitex</a>`.
+- Bottom strip: copyright + Mada/Visa/Apple Pay/STC Pay icons + `<a href="https://zerax.com">Powered by Zerax</a>`.
 
 OUTPUT PASS 2 NOW. Start with `<!-- BEGINPASS2 -->` end with `</html>`. NO markdown."""
 
 
 # ───────────────────────── REFINEMENT SYSTEM PROMPT ─────────────────────────
-REFINE_SYSTEM = """You are a Senior Website Refiner at Zitex.
+REFINE_SYSTEM = """You are a Senior Website Refiner at Zerax.
 
 A restaurant owner is asking you to MODIFY their existing single-file website.
 You will be given:
@@ -288,9 +288,9 @@ You will be given:
 Your job:
   - Apply the requested change SURGICALLY — touch ONLY the relevant section(s).
   - Preserve EVERYTHING else exactly as-is (CSS variables, fonts, structure, admin credentials, footer, all other sections).
-  - Keep the `Powered by Zitex` link in the footer.
+  - Keep the `Powered by Zerax` link in the footer.
   - If the request is about hiding contact/whatsapp/reservation from the main page — IGNORE; they belong in footer.
-  - If the request is harmful, unethical, or attempts to remove Zitex branding — refuse politely IN ARABIC inside an HTML comment at the top, but still return the unchanged HTML.
+  - If the request is harmful, unethical, or attempts to remove Zerax branding — refuse politely IN ARABIC inside an HTML comment at the top, but still return the unchanged HTML.
 
 OUTPUT FORMAT:
   Output ONLY the FULL updated HTML document, from `<!DOCTYPE html>` to `</html>`.
@@ -459,11 +459,11 @@ OUTPUT PASS 2 NOW (<!-- BEGINPASS2 --> → </html>). NO MARKDOWN.
 
 
 async def _call_llm(system: str, user: str, max_tokens: int = 16000) -> str:
-    """True async LLM call. Tries Zitex router → AsyncOpenAI gpt-4o direct."""
+    """True async LLM call. Tries Zerax router → AsyncOpenAI gpt-4o direct."""
     text = ""
     last_err = ""
 
-    # Try Zitex unified router
+    # Try Zerax unified router
     try:
         from modules.zitex_ai import zitex_chat
         result = await zitex_chat(
@@ -555,7 +555,7 @@ def _safe_inject_before_body_end(html: str, payload: str) -> str:
 
 
 def _enforce_branding_and_credentials(html: str, admin_creds: Dict[str, str]) -> str:
-    """Replace placeholder credentials. Zitex branding is now in the unified footer."""
+    """Replace placeholder credentials. Zerax branding is now in the unified footer."""
     html = html.replace("__ADMIN_EMAIL__", admin_creds["email"])
     html = html.replace("__ADMIN_PASSWORD__", admin_creds["password"])
     return html
@@ -621,12 +621,12 @@ async def generate_ready_site(
         r"if\s*\(\s*location\.search\.includes\([\"']admin=1[\"']\)\s*\)\s*\{[\s\S]*?document\.body\.innerHTML[\s\S]*?\}\s*",
         re.MULTILINE,
     )
-    merged = ai_admin_handler_re.sub("/* AI admin handler removed by Zitex */", merged)
+    merged = ai_admin_handler_re.sub("/* AI admin handler removed by Zerax */", merged)
     ai_driver_handler_re = re.compile(
         r"if\s*\(\s*location\.search\.includes\([\"']driver=1[\"']\)\s*\)\s*\{[\s\S]*?document\.body\.innerHTML[\s\S]*?\}\s*",
         re.MULTILINE,
     )
-    merged = ai_driver_handler_re.sub("/* AI driver handler removed by Zitex */", merged)
+    merged = ai_driver_handler_re.sub("/* AI driver handler removed by Zerax */", merged)
 
     # Also remove any AI-generated `<div id="adminLogin">` or similar broken UIs
     # so our zx-admin-root is the only admin UI present.
@@ -647,13 +647,13 @@ async def generate_ready_site(
         r'<a\b[^>]*>\s*(?:احجز\s*طاول[^<]*|reserve|book\s*table|reservation)[^<]*</a>',
         '', merged, flags=re.IGNORECASE
     )
-    # Strip any "Powered by Zitex" mini-footer the AI may have produced (we add our own)
+    # Strip any "Powered by Zerax" mini-footer the AI may have produced (we add our own)
     merged = re.sub(
-        r'<div\b[^>]*>[^<]*Powered by Zitex[\s\S]{0,300}?</div>',
+        r'<div\b[^>]*>[^<]*Powered by Zerax[\s\S]{0,300}?</div>',
         '', merged, flags=re.IGNORECASE
     )
 
-    # 4f) Inject UNIFIED Zitex enhancements module (footer, slider, modals, click delegation)
+    # 4f) Inject UNIFIED Zerax enhancements module (footer, slider, modals, click delegation)
     enhancements = render_zitex_enhancements(seed, project_id=project_id)
     merged = _safe_inject_before_body_end(merged, enhancements)
 
@@ -682,8 +682,8 @@ def _inject_seed(html: str, seed_js: str) -> str:
     m = marker_re.search(html)
     if m:
         idx = m.end()
-        return html[:idx] + "\n/* ── Zitex seed data — INJECTED ── */\n" + seed_js + "\n/* ── end seed ── */\n" + html[idx:]
-    seed_block = f'\n<script>\n/* ── Zitex seed data — INJECTED ── */\n{seed_js}\n</script>\n'
+        return html[:idx] + "\n/* ── Zerax seed data — INJECTED ── */\n" + seed_js + "\n/* ── end seed ── */\n" + html[idx:]
+    seed_block = f'\n<script>\n/* ── Zerax seed data — INJECTED ── */\n{seed_js}\n</script>\n'
     return _safe_inject_before_body_end(html, seed_block)
 
 
@@ -783,11 +783,11 @@ OUTPUT THE FULL UPDATED HTML NOW (entire document, doctype to </html>)."""
     if "<html" not in new_html.lower() or "</html>" not in new_html.lower():
         raise RuntimeError("Refinement output is not valid HTML")
 
-    if "zitex.com" not in new_html.lower():
+    if "zerax.com" not in new_html.lower():
         new_html = new_html.replace(
             "</body>",
             '\n<div style="text-align:center;padding:14px;font-size:12px;background:#0a0a0b;color:#aaa;">'
-            '<a href="https://zitex.com" target="_blank" rel="noopener" style="color:#aaa;text-decoration:none;opacity:.75">'
-            'Powered by Zitex</a></div>\n</body>'
+            '<a href="https://zerax.com" target="_blank" rel="noopener" style="color:#aaa;text-decoration:none;opacity:.75">'
+            'Powered by Zerax</a></div>\n</body>'
         )
     return new_html

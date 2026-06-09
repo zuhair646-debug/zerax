@@ -1,5 +1,5 @@
 """
-Zitex Chat API Router
+Zerax Chat API Router
 راوتر API للشات الذكي
 """
 from fastapi import APIRouter, HTTPException, Depends, UploadFile, File, Form
@@ -487,7 +487,7 @@ body {{ display:flex; align-items:center; justify-content:center; min-height:100
 <body><div class="card">
 <div class="icon">{"🎮" if "game" in template_id else "🌐" if "landing" in template_id else "🛒" if "ecommerce" in template_id else "👤" if "portfolio" in template_id else "📊"}</div>
 <div class="title">{title}</div>
-<div class="badge">Zitex Template</div>
+<div class="badge">Zerax Template</div>
 </div></body></html>'''
     return HTMLResponse(content=preview_html)
 

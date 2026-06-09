@@ -1723,11 +1723,11 @@ def make_freebuild_chat_router(db, get_current_user):
             "paths": [
                 {
                     "id": "host_with_us",
-                    "title": "🏠 استضف معنا على Zitex",
+                    "title": "🏠 استضف معنا على Zerax",
                     "price_usd": 0,
-                    "subtitle": "مجاني تماماً — موقعك على دومين Zitex، نتولى الاستضافة والصيانة",
+                    "subtitle": "مجاني تماماً — موقعك على دومين Zerax، نتولى الاستضافة والصيانة",
                     "features": [
-                        "نشر فوري على نطاق zitex.com",
+                        "نشر فوري على نطاق zerax.com",
                         "SSL مجاني وأداء عالي",
                         "تعديل لاحق عبر نفس الشات",
                         "لا تحتاج خبرة تقنية",
@@ -1911,7 +1911,7 @@ def make_freebuild_chat_router(db, get_current_user):
             cr_r = await cli.post(
                 "https://api.github.com/user/repos",
                 headers=headers,
-                json={"name": repo_name, "private": private, "auto_init": True, "description": f"Built with Zitex — {proj.get('name','')}"},
+                json={"name": repo_name, "private": private, "auto_init": True, "description": f"Built with Zerax — {proj.get('name','')}"},
             )
             if cr_r.status_code not in (201, 422):  # 422 = already exists
                 raise HTTPException(400, f"فشل إنشاء المستودع: {cr_r.status_code} — {cr_r.text[:120]}")
@@ -1926,7 +1926,7 @@ def make_freebuild_chat_router(db, get_current_user):
             # 4) PUT index.html
             content_b64 = base64.b64encode(proj["current_html"].encode()).decode()
             payload = {
-                "message": f"Update from Zitex — {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M')}",
+                "message": f"Update from Zerax — {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M')}",
                 "content": content_b64,
             }
             if sha:
@@ -2012,7 +2012,7 @@ def make_freebuild_chat_router(db, get_current_user):
         pseudo_project = {
             "id": aid,
             "type": app_type,
-            "title": doc.get("name", "تطبيق Zitex"),
+            "title": doc.get("name", "تطبيق Zerax"),
             "description": doc.get("description", ""),
             "primary_color": doc.get("primary_color", "#10b981"),
             "package_id": doc.get("package_id", "com.zitex.app"),

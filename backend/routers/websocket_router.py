@@ -1,5 +1,5 @@
 """
-Zitex WebSocket Router - Real-time Chat
+Zerax WebSocket Router - Real-time Chat
 شات حي مع تحديثات التقدم
 """
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect

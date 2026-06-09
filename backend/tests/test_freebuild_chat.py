@@ -21,7 +21,7 @@ import requests
 BASE_URL = os.environ.get("REACT_APP_BACKEND_URL", "https://ai-cinematic-hub-2.preview.emergentagent.com").rstrip("/")
 PREFIX = f"{BASE_URL}/api/freebuild-chat"
 
-OWNER_EMAIL = "owner@zitex.com"
+OWNER_EMAIL = "owner@zerax.com"
 OWNER_PASS = "owner123"
 
 TAG_RE = re.compile(r"<<\s*(HERO|SECTION_BG|LOGO|PRODUCT|ICON|BANNER_AR|GALLERY)\s*[:：]", re.IGNORECASE)

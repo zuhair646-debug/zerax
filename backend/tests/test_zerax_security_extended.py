@@ -1,5 +1,5 @@
 """
-Zitex Security Center — EXTENDED 14-Layer test suite
+Zerax Security Center — EXTENDED 14-Layer test suite
 ─────────────────────────────────────────────────────
 Covers L1 (actual slowapi rate limit), L11 (honeypot), L12 (bad UA),
 L13 (JWT revocation), L14 (password strength) — plus regression on
@@ -26,7 +26,7 @@ if not BASE_URL:
     except Exception:
         pass
 
-ADMIN_EMAIL = "owner@zitex.com"
+ADMIN_EMAIL = "owner@zerax.com"
 ADMIN_PASSWORD = "owner123"
 
 CLEAN_UA = "Mozilla/5.0 (Macintosh; Intel Mac OS X 14_0) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36"

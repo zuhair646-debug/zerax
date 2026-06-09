@@ -1,5 +1,5 @@
 """
-Shared Agent Core — Unified intelligence layer for every Zitex section.
+Shared Agent Core — Unified intelligence layer for every Zerax section.
 
 Each user-facing section (Images, Videos, Websites, Apps, Games, Owner) gets
 an instance of `SectionAgent` configured with:

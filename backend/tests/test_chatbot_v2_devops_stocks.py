@@ -1,5 +1,5 @@
 """
-Comprehensive tests for Zitex AI Platform - Iteration 19
+Comprehensive tests for Zerax AI Platform - Iteration 19
 =========================================================
 Testing:
 1. Storefront Chatbot v2 (deep knowledge, HANDOFF detection)
@@ -18,7 +18,7 @@ import json
 BASE_URL = os.environ.get('REACT_APP_BACKEND_URL', 'https://ai-cinematic-hub-2.preview.emergentagent.com').rstrip('/')
 
 # Test credentials from test_credentials.md
-OWNER_EMAIL = "owner@zitex.com"
+OWNER_EMAIL = "owner@zerax.com"
 OWNER_PASSWORD = "owner123"
 CLIENT_SLUG = "cozy-cafe-demo"
 CLIENT_PASSWORD = "WKDWkG0d"

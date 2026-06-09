@@ -527,7 +527,7 @@ AUDIO_CARD_TEMPLATE = '''
 
 
 # ════════════════════════════════════════════════════════════════════════════
-#  NAVBAR REFERENCE TEMPLATE (Zitex-style — pill nav, glassmorphism)
+#  NAVBAR REFERENCE TEMPLATE (Zerax-style — pill nav, glassmorphism)
 # ════════════════════════════════════════════════════════════════════════════
 NAVBAR_TEMPLATE = '''
 <header class="topbar">

@@ -1,5 +1,5 @@
 """
-Zitex AI Chat Service - Progressive Builder Edition
+Zerax AI Chat Service - Progressive Builder Edition
 خدمة الشات الذكي - النسخة التدريجية
 Version 7.0 - Real Hosting + Full Game Support
 """
@@ -103,7 +103,7 @@ except ImportError:
     VoiceSettings = None
 
 
-MASTER_SYSTEM_PROMPT = """أنت "زيتكس" (Zitex) - مهندس ذكاء اصطناعي محترف لبناء المشاريع الرقمية.
+MASTER_SYSTEM_PROMPT = """أنت "زيتكس" (Zerax) - مهندس ذكاء اصطناعي محترف لبناء المشاريع الرقمية.
 أنت مستشار ومنفذ. تفهم المشروع بالكامل ثم تبنيه قسم قسم مع العميل.
 
 ## القواعد الأساسية:
@@ -272,7 +272,7 @@ prompt: [وصف شاشة اللعبة الرئيسية بالتفصيل - الخ
 - ابنِ الكود فوراً في [CODE_BLOCK]
 - انظر للصورة المرجعية المرفقة وطابق ألوانها وأسلوبها
 
-للألعاب الاستراتيجية وبناء القرى، استخدم محرك Zitex الجاهز:
+للألعاب الاستراتيجية وبناء القرى، استخدم محرك Zerax الجاهز:
 كود بسيط جداً ينتج لعبة مليئة بالعناصر (40+ عنصر: قلاع، بيوت، أشجار، مزارع، جنود، غيوم، زهور):
 
 [CODE_BLOCK]
@@ -288,7 +288,7 @@ prompt: [وصف شاشة اللعبة الرئيسية بالتفصيل - الخ
 <div id="game-world"></div>
 <script src="/api/game-engine.js"></script>
 <script>
-ZitexGame.init({
+ZeraxGame.init({
   theme: 'medieval',
   buildings: 6,
   trees: 12,
@@ -499,10 +499,10 @@ WELCOME_MESSAGE = """## 👋 مرحباً بك في زيتكس!
 [/BUTTONS]"""
 
 
-ZITEX_BADGE = '''<!-- Zitex Badge -->
+ZERAX_BADGE = '''<!-- Zerax Badge -->
 <div id="zitex-badge" style="position:fixed;bottom:20px;right:20px;background:linear-gradient(135deg,#1a1a2e,#16213e);padding:10px 20px;border-radius:25px;box-shadow:0 4px 15px rgba(0,0,0,0.3);z-index:9999;display:flex;align-items:center;gap:10px;cursor:pointer;border:1px solid rgba(255,215,0,0.3);" onclick="window.open('https://zitex.vercel.app','_blank')">
     <div style="width:30px;height:30px;background:linear-gradient(135deg,#ffd700,#ffaa00);border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:bold;color:#000;font-size:16px;">Z</div>
-    <span style="color:#ffd700;font-size:14px;font-weight:500;">Powered by Zitex</span>
+    <span style="color:#ffd700;font-size:14px;font-weight:500;">Powered by Zerax</span>
 </div>'''
 
 
@@ -852,10 +852,10 @@ def detect_request_type(message: str, session_type: str = "general") -> str:
 
 def inject_zitex_badge(html_code: str) -> str:
     if '</body>' in html_code:
-        return html_code.replace('</body>', f'{ZITEX_BADGE}\n</body>')
+        return html_code.replace('</body>', f'{ZERAX_BADGE}\n</body>')
     elif '</html>' in html_code:
-        return html_code.replace('</html>', f'{ZITEX_BADGE}\n</html>')
-    return html_code + '\n' + ZITEX_BADGE
+        return html_code.replace('</html>', f'{ZERAX_BADGE}\n</html>')
+    return html_code + '\n' + ZERAX_BADGE
 
 
 # ============== GAME ENGINE FORCE-INJECTION ==============
@@ -898,8 +898,8 @@ def detect_game_genre_prioritized(primary: str, context: str = "", fallback: str
     return fallback
 
 
-def build_game_html(genre: str, title: str = "لعبة Zitex", hint: str = "", engine_url: str = "/api/game-engine.js", design_image_url: Optional[str] = None) -> str:
-    """Generate a bulletproof HTML shell that loads the Zitex multi-genre game engine.
+def build_game_html(genre: str, title: str = "لعبة Zerax", hint: str = "", engine_url: str = "/api/game-engine.js", design_image_url: Optional[str] = None) -> str:
+    """Generate a bulletproof HTML shell that loads the Zerax multi-genre game engine.
 
     If design_image_url is provided, we render an "image-backed" variant where the
     approved design image is used as the actual playable background with an
@@ -907,7 +907,7 @@ def build_game_html(genre: str, title: str = "لعبة Zitex", hint: str = "", e
     the live preview matches the generated design 1:1 instead of a stylized mock.
     """
     safe_hint = (hint or "").replace('"', "'").replace("\n", " ")[:600]
-    safe_title = (title or "لعبة Zitex").replace('"', "'")[:80]
+    safe_title = (title or "لعبة Zerax").replace('"', "'")[:80]
 
     # === IMAGE-BACKED MODE ===
     # For ANY approved design image, use it as the literal game background.
@@ -948,15 +948,15 @@ def build_game_html(genre: str, title: str = "لعبة Zitex", hint: str = "", e
 <script>
 (function(){{
   function boot(){{
-    if (typeof ZitexGame === 'undefined') {{ setTimeout(boot, 100); return; }}
+    if (typeof ZeraxGame === 'undefined') {{ setTimeout(boot, 100); return; }}
     document.getElementById('zg-loading').remove();
-    try {{ ZitexGame.init({cfg}); }}
+    try {{ ZeraxGame.init({cfg}); }}
     catch(e){{ console.error(e); document.body.innerHTML = '<div style="color:#fff;padding:40px;text-align:center">خطأ في تحميل المحرك: '+e.message+'</div>'; }}
   }}
   boot();
 }})();
 </script>
-<!-- Zitex: hint="{safe_hint}" genre="{genre}" -->
+<!-- Zerax: hint="{safe_hint}" genre="{genre}" -->
 </body>
 </html>"""
 
@@ -1026,7 +1026,7 @@ def _build_image_backed_game(genre: str, title: str, hint: str, image_url: str) 
 <div class="zg-hud"><div class="left">{hud}</div><div class="right"><div class="zg-chip">🎮 {title}</div></div></div>
 <div id="hot-layer"></div>
 <div class="zg-foot">{foot}</div>
-<div class="zg-badge">Zitex Engine · Image-backed</div>
+<div class="zg-badge">Zerax Engine · Image-backed</div>
 <script>
 (function(){{
   const genre = '{genre}';
@@ -1094,7 +1094,7 @@ def _build_image_backed_game(genre: str, title: str, hint: str, image_url: str) 
   upd();
 }})();
 </script>
-<!-- Zitex: hint="{hint}" genre="{genre}" image-backed -->
+<!-- Zerax: hint="{hint}" genre="{genre}" image-backed -->
 </body>
 </html>"""
 
@@ -1108,7 +1108,7 @@ def render_design_to_html(design: dict) -> str:
     h = int(canvas.get("height") or 720)
     bg_img = canvas.get("background_image_url") or ""
     bg_color = canvas.get("background_color") or "#87CEEB"
-    name = (design.get("name") or "لعبة Zitex").replace('"', "'")[:80]
+    name = (design.get("name") or "لعبة Zerax").replace('"', "'")[:80]
     elements = design.get("elements") or []
 
     # Build element HTML
@@ -1219,7 +1219,7 @@ def render_design_to_html(design: dict) -> str:
   <button class="zg-btn" onclick="ZD.act('upgrade')">⭐ ترقية</button>
   <button class="zg-btn" onclick="ZD.act('attack')">🔥 هجوم</button>
 </div>
-<div class="badge">Zitex · من تصميم العميل</div>
+<div class="badge">Zerax · من تصميم العميل</div>
 <script>
 (function(){{
   const state = {{gold:500,wood:300,food:400,stone:150,sold:4}};
@@ -1331,7 +1331,7 @@ def should_override_game_code(code: Optional[str], has_design_image: bool = Fals
     # guarantees match-to-design, so we always prefer it.
     if has_design_image:
         # Respect GPT only if it explicitly wired in our engine
-        if code and ("game-engine.js" in code or "ZitexGame.init" in code):
+        if code and ("game-engine.js" in code or "ZeraxGame.init" in code):
             return False
         return True
 
@@ -1341,7 +1341,7 @@ def should_override_game_code(code: Optional[str], has_design_image: bool = Fals
     if len(c) < 200:
         return True
     # If GPT already wired in our engine, keep it
-    if "game-engine.js" in c or "ZitexGame.init" in c:
+    if "game-engine.js" in c or "ZeraxGame.init" in c:
         return False
     # Heuristic: simplistic HTML with very few nodes -> weak
     svg_count = c.lower().count("<svg")
@@ -1569,7 +1569,7 @@ class AIAssistant:
         
         if code:
             # === FORCE GAME ENGINE OVERRIDE ===
-            # For game requests, guarantee a real playable game by injecting the Zitex engine template
+            # For game requests, guarantee a real playable game by injecting the Zerax engine template
             # whenever GPT's output is weak (short, no <script>, basic SVG scene, etc.).
             if request_type in ("game", "game_3d"):
                 try:
@@ -1583,12 +1583,12 @@ class AIAssistant:
                         for m in session.get("messages", [])[-10:]:
                             ctx_text += " " + (m.get("content") or "")
                         genre = detect_game_genre_prioritized(primary=message, context=ctx_text, fallback="strategy")
-                        title = session.get("title") or "لعبة Zitex"
+                        title = session.get("title") or "لعبة Zerax"
                         overridden = build_game_html(genre=genre, title=title, hint=message[:400], design_image_url=design_url)
                         logger.info(f"GAME OVERRIDE: genre={genre}, original_len={len(code)}, new_len={len(overridden)}")
                         code = overridden
                         # Surface a friendly note to the user about auto-boosting
-                        ai_response = ai_response + f"\n\n✨ تم تفعيل محرك Zitex للألعاب تلقائياً (نوع: {genre}) لضمان لعبة كاملة وقابلة للعب."
+                        ai_response = ai_response + f"\n\n✨ تم تفعيل محرك Zerax للألعاب تلقائياً (نوع: {genre}) لضمان لعبة كاملة وقابلة للعب."
                         assistant_msg["content"] = ai_response
                 except Exception as ge:
                     logger.error(f"Game override failed: {ge}")
@@ -1619,7 +1619,7 @@ class AIAssistant:
                         for m in session.get("messages", [])[-10:]:
                             ctx_text += " " + (m.get("content") or "")
                         genre = detect_game_genre_prioritized(primary=message, context=ctx_text, fallback="strategy")
-                        title = session.get("title") or "لعبة Zitex"
+                        title = session.get("title") or "لعبة Zerax"
                         fresh = await self.db.chat_sessions.find_one({"id": session_id}, {"_id": 0, "project_data": 1}) or {}
                         design_url = (fresh.get("project_data") or {}).get("last_design_image") \
                                      or (session.get("project_data") or {}).get("last_design_image")
@@ -1628,7 +1628,7 @@ class AIAssistant:
                         update_data["$set"]["generated_code"] = code_with_badge
                         assistant_msg["metadata"]["generated_code"] = code_with_badge
                         assistant_msg["metadata"]["has_preview"] = True
-                        ai_response = ai_response + f"\n\n✨ تم بناء اللعبة تلقائياً باستخدام محرك Zitex (نوع: {genre}). شوف المعاينة!"
+                        ai_response = ai_response + f"\n\n✨ تم بناء اللعبة تلقائياً باستخدام محرك Zerax (نوع: {genre}). شوف المعاينة!"
                         assistant_msg["content"] = ai_response
                         code = generated
                         logger.info(f"GAME FALLBACK TRIGGERED: genre={genre}, code_len={len(generated)}")

@@ -1,5 +1,5 @@
 """
-🛡️ Zitex Security Center — full enterprise-grade protection
+🛡️ Zerax Security Center — full enterprise-grade protection
 ─────────────────────────────────────────────────────────────
 All controls live here + visible in /admin/security control room.
 
@@ -278,7 +278,7 @@ def _record_alert(kind: str, severity: str, message: str) -> None:
 async def _send_alert_email(to: str, resend_key: str, alert: Dict[str, Any]):
     try:
         from_email = os.environ.get("FROM_EMAIL", "onboarding@resend.dev")
-        from_name = os.environ.get("FROM_NAME", "Zitex Security")
+        from_name = os.environ.get("FROM_NAME", "Zerax Security")
         async with httpx.AsyncClient(timeout=10) as c:
             r = await c.post(
                 "https://api.resend.com/emails",
@@ -286,10 +286,10 @@ async def _send_alert_email(to: str, resend_key: str, alert: Dict[str, Any]):
                 json={
                     "from": f"{from_name} <{from_email}>",
                     "to": [to],
-                    "subject": f"🚨 [{alert['severity'].upper()}] {alert['kind']} — Zitex Security",
+                    "subject": f"🚨 [{alert['severity'].upper()}] {alert['kind']} — Zerax Security",
                     "html": (
                         f"<div style='font-family:-apple-system,Segoe UI,sans-serif;max-width:600px;margin:auto;padding:24px;background:#0a0a0a;color:#fff'>"
-                        f"<h1 style='color:#ef4444;margin:0 0 12px'>🛡️ Zitex Security Alert</h1>"
+                        f"<h1 style='color:#ef4444;margin:0 0 12px'>🛡️ Zerax Security Alert</h1>"
                         f"<div style='background:#1f1f1f;border-left:4px solid #ef4444;padding:16px;border-radius:8px;margin:16px 0'>"
                         f"<p><b>النوع / Kind:</b> <code>{alert['kind']}</code></p>"
                         f"<p><b>الخطورة / Severity:</b> <span style='color:#f59e0b'>{alert['severity'].upper()}</span></p>"
@@ -556,7 +556,7 @@ def create_router(db, get_admin_user):
         test_alert = {
             "kind": "TEST_EMAIL",
             "severity": "high",
-            "message": "هذا إيميل اختباري من Zitex Security Center — إذا وصلك يعني نظام التنبيهات شغّال ✅",
+            "message": "هذا إيميل اختباري من Zerax Security Center — إذا وصلك يعني نظام التنبيهات شغّال ✅",
             "ts": datetime.now(timezone.utc).isoformat(),
             "id": "test",
         }

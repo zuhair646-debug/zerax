@@ -1,5 +1,5 @@
 """
-Channel Bridge — connects Zitex platform-generated assets (studio images/videos)
+Channel Bridge — connects Zerax platform-generated assets (studio images/videos)
 to the owner's client websites. Auto-publishes to stories/banners or media library.
 
 Endpoints:
@@ -8,7 +8,7 @@ Endpoints:
     POST /api/bridge/push-to-banner        — push a studio asset as Banner slide
     GET  /api/bridge/history?project_id=   — list assets pushed to a site
 
-Each push deducts 2 points (small ops fee). Only Zitex-generated assets
+Each push deducts 2 points (small ops fee). Only Zerax-generated assets
 (from studio_assets, video_wizard_results, image_wizard_results) are bridgeable.
 """
 from __future__ import annotations

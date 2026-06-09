@@ -18,7 +18,7 @@ import threading
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-VAULT_DIR = Path(os.environ.get("ZITEX_VAULT_DIR", "/root/.zitex"))
+VAULT_DIR = Path(os.environ.get("ZERAX_VAULT_DIR", "/root/.zitex"))
 VAULT_FILE = VAULT_DIR / "credentials.json"
 _LOCK = threading.Lock()
 _CACHE: Optional[Dict[str, str]] = None

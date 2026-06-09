@@ -1,5 +1,5 @@
 """
-🎨 Asset Pipeline — automatic optimization for Zitex-generated game assets
+🎨 Asset Pipeline — automatic optimization for Zerax-generated game assets
 ─────────────────────────────────────────────────────────────────────────
 • WebP + AVIF variants per uploaded image (with size matrix)
 • Draco-style optimization marker for 3D models (real Draco needs gltf-pipeline; we record the intent)

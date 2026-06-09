@@ -1,4 +1,4 @@
-"""Zitex Marketing Suite — owner-only AI marketing auto-pilot.
+"""Zerax Marketing Suite — owner-only AI marketing auto-pilot.
 
 Generates daily content (text + image) targeting 5 audience personas,
 publishes to connected channels (Telegram/Discord/Email/Twitter/WhatsApp/Instagram),

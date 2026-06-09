@@ -1,5 +1,5 @@
 """
-Zitex AI Chat System
+Zerax AI Chat System
 نظام المحادثة الذكية لتوليد المحتوى الإبداعي
 """
 from pydantic import BaseModel, Field

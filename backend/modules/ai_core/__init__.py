@@ -1,5 +1,5 @@
 """
-AI Core — the smart intelligence layer that sits between Zitex and upstream LLM APIs.
+AI Core — the smart intelligence layer that sits between Zerax and upstream LLM APIs.
 
 Purpose: Maximum protection against cost overruns + maximum quality.
 
@@ -10,7 +10,7 @@ Purpose: Maximum protection against cost overruns + maximum quality.
     4. Smart model router (cheap model for simple queries, premium for complex)
     5. Cost tracking per request (real-time margin monitoring)
 
-All Zitex AI endpoints (avatar, chatbots, wizards) can route through `ai_core.chat()`
+All Zerax AI endpoints (avatar, chatbots, wizards) can route through `ai_core.chat()`
 and get automatic protection.
 """
 from __future__ import annotations

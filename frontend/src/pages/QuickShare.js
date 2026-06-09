@@ -37,7 +37,7 @@ const QuickShare = ({ user, setUser }) => {
   const shareNative = async (platform) => {
     if (!selected) return toast.error('اختاري ملف للنشر أولاً');
     const url = selected.image_url || selected.video_url || selected.url;
-    const text = `${selected.prompt || 'محتوى من Zitex AI'} ✨\n#Zitex`;
+    const text = `${selected.prompt || 'محتوى من Zerax AI'} ✨\n#Zerax`;
 
     // Save to history
     const history = JSON.parse(localStorage.getItem('zitex_share_history') || '[]');

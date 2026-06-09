@@ -1,5 +1,5 @@
 /**
- * Channel Bridge — owner pushes Zitex-generated assets (studio/wizard) to their client websites.
+ * Channel Bridge — owner pushes Zerax-generated assets (studio/wizard) to their client websites.
  * Route: /dashboard/bridge
  *
  * Lists owner's generated assets (studio images/videos + wizard results) and shows

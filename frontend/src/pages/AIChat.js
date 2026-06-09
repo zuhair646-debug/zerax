@@ -14,10 +14,10 @@ import {
   Smartphone
 } from 'lucide-react';
 
-// ============== Zitex Logo Animation ==============
-const ZITEX_LOGO_URL = "https://static.prod-images.emergentagent.com/jobs/d28c1cbc-c039-46df-a176-2e32ebb0f715/images/f7f88c5a96c3a3978fb84a31dd4d6b922be1568a9083c93bf3cef363e8c17387.png";
+// ============== Zerax Logo Animation ==============
+const ZERAX_LOGO_URL = "https://static.prod-images.emergentagent.com/jobs/d28c1cbc-c039-46df-a176-2e32ebb0f715/images/f7f88c5a96c3a3978fb84a31dd4d6b922be1568a9083c93bf3cef363e8c17387.png";
 
-const ZitexLogo = memo(({ isAnimating, size = 'md' }) => {
+const ZeraxLogo = memo(({ isAnimating, size = 'md' }) => {
   const sizeClasses = {
     sm: 'w-8 h-8',
     md: 'w-10 h-10',
@@ -28,8 +28,8 @@ const ZitexLogo = memo(({ isAnimating, size = 'md' }) => {
   return (
     <div className={`${sizeClasses[size]} relative flex-shrink-0`}>
       <img 
-        src={ZITEX_LOGO_URL} 
-        alt="Zitex" 
+        src={ZERAX_LOGO_URL} 
+        alt="Zerax" 
         className={`w-full h-full object-contain rounded-full ${isAnimating ? 'animate-spin-slow' : ''}`}
       />
       {isAnimating && (
@@ -539,7 +539,7 @@ const ChatMessage = memo(({ msg, idx, renderAttachment, onPlayAudio, onGenerateT
               )}
             </div>
           </div>
-          <ZitexLogo size="sm" isAnimating={isTyping} />
+          <ZeraxLogo size="sm" isAnimating={isTyping} />
         </div>
       )}
     </div>
@@ -1428,8 +1428,8 @@ const AIChat = ({ user }) => {
       return;
     }
     
-    // Remove Zitex badge for export
-    let cleanCode = previewCode.replace(/<!-- Zitex Badge -->[\s\S]*?<\/div>/g, '');
+    // Remove Zerax badge for export
+    let cleanCode = previewCode.replace(/<!-- Zerax Badge -->[\s\S]*?<\/div>/g, '');
     
     // Download as HTML file
     const blob = new Blob([cleanCode], { type: 'text/html' });
@@ -1758,9 +1758,9 @@ const AIChat = ({ user }) => {
               <div className="flex-1 overflow-y-auto">
                 <div className="max-w-5xl mx-auto px-4 py-8 sm:py-12">
                   <div className="text-center mb-8 sm:mb-10">
-                    <ZitexLogo size="xl" isAnimating={false} />
+                    <ZeraxLogo size="xl" isAnimating={false} />
                     <h1 className="text-3xl sm:text-4xl font-black text-white mt-5 mb-2">
-                      مرحباً بك في <span className="text-transparent bg-clip-text bg-gradient-to-r from-amber-400 via-yellow-400 to-amber-500">Zitex</span>
+                      مرحباً بك في <span className="text-transparent bg-clip-text bg-gradient-to-r from-amber-400 via-yellow-400 to-amber-500">Zerax</span>
                     </h1>
                     <p className="text-amber-200/80 text-sm sm:text-base">مساعدك الذكي لإنشاء المواقع والصور والفيديوهات والتطبيقات</p>
                   </div>
@@ -1953,7 +1953,7 @@ const AIChat = ({ user }) => {
                               <span className="text-gray-400 text-sm mr-2">جاري التفكير...</span>
                             </div>
                           </div>
-                          <ZitexLogo size="sm" isAnimating={true} />
+                          <ZeraxLogo size="sm" isAnimating={true} />
                         </div>
                       </div>
                     )}

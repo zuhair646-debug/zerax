@@ -1,5 +1,5 @@
 """
-Backend tests for Zitex Pricing & Billing system (iteration_35).
+Backend tests for Zerax Pricing & Billing system (iteration_35).
 
 Covers:
 - Public catalog endpoints: /api/pricing/plans, /packs, /tax-config, /service-costs
@@ -32,7 +32,7 @@ def _load_base_url():
 
 
 BASE_URL = _load_base_url()
-ADMIN_EMAIL = "owner@zitex.com"
+ADMIN_EMAIL = "owner@zerax.com"
 ADMIN_PASSWORD = "owner123"
 
 

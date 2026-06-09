@@ -78,7 +78,7 @@ mongo_url = os.environ['MONGO_URL']
 client = AsyncIOMotorClient(mongo_url)
 db = client[os.environ['DB_NAME']]
 
-app = FastAPI(title="Zitex API", description="AI-Powered Creative Platform")
+app = FastAPI(title="Zerax API", description="AI-Powered Creative Platform")
 api_router = APIRouter(prefix="/api")
 
 # 🛡️ L1 — Global rate limiter (slowapi) — keyed by real client IP (honors X-Forwarded-For)
@@ -1490,7 +1490,7 @@ async def create_payment(payment_data: PaymentCreate, current_user: dict = Depen
         "videos_monthly": "اشتراك فيديو شهري"
     }.get(payment_data.payment_type, payment_data.payment_type)
     
-    message = f"""💰 دفعة جديدة في Zitex!
+    message = f"""💰 دفعة جديدة في Zerax!
 
 👤 العميل: {user_doc.get('name', 'Unknown')}
 📧 البريد: {user_doc.get('email', '')}
@@ -1697,7 +1697,7 @@ async def get_referral_info(current_user: dict = Depends(get_current_user)):
     
     return {
         "referral_code": referral_code,
-        "referral_link": f"https://zitex.com/register?ref={referral_code}",
+        "referral_link": f"https://zerax.com/register?ref={referral_code}",
         "total_referrals": referrals_count,
         "bonus_points": user_doc.get('bonus_points', 0),
         "rewards": PRICING_CONFIG["referral_rewards"]
@@ -1855,8 +1855,8 @@ async def create_payment_order(request: CreateOrderRequest, current_user: dict =
                 "intent": "sale",
                 "payer": {"payment_method": "paypal"},
                 "redirect_urls": {
-                    "return_url": f"{os.environ.get('FRONTEND_URL', 'https://zitex.com')}/payment/success",
-                    "cancel_url": f"{os.environ.get('FRONTEND_URL', 'https://zitex.com')}/payment/cancel"
+                    "return_url": f"{os.environ.get('FRONTEND_URL', 'https://zerax.com')}/payment/success",
+                    "cancel_url": f"{os.environ.get('FRONTEND_URL', 'https://zerax.com')}/payment/cancel"
                 },
                 "transactions": [{
                     "item_list": {
@@ -1872,7 +1872,7 @@ async def create_payment_order(request: CreateOrderRequest, current_user: dict =
                         "total": str(request.amount),
                         "currency": request.currency
                     },
-                    "description": f"Zitex - {package_name} ({credits_to_add} نقطة)"
+                    "description": f"Zerax - {package_name} ({credits_to_add} نقطة)"
                 }]
             })
             
@@ -3340,7 +3340,7 @@ try:
 except Exception as _se:
     logging.getLogger(__name__).error(f"Failed to register source module: {_se}", exc_info=True)
 
-# ============== SITE BANNER & STORIES (Zitex main marketing site) ==============
+# ============== SITE BANNER & STORIES (Zerax main marketing site) ==============
 try:
     from modules.site.routes import init_routes as init_site_routes
 
@@ -3556,7 +3556,7 @@ try:
     _fb2_router = create_freebuild_v2_router(db, get_current_user)
     app.include_router(_fb2_router)
 
-    # Zitex AI Agent — free-form conversational chat with tools
+    # Zerax AI Agent — free-form conversational chat with tools
     from modules.agent import create_agent_router, create_public_agent_router
     _agent_router = create_agent_router(db, get_current_user)
     app.include_router(_agent_router)
@@ -3566,7 +3566,7 @@ try:
 except Exception as _fb2e:
     logging.getLogger(__name__).error(f"Failed to register freebuild v2 module: {_fb2e}", exc_info=True)
 
-# ============== AUTOCODER (Owner-only AI that programs Zitex itself) ==============
+# ============== AUTOCODER (Owner-only AI that programs Zerax itself) ==============
 try:
     from modules.autocoder import create_autocoder_router
     _ac_router = create_autocoder_router(db, get_current_user, require_owner)
@@ -3620,7 +3620,7 @@ try:
 except Exception as _mobe:
     logging.getLogger(__name__).error(f"Failed to register mobile-app module: {_mobe}", exc_info=True)
 
-# ============== CHANNEL BRIDGE (Push Zitex-generated assets to owner's client websites) ==============
+# ============== CHANNEL BRIDGE (Push Zerax-generated assets to owner's client websites) ==============
 try:
     from modules.bridge import create_bridge_router
     _br_router = create_bridge_router(db, get_current_user)
@@ -3892,7 +3892,7 @@ try:
 except Exception as _ge:
     logging.getLogger(__name__).error(f"games module failed: {_ge}")
 
-# 🎮 Zitex Game Runtime — Backend-as-a-Service for AI-generated games
+# 🎮 Zerax Game Runtime — Backend-as-a-Service for AI-generated games
 # Provides auth/save/leaderboard/achievements/multiplayer/SDK for every project.
 try:
     from modules.game_runtime import create_router as _gr_create
@@ -3929,7 +3929,7 @@ try:
 except Exception as _gee:
     logging.getLogger(__name__).error(f"game_extras module failed: {_gee}")
 
-# 🛡️ Zitex Security Center — 10-layer enterprise protection + admin control room
+# 🛡️ Zerax Security Center — 10-layer enterprise protection + admin control room
 try:
     from modules.security import (
         create_router as _sec_create,
@@ -4081,12 +4081,12 @@ app.mount("/uploads", StaticFiles(directory="/app/backend/uploads"), name="autoc
 
 
 # ═══════════════════════════════════════════════════════════════════
-# 🧠 ZITEX AI — Unified Intelligence Layer (Smart Router + Boundaries)
+# 🧠 ZERAX AI — Unified Intelligence Layer (Smart Router + Boundaries)
 # ═══════════════════════════════════════════════════════════════════
 from modules.zitex_ai import zitex_chat as _zitex_chat, list_agents as _list_agents
 
 
-class ZitexAIRequest(BaseModel):
+class ZeraxAIRequest(BaseModel):
     agent: str = Field(..., description="freebuild|mobile_app|game_studio|cinema|image_studio|avatar|support|marketing")
     messages: List[Dict[str, str]] = Field(..., description="Chat history [{role, content}]")
     extra_context: Optional[str] = None
@@ -4094,12 +4094,12 @@ class ZitexAIRequest(BaseModel):
 
 @api_router.get("/ai/agents")
 async def list_zitex_agents():
-    """Returns metadata for every Zitex AI agent (admin/debug)."""
+    """Returns metadata for every Zerax AI agent (admin/debug)."""
     return {"agents": _list_agents()}
 
 
 @api_router.post("/ai/chat")
-async def zitex_ai_chat(req: ZitexAIRequest, current_user: dict = Depends(get_current_user)):
+async def zitex_ai_chat(req: ZeraxAIRequest, current_user: dict = Depends(get_current_user)):
     """
     Universal AI chat endpoint — routes to the best model with strict boundaries.
 

@@ -1,5 +1,5 @@
 import React from 'react';
-import { Navbar, ZitexLogo } from '@/components/Navbar';
+import { Navbar, ZeraxLogo } from '@/components/Navbar';
 import { Button } from '@/components/ui/button';
 import { useNavigate } from 'react-router-dom';
 import { Sparkles, HelpCircle, X, Check, AlertTriangle, Target } from 'lucide-react';
@@ -105,7 +105,7 @@ const cardInfo = {
   },
   'mobile-market': {
     title: 'سوق التطبيقات — Remix',
-    description: 'مكتبة تطبيقات بناها مجتمع Zitex — استلهم منها، أو "Remix" تطبيق موجود وعدّله لاحتياجك.',
+    description: 'مكتبة تطبيقات بناها مجتمع Zerax — استلهم منها، أو "Remix" تطبيق موجود وعدّله لاحتياجك.',
     features: [
       'تطبيقات جاهزة لكل قطاع',
       'Remix تطبيق بضغطة زر',
@@ -433,14 +433,14 @@ const LandingPage = ({ user }) => {
         {/* Hero header — clean, animated logo only */}
         <div className="text-center mb-6">
           <div className="flex justify-center mb-3">
-            <ZitexLogo size="xl" />
+            <ZeraxLogo size="xl" />
           </div>
           <p className="text-sm sm:text-base text-amber-200/60 font-medium tracking-wide" data-testid="hero-tagline">
-            منصّة <span className="text-amber-300 font-bold">Zitex</span> — أنشئ مواقع، تطبيقات، صور وفيديوهات بالذكاء الاصطناعي
+            منصّة <span className="text-amber-300 font-bold">Zerax</span> — أنشئ مواقع، تطبيقات، صور وفيديوهات بالذكاء الاصطناعي
           </p>
         </div>
 
-        {/* Rotating hero banner — 5 slides (Zitex/Video/Image/Game/App), 8s each */}
+        {/* Rotating hero banner — 5 slides (Zerax/Video/Image/Game/App), 8s each */}
         <div className="mb-10">
           <HeroBanner onGo={goOrRegister} />
         </div>
@@ -495,10 +495,10 @@ const LandingPage = ({ user }) => {
         <div className="container mx-auto px-4 md:px-8 max-w-7xl">
           <div className="flex flex-col md:flex-row items-center justify-between gap-4">
             <div className="flex items-center gap-3">
-              <ZitexLogo size="sm" />
-              <span className="text-transparent bg-clip-text bg-gradient-to-r from-amber-400 to-yellow-500 font-bold text-xl">Zitex</span>
+              <ZeraxLogo size="sm" />
+              <span className="text-transparent bg-clip-text bg-gradient-to-r from-amber-400 to-yellow-500 font-bold text-xl">Zerax</span>
             </div>
-            <p className="text-sm text-gray-500">© 2026 Zitex. جميع الحقوق محفوظة.</p>
+            <p className="text-sm text-gray-500">© 2026 Zerax. جميع الحقوق محفوظة.</p>
           </div>
         </div>
       </footer>

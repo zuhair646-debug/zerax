@@ -124,7 +124,7 @@ export default function AdminAIReadiness() {
             </button>
             <div>
               <h1 className="flex items-center gap-2 text-lg font-black md:text-xl">
-                <Brain className="h-5 w-5 text-amber-400" /> جاهزية الذكاء في Zitex
+                <Brain className="h-5 w-5 text-amber-400" /> جاهزية الذكاء في Zerax
               </h1>
               <p className="text-xs text-zinc-400">قدرات برمجة زيتاكس، النواقص، وروابط الارتقاء</p>
             </div>

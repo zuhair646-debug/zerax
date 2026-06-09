@@ -4,8 +4,8 @@ import { Button } from '@/components/ui/button';
 import { LogOut, LayoutDashboard, Shield, Menu, X, ArrowRight } from 'lucide-react';
 import LanguagePicker from '@/components/LanguagePicker';
 
-// شعار Zitex — الصورة المعتمدة (L1: ملكي تراثي ذهبي) + حركة دوران لطيفة في المكان
-export const ZitexLogo = ({ size = 'md', animated = true }) => {
+// شعار Zerax — الصورة المعتمدة (L1: ملكي تراثي ذهبي) + حركة دوران لطيفة في المكان
+export const ZeraxLogo = ({ size = 'md', animated = true }) => {
   const px = { sm: 32, md: 44, lg: 64, xl: 96 }[size] || 44;
   // pick small image for sm/md, large for lg/xl — saves bandwidth
   const src = px <= 48 ? '/zitex-logo-sm.png' : '/zitex-logo.png';
@@ -13,11 +13,11 @@ export const ZitexLogo = ({ size = 'md', animated = true }) => {
     <span
       className={`zitex-logo-img-wrap ${animated ? 'zitex-logo-img-animated' : ''}`}
       style={{ width: px, height: px, display: 'inline-block', position: 'relative' }}
-      aria-label="Zitex"
+      aria-label="Zerax"
     >
       <img
         src={src}
-        alt="Zitex"
+        alt="Zerax"
         width={px}
         height={px}
         className="zitex-logo-img"
@@ -86,8 +86,8 @@ export const Navbar = ({ user, transparent = false, setUser }) => {
               </button>
             )}
             <Link to="/" className="flex items-center gap-3" data-testid="navbar-logo" data-no-translate="true">
-              <ZitexLogo size="md" />
-              <span className="text-2xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-amber-400 to-yellow-500">Zitex</span>
+              <ZeraxLogo size="md" />
+              <span className="text-2xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-amber-400 to-yellow-500">Zerax</span>
             </Link>
           </div>
 

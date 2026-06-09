@@ -1,5 +1,5 @@
 """
-Zitex Free-Build Website Module — fully AI-driven, NO templates.
+Zerax Free-Build Website Module — fully AI-driven, NO templates.
 
 Philosophy:
     The user does NOT pick from pre-made templates (no "restaurant", "salon", etc.)
@@ -224,10 +224,10 @@ async def _generate_html_with_claude(brief: str) -> str:
     """Call OpenAI gpt-4o (user's DIRECT API key) with the architect prompt + brief.
     Returns the raw HTML string. Raises on failure.
 
-    Routes through Zitex AI Smart Router → picks the BEST model for website-build task
+    Routes through Zerax AI Smart Router → picks the BEST model for website-build task
     (Kimi K2.6 → DeepSeek → Claude Sonnet → GPT-4o). Auto fallback if any provider fails.
     """
-    # NEW: route through unified Zitex AI layer with boundaries
+    # NEW: route through unified Zerax AI layer with boundaries
     try:
         from modules.zitex_ai import zitex_chat
         result = await zitex_chat(

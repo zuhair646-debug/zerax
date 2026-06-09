@@ -168,14 +168,14 @@ def create_router(db, get_current_user, get_admin_user):
             if base <= 0:
                 raise HTTPException(status_code=400, detail="الباقة المجانية لا تتطلب دفع")
             credits_to_add = int(plan["credits_per_month"]) * (12 if body.billing_cycle == "yearly" else 1)
-            description = f"Zitex {plan['name']} — {body.billing_cycle}"
+            description = f"Zerax {plan['name']} — {body.billing_cycle}"
         elif body.item_type == "pack":
             pack = await db.credit_packs.find_one({"id": body.item_id}, {"_id": 0})
             if not pack:
                 raise HTTPException(status_code=404, detail="Pack not found")
             base = float(pack["price_usd"])
             credits_to_add = int(pack["credits"])
-            description = f"Zitex {pack['name_ar']} pack"
+            description = f"Zerax {pack['name_ar']} pack"
         else:
             raise HTTPException(status_code=400, detail="item_type must be 'subscription' or 'pack'")
 
@@ -770,7 +770,7 @@ def create_router(db, get_current_user, get_admin_user):
                 amount_usd=1.00,
                 return_url="https://zitex.app/billing/test-return",
                 cancel_url="https://zitex.app/billing/test-cancel",
-                description="Zitex PayPal credential test",
+                description="Zerax PayPal credential test",
             )
             return {
                 "ok": True,

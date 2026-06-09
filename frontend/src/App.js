@@ -13,7 +13,7 @@ import PayoutsAdmin from '@/pages/PayoutsAdmin';
 import LandingPage from '@/pages/LandingPage';
 import DemoLanding from '@/pages/DemoLanding';
 import VrmPreview from '@/pages/VrmPreview';
-import ZitexDuoLauncher from '@/components/ZitexDuoLauncher';
+import ZeraxDuoLauncher from '@/components/ZeraxDuoLauncher';
 import GlobalAvatarMount from '@/components/GlobalAvatarMount';
 import LoginPage from '@/pages/LoginPage';
 import RegisterPage from '@/pages/RegisterPage';
@@ -99,7 +99,7 @@ import PricingSuccess from '@/pages/PricingSuccess';
 import PricingAdmin from '@/pages/PricingAdmin';
 import Companion from '@/pages/Companion';
 import ReadySites from '@/pages/ReadySites';
-import ZitexShowcase from '@/pages/ZitexShowcase';
+import ZeraxShowcase from '@/pages/ZeraxShowcase';
 import '@/App.css';
 
 function App() {
@@ -252,7 +252,7 @@ function App() {
           {/* 🏪 Ready Sites — Wizard-driven AI restaurant site builder */}
           <Route path="/ready-sites" element={<ProtectedRoute><ReadySites user={user} /></ProtectedRoute>} />
           <Route path="/dashboard/ready-sites" element={<ProtectedRoute><ReadySites user={user} /></ProtectedRoute>} />
-          <Route path="/showcase" element={<ZitexShowcase />} />
+          <Route path="/showcase" element={<ZeraxShowcase />} />
           {/* 💰 Pricing & Billing */}
           <Route path="/pricing" element={<Pricing user={user} />} />
           <Route path="/billing" element={<ProtectedRoute><Billing user={user} /></ProtectedRoute>} />

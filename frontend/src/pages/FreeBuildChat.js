@@ -671,7 +671,7 @@ function FinalizeModal({ open, projectId, projectName, onClose, onConverted, onU
 
   const choose = async (pathId, priceUsd) => {
     if (pathId === 'host_with_us') {
-      toast.success('🚀 موقعك سينشر على Zitex قريباً — جاري الإعداد');
+      toast.success('🚀 موقعك سينشر على Zerax قريباً — جاري الإعداد');
       return;
     }
     // Paid tiers: unlock (MOCKED — Lemon Squeezy wiring later)
@@ -2223,7 +2223,7 @@ function ChatWorkspace({ projectId }) {
                       <span className="absolute inset-0 rounded-full bg-emerald-400/30 blur animate-pulse" />
                       <img
                         src="/zitex-logo-sm.png"
-                        alt="Zitex"
+                        alt="Zerax"
                         className="relative w-7 h-7 rounded-full object-contain ai-think-spin"
                         style={{ filter: 'drop-shadow(0 0 6px rgba(34,211,238,0.8))' }}
                       />

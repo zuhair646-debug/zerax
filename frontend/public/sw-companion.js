@@ -1,5 +1,5 @@
 /**
- * Zitex Companion — Service Worker
+ * Zerax Companion — Service Worker
  * Registers for PWA install + basic offline shell + notification display.
  */
 const CACHE_VERSION = 'zitex-companion-v1';

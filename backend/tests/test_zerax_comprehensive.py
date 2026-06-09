@@ -1,5 +1,5 @@
 """
-Comprehensive regression tests for Zitex Website Module
+Comprehensive regression tests for Zerax Website Module
 Tests all 4 auth token types: Bearer JWT, ClientToken, SiteToken, DriverToken
 Tests: Platform Owner, Client Dashboard, Site Customer, Driver Dashboard, Orders, Coupons, Loyalty
 """
@@ -11,7 +11,7 @@ import uuid
 BASE_URL = os.environ.get('REACT_APP_BACKEND_URL', '').rstrip('/')
 
 # Test credentials from test_credentials.md
-OWNER_EMAIL = "owner@zitex.com"
+OWNER_EMAIL = "owner@zerax.com"
 OWNER_PASSWORD = "owner123"
 CLIENT_SLUG = "cozy-cafe-demo"
 CLIENT_PASSWORD = "WKDWkG0d"
@@ -26,7 +26,7 @@ class TestPlatformOwnerAuth:
     """Test 1: Platform Owner authentication with Bearer JWT"""
     
     def test_owner_login_success(self):
-        """POST /api/auth/login with owner@zitex.com/owner123 → returns JWT"""
+        """POST /api/auth/login with owner@zerax.com/owner123 → returns JWT"""
         response = requests.post(f"{BASE_URL}/api/auth/login", json={
             "email": OWNER_EMAIL,
             "password": OWNER_PASSWORD

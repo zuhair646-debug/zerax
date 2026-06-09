@@ -84,7 +84,7 @@ def generate_invoice_pdf(invoice: Dict[str, Any]) -> bytes:
     c.rect(0, H - 30 * mm, W, 30 * mm, fill=1, stroke=0)
     c.setFillColor(colors.HexColor("#fbbf24"))
     c.setFont("Amiri-Bold", 28)
-    c.drawString(20 * mm, H - 17 * mm, "ZITEX")
+    c.drawString(20 * mm, H - 17 * mm, "ZERAX")
     c.setFillColor(colors.white)
     c.setFont("Amiri", 11)
     c.drawString(20 * mm, H - 24 * mm, _ar("منصة الإبداع بالذكاء الاصطناعي"))
@@ -181,7 +181,7 @@ def generate_invoice_pdf(invoice: Dict[str, Any]) -> bytes:
     # ── Footer ───────────────────────────────────────────────────
     c.setFillColor(colors.HexColor("#888"))
     c.setFont("Amiri", 9)
-    c.drawCentredString(W / 2, 20 * mm, _ar("شكراً لاختيارك Zitex — منصة الإبداع بالذكاء الاصطناعي"))
+    c.drawCentredString(W / 2, 20 * mm, _ar("شكراً لاختيارك Zerax — منصة الإبداع بالذكاء الاصطناعي"))
     c.drawCentredString(W / 2, 15 * mm, "zitex.app  •  zitex.zx0@gmail.com")
     if invoice.get("tax_id"):
         c.drawCentredString(W / 2, 10 * mm, _ar(f"الرقم الضريبي: {invoice['tax_id']}"))
@@ -207,12 +207,12 @@ async def send_invoice_email(
         log.warning("RESEND_API_KEY missing — cannot send invoice email")
         return False
     from_email = os.environ.get("FROM_EMAIL", "onboarding@resend.dev")
-    from_name = os.environ.get("FROM_NAME", "Zitex Billing")
+    from_name = os.environ.get("FROM_NAME", "Zerax Billing")
     encoded_pdf = base64.b64encode(pdf_bytes).decode("ascii")
     html = (
         f"<div style='font-family:-apple-system,Segoe UI,sans-serif;max-width:600px;margin:auto;"
         f"padding:24px;background:#0a0a0a;color:#fff;border-radius:12px'>"
-        f"<h1 style='color:#fbbf24;margin:0 0 8px'>شكراً لاشتراكك في Zitex! 🎉</h1>"
+        f"<h1 style='color:#fbbf24;margin:0 0 8px'>شكراً لاشتراكك في Zerax! 🎉</h1>"
         f"<p style='color:#aaa'>مرحباً {customer_name}،</p>"
         f"<p>تم استلام دفعتك بنجاح. مرفق الفاتورة الرسمية بصيغة PDF.</p>"
         f"<div style='background:#1a1a1a;border-right:4px solid #fbbf24;padding:16px;margin:20px 0;border-radius:8px'>"
@@ -223,7 +223,7 @@ async def send_invoice_email(
         f"<p style='color:#888;font-size:13px'>للوصول إلى لوحة الاشتراك:<br>"
         f"<a href='https://zitex.app/billing' style='color:#fbbf24'>zitex.app/billing</a></p>"
         f"<hr style='border:0;border-top:1px solid #333;margin:20px 0'>"
-        f"<p style='color:#666;font-size:11px'>Zitex — منصة الإبداع بالذكاء الاصطناعي</p>"
+        f"<p style='color:#666;font-size:11px'>Zerax — منصة الإبداع بالذكاء الاصطناعي</p>"
         f"</div>"
     )
     try:
@@ -234,7 +234,7 @@ async def send_invoice_email(
                 json={
                     "from": f"{from_name} <{from_email}>",
                     "to": [to_email],
-                    "subject": f"فاتورتك من Zitex — {invoice_number}",
+                    "subject": f"فاتورتك من Zerax — {invoice_number}",
                     "html": html,
                     "attachments": [{
                         "filename": f"{invoice_number}.pdf",

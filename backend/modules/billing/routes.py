@@ -1,4 +1,4 @@
-"""Stripe subscription billing routes for Zitex Website Studio gate.
+"""Stripe subscription billing routes for Zerax Website Studio gate.
 
 Uses emergentintegrations Stripe SDK. Single fixed package: studio_monthly @ $50 USD.
 Subscription is simulated as a one-time $50 payment granting 30 days of studio access.

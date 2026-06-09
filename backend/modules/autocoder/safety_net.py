@@ -40,7 +40,7 @@ from typing import Any, Dict, List, Optional, Tuple
 logger = logging.getLogger(__name__)
 
 REPO_ROOT = Path("/app")
-SNAPSHOT_DIR = Path(os.environ.get("ZITEX_SNAPSHOT_DIR", "/tmp/zitex_snapshots"))
+SNAPSHOT_DIR = Path(os.environ.get("ZERAX_SNAPSHOT_DIR", "/tmp/zitex_snapshots"))
 SNAPSHOT_DIR.mkdir(parents=True, exist_ok=True)
 
 # Files we treat as "spine" — extra-strict checks. Editing allowed, but

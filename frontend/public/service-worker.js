@@ -1,4 +1,4 @@
-/* Zitex Service Worker — PWA */
+/* Zerax Service Worker — PWA */
 const CACHE_VERSION = 'zitex-pwa-v1';
 const STATIC_CACHE = `${CACHE_VERSION}-static`;
 const RUNTIME_CACHE = `${CACHE_VERSION}-runtime`;

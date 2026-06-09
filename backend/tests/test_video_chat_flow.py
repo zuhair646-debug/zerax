@@ -1,11 +1,11 @@
 """
-Zitex Video Chat Flow Tests
+Zerax Video Chat Flow Tests
 Tests for the video consultation system with 3 video types:
 - Cinematic (سينمائي)
 - Funny (مضحك)
 - Advertising (إعلاني)
 
-Test credentials: owner@zitex.com / owner123
+Test credentials: owner@zerax.com / owner123
 """
 import pytest
 import requests
@@ -15,7 +15,7 @@ import time
 BASE_URL = os.environ.get('REACT_APP_BACKEND_URL', 'https://ai-cinematic-hub-2.preview.emergentagent.com')
 
 # Test credentials
-TEST_EMAIL = "owner@zitex.com"
+TEST_EMAIL = "owner@zerax.com"
 TEST_PASSWORD = "owner123"
 
 

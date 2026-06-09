@@ -80,8 +80,8 @@ const PricingPage = ({ user }) => {
     if (referralInfo?.referral_link) {
       if (navigator.share) {
         navigator.share({
-          title: 'انضم لـ Zitex',
-          text: `انضم لمنصة Zitex واحصل على 20 نقطة مجانية! استخدم كود الدعوة: ${referralInfo.referral_code}`,
+          title: 'انضم لـ Zerax',
+          text: `انضم لمنصة Zerax واحصل على 20 نقطة مجانية! استخدم كود الدعوة: ${referralInfo.referral_code}`,
           url: referralInfo.referral_link
         });
       } else {

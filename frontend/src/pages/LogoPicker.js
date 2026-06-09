@@ -154,7 +154,7 @@ export default function LogoPicker() {
             <ArrowLeft className="w-5 h-5" />
           </button>
           <div className="flex-1">
-            <h1 className="text-xl font-black text-amber-300">اختر شعار Zitex</h1>
+            <h1 className="text-xl font-black text-amber-300">اختر شعار Zerax</h1>
             <p className="text-xs text-white/55">5 خيارات بنفس اللون الذهبي — كل واحد بحركة مختلفة. اضغط على اللي يعجبك.</p>
           </div>
         </div>

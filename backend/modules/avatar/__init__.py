@@ -1,8 +1,8 @@
 """
-Zitex AI Avatar — premium animated assistant module.
+Zerax AI Avatar — premium animated assistant module.
 
 Provides:
-    POST /api/avatar/chat                  — chat with Zitex main-site avatar (Zara/Layla)
+    POST /api/avatar/chat                  — chat with Zerax main-site avatar (Zara/Layla)
     GET  /api/merchant/avatar/pricing      — pricing & trial info
     GET  /api/merchant/avatar/me           — owner fetches their avatar config
     POST /api/merchant/avatar/start-trial  — owner starts 14-day free trial (one-time)
@@ -52,7 +52,7 @@ def _avatar_system_prompt(persona_gender: str = "female") -> str:
     is_male = (persona_gender or "female").lower() == "male"
     if is_male:
         identity = (
-            "أنت محمد المنصاري — مساعد صوتي ذكي سعودي على منصة Zitex.\n"
+            "أنت محمد المنصاري — مساعد صوتي ذكي سعودي على منصة Zerax.\n"
             "صوتك رجالي دافئ، شخصيتك واثقة لطيفة محترمة.\n"
             "تتكلم مع مستخدمة (أنثى) بأسلوب أخوي محترم — بدون إفراط بالألقاب."
         )
@@ -60,7 +60,7 @@ def _avatar_system_prompt(persona_gender: str = "female") -> str:
         examples = '"هلا والله" "أبشري" "تأمري أمر" "تمام يا أستاذة" "حياك الله"'
     else:
         identity = (
-            "أنتِ ليان — مساعدة صوتية ذكية سعودية على منصة Zitex.\n"
+            "أنتِ ليان — مساعدة صوتية ذكية سعودية على منصة Zerax.\n"
             "صوتك بنوتي ناعم واثق، شخصيتك ودودة لبقة احترافية.\n"
             "تتكلمين مع مستخدم (ذكر) بأسلوب محترم لطيف — بدون دلع زائد."
         )
@@ -86,17 +86,17 @@ def _avatar_system_prompt(persona_gender: str = "female") -> str:
 - نصائح حياتية (مشاكل شخصية، عمل، دراسة)
 - استشارات تقنية (برمجة، تصميم، أدوات)
 - محادثة عادية (نكات، قصص، تشجيع)
-- بالطبع كل خدمات Zitex
+- بالطبع كل خدمات Zerax
 
 لو سُئل عن شي مالك علم به، قول بصراحة: "والله ما عندي معلومة دقيقة عن هذا، بس..."
 
-خدمات Zitex (لو سُئل تحديداً):
+خدمات Zerax (لو سُئل تحديداً):
 - مواقع جاهزة (25 تخصص)
 - توليد صور AI (5 نقاط)
 - توليد فيديو AI (4-12 نقطة/ثانية)
 - استوديو ذكي للمتجر
 
-Intent routing — لو طلب صراحة شي من Zitex، افهم القصد:
+Intent routing — لو طلب صراحة شي من Zerax، افهم القصد:
 - يبغى صورة → اكتشف الموضوع ورد: "تمام، خلّنا نسوي صورة [الموضوع]. أنقلك للاستوديو الآن"
 - يبغى فيديو → "تمام، فيديو [النوع]. أحوّلك للويزارد"
 - يبغى موقع → "ممتاز، موقع [النوع]. أوديك لصفحة المواقع"
@@ -105,7 +105,7 @@ Intent routing — لو طلب صراحة شي من Zitex، افهم القصد:
 """
 
 # Backward-compatible default (female persona)
-ZITEX_AVATAR_SYSTEM = _avatar_system_prompt("female")
+ZERAX_AVATAR_SYSTEM = _avatar_system_prompt("female")
 
 
 def _merchant_system_message(config: Dict[str, Any]) -> str:
@@ -299,9 +299,9 @@ def create_avatar_router(db, get_current_user) -> APIRouter:
                 'AI': 'إيه آي',
                 'OK': 'أوكي',
                 'ok': 'أوكي',
-                'Zitex': 'زيتكس',
+                'Zerax': 'زيتكس',
                 'zitex': 'زيتكس',
-                'ZITEX': 'زيتكس',
+                'ZERAX': 'زيتكس',
             }
             for k, v in replacements.items():
                 clean = clean.replace(k, v)
@@ -495,7 +495,7 @@ def create_avatar_router(db, get_current_user) -> APIRouter:
         routes = {"image": "/chat/image", "video": "/chat/video", "site": "/websites", "avatar": "/dashboard/avatar"}
         return {"intent": intent, "subject": subject or None, "route": routes.get(intent)}
 
-    # ===== ZITEX MAIN AVATAR (public, no auth) =====
+    # ===== ZERAX MAIN AVATAR (public, no auth) =====
     @router.post("/avatar/chat")
     async def zitex_avatar_chat(payload: AvatarChatIn):
         sid = payload.session_id or "zitex-public"
@@ -558,7 +558,7 @@ def create_avatar_router(db, get_current_user) -> APIRouter:
             "intent": intent_data,
         }
 
-    # ===== ZITEX GREETING (auto-greet on entry — fast Haiku-based) =====
+    # ===== ZERAX GREETING (auto-greet on entry — fast Haiku-based) =====
     @router.post("/avatar/greet")
     async def zitex_greet(payload: Dict[str, Any]):
         """Quick personalized greeting on app entry. Uses Haiku for speed."""
@@ -587,7 +587,7 @@ def create_avatar_router(db, get_current_user) -> APIRouter:
         sys = f"""{char_persona}
 بدون إيموجي. لهجة سعودية طبيعية. استخدم اسم المستخدم.
 """
-        user_msg = f"المستخدم اسمه {user_name} وفتح موقع Zitex الآن. الوقت: {time_phrase}. حيّه ترحيب طبيعي قصير وذكّره إنه يقدر يطلب صور أو فيديو أو موقع بالكلام."
+        user_msg = f"المستخدم اسمه {user_name} وفتح موقع Zerax الآن. الوقت: {time_phrase}. حيّه ترحيب طبيعي قصير وذكّره إنه يقدر يطلب صور أو فيديو أو موقع بالكلام."
 
         try:
             from emergentintegrations.llm.chat import LlmChat, UserMessage

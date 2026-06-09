@@ -1,7 +1,7 @@
 """
 🎮 Unity SDK exporter
 ═══════════════════════════════════════════════════════════════════════
-Ships a downloadable .zip with Unity C# scripts that pull a Zitex
+Ships a downloadable .zip with Unity C# scripts that pull a Zerax
 project's assets into a Unity scene at runtime — images become
 Sprites/Textures, .glb models become GameObjects, .mp3 voice lines
 become AudioClips.
@@ -15,7 +15,7 @@ from typing import Dict, Any
 
 
 CSHARP_CLIENT = '''
-// Zitex Unity Client — auto-generated. Drop into your Unity project.
+// Zerax Unity Client — auto-generated. Drop into your Unity project.
 // Requires: GLTFast (Window > Package Manager > Add by name: com.unity.cloud.gltfast)
 using System;
 using System.Collections;
@@ -23,27 +23,27 @@ using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.Networking;
 
-namespace Zitex {
-  [Serializable] public class ZitexAsset {
+namespace Zerax {
+  [Serializable] public class ZeraxAsset {
     public string id; public string type; public string subtype;
     public string name; public string url; public string cdn_url;
   }
-  [Serializable] public class ZitexManifest {
+  [Serializable] public class ZeraxManifest {
     public string project_id;
     public string project_title;
-    public List<ZitexAsset> images;
-    public List<ZitexAsset> models;
-    public List<ZitexAsset> voices;
+    public List<ZeraxAsset> images;
+    public List<ZeraxAsset> models;
+    public List<ZeraxAsset> voices;
     public string base_api;
     public string lora_url;
   }
 
-  public static class ZitexClient {
-    public static IEnumerator FetchManifest(string manifestUrl, Action<ZitexManifest> onReady, Action<string> onError = null) {
+  public static class ZeraxClient {
+    public static IEnumerator FetchManifest(string manifestUrl, Action<ZeraxManifest> onReady, Action<string> onError = null) {
       using (var req = UnityWebRequest.Get(manifestUrl)) {
         yield return req.SendWebRequest();
         if (req.result == UnityWebRequest.Result.Success) {
-          var m = JsonUtility.FromJson<ZitexManifest>(req.downloadHandler.text);
+          var m = JsonUtility.FromJson<ZeraxManifest>(req.downloadHandler.text);
           onReady?.Invoke(m);
         } else { onError?.Invoke(req.error); }
       }
@@ -71,22 +71,22 @@ namespace Zitex {
   }
 
   // Drop this on any GameObject to auto-load all approved assets.
-  public class ZitexImporter : MonoBehaviour {
+  public class ZeraxImporter : MonoBehaviour {
     [Tooltip("URL to the project's manifest JSON")]
     public string manifestUrl;
     public Transform spritesParent;
     public Transform modelsParent;
 
-    void Start() { StartCoroutine(ZitexClient.FetchManifest(manifestUrl, OnManifest)); }
+    void Start() { StartCoroutine(ZeraxClient.FetchManifest(manifestUrl, OnManifest)); }
 
-    void OnManifest(ZitexManifest m) {
-      Debug.Log($"[Zitex] loaded project: {m.project_title} ({m.images?.Count} imgs, {m.models?.Count} models)");
+    void OnManifest(ZeraxManifest m) {
+      Debug.Log($"[Zerax] loaded project: {m.project_title} ({m.images?.Count} imgs, {m.models?.Count} models)");
       if (m.images != null) foreach (var a in m.images) StartCoroutine(LoadSpriteInto(a));
       // Models require GLTFast — leave as TODO for the user.
     }
 
-    IEnumerator LoadSpriteInto(ZitexAsset a) {
-      yield return ZitexClient.LoadSprite(a.cdn_url ?? a.url, sprite => {
+    IEnumerator LoadSpriteInto(ZeraxAsset a) {
+      yield return ZeraxClient.LoadSprite(a.cdn_url ?? a.url, sprite => {
         var go = new GameObject(a.name);
         if (spritesParent) go.transform.SetParent(spritesParent, false);
         var sr = go.AddComponent<SpriteRenderer>();
@@ -98,33 +98,33 @@ namespace Zitex {
 '''.strip()
 
 
-README_MD = '''# Zitex Unity SDK
+README_MD = '''# Zerax Unity SDK
 
-Auto-generated SDK for your Zitex project. Imports all approved
+Auto-generated SDK for your Zerax project. Imports all approved
 images, 3D models (.glb), and voice lines into a Unity scene at
 runtime.
 
 ## Setup (60 seconds)
 
-1. **Copy the `Zitex/` folder** to your Unity project's `Assets/`.
+1. **Copy the `Zerax/` folder** to your Unity project's `Assets/`.
 2. **Install GLTFast** (for .glb models):
    - `Window > Package Manager > + > Add package by name`
    - `com.unity.cloud.gltfast`
-3. **Create an empty GameObject** in your scene, name it `ZitexImporter`.
-4. **Attach `ZitexImporter.cs`** to it.
+3. **Create an empty GameObject** in your scene, name it `ZeraxImporter`.
+4. **Attach `ZeraxImporter.cs`** to it.
 5. **Set `manifestUrl`** to:
    `{MANIFEST_URL}`
 6. Press Play — all approved assets stream in automatically.
 
 ## What's included
-- `ZitexClient.cs`  — async helpers for fetching images/audio/models.
-- `ZitexImporter.cs` — drag-and-drop scene component.
+- `ZeraxClient.cs`  — async helpers for fetching images/audio/models.
+- `ZeraxImporter.cs` — drag-and-drop scene component.
 - `manifest.json`  — snapshot of your project's assets (also live via API).
 - `README.md`     — this file.
 
 ## Live updates
 The `manifestUrl` always returns the latest approved assets. You can
-re-run `ZitexImporter` at any time to refresh the scene.
+re-run `ZeraxImporter` at any time to refresh the scene.
 
 ## Need anything else?
 Open an issue at https://zitex.app/support — we ship custom Unity
@@ -166,8 +166,8 @@ def build_zip(project: Dict[str, Any], base_api: str) -> bytes:
 
     buf = io.BytesIO()
     with zipfile.ZipFile(buf, "w", compression=zipfile.ZIP_DEFLATED) as zf:
-        zf.writestr("Zitex/ZitexClient.cs", CSHARP_CLIENT)
-        zf.writestr("Zitex/manifest.json", json.dumps(manifest, indent=2))
+        zf.writestr("Zerax/ZeraxClient.cs", CSHARP_CLIENT)
+        zf.writestr("Zerax/manifest.json", json.dumps(manifest, indent=2))
         zf.writestr("README.md", README_MD.replace("{MANIFEST_URL}", manifest_url))
     return buf.getvalue()
 

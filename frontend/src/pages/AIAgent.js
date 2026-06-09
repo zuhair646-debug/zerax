@@ -253,7 +253,7 @@ export default function AIAgent() {
             <ArrowLeft className="w-4 h-4" />
           </button>
           <h1 className="font-black text-sm flex items-center gap-1.5">
-            <Sparkles className="w-4 h-4 text-amber-400" /> Zitex AI
+            <Sparkles className="w-4 h-4 text-amber-400" /> Zerax AI
           </h1>
         </div>
         <div className="flex items-center gap-2">

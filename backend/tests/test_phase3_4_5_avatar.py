@@ -27,9 +27,9 @@ SAUDI_KEYWORDS = ['هلا', 'وش', 'ابغى', 'تبي', 'شلون', 'يلا', 
 
 @pytest.fixture(scope="module")
 def auth_token():
-    """Login as owner@zitex.com and get token"""
+    """Login as owner@zerax.com and get token"""
     r = requests.post(f"{BASE_URL}/api/auth/login", json={
-        "email": "owner@zitex.com",
+        "email": "owner@zerax.com",
         "password": "owner123"
     })
     assert r.status_code == 200, f"Login failed: {r.text}"
@@ -342,7 +342,7 @@ class TestRegressionExistingEndpoints:
         r = requests.get(f"{BASE_URL}/api/auth/me", headers=auth_headers)
         assert r.status_code == 200, f"Auth me failed: {r.text}"
         data = r.json()
-        assert data.get("email") == "owner@zitex.com"
+        assert data.get("email") == "owner@zerax.com"
 
 
 if __name__ == "__main__":

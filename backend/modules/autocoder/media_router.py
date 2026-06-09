@@ -1,5 +1,5 @@
 """
-Media Router — Quality-First Edition for Zitex
+Media Router — Quality-First Edition for Zerax
 ═══════════════════════════════════════════════════════════════════════════
 Smart selection of premium media models (image / video / voice / edit).
 

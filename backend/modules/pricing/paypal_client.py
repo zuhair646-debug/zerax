@@ -45,7 +45,7 @@ async def create_order(
     amount_usd: float,
     return_url: str,
     cancel_url: str,
-    description: str = "Zitex Purchase",
+    description: str = "Zerax Purchase",
     custom_id: Optional[str] = None,
 ) -> Dict[str, Any]:
     """Creates a v2 order. Returns {order_id, approval_url}."""
@@ -61,7 +61,7 @@ async def create_order(
             **({"custom_id": custom_id} if custom_id else {}),
         }],
         "application_context": {
-            "brand_name": "Zitex",
+            "brand_name": "Zerax",
             "shipping_preference": "NO_SHIPPING",
             "user_action": "PAY_NOW",
             "return_url": return_url,

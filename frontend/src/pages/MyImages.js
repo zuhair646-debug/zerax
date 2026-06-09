@@ -31,8 +31,8 @@ const MyImages = ({ user, setUser }) => {
     if (navigator.share) {
       try {
         await navigator.share({
-          title: 'صورة من Zitex AI',
-          text: img.prompt || 'تم إنشاؤها بواسطة Zitex',
+          title: 'صورة من Zerax AI',
+          text: img.prompt || 'تم إنشاؤها بواسطة Zerax',
           url,
         });
         toast.success('تمت المشاركة بنجاح');

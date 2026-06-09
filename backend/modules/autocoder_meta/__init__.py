@@ -71,7 +71,7 @@ RECOMMENDED_INTEGRATIONS: List[Dict[str, Any]] = [
         "priority": "high",
         "env_vars": ["LIVEKIT_URL", "LIVEKIT_API_KEY", "LIVEKIT_API_SECRET"],
         "where": "https://cloud.livekit.io/projects",
-        "why_ar": "مساعد صوتي/فيديو حي داخل Zitex مع avatar ومقاطعة صوتية realtime.",
+        "why_ar": "مساعد صوتي/فيديو حي داخل Zerax مع avatar ومقاطعة صوتية realtime.",
         "adds": ["realtime_voice", "voice_rooms", "avatar_live_chat"],
         "weight": 7,
     },
@@ -128,7 +128,7 @@ RECOMMENDED_INTEGRATIONS: List[Dict[str, Any]] = [
 ]
 
 CAPABILITIES: List[Dict[str, Any]] = [
-    {"area": "code", "level": "strong", "items": ["قراءة وتعديل كود Zitex", "إنشاء backend modules", "إنشاء صفحات React", "اختبار lint/build/endpoints", "commit/push/rollback"]},
+    {"area": "code", "level": "strong", "items": ["قراءة وتعديل كود Zerax", "إنشاء backend modules", "إنشاء صفحات React", "اختبار lint/build/endpoints", "commit/push/rollback"]},
     {"area": "ops", "level": "strong", "items": ["Railway logs/deploy/env", "Vercel deploy status/logs", "health overview", "browser testing", "screenshots"]},
     {"area": "ai", "level": "strong", "items": ["توجيه نماذج LLM", "توليد صور", "توليد صوت", "توليد فيديو", "تحليل vision عند تمرير صور", "web search"]},
     {"area": "product", "level": "strong", "items": ["بناء أقسام كاملة", "لوحات admin/client", "أنظمة دفع/credits", "media studios", "website/app builders"]},
@@ -203,7 +203,7 @@ def _score_readiness(providers: List[Dict[str, Any]], integrations: List[Dict[st
         verdict_ar = "متقدم جداً: الأساس قوي، والنواقص المتبقية تحسينات توسّع وليست عوائق رئيسية."
     elif score >= 65:
         maturity = "strong_but_not_complete"
-        verdict_ar = "قوي لكن غير مكتمل: أقدر أنفذ وأطور Zitex، لكن لا أقدر أقول مكتمل بالكامل قبل إغلاق النواقص الحرجة."
+        verdict_ar = "قوي لكن غير مكتمل: أقدر أنفذ وأطور Zerax، لكن لا أقدر أقول مكتمل بالكامل قبل إغلاق النواقص الحرجة."
     else:
         maturity = "foundation"
         verdict_ar = "مرحلة تأسيس: توجد قدرات مهمة لكن يلزم إكمال تكاملات أساسية قبل الاعتماد العالي."
@@ -252,7 +252,7 @@ def _build_report(owner: Dict[str, Any] | None = None) -> Dict[str, Any]:
         "owner_id": (owner or {}).get("id"),
         "readiness": readiness,
         "summary_ar": (
-            "برمجة زيتاكس قادر حالياً على تطوير Zitex end-to-end: كود، اختبارات، نشر، مراقبة، وذكاء متعدد النماذج. "
+            "برمجة زيتاكس قادر حالياً على تطوير Zerax end-to-end: كود، اختبارات، نشر، مراقبة، وذكاء متعدد النماذج. "
             "لكن الاكتمال المطلق مشروط بإكمال التخزين الدائم والـobservability وتوسيع مسارات النماذج والمهام الخلفية."
         ),
         "configured_counts": {

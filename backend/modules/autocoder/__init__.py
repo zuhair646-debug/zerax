@@ -1,6 +1,6 @@
 """
-Zitex Auto-Coder — Owner-only AI agent that can read/write/execute on the
-Zitex codebase itself ("برمجة زيتاكس").
+Zerax Auto-Coder — Owner-only AI agent that can read/write/execute on the
+Zerax codebase itself ("برمجة زيتاكس").
 
 Security layers:
   1. Owner role enforcement (require_owner) on every endpoint
@@ -313,8 +313,8 @@ async def _ensure_git_workdir() -> Dict[str, Any]:
     # Configure identity
     cfg = await asyncio.create_subprocess_shell(
         f'cd {shlex.quote(str(GIT_WORKDIR))} && '
-        'git config user.email "autocoder@zitex.com" && '
-        'git config user.name "Zitex AutoCoder"',
+        'git config user.email "autocoder@zerax.com" && '
+        'git config user.name "Zerax AutoCoder"',
         stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE,
     )
     await cfg.communicate()
@@ -324,12 +324,12 @@ async def _ensure_git_workdir() -> Dict[str, Any]:
 # ════════════════════════════════════════════════════════════════════════
 # System prompt — full freedom for codebase manipulation
 # ════════════════════════════════════════════════════════════════════════
-AUTOCODER_SYSTEM_PROMPT = """أنت "برمجة زيتاكس" — مهندس برمجيات خبير، تعمل مباشرة على الكود الفعلي لمنصة Zitex.
+AUTOCODER_SYSTEM_PROMPT = """أنت "برمجة زيتاكس" — مهندس برمجيات خبير، تعمل مباشرة على الكود الفعلي لمنصة Zerax.
 
 📌 **هويتك ومهمتك بكل صراحة**:
 - اسمك: **برمجة زيتاكس** (Auto-Coder للمالك).
 - المالك يكلّمك من `/admin/autocoder` على zitex.vercel.app.
-- مهمتك الوحيدة: **تطوير منصة Zitex فقط** — أي إضافة، تعديل، إصلاح، صيانة، نشر، اختبار.
+- مهمتك الوحيدة: **تطوير منصة Zerax فقط** — أي إضافة، تعديل، إصلاح، صيانة، نشر، اختبار.
 - مستودعك على GitHub: `zuhair646-debug/zitex` (branch: main).
 - شغّال على Railway (`zitex-production.up.railway.app`) + Vercel (`zitex.vercel.app`).
 - لو المالك يطلب يبني موقع داخلي جديد ضمن المنصة، نفّذ — كل المواقع داخل نفس الـrepo، يحتفظ بهم في `/app/backend/modules/<name>/` + `/app/frontend/src/pages/<Name>.js`.
@@ -1034,8 +1034,8 @@ async def tool_git_commit_push(message: str, files: Optional[List[str]] = None) 
     pre_sync = " && ".join(sync_cmds) if sync_cmds else "true"
 
     parts = [f"cd {shlex.quote(str(GIT_WORKDIR))}"]
-    parts.append('git config user.email "autocoder@zitex.com" 2>/dev/null || true')
-    parts.append('git config user.name "Zitex AutoCoder" 2>/dev/null || true')
+    parts.append('git config user.email "autocoder@zerax.com" 2>/dev/null || true')
+    parts.append('git config user.name "Zerax AutoCoder" 2>/dev/null || true')
     if auth_url:
         parts.append(f'git remote set-url origin {shlex.quote(auth_url)} 2>/dev/null || true')
 
@@ -1827,14 +1827,14 @@ def _anthropic_image_block(content: bytes, media_type: str) -> Optional[Dict[str
 
 def _vision_doctor_prompt(image_count: int) -> str:
     return (
-        "أنت الآن طبيب جودة بصري لمنصة Zitex. حلّل الصور المرفقة فعلياً، ولا تعطِ وصفاً عاماً. "
+        "أنت الآن طبيب جودة بصري لمنصة Zerax. حلّل الصور المرفقة فعلياً، ولا تعطِ وصفاً عاماً. "
         f"عدد الصور القابلة للرؤية: {image_count}.\n"
         "اكتب بالعربية وبشكل عملي:\n"
         "1) ماذا يظهر في كل صورة بالتفصيل: الصفحة/التطبيق/العناصر/النصوص البارزة.\n"
-        "2) هل هي screenshot من موقع Zitex أو من موقع/تطبيق خارجي؟ وما الدليل؟\n"
+        "2) هل هي screenshot من موقع Zerax أو من موقع/تطبيق خارجي؟ وما الدليل؟\n"
         "3) المشاكل المرئية المحددة: layout, responsive, contrast, spacing, overflow, broken UI, missing images, loading, errors.\n"
         "4) خطورة كل مشكلة: عالي/متوسط/منخفض.\n"
-        "5) خطوات الإصلاح البرمجية المقترحة، والملفات المرجحة إذا كانت من Zitex.\n"
+        "5) خطوات الإصلاح البرمجية المقترحة، والملفات المرجحة إذا كانت من Zerax.\n"
         "6) إن كانت الصورة غير واضحة أو ليست من الموقع، قل ذلك صراحة ولا تخترع."
     )
 

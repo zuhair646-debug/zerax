@@ -1,5 +1,5 @@
 """
-WebSocket Tests for Zitex Real-time Features (Tests A-D)
+WebSocket Tests for Zerax Real-time Features (Tests A-D)
 
 Uses the websockets library to test:
 A. Client WS connection + hello + ping/pong

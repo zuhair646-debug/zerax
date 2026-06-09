@@ -19,7 +19,7 @@ const TYPE_LABEL = {
   realestate: 'عقار',
 };
 
-export default function ZitexShowcase() {
+export default function ZeraxShowcase() {
   const [sites, setSites] = useState([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -61,15 +61,15 @@ export default function ZitexShowcase() {
     <div dir="rtl" style={styles.page} data-testid="zitex-showcase-page">
       {/* Hero */}
       <section style={styles.hero}>
-        <Link to="/" style={styles.backLink} data-testid="back-to-home">← العودة لـ Zitex</Link>
+        <Link to="/" style={styles.backLink} data-testid="back-to-home">← العودة لـ Zerax</Link>
         <div style={styles.heroInner}>
           <div style={styles.zitexBadge}>
             <span style={styles.zitexBadgeDot}>Z</span>
-            <span style={{ color: '#fbbf24', fontWeight: 900 }}>Zitex Showcase</span>
+            <span style={{ color: '#fbbf24', fontWeight: 900 }}>Zerax Showcase</span>
           </div>
           <h1 style={styles.heroTitle}>مواقع مبنية بـ <span style={styles.heroAccent}>الذكاء الاصطناعي</span></h1>
           <p style={styles.heroSub}>
-            كل موقع تشوفه هنا تم بناؤه على منصة <strong>Zitex</strong> في أقل من 60 ثانية —
+            كل موقع تشوفه هنا تم بناؤه على منصة <strong>Zerax</strong> في أقل من 60 ثانية —
             من النمط البصري حتى لوحة الإدارة الكاملة وتطبيق السائق.
           </p>
 
@@ -138,7 +138,7 @@ export default function ZitexShowcase() {
       </section>
 
       <footer style={styles.foot}>
-        <span>© Zitex 2026 — منصة بناء المواقع بالذكاء الاصطناعي</span>
+        <span>© Zerax 2026 — منصة بناء المواقع بالذكاء الاصطناعي</span>
       </footer>
     </div>
   );

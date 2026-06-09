@@ -1,5 +1,5 @@
 """
-Tool Registry for the Zitex Agent System.
+Tool Registry for the Zerax Agent System.
 
 Each tool is a callable async function with a JSON Schema describing its
 arguments (compatible with OpenAI function-calling). The agent can invoke
@@ -115,7 +115,7 @@ async def web_fetch(url: str, max_chars: int = 30000) -> Dict[str, Any]:
         return {"ok": False, "error": "url must start with http(s)"}
     try:
         async with httpx.AsyncClient(timeout=12.0, follow_redirects=True) as client:
-            r = await client.get(url, headers={"User-Agent": "Mozilla/5.0 ZitexBot"})
+            r = await client.get(url, headers={"User-Agent": "Mozilla/5.0 ZeraxBot"})
         if r.status_code >= 400:
             return {"ok": False, "error": f"HTTP {r.status_code}"}
         ct = r.headers.get("content-type", "")
@@ -1663,7 +1663,7 @@ async def build_quran_mushaf_reader(
 
 🔒 قواعد البيانات (إلزامية صارمة):
 - يجب تضمين السكريبت: `<script src="/api/agent/primitives/quran.js"></script>` قبل أي JS تكتبه.
-- روابط الصوت فقط عبر `ZitexQuran.audioUrl(reciterId, surahN, ayahN)` (تستخدم everyayah.com).
+- روابط الصوت فقط عبر `ZeraxQuran.audioUrl(reciterId, surahN, ayahN)` (تستخدم everyayah.com).
 - ⚠️ سأعطيك كتلتين HTML جاهزتين (الآيات + القراء). يجب أن تنسخهما **حرفياً** داخل containers في موقعك. ممنوع تعديل النصوص أو الأسماء.
 
 🎨 الإلزام الإبداعي (اختلف 100% عن أي تصميم سابق):
@@ -1680,7 +1680,7 @@ async def build_quran_mushaf_reader(
 5. activeReciter (state) — أول قارئ افتراضياً (alafasy). الضغط على .reciter-card يبدّله.
 6. الضغط على .ayah-row → 
    ```
-   const audio = new Audio(window.ZitexQuran.audioUrl(activeReciter, {surah}, parseInt(this.dataset.ayah)));
+   const audio = new Audio(window.ZeraxQuran.audioUrl(activeReciter, {surah}, parseInt(this.dataset.ayah)));
    audio.play();
    ```
 7. الآية اللي تُشغّل تأخذ class="playing" (glow/scale).
@@ -1911,8 +1911,8 @@ async def fetch_quran_blocks(surah: int = 1) -> Dict[str, Any]:
     document.querySelectorAll('.ayah-row.playing, .verse.playing').forEach(e => e.classList.remove('playing'));
     if (el) el.classList.add('playing');
     
-    const url = (window.ZitexQuran && window.ZitexQuran.audioUrl)
-      ? window.ZitexQuran.audioUrl(activeReciter, SURAH_N, ayahN)
+    const url = (window.ZeraxQuran && window.ZeraxQuran.audioUrl)
+      ? window.ZeraxQuran.audioUrl(activeReciter, SURAH_N, ayahN)
       : urlFor(activeReciter, SURAH_N, ayahN);
     currentAudio = new Audio(url);
     currentAudio.addEventListener('ended', () => { if (el) el.classList.remove('playing'); });
@@ -2016,8 +2016,8 @@ async def build_creative_quran_site(
 🔒 المتطلبات الإلزامية:
 1. RTL، lang="ar"، Tajawal/Aref Ruqaa/Amiri Quran.
 2. ضع هذين الـcomments داخل قسم المصحف:
-   - <!-- ZITEX_QURAN_AYAHS -->  (سيُستبدل بـ {ayah_count} آية حقيقية)
-   - <!-- ZITEX_QURAN_RECITERS --> (سيُستبدل بأزرار 14 قارئ)
+   - <!-- ZERAX_QURAN_AYAHS -->  (سيُستبدل بـ {ayah_count} آية حقيقية)
+   - <!-- ZERAX_QURAN_RECITERS --> (سيُستبدل بأزرار 14 قارئ)
 3. لا تكتب الآيات أو القراء — فقط ضع الـcomments. النظام يحقن المحتوى الحقيقي.
 4. اضمن CSS جميل لـ class="ayah-row" و class="reciter-card" داخل التصميم.
 5. ⚠️ ممنوع تضع <script src="/api/agent/primitives/quran.js"> — النظام يحقنه.
@@ -2030,7 +2030,7 @@ async def build_creative_quran_site(
 السورة المطلوبة في قسم المصحف: {surah_name} ({ayah_count} آية)
 {f"توجيه التصميم: {style_direction}" if style_direction else ""}
 
-تذكر: ضع <!-- ZITEX_QURAN_AYAHS --> و <!-- ZITEX_QURAN_RECITERS --> في قسم المصحف.
+تذكر: ضع <!-- ZERAX_QURAN_AYAHS --> و <!-- ZERAX_QURAN_RECITERS --> في قسم المصحف.
 
 ابنِ الموقع الكامل الآن."""
     
@@ -2045,14 +2045,14 @@ async def build_creative_quran_site(
                 continue
             
             # DETERMINISTIC INJECTION
-            if "<!-- ZITEX_QURAN_AYAHS -->" in html:
-                html = html.replace("<!-- ZITEX_QURAN_AYAHS -->", blocks["ayahs_html"], 1)
+            if "<!-- ZERAX_QURAN_AYAHS -->" in html:
+                html = html.replace("<!-- ZERAX_QURAN_AYAHS -->", blocks["ayahs_html"], 1)
             else:
                 fallback = f'<section class="quran-section"><div class="ayahs-container">{blocks["ayahs_html"]}</div></section>'
                 html = html.replace("</body>", fallback + "\n</body>", 1)
             
-            if "<!-- ZITEX_QURAN_RECITERS -->" in html:
-                html = html.replace("<!-- ZITEX_QURAN_RECITERS -->", blocks["reciters_html"], 1)
+            if "<!-- ZERAX_QURAN_RECITERS -->" in html:
+                html = html.replace("<!-- ZERAX_QURAN_RECITERS -->", blocks["reciters_html"], 1)
             else:
                 rec_block = f'<div class="reciters-strip">{blocks["reciters_html"]}</div>'
                 if 'class="ayahs-container"' in html:

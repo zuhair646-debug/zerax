@@ -1,7 +1,7 @@
 """
-🎮 Zitex Game Runtime — Backend-as-a-Service for AI-generated games
+🎮 Zerax Game Runtime — Backend-as-a-Service for AI-generated games
 ─────────────────────────────────────────────────────────────────────
-Provides EVERY backend primitive a Zitex-generated game needs, so games
+Provides EVERY backend primitive a Zerax-generated game needs, so games
 deployed via the existing static-site live preview can still have:
   • Player auth (per-project namespace, JWT)
   • Save/load player progress (cross-device)
@@ -500,7 +500,7 @@ GENRE_TEMPLATES = [
             {"id": "ui", "title": "UI Panels", "assets": ["resource_bar", "inventory", "build_menu", "battle_report"]},
             {"id": "economy", "title": "Economy Loop", "code": "production_rates + upgrade_costs"},
             {"id": "combat", "title": "Combat System", "code": "turn_based_resolution"},
-            {"id": "multiplayer", "title": "Multiplayer (use Zitex Runtime)", "code": "room_state + leaderboard"},
+            {"id": "multiplayer", "title": "Multiplayer (use Zerax Runtime)", "code": "room_state + leaderboard"},
         ],
         "engines": ["zitex_runtime_save", "zitex_runtime_leaderboard", "zitex_runtime_multiplayer"],
     },
@@ -516,7 +516,7 @@ GENRE_TEMPLATES = [
             {"id": "collectibles", "title": "Coins & Power-ups", "assets": ["coin", "mushroom", "star"]},
             {"id": "mechanics", "title": "Physics & Movement", "code": "Phaser Arcade Physics + jump curve"},
             {"id": "levels", "title": "Level Design (10 stages)", "code": "JSON tilemap loader"},
-            {"id": "save", "title": "Save Progress (Zitex Runtime)", "code": "best_level + collectibles_count"},
+            {"id": "save", "title": "Save Progress (Zerax Runtime)", "code": "best_level + collectibles_count"},
         ],
         "engines": ["zitex_runtime_save", "zitex_runtime_achievements"],
     },
@@ -532,7 +532,7 @@ GENRE_TEMPLATES = [
             {"id": "cascades", "title": "Cascade & Refill", "code": "gravity + spawn_top_row"},
             {"id": "powerups", "title": "Power-ups", "code": "row_clear + bomb + color_clear"},
             {"id": "levels", "title": "Level Goals (50 levels)", "code": "objective JSON file"},
-            {"id": "leaderboard", "title": "Global Best Scores (Zitex Runtime)", "code": "submit_score per level"},
+            {"id": "leaderboard", "title": "Global Best Scores (Zerax Runtime)", "code": "submit_score per level"},
         ],
         "engines": ["zitex_runtime_leaderboard", "zitex_runtime_save"],
     },
@@ -547,7 +547,7 @@ GENRE_TEMPLATES = [
             {"id": "upgrades", "title": "Upgrades", "assets": ["upgrade_icons"]},
             {"id": "economy", "title": "Production Math", "code": "exponential_growth_curve"},
             {"id": "prestige", "title": "Prestige/Reset System", "code": "soul_currency_loop"},
-            {"id": "save", "title": "Auto-save (Zitex Runtime)", "code": "save every 30s"},
+            {"id": "save", "title": "Auto-save (Zerax Runtime)", "code": "save every 30s"},
             {"id": "achievements", "title": "Achievements (50 unlocks)", "code": "unlock thresholds"},
         ],
         "engines": ["zitex_runtime_save", "zitex_runtime_achievements"],
@@ -564,7 +564,7 @@ GENRE_TEMPLATES = [
             {"id": "items", "title": "Items & Inventory", "assets": ["sword_icon", "potion_icon", "armor_icon"]},
             {"id": "story", "title": "Story Beats (10 chapters)", "code": "dialogue_tree.json"},
             {"id": "combat_math", "title": "Combat Formulas", "code": "atk - def + crit + status"},
-            {"id": "save", "title": "Save Anywhere (Zitex Runtime)", "code": "save full party state"},
+            {"id": "save", "title": "Save Anywhere (Zerax Runtime)", "code": "save full party state"},
         ],
         "engines": ["zitex_runtime_save", "zitex_runtime_achievements"],
     },
@@ -579,8 +579,8 @@ GENRE_TEMPLATES = [
             {"id": "enemies", "title": "Enemy NPCs", "assets": ["enemy_grunt_3d", "boss_3d"]},
             {"id": "movement", "title": "WASD + Mouse Look", "code": "PointerLockControls + collision"},
             {"id": "shooting", "title": "Hit Detection", "code": "raycaster + damage falloff"},
-            {"id": "rooms", "title": "PvP Rooms (Zitex Runtime)", "code": "WebSocket realtime"},
-            {"id": "leaderboard", "title": "K/D Leaderboard (Zitex Runtime)", "code": "submit kills/deaths"},
+            {"id": "rooms", "title": "PvP Rooms (Zerax Runtime)", "code": "WebSocket realtime"},
+            {"id": "leaderboard", "title": "K/D Leaderboard (Zerax Runtime)", "code": "submit kills/deaths"},
         ],
         "engines": ["zitex_runtime_multiplayer", "zitex_runtime_leaderboard"],
     },
@@ -588,18 +588,18 @@ GENRE_TEMPLATES = [
 
 
 # ═══════════════════════════════════════════════════════════════
-# 🧰 JS SDK TEMPLATE — what every Zitex-generated game embeds
+# 🧰 JS SDK TEMPLATE — what every Zerax-generated game embeds
 # ═══════════════════════════════════════════════════════════════
-_SDK_TEMPLATE = r"""/* Zitex Game Runtime SDK
+_SDK_TEMPLATE = r"""/* Zerax Game Runtime SDK
  * ─────────────────────────────────────────────
  * One-line backend for AI-generated games:
  *   <script src="__BACKEND_URL__/api/game-runtime/__PROJECT_ID__/sdk.js"></script>
  *   <script>
- *     await ZitexGame.guest();   // anonymous instant play
- *     await ZitexGame.save({level:5, gold:1200});
- *     const top = await ZitexGame.leaderboard.top();
- *     ZitexGame.unlock('first_blood');
- *     const room = ZitexGame.join('arena-1');
+ *     await ZeraxGame.guest();   // anonymous instant play
+ *     await ZeraxGame.save({level:5, gold:1200});
+ *     const top = await ZeraxGame.leaderboard.top();
+ *     ZeraxGame.unlock('first_blood');
+ *     const room = ZeraxGame.join('arena-1');
  *     room.onMessage(m => console.log(m));
  *     room.send({type:'shoot', x:120, y:80});
  *   </script>
@@ -629,7 +629,7 @@ _SDK_TEMPLATE = r"""/* Zitex Game Runtime SDK
     return r.json();
   }
 
-  const ZitexGame = {
+  const ZeraxGame = {
     backend: BACKEND, projectId: PID,
     player: null,
 
@@ -694,6 +694,6 @@ _SDK_TEMPLATE = r"""/* Zitex Game Runtime SDK
     async rooms(){ return (await _get("/rooms")).rooms; },
   };
 
-  global.ZitexGame = ZitexGame;
+  global.ZeraxGame = ZeraxGame;
 })(typeof window !== "undefined" ? window : globalThis);
 """

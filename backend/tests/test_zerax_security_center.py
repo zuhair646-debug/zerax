@@ -1,5 +1,5 @@
 """
-Test the 10-layer Zitex Security Center.
+Test the 10-layer Zerax Security Center.
 
 Coverage:
 - L2 security headers on responses
@@ -24,7 +24,7 @@ if not BASE_URL:
             if line.startswith("REACT_APP_BACKEND_URL="):
                 BASE_URL = line.strip().split("=", 1)[1].rstrip("/")
 
-ADMIN_EMAIL = "owner@zitex.com"
+ADMIN_EMAIL = "owner@zerax.com"
 ADMIN_PASSWORD = "owner123"
 
 # Use a fresh forwarded IP for brute-force test so we don't lock the runner itself

@@ -774,8 +774,8 @@ function UnityPanel({ projectId, token, accent }) {
         تنزيل Unity SDK .zip
       </button>
       <p className="text-[11px] text-zinc-500 leading-relaxed">
-        داخل الـZIP: <code>Zitex/ZitexClient.cs</code>, <code>Zitex/ZitexImporter.cs</code>, <code>manifest.json</code>, <code>README.md</code>.
-        ضع المجلد في <code>Assets/</code>، ثبّت GLTFast، أضف <code>ZitexImporter</code> لـGameObject في المشهد، اضغط Play.
+        داخل الـZIP: <code>Zerax/ZeraxClient.cs</code>, <code>Zerax/ZeraxImporter.cs</code>, <code>manifest.json</code>, <code>README.md</code>.
+        ضع المجلد في <code>Assets/</code>، ثبّت GLTFast، أضف <code>ZeraxImporter</code> لـGameObject في المشهد، اضغط Play.
       </p>
     </div>
   );

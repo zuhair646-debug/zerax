@@ -24,7 +24,7 @@ const MyVideos = ({ user, setUser }) => {
   const handleShare = async (v) => {
     const url = v.video_url || v.url;
     if (navigator.share) {
-      try { await navigator.share({ title: 'فيديو من Zitex', text: v.prompt || '', url }); toast.success('تمت المشاركة'); } catch (e) {}
+      try { await navigator.share({ title: 'فيديو من Zerax', text: v.prompt || '', url }); toast.success('تمت المشاركة'); } catch (e) {}
     } else {
       await navigator.clipboard.writeText(url);
       toast.success('تم نسخ الرابط');

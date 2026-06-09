@@ -1,5 +1,5 @@
 """
-Test suite for Zitex Pricing and Referral System APIs
+Test suite for Zerax Pricing and Referral System APIs
 Tests: /api/pricing, /api/user/balance, /api/referral/info, /api/referral/apply, registration with referral
 """
 import pytest
@@ -95,7 +95,7 @@ class TestUserBalanceAPI:
     def auth_token(self):
         """Get auth token for owner user"""
         response = requests.post(f"{BASE_URL}/api/auth/login", json={
-            "email": "owner@zitex.com",
+            "email": "owner@zerax.com",
             "password": "owner123"
         })
         if response.status_code == 200:
@@ -143,7 +143,7 @@ class TestReferralInfoAPI:
     def auth_token(self):
         """Get auth token for owner user"""
         response = requests.post(f"{BASE_URL}/api/auth/login", json={
-            "email": "owner@zitex.com",
+            "email": "owner@zerax.com",
             "password": "owner123"
         })
         if response.status_code == 200:
@@ -189,7 +189,7 @@ class TestRegistrationWithReferral:
         """Get owner's referral code"""
         # Login as owner
         response = requests.post(f"{BASE_URL}/api/auth/login", json={
-            "email": "owner@zitex.com",
+            "email": "owner@zerax.com",
             "password": "owner123"
         })
         if response.status_code == 200:
@@ -331,7 +331,7 @@ class TestReferralApply:
     def owner_referral_code(self):
         """Get owner's referral code"""
         response = requests.post(f"{BASE_URL}/api/auth/login", json={
-            "email": "owner@zitex.com",
+            "email": "owner@zerax.com",
             "password": "owner123"
         })
         if response.status_code == 200:

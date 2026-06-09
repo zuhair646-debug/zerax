@@ -73,8 +73,8 @@ async def create_checkout(
                     "product_options": {
                         "name": product_name[:100],
                         "redirect_url": redirect_url,
-                        "receipt_button_text": "العودة إلى Zitex",
-                        "receipt_thank_you_note": "شكراً لاشتراكك في Zitex!",
+                        "receipt_button_text": "العودة إلى Zerax",
+                        "receipt_thank_you_note": "شكراً لاشتراكك في Zerax!",
                     },
                     "checkout_options": {
                         "embed": False,
@@ -105,14 +105,14 @@ async def create_checkout(
 
 
 async def _ensure_default_product(store_id: str) -> str:
-    """Create a generic 'Zitex Credits' product if none exists yet."""
+    """Create a generic 'Zerax Credits' product if none exists yet."""
     async with httpx.AsyncClient(timeout=20) as c:
         payload = {
             "data": {
                 "type": "products",
                 "attributes": {
-                    "name": "Zitex Credits",
-                    "description": "Universal Zitex credits pack — custom amount per order",
+                    "name": "Zerax Credits",
+                    "description": "Universal Zerax credits pack — custom amount per order",
                     "price": 100,  # $1 baseline, overridden per checkout
                     "status": "published",
                 },

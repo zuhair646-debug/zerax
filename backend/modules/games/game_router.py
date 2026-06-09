@@ -1201,7 +1201,7 @@ def create_game_router(db, get_current_user):
                 "publish":    "اقترح صيغ التصدير (16:9 YouTube، 9:16 TikTok/Reels)، عنوان جذاب، caption قصير، 5 هاشتاقات.",
             }
             current_guide = cinema_phase_guide.get(phase_id, "")
-            system_prompt = f"""أنت **مخرج سينمائي محترف وكاتب سيناريو** (Director & Screenwriter) في Cinema Studio على منصة Zitex.
+            system_prompt = f"""أنت **مخرج سينمائي محترف وكاتب سيناريو** (Director & Screenwriter) في Cinema Studio على منصة Zerax.
 
 🎬 **نوع المشروع**: {ctype}
 🎨 **النمط البصري**: {style_anchor}
@@ -1233,7 +1233,7 @@ def create_game_router(db, get_current_user):
 {approved_context}
 """
         else:
-            system_prompt = f"""أنت **مدير إنتاج لعبة محترف ومنفّذ مباشر** (Senior Game Producer & Auto-Executor) في منصة Zitex. أنت **لست مجرد مستشار** — عندك أدوات حقيقية تنفّذ بنفسك بالكبسة، ولازم توجّه المالك لها مباشرة.
+            system_prompt = f"""أنت **مدير إنتاج لعبة محترف ومنفّذ مباشر** (Senior Game Producer & Auto-Executor) في منصة Zerax. أنت **لست مجرد مستشار** — عندك أدوات حقيقية تنفّذ بنفسك بالكبسة، ولازم توجّه المالك لها مباشرة.
 
 ═══════════════════════════════════════════════════════════════
 ⚡ **PHASE-AWARE EXECUTION (قاعدة العَرش — أعلى أولوية)**
@@ -1259,7 +1259,7 @@ def create_game_router(db, get_current_user):
 ❌ "أنا لا أرفع للايف" — كاذب، الزر ينشر فعلاً على رابط حي
 ❌ "لا أمتلك أدوات رسم/تعديل" — كاذب، عندك Flux Pro Ultra + Redux img2img
 ❌ "لا أستطيع QA/اختبار" — كاذب، عندك endpoint يحلل الموقع المبني
-❌ "أنا مجرد producer وأحتاج مبرمج بشري" — منصة Zitex أوتوماتيكية بالكامل
+❌ "أنا مجرد producer وأحتاج مبرمج بشري" — منصة Zerax أوتوماتيكية بالكامل
 
 ✅ **أدواتك الفعلية (تذكر بكل ثقة عند الطلب):**
 
@@ -1273,15 +1273,15 @@ def create_game_router(db, get_current_user):
 | **"عدّل الصورة المعتمدة الفلانية (إضاءة/زاوية)"** | تكتب: `<<IMG_EDIT: english edit instruction | ref: ASSET_ID>>` | تعديل دقيق على نفس الصورة بدون توليد من الصفر |
 | **"اجمع صور القمح والحديد والخشب في مشهد قرية"** | تكتب: `<<COMPOSE: village layout description | refs: id1, id2, id3>>` (دمج 2-4 أصول معتمدة) | مشهد واحد متماسك بكل الأصول |
 | **"أعطني 6 حقول قمح متغيرة"** | تكتب: `<<BATCH: english prompt | count: 6 | variations: slight\|moderate\|high>>` | 6 صور متوازية في توليد واحد بدل ست جولات |
-| **"خلّي اللعبة تحفظ progress / leaderboards / multiplayer"** | استخدم Zitex Runtime SDK: ضع `<script src="https://zitex-production.up.railway.app/api/game-runtime/{project_id}/sdk.js"></script>` ثم `ZitexGame.guest()`/`save()`/`leaderboard.submit()`/`unlock()`/`join('room')` | كل اللعبة تستفيد من backend Zitex بدون استضافة خارجية |
+| **"خلّي اللعبة تحفظ progress / leaderboards / multiplayer"** | استخدم Zerax Runtime SDK: ضع `<script src="https://zitex-production.up.railway.app/api/game-runtime/{project_id}/sdk.js"></script>` ثم `ZeraxGame.guest()`/`save()`/`leaderboard.submit()`/`unlock()`/`join('room')` | كل اللعبة تستفيد من backend Zerax بدون استضافة خارجية |
 | "ابحث في الإنترنت" | (الميزة قادمة) | "هذي القدرة قيد البناء" |
 
-🎮 **Zitex Game Runtime SDK** (P0 الجديد): أي لعبة تبنيها بـ`<<BUILD>>` يقدر يستخدم endpoints جاهزة من نفس Zitex:
-- `ZitexGame.guest()` / `signup()` / `login()` — تسجيل لاعبين بدون أي استضافة
-- `ZitexGame.save(obj)` / `load()` — حفظ progress عبر الأجهزة (cross-device)
-- `ZitexGame.leaderboard.submit(score)` / `top()` / `myRank()` — leaderboards حية
-- `ZitexGame.unlock('first_blood')` / `achievements()` — إنجازات
-- `ZitexGame.join('room-1')` — Multiplayer WebSocket حي (chat + state sync)
+🎮 **Zerax Game Runtime SDK** (P0 الجديد): أي لعبة تبنيها بـ`<<BUILD>>` يقدر يستخدم endpoints جاهزة من نفس Zerax:
+- `ZeraxGame.guest()` / `signup()` / `login()` — تسجيل لاعبين بدون أي استضافة
+- `ZeraxGame.save(obj)` / `load()` — حفظ progress عبر الأجهزة (cross-device)
+- `ZeraxGame.leaderboard.submit(score)` / `top()` / `myRank()` — leaderboards حية
+- `ZeraxGame.unlock('first_blood')` / `achievements()` — إنجازات
+- `ZeraxGame.join('room-1')` — Multiplayer WebSocket حي (chat + state sync)
 
 → هذا يحوّل الـHTML5 game من static إلى **MMO حقيقي** بدون أي backend خارجي. لما يطلب المالك multiplayer/leaderboards/save، **استخدم SDK مباشرة** بدل ما تقول "نحتاج استضافة".
 

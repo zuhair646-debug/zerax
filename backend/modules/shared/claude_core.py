@@ -1,5 +1,5 @@
 """
-Shared Claude streaming agent core — used by every AI section across Zitex
+Shared Claude streaming agent core — used by every AI section across Zerax
 (FreeBuild, Game Studio, App Studio, Marketing, Companion, Mobile Builder, ...).
 
 Goals:

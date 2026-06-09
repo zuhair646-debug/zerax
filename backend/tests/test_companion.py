@@ -1,5 +1,5 @@
 """
-Zitex Companion Module Tests
+Zerax Companion Module Tests
 Tests for the personal AI companion (Zara/Layla) PWA feature.
 
 Features tested:
@@ -25,7 +25,7 @@ class TestCompanionModule:
     def setup(self):
         """Login and get token for owner user"""
         login_resp = requests.post(f"{BASE_URL}/api/auth/login", json={
-            "email": "owner@zitex.com",
+            "email": "owner@zerax.com",
             "password": "owner123"
         })
         assert login_resp.status_code == 200, f"Login failed: {login_resp.text}"
@@ -315,7 +315,7 @@ class TestCompanionModule:
         resp = requests.get(f"{BASE_URL}/api/auth/me", headers=self.headers)
         assert resp.status_code == 200, f"Failed: {resp.text}"
         data = resp.json()
-        assert data["email"] == "owner@zitex.com"
+        assert data["email"] == "owner@zerax.com"
         print(f"✓ /api/auth/me works: {data['email']}")
     
     def test_18_regression_ai_core_tiers(self):
@@ -361,7 +361,7 @@ class TestCompanionDailyReminder:
     def setup(self):
         """Login and get token"""
         login_resp = requests.post(f"{BASE_URL}/api/auth/login", json={
-            "email": "owner@zitex.com",
+            "email": "owner@zerax.com",
             "password": "owner123"
         })
         assert login_resp.status_code == 200

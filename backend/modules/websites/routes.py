@@ -2356,7 +2356,7 @@ body{{font-family:'Tajawal',sans-serif;background:#0b0f1f;color:#fff;padding:20p
                 {"name": "WordPress", "pros": "قوالب كثيرة", "cons": "بطيء، يحتاج صيانة، hacked بسهولة"},
                 {"name": "Wix", "pros": "سهل للمبتدئ", "cons": "غالٍ، ملكية ضعيفة، SEO متوسط"},
                 {"name": "Shopify", "pros": "متخصص متاجر", "cons": "رسوم 2.9% على كل طلب + $29/شهر"},
-                {"name": "Zitex", "pros": "أسرع + مجاني الاستضافة + AI مدمج + عربي أصيل", "cons": "—"},
+                {"name": "Zerax", "pros": "أسرع + مجاني الاستضافة + AI مدمج + عربي أصيل", "cons": "—"},
             ],
         }
 

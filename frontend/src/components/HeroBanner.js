@@ -10,7 +10,7 @@ const SLIDES = [
   {
     id: 'zitex-intro',
     kind: 'brand',
-    title: 'ذكاء Zitex',
+    title: 'ذكاء Zerax',
     sub: 'يبني، يبحث، يولّد — في شات واحد',
     cta: 'ابدأ الآن',
     target: '/ai-agent',
@@ -144,7 +144,7 @@ export default function HeroBanner({ onGo }) {
                   className="text-[10px] sm:text-[11px] font-black tracking-widest mb-0.5"
                   style={{ color: s.accent }}
                 >
-                  {s.kind === 'brand' ? 'منصّة Zitex' : 'استكشف القسم'}
+                  {s.kind === 'brand' ? 'منصّة Zerax' : 'استكشف القسم'}
                 </div>
                 <h3 className="text-base sm:text-xl font-black text-white leading-tight truncate">{s.title}</h3>
                 <p className="hidden sm:block text-[11px] sm:text-xs text-white/65 mt-0.5 truncate">{s.sub}</p>
@@ -205,7 +205,7 @@ export default function HeroBanner({ onGo }) {
 // ─────────────────────────────────────────────────────────
 function MotionLayer({ type, accent }) {
   if (type === 'orbit') {
-    // Zitex brand slide: transparent L1 logo, gentle float + glow only (no rings, no box)
+    // Zerax brand slide: transparent L1 logo, gentle float + glow only (no rings, no box)
     return (
       <div
         className="absolute right-4 sm:right-8 top-1/2 -translate-y-1/2 pointer-events-none flex items-center justify-center"
@@ -213,7 +213,7 @@ function MotionLayer({ type, accent }) {
       >
         <img
           src="/zitex-logo.png"
-          alt="Zitex"
+          alt="Zerax"
           className="hb-brand-logo"
           width={112}
           height={112}

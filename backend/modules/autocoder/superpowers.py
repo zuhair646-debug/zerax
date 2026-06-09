@@ -242,7 +242,7 @@ async def tool_update_prd(section: str, content: str, append: bool = True) -> Di
     """
     try:
         MEMORY_DIR.mkdir(parents=True, exist_ok=True)
-        existing = PRD_PATH.read_text(encoding="utf-8") if PRD_PATH.exists() else "# Zitex AI Platform - PRD\n\n"
+        existing = PRD_PATH.read_text(encoding="utf-8") if PRD_PATH.exists() else "# Zerax AI Platform - PRD\n\n"
 
         new_block = f"\n### {section}\n\n{content.strip()}\n\n---\n"
         if append and existing.startswith("#"):
@@ -257,7 +257,7 @@ async def tool_update_prd(section: str, content: str, append: bool = True) -> Di
         # Also mirror into CHANGELOG.md
         ts = datetime.now(timezone.utc).isoformat()[:19]
         try:
-            cl_existing = CHANGELOG_PATH.read_text(encoding="utf-8") if CHANGELOG_PATH.exists() else "# Zitex Changelog\n\n"
+            cl_existing = CHANGELOG_PATH.read_text(encoding="utf-8") if CHANGELOG_PATH.exists() else "# Zerax Changelog\n\n"
             cl_new = f"\n## {ts} — {section}\n\n{content.strip()}\n"
             CHANGELOG_PATH.write_text(cl_existing + cl_new, encoding="utf-8")
         except Exception:

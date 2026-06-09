@@ -1,1 +1,1 @@
-"""Site (Zitex marketing/main app) banner + stories module."""
+"""Site (Zerax marketing/main app) banner + stories module."""

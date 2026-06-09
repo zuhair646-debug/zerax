@@ -295,7 +295,7 @@ def _screen_auth():
 def _manifest(project: Dict[str, Any]) -> str:
     color = _safe_color(project.get("primary_color"))
     return json.dumps({
-        "name": project.get("title") or "Zitex App",
+        "name": project.get("title") or "Zerax App",
         "short_name": (project.get("title") or "App")[:12],
         "description": project.get("description") or "",
         "start_url": ".",

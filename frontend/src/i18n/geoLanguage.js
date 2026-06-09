@@ -110,7 +110,7 @@ export function getInitialLanguage() {
       if (isSupported(code)) return code;
     }
   } catch (_) { /* SSR / privacy mode */ }
-  return 'ar'; // Zitex default — Arabic
+  return 'ar'; // Zerax default — Arabic
 }
 
 export function hasManualChoice() {

@@ -1,5 +1,5 @@
 """
-Zitex Ready-Made Sites Module — Wizard-driven deep-vertical AI site builder.
+Zerax Ready-Made Sites Module — Wizard-driven deep-vertical AI site builder.
 
 Flow:
     1) Pick site type (restaurant / store / clinic / ...)
@@ -117,7 +117,7 @@ async def _run_generation(db, session_id: str, user_id: str) -> None:
         type_features = get_features(type_id)
         features_full = [f for f in type_features if f["id"] in enabled]
 
-        # Pre-generate project_id so Zitex tracking link is unique per site.
+        # Pre-generate project_id so Zerax tracking link is unique per site.
         project_id = str(uuid.uuid4())
 
         result = await generate_ready_site(
@@ -418,10 +418,10 @@ def create_ready_sites_router(db, get_current_user) -> APIRouter:
         market_id = detect_market_from_country_code(ip)
         return {"market_id": market_id, "market": get_market(market_id)}
 
-    # ---- Zitex Branding Tracker (public) ----
+    # ---- Zerax Branding Tracker (public) ----
     @router.get("/track-visit/{project_id}")
     async def track_visit(project_id: str):
-        """Fired from the Zitex footer pixel. Records that an end-customer saw the site."""
+        """Fired from the Zerax footer pixel. Records that an end-customer saw the site."""
         try:
             await db.ready_sites_projects.update_one(
                 {"id": project_id},
@@ -437,12 +437,12 @@ def create_ready_sites_router(db, get_current_user) -> APIRouter:
         return Response(content=gif, media_type="image/gif",
                         headers={"Cache-Control": "no-store, no-cache, must-revalidate, max-age=0"})
 
-    # ---- Public Showcase — every site built on Zitex (social proof gallery) ----
+    # ---- Public Showcase — every site built on Zerax (social proof gallery) ----
     @router.get("/showcase")
     async def public_showcase(limit: int = 60, type_id: Optional[str] = None):
-        """Public gallery of every site ever built on the Zitex platform.
-        Used as social proof on https://zitex.com/showcase and linked from every
-        generated site's Zitex footer link."""
+        """Public gallery of every site ever built on the Zerax platform.
+        Used as social proof on https://zerax.com/showcase and linked from every
+        generated site's Zerax footer link."""
         query: Dict[str, Any] = {}
         if type_id:
             query["type_id"] = type_id
@@ -476,10 +476,10 @@ def create_ready_sites_router(db, get_current_user) -> APIRouter:
             "total_built": await db.ready_sites_projects.count_documents({}),
         }
 
-    # ---- Zitex Admin: view ALL ready-site projects across all tenants ----
+    # ---- Zerax Admin: view ALL ready-site projects across all tenants ----
     @router.get("/admin/owned-sites")
     async def admin_owned_sites(user=Depends(get_current_user)):
-        """Returns every Ready Site we've ever built. Used by Zitex's own admin dashboard
+        """Returns every Ready Site we've ever built. Used by Zerax's own admin dashboard
         to track customer sites that carry our branded footer link."""
         if not user.get("is_admin"):
             raise HTTPException(403, "صلاحيات المسؤول مطلوبة")
@@ -491,7 +491,7 @@ def create_ready_sites_router(db, get_current_user) -> APIRouter:
         # Enrich with the live preview link
         for it in items:
             it["preview_url"] = f"/api/ready-sites/preview/{it['id']}"
-            it["track_url"] = f"https://zitex.com/?ref={it['id']}"
+            it["track_url"] = f"https://zerax.com/?ref={it['id']}"
         # Aggregate totals
         total_sites = len(items)
         total_visits = sum(int(it.get("visits_count", 0) or 0) for it in items)

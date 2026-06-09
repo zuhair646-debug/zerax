@@ -30,7 +30,7 @@ def _load_base_url():
 BASE_URL = _load_base_url() or "http://localhost:8001"
 
 # Test credentials
-TEST_EMAIL = "owner@zitex.com"
+TEST_EMAIL = "owner@zerax.com"
 TEST_PASSWORD = "owner123"
 
 

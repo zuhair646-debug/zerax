@@ -1,5 +1,5 @@
 """
-Zitex FreeBuild v2 — CONVERSATIONAL LIVE BUILDER.
+Zerax FreeBuild v2 — CONVERSATIONAL LIVE BUILDER.
 
 Philosophy:
     NO fixed wizard. NO templates. The user has a natural conversation with a

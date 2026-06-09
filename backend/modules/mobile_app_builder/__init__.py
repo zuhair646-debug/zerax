@@ -1,5 +1,5 @@
 """
-Zitex Mobile App Builder — conversational builder for mobile-style apps.
+Zerax Mobile App Builder — conversational builder for mobile-style apps.
 
 Generates a self-contained SPA optimised for an iPhone-frame preview.
 Categories: 🎮 Games (canvas+JS), 📱 Apps (lists/forms/dashboards), 🛠️ Tools
@@ -121,7 +121,7 @@ async def _llm_turn(messages: List[Dict[str, str]]) -> Dict[str, Any]:
     raw = ""
     last_err = None
 
-    # NEW: route through Zitex AI Smart Router first (best model + boundaries)
+    # NEW: route through Zerax AI Smart Router first (best model + boundaries)
     try:
         from modules.zitex_ai import zitex_chat
         sys_combined = "\n\n".join(m["content"] for m in messages if m["role"] == "system")
@@ -563,7 +563,7 @@ def create_mobile_app_router(db, get_current_user):
         if not p:
             raise HTTPException(404, "project not found")
         html = (p.get("html") or "").replace("`", "\\`").replace("$", "\\$")
-        app_name = p.get("name", "ZitexApp")
+        app_name = p.get("name", "ZeraxApp")
         # Sanitise app_name for the JS string
         safe_name = app_name.replace('"', '\\"').replace("\n", " ")[:80]
         package_json = {
@@ -609,7 +609,7 @@ def create_mobile_app_router(db, get_current_user):
         )
         readme = (
             f"# {safe_name}\n\n"
-            "تم توليد هذا المشروع تلقائياً عبر **Zitex Mobile App Builder**.\n\n"
+            "تم توليد هذا المشروع تلقائياً عبر **Zerax Mobile App Builder**.\n\n"
             "## كيف تشغّله محلياً\n\n"
             "```bash\n"
             "npm install -g expo-cli\n"

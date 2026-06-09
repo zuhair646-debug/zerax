@@ -421,7 +421,7 @@ def build_router(db, get_current_user):
         if not aff:
             raise HTTPException(403, "أنت لست مسوّقاً")
         code = aff.get("code")
-        base = os.environ.get("PUBLIC_BASE_URL", "").rstrip("/") or "https://zitex.com"
+        base = os.environ.get("PUBLIC_BASE_URL", "").rstrip("/") or "https://zerax.com"
         # Prefer a short tracker route
         params = f"utm_source={platform}&utm_medium=social&utm_campaign={campaign}"
         return {

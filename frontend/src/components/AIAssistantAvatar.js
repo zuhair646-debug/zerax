@@ -8,7 +8,7 @@
  *   - Subtle "speaking" animation on the character
  *
  * Used in TWO places:
- *   - Landing page (talks about Zitex platform): pass mode="zitex"
+ *   - Landing page (talks about Zerax platform): pass mode="zitex"
  *   - Merchant sites (talks about the shop's products): pass mode="merchant" slug={slug}
  */
 import React, { useEffect, useRef, useState } from 'react';
@@ -47,7 +47,7 @@ export default function AIAssistantAvatar({ mode = 'zitex', slug = null, charact
   useEffect(() => {
     if (open && messages.length === 0) {
       const greeting = mode === 'zitex'
-        ? 'أهلاً بك في Zitex! 👋 أنا مساعدك الذكي. اسألني عن أي خدمة — مواقع، صور، فيديوهات، أو طريقة الاشتراك.'
+        ? 'أهلاً بك في Zerax! 👋 أنا مساعدك الذكي. اسألني عن أي خدمة — مواقع، صور، فيديوهات، أو طريقة الاشتراك.'
         : 'مرحباً! 👋 أنا مساعدك الذكي في هذا المتجر. اسألني عن أي منتج أو خدمة وسأشرحها لك.';
       setMessages([{ role: 'assistant', content: greeting }]);
     }
@@ -146,7 +146,7 @@ export default function AIAssistantAvatar({ mode = 'zitex', slug = null, charact
             </div>
             <div className="flex-1 text-right">
               <div className="text-sm font-black text-white">
-                {mode === 'zitex' ? 'مساعد Zitex' : 'مساعد المتجر'}
+                {mode === 'zitex' ? 'مساعد Zerax' : 'مساعد المتجر'}
               </div>
               <div className="text-[10px] text-emerald-400 flex items-center gap-1 justify-end">
                 <span className="w-1.5 h-1.5 bg-emerald-400 rounded-full" />

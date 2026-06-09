@@ -1,11 +1,11 @@
 /**
- * GlobalAvatarMount — renders ZitexDuoLauncher on every page,
+ * GlobalAvatarMount — renders ZeraxDuoLauncher on every page,
  * EXCEPT routes where the avatars would interfere (login/register flow,
  * VRM preview diagnostic page, public site preview).
  */
 import React from 'react';
 import { useLocation } from 'react-router-dom';
-import ZitexDuoLauncher from './ZitexDuoLauncher';
+import ZeraxDuoLauncher from './ZeraxDuoLauncher';
 
 const HIDDEN_ROUTES = [
   '/vrm-preview',

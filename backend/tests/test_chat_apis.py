@@ -1,5 +1,5 @@
 """
-Zitex AI Chat API Tests
+Zerax AI Chat API Tests
 Tests for the new chat system including:
 - Session management (create, get, delete)
 - Message sending and AI responses
@@ -13,7 +13,7 @@ import time
 BASE_URL = os.environ.get('REACT_APP_BACKEND_URL', 'https://ai-cinematic-hub-2.preview.emergentagent.com').rstrip('/')
 
 # Test credentials
-TEST_EMAIL = "owner@zitex.com"
+TEST_EMAIL = "owner@zerax.com"
 TEST_PASSWORD = "owner123"
 
 

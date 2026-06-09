@@ -1,5 +1,5 @@
 """
-Codebase Atlas — pre-loaded knowledge map of the Zitex platform.
+Codebase Atlas — pre-loaded knowledge map of the Zerax platform.
 
 This file replaces the need for the AI to call read_file/list_dir repeatedly
 just to discover the structure. Every system prompt build pulls this so the
@@ -42,7 +42,7 @@ FRONTEND_PAGES = {
     "FreeBuild.js": "/build-from-zero — بناء موقع من الصفر (FreeBuild v1)",
     "AIAgent.js": "/ai-agent — محادثة مع الذكاء العام (Agent)",
     "AIChat.js": "/ai-chat — chat بسيط",
-    "Companion.js": "/companion — الرفيق Zitex Companion",
+    "Companion.js": "/companion — الرفيق Zerax Companion",
     "Affiliate.js": "/affiliate — الإحالات",
     "AvatarSettings.js": "/avatar-settings — إعدادات avatar",
     "ChannelBridge.js": "/bridge — جسر القنوات",
@@ -72,7 +72,7 @@ FRONTEND_PAGES = {
 # Big shared components (in /app/frontend/src/components/)
 FRONTEND_COMPONENTS = {
     "Navbar.js": "شريط التنقل العلوي",
-    "ZitexDuo.js + ZitexDuoLauncher.js": "زوج الـAI المساعد العائم",
+    "ZeraxDuo.js + ZeraxDuoLauncher.js": "زوج الـAI المساعد العائم",
     "Avatar3D.js + AIAssistantAvatar.js": "الـavatar الـ3D",
     "GlobalAvatarMount.js": "تركيب avatar في كل الصفحات",
     "VoiceChatButton.js + VoicePanel.js + VoiceStage.js": "نظام الصوت",
@@ -105,7 +105,7 @@ BACKEND_MODULES = {
     "bridge":       "جسر القنوات (telegram/whatsapp)",
     "ai_core":      "تكوين الذكاء العام (system prompts, models)",
     "avatar":       "إعدادات الـavatar الـ3D",
-    "companion":    "Zitex Companion + scheduler",
+    "companion":    "Zerax Companion + scheduler",
     "games":        "ألعاب",
     "independence": "حالة الاستقلالية (مفاتيح المالك المباشرة)",
 }

@@ -65,7 +65,7 @@ async def _gather_context(db, project_id: str) -> Optional[Dict[str, Any]]:
                         except Exception:
                             pass
     return {
-        "title": proj.get("title") or "لعبة Zitex",
+        "title": proj.get("title") or "لعبة Zerax",
         "description": proj.get("description") or "",
         "game_type": proj.get("game_type") or "web",
         "programming_type": proj.get("programming_type") or "",

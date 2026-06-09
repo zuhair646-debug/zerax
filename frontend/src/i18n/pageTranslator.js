@@ -1,5 +1,5 @@
 /**
- * Live DOM Translator for Zitex
+ * Live DOM Translator for Zerax
  * ------------------------------------------------------------------
  * Translates EVERY visible Arabic/English text node on the page into
  * the user's chosen language via the batch Claude endpoint.
