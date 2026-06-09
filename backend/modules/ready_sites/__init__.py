@@ -32,7 +32,7 @@ import uuid
 import logging
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
-from fastapi import APIRouter, HTTPException, Depends, Response
+from fastapi import APIRouter, HTTPException, Depends, Response, Request
 from pydantic import BaseModel, Field
 
 from .catalog import (
@@ -45,6 +45,7 @@ from .catalog import (
     get_type,
     get_features,
 )
+from .market_packs import MARKET_PACKS, get_market, list_markets, detect_market_from_country_code
 from .agent import generate_ready_site, refine_ready_site
 
 logger = logging.getLogger(__name__)
@@ -395,6 +396,27 @@ def create_ready_sites_router(db, get_current_user) -> APIRouter:
         if r.deleted_count == 0:
             raise HTTPException(404, "المشروع غير موجود")
         return {"ok": True}
+
+    # ---- Market Packs (public — used by generated sites for auto-localization) ----
+    @router.get("/markets")
+    async def list_all_markets():
+        """List all 15 supported markets for the wizard selector."""
+        return {"markets": list_markets(), "count": len(MARKET_PACKS)}
+
+    @router.get("/market/{market_id}")
+    async def get_market_pack(market_id: str):
+        """Return a single market pack with full payment/shipping/chat data."""
+        pack = get_market(market_id)
+        if not pack:
+            raise HTTPException(404, f"السوق {market_id} غير مدعوم")
+        return pack
+
+    @router.get("/detect-market")
+    async def detect_market(request: Request):
+        """Auto-detect visitor's market from IP. Falls back to SA."""
+        ip = request.headers.get("cf-ipcountry") or request.headers.get("x-country-code") or ""
+        market_id = detect_market_from_country_code(ip)
+        return {"market_id": market_id, "market": get_market(market_id)}
 
     # ---- Zitex Branding Tracker (public) ----
     @router.get("/track-visit/{project_id}")

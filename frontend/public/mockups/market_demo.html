@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html><head><meta charset="UTF-8"><title>Zitex Demo — Live Market Switcher</title>
+<link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;700;900&family=Noto+Sans+SC:wght@400;700;900&family=Noto+Sans+JP:wght@400;700;900&family=Noto+Sans+KR:wght@400;700;900&family=Noto+Sans+Devanagari:wght@400;700;900&family=Inter:wght@400;700;900&family=Vazirmatn:wght@400;700;900&display=swap" rel="stylesheet">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:var(--font,'Tajawal');background:#f3f4f6;min-height:100vh}
+.demo-bar{background:#0f172a;color:#fff;padding:14px 24px;display:flex;align-items:center;gap:14px;flex-wrap:wrap;position:sticky;top:0;z-index:1000}
+.demo-bar h2{font-size:15px;font-weight:900;color:#fbbf24}
+.demo-bar .market-picker{flex:1;max-width:400px;display:flex;gap:8px;overflow-x:auto;padding:4px;scrollbar-width:none}
+.demo-bar .market-picker::-webkit-scrollbar{display:none}
+.flag-btn{flex-shrink:0;padding:8px 14px;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.1);border-radius:99px;color:#fff;font-family:inherit;font-size:13px;cursor:pointer;display:flex;align-items:center;gap:6px;transition:all .2s}
+.flag-btn:hover{background:rgba(251,191,36,.15);border-color:#fbbf24}
+.flag-btn.active{background:#fbbf24;color:#0a0a0a;border-color:#fbbf24;font-weight:900}
+.demo-info{font-size:12px;color:#94a3b8}
+.demo-info b{color:#fbbf24}
+.app{padding-bottom:80px;direction:var(--dir,rtl)}
+.top{background:#fff;padding:14px 18px;display:flex;align-items:center;gap:14px;box-shadow:0 2px 10px rgba(0,0,0,.04)}
+.logo{font-weight:900;font-size:22px;color:#7c3aed}
+.search{flex:1;background:#f3f4f6;border:none;padding:12px 18px;border-radius:99px;font-family:inherit;font-size:14px;outline:none}
+.top-ico{width:42px;height:42px;border-radius:50%;background:#f3f4f6;display:flex;align-items:center;justify-content:center;font-size:18px}
+.banner{margin:14px 18px;height:160px;border-radius:18px;overflow:hidden;position:relative;background:linear-gradient(135deg,#7c3aed,#ec4899);display:flex;align-items:center;padding:0 24px;color:#fff}
+.banner h2{font-size:22px;font-weight:900;margin-bottom:6px}
+.banner p{font-size:13px;opacity:.95}
+.section{padding:18px}
+.section h3{font-size:16px;font-weight:900;margin-bottom:14px;color:#0a0a0a}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:14px}
+.card{background:#fff;border-radius:16px;padding:18px;border:1px solid #e5e7eb}
+.card h4{font-size:14px;font-weight:900;margin-bottom:12px;color:#0a0a0a;display:flex;align-items:center;gap:8px}
+.payment-row,.shipping-row,.chat-row{display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px dashed #e5e7eb;font-size:13px}
+.payment-row:last-child,.shipping-row:last-child,.chat-row:last-child{border:none}
+.tag{padding:2px 10px;border-radius:99px;font-size:11px;font-weight:700}
+.tag-bnpl{background:#ddd6fe;color:#5b21b6}
+.tag-card{background:#dbeafe;color:#1e40af}
+.tag-wallet{background:#fce7f3;color:#9f1239}
+.tag-cash{background:#dcfce7;color:#166534}
+.tag-popular{background:#fef3c7;color:#92400e}
+.product-card{background:#fff;border-radius:14px;overflow:hidden;border:1px solid #e5e7eb}
+.product-card img{width:100%;height:140px;object-fit:cover}
+.product-card .p-info{padding:10px 14px}
+.product-card .name{font-size:13px;font-weight:700;margin-bottom:4px}
+.product-card .price{font-size:18px;font-weight:900;color:#7c3aed}
+.product-card .price-converted{font-size:11px;color:#9ca3af}
+.market-summary{background:#0f172a;color:#fff;padding:24px;border-radius:18px;margin:14px 18px}
+.market-summary .row{display:flex;justify-content:space-between;padding:8px 0;font-size:13px}
+.market-summary .row span:first-child{color:#94a3b8}
+.market-summary .row span:last-child{color:#fbbf24;font-weight:700}
+</style></head>
+<body>
+
+<div class="demo-bar">
+  <h2>🌍 Zitex Live Market Demo</h2>
+  <div class="market-picker" id="picker"></div>
+  <div class="demo-info">السوق الحالي: <b id="cur-market">السعودية</b></div>
+</div>
+
+<div class="app">
+  <div class="top">
+    <div class="logo" id="brand">سوقي 🛒</div>
+    <input class="search" id="search" placeholder="ابحث عن منتج...">
+    <div class="top-ico" id="chat-ico">💬</div>
+  </div>
+
+  <div class="banner">
+    <div>
+      <h2 id="banner-title">عرض اليوم 🔥</h2>
+      <p id="banner-sub">خصم 30% على كل المنتجات</p>
+    </div>
+  </div>
+
+  <div class="market-summary">
+    <h3 style="font-size:18px;font-weight:900;margin-bottom:14px;color:#fbbf24">📋 إعدادات السوق</h3>
+    <div class="row"><span>الاسم</span><span id="m-name">السعودية</span></div>
+    <div class="row"><span>اللغة</span><span id="m-lang">ar (RTL)</span></div>
+    <div class="row"><span>العملة</span><span id="m-curr">ر.س (SAR)</span></div>
+    <div class="row"><span>الضريبة</span><span id="m-tax">VAT 15%</span></div>
+    <div class="row"><span>الخط</span><span id="m-font">Tajawal</span></div>
+  </div>
+
+  <div class="section">
+    <h3>🛍️ المنتجات (مع التحويل التلقائي للعملة)</h3>
+    <div class="grid" id="products"></div>
+  </div>
+
+  <div class="section">
+    <h3>💳 بوابات الدفع المتاحة</h3>
+    <div class="card"><div id="payments"></div></div>
+  </div>
+
+  <div class="section">
+    <h3>🚚 شركات الشحن المحلية</h3>
+    <div class="card"><div id="shipping"></div></div>
+  </div>
+
+  <div class="section">
+    <h3>💬 تطبيقات التواصل المحلية</h3>
+    <div class="card"><div id="chats"></div></div>
+  </div>
+
+  <div class="section">
+    <h3>🎉 المواسم الترويجية</h3>
+    <div class="card"><div id="promos"></div></div>
+  </div>
+</div>
+
+<script>
+const API = window.location.origin;
+const PRODUCTS = [
+  {name_ar:'قميص قطن فاخر',name_en:'Premium Cotton Shirt',name_zh:'纯棉精品衬衫',name_ja:'プレミアムコットンシャツ',name_ko:'프리미엄 면 셔츠',name_hi:'प्रीमियम कॉटन शर्ट',name_fa:'پیراهن کتان درجه یک',sar:185,img:'https://images.unsplash.com/photo-1521572163474-6864f9cf17ab?w=400'},
+  {name_ar:'حذاء رياضي عصري',name_en:'Modern Sneakers',name_zh:'现代运动鞋',name_ja:'モダンスニーカー',name_ko:'모던 스니커즈',name_hi:'मॉडर्न स्नीकर्स',name_fa:'کتانی مدرن',sar:399,img:'https://images.unsplash.com/photo-1542291026-7eec264c27ff?w=400'},
+  {name_ar:'ساعة يد كلاسيكية',name_en:'Classic Wrist Watch',name_zh:'经典手表',name_ja:'クラシック腕時計',name_ko:'클래식 손목시계',name_hi:'क्लासिक कलाई घड़ी',name_fa:'ساعت کلاسیک',sar:890,img:'https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=400'},
+  {name_ar:'حقيبة جلد طبيعي',name_en:'Genuine Leather Bag',name_zh:'真皮包',name_ja:'本革バッグ',name_ko:'천연가죽 가방',name_hi:'असली चमड़े का बैग',name_fa:'کیف چرم طبیعی',sar:650,img:'https://images.unsplash.com/photo-1548036328-c9fa89d128fa?w=400'}
+];
+// Approximate SAR -> X rates
+const RATES = {SAR:1, AED:0.98, KWD:0.082, QAR:0.97, BHD:0.10, OMR:0.103, IQD:350, SYP:3400, JOD:0.19, LBP:24000, EGP:13, IRR:11200, CNY:1.93, JPY:40, KRW:360, INR:22, USD:0.267};
+const BANNER_TEXTS={
+  ar:{title:'عرض اليوم 🔥',sub:'خصم 30% على كل المنتجات'},
+  en:{title:'Today\'s Offer 🔥',sub:'30% off on all products'},
+  zh:{title:'今日特惠 🔥',sub:'全场商品7折优惠'},
+  ja:{title:'今日のオファー 🔥',sub:'全商品30%オフ'},
+  ko:{title:'오늘의 특가 🔥',sub:'전 상품 30% 할인'},
+  hi:{title:'आज का ऑफर 🔥',sub:'सभी उत्पादों पर 30% छूट'},
+  fa:{title:'پیشنهاد امروز 🔥',sub:'۳۰٪ تخفیف برای تمام محصولات'}
+};
+const SEARCH_PLACEHOLDER={ar:'ابحث عن منتج...',en:'Search for products...',zh:'搜索商品...',ja:'商品を検索...',ko:'상품 검색...',hi:'उत्पाद खोजें...',fa:'جستجوی محصول...'};
+
+async function loadMarkets(){
+  const r = await fetch(API+'/api/ready-sites/markets');
+  const d = await r.json();
+  const picker = document.getElementById('picker');
+  picker.innerHTML = d.markets.map(m=>`<button class="flag-btn ${m.id==='sa'?'active':''}" data-market="${m.id}" onclick="switchMarket('${m.id}')">${m.flag} ${m.name_ar}</button>`).join('');
+}
+
+async function switchMarket(id){
+  document.querySelectorAll('.flag-btn').forEach(b=>b.classList.toggle('active',b.dataset.market===id));
+  const r = await fetch(API+'/api/ready-sites/market/'+id);
+  const m = await r.json();
+
+  // Apply visual
+  document.documentElement.style.setProperty('--font',`'${m.font}',sans-serif`);
+  document.documentElement.style.setProperty('--dir',m.direction);
+  document.body.style.fontFamily = `'${m.font}',sans-serif`;
+  document.body.style.direction = m.direction;
+
+  // Update summary
+  document.getElementById('cur-market').textContent = m.name_ar;
+  document.getElementById('m-name').textContent = m.name_ar + ' ' + m.flag;
+  document.getElementById('m-lang').textContent = m.language + ' (' + m.direction.toUpperCase() + ')';
+  document.getElementById('m-curr').textContent = m.symbol + ' (' + m.currency + ')';
+  document.getElementById('m-tax').textContent = m.tax.rate ? (m.tax.name_ar||m.tax.name_en||'VAT') + ' ' + m.tax.rate + '%' : 'بدون ضريبة';
+  document.getElementById('m-font').textContent = m.font;
+
+  // Translate banner + search
+  const lang = m.language;
+  const bt = BANNER_TEXTS[lang] || BANNER_TEXTS.en;
+  document.getElementById('banner-title').textContent = bt.title;
+  document.getElementById('banner-sub').textContent = bt.sub;
+  document.getElementById('search').placeholder = SEARCH_PLACEHOLDER[lang] || SEARCH_PLACEHOLDER.en;
+
+  // Convert prices + show products in local language
+  const rate = RATES[m.currency] || 1;
+  document.getElementById('products').innerHTML = PRODUCTS.map(p=>{
+    const localPrice = (p.sar * rate);
+    const formatted = m.currency==='IQD'||m.currency==='SYP'||m.currency==='LBP'||m.currency==='IRR'||m.currency==='KRW'||m.currency==='JPY' ? Math.round(localPrice).toLocaleString() : localPrice.toFixed(2);
+    const name = p['name_'+lang] || p.name_en;
+    return `<div class="product-card"><img src="${p.img}"><div class="p-info"><div class="name">${name}</div><div class="price">${m.symbol} ${formatted}</div><div class="price-converted">~ ${p.sar} ر.س</div></div></div>`;
+  }).join('');
+
+  // Payment gateways
+  document.getElementById('payments').innerHTML = m.payment_gateways.map(g=>{
+    const tag = g.type==='bnpl'?'tag-bnpl':g.type==='wallet'?'tag-wallet':g.type==='cash'?'tag-cash':'tag-card';
+    const tagLabel = {bnpl:'BNPL',wallet:'محفظة',cash:'كاش',card:'بطاقة',gateway:'بوابة',qr:'QR',transfer:'حوالة'}[g.type]||g.type;
+    return `<div class="payment-row"><div><b>${g.name}</b>${g.popular?' <span class="tag tag-popular">شائع</span>':''}${g.tagline?'<br><small style="color:#6b7280">'+g.tagline+'</small>':''}</div><span class="tag ${tag}">${tagLabel}</span></div>`;
+  }).join('');
+
+  // Shipping
+  document.getElementById('shipping').innerHTML = m.shipping_carriers.map(s=>{
+    return `<div class="shipping-row"><b>${s.name}</b><span style="color:#6b7280">${s.days?s.days+' أيام':''}${s.popular?' · شائع':''}</span></div>`;
+  }).join('');
+
+  // Chat apps
+  document.getElementById('chats').innerHTML = m.chat_apps.map(c=>{
+    return `<div class="chat-row"><b>${c.name}</b>${c.popular?'<span class="tag tag-popular">الأكثر استخداماً</span>':''}</div>`;
+  }).join('');
+  document.getElementById('chat-ico').textContent = m.chat_apps[0]?.id==='wechat'?'💚':m.chat_apps[0]?.id==='line'?'🟢':m.chat_apps[0]?.id==='kakaotalk'?'💛':m.chat_apps[0]?.id==='telegram'?'✈️':'💬';
+
+  // Promos
+  const promos = m.seasonal_promos || [];
+  document.getElementById('promos').innerHTML = promos.length ? promos.map(p=>{
+    const sizeColor = p.size==='HUGE'?'#ef4444':p.size==='BIG'?'#f59e0b':'#7c3aed';
+    return `<div class="payment-row"><b>${p.name_ar||p.name_en}</b><span class="tag" style="background:${sizeColor};color:#fff">${p.size||'موسم'}</span></div>`;
+  }).join('') : '<div style="text-align:center;color:#9ca3af;padding:10px">لا توجد مواسم خاصة في هذا السوق</div>';
+}
+
+loadMarkets().then(()=>switchMarket('sa'));
+</script>
+</body></html>
