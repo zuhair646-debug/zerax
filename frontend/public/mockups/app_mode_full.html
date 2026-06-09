@@ -458,6 +458,51 @@ body.admin-mode .add-product-card{display:flex}
 .rch-success .check{font-size:60px;color:#10b981;margin-bottom:10px}
 .rch-success b{display:block;font-size:18px;color:#0a0a0a;margin-bottom:6px}
 .rch-success .receipt{font-family:monospace;font-size:11px;color:#6b7280;background:#f3f4f6;padding:8px;border-radius:8px;margin-top:10px}
+/* DELIVERY TAB */
+.dlv-stat-box{background:#fff;border:1.5px solid #e5e7eb;border-radius:12px;padding:8px 6px;text-align:center}
+.dlv-stat-box .v{font-size:18px;font-weight:900;color:#7c3aed;line-height:1}
+.dlv-stat-box .l{font-size:9px;color:#6b7280;margin-top:3px;font-weight:900}
+.dlv-order{background:#fff;border:1.5px solid #e5e7eb;border-radius:12px;padding:10px;margin-bottom:8px}
+.dlv-order .top{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:6px;gap:8px}
+.dlv-order .cust{font-size:13px;font-weight:900;color:#0a0a0a}
+.dlv-order .ph{font-size:10px;color:#6b7280;direction:ltr}
+.dlv-order .badge{padding:2px 8px;border-radius:99px;font-size:9px;font-weight:900;white-space:nowrap}
+.dlv-order .badge.pending{background:#fef3c7;color:#92400e}
+.dlv-order .badge.assigned{background:#ede9fe;color:#5b21b6}
+.dlv-order .badge.picked_up{background:#dbeafe;color:#1e40af}
+.dlv-order .badge.delivering{background:#fce7f3;color:#9d174d}
+.dlv-order .badge.delivered{background:#d1fae5;color:#065f46}
+.dlv-order .badge.cancelled{background:#fee2e2;color:#991b1b}
+.dlv-order .addr{font-size:11px;color:#6b7280;line-height:1.5;margin-bottom:5px}
+.dlv-order .meta{display:flex;justify-content:space-between;align-items:center;padding-top:6px;border-top:1px dashed #e5e7eb;font-size:11px}
+.dlv-order .meta .total{font-weight:900;color:#7c3aed;font-size:13px}
+.dlv-order .meta .drv{color:#0a0a0a;font-weight:900;font-size:11px}
+.dlv-order .meta .drv.no-drv{color:#dc2626}
+.dlv-order .actions{display:flex;gap:6px;margin-top:8px;flex-wrap:wrap}
+.dlv-order .actions button{flex:1;min-width:0;padding:7px 8px;border-radius:8px;border:none;font-family:inherit;font-weight:900;font-size:11px;cursor:pointer}
+.dlv-order .actions button.primary{background:linear-gradient(135deg,#7c3aed,#a855f7);color:#fff}
+.dlv-order .actions button.secondary{background:#fff;color:#0a0a0a;border:1.5px solid #e5e7eb}
+.dlv-driver{background:#fff;border:1.5px solid #e5e7eb;border-radius:12px;padding:10px;margin-bottom:8px;display:flex;align-items:center;gap:10px}
+.dlv-driver .avt{width:42px;height:42px;border-radius:50%;background:linear-gradient(135deg,#7c3aed,#fbbf24);display:flex;align-items:center;justify-content:center;color:#fff;font-weight:900;font-size:16px;flex-shrink:0}
+.dlv-driver .nm{font-size:13px;font-weight:900;color:#0a0a0a}
+.dlv-driver .ph{font-size:10px;color:#6b7280;direction:ltr;text-align:right}
+.dlv-driver .stat-row{font-size:10px;color:#6b7280;margin-top:3px}
+.dlv-driver .stat-row b{color:#0a0a0a}
+.dlv-driver .status-pill{padding:3px 8px;border-radius:99px;font-size:9px;font-weight:900;white-space:nowrap;margin-right:auto;flex-shrink:0}
+.dlv-driver .status-pill.online{background:#d1fae5;color:#065f46}
+.dlv-driver .status-pill.delivering{background:#fce7f3;color:#9d174d}
+.dlv-driver .status-pill.offline{background:#f3f4f6;color:#6b7280}
+.dlv-zone-row{background:#fff;border:1.5px solid #e5e7eb;border-radius:10px;padding:8px 10px;margin-bottom:6px;display:flex;justify-content:space-between;align-items:center;font-size:12px}
+.dlv-zone-row .nm{font-weight:900;color:#0a0a0a}
+.dlv-zone-row .meta{font-size:11px;color:#6b7280}
+.dlv-zone-row input{width:60px;padding:4px 8px;border:1px solid #e5e7eb;border-radius:6px;text-align:center;font-family:inherit;font-size:11px}
+.dlv-assign-modal{position:fixed;inset:0;background:rgba(0,0,0,.7);display:none;z-index:700;align-items:center;justify-content:center;padding:14px}
+.dlv-assign-modal.open{display:flex}
+.dlv-assign-modal .inner{background:#fff;border-radius:16px;width:100%;max-width:380px;max-height:80vh;overflow-y:auto;padding:16px}
+.dlv-assign-modal h3{font-size:14px;font-weight:900;margin-bottom:10px}
+.dlv-assign-driver-row{display:flex;align-items:center;gap:10px;padding:10px;border:1.5px solid #e5e7eb;border-radius:10px;margin-bottom:6px;cursor:pointer;transition:all .15s}
+.dlv-assign-driver-row:hover{border-color:#7c3aed;background:#faf5ff}
+.dlv-assign-driver-row .avt{width:36px;height:36px;border-radius:50%;background:linear-gradient(135deg,#7c3aed,#fbbf24);display:flex;align-items:center;justify-content:center;color:#fff;font-weight:900}
 /* PRODUCT DETAIL PAGE */
 .pd-hero{position:relative;aspect-ratio:1;border-radius:18px;overflow:hidden;margin-bottom:14px;box-shadow:0 8px 24px rgba(0,0,0,.1)}
 .pd-hero img{width:100%;height:100%;object-fit:cover;cursor:zoom-in}
@@ -920,6 +965,7 @@ body.admin-mode .add-product-card{display:flex}
     <div class="acp-tabs">
       <button class="acp-tab active" data-tab="products" onclick="switchAcpTab('products')">📦 <span data-key="acp_tab_products">المنتجات</span></button>
       <button class="acp-tab" data-tab="video" onclick="switchAcpTab('video')">🎬 <span data-key="acp_tab_video">Video Studio</span></button>
+      <button class="acp-tab" data-tab="delivery" onclick="switchAcpTab('delivery')">🚚 <span data-key="acp_tab_delivery">التوصيل</span></button>
     </div>
     <div class="acp-body">
       <!-- ── PRODUCTS TAB ── -->
@@ -1023,11 +1069,89 @@ body.admin-mode .add-product-card{display:flex}
           <button class="acp-secondary" onclick="vsDownloadVideo()" style="margin-top:10px">⬇️ <span data-key="vs_download">تحميل الفيديو</span></button>
         </div>
       </div>
+
+      <!-- ── DELIVERY TAB ── -->
+      <div class="acp-section" data-section="delivery">
+        <!-- live stats strip -->
+        <div id="dlv-stats" style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-bottom:14px"></div>
+
+        <!-- driver app link card -->
+        <div style="background:linear-gradient(135deg,#0a0a14,#1f1f3e);border:1.5px solid #2a2a44;border-radius:14px;padding:12px;margin-bottom:14px;color:#fff">
+          <div style="display:flex;align-items:center;gap:10px">
+            <div style="width:42px;height:42px;border-radius:10px;background:linear-gradient(135deg,#fbbf24,#a78bfa);display:flex;align-items:center;justify-content:center;font-size:20px">🚗</div>
+            <div style="flex:1;min-width:0">
+              <div style="font-size:13px;font-weight:900">تطبيق السائق</div>
+              <div style="font-size:10px;color:#94a3b8;margin-top:2px">شارك الرابط مع السائقين للوصول لطلباتهم</div>
+            </div>
+            <a href="/mockups/driver_app.html" target="_blank" style="background:#fbbf24;color:#000;padding:8px 14px;border-radius:99px;font-size:11px;font-weight:900;text-decoration:none">فتح ↗</a>
+          </div>
+        </div>
+
+        <!-- sub-tabs -->
+        <div style="display:flex;gap:6px;margin-bottom:12px;border-bottom:1.5px solid #f3f4f6;padding-bottom:0">
+          <button class="vs-pill active" id="dlv-sub-orders" onclick="dlvSwitchSub('orders')" style="border-radius:10px 10px 0 0">📦 الطلبات</button>
+          <button class="vs-pill" id="dlv-sub-drivers" onclick="dlvSwitchSub('drivers')" style="border-radius:10px 10px 0 0">🧑‍✈️ السائقون</button>
+          <button class="vs-pill" id="dlv-sub-zones" onclick="dlvSwitchSub('zones')" style="border-radius:10px 10px 0 0">🗺️ المناطق</button>
+        </div>
+
+        <!-- Orders subsection -->
+        <div id="dlv-orders" class="dlv-sub">
+          <div style="display:flex;gap:6px;margin-bottom:10px;overflow-x:auto;padding-bottom:4px">
+            <button class="vs-pill active" data-flt="all" onclick="dlvFilterOrders('all')">الكل</button>
+            <button class="vs-pill" data-flt="pending" onclick="dlvFilterOrders('pending')">⏳ بانتظار</button>
+            <button class="vs-pill" data-flt="assigned" onclick="dlvFilterOrders('assigned')">📋 مُسندة</button>
+            <button class="vs-pill" data-flt="delivering" onclick="dlvFilterOrders('delivering')">🚗 في طريقها</button>
+            <button class="vs-pill" data-flt="delivered" onclick="dlvFilterOrders('delivered')">✓ منجزة</button>
+          </div>
+          <div id="dlv-orders-list"></div>
+        </div>
+
+        <!-- Drivers subsection -->
+        <div id="dlv-drivers" class="dlv-sub" style="display:none">
+          <button class="acp-secondary" onclick="dlvShowAddDriver()" style="margin-bottom:12px;color:#7c3aed;border-color:#ddd6fe;background:#faf5ff">＋ إضافة سائق جديد</button>
+          <div id="dlv-add-driver-form" style="display:none;background:#faf5ff;border:1.5px dashed #c4b5fd;border-radius:12px;padding:12px;margin-bottom:12px">
+            <div class="acp-field"><label>اسم السائق</label><input id="dlv-d-name" placeholder="مثلاً: أحمد السبيعي"></div>
+            <div class="acp-row">
+              <div class="acp-field"><label>رقم الجوال</label><input id="dlv-d-phone" placeholder="05XXXXXXXX" maxlength="10"></div>
+              <div class="acp-field"><label>المركبة</label><select id="dlv-d-vehicle"><option>موتر</option><option>دباب</option><option>سيكل</option></select></div>
+            </div>
+            <div class="acp-field"><label>المنطقة</label><select id="dlv-d-area"></select></div>
+            <button class="acp-save-btn" onclick="dlvSaveDriver()">💾 حفظ السائق</button>
+          </div>
+          <div id="dlv-drivers-list"></div>
+        </div>
+
+        <!-- Zones / Settings subsection -->
+        <div id="dlv-zones" class="dlv-sub" style="display:none">
+          <div class="acp-field"><label>الحد الأدنى للتوصيل المجاني (ر.س)</label><input id="dlv-free-th" type="number" min="0"></div>
+          <div class="acp-row">
+            <div class="acp-field"><label>الرسوم الأساسية (ر.س)</label><input id="dlv-base-fee" type="number" min="0"></div>
+            <div class="acp-field"><label>سعر الكيلو (ر.س)</label><input id="dlv-per-km" type="number" min="0" step="0.5"></div>
+          </div>
+          <label style="display:flex;align-items:center;gap:8px;font-size:12px;font-weight:900;margin:10px 0">
+            <input type="checkbox" id="dlv-auto" style="width:18px;height:18px;accent-color:#7c3aed"> توزيع تلقائي للطلبات على السائقين
+          </label>
+          <label style="display:flex;align-items:center;gap:8px;font-size:12px;font-weight:900;margin-bottom:14px">
+            <input type="checkbox" id="dlv-cod" style="width:18px;height:18px;accent-color:#7c3aed"> السماح بالدفع كاش عند الاستلام
+          </label>
+          <h5 style="font-size:12px;font-weight:900;color:#0a0a0a;margin-bottom:8px">مناطق التوصيل</h5>
+          <div id="dlv-zones-list" style="margin-bottom:14px"></div>
+          <button class="acp-save-btn" onclick="dlvSaveSettings()">💾 حفظ الإعدادات</button>
+        </div>
+      </div>
     </div>
   </div>
 </div>
 
-<!-- ═══════════════════ RECHARGE MODAL (Inline Zerax wallet top-up) ═══════════════════ -->
+<!-- ═══════════════════ ASSIGN DRIVER MODAL ═══════════════════ -->
+<div class="dlv-assign-modal" id="dlv-assign-modal" onclick="if(event.target===this)closeDlvAssign()">
+  <div class="inner">
+    <h3>اختر سائقاً لهذا الطلب</h3>
+    <p style="font-size:11px;color:#6b7280;margin-bottom:12px" id="dlv-assign-order-info"></p>
+    <div id="dlv-assign-list"></div>
+    <button class="acp-secondary" onclick="closeDlvAssign()" style="margin-top:8px">إلغاء</button>
+  </div>
+</div>
 <div class="rch-modal" id="rch-modal" onclick="if(event.target===this)closeRecharge()">
   <div class="rch">
     <div class="rch-head">
@@ -2631,6 +2755,7 @@ function closeAcp(){document.getElementById('acp-modal').classList.remove('open'
 function switchAcpTab(tab){
   document.querySelectorAll('.acp-tab').forEach(t=>t.classList.toggle('active',t.dataset.tab===tab));
   document.querySelectorAll('.acp-section').forEach(s=>s.classList.toggle('active',s.dataset.section===tab));
+  if(tab==='delivery')dlvLoadAll();
 }
 function syncCreditsDisplay(){
   const el=document.getElementById('acp-credits-value');if(el)el.textContent=ZERAX_CREDITS;
@@ -2914,6 +3039,168 @@ async function rchConfirm(){
     document.getElementById('rch-success').classList.add('show');
   }catch(e){alert('فشل الدفع: '+e.message);}
   finally{btn.disabled=false;btn.innerHTML=old;}
+}
+
+
+// ═══════════════════════ DELIVERY MANAGEMENT (in ACP) ═══════════════════════
+let DLV_ORDER_FILTER='all', DLV_SUB='orders', DLV_ASSIGN_ORDER_ID=null;
+let DLV_DRIVERS_CACHE=[], DLV_SETTINGS_CACHE=null;
+async function dlvLoadAll(){
+  try{
+    const [statsR,ordR,drvR,setR]=await Promise.all([
+      fetch(API+'/api/delivery/stats').then(r=>r.json()),
+      fetch(API+'/api/delivery/orders?limit=80').then(r=>r.json()),
+      fetch(API+'/api/delivery/drivers').then(r=>r.json()),
+      fetch(API+'/api/delivery/settings').then(r=>r.json()),
+    ]);
+    DLV_DRIVERS_CACHE=drvR.drivers||[];
+    DLV_SETTINGS_CACHE=setR;
+    dlvRenderStats(statsR);
+    dlvRenderOrders(ordR.orders||[]);
+    dlvRenderDrivers(DLV_DRIVERS_CACHE);
+    dlvRenderSettings(setR);
+    dlvPopulateAreaSelect();
+  }catch(e){console.warn('delivery load failed',e);}
+}
+function dlvRenderStats(s){
+  const items=[
+    {v:s.by_status?.pending||0,l:'بانتظار'},
+    {v:(s.by_status?.assigned||0)+(s.by_status?.delivering||0),l:'نشطة'},
+    {v:s.active_drivers||0,l:'سائق متاح'},
+    {v:s.revenue_today_sar||0,l:'إيراد اليوم'},
+  ];
+  document.getElementById('dlv-stats').innerHTML=items.map(i=>`<div class="dlv-stat-box"><div class="v">${i.v}</div><div class="l">${i.l}</div></div>`).join('');
+}
+function dlvSwitchSub(s){
+  DLV_SUB=s;
+  ['orders','drivers','zones'].forEach(k=>{
+    const el=document.getElementById('dlv-'+k);if(el)el.style.display=k===s?'block':'none';
+    const btn=document.getElementById('dlv-sub-'+k);if(btn)btn.classList.toggle('active',k===s);
+  });
+}
+function dlvFilterOrders(f){
+  DLV_ORDER_FILTER=f;
+  document.querySelectorAll('#dlv-orders .vs-pill[data-flt]').forEach(p=>p.classList.toggle('active',p.dataset.flt===f));
+  dlvLoadOrdersOnly();
+}
+async function dlvLoadOrdersOnly(){
+  const u=DLV_ORDER_FILTER==='all'?'/api/delivery/orders':'/api/delivery/orders?status='+DLV_ORDER_FILTER;
+  try{const r=await fetch(API+u);const d=await r.json();dlvRenderOrders(d.orders||[]);}catch(_){}
+}
+function dlvRenderOrders(orders){
+  const list=document.getElementById('dlv-orders-list');
+  if(!orders.length){list.innerHTML='<div style="text-align:center;padding:30px 12px;color:#6b7280;font-size:12px">لا توجد طلبات</div>';return;}
+  const statusLbl=s=>({pending:'بانتظار',assigned:'مُسندة',picked_up:'تم الاستلام',delivering:'في طريقها',delivered:'منجزة',cancelled:'ملغاة'})[s]||s;
+  list.innerHTML=orders.map(o=>{
+    const drv=DLV_DRIVERS_CACHE.find(d=>d.id===o.driver_id);
+    const drvHtml=drv?`<span class="drv">🧑‍✈️ ${drv.name}</span>`:`<span class="drv no-drv">⚠️ لم يُسند</span>`;
+    const showAssign=!o.driver_id&&['pending'].includes(o.status);
+    const actHtml=showAssign?`<div class="actions"><button class="primary" onclick="openDlvAssign('${o.id}')">إسناد لسائق</button><button class="secondary" onclick="dlvCancelOrder('${o.id}')">إلغاء</button></div>`:'';
+    return `<div class="dlv-order">
+      <div class="top"><div><div class="cust">${o.customer_name}</div><div class="ph">${o.customer_phone}</div></div><span class="badge ${o.status}">${statusLbl(o.status)}</span></div>
+      <div class="addr">📍 ${o.address}</div>
+      <div class="meta"><span class="total">${o.total_sar} ر.س</span>${drvHtml}<span style="color:#6b7280">${o.payment_method==='cash'?'💵':'💳'}</span></div>
+      ${actHtml}
+    </div>`;
+  }).join('');
+}
+function openDlvAssign(orderId){
+  DLV_ASSIGN_ORDER_ID=orderId;
+  const o=Object.values(document.querySelectorAll('.dlv-order'));
+  document.getElementById('dlv-assign-order-info').textContent='طلب #'+orderId.replace('ord_','');
+  const available=DLV_DRIVERS_CACHE.filter(d=>d.status!=='offline');
+  document.getElementById('dlv-assign-list').innerHTML=available.length?available.map(d=>`
+    <div class="dlv-assign-driver-row" onclick="dlvAssignTo('${d.id}')">
+      <div class="avt">${d.name.charAt(0)}</div>
+      <div style="flex:1;min-width:0"><div style="font-size:13px;font-weight:900">${d.name}</div><div style="font-size:10px;color:#6b7280">⭐ ${d.rating||5} · ${d.deliveries_today||0} توصيل اليوم · ${dlvAreaLabel(d.area)}</div></div>
+      <span class="status-pill ${d.status}" style="padding:3px 8px;border-radius:99px;font-size:9px;font-weight:900;background:${d.status==='online'?'#d1fae5':'#fce7f3'};color:${d.status==='online'?'#065f46':'#9d174d'}">${d.status==='online'?'متاح':'في توصيل'}</span>
+    </div>`).join(''):'<div style="text-align:center;padding:20px;color:#dc2626;font-weight:900">⚠️ لا يوجد سائقين متاحين حالياً</div>';
+  document.getElementById('dlv-assign-modal').classList.add('open');
+}
+function closeDlvAssign(){document.getElementById('dlv-assign-modal').classList.remove('open');}
+async function dlvAssignTo(driverId){
+  try{
+    const r=await fetch(API+'/api/delivery/orders/'+DLV_ASSIGN_ORDER_ID+'/assign',{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({driver_id:driverId})});
+    if(!r.ok)throw new Error();
+    closeDlvAssign();dlvLoadAll();
+    toast('✓ تم إسناد الطلب');
+  }catch(e){alert('فشل الإسناد');}
+}
+async function dlvCancelOrder(orderId){
+  if(!confirm('إلغاء هذا الطلب؟'))return;
+  try{
+    await fetch(API+'/api/delivery/orders/'+orderId+'/status',{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({status:'cancelled'})});
+    dlvLoadAll();toast('✓ تم الإلغاء');
+  }catch(_){alert('فشل');}
+}
+function dlvAreaLabel(id){const m={north_riyadh:'شمال الرياض',south_riyadh:'جنوب الرياض',east_riyadh:'شرق الرياض',west_riyadh:'غرب الرياض',central:'وسط الرياض'};return m[id]||id;}
+function dlvRenderDrivers(drivers){
+  const list=document.getElementById('dlv-drivers-list');
+  if(!drivers.length){list.innerHTML='<div style="text-align:center;padding:30px;color:#6b7280;font-size:12px">لا يوجد سائقين</div>';return;}
+  list.innerHTML=drivers.map(d=>`
+    <div class="dlv-driver">
+      <div class="avt">${d.name.charAt(0)}</div>
+      <div style="flex:1;min-width:0">
+        <div class="nm">${d.name}</div>
+        <div class="ph">${d.phone}</div>
+        <div class="stat-row">⭐ <b>${(d.rating||5).toFixed(1)}</b> · ${d.deliveries_today||0} توصيل · <b>${d.earnings_today_sar||0}</b> ر.س · ${dlvAreaLabel(d.area)}</div>
+      </div>
+      <span class="status-pill ${d.status}">${d.status==='online'?'متاح':d.status==='delivering'?'في توصيل':'غير متاح'}</span>
+      <button onclick="dlvDeleteDriver('${d.id}','${d.name.replace(/'/g,'')}')" style="background:none;border:none;color:#dc2626;cursor:pointer;font-size:16px;padding:4px">🗑️</button>
+    </div>`).join('');
+}
+function dlvShowAddDriver(){
+  const f=document.getElementById('dlv-add-driver-form');
+  f.style.display=f.style.display==='none'?'block':'none';
+  if(f.style.display==='block')dlvPopulateAreaSelect();
+}
+function dlvPopulateAreaSelect(){
+  if(!DLV_SETTINGS_CACHE)return;
+  const sel=document.getElementById('dlv-d-area');if(!sel)return;
+  sel.innerHTML=DLV_SETTINGS_CACHE.zones.map(z=>`<option value="${z.id}">${z.name_ar}</option>`).join('');
+}
+async function dlvSaveDriver(){
+  const name=document.getElementById('dlv-d-name').value.trim();
+  const phone=document.getElementById('dlv-d-phone').value.trim();
+  if(!name||!/^05\d{8}$/.test(phone)){alert('أدخل الاسم ورقم جوال صحيح يبدأ بـ 05');return;}
+  const vehicle=document.getElementById('dlv-d-vehicle').value;
+  const area=document.getElementById('dlv-d-area').value;
+  try{
+    const r=await fetch(API+'/api/delivery/drivers',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name,phone,vehicle,area,status:'online'})});
+    if(!r.ok)throw new Error();
+    ['dlv-d-name','dlv-d-phone'].forEach(id=>document.getElementById(id).value='');
+    document.getElementById('dlv-add-driver-form').style.display='none';
+    dlvLoadAll();toast('✓ تم حفظ السائق');
+  }catch(e){alert('فشل الحفظ');}
+}
+async function dlvDeleteDriver(id,name){
+  if(!confirm('حذف السائق "'+name+'"؟'))return;
+  try{await fetch(API+'/api/delivery/drivers/'+id,{method:'DELETE'});dlvLoadAll();toast('✓ تم الحذف');}catch(e){alert('فشل');}
+}
+function dlvRenderSettings(s){
+  document.getElementById('dlv-free-th').value=s.free_delivery_threshold_sar||0;
+  document.getElementById('dlv-base-fee').value=s.base_fee_sar||0;
+  document.getElementById('dlv-per-km').value=s.per_km_sar||0;
+  document.getElementById('dlv-auto').checked=!!s.auto_assign;
+  document.getElementById('dlv-cod').checked=!!s.allow_cash_on_delivery;
+  document.getElementById('dlv-zones-list').innerHTML=(s.zones||[]).map(z=>
+    `<div class="dlv-zone-row"><div><div class="nm">${z.name_ar}</div><div class="meta">~${z.eta_min} دقيقة</div></div><div>الرسوم: <b>${z.fee_sar}</b> ر.س</div></div>`
+  ).join('');
+}
+async function dlvSaveSettings(){
+  const payload={
+    free_delivery_threshold_sar:+document.getElementById('dlv-free-th').value||0,
+    base_fee_sar:+document.getElementById('dlv-base-fee').value||0,
+    per_km_sar:+document.getElementById('dlv-per-km').value||0,
+    auto_assign:document.getElementById('dlv-auto').checked,
+    allow_cash_on_delivery:document.getElementById('dlv-cod').checked,
+  };
+  try{
+    const r=await fetch(API+'/api/delivery/settings',{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
+    if(!r.ok)throw new Error();
+    DLV_SETTINGS_CACHE=await r.json();
+    toast('✓ تم حفظ الإعدادات');
+  }catch(e){alert('فشل');}
 }
 
 

@@ -1,0 +1,498 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<meta name="theme-color" content="#0a0a14">
+<title>Zerax Driver — تطبيق السائق</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;500;700;900&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+:root{--ink:#0a0a14;--ink2:#13131f;--amber:#fbbf24;--purple:#a78bfa;--emerald:#10b981;--rose:#ef4444;--mute:#94a3b8;--surface:#1a1a2e;--surface2:#22223a}
+html,body{height:100%;background:var(--ink);color:#fff;font-family:'IBM Plex Sans Arabic',system-ui,sans-serif}
+body{display:flex;justify-content:center}
+#app{width:100%;max-width:480px;min-height:100vh;background:var(--ink);display:flex;flex-direction:column;position:relative}
+
+/* ── LOGIN ── */
+.login-screen{flex:1;display:flex;flex-direction:column;justify-content:center;align-items:center;padding:24px;text-align:center;background:radial-gradient(ellipse at top,#1a1a3e 0%,var(--ink) 60%)}
+.login-screen .badge{display:inline-block;padding:6px 14px;background:rgba(251,191,36,.15);color:var(--amber);border-radius:99px;font-size:11px;font-weight:900;margin-bottom:20px;border:1px solid rgba(251,191,36,.3)}
+.login-screen h1{font-size:32px;font-weight:900;background:linear-gradient(135deg,var(--amber),var(--purple));-webkit-background-clip:text;background-clip:text;color:transparent;margin-bottom:10px}
+.login-screen .sub{color:var(--mute);font-size:14px;margin-bottom:40px}
+.login-card{width:100%;max-width:360px;background:var(--surface);border:1.5px solid #2a2a44;border-radius:24px;padding:24px}
+.login-card h3{font-size:16px;font-weight:900;margin-bottom:6px}
+.login-card p.help{font-size:11px;color:var(--mute);margin-bottom:18px;line-height:1.7}
+.login-card input{width:100%;padding:14px;background:var(--ink2);border:1.5px solid #2a2a44;border-radius:14px;color:#fff;font-family:inherit;font-size:15px;font-weight:700;letter-spacing:1px;text-align:center;direction:ltr;margin-bottom:12px;outline:none}
+.login-card input:focus{border-color:var(--amber)}
+.login-card button{width:100%;padding:15px;background:linear-gradient(135deg,var(--amber),#f59e0b);color:#000;border:none;border-radius:14px;font-family:inherit;font-weight:900;font-size:15px;cursor:pointer;box-shadow:0 6px 22px rgba(251,191,36,.3)}
+.login-card button:disabled{opacity:.5}
+.login-card .demo-hint{margin-top:14px;padding:10px;background:rgba(167,139,250,.08);border:1px dashed rgba(167,139,250,.3);border-radius:10px;font-size:11px;color:var(--purple);line-height:1.6}
+.login-card .demo-hint b{color:#fff}
+.login-card .err{color:var(--rose);font-size:12px;margin-bottom:10px;display:none}
+.login-card .err.show{display:block}
+
+/* ── MAIN APP HEADER ── */
+.app-header{padding:16px;background:linear-gradient(180deg,#1a1a3e,#13131f);display:flex;align-items:center;gap:12px;border-bottom:1px solid #2a2a44;position:sticky;top:0;z-index:50;backdrop-filter:blur(8px)}
+.app-header .avatar{width:46px;height:46px;border-radius:50%;background:linear-gradient(135deg,var(--amber),var(--purple));display:flex;align-items:center;justify-content:center;font-weight:900;color:#000;font-size:18px}
+.app-header .info{flex:1;min-width:0}
+.app-header .info .nm{font-size:14px;font-weight:900;line-height:1.2}
+.app-header .info .meta{font-size:10px;color:var(--mute);margin-top:2px}
+.status-toggle{padding:6px 12px;border-radius:99px;font-size:11px;font-weight:900;cursor:pointer;border:1.5px solid;font-family:inherit;display:flex;align-items:center;gap:5px}
+.status-toggle.online{background:rgba(16,185,129,.15);color:var(--emerald);border-color:var(--emerald)}
+.status-toggle.offline{background:rgba(148,163,184,.1);color:var(--mute);border-color:#374151}
+.status-toggle .dot{width:8px;height:8px;border-radius:50%;background:currentColor}
+.status-toggle.online .dot{animation:pulse 1.8s ease-in-out infinite}
+@keyframes pulse{50%{box-shadow:0 0 0 6px rgba(16,185,129,.25)}}
+
+/* ── STATS STRIP ── */
+.stats-strip{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;padding:14px}
+.stat{background:var(--surface);border:1.5px solid #2a2a44;border-radius:14px;padding:12px 8px;text-align:center}
+.stat .v{font-size:18px;font-weight:900;color:var(--amber)}
+.stat .l{font-size:10px;color:var(--mute);margin-top:3px}
+
+/* ── TABS ── */
+.tabs{display:flex;padding:0 14px;gap:6px;border-bottom:1px solid #2a2a44;margin-bottom:8px}
+.tab{flex:1;background:none;border:none;color:var(--mute);font-family:inherit;font-weight:900;font-size:12px;padding:12px 8px;cursor:pointer;border-bottom:3px solid transparent;display:flex;align-items:center;justify-content:center;gap:5px}
+.tab.active{color:var(--amber);border-bottom-color:var(--amber)}
+.tab .count{background:var(--amber);color:#000;padding:1px 7px;border-radius:99px;font-size:10px;font-weight:900}
+
+/* ── ORDER LIST ── */
+.list-wrap{padding:0 14px 24px;flex:1;overflow-y:auto}
+.section{display:none}.section.active{display:block}
+.empty{text-align:center;color:var(--mute);padding:60px 20px;font-size:13px;line-height:1.6}
+.empty .ico{font-size:54px;opacity:.4;margin-bottom:10px;display:block}
+
+.order-card{background:var(--surface);border:1.5px solid #2a2a44;border-radius:16px;padding:14px;margin-bottom:10px;cursor:pointer;transition:all .15s}
+.order-card:active{transform:scale(.98)}
+.order-card .row1{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px}
+.order-card .cust{font-size:14px;font-weight:900}
+.order-card .phone{font-size:11px;color:var(--mute);direction:ltr;text-align:right}
+.order-card .badge{padding:3px 10px;border-radius:99px;font-size:10px;font-weight:900;white-space:nowrap}
+.order-card .badge.pending{background:rgba(251,191,36,.15);color:var(--amber)}
+.order-card .badge.assigned{background:rgba(167,139,250,.15);color:var(--purple)}
+.order-card .badge.picked_up{background:rgba(59,130,246,.15);color:#3b82f6}
+.order-card .badge.delivering{background:rgba(236,72,153,.15);color:#ec4899}
+.order-card .badge.delivered{background:rgba(16,185,129,.15);color:var(--emerald)}
+.order-card .badge.cancelled{background:rgba(239,68,68,.15);color:var(--rose)}
+.order-card .addr{font-size:12px;color:var(--mute);line-height:1.6;margin-bottom:8px;display:flex;gap:5px;align-items:flex-start}
+.order-card .addr svg{flex-shrink:0;margin-top:2px}
+.order-card .items{font-size:11px;color:#cbd5e1;margin-bottom:8px}
+.order-card .totalrow{display:flex;justify-content:space-between;align-items:center;padding-top:8px;border-top:1px dashed #2a2a44}
+.order-card .total{font-size:14px;font-weight:900;color:var(--amber)}
+.order-card .pmeth{font-size:10px;background:var(--ink2);padding:3px 8px;border-radius:99px;color:#cbd5e1}
+
+/* ── ORDER DETAIL OVERLAY ── */
+.detail-overlay{position:fixed;inset:0;background:var(--ink);z-index:200;display:none;flex-direction:column;max-width:480px;margin:0 auto;left:0;right:0}
+.detail-overlay.open{display:flex}
+.detail-head{padding:14px;display:flex;align-items:center;gap:12px;border-bottom:1px solid #2a2a44;background:var(--ink2)}
+.detail-head .back{background:var(--surface);color:#fff;border:none;width:36px;height:36px;border-radius:50%;font-size:18px;cursor:pointer}
+.detail-head h2{font-size:15px;font-weight:900;flex:1}
+.detail-body{flex:1;overflow-y:auto;padding:14px}
+#detail-map{height:240px;border-radius:16px;margin-bottom:14px;border:1.5px solid #2a2a44;background:var(--surface)}
+.detail-info{background:var(--surface);border:1.5px solid #2a2a44;border-radius:16px;padding:14px;margin-bottom:12px}
+.detail-info .label{font-size:10px;color:var(--mute);font-weight:900;text-transform:uppercase;letter-spacing:1px;margin-bottom:3px}
+.detail-info .val{font-size:14px;font-weight:700}
+.detail-info .ph{direction:ltr;text-align:right;font-family:'IBM Plex Sans Arabic'}
+.detail-info-row{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.timeline{padding:0 4px}
+.timeline .step{display:flex;gap:10px;margin-bottom:10px;align-items:flex-start}
+.timeline .step .dot{width:14px;height:14px;border-radius:50%;background:var(--surface2);border:2px solid #2a2a44;flex-shrink:0;margin-top:3px;position:relative}
+.timeline .step.done .dot{background:var(--emerald);border-color:var(--emerald)}
+.timeline .step.current .dot{background:var(--amber);border-color:var(--amber);animation:pulse 1.5s ease-in-out infinite}
+.timeline .step .step-lbl{font-size:12px;font-weight:700}
+.timeline .step .step-tm{font-size:10px;color:var(--mute);margin-top:2px}
+.action-bar{position:sticky;bottom:0;padding:12px;background:linear-gradient(180deg,transparent,var(--ink) 30%);display:flex;gap:8px}
+.action-bar .btn{flex:1;padding:14px;border:none;border-radius:14px;font-family:inherit;font-weight:900;font-size:13px;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px}
+.action-bar .btn.primary{background:linear-gradient(135deg,var(--amber),#f59e0b);color:#000;box-shadow:0 6px 22px rgba(251,191,36,.3)}
+.action-bar .btn.secondary{background:var(--surface);color:#fff;border:1.5px solid #2a2a44}
+.action-bar .btn.danger{background:rgba(239,68,68,.15);color:var(--rose);border:1.5px solid rgba(239,68,68,.3)}
+.action-bar .btn:disabled{opacity:.5}
+
+/* ── EARNINGS ── */
+.earn-card{background:linear-gradient(135deg,#1a1a3e,#2a1a4e);border:1.5px solid rgba(167,139,250,.3);border-radius:18px;padding:18px;margin-bottom:14px;text-align:center}
+.earn-card .lbl{font-size:11px;color:var(--mute);margin-bottom:6px;font-weight:900;text-transform:uppercase;letter-spacing:1px}
+.earn-card .amount{font-size:32px;font-weight:900;background:linear-gradient(135deg,var(--amber),var(--purple));-webkit-background-clip:text;background-clip:text;color:transparent}
+.earn-card .unit{font-size:14px;color:var(--mute);font-weight:700;margin-right:6px}
+.earn-stats{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:12px}
+.earn-stat{background:var(--surface);border:1.5px solid #2a2a44;border-radius:12px;padding:10px;text-align:center}
+.earn-stat .v{font-size:16px;font-weight:900;color:#fff}
+.earn-stat .l{font-size:10px;color:var(--mute);margin-top:3px}
+
+.toast{position:fixed;bottom:80px;left:50%;transform:translateX(-50%);background:var(--surface);color:#fff;padding:11px 18px;border-radius:99px;font-size:12px;font-weight:900;box-shadow:0 10px 30px rgba(0,0,0,.5);z-index:500;border:1.5px solid var(--amber);opacity:0;transition:opacity .25s,transform .25s;pointer-events:none}
+.toast.show{opacity:1;transform:translate(-50%,-10px)}
+
+/* Bottom nav */
+.bottom-nav{display:flex;background:var(--surface);border-top:1px solid #2a2a44;padding:6px 0 calc(env(safe-area-inset-bottom)+6px);position:sticky;bottom:0;z-index:30}
+.bn-item{flex:1;background:none;border:none;color:var(--mute);font-family:inherit;cursor:pointer;padding:8px;display:flex;flex-direction:column;align-items:center;gap:3px;font-size:10px;font-weight:700}
+.bn-item.active{color:var(--amber)}
+.bn-item svg{width:22px;height:22px}
+</style>
+</head>
+<body>
+<div id="app">
+
+  <!-- LOGIN SCREEN -->
+  <div id="login-screen" class="login-screen">
+    <div class="badge">⚡ ZERAX DRIVER</div>
+    <h1>تطبيق السائق</h1>
+    <p class="sub">سجل دخول برقم جوالك للوصول لطلباتك</p>
+
+    <div class="login-card" id="phone-card">
+      <h3>رقم الجوال</h3>
+      <p class="help">أدخل رقم جوالك المسجل لدى المتجر</p>
+      <input id="phone-input" placeholder="05XXXXXXXX" type="tel" maxlength="10" inputmode="numeric">
+      <div class="err" id="phone-err"></div>
+      <button id="send-otp-btn" onclick="sendOtp()">إرسال رمز التحقق</button>
+      <div class="demo-hint">
+        💡 <b>سائقي التجربة:</b><br>
+        0501111111 (أحمد) · 0552222222 (خالد) · 0533333333 (سلطان) · 0544444444 (فيصل) · 0555555555 (بدر)
+      </div>
+    </div>
+
+    <div class="login-card" id="otp-card" style="display:none">
+      <h3>رمز التحقق</h3>
+      <p class="help">أرسلنا رمزاً مكوناً من 4 أرقام (للتجربة: <b style="color:#fbbf24">1234</b>)</p>
+      <input id="otp-input" placeholder="0000" type="tel" maxlength="4" inputmode="numeric">
+      <div class="err" id="otp-err"></div>
+      <button id="verify-btn" onclick="verifyOtp()">تحقق ودخول</button>
+      <button onclick="backToPhone()" style="background:none;color:var(--mute);box-shadow:none;margin-top:8px;border:1px solid #2a2a44">← تغيير الرقم</button>
+    </div>
+  </div>
+
+  <!-- MAIN APP -->
+  <div id="main-app" style="display:none;flex-direction:column;flex:1">
+    <div class="app-header">
+      <div class="avatar" id="h-avatar">س</div>
+      <div class="info">
+        <div class="nm" id="h-name">السائق</div>
+        <div class="meta">⭐ <span id="h-rating">5.0</span> · <span id="h-area">—</span></div>
+      </div>
+      <button class="status-toggle online" id="status-btn" onclick="toggleAvailability()"><span class="dot"></span><span id="status-label">متاح</span></button>
+    </div>
+
+    <div class="stats-strip">
+      <div class="stat"><div class="v" id="s-today">0</div><div class="l">طلبات اليوم</div></div>
+      <div class="stat"><div class="v" id="s-earnings">0</div><div class="l">أرباح اليوم (ر.س)</div></div>
+      <div class="stat"><div class="v" id="s-rating">5.0</div><div class="l">التقييم</div></div>
+    </div>
+
+    <div class="tabs">
+      <button class="tab active" data-tab="active" onclick="switchTab('active')">📋 النشطة <span class="count" id="c-active">0</span></button>
+      <button class="tab" data-tab="done" onclick="switchTab('done')">✓ المنجزة</button>
+      <button class="tab" data-tab="earn" onclick="switchTab('earn')">💰 الأرباح</button>
+    </div>
+
+    <div class="list-wrap">
+      <div class="section active" data-section="active" id="sec-active"></div>
+      <div class="section" data-section="done" id="sec-done"></div>
+      <div class="section" data-section="earn">
+        <div class="earn-card">
+          <div class="lbl">إجمالي أرباحك هذا الأسبوع</div>
+          <div class="amount"><span id="e-week">0</span><span class="unit">ر.س</span></div>
+        </div>
+        <div class="earn-stats">
+          <div class="earn-stat"><div class="v" id="e-today">0</div><div class="l">اليوم</div></div>
+          <div class="earn-stat"><div class="v" id="e-deliv">0</div><div class="l">توصيلات</div></div>
+          <div class="earn-stat"><div class="v" id="e-avg">0</div><div class="l">متوسط/طلب</div></div>
+        </div>
+        <div style="background:var(--surface);border:1.5px solid #2a2a44;border-radius:14px;padding:14px;font-size:12px;color:var(--mute);line-height:1.8;text-align:center">
+          💡 <b style="color:#fff">نصيحة:</b> فعّل وضع "متاح" في ساعات الذروة (1م-3م و 7م-10م) لتحصل على طلبات أكثر.
+        </div>
+      </div>
+    </div>
+
+    <nav class="bottom-nav">
+      <button class="bn-item active" onclick="switchTab('active')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>الطلبات</button>
+      <button class="bn-item" onclick="switchTab('earn')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>الأرباح</button>
+      <button class="bn-item" onclick="logout()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>خروج</button>
+    </nav>
+  </div>
+
+  <!-- ORDER DETAIL OVERLAY -->
+  <div class="detail-overlay" id="detail-overlay">
+    <div class="detail-head">
+      <button class="back" onclick="closeDetail()">←</button>
+      <h2 id="d-title">تفاصيل الطلب</h2>
+    </div>
+    <div class="detail-body" id="detail-body"></div>
+    <div class="action-bar" id="action-bar"></div>
+  </div>
+
+  <div class="toast" id="toast"></div>
+</div>
+
+<script>
+const API = window.location.origin;
+let TOKEN = localStorage.getItem('zrx_drv_token') || null;
+let DRIVER = null;
+let CURRENT_ORDER = null;
+let MAP = null, MARKER_DRV = null, MARKER_DEST = null;
+let LOCATION_INTERVAL = null;
+
+function $(id){return document.getElementById(id);}
+function toast(msg){const t=$('toast');t.textContent=msg;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),2400);}
+
+// ───── LOGIN ─────
+async function sendOtp(){
+  const phone=$('phone-input').value.trim();
+  if(!/^05\d{8}$/.test(phone)){$('phone-err').textContent='رقم الجوال يجب أن يبدأ بـ 05 ويتكون من 10 أرقام';$('phone-err').classList.add('show');return;}
+  $('phone-err').classList.remove('show');
+  const btn=$('send-otp-btn');btn.disabled=true;btn.textContent='⏳ جاري الإرسال...';
+  try{
+    const r=await fetch(API+'/api/delivery/driver/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({phone})});
+    if(!r.ok){const e=await r.json().catch(()=>({detail:'فشل'}));$('phone-err').textContent=e.detail;$('phone-err').classList.add('show');return;}
+    $('phone-card').style.display='none';
+    $('otp-card').style.display='block';
+    $('otp-input').focus();
+  }catch(e){toast('فشل الاتصال');}
+  finally{btn.disabled=false;btn.textContent='إرسال رمز التحقق';}
+}
+function backToPhone(){$('phone-card').style.display='block';$('otp-card').style.display='none';}
+async function verifyOtp(){
+  const phone=$('phone-input').value.trim();
+  const code=$('otp-input').value.trim();
+  if(code.length!==4){$('otp-err').textContent='أدخل 4 أرقام';$('otp-err').classList.add('show');return;}
+  $('otp-err').classList.remove('show');
+  const btn=$('verify-btn');btn.disabled=true;btn.textContent='⏳ يتم التحقق...';
+  try{
+    const r=await fetch(API+'/api/delivery/driver/verify-otp',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({phone,code})});
+    if(!r.ok){const e=await r.json().catch(()=>({detail:'فشل'}));$('otp-err').textContent=e.detail;$('otp-err').classList.add('show');return;}
+    const data=await r.json();
+    TOKEN=data.token;DRIVER=data.driver;
+    localStorage.setItem('zrx_drv_token',TOKEN);
+    enterApp();
+  }catch(e){toast('فشل التحقق');}
+  finally{btn.disabled=false;btn.textContent='تحقق ودخول';}
+}
+function logout(){localStorage.removeItem('zrx_drv_token');TOKEN=null;DRIVER=null;location.reload();}
+
+// ───── MAIN APP ─────
+async function enterApp(){
+  $('login-screen').style.display='none';
+  $('main-app').style.display='flex';
+  // Resolve driver from token
+  try{
+    const r=await fetch(API+'/api/delivery/driver/me',{headers:{'Authorization':'DriverToken '+TOKEN}});
+    if(!r.ok)throw new Error('expired');
+    DRIVER=await r.json();
+    renderHeader();
+    await refreshFeed();
+  }catch(e){logout();}
+}
+function renderHeader(){
+  $('h-name').textContent=DRIVER.name;
+  $('h-avatar').textContent=DRIVER.name.charAt(0);
+  $('h-rating').textContent=(DRIVER.rating||5).toFixed(1);
+  $('h-area').textContent=areaLabel(DRIVER.area);
+  $('s-rating').textContent=(DRIVER.rating||5).toFixed(1);
+  setStatusUI(DRIVER.status);
+}
+function areaLabel(id){const m={north_riyadh:'شمال الرياض',south_riyadh:'جنوب الرياض',east_riyadh:'شرق الرياض',west_riyadh:'غرب الرياض',central:'وسط الرياض'};return m[id]||id;}
+function setStatusUI(st){
+  const btn=$('status-btn'),lbl=$('status-label');
+  btn.classList.remove('online','offline');
+  if(st==='online'||st==='delivering'){btn.classList.add('online');lbl.textContent=st==='delivering'?'في توصيل':'متاح';}
+  else{btn.classList.add('offline');lbl.textContent='غير متاح';}
+}
+async function toggleAvailability(){
+  const next=(DRIVER.status==='offline')?'online':'offline';
+  try{
+    const r=await fetch(API+'/api/delivery/drivers/'+DRIVER.id,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({status:next})});
+    if(!r.ok)throw new Error('failed');
+    DRIVER=await r.json();
+    setStatusUI(DRIVER.status);
+    toast(next==='online'?'✓ متاح للطلبات':'✓ تم إيقاف الاستقبال');
+  }catch(e){toast('فشل التحديث');}
+}
+
+async function refreshFeed(){
+  try{
+    const r=await fetch(API+'/api/delivery/driver/feed',{headers:{'Authorization':'DriverToken '+TOKEN}});
+    if(!r.ok)throw new Error();
+    const data=await r.json();
+    DRIVER=data.driver;
+    renderActive(data.active);
+    renderDone(data.done_today);
+    renderEarnings(data.summary,data.done_today.length+data.active.length);
+  }catch(e){console.warn(e);}
+}
+function renderActive(orders){
+  $('c-active').textContent=orders.length;
+  $('s-today').textContent=orders.length+($('s-today').textContent.includes('+')?0:0);
+  if(orders.length===0){
+    $('sec-active').innerHTML='<div class="empty"><span class="ico">📭</span>ما عندك طلبات نشطة حالياً<br><small>تأكد أنك بحالة "متاح" لاستقبال الطلبات الجديدة</small></div>';
+    return;
+  }
+  $('sec-active').innerHTML=orders.map(orderCardHtml).join('');
+}
+function renderDone(orders){
+  if(orders.length===0){
+    $('sec-done').innerHTML='<div class="empty"><span class="ico">📦</span>لا توجد توصيلات منجزة اليوم</div>';return;
+  }
+  $('sec-done').innerHTML=orders.map(orderCardHtml).join('');
+}
+function renderEarnings(s,totalToday){
+  $('s-earnings').textContent=s.earnings_today_sar||0;
+  $('s-today').textContent=totalToday;
+  $('e-today').textContent=(s.earnings_today_sar||0)+' ر.س';
+  $('e-week').textContent=(s.earnings_week_sar||0).toLocaleString('ar-EG');
+  $('e-deliv').textContent=s.deliveries_today||0;
+  const avg=s.deliveries_today?Math.round((s.earnings_today_sar||0)/s.deliveries_today):0;
+  $('e-avg').textContent=avg+' ر.س';
+}
+function statusLabel(st){return{pending:'بانتظار تأكيد',assigned:'مُسند إليك',picked_up:'تم الاستلام',delivering:'في طريقها',delivered:'تم التسليم',cancelled:'ملغاة'}[st]||st;}
+function orderCardHtml(o){
+  return `<div class="order-card" onclick="openDetail('${o.id}')">
+    <div class="row1">
+      <div><div class="cust">${o.customer_name}</div><div class="phone">${o.customer_phone}</div></div>
+      <span class="badge ${o.status}">${statusLabel(o.status)}</span>
+    </div>
+    <div class="addr"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>${o.address}</div>
+    <div class="items">📦 ${o.items.map(i=>`${i.name} ×${i.qty}`).join(' · ')}</div>
+    <div class="totalrow">
+      <span class="total">${o.total_sar} ر.س</span>
+      <span class="pmeth">${o.payment_method==='cash'?'💵 كاش':o.payment_method==='card'?'💳 شبكة':'⚡ محفظة'}</span>
+    </div>
+  </div>`;
+}
+
+function switchTab(t){
+  document.querySelectorAll('.tab').forEach(b=>b.classList.toggle('active',b.dataset.tab===t));
+  document.querySelectorAll('.section').forEach(s=>s.classList.toggle('active',s.dataset.section===t));
+}
+
+// ───── ORDER DETAIL ─────
+async function openDetail(id){
+  CURRENT_ORDER=null;
+  try{
+    const r=await fetch(API+'/api/delivery/orders/'+id);
+    if(!r.ok)throw new Error();
+    CURRENT_ORDER=await r.json();
+  }catch(e){toast('فشل تحميل الطلب');return;}
+  renderDetail();
+  $('detail-overlay').classList.add('open');
+  setTimeout(initMap,150);
+}
+function closeDetail(){
+  $('detail-overlay').classList.remove('open');
+  if(LOCATION_INTERVAL){clearInterval(LOCATION_INTERVAL);LOCATION_INTERVAL=null;}
+  if(MAP){MAP.remove();MAP=null;MARKER_DRV=null;MARKER_DEST=null;}
+  refreshFeed();
+}
+function renderDetail(){
+  const o=CURRENT_ORDER;
+  $('d-title').textContent='#'+o.id.replace('ord_','');
+  const steps=['pending','assigned','picked_up','delivering','delivered'];
+  const idx=steps.indexOf(o.status);
+  const logMap=Object.fromEntries(o.status_log.map(l=>[l.status,l.at]));
+  $('detail-body').innerHTML=`
+    <div id="detail-map"></div>
+    <div class="detail-info">
+      <div class="label">العميل</div>
+      <div class="val">${o.customer_name}</div>
+      <div style="margin-top:10px"><a href="tel:${o.customer_phone}" style="color:var(--amber);font-weight:900;font-size:14px;direction:ltr;display:block;text-align:right">📞 ${o.customer_phone}</a></div>
+    </div>
+    <div class="detail-info">
+      <div class="label">عنوان التسليم</div>
+      <div class="val">${o.address}</div>
+      <a href="https://maps.google.com/?q=${o.current_location?o.current_location.lat+','+o.current_location.lng:''}" target="_blank" style="display:inline-block;margin-top:8px;padding:8px 14px;background:rgba(167,139,250,.15);color:var(--purple);border-radius:99px;font-size:12px;font-weight:900;text-decoration:none">🗺️ افتح الخريطة</a>
+    </div>
+    <div class="detail-info-row" style="margin-bottom:12px">
+      <div class="detail-info" style="margin:0">
+        <div class="label">المبلغ الإجمالي</div>
+        <div class="val" style="color:var(--amber);font-size:20px">${o.total_sar} ر.س</div>
+        <div style="font-size:10px;color:var(--mute);margin-top:3px">+ توصيل ${o.delivery_fee_sar} ر.س</div>
+      </div>
+      <div class="detail-info" style="margin:0">
+        <div class="label">طريقة الدفع</div>
+        <div class="val">${o.payment_method==='cash'?'💵 كاش عند الاستلام':o.payment_method==='card'?'💳 مدفوع شبكة':'⚡ محفظة'}</div>
+      </div>
+    </div>
+    <div class="detail-info">
+      <div class="label">المنتجات</div>
+      ${o.items.map(i=>`<div style="display:flex;justify-content:space-between;padding:6px 0;font-size:13px;border-bottom:1px dashed #2a2a44"><span>${i.name} ×${i.qty}</span><b>${i.sar} ر.س</b></div>`).join('')}
+    </div>
+    <div class="detail-info">
+      <div class="label">تتبع الحالة</div>
+      <div class="timeline" style="margin-top:10px">
+        ${steps.map((s,i)=>{
+          const done=i<idx,curr=i===idx;
+          const tm=logMap[s]?new Date(logMap[s]).toLocaleTimeString('ar-SA',{hour:'2-digit',minute:'2-digit'}):'';
+          return `<div class="step ${done?'done':''} ${curr?'current':''}"><div class="dot"></div><div><div class="step-lbl">${statusLabel(s)}</div>${tm?`<div class="step-tm">${tm}</div>`:''}</div></div>`;
+        }).join('')}
+      </div>
+    </div>
+  `;
+  renderActionBar();
+}
+function renderActionBar(){
+  const o=CURRENT_ORDER;const ab=$('action-bar');
+  const transitions={pending:'assigned',assigned:'picked_up',picked_up:'delivering',delivering:'delivered'};
+  const nextLbl={assigned:'✓ قبول الطلب',picked_up:'📦 استلمت الطلب',delivering:'🚗 بدأت التوصيل',delivered:'✅ تم التسليم'};
+  const next=transitions[o.status];
+  let html='';
+  if(next){html+=`<button class="btn primary" onclick="updateStatus('${next}')">${nextLbl[next]}</button>`;}
+  if(o.status==='delivered'||o.status==='cancelled'){html+=`<button class="btn secondary" onclick="closeDetail()">إغلاق</button>`;}
+  else{html+=`<button class="btn danger" onclick="if(confirm('إلغاء الطلب؟'))updateStatus('cancelled')">إلغاء</button>`;}
+  ab.innerHTML=html;
+}
+async function updateStatus(st){
+  try{
+    const r=await fetch(API+'/api/delivery/orders/'+CURRENT_ORDER.id+'/status',{
+      method:'PATCH',headers:{'Content-Type':'application/json','Authorization':'DriverToken '+TOKEN},
+      body:JSON.stringify({status:st})
+    });
+    if(!r.ok){const e=await r.json().catch(()=>({}));toast(e.detail||'فشل التحديث');return;}
+    CURRENT_ORDER=await r.json();
+    toast('✓ تم تحديث الحالة');
+    renderDetail();
+    setTimeout(initMap,100);
+    // Start location ping if delivering
+    if(st==='delivering')startLocationPing();
+    else if(LOCATION_INTERVAL){clearInterval(LOCATION_INTERVAL);LOCATION_INTERVAL=null;}
+    if(st==='delivered'){setTimeout(closeDetail,1500);}
+  }catch(e){toast('فشل');}
+}
+function startLocationPing(){
+  if(LOCATION_INTERVAL)clearInterval(LOCATION_INTERVAL);
+  const ping=async(lat,lng)=>{
+    try{await fetch(API+'/api/delivery/orders/'+CURRENT_ORDER.id+'/location',{method:'POST',headers:{'Content-Type':'application/json','Authorization':'DriverToken '+TOKEN},body:JSON.stringify({lat,lng})});}catch(_){}
+  };
+  // Simulate moving location every 8 seconds (demo)
+  let lat=DRIVER.current_location?.lat||24.74;
+  let lng=DRIVER.current_location?.lng||46.66;
+  ping(lat,lng);
+  LOCATION_INTERVAL=setInterval(()=>{
+    lat+=(Math.random()-0.5)*0.003;lng+=(Math.random()-0.5)*0.003;
+    ping(lat,lng);
+    if(MARKER_DRV){MARKER_DRV.setLatLng([lat,lng]);}
+  },8000);
+}
+function initMap(){
+  const el=document.getElementById('detail-map');if(!el||!window.L)return;
+  if(MAP){MAP.remove();MAP=null;}
+  // Use driver location or default Riyadh
+  const lat=CURRENT_ORDER.current_location?.lat||DRIVER.current_location?.lat||24.7136;
+  const lng=CURRENT_ORDER.current_location?.lng||DRIVER.current_location?.lng||46.6753;
+  MAP=L.map(el,{zoomControl:true,attributionControl:false}).setView([lat,lng],13);
+  L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',{maxZoom:19}).addTo(MAP);
+  const drvIcon=L.divIcon({className:'',html:'<div style="background:#fbbf24;width:30px;height:30px;border-radius:50%;border:3px solid #0a0a14;box-shadow:0 0 0 4px rgba(251,191,36,.3);display:flex;align-items:center;justify-content:center;font-size:14px">🚗</div>',iconSize:[30,30],iconAnchor:[15,15]});
+  MARKER_DRV=L.marker([lat,lng],{icon:drvIcon}).addTo(MAP);
+  // Destination marker offset by small distance
+  const destLat=lat+0.012,destLng=lng+0.008;
+  const destIcon=L.divIcon({className:'',html:'<div style="background:#10b981;width:30px;height:30px;border-radius:50%;border:3px solid #0a0a14;box-shadow:0 0 0 4px rgba(16,185,129,.3);display:flex;align-items:center;justify-content:center;font-size:14px">📍</div>',iconSize:[30,30],iconAnchor:[15,15]});
+  MARKER_DEST=L.marker([destLat,destLng],{icon:destIcon}).addTo(MAP);
+  L.polyline([[lat,lng],[destLat,destLng]],{color:'#a78bfa',weight:3,opacity:.7,dashArray:'8'}).addTo(MAP);
+  MAP.fitBounds(L.latLngBounds([lat,lng],[destLat,destLng]).pad(0.5));
+}
+
+// Auto-restore session
+if(TOKEN){enterApp();}
+
+// Auto-refresh feed every 30s while logged in
+setInterval(()=>{if(TOKEN&&!$('detail-overlay').classList.contains('open'))refreshFeed();},30000);
+</script>
+</body>
+</html>

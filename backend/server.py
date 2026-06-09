@@ -3552,7 +3552,10 @@ try:
     # Video Studio (storyboard + Zerax Voice TTS + ffmpeg slideshow)
     from routers.video_studio_router import router as _video_studio_router
     app.include_router(_video_studio_router)
-    logging.getLogger(__name__).info("Care Portal + Image/Video Studio modules registered")
+    # Delivery & Driver Management (merchant + driver + customer tracking)
+    from routers.delivery_router import router as _delivery_router
+    app.include_router(_delivery_router)
+    logging.getLogger(__name__).info("Care Portal + Image/Video Studio + Delivery modules registered")
 except Exception as _care_e:
     logging.getLogger(__name__).error(f"Failed to register care_portal module: {_care_e}", exc_info=True)
 
