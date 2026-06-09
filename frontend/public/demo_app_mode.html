@@ -196,7 +196,7 @@ body{font-family:var(--font,'Tajawal'),sans-serif;background:#f3f4f6;color:#0a0a
       <h4 data-key="contact">تواصل معنا</h4>
       <a id="phone-link">📞 +966512345678</a>
       <a id="whatsapp-link">💬 WhatsApp</a>
-      <a id="email-link">✉️ <span class="__cf_email__" data-cfemail="452c2b232a052737242b216b3624">[email&#160;protected]</span></a>
+      <a id="email-link">✉️ <span class="__cf_email__" data-cfemail="a6cfc8c0c9e6c4d4c7c8c288d5c7">[email&#160;protected]</span></a>
       <a id="address-link">📍 الرياض، السعودية</a>
     </div>
   </div>
@@ -270,29 +270,32 @@ body{font-family:var(--font,'Tajawal'),sans-serif;background:#f3f4f6;color:#0a0a
 <!-- ═══════════════════ CATEGORY PAGE (dedicated view per category) ═══════════════════ -->
 <section id="view-category" style="display:none;padding:0 16px 24px" data-view-section>
   <button class="back-btn" onclick="showView('home')" style="display:flex;align-items:center;gap:6px;background:transparent;border:none;color:#7c3aed;font-family:inherit;font-weight:900;font-size:14px;cursor:pointer;padding:8px 0">← <span data-key="back">رجوع</span></button>
-  <!-- Cinematic video banner with overlay + auto-rotating products -->
-  <div id="cat-banner" style="height:220px;border-radius:18px;position:relative;overflow:hidden;margin-bottom:16px;color:#fff;box-shadow:0 10px 30px rgba(0,0,0,.15)">
-    <video id="cat-banner-video" autoplay muted loop playsinline preload="metadata"
-      style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;z-index:1"></video>
-    <div id="cat-banner-overlay" style="position:absolute;inset:0;z-index:2;background:linear-gradient(135deg,rgba(124,58,237,.7),rgba(236,72,153,.55));mix-blend-mode:multiply"></div>
-    <div style="position:absolute;inset:0;z-index:3;display:flex;align-items:center;justify-content:space-between;padding:0 22px">
-      <div style="max-width:65%">
-        <small id="cat-banner-tag" style="background:#fff;color:#7c3aed;padding:4px 12px;border-radius:99px;font-size:10px;font-weight:900;display:inline-block;margin-bottom:8px;letter-spacing:1px">عروض حصرية</small>
-        <h2 style="font-size:28px;font-weight:900;line-height:1.1;text-shadow:0 2px 8px rgba(0,0,0,.4)" id="cat-banner-title">القسم</h2>
-        <p style="font-size:13px;opacity:.95;margin-top:6px;text-shadow:0 1px 4px rgba(0,0,0,.4)" id="cat-banner-sub">اكتشف أفضل المنتجات</p>
-        <button onclick="document.getElementById('cat-products').scrollIntoView({behavior:'smooth'})" style="margin-top:12px;padding:9px 18px;background:#fff;color:#0a0a0a;border:none;border-radius:99px;font-family:inherit;font-weight:900;font-size:12px;cursor:pointer;display:inline-flex;align-items:center;gap:6px"><span>تسوّق الآن</span><span>↓</span></button>
-      </div>
-      <div id="cat-banner-product" style="width:120px;height:160px;border-radius:12px;overflow:hidden;background:rgba(255,255,255,.15);backdrop-filter:blur(8px);border:1px solid rgba(255,255,255,.3);box-shadow:0 10px 30px rgba(0,0,0,.3);display:flex;align-items:center;justify-content:center;animation:cat-prod-bounce 3s ease-in-out infinite"></div>
+  <!-- Cinematic full-bleed banner: image/video covers ENTIRE banner area -->
+  <div id="cat-banner" style="height:240px;border-radius:18px;position:relative;overflow:hidden;margin-bottom:16px;color:#fff;box-shadow:0 10px 30px rgba(0,0,0,.15);background:linear-gradient(135deg,#7c3aed,#ec4899,#f59e0b);background-size:200% 200%;animation:cat-grad-shift 8s ease-in-out infinite">
+    <!-- Full-bleed background image (always loads instantly) -->
+    <img id="cat-banner-img" alt="" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;z-index:1;animation:cat-kenburns 18s ease-in-out infinite alternate" />
+    <!-- Optional video on top (only when loaded) -->
+    <video id="cat-banner-video" muted loop playsinline preload="metadata" crossorigin="anonymous"
+      style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;z-index:2;opacity:0;transition:opacity .6s"></video>
+    <!-- Dark gradient overlay for text legibility -->
+    <div style="position:absolute;inset:0;z-index:3;background:linear-gradient(135deg,rgba(0,0,0,.55) 0%,rgba(0,0,0,.25) 50%,rgba(0,0,0,.65) 100%)"></div>
+    <!-- Text + CTA centered on banner -->
+    <div style="position:absolute;inset:0;z-index:4;display:flex;flex-direction:column;justify-content:center;padding:0 24px">
+      <small id="cat-banner-tag" style="background:#fff;color:#0a0a0a;padding:5px 14px;border-radius:99px;font-size:11px;font-weight:900;display:inline-block;align-self:flex-start;margin-bottom:10px;letter-spacing:1px">عروض حصرية</small>
+      <h2 style="font-size:34px;font-weight:900;line-height:1.05;text-shadow:0 3px 12px rgba(0,0,0,.55);max-width:80%" id="cat-banner-title">القسم</h2>
+      <p style="font-size:14px;opacity:.95;margin-top:8px;text-shadow:0 2px 6px rgba(0,0,0,.55);max-width:80%" id="cat-banner-sub">اكتشف أفضل المنتجات</p>
+      <button onclick="document.getElementById('cat-products').scrollIntoView({behavior:'smooth'})" style="margin-top:14px;padding:11px 22px;background:#fff;color:#0a0a0a;border:none;border-radius:99px;font-family:inherit;font-weight:900;font-size:13px;cursor:pointer;align-self:flex-start;display:inline-flex;align-items:center;gap:6px"><span>تسوّق الآن</span><span>↓</span></button>
     </div>
-    <!-- Animated gradient sheen overlay -->
-    <div style="position:absolute;inset:0;z-index:4;background:linear-gradient(90deg,transparent 0%,rgba(255,255,255,.08) 50%,transparent 100%);background-size:200% 100%;animation:cat-sheen 6s linear infinite;pointer-events:none"></div>
+    <!-- Animated sheen sweep -->
+    <div style="position:absolute;inset:0;z-index:5;background:linear-gradient(90deg,transparent 0%,rgba(255,255,255,.07) 50%,transparent 100%);background-size:200% 100%;animation:cat-sheen 6s linear infinite;pointer-events:none"></div>
   </div>
   <h3 style="font-size:16px;font-weight:900;margin-bottom:12px" id="cat-count-title">المنتجات</h3>
   <div class="grid" id="cat-products"></div>
 </section>
 <style>
-@keyframes cat-prod-bounce{0%,100%{transform:translateY(0) rotate(-2deg)}50%{transform:translateY(-8px) rotate(2deg)}}
+@keyframes cat-kenburns{0%{transform:scale(1) translate(0,0)}100%{transform:scale(1.15) translate(-2%,1%)}}
 @keyframes cat-sheen{0%{background-position:200% 0}100%{background-position:-200% 0}}
+@keyframes cat-grad-shift{0%,100%{background-position:0% 50%}50%{background-position:100% 50%}}
 </style>
 
 <!-- ═══════════════════ ORDERS PAGE ═══════════════════ -->
@@ -381,14 +384,11 @@ const PRODUCTS = [
   {id:'p32',cat:'home',ar:'بخار كهربائي للملابس',en:'Electric Clothes Steamer',descAr:'1500 واط · خزان 240مل · جاهز في 30 ثانية',descEn:'1500W · 240ml tank · Ready in 30s',sar:295,img:'https://images.unsplash.com/photo-1521903062400-b80f2cb8cb9d?w=500'},
 ];
 const CATS=[
+  {id:'all',ar:'الكل',en:'All',ico:'📦'},
   {id:'electronics',ar:'إلكترونيات',en:'Electronics',ico:'📱'},
   {id:'fashion',ar:'أزياء',en:'Fashion',ico:'👗'},
   {id:'beauty',ar:'تجميل',en:'Beauty',ico:'💄'},
   {id:'home',ar:'منزل',en:'Home',ico:'🏠'},
-  {id:'sports',ar:'رياضة',en:'Sports',ico:'⚽'},
-  {id:'kids',ar:'أطفال',en:'Kids',ico:'🧸'},
-  {id:'food',ar:'مأكولات',en:'Food',ico:'🍔'},
-  {id:'all',ar:'الكل',en:'All',ico:'📦'},
 ];
 const REVIEWS=[
   {ar:'تجربة شراء ممتازة! المنتجات أصلية والتوصيل سريع جداً',en:'Amazing shopping experience! Authentic products and very fast delivery',name:'أحمد · Ahmed',stars:5},
@@ -584,35 +584,35 @@ const CAT_VIDEOS={
   kids:'https://cdn.pixabay.com/video/2019/01/02/20305-309901537_large.mp4',
 };
 
+// Category banner images (full-bleed, high-quality Unsplash)
+const CAT_IMAGES={
+  food:'https://images.unsplash.com/photo-1504674900247-0877df9cc836?w=1600&q=85',
+  fashion:'https://images.unsplash.com/photo-1483985988355-763728e1935b?w=1600&q=85',
+  beauty:'https://images.unsplash.com/photo-1522335789203-aaa2f8be5419?w=1600&q=85',
+  electronics:'https://images.unsplash.com/photo-1498049794561-7780e7231661?w=1600&q=85',
+  home:'https://images.unsplash.com/photo-1556909114-f6e7ad7d3136?w=1600&q=85',
+  sport:'https://images.unsplash.com/photo-1517649763962-0c623066013b?w=1600&q=85',
+  kids:'https://images.unsplash.com/photo-1545558014-8692077e9b5c?w=1600&q=85',
+};
+
 function renderCategoryPage(catId){
   const cat=CATS.find(c=>c.id===catId);
   if(!cat)return;
-  const theme=CAT_THEMES[catId]||{grad:'linear-gradient(135deg,#7c3aed,#ec4899)',emoji:cat.ico||'🛍️',tagAr:'عروض حصرية',tagEn:'Exclusive deals'};
-  // Update overlay color to match category theme
-  document.getElementById('cat-banner-overlay').style.background=theme.grad.replace(/linear-gradient\(135deg,/,'linear-gradient(135deg,').replace(/\)/, ',.7)').replace(',.7),',',.7),').replace(/#([0-9a-f]{6})/gi,(m,h)=>{const r=parseInt(h.slice(0,2),16),g=parseInt(h.slice(2,4),16),b=parseInt(h.slice(4,6),16);return `rgba(${r},${g},${b},.7)`});
+  const theme=CAT_THEMES[catId]||{tagAr:'عروض حصرية',tagEn:'Exclusive deals'};
   document.getElementById('cat-banner-tag').textContent=CURRENT_LANG==='ar'?theme.tagAr:theme.tagEn;
   document.getElementById('cat-banner-title').textContent=CURRENT_LANG==='ar'?cat.ar:cat.en;
-  document.getElementById('cat-banner-sub').textContent=CURRENT_LANG==='ar'?'اكتشف '+(PRODUCTS.filter(p=>p.cat===catId).length)+' منتج مختار بعناية':'Discover '+(PRODUCTS.filter(p=>p.cat===catId).length)+' carefully curated items';
-  // Set background video
-  const vid=document.getElementById('cat-banner-video');
-  if(CAT_VIDEOS[catId]){
-    vid.src=CAT_VIDEOS[catId];vid.style.display='block';
-    vid.load();vid.play().catch(()=>{});
-  } else {
-    vid.style.display='none';
-  }
-  // Filter products
   const filtered=PRODUCTS.filter(p=>p.cat===catId);
-  // Featured product card in banner (rotates every 4s)
-  const featured=document.getElementById('cat-banner-product');
-  if(filtered.length){
-    let idx=0;
-    const renderFeat=()=>{const p=filtered[idx%filtered.length];featured.innerHTML=`<img src="${p.img}" style="width:100%;height:100%;object-fit:cover"/>`;idx++;};
-    renderFeat();
-    if(window.__catRotator)clearInterval(window.__catRotator);
-    if(filtered.length>1)window.__catRotator=setInterval(renderFeat,4000);
-  } else {
-    featured.innerHTML='<div style="font-size:42px">'+theme.emoji+'</div>';
+  document.getElementById('cat-banner-sub').textContent=CURRENT_LANG==='ar'?'اكتشف '+filtered.length+' منتج مختار بعناية':'Discover '+filtered.length+' carefully curated items';
+  // Full-bleed background image (always loads)
+  const img=document.getElementById('cat-banner-img');
+  img.src=CAT_IMAGES[catId]||CAT_IMAGES.fashion;
+  // Optional video on top (fades in when ready)
+  const vid=document.getElementById('cat-banner-video');
+  vid.style.opacity='0';
+  if(CAT_VIDEOS[catId]){
+    vid.src=CAT_VIDEOS[catId];
+    vid.load();
+    vid.oncanplay=()=>{vid.play().then(()=>{vid.style.opacity='1'}).catch(()=>{})};
   }
   document.getElementById('cat-count-title').textContent=(CURRENT_LANG==='ar'?'المنتجات':'Products')+' ('+filtered.length+')';
   const grid=document.getElementById('cat-products');
@@ -792,4 +792,4 @@ init();
 <div class="zerax-credit" role="contentinfo" aria-label="Powered by Zerax"><a href="https://zerax.com?ref=preview" target="_blank" rel="noopener noreferrer" onclick="event.stopPropagation();window.open(this.href,'_blank');return false;"><span class="zerax-mark"><img src="/zerax-logo.png" alt="Zerax" /></span><span class="zerax-txt"><small>POWERED BY</small><b>ZERAX</b></span></a></div>
 <style>.zx-zerax-brand,.zx-zitex-brand,.zx-zerax-bar a.zx-zerax-brand{display:none!important}</style>
 <script>(function(){var pid='preview';fetch('/api/care/pwa-status/'+pid).then(function(r){return r.json()}).then(function(s){  window.ZERAX_PWA_ENABLED=!!s.pwa_enabled;  if(!s.pwa_enabled){    var m=document.querySelector('link[rel=manifest]');if(m)m.remove();return;  }  if('serviceWorker' in navigator){    navigator.serviceWorker.register('/sw.js').catch(function(){});  }}).catch(function(){});})();</script>
-<script>(function(){function c(){var b=a.contentDocument||a.contentWindow.document;if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a0926410394c3e5d',t:'MTc4MTAzMTc0OQ=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body></html>
+<script>(function(){function c(){var b=a.contentDocument||a.contentWindow.document;if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a0927f47aadb3e5d',t:'MTc4MTAzMjg2Mw=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body></html>
