@@ -1,5 +1,34 @@
 # Zitex AI Platform - PRD
 
+### 🆕 Feb 9 2026 — Phase 12: Product Detail Page + Cleaner Cat Icons ✅
+**User feedback fulfilled (2 of 3 items - Video Studio deferred for context window):**
+
+✅ **Removed cartoon emoji from Quick Categories**
+- The cute `🏠 💄 👗 📱` icons on top quick-cat squares are gone
+- Now they show ONLY the full category image (Unsplash) + the label
+- Clean, professional look — image dominates the square
+
+✅ **Full Product Detail Page (View)**
+- New `view-product` section with `data-view-section` so it integrates with showView() routing
+- Clicking the product card body OR the title/desc opens the detail page (images still open the lightbox for zoom)
+- Page structure:
+  - Back button
+  - Hero image (1:1 aspect, click → lightbox)
+  - Thumbnail strip (gallery navigation)
+  - Title + tagline
+  - Price + "🛒 أضف للسلة" CTA
+  - Full HTML info block (rendered from `PRODUCT_INFO[id].html` — populated by Studio AI Research)
+- If no AI research yet: shows empty state with instructions to open Studio → 🤖 Product Info
+- Edit ✨ button on hero image (admin) jumps straight to Studio for that product
+- Updates showView() to route `view==='product'` to display the new section
+
+⏸️ **AI Video Studio — DEFERRED**: requires substantial backend work (storyboard generation → TTS Saudi voice → FFmpeg/Remotion video stitching). Documented in next-action items for the next session with fresh context.
+
+**Files Modified:**
+- `/app/frontend/public/mockups/app_mode_full.html` (CSS for pdp-* + showProductDetail + new view section + showView routing)
+
+
+
 ### 🆕 Feb 9 2026 — Phase 11: Hover-Rotate Cards + REAL AI Product Research ✅
 **User feedback fulfilled:**
 1. ✅ **Product cards now auto-rotate on hover** with mini dots indicator + side arrows

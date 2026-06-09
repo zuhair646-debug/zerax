@@ -372,6 +372,22 @@ body.admin-mode .add-product-card{display:flex}
 .info-result .specs div{background:#fff;border-radius:6px;padding:6px 8px;font-size:11px}
 .info-result .specs b{display:block;color:#7c3aed;font-size:10px;margin-bottom:2px}
 .info-cost-pill{background:#fef3c7;color:#92400e;padding:2px 8px;border-radius:99px;font-size:10px;font-weight:900}
+/* PRODUCT DETAIL PAGE */
+.pd-hero{position:relative;aspect-ratio:1;border-radius:18px;overflow:hidden;margin-bottom:14px;box-shadow:0 8px 24px rgba(0,0,0,.1)}
+.pd-hero img{width:100%;height:100%;object-fit:cover;cursor:zoom-in}
+.pd-thumbs{display:flex;gap:6px;overflow-x:auto;padding:4px 0 10px;margin-bottom:10px}
+.pd-thumbs img{width:56px;height:56px;border-radius:8px;object-fit:cover;cursor:pointer;border:2px solid transparent;flex-shrink:0;opacity:.6;transition:all .2s}
+.pd-thumbs img.active{border-color:#7c3aed;opacity:1}
+.pd-title{font-size:22px;font-weight:900;color:#0a0a0a;margin-bottom:6px}
+.pd-price-row{display:flex;align-items:center;justify-content:space-between;padding:14px 0;border-bottom:1px solid #f3f4f6;margin-bottom:14px}
+.pd-price{font-size:26px;font-weight:900;color:#7c3aed}
+.pd-cta{padding:14px 30px;background:linear-gradient(135deg,#7c3aed,#a855f7);color:#fff;border:none;border-radius:99px;font-family:inherit;font-weight:900;font-size:14px;cursor:pointer;box-shadow:0 4px 14px rgba(124,58,237,.4)}
+.pd-info-html{font-size:13px;line-height:1.8;color:#374151}
+.pd-info-html h2{font-size:18px;font-weight:900;margin:14px 0 8px;color:#0a0a0a}
+.pd-info-html h3{font-size:14px;font-weight:900;margin:14px 0 6px;color:#7c3aed}
+.pd-info-html ul{padding-inline-start:18px;margin-bottom:14px}
+.pd-info-html li{margin-bottom:5px}
+.pd-empty{text-align:center;padding:30px 16px;color:#9ca3af;background:#f9fafb;border-radius:14px;font-size:13px;line-height:1.6}
 /* FOOTER */
 .zx-footer{background:#0f172a;color:#cbd5e1;padding:36px 18px 14px;direction:var(--dir,rtl);margin-top:30px;border-radius:24px 24px 0 0}
 .zx-foot-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:24px;margin-bottom:24px}
@@ -604,6 +620,17 @@ body.admin-mode .add-product-card{display:flex}
 </style>
 
 <!-- ═══════════════════ ORDERS PAGE ═══════════════════ -->
+<!-- ═══════════════════ PRODUCT DETAIL PAGE ═══════════════════ -->
+<section id="view-product" style="display:none;padding:0 16px 24px" data-view-section>
+  <button onclick="showView('home')" class="pill-btn" style="margin:18px 0;background:#fff;color:#0a0a0a"><span data-key="back">رجوع</span></button>
+  <div class="pd-hero editable-img-host"><img id="pd-hero-img" alt=""><button class="img-edit-btn" id="pd-edit-btn" title="تحرير">✨</button></div>
+  <div class="pd-thumbs" id="pd-thumbs"></div>
+  <h1 class="pd-title" id="pd-title"></h1>
+  <p style="font-size:13px;color:#6b7280;line-height:1.7" id="pd-tagline"></p>
+  <div class="pd-price-row"><div class="pd-price" id="pd-price"></div><button class="pd-cta" id="pd-add-btn"><span data-key="add_to_cart">🛒 أضف للسلة</span></button></div>
+  <div id="pd-info" class="pd-info-html"></div>
+</section>
+
 <section id="view-orders" style="display:none;padding:0 16px 24px" data-view-section>
   <h2 style="font-size:20px;font-weight:900;margin:18px 0 16px" data-key="my_orders">📋 طلباتي</h2>
   <div id="orders-list"></div>
@@ -1217,7 +1244,7 @@ function renderCategories(){
     return `<div class="q-cat editable-img-host ${c.id===activeCat?'active-cat':''}" onclick="filterCat('${c.id}')">
       <div class="q-cat-bg" style="background-image:url('${bgUrl}')"></div>
       <button class="img-edit-btn" onclick="event.stopPropagation();openStudio('cat_icon:${c.id}')" title="تحرير">✨</button>
-      <div class="ico">${c.ico}</div><span>${CURRENT_LANG==='ar'?c.ar:c.en}</span>
+      <span>${CURRENT_LANG==='ar'?c.ar:c.en}</span>
     </div>`;
   }).join('');
 }
@@ -1247,6 +1274,7 @@ function showView(view, param){
   if(view==='category'){renderCategoryPage(param);document.getElementById('view-category').style.display='block';}
   if(view==='orders'){renderOrders();document.getElementById('view-orders').style.display='block';}
   if(view==='account'){renderAccount();document.getElementById('view-account').style.display='block';}
+  if(view==='product'){document.getElementById('view-product').style.display='block';}
   window.scrollTo({top:0,behavior:'smooth'});
 }
 
@@ -2140,9 +2168,9 @@ function pCardHtml(p){
   const stack=imgs.map((g,i)=>`<img src="${g.url}" alt="${name} ${i+1}" class="${i===0?'active':''}" data-i="${i}">`).join('');
   const dots=imgs.length>1?`<div class="p-card-dots">${imgs.map((_,i)=>`<span class="${i===0?'active':''}"></span>`).join('')}</div>`:'';
   const navs=imgs.length>1?`<button class="p-card-nav p-card-prev" onclick="event.stopPropagation();pCardNav(this,-1)" aria-label="prev">‹</button><button class="p-card-nav p-card-next" onclick="event.stopPropagation();pCardNav(this,1)" aria-label="next">›</button>`:'';
-  return `<div class="p-card" onmouseenter="pCardHover(this,true)" onmouseleave="pCardHover(this,false)">
+  return `<div class="p-card" onmouseenter="pCardHover(this,true)" onmouseleave="pCardHover(this,false)" onclick="if(!event.target.closest('.img-edit-btn,.add-btn,.p-card-nav,img'))showProductDetail('${p.id}')">
     <div class="editable-img-host"><div class="p-card-stack" data-pid="${p.id}">${stack}</div>${dots}${navs}<button class="img-edit-btn" onclick="event.stopPropagation();openStudio('product:${p.id}')" title="تحرير">✨</button></div>
-    <div class="p-info"><div class="name">${name}</div><div class="desc">${desc}</div><div class="p-row"><div class="p-price">${curSym()} ${formatPrice(p.sar)}</div><button class="add-btn" onclick="event.stopPropagation();addToCart('${p.id}')">+</button></div></div>
+    <div class="p-info" onclick="event.stopPropagation();showProductDetail('${p.id}')" style="cursor:pointer"><div class="name">${name}</div><div class="desc">${desc}</div><div class="p-row"><div class="p-price">${curSym()} ${formatPrice(p.sar)}</div><button class="add-btn" onclick="event.stopPropagation();addToCart('${p.id}')">+</button></div></div>
   </div>`;
 }
 // Hover auto-rotate logic
@@ -2176,6 +2204,42 @@ function pCardNav(btn,dir){
   imgs.forEach((im,k)=>im.classList.toggle('active',k===cur));
   card.querySelectorAll('.p-card-dots span').forEach((d,k)=>d.classList.toggle('active',k===cur));
 }
+
+// ═══════════════════════ PRODUCT DETAIL PAGE ═══════════════════════
+let _pdIndex=0;
+function showProductDetail(pid){
+  const p=PRODUCTS.find(x=>x.id===pid);
+  if(!p)return;
+  const name=CURRENT_LANG==='ar'?p.ar:p.en;
+  const desc=CURRENT_LANG==='ar'?(p.descAr||''):(p.descEn||'');
+  const gallery=(PRODUCT_GALLERIES[pid]||[{type:'image',url:p.img}]).filter(g=>g.type==='image');
+  _pdIndex=0;
+  const heroImg=document.getElementById('pd-hero-img');
+  heroImg.src=gallery[0].url;
+  heroImg.onclick=()=>openLightbox(gallery[0].url,pid);
+  document.getElementById('pd-thumbs').innerHTML=gallery.map((g,i)=>`<img src="${g.url}" class="${i===0?'active':''}" onclick="pdJump(${i},'${pid}')" alt="">`).join('');
+  document.getElementById('pd-title').textContent=name;
+  document.getElementById('pd-tagline').textContent=desc;
+  document.getElementById('pd-price').textContent=curSym()+' '+formatPrice(p.sar);
+  document.getElementById('pd-add-btn').onclick=()=>{addToCart(pid);toast(CURRENT_LANG==='ar'?'✓ تمت الإضافة للسلة':'✓ Added');};
+  document.getElementById('pd-edit-btn').onclick=(e)=>{e.stopPropagation();openStudio('product:'+pid);};
+  const info=PRODUCT_INFO[pid];
+  const html=info?.html;
+  document.getElementById('pd-info').innerHTML=html||`<div class="pd-empty">${CURRENT_LANG==='ar'?'ما فيه تفاصيل بعد. افتح <b style="color:#7c3aed">✨ Studio → 🤖 معلومات المنتج</b> عشان الذكاء يبحث ويعبّي المعلومات تلقائياً.':'No details yet. Open ✨ Studio → 🤖 Product Info.'}</div>`;
+  showView('product');
+  window.scrollTo({top:0,behavior:'smooth'});
+}
+function pdJump(i,pid){
+  _pdIndex=i;
+  const gallery=(PRODUCT_GALLERIES[pid]||[]).filter(g=>g.type==='image');
+  if(!gallery[i])return;
+  const heroImg=document.getElementById('pd-hero-img');
+  heroImg.src=gallery[i].url;
+  heroImg.onclick=()=>openLightbox(gallery[i].url,pid);
+  document.querySelectorAll('#pd-thumbs img').forEach((im,k)=>im.classList.toggle('active',k===i));
+}
+
+
 
 // ═══════════════════════ AI PRODUCT INFO (research + fill) ═══════════════════════
 const PRODUCT_INFO=JSON.parse(localStorage.getItem('zx_product_info')||'{}');
