@@ -1,6 +1,36 @@
 # Zitex Changelog
 
 
+### 🆕 Feb 17 2026 — Phase 16: Distance-based Pricing + Driver Employment Models + Multi-country Payouts ✅
+Massive upgrade to the delivery system per the user's explicit Saudi-Arabic specs:
+
+**1. Distance-based pricing (real Haversine)** — `POST /api/delivery/calculate-fee`. Configurable in ACP: base fee + price/km + min/max floor/cap. Customer GPS coords now stored on every order with auto-computed `distance_km`.
+
+**2. Two driver employment models**:
+   - `commission`: per-delivery share (e.g., 8 SAR of 10 SAR fee → driver, 2 SAR → merchant)
+   - `salaried`: fixed monthly wage, merchant keeps 100% of every fee
+   - Auto-revenue split via `driver_share_default_pct` (configurable, default 80%)
+
+**3. Multi-country payouts** (8 countries): STC Pay/urpay/Mada/AlInma Pay (SA), PayBy/e&Money (AE), Vodafone Cash/InstaPay/Fawry (EG), KNET/MyFatoorah (KW), BenefitPay (BH), QPay (QA), OmanNet (OM), ZainCash/AsiaHawala (IQ), plus IBAN + cash everywhere. Per-country method list via `GET /api/delivery/payout-methods?country=`.
+
+**4. Payouts tracking**: `GET/POST /api/delivery/payouts` — record manual wage/commission transfers per driver. Auto-decrements `balance_pending_sar` for commission drivers. ACP shows pending balances + history.
+
+**5. Branches management**: `GET/POST/DELETE /api/delivery/branches` — merchants define multiple branch GPS coords. Distance is calculated from the branch chosen on each order (default: main branch).
+
+**6. Smarter auto-assign**: Now considers (a) zone match, (b) current active load (max 3 per driver, allows multi-order assignment), (c) Haversine distance from driver's location to the customer. Truly proximity-aware without AI.
+
+**7. Customer tracking page**: NEW `/mockups/track.html` with public Leaflet map (Carto light tiles), live driver location, ETA, full status timeline, items + bill, tel: link to driver. Polls every 10 s. Receives order id via `?id=` query param.
+
+**8. Unified landing page**: NEW `/mockups/index.html` with 3 hero cards (Merchant ACP / Driver App / Customer Track) — easy access to all three entry points + demo credentials inline.
+
+**Files Created/Modified:**
+- `/app/backend/routers/delivery_router.py` — extended ~250 lines: Haversine, distance pricing, employment-type-aware revenue split, payouts/branches/payout-methods endpoints, country/currency support.
+- `/app/frontend/public/mockups/app_mode_full.html` — ACP delivery tab now has 5 sub-tabs (orders/drivers/branches/payouts/zones), distance calculator widget, employment-type toggle in driver form, multi-country payout method dropdown.
+- `/app/frontend/public/mockups/track.html` (NEW, customer tracking)
+- `/app/frontend/public/mockups/index.html` (NEW, unified landing)
+
+
+
 ## 2026-02-17 — 🚚 Integrated 3-Sided Delivery System ✅
 
 End-to-end driver/delivery platform spanning merchant ↔ driver ↔ customer.

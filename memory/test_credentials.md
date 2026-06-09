@@ -69,19 +69,26 @@
 - Tools available to the AI: `read_file`, `write_file`, `edit_file`, `delete_file`, `list_dir`, `search_code`, `run_command` (full bash), `restart_service`, `git_status`, `git_diff`, `git_commit_push`
 - Backend uses Claude Sonnet 4.5 via owner's `ANTHROPIC_API_KEY` (synced from Railway production)
 
-## App-Mode Mockup (Merchant Admin Control Panel + Video Studio)
-- URL: `${REACT_APP_BACKEND_URL}/mockups/app_mode_full.html`
-- No auth required — uses localStorage for state (`zx_credits` starts at 50)
-- **Enable Admin mode**: click the ♛ button in the top header → auto-opens the Admin Control Panel (ACP)
-- ACP tabs: `📦 المنتجات` (product CRUD + AI auto-fill) and `🎬 Video Studio` (promo video generation)
+## App-Mode Mockup (Merchant Admin Control Panel + Video Studio + Delivery)
+- **Landing page (unified)**: `${REACT_APP_BACKEND_URL}/mockups/index.html` — 3 cards: Merchant ACP / Driver App / Customer Track
+- **Customer tracking**: `${REACT_APP_BACKEND_URL}/mockups/track.html?id=<order_id>` — public Leaflet map with live driver location, ETA, status timeline
+- **Driver app**: `${REACT_APP_BACKEND_URL}/mockups/driver_app.html` — phone+OTP login (5 demo phones, OTP=1234)
+- **Merchant ACP**: `${REACT_APP_BACKEND_URL}/mockups/app_mode_full.html` — click ♛ to open
+- ACP delivery tab has 5 sub-sections: 📦 الطلبات · 🧑‍✈️ السائقون · 🏬 الفروع · 💰 الرواتب · ⚙️ التسعير
 - Recharge: click `+ شحن` inside ACP → modal with 4 packages + 5 payment methods (mada/visa/mc/apple_pay/stc_pay)
 
 ### Public API endpoints (no auth required)
-- `GET  /api/promo-video/health` — sanity check
-- `POST /api/promo-video/storyboard` — Body: `{"product_name":"...","duration_seconds":30,"lang":"ar","tone":"luxury","cta":"اطلب الآن"}`
-- `POST /api/promo-video/generate` — Body: `{"title":"...","scenes":[{"narration":"...","image_url":"..."}],"duration_seconds":30,"voice":"zerax_male_deep","cta":"..."}`. Returns video at `/api/static/videos/{id}.mp4` (real ffmpeg + OpenAI TTS pipeline).
-- `GET  /api/promo-video/packages` — lists 4 recharge tiers
-- `POST /api/promo-video/recharge` — **MOCKED gateway** — simulates 400ms latency, returns fake transaction. Body: `{"package_id":"pro","payment_method":"mada"}`. User explicitly designed this as a placeholder for their own Zerax wallet service.
-- `POST /api/image-studio/product-info` — AI product info enrichment (Gemini Nano Banana)
+- `GET  /api/promo-video/health` · `POST /api/promo-video/storyboard` · `POST /api/promo-video/generate` · `GET /api/promo-video/packages` · `POST /api/promo-video/recharge` (MOCKED gateway)
+- `POST /api/image-studio/product-info` (Gemini)
+- **Delivery (16+ endpoints)**:
+  - Drivers CRUD: `GET/POST /api/delivery/drivers`, `PATCH/DELETE /api/delivery/drivers/{id}` (driver now has employment_type, share_per_delivery_sar OR monthly_salary_sar, payout_method, payout_account, country)
+  - Driver auth: `POST /api/delivery/driver/login` (returns OTP=1234), `POST /api/delivery/driver/verify-otp`, `GET /api/delivery/driver/me`, `GET /api/delivery/driver/feed`
+  - Orders: `GET/POST /api/delivery/orders`, `PATCH /api/delivery/orders/{id}/assign`, `PATCH .../status`, `POST .../location`, `GET .../track` (public, returns driver+location+timeline)
+  - **NEW**: `POST /api/delivery/calculate-fee` — Haversine distance + fee breakdown + driver/merchant share preview. Body: `{customer_lat, customer_lng, total_sar, branch_id?}`
+  - **NEW**: `GET/POST /api/delivery/branches`, `DELETE /api/delivery/branches/{id}` — branch GPS coords used as distance origin
+  - **NEW**: `GET/POST /api/delivery/payouts?driver_id=` — payout history + record wage transfers. Decrements `balance_pending_sar` on commission drivers.
+  - **NEW**: `GET /api/delivery/payout-methods?country=SA|AE|EG|KW|BH|QA|OM|IQ` — country-specific payout methods (STC Pay, urpay, PayBy, Vodafone Cash, InstaPay, KNET, ZainCash, etc.)
+  - **NEW**: `GET /api/delivery/countries` — 8 supported countries with currency codes
+  - Settings: `GET/PATCH /api/delivery/settings` (now includes per_km_sar, base_fee_sar, min_fee_sar, max_fee_sar, driver_share_default_pct, use_distance_pricing toggle)
 
 

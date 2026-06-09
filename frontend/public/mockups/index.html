@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Zerax — منصة التجارة الذكية</title>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;700;900&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'IBM Plex Sans Arabic',system-ui,sans-serif;background:#0a0a14;color:#fff;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px;background-image:radial-gradient(ellipse at top,#1a1a3e,#0a0a14 60%)}
+.wrap{max-width:1100px;width:100%}
+.head{text-align:center;margin-bottom:40px}
+.head .badge{display:inline-block;padding:6px 16px;background:rgba(251,191,36,.15);color:#fbbf24;border:1px solid rgba(251,191,36,.3);border-radius:99px;font-size:11px;font-weight:900;margin-bottom:16px}
+.head h1{font-size:clamp(28px,6vw,52px);font-weight:900;background:linear-gradient(135deg,#fbbf24,#a78bfa 60%,#ec4899);-webkit-background-clip:text;background-clip:text;color:transparent;margin-bottom:10px;line-height:1.1}
+.head p{color:#94a3b8;font-size:15px;max-width:600px;margin:0 auto;line-height:1.7}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:18px}
+.card{background:#13131f;border:1.5px solid #2a2a44;border-radius:24px;padding:24px;cursor:pointer;text-decoration:none;color:inherit;transition:all .25s;position:relative;overflow:hidden;display:flex;flex-direction:column}
+.card::before{content:'';position:absolute;inset:0;background:radial-gradient(circle at top right,rgba(124,58,237,.15),transparent 50%);opacity:0;transition:opacity .25s}
+.card:hover{transform:translateY(-4px);border-color:#7c3aed;box-shadow:0 16px 40px rgba(124,58,237,.3)}
+.card:hover::before{opacity:1}
+.card .ico{width:56px;height:56px;border-radius:16px;display:flex;align-items:center;justify-content:center;font-size:28px;margin-bottom:16px;background:linear-gradient(135deg,#fbbf24,#a78bfa)}
+.card.merchant .ico{background:linear-gradient(135deg,#7c3aed,#a855f7)}
+.card.driver .ico{background:linear-gradient(135deg,#fbbf24,#f59e0b)}
+.card.track .ico{background:linear-gradient(135deg,#10b981,#059669)}
+.card h3{font-size:18px;font-weight:900;margin-bottom:8px}
+.card p{font-size:13px;color:#94a3b8;line-height:1.6;margin-bottom:14px;flex:1}
+.card .features{display:flex;flex-wrap:wrap;gap:5px;margin-bottom:14px}
+.card .features span{font-size:10px;padding:3px 8px;background:rgba(124,58,237,.15);color:#a78bfa;border-radius:99px;font-weight:900}
+.card.driver .features span{background:rgba(251,191,36,.15);color:#fbbf24}
+.card.track .features span{background:rgba(16,185,129,.15);color:#10b981}
+.card .cta{display:inline-flex;align-items:center;gap:6px;font-weight:900;font-size:13px;color:#fff;background:rgba(255,255,255,.06);padding:10px 16px;border-radius:99px;border:1px solid rgba(255,255,255,.1);align-self:flex-start}
+.card:hover .cta{background:#fbbf24;color:#000;border-color:#fbbf24}
+.foot{margin-top:50px;text-align:center;color:#475569;font-size:11px}
+.foot code{background:#13131f;color:#a78bfa;padding:3px 10px;border-radius:99px;font-family:monospace;font-size:11px;border:1px solid #2a2a44}
+.creds-card{margin-top:28px;background:#13131f;border:1.5px dashed #2a2a44;border-radius:18px;padding:18px}
+.creds-card h4{font-size:13px;font-weight:900;color:#fbbf24;margin-bottom:10px;display:flex;align-items:center;gap:6px}
+.creds-list{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:8px;font-size:12px;color:#cbd5e1}
+.creds-list b{color:#fff;direction:ltr;display:inline-block}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="head">
+    <div class="badge">⚡ ZERAX PLATFORM</div>
+    <h1>منصة التجارة الذكية المتكاملة</h1>
+    <p>اختر اللوحة اللي تبي تدخل فيها — كل لوحة مستقلة ومتكاملة مع باقي النظام</p>
+  </div>
+
+  <div class="grid">
+    <!-- Merchant ACP -->
+    <a href="/mockups/app_mode_full.html" class="card merchant">
+      <div class="ico">🏪</div>
+      <h3>لوحة تحكم التاجر</h3>
+      <p>إدارة المنتجات، توليد فيديوهات إعلانية بالـAI، إدارة سائقين وطلبات التوصيل، شحن نقاط Zerax — كل شي من مكان واحد</p>
+      <div class="features">
+        <span>📦 منتجات</span><span>🎬 Video Studio</span><span>🚚 توصيل</span><span>💰 نقاط</span>
+      </div>
+      <span class="cta">افتح لوحة التاجر →</span>
+    </a>
+
+    <!-- Driver App -->
+    <a href="/mockups/driver_app.html" class="card driver">
+      <div class="ico">🚗</div>
+      <h3>تطبيق السائق</h3>
+      <p>سجّل دخول برقم جوالك (OTP)، اعرض طلباتك اليوم، حدّث الحالة، تتبع GPS مباشر، أرباح يومية وأسبوعية، إعدادات الاستقبال</p>
+      <div class="features">
+        <span>📱 OTP</span><span>🗺️ خريطة</span><span>💰 أرباح</span><span>🔄 توزيع تلقائي</span>
+      </div>
+      <span class="cta">افتح تطبيق السائق →</span>
+    </a>
+
+    <!-- Customer Track -->
+    <a href="/mockups/track.html" class="card track">
+      <div class="ico">📍</div>
+      <h3>تتبع الطلب (للعميل)</h3>
+      <p>صفحة تتبع مباشرة للعميل — خريطة حية، حالة الطلب، معلومات السائق، رقم اتصال، ETA متجدد لحظياً</p>
+      <div class="features">
+        <span>🗺️ خريطة حية</span><span>📞 تواصل</span><span>⏱️ ETA</span><span>📊 تايملاين</span>
+      </div>
+      <span class="cta">جرّب صفحة التتبع →</span>
+    </a>
+  </div>
+
+  <div class="creds-card">
+    <h4>🔑 بيانات الدخول للتجربة</h4>
+    <div class="creds-list">
+      <div><b>لوحة التاجر:</b> اضغط ♛ في الهيدر</div>
+      <div><b>أحمد:</b> 0501111111 / OTP: 1234</div>
+      <div><b>خالد:</b> 0552222222 / OTP: 1234</div>
+      <div><b>سلطان:</b> 0533333333 / OTP: 1234</div>
+      <div><b>فيصل:</b> 0544444444 / OTP: 1234</div>
+      <div><b>بدر:</b> 0555555555 / OTP: 1234</div>
+    </div>
+  </div>
+
+  <div class="foot">
+    <p>API endpoints: <code>/api/delivery/*</code> · <code>/api/promo-video/*</code> · <code>/api/image-studio/*</code></p>
+    <p style="margin-top:8px">Powered by <b style="color:#fbbf24">Zerax</b> · 2026</p>
+  </div>
+</div>
+</body>
+</html>

@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>تتبع طلبك — Zerax</title>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;700;900&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'IBM Plex Sans Arabic',system-ui,sans-serif;background:#f8fafc;color:#0a0a14;min-height:100vh}
+#app{max-width:480px;margin:0 auto;background:#fff;min-height:100vh;display:flex;flex-direction:column}
+.head{padding:14px 16px;background:linear-gradient(135deg,#7c3aed,#a855f7);color:#fff;display:flex;align-items:center;gap:10px;position:sticky;top:0;z-index:50}
+.head .logo{width:34px;height:34px;background:#fbbf24;color:#000;border-radius:10px;display:flex;align-items:center;justify-content:center;font-weight:900;font-size:14px}
+.head h1{font-size:15px;font-weight:900;flex:1}
+.head .id{font-size:11px;background:rgba(255,255,255,.2);padding:4px 10px;border-radius:99px;font-family:monospace}
+#map{height:280px;background:#e2e8f0}
+.status-card{margin:14px;padding:16px;border-radius:16px;background:linear-gradient(135deg,#fef3c7,#fde68a);border:1.5px solid #f59e0b;text-align:center}
+.status-card.delivering{background:linear-gradient(135deg,#fce7f3,#fbcfe8);border-color:#ec4899}
+.status-card.delivered{background:linear-gradient(135deg,#d1fae5,#a7f3d0);border-color:#10b981}
+.status-card .ico{font-size:36px;margin-bottom:8px}
+.status-card h2{font-size:18px;font-weight:900;margin-bottom:4px}
+.status-card p{font-size:12px;color:#374151;line-height:1.6}
+.status-card .eta{display:inline-block;margin-top:8px;padding:6px 14px;background:rgba(0,0,0,.08);border-radius:99px;font-size:12px;font-weight:900}
+
+.driver-card{margin:0 14px 14px;background:#0a0a14;color:#fff;border-radius:16px;padding:14px;display:flex;align-items:center;gap:12px}
+.driver-card .avt{width:46px;height:46px;border-radius:50%;background:linear-gradient(135deg,#fbbf24,#a78bfa);display:flex;align-items:center;justify-content:center;color:#000;font-weight:900;font-size:18px;flex-shrink:0}
+.driver-card .info{flex:1;min-width:0}
+.driver-card .nm{font-size:14px;font-weight:900}
+.driver-card .meta{font-size:11px;color:#94a3b8;margin-top:2px}
+.driver-card a{background:#fbbf24;color:#000;width:42px;height:42px;border-radius:50%;display:flex;align-items:center;justify-content:center;text-decoration:none;font-size:18px;font-weight:900}
+
+.section{margin:0 14px 14px;background:#fff;border:1.5px solid #e5e7eb;border-radius:16px;padding:14px}
+.section h3{font-size:13px;font-weight:900;color:#0a0a14;margin-bottom:10px;display:flex;align-items:center;gap:6px}
+.timeline{padding:4px 0}
+.step{display:flex;gap:10px;margin-bottom:10px;align-items:flex-start}
+.step .dot{width:12px;height:12px;border-radius:50%;background:#e5e7eb;border:2px solid #cbd5e1;flex-shrink:0;margin-top:3px}
+.step.done .dot{background:#10b981;border-color:#10b981}
+.step.current .dot{background:#fbbf24;border-color:#fbbf24;animation:pulse 1.5s ease-in-out infinite}
+@keyframes pulse{50%{box-shadow:0 0 0 6px rgba(251,191,36,.3)}}
+.step .lbl{font-size:12px;font-weight:700}
+.step .tm{font-size:10px;color:#6b7280;margin-top:1px}
+
+.item-row{display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px dashed #e5e7eb;font-size:13px}
+.item-row:last-child{border-bottom:none}
+.bill-row{display:flex;justify-content:space-between;padding:6px 0;font-size:12px;color:#374151}
+.bill-row.total{padding-top:10px;border-top:1px dashed #e5e7eb;font-weight:900;color:#0a0a14;font-size:14px;margin-top:6px}
+
+.lookup-screen{flex:1;display:flex;flex-direction:column;justify-content:center;align-items:center;padding:30px;text-align:center}
+.lookup-screen h2{font-size:24px;font-weight:900;margin-bottom:8px}
+.lookup-screen p{color:#6b7280;font-size:13px;margin-bottom:24px;line-height:1.7}
+.lookup-screen .input-wrap{width:100%;max-width:300px}
+.lookup-screen input{width:100%;padding:14px;border:2px solid #e5e7eb;border-radius:14px;font-family:inherit;font-size:14px;text-align:center;letter-spacing:2px;direction:ltr;margin-bottom:10px;outline:none}
+.lookup-screen input:focus{border-color:#7c3aed}
+.lookup-screen button{width:100%;padding:14px;background:linear-gradient(135deg,#7c3aed,#a855f7);color:#fff;border:none;border-radius:14px;font-family:inherit;font-weight:900;font-size:14px;cursor:pointer}
+.lookup-screen .demo{margin-top:14px;padding:12px;background:#faf5ff;border:1px dashed #c4b5fd;border-radius:10px;font-size:11px;color:#7c3aed;line-height:1.6}
+.lookup-screen .demo b{color:#0a0a14}
+.lookup-screen .demo a{color:#7c3aed;font-weight:900;text-decoration:none;cursor:pointer;display:block;padding:3px;font-family:monospace;font-size:12px}
+.lookup-screen .demo a:hover{text-decoration:underline}
+.err{color:#dc2626;font-size:12px;margin-bottom:10px;display:none}
+.err.show{display:block}
+</style>
+</head>
+<body>
+<div id="app">
+  <div class="head">
+    <div class="logo">Z</div>
+    <h1>تتبع طلبك</h1>
+    <span class="id" id="order-id">—</span>
+  </div>
+
+  <!-- Lookup screen -->
+  <div id="lookup-screen" class="lookup-screen">
+    <h2>🔍 تتبع طلبك</h2>
+    <p>أدخل رقم الطلب اللي وصلك عبر الرسالة أو الإيميل</p>
+    <div class="input-wrap">
+      <input id="order-input" placeholder="ord_xxxxxxxx" autocapitalize="none">
+      <div class="err" id="err"></div>
+      <button onclick="lookup()">تتبع الطلب 🔍</button>
+      <div class="demo">
+        💡 <b>للتجربة:</b><br>اضغط على أي طلب لمشاهدته:
+        <div id="demo-ids" style="margin-top:6px"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Tracking view -->
+  <div id="track-view" style="display:none;flex:1;flex-direction:column;overflow-y:auto">
+    <div id="map"></div>
+    <div class="status-card" id="status-card">
+      <div class="ico" id="status-ico">⏳</div>
+      <h2 id="status-title">جاري التحضير</h2>
+      <p id="status-desc">طلبك تحت التجهيز</p>
+      <div class="eta" id="eta">—</div>
+    </div>
+    <div class="driver-card" id="driver-card" style="display:none">
+      <div class="avt" id="d-avt">س</div>
+      <div class="info">
+        <div class="nm" id="d-name">السائق</div>
+        <div class="meta" id="d-meta">—</div>
+      </div>
+      <a id="d-call" href="#">📞</a>
+    </div>
+    <div class="section">
+      <h3>📍 العنوان</h3>
+      <p style="font-size:13px;color:#374151;line-height:1.6" id="addr">—</p>
+      <p style="font-size:11px;color:#6b7280;margin-top:4px" id="distance">—</p>
+    </div>
+    <div class="section">
+      <h3>🛒 تفاصيل الطلب</h3>
+      <div id="items-list"></div>
+      <div style="margin-top:10px">
+        <div class="bill-row"><span>المجموع</span><span id="b-total">— ر.س</span></div>
+        <div class="bill-row"><span>رسوم التوصيل</span><span id="b-fee">— ر.س</span></div>
+        <div class="bill-row total"><span>الإجمالي</span><span id="b-grand">— ر.س</span></div>
+      </div>
+    </div>
+    <div class="section">
+      <h3>📊 تقدّم الطلب</h3>
+      <div class="timeline" id="timeline"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+const API = window.location.origin;
+let TRACK_INTERVAL = null;
+let MAP = null, MARKER_DRV = null, MARKER_DEST = null, ROUTE_LINE = null;
+const STEPS = ['pending','assigned','picked_up','delivering','delivered'];
+const STEP_LBL = {pending:'تم استلام الطلب',assigned:'تم تعيين السائق',picked_up:'استلم السائق الطلب',delivering:'في طريقها إليك',delivered:'تم التسليم'};
+const STEP_DESC = {pending:'طلبك قيد التجهيز',assigned:'تم إسناد السائق وسيأتي قريباً',picked_up:'السائق استلم الطلب من المتجر',delivering:'السائق في طريقه إليك الآن 🚗',delivered:'وصل طلبك بنجاح ✓'};
+const STEP_ICO = {pending:'⏳',assigned:'👤',picked_up:'📦',delivering:'🚗',delivered:'✅'};
+
+async function loadDemoIds(){
+  try{
+    const r=await fetch(API+'/api/delivery/orders?limit=4');
+    const d=await r.json();
+    document.getElementById('demo-ids').innerHTML=d.orders.map(o=>`<a onclick="document.getElementById('order-input').value='${o.id}';lookup()">📦 ${o.id} (${o.customer_name})</a>`).join('');
+  }catch(_){}
+}
+loadDemoIds();
+
+// Read order id from URL ?id=
+const urlId=new URLSearchParams(location.search).get('id');
+if(urlId){document.getElementById('order-input').value=urlId;setTimeout(lookup,300);}
+
+async function lookup(){
+  const id=document.getElementById('order-input').value.trim();
+  if(!id){document.getElementById('err').textContent='أدخل رقم الطلب';document.getElementById('err').classList.add('show');return;}
+  document.getElementById('err').classList.remove('show');
+  try{
+    const r=await fetch(API+'/api/delivery/orders/'+id+'/track');
+    if(!r.ok){const e=await r.json().catch(()=>({}));document.getElementById('err').textContent=e.detail||'طلب غير موجود';document.getElementById('err').classList.add('show');return;}
+    const data=await r.json();
+    document.getElementById('lookup-screen').style.display='none';
+    document.getElementById('track-view').style.display='flex';
+    document.getElementById('order-id').textContent='#'+id.replace('ord_','');
+    render(data);
+    // poll every 10s
+    if(TRACK_INTERVAL)clearInterval(TRACK_INTERVAL);
+    TRACK_INTERVAL=setInterval(async()=>{
+      try{const r2=await fetch(API+'/api/delivery/orders/'+id+'/track');if(r2.ok){render(await r2.json());}}catch(_){}
+    },10000);
+  }catch(e){document.getElementById('err').textContent='فشل الاتصال';document.getElementById('err').classList.add('show');}
+}
+
+function render(o){
+  // Status card
+  const sc=document.getElementById('status-card');
+  sc.classList.remove('delivering','delivered');
+  if(o.status==='delivering')sc.classList.add('delivering');
+  if(o.status==='delivered')sc.classList.add('delivered');
+  document.getElementById('status-ico').textContent=STEP_ICO[o.status]||'⏳';
+  document.getElementById('status-title').textContent=STEP_LBL[o.status]||o.status;
+  document.getElementById('status-desc').textContent=STEP_DESC[o.status]||'';
+  document.getElementById('eta').textContent='⏱️ الوصول المتوقع: ~'+o.eta_min+' دقيقة';
+
+  // Driver
+  if(o.driver){
+    document.getElementById('driver-card').style.display='flex';
+    document.getElementById('d-name').textContent=o.driver.name;
+    document.getElementById('d-avt').textContent=o.driver.name.charAt(0);
+    document.getElementById('d-meta').textContent='⭐ '+o.driver.rating.toFixed(1)+' · '+o.driver.vehicle;
+    document.getElementById('d-call').href='tel:'+o.driver.phone;
+  }else{
+    document.getElementById('driver-card').style.display='none';
+  }
+
+  // Address + distance
+  document.getElementById('addr').textContent=o.address;
+  if(o.current_location){
+    document.getElementById('distance').textContent='📍 السائق على بُعد دقائق منك';
+  } else {
+    document.getElementById('distance').textContent='';
+  }
+
+  // Items + bill
+  document.getElementById('items-list').innerHTML=(o.items||[]).map(i=>`<div class="item-row"><span>${i.name} ×${i.qty}</span><b>${i.sar} ر.س</b></div>`).join('');
+  document.getElementById('b-total').textContent=o.total_sar+' ر.س';
+  document.getElementById('b-fee').textContent=(o.delivery_fee_sar||0)+' ر.س';
+  document.getElementById('b-grand').textContent=(o.total_sar + (o.delivery_fee_sar||0))+' ر.س';
+
+  // Timeline
+  const idx=STEPS.indexOf(o.status);
+  document.getElementById('timeline').innerHTML=STEPS.map((s,i)=>{
+    const done=i<idx,curr=i===idx;
+    const log=(o.status_log||[]).find(l=>l.status===s);
+    const tm=log?new Date(log.at).toLocaleTimeString('ar-SA',{hour:'2-digit',minute:'2-digit'}):'';
+    return `<div class="step ${done?'done':''} ${curr?'current':''}"><div class="dot"></div><div><div class="lbl">${STEP_LBL[s]}</div>${tm?`<div class="tm">${tm}</div>`:''}</div></div>`;
+  }).join('');
+
+  // Map
+  setTimeout(()=>initMap(o),100);
+}
+
+function initMap(o){
+  if(!window.L)return;
+  const el=document.getElementById('map');if(!el)return;
+  const drvLoc=o.current_location?{lat:o.current_location.lat,lng:o.current_location.lng}:null;
+  // Default to Riyadh center if no driver location
+  const center=drvLoc||{lat:24.7136,lng:46.6753};
+  if(!MAP){
+    MAP=L.map(el,{zoomControl:true,attributionControl:false}).setView([center.lat,center.lng],13);
+    L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',{maxZoom:19}).addTo(MAP);
+  }
+  // Customer marker (destination)
+  const destLat=center.lat+0.012,destLng=center.lng+0.008;
+  const destIcon=L.divIcon({className:'',html:'<div style="background:#7c3aed;width:32px;height:32px;border-radius:50%;border:3px solid #fff;box-shadow:0 4px 12px rgba(124,58,237,.5);display:flex;align-items:center;justify-content:center;color:#fff;font-size:14px">🏠</div>',iconSize:[32,32],iconAnchor:[16,16]});
+  if(!MARKER_DEST){MARKER_DEST=L.marker([destLat,destLng],{icon:destIcon}).addTo(MAP);}
+  if(drvLoc){
+    const drvIcon=L.divIcon({className:'',html:'<div style="background:#fbbf24;width:36px;height:36px;border-radius:50%;border:3px solid #fff;box-shadow:0 4px 12px rgba(251,191,36,.6);display:flex;align-items:center;justify-content:center;font-size:16px;animation:bounce 1.5s ease-in-out infinite"><style>@keyframes bounce{50%{transform:translateY(-4px)}}</style>🚗</div>',iconSize:[36,36],iconAnchor:[18,18]});
+    if(MARKER_DRV)MARKER_DRV.remove();
+    MARKER_DRV=L.marker([drvLoc.lat,drvLoc.lng],{icon:drvIcon}).addTo(MAP);
+    if(ROUTE_LINE)ROUTE_LINE.remove();
+    ROUTE_LINE=L.polyline([[drvLoc.lat,drvLoc.lng],[destLat,destLng]],{color:'#7c3aed',weight:4,opacity:.7,dashArray:'10,8'}).addTo(MAP);
+    MAP.fitBounds(L.latLngBounds([drvLoc.lat,drvLoc.lng],[destLat,destLng]).pad(0.3));
+  }
+}
+</script>
+</body>
+</html>

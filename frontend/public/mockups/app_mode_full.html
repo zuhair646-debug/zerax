@@ -1088,10 +1088,12 @@ body.admin-mode .add-product-card{display:flex}
         </div>
 
         <!-- sub-tabs -->
-        <div style="display:flex;gap:6px;margin-bottom:12px;border-bottom:1.5px solid #f3f4f6;padding-bottom:0">
+        <div style="display:flex;gap:6px;margin-bottom:12px;border-bottom:1.5px solid #f3f4f6;padding-bottom:0;overflow-x:auto">
           <button class="vs-pill active" id="dlv-sub-orders" onclick="dlvSwitchSub('orders')" style="border-radius:10px 10px 0 0">📦 الطلبات</button>
           <button class="vs-pill" id="dlv-sub-drivers" onclick="dlvSwitchSub('drivers')" style="border-radius:10px 10px 0 0">🧑‍✈️ السائقون</button>
-          <button class="vs-pill" id="dlv-sub-zones" onclick="dlvSwitchSub('zones')" style="border-radius:10px 10px 0 0">🗺️ المناطق</button>
+          <button class="vs-pill" id="dlv-sub-branches" onclick="dlvSwitchSub('branches')" style="border-radius:10px 10px 0 0">🏬 الفروع</button>
+          <button class="vs-pill" id="dlv-sub-payouts" onclick="dlvSwitchSub('payouts')" style="border-radius:10px 10px 0 0">💰 الرواتب</button>
+          <button class="vs-pill" id="dlv-sub-zones" onclick="dlvSwitchSub('zones')" style="border-radius:10px 10px 0 0">⚙️ التسعير</button>
         </div>
 
         <!-- Orders subsection -->
@@ -1116,27 +1118,100 @@ body.admin-mode .add-product-card{display:flex}
               <div class="acp-field"><label>المركبة</label><select id="dlv-d-vehicle"><option>موتر</option><option>دباب</option><option>سيكل</option></select></div>
             </div>
             <div class="acp-field"><label>المنطقة</label><select id="dlv-d-area"></select></div>
+
+            <h5 style="font-size:12px;font-weight:900;color:#7c3aed;margin:14px 0 8px;border-top:1px dashed #c4b5fd;padding-top:10px">💼 نوع التوظيف</h5>
+            <div style="display:flex;gap:6px;margin-bottom:10px">
+              <button type="button" class="vs-pill active" id="dlv-emp-commission" onclick="dlvSetEmpType('commission')">💸 بعمولة لكل طلب</button>
+              <button type="button" class="vs-pill" id="dlv-emp-salaried" onclick="dlvSetEmpType('salaried')">📅 موظف براتب</button>
+            </div>
+            <div id="dlv-emp-commission-fields"><div class="acp-field"><label>حصة السائق لكل توصيل (ر.س)</label><input id="dlv-d-share" type="number" min="0" step="0.5" value="8" placeholder="مثلاً 8 من إجمالي 10"></div></div>
+            <div id="dlv-emp-salaried-fields" style="display:none"><div class="acp-field"><label>الراتب الشهري (ر.س)</label><input id="dlv-d-salary" type="number" min="0" step="100" value="4500"></div></div>
+
+            <h5 style="font-size:12px;font-weight:900;color:#7c3aed;margin:14px 0 8px;border-top:1px dashed #c4b5fd;padding-top:10px">💳 طريقة استلام المبلغ</h5>
+            <div class="acp-row">
+              <div class="acp-field"><label>الدولة</label><select id="dlv-d-country" onchange="dlvLoadPayoutMethods()"></select></div>
+              <div class="acp-field"><label>وسيلة الدفع</label><select id="dlv-d-paymethod"></select></div>
+            </div>
+            <div class="acp-field"><label id="dlv-d-account-label">رقم الحساب / الجوال للتحويل</label><input id="dlv-d-account" placeholder="0501234567 أو IBAN"></div>
+
             <button class="acp-save-btn" onclick="dlvSaveDriver()">💾 حفظ السائق</button>
           </div>
           <div id="dlv-drivers-list"></div>
         </div>
 
-        <!-- Zones / Settings subsection -->
-        <div id="dlv-zones" class="dlv-sub" style="display:none">
-          <div class="acp-field"><label>الحد الأدنى للتوصيل المجاني (ر.س)</label><input id="dlv-free-th" type="number" min="0"></div>
-          <div class="acp-row">
-            <div class="acp-field"><label>الرسوم الأساسية (ر.س)</label><input id="dlv-base-fee" type="number" min="0"></div>
-            <div class="acp-field"><label>سعر الكيلو (ر.س)</label><input id="dlv-per-km" type="number" min="0" step="0.5"></div>
+        <!-- Branches subsection -->
+        <div id="dlv-branches" class="dlv-sub" style="display:none">
+          <p style="font-size:11px;color:#6b7280;margin-bottom:10px;line-height:1.6">📍 الفروع تُستخدم لحساب المسافة الفعلية للعميل (Haversine). الفرع الرئيسي هو نقطة البداية الافتراضية.</p>
+          <button class="acp-secondary" onclick="document.getElementById('dlv-add-branch-form').style.display=document.getElementById('dlv-add-branch-form').style.display==='none'?'block':'none'" style="margin-bottom:12px;color:#7c3aed;border-color:#ddd6fe;background:#faf5ff">＋ إضافة فرع جديد</button>
+          <div id="dlv-add-branch-form" style="display:none;background:#faf5ff;border:1.5px dashed #c4b5fd;border-radius:12px;padding:12px;margin-bottom:12px">
+            <div class="acp-field"><label>اسم الفرع</label><input id="dlv-b-name" placeholder="مثلاً: فرع جدة - الكورنيش"></div>
+            <div class="acp-row">
+              <div class="acp-field"><label>خط العرض (Latitude)</label><input id="dlv-b-lat" type="number" step="0.0001" value="24.7136"></div>
+              <div class="acp-field"><label>خط الطول (Longitude)</label><input id="dlv-b-lng" type="number" step="0.0001" value="46.6753"></div>
+            </div>
+            <div class="acp-row">
+              <div class="acp-field"><label>هاتف الفرع</label><input id="dlv-b-phone" placeholder="0112000000"></div>
+              <div class="acp-field" style="display:flex;align-items:flex-end"><label style="display:flex;align-items:center;gap:6px;font-weight:900;font-size:12px"><input type="checkbox" id="dlv-b-main" style="width:18px;height:18px;accent-color:#7c3aed"> هل هو الفرع الرئيسي؟</label></div>
+            </div>
+            <button class="acp-save-btn" onclick="dlvSaveBranch()">💾 حفظ الفرع</button>
+            <p style="font-size:10px;color:#6b7280;margin-top:8px;line-height:1.6">💡 لاستخراج إحداثيات أي مكان: افتح Google Maps → اضغط على الموقع بشكل مطوّل → انسخ الإحداثيات.</p>
           </div>
+          <div id="dlv-branches-list"></div>
+        </div>
+
+        <!-- Payouts subsection -->
+        <div id="dlv-payouts" class="dlv-sub" style="display:none">
+          <p style="font-size:11px;color:#6b7280;margin-bottom:10px;line-height:1.6">💰 سجل تحويلات الرواتب والعمولات للسائقين. اضغط "تحويل" بجانب أي سائق لإصدار دفعة.</p>
+          <div id="dlv-payout-summary" style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-bottom:14px"></div>
+          <h5 style="font-size:12px;font-weight:900;color:#0a0a0a;margin-bottom:8px">💵 أرصدة معلّقة للسائقين</h5>
+          <div id="dlv-balances-list" style="margin-bottom:14px"></div>
+          <h5 style="font-size:12px;font-weight:900;color:#0a0a0a;margin-bottom:8px">📋 سجل التحويلات الأخيرة</h5>
+          <div id="dlv-payouts-list"></div>
+        </div>
+
+        <!-- Zones / Pricing subsection -->
+        <div id="dlv-zones" class="dlv-sub" style="display:none">
+          <h5 style="font-size:12px;font-weight:900;color:#7c3aed;margin-bottom:8px">📏 تسعير المسافة (لكل كم)</h5>
+          <div class="acp-row">
+            <div class="acp-field"><label>الرسوم الأساسية (ر.س)</label><input id="dlv-base-fee" type="number" min="0" step="0.5"></div>
+            <div class="acp-field"><label>سعر الكيلو (ر.س)</label><input id="dlv-per-km" type="number" min="0" step="0.1"></div>
+          </div>
+          <div class="acp-row">
+            <div class="acp-field"><label>الحد الأدنى للرسوم (ر.س)</label><input id="dlv-min-fee" type="number" min="0" step="0.5"></div>
+            <div class="acp-field"><label>الحد الأعلى للرسوم (ر.س)</label><input id="dlv-max-fee" type="number" min="0" step="1"></div>
+          </div>
+          <div class="acp-field"><label>الحد الأدنى للتوصيل المجاني (ر.س) — اجعله 0 لتعطيله</label><input id="dlv-free-th" type="number" min="0"></div>
+
+          <h5 style="font-size:12px;font-weight:900;color:#7c3aed;margin:14px 0 8px;border-top:1px dashed #e5e7eb;padding-top:10px">⚖️ تقسيم الإيراد للسائقين بعمولة</h5>
+          <div class="acp-row">
+            <div class="acp-field"><label>حصة السائق الافتراضية (%)</label><input id="dlv-drv-pct" type="number" min="0" max="100" step="5"></div>
+            <div class="acp-field"><label>حصة المتجر (%)</label><input id="dlv-mer-pct" type="number" min="0" max="100" step="5" readonly style="background:#f3f4f6"></div>
+          </div>
+
+          <h5 style="font-size:12px;font-weight:900;color:#7c3aed;margin:14px 0 8px;border-top:1px dashed #e5e7eb;padding-top:10px">🧮 آلة حساب فورية</h5>
+          <div style="background:#faf5ff;border:1.5px solid #ddd6fe;border-radius:12px;padding:12px;margin-bottom:14px">
+            <div class="acp-row">
+              <div class="acp-field"><label>عرض (Lat)</label><input id="dlv-calc-lat" type="number" step="0.0001" placeholder="24.835"></div>
+              <div class="acp-field"><label>طول (Lng)</label><input id="dlv-calc-lng" type="number" step="0.0001" placeholder="46.665"></div>
+            </div>
+            <div class="acp-field"><label>قيمة الطلب (ر.س)</label><input id="dlv-calc-total" type="number" min="0" placeholder="80"></div>
+            <button class="acp-secondary" onclick="dlvCalcFee()" style="background:#7c3aed;color:#fff;border-color:#7c3aed">🧮 احسب الرسوم</button>
+            <div id="dlv-calc-result" style="margin-top:10px;font-size:12px"></div>
+          </div>
+
           <label style="display:flex;align-items:center;gap:8px;font-size:12px;font-weight:900;margin:10px 0">
-            <input type="checkbox" id="dlv-auto" style="width:18px;height:18px;accent-color:#7c3aed"> توزيع تلقائي للطلبات على السائقين
+            <input type="checkbox" id="dlv-distance-pricing" style="width:18px;height:18px;accent-color:#7c3aed"> ✓ تفعيل تسعير المسافة (Haversine)
+          </label>
+          <label style="display:flex;align-items:center;gap:8px;font-size:12px;font-weight:900;margin:10px 0">
+            <input type="checkbox" id="dlv-auto" style="width:18px;height:18px;accent-color:#7c3aed"> توزيع تلقائي للطلبات (الأقرب للعميل أولاً)
           </label>
           <label style="display:flex;align-items:center;gap:8px;font-size:12px;font-weight:900;margin-bottom:14px">
             <input type="checkbox" id="dlv-cod" style="width:18px;height:18px;accent-color:#7c3aed"> السماح بالدفع كاش عند الاستلام
           </label>
-          <h5 style="font-size:12px;font-weight:900;color:#0a0a0a;margin-bottom:8px">مناطق التوصيل</h5>
+
+          <h5 style="font-size:12px;font-weight:900;color:#0a0a0a;margin-bottom:8px">🗺️ مناطق التوصيل (للاحتياط)</h5>
           <div id="dlv-zones-list" style="margin-bottom:14px"></div>
-          <button class="acp-save-btn" onclick="dlvSaveSettings()">💾 حفظ الإعدادات</button>
+          <button class="acp-save-btn" onclick="dlvSaveSettings()">💾 حفظ كل الإعدادات</button>
         </div>
       </div>
     </div>
@@ -3073,10 +3148,12 @@ function dlvRenderStats(s){
 }
 function dlvSwitchSub(s){
   DLV_SUB=s;
-  ['orders','drivers','zones'].forEach(k=>{
+  ['orders','drivers','branches','payouts','zones'].forEach(k=>{
     const el=document.getElementById('dlv-'+k);if(el)el.style.display=k===s?'block':'none';
     const btn=document.getElementById('dlv-sub-'+k);if(btn)btn.classList.toggle('active',k===s);
   });
+  if(s==='branches')dlvLoadBranches();
+  if(s==='payouts')dlvLoadPayouts();
 }
 function dlvFilterOrders(f){
   DLV_ORDER_FILTER=f;
@@ -3134,66 +3211,242 @@ async function dlvCancelOrder(orderId){
   }catch(_){alert('فشل');}
 }
 function dlvAreaLabel(id){const m={north_riyadh:'شمال الرياض',south_riyadh:'جنوب الرياض',east_riyadh:'شرق الرياض',west_riyadh:'غرب الرياض',central:'وسط الرياض'};return m[id]||id;}
-function dlvRenderDrivers(drivers){
-  const list=document.getElementById('dlv-drivers-list');
-  if(!drivers.length){list.innerHTML='<div style="text-align:center;padding:30px;color:#6b7280;font-size:12px">لا يوجد سائقين</div>';return;}
-  list.innerHTML=drivers.map(d=>`
-    <div class="dlv-driver">
-      <div class="avt">${d.name.charAt(0)}</div>
-      <div style="flex:1;min-width:0">
-        <div class="nm">${d.name}</div>
-        <div class="ph">${d.phone}</div>
-        <div class="stat-row">⭐ <b>${(d.rating||5).toFixed(1)}</b> · ${d.deliveries_today||0} توصيل · <b>${d.earnings_today_sar||0}</b> ر.س · ${dlvAreaLabel(d.area)}</div>
-      </div>
-      <span class="status-pill ${d.status}">${d.status==='online'?'متاح':d.status==='delivering'?'في توصيل':'غير متاح'}</span>
-      <button onclick="dlvDeleteDriver('${d.id}','${d.name.replace(/'/g,'')}')" style="background:none;border:none;color:#dc2626;cursor:pointer;font-size:16px;padding:4px">🗑️</button>
-    </div>`).join('');
-}
-function dlvShowAddDriver(){
-  const f=document.getElementById('dlv-add-driver-form');
-  f.style.display=f.style.display==='none'?'block':'none';
-  if(f.style.display==='block')dlvPopulateAreaSelect();
+let DLV_EMP_TYPE='commission', DLV_COUNTRIES=[], DLV_PAY_METHODS=[];
+function dlvSetEmpType(t){
+  DLV_EMP_TYPE=t;
+  document.getElementById('dlv-emp-commission').classList.toggle('active',t==='commission');
+  document.getElementById('dlv-emp-salaried').classList.toggle('active',t==='salaried');
+  document.getElementById('dlv-emp-commission-fields').style.display=t==='commission'?'block':'none';
+  document.getElementById('dlv-emp-salaried-fields').style.display=t==='salaried'?'block':'none';
 }
 function dlvPopulateAreaSelect(){
   if(!DLV_SETTINGS_CACHE)return;
   const sel=document.getElementById('dlv-d-area');if(!sel)return;
   sel.innerHTML=DLV_SETTINGS_CACHE.zones.map(z=>`<option value="${z.id}">${z.name_ar}</option>`).join('');
 }
-async function dlvSaveDriver(){
-  const name=document.getElementById('dlv-d-name').value.trim();
-  const phone=document.getElementById('dlv-d-phone').value.trim();
-  if(!name||!/^05\d{8}$/.test(phone)){alert('أدخل الاسم ورقم جوال صحيح يبدأ بـ 05');return;}
-  const vehicle=document.getElementById('dlv-d-vehicle').value;
-  const area=document.getElementById('dlv-d-area').value;
-  try{
-    const r=await fetch(API+'/api/delivery/drivers',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name,phone,vehicle,area,status:'online'})});
-    if(!r.ok)throw new Error();
-    ['dlv-d-name','dlv-d-phone'].forEach(id=>document.getElementById(id).value='');
-    document.getElementById('dlv-add-driver-form').style.display='none';
-    dlvLoadAll();toast('✓ تم حفظ السائق');
-  }catch(e){alert('فشل الحفظ');}
-}
 async function dlvDeleteDriver(id,name){
   if(!confirm('حذف السائق "'+name+'"؟'))return;
   try{await fetch(API+'/api/delivery/drivers/'+id,{method:'DELETE'});dlvLoadAll();toast('✓ تم الحذف');}catch(e){alert('فشل');}
 }
+async function dlvLoadCountries(){
+  if(DLV_COUNTRIES.length)return;
+  try{const r=await fetch(API+'/api/delivery/countries');const d=await r.json();DLV_COUNTRIES=d.countries||[];
+    const sel=document.getElementById('dlv-d-country');
+    if(sel){sel.innerHTML=DLV_COUNTRIES.map(c=>`<option value="${c.code}">${c.flag} ${c.name_ar}</option>`).join('');sel.value='SA';}
+  }catch(_){}
+}
+async function dlvLoadPayoutMethods(){
+  const country=document.getElementById('dlv-d-country')?.value||'SA';
+  try{
+    const r=await fetch(API+'/api/delivery/payout-methods?country='+country);
+    const d=await r.json();
+    DLV_PAY_METHODS=d.methods||[];
+    const sel=document.getElementById('dlv-d-paymethod');
+    if(sel){
+      sel.innerHTML=DLV_PAY_METHODS.map(m=>`<option value="${m.id}" data-field="${m.field}">${m.icon} ${m.name_ar}</option>`).join('');
+      dlvUpdateAccountLabel();
+    }
+  }catch(_){}
+}
+function dlvUpdateAccountLabel(){
+  const sel=document.getElementById('dlv-d-paymethod');if(!sel)return;
+  const opt=sel.selectedOptions[0];
+  const f=opt?.dataset?.field;
+  const lbl=document.getElementById('dlv-d-account-label');
+  if(f==='iban')lbl.textContent='IBAN — رقم الحساب الدولي';
+  else if(f==='note')lbl.textContent='ملاحظة (تحويل يدوي/كاش)';
+  else lbl.textContent='رقم الجوال للتحويل';
+}
+document.addEventListener('change',(e)=>{if(e.target&&e.target.id==='dlv-d-paymethod')dlvUpdateAccountLabel();});
+
+async function dlvSaveDriver(){
+  const name=document.getElementById('dlv-d-name').value.trim();
+  const phone=document.getElementById('dlv-d-phone').value.trim();
+  if(!name||!/^05\d{8}$/.test(phone)){alert('أدخل الاسم ورقم جوال صحيح يبدأ بـ 05');return;}
+  const payload={
+    name, phone,
+    vehicle:document.getElementById('dlv-d-vehicle').value,
+    area:document.getElementById('dlv-d-area').value,
+    status:'online',
+    employment_type:DLV_EMP_TYPE,
+    share_per_delivery_sar:+document.getElementById('dlv-d-share').value||8,
+    monthly_salary_sar:+document.getElementById('dlv-d-salary').value||0,
+    country:document.getElementById('dlv-d-country').value||'SA',
+    payout_method:document.getElementById('dlv-d-paymethod').value||'stc_pay',
+    payout_account:document.getElementById('dlv-d-account').value.trim()||phone,
+  };
+  try{
+    const r=await fetch(API+'/api/delivery/drivers',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
+    if(!r.ok)throw new Error();
+    ['dlv-d-name','dlv-d-phone','dlv-d-account'].forEach(id=>document.getElementById(id).value='');
+    document.getElementById('dlv-add-driver-form').style.display='none';
+    dlvLoadAll();toast('✓ تم حفظ السائق');
+  }catch(e){alert('فشل الحفظ');}
+}
+function dlvShowAddDriver(){
+  const f=document.getElementById('dlv-add-driver-form');
+  f.style.display=f.style.display==='none'?'block':'none';
+  if(f.style.display==='block'){
+    dlvPopulateAreaSelect();
+    dlvLoadCountries().then(dlvLoadPayoutMethods);
+  }
+}
+
+// Update drivers render to show employment type
+function dlvRenderDrivers(drivers){
+  const list=document.getElementById('dlv-drivers-list');
+  if(!drivers.length){list.innerHTML='<div style="text-align:center;padding:30px;color:#6b7280;font-size:12px">لا يوجد سائقين</div>';return;}
+  list.innerHTML=drivers.map(d=>{
+    const empBadge=d.employment_type==='salaried'?`<span style="background:#dbeafe;color:#1e40af;padding:2px 6px;border-radius:99px;font-size:9px;font-weight:900">📅 راتب ${d.monthly_salary_sar||0} ر.س</span>`:`<span style="background:#fce7f3;color:#9d174d;padding:2px 6px;border-radius:99px;font-size:9px;font-weight:900">💸 ${d.share_per_delivery_sar||0} ر.س/طلب</span>`;
+    return `<div class="dlv-driver">
+      <div class="avt">${d.name.charAt(0)}</div>
+      <div style="flex:1;min-width:0">
+        <div class="nm">${d.name} ${empBadge}</div>
+        <div class="ph">${d.phone}</div>
+        <div class="stat-row">⭐ <b>${(d.rating||5).toFixed(1)}</b> · ${d.deliveries_today||0} توصيل · معلّق <b>${d.balance_pending_sar||0}</b> ر.س · ${dlvAreaLabel(d.area)}</div>
+      </div>
+      <span class="status-pill ${d.status}">${d.status==='online'?'متاح':d.status==='delivering'?'في توصيل':'غير متاح'}</span>
+      <button onclick="dlvDeleteDriver('${d.id}','${d.name.replace(/'/g,'')}')" style="background:none;border:none;color:#dc2626;cursor:pointer;font-size:16px;padding:4px">🗑️</button>
+    </div>`;
+  }).join('');
+}
+
+// ── BRANCHES ──
+async function dlvLoadBranches(){
+  try{
+    const r=await fetch(API+'/api/delivery/branches');
+    const d=await r.json();
+    document.getElementById('dlv-branches-list').innerHTML=(d.branches||[]).map(b=>`
+      <div class="dlv-driver" style="padding:12px">
+        <div class="avt" style="background:linear-gradient(135deg,#10b981,#059669)">🏪</div>
+        <div style="flex:1;min-width:0">
+          <div class="nm">${b.name_ar} ${b.is_main?'<span style="background:#fef3c7;color:#92400e;padding:2px 8px;border-radius:99px;font-size:9px;font-weight:900;margin-right:5px">⭐ رئيسي</span>':''}</div>
+          <div style="font-size:10px;color:#6b7280;font-family:monospace;direction:ltr;text-align:right;margin-top:3px">${b.lat}, ${b.lng}</div>
+          <div style="font-size:11px;color:#6b7280;margin-top:3px">📞 ${b.phone||'—'}</div>
+        </div>
+        <a href="https://maps.google.com/?q=${b.lat},${b.lng}" target="_blank" style="background:#10b981;color:#fff;padding:6px 12px;border-radius:99px;font-size:11px;font-weight:900;text-decoration:none;flex-shrink:0">📍 خريطة</a>
+      </div>`).join('');
+  }catch(_){}
+}
+async function dlvSaveBranch(){
+  const name=document.getElementById('dlv-b-name').value.trim();
+  const lat=+document.getElementById('dlv-b-lat').value;
+  const lng=+document.getElementById('dlv-b-lng').value;
+  if(!name||isNaN(lat)||isNaN(lng)){alert('أدخل الاسم والإحداثيات');return;}
+  try{
+    const r=await fetch(API+'/api/delivery/branches',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({
+      name_ar:name,lat,lng,
+      phone:document.getElementById('dlv-b-phone').value.trim(),
+      is_main:document.getElementById('dlv-b-main').checked
+    })});
+    if(!r.ok)throw new Error();
+    ['dlv-b-name','dlv-b-phone'].forEach(id=>document.getElementById(id).value='');
+    document.getElementById('dlv-add-branch-form').style.display='none';
+    dlvLoadBranches();toast('✓ تم حفظ الفرع');
+  }catch(e){alert('فشل');}
+}
+
+// ── PAYOUTS ──
+async function dlvLoadPayouts(){
+  try{
+    const [drvR,payR]=await Promise.all([
+      fetch(API+'/api/delivery/drivers').then(r=>r.json()),
+      fetch(API+'/api/delivery/payouts').then(r=>r.json())
+    ]);
+    const drivers=drvR.drivers||[];
+    const payouts=payR.payouts||[];
+    // Summary
+    const totalPending=drivers.reduce((s,d)=>s+(d.balance_pending_sar||0),0).toFixed(2);
+    const totalPaid=payouts.reduce((s,p)=>s+(p.amount_sar||0),0).toFixed(2);
+    const totalSalaries=drivers.filter(d=>d.employment_type==='salaried').reduce((s,d)=>s+(d.monthly_salary_sar||0),0).toFixed(0);
+    document.getElementById('dlv-payout-summary').innerHTML=[
+      {v:totalPending+' ر.س',l:'معلّق دفعه',c:'#dc2626'},
+      {v:totalPaid+' ر.س',l:'مدفوع سابقاً',c:'#10b981'},
+      {v:totalSalaries+' ر.س',l:'إجمالي الرواتب الشهرية',c:'#7c3aed'}
+    ].map(i=>`<div class="dlv-stat-box"><div class="v" style="color:${i.c}">${i.v}</div><div class="l">${i.l}</div></div>`).join('');
+    // Balances list (drivers with pending > 0 or salaried)
+    const owed=drivers.filter(d=>(d.balance_pending_sar||0)>0||d.employment_type==='salaried');
+    document.getElementById('dlv-balances-list').innerHTML=owed.length?owed.map(d=>{
+      const amt=d.employment_type==='salaried'?(d.monthly_salary_sar||0):(d.balance_pending_sar||0);
+      const lbl=d.employment_type==='salaried'?'راتب شهري':'عمولات معلّقة';
+      return `<div class="dlv-driver">
+        <div class="avt">${d.name.charAt(0)}</div>
+        <div style="flex:1;min-width:0"><div class="nm">${d.name}</div><div style="font-size:10px;color:#6b7280">${lbl} · ${dlvPayMethodLabel(d.payout_method)} · <span style="direction:ltr">${d.payout_account||'—'}</span></div></div>
+        <div style="font-weight:900;color:#dc2626;font-size:14px">${amt} ر.س</div>
+        <button class="acp-save-btn" style="margin:0;padding:8px 14px;width:auto;font-size:11px" onclick="dlvDoPayout('${d.id}','${d.name.replace(/'/g,'')}',${amt})">💸 تحويل</button>
+      </div>`;
+    }).join(''):'<div style="text-align:center;padding:20px;color:#6b7280;font-size:12px">لا توجد أرصدة معلّقة</div>';
+    // Payouts history
+    document.getElementById('dlv-payouts-list').innerHTML=payouts.length?payouts.slice(0,10).map(p=>`
+      <div class="dlv-order" style="padding:10px">
+        <div class="top"><div><div class="cust">${p.driver_name}</div><div style="font-size:10px;color:#6b7280;font-family:monospace;direction:ltr;text-align:right">${p.reference}</div></div><span class="badge delivered">${p.amount_sar} ر.س</span></div>
+        <div class="meta" style="font-size:11px">${dlvPayMethodLabel(p.method)} · <span style="direction:ltr">${p.account}</span> · ${new Date(p.created_at).toLocaleString('ar-SA')}</div>
+      </div>`).join(''):'<div style="text-align:center;padding:20px;color:#6b7280;font-size:12px">لا توجد تحويلات سابقة</div>';
+  }catch(_){}
+}
+function dlvPayMethodLabel(id){const m={stc_pay:'📱 STC Pay',mada:'🏦 مدى',urpay:'💳 urpay',alinma_pay:'💳 الإنماء',cash:'💵 كاش',payby:'📱 PayBy',e_and:'📱 e&',vodafone_cash:'📱 Vodafone Cash',instapay:'💳 InstaPay',fawry:'🏷️ Fawry',knet:'🏦 KNET',myfatoorah:'💳 MyFatoorah',benefit:'📱 Benefit',qpay:'📱 QPay',omanpay:'📱 OmanNet',zaincash:'📱 ZainCash',asia_hawala:'📱 AsiaHawala',bank:'🏦 بنكي',bank_ae:'🏦 بنكي UAE',bank_eg:'🏦 بنكي EG'};return m[id]||id;}
+async function dlvDoPayout(driverId,name,amount){
+  const amt=parseFloat(prompt('تأكيد المبلغ المراد تحويله للسائق '+name+' (ر.س):',amount.toString())||'0');
+  if(!amt||amt<=0)return;
+  try{
+    const r=await fetch(API+'/api/delivery/payouts',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({driver_id:driverId,amount_sar:amt,note:'تحويل يدوي من لوحة التاجر'})});
+    if(!r.ok)throw new Error();
+    const data=await r.json();
+    toast('✓ تم التحويل · مرجع: '+data.reference);
+    dlvLoadPayouts();
+  }catch(e){alert('فشل التحويل');}
+}
+
+// ── FEE CALCULATOR ──
+async function dlvCalcFee(){
+  const lat=+document.getElementById('dlv-calc-lat').value;
+  const lng=+document.getElementById('dlv-calc-lng').value;
+  const total=+document.getElementById('dlv-calc-total').value||0;
+  if(isNaN(lat)||isNaN(lng)){alert('أدخل الإحداثيات');return;}
+  try{
+    const r=await fetch(API+'/api/delivery/calculate-fee',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({customer_lat:lat,customer_lng:lng,total_sar:total})});
+    const d=await r.json();
+    document.getElementById('dlv-calc-result').innerHTML=d.is_free
+      ?`<div style="background:#d1fae5;color:#065f46;padding:10px;border-radius:10px;font-weight:900">✅ توصيل مجاني! المسافة ${d.distance_km} كم — الطلب أكبر من ${d.free_threshold_sar} ر.س</div>`
+      :`<div style="background:#fff;border:1.5px solid #e5e7eb;padding:10px;border-radius:10px;line-height:1.9">
+          <div>📏 المسافة: <b>${d.distance_km} كم</b></div>
+          <div>🧮 الحساب: ${d.base_fee_sar} + (${d.distance_km} × ${d.per_km_sar}) = <b>${(d.base_fee_sar + d.distance_km*d.per_km_sar).toFixed(2)}</b></div>
+          <div>💰 الرسوم النهائية: <b style="color:#7c3aed;font-size:14px">${d.fee_sar} ر.س</b> (بعد min/max)</div>
+          <div style="border-top:1px dashed #e5e7eb;margin-top:6px;padding-top:6px">🚗 حصة السائق (افتراضي): <b>${d.driver_share_sar} ر.س</b> · 🏪 المتجر: <b>${d.merchant_share_sar} ر.س</b></div>
+        </div>`;
+  }catch(e){alert('فشل الحساب');}
+}
+
 function dlvRenderSettings(s){
   document.getElementById('dlv-free-th').value=s.free_delivery_threshold_sar||0;
   document.getElementById('dlv-base-fee').value=s.base_fee_sar||0;
   document.getElementById('dlv-per-km').value=s.per_km_sar||0;
+  document.getElementById('dlv-min-fee').value=s.min_fee_sar||0;
+  document.getElementById('dlv-max-fee').value=s.max_fee_sar||0;
+  document.getElementById('dlv-drv-pct').value=s.driver_share_default_pct||80;
+  document.getElementById('dlv-mer-pct').value=100-(s.driver_share_default_pct||80);
   document.getElementById('dlv-auto').checked=!!s.auto_assign;
   document.getElementById('dlv-cod').checked=!!s.allow_cash_on_delivery;
+  document.getElementById('dlv-distance-pricing').checked=!!s.use_distance_pricing;
+  // auto-update merchant pct
+  document.getElementById('dlv-drv-pct').oninput=e=>{document.getElementById('dlv-mer-pct').value=100-(+e.target.value||0);};
   document.getElementById('dlv-zones-list').innerHTML=(s.zones||[]).map(z=>
     `<div class="dlv-zone-row"><div><div class="nm">${z.name_ar}</div><div class="meta">~${z.eta_min} دقيقة</div></div><div>الرسوم: <b>${z.fee_sar}</b> ر.س</div></div>`
   ).join('');
 }
 async function dlvSaveSettings(){
+  const drvPct=+document.getElementById('dlv-drv-pct').value||80;
   const payload={
     free_delivery_threshold_sar:+document.getElementById('dlv-free-th').value||0,
     base_fee_sar:+document.getElementById('dlv-base-fee').value||0,
     per_km_sar:+document.getElementById('dlv-per-km').value||0,
+    min_fee_sar:+document.getElementById('dlv-min-fee').value||0,
+    max_fee_sar:+document.getElementById('dlv-max-fee').value||0,
+    driver_share_default_pct:drvPct,
+    merchant_share_default_pct:100-drvPct,
     auto_assign:document.getElementById('dlv-auto').checked,
     allow_cash_on_delivery:document.getElementById('dlv-cod').checked,
+    use_distance_pricing:document.getElementById('dlv-distance-pricing').checked,
   };
   try{
     const r=await fetch(API+'/api/delivery/settings',{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
