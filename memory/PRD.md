@@ -1,5 +1,43 @@
 # Zitex AI Platform - PRD
 
+### 🆕 Feb 9 2026 — Phase 11: Hover-Rotate Cards + REAL AI Product Research ✅
+**User feedback fulfilled:**
+1. ✅ **Product cards now auto-rotate on hover** with mini dots indicator + side arrows
+2. ✅ **AI Product Info Generator** — real research via Gemini
+
+**Hover Auto-Rotate Gallery on Cards**
+- Every product card now renders its first 5 gallery images stacked. Only the active one is visible (CSS opacity transitions).
+- On `mouseenter`: starts a 1.2s interval that cycles through images. Tiny dots underneath update live (active dot becomes a 18px pill, others are 6px circles).
+- On `mouseleave`: clears the interval and resets to first image.
+- Side navigation arrows (‹ ›) appear on hover for manual navigation.
+- Click on the image still opens the full lightbox with zoom + pan.
+- Single helper `pCardHtml(p)` replaces 3 duplicated templates → cleaner code.
+
+**AI Product Info Generator (REAL Gemini)**
+- New backend endpoint: `POST /api/image-studio/product-info`
+- Uses `gemini-2.5-flash` (multimodal) with strict JSON output schema:
+  - `title`, `description`, `features[5-8 bullets]`, `specs{6 key→value}`
+- Accepts optional product image (base64) for visual conditioning + official URL hint.
+- Returns sanitized JSON + a pre-rendered RTL HTML block (cards/lists styled).
+- Cost: 10 credits per query.
+
+**Studio UI integration**
+- New collapsible panel "🤖 معلومات المنتج بالذكاء الاصطناعي" appears ONLY when `STUDIO_TARGET` is a product.
+- Inputs: product name (pre-filled from product) + optional official URL.
+- "🤖 ابحث وعبّي المعلومات تلقائياً" button calls the API. Shows ⏳ spinner during ~10s research.
+- Result panel renders title + description + features bullet list + 2-column specs grid.
+- Updates the product's title/description in PRODUCTS array AND localStorage `zx_product_info` (persists between sessions).
+
+**Verified end-to-end:**
+- Curl: `iPhone 17 Pro Max` returned Arabic JSON with 7 features and 6 specs (A19 Bionic, ProMotion XDR, Wi-Fi 5G, titanium, etc.) in ~10s.
+- Browser: same flow showed live result with toast "✓ تم تعبئة المعلومات تلقائياً".
+
+**Files Modified:**
+- `/app/backend/routers/image_studio_router.py` (+ProductInfo endpoint, ~110 lines)
+- `/app/frontend/public/mockups/app_mode_full.html` (pCardHtml helper, hover handlers, info panel + AI fill)
+
+
+
 ### 🆕 Feb 9 2026 — Phase 10: Full-Image Quick Cats + Saved Library + Add-Product + Default Galleries ✅
 **User requests fulfilled:**
 

@@ -130,3 +130,119 @@ async def generate(req: GenerateRequest):
 async def health():
     has_key = bool(os.environ.get("EMERGENT_LLM_KEY"))
     return {"status": "ok", "engine": "gemini-3.1-flash-image-preview", "key_configured": has_key}
+
+
+# ═══════════════════════ AI PRODUCT INFO (research + describe) ═══════════════════════
+class ProductInfoRequest(BaseModel):
+    name: str
+    image_base64: Optional[str] = None  # data:image/...;base64,...
+    official_url: Optional[str] = None
+    lang: str = "ar"  # 'ar' | 'en'
+
+
+class ProductInfoResponse(BaseModel):
+    title: str
+    description: str
+    features: List[str]
+    specs: dict
+    html: str
+    cost: int
+
+
+@router.post("/product-info", response_model=ProductInfoResponse)
+async def product_info(req: ProductInfoRequest):
+    api_key = os.environ.get("EMERGENT_LLM_KEY")
+    if not api_key:
+        raise HTTPException(status_code=500, detail="EMERGENT_LLM_KEY not configured")
+    if not req.name or len(req.name.strip()) < 2:
+        raise HTTPException(status_code=400, detail="name is required")
+
+    from emergentintegrations.llm.chat import LlmChat, UserMessage, ImageContent
+
+    lang_instr = "Respond in Arabic" if req.lang == "ar" else "Respond in English"
+    sys_msg = (
+        f"You are a product research expert. {lang_instr}. "
+        "When given a product name, optional image, and optional official URL, you research the product "
+        "(based on the image + name + your knowledge) and return STRICTLY a JSON object with these exact fields: "
+        "title (string, full official product name), "
+        "description (string, 2-3 polished sentences highlighting the product), "
+        "features (array of 5-8 short bullet strings, each a key benefit), "
+        "specs (object of key→value strings for technical specs, max 6 entries). "
+        "Output ONLY the JSON object, no markdown, no code fences."
+    )
+    user_parts = [f"Product name: {req.name.strip()}"]
+    if req.official_url:
+        user_parts.append(f"Official URL: {req.official_url.strip()}")
+    user_parts.append("Generate the JSON now.")
+    user_text = "\n".join(user_parts)
+
+    try:
+        chat = LlmChat(
+            api_key=api_key,
+            session_id=f"prodinfo-{uuid.uuid4().hex[:10]}",
+            system_message=sys_msg,
+        )
+        # Use Gemini (multimodal-capable, fast)
+        chat.with_model("gemini", "gemini-2.5-flash")
+        msg = UserMessage(text=user_text)
+        if req.image_base64 and req.image_base64.startswith("data:"):
+            # Extract mime + base64 data
+            try:
+                head, b64 = req.image_base64.split(",", 1)
+                mime = head.split(";")[0].split(":")[1]
+                msg.file_contents = [ImageContent(image_base64=b64)]
+            except Exception:
+                pass
+        result_text = await chat.send_message(msg)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"AI research failed: {str(e)[:200]}")
+
+    # Parse JSON from response
+    import json as _json
+    text = (result_text or "").strip()
+    # Strip code fences if any
+    if text.startswith("```"):
+        text = text.split("```", 2)[1] if "```" in text[3:] else text
+        if text.lower().startswith("json"):
+            text = text[4:].strip()
+    try:
+        data = _json.loads(text)
+    except Exception:
+        # Best-effort extract
+        import re as _re
+        m = _re.search(r"\{.*\}", text, _re.DOTALL)
+        if m:
+            try:
+                data = _json.loads(m.group(0))
+            except Exception:
+                raise HTTPException(status_code=502, detail="AI returned non-JSON")
+        else:
+            raise HTTPException(status_code=502, detail="AI returned non-JSON")
+
+    title = str(data.get("title", req.name)).strip()
+    description = str(data.get("description", "")).strip()
+    features = [str(f).strip() for f in (data.get("features") or []) if str(f).strip()][:8]
+    specs = {str(k): str(v) for k, v in (data.get("specs") or {}).items()}
+    # Build a clean HTML rendering for direct insertion
+    html_parts = [
+        f"<h2 style='font-size:18px;font-weight:900;margin-bottom:8px;color:#0a0a0a'>{title}</h2>",
+        f"<p style='font-size:13px;line-height:1.8;color:#374151;margin-bottom:12px'>{description}</p>",
+    ]
+    if features:
+        html_parts.append("<h3 style='font-size:14px;font-weight:900;margin:12px 0 6px;color:#7c3aed'>المميزات الرئيسية</h3><ul style='padding-inline-start:18px;margin-bottom:12px'>" +
+                          "".join(f"<li style='font-size:12px;line-height:1.8;color:#0a0a0a;margin-bottom:3px'>{f}</li>" for f in features) + "</ul>")
+    if specs:
+        html_parts.append("<h3 style='font-size:14px;font-weight:900;margin:12px 0 6px;color:#7c3aed'>المواصفات</h3><div style='display:grid;grid-template-columns:1fr 1fr;gap:6px'>" +
+                          "".join(f"<div style='background:#faf5ff;border-radius:8px;padding:8px'><b style='display:block;font-size:10px;color:#7c3aed'>{k}</b><span style='font-size:12px;color:#0a0a0a'>{v}</span></div>" for k, v in specs.items()) + "</div>")
+    if req.official_url:
+        html_parts.append(f"<p style='font-size:11px;margin-top:14px'><a href='{req.official_url}' target='_blank' style='color:#7c3aed'>الرابط الرسمي ↗</a></p>")
+
+    return ProductInfoResponse(
+        title=title,
+        description=description,
+        features=features,
+        specs=specs,
+        html="".join(html_parts),
+        cost=10,
+    )
+

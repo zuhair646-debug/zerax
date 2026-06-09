@@ -342,6 +342,36 @@ body.admin-mode .add-product-card{display:flex}
 .saved-card img{width:100%;aspect-ratio:1;object-fit:cover;display:block}
 .saved-card .del{position:absolute;top:4px;right:4px;width:22px;height:22px;background:rgba(220,38,38,.9);color:#fff;border:none;border-radius:50%;cursor:pointer;font-weight:900;font-size:11px;display:flex;align-items:center;justify-content:center}
 .saved-card .meta{position:absolute;bottom:0;left:0;right:0;background:linear-gradient(transparent,rgba(0,0,0,.75));color:#fff;padding:14px 6px 6px;font-size:9px;font-weight:700;line-height:1.3}
+/* PRODUCT CARD - hover auto-rotate gallery */
+.p-card{position:relative}
+.p-card .editable-img-host{position:relative;aspect-ratio:1;overflow:hidden}
+.p-card-stack{position:absolute;inset:0}
+.p-card-stack img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;opacity:0;transition:opacity .5s;cursor:zoom-in}
+.p-card-stack img.active{opacity:1}
+.p-card-dots{position:absolute;bottom:8px;left:50%;transform:translateX(-50%);display:flex;gap:4px;z-index:5;pointer-events:none}
+.p-card-dots span{width:6px;height:6px;border-radius:50%;background:rgba(255,255,255,.55);transition:all .2s;box-shadow:0 1px 3px rgba(0,0,0,.3)}
+.p-card-dots span.active{background:#fff;width:18px;border-radius:99px}
+.p-card-nav{position:absolute;top:50%;transform:translateY(-50%);width:30px;height:30px;border-radius:50%;background:rgba(255,255,255,.92);border:none;font-size:15px;font-weight:900;opacity:0;cursor:pointer;z-index:6;transition:opacity .2s;display:flex;align-items:center;justify-content:center;color:#0a0a0a;box-shadow:0 2px 8px rgba(0,0,0,.2)}
+.p-card:hover .p-card-nav{opacity:1}
+.p-card-prev{left:6px}.p-card-next{right:6px}
+[dir="rtl"] .p-card-prev{left:auto;right:6px}[dir="rtl"] .p-card-next{right:auto;left:6px}
+/* AI INFO PANEL (admin product editor) */
+.info-panel{margin-top:14px;padding-top:14px;border-top:1px solid #f3f4f6}
+.info-panel h4{font-size:13px;font-weight:900;margin-bottom:8px;display:flex;align-items:center;gap:6px;color:#0a0a0a}
+.info-panel input,.info-panel textarea{width:100%;padding:10px;border:1.5px solid #e5e7eb;border-radius:10px;font-family:inherit;font-size:12px;margin-bottom:8px;outline:none}
+.info-panel input:focus,.info-panel textarea:focus{border-color:#7c3aed}
+.info-panel .ai-fill-btn{width:100%;padding:11px;background:linear-gradient(135deg,#a78bfa,#7c3aed);color:#fff;border:none;border-radius:10px;font-family:inherit;font-weight:900;font-size:12px;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px}
+.info-panel .ai-fill-btn:disabled{opacity:.6}
+.info-result{margin-top:10px;padding:12px;background:#faf5ff;border:1px solid #ddd6fe;border-radius:10px;display:none}
+.info-result.show{display:block}
+.info-result h5{font-size:13px;font-weight:900;color:#7c3aed;margin-bottom:6px}
+.info-result ul{margin:6px 0 10px 18px;padding:0}
+.info-result li{font-size:12px;line-height:1.7;color:#374151;margin-bottom:3px}
+.info-result .desc{font-size:12px;line-height:1.7;color:#0a0a0a;margin-bottom:10px}
+.info-result .specs{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:8px}
+.info-result .specs div{background:#fff;border-radius:6px;padding:6px 8px;font-size:11px}
+.info-result .specs b{display:block;color:#7c3aed;font-size:10px;margin-bottom:2px}
+.info-cost-pill{background:#fef3c7;color:#92400e;padding:2px 8px;border-radius:99px;font-size:10px;font-weight:900}
 /* FOOTER */
 .zx-footer{background:#0f172a;color:#cbd5e1;padding:36px 18px 14px;direction:var(--dir,rtl);margin-top:30px;border-radius:24px 24px 0 0}
 .zx-foot-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:24px;margin-bottom:24px}
@@ -742,6 +772,17 @@ body.admin-mode .add-product-card{display:flex}
         <p style="font-size:12px;color:#6b7280;margin-bottom:12px" data-key="saved_help">الصور اللي ولّدتها سابقاً وحفظتها — اضغط للتطبيق على الهدف الحالي:</p>
         <div class="saved-grid" id="saved-grid"></div>
         <p id="saved-empty" style="text-align:center;color:#9ca3af;font-size:12px;padding:30px 10px;display:none" data-key="saved_empty">📭 ما عندك صور محفوظة بعد. ولّد صورة واضغط 💾 حفظ.</p>
+      </div>
+      <!-- PRODUCT INFO PANEL (only shown when target is a product) -->
+      <div id="info-panel-wrap" style="display:none">
+        <div class="info-panel">
+          <h4>🤖 <span data-key="ai_info_title">معلومات المنتج بالذكاء الاصطناعي</span> <span class="info-cost-pill">١٠ <span data-key="credits">نقطة</span></span></h4>
+          <p style="font-size:11px;color:#6b7280;line-height:1.6;margin-bottom:10px" data-key="ai_info_help">اكتب اسم المنتج + رابط رسمي اختياري، والذكاء يبحث ويجيب الوصف والمميزات والمواصفات كاملة.</p>
+          <input id="info-name" placeholder="اسم المنتج (مثلاً: iPhone 17 Pro Max)">
+          <input id="info-url" placeholder="رابط رسمي اختياري (https://...)">
+          <button class="ai-fill-btn" id="info-fill-btn" onclick="aiFillProductInfo()">🤖 <span data-key="ai_fill">ابحث وعبّي المعلومات تلقائياً</span></button>
+          <div class="info-result" id="info-result"></div>
+        </div>
       </div>
     </div>
   </div>
@@ -1163,11 +1204,7 @@ function renderProducts(){
     grid.innerHTML=`<div style="grid-column:1/-1;text-align:center;padding:40px 20px;color:#9ca3af"><div style="font-size:48px;margin-bottom:10px">📭</div><b>${CURRENT_LANG==='ar'?'لا توجد منتجات في هذا القسم':'No products in this category'}</b></div>`;
     return;
   }
-  grid.innerHTML=filtered.map(p=>{
-    const name=CURRENT_LANG==='ar'?p.ar:p.en;
-    const desc=CURRENT_LANG==='ar'?(p.descAr||''):(p.descEn||'');
-    return `<div class="p-card"><div class="editable-img-host"><img src="${p.img}" alt="${name}"><button class="img-edit-btn" onclick="event.stopPropagation();openStudio('product:${p.id}')" title="تحرير">✨</button></div><div class="p-info"><div class="name">${name}</div><div class="desc">${desc}</div><div class="p-row"><div class="p-price">${curSym()} ${formatPrice(p.sar)}</div><button class="add-btn" onclick="event.stopPropagation();addToCart('${p.id}')" aria-label="add">+</button></div></div></div>`;
-  }).join('');
+  grid.innerHTML=filtered.map(pCardHtml).join('');
 }
 
 function renderCategories(){
@@ -1287,11 +1324,7 @@ function renderCategoryPage(catId){
     grid.innerHTML=`<div style="grid-column:1/-1;text-align:center;padding:40px 20px;color:#9ca3af"><div style="font-size:48px;margin-bottom:10px">📭</div><b>${CURRENT_LANG==='ar'?'لا توجد منتجات حالياً':'No products yet'}</b></div><div class="add-product-card" onclick="startAddProduct('${catId}')"><div class="plus">+</div><b>${CURRENT_LANG==='ar'?'إضافة منتج جديد':'Add new product'}</b><small>${CURRENT_LANG==='ar'?'يفتح استوديو الصور للتوليد':'Opens Image Studio'}</small></div>`;
     return;
   }
-  grid.innerHTML=filtered.map(p=>{
-    const name=CURRENT_LANG==='ar'?p.ar:p.en;
-    const desc=CURRENT_LANG==='ar'?(p.descAr||''):(p.descEn||'');
-    return `<div class="p-card"><div class="editable-img-host"><img src="${p.img}" alt="${name}"><button class="img-edit-btn" onclick="event.stopPropagation();openStudio('product:${p.id}')" title="تحرير">✨</button></div><div class="p-info"><div class="name">${name}</div><div class="desc">${desc}</div><div class="p-row"><div class="p-price">${curSym()} ${formatPrice(p.sar)}</div><button class="add-btn" onclick="event.stopPropagation();addToCart('${p.id}')">+</button></div></div></div>`;
-  }).join('')+`<div class="add-product-card" onclick="startAddProduct('${catId}')"><div class="plus">+</div><b>${CURRENT_LANG==='ar'?'إضافة منتج جديد':'Add new product'}</b><small>${CURRENT_LANG==='ar'?'يفتح استوديو الصور لتوليد منتج بصورة احترافية':'Opens Image Studio to generate a product'}</small></div>`;
+  grid.innerHTML=filtered.map(pCardHtml).join('')+`<div class="add-product-card" onclick="startAddProduct('${catId}')"><div class="plus">+</div><b>${CURRENT_LANG==='ar'?'إضافة منتج جديد':'Add new product'}</b><small>${CURRENT_LANG==='ar'?'يفتح استوديو الصور لتوليد منتج بصورة احترافية':'Opens Image Studio to generate a product'}</small></div>`;
 }
 
 // ═══════════════════════ ORDERS ═══════════════════════
@@ -1573,11 +1606,7 @@ document.getElementById('search').addEventListener('input',e=>{
   const t=TRANS[CURRENT_LANG]||TRANS.en;
   const grid=document.getElementById('products');
   if(!matched.length){grid.innerHTML=`<div style="grid-column:1/-1;text-align:center;padding:40px 20px;color:#9ca3af"><div style="font-size:48px;margin-bottom:10px">🔍</div><b>${CURRENT_LANG==='ar'?'لا توجد نتائج':'No results found'}</b></div>`;return;}
-  grid.innerHTML=matched.map(p=>{
-    const name=CURRENT_LANG==='ar'?p.ar:p.en;
-    const desc=CURRENT_LANG==='ar'?(p.descAr||''):(p.descEn||'');
-    return `<div class="p-card"><div class="editable-img-host"><img src="${p.img}" alt="${name}"><button class="img-edit-btn" onclick="event.stopPropagation();openStudio('product:${p.id}')" title="تحرير">✨</button></div><div class="p-info"><div class="name">${name}</div><div class="desc">${desc}</div><div class="p-row"><div class="p-price">${curSym()} ${formatPrice(p.sar)}</div><button class="add-btn" onclick="event.stopPropagation();addToCart('${p.id}')">+</button></div></div></div>`;
-  }).join('');
+  grid.innerHTML=matched.map(pCardHtml).join('');
 });
 
 // ═══════════════════════ ADMIN MODE + IMAGE STUDIO ═══════════════════════
@@ -1845,6 +1874,23 @@ function openStudio(target){
   // Show video mode only for banners
   const videoModeEl=document.querySelector('.studio-mode[data-mode="video"]');
   if(videoModeEl)videoModeEl.style.display=(target==='main_banner'||target.startsWith('cat_banner:'))?'block':'none';
+  // Show/hide AI Product Info panel based on target
+  const infoWrap=document.getElementById('info-panel-wrap');
+  if(infoWrap){
+    if(target.startsWith('product:')){
+      infoWrap.style.display='block';
+      const pid=target.split(':')[1];
+      const p=PRODUCTS.find(x=>x.id===pid);
+      document.getElementById('info-name').value=p?(CURRENT_LANG==='ar'?p.ar:p.en):'';
+      document.getElementById('info-url').value='';
+      const stored=PRODUCT_INFO[pid];
+      const rEl=document.getElementById('info-result');
+      if(stored){
+        rEl.innerHTML=`<h5>${stored.title}</h5><div class="desc">${stored.description}</div>`+(stored.features?.length?`<b style="font-size:11px;color:#7c3aed">المميزات:</b><ul>${stored.features.map(f=>`<li>${f}</li>`).join('')}</ul>`:'');
+        rEl.classList.add('show');
+      } else { rEl.classList.remove('show'); }
+    } else { infoWrap.style.display='none'; }
+  }
   setStudioMode('image');
   // Generate auto-prompt
   updateAutoPrompt();
@@ -2085,6 +2131,94 @@ function applyImageOverride(target,url,type){
   }
   toast(CURRENT_LANG==='ar'?'✨ تم تطبيق الصورة الجديدة':'✨ Image applied');
 }
+// Build product card HTML (with hover-rotate gallery)
+function pCardHtml(p){
+  const name=CURRENT_LANG==='ar'?p.ar:p.en;
+  const desc=CURRENT_LANG==='ar'?(p.descAr||''):(p.descEn||'');
+  const gallery=(PRODUCT_GALLERIES[p.id]||[{type:'image',url:p.img}]).filter(g=>g.type==='image').slice(0,5);
+  const imgs=gallery.length?gallery:[{url:p.img}];
+  const stack=imgs.map((g,i)=>`<img src="${g.url}" alt="${name} ${i+1}" class="${i===0?'active':''}" data-i="${i}">`).join('');
+  const dots=imgs.length>1?`<div class="p-card-dots">${imgs.map((_,i)=>`<span class="${i===0?'active':''}"></span>`).join('')}</div>`:'';
+  const navs=imgs.length>1?`<button class="p-card-nav p-card-prev" onclick="event.stopPropagation();pCardNav(this,-1)" aria-label="prev">‹</button><button class="p-card-nav p-card-next" onclick="event.stopPropagation();pCardNav(this,1)" aria-label="next">›</button>`:'';
+  return `<div class="p-card" onmouseenter="pCardHover(this,true)" onmouseleave="pCardHover(this,false)">
+    <div class="editable-img-host"><div class="p-card-stack" data-pid="${p.id}">${stack}</div>${dots}${navs}<button class="img-edit-btn" onclick="event.stopPropagation();openStudio('product:${p.id}')" title="تحرير">✨</button></div>
+    <div class="p-info"><div class="name">${name}</div><div class="desc">${desc}</div><div class="p-row"><div class="p-price">${curSym()} ${formatPrice(p.sar)}</div><button class="add-btn" onclick="event.stopPropagation();addToCart('${p.id}')">+</button></div></div>
+  </div>`;
+}
+// Hover auto-rotate logic
+const _pCardTimers=new WeakMap();
+function pCardHover(card,enter){
+  const stack=card.querySelector('.p-card-stack');
+  if(!stack)return;
+  const imgs=stack.querySelectorAll('img');
+  if(imgs.length<2)return;
+  if(enter){
+    if(_pCardTimers.get(card))return;
+    let i=0;
+    const t=setInterval(()=>{
+      i=(i+1)%imgs.length;
+      imgs.forEach((im,k)=>im.classList.toggle('active',k===i));
+      card.querySelectorAll('.p-card-dots span').forEach((d,k)=>d.classList.toggle('active',k===i));
+    },1200);
+    _pCardTimers.set(card,t);
+  } else {
+    const t=_pCardTimers.get(card);if(t){clearInterval(t);_pCardTimers.delete(card);}
+    imgs.forEach((im,k)=>im.classList.toggle('active',k===0));
+    card.querySelectorAll('.p-card-dots span').forEach((d,k)=>d.classList.toggle('active',k===0));
+  }
+}
+function pCardNav(btn,dir){
+  const card=btn.closest('.p-card');
+  const imgs=card.querySelectorAll('.p-card-stack img');
+  let cur=Array.from(imgs).findIndex(im=>im.classList.contains('active'));
+  if(cur<0)cur=0;
+  cur=(cur+dir+imgs.length)%imgs.length;
+  imgs.forEach((im,k)=>im.classList.toggle('active',k===cur));
+  card.querySelectorAll('.p-card-dots span').forEach((d,k)=>d.classList.toggle('active',k===cur));
+}
+
+// ═══════════════════════ AI PRODUCT INFO (research + fill) ═══════════════════════
+const PRODUCT_INFO=JSON.parse(localStorage.getItem('zx_product_info')||'{}');
+async function aiFillProductInfo(){
+  if(!STUDIO_TARGET.startsWith('product:'))return;
+  const pid=STUDIO_TARGET.split(':')[1];
+  const p=PRODUCTS.find(x=>x.id===pid);
+  const name=document.getElementById('info-name').value.trim()||(p?(CURRENT_LANG==='ar'?p.ar:p.en):'');
+  const url=document.getElementById('info-url').value.trim();
+  if(!name){alert(CURRENT_LANG==='ar'?'اكتب اسم المنتج':'Enter product name');return;}
+  if(ZERAX_CREDITS<10){document.getElementById('topup-banner').style.display='flex';return;}
+  const btn=document.getElementById('info-fill-btn');btn.disabled=true;btn.innerHTML='⏳ '+(CURRENT_LANG==='ar'?'الذكاء يبحث في الإنترنت…':'AI researching…');
+  const result=document.getElementById('info-result');result.classList.remove('show');
+  try{
+    const res=await fetch(API+'/api/image-studio/product-info',{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({name,official_url:url||undefined,image_base64:p?.img&&p.img.startsWith('data:')?p.img:undefined,lang:CURRENT_LANG})
+    });
+    if(!res.ok){const e=await res.json().catch(()=>({detail:'Network error'}));throw new Error(e.detail||'Failed');}
+    const data=await res.json();
+    // Save to product info store + update product fields
+    PRODUCT_INFO[pid]=data;
+    try{localStorage.setItem('zx_product_info',JSON.stringify(PRODUCT_INFO));}catch(_){}
+    if(p){
+      if(CURRENT_LANG==='ar'){p.ar=data.title;p.descAr=data.description;}else{p.en=data.title;p.descEn=data.description;}
+    }
+    // Render result preview
+    result.innerHTML=`<h5>${data.title}</h5><div class="desc">${data.description}</div>`+(data.features.length?`<b style="font-size:11px;color:#7c3aed">المميزات:</b><ul>${data.features.map(f=>`<li>${f}</li>`).join('')}</ul>`:'')+(Object.keys(data.specs).length?`<b style="font-size:11px;color:#7c3aed">المواصفات:</b><div class="specs">${Object.entries(data.specs).map(([k,v])=>`<div><b>${k}</b>${v}</div>`).join('')}</div>`:'');
+    result.classList.add('show');
+    ZERAX_CREDITS-=(data.cost||10);
+    localStorage.setItem('zx_credits',String(ZERAX_CREDITS));
+    document.getElementById('zerax-credits').textContent=ZERAX_CREDITS;
+    renderProducts();
+    if(document.getElementById('view-category').style.display==='block')renderCategoryPage(activeCat);
+    toast(CURRENT_LANG==='ar'?'✓ تم تعبئة المعلومات تلقائياً':'✓ Info filled');
+  }catch(e){
+    alert((CURRENT_LANG==='ar'?'فشل البحث: ':'Failed: ')+e.message);
+  }finally{
+    btn.disabled=false;btn.innerHTML='🤖 '+(CURRENT_LANG==='ar'?'ابحث وعبّي المعلومات تلقائياً':'Research & auto-fill');
+  }
+}
+
 // ═══════════════════════ SAVED IMAGES LIBRARY ═══════════════════════
 const SAVED_IMAGES=JSON.parse(localStorage.getItem('zx_saved_images')||'[]');
 function saveCurrentImage(){
