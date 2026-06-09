@@ -9,6 +9,18 @@
         <meta property="og:description" content="منصّة الذكاء الاصطناعي الأكثر فخامة لإنشاء مواقع ومتاجر إلكترونية متكاملة." />
         <meta property="og:type" content="website" />
         <link rel="icon" href="%PUBLIC_URL%/favicon.ico" />
+        <link rel="manifest" href="%PUBLIC_URL%/manifest.json" />
+        <link rel="apple-touch-icon" href="%PUBLIC_URL%/icons/icon-180.png" />
+        <link rel="apple-touch-icon" sizes="152x152" href="%PUBLIC_URL%/icons/icon-152.png" />
+        <link rel="apple-touch-icon" sizes="167x167" href="%PUBLIC_URL%/icons/icon-167.png" />
+        <link rel="apple-touch-icon" sizes="180x180" href="%PUBLIC_URL%/icons/icon-180.png" />
+        <meta name="apple-mobile-web-app-capable" content="yes" />
+        <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+        <meta name="apple-mobile-web-app-title" content="Zitex" />
+        <meta name="mobile-web-app-capable" content="yes" />
+        <meta name="application-name" content="Zitex" />
+        <meta name="msapplication-TileColor" content="#08080f" />
+        <meta name="msapplication-TileImage" content="%PUBLIC_URL%/icons/icon-144.png" />
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
         <link href="https://fonts.googleapis.com/css2?family=Inter:wght@600&display=swap" rel="stylesheet" />
@@ -31,5 +43,83 @@
     <body>
         <noscript>You need to enable JavaScript to run this app.</noscript>
         <div id="root"></div>
+        <button
+            id="zitex-pwa-install"
+            style="display:none;position:fixed;bottom:20px;inset-inline-end:20px;z-index:99999;padding:12px 18px;background:linear-gradient(135deg,#7c3aed,#a855f7);color:#fff;border:none;border-radius:99px;font-family:'IBM Plex Sans Arabic',sans-serif;font-size:14px;font-weight:700;cursor:pointer;box-shadow:0 10px 30px rgba(124,58,237,.45);align-items:center;gap:8px"
+            aria-label="تثبيت تطبيق Zitex"
+        >
+            <span style="font-size:18px">📱</span><span>تثبيت تطبيق Zitex</span>
+        </button>
+        <script>
+            // Zitex PWA — Service Worker registration + install prompt
+            if ('serviceWorker' in navigator) {
+                window.addEventListener('load', function () {
+                    navigator.serviceWorker
+                        .register('/service-worker.js', { scope: '/' })
+                        .then(function (reg) {
+                            console.log('[Zitex PWA] Service worker registered:', reg.scope);
+                            reg.addEventListener('updatefound', function () {
+                                var nw = reg.installing;
+                                if (!nw) return;
+                                nw.addEventListener('statechange', function () {
+                                    if (nw.state === 'installed' && navigator.serviceWorker.controller) {
+                                        nw.postMessage({ type: 'SKIP_WAITING' });
+                                    }
+                                });
+                            });
+                        })
+                        .catch(function (err) {
+                            console.warn('[Zitex PWA] SW registration failed:', err);
+                        });
+                    var refreshing = false;
+                    navigator.serviceWorker.addEventListener('controllerchange', function () {
+                        if (refreshing) return;
+                        refreshing = true;
+                        window.location.reload();
+                    });
+                });
+            }
+
+            // Capture install prompt (Android/Chrome) — show our own custom button
+            var deferredPrompt = null;
+            var installBtn = document.getElementById('zitex-pwa-install');
+            window.addEventListener('beforeinstallprompt', function (e) {
+                e.preventDefault();
+                deferredPrompt = e;
+                if (installBtn) installBtn.style.display = 'inline-flex';
+            });
+            if (installBtn) {
+                installBtn.addEventListener('click', function () {
+                    if (!deferredPrompt) return;
+                    deferredPrompt.prompt();
+                    deferredPrompt.userChoice.then(function () {
+                        deferredPrompt = null;
+                        installBtn.style.display = 'none';
+                    });
+                });
+            }
+            window.addEventListener('appinstalled', function () {
+                if (installBtn) installBtn.style.display = 'none';
+                console.log('[Zitex PWA] App installed successfully');
+            });
+
+            // iOS Safari has no beforeinstallprompt — show hint button once for new visitors
+            var isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+            var isInStandalone =
+                window.matchMedia('(display-mode: standalone)').matches ||
+                window.navigator.standalone === true;
+            if (isIOS && !isInStandalone && installBtn && !localStorage.getItem('zx_ios_hint_dismissed')) {
+                installBtn.innerHTML =
+                    '<span style="font-size:18px">📱</span><span>أضف Zitex للشاشة الرئيسية</span>';
+                installBtn.style.display = 'inline-flex';
+                installBtn.addEventListener('click', function () {
+                    alert(
+                        'لتثبيت Zitex على آيفون:\n\n١. اضغط زر المشاركة ⎙\n٢. اختر "إضافة إلى الشاشة الرئيسية"\n٣. اضغط "إضافة"'
+                    );
+                    localStorage.setItem('zx_ios_hint_dismissed', '1');
+                    installBtn.style.display = 'none';
+                });
+            }
+        </script>
     </body>
 </html>
