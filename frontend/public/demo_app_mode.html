@@ -137,7 +137,7 @@ body{font-family:var(--font,'Tajawal'),sans-serif;background:#f3f4f6;color:#0a0a
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="متجر سوقي">
-<script>window.ZERAX_CONFIG={"BRAND": "متجر سوقي", "TAGLINE": "", "PRIMARY_COLOR": "#7c3aed", "ACCENT_COLOR": "#a855f7", "PHONE": "+966512345678", "WHATSAPP": "+966512345678", "EMAIL": "hello@demo.sa", "ADDRESS_AR": "", "ADDRESS_EN": "", "LOGO_URL": "", "DEFAULT_MARKET": "sa", "PRODUCTS": [], "PROJECT_ID": "preview"};</script>
+<script>window.ZERAX_CONFIG={"BRAND": "متجر سوقي", "TAGLINE": "", "PRIMARY_COLOR": "#7c3aed", "ACCENT_COLOR": "#a855f7", "PHONE": "+966512345678", "WHATSAPP": "", "EMAIL": "hello@example.com", "ADDRESS_AR": "", "ADDRESS_EN": "", "LOGO_URL": "", "DEFAULT_MARKET": "sa", "PRODUCTS": [], "PROJECT_ID": "preview"};</script>
 <style>@keyframes zerax-gold-shine{0%,100%{background-position:0% 50%}50%{background-position:100% 50%}}@keyframes zerax-gold-glow{0%,100%{filter:drop-shadow(0 0 4px rgba(212,175,55,.35))}50%{filter:drop-shadow(0 0 12px rgba(212,175,55,.75))}}.zerax-credit{display:flex;justify-content:center;align-items:center;padding:20px 16px;background:#000;border-top:1px solid rgba(212,175,55,.18);position:relative}.zerax-credit::before{content:"";position:absolute;left:0;right:0;top:-1px;height:1px;background:linear-gradient(90deg,transparent,rgba(212,175,55,.6),transparent)}.zerax-credit a{display:inline-flex;align-items:center;gap:10px;padding:7px 18px 7px 8px;border-radius:99px;background:linear-gradient(135deg,#0a0a14,#0e0a18);border:1px solid rgba(212,175,55,.35);text-decoration:none;animation:zerax-gold-glow 3s ease-in-out infinite;transition:transform .25s;cursor:pointer}.zerax-credit a:hover{transform:translateY(-1px) scale(1.03)}.zerax-credit .zerax-mark{width:32px;height:32px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;background:#000;border:1.5px solid rgba(212,175,55,.5);padding:3px;box-shadow:inset 0 0 8px rgba(212,175,55,.15)}.zerax-credit .zerax-mark img{width:100%;height:100%;object-fit:contain;filter:drop-shadow(0 0 3px rgba(212,175,55,.5))}.zerax-credit .zerax-txt{display:flex;flex-direction:column;line-height:1.15;font-family:-apple-system,Tajawal,sans-serif}.zerax-credit .zerax-txt small{color:#9ca3af;font-size:9px;letter-spacing:2.5px;font-weight:700;text-transform:uppercase}.zerax-credit .zerax-txt b{font-size:13px;letter-spacing:3px;font-weight:900;background:linear-gradient(135deg,#f4d77a,#d4af37,#b8862f);background-size:200% 100%;-webkit-background-clip:text;background-clip:text;color:transparent;animation:zerax-gold-shine 4s linear infinite}@media print{.zerax-credit{display:none}}</style>
 </head>
 <body>
@@ -196,7 +196,7 @@ body{font-family:var(--font,'Tajawal'),sans-serif;background:#f3f4f6;color:#0a0a
       <h4 data-key="contact">تواصل معنا</h4>
       <a id="phone-link">📞 +966512345678</a>
       <a id="whatsapp-link">💬 WhatsApp</a>
-      <a id="email-link">✉️ <span class="__cf_email__" data-cfemail="b4dddad2dbf4d6c6d5dad09ac7d5">[email&#160;protected]</span></a>
+      <a id="email-link">✉️ <span class="__cf_email__" data-cfemail="452c2b232a052737242b216b3624">[email&#160;protected]</span></a>
       <a id="address-link">📍 الرياض، السعودية</a>
     </div>
   </div>
@@ -270,18 +270,30 @@ body{font-family:var(--font,'Tajawal'),sans-serif;background:#f3f4f6;color:#0a0a
 <!-- ═══════════════════ CATEGORY PAGE (dedicated view per category) ═══════════════════ -->
 <section id="view-category" style="display:none;padding:0 16px 24px" data-view-section>
   <button class="back-btn" onclick="showView('home')" style="display:flex;align-items:center;gap:6px;background:transparent;border:none;color:#7c3aed;font-family:inherit;font-weight:900;font-size:14px;cursor:pointer;padding:8px 0">← <span data-key="back">رجوع</span></button>
-  <!-- Category-specific promo banner -->
-  <div id="cat-banner" style="height:160px;border-radius:16px;background:linear-gradient(135deg,#7c3aed,#ec4899);position:relative;overflow:hidden;margin-bottom:16px;display:flex;align-items:center;padding:0 20px;color:#fff">
-    <div style="position:relative;z-index:2">
-      <small style="background:#fff;color:#7c3aed;padding:3px 10px;border-radius:99px;font-size:10px;font-weight:900;display:inline-block;margin-bottom:6px" id="cat-banner-tag">عروض حصرية</small>
-      <h2 style="font-size:22px;font-weight:900;line-height:1.2" id="cat-banner-title">القسم</h2>
-      <p style="font-size:13px;opacity:.9;margin-top:4px" id="cat-banner-sub">اكتشف أفضل المنتجات</p>
+  <!-- Cinematic video banner with overlay + auto-rotating products -->
+  <div id="cat-banner" style="height:220px;border-radius:18px;position:relative;overflow:hidden;margin-bottom:16px;color:#fff;box-shadow:0 10px 30px rgba(0,0,0,.15)">
+    <video id="cat-banner-video" autoplay muted loop playsinline preload="metadata"
+      style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;z-index:1"></video>
+    <div id="cat-banner-overlay" style="position:absolute;inset:0;z-index:2;background:linear-gradient(135deg,rgba(124,58,237,.7),rgba(236,72,153,.55));mix-blend-mode:multiply"></div>
+    <div style="position:absolute;inset:0;z-index:3;display:flex;align-items:center;justify-content:space-between;padding:0 22px">
+      <div style="max-width:65%">
+        <small id="cat-banner-tag" style="background:#fff;color:#7c3aed;padding:4px 12px;border-radius:99px;font-size:10px;font-weight:900;display:inline-block;margin-bottom:8px;letter-spacing:1px">عروض حصرية</small>
+        <h2 style="font-size:28px;font-weight:900;line-height:1.1;text-shadow:0 2px 8px rgba(0,0,0,.4)" id="cat-banner-title">القسم</h2>
+        <p style="font-size:13px;opacity:.95;margin-top:6px;text-shadow:0 1px 4px rgba(0,0,0,.4)" id="cat-banner-sub">اكتشف أفضل المنتجات</p>
+        <button onclick="document.getElementById('cat-products').scrollIntoView({behavior:'smooth'})" style="margin-top:12px;padding:9px 18px;background:#fff;color:#0a0a0a;border:none;border-radius:99px;font-family:inherit;font-weight:900;font-size:12px;cursor:pointer;display:inline-flex;align-items:center;gap:6px"><span>تسوّق الآن</span><span>↓</span></button>
+      </div>
+      <div id="cat-banner-product" style="width:120px;height:160px;border-radius:12px;overflow:hidden;background:rgba(255,255,255,.15);backdrop-filter:blur(8px);border:1px solid rgba(255,255,255,.3);box-shadow:0 10px 30px rgba(0,0,0,.3);display:flex;align-items:center;justify-content:center;animation:cat-prod-bounce 3s ease-in-out infinite"></div>
     </div>
-    <div id="cat-banner-emoji" style="position:absolute;left:-20px;top:50%;transform:translateY(-50%);font-size:140px;opacity:.25">🛍️</div>
+    <!-- Animated gradient sheen overlay -->
+    <div style="position:absolute;inset:0;z-index:4;background:linear-gradient(90deg,transparent 0%,rgba(255,255,255,.08) 50%,transparent 100%);background-size:200% 100%;animation:cat-sheen 6s linear infinite;pointer-events:none"></div>
   </div>
   <h3 style="font-size:16px;font-weight:900;margin-bottom:12px" id="cat-count-title">المنتجات</h3>
   <div class="grid" id="cat-products"></div>
 </section>
+<style>
+@keyframes cat-prod-bounce{0%,100%{transform:translateY(0) rotate(-2deg)}50%{transform:translateY(-8px) rotate(2deg)}}
+@keyframes cat-sheen{0%{background-position:200% 0}100%{background-position:-200% 0}}
+</style>
 
 <!-- ═══════════════════ ORDERS PAGE ═══════════════════ -->
 <section id="view-orders" style="display:none;padding:0 16px 24px" data-view-section>
@@ -330,6 +342,10 @@ const PRODUCTS = [
   {id:'p11',cat:'electronics',ar:'جوال آيفون 16 برو',en:'iPhone 16 Pro',descAr:'ذاكرة 256GB · 3 كاميرات · A18 Bionic',descEn:'256GB · Triple cam · A18 Bionic',sar:5499,img:'https://images.unsplash.com/photo-1592750475338-74b7b21085ab?w=500'},
   {id:'p12',cat:'electronics',ar:'لابتوب ماك بوك إير',en:'MacBook Air M3',descAr:'13.6 إنش · M3 · 16GB رام · 512GB',descEn:'13.6" · M3 · 16GB RAM · 512GB',sar:6890,img:'https://images.unsplash.com/photo-1496181133206-80ce9b88a853?w=500'},
   {id:'p13',cat:'electronics',ar:'سماعة AirPods Pro',en:'AirPods Pro 2',descAr:'إلغاء ضوضاء نشط · شحن لاسلكي MagSafe',descEn:'Active ANC · MagSafe wireless charging',sar:990,img:'https://images.unsplash.com/photo-1606220945770-b5b6c2c55bf1?w=500'},
+  {id:'p33',cat:'electronics',ar:'تابلت iPad Air',en:'iPad Air M2',descAr:'M2 · شاشة Liquid Retina · 256GB',descEn:'M2 · Liquid Retina · 256GB',sar:3290,img:'https://images.unsplash.com/photo-1561154464-82e9adf32764?w=500'},
+  {id:'p34',cat:'electronics',ar:'كاميرا DSLR احترافية',en:'Pro DSLR Camera',descAr:'24MP · فيديو 4K · عدسة kit',descEn:'24MP · 4K video · kit lens',sar:4200,img:'https://images.unsplash.com/photo-1502920917128-1aa500764cbd?w=500'},
+  {id:'p35',cat:'electronics',ar:'مكبر صوت بلوتوث',en:'Bluetooth Speaker',descAr:'مقاوم للماء · 24 ساعة · صوت 360°',descEn:'Waterproof · 24hr battery · 360° sound',sar:380,img:'https://images.unsplash.com/photo-1608043152269-423dbba4e7e1?w=500'},
+  {id:'p36',cat:'electronics',ar:'شاشة Gaming 4K',en:'4K Gaming Monitor',descAr:'27 إنش · 144Hz · HDR400',descEn:'27" · 144Hz · HDR400',sar:2890,img:'https://images.unsplash.com/photo-1527443224154-c4a3942d3acf?w=500'},
   // Fashion
   {id:'p3',cat:'fashion',ar:'قميص قطني فاخر',en:'Premium Cotton Shirt',descAr:'قطن مصري 100% · جميع المقاسات',descEn:'100% Egyptian cotton · All sizes',sar:185,img:'https://images.unsplash.com/photo-1521572163474-6864f9cf17ab?w=500'},
   {id:'p4',cat:'fashion',ar:'حذاء رياضي مودرن',en:'Modern Sneakers',descAr:'مقاس 36-46 · 3 ألوان متوفرة',descEn:'Size 36-46 · 3 colors available',sar:399,img:'https://images.unsplash.com/photo-1542291026-7eec264c27ff?w=500'},
@@ -337,17 +353,32 @@ const PRODUCTS = [
   {id:'p14',cat:'fashion',ar:'جاكيت جلد طبيعي',en:'Genuine Leather Jacket',descAr:'جلد بقر فاخر · بطانة دافئة · صناعة يدوية',descEn:'Premium cowhide · Warm lining · Handmade',sar:1290,img:'https://images.unsplash.com/photo-1551028719-00167b16eac5?w=500'},
   {id:'p15',cat:'fashion',ar:'بنطلون جينز',en:'Slim Fit Jeans',descAr:'قطن مرن · قص حديث · أزرق غامق',descEn:'Stretch denim · Slim fit · Dark blue',sar:275,img:'https://images.unsplash.com/photo-1542272604-787c3835535d?w=500'},
   {id:'p16',cat:'fashion',ar:'حقيبة جلد للسيدات',en:'Leather Tote Bag',descAr:'جلد طبيعي · 3 جيوب داخلية · أنيقة',descEn:'Real leather · 3 inner pockets · Elegant',sar:560,img:'https://images.unsplash.com/photo-1584917865442-de89df76afd3?w=500'},
+  {id:'p37',cat:'fashion',ar:'فستان سهرة فاخر',en:'Evening Dress',descAr:'حرير طبيعي · تطريز يدوي · مقاسات S-XL',descEn:'Pure silk · Hand-embroidered · S-XL',sar:1450,img:'https://images.unsplash.com/photo-1539008835657-9e8e9680c956?w=500'},
+  {id:'p38',cat:'fashion',ar:'نظارة شمسية فاخرة',en:'Luxury Sunglasses',descAr:'UV400 · إطار معدني · مع علبة جلدية',descEn:'UV400 · Metal frame · Leather case',sar:680,img:'https://images.unsplash.com/photo-1572635196237-14b3f281503f?w=500'},
+  {id:'p39',cat:'fashion',ar:'حزام جلد طبيعي',en:'Genuine Leather Belt',descAr:'جلد بقر · إبزيم مذهب · 3 مقاسات',descEn:'Cowhide · Gold buckle · 3 sizes',sar:295,img:'https://images.unsplash.com/photo-1624222247344-550fb60583dc?w=500'},
+  {id:'p40',cat:'fashion',ar:'سلسلة ذهب 18 قيراط',en:'18k Gold Chain',descAr:'ذهب أصلي · شهادة ضمان · 18 قيراط',descEn:'Real gold · Certified · 18 karat',sar:2890,img:'https://images.unsplash.com/photo-1599643478518-a784e5dc4c8f?w=500'},
+  {id:'p41',cat:'home',ar:'مرتبة فاخرة Queen',en:'Queen Mattress Premium',descAr:'فوم بدرجات متعددة · ضمان 10 سنوات',descEn:'Multi-layer foam · 10-year warranty',sar:1890,img:'https://images.unsplash.com/photo-1631679706909-1844bbd07221?w=500'},
   // Beauty
   {id:'p6',cat:'beauty',ar:'سيروم فيتامين C',en:'Vitamin C Serum',descAr:'يضيء البشرة · 30مل · بدون مواد ضارة',descEn:'Brightens skin · 30ml · Clean formula',sar:245,img:'https://images.unsplash.com/photo-1556228720-195a672e8a03?w=500'},
   {id:'p7',cat:'beauty',ar:'عطر شرقي فاخر',en:'Luxury Oriental Perfume',descAr:'عود · مسك · ثبات 12 ساعة',descEn:'Oud · Musk · 12hr longevity',sar:1450,img:'https://images.unsplash.com/photo-1541643600914-78b084683601?w=500'},
   {id:'p17',cat:'beauty',ar:'كريم مرطب يومي',en:'Daily Moisturizer',descAr:'هياليورونيك أسيد · يومي · لكل أنواع البشرة',descEn:'Hyaluronic acid · For all skin types',sar:180,img:'https://images.unsplash.com/photo-1570554886111-e80fcca6a029?w=500'},
   {id:'p18',cat:'beauty',ar:'باليت ميك آب احترافية',en:'Pro Makeup Palette',descAr:'24 لون · ثبات طويل · يلائم كل المناسبات',descEn:'24 shades · Long lasting · All occasions',sar:320,img:'https://images.unsplash.com/photo-1596462502278-27bfdc403348?w=500'},
   {id:'p19',cat:'beauty',ar:'مكواة شعر سيراميك',en:'Ceramic Hair Straightener',descAr:'حماية للشعر · يصلح للمزدوج · 230°',descEn:'Hair protection · Dual voltage · 230°',sar:450,img:'https://images.unsplash.com/photo-1522338242992-e1a54906a8da?w=500'},
+  {id:'p23',cat:'beauty',ar:'أحمر شفاه مات',en:'Matte Lipstick Set',descAr:'12 لون · صيغة ماتية · ثبات 8 ساعات',descEn:'12 shades · Matte formula · 8hr lasting',sar:165,img:'https://images.unsplash.com/photo-1586495777744-4413f21062fa?w=500'},
+  {id:'p24',cat:'beauty',ar:'فرش ميك آب احترافية',en:'Pro Makeup Brushes',descAr:'10 فرش · شعر صناعي · حقيبة جلدية',descEn:'10 brushes · Synthetic · Leather case',sar:285,img:'https://images.unsplash.com/photo-1631214540242-0712e842de4d?w=500'},
+  {id:'p25',cat:'beauty',ar:'مساج وجه كهربائي',en:'Electric Face Massager',descAr:'يدلك ويرطب · 5 سرعات · شحن USB',descEn:'Massage + moisturize · 5 speeds · USB',sar:380,img:'https://images.unsplash.com/photo-1631730486572-226d1f595b68?w=500'},
+  {id:'p26',cat:'beauty',ar:'بخاخ شعر طبيعي',en:'Natural Hair Mist',descAr:'زيت أرغان · مغذي · 100مل',descEn:'Argan oil · Nourishing · 100ml',sar:135,img:'https://images.unsplash.com/photo-1526045478516-99145907023c?w=500'},
+  {id:'p27',cat:'beauty',ar:'كريم العين',en:'Eye Contour Cream',descAr:'يخفف الهالات · فيتامين K · 15مل',descEn:'Reduces dark circles · Vitamin K · 15ml',sar:210,img:'https://images.unsplash.com/photo-1620916566398-39f1143ab7be?w=500'},
   // Home
   {id:'p8',cat:'home',ar:'مكنسة لاسلكية',en:'Cordless Vacuum',descAr:'شفط قوي · بطارية 60 دقيقة',descEn:'Powerful suction · 60min battery',sar:1890,img:'https://images.unsplash.com/photo-1558317374-067fb5f30001?w=500'},
   {id:'p20',cat:'home',ar:'مصباح ليد ذكي',en:'Smart LED Lamp',descAr:'16 مليون لون · يعمل بالصوت · Alexa & Google',descEn:'16M colors · Voice controlled · Alexa & Google',sar:240,img:'https://images.unsplash.com/photo-1565814329452-e1efa11c5b89?w=500'},
   {id:'p21',cat:'home',ar:'مكينة قهوة إيطالية',en:'Italian Espresso Machine',descAr:'ضغط 15 بار · رغوة حليب · إيطالية الصنع',descEn:'15-bar pressure · Milk frother · Made in Italy',sar:2450,img:'https://images.unsplash.com/photo-1610632380989-680fe40816c6?w=500'},
   {id:'p22',cat:'home',ar:'وسادة طبية',en:'Memory Foam Pillow',descAr:'فوم طبي · يدعم الرقبة · غطاء قابل للغسيل',descEn:'Memory foam · Neck support · Washable cover',sar:165,img:'https://images.unsplash.com/photo-1631049307264-da0ec9d70304?w=500'},
+  {id:'p28',cat:'home',ar:'بطانية حرارية',en:'Heated Throw Blanket',descAr:'3 درجات حرارة · مقاسات كبيرة · قابلة للغسيل',descEn:'3 heat levels · King size · Machine washable',sar:295,img:'https://images.unsplash.com/photo-1631679706909-1844bbd07221?w=500'},
+  {id:'p29',cat:'home',ar:'أرفف كتب خشبية',en:'Wooden Bookshelf',descAr:'5 أرفف · خشب صلب · يحمل 50 كجم',descEn:'5 shelves · Solid wood · 50kg capacity',sar:680,img:'https://images.unsplash.com/photo-1594620302200-9a762244a156?w=500'},
+  {id:'p30',cat:'home',ar:'سلطانية فخار',en:'Ceramic Bowl Set',descAr:'6 قطع · صناعة يدوية · سيراميك ياباني',descEn:'6-piece · Handmade · Japanese ceramic',sar:215,img:'https://images.unsplash.com/photo-1610701596007-11502861dcfa?w=500'},
+  {id:'p31',cat:'home',ar:'منشفة قطن مصرية',en:'Egyptian Cotton Towels',descAr:'4 قطع · قطن مصري 100% · امتصاص فائق',descEn:'4-piece · 100% Egyptian cotton · Super absorbent',sar:185,img:'https://images.unsplash.com/photo-1571902943202-507ec2618e8f?w=500'},
+  {id:'p32',cat:'home',ar:'بخار كهربائي للملابس',en:'Electric Clothes Steamer',descAr:'1500 واط · خزان 240مل · جاهز في 30 ثانية',descEn:'1500W · 240ml tank · Ready in 30s',sar:295,img:'https://images.unsplash.com/photo-1521903062400-b80f2cb8cb9d?w=500'},
 ];
 const CATS=[
   {id:'electronics',ar:'إلكترونيات',en:'Electronics',ico:'📱'},
@@ -514,7 +545,7 @@ function showView(view, param){
   // Hide all dedicated view sections first
   document.querySelectorAll('[data-view-section]').forEach(el=>el.style.display='none');
   // Home content elements (everything between header and footer that's part of the home view)
-  const homeSel='.banner,.quick-cats,.sec-head,.grid,.reviews,#cats,.zx-footer';
+  const homeSel='.banner,.quick-cats,.sec-head,#products,.reviews,#cats,.zx-footer';
   const homeBlocks=document.querySelectorAll(homeSel);
   if(view==='home' || view==='search'){
     homeBlocks.forEach(el=>el.style.display='');
@@ -542,32 +573,46 @@ const CAT_THEMES={
   fashion:{grad:'linear-gradient(135deg,#6366f1,#8b5cf6)',emoji:'👗',tagAr:'موضة عصرية',tagEn:'Modern fashion',titleAr:'أزياء',titleEn:'Fashion'},
   electronics:{grad:'linear-gradient(135deg,#0f172a,#7c3aed)',emoji:'📱',tagAr:'تكنولوجيا حديثة',tagEn:'Latest tech',titleAr:'إلكترونيات',titleEn:'Electronics'},
 };
+// Category background videos (free CDN looping clips)
+const CAT_VIDEOS={
+  food:'https://cdn.pixabay.com/video/2017/06/14/9839-222603517_large.mp4',
+  fashion:'https://cdn.pixabay.com/video/2020/03/29/35169-403291317_large.mp4',
+  beauty:'https://cdn.pixabay.com/video/2024/03/27/204905-928297692_large.mp4',
+  electronics:'https://cdn.pixabay.com/video/2019/02/10/21307-317538144_large.mp4',
+  home:'https://cdn.pixabay.com/video/2024/04/24/209019_large.mp4',
+  sport:'https://cdn.pixabay.com/video/2022/02/23/108708-682773715_large.mp4',
+  kids:'https://cdn.pixabay.com/video/2019/01/02/20305-309901537_large.mp4',
+};
+
 function renderCategoryPage(catId){
   const cat=CATS.find(c=>c.id===catId);
   if(!cat)return;
   const theme=CAT_THEMES[catId]||{grad:'linear-gradient(135deg,#7c3aed,#ec4899)',emoji:cat.ico||'🛍️',tagAr:'عروض حصرية',tagEn:'Exclusive deals'};
-  const banner=document.getElementById('cat-banner');
-  banner.style.background=theme.grad;
+  // Update overlay color to match category theme
+  document.getElementById('cat-banner-overlay').style.background=theme.grad.replace(/linear-gradient\(135deg,/,'linear-gradient(135deg,').replace(/\)/, ',.7)').replace(',.7),',',.7),').replace(/#([0-9a-f]{6})/gi,(m,h)=>{const r=parseInt(h.slice(0,2),16),g=parseInt(h.slice(2,4),16),b=parseInt(h.slice(4,6),16);return `rgba(${r},${g},${b},.7)`});
   document.getElementById('cat-banner-tag').textContent=CURRENT_LANG==='ar'?theme.tagAr:theme.tagEn;
   document.getElementById('cat-banner-title').textContent=CURRENT_LANG==='ar'?cat.ar:cat.en;
-  document.getElementById('cat-banner-sub').textContent=CURRENT_LANG==='ar'?'اكتشف أفضل المنتجات في هذا القسم':'Discover the best products in this category';
-  // Filter products for this category
-  const filtered=PRODUCTS.filter(p=>p.cat===catId);
-  // Animated product carousel as banner background (instead of static emoji)
-  const emoji=document.getElementById('cat-banner-emoji');
-  if(filtered.length>=3){
-    emoji.innerHTML=filtered.slice(0,4).map((p,i)=>`<img src="${p.img}" alt="" style="position:absolute;width:90px;height:90px;border-radius:12px;object-fit:cover;box-shadow:0 8px 24px rgba(0,0,0,.4);animation:cat-float${i} ${5+i}s ease-in-out infinite;animation-delay:${i*.6}s;opacity:.9" />`).join('');
-    // Inject animations once
-    if(!document.getElementById('cat-anim-style')){
-      const st=document.createElement('style');st.id='cat-anim-style';
-      st.textContent=`@keyframes cat-float0{0%,100%{transform:translate(0,0) rotate(-5deg)}50%{transform:translate(8px,-8px) rotate(5deg)}}@keyframes cat-float1{0%,100%{transform:translate(60px,20px) rotate(8deg)}50%{transform:translate(50px,5px) rotate(-3deg)}}@keyframes cat-float2{0%,100%{transform:translate(120px,-10px) rotate(-2deg)}50%{transform:translate(135px,10px) rotate(6deg)}}@keyframes cat-float3{0%,100%{transform:translate(180px,15px) rotate(4deg)}50%{transform:translate(165px,-5px) rotate(-7deg)}}`;
-      document.head.appendChild(st);
-    }
-    emoji.style.cssText='position:absolute;left:-30px;top:50%;transform:translateY(-50%);width:280px;height:140px;opacity:.95';
+  document.getElementById('cat-banner-sub').textContent=CURRENT_LANG==='ar'?'اكتشف '+(PRODUCTS.filter(p=>p.cat===catId).length)+' منتج مختار بعناية':'Discover '+(PRODUCTS.filter(p=>p.cat===catId).length)+' carefully curated items';
+  // Set background video
+  const vid=document.getElementById('cat-banner-video');
+  if(CAT_VIDEOS[catId]){
+    vid.src=CAT_VIDEOS[catId];vid.style.display='block';
+    vid.load();vid.play().catch(()=>{});
   } else {
-    // Fallback: emoji if not enough products
-    emoji.innerHTML='';emoji.textContent=theme.emoji;
-    emoji.style.cssText='position:absolute;left:-20px;top:50%;transform:translateY(-50%);font-size:140px;opacity:.25';
+    vid.style.display='none';
+  }
+  // Filter products
+  const filtered=PRODUCTS.filter(p=>p.cat===catId);
+  // Featured product card in banner (rotates every 4s)
+  const featured=document.getElementById('cat-banner-product');
+  if(filtered.length){
+    let idx=0;
+    const renderFeat=()=>{const p=filtered[idx%filtered.length];featured.innerHTML=`<img src="${p.img}" style="width:100%;height:100%;object-fit:cover"/>`;idx++;};
+    renderFeat();
+    if(window.__catRotator)clearInterval(window.__catRotator);
+    if(filtered.length>1)window.__catRotator=setInterval(renderFeat,4000);
+  } else {
+    featured.innerHTML='<div style="font-size:42px">'+theme.emoji+'</div>';
   }
   document.getElementById('cat-count-title').textContent=(CURRENT_LANG==='ar'?'المنتجات':'Products')+' ('+filtered.length+')';
   const grid=document.getElementById('cat-products');
@@ -747,4 +792,4 @@ init();
 <div class="zerax-credit" role="contentinfo" aria-label="Powered by Zerax"><a href="https://zerax.com?ref=preview" target="_blank" rel="noopener noreferrer" onclick="event.stopPropagation();window.open(this.href,'_blank');return false;"><span class="zerax-mark"><img src="/zerax-logo.png" alt="Zerax" /></span><span class="zerax-txt"><small>POWERED BY</small><b>ZERAX</b></span></a></div>
 <style>.zx-zerax-brand,.zx-zitex-brand,.zx-zerax-bar a.zx-zerax-brand{display:none!important}</style>
 <script>(function(){var pid='preview';fetch('/api/care/pwa-status/'+pid).then(function(r){return r.json()}).then(function(s){  window.ZERAX_PWA_ENABLED=!!s.pwa_enabled;  if(!s.pwa_enabled){    var m=document.querySelector('link[rel=manifest]');if(m)m.remove();return;  }  if('serviceWorker' in navigator){    navigator.serviceWorker.register('/sw.js').catch(function(){});  }}).catch(function(){});})();</script>
-<script>(function(){function c(){var b=a.contentDocument||a.contentWindow.document;if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a09252b30a1b80ba',t:'MTc4MTAzMTAzNw=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body></html>
+<script>(function(){function c(){var b=a.contentDocument||a.contentWindow.document;if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a0926410394c3e5d',t:'MTc4MTAzMTc0OQ=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body></html>
