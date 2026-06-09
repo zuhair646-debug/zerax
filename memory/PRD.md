@@ -1,5 +1,34 @@
 # Zitex AI Platform - PRD
 
+### 🆕 Feb 9 2026 — Phase 4: Multi-Variant Gen + Product Gallery + Logo Stamp + Video Mode ✅
+**Completed in this session (continuation):**
+- ✅ **3 Studio Generation Modes**:
+   - 🖼️ **Single Image** (5 credits): generates 1 themed image based on prompt keywords
+   - 🎨 **4 Variants** (20 credits): generates 4 different angles/designs of the product at once (e.g. "iPhone 17 Pro" returns 4 distinct phone shots — front, back, multi-angle, multi-device). User picks one to apply OR (for product target) all 4 are auto-added to the product gallery.
+   - 🎬 **Video** (15 credits, banner-only): generates a looping background video for the main/category banner.
+- ✅ **Brand Logo Stamp**: Optional company logo upload (max 256KB) automatically composited onto the top-right corner of every generated image via HTML canvas with a white rounded background frame. Works in single AND multi-variant modes.
+- ✅ **Zerax AI Engine Badge**: Pill `⚡ Zerax AI · Gemini Nano Banana` shown in Studio header to signal which engine is powering generation (production hook will live-update if model upgrades).
+- ✅ **Per-Product Multi-Image Gallery**: Every product now supports unlimited images + videos. Stored in localStorage `zx_galleries[productId] = [{type, url}, ...]`. Lightbox:
+   - **Thumbnail strip** at bottom (active thumb highlighted gold)
+   - **Prev/Next arrows** (‹ ›) auto-localized for RTL/LTR
+   - **Auto-advance** every 5 seconds (paused when zoomed)
+   - **Video thumbnail** detection (play icon overlay)
+   - **In Admin Mode**: floating action buttons inside lightbox — `📷 صورة` / `🎬 فيديو` (file upload) / `✨ توليد` (opens Studio in product mode)
+- ✅ **Quick Categories Editable**: ✨ buttons now appear on every top-bar category icon (الكل/إلكترونيات/أزياء/تجميل/منزل). Studio supports `cat_icon:<id>` target with optimized prompt suggestions like "صورة جوال + لابتوب + ساعة تحت كلمة الكل".
+- ✅ **Smart Theme Routing**: New `themes` keyword matcher routes Arabic AND English prompts to themed image pools:
+   - "iPhone/جوال" → 4 dedicated smartphone images
+   - "لابتوب/laptop" → 4 dedicated laptop images
+   - "ساعة/watch" → 4 dedicated watch images
+   - "الكل/all" → mixed product collection
+   - + makeup, fashion, food, gold, home themes
+- ✅ **Logo overlay via Canvas**: Real client-side image composition (canvas → toDataURL) — no backend needed for MVP. Production should use Gemini's image edit API to do branded composition with deeper integration.
+
+**File**: `/app/frontend/public/mockups/app_mode_full.html` (+~350 lines from baseline)
+
+⚠️ **Mocked**: AI generation returns themed Unsplash photos by keyword (not real ML). Video mode returns a sample bunny video clip. Top-up button adds 100 credits locally (Stripe in prod).
+
+
+
 ### 🆕 Feb 9 2026 — Phase 3: Image Studio + Lightbox + Brand Crown Logo ✅
 **Completed in this session (continuation):**
 - ✅ **Zerax Crown Logo** (footer): rebuilt the "Made by Zerax" logo as a circular gold/red gradient badge with a CSS-rendered crown above the **Z** (no emoji — pure SVG-like polygon clip-path so it scales crisply on all devices).

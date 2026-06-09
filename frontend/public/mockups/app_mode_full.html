@@ -249,6 +249,34 @@ body.admin-mode .img-edit-btn{display:flex !important}
 .q-cat{position:relative;overflow:hidden}
 .q-cat .ico{font-size:26px;margin-bottom:5px;position:relative;z-index:2}
 .q-cat span{position:relative;z-index:2}
+/* PRODUCT GALLERY (multi-image, auto-advance, lightbox-only) */
+.lb-thumbs{position:absolute;bottom:90px;left:50%;transform:translateX(-50%);display:flex;gap:8px;padding:8px;background:rgba(0,0,0,.55);border-radius:99px;backdrop-filter:blur(8px);max-width:90%;overflow-x:auto;z-index:2}
+.lb-thumbs::-webkit-scrollbar{display:none}
+.lb-thumbs img{width:48px;height:48px;border-radius:8px;object-fit:cover;cursor:pointer;border:2px solid transparent;flex-shrink:0;opacity:.6;transition:all .2s}
+.lb-thumbs img.active{border-color:#fbbf24;opacity:1;transform:scale(1.1)}
+.lb-nav{position:absolute;top:50%;transform:translateY(-50%);width:48px;height:48px;border-radius:50%;background:rgba(255,255,255,.85);border:none;font-size:20px;font-weight:900;cursor:pointer;z-index:2;display:flex;align-items:center;justify-content:center;color:#0a0a0a}
+.lb-nav:hover{background:#7c3aed;color:#fff}
+.lb-prev{left:20px}.lb-next{right:20px}
+[dir="rtl"] .lb-prev{left:auto;right:20px}[dir="rtl"] .lb-next{right:auto;left:20px}
+.lb-gallery-add{position:absolute;bottom:30px;left:20px;display:flex;gap:8px;z-index:3}
+.lb-gallery-add button{background:linear-gradient(135deg,#fbbf24,#a52a2a);color:#fff;border:none;padding:10px 14px;border-radius:99px;font-family:inherit;font-weight:900;font-size:12px;cursor:pointer;display:flex;align-items:center;gap:5px}
+/* STUDIO MODE TOGGLES (image / video / multi) */
+.studio-modes{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:14px}
+.studio-mode{padding:12px 8px;background:#f9fafb;border:1.5px solid #e5e7eb;border-radius:12px;cursor:pointer;text-align:center;transition:all .2s}
+.studio-mode.active{border-color:#7c3aed;background:#faf5ff}
+.studio-mode .ico{font-size:22px;margin-bottom:4px}
+.studio-mode b{display:block;font-size:11px;font-weight:900}
+.studio-mode small{font-size:10px;color:#7c3aed;font-weight:900;display:block;margin-top:2px}
+.logo-upload-row{display:flex;align-items:center;gap:10px;padding:10px;background:#f9fafb;border:1px dashed #cbd5e1;border-radius:10px;margin-bottom:10px;cursor:pointer}
+.logo-upload-row:hover{border-color:#7c3aed}
+.logo-upload-row .preview{width:40px;height:40px;border-radius:8px;background:#e5e7eb;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0;overflow:hidden}
+.logo-upload-row .preview img{width:100%;height:100%;object-fit:cover}
+.logo-upload-row .text{flex:1;font-size:12px;color:#374151}
+.logo-upload-row .text b{display:block;font-weight:900;font-size:12px;color:#0a0a0a;margin-bottom:2px}
+.multi-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:8px;margin-top:14px}
+.multi-grid img,.multi-grid video{width:100%;aspect-ratio:1;object-fit:cover;border-radius:10px;border:2px solid transparent;cursor:pointer;transition:all .2s}
+.multi-grid img.picked{border-color:#22c55e}
+.engine-pill{display:inline-flex;align-items:center;gap:5px;background:linear-gradient(135deg,#a78bfa,#7c3aed);color:#fff;padding:4px 10px;border-radius:99px;font-size:10px;font-weight:900;margin-inline-start:6px}
 /* FOOTER */
 .zx-footer{background:#0f172a;color:#cbd5e1;padding:36px 18px 14px;direction:var(--dir,rtl);margin-top:30px;border-radius:24px 24px 0 0}
 .zx-foot-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:24px;margin-bottom:24px}
@@ -533,16 +561,36 @@ body.admin-mode .img-edit-btn{display:flex !important}
     <div class="studio-body">
       <!-- AI TAB -->
       <div class="studio-section active" data-section="ai">
-        <p style="font-size:12px;color:#6b7280;margin-bottom:10px;line-height:1.6" data-key="studio_ai_help">اكتب وصف الصورة اللي تبيها (مثلاً: "خلفية مكياج فاخر مع ورود وإضاءة ذهبية")، يولّدها الذكاء الاصطناعي بمقاسات البنر الصحيحة تلقائياً.</p>
-        <textarea class="studio-prompt" id="ai-prompt" placeholder="مثال: عرض أزياء فاخر مع إضاءة سينمائية وألوان دافئة" data-key-ph="studio_prompt_ph"></textarea>
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;flex-wrap:wrap;gap:6px">
+          <p style="font-size:12px;color:#6b7280;line-height:1.6;margin:0" data-key="studio_ai_help">اكتب وصف الصورة، يولّدها الذكاء بمقاسات صحيحة تلقائياً.</p>
+          <span class="engine-pill">⚡ Zerax AI · Gemini Nano Banana</span>
+        </div>
+        <!-- Mode toggle: Image / Video / Multi -->
+        <div class="studio-modes" id="studio-modes">
+          <div class="studio-mode active" data-mode="image" onclick="setStudioMode('image')"><div class="ico">🖼️</div><b data-key="mode_image">صورة وحدة</b><small>٥ <span data-key="credits">نقطة</span></small></div>
+          <div class="studio-mode" data-mode="multi" onclick="setStudioMode('multi')"><div class="ico">🎨</div><b data-key="mode_multi">٤ تصاميم</b><small>٢٠ <span data-key="credits">نقطة</span></small></div>
+          <div class="studio-mode" data-mode="video" onclick="setStudioMode('video')"><div class="ico">🎬</div><b data-key="mode_video">فيديو</b><small>١٥ <span data-key="credits">نقطة</span></small></div>
+        </div>
+        <textarea class="studio-prompt" id="ai-prompt" placeholder="مثال: iPhone 17 Pro لون أزرق سماوي على خلفية رخامية بإضاءة استوديو" data-key-ph="studio_prompt_ph"></textarea>
         <div class="studio-suggestions" id="ai-suggestions"></div>
-        <button class="gen-btn" id="gen-btn" onclick="generateAI()">✨ <span data-key="studio_generate">توليد الصورة (٥ نقاط)</span></button>
+        <!-- Optional company logo overlay -->
+        <input type="file" id="studio-logo" accept="image/*" style="display:none" onchange="onStudioLogoUpload(event)">
+        <div class="logo-upload-row" onclick="document.getElementById('studio-logo').click()">
+          <div class="preview" id="studio-logo-preview">🏷️</div>
+          <div class="text"><b data-key="add_brand_logo">أضف لوغو علامتك (اختياري)</b><span id="studio-logo-status" data-key="add_brand_logo_sub">يطبع على زاوية الصورة المولّدة</span></div>
+        </div>
+        <button class="gen-btn" id="gen-btn" onclick="generateAI()">✨ <span id="gen-btn-label">توليد الصورة (٥ نقاط)</span></button>
         <div class="topup-banner" id="topup-banner" style="display:none">
           <div class="info"><b data-key="low_credits">رصيدك منخفض!</b><br><span data-key="low_credits_sub">اشحن نقاط Zerax عشان تكمل التوليد.</span></div>
           <button onclick="topupCredits()" data-key="topup">شحن الرصيد</button>
         </div>
-        <div class="gen-loading" id="gen-loading"><div class="spin"></div><b data-key="generating">جاري التوليد...</b><p style="font-size:12px;color:#6b7280;margin-top:6px" data-key="generating_sub">ثواني ويصير عندك صورة احترافية</p></div>
-        <div class="gen-preview" id="gen-preview"><img id="gen-preview-img" alt="generated"><button class="gen-apply" onclick="applyGenerated()">✅ <span data-key="studio_apply">تطبيق الصورة على البنر</span></button></div>
+        <div class="gen-loading" id="gen-loading"><div class="spin"></div><b data-key="generating">جاري التوليد...</b><p style="font-size:12px;color:#6b7280;margin-top:6px" data-key="generating_sub">Zerax AI Engine يشتغل...</p></div>
+        <div class="gen-preview" id="gen-preview">
+          <img id="gen-preview-img" alt="generated">
+          <video id="gen-preview-video" controls playsinline style="width:100%;border-radius:12px;border:2px solid #7c3aed;display:none"></video>
+          <div class="multi-grid" id="gen-multi-grid" style="display:none"></div>
+          <button class="gen-apply" id="gen-apply-btn" onclick="applyGenerated()">✅ <span data-key="studio_apply">تطبيق على البنر</span></button>
+        </div>
       </div>
       <!-- UPLOAD TAB -->
       <div class="studio-section" data-section="upload">
@@ -563,12 +611,23 @@ body.admin-mode .img-edit-btn{display:flex !important}
   </div>
 </div>
 
-<!-- ═══════════════════ LIGHTBOX (Zoomable product images) ═══════════════════ -->
+<!-- ═══════════════════ LIGHTBOX (Zoomable + Gallery + Auto-advance) ═══════════════════ -->
 <div class="lb-overlay" id="lightbox" onclick="if(event.target===this)closeLightbox()">
   <div class="lb-info" id="lb-info">100%</div>
   <button class="lb-close" onclick="closeLightbox()">✕</button>
+  <button class="lb-nav lb-prev" onclick="lbPrev()" title="السابق">‹</button>
+  <button class="lb-nav lb-next" onclick="lbNext()" title="التالي">›</button>
   <div class="lb-stage" id="lb-stage">
     <img class="lb-img" id="lb-img" alt="" draggable="false">
+    <video class="lb-img" id="lb-video" controls playsinline style="display:none;background:#000"></video>
+  </div>
+  <div class="lb-thumbs" id="lb-thumbs"></div>
+  <div class="lb-gallery-add" id="lb-gallery-add" style="display:none">
+    <input type="file" id="lb-add-image" accept="image/*" style="display:none" onchange="addToProductGallery(event,'image')">
+    <input type="file" id="lb-add-video" accept="video/*" style="display:none" onchange="addToProductGallery(event,'video')">
+    <button onclick="document.getElementById('lb-add-image').click()">📷 <span data-key="add_image">صورة</span></button>
+    <button onclick="document.getElementById('lb-add-video').click()">🎬 <span data-key="add_video">فيديو</span></button>
+    <button onclick="openStudioFromLightbox()">✨ <span data-key="gen_ai">توليد</span></button>
   </div>
   <div class="lb-controls">
     <button onclick="lbZoom(-0.25)" title="تصغير">−</button>
@@ -975,7 +1034,18 @@ function renderProducts(){
 }
 
 function renderCategories(){
-  document.getElementById('cats').innerHTML=CATS.map(c=>`<div class="q-cat ${c.id===activeCat?'active-cat':''}" onclick="filterCat('${c.id}')"><div class="ico">${c.ico}</div><span>${CURRENT_LANG==='ar'?c.ar:c.en}</span></div>`).join('');
+  document.getElementById('cats').innerHTML=CATS.map(c=>{
+    const overrideKey='cat_icon:'+c.id;
+    const overrideObj=IMG_OVERRIDES[overrideKey];
+    const overrideUrl=overrideObj?(typeof overrideObj==='string'?overrideObj:overrideObj.url):null;
+    const bgStyle=overrideUrl?`background-image:linear-gradient(rgba(0,0,0,.35),rgba(0,0,0,.55)),url('${overrideUrl}');background-size:cover;background-position:center;color:#fff`:'';
+    const iconStyle=overrideUrl?'color:#fff;text-shadow:0 2px 6px rgba(0,0,0,.6)':'';
+    const spanStyle=overrideUrl?'color:#fff !important':'';
+    return `<div class="q-cat editable-img-host ${c.id===activeCat?'active-cat':''}" onclick="filterCat('${c.id}')" style="${bgStyle}">
+      <button class="img-edit-btn" onclick="event.stopPropagation();openStudio('cat_icon:${c.id}')" title="تحرير">✨</button>
+      <div class="ico" style="${iconStyle}">${c.ico}</div><span style="${spanStyle}">${CURRENT_LANG==='ar'?c.ar:c.en}</span>
+    </div>`;
+  }).join('');
 }
 function filterCat(id){activeCat=id;if(id==='all'){showView('home');renderCategories();renderProducts();window.scrollTo({top:document.getElementById('products').offsetTop-100,behavior:'smooth'});}else{showView('category',id);}}
 
@@ -1374,6 +1444,23 @@ document.getElementById('search').addEventListener('input',e=>{
 });
 
 // ═══════════════════════ ADMIN MODE + IMAGE STUDIO ═══════════════════════
+let STUDIO_MODE='image'; // 'image' | 'multi' | 'video'
+let STUDIO_LOGO=null; // dataURL
+const MODE_COST={image:5,multi:20,video:15};
+let GEN_MULTI=[]; // array of variant URLs for 'multi' mode
+let GEN_VIDEO=null; // video URL for 'video' mode
+// Product galleries (extends p.img into a list)
+const PRODUCT_GALLERIES=JSON.parse(localStorage.getItem('zx_galleries')||'{}');
+let LB_CURRENT_PRODUCT=null;
+let LB_GALLERY=[]; // [{type:'image'|'video', url}]
+let LB_INDEX=0;
+let _lbAutoAdvance=null;
+
+// Mock video samples for video mode
+const VIDEO_SAMPLES=[
+  'https://test-videos.co.uk/vids/bigbuckbunny/mp4/h264/720/Big_Buck_Bunny_720_10s_1MB.mp4',
+];
+
 function toggleAdminMode(){
   ADMIN_MODE=!ADMIN_MODE;
   localStorage.setItem('zx_admin',ADMIN_MODE?'1':'0');
@@ -1381,28 +1468,55 @@ function toggleAdminMode(){
   const btn=document.getElementById('admin-btn');
   if(btn)btn.style.opacity=ADMIN_MODE?'1':'0.7';
   toast(ADMIN_MODE?(CURRENT_LANG==='ar'?'♛ وضع التحكم مُفعّل':'♛ Admin mode ON'):(CURRENT_LANG==='ar'?'تم الخروج من التحكم':'Admin mode OFF'));
+  renderCategories(); // re-render to show/hide edit buttons on quick cats
 }
 function applyAdminModeOnInit(){
   document.body.classList.toggle('admin-mode',ADMIN_MODE);
   const btn=document.getElementById('admin-btn');
   if(btn)btn.style.opacity=ADMIN_MODE?'1':'0.7';
 }
+function setStudioMode(m){
+  STUDIO_MODE=m;
+  document.querySelectorAll('.studio-mode').forEach(el=>el.classList.toggle('active',el.dataset.mode===m));
+  const cost=MODE_COST[m];
+  const label=document.getElementById('gen-btn-label');
+  if(label)label.textContent=(CURRENT_LANG==='ar'?{image:'توليد الصورة',multi:'توليد ٤ تصاميم',video:'توليد فيديو'}[m]:{image:'Generate image',multi:'Generate 4 variants',video:'Generate video'}[m])+` (${cost} ${CURRENT_LANG==='ar'?'نقطة':'cr'})`;
+}
+function onStudioLogoUpload(e){
+  const file=e.target.files?.[0];if(!file)return;
+  if(file.size>256*1024){alert(CURRENT_LANG==='ar'?'حجم اللوغو كبير (الحد ٢٥٦ كيلوبايت)':'Logo too big (256KB max)');return;}
+  const reader=new FileReader();
+  reader.onload=ev=>{
+    STUDIO_LOGO=ev.target.result;
+    const prev=document.getElementById('studio-logo-preview');
+    prev.innerHTML=`<img src="${STUDIO_LOGO}" alt="logo">`;
+    document.getElementById('studio-logo-status').textContent=CURRENT_LANG==='ar'?'✓ سيُضاف اللوغو إلى الصورة':'✓ Logo will be added';
+  };
+  reader.readAsDataURL(file);
+}
 function openStudio(target){
   STUDIO_TARGET=target;
-  GEN_RESULT=null;
+  GEN_RESULT=null;GEN_MULTI=[];GEN_VIDEO=null;STUDIO_LOGO=null;
   document.getElementById('studio-modal').classList.add('open');
   document.getElementById('zerax-credits').textContent=ZERAX_CREDITS;
   document.getElementById('ai-prompt').value='';
   document.getElementById('gen-preview').classList.remove('show');
   document.getElementById('gen-loading').classList.remove('show');
   document.getElementById('topup-banner').style.display=ZERAX_CREDITS<5?'flex':'none';
+  document.getElementById('studio-logo-preview').innerHTML='🏷️';
+  document.getElementById('studio-logo-status').textContent=CURRENT_LANG==='ar'?'يطبع على زاوية الصورة المولّدة':'Will be stamped on the generated image';
   // suggestions
-  const key=target.startsWith('product:')||target.startsWith('cat_icon:')?'product':target;
+  const key=target.startsWith('product:')?'product':(target.startsWith('cat_icon:')||target.startsWith('cat_banner:')?'cat_banner':target);
   const sugg=(STUDIO_SUGGESTIONS[CURRENT_LANG]||STUDIO_SUGGESTIONS.en)[key]||[];
   document.getElementById('ai-suggestions').innerHTML=sugg.map(s=>`<button class="suggestion-chip" onclick="document.getElementById('ai-prompt').value='${s.replace(/'/g,'&#39;')}'">${s}</button>`).join('');
   // library
-  const lib=STUDIO_LIBRARY[key]||STUDIO_LIBRARY.cat_banner;
+  const libKey=target.startsWith('product:')||target.startsWith('cat_icon:')?'product':(target.startsWith('cat_banner:')?'cat_banner':target);
+  const lib=STUDIO_LIBRARY[libKey]||STUDIO_LIBRARY.cat_banner;
   document.getElementById('lib-grid').innerHTML=lib.map(u=>`<img src="${u}" onclick="pickFromLibrary('${u}')" alt="library">`).join('');
+  // Show/hide video mode based on target type (video only for banners)
+  const videoModeEl=document.querySelector('.studio-mode[data-mode="video"]');
+  if(videoModeEl)videoModeEl.style.display=(target==='main_banner'||target.startsWith('cat_banner:'))?'block':'none';
+  setStudioMode('image');
   switchStudioTab('ai');
 }
 function closeStudio(){document.getElementById('studio-modal').classList.remove('open');}
@@ -1412,67 +1526,145 @@ function switchStudioTab(tab){
 }
 function generateAI(){
   const prompt=document.getElementById('ai-prompt').value.trim();
-  if(!prompt){alert(CURRENT_LANG==='ar'?'اكتب وصف الصورة أولاً':'Please describe the image first');return;}
-  if(ZERAX_CREDITS<5){document.getElementById('topup-banner').style.display='flex';return;}
+  if(!prompt){alert(CURRENT_LANG==='ar'?'اكتب وصف الصورة أولاً':'Please describe first');return;}
+  const cost=MODE_COST[STUDIO_MODE];
+  if(ZERAX_CREDITS<cost){document.getElementById('topup-banner').style.display='flex';return;}
   document.getElementById('gen-btn').disabled=true;
   document.getElementById('gen-loading').classList.add('show');
   document.getElementById('gen-preview').classList.remove('show');
-  // MOCKED AI: simulate generation by picking from a curated set + Unsplash query
-  const seed=Math.abs(prompt.split('').reduce((s,c)=>s+c.charCodeAt(0),0));
-  // Map prompt keywords to themed image
+  // Reset preview elements
+  document.getElementById('gen-preview-img').style.display='none';
+  document.getElementById('gen-preview-video').style.display='none';
+  document.getElementById('gen-multi-grid').style.display='none';
+  document.getElementById('gen-multi-grid').innerHTML='';
+  // MOCKED Zerax AI Engine
   const themes=[
-    {k:['مكياج','makeup','تجميل','beauty'],u:'https://images.unsplash.com/photo-1487412947147-5cebf100ffc2?w=1600&q=90'},
-    {k:['أزياء','fashion','فستان','dress','clothes'],u:'https://images.unsplash.com/photo-1558769132-cb1aea458c5e?w=1600&q=90'},
-    {k:['طعام','مأكولات','food','meal','restaurant'],u:'https://images.unsplash.com/photo-1565299624946-b28f40a0ae38?w=1600&q=90'},
-    {k:['تقني','تكنولوجيا','electronics','tech','phone'],u:'https://images.unsplash.com/photo-1550009158-9ebf69173e03?w=1600&q=90'},
-    {k:['منزل','home','تصميم','interior'],u:'https://images.unsplash.com/photo-1618220179428-22790b461013?w=1600&q=90'},
-    {k:['ذهب','gold','luxury','فاخر','luxurious'],u:'https://images.unsplash.com/photo-1611243705797-7b65fefdc111?w=1600&q=90'},
-    {k:['ربيع','spring','زهور','flowers'],u:'https://images.unsplash.com/photo-1487530811176-3780de880c2d?w=1600&q=90'},
+    {k:['مكياج','makeup','تجميل','beauty'],pool:['https://images.unsplash.com/photo-1487412947147-5cebf100ffc2?w=1600&q=90','https://images.unsplash.com/photo-1596462502278-27bfdc403348?w=1600&q=90','https://images.unsplash.com/photo-1522335789203-aaa2f8be5419?w=1600&q=90','https://images.unsplash.com/photo-1631214540242-0712e842de4d?w=1600&q=90']},
+    {k:['أزياء','fashion','فستان','dress'],pool:['https://images.unsplash.com/photo-1558769132-cb1aea458c5e?w=1600&q=90','https://images.unsplash.com/photo-1483985988355-763728e1935b?w=1600&q=90','https://images.unsplash.com/photo-1539109136881-3be0616acf4b?w=1600&q=90','https://images.unsplash.com/photo-1485518882345-15568b007407?w=1600&q=90']},
+    {k:['جوال','iphone','phone','هاتف','موبايل','smartphone'],pool:['https://images.unsplash.com/photo-1592750475338-74b7b21085ab?w=1600&q=90','https://images.unsplash.com/photo-1511707171634-5f897ff02aa9?w=1600&q=90','https://images.unsplash.com/photo-1565849904461-04a58ad377e0?w=1600&q=90','https://images.unsplash.com/photo-1556656793-08538906a9f8?w=1600&q=90']},
+    {k:['لابتوب','laptop','حاسوب','macbook'],pool:['https://images.unsplash.com/photo-1496181133206-80ce9b88a853?w=1600&q=90','https://images.unsplash.com/photo-1517336714731-489689fd1ca8?w=1600&q=90','https://images.unsplash.com/photo-1541807084-5c52b6b3adef?w=1600&q=90','https://images.unsplash.com/photo-1531297484001-80022131f5a1?w=1600&q=90']},
+    {k:['ساعة','watch','clock'],pool:['https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=1600&q=90','https://images.unsplash.com/photo-1546868871-7041f2a55e12?w=1600&q=90','https://images.unsplash.com/photo-1524805444758-089113d48a6d?w=1600&q=90','https://images.unsplash.com/photo-1508057198894-247b23fe5ade?w=1600&q=90']},
+    {k:['طعام','مأكولات','food','meal'],pool:['https://images.unsplash.com/photo-1565299624946-b28f40a0ae38?w=1600&q=90','https://images.unsplash.com/photo-1504674900247-0877df9cc836?w=1600&q=90','https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=1600&q=90','https://images.unsplash.com/photo-1571997478779-2adcbbe9ab2f?w=1600&q=90']},
+    {k:['ذهب','luxury','فاخر','gold'],pool:['https://images.unsplash.com/photo-1611243705797-7b65fefdc111?w=1600&q=90','https://images.unsplash.com/photo-1599643478518-a784e5dc4c8f?w=1600&q=90','https://images.unsplash.com/photo-1602173574767-37ac01994b2a?w=1600&q=90','https://images.unsplash.com/photo-1573408301185-9146fe634ad0?w=1600&q=90']},
+    {k:['منزل','home','تصميم','interior'],pool:['https://images.unsplash.com/photo-1618220179428-22790b461013?w=1600&q=90','https://images.unsplash.com/photo-1556909114-f6e7ad7d3136?w=1600&q=90','https://images.unsplash.com/photo-1505691938895-1758d7feb511?w=1600&q=90','https://images.unsplash.com/photo-1586023492125-27b2c045efd7?w=1600&q=90']},
+    {k:['الكل','all','تشكيلة','collection','mix'],pool:['https://images.unsplash.com/photo-1607082348824-0a96f2a4b9da?w=1600&q=90','https://images.unsplash.com/photo-1483985988355-763728e1935b?w=1600&q=90','https://images.unsplash.com/photo-1556909114-f6e7ad7d3136?w=1600&q=90','https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=1600&q=90']},
   ];
   const lower=prompt.toLowerCase();
   const matched=themes.find(t=>t.k.some(k=>lower.includes(k.toLowerCase())));
-  const fallbacks=STUDIO_LIBRARY[STUDIO_TARGET.startsWith('product:')||STUDIO_TARGET.startsWith('cat_icon:')?'product':STUDIO_TARGET]||STUDIO_LIBRARY.cat_banner;
-  const url=matched?matched.u:fallbacks[seed%fallbacks.length];
-  setTimeout(()=>{
-    GEN_RESULT=url;
+  const targetKey=STUDIO_TARGET.startsWith('product:')||STUDIO_TARGET.startsWith('cat_icon:')?'product':(STUDIO_TARGET.startsWith('cat_banner:')?'cat_banner':STUDIO_TARGET);
+  const fallbacks=STUDIO_LIBRARY[targetKey]||STUDIO_LIBRARY.cat_banner;
+  const pool=matched?matched.pool:fallbacks;
+  const seed=Math.abs(prompt.split('').reduce((s,c)=>s+c.charCodeAt(0),0));
+  setTimeout(async ()=>{
     document.getElementById('gen-loading').classList.remove('show');
-    document.getElementById('gen-preview-img').src=url;
     document.getElementById('gen-preview').classList.add('show');
+    if(STUDIO_MODE==='image'){
+      let url=pool[seed%pool.length];
+      if(STUDIO_LOGO)url=await stampLogo(url,STUDIO_LOGO);
+      GEN_RESULT=url;
+      const img=document.getElementById('gen-preview-img');
+      img.src=url;img.style.display='block';
+    } else if(STUDIO_MODE==='multi'){
+      // 4 variants
+      let urls=[0,1,2,3].map(i=>pool[(seed+i)%pool.length]);
+      if(STUDIO_LOGO)urls=await Promise.all(urls.map(u=>stampLogo(u,STUDIO_LOGO)));
+      GEN_MULTI=urls;
+      const grid=document.getElementById('gen-multi-grid');
+      grid.style.display='grid';
+      grid.innerHTML=urls.map((u,i)=>`<img src="${u}" data-i="${i}" onclick="pickMultiVariant(${i},this)" alt="variant">`).join('');
+    } else if(STUDIO_MODE==='video'){
+      GEN_VIDEO=VIDEO_SAMPLES[0];
+      const v=document.getElementById('gen-preview-video');
+      v.src=GEN_VIDEO;v.style.display='block';v.load();v.play().catch(()=>{});
+    }
     document.getElementById('gen-btn').disabled=false;
-    ZERAX_CREDITS-=5;
+    ZERAX_CREDITS-=cost;
     localStorage.setItem('zx_credits',String(ZERAX_CREDITS));
     document.getElementById('zerax-credits').textContent=ZERAX_CREDITS;
-  },1800);
+  },1700);
 }
-function applyGenerated(){if(GEN_RESULT){applyImageOverride(STUDIO_TARGET,GEN_RESULT);closeStudio();}}
+function pickMultiVariant(i,el){
+  GEN_RESULT=GEN_MULTI[i];
+  document.querySelectorAll('#gen-multi-grid img').forEach(im=>im.classList.remove('picked'));
+  el.classList.add('picked');
+}
+// Stamp company logo on top-right of generated image using canvas
+function stampLogo(imgUrl,logoDataUrl){
+  return new Promise(resolve=>{
+    const img=new Image();img.crossOrigin='anonymous';
+    img.onload=()=>{
+      const c=document.createElement('canvas');c.width=img.naturalWidth;c.height=img.naturalHeight;
+      const ctx=c.getContext('2d');ctx.drawImage(img,0,0);
+      const logo=new Image();logo.crossOrigin='anonymous';
+      logo.onload=()=>{
+        const lw=img.naturalWidth*0.14,lh=lw*(logo.height/logo.width);
+        const m=img.naturalWidth*0.03;
+        // semi-transparent rounded box behind logo
+        const bx=img.naturalWidth-lw-m,by=m;
+        ctx.fillStyle='rgba(255,255,255,.92)';
+        const r=12;
+        ctx.beginPath();ctx.moveTo(bx+r,by);ctx.lineTo(bx+lw-r,by);ctx.quadraticCurveTo(bx+lw,by,bx+lw,by+r);ctx.lineTo(bx+lw,by+lh-r);ctx.quadraticCurveTo(bx+lw,by+lh,bx+lw-r,by+lh);ctx.lineTo(bx+r,by+lh);ctx.quadraticCurveTo(bx,by+lh,bx,by+lh-r);ctx.lineTo(bx,by+r);ctx.quadraticCurveTo(bx,by,bx+r,by);ctx.fill();
+        ctx.drawImage(logo,bx+8,by+4,lw-16,lh-8);
+        try{resolve(c.toDataURL('image/jpeg',0.9));}catch(_){resolve(imgUrl);}
+      };
+      logo.onerror=()=>resolve(imgUrl);
+      logo.src=logoDataUrl;
+    };
+    img.onerror=()=>resolve(imgUrl);
+    img.src=imgUrl;
+  });
+}
+function applyGenerated(){
+  if(STUDIO_MODE==='video'&&GEN_VIDEO){applyImageOverride(STUDIO_TARGET,GEN_VIDEO,'video');closeStudio();}
+  else if(STUDIO_MODE==='multi'){
+    if(!GEN_RESULT){alert(CURRENT_LANG==='ar'?'اختر تصميم من الأربعة':'Pick one variant');return;}
+    // For product target: add all 4 to gallery; for others apply the picked one
+    if(STUDIO_TARGET.startsWith('product:')){
+      const pid=STUDIO_TARGET.split(':')[1];
+      if(!PRODUCT_GALLERIES[pid])PRODUCT_GALLERIES[pid]=[];
+      GEN_MULTI.forEach(u=>PRODUCT_GALLERIES[pid].push({type:'image',url:u}));
+      localStorage.setItem('zx_galleries',JSON.stringify(PRODUCT_GALLERIES));
+      toast(CURRENT_LANG==='ar'?`✨ تم إضافة ${GEN_MULTI.length} صور للمعرض`:`✨ Added ${GEN_MULTI.length} images`);
+    }
+    applyImageOverride(STUDIO_TARGET,GEN_RESULT);
+    closeStudio();
+  } else if(GEN_RESULT){applyImageOverride(STUDIO_TARGET,GEN_RESULT);closeStudio();}
+}
 function onStudioUpload(e){
   const file=e.target.files?.[0];if(!file)return;
-  if(file.size>2*1024*1024){alert(CURRENT_LANG==='ar'?'الصورة كبيرة (الحد ٢ ميجابايت)':'Image too big (2MB max)');return;}
+  if(file.size>2*1024*1024){alert(CURRENT_LANG==='ar'?'الصورة كبيرة (٢ ميجابايت)':'Image too big (2MB)');return;}
   const reader=new FileReader();
   reader.onload=ev=>{applyImageOverride(STUDIO_TARGET,ev.target.result);closeStudio();};
   reader.readAsDataURL(file);
 }
 function pickFromLibrary(url){applyImageOverride(STUDIO_TARGET,url);closeStudio();}
 function topupCredits(){
-  // MOCKED: simulate adding 100 credits
   ZERAX_CREDITS+=100;
   localStorage.setItem('zx_credits',String(ZERAX_CREDITS));
   document.getElementById('zerax-credits').textContent=ZERAX_CREDITS;
   document.getElementById('topup-banner').style.display='none';
-  alert(CURRENT_LANG==='ar'?'✓ تم شحن ١٠٠ نقطة (محاكاة - في الإنتاج تتم عبر Stripe)':'✓ Added 100 credits (mocked - production via Stripe)');
+  alert(CURRENT_LANG==='ar'?'✓ تم شحن ١٠٠ نقطة (محاكاة - في الإنتاج عبر Stripe)':'✓ +100 credits (mocked Stripe)');
 }
-function applyImageOverride(target,url){
-  IMG_OVERRIDES[target]=url;
+function applyImageOverride(target,url,type){
+  IMG_OVERRIDES[target]={url,type:type||'image'};
   localStorage.setItem('zx_img_overrides',JSON.stringify(IMG_OVERRIDES));
-  // Live-apply
   if(target==='main_banner'){
     const stack=document.getElementById('banner-img-stack');
-    if(stack){stack.innerHTML=`<img src="${url}" alt="banner" style="opacity:1;animation:bnr-fade 18s linear infinite">`;}
+    if(stack){
+      if(type==='video'){stack.innerHTML='';const v=document.getElementById('banner-video');v.src=url;v.style.opacity='1';v.load();v.play().catch(()=>{});}
+      else{stack.innerHTML=`<img src="${url}" alt="banner" style="opacity:1;animation:bnr-fade 18s linear infinite">`;}
+    }
   } else if(target.startsWith('cat_banner:')){
     document.getElementById('cat-banner-img').src=url;
+  } else if(target.startsWith('cat_icon:')){
+    renderCategories();
   } else if(target.startsWith('product:')){
     const id=target.split(':')[1];
     const p=PRODUCTS.find(x=>x.id===id);if(p)p.img=url;
+    // Also add as first gallery entry
+    if(!PRODUCT_GALLERIES[id])PRODUCT_GALLERIES[id]=[];
+    PRODUCT_GALLERIES[id].unshift({type:type||'image',url});
+    localStorage.setItem('zx_galleries',JSON.stringify(PRODUCT_GALLERIES));
     renderProducts();
     if(document.getElementById('view-category').style.display==='block')renderCategoryPage(activeCat);
   }
@@ -1487,17 +1679,62 @@ function toast(msg){
 }
 const _toastKf=document.createElement('style');_toastKf.textContent='@keyframes fadeOut{0%,70%{opacity:1}100%{opacity:0;transform:translate(-50%,20px)}}';document.head.appendChild(_toastKf);
 
-// ═══════════════════════ LIGHTBOX (Pan + Zoom) ═══════════════════════
+// ═══════════════════════ LIGHTBOX (Pan + Zoom + Gallery + Auto-advance) ═══════════════════════
 let _lbScale=1,_lbX=0,_lbY=0,_lbStartX=0,_lbStartY=0,_lbDragging=false;
-function openLightbox(url){
-  const img=document.getElementById('lb-img');
-  img.src=url;
+function buildProductGallery(productId){
+  const p=PRODUCTS.find(x=>x.id===productId);
+  const stored=PRODUCT_GALLERIES[productId]||[];
+  if(stored.length)return stored;
+  // Default: include p.img only
+  return p?[{type:'image',url:p.img}]:[];
+}
+function openLightbox(url,productId){
+  LB_CURRENT_PRODUCT=productId||null;
+  LB_GALLERY=productId?buildProductGallery(productId):[{type:'image',url}];
+  LB_INDEX=Math.max(0,LB_GALLERY.findIndex(g=>g.url===url));
+  if(LB_INDEX<0)LB_INDEX=0;
   _lbScale=1;_lbX=0;_lbY=0;
-  applyLbTransform();
   document.getElementById('lightbox').classList.add('open');
   document.body.style.overflow='hidden';
+  document.getElementById('lb-gallery-add').style.display=(ADMIN_MODE&&productId)?'flex':'none';
+  showLbItem();
+  startLbAutoAdvance();
 }
-function closeLightbox(){document.getElementById('lightbox').classList.remove('open');document.body.style.overflow='';}
+function showLbItem(){
+  const item=LB_GALLERY[LB_INDEX];if(!item)return;
+  const img=document.getElementById('lb-img'),vid=document.getElementById('lb-video');
+  if(item.type==='video'){
+    img.style.display='none';vid.style.display='block';vid.src=item.url;vid.play().catch(()=>{});
+  } else {
+    vid.pause();vid.style.display='none';
+    img.style.display='block';img.src=item.url.replace(/w=\d+/,'w=1600').replace(/q=\d+/,'q=90');
+  }
+  _lbScale=1;_lbX=0;_lbY=0;applyLbTransform();
+  // Render thumbnails
+  const thumbs=document.getElementById('lb-thumbs');
+  if(LB_GALLERY.length>1){
+    thumbs.style.display='flex';
+    thumbs.innerHTML=LB_GALLERY.map((g,i)=>`<img src="${g.type==='video'?'https://cdn-icons-png.flaticon.com/512/727/727245.png':g.url}" class="${i===LB_INDEX?'active':''}" onclick="jumpLb(${i})" alt="">`).join('');
+  } else thumbs.style.display='none';
+  // Show/hide nav buttons
+  const showNav=LB_GALLERY.length>1;
+  document.querySelector('.lb-prev').style.display=showNav?'flex':'none';
+  document.querySelector('.lb-next').style.display=showNav?'flex':'none';
+}
+function jumpLb(i){LB_INDEX=i;showLbItem();}
+function lbPrev(){LB_INDEX=(LB_INDEX-1+LB_GALLERY.length)%LB_GALLERY.length;showLbItem();}
+function lbNext(){LB_INDEX=(LB_INDEX+1)%LB_GALLERY.length;showLbItem();}
+function startLbAutoAdvance(){
+  if(_lbAutoAdvance)clearInterval(_lbAutoAdvance);
+  if(LB_GALLERY.length<2)return;
+  _lbAutoAdvance=setInterval(()=>{if(_lbScale===1)lbNext();},5000);
+}
+function closeLightbox(){
+  document.getElementById('lightbox').classList.remove('open');
+  document.body.style.overflow='';
+  if(_lbAutoAdvance)clearInterval(_lbAutoAdvance);
+  document.getElementById('lb-video').pause();
+}
 function lbZoom(delta){_lbScale=Math.max(0.5,Math.min(5,_lbScale+delta));applyLbTransform();}
 function lbReset(){_lbScale=1;_lbX=0;_lbY=0;applyLbTransform();}
 function applyLbTransform(){
@@ -1505,6 +1742,28 @@ function applyLbTransform(){
   if(!img)return;
   img.style.transform=`translate(${_lbX}px,${_lbY}px) scale(${_lbScale})`;
   document.getElementById('lb-info').textContent=Math.round(_lbScale*100)+'%';
+}
+function addToProductGallery(e,kind){
+  if(!LB_CURRENT_PRODUCT)return;
+  const file=e.target.files?.[0];if(!file)return;
+  const max=kind==='video'?20*1024*1024:5*1024*1024;
+  if(file.size>max){alert(CURRENT_LANG==='ar'?'الملف كبير':'File too large');return;}
+  const reader=new FileReader();
+  reader.onload=ev=>{
+    if(!PRODUCT_GALLERIES[LB_CURRENT_PRODUCT])PRODUCT_GALLERIES[LB_CURRENT_PRODUCT]=[];
+    PRODUCT_GALLERIES[LB_CURRENT_PRODUCT].push({type:kind,url:ev.target.result});
+    localStorage.setItem('zx_galleries',JSON.stringify(PRODUCT_GALLERIES));
+    LB_GALLERY=buildProductGallery(LB_CURRENT_PRODUCT);
+    LB_INDEX=LB_GALLERY.length-1;
+    showLbItem();
+    toast(CURRENT_LANG==='ar'?(kind==='video'?'🎬 تم إضافة فيديو':'📷 تم إضافة صورة'):(kind==='video'?'🎬 Video added':'📷 Image added'));
+  };
+  reader.readAsDataURL(file);
+}
+function openStudioFromLightbox(){
+  if(!LB_CURRENT_PRODUCT)return;
+  closeLightbox();
+  openStudio('product:'+LB_CURRENT_PRODUCT);
 }
 (function setupLightboxDrag(){
   const stage=document.getElementById('lb-stage');
@@ -1516,30 +1775,39 @@ function applyLbTransform(){
   stage.addEventListener('mousedown',start);stage.addEventListener('mousemove',move);window.addEventListener('mouseup',end);
   stage.addEventListener('touchstart',start,{passive:true});stage.addEventListener('touchmove',move,{passive:true});stage.addEventListener('touchend',end);
   stage.addEventListener('wheel',e=>{e.preventDefault();lbZoom(e.deltaY<0?0.15:-0.15);},{passive:false});
-  // Double-tap to zoom
   let lastTap=0;
   stage.addEventListener('click',e=>{if(e.target.id==='lb-img'){const now=Date.now();if(now-lastTap<350){_lbScale===1?lbZoom(1):lbReset();}lastTap=now;}});
 })();
 
 // Hook product images to lightbox (delegated)
 document.addEventListener('click',e=>{
-  // Ignore admin edit buttons and add-to-cart buttons
   if(e.target.closest('.img-edit-btn,.add-btn,.qty-btn'))return;
   const img=e.target.closest('.p-card img');
   if(!img)return;
-  openLightbox(img.src.replace(/w=\d+/,'w=1600').replace(/q=\d+/,'q=90'));
+  const card=img.closest('.p-card');
+  const addBtn=card?.querySelector('.add-btn');
+  // Find product ID from add-btn onclick
+  let pid=null;
+  if(addBtn){const m=addBtn.getAttribute('onclick')?.match(/addToCart\('([^']+)'\)/);if(m)pid=m[1];}
+  openLightbox(img.src,pid);
 });
 
 // Apply image overrides on initial render
 function applyAllOverrides(){
   if(IMG_OVERRIDES.main_banner){
     const stack=document.getElementById('banner-img-stack');
-    if(stack){stack.innerHTML=`<img src="${IMG_OVERRIDES.main_banner}" alt="banner" style="opacity:1;animation:bnr-fade 18s linear infinite">`;}
+    const ov=IMG_OVERRIDES.main_banner;
+    const obj=typeof ov==='string'?{url:ov,type:'image'}:ov;
+    if(stack){
+      if(obj.type==='video'){stack.innerHTML='';const v=document.getElementById('banner-video');v.src=obj.url;v.style.opacity='1';v.load();}
+      else{stack.innerHTML=`<img src="${obj.url}" alt="banner" style="opacity:1;animation:bnr-fade 18s linear infinite">`;}
+    }
   }
   Object.keys(IMG_OVERRIDES).forEach(k=>{
     if(k.startsWith('product:')){
       const id=k.split(':')[1];
-      const p=PRODUCTS.find(x=>x.id===id);if(p)p.img=IMG_OVERRIDES[k];
+      const p=PRODUCTS.find(x=>x.id===id);
+      if(p){const v=IMG_OVERRIDES[k];p.img=typeof v==='string'?v:v.url;}
     }
   });
 }
