@@ -706,6 +706,45 @@ function SuccessPanel({ generated }) {
     <div data-testid="ready-sites-success">
       <h2 style={sectionTitle}>✅ تم بناء موقعك — كل اللي تحتاجه جاهز</h2>
 
+      {/* Care Portal CTA — links to /care/{projectId} for post-delivery management */}
+      <div
+        data-testid="care-portal-cta"
+        style={{
+          ...cardStyle,
+          background: 'linear-gradient(135deg,#1a0f1a,#160a26)',
+          borderColor: '#a855f730',
+          marginBottom: 16,
+        }}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+          <span style={{ fontSize: 28 }}>🚀</span>
+          <div style={{ flex: 1, minWidth: 200 }}>
+            <div style={{ fontWeight: 900, color: '#c084fc', fontSize: 16, marginBottom: 4 }}>
+              فعّل تطبيق جوال + إدارة كاملة
+            </div>
+            <div style={{ color: '#a78bfa', fontSize: 12, lineHeight: 1.7 }}>
+              لوحة Care Portal تتيح لك تحويل موقعك إلى تطبيق على جوال زبائنك بضغطة وحدة، إدارة الأسواق، تعديل المحتوى، والمزيد.
+            </div>
+          </div>
+          <a
+            href={`/care/${generated.project_id}`}
+            data-testid="open-care-portal-btn"
+            style={{
+              padding: '10px 18px',
+              background: 'linear-gradient(135deg,#7c3aed,#ec4899)',
+              color: '#fff',
+              borderRadius: 8,
+              fontWeight: 900,
+              fontSize: 13,
+              textDecoration: 'none',
+              whiteSpace: 'nowrap',
+            }}
+          >
+            افتح لوحة التحكم ←
+          </a>
+        </div>
+      </div>
+
       {/* Admin credentials card */}
       {creds && (
         <div data-testid="admin-credentials-card" style={{ ...cardStyle, background: 'linear-gradient(135deg,#0f1e0f,#0e0e0e)', borderColor: '#22c55e30' }}>

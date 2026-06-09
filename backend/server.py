@@ -3541,6 +3541,15 @@ try:
 except Exception as _rse:
     logging.getLogger(__name__).error(f"Failed to register ready_sites module: {_rse}", exc_info=True)
 
+# ============== CARE PORTAL (post-delivery client dashboard + Mobile App upgrade) ==============
+try:
+    from modules.care_portal import create_care_router
+    _care_router = create_care_router(db, get_current_user)
+    app.include_router(_care_router)
+    logging.getLogger(__name__).info("Care Portal module registered")
+except Exception as _care_e:
+    logging.getLogger(__name__).error(f"Failed to register care_portal module: {_care_e}", exc_info=True)
+
 # ============== FREE-BUILD CHAT (Game-Studio-style conversational + asset approval) ==============
 try:
     from modules.freebuild.freebuild_chat import make_freebuild_chat_router

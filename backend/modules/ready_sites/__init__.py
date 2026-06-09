@@ -28,6 +28,7 @@ Pricing:
 from __future__ import annotations
 
 import os
+import json
 import uuid
 import logging
 from datetime import datetime, timezone
@@ -47,6 +48,12 @@ from .catalog import (
 )
 from .market_packs import MARKET_PACKS, get_market, list_markets, detect_market_from_country_code
 from .agent import generate_ready_site, refine_ready_site
+from .template_renderer import (
+    render_template,
+    list_templates,
+    get_recommended_template,
+    TEMPLATE_FILES,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -109,27 +116,53 @@ async def _run_generation(db, session_id: str, user_id: str) -> None:
 
         type_id = sess.get("type_id") or "restaurant"
         pattern_id = sess.get("pattern_id") or ""
-        pattern = get_pattern(type_id, pattern_id)
-        if not pattern:
-            raise RuntimeError("النمط البصري المختار غير موجود")
         branding = sess.get("branding") or {}
         enabled = sess.get("features") or []
-        type_features = get_features(type_id)
-        features_full = [f for f in type_features if f["id"] in enabled]
 
         # Pre-generate project_id so Zerax tracking link is unique per site.
         project_id = str(uuid.uuid4())
 
-        result = await generate_ready_site(
-            type_id=type_id,
-            pattern=pattern,
-            branding=branding,
-            features=features_full,
-            project_id=project_id,
-        )
-        html = result["html"]
-        admin_creds = result["admin_credentials"]
-        seed_summary = result.get("seed_summary", {})
+        # === TEMPLATE-FIRST ENGINE (Feb 2026 pivot) ===
+        # Each Ready Site is now rendered from one of our 3 master templates.
+        # The session's template_mode (set in the wizard) decides which template to use.
+        # If absent, fall back to the recommended template for this business type.
+        template_mode = sess.get("template_mode") or get_recommended_template(type_id)
+        market_id = sess.get("market_id") or "sa"
+        products = branding.get("products") or []
+
+        try:
+            rendered = render_template(
+                template_mode=template_mode,
+                branding=branding,
+                products=products,
+                market_id=market_id,
+                project_id=project_id,
+            )
+            html = rendered["html"]
+            admin_creds = {"username": "admin", "password": str(uuid.uuid4())[:8]}
+            seed_summary = {
+                "template_mode": template_mode,
+                "brand": rendered["brand"],
+                "market": market_id,
+                "product_count": rendered["product_count"],
+            }
+        except Exception as render_err:
+            # Fallback to legacy AI agent if template rendering fails (e.g. file missing)
+            logger.warning("[READY_SITES] template render failed, falling back to AI: %s", render_err)
+            pattern = get_pattern(type_id, pattern_id) or {}
+            type_features = get_features(type_id)
+            features_full = [f for f in type_features if f["id"] in enabled]
+            result = await generate_ready_site(
+                type_id=type_id,
+                pattern=pattern,
+                branding=branding,
+                features=features_full,
+                project_id=project_id,
+            )
+            html = result["html"]
+            admin_creds = result["admin_credentials"]
+            seed_summary = result.get("seed_summary", {})
+            template_mode = None  # legacy
 
         slug = (branding.get("business_name", "site") or "site").strip().replace(" ", "-").lower()[:40] or "site"
         project = {
@@ -138,6 +171,8 @@ async def _run_generation(db, session_id: str, user_id: str) -> None:
             "session_id": session_id,
             "type_id": type_id,
             "pattern_id": pattern_id,
+            "template_mode": template_mode,
+            "market_id": market_id,
             "branding": branding,
             "features": enabled,
             "html": html,
@@ -417,6 +452,88 @@ def create_ready_sites_router(db, get_current_user) -> APIRouter:
         ip = request.headers.get("cf-ipcountry") or request.headers.get("x-country-code") or ""
         market_id = detect_market_from_country_code(ip)
         return {"market_id": market_id, "market": get_market(market_id)}
+
+    # ---- Template-First Engine endpoints (Feb 2026 pivot) ----
+    @router.get("/templates")
+    async def get_templates():
+        """Public list of the 3 master templates with previews + best-fit info."""
+        return {"templates": list_templates()}
+
+    @router.post("/select-template")
+    async def select_template(session_id: str, template_mode: str, user=Depends(get_current_user)):
+        """Wizard step: client picks which master template (app/story/showroom)."""
+        if template_mode not in TEMPLATE_FILES:
+            raise HTTPException(400, "نمط القالب غير صالح")
+        result = await db.ready_sites_sessions.update_one(
+            {"id": session_id, "user_id": user["user_id"]},
+            {"$set": {"template_mode": template_mode}},
+        )
+        if result.matched_count == 0:
+            raise HTTPException(404, "الجلسة غير موجودة")
+        return {"template_mode": template_mode, "ok": True}
+
+    @router.post("/select-market")
+    async def select_market(session_id: str, market_id: str, user=Depends(get_current_user)):
+        """Wizard step: client picks default market (for currency/payments/shipping)."""
+        if not get_market(market_id):
+            raise HTTPException(400, "السوق غير موجود")
+        result = await db.ready_sites_sessions.update_one(
+            {"id": session_id, "user_id": user["user_id"]},
+            {"$set": {"market_id": market_id}},
+        )
+        if result.matched_count == 0:
+            raise HTTPException(404, "الجلسة غير موجودة")
+        return {"market_id": market_id, "ok": True}
+
+    @router.get("/manifest/{project_id}.webmanifest")
+    async def project_manifest(project_id: str):
+        """Per-project PWA manifest — makes every generated site installable."""
+        project = await db.ready_sites_projects.find_one(
+            {"id": project_id}, {"_id": 0, "name": 1, "branding": 1, "id": 1}
+        )
+        if not project:
+            raise HTTPException(404, "Project not found")
+        brand = project.get("branding", {}) or {}
+        name = project.get("name") or brand.get("business_name") or "Site"
+        primary = brand.get("primary_color") or "#7c3aed"
+        manifest = {
+            "name": name,
+            "short_name": (name[:12] or "Site"),
+            "start_url": f"/sites/{project.get('id')}",
+            "scope": f"/sites/{project.get('id')}/",
+            "display": "standalone",
+            "background_color": "#08080f",
+            "theme_color": primary,
+            "lang": "ar",
+            "dir": "rtl",
+            "icons": [
+                {"src": "/icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any"},
+                {"src": "/icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any"},
+                {"src": "/icons/icon-maskable-192.png", "sizes": "192x192", "type": "image/png", "purpose": "maskable"},
+                {"src": "/icons/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable"},
+            ],
+        }
+        return Response(
+            content=json.dumps(manifest, ensure_ascii=False),
+            media_type="application/manifest+json",
+            headers={"Cache-Control": "public, max-age=300"},
+        )
+
+    @router.post("/preview-template")
+    async def preview_template(payload: Dict[str, Any]):
+        """Render a template with arbitrary branding — used by the Wizard preview pane.
+        No auth needed (just renders, doesn't save)."""
+        try:
+            result = render_template(
+                template_mode=payload.get("template_mode", "app_mode"),
+                branding=payload.get("branding", {}),
+                products=payload.get("products", []),
+                market_id=payload.get("market_id", "sa"),
+                project_id="preview",
+            )
+            return Response(content=result["html"], media_type="text/html; charset=utf-8")
+        except Exception as e:
+            raise HTTPException(500, f"Preview render failed: {str(e)[:200]}")
 
     # ---- Zerax Branding Tracker (public) ----
     @router.get("/track-visit/{project_id}")

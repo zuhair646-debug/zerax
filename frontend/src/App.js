@@ -100,6 +100,7 @@ import PricingAdmin from '@/pages/PricingAdmin';
 import Companion from '@/pages/Companion';
 import ReadySites from '@/pages/ReadySites';
 import ZeraxShowcase from '@/pages/ZeraxShowcase';
+import CarePortal from '@/pages/CarePortal';
 import '@/App.css';
 
 function App() {
@@ -252,6 +253,7 @@ function App() {
           {/* 🏪 Ready Sites — Wizard-driven AI restaurant site builder */}
           <Route path="/ready-sites" element={<ProtectedRoute><ReadySites user={user} /></ProtectedRoute>} />
           <Route path="/dashboard/ready-sites" element={<ProtectedRoute><ReadySites user={user} /></ProtectedRoute>} />
+          <Route path="/care/:projectId" element={<ProtectedRoute><CarePortal user={user} /></ProtectedRoute>} />
           <Route path="/showcase" element={<ZeraxShowcase />} />
           {/* 💰 Pricing & Billing */}
           <Route path="/pricing" element={<Pricing user={user} />} />
