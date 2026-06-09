@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html dir="rtl" lang="ar"><head>
+<meta charset="UTF-8"><title>Story Mode — مطعم سينمائي</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,700;1,700&family=Tajawal:wght@300;400;700;900&display=swap" rel="stylesheet">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'Tajawal',sans-serif;background:#0a0a0a;color:#fff;overflow-x:hidden}
+.sf{font-family:'Playfair Display',serif}
+/* SCENE 1: HERO */
+.scene-hero{height:100vh;position:relative;overflow:hidden;display:flex;align-items:center;padding:0 80px}
+.scene-hero::before{content:'';position:absolute;inset:0;background:linear-gradient(90deg,rgba(0,0,0,.95) 0%,rgba(0,0,0,.4) 50%,rgba(0,0,0,.2) 100%);z-index:1}
+.scene-hero img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;filter:brightness(.7) contrast(1.1)}
+.hero-content{position:relative;z-index:2;max-width:600px}
+.hero-tagline{font-size:11px;letter-spacing:6px;color:#c8a97e;margin-bottom:24px;text-transform:uppercase;font-weight:700}
+.hero-title{font-size:64px;line-height:1.1;font-weight:400;margin-bottom:18px;letter-spacing:-1px}
+.hero-title b{font-style:italic;font-weight:700;color:#c8a97e}
+.hero-sub{font-size:17px;line-height:1.8;color:#d4d4d4;margin-bottom:36px;font-weight:300;max-width:480px}
+.hero-cta{padding:16px 44px;background:transparent;border:1.5px solid #c8a97e;color:#c8a97e;font-family:'Tajawal',sans-serif;font-size:13px;letter-spacing:3px;font-weight:700;cursor:pointer;transition:all .3s;text-transform:uppercase}
+.hero-cta:hover{background:#c8a97e;color:#0a0a0a}
+.scroll-hint{position:absolute;bottom:30px;left:50%;transform:translateX(-50%);color:#c8a97e;font-size:11px;letter-spacing:3px;z-index:2;animation:pulse 2s infinite}
+@keyframes pulse{0%,100%{opacity:.4}50%{opacity:1}}
+/* SCENE 2: STORY CHAPTER */
+.scene-story{padding:140px 80px;background:#0a0a0a;display:grid;grid-template-columns:1fr 1fr;gap:80px;align-items:center}
+.story-text .chapter{font-size:11px;letter-spacing:6px;color:#c8a97e;margin-bottom:20px}
+.story-text h2{font-size:48px;line-height:1.2;font-weight:400;margin-bottom:24px}
+.story-text h2 b{font-style:italic;color:#c8a97e}
+.story-text p{font-size:15px;line-height:2;color:#a8a8a8;margin-bottom:16px;font-weight:300}
+.story-img-wrap{position:relative;height:560px;border-radius:8px;overflow:hidden}
+.story-img-wrap img{width:100%;height:100%;object-fit:cover}
+.story-img-wrap::after{content:'';position:absolute;inset:0;border:1px solid rgba(200,169,126,.3);margin:14px;pointer-events:none}
+/* SCENE 3: SIGNATURE DISHES */
+.scene-dishes{padding:140px 80px;background:#0a0a0a;border-top:1px solid #1a1a1a}
+.sec-label{font-size:11px;letter-spacing:6px;color:#c8a97e;margin-bottom:14px;text-align:center}
+.sec-title{font-size:42px;text-align:center;font-weight:400;margin-bottom:80px}
+.sec-title b{font-style:italic;color:#c8a97e}
+.dishes-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:50px;max-width:1200px;margin:0 auto}
+.dish{cursor:pointer;transition:transform .4s}
+.dish:hover{transform:translateY(-8px)}
+.dish-img{width:100%;height:380px;overflow:hidden;border-radius:4px;margin-bottom:24px}
+.dish-img img{width:100%;height:100%;object-fit:cover;transition:transform 1s}
+.dish:hover .dish-img img{transform:scale(1.08)}
+.dish .num{font-size:11px;letter-spacing:4px;color:#c8a97e;margin-bottom:8px}
+.dish .name{font-size:24px;font-weight:400;margin-bottom:8px;font-style:italic}
+.dish .desc{font-size:13px;line-height:1.8;color:#888;margin-bottom:14px;font-weight:300}
+.dish .price{font-size:13px;letter-spacing:2px;color:#c8a97e}
+/* SCENE 4: CTA */
+.scene-cta{padding:160px 80px;text-align:center;background:#0a0a0a;border-top:1px solid #1a1a1a}
+.cta-title{font-size:56px;font-weight:400;margin-bottom:18px;line-height:1.2}
+.cta-title b{font-style:italic;color:#c8a97e}
+.cta-sub{font-size:15px;color:#888;margin-bottom:48px;font-weight:300;letter-spacing:1px}
+.cta-btn{padding:20px 60px;background:#c8a97e;color:#0a0a0a;border:none;font-family:'Tajawal',sans-serif;font-size:14px;letter-spacing:4px;font-weight:700;cursor:pointer;text-transform:uppercase}
+/* Floating Nav (appears after scroll, simulated visible here) */
+.floating-nav{position:absolute;top:40px;right:80px;display:flex;align-items:center;gap:40px;z-index:5}
+.floating-nav .logo{font-size:18px;letter-spacing:8px;color:#c8a97e;font-weight:700;font-family:'Playfair Display'}
+.floating-nav a{color:#fff;font-size:12px;letter-spacing:2px;text-decoration:none;opacity:.8;transition:opacity .3s}
+.floating-nav a:hover{opacity:1;color:#c8a97e}
+</style></head>
+<body>
+
+<!-- SCENE 1: HERO CINEMATIC -->
+<section class="scene-hero">
+  <div class="floating-nav">
+    <span class="logo">N O I R</span>
+    <a>STORY</a><a>MENU</a><a>RESERVE</a><a>CONTACT</a>
+  </div>
+  <img src="https://images.unsplash.com/photo-1414235077428-338989a2e8c0?w=2000&q=85">
+  <div class="hero-content">
+    <div class="hero-tagline">Fine Dining · Riyadh · Est. 2026</div>
+    <h1 class="hero-title sf">A taste of <b>elegance</b> in every bite</h1>
+    <p class="hero-sub">في كل صحن قصّة. في كل قضمة، رحلة. نقدّم لك تجربة طعام تتجاوز التوقّعات — تذوّق فنّ الطهي السعودي بروح عالمية.</p>
+    <button class="hero-cta">Begin Your Journey →</button>
+  </div>
+  <div class="scroll-hint">SCROLL ↓</div>
+</section>
+
+<!-- SCENE 2: OUR STORY -->
+<section class="scene-story">
+  <div class="story-text">
+    <div class="chapter">CHAPTER ONE</div>
+    <h2 class="sf">A Family Legacy <b>since 1987</b></h2>
+    <p>بدأت القصّة بمائدة جدتي في الرياض — حيث كانت تجمع العائلة حول أطباق المندي والكبسة المتقنة.</p>
+    <p>اليوم، نحمل تلك الذكريات في كل وصفة. كل طبق هو حنين، وكل ضيف هو جزء من القصة.</p>
+    <p>الشيف خالد، حفيد تلك المائدة، يقدّم لك تراثاً سعودياً بلمسة عصرية فاخرة.</p>
+  </div>
+  <div class="story-img-wrap">
+    <img src="https://images.unsplash.com/photo-1577219491135-ce391730fb2c?w=1200&q=85">
+  </div>
+</section>
+
+<!-- SCENE 3: SIGNATURE DISHES -->
+<section class="scene-dishes">
+  <div class="sec-label">CHAPTER TWO</div>
+  <h2 class="sec-title sf">Our Signature <b>Dishes</b></h2>
+  <div class="dishes-grid">
+    <div class="dish">
+      <div class="dish-img"><img src="https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=800"></div>
+      <div class="num">N° 01</div>
+      <div class="name sf">Mandi Royale</div>
+      <div class="desc">أرز بسمتي طويل · لحم خاروف نجدي · زعفران · صلصة الشيف الخاصة</div>
+      <div class="price">SAR 285</div>
+    </div>
+    <div class="dish">
+      <div class="dish-img"><img src="https://images.unsplash.com/photo-1565299624946-b28f40a0ae38?w=800"></div>
+      <div class="num">N° 02</div>
+      <div class="name sf">Kabsa d'Or</div>
+      <div class="desc">كبسة دجاج مع زعتر · بهارات سرية · رمان طازج · طبق أيقوني للمطعم</div>
+      <div class="price">SAR 210</div>
+    </div>
+    <div class="dish">
+      <div class="dish-img"><img src="https://images.unsplash.com/photo-1567620905732-2d1ec7ab7445?w=800"></div>
+      <div class="num">N° 03</div>
+      <div class="name sf">Honey Saffron</div>
+      <div class="desc">حلوى مخصصة · عسل سدر يمني · زعفران كشميري · جزء من الفصول الأربعة</div>
+      <div class="price">SAR 95</div>
+    </div>
+  </div>
+</section>
+
+<!-- SCENE 4: FINAL CTA -->
+<section class="scene-cta">
+  <h2 class="cta-title sf">Reserve your <b>Experience</b></h2>
+  <p class="cta-sub">Only 14 tables per evening · Reservations open 30 days in advance</p>
+  <button class="cta-btn">Reserve a Table →</button>
+</section>
+
+</body></html>

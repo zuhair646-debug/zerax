@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html dir="rtl" lang="ar"><head>
+<meta charset="UTF-8"><title>App Mode — متجر</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;700;900&display=swap" rel="stylesheet">
+<style>
+*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+body{font-family:'Tajawal',sans-serif;background:#f3f4f6;color:#0a0a0a;padding-bottom:80px}
+/* TOP HEADER */
+.top{background:#fff;padding:14px 18px;display:flex;align-items:center;gap:14px;position:sticky;top:0;z-index:50;box-shadow:0 2px 10px rgba(0,0,0,.04)}
+.logo{font-weight:900;font-size:22px;color:#7c3aed;letter-spacing:-1px}
+.search{flex:1;background:#f3f4f6;border:none;padding:12px 18px;border-radius:99px;font-family:inherit;font-size:14px;outline:none}
+.top-ico{width:42px;height:42px;border-radius:50%;background:#f3f4f6;display:flex;align-items:center;justify-content:center;font-size:18px;position:relative}
+.badge{position:absolute;top:-2px;left:-2px;width:18px;height:18px;background:#ef4444;color:#fff;border-radius:50%;font-size:10px;display:flex;align-items:center;justify-content:center;font-weight:900}
+/* BANNER */
+.banner{margin:14px 18px;height:180px;border-radius:18px;overflow:hidden;position:relative;background:linear-gradient(135deg,#7c3aed,#ec4899)}
+.banner img{width:100%;height:100%;object-fit:cover;mix-blend-mode:overlay;opacity:.7}
+.banner-text{position:absolute;inset:0;display:flex;flex-direction:column;justify-content:center;padding:0 28px;color:#fff;z-index:2}
+.banner-text small{background:#fff;color:#7c3aed;padding:4px 12px;border-radius:99px;font-size:11px;font-weight:900;width:fit-content;margin-bottom:8px}
+.banner-text h2{font-size:26px;font-weight:900;line-height:1.2;margin-bottom:6px}
+.banner-text p{font-size:13px;opacity:.95}
+.dots{position:absolute;bottom:14px;right:18px;display:flex;gap:5px;z-index:3}
+.dot{width:7px;height:7px;border-radius:50%;background:rgba(255,255,255,.5)}
+.dot.active{width:22px;border-radius:99px;background:#fff}
+/* STORIES */
+.stories{display:flex;gap:14px;padding:14px 18px;overflow-x:auto;scrollbar-width:none}
+.stories::-webkit-scrollbar{display:none}
+.story{display:flex;flex-direction:column;align-items:center;gap:6px;flex-shrink:0;cursor:pointer}
+.story-img{width:64px;height:64px;border-radius:50%;border:2.5px solid #7c3aed;padding:2px;background:#fff}
+.story-img img{width:100%;height:100%;object-fit:cover;border-radius:50%}
+.story span{font-size:11px;color:#374151;font-weight:700}
+/* QUICK CATEGORIES */
+.quick-cats{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;padding:6px 18px 18px}
+.q-cat{background:#fff;border-radius:14px;padding:14px 6px;text-align:center;border:1px solid #f3f4f6;cursor:pointer;transition:transform .15s}
+.q-cat:active{transform:scale(.95)}
+.q-cat .ico{font-size:28px;margin-bottom:6px}
+.q-cat span{font-size:11px;color:#0a0a0a;font-weight:700;display:block}
+/* SECTION */
+.sec{padding:8px 18px 0}
+.sec-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px}
+.sec-head h3{font-size:18px;font-weight:900}
+.sec-head a{color:#7c3aed;font-size:13px;font-weight:700;text-decoration:none}
+/* HOT DEALS */
+.hot{display:flex;gap:12px;overflow-x:auto;padding-bottom:14px;scrollbar-width:none}
+.hot::-webkit-scrollbar{display:none}
+.hot-card{flex-shrink:0;width:160px;background:#fff;border-radius:16px;overflow:hidden;border:1px solid #f3f4f6}
+.hot-card img{width:100%;height:120px;object-fit:cover}
+.hot-info{padding:10px 12px}
+.hot-info .name{font-size:13px;font-weight:700;margin-bottom:4px;color:#0a0a0a;display:-webkit-box;-webkit-line-clamp:1;-webkit-box-orient:vertical;overflow:hidden}
+.hot-info .price{display:flex;align-items:baseline;gap:6px;margin-bottom:6px}
+.hot-info .price b{color:#ef4444;font-weight:900}
+.hot-info .price s{color:#9ca3af;font-size:11px}
+.hot-discount{position:absolute;top:8px;right:8px;background:#ef4444;color:#fff;font-size:10px;font-weight:900;padding:3px 8px;border-radius:99px}
+.hot-card{position:relative}
+/* PRODUCTS GRID */
+.grid{display:grid;grid-template-columns:repeat(2,1fr);gap:12px;padding:14px 18px 24px}
+.p-card{background:#fff;border-radius:16px;overflow:hidden;border:1px solid #f3f4f6;position:relative}
+.p-card img{width:100%;height:140px;object-fit:cover}
+.p-info{padding:10px 12px 12px}
+.p-info .name{font-size:13px;font-weight:700;margin-bottom:4px;line-height:1.3;color:#0a0a0a}
+.p-info .desc{font-size:11px;color:#6b7280;margin-bottom:8px;line-height:1.4}
+.p-row{display:flex;justify-content:space-between;align-items:center}
+.p-price b{font-size:16px;font-weight:900;color:#0a0a0a}
+.p-price s{font-size:11px;color:#9ca3af;display:block}
+.add-btn{width:34px;height:34px;background:#7c3aed;color:#fff;border:none;border-radius:50%;font-size:18px;font-weight:900;cursor:pointer;display:flex;align-items:center;justify-content:center}
+/* BOTTOM NAV */
+.bnav{position:fixed;bottom:0;right:0;left:0;background:#fff;display:grid;grid-template-columns:repeat(5,1fr);padding:8px 0 calc(8px + env(safe-area-inset-bottom));box-shadow:0 -4px 20px rgba(0,0,0,.06);z-index:60}
+.bnav a{display:flex;flex-direction:column;align-items:center;gap:3px;color:#6b7280;text-decoration:none;font-size:10px;font-weight:700;padding:6px}
+.bnav a.active{color:#7c3aed}
+.bnav .ico{font-size:22px}
+.cart-fab{background:#7c3aed;color:#fff;width:54px;height:54px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:24px;margin-top:-22px;box-shadow:0 8px 20px rgba(124,58,237,.4);position:relative}
+.cart-fab .badge{top:-2px;left:-2px}
+</style></head>
+<body>
+<header class="top">
+  <div class="logo">سوقي 🛒</div>
+  <input class="search" placeholder="ابحث عن منتج...">
+  <div class="top-ico">🔔<span class="badge">3</span></div>
+</header>
+
+<div class="banner">
+  <img src="https://images.unsplash.com/photo-1542838132-92c53300491e?w=900&q=80">
+  <div class="banner-text">
+    <small>عرض اليوم 🔥</small>
+    <h2>خصم 30% على الخضار والفواكه</h2>
+    <p>توصيل خلال ساعة لباب بيتك</p>
+  </div>
+  <div class="dots"><div class="dot active"></div><div class="dot"></div><div class="dot"></div></div>
+</div>
+
+<div class="stories">
+  <div class="story"><div class="story-img"><img src="https://images.unsplash.com/photo-1542838132-92c53300491e?w=200"></div><span>خضار</span></div>
+  <div class="story"><div class="story-img"><img src="https://images.unsplash.com/photo-1610348725531-843dff563e2c?w=200"></div><span>فواكه</span></div>
+  <div class="story"><div class="story-img"><img src="https://images.unsplash.com/photo-1607623814075-e51df1bdc82f?w=200"></div><span>لحوم</span></div>
+  <div class="story"><div class="story-img"><img src="https://images.unsplash.com/photo-1535473895227-bdecb20fb157?w=200"></div><span>أسماك</span></div>
+  <div class="story"><div class="story-img"><img src="https://images.unsplash.com/photo-1488477181946-6428a0291777?w=200"></div><span>ألبان</span></div>
+  <div class="story"><div class="story-img"><img src="https://images.unsplash.com/photo-1509440159596-0249088772ff?w=200"></div><span>مخبوزات</span></div>
+  <div class="story"><div class="story-img"><img src="https://images.unsplash.com/photo-1587049352846-4a222e784d38?w=200"></div><span>مشروبات</span></div>
+</div>
+
+<div class="quick-cats">
+  <div class="q-cat"><div class="ico">🥬</div><span>خضار</span></div>
+  <div class="q-cat"><div class="ico">🍎</div><span>فواكه</span></div>
+  <div class="q-cat"><div class="ico">🥩</div><span>لحوم</span></div>
+  <div class="q-cat"><div class="ico">🐟</div><span>أسماك</span></div>
+  <div class="q-cat"><div class="ico">🥛</div><span>ألبان</span></div>
+  <div class="q-cat"><div class="ico">🍞</div><span>مخبوزات</span></div>
+  <div class="q-cat"><div class="ico">🧂</div><span>توابل</span></div>
+  <div class="q-cat"><div class="ico">📦</div><span>الكل</span></div>
+</div>
+
+<div class="sec">
+  <div class="sec-head"><h3>🔥 العروض الساخنة</h3><a>الكل ←</a></div>
+  <div class="hot">
+    <div class="hot-card"><div class="hot-discount">-30%</div><img src="https://images.unsplash.com/photo-1610348725531-843dff563e2c?w=400"><div class="hot-info"><div class="name">تفاح أحمر طازج</div><div class="price"><b>9 ر.س</b><s>13 ر.س</s></div></div></div>
+    <div class="hot-card"><div class="hot-discount">-25%</div><img src="https://images.unsplash.com/photo-1607623814075-e51df1bdc82f?w=400"><div class="hot-info"><div class="name">لحم بقري بلدي</div><div class="price"><b>45 ر.س</b><s>60 ر.س</s></div></div></div>
+    <div class="hot-card"><div class="hot-discount">-20%</div><img src="https://images.unsplash.com/photo-1488477181946-6428a0291777?w=400"><div class="hot-info"><div class="name">حليب طازج 1 لتر</div><div class="price"><b>6.5 ر.س</b><s>8 ر.س</s></div></div></div>
+    <div class="hot-card"><div class="hot-discount">-15%</div><img src="https://images.unsplash.com/photo-1542838132-92c53300491e?w=400"><div class="hot-info"><div class="name">خضار مشكلة</div><div class="price"><b>17 ر.س</b><s>20 ر.س</s></div></div></div>
+  </div>
+</div>
+
+<div class="sec">
+  <div class="sec-head"><h3>المنتجات الأكثر طلباً</h3><a>الكل ←</a></div>
+</div>
+
+<div class="grid">
+  <div class="p-card"><img src="https://images.unsplash.com/photo-1610348725531-843dff563e2c?w=500"><div class="p-info"><div class="name">تفاح أحمر مستورد</div><div class="desc">1 كيلو · طازج يومياً</div><div class="p-row"><div class="p-price"><b>13 ر.س</b></div><button class="add-btn">+</button></div></div></div>
+  <div class="p-card"><img src="https://images.unsplash.com/photo-1571771894821-ce9b6c11b08e?w=500"><div class="p-info"><div class="name">برتقال أبو سرة</div><div class="desc">1 كيلو · حلو وعصير</div><div class="p-row"><div class="p-price"><b>11 ر.س</b></div><button class="add-btn">+</button></div></div></div>
+  <div class="p-card"><img src="https://images.unsplash.com/photo-1607623814075-e51df1bdc82f?w=500"><div class="p-info"><div class="name">لحم خاروف</div><div class="desc">1 كيلو · بلدي · حلال</div><div class="p-row"><div class="p-price"><b>89 ر.س</b></div><button class="add-btn">+</button></div></div></div>
+  <div class="p-card"><img src="https://images.unsplash.com/photo-1488477181946-6428a0291777?w=500"><div class="p-info"><div class="name">حليب المراعي 1 ل</div><div class="desc">طازج · كامل الدسم</div><div class="p-row"><div class="p-price"><b>8 ر.س</b></div><button class="add-btn">+</button></div></div></div>
+</div>
+
+<nav class="bnav">
+  <a class="active"><div class="ico">🏠</div>الرئيسية</a>
+  <a><div class="ico">🔍</div>بحث</a>
+  <a><div class="cart-fab">🛒<span class="badge">2</span></div></a>
+  <a><div class="ico">📋</div>طلباتي</a>
+  <a><div class="ico">👤</div>حسابي</a>
+</nav>
+</body></html>
