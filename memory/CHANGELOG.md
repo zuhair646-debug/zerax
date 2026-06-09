@@ -1,6 +1,47 @@
 # Zitex Changelog
 
 
+## 2026-02-17 — 🚚 Integrated 3-Sided Delivery System ✅
+
+End-to-end driver/delivery platform spanning merchant ↔ driver ↔ customer.
+
+### Backend (`/api/delivery/*`)
+NEW router `/app/backend/routers/delivery_router.py` (~470 lines). All endpoints public for demo (no JWT). In-memory store seeded with 5 demo drivers + 5 orders in mixed statuses.
+
+**Drivers CRUD** · `/drivers` (list/create/upsert by phone) · `PATCH /drivers/{id}` · `DELETE /drivers/{id}` (auto-unassigns active orders to `pending`).
+
+**Driver Auth (demo OTP)** · `POST /driver/login` (any seed phone → returns deterministic OTP `1234`) · `POST /driver/verify-otp` → token · `GET /driver/me` + `GET /driver/feed` (active + done_today + summary). Header: `Authorization: DriverToken <tok>`.
+
+**Orders** · list with `?status=` / `?driver_id=` filters · auto-assign on create (matches zone, picks driver with fewest active deliveries) · `PATCH /assign` · `PATCH /status` (only assigned driver can change when driver-token used; updates timeline log + increments driver.earnings_today_sar on `delivered`) · `POST /location` (GPS ping) · `GET /track` (public customer view — sanitized).
+
+**Settings & Stats** · zones (5 Riyadh areas with per-zone fee + ETA), free-delivery threshold, auto-assign toggle, COD toggle · `/stats` returns by_status counts + active_drivers + revenue_today_sar.
+
+### Frontend — Merchant ACP Delivery Tab
+NEW `🚚 التوصيل` tab in the Admin Control Panel:
+- **4-stat strip** (waiting / active / available drivers / revenue today)
+- **Driver-app link card** with `فتح ↗` button → `/mockups/driver_app.html`
+- **3 sub-tabs**: 📦 الطلبات · 🧑‍✈️ السائقون · 🗺️ المناطق
+  - Orders: filter pills + assign-driver modal (shows online/delivering drivers w/ avatar+rating+today's count) + cancel button
+  - Drivers: avatar list with status pill + add-driver form (name/phone/vehicle/area) + delete (with auto-unassign)
+  - Zones/Settings: free-threshold + base-fee + per-km + auto-assign checkbox + COD checkbox + 5-zone list with per-zone fee/ETA
+
+### Frontend — Standalone Driver PWA (`/mockups/driver_app.html`)
+NEW dark-themed mobile-first app (480px max-width, RTL Arabic):
+- **Login**: phone (05xxxxxxxx validation) → OTP (deterministic 1234) → token persisted to `localStorage.zrx_drv_token`. Auto-login on revisit.
+- **Header**: avatar + name + rating + zone + status toggle pill (online ↔ offline with pulsing dot animation).
+- **Stats strip**: today's count / today's earnings / rating.
+- **Tabs**: النشطة (with badge count) / المنجزة / الأرباح (weekly total, per-delivery avg, productivity tip).
+- **Order detail overlay**: Leaflet dark-theme map with driver+destination markers + dashed route polyline, customer info with tel: link, address w/ Google Maps deep link, items breakdown, status timeline (5 steps with pulse on current step), action bar with next-status button + cancel.
+- **Status transitions**: `pending → assigned → picked_up → delivering → delivered` (each call updates server + advances timeline). When `delivering` starts, simulated GPS ping every 8 sec via `POST /location`.
+- **Bottom-nav**: الطلبات / الأرباح / خروج (with SVG icons).
+- **Auto-refresh**: every 30 sec when not viewing an order detail.
+
+### Tests
+- `/app/backend/tests/test_delivery.py` — 16 pytest cases ALL PASS (testing iteration_40)
+- Full E2E driver app + ACP delivery tab verified end-to-end including OTP login, status toggles, assignment modal, add-driver flow, session persistence after reload.
+
+
+
 ## 2026-02-17 — 🎬 Admin Control Panel + Promo Video Studio + Inline Recharge Gateway ✅
 
 Major UX consolidation per user's explicit Saudi-Arabic requests.

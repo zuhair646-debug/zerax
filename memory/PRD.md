@@ -1,6 +1,37 @@
 # Zitex AI Platform - PRD
 
 
+### 🆕 Feb 17 2026 — Phase 15: Integrated 3-Sided Delivery System ✅
+**Goal**: Full delivery platform tying merchants ↔ drivers ↔ customers.
+
+**1. Merchant side**: NEW 🚚 التوصيل tab inside the Admin Control Panel with 3 sub-tabs (Orders / Drivers / Zones). Live stats, assign-to-driver modal, add/remove drivers, configurable zones+fees+threshold, auto-assignment toggle.
+
+**2. Driver side**: NEW dedicated mobile PWA at `/mockups/driver_app.html`. Login by phone+OTP (demo OTP=1234), main app shows feed of active+done-today orders, status toggle (online/offline), Leaflet dark map with route polyline, full status flow (pending→assigned→picked_up→delivering→delivered) with auto location ping every 8s while delivering.
+
+**3. Customer side**: Public tracking endpoint `GET /api/delivery/orders/{id}/track` returns sanitized payload (driver name+phone+vehicle+rating + current_location + status_log). Frontend integration in main app to be wired into the existing order-tracking screen.
+
+**Backend**: `/app/backend/routers/delivery_router.py` — drivers CRUD, orders CRUD with auto_assign, driver OTP auth, status transitions with driver-permission check, GPS pings, public track, settings & stats. In-memory store with seeded demo (5 drivers + 5 orders in mixed statuses). 16/16 pytest pass.
+
+**Test phones for driver app**: 0501111111 (أحمد) · 0552222222 (خالد) · 0533333333 (سلطان) · 0544444444 (فيصل) · 0555555555 (بدر) — OTP for all: **1234**.
+
+**Files Modified/Created:**
+- `/app/backend/routers/delivery_router.py` (NEW, ~470 lines)
+- `/app/backend/server.py` (registered router)
+- `/app/frontend/public/mockups/driver_app.html` (NEW standalone driver PWA)
+- `/app/frontend/public/mockups/app_mode_full.html` (added 🚚 tab + assign modal + delivery JS module)
+- `/app/backend/tests/test_delivery.py` (16 pytest cases, all pass)
+
+**Remaining (next session):**
+- 💳 Tabby & Tamara installment integration (P1)
+- 🧙 Refactor React `ReadySites.js` wizard (P2)
+- 📤 Social Media AI post generator (P2)
+- 📑 ZATCA Phase 2 e-invoicing (P2)
+- 🧠 Unify AI agents via `claude_core.py` (P2)
+- 📞 Voice Agent / Call Center AI (P2)
+- 🎮 Game Studio prompt adherence (P2)
+
+
+
 ### 🆕 Feb 17 2026 — Phase 14: Admin Control Panel + Promo Video Studio + Inline Recharge ✅
 **User asks fulfilled (3 of 3):**
 1. ✅ AI Product Info generator was MOVED from inside the Image Studio modal into a brand-new **Admin Control Panel** (`#acp-modal`) — opens automatically when the merchant toggles ♛ admin mode. Tab `📦 المنتجات` has a full product editor (name/price/category/URL/description) with the `🤖 ولّد المعلومات` button right there.
