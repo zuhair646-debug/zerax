@@ -1,5 +1,36 @@
 # Zitex AI Platform - PRD
 
+### 🆕 Feb 9 2026 — Phase 6: Context-Aware Studio (Style/Angle/Auto-Prompt) ✅
+**User feedback addressed**: "الذكاء يكون عارف القسم ويسأل خلفية بيضاء ولا طبيعية، ويولّد عدة زوايا للمنتج (أمام/خلف/يمين/يسار/كرتون)"
+
+**Completed:**
+- ✅ **Context Awareness Banner**: Live green-pulsing badge at top of Studio explains the detected context (e.g. "فهمت السياق: منتج 'iPhone 16 Pro' في قسم إلكترونيات — موصى به: خلفية بيضاء + ٤ زوايا"). Different recommendations for: product / main_banner / cat_banner / cat_icon targets.
+- ✅ **Style Presets (4 options)**: 
+   - 🤍 **خلفية بيضاء** (Product showcase) — pure white BG, studio lighting
+   - 🌿 **لايف ستايل** (Lifestyle) — person holding product, natural environment
+   - 🎨 **إبداعي** (Creative) — dramatic lighting, artistic composition
+   - 📦 **كرتون المنتج** (Package box) — retail box / packaging shot
+   - Each style has dedicated curated Unsplash pools per product type (phone/laptop/watch/default).
+- ✅ **Angle Picker (multi-select chips)**: 7 angles for product targets — أمام / خلف / يسار / يمين / فوق / الكرتون / يد تمسكه. Count auto-syncs with number of selected angles. Pre-selected `front+back+right+package` for new products.
+- ✅ **Smart Auto-Prompt**: `updateAutoPrompt()` writes a precise Arabic/English prompt automatically based on:
+   - Product name (from PRODUCTS lookup by ID)
+   - Selected angles (joined naturally)
+   - Selected style
+   - Lighting modifier ("بإضاءة استوديو احترافية")
+   - User can still override by typing their own — system only auto-fills if textarea is empty or last auto-fill.
+- ✅ **Smart Defaults per Target**:
+   - Product → white BG + 4 angles + count=4
+   - Main banner → lifestyle + count=1
+   - Category banner → creative + count=1
+   - Category icon → white square + count=1
+- ✅ **STYLE_POOLS dictionary**: 4 styles × 4 categories of curated image URLs (white/lifestyle/creative/package × phone/laptop/watch/default). Real variety per style — no more "lifestyle" returning the same studio shots.
+
+**File**: `/app/frontend/public/mockups/app_mode_full.html` (refactored Studio JS, removed duplicates)
+
+⚠️ **Mocked**: Style/theme matching via curated Unsplash pools. Production should use Gemini Nano Banana with the auto-built prompt for true conditional generation.
+
+
+
 ### 🆕 Feb 9 2026 — Phase 5: Precise Prompts, Image Count Selector, Multi-Theme Mixing ✅
 **Completed in this session (fixes + enhancements based on user testing feedback):**
 
