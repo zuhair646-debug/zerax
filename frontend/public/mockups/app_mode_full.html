@@ -293,6 +293,28 @@ body.admin-mode .img-edit-btn{display:flex !important}
 .multi-grid img,.multi-grid video{width:100%;aspect-ratio:1;object-fit:cover;border-radius:10px;border:2px solid transparent;cursor:pointer;transition:all .2s}
 .multi-grid img.picked{border-color:#22c55e}
 .engine-pill{display:inline-flex;align-items:center;gap:5px;background:linear-gradient(135deg,#a78bfa,#7c3aed);color:#fff;padding:4px 10px;border-radius:99px;font-size:10px;font-weight:900;margin-inline-start:6px}
+/* BG COLOR SWATCHES + EXTRA OPTIONS */
+.bg-swatches{display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap}
+.bg-swatch{width:36px;height:36px;border-radius:50%;cursor:pointer;border:2.5px solid transparent;position:relative;transition:all .15s;box-shadow:inset 0 1px 4px rgba(0,0,0,.1)}
+.bg-swatch.active{border-color:#7c3aed;transform:scale(1.1);box-shadow:0 4px 12px rgba(124,58,237,.35)}
+.bg-swatch::after{content:attr(data-name);position:absolute;bottom:-18px;left:50%;transform:translateX(-50%);font-size:9px;color:#6b7280;white-space:nowrap;font-weight:700}
+.opt-toggle{display:flex;align-items:center;justify-content:space-between;padding:10px 12px;background:#f9fafb;border:1px solid #e5e7eb;border-radius:10px;margin-bottom:10px}
+.opt-toggle b{font-size:12px;font-weight:900;color:#0a0a0a}
+.opt-toggle small{font-size:10px;color:#6b7280;display:block;margin-top:2px}
+.toggle-switch{position:relative;width:46px;height:26px;background:#d1d5db;border-radius:99px;cursor:pointer;transition:all .2s;flex-shrink:0}
+.toggle-switch.on{background:#7c3aed}
+.toggle-switch::after{content:'';position:absolute;top:3px;left:3px;width:20px;height:20px;background:#fff;border-radius:50%;transition:all .2s;box-shadow:0 2px 4px rgba(0,0,0,.2)}
+.toggle-switch.on::after{left:23px}
+/* CLARIFY DIALOG */
+.clarify-overlay{display:none;position:absolute;inset:0;background:rgba(0,0,0,.6);z-index:50;align-items:center;justify-content:center;border-radius:20px;padding:14px;backdrop-filter:blur(6px)}
+.clarify-overlay.open{display:flex}
+.clarify-box{background:#fff;border-radius:16px;padding:20px;max-width:380px;width:100%;border:2px solid #7c3aed;box-shadow:0 12px 40px rgba(0,0,0,.4)}
+.clarify-box h4{font-size:14px;font-weight:900;color:#0a0a0a;margin-bottom:6px;display:flex;align-items:center;gap:6px}
+.clarify-box p{font-size:12px;color:#6b7280;line-height:1.6;margin-bottom:14px}
+.clarify-options{display:grid;grid-template-columns:repeat(2,1fr);gap:8px}
+.clarify-opt{padding:11px 8px;background:#faf5ff;border:1.5px solid #ede9fe;border-radius:10px;font-family:inherit;font-weight:900;font-size:12px;color:#7c3aed;cursor:pointer;transition:all .15s}
+.clarify-opt:hover{background:#7c3aed;color:#fff}
+.studio{position:relative}
 /* FOOTER */
 .zx-footer{background:#0f172a;color:#cbd5e1;padding:36px 18px 14px;direction:var(--dir,rtl);margin-top:30px;border-radius:24px 24px 0 0}
 .zx-foot-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:24px;margin-bottom:24px}
@@ -562,6 +584,15 @@ body.admin-mode .img-edit-btn{display:flex !important}
 <!-- ═══════════════════ IMAGE STUDIO MODAL (AI Generate / Upload / Library) ═══════════════════ -->
 <div class="studio-modal" id="studio-modal" onclick="if(event.target===this)closeStudio()">
   <div class="studio">
+    <!-- Clarification dialog overlay -->
+    <div class="clarify-overlay" id="clarify-overlay">
+      <div class="clarify-box">
+        <h4>🤔 <span id="clarify-title">احتاج توضيح صغير</span></h4>
+        <p id="clarify-question">اختر الموديل المطلوب:</p>
+        <div class="clarify-options" id="clarify-options"></div>
+        <button onclick="dismissClarify()" style="margin-top:10px;width:100%;padding:8px;background:#f3f4f6;border:none;border-radius:8px;font-family:inherit;font-size:11px;color:#6b7280;cursor:pointer">تخطي وتوليد مباشرة</button>
+      </div>
+    </div>
     <div class="studio-head">
       <h3>✨ <span data-key="studio_title">استوديو الصور الذكي</span></h3>
       <div style="display:flex;align-items:center;gap:8px">
@@ -602,6 +633,24 @@ body.admin-mode .img-edit-btn{display:flex !important}
             <button class="angle-chip" data-a="package" onclick="toggleAngle('package')" data-key="angle_pack">الكرتون</button>
             <button class="angle-chip" data-a="held" onclick="toggleAngle('held')" data-key="angle_held">يد تمسكه</button>
           </div>
+        </div>
+        <!-- Background color swatches -->
+        <div style="margin-bottom:6px"><b style="font-size:11px;color:#0a0a0a" data-key="bg_color">لون الخلفية:</b></div>
+        <div class="bg-swatches" id="bg-swatches">
+          <div class="bg-swatch active" data-bg="white" data-name="أبيض" style="background:#fff;border-color:#7c3aed" onclick="setBg('white')"></div>
+          <div class="bg-swatch" data-bg="gray" data-name="رمادي" style="background:#e5e7eb" onclick="setBg('gray')"></div>
+          <div class="bg-swatch" data-bg="black" data-name="أسود" style="background:#0a0a0a" onclick="setBg('black')"></div>
+          <div class="bg-swatch" data-bg="beige" data-name="بيج" style="background:#f5e6d3" onclick="setBg('beige')"></div>
+          <div class="bg-swatch" data-bg="gold" data-name="ذهبي" style="background:linear-gradient(135deg,#fbbf24,#d97706)" onclick="setBg('gold')"></div>
+          <div class="bg-swatch" data-bg="navy" data-name="أزرق فاخر" style="background:linear-gradient(135deg,#1e3a8a,#1e40af)" onclick="setBg('navy')"></div>
+        </div>
+        <!-- Person holding toggle (only for relevant styles) -->
+        <div class="opt-toggle" id="person-toggle-row" style="margin-top:18px">
+          <div>
+            <b data-key="opt_person">أحد يمسك المنتج؟</b>
+            <small data-key="opt_person_sub">صور لايف ستايل بدل عرض المنتج وحده</small>
+          </div>
+          <div class="toggle-switch" id="person-toggle" onclick="togglePerson()"></div>
         </div>
         <!-- Mode toggle: Image / Video -->
         <div class="studio-modes" id="studio-modes">
@@ -1499,6 +1548,8 @@ let STUDIO_COUNT=1;
 let STUDIO_STYLE='white'; // 'white' | 'lifestyle' | 'creative' | 'package'
 let STUDIO_ANGLES=new Set(['front','back']);
 let STUDIO_LOGO=null;
+let STUDIO_BG='white';
+let STUDIO_PERSON=false;
 let GEN_MULTI=[];
 let GEN_VIDEO=null;
 const PRODUCT_GALLERIES=JSON.parse(localStorage.getItem('zx_galleries')||'{}');
@@ -1558,7 +1609,60 @@ const MIXED_KEYS=['الكل','all','تشكيلة','collection','mixed','منوع
 function setStyle(s){
   STUDIO_STYLE=s;
   document.querySelectorAll('.style-btn').forEach(b=>b.classList.toggle('active',b.dataset.style===s));
+  // Auto-set person toggle for lifestyle
+  STUDIO_PERSON=(s==='lifestyle');
+  document.getElementById('person-toggle').classList.toggle('on',STUDIO_PERSON);
   updateAutoPrompt();
+}
+function setBg(color){
+  STUDIO_BG=color;
+  document.querySelectorAll('.bg-swatch').forEach(s=>s.classList.toggle('active',s.dataset.bg===color));
+  updateAutoPrompt();
+}
+function togglePerson(){
+  STUDIO_PERSON=!STUDIO_PERSON;
+  document.getElementById('person-toggle').classList.toggle('on',STUDIO_PERSON);
+  // If person is ON and style is white, auto-switch to lifestyle
+  if(STUDIO_PERSON && STUDIO_STYLE==='white')setStyle('lifestyle');
+  if(!STUDIO_PERSON && STUDIO_STYLE==='lifestyle')setStyle('white');
+  updateAutoPrompt();
+}
+
+// Clarification rules: vague brands need a model picker
+const CLARIFY_RULES=[
+  {test:t=>/iphone|آيفون|ايفون/i.test(t)&&!/(16|17|15|14|pro|max|plus|mini)/i.test(t),title:'أي موديل iPhone؟',titleEn:'Which iPhone model?',options:['iPhone 17 Pro Max','iPhone 17 Pro','iPhone 17','iPhone 16 Pro','iPhone 16','iPhone 15']},
+  {test:t=>/galaxy|سامسونج|samsung/i.test(t)&&!/(s24|s25|note|fold|flip|ultra)/i.test(t),title:'أي موديل Samsung؟',titleEn:'Which Samsung model?',options:['Galaxy S25 Ultra','Galaxy S25','Galaxy Z Fold 6','Galaxy Z Flip 6','Galaxy Note Ultra']},
+  {test:t=>/^(فستان|dress)$/i.test(t.trim())||(/(فستان|dress)/i.test(t)&&!/(زفاف|سهرة|كاجوال|wedding|evening|casual|maxi|mini)/i.test(t)),title:'أي نوع فستان؟',titleEn:'Which type of dress?',options:['فستان سهرة','فستان زفاف','فستان كاجوال','فستان طويل (Maxi)','فستان قصير (Mini)','فستان عمل']},
+  {test:t=>/(لابتوب|laptop|macbook)/i.test(t)&&!/(pro|air|m1|m2|m3|m4|13|14|15|16)/i.test(t),title:'أي موديل لابتوب؟',titleEn:'Which laptop model?',options:['MacBook Pro 16" M4','MacBook Pro 14" M4','MacBook Air 13" M3','Dell XPS 15','Lenovo ThinkPad','ASUS ROG']},
+  {test:t=>/(ساعة|watch)/i.test(t)&&!/(apple|rolex|garmin|fitbit|samsung|smart|كلاسيك|رياضية)/i.test(t),title:'أي نوع ساعة؟',titleEn:'Which watch type?',options:['Apple Watch Ultra','Rolex كلاسيكية','ساعة ذكية رياضية','ساعة جلد فاخرة','ساعة معدنية']},
+];
+
+let _pendingPrompt=null;
+function maybeClarify(prompt){
+  const rule=CLARIFY_RULES.find(r=>r.test(prompt));
+  if(!rule)return false;
+  document.getElementById('clarify-title').textContent=CURRENT_LANG==='ar'?rule.title:(rule.titleEn||rule.title);
+  document.getElementById('clarify-question').textContent=CURRENT_LANG==='ar'?'الذكاء الاصطناعي بيشتغل أحسن لو حدّدت بالضبط — اختر:':'AI works best with specifics — pick one:';
+  const opts=document.getElementById('clarify-options');
+  opts.innerHTML=rule.options.map(o=>`<button class="clarify-opt" onclick="applyClarify('${o.replace(/'/g,"&#39;")}')">${o}</button>`).join('');
+  document.getElementById('clarify-overlay').classList.add('open');
+  _pendingPrompt=prompt;
+  return true;
+}
+function applyClarify(model){
+  const newPrompt=(_pendingPrompt||'')+' — '+model;
+  document.getElementById('ai-prompt').value=newPrompt;
+  document.getElementById('ai-prompt').dataset.autoFilled='';
+  document.getElementById('clarify-overlay').classList.remove('open');
+  _pendingPrompt=null;
+  // Show a small toast that the AI is "researching"
+  toast(CURRENT_LANG==='ar'?'🔍 الذكاء يبحث عن '+model+' …':'🔍 AI is researching '+model+' …');
+  // Auto-trigger generation
+  setTimeout(()=>runGeneration(),700);
+}
+function dismissClarify(){
+  document.getElementById('clarify-overlay').classList.remove('open');
+  if(_pendingPrompt){runGeneration();_pendingPrompt=null;}
 }
 function toggleAngle(a){
   if(STUDIO_ANGLES.has(a))STUDIO_ANGLES.delete(a);else STUDIO_ANGLES.add(a);
@@ -1647,6 +1751,8 @@ function openStudio(target){
   STUDIO_TARGET=target;
   GEN_RESULT=null;GEN_MULTI=[];GEN_VIDEO=null;STUDIO_LOGO=null;
   STUDIO_COUNT=1;STUDIO_ANGLES=new Set(['front','back']);
+  STUDIO_BG='white';STUDIO_PERSON=false;
+  document.getElementById('clarify-overlay')?.classList.remove('open');
   document.getElementById('studio-modal').classList.add('open');
   document.getElementById('zerax-credits').textContent=ZERAX_CREDITS;
   document.getElementById('ai-prompt').value='';
@@ -1688,6 +1794,10 @@ function openStudio(target){
   // Apply suggestions
   setStyle(smartStyle);
   setStudioCount(smartCount);
+  // Reset bg + person UI
+  STUDIO_BG='white';
+  document.querySelectorAll('.bg-swatch').forEach(s=>s.classList.toggle('active',s.dataset.bg==='white'));
+  document.getElementById('person-toggle').classList.toggle('on',STUDIO_PERSON);
   // sync angle chips
   document.querySelectorAll('.angle-chip').forEach(c=>c.classList.toggle('active',STUDIO_ANGLES.has(c.dataset.a)));
   // Build library tab
@@ -1750,6 +1860,12 @@ function pickVariety(pools,count,seed){
 function generateAI(){
   const prompt=document.getElementById('ai-prompt').value.trim();
   if(!prompt){alert(CURRENT_LANG==='ar'?'اكتب وصف الصورة':'Describe first');return;}
+  // Step 1: Smart clarification — pause if prompt is vague
+  if(maybeClarify(prompt))return;
+  runGeneration();
+}
+function runGeneration(){
+  const prompt=document.getElementById('ai-prompt').value.trim();
   const cost=STUDIO_MODE==='video'?15:(STUDIO_COUNT*5);
   if(ZERAX_CREDITS<cost){document.getElementById('topup-banner').style.display='flex';return;}
   document.getElementById('gen-btn').disabled=true;
@@ -1768,9 +1884,7 @@ function generateAI(){
       const v=document.getElementById('gen-preview-video');
       v.src=GEN_VIDEO;v.style.display='block';v.load();v.play().catch(()=>{});
     } else {
-      // Detect theme IDs, then fetch from STYLE_POOLS[STUDIO_STYLE][id]
       let themeIds=detectThemeIds(prompt);
-      // For product target, infer from category
       if(!themeIds.length && STUDIO_TARGET.startsWith('product:')){
         const pid=STUDIO_TARGET.split(':')[1];
         const p=PRODUCTS.find(x=>x.id===pid);
@@ -1780,11 +1894,17 @@ function generateAI(){
         }
       }
       if(!themeIds.length)themeIds=['default'];
-      const stylePool=STYLE_POOLS[STUDIO_STYLE]||STYLE_POOLS.white;
+      // Determine effective style: respect person toggle
+      const effectiveStyle=STUDIO_PERSON?'lifestyle':(STUDIO_STYLE==='lifestyle'?'white':STUDIO_STYLE);
+      const stylePool=STYLE_POOLS[effectiveStyle]||STYLE_POOLS.white;
       const pools=themeIds.map(id=>stylePool[id]||stylePool.default).filter(p=>p&&p.length);
       const seed=Math.abs(prompt.split('').reduce((s,c)=>s+c.charCodeAt(0),0));
       let urls=pickVariety(pools,STUDIO_COUNT,seed);
       urls=urls.map(u=>unsplashTransform(u,size));
+      // Apply background color (visual tinting via canvas)
+      if(STUDIO_BG!=='white' && effectiveStyle==='white'){
+        urls=await Promise.all(urls.map(u=>applyBgColor(u,STUDIO_BG)));
+      }
       if(STUDIO_LOGO)urls=await Promise.all(urls.map(u=>stampLogo(u,STUDIO_LOGO)));
       GEN_MULTI=urls;GEN_RESULT=urls[0];
       if(STUDIO_COUNT===1){
@@ -1801,6 +1921,30 @@ function generateAI(){
     localStorage.setItem('zx_credits',String(ZERAX_CREDITS));
     document.getElementById('zerax-credits').textContent=ZERAX_CREDITS;
   },1500);
+}
+// Apply colored background tint to a white-bg image
+function applyBgColor(imgUrl,bgKey){
+  const colors={white:'#ffffff',gray:'#e5e7eb',black:'#1a1a1a',beige:'#f5e6d3',gold:'#fbbf24',navy:'#1e3a8a'};
+  const bg=colors[bgKey]||'#ffffff';
+  return new Promise(resolve=>{
+    const img=new Image();img.crossOrigin='anonymous';
+    img.onload=()=>{
+      const c=document.createElement('canvas');c.width=img.naturalWidth;c.height=img.naturalHeight;
+      const ctx=c.getContext('2d');
+      // Fill with target color, then draw image with multiply/screen blend for effect
+      ctx.fillStyle=bg;ctx.fillRect(0,0,c.width,c.height);
+      ctx.globalCompositeOperation='multiply';
+      ctx.drawImage(img,0,0);
+      ctx.globalCompositeOperation='source-over';
+      // Slight overlay for dark bg
+      if(bgKey==='black'||bgKey==='navy'){
+        ctx.fillStyle='rgba(255,255,255,.1)';ctx.fillRect(0,0,c.width,c.height);
+      }
+      try{resolve(c.toDataURL('image/jpeg',0.9));}catch(_){resolve(imgUrl);}
+    };
+    img.onerror=()=>resolve(imgUrl);
+    img.src=imgUrl;
+  });
 }
 
 // ═══════ EXPANDED THEME POOLS (8-12 distinct images per theme for real variety) ═══════

@@ -1,5 +1,27 @@
 # Zitex AI Platform - PRD
 
+### 🆕 Feb 9 2026 — Phase 8: Smart AI Brain (Clarification + BG Color + Person Toggle) ✅
+**User feedback**: "الذكاء لازم يوقف ويسأل عن النوع لو مو واضح، خلفية بيضاء/رمادي/ألوان احترافية بدون شخص يمسك المنتج إلا بطلب صريح، ويبحث عن المنتج بالماركة قبل التوليد."
+
+**Completed:**
+- ✅ **Smart Clarification Dialog**: 5 ambiguity rules (regex-based). When user types vague terms like:
+   - "iPhone" without model → asks "أي موديل؟" with 6 options (17 Pro Max, 17 Pro, 17, 16 Pro, 16, 15)
+   - "Samsung Galaxy" → asks for model (S25 Ultra, Z Fold 6, Note Ultra, etc.)
+   - "فستان" alone → asks type (سهرة / زفاف / كاجوال / Maxi / Mini / عمل)
+   - "لابتوب" → asks model (MacBook Pro M4 16"/14", MacBook Air, Dell XPS, ThinkPad, ROG)
+   - "ساعة" → asks type (Apple Watch / Rolex / smartwatch / leather / metal)
+   - Skip option: "تخطي وتوليد مباشرة" if user doesn't want to clarify
+   - On selection → toast "🔍 الذكاء يبحث عن [model]…" then auto-generates with enriched prompt
+- ✅ **Background Color Picker (6 professional swatches)**: ⚪ أبيض / 🩶 رمادي / ⚫ أسود / 🟤 بيج / 🟡 ذهبي / 🔵 أزرق فاخر. Each renders as a colored circle with name underneath. Applied via HTML5 canvas `multiply` blend mode for realistic color tinting of white-bg products.
+- ✅ **"Person Holding Product" Toggle**: explicit on/off switch. When ON, forces `lifestyle` style (person+product shots). When OFF, forces `white` style (product-only). Removes the previous automatic ambiguity where lifestyle could surprise users with random scenes.
+- ✅ **Style ↔ Person Auto-Sync**: changing style auto-syncs the person toggle (lifestyle→ON, others→OFF). Toggling person manually flips the style accordingly. Single source of truth.
+
+**File**: `/app/frontend/public/mockups/app_mode_full.html`
+
+⚠️ **Mocked**: AI "research" is simulated by appending the clarified model to the prompt. Real production should call a vision-LLM with web-search tool (e.g. Perplexity sonar-reasoning) to fetch reference images of the exact model, then pass them to Gemini Nano Banana with `image_conditioning`.
+
+
+
 ### 🆕 Feb 9 2026 — Phase 7: Theme Pool Cleanup (Headphones Bug Fix) ✅
 **User report**: User typed "سماعة رأس" in Studio prompt and got **iPhone images** instead of headphones.
 **Root cause**: In `THEMES` dictionary, the "سماعة" keyword was mapped to `id:'phone'` (same as iPhone). So `STYLE_POOLS[style].phone` was returned — phones, not headphones.
