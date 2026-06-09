@@ -3549,7 +3549,10 @@ try:
     # Real AI Image Studio (Gemini Nano Banana)
     from routers.image_studio_router import router as _image_studio_router
     app.include_router(_image_studio_router)
-    logging.getLogger(__name__).info("Care Portal module registered")
+    # Video Studio (storyboard + Zerax Voice TTS + ffmpeg slideshow)
+    from routers.video_studio_router import router as _video_studio_router
+    app.include_router(_video_studio_router)
+    logging.getLogger(__name__).info("Care Portal + Image/Video Studio modules registered")
 except Exception as _care_e:
     logging.getLogger(__name__).error(f"Failed to register care_portal module: {_care_e}", exc_info=True)
 

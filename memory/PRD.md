@@ -1,5 +1,27 @@
 # Zitex AI Platform - PRD
 
+### 🆕 Feb 9 2026 — Phase 13: AI Variants (Colors / Sizes / Warranty) on PDP ✅
+**User feedback fulfilled**: "ضيف خيارات للمعلومات - ألوان (تغيّر الصورة)، مقاسات، ضمان مع رابط - الذكاء يبحث ويجيبها"
+
+✅ **Backend enhanced**: `/api/image-studio/product-info` now requests + returns 3 extra fields:
+- `colors`: array of `{name, hex}` — color options (e.g. iPhone titanium colors)
+- `sizes`: array of strings — storage/clothing sizes (256GB-2TB or S-XL)
+- `warranty`: `{duration_text, url}` — duration + official warranty link
+- Gemini fills these correctly based on product type (electronics gets storage, fashion gets clothing sizes, etc.)
+
+✅ **Verified live**: `iPhone 17 Pro Max` returned 4 Arabic titanium colors (تيتانيوم أسود فلكي / أزرق محيطي / طبيعي داكن / ذهبي شمسي), 4 storages (256GB→2TB), warranty "ضمان محدود لمدة عام واحد" + Apple's official warranty URL.
+
+✅ **PDP Variants UI**: New `pdp-variants` section above the info block:
+- **Color circles**: tap-to-select with purple ring + label showing color name. Selecting cycles the hero image (visual variant feedback)
+- **Size pills**: tap-to-select, active state = solid purple
+- **Warranty card**: yellow banner with duration text + clickable "تفاصيل الضمان الرسمي ↗" link
+
+**Files Modified:**
+- `/app/backend/routers/image_studio_router.py`
+- `/app/frontend/public/mockups/app_mode_full.html` (CSS + showProductDetail variants rendering + pdPickColor/pdPickSize)
+
+
+
 ### 🆕 Feb 9 2026 — Phase 12: Product Detail Page + Cleaner Cat Icons ✅
 **User feedback fulfilled (2 of 3 items - Video Studio deferred for context window):**
 

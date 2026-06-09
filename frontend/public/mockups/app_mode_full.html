@@ -372,6 +372,92 @@ body.admin-mode .add-product-card{display:flex}
 .info-result .specs div{background:#fff;border-radius:6px;padding:6px 8px;font-size:11px}
 .info-result .specs b{display:block;color:#7c3aed;font-size:10px;margin-bottom:2px}
 .info-cost-pill{background:#fef3c7;color:#92400e;padding:2px 8px;border-radius:99px;font-size:10px;font-weight:900}
+/* ═══ ADMIN CONTROL PANEL ═══ */
+.acp-modal{position:fixed;inset:0;background:rgba(15,23,42,.7);backdrop-filter:blur(8px);display:none;z-index:550;align-items:center;justify-content:center;padding:14px}
+.acp-modal.open{display:flex}
+.acp{background:#fff;border-radius:20px;width:100%;max-width:560px;max-height:90vh;overflow:hidden;display:flex;flex-direction:column;box-shadow:0 24px 60px rgba(0,0,0,.4)}
+.acp-head{padding:16px 18px;background:linear-gradient(135deg,#7c3aed 0%,#a52a2a 100%);color:#fff;display:flex;justify-content:space-between;align-items:center}
+.acp-head h3{font-size:16px;font-weight:900;display:flex;align-items:center;gap:8px}
+.acp-credits-bar{display:flex;align-items:center;gap:10px;padding:12px 18px;background:linear-gradient(135deg,#fbbf24 0%,#f59e0b 100%);color:#0a0a0a;font-weight:900;font-size:13px}
+.acp-credits-bar .label{flex:1;display:flex;align-items:center;gap:6px}
+.acp-credits-bar .recharge-btn{background:#0a0a0a;color:#fbbf24;border:none;padding:7px 14px;border-radius:99px;font-family:inherit;font-weight:900;font-size:12px;cursor:pointer;display:flex;align-items:center;gap:4px}
+.acp-credits-bar .recharge-btn:hover{background:#1f2937}
+.acp-tabs{display:flex;border-bottom:2px solid #f3f4f6;background:#fafafa}
+.acp-tab{flex:1;padding:13px;background:none;border:none;font-family:inherit;font-weight:900;font-size:13px;color:#6b7280;cursor:pointer;border-bottom:3px solid transparent;transition:all .15s}
+.acp-tab.active{color:#7c3aed;border-bottom-color:#7c3aed;background:#fff}
+.acp-body{flex:1;overflow-y:auto;padding:18px}
+.acp-section{display:none}.acp-section.active{display:block}
+.acp-field{margin-bottom:12px}
+.acp-field label{display:block;font-size:11px;font-weight:900;color:#0a0a0a;margin-bottom:5px}
+.acp-field input,.acp-field textarea,.acp-field select{width:100%;padding:11px;border:1.5px solid #e5e7eb;border-radius:10px;font-family:inherit;font-size:13px;outline:none;background:#fff}
+.acp-field input:focus,.acp-field textarea:focus,.acp-field select:focus{border-color:#7c3aed}
+.acp-row{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.acp-ai-btn{width:100%;padding:13px;background:linear-gradient(135deg,#7c3aed,#a855f7);color:#fff;border:none;border-radius:12px;font-family:inherit;font-weight:900;font-size:13px;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px;box-shadow:0 6px 18px rgba(124,58,237,.35);position:relative;overflow:hidden}
+.acp-ai-btn::before{content:'';position:absolute;inset:0;background:linear-gradient(120deg,transparent 30%,rgba(255,255,255,.25) 50%,transparent 70%);animation:acp-shine 3s linear infinite}
+@keyframes acp-shine{0%{transform:translateX(-100%)}100%{transform:translateX(100%)}}
+.acp-ai-btn:disabled{opacity:.6;cursor:not-allowed}
+.acp-ai-btn .cost{font-size:11px;background:rgba(255,255,255,.25);padding:2px 8px;border-radius:99px}
+.acp-save-btn{width:100%;padding:13px;background:#0a0a0a;color:#fff;border:none;border-radius:12px;font-family:inherit;font-weight:900;font-size:13px;cursor:pointer;margin-top:10px}
+.acp-secondary{width:100%;padding:11px;background:#fff;border:1.5px solid #e5e7eb;color:#0a0a0a;border-radius:12px;font-family:inherit;font-weight:900;font-size:12px;cursor:pointer;margin-top:8px;display:flex;align-items:center;justify-content:center;gap:6px}
+.acp-secondary:hover{border-color:#7c3aed;color:#7c3aed}
+.acp-result-card{margin-top:14px;padding:12px;background:linear-gradient(135deg,#faf5ff,#fef3c7);border:1.5px solid #ddd6fe;border-radius:12px;display:none}
+.acp-result-card.show{display:block}
+.acp-result-card h5{font-size:13px;font-weight:900;color:#7c3aed;margin-bottom:6px}
+.acp-result-card .desc{font-size:12px;line-height:1.7;color:#0a0a0a;margin-bottom:8px}
+.acp-result-card ul{margin:6px 0 8px 18px;padding:0}
+.acp-result-card li{font-size:11px;line-height:1.6;color:#374151;margin-bottom:2px}
+.acp-product-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:8px;margin-bottom:10px}
+.acp-pcard{background:#fff;border:1.5px solid #e5e7eb;border-radius:10px;padding:8px;cursor:pointer;transition:all .15s;display:flex;align-items:center;gap:8px}
+.acp-pcard:hover{border-color:#7c3aed;transform:translateY(-1px)}
+.acp-pcard img{width:38px;height:38px;border-radius:6px;object-fit:cover;background:#f3f4f6}
+.acp-pcard .nm{font-size:11px;font-weight:900;color:#0a0a0a;line-height:1.3}
+.acp-pcard.adding{background:linear-gradient(135deg,#a78bfa,#7c3aed);border-color:#7c3aed;color:#fff;justify-content:center;text-align:center}
+.acp-pcard.adding .plus{font-size:22px;font-weight:900}
+/* VIDEO STUDIO */
+.vs-duration-row,.vs-tone-row,.vs-voice-row{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px}
+.vs-pill{padding:9px 14px;background:#fff;border:1.5px solid #e5e7eb;border-radius:99px;font-family:inherit;font-weight:900;font-size:11px;cursor:pointer;color:#374151;transition:all .15s}
+.vs-pill.active{background:#7c3aed;border-color:#7c3aed;color:#fff}
+.vs-scene{background:#fff;border:1.5px solid #e5e7eb;border-radius:12px;padding:10px;margin-bottom:8px;display:flex;gap:10px;align-items:center}
+.vs-scene .seq{width:28px;height:28px;border-radius:50%;background:#7c3aed;color:#fff;display:flex;align-items:center;justify-content:center;font-weight:900;font-size:12px;flex-shrink:0}
+.vs-scene .narr{flex:1;font-size:12px;line-height:1.5;color:#0a0a0a}
+.vs-scene small{display:block;color:#6b7280;font-size:10px;margin-top:3px}
+.vs-loader{text-align:center;padding:30px 14px;display:none}
+.vs-loader.show{display:block}
+.vs-loader .spin{width:48px;height:48px;border:4px solid #f3f4f6;border-top-color:#7c3aed;border-radius:50%;animation:spin 0.9s linear infinite;margin:0 auto 12px}
+@keyframes spin{to{transform:rotate(360deg)}}
+.vs-video-result{margin-top:14px;display:none}
+.vs-video-result.show{display:block}
+.vs-video-result video{width:100%;border-radius:14px;border:2px solid #7c3aed;box-shadow:0 8px 24px rgba(124,58,237,.3)}
+.vs-info-pill{display:inline-flex;align-items:center;gap:5px;background:#faf5ff;color:#7c3aed;padding:4px 10px;border-radius:99px;font-size:11px;font-weight:900;margin:8px 4px 0 0}
+/* RECHARGE MODAL */
+.rch-modal{position:fixed;inset:0;background:rgba(0,0,0,.75);backdrop-filter:blur(8px);display:none;z-index:600;align-items:center;justify-content:center;padding:14px}
+.rch-modal.open{display:flex}
+.rch{background:#fff;border-radius:20px;width:100%;max-width:480px;max-height:88vh;overflow:hidden;display:flex;flex-direction:column}
+.rch-head{padding:16px 18px;background:linear-gradient(135deg,#0a0a0a,#1f2937);color:#fff;display:flex;justify-content:space-between;align-items:center}
+.rch-head h3{font-size:15px;font-weight:900;display:flex;align-items:center;gap:8px}
+.rch-body{padding:16px;overflow-y:auto}
+.rch-pkg-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:14px}
+.rch-pkg{background:#fff;border:2px solid #e5e7eb;border-radius:14px;padding:12px;cursor:pointer;text-align:center;transition:all .2s;position:relative}
+.rch-pkg.active{border-color:#7c3aed;background:linear-gradient(135deg,#faf5ff,#fff);transform:translateY(-2px);box-shadow:0 8px 20px rgba(124,58,237,.2)}
+.rch-pkg .badge{position:absolute;top:-8px;right:8px;background:#f59e0b;color:#fff;padding:2px 8px;border-radius:99px;font-size:9px;font-weight:900;display:none}
+.rch-pkg.popular .badge{display:block}
+.rch-pkg .credits{font-size:22px;font-weight:900;color:#7c3aed}
+.rch-pkg .label{font-size:11px;color:#0a0a0a;font-weight:900;margin:3px 0}
+.rch-pkg .price{font-size:13px;color:#0a0a0a;font-weight:900}
+.rch-pkg .perpoint{font-size:9px;color:#6b7280}
+.rch-pay-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:6px;margin:14px 0 6px}
+.rch-pay{aspect-ratio:1.4;background:#fff;border:1.5px solid #e5e7eb;border-radius:10px;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:18px;color:#0a0a0a;font-weight:900;transition:all .15s;font-family:inherit}
+.rch-pay:hover{border-color:#7c3aed}
+.rch-pay.active{border-color:#7c3aed;background:#faf5ff;box-shadow:0 4px 10px rgba(124,58,237,.15)}
+.rch-pay small{font-size:8px;display:block;text-align:center;line-height:1}
+.rch-pay-grid + p{font-size:10px;color:#6b7280;text-align:center;margin:4px 0 12px;line-height:1.5}
+.rch-confirm{width:100%;padding:14px;background:linear-gradient(135deg,#10b981,#059669);color:#fff;border:none;border-radius:12px;font-family:inherit;font-weight:900;font-size:14px;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px;box-shadow:0 6px 18px rgba(16,185,129,.35)}
+.rch-confirm:disabled{opacity:.5}
+.rch-success{display:none;text-align:center;padding:24px 14px}
+.rch-success.show{display:block}
+.rch-success .check{font-size:60px;color:#10b981;margin-bottom:10px}
+.rch-success b{display:block;font-size:18px;color:#0a0a0a;margin-bottom:6px}
+.rch-success .receipt{font-family:monospace;font-size:11px;color:#6b7280;background:#f3f4f6;padding:8px;border-radius:8px;margin-top:10px}
 /* PRODUCT DETAIL PAGE */
 .pd-hero{position:relative;aspect-ratio:1;border-radius:18px;overflow:hidden;margin-bottom:14px;box-shadow:0 8px 24px rgba(0,0,0,.1)}
 .pd-hero img{width:100%;height:100%;object-fit:cover;cursor:zoom-in}
@@ -388,6 +474,19 @@ body.admin-mode .add-product-card{display:flex}
 .pd-info-html ul{padding-inline-start:18px;margin-bottom:14px}
 .pd-info-html li{margin-bottom:5px}
 .pd-empty{text-align:center;padding:30px 16px;color:#9ca3af;background:#f9fafb;border-radius:14px;font-size:13px;line-height:1.6}
+/* PDP - Variants (colors, sizes, warranty) */
+.pdp-variants{margin:14px 0;padding:14px 0;border-top:1px solid #f3f4f6;border-bottom:1px solid #f3f4f6}
+.pdp-var-row{margin-bottom:14px}
+.pdp-var-row b{display:block;font-size:12px;font-weight:900;color:#0a0a0a;margin-bottom:6px}
+.pdp-colors{display:flex;gap:8px;flex-wrap:wrap}
+.pdp-color{width:38px;height:38px;border-radius:50%;cursor:pointer;border:3px solid #fff;box-shadow:0 0 0 1.5px #e5e7eb;transition:all .15s;position:relative}
+.pdp-color.active{box-shadow:0 0 0 2.5px #7c3aed;transform:scale(1.08)}
+.pdp-color-label{font-size:10px;color:#6b7280;margin-top:4px;text-align:center;font-weight:700}
+.pdp-sizes{display:flex;gap:6px;flex-wrap:wrap}
+.pdp-size{padding:8px 14px;background:#fff;border:1.5px solid #e5e7eb;border-radius:10px;font-family:inherit;font-weight:900;font-size:12px;cursor:pointer;color:#374151;transition:all .15s}
+.pdp-size.active{background:#7c3aed;border-color:#7c3aed;color:#fff}
+.pdp-warranty{background:#fef3c7;border:1px solid #f59e0b;border-radius:10px;padding:10px 12px;font-size:12px;color:#78350f;line-height:1.7}
+.pdp-warranty a{color:#7c2d12;font-weight:900;text-decoration:underline}
 /* FOOTER */
 .zx-footer{background:#0f172a;color:#cbd5e1;padding:36px 18px 14px;direction:var(--dir,rtl);margin-top:30px;border-radius:24px 24px 0 0}
 .zx-foot-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:24px;margin-bottom:24px}
@@ -414,6 +513,7 @@ body.admin-mode .add-product-card{display:flex}
   <button class="pill-btn" onclick="toggleLang()" data-key="lang_btn"><span id="lang-flag">🇸🇦</span> <span id="lang-label">عربي</span></button>
   <button class="pill-btn" onclick="toggleMarketPopover(event)" id="market-btn">🌍 <span id="market-label">السعودية</span></button>
   <button class="pill-btn admin-toggle" id="admin-btn" onclick="toggleAdminMode()" title="وضع التحكم" style="padding:8px 10px"><span style="font-size:14px">♛</span></button>
+  <button class="pill-btn admin-toggle" id="acp-open-btn" onclick="openAcp()" title="لوحة تحكم التاجر" style="padding:8px 12px;display:none;background:linear-gradient(135deg,#7c3aed,#0a0a0a);color:#fbbf24 !important"><span style="font-size:13px">🛠️</span></button>
   <button class="cart-btn" onclick="openCart()">🛒<span class="cart-badge" id="cart-badge">0</span></button>
 </header>
 
@@ -628,6 +728,7 @@ body.admin-mode .add-product-card{display:flex}
   <h1 class="pd-title" id="pd-title"></h1>
   <p style="font-size:13px;color:#6b7280;line-height:1.7" id="pd-tagline"></p>
   <div class="pd-price-row"><div class="pd-price" id="pd-price"></div><button class="pd-cta" id="pd-add-btn"><span data-key="add_to_cart">🛒 أضف للسلة</span></button></div>
+  <div id="pd-variants" class="pdp-variants" style="display:none"></div>
   <div id="pd-info" class="pd-info-html"></div>
 </section>
 
@@ -800,17 +901,163 @@ body.admin-mode .add-product-card{display:flex}
         <div class="saved-grid" id="saved-grid"></div>
         <p id="saved-empty" style="text-align:center;color:#9ca3af;font-size:12px;padding:30px 10px;display:none" data-key="saved_empty">📭 ما عندك صور محفوظة بعد. ولّد صورة واضغط 💾 حفظ.</p>
       </div>
-      <!-- PRODUCT INFO PANEL (only shown when target is a product) -->
-      <div id="info-panel-wrap" style="display:none">
-        <div class="info-panel">
-          <h4>🤖 <span data-key="ai_info_title">معلومات المنتج بالذكاء الاصطناعي</span> <span class="info-cost-pill">١٠ <span data-key="credits">نقطة</span></span></h4>
-          <p style="font-size:11px;color:#6b7280;line-height:1.6;margin-bottom:10px" data-key="ai_info_help">اكتب اسم المنتج + رابط رسمي اختياري، والذكاء يبحث ويجيب الوصف والمميزات والمواصفات كاملة.</p>
-          <input id="info-name" placeholder="اسم المنتج (مثلاً: iPhone 17 Pro Max)">
-          <input id="info-url" placeholder="رابط رسمي اختياري (https://...)">
-          <button class="ai-fill-btn" id="info-fill-btn" onclick="aiFillProductInfo()">🤖 <span data-key="ai_fill">ابحث وعبّي المعلومات تلقائياً</span></button>
-          <div class="info-result" id="info-result"></div>
+      <!-- (Product Info AI was moved to Admin Control Panel — see #acp-modal) -->
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════ ADMIN CONTROL PANEL (Product Editor + Video Studio) ═══════════════════ -->
+<div class="acp-modal" id="acp-modal" onclick="if(event.target===this)closeAcp()">
+  <div class="acp">
+    <div class="acp-head">
+      <h3>♛ <span data-key="acp_title">لوحة تحكم التاجر</span></h3>
+      <button class="close-btn" onclick="closeAcp()" style="background:rgba(0,0,0,.2);color:#fff;border:none;width:32px;height:32px;border-radius:50%;cursor:pointer;font-size:14px">✕</button>
+    </div>
+    <div class="acp-credits-bar">
+      <div class="label">⚡ <span data-key="acp_balance">رصيدك:</span> <span id="acp-credits-value">50</span> <span data-key="acp_pt">نقطة Zerax</span></div>
+      <button class="recharge-btn" onclick="openRecharge()">＋ <span data-key="acp_recharge">شحن</span></button>
+    </div>
+    <div class="acp-tabs">
+      <button class="acp-tab active" data-tab="products" onclick="switchAcpTab('products')">📦 <span data-key="acp_tab_products">المنتجات</span></button>
+      <button class="acp-tab" data-tab="video" onclick="switchAcpTab('video')">🎬 <span data-key="acp_tab_video">Video Studio</span></button>
+    </div>
+    <div class="acp-body">
+      <!-- ── PRODUCTS TAB ── -->
+      <div class="acp-section active" data-section="products">
+        <p style="font-size:11px;color:#6b7280;margin-bottom:10px;line-height:1.6" data-key="acp_pick_product">اختر منتج لتعديله أو أضف منتج جديد:</p>
+        <div class="acp-product-grid" id="acp-product-grid"></div>
+
+        <div id="acp-product-form" style="display:none;border-top:2px dashed #e5e7eb;padding-top:14px;margin-top:6px">
+          <div class="acp-field">
+            <label data-key="acp_pname">اسم المنتج</label>
+            <input id="acp-pname" placeholder="مثلاً: iPhone 17 Pro Max">
+          </div>
+          <div class="acp-row">
+            <div class="acp-field"><label data-key="acp_pprice">السعر (ر.س)</label><input id="acp-pprice" type="number" min="0" placeholder="0"></div>
+            <div class="acp-field">
+              <label data-key="acp_pcat">الفئة</label>
+              <select id="acp-pcat">
+                <option value="electronics">إلكترونيات</option>
+                <option value="fashion">أزياء</option>
+                <option value="beauty">جمال وعناية</option>
+                <option value="home">منزل ومطبخ</option>
+              </select>
+            </div>
+          </div>
+          <div class="acp-field"><label data-key="acp_purl">رابط رسمي (اختياري)</label><input id="acp-purl" placeholder="https://apple.com/iphone-17"></div>
+          <div class="acp-field"><label data-key="acp_pdesc">الوصف</label><textarea id="acp-pdesc" rows="3" placeholder="وصف قصير للمنتج…"></textarea></div>
+
+          <button class="acp-ai-btn" id="acp-ai-btn" onclick="acpAiFillProduct()">
+            🤖 <span data-key="acp_ai_fill">ولّد المعلومات بالذكاء الاصطناعي</span>
+            <span class="cost">١٠ نقاط</span>
+          </button>
+          <div class="acp-result-card" id="acp-ai-result"></div>
+
+          <button class="acp-secondary" onclick="acpOpenImagesForCurrent()">🖼️ <span data-key="acp_open_studio">إدارة صور المنتج (Image Studio)</span></button>
+          <button class="acp-save-btn" onclick="acpSaveProduct()">💾 <span data-key="acp_save">حفظ المنتج</span></button>
+          <button class="acp-secondary" onclick="acpResetForm()" style="margin-top:6px;color:#dc2626;border-color:#fecaca" data-key="acp_cancel">إلغاء</button>
         </div>
       </div>
+
+      <!-- ── VIDEO STUDIO TAB ── -->
+      <div class="acp-section" data-section="video">
+        <p style="font-size:11px;color:#6b7280;margin-bottom:10px;line-height:1.6" data-key="vs_intro">ولّد فيديو إعلاني جاهز للسوشيال — قصة + تعليق صوتي بصوت Zerax + دمج فيديو احترافي.</p>
+        <div class="acp-field">
+          <label data-key="vs_pick">اختر المنتج</label>
+          <select id="vs-product"></select>
+        </div>
+        <div>
+          <label style="font-size:11px;font-weight:900;color:#0a0a0a;display:block;margin-bottom:5px" data-key="vs_dur">المدة (ثانية)</label>
+          <div class="vs-duration-row" id="vs-duration-row">
+            <button class="vs-pill" data-d="15" onclick="vsSetDuration(15)">15 ث</button>
+            <button class="vs-pill active" data-d="30" onclick="vsSetDuration(30)">30 ث</button>
+            <button class="vs-pill" data-d="45" onclick="vsSetDuration(45)">45 ث</button>
+            <button class="vs-pill" data-d="60" onclick="vsSetDuration(60)">60 ث</button>
+          </div>
+        </div>
+        <div>
+          <label style="font-size:11px;font-weight:900;color:#0a0a0a;display:block;margin-bottom:5px" data-key="vs_tone">النبرة</label>
+          <div class="vs-tone-row" id="vs-tone-row">
+            <button class="vs-pill active" data-t="energetic" onclick="vsSetTone('energetic')">⚡ حماسية</button>
+            <button class="vs-pill" data-t="luxury" onclick="vsSetTone('luxury')">💎 فاخرة</button>
+            <button class="vs-pill" data-t="warm" onclick="vsSetTone('warm')">🤗 دافئة</button>
+            <button class="vs-pill" data-t="tech" onclick="vsSetTone('tech')">🔬 تقنية</button>
+          </div>
+        </div>
+        <div>
+          <label style="font-size:11px;font-weight:900;color:#0a0a0a;display:block;margin-bottom:5px" data-key="vs_voice">صوت Zerax</label>
+          <div class="vs-voice-row" id="vs-voice-row">
+            <button class="vs-pill active" data-v="zerax_male_deep" onclick="vsSetVoice('zerax_male_deep')">رجل عميق</button>
+            <button class="vs-pill" data-v="zerax_male_warm" onclick="vsSetVoice('zerax_male_warm')">رجل دافئ</button>
+            <button class="vs-pill" data-v="zerax_female_warm" onclick="vsSetVoice('zerax_female_warm')">امرأة دافئة</button>
+            <button class="vs-pill" data-v="zerax_female_clear" onclick="vsSetVoice('zerax_female_clear')">امرأة واضحة</button>
+          </div>
+        </div>
+        <div class="acp-field"><label data-key="vs_cta">CTA (الدعوة للإجراء)</label><input id="vs-cta" value="اطلب الآن قبل نفاد الكمية" placeholder="اطلب الآن"></div>
+
+        <button class="acp-ai-btn" id="vs-storyboard-btn" onclick="vsGenerateStoryboard()">
+          📝 <span data-key="vs_make_story">ولّد القصة (storyboard)</span>
+          <span class="cost">٥ نقاط</span>
+        </button>
+
+        <div class="vs-loader" id="vs-story-loader"><div class="spin"></div><b data-key="vs_thinking">Zerax يكتب السيناريو…</b></div>
+
+        <div id="vs-storyboard-preview" style="display:none;margin-top:14px">
+          <h5 style="font-size:13px;font-weight:900;color:#7c3aed;margin-bottom:8px" id="vs-title-preview"></h5>
+          <div id="vs-scenes-list"></div>
+          <button class="acp-ai-btn" id="vs-render-btn" onclick="vsRenderVideo()" style="margin-top:8px">
+            🎬 <span data-key="vs_render">ولّد الفيديو الكامل</span>
+            <span class="cost" id="vs-render-cost">٣٠ نقطة</span>
+          </button>
+        </div>
+
+        <div class="vs-loader" id="vs-render-loader">
+          <div class="spin"></div>
+          <b data-key="vs_rendering">Zerax يدمج الفيديو + يولّد التعليق الصوتي…</b>
+          <p style="font-size:11px;color:#6b7280;margin-top:6px">قد يستغرق 30-60 ثانية</p>
+        </div>
+
+        <div class="vs-video-result" id="vs-video-result">
+          <video id="vs-video-player" controls playsinline></video>
+          <div id="vs-video-meta"></div>
+          <button class="acp-secondary" onclick="vsDownloadVideo()" style="margin-top:10px">⬇️ <span data-key="vs_download">تحميل الفيديو</span></button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════ RECHARGE MODAL (Inline Zerax wallet top-up) ═══════════════════ -->
+<div class="rch-modal" id="rch-modal" onclick="if(event.target===this)closeRecharge()">
+  <div class="rch">
+    <div class="rch-head">
+      <h3>＋ <span data-key="rch_title">شحن رصيد Zerax</span></h3>
+      <button onclick="closeRecharge()" style="background:rgba(255,255,255,.15);color:#fff;border:none;width:30px;height:30px;border-radius:50%;cursor:pointer">✕</button>
+    </div>
+    <div class="rch-body" id="rch-body-main">
+      <p style="font-size:11px;color:#6b7280;margin-bottom:12px;line-height:1.6" data-key="rch_sub">اختر باقة نقاط — يتم الشحن مباشرة على رصيدك في Zerax بدون مغادرة الموقع.</p>
+      <div class="rch-pkg-grid" id="rch-pkg-grid"></div>
+
+      <label style="font-size:11px;font-weight:900;color:#0a0a0a;display:block;margin-bottom:6px;margin-top:6px" data-key="rch_pay_method">طريقة الدفع</label>
+      <div class="rch-pay-grid" id="rch-pay-grid">
+        <div class="rch-pay active" data-m="mada" onclick="rchSetPay('mada')"><div>💳<small>مدى</small></div></div>
+        <div class="rch-pay" data-m="visa" onclick="rchSetPay('visa')"><div>VISA</div></div>
+        <div class="rch-pay" data-m="mastercard" onclick="rchSetPay('mastercard')"><div>MC</div></div>
+        <div class="rch-pay" data-m="apple_pay" onclick="rchSetPay('apple_pay')"><div></div></div>
+        <div class="rch-pay" data-m="stc_pay" onclick="rchSetPay('stc_pay')"><div>STC<small>Pay</small></div></div>
+      </div>
+      <p data-key="rch_note">🔒 الدفع آمن ومُشفّر · يتم خصم القيمة من حسابك في Zerax مباشرة</p>
+
+      <button class="rch-confirm" id="rch-confirm" onclick="rchConfirm()">
+        🚀 <span id="rch-confirm-label" data-key="rch_pay_now">ادفع الآن</span>
+      </button>
+    </div>
+    <div class="rch-success" id="rch-success">
+      <div class="check">✓</div>
+      <b data-key="rch_done">تم الشحن بنجاح!</b>
+      <p style="font-size:13px;color:#6b7280" id="rch-credits-added"></p>
+      <div class="receipt" id="rch-receipt"></div>
+      <button class="acp-save-btn" onclick="closeRecharge()" style="margin-top:14px" data-key="close">إغلاق</button>
     </div>
   </div>
 </div>
@@ -1822,13 +2069,19 @@ function toggleAdminMode(){
   localStorage.setItem('zx_admin',ADMIN_MODE?'1':'0');
   document.body.classList.toggle('admin-mode',ADMIN_MODE);
   const btn=document.getElementById('admin-btn');
+  const acpBtn=document.getElementById('acp-open-btn');
   if(btn)btn.style.opacity=ADMIN_MODE?'1':'0.7';
+  if(acpBtn)acpBtn.style.display=ADMIN_MODE?'inline-flex':'none';
   toast(ADMIN_MODE?(CURRENT_LANG==='ar'?'♛ وضع التحكم مُفعّل':'♛ Admin mode ON'):(CURRENT_LANG==='ar'?'تم الخروج من التحكم':'Admin mode OFF'));
   renderCategories();
+  // Auto-open the admin control panel when enabling admin mode
+  if(ADMIN_MODE)setTimeout(openAcp,250);
 }
 function applyAdminModeOnInit(){
   document.body.classList.toggle('admin-mode',ADMIN_MODE);
   const btn=document.getElementById('admin-btn');
+  const acpBtn=document.getElementById('acp-open-btn');
+  if(acpBtn)acpBtn.style.display=ADMIN_MODE?'inline-flex':'none';
   if(btn)btn.style.opacity=ADMIN_MODE?'1':'0.7';
 }
 function onStudioLogoUpload(e){
@@ -1902,23 +2155,7 @@ function openStudio(target){
   // Show video mode only for banners
   const videoModeEl=document.querySelector('.studio-mode[data-mode="video"]');
   if(videoModeEl)videoModeEl.style.display=(target==='main_banner'||target.startsWith('cat_banner:'))?'block':'none';
-  // Show/hide AI Product Info panel based on target
-  const infoWrap=document.getElementById('info-panel-wrap');
-  if(infoWrap){
-    if(target.startsWith('product:')){
-      infoWrap.style.display='block';
-      const pid=target.split(':')[1];
-      const p=PRODUCTS.find(x=>x.id===pid);
-      document.getElementById('info-name').value=p?(CURRENT_LANG==='ar'?p.ar:p.en):'';
-      document.getElementById('info-url').value='';
-      const stored=PRODUCT_INFO[pid];
-      const rEl=document.getElementById('info-result');
-      if(stored){
-        rEl.innerHTML=`<h5>${stored.title}</h5><div class="desc">${stored.description}</div>`+(stored.features?.length?`<b style="font-size:11px;color:#7c3aed">المميزات:</b><ul>${stored.features.map(f=>`<li>${f}</li>`).join('')}</ul>`:'');
-        rEl.classList.add('show');
-      } else { rEl.classList.remove('show'); }
-    } else { infoWrap.style.display='none'; }
-  }
+  // (Product Info AI panel was moved to Admin Control Panel — see openAcp())
   setStudioMode('image');
   // Generate auto-prompt
   updateAutoPrompt();
@@ -2225,6 +2462,27 @@ function showProductDetail(pid){
   document.getElementById('pd-edit-btn').onclick=(e)=>{e.stopPropagation();openStudio('product:'+pid);};
   const info=PRODUCT_INFO[pid];
   const html=info?.html;
+  // Render variants (colors / sizes / warranty)
+  const vWrap=document.getElementById('pd-variants');
+  if(info && (info.colors?.length || info.sizes?.length || info.warranty?.duration_text)){
+    let html2='';
+    if(info.colors?.length){
+      const labelColor=CURRENT_LANG==='ar'?'اللون':'Color';
+      html2+=`<div class="pdp-var-row"><b>${labelColor}: <span id="pd-color-label" style="font-weight:400;color:#6b7280">${info.colors[0].name||''}</span></b><div class="pdp-colors">`+
+        info.colors.map((c,i)=>`<div class="pdp-color ${i===0?'active':''}" style="background:${c.hex||'#888'}" data-name="${c.name||''}" onclick="pdPickColor(this)" title="${c.name||''}"></div>`).join('')+'</div></div>';
+    }
+    if(info.sizes?.length){
+      const labelSize=CURRENT_LANG==='ar'?'المقاس / السعة':'Size / Capacity';
+      html2+=`<div class="pdp-var-row"><b>${labelSize}:</b><div class="pdp-sizes">`+
+        info.sizes.map((s,i)=>`<button class="pdp-size ${i===0?'active':''}" onclick="pdPickSize(this)">${s}</button>`).join('')+'</div></div>';
+    }
+    if(info.warranty?.duration_text){
+      const labelW=CURRENT_LANG==='ar'?'🛡️ الضمان':'🛡️ Warranty';
+      html2+=`<div class="pdp-var-row"><b>${labelW}:</b><div class="pdp-warranty">${info.warranty.duration_text}${info.warranty.url?` · <a href="${info.warranty.url}" target="_blank">${CURRENT_LANG==='ar'?'تفاصيل الضمان الرسمي ↗':'Official warranty ↗'}</a>`:''}</div></div>`;
+    }
+    vWrap.innerHTML=html2;
+    vWrap.style.display='block';
+  } else { vWrap.style.display='none'; }
   document.getElementById('pd-info').innerHTML=html||`<div class="pd-empty">${CURRENT_LANG==='ar'?'ما فيه تفاصيل بعد. افتح <b style="color:#7c3aed">✨ Studio → 🤖 معلومات المنتج</b> عشان الذكاء يبحث ويعبّي المعلومات تلقائياً.':'No details yet. Open ✨ Studio → 🤖 Product Info.'}</div>`;
   showView('product');
   window.scrollTo({top:0,behavior:'smooth'});
@@ -2237,6 +2495,19 @@ function pdJump(i,pid){
   heroImg.src=gallery[i].url;
   heroImg.onclick=()=>openLightbox(gallery[i].url,pid);
   document.querySelectorAll('#pd-thumbs img').forEach((im,k)=>im.classList.toggle('active',k===i));
+}
+function pdPickColor(el){
+  document.querySelectorAll('.pdp-color').forEach(c=>c.classList.remove('active'));
+  el.classList.add('active');
+  document.getElementById('pd-color-label').textContent=el.dataset.name||'';
+  // Cycle through gallery image to suggest variant change (visual feedback)
+  const idx=Array.from(el.parentNode.children).indexOf(el);
+  const gallery=document.querySelectorAll('#pd-thumbs img');
+  if(gallery[idx])gallery[idx].click();
+}
+function pdPickSize(el){
+  document.querySelectorAll('.pdp-size').forEach(s=>s.classList.remove('active'));
+  el.classList.add('active');
 }
 
 
@@ -2317,13 +2588,17 @@ function deleteSavedImage(id){
   if(idx>=0){SAVED_IMAGES.splice(idx,1);localStorage.setItem('zx_saved_images',JSON.stringify(SAVED_IMAGES));renderSavedImages();}
 }
 
-// ═══════════════════════ ADD-PRODUCT ═══════════════════════
+// ═══════════════════════ ADD-PRODUCT (now routes through Admin Control Panel) ═══════════════════════
 function startAddProduct(catId){
-  const newId='custom_'+Date.now();
-  PRODUCTS.unshift({id:newId,cat:catId,ar:'منتج جديد',en:'New Product',descAr:'اضغط ✨ لتوليد صورة',descEn:'Click ✨ to generate',sar:0,img:'https://via.placeholder.com/800x800/ede9fe/7c3aed?text=%E2%9C%A8'});
-  renderProducts();
-  if(document.getElementById('view-category').style.display==='block')renderCategoryPage(catId);
-  openStudio('product:'+newId);
+  // Open the Admin Control Panel pre-filled to add a new product in this category.
+  openAcp();
+  switchAcpTab('products');
+  acpResetForm();
+  // pre-select category
+  const sel=document.getElementById('acp-pcat');
+  if(sel&&[...sel.options].some(o=>o.value===catId))sel.value=catId;
+  document.getElementById('acp-product-form').style.display='block';
+  ACP_EDITING_PID=null;
 }
 
 // ═══════════════════════ DEFAULT MULTI-IMAGE GALLERIES ═══════════════════════
@@ -2340,6 +2615,302 @@ function ensureDefaultGalleries(){
     PRODUCT_GALLERIES[p.id]=[{type:'image',url:p.img}].concat(pool.slice(0,3).map(u=>({type:'image',url:u})));
   });
   try{localStorage.setItem('zx_galleries',JSON.stringify(PRODUCT_GALLERIES));}catch(_){}
+}
+
+
+// ═══════════════════════ ADMIN CONTROL PANEL (ACP) ═══════════════════════
+let ACP_EDITING_PID=null;
+let ACP_AI_DATA=null;
+function openAcp(){
+  document.getElementById('acp-modal').classList.add('open');
+  syncCreditsDisplay();
+  acpRenderProductGrid();
+  vsPopulateProductSelect();
+}
+function closeAcp(){document.getElementById('acp-modal').classList.remove('open');}
+function switchAcpTab(tab){
+  document.querySelectorAll('.acp-tab').forEach(t=>t.classList.toggle('active',t.dataset.tab===tab));
+  document.querySelectorAll('.acp-section').forEach(s=>s.classList.toggle('active',s.dataset.section===tab));
+}
+function syncCreditsDisplay(){
+  const el=document.getElementById('acp-credits-value');if(el)el.textContent=ZERAX_CREDITS;
+  const e2=document.getElementById('zerax-credits');if(e2)e2.textContent=ZERAX_CREDITS;
+}
+function acpRenderProductGrid(){
+  const grid=document.getElementById('acp-product-grid');
+  if(!grid)return;
+  const recent=PRODUCTS.slice(0,7);
+  grid.innerHTML=`<div class="acp-pcard adding" onclick="acpStartNewProduct()"><div class="plus">＋</div><b style="font-size:11px">منتج جديد</b></div>`+
+    recent.map(p=>`<div class="acp-pcard" onclick="acpEditProduct('${p.id}')"><img src="${p.img}" alt=""><div class="nm">${(CURRENT_LANG==='ar'?p.ar:p.en).slice(0,30)}</div></div>`).join('');
+}
+function acpStartNewProduct(){
+  acpResetForm();
+  ACP_EDITING_PID=null;
+  document.getElementById('acp-product-form').style.display='block';
+}
+function acpEditProduct(pid){
+  const p=PRODUCTS.find(x=>x.id===pid);
+  if(!p)return;
+  ACP_EDITING_PID=pid;
+  document.getElementById('acp-pname').value=CURRENT_LANG==='ar'?p.ar:p.en;
+  document.getElementById('acp-pprice').value=p.sar||'';
+  document.getElementById('acp-pcat').value=p.cat||'electronics';
+  document.getElementById('acp-pdesc').value=CURRENT_LANG==='ar'?(p.descAr||''):(p.descEn||'');
+  document.getElementById('acp-purl').value='';
+  document.getElementById('acp-ai-result').classList.remove('show');
+  document.getElementById('acp-product-form').style.display='block';
+}
+function acpResetForm(){
+  ['acp-pname','acp-pprice','acp-purl','acp-pdesc'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
+  ACP_EDITING_PID=null;ACP_AI_DATA=null;
+  const r=document.getElementById('acp-ai-result');if(r)r.classList.remove('show');
+  document.getElementById('acp-product-form').style.display='none';
+}
+function acpOpenImagesForCurrent(){
+  // Ensure product exists (create on-the-fly if new), then open image studio for it.
+  let pid=ACP_EDITING_PID;
+  if(!pid){
+    const name=document.getElementById('acp-pname').value.trim();
+    if(!name){alert(CURRENT_LANG==='ar'?'اكتب اسم المنتج أولاً':'Enter product name first');return;}
+    pid=acpCommitProduct();
+  } else {
+    acpCommitProduct();
+  }
+  openStudio('product:'+pid);
+}
+function acpCommitProduct(){
+  const name=document.getElementById('acp-pname').value.trim()||'منتج جديد';
+  const price=parseFloat(document.getElementById('acp-pprice').value||'0')||0;
+  const cat=document.getElementById('acp-pcat').value||'electronics';
+  const desc=document.getElementById('acp-pdesc').value.trim();
+  if(ACP_EDITING_PID){
+    const p=PRODUCTS.find(x=>x.id===ACP_EDITING_PID);
+    if(p){
+      if(CURRENT_LANG==='ar'){p.ar=name;p.descAr=desc;}else{p.en=name;p.descEn=desc;}
+      p.sar=price;p.cat=cat;
+    }
+    return ACP_EDITING_PID;
+  }
+  const newId='custom_'+Date.now();
+  PRODUCTS.unshift({id:newId,cat:cat,ar:name,en:name,descAr:desc,descEn:desc,sar:price,img:'https://via.placeholder.com/800x800/ede9fe/7c3aed?text=%E2%9C%A8'});
+  ACP_EDITING_PID=newId;
+  return newId;
+}
+function acpSaveProduct(){
+  if(!document.getElementById('acp-pname').value.trim()){alert(CURRENT_LANG==='ar'?'اكتب اسم المنتج':'Enter product name');return;}
+  const pid=acpCommitProduct();
+  renderProducts();
+  const catView=document.getElementById('view-category');
+  if(catView&&catView.style.display==='block')renderCategoryPage(activeCat);
+  acpRenderProductGrid();
+  toast(CURRENT_LANG==='ar'?'✓ تم حفظ المنتج':'✓ Product saved');
+}
+async function acpAiFillProduct(){
+  const name=document.getElementById('acp-pname').value.trim();
+  if(!name){alert(CURRENT_LANG==='ar'?'اكتب اسم المنتج أولاً':'Enter product name first');return;}
+  if(ZERAX_CREDITS<10){openRecharge();return;}
+  const btn=document.getElementById('acp-ai-btn');
+  btn.disabled=true;
+  const originalHTML=btn.innerHTML;
+  btn.innerHTML='⏳ <span>الذكاء يبحث في الإنترنت…</span>';
+  try{
+    const res=await fetch(API+'/api/image-studio/product-info',{
+      method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({name,official_url:document.getElementById('acp-purl').value.trim()||undefined,lang:CURRENT_LANG})
+    });
+    if(!res.ok)throw new Error((await res.json().catch(()=>({}))).detail||'AI failed');
+    const data=await res.json();
+    ACP_AI_DATA=data;
+    // Auto-fill form fields
+    document.getElementById('acp-pname').value=data.title||name;
+    document.getElementById('acp-pdesc').value=data.description||'';
+    // Render rich preview
+    const r=document.getElementById('acp-ai-result');
+    r.innerHTML=`<h5>${data.title}</h5><div class="desc">${data.description||''}</div>`+
+      (data.features?.length?`<b style="font-size:11px;color:#7c3aed">المميزات:</b><ul>${data.features.map(f=>`<li>${f}</li>`).join('')}</ul>`:'')+
+      (data.colors?.length?`<b style="font-size:11px;color:#7c3aed">الألوان المتاحة:</b><div style="display:flex;gap:6px;flex-wrap:wrap;margin:5px 0 10px">${data.colors.map(c=>`<span style="display:inline-flex;align-items:center;gap:4px;font-size:11px;background:#fff;padding:3px 8px;border-radius:99px;border:1px solid #e5e7eb"><span style="display:inline-block;width:12px;height:12px;border-radius:50%;background:${c.hex||'#888'};border:1px solid #d1d5db"></span>${c.name_ar||c.name||c.name_en||''}</span>`).join('')}</div>`:'')+
+      (data.warranty?.url?`<b style="font-size:11px;color:#7c3aed">الضمان:</b><br><a href="${data.warranty.url}" target="_blank" style="font-size:11px;color:#7c3aed;text-decoration:underline">${data.warranty.duration_text||'الموقع الرسمي'}</a>`:'');
+    r.classList.add('show');
+    // Persist AI data on product
+    PRODUCT_INFO[ACP_EDITING_PID||'_pending']=data;
+    try{localStorage.setItem('zx_product_info',JSON.stringify(PRODUCT_INFO));}catch(_){}
+    // Auto-commit to product (so PDP variants show)
+    if(ACP_EDITING_PID){
+      const p=PRODUCTS.find(x=>x.id===ACP_EDITING_PID);
+      if(p){
+        if(CURRENT_LANG==='ar'){p.ar=data.title;p.descAr=data.description;}else{p.en=data.title;p.descEn=data.description;}
+      }
+      PRODUCT_INFO[ACP_EDITING_PID]=data;
+      try{localStorage.setItem('zx_product_info',JSON.stringify(PRODUCT_INFO));}catch(_){}
+    }
+    ZERAX_CREDITS-=(data.cost||10);
+    localStorage.setItem('zx_credits',String(ZERAX_CREDITS));
+    syncCreditsDisplay();
+    toast(CURRENT_LANG==='ar'?'✓ تم توليد المعلومات':'✓ Info generated');
+  }catch(e){
+    alert((CURRENT_LANG==='ar'?'فشل التوليد: ':'Failed: ')+e.message);
+  }finally{
+    btn.disabled=false;btn.innerHTML=originalHTML;
+  }
+}
+
+// ═══════════════════════ VIDEO STUDIO ═══════════════════════
+let VS_DURATION=30, VS_TONE='energetic', VS_VOICE='zerax_male_deep';
+let VS_STORYBOARD=null, VS_PRODUCT_ID=null, VS_LAST_VIDEO=null;
+function vsSetDuration(d){VS_DURATION=d;document.querySelectorAll('#vs-duration-row .vs-pill').forEach(p=>p.classList.toggle('active',+p.dataset.d===d));vsUpdateRenderCost();}
+function vsSetTone(t){VS_TONE=t;document.querySelectorAll('#vs-tone-row .vs-pill').forEach(p=>p.classList.toggle('active',p.dataset.t===t));}
+function vsSetVoice(v){VS_VOICE=v;document.querySelectorAll('#vs-voice-row .vs-pill').forEach(p=>p.classList.toggle('active',p.dataset.v===v));}
+function vsUpdateRenderCost(){const c=Math.floor(VS_DURATION/5)*5;const el=document.getElementById('vs-render-cost');if(el)el.textContent=c+' نقطة';}
+function vsPopulateProductSelect(){
+  const sel=document.getElementById('vs-product');if(!sel)return;
+  sel.innerHTML=PRODUCTS.slice(0,30).map(p=>`<option value="${p.id}">${(CURRENT_LANG==='ar'?p.ar:p.en).slice(0,45)}</option>`).join('');
+}
+async function vsGenerateStoryboard(){
+  const sel=document.getElementById('vs-product');
+  const pid=sel?.value;
+  if(!pid){alert('اختر منتج');return;}
+  if(ZERAX_CREDITS<5){openRecharge();return;}
+  VS_PRODUCT_ID=pid;
+  const p=PRODUCTS.find(x=>x.id===pid);
+  const cta=document.getElementById('vs-cta').value.trim()||'اطلب الآن';
+  document.getElementById('vs-story-loader').classList.add('show');
+  document.getElementById('vs-storyboard-preview').style.display='none';
+  document.getElementById('vs-video-result').classList.remove('show');
+  try{
+    const res=await fetch(API+'/api/promo-video/storyboard',{
+      method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({
+        product_name:CURRENT_LANG==='ar'?p.ar:p.en,
+        product_description:(CURRENT_LANG==='ar'?p.descAr:p.descEn)||'',
+        duration_seconds:VS_DURATION, tone:VS_TONE, lang:CURRENT_LANG, cta:cta
+      })
+    });
+    if(!res.ok)throw new Error((await res.json().catch(()=>({}))).detail||'storyboard failed');
+    const data=await res.json();
+    VS_STORYBOARD=data;
+    document.getElementById('vs-title-preview').textContent=data.title;
+    document.getElementById('vs-scenes-list').innerHTML=data.scenes.map(s=>
+      `<div class="vs-scene"><div class="seq">${s.seq}</div><div class="narr">${s.narration}<small>🎨 ${s.visual_prompt.slice(0,70)}</small></div></div>`
+    ).join('');
+    document.getElementById('vs-storyboard-preview').style.display='block';
+    ZERAX_CREDITS-=(data.cost||5);
+    localStorage.setItem('zx_credits',String(ZERAX_CREDITS));
+    syncCreditsDisplay();
+    toast('✓ تم توليد القصة');
+  }catch(e){alert('فشل التوليد: '+e.message);}
+  finally{document.getElementById('vs-story-loader').classList.remove('show');}
+}
+async function vsRenderVideo(){
+  if(!VS_STORYBOARD){alert('ولّد القصة أولاً');return;}
+  const cost=Math.floor(VS_DURATION/5)*5;
+  if(ZERAX_CREDITS<cost){openRecharge();return;}
+  const p=PRODUCTS.find(x=>x.id===VS_PRODUCT_ID);
+  // Build scenes with product gallery images (fallback to p.img)
+  const gallery=PRODUCT_GALLERIES?.[VS_PRODUCT_ID]||[{type:'image',url:p?.img}];
+  const imgUrls=gallery.filter(g=>g.type==='image'||!g.type).map(g=>g.url);
+  const scenes=VS_STORYBOARD.scenes.map((s,i)=>({
+    narration:s.narration,
+    text_overlay:s.text_overlay||null,
+    image_url: imgUrls[i % imgUrls.length] || p?.img
+  }));
+  document.getElementById('vs-render-loader').classList.add('show');
+  document.getElementById('vs-video-result').classList.remove('show');
+  try{
+    const res=await fetch(API+'/api/promo-video/generate',{
+      method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({
+        title:VS_STORYBOARD.title, scenes, duration_seconds:VS_DURATION, voice:VS_VOICE,
+        full_narration:VS_STORYBOARD.full_narration, cta:VS_STORYBOARD.cta, lang:CURRENT_LANG
+      })
+    });
+    if(!res.ok)throw new Error((await res.json().catch(()=>({}))).detail||'render failed');
+    const data=await res.json();
+    VS_LAST_VIDEO=data;
+    const vid=document.getElementById('vs-video-player');
+    vid.src=API+data.video_url;
+    document.getElementById('vs-video-meta').innerHTML=
+      `<div style="margin-top:8px"><span class="vs-info-pill">⏱ ${data.duration_seconds}s</span><span class="vs-info-pill">🎬 ${data.scenes_count} مشاهد</span><span class="vs-info-pill">🎙 ${data.voice_used}</span><span class="vs-info-pill">⚡ -${data.cost} نقطة</span></div>`;
+    document.getElementById('vs-video-result').classList.add('show');
+    ZERAX_CREDITS-=(data.cost||cost);
+    localStorage.setItem('zx_credits',String(ZERAX_CREDITS));
+    syncCreditsDisplay();
+    toast('✓ تم توليد الفيديو');
+  }catch(e){alert('فشل التوليد: '+e.message);}
+  finally{document.getElementById('vs-render-loader').classList.remove('show');}
+}
+function vsDownloadVideo(){
+  if(!VS_LAST_VIDEO)return;
+  const a=document.createElement('a');
+  a.href=API+VS_LAST_VIDEO.video_url;
+  a.download='zerax-promo.mp4';
+  document.body.appendChild(a);a.click();a.remove();
+}
+
+// ═══════════════════════ RECHARGE (Inline Zerax wallet top-up) ═══════════════════════
+let RCH_PKG='pro', RCH_METHOD='mada', RCH_PACKAGES=[];
+async function openRecharge(){
+  document.getElementById('rch-modal').classList.add('open');
+  document.getElementById('rch-body-main').style.display='block';
+  document.getElementById('rch-success').classList.remove('show');
+  if(!RCH_PACKAGES.length){
+    try{
+      const res=await fetch(API+'/api/promo-video/packages');
+      const data=await res.json();
+      RCH_PACKAGES=data.packages||[];
+    }catch(_){RCH_PACKAGES=[
+      {id:'starter',credits:500,price_sar:49,label_ar:'البداية'},
+      {id:'pro',credits:2500,price_sar:199,label_ar:'المحترف'},
+      {id:'agency',credits:6000,price_sar:449,label_ar:'الوكالة'},
+      {id:'enterprise',credits:15000,price_sar:999,label_ar:'المؤسسي'}
+    ];}
+  }
+  rchRenderPackages();
+  rchUpdateButton();
+}
+function closeRecharge(){document.getElementById('rch-modal').classList.remove('open');}
+function rchRenderPackages(){
+  const grid=document.getElementById('rch-pkg-grid');
+  grid.innerHTML=RCH_PACKAGES.map(p=>{
+    const popular=p.id==='pro'?'popular':'';
+    const active=p.id===RCH_PKG?'active':'';
+    const perPt=(p.price_sar/p.credits*100).toFixed(1);
+    return `<div class="rch-pkg ${active} ${popular}" data-pkg="${p.id}" onclick="rchSetPkg('${p.id}')">
+      <span class="badge">الأكثر طلباً</span>
+      <div class="credits">${p.credits.toLocaleString()}</div>
+      <div class="label">${p.label_ar||p.id}</div>
+      <div class="price">${p.price_sar} ر.س</div>
+      <div class="perpoint">${perPt} هللة/نقطة</div>
+    </div>`;
+  }).join('');
+}
+function rchSetPkg(id){RCH_PKG=id;rchRenderPackages();rchUpdateButton();}
+function rchSetPay(m){RCH_METHOD=m;document.querySelectorAll('.rch-pay').forEach(p=>p.classList.toggle('active',p.dataset.m===m));}
+function rchUpdateButton(){
+  const pkg=RCH_PACKAGES.find(p=>p.id===RCH_PKG);
+  if(!pkg)return;
+  document.getElementById('rch-confirm-label').textContent=`ادفع ${pkg.price_sar} ر.س — استلم ${pkg.credits.toLocaleString()} نقطة`;
+}
+async function rchConfirm(){
+  const btn=document.getElementById('rch-confirm');
+  btn.disabled=true;
+  const old=btn.innerHTML;btn.innerHTML='⏳ جاري الاتصال بالبوابة الآمنة…';
+  try{
+    const res=await fetch(API+'/api/promo-video/recharge',{
+      method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({package_id:RCH_PKG, payment_method:RCH_METHOD})
+    });
+    if(!res.ok)throw new Error('payment failed');
+    const data=await res.json();
+    ZERAX_CREDITS+=data.credits_added;
+    localStorage.setItem('zx_credits',String(ZERAX_CREDITS));
+    syncCreditsDisplay();
+    // Show success screen
+    document.getElementById('rch-body-main').style.display='none';
+    document.getElementById('rch-credits-added').innerHTML=`+ <b style="color:#10b981;font-size:22px">${data.credits_added.toLocaleString()}</b> نقطة Zerax أُضيفت لرصيدك`;
+    document.getElementById('rch-receipt').innerHTML=`رقم العملية: ${data.transaction_id}<br>الإيصال: ${data.receipt_number}<br>طريقة الدفع: ${data.payment_method.toUpperCase()}`;
+    document.getElementById('rch-success').classList.add('show');
+  }catch(e){alert('فشل الدفع: '+e.message);}
+  finally{btn.disabled=false;btn.innerHTML=old;}
 }
 
 

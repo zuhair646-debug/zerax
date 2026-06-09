@@ -1,0 +1,27 @@
+{
+  "summary": "Validated the Zerax Merchant ACP + Video Studio + Recharge flow end-to-end. Backend: 7/7 pytest cases passed (health, storyboard, packages, 3× recharge variants, real ffmpeg+TTS video generation produced a valid MP4 with ftyp atom in ~28s). Frontend: ACP auto-opens on admin toggle, credits bar reads '50 نقطة Zerax' with '+ شحن' button, products tab + new-product form work, AI product-info call returns 200 and decrements credits 50→40, Video Studio tab has all 4 duration / 4 tone / 4 voice pills with correct defaults (30 / energetic / zerax_male_deep), storyboard renders scenes, full video render returns 200 and shows player + meta pills, recharge modal opens with 4 packages (Pro default + 'الأكثر طلباً' badge) and 5 payment methods (mada/visa/mc/apple_pay/stc_pay), Pro purchase via mada returns 200 with ZX-* transaction id and instantly raises credits 50→2550. OLD #info-panel-wrap is fully removed from the Image Studio modal. PDP navigation still works, no console errors.",
+  "backend_issues": { "critical": [], "minor": [] },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_promo_video.py",
+    "/app/test_reports/pytest/promo_video.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "openRecharge() renders packages asynchronously via fetch /api/promo-video/packages, so for ~200ms after the modal opens .rch-pkg list is empty. Consider rendering a skeleton or rendering the static CREDIT_PACKAGES map immediately and refreshing from API to avoid a flash of empty modal.",
+    "video_studio_router.py is 527 lines — borderline acceptable but approaching the 700-line threshold. Splitting the storyboard / generate / recharge sections into separate modules would improve maintainability."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_promo_video.py (new)"
+  ],
+  "success_rate": { "backend": "100% (7/7)", "frontend": "100% (all spec'd flows verified)" },
+  "test_credentials": "None required — mockup uses localStorage (zx_credits starts at 50)",
+  "seed_data_creation": "None — pure test calls, recharge endpoint is mocked",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Backend test file at /app/backend/tests/test_promo_video.py covers all /api/promo-video/* endpoints including a real video render in ~28-35s. Run with `export $(grep -v ^# /app/frontend/.env | xargs) && pytest backend/tests/test_promo_video.py -v`. Frontend selectors: #admin-btn opens ACP, .acp-pcard.adding starts new product, #acp-ai-btn triggers Gemini, .acp-tab[data-tab='video'] switches to Video Studio, #vs-product (select), #vs-duration-row .vs-pill[data-d=15], #vs-storyboard-btn, #vs-render-btn, #vs-video-player, .recharge-btn opens recharge modal, .rch-pkg[data-pkg='pro'], .rch-pay[data-m='mada'], #rch-confirm. Recharge endpoint is INTENTIONALLY MOCKED per user request (Zerax wallet placeholder)."
+}

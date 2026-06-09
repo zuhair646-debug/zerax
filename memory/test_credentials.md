@@ -69,3 +69,19 @@
 - Tools available to the AI: `read_file`, `write_file`, `edit_file`, `delete_file`, `list_dir`, `search_code`, `run_command` (full bash), `restart_service`, `git_status`, `git_diff`, `git_commit_push`
 - Backend uses Claude Sonnet 4.5 via owner's `ANTHROPIC_API_KEY` (synced from Railway production)
 
+## App-Mode Mockup (Merchant Admin Control Panel + Video Studio)
+- URL: `${REACT_APP_BACKEND_URL}/mockups/app_mode_full.html`
+- No auth required — uses localStorage for state (`zx_credits` starts at 50)
+- **Enable Admin mode**: click the ♛ button in the top header → auto-opens the Admin Control Panel (ACP)
+- ACP tabs: `📦 المنتجات` (product CRUD + AI auto-fill) and `🎬 Video Studio` (promo video generation)
+- Recharge: click `+ شحن` inside ACP → modal with 4 packages + 5 payment methods (mada/visa/mc/apple_pay/stc_pay)
+
+### Public API endpoints (no auth required)
+- `GET  /api/promo-video/health` — sanity check
+- `POST /api/promo-video/storyboard` — Body: `{"product_name":"...","duration_seconds":30,"lang":"ar","tone":"luxury","cta":"اطلب الآن"}`
+- `POST /api/promo-video/generate` — Body: `{"title":"...","scenes":[{"narration":"...","image_url":"..."}],"duration_seconds":30,"voice":"zerax_male_deep","cta":"..."}`. Returns video at `/api/static/videos/{id}.mp4` (real ffmpeg + OpenAI TTS pipeline).
+- `GET  /api/promo-video/packages` — lists 4 recharge tiers
+- `POST /api/promo-video/recharge` — **MOCKED gateway** — simulates 400ms latency, returns fake transaction. Body: `{"package_id":"pro","payment_method":"mada"}`. User explicitly designed this as a placeholder for their own Zerax wallet service.
+- `POST /api/image-studio/product-info` — AI product info enrichment (Gemini Nano Banana)
+
+

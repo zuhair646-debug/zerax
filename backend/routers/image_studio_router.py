@@ -145,6 +145,9 @@ class ProductInfoResponse(BaseModel):
     description: str
     features: List[str]
     specs: dict
+    colors: list = []
+    sizes: list = []
+    warranty: dict = {}
     html: str
     cost: int
 
@@ -167,7 +170,10 @@ async def product_info(req: ProductInfoRequest):
         "title (string, full official product name), "
         "description (string, 2-3 polished sentences highlighting the product), "
         "features (array of 5-8 short bullet strings, each a key benefit), "
-        "specs (object of key→value strings for technical specs, max 6 entries). "
+        "specs (object of key→value strings for technical specs, max 6 entries), "
+        "colors (array of {name, hex} objects — available color options for this product, e.g. iPhone titanium colors; empty array if N/A), "
+        "sizes (array of strings — available sizes if applicable, e.g. ['256GB','512GB','1TB'] for electronics or ['S','M','L','XL'] for fashion; empty if N/A), "
+        "warranty (object {duration_text, url} — official warranty info; both fields can be empty strings). "
         "Output ONLY the JSON object, no markdown, no code fences."
     )
     user_parts = [f"Product name: {req.name.strip()}"]
@@ -223,6 +229,9 @@ async def product_info(req: ProductInfoRequest):
     description = str(data.get("description", "")).strip()
     features = [str(f).strip() for f in (data.get("features") or []) if str(f).strip()][:8]
     specs = {str(k): str(v) for k, v in (data.get("specs") or {}).items()}
+    colors = data.get("colors") or []
+    sizes = [str(s) for s in (data.get("sizes") or [])][:8]
+    warranty = data.get("warranty") or {"duration_text": "", "url": ""}
     # Build a clean HTML rendering for direct insertion
     html_parts = [
         f"<h2 style='font-size:18px;font-weight:900;margin-bottom:8px;color:#0a0a0a'>{title}</h2>",
@@ -242,6 +251,9 @@ async def product_info(req: ProductInfoRequest):
         description=description,
         features=features,
         specs=specs,
+        colors=colors,
+        sizes=sizes,
+        warranty=warranty,
         html="".join(html_parts),
         cost=10,
     )
