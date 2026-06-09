@@ -426,7 +426,7 @@ async def _render_shot(prompt: str, duration: int, *, aspect: str = "16x9") -> D
 def _social_captions(script: Dict[str, Any]) -> Dict[str, str]:
     title = (script.get("title") or "").strip() or "حلقة جديدة من زيتاكس"
     logline = (script.get("logline") or "").strip()
-    hashtags = "#زيتاكس #فيديو_بالذكاء_الاصطناعي #ai #zitex"
+    hashtags = "#زيتاكس #فيديو_بالذكاء_الاصطناعي #ai #zerax"
     return {
         "tiktok": f"{title}\n{logline}\n\n{hashtags} #fyp #tiktok",
         "instagram": f"{title}\n{logline}\n\n{hashtags} #reels #instagram",

@@ -47,7 +47,7 @@ const MyImages = ({ user, setUser }) => {
     const url = img.image_url || img.url;
     const a = document.createElement('a');
     a.href = url;
-    a.download = `zitex-image-${img.id || Date.now()}.png`;
+    a.download = `zerax-image-${img.id || Date.now()}.png`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);

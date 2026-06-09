@@ -10,7 +10,7 @@ Hybrid quality strategy (post Feb 2026):
   • AI focuses ONLY on the UI shell: HTML structure, CSS, routing JS, modals,
     admin dashboard layout. Result: ALWAYS 60+ products, 30 orders, 20 customers.
 
-Provider chain (all async): zitex_chat → AsyncOpenAI gpt-4o direct.
+Provider chain (all async): zerax_chat → AsyncOpenAI gpt-4o direct.
 """
 from __future__ import annotations
 
@@ -27,7 +27,7 @@ from .data_factory import (
     render_categories_html, render_products_html,
     render_admin_orders_html, render_admin_customers_html,
     render_admin_full_app, render_cart_module,
-    render_zitex_enhancements,
+    render_zerax_enhancements,
 )
 from .data_factory_generic import seed_generic
 
@@ -307,7 +307,7 @@ def _gen_admin_credentials(business_name: str) -> Dict[str, str]:
         slug = "biz" + secrets.token_hex(3)
     pwd_chars = string.ascii_letters + string.digits
     return {
-        "email": f"admin@{slug[:20]}.zitex.app",
+        "email": f"admin@{slug[:20]}.zerax.app",
         "password": "".join(secrets.choice(pwd_chars) for _ in range(10)),
     }
 
@@ -465,8 +465,8 @@ async def _call_llm(system: str, user: str, max_tokens: int = 16000) -> str:
 
     # Try Zerax unified router
     try:
-        from modules.zitex_ai import zitex_chat
-        result = await zitex_chat(
+        from modules.zerax_ai import zerax_chat
+        result = await zerax_chat(
             agent="ready_sites",
             messages=[{"role": "user", "content": user}],
             override_system=system,
@@ -477,7 +477,7 @@ async def _call_llm(system: str, user: str, max_tokens: int = 16000) -> str:
             last_err = str(result.get("error", ""))
     except Exception as e:
         last_err = str(e)
-        logger.warning(f"[READY_SITES] zitex_chat: {e}")
+        logger.warning(f"[READY_SITES] zerax_chat: {e}")
 
     # Fallback: AsyncOpenAI gpt-4o
     if not text:
@@ -654,7 +654,7 @@ async def generate_ready_site(
     )
 
     # 4f) Inject UNIFIED Zerax enhancements module (footer, slider, modals, click delegation)
-    enhancements = render_zitex_enhancements(seed, project_id=project_id)
+    enhancements = render_zerax_enhancements(seed, project_id=project_id)
     merged = _safe_inject_before_body_end(merged, enhancements)
 
     # 5) Enforce credentials + branding
@@ -727,11 +727,11 @@ def _inject_prebuilt_html(html: str, seed: Dict[str, Any]) -> str:
     # If AI didn't include any menu markers, inject a fallback menu section near the end
     if not found_any:
         fallback_styles = """
-<style id="zitex-injected-menu-styles">
-#zitex-menu-fallback { max-width:1200px; margin:60px auto; padding:0 20px; }
-#zitex-menu-fallback h2 { font-size:32px; text-align:center; margin-bottom:30px; }
-#zitex-menu-fallback .cat-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:20px; margin-bottom:60px; }
-@media(max-width:768px){ #zitex-menu-fallback .cat-grid { grid-template-columns:1fr } }
+<style id="zerax-injected-menu-styles">
+#zerax-menu-fallback { max-width:1200px; margin:60px auto; padding:0 20px; }
+#zerax-menu-fallback h2 { font-size:32px; text-align:center; margin-bottom:30px; }
+#zerax-menu-fallback .cat-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:20px; margin-bottom:60px; }
+@media(max-width:768px){ #zerax-menu-fallback .cat-grid { grid-template-columns:1fr } }
 .cat-card { background:#fff; border-radius:18px; overflow:hidden; box-shadow:0 6px 24px rgba(0,0,0,.1); transition:transform .2s; text-decoration:none; color:inherit; display:block; }
 .cat-card:hover { transform:translateY(-6px); }
 .cat-img { height:200px; background-size:cover; background-position:center; }
@@ -757,7 +757,7 @@ def _inject_prebuilt_html(html: str, seed: Dict[str, Any]) -> str:
 .prod-add:hover { transform:scale(1.05); }
 </style>"""
         fallback_section = f"""
-<section id="zitex-menu-fallback">
+<section id="zerax-menu-fallback">
   <h2>منيو المطعم</h2>
   <div class="cat-grid">{cats_html}</div>
   <h2 id="all-products-title">كل الأصناف</h2>

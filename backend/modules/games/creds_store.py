@@ -2,7 +2,7 @@
 🔐 MongoDB-backed Credentials Store
 ═══════════════════════════════════════════════════════════════════════
 Persistent key/value storage that SURVIVES Railway container restarts.
-The previous JSON-file vault (/root/.zitex/credentials.json) gets wiped
+The previous JSON-file vault (/root/.zerax/credentials.json) gets wiped
 when Railway redeploys, causing FAL_KEY to vanish.
 
 This module stores the same keys in MongoDB collection `credentials_kv`

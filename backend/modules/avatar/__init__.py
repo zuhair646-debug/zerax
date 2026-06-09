@@ -300,7 +300,7 @@ def create_avatar_router(db, get_current_user) -> APIRouter:
                 'OK': 'أوكي',
                 'ok': 'أوكي',
                 'Zerax': 'زيتكس',
-                'zitex': 'زيتكس',
+                'zerax': 'زيتكس',
                 'ZERAX': 'زيتكس',
             }
             for k, v in replacements.items():
@@ -497,8 +497,8 @@ def create_avatar_router(db, get_current_user) -> APIRouter:
 
     # ===== ZERAX MAIN AVATAR (public, no auth) =====
     @router.post("/avatar/chat")
-    async def zitex_avatar_chat(payload: AvatarChatIn):
-        sid = payload.session_id or "zitex-public"
+    async def zerax_avatar_chat(payload: AvatarChatIn):
+        sid = payload.session_id or "zerax-public"
 
         # Determine AI persona based on user gender (OPPOSITE-gender voice)
         persona = _resolve_persona(payload.user_gender)
@@ -537,7 +537,7 @@ def create_avatar_router(db, get_current_user) -> APIRouter:
             usage = await _check_anon_usage(payload.anon_id)
 
         await db.avatar_conversations.insert_one({
-            "site": "zitex",
+            "site": "zerax",
             "session_id": sid,
             "user_message": payload.message,
             "assistant_reply": text,
@@ -560,7 +560,7 @@ def create_avatar_router(db, get_current_user) -> APIRouter:
 
     # ===== ZERAX GREETING (auto-greet on entry — fast Haiku-based) =====
     @router.post("/avatar/greet")
-    async def zitex_greet(payload: Dict[str, Any]):
+    async def zerax_greet(payload: Dict[str, Any]):
         """Quick personalized greeting on app entry. Uses Haiku for speed."""
         user_name = payload.get("user_name") or "صديقي"
         user_gender = payload.get("user_gender")

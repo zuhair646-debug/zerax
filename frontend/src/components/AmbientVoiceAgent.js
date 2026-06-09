@@ -19,9 +19,9 @@ import { toast } from 'sonner';
 
 const API = process.env.REACT_APP_BACKEND_URL;
 const SR = (typeof window !== 'undefined') && (window.SpeechRecognition || window.webkitSpeechRecognition);
-const ANON_ID_KEY = 'zitex_anon_id';
-const SESSION_KEY = 'zitex_voice_session_id';
-const WAKE_PATTERNS = [/ز[يَ]ت[كك]س/i, /zitex/i, /يا\s+زيتكس/i];
+const ANON_ID_KEY = 'zerax_anon_id';
+const SESSION_KEY = 'zerax_voice_session_id';
+const WAKE_PATTERNS = [/ز[يَ]ت[كك]س/i, /zerax/i, /يا\s+زيتكس/i];
 
 function getUserName() {
   try {
@@ -32,7 +32,7 @@ function getUserName() {
       if (n && n.trim().length >= 2) return n.trim();
     }
   } catch (_) {}
-  return localStorage.getItem('zitex_user_name') || '';
+  return localStorage.getItem('zerax_user_name') || '';
 }
 
 function getUserGender() {
@@ -48,7 +48,7 @@ function getUserGender() {
       if (g === 'male' || g === 'female') return g;
     }
   } catch (_) {}
-  const stored = (localStorage.getItem('zitex_user_gender') || '').toLowerCase();
+  const stored = (localStorage.getItem('zerax_user_gender') || '').toLowerCase();
   if (stored === 'male' || stored === 'female') return stored;
   return '';
 }
@@ -138,7 +138,7 @@ export default function AmbientVoiceAgent() {
       if (d.intent && d.intent.intent && d.intent.intent !== 'unclear' && d.intent.subject) {
         const route = INTENT_ROUTES[d.intent.intent];
         if (route && location.pathname !== route) {
-          sessionStorage.setItem('zitex_voice_intent', JSON.stringify({
+          sessionStorage.setItem('zerax_voice_intent', JSON.stringify({
             intent: d.intent.intent, subject: d.intent.subject, from_voice: true, ts: Date.now(),
           }));
           setTimeout(() => navigate(route), 400);
@@ -240,7 +240,7 @@ export default function AmbientVoiceAgent() {
   const toggleMic = useCallback(() => {
     const next = !micOn;
     setMicOn(next);
-    try { localStorage.setItem('zitex_mic_on', next ? '1' : '0'); } catch (_) {}
+    try { localStorage.setItem('zerax_mic_on', next ? '1' : '0'); } catch (_) {}
     if (!next) {
       // Turn off: stop any running recognition
       if (recRef.current) { try { recRef.current.stop(); } catch (_) {} recRef.current = null; }
@@ -256,7 +256,7 @@ export default function AmbientVoiceAgent() {
   // Restore mic state from localStorage
   useEffect(() => {
     try {
-      if (localStorage.getItem('zitex_mic_on') === '1') setMicOn(true);
+      if (localStorage.getItem('zerax_mic_on') === '1') setMicOn(true);
     } catch (_) {}
   }, []);
 

@@ -40,7 +40,7 @@ from .paypal_client import create_order, capture_order, get_order
 from .promos import validate_and_apply_promo, redeem_promo
 from .invoices import generate_invoice_pdf, send_invoice_email, next_invoice_number
 
-log = logging.getLogger("zitex.pricing.router")
+log = logging.getLogger("zerax.pricing.router")
 
 
 # ════════════════════════════════════════════════════════════════
@@ -768,8 +768,8 @@ def create_router(db, get_current_user, get_admin_user):
         try:
             result = await create_order(
                 amount_usd=1.00,
-                return_url="https://zitex.app/billing/test-return",
-                cancel_url="https://zitex.app/billing/test-cancel",
+                return_url="https://zerax.app/billing/test-return",
+                cancel_url="https://zerax.app/billing/test-cancel",
                 description="Zerax PayPal credential test",
             )
             return {

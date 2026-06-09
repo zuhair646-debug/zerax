@@ -8,7 +8,7 @@ import {
 } from 'lucide-react';
 
 const API = process.env.REACT_APP_BACKEND_URL;
-const SESSION_KEY = 'zitex_autocoder_session';
+const SESSION_KEY = 'zerax_autocoder_session';
 
 const TIER_BADGE = {
   premium: { label: 'Premium', cls: 'bg-amber-500/15 text-amber-400 border-amber-500/30', icon: Crown },

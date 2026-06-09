@@ -449,7 +449,7 @@ const VideoGenerator = ({ user }) => {
                               size="sm" 
                               variant="outline" 
                               className="border-slate-600"
-                              onClick={() => downloadMedia(item.video_url, `zitex-video-${item.id}.mp4`, 'video')}
+                              onClick={() => downloadMedia(item.video_url, `zerax-video-${item.id}.mp4`, 'video')}
                               data-testid="download-video-btn"
                             >
                               <Download className="w-4 h-4 me-1" />
@@ -461,7 +461,7 @@ const VideoGenerator = ({ user }) => {
                               size="sm" 
                               variant="outline" 
                               className="border-blue-500 text-blue-400"
-                              onClick={() => downloadMedia(item.audio_url, `zitex-audio-${item.id}.mp3`, 'audio')}
+                              onClick={() => downloadMedia(item.audio_url, `zerax-audio-${item.id}.mp3`, 'audio')}
                               data-testid="download-audio-btn"
                             >
                               <Download className="w-4 h-4 me-1" />

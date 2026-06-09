@@ -105,7 +105,7 @@ def _render_widget(surah: int, style_key: str = "classic", instance_id: str = "q
     )
 
     return f"""
-<div class="zitex-qp" data-instance="{instance_id}" data-surah="{surah}" style="
+<div class="zerax-qp" data-instance="{instance_id}" data-surah="{surah}" style="
   background:{style['bg']};
   border:2px solid {style['border']};
   border-radius:1.5rem;
@@ -214,7 +214,7 @@ def _render_widget(surah: int, style_key: str = "classic", instance_id: str = "q
 <script>
 (function(){{
   var root = document.querySelector('.zqp-{instance_id}') ||
-             document.querySelector('.zitex-qp[data-instance="{instance_id}"]');
+             document.querySelector('.zerax-qp[data-instance="{instance_id}"]');
   if(!root || root.dataset.zqpInit === '1') return;
   root.dataset.zqpInit = '1';
 
@@ -436,8 +436,8 @@ def inject_quran_players(html: str) -> str:
         # The widget expects `.zqp-{instance_id}` OR the data-instance attribute
         # selector — we already set data-instance. To be safe also add a class.
         widget = widget.replace(
-            f'<div class="zitex-qp" data-instance="{inst}"',
-            f'<div class="zitex-qp zqp-{inst}" data-instance="{inst}"',
+            f'<div class="zerax-qp" data-instance="{inst}"',
+            f'<div class="zerax-qp zqp-{inst}" data-instance="{inst}"',
             1,
         )
         return widget

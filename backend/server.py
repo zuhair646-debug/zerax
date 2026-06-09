@@ -583,7 +583,7 @@ async def register(user_data: UserRegisterWithReferral, request: Request):
 
     # 🆕 Click→signup attribution: read tracking cookie set by /api/r/{code}
     try:
-        click_id = request.cookies.get("zitex_aff_click")
+        click_id = request.cookies.get("zerax_aff_click")
         if click_id:
             from modules.affiliate.tracking import build_router as _ignored  # ensure module imported
             await db.affiliate_clicks.update_one(
@@ -2365,7 +2365,7 @@ async def get_public_offers():
 # Object Storage Configuration
 STORAGE_URL = "https://integrations.emergentagent.com/objstore/api/v1/storage"
 EMERGENT_KEY = os.environ.get('EMERGENT_LLM_KEY')
-APP_NAME = "zitex-files"
+APP_NAME = "zerax-files"
 
 import requests as http_requests  # noqa: E402
 import tempfile  # noqa: E402,F811
@@ -3853,7 +3853,7 @@ async def delete_user_element(el_id: str, current_user: dict = Depends(get_curre
 # Health check endpoint - MUST be before other routers
 @app.get("/api/health")
 async def health_check():
-    return {"status": "healthy", "service": "zitex-api"}
+    return {"status": "healthy", "service": "zerax-api"}
 
 # Version endpoint — exposes git commit so we can verify what's actually deployed
 @app.get("/api/version")
@@ -3877,7 +3877,7 @@ async def api_version():
         sha = os.environ.get("GIT_COMMIT", os.environ.get("RAILWAY_GIT_COMMIT_SHA", ""))[:8]
         msg = os.environ.get("RAILWAY_GIT_COMMIT_MESSAGE", "")[:120]
     return {
-        "service": "zitex-api",
+        "service": "zerax-api",
         "commit": sha or "unknown",
         "commit_message": msg,
         "deployed_at": os.environ.get("RAILWAY_DEPLOYMENT_DRAINING_SECONDS") or "n/a",
@@ -4083,7 +4083,7 @@ app.mount("/uploads", StaticFiles(directory="/app/backend/uploads"), name="autoc
 # ═══════════════════════════════════════════════════════════════════
 # 🧠 ZERAX AI — Unified Intelligence Layer (Smart Router + Boundaries)
 # ═══════════════════════════════════════════════════════════════════
-from modules.zitex_ai import zitex_chat as _zitex_chat, list_agents as _list_agents
+from modules.zerax_ai import zerax_chat as _zerax_chat, list_agents as _list_agents
 
 
 class ZeraxAIRequest(BaseModel):
@@ -4093,13 +4093,13 @@ class ZeraxAIRequest(BaseModel):
 
 
 @api_router.get("/ai/agents")
-async def list_zitex_agents():
+async def list_zerax_agents():
     """Returns metadata for every Zerax AI agent (admin/debug)."""
     return {"agents": _list_agents()}
 
 
 @api_router.post("/ai/chat")
-async def zitex_ai_chat(req: ZeraxAIRequest, current_user: dict = Depends(get_current_user)):
+async def zerax_ai_chat(req: ZeraxAIRequest, current_user: dict = Depends(get_current_user)):
     """
     Universal AI chat endpoint — routes to the best model with strict boundaries.
 
@@ -4110,7 +4110,7 @@ async def zitex_ai_chat(req: ZeraxAIRequest, current_user: dict = Depends(get_cu
           "messages": [{"role":"user","content":"اعمل لي موقع بيع قهوة"}]
         }
     """
-    result = await _zitex_chat(
+    result = await _zerax_chat(
         agent=req.agent,
         messages=req.messages,
         user_id=current_user["user_id"],

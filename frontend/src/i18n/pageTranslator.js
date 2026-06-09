@@ -19,7 +19,7 @@
  */
 
 const API = process.env.REACT_APP_BACKEND_URL || '';
-const CACHE_PREFIX = 'zitex_pt_';
+const CACHE_PREFIX = 'zerax_pt_';
 const SKIP_TAGS = new Set([
   'SCRIPT', 'STYLE', 'CODE', 'PRE', 'TEXTAREA', 'INPUT',
   'NOSCRIPT', 'IFRAME', 'CANVAS', 'SVG', 'PATH', 'KBD', 'SAMP',
@@ -408,7 +408,7 @@ async function sweepAndTranslate() {
 
 // Exported for debugging in the browser console
 if (typeof window !== 'undefined') {
-  window.__zitexI18n = {
+  window.__zeraxI18n = {
     apply: applyPageLanguage,
     clearCache: () => {
       memCache.clear();

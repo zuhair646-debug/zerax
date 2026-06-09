@@ -6,7 +6,7 @@ import { X, Globe } from 'lucide-react';
 
 /**
  * Floating toast that confirms an auto-detected language for the visitor.
- * Listens for the custom `zitex:lang-auto-detected` event (dispatched by
+ * Listens for the custom `zerax:lang-auto-detected` event (dispatched by
  * geoLanguage.js) and offers a one-click "Keep Arabic" escape hatch.
  *
  * - Auto-dismisses after 8 seconds
@@ -24,15 +24,15 @@ export default function DetectedLanguageBanner() {
       const code = e?.detail?.code;
       if (!code || !LANG_BY_CODE[code]) return;
       // Don't show if the visitor has dismissed this session
-      try { if (sessionStorage.getItem('zitex_geo_banner_seen') === '1') return; }
+      try { if (sessionStorage.getItem('zerax_geo_banner_seen') === '1') return; }
       catch (_) { /* */ }
       setDetected(code);
       setShow(true);
       const t = setTimeout(() => setShow(false), 8000);
       return () => clearTimeout(t);
     };
-    window.addEventListener('zitex:lang-auto-detected', handler);
-    return () => window.removeEventListener('zitex:lang-auto-detected', handler);
+    window.addEventListener('zerax:lang-auto-detected', handler);
+    return () => window.removeEventListener('zerax:lang-auto-detected', handler);
   }, []);
 
   if (!show || !detected) return null;
@@ -41,12 +41,12 @@ export default function DetectedLanguageBanner() {
   const keepArabic = () => {
     markManualChoice('ar');
     i18n.changeLanguage('ar');
-      try { sessionStorage.setItem('zitex_geo_banner_seen', '1'); } catch (_) { /* */ }
+      try { sessionStorage.setItem('zerax_geo_banner_seen', '1'); } catch (_) { /* */ }
     setShow(false);
   };
 
   const dismiss = () => {
-    try { sessionStorage.setItem('zitex_geo_banner_seen', '1'); } catch (_) { /* */ }
+    try { sessionStorage.setItem('zerax_geo_banner_seen', '1'); } catch (_) { /* */ }
     setShow(false);
   };
 

@@ -254,7 +254,7 @@ TUTORIALS: Dict[str, Dict[str, Any]] = {
             "ابحث عن @BotFather وابدأ محادثة",
             "اكتب /newbot",
             "اعطه اسم البوت (مثلاً: Zerax Notifier)",
-            "اعطه username ينتهي بـ bot (مثلاً: zitex_alerts_bot)",
+            "اعطه username ينتهي بـ bot (مثلاً: zerax_alerts_bot)",
             "راح يرجع لك Token — انسخه",
         ],
         "youtube_search": _yt_search("Telegram BotFather create bot tutorial"),

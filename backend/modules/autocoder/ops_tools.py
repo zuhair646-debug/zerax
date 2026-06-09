@@ -151,7 +151,7 @@ async def tool_git_revert(commit: str = "HEAD", push: bool = False) -> Dict[str,
                 "stdout": r["stdout"][:500]}
     result = {"ok": True, "reverted": commit, "stdout": r["stdout"][-500:]}
     if push:
-        push_script = "/root/.zitex/push.sh"
+        push_script = "/root/.zerax/push.sh"
         if Path(push_script).exists():
             pr = await _sh(f'bash {push_script} "revert: {commit}"', cwd="/app", timeout=60)
             result["push"] = {"exit_code": pr["exit_code"], "stdout": pr["stdout"][-500:]}

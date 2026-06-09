@@ -1304,8 +1304,8 @@ def make_freebuild_chat_router(db, get_current_user):
         logger.info(f"freebuild route: task={task_type} label={task_label}")
 
         try:
-            from modules.zitex_ai import zitex_chat
-            result = await zitex_chat(
+            from modules.zerax_ai import zerax_chat
+            result = await zerax_chat(
                 agent="freebuild",
                 messages=msg_list,
                 user_id=user["user_id"],
@@ -1326,7 +1326,7 @@ def make_freebuild_chat_router(db, get_current_user):
                     {"role": "assistant", "content": ai_text},
                     {"role": "user", "content": f"⚠️ تنبيه نظام داخلي (لا تظهره للمستخدم): {error_msg}"},
                 ]
-                retry_result = await zitex_chat(
+                retry_result = await zerax_chat(
                     agent="freebuild",
                     messages=retry_msgs,
                     user_id=user["user_id"],
@@ -1362,7 +1362,7 @@ def make_freebuild_chat_router(db, get_current_user):
                     {"role": "assistant", "content": ai_text},
                     {"role": "user", "content": fix_prompt},
                 ]
-                fix_result = await zitex_chat(
+                fix_result = await zerax_chat(
                     agent="freebuild",
                     messages=fix_msgs,
                     user_id=user["user_id"],
@@ -1974,7 +1974,7 @@ def make_freebuild_chat_router(db, get_current_user):
             update["name"] = name.strip()[:80]
         if package_id is not None:
             # normalize: only lowercase + dots + dashes
-            pkg = re.sub(r"[^a-z0-9.\-]", "", package_id.lower()) or "com.zitex.app"
+            pkg = re.sub(r"[^a-z0-9.\-]", "", package_id.lower()) or "com.zerax.app"
             update["package_id"] = pkg[:80]
         if primary_color is not None and primary_color.startswith("#"):
             update["primary_color"] = primary_color[:7]
@@ -2015,7 +2015,7 @@ def make_freebuild_chat_router(db, get_current_user):
             "title": doc.get("name", "تطبيق Zerax"),
             "description": doc.get("description", ""),
             "primary_color": doc.get("primary_color", "#10b981"),
-            "package_id": doc.get("package_id", "com.zitex.app"),
+            "package_id": doc.get("package_id", "com.zerax.app"),
             "imports": [{"kind": "freebuild_site", "html_snapshot": doc["current_html"]}],
         }
         try:

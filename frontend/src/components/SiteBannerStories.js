@@ -34,12 +34,12 @@ export default function SiteBannerStories({ placement = 'outside' }) {
   const seenRef = useRef(loadSeen());
 
   function loadSeen() {
-    try { return JSON.parse(localStorage.getItem('zitex_seen_stories') || '[]'); } catch (_) { return []; }
+    try { return JSON.parse(localStorage.getItem('zerax_seen_stories') || '[]'); } catch (_) { return []; }
   }
   function markSeen(id) {
     if (!seenRef.current.includes(id)) {
       seenRef.current.push(id);
-      try { localStorage.setItem('zitex_seen_stories', JSON.stringify(seenRef.current.slice(-100))); } catch (_) {}
+      try { localStorage.setItem('zerax_seen_stories', JSON.stringify(seenRef.current.slice(-100))); } catch (_) {}
     }
   }
 

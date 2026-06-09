@@ -8,7 +8,7 @@ from typing import Optional, Dict, Any, List
 from emergentintegrations.llm.chat import LlmChat, UserMessage
 from .personas import PERSONA_MAP, CONTENT_BUCKETS
 
-logger = logging.getLogger("zitex.marketing.content")
+logger = logging.getLogger("zerax.marketing.content")
 
 PLATFORM_LIMITS = {
     "twitter": 280,

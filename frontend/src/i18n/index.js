@@ -103,7 +103,7 @@ function applyLangSideEffects(code) {
   try {
     document.documentElement.lang = code;
     document.documentElement.dir = isRTL(code) ? 'rtl' : 'ltr';
-    localStorage.setItem('zitex_lang', code);
+    localStorage.setItem('zerax_lang', code);
     // Live full-page translation via Claude — runs synchronously (no lazy
     // chunk) so language changes ALWAYS apply, even if the browser has
     // an aggressive cache or a stale dynamic import chunk.
@@ -125,7 +125,7 @@ if (typeof window !== 'undefined' && !hasManualChoice()) {
         i18n.changeLanguage(geoCode);
         // Let the UI know so a small banner can offer "Keep Arabic"
         try {
-          window.dispatchEvent(new CustomEvent('zitex:lang-auto-detected', {
+          window.dispatchEvent(new CustomEvent('zerax:lang-auto-detected', {
             detail: { code: geoCode },
           }));
         } catch (_) { /* */ }
@@ -140,7 +140,7 @@ if (typeof window !== 'undefined' && !hasManualChoice()) {
 // (Arabic or English) and gets back the target-language string.
 export async function translateOnDemand(text, targetCode) {
   if (!text || !targetCode || targetCode === 'ar') return text;
-  const cacheKey = `zitex_t_${targetCode}_${btoa(unescape(encodeURIComponent(text))).slice(0, 60)}`;
+  const cacheKey = `zerax_t_${targetCode}_${btoa(unescape(encodeURIComponent(text))).slice(0, 60)}`;
   const cached = localStorage.getItem(cacheKey);
   if (cached) return cached;
   try {

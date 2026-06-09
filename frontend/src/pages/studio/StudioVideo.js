@@ -238,7 +238,7 @@ export default function StudioVideo({ user }) {
               <div className="text-sm font-bold text-emerald-300 mb-2">✓ {result.title}</div>
               <video src={result.media_url} controls className="w-full rounded-xl mb-3" />
               <div className="flex gap-2">
-                <a href={result.media_url} download={`zitex-${result.id}.mp4`} className="flex-1">
+                <a href={result.media_url} download={`zerax-${result.id}.mp4`} className="flex-1">
                   <Button variant="outline" className="w-full border-emerald-400/30 text-emerald-300" data-testid="studio-video-download">
                     تحميل
                   </Button>

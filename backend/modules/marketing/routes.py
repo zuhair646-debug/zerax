@@ -27,7 +27,7 @@ from .personas import PERSONAS, PERSONA_MAP
 from .content_gen import generate_post, generate_batch
 from .connectors import get_all_status, publish_to
 
-logger = logging.getLogger("zitex.marketing.routes")
+logger = logging.getLogger("zerax.marketing.routes")
 
 
 # Models

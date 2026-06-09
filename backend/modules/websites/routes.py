@@ -2715,7 +2715,7 @@ body{{font-family:'Tajawal',sans-serif;background:#0b0f1f;color:#fff;padding:20p
             cust = {
                 "name": data["customer"].get("name"),
                 "phone": data["customer"].get("phone"),
-                "email": data["customer"].get("email") or f"{data['customer'].get('phone','user')}@zitex.site",
+                "email": data["customer"].get("email") or f"{data['customer'].get('phone','user')}@zerax.site",
                 "address": order.get("address"),
                 "city": order.get("city") or "الرياض",
             }

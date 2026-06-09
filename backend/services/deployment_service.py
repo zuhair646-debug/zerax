@@ -127,7 +127,7 @@ HTML_TEMPLATE = {
 class DeploymentService:
     """خدمة نشر المشاريع"""
     
-    def __init__(self, db, storage_path: str = "/tmp/zitex_projects"):
+    def __init__(self, db, storage_path: str = "/tmp/zerax_projects"):
         self.db = db
         self.storage_path = Path(storage_path)
         self.storage_path.mkdir(parents=True, exist_ok=True)

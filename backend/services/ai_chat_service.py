@@ -25,7 +25,7 @@ AI_FEATURES_ENABLED = True
 # ============== Object Storage for Real Hosting ==============
 STORAGE_URL = "https://integrations.emergentagent.com/objstore/api/v1/storage"
 EMERGENT_KEY = os.environ.get('EMERGENT_LLM_KEY')
-APP_NAME = "zitex-hosting"
+APP_NAME = "zerax-hosting"
 BACKEND_URL = os.environ.get('BACKEND_URL', '')
 storage_key = None
 
@@ -500,7 +500,7 @@ WELCOME_MESSAGE = """## 👋 مرحباً بك في زيتكس!
 
 
 ZERAX_BADGE = '''<!-- Zerax Badge -->
-<div id="zitex-badge" style="position:fixed;bottom:20px;right:20px;background:linear-gradient(135deg,#1a1a2e,#16213e);padding:10px 20px;border-radius:25px;box-shadow:0 4px 15px rgba(0,0,0,0.3);z-index:9999;display:flex;align-items:center;gap:10px;cursor:pointer;border:1px solid rgba(255,215,0,0.3);" onclick="window.open('https://zitex.vercel.app','_blank')">
+<div id="zerax-badge" style="position:fixed;bottom:20px;right:20px;background:linear-gradient(135deg,#1a1a2e,#16213e);padding:10px 20px;border-radius:25px;box-shadow:0 4px 15px rgba(0,0,0,0.3);z-index:9999;display:flex;align-items:center;gap:10px;cursor:pointer;border:1px solid rgba(255,215,0,0.3);" onclick="window.open('https://zerax.vercel.app','_blank')">
     <div style="width:30px;height:30px;background:linear-gradient(135deg,#ffd700,#ffaa00);border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:bold;color:#000;font-size:16px;">Z</div>
     <span style="color:#ffd700;font-size:14px;font-weight:500;">Powered by Zerax</span>
 </div>'''
@@ -850,7 +850,7 @@ def detect_request_type(message: str, session_type: str = "general") -> str:
     return "general"
 
 
-def inject_zitex_badge(html_code: str) -> str:
+def inject_zerax_badge(html_code: str) -> str:
     if '</body>' in html_code:
         return html_code.replace('</body>', f'{ZERAX_BADGE}\n</body>')
     elif '</html>' in html_code:
@@ -1593,7 +1593,7 @@ class AIAssistant:
                 except Exception as ge:
                     logger.error(f"Game override failed: {ge}")
 
-            code_with_badge = inject_zitex_badge(code)
+            code_with_badge = inject_zerax_badge(code)
             update_data["$set"]["generated_code"] = code_with_badge
             # Store code in metadata for frontend to use
             assistant_msg["metadata"]["generated_code"] = code_with_badge
@@ -1624,7 +1624,7 @@ class AIAssistant:
                         design_url = (fresh.get("project_data") or {}).get("last_design_image") \
                                      or (session.get("project_data") or {}).get("last_design_image")
                         generated = build_game_html(genre=genre, title=title, hint=message[:400], design_image_url=design_url)
-                        code_with_badge = inject_zitex_badge(generated)
+                        code_with_badge = inject_zerax_badge(generated)
                         update_data["$set"]["generated_code"] = code_with_badge
                         assistant_msg["metadata"]["generated_code"] = code_with_badge
                         assistant_msg["metadata"]["has_preview"] = True
@@ -2729,7 +2729,7 @@ class AIAssistant:
             return None
     
     async def update_session_code(self, session_id: str, user_id: str, code: str) -> bool:
-        code_with_badge = inject_zitex_badge(code)
+        code_with_badge = inject_zerax_badge(code)
         result = await self.db.chat_sessions.update_one(
             {"id": session_id, "user_id": user_id},
             {"$set": {"generated_code": code_with_badge, "updated_at": datetime.now(timezone.utc).isoformat()}}
@@ -2845,7 +2845,7 @@ class AIAssistant:
         
         return {
             "session_id": session_id,
-            "code": inject_zitex_badge(code),
+            "code": inject_zerax_badge(code),
             "template_name": template["name"],
             "cost": cost
         }
@@ -3176,7 +3176,7 @@ class AIAssistant:
         # Check if subdomain is taken
         existing = await self.db.deployments.find_one({"subdomain": subdomain, "status": "active"})
         if existing:
-            raise ValueError(f"النطاق {subdomain}.zitex.app محجوز بالفعل")
+            raise ValueError(f"النطاق {subdomain}.zerax.app محجوز بالفعل")
         
         # Get session code
         session = await self.get_session(session_id, user_id)
@@ -3203,7 +3203,7 @@ class AIAssistant:
             raise ValueError("فشل رفع الملف. حاول مرة أخرى")
         
         # Generate public URL
-        public_url = f"https://{subdomain}.zitex.app"
+        public_url = f"https://{subdomain}.zerax.app"
         storage_url = f"{STORAGE_URL.replace('/api/v1/storage', '')}/sites/{subdomain}/index.html"
         
         # Create deployment record

@@ -125,7 +125,7 @@ export default function SourceBrowser({ user }) {
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `zitex-${new Date().toISOString().slice(0, 10)}.zip`;
+      a.download = `zerax-${new Date().toISOString().slice(0, 10)}.zip`;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
@@ -147,7 +147,7 @@ export default function SourceBrowser({ user }) {
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `zitex-${prefix.replace(/\//g, '-').replace(/-$/, '')}.zip`;
+      a.download = `zerax-${prefix.replace(/\//g, '-').replace(/-$/, '')}.zip`;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
@@ -176,7 +176,7 @@ export default function SourceBrowser({ user }) {
         <div className="mb-6">
           <h1 className="text-3xl md:text-4xl font-black mb-2">📥 تحميل الكود (ملف بملف)</h1>
           <p className="text-sm text-white/60 leading-relaxed">
-            انسخ كل ملف إلى مستودعك على GitHub (<code className="text-yellow-300">zuhair646-debug/zitex</code>) محافظاً على نفس المسار.
+            انسخ كل ملف إلى مستودعك على GitHub (<code className="text-yellow-300">zuhair646-debug/zerax</code>) محافظاً على نفس المسار.
             استخدم <b>👁️ عرض</b> لفتح الملف في تبويب جديد، <b>📋 نسخ</b> لنسخه مباشرة، أو <b>⬇️ تنزيل</b> لحفظه على جهازك.
           </p>
         </div>

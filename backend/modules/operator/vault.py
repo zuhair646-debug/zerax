@@ -21,7 +21,7 @@ def _derive_key() -> bytes:
     hkdf = HKDF(
         algorithm=hashes.SHA256(),
         length=32,
-        salt=b"zitex-operator-vault-v1",
+        salt=b"zerax-operator-vault-v1",
         info=b"fernet",
     )
     raw = hkdf.derive(secret)

@@ -8,7 +8,7 @@
 
 ## Platform Owner (Admin)
 - URL: `/login`
-- Email: `owner@zitex.com`
+- Email: `owner@zerax.com`
 - Password: `owner123`
 
 ## Demo Site — Cozy Cafe Demo
@@ -38,7 +38,7 @@
 - Driver auth: `Authorization: DriverToken <token>` (from `/driver/login`)
 
 ## Stripe Subscription Gate Test User (Website Studio paywall)
-- Email: `gatetest@zitex.com`
+- Email: `gatetest@zerax.com`
 - Password: `test123`
 - Role: client (non-owner — hits paywall)
 - Has active `studio_monthly` subscription (paid via Stripe test card 4242 4242 4242 4242, 12/34, 123, ZIP 12345)
@@ -52,7 +52,7 @@
 
 ## Zitex Auto-Coder (برمجة زيتاكس) — Owner-Only Codebase Agent
 - Route: `/admin/autocoder` (requires `is_owner=true` user)
-- **🔑 Current passcode (Jun 2026)**: `zitex2026`
+- **🔑 Current passcode (Jun 2026)**: `zerax2026`
 - **Recovery codes** (use once each if you forget the passcode):
   - `5702-2746-0033-A0B1`
   - `60F3-BBB7-2628-CE0E`
@@ -62,7 +62,7 @@
   - `6266-B1DE-07D6-7912`
 - First visit shows **Setup screen** → owner picks passcode (≥6 chars) → system generates 6 one-time recovery codes
 - Subsequent visits show **Lock screen** → enter passcode → 4-hour session token
-- Session token stored client-side in `localStorage.zitex_autocoder_session` and sent in `X-AutoCoder-Token` header
+- Session token stored client-side in `localStorage.zerax_autocoder_session` and sent in `X-AutoCoder-Token` header
 - Forgot passcode? → "نسيت كلمة السر؟" → enter recovery code + new passcode (consumes the recovery code; if all 6 used, system regenerates a fresh batch)
 - All actions audited in `autocoder_audit` collection (visible via `GET /api/autocoder/audit`)
 - Tools available to the AI: `read_file`, `write_file`, `edit_file`, `delete_file`, `list_dir`, `search_code`, `run_command` (full bash), `restart_service`, `git_status`, `git_diff`, `git_commit_push`

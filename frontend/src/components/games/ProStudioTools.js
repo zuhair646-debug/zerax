@@ -519,7 +519,7 @@ function MultiplayerPanel({ projectId, token, accent }) {
       .then(b => {
         const url = URL.createObjectURL(b);
         const a = document.createElement('a');
-        a.href = url; a.download = `zitex-${stack}.zip`; a.click();
+        a.href = url; a.download = `zerax-${stack}.zip`; a.click();
         URL.revokeObjectURL(url);
       });
   };
@@ -747,7 +747,7 @@ function UnityPanel({ projectId, token, accent }) {
       const b = await r.blob();
       const url = URL.createObjectURL(b);
       const a = document.createElement('a');
-      a.href = url; a.download = `zitex-unity-${projectId.slice(0, 8)}.zip`; a.click();
+      a.href = url; a.download = `zerax-unity-${projectId.slice(0, 8)}.zip`; a.click();
       URL.revokeObjectURL(url);
     } finally { setBusy(false); }
   };

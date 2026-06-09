@@ -143,7 +143,7 @@ async def tool_browse_site(
 
         if action == "screenshot":
             import time
-            path = f"/tmp/zitex_screenshot_{int(time.time())}.png"
+            path = f"/tmp/zerax_screenshot_{int(time.time())}.png"
             await page.screenshot(path=path, full_page=full_page, quality=50, type="jpeg")
             # Note: jpeg requires .jpg extension actually; switch type=png and remove quality
             from pathlib import Path as _P
@@ -216,7 +216,7 @@ async def tool_create_test_user(
 
     if not email:
         # Auto-generate unique email
-        email = f"test_{uuid.uuid4().hex[:8]}@zitex.test"
+        email = f"test_{uuid.uuid4().hex[:8]}@zerax.test"
     # Check if exists
     existing = await db.users.find_one({"email": email}, {"_id": 0, "id": 1})
     if existing:
@@ -274,7 +274,7 @@ async def _run_shell(cmd: str, timeout: int = 60, cwd: Optional[str] = None) -> 
 
 async def tool_git_push(commit_message: str = "") -> Dict[str, Any]:
     """Push committed changes to GitHub (production)."""
-    push_script = "/root/.zitex/push.sh"
+    push_script = "/root/.zerax/push.sh"
     if not os.path.exists(push_script):
         return {"ok": False, "error": "push script not configured"}
     msg = commit_message or "auto: changes via auto-coder"
@@ -415,7 +415,7 @@ AUTONOMY_PROMPT_RULES = """
 🎯 الذكاء الحقيقي = الإقدام مع المسؤولية، مو التردد مع التحفّظ.
 
 🌐 اختبار حقيقي للموقع (لما تعدّل واجهة):
-   1. browse_site(action='navigate', url='https://zitex-frontend.vercel.app')
+   1. browse_site(action='navigate', url='https://zerax-frontend.vercel.app')
    2. browse_site(action='screenshot') — شوف الصفحة
    3. browse_site(action='click', selector='[data-testid=...]') — جرّب الزر
    4. browse_site(action='get_text', selector='...') — تأكد من المحتوى

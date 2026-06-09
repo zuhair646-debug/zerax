@@ -7,7 +7,7 @@ from datetime import datetime, timezone
 from typing import Optional, Dict, Any
 import uuid
 
-log = logging.getLogger("zitex.pricing.credits")
+log = logging.getLogger("zerax.pricing.credits")
 
 
 async def get_balance(db, user_id: str) -> float:

@@ -99,7 +99,7 @@ room.state.players.onAdd = (player, id) => {
 };
 """,
         "package.json": """{
-  "name": "zitex-multiplayer-server",
+  "name": "zerax-multiplayer-server",
   "version": "1.0.0",
   "scripts": { "start": "ts-node server.ts", "dev": "ts-node-dev server.ts" },
   "dependencies": {
@@ -180,7 +180,7 @@ socket.emit("move", { x: 5, y: 10 });
 </script>
 """,
         "package.json": """{
-  "name": "zitex-socketio",
+  "name": "zerax-socketio",
   "scripts": { "start": "node server.js" },
   "dependencies": { "socket.io": "^4.7.5" }
 }""",
@@ -213,7 +213,7 @@ minimal setup for a `{game_type}` with {max_players} max players:
 For ZERAX_VOICE_CHAT integration: Photon Voice works in parallel —
 add `PhotonVoiceSetup` prefab to your scene.
 
-Need a starter template? Email support@zitex.app — we ship a Unity
+Need a starter template? Email support@zerax.app — we ship a Unity
 package on request.
 """,
     }

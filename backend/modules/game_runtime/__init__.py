@@ -33,7 +33,7 @@ from pydantic import BaseModel, Field
 logger = logging.getLogger(__name__)
 
 # JWT secret for player tokens (scoped per project)
-PLAYER_JWT_SECRET = os.environ.get("PLAYER_JWT_SECRET") or os.environ.get("JWT_SECRET") or "zitex-player-fallback"
+PLAYER_JWT_SECRET = os.environ.get("PLAYER_JWT_SECRET") or os.environ.get("JWT_SECRET") or "zerax-player-fallback"
 PLAYER_TOKEN_TTL_HOURS = 24 * 14  # 2 weeks
 
 
@@ -502,7 +502,7 @@ GENRE_TEMPLATES = [
             {"id": "combat", "title": "Combat System", "code": "turn_based_resolution"},
             {"id": "multiplayer", "title": "Multiplayer (use Zerax Runtime)", "code": "room_state + leaderboard"},
         ],
-        "engines": ["zitex_runtime_save", "zitex_runtime_leaderboard", "zitex_runtime_multiplayer"],
+        "engines": ["zerax_runtime_save", "zerax_runtime_leaderboard", "zerax_runtime_multiplayer"],
     },
     {
         "id": "platformer",
@@ -518,7 +518,7 @@ GENRE_TEMPLATES = [
             {"id": "levels", "title": "Level Design (10 stages)", "code": "JSON tilemap loader"},
             {"id": "save", "title": "Save Progress (Zerax Runtime)", "code": "best_level + collectibles_count"},
         ],
-        "engines": ["zitex_runtime_save", "zitex_runtime_achievements"],
+        "engines": ["zerax_runtime_save", "zerax_runtime_achievements"],
     },
     {
         "id": "puzzle_match3",
@@ -534,7 +534,7 @@ GENRE_TEMPLATES = [
             {"id": "levels", "title": "Level Goals (50 levels)", "code": "objective JSON file"},
             {"id": "leaderboard", "title": "Global Best Scores (Zerax Runtime)", "code": "submit_score per level"},
         ],
-        "engines": ["zitex_runtime_leaderboard", "zitex_runtime_save"],
+        "engines": ["zerax_runtime_leaderboard", "zerax_runtime_save"],
     },
     {
         "id": "idle_clicker",
@@ -550,7 +550,7 @@ GENRE_TEMPLATES = [
             {"id": "save", "title": "Auto-save (Zerax Runtime)", "code": "save every 30s"},
             {"id": "achievements", "title": "Achievements (50 unlocks)", "code": "unlock thresholds"},
         ],
-        "engines": ["zitex_runtime_save", "zitex_runtime_achievements"],
+        "engines": ["zerax_runtime_save", "zerax_runtime_achievements"],
     },
     {
         "id": "turn_based_rpg",
@@ -566,7 +566,7 @@ GENRE_TEMPLATES = [
             {"id": "combat_math", "title": "Combat Formulas", "code": "atk - def + crit + status"},
             {"id": "save", "title": "Save Anywhere (Zerax Runtime)", "code": "save full party state"},
         ],
-        "engines": ["zitex_runtime_save", "zitex_runtime_achievements"],
+        "engines": ["zerax_runtime_save", "zerax_runtime_achievements"],
     },
     {
         "id": "action_fps",
@@ -582,7 +582,7 @@ GENRE_TEMPLATES = [
             {"id": "rooms", "title": "PvP Rooms (Zerax Runtime)", "code": "WebSocket realtime"},
             {"id": "leaderboard", "title": "K/D Leaderboard (Zerax Runtime)", "code": "submit kills/deaths"},
         ],
-        "engines": ["zitex_runtime_multiplayer", "zitex_runtime_leaderboard"],
+        "engines": ["zerax_runtime_multiplayer", "zerax_runtime_leaderboard"],
     },
 ]
 
@@ -608,7 +608,7 @@ _SDK_TEMPLATE = r"""/* Zerax Game Runtime SDK
   const BACKEND = "__BACKEND_URL__";
   const PID = "__PROJECT_ID__";
   const BASE = BACKEND + "/api/game-runtime/" + PID;
-  const LSKEY = "zitex_token_" + PID;
+  const LSKEY = "zerax_token_" + PID;
 
   function _hdr(){
     const t = localStorage.getItem(LSKEY);

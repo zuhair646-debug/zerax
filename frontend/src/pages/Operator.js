@@ -377,7 +377,7 @@ function GithubForm({ client, save, saving }) {
   const [token, setToken] = useState('');
   return (
     <div className="space-y-2">
-      <Field label="Repo (user/repo)"><input value={repo} onChange={e => setRepo(e.target.value)} placeholder="zuhair646-debug/zitex" className="inp" data-testid="gh-repo" /></Field>
+      <Field label="Repo (user/repo)"><input value={repo} onChange={e => setRepo(e.target.value)} placeholder="zuhair646-debug/zerax" className="inp" data-testid="gh-repo" /></Field>
       <Field label="Branch"><input value={branch} onChange={e => setBranch(e.target.value)} className="inp" data-testid="gh-branch" /></Field>
       <Field label={`Token ${g.has_token ? `(محفوظ: ${g.token_mask})` : ''}`}>
         <input type="password" value={token} onChange={e => setToken(e.target.value)} placeholder={g.has_token ? 'اترك فارغاً للإبقاء' : 'ghp_...'} className="inp" data-testid="gh-token" />

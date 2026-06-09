@@ -112,7 +112,7 @@ def create_bridge_router(db, get_current_user) -> APIRouter:
             "link": payload.link or "",
             "visible": True,
             "position": existing_count,
-            "source": f"zitex_bridge_{payload.asset_source}",
+            "source": f"zerax_bridge_{payload.asset_source}",
             "source_asset_id": payload.asset_id,
             "created_at": _now().isoformat(),
         }
@@ -181,7 +181,7 @@ def create_bridge_router(db, get_current_user) -> APIRouter:
             "cta_link": payload.cta_link or "",
             "visible": True,
             "position": existing_count,
-            "source": f"zitex_bridge_{payload.asset_source}",
+            "source": f"zerax_bridge_{payload.asset_source}",
             "source_asset_id": payload.asset_id,
             "created_at": _now().isoformat(),
         }

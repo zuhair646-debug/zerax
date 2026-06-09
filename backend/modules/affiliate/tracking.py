@@ -31,7 +31,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request, Query
 from fastapi.responses import RedirectResponse, HTMLResponse
 from pydantic import BaseModel, Field
 
-logger = logging.getLogger("zitex.affiliate.tracking")
+logger = logging.getLogger("zerax.affiliate.tracking")
 
 router = APIRouter(tags=["affiliate-tracking"])
 
@@ -214,7 +214,7 @@ def build_router(db, get_current_user):
         # Redirect + set attribution cookie (30 days)
         resp = RedirectResponse(url=dest, status_code=302)
         resp.set_cookie(
-            "zitex_aff",
+            "zerax_aff",
             code,
             max_age=60 * 60 * 24 * 30,  # 30 days
             httponly=False,
@@ -223,7 +223,7 @@ def build_router(db, get_current_user):
         )
         # Also store click id so signup-binding is precise
         resp.set_cookie(
-            "zitex_aff_click",
+            "zerax_aff_click",
             click["id"],
             max_age=60 * 60 * 24 * 30,
             httponly=False,

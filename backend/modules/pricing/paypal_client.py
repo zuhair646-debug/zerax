@@ -12,7 +12,7 @@ import logging
 import httpx
 from typing import Dict, Any, Optional
 
-log = logging.getLogger("zitex.pricing.paypal")
+log = logging.getLogger("zerax.pricing.paypal")
 
 PAYPAL_BASE_LIVE = "https://api-m.paypal.com"
 PAYPAL_BASE_SANDBOX = "https://api-m.sandbox.paypal.com"

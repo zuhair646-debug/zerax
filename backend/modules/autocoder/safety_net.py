@@ -7,7 +7,7 @@ The problem: the AI lost its ability to evolve its OWN intelligence module.
 New approach: full freedom + tripwires:
 
   1. **Snapshot before any core-file write**
-     Auto-backup to /tmp/zitex_snapshots/<file>__<timestamp> so we can roll back.
+     Auto-backup to /tmp/zerax_snapshots/<file>__<timestamp> so we can roll back.
 
   2. **Sanity check before commit**
      Run `python -c "import ast; ast.parse(content)"` on Python files.
@@ -40,7 +40,7 @@ from typing import Any, Dict, List, Optional, Tuple
 logger = logging.getLogger(__name__)
 
 REPO_ROOT = Path("/app")
-SNAPSHOT_DIR = Path(os.environ.get("ZERAX_SNAPSHOT_DIR", "/tmp/zitex_snapshots"))
+SNAPSHOT_DIR = Path(os.environ.get("ZERAX_SNAPSHOT_DIR", "/tmp/zerax_snapshots"))
 SNAPSHOT_DIR.mkdir(parents=True, exist_ok=True)
 
 # Files we treat as "spine" — extra-strict checks. Editing allowed, but
@@ -355,7 +355,7 @@ SAFETY_PROMPT_RULES = """
 ✅ بدلاً منها، فيه **شبكة أمان تلقائية**:
 
   1. **Snapshot تلقائي** — قبل أي write_file لملف spine، النظام يحفظ نسخة
-     في /tmp/zitex_snapshots/ تلقائياً. ما تحتاج تطلبها.
+     في /tmp/zerax_snapshots/ تلقائياً. ما تحتاج تطلبها.
 
   2. **Sanity check** — قبل ما النظام يكتب فعلياً:
      • Python syntax + compile check

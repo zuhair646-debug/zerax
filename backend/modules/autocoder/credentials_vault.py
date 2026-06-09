@@ -4,7 +4,7 @@ the 300+ tools the Auto-Coder can activate.
 
 Resolution order for ANY credential lookup:
   1. process environment variable (always wins — production Railway env)
-  2. JSON vault at /root/.zitex/credentials.json
+  2. JSON vault at /root/.zerax/credentials.json
   3. None  →  the tool surfaces a "needs_key" hint to the AI / owner
 
 The JSON vault lets the owner add keys at runtime without redeploy. It is
@@ -18,7 +18,7 @@ import threading
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-VAULT_DIR = Path(os.environ.get("ZERAX_VAULT_DIR", "/root/.zitex"))
+VAULT_DIR = Path(os.environ.get("ZERAX_VAULT_DIR", "/root/.zerax"))
 VAULT_FILE = VAULT_DIR / "credentials.json"
 _LOCK = threading.Lock()
 _CACHE: Optional[Dict[str, str]] = None

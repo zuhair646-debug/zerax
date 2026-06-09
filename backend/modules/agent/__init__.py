@@ -373,7 +373,7 @@ def create_agent_router(db, get_current_user):
     @router.get("/primitives/quran.js")
     async def serve_quran_primitives():
         """Static JS exposing ZeraxQuran data primitives (reciters, surahs, fetchSurah, audioUrl)."""
-        fp = Path("/app/backend/static/zitex_primitives_quran.js")
+        fp = Path("/app/backend/static/zerax_primitives_quran.js")
         if not fp.exists():
             raise HTTPException(404, "primitives not found")
         return FileResponse(str(fp), media_type="application/javascript")

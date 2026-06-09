@@ -673,7 +673,7 @@ def render_cart_module(seed: Dict[str, Any]) -> str:
 """
 
 
-def render_zitex_enhancements(seed: Dict[str, Any], project_id: str = "") -> str:
+def render_zerax_enhancements(seed: Dict[str, Any], project_id: str = "") -> str:
     """Unified enhancements: global add-to-cart delegation, category filter, reservation modal,
     contact smooth-scroll, reviews slider, and clean Zerax footer with tracking link.
 
@@ -774,14 +774,14 @@ def render_zitex_enhancements(seed: Dict[str, Any], project_id: str = "") -> str
 .zx-map-mini{{margin-top:10px;width:100%;height:140px;border:none;border-radius:10px;background:#1e293b}}
 
 /* Zerax tracker bar */
-.zx-zitex-bar{{border-top:1px solid #1e293b;padding:18px 0;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:14px}}
-.zx-zitex-copy{{color:#64748b;font-size:12px}}
-.zx-zitex-brand{{display:flex;align-items:center;gap:10px;text-decoration:none;padding:8px 14px;border-radius:99px;background:linear-gradient(135deg,rgba(251,191,36,.1),rgba(165,42,42,.1));border:1px solid rgba(251,191,36,.2);transition:all .25s}}
-.zx-zitex-brand:hover{{background:linear-gradient(135deg,rgba(251,191,36,.2),rgba(165,42,42,.2));border-color:#fbbf24;transform:translateY(-2px)}}
-.zx-zitex-logo{{width:28px;height:28px;border-radius:50%;background:linear-gradient(135deg,#fbbf24,#a52a2a);display:flex;align-items:center;justify-content:center;color:#fff;font-weight:900;font-size:13px}}
-.zx-zitex-text{{display:flex;flex-direction:column;line-height:1.2}}
-.zx-zitex-text small{{color:#64748b;font-size:10px}}
-.zx-zitex-text strong{{color:#fbbf24;font-size:13px;font-weight:900}}
+.zx-zerax-bar{{border-top:1px solid #1e293b;padding:18px 0;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:14px}}
+.zx-zerax-copy{{color:#64748b;font-size:12px}}
+.zx-zerax-brand{{display:flex;align-items:center;gap:10px;text-decoration:none;padding:8px 14px;border-radius:99px;background:linear-gradient(135deg,rgba(251,191,36,.1),rgba(165,42,42,.1));border:1px solid rgba(251,191,36,.2);transition:all .25s}}
+.zx-zerax-brand:hover{{background:linear-gradient(135deg,rgba(251,191,36,.2),rgba(165,42,42,.2));border-color:#fbbf24;transform:translateY(-2px)}}
+.zx-zerax-logo{{width:28px;height:28px;border-radius:50%;background:linear-gradient(135deg,#fbbf24,#a52a2a);display:flex;align-items:center;justify-content:center;color:#fff;font-weight:900;font-size:13px}}
+.zx-zerax-text{{display:flex;flex-direction:column;line-height:1.2}}
+.zx-zerax-text small{{color:#64748b;font-size:10px}}
+.zx-zerax-text strong{{color:#fbbf24;font-size:13px;font-weight:900}}
 .zx-pay-icons{{display:flex;gap:8px;align-items:center}}
 .zx-pay-icons span{{padding:5px 10px;background:#1e293b;border-radius:6px;font-size:10px;color:#94a3b8;font-weight:700}}
 
@@ -873,14 +873,14 @@ def render_zitex_enhancements(seed: Dict[str, Any], project_id: str = "") -> str
       </div>
     </div>
 
-    <div class="zx-zitex-bar">
-      <div class="zx-zitex-copy">© {branding.get('name','مطعمي')} {seed.get('year', 2026)} — جميع الحقوق محفوظة</div>
+    <div class="zx-zerax-bar">
+      <div class="zx-zerax-copy">© {branding.get('name','مطعمي')} {seed.get('year', 2026)} — جميع الحقوق محفوظة</div>
       <div class="zx-pay-icons">
         <span>Mada</span><span>Visa</span><span>Apple Pay</span><span>STC Pay</span>
       </div>
-      <a class="zx-zitex-brand" href="{track_url}" target="_blank" rel="noopener" data-zx-tracker="{project_id}">
-        <div class="zx-zitex-logo">Z</div>
-        <div class="zx-zitex-text">
+      <a class="zx-zerax-brand" href="{track_url}" target="_blank" rel="noopener" data-zx-tracker="{project_id}">
+        <div class="zx-zerax-logo">Z</div>
+        <div class="zx-zerax-text">
           <small>صُنع بواسطة</small>
           <strong>Zerax</strong>
         </div>

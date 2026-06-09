@@ -21,10 +21,10 @@ const SR = (typeof window !== 'undefined') && (window.SpeechRecognition || windo
 
 function getAnonId() {
   if (typeof window === 'undefined') return null;
-  let id = localStorage.getItem('zitex_anon_id');
+  let id = localStorage.getItem('zerax_anon_id');
   if (!id) {
     id = 'anon_' + Math.random().toString(36).slice(2, 10) + Date.now().toString(36);
-    localStorage.setItem('zitex_anon_id', id);
+    localStorage.setItem('zerax_anon_id', id);
   }
   return id;
 }
@@ -41,7 +41,7 @@ function getStoredName() {
     }
   } catch (_) {}
   // 2. Anonymous: prior typed name
-  return localStorage.getItem('zitex_user_name') || '';
+  return localStorage.getItem('zerax_user_name') || '';
 }
 
 // ====== AI Director: map reply text keywords to VRMA animations ======
@@ -67,7 +67,7 @@ function pickAnimationFromText(text) {
 }
 
 function setStoredName(name) {
-  try { localStorage.setItem('zitex_user_name', name); } catch (_) {}
+  try { localStorage.setItem('zerax_user_name', name); } catch (_) {}
 }
 
 function getTimeHint() {
@@ -374,7 +374,7 @@ export default function VoiceStage({ open, onClose, initialCharacter = 'zara', m
         if (shouldNavigate) {
           // Pass extracted subject as URL state via sessionStorage
           if (intent.subject) {
-            sessionStorage.setItem('zitex_voice_intent', JSON.stringify({
+            sessionStorage.setItem('zerax_voice_intent', JSON.stringify({
               intent: intent.intent,
               subject: intent.subject,
               from_voice: true,

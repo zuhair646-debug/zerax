@@ -229,8 +229,8 @@ async def _generate_html_with_claude(brief: str) -> str:
     """
     # NEW: route through unified Zerax AI layer with boundaries
     try:
-        from modules.zitex_ai import zitex_chat
-        result = await zitex_chat(
+        from modules.zerax_ai import zerax_chat
+        result = await zerax_chat(
             agent="freebuild",
             messages=[{"role": "user", "content": brief}],
             override_system=ARCHITECT_PROMPT,  # FreeBuild has its own detailed architect prompt
@@ -238,7 +238,7 @@ async def _generate_html_with_claude(brief: str) -> str:
         if result.get("ok"):
             out = result.get("content", "")
         else:
-            raise RuntimeError(f"zitex_chat failed: {result.get('error')}")
+            raise RuntimeError(f"zerax_chat failed: {result.get('error')}")
     except Exception as e:
         # Fallback to legacy direct call
         direct_key = os.environ.get("OPENAI_DIRECT_KEY", "").strip()

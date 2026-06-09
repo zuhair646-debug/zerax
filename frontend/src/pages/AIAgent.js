@@ -116,7 +116,7 @@ export default function AIAgent() {
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `zitex-site-${conversationId.slice(0, 8)}.html`;
+      a.download = `zerax-site-${conversationId.slice(0, 8)}.html`;
       a.click();
       URL.revokeObjectURL(url);
       toast.success('تم تحميل الملف');

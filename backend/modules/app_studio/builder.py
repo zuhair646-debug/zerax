@@ -312,7 +312,7 @@ def _manifest(project: Dict[str, Any]) -> str:
 
 
 def _service_worker() -> str:
-    return """const CACHE='zitex-app-v1';
+    return """const CACHE='zerax-app-v1';
 const ASSETS=['./','./index.html','./manifest.json'];
 self.addEventListener('install',e=>{e.waitUntil(caches.open(CACHE).then(c=>c.addAll(ASSETS)));self.skipWaiting();});
 self.addEventListener('activate',e=>{e.waitUntil(self.clients.claim());});
@@ -358,7 +358,7 @@ def _icon_svg(label: str, color: str, size: int = 512) -> bytes:
 # Capacitor (Hybrid) extras
 # ════════════════════════════════════════════════════════════════════════
 def _capacitor_config(project: Dict[str, Any]) -> str:
-    app_id = "com.zitex." + "".join(c for c in (project.get("title") or "app").lower() if c.isalnum())[:20] or "myapp"
+    app_id = "com.zerax." + "".join(c for c in (project.get("title") or "app").lower() if c.isalnum())[:20] or "myapp"
     return json.dumps({
         "appId": app_id,
         "appName": project.get("title") or "MyApp",
@@ -449,7 +449,7 @@ struct ContentView: View {{
 
 def _kotlin_app(project: Dict[str, Any]) -> str:
     name = project.get("title") or "MyApp"
-    return f"""package com.zitex.app
+    return f"""package com.zerax.app
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -663,7 +663,7 @@ def build_project(project: Dict[str, Any], features: List[Dict[str, Any]]) -> Di
     # ── Native scaffolding ────────────────────────────────────────────
     if ptype == "native":
         _write("ios/App.swift", _swift_app(project))
-        _write("android/app/src/main/java/com/zitex/app/MainActivity.kt", _kotlin_app(project))
+        _write("android/app/src/main/java/com/zerax/app/MainActivity.kt", _kotlin_app(project))
         _write("README.md", f"""# {project.get('title')} — Native scaffold
 
 ## iOS

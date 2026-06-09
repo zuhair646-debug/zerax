@@ -1074,7 +1074,7 @@ def create_game_router(db, get_current_user):
         seen_ids_ac: set = set()
         _public_backend = (
             os.environ.get("PUBLIC_BACKEND_URL")
-            or "https://zitex-production.up.railway.app"
+            or "https://zerax-production.up.railway.app"
         )
 
         # Path A: phases (new approvals)
@@ -1273,7 +1273,7 @@ def create_game_router(db, get_current_user):
 | **"عدّل الصورة المعتمدة الفلانية (إضاءة/زاوية)"** | تكتب: `<<IMG_EDIT: english edit instruction | ref: ASSET_ID>>` | تعديل دقيق على نفس الصورة بدون توليد من الصفر |
 | **"اجمع صور القمح والحديد والخشب في مشهد قرية"** | تكتب: `<<COMPOSE: village layout description | refs: id1, id2, id3>>` (دمج 2-4 أصول معتمدة) | مشهد واحد متماسك بكل الأصول |
 | **"أعطني 6 حقول قمح متغيرة"** | تكتب: `<<BATCH: english prompt | count: 6 | variations: slight\|moderate\|high>>` | 6 صور متوازية في توليد واحد بدل ست جولات |
-| **"خلّي اللعبة تحفظ progress / leaderboards / multiplayer"** | استخدم Zerax Runtime SDK: ضع `<script src="https://zitex-production.up.railway.app/api/game-runtime/{project_id}/sdk.js"></script>` ثم `ZeraxGame.guest()`/`save()`/`leaderboard.submit()`/`unlock()`/`join('room')` | كل اللعبة تستفيد من backend Zerax بدون استضافة خارجية |
+| **"خلّي اللعبة تحفظ progress / leaderboards / multiplayer"** | استخدم Zerax Runtime SDK: ضع `<script src="https://zerax-production.up.railway.app/api/game-runtime/{project_id}/sdk.js"></script>` ثم `ZeraxGame.guest()`/`save()`/`leaderboard.submit()`/`unlock()`/`join('room')` | كل اللعبة تستفيد من backend Zerax بدون استضافة خارجية |
 | "ابحث في الإنترنت" | (الميزة قادمة) | "هذي القدرة قيد البناء" |
 
 🎮 **Zerax Game Runtime SDK** (P0 الجديد): أي لعبة تبنيها بـ`<<BUILD>>` يقدر يستخدم endpoints جاهزة من نفس Zerax:
@@ -1363,7 +1363,7 @@ def create_game_router(db, get_current_user):
    
    🧊 `<<3D: english prompt for 3D object>>` — **موديل 3D حقيقي (.glb)** (Hyper3D Rodin، 0.30$، 1-3 دقائق). للشخصيات، الـbuildings، الـvehicles. الـoutput .glb يفتح في Three.js/Unity/Blender مباشرة.
    
-   🎬 `<<ANIMATE: english motion prompt | img: ABSOLUTE_IMAGE_URL>>` — **تحريك صورة معتمدة لفيديو 5 ثوان** (Kling 1.6، 0.50$، 1-2 دقيقة). استخدمه فقط بعد ما يعتمد المالك صورة. الـimg URL = الـURL الكامل للصورة المعتمدة (مثلاً: `https://zitex.vercel.app/api/games/asset-image/PROJECT_ID/ASSET_ID.png`).
+   🎬 `<<ANIMATE: english motion prompt | img: ABSOLUTE_IMAGE_URL>>` — **تحريك صورة معتمدة لفيديو 5 ثوان** (Kling 1.6، 0.50$، 1-2 دقيقة). استخدمه فقط بعد ما يعتمد المالك صورة. الـimg URL = الـURL الكامل للصورة المعتمدة (مثلاً: `https://zerax.vercel.app/api/games/asset-image/PROJECT_ID/ASSET_ID.png`).
    
    🎵 `<<MUSIC: english music mood/genre prompt | dur: 30>>` — **موسيقى خلفية للعبة** (CassetteAI، 0.03$، 30 ثانية). مثل: `<<MUSIC: epic medieval battle orchestral with drums | dur: 60>>`
    
@@ -3188,7 +3188,7 @@ def create_game_router(db, get_current_user):
         return StreamingResponse(
             buf,
             media_type="application/zip",
-            headers={"Content-Disposition": f'attachment; filename="zitex-{stack}-{project_id[:8]}.zip"'},
+            headers={"Content-Disposition": f'attachment; filename="zerax-{stack}-{project_id[:8]}.zip"'},
         )
 
     # ═════════════════════════════════════════════════════════════
@@ -3289,7 +3289,7 @@ def create_game_router(db, get_current_user):
         return StreamingResponse(
             _io.BytesIO(blob),
             media_type="application/zip",
-            headers={"Content-Disposition": f'attachment; filename="zitex-unity-{project_id[:8]}.zip"'},
+            headers={"Content-Disposition": f'attachment; filename="zerax-unity-{project_id[:8]}.zip"'},
         )
 
     @router.post("/project/{project_id}/unity-public")

@@ -1071,12 +1071,12 @@ function ConnectionsPanel({ open, projectId, onClose }) {
 function CodeActions({ project, projectId, onOpenConnections }) {
   const [pushing, setPushing] = useState(false);
   const [repoName, setRepoName] = useState(() =>
-    (project.name || 'zitex-site')
+    (project.name || 'zerax-site')
       .toLowerCase()
       .replace(/[^a-z0-9\s-]/g, '')
       .trim()
       .replace(/\s+/g, '-')
-      .slice(0, 40) || 'zitex-site'
+      .slice(0, 40) || 'zerax-site'
   );
 
   const copyAll = async () => {
@@ -1333,7 +1333,7 @@ function ChatWorkspace({ projectId }) {
       // Pass the user's UI language so the AI replies in the same language
       try {
         const lang = (typeof window !== 'undefined' && window.localStorage)
-          ? (localStorage.getItem('zitex_lang_manual') || localStorage.getItem('zitex_lang') || 'ar')
+          ? (localStorage.getItem('zerax_lang_manual') || localStorage.getItem('zerax_lang') || 'ar')
           : 'ar';
         fd.append('user_language', lang);
       } catch (_) { fd.append('user_language', 'ar'); }
@@ -2222,7 +2222,7 @@ function ChatWorkspace({ projectId }) {
                       <span className="absolute inset-0 rounded-full bg-cyan-400/40 blur-md animate-ping" />
                       <span className="absolute inset-0 rounded-full bg-emerald-400/30 blur animate-pulse" />
                       <img
-                        src="/zitex-logo-sm.png"
+                        src="/zerax-logo-sm.png"
                         alt="Zerax"
                         className="relative w-7 h-7 rounded-full object-contain ai-think-spin"
                         style={{ filter: 'drop-shadow(0 0 6px rgba(34,211,238,0.8))' }}

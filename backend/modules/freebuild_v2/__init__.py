@@ -568,7 +568,7 @@ async def _openai_architect_turn(messages_for_model: List[Dict[str, str]], user_
 
                 # Inject Surah selector + swap script ONCE if a #/readers
                 # section exists and we haven't done it yet.
-                if 'id="page-readers"' in h and 'data-zitex-surah-selector' not in h:
+                if 'id="page-readers"' in h and 'data-zerax-surah-selector' not in h:
                     from .verified_sources import SURAH_LIST
                     # Build full 114 list (we have only ~10 in SURAH_LIST table;
                     # generate the rest with default name pattern from API).
@@ -580,10 +580,10 @@ async def _openai_architect_turn(messages_for_model: List[Dict[str, str]], user_
                             f'<option value="{n:03d}">{n}. {nm}</option>'
                         )
                     selector_html = (
-                        '<div data-zitex-surah-selector style="margin:1.5rem 0;text-align:center">'
+                        '<div data-zerax-surah-selector style="margin:1.5rem 0;text-align:center">'
                         '<label style="font-weight:bold;margin-inline-end:.5rem;color:#d4af37">'
                         'اختر السورة:</label>'
-                        '<select id="zitex-surah-pick" '
+                        '<select id="zerax-surah-pick" '
                         'style="padding:.6rem 1rem;border-radius:.6rem;border:1px solid '
                         '#d4af37;background:#1a1208;color:#fff;font-size:1rem;'
                         'min-width:240px">'
@@ -591,8 +591,8 @@ async def _openai_architect_turn(messages_for_model: List[Dict[str, str]], user_
                         '</select></div>'
                     )
                     swap_script = (
-                        '<script data-zitex-surah-script>'
-                        '(function(){var sel=document.getElementById("zitex-surah-pick");'
+                        '<script data-zerax-surah-script>'
+                        '(function(){var sel=document.getElementById("zerax-surah-pick");'
                         'if(!sel)return;sel.addEventListener("change",function(){'
                         'var n=sel.value;'
                         'document.querySelectorAll("audio.reciter-audio").forEach(function(a){'

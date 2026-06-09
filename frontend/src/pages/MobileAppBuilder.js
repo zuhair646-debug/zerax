@@ -141,9 +141,9 @@ export default function MobileAppBuilder() {
     setLoading(true);
     try {
       // If user came from Marketplace via remix → resume that session
-      const remixSid = localStorage.getItem('zitex_mobile_remix_session');
+      const remixSid = localStorage.getItem('zerax_mobile_remix_session');
       if (remixSid) {
-        localStorage.removeItem('zitex_mobile_remix_session');
+        localStorage.removeItem('zerax_mobile_remix_session');
         try {
           const s = await fetchJson(`/api/mobile-app/session/${remixSid}`);
           const cats = await fetchJson('/api/mobile-app/categories');

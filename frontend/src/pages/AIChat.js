@@ -737,7 +737,7 @@ const LivePreviewPanel = memo(({ code, isOpen, onClose, onRefresh, isFullscreen,
                   placeholder="my-project"
                   className="flex-1 bg-transparent text-white px-2 py-3 text-sm focus:outline-none"
                 />
-                <span className="px-3 text-gray-500 text-sm">.zitex.app</span>
+                <span className="px-3 text-gray-500 text-sm">.zerax.app</span>
               </div>
               <p className="text-xs text-gray-500 mt-1">حروف إنجليزية صغيرة وأرقام وشرطات فقط</p>
             </div>
@@ -1436,7 +1436,7 @@ const AIChat = ({ user }) => {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = 'zitex-project.html';
+    a.download = 'zerax-project.html';
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
@@ -1540,7 +1540,7 @@ const AIChat = ({ user }) => {
               </div>
             )}
             <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
-              <Button size="sm" onClick={() => downloadAsset(attachment.url, 'zitex-image.png')} className="bg-white/20 backdrop-blur">
+              <Button size="sm" onClick={() => downloadAsset(attachment.url, 'zerax-image.png')} className="bg-white/20 backdrop-blur">
                 <Download className="w-4 h-4 me-1" /> تحميل
               </Button>
               <Button
@@ -1589,7 +1589,7 @@ const AIChat = ({ user }) => {
             </div>
             <video src={attachment.url} controls className="w-full rounded-xl" preload="metadata" />
             <div className="flex gap-2 mt-2">
-              <Button size="sm" onClick={() => downloadAsset(attachment.url, 'zitex-video.mp4')} className="bg-orange-500 hover:bg-orange-600">
+              <Button size="sm" onClick={() => downloadAsset(attachment.url, 'zerax-video.mp4')} className="bg-orange-500 hover:bg-orange-600">
                 <Download className="w-4 h-4 me-1" /> تحميل
               </Button>
               <Button size="sm" onClick={() => openSocialExport({ id: attachment.id || 'temp', url: attachment.url, type: 'video' })} className="bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600">
@@ -1629,7 +1629,7 @@ const AIChat = ({ user }) => {
               <Button size="sm" onClick={() => onPreview(attachment.code || Object.values(attachment.files || {})[0])} className="bg-green-500 hover:bg-green-600">
                 <Eye className="w-4 h-4 me-1" /> معاينة
               </Button>
-              <Button size="sm" variant="outline" onClick={() => downloadAsset(URL.createObjectURL(new Blob([attachment.code], { type: 'text/html' })), `zitex-${attachment.type}.html`)}>
+              <Button size="sm" variant="outline" onClick={() => downloadAsset(URL.createObjectURL(new Blob([attachment.code], { type: 'text/html' })), `zerax-${attachment.type}.html`)}>
                 <Download className="w-4 h-4 me-1" /> تحميل
               </Button>
             </div>

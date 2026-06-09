@@ -1,13 +1,13 @@
 /* Zerax Service Worker — PWA */
-const CACHE_VERSION = 'zitex-pwa-v1';
+const CACHE_VERSION = 'zerax-pwa-v1';
 const STATIC_CACHE = `${CACHE_VERSION}-static`;
 const RUNTIME_CACHE = `${CACHE_VERSION}-runtime`;
 
 const PRECACHE_URLS = [
   '/',
   '/manifest.json',
-  '/zitex-logo.png',
-  '/zitex-logo-sm.png',
+  '/zerax-logo.png',
+  '/zerax-logo-sm.png',
   '/icons/icon-192.png',
   '/icons/icon-512.png',
 ];

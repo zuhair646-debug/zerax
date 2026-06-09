@@ -247,7 +247,7 @@ def init_routes(database, auth_dep) -> APIRouter:
             io.BytesIO(data),
             media_type="application/zip",
             headers={
-                "Content-Disposition": f'attachment; filename="zitex-{ts}.zip"',
+                "Content-Disposition": f'attachment; filename="zerax-{ts}.zip"',
                 "Content-Length": str(len(data)),
             },
         )
@@ -270,7 +270,7 @@ def init_routes(database, auth_dep) -> APIRouter:
             io.BytesIO(data),
             media_type="application/zip",
             headers={
-                "Content-Disposition": f'attachment; filename="zitex-{safe}-{ts}.zip"',
+                "Content-Disposition": f'attachment; filename="zerax-{safe}-{ts}.zip"',
                 "Content-Length": str(len(data)),
             },
         )

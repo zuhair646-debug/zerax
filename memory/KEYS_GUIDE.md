@@ -7,7 +7,7 @@
 - ترتيب حسب الأولوية والقيمة
 
 > **مهم**: المفاتيح تُحفظ في **Railway → Variables** عشان تكون متاحة للـ production،
-> أو في `/root/.zitex/credentials.json` (vault) للـ dev. الذكاء يقرأ من ENV أولاً ثم الـvault.
+> أو في `/root/.zerax/credentials.json` (vault) للـ dev. الذكاء يقرأ من ENV أولاً ثم الـvault.
 
 ---
 
@@ -169,7 +169,7 @@
 سيف هذا المفتاح في الخزنة:
 vault_set(key="FAL_KEY", value="fal_xxx...")
 ```
-وراح يحفظه في `/root/.zitex/credentials.json` ويستخدمه فوراً.
+وراح يحفظه في `/root/.zerax/credentials.json` ويستخدمه فوراً.
 
 ### الطريقة 3: محلياً (للاختبار قبل النشر):
 ```bash

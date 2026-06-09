@@ -9,7 +9,7 @@ import logging
 import httpx
 from typing import Optional, Dict, Any
 
-logger = logging.getLogger("zitex.marketing.connectors")
+logger = logging.getLogger("zerax.marketing.connectors")
 
 
 # ─── Telegram ─────────────────────────────────────────────
@@ -23,7 +23,7 @@ async def telegram_publish(text: str, image_url: Optional[str] = None, channel_i
         if image_url:
             # Telegram needs absolute URL or upload; build absolute from backend
             if image_url.startswith("/"):
-                public = os.environ.get("PUBLIC_BASE_URL", "https://zitex-production.up.railway.app")
+                public = os.environ.get("PUBLIC_BASE_URL", "https://zerax-production.up.railway.app")
                 image_url = public.rstrip("/") + image_url
             r = await client.post(f"{base}/sendPhoto", data={
                 "chat_id": chat_id, "caption": text[:1024], "photo": image_url, "parse_mode": "HTML",
@@ -49,7 +49,7 @@ async def discord_publish(text: str, image_url: Optional[str] = None) -> Dict[st
     payload: Dict[str, Any] = {"content": text[:2000], "username": "Zerax AI"}
     if image_url:
         if image_url.startswith("/"):
-            public = os.environ.get("PUBLIC_BASE_URL", "https://zitex-production.up.railway.app")
+            public = os.environ.get("PUBLIC_BASE_URL", "https://zerax-production.up.railway.app")
             image_url = public.rstrip("/") + image_url
         payload["embeds"] = [{"image": {"url": image_url}}]
     async with httpx.AsyncClient(timeout=30) as client:
@@ -79,7 +79,7 @@ async def email_publish(text: str, subject: str = "Zerax — جديد!", to_list
     img_html = ""
     if image_url:
         if image_url.startswith("/"):
-            public = os.environ.get("PUBLIC_BASE_URL", "https://zitex-production.up.railway.app")
+            public = os.environ.get("PUBLIC_BASE_URL", "https://zerax-production.up.railway.app")
             image_url = public.rstrip("/") + image_url
         img_html = f'<img src="{image_url}" style="max-width:100%;border-radius:12px;margin:16px 0"/>'
     html = f'<div dir="rtl" style="font-family:system-ui;line-height:1.7;color:#1a1a1a">{img_html}<div style="white-space:pre-wrap">{text}</div><div style="margin-top:24px;padding-top:16px;border-top:1px solid #eee;font-size:12px;color:#888">للإيقاف اضغط <a href="https://zerax.com/unsubscribe">هنا</a></div></div>'
@@ -150,7 +150,7 @@ async def instagram_publish(text: str, image_url: str) -> Dict[str, Any]:
     if not image_url:
         raise ValueError("Instagram requires an image URL.")
     if image_url.startswith("/"):
-        public = os.environ.get("PUBLIC_BASE_URL", "https://zitex-production.up.railway.app")
+        public = os.environ.get("PUBLIC_BASE_URL", "https://zerax-production.up.railway.app")
         image_url = public.rstrip("/") + image_url
 
     async with httpx.AsyncClient(timeout=60) as client:
@@ -188,13 +188,13 @@ CONNECTORS = {
         "needs_image": False,
         "fields": [
             {"key": "TELEGRAM_BOT_TOKEN", "label": "Bot Token", "placeholder": "1234567890:AAH...", "secret": True, "required": True},
-            {"key": "TELEGRAM_CHANNEL_ID", "label": "Channel ID أو @username", "placeholder": "@zitex_official أو -1001234567", "secret": False, "required": True},
+            {"key": "TELEGRAM_CHANNEL_ID", "label": "Channel ID أو @username", "placeholder": "@zerax_official أو -1001234567", "secret": False, "required": True},
         ],
         "setup_steps": [
             "افتح @BotFather في Telegram",
             "أرسل /newbot ثم سمّ البوت ZeraxBot",
             "انسخ الـ Token الذي يعطيك إياه",
-            "أنشئ قناة عامة (مثل @zitex_official) واجعل البوت admin فيها",
+            "أنشئ قناة عامة (مثل @zerax_official) واجعل البوت admin فيها",
             "الصق الـ Token و اسم القناة في الحقول أعلاه واضغط حفظ",
         ],
     },

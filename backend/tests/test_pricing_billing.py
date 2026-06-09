@@ -188,8 +188,8 @@ class TestUserBilling:
             "item_id": "indie",
             "billing_cycle": "monthly",
             "promo_code": "LAUNCH50",
-            "return_url": "https://zitex.app/billing/return",
-            "cancel_url": "https://zitex.app/billing/cancel",
+            "return_url": "https://zerax.app/billing/return",
+            "cancel_url": "https://zerax.app/billing/cancel",
         }
         r = requests.post(f"{BASE_URL}/api/pricing/checkout", headers=user_headers,
                           json=body, timeout=45)
@@ -208,8 +208,8 @@ class TestUserBilling:
             "item_type": "pack",
             "item_id": "pack_power",
             "billing_cycle": "monthly",
-            "return_url": "https://zitex.app/billing/return",
-            "cancel_url": "https://zitex.app/billing/cancel",
+            "return_url": "https://zerax.app/billing/return",
+            "cancel_url": "https://zerax.app/billing/cancel",
         }
         r = requests.post(f"{BASE_URL}/api/pricing/checkout", headers=user_headers,
                           json=body, timeout=45)

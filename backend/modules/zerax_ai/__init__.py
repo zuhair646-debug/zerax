@@ -22,9 +22,9 @@ This module fixes ALL of that with two layers:
      • forces language tone (Saudi Arabic / formal / English code…)
 
 Usage:
-    from modules.zitex_ai import zitex_chat
+    from modules.zerax_ai import zerax_chat
 
-    result = await zitex_chat(
+    result = await zerax_chat(
         agent="freebuild",            # which agent personality
         messages=[{"role":"user","content":"اعمل لي موقع بيع قهوة"}],
         user_id="abc123",             # for cost tracking
@@ -270,7 +270,7 @@ AGENTS: Dict[str, Dict[str, Any]] = {
 }
 
 
-async def zitex_chat(
+async def zerax_chat(
     agent: str,
     messages: List[Dict[str, str]],
     user_id: Optional[str] = None,
@@ -317,7 +317,7 @@ async def zitex_chat(
     result["agent"] = agent
     if user_id and result.get("ok"):
         logger.info(
-            "[zitex_ai] agent=%s user=%s task=%s model=%s cost=$%.4f",
+            "[zerax_ai] agent=%s user=%s task=%s model=%s cost=$%.4f",
             agent, user_id, task_type_override or cfg["task_type"],
             result.get("model_used"), result.get("cost_estimate_usd", 0)
         )

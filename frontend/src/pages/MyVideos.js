@@ -34,7 +34,7 @@ const MyVideos = ({ user, setUser }) => {
   const handleDownload = (v) => {
     const a = document.createElement('a');
     a.href = v.video_url || v.url;
-    a.download = `zitex-video-${v.id || Date.now()}.mp4`;
+    a.download = `zerax-video-${v.id || Date.now()}.mp4`;
     document.body.appendChild(a); a.click(); document.body.removeChild(a);
   };
 

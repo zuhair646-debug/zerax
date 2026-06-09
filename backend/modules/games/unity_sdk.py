@@ -127,7 +127,7 @@ The `manifestUrl` always returns the latest approved assets. You can
 re-run `ZeraxImporter` at any time to refresh the scene.
 
 ## Need anything else?
-Open an issue at https://zitex.app/support — we ship custom Unity
+Open an issue at https://zerax.app/support — we ship custom Unity
 features for paying tiers (LoRA-based prefab generation, automated
 animation rigs via Mixamo, etc.)
 '''

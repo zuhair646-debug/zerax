@@ -14,8 +14,8 @@ import {
 import ChatInput from '../components/ChatInput';
 
 const API = process.env.REACT_APP_BACKEND_URL;
-const SESSION_KEY = 'zitex_autocoder_session';
-const MODEL_KEY = 'zitex_autocoder_model';
+const SESSION_KEY = 'zerax_autocoder_session';
+const MODEL_KEY = 'zerax_autocoder_model';
 
 const OWNER_MISSION_STEPS = [
   { title: 'أفهم الطلب', desc: 'ألخّص الهدف، أحدد الملفات/الخدمات، وأوضح لك وش راح أبني.', icon: Target, tone: 'amber' },

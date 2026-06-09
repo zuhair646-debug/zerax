@@ -131,7 +131,7 @@ def register_routes(app, db, get_current_user):
         metadata = {
             "user_id": current_user["user_id"],
             "package_id": body.package_id,
-            "source": "zitex_studio_gate",
+            "source": "zerax_studio_gate",
         }
 
         stripe = _stripe_client(http_request)

@@ -25,7 +25,7 @@ from typing import Any, Dict, List, Optional
 from fastapi import APIRouter, HTTPException, Depends, Query
 from pydantic import BaseModel
 
-logger = logging.getLogger("zitex.admin.intelligence")
+logger = logging.getLogger("zerax.admin.intelligence")
 
 router = APIRouter(prefix="/admin/intelligence", tags=["admin", "intelligence"])
 

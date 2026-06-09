@@ -20,7 +20,7 @@ from reportlab.pdfbase.ttfonts import TTFont
 import arabic_reshaper
 from bidi.algorithm import get_display
 
-log = logging.getLogger("zitex.pricing.invoices")
+log = logging.getLogger("zerax.pricing.invoices")
 
 # ════════════════════════════════════════════════════════════════
 # Font registration (one-time)
@@ -182,7 +182,7 @@ def generate_invoice_pdf(invoice: Dict[str, Any]) -> bytes:
     c.setFillColor(colors.HexColor("#888"))
     c.setFont("Amiri", 9)
     c.drawCentredString(W / 2, 20 * mm, _ar("شكراً لاختيارك Zerax — منصة الإبداع بالذكاء الاصطناعي"))
-    c.drawCentredString(W / 2, 15 * mm, "zitex.app  •  zitex.zx0@gmail.com")
+    c.drawCentredString(W / 2, 15 * mm, "zerax.app  •  zerax.zx0@gmail.com")
     if invoice.get("tax_id"):
         c.drawCentredString(W / 2, 10 * mm, _ar(f"الرقم الضريبي: {invoice['tax_id']}"))
 
@@ -221,7 +221,7 @@ async def send_invoice_email(
         f"<p><b>الشعلات المُضافة:</b> {credits_added:,} ✨</p>"
         f"</div>"
         f"<p style='color:#888;font-size:13px'>للوصول إلى لوحة الاشتراك:<br>"
-        f"<a href='https://zitex.app/billing' style='color:#fbbf24'>zitex.app/billing</a></p>"
+        f"<a href='https://zerax.app/billing' style='color:#fbbf24'>zerax.app/billing</a></p>"
         f"<hr style='border:0;border-top:1px solid #333;margin:20px 0'>"
         f"<p style='color:#666;font-size:11px'>Zerax — منصة الإبداع بالذكاء الاصطناعي</p>"
         f"</div>"

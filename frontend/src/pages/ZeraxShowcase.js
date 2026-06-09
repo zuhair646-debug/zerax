@@ -58,13 +58,13 @@ export default function ZeraxShowcase() {
   const totalVisits = useMemo(() => sites.reduce((a, s) => a + (s.visits || 0), 0), [sites]);
 
   return (
-    <div dir="rtl" style={styles.page} data-testid="zitex-showcase-page">
+    <div dir="rtl" style={styles.page} data-testid="zerax-showcase-page">
       {/* Hero */}
       <section style={styles.hero}>
         <Link to="/" style={styles.backLink} data-testid="back-to-home">← العودة لـ Zerax</Link>
         <div style={styles.heroInner}>
-          <div style={styles.zitexBadge}>
-            <span style={styles.zitexBadgeDot}>Z</span>
+          <div style={styles.zeraxBadge}>
+            <span style={styles.zeraxBadgeDot}>Z</span>
             <span style={{ color: '#fbbf24', fontWeight: 900 }}>Zerax Showcase</span>
           </div>
           <h1 style={styles.heroTitle}>مواقع مبنية بـ <span style={styles.heroAccent}>الذكاء الاصطناعي</span></h1>
@@ -209,7 +209,7 @@ const styles = {
     marginBottom: 28,
   },
   heroInner: { maxWidth: 1100, margin: '0 auto', textAlign: 'center' },
-  zitexBadge: {
+  zeraxBadge: {
     display: 'inline-flex',
     alignItems: 'center',
     gap: 8,
@@ -220,7 +220,7 @@ const styles = {
     marginBottom: 18,
     fontSize: 13,
   },
-  zitexBadgeDot: {
+  zeraxBadgeDot: {
     width: 24, height: 24, borderRadius: '50%',
     background: 'linear-gradient(135deg,#fbbf24,#a52a2a)',
     display: 'inline-flex', alignItems: 'center', justifyContent: 'center',

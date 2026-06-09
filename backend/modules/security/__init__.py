@@ -24,7 +24,7 @@ import httpx
 from fastapi import APIRouter, Request, HTTPException, Depends, Response
 from fastapi.responses import JSONResponse
 
-logger = logging.getLogger("zitex.security")
+logger = logging.getLogger("zerax.security")
 
 # In-memory caches (acceptable for single-instance Railway deploy)
 _login_failures: Dict[str, List[float]] = {}      # key: ip+username
@@ -296,7 +296,7 @@ async def _send_alert_email(to: str, resend_key: str, alert: Dict[str, Any]):
                         f"<p><b>الوقت / Time:</b> {alert['ts']}</p>"
                         f"<p><b>التفاصيل / Message:</b><br>{alert['message']}</p>"
                         f"</div>"
-                        f"<p style='color:#888;font-size:12px'>افتح غرفة التحكم الأمنية: <a href='https://zitex.app/admin/security' style='color:#fbbf24'>/admin/security</a></p>"
+                        f"<p style='color:#888;font-size:12px'>افتح غرفة التحكم الأمنية: <a href='https://zerax.app/admin/security' style='color:#fbbf24'>/admin/security</a></p>"
                         f"</div>"
                     ),
                 },

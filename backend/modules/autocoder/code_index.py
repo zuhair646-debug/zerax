@@ -30,7 +30,7 @@ from typing import Any, Dict, List, Optional
 logger = logging.getLogger(__name__)
 
 REPO_ROOT = Path("/app")
-INDEX_FILE = Path("/tmp/zitex_code_index.json")
+INDEX_FILE = Path("/tmp/zerax_code_index.json")
 
 # Only index source files
 INDEXED_EXTENSIONS = {".py", ".js", ".jsx", ".ts", ".tsx"}

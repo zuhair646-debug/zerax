@@ -116,7 +116,7 @@
 2. **AI ينسى `</body>`** → أضفنا `_merge_passes` يضمن وجود `</body>` و `</html>` + دالة `_safe_inject_before_body_end` تحقن قبل `</html>` لو `</body>` مفقود. هذا أصلح ضياع كل الـ modules المحقونة (Admin, Cart, Footer, Enhancements).
 
 **New features:**
-- **Unified Zitex Footer** (`render_zitex_enhancements`): 4 أعمدة (Brand+Social / ساعات / روابط سريعة / تواصل + خريطة) + شريط نهاية فيه شعار Zitex مع رابط تتبّع `https://zitex.com/?ref={project_id}`.
+- **Unified Zitex Footer** (`render_zerax_enhancements`): 4 أعمدة (Brand+Social / ساعات / روابط سريعة / تواصل + خريطة) + شريط نهاية فيه شعار Zitex مع رابط تتبّع `https://zerax.com/?ref={project_id}`.
 - **Reservation Modal** (`#zx-resv-modal`): يفتح من زر "احجز طاولة" بدل النافبار. حقول: اسم، جوال، تاريخ، وقت، عدد، ملاحظات. يحفظ في `localStorage.zx_reservations` لمشاهدته في لوحة الأدمن.
 - **تواصل معنا Button**: في النافبار يعمل smooth scroll لقسم `#zx-contact-section` بالفوتر (إيميل clickable، جوال clickable، خريطة Google Maps مدمجة).
 - **Reviews Auto-Slider**: 5 آراء تتبدّل كل 5 ثوانٍ مع dots للتنقّل اليدوي.
@@ -131,7 +131,7 @@
 **Testing**: ✅ Playwright E2E مرّت — كل الأزرار شغّالة، Modal يفتح، Cart يضيف، Slider يدور، Tracker link موجود بـ project_id الصحيح.
 
 **Files touched**:
-- `/app/backend/modules/ready_sites/data_factory.py` (+ `render_zitex_enhancements`).
+- `/app/backend/modules/ready_sites/data_factory.py` (+ `render_zerax_enhancements`).
 - `/app/backend/modules/ready_sites/agent.py` (`_merge_passes`, `_safe_inject_before_body_end`, generate_ready_site accepts `project_id`).
 - `/app/backend/modules/ready_sites/__init__.py` (tracker endpoints, pre-generates project_id).
 
@@ -151,7 +151,7 @@
 - **Dashboard**: أضفنا كرت "المواقع الجاهزة" في `ClientDashboard.js`.
 
 **Provider chain (true async — لا يحجب event loop)**:
-1. `zitex_chat` (يمر عبر `model_router.smart_complete` → AsyncAnthropic/AsyncOpenAI)
+1. `zerax_chat` (يمر عبر `model_router.smart_complete` → AsyncAnthropic/AsyncOpenAI)
 2. AsyncOpenAI gpt-4o مباشر باستخدام `OPENAI_DIRECT_KEY`
 
 **⚠️ ملاحظة هامة**: تم استبعاد `emergentintegrations.LlmChat` كـ fallback لأن `litellm.completion()` الداخلي **synchronous** ويحجب الـ event loop طوال فترة التوليد (60-180 ثانية)، مما يعطّل كل الـ endpoints الأخرى (catalog/status polling/login). استبدلناه بـ AsyncOpenAI مباشرة.
@@ -228,7 +228,7 @@ event: done        data: {...}
 **2️⃣ Self-Correction Loop**:
 بعد ما الذكاء يولّد HTML، الـbackend يفحص `_verify_anchor_links` تلقائياً. لو 2+ روابط معطوبة → استدعاء ثاني بـ`reasoning_hard` model مع رسالة "هذي المشاكل، صحّحها" — pass واحد فقط لمنع الـ infinite loops.
 
-**3️⃣ zitex_chat parameter جديد**: `task_type_override` يسمح للـcallers يطغوا على routing الـagent الافتراضي بدون كسر backwards compat.
+**3️⃣ zerax_chat parameter جديد**: `task_type_override` يسمح للـcallers يطغوا على routing الـagent الافتراضي بدون كسر backwards compat.
 
 **4️⃣ Model Badge في الـUI**:
 - Backend يرجع `task_label` + `model_used` في response
@@ -294,7 +294,7 @@ event: done        data: {...}
 
 **الحل (3 طبقات تعديل)**:
 
-1. **Agent-level system_prompt في `zitex_ai/__init__.py`** — إضافة بلوك `🚀 قدراتك الحقيقية` في الأعلى:
+1. **Agent-level system_prompt في `zerax_ai/__init__.py`** — إضافة بلوك `🚀 قدراتك الحقيقية` في الأعلى:
    - "عندك 16,000 رمز = ~4,000 سطر HTML"
    - "ما عندك أي قفل" (صياغة مُمكِّنة)
    - "أنت حر تبني موقع 50 قسم"
@@ -447,7 +447,7 @@ event: done        data: {...}
 - **Events handled**: `order_created`, `order_paid`
 - **Flow**: Verify signature → lookup pending order by `custom_id` → add credits + bonus → activate subscription (if any) → redeem promo → generate Arabic PDF invoice → email via Resend → mark order COMPLETED
 - **E2E Tested**: ✅ User credits added (200), invoice ZTX-202606-00001 generated, status flips to COMPLETED
-- **User TODO**: Set webhook URL in Lemon Squeezy dashboard to `https://zitex-production.up.railway.app/api/pricing/lemonsqueezy-webhook` AND add `LEMONSQUEEZY_WEBHOOK_SECRET` to Railway env vars
+- **User TODO**: Set webhook URL in Lemon Squeezy dashboard to `https://zerax-production.up.railway.app/api/pricing/lemonsqueezy-webhook` AND add `LEMONSQUEEZY_WEBHOOK_SECRET` to Railway env vars
 
 ### 💰 Feb 8 2026 — نظام البيع الكامل (Pricing + PayPal LIVE + PDF Invoices + Credits) ✅
 
@@ -493,8 +493,8 @@ event: done        data: {...}
 
 #### Resend مفعّل
 - مفتاح: `re_dzXgkb3L_NVzwUmTuzx3uDfZ4bY47yPBU` في `.env`
-- مرسِل حالي: `onboarding@resend.dev` (مؤقت حتى يتحقق دومين zitex.app)
-- مستقبل التنبيهات: `zuhair646@gmail.com` (مؤقت حتى الدومين يتفعّل، ثم نحوّل لـ zitex.zx0@gmail.com)
+- مرسِل حالي: `onboarding@resend.dev` (مؤقت حتى يتحقق دومين zerax.app)
+- مستقبل التنبيهات: `zuhair646@gmail.com` (مؤقت حتى الدومين يتفعّل، ثم نحوّل لـ zerax.zx0@gmail.com)
 - الفواتير ترسل لإيميل العميل مع PDF مرفقة
 
 ---
@@ -906,8 +906,8 @@ event: done        data: {...}
 
 **ما تم تنفيذه**:
 1. **Deployment status verified**:
-   - ✅ Vercel `prj_zxll1vw8YFh6kcvHJ48PQcTmeAYM` (zitex.vercel.app): آخر commit `813a6541` منشور وحالته READY.
-   - ✅ Railway backend `https://zitex-production.up.railway.app`: build_marker الحي يطابق آخر كود قبل LoRA. `fal_configured: true`. توليد الصور يشتغل.
+   - ✅ Vercel `prj_zxll1vw8YFh6kcvHJ48PQcTmeAYM` (zerax.vercel.app): آخر commit `813a6541` منشور وحالته READY.
+   - ✅ Railway backend `https://zerax-production.up.railway.app`: build_marker الحي يطابق آخر كود قبل LoRA. `fal_configured: true`. توليد الصور يشتغل.
    - ⚠️ Railway project المستضيف للبَكاند ليس تحت حساب المستخدم (token المعطى يُرجع projects فارغة) — يعني يحتاج push لـGitHub لينشر التحديثات الجديدة.
 
 2. **ESLint warnings: 50 → 0** ✅
@@ -941,7 +941,7 @@ event: done        data: {...}
 
 **نقاط مهمة للنشر**:
 - المستخدم محتاج يستخدم "Save to GitHub" عشان تنشر هذه التغييرات على Railway + Vercel تلقائياً.
-- بعد النشر، تحقق من https://zitex-production.up.railway.app/api/games/health يطبع `v7_2026_06_05_lora_style_training`.
+- بعد النشر، تحقق من https://zerax-production.up.railway.app/api/games/health يطبع `v7_2026_06_05_lora_style_training`.
 
 ---
 
@@ -1194,7 +1194,7 @@ Bug Fixes shipped this session:
 
 ### 🆕 Feb 18, 2026 (الجولة 5) — NARRATION→FILM + COMMUNITY FEED + HYPERREAL ✅
 
-**Commit `dcae980`** — pushed + Vercel deploy READY على `zitex.vercel.app`.
+**Commit `dcae980`** — pushed + Vercel deploy READY على `zerax.vercel.app`.
 
 🎬 **رفع تسجيل اليوتيوبر → فيلم واقعي**:
 - `POST /api/video-studio/narration-to-script` — يستقبل audio file (mp3/m4a/wav/mp4 ≤25MB).
@@ -1215,13 +1215,13 @@ Bug Fixes shipped this session:
 
 ✅ **تحققنا من الـDeployment**:
 - Vercel استلم الـcommit `dcae9802b8` وحالته READY.
-- زرنا `https://zitex.vercel.app/chat/video-studio` وأكدنا حضور `narration-upload-card`, `upload-narration-btn`, `community-tab`, `hyperreal` كلها live في الـbundle المنشور.
+- زرنا `https://zerax.vercel.app/chat/video-studio` وأكدنا حضور `narration-upload-card`, `upload-narration-btn`, `community-tab`, `hyperreal` كلها live في الـbundle المنشور.
 - Screenshot يؤكد الواجهة الجديدة شغّالة على الموقع الرسمي.
 
 
 ### 🆕 Feb 18, 2026 (الجولة 4) — VIDEO STUDIO v2.1 — مفاتيح المالك + Multi-tab + سوشيال ✅
 
-**Commit `f26f22e`** — pushed to `zuhair646-debug/zitex:main`.
+**Commit `f26f22e`** — pushed to `zuhair646-debug/zerax:main`.
 
 **التحديثات الثلاث الكبيرة**:
 
@@ -1265,7 +1265,7 @@ Bug Fixes shipped this session:
 
 ### 🆕 Feb 18, 2026 (الجولة 3) — VIDEO STUDIO v2 FRONTEND ✅
 
-**Commit `3441c58`** — pushed to `zuhair646-debug/zitex:main`.
+**Commit `3441c58`** — pushed to `zuhair646-debug/zerax:main`.
 
 🎨 **صفحة جديدة `/chat/video-studio`** (`/app/frontend/src/pages/VideoStudio.js`, ~600 سطر RTL):
 - **Sidebar يسار**: قائمة السلاسل (مثل قنوات YouTube) + زر "+ سلسلة جديدة" + modal فيه: عنوان السلسلة، style direction إنجليزي مختصر، شخصيات (سطر لكل واحد بصيغة "الاسم: الوصف").
@@ -1294,7 +1294,7 @@ Bug Fixes shipped this session:
 
 **طلب المستخدم**: نفس الذكاء (الأدوات + الكاش + Smart Router) ينتشر في كل الأقسام بتخصص دقيق + قسم فيديو بمراحل متتالية مع موافقة قبل الخصم + ذاكرة سلاسل (حلقات متتالية).
 
-**Commit `aa53080`** — pushed to `zuhair646-debug/zitex:main`.
+**Commit `aa53080`** — pushed to `zuhair646-debug/zerax:main`.
 
 🧠 **Shared Agent Core** (`modules/shared/__init__.py`):
 - `SectionAgent(scope, ...)` — مصنع ذكاء موحّد لكل قسم.
@@ -1398,7 +1398,7 @@ Bug Fixes shipped this session:
 
 🧪 **Sandbox Mode للـAuto-Coder** (`modules/autocoder/sandbox.py`):
 - 9 أدوات جديدة: `sandbox_init/status/read/write/run/validate/diff/promote/reset`
-- المسار `/tmp/zitex_sandbox` ينعكس فيه: backend/modules + server.py + frontend/src + memory
+- المسار `/tmp/zerax_sandbox` ينعكس فيه: backend/modules + server.py + frontend/src + memory
 - AST compile-check gate قبل ما `sandbox_promote` يقدر ينقل لـ/app
 - ✅ مُختبر: init → write new + modify → validate passes → broken syntax → validate fails 1 issue → reset
 - مجموع أدوات الـauto-coder: **71** (الـschemas الجديدة في system prompt)
@@ -1538,7 +1538,7 @@ Bug Fixes shipped this session:
 - ✅ غير المالك → 403
 - ✅ `/chat` بدون session → 401
 - ✅ `/chat` مع session → AI استدعى read_file + list_dir + رجّع نتائج فعلية بالعربي
-- ✅ AI كتب ملف فعلي `/tmp/zitex_autocoder_marker.txt` (17B) ثم قرأه
+- ✅ AI كتب ملف فعلي `/tmp/zerax_autocoder_marker.txt` (17B) ثم قرأه
 - ✅ Recovery: استهلك رمز، ضبط passcode جديد، القديم 401 / الجديد 200
 - ✅ Audit log يسجّل كل العمليات بـtools list
 
@@ -1578,7 +1578,7 @@ Bug Fixes shipped this session:
 - ✅ kids_friendly: ok=True، has kids-ayahs container + CSS
 - ✅ audio_snippet: urlFor() + RECITER_FOLDERS + error listener موجودين
 
-**Commit**: `34e9c40` → push `zuhair646-debug/zitex:main` ✅
+**Commit**: `34e9c40` → push `zuhair646-debug/zerax:main` ✅
 
 
 ### 🆕 May 7, 2026 — BULLETPROOF CREATIVE QURAN (Solution 1 + 4) ✅
@@ -1612,7 +1612,7 @@ Bug Fixes shipped this session:
 - Test 1: `build_creative_quran_site(gaming theme, kid-friendly)` → 7.6KB، 7/7 آية، 14/14 قارئ، تصميم gaming كامل ✅
 - Test 2: `inject_quran_blocks` على موقع مكسور (section فاضي) → 4.9KB، 7 آية، 14 قارئ، CSS مزروع تلقائياً، location="replaced existing quran section" ✅
 
-**Commit**: `62a49ad` → push `zuhair646-debug/zitex:main` ✅
+**Commit**: `62a49ad` → push `zuhair646-debug/zerax:main` ✅
 
 
 ### 🆕 May 7, 2026 — UNLOCK CREATIVE QURAN SITES (fetch_quran_blocks) ✅
@@ -1639,7 +1639,7 @@ Bug Fixes shipped this session:
 
 **اختبار**: fetch_quran_blocks(surah=1) → 1,300 حرف ayahs_html + 2,220 حرف reciters_html + 1,209 حرف audio_snippet، الكل قابل للزرع في build_website مع أي تصميم gaming/luxury/minimal.
 
-**Commit**: `6dd9fa4` → push `zuhair646-debug/zitex:main` ✅
+**Commit**: `6dd9fa4` → push `zuhair646-debug/zerax:main` ✅
 
 
 ### 🆕 May 7, 2026 — UNLOCK ALL PERMISSIONS (Full Freedom Mode) ✅
@@ -1661,7 +1661,7 @@ Bug Fixes shipped this session:
 
 **اختبار E2E**: agent تجاوز 7 استدعاءات في turn واحد (كان مقفّل عند 6 سابقاً).
 
-**Commit**: `c135c0a` → push `zuhair646-debug/zitex:main` ✅
+**Commit**: `c135c0a` → push `zuhair646-debug/zerax:main` ✅
 
 
 ### 🆕 May 7, 2026 — COMPLETE QURAN SITES GUARANTEED (pre-fetch + audit + retry) ✅
@@ -1698,7 +1698,7 @@ Bug Fixes shipped this session:
 - ✅ click reciter → activeReciter changes
 - ✅ click ayah → audio plays + `.playing` class applied (Playwright تأكدت)
 
-**Commit**: `71d7d67` → push `zuhair646-debug/zitex:main` ✅
+**Commit**: `71d7d67` → push `zuhair646-debug/zerax:main` ✅
 
 
 ### 🆕 May 7, 2026 — GENERATIVE QURAN (no templates, unique every time) ✅
@@ -1707,7 +1707,7 @@ Bug Fixes shipped this session:
 
 **الحل المعماري — primitives + توليد حر**:
 
-📜 **ملف JS بدائل (`/app/backend/static/zitex_primitives_quran.js`)**:
+📜 **ملف JS بدائل (`/app/backend/static/zerax_primitives_quran.js`)**:
 - يُقدَّم عبر `GET /api/agent/primitives/quran.js`
 - `ZitexQuran.RECITERS` (14 قارئ معتمد + everyayah folder slug)
 - `ZitexQuran.SURAHS` (114 سورة metadata: name, transliteration, type, ayah_count)
@@ -1729,7 +1729,7 @@ Bug Fixes shipped this session:
 
 **E2E مُحقّق**: chat → analyze_intent → build_quran (95/100 QA) → publish_site → `/api/p/q1` يقدّم تصميماً فريداً (navy+copper مع كل الـ14 قارئ).
 
-**Commit**: `c2557c4` → push `zuhair646-debug/zitex:main` ✅
+**Commit**: `c2557c4` → push `zuhair646-debug/zerax:main` ✅
 
 
 ### 🆕 May 6, 2026 — MULTI-AGENT ORCHESTRATION + PUBLIC PUBLISH + CLAUDE FALLBACK ✅
@@ -1773,7 +1773,7 @@ Bug Fixes shipped this session:
 - ✅ QA: 100/100, 0 issues
 - ✅ Deployer: /api/p/alquran123 → الموقع يظهر مع كل المكوّنات شغّالة (مُحقّق بـscreenshot)
 
-**Commit**: `2fa11c0` → push `zuhair646-debug/zitex:main` ✅
+**Commit**: `2fa11c0` → push `zuhair646-debug/zerax:main` ✅
 
 **ملاحظة شفافة للمستخدم**: ما يزال غير مُنفّذ من blueprint ChatGPT (يحتاج مفاتيح/ميزانية):
 - Pinecone (vector memory) — يحتاج API key مدفوع
@@ -1810,7 +1810,7 @@ Bug Fixes shipped this session:
 - "ابني لي موقع قرآن لتلاوة الفاتحة" → agent استدعى `build_quran_mushaf_reader(surah=1)` → 21KB page في 3 ثواني
 - screenshot يؤكد: عنوان فخم + selector 114 سورة + 14 قارئ avatars + 7 آيات الفاتحة بالتشكيل الصحيح + جميع الأزرار شغّالة
 
-**Commit**: `65cb115` → push `zuhair646-debug/zitex:main` ✅
+**Commit**: `65cb115` → push `zuhair646-debug/zerax:main` ✅
 
 
 ### 🆕 May 5, 2026 — SURGICAL EDIT TOOLS (set_theme + add_page + edit_section) ✅
@@ -1853,7 +1853,7 @@ Bug Fixes shipped this session:
 - edit_section(about): ok=True, edited='about' ✅
 - add_page(contact): ok=True, has new section + nav link ✅
 
-**Commit**: `ee85db5` → push `zuhair646-debug/zitex:main` ✅
+**Commit**: `ee85db5` → push `zuhair646-debug/zerax:main` ✅
 
 
 ### 🆕 May 5, 2026 — UNIFIED THINKING AGENT (build_website + audio + live preview) ✅
@@ -1883,7 +1883,7 @@ Bug Fixes shipped this session:
 - inline `<audio controls>` للـgenerate_audio events
 - 4 example chips (موقع تحفيظ قرآن، نادي رياضي، مطعم تراثي، بورتفوليو)
 
-🐛 **Bug fix رئيسي**: AIAgent.js كان يقرأ التوكن من `localStorage.getItem('zitex_token')` لكن باقي التطبيق يستخدم `'token'` → كان يحوّل المستخدم على /login فوراً (the "login loop" bug). تم الإصلاح.
+🐛 **Bug fix رئيسي**: AIAgent.js كان يقرأ التوكن من `localStorage.getItem('zerax_token')` لكن باقي التطبيق يستخدم `'token'` → كان يحوّل المستخدم على /login فوراً (the "login loop" bug). تم الإصلاح.
 
 🏠 **Landing page CTA**: زر الـhero الرئيسي الآن يوجّه على `/ai-agent` بدل `/build-from-zero` (data-testid=`hero-ai-agent`).
 
@@ -1896,7 +1896,7 @@ quran_reciter_lookup, quran_verse_fetch, web_search, web_fetch, generate_image_u
 - pytest file: `/app/backend/tests/test_agent_endpoints.py` (365 سطر)
 - E2E verified: agent استدعى quran_reciter_lookup ورجّع 3 قراء حقيقيين بـURLs من mp3quran.net
 
-**Commit**: `11f4c6a` + auto-commit `563a18d` → push `zuhair646-debug/zitex:main` ✅
+**Commit**: `11f4c6a` + auto-commit `563a18d` → push `zuhair646-debug/zerax:main` ✅
 
 
 ### 🆕 May 4, 2026 — INTERACTIVE QURAN PLAYER + SAUDI SOURCES + REDESIGN MODE ✅
@@ -1937,7 +1937,7 @@ quran_reciter_lookup, quran_verse_fetch, web_search, web_fetch, generate_image_u
   - 2 مصدر سعودي معتمد (qurancomplex.gov.sa + moia.gov.sa) ✅
   - 4 صفحات SPA كاملة
 
-**Commits**: `92934db` → push `zuhair646-debug/zitex:main` ✅
+**Commits**: `92934db` → push `zuhair646-debug/zerax:main` ✅
 
 
 ### 🆕 May 3, 2026 — RAILWAY DEPLOYMENT FIX + ENV VARS ✅
@@ -1991,7 +1991,7 @@ quran_reciter_lookup, quran_verse_fetch, web_search, web_fetch, generate_image_u
   - `server8.mp3quran.net/afs/001.mp3` (العفاسي) ✅ HTTP 200
   - `server13.mp3quran.net/husr/001.mp3` (الحصري) ✅ HTTP 200
 
-**Commit**: `cb59fb2` → push `zuhair646-debug/zitex:main` ✅
+**Commit**: `cb59fb2` → push `zuhair646-debug/zerax:main` ✅
 
 
 ### 🆕 May 2, 2026 — PERSISTENT CONSTRAINTS + VERIFIED SOURCES + SURGICAL EDIT ✅
@@ -2026,7 +2026,7 @@ quran_reciter_lookup, quran_verse_fetch, web_search, web_fetch, generate_image_u
 - Emoji in body: **0** ✅
 - القيود محفوظة وتُحقن في كل turn
 
-**Commit**: `664410b` → push `zuhair646-debug/zitex:main` ✅
+**Commit**: `664410b` → push `zuhair646-debug/zerax:main` ✅
 
 
 ### 🆕 May 2, 2026 — DEEP DOMAIN INTELLIGENCE + INTERNAL LINKING + NAV EDITOR ✅
@@ -2049,7 +2049,7 @@ quran_reciter_lookup, quran_verse_fetch, web_search, web_fetch, generate_image_u
 
 **E2E محقّق**: جلسة "تحفيظ قرآن" → الذكاء بنى **15 صفحة كاملة** (home, login, register, dashboard-parent, readers, lessons, memorize, rewards, transfer, leaderboard, teacher, profile, settings, about, contact) مطابقة للـblueprint بالضبط، 20 internal link، 3 عناصر صوت، ميزة تسجيل، 3 قرّاء مذكورين، صور AI. Nav editor كل العمليات (rename/delete/reorder) ترجع 200.
 
-**Commit**: `0c727a1` → push `zuhair646-debug/zitex:main` ✅
+**Commit**: `0c727a1` → push `zuhair646-debug/zerax:main` ✅
 
 
 ### 🆕 May 2, 2026 — FREEBUILD V2: AI-GENERATED IMAGES (Nano Banana) ✅
@@ -2075,7 +2075,7 @@ quran_reciter_lookup, quran_verse_fetch, web_search, web_fetch, generate_image_u
 - Cache hit للوصف نفسه → نفس URL (no re-gen)
 - HTTP 200 على `/api/freebuild/v2/img/*.png` (image/png, ~700KB-900KB لكل صورة)
 
-**Commit**: `18eeb75` → push `zuhair646-debug/zitex:main` → Vercel/Railway auto-deploy
+**Commit**: `18eeb75` → push `zuhair646-debug/zerax:main` → Vercel/Railway auto-deploy
 
 
 ### 🆕 May 1, 2026 — FREEBUILD V2: CONVERSATIONAL LIVE BUILDER ✅
@@ -2105,7 +2105,7 @@ quran_reciter_lookup, quran_verse_fetch, web_search, web_fetch, generate_image_u
 **Commits**:
 - `c9c24d6` feat(freebuild-v2): conversational LIVE builder with side preview
 - `615dccf` test: pytest suite
-- Push to `zuhair646-debug/zitex:main` → Vercel auto-deploy
+- Push to `zuhair646-debug/zerax:main` → Vercel auto-deploy
 
 
 
@@ -2172,7 +2172,7 @@ quran_reciter_lookup, quran_verse_fetch, web_search, web_fetch, generate_image_u
 
 كل الـLLM calls الجديدة في FreeBuild + Image Expert + Video Director تستخدم `OPENAI_DIRECT_KEY` كـ primary، مع fallback لـ EMERGENT_LLM_KEY فقط لو الـDIRECT key مفقود. هذا يحقق طلب المستخدم بالاستقلال الكامل.
 
-**Push:** Commit pending → `https://github.com/zuhair646-debug/zitex` → Vercel auto-deploy
+**Push:** Commit pending → `https://github.com/zuhair646-debug/zerax` → Vercel auto-deploy
 
 
 ### 🆕 May 1, 2026 — NATIVE SAUDI VOICES + OPPOSITE-GENDER LOGIC ✅
@@ -2216,7 +2216,7 @@ quran_reciter_lookup, quran_verse_fetch, web_search, web_fetch, generate_image_u
 - Register with gender=male → user.gender=male في الـ response ✅
 - عيّنات صوت محفوظة في `/app/frontend/public/voice-samples/sample_mohammed.mp3` و `sample_layan.mp3`
 
-**Push:** Commit `72cd83e` → `https://github.com/zuhair646-debug/zitex` → Vercel ينشر تلقائياً
+**Push:** Commit `72cd83e` → `https://github.com/zuhair646-debug/zerax` → Vercel ينشر تلقائياً
 
 
 ## 🎯 Modular Architecture (Feb 2026)
@@ -2240,7 +2240,7 @@ quran_reciter_lookup, quran_verse_fetch, web_search, web_fetch, generate_image_u
 
 **المكوّنات الجديدة:**
 - 🆕 `AmbientVoiceAgent.js`:
-  - Wake-word: `/ز[يَ]ت[كك]س/`, `/zitex/`, `/يا زيتكس/`
+  - Wake-word: `/ز[يَ]ت[كك]س/`, `/zerax/`, `/يا زيتكس/`
   - 4 phases: ambient (breathing) / listening (emerald pulse) / thinking (purple) / speaking (amber)
   - AI reply = audio + toast (bottom-center, 6s) — لا modal
   - Intent → navigate silently + sessionStorage
@@ -2252,7 +2252,7 @@ quran_reciter_lookup, quran_verse_fetch, web_search, web_fetch, generate_image_u
 - إزالة إيموجي شاملة من جميع النطاقات
 - Character whitelist: Arabic + Latin + digits + basic punct فقط
 - Collapse repeated punctuation (`!!` → `.`) لمنع التكرار
-- Normalize: Zitex/zitex/ZITEX → "زيتكس"
+- Normalize: Zitex/zerax/ZITEX → "زيتكس"
 - System prompt: حظر صريح للإيموجي/الإنجليزي/التكرار
 
 **اختبار حي:**
@@ -2275,13 +2275,13 @@ quran_reciter_lookup, quran_verse_fetch, web_search, web_fetch, generate_image_u
 **ما تم:**
 - 🆕 **`VoicePanel.js`** جديد: card عائم 360×350px في bottom-right (يمين السفلى)
   - auto-greet + auto-listen
-  - Session persistence via `sessionStorage.zitex_voice_session_id`
+  - Session persistence via `sessionStorage.zerax_voice_session_id`
   - live subtitle + listening indicator + credits + mute toggle
   - `INTENT_ROUTES`: image→`/chat/image`, video→`/chat/video`, website→`/websites`
 - 🔄 **`ZitexDuoLauncher` v7**:
   - مخفيات الشخصيات 3D كلياً (لا CharacterSceneEngine mount)
   - `VoiceChatButton` + `VoicePanel` (lazy) بدلاً من `VoiceStage`
-  - "Continue conversation" pattern: بعد التوجيه يعيد فتح Panel تلقائياً من `zitex_voice_reopen` key
+  - "Continue conversation" pattern: بعد التوجيه يعيد فتح Panel تلقائياً من `zerax_voice_reopen` key
 - 🗂️ **محفوظ 100%**: VoiceStage, Avatar3D, CharacterSceneEngine, كل ملفات VRM + VRMA
   (الرجوع يتم بتغيير `SHOW_3D_PEEK=true` + استيراد VoiceStage بدل VoicePanel)
 - ✅ **اختبار حي**: `voice-chat-button: 1, canvases: 0, voice-panel opened: 1`
@@ -2433,7 +2433,7 @@ quran_reciter_lookup, quran_verse_fetch, web_search, web_fetch, generate_image_u
 
 #### Auto-open VoiceStage
 - **`ZitexDuoLauncher.js` v4**: أول زيارة → فتح تلقائي بعد 2s
-- cooldown 10 دقائق (localStorage `zitex_vs_dismissed_at`)
+- cooldown 10 دقائق (localStorage `zerax_vs_dismissed_at`)
 - يكمل الـ auto-listen + wake-word السابق
 
 #### Push
@@ -2468,14 +2468,14 @@ quran_reciter_lookup, quran_verse_fetch, web_search, web_fetch, generate_image_u
 - **`/app/frontend/src/components/WakeWordListener.js`** (جديد):
   - Web Speech API continuous=true, lang='ar-SA'
   - Regex patterns: `(يا\s+)?زار[اه]` و `(يا\s+)?ليل[اى]`
-  - عند الكشف → dispatch CustomEvent `zitex:wake-word` بـ `{character}`
+  - عند الكشف → dispatch CustomEvent `zerax:wake-word` بـ `{character}`
   - Toggle محفوظ في localStorage، indicator floating (bottom-20 left-4)
 - **`/app/frontend/src/components/ZitexDuoLauncher.js`** (v3):
-  - يستمع لـ`zitex:wake-word` → يفتح VoiceStage بالشخصية المطلوبة
-  - Dispatches `zitex:voice-stage-open/close` — WakeWordListener يوقف نفسه أثناء فتح VoiceStage (تجنّب تصادم المايك)
+  - يستمع لـ`zerax:wake-word` → يفتح VoiceStage بالشخصية المطلوبة
+  - Dispatches `zerax:voice-stage-open/close` — WakeWordListener يوقف نفسه أثناء فتح VoiceStage (تجنّب تصادم المايك)
 
 #### 🚀 Deployment
-- Commits: `24456dc`, `8b6377c` → pushed to `zuhair646-debug/zitex:main` → Vercel auto-deploy
+- Commits: `24456dc`, `8b6377c` → pushed to `zuhair646-debug/zerax:main` → Vercel auto-deploy
 
 
 ### 🆕 Apr 30, 2026 — Hands-Free VAD Auto-Listen (P0 — COMPLETE ✅)
@@ -2820,7 +2820,7 @@ quran_reciter_lookup, quran_verse_fetch, web_search, web_fetch, generate_image_u
   - `POST /api/bridge/push-to-banner` — نشر كـBanner slide (2 نقطة)
   - `GET  /api/bridge/history?project_id=` — سجل النشر
   - يقبل 3 مصادر: studio / video_wizard / image_wizard
-  - يكتب مباشرة في `site_stories` و `site_banner_slides` بـmark مصدر `zitex_bridge_*`
+  - يكتب مباشرة في `site_stories` و `site_banner_slides` بـmark مصدر `zerax_bridge_*`
 - **UI**: `/app/frontend/src/pages/ChannelBridge.js` — route `/dashboard/bridge`
   - grid عرض كل أصول المالك (صور+فيديوهات) مع زرين Story/Banner لكل أصل
   - سجل النشر محدّث تلقائياً
@@ -2892,7 +2892,7 @@ quran_reciter_lookup, quran_verse_fetch, web_search, web_fetch, generate_image_u
 - Register button → redirect URL صحيح
 - `/auth-callback` بدون session → toast + redirect لـ /login
 - `/auth-callback#session_id=fake` → backend rejection + redirect لـ /login
-- Regression: email+password login لـ owner@zitex.com يعمل + `/api/auth/me` يعمل
+- Regression: email+password login لـ owner@zerax.com يعمل + `/api/auth/me` يعمل
 - Lint: 4 ملفات JS تمر بدون أخطاء
 
 #### ملاحظات تقنية
@@ -3998,7 +3998,7 @@ quran_reciter_lookup, quran_verse_fetch, web_search, web_fetch, generate_image_u
 
 **E2E verified** (Apr 22, 2026):
 - Owner → bypass, studio loads directly. ✅
-- Non-owner client `gatetest@zitex.com` → gate shown, Stripe redirect OK at US$50.00, card 4242… accepted, success page polled & confirmed, studio unlocked. ✅
+- Non-owner client `gatetest@zerax.com` → gate shown, Stripe redirect OK at US$50.00, card 4242… accepted, success page polled & confirmed, studio unlocked. ✅
 - `studio_subscriptions` collection: exactly 1 doc after 1 successful payment (idempotency). ✅
 
 **Environment**:
@@ -4388,7 +4388,7 @@ New endpoints (13): /public/{slug}/auth/{register,login,me}, /public/{slug}/orde
 - "تصميم الألعاب" / "إنشاء الفيديو" / "توليد الصور" — 🔒 **قريباً**
 
 ## Credentials
-- Email: owner@zitex.com | Password: owner123
+- Email: owner@zerax.com | Password: owner123
 
 ---
 

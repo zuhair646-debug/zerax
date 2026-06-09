@@ -22,7 +22,7 @@ import { toast } from 'sonner';
 const API = process.env.REACT_APP_BACKEND_URL;
 
 // Idle animation keyframes (appended to <head> once)
-const STYLE_ID = 'zitex-duo-styles';
+const STYLE_ID = 'zerax-duo-styles';
 if (typeof window !== 'undefined' && !document.getElementById(STYLE_ID)) {
   const style = document.createElement('style');
   style.id = STYLE_ID;

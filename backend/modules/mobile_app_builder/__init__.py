@@ -123,10 +123,10 @@ async def _llm_turn(messages: List[Dict[str, str]]) -> Dict[str, Any]:
 
     # NEW: route through Zerax AI Smart Router first (best model + boundaries)
     try:
-        from modules.zitex_ai import zitex_chat
+        from modules.zerax_ai import zerax_chat
         sys_combined = "\n\n".join(m["content"] for m in messages if m["role"] == "system")
         user_msgs = [m for m in messages if m["role"] != "system"]
-        result = await zitex_chat(
+        result = await zerax_chat(
             agent="mobile_app",
             messages=user_msgs,
             override_system=sys_combined + "\n\n⚠️ ردّك لازم يكون JSON صالح فقط.",
@@ -139,8 +139,8 @@ async def _llm_turn(messages: List[Dict[str, str]]) -> Dict[str, Any]:
                     raw = raw[4:].strip()
                 raw = raw.rstrip("`").strip()
     except Exception as e:
-        last_err = f"zitex_ai: {type(e).__name__}: {str(e)[:200]}"
-        logger.warning(f"[MOBILE-APP] zitex_ai failed: {last_err}")
+        last_err = f"zerax_ai: {type(e).__name__}: {str(e)[:200]}"
+        logger.warning(f"[MOBILE-APP] zerax_ai failed: {last_err}")
 
     if not raw and direct_key:
         try:
@@ -567,7 +567,7 @@ def create_mobile_app_router(db, get_current_user):
         # Sanitise app_name for the JS string
         safe_name = app_name.replace('"', '\\"').replace("\n", " ")[:80]
         package_json = {
-            "name": "zitex-app",
+            "name": "zerax-app",
             "version": "1.0.0",
             "main": "node_modules/expo/AppEntry.js",
             "scripts": {
@@ -642,7 +642,7 @@ def create_mobile_app_router(db, get_current_user):
                         "splash": {"backgroundColor": "#0a0a14"},
                         "assetBundlePatterns": ["**/*"],
                         "ios": {"supportsTablet": True},
-                        "android": {"package": f"com.zitex.{safe_name.lower().replace(' ', '')[:20]}"},
+                        "android": {"package": f"com.zerax.{safe_name.lower().replace(' ', '')[:20]}"},
                         "web": {"favicon": "./assets/favicon.png"},
                     }
                 }, indent=2, ensure_ascii=False),

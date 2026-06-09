@@ -29,7 +29,7 @@ import asyncio
 import logging
 from typing import Any, AsyncGenerator, Awaitable, Callable, Dict, List, Optional
 
-logger = logging.getLogger("zitex.shared.claude_core")
+logger = logging.getLogger("zerax.shared.claude_core")
 
 DEFAULT_MODEL = "claude-sonnet-4-5-20250929"
 DEFAULT_MAX_TOKENS = 8000

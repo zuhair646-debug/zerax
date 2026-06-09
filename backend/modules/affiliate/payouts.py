@@ -28,7 +28,7 @@ from typing import Any, Dict, Optional, List
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, EmailStr, Field
 
-logger = logging.getLogger("zitex.affiliate.payouts")
+logger = logging.getLogger("zerax.affiliate.payouts")
 router = APIRouter(tags=["affiliate-payouts"])
 
 PAYOUT_FEE_USD = 2.0

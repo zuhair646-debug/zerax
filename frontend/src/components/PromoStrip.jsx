@@ -19,16 +19,16 @@ export const PromoStrip = () => {
   const [dismissed, setDismissed] = useState(false);
 
   useEffect(() => {
-    setDismissed(sessionStorage.getItem('zitex_promo_dismissed') === '1');
+    setDismissed(sessionStorage.getItem('zerax_promo_dismissed') === '1');
   }, []);
 
   if (dismissed) return null;
 
   const close = (e) => {
     e.stopPropagation();
-    sessionStorage.setItem('zitex_promo_dismissed', '1');
+    sessionStorage.setItem('zerax_promo_dismissed', '1');
     setDismissed(true);
-    window.dispatchEvent(new CustomEvent('zitex:promo-change', { detail: { shown: false } }));
+    window.dispatchEvent(new CustomEvent('zerax:promo-change', { detail: { shown: false } }));
   };
 
   return (

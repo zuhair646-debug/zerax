@@ -43,7 +43,7 @@ export default function ChatVideo({ user }) {
 
     // Pull voice intent if coming from Voice Stage
     try {
-      const raw = sessionStorage.getItem('zitex_voice_intent');
+      const raw = sessionStorage.getItem('zerax_voice_intent');
       if (raw) {
         const data = JSON.parse(raw);
         if (data.intent === 'video' && data.subject && (Date.now() - (data.ts || 0)) < 60000) {
@@ -52,7 +52,7 @@ export default function ChatVideo({ user }) {
             toast.success(`✓ سمعتك: "${data.subject}". اضغطي تأكيد أو عدّلي`);
           }, 800);
         }
-        sessionStorage.removeItem('zitex_voice_intent');
+        sessionStorage.removeItem('zerax_voice_intent');
       }
     } catch (_) {}
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -256,7 +256,7 @@ export default function ChatVideo({ user }) {
               <div className="text-sm font-bold text-emerald-300 mb-2">✓ الفيديو جاهز</div>
               <video src={result.media_url} controls className="w-full rounded-xl mb-3" />
               <div className="flex gap-2">
-                <a href={result.media_url} download={`zitex-${result.id}.mp4`} className="flex-1">
+                <a href={result.media_url} download={`zerax-${result.id}.mp4`} className="flex-1">
                   <Button variant="outline" className="w-full border-emerald-400/30 text-emerald-300">تحميل</Button>
                 </a>
                 <Button onClick={() => { setResult(null); setReadyState(null); setHistory([]); setCurrentQuestion(null); startWizard(); }}

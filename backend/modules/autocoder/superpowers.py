@@ -19,7 +19,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-logger = logging.getLogger("zitex.autocoder.superpowers")
+logger = logging.getLogger("zerax.autocoder.superpowers")
 
 MEMORY_DIR = Path("/app/memory")
 PRD_PATH = MEMORY_DIR / "PRD.md"
@@ -305,7 +305,7 @@ SUPERPOWERS_ANTHROPIC_TOOLS = [
         "input_schema": {
             "type": "object",
             "properties": {
-                "url": {"type": "string", "description": "الـURL الكامل (e.g. https://zitex.vercel.app/games/web)"},
+                "url": {"type": "string", "description": "الـURL الكامل (e.g. https://zerax.vercel.app/games/web)"},
                 "viewport": {"type": "string", "description": "WxH (default 1920x1080)"},
                 "wait_ms": {"type": "integer", "description": "كم millisecond ينتظر قبل الـscreenshot (default 3000)"},
             },

@@ -36,7 +36,7 @@ from typing import Optional, List
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
-logger = logging.getLogger("zitex.support")
+logger = logging.getLogger("zerax.support")
 router = APIRouter(tags=["support"])
 
 

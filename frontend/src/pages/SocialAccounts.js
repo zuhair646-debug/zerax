@@ -19,14 +19,14 @@ const SocialAccounts = ({ user, setUser }) => {
   const [connected, setConnected] = useState({});
 
   useEffect(() => {
-    const saved = localStorage.getItem('zitex_connected_socials');
+    const saved = localStorage.getItem('zerax_connected_socials');
     if (saved) setConnected(JSON.parse(saved));
   }, []);
 
   const toggleConnect = (id) => {
     const next = { ...connected, [id]: !connected[id] };
     setConnected(next);
-    localStorage.setItem('zitex_connected_socials', JSON.stringify(next));
+    localStorage.setItem('zerax_connected_socials', JSON.stringify(next));
     if (next[id]) {
       toast.success(`تم ربط ${PLATFORMS.find((p) => p.id === id).name} بنجاح`);
     } else {

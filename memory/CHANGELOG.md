@@ -45,7 +45,7 @@ Luxury 3D portfolio template for jewelry, watches, real estate, fine art, cars.
 - **Currency RATES map**: 43+ currencies converted from SAR baseline
 - **Universal i18n pattern**: `data-key`, `data-key-ph`, `data-key-opt` + `_html` suffix for innerHTML
 - **Universal market popover**: same UX across all 3 templates
-- **Zitex footer**: Branded "CRAFTED BY ZITEX" footer with link to zitex.com
+- **Zitex footer**: Branded "CRAFTED BY ZITEX" footer with link to zerax.com
 - **Pushed to GitHub**: 2 commits (`93c634b`, `51407c4`) on main branch
 
 ### Tested
@@ -137,11 +137,11 @@ Luxury 3D portfolio template for jewelry, watches, real estate, fine art, cars.
 - يستخرج: IP, User-Agent, Referer, UTM (utm_source/medium/campaign/content), post_url
 - يحدد المنصة تلقائياً (twitter/instagram/facebook/youtube/tiktok/whatsapp/telegram/linkedin/google/...) من الـ Referer host + UTM source
 - يحلل الـ User-Agent → device (mobile/desktop/tablet) + browser + OS
-- يضع cookie `zitex_aff_click` (30 يوم) لربط الـ click بالـ signup لاحقاً
+- يضع cookie `zerax_aff_click` (30 يوم) لربط الـ click بالـ signup لاحقاً
 - Redirect مع `?aff=CODE` للـ landing
 
 **Server-side signup binding** (في `server.py /api/auth/register`):
-- يقرأ `zitex_aff_click` cookie من الـ request
+- يقرأ `zerax_aff_click` cookie من الـ request
 - يحدّث `affiliate_clicks` بـ `converted_to_signup=true`, `signup_user_id`, `signup_at`
 - ⇒ نعرف **بالضبط** من أي ضغطة جاء التسجيل
 
@@ -224,7 +224,7 @@ Luxury 3D portfolio template for jewelry, watches, real estate, fine art, cars.
 **Route**: `/admin/intelligence` (protected by `ProtectedRoute adminOnly`)
 **AdminDashboard tile**: "مركز ذكاء العملاء 🧠" أضيف مع icon Sparkles + amber→orange gradient.
 
-**اختبار live (curl on owner@zitex.com)**:
+**اختبار live (curl on owner@zerax.com)**:
 - `GET /clients` → 51 عميل، اول واحد له 52 websites, 9 games, 4 images, 23 videos, 199 chats ✅
 - `GET /clients/{owner_id}/360` → engagement=100/100, counts كاملة ✅
 - `GET /clients/{owner_id}/projects` → 52 websites, 9 games, 3 apps ✅
@@ -347,7 +347,7 @@ Luxury 3D portfolio template for jewelry, watches, real estate, fine art, cars.
 **الطلب**: المستخدم يبي اللغة تتعين تلقائياً حسب منطقة الزائر، بدون ما يحتاج يفتح الـ Picker. ولو غيّر يدوياً، نحترم اختياره.
 
 **الحل** — اكتشاف بثلاث طبقات (`/app/frontend/src/i18n/geoLanguage.js`):
-1. **Manual override يفوز دايماً**: مفتاح `zitex_lang_manual` في localStorage — يُحفظ فقط عند الاختيار اليدوي من Picker
+1. **Manual override يفوز دايماً**: مفتاح `zerax_lang_manual` في localStorage — يُحفظ فقط عند الاختيار اليدوي من Picker
 2. **Browser language (instant)**: `navigator.language` (مثلاً `fr-FR` → `fr`) — يُطبَّق قبل أول render
 3. **IP geolocation (background)**: ipapi.co + ipwho.is + geojs.io (fallbacks) — يرفع اللغة لـ country-based لو الزائر فرنسي ومتصفحه إنجليزي
 
@@ -368,7 +368,7 @@ Luxury 3D portfolio template for jewelry, watches, real estate, fine art, cars.
 
 **ملفات معدّلة/جديدة**:
 - `/app/frontend/src/i18n/geoLanguage.js` (جديد — 145 سطر)
-- `/app/frontend/src/i18n/index.js` (استبدال `localStorage.getItem('zitex_lang') || 'ar'` بـ `getInitialLanguage()` + background geo invocation)
+- `/app/frontend/src/i18n/index.js` (استبدال `localStorage.getItem('zerax_lang') || 'ar'` بـ `getInitialLanguage()` + background geo invocation)
 - `/app/frontend/src/components/LanguagePicker.js` (`markManualChoice(code)` عند الاختيار اليدوي)
 
 ---
@@ -436,7 +436,7 @@ Bug Fixes shipped this session:
   - 3-pane layout: **Assets sidebar | Chat | Live Preview iframe** with desktop/mobile toggle and show/hide preview
   - Polls project every 4s for async asset generation status
   - `data-testid` on every interactive element (new-project-btn, type-{id}, create-project-btn, chat-input, chat-send-btn, approve-asset-{id}, preview-iframe, …)
-- AI agent ("freebuild" in `zitex_ai`) instructs Claude Sonnet to consult first then emit tags then HTML
+- AI agent ("freebuild" in `zerax_ai`) instructs Claude Sonnet to consult first then emit tags then HTML
 - Tested: 16/16 backend pytest pass, frontend smoke ✅ (`/app/test_reports/iteration_37.json`)
 - Pytest regression: `/app/backend/tests/test_freebuild_chat.py` (~60s, hits live Claude+Fal)
 - Pushed to `main` → Railway auto-redeploys

@@ -12,7 +12,7 @@ import logging
 import httpx
 from typing import Dict, Any, Optional
 
-log = logging.getLogger("zitex.pricing.lemonsqueezy")
+log = logging.getLogger("zerax.pricing.lemonsqueezy")
 
 LS_BASE = "https://api.lemonsqueezy.com/v1"
 

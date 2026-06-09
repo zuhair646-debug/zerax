@@ -8,7 +8,7 @@ import { Play, Image as ImageIcon, Gamepad2, Smartphone, Sparkles, ArrowLeft } f
  */
 const SLIDES = [
   {
-    id: 'zitex-intro',
+    id: 'zerax-intro',
     kind: 'brand',
     title: 'ذكاء Zerax',
     sub: 'يبني، يبحث، يولّد — في شات واحد',
@@ -212,7 +212,7 @@ function MotionLayer({ type, accent }) {
         style={{ width: 120, height: 120 }}
       >
         <img
-          src="/zitex-logo.png"
+          src="/zerax-logo.png"
           alt="Zerax"
           className="hb-brand-logo"
           width={112}
