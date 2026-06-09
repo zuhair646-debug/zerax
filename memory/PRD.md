@@ -1,6 +1,60 @@
 # Zitex AI Platform - PRD
 
 
+### 🆕 Jun 9 2026 — Ready Sites: All 4 Business Types Fully Supported ✅
+
+**The platform now generates 4 distinct business types with the SAME pipeline:**
+
+| Type | Patterns | Items per category × 6 categories | Sample categories |
+|------|----------|-----------------------------------|-------------------|
+| `restaurant` | 6 | 60 dishes | بيتزا، بروست، سلطات، لحوم، دجاج، شاورما |
+| `store` | 6 | 60 products | إلكترونيات، أزياء، تجميل، منزل، رياضة، أطفال |
+| `clinic` | 4 | 60 medical services | أمراض القلب، أسنان، أطفال، جلدية، باطنة، عيون |
+| `realestate` | 4 | 60 properties | فلل، شقق، أراضٍ، تجاري، إيجار، فاخر |
+
+**New backend module**: `/app/backend/modules/ready_sites/data_factory_generic.py`
+  - `seed_generic(type_id, business_name, tagline)` — returns identical shape to `seed_restaurant` but populated for store/clinic/realestate
+  - Each factory comes with:
+    - 60 real-world items with Saudi pricing (electronics 999-9899 SAR, properties 320K-25M SAR, medical 100-12500 SAR)
+    - 30 orders/appointments/inquiries with status flow per business type
+    - 20 customers/patients/clients with VIP tiering
+    - 5 drivers/doctors/agents with realistic Saudi names + areas
+    - Analytics, reviews, 7-day hours
+    - Type-appropriate Unsplash photos (60 curated per type)
+
+**Catalog upgrades** (`/app/backend/modules/ready_sites/catalog.py`):
+  - `PATTERNS_BY_TYPE` and `FEATURES_BY_TYPE` dicts
+  - All 4 types marked `available: true`
+  - 16 patterns total + 64 features total
+  - `get_features(type_id)`, `get_pattern(type_id, pattern_id)` helpers
+
+**Agent updates** (`agent.py`):
+  - Renamed PASS1_SYSTEM and PASS2_SYSTEM from "restaurant" → generic "business" architect
+  - `_type_vocab(type_id)` injects type-specific Arabic labels (`menu_label`, `cart_label`, etc.) into the brief
+  - `_build_pass1_brief` now passes vocab + business_type to the AI
+  - Data layer no longer asks AI to define `window.SITE` — platform injects it; AI only reads
+
+**Frontend updates** (`ReadySites.js`):
+  - `patternsForType` / `featuresForType` instead of hardcoded `restaurantPatterns`
+  - Removed "قريباً" guard on store/clinic/realestate cards (all 4 are now selectable)
+  - Step 4 generic labels: "اسم العلامة التجارية" instead of "اسم المطعم"
+  - StepPromoVideo has type-specific Unsplash showcase images (fashion for store, medical for clinic, villa for realestate)
+
+**API endpoint** `GET /api/ready-sites/catalog` now returns all 4 types in `patterns` and `features` dicts.
+
+**Testing**: ✅ Generated 1 of each type successfully:
+  - Restaurant `7ce0ca81`: Burger Lab (Burger Cinema pattern)
+  - Store `7eb4ea2a`: Luxe Store (Luxe Mono pattern) — 60 products across 6 categories
+  - Clinic `dc3750ad`: عيادات الصحة (Calm Blue pattern) — 60 medical services
+  - Realestate `2ef5a0a5`: عقارات الصفوة (Luxe Estate pattern) — 60 properties
+
+**Showcase page** `/showcase` now displays all 4 business types with proper color gradients per pattern + filter pills (الكل / مطاعم / متاجر / عيادات).
+
+**Known minor issue**: The AI sometimes uses the restaurant-default section title "منيو المطعم" instead of "كتالوج المنتجات" / "الخدمات الطبية" — this is a labeling tweak only, all data + cart + footer + Zitex tracker work flawlessly across types.
+
+---
+
+
 ### 🆕 Jun 8 2026 — Ready Sites: Unified Footer + Zitex Tracker + UX Fixes ✅
 
 **Issues fixed (all P0):**

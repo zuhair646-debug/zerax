@@ -73,23 +73,23 @@ export default function ReadySites({ user }) {
     return session_id;
   };
 
-  const restaurantPatterns = catalog?.patterns?.restaurant || [];
-  const restaurantFeatures = catalog?.features?.restaurant || [];
+  const patternsForType = catalog?.patterns?.[typeId] || [];
+  const featuresForType = catalog?.features?.[typeId] || [];
 
   const featureCategories = useMemo(() => {
     const g = {};
-    restaurantFeatures.forEach((f) => {
+    featuresForType.forEach((f) => {
       g[f.category] = g[f.category] || [];
       g[f.category].push(f);
     });
     return g;
-  }, [restaurantFeatures]);
+  }, [featuresForType]);
 
   const handlePickType = async (tid) => {
     if (!catalog) return;
     const t = catalog.types.find((x) => x.id === tid);
     if (t && !t.available) {
-      toast.info('هذا النوع قريباً — حالياً المطاعم فقط متاحة');
+      toast.info('هذا النوع قريباً');
       return;
     }
     setBusy(true);
@@ -120,7 +120,7 @@ export default function ReadySites({ user }) {
 
   const handleBranding = async () => {
     if (!branding.business_name.trim()) {
-      toast.error('اكتب اسم المطعم');
+      toast.error('اكتب اسم العلامة التجارية');
       return;
     }
     setBusy(true);
@@ -211,7 +211,7 @@ export default function ReadySites({ user }) {
         )}
         {step === 3 && (
           <StepPatterns
-            patterns={restaurantPatterns}
+            patterns={patternsForType}
             onPick={handlePickPattern}
             busy={busy}
             onBack={() => setStep(2)}
@@ -332,6 +332,24 @@ function StepPromoVideo({ typeId, type, onContinue, onBack }) {
       'https://images.unsplash.com/photo-1565958011703-44f9829ba187?w=1200&q=80',
       'https://images.unsplash.com/photo-1546833999-b9f581a1996d?w=1200&q=80',
     ],
+    store: [
+      'https://images.unsplash.com/photo-1483985988355-763728e1935b?w=1200&q=80',
+      'https://images.unsplash.com/photo-1556228720-195a672e8a03?w=1200&q=80',
+      'https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=1200&q=80',
+      'https://images.unsplash.com/photo-1556228453-efd6c1ff04f6?w=1200&q=80',
+    ],
+    clinic: [
+      'https://images.unsplash.com/photo-1576091160550-2173dba999ef?w=1200&q=80',
+      'https://images.unsplash.com/photo-1559757148-5c350d0d3c56?w=1200&q=80',
+      'https://images.unsplash.com/photo-1606811971618-4486d14f3f99?w=1200&q=80',
+      'https://images.unsplash.com/photo-1581595220892-b0739db3ba8c?w=1200&q=80',
+    ],
+    realestate: [
+      'https://images.unsplash.com/photo-1564013799919-ab600027ffc6?w=1200&q=80',
+      'https://images.unsplash.com/photo-1613490493576-7fde63acd811?w=1200&q=80',
+      'https://images.unsplash.com/photo-1522708323590-d24dbb6b0267?w=1200&q=80',
+      'https://images.unsplash.com/photo-1600596542815-ffad4c1539a9?w=1200&q=80',
+    ],
   };
   const images = showcaseImages[typeId] || showcaseImages.restaurant;
   return (
@@ -449,14 +467,14 @@ function StepBranding({ value, onChange, onNext, onBack, busy }) {
   };
   return (
     <div>
-      <h2 style={sectionTitle}>4️⃣ هوية مطعمك</h2>
+      <h2 style={sectionTitle}>4️⃣ هوية علامتك التجارية</h2>
       <div style={cardStyle}>
-        <Field label="اسم المطعم">
+        <Field label="اسم العلامة التجارية">
           <input
             data-testid="business-name-input"
             value={value.business_name}
             onChange={(e) => update({ business_name: e.target.value })}
-            placeholder="مثال: مطعم زعتر"
+            placeholder="مثال: مطعم زعتر / متجر اللوكس / عيادات الصحة"
             style={inputStyle}
           />
         </Field>
@@ -501,7 +519,7 @@ function StepBranding({ value, onChange, onNext, onBack, busy }) {
               data-testid="logo-text-input"
               value={value.logo_text}
               onChange={(e) => update({ logo_text: e.target.value })}
-              placeholder="النص الذي يظهر كلوجو (اتركه فارغاً لاستخدام اسم المطعم)"
+              placeholder="النص الذي يظهر كلوجو (اتركه فارغاً لاستخدام اسم العلامة)"
               style={inputStyle}
             />
           )}

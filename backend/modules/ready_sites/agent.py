@@ -29,16 +29,19 @@ from .data_factory import (
     render_admin_full_app, render_cart_module,
     render_zitex_enhancements,
 )
+from .data_factory_generic import seed_generic
 
 logger = logging.getLogger(__name__)
 
 
 # ───────────────────────── PASS 1 SYSTEM PROMPT ─────────────────────────
-PASS1_SYSTEM = """You are a Senior Restaurant Website Architect at Zitex. PASS 1 OF 2.
+PASS1_SYSTEM = """You are a Senior Business Website Architect at Zitex. PASS 1 OF 2.
 
-You are building the FIRST HALF of a deeply-functional restaurant SPA (Single Page App in one HTML file).
+You are building the FIRST HALF of a deeply-functional business SPA (Single Page App in one HTML file).
+The business type (restaurant / store / clinic / realestate) is specified in the user brief — adapt all
+labels, tone, and feature names to that business type.
 
-PASS 1 covers: <head>, brand variables, sticky nav, hero, about, full DATA LAYER, menu (categories grid), reviews, loyalty.
+PASS 1 covers: <head>, brand variables, sticky nav, hero, about, catalog (categories grid), reviews.
 
 ═══════════════════════════════════════════════════════════════════
 ABSOLUTE OUTPUT RULES
@@ -49,71 +52,58 @@ ABSOLUTE OUTPUT RULES
 4. `dir="rtl"`, Arabic Saudi/Khaleeji dialect, NEVER Lorem.
 5. 3+ Google Fonts (display + body + accent).
 6. NO markdown fences.
+7. **DO NOT define `window.SITE`** — the platform injects it automatically with full data (60 items, 6 categories, hours, reviews, branding). Your JS must READ from it.
 
 ═══════════════════════════════════════════════════════════════════
-DATA LAYER (MOST CRITICAL — this powers EVERYTHING)
+DATA LAYER (READ-ONLY — INJECTED BY PLATFORM)
 ═══════════════════════════════════════════════════════════════════
-At the START of your <script> tag, define `window.SITE` as a global constant containing:
+**DO NOT define `window.SITE`** — it is already populated by Python with:
+  - branding (name, tagline, phone, whatsapp, email, address, city)
+  - hours (saturday..friday with open/close times)
+  - categories (6 items: id, name, desc, img)
+  - products (60 items: id, category, name, price, desc, tags, img, rating, reviews_count, is_new, is_popular, meta?)
+  - reviews (5 items: name, stars, date, text)
 
-```js
-window.SITE = {
-  branding: { name: "...", tagline: "...", phone: "+966512345678", whatsapp: "+966512345678",
-              email: "info@brand.com", address: "...", city: "الرياض", maps_query: "..." },
-  hours: { saturday: {open:"11:00",close:"23:00"}, sunday: {...}, ... },
-  categories: [
-    { id:"pizza", name:"البيتزا", desc:"...", img:"https://images.unsplash.com/photo-..." },
-    { id:"broast", name:"بروست", desc:"...", img:"..." },
-    { id:"salads", name:"سلطات", desc:"...", img:"..." },
-    { id:"meat",   name:"لحوم",   desc:"...", img:"..." },
-    { id:"chicken",name:"دجاج",   desc:"...", img:"..." },
-    { id:"shawarma",name:"شاورما",desc:"...",img:"..." }
-  ],
-  products: [
-    // ≥10 products PER category × 6 categories = 60+ items total
-    // Each product:
-    { id:"p1", category:"pizza", name:"بيتزا مارجريتا", price:35, calories:850,
-      desc:"طماطم سان مارزانو، موزاريلا الجاموس الطازج، أوراق ريحان، زيت زيتون بكر",
-      ingredients:["دقيق إيطالي 00","صلصة طماطم","موزاريلا","ريحان","زيت زيتون"],
-      tags:["نباتي","حلال"], img:"https://images.unsplash.com/photo-...",
-      prep_time:"15-20 دقيقة", rating:4.7, reviews_count:142 },
-    ... 60+ total products ...
-  ],
-  reviews: [ {name, stars, date, text}, ... 4-5 sample reviews ]
-};
-```
-
-Generate REAL prices in ر.س. matching market rates (10-150 SAR).
-Generate REAL calorie counts (200-1200 kcal).
-Use the curated Unsplash photo IDs given in the user message — pick varied ones across products.
+Your JS code READS from `window.SITE.categories`, `window.SITE.products`, etc. to render UI.
+The brief tells you the business type — name the products section accordingly
+(e.g. "قائمة الطعام" for restaurant, "كتالوج المنتجات" for store, "الخدمات الطبية" for clinic, "العقارات المتاحة" for realestate).
 
 ═══════════════════════════════════════════════════════════════════
 ROUTING (SPA — uses hash routes, NO page reloads)
 ═══════════════════════════════════════════════════════════════════
 Use hash-based routing. The body has these views (mutually exclusive `.view`):
-  - `#/` or no hash → view-home (hero + about + reviews + loyalty)
-  - `#/menu` → view-menu (the 6 category cards grid)
-  - `#/category/{id}` → view-category (header showing category name + grid of products in that category)
-  - `#/product/{id}` → view-product-detail (full product info: large image, name, price, description, calories card, ingredients list, "أضف للسلة" button, related products)
+  - `#/` or no hash → view-home (hero + about + reviews)
+  - `#/menu` → view-menu (the 6 category cards grid) — title adapts to business type
+  - `#/category/{id}` → view-category (header showing category name + grid of items in that category)
+  - `#/product/{id}` → view-product-detail (full item info: large image, name, price, description, tags, "Add" button, related items)
   - `#/cart` → view-cart (pass 2 will populate this)
   - `#/about` → view-about
 
-The nav links use `href="#/menu"` etc.
+The nav links use `href="#/menu"` etc. — the "menu" link label adapts to the business
+(القائمة for restaurant · المنتجات for store · التخصصات for clinic · العقارات for realestate).
 Implement `router()` function that reads `location.hash`, hides all `.view`, shows the matching one, scrolls to top.
 `window.addEventListener('hashchange', router); window.addEventListener('load', router);`
 
 ═══════════════════════════════════════════════════════════════════
-MENU LANDING (view-menu)
+CATALOG LANDING (view-menu)
 ═══════════════════════════════════════════════════════════════════
-- Section title with ornamental divider.
-- Grid of 6 category cards (3×2). Each card has the category photo (Unsplash), name, short desc, hover-lift effect.
+- Section title with ornamental divider — use the business-appropriate label from the brief
+  (e.g. "قائمة الطعام" / "كتالوج المنتجات" / "الخدمات الطبية" / "العقارات المتاحة").
+- Grid of 6 category cards (3×2). Each card has the category photo, name, short desc, hover-lift effect.
 - The ENTIRE card is a clickable anchor `<a href="#/category/${cat.id}">` — clicking transitions to the category view.
 
 ═══════════════════════════════════════════════════════════════════
 CATEGORY PAGE (view-category — populated dynamically)
 ═══════════════════════════════════════════════════════════════════
-- Big header with category name + breadcrumb (الرئيسية / القائمة / {category}).
-- Grid of products in that category (rendered from `window.SITE.products.filter(p => p.category === currentCategoryId)`).
-- Each product card: image, name, calories badge, description, price chip, "تفاصيل" button (→ #/product/{id}) + "أضف للسلة" button.
+- Big header with category name + breadcrumb.
+- Grid of items in that category (rendered from `window.SITE.products.filter(p => p.category === currentCategoryId)`).
+- Each card: image, name, description, price chip (or "اتصل للسعر" for realestate luxury), tags, and an
+  **"Add" button** with appropriate label:
+    • restaurant/store → "أضف للسلة"  (sets data-pid={product.id} and data-add-cart)
+    • clinic → "احجز موعد"  (also sets data-pid + data-add-cart so platform cart can hold appointments)
+    • realestate → "أضف للمفضلة"  (same data attributes)
+  IMPORTANT: the platform injects a global click handler that catches `[data-pid]` clicks and calls window.addToCart(pid).
+  So as long as you include `data-pid="${product.id}"` on the button, it WILL work.
 
 ═══════════════════════════════════════════════════════════════════
 PRODUCT DETAIL PAGE (view-product-detail — populated dynamically)
@@ -127,10 +117,10 @@ PRODUCT DETAIL PAGE (view-product-detail — populated dynamically)
 NAV / HEADER / HERO
 ═══════════════════════════════════════════════════════════════════
 - Sticky top nav with these 5 links ONLY:
-  الرئيسية(#/) · القائمة(#/menu) · المعرض(#/#gallery) · العروض(#/#specials) · عن المطعم(#/about)
+  الرئيسية(#/) · القائمة(#/menu) · المعرض(#/#gallery) · العروض(#/#specials) · عن العلامة(#/about)
 - DO NOT add "احجز طاولة" link in the nav — the platform owns the reservation modal.
 - DO NOT add "تواصل / Contact" link — the platform injects a unified contact section in the footer.
-- Hero embodies the visual pattern. ONE CTA only — "تصفّح القائمة" → #/menu.
+- Hero embodies the visual pattern. ONE CTA only that opens the catalog (link → #/menu).
 - DO NOT BUILD ANY FOOTER. The platform injects a complete unified footer (hours, contact, social, Zitex tracking).
 
 ═══════════════════════════════════════════════════════════════════
@@ -146,10 +136,12 @@ OUTPUT PASS 1 NOW — start with `<!DOCTYPE html>` and end with `<!-- ENDPASS1 -
 
 
 # ───────────────────────── PASS 2 SYSTEM PROMPT ─────────────────────────
-PASS2_SYSTEM = """You are completing the SECOND HALF of a restaurant SPA at Zitex.
+PASS2_SYSTEM = """You are completing the SECOND HALF of a business SPA at Zitex.
 
-The first half established `window.SITE` (branding, hours, categories, products, reviews) and SPA hash routing.
+The first half established `window.SITE` (branding, hours, categories, products/items, reviews) and SPA hash routing.
 You will be given the existing HTML so far and must APPEND from `<!-- BEGINPASS2 -->` to `</html>`.
+
+The business type (restaurant / store / clinic / realestate) is in the brief — adapt labels accordingly.
 
 ═══════════════════════════════════════════════════════════════════
 WHAT TO BUILD
@@ -320,13 +312,44 @@ def _gen_admin_credentials(business_name: str) -> Dict[str, str]:
     }
 
 
+def _type_vocab(type_id: str) -> Dict[str, str]:
+    """Map type_id → vocabulary labels for prompt customization.
+    Keeps the JSON data shape identical across types — only labels change."""
+    if type_id == "store":
+        return {
+            "business": "متجر إلكتروني", "products_label": "المنتجات", "products_single": "منتج",
+            "cart_label": "سلة المشتريات", "orders_label": "الطلبات", "menu_label": "الكتالوج",
+            "wizard_step_2": "تصنيفات المنتجات", "delivery_label": "الشحن والتوصيل",
+        }
+    if type_id == "clinic":
+        return {
+            "business": "عيادة طبية", "products_label": "الخدمات الطبية", "products_single": "خدمة",
+            "cart_label": "حجز موعد", "orders_label": "المواعيد", "menu_label": "التخصصات والخدمات",
+            "wizard_step_2": "التخصصات الطبية", "delivery_label": "حجز ومواعيد",
+        }
+    if type_id == "realestate":
+        return {
+            "business": "مكتب عقاري", "products_label": "العقارات", "products_single": "عقار",
+            "cart_label": "العقارات المفضلة", "orders_label": "الاستفسارات والجولات",
+            "menu_label": "كتالوج العقارات", "wizard_step_2": "أنواع العقارات",
+            "delivery_label": "الجولات الميدانية",
+        }
+    return {  # restaurant default
+        "business": "مطعم", "products_label": "الأطباق", "products_single": "طبق",
+        "cart_label": "السلة", "orders_label": "الطلبات", "menu_label": "قائمة الطعام",
+        "wizard_step_2": "الفئات", "delivery_label": "التوصيل",
+    }
+
+
 def _build_pass1_brief(
     pattern: Dict[str, Any],
     branding: Dict[str, Any],
     features: List[Dict[str, Any]],
     seed: Dict[str, Any],
 ) -> str:
-    name = branding.get("business_name", "مطعمي")
+    type_id = seed.get("type_id", "restaurant")
+    vocab = _type_vocab(type_id)
+    name = branding.get("business_name", vocab["business"])
     tagline = branding.get("tagline", "")
     logo_mode = branding.get("logo_mode", "text")
     logo_url = branding.get("logo_url", "")
@@ -346,6 +369,7 @@ def _build_pass1_brief(
     sample_product = seed["products"][0]
 
     return f"""## BUSINESS BRIEF
+- Business type: {vocab['business']} (type_id={type_id})
 - Business name: {name}
 - Tagline: {tagline or '—'}
 - Logo: {logo_block}
@@ -358,23 +382,29 @@ def _build_pass1_brief(
 - DIRECTIVE:
 {pattern['design_directive']}
 
+## VOCABULARY (use these Arabic labels in the UI)
+- Products section title: "{vocab['menu_label']}"
+- Cart label: "{vocab['cart_label']}"
+- Orders label: "{vocab['orders_label']}"
+- Each product is called: "{vocab['products_single']}"
+
 ## ENABLED FEATURES
 {features_block}
 
 ## DATA LAYER — DO NOT GENERATE — IT WILL BE INJECTED
 The platform will inject `window.SITE` automatically. Your JS code must READ from it but NEVER define it.
-window.SITE shape (read-only — already populated with 60 products, 6 categories, hours, branding, reviews):
+window.SITE shape (read-only — already populated with 60 items, 6 categories, hours, branding, reviews):
 
   window.SITE.branding = {{ name, tagline, phone, whatsapp, email, address, city, instagram }}
   window.SITE.hours = {{ saturday: {{open, close}}, ..., friday: {{open, close}} }}
   window.SITE.categories = [ {{ id, name, desc, img }} ]   // 6 items
-  window.SITE.products = [ {{ id, category, name, price, calories, desc, ingredients[], tags[], img, prep_time, rating, reviews_count, is_new, is_popular }} ]   // 60 items
+  window.SITE.products = [ {{ id, category, name, price, desc, tags[], img, rating, reviews_count, is_new, is_popular, meta? }} ]   // 60 items
   window.SITE.reviews = [ {{ name, stars, date, text }} ]   // 5 items
 
 Categories preview: {cat_preview}
-Sample product: {sample_product['name']} (price={sample_product['price']} ر.س, calories={sample_product['calories']}, category={sample_product['category']})
+Sample item: {sample_product['name']} (price={sample_product['price']} ر.س, category={sample_product['category']})
 
-YOUR JOB: build the UI shell. Render menus, products, reviews FROM `window.SITE`.
+YOUR JOB: build the UI shell. Render {vocab['menu_label']}, items, reviews FROM `window.SITE`.
 DO NOT write `window.SITE = {{...}}` — the platform owns that data.
 
 OUTPUT PASS 1 NOW (DOCTYPE → <!-- ENDPASS1 -->). NO MARKDOWN.
@@ -547,11 +577,18 @@ async def generate_ready_site(
     """
     admin_creds = _gen_admin_credentials(branding.get("business_name", ""))
 
-    # 1) Python data factory — deterministic seed
-    seed = seed_restaurant(
-        business_name=branding.get("business_name", "مطعمي"),
-        tagline=branding.get("tagline", ""),
-    )
+    # 1) Python data factory — deterministic seed (branched by type_id)
+    if type_id == "restaurant":
+        seed = seed_restaurant(
+            business_name=branding.get("business_name", "مطعمي"),
+            tagline=branding.get("tagline", ""),
+        )
+    else:
+        seed = seed_generic(
+            type_id=type_id,
+            business_name=branding.get("business_name", "علامتي"),
+            tagline=branding.get("tagline", ""),
+        )
     seed_js = seed_to_js(seed)
 
     # 2) AI builds the UI shell only

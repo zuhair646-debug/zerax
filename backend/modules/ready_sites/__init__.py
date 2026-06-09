@@ -39,8 +39,11 @@ from .catalog import (
     SITE_TYPES,
     RESTAURANT_PATTERNS,
     RESTAURANT_FEATURES,
+    PATTERNS_BY_TYPE,
+    FEATURES_BY_TYPE,
     get_pattern,
     get_type,
+    get_features,
 )
 from .agent import generate_ready_site, refine_ready_site
 
@@ -110,7 +113,8 @@ async def _run_generation(db, session_id: str, user_id: str) -> None:
             raise RuntimeError("النمط البصري المختار غير موجود")
         branding = sess.get("branding") or {}
         enabled = sess.get("features") or []
-        features_full = [f for f in RESTAURANT_FEATURES if f["id"] in enabled]
+        type_features = get_features(type_id)
+        features_full = [f for f in type_features if f["id"] in enabled]
 
         # Pre-generate project_id so Zitex tracking link is unique per site.
         project_id = str(uuid.uuid4())
@@ -195,8 +199,8 @@ def create_ready_sites_router(db, get_current_user) -> APIRouter:
     async def catalog():
         return {
             "types": SITE_TYPES,
-            "patterns": {"restaurant": RESTAURANT_PATTERNS},
-            "features": {"restaurant": RESTAURANT_FEATURES},
+            "patterns": PATTERNS_BY_TYPE,
+            "features": FEATURES_BY_TYPE,
             "generate_cost": GENERATE_COST,
         }
 
@@ -231,7 +235,7 @@ def create_ready_sites_router(db, get_current_user) -> APIRouter:
             {"id": payload.session_id},
             {"$set": {"type_id": payload.type_id, "phase": "select_pattern"}}
         )
-        patterns = RESTAURANT_PATTERNS if payload.type_id == "restaurant" else []
+        patterns = PATTERNS_BY_TYPE.get(payload.type_id, [])
         return {"phase": "select_pattern", "patterns": patterns}
 
     # ---- Step 2: select pattern ----
@@ -272,14 +276,15 @@ def create_ready_sites_router(db, get_current_user) -> APIRouter:
             "logo_ai_prompt": (payload.logo_ai_prompt or "").strip(),
         }
 
-        # default features list for restaurant if user didn't customize yet
-        default_features = [f["id"] for f in RESTAURANT_FEATURES if f.get("default", True)]
+        # default features list per type (use the session's type_id)
+        type_features = get_features(sess.get("type_id") or "restaurant")
+        default_features = [f["id"] for f in type_features if f.get("default", True)]
 
         await db.ready_sites_sessions.update_one(
             {"id": payload.session_id},
             {"$set": {"branding": branding, "features": default_features, "phase": "features"}}
         )
-        return {"phase": "features", "features": RESTAURANT_FEATURES, "default_enabled": default_features}
+        return {"phase": "features", "features": type_features, "default_enabled": default_features}
 
     # ---- Step 4: features ----
     @router.post("/features")
@@ -290,7 +295,8 @@ def create_ready_sites_router(db, get_current_user) -> APIRouter:
         if not sess:
             raise HTTPException(404, "الجلسة غير موجودة")
 
-        valid_ids = {f["id"] for f in RESTAURANT_FEATURES}
+        type_features = get_features(sess.get("type_id") or "restaurant")
+        valid_ids = {f["id"] for f in type_features}
         clean = [fid for fid in payload.enabled if fid in valid_ids]
         if not clean:
             raise HTTPException(400, "اختر ميزة واحدة على الأقل")
