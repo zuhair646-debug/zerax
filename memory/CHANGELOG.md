@@ -440,3 +440,46 @@ Bug Fixes shipped this session:
 - Tested: 16/16 backend pytest pass, frontend smoke ✅ (`/app/test_reports/iteration_37.json`)
 - Pytest regression: `/app/backend/tests/test_freebuild_chat.py` (~60s, hits live Claude+Fal)
 - Pushed to `main` → Railway auto-redeploys
+
+## 2026-02-16 (b) — 🚀 Template-First Engine + Care Portal + Mobile App Upgrade ✅
+
+### Phase 1: Template-First Engine
+- **NEW**: `/app/backend/modules/ready_sites/template_renderer.py`
+- Replaces AI generation for Ready Sites — zero hallucinations
+- 3 hand-crafted templates: app_mode / story_mode / showroom_mode
+- Auto-routes by business type (restaurant→story, jewelry→showroom)
+- Brand/contact/products injected via `window.ZERAX_CONFIG` + regex string replacement
+- Every generated site is **PWA-ready by default** (per-project manifest)
+- Fallback to legacy AI agent if template render fails
+
+### Phase 2: Wizard endpoints
+- `GET /api/ready-sites/templates` — public catalog (3 master templates)
+- `POST /api/ready-sites/select-template` — wizard step
+- `POST /api/ready-sites/select-market` — wizard step (49 markets)
+- `POST /api/ready-sites/preview-template` — live preview
+- `GET /api/ready-sites/manifest/{id}.webmanifest` — per-project PWA manifest
+
+### Phase 3: Care Portal — Post-delivery client dashboard ⭐
+- **NEW**: `/app/backend/modules/care_portal/` (new module)
+- **NEW**: `/app/frontend/src/pages/CarePortal.js`
+- **Route**: `/care/:projectId`
+- Shows project info + entitlements + live preview link
+- ⭐ **"Mobile App Conversion" upgrade card** (the feature user requested):
+  - **Pricing**: 99 SAR/mo · 950 SAR/yr (20% off) · 990 credits/mo · 9900 credits/yr
+  - Pay with credits ✅ (working) — Stripe path is 501 (TODO)
+  - On upgrade → activates PWA on the client's site (zoaar see "Install App" button)
+  - `GET /api/care/project/{id}` — owned project + entitlements
+  - `POST /api/care/upgrade/mobile-app` — buy upgrade
+  - `GET /api/care/pwa-status/{id}` — public status (used by site's install script)
+
+### Tested End-to-End
+- ✅ Template list endpoint returns 3 templates
+- ✅ Preview rendering: 40KB HTML with brand injected
+- ✅ Care Portal loads for owner with project data
+- ✅ Upgrade flow: 990 credits deducted, `pwa_enabled` flipped false→true
+- ✅ Expires 31 days from purchase
+
+### Backlog
+- Stripe/Mada payment path for upgrade
+- Wizard UI step to pick template_mode + market_id (currently auto by type)
+- iOS APK generation tier via Capacitor + GitHub Actions
