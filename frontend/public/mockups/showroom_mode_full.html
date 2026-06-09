@@ -1,0 +1,645 @@
+<!DOCTYPE html>
+<html dir="rtl" lang="ar"><head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Zitex Showroom Mode — Full Demo</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,700;1,400&family=Tajawal:wght@300;400;700;900&family=Inter:wght@300;400;700;900&family=Noto+Sans+SC:wght@400;700;900&family=Noto+Sans+JP:wght@400;700;900&family=Vazirmatn:wght@400;700;900&display=swap" rel="stylesheet">
+<style>
+*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+body{font-family:var(--font,'Tajawal'),sans-serif;background:#0a0a14;color:#fff;overflow-x:hidden;min-height:100vh;direction:var(--dir,rtl)}
+.sf{font-family:'Cormorant Garamond',serif}
+img{max-width:100%;display:block}
+
+/* AMBIENT BG */
+.ambient{position:fixed;inset:0;z-index:0;background:
+  radial-gradient(ellipse at 20% 30%,rgba(220,160,80,.18) 0%,transparent 50%),
+  radial-gradient(ellipse at 80% 70%,rgba(150,100,200,.14) 0%,transparent 50%),
+  radial-gradient(ellipse at 50% 50%,rgba(50,30,80,.5) 0%,transparent 70%),
+  #0a0a14;pointer-events:none}
+.ambient::before{content:'';position:absolute;inset:0;background:
+  radial-gradient(circle at 10% 20%,#fff 0,transparent 1px),
+  radial-gradient(circle at 25% 60%,#fff 0,transparent 1px),
+  radial-gradient(circle at 75% 30%,#fff 0,transparent 1px),
+  radial-gradient(circle at 90% 80%,#fff 0,transparent 1px),
+  radial-gradient(circle at 50% 90%,#fff 0,transparent 1px);
+  background-size:200% 200%;opacity:.4;animation:drift 30s linear infinite}
+@keyframes drift{0%{background-position:0% 0%}100%{background-position:100% 100%}}
+
+/* NAV */
+.nav{position:sticky;top:0;z-index:50;padding:24px 60px;display:flex;justify-content:space-between;align-items:center;background:linear-gradient(180deg,rgba(10,10,20,.92),rgba(10,10,20,.6));backdrop-filter:blur(12px);direction:var(--dir,rtl)}
+.logo{font-size:24px;letter-spacing:6px;font-weight:400;color:#dca050;font-family:'Cormorant Garamond',serif;cursor:pointer}
+.nav-links{display:flex;gap:36px;align-items:center}
+.nav-links a{color:rgba(255,255,255,.85);font-size:11px;letter-spacing:3px;text-decoration:none;text-transform:uppercase;cursor:pointer;transition:color .2s}
+.nav-links a:hover{color:#dca050}
+.nav-tools{display:flex;align-items:center;gap:12px}
+.tool-btn{padding:8px 14px;border:1px solid rgba(220,160,80,.35);background:transparent;color:#dca050;font-size:11px;letter-spacing:1.5px;cursor:pointer;border-radius:2px;font-family:inherit;font-weight:700}
+.tool-btn:hover{background:#dca050;color:#0a0a14}
+.cart-btn{position:relative;width:40px;height:40px;border-radius:50%;border:1px solid rgba(220,160,80,.35);background:transparent;color:#dca050;cursor:pointer;font-size:16px;display:flex;align-items:center;justify-content:center}
+.cart-badge{position:absolute;top:-4px;right:-4px;background:#dca050;color:#0a0a14;width:20px;height:20px;border-radius:50%;font-size:10px;font-weight:900;display:flex;align-items:center;justify-content:center;border:2px solid #0a0a14}
+
+/* MARKET POPOVER */
+.market-popover{position:fixed;top:80px;background:#15152a;border:1px solid rgba(220,160,80,.2);border-radius:6px;padding:12px;width:300px;max-height:60vh;overflow-y:auto;display:none;z-index:200;box-shadow:0 20px 60px rgba(0,0,0,.7)}
+[dir="rtl"] .market-popover{right:60px}[dir="ltr"] .market-popover{left:60px}
+.market-popover.open{display:block}
+.market-popover .note{font-size:11px;color:#9ca3af;padding:8px 10px;background:rgba(0,0,0,.4);border-radius:4px;margin-bottom:8px;line-height:1.6;border:1px solid rgba(220,160,80,.1)}
+.market-item{display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:4px;cursor:pointer;font-size:13px;color:#ccc}
+.market-item:hover{background:rgba(220,160,80,.08);color:#dca050}
+.market-item.active{background:rgba(220,160,80,.18);color:#dca050;font-weight:700}
+.market-item .flag{font-size:18px}
+.market-item small{color:#666;font-size:11px;margin-inline-start:auto}
+
+/* HERO */
+.hero{position:relative;z-index:5;text-align:center;padding:80px 60px 60px}
+.hero-eyebrow{font-size:11px;letter-spacing:8px;color:#dca050;margin-bottom:18px}
+.hero h1{font-size:84px;font-weight:400;line-height:1.05;margin-bottom:20px;letter-spacing:-1px}
+.hero h1 b{font-style:italic;color:#dca050;font-weight:400}
+.hero p{font-size:15px;color:rgba(255,255,255,.6);max-width:540px;margin:0 auto;line-height:1.9;font-weight:300}
+
+/* ROOM INDICATOR (CATEGORY TABS) */
+.rooms{display:flex;justify-content:center;flex-wrap:wrap;gap:6px;margin:36px 0 50px;position:relative;z-index:5;padding:0 20px}
+.room-tab{padding:7px 18px;border:1px solid rgba(220,160,80,.3);background:transparent;color:rgba(220,160,80,.7);font-size:10px;letter-spacing:2px;border-radius:99px;cursor:pointer;font-family:inherit;font-weight:700;text-transform:uppercase;transition:all .25s}
+.room-tab:hover{border-color:#dca050;color:#dca050}
+.room-tab.active{background:#dca050;color:#0a0a14;border-color:#dca050}
+
+/* SHOWROOM 3D GRID */
+.showroom{position:relative;z-index:5;padding:0 60px 60px;perspective:2000px}
+.floating-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:50px;transform-style:preserve-3d}
+.product{position:relative;cursor:pointer;text-align:center;transition:transform .6s cubic-bezier(.2,.8,.2,1)}
+.product:nth-child(3n+1){transform:translateZ(0) rotateY(-6deg)}
+.product:nth-child(3n+2){transform:translateZ(30px)}
+.product:nth-child(3n+3){transform:translateZ(0) rotateY(6deg)}
+.product:hover{transform:translateZ(80px) scale(1.04) rotateY(0)}
+.product-frame{position:relative;background:linear-gradient(135deg,rgba(220,160,80,.06),rgba(150,100,200,.06));border:1px solid rgba(220,160,80,.2);padding:28px;backdrop-filter:blur(8px);transition:all .6s;border-radius:2px}
+.product:hover .product-frame{border-color:#dca050;box-shadow:0 30px 80px rgba(220,160,80,.22)}
+.product-img{width:100%;height:260px;object-fit:cover;border-radius:2px;margin-bottom:20px;filter:drop-shadow(0 20px 30px rgba(0,0,0,.5))}
+.product .num{font-size:9px;letter-spacing:4px;color:#dca050;margin-bottom:10px}
+.product .name{font-size:22px;font-weight:400;margin-bottom:6px;font-style:italic;font-family:'Cormorant Garamond',serif}
+.product .desc{font-size:11px;color:rgba(255,255,255,.5);letter-spacing:1px;margin-bottom:14px;line-height:1.7}
+.product .price{font-size:14px;color:#dca050;letter-spacing:2px;font-weight:700;margin-bottom:14px}
+.product-actions{display:flex;gap:8px;justify-content:center}
+.p-act{flex:1;padding:10px;background:transparent;border:1px solid rgba(220,160,80,.35);color:#dca050;font-family:inherit;font-size:10px;letter-spacing:2px;cursor:pointer;font-weight:700;text-transform:uppercase;transition:all .2s}
+.p-act:hover{background:#dca050;color:#0a0a14}
+.p-act.solid{background:#dca050;color:#0a0a14}
+.p-act.solid:hover{background:transparent;color:#dca050}
+
+/* HUD */
+.hud-bar{position:relative;z-index:5;display:flex;justify-content:space-around;padding:36px 60px;margin:60px 0;border-block:1px solid rgba(220,160,80,.15);background:linear-gradient(180deg,rgba(220,160,80,.03),transparent)}
+.hud-item{text-align:center;color:rgba(255,255,255,.7);font-size:11px;letter-spacing:3px}
+.hud-item b{display:block;font-size:32px;color:#dca050;font-family:'Cormorant Garamond',serif;font-style:italic;margin-bottom:6px;font-weight:400}
+
+/* CONSULTATION SECTION */
+.consult{position:relative;z-index:5;padding:80px 60px;text-align:center;display:grid;grid-template-columns:1fr 1fr;gap:60px;align-items:center;max-width:1300px;margin:0 auto}
+.consult-text{text-align:start}
+.consult .eyebrow{font-size:11px;letter-spacing:6px;color:#dca050;margin-bottom:18px}
+.consult h2{font-size:48px;font-weight:400;line-height:1.2;margin-bottom:18px;font-family:'Cormorant Garamond',serif}
+.consult h2 b{font-style:italic;color:#dca050;font-weight:400}
+.consult p{font-size:14px;color:rgba(255,255,255,.6);line-height:2;margin-bottom:28px;font-weight:300}
+.consult-form{display:grid;gap:10px}
+.consult-form input,.consult-form textarea,.consult-form select{padding:14px 16px;background:rgba(20,20,40,.6);border:1px solid rgba(220,160,80,.15);color:#fff;font-family:inherit;font-size:13px;border-radius:2px;outline:none;transition:border-color .2s}
+.consult-form input:focus,.consult-form textarea:focus,.consult-form select:focus{border-color:#dca050}
+.consult-form .submit-btn{padding:16px;background:#dca050;color:#0a0a14;border:none;font-family:inherit;font-size:12px;letter-spacing:4px;font-weight:900;cursor:pointer;text-transform:uppercase;border-radius:2px;margin-top:8px}
+.consult-img{height:480px;border:1px solid rgba(220,160,80,.2);overflow:hidden;position:relative;border-radius:2px}
+.consult-img img{width:100%;height:100%;object-fit:cover;filter:brightness(.85)}
+.consult-img::after{content:'';position:absolute;inset:0;border:1px solid rgba(220,160,80,.3);margin:14px;pointer-events:none}
+.consult-ok{display:none;padding:30px;color:#dca050;font-family:'Cormorant Garamond',serif;font-style:italic;font-size:22px;text-align:center;border:1px solid rgba(220,160,80,.3)}
+
+/* REVIEWS */
+.reviews{position:relative;z-index:5;padding:80px 60px;text-align:center;border-top:1px solid rgba(220,160,80,.15)}
+.reviews .eyebrow{font-size:11px;letter-spacing:6px;color:#dca050;margin-bottom:14px}
+.reviews h2{font-size:36px;font-weight:400;margin-bottom:60px;font-family:'Cormorant Garamond',serif}
+.reviews h2 b{font-style:italic;color:#dca050}
+.r-stage{position:relative;max-width:760px;margin:0 auto;min-height:200px}
+.r-slide{position:absolute;inset:0;opacity:0;transition:opacity .6s;display:flex;flex-direction:column;align-items:center;justify-content:center}
+.r-slide.active{opacity:1}
+.r-stars{color:#dca050;font-size:18px;letter-spacing:5px;margin-bottom:18px}
+.r-text{font-size:20px;line-height:1.8;color:rgba(255,255,255,.85);font-style:italic;font-family:'Cormorant Garamond',serif;margin-bottom:18px}
+.r-name{font-size:11px;letter-spacing:4px;color:#888;text-transform:uppercase}
+.r-dots{display:flex;justify-content:center;gap:10px;margin-top:160px}
+.r-dot{width:7px;height:7px;border-radius:50%;background:rgba(220,160,80,.3);border:none;cursor:pointer}
+.r-dot.active{width:26px;border-radius:99px;background:#dca050}
+
+/* CART DRAWER */
+.cart-drawer{position:fixed;top:0;bottom:0;width:100%;max-width:440px;background:#0a0a14;z-index:300;transform:translateX(100%);transition:transform .4s;display:flex;flex-direction:column;box-shadow:-10px 0 50px rgba(0,0,0,.7);border-inline-start:1px solid rgba(220,160,80,.15)}
+[dir="ltr"] .cart-drawer{right:auto;left:0;transform:translateX(-100%)}
+[dir="rtl"] .cart-drawer{right:0}
+.cart-drawer.open{transform:translateX(0)}
+.cart-head{padding:24px;border-bottom:1px solid rgba(220,160,80,.15);display:flex;justify-content:space-between;align-items:center}
+.cart-head h3{font-family:'Cormorant Garamond',serif;font-style:italic;font-size:24px;color:#dca050;font-weight:400;letter-spacing:1px}
+.close-btn{background:transparent;border:1px solid rgba(220,160,80,.2);width:36px;height:36px;border-radius:50%;color:#fff;cursor:pointer;font-size:14px}
+.cart-body{flex:1;overflow-y:auto;padding:16px 24px}
+.cart-item{display:flex;gap:14px;padding:14px 0;border-bottom:1px solid rgba(220,160,80,.08);align-items:center}
+.cart-item img{width:70px;height:70px;border-radius:4px;object-fit:cover;flex-shrink:0}
+.ci-info{flex:1;min-width:0}
+.ci-name{font-size:14px;font-weight:400;margin-bottom:4px;font-family:'Cormorant Garamond',serif;font-style:italic;color:#fff}
+.ci-price{font-size:13px;color:#dca050;letter-spacing:1px}
+.qty-row{display:flex;align-items:center;gap:10px;margin-top:8px}
+.qty-btn{width:26px;height:26px;border:1px solid rgba(220,160,80,.2);background:transparent;color:#fff;border-radius:50%;font-size:13px;cursor:pointer}
+.qty-num{min-width:24px;text-align:center;font-weight:700;font-size:13px;color:#dca050}
+.cart-foot{padding:24px;border-top:1px solid rgba(220,160,80,.15);background:rgba(0,0,0,.4)}
+.total-row{display:flex;justify-content:space-between;margin-bottom:8px;font-size:13px;color:#9ca3af;letter-spacing:1px}
+.total-row.big{font-size:20px;color:#dca050;margin-top:12px;padding-top:12px;border-top:1px solid rgba(220,160,80,.15);font-weight:700}
+.checkout-btn{width:100%;padding:18px;background:#dca050;color:#0a0a14;border:none;font-family:inherit;font-size:13px;letter-spacing:4px;font-weight:900;cursor:pointer;text-transform:uppercase;margin-top:14px;border-radius:2px}
+.empty-cart{text-align:center;padding:60px 20px;color:#666}
+.empty-cart .ico{font-size:54px;margin-bottom:14px;color:#dca050}
+
+/* MODAL */
+.modal-bg{position:fixed;inset:0;background:rgba(0,0,0,.92);z-index:400;display:none;align-items:center;justify-content:center;padding:20px;backdrop-filter:blur(10px)}
+.modal-bg.open{display:flex}
+.modal{background:#0a0a14;border:1px solid rgba(220,160,80,.2);border-radius:4px;max-width:540px;width:100%;max-height:92vh;overflow-y:auto;padding:36px}
+.modal h3{font-family:'Cormorant Garamond',serif;font-size:30px;color:#dca050;font-style:italic;font-weight:400;margin-bottom:8px;text-align:center}
+.modal .sub{font-size:11px;color:#888;text-align:center;margin-bottom:22px;letter-spacing:3px;text-transform:uppercase}
+.modal input,.modal select,.modal textarea{width:100%;padding:14px 16px;background:rgba(20,20,40,.5);border:1px solid rgba(220,160,80,.15);color:#fff;font-family:inherit;font-size:14px;border-radius:2px;margin-bottom:10px;outline:none}
+.modal input:focus,.modal select:focus,.modal textarea:focus{border-color:#dca050}
+.pay-list{display:grid;gap:8px;margin-top:14px}
+.pay-option{padding:14px;border:1px solid rgba(220,160,80,.15);background:rgba(20,20,40,.4);border-radius:2px;display:flex;align-items:center;gap:12px;cursor:pointer;transition:all .2s}
+.pay-option:hover,.pay-option.selected{border-color:#dca050;background:rgba(220,160,80,.06)}
+.pay-option .icon{font-size:20px;flex-shrink:0;color:#dca050}
+.pay-option .info{flex:1;text-align:start}
+.pay-option .info b{display:block;font-size:13px;font-weight:700;margin-bottom:2px;color:#fff}
+.pay-option .info small{font-size:11px;color:#888}
+.pay-tag{padding:3px 8px;border-radius:99px;font-size:10px;font-weight:700;background:#dca050;color:#0a0a14;letter-spacing:1px}
+.success{text-align:center;padding:24px 10px}
+.success .ico{font-size:60px;color:#dca050;margin-bottom:14px}
+
+/* PRODUCT DETAIL MODAL */
+.detail-modal{max-width:920px;display:grid;grid-template-columns:1fr 1fr;gap:24px;padding:0}
+.detail-img{height:540px;overflow:hidden;background:#15152a}
+.detail-img img{width:100%;height:100%;object-fit:cover}
+.detail-info{padding:40px 36px;display:flex;flex-direction:column;justify-content:center}
+.detail-info .label{font-size:10px;letter-spacing:4px;color:#dca050;margin-bottom:10px}
+.detail-info h3{font-family:'Cormorant Garamond',serif;font-size:36px;color:#fff;font-style:italic;font-weight:400;margin-bottom:14px;text-align:start}
+.detail-info .meta{font-size:13px;color:#9ca3af;line-height:1.9;margin-bottom:24px}
+.detail-info .price{font-size:28px;color:#dca050;font-weight:700;letter-spacing:2px;margin-bottom:28px;font-family:'Cormorant Garamond',serif}
+.detail-info .acts{display:flex;gap:10px}
+.detail-info .acts button{flex:1;padding:14px;font-family:inherit;font-size:11px;letter-spacing:3px;cursor:pointer;font-weight:700;text-transform:uppercase;border-radius:2px;border:1px solid #dca050}
+.detail-info .acts .add-c{background:#dca050;color:#0a0a14}
+.detail-info .acts .wa{background:transparent;color:#dca050}
+
+/* FOOTER */
+.zx-footer{position:relative;z-index:5;background:rgba(0,0,0,.6);color:#888;padding:60px 60px 24px;direction:var(--dir,rtl);border-top:1px solid rgba(220,160,80,.15)}
+.zx-foot-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:48px;margin-bottom:36px;max-width:1300px;margin-inline:auto}
+.zx-foot-col h4{color:#dca050;font-family:'Cormorant Garamond',serif;font-style:italic;font-size:16px;font-weight:400;margin-bottom:18px;letter-spacing:1px}
+.zx-foot-col a,.zx-foot-col p{color:#888;font-size:12px;line-height:2;text-decoration:none;display:block;cursor:pointer;letter-spacing:1px}
+.zx-foot-col a:hover{color:#dca050}
+.zx-zitex-bar{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;padding-top:24px;border-top:1px solid rgba(220,160,80,.1);max-width:1300px;margin-inline:auto}
+.zx-copy{color:#444;font-size:11px;letter-spacing:1px}
+.zx-zitex-brand{display:flex;align-items:center;gap:8px;text-decoration:none;padding:6px 14px;border-radius:99px;background:rgba(220,160,80,.06);border:1px solid rgba(220,160,80,.2);color:#dca050}
+.zx-zitex-logo{width:22px;height:22px;border-radius:50%;background:#dca050;color:#0a0a14;display:flex;align-items:center;justify-content:center;font-weight:900;font-size:11px}
+.zx-zitex-text{display:flex;flex-direction:column;line-height:1.1}
+.zx-zitex-text small{color:#666;font-size:9px;letter-spacing:1px}
+.zx-zitex-text strong{color:#dca050;font-size:12px;font-weight:900;letter-spacing:2px}
+
+/* RESPONSIVE */
+@media(max-width:768px){
+  .nav,.hero,.showroom,.consult,.reviews,.hud-bar,.zx-footer{padding-inline:24px}
+  .nav-links{display:none}
+  .hero h1{font-size:42px}
+  .hero{padding:40px 24px}
+  .floating-grid{grid-template-columns:1fr;gap:30px}
+  .product:nth-child(n){transform:none}
+  .consult{grid-template-columns:1fr;gap:30px;padding-block:60px}
+  .consult-img{height:300px}
+  .consult h2{font-size:32px}
+  .hud-bar{flex-wrap:wrap;gap:24px;padding-block:24px}
+  .hud-item b{font-size:24px}
+  .zx-foot-grid{grid-template-columns:repeat(2,1fr);gap:24px}
+  .market-popover{right:24px!important;left:24px!important;width:auto}
+  .reviews h2{font-size:24px}
+  .r-text{font-size:16px}
+  .detail-modal{grid-template-columns:1fr}
+  .detail-img{height:280px}
+  .detail-info{padding:24px}
+  .rooms{gap:5px}
+  .room-tab{padding:6px 12px;font-size:9px}
+}
+</style></head>
+<body>
+<div class="ambient"></div>
+
+<!-- NAV -->
+<nav class="nav">
+  <div class="logo" id="brand">A R Y A</div>
+  <div class="nav-links">
+    <a onclick="scrollToEl('showroom-sec')" data-key="nav_collection">COLLECTION</a>
+    <a onclick="scrollToEl('consult-sec')" data-key="nav_consult">CONSULTATION</a>
+    <a onclick="scrollToEl('reviews-sec')" data-key="nav_reviews">REVIEWS</a>
+  </div>
+  <div class="nav-tools">
+    <button class="tool-btn" onclick="toggleLang()"><span id="lang-flag">🇸🇦</span> <span id="lang-label">عربي</span></button>
+    <button class="tool-btn" onclick="toggleMarket(event)" id="market-btn">🌍 <span id="market-label">السعودية</span></button>
+    <button class="cart-btn" onclick="openCart()">◆<span class="cart-badge" id="cart-badge">0</span></button>
+  </div>
+</nav>
+
+<!-- MARKET POPOVER -->
+<div class="market-popover" id="market-popover" onclick="event.stopPropagation()">
+  <div class="note" id="market-note">⚠️ تحديد السوق يحدد <b style="color:#dca050">اللغة + العملة + بوابات الدفع + الضرائب</b> تلقائياً.</div>
+  <div id="market-list"></div>
+</div>
+
+<!-- HERO -->
+<section class="hero">
+  <div class="hero-eyebrow" data-key="hero_eyebrow">PRIVATE COLLECTION · EST. 2026</div>
+  <h1 class="sf" data-key="hero_title_html">Where <b>timeless</b> meets desire</h1>
+  <p data-key="hero_sub">قطع منحوتة باليد. ذهب 18 قيراط. ألماس معتمد دولياً. نُقدّم لك فن المجوهرات في أرقى صوره — حيث تتحول كل قطعة إلى إرث.</p>
+</section>
+
+<!-- ROOMS / CATEGORY TABS -->
+<div class="rooms" id="rooms"></div>
+
+<!-- SHOWROOM 3D GRID -->
+<section class="showroom" id="showroom-sec">
+  <div class="floating-grid" id="grid"></div>
+</section>
+
+<!-- HUD BAR (STATS) -->
+<div class="hud-bar">
+  <div class="hud-item"><b>2026</b><span data-key="hud_since">EST.</span></div>
+  <div class="hud-item"><b>12K+</b><span data-key="hud_clients">PRIVATE CLIENTS</span></div>
+  <div class="hud-item"><b>18K</b><span data-key="hud_gold">GOLD PURITY</span></div>
+  <div class="hud-item"><b>GIA</b><span data-key="hud_certified">CERTIFIED</span></div>
+</div>
+
+<!-- CONSULTATION -->
+<section class="consult" id="consult-sec">
+  <div class="consult-text">
+    <div class="eyebrow" data-key="consult_eyebrow">PRIVATE CONSULTATION</div>
+    <h2 class="sf" data-key="consult_title_html">Book a <b>private</b> viewing</h2>
+    <p data-key="consult_sub">احجز جلسة خاصة في صالة العرض. سيستقبلك مستشار شخصي ليُعرض عليك مجموعتنا المختارة بدقة.</p>
+    <form class="consult-form" id="consult-form" onsubmit="submitConsult(event)">
+      <input id="cs-name" placeholder="Full Name" data-key-ph="name" required>
+      <input id="cs-phone" placeholder="Phone Number" data-key-ph="phone" required>
+      <input id="cs-date" type="date" required>
+      <select id="cs-interest">
+        <option value="rings" data-key-opt="cat_rings">Engagement Rings</option>
+        <option value="necklaces" data-key-opt="cat_necklaces">Necklaces</option>
+        <option value="bracelets" data-key-opt="cat_bracelets">Bracelets</option>
+        <option value="watches" data-key-opt="cat_watches">Watches</option>
+      </select>
+      <textarea id="cs-notes" placeholder="What are you looking for?" data-key-ph="notes_consult"></textarea>
+      <button type="submit" class="submit-btn" data-key="confirm_consult">REQUEST CONSULTATION →</button>
+    </form>
+    <div class="consult-ok" id="consult-ok">✓ <span data-key="consult_ok">Request received. Our concierge will call you within 24 hours.</span></div>
+  </div>
+  <div class="consult-img">
+    <img src="https://images.unsplash.com/photo-1605100804763-247f67b3557e?w=1200&q=85" alt="Showroom">
+  </div>
+</section>
+
+<!-- REVIEWS -->
+<section class="reviews" id="reviews-sec">
+  <div class="eyebrow" data-key="reviews_eyebrow">CLIENT STORIES</div>
+  <h2 class="sf" data-key="reviews_title_html">Trusted by <b>connoisseurs</b></h2>
+  <div class="r-stage" id="r-stage"></div>
+  <div class="r-dots" id="r-dots"></div>
+</section>
+
+<!-- CART DRAWER -->
+<div class="cart-drawer" id="cart-drawer">
+  <div class="cart-head"><h3 data-key="cart_title">Your Selection</h3><button class="close-btn" onclick="closeCart()">✕</button></div>
+  <div class="cart-body" id="cart-body"></div>
+  <div class="cart-foot" id="cart-foot" style="display:none">
+    <div class="total-row"><span data-key="subtotal">Subtotal</span><span id="subtotal">0</span></div>
+    <div class="total-row"><span data-key="tax">Tax</span><span id="tax-line">0</span></div>
+    <div class="total-row big"><span data-key="total">Total</span><span id="total">0</span></div>
+    <button class="checkout-btn" onclick="openCheckout()" data-key="checkout">SECURE CHECKOUT →</button>
+  </div>
+</div>
+
+<!-- PRODUCT DETAIL MODAL -->
+<div class="modal-bg" id="detail-modal-bg" onclick="if(event.target===this)closeDetail()">
+  <div class="modal detail-modal" id="detail-modal-body"></div>
+</div>
+
+<!-- CHECKOUT MODAL -->
+<div class="modal-bg" id="checkout-modal" onclick="if(event.target===this)closeCheckout()">
+  <div class="modal">
+    <div id="checkout-form">
+      <h3 data-key="checkout_title">Complete Purchase</h3>
+      <p class="sub" data-key="checkout_sub">SELECT PAYMENT</p>
+      <input id="ck-name" placeholder="Full Name" data-key-ph="name">
+      <input id="ck-phone" placeholder="Phone" data-key-ph="phone">
+      <input id="ck-addr" placeholder="Delivery Address" data-key-ph="address">
+      <div class="pay-list" id="pay-list"></div>
+    </div>
+    <div id="checkout-success" style="display:none" class="success">
+      <div class="ico">✓</div>
+      <h3 data-key="order_success">Purchase Confirmed</h3>
+      <p style="color:#888;margin-top:8px" data-key="order_success_sub">A concierge will reach out to arrange secure delivery</p>
+      <button class="checkout-btn" onclick="closeCheckout()" style="margin-top:18px" data-key="close">CLOSE</button>
+    </div>
+  </div>
+</div>
+
+<!-- FOOTER -->
+<footer class="zx-footer">
+  <div class="zx-foot-grid">
+    <div class="zx-foot-col">
+      <h4 data-key="quick_links">Quick Links</h4>
+      <a onclick="scrollToEl('showroom-sec')" data-key="nav_collection">Collection</a>
+      <a onclick="scrollToEl('consult-sec')" data-key="nav_consult">Consultation</a>
+      <a onclick="scrollToEl('reviews-sec')" data-key="nav_reviews">Reviews</a>
+    </div>
+    <div class="zx-foot-col" id="payments-footer"><h4 data-key="payments">Payments</h4></div>
+    <div class="zx-foot-col">
+      <h4 data-key="visit">Visit Us</h4>
+      <p data-key="hours_weekday">Sun–Thu · 10AM – 10PM</p>
+      <p data-key="hours_weekend">Fri–Sat · 4PM – Midnight</p>
+      <p data-key="appointment_only">By appointment only</p>
+    </div>
+    <div class="zx-foot-col">
+      <h4 data-key="contact">Contact</h4>
+      <a id="phone-link">📞 +966 51 234 5678</a>
+      <a id="whatsapp-link">💬 WhatsApp</a>
+      <a id="email-link">✉️ private@arya.sa</a>
+      <a data-key="address">📍 Boulevard, Riyadh, SA</a>
+    </div>
+  </div>
+  <div class="zx-zitex-bar">
+    <div class="zx-copy">© 2026 ARYA — <span data-key="rights">All rights reserved</span></div>
+    <a class="zx-zitex-brand" href="https://zitex.com" target="_blank">
+      <div class="zx-zitex-logo">Z</div>
+      <div class="zx-zitex-text"><small data-key="made_by">CRAFTED BY</small><strong>ZITEX</strong></div>
+    </a>
+  </div>
+</footer>
+
+<script>
+const API=window.location.origin;
+const RATES={SAR:1,AED:0.98,KWD:0.082,QAR:0.97,BHD:0.10,OMR:0.103,IQD:350,SYP:3400,JOD:0.19,LBP:24000,EGP:13,IRR:11200,YER:67,ILS:1,CNY:1.93,JPY:40,KRW:360,INR:22,USD:0.267,GBP:0.21,EUR:0.25,CHF:0.24,SEK:2.8,RUB:24,TRY:9.1,MAD:2.7,DZD:36,TND:0.83,LYD:1.3,SDG:160,PKR:75,BDT:32,IDR:4200,MYR:1.25,THB:9.5,PHP:15.3,VND:6500,CAD:0.36,MXN:5.4,BRL:1.6,ARS:270,ZAR:5.0,NGN:430,KES:34,AUD:0.41};
+
+const PRODUCTS=[
+  {id:'p1',cat:'rings',ar:'خاتم الأميرة',en:'The Princess',descAr:'ذهب أبيض 18 قيراط · ألماس مركزي 1.2 قيراط · 36 ماسة جانبية',descEn:'18k white gold · 1.2ct center diamond · 36 side stones',sar:48500,img:'https://images.unsplash.com/photo-1605100804763-247f67b3557e?w=800&q=85'},
+  {id:'p2',cat:'necklaces',ar:'قلادة المساء',en:'Evening Star',descAr:'ذهب أصفر 18 قيراط · زمرد كولومبي · ألماس F-VVS',descEn:'18k yellow gold · Colombian emerald · F-VVS diamonds',sar:62800,img:'https://images.unsplash.com/photo-1611591437281-460bfbe1220a?w=800&q=85'},
+  {id:'p3',cat:'rings',ar:'خاتم الإمبراطورة',en:'Empress',descAr:'بلاتين · ياقوت بورمي 2.5 قيراط · 24 ماسة',descEn:'Platinum · Burmese ruby 2.5ct · 24 diamonds',sar:89500,img:'https://images.unsplash.com/photo-1602173574767-37ac01994b2a?w=800&q=85'},
+  {id:'p4',cat:'bracelets',ar:'سوار الفجر',en:'Dawn',descAr:'ذهب وردي 18 قيراط · 48 ماسة كاملة',descEn:'18k rose gold · 48 full-cut diamonds',sar:34200,img:'https://images.unsplash.com/photo-1573408301185-9146fe634ad0?w=800&q=85'},
+  {id:'p5',cat:'watches',ar:'ساعة المؤسس',en:'The Founder',descAr:'ساعة سويسرية · ذهب 18 قيراط · إطار مرصع · ضمان 5 سنوات',descEn:'Swiss movement · 18k gold · diamond bezel · 5-year warranty',sar:128000,img:'https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=800&q=85'},
+  {id:'p6',cat:'necklaces',ar:'قلادة الجوهرة',en:'The Gem',descAr:'ذهب أبيض · سلسلة ناعمة · معلّقة قطرة دموع',descEn:'White gold · fine chain · tear-drop pendant',sar:28500,img:'https://images.unsplash.com/photo-1599643478518-a784e5dc4c8f?w=800&q=85'},
+  {id:'p7',cat:'bracelets',ar:'إسوارة الإرث',en:'Legacy',descAr:'ذهب أصفر تقليدي · حفر يدوي · إصدار محدود',descEn:'Traditional yellow gold · hand-engraved · limited edition',sar:18900,img:'https://images.unsplash.com/photo-1620656798932-902c3dc12db5?w=800&q=85'},
+  {id:'p8',cat:'watches',ar:'ساعة الديبلوماسي',en:'Diplomat',descAr:'ستانلس ستيل · زجاج ياقوتي · حركة أوتوماتيكية',descEn:'Stainless steel · sapphire crystal · automatic',sar:42000,img:'https://images.unsplash.com/photo-1547996160-81dfa63595aa?w=800&q=85'},
+  {id:'p9',cat:'rings',ar:'خاتم الياسمين',en:'Jasmine',descAr:'ذهب أبيض · ألماس باجيت · تصميم نباتي رقيق',descEn:'White gold · baguette diamonds · delicate floral',sar:21500,img:'https://images.unsplash.com/photo-1535632066927-ab7c9ab60908?w=800&q=85'},
+];
+
+const CATS=[
+  {id:'all',ar:'الكل',en:'ALL'},
+  {id:'rings',ar:'الخواتم',en:'RINGS'},
+  {id:'necklaces',ar:'القلائد',en:'NECKLACES'},
+  {id:'bracelets',ar:'الأساور',en:'BRACELETS'},
+  {id:'watches',ar:'الساعات',en:'WATCHES'},
+];
+
+const REVIEWS=[
+  {ar:'كل قطعة من آريا هي تحفة. الاهتمام بالتفاصيل لا يُضاهى.',en:'Every piece from Arya is a masterpiece. Attention to detail is unmatched.',name:'Princess L. · الأميرة لطيفة'},
+  {ar:'الخدمة الخاصة والكونسيرج جعلتني أشعر بأنني الشخص الوحيد في المتجر.',en:'The private concierge made me feel like I was the only client in the world.',name:'Mr. Ali · السيد علي'},
+  {ar:'استثمار حقيقي في الجمال. كل قطعة تحمل قصة.',en:'A true investment in beauty. Each piece carries a story.',name:'Dr. Hala · د. هلا'},
+];
+
+const TRANS={
+  ar:{
+    brand:'A R Y A',
+    nav_collection:'المجموعة',nav_consult:'الاستشارة',nav_reviews:'الآراء',
+    hero_eyebrow:'مجموعة خاصة · تأسست 2026',
+    hero_title_html:'حيث يلتقي <b>الخلود</b> بالشغف',
+    hero_sub:'قطع منحوتة باليد. ذهب 18 قيراط. ألماس معتمد دولياً. نُقدّم لك فن المجوهرات في أرقى صوره — حيث تتحول كل قطعة إلى إرث.',
+    cat_all:'الكل',cat_rings:'الخواتم',cat_necklaces:'القلائد',cat_bracelets:'الأساور',cat_watches:'الساعات',
+    hud_since:'منذ',hud_clients:'عميل خاص',hud_gold:'ذهب صافٍ',hud_certified:'معتمد',
+    consult_eyebrow:'استشارة خاصة',
+    consult_title_html:'احجز جلسة <b>خاصة</b>',
+    consult_sub:'احجز جلسة خاصة في صالة العرض. سيستقبلك مستشار شخصي ليُعرض عليك مجموعتنا المختارة بدقة.',
+    name:'الاسم الكامل',phone:'رقم الجوال',address:'عنوان التوصيل',notes_consult:'ماذا تبحث عن؟',
+    confirm_consult:'طلب استشارة ←',consult_ok:'تم استلام طلبك. سيتواصل معك الكونسيرج خلال 24 ساعة.',
+    reviews_eyebrow:'قصص عملائنا',reviews_title_html:'يثق بنا <b>الذوّاقون</b>',
+    cart_title:'اختياراتك',subtotal:'المجموع',tax:'الضريبة',total:'الإجمالي',checkout:'إتمام الشراء ←',
+    checkout_title:'إتمام الشراء',checkout_sub:'اختر طريقة الدفع',order_success:'تم تأكيد الشراء',order_success_sub:'سيتواصل معك الكونسيرج لترتيب التسليم الآمن',close:'إغلاق',
+    quick_links:'روابط سريعة',payments:'طرق الدفع',visit:'زيارتنا',contact:'تواصل معنا',
+    hours_weekday:'الأحد–الخميس · 10ص – 10م',hours_weekend:'الجمعة–السبت · 4م – منتصف الليل',appointment_only:'بموعد مسبق فقط',
+    address:'📍 البوليفارد، الرياض',rights:'جميع الحقوق محفوظة',made_by:'صُنع بواسطة',
+    cart_empty:'اختياراتك فارغة',cart_empty_sub:'استكشف المجموعة الخاصة',
+    add_cart:'أضف للسلة',whatsapp:'استشر عبر واتساب',view_detail:'التفاصيل',
+  },
+  en:{
+    brand:'A R Y A',
+    nav_collection:'COLLECTION',nav_consult:'CONSULTATION',nav_reviews:'REVIEWS',
+    hero_eyebrow:'PRIVATE COLLECTION · EST. 2026',
+    hero_title_html:'Where <b>timeless</b> meets desire',
+    hero_sub:'Hand-sculpted pieces. 18k gold. Internationally certified diamonds. We present the art of fine jewelry at its purest — where every piece becomes a legacy.',
+    cat_all:'ALL',cat_rings:'RINGS',cat_necklaces:'NECKLACES',cat_bracelets:'BRACELETS',cat_watches:'WATCHES',
+    hud_since:'EST.',hud_clients:'PRIVATE CLIENTS',hud_gold:'GOLD PURITY',hud_certified:'CERTIFIED',
+    consult_eyebrow:'PRIVATE CONSULTATION',
+    consult_title_html:'Book a <b>private</b> viewing',
+    consult_sub:'Reserve a private session in our showroom. A personal advisor will receive you and curate a selection with precision.',
+    name:'Full Name',phone:'Phone Number',address:'Delivery Address',notes_consult:'What are you looking for?',
+    confirm_consult:'REQUEST CONSULTATION →',consult_ok:'Request received. Our concierge will call you within 24 hours.',
+    reviews_eyebrow:'CLIENT STORIES',reviews_title_html:'Trusted by <b>connoisseurs</b>',
+    cart_title:'Your Selection',subtotal:'Subtotal',tax:'Tax',total:'Total',checkout:'SECURE CHECKOUT →',
+    checkout_title:'Complete Purchase',checkout_sub:'SELECT PAYMENT',order_success:'Purchase Confirmed',order_success_sub:'A concierge will reach out to arrange secure delivery',close:'CLOSE',
+    quick_links:'Quick Links',payments:'Payments',visit:'Visit Us',contact:'Contact',
+    hours_weekday:'Sun–Thu · 10AM – 10PM',hours_weekend:'Fri–Sat · 4PM – Midnight',appointment_only:'By appointment only',
+    address:'📍 Boulevard, Riyadh, SA',rights:'All rights reserved',made_by:'CRAFTED BY',
+    cart_empty:'Your selection is empty',cart_empty_sub:'Explore the private collection',
+    add_cart:'ADD TO CART',whatsapp:'WHATSAPP CONSULT',view_detail:'VIEW DETAILS',
+  }
+};
+
+let CURRENT_LANG='ar';
+let CURRENT_MARKET=null;
+let CART=JSON.parse(localStorage.getItem('zx_arya_cart')||'[]');
+let activeCat='all';
+let PAYMENT_CHOSEN=null;
+
+// ═══════════════════════ INIT ═══════════════════════
+async function init(){
+  let mid='sa';
+  try{const r=await fetch(API+'/api/ready-sites/detect-market');const d=await r.json();mid=d.market_id||'sa';}catch(_){}
+  await loadMarket(mid);
+  buildMarketList();
+  renderUI();
+  renderRooms();
+  renderProducts();
+  renderReviews();
+  updateCart();
+  document.body.addEventListener('click',()=>document.getElementById('market-popover').classList.remove('open'));
+  setInterval(()=>goReview(revIdx+1),5500);
+}
+
+async function loadMarket(mid){
+  const r=await fetch(API+'/api/ready-sites/market/'+mid);
+  CURRENT_MARKET=await r.json();
+  if(!['ar','en'].includes(CURRENT_LANG))CURRENT_LANG='en';
+  applyLocale();
+}
+
+function applyLocale(){
+  document.documentElement.style.setProperty('--font',`'${CURRENT_MARKET.font}',sans-serif`);
+  document.documentElement.style.setProperty('--dir',CURRENT_MARKET.direction);
+  document.documentElement.dir=CURRENT_LANG==='ar'?'rtl':'ltr';
+  document.documentElement.lang=CURRENT_LANG;
+  const lf=document.getElementById('lang-flag');if(lf)lf.textContent=CURRENT_LANG==='ar'?'🇸🇦':'🇬🇧';
+  const ll=document.getElementById('lang-label');if(ll)ll.textContent=CURRENT_LANG==='ar'?'العربية':'English';
+  const ml=document.getElementById('market-label');if(ml)ml.textContent=CURRENT_MARKET.name_ar||CURRENT_MARKET.name_en;
+}
+
+function toggleLang(){
+  CURRENT_LANG=CURRENT_LANG==='ar'?'en':'ar';
+  applyLocale();renderUI();renderRooms();renderProducts();renderReviews();updateCart();
+}
+function toggleMarket(e){e.stopPropagation();document.getElementById('market-popover').classList.toggle('open');}
+async function buildMarketList(){
+  const r=await fetch(API+'/api/ready-sites/markets');const d=await r.json();
+  document.getElementById('market-list').innerHTML=d.markets.map(m=>`<div class="market-item ${m.id===CURRENT_MARKET.id?'active':''}" onclick="switchMarket('${m.id}')"><span class="flag">${m.flag}</span><span>${m.name_ar}</span><small>${m.currency}</small></div>`).join('');
+}
+async function switchMarket(id){
+  await loadMarket(id);
+  document.getElementById('market-popover').classList.remove('open');
+  buildMarketList();renderUI();renderRooms();renderProducts();renderReviews();updateCart();
+}
+
+function renderUI(){
+  const t=TRANS[CURRENT_LANG]||TRANS.en;
+  document.querySelectorAll('[data-key]').forEach(el=>{
+    const k=el.getAttribute('data-key');
+    if(t[k]!==undefined){
+      if(k.endsWith('_html'))el.innerHTML=t[k];else el.textContent=t[k];
+    }
+  });
+  document.querySelectorAll('[data-key-ph]').forEach(el=>{
+    const k=el.getAttribute('data-key-ph');if(t[k])el.placeholder=t[k];
+  });
+  document.querySelectorAll('[data-key-opt]').forEach(el=>{
+    const k=el.getAttribute('data-key-opt');if(t[k])el.textContent=t[k];
+  });
+  const b=CURRENT_MARKET;
+  const pf=document.getElementById('payments-footer');
+  pf.innerHTML='<h4>'+t.payments+'</h4>'+(b.payment_gateways||[]).slice(0,6).map(g=>`<a>${g.name}</a>`).join('');
+  const ph=document.getElementById('phone-link');if(ph)ph.innerHTML='📞 '+(b.country_code?b.country_code+' 51 234 5678':'+966 51 234 5678');
+  const wa=document.getElementById('whatsapp-link');if(wa)wa.innerHTML='💬 '+(b.chat_apps?.[0]?.name||'WhatsApp');
+}
+
+function renderRooms(){
+  document.getElementById('rooms').innerHTML=CATS.map(c=>`<button class="room-tab ${c.id===activeCat?'active':''}" onclick="filterCat('${c.id}')">${CURRENT_LANG==='ar'?c.ar:c.en}</button>`).join('');
+}
+function filterCat(id){activeCat=id;renderRooms();renderProducts();}
+
+function formatPrice(sar){
+  const rate=RATES[CURRENT_MARKET.currency]||1;
+  const v=sar*rate;
+  const noDec=['IQD','SYP','LBP','IRR','KRW','JPY','VND','IDR','UZS'];
+  return noDec.includes(CURRENT_MARKET.currency)?Math.round(v).toLocaleString():v.toLocaleString(undefined,{maximumFractionDigits:2});
+}
+
+function renderProducts(){
+  const t=TRANS[CURRENT_LANG]||TRANS.en;
+  const filtered=activeCat==='all'?PRODUCTS:PRODUCTS.filter(p=>p.cat===activeCat);
+  const grid=document.getElementById('grid');
+  if(!filtered.length){grid.innerHTML=`<div style="grid-column:1/-1;text-align:center;padding:80px;color:#666"><div style="font-size:48px;color:#dca050">∅</div></div>`;return;}
+  grid.innerHTML=filtered.map((p,i)=>{
+    const name=CURRENT_LANG==='ar'?p.ar:p.en;
+    const desc=CURRENT_LANG==='ar'?p.descAr:p.descEn;
+    return `<div class="product" onclick="openDetail('${p.id}')"><div class="product-frame"><img class="product-img" src="${p.img}" alt="${name}"><div class="num">N° ${String(i+1).padStart(2,'0')}</div><div class="name">${name}</div><div class="desc">${desc}</div><div class="price">${CURRENT_MARKET.symbol} ${formatPrice(p.sar)}</div><div class="product-actions" onclick="event.stopPropagation()"><button class="p-act" onclick="openDetail('${p.id}')">${t.view_detail}</button><button class="p-act solid" onclick="addToCart('${p.id}')">+</button></div></div></div>`;
+  }).join('');
+}
+
+// ═══════════════════════ DETAIL MODAL ═══════════════════════
+function openDetail(pid){
+  const p=PRODUCTS.find(x=>x.id===pid);if(!p)return;
+  const t=TRANS[CURRENT_LANG]||TRANS.en;
+  const name=CURRENT_LANG==='ar'?p.ar:p.en;
+  const desc=CURRENT_LANG==='ar'?p.descAr:p.descEn;
+  document.getElementById('detail-modal-body').innerHTML=`
+    <div class="detail-img"><img src="${p.img}" alt="${name}"></div>
+    <div class="detail-info">
+      <div class="label">N° ${p.id.toUpperCase()}</div>
+      <h3>${name}</h3>
+      <div class="meta">${desc}</div>
+      <div class="price">${CURRENT_MARKET.symbol} ${formatPrice(p.sar)}</div>
+      <div class="acts">
+        <button class="add-c" onclick="addToCart('${p.id}');closeDetail()">${t.add_cart}</button>
+        <button class="wa" onclick="contactWA('${name}')">${t.whatsapp}</button>
+      </div>
+    </div>`;
+  document.getElementById('detail-modal-bg').classList.add('open');
+}
+function closeDetail(){document.getElementById('detail-modal-bg').classList.remove('open')}
+function contactWA(name){
+  const phone=(CURRENT_MARKET.country_code||'+966').replace(/\D/g,'');
+  const msg=encodeURIComponent((CURRENT_LANG==='ar'?'مرحباً، أود الاستفسار عن: ':'Hi, I would like to inquire about: ')+name);
+  window.open(`https://wa.me/${phone}512345678?text=${msg}`,'_blank');
+}
+
+// ═══════════════════════ REVIEWS ═══════════════════════
+let revIdx=0;
+function renderReviews(){
+  document.getElementById('r-stage').innerHTML=REVIEWS.map((r,i)=>`<div class="r-slide ${i===0?'active':''}"><div class="r-stars">★ ★ ★ ★ ★</div><div class="r-text">"${CURRENT_LANG==='ar'?r.ar:r.en}"</div><div class="r-name">— ${r.name}</div></div>`).join('');
+  document.getElementById('r-dots').innerHTML=REVIEWS.map((_,i)=>`<button class="r-dot ${i===0?'active':''}" onclick="goReview(${i})"></button>`).join('');
+  revIdx=0;
+}
+function goReview(i){
+  const sl=document.querySelectorAll('.r-slide'),dt=document.querySelectorAll('.r-dot');
+  if(!sl.length)return;
+  sl[revIdx]?.classList.remove('active');dt[revIdx]?.classList.remove('active');
+  revIdx=i%sl.length;
+  sl[revIdx]?.classList.add('active');dt[revIdx]?.classList.add('active');
+}
+
+// ═══════════════════════ CART ═══════════════════════
+function addToCart(pid){
+  const ex=CART.find(c=>c.id===pid);
+  if(ex)ex.qty++;else CART.push({id:pid,qty:1});
+  saveCart();openCart();
+}
+function changeQty(pid,d){const it=CART.find(c=>c.id===pid);if(!it)return;it.qty+=d;if(it.qty<=0)CART=CART.filter(c=>c.id!==pid);saveCart();}
+function saveCart(){localStorage.setItem('zx_arya_cart',JSON.stringify(CART));updateCart();}
+function updateCart(){
+  const t=TRANS[CURRENT_LANG]||TRANS.en;
+  const body=document.getElementById('cart-body'),foot=document.getElementById('cart-foot');
+  const totalQty=CART.reduce((s,c)=>s+c.qty,0);
+  document.getElementById('cart-badge').textContent=totalQty;
+  if(!CART.length){body.innerHTML=`<div class="empty-cart"><div class="ico">◆</div><b style="color:#dca050;font-family:'Cormorant Garamond',serif;font-style:italic;font-size:22px">${t.cart_empty}</b><p style="margin-top:8px;font-size:13px">${t.cart_empty_sub}</p></div>`;foot.style.display='none';return;}
+  body.innerHTML=CART.map(c=>{
+    const p=PRODUCTS.find(x=>x.id===c.id);if(!p)return'';
+    const n=CURRENT_LANG==='ar'?p.ar:p.en;
+    return `<div class="cart-item"><img src="${p.img}"><div class="ci-info"><div class="ci-name">${n}</div><div class="ci-price">${CURRENT_MARKET.symbol} ${formatPrice(p.sar*c.qty)}</div><div class="qty-row"><button class="qty-btn" onclick="changeQty('${p.id}',-1)">−</button><span class="qty-num">${c.qty}</span><button class="qty-btn" onclick="changeQty('${p.id}',1)">+</button></div></div></div>`;
+  }).join('');
+  const sub=CART.reduce((s,c)=>{const p=PRODUCTS.find(x=>x.id===c.id);return s+(p?p.sar*c.qty:0);},0);
+  const taxRate=typeof CURRENT_MARKET.tax?.rate==='number'?CURRENT_MARKET.tax.rate:0;
+  const tax=sub*(taxRate/100);
+  document.getElementById('subtotal').textContent=`${CURRENT_MARKET.symbol} ${formatPrice(sub)}`;
+  document.getElementById('tax-line').textContent=`${CURRENT_MARKET.symbol} ${formatPrice(tax)}`;
+  document.getElementById('total').textContent=`${CURRENT_MARKET.symbol} ${formatPrice(sub+tax)}`;
+  foot.style.display='block';
+}
+function openCart(){document.getElementById('cart-drawer').classList.add('open')}
+function closeCart(){document.getElementById('cart-drawer').classList.remove('open')}
+
+// ═══════════════════════ CHECKOUT ═══════════════════════
+function openCheckout(){
+  if(!CART.length)return;
+  document.getElementById('checkout-modal').classList.add('open');
+  document.getElementById('checkout-form').style.display='block';
+  document.getElementById('checkout-success').style.display='none';
+  const pays=CURRENT_MARKET.payment_gateways||[];
+  const t=TRANS[CURRENT_LANG]||TRANS.en;
+  const icons={card:'💳',wallet:'📱',bnpl:'🕐',cash:'💵',transfer:'🏦',qr:'📲',gateway:'🔌'};
+  document.getElementById('pay-list').innerHTML=pays.map(g=>`<div class="pay-option" onclick="choosePay('${g.id}',this)"><div class="icon">${icons[g.type]||'💳'}</div><div class="info"><b>${g.name}</b><small>${g.tagline||''}</small></div>${g.popular?'<div class="pay-tag">★</div>':''}</div>`).join('')+`<button class="checkout-btn" onclick="completeOrder()" style="margin-top:14px">${t.checkout}</button>`;
+}
+function closeCheckout(){document.getElementById('checkout-modal').classList.remove('open')}
+function choosePay(id,el){PAYMENT_CHOSEN=id;document.querySelectorAll('.pay-option').forEach(e=>e.classList.remove('selected'));el.classList.add('selected');}
+function completeOrder(){
+  if(!PAYMENT_CHOSEN){alert(CURRENT_LANG==='ar'?'اختر طريقة الدفع':'Please select a payment method');return;}
+  document.getElementById('checkout-form').style.display='none';
+  document.getElementById('checkout-success').style.display='block';
+  CART=[];saveCart();
+}
+
+// ═══════════════════════ CONSULTATION ═══════════════════════
+function submitConsult(e){
+  e.preventDefault();
+  document.getElementById('consult-form').style.display='none';
+  document.getElementById('consult-ok').style.display='block';
+}
+
+function scrollToEl(id){const el=document.getElementById(id);if(el)el.scrollIntoView({behavior:'smooth',block:'start'})}
+
+init();
+</script>
+</body></html>
