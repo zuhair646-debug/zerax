@@ -1048,8 +1048,17 @@ MARKET_PACKS: Dict[str, Dict[str, Any]] = {
 
 
 def get_market(market_id: str) -> Dict[str, Any] | None:
-    """Get a single market pack by ID."""
-    return MARKET_PACKS.get(market_id.lower())
+    """Get a single market pack by ID. Always includes English as a fallback language."""
+    pack = MARKET_PACKS.get(market_id.lower())
+    if pack:
+        # Inject "supported_languages" — local + English fallback (always available).
+        local_lang = pack.get("language", "en")
+        supported = [local_lang]
+        if local_lang != "en":
+            supported.append("en")
+        # Return a copy with supported_languages added (without mutating the source)
+        return {**pack, "supported_languages": supported}
+    return None
 
 
 def list_markets() -> List[Dict[str, Any]]:
