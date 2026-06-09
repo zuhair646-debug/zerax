@@ -3546,6 +3546,9 @@ try:
     from modules.care_portal import create_care_router
     _care_router = create_care_router(db, get_current_user)
     app.include_router(_care_router)
+    # Real AI Image Studio (Gemini Nano Banana)
+    from routers.image_studio_router import router as _image_studio_router
+    app.include_router(_image_studio_router)
     logging.getLogger(__name__).info("Care Portal module registered")
 except Exception as _care_e:
     logging.getLogger(__name__).error(f"Failed to register care_portal module: {_care_e}", exc_info=True)

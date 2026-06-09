@@ -1860,11 +1860,10 @@ function pickVariety(pools,count,seed){
 function generateAI(){
   const prompt=document.getElementById('ai-prompt').value.trim();
   if(!prompt){alert(CURRENT_LANG==='ar'?'اكتب وصف الصورة':'Describe first');return;}
-  // Step 1: Smart clarification — pause if prompt is vague
   if(maybeClarify(prompt))return;
   runGeneration();
 }
-function runGeneration(){
+async function runGeneration(){
   const prompt=document.getElementById('ai-prompt').value.trim();
   const cost=STUDIO_MODE==='video'?15:(STUDIO_COUNT*5);
   if(ZERAX_CREDITS<cost){document.getElementById('topup-banner').style.display='flex';return;}
@@ -1876,51 +1875,67 @@ function runGeneration(){
   document.getElementById('gen-multi-grid').style.display='none';
   document.getElementById('gen-multi-grid').innerHTML='';
   const size=getTargetSize(STUDIO_TARGET);
-  setTimeout(async ()=>{
-    document.getElementById('gen-loading').classList.remove('show');
-    document.getElementById('gen-preview').classList.add('show');
-    if(STUDIO_MODE==='video'){
+
+  if(STUDIO_MODE==='video'){
+    // Video generation still uses sample (no Gemini video API yet)
+    setTimeout(()=>{
+      document.getElementById('gen-loading').classList.remove('show');
+      document.getElementById('gen-preview').classList.add('show');
       GEN_VIDEO=VIDEO_SAMPLES[0];
       const v=document.getElementById('gen-preview-video');
       v.src=GEN_VIDEO;v.style.display='block';v.load();v.play().catch(()=>{});
-    } else {
-      let themeIds=detectThemeIds(prompt);
-      if(!themeIds.length && STUDIO_TARGET.startsWith('product:')){
-        const pid=STUDIO_TARGET.split(':')[1];
-        const p=PRODUCTS.find(x=>x.id===pid);
-        if(p){
-          const catMap={electronics:'phone',fashion:'default',beauty:'default',home:'default'};
-          themeIds=[catMap[p.cat]||'default'];
-        }
-      }
-      if(!themeIds.length)themeIds=['default'];
-      // Determine effective style: respect person toggle
-      const effectiveStyle=STUDIO_PERSON?'lifestyle':(STUDIO_STYLE==='lifestyle'?'white':STUDIO_STYLE);
-      const stylePool=STYLE_POOLS[effectiveStyle]||STYLE_POOLS.white;
-      const pools=themeIds.map(id=>stylePool[id]||stylePool.default).filter(p=>p&&p.length);
-      const seed=Math.abs(prompt.split('').reduce((s,c)=>s+c.charCodeAt(0),0));
-      let urls=pickVariety(pools,STUDIO_COUNT,seed);
-      urls=urls.map(u=>unsplashTransform(u,size));
-      // Apply background color (visual tinting via canvas)
-      if(STUDIO_BG!=='white' && effectiveStyle==='white'){
-        urls=await Promise.all(urls.map(u=>applyBgColor(u,STUDIO_BG)));
-      }
-      if(STUDIO_LOGO)urls=await Promise.all(urls.map(u=>stampLogo(u,STUDIO_LOGO)));
-      GEN_MULTI=urls;GEN_RESULT=urls[0];
-      if(STUDIO_COUNT===1){
-        const img=document.getElementById('gen-preview-img');
-        img.src=urls[0];img.style.display='block';
-      } else {
-        const grid=document.getElementById('gen-multi-grid');
-        grid.style.display='grid';
-        grid.innerHTML=urls.map((u,i)=>`<img src="${u}" data-i="${i}" onclick="pickMultiVariant(${i},this)" alt="variant ${i+1}" class="${i===0?'picked':''}">`).join('');
-      }
+      document.getElementById('gen-btn').disabled=false;
+      ZERAX_CREDITS-=cost;
+      localStorage.setItem('zx_credits',String(ZERAX_CREDITS));
+      document.getElementById('zerax-credits').textContent=ZERAX_CREDITS;
+    },1500);
+    return;
+  }
+
+  // ═══ REAL AI: call /api/image-studio/generate (Gemini Nano Banana) ═══
+  try {
+    const angles=[...STUDIO_ANGLES];
+    const res=await fetch(API+'/api/image-studio/generate',{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({
+        prompt,
+        width:size.w,
+        height:size.h,
+        count:STUDIO_COUNT,
+        style:STUDIO_STYLE,
+        bg_color:STUDIO_BG,
+        person_holding:STUDIO_PERSON,
+        angles:angles.length?angles:undefined,
+      })
+    });
+    if(!res.ok){
+      const err=await res.json().catch(()=>({detail:'Network error'}));
+      throw new Error(err.detail||'Generation failed');
     }
-    document.getElementById('gen-btn').disabled=false;
-    ZERAX_CREDITS-=cost;
+    const data=await res.json();
+    let urls=data.images||[];
+    if(STUDIO_LOGO)urls=await Promise.all(urls.map(u=>stampLogo(u,STUDIO_LOGO)));
+    GEN_MULTI=urls;GEN_RESULT=urls[0];
+    document.getElementById('gen-loading').classList.remove('show');
+    document.getElementById('gen-preview').classList.add('show');
+    if(STUDIO_COUNT===1){
+      const img=document.getElementById('gen-preview-img');
+      img.src=urls[0];img.style.display='block';
+    } else {
+      const grid=document.getElementById('gen-multi-grid');
+      grid.style.display='grid';
+      grid.innerHTML=urls.map((u,i)=>`<img src="${u}" data-i="${i}" onclick="pickMultiVariant(${i},this)" alt="variant ${i+1}" class="${i===0?'picked':''}">`).join('');
+    }
+    ZERAX_CREDITS-=(data.cost||cost);
     localStorage.setItem('zx_credits',String(ZERAX_CREDITS));
     document.getElementById('zerax-credits').textContent=ZERAX_CREDITS;
-  },1500);
+  } catch(e) {
+    document.getElementById('gen-loading').classList.remove('show');
+    alert((CURRENT_LANG==='ar'?'فشل التوليد: ':'Generation failed: ')+e.message);
+  } finally {
+    document.getElementById('gen-btn').disabled=false;
+  }
 }
 // Apply colored background tint to a white-bg image
 function applyBgColor(imgUrl,bgKey){

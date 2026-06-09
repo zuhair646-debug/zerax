@@ -1,5 +1,44 @@
 # Zitex AI Platform - PRD
 
+### 🔥 Feb 9 2026 — Phase 9: REAL AI INTEGRATION (Gemini Nano Banana) ✅
+**User feedback (frustrated, justified)**: "كاتب لايفون مطلع لك صورة فيل. وين الدقة؟ الـ AI اللي عندك مو حقيقي. اربط مع الذكاء الصناعي الفعلي عندي."
+
+**Root cause**: All previous "AI generation" was just keyword-matching against curated Unsplash pools. When the pool URL was wrong (e.g. elephant photo mistakenly in a phone pool), the result was an elephant. There was NO real AI involved.
+
+**Fix — connected to REAL Gemini Nano Banana via Emergent LLM Key:**
+
+✅ **New backend endpoint**: `POST /api/image-studio/generate`
+   - Built `/app/backend/routers/image_studio_router.py`
+   - Uses `emergentintegrations.llm.chat.LlmChat` with `gemini-3.1-flash-image-preview` (Nano Banana)
+   - Accepts: `{prompt, width, height, count, style, bg_color, person_holding, angles}`
+   - Returns: `{images: [data:image/...;base64,...], prompt_used, model, cost}`
+   - Smart prompt enrichment server-side: appends style directive ("isolated on pure white seamless studio background, soft even lighting, no shadows…"), background color spec, angle keywords, anti-people clause if `person_holding=false`, aspect ratio specification.
+   - One Gemini call per requested image (count=4 → 4 calls). Each gets a unique session_id.
+   - Errors propagate to frontend with details (no silent fallback to mocks).
+
+✅ **Frontend rewrite**: `runGeneration()` in `/app/frontend/public/mockups/app_mode_full.html`
+   - Removed all calls to `STYLE_POOLS` / `pickVariety` / `unsplashTransform` / `applyBgColor` (legacy mock pipeline).
+   - Now does a single `fetch(API+'/api/image-studio/generate', {method:'POST', body:{...}})` and renders the returned base64 data-URIs directly in the preview grid.
+   - Logo stamping (canvas overlay) still runs client-side on the AI-generated images.
+   - Clarification dialog still triggers for vague prompts before the API call.
+
+✅ **Verified end-to-end**:
+   - Curl test: `iPhone 17 Pro titanium blue` returned a real 800×800 JPEG base64 (430KB) from Gemini.
+   - Browser test: same prompt with `style=lifestyle, person_holding=ON` returned a generated image of a woman in a café holding an actual modern iPhone with its display on. NOT a stock photo.
+   - Generation time: ~11 seconds per image (Gemini Nano Banana SLA).
+
+✅ **Status of mocks removed**:
+   - 🔴 **REMOVED**: image generation mocking (was Unsplash pools)
+   - 🟡 **STILL MOCKED**: video mode (uses Big Buck Bunny sample — Gemini doesn't expose video gen yet via Emergent key)
+   - 🟡 **STILL MOCKED**: top-up button (+100 credits localStorage; Stripe needed for prod)
+
+**Files Modified:**
+- `/app/backend/routers/image_studio_router.py` (NEW — 130 lines)
+- `/app/backend/server.py` (router registration)
+- `/app/frontend/public/mockups/app_mode_full.html` (replaced mock runGeneration with real API call)
+
+
+
 ### 🆕 Feb 9 2026 — Phase 8: Smart AI Brain (Clarification + BG Color + Person Toggle) ✅
 **User feedback**: "الذكاء لازم يوقف ويسأل عن النوع لو مو واضح، خلفية بيضاء/رمادي/ألوان احترافية بدون شخص يمسك المنتج إلا بطلب صريح، ويبحث عن المنتج بالماركة قبل التوليد."
 
