@@ -648,6 +648,38 @@ select.ps-input option{background:#13131f;color:#fff}
           </div>
         </div>
 
+        <!-- AI WEEKLY REPORT (collapsible, dismissible) -->
+        <div class="panel" id="ai-weekly-card" style="background:linear-gradient(135deg,#0a0a14,#13131f);color:#fff;border:none;position:relative;overflow:hidden">
+          <div style="position:absolute;top:-30px;left:-30px;width:140px;height:140px;border-radius:50%;background:radial-gradient(circle,rgba(251,191,36,.15),transparent);pointer-events:none"></div>
+          <div style="display:flex;align-items:center;gap:12px;margin-bottom:14px;flex-wrap:wrap">
+            <div style="width:44px;height:44px;border-radius:12px;background:linear-gradient(135deg,var(--amber),var(--purple));display:flex;align-items:center;justify-content:center;font-size:22px;color:#0a0a14">📊</div>
+            <div style="flex:1;min-width:200px"><h3 style="color:#fff;font-size:14px;margin:0">تقرير AI الأسبوعي</h3><div style="font-size:11px;color:#94a3b8;margin-top:2px">آخر تحديث · اليوم 8:00 ص · يُرسل أسبوعياً (الأحد) عبر واتساب وإيميل</div></div>
+            <button onclick="dismissAiReport()" style="background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);color:#cbd5e1;width:30px;height:30px;border-radius:8px;cursor:pointer;display:flex;align-items:center;justify-content:center" title="إخفاء التقرير"><i data-lucide="x" style="width:14px;height:14px"></i></button>
+          </div>
+          <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-bottom:14px">
+            <div style="background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.06);padding:11px 14px;border-radius:11px"><div style="font-size:10px;color:#94a3b8">📤 منشورات تلقائية</div><b style="font-size:18px;color:var(--amber)" id="awr-posts">12</b> <span style="font-size:10px;color:#94a3b8">عبر 5 منصات</span></div>
+            <div style="background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.06);padding:11px 14px;border-radius:11px"><div style="font-size:10px;color:#94a3b8">💬 ردود ذكية</div><b style="font-size:18px;color:var(--emerald)" id="awr-replies">89</b> <span style="font-size:10px;color:#94a3b8">94% رضا</span></div>
+            <div style="background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.06);padding:11px 14px;border-radius:11px"><div style="font-size:10px;color:#94a3b8">⚡ زمن الرد</div><b style="font-size:18px;color:#67e8f9">8 ث</b> <span style="font-size:10px;color:#94a3b8">متوسط</span></div>
+            <div style="background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.06);padding:11px 14px;border-radius:11px"><div style="font-size:10px;color:#94a3b8">🎬 فيديوهات</div><b style="font-size:18px;color:var(--rose)">3</b> <span style="font-size:10px;color:#94a3b8">+24K مشاهدة</span></div>
+            <div style="background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.06);padding:11px 14px;border-radius:11px"><div style="font-size:10px;color:#94a3b8">🤖 تحاليل منتج</div><b style="font-size:18px;color:#c4b5fd">7</b> <span style="font-size:10px;color:#94a3b8">منتج</span></div>
+          </div>
+          <div style="background:rgba(251,191,36,.06);border:1px solid rgba(251,191,36,.2);border-radius:11px;padding:12px 14px;display:flex;gap:10px;align-items:flex-start;margin-bottom:10px">
+            <div style="font-size:18px">💡</div>
+            <div style="flex:1"><b style="font-size:12px;color:var(--amber);display:block;margin-bottom:4px">3 اقتراحات من AI لتحسين متجرك</b>
+              <div style="font-size:11px;color:#cbd5e1;line-height:1.9">
+                <div>▸ <b>iPhone 17 Pro Max</b> أعلى تفاعل (52% conversion) — اعمل له فيديو إعلاني</div>
+                <div>▸ ذروة الزوار يوم الخميس 8-10م — برمج المنشورات في هالوقت</div>
+                <div>▸ 12 سؤال متكرر عن "الشحن" — اضف رد ثابت في الإدارة الذكية</div>
+              </div>
+            </div>
+          </div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap">
+            <button class="btn btn-amber" style="padding:8px 14px;font-size:11px" onclick="alert('سيتم فتح التقرير الكامل في صفحة جديدة قريباً')"><i data-lucide="file-text" style="width:12px;height:12px"></i> التقرير الكامل (PDF)</button>
+            <button class="btn btn-outline" style="padding:8px 14px;font-size:11px;color:#cbd5e1;border-color:rgba(255,255,255,.12);background:rgba(255,255,255,.04)" onclick="goPage('smart-mgmt')"><i data-lucide="brain-circuit" style="width:12px;height:12px"></i> إعدادات الإدارة الذكية</button>
+            <button class="btn btn-outline" style="padding:8px 14px;font-size:11px;color:#cbd5e1;border-color:rgba(255,255,255,.12);background:rgba(255,255,255,.04)" onclick="toast('✓ بتستلم التقرير القادم على واتساب الأحد القادم')"><i data-lucide="message-circle" style="width:12px;height:12px"></i> إرسال على واتساب الأحد</button>
+          </div>
+        </div>
+
         <div class="panel">
           <div class="panel-head"><h3>🛒 أحدث الطلبات</h3><a href="#" class="more" onclick="goPage('orders');return false">كل الطلبات ←</a></div>
           <div style="overflow-x:auto"><table class="tbl">
@@ -1256,6 +1288,7 @@ function showApp(){
     setupChart();
     vsUpdateConfig();
     renderVsHistory();
+    maybeHideAiReport();
   },150);
 }
 if(localStorage.getItem('zx_admin_session'))showApp();
@@ -2107,8 +2140,19 @@ function vsResetStudio(){
   vsSwitchTab('script');vsRenderScript();
 }
 
+// ───── AI WEEKLY REPORT ─────
+function dismissAiReport(){
+  const card=document.getElementById('ai-weekly-card');if(card)card.style.display='none';
+  localStorage.setItem('zx_hide_ai_report_until',(Date.now()+7*86400000).toString());
+  toast('✓ مُخفي · يظهر التقرير القادم الأحد');
+}
+function maybeHideAiReport(){
+  const until=parseInt(localStorage.getItem('zx_hide_ai_report_until')||'0');
+  if(until&&Date.now()<until){const c=document.getElementById('ai-weekly-card');if(c)c.style.display='none';}
+}
+
 function rechargeOpen(){
-  const html=`<div id="zx-recharge-modal" style="position:fixed;inset:0;background:rgba(10,10,20,.75);backdrop-filter:blur(10px);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px" onclick="if(event.target===this)document.body.removeChild(this)"><div style="background:#13131f;border:1px solid rgba(255,255,255,.1);border-radius:18px;max-width:440px;width:100%;color:#fff;box-shadow:0 24px 60px rgba(0,0,0,.5);overflow:hidden">
+  const html=`<div id="zx-recharge-modal"style="position:fixed;inset:0;background:rgba(10,10,20,.75);backdrop-filter:blur(10px);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px" onclick="if(event.target===this)document.body.removeChild(this)"><div style="background:#13131f;border:1px solid rgba(255,255,255,.1);border-radius:18px;max-width:440px;width:100%;color:#fff;box-shadow:0 24px 60px rgba(0,0,0,.5);overflow:hidden">
     <div style="padding:24px 22px 18px;border-bottom:1px solid rgba(255,255,255,.06);text-align:center"><div style="font-size:42px;margin-bottom:8px">⚡</div><h3 style="font-size:18px;font-weight:900;margin-bottom:4px">شحن رصيد Zerax</h3><div style="font-size:11px;color:var(--mute)">رصيدك الحالي: <b style="color:var(--amber)" id="zx-rc-bal">${WALLET.toLocaleString('en-US')}</b> نقطة</div></div>
     <div style="padding:18px 22px;display:grid;grid-template-columns:repeat(2,1fr);gap:10px">
       <button class="zx-pkg" onclick="vsAddCredits(1000)" style="background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);border-radius:12px;padding:14px;cursor:pointer;color:#fff;font-family:inherit;text-align:right"><div style="font-size:11px;color:var(--mute);margin-bottom:4px">باقة تجربة</div><div style="font-size:22px;font-weight:900;color:var(--amber)">1,000</div><div style="font-size:10px;color:var(--mute);margin-top:4px">نقطة · مجاناً للعرض</div></button>
