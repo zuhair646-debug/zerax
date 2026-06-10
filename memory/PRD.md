@@ -115,6 +115,15 @@ Build "Zerax" — a multi-tenant Saudi/Arab AI commerce platform with:
 - Service activations are localStorage flags only
 - Auto-dispatch endpoint /api/delivery/auto-assign falls back to simulation
 
+### 🟢 LATEST (Feb 10, 2026)
+- **3-Tab Product Editor UI polish** (`admin.html`):
+  - Collapsible "Switch to AI" banner (saves vertical space)
+  - Collapsible Tools picker section (after preset selected)
+  - Tool chips now visually interactive (hover gradient, tooltip, click → switches to Variants tab + scroll + highlight pulse)
+  - Removed redundant "Use AI" mini-button from Manual image upload area
+  - AI Chat tab: removed "Return to scratch" header bar, added prominent border-highlighted input with Enter-to-send hint
+  - Preview tab: dark `#0a0a14` background with centered white product card (better contrast)
+
 ### 🔴 PENDING (Priority Order)
 
 **P1 — CRITICAL NEXT**
