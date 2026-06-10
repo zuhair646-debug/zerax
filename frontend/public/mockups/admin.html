@@ -1,0 +1,800 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Zerax — لوحة تحكم التاجر</title>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;500;700;900&display=swap" rel="stylesheet">
+<script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+:root{--ink:#0a0a14;--ink2:#13131f;--amber:#fbbf24;--purple:#7c3aed;--violet:#a78bfa;--rose:#ec4899;--emerald:#10b981;--rd:#ef4444;--mute:#94a3b8;--mute2:#475569;--bg:#f6f7fb;--panel:#fff;--border:#e6e7ee;--sidebar:#0a0a14}
+html,body{height:100%;background:var(--bg);color:#0a0a14;font-family:'IBM Plex Sans Arabic',system-ui,sans-serif;font-size:14px}
+
+/* ───── LOGIN ───── */
+.login-bg{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px;background:radial-gradient(ellipse at top right,#1a1a3e,#0a0a14 60%);position:relative;overflow:hidden}
+.login-bg::before{content:'';position:absolute;width:600px;height:600px;background:radial-gradient(circle,rgba(124,58,237,.3),transparent 70%);top:-200px;left:-200px;filter:blur(80px)}
+.login-bg::after{content:'';position:absolute;width:500px;height:500px;background:radial-gradient(circle,rgba(251,191,36,.2),transparent 70%);bottom:-200px;right:-200px;filter:blur(80px)}
+.login-card{position:relative;z-index:1;background:rgba(20,20,35,.85);backdrop-filter:blur(24px);border:1.5px solid rgba(255,255,255,.1);border-radius:24px;padding:40px;width:100%;max-width:420px;color:#fff;box-shadow:0 24px 60px rgba(0,0,0,.5)}
+.login-card .logo{font-size:32px;font-weight:900;background:linear-gradient(135deg,var(--amber),var(--violet));-webkit-background-clip:text;background-clip:text;color:transparent;margin-bottom:6px}
+.login-card .sub{color:var(--mute);font-size:13px;margin-bottom:30px}
+.login-card label{font-size:11px;font-weight:900;color:#cbd5e1;display:block;margin-bottom:6px;text-transform:uppercase;letter-spacing:1px}
+.login-card input{width:100%;padding:14px;background:rgba(0,0,0,.4);border:1.5px solid rgba(255,255,255,.1);border-radius:12px;color:#fff;font-family:inherit;font-size:14px;margin-bottom:16px;outline:none;transition:border-color .2s}
+.login-card input:focus{border-color:var(--amber)}
+.login-card button{width:100%;padding:15px;background:linear-gradient(135deg,var(--amber),#f59e0b);color:#000;border:none;border-radius:12px;font-family:inherit;font-weight:900;font-size:14px;cursor:pointer;margin-top:8px;box-shadow:0 8px 24px rgba(251,191,36,.3)}
+.login-card button:disabled{opacity:.5}
+.login-card .demo{margin-top:20px;padding:12px;background:rgba(167,139,250,.1);border:1px dashed rgba(167,139,250,.3);border-radius:10px;font-size:11px;color:var(--violet);line-height:1.7}
+.login-card .demo b{color:#fff;font-family:monospace}
+.login-card .err{color:#fca5a5;font-size:12px;margin-bottom:10px;display:none}
+.login-card .err.show{display:block}
+
+/* ───── LAYOUT ───── */
+.app{display:none;min-height:100vh;background:var(--bg)}
+.app.show{display:grid;grid-template-columns:240px 1fr}
+@media (max-width:900px){.app.show{grid-template-columns:1fr}}
+
+/* ───── SIDEBAR ───── */
+.sidebar{background:var(--sidebar);color:#fff;padding:20px 14px;display:flex;flex-direction:column;position:sticky;top:0;height:100vh;overflow-y:auto}
+@media (max-width:900px){.sidebar{position:fixed;right:-260px;width:240px;height:100vh;z-index:90;transition:right .25s;box-shadow:-10px 0 30px rgba(0,0,0,.3)}.sidebar.open{right:0}}
+.sidebar .brand{display:flex;align-items:center;gap:10px;padding:8px 6px 18px;border-bottom:1px solid rgba(255,255,255,.08);margin-bottom:14px}
+.sidebar .brand .logo{width:36px;height:36px;border-radius:10px;background:linear-gradient(135deg,var(--amber),var(--violet));display:flex;align-items:center;justify-content:center;font-weight:900;color:#0a0a14;font-size:16px}
+.sidebar .brand .nm{font-weight:900;font-size:14px}
+.sidebar .brand .role{font-size:10px;color:var(--mute)}
+.nav-section{font-size:9px;color:#475569;text-transform:uppercase;letter-spacing:1.5px;padding:14px 8px 6px;font-weight:900}
+.nav-item{display:flex;align-items:center;gap:12px;padding:11px 12px;border-radius:10px;cursor:pointer;color:#cbd5e1;font-size:13px;font-weight:700;transition:all .15s;margin-bottom:2px;border:none;background:none;font-family:inherit;width:100%;text-align:right}
+.nav-item:hover{background:rgba(255,255,255,.06);color:#fff}
+.nav-item.active{background:linear-gradient(90deg,rgba(124,58,237,.2),transparent);color:var(--amber);box-shadow:inset 3px 0 0 var(--amber)}
+.nav-item i{width:18px;height:18px;flex-shrink:0}
+.nav-item .badge{margin-right:auto;background:var(--rose);color:#fff;font-size:9px;padding:2px 7px;border-radius:99px;font-weight:900}
+.wallet{margin-top:auto;background:linear-gradient(135deg,#1a1a3e,#2a1a4e);border:1px solid rgba(167,139,250,.3);border-radius:14px;padding:12px;text-align:center}
+.wallet .lbl{font-size:10px;color:var(--mute);text-transform:uppercase;letter-spacing:1px;font-weight:900;margin-bottom:4px}
+.wallet .amt{font-size:22px;font-weight:900;color:var(--amber)}
+.wallet button{width:100%;margin-top:8px;padding:8px;background:var(--amber);color:#000;border:none;border-radius:8px;font-weight:900;font-family:inherit;font-size:12px;cursor:pointer}
+
+/* ───── MAIN ───── */
+.main{padding:0;overflow-x:hidden}
+.topbar{background:#fff;border-bottom:1px solid var(--border);padding:14px 24px;display:flex;align-items:center;gap:16px;position:sticky;top:0;z-index:50}
+.topbar .menu-btn{display:none;background:none;border:none;cursor:pointer;width:32px;height:32px;align-items:center;justify-content:center}
+@media (max-width:900px){.topbar .menu-btn{display:flex}}
+.topbar h1{font-size:18px;font-weight:900;flex:1}
+.topbar .search{display:flex;align-items:center;gap:8px;background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:8px 12px;flex:0 0 280px;max-width:40%}
+@media (max-width:900px){.topbar .search{display:none}}
+.topbar .search input{border:none;background:none;outline:none;font-family:inherit;font-size:13px;flex:1}
+.topbar .topbar-actions{display:flex;align-items:center;gap:8px}
+.notif-btn{width:38px;height:38px;border-radius:50%;background:var(--bg);border:1px solid var(--border);cursor:pointer;display:flex;align-items:center;justify-content:center;position:relative}
+.notif-btn .dot{position:absolute;top:7px;left:7px;width:8px;height:8px;border-radius:50%;background:var(--rose);border:2px solid #fff}
+.user-pill{display:flex;align-items:center;gap:10px;padding:6px 10px;background:var(--bg);border:1px solid var(--border);border-radius:99px;cursor:pointer}
+.user-pill .avt{width:30px;height:30px;border-radius:50%;background:linear-gradient(135deg,var(--purple),var(--amber));color:#fff;font-weight:900;display:flex;align-items:center;justify-content:center;font-size:13px}
+.user-pill .info{display:none;flex-direction:column}
+@media (min-width:600px){.user-pill .info{display:flex}}
+.user-pill .nm{font-size:12px;font-weight:900;line-height:1}
+.user-pill .em{font-size:10px;color:var(--mute);direction:ltr;margin-top:2px}
+
+.content{padding:24px}
+@media (max-width:900px){.content{padding:16px}}
+
+.page{display:none}
+.page.active{display:block}
+
+/* ───── KPI CARDS ───── */
+.kpi-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:14px;margin-bottom:24px}
+.kpi{background:#fff;border:1px solid var(--border);border-radius:16px;padding:18px;position:relative;overflow:hidden}
+.kpi::after{content:'';position:absolute;top:0;right:0;width:80px;height:80px;background:var(--clr,#fbbf24);opacity:.08;border-radius:50%;transform:translate(40%,-40%)}
+.kpi .ico{width:42px;height:42px;border-radius:12px;background:var(--clr,#fbbf24);color:#fff;display:flex;align-items:center;justify-content:center;margin-bottom:14px}
+.kpi .lbl{font-size:11px;color:var(--mute);font-weight:900;text-transform:uppercase;letter-spacing:1px;margin-bottom:4px}
+.kpi .val{font-size:26px;font-weight:900;line-height:1.1}
+.kpi .delta{font-size:11px;font-weight:900;margin-top:6px;display:flex;align-items:center;gap:4px}
+.kpi .delta.up{color:var(--emerald)}
+.kpi .delta.down{color:var(--rd)}
+
+/* ───── PANELS ───── */
+.panel{background:#fff;border:1px solid var(--border);border-radius:16px;padding:20px;margin-bottom:16px}
+.panel-head{display:flex;align-items:center;gap:10px;margin-bottom:16px}
+.panel-head h3{font-size:15px;font-weight:900;flex:1}
+.panel-head .more{font-size:11px;color:var(--purple);font-weight:900;text-decoration:none}
+.grid-2{display:grid;grid-template-columns:2fr 1fr;gap:16px}
+@media (max-width:900px){.grid-2{grid-template-columns:1fr}}
+
+/* ───── CHART (simple SVG) ───── */
+.chart-wrap{height:220px;margin-bottom:6px}
+.chart-wrap svg{width:100%;height:100%}
+.chart-legend{display:flex;gap:16px;font-size:11px;color:var(--mute);font-weight:700;margin-top:8px}
+.chart-legend span{display:flex;align-items:center;gap:5px}
+.chart-legend i{width:10px;height:10px;border-radius:50%}
+
+/* ───── TABLES ───── */
+.tbl{width:100%;border-collapse:collapse}
+.tbl th{text-align:right;padding:10px 12px;font-size:11px;font-weight:900;color:var(--mute);background:var(--bg);text-transform:uppercase;letter-spacing:1px}
+.tbl td{padding:12px;border-bottom:1px solid var(--border);font-size:13px}
+.tbl tr:last-child td{border-bottom:none}
+.status-pill{padding:3px 10px;border-radius:99px;font-size:10px;font-weight:900;white-space:nowrap}
+.s-pending{background:#fef3c7;color:#92400e}
+.s-paid,.s-delivered{background:#d1fae5;color:#065f46}
+.s-delivering{background:#fce7f3;color:#9d174d}
+.s-cancelled{background:#fee2e2;color:#991b1b}
+
+/* ───── BUTTONS ───── */
+.btn{padding:10px 16px;border:none;border-radius:10px;font-family:inherit;font-weight:900;font-size:13px;cursor:pointer;display:inline-flex;align-items:center;gap:6px}
+.btn-primary{background:var(--purple);color:#fff;box-shadow:0 6px 18px rgba(124,58,237,.3)}
+.btn-amber{background:var(--amber);color:#000}
+.btn-outline{background:#fff;color:#0a0a14;border:1.5px solid var(--border)}
+.btn-success{background:var(--emerald);color:#fff}
+
+/* ───── FORMS ───── */
+.field{margin-bottom:14px}
+.field label{display:block;font-size:11px;font-weight:900;color:#0a0a14;margin-bottom:6px;text-transform:uppercase;letter-spacing:1px}
+.field input,.field select,.field textarea{width:100%;padding:11px;border:1.5px solid var(--border);border-radius:10px;font-family:inherit;font-size:13px;outline:none;background:#fff}
+.field input:focus,.field select:focus,.field textarea:focus{border-color:var(--purple)}
+.row{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+@media (max-width:600px){.row{grid-template-columns:1fr}}
+
+/* ───── PRODUCT GRID ───── */
+.prod-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:14px}
+.pcard{background:#fff;border:1px solid var(--border);border-radius:14px;overflow:hidden;cursor:pointer;transition:all .15s}
+.pcard:hover{transform:translateY(-2px);box-shadow:0 12px 30px rgba(0,0,0,.08);border-color:var(--purple)}
+.pcard .img{aspect-ratio:1;background:#f1f5f9;background-size:cover;background-position:center;position:relative}
+.pcard .img .actions{position:absolute;top:8px;left:8px;display:flex;gap:4px}
+.pcard .img .actions button{background:rgba(0,0,0,.6);color:#fff;border:none;width:28px;height:28px;border-radius:50%;cursor:pointer;display:flex;align-items:center;justify-content:center}
+.pcard .body{padding:10px}
+.pcard h4{font-size:12px;font-weight:900;margin-bottom:4px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pcard .price{font-size:14px;font-weight:900;color:var(--purple)}
+.pcard .meta{font-size:10px;color:var(--mute);margin-top:2px}
+.pcard.add{border:2px dashed var(--border);display:flex;flex-direction:column;align-items:center;justify-content:center;padding:30px;text-align:center;color:var(--purple);font-weight:900}
+.pcard.add:hover{border-color:var(--purple);background:#faf5ff}
+
+/* ───── VIDEO STUDIO CHAT ───── */
+.vs-shell{display:grid;grid-template-columns:280px 1fr;gap:16px;height:calc(100vh - 130px)}
+@media (max-width:900px){.vs-shell{grid-template-columns:1fr;height:auto}}
+.vs-side{background:#fff;border:1px solid var(--border);border-radius:16px;padding:16px;overflow-y:auto}
+.vs-side h4{font-size:11px;font-weight:900;color:var(--mute);text-transform:uppercase;letter-spacing:1px;margin-bottom:10px}
+.vs-suggestion{display:block;width:100%;text-align:right;padding:10px;background:var(--bg);border:1px solid var(--border);border-radius:10px;font-size:12px;cursor:pointer;margin-bottom:6px;font-family:inherit;font-weight:700;color:#0a0a14;line-height:1.5}
+.vs-suggestion:hover{background:#faf5ff;border-color:var(--purple);color:var(--purple)}
+.vs-suggestion .emoji{font-size:14px;margin-left:4px}
+
+.vs-chat{background:#fff;border:1px solid var(--border);border-radius:16px;display:flex;flex-direction:column;overflow:hidden}
+.vs-chat-head{padding:14px 18px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px;background:linear-gradient(135deg,#faf5ff,#fff)}
+.vs-chat-head .avt{width:38px;height:38px;border-radius:50%;background:linear-gradient(135deg,var(--purple),var(--amber));color:#fff;display:flex;align-items:center;justify-content:center;font-weight:900}
+.vs-chat-head h4{font-size:14px;font-weight:900}
+.vs-chat-head .sub{font-size:11px;color:var(--mute)}
+.vs-chat-head .live{margin-right:auto;display:flex;align-items:center;gap:5px;font-size:11px;color:var(--emerald);font-weight:900}
+.vs-chat-head .live .dot{width:8px;height:8px;border-radius:50%;background:var(--emerald);animation:pulse 1.5s ease-in-out infinite}
+@keyframes pulse{50%{box-shadow:0 0 0 6px rgba(16,185,129,.25)}}
+
+.vs-messages{flex:1;overflow-y:auto;padding:18px;display:flex;flex-direction:column;gap:14px;min-height:300px}
+.msg{display:flex;gap:10px;max-width:90%}
+.msg.user{align-self:flex-start;flex-direction:row-reverse}
+.msg.ai{align-self:flex-start}
+.msg .avt{width:32px;height:32px;border-radius:50%;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-weight:900;font-size:12px}
+.msg.user .avt{background:var(--ink);color:#fbbf24}
+.msg.ai .avt{background:linear-gradient(135deg,var(--purple),var(--amber));color:#fff}
+.msg .bubble{background:var(--bg);border:1px solid var(--border);border-radius:14px;padding:11px 14px;font-size:13px;line-height:1.7}
+.msg.ai .bubble{background:#faf5ff;border-color:#ddd6fe}
+.msg .bubble video{max-width:280px;width:100%;border-radius:10px;margin-top:6px}
+.msg .bubble img{max-width:200px;width:100%;border-radius:10px;margin-top:6px}
+.typing{display:inline-flex;gap:4px}
+.typing span{width:6px;height:6px;border-radius:50%;background:var(--purple);animation:bounce 1.2s infinite}
+.typing span:nth-child(2){animation-delay:.15s}
+.typing span:nth-child(3){animation-delay:.3s}
+@keyframes bounce{0%,60%,100%{transform:translateY(0);opacity:.4}30%{transform:translateY(-6px);opacity:1}}
+
+.vs-input{border-top:1px solid var(--border);padding:14px;background:#fff}
+.vs-input .attach-bar{display:flex;gap:6px;margin-bottom:8px;flex-wrap:wrap}
+.vs-input .attach-pill{display:flex;align-items:center;gap:5px;background:var(--bg);border:1px solid var(--border);border-radius:99px;padding:5px 10px;font-size:11px;font-weight:700}
+.vs-input .attach-pill button{background:none;border:none;cursor:pointer;color:var(--rd);padding:0;font-size:14px}
+.vs-input .input-row{display:flex;align-items:center;gap:8px;background:var(--bg);border:1.5px solid var(--border);border-radius:14px;padding:8px}
+.vs-input .input-row:focus-within{border-color:var(--purple)}
+.vs-input textarea{flex:1;border:none;background:none;outline:none;resize:none;padding:8px;font-family:inherit;font-size:13px;min-height:24px;max-height:120px;line-height:1.5}
+.vs-input .ibtn{width:38px;height:38px;border-radius:50%;border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;background:#fff;border:1px solid var(--border);color:var(--mute2);transition:all .15s}
+.vs-input .ibtn:hover{border-color:var(--purple);color:var(--purple)}
+.vs-input .ibtn.send{background:linear-gradient(135deg,var(--purple),var(--amber));color:#fff;border:none}
+.vs-input .ibtn.recording{background:var(--rd);color:#fff;animation:pulse 1s infinite}
+
+/* ───── TOAST ───── */
+.toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%) translateY(20px);background:var(--ink);color:#fff;padding:11px 22px;border-radius:99px;font-size:13px;font-weight:900;opacity:0;transition:all .3s;z-index:1000;pointer-events:none;border:1.5px solid var(--amber)}
+.toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+
+/* ───── EMPTY STATE ───── */
+.empty{text-align:center;padding:60px 20px;color:var(--mute)}
+.empty .ico{font-size:48px;opacity:.4;margin-bottom:12px}
+.empty p{font-size:13px;line-height:1.7;margin-bottom:14px}
+
+/* ───── MODAL ───── */
+.mod{position:fixed;inset:0;background:rgba(0,0,0,.6);backdrop-filter:blur(6px);display:none;z-index:500;align-items:center;justify-content:center;padding:16px}
+.mod.open{display:flex}
+.mod .box{background:#fff;border-radius:18px;width:100%;max-width:480px;max-height:90vh;overflow-y:auto;padding:24px}
+.mod h3{font-size:16px;font-weight:900;margin-bottom:14px}
+</style>
+</head>
+<body>
+
+<!-- ═══════════════════ LOGIN ═══════════════════ -->
+<div class="login-bg" id="login-screen">
+  <div class="login-card">
+    <div class="logo">⚡ Zerax</div>
+    <p class="sub">سجّل دخولك للوصول إلى لوحة تحكم تاجرك</p>
+    <form onsubmit="event.preventDefault();doLogin()">
+      <label>البريد الإلكتروني</label>
+      <input id="li-email" type="email" placeholder="merchant@zerax.com" value="merchant@zerax.com" autocomplete="username">
+      <label>كلمة المرور</label>
+      <input id="li-pass" type="password" placeholder="••••••••" value="zerax2026" autocomplete="current-password">
+      <div class="err" id="li-err"></div>
+      <button type="submit">دخول إلى لوحة التحكم ←</button>
+    </form>
+    <div class="demo">
+      💡 <b>حساب التجربة:</b><br>
+      البريد: <b>merchant@zerax.com</b><br>
+      كلمة المرور: <b>zerax2026</b>
+    </div>
+    <div style="margin-top:14px;text-align:center;font-size:11px;color:var(--mute)">
+      تبي تشوف المتجر كعميل؟ <a href="/mockups/app_mode_full.html" style="color:var(--amber);font-weight:900;text-decoration:none">افتح المتجر ↗</a>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════ APP ═══════════════════ -->
+<div class="app" id="app">
+
+  <!-- SIDEBAR -->
+  <aside class="sidebar" id="sidebar">
+    <div class="brand">
+      <div class="logo">Z</div>
+      <div><div class="nm">متجر زيراكس</div><div class="role">حساب التاجر</div></div>
+    </div>
+
+    <div class="nav-section">القائمة الرئيسية</div>
+    <button class="nav-item active" data-page="dashboard" onclick="goPage('dashboard')"><i data-lucide="layout-dashboard"></i> الرئيسية</button>
+    <button class="nav-item" data-page="products" onclick="goPage('products')"><i data-lucide="package"></i> المنتجات</button>
+    <button class="nav-item" data-page="orders" onclick="goPage('orders')"><i data-lucide="shopping-bag"></i> الطلبات <span class="badge" id="nav-pending-count">2</span></button>
+    <button class="nav-item" data-page="customers" onclick="goPage('customers')"><i data-lucide="users"></i> العملاء</button>
+
+    <div class="nav-section">العمليات</div>
+    <button class="nav-item" data-page="delivery" onclick="goPage('delivery')"><i data-lucide="truck"></i> التوصيل</button>
+    <button class="nav-item" data-page="payroll" onclick="goPage('payroll')"><i data-lucide="wallet"></i> المحاسبة</button>
+    <button class="nav-item" data-page="gateways" onclick="goPage('gateways')"><i data-lucide="credit-card"></i> وسائل الدفع</button>
+
+    <div class="nav-section">الذكاء الإصطناعي</div>
+    <button class="nav-item" data-page="video-studio" onclick="goPage('video-studio')"><i data-lucide="clapperboard"></i> Video Studio AI</button>
+    <button class="nav-item" data-page="settings" onclick="goPage('settings')"><i data-lucide="settings"></i> الإعدادات</button>
+
+    <div class="wallet">
+      <div class="lbl">رصيد نقاط Zerax</div>
+      <div class="amt"><span id="wallet-balance">2,550</span></div>
+      <button onclick="rechargeOpen()">+ شحن الرصيد</button>
+    </div>
+    <button class="nav-item" onclick="doLogout()" style="margin-top:10px;color:#fca5a5"><i data-lucide="log-out"></i> تسجيل الخروج</button>
+  </aside>
+
+  <!-- MAIN -->
+  <main class="main">
+    <header class="topbar">
+      <button class="menu-btn" onclick="document.getElementById('sidebar').classList.toggle('open')"><i data-lucide="menu"></i></button>
+      <h1 id="page-title">الرئيسية</h1>
+      <div class="search">
+        <i data-lucide="search" style="width:16px;height:16px;color:var(--mute)"></i>
+        <input placeholder="ابحث عن طلب، منتج، عميل...">
+      </div>
+      <div class="topbar-actions">
+        <button class="notif-btn"><i data-lucide="bell" style="width:18px;height:18px"></i><span class="dot"></span></button>
+        <div class="user-pill">
+          <div class="avt">م</div>
+          <div class="info"><div class="nm">محمد الفهد</div><div class="em">merchant@zerax.com</div></div>
+        </div>
+      </div>
+    </header>
+
+    <div class="content">
+      <!-- ─── DASHBOARD ─── -->
+      <div class="page active" data-page="dashboard">
+        <div class="kpi-grid">
+          <div class="kpi" style="--clr:#7c3aed"><div class="ico"><i data-lucide="dollar-sign"></i></div><div class="lbl">إيرادات اليوم</div><div class="val">12,450 <small style="font-size:14px;color:var(--mute)">ر.س</small></div><div class="delta up"><i data-lucide="trending-up" style="width:12px;height:12px"></i> +18% من أمس</div></div>
+          <div class="kpi" style="--clr:#fbbf24"><div class="ico" style="color:#0a0a14"><i data-lucide="shopping-bag"></i></div><div class="lbl">طلبات اليوم</div><div class="val">47</div><div class="delta up"><i data-lucide="trending-up" style="width:12px;height:12px"></i> +12 طلب</div></div>
+          <div class="kpi" style="--clr:#ec4899"><div class="ico"><i data-lucide="users"></i></div><div class="lbl">عملاء جدد</div><div class="val">8</div><div class="delta up"><i data-lucide="trending-up" style="width:12px;height:12px"></i> +33%</div></div>
+          <div class="kpi" style="--clr:#10b981"><div class="ico"><i data-lucide="truck"></i></div><div class="lbl">سائقون نشطون</div><div class="val">4 / 5</div><div class="delta" style="color:var(--mute)"><i data-lucide="activity" style="width:12px;height:12px"></i> 80% متاحون</div></div>
+        </div>
+
+        <div class="grid-2">
+          <div class="panel">
+            <div class="panel-head">
+              <h3>📈 الإيرادات (آخر 7 أيام)</h3>
+              <a href="#" class="more">عرض الكل ←</a>
+            </div>
+            <div class="chart-wrap">
+              <svg viewBox="0 0 700 220" preserveAspectRatio="none">
+                <defs>
+                  <linearGradient id="gPur" x1="0" x2="0" y1="0" y2="1"><stop offset="0%" stop-color="#7c3aed" stop-opacity=".3"/><stop offset="100%" stop-color="#7c3aed" stop-opacity="0"/></linearGradient>
+                </defs>
+                <g stroke="#e6e7ee" stroke-dasharray="4 4">
+                  <line x1="0" y1="40" x2="700" y2="40"/><line x1="0" y1="100" x2="700" y2="100"/><line x1="0" y1="160" x2="700" y2="160"/>
+                </g>
+                <path d="M 30,160 L 130,120 L 230,140 L 330,80 L 430,100 L 530,50 L 630,70 L 630,200 L 30,200 Z" fill="url(#gPur)"/>
+                <path d="M 30,160 L 130,120 L 230,140 L 330,80 L 430,100 L 530,50 L 630,70" stroke="#7c3aed" stroke-width="3" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+                <g fill="#7c3aed"><circle cx="30" cy="160" r="4"/><circle cx="130" cy="120" r="4"/><circle cx="230" cy="140" r="4"/><circle cx="330" cy="80" r="4"/><circle cx="430" cy="100" r="4"/><circle cx="530" cy="50" r="5" fill="#fbbf24" stroke="#7c3aed" stroke-width="2"/><circle cx="630" cy="70" r="4"/></g>
+                <g font-family="IBM Plex Sans Arabic" font-size="10" fill="#94a3b8" text-anchor="middle">
+                  <text x="30" y="218">السبت</text><text x="130" y="218">الأحد</text><text x="230" y="218">الإثنين</text><text x="330" y="218">الثلاثاء</text><text x="430" y="218">الأربعاء</text><text x="530" y="218">الخميس</text><text x="630" y="218">الجمعة</text>
+                </g>
+              </svg>
+            </div>
+            <div class="chart-legend"><span><i style="background:#7c3aed"></i> إيرادات بـ ر.س</span><span><i style="background:#fbbf24"></i> ذروة الأسبوع</span></div>
+          </div>
+
+          <div class="panel">
+            <div class="panel-head"><h3>🏆 أفضل المنتجات</h3></div>
+            <div id="top-products"></div>
+          </div>
+        </div>
+
+        <div class="panel">
+          <div class="panel-head"><h3>🛒 أحدث الطلبات</h3><a href="#" class="more" onclick="goPage('orders');return false">كل الطلبات ←</a></div>
+          <div style="overflow-x:auto"><table class="tbl">
+            <thead><tr><th>الطلب</th><th>العميل</th><th>المبلغ</th><th>الحالة</th><th>السائق</th><th>الوقت</th></tr></thead>
+            <tbody id="recent-orders"></tbody>
+          </table></div>
+        </div>
+      </div>
+
+      <!-- ─── PRODUCTS ─── -->
+      <div class="page" data-page="products">
+        <div class="panel">
+          <div class="panel-head">
+            <h3>📦 جميع المنتجات</h3>
+            <button class="btn btn-primary" onclick="openProductModal()"><i data-lucide="plus" style="width:14px;height:14px"></i> منتج جديد</button>
+          </div>
+          <div class="prod-grid" id="products-grid"></div>
+        </div>
+      </div>
+
+      <!-- ─── ORDERS ─── -->
+      <div class="page" data-page="orders">
+        <div class="panel">
+          <div class="panel-head"><h3>🛒 إدارة الطلبات</h3></div>
+          <div style="overflow-x:auto"><table class="tbl">
+            <thead><tr><th>رقم الطلب</th><th>العميل</th><th>الجوال</th><th>المبلغ</th><th>الحالة</th><th>السائق</th><th>تتبع</th></tr></thead>
+            <tbody id="orders-table"></tbody>
+          </table></div>
+        </div>
+      </div>
+
+      <!-- ─── CUSTOMERS ─── -->
+      <div class="page" data-page="customers">
+        <div class="panel">
+          <div class="panel-head"><h3>👥 قاعدة العملاء</h3></div>
+          <div style="overflow-x:auto"><table class="tbl">
+            <thead><tr><th>العميل</th><th>الجوال</th><th>عدد الطلبات</th><th>الإجمالي</th><th>آخر طلب</th></tr></thead>
+            <tbody id="customers-table"></tbody>
+          </table></div>
+        </div>
+      </div>
+
+      <!-- ─── DELIVERY (placeholder linking to legacy ACP) ─── -->
+      <div class="page" data-page="delivery">
+        <div class="panel">
+          <div class="panel-head"><h3>🚚 إدارة التوصيل</h3></div>
+          <div id="dv-stats" style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:20px"></div>
+          <div style="overflow-x:auto"><table class="tbl">
+            <thead><tr><th>الطلب</th><th>العميل</th><th>المسافة</th><th>الرسوم</th><th>السائق</th><th>الحالة</th></tr></thead>
+            <tbody id="dv-orders"></tbody>
+          </table></div>
+          <h4 style="margin:20px 0 10px;font-size:14px;font-weight:900">السائقون</h4>
+          <div id="dv-drivers" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:10px"></div>
+        </div>
+      </div>
+
+      <!-- ─── PAYROLL ─── -->
+      <div class="page" data-page="payroll">
+        <div class="panel">
+          <div class="panel-head"><h3>💰 المحاسبة والرواتب</h3><button class="btn btn-success" onclick="prRunAll()"><i data-lucide="send" style="width:14px;height:14px"></i> تحويل دفعة شهرية لكل السائقين</button></div>
+          <div id="pr-summary" style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:18px"></div>
+          <div style="overflow-x:auto"><table class="tbl">
+            <thead><tr><th>السائق</th><th>النوع</th><th>المبلغ المستحق</th><th>وسيلة الاستلام</th><th>إجراء</th></tr></thead>
+            <tbody id="pr-table"></tbody>
+          </table></div>
+        </div>
+      </div>
+
+      <!-- ─── GATEWAYS ─── -->
+      <div class="page" data-page="gateways">
+        <div class="panel">
+          <div class="panel-head"><h3>🌍 وسائل الدفع المفعّلة</h3>
+            <select id="gw-country-sel" style="padding:8px 12px;border:1px solid var(--border);border-radius:8px;font-family:inherit;font-weight:900;font-size:12px" onchange="gwLoad()"></select>
+          </div>
+          <div id="gw-list"></div>
+        </div>
+      </div>
+
+      <!-- ─── VIDEO STUDIO CHAT ─── -->
+      <div class="page" data-page="video-studio">
+        <div class="vs-shell">
+          <aside class="vs-side">
+            <h4>💡 اقتراحات سريعة</h4>
+            <button class="vs-suggestion" onclick="vsSendSuggestion(this.dataset.q)" data-q="ولّد لي فيديو إعلاني لـ iPhone 17 Pro مدة 30 ثانية بأسلوب فاخر">🎬 فيديو إعلاني فاخر للـ iPhone 17 Pro <span class="emoji">📱</span></button>
+            <button class="vs-suggestion" onclick="vsSendSuggestion(this.dataset.q)" data-q="اعمل فيديو حماسي 15 ثانية لتخفيضات نهاية الأسبوع">⚡ تخفيضات حماسية 15 ثانية <span class="emoji">🔥</span></button>
+            <button class="vs-suggestion" onclick="vsSendSuggestion(this.dataset.q)" data-q="ولّد فيديو دافئ 45 ثانية لمنتج ساعة Apple Watch Ultra">⌚ Apple Watch Ultra دافئ <span class="emoji">💎</span></button>
+            <button class="vs-suggestion" onclick="vsSendSuggestion(this.dataset.q)" data-q="فيديو تقني لسماعات AirPods Pro مدته 30 ثانية">🎧 AirPods Pro تقني <span class="emoji">🔬</span></button>
+            <button class="vs-suggestion" onclick="vsSendSuggestion(this.dataset.q)" data-q="فيديو موجز لجميع منتجاتي الجديدة لشهر هذا">🆕 ملخص منتجات الشهر <span class="emoji">📅</span></button>
+            <h4 style="margin-top:18px">📂 الفيديوهات السابقة</h4>
+            <div id="vs-history" style="font-size:11px;color:var(--mute);padding:14px;text-align:center">لا يوجد فيديوهات بعد</div>
+          </aside>
+
+          <div class="vs-chat">
+            <div class="vs-chat-head">
+              <div class="avt">⚡</div>
+              <div><h4>Zerax AI</h4><div class="sub">مساعدك الإبداعي للفيديوهات الإعلانية</div></div>
+              <div class="live"><span class="dot"></span> متصل</div>
+            </div>
+            <div class="vs-messages" id="vs-msgs">
+              <div class="msg ai">
+                <div class="avt">⚡</div>
+                <div class="bubble">
+                  مرحباً 👋 أنا Zerax AI، مساعدك لإنشاء فيديوهات إعلانية احترافية بـ AI.<br><br>
+                  <b>كيف تكتب طلبك:</b><br>
+                  • اذكر اسم المنتج أو الفئة<br>
+                  • حدد المدة (15 / 30 / 45 / 60 ثانية)<br>
+                  • اذكر النبرة (فاخرة / حماسية / دافئة / تقنية)<br><br>
+                  أو اضغط أي اقتراح من القائمة الجانبية 👈
+                </div>
+              </div>
+            </div>
+            <div class="vs-input">
+              <div class="attach-bar" id="vs-attach-bar"></div>
+              <div class="input-row">
+                <button class="ibtn" onclick="document.getElementById('vs-file').click()" title="ارفق صورة"><i data-lucide="image" style="width:18px;height:18px"></i></button>
+                <input type="file" id="vs-file" accept="image/*" multiple style="display:none" onchange="vsAttachFile(this)">
+                <button class="ibtn" id="vs-mic-btn" onclick="vsToggleVoice()" title="تسجيل صوتي"><i data-lucide="mic" style="width:18px;height:18px"></i></button>
+                <textarea id="vs-input-text" placeholder="اكتب طلبك… مثلاً: ولّد لي فيديو 30 ثانية لساعة Apple Watch بأسلوب فاخر" rows="1" oninput="vsAutoSize(this)" onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();vsSend()}"></textarea>
+                <button class="ibtn send" onclick="vsSend()" title="إرسال"><i data-lucide="send" style="width:18px;height:18px"></i></button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ─── SETTINGS ─── -->
+      <div class="page" data-page="settings">
+        <div class="panel">
+          <div class="panel-head"><h3>⚙️ إعدادات المتجر</h3></div>
+          <div class="field"><label>اسم المتجر</label><input value="متجر زيراكس"></div>
+          <div class="row"><div class="field"><label>الدولة</label><select><option>🇸🇦 السعودية</option><option>🇦🇪 الإمارات</option></select></div><div class="field"><label>العملة</label><select><option>ر.س</option><option>د.إ</option></select></div></div>
+          <div class="field"><label>سياسة الإرجاع</label><textarea rows="3">يمكن إرجاع المنتج خلال 14 يوم من تاريخ الاستلام مع وجود الفاتورة الأصلية…</textarea></div>
+          <button class="btn btn-primary">💾 حفظ التغييرات</button>
+        </div>
+      </div>
+    </div>
+  </main>
+</div>
+
+<!-- PRODUCT MODAL -->
+<div class="mod" id="prod-mod" onclick="if(event.target===this)closeProductModal()">
+  <div class="box">
+    <h3>📦 منتج جديد</h3>
+    <div class="field"><label>صورة المنتج</label>
+      <div style="border:2px dashed var(--border);border-radius:12px;padding:30px;text-align:center;cursor:pointer" onclick="document.getElementById('pm-img').click()" id="pm-img-preview">
+        <i data-lucide="upload-cloud" style="width:36px;height:36px;color:var(--mute);margin-bottom:8px"></i>
+        <p style="font-size:12px;color:var(--mute)">اضغط لرفع صورة أو اسحبها هنا</p>
+      </div>
+      <input type="file" id="pm-img" accept="image/*" style="display:none" onchange="pmPreviewImg(this)">
+    </div>
+    <div class="field"><label>اسم المنتج</label><input id="pm-name" placeholder="مثلاً iPhone 17 Pro Max"></div>
+    <div class="row"><div class="field"><label>السعر (ر.س)</label><input id="pm-price" type="number" min="0" placeholder="0"></div><div class="field"><label>المخزون</label><input id="pm-stock" type="number" min="0" value="10"></div></div>
+    <div class="field"><label>الفئة</label><select id="pm-cat"><option value="electronics">📱 إلكترونيات</option><option value="fashion">👗 أزياء</option><option value="beauty">💄 جمال وعناية</option><option value="home">🏠 منزل ومطبخ</option></select></div>
+    <div class="field"><label>الوصف</label><textarea id="pm-desc" rows="3"></textarea></div>
+    <button class="btn btn-amber" onclick="pmAiFill()" style="width:100%;margin-bottom:8px"><i data-lucide="sparkles" style="width:14px;height:14px"></i> 🤖 ولّد المعلومات تلقائياً بـ AI (10 نقاط)</button>
+    <button class="btn btn-primary" onclick="pmSave()" style="width:100%">💾 حفظ المنتج</button>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const API = window.location.origin;
+let WALLET = parseInt(localStorage.getItem('zx_credits')||'2550');
+let CURRENT_PAGE='dashboard';
+
+// Mock product seed
+const MOCK_PRODUCTS=[
+  {id:'p1',name:'iPhone 17 Pro Max',price:5499,stock:24,cat:'electronics',img:'https://images.unsplash.com/photo-1592750475338-74b7b21085ab?w=600&q=85',sales:34},
+  {id:'p2',name:'Apple Watch Ultra 2',price:3299,stock:18,cat:'electronics',img:'https://images.unsplash.com/photo-1551816230-ef5deaed4a26?w=600&q=85',sales:28},
+  {id:'p3',name:'AirPods Pro 3',price:1099,stock:42,cat:'electronics',img:'https://images.unsplash.com/photo-1606220945770-b5b6c2c55bf1?w=600&q=85',sales:51},
+  {id:'p4',name:'MacBook Pro M4',price:9999,stock:7,cat:'electronics',img:'https://images.unsplash.com/photo-1517336714731-489689fd1ca8?w=600&q=85',sales:12},
+  {id:'p5',name:'iPad Air M3',price:2799,stock:15,cat:'electronics',img:'https://images.unsplash.com/photo-1561154464-82e9adf32764?w=600&q=85',sales:19},
+  {id:'p6',name:'Samsung S25 Ultra',price:4899,stock:11,cat:'electronics',img:'https://images.unsplash.com/photo-1610945415295-d9bbf067e59c?w=600&q=85',sales:8}
+];
+let PRODUCTS=JSON.parse(localStorage.getItem('zx_dash_products')||'null')||MOCK_PRODUCTS;
+const MOCK_CUSTOMERS=[
+  {name:'نوف العتيبي',phone:'0567778888',orders:7,total:1245,last:'قبل ساعة'},
+  {name:'خالد المطيري',phone:'0561234567',orders:12,total:3489,last:'قبل 3 ساعات'},
+  {name:'ريم القحطاني',phone:'0578889999',orders:4,total:1820,last:'أمس'},
+  {name:'محمد الزهراني',phone:'0533123456',orders:9,total:2145,last:'منذ 2 أيام'},
+  {name:'سارة العنزي',phone:'0598765432',orders:3,total:567,last:'منذ 3 أيام'}
+];
+
+function $(id){return document.getElementById(id)}
+function toast(m){const t=$('toast');t.textContent=m;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),2500)}
+
+// ───── AUTH ─────
+function doLogin(){
+  const email=$('li-email').value,pass=$('li-pass').value;
+  if(email==='merchant@zerax.com'&&pass==='zerax2026'){
+    localStorage.setItem('zx_admin_session','1');
+    showApp();
+  }else{$('li-err').textContent='البريد أو كلمة المرور غير صحيحة';$('li-err').classList.add('show')}
+}
+function doLogout(){localStorage.removeItem('zx_admin_session');location.reload()}
+function showApp(){
+  $('login-screen').style.display='none';
+  $('app').classList.add('show');
+  goPage('dashboard');
+  renderAll();
+  setTimeout(()=>{if(window.lucide)lucide.createIcons()},100);
+}
+if(localStorage.getItem('zx_admin_session'))showApp();
+
+// ───── NAV ─────
+function goPage(p){
+  CURRENT_PAGE=p;
+  document.querySelectorAll('.page').forEach(el=>el.classList.toggle('active',el.dataset.page===p));
+  document.querySelectorAll('.nav-item').forEach(el=>el.classList.toggle('active',el.dataset.page===p));
+  const titles={dashboard:'الرئيسية',products:'المنتجات',orders:'الطلبات',customers:'العملاء',delivery:'إدارة التوصيل',payroll:'المحاسبة والرواتب',gateways:'وسائل الدفع',settings:'الإعدادات','video-studio':'Video Studio AI'};
+  $('page-title').textContent=titles[p]||p;
+  document.getElementById('sidebar').classList.remove('open');
+  // lazy load
+  if(p==='delivery')loadDelivery();
+  if(p==='payroll')loadPayroll();
+  if(p==='gateways')loadGateways();
+  setTimeout(()=>{if(window.lucide)lucide.createIcons()},50);
+}
+
+// ───── RENDER ALL (initial) ─────
+function renderAll(){
+  $('wallet-balance').textContent=WALLET.toLocaleString('ar-EG');
+  // Recent orders
+  $('recent-orders').innerHTML=[
+    {id:'#3047',cust:'نوف العتيبي',amt:'245 ر.س',st:'delivered',drv:'خالد العتيبي',time:'قبل دقيقتين'},
+    {id:'#3046',cust:'خالد المطيري',amt:'89 ر.س',st:'delivering',drv:'أحمد السبيعي',time:'قبل 15 دقيقة'},
+    {id:'#3045',cust:'ريم القحطاني',amt:'320 ر.س',st:'paid',drv:'—',time:'قبل ساعة'},
+    {id:'#3044',cust:'محمد الزهراني',amt:'145 ر.س',st:'pending',drv:'—',time:'قبل ساعتين'},
+    {id:'#3043',cust:'سارة العنزي',amt:'67 ر.س',st:'pending',drv:'—',time:'قبل 3 ساعات'}
+  ].map(o=>`<tr><td><b>${o.id}</b></td><td>${o.cust}</td><td><b>${o.amt}</b></td><td><span class="status-pill s-${o.st}">${({delivered:'تم التسليم',delivering:'في طريقها',paid:'مدفوع',pending:'بانتظار'})[o.st]}</span></td><td>${o.drv}</td><td style="color:var(--mute);font-size:11px">${o.time}</td></tr>`).join('');
+  // Top products
+  $('top-products').innerHTML=[...PRODUCTS].sort((a,b)=>b.sales-a.sales).slice(0,5).map((p,i)=>
+    `<div style="display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--border)"><div style="width:34px;height:34px;border-radius:50%;background:#faf5ff;color:var(--purple);display:flex;align-items:center;justify-content:center;font-weight:900">${i+1}</div><img src="${p.img}" style="width:38px;height:38px;border-radius:8px;object-fit:cover"><div style="flex:1;min-width:0"><div style="font-size:12px;font-weight:900;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${p.name}</div><div style="font-size:10px;color:var(--mute)">${p.sales} مبيعات</div></div><b style="color:var(--purple);font-size:13px">${p.price}</b></div>`).join('');
+  renderProducts();
+  renderOrders();
+  renderCustomers();
+}
+function renderProducts(){
+  $('products-grid').innerHTML=`<div class="pcard add" onclick="openProductModal()"><i data-lucide="plus-circle" style="width:36px;height:36px;margin-bottom:8px"></i>منتج جديد</div>`+
+    PRODUCTS.map(p=>`<div class="pcard"><div class="img" style="background-image:url('${p.img}')"><div class="actions"><button title="تعديل صورة"><i data-lucide="image-plus" style="width:14px;height:14px"></i></button><button title="حذف"><i data-lucide="trash-2" style="width:14px;height:14px"></i></button></div></div><div class="body"><h4>${p.name}</h4><div class="price">${p.price} ر.س</div><div class="meta">📦 المخزون: ${p.stock} · 🛒 ${p.sales} مبيعات</div></div></div>`).join('');
+  setTimeout(()=>{if(window.lucide)lucide.createIcons()},50);
+}
+function renderOrders(){
+  const seed=[
+    {id:'ord_3047',cust:'نوف العتيبي',ph:'0567778888',amt:245,st:'delivered',drv:'خالد العتيبي'},
+    {id:'ord_3046',cust:'خالد المطيري',ph:'0561234567',amt:89,st:'delivering',drv:'أحمد السبيعي'},
+    {id:'ord_3045',cust:'ريم القحطاني',ph:'0578889999',amt:320,st:'paid',drv:'—'},
+    {id:'ord_3044',cust:'محمد الزهراني',ph:'0533123456',amt:145,st:'pending',drv:'—'},
+    {id:'ord_3043',cust:'سارة العنزي',ph:'0598765432',amt:67,st:'pending',drv:'—'}
+  ];
+  $('orders-table').innerHTML=seed.map(o=>`<tr><td><b>${o.id.replace('ord_','#')}</b></td><td>${o.cust}</td><td style="direction:ltr;text-align:right">${o.ph}</td><td><b>${o.amt} ر.س</b></td><td><span class="status-pill s-${o.st}">${({delivered:'تم التسليم',delivering:'في طريقها',paid:'مدفوع',pending:'بانتظار'})[o.st]}</span></td><td>${o.drv}</td><td><a href="/mockups/track.html?id=${o.id}" target="_blank" style="color:var(--purple);font-weight:900;text-decoration:none;font-size:11px">🔍 تتبع ↗</a></td></tr>`).join('');
+}
+function renderCustomers(){
+  $('customers-table').innerHTML=MOCK_CUSTOMERS.map(c=>`<tr><td><div style="display:flex;align-items:center;gap:10px"><div style="width:34px;height:34px;border-radius:50%;background:linear-gradient(135deg,var(--purple),var(--amber));color:#fff;display:flex;align-items:center;justify-content:center;font-weight:900">${c.name.charAt(0)}</div><b>${c.name}</b></div></td><td style="direction:ltr;text-align:right">${c.phone}</td><td><b>${c.orders}</b></td><td><b style="color:var(--purple)">${c.total} ر.س</b></td><td style="color:var(--mute);font-size:11px">${c.last}</td></tr>`).join('');
+}
+
+// ───── DELIVERY ─────
+async function loadDelivery(){
+  try{
+    const [stat,ord,drv]=await Promise.all([
+      fetch(API+'/api/delivery/stats').then(r=>r.json()),
+      fetch(API+'/api/delivery/orders?limit=20').then(r=>r.json()),
+      fetch(API+'/api/delivery/drivers').then(r=>r.json())
+    ]);
+    $('dv-stats').innerHTML=[
+      {v:stat.by_status?.pending||0,l:'بانتظار',c:'#fbbf24'},
+      {v:(stat.by_status?.delivering||0)+(stat.by_status?.assigned||0),l:'نشطة',c:'#ec4899'},
+      {v:stat.active_drivers||0,l:'سائق متاح',c:'#10b981'},
+      {v:(stat.revenue_today_sar||0)+' ر.س',l:'إيراد اليوم',c:'#7c3aed'}
+    ].map(s=>`<div class="kpi" style="--clr:${s.c};padding:14px"><div class="lbl">${s.l}</div><div class="val" style="font-size:20px">${s.v}</div></div>`).join('');
+    $('dv-orders').innerHTML=(ord.orders||[]).slice(0,8).map(o=>{
+      const drvObj=(drv.drivers||[]).find(d=>d.id===o.driver_id);
+      return `<tr><td><b>#${o.id.replace('ord_','')}</b></td><td>${o.customer_name}</td><td>${o.distance_km||0} كم</td><td><b>${o.delivery_fee_sar||0} ر.س</b></td><td>${drvObj?drvObj.name:'<span style="color:#dc2626">⚠️ لم يُسند</span>'}</td><td><span class="status-pill s-${o.status==='delivering'?'delivering':o.status==='delivered'?'delivered':o.status==='cancelled'?'cancelled':'pending'}">${({pending:'بانتظار',assigned:'مُسندة',picked_up:'تم الاستلام',delivering:'في طريقها',delivered:'تم التسليم',cancelled:'ملغاة'})[o.status]||o.status}</span></td></tr>`;
+    }).join('');
+    $('dv-drivers').innerHTML=(drv.drivers||[]).map(d=>`<div class="panel" style="margin:0;padding:14px"><div style="display:flex;align-items:center;gap:10px"><div style="width:42px;height:42px;border-radius:50%;background:linear-gradient(135deg,var(--purple),var(--amber));color:#fff;display:flex;align-items:center;justify-content:center;font-weight:900">${d.name.charAt(0)}</div><div style="flex:1"><b style="font-size:13px">${d.name}</b><div style="font-size:10px;color:var(--mute);direction:ltr;text-align:right">${d.phone}</div></div><span class="status-pill ${d.status==='online'?'s-paid':d.status==='delivering'?'s-delivering':'s-pending'}">${d.status==='online'?'متاح':d.status==='delivering'?'في توصيل':'غير متاح'}</span></div><div style="margin-top:8px;font-size:11px;color:var(--mute)">⭐ ${(d.rating||5).toFixed(1)} · ${d.deliveries_today||0} توصيل · <b>${d.balance_pending_sar||0}</b> ر.س معلّق</div></div>`).join('');
+    setTimeout(()=>{if(window.lucide)lucide.createIcons()},50);
+  }catch(e){}
+}
+
+// ───── PAYROLL ─────
+async function loadPayroll(){
+  try{
+    const r=await fetch(API+'/api/payroll/calculate');
+    const d=await r.json();
+    $('pr-summary').innerHTML=[
+      {v:d.total_payable_sar+' ر.س',l:'إجمالي مستحق',c:'#7c3aed'},
+      {v:d.salaried_total+' ر.س',l:'رواتب موظفين',c:'#1e40af'},
+      {v:d.commission_total+' ر.س',l:'عمولات',c:'#ec4899'},
+      {v:d.vat_amount_sar+' ر.س',l:'ضريبة 15%',c:'#fbbf24'}
+    ].map(s=>`<div class="kpi" style="--clr:${s.c};padding:14px"><div class="lbl">${s.l}</div><div class="val" style="font-size:18px">${s.v}</div></div>`).join('');
+    $('pr-table').innerHTML=d.lines.map(l=>{
+      const em=l.employment_type==='salaried'?'<span class="status-pill s-paid">📅 موظف</span>':'<span class="status-pill s-delivering">💸 عمولة</span>';
+      return `<tr><td><b>${l.driver_name}</b><div style="font-size:10px;color:var(--mute);direction:ltr;text-align:right">${l.phone}</div></td><td>${em}</td><td><b style="color:${l.amount_sar>0?'var(--emerald)':'var(--mute)'}">${l.amount_sar} ر.س</b></td><td>${({stc_pay:'📱 STC Pay',mada:'🏦 مدى',urpay:'💳 urpay',alinma_pay:'💳 الإنماء'})[l.payout_method]||l.payout_method}<div style="font-size:10px;color:var(--mute);direction:ltr;text-align:right">${l.payout_account}</div></td><td><button class="btn btn-outline" style="padding:7px 12px;font-size:11px" onclick="window.open('${API}/api/payroll/statement/${l.driver_id}','_blank')">📄 كشف</button></td></tr>`;
+    }).join('');
+  }catch(e){}
+}
+async function prRunAll(){
+  if(!confirm('سيتم تحويل دفعات لجميع السائقين الآن. متأكد؟'))return;
+  try{
+    const r=await fetch(API+'/api/payroll/run',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({notify_whatsapp:true})});
+    const d=await r.json();
+    toast('✓ تم تحويل '+d.total_paid_sar+' ر.س على '+d.processed+' سائق');
+    loadPayroll();
+  }catch(e){alert('فشل')}
+}
+
+// ───── GATEWAYS ─────
+async function loadGateways(){
+  try{
+    const profR=await fetch(API+'/api/payments/countries').then(r=>r.json());
+    const sel=$('gw-country-sel');
+    if(!sel.options.length){
+      const flags={SA:'🇸🇦',AE:'🇦🇪',EG:'🇪🇬',KW:'🇰🇼',US:'🇺🇸',GB:'🇬🇧',DE:'🇩🇪',FR:'🇫🇷',NL:'🇳🇱',CN:'🇨🇳',IN:'🇮🇳',SG:'🇸🇬',BH:'🇧🇭',QA:'🇶🇦'};
+      sel.innerHTML=Object.entries(profR.profiles).map(([c,p])=>`<option value="${c}">${flags[c]||'🌐'} ${p.name_ar}</option>`).join('');
+    }
+    gwLoad();
+  }catch(e){}
+}
+async function gwLoad(){
+  const c=$('gw-country-sel').value||'SA';
+  try{
+    const r=await fetch(API+'/api/payments/by-country?country='+c);
+    const d=await r.json();
+    $('gw-list').innerHTML=d.gateways.map(g=>{
+      const typeColor={card:'#1e40af',wallet:'#7c3aed',bnpl:'#ec4899',bank:'#059669',cod:'#10b981',qr:'#0891b2',crypto:'#f59e0b'}[g.type]||'#6b7280';
+      const u=g.is_universal?'<span style="background:#fef3c7;color:#92400e;padding:2px 6px;border-radius:99px;font-size:9px;font-weight:900;margin-right:4px">🌐 عالمي</span>':'';
+      return `<div style="background:#fff;border:1.5px solid var(--border);border-radius:14px;padding:14px;margin-bottom:10px;display:grid;grid-template-columns:auto 1fr auto;gap:14px;align-items:center">
+        <div style="width:48px;height:48px;border-radius:10px;background:${g.badge.bg};color:${g.badge.fg};display:flex;align-items:center;justify-content:center;font-weight:900;font-size:10px;text-align:center;line-height:1.1">${g.name_en.slice(0,8)}</div>
+        <div><div style="font-size:13px;font-weight:900">${g.name_ar} ${u}<span style="background:${typeColor}20;color:${typeColor};padding:2px 6px;border-radius:99px;font-size:9px;margin-right:4px">${({card:'💳',wallet:'📱',bnpl:'💎',bank:'🏦',cod:'💵',qr:'📲',crypto:'₿'})[g.type]} ${g.type.toUpperCase()}</span></div>
+        <div style="font-size:11px;color:var(--mute);margin-top:3px">${g.badge.slogan_ar}</div>
+        <div style="font-size:11px;color:#dc2626;margin-top:3px">💰 ${g.real_fees?.merchant||g.fees_hint} · تسوية ${g.real_fees?.settlement_days||1} يوم</div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px">
+          <a href="${g.merchant_signup_url||'#'}" target="_blank" style="background:#10b981;color:#fff;padding:5px 10px;border-radius:99px;font-size:10px;font-weight:900;text-decoration:none">🚀 سجّل</a>
+          <a href="${g.merchant_dashboard_url||'#'}" target="_blank" style="background:#0a0a14;color:#fbbf24;padding:5px 10px;border-radius:99px;font-size:10px;font-weight:900;text-decoration:none">🔐 لوحة</a>
+          <a href="${g.developer_docs_url||'#'}" target="_blank" style="background:#7c3aed;color:#fff;padding:5px 10px;border-radius:99px;font-size:10px;font-weight:900;text-decoration:none">📚 Docs</a>
+        </div></div>
+        <label style="cursor:pointer"><input type="checkbox" style="width:36px;height:20px;accent-color:var(--purple)"></label>
+      </div>`;
+    }).join('');
+  }catch(e){}
+}
+
+// ───── PRODUCT MODAL ─────
+function openProductModal(){$('prod-mod').classList.add('open')}
+function closeProductModal(){$('prod-mod').classList.remove('open')}
+function pmPreviewImg(inp){
+  const f=inp.files[0];if(!f)return;
+  const reader=new FileReader();
+  reader.onload=e=>{$('pm-img-preview').innerHTML=`<img src="${e.target.result}" style="max-width:100%;max-height:200px;border-radius:8px">`};
+  reader.readAsDataURL(f);
+}
+async function pmAiFill(){
+  const name=$('pm-name').value.trim();if(!name){alert('اكتب اسم المنتج أولاً');return;}
+  if(WALLET<10){alert('رصيدك أقل من 10 نقاط — اشحن أولاً');return;}
+  toast('🤖 الذكاء يبحث ويعبّي المعلومات…');
+  try{
+    const r=await fetch(API+'/api/image-studio/product-info',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name,lang:'ar'})});
+    const d=await r.json();
+    if(d.title)$('pm-name').value=d.title;
+    if(d.description)$('pm-desc').value=d.description;
+    WALLET-=10;localStorage.setItem('zx_credits',WALLET);$('wallet-balance').textContent=WALLET.toLocaleString('ar-EG');
+    toast('✓ تم التوليد · خُصمت 10 نقاط');
+  }catch(e){alert('فشل')}
+}
+function pmSave(){
+  const name=$('pm-name').value.trim();if(!name){alert('اكتب الاسم');return;}
+  const newP={id:'p'+Date.now(),name,price:+$('pm-price').value||0,stock:+$('pm-stock').value||0,cat:$('pm-cat').value,img:'https://images.unsplash.com/photo-1586765501019-cbf6c0b6d7a4?w=600&q=85',sales:0};
+  PRODUCTS.unshift(newP);
+  localStorage.setItem('zx_dash_products',JSON.stringify(PRODUCTS));
+  closeProductModal();
+  renderProducts();
+  ['pm-name','pm-price','pm-desc'].forEach(id=>$(id).value='');
+  toast('✓ تم حفظ المنتج');
+}
+
+// ───── VIDEO STUDIO CHAT ─────
+let VS_ATTACHMENTS=[],VS_RECORDING=null;
+function vsAutoSize(t){t.style.height='auto';t.style.height=Math.min(t.scrollHeight,120)+'px'}
+function vsAttachFile(inp){
+  for(const f of inp.files){
+    const reader=new FileReader();
+    reader.onload=e=>{
+      VS_ATTACHMENTS.push({type:'image',data:e.target.result,name:f.name});
+      vsRenderAttachments();
+    };
+    reader.readAsDataURL(f);
+  }
+  inp.value='';
+}
+function vsRenderAttachments(){
+  $('vs-attach-bar').innerHTML=VS_ATTACHMENTS.map((a,i)=>`<div class="attach-pill">📎 ${a.name?a.name.slice(0,18):a.type} <button onclick="VS_ATTACHMENTS.splice(${i},1);vsRenderAttachments()">✕</button></div>`).join('');
+}
+async function vsToggleVoice(){
+  if(VS_RECORDING){VS_RECORDING.stop();return;}
+  try{
+    const stream=await navigator.mediaDevices.getUserMedia({audio:true});
+    const rec=new MediaRecorder(stream);
+    const chunks=[];
+    rec.ondataavailable=e=>chunks.push(e.data);
+    rec.onstop=()=>{
+      const blob=new Blob(chunks,{type:'audio/webm'});
+      VS_ATTACHMENTS.push({type:'audio',name:'تسجيل صوتي '+new Date().toLocaleTimeString('ar-SA'),blob});
+      vsRenderAttachments();
+      stream.getTracks().forEach(t=>t.stop());
+      VS_RECORDING=null;
+      $('vs-mic-btn').classList.remove('recording');
+    };
+    rec.start();
+    VS_RECORDING=rec;
+    $('vs-mic-btn').classList.add('recording');
+    toast('🎙️ التسجيل بدأ … اضغط الميكروفون مرة ثانية للإيقاف');
+  }catch(e){alert('لم نتمكن من الوصول للميكروفون')}
+}
+function vsSendSuggestion(q){$('vs-input-text').value=q;vsSend()}
+function vsAddMsg(role,html){
+  const m=document.createElement('div');
+  m.className='msg '+role;
+  m.innerHTML=`<div class="avt">${role==='user'?'م':'⚡'}</div><div class="bubble">${html}</div>`;
+  $('vs-msgs').appendChild(m);
+  $('vs-msgs').scrollTop=$('vs-msgs').scrollHeight;
+  return m;
+}
+async function vsSend(){
+  const txt=$('vs-input-text').value.trim();if(!txt&&!VS_ATTACHMENTS.length)return;
+  // User message
+  let userHTML=txt.replace(/\n/g,'<br>');
+  VS_ATTACHMENTS.forEach(a=>{if(a.type==='image')userHTML+=`<img src="${a.data}">`;else if(a.type==='audio')userHTML+=`<div style="margin-top:6px;padding:6px 10px;background:#fff;border-radius:8px;font-size:11px">🎙️ ${a.name}</div>`});
+  vsAddMsg('user',userHTML);
+  $('vs-input-text').value='';vsAutoSize($('vs-input-text'));
+  VS_ATTACHMENTS=[];vsRenderAttachments();
+
+  // AI typing
+  const typingMsg=vsAddMsg('ai','<span class="typing"><span></span><span></span><span></span></span> يفكر…');
+
+  try{
+    // Detect intent (very simple parser)
+    let duration=30,tone='energetic';
+    if(/15/.test(txt))duration=15;else if(/45/.test(txt))duration=45;else if(/60/.test(txt))duration=60;
+    if(/فاخر/.test(txt))tone='luxury';else if(/دافئ/.test(txt))tone='warm';else if(/تقني/.test(txt))tone='tech';
+    const productMatch=txt.match(/(?:فيديو|إعلان|لـ|عن|ل)\s+(.+?)(?:بأسلوب|مدته|مدة|ثانية|$)/);
+    const productName=(productMatch?productMatch[1]:txt.split(/\s+/).slice(0,6).join(' ')).trim();
+
+    typingMsg.querySelector('.bubble').innerHTML='🎬 أكتب لك قصة الفيديو الأول…';
+    const storyR=await fetch(API+'/api/promo-video/storyboard',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({product_name:productName,duration_seconds:duration,tone,lang:'ar',cta:'اطلب الآن'})});
+    if(!storyR.ok)throw new Error('storyboard failed');
+    const story=await storyR.json();
+    typingMsg.querySelector('.bubble').innerHTML=`✅ <b>${story.title}</b><br><br>القصة (${story.scenes.length} مشاهد):<br>`+story.scenes.map(s=>`<div style="font-size:11px;color:var(--mute);padding:5px 0;border-bottom:1px dashed var(--border)"><b>مشهد ${s.seq}:</b> ${s.narration}</div>`).join('')+`<br>⏳ الآن أركّب الفيديو بصوت Zerax… (~30 ث)`;
+    $('vs-msgs').scrollTop=$('vs-msgs').scrollHeight;
+
+    const scenes=story.scenes.map((s,i)=>({narration:s.narration,image_url:[
+      'https://images.unsplash.com/photo-1592750475338-74b7b21085ab?w=800&q=85',
+      'https://images.unsplash.com/photo-1551816230-ef5deaed4a26?w=800&q=85',
+      'https://images.unsplash.com/photo-1606220945770-b5b6c2c55bf1?w=800&q=85',
+      'https://images.unsplash.com/photo-1517336714731-489689fd1ca8?w=800&q=85'
+    ][i%4]}));
+    const vidR=await fetch(API+'/api/promo-video/generate',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({title:story.title,scenes,duration_seconds:duration,voice:'zerax_male_deep',full_narration:story.full_narration,cta:'اطلب الآن',lang:'ar'})});
+    if(!vidR.ok)throw new Error('video failed');
+    const vid=await vidR.json();
+    const cost=story.cost+vid.cost;
+    typingMsg.querySelector('.bubble').innerHTML=`🎉 <b>الفيديو جاهز!</b><br><br><video controls playsinline src="${API+vid.video_url}"></video><br><div style="margin-top:6px;font-size:11px;color:var(--mute)">⏱ ${vid.duration_seconds}ث · 🎬 ${vid.scenes_count} مشاهد · 🎙 ${vid.voice_used} · ⚡ خُصم ${cost} نقطة</div>`;
+    WALLET-=cost;localStorage.setItem('zx_credits',WALLET);$('wallet-balance').textContent=WALLET.toLocaleString('ar-EG');
+    $('vs-msgs').scrollTop=$('vs-msgs').scrollHeight;
+  }catch(e){
+    typingMsg.querySelector('.bubble').innerHTML=`❌ آسف، حصل خطأ: ${e.message}. حاول مرة ثانية أو اختر اقتراح من القائمة الجانبية.`;
+  }
+}
+
+function rechargeOpen(){window.open('/mockups/app_mode_full.html','_blank')}
+
+// Init lucide icons on load
+window.addEventListener('load',()=>{if(window.lucide)lucide.createIcons()});
+</script>
+</body>
+</html>
