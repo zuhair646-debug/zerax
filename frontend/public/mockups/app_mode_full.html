@@ -2,6 +2,41 @@
 <html dir="rtl" lang="ar"><head>
 <!-- Zerax Unified Dark Theme — applied platform-wide -->
 <link rel="stylesheet" href="/mockups/zerax-theme.css">
+<style id="zx-customer-dark-overrides">
+  /* Force the customer storefront into the Zerax dark aesthetic */
+  body.zx-dark{background:#0a0a14 !important;color:#f1f5f9 !important}
+  body.zx-dark .top{background:#0f0f1c !important;border-bottom:1px solid #2d2d4a !important;box-shadow:0 2px 10px rgba(0,0,0,.4) !important}
+  body.zx-dark .search{background:#14142b !important;color:#f1f5f9 !important;border:1px solid #2d2d4a !important}
+  body.zx-dark .search::placeholder{color:#64748b !important}
+  body.zx-dark .pill-btn{background:#14142b !important;color:#cbd5e1 !important;border:1px solid #2d2d4a !important}
+  body.zx-dark .pill-btn:hover{background:#1f1f3a !important;border-color:#7c3aed !important}
+  body.zx-dark .q-cat,
+  body.zx-dark .p-card{background:#14142b !important;border:1px solid #2d2d4a !important;color:#f1f5f9 !important;box-shadow:0 4px 16px rgba(0,0,0,.3) !important}
+  body.zx-dark .q-cat:hover,
+  body.zx-dark .p-card:hover{transform:translateY(-2px);border-color:#7c3aed !important;box-shadow:0 8px 24px rgba(124,58,237,.2) !important}
+  body.zx-dark .bnav{background:#0f0f1c !important;border-top:1px solid #2d2d4a !important;box-shadow:0 -4px 20px rgba(0,0,0,.5) !important}
+  body.zx-dark .bnav button,
+  body.zx-dark .bnav a{color:#94a3b8 !important}
+  body.zx-dark .bnav .active{color:#fbbf24 !important}
+  body.zx-dark .cart-drawer{background:#0f0f1c !important;color:#f1f5f9 !important;border-left:1px solid #2d2d4a !important}
+  body.zx-dark .cart-foot{background:#14142b !important;border-top:1px solid #2d2d4a !important;color:#f1f5f9 !important}
+  body.zx-dark .qty-btn{background:#14142b !important;border:1px solid #2d2d4a !important;color:#f1f5f9 !important}
+  body.zx-dark .close-btn{background:#14142b !important;color:#f1f5f9 !important}
+  body.zx-dark h1,body.zx-dark h2,body.zx-dark h3,body.zx-dark h4,body.zx-dark p,body.zx-dark span,body.zx-dark label,body.zx-dark div{color:inherit}
+  body.zx-dark .banner-slide small{background:#fbbf24 !important;color:#0a0a14 !important}
+  /* Welcome modals and dialogs */
+  body.zx-dark [role="dialog"],
+  body.zx-dark .modal,
+  body.zx-dark .modal-card,
+  body.zx-dark [class*="welcome"],
+  body.zx-dark .geo-modal{background:#14142b !important;color:#f1f5f9 !important;border:1px solid #2d2d4a !important;box-shadow:0 30px 80px rgba(0,0,0,.6), 0 0 0 1px #312e81 !important}
+  body.zx-dark [class*="welcome"] h2,
+  body.zx-dark .modal h2{color:#fbbf24 !important}
+  body.zx-dark [class*="welcome"] p,
+  body.zx-dark .modal p{color:#cbd5e1 !important}
+  /* Default page bg even when zx-dark isn't on body */
+  body{background:#0a0a14;color:#f1f5f9}
+</style>
 <meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Zerax App Mode — Full Demo</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
