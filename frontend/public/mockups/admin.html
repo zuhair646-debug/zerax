@@ -1360,12 +1360,80 @@ select.ps-input option{background:#13131f;color:#fff}
             <p style="margin-top:8px;font-size:13px;color:rgba(255,255,255,.95);line-height:1.9">Zerax يوفر <b>العقل والأتمتة والذكاء الاصطناعي فقط</b>. أنت كتاجر تستخدم <b>مفاتيحك الخاصة</b> لكل خدمة (إيميل، SMS، واتساب، دفع) — تخصم الرسوم على حسابك مباشرة عند مزود الخدمة. <b>Zerax ما تاخذ أي عمولة</b> على هذي الخدمات. النقاط تنخصم فقط على خدمات الذكاء الاصطناعي اللي نحن نوفرها.</p>
           </div></div>
         </div>
-        <!-- Current balance -->
+
+        <!-- ═══════ MY SUBSCRIPTION ═══════ -->
+        <div class="panel" style="margin-top:14px">
+          <div class="panel-head"><h3>💼 اشتراكي الشهري</h3></div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:18px">
+            <div style="background:linear-gradient(135deg,#0a0a14,#1f1f2e);color:#fff;border-radius:14px;padding:18px">
+              <div style="font-size:11px;color:#94a3b8;font-weight:700">باقتك الحالية</div>
+              <div style="font-size:24px;font-weight:900;margin-top:6px" id="my-plan-name">Free Trial · ١٤ يوم تجربة</div>
+              <div style="display:flex;gap:14px;margin-top:14px;font-size:11px">
+                <div><div style="color:#94a3b8">القيمة الشهرية</div><b style="color:#fbbf24;font-size:16px" id="my-plan-price">0 ر.س</b></div>
+                <div><div style="color:#94a3b8">التجديد القادم</div><b style="color:#fff;font-size:13px" id="my-plan-renew">25 مارس 2026</b></div>
+                <div><div style="color:#94a3b8">حالة الفوترة</div><b style="color:#10b981">✓ نشط</b></div>
+              </div>
+            </div>
+            <div style="background:#fff;border:1px solid var(--border);border-radius:14px;padding:18px">
+              <div style="font-size:11px;color:var(--mute);font-weight:700">طريقة الدفع</div>
+              <div style="display:flex;align-items:center;gap:10px;margin-top:8px">
+                <div style="width:42px;height:30px;background:#0a0a14;color:#fbbf24;border-radius:6px;display:flex;align-items:center;justify-content:center;font-weight:900;font-size:9px">VISA</div>
+                <b style="font-family:monospace;font-size:13px">•••• 4242</b>
+              </div>
+              <button class="btn btn-outline" data-testid="change-payment-method" onclick="changePaymentMethod()" style="margin-top:14px;width:100%;padding:10px;font-size:12px"><i data-lucide="credit-card" style="width:13px;height:13px"></i> تغيير طريقة الدفع</button>
+            </div>
+          </div>
+          <!-- Plans comparison -->
+          <h4 style="font-size:13px;font-weight:900;color:var(--purple);margin-bottom:10px">⬆️ ترقية الباقة:</h4>
+          <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:14px">
+            <!-- STANDARD -->
+            <div style="background:#fff;border:2px solid #e5e7eb;border-radius:14px;padding:20px">
+              <div style="font-size:11px;color:#6b7280;font-weight:900">⭐ ستاندرد</div>
+              <div style="font-size:32px;font-weight:900;color:#0a0a14;margin:8px 0"><span style="font-size:18px">ر.س</span> 99<span style="font-size:13px;color:#6b7280">/شهر</span></div>
+              <div style="font-size:11px;color:#10b981;font-weight:900">أو 999 ر.س/سنة (وفّر شهرين)</div>
+              <ul style="list-style:none;padding:0;margin:16px 0;font-size:12px;line-height:2;color:#374151">
+                <li>✅ حتى <b>500 منتج</b></li>
+                <li>✅ حتى <b>2,000 طلب/شهر</b></li>
+                <li>✅ <b>3 موظفين</b> + سائق واحد</li>
+                <li>✅ <b>1,000 نقطة AI/شهر</b> (مجاناً)</li>
+                <li>✅ تقارير PDF + ZATCA</li>
+                <li>✅ ربط مفاتيحك الخاصة (إيميل/SMS/واتساب/دفع)</li>
+                <li>❌ بدون white-label</li>
+                <li>❌ بدون priority support</li>
+                <li>❌ بدون API access</li>
+              </ul>
+              <button class="btn btn-primary" data-testid="upgrade-standard" onclick="upgradePlan('standard',99)" style="width:100%;padding:12px;font-size:13px">اشترك بـ ٩٩ ر.س/شهر</button>
+            </div>
+            <!-- PRO ALL-INCLUSIVE -->
+            <div style="background:linear-gradient(135deg,#7c3aed,#0a0a14);color:#fff;border:2px solid #fbbf24;border-radius:14px;padding:20px;position:relative">
+              <div style="position:absolute;top:-12px;left:50%;transform:translateX(-50%);background:#fbbf24;color:#0a0a14;padding:4px 14px;border-radius:99px;font-size:10px;font-weight:900">⭐ الأشهر</div>
+              <div style="font-size:11px;color:#fbbf24;font-weight:900">💎 برو · شامل كل شي</div>
+              <div style="font-size:32px;font-weight:900;margin:8px 0;color:#fff"><span style="font-size:18px">ر.س</span> 299<span style="font-size:13px;color:#94a3b8">/شهر</span></div>
+              <div style="font-size:11px;color:#fbbf24;font-weight:900">أو 2,999 ر.س/سنة (وفّر شهرين)</div>
+              <ul style="list-style:none;padding:0;margin:16px 0;font-size:12px;line-height:2;color:#e2e8f0">
+                <li>✅ <b style="color:#fff">منتجات بلا حدود</b></li>
+                <li>✅ <b style="color:#fff">طلبات بلا حدود</b></li>
+                <li>✅ <b style="color:#fff">موظفين وسائقين بلا حدود</b></li>
+                <li>✅ <b style="color:#fff">10,000 نقطة AI/شهر</b> (مجاناً)</li>
+                <li>✅ كل ميزات ستاندرد</li>
+                <li>✅ <b style="color:#fbbf24">White-label</b> (نطاقك الخاص)</li>
+                <li>✅ <b style="color:#fbbf24">دعم فني أولوية 24/7</b></li>
+                <li>✅ <b style="color:#fbbf24">API access كامل</b></li>
+                <li>✅ <b style="color:#fbbf24">مدير حساب شخصي</b></li>
+                <li>✅ تكامل مخصص + استشارات</li>
+              </ul>
+              <button class="btn btn-amber" data-testid="upgrade-pro" onclick="upgradePlan('pro',299)" style="width:100%;padding:12px;font-size:13px;background:#fbbf24;color:#0a0a14;border:none">ترقّ إلى برو بـ ٢٩٩ ر.س/شهر</button>
+            </div>
+          </div>
+          <p style="font-size:11px;color:var(--mute);text-align:center;margin-top:14px">💳 الدفع شهري عبر بطاقتك · يمكنك إلغاء الاشتراك في أي وقت · ضمان استرجاع ٧ أيام</p>
+        </div>
+
+        <!-- Current AI usage -->
         <div class="kpi-grid" style="margin-top:14px;grid-template-columns:repeat(auto-fit,minmax(200px,1fr))">
           <div class="kpi"><div class="lbl">رصيد النقاط الحالي</div><div class="val" style="color:#7c3aed" id="credits-balance">0</div><div class="meta">نقطة</div></div>
           <div class="kpi"><div class="lbl">قيمة النقطة</div><div class="val" style="color:#10b981">0.10</div><div class="meta">ر.س / نقطة</div></div>
           <div class="kpi"><div class="lbl">استهلاك AI هذا الشهر</div><div class="val" style="color:#fbbf24">142</div><div class="meta">نقطة</div></div>
-          <div class="kpi"><div class="lbl">حالة الاشتراك</div><div class="val" style="color:#10b981;font-size:14px">Free Tier</div><div class="meta">ترقّ لباقة أعلى</div></div>
+          <div class="kpi"><div class="lbl">إعفاء الباقة الحالية</div><div class="val" style="color:#10b981;font-size:14px">0 نقطة</div><div class="meta">رقّ لـ ستاندرد</div></div>
         </div>
 
         <!-- WHAT POINTS COVER -->
@@ -1703,6 +1771,7 @@ function showApp(){
   goPage('dashboard');
   loadProductsFromAPI();
   renderAll();
+  maybeShowOnboarding();
   setTimeout(()=>{
     if(window.lucide)lucide.createIcons();
     setupKpiClicks();
@@ -3200,6 +3269,36 @@ function openCouponMod(){
 function loadCredits(){
   const el=document.getElementById('credits-balance');
   if(el)el.textContent=(WALLET||0).toLocaleString('ar-EG');
+  // Update plan info if user has upgraded
+  try{
+    const plan=JSON.parse(localStorage.getItem('zx_subscription')||'null');
+    if(plan){
+      const nameEl=document.getElementById('my-plan-name');
+      const priceEl=document.getElementById('my-plan-price');
+      const renewEl=document.getElementById('my-plan-renew');
+      if(nameEl)nameEl.textContent=plan.tier==='pro'?'💎 برو · شامل':'⭐ ستاندرد';
+      if(priceEl)priceEl.textContent=plan.price+' ر.س/شهر';
+      if(renewEl)renewEl.textContent=new Date(Date.now()+30*86400000).toLocaleDateString('ar-SA');
+    }
+  }catch(_){}
+}
+function upgradePlan(tier,price){
+  const tierName=tier==='pro'?'برو الشاملة':'ستاندرد';
+  if(!confirm(`الاشتراك في باقة ${tierName} بـ ${price} ر.س/شهر؟\n\nسيتم تحويلك لبوابة الدفع لإتمام العملية.\n\n⚠️ يستخدم بطاقتك المسجّلة في "طريقة الدفع" أعلاه.`))return;
+  toast('💳 جاري التحويل لبوابة الدفع...');
+  setTimeout(()=>{
+    localStorage.setItem('zx_subscription',JSON.stringify({tier,price,started:new Date().toISOString()}));
+    // Award monthly free points
+    const freePoints=tier==='pro'?10000:1000;
+    WALLET=(WALLET||0)+freePoints;
+    localStorage.setItem('zx_credits',WALLET);
+    const ce=document.getElementById('wallet-balance');if(ce)ce.textContent=WALLET.toLocaleString('ar-EG');
+    loadCredits();
+    toast(`✓ تم الاشتراك في باقة ${tierName} · +${freePoints.toLocaleString()} نقطة AI مجاناً`);
+  },1500);
+}
+function changePaymentMethod(){
+  alert('سيتم توجيهك لإضافة طريقة دفع جديدة.\n\n(مثال: Stripe Element لإدخال بيانات البطاقة بشكل آمن)');
 }
 function buyCredits(points,sar){
   if(!confirm(`شراء ${points.toLocaleString()} نقطة بمبلغ ${sar} ر.س؟\n\nسيتم توجيهك لبوابة الدفع لإتمام العملية.`))return;
@@ -3211,6 +3310,56 @@ function buyCredits(points,sar){
     loadCredits();
     toast(`✓ تم إضافة ${points.toLocaleString()} نقطة لرصيدك`);
   },1500);
+}
+
+// ───── ONBOARDING WIZARD (first login) ─────
+function maybeShowOnboarding(){
+  if(localStorage.getItem('zx_onboarded'))return;
+  setTimeout(()=>openOnboarding(),700);
+}
+function openOnboarding(){
+  if(document.getElementById('onboarding-modal'))return;
+  const m=document.createElement('div');m.id='onboarding-modal';
+  m.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px;overflow-y:auto;backdrop-filter:blur(6px)';
+  m.innerHTML=`<div style="background:#fff;max-width:760px;width:100%;border-radius:20px;overflow:hidden;box-shadow:0 30px 80px rgba(0,0,0,.5)">
+    <div style="background:linear-gradient(135deg,#7c3aed,#0a0a14);color:#fff;padding:32px 28px;text-align:center">
+      <div style="font-size:50px;margin-bottom:8px">🎉</div>
+      <h2 style="color:#fff;font-size:22px">مرحباً فيك في Zerax!</h2>
+      <p style="font-size:13px;color:#94a3b8;margin-top:6px">في 4 خطوات بسيطة، متجرك يصير جاهز ١٠٠٪</p>
+    </div>
+    <div style="padding:28px;max-height:65vh;overflow-y:auto">
+      <div style="display:grid;gap:14px">
+        <div style="background:#f0fdf4;border:2px solid #86efac;border-radius:12px;padding:16px;display:flex;align-items:center;gap:14px"><div style="width:42px;height:42px;border-radius:50%;background:#10b981;color:#fff;display:flex;align-items:center;justify-content:center;font-weight:900;font-size:18px">1</div><div style="flex:1"><b style="font-size:14px">✅ إنشاء حسابك (انتهى)</b><div style="font-size:11px;color:#6b7280;margin-top:3px">تم تسجيل دخولك بنجاح</div></div></div>
+        <div style="background:#faf5ff;border:2px solid #c4b5fd;border-radius:12px;padding:16px;display:flex;align-items:center;gap:14px"><div style="width:42px;height:42px;border-radius:50%;background:#7c3aed;color:#fff;display:flex;align-items:center;justify-content:center;font-weight:900;font-size:18px">2</div><div style="flex:1"><b style="font-size:14px">📦 أضف منتجاتك</b><div style="font-size:11px;color:#6b7280;margin-top:3px">ابدأ بأول 3 منتجات — استخدم AI لتوليد الأوصاف والصور</div></div><button onclick="closeOnboarding();goPage('products')" style="background:#7c3aed;color:#fff;border:none;padding:8px 14px;border-radius:8px;font-family:inherit;font-weight:900;font-size:11px;cursor:pointer">ابدأ ←</button></div>
+        <div style="background:#fffbeb;border:2px solid #fde68a;border-radius:12px;padding:16px;display:flex;align-items:center;gap:14px"><div style="width:42px;height:42px;border-radius:50%;background:#f59e0b;color:#fff;display:flex;align-items:center;justify-content:center;font-weight:900;font-size:18px">3</div><div style="flex:1"><b style="font-size:14px">🔐 اربط مفاتيح المزودين</b><div style="font-size:11px;color:#6b7280;margin-top:3px;line-height:1.6">إيميل (Resend) + SMS (Unifonic) + واتساب (Meta) + الدفع (Tabby/Tamara)<br>الرسوم تدفعها مباشرة لكل مزود — Zerax ما تتدخل</div></div><button onclick="closeOnboarding();goPage('credits')" style="background:#f59e0b;color:#fff;border:none;padding:8px 14px;border-radius:8px;font-family:inherit;font-weight:900;font-size:11px;cursor:pointer">اذهب ←</button></div>
+        <div style="background:#fdf2f8;border:2px solid #f9a8d4;border-radius:12px;padding:16px;display:flex;align-items:center;gap:14px"><div style="width:42px;height:42px;border-radius:50%;background:#ec4899;color:#fff;display:flex;align-items:center;justify-content:center;font-weight:900;font-size:18px">4</div><div style="flex:1"><b style="font-size:14px">🔗 شارك رابط متجرك</b><div style="font-size:11px;color:#6b7280;margin-top:3px">انسخ رابطك الفريد من البانر الأعلى وانشره مع زبائنك</div></div><button onclick="closeOnboarding();copyStoreUrl&&copyStoreUrl()" style="background:#ec4899;color:#fff;border:none;padding:8px 14px;border-radius:8px;font-family:inherit;font-weight:900;font-size:11px;cursor:pointer">نسخ الرابط</button></div>
+      </div>
+      <div style="background:#0a0a14;color:#94e2d5;border-radius:12px;padding:16px;margin-top:18px;font-size:11px;line-height:1.9">
+        <b style="color:#fbbf24">💡 معلومات تفيدك بعد ما تكمل الربط:</b><br>
+        • <b style="color:#fff">الإيميل</b> → كل طلب جديد ينرسل تأكيد للعميل + تحديث للتاجر تلقائياً<br>
+        • <b style="color:#fff">SMS</b> → تنبيهات تجديد طلب + استرداد سلة متروكة + حملات تسويقية<br>
+        • <b style="color:#fff">واتساب</b> → دعم فوري + إشعارات طلبات + رد AI الذكي على استفسارات<br>
+        • <b style="color:#fff">الدفع</b> → الأموال تدخل حسابك مباشرة (Zerax ما تمسها)<br>
+        • <b style="color:#fff">الذكاء الاصطناعي</b> → توليد صور المنتجات + كتابة الأوصاف + ردود تلقائية + تحليل سلوك العملاء + اقتراح أفضل وقت لكل حملة
+      </div>
+    </div>
+    <div style="background:#fafafa;padding:16px 28px;display:flex;justify-content:space-between;align-items:center;border-top:1px solid #e5e7eb">
+      <label style="display:flex;align-items:center;gap:6px;font-size:11px;color:#6b7280;cursor:pointer"><input type="checkbox" id="dont-show-again" style="cursor:pointer"> لا تعرض هذه الشاشة مرة أخرى</label>
+      <div style="display:flex;gap:8px">
+        <button onclick="closeOnboarding()" style="background:transparent;border:1px solid #d1d5db;color:#6b7280;padding:10px 18px;border-radius:8px;font-family:inherit;font-weight:700;cursor:pointer;font-size:12px">تخطّي</button>
+        <button data-testid="onboarding-finish" onclick="finishOnboarding()" style="background:linear-gradient(135deg,#7c3aed,#ec4899);color:#fff;border:none;padding:10px 22px;border-radius:8px;font-family:inherit;font-weight:900;cursor:pointer;font-size:12px">ابدأ رحلتي 🚀</button>
+      </div>
+    </div>
+  </div>`;
+  document.body.appendChild(m);
+}
+function closeOnboarding(){
+  const m=document.getElementById('onboarding-modal');if(m)m.remove();
+}
+function finishOnboarding(){
+  if(document.getElementById('dont-show-again')?.checked)localStorage.setItem('zx_onboarded','1');
+  closeOnboarding();
+  toast('🚀 صرت جاهز · استكشف لوحتك');
 }
 
 // ───── AI SMART AUDIENCE (for campaigns) ─────
