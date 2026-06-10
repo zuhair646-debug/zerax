@@ -1,0 +1,233 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Zerax · جرّب الآن مجاناً</title>
+<link rel="stylesheet" href="/mockups/zerax-theme.css">
+<link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;700;900&display=swap" rel="stylesheet">
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:'Tajawal',sans-serif;background:#0a0a14;color:#f1f5f9;min-height:100vh;overflow-x:hidden}
+  .hero{
+    background:
+      radial-gradient(circle at 20% 20%, rgba(124,58,237,.25), transparent 60%),
+      radial-gradient(circle at 80% 80%, rgba(251,191,36,.15), transparent 60%),
+      linear-gradient(180deg, #0a0a14 0%, #1a1a2e 100%);
+    min-height:100vh;
+    display:flex;align-items:center;justify-content:center;
+    padding:40px 20px;
+  }
+  .hero-card{max-width:920px;width:100%;text-align:center}
+  .logo{font-size:46px;font-weight:900;background:linear-gradient(135deg,#fbbf24,#a855f7);-webkit-background-clip:text;background-clip:text;color:transparent;margin-bottom:6px;letter-spacing:1px}
+  .tagline{color:#94a3b8;font-size:13px;margin-bottom:36px}
+  h1{font-size:42px;font-weight:900;line-height:1.3;margin-bottom:16px;background:linear-gradient(135deg,#f1f5f9,#cbd5e1);-webkit-background-clip:text;background-clip:text;color:transparent}
+  h1 .accent{background:linear-gradient(135deg,#fbbf24,#f59e0b);-webkit-background-clip:text;background-clip:text;color:transparent}
+  p.lede{color:#cbd5e1;font-size:16px;line-height:1.8;margin-bottom:36px;max-width:680px;margin-inline:auto}
+  .features{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:14px;margin-bottom:40px;max-width:780px;margin-inline:auto}
+  .feat{background:rgba(124,58,237,.06);border:1px solid rgba(124,58,237,.25);border-radius:14px;padding:18px 14px;font-size:12px;line-height:1.7;color:#cbd5e1}
+  .feat .icon{font-size:30px;display:block;margin-bottom:8px}
+  .feat b{color:#fbbf24;font-size:13px;display:block;margin-bottom:4px}
+  .cta-box{background:linear-gradient(135deg,#14142b,#1a1a2e);border:1px solid #2d2d4a;border-radius:22px;padding:36px 32px;max-width:560px;margin:0 auto;box-shadow:0 30px 80px rgba(0,0,0,.4)}
+  .cta-box h2{font-size:22px;font-weight:900;color:#fff;margin-bottom:10px}
+  .cta-box .sub{color:#94a3b8;font-size:12px;margin-bottom:20px;line-height:1.7}
+  .input-group{display:flex;flex-direction:column;gap:10px;text-align:right;margin-bottom:18px}
+  .input-group label{font-size:11px;color:#94a3b8;font-weight:700}
+  .input-group input,.input-group select{background:#0a0a14;border:1.5px solid #2d2d4a;color:#f1f5f9;padding:12px 14px;border-radius:10px;font-family:inherit;font-size:13px;outline:none;transition:border-color .15s}
+  .input-group input:focus,.input-group select:focus{border-color:#7c3aed;box-shadow:0 0 0 3px rgba(124,58,237,.2)}
+  .btn-start{width:100%;background:linear-gradient(135deg,#7c3aed,#a855f7);color:#fff;border:none;padding:16px;border-radius:12px;font-family:inherit;font-weight:900;font-size:14px;cursor:pointer;box-shadow:0 12px 30px rgba(124,58,237,.4);transition:transform .15s,box-shadow .15s}
+  .btn-start:hover{transform:translateY(-2px);box-shadow:0 18px 40px rgba(124,58,237,.5)}
+  .btn-start:disabled{opacity:.6;cursor:wait}
+  .secure-note{color:#64748b;font-size:11px;margin-top:14px;line-height:1.7}
+  .secure-note b{color:#10b981}
+  /* Result card */
+  .result-box{background:#14142b;border:2px solid #10b981;border-radius:22px;padding:36px;max-width:680px;margin:0 auto;display:none;text-align:right;animation:fadeIn .4s}
+  .result-box h2{color:#10b981;font-size:22px;font-weight:900;margin-bottom:8px}
+  .result-box .countdown{background:rgba(16,185,129,.1);color:#10b981;padding:12px;border-radius:10px;font-weight:900;margin-bottom:18px;text-align:center;font-size:14px}
+  .cred{background:#0a0a14;border:1px solid #2d2d4a;border-radius:12px;padding:14px;margin-bottom:10px}
+  .cred .label{font-size:11px;color:#fbbf24;font-weight:800;margin-bottom:6px}
+  .cred .val{font-family:'Courier New',monospace;color:#f1f5f9;font-size:13px;word-break:break-all;line-height:1.7}
+  .cred .copy{background:rgba(124,58,237,.15);color:#a855f7;border:1px solid rgba(124,58,237,.3);padding:5px 11px;border-radius:6px;font-family:inherit;font-weight:700;font-size:10px;cursor:pointer;margin-right:6px}
+  .open-btn{display:block;background:linear-gradient(135deg,#fbbf24,#f59e0b);color:#0a0a14;text-decoration:none;padding:14px;border-radius:12px;font-weight:900;text-align:center;margin-top:14px;font-size:13px;box-shadow:0 8px 20px rgba(251,191,36,.3)}
+  @keyframes fadeIn{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
+  @media (max-width:600px){h1{font-size:30px}.cta-box{padding:24px 20px}}
+</style>
+</head>
+<body class="zx-dark">
+
+<div class="hero">
+  <div class="hero-card">
+    <div class="logo">Zerax</div>
+    <div class="tagline">منصة المتاجر الذكية المتكاملة</div>
+
+    <h1>جرّب لوحة تحكم متجرك<br><span class="accent">بدون تسجيل · بدون بطاقة</span></h1>
+    <p class="lede">احصل على لوحة تحكم كاملة + متجر للعملاء + تطبيق سائق · مع منتجات وفرع وعميل تجريبي · جاهزة في 3 ثواني · صالحة 3 ساعات مجاناً</p>
+
+    <div class="features">
+      <div class="feat"><span class="icon">⚡</span><b>فوري</b>اربط · جرّب · شف الفرق في 3 ثواني</div>
+      <div class="feat"><span class="icon">🏪</span><b>متجر كامل</b>منتجات · طلبات · فروع · موظفين</div>
+      <div class="feat"><span class="icon">🤖</span><b>ذكاء صناعي</b>توليد صور ومحتوى المنتجات تلقائياً</div>
+      <div class="feat"><span class="icon">💳</span><b>دفع وشحن</b>تابي · تمارا · أرامكس · سمسا تجريبي</div>
+      <div class="feat"><span class="icon">🎨</span><b>هويتك</b>غيّر الألوان والخطوط على ذوقك</div>
+      <div class="feat"><span class="icon">🚗</span><b>تطبيق سائق</b>توصيل وتتبع طلبات للسائقين</div>
+    </div>
+
+    <!-- INPUT BOX -->
+    <div class="cta-box" id="cta-box" data-testid="trial-cta">
+      <h2>🚀 أنشئ تجربتك الآن</h2>
+      <div class="sub">عبّي البيانات وانطلق · بدون بريد · بدون كلمة مرور · يجيك كل شيء جاهز</div>
+      <div class="input-group">
+        <label>اسم متجرك التجريبي</label>
+        <input type="text" id="trial-name" placeholder="مثال: متجر النور للإلكترونيات" value="متجر تجريبي" data-testid="trial-name">
+      </div>
+      <div class="input-group">
+        <label>التخصص (يحدد ماذا يعبّي AI لك)</label>
+        <select id="trial-industry" data-testid="trial-industry">
+          <option value="electronics">📱 إلكترونيات وجوالات</option>
+          <option value="clothes">👕 ملابس</option>
+          <option value="food">🍔 أطعمة ومشروبات</option>
+          <option value="beauty">💄 جمال وعطور</option>
+          <option value="meds">💊 أدوية ومكملات</option>
+          <option value="home">🏠 منزل وأثاث</option>
+          <option value="kids">🧸 ألعاب أطفال</option>
+          <option value="sports">⚽ رياضة</option>
+        </select>
+      </div>
+      <div class="input-group">
+        <label>مدة التجربة</label>
+        <select id="trial-duration" data-testid="trial-duration">
+          <option value="3">3 ساعات (مجاناً)</option>
+          <option value="24">24 ساعة (20 نقطة Zerax)</option>
+          <option value="72">3 أيام (60 نقطة Zerax)</option>
+        </select>
+      </div>
+      <button class="btn-start" onclick="startTrial()" data-testid="start-trial-btn">⚡ ابدأ التجربة الآن</button>
+      <div class="secure-note">🔒 <b>آمن وخاص</b> · بياناتك معزولة تماماً · ستُحذف تلقائياً بعد انتهاء المدة · بدون مشاركة</div>
+    </div>
+
+    <!-- RESULT BOX -->
+    <div class="result-box" id="result-box" data-testid="trial-result">
+      <h2>🎉 تجربتك جاهزة!</h2>
+      <div class="countdown" id="countdown">⏱️ الوقت المتبقي: --:--:--</div>
+
+      <div class="cred">
+        <div class="label">🔐 لوحة التاجر (المتجر)</div>
+        <div class="val" id="admin-email"></div>
+        <div class="val" id="admin-pwd" style="margin-top:4px"></div>
+        <button class="copy" onclick="copyVal('admin-email')">📋 بريد</button>
+        <button class="copy" onclick="copyVal('admin-pwd')">📋 كلمة سر</button>
+        <a class="open-btn" id="admin-url" target="_blank">افتح لوحة التاجر ←</a>
+      </div>
+
+      <div class="cred">
+        <div class="label">🛍️ متجر العميل</div>
+        <div class="val" id="cust-phone"></div>
+        <div class="val" id="cust-otp" style="margin-top:4px"></div>
+        <button class="copy" onclick="copyVal('cust-phone')">📋 جوال</button>
+        <a class="open-btn" id="cust-url" target="_blank">افتح متجر العميل ←</a>
+      </div>
+
+      <div class="cred">
+        <div class="label">🚗 تطبيق السائق</div>
+        <div class="val" id="drv-phone"></div>
+        <div class="val" id="drv-otp" style="margin-top:4px"></div>
+        <a class="open-btn" id="drv-url" target="_blank">افتح تطبيق السائق ←</a>
+      </div>
+
+      <p style="color:#64748b;font-size:11px;text-align:center;margin-top:20px;line-height:1.8">
+        💡 بياناتك ستظل سارية للمدة المحددة فقط · بعدها تُحذف تلقائياً<br>
+        لو أعجبتك المنصة، اضغط <b style="color:#10b981">"تحويل لحساب دائم"</b> من لوحة التاجر قبل انتهاء التجربة
+      </p>
+    </div>
+  </div>
+</div>
+
+<script>
+const API = window.location.origin;
+
+async function startTrial() {
+  const btn = document.querySelector('[data-testid="start-trial-btn"]');
+  btn.disabled = true;
+  btn.textContent = '⏳ جاري إنشاء متجرك...';
+  try {
+    const r = await fetch(API + '/api/trial/start', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({
+        business_name: document.getElementById('trial-name').value || 'متجر تجريبي',
+        industry: document.getElementById('trial-industry').value,
+        duration_hours: parseInt(document.getElementById('trial-duration').value),
+        paid: parseInt(document.getElementById('trial-duration').value) > 3,
+      })
+    });
+    if (!r.ok) {
+      const err = await r.json().catch(()=>({}));
+      throw new Error(err.detail || 'فشل إنشاء التجربة');
+    }
+    const d = await r.json();
+    showResult(d);
+  } catch (e) {
+    alert('⚠️ ' + e.message);
+    btn.disabled = false;
+    btn.textContent = '⚡ ابدأ التجربة الآن';
+  }
+}
+
+function showResult(d) {
+  document.getElementById('cta-box').style.display = 'none';
+  document.getElementById('result-box').style.display = 'block';
+  document.getElementById('admin-email').textContent = 'البريد: ' + d.credentials.admin.email;
+  document.getElementById('admin-pwd').textContent = 'الكلمة: ' + d.credentials.admin.password;
+  document.getElementById('admin-url').href = d.urls.admin;
+  document.getElementById('cust-phone').textContent = 'الجوال: ' + d.credentials.customer.phone;
+  document.getElementById('cust-otp').textContent = 'رمز OTP: ' + d.credentials.customer.otp;
+  document.getElementById('cust-url').href = d.urls.customer;
+  document.getElementById('drv-phone').textContent = 'الجوال: ' + d.credentials.driver.phone;
+  document.getElementById('drv-otp').textContent = 'رمز OTP: ' + d.credentials.driver.otp;
+  document.getElementById('drv-url').href = d.urls.driver;
+  // Persist for follow-up
+  localStorage.setItem('zerax_active_trial', JSON.stringify(d));
+  startCountdown(new Date(d.expires_at));
+  document.getElementById('result-box').scrollIntoView({behavior:'smooth', block:'start'});
+}
+
+function startCountdown(expiresAt) {
+  const el = document.getElementById('countdown');
+  function tick() {
+    const diff = expiresAt - new Date();
+    if (diff <= 0) {
+      el.textContent = '⏰ انتهت مدة التجربة';
+      el.style.background = 'rgba(239,68,68,.15)';
+      el.style.color = '#ef4444';
+      return;
+    }
+    const h = Math.floor(diff / 3600000);
+    const m = Math.floor((diff % 3600000) / 60000);
+    const s = Math.floor((diff % 60000) / 1000);
+    el.textContent = `⏱️ متبقي: ${h}س ${m}د ${s}ث`;
+    setTimeout(tick, 1000);
+  }
+  tick();
+}
+
+function copyVal(id) {
+  const txt = document.getElementById(id).textContent;
+  navigator.clipboard.writeText(txt.split(':').slice(1).join(':').trim());
+  // brief feedback
+  event.target.textContent = '✓ نُسخ';
+  setTimeout(() => event.target.textContent = event.target.textContent.replace('✓ نُسخ','📋 نسخ'), 1500);
+}
+
+// Resume an active trial if user reloads
+(function resumeIfExists() {
+  const raw = localStorage.getItem('zerax_active_trial');
+  if (!raw) return;
+  try {
+    const d = JSON.parse(raw);
+    if (new Date(d.expires_at) > new Date()) showResult(d);
+    else localStorage.removeItem('zerax_active_trial');
+  } catch(_) { localStorage.removeItem('zerax_active_trial'); }
+})();
+</script>
+</body>
+</html>
