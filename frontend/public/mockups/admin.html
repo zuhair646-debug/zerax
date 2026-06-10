@@ -566,6 +566,7 @@ select.ps-input option{background:#13131f;color:#fff}
     <button class="nav-item" data-page="payroll" onclick="goPage('payroll')"><i data-lucide="wallet"></i> المحاسبة</button>
     <button class="nav-item" data-page="gateways" onclick="goPage('gateways')"><i data-lucide="credit-card"></i> وسائل الدفع</button>
     <button class="nav-item" data-page="markets" onclick="goPage('markets')" data-testid="nav-markets"><i data-lucide="globe"></i> الأسواق المستهدفة <span class="badge" style="background:var(--purple)">جديد</span></button>
+    <button class="nav-item" data-page="branches" onclick="goPage('branches')" data-testid="nav-branches"><i data-lucide="store"></i> إدارة الفروع <span class="badge" style="background:#10b981">+</span></button>
     <button class="nav-item" data-page="reports" onclick="goPage('reports')" data-testid="nav-reports"><i data-lucide="file-text"></i> تقارير PDF <span class="badge" style="background:var(--emerald)">جديد</span></button>
     <button class="nav-item" data-page="zatca" onclick="goPage('zatca')" data-testid="nav-zatca"><i data-lucide="receipt"></i> الفاتورة الإلكترونية ZATCA</button>
     <button class="nav-item" data-page="credits" onclick="goPage('credits')" data-testid="nav-credits"><i data-lucide="coins"></i> النقاط والاشتراك <span class="badge" style="background:#dc2626">!</span></button>
@@ -907,6 +908,43 @@ select.ps-input option{background:#13131f;color:#fff}
         <div class="panel" style="margin-top:14px"><div class="panel-head"><h3>🎯 شرائح العملاء</h3></div><div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:10px"><div class="kpi" style="cursor:pointer" onclick="toast('شريحة VIP — 42 عميل')"><div class="lbl">💎 عملاء VIP</div><div class="val" style="font-size:24px">42</div><div class="meta">أكثر من 5,000 ر.س</div></div><div class="kpi" style="cursor:pointer" onclick="toast('عملاء جدد — 187')"><div class="lbl">🆕 عملاء جدد</div><div class="val" style="font-size:24px">187</div><div class="meta">آخر 30 يوم</div></div><div class="kpi" style="cursor:pointer" onclick="toast('غير نشطين — 89')"><div class="lbl">😴 غير نشطين</div><div class="val" style="font-size:24px">89</div><div class="meta">آخر طلب قبل 60 يوم</div></div><div class="kpi" style="cursor:pointer" onclick="toast('متكررون — 234')"><div class="lbl">🔁 عملاء متكررون</div><div class="val" style="font-size:24px">234</div><div class="meta">3+ طلبات</div></div></div><button class="btn btn-amber" data-testid="open-campaign-builder" style="margin-top:14px;width:100%" onclick="openCampaignBuilder()"><i data-lucide="megaphone" style="width:13px;height:13px"></i> أنشئ حملة احترافية (استهداف كامل)</button></div>
       </div>
 
+      <!-- ─── ADD BRANCH MODAL ─── -->
+      <div class="modal-bg" id="add-branch-modal" onclick="if(event.target===this)closeAddBranchModal()" style="position:fixed;inset:0;background:rgba(0,0,0,.65);z-index:300;display:none;align-items:flex-start;justify-content:center;padding:20px;overflow-y:auto">
+        <div style="background:#fff;border-radius:18px;max-width:560px;width:100%;padding:0;margin-top:30px;box-shadow:0 30px 80px rgba(0,0,0,.4);overflow:hidden">
+          <div style="background:linear-gradient(135deg,#065f46,#10b981);color:#fff;padding:18px 22px;display:flex;align-items:center;justify-content:space-between">
+            <div style="display:flex;align-items:center;gap:12px"><div style="width:46px;height:46px;border-radius:12px;background:rgba(255,255,255,.25);display:flex;align-items:center;justify-content:center;font-size:22px">🏪</div><div><h3 style="color:#fff;font-size:17px">إضافة فرع جديد</h3><p style="font-size:11px;color:#d1fae5;margin-top:2px" id="ab-cost-line">سيُحتسب 99 ر.س/شهر</p></div></div>
+            <button onclick="closeAddBranchModal()" style="background:rgba(255,255,255,.2);color:#fff;border:none;width:30px;height:30px;border-radius:50%;font-size:15px;cursor:pointer">✕</button>
+          </div>
+          <div style="padding:20px">
+            <label class="lbl-sm">اسم الفرع (عربي) <span style="color:#ef4444">*</span></label>
+            <input id="ab-name-ar" placeholder="مثال: فرع الرياض - النخيل" style="width:100%;padding:11px;border:1px solid var(--border);border-radius:10px;font-family:inherit;font-size:13px;margin:5px 0 11px;outline:none">
+            <label class="lbl-sm">اسم الفرع (إنجليزي)</label>
+            <input id="ab-name-en" placeholder="e.g. Riyadh - Nakheel Branch" style="width:100%;padding:11px;border:1px solid var(--border);border-radius:10px;font-family:inherit;font-size:13px;margin:5px 0 11px;outline:none;direction:ltr">
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+              <div><label class="lbl-sm">العنوان</label><input id="ab-addr" placeholder="شارع... حي..." style="width:100%;padding:11px;border:1px solid var(--border);border-radius:10px;font-family:inherit;font-size:13px;margin-top:5px;outline:none"></div>
+              <div><label class="lbl-sm">هاتف الفرع</label><input id="ab-phone" placeholder="+966 5X XXX XXXX" style="width:100%;padding:11px;border:1px solid var(--border);border-radius:10px;font-family:inherit;font-size:13px;margin-top:5px;outline:none;direction:ltr"></div>
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:11px">
+              <div><label class="lbl-sm">خط العرض (Lat)</label><input id="ab-lat" placeholder="24.7136" type="number" step="0.0001" style="width:100%;padding:11px;border:1px solid var(--border);border-radius:10px;font-family:inherit;font-size:13px;margin-top:5px;outline:none;direction:ltr"></div>
+              <div><label class="lbl-sm">خط الطول (Lng)</label><input id="ab-lng" placeholder="46.6753" type="number" step="0.0001" style="width:100%;padding:11px;border:1px solid var(--border);border-radius:10px;font-family:inherit;font-size:13px;margin-top:5px;outline:none;direction:ltr"></div>
+            </div>
+            <button onclick="abAutoLocate()" style="margin-top:8px;background:#faf5ff;color:#7c3aed;border:1.5px dashed #ddd6fe;padding:9px;border-radius:10px;font-family:inherit;font-weight:700;font-size:11px;cursor:pointer;width:100%">📍 استخدم موقعي الحالي</button>
+            <hr style="border:none;border-top:1px dashed var(--border);margin:14px 0">
+            <label class="lbl-sm">مدير الفرع</label>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:5px">
+              <input id="ab-mgr-name" placeholder="اسم المدير" style="padding:11px;border:1px solid var(--border);border-radius:10px;font-family:inherit;font-size:13px;outline:none">
+              <input id="ab-mgr-email" placeholder="manager@example.com" type="email" style="padding:11px;border:1px solid var(--border);border-radius:10px;font-family:inherit;font-size:13px;outline:none;direction:ltr">
+            </div>
+            <div style="background:#f0fdf4;border:1px solid #86efac;border-radius:10px;padding:10px;font-size:11px;color:#065f46;line-height:1.7;margin-top:11px">📨 سيتم إنشاء حساب للمدير + إرسال بيانات الدخول على إيميله. يقدر يدخل من <b>admin.html?branch={branch_id}</b> لإدارة فرعه فقط.</div>
+            <div id="ab-cost-summary" style="background:linear-gradient(135deg,#fef3c7,#fde68a);border:1px solid #fbbf24;border-radius:10px;padding:12px;margin-top:11px"></div>
+            <div style="display:flex;gap:10px;margin-top:14px">
+              <button onclick="closeAddBranchModal()" style="flex:1;padding:13px;background:#f3f4f6;color:#374151;border:none;border-radius:10px;font-family:inherit;font-weight:900;font-size:13px;cursor:pointer">إلغاء</button>
+              <button onclick="createBranch()" data-testid="create-branch-btn" style="flex:1;padding:13px;background:linear-gradient(135deg,#10b981,#059669);color:#fff;border:none;border-radius:10px;font-family:inherit;font-weight:900;font-size:13px;cursor:pointer">✓ إنشاء الفرع والاشتراك</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
       <!-- ─── CAMPAIGN BUILDER MODAL ─── -->
       <div class="modal-bg" id="campaign-modal" onclick="if(event.target===this)closeCampaignBuilder()" style="position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:300;display:none;align-items:flex-start;justify-content:center;padding:20px;overflow-y:auto">
         <div style="background:#fff;border-radius:18px;max-width:760px;width:100%;padding:0;margin-top:30px;box-shadow:0 30px 80px rgba(0,0,0,.4);overflow:hidden">
@@ -1156,6 +1194,48 @@ select.ps-input option{background:#13131f;color:#fff}
         </div>
       </div>
       <!-- ─── /MARKETS ─── -->
+
+      <!-- ─── BRANCHES MANAGEMENT PAGE ─── -->
+      <div class="page" data-page="branches">
+        <!-- Hero -->
+        <div class="panel" style="background:linear-gradient(135deg,#065f46,#10b981);color:#fff;border:1px solid #047857;margin-bottom:14px">
+          <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:14px;flex-wrap:wrap">
+            <div>
+              <h3 style="color:#fff;display:flex;align-items:center;gap:8px;font-size:17px"><i data-lucide="store" style="width:22px"></i> إدارة الفروع المتعددة</h3>
+              <p style="font-size:12px;color:#d1fae5;margin-top:6px;line-height:1.7;max-width:580px">كل فرع له <b style="color:#fbbf24">لوحة تحكم خاصة</b> (طلبات + مخزون + موظفين + تقارير) — يديره مدير الفرع باستقلالية تامة. أنت كمالك ترى الصورة الكبيرة من هنا · الفروع تعمل كمتاجر مصغّرة تحت مظلتك.</p>
+            </div>
+            <button onclick="openAddBranchModal()" data-testid="add-branch-btn" style="background:linear-gradient(135deg,#fbbf24,#f59e0b);color:#0a0a14;border:none;padding:11px 18px;border-radius:10px;font-family:inherit;font-weight:900;font-size:13px;cursor:pointer;display:flex;align-items:center;gap:6px">+ إضافة فرع جديد</button>
+          </div>
+        </div>
+
+        <!-- Stats overview -->
+        <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:14px" id="br-stats-grid">
+          <div class="panel" style="text-align:center"><div style="font-size:11px;color:var(--text-mut)">إجمالي الفروع</div><div style="font-size:24px;font-weight:900;color:var(--purple);margin-top:4px" id="br-stat-total">0</div></div>
+          <div class="panel" style="text-align:center"><div style="font-size:11px;color:var(--text-mut)">فروع نشطة</div><div style="font-size:24px;font-weight:900;color:var(--emerald);margin-top:4px" id="br-stat-active">0</div></div>
+          <div class="panel" style="text-align:center"><div style="font-size:11px;color:var(--text-mut)">طلبات اليوم</div><div style="font-size:24px;font-weight:900;color:#0ea5e9;margin-top:4px" id="br-stat-orders">0</div></div>
+          <div class="panel" style="text-align:center"><div style="font-size:11px;color:var(--text-mut)">رسوم الفروع (شهرياً)</div><div style="font-size:24px;font-weight:900;color:#f59e0b;margin-top:4px"><span id="br-stat-fees">0</span> <small style="font-size:11px">ر.س</small></div></div>
+        </div>
+
+        <!-- Pricing tiers info -->
+        <div class="panel" style="background:linear-gradient(135deg,#fef3c7,#fde68a);border:1px solid #fbbf24;margin-bottom:14px">
+          <h4 style="font-size:13px;font-weight:900;color:#92400e;margin-bottom:10px">💎 باقات الفروع</h4>
+          <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px;font-size:11px">
+            <div style="background:#fff;padding:10px;border-radius:10px;border:1px solid #fde68a"><b style="color:#10b981;font-size:13px">🆓 الفرع الأول</b><div style="color:#92400e;margin-top:4px">مجاناً مع باقتك</div></div>
+            <div style="background:#fff;padding:10px;border-radius:10px;border:1px solid #fde68a"><b style="color:#7c3aed;font-size:13px">⭐ الفروع 2-3</b><div style="color:#92400e;margin-top:4px"><b>99 ر.س/شهر</b> لكل فرع</div></div>
+            <div style="background:#fff;padding:10px;border-radius:10px;border:1px solid #fde68a"><b style="color:#0ea5e9;font-size:13px">🚀 الفروع 4-10</b><div style="color:#92400e;margin-top:4px"><b>149 ر.س/شهر</b> لكل فرع</div></div>
+            <div style="background:#fff;padding:10px;border-radius:10px;border:1px solid #fde68a"><b style="color:#dc2626;font-size:13px">👑 11+ فرع</b><div style="color:#92400e;margin-top:4px">باقة Enterprise — اتصل بنا</div></div>
+          </div>
+        </div>
+
+        <!-- Branches list -->
+        <div class="panel">
+          <div class="panel-head"><h3>🏪 فروعك</h3>
+            <span style="font-size:11px;color:var(--text-mut)" id="br-list-count">0 فرع</span>
+          </div>
+          <div id="branches-list" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:12px"></div>
+        </div>
+      </div>
+      <!-- ─── /BRANCHES ─── -->
 
       <!-- ─── VIDEO STUDIO — TABBED DARK ZERAX ─── -->
       <div class="page" data-page="video-studio">
@@ -1877,7 +1957,7 @@ function goPage(p){
   CURRENT_PAGE=p;
   document.querySelectorAll('.page').forEach(el=>el.classList.toggle('active',el.dataset.page===p));
   document.querySelectorAll('.nav-item').forEach(el=>el.classList.toggle('active',el.dataset.page===p));
-  const titles={dashboard:'الرئيسية',products:'المنتجات',orders:'الطلبات',customers:'العملاء',delivery:'إدارة التوصيل',payroll:'المحاسبة والرواتب',gateways:'وسائل الدفع',markets:'الأسواق المستهدفة',settings:'الإعدادات','video-studio':'استوديو الفيديو الإعلاني',social:'الحسابات الاجتماعية',services:'الخدمات الإضافية','smart-mgmt':'الإدارة الذكية',marketing:'التسويق والمبيعات',reviews:'التقييمات والمراجعات',themes:'ألوان المتجر',reports:'تقارير PDF',zatca:'الفاتورة الإلكترونية ZATCA',credits:'النقاط والاشتراك'};
+  const titles={dashboard:'الرئيسية',products:'المنتجات',orders:'الطلبات',customers:'العملاء',delivery:'إدارة التوصيل',payroll:'المحاسبة والرواتب',gateways:'وسائل الدفع',markets:'الأسواق المستهدفة',branches:'إدارة الفروع',settings:'الإعدادات','video-studio':'استوديو الفيديو الإعلاني',social:'الحسابات الاجتماعية',services:'الخدمات الإضافية','smart-mgmt':'الإدارة الذكية',marketing:'التسويق والمبيعات',reviews:'التقييمات والمراجعات',themes:'ألوان المتجر',reports:'تقارير PDF',zatca:'الفاتورة الإلكترونية ZATCA',credits:'النقاط والاشتراك'};
   $('page-title').textContent=titles[p]||p;
   document.getElementById('sidebar').classList.remove('open');
   // lazy load
@@ -1885,6 +1965,7 @@ function goPage(p){
   if(p==='payroll')loadPayroll();
   if(p==='gateways')loadGateways();
   if(p==='markets')loadMarkets();
+  if(p==='branches')loadMerchantBranches();
   if(p==='social')loadSocial();
   if(p==='services')loadServices();
   if(p==='smart-mgmt')loadSmartMgmt();
@@ -2590,6 +2671,182 @@ function mktSaveAll(){
   localStorage.setItem('zx_active_markets',JSON.stringify(Array.from(MKT_ACTIVE)));
   localStorage.setItem('zx_markets_config',JSON.stringify(MKT_CONFIG));
   toast('✓ تم حفظ إعدادات '+MKT_ACTIVE.size+' سوق · ستظهر تلقائياً للعملاء حسب موقعهم');
+}
+
+// ───────────────────────── BRANCHES MANAGEMENT (Multi-Branch Sub-Dashboards with Subscription) ─────────────────────────
+let MERCHANT_BRANCHES=JSON.parse(localStorage.getItem('zx_merchant_branches')||'null')||[
+  {id:'br-main',name_ar:'الفرع الرئيسي',name_en:'Main Branch',addr:'الرياض - العليا',phone:'+966112345678',lat:24.6877,lng:46.6857,manager_name:'مدير عام',manager_email:'owner@zerax.com',active:true,is_main:true,created_at:Date.now()-90*86400000}
+];
+
+function branchFeeFor(index){
+  if(index===0)return 0;          // First branch free
+  if(index<=2)return 99;          // 2-3 = 99
+  if(index<=9)return 149;         // 4-10 = 149
+  return 199;                     // 11+ = 199 (Enterprise call later)
+}
+
+function loadMerchantBranches(){
+  renderBranchesList();
+  updateBranchStats();
+}
+
+function renderBranchesList(){
+  const host=document.getElementById('branches-list');if(!host)return;
+  document.getElementById('br-list-count').textContent=`${MERCHANT_BRANCHES.length} فرع`;
+  if(!MERCHANT_BRANCHES.length){host.innerHTML='<div style="grid-column:1/-1;text-align:center;padding:30px;color:var(--text-mut);font-size:12px">لا يوجد فروع · ابدأ بإضافة فرعك الأول</div>';return;}
+  host.innerHTML=MERCHANT_BRANCHES.map((b,i)=>{
+    const fee=branchFeeFor(i);
+    const ordersToday=Math.floor(Math.random()*60)+5;
+    const revenueToday=(Math.random()*15000+2000).toFixed(0);
+    return `<div style="border:2px solid ${b.active?'var(--border)':'#fecaca'};background:${b.active?'var(--surface)':'#fef2f2'};border-radius:14px;padding:14px;position:relative;transition:transform .15s" onmouseenter="this.style.transform='translateY(-2px)'" onmouseleave="this.style.transform='translateY(0)'">
+      ${b.is_main?'<div style="position:absolute;top:8px;left:8px;background:linear-gradient(135deg,#fbbf24,#f59e0b);color:#0a0a14;padding:3px 9px;border-radius:99px;font-size:9px;font-weight:900">👑 رئيسي</div>':''}
+      ${fee===0?'<div style="position:absolute;top:8px;right:8px;background:#10b981;color:#fff;padding:3px 9px;border-radius:99px;font-size:9px;font-weight:900">🆓 مجاني</div>':`<div style="position:absolute;top:8px;right:8px;background:#7c3aed;color:#fff;padding:3px 9px;border-radius:99px;font-size:9px;font-weight:900">${fee} ر.س/شهر</div>`}
+      <div style="margin-top:24px;display:flex;align-items:center;gap:10px">
+        <div style="width:48px;height:48px;border-radius:12px;background:linear-gradient(135deg,#10b981,#059669);color:#fff;display:flex;align-items:center;justify-content:center;font-size:22px;flex-shrink:0">🏪</div>
+        <div style="flex:1;min-width:0"><b style="font-size:14px;display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${b.name_ar}</b><div style="font-size:10px;color:var(--text-mut);margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">📍 ${b.addr||'—'}</div></div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:12px;font-size:10px">
+        <div style="background:#dbeafe;color:#1e3a8a;padding:6px 8px;border-radius:8px"><b style="font-size:13px">${ordersToday}</b><div>طلب اليوم</div></div>
+        <div style="background:#dcfce7;color:#065f46;padding:6px 8px;border-radius:8px"><b style="font-size:13px">${parseInt(revenueToday).toLocaleString()}</b><div>ر.س إيرادات</div></div>
+      </div>
+      <div style="display:flex;align-items:center;gap:6px;margin-top:10px;padding-top:10px;border-top:1px dashed var(--border);font-size:11px;color:var(--text-mut)">
+        <i data-lucide="user" style="width:12px;height:12px"></i>
+        <span>${b.manager_name||'لم يعيّن'}</span>
+        ${b.manager_email?`<span style="color:#94a3b8" title="${b.manager_email}">· ${b.manager_email.length>20?b.manager_email.slice(0,20)+'...':b.manager_email}</span>`:''}
+      </div>
+      <div style="display:flex;gap:5px;margin-top:10px;flex-wrap:wrap">
+        <button onclick="openBranchDashboard('${b.id}')" data-testid="open-branch-${b.id}" style="flex:1;min-width:80px;padding:8px;background:linear-gradient(135deg,#7c3aed,#ec4899);color:#fff;border:none;border-radius:8px;font-family:inherit;font-weight:900;font-size:10px;cursor:pointer">🔓 فتح اللوحة</button>
+        <button onclick="copyBranchLink('${b.id}')" style="padding:8px 10px;background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:8px;font-family:inherit;font-size:10px;cursor:pointer" title="نسخ رابط المدير">🔗</button>
+        <button onclick="editBranch('${b.id}')" style="padding:8px 10px;background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:8px;font-family:inherit;font-size:10px;cursor:pointer" title="تعديل">✏️</button>
+        <button onclick="toggleBranchActive('${b.id}')" style="padding:8px 10px;background:${b.active?'#fef3c7':'#dcfce7'};color:${b.active?'#92400e':'#065f46'};border:1px solid ${b.active?'#fde68a':'#86efac'};border-radius:8px;font-family:inherit;font-size:10px;cursor:pointer" title="${b.active?'إيقاف':'تفعيل'}">${b.active?'⏸':'▶️'}</button>
+        ${b.is_main?'':`<button onclick="removeBranch('${b.id}')" style="padding:8px 10px;background:#fef2f2;color:#dc2626;border:1px solid #fecaca;border-radius:8px;font-family:inherit;font-size:10px;cursor:pointer" title="حذف">🗑️</button>`}
+      </div>
+    </div>`;
+  }).join('');
+  if(window.lucide)window.lucide.createIcons();
+}
+
+function updateBranchStats(){
+  const total=MERCHANT_BRANCHES.length;
+  const active=MERCHANT_BRANCHES.filter(b=>b.active).length;
+  const fees=MERCHANT_BRANCHES.reduce((s,_,i)=>s+branchFeeFor(i),0);
+  const ordersToday=total*22; // mock
+  document.getElementById('br-stat-total').textContent=total;
+  document.getElementById('br-stat-active').textContent=active;
+  document.getElementById('br-stat-orders').textContent=ordersToday;
+  document.getElementById('br-stat-fees').textContent=fees;
+}
+
+function openAddBranchModal(){
+  const idx=MERCHANT_BRANCHES.length;
+  const fee=branchFeeFor(idx);
+  const tierLabel=idx===0?'مجاني (الفرع الأول)':idx<=2?'⭐ الباقة الفضية':idx<=9?'🚀 الباقة الذهبية':'👑 Enterprise';
+  document.getElementById('ab-cost-line').innerHTML=fee===0?'🆓 مجاناً مع باقتك':`💎 ${fee} ر.س/شهر · ${tierLabel}`;
+  document.getElementById('ab-cost-summary').innerHTML=fee===0?'<b style="color:#065f46">🆓 هذا الفرع مجاني مع باقتك الحالية</b>':`<div style="display:flex;justify-content:space-between;align-items:center"><div><b style="color:#92400e;font-size:12px">إجمالي شهري إضافي</b><div style="font-size:10px;color:#92400e;margin-top:2px">${tierLabel}</div></div><b style="color:#dc2626;font-size:18px">${fee} ر.س</b></div>`;
+  ['ab-name-ar','ab-name-en','ab-addr','ab-phone','ab-lat','ab-lng','ab-mgr-name','ab-mgr-email'].forEach(id=>{const e=document.getElementById(id);if(e)e.value='';});
+  document.getElementById('add-branch-modal').style.display='flex';
+}
+function closeAddBranchModal(){document.getElementById('add-branch-modal').style.display='none';}
+
+function abAutoLocate(){
+  if(!navigator.geolocation){toast('متصفحك لا يدعم تحديد الموقع');return;}
+  toast('⏳ جاري تحديد موقعك...');
+  navigator.geolocation.getCurrentPosition(p=>{
+    document.getElementById('ab-lat').value=p.coords.latitude.toFixed(4);
+    document.getElementById('ab-lng').value=p.coords.longitude.toFixed(4);
+    toast('✓ تم تحديد الموقع');
+  },()=>toast('⚠️ تعذّر تحديد الموقع'));
+}
+
+function createBranch(){
+  const name_ar=document.getElementById('ab-name-ar').value.trim();
+  if(!name_ar){alert('اسم الفرع مطلوب');return;}
+  const idx=MERCHANT_BRANCHES.length;
+  const fee=branchFeeFor(idx);
+  if(fee>0&&!confirm(`سيتم إضافة فرع جديد بتكلفة ${fee} ر.س/شهر إضافية على باقتك.\n\nمتابعة الإضافة والاشتراك؟`))return;
+  const b={
+    id:'br-'+Date.now().toString(36),
+    name_ar,
+    name_en:document.getElementById('ab-name-en').value.trim()||name_ar,
+    addr:document.getElementById('ab-addr').value.trim(),
+    phone:document.getElementById('ab-phone').value.trim(),
+    lat:parseFloat(document.getElementById('ab-lat').value)||null,
+    lng:parseFloat(document.getElementById('ab-lng').value)||null,
+    manager_name:document.getElementById('ab-mgr-name').value.trim()||'مدير الفرع',
+    manager_email:document.getElementById('ab-mgr-email').value.trim(),
+    active:true,is_main:false,fee_monthly:fee,
+    created_at:Date.now()
+  };
+  MERCHANT_BRANCHES.push(b);
+  localStorage.setItem('zx_merchant_branches',JSON.stringify(MERCHANT_BRANCHES));
+  closeAddBranchModal();
+  renderBranchesList();updateBranchStats();
+  toast(`✓ تم إنشاء فرع "${name_ar}"${fee?` · سيُضاف ${fee} ر.س لفاتورتك الشهرية`:''}`);
+  if(b.manager_email){setTimeout(()=>toast('📨 تم إرسال بيانات الدخول لـ '+b.manager_email),1500);}
+}
+
+function openBranchDashboard(branchId){
+  const b=MERCHANT_BRANCHES.find(x=>x.id===branchId);if(!b)return;
+  localStorage.setItem('zx_active_branch_scope',branchId);
+  toast(`🔓 الآن تدير: ${b.name_ar} · كل البيانات (طلبات/مخزون/تقارير) مفلترة لهذا الفرع`);
+  setTimeout(()=>goPage('dashboard'),600);
+}
+
+function copyBranchLink(branchId){
+  const b=MERCHANT_BRANCHES.find(x=>x.id===branchId);if(!b)return;
+  const url=`${window.location.origin}/mockups/admin.html?branch=${branchId}`;
+  navigator.clipboard?.writeText(url).then(()=>toast('✓ تم نسخ رابط لوحة مدير "'+b.name_ar+'"')).catch(()=>{
+    prompt('انسخ الرابط يدوياً:',url);
+  });
+}
+
+function editBranch(id){
+  const b=MERCHANT_BRANCHES.find(x=>x.id===id);if(!b)return;
+  openAddBranchModal();
+  setTimeout(()=>{
+    document.getElementById('ab-name-ar').value=b.name_ar||'';
+    document.getElementById('ab-name-en').value=b.name_en||'';
+    document.getElementById('ab-addr').value=b.addr||'';
+    document.getElementById('ab-phone').value=b.phone||'';
+    document.getElementById('ab-lat').value=b.lat||'';
+    document.getElementById('ab-lng').value=b.lng||'';
+    document.getElementById('ab-mgr-name').value=b.manager_name||'';
+    document.getElementById('ab-mgr-email').value=b.manager_email||'';
+    // Change button to update
+    const btn=document.querySelector('[data-testid="create-branch-btn"]');
+    if(btn){btn.textContent='💾 حفظ التعديلات';btn.onclick=()=>{
+      b.name_ar=document.getElementById('ab-name-ar').value.trim()||b.name_ar;
+      b.name_en=document.getElementById('ab-name-en').value.trim()||b.name_en;
+      b.addr=document.getElementById('ab-addr').value.trim();
+      b.phone=document.getElementById('ab-phone').value.trim();
+      b.lat=parseFloat(document.getElementById('ab-lat').value)||b.lat;
+      b.lng=parseFloat(document.getElementById('ab-lng').value)||b.lng;
+      b.manager_name=document.getElementById('ab-mgr-name').value.trim();
+      b.manager_email=document.getElementById('ab-mgr-email').value.trim();
+      localStorage.setItem('zx_merchant_branches',JSON.stringify(MERCHANT_BRANCHES));
+      closeAddBranchModal();renderBranchesList();
+      toast('✓ تم حفظ التعديلات');
+    };}
+  },100);
+}
+
+function toggleBranchActive(id){
+  const b=MERCHANT_BRANCHES.find(x=>x.id===id);if(!b)return;
+  if(b.is_main&&b.active){alert('لا يمكن إيقاف الفرع الرئيسي');return;}
+  b.active=!b.active;
+  localStorage.setItem('zx_merchant_branches',JSON.stringify(MERCHANT_BRANCHES));
+  renderBranchesList();updateBranchStats();
+  toast(b.active?`▶️ تم تفعيل ${b.name_ar}`:`⏸ تم إيقاف ${b.name_ar} مؤقتاً`);
+}
+
+function removeBranch(id){
+  const b=MERCHANT_BRANCHES.find(x=>x.id===id);if(!b)return;
+  if(b.is_main){alert('لا يمكن حذف الفرع الرئيسي');return;}
+  if(!confirm(`⚠️ حذف فرع "${b.name_ar}" نهائياً؟\n\nسيتم:\n- إلغاء اشتراكه (${b.fee_monthly||0} ر.س/شهر)\n- نقل طلباته للفرع الرئيسي\n- إغلاق حساب مديره\n\nهذا الإجراء لا يمكن التراجع عنه.`))return;
+  MERCHANT_BRANCHES=MERCHANT_BRANCHES.filter(x=>x.id!==id);
+  localStorage.setItem('zx_merchant_branches',JSON.stringify(MERCHANT_BRANCHES));
+  renderBranchesList();updateBranchStats();
+  toast(`🗑️ تم حذف الفرع · توفير ${b.fee_monthly||0} ر.س/شهر`);
 }
 
 // ───────────────────────── SEED DEMO PRODUCTS (5 per category × 8 categories = 40 items) ─────────────────────────
@@ -4106,7 +4363,33 @@ setInterval(()=>{
 },1000);
 
 // Init lucide icons on load
-window.addEventListener('load',()=>{if(window.lucide)lucide.createIcons()});
+window.addEventListener('load',()=>{
+  if(window.lucide)lucide.createIcons();
+  // Branch scope detection (from URL or localStorage)
+  try{
+    const urlBranch=new URLSearchParams(location.search).get('branch');
+    if(urlBranch){localStorage.setItem('zx_active_branch_scope',urlBranch);}
+    const scope=localStorage.getItem('zx_active_branch_scope');
+    if(scope){
+      const branches=JSON.parse(localStorage.getItem('zx_merchant_branches')||'[]');
+      const b=branches.find(x=>x.id===scope);
+      if(b&&!b.is_main){
+        // Show persistent banner indicating scoped mode
+        const banner=document.createElement('div');
+        banner.id='branch-scope-banner';
+        banner.style.cssText='position:sticky;top:0;background:linear-gradient(135deg,#10b981,#059669);color:#fff;padding:8px 16px;font-size:12px;font-weight:900;display:flex;justify-content:space-between;align-items:center;z-index:50;box-shadow:0 2px 12px rgba(16,185,129,.3)';
+        banner.innerHTML=`<span>🏪 تدير الآن: <b>${b.name_ar}</b> · كل البيانات مفلترة لهذا الفرع</span><button onclick="exitBranchScope()" style="background:#fff;color:#065f46;border:none;padding:6px 14px;border-radius:99px;font-family:inherit;font-weight:900;font-size:11px;cursor:pointer">↩️ الخروج للعرض الكلي</button>`;
+        const root=document.querySelector('.main-content')||document.body;
+        root.insertBefore(banner,root.firstChild);
+      }
+    }
+  }catch(_){}
+});
+function exitBranchScope(){
+  localStorage.removeItem('zx_active_branch_scope');
+  toast('↩️ تم الخروج من نطاق الفرع · العرض الكلي');
+  setTimeout(()=>location.href=location.pathname,400);
+}
 </script>
 </body>
 </html>
