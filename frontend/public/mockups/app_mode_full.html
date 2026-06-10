@@ -861,7 +861,10 @@ body.admin-mode .add-product-card{display:flex}
 
 <!-- ═══════════════════ WISHLIST PAGE ═══════════════════ -->
 <section id="view-wishlist" style="display:none;padding:0 16px 24px" data-view-section>
-  <h2 style="font-size:20px;font-weight:900;margin:18px 0 16px">❤ <span id="wishlist-title">قائمة المفضلة</span></h2>
+  <div style="display:flex;align-items:center;justify-content:space-between;margin:18px 0 16px">
+    <h2 style="font-size:20px;font-weight:900">❤ <span id="wishlist-title">قائمة المفضلة</span></h2>
+    <button data-testid="share-wishlist-btn" onclick="shareWishlist()" style="display:none;background:#25D366;color:#fff;border:none;padding:9px 14px;border-radius:99px;font-family:inherit;font-weight:900;font-size:12px;cursor:pointer;align-items:center;gap:5px" id="share-wishlist-btn">📲 شارك</button>
+  </div>
   <div class="grid" id="wishlist-grid"></div>
   <div id="wishlist-empty" style="display:none;background:#fff;border-radius:14px;padding:60px 20px;text-align:center;color:#9ca3af">
     <div style="font-size:60px;margin-bottom:14px">💔</div>
@@ -2039,11 +2042,49 @@ function updateWishBadge(){const b=document.getElementById('wish-badge');if(b)b.
 function renderWishlist(){
   const grid=document.getElementById('wishlist-grid');
   const empty=document.getElementById('wishlist-empty');
+  const shareBtn=document.getElementById('share-wishlist-btn');
   const items=WISHLIST.map(id=>PRODUCTS.find(p=>p.id===id)).filter(Boolean);
-  if(!items.length){grid.innerHTML='';grid.style.display='none';empty.style.display='block';return;}
+  if(!items.length){grid.innerHTML='';grid.style.display='none';empty.style.display='block';if(shareBtn)shareBtn.style.display='none';return;}
   grid.style.display='';empty.style.display='none';
+  if(shareBtn)shareBtn.style.display='inline-flex';
   grid.innerHTML=items.map(pCardHtml).join('');
 }
+function shareWishlist(){
+  if(!WISHLIST.length){alert('قائمتك فارغة');return;}
+  // Build shareable URL
+  const baseUrl=window.location.origin+window.location.pathname;
+  const shareUrl=`${baseUrl}?wl=${WISHLIST.join(',')}`;
+  const items=WISHLIST.map(id=>PRODUCTS.find(p=>p.id===id)).filter(Boolean);
+  const itemsList=items.slice(0,5).map(p=>`• ${CURRENT_LANG==='ar'?p.ar:p.en} — ${curSym()} ${formatPrice(p.sar)}`).join('\n');
+  const msg=`❤ شوف منتجاتي المفضلة من سوقي:\n\n${itemsList}${items.length>5?`\n... و ${items.length-5} منتج إضافي`:''}\n\n🔗 ${shareUrl}`;
+  // Try native share first
+  if(navigator.share){
+    navigator.share({title:'قائمة مفضلتي',text:msg,url:shareUrl}).then(()=>toast('✓ تمت المشاركة')).catch(()=>{});
+    return;
+  }
+  // Fallback: WhatsApp + copy options
+  if(confirm(msg+'\n\nاضغط OK للفتح في واتساب · أو Cancel للنسخ')){
+    window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`,'_blank');
+  } else {
+    navigator.clipboard?.writeText(shareUrl).then(()=>toast('📋 تم نسخ اللينك'));
+  }
+}
+// Read ?wl=p1,p5,... from URL to auto-import shared wishlist
+(function _maybeImportSharedWishlist(){
+  const params=new URLSearchParams(window.location.search);
+  const wl=params.get('wl');
+  if(!wl)return;
+  const ids=wl.split(',').filter(Boolean);
+  if(!ids.length)return;
+  setTimeout(()=>{
+    if(confirm(`صديقك أرسل لك ${ids.length} منتج من مفضلته — تبي تضيفهم لقائمتك؟`)){
+      ids.forEach(id=>{if(!WISHLIST.includes(id))WISHLIST.push(id);});
+      saveWishlist();
+      toast(`❤ تمت إضافة ${ids.length} منتج للمفضلة`);
+      if(typeof showView==='function')showView('wishlist');
+    }
+  },1500);
+})();
 
 // ═══════════════════════ PRODUCT REVIEWS (per-product) ═══════════════════════
 function getReviews(pid){try{return JSON.parse(localStorage.getItem('zx_reviews_'+pid)||'[]');}catch(_){return[];}}

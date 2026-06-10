@@ -6,6 +6,8 @@
 <title>Zerax — لوحة تحكم التاجر</title>
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;500;700;900&display=swap" rel="stylesheet">
 <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
 :root{--ink:#0a0a14;--ink2:#13131f;--amber:#fbbf24;--purple:#7c3aed;--violet:#a78bfa;--rose:#ec4899;--emerald:#10b981;--rd:#ef4444;--mute:#94a3b8;--mute2:#475569;--bg:#f6f7fb;--panel:#fff;--border:#e6e7ee;--sidebar:#0a0a14}
@@ -503,6 +505,17 @@ select.ps-input option{background:#13131f;color:#fff}
 .ps-ai-card.warning h5{color:#fb923c}
 .ps-step{display:flex;gap:10px;margin-bottom:10px;font-size:12px;line-height:1.7;color:#cbd5e1}
 .ps-step .num{flex-shrink:0;width:24px;height:24px;border-radius:50%;background:rgba(6,182,212,.2);color:#67e8f9;display:flex;align-items:center;justify-content:center;font-weight:900;font-size:11px}
+.chip-toggle{display:inline-flex;align-items:center;cursor:pointer;user-select:none}
+.chip-toggle input{display:none}
+.chip-toggle span{padding:7px 12px;border:1px solid var(--border);border-radius:99px;font-size:11px;font-weight:700;color:#475569;background:#fff;transition:all .15s}
+.chip-toggle input:checked+span{background:linear-gradient(135deg,#7c3aed,#ec4899);color:#fff;border-color:transparent;box-shadow:0 3px 10px rgba(124,58,237,.3)}
+.chip-toggle:hover span{border-color:#7c3aed;color:#7c3aed}
+.chip-toggle input:checked+span:hover{color:#fff}
+.modal-bg.open{display:flex !important}
+.expiry-bad{background:#fef2f2;color:#dc2626;border:1px solid #fecaca;padding:3px 8px;border-radius:99px;font-size:10px;font-weight:900}
+.expiry-warn{background:#fffbeb;color:#d97706;border:1px solid #fde68a;padding:3px 8px;border-radius:99px;font-size:10px;font-weight:900}
+.stock-low{background:#fef3c7;color:#92400e;border:1px solid #fcd34d;padding:3px 8px;border-radius:99px;font-size:10px;font-weight:900}
+.stock-out{background:#fef2f2;color:#dc2626;border:1px solid #fecaca;padding:3px 8px;border-radius:99px;font-size:10px;font-weight:900}
 </style>
 </head>
 <body>
@@ -551,6 +564,8 @@ select.ps-input option{background:#13131f;color:#fff}
     <button class="nav-item" data-page="delivery" onclick="goPage('delivery')"><i data-lucide="truck"></i> التوصيل</button>
     <button class="nav-item" data-page="payroll" onclick="goPage('payroll')"><i data-lucide="wallet"></i> المحاسبة</button>
     <button class="nav-item" data-page="gateways" onclick="goPage('gateways')"><i data-lucide="credit-card"></i> وسائل الدفع</button>
+    <button class="nav-item" data-page="reports" onclick="goPage('reports')" data-testid="nav-reports"><i data-lucide="file-text"></i> تقارير PDF <span class="badge" style="background:var(--emerald)">جديد</span></button>
+    <button class="nav-item" data-page="zatca" onclick="goPage('zatca')" data-testid="nav-zatca"><i data-lucide="receipt"></i> الفاتورة الإلكترونية ZATCA</button>
 
     <div class="nav-section">التسويق والذكاء الإصطناعي</div>
     <button class="nav-item" data-page="video-studio" onclick="goPage('video-studio')"><i data-lucide="clapperboard"></i> استوديو الفيديو الإعلاني</button>
@@ -845,7 +860,89 @@ select.ps-input option{background:#13131f;color:#fff}
         <!-- Loyalty -->
         <div class="panel" style="margin-top:14px"><div class="panel-head"><h3>⭐ برنامج الولاء والنقاط</h3><label class="switch-label"><input type="checkbox" id="loy-enabled" checked onchange="toast(this.checked?'✓ تفعيل':'إيقاف')"><span class="switch-track"></span><b style="font-size:11px">مُفعّل</b></label></div><div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px"><div class="field"><label style="font-size:11px;font-weight:900;color:var(--mute);display:block;margin-bottom:5px">النقاط لكل ريال مُنفق</label><input type="number" value="1" min="0" step="0.5" style="width:100%;padding:9px;border:1px solid var(--border);border-radius:8px;font-weight:700"></div><div class="field"><label style="font-size:11px;font-weight:900;color:var(--mute);display:block;margin-bottom:5px">قيمة 100 نقطة (ر.س)</label><input type="number" value="5" min="0" step="0.5" style="width:100%;padding:9px;border:1px solid var(--border);border-radius:8px;font-weight:700"></div><div class="field"><label style="font-size:11px;font-weight:900;color:var(--mute);display:block;margin-bottom:5px">الحد الأدنى للاستبدال</label><input type="number" value="500" min="0" style="width:100%;padding:9px;border:1px solid var(--border);border-radius:8px;font-weight:700"></div><div class="field"><label style="font-size:11px;font-weight:900;color:var(--mute);display:block;margin-bottom:5px">مكافأة التسجيل</label><input type="number" value="100" min="0" style="width:100%;padding:9px;border:1px solid var(--border);border-radius:8px;font-weight:700"></div></div><button class="btn btn-primary" style="margin-top:14px;width:100%" onclick="toast('✓ حُفظت إعدادات الولاء')">💾 حفظ إعدادات الولاء</button></div>
         <!-- Customer segments -->
-        <div class="panel" style="margin-top:14px"><div class="panel-head"><h3>🎯 شرائح العملاء</h3></div><div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:10px"><div class="kpi" style="cursor:pointer" onclick="toast('شريحة VIP — 42 عميل')"><div class="lbl">💎 عملاء VIP</div><div class="val" style="font-size:24px">42</div><div class="meta">أكثر من 5,000 ر.س</div></div><div class="kpi" style="cursor:pointer" onclick="toast('عملاء جدد — 187')"><div class="lbl">🆕 عملاء جدد</div><div class="val" style="font-size:24px">187</div><div class="meta">آخر 30 يوم</div></div><div class="kpi" style="cursor:pointer" onclick="toast('غير نشطين — 89')"><div class="lbl">😴 غير نشطين</div><div class="val" style="font-size:24px">89</div><div class="meta">آخر طلب قبل 60 يوم</div></div><div class="kpi" style="cursor:pointer" onclick="toast('متكررون — 234')"><div class="lbl">🔁 عملاء متكررون</div><div class="val" style="font-size:24px">234</div><div class="meta">3+ طلبات</div></div></div><button class="btn btn-amber" style="margin-top:14px;width:100%" onclick="toast('📧 الحملة جاهزة · 562 عميل · 8 نقاط')"><i data-lucide="megaphone" style="width:13px;height:13px"></i> أنشئ حملة لشريحة محددة</button></div>
+        <div class="panel" style="margin-top:14px"><div class="panel-head"><h3>🎯 شرائح العملاء</h3></div><div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:10px"><div class="kpi" style="cursor:pointer" onclick="toast('شريحة VIP — 42 عميل')"><div class="lbl">💎 عملاء VIP</div><div class="val" style="font-size:24px">42</div><div class="meta">أكثر من 5,000 ر.س</div></div><div class="kpi" style="cursor:pointer" onclick="toast('عملاء جدد — 187')"><div class="lbl">🆕 عملاء جدد</div><div class="val" style="font-size:24px">187</div><div class="meta">آخر 30 يوم</div></div><div class="kpi" style="cursor:pointer" onclick="toast('غير نشطين — 89')"><div class="lbl">😴 غير نشطين</div><div class="val" style="font-size:24px">89</div><div class="meta">آخر طلب قبل 60 يوم</div></div><div class="kpi" style="cursor:pointer" onclick="toast('متكررون — 234')"><div class="lbl">🔁 عملاء متكررون</div><div class="val" style="font-size:24px">234</div><div class="meta">3+ طلبات</div></div></div><button class="btn btn-amber" data-testid="open-campaign-builder" style="margin-top:14px;width:100%" onclick="openCampaignBuilder()"><i data-lucide="megaphone" style="width:13px;height:13px"></i> أنشئ حملة احترافية (استهداف كامل)</button></div>
+      </div>
+
+      <!-- ─── CAMPAIGN BUILDER MODAL ─── -->
+      <div class="modal-bg" id="campaign-modal" onclick="if(event.target===this)closeCampaignBuilder()" style="position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:300;display:none;align-items:flex-start;justify-content:center;padding:20px;overflow-y:auto">
+        <div style="background:#fff;border-radius:18px;max-width:760px;width:100%;padding:0;margin-top:30px;box-shadow:0 30px 80px rgba(0,0,0,.4);overflow:hidden">
+          <div style="background:linear-gradient(135deg,#0a0a14,#13131f);color:#fff;padding:20px 24px;display:flex;align-items:center;justify-content:space-between">
+            <div style="display:flex;align-items:center;gap:12px"><div style="width:46px;height:46px;border-radius:12px;background:linear-gradient(135deg,#f43f5e,var(--amber));display:flex;align-items:center;justify-content:center;font-size:22px">📢</div><div><h3 style="color:#fff;font-size:17px">منشئ الحملة الإعلانية</h3><p style="font-size:11px;color:#94a3b8;margin-top:2px">حدّد كل تفصيلة قبل الإطلاق</p></div></div>
+            <button onclick="closeCampaignBuilder()" style="background:rgba(255,255,255,.1);color:#fff;border:none;width:32px;height:32px;border-radius:50%;font-size:18px;cursor:pointer">✕</button>
+          </div>
+          <div style="padding:22px 24px;max-height:75vh;overflow-y:auto">
+            <!-- Step 1: Basic -->
+            <h4 style="font-size:13px;font-weight:900;margin-bottom:10px;color:var(--purple)">① معلومات أساسية</h4>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:18px">
+              <div class="field"><label style="font-size:11px;font-weight:900;color:var(--mute);display:block;margin-bottom:5px">اسم الحملة</label><input id="cmp-name" data-testid="cmp-name" placeholder="مثلاً: تخفيضات الجمعة البيضاء" style="width:100%;padding:10px;border:1px solid var(--border);border-radius:8px;font-weight:700;font-family:inherit"></div>
+              <div class="field"><label style="font-size:11px;font-weight:900;color:var(--mute);display:block;margin-bottom:5px">الهدف</label><select id="cmp-goal" data-testid="cmp-goal" style="width:100%;padding:10px;border:1px solid var(--border);border-radius:8px;font-weight:700;font-family:inherit"><option value="sales">🛒 زيادة المبيعات</option><option value="awareness">👀 الوعي بالعلامة</option><option value="reactivation">🔁 استرجاع غير النشطين</option><option value="newproduct">✨ إطلاق منتج جديد</option><option value="loyalty">💎 مكافأة الـVIP</option></select></div>
+            </div>
+            <!-- Step 2: Audience -->
+            <h4 style="font-size:13px;font-weight:900;margin-bottom:10px;color:var(--purple)">② الجمهور المستهدف</h4>
+            <div style="margin-bottom:10px">
+              <label style="font-size:11px;font-weight:900;color:var(--mute);display:block;margin-bottom:6px">الشرائح</label>
+              <div style="display:flex;flex-wrap:wrap;gap:6px" id="cmp-segments">
+                <label class="chip-toggle"><input type="checkbox" value="vip" data-count="42" data-testid="seg-vip"><span>💎 VIP (42)</span></label>
+                <label class="chip-toggle"><input type="checkbox" value="new" data-count="187" data-testid="seg-new"><span>🆕 جدد (187)</span></label>
+                <label class="chip-toggle"><input type="checkbox" value="inactive" data-count="89" data-testid="seg-inactive"><span>😴 غير نشطين (89)</span></label>
+                <label class="chip-toggle"><input type="checkbox" value="repeat" data-count="234" data-testid="seg-repeat"><span>🔁 متكررون (234)</span></label>
+                <label class="chip-toggle"><input type="checkbox" value="all" data-count="552" data-testid="seg-all"><span>🌐 الكل (552)</span></label>
+              </div>
+            </div>
+            <div style="margin-bottom:10px">
+              <label style="font-size:11px;font-weight:900;color:var(--mute);display:block;margin-bottom:6px">اهتمامات (تصنيفات)</label>
+              <div style="display:flex;flex-wrap:wrap;gap:6px" id="cmp-cats">
+                <label class="chip-toggle"><input type="checkbox" value="electronics"><span>📱 إلكترونيات</span></label>
+                <label class="chip-toggle"><input type="checkbox" value="fashion"><span>👗 أزياء</span></label>
+                <label class="chip-toggle"><input type="checkbox" value="beauty"><span>💄 تجميل</span></label>
+                <label class="chip-toggle"><input type="checkbox" value="home"><span>🏠 منزل</span></label>
+                <label class="chip-toggle"><input type="checkbox" value="food"><span>🍔 أطعمة</span></label>
+                <label class="chip-toggle"><input type="checkbox" value="kids"><span>🧸 أطفال</span></label>
+                <label class="chip-toggle"><input type="checkbox" value="sports"><span>⚽ رياضة</span></label>
+              </div>
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:18px">
+              <div class="field"><label style="font-size:11px;font-weight:900;color:var(--mute);display:block;margin-bottom:5px">العمر من</label><input id="cmp-age-from" data-testid="cmp-age-from" type="number" min="13" max="80" value="18" style="width:100%;padding:10px;border:1px solid var(--border);border-radius:8px;font-weight:700;font-family:inherit"></div>
+              <div class="field"><label style="font-size:11px;font-weight:900;color:var(--mute);display:block;margin-bottom:5px">إلى</label><input id="cmp-age-to" data-testid="cmp-age-to" type="number" min="13" max="80" value="55" style="width:100%;padding:10px;border:1px solid var(--border);border-radius:8px;font-weight:700;font-family:inherit"></div>
+              <div class="field"><label style="font-size:11px;font-weight:900;color:var(--mute);display:block;margin-bottom:5px">الجنس</label><select id="cmp-gender" data-testid="cmp-gender" style="width:100%;padding:10px;border:1px solid var(--border);border-radius:8px;font-weight:700;font-family:inherit"><option value="any">الكل</option><option value="male">رجال</option><option value="female">نساء</option></select></div>
+            </div>
+            <!-- Step 3: Message -->
+            <h4 style="font-size:13px;font-weight:900;margin-bottom:10px;color:var(--purple)">③ الرسالة + العرض</h4>
+            <div class="field" style="margin-bottom:10px"><label style="font-size:11px;font-weight:900;color:var(--mute);display:block;margin-bottom:5px">عنوان الرسالة</label><input id="cmp-title" data-testid="cmp-title" placeholder="مثلاً: عروض حصرية لك! ⚡" style="width:100%;padding:10px;border:1px solid var(--border);border-radius:8px;font-weight:700;font-family:inherit"></div>
+            <div class="field" style="margin-bottom:10px"><label style="font-size:11px;font-weight:900;color:var(--mute);display:block;margin-bottom:5px">نص الرسالة</label><textarea id="cmp-body" data-testid="cmp-body" rows="3" placeholder="منتجاتنا الجديدة وصلت — جرّبها بسعر مميز" style="width:100%;padding:10px;border:1px solid var(--border);border-radius:8px;font-weight:700;font-family:inherit;line-height:1.7"></textarea></div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:18px">
+              <div class="field"><label style="font-size:11px;font-weight:900;color:var(--mute);display:block;margin-bottom:5px">كوبون مرفق</label><select id="cmp-coupon" data-testid="cmp-coupon" style="width:100%;padding:10px;border:1px solid var(--border);border-radius:8px;font-weight:700;font-family:inherit"><option value="">بدون كوبون</option><option value="WELCOME10">WELCOME10 (خصم 10%)</option><option value="SAVE50">SAVE50 (خصم 50 ر.س)</option><option value="FREESHIP">FREESHIP (شحن مجاني)</option></select></div>
+              <div class="field"><label style="font-size:11px;font-weight:900;color:var(--mute);display:block;margin-bottom:5px">صورة (اختياري)</label><input id="cmp-img" data-testid="cmp-img" placeholder="رابط صورة الإعلان" style="width:100%;padding:10px;border:1px solid var(--border);border-radius:8px;font-weight:700;font-family:inherit"></div>
+            </div>
+            <!-- Step 4: Channels -->
+            <h4 style="font-size:13px;font-weight:900;margin-bottom:10px;color:var(--purple)">④ قنوات الإرسال</h4>
+            <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:18px" id="cmp-channels">
+              <label class="chip-toggle"><input type="checkbox" value="whatsapp" checked data-testid="ch-whatsapp"><span>💬 واتساب (1 نقطة/رسالة)</span></label>
+              <label class="chip-toggle"><input type="checkbox" value="sms" data-testid="ch-sms"><span>📱 SMS (2 نقطة)</span></label>
+              <label class="chip-toggle"><input type="checkbox" value="email" data-testid="ch-email"><span>📧 إيميل (مجاناً)</span></label>
+              <label class="chip-toggle"><input type="checkbox" value="push" data-testid="ch-push"><span>🔔 تنبيهات Push (مجاناً)</span></label>
+              <label class="chip-toggle"><input type="checkbox" value="instagram" data-testid="ch-ig"><span>📷 Instagram DM</span></label>
+              <label class="chip-toggle"><input type="checkbox" value="snap" data-testid="ch-snap"><span>👻 Snapchat</span></label>
+            </div>
+            <!-- Step 5: Schedule + Budget -->
+            <h4 style="font-size:13px;font-weight:900;margin-bottom:10px;color:var(--purple)">⑤ التوقيت والميزانية</h4>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:18px">
+              <div class="field"><label style="font-size:11px;font-weight:900;color:var(--mute);display:block;margin-bottom:5px">إرسال</label><select id="cmp-when" data-testid="cmp-when" style="width:100%;padding:10px;border:1px solid var(--border);border-radius:8px;font-weight:700;font-family:inherit"><option value="now">فوراً</option><option value="peak">في وقت ذروة المتابعين</option><option value="schedule">جدولة لتاريخ ووقت</option></select></div>
+              <div class="field"><label style="font-size:11px;font-weight:900;color:var(--mute);display:block;margin-bottom:5px">الميزانية القصوى (نقاط)</label><input id="cmp-budget" data-testid="cmp-budget" type="number" min="0" value="500" style="width:100%;padding:10px;border:1px solid var(--border);border-radius:8px;font-weight:700;font-family:inherit"></div>
+            </div>
+            <!-- Summary -->
+            <div id="cmp-summary" style="background:linear-gradient(135deg,#faf5ff,#fdf2f8);border:1px solid #ddd6fe;border-radius:12px;padding:14px;margin-bottom:14px">
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;font-size:12px">
+                <div><b style="color:var(--purple)">👥 الجمهور المتوقع:</b> <span id="cmp-est-audience">—</span></div>
+                <div><b style="color:var(--purple)">💰 التكلفة المتوقعة:</b> <span id="cmp-est-cost">—</span></div>
+              </div>
+            </div>
+            <div style="display:flex;gap:10px">
+              <button class="btn btn-amber" data-testid="cmp-preview-btn" onclick="previewCampaign()" style="flex:1"><i data-lucide="eye" style="width:14px;height:14px"></i> معاينة</button>
+              <button class="btn btn-primary" data-testid="cmp-launch-btn" onclick="launchCampaign()" style="flex:1.5"><i data-lucide="send" style="width:14px;height:14px"></i> 🚀 إطلاق الحملة</button>
+            </div>
+          </div>
+        </div>
       </div>
 
       <!-- ─── REVIEWS ─── -->
@@ -1155,6 +1252,81 @@ select.ps-input option{background:#13131f;color:#fff}
         </div>
       </div>
 
+      <!-- ─── PDF REPORTS ─── -->
+      <div class="page" data-page="reports">
+        <div class="panel" style="background:linear-gradient(135deg,#0a0a14,#13131f);color:#fff;border:none"><div style="display:flex;align-items:center;gap:14px"><div style="width:54px;height:54px;border-radius:14px;background:linear-gradient(135deg,#10b981,#06b6d4);display:flex;align-items:center;justify-content:center;font-size:26px">📄</div><div><h3 style="color:#fff;font-size:18px">تقارير PDF احترافية</h3><p style="font-size:12px;color:#94a3b8;margin-top:4px">حسابات المبيعات · أفضل المنتجات · العملاء · المخزون · أرسلها على واتساب مباشرة</p></div></div></div>
+        <div class="kpi-grid" style="margin-top:14px">
+          <div class="kpi"><div class="lbl">إجمالي المبيعات</div><div class="val" style="color:var(--emerald)" id="rep-sales">—</div><div class="meta">آخر 30 يوم</div></div>
+          <div class="kpi"><div class="lbl">الطلبات</div><div class="val" style="color:var(--purple)" id="rep-orders">—</div><div class="meta">إجمالي</div></div>
+          <div class="kpi"><div class="lbl">متوسط الطلب</div><div class="val" style="color:var(--amber)" id="rep-avg">—</div><div class="meta">ر.س / طلب</div></div>
+          <div class="kpi"><div class="lbl">العملاء النشطون</div><div class="val" style="color:var(--rose)" id="rep-cust">—</div><div class="meta">شراء آخر 30 يوم</div></div>
+        </div>
+        <div class="panel" style="margin-top:14px">
+          <div class="panel-head"><h3>🎯 اختر نوع التقرير</h3></div>
+          <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:10px">
+            <div class="kpi" style="cursor:pointer;border:2px solid transparent" data-testid="rep-sales-card" onclick="generateReport('sales')"><div style="font-size:32px;margin-bottom:6px">💰</div><b style="font-size:14px">تقرير المبيعات</b><div style="font-size:11px;color:var(--mute);margin-top:4px">إجمالي · ضريبة · صافي · حسب اليوم</div></div>
+            <div class="kpi" style="cursor:pointer" data-testid="rep-products-card" onclick="generateReport('products')"><div style="font-size:32px;margin-bottom:6px">📦</div><b style="font-size:14px">تقرير المنتجات</b><div style="font-size:11px;color:var(--mute);margin-top:4px">الأكثر مبيعاً · المخزون · المنتهي</div></div>
+            <div class="kpi" style="cursor:pointer" data-testid="rep-customers-card" onclick="generateReport('customers')"><div style="font-size:32px;margin-bottom:6px">👥</div><b style="font-size:14px">تقرير العملاء</b><div style="font-size:11px;color:var(--mute);margin-top:4px">VIP · جدد · إجمالي إنفاقهم</div></div>
+            <div class="kpi" style="cursor:pointer" data-testid="rep-inventory-card" onclick="generateReport('inventory')"><div style="font-size:32px;margin-bottom:6px">📊</div><b style="font-size:14px">جرد المخزون</b><div style="font-size:11px;color:var(--mute);margin-top:4px">قيمة الجرد · نفاد · تنبيهات</div></div>
+            <div class="kpi" style="cursor:pointer" data-testid="rep-zatca-card" onclick="generateReport('zatca')"><div style="font-size:32px;margin-bottom:6px">🧾</div><b style="font-size:14px">تقرير ZATCA</b><div style="font-size:11px;color:var(--mute);margin-top:4px">للهيئة · فواتير · ضريبة 15%</div></div>
+            <div class="kpi" style="cursor:pointer" data-testid="rep-monthly-card" onclick="generateReport('monthly')"><div style="font-size:32px;margin-bottom:6px">📅</div><b style="font-size:14px">التقرير الشهري الشامل</b><div style="font-size:11px;color:var(--mute);margin-top:4px">كل شي في ملف واحد</div></div>
+          </div>
+        </div>
+        <div class="panel" style="margin-top:14px" id="rep-output-panel" style="display:none">
+          <div class="panel-head"><h3 id="rep-output-title">📄 معاينة التقرير</h3>
+            <div style="display:flex;gap:6px">
+              <button class="btn btn-primary" data-testid="rep-download-pdf" onclick="downloadReportPDF()" style="padding:7px 12px;font-size:11px"><i data-lucide="download" style="width:12px;height:12px"></i> تحميل PDF</button>
+              <button class="btn btn-amber" data-testid="rep-share-whatsapp" onclick="shareReportWhatsapp()" style="padding:7px 12px;font-size:11px;background:#25D366;color:#fff;border:none"><i data-lucide="message-circle" style="width:12px;height:12px"></i> أرسل على واتساب</button>
+              <button class="btn" data-testid="rep-share-email" onclick="shareReportEmail()" style="padding:7px 12px;font-size:11px"><i data-lucide="mail" style="width:12px;height:12px"></i> إيميل</button>
+            </div>
+          </div>
+          <div id="rep-output" style="background:#fff;padding:20px;border:1px solid var(--border);border-radius:10px;max-height:560px;overflow-y:auto;font-size:13px"></div>
+        </div>
+      </div>
+
+      <!-- ─── ZATCA E-INVOICE ─── -->
+      <div class="page" data-page="zatca">
+        <div class="panel" style="background:linear-gradient(135deg,#0a0a14,#13131f);color:#fff;border:none"><div style="display:flex;align-items:center;gap:14px"><div style="width:54px;height:54px;border-radius:14px;background:linear-gradient(135deg,#059669,#10b981);display:flex;align-items:center;justify-content:center;font-size:26px">🧾</div><div><h3 style="color:#fff;font-size:18px">الفاتورة الإلكترونية ZATCA Phase 2</h3><p style="font-size:12px;color:#94a3b8;margin-top:4px">إلزامي من هيئة الزكاة والضريبة والجمارك · إصدار فواتير بـ XML + QR + توقيع رقمي</p></div></div></div>
+        <div class="panel" style="margin-top:14px">
+          <div class="panel-head"><h3>① بيانات المنشأة</h3><span id="zatca-status-pill" class="status-pill s-pending" style="font-size:10px">غير مفعّل</span></div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+            <div class="field"><label style="font-size:11px;font-weight:900;color:var(--mute);display:block;margin-bottom:5px">الرقم الضريبي (15 رقم)</label><input id="z-vat" data-testid="z-vat" placeholder="300000000000003" style="width:100%;padding:10px;border:1px solid var(--border);border-radius:8px;font-family:monospace;direction:ltr;font-weight:700"></div>
+            <div class="field"><label style="font-size:11px;font-weight:900;color:var(--mute);display:block;margin-bottom:5px">السجل التجاري</label><input id="z-cr" data-testid="z-cr" placeholder="1010234567" style="width:100%;padding:10px;border:1px solid var(--border);border-radius:8px;font-family:monospace;direction:ltr;font-weight:700"></div>
+            <div class="field"><label style="font-size:11px;font-weight:900;color:var(--mute);display:block;margin-bottom:5px">اسم المنشأة (عربي)</label><input id="z-name-ar" data-testid="z-name-ar" placeholder="شركة زيراكس للتجارة الإلكترونية" style="width:100%;padding:10px;border:1px solid var(--border);border-radius:8px;font-weight:700"></div>
+            <div class="field"><label style="font-size:11px;font-weight:900;color:var(--mute);display:block;margin-bottom:5px">اسم المنشأة (إنجليزي)</label><input id="z-name-en" data-testid="z-name-en" placeholder="Zerax Trading LLC" style="width:100%;padding:10px;border:1px solid var(--border);border-radius:8px;font-weight:700;direction:ltr"></div>
+            <div class="field" style="grid-column:1/-1"><label style="font-size:11px;font-weight:900;color:var(--mute);display:block;margin-bottom:5px">العنوان الرسمي</label><input id="z-address" data-testid="z-address" placeholder="حي العليا، طريق الملك فهد، الرياض 11564" style="width:100%;padding:10px;border:1px solid var(--border);border-radius:8px;font-weight:700"></div>
+          </div>
+        </div>
+        <div class="panel" style="margin-top:14px">
+          <div class="panel-head"><h3>② شهادة الاستيفاء (CSR/CSID)</h3></div>
+          <p style="font-size:12px;color:var(--mute);line-height:1.7;margin-bottom:10px">حمّل شهادة CSID اللي حصلت عليها من بوابة فاتورة، أو ولّدها مباشرة من هنا (يحتاج رفع المفتاح العام).</p>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+            <button class="btn btn-primary" data-testid="z-generate-csr" onclick="zGenerateCSR()" style="padding:14px"><i data-lucide="key" style="width:14px;height:14px"></i> توليد طلب CSR جديد</button>
+            <button class="btn" data-testid="z-upload-csid" onclick="zUploadCSID()" style="padding:14px"><i data-lucide="upload" style="width:14px;height:14px"></i> رفع شهادة CSID موجودة</button>
+          </div>
+          <div id="z-csr-output" style="display:none;margin-top:12px;background:#0a0a14;color:#10b981;padding:14px;border-radius:10px;font-family:monospace;font-size:10px;direction:ltr;text-align:left;line-height:1.6;max-height:200px;overflow:auto"></div>
+        </div>
+        <div class="panel" style="margin-top:14px">
+          <div class="panel-head"><h3>③ بيئة العمل</h3></div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+            <label class="pay-card selected" data-zenv="sandbox"><input type="radio" name="z-env" value="sandbox" checked style="display:none"><div style="font-size:24px;margin-bottom:4px">🧪</div><b>بيئة التجربة (Sandbox)</b><span>للاختبار · لا يصدر فواتير حقيقية</span></label>
+            <label class="pay-card" data-zenv="production"><input type="radio" name="z-env" value="production" style="display:none"><div style="font-size:24px;margin-bottom:4px">🚀</div><b>الإنتاج (Production)</b><span>فواتير رسمية لـ ZATCA</span></label>
+          </div>
+          <div style="margin-top:14px;background:#fffbeb;border:1px solid #fde68a;border-radius:10px;padding:12px;font-size:11px;color:#92400e;line-height:1.7">⚠️ <b>قبل التفعيل في الإنتاج:</b> تأكد من تسجيلك في بوابة فاتورة وحصولك على CSID فعلي. هذا تطبيق Mock للتجربة فقط — لا يربط مع ZATCA الحقيقي.</div>
+        </div>
+        <div class="panel" style="margin-top:14px">
+          <div class="panel-head"><h3>④ معاينة فاتورة عيّنة</h3><button class="btn btn-amber" data-testid="z-gen-sample" onclick="zGenerateSampleInvoice()" style="padding:7px 12px;font-size:11px"><i data-lucide="file-plus" style="width:12px;height:12px"></i> ولّد فاتورة عينة</button></div>
+          <div id="z-sample-output" style="display:none">
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:10px">
+              <div><h4 style="font-size:12px;color:var(--purple);margin-bottom:6px">📋 XML</h4><pre id="z-xml" style="background:#0a0a14;color:#94e2d5;padding:12px;border-radius:8px;font-size:9px;direction:ltr;text-align:left;max-height:280px;overflow:auto;font-family:monospace;line-height:1.5"></pre></div>
+              <div><h4 style="font-size:12px;color:var(--purple);margin-bottom:6px">📲 QR Code (TLV)</h4><div id="z-qr" style="background:#fff;padding:20px;border:2px solid var(--border);border-radius:10px;text-align:center"></div><p style="font-size:10px;color:var(--mute);margin-top:8px;text-align:center;direction:ltr;font-family:monospace;word-break:break-all" id="z-qr-tlv"></p></div>
+            </div>
+            <button class="btn btn-primary" data-testid="z-download-pdf-a3" onclick="zDownloadPDFA3()" style="margin-top:14px;width:100%"><i data-lucide="download" style="width:14px;height:14px"></i> تحميل PDF/A-3 (مع XML مدمج)</button>
+          </div>
+        </div>
+        <button class="btn btn-primary" data-testid="z-save-config" onclick="zSaveConfig()" style="margin-top:14px;width:100%;padding:14px;font-size:14px">💾 حفظ إعدادات ZATCA</button>
+      </div>
+
       <!-- ─── SETTINGS ─── -->
       <div class="page" data-page="settings">
         <div class="panel">
@@ -1206,6 +1378,17 @@ select.ps-input option{background:#13131f;color:#fff}
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:10px">
               <div><label class="ps-lbl">السعر (ر.س)</label><input id="pm-price" class="ps-input" type="number" min="0" placeholder="0"></div>
               <div><label class="ps-lbl">المخزون</label><input id="pm-stock" class="ps-input" type="number" min="0" value="10"></div>
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:10px">
+              <div><label class="ps-lbl">SKU / رقم المنتج</label><input id="pm-sku" class="ps-input" placeholder="مثلاً: IP17-PRO-256"></div>
+              <div><label class="ps-lbl">حد تنبيه نفاد المخزون</label><input id="pm-stock-low" class="ps-input" type="number" min="0" value="5"></div>
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:10px">
+              <div><label class="ps-lbl">تاريخ الإنتاج (اختياري)</label><input id="pm-mfg" class="ps-input" type="date"></div>
+              <div><label class="ps-lbl">تاريخ الانتهاء (اختياري)</label><input id="pm-exp" class="ps-input" type="date"></div>
+            </div>
+            <div style="display:flex;align-items:center;gap:8px;margin-top:10px;background:#fffbeb;border:1px solid #fde68a;border-radius:10px;padding:10px 12px">
+              <label class="switch-label" style="margin:0"><input type="checkbox" id="pm-track-expiry"><span class="switch-track"></span><b style="font-size:11px;color:#92400e">⏰ تنبيه قبل انتهاء الصلاحية (مفيد للأطعمة/مواد التجميل/الأدوية)</b></label>
             </div>
             <label class="ps-lbl" style="margin-top:10px">الفئة</label>
             <select id="pm-cat" class="ps-input"><option value="electronics">📱 إلكترونيات</option><option value="fashion">👗 أزياء</option><option value="beauty">💄 جمال وعناية</option><option value="home">🏠 منزل ومطبخ</option><option value="food">🍔 أطعمة</option><option value="health">💊 صحة ودواء</option><option value="pet">🐾 حيوانات أليفة</option><option value="sports">⚽ رياضة</option><option value="kids">🧸 أطفال</option></select>
@@ -1297,12 +1480,12 @@ let CURRENT_PAGE='dashboard';
 
 // Mock product seed
 const MOCK_PRODUCTS=[
-  {id:'p1',name:'iPhone 17 Pro Max',price:5499,stock:24,cat:'electronics',img:'https://images.unsplash.com/photo-1592750475338-74b7b21085ab?w=600&q=85',sales:34},
-  {id:'p2',name:'Apple Watch Ultra 2',price:3299,stock:18,cat:'electronics',img:'https://images.unsplash.com/photo-1551816230-ef5deaed4a26?w=600&q=85',sales:28},
-  {id:'p3',name:'AirPods Pro 3',price:1099,stock:42,cat:'electronics',img:'https://images.unsplash.com/photo-1606220945770-b5b6c2c55bf1?w=600&q=85',sales:51},
-  {id:'p4',name:'MacBook Pro M4',price:9999,stock:7,cat:'electronics',img:'https://images.unsplash.com/photo-1517336714731-489689fd1ca8?w=600&q=85',sales:12},
-  {id:'p5',name:'iPad Air M3',price:2799,stock:15,cat:'electronics',img:'https://images.unsplash.com/photo-1561154464-82e9adf32764?w=600&q=85',sales:19},
-  {id:'p6',name:'Samsung S25 Ultra',price:4899,stock:11,cat:'electronics',img:'https://images.unsplash.com/photo-1610945415295-d9bbf067e59c?w=600&q=85',sales:8}
+  {id:'p1',name:'iPhone 17 Pro Max',price:5499,stock:24,sku:'IP17-PM-256',stockLow:5,exp:null,cat:'electronics',img:'https://images.unsplash.com/photo-1592750475338-74b7b21085ab?w=600&q=85',sales:34},
+  {id:'p2',name:'Apple Watch Ultra 2',price:3299,stock:18,sku:'AW-ULT2',stockLow:5,exp:null,cat:'electronics',img:'https://images.unsplash.com/photo-1551816230-ef5deaed4a26?w=600&q=85',sales:28},
+  {id:'p3',name:'AirPods Pro 3',price:1099,stock:42,sku:'APP-3',stockLow:8,exp:null,cat:'electronics',img:'https://images.unsplash.com/photo-1606220945770-b5b6c2c55bf1?w=600&q=85',sales:51},
+  {id:'p4',name:'MacBook Pro M4',price:9999,stock:3,sku:'MBP-M4-14',stockLow:5,exp:null,cat:'electronics',img:'https://images.unsplash.com/photo-1517336714731-489689fd1ca8?w=600&q=85',sales:12},
+  {id:'p5',name:'iPad Air M3',price:2799,stock:15,sku:'IPA-M3',stockLow:5,exp:null,cat:'electronics',img:'https://images.unsplash.com/photo-1561154464-82e9adf32764?w=600&q=85',sales:19},
+  {id:'p6',name:'Samsung S25 Ultra',price:4899,stock:0,sku:'SAM-S25U',stockLow:5,exp:null,cat:'electronics',img:'https://images.unsplash.com/photo-1610945415295-d9bbf067e59c?w=600&q=85',sales:8}
 ];
 let PRODUCTS=JSON.parse(localStorage.getItem('zx_dash_products')||'null')||MOCK_PRODUCTS;
 const MOCK_CUSTOMERS=[
@@ -1346,7 +1529,7 @@ function goPage(p){
   CURRENT_PAGE=p;
   document.querySelectorAll('.page').forEach(el=>el.classList.toggle('active',el.dataset.page===p));
   document.querySelectorAll('.nav-item').forEach(el=>el.classList.toggle('active',el.dataset.page===p));
-  const titles={dashboard:'الرئيسية',products:'المنتجات',orders:'الطلبات',customers:'العملاء',delivery:'إدارة التوصيل',payroll:'المحاسبة والرواتب',gateways:'وسائل الدفع',settings:'الإعدادات','video-studio':'استوديو الفيديو الإعلاني',social:'الحسابات الاجتماعية',services:'الخدمات الإضافية','smart-mgmt':'الإدارة الذكية',marketing:'التسويق والمبيعات',reviews:'التقييمات والمراجعات',themes:'ألوان المتجر'};
+  const titles={dashboard:'الرئيسية',products:'المنتجات',orders:'الطلبات',customers:'العملاء',delivery:'إدارة التوصيل',payroll:'المحاسبة والرواتب',gateways:'وسائل الدفع',settings:'الإعدادات','video-studio':'استوديو الفيديو الإعلاني',social:'الحسابات الاجتماعية',services:'الخدمات الإضافية','smart-mgmt':'الإدارة الذكية',marketing:'التسويق والمبيعات',reviews:'التقييمات والمراجعات',themes:'ألوان المتجر',reports:'تقارير PDF',zatca:'الفاتورة الإلكترونية ZATCA'};
   $('page-title').textContent=titles[p]||p;
   document.getElementById('sidebar').classList.remove('open');
   // lazy load
@@ -1359,6 +1542,8 @@ function goPage(p){
   if(p==='marketing')loadMarketing();
   if(p==='reviews')loadReviews();
   if(p==='themes')loadThemes();
+  if(p==='reports')loadReports();
+  if(p==='zatca')loadZatca();
   if(p==='video-studio')renderSocialMini();
   setTimeout(()=>{if(window.lucide)lucide.createIcons()},50);
 }
@@ -1383,15 +1568,37 @@ function renderAll(){
   renderOrders();
   renderCustomers();
 }
+function _stockBadge(p){
+  if(p.stock===0)return '<span class="stock-out">⛔ نفد المخزون</span>';
+  if(p.stock<=(p.stockLow||5))return `<span class="stock-low">⚠️ مخزون منخفض (${p.stock})</span>`;
+  return '';
+}
+function _expiryBadge(p){
+  if(!p.exp)return '';
+  const today=new Date();const exp=new Date(p.exp);
+  const days=Math.floor((exp-today)/(1000*60*60*24));
+  if(days<0)return '<span class="expiry-bad">🚫 منتهي الصلاحية</span>';
+  if(days<=30)return `<span class="expiry-warn">⏰ ينتهي خلال ${days} يوم</span>`;
+  return '';
+}
 function renderProducts(){
   $('products-grid').innerHTML=`<div class="pcard add" onclick="openProductModal()"><i data-lucide="plus-circle" style="width:36px;height:36px;margin-bottom:8px"></i>منتج جديد</div>`+
-    PRODUCTS.map((p,i)=>`<div class="pcard" onclick="editProduct('${p.id}')"><div class="img" style="background-image:url('${p.img}')"><div class="actions"><button title="استوديو الصور بالذكاء الإصطناعي" onclick="event.stopPropagation();openImageStudioFor('${p.id}')"><i data-lucide="sparkles" style="width:14px;height:14px"></i></button><button title="حذف" onclick="event.stopPropagation();deleteProduct('${p.id}')"><i data-lucide="trash-2" style="width:14px;height:14px"></i></button></div>${p.analysis?'<div style="position:absolute;bottom:6px;right:6px;background:rgba(124,58,237,.85);color:#fff;font-size:9px;font-weight:900;padding:3px 8px;border-radius:99px;backdrop-filter:blur(8px)">🤖 تحليل AI</div>':''}</div><div class="body"><h4>${p.name}</h4><div class="price">${p.price} ر.س</div><div class="meta">📦 ${p.stock} · 🛒 ${p.sales} ${p.analysis?'· ✨':''}</div></div></div>`).join('');
+    PRODUCTS.map((p,i)=>{
+      const stockB=_stockBadge(p);const expB=_expiryBadge(p);
+      const badges=[stockB,expB].filter(Boolean).join(' ');
+      return `<div class="pcard" onclick="editProduct('${p.id}')"><div class="img" style="background-image:url('${p.img}')"><div class="actions"><button title="استوديو الصور بالذكاء الإصطناعي" onclick="event.stopPropagation();openImageStudioFor('${p.id}')"><i data-lucide="sparkles" style="width:14px;height:14px"></i></button><button title="حذف" onclick="event.stopPropagation();deleteProduct('${p.id}')"><i data-lucide="trash-2" style="width:14px;height:14px"></i></button></div>${p.analysis?'<div style="position:absolute;bottom:6px;right:6px;background:rgba(124,58,237,.85);color:#fff;font-size:9px;font-weight:900;padding:3px 8px;border-radius:99px;backdrop-filter:blur(8px)">🤖 تحليل AI</div>':''}${badges?`<div style="position:absolute;top:6px;left:6px;display:flex;flex-direction:column;gap:4px">${badges}</div>`:''}</div><div class="body"><h4>${p.name}</h4>${p.sku?`<div style="font-size:10px;color:var(--mute);font-family:monospace;margin-bottom:4px">SKU: ${p.sku}</div>`:''}<div class="price">${p.price} ر.س</div><div class="meta">📦 ${p.stock} · 🛒 ${p.sales} ${p.analysis?'· ✨':''}</div></div></div>`;
+    }).join('');
   setTimeout(()=>{if(window.lucide)lucide.createIcons()},50);
 }
 function editProduct(id){
   const p=PRODUCTS.find(x=>x.id===id);if(!p)return;
   openProductModal();
   $('pm-name').value=p.name;$('pm-price').value=p.price;$('pm-stock').value=p.stock;$('pm-desc').value=p.desc||'';
+  if($('pm-sku'))$('pm-sku').value=p.sku||'';
+  if($('pm-stock-low'))$('pm-stock-low').value=p.stockLow||5;
+  if($('pm-mfg'))$('pm-mfg').value=p.mfg||'';
+  if($('pm-exp'))$('pm-exp').value=p.exp||'';
+  if($('pm-track-expiry'))$('pm-track-expiry').checked=!!p.trackExpiry;
   if(p.cat)$('pm-cat').value=p.cat;
   $('pm-img-preview').innerHTML=`<img src="${p.img}">`;
   // If product has stored analysis, show its full styled preview on Info tab
@@ -1754,7 +1961,7 @@ function pmSave(){
   const name=$('pm-name').value.trim();if(!name){alert('اكتب الاسم');psSwitchTab('info');$('pm-name').focus();return;}
   const previewImg=$('pm-img-preview').querySelector('img');
   const img=PS_STATE.approvedImg||(previewImg?previewImg.src:'https://images.unsplash.com/photo-1586765501019-cbf6c0b6d7a4?w=600&q=85');
-  const newP={id:'p'+Date.now(),name,price:+$('pm-price').value||0,stock:+$('pm-stock').value||0,cat:$('pm-cat').value,img,sales:0,desc:$('pm-desc').value||'',analysis:PS_STATE.analysis||null};
+  const newP={id:'p'+Date.now(),name,price:+$('pm-price').value||0,stock:+$('pm-stock').value||0,sku:$('pm-sku')?.value||'',stockLow:+$('pm-stock-low')?.value||5,mfg:$('pm-mfg')?.value||'',exp:$('pm-exp')?.value||'',trackExpiry:$('pm-track-expiry')?.checked||false,cat:$('pm-cat').value,img,sales:0,desc:$('pm-desc').value||'',analysis:PS_STATE.analysis||null};
   PRODUCTS.unshift(newP);
   localStorage.setItem('zx_dash_products',JSON.stringify(PRODUCTS));
   closeProductModal();
@@ -2231,13 +2438,403 @@ function bulkExport(){
 
 // ───── MARKETING (Coupons, Loyalty, Carts, Segments) ─────
 const COUPONS_SEED=[{code:'WELCOME10',type:'percent',value:10,min:0,used:34,limit:100,active:true,desc:'خصم 10% لأول طلب'},{code:'RAMADAN50',type:'fixed',value:50,min:300,used:128,limit:500,active:true,desc:'خصم 50 ر.س فوق 300'},{code:'VIP20',type:'percent',value:20,min:1000,used:12,limit:50,active:true,desc:'خصم 20% للعملاء VIP'},{code:'SHIPFREE',type:'shipping',value:0,min:200,used:89,limit:1000,active:true,desc:'شحن مجاني فوق 200'},{code:'BLACK40',type:'percent',value:40,min:500,used:0,limit:200,active:false,desc:'بلاك فرايدي'},{code:'BUNDLE3',type:'percent',value:15,min:0,used:23,limit:0,active:true,desc:'15% عند شراء 3+ منتجات'},{code:'SAUDI92',type:'fixed',value:92,min:500,used:5,limit:92,active:true,desc:'اليوم الوطني'}];
+// ───── PDF REPORTS ─────
+let _currentReport=null;
+function loadReports(){
+  const orders=_getAllOrders();
+  const totalSales=orders.reduce((s,o)=>s+(o.total||0),0);
+  document.getElementById('rep-sales').textContent=totalSales.toLocaleString('ar-SA')+' ر.س';
+  document.getElementById('rep-orders').textContent=orders.length;
+  document.getElementById('rep-avg').textContent=orders.length?Math.round(totalSales/orders.length):'0';
+  document.getElementById('rep-cust').textContent=MOCK_CUSTOMERS.length;
+}
+function _getAllOrders(){
+  // Mock 30 orders for demo
+  const customers=MOCK_CUSTOMERS;
+  return Array.from({length:38},(_,i)=>({
+    id:'#'+(3000+i),
+    cust:customers[i%customers.length].name,
+    items:1+Math.floor(Math.random()*4),
+    total:Math.round(80+Math.random()*900),
+    tax:0,
+    date:new Date(Date.now()-i*86400000*0.7).toLocaleDateString('ar-SA'),
+    payment:['Visa','STC Pay','Tabby','مدى','Tamara'][i%5]
+  })).map(o=>{o.tax=Math.round(o.total*0.15);return o;});
+}
+function _reportSales(){
+  const orders=_getAllOrders();
+  const total=orders.reduce((s,o)=>s+o.total,0);
+  const tax=orders.reduce((s,o)=>s+o.tax,0);
+  return {
+    title:'تقرير المبيعات · آخر 30 يوم',
+    summary:[
+      {k:'إجمالي المبيعات',v:total.toLocaleString('ar-SA')+' ر.س'},
+      {k:'الضريبة (15%)',v:tax.toLocaleString('ar-SA')+' ر.س'},
+      {k:'الصافي',v:(total-tax).toLocaleString('ar-SA')+' ر.س'},
+      {k:'عدد الطلبات',v:orders.length},
+      {k:'متوسط قيمة الطلب',v:Math.round(total/orders.length)+' ر.س'},
+    ],
+    rows:[['رقم الطلب','العميل','المنتجات','الإجمالي','الضريبة','وسيلة الدفع','التاريخ'],
+      ...orders.slice(0,20).map(o=>[o.id,o.cust,o.items,o.total+' ر.س',o.tax+' ر.س',o.payment,o.date])]
+  };
+}
+function _reportProducts(){
+  const sorted=[...PRODUCTS].sort((a,b)=>b.sales-a.sales);
+  const lowStock=PRODUCTS.filter(p=>p.stock<=(p.stockLow||5));
+  return {
+    title:'تقرير المنتجات · الأداء والمخزون',
+    summary:[
+      {k:'إجمالي المنتجات',v:PRODUCTS.length},
+      {k:'نفد المخزون',v:PRODUCTS.filter(p=>p.stock===0).length},
+      {k:'مخزون منخفض',v:lowStock.length},
+      {k:'الأكثر مبيعاً',v:sorted[0]?.name||'—'}
+    ],
+    rows:[['المنتج','SKU','السعر','المخزون','المبيعات','حالة'],
+      ...sorted.map(p=>[p.name,p.sku||'-',p.price+' ر.س',p.stock,p.sales,p.stock===0?'⛔ نافذ':p.stock<=(p.stockLow||5)?'⚠️ منخفض':'✓ متوفر'])]
+  };
+}
+function _reportCustomers(){
+  return {
+    title:'تقرير العملاء',
+    summary:[
+      {k:'إجمالي العملاء',v:MOCK_CUSTOMERS.length},
+      {k:'إجمالي الإنفاق',v:MOCK_CUSTOMERS.reduce((s,c)=>s+c.total,0)+' ر.س'},
+      {k:'متوسط القيمة',v:Math.round(MOCK_CUSTOMERS.reduce((s,c)=>s+c.total,0)/MOCK_CUSTOMERS.length)+' ر.س'}
+    ],
+    rows:[['الاسم','الهاتف','الطلبات','الإنفاق','آخر طلب'],
+      ...MOCK_CUSTOMERS.map(c=>[c.name,c.phone,c.orders,c.total+' ر.س',c.last])]
+  };
+}
+function _reportInventory(){
+  const total=PRODUCTS.reduce((s,p)=>s+p.stock*p.price,0);
+  return {
+    title:'جرد المخزون · قيمة الجرد الحالي',
+    summary:[
+      {k:'قيمة المخزون',v:total.toLocaleString('ar-SA')+' ر.س'},
+      {k:'منتجات نفدت',v:PRODUCTS.filter(p=>p.stock===0).length},
+      {k:'تنبيهات مخزون منخفض',v:PRODUCTS.filter(p=>p.stock>0&&p.stock<=(p.stockLow||5)).length}
+    ],
+    rows:[['المنتج','SKU','المخزون','سعر الوحدة','القيمة الكلية'],
+      ...PRODUCTS.map(p=>[p.name,p.sku||'-',p.stock,p.price+' ر.س',(p.stock*p.price)+' ر.س'])]
+  };
+}
+function _reportZatca(){
+  const orders=_getAllOrders();
+  const tax=orders.reduce((s,o)=>s+o.tax,0);
+  return {
+    title:'تقرير الفواتير الإلكترونية ZATCA · للهيئة',
+    summary:[
+      {k:'عدد الفواتير',v:orders.length},
+      {k:'إجمالي الضريبة',v:tax.toLocaleString('ar-SA')+' ر.س'},
+      {k:'نسبة الضريبة',v:'15%'},
+      {k:'الفترة',v:'آخر 30 يوم'}
+    ],
+    rows:[['رقم الفاتورة','التاريخ','المبلغ قبل الضريبة','الضريبة','الإجمالي'],
+      ...orders.slice(0,25).map(o=>[o.id.replace('#','INV-'),o.date,(o.total-o.tax)+' ر.س',o.tax+' ر.س',o.total+' ر.س'])]
+  };
+}
+function _reportMonthly(){
+  const s=_reportSales(),p=_reportProducts(),c=_reportCustomers();
+  return {
+    title:'التقرير الشهري الشامل',
+    summary:[...s.summary,...p.summary.slice(0,2),...c.summary.slice(0,2)],
+    rows:s.rows
+  };
+}
+function generateReport(type){
+  const builders={sales:_reportSales,products:_reportProducts,customers:_reportCustomers,inventory:_reportInventory,zatca:_reportZatca,monthly:_reportMonthly};
+  const r=(builders[type]||_reportSales)();
+  _currentReport={type,...r};
+  document.getElementById('rep-output-panel').style.display='block';
+  document.getElementById('rep-output-title').textContent='📄 '+r.title;
+  const summaryHtml=`<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:10px;margin-bottom:16px">${r.summary.map(s=>`<div style="background:#faf5ff;border:1px solid #ddd6fe;padding:10px;border-radius:8px"><div style="font-size:10px;color:#7c3aed;font-weight:900;margin-bottom:3px">${s.k}</div><div style="font-size:16px;font-weight:900;color:#0a0a14">${s.v}</div></div>`).join('')}</div>`;
+  const tableHtml=`<table style="width:100%;border-collapse:collapse;font-size:11px"><thead style="background:#0a0a14;color:#fff"><tr>${r.rows[0].map(h=>`<th style="padding:8px;text-align:right;font-weight:900">${h}</th>`).join('')}</tr></thead><tbody>${r.rows.slice(1).map((row,i)=>`<tr style="border-bottom:1px solid #f3f4f6;background:${i%2?'#fafafa':'#fff'}">${row.map(c=>`<td style="padding:8px">${c}</td>`).join('')}</tr>`).join('')}</tbody></table>`;
+  const merchantName=document.getElementById('z-name-ar')?.value||'متجر زيراكس';
+  const header=`<div style="text-align:center;margin-bottom:20px;border-bottom:2px solid #0a0a14;padding-bottom:14px"><h1 style="font-size:20px;color:#0a0a14;margin-bottom:4px">${merchantName}</h1><p style="font-size:11px;color:#6b7280">${r.title} · صادر بتاريخ ${new Date().toLocaleDateString('ar-SA')}</p></div>`;
+  document.getElementById('rep-output').innerHTML=header+summaryHtml+tableHtml;
+  document.getElementById('rep-output-panel').scrollIntoView({behavior:'smooth',block:'start'});
+  setTimeout(()=>{if(window.lucide)lucide.createIcons()},50);
+}
+function downloadReportPDF(){
+  if(!_currentReport){alert('اختر نوع التقرير أولاً');return;}
+  if(!window.jspdf){alert('jsPDF غير محمّل');return;}
+  const {jsPDF}=window.jspdf;
+  const doc=new jsPDF('p','mm','a4');
+  const merchantName=document.getElementById('z-name-ar')?.value||'Zerax Store';
+  // Header
+  doc.setFontSize(16);doc.setTextColor(10,10,20);
+  doc.text(merchantName,105,20,{align:'center'});
+  doc.setFontSize(10);doc.setTextColor(100,116,139);
+  doc.text(_currentReport.title,105,28,{align:'center'});
+  doc.text('Date: '+new Date().toLocaleDateString('en-GB'),105,34,{align:'center'});
+  // Summary boxes
+  let y=46;
+  doc.setFontSize(11);doc.setTextColor(10,10,20);
+  doc.text('Summary',20,y);y+=4;
+  doc.setDrawColor(220,220,230);doc.line(20,y,190,y);y+=6;
+  _currentReport.summary.forEach((s,i)=>{
+    doc.setFontSize(9);doc.setTextColor(124,58,237);
+    doc.text(s.k,20,y);
+    doc.setTextColor(10,10,20);doc.setFontSize(11);
+    doc.text(String(s.v),120,y);
+    y+=7;
+  });
+  y+=4;
+  // Table
+  const headers=_currentReport.rows[0];
+  const data=_currentReport.rows.slice(1,30);
+  const colW=170/headers.length;
+  doc.setFillColor(10,10,20);doc.rect(20,y,170,8,'F');
+  doc.setTextColor(255,255,255);doc.setFontSize(9);
+  headers.forEach((h,i)=>doc.text(String(h).slice(0,18),22+i*colW,y+5));
+  y+=10;
+  doc.setTextColor(10,10,20);doc.setFontSize(8);
+  data.forEach((row,ri)=>{
+    if(y>275){doc.addPage();y=20;}
+    if(ri%2===0){doc.setFillColor(250,250,252);doc.rect(20,y-4,170,7,'F');}
+    row.forEach((c,i)=>doc.text(String(c).slice(0,20),22+i*colW,y));
+    y+=7;
+  });
+  // Footer
+  doc.setFontSize(8);doc.setTextColor(150,150,160);
+  doc.text('Generated by Zerax Platform · zerax.sa',105,290,{align:'center'});
+  const filename=`${_currentReport.type}-report-${Date.now()}.pdf`;
+  doc.save(filename);
+  toast('📥 تم تحميل: '+filename);
+}
+function shareReportWhatsapp(){
+  if(!_currentReport){alert('اختر التقرير أولاً');return;}
+  const msg=`📊 *${_currentReport.title}*\n\n`+
+    _currentReport.summary.map(s=>`• ${s.k}: *${s.v}*`).join('\n')+
+    `\n\n📅 ${new Date().toLocaleDateString('ar-SA')}\n\n_تم إنشاؤه من منصة Zerax_`;
+  const url=`https://wa.me/?text=${encodeURIComponent(msg)}`;
+  window.open(url,'_blank');
+  toast('💬 جاهز للإرسال — حمّل الـPDF ثم أرفقه يدوياً');
+}
+function shareReportEmail(){
+  if(!_currentReport){alert('اختر التقرير أولاً');return;}
+  const subject=`تقرير: ${_currentReport.title}`;
+  const body=`مرفق ملخص التقرير:\n\n`+_currentReport.summary.map(s=>`${s.k}: ${s.v}`).join('\n');
+  window.open(`mailto:?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`,'_blank');
+}
+
+// ───── ZATCA E-INVOICE ─────
+function loadZatca(){
+  const cfg=JSON.parse(localStorage.getItem('zx_zatca')||'{}');
+  ['z-vat','z-cr','z-name-ar','z-name-en','z-address'].forEach(id=>{
+    const v=cfg[id.replace('z-','').replace('-','_')];
+    if(v&&document.getElementById(id))document.getElementById(id).value=v;
+  });
+  const env=cfg.env||'sandbox';
+  document.querySelectorAll('input[name="z-env"]').forEach(r=>r.checked=r.value===env);
+  document.querySelectorAll('.pay-card[data-zenv]').forEach(c=>c.classList.toggle('selected',c.dataset.zenv===env));
+  const pill=document.getElementById('zatca-status-pill');
+  if(cfg.csid){pill.textContent='✓ مفعّل ('+env+')';pill.className='status-pill s-paid';}
+  else{pill.textContent='غير مفعّل';pill.className='status-pill s-pending';}
+  // wire env switch
+  document.querySelectorAll('.pay-card[data-zenv]').forEach(c=>c.onclick=()=>{
+    const v=c.dataset.zenv;
+    document.querySelectorAll('input[name="z-env"]').forEach(r=>r.checked=r.value===v);
+    document.querySelectorAll('.pay-card[data-zenv]').forEach(x=>x.classList.toggle('selected',x===c));
+  });
+}
+function zSaveConfig(){
+  const cfg={
+    vat:document.getElementById('z-vat').value.trim(),
+    cr:document.getElementById('z-cr').value.trim(),
+    name_ar:document.getElementById('z-name-ar').value.trim(),
+    name_en:document.getElementById('z-name-en').value.trim(),
+    address:document.getElementById('z-address').value.trim(),
+    env:document.querySelector('input[name="z-env"]:checked')?.value||'sandbox',
+    csid:localStorage.getItem('zx_zatca_csid')||null
+  };
+  if(!cfg.vat||cfg.vat.length!==15){alert('الرقم الضريبي لازم 15 رقم');return;}
+  if(!cfg.name_ar){alert('اكتب اسم المنشأة');return;}
+  localStorage.setItem('zx_zatca',JSON.stringify(cfg));
+  loadZatca();
+  toast('✓ تم حفظ إعدادات ZATCA');
+}
+function zGenerateCSR(){
+  const csr=`-----BEGIN CERTIFICATE REQUEST-----
+MIIBijCCATEcAQAwgZAxCzAJBgNVBAYTAlNBMRMwEQYDVQQIDAJSaXlhZGgxFTAT
+BgNVBAcMDFJpeWFkaCBNYWluMSEwHwYDVQQKDBhaZXJheCBUcmFkaW5nIFNvbHV0
+aW9uczEXMBUGA1UECwwOWmVyYXggUGxhdGZvcm0xGTAXBgNVBAMMEEFkbWluLnpl
+cmF4LmNvbS5zYTBZMBMGByqGSM49AgEGCCqGSM49AwEHA0IABM7sk5C8gZj_${Date.now().toString(36)}
+oWNyMUEoFOu3VMyVB2xCKBJBcCKQDqVnLgQB7VAGu48nM3lU3l_aOL5VPI4j9p5n
+HEUCIQDYourTokenHere_${Math.random().toString(36).slice(2,15)}==
+-----END CERTIFICATE REQUEST-----`;
+  document.getElementById('z-csr-output').style.display='block';
+  document.getElementById('z-csr-output').textContent=csr;
+  localStorage.setItem('zx_zatca_csid','CSID-'+Date.now());
+  toast('🔐 تم توليد CSR · انسخه وقدّمه لـ ZATCA');
+}
+function zUploadCSID(){
+  const v=prompt('الصق محتوى شهادة CSID:');
+  if(!v)return;
+  localStorage.setItem('zx_zatca_csid',v.slice(0,200));
+  loadZatca();
+  toast('✓ تم رفع الشهادة');
+}
+function _toTLV(tag,value){
+  const v=new TextEncoder().encode(value);
+  const tlv=new Uint8Array(2+v.length);
+  tlv[0]=tag;tlv[1]=v.length;
+  tlv.set(v,2);
+  return tlv;
+}
+function _b64(bytes){
+  let bin='';bytes.forEach(b=>bin+=String.fromCharCode(b));
+  return btoa(bin);
+}
+function zGenerateSampleInvoice(){
+  const cfg=JSON.parse(localStorage.getItem('zx_zatca')||'{}');
+  const sellerName=cfg.name_ar||'متجر تجريبي';
+  const vat=cfg.vat||'300000000000003';
+  const dt=new Date().toISOString();
+  const total='1149.85';const taxAmt='149.85';
+  // Build TLV QR
+  const tlvParts=[
+    _toTLV(1,sellerName),
+    _toTLV(2,vat),
+    _toTLV(3,dt),
+    _toTLV(4,total),
+    _toTLV(5,taxAmt)
+  ];
+  const totalLen=tlvParts.reduce((s,p)=>s+p.length,0);
+  const concat=new Uint8Array(totalLen);
+  let off=0;tlvParts.forEach(p=>{concat.set(p,off);off+=p.length;});
+  const qrB64=_b64(concat);
+  // Build XML
+  const xml=`<?xml version="1.0" encoding="UTF-8"?>
+<Invoice xmlns="urn:oasis:names:specification:ubl:schema:xsd:Invoice-2">
+  <cbc:ProfileID>reporting:1.0</cbc:ProfileID>
+  <cbc:ID>INV-${Date.now()}</cbc:ID>
+  <cbc:IssueDate>${dt.slice(0,10)}</cbc:IssueDate>
+  <cbc:IssueTime>${dt.slice(11,19)}</cbc:IssueTime>
+  <cbc:InvoiceTypeCode name="0100000">388</cbc:InvoiceTypeCode>
+  <cac:AccountingSupplierParty>
+    <cac:Party>
+      <cbc:PartyName>${sellerName}</cbc:PartyName>
+      <cac:PartyTaxScheme><cbc:CompanyID>${vat}</cbc:CompanyID></cac:PartyTaxScheme>
+    </cac:Party>
+  </cac:AccountingSupplierParty>
+  <cac:TaxTotal>
+    <cbc:TaxAmount currencyID="SAR">${taxAmt}</cbc:TaxAmount>
+  </cac:TaxTotal>
+  <cac:LegalMonetaryTotal>
+    <cbc:PayableAmount currencyID="SAR">${total}</cbc:PayableAmount>
+  </cac:LegalMonetaryTotal>
+  <cac:InvoiceLine>
+    <cbc:ID>1</cbc:ID>
+    <cbc:InvoicedQuantity>1</cbc:InvoicedQuantity>
+    <cbc:LineExtensionAmount currencyID="SAR">1000.00</cbc:LineExtensionAmount>
+    <cac:Item><cbc:Name>منتج تجريبي</cbc:Name></cac:Item>
+  </cac:InvoiceLine>
+</Invoice>`;
+  document.getElementById('z-sample-output').style.display='block';
+  document.getElementById('z-xml').textContent=xml;
+  document.getElementById('z-qr-tlv').textContent=qrB64;
+  // Render QR
+  const qrEl=document.getElementById('z-qr');qrEl.innerHTML='';
+  if(window.QRCode){new QRCode(qrEl,{text:qrB64,width:180,height:180,correctLevel:QRCode.CorrectLevel.M});}
+  else{qrEl.textContent='[QR library not loaded]';}
+  toast('🧾 تم توليد فاتورة عينة');
+}
+function zDownloadPDFA3(){
+  if(!window.jspdf){alert('jsPDF غير محمّل');return;}
+  const {jsPDF}=window.jspdf;
+  const doc=new jsPDF();
+  const cfg=JSON.parse(localStorage.getItem('zx_zatca')||'{}');
+  doc.setFontSize(18);doc.text('Tax Invoice / Fatoorah',105,20,{align:'center'});
+  doc.setFontSize(10);
+  doc.text('Seller: '+(cfg.name_en||cfg.name_ar||'Zerax Store'),20,40);
+  doc.text('VAT: '+(cfg.vat||'-'),20,48);
+  doc.text('CR: '+(cfg.cr||'-'),20,56);
+  doc.text('Date: '+new Date().toLocaleDateString('en-GB'),20,64);
+  doc.setDrawColor(0);doc.line(20,72,190,72);
+  doc.text('Subtotal: 1000.00 SAR',20,84);
+  doc.text('VAT (15%): 149.85 SAR',20,92);
+  doc.setFontSize(14);doc.text('Total: 1149.85 SAR',20,104);
+  doc.setFontSize(9);
+  doc.text('Note: This is a sample ZATCA-compliant invoice generated by Zerax (mock).',20,280);
+  doc.save('zatca-sample-invoice.pdf');
+  toast('📥 PDF فاتورة العينة نُزّل');
+}
+
 function loadMarketing(){
-  const coupons=JSON.parse(localStorage.getItem('zx_coupons')||JSON.stringify(COUPONS_SEED));
   document.getElementById('coupon-list').innerHTML=coupons.map(c=>`<div class="panel" style="margin:0;padding:14px;border:1.5px dashed ${c.active?'var(--purple)':'var(--border)'};background:${c.active?'#faf5ff':'#f9fafb'}"><div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px"><b style="font-family:monospace;font-size:14px;color:var(--purple);letter-spacing:1px">${c.code}</b><span class="status-pill ${c.active?'s-paid':'s-cancelled'}" style="font-size:9px">${c.active?'نشط':'متوقف'}</span></div><div style="font-size:11px;color:var(--mute);margin-bottom:6px">${c.desc}</div><div style="font-size:13px;color:#0a0a14;font-weight:900;margin-bottom:6px">${c.type==='percent'?c.value+'%':c.type==='fixed'?c.value+' ر.س':'شحن مجاني'} ${c.min?'· حد أدنى '+c.min+' ر.س':''}</div><div style="display:flex;justify-content:space-between;font-size:10px;color:var(--mute);padding-top:8px;border-top:1px solid var(--border)"><span>📊 استُخدم ${c.used} ${c.limit?'/ '+c.limit:''}</span><a href="#" onclick="toast('🗑️ '+'${c.code}'+' حُذف');return false" style="color:var(--rd);font-weight:900;text-decoration:none">حذف</a></div></div>`).join('');
 }
 function openCouponMod(){
   const code='ZX'+Math.random().toString(36).slice(2,7).toUpperCase();
   if(prompt('كود الكوبون:',code)){const arr=JSON.parse(localStorage.getItem('zx_coupons')||JSON.stringify(COUPONS_SEED));arr.unshift({code,type:'percent',value:15,min:0,used:0,limit:100,active:true,desc:'كوبون جديد'});localStorage.setItem('zx_coupons',JSON.stringify(arr));loadMarketing();toast('✓ كوبون جديد: '+code);}
+}
+// ───── CAMPAIGN BUILDER ─────
+function openCampaignBuilder(){
+  const m=document.getElementById('campaign-modal');
+  m.style.display='flex';
+  // Wire change handlers for live estimate
+  m.querySelectorAll('input[type=checkbox],input,select').forEach(el=>{el.oninput=updateCampaignEstimate;el.onchange=updateCampaignEstimate;});
+  updateCampaignEstimate();
+  setTimeout(()=>{if(window.lucide)lucide.createIcons()},50);
+}
+function closeCampaignBuilder(){document.getElementById('campaign-modal').style.display='none'}
+function _collectCampaign(){
+  const segs=[...document.querySelectorAll('#cmp-segments input:checked')].map(i=>({v:i.value,n:+i.dataset.count||0}));
+  const cats=[...document.querySelectorAll('#cmp-cats input:checked')].map(i=>i.value);
+  const channels=[...document.querySelectorAll('#cmp-channels input:checked')].map(i=>i.value);
+  // audience = sum of segments (cap at 'all')
+  let audience=segs.some(s=>s.v==='all')?552:segs.reduce((a,b)=>a+b.n,0);
+  // narrow by category interest (rough heuristic 70% match if any cat picked)
+  if(cats.length>0 && !segs.some(s=>s.v==='all'))audience=Math.floor(audience*0.7);
+  if(audience===0)audience=cats.length>0?180:0;
+  return {
+    name:document.getElementById('cmp-name').value.trim(),
+    goal:document.getElementById('cmp-goal').value,
+    segments:segs.map(s=>s.v),categories:cats,channels,
+    ageFrom:+document.getElementById('cmp-age-from').value||18,
+    ageTo:+document.getElementById('cmp-age-to').value||55,
+    gender:document.getElementById('cmp-gender').value,
+    title:document.getElementById('cmp-title').value.trim(),
+    body:document.getElementById('cmp-body').value.trim(),
+    coupon:document.getElementById('cmp-coupon').value,
+    img:document.getElementById('cmp-img').value.trim(),
+    when:document.getElementById('cmp-when').value,
+    budget:+document.getElementById('cmp-budget').value||0,
+    audience
+  };
+}
+function updateCampaignEstimate(){
+  const c=_collectCampaign();
+  const channelCosts={whatsapp:1,sms:2,email:0,push:0,instagram:1,snap:1};
+  const perRecipientCost=c.channels.reduce((s,ch)=>s+(channelCosts[ch]||0),0);
+  const totalCost=Math.min(c.budget,c.audience*Math.max(perRecipientCost,1));
+  document.getElementById('cmp-est-audience').textContent=c.audience>0?`${c.audience} عميل`:'حدّد الجمهور';
+  document.getElementById('cmp-est-cost').textContent=totalCost>0?`${totalCost} نقطة`:'—';
+}
+function previewCampaign(){
+  const c=_collectCampaign();
+  if(!c.title||!c.body){alert('اكتب العنوان والنص أولاً');return;}
+  alert(`📱 معاينة الرسالة:\n\n${c.title}\n\n${c.body}\n\n${c.coupon?`🎟️ كوبون: ${c.coupon}`:''}\n\n👥 الجمهور المتوقع: ${c.audience} عميل`);
+}
+function launchCampaign(){
+  const c=_collectCampaign();
+  if(!c.name){alert('اكتب اسم الحملة');return;}
+  if(c.channels.length===0){alert('اختر قناة إرسال واحدة على الأقل');return;}
+  if(c.audience===0){alert('حدّد شريحة أو تصنيف للجمهور');return;}
+  if(!c.title||!c.body){alert('اكتب العنوان والنص');return;}
+  // Save campaign
+  const list=JSON.parse(localStorage.getItem('zx_campaigns')||'[]');
+  list.unshift({...c,id:'cmp'+Date.now(),status:c.when==='now'?'running':'scheduled',createdAt:new Date().toISOString(),sent:0,opened:0,clicked:0});
+  localStorage.setItem('zx_campaigns',JSON.stringify(list));
+  // Deduct cost (capped)
+  const channelCosts={whatsapp:1,sms:2,email:0,push:0,instagram:1,snap:1};
+  const perRec=c.channels.reduce((s,ch)=>s+(channelCosts[ch]||0),0);
+  const cost=Math.min(c.budget,c.audience*Math.max(perRec,1));
+  WALLET=Math.max(0,WALLET-cost);
+  localStorage.setItem('zx_credits',WALLET);
+  const credEl=document.getElementById('wallet-balance');if(credEl)credEl.textContent=WALLET.toLocaleString('ar-EG');
+  closeCampaignBuilder();
+  toast(`🚀 أُطلقت "${c.name}" · ${c.audience} عميل · -${cost} نقطة`);
 }
 // ───── REVIEWS ─────
 function loadReviews(){
