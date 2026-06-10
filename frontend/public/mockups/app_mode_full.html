@@ -669,6 +669,19 @@ body.dark .acc-stat .k{color:#94a3b8}
   <button class="pill-btn admin-toggle" id="admin-btn" onclick="toggleAdminMode()" style="display:none"></button>
   <button class="pill-btn admin-toggle" id="acp-open-btn" onclick="openAcp()" style="display:none"></button>
 </header>
+
+<!-- ─── PERSISTENT BRANCH BAR (always visible — shows nearest branch + allows switching) ─── -->
+<div id="branch-bar" data-testid="branch-bar" style="background:linear-gradient(135deg,#0f172a,#1e293b);color:#fff;padding:8px 14px;display:flex;align-items:center;gap:8px;font-size:12px;cursor:pointer;border-bottom:2px solid var(--zx-accent,#7c3aed)" onclick="openBranchPicker()">
+  <span style="font-size:16px">📍</span>
+  <div style="flex:1;min-width:0">
+    <div style="font-size:9px;color:#94a3b8;font-weight:700">يتم التوصيل من</div>
+    <b id="branch-bar-name" style="font-size:13px;color:#fbbf24;display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">— اختر فرعك —</b>
+  </div>
+  <div style="text-align:left">
+    <div style="font-size:9px;color:#94a3b8" id="branch-bar-dist"></div>
+    <span style="color:#fbbf24;font-size:11px;font-weight:900">تغيير ←</span>
+  </div>
+</div>
 <!-- HEADER SETTINGS POPOVER (now repurposed - kept hidden for legacy code; settings live in Account page) -->
 <div id="header-settings-popover" style="display:none;position:fixed;top:60px;left:14px;background:#fff;border:1px solid #e5e7eb;border-radius:14px;box-shadow:0 12px 40px rgba(0,0,0,.18);padding:12px;min-width:220px;z-index:200">
   <div style="font-size:10px;color:#7c3aed;font-weight:900;margin-bottom:8px">⚙️ تخصيصاتك</div>
@@ -748,11 +761,7 @@ body.dark .acc-stat .k{color:#94a3b8}
     </div>
   </div>
   <div class="zx-zerax-bar">
-    <div class="zx-copy">© 2026 — <span data-key="rights">جميع الحقوق محفوظة</span></div>
-    <a class="zx-zerax-brand" href="https://zerax.com" target="_blank">
-      <div class="zx-zerax-logo">Z</div>
-      <div class="zx-zerax-text"><small data-key="made_by">صُنع بواسطة</small><strong>Zerax</strong></div>
-    </a>
+    <div class="zx-copy" style="margin:0 auto;text-align:center;width:100%">© 2026 — <span data-key="rights">جميع الحقوق محفوظة</span></div>
   </div>
 </footer>
 
@@ -1149,6 +1158,31 @@ body.dark .acc-stat .k{color:#94a3b8}
     <button onclick="showView('home')" data-testid="wishlist-shop-btn" style="margin-top:16px;padding:12px 22px;background:#ec4899;color:#fff;border:none;border-radius:10px;font-family:inherit;font-weight:900;font-size:13px;cursor:pointer">🛒 ابدأ التسوق</button>
   </div>
 </section>
+
+<!-- ═══════════════════ LOCATION REQUEST MODAL (first-visit prompt) ═══════════════════ -->
+<div class="modal-bg" id="location-modal" onclick="if(event.target===this)closeLocationModal()">
+  <div class="modal" style="max-width:380px;text-align:center">
+    <div style="width:84px;height:84px;border-radius:50%;background:linear-gradient(135deg,#7c3aed,#ec4899);color:#fff;display:inline-flex;align-items:center;justify-content:center;font-size:38px;margin-bottom:14px;box-shadow:0 8px 30px rgba(124,58,237,.4)">📍</div>
+    <h3 style="font-size:18px;font-weight:900;margin-bottom:8px">مرحباً بك! 👋</h3>
+    <p style="color:#6b7280;font-size:13px;line-height:1.7;margin-bottom:18px">للحصول على أفضل تجربة:<br/>• أقرب فرع لك<br/>• توصيل أسرع<br/>• منتجات متوفرة بفرعك<br/>• رسوم شحن دقيقة</p>
+    <button onclick="requestLocationPermission()" data-testid="allow-location-btn" style="width:100%;padding:14px;background:linear-gradient(135deg,#7c3aed,#ec4899);color:#fff;border:none;border-radius:12px;font-family:inherit;font-weight:900;font-size:14px;cursor:pointer;margin-bottom:8px">✅ السماح بتحديد موقعي</button>
+    <button onclick="pickBranchManually()" data-testid="manual-branch-btn" style="width:100%;padding:12px;background:#fff;color:#374151;border:1px solid #e5e7eb;border-radius:12px;font-family:inherit;font-weight:700;font-size:12px;cursor:pointer">🏪 أو اختر فرعاً يدوياً</button>
+    <button onclick="closeLocationModal()" style="margin-top:10px;background:none;border:none;color:#9ca3af;font-family:inherit;font-size:11px;cursor:pointer">تجاوز الآن</button>
+  </div>
+</div>
+
+<!-- ═══════════════════ BRANCH PICKER MODAL ═══════════════════ -->
+<div class="modal-bg" id="branch-picker-modal" onclick="if(event.target===this)closeBranchPicker()">
+  <div class="modal" style="max-width:480px">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
+      <h3 style="font-size:17px;font-weight:900;display:flex;align-items:center;gap:6px">🏪 اختر الفرع</h3>
+      <button onclick="closeBranchPicker()" style="width:28px;height:28px;border-radius:50%;background:#f3f4f6;border:none;cursor:pointer;font-size:14px;font-weight:900">✕</button>
+    </div>
+    <p style="font-size:11px;color:#6b7280;margin-bottom:12px;line-height:1.6">منتجاتك وأسعار الشحن تعتمد على الفرع المختار · مفرزة من الأقرب للأبعد.</p>
+    <button onclick="requestLocationPermission()" data-testid="picker-locate-btn" style="width:100%;padding:11px;background:#faf5ff;color:#7c3aed;border:1.5px dashed #ddd6fe;border-radius:10px;font-family:inherit;font-weight:900;font-size:12px;cursor:pointer;margin-bottom:12px">📍 إعادة تحديد موقعي</button>
+    <div id="branch-picker-list" style="max-height:55vh;overflow-y:auto"></div>
+  </div>
+</div>
 
 <!-- ═══════════════════ LOGIN MODAL (OTP) ═══════════════════ -->
 <div class="modal-bg" id="login-modal" onclick="if(event.target===this)closeLogin()">
@@ -1786,10 +1820,10 @@ const RATES = {SAR:1,AED:0.98,KWD:0.082,QAR:0.97,BHD:0.10,OMR:0.103,IQD:350,SYP:
 // ═══════════════════════ BRANCHES (Multi-branch eCommerce) ═══════════════════════
 // Each branch has location + which products it stocks (out_of_stock list = products it's missing)
 const BRANCHES=[
-  {id:'b1',ar:'فرع الرياض - العليا',en:'Riyadh - Olaya Branch',addrAr:'شارع العليا، الرياض',addrEn:'Olaya St, Riyadh',lat:24.6877,lng:46.6857,out_of_stock:['p34','p40']},
-  {id:'b2',ar:'فرع الرياض - الملز',en:'Riyadh - Malaz Branch',addrAr:'حي الملز، الرياض',addrEn:'Malaz District, Riyadh',lat:24.6745,lng:46.7335,out_of_stock:['p12','p35']},
-  {id:'b3',ar:'فرع جدة - التحلية',en:'Jeddah - Tahlia Branch',addrAr:'شارع التحلية، جدة',addrEn:'Tahlia St, Jeddah',lat:21.5810,lng:39.1653,out_of_stock:['p11','p36','p37']},
-  {id:'b4',ar:'فرع الدمام - الشاطئ',en:'Dammam - Corniche Branch',addrAr:'كورنيش الدمام',addrEn:'Dammam Corniche',lat:26.4366,lng:50.1040,out_of_stock:['p13','p38']},
+  {id:'b1',ar:'فرع الرياض - العليا',en:'Riyadh - Olaya Branch',addrAr:'شارع العليا، الرياض',addrEn:'Olaya St, Riyadh',lat:24.6877,lng:46.6857,out_of_stock:['p34','p40'],ship_modifier:1.0,phone:'+966112345678'},
+  {id:'b2',ar:'فرع الرياض - الملز',en:'Riyadh - Malaz Branch',addrAr:'حي الملز، الرياض',addrEn:'Malaz District, Riyadh',lat:24.6745,lng:46.7335,out_of_stock:['p12','p35'],ship_modifier:1.0,phone:'+966112345679'},
+  {id:'b3',ar:'فرع جدة - التحلية',en:'Jeddah - Tahlia Branch',addrAr:'شارع التحلية، جدة',addrEn:'Tahlia St, Jeddah',lat:21.5810,lng:39.1653,out_of_stock:['p11','p36','p37'],ship_modifier:1.15,phone:'+966122345678'},
+  {id:'b4',ar:'فرع الدمام - الشاطئ',en:'Dammam - Corniche Branch',addrAr:'كورنيش الدمام',addrEn:'Dammam Corniche',lat:26.4366,lng:50.1040,out_of_stock:['p13','p38'],ship_modifier:1.25,phone:'+966132345678'},
 ];
 
 // ═══════════════════════ SHIPPING METHODS ═══════════════════════
@@ -3136,6 +3170,20 @@ function startReviewSlider(){renderReviews();setInterval(()=>goReview(revIdx+1),
 // ═══════════════════════ CART ═══════════════════════
 function addToCart(pid){
   const p=PRODUCTS.find(x=>x.id===pid);
+  // Branch stock check
+  const currentBranch=BRANCHES.find(b=>b.id===SELECTED_BRANCH);
+  if(p&&currentBranch&&currentBranch.out_of_stock?.includes(pid)){
+    const withStock=BRANCHES.filter(b=>!b.out_of_stock?.includes(pid));
+    if(withStock.length&&USER_LOCATION){
+      const sorted=withStock.map(b=>({...b,d:haversineKm(USER_LOCATION.lat,USER_LOCATION.lng,b.lat,b.lng)})).sort((a,b)=>a.d-b.d);
+      const alt=sorted[0];
+      if(confirm(`⚠️ "${p.ar}" غير متوفر في ${currentBranch.ar}.\n\n✓ متوفر في ${alt.ar} (${alt.d.toFixed(1)} كم)\n\nهل تريد التحويل للفرع الآخر وإضافة المنتج؟`)){
+        selectBranchAndClose(alt.id);
+        setTimeout(()=>{const ex=CART.find(c=>c.id===pid);if(ex)ex.qty++;else CART.push({id:pid,qty:1});saveCart();},400);
+      }
+    }else{toast('⚠️ هذا المنتج غير متوفر حالياً');}
+    return;
+  }
   // Smart AI Service — pay with Zerax credits instantly, no cart
   if(p&&(p.isAI||p.cat==='ai_services')){
     if(!getUser()){requireLogin('يلزم تسجيل الدخول لشراء خدمات الذكاء الاصطناعي');return;}
@@ -3149,7 +3197,6 @@ function addToCart(pid){
     ZERAX_CREDITS-=cost;
     localStorage.setItem('zx_credits',String(ZERAX_CREDITS));
     const el=document.getElementById('zerax-credits');if(el)el.textContent=ZERAX_CREDITS;
-    // Log the AI service purchase as an order
     const orders=getOrders();
     orders.unshift({id:Date.now(),date:new Date().toLocaleDateString('ar'),items:[{id:p.id,qty:1,name:p.ar}],total:cost,status:'مفعّل · خدمة AI',isAI:true});
     localStorage.setItem('zx_orders',JSON.stringify(orders));
@@ -3287,7 +3334,109 @@ function renderBranches(){
   }).join('');
   renderStockAlert(withDist[0]);
 }
-function selectBranch(id){SELECTED_BRANCH=id;renderBranches();}
+function selectBranch(id){SELECTED_BRANCH=id;renderBranches();updateBranchBar();}
+
+// ═══════════════════════ PERSISTENT BRANCH BAR + LOCATION FLOW ═══════════════════════
+function updateBranchBar(){
+  const bar=document.getElementById('branch-bar');if(!bar)return;
+  const b=BRANCHES.find(x=>x.id===SELECTED_BRANCH);
+  const nameEl=document.getElementById('branch-bar-name');
+  const distEl=document.getElementById('branch-bar-dist');
+  if(b){
+    nameEl.textContent=CURRENT_LANG==='ar'?b.ar:b.en;
+    if(USER_LOCATION){
+      const dist=haversineKm(USER_LOCATION.lat,USER_LOCATION.lng,b.lat,b.lng);
+      distEl.innerHTML=`📍 ${dist.toFixed(1)} كم`;
+    }else{distEl.textContent='';}
+  }else{
+    nameEl.textContent='— اختر فرعك —';distEl.textContent='';
+  }
+}
+function openLocationModal(){document.getElementById('location-modal').classList.add('open');}
+function closeLocationModal(){document.getElementById('location-modal').classList.remove('open');localStorage.setItem('zx_location_asked','1');}
+function pickBranchManually(){closeLocationModal();openBranchPicker();}
+function requestLocationPermission(){
+  if(!navigator.geolocation){alert('متصفحك لا يدعم تحديد الموقع');return;}
+  toast('⏳ جاري تحديد موقعك...');
+  navigator.geolocation.getCurrentPosition(pos=>{
+    USER_LOCATION={lat:pos.coords.latitude,lng:pos.coords.longitude};
+    localStorage.setItem('zx_user_location',JSON.stringify(USER_LOCATION));
+    autoSelectNearestBranch();
+    closeLocationModal();
+    closeBranchPicker();
+    toast('✓ تم تحديد موقعك · اخترنا الفرع الأقرب لك');
+  },err=>{
+    // Fallback to manual
+    closeLocationModal();
+    openBranchPicker();
+    toast('⚠️ لم نتمكن من تحديد موقعك · اختر يدوياً');
+  },{timeout:10000,enableHighAccuracy:true});
+}
+function autoSelectNearestBranch(){
+  if(!USER_LOCATION)return;
+  const sorted=BRANCHES.slice().sort((a,b)=>haversineKm(USER_LOCATION.lat,USER_LOCATION.lng,a.lat,a.lng)-haversineKm(USER_LOCATION.lat,USER_LOCATION.lng,b.lat,b.lng));
+  SELECTED_BRANCH=sorted[0].id;
+  localStorage.setItem('zx_selected_branch',SELECTED_BRANCH);
+  updateBranchBar();
+  renderProducts();
+}
+function openBranchPicker(){
+  document.getElementById('branch-picker-modal').classList.add('open');
+  renderBranchPickerList();
+}
+function closeBranchPicker(){document.getElementById('branch-picker-modal').classList.remove('open');}
+function renderBranchPickerList(){
+  const host=document.getElementById('branch-picker-list');
+  const withDist=BRANCHES.map(b=>({...b,dist:USER_LOCATION?haversineKm(USER_LOCATION.lat,USER_LOCATION.lng,b.lat,b.lng):null}));
+  withDist.sort((a,b)=>(a.dist??999)-(b.dist??999));
+  host.innerHTML=withDist.map((b,i)=>{
+    const isSel=b.id===SELECTED_BRANCH;
+    const distLabel=b.dist!=null?`${b.dist.toFixed(1)} كم`:'—';
+    const nearestTag=i===0&&b.dist!=null?'<span style="background:#10b981;color:#fff;padding:2px 7px;border-radius:99px;font-size:9px;font-weight:900;margin-right:6px">الأقرب ✓</span>':'';
+    const shipPct=b.ship_modifier?Math.round((b.ship_modifier-1)*100):0;
+    const shipBadge=shipPct===0?'<span style="color:#10b981;font-size:9px;font-weight:700">رسوم شحن قياسية</span>':`<span style="color:#f59e0b;font-size:9px;font-weight:700">+${shipPct}% رسوم شحن</span>`;
+    return `<div onclick="selectBranchAndClose('${b.id}')" data-testid="branch-option-${b.id}" style="border:2px solid ${isSel?'var(--zx-accent,#7c3aed)':'#e5e7eb'};background:${isSel?'linear-gradient(135deg,#faf5ff,#fdf2f8)':'#fff'};border-radius:12px;padding:12px;cursor:pointer;margin-bottom:8px;transition:all .15s">
+      <div style="display:flex;align-items:center;gap:10px">
+        <div style="width:42px;height:42px;border-radius:10px;background:linear-gradient(135deg,#7c3aed,#ec4899);color:#fff;display:flex;align-items:center;justify-content:center;font-size:18px">🏪</div>
+        <div style="flex:1;min-width:0"><b style="font-size:13px">${CURRENT_LANG==='ar'?b.ar:b.en}${nearestTag}</b><div style="font-size:11px;color:#6b7280;margin-top:2px">${CURRENT_LANG==='ar'?b.addrAr:b.addrEn}</div><div style="margin-top:4px;display:flex;gap:8px;align-items:center">${shipBadge}<span style="color:#6b7280;font-size:9px">📞 ${b.phone}</span></div></div>
+        <div style="text-align:left"><b style="color:var(--zx-accent,#7c3aed);font-size:14px">${distLabel}</b>${isSel?'<div style="font-size:9px;color:var(--zx-accent,#7c3aed);font-weight:900;margin-top:2px">✓ المختار</div>':''}</div>
+      </div>
+    </div>`;
+  }).join('');
+}
+function selectBranchAndClose(id){
+  const prev=SELECTED_BRANCH;
+  SELECTED_BRANCH=id;
+  localStorage.setItem('zx_selected_branch',id);
+  closeBranchPicker();
+  updateBranchBar();
+  renderProducts(); // re-render products to update availability
+  const b=BRANCHES.find(x=>x.id===id);
+  toast(`✓ تم التحويل لـ ${CURRENT_LANG==='ar'?b.ar:b.en}`);
+  // If cart has out-of-stock items in new branch, warn
+  if(prev!==id&&CART.length){
+    const missing=CART.filter(c=>b.out_of_stock.includes(c.id));
+    if(missing.length){
+      setTimeout(()=>toast(`⚠️ ${missing.length} منتج من سلتك غير متوفر بالفرع الجديد`),1200);
+    }
+  }
+}
+
+// Initialize branch system on page load
+(function initBranchSystem(){
+  try{
+    const savedLoc=localStorage.getItem('zx_user_location');
+    if(savedLoc){USER_LOCATION=JSON.parse(savedLoc);}
+    const savedBranch=localStorage.getItem('zx_selected_branch');
+    if(savedBranch){SELECTED_BRANCH=savedBranch;}
+    else if(USER_LOCATION){autoSelectNearestBranch();}
+    setTimeout(updateBranchBar,400);
+    // Prompt for location on first visit only
+    if(!localStorage.getItem('zx_location_asked')&&!savedLoc){
+      setTimeout(openLocationModal,2000);
+    }
+  }catch(_){}
+})();
 function renderStockAlert(nearestBranch){
   const host=document.getElementById('stock-alert-host');
   if(!nearestBranch){host.innerHTML='';return;}
@@ -3318,9 +3467,12 @@ function removeMissingItems(ids){
 }
 function renderShippingOptions(){
   const host=document.getElementById('ship-list');
+  const branch=BRANCHES.find(b=>b.id===SELECTED_BRANCH);
+  const mod=branch?.ship_modifier||1;
   host.innerHTML=SHIP_METHODS.map(s=>{
     const isSel=s.id===SELECTED_SHIPPING;
-    const fee=s.sar===0?`<span class="ship-opt-fee ship-free">${tx('pickup_free')}</span>`:`<span class="ship-opt-fee">${curSym()} ${formatPrice(s.sar)}</span>`;
+    const adjFee=Math.round(s.sar*mod);
+    const fee=s.sar===0?`<span class="ship-opt-fee ship-free">${tx('pickup_free')}</span>`:`<span class="ship-opt-fee">${curSym()} ${formatPrice(adjFee)}${mod>1?` <small style="opacity:.7">(+${Math.round((mod-1)*100)}%)</small>`:''}</span>`;
     return `<div class="ship-opt ${isSel?'selected':''}" onclick="selectShipping('${s.id}')">
       <div class="ship-opt-left"><div class="ico">${s.ico}</div><div><b>${CURRENT_LANG==='ar'?s.ar:s.en}</b><small>${CURRENT_LANG==='ar'?s.etaAr:s.etaEn}</small></div></div>
       ${fee}
@@ -3348,7 +3500,7 @@ function completeOrder(){
   const items=CART.reduce((s,c)=>s+c.qty,0);
   const subtotal=CART.reduce((s,c)=>{const p=PRODUCTS.find(x=>x.id===c.id);return s+(p?p.sar*c.qty:0)},0);
   const taxRate=typeof CURRENT_MARKET.tax?.rate==='number'?CURRENT_MARKET.tax.rate:0;
-  const shipFee=(SHIP_METHODS.find(s=>s.id===SELECTED_SHIPPING)||{sar:0}).sar;
+  const shipFee=(SHIP_METHODS.find(s=>s.id===SELECTED_SHIPPING)||{sar:0}).sar*((BRANCHES.find(b=>b.id===SELECTED_BRANCH)?.ship_modifier)||1);
   // Apply Store Credit if customer chose to use it
   const useCredit=document.getElementById('use-store-credit')?.checked;
   const availableCredit=getStoreCredit();
@@ -3923,9 +4075,24 @@ function pCardHtml(p){
   const isAI=p.isAI||p.cat==='ai_services';
   const aiBadge=isAI?`<div class="ai-badge">✨ AI · ${p.credits||p.sar} نقطة</div>`:'';
   const priceLabel=isAI?`⭐ ${p.credits||p.sar} <small style="font-size:9px;opacity:.85">نقطة</small>`:`${curSym()} ${formatPrice(p.sar)}`;
+  // Branch stock check
+  const currentBranch=BRANCHES.find(b=>b.id===SELECTED_BRANCH);
+  const isOOS=currentBranch&&currentBranch.out_of_stock?.includes(p.id);
+  // Find nearest branch with stock if OOS
+  let altBranch=null,altDist=null;
+  if(isOOS){
+    const withStock=BRANCHES.filter(b=>!b.out_of_stock?.includes(p.id));
+    if(withStock.length&&USER_LOCATION){
+      const sorted=withStock.map(b=>({...b,d:haversineKm(USER_LOCATION.lat,USER_LOCATION.lng,b.lat,b.lng)})).sort((a,b)=>a.d-b.d);
+      altBranch=sorted[0];altDist=sorted[0].d;
+    }else if(withStock.length){altBranch=withStock[0];}
+  }
+  const oosBadge=isOOS?`<div style="position:absolute;top:8px;${CURRENT_LANG==='ar'?'left':'right'}:8px;background:rgba(220,38,38,.95);color:#fff;padding:3px 8px;border-radius:99px;font-size:9px;font-weight:900;z-index:7;backdrop-filter:blur(4px)">⚠️ نافد بفرعك</div>`:'';
+  const oosFooter=isOOS&&altBranch?`<div onclick="event.stopPropagation();selectBranchAndClose('${altBranch.id}')" style="background:linear-gradient(135deg,#fef3c7,#fde68a);color:#92400e;padding:6px 8px;font-size:10px;font-weight:700;text-align:center;cursor:pointer;border-top:1px solid #fde68a">📍 متوفر بـ <b>${CURRENT_LANG==='ar'?altBranch.ar:altBranch.en}</b>${altDist?` · ${altDist.toFixed(1)} كم`:''} · انقر للتبديل ←</div>`:'';
   return `<div class="p-card ${isAI?'ai-service':''}" onmouseenter="pCardHover(this,true)" onmouseleave="pCardHover(this,false)" onclick="if(!event.target.closest('.add-btn,.p-card-nav,.wish-heart,img'))showProductDetail('${p.id}')">
-    <div class="editable-img-host">${aiBadge}<div class="p-card-stack" data-pid="${p.id}">${stack}</div>${dots}${navs}<button class="wish-heart ${inWish(p.id)?'active':''}" data-testid="wish-toggle-${p.id}" onclick="event.stopPropagation();toggleWish('${p.id}')" title="المفضلة">${inWish(p.id)?'❤':'🤍'}</button></div>
-    <div class="p-info" onclick="event.stopPropagation();showProductDetail('${p.id}')" style="cursor:pointer"><div class="name">${name}</div><div class="desc">${desc}</div><div class="p-row"><div class="p-price">${priceLabel}</div><button class="add-btn" onclick="event.stopPropagation();addToCart('${p.id}')" title="${isAI?'اشترِ بالنقاط':'أضف للسلة'}">${isAI?'⭐':'+'}</button></div></div>
+    <div class="editable-img-host">${aiBadge}${oosBadge}<div class="p-card-stack" data-pid="${p.id}">${stack}</div>${dots}${navs}<button class="wish-heart ${inWish(p.id)?'active':''}" data-testid="wish-toggle-${p.id}" onclick="event.stopPropagation();toggleWish('${p.id}')" title="المفضلة">${inWish(p.id)?'❤':'🤍'}</button></div>
+    <div class="p-info" onclick="event.stopPropagation();showProductDetail('${p.id}')" style="cursor:pointer"><div class="name">${name}</div><div class="desc">${desc}</div><div class="p-row"><div class="p-price">${priceLabel}</div><button class="add-btn" onclick="event.stopPropagation();addToCart('${p.id}')" title="${isAI?'اشترِ بالنقاط':isOOS?'غير متوفر':'أضف للسلة'}" ${isOOS?'style="background:#9ca3af;cursor:not-allowed"':''}>${isAI?'⭐':isOOS?'✕':'+'}</button></div></div>
+    ${oosFooter}
   </div>`;
 }
 // Hover auto-rotate logic
@@ -5149,22 +5316,6 @@ function applyAllOverrides(){
     const obj=typeof ov==='string'?{url:ov,type:'image'}:ov;
     if(stack){
       if(obj.type==='video'){stack.innerHTML='';const v=document.getElementById('banner-video');v.src=obj.url;v.style.opacity='1';v.load();}
-      else{stack.innerHTML=`<img src="${obj.url}" alt="banner" style="opacity:1;animation:bnr-fade 18s linear infinite">`;}
-    }
-  }
-  Object.keys(IMG_OVERRIDES).forEach(k=>{
-    if(k.startsWith('product:')){
-      const id=k.split(':')[1];
-      const p=PRODUCTS.find(x=>x.id===id);
-      if(p){const v=IMG_OVERRIDES[k];p.img=typeof v==='string'?v:v.url;}
-    }
-  });
-}
-
-init();
-</script>
-</body></html>
-onst v=document.getElementById('banner-video');v.src=obj.url;v.style.opacity='1';v.load();}
       else{stack.innerHTML=`<img src="${obj.url}" alt="banner" style="opacity:1;animation:bnr-fade 18s linear infinite">`;}
     }
   }
