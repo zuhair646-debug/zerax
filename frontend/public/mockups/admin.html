@@ -1752,6 +1752,7 @@ select.ps-input option{background:#13131f;color:#fff}
     <div class="ps-tabs">
       <button class="ps-tab active" data-pstab="info" onclick="psSwitchTab('info')"><span class="num">1</span><span class="lbl">📝 الإضافة اليدوية</span></button>
       <button class="ps-tab ai-tab" data-pstab="ai" onclick="psSwitchTab('ai')" style="background:linear-gradient(135deg,#7c3aed20,#ec489920);border-bottom:2px solid #fbbf24"><span class="num" style="background:linear-gradient(135deg,#fbbf24,#f59e0b);color:#0a0a14">✨</span><span class="lbl" style="color:#fbbf24">🤖 شات AI الذكي</span></button>
+      <button class="ps-tab preview-tab" data-pstab="preview" onclick="psSwitchTab('preview');renderProductPreview()" style="background:linear-gradient(135deg,#10b98120,#06b6d420);border-bottom:2px solid #10b981"><span class="num" style="background:linear-gradient(135deg,#10b981,#059669);color:#fff">👁️</span><span class="lbl" style="color:#10b981">معاينة العميل</span></button>
       <!-- Hidden legacy tabs -->
       <button class="ps-tab" data-pstab="image" onclick="psSwitchTab('image')" style="display:none"></button>
       <button class="ps-tab" data-pstab="variants" onclick="psSwitchTab('variants')" style="display:none"></button>
@@ -1989,39 +1990,33 @@ select.ps-input option{background:#13131f;color:#fff}
           </div>
         </div>
 
-        <!-- Split: Chat | Results -->
-        <div style="display:grid;grid-template-columns:1fr 1.2fr;min-height:420px;background:#0a0a14">
-          <!-- LEFT: Chat -->
-          <div style="display:flex;flex-direction:column;border-left:1px solid #1e293b">
-            <div id="ai-chat-msgs" style="flex:1;overflow-y:auto;padding:16px 18px;max-height:480px">
-              <div class="ai-msg ai-msg-bot">
-                <div class="ai-avt">🤖</div>
-                <div class="ai-bubble"><b style="color:#fbbf24">مرحباً! 👋</b><br/>اكتب لي اسم منتجك في تاب "إضافة يدوية" أولاً، ثم رجع لي وأنا أعتمد عليك:<br/>✅ أبحث في الإنترنت عن المنتج<br/>✅ أولّد صور بألوانك وخلفيتك<br/>✅ أجمع كل المعلومات في "نتائج البحث" على اليمين ←<br/><br/>🎯 جرّب: اضغط الخيارات السريعة فوق + اكتب طلبك تحت</div>
-              </div>
-            </div>
-            <div style="padding:12px 16px;border-top:1px solid #1e293b;background:#0f172a">
-              <div style="display:flex;gap:8px">
-                <button onclick="document.getElementById('ai-upload-img').click()" title="ارفع صورة" style="background:#1f1f2e;color:#94a3b8;border:1px solid #312e81;width:38px;height:38px;border-radius:10px;cursor:pointer;font-size:16px">📷</button>
-                <input type="file" id="ai-upload-img" accept="image/*" style="display:none" onchange="aiChatAttach(this)">
-                <textarea id="ai-chat-input" placeholder="مثلاً: 'اعمل لي نفس هذا الجوال بألوان (ذهبي، أزرق، بنفسجي) وخلفية بيضاء'" rows="1" style="flex:1;background:#1f1f2e;color:#fff;border:1px solid #312e81;border-radius:10px;padding:10px 12px;font-family:inherit;font-size:12px;resize:none;outline:none"></textarea>
-                <button onclick="aiChatSend()" data-testid="ai-chat-send" style="background:linear-gradient(135deg,#fbbf24,#f59e0b);color:#0a0a14;border:none;padding:0 16px;border-radius:10px;font-family:inherit;font-weight:900;font-size:12px;cursor:pointer">إرسال ✨</button>
-              </div>
+        <!-- Single column FULL chat -->
+        <div style="display:flex;flex-direction:column;min-height:520px;background:#0a0a14">
+          <div id="ai-chat-msgs" style="flex:1;overflow-y:auto;padding:20px 24px;max-height:480px">
+            <div class="ai-msg ai-msg-bot">
+              <div class="ai-avt">🤖</div>
+              <div class="ai-bubble"><b style="color:#fbbf24">مرحباً! 👋</b><br/>اكتب اسم منتجك في تاب "إضافة يدوية" أولاً، ثم رجع لي وأنا أعتمد عليك:<br/>✅ أبحث في الإنترنت<br/>✅ أولّد صور بألوانك وخلفيتك<br/>✅ أنقل النتائج لتاب "المعاينة" مباشرة<br/><br/>💰 <b style="color:#10b981">كل رسالة = 5 نقاط Zerax</b> · يمكنك إرفاق صور/روابط</div>
             </div>
           </div>
-          <!-- RIGHT: Results -->
-          <div style="display:flex;flex-direction:column">
-            <div style="padding:12px 18px;border-bottom:1px solid #1e293b;background:#0f172a"><b style="color:#fbbf24;font-size:12px">📊 نتائج البحث والصور المولّدة</b></div>
-            <div id="ai-results-panel" style="flex:1;overflow-y:auto;padding:16px 18px;max-height:480px">
-              <div style="text-align:center;padding:40px 20px;color:#475569">
-                <div style="font-size:48px;margin-bottom:14px;opacity:.5">📦</div>
-                <p style="font-size:12px;color:#94a3b8;line-height:1.7">لم يبدأ البحث بعد<br/>اضغط الخيارات فوق أو ابعت رسالة للشات</p>
-              </div>
+          <div style="padding:14px 18px;border-top:1px solid #1e293b;background:#0f172a">
+            <div style="display:flex;gap:8px;align-items:end">
+              <button onclick="document.getElementById('ai-upload-img').click()" title="ارفع صورة" style="background:#1f1f2e;color:#94a3b8;border:1px solid #312e81;width:38px;height:38px;border-radius:10px;cursor:pointer;font-size:16px;flex-shrink:0">📷</button>
+              <input type="file" id="ai-upload-img" accept="image/*" style="display:none" onchange="aiChatAttach(this)">
+              <button onclick="aiAttachLink()" title="أضف رابط" style="background:#1f1f2e;color:#94a3b8;border:1px solid #312e81;width:38px;height:38px;border-radius:10px;cursor:pointer;font-size:16px;flex-shrink:0">🔗</button>
+              <textarea id="ai-chat-input" placeholder="مثلاً: 'ابحث عن iPhone 17 Pro Max وولّد لي 5 صور بألوان مختلفة وخلفية بيضاء'" rows="2" style="flex:1;background:#1f1f2e;color:#fff;border:1px solid #312e81;border-radius:10px;padding:10px 12px;font-family:inherit;font-size:12px;resize:none;outline:none"></textarea>
+              <button onclick="aiChatSend()" data-testid="ai-chat-send" style="background:linear-gradient(135deg,#fbbf24,#f59e0b);color:#0a0a14;border:none;padding:0 18px;border-radius:10px;font-family:inherit;font-weight:900;font-size:12px;cursor:pointer;height:64px">إرسال ✨<br><small style="font-weight:700">(-5 نقاط)</small></button>
             </div>
-            <div style="padding:10px 18px;border-top:1px solid #1e293b;background:#0f172a;display:flex;gap:8px">
-              <button onclick="aiApplyResults()" data-testid="ai-apply-results" style="flex:1;background:linear-gradient(135deg,#10b981,#059669);color:#fff;border:none;padding:10px;border-radius:8px;font-family:inherit;font-weight:900;font-size:11px;cursor:pointer">✅ اعتمد كل النتائج</button>
-              <button onclick="aiClearResults()" style="background:#1f1f2e;color:#94a3b8;border:1px solid #312e81;padding:10px 14px;border-radius:8px;font-family:inherit;font-size:11px;cursor:pointer">🗑️</button>
           </div>
         </div>
+      </div>
+
+      <!-- TAB: PREVIEW (customer view) -->
+      <div class="ps-panel" data-pspanel="preview">
+        <div style="background:linear-gradient(135deg,#0f172a,#1e293b);padding:14px 22px;border-bottom:1px solid #10b981;display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap">
+          <div style="display:flex;align-items:center;gap:12px"><div style="width:42px;height:42px;border-radius:10px;background:linear-gradient(135deg,#10b981,#059669);color:#fff;display:flex;align-items:center;justify-content:center;font-size:20px">👁️</div><div><b style="color:#10b981;font-size:14px;display:block">معاينة العميل</b><span style="font-size:11px;color:#94a3b8">هكذا سيرى العميل منتجك · اضغط "نشر مباشر" لينشر فوراً</span></div></div>
+          <div style="display:flex;gap:8px"><button onclick="psSwitchTab('info')" style="background:#1f1f2e;color:#94a3b8;border:1px solid #312e81;padding:8px 14px;border-radius:8px;font-family:inherit;font-weight:700;font-size:11px;cursor:pointer">↩ تعديل</button><button onclick="publishProductLive()" data-testid="publish-live-btn" style="background:linear-gradient(135deg,#10b981,#059669);color:#fff;border:none;padding:8px 18px;border-radius:8px;font-family:inherit;font-weight:900;font-size:12px;cursor:pointer">🚀 نشر مباشر</button></div>
+        </div>
+        <div id="preview-content" style="padding:22px;background:#f8fafc;min-height:400px"></div>
       </div>
     </div>
     <!-- Footer -->
@@ -2924,22 +2919,32 @@ function aiChatSend(){
   const input=document.getElementById('ai-chat-input');
   const txt=input.value.trim();
   if(!txt&&!AI_CHAT_ATTACH){toast('اكتب طلبك أو ارفع صورة');return;}
+  // Charge 5 credits per message
+  if(typeof ZERAX_CREDITS!=='undefined'&&ZERAX_CREDITS<5){toast('⚠️ رصيد النقاط غير كافي · تحتاج 5 نقاط');return;}
+  if(typeof ZERAX_CREDITS!=='undefined'){ZERAX_CREDITS-=5;localStorage.setItem('zx_credits',String(ZERAX_CREDITS));const e=document.getElementById('zerax-credits');if(e)e.textContent=ZERAX_CREDITS;}
   const productName=document.getElementById('pm-name')?.value.trim()||'المنتج';
   if(txt)aiChatPush('user',txt);
   input.value='';
-  // Bot working message
   setTimeout(()=>aiChatPush('bot',`⏳ جاري معالجة طلبك لـ "<b>${productName}</b>" مع الخيارات: <b>${[...AI_CHAT_OPTS].join(' · ')||'بدون خيارات'}</b>`),300);
-  // Simulate AI response (in production: call backend with productName + opts + image)
   setTimeout(async()=>{
     try{
       const r=await fetch(API+'/api/image-studio/product-info',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:productName,lang:'ar',options:[...AI_CHAT_OPTS]})});
       const d=r.ok?await r.json():{};
-      aiChatPush('bot',`✅ <b>تم البحث والتوليد بنجاح!</b><br/>📋 <b>${d.title||productName}</b><br/>📝 ${(d.description||'وصف احترافي تم توليده').slice(0,120)}...<br/>📸 ${(d.images||[]).length||4} صورة جديدة جاهزة في "نتائج البحث" ←`);
-      aiRenderResults(d,productName);
+      LAST_AI_RESULT={title:d.title||productName,description:d.description||'',price:d.price_range||'',images:d.images||['https://images.unsplash.com/photo-1592750475338-74b7b21085ab?w=600','https://images.unsplash.com/photo-1591337676887-a217a6970a8a?w=600','https://images.unsplash.com/photo-1546054454-aa26e2b734c7?w=600','https://images.unsplash.com/photo-1605236453806-6ff36851218e?w=600']};
+      aiChatPush('bot',`✅ <b>تم البحث والتوليد بنجاح!</b><br/>📋 <b>${LAST_AI_RESULT.title}</b><br/>📝 ${LAST_AI_RESULT.description.slice(0,120)}...<br/>📸 ${LAST_AI_RESULT.images.length} صورة جاهزة<br/><br/><button onclick="acceptAiAndPreview()" style="background:linear-gradient(135deg,#10b981,#059669);color:#fff;border:none;padding:10px 16px;border-radius:8px;font-family:inherit;font-weight:900;font-size:12px;cursor:pointer;margin-top:6px">✓ موافق · افتح المعاينة ←</button>`);
     }catch(_){
       aiChatPush('bot','⚠️ فشل البحث · تأكد من اتصال الإنترنت');
     }
   },1500);
+}
+function acceptAiAndPreview(){
+  if(!LAST_AI_RESULT)return;
+  // Apply to manual fields
+  const nameEl=document.getElementById('pm-name');if(nameEl&&!nameEl.value)nameEl.value=LAST_AI_RESULT.title;
+  const descEl=document.getElementById('pm-desc');if(descEl&&!descEl.value)descEl.value=LAST_AI_RESULT.description;
+  const prev=document.getElementById('pm-img-preview');if(prev&&LAST_AI_RESULT.images?.[0])prev.innerHTML=`<img src="${LAST_AI_RESULT.images[0]}" style="width:100%;height:100%;object-fit:cover;border-radius:12px">`;
+  toast('✓ تم نقل النتائج للمعاينة');
+  psSwitchTab('preview');renderProductPreview();
 }
 function aiRenderResults(data,productName){
   const panel=document.getElementById('ai-results-panel');
@@ -2965,10 +2970,49 @@ function aiApplyResults(){
   psSwitchTab('info');
 }
 function aiClearResults(){
-  document.getElementById('ai-results-panel').innerHTML='<div style="text-align:center;padding:40px 20px;color:#475569"><div style="font-size:48px;margin-bottom:14px;opacity:.5">📦</div><p style="font-size:12px;color:#94a3b8">تم المسح</p></div>';
   document.getElementById('ai-chat-msgs').innerHTML='<div class="ai-msg ai-msg-bot"><div class="ai-avt">🤖</div><div class="ai-bubble"><b style="color:#fbbf24">شات جديد 🆕</b><br/>ابدأ من الجديد · حدد خياراتك وارسل طلبك</div></div>';
   AI_CHAT_OPTS.clear();
   document.querySelectorAll('.ai-qopt').forEach(b=>b.classList.remove('active'));
+}
+function aiAttachLink(){
+  const url=prompt('الصق رابط (موقع رسمي، يوتيوب، أمازون):');
+  if(url)aiChatPush('user',`🔗 <a href="${url}" target="_blank" style="color:#fbbf24">${url}</a>`);
+}
+
+// ───── PRODUCT PREVIEW (customer view) ─────
+let LAST_AI_RESULT=null;
+function renderProductPreview(){
+  const host=document.getElementById('preview-content');if(!host)return;
+  const name=document.getElementById('pm-name')?.value.trim()||LAST_AI_RESULT?.title||'منتجك سيظهر هنا';
+  const price=document.getElementById('pm-price')?.value||LAST_AI_RESULT?.price||'0';
+  const desc=document.getElementById('pm-desc')?.value||LAST_AI_RESULT?.description||'وصف المنتج سيظهر هنا...';
+  const imgPrev=document.querySelector('#pm-img-preview img')?.src||LAST_AI_RESULT?.images?.[0]||'';
+  const aiImgs=LAST_AI_RESULT?.images||[];
+  const warrantyName=document.getElementById('pm-warranty-name')?.value;
+  const warrantyUrl=document.getElementById('pm-warranty-url')?.value;
+  // Collect colors/sizes/storage from variants panel
+  const colors=Array.from(document.querySelectorAll('#variant-colors .color-pill')).map(p=>({name:p.querySelector('span:nth-child(2)')?.textContent,bg:p.querySelector('span:first-child')?.style.background}));
+  const storage=Array.from(document.querySelectorAll('#variant-storage .chip-pill')).map(p=>p.dataset.val);
+  const sizes=Array.from(document.querySelectorAll('#variant-sizes .chip-pill')).map(p=>p.dataset.val);
+  host.innerHTML=`<div style="max-width:480px;margin:0 auto;background:#fff;border-radius:16px;overflow:hidden;box-shadow:0 12px 40px rgba(0,0,0,.1);font-family:system-ui">
+    <div style="position:relative">${imgPrev?`<img src="${imgPrev}" style="width:100%;height:340px;object-fit:cover;display:block">`:`<div style="width:100%;height:340px;background:#f3f4f6;display:flex;align-items:center;justify-content:center;color:#9ca3af;font-size:14px">📷 لا توجد صورة بعد</div>`}<button style="position:absolute;top:14px;right:14px;background:#fff;border:none;width:38px;height:38px;border-radius:50%;font-size:16px;cursor:pointer;box-shadow:0 4px 12px rgba(0,0,0,.15)">🤍</button></div>
+    ${aiImgs.length>1?`<div style="display:flex;gap:6px;padding:10px;overflow-x:auto">${aiImgs.slice(0,5).map(u=>`<img src="${u}" style="width:60px;height:60px;object-fit:cover;border-radius:8px;border:2px solid #e5e7eb;flex-shrink:0">`).join('')}</div>`:''}
+    <div style="padding:18px"><h2 style="font-size:18px;font-weight:900;color:#0a0a0a;margin-bottom:6px">${name}</h2><div style="font-size:13px;color:#6b7280;line-height:1.7;margin-bottom:12px">${desc}</div>
+      ${colors.length?`<div style="margin-bottom:14px"><b style="font-size:12px;color:#6b7280;display:block;margin-bottom:6px">🎨 اللون</b><div style="display:flex;gap:8px">${colors.map(c=>`<div title="${c.name}" style="width:30px;height:30px;border-radius:50%;background:${c.bg};border:2px solid #e5e7eb;cursor:pointer"></div>`).join('')}</div></div>`:''}
+      ${storage.length?`<div style="margin-bottom:14px"><b style="font-size:12px;color:#6b7280;display:block;margin-bottom:6px">💾 الذاكرة</b><div style="display:flex;gap:6px;flex-wrap:wrap">${storage.map(s=>`<button style="padding:7px 14px;border:1.5px solid #e5e7eb;border-radius:99px;background:#fff;font-family:inherit;font-weight:700;font-size:12px;cursor:pointer">${s}</button>`).join('')}</div></div>`:''}
+      ${sizes.length?`<div style="margin-bottom:14px"><b style="font-size:12px;color:#6b7280;display:block;margin-bottom:6px">📏 المقاس</b><div style="display:flex;gap:6px;flex-wrap:wrap">${sizes.map(s=>`<button style="padding:7px 14px;border:1.5px solid #e5e7eb;border-radius:99px;background:#fff;font-family:inherit;font-weight:700;font-size:12px;cursor:pointer">${s}</button>`).join('')}</div></div>`:''}
+      ${warrantyName?`<div style="background:#f0fdf4;border:1px solid #86efac;border-radius:10px;padding:10px;margin-bottom:14px"><b style="color:#065f46;font-size:12px">🛡️ ${warrantyName}</b>${warrantyUrl?`<br><a href="${warrantyUrl}" target="_blank" style="color:#10b981;font-size:11px;font-weight:700">✓ تحقّق من الضمان الرسمي ←</a>`:''}</div>`:''}
+      <div style="display:flex;justify-content:space-between;align-items:center;padding-top:14px;border-top:1px solid #f3f4f6"><div><div style="font-size:10px;color:#9ca3af">السعر</div><b style="font-size:24px;color:#7c3aed">${parseFloat(price).toFixed(2)} <small>ر.س</small></b></div><button style="padding:14px 24px;background:linear-gradient(135deg,#7c3aed,#ec4899);color:#fff;border:none;border-radius:99px;font-family:inherit;font-weight:900;font-size:13px;cursor:pointer">🛒 أضف للسلة</button></div>
+    </div>
+  </div>`;
+}
+
+function publishProductLive(){
+  const name=document.getElementById('pm-name')?.value.trim();
+  if(!name){alert('⚠️ اسم المنتج فارغ · عبّئه في تاب "الإضافة اليدوية"');psSwitchTab('info');return;}
+  if(!confirm(`نشر "${name}" مباشرة على المتجر؟ سيظهر للعملاء فوراً.`))return;
+  pmSave();
+  toast('🚀 تم النشر · المنتج ظاهر للعملاء الآن!');
 }
 
 // ───── TOOLS PICKER (smart per-category tool presets) ─────
