@@ -348,6 +348,8 @@ body.admin-mode .add-product-card{display:flex}
 .wish-heart{position:absolute;top:8px;left:8px;width:34px;height:34px;border-radius:50%;background:rgba(255,255,255,.92);border:none;font-size:16px;display:flex;align-items:center;justify-content:center;cursor:pointer;backdrop-filter:blur(6px);box-shadow:0 2px 8px rgba(0,0,0,.15);z-index:6;transition:transform .15s ease,background .2s ease;color:#ec4899}
 .wish-heart:hover{transform:scale(1.12)}
 .wish-heart.active{background:#ec4899;color:#fff;box-shadow:0 4px 14px rgba(236,72,153,.45)}
+/* Customer-side: hide merchant-only AI edit/studio buttons */
+.img-edit-btn,.cat-edit-btn,.banner-edit-btn,.studio-btn,[data-merchant-only]{display:none !important}
 .p-card-stack{position:absolute;inset:0}
 .p-card-stack img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;opacity:0;transition:opacity .5s;cursor:zoom-in}
 .p-card-stack img.active{opacity:1}
@@ -591,15 +593,13 @@ body.admin-mode .add-product-card{display:flex}
 
 <!-- HEADER -->
 <header class="top">
-  <div class="logo" id="brand">سوقي 🛒</div>
+  <a href="https://zerax.sa" target="_blank" rel="noopener" class="logo" id="brand" style="text-decoration:none;color:inherit;display:flex;align-items:center;gap:8px"><span style="font-weight:900;background:linear-gradient(135deg,#7c3aed,#0a0a0a);color:#fff;width:32px;height:32px;border-radius:8px;display:inline-flex;align-items:center;justify-content:center;font-size:14px">Z</span><span style="font-weight:900">Zerax</span></a>
   <input class="search" id="search" placeholder="ابحث...">
   <button class="pill-btn" onclick="toggleLang()" data-key="lang_btn"><span id="lang-flag">🇸🇦</span> <span id="lang-label">عربي</span></button>
   <button class="pill-btn" onclick="toggleMarketPopover(event)" id="market-btn">🌍 <span id="market-label">السعودية</span></button>
-  <button class="pill-btn admin-toggle" id="admin-btn" onclick="toggleAdminMode()" title="وضع التحكم" style="padding:8px 10px"><span style="font-size:14px">♛</span></button>
+  <button class="pill-btn admin-toggle" id="admin-btn" onclick="toggleAdminMode()" title="وضع التحكم" style="padding:8px 10px;display:none"><span style="font-size:14px">♛</span></button>
   <button class="pill-btn admin-toggle" id="acp-open-btn" onclick="openAcp()" title="لوحة تحكم التاجر" style="padding:8px 12px;display:none;background:linear-gradient(135deg,#7c3aed,#0a0a0a);color:#fbbf24 !important"><span style="font-size:13px">🛠️</span></button>
-  <button class="cart-btn" data-testid="header-wishlist-btn" onclick="showView('wishlist')" title="المفضلة" style="background:#fff;border:1px solid #fee2e2;color:#ec4899">❤<span class="cart-badge" id="wish-badge" style="background:#ec4899">0</span></button>
   <button class="cart-btn" data-testid="header-login-btn" onclick="openLogin()" title="تسجيل دخول" id="header-login-btn" style="background:#fff;border:1px solid #e9d5ff;color:#7c3aed">👤</button>
-  <button class="cart-btn" onclick="openCart()" data-testid="header-cart-btn">🛒<span class="cart-badge" id="cart-badge">0</span></button>
 </header>
 
 <!-- MARKET POPOVER -->
@@ -772,11 +772,47 @@ body.admin-mode .add-product-card{display:flex}
 <nav class="bnav">
   <a class="active" data-view="home" onclick="showView('home')"><div class="ico">🏠</div><span data-key="home">الرئيسية</span></a>
   <a data-view="search" onclick="showView('search')"><div class="ico">🔍</div><span data-key="search">بحث</span></a>
-  <a data-view="cart" onclick="openCart()"><div class="ico">🛒</div><span data-key="cart">السلة</span></a>
-  <a data-view="wishlist" data-testid="bnav-wishlist" onclick="showView('wishlist')"><div class="ico">❤</div><span>المفضلة</span></a>
+  <a data-view="cart" onclick="openCart()" style="position:relative"><div class="ico" style="position:relative;display:inline-block">🛒<span id="bnav-cart-badge" class="cart-badge" style="position:absolute;top:-8px;right:-10px;width:18px;height:18px;font-size:10px;display:none">0</span></div><span data-key="cart">السلة</span></a>
+  <a data-view="wishlist" data-testid="bnav-wishlist" onclick="showView('wishlist')" style="position:relative"><div class="ico" style="position:relative;display:inline-block">❤<span id="bnav-wish-badge" class="cart-badge" style="position:absolute;top:-8px;right:-10px;width:18px;height:18px;font-size:10px;background:#ec4899;display:none">0</span></div><span>المفضلة</span></a>
   <a data-view="orders" onclick="showView('orders')"><div class="ico">📋</div><span data-key="orders">طلباتي</span></a>
   <a data-view="account" onclick="showView('account')"><div class="ico">👤</div><span data-key="account">حسابي</span></a>
 </nav>
+
+<!-- AI CUSTOMER ASSISTANT (FAB, shows only if merchant enabled it) -->
+<button id="ai-assistant-fab" data-testid="ai-customer-assistant" onclick="openAiAssistant()" style="display:none;position:fixed;bottom:90px;left:14px;width:56px;height:56px;border-radius:50%;background:linear-gradient(135deg,#7c3aed,#ec4899);color:#fff;border:none;cursor:pointer;box-shadow:0 6px 24px rgba(124,58,237,.45);z-index:90;font-size:22px;font-weight:900;display:flex;align-items:center;justify-content:center" title="مساعد ذكي">✨</button>
+
+<!-- AI ASSISTANT MODAL -->
+<div class="modal-bg" id="ai-modal" onclick="if(event.target===this)closeAiAssistant()">
+  <div class="modal" style="max-width:420px;padding:0;overflow:hidden">
+    <div style="background:linear-gradient(135deg,#7c3aed,#0a0a0a);color:#fff;padding:18px 20px;display:flex;align-items:center;justify-content:space-between">
+      <div style="display:flex;align-items:center;gap:10px"><div style="width:36px;height:36px;border-radius:50%;background:rgba(255,255,255,.15);display:flex;align-items:center;justify-content:center">✨</div><div><b style="font-size:14px">مساعدك الذكي</b><div style="font-size:10px;opacity:.85">يجاوب عن المنتج · تجارب الناس · مقارنات</div></div></div>
+      <button onclick="closeAiAssistant()" style="background:transparent;color:#fff;border:none;font-size:18px;cursor:pointer">✕</button>
+    </div>
+    <div style="padding:16px 20px;max-height:60vh;overflow-y:auto">
+      <div style="font-size:11px;color:#7c3aed;font-weight:900;margin-bottom:10px">💡 جرّب تسأل:</div>
+      <div style="display:flex;flex-direction:column;gap:8px;margin-bottom:14px">
+        <button onclick="aiAskCustomer('وش تجارب الناس مع هذا المنتج؟')" data-testid="ai-q-1" style="background:#faf5ff;border:1px solid #ddd6fe;border-radius:10px;padding:10px 12px;text-align:right;font-family:inherit;font-size:12px;cursor:pointer;color:#5b21b6">💬 وش تجارب الناس مع هذا المنتج؟</button>
+        <button onclick="aiAskCustomer('قارن لي هذا المنتج مع منتج مشابه')" data-testid="ai-q-2" style="background:#fdf2f8;border:1px solid #fbcfe8;border-radius:10px;padding:10px 12px;text-align:right;font-family:inherit;font-size:12px;cursor:pointer;color:#9d174d">⚖️ قارن لي مع منتج مشابه</button>
+        <button onclick="aiAskCustomer('اقترح لي منتجات تكمل اختياري')" data-testid="ai-q-3" style="background:#f0fdf4;border:1px solid #86efac;border-radius:10px;padding:10px 12px;text-align:right;font-family:inherit;font-size:12px;cursor:pointer;color:#166534">🎁 اقترح منتجات تكمل اختياري</button>
+        <button onclick="aiAskCustomer('وش أفضل خيار لي بحسب احتياجي؟')" data-testid="ai-q-4" style="background:#fffbeb;border:1px solid #fde68a;border-radius:10px;padding:10px 12px;text-align:right;font-family:inherit;font-size:12px;cursor:pointer;color:#92400e">🎯 وش أفضل خيار لي؟</button>
+      </div>
+      <div id="ai-chat-log" style="margin-bottom:10px"></div>
+      <div style="display:flex;gap:6px;padding-top:10px;border-top:1px solid #e5e7eb">
+        <input id="ai-input" data-testid="ai-input" placeholder="اكتب سؤالك..." style="flex:1;padding:10px;border:1px solid #e5e7eb;border-radius:10px;font-family:inherit;font-size:12px;outline:none">
+        <button onclick="aiAskCustomer(document.getElementById('ai-input').value)" data-testid="ai-send" style="padding:10px 14px;background:linear-gradient(135deg,#7c3aed,#ec4899);color:#fff;border:none;border-radius:10px;font-family:inherit;font-weight:900;cursor:pointer">إرسال</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- POWERED BY FOOTER -->
+<div style="background:#0a0a0a;color:#94a3b8;padding:20px 14px 80px;text-align:center;font-size:11px;line-height:1.9">
+  <a href="https://zerax.sa" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;gap:8px;text-decoration:none;color:#fff;font-weight:900;font-size:13px">
+    <span style="background:linear-gradient(135deg,#7c3aed,#fbbf24);color:#fff;width:28px;height:28px;border-radius:8px;display:inline-flex;align-items:center;justify-content:center;font-size:13px">Z</span>
+    <span>Powered by <b style="color:#fbbf24">Zerax</b></span>
+  </a>
+  <div style="margin-top:6px;opacity:.7">الشركة المطوّرة · <a href="https://zerax.sa" target="_blank" rel="noopener" style="color:#fbbf24;text-decoration:none">zerax.sa</a></div>
+</div>
 
 <!-- ═══════════════════ CATEGORY PAGE (dedicated view per category) ═══════════════════ -->
 <section id="view-category" style="display:none;padding:0 16px 24px" data-view-section>
@@ -1604,8 +1640,8 @@ const REVIEWS=[
   {ar:'أسعار منافسة جداً وجودة عالية، تعاملي الثالث',en:'Very competitive prices and high quality, my third time',name:'محمد · Mohammed',stars:5},
 ];
 const TRANS={
-  ar:{lang_btn:'عربي',home:'الرئيسية',products:'المنتجات',contact:'تواصل معنا',book_now:'احجز موعد',cart:'السلة',search:'بحث',orders:'طلباتي',account:'حسابي',featured:'⭐ المنتجات المميّزة',see_all:'الكل ←',reviews_title:'آراء عملائنا',reviews_sub:'قالوا عنا...',cart_title:'🛒 السلة',subtotal:'المجموع',tax:'الضريبة',total:'الإجمالي',checkout:'إتمام الطلب',checkout_title:'💳 إتمام الطلب',checkout_sub:'اختر طريقة الدفع',select_payment:'اختر طريقة الدفع',order_success:'تم تأكيد طلبك!',order_success_sub:'سيتم التواصل معك قريباً',close:'إغلاق',reserve_title:'📅 احجز موعدك',reserve_sub:'سنتواصل معك للتأكيد',confirm_book:'تأكيد الحجز',name:'الاسم الكامل',phone:'رقم الجوال',address:'العنوان',notes:'ملاحظات',rights:'جميع الحقوق محفوظة',made_by:'صُنع بواسطة',quick_links:'روابط سريعة',payments:'طرق الدفع',shipping:'الشحن',cart_empty:'سلتك فارغة',cart_empty_sub:'أضف منتجات لتبدأ التسوق',search_ph:'ابحث عن منتج...',brand:'سوقي 🛒',back:'رجوع',shop_now:'تسوّق الآن',my_orders:'📋 طلباتي',my_account:'👤 حسابي',hello:'مرحباً',guest:'زائر عزيز',acc_name:'الاسم',acc_phone:'رقم الجوال',acc_addr:'العنوان',acc_addr_ph:'مدينتك وحيك',acc_name_ph:'اكتب اسمك',save_data:'💾 حفظ البيانات',orders_count:'عدد الطلبات',loyalty_points:'نقاط الولاء',products_label:'المنتجات',follow_us:'تابعنا',exclusive_offers:'عروض حصرية',cart_empty_alert:'السلة فارغة',choose_payment_alert:'اختر طريقة الدفع',fill_name_alert:'املأ الاسم',saved_ok:'✓ تم حفظ بياناتك',booking_ok:'تم استلام حجزك! سنتواصل معك للتأكيد.',products_in:'منتج',items_label:'منتج',status_confirmed:'مؤكد',no_orders:'لا توجد طلبات بعد',no_orders_sub:'ابدأ التسوق وستظهر طلباتك هنا',pick_branch:'🏪 اختر فرع التسليم',pick_shipping:'🚚 طريقة الشحن',map_loading:'جاري تحميل الخريطة...',locate_me:'📍 حدد موقعي تلقائياً',nearest:'الأقرب',km_away:'كم',stock_warn_title:'⚠️ تنبيه: منتجات غير متوفرة بالفرع الأقرب',stock_warn_msg:'بعض المنتجات غير متوفرة في الفرع الأقرب. اختر:',ship_from_other:'🚛 شحن من فرع آخر',ship_from_other_sub:'رسوم توصيل إضافية',remove_item:'🗑️ احذف من السلة',shipping_fee:'رسوم الشحن',pickup_free:'مجاناً',choose_branch_alert:'اختر فرع التسليم أولاً',add_custom_social:'+ إضافة موقع تواصل مخصص',custom_social_title:'إضافة موقع تواصل اجتماعي',custom_social_name:'اسم الموقع (مثلاً: Threads)',custom_social_url:'الرابط المباشر',custom_social_upload:'📷 ارفع صورة/شعار الموقع',custom_social_save:'حفظ ونشر',admin_custom:'إدارة المواقع المخصصة',admin:'لوحة التحكم'},
-  en:{lang_btn:'English',home:'Home',products:'Products',contact:'Contact',book_now:'Book Now',cart:'Cart',search:'Search',orders:'Orders',account:'Account',featured:'⭐ Featured Products',see_all:'See all →',reviews_title:'Customer Reviews',reviews_sub:'What they said about us...',cart_title:'🛒 Cart',subtotal:'Subtotal',tax:'Tax',total:'Total',checkout:'Checkout',checkout_title:'💳 Checkout',checkout_sub:'Choose payment method',select_payment:'Select payment method',order_success:'Order Confirmed!',order_success_sub:'We will contact you shortly',close:'Close',reserve_title:'📅 Book Appointment',reserve_sub:'We will confirm with you',confirm_book:'Confirm Booking',name:'Full Name',phone:'Phone Number',address:'Address',notes:'Notes (optional)',rights:'All rights reserved',made_by:'Made by',quick_links:'Quick Links',payments:'Payments',shipping:'Shipping',cart_empty:'Your cart is empty',cart_empty_sub:'Add products to start shopping',search_ph:'Search for products...',brand:'My Shop 🛒',back:'Back',shop_now:'Shop Now',my_orders:'📋 My Orders',my_account:'👤 My Account',hello:'Hello',guest:'Dear guest',acc_name:'Name',acc_phone:'Phone',acc_addr:'Address',acc_addr_ph:'Your city & district',acc_name_ph:'Type your name',save_data:'💾 Save Info',orders_count:'Orders count',loyalty_points:'Loyalty points',products_label:'Products',follow_us:'Follow Us',exclusive_offers:'EXCLUSIVE OFFERS',cart_empty_alert:'Cart is empty',choose_payment_alert:'Choose a payment method',fill_name_alert:'Please fill in your name',saved_ok:'✓ Account saved',booking_ok:'Booking received! We will contact you to confirm.',products_in:'items',items_label:'items',status_confirmed:'Confirmed',no_orders:'No orders yet',no_orders_sub:'Start shopping and your orders will appear here',pick_branch:'🏪 Choose delivery branch',pick_shipping:'🚚 Shipping method',map_loading:'Loading map...',locate_me:'📍 Auto-detect my location',nearest:'NEAREST',km_away:'km',stock_warn_title:'⚠️ Heads up: items missing from nearest branch',stock_warn_msg:'Some items are out-of-stock in the closest branch. Choose:',ship_from_other:'🚛 Ship from another branch',ship_from_other_sub:'Extra delivery fee applies',remove_item:'🗑️ Remove from cart',shipping_fee:'Shipping fee',pickup_free:'FREE',choose_branch_alert:'Please choose a delivery branch first',add_custom_social:'+ Add custom social',custom_social_title:'Add custom social network',custom_social_name:'Network name (e.g. Threads)',custom_social_url:'Direct link',custom_social_upload:'📷 Upload logo/icon image',custom_social_save:'Save & publish',admin_custom:'Manage custom socials',admin:'Admin'}
+  ar:{lang_btn:'عربي',home:'الرئيسية',products:'المنتجات',contact:'تواصل معنا',book_now:'احجز موعد',cart:'السلة',search:'بحث',orders:'طلباتي',account:'حسابي',featured:'⭐ المنتجات المميّزة',see_all:'الكل ←',reviews_title:'آراء عملائنا',reviews_sub:'قالوا عنا...',cart_title:'🛒 السلة',subtotal:'المجموع',tax:'الضريبة',total:'الإجمالي',checkout:'إتمام الطلب',checkout_title:'💳 إتمام الطلب',checkout_sub:'اختر طريقة الدفع',select_payment:'اختر طريقة الدفع',order_success:'تم تأكيد طلبك!',order_success_sub:'سيتم التواصل معك قريباً',close:'إغلاق',reserve_title:'📅 احجز موعدك',reserve_sub:'سنتواصل معك للتأكيد',confirm_book:'تأكيد الحجز',name:'الاسم الكامل',phone:'رقم الجوال',address:'العنوان',notes:'ملاحظات',rights:'جميع الحقوق محفوظة',made_by:'صُنع بواسطة',quick_links:'روابط سريعة',payments:'طرق الدفع',shipping:'الشحن',cart_empty:'سلتك فارغة',cart_empty_sub:'أضف منتجات لتبدأ التسوق',search_ph:'ابحث عن منتج...',brand:'Zerax',back:'رجوع',shop_now:'تسوّق الآن',my_orders:'📋 طلباتي',my_account:'👤 حسابي',hello:'مرحباً',guest:'زائر عزيز',acc_name:'الاسم',acc_phone:'رقم الجوال',acc_addr:'العنوان',acc_addr_ph:'مدينتك وحيك',acc_name_ph:'اكتب اسمك',save_data:'💾 حفظ البيانات',orders_count:'عدد الطلبات',loyalty_points:'نقاط الولاء',products_label:'المنتجات',follow_us:'تابعنا',exclusive_offers:'عروض حصرية',cart_empty_alert:'السلة فارغة',choose_payment_alert:'اختر طريقة الدفع',fill_name_alert:'املأ الاسم',saved_ok:'✓ تم حفظ بياناتك',booking_ok:'تم استلام حجزك! سنتواصل معك للتأكيد.',products_in:'منتج',items_label:'منتج',status_confirmed:'مؤكد',no_orders:'لا توجد طلبات بعد',no_orders_sub:'ابدأ التسوق وستظهر طلباتك هنا',pick_branch:'🏪 اختر فرع التسليم',pick_shipping:'🚚 طريقة الشحن',map_loading:'جاري تحميل الخريطة...',locate_me:'📍 حدد موقعي تلقائياً',nearest:'الأقرب',km_away:'كم',stock_warn_title:'⚠️ تنبيه: منتجات غير متوفرة بالفرع الأقرب',stock_warn_msg:'بعض المنتجات غير متوفرة في الفرع الأقرب. اختر:',ship_from_other:'🚛 شحن من فرع آخر',ship_from_other_sub:'رسوم توصيل إضافية',remove_item:'🗑️ احذف من السلة',shipping_fee:'رسوم الشحن',pickup_free:'مجاناً',choose_branch_alert:'اختر فرع التسليم أولاً',add_custom_social:'+ إضافة موقع تواصل مخصص',custom_social_title:'إضافة موقع تواصل اجتماعي',custom_social_name:'اسم الموقع (مثلاً: Threads)',custom_social_url:'الرابط المباشر',custom_social_upload:'📷 ارفع صورة/شعار الموقع',custom_social_save:'حفظ ونشر',admin_custom:'إدارة المواقع المخصصة',admin:'لوحة التحكم'},
+  en:{lang_btn:'English',home:'Home',products:'Products',contact:'Contact',book_now:'Book Now',cart:'Cart',search:'Search',orders:'Orders',account:'Account',featured:'⭐ Featured Products',see_all:'See all →',reviews_title:'Customer Reviews',reviews_sub:'What they said about us...',cart_title:'🛒 Cart',subtotal:'Subtotal',tax:'Tax',total:'Total',checkout:'Checkout',checkout_title:'💳 Checkout',checkout_sub:'Choose payment method',select_payment:'Select payment method',order_success:'Order Confirmed!',order_success_sub:'We will contact you shortly',close:'Close',reserve_title:'📅 Book Appointment',reserve_sub:'We will confirm with you',confirm_book:'Confirm Booking',name:'Full Name',phone:'Phone Number',address:'Address',notes:'Notes (optional)',rights:'All rights reserved',made_by:'Made by',quick_links:'Quick Links',payments:'Payments',shipping:'Shipping',cart_empty:'Your cart is empty',cart_empty_sub:'Add products to start shopping',search_ph:'Search for products...',brand:'Zerax',back:'Back',shop_now:'Shop Now',my_orders:'📋 My Orders',my_account:'👤 My Account',hello:'Hello',guest:'Dear guest',acc_name:'Name',acc_phone:'Phone',acc_addr:'Address',acc_addr_ph:'Your city & district',acc_name_ph:'Type your name',save_data:'💾 Save Info',orders_count:'Orders count',loyalty_points:'Loyalty points',products_label:'Products',follow_us:'Follow Us',exclusive_offers:'EXCLUSIVE OFFERS',cart_empty_alert:'Cart is empty',choose_payment_alert:'Choose a payment method',fill_name_alert:'Please fill in your name',saved_ok:'✓ Account saved',booking_ok:'Booking received! We will contact you to confirm.',products_in:'items',items_label:'items',status_confirmed:'Confirmed',no_orders:'No orders yet',no_orders_sub:'Start shopping and your orders will appear here',pick_branch:'🏪 Choose delivery branch',pick_shipping:'🚚 Shipping method',map_loading:'Loading map...',locate_me:'📍 Auto-detect my location',nearest:'NEAREST',km_away:'km',stock_warn_title:'⚠️ Heads up: items missing from nearest branch',stock_warn_msg:'Some items are out-of-stock in the closest branch. Choose:',ship_from_other:'🚛 Ship from another branch',ship_from_other_sub:'Extra delivery fee applies',remove_item:'🗑️ Remove from cart',shipping_fee:'Shipping fee',pickup_free:'FREE',choose_branch_alert:'Please choose a delivery branch first',add_custom_social:'+ Add custom social',custom_social_title:'Add custom social network',custom_social_name:'Network name (e.g. Threads)',custom_social_url:'Direct link',custom_social_upload:'📷 Upload logo/icon image',custom_social_save:'Save & publish',admin_custom:'Manage custom socials',admin:'Admin'}
 };
 // Currency symbol per language (so SAR displays as "SAR" in English instead of "ر.س")
 const CURRENCY_SYMBOLS_EN={SAR:'SAR',AED:'AED',KWD:'KWD',QAR:'QAR',BHD:'BHD',OMR:'OMR',IQD:'IQD',SYP:'SYP',JOD:'JOD',LBP:'LBP',EGP:'EGP',IRR:'IRR',YER:'YER',ILS:'ILS',CNY:'¥',JPY:'¥',KRW:'₩',INR:'₹',USD:'$',GBP:'£',EUR:'€',CHF:'CHF',SEK:'kr',RUB:'₽',TRY:'₺',MAD:'MAD',DZD:'DZD',TND:'TND',LYD:'LYD',SDG:'SDG',PKR:'₨',BDT:'৳',IDR:'Rp',MYR:'RM',THB:'฿',PHP:'₱',VND:'₫',CAD:'CA$',MXN:'MX$',BRL:'R$',ARS:'AR$',ZAR:'R',NGN:'₦',KES:'KSh',AUD:'A$'};
@@ -1663,7 +1699,11 @@ function applyLocale(){
   document.documentElement.dir=CURRENT_LANG==='ar'?'rtl':(CURRENT_MARKET.direction);
   document.documentElement.lang=CURRENT_LANG;
   const brandEl=document.getElementById('brand');
-  if(brandEl)brandEl.textContent=TRANS[CURRENT_LANG]?.brand||TRANS.en.brand;
+  if(brandEl){
+    // Preserve logo styling — only update the text span (last span child)
+    const textSpan=brandEl.querySelector('span:last-child');
+    if(textSpan)textSpan.textContent=TRANS[CURRENT_LANG]?.brand||TRANS.en.brand;
+  }
   const mlbl=document.getElementById('market-label');
   if(mlbl)mlbl.textContent=(CURRENT_LANG==='en'?(CURRENT_MARKET.name_en||CURRENT_MARKET.name_ar):(CURRENT_MARKET.name_ar||CURRENT_MARKET.name_en));
   const lf=document.getElementById('lang-flag');
@@ -2060,7 +2100,6 @@ async function syncWishlistFromServer(){
 // Load real products from merchant database and prepend them
 async function loadMerchantProducts(){
   try{
-    // Check ?m=<merchant_id> in URL — if present, fetch only that merchant's products
     const params=new URLSearchParams(window.location.search);
     const merchantId=params.get('m');
     const qs=merchantId?('?merchant_id='+encodeURIComponent(merchantId)):'';
@@ -2075,13 +2114,14 @@ async function loadMerchantProducts(){
       sar:b.price,img:b.img||'https://images.unsplash.com/photo-1586765501019-cbf6c0b6d7a4?w=500',
       stock:b.stock,sku:b.sku,_fromApi:true,_merchantId:b.merchant_id
     }));
-    // If filtering by merchant, REPLACE PRODUCTS (only show this merchant)
     if(merchantId){
       PRODUCTS=adapted;
-      // Show merchant context banner
       _showMerchantBanner(merchantId,adapted.length);
+      // Show AI assistant only on per-merchant page (assume enabled by default — merchant can toggle off in admin)
+      const aiFab=document.getElementById('ai-assistant-fab');
+      const merchantSettings=JSON.parse(localStorage.getItem('zx_merchant_'+merchantId+'_settings')||'{"ai_assistant":true}');
+      if(aiFab)aiFab.style.display=merchantSettings.ai_assistant?'flex':'none';
     }else{
-      // Otherwise prepend merchant DB products on top of demo seed
       const existingIds=new Set(PRODUCTS.map(p=>p.id));
       const newOnes=adapted.filter(p=>!existingIds.has(p.id));
       PRODUCTS=[...newOnes,...PRODUCTS];
@@ -2090,6 +2130,28 @@ async function loadMerchantProducts(){
     renderCategories();
     console.log(`[storefront] loaded ${adapted.length} merchant products (merchant=${merchantId||'all'})`);
   }catch(e){console.warn('loadMerchantProducts failed',e);}
+}
+// ───── AI CUSTOMER ASSISTANT ─────
+function openAiAssistant(){document.getElementById('ai-modal').classList.add('open');setTimeout(()=>document.getElementById('ai-input').focus(),100);}
+function closeAiAssistant(){document.getElementById('ai-modal').classList.remove('open');}
+function aiAskCustomer(q){
+  if(!q||!q.trim())return;
+  const log=document.getElementById('ai-chat-log');
+  const userMsg=`<div style="background:#7c3aed;color:#fff;padding:10px 12px;border-radius:14px 14px 4px 14px;margin:6px 0 6px auto;max-width:80%;font-size:12px;text-align:right">${q}</div>`;
+  // Simulated AI response (uses Zerax AI on backend — costs merchant points)
+  const responses={
+    'تجارب':'بناءً على ١٢ تقييم لهذا المنتج: متوسط ٤.٧⭐. أبرز الإيجابيات: جودة عالية، شحن سريع، تغليف ممتاز. أبرز السلبيات: السعر مرتفع نسبياً.',
+    'قارن':'هذا المنتج مقارنة بمنتجات مشابهة في المتجر:\n• الجودة: ممتازة (الأعلى في فئته)\n• السعر: متوسط\n• المخزون: متوفر',
+    'اقترح':'بناءً على اختيارك، أقترح: \n• كفر حماية مناسب\n• شاحن لاسلكي\n• سماعات تكمل الإكسسوارات',
+    'افضل':'بناءً على ما عرضته من اهتمامات، أنصحك بهذا المنتج — يجمع بين الجودة والسعر المناسب وله تقييمات ممتازة.',
+    'default':'سؤال ممتاز! بناءً على بيانات المتجر، أنصحك بمراجعة قسم "آراء العملاء" تحت كل منتج، أو تواصل مع التاجر مباشرة عبر زر واتساب. لو تبي مقارنة محددة، أعطني اسم المنتج.'
+  };
+  let resp=responses.default;
+  for(const k in responses){if(q.includes(k)){resp=responses[k];break;}}
+  const botMsg=`<div style="background:#f3f4f6;color:#1f2937;padding:10px 12px;border-radius:14px 14px 14px 4px;margin:6px auto 6px 0;max-width:80%;font-size:12px;line-height:1.7"><b style="color:#7c3aed">✨ Zerax AI:</b><br>${resp.replace(/\n/g,'<br>')}</div>`;
+  log.innerHTML+=userMsg+botMsg;
+  log.scrollTop=log.scrollHeight;
+  document.getElementById('ai-input').value='';
 }
 function _showMerchantBanner(merchantId,count){
   const existing=document.getElementById('merchant-banner');if(existing)existing.remove();
@@ -2117,7 +2179,11 @@ function toggleWish(pid){
     fetch(API_BASE_CUST+'/api/store/wishlist',{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+getCustToken()},body:JSON.stringify({product_id:pid})}).catch(()=>{});
   }
 }
-function updateWishBadge(){const b=document.getElementById('wish-badge');if(b)b.textContent=WISHLIST.length;}
+function updateWishBadge(){
+  const n=WISHLIST.length;
+  const bnavWish=document.getElementById('bnav-wish-badge');
+  if(bnavWish){bnavWish.textContent=n;bnavWish.style.display=n>0?'flex':'none';}
+}
 function renderWishlist(){
   const grid=document.getElementById('wishlist-grid');
   const empty=document.getElementById('wishlist-empty');
@@ -2306,7 +2372,10 @@ function updateCart(){
   const body=document.getElementById('cart-body');
   const foot=document.getElementById('cart-foot');
   const total=CART.reduce((s,c)=>s+c.qty,0);
-  document.getElementById('cart-badge').textContent=total;
+  document.getElementById('cart-badge')?.style?.setProperty('display','flex');
+  const cb=document.getElementById('cart-badge');if(cb)cb.textContent=total;
+  const bnavCart=document.getElementById('bnav-cart-badge');
+  if(bnavCart){bnavCart.textContent=total;bnavCart.style.display=total>0?'flex':'none';}
   if(!CART.length){body.innerHTML=`<div class="empty-cart"><div class="ico">🛒</div><b>${t.cart_empty}</b><p style="margin-top:6px;font-size:13px">${t.cart_empty_sub}</p></div>`;foot.style.display='none';return;}
   body.innerHTML=CART.map(c=>{const p=PRODUCTS.find(x=>x.id===c.id);if(!p)return'';const n=CURRENT_LANG==='ar'?p.ar:p.en;return `<div class="cart-item"><img src="${p.img}"><div class="cart-item-info"><div class="n">${n}</div><div class="p">${curSym()} ${formatPrice(p.sar*c.qty)}</div><div class="qty-row"><button class="qty-btn" onclick="changeQty('${p.id}',-1)">−</button><span class="qty-num">${c.qty}</span><button class="qty-btn" onclick="changeQty('${p.id}',1)">+</button></div></div></div>`;}).join('');
   const sub=CART.reduce((s,c)=>{const p=PRODUCTS.find(x=>x.id===c.id);return s+(p?p.sar*c.qty:0);},0);
@@ -3029,8 +3098,8 @@ function pCardHtml(p){
   const stack=imgs.map((g,i)=>`<img src="${g.url}" alt="${name} ${i+1}" class="${i===0?'active':''}" data-i="${i}">`).join('');
   const dots=imgs.length>1?`<div class="p-card-dots">${imgs.map((_,i)=>`<span class="${i===0?'active':''}"></span>`).join('')}</div>`:'';
   const navs=imgs.length>1?`<button class="p-card-nav p-card-prev" onclick="event.stopPropagation();pCardNav(this,-1)" aria-label="prev">‹</button><button class="p-card-nav p-card-next" onclick="event.stopPropagation();pCardNav(this,1)" aria-label="next">›</button>`:'';
-  return `<div class="p-card" onmouseenter="pCardHover(this,true)" onmouseleave="pCardHover(this,false)" onclick="if(!event.target.closest('.img-edit-btn,.add-btn,.p-card-nav,.wish-heart,img'))showProductDetail('${p.id}')">
-    <div class="editable-img-host"><div class="p-card-stack" data-pid="${p.id}">${stack}</div>${dots}${navs}<button class="img-edit-btn" onclick="event.stopPropagation();openStudio('product:${p.id}')" title="تحرير">✨</button><button class="wish-heart ${inWish(p.id)?'active':''}" data-testid="wish-toggle-${p.id}" onclick="event.stopPropagation();toggleWish('${p.id}')" title="المفضلة">${inWish(p.id)?'❤':'🤍'}</button></div>
+  return `<div class="p-card" onmouseenter="pCardHover(this,true)" onmouseleave="pCardHover(this,false)" onclick="if(!event.target.closest('.add-btn,.p-card-nav,.wish-heart,img'))showProductDetail('${p.id}')">
+    <div class="editable-img-host"><div class="p-card-stack" data-pid="${p.id}">${stack}</div>${dots}${navs}<button class="wish-heart ${inWish(p.id)?'active':''}" data-testid="wish-toggle-${p.id}" onclick="event.stopPropagation();toggleWish('${p.id}')" title="المفضلة">${inWish(p.id)?'❤':'🤍'}</button></div>
     <div class="p-info" onclick="event.stopPropagation();showProductDetail('${p.id}')" style="cursor:pointer"><div class="name">${name}</div><div class="desc">${desc}</div><div class="p-row"><div class="p-price">${curSym()} ${formatPrice(p.sar)}</div><button class="add-btn" onclick="event.stopPropagation();addToCart('${p.id}')">+</button></div></div>
   </div>`;
 }
