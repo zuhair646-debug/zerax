@@ -1750,10 +1750,11 @@ select.ps-input option{background:#13131f;color:#fff}
     </div>
     <!-- Tabs -->
     <div class="ps-tabs">
-      <button class="ps-tab active" data-pstab="info" onclick="psSwitchTab('info')"><span class="num">1</span><span class="lbl">📝 إضافة يدوية</span></button>
-      <button class="ps-tab" data-pstab="image" onclick="psSwitchTab('image')"><span class="num">2</span><span class="lbl">🎨 صور المنتج AI</span></button>
-      <button class="ps-tab" data-pstab="variants" onclick="psSwitchTab('variants')"><span class="num">3</span><span class="lbl">🎯 المتغيّرات والضمان</span></button>
+      <button class="ps-tab active" data-pstab="info" onclick="psSwitchTab('info')"><span class="num">1</span><span class="lbl">📝 الإضافة اليدوية</span></button>
       <button class="ps-tab ai-tab" data-pstab="ai" onclick="psSwitchTab('ai')" style="background:linear-gradient(135deg,#7c3aed20,#ec489920);border-bottom:2px solid #fbbf24"><span class="num" style="background:linear-gradient(135deg,#fbbf24,#f59e0b);color:#0a0a14">✨</span><span class="lbl" style="color:#fbbf24">🤖 شات AI الذكي</span></button>
+      <!-- Hidden legacy tabs -->
+      <button class="ps-tab" data-pstab="image" onclick="psSwitchTab('image')" style="display:none"></button>
+      <button class="ps-tab" data-pstab="variants" onclick="psSwitchTab('variants')" style="display:none"></button>
     </div>
     <div class="ps-body">
       <!-- TAB 1: BASIC INFO -->
@@ -1765,6 +1766,34 @@ select.ps-input option{background:#13131f;color:#fff}
             <div><b style="color:#fbbf24;font-size:13px;display:block">الإضافة اليدوية الكاملة</b><span style="font-size:11px;color:#94a3b8;line-height:1.6">صلاحيات كاملة · ارفع صورتك · اكتب معلوماتك · بدون أي تدخل من AI</span></div>
           </div>
           <button onclick="psSwitchTab('ai')" style="background:linear-gradient(135deg,#fbbf24,#f59e0b);color:#0a0a14;border:none;padding:10px 16px;border-radius:10px;font-family:inherit;font-weight:900;font-size:12px;cursor:pointer;white-space:nowrap;display:flex;align-items:center;gap:6px">✨ أو استخدم شات AI ←</button>
+        </div>
+
+        <!-- TOOLS PICKER BAR (smart category-based tools) -->
+        <div style="background:#0a0a14;border:1px solid #1e293b;border-radius:14px;padding:14px 18px;margin:14px 22px 0">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;flex-wrap:wrap;gap:10px">
+            <div><b style="color:#fbbf24;font-size:13px">🛠️ أدوات المنتج</b><span style="color:#94a3b8;font-size:11px;margin-right:8px">حدد نوع المنتج لتظهر أدواته تلقائياً · أو فعّل أدوات يدوياً</span></div>
+            <select id="tool-preset" onchange="applyToolPreset(this.value)" style="background:#1f1f2e;color:#fbbf24;border:1px solid #312e81;padding:8px 12px;border-radius:8px;font-family:inherit;font-weight:700;font-size:12px;cursor:pointer">
+              <option value="">— اختر نوع المنتج —</option>
+              <option value="phones">📱 جوالات وإلكترونيات</option>
+              <option value="clothes">👕 ملابس</option>
+              <option value="shoes">👟 أحذية</option>
+              <option value="watches">⌚ ساعات ومجوهرات</option>
+              <option value="food">🍔 أطعمة ومشروبات</option>
+              <option value="beauty">💄 جمال وعطور</option>
+              <option value="perfume">🌹 عطور فقط</option>
+              <option value="meds">💊 أدوية ومكملات</option>
+              <option value="home">🏠 منزل وأثاث</option>
+              <option value="kids">🧸 ألعاب أطفال</option>
+              <option value="sports">⚽ رياضة ومعدات</option>
+              <option value="books">📚 كتب ومطبوعات</option>
+              <option value="cars">🚗 سيارات وقطع غيار</option>
+              <option value="pets">🐕 حيوانات أليفة</option>
+              <option value="custom">⚙️ مخصص (يدوي)</option>
+            </select>
+          </div>
+          <div style="display:flex;flex-wrap:wrap;gap:6px" id="tools-active-chips"><span style="color:#475569;font-size:11px">لا أدوات مفعّلة بعد · اختر نوع المنتج فوق</span></div>
+          <div style="margin-top:10px;font-size:10px;color:#94a3b8;background:#0f172a;padding:8px 10px;border-radius:8px;line-height:1.6">💡 بعد اختيار النوع، انتقل لتاب "🎯 المتغيّرات والضمان" أعلى الصفحة لتعبئة الأدوات. أو اضغط زر "⚙️ تعبئة الأدوات الآن" أسفل.</div>
+          <button onclick="psSwitchTab('variants')" id="goto-variants-btn" style="display:none;margin-top:10px;background:linear-gradient(135deg,#fbbf24,#f59e0b);color:#0a0a14;border:none;padding:10px 18px;border-radius:10px;font-family:inherit;font-weight:900;font-size:12px;cursor:pointer;width:100%">⚙️ افتح أدوات المنتج لتعبئتها ←</button>
         </div>
         <div class="ps-grid-2">
           <div>
@@ -1845,7 +1874,14 @@ select.ps-input option{background:#13131f;color:#fff}
 
       <!-- TAB 3: VARIANTS & WARRANTY (color swatches · storage · sizes · warranty) -->
       <div class="ps-panel" data-pspanel="variants">
-        <div class="ps-panel-head"><div class="ico" style="background:linear-gradient(135deg,#f59e0b,#dc2626)">🎯</div><div><h4>المتغيّرات والضمان</h4><div class="desc">ألوان · سعات · مقاسات · ضمان رسمي · العميل يضغط ضغطة زر فيتغيّر كل شي</div></div></div>
+        <div style="background:linear-gradient(135deg,#0f172a,#1e293b);padding:14px 22px;border-bottom:1px solid #312e81;display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap">
+          <div style="display:flex;align-items:center;gap:12px">
+            <div style="width:42px;height:42px;border-radius:10px;background:linear-gradient(135deg,#f59e0b,#dc2626);color:#fff;display:flex;align-items:center;justify-content:center;font-size:20px">🎯</div>
+            <div><b style="color:#fbbf24;font-size:14px;display:block">تعبئة أدوات المنتج</b><span style="font-size:11px;color:#94a3b8">ألوان · سعات · مقاسات · ضمان · مواصفات</span></div>
+          </div>
+          <button onclick="psSwitchTab('info')" style="background:#1f1f2e;color:#94a3b8;border:1px solid #312e81;padding:8px 14px;border-radius:8px;font-family:inherit;font-weight:700;font-size:11px;cursor:pointer">↩ رجوع للإضافة اليدوية</button>
+        </div>
+        <div class="ps-panel-head" style="display:none"></div>
         <div class="ps-content" style="padding:18px 22px">
           <!-- Field toggles -->
           <div style="background:#0f172a;border:1px solid #1e293b;border-radius:12px;padding:12px;margin-bottom:14px">
@@ -2933,6 +2969,84 @@ function aiClearResults(){
   document.getElementById('ai-chat-msgs').innerHTML='<div class="ai-msg ai-msg-bot"><div class="ai-avt">🤖</div><div class="ai-bubble"><b style="color:#fbbf24">شات جديد 🆕</b><br/>ابدأ من الجديد · حدد خياراتك وارسل طلبك</div></div>';
   AI_CHAT_OPTS.clear();
   document.querySelectorAll('.ai-qopt').forEach(b=>b.classList.remove('active'));
+}
+
+// ───── TOOLS PICKER (smart per-category tool presets) ─────
+const TOOL_PRESETS={
+  phones:['colors','storage','ram','warranty','specs','imei','condition'],
+  clothes:['colors','sizes_clothes','materials','gender','season','warranty'],
+  shoes:['colors','sizes_shoes','materials','gender','warranty'],
+  watches:['colors','materials','warranty','specs','water_resistance','strap'],
+  food:['expiry','weight','flavors','allergens','origin','storage_temp','calories'],
+  beauty:['colors','volume','skin_type','expiry','ingredients','warranty'],
+  perfume:['volume','notes','gender','concentration','expiry'],
+  meds:['expiry','dosage','ingredients','warnings','manufacturer','batch'],
+  home:['colors','materials','dimensions','warranty','assembly_required'],
+  kids:['colors','age_range','materials','warranty','batteries_required'],
+  sports:['colors','sizes_shoes','materials','warranty','weight'],
+  books:['language','pages','isbn','publisher','genre'],
+  cars:['compatibility','warranty','part_number','manufacturer'],
+  pets:['weight','age_range','flavors','ingredients','expiry'],
+  custom:[]
+};
+const TOOL_LABELS={
+  colors:'🎨 الألوان',storage:'💾 الذاكرة',ram:'⚡ RAM',warranty:'🛡️ ضمان',specs:'📋 مواصفات',
+  imei:'🔢 IMEI',condition:'✨ الحالة (جديد/مستعمل)',sizes_clothes:'📏 مقاسات ملابس',
+  sizes_shoes:'👟 مقاسات أحذية',materials:'🧵 الخامة',gender:'👫 الفئة',season:'☀️ الموسم',
+  expiry:'📅 الانتهاء',weight:'⚖️ الوزن',flavors:'🍦 النكهات',allergens:'⚠️ مسببات الحساسية',
+  origin:'🌍 بلد المنشأ',storage_temp:'❄️ التخزين',calories:'🔥 السعرات',volume:'🧴 الحجم',
+  skin_type:'👤 نوع البشرة',ingredients:'🧪 المكونات',notes:'🌸 الروائح',concentration:'💧 التركيز',
+  dosage:'💊 الجرعة',warnings:'⚠️ التحذيرات',manufacturer:'🏭 المصنع',batch:'🔖 رقم التشغيلة',
+  dimensions:'📐 الأبعاد',assembly_required:'🔧 يحتاج تركيب',age_range:'👶 العمر المناسب',
+  batteries_required:'🔋 يحتاج بطاريات',language:'🗣️ اللغة',pages:'📄 الصفحات',
+  isbn:'📚 ISBN',publisher:'🏢 الناشر',genre:'📖 التصنيف',compatibility:'🔗 التوافق',
+  part_number:'🆔 رقم القطعة',water_resistance:'💧 مقاوم الماء',strap:'⌚ الحزام'
+};
+let ACTIVE_TOOLS=new Set();
+function applyToolPreset(key){
+  if(!key)return;
+  if(key==='custom'){openToolPickerDialog();return;}
+  ACTIVE_TOOLS=new Set(TOOL_PRESETS[key]||[]);
+  renderActiveTools();
+  toast(`✓ تم تفعيل ${ACTIVE_TOOLS.size} أداة لنوع المنتج`);
+}
+function renderActiveTools(){
+  const host=document.getElementById('tools-active-chips');if(!host)return;
+  const gotoBtn=document.getElementById('goto-variants-btn');
+  if(!ACTIVE_TOOLS.size){host.innerHTML='<span style="color:#475569;font-size:11px">لا أدوات مفعّلة بعد · اختر نوع المنتج فوق</span>';if(gotoBtn)gotoBtn.style.display='none';return;}
+  host.innerHTML=Array.from(ACTIVE_TOOLS).map(t=>`<div class="tool-chip" data-tool="${t}" style="background:linear-gradient(135deg,#fbbf2420,#f59e0b20);border:1px solid #fbbf24;color:#fbbf24;padding:6px 12px;border-radius:99px;font-size:11px;font-weight:700;cursor:pointer;display:inline-flex;align-items:center;gap:6px" onclick="scrollToTool('${t}')">${TOOL_LABELS[t]||t} <button onclick="event.stopPropagation();ACTIVE_TOOLS.delete('${t}');renderActiveTools();" style="background:none;border:none;color:#dc2626;cursor:pointer;font-weight:900;font-size:14px">×</button></div>`).join('')+
+    `<button onclick="openToolPickerDialog()" style="background:#1f1f2e;color:#94a3b8;border:1px dashed #475569;padding:6px 12px;border-radius:99px;font-size:11px;font-weight:700;cursor:pointer">+ أداة</button>`;
+  if(gotoBtn)gotoBtn.style.display='block';
+  showInlineVariantsForActiveTools();
+}
+function openToolPickerDialog(){
+  const allTools=Object.keys(TOOL_LABELS);
+  const inactive=allTools.filter(t=>!ACTIVE_TOOLS.has(t));
+  if(!inactive.length){toast('كل الأدوات مفعّلة');return;}
+  const choice=prompt('اختر أداة لتفعيلها:\n\n'+inactive.map((t,i)=>`${i+1}- ${TOOL_LABELS[t]}`).join('\n')+'\n\nاكتب الرقم:');
+  if(!choice)return;
+  const idx=parseInt(choice)-1;
+  if(inactive[idx]){ACTIVE_TOOLS.add(inactive[idx]);renderActiveTools();}
+}
+function scrollToTool(tool){
+  // For colors/sizes/materials etc we have inline sections — try to scroll
+  const map={colors:'variant-colors',storage:'variant-storage',sizes_clothes:'variant-sizes',sizes_shoes:'variant-sizes',materials:'variant-materials',flavors:'variant-flavors'};
+  const target=map[tool];
+  if(target){
+    const el=document.getElementById(target);
+    if(el)el.scrollIntoView({behavior:'smooth',block:'center'});
+  } else {
+    // For other tools, just toast a hint
+    toast(`💡 أداة "${TOOL_LABELS[tool]}" — أضفها في قسم المواصفات`);
+  }
+}
+function showInlineVariantsForActiveTools(){
+  // Auto-enable variant field toggles for active tools
+  const mapping={colors:'colors',storage:'storage',sizes_clothes:'sizes',sizes_shoes:'sizes',materials:'materials',flavors:'flavors',warranty:'warranty',specs:'specs'};
+  Object.entries(mapping).forEach(([tool,field])=>{
+    const cb=document.getElementById('vf-'+field);
+    if(cb){cb.checked=ACTIVE_TOOLS.has(tool)||cb.checked;toggleVariantField(field);}
+  });
 }
 
 // ───────────────────────── MARKETS MODULE (Multi-Market Targeting) ─────────────────────────
