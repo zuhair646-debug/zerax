@@ -1545,8 +1545,8 @@ const SOCIAL_PRESETS={
   ],
 };
 
-// 12 products with multi-language names
-const PRODUCTS = [
+// 12 products with multi-language names (seed demos — augmented with merchant DB products at runtime)
+let PRODUCTS = [
   // Electronics
   {id:'p1',cat:'electronics',ar:'سماعات لاسلكية فاخرة',en:'Premium Wireless Headphones',descAr:'صوت نقي · إلغاء ضوضاء · 30 ساعة',descEn:'Pure sound · ANC · 30hr battery',sar:599,img:'https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=500'},
   {id:'p2',cat:'electronics',ar:'ساعة ذكية رياضية',en:'Smart Sports Watch',descAr:'GPS · مقاومة للماء · شاشة AMOLED',descEn:'GPS · Water resistant · AMOLED',sar:1290,img:'https://images.unsplash.com/photo-1546868871-7041f2a55e12?w=500'},
@@ -1643,6 +1643,7 @@ async function init(){
   updateCart();
   updateWishBadge();
   updateAuthUi();
+  loadMerchantProducts();
   applyAdminModeOnInit();
   document.body.addEventListener('click',()=>{document.getElementById('market-popover').classList.remove('open')});
 }
@@ -2056,6 +2057,29 @@ async function syncWishlistFromServer(){
     saveWishlist();renderProducts();
   }catch(_){}
 }
+// Load real products from merchant database and prepend them
+async function loadMerchantProducts(){
+  try{
+    const r=await fetch(API_BASE_CUST+'/api/store/products');
+    if(!r.ok)return;
+    const d=await r.json();
+    if(!d.items||!d.items.length)return;
+    const adapted=d.items.map(b=>({
+      id:b.id,cat:b.cat||'other',
+      ar:b.name,en:b.name,
+      descAr:b.desc||'',descEn:b.desc||'',
+      sar:b.price,img:b.img||'https://images.unsplash.com/photo-1586765501019-cbf6c0b6d7a4?w=500',
+      stock:b.stock,sku:b.sku,_fromApi:true
+    }));
+    // Prepend merchant products and de-dupe by id
+    const existingIds=new Set(PRODUCTS.map(p=>p.id));
+    const newOnes=adapted.filter(p=>!existingIds.has(p.id));
+    PRODUCTS=[...newOnes,...PRODUCTS];
+    renderProducts();
+    renderCategories();
+    console.log(`[storefront] loaded ${newOnes.length} merchant products from DB`);
+  }catch(e){console.warn('loadMerchantProducts failed',e);}
+}
 
 // ═══════════════════════ WISHLIST ═══════════════════════
 let WISHLIST=JSON.parse(localStorage.getItem('zx_wishlist')||'[]');
@@ -2126,6 +2150,24 @@ function saveReviewsFor(pid,arr){localStorage.setItem('zx_reviews_'+pid,JSON.str
 let _pdReviewStars=5;
 function pickReviewStars(n){_pdReviewStars=n;document.querySelectorAll('.pd-rev-star').forEach((el,i)=>{el.textContent=i<n?'★':'☆';el.style.color=i<n?'#f59e0b':'#d1d5db';});}
 function renderProductReviews(pid){
+  // Fetch from server in background and merge with local cache
+  (async()=>{
+    try{
+      const r=await fetch(API_BASE_CUST+'/api/store/reviews/'+encodeURIComponent(pid));
+      if(!r.ok)return;
+      const d=await r.json();
+      if(d.items&&d.items.length){
+        const local=getReviews(pid);
+        const localIds=new Set(local.map(x=>x.id));
+        const merged=[...local,...d.items.filter(x=>!localIds.has(x.id)).map(x=>({id:x.id,name:x.name,stars:x.stars,text:x.text,date:Date.parse(x.created_at)||Date.now()}))];
+        saveReviewsFor(pid,merged);
+        _renderReviewsHTML(pid);
+      }
+    }catch(_){}
+  })();
+  _renderReviewsHTML(pid);
+}
+function _renderReviewsHTML(pid){
   const list=getReviews(pid);
   const avg=list.length?(list.reduce((s,r)=>s+r.stars,0)/list.length).toFixed(1):'—';
   const u=getUser();
