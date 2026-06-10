@@ -1513,7 +1513,21 @@ select.ps-input option{background:#13131f;color:#fff}
 
       <!-- ─── SETTINGS ─── -->
       <div class="page" data-page="settings">
-        <div class="panel">
+        <!-- AI Customer Assistant — merchant toggle -->
+        <div class="panel" style="border:2px solid #7c3aed">
+          <div class="panel-head"><h3>✨ مساعد AI للعملاء (في متجرك)</h3>
+            <label class="switch-label" style="margin:0;cursor:pointer"><input type="checkbox" id="enable-ai-assistant" data-testid="enable-ai-assistant" checked onchange="toggleAiAssistant(this.checked)"><span class="switch-track"></span><b style="font-size:11px;color:#7c3aed">مفعّل</b></label>
+          </div>
+          <p style="font-size:12px;color:var(--mute);line-height:1.9;margin-bottom:12px">عند التفعيل، يظهر زر مساعد ذكي في متجرك للعملاء — يجاوبهم على أسئلة المنتجات، يقارن، يقترح، ويعرض تجارب الناس. <b>أنت تدفع عن العميل</b> 0.10 ر.س لكل سؤال (يخصم من نقاطك).</p>
+          <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:8px">
+            <div class="kpi" style="padding:12px"><div class="lbl">أسئلة هذا الشهر</div><div class="val" style="color:#7c3aed;font-size:18px">47</div></div>
+            <div class="kpi" style="padding:12px"><div class="lbl">المبلغ المخصوم</div><div class="val" style="color:#dc2626;font-size:18px">4.70 ر.س</div></div>
+            <div class="kpi" style="padding:12px"><div class="lbl">معدّل التحويل للشراء</div><div class="val" style="color:#10b981;font-size:18px">+23%</div></div>
+            <div class="kpi" style="padding:12px"><div class="lbl">رضا العملاء</div><div class="val" style="color:#fbbf24;font-size:18px">4.8 ⭐</div></div>
+          </div>
+          <div style="background:#dcfce7;border:1px solid #86efac;border-radius:10px;padding:10px;margin-top:12px;font-size:11px;color:#166534;line-height:1.7">✓ <b>فوائدك:</b> العميل يحصل على إجابات فورية → يطمئن للمنتج → معدل التحويل يرتفع. أنت تدفع مبلغ بسيط جداً، والعميل ما يدفع شي = ولاء + ثقة + مبيعات.</div>
+        </div>
+        <div class="panel" style="margin-top:14px">
           <div class="panel-head"><h3>⚙️ إعدادات المتجر</h3></div>
           <div class="field"><label>اسم المتجر</label><input value="متجر زيراكس"></div>
           <div class="row"><div class="field"><label>الدولة</label><select><option>🇸🇦 السعودية</option><option>🇦🇪 الإمارات</option></select></div><div class="field"><label>العملة</label><select><option>ر.س</option><option>د.إ</option></select></div></div>
@@ -3299,6 +3313,18 @@ function upgradePlan(tier,price){
 }
 function changePaymentMethod(){
   alert('سيتم توجيهك لإضافة طريقة دفع جديدة.\n\n(مثال: Stripe Element لإدخال بيانات البطاقة بشكل آمن)');
+}
+function toggleAiAssistant(enabled){
+  try{
+    const u=JSON.parse(localStorage.getItem('zx_admin_user')||'{}');
+    if(u.id){
+      const key='zx_merchant_'+u.id+'_settings';
+      const s=JSON.parse(localStorage.getItem(key)||'{}');
+      s.ai_assistant=enabled;
+      localStorage.setItem(key,JSON.stringify(s));
+    }
+    toast(enabled?'✓ مساعد AI مفعّل في متجرك':'⏸ تم إيقاف مساعد AI');
+  }catch(_){}
 }
 function buyCredits(points,sar){
   if(!confirm(`شراء ${points.toLocaleString()} نقطة بمبلغ ${sar} ر.س؟\n\nسيتم توجيهك لبوابة الدفع لإتمام العملية.`))return;

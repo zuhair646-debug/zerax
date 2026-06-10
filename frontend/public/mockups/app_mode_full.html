@@ -190,7 +190,7 @@ body{font-family:var(--font,'Tajawal'),sans-serif;background:#f3f4f6;color:#0a0a
 .upload-zone img{max-width:80px;max-height:80px;border-radius:50%;object-fit:cover;margin:0 auto;display:block}
 /* IMAGE STUDIO + ADMIN MODE + LIGHTBOX */
 .admin-toggle{background:linear-gradient(135deg,#fbbf24,#a52a2a);color:#fff !important}
-body.admin-mode .img-edit-btn{display:flex !important}
+body.admin-mode .img-edit-btn{display:none !important}
 .img-edit-btn{display:none;position:absolute;top:6px;right:6px;width:30px;height:30px;border-radius:50%;background:linear-gradient(135deg,#fbbf24,#a52a2a);color:#fff;border:none;font-size:14px;cursor:pointer;z-index:20;box-shadow:0 4px 12px rgba(0,0,0,.35);align-items:center;justify-content:center}
 .img-edit-btn:hover{transform:scale(1.1)}
 [dir="rtl"] .img-edit-btn{right:auto;left:6px}
@@ -348,8 +348,9 @@ body.admin-mode .add-product-card{display:flex}
 .wish-heart{position:absolute;top:8px;left:8px;width:34px;height:34px;border-radius:50%;background:rgba(255,255,255,.92);border:none;font-size:16px;display:flex;align-items:center;justify-content:center;cursor:pointer;backdrop-filter:blur(6px);box-shadow:0 2px 8px rgba(0,0,0,.15);z-index:6;transition:transform .15s ease,background .2s ease;color:#ec4899}
 .wish-heart:hover{transform:scale(1.12)}
 .wish-heart.active{background:#ec4899;color:#fff;box-shadow:0 4px 14px rgba(236,72,153,.45)}
-/* Customer-side: hide merchant-only AI edit/studio buttons */
-.img-edit-btn,.cat-edit-btn,.banner-edit-btn,.studio-btn,[data-merchant-only]{display:none !important}
+/* Customer-side: hide merchant-only AI edit/studio buttons EVERYWHERE */
+.img-edit-btn,.cat-edit-btn,.banner-edit-btn,.studio-btn,[data-merchant-only],.admin-toggle{display:none !important}
+body.admin-mode .img-edit-btn,body.admin-mode .studio-btn{display:none !important}
 .p-card-stack{position:absolute;inset:0}
 .p-card-stack img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;opacity:0;transition:opacity .5s;cursor:zoom-in}
 .p-card-stack img.active{opacity:1}
@@ -783,24 +784,34 @@ body.admin-mode .add-product-card{display:flex}
 
 <!-- AI ASSISTANT MODAL -->
 <div class="modal-bg" id="ai-modal" onclick="if(event.target===this)closeAiAssistant()">
-  <div class="modal" style="max-width:420px;padding:0;overflow:hidden">
-    <div style="background:linear-gradient(135deg,#7c3aed,#0a0a0a);color:#fff;padding:18px 20px;display:flex;align-items:center;justify-content:space-between">
-      <div style="display:flex;align-items:center;gap:10px"><div style="width:36px;height:36px;border-radius:50%;background:rgba(255,255,255,.15);display:flex;align-items:center;justify-content:center">✨</div><div><b style="font-size:14px">مساعدك الذكي</b><div style="font-size:10px;opacity:.85">يجاوب عن المنتج · تجارب الناس · مقارنات</div></div></div>
+  <div class="modal" style="max-width:440px;padding:0;overflow:hidden;display:flex;flex-direction:column;height:80vh;max-height:640px">
+    <div style="background:linear-gradient(135deg,#7c3aed,#0a0a0a);color:#fff;padding:14px 18px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0">
+      <div style="display:flex;align-items:center;gap:10px"><div style="width:36px;height:36px;border-radius:50%;background:rgba(255,255,255,.15);display:flex;align-items:center;justify-content:center;font-size:18px">✨</div><div><b style="font-size:14px">مساعدك الذكي</b><div style="font-size:10px;opacity:.85" id="ai-status">جاهز للأسئلة</div></div></div>
       <button onclick="closeAiAssistant()" style="background:transparent;color:#fff;border:none;font-size:18px;cursor:pointer">✕</button>
     </div>
-    <div style="padding:16px 20px;max-height:60vh;overflow-y:auto">
-      <div style="font-size:11px;color:#7c3aed;font-weight:900;margin-bottom:10px">💡 جرّب تسأل:</div>
-      <div style="display:flex;flex-direction:column;gap:8px;margin-bottom:14px">
-        <button onclick="aiAskCustomer('وش تجارب الناس مع هذا المنتج؟')" data-testid="ai-q-1" style="background:#faf5ff;border:1px solid #ddd6fe;border-radius:10px;padding:10px 12px;text-align:right;font-family:inherit;font-size:12px;cursor:pointer;color:#5b21b6">💬 وش تجارب الناس مع هذا المنتج؟</button>
-        <button onclick="aiAskCustomer('قارن لي هذا المنتج مع منتج مشابه')" data-testid="ai-q-2" style="background:#fdf2f8;border:1px solid #fbcfe8;border-radius:10px;padding:10px 12px;text-align:right;font-family:inherit;font-size:12px;cursor:pointer;color:#9d174d">⚖️ قارن لي مع منتج مشابه</button>
-        <button onclick="aiAskCustomer('اقترح لي منتجات تكمل اختياري')" data-testid="ai-q-3" style="background:#f0fdf4;border:1px solid #86efac;border-radius:10px;padding:10px 12px;text-align:right;font-family:inherit;font-size:12px;cursor:pointer;color:#166534">🎁 اقترح منتجات تكمل اختياري</button>
-        <button onclick="aiAskCustomer('وش أفضل خيار لي بحسب احتياجي؟')" data-testid="ai-q-4" style="background:#fffbeb;border:1px solid #fde68a;border-radius:10px;padding:10px 12px;text-align:right;font-family:inherit;font-size:12px;cursor:pointer;color:#92400e">🎯 وش أفضل خيار لي؟</button>
+    <!-- Suggested prompts -->
+    <div id="ai-suggested" style="padding:12px 16px;border-bottom:1px solid #e5e7eb;background:#fafafa">
+      <div style="font-size:10px;color:#7c3aed;font-weight:900;margin-bottom:6px">💡 اقتراحات سريعة</div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap">
+        <button onclick="aiAskCustomer('وش تجارب الناس مع هذا المنتج؟')" data-testid="ai-q-1" style="background:#faf5ff;border:1px solid #ddd6fe;border-radius:99px;padding:6px 10px;font-family:inherit;font-size:11px;cursor:pointer;color:#5b21b6">💬 تجارب الناس</button>
+        <button onclick="aiAskCustomer('قارن مع منتج مشابه')" data-testid="ai-q-2" style="background:#fdf2f8;border:1px solid #fbcfe8;border-radius:99px;padding:6px 10px;font-family:inherit;font-size:11px;cursor:pointer;color:#9d174d">⚖️ مقارنة</button>
+        <button onclick="aiAskCustomer('اقترح منتجات تكمل اختياري')" data-testid="ai-q-3" style="background:#f0fdf4;border:1px solid #86efac;border-radius:99px;padding:6px 10px;font-family:inherit;font-size:11px;cursor:pointer;color:#166534">🎁 اقتراحات</button>
+        <button onclick="aiAskCustomer('وش أفضل خيار لي؟')" data-testid="ai-q-4" style="background:#fffbeb;border:1px solid #fde68a;border-radius:99px;padding:6px 10px;font-family:inherit;font-size:11px;cursor:pointer;color:#92400e">🎯 الأفضل لي</button>
       </div>
-      <div id="ai-chat-log" style="margin-bottom:10px"></div>
-      <div style="display:flex;gap:6px;padding-top:10px;border-top:1px solid #e5e7eb">
-        <input id="ai-input" data-testid="ai-input" placeholder="اكتب سؤالك..." style="flex:1;padding:10px;border:1px solid #e5e7eb;border-radius:10px;font-family:inherit;font-size:12px;outline:none">
-        <button onclick="aiAskCustomer(document.getElementById('ai-input').value)" data-testid="ai-send" style="padding:10px 14px;background:linear-gradient(135deg,#7c3aed,#ec4899);color:#fff;border:none;border-radius:10px;font-family:inherit;font-weight:900;cursor:pointer">إرسال</button>
+    </div>
+    <!-- Chat log -->
+    <div id="ai-chat-log" style="flex:1;overflow-y:auto;padding:14px 16px;background:#fff">
+      <div style="background:#faf5ff;border:1px solid #ddd6fe;border-radius:12px;padding:12px;font-size:12px;color:#5b21b6;line-height:1.7;text-align:center">
+        👋 أهلاً! أنا مساعدك الذكي · أسألني أي شي عن المنتجات وتجارب العملاء · <b>أول سؤال مجاناً</b> 🎁
       </div>
+    </div>
+    <!-- Input -->
+    <div style="padding:12px 16px;border-top:1px solid #e5e7eb;background:#fff;flex-shrink:0">
+      <div style="display:flex;gap:6px">
+        <input id="ai-input" data-testid="ai-input" placeholder="اكتب سؤالك..." style="flex:1;padding:10px 12px;border:1px solid #e5e7eb;border-radius:99px;font-family:inherit;font-size:12px;outline:none" onkeydown="if(event.key==='Enter')aiAskCustomer(this.value)">
+        <button onclick="aiAskCustomer(document.getElementById('ai-input').value)" data-testid="ai-send" style="padding:10px 16px;background:linear-gradient(135deg,#7c3aed,#ec4899);color:#fff;border:none;border-radius:99px;font-family:inherit;font-weight:900;cursor:pointer">إرسال</button>
+      </div>
+      <div style="text-align:center;margin-top:6px;font-size:9px;color:#9ca3af">يدعمه ⚡ Zerax AI · <span id="ai-questions-count">0</span> سؤال هذه الجلسة</div>
     </div>
   </div>
 </div>
@@ -2132,26 +2143,69 @@ async function loadMerchantProducts(){
   }catch(e){console.warn('loadMerchantProducts failed',e);}
 }
 // ───── AI CUSTOMER ASSISTANT ─────
+let _aiQuestionsCount=0;
+let _aiBusy=false;
 function openAiAssistant(){document.getElementById('ai-modal').classList.add('open');setTimeout(()=>document.getElementById('ai-input').focus(),100);}
 function closeAiAssistant(){document.getElementById('ai-modal').classList.remove('open');}
-function aiAskCustomer(q){
-  if(!q||!q.trim())return;
+async function aiAskCustomer(q){
+  if(!q||!q.trim()||_aiBusy)return;
+  _aiBusy=true;
   const log=document.getElementById('ai-chat-log');
-  const userMsg=`<div style="background:#7c3aed;color:#fff;padding:10px 12px;border-radius:14px 14px 4px 14px;margin:6px 0 6px auto;max-width:80%;font-size:12px;text-align:right">${q}</div>`;
-  // Simulated AI response (uses Zerax AI on backend — costs merchant points)
+  // First question free, then merchant points (1 point per question)
+  const isFree=_aiQuestionsCount===0;
+  _aiQuestionsCount++;
+  document.getElementById('ai-questions-count').textContent=_aiQuestionsCount;
+  // Render user message
+  const userMsg=document.createElement('div');
+  userMsg.style.cssText='background:#7c3aed;color:#fff;padding:10px 12px;border-radius:14px 14px 4px 14px;margin:6px 0 6px auto;max-width:80%;font-size:12px;line-height:1.6;width:fit-content;float:right;clear:both';
+  userMsg.textContent=q;
+  log.appendChild(userMsg);
+  // Render "typing" indicator
+  const typing=document.createElement('div');
+  typing.style.cssText='background:#f3f4f6;color:#6b7280;padding:10px 14px;border-radius:14px 14px 14px 4px;margin:6px auto 6px 0;max-width:80%;font-size:12px;width:fit-content;float:left;clear:both';
+  typing.innerHTML='<b style="color:#7c3aed">✨ Zerax AI</b> · يكتب...';
+  log.appendChild(typing);
+  log.scrollTop=log.scrollHeight;
+  document.getElementById('ai-input').value='';
+  // Simulate AI thinking (~1s)
+  await new Promise(r=>setTimeout(r,900));
+  // Generate response based on keywords
   const responses={
-    'تجارب':'بناءً على ١٢ تقييم لهذا المنتج: متوسط ٤.٧⭐. أبرز الإيجابيات: جودة عالية، شحن سريع، تغليف ممتاز. أبرز السلبيات: السعر مرتفع نسبياً.',
-    'قارن':'هذا المنتج مقارنة بمنتجات مشابهة في المتجر:\n• الجودة: ممتازة (الأعلى في فئته)\n• السعر: متوسط\n• المخزون: متوفر',
-    'اقترح':'بناءً على اختيارك، أقترح: \n• كفر حماية مناسب\n• شاحن لاسلكي\n• سماعات تكمل الإكسسوارات',
-    'افضل':'بناءً على ما عرضته من اهتمامات، أنصحك بهذا المنتج — يجمع بين الجودة والسعر المناسب وله تقييمات ممتازة.',
-    'default':'سؤال ممتاز! بناءً على بيانات المتجر، أنصحك بمراجعة قسم "آراء العملاء" تحت كل منتج، أو تواصل مع التاجر مباشرة عبر زر واتساب. لو تبي مقارنة محددة، أعطني اسم المنتج.'
+    'تجربة':'⭐ بناءً على ١٢ تقييم: متوسط ٤.٧/٥<br>✅ <b>الإيجابيات:</b> جودة عالية · تغليف ممتاز · شحن سريع<br>⚠️ <b>الملاحظات:</b> السعر مرتفع نسبياً مقارنة بالمنافسين',
+    'قارن':'📊 <b>مقارنة سريعة:</b><br>• <b>هذا المنتج:</b> 5,499 ر.س · شاشة 6.9″ · بطارية 24 ساعة<br>• <b>المنتج البديل:</b> 4,899 ر.س · شاشة 6.7″ · بطارية 22 ساعة<br>💡 <b>توصيتي:</b> لو الشاشة الأكبر مهمة، الأول أفضل',
+    'اقترح':'🎁 منتجات تكمل اختيارك:<br>1. كفر حماية بريميوم — 199 ر.س<br>2. شاحن لاسلكي 30W — 349 ر.س<br>3. واقي شاشة زجاجي — 89 ر.س<br><br>💰 العرض: خصم ١٥٪ لو اشتريت ٣ معاً',
+    'أفضل':'🎯 بحسب اهتمامك بالجوالات الذكية، أنصحك بـ <b>iPhone 17 Pro Max</b> — يجمع بين الجودة الممتازة والميزات الكاملة. تقييمه ٤.٨/٥ وفي مخزون ٢٤ قطعة.',
+    'سعر':'💰 السعر الحالي ٥,٤٩٩ ر.س. لو تحب نخصصلك خصم على كميات، تواصل مع التاجر مباشرة عبر زر واتساب في صفحة المنتج.',
+    'شحن':'🚚 الشحن متاح لكل أنحاء السعودية:<br>• الرياض/جدة: ١-٢ يوم<br>• باقي المدن: ٢-٥ أيام<br>• الشحن مجاني فوق ٢٠٠ ر.س',
+    'دفع':'💳 طرق الدفع المتاحة:<br>• مدى · Visa/Mastercard<br>• STC Pay · Apple Pay<br>• Tabby (قسّط على ٤ دفعات)<br>• Tamara (ادفع بعد ٣٠ يوم)<br>• الدفع عند الاستلام',
+    'default':'سؤال ممتاز! ✨ بناءً على بيانات المتجر، أنصحك:<br>1. راجع قسم "آراء العملاء" تحت كل منتج<br>2. تواصل مع التاجر عبر زر الواتساب لاستفسار محدد<br>3. اسألني بشكل أوضح ⬇️ مثل: "وش الفرق بين المنتجين؟"'
   };
   let resp=responses.default;
   for(const k in responses){if(q.includes(k)){resp=responses[k];break;}}
-  const botMsg=`<div style="background:#f3f4f6;color:#1f2937;padding:10px 12px;border-radius:14px 14px 14px 4px;margin:6px auto 6px 0;max-width:80%;font-size:12px;line-height:1.7"><b style="color:#7c3aed">✨ Zerax AI:</b><br>${resp.replace(/\n/g,'<br>')}</div>`;
-  log.innerHTML+=userMsg+botMsg;
+  // Replace typing with actual response
+  typing.innerHTML=`<b style="color:#7c3aed">✨ Zerax AI:</b><br>${resp}`;
+  typing.style.color='#1f2937';
+  // Append cost indicator
+  if(!isFree){
+    const costNote=document.createElement('div');
+    costNote.style.cssText='font-size:9px;color:#9ca3af;text-align:center;margin:2px 0 6px;clear:both';
+    costNote.innerHTML='💎 تكلفة هذا السؤال: <b>0.10 ر.س</b> · يخصم من رصيد التاجر';
+    log.appendChild(costNote);
+  } else {
+    const freeNote=document.createElement('div');
+    freeNote.style.cssText='font-size:9px;color:#10b981;text-align:center;margin:2px 0 6px;font-weight:900;clear:both';
+    freeNote.textContent='🎁 سؤالك الأول مجاناً';
+    log.appendChild(freeNote);
+  }
   log.scrollTop=log.scrollHeight;
-  document.getElementById('ai-input').value='';
+  // After 3rd question, show paywall hint
+  if(_aiQuestionsCount===3){
+    const hint=document.createElement('div');
+    hint.style.cssText='background:linear-gradient(135deg,#fffbeb,#fef3c7);border:1px dashed #f59e0b;border-radius:10px;padding:10px;font-size:11px;color:#92400e;text-align:center;margin:8px 0;clear:both;line-height:1.7';
+    hint.innerHTML='✨ مساعد AI رائع وتلقائي · التاجر يوفّر لك هذي الخدمة مجاناً (يدفع عنك)';
+    log.appendChild(hint);
+  }
+  _aiBusy=false;
 }
 function _showMerchantBanner(merchantId,count){
   const existing=document.getElementById('merchant-banner');if(existing)existing.remove();
