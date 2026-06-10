@@ -942,7 +942,7 @@ body.dark .acc-stat .k{color:#94a3b8}
   <div class="pd-thumbs" id="pd-thumbs"></div>
   <h1 class="pd-title" id="pd-title"></h1>
   <p style="font-size:13px;color:#6b7280;line-height:1.7" id="pd-tagline"></p>
-  <div class="pd-price-row"><div class="pd-price" id="pd-price"></div><button class="pd-cta" id="pd-add-btn"><span data-key="add_to_cart">🛒 أضف للسلة</span></button></div>
+  <div class="pd-price-row"><div class="pd-price" id="pd-price"></div><div style="display:flex;gap:6px;flex-wrap:wrap"><button class="pd-cta" id="pd-subscribe-btn" style="background:linear-gradient(135deg,#10b981,#059669)!important" title="استلام متكرر بخصم"><span>📅 اشترك (-15%)</span></button><button class="pd-cta" id="pd-add-btn"><span data-key="add_to_cart">🛒 أضف للسلة</span></button></div></div>
   <div id="pd-variants" class="pdp-variants" style="display:none"></div>
   <div id="pd-info" class="pd-info-html"></div>
   <div id="pd-reviews" style="margin-top:24px"></div>
@@ -1061,6 +1061,36 @@ body.dark .acc-stat .k{color:#94a3b8}
       <div style="font-size:10px;opacity:.75;margin-top:8px">💡 يُستخدم تلقائياً عند الدفع · مكتسب من المبالغ المستردة والمكافآت</div>
     </div>
     <div id="acc-credit-history" style="display:none;margin-top:10px;max-height:200px;overflow-y:auto"></div>
+  </div>
+
+  <!-- REFERRAL PROGRAM -->
+  <div class="acc-section">
+    <h4>🤝 ادعُ صديقاً واربح <span class="badge">جديد</span></h4>
+    <div style="background:linear-gradient(135deg,#10b981,#059669);color:#fff;border-radius:14px;padding:16px;margin-top:8px">
+      <div style="font-size:12px;font-weight:700;margin-bottom:6px">احصل على <b style="font-size:18px">50 ر.س</b> لكل صديق يطلب · صديقك يحصل على <b>25 ر.س</b> هدية</div>
+      <div style="background:rgba(255,255,255,.18);border:1.5px dashed rgba(255,255,255,.4);border-radius:10px;padding:10px;margin:10px 0;text-align:center;font-family:monospace;font-weight:900;font-size:16px;letter-spacing:2px;direction:ltr" id="ref-code">ZRX-XXXX</div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap">
+        <button onclick="copyRefCode()" data-testid="copy-ref-btn" style="flex:1;min-width:90px;padding:10px;background:#fff;color:#059669;border:none;border-radius:8px;font-family:inherit;font-weight:900;font-size:11px;cursor:pointer">📋 انسخ الكود</button>
+        <button onclick="shareRefWhatsapp()" data-testid="share-ref-wa" style="flex:1;min-width:90px;padding:10px;background:#25D366;color:#fff;border:none;border-radius:8px;font-family:inherit;font-weight:900;font-size:11px;cursor:pointer">💬 شارك واتساب</button>
+      </div>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px">
+      <div style="background:var(--zx-bg);padding:10px;border-radius:10px;text-align:center"><div style="font-size:18px;font-weight:900;color:var(--zx-accent)" id="ref-invited">0</div><div style="font-size:10px;color:#6b7280">صديق دعيته</div></div>
+      <div style="background:var(--zx-bg);padding:10px;border-radius:10px;text-align:center"><div style="font-size:18px;font-weight:900;color:#10b981" id="ref-earned">0</div><div style="font-size:10px;color:#6b7280">ر.س ربحتها</div></div>
+    </div>
+  </div>
+
+  <!-- SUBSCRIPTIONS -->
+  <div class="acc-section" id="acc-subscriptions-section" style="display:none">
+    <h4>📅 اشتراكاتي المتكررة</h4>
+    <div id="acc-subscriptions-list"></div>
+  </div>
+
+  <!-- SAVED PAYMENT METHODS -->
+  <div class="acc-section">
+    <h4 style="display:flex;justify-content:space-between;align-items:center"><span>💳 بطاقاتي المحفوظة</span><button onclick="addSavedCard()" style="font-size:10px;color:var(--zx-accent);background:none;border:1px dashed var(--zx-accent);padding:4px 10px;border-radius:99px;cursor:pointer;font-family:inherit">+ إضافة بطاقة</button></h4>
+    <div id="acc-cards-list" style="margin-top:8px"></div>
+    <div style="font-size:10px;color:#9ca3af;margin-top:8px;padding:8px;background:var(--zx-bg);border-radius:8px;line-height:1.6">🔒 البطاقات مشفّرة بـ PCI-DSS · لا نحفظ رقم CVV · يمكن الدفع بنقرة واحدة</div>
   </div>
 
   <!-- RETURNS HISTORY -->
@@ -2347,6 +2377,112 @@ function submitReturnRequest(){
   renderOrders();renderAccount();
 }
 
+// ═══════════════════════ REFERRAL PROGRAM ═══════════════════════
+function copyRefCode(){
+  const code=document.getElementById('ref-code').textContent;
+  navigator.clipboard?.writeText(code).then(()=>toast('✓ تم نسخ الكود · شاركه مع أصدقاءك')).catch(()=>{
+    const ta=document.createElement('textarea');ta.value=code;document.body.appendChild(ta);ta.select();document.execCommand('copy');ta.remove();
+    toast('✓ تم نسخ الكود');
+  });
+}
+function shareRefWhatsapp(){
+  const code=document.getElementById('ref-code').textContent;
+  const msg=`🎉 جربت متجر Zerax — تجربة رائعة! استخدم كود الإحالة ${code} عند التسجيل واحصل على 25 ر.س هدية ترحيب 🎁\n\n👇 التطبيق:\n${location.origin}/mockups/app_mode_full.html?ref=${code}`;
+  window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`,'_blank');
+}
+// On page load, check if URL has ?ref= and credit the referrer (mock)
+(function checkReferralOnLoad(){
+  try{
+    const params=new URLSearchParams(location.search);
+    const ref=params.get('ref');
+    if(ref&&!localStorage.getItem('zx_referred_by')){
+      localStorage.setItem('zx_referred_by',ref);
+      // Give new user 25 SAR welcome bonus
+      const bal=parseFloat(localStorage.getItem('zx_store_credit')||'0')+25;
+      localStorage.setItem('zx_store_credit',String(bal));
+      const h=JSON.parse(localStorage.getItem('zx_credit_history')||'[]');
+      h.unshift({date:new Date().toISOString(),amount:25,reason:`🎁 هدية ترحيب من إحالة ${ref}`,balance:bal,type:'credit'});
+      localStorage.setItem('zx_credit_history',JSON.stringify(h));
+      setTimeout(()=>alert(`🎉 مرحباً بك من ${ref}!\n\n💰 تم إضافة 25 ر.س هدية لمحفظتك.`),800);
+    }
+  }catch(_){}
+})();
+
+// ═══════════════════════ SAVED PAYMENT CARDS ═══════════════════════
+function addSavedCard(){
+  const num=prompt('رقم البطاقة (16 رقم):');if(!num||num.replace(/\D/g,'').length<13){if(num)alert('رقم البطاقة غير صحيح');return;}
+  const exp=prompt('تاريخ الانتهاء (MM/YY):');if(!exp||!/^\d{1,2}\/\d{2}$/.test(exp.trim())){if(exp)alert('تنسيق التاريخ خاطئ');return;}
+  const name=prompt('اسم صاحب البطاقة:')||'العميل';
+  const cleanNum=num.replace(/\D/g,'');
+  const first=cleanNum.charAt(0);
+  const brand=first==='4'?'visa':first==='5'?'mastercard':first==='3'?'amex':'mada';
+  const cards=JSON.parse(localStorage.getItem('zx_saved_cards')||'[]');
+  if(!cards.length)cards.push({last4:cleanNum.slice(-4),exp:exp.trim(),brand,name,default:true});
+  else cards.push({last4:cleanNum.slice(-4),exp:exp.trim(),brand,name,default:false});
+  localStorage.setItem('zx_saved_cards',JSON.stringify(cards));
+  renderAccount();
+  toast('✓ تم حفظ البطاقة بأمان');
+}
+function removeSavedCard(i){
+  if(!confirm('حذف البطاقة؟'))return;
+  const cards=JSON.parse(localStorage.getItem('zx_saved_cards')||'[]');
+  cards.splice(i,1);
+  if(cards.length&&!cards.some(c=>c.default))cards[0].default=true;
+  localStorage.setItem('zx_saved_cards',JSON.stringify(cards));
+  renderAccount();
+}
+
+// ═══════════════════════ SUBSCRIPTIONS (طلب متكرر) ═══════════════════════
+function subscribeToProduct(productId){
+  if(!getUser()){requireLogin('يلزم تسجيل الدخول للاشتراك المتكرر');return;}
+  const p=PRODUCTS.find(x=>x.id===productId);if(!p)return;
+  const opts=['weekly','biweekly','monthly','quarterly'];
+  const labels={weekly:'كل أسبوع (-5%)',biweekly:'كل أسبوعين (-10%)',monthly:'كل شهر (-15% الأفضل)',quarterly:'كل 3 أشهر (-8%)'};
+  // Build a quick choice prompt
+  const choice=prompt(`⏰ كم مرة تريد استلام "${p.ar}"؟\n\n1- أسبوعياً (خصم 5%)\n2- كل أسبوعين (خصم 10%)\n3- شهرياً (خصم 15% — الأكثر شيوعاً)\n4- كل 3 أشهر (خصم 8%)\n\nاكتب الرقم:`);
+  if(!choice||!['1','2','3','4'].includes(choice.trim()))return;
+  const freq=opts[parseInt(choice)-1];
+  const days={weekly:7,biweekly:14,monthly:30,quarterly:90}[freq];
+  const sub={
+    id:'SUB-'+Date.now().toString(36).toUpperCase(),
+    productId,
+    frequency:freq,
+    nextDelivery:new Date(Date.now()+days*86400000).toISOString(),
+    paused:false,
+    createdAt:new Date().toISOString()
+  };
+  const arr=JSON.parse(localStorage.getItem('zx_subscriptions')||'[]');
+  arr.push(sub);
+  localStorage.setItem('zx_subscriptions',JSON.stringify(arr));
+  toast(`✓ تم تفعيل الاشتراك · ${labels[freq]}`);
+  setTimeout(()=>{showView('account');renderAccount();document.getElementById('acc-subscriptions-section')?.scrollIntoView({block:'center'});},800);
+}
+function pauseSubscription(i){
+  const arr=JSON.parse(localStorage.getItem('zx_subscriptions')||'[]');
+  if(!arr[i])return;
+  arr[i].paused=!arr[i].paused;
+  localStorage.setItem('zx_subscriptions',JSON.stringify(arr));
+  renderAccount();
+  toast(arr[i].paused?'⏸ تم إيقاف الاشتراك مؤقتاً':'▶️ تم استئناف الاشتراك');
+}
+function skipNextDelivery(i){
+  const arr=JSON.parse(localStorage.getItem('zx_subscriptions')||'[]');
+  if(!arr[i])return;
+  const days={weekly:7,biweekly:14,monthly:30,quarterly:90}[arr[i].frequency]||30;
+  arr[i].nextDelivery=new Date(new Date(arr[i].nextDelivery).getTime()+days*86400000).toISOString();
+  localStorage.setItem('zx_subscriptions',JSON.stringify(arr));
+  renderAccount();
+  toast('⏭️ تم تخطي التوصيلة القادمة');
+}
+function cancelSubscription(i){
+  if(!confirm('هل تريد إلغاء هذا الاشتراك نهائياً؟'))return;
+  const arr=JSON.parse(localStorage.getItem('zx_subscriptions')||'[]');
+  arr.splice(i,1);
+  localStorage.setItem('zx_subscriptions',JSON.stringify(arr));
+  renderAccount();
+  toast('✓ تم إلغاء الاشتراك');
+}
+
 // ═══════════════════════ ACCOUNT ═══════════════════════
 function getAccount(){return JSON.parse(localStorage.getItem('zx_account')||'{}');}
 function renderAccount(){
@@ -2417,6 +2553,46 @@ function renderAccount(){
       return `<div style="background:var(--zx-bg);border-radius:10px;padding:10px;margin-bottom:6px"><div style="display:flex;justify-content:space-between;align-items:center"><b style="font-size:11px;color:var(--zx-accent)">#${r.id}</b><span style="background:${stCol}20;color:${stCol};padding:2px 8px;border-radius:99px;font-size:10px;font-weight:900">${r.status}</span></div><div style="font-size:10px;color:#6b7280;margin-top:4px">طلب #${r.orderId} · ${r.reason}</div></div>`;
     }).join('');}
     else{retSection.style.display='none';}
+  }
+  // Referral code
+  let refCode=localStorage.getItem('zx_ref_code');
+  if(!refCode){refCode='ZRX-'+Math.random().toString(36).slice(2,7).toUpperCase();localStorage.setItem('zx_ref_code',refCode);}
+  const refCodeEl=document.getElementById('ref-code');if(refCodeEl)refCodeEl.textContent=refCode;
+  const refStats=JSON.parse(localStorage.getItem('zx_ref_stats')||'{"invited":0,"earned":0}');
+  const refI=document.getElementById('ref-invited');if(refI)refI.textContent=refStats.invited;
+  const refE=document.getElementById('ref-earned');if(refE)refE.textContent=refStats.earned;
+  // Saved cards
+  const cards=JSON.parse(localStorage.getItem('zx_saved_cards')||'[]');
+  const cardsList=document.getElementById('acc-cards-list');
+  if(cardsList){
+    cardsList.innerHTML=cards.length?cards.map((c,i)=>{
+      const brandIco={visa:'💳',mastercard:'💳',mada:'🇸🇦',amex:'💎'}[c.brand]||'💳';
+      const brandCol={visa:'#1a1f71',mastercard:'#eb001b',mada:'#84BD00',amex:'#016fd0'}[c.brand]||'#7c3aed';
+      return `<div style="background:linear-gradient(135deg,${brandCol},${brandCol}dd);color:#fff;border-radius:12px;padding:14px;margin-bottom:8px;position:relative">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px"><span style="font-size:20px">${brandIco}</span>${c.default?'<span style="background:rgba(255,255,255,.25);font-size:9px;padding:3px 8px;border-radius:99px;font-weight:900">افتراضية</span>':''}</div>
+        <div style="font-family:monospace;font-size:15px;letter-spacing:3px;direction:ltr">•••• •••• •••• ${c.last4}</div>
+        <div style="display:flex;justify-content:space-between;align-items:end;margin-top:10px"><div><div style="font-size:9px;opacity:.7">صاحب البطاقة</div><b style="font-size:11px">${c.name||'العميل'}</b></div><div style="text-align:left"><div style="font-size:9px;opacity:.7">انتهاء</div><b style="font-size:11px">${c.exp}</b></div><button onclick="removeSavedCard(${i})" style="background:rgba(0,0,0,.25);color:#fff;border:none;width:24px;height:24px;border-radius:50%;cursor:pointer;font-size:11px">🗑️</button></div>
+      </div>`;
+    }).join(''):'<div style="text-align:center;color:#9ca3af;padding:14px;font-size:12px">لا توجد بطاقات محفوظة</div>';
+  }
+  // Subscriptions
+  const subs=JSON.parse(localStorage.getItem('zx_subscriptions')||'[]');
+  const subSec=document.getElementById('acc-subscriptions-section');
+  const subList=document.getElementById('acc-subscriptions-list');
+  if(subSec&&subList){
+    if(subs.length){
+      subSec.style.display='block';
+      subList.innerHTML=subs.map((s,i)=>{
+        const p=PRODUCTS.find(x=>x.id===s.productId);
+        const name=p?(CURRENT_LANG==='ar'?p.ar:p.en):'منتج محذوف';
+        const nextDate=new Date(s.nextDelivery).toLocaleDateString('ar-SA');
+        const freqMap={weekly:'أسبوعياً',biweekly:'كل أسبوعين',monthly:'شهرياً',quarterly:'كل 3 أشهر'};
+        return `<div style="background:linear-gradient(135deg,#faf5ff,#fdf2f8);border:1.5px solid #e9d5ff;border-radius:12px;padding:12px;margin-bottom:8px">
+          <div style="display:flex;align-items:center;gap:10px"><img src="${p?.img||''}" style="width:48px;height:48px;border-radius:8px;object-fit:cover"><div style="flex:1;min-width:0"><b style="font-size:12px;color:var(--zx-text)">${name}</b><div style="font-size:10px;color:#6b7280;margin-top:2px">⏰ ${freqMap[s.frequency]||s.frequency} · 📅 التالي: <b>${nextDate}</b></div></div><b style="color:var(--zx-accent);font-size:13px">${curSym()} ${formatPrice(p?.sar||0)}</b></div>
+          <div style="display:flex;gap:6px;margin-top:10px"><button onclick="pauseSubscription(${i})" style="flex:1;padding:7px;background:var(--zx-card,#fff);border:1px solid #e5e7eb;border-radius:7px;font-family:inherit;font-size:10px;cursor:pointer;font-weight:700">${s.paused?'▶️ استئناف':'⏸️ إيقاف مؤقت'}</button><button onclick="skipNextDelivery(${i})" style="flex:1;padding:7px;background:var(--zx-card,#fff);border:1px solid #e5e7eb;border-radius:7px;font-family:inherit;font-size:10px;cursor:pointer;font-weight:700">⏭️ تخطي مرة</button><button onclick="cancelSubscription(${i})" style="flex:1;padding:7px;background:#fef2f2;color:#dc2626;border:1px solid #fecaca;border-radius:7px;font-family:inherit;font-size:10px;cursor:pointer;font-weight:700">❌ إلغاء</button></div>
+        </div>`;
+      }).join('');
+    } else {subSec.style.display='none';}
   }
   // Market name
   const mn=document.getElementById('acc-market-name');
@@ -3801,6 +3977,12 @@ function showProductDetail(pid){
   document.getElementById('pd-tagline').textContent=desc;
   document.getElementById('pd-price').textContent=curSym()+' '+formatPrice(p.sar);
   document.getElementById('pd-add-btn').onclick=()=>{addToCart(pid);toast(CURRENT_LANG==='ar'?'✓ تمت الإضافة للسلة':'✓ Added');};
+  const subBtn=document.getElementById('pd-subscribe-btn');
+  if(subBtn){
+    // Only show subscribe for non-AI physical products
+    if(p.isAI||p.cat==='ai_services'){subBtn.style.display='none';}
+    else{subBtn.style.display='';subBtn.onclick=()=>{subscribeToProduct(pid);};}
+  }
   document.getElementById('pd-edit-btn').onclick=(e)=>{e.stopPropagation();openStudio('product:'+pid);};
   const info=PRODUCT_INFO[pid];
   // Use rich builder if any of the new deep fields exist; fallback to legacy html
