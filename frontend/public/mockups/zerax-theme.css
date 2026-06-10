@@ -1,0 +1,197 @@
+/* ═══════════════════════════════════════════════════════════════════════════
+   ZERAX UNIFIED DARK THEME · v1.0
+   ───────────────────────────────────────────────────────────────────────────
+   Single source of truth for the platform's luxurious dark aesthetic.
+   Used by: admin.html · app_mode_full.html · driver_app.html
+   
+   All colors driven by CSS variables so the Theme Customizer can override
+   them at runtime per-merchant.  
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+:root {
+  /* ───── CORE PALETTE ───── */
+  --zx-bg:            #0a0a14;        /* deep navy-black · main background */
+  --zx-bg-2:          #0f0f1c;        /* slightly lifted background */
+  --zx-surface:       #14142b;        /* card / panel surface */
+  --zx-surface-2:     #1a1a2e;        /* elevated surface */
+  --zx-surface-3:     #1f1f3a;        /* highest elevation */
+  --zx-border:        #2d2d4a;        /* subtle dividers */
+  --zx-border-soft:   #1f1f3a;        /* whisper-soft border */
+
+  /* ───── BRAND ACCENTS ───── */
+  --zx-accent:        #7c3aed;        /* Zerax violet · primary */
+  --zx-accent-2:      #a855f7;        /* lighter violet */
+  --zx-accent-soft:   #7c3aed20;      /* tint for backgrounds */
+  --zx-amber:         #fbbf24;        /* gold · secondary */
+  --zx-amber-2:       #f59e0b;        /* darker gold */
+  --zx-success:       #10b981;        /* emerald */
+  --zx-warning:       #f59e0b;        /* amber warning */
+  --zx-danger:        #ef4444;        /* red */
+  --zx-info:          #3b82f6;        /* blue */
+
+  /* ───── TEXT ───── */
+  --zx-text:          #f1f5f9;        /* primary text */
+  --zx-text-soft:     #cbd5e1;        /* secondary text */
+  --zx-text-mute:     #94a3b8;        /* muted */
+  --zx-text-dim:      #64748b;        /* very dim */
+
+  /* ───── GRADIENTS ───── */
+  --zx-grad-primary:  linear-gradient(135deg, #7c3aed 0%, #a855f7 100%);
+  --zx-grad-gold:     linear-gradient(135deg, #fbbf24 0%, #f59e0b 100%);
+  --zx-grad-success:  linear-gradient(135deg, #10b981 0%, #059669 100%);
+  --zx-grad-hero:     linear-gradient(135deg, #0a0a14 0%, #1a1a2e 50%, #2d1b69 100%);
+
+  /* ───── SHADOWS ───── */
+  --zx-shadow-sm:     0 2px 8px rgba(0,0,0,.4);
+  --zx-shadow:        0 8px 24px rgba(0,0,0,.4), 0 2px 6px rgba(124,58,237,.1);
+  --zx-shadow-lg:     0 20px 50px rgba(0,0,0,.5), 0 10px 20px rgba(124,58,237,.15);
+  --zx-glow-primary:  0 0 40px rgba(124,58,237,.25);
+  --zx-glow-amber:    0 0 30px rgba(251,191,36,.25);
+
+  /* ───── TYPOGRAPHY ───── */
+  --zx-font:          'Tajawal', 'Cairo', 'Segoe UI', -apple-system, system-ui, sans-serif;
+  --zx-font-display:  'Tajawal', 'Cairo', 'Segoe UI', sans-serif;
+
+  /* ───── RADIUS ───── */
+  --zx-radius-sm:     8px;
+  --zx-radius:        12px;
+  --zx-radius-lg:     18px;
+  --zx-radius-xl:     24px;
+}
+
+/* ═════════ GLOBAL DARK MODE OVERRIDES ═════════ */
+html, body { background: var(--zx-bg) !important; color: var(--zx-text); font-family: var(--zx-font); }
+
+/* Tame ANY bright white surface into our dark theme */
+.zx-dark body,
+.zx-dark .page,
+.zx-dark .card,
+.zx-dark .panel { background: var(--zx-bg); color: var(--zx-text); }
+
+/* Scrollbars across the board */
+.zx-dark ::-webkit-scrollbar { width: 10px; height: 10px; }
+.zx-dark ::-webkit-scrollbar-track { background: var(--zx-bg-2); }
+.zx-dark ::-webkit-scrollbar-thumb { background: var(--zx-grad-primary); border-radius: 8px; border: 2px solid var(--zx-bg-2); }
+.zx-dark ::-webkit-scrollbar-thumb:hover { background: var(--zx-accent-2); }
+
+/* Buttons */
+.zx-btn-primary {
+  background: var(--zx-grad-primary);
+  color: #fff;
+  border: none;
+  padding: 10px 20px;
+  border-radius: var(--zx-radius);
+  font-weight: 800;
+  cursor: pointer;
+  box-shadow: var(--zx-shadow);
+  transition: transform .15s, box-shadow .15s;
+}
+.zx-btn-primary:hover { transform: translateY(-1px); box-shadow: var(--zx-glow-primary); }
+
+.zx-btn-gold {
+  background: var(--zx-grad-gold);
+  color: var(--zx-bg);
+  border: none;
+  padding: 10px 20px;
+  border-radius: var(--zx-radius);
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.zx-btn-ghost {
+  background: var(--zx-surface);
+  color: var(--zx-text-soft);
+  border: 1px solid var(--zx-border);
+  padding: 10px 20px;
+  border-radius: var(--zx-radius);
+  font-weight: 700;
+  cursor: pointer;
+}
+.zx-btn-ghost:hover { border-color: var(--zx-accent); color: var(--zx-text); }
+
+/* Cards */
+.zx-card {
+  background: var(--zx-surface);
+  border: 1px solid var(--zx-border);
+  border-radius: var(--zx-radius-lg);
+  padding: 20px;
+  box-shadow: var(--zx-shadow-sm);
+}
+
+/* Inputs */
+.zx-input {
+  background: var(--zx-surface-2);
+  border: 1.5px solid var(--zx-border);
+  color: var(--zx-text);
+  padding: 11px 14px;
+  border-radius: var(--zx-radius);
+  font-family: inherit;
+  font-size: 13px;
+  outline: none;
+  width: 100%;
+  transition: border-color .15s, box-shadow .15s;
+}
+.zx-input:focus {
+  border-color: var(--zx-accent);
+  box-shadow: 0 0 0 3px var(--zx-accent-soft);
+}
+.zx-input::placeholder { color: var(--zx-text-dim); }
+
+/* Section headers */
+.zx-section-title {
+  font-size: 18px;
+  font-weight: 900;
+  color: var(--zx-text);
+  margin-bottom: 14px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.zx-section-title::before {
+  content: '';
+  display: inline-block;
+  width: 4px;
+  height: 22px;
+  background: var(--zx-grad-gold);
+  border-radius: 4px;
+}
+
+/* Status badges */
+.zx-badge { display: inline-block; padding: 4px 10px; border-radius: 99px; font-size: 11px; font-weight: 800; }
+.zx-badge-success { background: rgba(16,185,129,.15); color: var(--zx-success); border: 1px solid rgba(16,185,129,.3); }
+.zx-badge-warning { background: rgba(245,158,11,.15); color: var(--zx-warning); border: 1px solid rgba(245,158,11,.3); }
+.zx-badge-danger  { background: rgba(239,68,68,.15);  color: var(--zx-danger);  border: 1px solid rgba(239,68,68,.3); }
+.zx-badge-info    { background: rgba(59,130,246,.15); color: var(--zx-info);    border: 1px solid rgba(59,130,246,.3); }
+.zx-badge-accent  { background: var(--zx-accent-soft); color: var(--zx-accent-2); border: 1px solid rgba(124,58,237,.3); }
+
+/* Onboarding / Welcome modals — force dark luxury look */
+.zx-dark .mod[id*="onboard"] .mod-card,
+.zx-dark .mod[id*="welcome"] .mod-card,
+.zx-dark [class*="onboarding"] {
+  background: var(--zx-bg-2) !important;
+  border: 1px solid var(--zx-border) !important;
+  color: var(--zx-text);
+}
+
+/* Force any pastel/light card to dark surface */
+.zx-dark [style*="background:#fff"],
+.zx-dark [style*="background: #fff"],
+.zx-dark [style*="background:#ffffff"],
+.zx-dark [style*="background:#f9fafb"],
+.zx-dark [style*="background:#f3f4f6"] {
+  background: var(--zx-surface) !important;
+  color: var(--zx-text) !important;
+}
+.zx-dark [style*="color:#1f2937"],
+.zx-dark [style*="color:#111"],
+.zx-dark [style*="color:#000"] { color: var(--zx-text) !important; }
+
+/* Onboarding step cards: convert bright pastels → subtle dark accents */
+.zx-dark .onboard-step-success { background: rgba(16,185,129,.08) !important; border: 1px solid rgba(16,185,129,.3) !important; color: var(--zx-text); }
+.zx-dark .onboard-step-accent  { background: rgba(124,58,237,.08) !important; border: 1px solid rgba(124,58,237,.3) !important; color: var(--zx-text); }
+.zx-dark .onboard-step-amber   { background: rgba(245,158,11,.08)  !important; border: 1px solid rgba(245,158,11,.3) !important;  color: var(--zx-text); }
+.zx-dark .onboard-step-pink    { background: rgba(236,72,153,.08)  !important; border: 1px solid rgba(236,72,153,.3) !important;  color: var(--zx-text); }
+
+/* Smooth fade-in */
+@keyframes zxFadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+.zx-fade-in { animation: zxFadeIn .35s ease-out; }
