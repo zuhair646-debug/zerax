@@ -116,13 +116,21 @@ Build "Zerax" — a multi-tenant Saudi/Arab AI commerce platform with:
 - Auto-dispatch endpoint /api/delivery/auto-assign falls back to simulation
 
 ### 🟢 LATEST (Feb 10, 2026)
-- **3-Tab Product Editor UI polish** (`admin.html`):
-  - Collapsible "Switch to AI" banner (saves vertical space)
-  - Collapsible Tools picker section (after preset selected)
-  - Tool chips now visually interactive (hover gradient, tooltip, click → switches to Variants tab + scroll + highlight pulse)
-  - Removed redundant "Use AI" mini-button from Manual image upload area
-  - AI Chat tab: removed "Return to scratch" header bar, added prominent border-highlighted input with Enter-to-send hint
-  - Preview tab: dark `#0a0a14` background with centered white product card (better contrast)
+- **AI Chat Tab Major Redesign** (`admin.html`):
+  - Removed top header bar + Quick Options bar → chat area is now FULL-HEIGHT
+  - Welcome bot message contains AI rules + capabilities + good-prompt example
+  - Added `ZERAX_AI_SYSTEM_RULES` constant (source of truth for AI system prompt — will be wired to LLM later)
+  - Added `parseUserSpec()` Arabic parser → extracts color/background/count/style from free text
+  - AI ACK message confirms back: "🎨 لون: أبيض · ⬜ خلفية: سوداء · 📸 5 صور"
+  - Full product info delivered INSIDE chat: title, description, images grid, specs, benefits, warranty, medicine warnings
+  - In-chat **Approve ✓** / **Reject ✗** buttons (5 pts charged on send, approve/reject free)
+  - 3-second timeout race on LLM endpoint → instant mock fallback so chat never hangs
+  - Smooth auto-scroll to bottom on new messages
+- **3-Tab Product Editor UI polish** (earlier today):
+  - Collapsible "Switch to AI" banner + Tools picker section
+  - Tool chips visually interactive (hover gradient, tooltip, click → switch to Variants tab + highlight)
+  - Removed "Use AI" mini-button from Manual image upload
+  - Preview tab: dark `#0a0a14` background with centered white product card
 
 ### 🔴 PENDING (Priority Order)
 
