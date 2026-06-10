@@ -67,6 +67,12 @@ Build "Zerax" — a multi-tenant Saudi/Arab AI commerce platform with:
 - Light-themed cards matching customer-facing aesthetic
 - 8 dynamic sections rendered when analysis exists
 - Falls back to legacy info.html for old products
+- **P1 Customer Features (Feb 2026)**:
+  - ❤ Wishlist: heart toggle on every product card, dedicated wishlist page + bnav tab, badge in header
+  - 🔐 OTP Login modal: phone-based auth (demo OTP `1234`), session persisted in localStorage, account-page shows logged-in state + logout
+  - ⭐ Product Reviews: per-product reviews with 5-star picker + text, requires login, avg rating displayed, stored per product key
+  - 🎟️ Coupons: 3 codes seeded (`WELCOME10` 10%, `SAVE50` flat 50, `FREESHIP` flat 25) with live cart total recalc including tax-on-discounted-base
+  - Fixed pre-existing `pdJump()` orphan code that was breaking the page
 
 ### 🟡 MOCKED (functional UI, no live backend)
 - admin.html login uses localStorage (no JWT)
