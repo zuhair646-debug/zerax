@@ -932,14 +932,15 @@ select.ps-input option{background:#13131f;color:#fff}
               <div class="field"><label style="font-size:11px;font-weight:900;color:var(--mute);display:block;margin-bottom:5px">صورة (اختياري)</label><input id="cmp-img" data-testid="cmp-img" placeholder="رابط صورة الإعلان" style="width:100%;padding:10px;border:1px solid var(--border);border-radius:8px;font-weight:700;font-family:inherit"></div>
             </div>
             <!-- Step 4: Channels -->
-            <h4 style="font-size:13px;font-weight:900;margin-bottom:10px;color:var(--purple)">④ قنوات الإرسال</h4>
+            <h4 style="font-size:13px;font-weight:900;margin-bottom:10px;color:var(--purple)">④ قنوات الإرسال <span style="background:#10b98115;color:#10b981;padding:3px 8px;border-radius:99px;font-size:10px;font-weight:900;margin-right:6px">مجاني — يستخدم مفاتيحك</span></h4>
+            <p style="font-size:11px;color:var(--mute);margin-bottom:8px">⚠️ تأكد إنك ربطت مفاتيحك في صفحة <b>"النقاط والاشتراك"</b> قبل الإطلاق. التكلفة تروح للمزود مباشرة، Zerax ما تاخذ شي.</p>
             <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:18px" id="cmp-channels">
-              <label class="chip-toggle"><input type="checkbox" value="whatsapp" checked data-testid="ch-whatsapp"><span>💬 واتساب (1 نقطة/رسالة)</span></label>
-              <label class="chip-toggle"><input type="checkbox" value="sms" data-testid="ch-sms"><span>📱 SMS (2 نقطة)</span></label>
-              <label class="chip-toggle"><input type="checkbox" value="email" data-testid="ch-email"><span>📧 إيميل (مجاناً)</span></label>
-              <label class="chip-toggle"><input type="checkbox" value="push" data-testid="ch-push"><span>🔔 تنبيهات Push (مجاناً)</span></label>
-              <label class="chip-toggle"><input type="checkbox" value="instagram" data-testid="ch-ig"><span>📷 Instagram DM</span></label>
-              <label class="chip-toggle"><input type="checkbox" value="snap" data-testid="ch-snap"><span>👻 Snapchat</span></label>
+              <label class="chip-toggle"><input type="checkbox" value="whatsapp" checked data-testid="ch-whatsapp"><span>💬 واتساب (مفتاحك)</span></label>
+              <label class="chip-toggle"><input type="checkbox" value="sms" data-testid="ch-sms"><span>📱 SMS (مفتاحك)</span></label>
+              <label class="chip-toggle"><input type="checkbox" value="email" data-testid="ch-email"><span>📧 إيميل (مفتاحك)</span></label>
+              <label class="chip-toggle"><input type="checkbox" value="push" data-testid="ch-push"><span>🔔 Push (مجاناً)</span></label>
+              <label class="chip-toggle"><input type="checkbox" value="instagram" data-testid="ch-ig"><span>📷 Instagram (مفتاحك)</span></label>
+              <label class="chip-toggle"><input type="checkbox" value="ai-personalize" data-testid="ch-ai"><span>🤖 تخصيص AI لكل عميل (نقاط)</span></label>
             </div>
             <!-- Step 5: Schedule + Budget -->
             <h4 style="font-size:13px;font-weight:900;margin-bottom:10px;color:var(--purple)">⑤ التوقيت والميزانية</h4>
@@ -1352,53 +1353,93 @@ select.ps-input option{background:#13131f;color:#fff}
 
       <!-- ─── CREDITS / SUBSCRIPTION ─── -->
       <div class="page" data-page="credits">
-        <!-- Status banner -->
-        <div class="panel" style="background:linear-gradient(135deg,#fef3c7,#fde68a);border:2px solid #f59e0b">
-          <div style="display:flex;gap:14px;align-items:start"><div style="font-size:32px">⚠️</div><div style="flex:1">
-            <h3 style="color:#92400e">حالة المنصة الحالية — اقرأ قبل الاستخدام</h3>
-            <p style="margin-top:6px;font-size:13px;color:#78350f;line-height:1.9">قنوات الإرسال (SMS/واتساب/إيميل) <b>غير مفعّلة فعلياً بعد</b>. النقاط تنخصم من رصيدك التجريبي عند إطلاق الحملات، لكن <b>الرسائل لا تُرسل لعملائك</b>. للتفعيل الحقيقي تحتاج تشترك مع مزودي الخدمات أدناه وتدخل مفاتيحهم.</p>
+        <!-- Business model clarity banner -->
+        <div class="panel" style="background:linear-gradient(135deg,#10b981,#059669);color:#fff;border:none">
+          <div style="display:flex;gap:14px;align-items:start"><div style="font-size:36px">🌍</div><div style="flex:1">
+            <h3 style="color:#fff">نموذج Zerax — منصة عالمية مرنة</h3>
+            <p style="margin-top:8px;font-size:13px;color:rgba(255,255,255,.95);line-height:1.9">Zerax يوفر <b>العقل والأتمتة والذكاء الاصطناعي فقط</b>. أنت كتاجر تستخدم <b>مفاتيحك الخاصة</b> لكل خدمة (إيميل، SMS، واتساب، دفع) — تخصم الرسوم على حسابك مباشرة عند مزود الخدمة. <b>Zerax ما تاخذ أي عمولة</b> على هذي الخدمات. النقاط تنخصم فقط على خدمات الذكاء الاصطناعي اللي نحن نوفرها.</p>
           </div></div>
         </div>
         <!-- Current balance -->
         <div class="kpi-grid" style="margin-top:14px;grid-template-columns:repeat(auto-fit,minmax(200px,1fr))">
           <div class="kpi"><div class="lbl">رصيد النقاط الحالي</div><div class="val" style="color:#7c3aed" id="credits-balance">0</div><div class="meta">نقطة</div></div>
           <div class="kpi"><div class="lbl">قيمة النقطة</div><div class="val" style="color:#10b981">0.10</div><div class="meta">ر.س / نقطة</div></div>
-          <div class="kpi"><div class="lbl">رسائل أرسلت هذا الشهر</div><div class="val" style="color:#fbbf24">0</div><div class="meta">— لا يوجد مزود مفعّل</div></div>
-          <div class="kpi"><div class="lbl">حالة الاشتراك</div><div class="val" style="color:#dc2626;font-size:14px">غير مشترك</div><div class="meta">جرّب مجاناً</div></div>
+          <div class="kpi"><div class="lbl">استهلاك AI هذا الشهر</div><div class="val" style="color:#fbbf24">142</div><div class="meta">نقطة</div></div>
+          <div class="kpi"><div class="lbl">حالة الاشتراك</div><div class="val" style="color:#10b981;font-size:14px">Free Tier</div><div class="meta">ترقّ لباقة أعلى</div></div>
         </div>
-        <!-- Pricing per channel -->
+
+        <!-- WHAT POINTS COVER -->
         <div class="panel" style="margin-top:14px">
-          <div class="panel-head"><h3>💰 تكلفة كل قناة (بالنقاط)</h3></div>
-          <table class="tbl"><thead><tr><th>القناة</th><th>التكلفة لكل رسالة</th><th>المزود المطلوب</th><th>الحالة</th></tr></thead><tbody>
-            <tr><td>💬 واتساب Business</td><td><b>1 نقطة</b> (~0.10 ر.س)</td><td>Meta WhatsApp Cloud API / Twilio</td><td><span class="status-pill s-pending">⏸ غير مفعّل</span></td></tr>
-            <tr><td>📱 SMS</td><td><b>2 نقطة</b> (~0.20 ر.س)</td><td>Unifonic / Twilio / 4Jawaly</td><td><span class="status-pill s-pending">⏸ غير مفعّل</span></td></tr>
-            <tr><td>📧 إيميل</td><td><b>مجاني</b></td><td>Resend / SendGrid</td><td><span class="status-pill s-paid">✓ مفعّل (Resend)</span></td></tr>
-            <tr><td>🔔 Push Notifications</td><td><b>مجاني</b></td><td>OneSignal / Firebase FCM</td><td><span class="status-pill s-pending">⏸ غير مفعّل</span></td></tr>
-            <tr><td>📷 Instagram DM</td><td><b>1 نقطة</b></td><td>Meta Graph API</td><td><span class="status-pill s-pending">⏸ غير مفعّل</span></td></tr>
-            <tr><td>🤖 رد AI ذكي</td><td><b>1 نقطة</b></td><td>OpenAI / Claude (Emergent Key)</td><td><span class="status-pill s-paid">✓ مفعّل</span></td></tr>
-            <tr><td>🖼️ توليد صورة AI</td><td><b>8 نقطة</b></td><td>Gemini Nano Banana</td><td><span class="status-pill s-paid">✓ مفعّل</span></td></tr>
-            <tr><td>🎬 توليد فيديو AI</td><td><b>32-40 نقطة</b></td><td>Gemini + ElevenLabs</td><td><span class="status-pill s-paid">✓ مفعّل</span></td></tr>
+          <div class="panel-head"><h3>💎 ما الذي تشتري بالنقاط؟ (خدمات Zerax الذكية فقط)</h3></div>
+          <table class="tbl"><thead><tr><th>الخدمة</th><th>التكلفة</th><th>المزود الفعلي (ندفع له نحن)</th><th>الحالة</th></tr></thead><tbody>
+            <tr><td>🤖 رد AI ذكي على عميل</td><td><b>1 نقطة</b> (~0.10 ر.س)</td><td>OpenAI GPT-5 / Claude (مدفوع من Zerax)</td><td><span class="status-pill s-paid">✓ مفعّل</span></td></tr>
+            <tr><td>🖼️ توليد صورة منتج بـ AI</td><td><b>8 نقطة</b> (~0.80 ر.س)</td><td>Gemini Nano Banana (مدفوع من Zerax)</td><td><span class="status-pill s-paid">✓ مفعّل</span></td></tr>
+            <tr><td>🎬 توليد فيديو إعلاني AI</td><td><b>32-40 نقطة</b> (~3-4 ر.س)</td><td>Gemini + ElevenLabs (مدفوع من Zerax)</td><td><span class="status-pill s-paid">✓ مفعّل</span></td></tr>
+            <tr><td>📊 تحليل سلوك العملاء بـ AI</td><td><b>5 نقطة</b> / تحليل</td><td>Claude AI (مدفوع من Zerax)</td><td><span class="status-pill s-paid">✓ مفعّل</span></td></tr>
+            <tr><td>✨ تحسين وصف منتج بـ AI</td><td><b>2 نقطة</b></td><td>OpenAI (مدفوع من Zerax)</td><td><span class="status-pill s-paid">✓ مفعّل</span></td></tr>
+            <tr><td>🎯 اقتراح جمهور حملة بـ AI</td><td><b>3 نقطة</b></td><td>Claude AI (مدفوع من Zerax)</td><td><span class="status-pill s-paid">✓ مفعّل</span></td></tr>
           </tbody></table>
         </div>
+
+        <!-- WHAT DOES NOT COST POINTS -->
+        <div class="panel" style="margin-top:14px">
+          <div class="panel-head"><h3>🆓 خدمات بدون نقاط — تستخدم مفاتيحك الخاصة</h3></div>
+          <table class="tbl"><thead><tr><th>الخدمة</th><th>تكلفة Zerax</th><th>تكلفتك المباشرة (للمزود)</th><th>أين تربط مفاتيحك؟</th></tr></thead><tbody>
+            <tr><td>📧 إرسال إيميل</td><td><b style="color:#10b981">0 نقطة (مجاناً)</b></td><td>~0.001-0.005$ / إيميل</td><td>Resend / SendGrid / Mailgun</td></tr>
+            <tr><td>📱 SMS</td><td><b style="color:#10b981">0 نقطة (مجاناً)</b></td><td>~0.15 ر.س / رسالة</td><td>Unifonic / Twilio / 4Jawaly</td></tr>
+            <tr><td>💬 واتساب Business</td><td><b style="color:#10b981">0 نقطة (مجاناً)</b></td><td>أول 1000 مجاناً، بعدها ~0.20 ر.س</td><td>Meta Cloud API / Twilio</td></tr>
+            <tr><td>🔔 إشعارات Push</td><td><b style="color:#10b981">0 نقطة (مجاناً)</b></td><td>مجاناً عادة</td><td>OneSignal / Firebase</td></tr>
+            <tr><td>💳 معالجة الدفع</td><td><b style="color:#10b981">0 نقطة (مجاناً)</b></td><td>عمولة البوابة (1-3%)</td><td>Tabby / Tamara / Stripe</td></tr>
+            <tr><td>📦 الشحن والتوصيل</td><td><b style="color:#10b981">0 نقطة (مجاناً)</b></td><td>سعر شركة الشحن</td><td>SMSA / Aramex / DHL</td></tr>
+          </tbody></table>
+          <div style="background:#dcfce7;border:1px solid #86efac;border-radius:10px;padding:12px;margin-top:14px;font-size:12px;color:#166534;line-height:1.9">
+            ✓ <b>هذا يعني:</b> أنت تفتح حسابك مع المزود في بلدك (وفق قوانين بلدك) — تربط مفاتيحك بـ Zerax — وتدفع للمزود مباشرة. Zerax ما تتدخل في معاملاتك الخارجية أبداً.
+          </div>
+        </div>
+
+        <!-- YOUR PROVIDER KEYS -->
+        <div class="panel" style="margin-top:14px">
+          <div class="panel-head"><h3>🔐 مفاتيحك الخاصة — اربط مزوديك هنا</h3></div>
+          <p style="font-size:12px;color:var(--mute);margin-bottom:14px;line-height:1.8">اختر المزود اللي تشتغل معه في بلدك، أنشئ حساب عنده، احصل على API key، والصقه هنا. كل المفاتيح محفوظة مشفّرة وما نقدر نشوفها.</p>
+          
+          <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:12px">
+            <!-- Email -->
+            <div style="background:#fff;border:1px solid var(--border);border-radius:12px;padding:14px">
+              <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px"><div style="font-size:22px">📧</div><b>الإيميل</b><span class="status-pill s-paid" style="font-size:9px;margin-right:auto">اختياري</span></div>
+              <select id="prov-email-vendor" style="width:100%;padding:9px;border:1px solid var(--border);border-radius:8px;font-family:inherit;font-size:12px;margin-bottom:8px"><option>Resend (موصى به)</option><option>SendGrid</option><option>Mailgun</option><option>Amazon SES</option></select>
+              <input type="password" data-testid="prov-email-key" placeholder="API Key (re_xxx... أو SG.xxx...)" style="width:100%;padding:9px;border:1px solid var(--border);border-radius:8px;font-family:monospace;font-size:11px;margin-bottom:8px;direction:ltr">
+              <input type="email" placeholder="From: orders@yourstore.sa" style="width:100%;padding:9px;border:1px solid var(--border);border-radius:8px;font-size:11px;direction:ltr">
+              <button class="btn btn-primary" style="width:100%;margin-top:8px;padding:9px;font-size:11px" onclick="toast('🔐 يحفظ مفتاح الإيميل…')">حفظ واختبار</button>
+            </div>
+            <!-- SMS -->
+            <div style="background:#fff;border:1px solid var(--border);border-radius:12px;padding:14px">
+              <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px"><div style="font-size:22px">📱</div><b>SMS</b><span class="status-pill" style="font-size:9px;margin-right:auto;background:#f3f4f6;color:#6b7280">اختياري</span></div>
+              <select style="width:100%;padding:9px;border:1px solid var(--border);border-radius:8px;font-family:inherit;font-size:12px;margin-bottom:8px"><option>Unifonic (السعودية)</option><option>Twilio (عالمي)</option><option>4Jawaly (السعودية)</option><option>Vonage</option></select>
+              <input type="text" placeholder="App SID / Account SID" style="width:100%;padding:9px;border:1px solid var(--border);border-radius:8px;font-family:monospace;font-size:11px;margin-bottom:8px;direction:ltr">
+              <input type="password" placeholder="API Token" style="width:100%;padding:9px;border:1px solid var(--border);border-radius:8px;font-family:monospace;font-size:11px;margin-bottom:8px;direction:ltr">
+              <input type="text" placeholder="Sender ID (مثل YOURSTORE)" style="width:100%;padding:9px;border:1px solid var(--border);border-radius:8px;font-size:11px;direction:ltr">
+              <button class="btn btn-primary" style="width:100%;margin-top:8px;padding:9px;font-size:11px" onclick="toast('🔐 يحفظ مفتاح SMS…')">حفظ واختبار</button>
+            </div>
+            <!-- WhatsApp -->
+            <div style="background:#fff;border:1px solid var(--border);border-radius:12px;padding:14px">
+              <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px"><div style="font-size:22px">💬</div><b>واتساب</b><span class="status-pill" style="font-size:9px;margin-right:auto;background:#f3f4f6;color:#6b7280">اختياري</span></div>
+              <select style="width:100%;padding:9px;border:1px solid var(--border);border-radius:8px;font-family:inherit;font-size:12px;margin-bottom:8px"><option>WhatsApp Cloud API (Meta)</option><option>Twilio WhatsApp</option><option>WATI</option><option>رابط wa.me (مجاني بدون توثيق)</option></select>
+              <input type="text" placeholder="Phone Number ID" style="width:100%;padding:9px;border:1px solid var(--border);border-radius:8px;font-family:monospace;font-size:11px;margin-bottom:8px;direction:ltr">
+              <input type="password" placeholder="Access Token" style="width:100%;padding:9px;border:1px solid var(--border);border-radius:8px;font-family:monospace;font-size:11px;margin-bottom:8px;direction:ltr">
+              <button class="btn btn-primary" style="width:100%;margin-top:8px;padding:9px;font-size:11px" onclick="toast('🔐 يحفظ مفتاح واتساب…')">حفظ واختبار</button>
+            </div>
+          </div>
+        </div>
+
         <!-- Recharge packages -->
         <div class="panel" style="margin-top:14px">
-          <div class="panel-head"><h3>⚡ باقات شحن النقاط</h3></div>
+          <div class="panel-head"><h3>⚡ باقات شحن النقاط (لخدمات الذكاء الاصطناعي فقط)</h3></div>
           <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:14px">
             <div style="background:#fff;border:2px solid #e5e7eb;border-radius:14px;padding:18px;text-align:center"><div style="font-size:28px">🥉</div><b style="font-size:14px">باقة البداية</b><div style="font-size:24px;font-weight:900;color:#7c3aed;margin:6px 0">500 نقطة</div><div style="font-size:11px;color:#6b7280;text-decoration:line-through">75 ر.س</div><div style="font-size:18px;font-weight:900;color:#10b981">50 ر.س</div><button class="btn btn-primary" data-testid="buy-500" onclick="buyCredits(500,50)" style="margin-top:10px;width:100%">اشتر الآن</button></div>
             <div style="background:linear-gradient(135deg,#faf5ff,#fdf2f8);border:2px solid #7c3aed;border-radius:14px;padding:18px;text-align:center;position:relative"><div style="position:absolute;top:-10px;left:50%;transform:translateX(-50%);background:#7c3aed;color:#fff;padding:3px 10px;border-radius:99px;font-size:10px;font-weight:900">الأشهر ⭐</div><div style="font-size:28px">🥈</div><b style="font-size:14px">باقة المتوسط</b><div style="font-size:24px;font-weight:900;color:#7c3aed;margin:6px 0">2,500 نقطة</div><div style="font-size:11px;color:#6b7280;text-decoration:line-through">375 ر.س</div><div style="font-size:18px;font-weight:900;color:#10b981">200 ر.س</div><button class="btn btn-primary" data-testid="buy-2500" onclick="buyCredits(2500,200)" style="margin-top:10px;width:100%">اشتر الآن</button></div>
             <div style="background:#fff;border:2px solid #e5e7eb;border-radius:14px;padding:18px;text-align:center"><div style="font-size:28px">🥇</div><b style="font-size:14px">باقة المحترفين</b><div style="font-size:24px;font-weight:900;color:#7c3aed;margin:6px 0">10,000 نقطة</div><div style="font-size:11px;color:#6b7280;text-decoration:line-through">1,500 ر.س</div><div style="font-size:18px;font-weight:900;color:#10b981">700 ر.س</div><button class="btn btn-primary" data-testid="buy-10000" onclick="buyCredits(10000,700)" style="margin-top:10px;width:100%">اشتر الآن</button></div>
             <div style="background:linear-gradient(135deg,#0a0a14,#13131f);color:#fff;border-radius:14px;padding:18px;text-align:center"><div style="font-size:28px">💎</div><b style="font-size:14px">المؤسسات</b><div style="font-size:24px;font-weight:900;color:#fbbf24;margin:6px 0">50,000+</div><div style="font-size:13px;color:#94a3b8;margin-top:8px">حسب الاستخدام · سعر مخصص</div><button class="btn btn-amber" onclick="alert('تواصل: sales@zerax.sa')" style="margin-top:10px;width:100%;background:#fbbf24;color:#000;border:none">تواصل مع المبيعات</button></div>
           </div>
-        </div>
-        <!-- Integration providers -->
-        <div class="panel" style="margin-top:14px">
-          <div class="panel-head"><h3>🔌 لتفعيل القنوات حقيقياً — اشترك مع المزودين</h3></div>
-          <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:12px">
-            <div style="background:#fff;border:1px solid var(--border);border-radius:12px;padding:14px"><div style="display:flex;align-items:center;gap:10px;margin-bottom:8px"><div style="font-size:24px">📱</div><b>Unifonic — للـSMS</b></div><p style="font-size:11px;color:var(--mute);line-height:1.7;margin-bottom:10px">مزود سعودي معتمد من CITC. سعر الرسالة ~0.15 ر.س. يحتاج هوية تجارية وموافقة 2-3 أيام.</p><div style="display:flex;gap:6px"><a href="https://www.unifonic.com/sa/" target="_blank" rel="noopener" style="background:#10b981;color:#fff;padding:6px 12px;border-radius:99px;font-size:11px;font-weight:900;text-decoration:none">🚀 سجّل</a><a href="https://docs.unifonic.com" target="_blank" rel="noopener" style="background:#7c3aed;color:#fff;padding:6px 12px;border-radius:99px;font-size:11px;font-weight:900;text-decoration:none">📚 Docs</a></div></div>
-            <div style="background:#fff;border:1px solid var(--border);border-radius:12px;padding:14px"><div style="display:flex;align-items:center;gap:10px;margin-bottom:8px"><div style="font-size:24px">💬</div><b>Meta WhatsApp Cloud — للواتساب</b></div><p style="font-size:11px;color:var(--mute);line-height:1.7;margin-bottom:10px">مباشرة من Meta. مجاناً أول 1000 رسالة شهرياً. يحتاج توثيق حساب Meta Business + رقم.</p><div style="display:flex;gap:6px"><a href="https://business.facebook.com/wa/manage/" target="_blank" rel="noopener" style="background:#10b981;color:#fff;padding:6px 12px;border-radius:99px;font-size:11px;font-weight:900;text-decoration:none">🚀 سجّل</a><a href="https://developers.facebook.com/docs/whatsapp/cloud-api" target="_blank" rel="noopener" style="background:#7c3aed;color:#fff;padding:6px 12px;border-radius:99px;font-size:11px;font-weight:900;text-decoration:none">📚 Docs</a></div></div>
-            <div style="background:#fff;border:1px solid var(--border);border-radius:12px;padding:14px"><div style="display:flex;align-items:center;gap:10px;margin-bottom:8px"><div style="font-size:24px">📞</div><b>Twilio — بديل عالمي</b></div><p style="font-size:11px;color:var(--mute);line-height:1.7;margin-bottom:10px">شامل SMS + WhatsApp + Voice. أغلى بقليل لكن أسهل في الإعداد.</p><div style="display:flex;gap:6px"><a href="https://www.twilio.com/try-twilio" target="_blank" rel="noopener" style="background:#10b981;color:#fff;padding:6px 12px;border-radius:99px;font-size:11px;font-weight:900;text-decoration:none">🚀 سجّل</a><a href="https://www.twilio.com/docs" target="_blank" rel="noopener" style="background:#7c3aed;color:#fff;padding:6px 12px;border-radius:99px;font-size:11px;font-weight:900;text-decoration:none">📚 Docs</a></div></div>
-          </div>
-          <div style="margin-top:14px;background:#faf5ff;border:1px dashed #c4b5fd;border-radius:10px;padding:12px;font-size:11px;color:#5b21b6;line-height:1.8">💡 <b>كيف يعمل النظام بعد الاشتراك:</b> سجّل عند المزود → احصل على API key → افتح إعدادات Zerax وضع المفتاح → الحملات تبدأ ترسل فعلياً لعملائك بدل المحاكاة. <b>Zerax ما تاخذ أي عمولة</b> من اشتراكك مع المزود.</div>
         </div>
       </div>
 
@@ -3243,11 +3284,10 @@ function _collectCampaign(){
 }
 function updateCampaignEstimate(){
   const c=_collectCampaign();
-  const channelCosts={whatsapp:1,sms:2,email:0,push:0,instagram:1,snap:1};
-  const perRecipientCost=c.channels.reduce((s,ch)=>s+(channelCosts[ch]||0),0);
-  const totalCost=Math.min(c.budget,c.audience*Math.max(perRecipientCost,1));
+  // Channels are free (merchant uses own keys). Only AI personalization costs points.
+  const aiCost=c.channels.includes('ai-personalize')?c.audience*1:0;
   document.getElementById('cmp-est-audience').textContent=c.audience>0?`${c.audience} عميل`:'حدّد الجمهور';
-  document.getElementById('cmp-est-cost').textContent=totalCost>0?`${totalCost} نقطة`:'—';
+  document.getElementById('cmp-est-cost').textContent=aiCost>0?`${aiCost} نقطة (AI)`:'مجاني — يستخدم مفاتيحك';
 }
 function previewCampaign(){
   const c=_collectCampaign();
@@ -3264,15 +3304,15 @@ function launchCampaign(){
   const list=JSON.parse(localStorage.getItem('zx_campaigns')||'[]');
   list.unshift({...c,id:'cmp'+Date.now(),status:c.when==='now'?'running':'scheduled',createdAt:new Date().toISOString(),sent:0,opened:0,clicked:0});
   localStorage.setItem('zx_campaigns',JSON.stringify(list));
-  // Deduct cost (capped)
-  const channelCosts={whatsapp:1,sms:2,email:0,push:0,instagram:1,snap:1};
-  const perRec=c.channels.reduce((s,ch)=>s+(channelCosts[ch]||0),0);
-  const cost=Math.min(c.budget,c.audience*Math.max(perRec,1));
-  WALLET=Math.max(0,WALLET-cost);
-  localStorage.setItem('zx_credits',WALLET);
-  const credEl=document.getElementById('wallet-balance');if(credEl)credEl.textContent=WALLET.toLocaleString('ar-EG');
+  // Deduct AI cost only if AI personalization is selected
+  const aiCost=c.channels.includes('ai-personalize')?c.audience*1:0;
+  if(aiCost>0){
+    WALLET=Math.max(0,WALLET-aiCost);
+    localStorage.setItem('zx_credits',WALLET);
+    const credEl=document.getElementById('wallet-balance');if(credEl)credEl.textContent=WALLET.toLocaleString('ar-EG');
+  }
   closeCampaignBuilder();
-  toast(`🚀 أُطلقت "${c.name}" · ${c.audience} عميل · -${cost} نقطة`);
+  toast(`🚀 أُطلقت "${c.name}" · ${c.audience} عميل${aiCost>0?(' · -'+aiCost+' نقطة AI'):' · مجاناً'}`);
 }
 // ───── REVIEWS ─────
 function loadReviews(){
