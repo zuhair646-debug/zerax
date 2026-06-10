@@ -369,6 +369,66 @@ body.studio-fs{overflow:hidden}
 .mod.open{display:flex}
 .mod .box{background:#fff;border-radius:18px;width:100%;max-width:480px;max-height:90vh;overflow-y:auto;padding:24px}
 .mod h3{font-size:16px;font-weight:900;margin-bottom:14px}
+/* ─── PRODUCT STUDIO (Dark Zerax Theme) ─── */
+.mod.prod-studio{background:rgba(10,10,20,.78);backdrop-filter:blur(10px);align-items:stretch;padding:0}
+.mod.prod-studio.open{display:flex;justify-content:center}
+.mod.prod-studio .ps-box{background:#0a0a14;border:1px solid rgba(255,255,255,.08);border-radius:18px;width:100%;max-width:1100px;margin:24px auto;overflow:hidden;display:flex;flex-direction:column;color:#fff;box-shadow:0 32px 80px rgba(0,0,0,.5);max-height:calc(100vh - 48px)}
+@media (max-width:1000px){.mod.prod-studio .ps-box{margin:0;border-radius:0;max-height:100vh;min-height:100vh}}
+.ps-head{padding:16px 22px;background:linear-gradient(135deg,#0a0a14,#13131f);border-bottom:1px solid rgba(255,255,255,.08);display:flex;align-items:center;gap:14px}
+.ps-head .brand{display:flex;align-items:center;gap:10px;flex:1}
+.ps-head .brand .logo{width:36px;height:36px;border-radius:10px;background:linear-gradient(135deg,var(--amber),var(--violet));display:flex;align-items:center;justify-content:center;font-weight:900;color:#0a0a14;font-size:15px}
+.ps-head .brand h3{font-size:15px;font-weight:900;color:#fff;margin:0}
+.ps-head .brand .sub{font-size:10px;color:#94a3b8;letter-spacing:.5px;margin-top:2px}
+.ps-close{width:36px;height:36px;border-radius:50%;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.08);color:#cbd5e1;cursor:pointer;display:flex;align-items:center;justify-content:center}
+.ps-close:hover{background:rgba(244,63,94,.15);border-color:rgba(244,63,94,.3);color:var(--rose)}
+.ps-tabs{display:flex;background:#13131f;border-bottom:1px solid rgba(255,255,255,.08)}
+.ps-tab{flex:1;padding:14px 12px;background:none;border:none;color:#94a3b8;font-family:inherit;font-weight:900;font-size:12px;cursor:pointer;position:relative;transition:all .2s;display:flex;align-items:center;justify-content:center;gap:8px;border-left:1px solid rgba(255,255,255,.04)}
+.ps-tab:first-child{border-left:none}
+.ps-tab:hover{color:#cbd5e1;background:rgba(255,255,255,.02)}
+.ps-tab.active{color:var(--amber);background:linear-gradient(180deg,rgba(251,191,36,.06),transparent)}
+.ps-tab.active::after{content:'';position:absolute;bottom:0;left:10%;right:10%;height:2.5px;background:var(--amber);border-radius:2px 2px 0 0}
+.ps-tab .num{display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;border-radius:50%;background:rgba(255,255,255,.06);font-size:10px;font-weight:900}
+.ps-tab.active .num{background:var(--amber);color:#0a0a14}
+.ps-body{flex:1;overflow:hidden;display:flex;background:#0a0a14;min-height:0}
+.ps-panel{flex:1;display:none;flex-direction:column;overflow:hidden;color:#fff}
+.ps-panel.active{display:flex}
+.ps-panel-head{padding:14px 22px;border-bottom:1px solid rgba(255,255,255,.06);display:flex;align-items:center;gap:10px;background:rgba(255,255,255,.02)}
+.ps-panel-head .ico{width:38px;height:38px;border-radius:10px;display:flex;align-items:center;justify-content:center;flex-shrink:0;color:#fff;font-size:18px}
+.ps-panel-head h4{font-size:14px;font-weight:900;color:#fff;margin:0}
+.ps-panel-head .desc{font-size:11px;color:#94a3b8;margin-top:2px;line-height:1.5}
+.ps-content{flex:1;overflow-y:auto;padding:22px}
+.ps-grid-2{display:grid;grid-template-columns:280px 1fr;gap:20px;padding:22px;overflow-y:auto;flex:1}
+@media (max-width:760px){.ps-grid-2{grid-template-columns:1fr}}
+.ps-lbl{display:block;font-size:11px;font-weight:900;color:#94a3b8;margin-bottom:6px;letter-spacing:.3px}
+.ps-input{width:100%;padding:10px 12px;background:rgba(255,255,255,.04);border:1.5px solid rgba(255,255,255,.08);border-radius:10px;color:#fff;font-family:inherit;font-size:12px;font-weight:700;outline:none;transition:border .15s}
+.ps-input:focus{border-color:var(--amber)}
+select.ps-input{cursor:pointer}
+select.ps-input option{background:#13131f;color:#fff}
+.ps-upload{border:2px dashed rgba(255,255,255,.12);border-radius:14px;padding:22px;text-align:center;cursor:pointer;background:rgba(255,255,255,.02);transition:all .2s;min-height:200px;display:flex;flex-direction:column;align-items:center;justify-content:center}
+.ps-upload:hover{border-color:var(--amber);background:rgba(251,191,36,.04)}
+.ps-upload img{max-width:100%;max-height:180px;border-radius:10px}
+.ps-mini-btn{margin-top:12px;padding:6px 12px;background:linear-gradient(135deg,var(--purple),var(--amber));color:#fff;border:none;border-radius:99px;font-family:inherit;font-weight:900;font-size:10px;cursor:pointer;display:inline-flex;align-items:center;gap:5px}
+.ps-btn-amber{padding:10px 14px;background:linear-gradient(135deg,var(--amber),#f59e0b);color:#0a0a14;border:none;border-radius:10px;font-family:inherit;font-weight:900;font-size:12px;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;gap:6px;transition:all .2s}
+.ps-btn-amber:hover{transform:translateY(-1px);box-shadow:0 8px 20px rgba(251,191,36,.3)}
+.ps-btn-amber:disabled{opacity:.5;cursor:not-allowed;transform:none}
+.ps-btn-primary{padding:11px 22px;background:linear-gradient(135deg,var(--purple),var(--amber));color:#fff;border:none;border-radius:10px;font-family:inherit;font-weight:900;font-size:12px;cursor:pointer;display:inline-flex;align-items:center;gap:6px;box-shadow:0 8px 20px rgba(124,58,237,.3)}
+.ps-btn-ghost{padding:11px 22px;background:rgba(255,255,255,.04);color:#cbd5e1;border:1px solid rgba(255,255,255,.08);border-radius:10px;font-family:inherit;font-weight:900;font-size:12px;cursor:pointer}
+.ps-foot{padding:14px 22px;background:#13131f;border-top:1px solid rgba(255,255,255,.08);display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+.ps-style-card{background:rgba(255,255,255,.04);border:1.5px solid rgba(255,255,255,.06);border-radius:12px;padding:14px 12px;cursor:pointer;color:#fff;font-family:inherit;text-align:center;transition:all .15s}
+.ps-style-card:hover{border-color:rgba(251,191,36,.3);background:rgba(251,191,36,.04)}
+.ps-style-card[data-selected="true"]{border-color:var(--amber);background:rgba(251,191,36,.08);box-shadow:0 0 0 1px rgba(251,191,36,.3) inset}
+.ps-style-card b{display:block;font-size:11px;margin:4px 0 2px}
+.ps-style-card span{display:block;font-size:9px;color:#94a3b8;line-height:1.4}
+.ps-ai-card{background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.06);border-radius:14px;padding:16px;margin-bottom:12px}
+.ps-ai-card h5{font-size:11px;font-weight:900;color:var(--amber);text-transform:uppercase;letter-spacing:.6px;margin-bottom:10px;display:flex;align-items:center;gap:6px}
+.ps-feat-chip{display:inline-flex;align-items:center;gap:5px;background:rgba(124,58,237,.12);color:#c4b5fd;border:1px solid rgba(124,58,237,.2);padding:6px 11px;border-radius:99px;font-size:11px;font-weight:700;margin:3px}
+.ps-spec-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:8px}
+.ps-spec-item{background:rgba(0,0,0,.3);border:1px solid rgba(255,255,255,.06);border-radius:9px;padding:9px 12px}
+.ps-spec-item b{display:block;font-size:9px;color:var(--amber);text-transform:uppercase;letter-spacing:.4px;margin-bottom:3px}
+.ps-spec-item span{font-size:12px;color:#fff}
+.ps-color-swatch{display:inline-flex;align-items:center;gap:6px;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);padding:5px 10px;border-radius:99px;font-size:11px;color:#fff;font-weight:700;margin:3px}
+.ps-color-swatch .dot{width:14px;height:14px;border-radius:50%;border:1.5px solid rgba(255,255,255,.3)}
+.ps-size-pill{display:inline-flex;align-items:center;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.08);padding:5px 11px;border-radius:8px;font-size:11px;color:#fff;font-weight:900;margin:3px}
 </style>
 </head>
 <body>
@@ -815,23 +875,90 @@ body.studio-fs{overflow:hidden}
   </main>
 </div>
 
-<!-- PRODUCT MODAL -->
-<div class="mod" id="prod-mod" onclick="if(event.target===this)closeProductModal()">
-  <div class="box">
-    <h3>📦 منتج جديد</h3>
-    <div class="field"><label>صورة المنتج</label>
-      <div style="border:2px dashed var(--border);border-radius:12px;padding:30px;text-align:center;cursor:pointer" onclick="document.getElementById('pm-img').click()" id="pm-img-preview">
-        <i data-lucide="upload-cloud" style="width:36px;height:36px;color:var(--mute);margin-bottom:8px"></i>
-        <p style="font-size:12px;color:var(--mute)">اضغط لرفع صورة أو اسحبها هنا</p>
+<!-- PRODUCT STUDIO — Dark Zerax theme with AI deep analysis -->
+<div class="mod prod-studio" id="prod-mod" onclick="if(event.target===this)closeProductModal()">
+  <div class="ps-box">
+    <!-- Studio header -->
+    <div class="ps-head">
+      <div class="brand">
+        <div class="logo">Z</div>
+        <div><h3 id="ps-title">📦 إضافة منتج جديد</h3><div class="sub">⚡ ZERAX PRODUCT AI · صور + تحليل عميق + معلومات تفصيلية</div></div>
       </div>
-      <input type="file" id="pm-img" accept="image/*" style="display:none" onchange="pmPreviewImg(this)">
+      <button class="ps-close" onclick="closeProductModal()" title="إغلاق"><i data-lucide="x" style="width:18px;height:18px"></i></button>
     </div>
-    <div class="field"><label>اسم المنتج</label><input id="pm-name" placeholder="مثلاً iPhone 17 Pro Max"></div>
-    <div class="row"><div class="field"><label>السعر (ر.س)</label><input id="pm-price" type="number" min="0" placeholder="0"></div><div class="field"><label>المخزون</label><input id="pm-stock" type="number" min="0" value="10"></div></div>
-    <div class="field"><label>الفئة</label><select id="pm-cat"><option value="electronics">📱 إلكترونيات</option><option value="fashion">👗 أزياء</option><option value="beauty">💄 جمال وعناية</option><option value="home">🏠 منزل ومطبخ</option></select></div>
-    <div class="field"><label>الوصف</label><textarea id="pm-desc" rows="3"></textarea></div>
-    <button class="btn btn-amber" onclick="pmAiFill()" style="width:100%;margin-bottom:8px"><i data-lucide="sparkles" style="width:14px;height:14px"></i> 🤖 ولّد المعلومات تلقائياً بـ AI (10 نقاط)</button>
-    <button class="btn btn-primary" onclick="pmSave()" style="width:100%">💾 حفظ المنتج</button>
+    <!-- Tabs -->
+    <div class="ps-tabs">
+      <button class="ps-tab active" data-pstab="info" onclick="psSwitchTab('info')"><span class="num">1</span><span class="lbl">📋 المعلومات الأساسية</span></button>
+      <button class="ps-tab" data-pstab="image" onclick="psSwitchTab('image')"><span class="num">2</span><span class="lbl">🎨 صور المنتج AI</span></button>
+      <button class="ps-tab" data-pstab="ai" onclick="psSwitchTab('ai')"><span class="num">3</span><span class="lbl">🤖 التحليل العميق AI</span></button>
+    </div>
+    <div class="ps-body">
+      <!-- TAB 1: BASIC INFO -->
+      <div class="ps-panel active" data-pspanel="info">
+        <div class="ps-grid-2">
+          <div>
+            <label class="ps-lbl">صورة المنتج</label>
+            <div class="ps-upload" onclick="document.getElementById('pm-img').click()" id="pm-img-preview">
+              <i data-lucide="upload-cloud" style="width:42px;height:42px;color:#94a3b8;margin-bottom:8px"></i>
+              <p style="font-size:12px;color:#94a3b8;text-align:center">اضغط لرفع صورة أو<br>اسحبها هنا</p>
+              <button type="button" class="ps-mini-btn" onclick="event.stopPropagation();psSwitchTab('image')"><i data-lucide="sparkles" style="width:11px;height:11px"></i> أو ولّد بـ AI</button>
+            </div>
+            <input type="file" id="pm-img" accept="image/*" style="display:none" onchange="pmPreviewImg(this)">
+          </div>
+          <div>
+            <label class="ps-lbl">اسم المنتج</label>
+            <input id="pm-name" class="ps-input" placeholder="مثلاً iPhone 17 Pro Max">
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:10px">
+              <div><label class="ps-lbl">السعر (ر.س)</label><input id="pm-price" class="ps-input" type="number" min="0" placeholder="0"></div>
+              <div><label class="ps-lbl">المخزون</label><input id="pm-stock" class="ps-input" type="number" min="0" value="10"></div>
+            </div>
+            <label class="ps-lbl" style="margin-top:10px">الفئة</label>
+            <select id="pm-cat" class="ps-input"><option value="electronics">📱 إلكترونيات</option><option value="fashion">👗 أزياء</option><option value="beauty">💄 جمال وعناية</option><option value="home">🏠 منزل ومطبخ</option><option value="food">🍔 أطعمة</option><option value="health">💊 صحة ودواء</option><option value="pet">🐾 حيوانات أليفة</option><option value="sports">⚽ رياضة</option><option value="kids">🧸 أطفال</option></select>
+            <label class="ps-lbl" style="margin-top:10px">الوصف القصير</label>
+            <textarea id="pm-desc" class="ps-input" rows="4" placeholder="وصف قصير للمنتج"></textarea>
+            <button class="ps-btn-amber" onclick="psSwitchTab('ai')" style="margin-top:10px;width:100%"><i data-lucide="brain" style="width:14px;height:14px"></i> ادفع للذكاء الإصطناعي يحلل ويعبّي كل شي (10 نقاط)</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- TAB 2: AI IMAGE GENERATION -->
+      <div class="ps-panel" data-pspanel="image">
+        <div class="ps-panel-head"><div class="ico" style="background:linear-gradient(135deg,#10b981,#059669)">🎨</div><div><h4>توليد صور احترافية بالذكاء الإصطناعي</h4><div class="desc">Gemini Nano Banana · 4 صور بأنماط مختلفة · 8 نقاط/صورة · اعتماد فردي</div></div></div>
+        <div style="padding:18px 22px;display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:10px;border-bottom:1px solid rgba(255,255,255,.06)">
+          <button class="ps-style-card" data-style="product" onclick="psSelectStyle(this)" data-selected="true"><div style="font-size:24px">📷</div><b>تصوير منتج</b><span>خلفية بيضاء، إضاءة استوديو</span></button>
+          <button class="ps-style-card" data-style="lifestyle" onclick="psSelectStyle(this)"><div style="font-size:24px">🌅</div><b>أسلوب حياة</b><span>المنتج في بيئة حقيقية</span></button>
+          <button class="ps-style-card" data-style="luxury" onclick="psSelectStyle(this)"><div style="font-size:24px">💎</div><b>فاخر</b><span>إضاءة درامية، ذهبي/أسود</span></button>
+          <button class="ps-style-card" data-style="flat" onclick="psSelectStyle(this)"><div style="font-size:24px">📐</div><b>Flat Lay</b><span>تصوير علوي مرتّب</span></button>
+        </div>
+        <div class="ps-content">
+          <div id="ps-img-actions" style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
+            <div style="color:#94a3b8;font-size:12px">📸 4 صور بنمط <b id="ps-style-label" style="color:var(--amber)">تصوير منتج</b></div>
+            <button class="ps-btn-amber" onclick="psGenerateImages()" id="ps-gen-imgs-btn"><i data-lucide="sparkles" style="width:13px;height:13px"></i> توليد 4 صور · 32 نقطة</button>
+          </div>
+          <div id="ps-img-grid" class="zx-img-grid"></div>
+        </div>
+      </div>
+
+      <!-- TAB 3: DEEP AI ANALYSIS -->
+      <div class="ps-panel" data-pspanel="ai">
+        <div class="ps-panel-head"><div class="ico" style="background:linear-gradient(135deg,#7c3aed,#a78bfa)">🤖</div><div><h4>تحليل عميق بـ Gemini</h4><div class="desc">يحلل المنتج من الصورة + الاسم + المعرفة: مواصفات، ميزات، ألوان، مقاسات، ضمان، مقارنات</div></div></div>
+        <div class="ps-content">
+          <div id="ps-ai-empty" class="zx-empty">
+            <div class="big-ico">🤖</div>
+            <h5>اكتب اسم المنتج وارفع صورته</h5>
+            <p>Gemini يبحث وينتج تحليل احترافي كامل (مواصفات، ميزات، ألوان متوفرة، مقاسات، ضمان رسمي…) · يخصم 10 نقاط</p>
+            <input id="ps-ai-name" class="ps-input" placeholder="مثلاً: دواء للقطط من Royal Canin · أو iPhone 17 Pro · أو حذاء Nike Air Max" style="margin-top:14px;max-width:480px;background:rgba(255,255,255,.06);border-color:rgba(255,255,255,.1);color:#fff">
+            <button class="gen-btn" onclick="psAnalyze()" style="margin-top:14px"><i data-lucide="brain" style="width:16px;height:16px"></i> ابدأ التحليل العميق · 10 نقاط</button>
+          </div>
+          <div id="ps-ai-result" style="display:none"></div>
+        </div>
+      </div>
+    </div>
+    <!-- Footer -->
+    <div class="ps-foot">
+      <button class="ps-btn-ghost" onclick="closeProductModal()">إلغاء</button>
+      <button class="ps-btn-primary" onclick="pmSave()" style="margin-right:auto"><i data-lucide="save" style="width:14px;height:14px"></i> حفظ المنتج</button>
+    </div>
   </div>
 </div>
 
@@ -1045,36 +1172,128 @@ async function gwLoad(){
 }
 
 // ───── PRODUCT MODAL ─────
-function openProductModal(){$('prod-mod').classList.add('open')}
+function openProductModal(){
+  $('prod-mod').classList.add('open');
+  psSwitchTab('info');
+  PS_STATE={style:'product',images:[],approvedImg:null,analysis:null};
+  setTimeout(()=>{if(window.lucide)lucide.createIcons()},50);
+}
 function closeProductModal(){$('prod-mod').classList.remove('open')}
 function pmPreviewImg(inp){
   const f=inp.files[0];if(!f)return;
   const reader=new FileReader();
-  reader.onload=e=>{$('pm-img-preview').innerHTML=`<img src="${e.target.result}" style="max-width:100%;max-height:200px;border-radius:8px">`};
+  reader.onload=e=>{
+    $('pm-img-preview').innerHTML=`<img src="${e.target.result}">`;
+    PS_STATE.uploadedImg=e.target.result;
+  };
   reader.readAsDataURL(f);
 }
-async function pmAiFill(){
-  const name=$('pm-name').value.trim();if(!name){alert('اكتب اسم المنتج أولاً');return;}
-  if(WALLET<10){alert('رصيدك أقل من 10 نقاط — اشحن أولاً');return;}
-  toast('🤖 الذكاء يبحث ويعبّي المعلومات…');
-  try{
-    const r=await fetch(API+'/api/image-studio/product-info',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name,lang:'ar'})});
-    const d=await r.json();
-    if(d.title)$('pm-name').value=d.title;
-    if(d.description)$('pm-desc').value=d.description;
-    WALLET-=10;localStorage.setItem('zx_credits',WALLET);$('wallet-balance').textContent=WALLET.toLocaleString('ar-EG');
-    toast('✓ تم التوليد · خُصمت 10 نقاط');
-  }catch(e){alert('فشل')}
-}
 function pmSave(){
-  const name=$('pm-name').value.trim();if(!name){alert('اكتب الاسم');return;}
-  const newP={id:'p'+Date.now(),name,price:+$('pm-price').value||0,stock:+$('pm-stock').value||0,cat:$('pm-cat').value,img:'https://images.unsplash.com/photo-1586765501019-cbf6c0b6d7a4?w=600&q=85',sales:0};
+  const name=$('pm-name').value.trim();if(!name){alert('اكتب الاسم');psSwitchTab('info');$('pm-name').focus();return;}
+  const previewImg=$('pm-img-preview').querySelector('img');
+  const img=PS_STATE.approvedImg||(previewImg?previewImg.src:'https://images.unsplash.com/photo-1586765501019-cbf6c0b6d7a4?w=600&q=85');
+  const newP={id:'p'+Date.now(),name,price:+$('pm-price').value||0,stock:+$('pm-stock').value||0,cat:$('pm-cat').value,img,sales:0,desc:$('pm-desc').value||'',analysis:PS_STATE.analysis||null};
   PRODUCTS.unshift(newP);
   localStorage.setItem('zx_dash_products',JSON.stringify(PRODUCTS));
   closeProductModal();
   renderProducts();
+  renderAll();
   ['pm-name','pm-price','pm-desc'].forEach(id=>$(id).value='');
+  $('pm-img-preview').innerHTML=`<i data-lucide="upload-cloud" style="width:42px;height:42px;color:#94a3b8;margin-bottom:8px"></i><p style="font-size:12px;color:#94a3b8;text-align:center">اضغط لرفع صورة أو<br>اسحبها هنا</p><button type="button" class="ps-mini-btn" onclick="event.stopPropagation();psSwitchTab('image')"><i data-lucide="sparkles" style="width:11px;height:11px"></i> أو ولّد بـ AI</button>`;
   toast('✓ تم حفظ المنتج');
+}
+
+// ───── PRODUCT STUDIO ─────
+let PS_STATE={style:'product',images:[],approvedImg:null,analysis:null,uploadedImg:null};
+function psSwitchTab(tab){
+  document.querySelectorAll('.ps-tab').forEach(t=>t.classList.toggle('active',t.dataset.pstab===tab));
+  document.querySelectorAll('.ps-panel').forEach(p=>p.classList.toggle('active',p.dataset.pspanel===tab));
+  // Sync name to AI input
+  if(tab==='ai'){const aiInp=$('ps-ai-name');if(aiInp&&!aiInp.value&&$('pm-name').value)aiInp.value=$('pm-name').value;}
+  setTimeout(()=>{if(window.lucide)lucide.createIcons()},50);
+}
+function psSelectStyle(el){
+  document.querySelectorAll('.ps-style-card').forEach(c=>c.removeAttribute('data-selected'));
+  el.setAttribute('data-selected','true');
+  PS_STATE.style=el.dataset.style;
+  const labels={product:'تصوير منتج',lifestyle:'أسلوب حياة',luxury:'فاخر',flat:'Flat Lay'};
+  $('ps-style-label').textContent=labels[el.dataset.style];
+}
+async function psGenerateImages(){
+  const name=$('pm-name').value.trim()||'منتج جديد';
+  const cost=32;
+  if(WALLET<cost){alert('رصيد غير كافٍ — تحتاج '+cost+' نقطة');return;}
+  const btn=$('ps-gen-imgs-btn');btn.disabled=true;btn.innerHTML='<i data-lucide="loader" style="width:13px;height:13px"></i> Gemini يولّد…';
+  $('ps-img-grid').innerHTML=Array(4).fill().map(()=>'<div class="zx-img-card"><div class="img loading" style="aspect-ratio:1"></div><div class="meta"><b>جاري التوليد…</b></div></div>').join('');
+  const stylePrompts={product:'commercial product photography, white background, studio lighting, sharp focus, 4k',lifestyle:'lifestyle photography, natural setting, soft natural lighting, real environment',luxury:'luxury product photography, dramatic lighting, gold and black tones, premium aesthetic',flat:'flat lay product photography, top-down view, organized composition, minimal'};
+  const prompt=`${name}, ${stylePrompts[PS_STATE.style]}, ultra realistic, high detail`;
+  try{
+    const promises=Array(4).fill().map((_,i)=>fetch(API+'/api/image-studio/generate',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({prompt:prompt+', variation '+(i+1),count:1,style:PS_STATE.style==='flat'?'product':PS_STATE.style,width:1024,height:1024})}).then(r=>r.json()).catch(()=>null));
+    const results=await Promise.all(promises);
+    PS_STATE.images=results.map((r,i)=>(r&&r.images&&r.images[0])||['https://images.unsplash.com/photo-1592750475338-74b7b21085ab?w=600&q=85','https://images.unsplash.com/photo-1551816230-ef5deaed4a26?w=600&q=85','https://images.unsplash.com/photo-1606220945770-b5b6c2c55bf1?w=600&q=85','https://images.unsplash.com/photo-1517336714731-489689fd1ca8?w=600&q=85'][i%4]);
+    WALLET-=cost;localStorage.setItem('zx_credits',WALLET);$('wallet-balance').textContent=WALLET.toLocaleString('ar-EG');
+    toast('✓ 4 صور جاهزة · -'+cost+' نقطة · اختر اللي يعجبك');
+    psRenderImages();
+  }catch(e){toast('❌ '+e.message);}
+  btn.disabled=false;btn.innerHTML='<i data-lucide="sparkles" style="width:13px;height:13px"></i> إعادة توليد · 32 نقطة';
+  if(window.lucide)lucide.createIcons();
+}
+function psRenderImages(){
+  $('ps-img-grid').innerHTML=PS_STATE.images.map((u,i)=>{
+    const ok=PS_STATE.approvedImg===u;
+    return `<div class="zx-img-card ${ok?'approved':''}"><div class="badge-approved">✓ مختارة</div><div class="img" style="aspect-ratio:1;background-image:url('${u}')"></div><div class="meta"><b>الصورة ${i+1}</b><span style="color:#94a3b8">${({product:'تصوير منتج',lifestyle:'أسلوب حياة',luxury:'فاخر',flat:'Flat Lay'})[PS_STATE.style]}</span></div><div class="acts"><button class="${ok?'ok':'ok'}" onclick="psApproveImage(${i})"><i data-lucide="${ok?'check-check':'check'}" style="width:11px;height:11px"></i> ${ok?'مختارة':'استخدم هذي'}</button><button class="re" onclick="window.open('${u}','_blank')"><i data-lucide="zoom-in" style="width:11px;height:11px"></i></button></div></div>`;
+  }).join('');
+  if(window.lucide)lucide.createIcons();
+}
+function psApproveImage(i){
+  PS_STATE.approvedImg=PS_STATE.images[i];
+  $('pm-img-preview').innerHTML=`<img src="${PS_STATE.approvedImg}">`;
+  psRenderImages();
+  toast('✓ تم اختيار الصورة '+(i+1)+' · ستظهر في المنتج');
+}
+async function psAnalyze(){
+  const name=($('ps-ai-name').value||$('pm-name').value||'').trim();
+  if(!name){alert('اكتب اسم المنتج أولاً');return;}
+  if(WALLET<10){alert('رصيدك أقل من 10 نقاط — اشحن أولاً');return;}
+  $('ps-ai-empty').style.display='none';
+  $('ps-ai-result').style.display='block';
+  $('ps-ai-result').innerHTML='<div class="zx-empty"><div class="big-ico">🤖</div><h5>Gemini يحلل ويبحث…</h5><p>يقارن المنتج، يحضّر المواصفات، الميزات، الألوان، المقاسات، الضمان…</p></div>';
+  try{
+    const body={name,lang:'ar'};
+    if(PS_STATE.uploadedImg)body.image_base64=PS_STATE.uploadedImg;
+    const r=await fetch(API+'/api/image-studio/product-info',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+    if(!r.ok)throw new Error('فشل التحليل');
+    const d=await r.json();
+    PS_STATE.analysis=d;
+    WALLET-=10;localStorage.setItem('zx_credits',WALLET);$('wallet-balance').textContent=WALLET.toLocaleString('ar-EG');
+    // Auto-fill basic info
+    if(!$('pm-name').value&&d.title)$('pm-name').value=d.title;
+    if(!$('pm-desc').value&&d.description)$('pm-desc').value=d.description;
+    psRenderAnalysis(d);
+    toast('✓ تحليل عميق جاهز · -10 نقاط');
+  }catch(e){
+    $('ps-ai-result').innerHTML=`<div class="zx-empty"><div class="big-ico">❌</div><h5>فشل التحليل</h5><p>${e.message}</p><button class="gen-btn" onclick="psAnalyze()">↻ حاول مرة ثانية</button></div>`;
+  }
+}
+function psRenderAnalysis(d){
+  let html='';
+  html+=`<div class="ps-ai-card"><h5><i data-lucide="package" style="width:13px;height:13px"></i> العنوان والوصف الكامل</h5><div style="background:rgba(251,191,36,.06);border:1px solid rgba(251,191,36,.2);border-radius:10px;padding:12px;margin-bottom:8px"><b style="font-size:14px;color:var(--amber);display:block;margin-bottom:6px">${d.title}</b><p style="font-size:12px;line-height:1.8;color:#cbd5e1">${d.description}</p></div></div>`;
+  if(d.features&&d.features.length){html+=`<div class="ps-ai-card"><h5><i data-lucide="check-circle-2" style="width:13px;height:13px"></i> المميزات الرئيسية (${d.features.length})</h5><div style="line-height:2">${d.features.map(f=>`<span class="ps-feat-chip">✦ ${f}</span>`).join('')}</div></div>`;}
+  if(d.specs&&Object.keys(d.specs).length){html+=`<div class="ps-ai-card"><h5><i data-lucide="cpu" style="width:13px;height:13px"></i> المواصفات التقنية</h5><div class="ps-spec-grid">${Object.entries(d.specs).map(([k,v])=>`<div class="ps-spec-item"><b>${k}</b><span>${v}</span></div>`).join('')}</div></div>`;}
+  if(d.colors&&d.colors.length){html+=`<div class="ps-ai-card"><h5><i data-lucide="palette" style="width:13px;height:13px"></i> الألوان المتاحة</h5><div>${d.colors.map(c=>`<span class="ps-color-swatch"><span class="dot" style="background:${c.hex||'#888'}"></span>${c.name||c}</span>`).join('')}</div></div>`;}
+  if(d.sizes&&d.sizes.length){html+=`<div class="ps-ai-card"><h5><i data-lucide="ruler" style="width:13px;height:13px"></i> المقاسات / السعات المتاحة</h5><div>${d.sizes.map(s=>`<span class="ps-size-pill">${s}</span>`).join('')}</div></div>`;}
+  if(d.warranty&&(d.warranty.duration_text||d.warranty.url)){html+=`<div class="ps-ai-card"><h5><i data-lucide="shield-check" style="width:13px;height:13px"></i> الضمان الرسمي</h5><p style="font-size:12px;color:#cbd5e1;line-height:1.7">${d.warranty.duration_text||'ضمان وكيل معتمد'}${d.warranty.url?` · <a href="${d.warranty.url}" target="_blank" style="color:var(--amber)">رابط الضمان ↗</a>`:''}</p></div>`;}
+  html+=`<div style="text-align:center;margin-top:14px"><button class="ps-btn-amber" onclick="psApplyAnalysis()" style="padding:13px 28px"><i data-lucide="wand-2" style="width:14px;height:14px"></i> تطبيق التحليل على المنتج وحفظ</button></div>`;
+  $('ps-ai-result').innerHTML=html;
+  if(window.lucide)lucide.createIcons();
+}
+function psApplyAnalysis(){
+  if(!PS_STATE.analysis)return;
+  const d=PS_STATE.analysis;
+  if(d.title)$('pm-name').value=d.title;
+  if(d.description)$('pm-desc').value=d.description;
+  psSwitchTab('info');
+  toast('✓ تم تعبئة المعلومات الأساسية · اضغط حفظ المنتج');
 }
 
 // ───── VIDEO STUDIO (TABBED WORKFLOW) ─────
