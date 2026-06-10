@@ -590,3 +590,47 @@ Bug Fixes shipped this session:
 - Stripe/Mada payment path for upgrade
 - Wizard UI step to pick template_mode + market_id (currently auto by type)
 - iOS APK generation tier via Capacitor + GitHub Actions
+
+---
+## 2026-02-10 — Storefront UI Overhaul + Settings Hub + AI Services
+
+### Header Cleanup (`app_mode_full.html`)
+- Removed left logo, settings gear button (⚙️), admin shortcut buttons
+- Centered Zerax logo only — now linked to https://zerax.com (opens in new tab)
+- Single account icon on the left → opens the new full Account page
+
+### Full Account / Settings Page Redesign
+- **Profile**: avatar upload (base64, 2MB max), editable name/email/phone/address/birthday
+- **Stats Grid**: orders count · loyalty points · wishlist count
+- **Membership Tier**: 🥉Bronze → 🥈Silver → 🥇Gold → 💎Platinum (based on order count)
+- **Appearance Settings (new)**:
+  - Dark mode toggle (synced with global)
+  - 8 accent color presets (purple/pink/cyan/emerald/orange/red/royal-blue/black/gold)
+  - 6 text color presets
+  - 4 font-size levels (small / normal / large / x-large)
+  - All settings persist in localStorage via CSS variables `--zx-accent`, `--zx-text`, `--zx-font-scale`
+- **Language & Region** moved into Account
+- **Notifications**: 4 toggle prefs (orders/offers/new/email)
+- **Order History** (last 3 inline + link to full page)
+- **Addresses** (add/delete multiple addresses)
+- **Security**: change phone/email · GDPR data download · delete account
+- **Support**: AI assistant · WhatsApp · FAQ · policies
+
+### Smart AI Services Category (NEW)
+- Added new top-level category `ai_services` with 8 services:
+  - Image analysis (30 pts) · Pro ad image (50) · Sora 2 video (200) · Ad copywriter (40)
+  - Market analysis (80) · 24/7 chatbot (500/mo) · Logo design (60) · Pro translation (25)
+- Special card styling (dark navy gradient + golden AI badge)
+- Pays via Zerax credits (no cart): requires login → instant credit deduction
+- Logged into orders as "خدمة AI"
+
+### More Categories + Products (30+ new)
+- Added categories: Sports, Food, Kids (alongside existing electronics/fashion/beauty/home)
+- 13 new physical products with images
+
+### Mobile Fix
+- `.p-card img`, `.p-card-stack img` capped at `max-width:100%`, height 120px
+- Grid gap reduced on screens <480px
+
+### Push
+- Commit `0a406e7` → main → github.com/zuhair646-debug/zerax
