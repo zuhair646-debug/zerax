@@ -115,22 +115,33 @@ Build "Zerax" — a multi-tenant Saudi/Arab AI commerce platform with:
 - Service activations are localStorage flags only
 - Auto-dispatch endpoint /api/delivery/auto-assign falls back to simulation
 
-### 🟢 LATEST (Feb 10, 2026)
-- **AI Chat Tab Major Redesign** (`admin.html`):
-  - Removed top header bar + Quick Options bar → chat area is now FULL-HEIGHT
-  - Welcome bot message contains AI rules + capabilities + good-prompt example
-  - Added `ZERAX_AI_SYSTEM_RULES` constant (source of truth for AI system prompt — will be wired to LLM later)
-  - Added `parseUserSpec()` Arabic parser → extracts color/background/count/style from free text
-  - AI ACK message confirms back: "🎨 لون: أبيض · ⬜ خلفية: سوداء · 📸 5 صور"
-  - Full product info delivered INSIDE chat: title, description, images grid, specs, benefits, warranty, medicine warnings
-  - In-chat **Approve ✓** / **Reject ✗** buttons (5 pts charged on send, approve/reject free)
-  - 3-second timeout race on LLM endpoint → instant mock fallback so chat never hangs
-  - Smooth auto-scroll to bottom on new messages
-- **3-Tab Product Editor UI polish** (earlier today):
-  - Collapsible "Switch to AI" banner + Tools picker section
-  - Tool chips visually interactive (hover gradient, tooltip, click → switch to Variants tab + highlight)
-  - Removed "Use AI" mini-button from Manual image upload
-  - Preview tab: dark `#0a0a14` background with centered white product card
+### 🟢 LATEST (Feb 10, 2026 · Backend Foundation Wave)
+- **🏗️ Store V2 Backend Router** (`/api/store/v2/*`): Complete e-commerce backend
+  - `POST /checkout` — atomic order placement with stock decrement, loyalty points, wallet deduction
+  - `GET /orders` + `GET /orders/{id}` — customer order history
+  - `GET /merchant/orders` + `PATCH /merchant/orders/{id}/status` — merchant order management
+  - `GET /wallet` + `POST /merchant/wallet/adjust` — Store Credit Wallet
+  - `POST /returns` + `PATCH /merchant/returns/{id}` — Returns with auto-refund to wallet
+  - `POST /subscriptions` + recurring order management (weekly/biweekly/monthly/quarterly)
+  - `POST /branches` + `GET /branches?lat=&lng=` (Haversine nearest-first)
+  - `GET /referral/me` + `POST /referral/redeem` (REF code + welcome credit)
+  - `POST /saved-cards` (tokenized — never returns gateway_token to client)
+  - `PUT /merchant/ai-profile` — AUTO-TRAINING context (filled by Zerax at handover, NOT by merchant)
+- **🧠 Claude Core** (`/app/backend/claude_core.py`): Unified AI orchestrator
+  - `ZERAX_AI_CORE_RULES` — single source of truth (mirrored in admin.html)
+  - `product_research_chat()` — Gemini 2.5 Flash, JSON-structured output, loads merchant context automatically
+  - `onboarding_extract()` — extracts AI profile from merchant's free-text description at handover
+  - Strict domain rules: medicines (dosage+warnings), food (ingredients+calories), clothes (fabric+sizes), etc.
+- **🤖 AI Router** (`/api/ai/*`):
+  - `POST /product-chat` — admin.html AI chat tab now uses this
+  - `POST /onboarding/extract` — auto-fills `merchant_ai_profiles`
+  - `GET /rules` — transparent AI policy
+- **🔌 admin.html wired to real AI**: AI chat tab now calls `/api/ai/product-chat` (20s timeout race with mock fallback). Shows "✓ AI حقيقي" or "⚡ تجريبي" badge so merchant knows. Renders real specs/benefits/usage/warnings/warranty from Gemini.
+- **🧪 21/21 smoke tests pass** (`/app/backend/tests/test_store_v2_smoke.py`)
+
+### 🟡 LATEST (earlier today)
+- **AI Chat Tab Major Redesign**: removed top header + quick-options bar, full-height chat, Arabic parser (`parseUserSpec`), in-chat approve/reject buttons, smooth auto-scroll
+- **3-Tab Product Editor UI polish**: collapsible banners, clickable tool chips, dark preview tab
 
 ### 🔴 PENDING (Priority Order)
 
