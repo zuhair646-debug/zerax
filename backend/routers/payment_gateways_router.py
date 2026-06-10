@@ -19,6 +19,7 @@ from pydantic import BaseModel
 from modules.payments.gateways_catalog import (
     GATEWAYS, COUNTRY_PROFILES, gateways_for_country, gateway_by_id, country_profile,
 )
+from modules.payments.gateway_enrichment import enrich, UNIVERSAL_IDS
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/payments", tags=["payments"])
@@ -38,8 +39,9 @@ class ToggleIn(BaseModel):
 
 @router.get("/catalog")
 async def list_catalog():
-    """Return the full gateway catalog (all countries, all types)."""
-    return {"count": len(GATEWAYS), "gateways": GATEWAYS}
+    """Return the full gateway catalog (all countries, all types), enriched."""
+    enriched = [enrich(g) for g in GATEWAYS]
+    return {"count": len(enriched), "gateways": enriched, "universal_ids": list(UNIVERSAL_IDS)}
 
 
 @router.get("/countries")
@@ -50,21 +52,30 @@ async def list_country_profiles():
 
 @router.get("/by-country")
 async def by_country(country: str):
-    """List gateways available in a given ISO-3166 country code."""
-    profile = country_profile(country)
-    if not profile:
-        # unknown country — still return wildcard-supported gateways
-        profile = {
-            "name_ar": country.upper(), "currency": "USD", "vat_pct": 0,
-            "invoice_standard": "Standard tax invoice", "shipping_partners": [],
-            "recommended_gateways": [], "regulator": "—",
-        }
-    gws = gateways_for_country(country)
+    """List gateways available in a given ISO-3166 country code.
+    Always includes universal gateways (Stripe/PayPal/Apple/Google/COD/Bank/USDC)
+    alongside the country-specific ones — sorted so locals appear first.
+    """
+    cc = country.upper()
+    profile = country_profile(country) or {
+        "name_ar": cc, "currency": "USD", "vat_pct": 0,
+        "invoice_standard": "Standard tax invoice", "shipping_partners": [],
+        "recommended_gateways": [], "regulator": "—",
+    }
+    # Country-specific (with wildcard) + universal merged + de-duped
+    base = gateways_for_country(country)
+    seen = {g["id"] for g in base}
+    for g in GATEWAYS:
+        if g["id"] in UNIVERSAL_IDS and g["id"] not in seen:
+            base.append(g); seen.add(g["id"])
+    # Sort: country-local first (not universal), then universals; bnpl before card before wallet…
+    type_order = {"bnpl":1,"card":2,"wallet":3,"qr":4,"bank":5,"crypto":6,"cod":7}
+    base.sort(key=lambda g: (1 if g["id"] in UNIVERSAL_IDS else 0, type_order.get(g["type"], 9)))
+    enriched = [enrich(g) for g in base]
     return {
-        "country": country.upper(),
-        "profile": profile,
-        "available_count": len(gws),
-        "gateways": gws,
+        "country": cc, "profile": profile,
+        "available_count": len(enriched), "universal_count": sum(1 for g in enriched if g["is_universal"]),
+        "gateways": enriched,
     }
 
 
@@ -73,7 +84,7 @@ async def get_gateway(gateway_id: str):
     g = gateway_by_id(gateway_id)
     if not g:
         raise HTTPException(status_code=404, detail="gateway not found")
-    return g
+    return enrich(g)
 
 
 @router.post("/checkout-preview")

@@ -3614,16 +3614,29 @@ async function gwLoadCountry(){
       const enabled=GW_ENABLED.includes(g.id);
       const typeColor={card:'#1e40af',wallet:'#7c3aed',bnpl:'#ec4899',bank:'#059669',cod:'#10b981',qr:'#0891b2',crypto:'#f59e0b'}[g.type]||'#6b7280';
       const typeIco={card:'💳',wallet:'📱',bnpl:'💎',bank:'🏦',cod:'💵',qr:'📲',crypto:'₿'}[g.type]||'💰';
-      return `<div style="background:#fff;border:2px solid ${enabled?'#7c3aed':'#e5e7eb'};border-radius:12px;padding:10px;margin-bottom:8px;display:flex;align-items:center;gap:10px">
-        <div style="width:46px;height:46px;border-radius:10px;background:${g.badge.bg};color:${g.badge.fg};display:flex;align-items:center;justify-content:center;font-weight:900;font-size:11px;text-align:center;line-height:1.1;flex-shrink:0">${g.name_en.slice(0,7)}</div>
-        <div style="flex:1;min-width:0">
-          <div style="font-size:13px;font-weight:900">${g.name_ar} <span style="background:${typeColor}20;color:${typeColor};padding:2px 6px;border-radius:99px;font-size:9px;margin-right:4px">${typeIco} ${g.type.toUpperCase()}</span></div>
-          <div style="font-size:10px;color:#6b7280;margin-top:2px">${g.badge.slogan_ar} · ${g.fees_hint}</div>
-          ${g.installments?`<div style="font-size:10px;color:#ec4899;margin-top:2px">💎 ${g.installments.plans.map(p=>p.count+'×').join(' / ')}</div>`:''}
+      const fees=g.real_fees||{};
+      const universalBadge=g.is_universal?'<span style="background:#fef3c7;color:#92400e;padding:2px 6px;border-radius:99px;font-size:9px;font-weight:900;margin-right:4px">🌐 عالمي</span>':'';
+      return `<div style="background:#fff;border:2px solid ${enabled?'#7c3aed':'#e5e7eb'};border-radius:12px;padding:10px;margin-bottom:8px">
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px">
+          <div style="width:46px;height:46px;border-radius:10px;background:${g.badge.bg};color:${g.badge.fg};display:flex;align-items:center;justify-content:center;font-weight:900;font-size:11px;text-align:center;line-height:1.1;flex-shrink:0">${g.name_en.slice(0,7)}</div>
+          <div style="flex:1;min-width:0">
+            <div style="font-size:13px;font-weight:900">${g.name_ar} ${universalBadge}<span style="background:${typeColor}20;color:${typeColor};padding:2px 6px;border-radius:99px;font-size:9px;margin-right:4px">${typeIco} ${g.type.toUpperCase()}</span></div>
+            <div style="font-size:10px;color:#6b7280;margin-top:2px">${g.badge.slogan_ar}</div>
+            <div style="font-size:10px;color:#dc2626;margin-top:2px">💰 رسوم التاجر: ${fees.merchant||g.fees_hint||'—'} · تسوية ${fees.settlement_days||1} يوم</div>
+          </div>
+          <label style="display:flex;align-items:center;cursor:pointer">
+            <input type="checkbox" ${enabled?'checked':''} onchange="gwToggle('${g.id}',this.checked)" style="width:36px;height:20px;appearance:none;background:${enabled?'#7c3aed':'#cbd5e1'};border-radius:99px;cursor:pointer">
+          </label>
         </div>
-        <label style="display:flex;align-items:center;cursor:pointer">
-          <input type="checkbox" ${enabled?'checked':''} onchange="gwToggle('${g.id}',this.checked)" style="width:36px;height:20px;appearance:none;background:${enabled?'#7c3aed':'#cbd5e1'};border-radius:99px;position:relative;cursor:pointer;transition:all .2s">
-        </label>
+        <div style="display:flex;gap:5px;flex-wrap:wrap">
+          <a href="${g.merchant_signup_url||'#'}" target="_blank" style="background:#10b981;color:#fff;padding:5px 10px;border-radius:99px;font-size:10px;font-weight:900;text-decoration:none">🚀 تسجيل التاجر</a>
+          <a href="${g.merchant_dashboard_url||'#'}" target="_blank" style="background:#0a0a14;color:#fbbf24;padding:5px 10px;border-radius:99px;font-size:10px;font-weight:900;text-decoration:none">🔐 لوحة التحكم</a>
+          <a href="${g.developer_docs_url||'#'}" target="_blank" style="background:#7c3aed;color:#fff;padding:5px 10px;border-radius:99px;font-size:10px;font-weight:900;text-decoration:none">📚 API Docs</a>
+          ${g.required_credentials&&g.required_credentials.length?`<button onclick="gwOpenConnect('${g.id}')" style="background:#fbbf24;color:#0a0a14;padding:5px 10px;border:none;border-radius:99px;font-size:10px;font-weight:900;cursor:pointer;font-family:inherit">🔌 اربط الآن</button>`:''}
+          <button onclick="gwShowHelp('${g.id}')" style="background:#fff;color:#7c3aed;padding:5px 10px;border:1px solid #ddd6fe;border-radius:99px;font-size:10px;font-weight:900;cursor:pointer;font-family:inherit">🤖 مساعد AI</button>
+        </div>
+        <div id="gw-help-${g.id}" style="display:none;background:#faf5ff;border:1px solid #ddd6fe;border-radius:8px;padding:8px;margin-top:8px;font-size:11px;line-height:1.7;color:#5b21b6">${g.ai_helper_ar||''}</div>
+        <div id="gw-connect-${g.id}" style="display:none;background:#fef3c7;border:1px dashed #f59e0b;border-radius:8px;padding:10px;margin-top:8px"></div>
       </div>`;
     }).join('');
     // preview selector
@@ -3633,6 +3646,44 @@ async function gwLoadCountry(){
 }
 async function gwToggle(gid,enable){
   try{await fetch(API+'/api/payments/toggle',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({gateway_id:gid,enable})});if(enable&&!GW_ENABLED.includes(gid))GW_ENABLED.push(gid);if(!enable)GW_ENABLED=GW_ENABLED.filter(x=>x!==gid);toast(enable?'✓ تم تفعيل '+gid:'تم تعطيل '+gid);}catch(_){}
+}
+function gwShowHelp(gid){
+  const el=document.getElementById('gw-help-'+gid);
+  if(el)el.style.display=el.style.display==='none'?'block':'none';
+}
+async function gwOpenConnect(gid){
+  const el=document.getElementById('gw-connect-'+gid);
+  if(!el)return;
+  if(el.style.display!=='none'){el.style.display='none';return;}
+  try{
+    const r=await fetch(API+'/api/payments/gateway/'+gid);
+    const g=await r.json();
+    const creds=g.required_credentials||[];
+    const saved=JSON.parse(localStorage.getItem('zx_gw_creds_'+gid)||'{}');
+    el.innerHTML=`
+      <h5 style="font-size:12px;font-weight:900;color:#92400e;margin-bottom:8px">🔌 ربط ${g.name_ar} بمتجرك</h5>
+      <p style="font-size:11px;color:#6b7280;margin-bottom:10px;line-height:1.6">سجّل في <a href="${g.merchant_signup_url}" target="_blank" style="color:#7c3aed;font-weight:900">بوابة ${g.name_ar} ↗</a> ثم انسخ المعلومات أدناه:</p>
+      ${creds.map(c=>{
+        const val=saved[c.name]||'';
+        const optionsHtml=c.options?`<select id="cred-${gid}-${c.name}" style="width:100%;padding:8px;border:1.5px solid #fcd34d;border-radius:8px;font-family:inherit;font-size:12px;margin-bottom:4px">${c.options.map(o=>`<option value="${o}"${val===o?' selected':''}>${o}</option>`).join('')}</select>`:`<input id="cred-${gid}-${c.name}" type="${c.type==='password'?'password':'text'}" value="${val}" placeholder="${c.label_ar}" style="width:100%;padding:8px;border:1.5px solid #fcd34d;border-radius:8px;font-family:inherit;font-size:12px;margin-bottom:4px;direction:ltr;text-align:right">`;
+        return `<div style="margin-bottom:8px"><label style="font-size:10px;font-weight:900;color:#92400e;display:block;margin-bottom:3px">${c.label_ar}</label>${optionsHtml}<small style="font-size:9px;color:#78350f;line-height:1.4;display:block">💡 ${c.where_ar||''}</small></div>`;
+      }).join('')}
+      ${creds.length===0?'<p style="font-size:11px;color:#92400e">لا تحتاج بيانات إضافية — البوابة جاهزة فور التفعيل.</p>':''}
+      <button onclick="gwSaveCreds('${gid}')" style="background:#10b981;color:#fff;padding:8px 16px;border:none;border-radius:8px;font-family:inherit;font-weight:900;font-size:12px;cursor:pointer;margin-top:6px">💾 حفظ وربط البوابة</button>
+    `;
+    el.style.display='block';
+  }catch(e){alert('فشل التحميل');}
+}
+function gwSaveCreds(gid){
+  const creds={};
+  document.querySelectorAll(`[id^="cred-${gid}-"]`).forEach(inp=>{
+    const k=inp.id.replace(`cred-${gid}-`,'');
+    creds[k]=inp.value;
+  });
+  localStorage.setItem('zx_gw_creds_'+gid,JSON.stringify(creds));
+  gwToggle(gid,true);
+  toast('✓ تم حفظ بيانات '+gid+' محلياً · جاهز للربط الفعلي');
+  document.getElementById('gw-connect-'+gid).style.display='none';
 }
 async function gwPreview(){
   const amount=+document.getElementById('gw-test-amount').value||0;
