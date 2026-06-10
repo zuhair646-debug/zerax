@@ -966,6 +966,8 @@ body.admin-mode .add-product-card{display:flex}
       <button class="acp-tab active" data-tab="products" onclick="switchAcpTab('products')">📦 <span data-key="acp_tab_products">المنتجات</span></button>
       <button class="acp-tab" data-tab="video" onclick="switchAcpTab('video')">🎬 <span data-key="acp_tab_video">Video Studio</span></button>
       <button class="acp-tab" data-tab="delivery" onclick="switchAcpTab('delivery')">🚚 <span data-key="acp_tab_delivery">التوصيل</span></button>
+      <button class="acp-tab" data-tab="payroll" onclick="switchAcpTab('payroll')">📊 <span data-key="acp_tab_payroll">المحاسبة</span></button>
+      <button class="acp-tab" data-tab="gateways" onclick="switchAcpTab('gateways')">🌍 <span data-key="acp_tab_gateways">وسائل الدفع</span></button>
     </div>
     <div class="acp-body">
       <!-- ── PRODUCTS TAB ── -->
@@ -1212,6 +1214,53 @@ body.admin-mode .add-product-card{display:flex}
           <h5 style="font-size:12px;font-weight:900;color:#0a0a0a;margin-bottom:8px">🗺️ مناطق التوصيل (للاحتياط)</h5>
           <div id="dlv-zones-list" style="margin-bottom:14px"></div>
           <button class="acp-save-btn" onclick="dlvSaveSettings()">💾 حفظ كل الإعدادات</button>
+        </div>
+      </div>
+
+      <!-- ── PAYROLL TAB ── -->
+      <div class="acp-section" data-section="payroll">
+        <p style="font-size:11px;color:#6b7280;margin-bottom:10px;line-height:1.6">📊 نظام محاسبة شامل — يحسب رواتب الموظفين + عمولات السائقين تلقائياً، يولّد كشوفات PDF متوافقة مع ZATCA، ويرسل إشعارات WhatsApp.</p>
+
+        <div style="display:flex;gap:6px;margin-bottom:12px">
+          <select id="pr-month" style="flex:1;padding:9px;border:1.5px solid #e5e7eb;border-radius:10px;font-family:inherit;font-size:12px;font-weight:900"></select>
+          <select id="pr-year" style="flex:1;padding:9px;border:1.5px solid #e5e7eb;border-radius:10px;font-family:inherit;font-size:12px;font-weight:900"></select>
+          <button class="acp-secondary" onclick="prCalculate()" style="flex:0 0 auto;padding:9px 16px;background:#7c3aed;color:#fff;border-color:#7c3aed">🧮 احسب</button>
+        </div>
+
+        <div id="pr-summary" style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:14px"></div>
+        <div id="pr-lines"></div>
+
+        <div id="pr-actions" style="display:none;margin-top:14px">
+          <button class="acp-ai-btn" onclick="prRun()" style="background:linear-gradient(135deg,#10b981,#059669)">
+            💸 <span>تحويل دفعة شهرية واحدة لجميع السائقين</span>
+          </button>
+          <p style="font-size:10px;color:#6b7280;margin-top:8px;text-align:center;line-height:1.6">يرسل كل سائق دفعته الشهرية على وسيلته المحددة + إشعار WhatsApp + إيصال إلكتروني</p>
+        </div>
+
+        <div id="pr-results" style="margin-top:14px"></div>
+      </div>
+
+      <!-- ── GATEWAYS TAB ── -->
+      <div class="acp-section" data-section="gateways">
+        <p style="font-size:11px;color:#6b7280;margin-bottom:10px;line-height:1.6">🌍 اختر وسائل الدفع لكل دولة تخدمها — Tabby و Tamara للسعودية، Klarna و Afterpay و Affirm لأمريكا، Alipay و WeChat للصين، وغيرها.</p>
+
+        <div class="acp-field">
+          <label>الدولة المستهدفة</label>
+          <select id="gw-country" onchange="gwLoadCountry()"></select>
+        </div>
+
+        <div id="gw-country-profile"></div>
+        <div id="gw-gateways-list"></div>
+
+        <!-- Preview widget -->
+        <div style="background:#faf5ff;border:1.5px solid #ddd6fe;border-radius:12px;padding:12px;margin-top:14px">
+          <h5 style="font-size:12px;font-weight:900;color:#7c3aed;margin-bottom:8px">🧪 جرّب الـ Widget</h5>
+          <div class="acp-row">
+            <div class="acp-field"><label>المبلغ</label><input id="gw-test-amount" type="number" value="500" min="1"></div>
+            <div class="acp-field"><label>البوابة</label><select id="gw-test-gateway"></select></div>
+          </div>
+          <button class="acp-secondary" onclick="gwPreview()" style="background:#7c3aed;color:#fff;border-color:#7c3aed">🚀 معاينة Widget</button>
+          <div id="gw-preview-result" style="margin-top:10px"></div>
         </div>
       </div>
     </div>
@@ -2831,6 +2880,8 @@ function switchAcpTab(tab){
   document.querySelectorAll('.acp-tab').forEach(t=>t.classList.toggle('active',t.dataset.tab===tab));
   document.querySelectorAll('.acp-section').forEach(s=>s.classList.toggle('active',s.dataset.section===tab));
   if(tab==='delivery')dlvLoadAll();
+  if(tab==='payroll')prInit();
+  if(tab==='gateways')gwInit();
 }
 function syncCreditsDisplay(){
   const el=document.getElementById('acp-credits-value');if(el)el.textContent=ZERAX_CREDITS;
@@ -3453,6 +3504,156 @@ async function dlvSaveSettings(){
     if(!r.ok)throw new Error();
     DLV_SETTINGS_CACHE=await r.json();
     toast('✓ تم حفظ الإعدادات');
+  }catch(e){alert('فشل');}
+}
+
+
+// ═══════════════════════ PAYROLL (auto-calc + bulk payout + statements) ═══════════════════════
+const MONTHS_AR=['يناير','فبراير','مارس','أبريل','مايو','يونيو','يوليو','أغسطس','سبتمبر','أكتوبر','نوفمبر','ديسمبر'];
+function prInit(){
+  const mSel=document.getElementById('pr-month'),ySel=document.getElementById('pr-year');
+  if(!mSel.options.length){
+    mSel.innerHTML=MONTHS_AR.map((m,i)=>`<option value="${i+1}">${m}</option>`).join('');
+    const now=new Date();mSel.value=now.getMonth()+1;
+    const years=[2025,2026,2027];ySel.innerHTML=years.map(y=>`<option value="${y}">${y}</option>`).join('');
+    ySel.value=now.getFullYear();
+  }
+  prCalculate();
+}
+async function prCalculate(){
+  const m=document.getElementById('pr-month').value, y=document.getElementById('pr-year').value;
+  try{
+    const r=await fetch(API+`/api/payroll/calculate?month=${m}&year=${y}`);
+    const d=await r.json();
+    document.getElementById('pr-summary').innerHTML=`
+      <div class="dlv-stat-box"><div class="v">${d.total_payable_sar}</div><div class="l">إجمالي المستحق (ر.س)</div></div>
+      <div class="dlv-stat-box"><div class="v">${d.drivers_count}</div><div class="l">سائقين</div></div>
+      <div class="dlv-stat-box"><div class="v" style="color:#1e40af">${d.salaried_total}</div><div class="l">رواتب موظفين</div></div>
+      <div class="dlv-stat-box"><div class="v" style="color:#9d174d">${d.commission_total}</div><div class="l">عمولات</div></div>
+    `;
+    document.getElementById('pr-lines').innerHTML=`<h5 style="font-size:12px;font-weight:900;color:#0a0a0a;margin-bottom:8px">📋 تفاصيل ${d.label}</h5>`+
+      d.lines.map(l=>{
+        const empBadge=l.employment_type==='salaried'?`<span style="background:#dbeafe;color:#1e40af;padding:2px 6px;border-radius:99px;font-size:9px;font-weight:900">📅 راتب</span>`:`<span style="background:#fce7f3;color:#9d174d;padding:2px 6px;border-radius:99px;font-size:9px;font-weight:900">💸 عمولة</span>`;
+        return `<div class="dlv-driver">
+          <div class="avt">${l.driver_name.charAt(0)}</div>
+          <div style="flex:1;min-width:0">
+            <div class="nm">${l.driver_name} ${empBadge}</div>
+            <div class="stat-row">${l.kind} · ${l.deliveries_this_month} توصيل · ${dlvPayMethodLabel(l.payout_method)}</div>
+          </div>
+          <div style="font-weight:900;color:${l.amount_sar>0?'#10b981':'#94a3b8'};font-size:14px">${l.amount_sar} ر.س</div>
+          <button onclick="prOpenStatement('${l.driver_id}',${m},${y})" style="background:#0a0a14;color:#fbbf24;border:none;padding:7px 12px;border-radius:99px;font-family:inherit;font-weight:900;font-size:11px;cursor:pointer">📄 كشف</button>
+        </div>`;
+      }).join('');
+    document.getElementById('pr-actions').style.display=d.total_payable_sar>0?'block':'none';
+  }catch(e){alert('فشل الحساب');}
+}
+function prOpenStatement(driverId,m,y){
+  window.open(API+`/api/payroll/statement/${driverId}?month=${m}&year=${y}`,'_blank');
+}
+async function prRun(){
+  if(!confirm('سيتم تحويل دفعات لجميع السائقين الآن. هل أنت متأكد؟'))return;
+  const m=document.getElementById('pr-month').value, y=document.getElementById('pr-year').value;
+  try{
+    const r=await fetch(API+'/api/payroll/run',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({month:+m,year:+y,notify_whatsapp:true})});
+    const d=await r.json();
+    document.getElementById('pr-results').innerHTML=`
+      <div style="background:linear-gradient(135deg,#d1fae5,#a7f3d0);border:1.5px solid #10b981;border-radius:14px;padding:14px;margin-bottom:10px;text-align:center">
+        <div style="font-size:32px;margin-bottom:6px">✅</div>
+        <h4 style="font-size:14px;font-weight:900;color:#065f46;margin-bottom:4px">تم تنفيذ الدفعات!</h4>
+        <p style="font-size:12px;color:#065f46">تم تحويل <b>${d.total_paid_sar} ر.س</b> على ${d.processed} سائق</p>
+      </div>
+      ${d.results.map(r=>{
+        const status=r.status==='paid'?'<span style="color:#10b981">✓ مدفوع</span>':r.status==='skipped'?'<span style="color:#94a3b8">— تخطٍ</span>':'<span style="color:#dc2626">✕ فشل</span>';
+        return `<div class="dlv-order" style="padding:10px"><div class="top"><div><div class="cust">${r.driver_name}</div><div style="font-size:10px;color:#6b7280">${r.amount_sar} ر.س · ${dlvPayMethodLabel(r.payout_method)} · ${r.reference||'—'}</div></div>${status}</div>${r.whatsapp_message?`<div style="font-size:10px;color:#7c3aed;background:#faf5ff;padding:6px;border-radius:6px;margin-top:6px;line-height:1.5;white-space:pre-line">📱 WA: ${r.whatsapp_message.slice(0,140)}…</div>`:''}</div>`;
+      }).join('')}`;
+    prCalculate();
+  }catch(e){alert('فشل التحويل');}
+}
+
+// ═══════════════════════ GLOBAL PAYMENT GATEWAYS ═══════════════════════
+let GW_COUNTRIES=[],GW_CURRENT_COUNTRY='SA',GW_ENABLED=[];
+async function gwInit(){
+  try{
+    const [profR,enR]=await Promise.all([
+      fetch(API+'/api/payments/countries').then(r=>r.json()),
+      fetch(API+'/api/payments/enabled').then(r=>r.json())
+    ]);
+    GW_ENABLED=enR.enabled.map(g=>g.id);
+    const sel=document.getElementById('gw-country');
+    const codes=Object.keys(profR.profiles);
+    sel.innerHTML=codes.map(c=>{
+      const p=profR.profiles[c];
+      const flag={SA:'🇸🇦',AE:'🇦🇪',EG:'🇪🇬',KW:'🇰🇼',BH:'🇧🇭',QA:'🇶🇦',US:'🇺🇸',GB:'🇬🇧',DE:'🇩🇪',FR:'🇫🇷',NL:'🇳🇱',CN:'🇨🇳',IN:'🇮🇳',SG:'🇸🇬'}[c]||'🌐';
+      return `<option value="${c}">${flag} ${p.name_ar}</option>`;
+    }).join('');
+    sel.value=GW_CURRENT_COUNTRY;
+    gwLoadCountry();
+  }catch(_){}
+}
+async function gwLoadCountry(){
+  const c=document.getElementById('gw-country').value;
+  GW_CURRENT_COUNTRY=c;
+  try{
+    const r=await fetch(API+'/api/payments/by-country?country='+c);
+    const d=await r.json();
+    // profile panel
+    const p=d.profile;
+    document.getElementById('gw-country-profile').innerHTML=`
+      <div style="background:linear-gradient(135deg,#faf5ff,#fff);border:1.5px solid #ddd6fe;border-radius:14px;padding:14px;margin-bottom:14px">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;font-size:12px;line-height:1.7">
+          <div>🏛️ <b>الجهة المنظِّمة:</b> ${p.regulator}</div>
+          <div>💱 <b>العملة:</b> ${p.currency}</div>
+          <div>📊 <b>ضريبة:</b> ${p.vat_pct}%</div>
+          <div>📑 <b>الفاتورة:</b> ${p.invoice_standard}</div>
+          <div style="grid-column:1/-1">🚚 <b>الشحن:</b> ${(p.shipping_partners||[]).join(' · ')||'—'}</div>
+        </div>
+      </div>`;
+    // gateways list
+    const list=d.gateways;
+    document.getElementById('gw-gateways-list').innerHTML=list.map(g=>{
+      const enabled=GW_ENABLED.includes(g.id);
+      const typeColor={card:'#1e40af',wallet:'#7c3aed',bnpl:'#ec4899',bank:'#059669',cod:'#10b981',qr:'#0891b2',crypto:'#f59e0b'}[g.type]||'#6b7280';
+      const typeIco={card:'💳',wallet:'📱',bnpl:'💎',bank:'🏦',cod:'💵',qr:'📲',crypto:'₿'}[g.type]||'💰';
+      return `<div style="background:#fff;border:2px solid ${enabled?'#7c3aed':'#e5e7eb'};border-radius:12px;padding:10px;margin-bottom:8px;display:flex;align-items:center;gap:10px">
+        <div style="width:46px;height:46px;border-radius:10px;background:${g.badge.bg};color:${g.badge.fg};display:flex;align-items:center;justify-content:center;font-weight:900;font-size:11px;text-align:center;line-height:1.1;flex-shrink:0">${g.name_en.slice(0,7)}</div>
+        <div style="flex:1;min-width:0">
+          <div style="font-size:13px;font-weight:900">${g.name_ar} <span style="background:${typeColor}20;color:${typeColor};padding:2px 6px;border-radius:99px;font-size:9px;margin-right:4px">${typeIco} ${g.type.toUpperCase()}</span></div>
+          <div style="font-size:10px;color:#6b7280;margin-top:2px">${g.badge.slogan_ar} · ${g.fees_hint}</div>
+          ${g.installments?`<div style="font-size:10px;color:#ec4899;margin-top:2px">💎 ${g.installments.plans.map(p=>p.count+'×').join(' / ')}</div>`:''}
+        </div>
+        <label style="display:flex;align-items:center;cursor:pointer">
+          <input type="checkbox" ${enabled?'checked':''} onchange="gwToggle('${g.id}',this.checked)" style="width:36px;height:20px;appearance:none;background:${enabled?'#7c3aed':'#cbd5e1'};border-radius:99px;position:relative;cursor:pointer;transition:all .2s">
+        </label>
+      </div>`;
+    }).join('');
+    // preview selector
+    const tsel=document.getElementById('gw-test-gateway');
+    tsel.innerHTML=list.map(g=>`<option value="${g.id}">${g.name_ar}</option>`).join('');
+  }catch(_){}
+}
+async function gwToggle(gid,enable){
+  try{await fetch(API+'/api/payments/toggle',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({gateway_id:gid,enable})});if(enable&&!GW_ENABLED.includes(gid))GW_ENABLED.push(gid);if(!enable)GW_ENABLED=GW_ENABLED.filter(x=>x!==gid);toast(enable?'✓ تم تفعيل '+gid:'تم تعطيل '+gid);}catch(_){}
+}
+async function gwPreview(){
+  const amount=+document.getElementById('gw-test-amount').value||0;
+  const gid=document.getElementById('gw-test-gateway').value;
+  try{
+    const r=await fetch(API+`/api/payments/checkout-preview?gateway_id=${gid}&amount=${amount}&currency=SAR`,{method:'POST'});
+    const d=await r.json();
+    if(!d.eligible){document.getElementById('gw-preview-result').innerHTML=`<div style="background:#fef2f2;color:#991b1b;padding:10px;border-radius:8px;font-size:12px">⚠️ ${d.reason}</div>`;return;}
+    let html=`<div style="background:#fff;border:1.5px solid ${d.badge.bg};border-radius:12px;padding:14px;margin-top:10px;text-align:center">`;
+    html+=`<div style="background:${d.badge.bg};color:${d.badge.fg};display:inline-block;padding:8px 18px;border-radius:99px;font-weight:900;font-size:13px;margin-bottom:8px">${d.name_ar}</div>`;
+    html+=`<p style="font-size:11px;color:#6b7280;margin-bottom:10px">${d.badge.slogan_ar}</p>`;
+    if(d.installments){
+      html+='<div style="display:flex;flex-direction:column;gap:6px;text-align:right">';
+      d.installments.forEach(p=>{html+=`<div style="background:#faf5ff;border:1px solid #ddd6fe;border-radius:8px;padding:8px;font-size:12px;display:flex;justify-content:space-between"><span>${p.label_ar}</span><b style="color:#7c3aed">${p.total_with_interest} ${d.currency}</b></div>`;});
+      html+='</div>';
+    }else{
+      html+=`<div style="font-size:18px;font-weight:900;color:${d.badge.bg.startsWith('#0')?'#0a0a14':d.badge.bg}">${d.amount} ${d.currency}</div>`;
+    }
+    html+=`<div style="margin-top:10px;font-size:10px;color:#6b7280">${d.checkout.otp_required?'🔒 يتطلب OTP':''} ${d.checkout.kyc_required?'· 🆔 KYC':''} · 📲 ${d.checkout.flow}</div>`;
+    html+='</div>';
+    document.getElementById('gw-preview-result').innerHTML=html;
   }catch(e){alert('فشل');}
 }
 

@@ -3555,7 +3555,13 @@ try:
     # Delivery & Driver Management (merchant + driver + customer tracking)
     from routers.delivery_router import router as _delivery_router
     app.include_router(_delivery_router)
-    logging.getLogger(__name__).info("Care Portal + Image/Video Studio + Delivery modules registered")
+    # Payroll (auto-calc, bulk payout, PDF statements, WhatsApp notify)
+    from routers.payroll_router import router as _payroll_router
+    app.include_router(_payroll_router)
+    # Global Payment Gateways (Tabby/Tamara/Klarna/Alipay/etc. catalog)
+    from routers.payment_gateways_router import router as _payments_router
+    app.include_router(_payments_router)
+    logging.getLogger(__name__).info("Care Portal + Image/Video Studio + Delivery + Payroll + Payments modules registered")
 except Exception as _care_e:
     logging.getLogger(__name__).error(f"Failed to register care_portal module: {_care_e}", exc_info=True)
 
