@@ -81,7 +81,8 @@ class StoryboardRequest(BaseModel):
     product_description: Optional[str] = ""
     duration_seconds: int = 30   # 15 | 30 | 45 | 60
     tone: str = "energetic"      # energetic | luxury | warm | tech
-    lang: str = "ar"             # ar | en
+    lang: str = "ar"             # ar | en | …
+    dialect: Optional[str] = None  # full dialect code e.g. ar-sa-hijazi, ar-kw, ar-eg
     cta: Optional[str] = None    # e.g. "اطلب الآن"
 
 
@@ -122,36 +123,92 @@ async def generate_storyboard(req: StoryboardRequest):
     cta_default = "اطلب الآن" if req.lang == "ar" else "Order now"
     cta = (req.cta or cta_default).strip()
 
+    # Build a strong, dialect-specific language instruction
+    DIALECT_MAP = {
+        "ar-sa": "العربية باللهجة السعودية النجدية (لهجة الرياض): يلاه، خلاص، يبا، كذا، الحين، يا حلو",
+        "ar-sa-hijazi": "العربية باللهجة الحجازية (جدة/مكة): يلا، كده، إيش، طيب، إنت، عنّك",
+        "ar-sa-eastern": "العربية باللهجة الشرقية السعودية (الدمام/الأحساء)",
+        "ar-sa-southern": "العربية باللهجة الجنوبية السعودية (أبها/جازان)",
+        "ar-kw": "العربية باللهجة الكويتية: شلون، عاد، ها، الحين، شفيك",
+        "ar-ae": "العربية باللهجة الإماراتية: شو، الحين، يبا، شحالك",
+        "ar-qa": "العربية باللهجة القطرية",
+        "ar-bh": "العربية باللهجة البحرينية",
+        "ar-om": "العربية باللهجة العُمانية",
+        "ar-eg": "العربية باللهجة المصرية: إيه، عايز، كده، خالص، أوي، يلا",
+        "ar-jo": "العربية باللهجة الأردنية",
+        "ar-lb": "العربية باللهجة اللبنانية",
+        "ar-sy": "العربية باللهجة السورية",
+        "ar-ps": "العربية باللهجة الفلسطينية",
+        "ar-iq": "العربية باللهجة العراقية: شلون، شكو، هواي",
+        "ar-ye": "العربية باللهجة اليمنية",
+        "ar-ma": "العربية باللهجة المغربية الدارجة",
+        "ar-dz": "العربية باللهجة الجزائرية",
+        "ar-tn": "العربية باللهجة التونسية",
+        "ar-ly": "العربية باللهجة الليبية",
+        "ar-sd": "العربية باللهجة السودانية",
+        "ar-msa": "العربية الفصحى الحديثة (MSA) — رسمية وراقية",
+        "ar": "العربية باللهجة السعودية النجدية (الافتراضي)",
+        "en-us": "English (American, conversational)",
+        "en-gb": "English (British, polished)",
+        "en": "English (natural marketing copy)",
+        "fr": "Français (marketing naturel)",
+        "es": "Español (marketing natural)",
+        "de": "Deutsch (natürliche Werbesprache)",
+        "it": "Italiano (marketing naturale)",
+        "pt-br": "Português brasileiro (marketing natural)",
+        "ru": "Русский (естественный маркетинг)",
+        "tr": "Türkçe (doğal pazarlama)",
+        "fa": "فارسی (تبلیغاتی روان)",
+        "ur": "اردو (طبیعی مارکیٹنگ)",
+        "hi": "हिन्दी (प्राकृतिक मार्केटिंग)",
+        "bn": "বাংলা (স্বাভাবিক বিপণন)",
+        "id": "Bahasa Indonesia (pemasaran natural)",
+        "ms": "Bahasa Melayu (pemasaran semula jadi)",
+        "th": "ภาษาไทย (การตลาดที่เป็นธรรมชาติ)",
+        "vi": "Tiếng Việt (tiếp thị tự nhiên)",
+        "zh-cn": "中文普通话 (自然营销文案)",
+        "zh-tw": "繁體中文 (自然行銷文案)",
+        "ja": "日本語 (自然なマーケティング)",
+        "ko": "한국어 (자연스러운 마케팅)",
+        "sw": "Kiswahili (uuzaji wa asili)",
+    }
+    dialect_code = (req.dialect or req.lang or "ar").lower()
+    lang_instruction = DIALECT_MAP.get(dialect_code) or DIALECT_MAP.get(req.lang) or "العربية الفصحى"
+    is_arabic = dialect_code.startswith("ar")
+    lang_short = "Arabic" if is_arabic else "the target language"
+
     sys_msg = (
-        "You are Zerax MarketingDirector — an elite Arabic advertising copywriter "
-        "from Saudi Arabia. Output ONLY valid JSON. No markdown, no commentary."
+        f"You are Zerax MarketingDirector — an elite advertising copywriter. "
+        f"You MUST write all narration and titles in: {lang_instruction}. "
+        f"NEVER use English unless the requested language IS English. Output ONLY valid JSON. No markdown, no commentary."
     )
     user_prompt = f"""Create a {req.duration_seconds}-second promotional ad storyboard.
 
 PRODUCT: {req.product_name}
 DESCRIPTION: {req.product_description or '(no description provided)'}
 TONE: {req.tone}
-LANGUAGE: {'Arabic (Saudi dialect, natural, persuasive)' if req.lang == 'ar' else 'English'}
+LANGUAGE (STRICT — DO NOT DEVIATE): {lang_instruction}
 SCENES: exactly {scene_count} scenes (~5 seconds each)
 CTA (final scene): "{cta}"
 
 Output STRICT JSON:
 {{
-  "title": "<8-word headline in {('Arabic' if req.lang=='ar' else 'English')}>",
+  "title": "<8-word headline in {lang_instruction}>",
   "scenes": [
     {{
       "seq": 1,
-      "narration": "<short spoken line, ≤ 12 words, {('Arabic Saudi dialect' if req.lang=='ar' else 'English')}>",
-      "visual_prompt": "<ENGLISH cinematic image-gen prompt describing exact shot>",
-      "text_overlay": "<optional 2-3 word on-screen caption, same language as narration, or null>"
+      "narration": "<short spoken line in {lang_instruction}, ≤ 12 words, MUST match the dialect EXACTLY>",
+      "visual_prompt": "<ENGLISH cinematic image-gen prompt describing exact shot — keep this in English ALWAYS since it feeds an image model>",
+      "text_overlay": "<optional 2-3 word on-screen caption in {lang_instruction}, or null>"
     }}
   ]
 }}
 
-Rules:
+CRITICAL Rules:
+- ALL narration + ALL title + ALL text_overlay MUST be in {lang_instruction}. Not English (unless EN was requested).
 - The LAST scene's narration MUST end with the CTA "{cta}".
-- visual_prompt always in English (it feeds an image model).
-- Keep narrations punchy and natural — no marketing clichés.
+- visual_prompt always stays in English (it feeds an image model).
+- Keep narrations punchy and natural — use the requested dialect's authentic words and expressions.
 - Return raw JSON only.
 """
 

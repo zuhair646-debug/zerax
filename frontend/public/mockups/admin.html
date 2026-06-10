@@ -1129,7 +1129,7 @@ async function vsGenerateScript(){
   try{
     const m=VS_STATE.idea.match(/(?:فيديو|إعلان|لـ|عن|ل)\s+(.+?)(?:بأسلوب|مدته|مدة|ثانية|$)/);
     const productName=(m?m[1]:VS_STATE.idea.split(/\s+/).slice(0,6).join(' ')).trim();
-    const r=await fetch(API+'/api/promo-video/storyboard',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({product_name:productName,duration_seconds:cfg.duration,tone:cfg.tone,lang,cta:lang==='ar'?'اطلب الآن':'Order now'})});
+    const r=await fetch(API+'/api/promo-video/storyboard',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({product_name:productName,duration_seconds:cfg.duration,tone:cfg.tone,lang,dialect:cfg.langRaw,cta:lang==='ar'?'اطلب الآن':'Order now'})});
     if(!r.ok)throw new Error('فشل توليد السيناريو');
     VS_STATE.story=await r.json();
     // Charge immediately
@@ -1260,7 +1260,9 @@ async function vsGenerateVoice(){
   document.getElementById('content-voice').innerHTML=`<div class="zx-empty"><div class="big-ico">⏳</div><h5>Zerax Voice يسجّل…</h5><p>جودة سينمائية مع مخارج كلمات دقيقة</p></div>`;
   try{
     const text=VS_STATE.story.full_narration||VS_STATE.story.scenes.map(s=>s.narration).join(' ');
-    const r=await fetch(API+'/api/promo-video/generate',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({title:VS_STATE.story.title,scenes:[{narration:text,image_url:VS_STATE.images[0]||''}],duration_seconds:cfg.duration,voice:cfg.voice,full_narration:text,cta:lang==='ar'?'':'',lang})});
+    const firstImg=VS_STATE.images[0]||'';
+    const firstScene=firstImg.startsWith('data:')?{narration:text,image_base64:firstImg}:{narration:text,image_url:firstImg};
+    const r=await fetch(API+'/api/promo-video/generate',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({title:VS_STATE.story.title,scenes:[firstScene],duration_seconds:cfg.duration,voice:cfg.voice,full_narration:text,cta:lang==='ar'?'':'',lang})});
     if(!r.ok)throw new Error('فشل توليد الصوت');
     const d=await r.json();
     VS_STATE.audio={audio_url:d.audio_url,voice_used:d.voice_used};
@@ -1302,7 +1304,12 @@ async function vsRenderFinalVideo(){
   document.getElementById('content-final').innerHTML=`<div class="zx-empty"><div class="big-ico">🎬</div><h5>ffmpeg يدمج…</h5><p>قد يستغرق دقيقة — نضبط lip-sync + توقيت دقيق + جودة سينمائية</p></div>`;
   vsSetProgress(5,'active');vsSetTabStatus('final','pending','🔄 جاري الدمج…');
   try{
-    const scenes=VS_STATE.story.scenes.map((s,i)=>({narration:s.narration,image_url:VS_STATE.images[i]||''}));
+    const scenes=VS_STATE.story.scenes.map((s,i)=>{
+      const img=VS_STATE.images[i]||'';
+      const base={narration:s.narration,text_overlay:s.text_overlay||null};
+      if(img.startsWith('data:'))return {...base,image_base64:img};
+      return {...base,image_url:img};
+    });
     const r=await fetch(API+'/api/promo-video/generate',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({title:VS_STATE.story.title,scenes,duration_seconds:cfg.duration,voice:cfg.voice,full_narration:VS_STATE.story.full_narration,cta:lang==='ar'?'اطلب الآن':'Order now',lang})});
     if(!r.ok)throw new Error('فشل الدمج');
     VS_STATE.video=await r.json();
