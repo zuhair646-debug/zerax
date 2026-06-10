@@ -115,23 +115,23 @@ Build "Zerax" — a multi-tenant Saudi/Arab AI commerce platform with:
 - Service activations are localStorage flags only
 - Auto-dispatch endpoint /api/delivery/auto-assign falls back to simulation
 
-### 🟢 LATEST (Feb 10, 2026 · Sandbox Wave — LAUNCH-READY)
-- **🏖️ Sandbox Router** (`/api/sandbox/*`): Full end-to-end test mode for the WHOLE checkout pipeline
-  - **10 Payment Gateways**: Tabby, Tamara, Mada, STC Pay, HyperPay, Moyasar, Stripe, PayPal, Apple Pay, COD
-  - **6 Shipping Providers**: Aramex, SMSA, Naqel, DHL, J&T Express, Zerax Internal Fleet
-  - Each gateway/provider has built-in FAKE sandbox keys → merchant launches NOW, swaps to live later
-  - `/payment/init` → creates session → returns hosted checkout URL
-  - `/payment/checkout/{id}` → beautiful PSP-branded HTML page (Tabby green, Tamara purple, etc.) with 3 buttons (success/fail/cancel)
-  - `/payment/complete/{id}` → confirms outcome, updates linked order, fires timeline event
-  - `/shipping/quote` → realistic price (base + weight)
-  - `/shipping/create-label` → tracking number + PDF placeholder
-  - `/shipping/advance` → simulates carrier events (picked_up → in_transit → out_for_delivery → delivered)
-  - `/shipping/track/{tracking}` → public tracking page
-  - `POST /merchant/enable-all-sandbox` → ONE-CLICK enables all 10 gateways + 6 providers
-  - Smoke-tested end-to-end: Tabby SAR 250 paid → Aramex label created → 5-event delivery timeline ✅
-- **🏗️ Store V2 Backend** (`/api/store/v2/*`): orders/checkout/wallet/returns/subscriptions/branches/referrals/saved-cards/ai-profile (21/21 tests pass)
-- **🧠 Claude Core** + AI Router: unified `/api/ai/product-chat` wired to admin.html
-- **🎨 Admin UI polish**: 3-tab editor footer auto-hides on AI Chat & Preview tabs
+### 🟢 LATEST (Feb 10, 2026 · Dark Theme + Sandbox Wave — LAUNCH-READY)
+- **🌙 Zerax Unified Dark Theme** (`/mockups/zerax-theme.css`):
+  - Single source of truth via CSS variables (`--zx-*`)
+  - Deep navy-black bg (`#0a0a14`), elegant violet/amber accents, subtle borders
+  - Injected into `admin.html`, `app_mode_full.html`, `driver_app.html`
+  - Onboarding modal redesigned dark with radial gradient hero + per-step accent tints
+  - Custom themed scrollbars · luxurious shadows · `.zx-btn-primary/.zx-card/.zx-input` utilities
+- **🎨 Theme Router** (`/api/theme/*`):
+  - `GET /defaults` — platform default dark theme
+  - `GET /merchant/me` + `PUT /merchant/me` — per-merchant theme override (colors/fonts/radius/buttons)
+  - `GET /by-merchant/{id}` — public; customer storefront + driver app fetch merchant theme automatically
+  - `POST /merchant/reset` — restore platform default
+- **🏖️ Sandbox Router** (`/api/sandbox/*`): Full end-to-end test mode for ALL checkout
+  - 10 Payment Gateways (Tabby/Tamara/Mada/STC Pay/HyperPay/Moyasar/Stripe/PayPal/ApplePay/COD)
+  - 6 Shipping Providers (Aramex/SMSA/Naqel/DHL/J&T/Zerax Fleet)
+  - Beautiful PSP-branded checkout pages (Tabby green, Tamara purple, etc.)
+  - Smoke-tested end-to-end: Tabby payment → Aramex label → 5-event delivery timeline
 
 ### 🔴 PENDING (Priority Order)
 
