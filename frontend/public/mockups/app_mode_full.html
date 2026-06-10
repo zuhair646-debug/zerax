@@ -519,6 +519,11 @@ body.admin-mode .add-product-card{display:flex}
 .pd-info-html ul{padding-inline-start:18px;margin-bottom:14px}
 .pd-info-html li{margin-bottom:5px}
 .pd-empty{text-align:center;padding:30px 16px;color:#9ca3af;background:#f9fafb;border-radius:14px;font-size:13px;line-height:1.6}
+/* Hide merchant-only Studio tools from customer view (now in admin.html) */
+.img-edit-btn,
+#pd-edit-btn,
+[onclick*="openStudio"],
+[onclick*="openStudioFromLightbox"]{display:none!important}
 /* ─── RICH ANALYSIS RENDERER (Customer-facing) ─── */
 .pdai-card{background:#fff;border:1px solid #e5e7eb;border-radius:16px;padding:18px;margin-bottom:14px;box-shadow:0 1px 3px rgba(0,0,0,.04)}
 .pdai-card h3{display:flex;align-items:center;gap:8px;font-size:14px;font-weight:900;color:#0a0a0a;margin:0 0 12px;padding-bottom:10px;border-bottom:1px solid #f3f4f6}
@@ -2770,7 +2775,7 @@ function showProductDetail(pid){
     vWrap.innerHTML=html2;
     vWrap.style.display='block';
   } else { vWrap.style.display='none'; }
-  document.getElementById('pd-info').innerHTML=html||`<div class="pd-empty">${CURRENT_LANG==='ar'?'ما فيه تفاصيل بعد. افتح <b style="color:#7c3aed">✨ Studio → 🤖 معلومات المنتج</b> عشان الذكاء يبحث ويعبّي المعلومات تلقائياً.':'No details yet. Open ✨ Studio → 🤖 Product Info.'}</div>`;
+  document.getElementById('pd-info').innerHTML=html||`<div class="pd-empty">${CURRENT_LANG==='ar'?'ℹ️ التاجر لم يضف تفاصيل تفصيلية لهذا المنتج بعد.':'ℹ️ The merchant has not added detailed info for this product yet.'}</div>`;
   showView('product');
   window.scrollTo({top:0,behavior:'smooth'});
 }
