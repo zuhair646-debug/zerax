@@ -567,6 +567,7 @@ select.ps-input option{background:#13131f;color:#fff}
     <button class="nav-item" data-page="gateways" onclick="goPage('gateways')"><i data-lucide="credit-card"></i> وسائل الدفع</button>
     <button class="nav-item" data-page="reports" onclick="goPage('reports')" data-testid="nav-reports"><i data-lucide="file-text"></i> تقارير PDF <span class="badge" style="background:var(--emerald)">جديد</span></button>
     <button class="nav-item" data-page="zatca" onclick="goPage('zatca')" data-testid="nav-zatca"><i data-lucide="receipt"></i> الفاتورة الإلكترونية ZATCA</button>
+    <button class="nav-item" data-page="credits" onclick="goPage('credits')" data-testid="nav-credits"><i data-lucide="coins"></i> النقاط والاشتراك <span class="badge" style="background:#dc2626">!</span></button>
 
     <div class="nav-section">التسويق والذكاء الإصطناعي</div>
     <button class="nav-item" data-page="video-studio" onclick="goPage('video-studio')"><i data-lucide="clapperboard"></i> استوديو الفيديو الإعلاني</button>
@@ -1343,16 +1344,62 @@ select.ps-input option{background:#13131f;color:#fff}
           <div style="margin-top:14px;background:#fffbeb;border:1px solid #fde68a;border-radius:10px;padding:12px;font-size:11px;color:#92400e;line-height:1.7">⚠️ <b>قبل التفعيل في الإنتاج:</b> تأكد من تسجيلك في بوابة فاتورة وحصولك على CSID فعلي. هذا تطبيق Mock للتجربة فقط — لا يربط مع ZATCA الحقيقي.</div>
         </div>
         <div class="panel" style="margin-top:14px">
-          <div class="panel-head"><h3>④ معاينة فاتورة عيّنة</h3><button class="btn btn-amber" data-testid="z-gen-sample" onclick="zGenerateSampleInvoice()" style="padding:7px 12px;font-size:11px"><i data-lucide="file-plus" style="width:12px;height:12px"></i> ولّد فاتورة عينة</button></div>
-          <div id="z-sample-output" style="display:none">
-            <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:10px">
-              <div><h4 style="font-size:12px;color:var(--purple);margin-bottom:6px">📋 XML</h4><pre id="z-xml" style="background:#0a0a14;color:#94e2d5;padding:12px;border-radius:8px;font-size:9px;direction:ltr;text-align:left;max-height:280px;overflow:auto;font-family:monospace;line-height:1.5"></pre></div>
-              <div><h4 style="font-size:12px;color:var(--purple);margin-bottom:6px">📲 QR Code (TLV)</h4><div id="z-qr" style="background:#fff;padding:20px;border:2px solid var(--border);border-radius:10px;text-align:center"></div><p style="font-size:10px;color:var(--mute);margin-top:8px;text-align:center;direction:ltr;font-family:monospace;word-break:break-all" id="z-qr-tlv"></p></div>
-            </div>
-            <button class="btn btn-primary" data-testid="z-download-pdf-a3" onclick="zDownloadPDFA3()" style="margin-top:14px;width:100%"><i data-lucide="download" style="width:14px;height:14px"></i> تحميل PDF/A-3 (مع XML مدمج)</button>
-          </div>
+          <div class="panel-head"><h3>④ معاينة فاتورة عيّنة (تصميم احترافي)</h3><button class="btn btn-amber" data-testid="z-gen-sample" onclick="zGenerateSampleInvoice()" style="padding:7px 12px;font-size:11px"><i data-lucide="file-plus" style="width:12px;height:12px"></i> ولّد فاتورة عينة</button></div>
+          <div id="z-sample-output" style="display:none"></div>
         </div>
         <button class="btn btn-primary" data-testid="z-save-config" onclick="zSaveConfig()" style="margin-top:14px;width:100%;padding:14px;font-size:14px">💾 حفظ إعدادات ZATCA</button>
+      </div>
+
+      <!-- ─── CREDITS / SUBSCRIPTION ─── -->
+      <div class="page" data-page="credits">
+        <!-- Status banner -->
+        <div class="panel" style="background:linear-gradient(135deg,#fef3c7,#fde68a);border:2px solid #f59e0b">
+          <div style="display:flex;gap:14px;align-items:start"><div style="font-size:32px">⚠️</div><div style="flex:1">
+            <h3 style="color:#92400e">حالة المنصة الحالية — اقرأ قبل الاستخدام</h3>
+            <p style="margin-top:6px;font-size:13px;color:#78350f;line-height:1.9">قنوات الإرسال (SMS/واتساب/إيميل) <b>غير مفعّلة فعلياً بعد</b>. النقاط تنخصم من رصيدك التجريبي عند إطلاق الحملات، لكن <b>الرسائل لا تُرسل لعملائك</b>. للتفعيل الحقيقي تحتاج تشترك مع مزودي الخدمات أدناه وتدخل مفاتيحهم.</p>
+          </div></div>
+        </div>
+        <!-- Current balance -->
+        <div class="kpi-grid" style="margin-top:14px;grid-template-columns:repeat(auto-fit,minmax(200px,1fr))">
+          <div class="kpi"><div class="lbl">رصيد النقاط الحالي</div><div class="val" style="color:#7c3aed" id="credits-balance">0</div><div class="meta">نقطة</div></div>
+          <div class="kpi"><div class="lbl">قيمة النقطة</div><div class="val" style="color:#10b981">0.10</div><div class="meta">ر.س / نقطة</div></div>
+          <div class="kpi"><div class="lbl">رسائل أرسلت هذا الشهر</div><div class="val" style="color:#fbbf24">0</div><div class="meta">— لا يوجد مزود مفعّل</div></div>
+          <div class="kpi"><div class="lbl">حالة الاشتراك</div><div class="val" style="color:#dc2626;font-size:14px">غير مشترك</div><div class="meta">جرّب مجاناً</div></div>
+        </div>
+        <!-- Pricing per channel -->
+        <div class="panel" style="margin-top:14px">
+          <div class="panel-head"><h3>💰 تكلفة كل قناة (بالنقاط)</h3></div>
+          <table class="tbl"><thead><tr><th>القناة</th><th>التكلفة لكل رسالة</th><th>المزود المطلوب</th><th>الحالة</th></tr></thead><tbody>
+            <tr><td>💬 واتساب Business</td><td><b>1 نقطة</b> (~0.10 ر.س)</td><td>Meta WhatsApp Cloud API / Twilio</td><td><span class="status-pill s-pending">⏸ غير مفعّل</span></td></tr>
+            <tr><td>📱 SMS</td><td><b>2 نقطة</b> (~0.20 ر.س)</td><td>Unifonic / Twilio / 4Jawaly</td><td><span class="status-pill s-pending">⏸ غير مفعّل</span></td></tr>
+            <tr><td>📧 إيميل</td><td><b>مجاني</b></td><td>Resend / SendGrid</td><td><span class="status-pill s-paid">✓ مفعّل (Resend)</span></td></tr>
+            <tr><td>🔔 Push Notifications</td><td><b>مجاني</b></td><td>OneSignal / Firebase FCM</td><td><span class="status-pill s-pending">⏸ غير مفعّل</span></td></tr>
+            <tr><td>📷 Instagram DM</td><td><b>1 نقطة</b></td><td>Meta Graph API</td><td><span class="status-pill s-pending">⏸ غير مفعّل</span></td></tr>
+            <tr><td>🤖 رد AI ذكي</td><td><b>1 نقطة</b></td><td>OpenAI / Claude (Emergent Key)</td><td><span class="status-pill s-paid">✓ مفعّل</span></td></tr>
+            <tr><td>🖼️ توليد صورة AI</td><td><b>8 نقطة</b></td><td>Gemini Nano Banana</td><td><span class="status-pill s-paid">✓ مفعّل</span></td></tr>
+            <tr><td>🎬 توليد فيديو AI</td><td><b>32-40 نقطة</b></td><td>Gemini + ElevenLabs</td><td><span class="status-pill s-paid">✓ مفعّل</span></td></tr>
+          </tbody></table>
+        </div>
+        <!-- Recharge packages -->
+        <div class="panel" style="margin-top:14px">
+          <div class="panel-head"><h3>⚡ باقات شحن النقاط</h3></div>
+          <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:14px">
+            <div style="background:#fff;border:2px solid #e5e7eb;border-radius:14px;padding:18px;text-align:center"><div style="font-size:28px">🥉</div><b style="font-size:14px">باقة البداية</b><div style="font-size:24px;font-weight:900;color:#7c3aed;margin:6px 0">500 نقطة</div><div style="font-size:11px;color:#6b7280;text-decoration:line-through">75 ر.س</div><div style="font-size:18px;font-weight:900;color:#10b981">50 ر.س</div><button class="btn btn-primary" data-testid="buy-500" onclick="buyCredits(500,50)" style="margin-top:10px;width:100%">اشتر الآن</button></div>
+            <div style="background:linear-gradient(135deg,#faf5ff,#fdf2f8);border:2px solid #7c3aed;border-radius:14px;padding:18px;text-align:center;position:relative"><div style="position:absolute;top:-10px;left:50%;transform:translateX(-50%);background:#7c3aed;color:#fff;padding:3px 10px;border-radius:99px;font-size:10px;font-weight:900">الأشهر ⭐</div><div style="font-size:28px">🥈</div><b style="font-size:14px">باقة المتوسط</b><div style="font-size:24px;font-weight:900;color:#7c3aed;margin:6px 0">2,500 نقطة</div><div style="font-size:11px;color:#6b7280;text-decoration:line-through">375 ر.س</div><div style="font-size:18px;font-weight:900;color:#10b981">200 ر.س</div><button class="btn btn-primary" data-testid="buy-2500" onclick="buyCredits(2500,200)" style="margin-top:10px;width:100%">اشتر الآن</button></div>
+            <div style="background:#fff;border:2px solid #e5e7eb;border-radius:14px;padding:18px;text-align:center"><div style="font-size:28px">🥇</div><b style="font-size:14px">باقة المحترفين</b><div style="font-size:24px;font-weight:900;color:#7c3aed;margin:6px 0">10,000 نقطة</div><div style="font-size:11px;color:#6b7280;text-decoration:line-through">1,500 ر.س</div><div style="font-size:18px;font-weight:900;color:#10b981">700 ر.س</div><button class="btn btn-primary" data-testid="buy-10000" onclick="buyCredits(10000,700)" style="margin-top:10px;width:100%">اشتر الآن</button></div>
+            <div style="background:linear-gradient(135deg,#0a0a14,#13131f);color:#fff;border-radius:14px;padding:18px;text-align:center"><div style="font-size:28px">💎</div><b style="font-size:14px">المؤسسات</b><div style="font-size:24px;font-weight:900;color:#fbbf24;margin:6px 0">50,000+</div><div style="font-size:13px;color:#94a3b8;margin-top:8px">حسب الاستخدام · سعر مخصص</div><button class="btn btn-amber" onclick="alert('تواصل: sales@zerax.sa')" style="margin-top:10px;width:100%;background:#fbbf24;color:#000;border:none">تواصل مع المبيعات</button></div>
+          </div>
+        </div>
+        <!-- Integration providers -->
+        <div class="panel" style="margin-top:14px">
+          <div class="panel-head"><h3>🔌 لتفعيل القنوات حقيقياً — اشترك مع المزودين</h3></div>
+          <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:12px">
+            <div style="background:#fff;border:1px solid var(--border);border-radius:12px;padding:14px"><div style="display:flex;align-items:center;gap:10px;margin-bottom:8px"><div style="font-size:24px">📱</div><b>Unifonic — للـSMS</b></div><p style="font-size:11px;color:var(--mute);line-height:1.7;margin-bottom:10px">مزود سعودي معتمد من CITC. سعر الرسالة ~0.15 ر.س. يحتاج هوية تجارية وموافقة 2-3 أيام.</p><div style="display:flex;gap:6px"><a href="https://www.unifonic.com/sa/" target="_blank" rel="noopener" style="background:#10b981;color:#fff;padding:6px 12px;border-radius:99px;font-size:11px;font-weight:900;text-decoration:none">🚀 سجّل</a><a href="https://docs.unifonic.com" target="_blank" rel="noopener" style="background:#7c3aed;color:#fff;padding:6px 12px;border-radius:99px;font-size:11px;font-weight:900;text-decoration:none">📚 Docs</a></div></div>
+            <div style="background:#fff;border:1px solid var(--border);border-radius:12px;padding:14px"><div style="display:flex;align-items:center;gap:10px;margin-bottom:8px"><div style="font-size:24px">💬</div><b>Meta WhatsApp Cloud — للواتساب</b></div><p style="font-size:11px;color:var(--mute);line-height:1.7;margin-bottom:10px">مباشرة من Meta. مجاناً أول 1000 رسالة شهرياً. يحتاج توثيق حساب Meta Business + رقم.</p><div style="display:flex;gap:6px"><a href="https://business.facebook.com/wa/manage/" target="_blank" rel="noopener" style="background:#10b981;color:#fff;padding:6px 12px;border-radius:99px;font-size:11px;font-weight:900;text-decoration:none">🚀 سجّل</a><a href="https://developers.facebook.com/docs/whatsapp/cloud-api" target="_blank" rel="noopener" style="background:#7c3aed;color:#fff;padding:6px 12px;border-radius:99px;font-size:11px;font-weight:900;text-decoration:none">📚 Docs</a></div></div>
+            <div style="background:#fff;border:1px solid var(--border);border-radius:12px;padding:14px"><div style="display:flex;align-items:center;gap:10px;margin-bottom:8px"><div style="font-size:24px">📞</div><b>Twilio — بديل عالمي</b></div><p style="font-size:11px;color:var(--mute);line-height:1.7;margin-bottom:10px">شامل SMS + WhatsApp + Voice. أغلى بقليل لكن أسهل في الإعداد.</p><div style="display:flex;gap:6px"><a href="https://www.twilio.com/try-twilio" target="_blank" rel="noopener" style="background:#10b981;color:#fff;padding:6px 12px;border-radius:99px;font-size:11px;font-weight:900;text-decoration:none">🚀 سجّل</a><a href="https://www.twilio.com/docs" target="_blank" rel="noopener" style="background:#7c3aed;color:#fff;padding:6px 12px;border-radius:99px;font-size:11px;font-weight:900;text-decoration:none">📚 Docs</a></div></div>
+          </div>
+          <div style="margin-top:14px;background:#faf5ff;border:1px dashed #c4b5fd;border-radius:10px;padding:12px;font-size:11px;color:#5b21b6;line-height:1.8">💡 <b>كيف يعمل النظام بعد الاشتراك:</b> سجّل عند المزود → احصل على API key → افتح إعدادات Zerax وضع المفتاح → الحملات تبدأ ترسل فعلياً لعملائك بدل المحاكاة. <b>Zerax ما تاخذ أي عمولة</b> من اشتراكك مع المزود.</div>
+        </div>
       </div>
 
       <!-- ─── SETTINGS ─── -->
@@ -1631,7 +1678,7 @@ function goPage(p){
   CURRENT_PAGE=p;
   document.querySelectorAll('.page').forEach(el=>el.classList.toggle('active',el.dataset.page===p));
   document.querySelectorAll('.nav-item').forEach(el=>el.classList.toggle('active',el.dataset.page===p));
-  const titles={dashboard:'الرئيسية',products:'المنتجات',orders:'الطلبات',customers:'العملاء',delivery:'إدارة التوصيل',payroll:'المحاسبة والرواتب',gateways:'وسائل الدفع',settings:'الإعدادات','video-studio':'استوديو الفيديو الإعلاني',social:'الحسابات الاجتماعية',services:'الخدمات الإضافية','smart-mgmt':'الإدارة الذكية',marketing:'التسويق والمبيعات',reviews:'التقييمات والمراجعات',themes:'ألوان المتجر',reports:'تقارير PDF',zatca:'الفاتورة الإلكترونية ZATCA'};
+  const titles={dashboard:'الرئيسية',products:'المنتجات',orders:'الطلبات',customers:'العملاء',delivery:'إدارة التوصيل',payroll:'المحاسبة والرواتب',gateways:'وسائل الدفع',settings:'الإعدادات','video-studio':'استوديو الفيديو الإعلاني',social:'الحسابات الاجتماعية',services:'الخدمات الإضافية','smart-mgmt':'الإدارة الذكية',marketing:'التسويق والمبيعات',reviews:'التقييمات والمراجعات',themes:'ألوان المتجر',reports:'تقارير PDF',zatca:'الفاتورة الإلكترونية ZATCA',credits:'النقاط والاشتراك'};
   $('page-title').textContent=titles[p]||p;
   document.getElementById('sidebar').classList.remove('open');
   // lazy load
@@ -1646,6 +1693,7 @@ function goPage(p){
   if(p==='themes')loadThemes();
   if(p==='reports')loadReports();
   if(p==='zatca')loadZatca();
+  if(p==='credits')loadCredits();
   if(p==='video-studio')renderSocialMini();
   setTimeout(()=>{if(window.lucide)lucide.createIcons()},50);
 }
@@ -2931,76 +2979,173 @@ function _b64(bytes){
 function zGenerateSampleInvoice(){
   const cfg=JSON.parse(localStorage.getItem('zx_zatca')||'{}');
   const sellerName=cfg.name_ar||'متجر تجريبي';
+  const sellerEn=cfg.name_en||'Sample Store';
   const vat=cfg.vat||'300000000000003';
-  const dt=new Date().toISOString();
-  const total='1149.85';const taxAmt='149.85';
-  // Build TLV QR
-  const tlvParts=[
-    _toTLV(1,sellerName),
-    _toTLV(2,vat),
-    _toTLV(3,dt),
-    _toTLV(4,total),
-    _toTLV(5,taxAmt)
+  const cr=cfg.cr||'1010234567';
+  const addr=cfg.address||'الرياض، المملكة العربية السعودية';
+  const dt=new Date();
+  const invoiceNo='INV-'+dt.getTime();
+  const dtStr=dt.toISOString();
+  // Sample line items
+  const items=[
+    {name:'iPhone 17 Pro Max 256GB',nameEn:'iPhone 17 Pro Max 256GB',qty:1,price:5499,vat:0.15},
+    {name:'AirPods Pro 2',nameEn:'AirPods Pro 2',qty:1,price:990,vat:0.15},
+    {name:'كيبل شحن MagSafe',nameEn:'MagSafe Cable',qty:2,price:120,vat:0.15},
   ];
+  const subtotal=items.reduce((s,i)=>s+i.qty*i.price,0);
+  const taxAmt=subtotal*0.15;
+  const total=subtotal+taxAmt;
+  // Build TLV QR
+  const tlvParts=[_toTLV(1,sellerName),_toTLV(2,vat),_toTLV(3,dtStr),_toTLV(4,total.toFixed(2)),_toTLV(5,taxAmt.toFixed(2))];
   const totalLen=tlvParts.reduce((s,p)=>s+p.length,0);
   const concat=new Uint8Array(totalLen);
   let off=0;tlvParts.forEach(p=>{concat.set(p,off);off+=p.length;});
   const qrB64=_b64(concat);
-  // Build XML
+  // Build proper UBL 2.1 XML
   const xml=`<?xml version="1.0" encoding="UTF-8"?>
 <Invoice xmlns="urn:oasis:names:specification:ubl:schema:xsd:Invoice-2">
   <cbc:ProfileID>reporting:1.0</cbc:ProfileID>
-  <cbc:ID>INV-${Date.now()}</cbc:ID>
-  <cbc:IssueDate>${dt.slice(0,10)}</cbc:IssueDate>
-  <cbc:IssueTime>${dt.slice(11,19)}</cbc:IssueTime>
+  <cbc:ID>${invoiceNo}</cbc:ID>
+  <cbc:IssueDate>${dtStr.slice(0,10)}</cbc:IssueDate>
+  <cbc:IssueTime>${dtStr.slice(11,19)}</cbc:IssueTime>
   <cbc:InvoiceTypeCode name="0100000">388</cbc:InvoiceTypeCode>
-  <cac:AccountingSupplierParty>
-    <cac:Party>
-      <cbc:PartyName>${sellerName}</cbc:PartyName>
-      <cac:PartyTaxScheme><cbc:CompanyID>${vat}</cbc:CompanyID></cac:PartyTaxScheme>
-    </cac:Party>
-  </cac:AccountingSupplierParty>
-  <cac:TaxTotal>
-    <cbc:TaxAmount currencyID="SAR">${taxAmt}</cbc:TaxAmount>
-  </cac:TaxTotal>
-  <cac:LegalMonetaryTotal>
-    <cbc:PayableAmount currencyID="SAR">${total}</cbc:PayableAmount>
-  </cac:LegalMonetaryTotal>
-  <cac:InvoiceLine>
-    <cbc:ID>1</cbc:ID>
-    <cbc:InvoicedQuantity>1</cbc:InvoicedQuantity>
-    <cbc:LineExtensionAmount currencyID="SAR">1000.00</cbc:LineExtensionAmount>
-    <cac:Item><cbc:Name>منتج تجريبي</cbc:Name></cac:Item>
-  </cac:InvoiceLine>
+  <cac:AccountingSupplierParty><cac:Party>
+    <cbc:PartyName>${sellerName}</cbc:PartyName>
+    <cac:PartyTaxScheme><cbc:CompanyID>${vat}</cbc:CompanyID></cac:PartyTaxScheme>
+  </cac:Party></cac:AccountingSupplierParty>
+  <cac:TaxTotal><cbc:TaxAmount currencyID="SAR">${taxAmt.toFixed(2)}</cbc:TaxAmount></cac:TaxTotal>
+  <cac:LegalMonetaryTotal><cbc:PayableAmount currencyID="SAR">${total.toFixed(2)}</cbc:PayableAmount></cac:LegalMonetaryTotal>
+${items.map((it,i)=>`  <cac:InvoiceLine><cbc:ID>${i+1}</cbc:ID><cbc:InvoicedQuantity>${it.qty}</cbc:InvoicedQuantity><cbc:LineExtensionAmount currencyID="SAR">${(it.qty*it.price).toFixed(2)}</cbc:LineExtensionAmount><cac:Item><cbc:Name>${it.name}</cbc:Name></cac:Item></cac:InvoiceLine>`).join('\n')}
 </Invoice>`;
-  document.getElementById('z-sample-output').style.display='block';
-  document.getElementById('z-xml').textContent=xml;
-  document.getElementById('z-qr-tlv').textContent=qrB64;
-  // Render QR
-  const qrEl=document.getElementById('z-qr');qrEl.innerHTML='';
-  if(window.QRCode){new QRCode(qrEl,{text:qrB64,width:180,height:180,correctLevel:QRCode.CorrectLevel.M});}
-  else{qrEl.textContent='[QR library not loaded]';}
-  toast('🧾 تم توليد فاتورة عينة');
+  // ─── RENDER PROFESSIONAL INVOICE PREVIEW ───
+  const out=document.getElementById('z-sample-output');
+  out.style.display='block';
+  const itemsRows=items.map((it,i)=>`
+    <tr>
+      <td style="padding:10px 8px;border-bottom:1px solid #e5e7eb;text-align:center;font-weight:700;color:#0a0a14">${i+1}</td>
+      <td style="padding:10px 8px;border-bottom:1px solid #e5e7eb;color:#0a0a14"><div style="font-weight:700">${it.name}</div><div style="font-size:10px;color:#6b7280;direction:ltr;text-align:right">${it.nameEn}</div></td>
+      <td style="padding:10px 8px;border-bottom:1px solid #e5e7eb;text-align:center;color:#0a0a14">${it.qty}</td>
+      <td style="padding:10px 8px;border-bottom:1px solid #e5e7eb;text-align:left;direction:ltr;color:#0a0a14">${it.price.toFixed(2)}</td>
+      <td style="padding:10px 8px;border-bottom:1px solid #e5e7eb;text-align:left;direction:ltr;color:#10b981">${(it.qty*it.price*0.15).toFixed(2)}</td>
+      <td style="padding:10px 8px;border-bottom:1px solid #e5e7eb;text-align:left;direction:ltr;font-weight:900;color:#7c3aed">${(it.qty*it.price).toFixed(2)}</td>
+    </tr>`).join('');
+  out.innerHTML=`
+    <div id="z-invoice-preview" style="background:#fff;border:1px solid #e5e7eb;border-radius:14px;padding:0;overflow:hidden;color:#0a0a14;font-family:'IBM Plex Sans Arabic',Arial,sans-serif">
+      <!-- HEADER -->
+      <div style="background:linear-gradient(135deg,#7c3aed,#0a0a14);color:#fff;padding:24px 28px;display:flex;justify-content:space-between;align-items:start;flex-wrap:wrap;gap:16px">
+        <div style="flex:1;min-width:200px">
+          <h2 style="margin:0;font-size:22px;font-weight:900">فاتورة ضريبية مبسطة</h2>
+          <div style="font-size:11px;opacity:.85;margin-top:3px;direction:ltr;text-align:right">Simplified Tax Invoice</div>
+          <div style="margin-top:14px;font-size:13px;font-weight:900">${sellerName}</div>
+          <div style="font-size:11px;opacity:.8;direction:ltr;text-align:right">${sellerEn}</div>
+          <div style="font-size:10px;opacity:.7;margin-top:8px;line-height:1.7">
+            📍 ${addr}<br>
+            🆔 الرقم الضريبي / VAT: <span style="direction:ltr;display:inline-block">${vat}</span><br>
+            📋 السجل التجاري / CR: <span style="direction:ltr;display:inline-block">${cr}</span>
+          </div>
+        </div>
+        <div style="text-align:left;direction:ltr">
+          <div style="background:rgba(255,255,255,.15);padding:10px 14px;border-radius:10px;backdrop-filter:blur(8px)">
+            <div style="font-size:10px;opacity:.85;font-weight:900">رقم الفاتورة · Invoice #</div>
+            <div style="font-size:16px;font-weight:900;margin-top:4px;font-family:monospace">${invoiceNo}</div>
+            <div style="font-size:10px;margin-top:8px;opacity:.85">التاريخ · Date: <b>${dtStr.slice(0,10)}</b></div>
+            <div style="font-size:10px;opacity:.85">الوقت · Time: <b>${dtStr.slice(11,19)}</b></div>
+          </div>
+        </div>
+      </div>
+      <!-- CUSTOMER + QR -->
+      <div style="padding:20px 28px;display:grid;grid-template-columns:1fr auto;gap:20px;border-bottom:2px dashed #e5e7eb">
+        <div>
+          <div style="font-size:10px;color:#7c3aed;font-weight:900;letter-spacing:.5px">العميل · CUSTOMER</div>
+          <div style="font-size:14px;font-weight:900;margin-top:4px">عميل تجريبي</div>
+          <div style="font-size:11px;color:#6b7280;direction:ltr;text-align:right;margin-top:2px">+966 50 123 4567</div>
+          <div style="font-size:11px;color:#6b7280;margin-top:2px">الرياض، حي العليا</div>
+        </div>
+        <div style="text-align:center">
+          <div style="font-size:10px;color:#7c3aed;font-weight:900;letter-spacing:.5px;margin-bottom:6px">QR للتحقق ZATCA</div>
+          <div id="z-qr" style="background:#fff;padding:8px;border:2px solid #0a0a14;border-radius:8px;display:inline-block"></div>
+        </div>
+      </div>
+      <!-- ITEMS TABLE -->
+      <div style="padding:0 28px">
+        <table style="width:100%;border-collapse:collapse;margin:20px 0">
+          <thead>
+            <tr style="background:#0a0a14;color:#fff">
+              <th style="padding:12px 8px;text-align:center;font-size:11px;font-weight:900;width:40px">#</th>
+              <th style="padding:12px 8px;text-align:right;font-size:11px;font-weight:900">الصنف / Item</th>
+              <th style="padding:12px 8px;text-align:center;font-size:11px;font-weight:900;width:70px">الكمية / Qty</th>
+              <th style="padding:12px 8px;text-align:left;font-size:11px;font-weight:900;width:90px;direction:ltr">السعر / Price</th>
+              <th style="padding:12px 8px;text-align:left;font-size:11px;font-weight:900;width:90px;direction:ltr">ضريبة 15%</th>
+              <th style="padding:12px 8px;text-align:left;font-size:11px;font-weight:900;width:90px;direction:ltr">الإجمالي / Total</th>
+            </tr>
+          </thead>
+          <tbody>${itemsRows}</tbody>
+        </table>
+      </div>
+      <!-- TOTALS -->
+      <div style="padding:0 28px 24px;display:flex;justify-content:flex-start">
+        <div style="min-width:320px;background:linear-gradient(135deg,#faf5ff,#fdf2f8);border:1px solid #e9d5ff;border-radius:12px;padding:16px">
+          <div style="display:flex;justify-content:space-between;padding:6px 0;font-size:12px"><span style="color:#6b7280">الإجمالي قبل الضريبة · Subtotal</span><b style="direction:ltr">${subtotal.toFixed(2)} SAR</b></div>
+          <div style="display:flex;justify-content:space-between;padding:6px 0;font-size:12px"><span style="color:#10b981">ضريبة القيمة المضافة 15% · VAT</span><b style="color:#10b981;direction:ltr">${taxAmt.toFixed(2)} SAR</b></div>
+          <div style="border-top:2px dashed #c4b5fd;margin:8px 0"></div>
+          <div style="display:flex;justify-content:space-between;padding:6px 0;font-size:15px;font-weight:900"><span>الإجمالي النهائي · Total Due</span><b style="color:#7c3aed;direction:ltr;font-size:18px">${total.toFixed(2)} SAR</b></div>
+        </div>
+      </div>
+      <!-- FOOTER -->
+      <div style="background:#fafafa;padding:14px 28px;border-top:1px solid #e5e7eb;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px">
+        <div style="font-size:10px;color:#6b7280;line-height:1.7">
+          ✓ هذه فاتورة إلكترونية معتمدة من هيئة الزكاة والضريبة والجمارك ZATCA<br>
+          <span style="direction:ltr;display:inline-block">Electronic invoice compliant with ZATCA e-invoicing regulations Phase 2</span>
+        </div>
+        <div style="font-size:10px;color:#7c3aed;font-weight:900">⚡ صادرة من Zerax Platform</div>
+      </div>
+    </div>
+    <!-- DETAILS (collapsed) for developers -->
+    <details style="margin-top:14px">
+      <summary style="cursor:pointer;color:#7c3aed;font-weight:900;font-size:12px;padding:10px;background:#faf5ff;border-radius:8px">🔧 عرض البيانات التقنية (XML + QR Base64) — للمطورين فقط</summary>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:10px">
+        <div><h4 style="font-size:11px;color:var(--purple);margin-bottom:6px">📋 UBL 2.1 XML</h4><pre style="background:#0a0a14;color:#94e2d5;padding:12px;border-radius:8px;font-size:9px;direction:ltr;text-align:left;max-height:280px;overflow:auto;font-family:monospace;line-height:1.5">${xml.replace(/[<>]/g,c=>c==='<'?'&lt;':'&gt;')}</pre></div>
+        <div><h4 style="font-size:11px;color:var(--purple);margin-bottom:6px">📲 QR TLV (Base64)</h4><div style="background:#0a0a14;color:#fbbf24;padding:12px;border-radius:8px;font-size:9px;direction:ltr;text-align:left;font-family:monospace;line-height:1.5;word-break:break-all">${qrB64}</div></div>
+      </div>
+    </details>
+    <!-- ACTIONS -->
+    <div style="display:flex;gap:8px;margin-top:14px;flex-wrap:wrap">
+      <button class="btn btn-primary" data-testid="z-download-pdf-a3" onclick="zDownloadInvoicePDF()" style="flex:1;min-width:160px;padding:14px"><i data-lucide="download" style="width:14px;height:14px"></i> تحميل PDF/A-3</button>
+      <button class="btn btn-amber" onclick="zPrintInvoice()" style="flex:1;min-width:140px;padding:14px"><i data-lucide="printer" style="width:14px;height:14px"></i> طباعة</button>
+      <button class="btn btn-outline" onclick="zEmailInvoice()" style="flex:1;min-width:140px;padding:14px"><i data-lucide="mail" style="width:14px;height:14px"></i> إرسال للعميل</button>
+    </div>`;
+  // Render QR after innerHTML
+  setTimeout(()=>{
+    const qrEl=document.getElementById('z-qr');
+    if(qrEl&&window.QRCode){new QRCode(qrEl,{text:qrB64,width:140,height:140,correctLevel:QRCode.CorrectLevel.M});}
+    if(window.lucide)lucide.createIcons();
+  },50);
+  toast('🧾 تم توليد فاتورة عيّنة');
 }
-function zDownloadPDFA3(){
-  if(!window.jspdf){alert('jsPDF غير محمّل');return;}
-  const {jsPDF}=window.jspdf;
-  const doc=new jsPDF();
-  const cfg=JSON.parse(localStorage.getItem('zx_zatca')||'{}');
-  doc.setFontSize(18);doc.text('Tax Invoice / Fatoorah',105,20,{align:'center'});
-  doc.setFontSize(10);
-  doc.text('Seller: '+(cfg.name_en||cfg.name_ar||'Zerax Store'),20,40);
-  doc.text('VAT: '+(cfg.vat||'-'),20,48);
-  doc.text('CR: '+(cfg.cr||'-'),20,56);
-  doc.text('Date: '+new Date().toLocaleDateString('en-GB'),20,64);
-  doc.setDrawColor(0);doc.line(20,72,190,72);
-  doc.text('Subtotal: 1000.00 SAR',20,84);
-  doc.text('VAT (15%): 149.85 SAR',20,92);
-  doc.setFontSize(14);doc.text('Total: 1149.85 SAR',20,104);
-  doc.setFontSize(9);
-  doc.text('Note: This is a sample ZATCA-compliant invoice generated by Zerax (mock).',20,280);
-  doc.save('zatca-sample-invoice.pdf');
-  toast('📥 PDF فاتورة العينة نُزّل');
+async function zDownloadInvoicePDF(){
+  if(!window.jspdf||!window.html2canvas){alert('المكتبات لم تكتمل');return;}
+  toast('📄 جاري إنشاء PDF…');
+  const target=document.getElementById('z-invoice-preview');
+  if(!target){alert('ولّد فاتورة أولاً');return;}
+  try{
+    const canvas=await html2canvas(target,{scale:2,backgroundColor:'#ffffff',useCORS:true,logging:false});
+    const {jsPDF}=window.jspdf;
+    const pdf=new jsPDF('p','mm','a4');
+    const imgW=190,imgH=(canvas.height*imgW)/canvas.width;
+    pdf.addImage(canvas.toDataURL('image/jpeg',0.95),'JPEG',10,10,imgW,imgH);
+    pdf.save('zatca-invoice-'+Date.now()+'.pdf');
+    toast('📥 تم تحميل الفاتورة');
+  }catch(e){alert('فشل: '+e.message);}
+}
+function zPrintInvoice(){
+  const target=document.getElementById('z-invoice-preview');
+  if(!target){alert('ولّد فاتورة أولاً');return;}
+  const w=window.open('','_blank');
+  w.document.write(`<!DOCTYPE html><html dir="rtl"><head><meta charset="utf-8"><title>Invoice</title><link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;700;900&display=swap" rel="stylesheet"><style>body{margin:0;font-family:'IBM Plex Sans Arabic',Arial,sans-serif}@media print{button{display:none}}</style></head><body>${target.outerHTML}<script>window.onload=()=>setTimeout(()=>window.print(),400)<\/script></body></html>`);
+}
+function zEmailInvoice(){
+  const subject='فاتورة ضريبية من '+(document.getElementById('z-name-ar').value||'متجرنا');
+  window.open(`mailto:?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent('مرفق فاتورتك الضريبية. شكراً لتسوقك معنا.')}`,'_blank');
 }
 
 function loadMarketing(){
@@ -3011,13 +3156,64 @@ function openCouponMod(){
   if(prompt('كود الكوبون:',code)){const arr=JSON.parse(localStorage.getItem('zx_coupons')||JSON.stringify(COUPONS_SEED));arr.unshift({code,type:'percent',value:15,min:0,used:0,limit:100,active:true,desc:'كوبون جديد'});localStorage.setItem('zx_coupons',JSON.stringify(arr));loadMarketing();toast('✓ كوبون جديد: '+code);}
 }
 // ───── CAMPAIGN BUILDER ─────
+function loadCredits(){
+  const el=document.getElementById('credits-balance');
+  if(el)el.textContent=(WALLET||0).toLocaleString('ar-EG');
+}
+function buyCredits(points,sar){
+  if(!confirm(`شراء ${points.toLocaleString()} نقطة بمبلغ ${sar} ر.س؟\n\nسيتم توجيهك لبوابة الدفع لإتمام العملية.`))return;
+  toast('🔌 تحويلك إلى بوابة الدفع… (محاكاة)');
+  setTimeout(()=>{
+    WALLET=(WALLET||0)+points;
+    localStorage.setItem('zx_credits',WALLET);
+    const ce=document.getElementById('wallet-balance');if(ce)ce.textContent=WALLET.toLocaleString('ar-EG');
+    loadCredits();
+    toast(`✓ تم إضافة ${points.toLocaleString()} نقطة لرصيدك`);
+  },1500);
+}
+
+// ───── AI SMART AUDIENCE (for campaigns) ─────
+function aiSuggestAudience(){
+  const items=PRODUCTS||[];
+  const total=items.length;
+  // Simulate AI analysis based on product categories
+  const cats=[...new Set(items.map(p=>p.cat))];
+  const suggestions=[
+    {name:'العملاء المهتمون بالإلكترونيات والجوالات',count:42,reason:'اشتروا 2+ منتج إلكتروني آخر 90 يوم',matchPct:94,segments:['vip','repeat'],cats:['electronics']},
+    {name:'عملاء VIP (أكثر من 5000 ر.س)',count:18,reason:'إنفاق عالٍ + استجابة سريعة للعروض',matchPct:88,segments:['vip'],cats:[]},
+    {name:'المهتمون بـ iPhone خاصة',count:23,reason:'بحثوا عن iPhone 3+ مرات أو تركوا في السلة',matchPct:91,segments:['repeat','new'],cats:['electronics']},
+    {name:'العائدون بعد فترة (Win-back)',count:67,reason:'آخر طلب قبل 60-90 يوم — يحتاج تذكير',matchPct:72,segments:['inactive'],cats:[]},
+    {name:'مشتروا المنتجات المكمّلة',count:34,reason:'اشتروا جوال — مرشحين للسماعات/الإكسسوارات',matchPct:85,segments:['repeat'],cats:['electronics']},
+  ];
+  let html=`<div style="background:linear-gradient(135deg,#faf5ff,#fdf2f8);border:2px solid #7c3aed;border-radius:14px;padding:16px;margin-bottom:14px"><div style="display:flex;align-items:center;gap:10px;margin-bottom:12px"><div style="font-size:24px">🧠</div><div><b style="color:#7c3aed">اقتراحات Zerax AI — الجمهور الأمثل</b><div style="font-size:11px;color:#6b7280">بناءً على ${total} منتج و سلوك ${cats.length} تصنيف</div></div></div>`;
+  html+=suggestions.map((s,i)=>`<div style="background:#fff;border:1px solid #e5e7eb;border-radius:10px;padding:12px;margin-bottom:8px;cursor:pointer" onclick="aiApplyAudience(${i})" data-testid="ai-aud-${i}">
+    <div style="display:flex;justify-content:space-between;align-items:start;gap:10px">
+      <div style="flex:1"><b style="font-size:13px">${s.name}</b><div style="font-size:11px;color:#6b7280;margin-top:3px">${s.reason}</div></div>
+      <div style="text-align:left"><div style="font-size:16px;font-weight:900;color:#7c3aed">${s.count}</div><div style="font-size:10px;color:#10b981;font-weight:900">${s.matchPct}% توافق</div></div>
+    </div></div>`).join('');
+  html+=`</div>`;
+  // Insert at top of modal body
+  const body=document.querySelector('#campaign-modal > div > div:last-child');
+  const existing=document.getElementById('ai-aud-block');if(existing)existing.remove();
+  const wrap=document.createElement('div');wrap.id='ai-aud-block';wrap.innerHTML=html;
+  body.insertBefore(wrap,body.firstChild);
+  window.__aiAudSuggestions=suggestions;
+}
+function aiApplyAudience(idx){
+  const s=window.__aiAudSuggestions?.[idx];if(!s)return;
+  // Apply segments
+  document.querySelectorAll('#cmp-segments input').forEach(i=>i.checked=s.segments.includes(i.value));
+  document.querySelectorAll('#cmp-cats input').forEach(i=>i.checked=s.cats.includes(i.value));
+  if(typeof updateCampaignEstimate==='function')updateCampaignEstimate();
+  toast(`✓ تم تطبيق: ${s.name} (${s.count} عميل)`);
+}
 function openCampaignBuilder(){
   const m=document.getElementById('campaign-modal');
   m.style.display='flex';
-  // Wire change handlers for live estimate
   m.querySelectorAll('input[type=checkbox],input,select').forEach(el=>{el.oninput=updateCampaignEstimate;el.onchange=updateCampaignEstimate;});
   updateCampaignEstimate();
-  setTimeout(()=>{if(window.lucide)lucide.createIcons()},50);
+  // Auto-render AI suggestions
+  setTimeout(()=>{aiSuggestAudience();if(window.lucide)lucide.createIcons()},150);
 }
 function closeCampaignBuilder(){document.getElementById('campaign-modal').style.display='none'}
 function _collectCampaign(){
