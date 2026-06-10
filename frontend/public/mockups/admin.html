@@ -734,10 +734,36 @@ select.ps-input option{background:#13131f;color:#fff}
             <tbody id="recent-orders"></tbody>
           </table></div>
         </div>
+
+        <!-- ─── MARKET HEATMAP (compact widget — shows where customers come from) ─── -->
+        <div class="panel" id="mkt-heatmap-widget">
+          <div class="panel-head" style="margin-bottom:6px">
+            <h3>🗺️ خريطة الطلبات حسب السوق</h3>
+            <a href="#" class="more" onclick="goPage('markets');return false">إدارة الأسواق ←</a>
+          </div>
+          <p style="font-size:11px;color:var(--text-mut);margin-bottom:10px">أكثر الأسواق طلباً هذا الأسبوع — حدد أولوياتك التسويقية</p>
+          <div id="mkt-heatmap-rows" style="display:grid;grid-template-columns:1fr;gap:6px">
+            <!-- Rows injected by JS -->
+          </div>
+        </div>
       </div>
+
+      <!-- ─── /DASHBOARD ─── -->
 
       <!-- ─── PRODUCTS ─── -->
       <div class="page" data-page="products">
+        <div class="panel" style="background:linear-gradient(135deg,#0a0a14,#1a1a3a);color:#e2e8f0;border:1px solid #312e81;margin-bottom:14px">
+          <div style="display:flex;justify-content:space-between;align-items:center;gap:14px;flex-wrap:wrap">
+            <div>
+              <h3 style="color:#fbbf24;font-size:15px;font-weight:900;display:flex;align-items:center;gap:8px">🚀 ابدأ بسرعة: اطلب من Zerax AI</h3>
+              <p style="font-size:11px;color:#94a3b8;margin-top:6px;line-height:1.7;max-width:560px">أضف منتجات جاهزة لكل قسم تجربة فورية · أو اضغط "بحث AI" لأي منتج موجود ليبحث في الإنترنت ويعبّي كل المعلومات (وصف، مواصفات، صور، فيديوهات، رابط رسمي) مجاناً · <b style="color:#fbbf24">صفر تكلفة على التاجر</b></p>
+            </div>
+            <div style="display:flex;gap:8px;flex-wrap:wrap">
+              <button onclick="seedDemoProducts()" data-testid="seed-demo-btn" style="background:linear-gradient(135deg,#fbbf24,#f59e0b);color:#0a0a14;border:none;padding:10px 18px;border-radius:10px;font-family:inherit;font-weight:900;font-size:12px;cursor:pointer;display:flex;align-items:center;gap:6px">⚡ زرع 40 منتج تجريبي</button>
+              <button onclick="bulkAiEnrich()" data-testid="bulk-ai-enrich" style="background:linear-gradient(135deg,#7c3aed,#ec4899);color:#fff;border:none;padding:10px 18px;border-radius:10px;font-family:inherit;font-weight:900;font-size:12px;cursor:pointer;display:flex;align-items:center;gap:6px">🤖 إثراء بالـ AI</button>
+            </div>
+          </div>
+        </div>
         <div class="panel">
           <div class="panel-head">
             <h3>📦 جميع المنتجات</h3>
@@ -1891,7 +1917,33 @@ function renderAll(){
   renderProducts();
   renderOrders();
   renderCustomers();
+  renderMarketHeatmap();
 }
+
+// ───── MARKET HEATMAP (dashboard widget) ─────
+function renderMarketHeatmap(){
+  const host=document.getElementById('mkt-heatmap-rows');if(!host)return;
+  const active=JSON.parse(localStorage.getItem('zx_active_markets')||'["sa"]');
+  // Mock orders distribution (replace with real backend later)
+  const mockOrders={sa:248,ae:67,kw:34,qa:22,bh:18,om:12,eg:9,jo:6};
+  const flagMap={sa:'🇸🇦',ae:'🇦🇪',kw:'🇰🇼',qa:'🇶🇦',bh:'🇧🇭',om:'🇴🇲',eg:'🇪🇬',jo:'🇯🇴',lb:'🇱🇧',iq:'🇮🇶',ma:'🇲🇦',dz:'🇩🇿',tn:'🇹🇳',ly:'🇱🇾',sy:'🇸🇾',ps:'🇵🇸',ye:'🇾🇪',sd:'🇸🇩'};
+  const nameMap={sa:'السعودية',ae:'الإمارات',kw:'الكويت',qa:'قطر',bh:'البحرين',om:'عُمان',eg:'مصر',jo:'الأردن',lb:'لبنان',iq:'العراق',ma:'المغرب',dz:'الجزائر',tn:'تونس',ly:'ليبيا',sy:'سوريا',ps:'فلسطين',ye:'اليمن',sd:'السودان'};
+  const data=active.map(id=>({id,orders:mockOrders[id]||Math.floor(Math.random()*15)})).sort((a,b)=>b.orders-a.orders).slice(0,6);
+  if(!data.length){host.innerHTML='<div style="text-align:center;padding:20px;color:var(--text-mut);font-size:12px">لم تفعّل أي سوق بعد</div>';return;}
+  const max=Math.max(...data.map(d=>d.orders))||1;
+  host.innerHTML=data.map(d=>{
+    const pct=Math.round((d.orders/max)*100);
+    const heat=pct>=70?'#dc2626':pct>=40?'#f59e0b':pct>=20?'#fbbf24':'#94a3b8';
+    return `<div style="display:flex;align-items:center;gap:10px;padding:6px 0">
+      <div style="width:32px;font-size:18px;text-align:center">${flagMap[d.id]||'🌐'}</div>
+      <div style="flex:1;min-width:0"><div style="font-size:12px;font-weight:700">${nameMap[d.id]||d.id.toUpperCase()}</div>
+        <div style="background:#f3f4f6;height:6px;border-radius:99px;overflow:hidden;margin-top:4px"><div style="background:linear-gradient(90deg,${heat},${heat}aa);height:100%;width:${pct}%;border-radius:99px;transition:width .6s"></div></div>
+      </div>
+      <div style="text-align:left;min-width:60px"><b style="color:${heat};font-size:13px">${d.orders}</b><div style="font-size:9px;color:var(--text-mut)">طلب</div></div>
+    </div>`;
+  }).join('');
+}
+
 function _stockBadge(p){
   if(p.stock===0)return '<span class="stock-out">⛔ نفد المخزون</span>';
   if(p.stock<=(p.stockLow||5))return `<span class="stock-low">⚠️ مخزون منخفض (${p.stock})</span>`;
@@ -2538,6 +2590,89 @@ function mktSaveAll(){
   localStorage.setItem('zx_active_markets',JSON.stringify(Array.from(MKT_ACTIVE)));
   localStorage.setItem('zx_markets_config',JSON.stringify(MKT_CONFIG));
   toast('✓ تم حفظ إعدادات '+MKT_ACTIVE.size+' سوق · ستظهر تلقائياً للعملاء حسب موقعهم');
+}
+
+// ───────────────────────── SEED DEMO PRODUCTS (5 per category × 8 categories = 40 items) ─────────────────────────
+const SEED_DEMO=[
+  // Electronics (5)
+  {name:'iPhone 17 Pro Max',cat:'إلكترونيات',price:6299,stock:24,sku:'IP17PM',img:'https://images.unsplash.com/photo-1592750475338-74b7b21085ab?w=600',desc:'A19 Bionic · 6.9" ProMotion · بطارية 24 ساعة'},
+  {name:'سماعة Sony WH-1000XM6',cat:'إلكترونيات',price:1490,stock:18,sku:'SNY-XM6',img:'https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=600',desc:'ANC جيل 5 · 30 ساعة · Hi-Res'},
+  {name:'لابتوب MacBook Pro M4',cat:'إلكترونيات',price:9890,stock:9,sku:'MBP-M4',img:'https://images.unsplash.com/photo-1496181133206-80ce9b88a853?w=600',desc:'14" · M4 Pro · 18GB · 1TB SSD'},
+  {name:'Apple Watch Ultra 3',cat:'إلكترونيات',price:3490,stock:15,sku:'AWU3',img:'https://images.unsplash.com/photo-1546868871-7041f2a55e12?w=600',desc:'GPS+Cellular · تيتانيوم · 49مم'},
+  {name:'شاشة Samsung Odyssey 4K',cat:'إلكترونيات',price:3290,stock:7,sku:'ODY-4K',img:'https://images.unsplash.com/photo-1527443224154-c4a3942d3acf?w=600',desc:'27" · 240Hz · HDR1000 · QD-OLED'},
+  // Fashion (5)
+  {name:'فستان سهرة فاخر بالتطريز',cat:'أزياء',price:1450,stock:6,sku:'EVD-001',img:'https://images.unsplash.com/photo-1539008835657-9e8e9680c956?w=600',desc:'حرير طبيعي · يدوي · مقاسات S-XL'},
+  {name:'حذاء Nike Air Max جديد',cat:'أزياء',price:899,stock:32,sku:'NKE-AM',img:'https://images.unsplash.com/photo-1542291026-7eec264c27ff?w=600',desc:'وسادة هوائية · مقاسات 38-46 · 3 ألوان'},
+  {name:'ساعة Rolex Submariner',cat:'أزياء',price:42900,stock:2,sku:'RLX-SUB',img:'https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=600',desc:'حركة سويسرية · مقاومة 300م · ضمان 5 سنوات'},
+  {name:'حقيبة Louis Vuitton أصلية',cat:'أزياء',price:8950,stock:4,sku:'LV-001',img:'https://images.unsplash.com/photo-1584917865442-de89df76afd3?w=600',desc:'جلد طبيعي · شهادة أصالة · بطاقة ضمان'},
+  {name:'نظارة Ray-Ban Aviator',cat:'أزياء',price:650,stock:22,sku:'RB-AV',img:'https://images.unsplash.com/photo-1572635196237-14b3f281503f?w=600',desc:'UV400 · إطار ذهبي · مع علبة جلدية'},
+  // Beauty (5)
+  {name:'عطر Dior Sauvage 100مل',cat:'تجميل ومكياج',price:780,stock:18,sku:'DIOR-S',img:'https://images.unsplash.com/photo-1541643600914-78b084683601?w=600',desc:'برغموت · مسك · ثبات 12 ساعة'},
+  {name:'سيروم The Ordinary فيتامين C',cat:'تجميل ومكياج',price:185,stock:45,sku:'TO-VC',img:'https://images.unsplash.com/photo-1556228720-195a672e8a03?w=600',desc:'30% L-Ascorbic · يضيء البشرة · 30مل'},
+  {name:'باليت Fenty Beauty 24 لون',cat:'تجميل ومكياج',price:420,stock:14,sku:'FB-24',img:'https://images.unsplash.com/photo-1596462502278-27bfdc403348?w=600',desc:'24 درجة · ثبات 10 ساعات · يصلح للسهرات'},
+  {name:'كريم La Mer المرطب',cat:'تجميل ومكياج',price:2890,stock:5,sku:'LM-CR',img:'https://images.unsplash.com/photo-1570554886111-e80fcca6a029?w=600',desc:'Miracle Broth · 60مل · لكل أنواع البشرة'},
+  {name:'مكواة Dyson Airwrap',cat:'تجميل ومكياج',price:2450,stock:8,sku:'DYS-AW',img:'https://images.unsplash.com/photo-1522338242992-e1a54906a8da?w=600',desc:'تقنية Coanda · 6 ملحقات · حقيبة سفر'},
+  // Home (5)
+  {name:'مكنسة Dyson V15 لاسلكية',cat:'منزل',price:2890,stock:12,sku:'DYS-V15',img:'https://images.unsplash.com/photo-1558317374-067fb5f30001?w=600',desc:'ليزر يكشف الغبار · 60 دقيقة · HEPA'},
+  {name:'مكينة قهوة De\'Longhi La Specialista',cat:'منزل',price:3490,stock:6,sku:'DEL-LS',img:'https://images.unsplash.com/photo-1610632380989-680fe40816c6?w=600',desc:'15-بار · رغوة حليب يدوية · 1450 واط'},
+  {name:'سرير Tempur-Pedic ProBreeze',cat:'منزل',price:5890,stock:3,sku:'TMP-PB',img:'https://images.unsplash.com/photo-1631679706909-1844bbd07221?w=600',desc:'تبريد 4 درجات · فوم طبي · ضمان 10 سنوات'},
+  {name:'تلفزيون Samsung QLED 65"',cat:'منزل',price:4290,stock:9,sku:'SAM-Q65',img:'https://images.unsplash.com/photo-1593359677879-a4bb92f829d1?w=600',desc:'4K · 144Hz · Dolby Atmos · Tizen 8.0'},
+  {name:'طقم أواني Le Creuset 7 قطع',cat:'منزل',price:1890,stock:11,sku:'LC-7P',img:'https://images.unsplash.com/photo-1610701596007-11502861dcfa?w=600',desc:'حديد زهر فرنسي · 7 قطع · ضمان مدى الحياة'},
+  // Sports (5)
+  {name:'دراجة Trek Mountain Pro',cat:'رياضة',price:4890,stock:6,sku:'TRK-MP',img:'https://images.unsplash.com/photo-1485965120184-e220f721d03e?w=600',desc:'21 سرعة · إطار كربون · فرامل هيدروليكية'},
+  {name:'دامبلز Bowflex قابلة للتعديل',cat:'رياضة',price:1990,stock:14,sku:'BFX-DB',img:'https://images.unsplash.com/photo-1638536532686-d610adfc8e5c?w=600',desc:'2-25 كجم · 15 وزن · ستاند مرفق'},
+  {name:'ساعة Garmin Fenix 8',cat:'رياضة',price:3290,stock:11,sku:'GRM-F8',img:'https://images.unsplash.com/photo-1576243345690-4e4b79b63288?w=600',desc:'GPS مزدوج · بطارية 28 يوم · مقاومة 100م'},
+  {name:'حذاء Adidas Ultraboost 24',cat:'رياضة',price:850,stock:28,sku:'ADI-UB',img:'https://images.unsplash.com/photo-1542291026-7eec264c27ff?w=600',desc:'Boost Pro · Primeknit · مرونة قصوى'},
+  {name:'سجادة يوغا Manduka PRO',cat:'رياضة',price:295,stock:35,sku:'MND-PRO',img:'https://images.unsplash.com/photo-1592432678016-e910b452f9a2?w=600',desc:'6مم · مضادة للانزلاق · ضمان مدى الحياة'},
+  // Food (5)
+  {name:'قهوة Blue Bottle مختصة 250جم',cat:'مأكولات',price:95,stock:48,sku:'BB-250',img:'https://images.unsplash.com/photo-1559056199-641a0ac8b55e?w=600',desc:'محمصة طازجة · مختصة · رحلة الحاوية'},
+  {name:'عسل سدر جبلي يمني 1كجم',cat:'مأكولات',price:585,stock:17,sku:'YEM-SDR',img:'https://images.unsplash.com/photo-1587049352846-4a222e784d38?w=600',desc:'يمني أصلي · غير مبستر · شهادة منشأ'},
+  {name:'تمر مجدول فاخر 5كجم',cat:'مأكولات',price:295,stock:22,sku:'MJD-5K',img:'https://images.unsplash.com/photo-1581375074612-d1fd0e661aeb?w=600',desc:'فاخر · من نخيل المدينة · علبة هدية'},
+  {name:'زعفران إيراني نقي 5 جرام',cat:'مأكولات',price:425,stock:13,sku:'SAF-5G',img:'https://images.unsplash.com/photo-1599909533930-f2a1aab7e1e7?w=600',desc:'صنف Negin · شهادة جودة · علبة فاخرة'},
+  {name:'زيت زيتون عضوي 750مل',cat:'مأكولات',price:135,stock:31,sku:'OLV-750',img:'https://images.unsplash.com/photo-1474979266404-7eaacbcd87c5?w=600',desc:'بكر ممتاز · معصور بارد · سوري عضوي'},
+  // Kids (5)
+  {name:'مجموعة LEGO Star Wars Death Star',cat:'أطفال',price:1890,stock:7,sku:'LEGO-DS',img:'https://images.unsplash.com/photo-1558877385-8c1b8c4b4d28?w=600',desc:'4016 قطعة · للأعمار 14+ · حصرية'},
+  {name:'سيارة ريموت Traxxas X-Maxx',cat:'أطفال',price:2890,stock:5,sku:'TRX-XM',img:'https://images.unsplash.com/photo-1558060370-d644479cb6f7?w=600',desc:'سرعة 80كم/س · 4WD · بطارية ليثيوم'},
+  {name:'دراجة أطفال Spider-Man 16"',cat:'أطفال',price:485,stock:19,sku:'SM-BIKE',img:'https://images.unsplash.com/photo-1597740049577-d8f4c947be15?w=600',desc:'للأعمار 4-7 · عجلتي توازن · ترخيص أصلي'},
+  {name:'باربي Dreamhouse 3 طوابق',cat:'أطفال',price:1290,stock:8,sku:'BB-DH',img:'https://images.unsplash.com/photo-1558877385-8c1b8c4b4d28?w=600',desc:'مصعد كهربائي · 75+ قطعة · إضاءة LED'},
+  {name:'تابلت تعليمي Amazon Kids Pro',cat:'أطفال',price:649,stock:24,sku:'AMZ-KP',img:'https://images.unsplash.com/photo-1561154464-82e9adf32764?w=600',desc:'10" · سنة اشتراك مجاني · غطاء واقي'},
+];
+
+async function seedDemoProducts(){
+  if(!confirm('سيتم إضافة 40 منتج تجريبي (5 منتجات × 8 أقسام) لتجربة المتجر. متابعة؟'))return;
+  toast('⏳ جاري إضافة المنتجات...');
+  let success=0,fail=0;
+  for(const m of SEED_DEMO){
+    try{
+      const saved=await apiFetch('/api/store/products',{method:'POST',body:JSON.stringify({name:m.name,price:m.price,stock:m.stock,sku:m.sku,stock_low:5,cat:m.cat,img:m.img,desc:m.desc})});
+      if(saved&&saved.id){PRODUCTS.push({...saved,stockLow:saved.stock_low});success++;}else fail++;
+    }catch(_){fail++;}
+  }
+  renderProducts();renderAll();
+  toast(`✓ تم إضافة ${success} منتج · ${fail?fail+' فشلت':''}`);
+}
+
+async function bulkAiEnrich(){
+  if(!PRODUCTS.length){toast('⚠️ أضف منتجات أولاً ثم استخدم الإثراء');return;}
+  if(!confirm(`سيتم تشغيل AI Research على ${PRODUCTS.length} منتج لجلب وصف ومواصفات وصور وروابط رسمية تلقائياً (مجاناً للتاجر). يستغرق ~5 ثوان لكل منتج. متابعة؟`))return;
+  toast('⏳ AI يبحث في الإنترنت لكل منتج...');
+  let done=0;
+  const total=PRODUCTS.length;
+  for(const p of PRODUCTS){
+    try{
+      const res=await fetch(API+'/api/image-studio/product-info',{
+        method:'POST',headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({name:p.name,lang:'ar'})
+      });
+      if(res.ok){const data=await res.json();p.ai_info=data;done++;}
+    }catch(_){}
+    if(done%5===0)toast(`✨ ${done}/${total} منتج تم إثراؤه...`);
+  }
+  // Save enrichment locally
+  const enrichmentMap={};
+  PRODUCTS.forEach(p=>{if(p.ai_info)enrichmentMap[p.id]=p.ai_info;});
+  localStorage.setItem('zx_product_ai_info',JSON.stringify(enrichmentMap));
+  toast(`✓ تم إثراء ${done} منتج من أصل ${total} · المعلومات ستظهر في صفحة المنتج للعميل`);
 }
 
 
