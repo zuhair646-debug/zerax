@@ -258,6 +258,20 @@ html,body{height:100%;background:var(--bg);color:#0a0a14;font-family:'IBM Plex S
 .zx-progress .pdot.active{background:linear-gradient(90deg,var(--amber),transparent);background-size:200% 100%;animation:slide 1.5s linear infinite}
 @keyframes slide{from{background-position:200% 0}to{background-position:-200% 0}}
 @media (max-width:900px){.zx-studio-head{flex-direction:column;align-items:flex-start}.zx-tab{min-width:90px;padding:10px 8px}.zx-tab .lbl{font-size:10px}.zx-tab .cost{display:none}}
+/* Fullscreen button + state */
+.zx-fs-btn{width:36px;height:36px;border-radius:8px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);color:#cbd5e1;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all .2s}
+.zx-fs-btn:hover{background:rgba(255,255,255,.12);color:#fff}
+.zx-studio.fullscreen{position:fixed;top:0;left:0;right:0;bottom:0;height:100vh!important;z-index:999;border-radius:0;border:none;max-width:none}
+body.studio-fs{overflow:hidden}
+.zx-studio.fullscreen .zx-body{max-height:calc(100vh - 220px)}
+@media (max-width:900px){.zx-studio.fullscreen .zx-body{max-height:calc(100vh - 260px)}}
+/* Recording mic indicator */
+.zx-chatbar .ibtn.recording{background:var(--rose);color:#fff;border-color:var(--rose);animation:micPulse 1s ease-in-out infinite}
+@keyframes micPulse{0%,100%{transform:scale(1);box-shadow:0 0 0 0 rgba(244,63,94,.6)}50%{transform:scale(1.08);box-shadow:0 0 0 8px rgba(244,63,94,0)}}
+/* Mic transcript indicator */
+.zx-mic-status{position:absolute;bottom:80px;left:50%;transform:translateX(-50%);background:#0a0a14;border:1px solid var(--rose);padding:8px 14px;border-radius:99px;color:#fff;font-size:11px;font-weight:900;display:none;z-index:10;box-shadow:0 8px 24px rgba(0,0,0,.4)}
+.zx-mic-status.show{display:flex;align-items:center;gap:6px}
+.zx-mic-status .pulse{width:8px;height:8px;border-radius:50%;background:var(--rose);animation:micPulse 1s ease-in-out infinite}
 .vs-stages{background:transparent;display:flex;flex-direction:column;gap:10px;overflow-y:auto}
 .stage{background:#fff;border:1.5px solid var(--border);border-radius:14px;overflow:hidden;transition:all .25s}
 .stage.active{border-color:var(--purple);box-shadow:0 8px 24px rgba(124,58,237,.15);transform:translateY(-2px)}
@@ -411,7 +425,7 @@ html,body{height:100%;background:var(--bg);color:#0a0a14;font-family:'IBM Plex S
 
     <div class="wallet">
       <div class="lbl">رصيد نقاط Zerax</div>
-      <div class="amt"><span id="wallet-balance">2,550</span></div>
+      <div class="amt"><span id="wallet-balance">5,000</span></div>
       <button onclick="rechargeOpen()">+ شحن الرصيد</button>
     </div>
     <button class="nav-item" onclick="doLogout()" style="margin-top:10px;color:#fca5a5"><i data-lucide="log-out"></i> تسجيل الخروج</button>
@@ -597,20 +611,77 @@ html,body{height:100%;background:var(--bg);color:#0a0a14;font-family:'IBM Plex S
               <div><h3>Zerax AI Studio</h3><div class="sub">⚡ POWERED BY GEMINI · CLAUDE · ZERAX VOICE</div></div>
             </div>
             <div class="cfg">
-              <select id="vs-lang" onchange="vsUpdateConfig()" title="لغة الفيديو">
-                <option value="ar-sa">🇸🇦 سعودي</option>
-                <option value="ar-eg">🇪🇬 مصري</option>
-                <option value="ar-msa">🌍 فصحى</option>
-                <option value="en">🇬🇧 English</option>
-                <option value="fr">🇫🇷 Français</option>
-                <option value="hi">🇮🇳 हिन्दी</option>
+              <select id="vs-lang" onchange="vsUpdateConfig()" title="لغة الفيديو واللهجة">
+                <optgroup label="🇸🇦 العربية - لهجات الخليج">
+                  <option value="ar-sa">🇸🇦 سعودية (نجدية - الرياض)</option>
+                  <option value="ar-sa-hijazi">🕌 حجازية (جدة/مكة)</option>
+                  <option value="ar-sa-eastern">🛢️ شرقية (الدمام)</option>
+                  <option value="ar-sa-southern">⛰️ جنوبية (أبها/جازان)</option>
+                  <option value="ar-kw">🇰🇼 كويتية</option>
+                  <option value="ar-ae">🇦🇪 إماراتية</option>
+                  <option value="ar-qa">🇶🇦 قطرية</option>
+                  <option value="ar-bh">🇧🇭 بحرينية</option>
+                  <option value="ar-om">🇴🇲 عُمانية</option>
+                </optgroup>
+                <optgroup label="🌍 العربية - لهجات أخرى">
+                  <option value="ar-eg">🇪🇬 مصرية</option>
+                  <option value="ar-jo">🇯🇴 أردنية</option>
+                  <option value="ar-lb">🇱🇧 لبنانية</option>
+                  <option value="ar-sy">🇸🇾 سورية</option>
+                  <option value="ar-ps">🇵🇸 فلسطينية</option>
+                  <option value="ar-iq">🇮🇶 عراقية</option>
+                  <option value="ar-ye">🇾🇪 يمنية</option>
+                  <option value="ar-ma">🇲🇦 مغربية</option>
+                  <option value="ar-dz">🇩🇿 جزائرية</option>
+                  <option value="ar-tn">🇹🇳 تونسية</option>
+                  <option value="ar-ly">🇱🇾 ليبية</option>
+                  <option value="ar-sd">🇸🇩 سودانية</option>
+                  <option value="ar-msa">🌍 الفصحى الحديثة (MSA)</option>
+                </optgroup>
+                <optgroup label="🌐 لغات عالمية">
+                  <option value="en-us">🇺🇸 English (US)</option>
+                  <option value="en-gb">🇬🇧 English (UK)</option>
+                  <option value="fr">🇫🇷 Français</option>
+                  <option value="es">🇪🇸 Español</option>
+                  <option value="de">🇩🇪 Deutsch</option>
+                  <option value="it">🇮🇹 Italiano</option>
+                  <option value="pt-br">🇧🇷 Português (BR)</option>
+                  <option value="ru">🇷🇺 Русский</option>
+                  <option value="tr">🇹🇷 Türkçe</option>
+                  <option value="fa">🇮🇷 فارسی</option>
+                  <option value="ur">🇵🇰 اردو</option>
+                  <option value="hi">🇮🇳 हिन्दी</option>
+                  <option value="bn">🇧🇩 বাংলা</option>
+                  <option value="id">🇮🇩 Bahasa Indonesia</option>
+                  <option value="ms">🇲🇾 Bahasa Melayu</option>
+                  <option value="th">🇹🇭 ไทย</option>
+                  <option value="vi">🇻🇳 Tiếng Việt</option>
+                  <option value="zh-cn">🇨🇳 中文 (普通话)</option>
+                  <option value="zh-tw">🇹🇼 中文 (台灣)</option>
+                  <option value="ja">🇯🇵 日本語</option>
+                  <option value="ko">🇰🇷 한국어</option>
+                  <option value="sw">🇰🇪 Kiswahili</option>
+                </optgroup>
               </select>
               <select id="vs-voice" onchange="vsUpdateConfig()" title="الصوت">
-                <option value="zerax_male_deep">🎙️ ذكر عميق</option>
-                <option value="zerax_male_warm">🎙️ ذكر دافئ</option>
-                <option value="zerax_female_warm">🎤 أنثى دافئة</option>
-                <option value="zerax_female_clear">🎤 أنثى صافية</option>
-                <option value="zerax_neutral">🔊 محايد</option>
+                <optgroup label="🎙️ أصوات ذكور">
+                  <option value="zerax_male_deep">🎙️ ذكر · عميق وفخم</option>
+                  <option value="zerax_male_warm">🎙️ ذكر · دافئ وودود</option>
+                  <option value="zerax_male_youth">🎙️ ذكر · شبابي حيوي</option>
+                  <option value="zerax_narrator_pro">🎙️ راوي احترافي</option>
+                  <option value="zerax_friend_chat">🎙️ صديق محادثة</option>
+                  <option value="zerax_announcer">🎙️ مذيع رسمي</option>
+                </optgroup>
+                <optgroup label="🎤 أصوات إناث">
+                  <option value="zerax_female_warm">🎤 أنثى · دافئة وراقية</option>
+                  <option value="zerax_female_clear">🎤 أنثى · صافية وحيوية</option>
+                  <option value="zerax_storyteller_f">🎤 راوية قصص</option>
+                  <option value="zerax_news_anchor">🎤 مذيعة أخبار</option>
+                </optgroup>
+                <optgroup label="🔊 أصوات محايدة">
+                  <option value="zerax_neutral">🔊 محايد · احترافي</option>
+                  <option value="zerax_documentary">🎬 وثائقي عميق</option>
+                </optgroup>
               </select>
               <select id="vs-tone" onchange="vsUpdateConfig()" title="الأسلوب">
                 <option value="energetic">⚡ حماسي</option>
@@ -626,6 +697,7 @@ html,body{height:100%;background:var(--bg);color:#0a0a14;font-family:'IBM Plex S
               </select>
             </div>
             <div class="cost-est"><i data-lucide="zap" style="width:13px;height:13px"></i> تكلفة كاملة: <b id="vs-cost-est">62 نقطة</b></div>
+            <button class="zx-fs-btn" onclick="vsToggleFullscreen()" title="ملء الشاشة" id="vs-fs-btn"><i data-lucide="maximize-2" style="width:16px;height:16px"></i></button>
           </div>
 
           <!-- Progress bar -->
@@ -694,7 +766,8 @@ html,body{height:100%;background:var(--bg);color:#0a0a14;font-family:'IBM Plex S
           </div>
 
           <!-- Persistent chat bar -->
-          <div class="zx-chatbar">
+          <div class="zx-chatbar" style="position:relative">
+            <div class="zx-mic-status" id="zx-mic-status"><span class="pulse"></span><span id="zx-mic-text">جاري الاستماع... تكلّم بوضوح</span></div>
             <div class="zx-suggestions-row">
               <button class="zx-sug" onclick="vsQuickStart('فيديو إعلاني لـ iPhone 17 Pro مدة 30 ثانية بأسلوب فاخر')">📱 iPhone 17 Pro فاخر</button>
               <button class="zx-sug" onclick="vsQuickStart('فيديو حماسي 15 ثانية لتخفيضات نهاية الأسبوع')">🔥 تخفيضات حماسية</button>
@@ -705,7 +778,8 @@ html,body{height:100%;background:var(--bg);color:#0a0a14;font-family:'IBM Plex S
               <button class="ibtn" onclick="document.getElementById('vs-file').click()" title="ارفق صورة مرجعية"><i data-lucide="paperclip" style="width:16px;height:16px"></i></button>
               <input type="file" id="vs-file" accept="image/*" multiple style="display:none" onchange="vsAttachFile(this)">
               <button class="ibtn" onclick="vsPreviewVoice()" title="معاينة الصوت المختار"><i data-lucide="volume-2" style="width:16px;height:16px"></i></button>
-              <textarea id="vs-input-text" placeholder="اكتب فكرة فيديوك… (مثل: فيديو لـ iPhone 17 بأسلوب فاخر)" rows="1" oninput="vsAutoSize(this)" onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();vsHandleChat()}"></textarea>
+              <button class="ibtn" id="vs-mic-btn" onclick="vsToggleMic()" title="تكلّم بصوتك (يتحوّل لنص)"><i data-lucide="mic" style="width:16px;height:16px"></i></button>
+              <textarea id="vs-input-text" placeholder="اكتب فكرة فيديوك… أو اضغط الميكروفون وتكلّم" rows="1" oninput="vsAutoSize(this)" onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();vsHandleChat()}"></textarea>
               <button class="ibtn send" onclick="vsHandleChat()" title="إرسال"><i data-lucide="send" style="width:16px;height:16px"></i></button>
             </div>
           </div>
@@ -765,7 +839,9 @@ html,body{height:100%;background:var(--bg);color:#0a0a14;font-family:'IBM Plex S
 
 <script>
 const API = window.location.origin;
-let WALLET = parseInt(localStorage.getItem('zx_credits')||'2550');
+let WALLET = parseInt(localStorage.getItem('zx_credits')||'5000');
+// Boost low-balance demo accounts so user can experiment freely
+if(WALLET<1000){WALLET=5000;localStorage.setItem('zx_credits',WALLET);}
 let CURRENT_PAGE='dashboard';
 
 // Mock product seed
@@ -1048,7 +1124,7 @@ async function vsGenerateScript(){
   const cfg=vsGetConfig();const lang=cfg.langRaw.startsWith('ar')?'ar':cfg.langRaw;
   if(!VS_STATE.idea){VS_STATE.idea=$('vs-input-text').value.trim()||'منتج جذاب';}
   if(WALLET<5){alert('رصيد غير كافٍ — تحتاج 5 نقاط للسيناريو');return;}
-  document.getElementById('content-script').innerHTML=`<div class="zx-empty"><div class="big-ico">⏳</div><h5>Gemini يكتب السيناريو…</h5><p>بـ <b style="color:var(--amber)">${({'ar-sa':'لهجة سعودية','ar-eg':'لهجة مصرية','ar-msa':'العربية الفصحى','en':'English','fr':'Français','hi':'हिन्दी'})[cfg.langRaw]||lang}</b> · مدة ${cfg.duration} ثانية · أسلوب ${({energetic:'حماسي',luxury:'فاخر',warm:'دافئ',tech:'تقني'})[cfg.tone]}</p></div>`;
+  document.getElementById('content-script').innerHTML=`<div class="zx-empty"><div class="big-ico">⏳</div><h5>Gemini يكتب السيناريو…</h5><p>بـ <b style="color:var(--amber)">${vsLangLabel(cfg.langRaw)}</b> · مدة ${cfg.duration} ثانية · أسلوب ${({energetic:'حماسي',luxury:'فاخر',warm:'دافئ',tech:'تقني'})[cfg.tone]}</p></div>`;
   vsSetProgress(1,'active');vsSetTabStatus('script','pending','🔄 جاري التوليد...');
   try{
     const m=VS_STATE.idea.match(/(?:فيديو|إعلان|لـ|عن|ل)\s+(.+?)(?:بأسلوب|مدته|مدة|ثانية|$)/);
@@ -1081,7 +1157,7 @@ function vsRenderScript(){
     el.innerHTML=`<div class="zx-empty"><div class="big-ico">📝</div><h5>اكتب فكرة فيديوك أو اختر اقتراح</h5><p>Gemini راح يكتب نص احترافي بلهجتك. سيخصم 5 نقاط لحظة التوليد.</p><button class="gen-btn" onclick="vsGenerateScript()" ${WALLET<5?'disabled':''}><i data-lucide="sparkles" style="width:16px;height:16px"></i> توليد السيناريو · 5 نقاط</button></div>`;
   }else{
     const s=VS_STATE.story;const cfg=vsGetConfig();
-    el.innerHTML=`<div class="zx-card approved"><div class="ttl">📌 ${s.title}</div><div class="narration">${s.full_narration||s.scenes.map(x=>x.narration).join(' ')}</div><div style="margin-top:10px;font-size:11px;color:var(--mute)">⏱️ ${s.duration_seconds||cfg.duration} ث · 🎙️ سيُقرأ بـ <b style="color:var(--amber)">${({zerax_male_deep:'ذكر عميق',zerax_male_warm:'ذكر دافئ',zerax_female_warm:'أنثى دافئة',zerax_female_clear:'أنثى صافية',zerax_neutral:'محايد'})[cfg.voice]}</b> بـ <b style="color:var(--amber)">${({'ar-sa':'لهجة سعودية','ar-eg':'لهجة مصرية','ar-msa':'الفصحى','en':'English','fr':'Français','hi':'हिन्दी'})[cfg.langRaw]}</b></div><div class="zx-actions"><button class="zx-btn approve" onclick="vsApproveScript()">✓ اعتماد والانتقال للمشاهد</button><button class="zx-btn regen" onclick="vsGenerateScript()">↻ إعادة توليد (-5)</button></div></div>`;
+    el.innerHTML=`<div class="zx-card approved"><div class="ttl">📌 ${s.title}</div><div class="narration">${s.full_narration||s.scenes.map(x=>x.narration).join(' ')}</div><div style="margin-top:10px;font-size:11px;color:var(--mute)">⏱️ ${s.duration_seconds||cfg.duration} ث · 🎙️ سيُقرأ بـ <b style="color:var(--amber)">${vsVoiceLabel(cfg.voice)}</b> بـ <b style="color:var(--amber)">${vsLangLabel(cfg.langRaw)}</b></div><div class="zx-actions"><button class="zx-btn approve" onclick="vsApproveScript()">✓ اعتماد والانتقال للمشاهد</button><button class="zx-btn regen" onclick="vsGenerateScript()">↻ إعادة توليد (-5)</button></div></div>`;
   }
   if(window.lucide)lucide.createIcons();
 }
@@ -1172,7 +1248,7 @@ function vsRenderVoice(){
   }
   const cfg=vsGetConfig();
   if(!VS_STATE.audio){
-    el.innerHTML=`<div class="zx-empty"><div class="big-ico">🎙️</div><h5>توليد التعليق الصوتي</h5><p>سيُقرأ السيناريو بصوت <b style="color:var(--amber)">${({zerax_male_deep:'ذكر عميق',zerax_male_warm:'ذكر دافئ',zerax_female_warm:'أنثى دافئة',zerax_female_clear:'أنثى صافية',zerax_neutral:'محايد'})[cfg.voice]}</b>. تقدر تستمع للعينة وتعتمد قبل الدمج النهائي. سيخصم 5 نقاط.</p><button class="gen-btn" onclick="vsGenerateVoice()" ${WALLET<5?'disabled':''}><i data-lucide="mic-2" style="width:16px;height:16px"></i> توليد الصوت · 5 نقاط</button></div>`;
+    el.innerHTML=`<div class="zx-empty"><div class="big-ico">🎙️</div><h5>توليد التعليق الصوتي</h5><p>سيُقرأ السيناريو بصوت <b style="color:var(--amber)">${vsVoiceLabel(cfg.voice)}</b> بـ <b style="color:var(--amber)">${vsLangLabel(cfg.langRaw)}</b>. تقدر تستمع للعينة وتعتمد قبل الدمج النهائي. سيخصم 5 نقاط.</p><button class="gen-btn" onclick="vsGenerateVoice()" ${WALLET<5?'disabled':''}><i data-lucide="mic-2" style="width:16px;height:16px"></i> توليد الصوت · 5 نقاط</button></div>`;
   }else{
     el.innerHTML=`<div class="zx-card ${VS_STATE.audioApproved?'approved':''}"><div class="ttl">🎙️ التعليق الصوتي</div><div class="zx-voice-preview"><audio controls src="${API+VS_STATE.audio.audio_url}"></audio><div class="info">صوت: <b>${VS_STATE.audio.voice_used||cfg.voice}</b></div></div><div class="narration" style="margin-top:14px">${VS_STATE.story.full_narration||VS_STATE.story.scenes.map(s=>s.narration).join(' ')}</div><div class="zx-actions"><button class="zx-btn ${VS_STATE.audioApproved?'regen':'approve'}" onclick="vsApproveVoice()">${VS_STATE.audioApproved?'↺ إلغاء الاعتماد':'✓ اعتماد والانتقال للفيديو'}</button><button class="zx-btn regen" onclick="vsGenerateVoice()">↻ إعادة توليد (-5)</button></div></div>`;
   }
@@ -1249,7 +1325,85 @@ function vsResetStudio(){
   vsSwitchTab('script');vsRenderScript();
 }
 
-function rechargeOpen(){window.open('/mockups/app_mode_full.html','_blank')}
+function rechargeOpen(){
+  const html=`<div id="zx-recharge-modal" style="position:fixed;inset:0;background:rgba(10,10,20,.75);backdrop-filter:blur(10px);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px" onclick="if(event.target===this)document.body.removeChild(this)"><div style="background:#13131f;border:1px solid rgba(255,255,255,.1);border-radius:18px;max-width:440px;width:100%;color:#fff;box-shadow:0 24px 60px rgba(0,0,0,.5);overflow:hidden">
+    <div style="padding:24px 22px 18px;border-bottom:1px solid rgba(255,255,255,.06);text-align:center"><div style="font-size:42px;margin-bottom:8px">⚡</div><h3 style="font-size:18px;font-weight:900;margin-bottom:4px">شحن رصيد Zerax</h3><div style="font-size:11px;color:var(--mute)">رصيدك الحالي: <b style="color:var(--amber)" id="zx-rc-bal">${WALLET.toLocaleString('en-US')}</b> نقطة</div></div>
+    <div style="padding:18px 22px;display:grid;grid-template-columns:repeat(2,1fr);gap:10px">
+      <button class="zx-pkg" onclick="vsAddCredits(1000)" style="background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);border-radius:12px;padding:14px;cursor:pointer;color:#fff;font-family:inherit;text-align:right"><div style="font-size:11px;color:var(--mute);margin-bottom:4px">باقة تجربة</div><div style="font-size:22px;font-weight:900;color:var(--amber)">1,000</div><div style="font-size:10px;color:var(--mute);margin-top:4px">نقطة · مجاناً للعرض</div></button>
+      <button class="zx-pkg" onclick="vsAddCredits(2000)" style="background:rgba(124,58,237,.1);border:1px solid rgba(124,58,237,.3);border-radius:12px;padding:14px;cursor:pointer;color:#fff;font-family:inherit;text-align:right;position:relative"><div style="position:absolute;top:-8px;left:8px;background:var(--amber);color:#0a0a14;font-size:9px;font-weight:900;padding:2px 7px;border-radius:99px">الأكثر طلباً</div><div style="font-size:11px;color:var(--mute);margin-bottom:4px">باقة احترافية</div><div style="font-size:22px;font-weight:900;color:var(--amber)">2,000</div><div style="font-size:10px;color:var(--mute);margin-top:4px">نقطة · مجاناً للعرض</div></button>
+      <button class="zx-pkg" onclick="vsAddCredits(5000)" style="background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);border-radius:12px;padding:14px;cursor:pointer;color:#fff;font-family:inherit;text-align:right"><div style="font-size:11px;color:var(--mute);margin-bottom:4px">باقة أعمال</div><div style="font-size:22px;font-weight:900;color:var(--amber)">5,000</div><div style="font-size:10px;color:var(--mute);margin-top:4px">نقطة · مجاناً للعرض</div></button>
+      <button class="zx-pkg" onclick="vsAddCredits(10000)" style="background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);border-radius:12px;padding:14px;cursor:pointer;color:#fff;font-family:inherit;text-align:right"><div style="font-size:11px;color:var(--mute);margin-bottom:4px">باقة Enterprise</div><div style="font-size:22px;font-weight:900;color:var(--amber)">10,000</div><div style="font-size:10px;color:var(--mute);margin-top:4px">نقطة · مجاناً للعرض</div></button>
+    </div>
+    <div style="padding:0 22px 20px"><button onclick="document.body.removeChild(document.getElementById('zx-recharge-modal'))" style="width:100%;padding:11px;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);color:#cbd5e1;border-radius:10px;font-family:inherit;font-weight:700;font-size:12px;cursor:pointer">إغلاق</button></div>
+  </div></div>`;
+  const div=document.createElement('div');div.innerHTML=html;document.body.appendChild(div.firstChild);
+}
+function vsAddCredits(amt){
+  WALLET+=amt;localStorage.setItem('zx_credits',WALLET);$('wallet-balance').textContent=WALLET.toLocaleString('ar-EG');
+  const m=document.getElementById('zx-recharge-modal');if(m)document.body.removeChild(m);
+  toast('✅ تم شحن '+amt.toLocaleString('en-US')+' نقطة · رصيدك الآن '+WALLET.toLocaleString('en-US'));
+  // Refresh current tab to enable disabled buttons
+  if(VS_STATE&&VS_STATE.tab)vsRenderTab(VS_STATE.tab);
+}
+
+// ───── FULLSCREEN TOGGLE ─────
+function vsToggleFullscreen(){
+  const studio=document.querySelector('.zx-studio');if(!studio)return;
+  const isFs=studio.classList.toggle('fullscreen');
+  document.body.classList.toggle('studio-fs',isFs);
+  const btn=document.getElementById('vs-fs-btn');if(btn){btn.innerHTML=isFs?'<i data-lucide="minimize-2" style="width:16px;height:16px"></i>':'<i data-lucide="maximize-2" style="width:16px;height:16px"></i>';if(window.lucide)lucide.createIcons();btn.title=isFs?'تصغير':'ملء الشاشة';}
+  // ESC to exit
+  if(isFs){
+    document.addEventListener('keydown',vsEscFS);
+  }else{
+    document.removeEventListener('keydown',vsEscFS);
+  }
+}
+function vsEscFS(e){if(e.key==='Escape'){vsToggleFullscreen();}}
+
+// ───── MIC RECORDING (Web Speech API → text) ─────
+let VS_RECOG=null;
+function vsToggleMic(){
+  const btn=document.getElementById('vs-mic-btn');const stat=document.getElementById('zx-mic-status');
+  if(VS_RECOG){VS_RECOG.stop();return;}
+  const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
+  if(!SR){alert('متصفحك ما يدعم التحويل الصوتي للنص. استخدم Chrome/Edge أو اكتب يدوياً.');return;}
+  const cfg=vsGetConfig();
+  const langMap={'ar-sa':'ar-SA','ar-sa-hijazi':'ar-SA','ar-sa-eastern':'ar-SA','ar-sa-southern':'ar-SA','ar-kw':'ar-KW','ar-ae':'ar-AE','ar-qa':'ar-QA','ar-bh':'ar-BH','ar-om':'ar-OM','ar-eg':'ar-EG','ar-jo':'ar-JO','ar-lb':'ar-LB','ar-sy':'ar-SY','ar-ps':'ar-PS','ar-iq':'ar-IQ','ar-ye':'ar-YE','ar-ma':'ar-MA','ar-dz':'ar-DZ','ar-tn':'ar-TN','ar-ly':'ar-LY','ar-sd':'ar-SD','ar-msa':'ar-SA','en-us':'en-US','en-gb':'en-GB','fr':'fr-FR','es':'es-ES','de':'de-DE','it':'it-IT','pt-br':'pt-BR','ru':'ru-RU','tr':'tr-TR','fa':'fa-IR','ur':'ur-PK','hi':'hi-IN','bn':'bn-BD','id':'id-ID','ms':'ms-MY','th':'th-TH','vi':'vi-VN','zh-cn':'zh-CN','zh-tw':'zh-TW','ja':'ja-JP','ko':'ko-KR','sw':'sw-KE'};
+  const recog=new SR();
+  recog.lang=langMap[cfg.langRaw]||'ar-SA';
+  recog.continuous=true;recog.interimResults=true;
+  let finalText='';
+  recog.onstart=()=>{btn.classList.add('recording');stat.classList.add('show');document.getElementById('zx-mic-text').textContent='🎙️ جاري الاستماع بـ '+(recog.lang)+'… تكلّم بوضوح';};
+  recog.onresult=e=>{
+    let interim='';
+    for(let i=e.resultIndex;i<e.results.length;i++){
+      const t=e.results[i][0].transcript;
+      if(e.results[i].isFinal)finalText+=t+' ';else interim+=t;
+    }
+    const ta=document.getElementById('vs-input-text');
+    ta.value=(finalText+interim).trim();
+    vsAutoSize(ta);
+    document.getElementById('zx-mic-text').textContent=interim?('… '+interim.slice(0,40)):'🎙️ جاري الاستماع…';
+  };
+  recog.onerror=e=>{
+    toast('❌ خطأ ميكروفون: '+(e.error==='not-allowed'?'يرجى السماح بالميكروفون':e.error==='no-speech'?'لم نسمع شيئاً':e.error));
+    btn.classList.remove('recording');stat.classList.remove('show');VS_RECOG=null;
+  };
+  recog.onend=()=>{
+    btn.classList.remove('recording');stat.classList.remove('show');VS_RECOG=null;
+    if(finalText.trim()){toast('✓ تم التحويل: '+finalText.slice(0,50));}
+  };
+  try{recog.start();VS_RECOG=recog;}catch(e){toast('❌ '+e.message)}
+}
+
+// ───── LANGUAGE LABEL ─────
+function vsLangLabel(code){
+  return ({'ar-sa':'سعودية (نجدية)','ar-sa-hijazi':'حجازية','ar-sa-eastern':'شرقية','ar-sa-southern':'جنوبية','ar-kw':'كويتية','ar-ae':'إماراتية','ar-qa':'قطرية','ar-bh':'بحرينية','ar-om':'عُمانية','ar-eg':'مصرية','ar-jo':'أردنية','ar-lb':'لبنانية','ar-sy':'سورية','ar-ps':'فلسطينية','ar-iq':'عراقية','ar-ye':'يمنية','ar-ma':'مغربية','ar-dz':'جزائرية','ar-tn':'تونسية','ar-ly':'ليبية','ar-sd':'سودانية','ar-msa':'الفصحى','en-us':'English (US)','en-gb':'English (UK)','fr':'Français','es':'Español','de':'Deutsch','it':'Italiano','pt-br':'Português','ru':'Русский','tr':'Türkçe','fa':'فارسی','ur':'اردو','hi':'हिन्दी','bn':'বাংলা','id':'Indonesia','ms':'Melayu','th':'ไทย','vi':'Việt','zh-cn':'中文 普通话','zh-tw':'中文 台灣','ja':'日本語','ko':'한국어','sw':'Kiswahili'})[code]||code;
+}
+function vsVoiceLabel(code){
+  return ({zerax_male_deep:'ذكر عميق فخم',zerax_male_warm:'ذكر دافئ ودود',zerax_male_youth:'ذكر شبابي حيوي',zerax_narrator_pro:'راوي احترافي',zerax_friend_chat:'صديق محادثة',zerax_announcer:'مذيع رسمي',zerax_female_warm:'أنثى دافئة',zerax_female_clear:'أنثى صافية',zerax_storyteller_f:'راوية قصص',zerax_news_anchor:'مذيعة أخبار',zerax_neutral:'محايد احترافي',zerax_documentary:'وثائقي عميق'})[code]||code;
+}
 
 // ───── DROPDOWNS ─────
 function toggleDropdown(id){

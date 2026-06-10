@@ -55,11 +55,20 @@ COST_PER_5_SECONDS = 5   # 30s = 30 credits, 45s = 45 credits, 60s = 60 credits
 # Swap this single mapping when the real Zerax voice service is online.
 # ─────────────────────────────────────────────────────────────────────────────
 ZERAX_VOICE_MAP = {
+    # Arabic voices (5 main characters)
     "zerax_male_deep":     {"provider": "openai_tts", "voice": "onyx",   "model": "tts-1-hd"},
     "zerax_male_warm":     {"provider": "openai_tts", "voice": "echo",   "model": "tts-1-hd"},
+    "zerax_male_youth":    {"provider": "openai_tts", "voice": "fable",  "model": "tts-1-hd"},
     "zerax_female_warm":   {"provider": "openai_tts", "voice": "shimmer","model": "tts-1-hd"},
     "zerax_female_clear":  {"provider": "openai_tts", "voice": "nova",   "model": "tts-1-hd"},
     "zerax_neutral":       {"provider": "openai_tts", "voice": "alloy",  "model": "tts-1-hd"},
+    # Premium character variants (mapped to same underlying TTS voices but exposed as distinct personalities)
+    "zerax_narrator_pro":  {"provider": "openai_tts", "voice": "onyx",   "model": "tts-1-hd"},
+    "zerax_friend_chat":   {"provider": "openai_tts", "voice": "echo",   "model": "tts-1-hd"},
+    "zerax_announcer":     {"provider": "openai_tts", "voice": "fable",  "model": "tts-1-hd"},
+    "zerax_storyteller_f": {"provider": "openai_tts", "voice": "shimmer","model": "tts-1-hd"},
+    "zerax_news_anchor":   {"provider": "openai_tts", "voice": "nova",   "model": "tts-1-hd"},
+    "zerax_documentary":   {"provider": "openai_tts", "voice": "alloy",  "model": "tts-1-hd"},
 }
 DEFAULT_VOICE = "zerax_male_deep"
 
