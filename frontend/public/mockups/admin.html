@@ -396,6 +396,12 @@ body.studio-fs{overflow:hidden}
 .ps-close{width:36px;height:36px;border-radius:50%;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.08);color:#cbd5e1;cursor:pointer;display:flex;align-items:center;justify-content:center}
 .ps-close:hover{background:rgba(244,63,94,.15);border-color:rgba(244,63,94,.3);color:var(--rose)}
 .ps-tabs{display:flex;background:#13131f;border-bottom:1px solid rgba(255,255,255,.08)}
+.vf-toggle{display:inline-flex;align-items:center;gap:6px;background:#1f1f2e;border:1px solid #2d2d3f;padding:7px 12px;border-radius:99px;cursor:pointer;transition:all .15s;color:#94a3b8;font-size:11px;font-weight:700}
+.vf-toggle:hover{border-color:#7c3aed;color:#fff}
+.vf-toggle input{accent-color:#fbbf24;width:14px;height:14px;cursor:pointer}
+.vf-toggle input:checked + span{color:#fbbf24}
+.vf-section{margin-bottom:18px;padding-bottom:14px;border-bottom:1px dashed rgba(255,255,255,.08)}
+.vf-section:last-child{border-bottom:none}
 .ps-tab{flex:1;padding:14px 12px;background:none;border:none;color:#94a3b8;font-family:inherit;font-weight:900;font-size:12px;cursor:pointer;position:relative;transition:all .2s;display:flex;align-items:center;justify-content:center;gap:8px;border-left:1px solid rgba(255,255,255,.04)}
 .ps-tab:first-child{border-left:none}
 .ps-tab:hover{color:#cbd5e1;background:rgba(255,255,255,.02)}
@@ -784,6 +790,7 @@ select.ps-input option{background:#13131f;color:#fff}
             <div style="display:flex;gap:8px;flex-wrap:wrap">
               <button class="btn btn-outline" onclick="bulkImport()" style="padding:8px 14px;font-size:11px"><i data-lucide="upload" style="width:13px;height:13px"></i> استيراد CSV/Excel</button>
               <button class="btn btn-outline" onclick="bulkExport()" style="padding:8px 14px;font-size:11px"><i data-lucide="download" style="width:13px;height:13px"></i> تصدير الكل</button>
+              <button class="btn btn-outline" onclick="openBulkProductModal()" data-testid="bulk-add-btn" style="padding:8px 14px;font-size:11px;background:linear-gradient(135deg,#7c3aed,#ec4899);color:#fff;border:none"><i data-lucide="layers" style="width:13px;height:13px"></i> دفعة منتجات</button>
               <button class="btn btn-primary" onclick="openProductModal()"><i data-lucide="plus" style="width:14px;height:14px"></i> منتج جديد</button>
             </div>
           </div>
@@ -1733,7 +1740,8 @@ select.ps-input option{background:#13131f;color:#fff}
     <div class="ps-tabs">
       <button class="ps-tab active" data-pstab="info" onclick="psSwitchTab('info')"><span class="num">1</span><span class="lbl">📋 المعلومات الأساسية</span></button>
       <button class="ps-tab" data-pstab="image" onclick="psSwitchTab('image')"><span class="num">2</span><span class="lbl">🎨 صور المنتج AI</span></button>
-      <button class="ps-tab" data-pstab="ai" onclick="psSwitchTab('ai')"><span class="num">3</span><span class="lbl">🤖 التحليل العميق AI</span></button>
+      <button class="ps-tab" data-pstab="variants" onclick="psSwitchTab('variants')"><span class="num">3</span><span class="lbl">🎯 المتغيّرات والضمان</span></button>
+      <button class="ps-tab" data-pstab="ai" onclick="psSwitchTab('ai')"><span class="num">4</span><span class="lbl">🤖 التحليل العميق AI</span></button>
     </div>
     <div class="ps-body">
       <!-- TAB 1: BASIC INFO -->
@@ -1815,7 +1823,91 @@ select.ps-input option{background:#13131f;color:#fff}
         </div>
       </div>
 
-      <!-- TAB 3: DEEP AI ANALYSIS (chat-driven) -->
+      <!-- TAB 3: VARIANTS & WARRANTY (color swatches · storage · sizes · warranty) -->
+      <div class="ps-panel" data-pspanel="variants">
+        <div class="ps-panel-head"><div class="ico" style="background:linear-gradient(135deg,#f59e0b,#dc2626)">🎯</div><div><h4>المتغيّرات والضمان</h4><div class="desc">ألوان · سعات · مقاسات · ضمان رسمي · العميل يضغط ضغطة زر فيتغيّر كل شي</div></div></div>
+        <div class="ps-content" style="padding:18px 22px">
+          <!-- Field toggles -->
+          <div style="background:#0f172a;border:1px solid #1e293b;border-radius:12px;padding:12px;margin-bottom:14px">
+            <b style="font-size:12px;color:#fbbf24;display:block;margin-bottom:8px">⚙️ فعّل الحقول التي تحتاجها لهذا المنتج (تخفي البقية)</b>
+            <div style="display:flex;flex-wrap:wrap;gap:8px">
+              <label class="vf-toggle"><input type="checkbox" id="vf-colors" checked onchange="toggleVariantField('colors')"><span>🎨 الألوان</span></label>
+              <label class="vf-toggle"><input type="checkbox" id="vf-storage" onchange="toggleVariantField('storage')"><span>💾 السعات</span></label>
+              <label class="vf-toggle"><input type="checkbox" id="vf-sizes" onchange="toggleVariantField('sizes')"><span>📏 المقاسات</span></label>
+              <label class="vf-toggle"><input type="checkbox" id="vf-materials" onchange="toggleVariantField('materials')"><span>🧵 الخامة</span></label>
+              <label class="vf-toggle"><input type="checkbox" id="vf-flavors" onchange="toggleVariantField('flavors')"><span>🍦 النكهات</span></label>
+              <label class="vf-toggle"><input type="checkbox" id="vf-warranty" checked onchange="toggleVariantField('warranty')"><span>🛡️ الضمان</span></label>
+              <label class="vf-toggle"><input type="checkbox" id="vf-specs" checked onchange="toggleVariantField('specs')"><span>📋 المواصفات</span></label>
+            </div>
+          </div>
+
+          <!-- COLORS -->
+          <div class="vf-section" data-vf="colors">
+            <h5 style="font-size:13px;font-weight:900;margin-bottom:8px;display:flex;justify-content:space-between;align-items:center"><span>🎨 الألوان المتوفرة</span><button onclick="addColorVariant()" style="background:#7c3aed;color:#fff;border:none;padding:5px 11px;border-radius:7px;font-family:inherit;font-size:11px;font-weight:900;cursor:pointer">+ لون</button></h5>
+            <div id="variant-colors" style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:14px">
+              <div class="color-pill" style="display:flex;align-items:center;gap:6px;background:#fff;border:1.5px solid #e5e7eb;padding:6px 10px;border-radius:99px"><span style="width:18px;height:18px;border-radius:50%;background:#0a0a0a;border:1px solid #ccc"></span><span style="font-size:11px;font-weight:700">أسود</span><button onclick="this.parentElement.remove()" style="background:none;border:none;color:#dc2626;cursor:pointer;font-weight:900;font-size:14px">×</button></div>
+            </div>
+            <p style="font-size:10px;color:#94a3b8;line-height:1.6">💡 يقدر العميل من المتجر يضغط على دائرة اللون فتتغيّر صورة المنتج تلقائياً (إن وُفّرت صورة لكل لون)</p>
+          </div>
+
+          <!-- STORAGE -->
+          <div class="vf-section" data-vf="storage" style="display:none">
+            <h5 style="font-size:13px;font-weight:900;margin-bottom:8px;display:flex;justify-content:space-between;align-items:center"><span>💾 السعات / الذاكرات</span><button onclick="addSimpleChip('storage')" style="background:#0ea5e9;color:#fff;border:none;padding:5px 11px;border-radius:7px;font-family:inherit;font-size:11px;font-weight:900;cursor:pointer">+ سعة</button></h5>
+            <div id="variant-storage" style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:14px">
+              <div class="chip-pill" data-val="128GB" style="background:linear-gradient(135deg,#dbeafe,#bfdbfe);border:1.5px solid #93c5fd;padding:7px 13px;border-radius:99px;font-size:11px;font-weight:900;color:#1e3a8a;display:inline-flex;align-items:center;gap:6px">128GB <button onclick="this.parentElement.remove()" style="background:none;border:none;color:#dc2626;cursor:pointer;font-weight:900;font-size:14px">×</button></div>
+              <div class="chip-pill" data-val="256GB" style="background:linear-gradient(135deg,#dbeafe,#bfdbfe);border:1.5px solid #93c5fd;padding:7px 13px;border-radius:99px;font-size:11px;font-weight:900;color:#1e3a8a;display:inline-flex;align-items:center;gap:6px">256GB <button onclick="this.parentElement.remove()" style="background:none;border:none;color:#dc2626;cursor:pointer;font-weight:900;font-size:14px">×</button></div>
+              <div class="chip-pill" data-val="512GB" style="background:linear-gradient(135deg,#dbeafe,#bfdbfe);border:1.5px solid #93c5fd;padding:7px 13px;border-radius:99px;font-size:11px;font-weight:900;color:#1e3a8a;display:inline-flex;align-items:center;gap:6px">512GB <button onclick="this.parentElement.remove()" style="background:none;border:none;color:#dc2626;cursor:pointer;font-weight:900;font-size:14px">×</button></div>
+            </div>
+          </div>
+
+          <!-- SIZES -->
+          <div class="vf-section" data-vf="sizes" style="display:none">
+            <h5 style="font-size:13px;font-weight:900;margin-bottom:8px;display:flex;justify-content:space-between;align-items:center"><span>📏 المقاسات</span><button onclick="addSimpleChip('sizes')" style="background:#10b981;color:#fff;border:none;padding:5px 11px;border-radius:7px;font-family:inherit;font-size:11px;font-weight:900;cursor:pointer">+ مقاس</button></h5>
+            <div id="variant-sizes" style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:14px">
+              <button onclick="quickAddSizes(['S','M','L','XL','XXL'])" style="background:#dcfce7;color:#065f46;border:1px dashed #86efac;padding:6px 12px;border-radius:99px;font-family:inherit;font-size:10px;font-weight:700;cursor:pointer">+ ملابس (S,M,L,XL,XXL)</button>
+              <button onclick="quickAddSizes(['38','39','40','41','42','43','44','45'])" style="background:#fef3c7;color:#92400e;border:1px dashed #fde68a;padding:6px 12px;border-radius:99px;font-family:inherit;font-size:10px;font-weight:700;cursor:pointer">+ أحذية (38-45)</button>
+            </div>
+          </div>
+
+          <!-- MATERIALS -->
+          <div class="vf-section" data-vf="materials" style="display:none">
+            <h5 style="font-size:13px;font-weight:900;margin-bottom:8px;display:flex;justify-content:space-between;align-items:center"><span>🧵 الخامة</span><button onclick="addSimpleChip('materials')" style="background:#7c3aed;color:#fff;border:none;padding:5px 11px;border-radius:7px;font-family:inherit;font-size:11px;font-weight:900;cursor:pointer">+ خامة</button></h5>
+            <div id="variant-materials" style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:14px"></div>
+          </div>
+
+          <!-- FLAVORS -->
+          <div class="vf-section" data-vf="flavors" style="display:none">
+            <h5 style="font-size:13px;font-weight:900;margin-bottom:8px;display:flex;justify-content:space-between;align-items:center"><span>🍦 النكهات</span><button onclick="addSimpleChip('flavors')" style="background:#ec4899;color:#fff;border:none;padding:5px 11px;border-radius:7px;font-family:inherit;font-size:11px;font-weight:900;cursor:pointer">+ نكهة</button></h5>
+            <div id="variant-flavors" style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:14px"></div>
+          </div>
+
+          <!-- WARRANTY -->
+          <div class="vf-section" data-vf="warranty">
+            <h5 style="font-size:13px;font-weight:900;margin-bottom:8px;display:flex;align-items:center;gap:6px">🛡️ الضمان</h5>
+            <div style="background:#0a0a14;border:1px solid #1e293b;border-radius:12px;padding:14px;margin-bottom:14px">
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">
+                <div><label class="ps-lbl">اسم الضمان</label><input id="pm-warranty-name" class="ps-input" placeholder="مثلاً: ضمان Apple الدولي"></div>
+                <div><label class="ps-lbl">مدة الضمان</label><input id="pm-warranty-period" class="ps-input" placeholder="مثلاً: سنة واحدة"></div>
+              </div>
+              <label class="ps-lbl">رابط الضمان الرسمي (اختياري)</label>
+              <input id="pm-warranty-url" class="ps-input" placeholder="https://support.apple.com/warranty" style="direction:ltr">
+              <label class="ps-lbl" style="margin-top:10px">شروط وتفاصيل الضمان</label>
+              <textarea id="pm-warranty-terms" class="ps-input" rows="3" placeholder="تفاصيل الضمان · ما يشمله · ما لا يشمله..."></textarea>
+            </div>
+            <p style="font-size:10px;color:#94a3b8;line-height:1.6">💡 يظهر للعميل في صفحة المنتج كقسم "الضمان" مع زر "✓ تحقّق من الضمان الرسمي" لو وضعت رابط</p>
+          </div>
+
+          <!-- SPECS -->
+          <div class="vf-section" data-vf="specs">
+            <h5 style="font-size:13px;font-weight:900;margin-bottom:8px;display:flex;justify-content:space-between;align-items:center"><span>📋 المواصفات التفصيلية</span><button onclick="addSpecRow()" style="background:#10b981;color:#fff;border:none;padding:5px 11px;border-radius:7px;font-family:inherit;font-size:11px;font-weight:900;cursor:pointer">+ مواصفة</button></h5>
+            <div id="variant-specs" style="display:grid;gap:6px;margin-bottom:14px">
+              <div class="spec-row" style="display:grid;grid-template-columns:1fr 2fr 30px;gap:6px"><input class="ps-input" placeholder="الاسم (مثل: المعالج)"><input class="ps-input" placeholder="القيمة (مثل: A19 Bionic)"><button onclick="this.parentElement.remove()" style="background:#fef2f2;color:#dc2626;border:1px solid #fecaca;border-radius:6px;font-weight:900;cursor:pointer">×</button></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- TAB 4: DEEP AI ANALYSIS (chat-driven) -->
       <div class="ps-panel" data-pspanel="ai">
         <div class="ps-panel-head"><div class="ico" style="background:linear-gradient(135deg,#7c3aed,#a78bfa)">🤖</div><div><h4>التحليل العميق بـ Gemini</h4><div class="desc">يبحث في كل شي: مواصفات، فوائد، طريقة استخدام، الجديد vs السابق، مقارنات، تحذيرات</div></div></div>
         <div class="ps-content">
@@ -2585,6 +2677,124 @@ function gwToggleEnable(gid,on){
   const store=JSON.parse(localStorage.getItem('zx_gateway_enabled')||'{}');
   store[gid]=on;localStorage.setItem('zx_gateway_enabled',JSON.stringify(store));
   toast(on?('✓ تم تفعيل '+gid):('⏸ تم إيقاف '+gid));
+}
+
+// ───── VARIANTS / WARRANTY / SPECS FUNCTIONS ─────
+function toggleVariantField(field){
+  const cb=document.getElementById('vf-'+field);
+  const sec=document.querySelector('.vf-section[data-vf="'+field+'"]');
+  if(sec)sec.style.display=cb?.checked?'block':'none';
+}
+function addColorVariant(){
+  const name=prompt('اسم اللون (مثل: أحمر، ذهبي، رمادي تيتانيوم):');if(!name)return;
+  const hex=prompt('كود اللون HEX (مثل: #dc2626) — أو تركه فارغ لاستخدام أسود:')||'#0a0a0a';
+  const host=document.getElementById('variant-colors');
+  const div=document.createElement('div');
+  div.className='color-pill';
+  div.style.cssText='display:flex;align-items:center;gap:6px;background:#fff;border:1.5px solid #e5e7eb;padding:6px 10px;border-radius:99px';
+  div.innerHTML=`<span style="width:18px;height:18px;border-radius:50%;background:${hex};border:1px solid #ccc"></span><span style="font-size:11px;font-weight:700">${name}</span><button onclick="this.parentElement.remove()" style="background:none;border:none;color:#dc2626;cursor:pointer;font-weight:900;font-size:14px">×</button>`;
+  host.appendChild(div);
+}
+function addSimpleChip(field){
+  const label={storage:'السعة',sizes:'المقاس',materials:'الخامة',flavors:'النكهة'}[field];
+  const val=prompt(`أدخل ${label}:`);if(!val)return;
+  const colorMap={storage:['#dbeafe','#bfdbfe','#93c5fd','#1e3a8a'],sizes:['#dcfce7','#bbf7d0','#86efac','#065f46'],materials:['#f3e8ff','#e9d5ff','#c4b5fd','#6b21a8'],flavors:['#fce7f3','#fbcfe8','#f9a8d4','#9d174d']}[field];
+  const host=document.getElementById('variant-'+field);
+  const div=document.createElement('div');
+  div.className='chip-pill';
+  div.dataset.val=val;
+  div.style.cssText=`background:linear-gradient(135deg,${colorMap[0]},${colorMap[1]});border:1.5px solid ${colorMap[2]};padding:7px 13px;border-radius:99px;font-size:11px;font-weight:900;color:${colorMap[3]};display:inline-flex;align-items:center;gap:6px`;
+  div.innerHTML=`${val} <button onclick="this.parentElement.remove()" style="background:none;border:none;color:#dc2626;cursor:pointer;font-weight:900;font-size:14px">×</button>`;
+  host.appendChild(div);
+}
+function quickAddSizes(arr){
+  const host=document.getElementById('variant-sizes');
+  arr.forEach(s=>{
+    const div=document.createElement('div');
+    div.className='chip-pill';div.dataset.val=s;
+    div.style.cssText='background:linear-gradient(135deg,#dcfce7,#bbf7d0);border:1.5px solid #86efac;padding:7px 13px;border-radius:99px;font-size:11px;font-weight:900;color:#065f46;display:inline-flex;align-items:center;gap:6px';
+    div.innerHTML=`${s} <button onclick="this.parentElement.remove()" style="background:none;border:none;color:#dc2626;cursor:pointer;font-weight:900;font-size:14px">×</button>`;
+    host.appendChild(div);
+  });
+}
+function addSpecRow(){
+  const host=document.getElementById('variant-specs');
+  const div=document.createElement('div');
+  div.className='spec-row';
+  div.style.cssText='display:grid;grid-template-columns:1fr 2fr 30px;gap:6px';
+  div.innerHTML='<input class="ps-input" placeholder="الاسم"><input class="ps-input" placeholder="القيمة"><button onclick="this.parentElement.remove()" style="background:#fef2f2;color:#dc2626;border:1px solid #fecaca;border-radius:6px;font-weight:900;cursor:pointer">×</button>';
+  host.appendChild(div);
+}
+
+// ───── BULK PRODUCT ADD (Multiple products in one form) ─────
+function openBulkProductModal(){
+  // Build modal if not exists
+  if(!document.getElementById('bulk-prod-modal')){
+    const m=document.createElement('div');
+    m.id='bulk-prod-modal';
+    m.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.65);z-index:300;display:flex;align-items:flex-start;justify-content:center;padding:20px;overflow-y:auto';
+    m.innerHTML=`<div style="background:#fff;border-radius:18px;max-width:980px;width:100%;margin-top:20px;box-shadow:0 30px 80px rgba(0,0,0,.4);overflow:hidden">
+      <div style="background:linear-gradient(135deg,#7c3aed,#ec4899);color:#fff;padding:18px 22px;display:flex;align-items:center;justify-content:space-between"><div><h3 style="color:#fff;font-size:17px">📦 إضافة دفعة منتجات</h3><p style="font-size:11px;color:#fde4ff;margin-top:2px">أضف عدة منتجات بضربة واحدة · اضغط 🤖 لكل صف ليبحث AI تلقائياً</p></div><button onclick="closeBulkProductModal()" style="background:rgba(255,255,255,.2);color:#fff;border:none;width:30px;height:30px;border-radius:50%;font-size:15px;cursor:pointer">✕</button></div>
+      <div style="padding:18px 22px">
+        <div style="display:flex;justify-content:space-between;margin-bottom:10px"><button onclick="bulkAddRow()" style="background:#10b981;color:#fff;border:none;padding:8px 14px;border-radius:8px;font-family:inherit;font-weight:900;font-size:11px;cursor:pointer">+ إضافة صف</button><button onclick="bulkAddRow(5)" style="background:#7c3aed;color:#fff;border:none;padding:8px 14px;border-radius:8px;font-family:inherit;font-weight:900;font-size:11px;cursor:pointer">+ 5 صفوف</button></div>
+        <div style="overflow-x:auto;max-height:55vh;overflow-y:auto"><table id="bulk-prod-table" style="width:100%;border-collapse:collapse;font-size:11px"><thead><tr style="background:#f9fafb"><th style="padding:8px;text-align:right;border:1px solid #e5e7eb">اسم المنتج</th><th style="padding:8px;text-align:right;border:1px solid #e5e7eb">السعر</th><th style="padding:8px;text-align:right;border:1px solid #e5e7eb">المخزون</th><th style="padding:8px;text-align:right;border:1px solid #e5e7eb">الفئة</th><th style="padding:8px;text-align:right;border:1px solid #e5e7eb">SKU</th><th style="padding:8px;text-align:center;border:1px solid #e5e7eb">AI</th><th style="padding:8px;text-align:center;border:1px solid #e5e7eb">حذف</th></tr></thead><tbody id="bulk-prod-rows"></tbody></table></div>
+        <div style="background:#faf5ff;border:1px solid #e9d5ff;border-radius:10px;padding:10px;margin-top:12px;font-size:11px;color:#6b21a8;line-height:1.7">💡 <b>زر 🤖 لكل صف</b>: يكفي تكتب اسم المنتج فقط، اضغط الزر، AI يبحث في الإنترنت ويعبّي السعر التقديري + الوصف + الصور + المواصفات تلقائياً (مجاناً للتاجر).</div>
+        <div style="display:flex;gap:8px;margin-top:14px"><button onclick="closeBulkProductModal()" style="flex:1;padding:13px;background:#f3f4f6;color:#374151;border:none;border-radius:10px;font-family:inherit;font-weight:900;font-size:13px;cursor:pointer">إلغاء</button><button onclick="bulkSaveAllProducts()" data-testid="bulk-save-all" style="flex:2;padding:13px;background:linear-gradient(135deg,#10b981,#059669);color:#fff;border:none;border-radius:10px;font-family:inherit;font-weight:900;font-size:13px;cursor:pointer">💾 حفظ كل المنتجات</button></div>
+      </div>
+    </div>`;
+    document.body.appendChild(m);
+    bulkAddRow(3);
+  }
+  document.getElementById('bulk-prod-modal').style.display='flex';
+}
+function closeBulkProductModal(){const m=document.getElementById('bulk-prod-modal');if(m)m.style.display='none';}
+function bulkAddRow(n=1){
+  const host=document.getElementById('bulk-prod-rows');
+  for(let i=0;i<n;i++){
+    const tr=document.createElement('tr');
+    tr.innerHTML=`<td style="padding:4px;border:1px solid #e5e7eb"><input class="bulk-name" placeholder="اسم المنتج" style="width:100%;padding:7px;border:none;outline:none;font-family:inherit;font-size:11px"></td><td style="padding:4px;border:1px solid #e5e7eb"><input class="bulk-price" type="number" placeholder="0" style="width:100%;padding:7px;border:none;outline:none;font-family:inherit;font-size:11px"></td><td style="padding:4px;border:1px solid #e5e7eb"><input class="bulk-stock" type="number" placeholder="10" style="width:100%;padding:7px;border:none;outline:none;font-family:inherit;font-size:11px"></td><td style="padding:4px;border:1px solid #e5e7eb"><select class="bulk-cat" style="width:100%;padding:7px;border:none;outline:none;font-family:inherit;font-size:11px;background:#fff"><option value="electronics">إلكترونيات</option><option value="fashion">أزياء</option><option value="beauty">جمال</option><option value="home">منزل</option><option value="food">أطعمة</option><option value="sports">رياضة</option><option value="kids">أطفال</option></select></td><td style="padding:4px;border:1px solid #e5e7eb"><input class="bulk-sku" placeholder="SKU" style="width:100%;padding:7px;border:none;outline:none;font-family:inherit;font-size:11px"></td><td style="padding:4px;border:1px solid #e5e7eb;text-align:center"><button onclick="bulkRowAi(this)" title="ابحث AI" style="background:linear-gradient(135deg,#7c3aed,#ec4899);color:#fff;border:none;width:28px;height:28px;border-radius:50%;font-size:13px;cursor:pointer">🤖</button></td><td style="padding:4px;border:1px solid #e5e7eb;text-align:center"><button onclick="this.closest('tr').remove()" style="background:#fef2f2;color:#dc2626;border:1px solid #fecaca;width:24px;height:24px;border-radius:50%;font-weight:900;cursor:pointer">×</button></td>`;
+    host.appendChild(tr);
+  }
+}
+async function bulkRowAi(btn){
+  const tr=btn.closest('tr');
+  const name=tr.querySelector('.bulk-name').value.trim();
+  if(!name){toast('⚠️ اكتب اسم المنتج أولاً');return;}
+  btn.disabled=true;btn.innerHTML='⏳';
+  try{
+    const r=await fetch(API+'/api/image-studio/product-info',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name,lang:'ar'})});
+    if(r.ok){const d=await r.json();
+      if(!tr.querySelector('.bulk-price').value)tr.querySelector('.bulk-price').value=d.estimated_price||0;
+      if(!tr.querySelector('.bulk-sku').value)tr.querySelector('.bulk-sku').value=(d.sku||name.split(' ').map(w=>w.charAt(0).toUpperCase()).join(''));
+      tr.dataset.aiInfo=JSON.stringify(d);
+      btn.innerHTML='✓';btn.style.background='#10b981';toast(`✨ تم إثراء "${name}"`);
+    }else{btn.innerHTML='⚠️';btn.style.background='#dc2626';}
+  }catch(_){btn.innerHTML='⚠️';btn.style.background='#dc2626';}
+  setTimeout(()=>btn.disabled=false,1500);
+}
+async function bulkSaveAllProducts(){
+  const rows=document.querySelectorAll('#bulk-prod-rows tr');
+  const valid=Array.from(rows).filter(r=>r.querySelector('.bulk-name').value.trim());
+  if(!valid.length){toast('⚠️ أضف منتج واحد على الأقل');return;}
+  if(!confirm(`سيتم إضافة ${valid.length} منتج. متابعة؟`))return;
+  let ok=0,fail=0;
+  for(const tr of valid){
+    const ai=tr.dataset.aiInfo?JSON.parse(tr.dataset.aiInfo):{};
+    const payload={
+      name:tr.querySelector('.bulk-name').value.trim(),
+      price:parseFloat(tr.querySelector('.bulk-price').value)||0,
+      stock:parseInt(tr.querySelector('.bulk-stock').value)||10,
+      sku:tr.querySelector('.bulk-sku').value.trim(),
+      cat:tr.querySelector('.bulk-cat').value,
+      img:ai.image_url||ai.images?.[0]||'',
+      desc:ai.description||'',
+      stock_low:5
+    };
+    try{const s=await apiFetch('/api/store/products',{method:'POST',body:JSON.stringify(payload)});if(s&&s.id){PRODUCTS.push({...s,stockLow:s.stock_low});ok++;}else fail++;}catch(_){fail++;}
+  }
+  renderProducts();renderAll();
+  closeBulkProductModal();
+  toast(`✓ تم حفظ ${ok} منتج${fail?` · ${fail} فشلت`:''}`);
 }
 
 // ───────────────────────── MARKETS MODULE (Multi-Market Targeting) ─────────────────────────
