@@ -519,6 +519,36 @@ body.admin-mode .add-product-card{display:flex}
 .pd-info-html ul{padding-inline-start:18px;margin-bottom:14px}
 .pd-info-html li{margin-bottom:5px}
 .pd-empty{text-align:center;padding:30px 16px;color:#9ca3af;background:#f9fafb;border-radius:14px;font-size:13px;line-height:1.6}
+/* ─── RICH ANALYSIS RENDERER (Customer-facing) ─── */
+.pdai-card{background:#fff;border:1px solid #e5e7eb;border-radius:16px;padding:18px;margin-bottom:14px;box-shadow:0 1px 3px rgba(0,0,0,.04)}
+.pdai-card h3{display:flex;align-items:center;gap:8px;font-size:14px;font-weight:900;color:#0a0a0a;margin:0 0 12px;padding-bottom:10px;border-bottom:1px solid #f3f4f6}
+.pdai-card h3 .ic{width:32px;height:32px;border-radius:9px;display:flex;align-items:center;justify-content:center;font-size:15px}
+.pdai-desc{font-size:14px;line-height:1.9;color:#374151}
+.pdai-audience{margin-top:12px;padding:10px 14px;background:#fef3c7;border-radius:10px;font-size:12px;color:#92400e;font-weight:700}
+.pdai-list-rose{display:flex;flex-direction:column;gap:8px}
+.pdai-list-rose .it{background:#fef2f2;border-right:3px solid #f43f5e;padding:10px 14px;border-radius:9px;font-size:13px;line-height:1.7;color:#7f1d1d;font-weight:600}
+.pdai-list-green{display:flex;flex-direction:column;gap:8px}
+.pdai-list-green .it{background:#f0fdf4;border-right:3px solid #10b981;padding:10px 14px;border-radius:9px;font-size:13px;line-height:1.7;color:#065f46;font-weight:600}
+.pdai-list-amber{display:flex;flex-direction:column;gap:8px}
+.pdai-list-amber .it{background:#fffbeb;border-right:3px solid #f59e0b;padding:10px 14px;border-radius:9px;font-size:13px;line-height:1.7;color:#78350f;font-weight:600}
+.pdai-features{display:flex;flex-wrap:wrap;gap:6px;line-height:2}
+.pdai-features .chip{display:inline-flex;align-items:center;gap:5px;background:#faf5ff;color:#6d28d9;border:1px solid #ddd6fe;padding:7px 12px;border-radius:99px;font-size:12px;font-weight:700}
+.pdai-steps .step{display:flex;gap:10px;margin-bottom:10px;font-size:13px;line-height:1.8;color:#0a0a0a}
+.pdai-steps .step .num{flex-shrink:0;width:28px;height:28px;border-radius:50%;background:#06b6d4;color:#fff;display:flex;align-items:center;justify-content:center;font-weight:900;font-size:12px}
+.pdai-specs{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px}
+.pdai-spec{background:#f9fafb;border:1px solid #e5e7eb;border-radius:10px;padding:10px 12px}
+.pdai-spec b{display:block;font-size:10px;color:#7c3aed;text-transform:uppercase;letter-spacing:.4px;margin-bottom:4px;font-weight:900}
+.pdai-spec span{font-size:13px;color:#0a0a0a;font-weight:600}
+.pdai-comp{display:flex;flex-direction:column;gap:6px}
+.pdai-comp .diff{font-size:13px;line-height:1.8;color:#374151;padding:4px 0}
+.pdai-comp .upgrades{margin-top:12px;padding-top:12px;border-top:1px solid #f3f4f6}
+.pdai-comp .upgrades b{display:block;color:#059669;font-size:12px;margin-bottom:6px;font-weight:900}
+.pdai-comp .up{font-size:13px;line-height:1.7;color:#065f46;padding:3px 0}
+.pdai-link{display:inline-flex;align-items:center;gap:6px;color:#7c3aed;font-size:13px;font-weight:900;text-decoration:none;padding:10px 16px;background:#faf5ff;border-radius:99px}
+.pdai-link:hover{background:#ede9fe}
+.pdai-cta{position:sticky;bottom:0;background:linear-gradient(180deg,transparent,#fff 30%);padding:20px 0 8px;margin-top:14px}
+.pdai-cta button{width:100%;padding:14px;background:linear-gradient(135deg,#7c3aed,#fbbf24);color:#fff;border:none;border-radius:14px;font-family:inherit;font-weight:900;font-size:14px;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px;box-shadow:0 12px 28px rgba(124,58,237,.3)}
+.pdai-cta button:hover{transform:translateY(-1px);box-shadow:0 16px 36px rgba(124,58,237,.4)}
 /* PDP - Variants (colors, sizes, warranty) */
 .pdp-variants{margin:14px 0;padding:14px 0;border-top:1px solid #f3f4f6;border-bottom:1px solid #f3f4f6}
 .pdp-var-row{margin-bottom:14px}
@@ -2708,7 +2738,17 @@ function showProductDetail(pid){
   document.getElementById('pd-add-btn').onclick=()=>{addToCart(pid);toast(CURRENT_LANG==='ar'?'✓ تمت الإضافة للسلة':'✓ Added');};
   document.getElementById('pd-edit-btn').onclick=(e)=>{e.stopPropagation();openStudio('product:'+pid);};
   const info=PRODUCT_INFO[pid];
-  const html=info?.html;
+  // Use rich builder if any of the new deep fields exist; fallback to legacy html
+  const hasRichFields = info && (
+    (info.features && info.features.length) ||
+    (info.benefits && info.benefits.length) ||
+    (info.usage_instructions && info.usage_instructions.length) ||
+    (info.whats_new && info.whats_new.length) ||
+    (info.side_effects && info.side_effects.length) ||
+    (info.comparison && (info.comparison.previous_model || (info.comparison.key_differences||[]).length)) ||
+    (info.specs && Object.keys(info.specs).length)
+  );
+  const html = hasRichFields ? buildRichAnalysisClientHTML(info) : info?.html;
   // Render variants (colors / sizes / warranty)
   const vWrap=document.getElementById('pd-variants');
   if(info && (info.colors?.length || info.sizes?.length || info.warranty?.duration_text)){
@@ -2734,7 +2774,21 @@ function showProductDetail(pid){
   showView('product');
   window.scrollTo({top:0,behavior:'smooth'});
 }
-function pdJump(i,pid){
+function buildRichAnalysisClientHTML(d){
+  if(!d)return '';
+  const L=CURRENT_LANG==='ar';
+  let html='';
+  if(d.target_audience){html+=`<div class="pdai-audience">👥 <b>${L?'الفئة المستهدفة:':'For:'}</b> ${d.target_audience}</div>`;}
+  if(d.whats_new&&d.whats_new.length){html+=`<div class="pdai-card"><h3><span class="ic" style="background:#fef2f2;color:#f43f5e">🆕</span> ${L?'الجديد في هذا الإصدار':"What's new"}</h3><div class="pdai-list-rose">${d.whats_new.map(w=>`<div class="it">⚡ ${w}</div>`).join('')}</div></div>`;}
+  if(d.comparison&&(d.comparison.previous_model||(d.comparison.key_differences&&d.comparison.key_differences.length))){html+=`<div class="pdai-card"><h3><span class="ic" style="background:#fdf4ff;color:#a855f7">⚖️</span> ${L?'المقارنة مع':'Compared to'} ${d.comparison.previous_model||(L?'السابق':'previous')}</h3><div class="pdai-comp">${(d.comparison.key_differences||[]).map(k=>`<div class="diff">▸ ${k}</div>`).join('')}${(d.comparison.upgrades||[]).length?`<div class="upgrades"><b>🚀 ${L?'ترقيات أساسية':'Key upgrades'}</b>${d.comparison.upgrades.map(u=>`<div class="up">✓ ${u}</div>`).join('')}</div>`:''}</div></div>`;}
+  if(d.features&&d.features.length){html+=`<div class="pdai-card"><h3><span class="ic" style="background:#faf5ff;color:#7c3aed">✦</span> ${L?'المميزات الرئيسية':'Key features'} (${d.features.length})</h3><div class="pdai-features">${d.features.map(f=>`<span class="chip">✦ ${f}</span>`).join('')}</div></div>`;}
+  if(d.benefits&&d.benefits.length){html+=`<div class="pdai-card"><h3><span class="ic" style="background:#f0fdf4;color:#10b981">💚</span> ${L?'الفوائد':'Benefits'}</h3><div class="pdai-list-green">${d.benefits.map(b=>`<div class="it">💚 ${b}</div>`).join('')}</div></div>`;}
+  if(d.usage_instructions&&d.usage_instructions.length){html+=`<div class="pdai-card"><h3><span class="ic" style="background:#ecfeff;color:#06b6d4">📋</span> ${L?'طريقة الاستخدام':'How to use'}</h3><div class="pdai-steps">${d.usage_instructions.map((u,i)=>`<div class="step"><span class="num">${i+1}</span><span>${u}</span></div>`).join('')}</div></div>`;}
+  if(d.side_effects&&d.side_effects.length){html+=`<div class="pdai-card"><h3><span class="ic" style="background:#fffbeb;color:#f59e0b">⚠️</span> ${L?'تحذيرات وآثار جانبية':'Warnings & side effects'}</h3><div class="pdai-list-amber">${d.side_effects.map(s=>`<div class="it">⚠ ${s}</div>`).join('')}</div></div>`;}
+  if(d.specs&&Object.keys(d.specs).length){html+=`<div class="pdai-card"><h3><span class="ic" style="background:#f3f4f6;color:#374151">🔧</span> ${L?'المواصفات التقنية':'Technical specs'}</h3><div class="pdai-specs">${Object.entries(d.specs).map(([k,v])=>`<div class="pdai-spec"><b>${k}</b><span>${v}</span></div>`).join('')}</div></div>`;}
+  if(d.official_url){const u=d.official_url.startsWith('http')?d.official_url:'https://'+d.official_url;html+=`<div class="pdai-card"><h3><span class="ic" style="background:#faf5ff;color:#7c3aed">🌐</span> ${L?'الموقع الرسمي':'Official site'}</h3><a class="pdai-link" href="${u}" target="_blank">${d.official_url} ↗</a></div>`;}
+  return html;
+}
   _pdIndex=i;
   const gallery=(PRODUCT_GALLERIES[pid]||[]).filter(g=>g.type==='image');
   if(!gallery[i])return;
