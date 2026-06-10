@@ -1,6 +1,39 @@
 # Zitex AI Platform - PRD
 
 
+### 🆕 Feb 17 2026 — Phase 17: Driver Payroll + Global Payment Gateways Catalog ✅
+**A. Driver Accounting System (the 4 finish-tool suggestions, now fully built)**
+1. **Auto-calculate** — `GET /api/payroll/calculate?month=&year=` → per-driver line (commission balance OR monthly salary) + VAT 15% + totals
+2. **ZATCA-style PDF statements** — `GET /api/payroll/statement/{driver_id}` returns printable HTML with QR code, ZATCA Phase 2 markings, driver totals, delivery table, ready for browser print → PDF
+3. **Bulk payout** — `POST /api/payroll/run` iterates every driver, creates payout records, decrements pending balances, returns full results list
+4. **WhatsApp notification** — `POST /api/payroll/notify-driver` returns the message body that would be sent (placeholder for Meta WABA Cloud API)
+
+**B. Global Payment Gateways Catalog**
+- NEW `/app/backend/modules/payments/gateways_catalog.py` — **28 gateways across 14 countries**, fully described (id, name_ar/en, type, countries, currencies, min/max, installments config, badge design hints, checkout flow specs, integration_status)
+- NEW `/app/backend/routers/payment_gateways_router.py` — `/api/payments/catalog`, `/by-country`, `/checkout-preview`, `/toggle`, `/enabled`, `/countries`
+- MENA: Tabby, Tamara, Spotii, Mada, STC Pay, urpay, AlInma Pay
+- Egypt: Fawry, InstaPay, valU
+- USA/CA: Klarna, Afterpay, Affirm, PayPal, Stripe Card
+- China: Alipay, WeChat Pay, UnionPay (QR flow, cross-border PSP)
+- Europe/UK: Clearpay, SEPA, Sofort, iDEAL
+- India/SEA: UPI, GrabPay
+- Universal: Apple Pay, Google Pay, COD, Bank Transfer, USDC Crypto
+- Country profiles include VAT %, invoice standard (ZATCA/Factur-X/Fapiao/IRN/etc.), regulator, shipping partners
+
+**C. Frontend (ACP — 2 new tabs)**
+- 📊 المحاسبة — month/year picker, live summary (5 stat boxes), per-driver lines with employment-type badges, "📄 كشف" button per driver opens HTML statement in new tab, "💸 تحويل دفعة شهرية واحدة لجميع السائقين" green CTA shows results inline with WhatsApp message previews
+- 🌍 وسائل الدفع — country selector (14 options with flags), profile card (regulator/VAT/invoice/shipping), gateway cards with toggles + branded badges, live Widget preview that shows BNPL installment splits (e.g. Klarna 200 → 4 plans: 50×4, 200×1, 33.33×6, 18.33×12@9.99% interest)
+
+**Files Created/Modified:**
+- `/app/backend/modules/payments/gateways_catalog.py` (NEW, ~280 lines of curated config)
+- `/app/backend/routers/payment_gateways_router.py` (NEW, 95 lines)
+- `/app/backend/routers/payroll_router.py` (NEW, 280 lines with HTML statement renderer)
+- `/app/backend/server.py` (registered both routers)
+- `/app/frontend/public/mockups/app_mode_full.html` (2 new ACP tabs + ~250 lines of JS)
+- **Pushed to GitHub**: commit `38f8088` on `zuhair646-debug/zerax`
+
+
+
 ### 🆕 Feb 17 2026 — Phase 15: Integrated 3-Sided Delivery System ✅
 **Goal**: Full delivery platform tying merchants ↔ drivers ↔ customers.
 
