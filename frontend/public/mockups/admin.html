@@ -747,6 +747,19 @@ select.ps-input option{background:#13131f;color:#fff}
             <!-- Rows injected by JS -->
           </div>
         </div>
+
+        <!-- ─── MASTER BRANCHES OVERVIEW (owner-only · per-branch full breakdown) ─── -->
+        <div class="panel" id="master-branches-overview">
+          <div class="panel-head">
+            <h3>🏪 نظرة عامة على كل الفروع</h3>
+            <a href="#" class="more" onclick="goPage('branches');return false">إدارة الفروع ←</a>
+          </div>
+          <p style="font-size:11px;color:var(--text-mut);margin-bottom:10px">كل فرع — الطلبات · الإيرادات · العملاء · الفاتورة الشهرية · المدير</p>
+          <div style="overflow-x:auto"><table class="tbl">
+            <thead><tr><th>الفرع</th><th>طلبات اليوم</th><th>إيرادات اليوم</th><th>عملاء جدد</th><th>متوسط الطلب</th><th>الفاتورة الشهرية</th><th>المدير</th><th></th></tr></thead>
+            <tbody id="master-branches-rows"><tr><td colspan="8" style="text-align:center;color:var(--text-mut);padding:20px">لا يوجد فروع</td></tr></tbody>
+          </table></div>
+        </div>
       </div>
 
       <!-- ─── /DASHBOARD ─── -->
@@ -1139,6 +1152,16 @@ select.ps-input option{background:#13131f;color:#fff}
 
       <!-- ─── GATEWAYS ─── -->
       <div class="page" data-page="gateways">
+        <!-- Sandbox Mode Banner -->
+        <div class="panel" style="background:linear-gradient(135deg,#fef3c7,#fde68a);border:2px dashed #f59e0b;margin-bottom:14px">
+          <div style="display:flex;justify-content:space-between;align-items:center;gap:14px;flex-wrap:wrap">
+            <div style="display:flex;align-items:center;gap:12px">
+              <div style="width:46px;height:46px;border-radius:12px;background:linear-gradient(135deg,#f59e0b,#dc2626);color:#fff;display:flex;align-items:center;justify-content:center;font-size:22px">🧪</div>
+              <div><b style="font-size:14px;color:#92400e">الوضع التجريبي (Sandbox)</b><div style="font-size:11px;color:#78350f;margin-top:2px;line-height:1.5">شغّل الوضع التجريبي لاختبار وسائل الدفع والشحن بدون معاملات حقيقية. كل البطاقات والشحنات وهمية. مثالي للمختبرين والمبرمجين الخارجيين قبل الإطلاق الفعلي.</div></div>
+            </div>
+            <label class="switch-label" style="background:#fff;padding:10px 14px;border-radius:99px;border:1px solid #fbbf24"><input type="checkbox" id="sandbox-toggle" onchange="toggleSandboxMode()"><span class="switch-track"></span><b style="font-size:12px;color:#92400e">تفعيل التجربة</b></label>
+          </div>
+        </div>
         <div class="panel">
           <div class="panel-head"><h3>🌍 وسائل الدفع المفعّلة</h3>
             <select id="gw-country-sel" style="padding:8px 12px;border:1px solid var(--border);border-radius:8px;font-family:inherit;font-weight:900;font-size:12px" onchange="gwLoad()"></select>
@@ -1999,6 +2022,34 @@ function renderAll(){
   renderOrders();
   renderCustomers();
   renderMarketHeatmap();
+  renderMasterBranchesOverview();
+}
+
+// ───── MASTER BRANCHES OVERVIEW (Dashboard widget) ─────
+function renderMasterBranchesOverview(){
+  const tbody=document.getElementById('master-branches-rows');if(!tbody)return;
+  const branches=JSON.parse(localStorage.getItem('zx_merchant_branches')||'[]');
+  if(!branches.length){tbody.innerHTML='<tr><td colspan="8" style="text-align:center;color:var(--text-mut);padding:20px">لا يوجد فروع — أضف من <a href="#" onclick="goPage(\'branches\');return false" style="color:var(--purple)">صفحة الفروع</a></td></tr>';return;}
+  // Hide if user is in scoped mode (branch manager view)
+  if(localStorage.getItem('zx_active_branch_scope')){document.getElementById('master-branches-overview').style.display='none';return;}
+  tbody.innerHTML=branches.map((b,i)=>{
+    const fee=i===0?0:i<=2?99:i<=9?149:199;
+    const ordersToday=Math.floor(Math.random()*60)+15;
+    const revToday=Math.floor(Math.random()*15000)+3000;
+    const newCust=Math.floor(Math.random()*15)+2;
+    const avgOrder=Math.floor(revToday/ordersToday);
+    const statusBadge=b.active?'<span style="background:#dcfce7;color:#065f46;padding:2px 7px;border-radius:99px;font-size:9px;font-weight:900">●نشط</span>':'<span style="background:#fef2f2;color:#dc2626;padding:2px 7px;border-radius:99px;font-size:9px;font-weight:900">●متوقف</span>';
+    return `<tr>
+      <td><b>${b.name_ar}</b> ${b.is_main?'<span style="background:#fbbf24;color:#0a0a14;padding:1px 6px;border-radius:99px;font-size:8px;font-weight:900;margin-right:4px">👑 رئيسي</span>':''}<div style="font-size:10px;color:var(--text-mut);margin-top:2px">${b.addr||'—'}</div></td>
+      <td><b style="color:#0ea5e9">${ordersToday}</b></td>
+      <td><b style="color:#10b981">${revToday.toLocaleString()}</b> <small>ر.س</small></td>
+      <td>${newCust}</td>
+      <td>${avgOrder} <small>ر.س</small></td>
+      <td>${fee?`<b style="color:#dc2626">${fee}</b> <small>ر.س</small>`:'<span style="color:#10b981;font-weight:900">🆓 مجاني</span>'}</td>
+      <td><div style="font-size:11px"><b>${b.manager_name||'—'}</b></div><div style="font-size:9px;color:var(--text-mut)">${b.manager_email||''}</div>${statusBadge}</td>
+      <td><button onclick="openBranchDashboard('${b.id}')" style="padding:5px 10px;background:linear-gradient(135deg,#7c3aed,#ec4899);color:#fff;border:none;border-radius:6px;font-family:inherit;font-size:10px;font-weight:900;cursor:pointer">🔓 افتح</button></td>
+    </tr>`;
+  }).join('');
 }
 
 // ───── MARKET HEATMAP (dashboard widget) ─────
@@ -2132,7 +2183,15 @@ async function loadDelivery(){
     $('dv-drivers').innerHTML=(drv.drivers||[]).map(d=>{
       const pay=getDriverPay(d.id)||{mode:d.employment_type==='salaried'?'salary':'commission',commission:70,salary:3000,bonus:2,payout:d.payout_method||'bank'};
       const modeLbl=pay.mode==='salary'?`📅 ${pay.salary} ر.س/شهر`:`💰 عمولة ${pay.commission}%`;
-      return `<div class="panel" style="margin:0;padding:14px"><div style="display:flex;align-items:center;gap:10px"><div style="width:42px;height:42px;border-radius:50%;background:linear-gradient(135deg,var(--purple),var(--amber));color:#fff;display:flex;align-items:center;justify-content:center;font-weight:900">${d.name.charAt(0)}</div><div style="flex:1;min-width:0"><b style="font-size:13px">${d.name}</b><div style="font-size:10px;color:var(--mute);direction:ltr;text-align:right">${d.phone}</div></div><span class="status-pill ${d.status==='online'?'s-paid':d.status==='delivering'?'s-delivering':'s-pending'}">${d.status==='online'?'متاح':d.status==='delivering'?'في توصيل':'غير متاح'}</span></div><div style="margin-top:8px;font-size:11px;color:var(--mute)">⭐ ${(d.rating||5).toFixed(1)} · ${d.deliveries_today||0} توصيل · <b>${d.balance_pending_sar||0}</b> ر.س معلّق</div><div style="margin-top:10px;padding:8px;background:var(--bg);border-radius:8px;display:flex;justify-content:space-between;align-items:center"><span style="font-size:11px;color:var(--mute)">نظام الدفع</span><b style="font-size:11px;color:${pay.mode==='salary'?'#1e40af':'#ec4899'}">${modeLbl}</b></div><div style="display:flex;gap:6px;margin-top:8px"><button class="btn btn-outline" style="flex:1;padding:7px;font-size:10px" onclick="openDriverPayMod('${d.id}','${d.name.replace(/'/g,'')}','${d.phone}')"><i data-lucide="settings" style="width:11px;height:11px"></i> نظام الدفع</button></div></div>`;
+      // Branch assignment (new)
+      const branches=JSON.parse(localStorage.getItem('zx_merchant_branches')||'[]');
+      const driverBranches=JSON.parse(localStorage.getItem('zx_driver_branches')||'{}');
+      const assignedBranch=driverBranches[d.id]||'__all__';
+      const branchLbl=assignedBranch==='__all__'?'🌐 كل الفروع':(branches.find(b=>b.id===assignedBranch)?.name_ar||'غير محدد');
+      const branchCol=assignedBranch==='__all__'?'#10b981':'#7c3aed';
+      return `<div class="panel" style="margin:0;padding:14px"><div style="display:flex;align-items:center;gap:10px"><div style="width:42px;height:42px;border-radius:50%;background:linear-gradient(135deg,var(--purple),var(--amber));color:#fff;display:flex;align-items:center;justify-content:center;font-weight:900">${d.name.charAt(0)}</div><div style="flex:1;min-width:0"><b style="font-size:13px">${d.name}</b><div style="font-size:10px;color:var(--mute);direction:ltr;text-align:right">${d.phone}</div></div><span class="status-pill ${d.status==='online'?'s-paid':d.status==='delivering'?'s-delivering':'s-pending'}">${d.status==='online'?'متاح':d.status==='delivering'?'في توصيل':'غير متاح'}</span></div><div style="margin-top:8px;font-size:11px;color:var(--mute)">⭐ ${(d.rating||5).toFixed(1)} · ${d.deliveries_today||0} توصيل · <b>${d.balance_pending_sar||0}</b> ر.س معلّق</div>
+      <div style="margin-top:10px;padding:8px;background:var(--bg);border-radius:8px"><div style="font-size:10px;color:var(--mute);margin-bottom:4px">🏪 الفرع المُسند له</div><select onchange="assignDriverBranch('${d.id}',this.value)" style="width:100%;padding:6px 8px;border:1px solid ${branchCol};border-radius:6px;font-family:inherit;font-size:11px;font-weight:700;color:${branchCol};background:#fff;cursor:pointer"><option value="__all__" ${assignedBranch==='__all__'?'selected':''}>🌐 كل الفروع (مفتوح)</option>${branches.map(b=>`<option value="${b.id}" ${assignedBranch===b.id?'selected':''}>🏪 ${b.name_ar}</option>`).join('')}</select></div>
+      <div style="margin-top:8px;padding:8px;background:var(--bg);border-radius:8px;display:flex;justify-content:space-between;align-items:center"><span style="font-size:11px;color:var(--mute)">نظام الدفع</span><b style="font-size:11px;color:${pay.mode==='salary'?'#1e40af':'#ec4899'}">${modeLbl}</b></div><div style="display:flex;gap:6px;margin-top:8px"><button class="btn btn-outline" style="flex:1;padding:7px;font-size:10px" onclick="openDriverPayMod('${d.id}','${d.name.replace(/'/g,'')}','${d.phone}')"><i data-lucide="settings" style="width:11px;height:11px"></i> نظام الدفع</button></div></div>`;
     }).join('');
     setTimeout(()=>{if(window.lucide)lucide.createIcons()},50);
   }catch(e){}
@@ -2847,6 +2906,28 @@ function removeBranch(id){
   localStorage.setItem('zx_merchant_branches',JSON.stringify(MERCHANT_BRANCHES));
   renderBranchesList();updateBranchStats();
   toast(`🗑️ تم حذف الفرع · توفير ${b.fee_monthly||0} ر.س/شهر`);
+}
+
+// Assign driver to a specific branch (or '__all__' for open access)
+function assignDriverBranch(driverId,branchId){
+  const map=JSON.parse(localStorage.getItem('zx_driver_branches')||'{}');
+  if(branchId==='__all__')delete map[driverId];else map[driverId]=branchId;
+  localStorage.setItem('zx_driver_branches',JSON.stringify(map));
+  if(branchId==='__all__'){toast('✓ السائق متاح لكل الفروع');}
+  else{
+    const branches=JSON.parse(localStorage.getItem('zx_merchant_branches')||'[]');
+    const b=branches.find(x=>x.id===branchId);
+    toast(`✓ السائق مخصص لـ ${b?.name_ar||'الفرع'}`);
+  }
+}
+
+// ───── SANDBOX / TEST MODE for Payment & Shipping Gateways ─────
+function isSandboxMode(){return localStorage.getItem('zx_sandbox_mode')==='1';}
+function toggleSandboxMode(){
+  const newMode=!isSandboxMode();
+  localStorage.setItem('zx_sandbox_mode',newMode?'1':'0');
+  toast(newMode?'🧪 الوضع التجريبي مُفعّل · كل المعاملات وهمية للاختبار':'🔒 الوضع الفعلي مُفعّل · المعاملات حقيقية');
+  setTimeout(()=>location.reload(),800);
 }
 
 // ───────────────────────── SEED DEMO PRODUCTS (5 per category × 8 categories = 40 items) ─────────────────────────
@@ -4365,6 +4446,17 @@ setInterval(()=>{
 // Init lucide icons on load
 window.addEventListener('load',()=>{
   if(window.lucide)lucide.createIcons();
+  // Sync sandbox checkbox
+  const sb=document.getElementById('sandbox-toggle');if(sb)sb.checked=isSandboxMode();
+  // Global sandbox indicator on every page
+  if(isSandboxMode()&&!document.getElementById('sandbox-global-banner')){
+    const sbBanner=document.createElement('div');
+    sbBanner.id='sandbox-global-banner';
+    sbBanner.style.cssText='position:fixed;bottom:14px;left:14px;background:linear-gradient(135deg,#f59e0b,#dc2626);color:#fff;padding:9px 16px;border-radius:99px;font-size:12px;font-weight:900;z-index:200;box-shadow:0 8px 24px rgba(245,158,11,.5);display:flex;align-items:center;gap:8px;cursor:pointer';
+    sbBanner.innerHTML='🧪 الوضع التجريبي · معاملات وهمية';
+    sbBanner.onclick=()=>goPage('gateways');
+    document.body.appendChild(sbBanner);
+  }
   // Branch scope detection (from URL or localStorage)
   try{
     const urlBranch=new URLSearchParams(location.search).get('branch');
@@ -4374,7 +4466,6 @@ window.addEventListener('load',()=>{
       const branches=JSON.parse(localStorage.getItem('zx_merchant_branches')||'[]');
       const b=branches.find(x=>x.id===scope);
       if(b&&!b.is_main){
-        // Show persistent banner indicating scoped mode
         const banner=document.createElement('div');
         banner.id='branch-scope-banner';
         banner.style.cssText='position:sticky;top:0;background:linear-gradient(135deg,#10b981,#059669);color:#fff;padding:8px 16px;font-size:12px;font-weight:900;display:flex;justify-content:space-between;align-items:center;z-index:50;box-shadow:0 2px 12px rgba(16,185,129,.3)';
