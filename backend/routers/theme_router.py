@@ -63,6 +63,7 @@ class ThemeIn(BaseModel):
     mode: Optional[str] = None
     colors: Optional[Dict[str, str]] = None
     font_family: Optional[str] = None
+    font_size: Optional[int] = Field(default=None, ge=10, le=24)
     radius_scale: Optional[float] = Field(default=None, ge=0.5, le=2.0)
     buttons_style: Optional[str] = None
     use_glass: Optional[bool] = None
@@ -99,22 +100,68 @@ async def get_theme_by_merchant(merchant_id: str):
 async def update_my_theme(body: ThemeIn, u: dict = Depends(merchant_user)):
     """Merchant updates their theme. Only sent fields are overwritten."""
     update: Dict[str, Any] = {}
-    for k in ("mode", "font_family", "radius_scale", "buttons_style", "use_glass", "logo_url", "store_name", "tagline"):
+    for k in ("mode", "font_family", "font_size", "radius_scale", "buttons_style", "use_glass", "logo_url", "store_name", "tagline"):
         v = getattr(body, k)
         if v is not None:
             update[k] = v
     if body.colors:
-        # Merge with existing colors so partial updates work
         existing = await db.merchant_themes.find_one({"merchant_id": u["user_id"]}) or {}
         merged = {**DEFAULT_THEME["colors"], **(existing.get("colors") or {}), **body.colors}
         update["colors"] = merged
     update["updated_at"] = _now()
+    # Bump version so existing customers' locked theme stays unaffected
     await db.merchant_themes.update_one(
         {"merchant_id": u["user_id"]},
-        {"$set": update, "$setOnInsert": {"merchant_id": u["user_id"], "created_at": _now()}},
+        {"$set": update, "$inc": {"version": 1}, "$setOnInsert": {"merchant_id": u["user_id"], "created_at": _now()}},
         upsert=True,
     )
     return await db.merchant_themes.find_one({"merchant_id": u["user_id"]}, {"_id": 0})
+
+
+# ─────────────────────────────────────────────────────────────────────────
+# CUSTOMER LOCKED THEME (snapshot-at-signup)
+# When a customer registers, we snapshot the merchant's CURRENT theme into
+# the customer record. They keep that look forever unless they opt-in to
+# "use latest store theme" from their profile.
+# ─────────────────────────────────────────────────────────────────────────
+@router.get("/customer/effective")
+async def get_customer_effective_theme(customer_id: Optional[str] = None, merchant_id: Optional[str] = None):
+    """
+    Public — used by storefront on every page load to pick the right theme:
+      • If customer has locked_theme + use_latest=False → return locked snapshot
+      • Otherwise → return merchant's current theme
+    """
+    if customer_id:
+        cust = await db.customers.find_one({"id": customer_id}, {"_id": 0})
+        if cust and cust.get("locked_theme") and not cust.get("use_latest_theme"):
+            return {**DEFAULT_THEME, **cust["locked_theme"], "source": "locked"}
+    if merchant_id:
+        t = await db.merchant_themes.find_one({"merchant_id": merchant_id}, {"_id": 0})
+        if t:
+            return {**DEFAULT_THEME, **t, "source": "merchant"}
+    return {**DEFAULT_THEME, "source": "default"}
+
+
+@router.post("/customer/snapshot")
+async def snapshot_customer_theme(customer_id: str, merchant_id: str):
+    """Called automatically at customer signup — locks the current merchant theme."""
+    t = await db.merchant_themes.find_one({"merchant_id": merchant_id}, {"_id": 0}) or DEFAULT_THEME
+    await db.customers.update_one(
+        {"id": customer_id},
+        {"$set": {"locked_theme": t, "locked_theme_at": _now(), "use_latest_theme": False}},
+    )
+    return {"ok": True, "snapshot": t}
+
+
+class CustomerThemePrefIn(BaseModel):
+    use_latest_theme: bool
+
+
+@router.put("/customer/{customer_id}/preference")
+async def update_customer_pref(customer_id: str, body: CustomerThemePrefIn):
+    """Customer toggles 'use latest store theme' from their profile."""
+    await db.customers.update_one({"id": customer_id}, {"$set": {"use_latest_theme": body.use_latest_theme}})
+    return {"ok": True, "use_latest_theme": body.use_latest_theme}
 
 
 @router.post("/merchant/reset")

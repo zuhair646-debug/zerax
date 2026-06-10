@@ -3,6 +3,10 @@
 <head>
 <!-- Zerax Unified Dark Theme — applied platform-wide -->
 <link rel="stylesheet" href="/mockups/zerax-theme.css">
+<!-- Arabic font families for theme customizer -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;700;900&family=Cairo:wght@400;700;900&family=IBM+Plex+Sans+Arabic:wght@400;700&family=Rubik:wght@400;700;900&family=Almarai:wght@400;700;800&family=Noto+Kufi+Arabic:wght@400;700;900&family=Amiri:wght@400;700&family=Reem+Kufi:wght@400;700&display=swap" rel="stylesheet">
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Zerax — لوحة تحكم التاجر</title>
@@ -1073,9 +1077,104 @@ select.ps-input option{background:#13131f;color:#fff}
 
       <!-- ─── THEMES ─── -->
       <div class="page" data-page="themes">
-        <div class="panel" style="background:linear-gradient(135deg,#0a0a14,#13131f);color:#fff;border:none"><div style="display:flex;align-items:center;gap:14px"><div style="width:54px;height:54px;border-radius:14px;background:linear-gradient(135deg,var(--purple),var(--amber));display:flex;align-items:center;justify-content:center;font-size:26px">🎨</div><div><h3 style="color:#fff;font-size:18px">ألوان المتجر</h3><p style="font-size:12px;color:#94a3b8;margin-top:4px">اختر هوية متجرك · الوضع النهاري والليلي</p></div></div></div>
-        <div class="panel" style="margin-top:14px"><div class="panel-head"><h3>🌗 وضع العرض</h3></div><div style="display:grid;grid-template-columns:1fr 1fr;gap:10px"><label class="pay-card selected" data-mode="light"><input type="radio" name="theme-mode" value="light" checked onchange="setThemeMode('light')" style="display:none"><div style="font-size:28px;margin-bottom:6px">☀️</div><b>وضع نهاري</b><span>خلفية بيضاء، نص داكن</span></label><label class="pay-card" data-mode="dark"><input type="radio" name="theme-mode" value="dark" onchange="setThemeMode('dark')" style="display:none"><div style="font-size:28px;margin-bottom:6px">🌙</div><b>وضع ليلي</b><span>خلفية داكنة، نص فاتح، يريح العين</span></label></div></div>
-        <div class="panel" style="margin-top:14px"><div class="panel-head"><h3>🎨 لون الهوية الرئيسي</h3></div><div id="theme-colors" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:10px"></div></div>
+        <div class="panel" style="background:linear-gradient(135deg,#0a0a14,#13131f);color:#fff;border:none">
+          <div style="display:flex;align-items:center;gap:14px">
+            <div style="width:54px;height:54px;border-radius:14px;background:linear-gradient(135deg,var(--purple),var(--amber));display:flex;align-items:center;justify-content:center;font-size:26px">🎨</div>
+            <div style="flex:1"><h3 style="color:#fff;font-size:18px">هوية المتجر · ألوان وخطوط</h3><p style="font-size:12px;color:#94a3b8;margin-top:4px">عدّل هوية متجرك كاملاً · يطبق تلقائياً لكل عميل جديد · العملاء القدامى يظلون على هويتهم الأصلية</p></div>
+            <button onclick="resetTheme()" data-testid="theme-reset" style="background:#1f1f2e;border:1px solid #2d2d4a;color:#94a3b8;padding:9px 14px;border-radius:9px;font-family:inherit;font-weight:700;font-size:11px;cursor:pointer">↺ استعادة الافتراضي</button>
+          </div>
+        </div>
+
+        <!-- Mode -->
+        <div class="panel" style="margin-top:14px">
+          <div class="panel-head"><h3>🌗 وضع العرض الافتراضي</h3></div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+            <label class="pay-card" data-tm-mode="dark"><input type="radio" name="theme-mode" value="dark" checked onchange="themeSet('mode','dark')" style="display:none"><div style="font-size:28px;margin-bottom:6px">🌙</div><b>وضع ليلي (مُوصى به)</b><span>فاخر · يريح العين · هوية Zerax</span></label>
+            <label class="pay-card" data-tm-mode="light"><input type="radio" name="theme-mode" value="light" onchange="themeSet('mode','light')" style="display:none"><div style="font-size:28px;margin-bottom:6px">☀️</div><b>وضع نهاري</b><span>خلفية فاتحة · نص داكن</span></label>
+          </div>
+        </div>
+
+        <!-- Brand Colors -->
+        <div class="panel" style="margin-top:14px">
+          <div class="panel-head"><h3>🎨 ألوان الهوية</h3></div>
+          <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:12px">
+            <div><label style="font-size:11px;color:#94a3b8;font-weight:700;display:block;margin-bottom:6px">الخلفية الأساسية</label><input type="color" id="tm-bg" value="#0a0a14" oninput="themeSet('bg',this.value)" data-testid="tm-color-bg" style="width:100%;height:42px;border:1px solid #2d2d4a;border-radius:8px;cursor:pointer;background:transparent"></div>
+            <div><label style="font-size:11px;color:#94a3b8;font-weight:700;display:block;margin-bottom:6px">سطح البطاقات</label><input type="color" id="tm-surface" value="#14142b" oninput="themeSet('surface',this.value)" style="width:100%;height:42px;border:1px solid #2d2d4a;border-radius:8px;cursor:pointer;background:transparent"></div>
+            <div><label style="font-size:11px;color:#94a3b8;font-weight:700;display:block;margin-bottom:6px">اللون الرئيسي</label><input type="color" id="tm-accent" value="#7c3aed" oninput="themeSet('accent',this.value)" data-testid="tm-color-accent" style="width:100%;height:42px;border:1px solid #2d2d4a;border-radius:8px;cursor:pointer;background:transparent"></div>
+            <div><label style="font-size:11px;color:#94a3b8;font-weight:700;display:block;margin-bottom:6px">اللون الثانوي</label><input type="color" id="tm-amber" value="#fbbf24" oninput="themeSet('amber',this.value)" style="width:100%;height:42px;border:1px solid #2d2d4a;border-radius:8px;cursor:pointer;background:transparent"></div>
+            <div><label style="font-size:11px;color:#94a3b8;font-weight:700;display:block;margin-bottom:6px">لون النص</label><input type="color" id="tm-text" value="#f1f5f9" oninput="themeSet('text',this.value)" style="width:100%;height:42px;border:1px solid #2d2d4a;border-radius:8px;cursor:pointer;background:transparent"></div>
+            <div><label style="font-size:11px;color:#94a3b8;font-weight:700;display:block;margin-bottom:6px">لون الحدود</label><input type="color" id="tm-border" value="#2d2d4a" oninput="themeSet('border',this.value)" style="width:100%;height:42px;border:1px solid #2d2d4a;border-radius:8px;cursor:pointer;background:transparent"></div>
+          </div>
+          <!-- Quick presets -->
+          <div style="margin-top:14px;display:flex;flex-wrap:wrap;gap:8px">
+            <span style="font-size:11px;color:#94a3b8;font-weight:700;align-self:center;margin-left:6px">ثيمات جاهزة:</span>
+            <button onclick="applyPreset('zerax')" data-testid="preset-zerax" style="background:linear-gradient(135deg,#7c3aed,#a855f7);color:#fff;border:none;padding:8px 14px;border-radius:8px;font-family:inherit;font-weight:800;font-size:11px;cursor:pointer">Zerax الافتراضي</button>
+            <button onclick="applyPreset('luxury')" style="background:linear-gradient(135deg,#0a0a14,#fbbf24);color:#fbbf24;border:1px solid #fbbf24;padding:8px 14px;border-radius:8px;font-family:inherit;font-weight:800;font-size:11px;cursor:pointer">Luxury Gold</button>
+            <button onclick="applyPreset('emerald')" style="background:linear-gradient(135deg,#0f172a,#10b981);color:#fff;border:none;padding:8px 14px;border-radius:8px;font-family:inherit;font-weight:800;font-size:11px;cursor:pointer">Emerald Night</button>
+            <button onclick="applyPreset('rose')" style="background:linear-gradient(135deg,#1f1129,#ec4899);color:#fff;border:none;padding:8px 14px;border-radius:8px;font-family:inherit;font-weight:800;font-size:11px;cursor:pointer">Rose Velvet</button>
+            <button onclick="applyPreset('ocean')" style="background:linear-gradient(135deg,#0c1c3a,#3b82f6);color:#fff;border:none;padding:8px 14px;border-radius:8px;font-family:inherit;font-weight:800;font-size:11px;cursor:pointer">Ocean Blue</button>
+            <button onclick="applyPreset('day')" style="background:linear-gradient(135deg,#fafafa,#e5e7eb);color:#0f172a;border:1px solid #d1d5db;padding:8px 14px;border-radius:8px;font-family:inherit;font-weight:800;font-size:11px;cursor:pointer">☀️ نهاري كلاسيكي</button>
+          </div>
+        </div>
+
+        <!-- Typography -->
+        <div class="panel" style="margin-top:14px">
+          <div class="panel-head"><h3>✍️ الخطوط والحجم</h3></div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
+            <div>
+              <label style="font-size:11px;color:#94a3b8;font-weight:700;display:block;margin-bottom:6px">عائلة الخط</label>
+              <select id="tm-font" data-testid="tm-font" onchange="themeSet('font_family',this.value)" style="width:100%;padding:11px;background:#14142b;color:#f1f5f9;border:1px solid #2d2d4a;border-radius:9px;font-family:inherit;font-weight:700;font-size:13px">
+                <option value="Tajawal">Tajawal · تجوّل (افتراضي)</option>
+                <option value="Cairo">Cairo · القاهرة</option>
+                <option value="IBM Plex Sans Arabic">IBM Plex · رسمي</option>
+                <option value="Rubik">Rubik · حديث</option>
+                <option value="Almarai">Almarai · المراعي</option>
+                <option value="Noto Kufi Arabic">Noto Kufi · كوفي</option>
+                <option value="Amiri">Amiri · أميري (تقليدي)</option>
+                <option value="Reem Kufi">Reem Kufi · ريم كوفي</option>
+              </select>
+            </div>
+            <div>
+              <label style="font-size:11px;color:#94a3b8;font-weight:700;display:block;margin-bottom:6px">حجم الخط الأساسي: <span id="tm-fs-label" style="color:#fbbf24">15px</span></label>
+              <input type="range" id="tm-fs" min="12" max="20" value="15" oninput="themeSet('font_size',+this.value);document.getElementById('tm-fs-label').textContent=this.value+'px'" style="width:100%;accent-color:#7c3aed">
+            </div>
+          </div>
+          <div style="margin-top:14px;padding:14px;background:#0a0a14;border:1px solid #2d2d4a;border-radius:10px">
+            <div style="font-size:10px;color:#64748b;font-weight:700;margin-bottom:6px">معاينة الخط</div>
+            <div id="tm-preview" style="font-family:Tajawal,sans-serif;font-size:15px;color:#f1f5f9;line-height:1.8">
+              <b style="color:#fbbf24;font-size:18px">عنوان المنتج</b><br>
+              هذا نص تجريبي لمعاينة الخط الذي اخترته · يظهر كما سيراه عملاؤك في متجرك<br>
+              <span style="color:#94a3b8;font-size:12px">السعر: 250 ر.س · شحن مجاني</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Style + Save -->
+        <div class="panel" style="margin-top:14px">
+          <div class="panel-head"><h3>🎯 شكل الأزرار وانحناء الزوايا</h3></div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
+            <div>
+              <label style="font-size:11px;color:#94a3b8;font-weight:700;display:block;margin-bottom:6px">نمط الأزرار</label>
+              <select id="tm-btn-style" onchange="themeSet('buttons_style',this.value)" style="width:100%;padding:11px;background:#14142b;color:#f1f5f9;border:1px solid #2d2d4a;border-radius:9px;font-family:inherit;font-weight:700;font-size:13px">
+                <option value="gradient">Gradient (افتراضي)</option>
+                <option value="solid">Solid · لون موحد</option>
+                <option value="outline">Outline · حدود فقط</option>
+                <option value="pill">Pill · أزرار دائرية</option>
+              </select>
+            </div>
+            <div>
+              <label style="font-size:11px;color:#94a3b8;font-weight:700;display:block;margin-bottom:6px">انحناء الزوايا: <span id="tm-radius-label" style="color:#fbbf24">1.0×</span></label>
+              <input type="range" id="tm-radius" min="0.5" max="2" step="0.1" value="1" oninput="themeSet('radius_scale',+this.value);document.getElementById('tm-radius-label').textContent=this.value+'×'" style="width:100%;accent-color:#7c3aed">
+            </div>
+          </div>
+          <div style="margin-top:18px;background:rgba(124,58,237,.08);border:1px solid rgba(124,58,237,.3);border-radius:12px;padding:14px;line-height:1.8;font-size:12px;color:#cbd5e1">
+            <b style="color:#a855f7">📌 كيف يطبق؟</b><br>
+            • فور حفظك، الثيم الجديد يظهر تلقائياً لكل <b style="color:#10b981">عميل جديد</b> يدخل متجرك<br>
+            • العملاء الحاليون يظلون يرون الهوية التي اشتركوا بها أول مرة (مقفلة عليهم)<br>
+            • يقدر العميل من حسابه يفعّل "استخدام أحدث هوية للمتجر" إذا أراد
+          </div>
+          <button onclick="saveTheme()" data-testid="theme-save" style="margin-top:14px;width:100%;background:linear-gradient(135deg,#10b981,#059669);color:#fff;border:none;padding:14px;border-radius:11px;font-family:inherit;font-weight:900;font-size:13px;cursor:pointer;box-shadow:0 8px 20px rgba(16,185,129,.3)">💾 حفظ الهوية وتطبيقها على المتجر</button>
+        </div>
       </div>
       <div class="page" data-page="smart-mgmt">
         <!-- Hero banner -->
@@ -4902,10 +5001,9 @@ function loadReviews(){
 // ───── THEMES + DARK MODE ─────
 const THEME_COLORS=[{id:'purple',name:'بنفسجي',main:'#7c3aed',accent:'#fbbf24'},{id:'emerald',name:'أخضر',main:'#10b981',accent:'#fbbf24'},{id:'rose',name:'وردي',main:'#f43f5e',accent:'#fbbf24'},{id:'cyan',name:'فيروزي',main:'#06b6d4',accent:'#fbbf24'},{id:'orange',name:'برتقالي',main:'#f97316',accent:'#0a0a14'},{id:'pink',name:'وردي فاتح',main:'#ec4899',accent:'#fbbf24'},{id:'indigo',name:'كحلي',main:'#6366f1',accent:'#fbbf24'},{id:'red',name:'أحمر',main:'#dc2626',accent:'#fbbf24'},{id:'gold',name:'ذهبي فاخر',main:'#ca8a04',accent:'#0a0a14'},{id:'mono',name:'أحادي أسود',main:'#0a0a14',accent:'#fbbf24'}];
 function loadThemes(){
-  const cur=localStorage.getItem('zx_theme_color')||'purple';
-  document.getElementById('theme-colors').innerHTML=THEME_COLORS.map(c=>`<button class="pay-card ${cur===c.id?'selected':''}" onclick="setThemeColor('${c.id}','${c.main}','${c.accent}')" data-tid="${c.id}"><div style="width:42px;height:42px;border-radius:12px;background:linear-gradient(135deg,${c.main},${c.accent});margin:0 auto 6px"></div><b>${c.name}</b><span style="direction:ltr">${c.main}</span></button>`).join('');
-  document.querySelectorAll('input[name="theme-mode"]').forEach(r=>r.checked=r.value===(localStorage.getItem('zx_theme_mode')||'light'));
-  document.querySelectorAll('.pay-card[data-mode]').forEach(c=>c.classList.toggle('selected',c.dataset.mode===(localStorage.getItem('zx_theme_mode')||'light')));
+  // Legacy — the old #theme-colors div was removed in favor of the new Theme Customizer UI.
+  // Bridge: load merchant theme (if logged in) and sync new customizer inputs.
+  if(typeof loadMyTheme==='function')loadMyTheme();
 }
 function setThemeColor(id,main,accent){
   localStorage.setItem('zx_theme_color',id);
@@ -5218,6 +5316,122 @@ function exitBranchScope(){
   toast('↩️ تم الخروج من نطاق الفرع · العرض الكلي');
   setTimeout(()=>location.href=location.pathname,400);
 }
+// ═══════════════════ THEME CUSTOMIZER ═══════════════════
+let CURRENT_THEME = {
+  mode: 'dark',
+  font_family: 'Tajawal',
+  font_size: 15,
+  buttons_style: 'gradient',
+  radius_scale: 1.0,
+  colors: { bg:'#0a0a14', surface:'#14142b', accent:'#7c3aed', amber:'#fbbf24', text:'#f1f5f9', border:'#2d2d4a' }
+};
+const THEME_PRESETS = {
+  zerax:   { mode:'dark',  font_family:'Tajawal', colors:{bg:'#0a0a14',surface:'#14142b',accent:'#7c3aed',amber:'#fbbf24',text:'#f1f5f9',border:'#2d2d4a'} },
+  luxury:  { mode:'dark',  font_family:'Cairo',   colors:{bg:'#0a0908',surface:'#1c1916',accent:'#fbbf24',amber:'#d97706',text:'#fef3c7',border:'#3f3a2e'} },
+  emerald: { mode:'dark',  font_family:'Rubik',   colors:{bg:'#022c22',surface:'#064e3b',accent:'#10b981',amber:'#34d399',text:'#ecfdf5',border:'#065f46'} },
+  rose:    { mode:'dark',  font_family:'Almarai', colors:{bg:'#1f1129',surface:'#2d1b3d',accent:'#ec4899',amber:'#f9a8d4',text:'#fce7f3',border:'#4a2554'} },
+  ocean:   { mode:'dark',  font_family:'IBM Plex Sans Arabic', colors:{bg:'#0c1c3a',surface:'#1e3a5f',accent:'#3b82f6',amber:'#60a5fa',text:'#dbeafe',border:'#1e40af'} },
+  day:     { mode:'light', font_family:'Tajawal', colors:{bg:'#fafafa',surface:'#ffffff',accent:'#7c3aed',amber:'#f59e0b',text:'#0f172a',border:'#e5e7eb'} },
+};
+
+function themeSet(key, value) {
+  if(['bg','surface','accent','amber','text','border'].includes(key)) {
+    CURRENT_THEME.colors[key] = value;
+  } else {
+    CURRENT_THEME[key] = value;
+  }
+  applyThemeLive();
+}
+
+function applyThemeLive() {
+  const root = document.documentElement;
+  const c = CURRENT_THEME.colors;
+  root.style.setProperty('--zx-bg', c.bg);
+  root.style.setProperty('--zx-bg-2', c.bg);
+  root.style.setProperty('--zx-surface', c.surface);
+  root.style.setProperty('--zx-surface-2', c.surface);
+  root.style.setProperty('--zx-accent', c.accent);
+  root.style.setProperty('--zx-accent-2', c.accent);
+  root.style.setProperty('--zx-amber', c.amber);
+  root.style.setProperty('--zx-text', c.text);
+  root.style.setProperty('--zx-border', c.border);
+  root.style.setProperty('--zx-font', `'${CURRENT_THEME.font_family}', sans-serif`);
+  if(CURRENT_THEME.font_size) document.body.style.fontSize = CURRENT_THEME.font_size + 'px';
+  document.body.classList.toggle('zx-dark', CURRENT_THEME.mode === 'dark');
+  document.body.classList.toggle('zx-light', CURRENT_THEME.mode === 'light');
+  // Update preview area
+  const prev = document.getElementById('tm-preview');
+  if(prev) {
+    prev.style.fontFamily = `'${CURRENT_THEME.font_family}', sans-serif`;
+    prev.style.fontSize = (CURRENT_THEME.font_size || 15) + 'px';
+    prev.style.color = c.text;
+  }
+}
+
+function applyPreset(key) {
+  const p = THEME_PRESETS[key];
+  if(!p) return;
+  CURRENT_THEME = {...CURRENT_THEME, ...p, colors: {...CURRENT_THEME.colors, ...p.colors}};
+  // Sync UI inputs
+  const setVal = (id, v) => { const el = document.getElementById(id); if(el) el.value = v; };
+  setVal('tm-bg', p.colors.bg);
+  setVal('tm-surface', p.colors.surface);
+  setVal('tm-accent', p.colors.accent);
+  setVal('tm-amber', p.colors.amber);
+  setVal('tm-text', p.colors.text);
+  setVal('tm-border', p.colors.border);
+  setVal('tm-font', p.font_family);
+  applyThemeLive();
+  toast(`✓ تم تطبيق ثيم: ${key}`);
+}
+
+async function saveTheme() {
+  try {
+    const token = localStorage.getItem('zx_token') || '';
+    const r = await fetch(API+'/api/theme/merchant/me', {
+      method:'PUT',
+      headers:{'Content-Type':'application/json', ...(token?{'Authorization':'Bearer '+token}:{})},
+      body: JSON.stringify(CURRENT_THEME)
+    });
+    if(r.ok) toast('✓ تم حفظ الهوية وستظهر للعملاء الجدد فوراً');
+    else toast('⚠️ فشل الحفظ — سجل دخول مرة أخرى');
+  } catch(e) { toast('⚠️ '+e.message); }
+}
+
+async function resetTheme() {
+  if(!confirm('استعادة الهوية الافتراضية لـ Zerax؟')) return;
+  try {
+    const token = localStorage.getItem('zx_token') || '';
+    await fetch(API+'/api/theme/merchant/reset', {method:'POST', headers:{...(token?{'Authorization':'Bearer '+token}:{})}});
+    applyPreset('zerax');
+    toast('✓ تم استعادة الهوية الافتراضية');
+  } catch(e) { toast('⚠️ '+e.message); }
+}
+
+async function loadMyTheme() {
+  try {
+    const token = localStorage.getItem('zx_token') || '';
+    if(!token) return;
+    const r = await fetch(API+'/api/theme/merchant/me', {headers:{'Authorization':'Bearer '+token}});
+    if(!r.ok) return;
+    const t = await r.json();
+    if(t && !t.is_default) {
+      CURRENT_THEME = {...CURRENT_THEME, ...t, colors:{...CURRENT_THEME.colors, ...(t.colors||{})}};
+      // Sync UI inputs if visible
+      const setVal = (id, v) => { const el = document.getElementById(id); if(el && v!=null) el.value = v; };
+      const c = CURRENT_THEME.colors;
+      setVal('tm-bg', c.bg); setVal('tm-surface', c.surface); setVal('tm-accent', c.accent);
+      setVal('tm-amber', c.amber); setVal('tm-text', c.text); setVal('tm-border', c.border);
+      setVal('tm-font', CURRENT_THEME.font_family);
+      setVal('tm-fs', CURRENT_THEME.font_size || 15);
+      setVal('tm-btn-style', CURRENT_THEME.buttons_style);
+      setVal('tm-radius', CURRENT_THEME.radius_scale || 1);
+      applyThemeLive();
+    }
+  } catch(_) {}
+}
+// Auto-load theme after login
+setTimeout(loadMyTheme, 1500);
 </script>
 </body>
 </html>
