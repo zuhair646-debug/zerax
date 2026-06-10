@@ -624,6 +624,21 @@ select.ps-input option{background:#13131f;color:#fff}
     <div class="content">
       <!-- ─── DASHBOARD ─── -->
       <div class="page active" data-page="dashboard">
+        <!-- Store URL share widget -->
+        <div class="panel" id="store-url-widget" style="background:linear-gradient(135deg,#7c3aed,#ec4899);color:#fff;border:none;margin-bottom:18px;display:none">
+          <div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap">
+            <div style="width:50px;height:50px;border-radius:14px;background:rgba(255,255,255,.15);display:flex;align-items:center;justify-content:center;font-size:24px">🔗</div>
+            <div style="flex:1;min-width:220px">
+              <div style="font-size:11px;opacity:.85;font-weight:700">رابط متجرك الخاص (شاركه مع زبائنك)</div>
+              <div id="store-url-text" data-testid="store-url-text" style="font-family:monospace;font-size:13px;font-weight:900;margin-top:4px;direction:ltr;word-break:break-all">—</div>
+            </div>
+            <div style="display:flex;gap:8px;flex-wrap:wrap">
+              <button class="btn" data-testid="store-url-copy" onclick="copyStoreUrl()" style="background:rgba(255,255,255,.15);color:#fff;border:1px solid rgba(255,255,255,.3);padding:9px 14px;font-size:12px"><i data-lucide="copy" style="width:14px;height:14px"></i> نسخ</button>
+              <button class="btn" data-testid="store-url-whatsapp" onclick="shareStoreUrlWhatsapp()" style="background:#25D366;color:#fff;border:none;padding:9px 14px;font-size:12px"><i data-lucide="message-circle" style="width:14px;height:14px"></i> واتساب</button>
+              <button class="btn" data-testid="store-url-open" onclick="openStorePreview()" style="background:#fff;color:#7c3aed;border:none;padding:9px 14px;font-size:12px"><i data-lucide="external-link" style="width:14px;height:14px"></i> معاينة</button>
+            </div>
+          </div>
+        </div>
         <div class="kpi-grid">
           <div class="kpi" style="--clr:#7c3aed"><div class="ico"><i data-lucide="dollar-sign"></i></div><div class="lbl">إيرادات اليوم</div><div class="val">12,450 <small style="font-size:14px;color:var(--mute)">ر.س</small></div><div class="delta up"><i data-lucide="trending-up" style="width:12px;height:12px"></i> +18% من أمس</div></div>
           <div class="kpi" style="--clr:#fbbf24"><div class="ico" style="color:#0a0a14"><i data-lucide="shopping-bag"></i></div><div class="lbl">طلبات اليوم</div><div class="val">47</div><div class="delta up"><i data-lucide="trending-up" style="width:12px;height:12px"></i> +12 طلب</div></div>
@@ -1553,6 +1568,19 @@ function doLogout(){
   localStorage.removeItem('zx_admin_session');
   location.reload();
 }
+function copyStoreUrl(){
+  const url=window.__storeUrl||$('store-url-text').textContent;
+  navigator.clipboard?.writeText(url).then(()=>toast('📋 تم نسخ رابط متجرك'));
+}
+function shareStoreUrlWhatsapp(){
+  const url=window.__storeUrl||$('store-url-text').textContent;
+  const msg=`🛒 زورو متجري الإلكتروني:\n\n${url}\n\nتوصيل سريع · جودة عالية · أسعار منافسة`;
+  window.open('https://wa.me/?text='+encodeURIComponent(msg),'_blank');
+}
+function openStorePreview(){
+  const url=window.__storeUrl||$('store-url-text').textContent;
+  window.open(url,'_blank');
+}
 function showApp(){
   $('login-screen').style.display='none';
   $('app').classList.add('show');
@@ -1563,6 +1591,13 @@ function showApp(){
     ['user-avt','user-avt-big'].forEach(id=>{const el=$(id);if(el)el.textContent=initial;});
     ['user-name','user-name-big'].forEach(id=>{const el=$(id);if(el)el.textContent=u.name||u.email||'—';});
     ['user-email','user-email-big'].forEach(id=>{const el=$(id);if(el)el.textContent=u.email||'—';});
+    // Build store URL using user.id as the merchant key
+    if(u.id){
+      const url=window.location.origin+'/mockups/app_mode_full.html?m='+encodeURIComponent(u.id);
+      const urlEl=$('store-url-text');if(urlEl)urlEl.textContent=url;
+      const w=$('store-url-widget');if(w)w.style.display='block';
+      window.__storeUrl=url;
+    }
   }catch(_){}
   goPage('dashboard');
   loadProductsFromAPI();

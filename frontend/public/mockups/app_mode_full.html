@@ -2060,7 +2060,11 @@ async function syncWishlistFromServer(){
 // Load real products from merchant database and prepend them
 async function loadMerchantProducts(){
   try{
-    const r=await fetch(API_BASE_CUST+'/api/store/products');
+    // Check ?m=<merchant_id> in URL — if present, fetch only that merchant's products
+    const params=new URLSearchParams(window.location.search);
+    const merchantId=params.get('m');
+    const qs=merchantId?('?merchant_id='+encodeURIComponent(merchantId)):'';
+    const r=await fetch(API_BASE_CUST+'/api/store/products'+qs);
     if(!r.ok)return;
     const d=await r.json();
     if(!d.items||!d.items.length)return;
@@ -2069,16 +2073,33 @@ async function loadMerchantProducts(){
       ar:b.name,en:b.name,
       descAr:b.desc||'',descEn:b.desc||'',
       sar:b.price,img:b.img||'https://images.unsplash.com/photo-1586765501019-cbf6c0b6d7a4?w=500',
-      stock:b.stock,sku:b.sku,_fromApi:true
+      stock:b.stock,sku:b.sku,_fromApi:true,_merchantId:b.merchant_id
     }));
-    // Prepend merchant products and de-dupe by id
-    const existingIds=new Set(PRODUCTS.map(p=>p.id));
-    const newOnes=adapted.filter(p=>!existingIds.has(p.id));
-    PRODUCTS=[...newOnes,...PRODUCTS];
+    // If filtering by merchant, REPLACE PRODUCTS (only show this merchant)
+    if(merchantId){
+      PRODUCTS=adapted;
+      // Show merchant context banner
+      _showMerchantBanner(merchantId,adapted.length);
+    }else{
+      // Otherwise prepend merchant DB products on top of demo seed
+      const existingIds=new Set(PRODUCTS.map(p=>p.id));
+      const newOnes=adapted.filter(p=>!existingIds.has(p.id));
+      PRODUCTS=[...newOnes,...PRODUCTS];
+    }
     renderProducts();
     renderCategories();
-    console.log(`[storefront] loaded ${newOnes.length} merchant products from DB`);
+    console.log(`[storefront] loaded ${adapted.length} merchant products (merchant=${merchantId||'all'})`);
   }catch(e){console.warn('loadMerchantProducts failed',e);}
+}
+function _showMerchantBanner(merchantId,count){
+  const existing=document.getElementById('merchant-banner');if(existing)existing.remove();
+  const banner=document.createElement('div');
+  banner.id='merchant-banner';
+  banner.style.cssText='background:linear-gradient(135deg,#7c3aed,#ec4899);color:#fff;padding:14px 16px;margin:0 0 12px;text-align:center;font-weight:900;font-size:13px;box-shadow:0 4px 14px rgba(124,58,237,.3);position:sticky;top:60px;z-index:50';
+  banner.innerHTML=`🏪 أنت في متجر تاجر مخصص — ${count} منتج معروض`;
+  const main=document.querySelector('main')||document.body;
+  const firstSection=document.querySelector('[data-view-section]')||main.firstChild;
+  main.insertBefore(banner,firstSection);
 }
 
 // ═══════════════════════ WISHLIST ═══════════════════════
