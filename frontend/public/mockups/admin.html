@@ -10,6 +10,17 @@
 *{box-sizing:border-box;margin:0;padding:0}
 :root{--ink:#0a0a14;--ink2:#13131f;--amber:#fbbf24;--purple:#7c3aed;--violet:#a78bfa;--rose:#ec4899;--emerald:#10b981;--rd:#ef4444;--mute:#94a3b8;--mute2:#475569;--bg:#f6f7fb;--panel:#fff;--border:#e6e7ee;--sidebar:#0a0a14}
 html,body{height:100%;background:var(--bg);color:#0a0a14;font-family:'IBM Plex Sans Arabic',system-ui,sans-serif;font-size:14px}
+/* DARK MODE */
+body.dark-mode{--bg:#0f0f1a;--panel:#1a1a2e;--border:#2a2a3e;--mute:#94a3b8;--mute2:#cbd5e1;background:#0f0f1a;color:#e2e8f0}
+body.dark-mode .topbar,body.dark-mode .panel,body.dark-mode .kpi,body.dark-mode .pcard,body.dark-mode .mod .box,body.dark-mode .dropdown{background:#1a1a2e;color:#e2e8f0;border-color:#2a2a3e}
+body.dark-mode .tbl thead{background:#0f0f1a}body.dark-mode .tbl td,body.dark-mode .tbl th{border-color:#2a2a3e;color:#e2e8f0}
+body.dark-mode .pcard .body h4,body.dark-mode .panel h3,body.dark-mode .kpi .val{color:#fff}
+body.dark-mode input,body.dark-mode select,body.dark-mode textarea{background:#0f0f1a!important;color:#e2e8f0;border-color:#2a2a3e}
+body.dark-mode .ps-input{background:rgba(255,255,255,.04)!important}
+body.dark-mode .svc-card{background:#1a1a2e;color:#e2e8f0}
+body.dark-mode .svc-card h4{color:#fff}body.dark-mode .pdai-card{background:#1a1a2e;color:#e2e8f0;border-color:#2a2a3e}
+body.dark-mode .pay-card{background:#1a1a2e;color:#e2e8f0;border-color:#2a2a3e}
+body.dark-mode .pay-card.selected{background:rgba(124,58,237,.15);border-color:var(--purple)}
 
 /* ───── LOGIN ───── */
 .login-bg{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px;background:radial-gradient(ellipse at top right,#1a1a3e,#0a0a14 60%);position:relative;overflow:hidden}
@@ -546,6 +557,9 @@ select.ps-input option{background:#13131f;color:#fff}
     <button class="nav-item" data-page="social" onclick="goPage('social')"><i data-lucide="share-2"></i> الحسابات الاجتماعية <span class="badge" style="background:var(--emerald)" id="nav-social-count">3</span></button>
     <button class="nav-item" data-page="services" onclick="goPage('services')"><i data-lucide="rocket"></i> الخدمات الإضافية <span class="badge" style="background:var(--amber);color:#0a0a14">جديد</span></button>
     <button class="nav-item" data-page="smart-mgmt" onclick="goPage('smart-mgmt')"><i data-lucide="brain-circuit"></i> الإدارة الذكية <span class="badge" style="background:var(--purple)">AI</span></button>
+    <button class="nav-item" data-page="marketing" onclick="goPage('marketing')"><i data-lucide="megaphone"></i> التسويق والمبيعات <span class="badge" style="background:var(--rose)">جديد</span></button>
+    <button class="nav-item" data-page="reviews" onclick="goPage('reviews')"><i data-lucide="star"></i> التقييمات والمراجعات</button>
+    <button class="nav-item" data-page="themes" onclick="goPage('themes')"><i data-lucide="palette"></i> ألوان المتجر</button>
     <button class="nav-item" data-page="settings" onclick="goPage('settings')"><i data-lucide="settings"></i> الإعدادات</button>
 
     <div class="wallet">
@@ -694,7 +708,11 @@ select.ps-input option{background:#13131f;color:#fff}
         <div class="panel">
           <div class="panel-head">
             <h3>📦 جميع المنتجات</h3>
-            <button class="btn btn-primary" onclick="openProductModal()"><i data-lucide="plus" style="width:14px;height:14px"></i> منتج جديد</button>
+            <div style="display:flex;gap:8px;flex-wrap:wrap">
+              <button class="btn btn-outline" onclick="bulkImport()" style="padding:8px 14px;font-size:11px"><i data-lucide="upload" style="width:13px;height:13px"></i> استيراد CSV/Excel</button>
+              <button class="btn btn-outline" onclick="bulkExport()" style="padding:8px 14px;font-size:11px"><i data-lucide="download" style="width:13px;height:13px"></i> تصدير الكل</button>
+              <button class="btn btn-primary" onclick="openProductModal()"><i data-lucide="plus" style="width:14px;height:14px"></i> منتج جديد</button>
+            </div>
           </div>
           <div class="prod-grid" id="products-grid"></div>
         </div>
@@ -810,7 +828,37 @@ select.ps-input option{background:#13131f;color:#fff}
         <div class="services-grid" id="services-grid"></div>
       </div>
 
-      <!-- ─── SMART MANAGEMENT (AI Auto-Post + Smart Replies) ─── -->
+      <!-- ─── MARKETING & SALES (Coupons, Loyalty, Abandoned Carts, Segments) ─── -->
+      <div class="page" data-page="marketing">
+        <div class="panel" style="background:linear-gradient(135deg,#0a0a14,#13131f);color:#fff;border:none"><div style="display:flex;align-items:center;gap:14px"><div style="width:54px;height:54px;border-radius:14px;background:linear-gradient(135deg,#f43f5e,var(--amber));display:flex;align-items:center;justify-content:center;font-size:26px">📢</div><div><h3 style="color:#fff;font-size:18px">التسويق والمبيعات</h3><p style="font-size:12px;color:#94a3b8;margin-top:4px">كوبونات · ولاء · سلات متروكة · شرائح العملاء · حملات</p></div></div></div>
+        <!-- Stats row -->
+        <div class="kpi-grid" style="margin-top:14px">
+          <div class="kpi"><div class="lbl">سلات متروكة</div><div class="val" style="color:var(--rose)">23</div><div class="meta">11,840 ر.س محتمل · استرجع 38% بـ AI</div></div>
+          <div class="kpi"><div class="lbl">نقاط الولاء</div><div class="val" style="color:var(--amber)">142K</div><div class="meta">298 عميل نشط · 4,200 ر.س قيمة</div></div>
+          <div class="kpi"><div class="lbl">كوبونات فعّالة</div><div class="val" style="color:var(--emerald)">7</div><div class="meta">استُخدم 89 مرة هذا الأسبوع</div></div>
+          <div class="kpi"><div class="lbl">عملاء VIP</div><div class="val" style="color:var(--purple)">42</div><div class="meta">يمثلون 68% من المبيعات</div></div>
+        </div>
+        <!-- Abandoned carts -->
+        <div class="panel" style="margin-top:14px"><div class="panel-head"><h3>🛒 السلات المتروكة</h3><div style="display:flex;gap:8px;align-items:center"><label class="switch-label"><input type="checkbox" id="ab-enabled" checked><span class="switch-track"></span><b style="font-size:11px">استرجاع تلقائي</b></label></div></div><p style="font-size:11px;color:var(--mute);margin-bottom:12px;line-height:1.7">AI يرسل تذكير للعميل بعد ساعة من ترك السلة + رمز خصم 10% · 2 نقاط لكل تذكير</p><div style="overflow-x:auto"><table class="tbl"><thead><tr><th>العميل</th><th>المنتجات</th><th>القيمة</th><th>متى</th><th>إجراء</th></tr></thead><tbody><tr><td><b>أحمد محمد</b><br><span style="font-size:10px;color:var(--mute)">055xxxxx12</span></td><td>iPhone 17 + سماعة</td><td><b>5,890 ر.س</b></td><td>قبل 45 دقيقة</td><td><button class="btn btn-amber" style="padding:6px 11px;font-size:11px" onclick="toast('📲 تم إرسال تذكير + خصم 10% · -2 نقاط')"><i data-lucide="send" style="width:11px;height:11px"></i> أرسل تذكير</button></td></tr><tr><td><b>سارة الفهد</b><br><span style="font-size:10px;color:var(--mute)">053xxxxx88</span></td><td>عطر فاخر</td><td><b>340 ر.س</b></td><td>قبل ساعتين</td><td><button class="btn btn-amber" style="padding:6px 11px;font-size:11px" onclick="toast('📲 تم الإرسال')"><i data-lucide="send" style="width:11px;height:11px"></i> أرسل تذكير</button></td></tr><tr><td><b>محمد العتيبي</b><br><span style="font-size:10px;color:var(--mute)">050xxxxx55</span></td><td>3 منتجات</td><td><b>1,200 ر.س</b></td><td>قبل 4 ساعات</td><td><span style="color:var(--emerald);font-size:11px;font-weight:900">✓ استُرجع</span></td></tr></tbody></table></div></div>
+        <!-- Coupons -->
+        <div class="panel" style="margin-top:14px"><div class="panel-head"><h3>🎟️ الكوبونات والخصومات</h3><button class="btn btn-primary" style="padding:8px 14px;font-size:12px" onclick="openCouponMod()"><i data-lucide="plus" style="width:13px;height:13px"></i> كوبون جديد</button></div><div id="coupon-list" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:10px"></div></div>
+        <!-- Loyalty -->
+        <div class="panel" style="margin-top:14px"><div class="panel-head"><h3>⭐ برنامج الولاء والنقاط</h3><label class="switch-label"><input type="checkbox" id="loy-enabled" checked onchange="toast(this.checked?'✓ تفعيل':'إيقاف')"><span class="switch-track"></span><b style="font-size:11px">مُفعّل</b></label></div><div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px"><div class="field"><label style="font-size:11px;font-weight:900;color:var(--mute);display:block;margin-bottom:5px">النقاط لكل ريال مُنفق</label><input type="number" value="1" min="0" step="0.5" style="width:100%;padding:9px;border:1px solid var(--border);border-radius:8px;font-weight:700"></div><div class="field"><label style="font-size:11px;font-weight:900;color:var(--mute);display:block;margin-bottom:5px">قيمة 100 نقطة (ر.س)</label><input type="number" value="5" min="0" step="0.5" style="width:100%;padding:9px;border:1px solid var(--border);border-radius:8px;font-weight:700"></div><div class="field"><label style="font-size:11px;font-weight:900;color:var(--mute);display:block;margin-bottom:5px">الحد الأدنى للاستبدال</label><input type="number" value="500" min="0" style="width:100%;padding:9px;border:1px solid var(--border);border-radius:8px;font-weight:700"></div><div class="field"><label style="font-size:11px;font-weight:900;color:var(--mute);display:block;margin-bottom:5px">مكافأة التسجيل</label><input type="number" value="100" min="0" style="width:100%;padding:9px;border:1px solid var(--border);border-radius:8px;font-weight:700"></div></div><button class="btn btn-primary" style="margin-top:14px;width:100%" onclick="toast('✓ حُفظت إعدادات الولاء')">💾 حفظ إعدادات الولاء</button></div>
+        <!-- Customer segments -->
+        <div class="panel" style="margin-top:14px"><div class="panel-head"><h3>🎯 شرائح العملاء</h3></div><div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:10px"><div class="kpi" style="cursor:pointer" onclick="toast('شريحة VIP — 42 عميل')"><div class="lbl">💎 عملاء VIP</div><div class="val" style="font-size:24px">42</div><div class="meta">أكثر من 5,000 ر.س</div></div><div class="kpi" style="cursor:pointer" onclick="toast('عملاء جدد — 187')"><div class="lbl">🆕 عملاء جدد</div><div class="val" style="font-size:24px">187</div><div class="meta">آخر 30 يوم</div></div><div class="kpi" style="cursor:pointer" onclick="toast('غير نشطين — 89')"><div class="lbl">😴 غير نشطين</div><div class="val" style="font-size:24px">89</div><div class="meta">آخر طلب قبل 60 يوم</div></div><div class="kpi" style="cursor:pointer" onclick="toast('متكررون — 234')"><div class="lbl">🔁 عملاء متكررون</div><div class="val" style="font-size:24px">234</div><div class="meta">3+ طلبات</div></div></div><button class="btn btn-amber" style="margin-top:14px;width:100%" onclick="toast('📧 الحملة جاهزة · 562 عميل · 8 نقاط')"><i data-lucide="megaphone" style="width:13px;height:13px"></i> أنشئ حملة لشريحة محددة</button></div>
+      </div>
+
+      <!-- ─── REVIEWS ─── -->
+      <div class="page" data-page="reviews">
+        <div class="panel"><div class="panel-head"><h3>⭐ التقييمات والمراجعات</h3><span style="font-size:11px;color:var(--mute);font-weight:700">237 تقييم · متوسط 4.7 ⭐</span></div><div id="reviews-list" style="display:flex;flex-direction:column;gap:10px"></div></div>
+      </div>
+
+      <!-- ─── THEMES ─── -->
+      <div class="page" data-page="themes">
+        <div class="panel" style="background:linear-gradient(135deg,#0a0a14,#13131f);color:#fff;border:none"><div style="display:flex;align-items:center;gap:14px"><div style="width:54px;height:54px;border-radius:14px;background:linear-gradient(135deg,var(--purple),var(--amber));display:flex;align-items:center;justify-content:center;font-size:26px">🎨</div><div><h3 style="color:#fff;font-size:18px">ألوان المتجر</h3><p style="font-size:12px;color:#94a3b8;margin-top:4px">اختر هوية متجرك · الوضع النهاري والليلي</p></div></div></div>
+        <div class="panel" style="margin-top:14px"><div class="panel-head"><h3>🌗 وضع العرض</h3></div><div style="display:grid;grid-template-columns:1fr 1fr;gap:10px"><label class="pay-card selected" data-mode="light"><input type="radio" name="theme-mode" value="light" checked onchange="setThemeMode('light')" style="display:none"><div style="font-size:28px;margin-bottom:6px">☀️</div><b>وضع نهاري</b><span>خلفية بيضاء، نص داكن</span></label><label class="pay-card" data-mode="dark"><input type="radio" name="theme-mode" value="dark" onchange="setThemeMode('dark')" style="display:none"><div style="font-size:28px;margin-bottom:6px">🌙</div><b>وضع ليلي</b><span>خلفية داكنة، نص فاتح، يريح العين</span></label></div></div>
+        <div class="panel" style="margin-top:14px"><div class="panel-head"><h3>🎨 لون الهوية الرئيسي</h3></div><div id="theme-colors" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:10px"></div></div>
+      </div>
       <div class="page" data-page="smart-mgmt">
         <!-- Hero banner -->
         <div class="panel" style="background:linear-gradient(135deg,#0a0a14,#13131f);color:#fff;border:none">
@@ -1298,7 +1346,7 @@ function goPage(p){
   CURRENT_PAGE=p;
   document.querySelectorAll('.page').forEach(el=>el.classList.toggle('active',el.dataset.page===p));
   document.querySelectorAll('.nav-item').forEach(el=>el.classList.toggle('active',el.dataset.page===p));
-  const titles={dashboard:'الرئيسية',products:'المنتجات',orders:'الطلبات',customers:'العملاء',delivery:'إدارة التوصيل',payroll:'المحاسبة والرواتب',gateways:'وسائل الدفع',settings:'الإعدادات','video-studio':'استوديو الفيديو الإعلاني',social:'الحسابات الاجتماعية',services:'الخدمات الإضافية','smart-mgmt':'الإدارة الذكية'};
+  const titles={dashboard:'الرئيسية',products:'المنتجات',orders:'الطلبات',customers:'العملاء',delivery:'إدارة التوصيل',payroll:'المحاسبة والرواتب',gateways:'وسائل الدفع',settings:'الإعدادات','video-studio':'استوديو الفيديو الإعلاني',social:'الحسابات الاجتماعية',services:'الخدمات الإضافية','smart-mgmt':'الإدارة الذكية',marketing:'التسويق والمبيعات',reviews:'التقييمات والمراجعات',themes:'ألوان المتجر'};
   $('page-title').textContent=titles[p]||p;
   document.getElementById('sidebar').classList.remove('open');
   // lazy load
@@ -1308,6 +1356,9 @@ function goPage(p){
   if(p==='social')loadSocial();
   if(p==='services')loadServices();
   if(p==='smart-mgmt')loadSmartMgmt();
+  if(p==='marketing')loadMarketing();
+  if(p==='reviews')loadReviews();
+  if(p==='themes')loadThemes();
   if(p==='video-studio')renderSocialMini();
   setTimeout(()=>{if(window.lucide)lucide.createIcons()},50);
 }
@@ -2141,6 +2192,86 @@ function vsResetStudio(){
 }
 
 // ───── AI WEEKLY REPORT ─────
+// ───── BULK IMPORT/EXPORT ─────
+function bulkImport(){
+  const inp=document.createElement('input');inp.type='file';inp.accept='.csv,.xlsx,.xls';
+  inp.onchange=e=>{
+    const f=e.target.files[0];if(!f)return;
+    const r=new FileReader();
+    r.onload=ev=>{
+      const txt=ev.target.result;
+      const lines=txt.split(/\r?\n/).filter(l=>l.trim());
+      if(lines.length<2){alert('الملف فاضي أو ما فيه بيانات صالحة');return;}
+      const headers=lines[0].split(',').map(h=>h.trim().toLowerCase());
+      const nIdx=headers.findIndex(h=>['name','اسم','title'].includes(h));
+      const pIdx=headers.findIndex(h=>['price','سعر'].includes(h));
+      const sIdx=headers.findIndex(h=>['stock','مخزون','qty'].includes(h));
+      let added=0;
+      for(let i=1;i<lines.length;i++){
+        const cols=lines[i].split(',');
+        if(cols.length<2)continue;
+        PRODUCTS.unshift({id:'p'+Date.now()+i,name:(cols[nIdx]||'منتج').trim(),price:+cols[pIdx]||0,stock:+cols[sIdx]||10,cat:'electronics',img:'https://images.unsplash.com/photo-1592750475338-74b7b21085ab?w=600&q=85',sales:0,desc:''});
+        added++;
+      }
+      localStorage.setItem('zx_dash_products',JSON.stringify(PRODUCTS));
+      renderProducts();renderAll();
+      toast(`✓ تم استيراد ${added} منتج`);
+    };
+    r.readAsText(f);
+  };
+  inp.click();
+}
+function bulkExport(){
+  const rows=[['name','price','stock','sales'],...PRODUCTS.map(p=>[p.name,p.price,p.stock,p.sales])];
+  const csv=rows.map(r=>r.join(',')).join('\n');
+  const blob=new Blob(['\ufeff'+csv],{type:'text/csv'});
+  const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='products-'+Date.now()+'.csv';a.click();
+  toast('⬇️ تصدير '+PRODUCTS.length+' منتج');
+}
+
+// ───── MARKETING (Coupons, Loyalty, Carts, Segments) ─────
+const COUPONS_SEED=[{code:'WELCOME10',type:'percent',value:10,min:0,used:34,limit:100,active:true,desc:'خصم 10% لأول طلب'},{code:'RAMADAN50',type:'fixed',value:50,min:300,used:128,limit:500,active:true,desc:'خصم 50 ر.س فوق 300'},{code:'VIP20',type:'percent',value:20,min:1000,used:12,limit:50,active:true,desc:'خصم 20% للعملاء VIP'},{code:'SHIPFREE',type:'shipping',value:0,min:200,used:89,limit:1000,active:true,desc:'شحن مجاني فوق 200'},{code:'BLACK40',type:'percent',value:40,min:500,used:0,limit:200,active:false,desc:'بلاك فرايدي'},{code:'BUNDLE3',type:'percent',value:15,min:0,used:23,limit:0,active:true,desc:'15% عند شراء 3+ منتجات'},{code:'SAUDI92',type:'fixed',value:92,min:500,used:5,limit:92,active:true,desc:'اليوم الوطني'}];
+function loadMarketing(){
+  const coupons=JSON.parse(localStorage.getItem('zx_coupons')||JSON.stringify(COUPONS_SEED));
+  document.getElementById('coupon-list').innerHTML=coupons.map(c=>`<div class="panel" style="margin:0;padding:14px;border:1.5px dashed ${c.active?'var(--purple)':'var(--border)'};background:${c.active?'#faf5ff':'#f9fafb'}"><div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px"><b style="font-family:monospace;font-size:14px;color:var(--purple);letter-spacing:1px">${c.code}</b><span class="status-pill ${c.active?'s-paid':'s-cancelled'}" style="font-size:9px">${c.active?'نشط':'متوقف'}</span></div><div style="font-size:11px;color:var(--mute);margin-bottom:6px">${c.desc}</div><div style="font-size:13px;color:#0a0a14;font-weight:900;margin-bottom:6px">${c.type==='percent'?c.value+'%':c.type==='fixed'?c.value+' ر.س':'شحن مجاني'} ${c.min?'· حد أدنى '+c.min+' ر.س':''}</div><div style="display:flex;justify-content:space-between;font-size:10px;color:var(--mute);padding-top:8px;border-top:1px solid var(--border)"><span>📊 استُخدم ${c.used} ${c.limit?'/ '+c.limit:''}</span><a href="#" onclick="toast('🗑️ '+'${c.code}'+' حُذف');return false" style="color:var(--rd);font-weight:900;text-decoration:none">حذف</a></div></div>`).join('');
+}
+function openCouponMod(){
+  const code='ZX'+Math.random().toString(36).slice(2,7).toUpperCase();
+  if(prompt('كود الكوبون:',code)){const arr=JSON.parse(localStorage.getItem('zx_coupons')||JSON.stringify(COUPONS_SEED));arr.unshift({code,type:'percent',value:15,min:0,used:0,limit:100,active:true,desc:'كوبون جديد'});localStorage.setItem('zx_coupons',JSON.stringify(arr));loadMarketing();toast('✓ كوبون جديد: '+code);}
+}
+// ───── REVIEWS ─────
+function loadReviews(){
+  const reviews=[{name:'فهد العتيبي',rating:5,prod:'iPhone 17 Pro Max',text:'منتج خرافي! التوصيل سريع والتغليف ممتاز جداً 👌',date:'قبل 3 أيام',helpful:23},{name:'سارة الفهد',rating:5,prod:'Apple Watch Ultra',text:'تستاهل كل ريال دفعته، البطارية تدوم 3 أيام كاملة',date:'قبل 5 أيام',helpful:18},{name:'محمد الزهراني',rating:4,prod:'AirPods Pro 3',text:'جودة الصوت ممتازة، بس التوصيل تأخر يومين',date:'قبل أسبوع',helpful:12},{name:'نورة الحربي',rating:5,prod:'MacBook Pro M4',text:'أداء جنوني، سعر تنافسي، خدمة عملاء ممتازة 🔥',date:'قبل أسبوعين',helpful:45},{name:'يوسف القحطاني',rating:3,prod:'iPad Air',text:'منتج جيد لكن السعر مرتفع شوي',date:'قبل 3 أسابيع',helpful:5}];
+  document.getElementById('reviews-list').innerHTML=reviews.map(r=>`<div style="background:#fff;border:1px solid var(--border);border-radius:12px;padding:14px"><div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px"><div style="display:flex;align-items:center;gap:10px"><div style="width:36px;height:36px;border-radius:50%;background:linear-gradient(135deg,var(--purple),var(--amber));color:#fff;display:flex;align-items:center;justify-content:center;font-weight:900">${r.name.charAt(0)}</div><div><b style="font-size:13px">${r.name}</b><div style="font-size:10px;color:var(--mute)">${r.prod} · ${r.date}</div></div></div><div style="color:var(--amber);font-size:14px">${'★'.repeat(r.rating)}${'☆'.repeat(5-r.rating)}</div></div><p style="font-size:12px;line-height:1.7;color:#374151;margin:6px 0 8px">${r.text}</p><div style="display:flex;gap:10px;font-size:11px;color:var(--mute)"><span>👍 ${r.helpful} مفيد</span><a href="#" onclick="toast('💬 ردك');return false" style="color:var(--purple);font-weight:900;text-decoration:none">رد</a><a href="#" onclick="toast('🚩 تم الإبلاغ');return false" style="color:var(--rd);font-weight:900;text-decoration:none">إبلاغ</a></div></div>`).join('');
+}
+// ───── THEMES + DARK MODE ─────
+const THEME_COLORS=[{id:'purple',name:'بنفسجي',main:'#7c3aed',accent:'#fbbf24'},{id:'emerald',name:'أخضر',main:'#10b981',accent:'#fbbf24'},{id:'rose',name:'وردي',main:'#f43f5e',accent:'#fbbf24'},{id:'cyan',name:'فيروزي',main:'#06b6d4',accent:'#fbbf24'},{id:'orange',name:'برتقالي',main:'#f97316',accent:'#0a0a14'},{id:'pink',name:'وردي فاتح',main:'#ec4899',accent:'#fbbf24'},{id:'indigo',name:'كحلي',main:'#6366f1',accent:'#fbbf24'},{id:'red',name:'أحمر',main:'#dc2626',accent:'#fbbf24'},{id:'gold',name:'ذهبي فاخر',main:'#ca8a04',accent:'#0a0a14'},{id:'mono',name:'أحادي أسود',main:'#0a0a14',accent:'#fbbf24'}];
+function loadThemes(){
+  const cur=localStorage.getItem('zx_theme_color')||'purple';
+  document.getElementById('theme-colors').innerHTML=THEME_COLORS.map(c=>`<button class="pay-card ${cur===c.id?'selected':''}" onclick="setThemeColor('${c.id}','${c.main}','${c.accent}')" data-tid="${c.id}"><div style="width:42px;height:42px;border-radius:12px;background:linear-gradient(135deg,${c.main},${c.accent});margin:0 auto 6px"></div><b>${c.name}</b><span style="direction:ltr">${c.main}</span></button>`).join('');
+  document.querySelectorAll('input[name="theme-mode"]').forEach(r=>r.checked=r.value===(localStorage.getItem('zx_theme_mode')||'light'));
+  document.querySelectorAll('.pay-card[data-mode]').forEach(c=>c.classList.toggle('selected',c.dataset.mode===(localStorage.getItem('zx_theme_mode')||'light')));
+}
+function setThemeColor(id,main,accent){
+  localStorage.setItem('zx_theme_color',id);
+  document.documentElement.style.setProperty('--purple',main);
+  document.documentElement.style.setProperty('--violet',main);
+  document.documentElement.style.setProperty('--amber',accent);
+  document.querySelectorAll('#theme-colors .pay-card').forEach(c=>c.classList.toggle('selected',c.dataset.tid===id));
+  toast('🎨 تم تطبيق اللون: '+id);
+}
+function setThemeMode(mode){
+  localStorage.setItem('zx_theme_mode',mode);
+  document.body.classList.toggle('dark-mode',mode==='dark');
+  document.querySelectorAll('.pay-card[data-mode]').forEach(c=>c.classList.toggle('selected',c.dataset.mode===mode));
+  toast(mode==='dark'?'🌙 الوضع الليلي مُفعّل':'☀️ الوضع النهاري');
+}
+// Apply saved theme on load
+(function(){
+  const c=localStorage.getItem('zx_theme_color');
+  if(c){const t=THEME_COLORS.find(x=>x.id===c);if(t){document.documentElement.style.setProperty('--purple',t.main);document.documentElement.style.setProperty('--violet',t.main);document.documentElement.style.setProperty('--amber',t.accent);}}
+  if(localStorage.getItem('zx_theme_mode')==='dark')document.body.classList.add('dark-mode');
+})();
 function dismissAiReport(){
   const card=document.getElementById('ai-weekly-card');if(card)card.style.display='none';
   localStorage.setItem('zx_hide_ai_report_until',(Date.now()+7*86400000).toString());
