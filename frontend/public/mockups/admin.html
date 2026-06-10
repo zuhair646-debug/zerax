@@ -545,6 +545,7 @@ select.ps-input option{background:#13131f;color:#fff}
     <button class="nav-item" data-page="video-studio" onclick="goPage('video-studio')"><i data-lucide="clapperboard"></i> استوديو الفيديو الإعلاني</button>
     <button class="nav-item" data-page="social" onclick="goPage('social')"><i data-lucide="share-2"></i> الحسابات الاجتماعية <span class="badge" style="background:var(--emerald)" id="nav-social-count">3</span></button>
     <button class="nav-item" data-page="services" onclick="goPage('services')"><i data-lucide="rocket"></i> الخدمات الإضافية <span class="badge" style="background:var(--amber);color:#0a0a14">جديد</span></button>
+    <button class="nav-item" data-page="smart-mgmt" onclick="goPage('smart-mgmt')"><i data-lucide="brain-circuit"></i> الإدارة الذكية <span class="badge" style="background:var(--purple)">AI</span></button>
     <button class="nav-item" data-page="settings" onclick="goPage('settings')"><i data-lucide="settings"></i> الإعدادات</button>
 
     <div class="wallet">
@@ -775,6 +776,81 @@ select.ps-input option{background:#13131f;color:#fff}
           <div style="display:flex;align-items:center;gap:14px"><div style="width:54px;height:54px;border-radius:14px;background:linear-gradient(135deg,var(--amber),var(--violet));display:flex;align-items:center;justify-content:center;font-size:26px;color:#0a0a14">🚀</div><div><h3 style="color:#fff;font-size:18px">الخدمات الإضافية</h3><p style="font-size:12px;color:#94a3b8;margin-top:4px;line-height:1.7">طوّر متجرك في ثوانٍ · ضغطة زر واحدة · بدون تدخل بشري · تفعيل تلقائي فوري</p></div></div>
         </div>
         <div class="services-grid" id="services-grid"></div>
+      </div>
+
+      <!-- ─── SMART MANAGEMENT (AI Auto-Post + Smart Replies) ─── -->
+      <div class="page" data-page="smart-mgmt">
+        <!-- Hero banner -->
+        <div class="panel" style="background:linear-gradient(135deg,#0a0a14,#13131f);color:#fff;border:none">
+          <div style="display:flex;align-items:center;gap:14px"><div style="width:54px;height:54px;border-radius:14px;background:linear-gradient(135deg,var(--purple),var(--rose));display:flex;align-items:center;justify-content:center;font-size:26px">🧠</div><div><h3 style="color:#fff;font-size:18px">الإدارة الذكية</h3><p style="font-size:12px;color:#94a3b8;margin-top:4px;line-height:1.7">AI ينشر منتجاتك تلقائياً على السوشال + يرد على عملائك بذكاء · بدون أي تدخل بشري</p></div></div>
+        </div>
+
+        <!-- AUTO-POST -->
+        <div class="panel" style="margin-top:14px">
+          <div class="panel-head"><h3>📤 النشر التلقائي للمنتجات</h3>
+            <label class="switch-label"><input type="checkbox" id="sm-autopost" checked onchange="smSaveCfg()"><span class="switch-track"></span><b style="font-size:12px">مُفعّل</b></label>
+          </div>
+          <p style="font-size:12px;color:var(--mute);margin-bottom:14px;line-height:1.8">مجرد ما تضيف منتج جديد → الذكاء ياخذ صورة المنتج + الوصف + رابط الشراء → ينشره فوراً على كل حساباتك الاجتماعية المختارة</p>
+          <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:10px;margin-bottom:14px" id="sm-platforms"></div>
+
+          <div class="field" style="margin-top:10px"><label style="font-size:11px;font-weight:900;color:var(--mute);display:block;margin-bottom:6px">قالب نص النشر</label>
+            <textarea id="sm-template" rows="3" style="width:100%;padding:10px;border:1px solid var(--border);border-radius:9px;font-family:inherit;font-size:12px;line-height:1.7">🎉 منتج جديد وصلنا!\n\n{{title}}\n{{description}}\n\n💰 السعر: {{price}} ر.س\n🛒 اطلب الآن: {{link}}\n\n#متجرنا #جديد #تخفيضات</textarea>
+            <div style="font-size:10px;color:var(--mute);margin-top:6px">المتغيرات: <b>{{title}}</b> · <b>{{description}}</b> · <b>{{price}}</b> · <b>{{link}}</b> · <b>{{image}}</b></div>
+          </div>
+
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:14px">
+            <div class="field"><label style="font-size:11px;font-weight:900;color:var(--mute);display:block;margin-bottom:6px">توقيت النشر</label>
+              <select id="sm-when" style="width:100%;padding:10px;border:1px solid var(--border);border-radius:9px;font-family:inherit;font-weight:700;font-size:12px"><option value="immediate">فوراً عند الإضافة</option><option value="delay_15">بعد 15 دقيقة</option><option value="delay_60">بعد ساعة</option><option value="peak">في وقت ذروة المتابعين</option><option value="manual">مراجعة يدوية قبل النشر</option></select>
+            </div>
+            <div class="field"><label style="font-size:11px;font-weight:900;color:var(--mute);display:block;margin-bottom:6px">عدد الـ Hashtags</label>
+              <select id="sm-hashtags" style="width:100%;padding:10px;border:1px solid var(--border);border-radius:9px;font-family:inherit;font-weight:700;font-size:12px"><option value="3">3 (موجز)</option><option value="5" selected>5 (متوازن)</option><option value="10">10 (تغطية واسعة)</option><option value="15">15 (أقصى)</option></select>
+            </div>
+          </div>
+
+          <div style="background:#faf5ff;border:1px solid #ddd6fe;border-radius:10px;padding:12px;margin-top:14px;display:flex;align-items:center;gap:10px">
+            <i data-lucide="info" style="width:16px;height:16px;color:var(--purple)"></i>
+            <div style="font-size:11px;color:#5b21b6;line-height:1.7"><b>التكلفة:</b> 2 نقطة لكل منشور · 5 نقاط لو فيه تحسين النص بـ AI · مجاناً لو القالب يدوي</div>
+          </div>
+        </div>
+
+        <!-- SMART REPLIES -->
+        <div class="panel" style="margin-top:14px">
+          <div class="panel-head"><h3>💬 الردود الذكية على العملاء</h3>
+            <label class="switch-label"><input type="checkbox" id="sm-replies" checked onchange="smSaveCfg()"><span class="switch-track"></span><b style="font-size:12px">مُفعّل</b></label>
+          </div>
+          <p style="font-size:12px;color:var(--mute);margin-bottom:14px;line-height:1.8">AI يرد تلقائياً على رسائل العملاء عبر السوشال (Instagram DM, WhatsApp Business, Messenger, Telegram) — بأسلوب متجرك ولهجتك</p>
+
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px">
+            <label class="pay-card" data-mode="canned"><input type="radio" name="sm-reply-mode" value="canned" onchange="smToggleMode(this)" style="display:none"><b>📋 ردود ثابتة</b><span>مجاني · يرد بنصوص جاهزة سويتها مسبقاً</span></label>
+            <label class="pay-card selected" data-mode="ai"><input type="radio" name="sm-reply-mode" value="ai" checked onchange="smToggleMode(this)" style="display:none"><b>🤖 AI ذكي</b><span>1 نقطة/رد · يفهم العميل ويرد طبيعي</span></label>
+          </div>
+
+          <div id="sm-canned-section" style="display:none">
+            <label style="font-size:11px;font-weight:900;color:var(--mute);display:block;margin-bottom:8px">الردود الثابتة (السؤال → الرد)</label>
+            <div id="sm-canned-list" style="display:flex;flex-direction:column;gap:8px"></div>
+            <button class="btn btn-outline" style="margin-top:10px" onclick="smAddCanned()"><i data-lucide="plus" style="width:13px;height:13px"></i> أضف رد جديد</button>
+          </div>
+
+          <div id="sm-ai-section">
+            <div class="field"><label style="font-size:11px;font-weight:900;color:var(--mute);display:block;margin-bottom:6px">شخصية الرد</label>
+              <textarea id="sm-personality" rows="2" placeholder="مثال: ردود سعودية ودودة، احترافية، تذكر دائماً اسم المتجر وتوجّه العميل للشراء" style="width:100%;padding:10px;border:1px solid var(--border);border-radius:9px;font-family:inherit;font-size:12px;line-height:1.7">ودود واحترافي، يستخدم لهجة سعودية، يجيب بدقة ويقترح منتجات مناسبة، يوجه العميل للشراء بلطف</textarea>
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-top:10px">
+              <div class="field"><label style="font-size:10px;color:var(--mute)">حد يومي</label><input id="sm-daily-limit" type="number" value="100" style="width:100%;padding:9px;border:1px solid var(--border);border-radius:8px;font-size:12px;font-weight:700"></div>
+              <div class="field"><label style="font-size:10px;color:var(--mute)">نقاط لكل رد</label><input id="sm-cost-per-reply" type="number" value="1" min="1" style="width:100%;padding:9px;border:1px solid var(--border);border-radius:8px;font-size:12px;font-weight:700"></div>
+              <div class="field"><label style="font-size:10px;color:var(--mute)">تحويل لإنسان عند</label><select id="sm-handoff" style="width:100%;padding:9px;border:1px solid var(--border);border-radius:8px;font-size:12px;font-weight:700"><option value="complaint">شكوى</option><option value="refund">طلب استرجاع</option><option value="complex">سؤال معقد</option><option value="never">لا تحوّل أبداً</option></select></div>
+            </div>
+          </div>
+
+          <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:8px;margin-top:14px;padding-top:14px;border-top:1px solid var(--border)">
+            <div style="background:#f0fdf4;border:1px solid #bbf7d0;padding:10px;border-radius:10px"><div style="font-size:10px;color:#065f46">ردود اليوم</div><b style="font-size:18px;color:#065f46">47</b></div>
+            <div style="background:#faf5ff;border:1px solid #ddd6fe;padding:10px;border-radius:10px"><div style="font-size:10px;color:#5b21b6">نقاط مستهلكة</div><b style="font-size:18px;color:#5b21b6">47</b></div>
+            <div style="background:#fffbeb;border:1px solid #fde68a;padding:10px;border-radius:10px"><div style="font-size:10px;color:#78350f">معدل الرضا</div><b style="font-size:18px;color:#78350f">94%</b></div>
+            <div style="background:#fef2f2;border:1px solid #fecaca;padding:10px;border-radius:10px"><div style="font-size:10px;color:#7f1d1d">حُوّل لإنسان</div><b style="font-size:18px;color:#7f1d1d">3</b></div>
+          </div>
+        </div>
+
+        <button class="btn btn-primary" style="width:100%;margin-top:14px;padding:14px" onclick="smSaveCfg()"><i data-lucide="save" style="width:14px;height:14px"></i> حفظ إعدادات الإدارة الذكية</button>
       </div>
 
       <!-- ─── PAYROLL ─── -->
@@ -1189,7 +1265,7 @@ function goPage(p){
   CURRENT_PAGE=p;
   document.querySelectorAll('.page').forEach(el=>el.classList.toggle('active',el.dataset.page===p));
   document.querySelectorAll('.nav-item').forEach(el=>el.classList.toggle('active',el.dataset.page===p));
-  const titles={dashboard:'الرئيسية',products:'المنتجات',orders:'الطلبات',customers:'العملاء',delivery:'إدارة التوصيل',payroll:'المحاسبة والرواتب',gateways:'وسائل الدفع',settings:'الإعدادات','video-studio':'استوديو الفيديو الإعلاني',social:'الحسابات الاجتماعية',services:'الخدمات الإضافية'};
+  const titles={dashboard:'الرئيسية',products:'المنتجات',orders:'الطلبات',customers:'العملاء',delivery:'إدارة التوصيل',payroll:'المحاسبة والرواتب',gateways:'وسائل الدفع',settings:'الإعدادات','video-studio':'استوديو الفيديو الإعلاني',social:'الحسابات الاجتماعية',services:'الخدمات الإضافية','smart-mgmt':'الإدارة الذكية'};
   $('page-title').textContent=titles[p]||p;
   document.getElementById('sidebar').classList.remove('open');
   // lazy load
@@ -1198,6 +1274,7 @@ function goPage(p){
   if(p==='gateways')loadGateways();
   if(p==='social')loadSocial();
   if(p==='services')loadServices();
+  if(p==='smart-mgmt')loadSmartMgmt();
   if(p==='video-studio')renderSocialMini();
   setTimeout(()=>{if(window.lucide)lucide.createIcons()},50);
 }
@@ -1460,6 +1537,76 @@ function deactivateService(id){
   toast('تم إلغاء التجديد التلقائي');
 }
 
+// ───── SMART MANAGEMENT (Auto-post + Smart Replies) ─────
+function getSmartCfg(){return JSON.parse(localStorage.getItem('zx_smart_mgmt')||'{"autopost":true,"replies":true,"replyMode":"ai","platforms":{"instagram":true,"tiktok":true,"twitter":true,"snapchat":false,"facebook":false,"whatsapp":true,"telegram":false}}');}
+function loadSmartMgmt(){
+  const cfg=getSmartCfg();
+  document.getElementById('sm-autopost').checked=cfg.autopost!==false;
+  document.getElementById('sm-replies').checked=cfg.replies!==false;
+  document.querySelectorAll('input[name="sm-reply-mode"]').forEach(r=>r.checked=r.value===(cfg.replyMode||'ai'));
+  document.querySelectorAll('.pay-card[data-mode]').forEach(c=>c.classList.toggle('selected',c.dataset.mode===(cfg.replyMode||'ai')));
+  document.getElementById('sm-canned-section').style.display=cfg.replyMode==='canned'?'block':'none';
+  document.getElementById('sm-ai-section').style.display=cfg.replyMode==='canned'?'none':'block';
+  // Render platforms
+  const platforms=[{id:'instagram',ic:'📸',nm:'انستقرام',bg:'linear-gradient(135deg,#f09433,#dc2743)'},{id:'tiktok',ic:'🎵',nm:'تيك توك',bg:'#000'},{id:'twitter',ic:'𝕏',nm:'X',bg:'#000'},{id:'snapchat',ic:'👻',nm:'سناب',bg:'#FFFC00',fg:'#000'},{id:'facebook',ic:'f',nm:'فيسبوك',bg:'#1877F2'},{id:'whatsapp',ic:'💬',nm:'واتساب',bg:'#25D366'},{id:'telegram',ic:'✈',nm:'تيليجرام',bg:'#0088cc'}];
+  document.getElementById('sm-platforms').innerHTML=platforms.map(p=>`<label style="display:flex;align-items:center;gap:8px;padding:10px;background:${cfg.platforms&&cfg.platforms[p.id]?'#faf5ff':'#f9fafb'};border:1.5px solid ${cfg.platforms&&cfg.platforms[p.id]?'var(--purple)':'var(--border)'};border-radius:10px;cursor:pointer"><input type="checkbox" data-platform="${p.id}" ${cfg.platforms&&cfg.platforms[p.id]?'checked':''} onchange="smSaveCfg()" style="accent-color:var(--purple)"><div style="width:30px;height:30px;border-radius:8px;background:${p.bg};color:${p.fg||'#fff'};display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:900">${p.ic}</div><b style="font-size:12px">${p.nm}</b></label>`).join('');
+  smRenderCanned();
+  setTimeout(()=>{if(window.lucide)lucide.createIcons()},50);
+}
+function smToggleMode(inp){
+  document.querySelectorAll('.pay-card[data-mode]').forEach(c=>c.classList.toggle('selected',c.dataset.mode===inp.value));
+  document.getElementById('sm-canned-section').style.display=inp.value==='canned'?'block':'none';
+  document.getElementById('sm-ai-section').style.display=inp.value==='canned'?'none':'block';
+  smSaveCfg();
+}
+function smSaveCfg(){
+  const platforms={};document.querySelectorAll('[data-platform]').forEach(c=>{platforms[c.dataset.platform]=c.checked});
+  const cfg={
+    autopost:document.getElementById('sm-autopost').checked,
+    replies:document.getElementById('sm-replies').checked,
+    replyMode:document.querySelector('input[name="sm-reply-mode"]:checked')?.value||'ai',
+    platforms,
+    template:document.getElementById('sm-template').value,
+    when:document.getElementById('sm-when').value,
+    hashtags:+document.getElementById('sm-hashtags').value,
+    personality:document.getElementById('sm-personality')?.value||'',
+    dailyLimit:+document.getElementById('sm-daily-limit')?.value||100,
+    costPerReply:+document.getElementById('sm-cost-per-reply')?.value||1,
+    handoff:document.getElementById('sm-handoff')?.value||'complaint'
+  };
+  localStorage.setItem('zx_smart_mgmt',JSON.stringify(cfg));
+  toast('✓ حُفظت إعدادات الإدارة الذكية');
+}
+function smRenderCanned(){
+  const list=JSON.parse(localStorage.getItem('zx_canned_replies')||'[{"q":"كم سعر هذا المنتج؟","a":"السعر موجود تحت اسم المنتج. اطلب الآن وفيه شحن مجاني للطلبات فوق 200 ر.س 🚚"},{"q":"كم يستغرق التوصيل؟","a":"التوصيل خلال 1-3 أيام عمل داخل المدن الرئيسية، 3-5 أيام للمناطق الأخرى."},{"q":"هل في إرجاع؟","a":"نعم، الإرجاع متاح خلال 7 أيام من الاستلام بشرط أن المنتج بحالته الأصلية."}]');
+  document.getElementById('sm-canned-list').innerHTML=list.map((c,i)=>`<div style="display:grid;grid-template-columns:1fr 1fr auto;gap:6px;align-items:center"><input value="${c.q.replace(/"/g,'&quot;')}" placeholder="السؤال أو الكلمة المفتاحية" style="padding:9px;border:1px solid var(--border);border-radius:8px;font-size:11px" oninput="smUpdCanned(${i},'q',this.value)"><input value="${c.a.replace(/"/g,'&quot;')}" placeholder="الرد الجاهز" style="padding:9px;border:1px solid var(--border);border-radius:8px;font-size:11px" oninput="smUpdCanned(${i},'a',this.value)"><button class="btn btn-outline" style="padding:7px 10px;font-size:10px;color:var(--rd)" onclick="smRemoveCanned(${i})"><i data-lucide="trash-2" style="width:11px;height:11px"></i></button></div>`).join('');
+  if(window.lucide)lucide.createIcons();
+}
+function smAddCanned(){const list=JSON.parse(localStorage.getItem('zx_canned_replies')||'[]');list.push({q:'',a:''});localStorage.setItem('zx_canned_replies',JSON.stringify(list));smRenderCanned();}
+function smUpdCanned(i,k,v){const list=JSON.parse(localStorage.getItem('zx_canned_replies')||'[]');if(list[i]){list[i][k]=v;localStorage.setItem('zx_canned_replies',JSON.stringify(list));}}
+function smRemoveCanned(i){const list=JSON.parse(localStorage.getItem('zx_canned_replies')||'[]');list.splice(i,1);localStorage.setItem('zx_canned_replies',JSON.stringify(list));smRenderCanned();toast('🗑️ تم الحذف');}
+
+// Auto-post hook — called from pmSave when a new product is saved
+function autoPostNewProduct(product){
+  const cfg=getSmartCfg();
+  if(!cfg.autopost)return;
+  const active=Object.entries(cfg.platforms||{}).filter(([k,v])=>v).map(([k])=>k);
+  if(!active.length)return;
+  const tpl=cfg.template||'منتج جديد: {{title}} بسعر {{price}} ر.س — {{link}}';
+  const text=tpl
+    .replace(/\{\{title\}\}/g,product.name||'')
+    .replace(/\{\{description\}\}/g,product.desc||(product.analysis&&product.analysis.description)||'')
+    .replace(/\{\{price\}\}/g,product.price||0)
+    .replace(/\{\{link\}\}/g,'zerax.shop/p/'+product.id);
+  // Deduct points (2 per platform)
+  const cost=active.length*2;
+  if(WALLET<cost)return;
+  WALLET-=cost;localStorage.setItem('zx_credits',WALLET);$('wallet-balance').textContent=WALLET.toLocaleString('ar-EG');
+  const platformNames={instagram:'انستقرام',tiktok:'تيك توك',twitter:'X',snapchat:'سناب',facebook:'فيسبوك',whatsapp:'واتساب',telegram:'تيليجرام'};
+  const whenLbl={immediate:'الآن',delay_15:'بعد 15 دقيقة',delay_60:'بعد ساعة',peak:'وقت ذروة المتابعين',manual:'بانتظار المراجعة'}[cfg.when||'immediate'];
+  toast(`📤 جاري النشر التلقائي ${whenLbl} على: ${active.map(a=>platformNames[a]||a).join('، ')} · -${cost} نقاط`);
+}
+
 // ───── GATEWAYS ─────
 async function loadGateways(){
   try{
@@ -1529,6 +1676,8 @@ function pmSave(){
   closeProductModal();
   renderProducts();
   renderAll();
+  // Trigger auto-post to social media if enabled
+  try{autoPostNewProduct(newP);}catch(e){}
   ['pm-name','pm-price','pm-desc'].forEach(id=>$(id).value='');
   $('pm-img-preview').innerHTML=`<i data-lucide="upload-cloud" style="width:42px;height:42px;color:#94a3b8;margin-bottom:8px"></i><p style="font-size:12px;color:#94a3b8;text-align:center">اضغط لرفع صورة أو<br>اسحبها هنا</p><button type="button" class="ps-mini-btn" onclick="event.stopPropagation();psSwitchTab('image')"><i data-lucide="sparkles" style="width:11px;height:11px"></i> أو ولّد بـ AI</button>`;
   toast('✓ تم حفظ المنتج');
