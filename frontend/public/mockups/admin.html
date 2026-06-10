@@ -2032,8 +2032,8 @@ select.ps-input option{background:#13131f;color:#fff}
         <div id="preview-content" style="padding:40px 22px;background:#0a0a14;min-height:480px;display:flex;justify-content:center;align-items:flex-start"></div>
       </div>
     </div>
-    <!-- Footer -->
-    <div class="ps-foot">
+    <!-- Footer (auto-hidden on AI Chat & Preview tabs — approval happens IN the chat / preview itself) -->
+    <div class="ps-foot" id="ps-modal-foot">
       <button class="ps-btn-ghost" onclick="closeProductModal()">إلغاء</button>
       <button class="ps-btn-primary" onclick="pmSave()" style="margin-right:auto"><i data-lucide="save" style="width:14px;height:14px"></i> حفظ المنتج</button>
     </div>
@@ -3775,6 +3775,9 @@ function psSwitchTab(tab){
   document.querySelectorAll('.ps-panel').forEach(p=>p.classList.toggle('active',p.dataset.pspanel===tab));
   if(tab==='ai'){const aiInp=$('ps-ai-name');if(aiInp&&!aiInp.value&&$('pm-name').value)aiInp.value=$('pm-name').value;}
   if(tab==='image')psRenderColorPresets();
+  // Hide modal footer on AI Chat & Preview tabs — approval happens IN the chat / preview itself
+  const foot=document.getElementById('ps-modal-foot');
+  if(foot)foot.style.display=(tab==='ai'||tab==='preview')?'none':'';
   setTimeout(()=>{if(window.lucide)lucide.createIcons()},50);
 }
 function psToggleFullscreen(){
