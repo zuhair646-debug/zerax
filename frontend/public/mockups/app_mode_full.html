@@ -608,20 +608,22 @@ body.dark #header-settings-popover button{background:#1f1f2e;color:#e2e8f0;borde
 
 <!-- HEADER -->
 <header class="top">
-  <a href="https://zerax.sa" target="_blank" rel="noopener" class="logo" id="brand" style="text-decoration:none;color:inherit;display:flex;align-items:center;gap:8px"><span style="font-weight:900;background:linear-gradient(135deg,#fbbf24,#0a0a0a);color:#fff;width:34px;height:34px;border-radius:8px;display:inline-flex;align-items:center;justify-content:center;font-size:14px;position:relative;font-family:'IBM Plex Sans Arabic',serif"><span style="position:absolute;top:-7px;font-size:11px">👑</span>Z</span><span style="font-weight:900;background:linear-gradient(135deg,#fbbf24,#d97706);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;letter-spacing:.5px">Zerax</span></a>
+  <a href="#" onclick="showView('home');return false;" class="logo" id="brand" style="text-decoration:none;color:inherit;display:flex;align-items:center;gap:8px"><span id="brand-logo-mark" style="font-weight:900;background:#0a0a0a;color:#fbbf24;width:36px;height:36px;border-radius:8px;display:inline-flex;align-items:center;justify-content:center;font-size:16px;position:relative;border:1.5px solid #fbbf24"><span style="position:absolute;top:-9px;left:50%;transform:translateX(-50%);font-size:12px;filter:drop-shadow(0 1px 2px rgba(0,0,0,.3))">👑</span>Z</span><span style="font-weight:900;color:#0a0a0a;letter-spacing:.5px;font-size:17px">Zerax</span></a>
   <input class="search" id="search" placeholder="ابحث...">
   <button class="pill-btn" data-testid="header-settings-btn" onclick="toggleHeaderSettings(event)" title="الإعدادات" style="padding:8px 12px">⚙️</button>
   <button class="pill-btn admin-toggle" id="admin-btn" onclick="toggleAdminMode()" title="وضع التحكم" style="padding:8px 10px;display:none"><span style="font-size:14px">♛</span></button>
   <button class="pill-btn admin-toggle" id="acp-open-btn" onclick="openAcp()" title="لوحة تحكم التاجر" style="padding:8px 12px;display:none;background:linear-gradient(135deg,#7c3aed,#0a0a0a);color:#fbbf24 !important"><span style="font-size:13px">🛠️</span></button>
   <button class="cart-btn" data-testid="header-login-btn" onclick="openLogin()" title="تسجيل دخول" id="header-login-btn" style="background:#fff;border:1px solid #e9d5ff;color:#7c3aed">👤</button>
 </header>
-<!-- HEADER SETTINGS POPOVER -->
+<!-- HEADER SETTINGS POPOVER (customer-side: only language + dark mode, NO country) -->
 <div id="header-settings-popover" style="display:none;position:fixed;top:60px;left:14px;background:#fff;border:1px solid #e5e7eb;border-radius:14px;box-shadow:0 12px 40px rgba(0,0,0,.18);padding:12px;min-width:220px;z-index:200">
   <div style="font-size:10px;color:#7c3aed;font-weight:900;margin-bottom:8px">⚙️ تخصيصاتك</div>
   <button onclick="toggleLang()" style="width:100%;padding:10px;background:#faf5ff;border:1px solid #ddd6fe;border-radius:10px;font-family:inherit;font-size:12px;font-weight:700;cursor:pointer;text-align:right;margin-bottom:6px">🌐 <span id="lang-flag">🇸🇦</span> <span id="lang-label">عربي</span></button>
-  <button onclick="toggleMarketPopover(event)" style="width:100%;padding:10px;background:#faf5ff;border:1px solid #ddd6fe;border-radius:10px;font-family:inherit;font-size:12px;font-weight:700;cursor:pointer;text-align:right;margin-bottom:6px">🌍 <span id="market-label">السعودية</span></button>
   <button data-testid="dark-mode-toggle" onclick="toggleDarkMode()" id="dark-mode-btn" style="width:100%;padding:10px;background:#fef3c7;border:1px solid #fde68a;border-radius:10px;font-family:inherit;font-size:12px;font-weight:700;cursor:pointer;text-align:right">🌙 الوضع الليلي</button>
 </div>
+<!-- Hidden market label (kept for compatibility with existing code) -->
+<span id="market-label" style="display:none">السعودية</span>
+<span id="market-btn" style="display:none"></span>
 
 <!-- MARKET POPOVER -->
 <div class="market-popover" id="market-popover" onclick="event.stopPropagation()">
@@ -836,13 +838,13 @@ body.dark #header-settings-popover button{background:#1f1f2e;color:#e2e8f0;borde
   </div>
 </div>
 
-<!-- POWERED BY FOOTER -->
-<div style="background:#0a0a0a;color:#94a3b8;padding:20px 14px 80px;text-align:center;font-size:11px;line-height:1.9">
-  <a href="https://zerax.sa" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;gap:8px;text-decoration:none;font-weight:900;font-size:14px">
-    <span style="background:linear-gradient(135deg,#fbbf24,#0a0a0a);color:#fff;width:34px;height:34px;border-radius:8px;display:inline-flex;align-items:center;justify-content:center;font-size:14px;position:relative"><span style="position:absolute;top:-7px;font-size:11px">👑</span>Z</span>
-    <span style="background:linear-gradient(135deg,#fbbf24,#d97706);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;letter-spacing:.5px">Zerax</span>
+<!-- POWERED BY FOOTER (home only) -->
+<div id="powered-footer" data-home-only="true" style="background:#0a0a0a;color:#94a3b8;padding:20px 14px 80px;text-align:center;font-size:11px;line-height:1.9">
+  <a href="#" onclick="showView('home');return false;" style="display:inline-flex;align-items:center;gap:8px;text-decoration:none;font-weight:900;font-size:14px">
+    <span style="background:#0a0a0a;color:#fbbf24;width:36px;height:36px;border-radius:8px;display:inline-flex;align-items:center;justify-content:center;font-size:14px;position:relative;border:1.5px solid #fbbf24"><span style="position:absolute;top:-9px;left:50%;transform:translateX(-50%);font-size:12px">👑</span>Z</span>
+    <span style="color:#fff;letter-spacing:.5px">Zerax</span>
   </a>
-  <div style="margin-top:6px;opacity:.7">الشركة المطوّرة · <a href="https://zerax.sa" target="_blank" rel="noopener" style="color:#fbbf24;text-decoration:none">zerax.sa</a></div>
+  <div style="margin-top:6px;opacity:.7">الشركة المطوّرة</div>
 </div>
 
 <!-- ═══════════════════ CATEGORY PAGE (dedicated view per category) ═══════════════════ -->
@@ -1935,6 +1937,9 @@ function showView(view, param){
   if(view==='account'){renderAccount();document.getElementById('view-account').style.display='block';}
   if(view==='wishlist'){renderWishlist();document.getElementById('view-wishlist').style.display='block';}
   if(view==='product'){document.getElementById('view-product').style.display='block';}
+  // Footer only on home
+  const footer=document.getElementById('powered-footer');
+  if(footer)footer.style.display=view==='home'?'block':'none';
   window.scrollTo({top:0,behavior:'smooth'});
 }
 
