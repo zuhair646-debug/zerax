@@ -951,6 +951,11 @@ select.ps-input option{background:#13131f;color:#fff}
             <button class="ps-btn-amber" onclick="psSwitchTab('ai')" style="margin-top:10px;width:100%"><i data-lucide="brain" style="width:14px;height:14px"></i> ادفع للذكاء الإصطناعي يحلل ويعبّي كل شي (10 نقاط)</button>
           </div>
         </div>
+        <!-- Applied analysis preview (rendered after psApplyAnalysis) -->
+        <div id="ps-info-preview" style="display:none;border-top:1px solid rgba(255,255,255,.08);padding:18px 22px">
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:14px;padding-bottom:10px;border-bottom:1px solid rgba(255,255,255,.06)"><i data-lucide="wand-2" style="width:16px;height:16px;color:var(--amber)"></i><b style="color:var(--amber);font-size:13px">المعاينة الكاملة للمنتج كما ستظهر للعميل</b><span style="margin-right:auto;font-size:10px;color:#94a3b8">يمكنك تعديل أي قسم قبل الحفظ</span></div>
+          <div id="ps-info-preview-content"></div>
+        </div>
       </div>
 
       <!-- TAB 2: AI IMAGE GENERATION (now includes Logo / Banner / Section / Animated) -->
@@ -1111,21 +1116,43 @@ function renderAll(){
 }
 function renderProducts(){
   $('products-grid').innerHTML=`<div class="pcard add" onclick="openProductModal()"><i data-lucide="plus-circle" style="width:36px;height:36px;margin-bottom:8px"></i>منتج جديد</div>`+
-    PRODUCTS.map((p,i)=>`<div class="pcard" onclick="editProduct('${p.id}')"><div class="img" style="background-image:url('${p.img}')"><div class="actions"><button title="تعديل صورة بالذكاء الصناعي" onclick="event.stopPropagation();regenProductImg('${p.id}')"><i data-lucide="sparkles" style="width:14px;height:14px"></i></button><button title="حذف" onclick="event.stopPropagation();deleteProduct('${p.id}')"><i data-lucide="trash-2" style="width:14px;height:14px"></i></button></div></div><div class="body"><h4>${p.name}</h4><div class="price">${p.price} ر.س</div><div class="meta">📦 المخزون: ${p.stock} · 🛒 ${p.sales} مبيعات</div></div></div>`).join('');
+    PRODUCTS.map((p,i)=>`<div class="pcard" onclick="editProduct('${p.id}')"><div class="img" style="background-image:url('${p.img}')"><div class="actions"><button title="استوديو الصور بالذكاء الإصطناعي" onclick="event.stopPropagation();openImageStudioFor('${p.id}')"><i data-lucide="sparkles" style="width:14px;height:14px"></i></button><button title="حذف" onclick="event.stopPropagation();deleteProduct('${p.id}')"><i data-lucide="trash-2" style="width:14px;height:14px"></i></button></div>${p.analysis?'<div style="position:absolute;bottom:6px;right:6px;background:rgba(124,58,237,.85);color:#fff;font-size:9px;font-weight:900;padding:3px 8px;border-radius:99px;backdrop-filter:blur(8px)">🤖 تحليل AI</div>':''}</div><div class="body"><h4>${p.name}</h4><div class="price">${p.price} ر.س</div><div class="meta">📦 ${p.stock} · 🛒 ${p.sales} ${p.analysis?'· ✨':''}</div></div></div>`).join('');
   setTimeout(()=>{if(window.lucide)lucide.createIcons()},50);
 }
-function editProduct(id){const p=PRODUCTS.find(x=>x.id===id);if(!p)return;openProductModal();$('pm-name').value=p.name;$('pm-price').value=p.price;$('pm-stock').value=p.stock;$('pm-desc').value=p.desc||'';$('pm-img-preview').innerHTML=`<img src="${p.img}" style="max-width:100%;max-height:200px;border-radius:8px">`;toast('✏️ تعديل: '+p.name);}
+function editProduct(id){
+  const p=PRODUCTS.find(x=>x.id===id);if(!p)return;
+  openProductModal();
+  $('pm-name').value=p.name;$('pm-price').value=p.price;$('pm-stock').value=p.stock;$('pm-desc').value=p.desc||'';
+  if(p.cat)$('pm-cat').value=p.cat;
+  $('pm-img-preview').innerHTML=`<img src="${p.img}">`;
+  // If product has stored analysis, show its full styled preview on Info tab
+  if(p.analysis){
+    PS_STATE.analysis=p.analysis;
+    document.getElementById('ps-info-preview-content').innerHTML=psBuildAnalysisHTML(p.analysis);
+    document.getElementById('ps-info-preview').style.display='block';
+    setTimeout(()=>{if(window.lucide)lucide.createIcons()},50);
+  }
+  toast('✏️ تعديل: '+p.name);
+}
+function openImageStudioFor(id){
+  // Opens Product Studio at Image tab so the merchant can generate AI images for this product
+  const p=PRODUCTS.find(x=>x.id===id);if(!p)return;
+  openProductModal();
+  $('pm-name').value=p.name;$('pm-price').value=p.price;$('pm-stock').value=p.stock;$('pm-desc').value=p.desc||'';
+  if(p.cat)$('pm-cat').value=p.cat;
+  $('pm-img-preview').innerHTML=`<img src="${p.img}">`;
+  if(p.analysis){
+    PS_STATE.analysis=p.analysis;
+    document.getElementById('ps-info-preview-content').innerHTML=psBuildAnalysisHTML(p.analysis);
+    document.getElementById('ps-info-preview').style.display='block';
+  }
+  setTimeout(()=>{psSwitchTab('image');psRenderColorPresets();psUpdateSummary();if(window.lucide)lucide.createIcons();},100);
+  toast('🎨 استوديو الصور لـ '+p.name);
+}
 function deleteProduct(id){if(!confirm('متأكد تبي تحذف المنتج؟'))return;PRODUCTS=PRODUCTS.filter(x=>x.id!==id);localStorage.setItem('zx_dash_products',JSON.stringify(PRODUCTS));renderProducts();renderAll();toast('🗑️ تم الحذف');}
 async function regenProductImg(id){
-  const p=PRODUCTS.find(x=>x.id===id);if(!p)return;
-  if(WALLET<8){alert('رصيد غير كافٍ — تحتاج 8 نقاط');return;}
-  toast('🤖 Gemini يولّد صورة احترافية جديدة…');
-  try{
-    const r=await fetch(API+'/api/image-studio/generate',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({prompt:p.name+', commercial product photography, white background, studio lighting, 4k',count:1,style:'product',width:1024,height:1024})});
-    const d=await r.json();
-    if(d.images&&d.images[0]){p.img=d.images[0];localStorage.setItem('zx_dash_products',JSON.stringify(PRODUCTS));renderProducts();renderAll();WALLET-=8;localStorage.setItem('zx_credits',WALLET);$('wallet-balance').textContent=WALLET.toLocaleString('ar-EG');toast('✓ تم تحديث الصورة · -8 نقاط');}
-    else throw new Error('no image');
-  }catch(e){alert('فشل التوليد')}
+  // Kept for backward compat — but now redirects to image studio
+  openImageStudioFor(id);
 }
 function renderOrders(){
   const seed=[
@@ -1232,6 +1259,12 @@ function openProductModal(){
   $('prod-mod').classList.add('open');
   psSwitchTab('info');
   PS_STATE={style:'product',ctype:'product',images:[],approvedImg:null,analysis:null,uploadedImg:null,aiImg:null,bgColor:'#ffffff',frameColor:'#7c3aed',aspect:'1:1'};
+  // Reset preview
+  const prev=document.getElementById('ps-info-preview');if(prev)prev.style.display='none';
+  const pc=document.getElementById('ps-info-preview-content');if(pc)pc.innerHTML='';
+  // Reset AI tab
+  const aiEmpty=document.getElementById('ps-ai-empty');if(aiEmpty)aiEmpty.style.display='flex';
+  const aiRes=document.getElementById('ps-ai-result');if(aiRes){aiRes.style.display='none';aiRes.innerHTML='';}
   setTimeout(()=>{if(window.lucide)lucide.createIcons();psRenderColorPresets();psUpdateSummary();},80);
 }
 function closeProductModal(){$('prod-mod').classList.remove('open')}
@@ -1393,32 +1426,7 @@ async function psAnalyze(){
   }
 }
 function psRenderAnalysis(d){
-  let html='';
-  // 1. Title + description
-  html+=`<div class="ps-ai-card"><h5><i data-lucide="package" style="width:13px;height:13px"></i> العنوان والوصف الكامل</h5><div style="background:rgba(251,191,36,.06);border:1px solid rgba(251,191,36,.2);border-radius:10px;padding:12px"><b style="font-size:14px;color:var(--amber);display:block;margin-bottom:6px">${d.title}</b><p style="font-size:12px;line-height:1.8;color:#cbd5e1">${d.description}</p>${d.target_audience?`<div style="margin-top:10px;padding-top:10px;border-top:1px solid rgba(255,255,255,.06);font-size:11px;color:#94a3b8"><b style="color:var(--amber)">👥 الفئة المستهدفة:</b> ${d.target_audience}</div>`:''}</div></div>`;
-  // 2. What's new (highlighted for phones/cars/laptops)
-  if(d.whats_new&&d.whats_new.length){html+=`<div class="ps-ai-card whatsnew"><h5><i data-lucide="sparkles" style="width:13px;height:13px"></i> 🆕 الجديد في هذا الإصدار (vs السابق)</h5><div style="display:grid;gap:8px">${d.whats_new.map(w=>`<div style="background:rgba(0,0,0,.3);padding:9px 12px;border-radius:9px;font-size:12px;line-height:1.7;color:#fecaca;border-right:3px solid var(--rose)">⚡ ${w}</div>`).join('')}</div></div>`;}
-  // 3. Comparison block
-  if(d.comparison&&(d.comparison.previous_model||(d.comparison.key_differences&&d.comparison.key_differences.length))){html+=`<div class="ps-ai-card whatsnew"><h5><i data-lucide="git-compare" style="width:13px;height:13px"></i> ⚖️ المقارنة مع ${d.comparison.previous_model||'السابق'}</h5>${(d.comparison.key_differences||[]).map(k=>`<div style="font-size:12px;line-height:1.8;color:#cbd5e1;padding:5px 0">▸ ${k}</div>`).join('')}${(d.comparison.upgrades||[]).length?`<div style="margin-top:10px;padding-top:10px;border-top:1px solid rgba(255,255,255,.06)"><b style="color:var(--emerald);font-size:11px;display:block;margin-bottom:6px">🚀 ترقيات أساسية:</b>${d.comparison.upgrades.map(u=>`<div style="font-size:12px;line-height:1.7;color:#a7f3d0">✓ ${u}</div>`).join('')}</div>`:''}</div>`;}
-  // 4. Features
-  if(d.features&&d.features.length){html+=`<div class="ps-ai-card"><h5><i data-lucide="check-circle-2" style="width:13px;height:13px"></i> المميزات الرئيسية (${d.features.length})</h5><div style="line-height:2">${d.features.map(f=>`<span class="ps-feat-chip">✦ ${f}</span>`).join('')}</div></div>`;}
-  // 5. Benefits (medicine/food/skincare)
-  if(d.benefits&&d.benefits.length){html+=`<div class="ps-ai-card benefits"><h5><i data-lucide="heart-pulse" style="width:13px;height:13px"></i> 💚 الفوائد</h5><div style="display:grid;gap:8px">${d.benefits.map(b=>`<div style="background:rgba(0,0,0,.3);padding:9px 12px;border-radius:9px;font-size:12px;line-height:1.7;color:#a7f3d0;border-right:3px solid var(--emerald)">💚 ${b}</div>`).join('')}</div></div>`;}
-  // 6. Usage instructions (medicine/cosmetics/electronics)
-  if(d.usage_instructions&&d.usage_instructions.length){html+=`<div class="ps-ai-card usage"><h5><i data-lucide="list-checks" style="width:13px;height:13px"></i> 📋 طريقة الاستخدام</h5>${d.usage_instructions.map((u,i)=>`<div class="ps-step"><span class="num">${i+1}</span><span>${u}</span></div>`).join('')}</div>`;}
-  // 7. Side effects (medicine only)
-  if(d.side_effects&&d.side_effects.length){html+=`<div class="ps-ai-card warning"><h5><i data-lucide="alert-triangle" style="width:13px;height:13px"></i> ⚠️ تحذيرات وآثار جانبية</h5>${d.side_effects.map(s=>`<div style="font-size:12px;line-height:1.7;color:#fed7aa;padding:5px 0">⚠ ${s}</div>`).join('')}</div>`;}
-  // 8. Specs
-  if(d.specs&&Object.keys(d.specs).length){html+=`<div class="ps-ai-card"><h5><i data-lucide="cpu" style="width:13px;height:13px"></i> المواصفات التقنية</h5><div class="ps-spec-grid">${Object.entries(d.specs).map(([k,v])=>`<div class="ps-spec-item"><b>${k}</b><span>${v}</span></div>`).join('')}</div></div>`;}
-  // 9. Colors
-  if(d.colors&&d.colors.length){html+=`<div class="ps-ai-card"><h5><i data-lucide="palette" style="width:13px;height:13px"></i> الألوان المتاحة</h5><div>${d.colors.map(c=>`<span class="ps-color-swatch"><span class="dot" style="background:${c.hex||'#888'}"></span>${c.name||c}</span>`).join('')}</div></div>`;}
-  // 10. Sizes
-  if(d.sizes&&d.sizes.length){html+=`<div class="ps-ai-card"><h5><i data-lucide="ruler" style="width:13px;height:13px"></i> المقاسات / السعات</h5><div>${d.sizes.map(s=>`<span class="ps-size-pill">${s}</span>`).join('')}</div></div>`;}
-  // 11. Warranty
-  if(d.warranty&&(d.warranty.duration_text||d.warranty.url)){html+=`<div class="ps-ai-card"><h5><i data-lucide="shield-check" style="width:13px;height:13px"></i> الضمان الرسمي</h5><p style="font-size:12px;color:#cbd5e1;line-height:1.7">${d.warranty.duration_text||'ضمان وكيل معتمد'}${d.warranty.url?` · <a href="${d.warranty.url}" target="_blank" style="color:var(--amber)">رابط الضمان ↗</a>`:''}</p></div>`;}
-  // 12. Official URL
-  if(d.official_url){html+=`<div class="ps-ai-card"><h5><i data-lucide="link" style="width:13px;height:13px"></i> الموقع الرسمي</h5><a href="${d.official_url.startsWith('http')?d.official_url:'https://'+d.official_url}" target="_blank" style="color:var(--amber);font-size:13px;font-weight:900;display:inline-flex;align-items:center;gap:6px">${d.official_url} <i data-lucide="external-link" style="width:13px;height:13px"></i></a></div>`;}
-  html+=`<div style="text-align:center;margin-top:14px;display:flex;gap:10px;justify-content:center;flex-wrap:wrap"><button class="ps-btn-amber" onclick="psApplyAnalysis()" style="padding:13px 28px"><i data-lucide="wand-2" style="width:14px;height:14px"></i> تطبيق التحليل واستكمل</button><button class="ps-btn-ghost" onclick="psAnalyze()" style="padding:13px 22px;color:#cbd5e1">↻ تحليل جديد</button></div>`;
+  const html=psBuildAnalysisHTML(d)+`<div style="text-align:center;margin-top:14px;display:flex;gap:10px;justify-content:center;flex-wrap:wrap"><button class="ps-btn-amber" onclick="psApplyAnalysis()" style="padding:13px 28px"><i data-lucide="wand-2" style="width:14px;height:14px"></i> تطبيق التحليل على المنتج وعرض المعاينة</button><button class="ps-btn-ghost" onclick="psAnalyze()" style="padding:13px 22px;color:#cbd5e1">↻ تحليل جديد</button></div>`;
   $('ps-ai-result').innerHTML=html;
   if(window.lucide)lucide.createIcons();
 }
@@ -1427,8 +1435,30 @@ function psApplyAnalysis(){
   const d=PS_STATE.analysis;
   if(d.title)$('pm-name').value=d.title;
   if(d.description)$('pm-desc').value=d.description;
+  // Render the FULL styled preview on the Info tab so the merchant can see what the customer will see
+  document.getElementById('ps-info-preview-content').innerHTML=psBuildAnalysisHTML(d);
+  document.getElementById('ps-info-preview').style.display='block';
   psSwitchTab('info');
-  toast('✓ تم تعبئة المعلومات الأساسية · اضغط حفظ المنتج');
+  // Scroll to preview
+  setTimeout(()=>{const el=document.getElementById('ps-info-preview');if(el)el.scrollIntoView({behavior:'smooth',block:'start'});if(window.lucide)lucide.createIcons();},150);
+  toast('✓ التحليل الكامل ظهر بالأسفل · شف المعاينة');
+}
+function psBuildAnalysisHTML(d){
+  // Reuse the same beautiful design that's rendered in the AI tab
+  let html='';
+  html+=`<div class="ps-ai-card"><h5><i data-lucide="package" style="width:13px;height:13px"></i> العنوان والوصف الكامل</h5><div style="background:rgba(251,191,36,.06);border:1px solid rgba(251,191,36,.2);border-radius:10px;padding:12px"><b style="font-size:14px;color:var(--amber);display:block;margin-bottom:6px">${d.title}</b><p style="font-size:12px;line-height:1.8;color:#cbd5e1">${d.description}</p>${d.target_audience?`<div style="margin-top:10px;padding-top:10px;border-top:1px solid rgba(255,255,255,.06);font-size:11px;color:#94a3b8"><b style="color:var(--amber)">👥 الفئة المستهدفة:</b> ${d.target_audience}</div>`:''}</div></div>`;
+  if(d.whats_new&&d.whats_new.length){html+=`<div class="ps-ai-card whatsnew"><h5><i data-lucide="sparkles" style="width:13px;height:13px"></i> 🆕 الجديد في هذا الإصدار</h5><div style="display:grid;gap:8px">${d.whats_new.map(w=>`<div style="background:rgba(0,0,0,.3);padding:9px 12px;border-radius:9px;font-size:12px;line-height:1.7;color:#fecaca;border-right:3px solid var(--rose)">⚡ ${w}</div>`).join('')}</div></div>`;}
+  if(d.comparison&&(d.comparison.previous_model||(d.comparison.key_differences&&d.comparison.key_differences.length))){html+=`<div class="ps-ai-card whatsnew"><h5><i data-lucide="git-compare" style="width:13px;height:13px"></i> ⚖️ المقارنة مع ${d.comparison.previous_model||'السابق'}</h5>${(d.comparison.key_differences||[]).map(k=>`<div style="font-size:12px;line-height:1.8;color:#cbd5e1;padding:5px 0">▸ ${k}</div>`).join('')}${(d.comparison.upgrades||[]).length?`<div style="margin-top:10px;padding-top:10px;border-top:1px solid rgba(255,255,255,.06)"><b style="color:var(--emerald);font-size:11px;display:block;margin-bottom:6px">🚀 ترقيات أساسية:</b>${d.comparison.upgrades.map(u=>`<div style="font-size:12px;line-height:1.7;color:#a7f3d0">✓ ${u}</div>`).join('')}</div>`:''}</div>`;}
+  if(d.features&&d.features.length){html+=`<div class="ps-ai-card"><h5><i data-lucide="check-circle-2" style="width:13px;height:13px"></i> المميزات الرئيسية (${d.features.length})</h5><div style="line-height:2">${d.features.map(f=>`<span class="ps-feat-chip">✦ ${f}</span>`).join('')}</div></div>`;}
+  if(d.benefits&&d.benefits.length){html+=`<div class="ps-ai-card benefits"><h5><i data-lucide="heart-pulse" style="width:13px;height:13px"></i> 💚 الفوائد</h5><div style="display:grid;gap:8px">${d.benefits.map(b=>`<div style="background:rgba(0,0,0,.3);padding:9px 12px;border-radius:9px;font-size:12px;line-height:1.7;color:#a7f3d0;border-right:3px solid var(--emerald)">💚 ${b}</div>`).join('')}</div></div>`;}
+  if(d.usage_instructions&&d.usage_instructions.length){html+=`<div class="ps-ai-card usage"><h5><i data-lucide="list-checks" style="width:13px;height:13px"></i> 📋 طريقة الاستخدام</h5>${d.usage_instructions.map((u,i)=>`<div class="ps-step"><span class="num">${i+1}</span><span>${u}</span></div>`).join('')}</div>`;}
+  if(d.side_effects&&d.side_effects.length){html+=`<div class="ps-ai-card warning"><h5><i data-lucide="alert-triangle" style="width:13px;height:13px"></i> ⚠️ تحذيرات وآثار جانبية</h5>${d.side_effects.map(s=>`<div style="font-size:12px;line-height:1.7;color:#fed7aa;padding:5px 0">⚠ ${s}</div>`).join('')}</div>`;}
+  if(d.specs&&Object.keys(d.specs).length){html+=`<div class="ps-ai-card"><h5><i data-lucide="cpu" style="width:13px;height:13px"></i> المواصفات التقنية</h5><div class="ps-spec-grid">${Object.entries(d.specs).map(([k,v])=>`<div class="ps-spec-item"><b>${k}</b><span>${v}</span></div>`).join('')}</div></div>`;}
+  if(d.colors&&d.colors.length){html+=`<div class="ps-ai-card"><h5><i data-lucide="palette" style="width:13px;height:13px"></i> الألوان المتاحة</h5><div>${d.colors.map(c=>`<span class="ps-color-swatch"><span class="dot" style="background:${c.hex||'#888'}"></span>${c.name||c}</span>`).join('')}</div></div>`;}
+  if(d.sizes&&d.sizes.length){html+=`<div class="ps-ai-card"><h5><i data-lucide="ruler" style="width:13px;height:13px"></i> المقاسات / السعات</h5><div>${d.sizes.map(s=>`<span class="ps-size-pill">${s}</span>`).join('')}</div></div>`;}
+  if(d.warranty&&(d.warranty.duration_text||d.warranty.url)){html+=`<div class="ps-ai-card"><h5><i data-lucide="shield-check" style="width:13px;height:13px"></i> الضمان الرسمي</h5><p style="font-size:12px;color:#cbd5e1;line-height:1.7">${d.warranty.duration_text||'ضمان وكيل معتمد'}${d.warranty.url?` · <a href="${d.warranty.url}" target="_blank" style="color:var(--amber)">رابط الضمان ↗</a>`:''}</p></div>`;}
+  if(d.official_url){html+=`<div class="ps-ai-card"><h5><i data-lucide="link" style="width:13px;height:13px"></i> الموقع الرسمي</h5><a href="${d.official_url.startsWith('http')?d.official_url:'https://'+d.official_url}" target="_blank" style="color:var(--amber);font-size:13px;font-weight:900;display:inline-flex;align-items:center;gap:6px">${d.official_url} <i data-lucide="external-link" style="width:13px;height:13px"></i></a></div>`;}
+  return html;
 }
 
 // ───── VIDEO STUDIO (TABBED WORKFLOW) ─────
