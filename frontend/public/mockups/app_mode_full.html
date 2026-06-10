@@ -4106,7 +4106,8 @@ function pCardHtml(p){
   const desc=CURRENT_LANG==='ar'?(p.descAr||''):(p.descEn||'');
   const gallery=(PRODUCT_GALLERIES[p.id]||[{type:'image',url:p.img}]).filter(g=>g.type==='image').slice(0,5);
   const imgs=gallery.length?gallery:[{url:p.img}];
-  const stack=imgs.map((g,i)=>`<img src="${g.url}" alt="${name} ${i+1}" class="${i===0?'active':''}" data-i="${i}">`).join('');
+  const FALLBACK_IMG='https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=600';
+  const stack=imgs.map((g,i)=>`<img src="${g.url||FALLBACK_IMG}" alt="${name} ${i+1}" class="${i===0?'active':''}" data-i="${i}" onerror="this.onerror=null;this.src='${FALLBACK_IMG}'">`).join('');
   const dots=imgs.length>1?`<div class="p-card-dots">${imgs.map((_,i)=>`<span class="${i===0?'active':''}"></span>`).join('')}</div>`:'';
   const navs=imgs.length>1?`<button class="p-card-nav p-card-prev" onclick="event.stopPropagation();pCardNav(this,-1)" aria-label="prev">‹</button><button class="p-card-nav p-card-next" onclick="event.stopPropagation();pCardNav(this,1)" aria-label="next">›</button>`:'';
   const isAI=p.isAI||p.cat==='ai_services';
