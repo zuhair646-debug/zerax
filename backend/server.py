@@ -3570,7 +3570,10 @@ try:
     # AI Router — unified claude_core entry point (Feb 2026)
     from routers.ai_router import router as _ai_router
     app.include_router(_ai_router)
-    logging.getLogger(__name__).info("Care Portal + Image/Video Studio + Delivery + Payroll + Payments + Store + Store V2 + AI modules registered")
+    # Sandbox Router — full end-to-end test mode for ALL payment gateways + shipping (Feb 2026)
+    from routers.sandbox_router import router as _sandbox_router
+    app.include_router(_sandbox_router)
+    logging.getLogger(__name__).info("Care Portal + Image/Video Studio + Delivery + Payroll + Payments + Store + Store V2 + AI + Sandbox modules registered")
 except Exception as _care_e:
     logging.getLogger(__name__).error(f"Failed to register care_portal module: {_care_e}", exc_info=True)
 
