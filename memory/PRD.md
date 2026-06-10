@@ -96,6 +96,18 @@ Build "Zerax" — a multi-tenant Saudi/Arab AI commerce platform with:
   - 🔗 Share Wishlist (NEW): `?wl=p1,p5,...` URL deep-link, WhatsApp/native share, clipboard fallback, auto-import on visit
   - Fixed pre-existing `pdJump()` orphan code that was breaking the page
 
+### ✅ MongoDB + JWT Integration Phase 1 (Feb 2026)
+- New router `/app/backend/routers/store_router.py` (registered in server.py):
+  - `GET /api/store/health`
+  - `POST /api/store/customer/request-otp` · `POST /api/store/customer/verify-otp` · `GET /api/store/customer/me`
+  - `GET/POST/PUT/DELETE /api/store/products` (merchant-scoped via JWT)
+  - `GET/POST /api/store/wishlist` (per-customer)
+  - `GET /api/store/reviews/{pid}` · `POST /api/store/reviews`
+- `admin.html`: real `/api/auth/login` flow, JWT stored in localStorage, all products CRUD goes through API
+- `app_mode_full.html`: real customer OTP via backend, wishlist + reviews sync to MongoDB when logged in
+- Mongo collections used: `users` (existing), `store_products`, `customers`, `customer_otps`, `customer_wishlists`, `product_reviews`
+- Test creds: `owner@zerax.com` / `owner123` (admin), any phone + OTP `1234` (customer)
+
 ### 🟡 MOCKED (functional UI, no live backend)
 - admin.html login uses localStorage (no JWT)
 - Products + orders use seed data (no MongoDB sync between admin/customer)
