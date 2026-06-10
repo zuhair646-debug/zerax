@@ -608,7 +608,7 @@ body.dark #header-settings-popover button{background:#1f1f2e;color:#e2e8f0;borde
 
 <!-- HEADER -->
 <header class="top">
-  <a href="#" onclick="showView('home');return false;" class="logo" id="brand" style="text-decoration:none;color:inherit;display:flex;align-items:center;gap:8px"><span id="brand-logo-mark" style="font-weight:900;background:#0a0a0a;color:#fbbf24;width:36px;height:36px;border-radius:8px;display:inline-flex;align-items:center;justify-content:center;font-size:16px;position:relative;border:1.5px solid #fbbf24"><span style="position:absolute;top:-9px;left:50%;transform:translateX(-50%);font-size:12px;filter:drop-shadow(0 1px 2px rgba(0,0,0,.3))">👑</span>Z</span><span style="font-weight:900;color:#0a0a0a;letter-spacing:.5px;font-size:17px">Zerax</span></a>
+  <a href="#" onclick="showView('home');return false;" class="logo" id="brand" style="text-decoration:none;color:inherit;display:flex;align-items:center;gap:8px"><img src="/zerax-logo.png" alt="Zerax" style="height:38px;width:auto;object-fit:contain"></a>
   <input class="search" id="search" placeholder="ابحث...">
   <button class="pill-btn" data-testid="header-settings-btn" onclick="toggleHeaderSettings(event)" title="الإعدادات" style="padding:8px 12px">⚙️</button>
   <button class="pill-btn admin-toggle" id="admin-btn" onclick="toggleAdminMode()" title="وضع التحكم" style="padding:8px 10px;display:none"><span style="font-size:14px">♛</span></button>
@@ -839,12 +839,11 @@ body.dark #header-settings-popover button{background:#1f1f2e;color:#e2e8f0;borde
 </div>
 
 <!-- POWERED BY FOOTER (home only) -->
-<div id="powered-footer" data-home-only="true" style="background:#0a0a0a;color:#94a3b8;padding:20px 14px 80px;text-align:center;font-size:11px;line-height:1.9">
-  <a href="#" onclick="showView('home');return false;" style="display:inline-flex;align-items:center;gap:8px;text-decoration:none;font-weight:900;font-size:14px">
-    <span style="background:#0a0a0a;color:#fbbf24;width:36px;height:36px;border-radius:8px;display:inline-flex;align-items:center;justify-content:center;font-size:14px;position:relative;border:1.5px solid #fbbf24"><span style="position:absolute;top:-9px;left:50%;transform:translateX(-50%);font-size:12px">👑</span>Z</span>
-    <span style="color:#fff;letter-spacing:.5px">Zerax</span>
+<div id="powered-footer" data-home-only="true" style="background:#0a0a0a;color:#94a3b8;padding:24px 14px 90px;text-align:center;font-size:11px;line-height:1.9">
+  <a href="#" onclick="showView('home');return false;" style="display:inline-block;text-decoration:none">
+    <img src="/zerax-logo.png" alt="Zerax" style="height:60px;width:auto;object-fit:contain;filter:drop-shadow(0 4px 14px rgba(251,191,36,.25))">
   </a>
-  <div style="margin-top:6px;opacity:.7">الشركة المطوّرة</div>
+  <div style="margin-top:8px;opacity:.7;font-size:11px">الشركة المطوّرة</div>
 </div>
 
 <!-- ═══════════════════ CATEGORY PAGE (dedicated view per category) ═══════════════════ -->
@@ -1733,9 +1732,8 @@ function applyLocale(){
   document.documentElement.lang=CURRENT_LANG;
   const brandEl=document.getElementById('brand');
   if(brandEl){
-    // Preserve logo styling — only update the text span (last span child)
-    const textSpan=brandEl.querySelector('span:last-child');
-    if(textSpan)textSpan.textContent=TRANS[CURRENT_LANG]?.brand||TRANS.en.brand;
+    // Logo is now an <img>, no text update needed
+    return;
   }
   const mlbl=document.getElementById('market-label');
   if(mlbl)mlbl.textContent=(CURRENT_LANG==='en'?(CURRENT_MARKET.name_en||CURRENT_MARKET.name_ar):(CURRENT_MARKET.name_ar||CURRENT_MARKET.name_en));
