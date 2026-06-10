@@ -527,16 +527,16 @@ select.ps-input option{background:#13131f;color:#fff}
     <p class="sub">سجّل دخولك للوصول إلى لوحة تحكم تاجرك</p>
     <form onsubmit="event.preventDefault();doLogin()">
       <label>البريد الإلكتروني</label>
-      <input id="li-email" type="email" placeholder="merchant@zerax.com" value="merchant@zerax.com" autocomplete="username">
+      <input id="li-email" data-testid="login-email" type="email" placeholder="owner@zerax.com" value="owner@zerax.com" autocomplete="username">
       <label>كلمة المرور</label>
-      <input id="li-pass" type="password" placeholder="••••••••" value="zerax2026" autocomplete="current-password">
+      <input id="li-pass" data-testid="login-password" type="password" placeholder="••••••••" value="owner123" autocomplete="current-password">
       <div class="err" id="li-err"></div>
-      <button type="submit">دخول إلى لوحة التحكم ←</button>
+      <button type="submit" data-testid="login-submit-btn">دخول إلى لوحة التحكم ←</button>
     </form>
     <div class="demo">
-      💡 <b>حساب التجربة:</b><br>
-      البريد: <b>merchant@zerax.com</b><br>
-      كلمة المرور: <b>zerax2026</b>
+      💡 <b>حساب التجربة (متصل بـ MongoDB حقيقي):</b><br>
+      البريد: <b>owner@zerax.com</b><br>
+      كلمة المرور: <b>owner123</b>
     </div>
     <div style="margin-top:14px;text-align:center;font-size:11px;color:var(--mute)">
       تبي تشوف المتجر كعميل؟ <a href="/mockups/app_mode_full.html" style="color:var(--amber);font-weight:900;text-decoration:none">افتح المتجر ↗</a>
@@ -607,11 +607,11 @@ select.ps-input option{background:#13131f;color:#fff}
         </div>
         <div style="position:relative">
           <div class="user-pill" onclick="toggleDropdown('user-dd')">
-            <div class="avt">م</div>
-            <div class="info"><div class="nm">محمد الفهد</div><div class="em">merchant@zerax.com</div></div>
+            <div class="avt" id="user-avt">م</div>
+            <div class="info"><div class="nm" id="user-name">—</div><div class="em" id="user-email">—</div></div>
           </div>
           <div class="dropdown" id="user-dd" style="left:auto;right:0;min-width:240px">
-            <div style="padding:14px;border-bottom:1px solid var(--border);text-align:center"><div style="width:54px;height:54px;border-radius:50%;background:linear-gradient(135deg,var(--purple),var(--amber));color:#fff;font-weight:900;font-size:20px;display:flex;align-items:center;justify-content:center;margin:0 auto 8px">م</div><b style="font-size:13px">محمد الفهد</b><div style="font-size:10px;color:var(--mute);direction:ltr">merchant@zerax.com</div></div>
+            <div style="padding:14px;border-bottom:1px solid var(--border);text-align:center"><div style="width:54px;height:54px;border-radius:50%;background:linear-gradient(135deg,var(--purple),var(--amber));color:#fff;font-weight:900;font-size:20px;display:flex;align-items:center;justify-content:center;margin:0 auto 8px" id="user-avt-big">م</div><b style="font-size:13px" id="user-name-big">—</b><div style="font-size:10px;color:var(--mute);direction:ltr" id="user-email-big">—</div></div>
             <div class="dropdown-item" onclick="goPage('settings');closeDropdowns()"><i data-lucide="user" style="width:16px;height:16px;color:var(--mute)"></i> الملف الشخصي</div>
             <div class="dropdown-item" onclick="goPage('settings');closeDropdowns()"><i data-lucide="settings" style="width:16px;height:16px;color:var(--mute)"></i> إعدادات المتجر</div>
             <div class="dropdown-item" onclick="rechargeOpen();closeDropdowns()"><i data-lucide="zap" style="width:16px;height:16px;color:var(--amber)"></i> شحن الرصيد</div>
@@ -1487,7 +1487,27 @@ const MOCK_PRODUCTS=[
   {id:'p5',name:'iPad Air M3',price:2799,stock:15,sku:'IPA-M3',stockLow:5,exp:null,cat:'electronics',img:'https://images.unsplash.com/photo-1561154464-82e9adf32764?w=600&q=85',sales:19},
   {id:'p6',name:'Samsung S25 Ultra',price:4899,stock:0,sku:'SAM-S25U',stockLow:5,exp:null,cat:'electronics',img:'https://images.unsplash.com/photo-1610945415295-d9bbf067e59c?w=600&q=85',sales:8}
 ];
-let PRODUCTS=JSON.parse(localStorage.getItem('zx_dash_products')||'null')||MOCK_PRODUCTS;
+let PRODUCTS=[];
+let EDITING_PRODUCT_ID=null;
+async function loadProductsFromAPI(){
+  try{
+    const d=await apiFetch('/api/store/products');
+    PRODUCTS=(d.items||[]).map(p=>({...p,stockLow:p.stock_low,trackExpiry:p.track_expiry}));
+    if(!PRODUCTS.length){
+      // First-time: seed the merchant DB with sample products
+      for(const m of MOCK_PRODUCTS){
+        try{
+          const saved=await apiFetch('/api/store/products',{method:'POST',body:JSON.stringify({name:m.name,price:m.price,stock:m.stock,sku:m.sku||'',stock_low:m.stockLow||5,cat:m.cat,img:m.img,desc:''})});
+          PRODUCTS.push({...saved,stockLow:saved.stock_low,trackExpiry:saved.track_expiry});
+        }catch(_){}
+      }
+    }
+  }catch(e){
+    console.warn('Failed to load products from API, falling back to MOCK:',e.message);
+    PRODUCTS=MOCK_PRODUCTS.slice();
+  }
+  renderProducts();renderAll();
+}
 const MOCK_CUSTOMERS=[
   {name:'نوف العتيبي',phone:'0567778888',orders:7,total:1245,last:'قبل ساعة'},
   {name:'خالد المطيري',phone:'0561234567',orders:12,total:3489,last:'قبل 3 ساعات'},
@@ -1500,18 +1520,52 @@ function $(id){return document.getElementById(id)}
 function toast(m){const t=$('toast');t.textContent=m;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),2500)}
 
 // ───── AUTH ─────
-function doLogin(){
-  const email=$('li-email').value,pass=$('li-pass').value;
-  if(email==='merchant@zerax.com'&&pass==='zerax2026'){
+// ═══════════════ API CLIENT (real backend) ═══════════════
+function authToken(){return localStorage.getItem('zx_token')||''}
+async function apiFetch(path,opts={}){
+  const headers={'Content-Type':'application/json',...(opts.headers||{})};
+  const tk=authToken();if(tk)headers.Authorization='Bearer '+tk;
+  const r=await fetch(API+path,{...opts,headers});
+  if(r.status===401){doLogout();throw new Error('انتهت الجلسة');}
+  const data=await r.json().catch(()=>({}));
+  if(!r.ok)throw new Error(data.detail||data.message||('HTTP '+r.status));
+  return data;
+}
+async function doLogin(){
+  const email=$('li-email').value.trim().toLowerCase(),pass=$('li-pass').value;
+  const errEl=$('li-err');errEl.classList.remove('show');errEl.textContent='';
+  if(!email||!pass){errEl.textContent='أدخل البريد وكلمة المرور';errEl.classList.add('show');return;}
+  try{
+    const r=await fetch(API+'/api/auth/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email,password:pass})});
+    const d=await r.json();
+    if(!r.ok)throw new Error(d.detail||'فشل تسجيل الدخول');
+    localStorage.setItem('zx_token',d.token);
+    localStorage.setItem('zx_admin_user',JSON.stringify(d.user));
     localStorage.setItem('zx_admin_session','1');
     showApp();
-  }else{$('li-err').textContent='البريد أو كلمة المرور غير صحيحة';$('li-err').classList.add('show')}
+  }catch(e){
+    errEl.textContent=e.message||'بيانات غير صحيحة';errEl.classList.add('show');
+  }
 }
-function doLogout(){localStorage.removeItem('zx_admin_session');location.reload()}
+function doLogout(){
+  localStorage.removeItem('zx_token');
+  localStorage.removeItem('zx_admin_user');
+  localStorage.removeItem('zx_admin_session');
+  location.reload();
+}
 function showApp(){
   $('login-screen').style.display='none';
   $('app').classList.add('show');
+  // Hydrate user info from JWT user object
+  try{
+    const u=JSON.parse(localStorage.getItem('zx_admin_user')||'{}');
+    const initial=(u.name||u.email||'م').charAt(0).toUpperCase();
+    ['user-avt','user-avt-big'].forEach(id=>{const el=$(id);if(el)el.textContent=initial;});
+    ['user-name','user-name-big'].forEach(id=>{const el=$(id);if(el)el.textContent=u.name||u.email||'—';});
+    ['user-email','user-email-big'].forEach(id=>{const el=$(id);if(el)el.textContent=u.email||'—';});
+  }catch(_){}
   goPage('dashboard');
+  loadProductsFromAPI();
   renderAll();
   setTimeout(()=>{
     if(window.lucide)lucide.createIcons();
@@ -1593,6 +1647,7 @@ function renderProducts(){
 function editProduct(id){
   const p=PRODUCTS.find(x=>x.id===id);if(!p)return;
   openProductModal();
+  EDITING_PRODUCT_ID=id;
   $('pm-name').value=p.name;$('pm-price').value=p.price;$('pm-stock').value=p.stock;$('pm-desc').value=p.desc||'';
   if($('pm-sku'))$('pm-sku').value=p.sku||'';
   if($('pm-stock-low'))$('pm-stock-low').value=p.stockLow||5;
@@ -1625,7 +1680,15 @@ function openImageStudioFor(id){
   setTimeout(()=>{psSwitchTab('image');psRenderColorPresets();psUpdateSummary();if(window.lucide)lucide.createIcons();},100);
   toast('🎨 استوديو الصور لـ '+p.name);
 }
-function deleteProduct(id){if(!confirm('متأكد تبي تحذف المنتج؟'))return;PRODUCTS=PRODUCTS.filter(x=>x.id!==id);localStorage.setItem('zx_dash_products',JSON.stringify(PRODUCTS));renderProducts();renderAll();toast('🗑️ تم الحذف');}
+async function deleteProduct(id){
+  if(!confirm('متأكد تبي تحذف المنتج؟'))return;
+  try{
+    await apiFetch('/api/store/products/'+id,{method:'DELETE'});
+    PRODUCTS=PRODUCTS.filter(x=>x.id!==id);
+    renderProducts();renderAll();
+    toast('🗑️ تم الحذف من قاعدة البيانات');
+  }catch(e){alert('فشل الحذف: '+e.message);}
+}
 async function regenProductImg(id){
   // Kept for backward compat — but now redirects to image studio
   openImageStudioFor(id);
@@ -1936,6 +1999,7 @@ async function gwLoad(){
 
 // ───── PRODUCT MODAL ─────
 function openProductModal(){
+  EDITING_PRODUCT_ID=null;
   $('prod-mod').classList.add('open');
   psSwitchTab('info');
   PS_STATE={style:'product',ctype:'product',images:[],approvedImg:null,analysis:null,uploadedImg:null,aiImg:null,bgColor:'#ffffff',frameColor:'#7c3aed',aspect:'1:1'};
@@ -1957,21 +2021,31 @@ function pmPreviewImg(inp){
   };
   reader.readAsDataURL(f);
 }
-function pmSave(){
+async function pmSave(){
   const name=$('pm-name').value.trim();if(!name){alert('اكتب الاسم');psSwitchTab('info');$('pm-name').focus();return;}
   const previewImg=$('pm-img-preview').querySelector('img');
   const img=PS_STATE.approvedImg||(previewImg?previewImg.src:'https://images.unsplash.com/photo-1586765501019-cbf6c0b6d7a4?w=600&q=85');
-  const newP={id:'p'+Date.now(),name,price:+$('pm-price').value||0,stock:+$('pm-stock').value||0,sku:$('pm-sku')?.value||'',stockLow:+$('pm-stock-low')?.value||5,mfg:$('pm-mfg')?.value||'',exp:$('pm-exp')?.value||'',trackExpiry:$('pm-track-expiry')?.checked||false,cat:$('pm-cat').value,img,sales:0,desc:$('pm-desc').value||'',analysis:PS_STATE.analysis||null};
-  PRODUCTS.unshift(newP);
-  localStorage.setItem('zx_dash_products',JSON.stringify(PRODUCTS));
-  closeProductModal();
-  renderProducts();
-  renderAll();
-  // Trigger auto-post to social media if enabled
-  try{autoPostNewProduct(newP);}catch(e){}
-  ['pm-name','pm-price','pm-desc'].forEach(id=>$(id).value='');
-  $('pm-img-preview').innerHTML=`<i data-lucide="upload-cloud" style="width:42px;height:42px;color:#94a3b8;margin-bottom:8px"></i><p style="font-size:12px;color:#94a3b8;text-align:center">اضغط لرفع صورة أو<br>اسحبها هنا</p><button type="button" class="ps-mini-btn" onclick="event.stopPropagation();psSwitchTab('image')"><i data-lucide="sparkles" style="width:11px;height:11px"></i> أو ولّد بـ AI</button>`;
-  toast('✓ تم حفظ المنتج');
+  const payload={name,price:+$('pm-price').value||0,stock:+$('pm-stock').value||0,sku:$('pm-sku')?.value||'',stock_low:+$('pm-stock-low')?.value||5,mfg:$('pm-mfg')?.value||'',exp:$('pm-exp')?.value||'',track_expiry:$('pm-track-expiry')?.checked||false,cat:$('pm-cat').value,img,desc:$('pm-desc').value||'',analysis:PS_STATE.analysis||null};
+  try{
+    let saved;
+    if(EDITING_PRODUCT_ID){
+      saved=await apiFetch('/api/store/products/'+EDITING_PRODUCT_ID,{method:'PUT',body:JSON.stringify(payload)});
+      const idx=PRODUCTS.findIndex(p=>p.id===EDITING_PRODUCT_ID);
+      if(idx>=0)PRODUCTS[idx]={...saved,stockLow:saved.stock_low,trackExpiry:saved.track_expiry};
+    } else {
+      saved=await apiFetch('/api/store/products',{method:'POST',body:JSON.stringify(payload)});
+      const newP={...saved,stockLow:saved.stock_low,trackExpiry:saved.track_expiry};
+      PRODUCTS.unshift(newP);
+      try{autoPostNewProduct(newP);}catch(e){}
+    }
+    EDITING_PRODUCT_ID=null;
+    closeProductModal();
+    renderProducts();
+    renderAll();
+    ['pm-name','pm-price','pm-desc'].forEach(id=>$(id).value='');
+    $('pm-img-preview').innerHTML=`<i data-lucide="upload-cloud" style="width:42px;height:42px;color:#94a3b8;margin-bottom:8px"></i><p style="font-size:12px;color:#94a3b8;text-align:center">اضغط لرفع صورة أو<br>اسحبها هنا</p><button type="button" class="ps-mini-btn" onclick="event.stopPropagation();psSwitchTab('image')"><i data-lucide="sparkles" style="width:11px;height:11px"></i> أو ولّد بـ AI</button>`;
+    toast('✓ تم حفظ المنتج في قاعدة البيانات');
+  }catch(e){alert('فشل الحفظ: '+e.message);}
 }
 
 // ───── PRODUCT STUDIO ─────

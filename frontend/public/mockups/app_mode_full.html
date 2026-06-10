@@ -1985,37 +1985,57 @@ function saveAccount(){
   alert(tx('saved_ok'));
 }
 
-// ═══════════════════════ AUTH (OTP) ═══════════════════════
+// ═══════════════════════ AUTH (OTP via real backend) ═══════════════════════
+const API_BASE_CUST = window.location.origin;
 function getUser(){try{return JSON.parse(localStorage.getItem('zx_user')||'null');}catch(_){return null;}}
 function setUser(u){if(u)localStorage.setItem('zx_user',JSON.stringify(u));else localStorage.removeItem('zx_user');updateAuthUi();}
+function getCustToken(){return localStorage.getItem('zx_cust_token')||'';}
 function openLogin(){document.getElementById('login-modal').classList.add('open');document.getElementById('login-step-1').style.display='block';document.getElementById('login-step-2').style.display='none';setTimeout(()=>document.getElementById('login-phone').focus(),100);}
 function closeLogin(){document.getElementById('login-modal').classList.remove('open');}
 let _pendingLoginPhone=null;
-function requestOtp(){
+async function requestOtp(){
   const phone=document.getElementById('login-phone').value.trim();
   if(phone.replace(/\D/g,'').length<7){alert('رقم الجوال غير صحيح');return;}
-  _pendingLoginPhone=phone;
-  document.getElementById('login-phone-echo').textContent=phone;
-  document.getElementById('login-step-1').style.display='none';
-  document.getElementById('login-step-2').style.display='block';
-  setTimeout(()=>document.getElementById('login-otp').focus(),100);
+  try{
+    const r=await fetch(API_BASE_CUST+'/api/store/customer/request-otp',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({phone})});
+    const d=await r.json();
+    if(!r.ok)throw new Error(d.detail||'فشل إرسال الرمز');
+    _pendingLoginPhone=phone;
+    document.getElementById('login-phone-echo').textContent=phone;
+    document.getElementById('login-step-1').style.display='none';
+    document.getElementById('login-step-2').style.display='block';
+    setTimeout(()=>document.getElementById('login-otp').focus(),100);
+  }catch(e){alert(e.message);}
 }
 function loginBackToPhone(){
   document.getElementById('login-step-2').style.display='none';
   document.getElementById('login-step-1').style.display='block';
 }
-function verifyOtp(){
+async function verifyOtp(){
   const code=document.getElementById('login-otp').value.trim();
-  if(code!=='1234'){alert('الكود غير صحيح. للتجربة استخدم 1234');return;}
-  const acc=getAccount();
-  setUser({phone:_pendingLoginPhone,name:acc.name||'',token:'demo-'+Date.now()});
-  document.getElementById('login-otp').value='';
-  document.getElementById('login-phone').value='';
-  closeLogin();
-  toast('✓ تم تسجيل الدخول');
+  if(!code){alert('أدخل الرمز');return;}
+  try{
+    const acc=getAccount();
+    const r=await fetch(API_BASE_CUST+'/api/store/customer/verify-otp',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({phone:_pendingLoginPhone,code,name:acc.name||''})});
+    const d=await r.json();
+    if(!r.ok)throw new Error(d.detail||'الكود غير صحيح');
+    localStorage.setItem('zx_cust_token',d.token);
+    setUser({phone:_pendingLoginPhone,name:d.user.name||'',id:d.user.id});
+    document.getElementById('login-otp').value='';
+    document.getElementById('login-phone').value='';
+    closeLogin();
+    toast('✓ تم تسجيل الدخول');
+    // Sync wishlist from server
+    syncWishlistFromServer();
+    renderAccount();
+  }catch(e){alert(e.message);}
+}
+function logout(){
+  localStorage.removeItem('zx_cust_token');
+  setUser(null);
+  toast('تم تسجيل الخروج');
   renderAccount();
 }
-function logout(){setUser(null);toast('تم تسجيل الخروج');renderAccount();}
 function requireLogin(reason){
   if(getUser())return true;
   if(confirm((reason||'يلزم تسجيل الدخول')+'. تسجيل دخول الآن؟'))openLogin();
@@ -2025,6 +2045,16 @@ function updateAuthUi(){
   const u=getUser();
   const btn=document.getElementById('header-login-btn');
   if(btn)btn.innerHTML=u?'<span style="color:#10b981">✓</span>':'👤';
+}
+async function syncWishlistFromServer(){
+  if(!getCustToken())return;
+  try{
+    const r=await fetch(API_BASE_CUST+'/api/store/wishlist',{headers:{'Authorization':'Bearer '+getCustToken()}});
+    if(!r.ok)return;
+    const d=await r.json();
+    WISHLIST=d.items||[];
+    saveWishlist();renderProducts();
+  }catch(_){}
 }
 
 // ═══════════════════════ WISHLIST ═══════════════════════
@@ -2037,6 +2067,10 @@ function toggleWish(pid){
   saveWishlist();
   renderProducts();
   if(document.getElementById('view-wishlist').style.display!=='none')renderWishlist();
+  // Sync to server in background if logged in
+  if(getCustToken()){
+    fetch(API_BASE_CUST+'/api/store/wishlist',{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+getCustToken()},body:JSON.stringify({product_id:pid})}).catch(()=>{});
+  }
 }
 function updateWishBadge(){const b=document.getElementById('wish-badge');if(b)b.textContent=WISHLIST.length;}
 function renderWishlist(){
@@ -2124,17 +2158,21 @@ function renderProductReviews(pid){
   document.getElementById('pd-reviews').innerHTML=html;
   _pdReviewStars=5;
 }
-function submitReview(pid){
+async function submitReview(pid){
   if(!requireLogin('يلزم تسجيل الدخول لنشر التقييم'))return;
   const text=document.getElementById('pd-rev-text').value.trim();
   if(!text){alert('اكتب نص التقييم أولاً');return;}
-  const u=getUser();
-  const acc=getAccount();
-  const list=getReviews(pid);
-  list.push({name:acc.name||u.phone,stars:_pdReviewStars,text,date:Date.now()});
-  saveReviewsFor(pid,list);
-  toast('✓ تم نشر تقييمك');
-  renderProductReviews(pid);
+  try{
+    const r=await fetch(API_BASE_CUST+'/api/store/reviews',{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+getCustToken()},body:JSON.stringify({product_id:pid,stars:_pdReviewStars,text})});
+    const d=await r.json();
+    if(!r.ok)throw new Error(d.detail||'فشل النشر');
+    // Append locally too (so it appears immediately)
+    const list=getReviews(pid);
+    list.push({name:d.name,stars:d.stars,text:d.text,date:Date.now()});
+    saveReviewsFor(pid,list);
+    toast('✓ تم نشر تقييمك');
+    renderProductReviews(pid);
+  }catch(e){alert(e.message);}
 }
 
 // ═══════════════════════ COUPONS ═══════════════════════

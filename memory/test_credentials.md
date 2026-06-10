@@ -6,6 +6,13 @@
 - Role: regular user
 - Starting credits: 20
 
+## Merchant Control Panel (Real Backend Auth — Feb 2026)
+- URL: `${REACT_APP_BACKEND_URL}/mockups/admin.html`
+- Login: `owner@zerax.com` / `owner123` (real JWT via `/api/auth/login`)
+- Products now persist to MongoDB via `/api/store/products` (per-merchant scoped by `merchant_id`)
+- Customer login on storefront: any phone, OTP = `1234` (real backend via `/api/store/customer/request-otp` + `/verify-otp`)
+- Wishlist + Reviews sync to MongoDB when customer is logged in
+
 ## Platform Owner (Admin)
 - URL: `/login`
 - Email: `owner@zerax.com`
