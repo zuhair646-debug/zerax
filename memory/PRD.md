@@ -115,33 +115,23 @@ Build "Zerax" — a multi-tenant Saudi/Arab AI commerce platform with:
 - Service activations are localStorage flags only
 - Auto-dispatch endpoint /api/delivery/auto-assign falls back to simulation
 
-### 🟢 LATEST (Feb 10, 2026 · Backend Foundation Wave)
-- **🏗️ Store V2 Backend Router** (`/api/store/v2/*`): Complete e-commerce backend
-  - `POST /checkout` — atomic order placement with stock decrement, loyalty points, wallet deduction
-  - `GET /orders` + `GET /orders/{id}` — customer order history
-  - `GET /merchant/orders` + `PATCH /merchant/orders/{id}/status` — merchant order management
-  - `GET /wallet` + `POST /merchant/wallet/adjust` — Store Credit Wallet
-  - `POST /returns` + `PATCH /merchant/returns/{id}` — Returns with auto-refund to wallet
-  - `POST /subscriptions` + recurring order management (weekly/biweekly/monthly/quarterly)
-  - `POST /branches` + `GET /branches?lat=&lng=` (Haversine nearest-first)
-  - `GET /referral/me` + `POST /referral/redeem` (REF code + welcome credit)
-  - `POST /saved-cards` (tokenized — never returns gateway_token to client)
-  - `PUT /merchant/ai-profile` — AUTO-TRAINING context (filled by Zerax at handover, NOT by merchant)
-- **🧠 Claude Core** (`/app/backend/claude_core.py`): Unified AI orchestrator
-  - `ZERAX_AI_CORE_RULES` — single source of truth (mirrored in admin.html)
-  - `product_research_chat()` — Gemini 2.5 Flash, JSON-structured output, loads merchant context automatically
-  - `onboarding_extract()` — extracts AI profile from merchant's free-text description at handover
-  - Strict domain rules: medicines (dosage+warnings), food (ingredients+calories), clothes (fabric+sizes), etc.
-- **🤖 AI Router** (`/api/ai/*`):
-  - `POST /product-chat` — admin.html AI chat tab now uses this
-  - `POST /onboarding/extract` — auto-fills `merchant_ai_profiles`
-  - `GET /rules` — transparent AI policy
-- **🔌 admin.html wired to real AI**: AI chat tab now calls `/api/ai/product-chat` (20s timeout race with mock fallback). Shows "✓ AI حقيقي" or "⚡ تجريبي" badge so merchant knows. Renders real specs/benefits/usage/warnings/warranty from Gemini.
-- **🧪 21/21 smoke tests pass** (`/app/backend/tests/test_store_v2_smoke.py`)
-
-### 🟡 LATEST (earlier today)
-- **AI Chat Tab Major Redesign**: removed top header + quick-options bar, full-height chat, Arabic parser (`parseUserSpec`), in-chat approve/reject buttons, smooth auto-scroll
-- **3-Tab Product Editor UI polish**: collapsible banners, clickable tool chips, dark preview tab
+### 🟢 LATEST (Feb 10, 2026 · Sandbox Wave — LAUNCH-READY)
+- **🏖️ Sandbox Router** (`/api/sandbox/*`): Full end-to-end test mode for the WHOLE checkout pipeline
+  - **10 Payment Gateways**: Tabby, Tamara, Mada, STC Pay, HyperPay, Moyasar, Stripe, PayPal, Apple Pay, COD
+  - **6 Shipping Providers**: Aramex, SMSA, Naqel, DHL, J&T Express, Zerax Internal Fleet
+  - Each gateway/provider has built-in FAKE sandbox keys → merchant launches NOW, swaps to live later
+  - `/payment/init` → creates session → returns hosted checkout URL
+  - `/payment/checkout/{id}` → beautiful PSP-branded HTML page (Tabby green, Tamara purple, etc.) with 3 buttons (success/fail/cancel)
+  - `/payment/complete/{id}` → confirms outcome, updates linked order, fires timeline event
+  - `/shipping/quote` → realistic price (base + weight)
+  - `/shipping/create-label` → tracking number + PDF placeholder
+  - `/shipping/advance` → simulates carrier events (picked_up → in_transit → out_for_delivery → delivered)
+  - `/shipping/track/{tracking}` → public tracking page
+  - `POST /merchant/enable-all-sandbox` → ONE-CLICK enables all 10 gateways + 6 providers
+  - Smoke-tested end-to-end: Tabby SAR 250 paid → Aramex label created → 5-event delivery timeline ✅
+- **🏗️ Store V2 Backend** (`/api/store/v2/*`): orders/checkout/wallet/returns/subscriptions/branches/referrals/saved-cards/ai-profile (21/21 tests pass)
+- **🧠 Claude Core** + AI Router: unified `/api/ai/product-chat` wired to admin.html
+- **🎨 Admin UI polish**: 3-tab editor footer auto-hides on AI Chat & Preview tabs
 
 ### 🔴 PENDING (Priority Order)
 
