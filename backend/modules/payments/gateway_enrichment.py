@@ -14,8 +14,8 @@ UNIVERSAL_IDS = {"stripe_card", "paypal", "apple_pay", "google_pay", "cod", "ban
 # Per-gateway enrichment: real URLs, real fees, required credentials
 ENRICHMENT = {
     "tabby": {
-        "merchant_signup_url":  "https://merchants.tabby.ai/signup",
-        "merchant_dashboard_url":"https://merchants.tabby.ai",
+        "merchant_signup_url":  "https://merchant.tabby.ai",
+        "merchant_dashboard_url":"https://merchant.tabby.ai",
         "developer_docs_url":   "https://docs.tabby.ai",
         "real_fees": {"customer": "0% (interest-free)", "merchant": "5-7% + 1 SAR per transaction", "settlement_days": 1},
         "required_credentials": [

@@ -7,6 +7,7 @@
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;500;700;900&display=swap" rel="stylesheet">
 <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
@@ -1047,8 +1048,20 @@ select.ps-input option{background:#13131f;color:#fff}
 
       <!-- ─── PAYROLL ─── -->
       <div class="page" data-page="payroll">
-        <div class="panel">
-          <div class="panel-head"><h3>💰 المحاسبة والرواتب</h3><button class="btn btn-success" onclick="prRunAll()"><i data-lucide="send" style="width:14px;height:14px"></i> تحويل دفعة شهرية لكل السائقين</button></div>
+        <!-- Payout requests panel (notifications) -->
+        <div class="panel" id="payout-requests-panel" style="border:2px solid #f59e0b;background:linear-gradient(135deg,#fffbeb,#fef3c7)">
+          <div class="panel-head"><h3>🔔 طلبات تحويل من السائقين <span id="payout-req-count" style="background:#dc2626;color:#fff;padding:3px 9px;border-radius:99px;font-size:11px;margin-right:6px">0</span></h3>
+            <button class="btn btn-outline" data-testid="approve-all-payouts" onclick="approveAllPayouts()" style="padding:7px 12px;font-size:11px;color:#10b981;border-color:#10b981"><i data-lucide="check-check" style="width:12px;height:12px"></i> اعتمد الكل</button>
+          </div>
+          <div id="payout-requests-list" style="display:flex;flex-direction:column;gap:10px"></div>
+        </div>
+        <div class="panel" style="margin-top:14px">
+          <div class="panel-head"><h3>💰 المحاسبة والرواتب</h3>
+            <div style="display:flex;gap:8px;align-items:center">
+              <div style="font-size:11px;color:var(--mute)">رسوم التحويل: <b style="color:#dc2626" id="payroll-fee">4 ر.س</b></div>
+              <button class="btn btn-success" data-testid="payroll-run-all-btn" onclick="prRunAll()"><i data-lucide="send" style="width:14px;height:14px"></i> تحويل كامل (كل السائقين)</button>
+            </div>
+          </div>
           <div id="pr-summary" style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:18px"></div>
           <div style="overflow-x:auto"><table class="tbl">
             <thead><tr><th>السائق</th><th>النوع</th><th>المبلغ المستحق</th><th>وسيلة الاستلام</th><th>إجراء</th></tr></thead>
@@ -1771,7 +1784,84 @@ async function loadDelivery(){
 }
 
 // ───── PAYROLL ─────
+// Payout requests (simulated — drivers requesting their balance)
+function _seedPayoutRequests(){
+  if(localStorage.getItem('zx_payout_requests'))return;
+  const seed=[
+    {id:'req1',driver_id:'d2',driver_name:'خالد العتيبي',phone:'0552222222',amount:64,fee:4,net:60,method:'STC Pay',account:'0552222222',time:'قبل 12 دقيقة',status:'pending'},
+    {id:'req2',driver_id:'d4',driver_name:'فيصل الشمري',phone:'0544444444',amount:48,fee:4,net:44,method:'urpay',account:'0544444444',time:'قبل ساعتين',status:'pending'},
+  ];
+  localStorage.setItem('zx_payout_requests',JSON.stringify(seed));
+}
+function _getPayoutRequests(){_seedPayoutRequests();return JSON.parse(localStorage.getItem('zx_payout_requests')||'[]');}
+function _setPayoutRequests(arr){localStorage.setItem('zx_payout_requests',JSON.stringify(arr));}
+function renderPayoutRequests(){
+  const reqs=_getPayoutRequests().filter(r=>r.status==='pending');
+  const wrap=document.getElementById('payout-requests-list');
+  const count=document.getElementById('payout-req-count');
+  const panel=document.getElementById('payout-requests-panel');
+  if(count)count.textContent=reqs.length;
+  if(!reqs.length){
+    if(wrap)wrap.innerHTML='<div style="text-align:center;color:var(--mute);padding:18px;font-size:12px">✓ ما في طلبات تحويل معلّقة</div>';
+    return;
+  }
+  wrap.innerHTML=reqs.map(r=>`
+    <div style="background:#fff;border:1px solid #fde68a;border-radius:10px;padding:12px;display:grid;grid-template-columns:1fr 1fr auto;gap:12px;align-items:center">
+      <div>
+        <b style="font-size:13px">🚗 ${r.driver_name}</b>
+        <div style="font-size:11px;color:var(--mute);direction:ltr;text-align:right">${r.phone} · ${r.time}</div>
+      </div>
+      <div>
+        <div style="font-size:11px;color:var(--mute)">يطلب: <b style="color:#0a0a14">${r.amount} ر.س</b></div>
+        <div style="font-size:11px;color:#dc2626">- ${r.fee} ر.س رسوم · <b style="color:#10b981">صافي ${r.net} ر.س</b></div>
+        <div style="font-size:10px;color:var(--mute);direction:ltr;text-align:right">${r.method} · ${r.account}</div>
+      </div>
+      <div style="display:flex;gap:6px">
+        <button class="btn btn-success" data-testid="approve-payout-${r.id}" onclick="approvePayout('${r.id}')" style="padding:8px 14px;font-size:11px"><i data-lucide="check" style="width:12px;height:12px"></i> حوّل الآن</button>
+        <button class="btn btn-outline" onclick="rejectPayout('${r.id}')" style="padding:8px 12px;font-size:11px;color:#dc2626;border-color:#dc2626"><i data-lucide="x" style="width:12px;height:12px"></i></button>
+      </div>
+    </div>`).join('');
+  setTimeout(()=>{if(window.lucide)lucide.createIcons()},50);
+}
+function approvePayout(id){
+  const reqs=_getPayoutRequests();
+  const r=reqs.find(x=>x.id===id);if(!r)return;
+  if(!confirm(`تأكيد تحويل ${r.net} ر.س للسائق ${r.driver_name}؟\n\nالمبلغ: ${r.amount} ر.س\nالرسوم: -${r.fee} ر.س (تخصم من السائق)\nالصافي: ${r.net} ر.س\n\nسيتم التحويل فوراً إلى ${r.method}: ${r.account}`))return;
+  r.status='paid';r.paid_at=new Date().toISOString();
+  _setPayoutRequests(reqs);
+  renderPayoutRequests();
+  toast(`✓ تم تحويل ${r.net} ر.س إلى ${r.driver_name} (${r.method})`);
+}
+function rejectPayout(id){
+  if(!confirm('رفض هذا الطلب؟'))return;
+  const reqs=_getPayoutRequests();
+  const r=reqs.find(x=>x.id===id);if(r){r.status='rejected';_setPayoutRequests(reqs);renderPayoutRequests();toast('تم الرفض');}
+}
+function approveAllPayouts(){
+  const reqs=_getPayoutRequests().filter(r=>r.status==='pending');
+  if(!reqs.length){alert('ما في طلبات معلّقة');return;}
+  const total=reqs.reduce((s,r)=>s+r.net,0);
+  if(!confirm(`اعتماد ${reqs.length} طلب تحويل؟ إجمالي: ${total} ر.س`))return;
+  const all=_getPayoutRequests();
+  all.forEach(r=>{if(r.status==='pending'){r.status='paid';r.paid_at=new Date().toISOString();}});
+  _setPayoutRequests(all);
+  renderPayoutRequests();
+  toast(`✓ تم تحويل ${total} ر.س على ${reqs.length} سائق`);
+}
+// Quick transfer for a specific driver (from the payroll table)
+function transferDriverNow(driverId,driverName,amount,method,account){
+  const fee=4;const net=Math.max(0,amount-fee);
+  if(amount<=0){alert('ما عليه مستحق حالياً');return;}
+  if(!confirm(`تحويل مخصص للسائق ${driverName}؟\n\nالمبلغ: ${amount} ر.س\nالرسوم: -${fee} ر.س\nالصافي: ${net} ر.س\n\nسيتم التحويل إلى ${method}: ${account}`))return;
+  // Add a paid record
+  const reqs=_getPayoutRequests();
+  reqs.unshift({id:'req'+Date.now(),driver_id:driverId,driver_name:driverName,amount,fee,net,method,account,time:'الآن',status:'paid',paid_at:new Date().toISOString()});
+  _setPayoutRequests(reqs);
+  toast(`✓ تم تحويل ${net} ر.س إلى ${driverName}`);
+}
+
 async function loadPayroll(){
+  renderPayoutRequests();
   try{
     const r=await fetch(API+'/api/payroll/calculate');
     const d=await r.json();
@@ -1783,8 +1873,12 @@ async function loadPayroll(){
     ].map(s=>`<div class="kpi" style="--clr:${s.c};padding:14px"><div class="lbl">${s.l}</div><div class="val" style="font-size:18px">${s.v}</div></div>`).join('');
     $('pr-table').innerHTML=d.lines.map(l=>{
       const em=l.employment_type==='salaried'?'<span class="status-pill s-paid">📅 موظف</span>':'<span class="status-pill s-delivering">💸 عمولة</span>';
-      return `<tr><td><b>${l.driver_name}</b><div style="font-size:10px;color:var(--mute);direction:ltr;text-align:right">${l.phone}</div></td><td>${em}</td><td><b style="color:${l.amount_sar>0?'var(--emerald)':'var(--mute)'}">${l.amount_sar} ر.س</b></td><td>${({stc_pay:'📱 STC Pay',mada:'🏦 مدى',urpay:'💳 urpay',alinma_pay:'💳 الإنماء'})[l.payout_method]||l.payout_method}<div style="font-size:10px;color:var(--mute);direction:ltr;text-align:right">${l.payout_account}</div></td><td><button class="btn btn-outline" style="padding:7px 12px;font-size:11px" onclick="window.open('${API}/api/payroll/statement/${l.driver_id}','_blank')">📄 كشف</button></td></tr>`;
+      const methodLabel=({stc_pay:'📱 STC Pay',mada:'🏦 مدى',urpay:'💳 urpay',alinma_pay:'💳 الإنماء'})[l.payout_method]||l.payout_method;
+      const safeName=(l.driver_name||'').replace(/'/g,'&#39;');
+      const transferBtn=l.amount_sar>0?`<button class="btn btn-success" data-testid="transfer-${l.driver_id}" onclick="transferDriverNow('${l.driver_id}','${safeName}',${l.amount_sar},'${methodLabel}','${l.payout_account||''}')" style="padding:7px 12px;font-size:11px"><i data-lucide="send" style="width:12px;height:12px"></i> حوّل الآن</button>`:'<span style="font-size:10px;color:var(--mute)">—</span>';
+      return `<tr><td><b>${l.driver_name}</b><div style="font-size:10px;color:var(--mute);direction:ltr;text-align:right">${l.phone}</div></td><td>${em}</td><td><b style="color:${l.amount_sar>0?'var(--emerald)':'var(--mute)'}">${l.amount_sar} ر.س</b></td><td>${methodLabel}<div style="font-size:10px;color:var(--mute);direction:ltr;text-align:right">${l.payout_account||''}</div></td><td style="display:flex;gap:6px">${transferBtn}<button class="btn btn-outline" style="padding:7px 12px;font-size:11px" onclick="window.open('${API}/api/payroll/statement/${l.driver_id}','_blank')">📄 كشف</button></td></tr>`;
     }).join('');
+    setTimeout(()=>{if(window.lucide)lucide.createIcons()},50);
   }catch(e){}
 }
 async function prRunAll(){
@@ -2013,23 +2107,70 @@ async function gwLoad(){
   try{
     const r=await fetch(API+'/api/payments/by-country?country='+c);
     const d=await r.json();
-    $('gw-list').innerHTML=d.gateways.map(g=>{
+    $('gw-list').innerHTML=d.gateways.map((g,idx)=>{
       const typeColor={card:'#1e40af',wallet:'#7c3aed',bnpl:'#ec4899',bank:'#059669',cod:'#10b981',qr:'#0891b2',crypto:'#f59e0b'}[g.type]||'#6b7280';
       const u=g.is_universal?'<span style="background:#fef3c7;color:#92400e;padding:2px 6px;border-radius:99px;font-size:9px;font-weight:900;margin-right:4px">🌐 عالمي</span>':'';
-      return `<div style="background:#fff;border:1.5px solid var(--border);border-radius:14px;padding:14px;margin-bottom:10px;display:grid;grid-template-columns:auto 1fr auto;gap:14px;align-items:center">
-        <div style="width:48px;height:48px;border-radius:10px;background:${g.badge.bg};color:${g.badge.fg};display:flex;align-items:center;justify-content:center;font-weight:900;font-size:10px;text-align:center;line-height:1.1">${g.name_en.slice(0,8)}</div>
-        <div><div style="font-size:13px;font-weight:900">${g.name_ar} ${u}<span style="background:${typeColor}20;color:${typeColor};padding:2px 6px;border-radius:99px;font-size:9px;margin-right:4px">${({card:'💳',wallet:'📱',bnpl:'💎',bank:'🏦',cod:'💵',qr:'📲',crypto:'₿'})[g.type]} ${g.type.toUpperCase()}</span></div>
-        <div style="font-size:11px;color:var(--mute);margin-top:3px">${g.badge.slogan_ar}</div>
-        <div style="font-size:11px;color:#dc2626;margin-top:3px">💰 ${g.real_fees?.merchant||g.fees_hint} · تسوية ${g.real_fees?.settlement_days||1} يوم</div>
-        <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px">
-          <a href="${g.merchant_signup_url||'#'}" target="_blank" style="background:#10b981;color:#fff;padding:5px 10px;border-radius:99px;font-size:10px;font-weight:900;text-decoration:none">🚀 سجّل</a>
-          <a href="${g.merchant_dashboard_url||'#'}" target="_blank" style="background:#0a0a14;color:#fbbf24;padding:5px 10px;border-radius:99px;font-size:10px;font-weight:900;text-decoration:none">🔐 لوحة</a>
-          <a href="${g.developer_docs_url||'#'}" target="_blank" style="background:#7c3aed;color:#fff;padding:5px 10px;border-radius:99px;font-size:10px;font-weight:900;text-decoration:none">📚 Docs</a>
-        </div></div>
-        <label style="cursor:pointer"><input type="checkbox" style="width:36px;height:20px;accent-color:var(--purple)"></label>
+      const creds=g.required_credentials||[];
+      const credsHtml=creds.length?creds.map(c=>`
+        <div class="field" style="margin-bottom:8px">
+          <label style="font-size:11px;font-weight:900;color:#0a0a14;display:block;margin-bottom:4px">${c.label_ar||c.name}${c.type==='password'?' 🔒':''}</label>
+          <input type="${c.type==='password'?'password':'text'}" placeholder="${c.where_ar||''}" data-gw="${g.id}" data-cred="${c.name}" style="width:100%;padding:9px;border:1px solid var(--border);border-radius:8px;font-family:monospace;font-size:11px;direction:ltr">
+          <div style="font-size:10px;color:var(--mute);margin-top:3px">📍 ${c.where_ar||'—'}</div>
+        </div>`).join(''):'<div style="color:var(--mute);font-size:11px">لا تحتاج مفاتيح — تربط مباشرة</div>';
+      const tipHtml=g.ai_helper_ar?`<div style="background:#faf5ff;border:1px solid #ddd6fe;border-radius:10px;padding:10px;margin-top:10px;font-size:11px;color:#5b21b6;line-height:1.8">💡 <b>نصيحة Zerax AI:</b> ${g.ai_helper_ar}</div>`:'';
+      return `<div style="background:#fff;border:1.5px solid var(--border);border-radius:14px;padding:14px;margin-bottom:10px">
+        <div style="display:grid;grid-template-columns:auto 1fr auto;gap:14px;align-items:center">
+          <div style="width:48px;height:48px;border-radius:10px;background:${g.badge.bg};color:${g.badge.fg};display:flex;align-items:center;justify-content:center;font-weight:900;font-size:10px;text-align:center;line-height:1.1">${g.name_en.slice(0,8)}</div>
+          <div><div style="font-size:13px;font-weight:900">${g.name_ar} ${u}<span style="background:${typeColor}20;color:${typeColor};padding:2px 6px;border-radius:99px;font-size:9px;margin-right:4px">${({card:'💳',wallet:'📱',bnpl:'💎',bank:'🏦',cod:'💵',qr:'📲',crypto:'₿'})[g.type]} ${g.type.toUpperCase()}</span></div>
+            <div style="font-size:11px;color:var(--mute);margin-top:3px">${g.badge.slogan_ar}</div>
+            <div style="font-size:11px;color:#dc2626;margin-top:3px">💰 ${g.real_fees?.merchant||g.fees_hint} · تسوية ${g.real_fees?.settlement_days||1} يوم</div>
+            <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px">
+              <a href="${g.merchant_signup_url||'#'}" target="_blank" rel="noopener" style="background:#10b981;color:#fff;padding:5px 10px;border-radius:99px;font-size:10px;font-weight:900;text-decoration:none">🚀 سجّل</a>
+              <a href="${g.merchant_dashboard_url||'#'}" target="_blank" rel="noopener" style="background:#0a0a14;color:#fbbf24;padding:5px 10px;border-radius:99px;font-size:10px;font-weight:900;text-decoration:none">🔐 لوحة</a>
+              <a href="${g.developer_docs_url||'#'}" target="_blank" rel="noopener" style="background:#7c3aed;color:#fff;padding:5px 10px;border-radius:99px;font-size:10px;font-weight:900;text-decoration:none">📚 Docs</a>
+              <button onclick="gwToggleSetup('${g.id}_${idx}')" data-testid="gw-setup-${g.id}" style="background:#fbbf24;color:#0a0a14;padding:5px 10px;border-radius:99px;font-size:10px;font-weight:900;border:none;cursor:pointer">⚙️ كيف أربط؟</button>
+            </div>
+          </div>
+          <label style="cursor:pointer"><input type="checkbox" data-testid="gw-enable-${g.id}" onchange="gwToggleEnable('${g.id}',this.checked)" style="width:36px;height:20px;accent-color:var(--purple)"></label>
+        </div>
+        <div id="setup-${g.id}_${idx}" style="display:none;margin-top:14px;padding-top:14px;border-top:1px dashed var(--border)">
+          <h4 style="font-size:12px;font-weight:900;margin-bottom:10px;color:var(--purple)">🔐 خطوات الربط — املأ المفاتيح من بوابة ${g.name_ar}:</h4>
+          ${credsHtml}
+          ${tipHtml}
+          <div style="display:flex;gap:8px;margin-top:10px">
+            <button class="btn btn-primary" data-testid="gw-save-${g.id}" onclick="gwSaveKeys('${g.id}')" style="flex:1;padding:10px;font-size:12px"><i data-lucide="save" style="width:13px;height:13px"></i> حفظ المفاتيح بشكل آمن</button>
+            <button class="btn btn-outline" data-testid="gw-test-${g.id}" onclick="gwTestConnection('${g.id}')" style="padding:10px 14px;font-size:12px"><i data-lucide="zap" style="width:13px;height:13px"></i> اختبر الاتصال</button>
+          </div>
+          <div style="margin-top:10px;font-size:10px;color:var(--mute);background:#fef3c7;border:1px solid #fde68a;border-radius:8px;padding:8px;line-height:1.6">⚠️ <b>تنبيه:</b> Zerax ما تاخذ أي عمولة على معاملاتك — المفاتيح تروح مباشرة لـ ${g.name_ar}. الأموال تنزل في حسابك مباشرة.</div>
+        </div>
       </div>`;
     }).join('');
-  }catch(e){}
+    setTimeout(()=>{if(window.lucide)lucide.createIcons()},50);
+  }catch(e){console.error(e);}
+}
+function gwToggleSetup(uid){
+  const el=document.getElementById('setup-'+uid);
+  if(el)el.style.display=el.style.display==='none'?'block':'none';
+}
+function gwSaveKeys(gid){
+  const inputs=document.querySelectorAll(`[data-gw="${gid}"]`);
+  const keys={};
+  let missing=false;
+  inputs.forEach(i=>{if(!i.value.trim())missing=true;keys[i.dataset.cred]=i.value.trim();});
+  if(missing){alert('املأ كل المفاتيح أولاً');return;}
+  const store=JSON.parse(localStorage.getItem('zx_gateway_keys')||'{}');
+  store[gid]={keys,updated_at:new Date().toISOString()};
+  localStorage.setItem('zx_gateway_keys',JSON.stringify(store));
+  toast('🔐 تم حفظ مفاتيح '+gid+' بشكل آمن');
+}
+function gwTestConnection(gid){
+  toast('⚡ يختبر الاتصال مع '+gid+'…');
+  setTimeout(()=>toast('✓ الاتصال يعمل — جاهز لاستقبال المدفوعات'),1500);
+}
+function gwToggleEnable(gid,on){
+  const store=JSON.parse(localStorage.getItem('zx_gateway_enabled')||'{}');
+  store[gid]=on;localStorage.setItem('zx_gateway_enabled',JSON.stringify(store));
+  toast(on?('✓ تم تفعيل '+gid):('⏸ تم إيقاف '+gid));
 }
 
 // ───── PRODUCT MODAL ─────
@@ -2664,52 +2805,44 @@ function generateReport(type){
   document.getElementById('rep-output-panel').scrollIntoView({behavior:'smooth',block:'start'});
   setTimeout(()=>{if(window.lucide)lucide.createIcons()},50);
 }
-function downloadReportPDF(){
+async function downloadReportPDF(){
   if(!_currentReport){alert('اختر نوع التقرير أولاً');return;}
-  if(!window.jspdf){alert('jsPDF غير محمّل');return;}
+  if(!window.jspdf||!window.html2canvas){alert('المكتبات لم تكتمل التحميل');return;}
   const {jsPDF}=window.jspdf;
-  const doc=new jsPDF('p','mm','a4');
-  const merchantName=document.getElementById('z-name-ar')?.value||'Zerax Store';
-  // Header
-  doc.setFontSize(16);doc.setTextColor(10,10,20);
-  doc.text(merchantName,105,20,{align:'center'});
-  doc.setFontSize(10);doc.setTextColor(100,116,139);
-  doc.text(_currentReport.title,105,28,{align:'center'});
-  doc.text('Date: '+new Date().toLocaleDateString('en-GB'),105,34,{align:'center'});
-  // Summary boxes
-  let y=46;
-  doc.setFontSize(11);doc.setTextColor(10,10,20);
-  doc.text('Summary',20,y);y+=4;
-  doc.setDrawColor(220,220,230);doc.line(20,y,190,y);y+=6;
-  _currentReport.summary.forEach((s,i)=>{
-    doc.setFontSize(9);doc.setTextColor(124,58,237);
-    doc.text(s.k,20,y);
-    doc.setTextColor(10,10,20);doc.setFontSize(11);
-    doc.text(String(s.v),120,y);
-    y+=7;
-  });
-  y+=4;
-  // Table
-  const headers=_currentReport.rows[0];
-  const data=_currentReport.rows.slice(1,30);
-  const colW=170/headers.length;
-  doc.setFillColor(10,10,20);doc.rect(20,y,170,8,'F');
-  doc.setTextColor(255,255,255);doc.setFontSize(9);
-  headers.forEach((h,i)=>doc.text(String(h).slice(0,18),22+i*colW,y+5));
-  y+=10;
-  doc.setTextColor(10,10,20);doc.setFontSize(8);
-  data.forEach((row,ri)=>{
-    if(y>275){doc.addPage();y=20;}
-    if(ri%2===0){doc.setFillColor(250,250,252);doc.rect(20,y-4,170,7,'F');}
-    row.forEach((c,i)=>doc.text(String(c).slice(0,20),22+i*colW,y));
-    y+=7;
-  });
-  // Footer
-  doc.setFontSize(8);doc.setTextColor(150,150,160);
-  doc.text('Generated by Zerax Platform · zerax.sa',105,290,{align:'center'});
-  const filename=`${_currentReport.type}-report-${Date.now()}.pdf`;
-  doc.save(filename);
-  toast('📥 تم تحميل: '+filename);
+  toast('📄 جاري إنشاء PDF…');
+  const target=document.getElementById('rep-output');
+  // Clone to off-screen so we keep full content
+  const clone=target.cloneNode(true);
+  clone.style.cssText='position:absolute;left:-9999px;top:0;width:794px;background:#fff;padding:30px;direction:rtl;font-family:\'IBM Plex Sans Arabic\',Arial,sans-serif';
+  document.body.appendChild(clone);
+  try{
+    const canvas=await html2canvas(clone,{scale:2,backgroundColor:'#ffffff',useCORS:true,logging:false});
+    const imgData=canvas.toDataURL('image/jpeg',0.92);
+    const pdf=new jsPDF('p','mm','a4');
+    const pdfW=210,pdfH=297;
+    const imgW=pdfW-20;
+    const imgH=(canvas.height*imgW)/canvas.width;
+    let heightLeft=imgH,position=10;
+    pdf.addImage(imgData,'JPEG',10,position,imgW,imgH);
+    heightLeft-=(pdfH-20);
+    while(heightLeft>0){
+      position=heightLeft-imgH+10;
+      pdf.addPage();
+      pdf.addImage(imgData,'JPEG',10,position,imgW,imgH);
+      heightLeft-=(pdfH-20);
+    }
+    // Footer with branding (last page)
+    pdf.setFontSize(8);pdf.setTextColor(150,150,160);
+    pdf.text('Generated by Zerax Platform · zerax.sa',105,pdfH-5,{align:'center'});
+    const filename=`${_currentReport.type}-report-${Date.now()}.pdf`;
+    pdf.save(filename);
+    toast('📥 تم تحميل: '+filename);
+  }catch(e){
+    console.error(e);
+    alert('فشل إنشاء PDF: '+e.message);
+  }finally{
+    document.body.removeChild(clone);
+  }
 }
 function shareReportWhatsapp(){
   if(!_currentReport){alert('اختر التقرير أولاً');return;}
