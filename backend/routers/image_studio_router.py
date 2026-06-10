@@ -145,6 +145,13 @@ class ProductInfoResponse(BaseModel):
     description: str
     features: List[str]
     specs: dict
+    benefits: List[str] = []         # فوائد المنتج (مهم للأدوية/المكملات/الأطعمة)
+    usage_instructions: List[str] = []  # طريقة الاستخدام خطوة بخطوة
+    whats_new: List[str] = []         # الجديد في هذا الإصدار vs السابق (مهم للجوالات)
+    comparison: dict = {}             # مقارنة مع الجيل السابق
+    side_effects: List[str] = []      # تحذيرات / آثار جانبية (أدوية)
+    target_audience: str = ""         # الفئة المستهدفة
+    official_url: str = ""            # رابط الموقع الرسمي إن وجد
     colors: list = []
     sizes: list = []
     warranty: dict = {}
@@ -164,16 +171,24 @@ async def product_info(req: ProductInfoRequest):
 
     lang_instr = "Respond in Arabic" if req.lang == "ar" else "Respond in English"
     sys_msg = (
-        f"You are a product research expert. {lang_instr}. "
-        "When given a product name, optional image, and optional official URL, you research the product "
-        "(based on the image + name + your knowledge) and return STRICTLY a JSON object with these exact fields: "
-        "title (string, full official product name), "
-        "description (string, 2-3 polished sentences highlighting the product), "
-        "features (array of 5-8 short bullet strings, each a key benefit), "
-        "specs (object of key→value strings for technical specs, max 6 entries), "
-        "colors (array of {name, hex} objects — available color options for this product, e.g. iPhone titanium colors; empty array if N/A), "
-        "sizes (array of strings — available sizes if applicable, e.g. ['256GB','512GB','1TB'] for electronics or ['S','M','L','XL'] for fashion; empty if N/A), "
-        "warranty (object {duration_text, url} — official warranty info; both fields can be empty strings). "
+        f"You are an elite product research expert. {lang_instr}. "
+        "When given a product name, optional image, and optional official URL, you conduct DEEP research "
+        "(based on the image + name + your knowledge of the product, manufacturer, generation, market positioning) "
+        "and return STRICTLY a JSON object with these EXACT fields (ALL fields required; use empty array/string/object if N/A):\n"
+        "- title (string, full official product name with model/generation)\n"
+        "- description (string, 3-4 polished marketing sentences highlighting positioning + key value)\n"
+        "- features (array of 6-10 short bullet strings, each a concrete benefit/capability)\n"
+        "- specs (object key→value strings, 6-10 entries with concrete technical specs)\n"
+        "- benefits (array of 4-7 strings — health/functional benefits; ESSENTIAL for medicine/supplements/food/skincare)\n"
+        "- usage_instructions (array of 3-7 short step strings — how to use the product; ESSENTIAL for medicine/cosmetics/electronics setup)\n"
+        "- whats_new (array of 3-6 short strings — what's NEW vs the previous generation/version; ESSENTIAL for phones/laptops/cars)\n"
+        "- comparison (object: {previous_model: string, key_differences: [array of strings], upgrades: [array of strings]} — comparison to previous generation; empty object {} if N/A)\n"
+        "- side_effects (array of 0-5 strings — warnings/contraindications; ONLY for medicine/supplements, empty otherwise)\n"
+        "- target_audience (string — who is this product for, 1 sentence)\n"
+        "- official_url (string — best-guess official manufacturer URL like apple.com, royalcanin.com, samsung.com; empty string if unsure)\n"
+        "- colors (array of {name, hex} objects — available colors; empty if N/A)\n"
+        "- sizes (array of strings — sizes/capacities; empty if N/A)\n"
+        "- warranty (object {duration_text, url}; both can be empty strings)\n"
         "Output ONLY the JSON object, no markdown, no code fences."
     )
     user_parts = [f"Product name: {req.name.strip()}"]
@@ -227,8 +242,15 @@ async def product_info(req: ProductInfoRequest):
 
     title = str(data.get("title", req.name)).strip()
     description = str(data.get("description", "")).strip()
-    features = [str(f).strip() for f in (data.get("features") or []) if str(f).strip()][:8]
+    features = [str(f).strip() for f in (data.get("features") or []) if str(f).strip()][:10]
     specs = {str(k): str(v) for k, v in (data.get("specs") or {}).items()}
+    benefits = [str(b).strip() for b in (data.get("benefits") or []) if str(b).strip()][:7]
+    usage_instructions = [str(u).strip() for u in (data.get("usage_instructions") or []) if str(u).strip()][:7]
+    whats_new = [str(w).strip() for w in (data.get("whats_new") or []) if str(w).strip()][:6]
+    comparison = data.get("comparison") or {}
+    side_effects = [str(s).strip() for s in (data.get("side_effects") or []) if str(s).strip()][:5]
+    target_audience = str(data.get("target_audience", "")).strip()
+    official_url_resp = str(data.get("official_url", req.official_url or "")).strip()
     colors = data.get("colors") or []
     sizes = [str(s) for s in (data.get("sizes") or [])][:8]
     warranty = data.get("warranty") or {"duration_text": "", "url": ""}
@@ -251,6 +273,13 @@ async def product_info(req: ProductInfoRequest):
         description=description,
         features=features,
         specs=specs,
+        benefits=benefits,
+        usage_instructions=usage_instructions,
+        whats_new=whats_new,
+        comparison=comparison,
+        side_effects=side_effects,
+        target_audience=target_audience,
+        official_url=official_url_resp,
         colors=colors,
         sizes=sizes,
         warranty=warranty,

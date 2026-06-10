@@ -429,6 +429,37 @@ select.ps-input option{background:#13131f;color:#fff}
 .ps-color-swatch{display:inline-flex;align-items:center;gap:6px;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);padding:5px 10px;border-radius:99px;font-size:11px;color:#fff;font-weight:700;margin:3px}
 .ps-color-swatch .dot{width:14px;height:14px;border-radius:50%;border:1.5px solid rgba(255,255,255,.3)}
 .ps-size-pill{display:inline-flex;align-items:center;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.08);padding:5px 11px;border-radius:8px;font-size:11px;color:#fff;font-weight:900;margin:3px}
+/* ─── Product Studio fullscreen + creative subtabs ─── */
+.mod.prod-studio.fullscreen{padding:0}
+.mod.prod-studio.fullscreen .ps-box{margin:0;border-radius:0;max-width:none;width:100vw;height:100vh;max-height:none;min-height:100vh}
+.ps-subtabs{display:flex;padding:14px 22px 0;gap:8px;border-bottom:1px solid rgba(255,255,255,.06);overflow-x:auto;scrollbar-width:none}
+.ps-subtabs::-webkit-scrollbar{display:none}
+.ps-subtab{flex:0 0 auto;padding:12px 16px;background:rgba(255,255,255,.04);border:1.5px solid rgba(255,255,255,.06);border-radius:12px 12px 0 0;color:#cbd5e1;font-family:inherit;font-weight:900;font-size:12px;cursor:pointer;display:flex;align-items:center;gap:8px;transition:all .15s;margin-bottom:-1px;white-space:nowrap}
+.ps-subtab:hover{background:rgba(255,255,255,.08);color:#fff}
+.ps-subtab.active{background:#0a0a14;border-color:rgba(251,191,36,.4);border-bottom:1px solid #0a0a14;color:var(--amber)}
+.ps-subtab span:first-child{font-size:16px}
+.ps-subtab .cc{font-size:9px;color:#94a3b8;background:rgba(0,0,0,.3);padding:2px 7px;border-radius:99px;font-weight:700;margin-right:4px}
+.ps-subtab.active .cc{color:var(--amber);background:rgba(251,191,36,.1)}
+.ps-style-row{padding:14px 22px;display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:10px;border-bottom:1px solid rgba(255,255,255,.06)}
+.ps-colors-row{padding:14px 22px;display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px;border-bottom:1px solid rgba(255,255,255,.06)}
+@media (max-width:760px){.ps-colors-row{grid-template-columns:1fr}}
+.ps-color-input label{display:block;font-size:11px;font-weight:900;color:#94a3b8;margin-bottom:6px}
+.ps-color-input input[type=color]{width:100%;height:36px;background:transparent;border:1.5px solid rgba(255,255,255,.08);border-radius:8px;cursor:pointer}
+.ps-color-input .ps-input{width:100%}
+.ps-color-presets{display:flex;gap:4px;margin-bottom:6px;flex-wrap:wrap}
+.ps-color-presets .preset{width:22px;height:22px;border-radius:50%;cursor:pointer;border:2px solid rgba(255,255,255,.12);transition:transform .15s}
+.ps-color-presets .preset:hover{transform:scale(1.15);border-color:#fff}
+/* Deep analysis card variants */
+.ps-ai-card.benefits{border-color:rgba(16,185,129,.25);background:rgba(16,185,129,.04)}
+.ps-ai-card.benefits h5{color:var(--emerald)}
+.ps-ai-card.usage{border-color:rgba(6,182,212,.25);background:rgba(6,182,212,.04)}
+.ps-ai-card.usage h5{color:#06b6d4}
+.ps-ai-card.whatsnew{border-color:rgba(244,63,94,.25);background:rgba(244,63,94,.04)}
+.ps-ai-card.whatsnew h5{color:var(--rose)}
+.ps-ai-card.warning{border-color:rgba(251,146,60,.25);background:rgba(251,146,60,.04)}
+.ps-ai-card.warning h5{color:#fb923c}
+.ps-step{display:flex;gap:10px;margin-bottom:10px;font-size:12px;line-height:1.7;color:#cbd5e1}
+.ps-step .num{flex-shrink:0;width:24px;height:24px;border-radius:50%;background:rgba(6,182,212,.2);color:#67e8f9;display:flex;align-items:center;justify-content:center;font-weight:900;font-size:11px}
 </style>
 </head>
 <body>
@@ -882,8 +913,9 @@ select.ps-input option{background:#13131f;color:#fff}
     <div class="ps-head">
       <div class="brand">
         <div class="logo">Z</div>
-        <div><h3 id="ps-title">📦 إضافة منتج جديد</h3><div class="sub">⚡ ZERAX PRODUCT AI · صور + تحليل عميق + معلومات تفصيلية</div></div>
+        <div><h3 id="ps-title">📦 إضافة منتج جديد</h3><div class="sub">⚡ ZERAX PRODUCT AI · صور + لوجو + بانر + تحليل عميق</div></div>
       </div>
+      <button class="ps-close" onclick="psToggleFullscreen()" title="ملء الشاشة" id="ps-fs-btn"><i data-lucide="maximize-2" style="width:16px;height:16px"></i></button>
       <button class="ps-close" onclick="closeProductModal()" title="إغلاق"><i data-lucide="x" style="width:18px;height:18px"></i></button>
     </div>
     <!-- Tabs -->
@@ -921,33 +953,57 @@ select.ps-input option{background:#13131f;color:#fff}
         </div>
       </div>
 
-      <!-- TAB 2: AI IMAGE GENERATION -->
+      <!-- TAB 2: AI IMAGE GENERATION (now includes Logo / Banner / Section / Animated) -->
       <div class="ps-panel" data-pspanel="image">
-        <div class="ps-panel-head"><div class="ico" style="background:linear-gradient(135deg,#10b981,#059669)">🎨</div><div><h4>توليد صور احترافية بالذكاء الإصطناعي</h4><div class="desc">Gemini Nano Banana · 4 صور بأنماط مختلفة · 8 نقاط/صورة · اعتماد فردي</div></div></div>
-        <div style="padding:18px 22px;display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:10px;border-bottom:1px solid rgba(255,255,255,.06)">
+        <div class="ps-panel-head"><div class="ico" style="background:linear-gradient(135deg,#10b981,#059669)">🎨</div><div><h4>الاستوديو الإبداعي · صورة / لوجو / بانر / فيديو</h4><div class="desc">Gemini Nano Banana · اختر النوع + النمط + اللون + النسبة → اعتماد فردي</div></div></div>
+        <!-- Creative type tabs -->
+        <div class="ps-subtabs">
+          <button class="ps-subtab active" data-ctype="product" onclick="psSelectCType(this)"><span>📷</span><b>صورة منتج</b><span class="cc">32 نقطة</span></button>
+          <button class="ps-subtab" data-ctype="logo" onclick="psSelectCType(this)"><span>🅩</span><b>لوجو</b><span class="cc">16 نقطة</span></button>
+          <button class="ps-subtab" data-ctype="banner" onclick="psSelectCType(this)"><span>🖼️</span><b>بانر إعلاني</b><span class="cc">24 نقطة</span></button>
+          <button class="ps-subtab" data-ctype="section" onclick="psSelectCType(this)"><span>📐</span><b>صورة قسم</b><span class="cc">24 نقطة</span></button>
+          <button class="ps-subtab" data-ctype="animated" onclick="psSelectCType(this)"><span>🎬</span><b>بانر متحرك</b><span class="cc">40 نقطة</span></button>
+        </div>
+        <!-- Style selectors -->
+        <div class="ps-style-row" id="ps-styles-product">
           <button class="ps-style-card" data-style="product" onclick="psSelectStyle(this)" data-selected="true"><div style="font-size:24px">📷</div><b>تصوير منتج</b><span>خلفية بيضاء، إضاءة استوديو</span></button>
           <button class="ps-style-card" data-style="lifestyle" onclick="psSelectStyle(this)"><div style="font-size:24px">🌅</div><b>أسلوب حياة</b><span>المنتج في بيئة حقيقية</span></button>
           <button class="ps-style-card" data-style="luxury" onclick="psSelectStyle(this)"><div style="font-size:24px">💎</div><b>فاخر</b><span>إضاءة درامية، ذهبي/أسود</span></button>
           <button class="ps-style-card" data-style="flat" onclick="psSelectStyle(this)"><div style="font-size:24px">📐</div><b>Flat Lay</b><span>تصوير علوي مرتّب</span></button>
         </div>
+        <!-- Color + Frame customization -->
+        <div class="ps-colors-row">
+          <div class="ps-color-input"><label>🎨 لون الخلفية</label><div class="ps-color-presets" id="ps-bg-presets"></div><input type="color" id="ps-bg-color" value="#ffffff" onchange="psUpdatePreviewBg()"></div>
+          <div class="ps-color-input"><label>🔲 لون الإطار</label><div class="ps-color-presets" id="ps-frame-presets"></div><input type="color" id="ps-frame-color" value="#7c3aed" onchange="psUpdatePreviewBg()"></div>
+          <div class="ps-color-input"><label>📐 النسبة</label>
+            <select id="ps-aspect" class="ps-input" style="padding:8px"><option value="1:1">⬜ مربع (1:1)</option><option value="9:16">📱 طولي (9:16)</option><option value="16:9">🖥️ عرضي (16:9)</option><option value="4:5">📷 إنستقرام (4:5)</option><option value="3:1">📢 بانر (3:1)</option></select>
+          </div>
+        </div>
         <div class="ps-content">
-          <div id="ps-img-actions" style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
-            <div style="color:#94a3b8;font-size:12px">📸 4 صور بنمط <b id="ps-style-label" style="color:var(--amber)">تصوير منتج</b></div>
-            <button class="ps-btn-amber" onclick="psGenerateImages()" id="ps-gen-imgs-btn"><i data-lucide="sparkles" style="width:13px;height:13px"></i> توليد 4 صور · 32 نقطة</button>
+          <div id="ps-img-actions" style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;flex-wrap:wrap;gap:10px">
+            <div style="color:#94a3b8;font-size:12px">📸 <span id="ps-style-summary">4 صور · نمط تصوير منتج · مربع</span></div>
+            <button class="ps-btn-amber" onclick="psGenerateImages()" id="ps-gen-imgs-btn"><i data-lucide="sparkles" style="width:13px;height:13px"></i> <span id="ps-gen-btn-label">توليد 4 صور · 32 نقطة</span></button>
           </div>
           <div id="ps-img-grid" class="zx-img-grid"></div>
         </div>
       </div>
 
-      <!-- TAB 3: DEEP AI ANALYSIS -->
+      <!-- TAB 3: DEEP AI ANALYSIS (chat-driven) -->
       <div class="ps-panel" data-pspanel="ai">
-        <div class="ps-panel-head"><div class="ico" style="background:linear-gradient(135deg,#7c3aed,#a78bfa)">🤖</div><div><h4>تحليل عميق بـ Gemini</h4><div class="desc">يحلل المنتج من الصورة + الاسم + المعرفة: مواصفات، ميزات، ألوان، مقاسات، ضمان، مقارنات</div></div></div>
+        <div class="ps-panel-head"><div class="ico" style="background:linear-gradient(135deg,#7c3aed,#a78bfa)">🤖</div><div><h4>التحليل العميق بـ Gemini</h4><div class="desc">يبحث في كل شي: مواصفات، فوائد، طريقة استخدام، الجديد vs السابق، مقارنات، تحذيرات</div></div></div>
         <div class="ps-content">
-          <div id="ps-ai-empty" class="zx-empty">
+          <div id="ps-ai-empty" class="zx-empty" style="padding:30px 24px">
             <div class="big-ico">🤖</div>
-            <h5>اكتب اسم المنتج وارفع صورته</h5>
-            <p>Gemini يبحث وينتج تحليل احترافي كامل (مواصفات، ميزات، ألوان متوفرة، مقاسات، ضمان رسمي…) · يخصم 10 نقاط</p>
-            <input id="ps-ai-name" class="ps-input" placeholder="مثلاً: دواء للقطط من Royal Canin · أو iPhone 17 Pro · أو حذاء Nike Air Max" style="margin-top:14px;max-width:480px;background:rgba(255,255,255,.06);border-color:rgba(255,255,255,.1);color:#fff">
+            <h5>أعطنا اسم المنتج (واختياري صورته ورابطه)</h5>
+            <p style="margin-bottom:14px">Gemini يبحث بحث شامل ويعطيك: <b style="color:var(--amber)">العنوان · الوصف · المواصفات · الفوائد · طريقة الاستخدام · الجديد vs السابق · المقارنة · التحذيرات · رابط الموقع</b> — لأي نوع (جوال، دواء، طعام، حذاء، حيوانات أليفة)</p>
+            <div style="width:100%;max-width:600px;display:flex;flex-direction:column;gap:10px">
+              <input id="ps-ai-name" class="ps-input" placeholder="مثلاً: iPhone 17 Pro Max · أو Royal Canin Cat Food · أو Panadol Extra · أو حذاء Nike Air Max">
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+                <input id="ps-ai-url" class="ps-input" placeholder="رابط الموقع الرسمي (اختياري)">
+                <button class="ps-input" onclick="document.getElementById('ps-ai-img').click()" style="cursor:pointer;display:flex;align-items:center;gap:8px;justify-content:center;color:#94a3b8" id="ps-ai-img-btn"><i data-lucide="image-plus" style="width:14px;height:14px"></i> <span id="ps-ai-img-label">إرفاق صورة المنتج (اختياري)</span></button>
+              </div>
+              <input type="file" id="ps-ai-img" accept="image/*" style="display:none" onchange="psAttachAiImg(this)">
+            </div>
             <button class="gen-btn" onclick="psAnalyze()" style="margin-top:14px"><i data-lucide="brain" style="width:16px;height:16px"></i> ابدأ التحليل العميق · 10 نقاط</button>
           </div>
           <div id="ps-ai-result" style="display:none"></div>
@@ -1175,8 +1231,8 @@ async function gwLoad(){
 function openProductModal(){
   $('prod-mod').classList.add('open');
   psSwitchTab('info');
-  PS_STATE={style:'product',images:[],approvedImg:null,analysis:null};
-  setTimeout(()=>{if(window.lucide)lucide.createIcons()},50);
+  PS_STATE={style:'product',ctype:'product',images:[],approvedImg:null,analysis:null,uploadedImg:null,aiImg:null,bgColor:'#ffffff',frameColor:'#7c3aed',aspect:'1:1'};
+  setTimeout(()=>{if(window.lucide)lucide.createIcons();psRenderColorPresets();psUpdateSummary();},80);
 }
 function closeProductModal(){$('prod-mod').classList.remove('open')}
 function pmPreviewImg(inp){
@@ -1204,69 +1260,130 @@ function pmSave(){
 }
 
 // ───── PRODUCT STUDIO ─────
-let PS_STATE={style:'product',images:[],approvedImg:null,analysis:null,uploadedImg:null};
+let PS_STATE={style:'product',ctype:'product',images:[],approvedImg:null,analysis:null,uploadedImg:null,aiImg:null,bgColor:'#ffffff',frameColor:'#7c3aed',aspect:'1:1'};
+const PS_COLOR_PRESETS=['#ffffff','#000000','#0a0a14','#7c3aed','#fbbf24','#10b981','#f43f5e','#06b6d4','#f3f4f6','#fef3c7','#dbeafe','#fce7f3'];
+const PS_FRAME_PRESETS=['#7c3aed','#fbbf24','#000000','#10b981','#f43f5e','#06b6d4','#ec4899','#8b5cf6','transparent'];
 function psSwitchTab(tab){
   document.querySelectorAll('.ps-tab').forEach(t=>t.classList.toggle('active',t.dataset.pstab===tab));
   document.querySelectorAll('.ps-panel').forEach(p=>p.classList.toggle('active',p.dataset.pspanel===tab));
-  // Sync name to AI input
   if(tab==='ai'){const aiInp=$('ps-ai-name');if(aiInp&&!aiInp.value&&$('pm-name').value)aiInp.value=$('pm-name').value;}
+  if(tab==='image')psRenderColorPresets();
   setTimeout(()=>{if(window.lucide)lucide.createIcons()},50);
+}
+function psToggleFullscreen(){
+  const studio=document.getElementById('prod-mod');if(!studio)return;
+  const isFs=studio.classList.toggle('fullscreen');
+  const btn=document.getElementById('ps-fs-btn');
+  if(btn){btn.innerHTML=isFs?'<i data-lucide="minimize-2" style="width:16px;height:16px"></i>':'<i data-lucide="maximize-2" style="width:16px;height:16px"></i>';if(window.lucide)lucide.createIcons();btn.title=isFs?'تصغير':'ملء الشاشة';}
+}
+function psRenderColorPresets(){
+  const bg=document.getElementById('ps-bg-presets');const fr=document.getElementById('ps-frame-presets');
+  if(bg&&!bg.children.length)bg.innerHTML=PS_COLOR_PRESETS.map(c=>`<span class="preset" style="background:${c}" onclick="document.getElementById('ps-bg-color').value='${c}';psUpdatePreviewBg()"></span>`).join('');
+  if(fr&&!fr.children.length)fr.innerHTML=PS_FRAME_PRESETS.map(c=>`<span class="preset" style="background:${c==='transparent'?'repeating-linear-gradient(45deg,#666,#666 4px,#999 4px,#999 8px)':c}" onclick="document.getElementById('ps-frame-color').value='${c==='transparent'?'#ffffff':c}';psUpdatePreviewBg()"></span>`).join('');
+}
+function psUpdatePreviewBg(){
+  PS_STATE.bgColor=document.getElementById('ps-bg-color').value;
+  PS_STATE.frameColor=document.getElementById('ps-frame-color').value;
+}
+function psSelectCType(el){
+  document.querySelectorAll('.ps-subtab').forEach(s=>s.classList.remove('active'));
+  el.classList.add('active');
+  PS_STATE.ctype=el.dataset.ctype;
+  const costMap={product:32,logo:16,banner:24,section:24,animated:40};
+  const labelMap={product:'4 صور',logo:'2 لوجو',banner:'2 بانر',section:'2 صور قسم',animated:'بانر متحرك (GIF/MP4)'};
+  const cost=costMap[PS_STATE.ctype];
+  document.getElementById('ps-gen-btn-label').textContent=`توليد ${labelMap[PS_STATE.ctype]} · ${cost} نقطة`;
+  // Auto-suggest aspect ratio
+  const aspectMap={product:'1:1',logo:'1:1',banner:'3:1',section:'16:9',animated:'16:9'};
+  document.getElementById('ps-aspect').value=aspectMap[PS_STATE.ctype];
+  psUpdateSummary();
 }
 function psSelectStyle(el){
   document.querySelectorAll('.ps-style-card').forEach(c=>c.removeAttribute('data-selected'));
   el.setAttribute('data-selected','true');
   PS_STATE.style=el.dataset.style;
-  const labels={product:'تصوير منتج',lifestyle:'أسلوب حياة',luxury:'فاخر',flat:'Flat Lay'};
-  $('ps-style-label').textContent=labels[el.dataset.style];
+  psUpdateSummary();
+}
+function psUpdateSummary(){
+  const styleLabels={product:'تصوير منتج',lifestyle:'أسلوب حياة',luxury:'فاخر',flat:'Flat Lay'};
+  const ctypeLabels={product:'4 صور',logo:'2 لوجو',banner:'2 بانر',section:'2 قسم',animated:'بانر متحرك'};
+  const aspectLabels={'1:1':'مربع','9:16':'طولي','16:9':'عرضي','4:5':'إنستقرام','3:1':'بانر'};
+  const el=document.getElementById('ps-style-summary');
+  if(el)el.textContent=`${ctypeLabels[PS_STATE.ctype]||PS_STATE.ctype} · ${styleLabels[PS_STATE.style]||PS_STATE.style} · ${aspectLabels[document.getElementById('ps-aspect').value]||PS_STATE.aspect}`;
+}
+function psAttachAiImg(inp){
+  const f=inp.files[0];if(!f)return;
+  const reader=new FileReader();
+  reader.onload=e=>{
+    PS_STATE.aiImg=e.target.result;
+    document.getElementById('ps-ai-img-label').textContent='✓ '+(f.name.slice(0,30));
+    document.getElementById('ps-ai-img-btn').style.color='var(--emerald)';
+  };
+  reader.readAsDataURL(f);
 }
 async function psGenerateImages(){
-  const name=$('pm-name').value.trim()||'منتج جديد';
-  const cost=32;
+  const name=$('pm-name').value.trim()||$('ps-ai-name').value.trim()||'منتج جديد';
+  const costMap={product:32,logo:16,banner:24,section:24,animated:40};
+  const cost=costMap[PS_STATE.ctype]||32;
+  const countMap={product:4,logo:2,banner:2,section:2,animated:1};
+  const count=countMap[PS_STATE.ctype];
   if(WALLET<cost){alert('رصيد غير كافٍ — تحتاج '+cost+' نقطة');return;}
   const btn=$('ps-gen-imgs-btn');btn.disabled=true;btn.innerHTML='<i data-lucide="loader" style="width:13px;height:13px"></i> Gemini يولّد…';
-  $('ps-img-grid').innerHTML=Array(4).fill().map(()=>'<div class="zx-img-card"><div class="img loading" style="aspect-ratio:1"></div><div class="meta"><b>جاري التوليد…</b></div></div>').join('');
-  const stylePrompts={product:'commercial product photography, white background, studio lighting, sharp focus, 4k',lifestyle:'lifestyle photography, natural setting, soft natural lighting, real environment',luxury:'luxury product photography, dramatic lighting, gold and black tones, premium aesthetic',flat:'flat lay product photography, top-down view, organized composition, minimal'};
-  const prompt=`${name}, ${stylePrompts[PS_STATE.style]}, ultra realistic, high detail`;
+  $('ps-img-grid').innerHTML=Array(count).fill().map(()=>'<div class="zx-img-card"><div class="img loading" style="aspect-ratio:1"></div><div class="meta"><b>جاري التوليد…</b></div></div>').join('');
+  PS_STATE.bgColor=document.getElementById('ps-bg-color').value;
+  PS_STATE.frameColor=document.getElementById('ps-frame-color').value;
+  PS_STATE.aspect=document.getElementById('ps-aspect').value;
+  // Build prompt
+  const stylePrompts={product:'commercial product photography, studio lighting, sharp focus, 4k',lifestyle:'lifestyle photography, natural setting, soft natural lighting',luxury:'luxury product photography, dramatic lighting, premium aesthetic',flat:'flat lay product photography, top-down view, organized composition'};
+  const ctypePrompts={product:`${name}, isolated product shot on a ${PS_STATE.bgColor} background, ${stylePrompts[PS_STATE.style]}`,logo:`Modern minimalist LOGO for "${name}", clean vector style, ${PS_STATE.bgColor} background, professional brand identity, no text artifacts`,banner:`Wide promotional BANNER for "${name}", ${PS_STATE.bgColor} background, ${stylePrompts[PS_STATE.style]}, eye-catching marketing composition`,section:`Hero SECTION image showcasing "${name}", ${stylePrompts[PS_STATE.style]}, ${PS_STATE.bgColor} background, web-ready composition`,animated:`Animated promotional BANNER concept for "${name}", dynamic energetic composition, ${PS_STATE.bgColor} background, ${stylePrompts[PS_STATE.style]}, GIF-friendly`};
+  const prompt=ctypePrompts[PS_STATE.ctype];
+  // Build dimensions from aspect
+  const aspectDims={'1:1':[1024,1024],'9:16':[1080,1920],'16:9':[1920,1080],'4:5':[1080,1350],'3:1':[1920,640]};
+  const [w,h]=aspectDims[PS_STATE.aspect]||[1024,1024];
   try{
-    const promises=Array(4).fill().map((_,i)=>fetch(API+'/api/image-studio/generate',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({prompt:prompt+', variation '+(i+1),count:1,style:PS_STATE.style==='flat'?'product':PS_STATE.style,width:1024,height:1024})}).then(r=>r.json()).catch(()=>null));
+    const promises=Array(count).fill().map((_,i)=>fetch(API+'/api/image-studio/generate',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({prompt:prompt+', variation '+(i+1),count:1,style:PS_STATE.style==='flat'?'product':PS_STATE.style,width:w,height:h})}).then(r=>r.json()).catch(()=>null));
     const results=await Promise.all(promises);
     PS_STATE.images=results.map((r,i)=>(r&&r.images&&r.images[0])||['https://images.unsplash.com/photo-1592750475338-74b7b21085ab?w=600&q=85','https://images.unsplash.com/photo-1551816230-ef5deaed4a26?w=600&q=85','https://images.unsplash.com/photo-1606220945770-b5b6c2c55bf1?w=600&q=85','https://images.unsplash.com/photo-1517336714731-489689fd1ca8?w=600&q=85'][i%4]);
     WALLET-=cost;localStorage.setItem('zx_credits',WALLET);$('wallet-balance').textContent=WALLET.toLocaleString('ar-EG');
-    toast('✓ 4 صور جاهزة · -'+cost+' نقطة · اختر اللي يعجبك');
+    toast('✓ '+count+' '+(PS_STATE.ctype==='logo'?'لوجو':PS_STATE.ctype==='banner'?'بانر':'صور')+' جاهزة · -'+cost+' نقطة');
     psRenderImages();
   }catch(e){toast('❌ '+e.message);}
-  btn.disabled=false;btn.innerHTML='<i data-lucide="sparkles" style="width:13px;height:13px"></i> إعادة توليد · 32 نقطة';
+  btn.disabled=false;btn.innerHTML=`<i data-lucide="sparkles" style="width:13px;height:13px"></i> <span id="ps-gen-btn-label">إعادة توليد · ${cost} نقطة</span>`;
   if(window.lucide)lucide.createIcons();
 }
 function psRenderImages(){
+  const labels={product:'صورة منتج',logo:'لوجو',banner:'بانر',section:'صورة قسم',animated:'بانر متحرك'};
   $('ps-img-grid').innerHTML=PS_STATE.images.map((u,i)=>{
     const ok=PS_STATE.approvedImg===u;
-    return `<div class="zx-img-card ${ok?'approved':''}"><div class="badge-approved">✓ مختارة</div><div class="img" style="aspect-ratio:1;background-image:url('${u}')"></div><div class="meta"><b>الصورة ${i+1}</b><span style="color:#94a3b8">${({product:'تصوير منتج',lifestyle:'أسلوب حياة',luxury:'فاخر',flat:'Flat Lay'})[PS_STATE.style]}</span></div><div class="acts"><button class="${ok?'ok':'ok'}" onclick="psApproveImage(${i})"><i data-lucide="${ok?'check-check':'check'}" style="width:11px;height:11px"></i> ${ok?'مختارة':'استخدم هذي'}</button><button class="re" onclick="window.open('${u}','_blank')"><i data-lucide="zoom-in" style="width:11px;height:11px"></i></button></div></div>`;
+    const ratio=PS_STATE.aspect==='3:1'?'3/1':PS_STATE.aspect==='16:9'?'16/9':PS_STATE.aspect==='9:16'?'9/16':PS_STATE.aspect==='4:5'?'4/5':'1/1';
+    return `<div class="zx-img-card ${ok?'approved':''}"><div class="badge-approved">✓ مختارة</div><div class="img" style="aspect-ratio:${ratio};background-image:url('${u}')"></div><div class="meta"><b>${labels[PS_STATE.ctype]} ${i+1}</b><span style="color:#94a3b8">${PS_STATE.aspect} · ${PS_STATE.style}</span></div><div class="acts"><button class="ok" onclick="psApproveImage(${i})"><i data-lucide="${ok?'check-check':'check'}" style="width:11px;height:11px"></i> ${ok?'مختارة':'استخدم'}</button><button class="re" onclick="psDownloadImage(${i})" title="تحميل"><i data-lucide="download" style="width:11px;height:11px"></i></button><button class="re" onclick="window.open('${u}','_blank')" title="تكبير"><i data-lucide="zoom-in" style="width:11px;height:11px"></i></button></div></div>`;
   }).join('');
   if(window.lucide)lucide.createIcons();
 }
 function psApproveImage(i){
   PS_STATE.approvedImg=PS_STATE.images[i];
-  $('pm-img-preview').innerHTML=`<img src="${PS_STATE.approvedImg}">`;
+  if(PS_STATE.ctype==='product'){$('pm-img-preview').innerHTML=`<img src="${PS_STATE.approvedImg}">`;}
   psRenderImages();
-  toast('✓ تم اختيار الصورة '+(i+1)+' · ستظهر في المنتج');
+  toast('✓ تم اختيار '+({product:'الصورة',logo:'اللوجو',banner:'البانر',section:'صورة القسم',animated:'البانر المتحرك'})[PS_STATE.ctype]+' '+(i+1));
 }
+function psDownloadImage(i){const a=document.createElement('a');a.href=PS_STATE.images[i];a.download=`${PS_STATE.ctype}-${i+1}.png`;a.click();toast('⬇️ بدأ التحميل');}
 async function psAnalyze(){
   const name=($('ps-ai-name').value||$('pm-name').value||'').trim();
   if(!name){alert('اكتب اسم المنتج أولاً');return;}
   if(WALLET<10){alert('رصيدك أقل من 10 نقاط — اشحن أولاً');return;}
+  const url=$('ps-ai-url').value.trim();
   $('ps-ai-empty').style.display='none';
   $('ps-ai-result').style.display='block';
-  $('ps-ai-result').innerHTML='<div class="zx-empty"><div class="big-ico">🤖</div><h5>Gemini يحلل ويبحث…</h5><p>يقارن المنتج، يحضّر المواصفات، الميزات، الألوان، المقاسات، الضمان…</p></div>';
+  $('ps-ai-result').innerHTML='<div class="zx-empty"><div class="big-ico">🤖</div><h5>Gemini يبحث ويحلل بعمق…</h5><p>المواصفات، الفوائد، طريقة الاستخدام، الجديد، المقارنات… (قد يستغرق 20-40 ثانية)</p></div>';
   try{
     const body={name,lang:'ar'};
-    if(PS_STATE.uploadedImg)body.image_base64=PS_STATE.uploadedImg;
+    if(PS_STATE.aiImg)body.image_base64=PS_STATE.aiImg;
+    if(url)body.official_url=url;
     const r=await fetch(API+'/api/image-studio/product-info',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
     if(!r.ok)throw new Error('فشل التحليل');
     const d=await r.json();
     PS_STATE.analysis=d;
     WALLET-=10;localStorage.setItem('zx_credits',WALLET);$('wallet-balance').textContent=WALLET.toLocaleString('ar-EG');
-    // Auto-fill basic info
     if(!$('pm-name').value&&d.title)$('pm-name').value=d.title;
     if(!$('pm-desc').value&&d.description)$('pm-desc').value=d.description;
     psRenderAnalysis(d);
@@ -1277,13 +1394,31 @@ async function psAnalyze(){
 }
 function psRenderAnalysis(d){
   let html='';
-  html+=`<div class="ps-ai-card"><h5><i data-lucide="package" style="width:13px;height:13px"></i> العنوان والوصف الكامل</h5><div style="background:rgba(251,191,36,.06);border:1px solid rgba(251,191,36,.2);border-radius:10px;padding:12px;margin-bottom:8px"><b style="font-size:14px;color:var(--amber);display:block;margin-bottom:6px">${d.title}</b><p style="font-size:12px;line-height:1.8;color:#cbd5e1">${d.description}</p></div></div>`;
+  // 1. Title + description
+  html+=`<div class="ps-ai-card"><h5><i data-lucide="package" style="width:13px;height:13px"></i> العنوان والوصف الكامل</h5><div style="background:rgba(251,191,36,.06);border:1px solid rgba(251,191,36,.2);border-radius:10px;padding:12px"><b style="font-size:14px;color:var(--amber);display:block;margin-bottom:6px">${d.title}</b><p style="font-size:12px;line-height:1.8;color:#cbd5e1">${d.description}</p>${d.target_audience?`<div style="margin-top:10px;padding-top:10px;border-top:1px solid rgba(255,255,255,.06);font-size:11px;color:#94a3b8"><b style="color:var(--amber)">👥 الفئة المستهدفة:</b> ${d.target_audience}</div>`:''}</div></div>`;
+  // 2. What's new (highlighted for phones/cars/laptops)
+  if(d.whats_new&&d.whats_new.length){html+=`<div class="ps-ai-card whatsnew"><h5><i data-lucide="sparkles" style="width:13px;height:13px"></i> 🆕 الجديد في هذا الإصدار (vs السابق)</h5><div style="display:grid;gap:8px">${d.whats_new.map(w=>`<div style="background:rgba(0,0,0,.3);padding:9px 12px;border-radius:9px;font-size:12px;line-height:1.7;color:#fecaca;border-right:3px solid var(--rose)">⚡ ${w}</div>`).join('')}</div></div>`;}
+  // 3. Comparison block
+  if(d.comparison&&(d.comparison.previous_model||(d.comparison.key_differences&&d.comparison.key_differences.length))){html+=`<div class="ps-ai-card whatsnew"><h5><i data-lucide="git-compare" style="width:13px;height:13px"></i> ⚖️ المقارنة مع ${d.comparison.previous_model||'السابق'}</h5>${(d.comparison.key_differences||[]).map(k=>`<div style="font-size:12px;line-height:1.8;color:#cbd5e1;padding:5px 0">▸ ${k}</div>`).join('')}${(d.comparison.upgrades||[]).length?`<div style="margin-top:10px;padding-top:10px;border-top:1px solid rgba(255,255,255,.06)"><b style="color:var(--emerald);font-size:11px;display:block;margin-bottom:6px">🚀 ترقيات أساسية:</b>${d.comparison.upgrades.map(u=>`<div style="font-size:12px;line-height:1.7;color:#a7f3d0">✓ ${u}</div>`).join('')}</div>`:''}</div>`;}
+  // 4. Features
   if(d.features&&d.features.length){html+=`<div class="ps-ai-card"><h5><i data-lucide="check-circle-2" style="width:13px;height:13px"></i> المميزات الرئيسية (${d.features.length})</h5><div style="line-height:2">${d.features.map(f=>`<span class="ps-feat-chip">✦ ${f}</span>`).join('')}</div></div>`;}
+  // 5. Benefits (medicine/food/skincare)
+  if(d.benefits&&d.benefits.length){html+=`<div class="ps-ai-card benefits"><h5><i data-lucide="heart-pulse" style="width:13px;height:13px"></i> 💚 الفوائد</h5><div style="display:grid;gap:8px">${d.benefits.map(b=>`<div style="background:rgba(0,0,0,.3);padding:9px 12px;border-radius:9px;font-size:12px;line-height:1.7;color:#a7f3d0;border-right:3px solid var(--emerald)">💚 ${b}</div>`).join('')}</div></div>`;}
+  // 6. Usage instructions (medicine/cosmetics/electronics)
+  if(d.usage_instructions&&d.usage_instructions.length){html+=`<div class="ps-ai-card usage"><h5><i data-lucide="list-checks" style="width:13px;height:13px"></i> 📋 طريقة الاستخدام</h5>${d.usage_instructions.map((u,i)=>`<div class="ps-step"><span class="num">${i+1}</span><span>${u}</span></div>`).join('')}</div>`;}
+  // 7. Side effects (medicine only)
+  if(d.side_effects&&d.side_effects.length){html+=`<div class="ps-ai-card warning"><h5><i data-lucide="alert-triangle" style="width:13px;height:13px"></i> ⚠️ تحذيرات وآثار جانبية</h5>${d.side_effects.map(s=>`<div style="font-size:12px;line-height:1.7;color:#fed7aa;padding:5px 0">⚠ ${s}</div>`).join('')}</div>`;}
+  // 8. Specs
   if(d.specs&&Object.keys(d.specs).length){html+=`<div class="ps-ai-card"><h5><i data-lucide="cpu" style="width:13px;height:13px"></i> المواصفات التقنية</h5><div class="ps-spec-grid">${Object.entries(d.specs).map(([k,v])=>`<div class="ps-spec-item"><b>${k}</b><span>${v}</span></div>`).join('')}</div></div>`;}
+  // 9. Colors
   if(d.colors&&d.colors.length){html+=`<div class="ps-ai-card"><h5><i data-lucide="palette" style="width:13px;height:13px"></i> الألوان المتاحة</h5><div>${d.colors.map(c=>`<span class="ps-color-swatch"><span class="dot" style="background:${c.hex||'#888'}"></span>${c.name||c}</span>`).join('')}</div></div>`;}
-  if(d.sizes&&d.sizes.length){html+=`<div class="ps-ai-card"><h5><i data-lucide="ruler" style="width:13px;height:13px"></i> المقاسات / السعات المتاحة</h5><div>${d.sizes.map(s=>`<span class="ps-size-pill">${s}</span>`).join('')}</div></div>`;}
+  // 10. Sizes
+  if(d.sizes&&d.sizes.length){html+=`<div class="ps-ai-card"><h5><i data-lucide="ruler" style="width:13px;height:13px"></i> المقاسات / السعات</h5><div>${d.sizes.map(s=>`<span class="ps-size-pill">${s}</span>`).join('')}</div></div>`;}
+  // 11. Warranty
   if(d.warranty&&(d.warranty.duration_text||d.warranty.url)){html+=`<div class="ps-ai-card"><h5><i data-lucide="shield-check" style="width:13px;height:13px"></i> الضمان الرسمي</h5><p style="font-size:12px;color:#cbd5e1;line-height:1.7">${d.warranty.duration_text||'ضمان وكيل معتمد'}${d.warranty.url?` · <a href="${d.warranty.url}" target="_blank" style="color:var(--amber)">رابط الضمان ↗</a>`:''}</p></div>`;}
-  html+=`<div style="text-align:center;margin-top:14px"><button class="ps-btn-amber" onclick="psApplyAnalysis()" style="padding:13px 28px"><i data-lucide="wand-2" style="width:14px;height:14px"></i> تطبيق التحليل على المنتج وحفظ</button></div>`;
+  // 12. Official URL
+  if(d.official_url){html+=`<div class="ps-ai-card"><h5><i data-lucide="link" style="width:13px;height:13px"></i> الموقع الرسمي</h5><a href="${d.official_url.startsWith('http')?d.official_url:'https://'+d.official_url}" target="_blank" style="color:var(--amber);font-size:13px;font-weight:900;display:inline-flex;align-items:center;gap:6px">${d.official_url} <i data-lucide="external-link" style="width:13px;height:13px"></i></a></div>`;}
+  html+=`<div style="text-align:center;margin-top:14px;display:flex;gap:10px;justify-content:center;flex-wrap:wrap"><button class="ps-btn-amber" onclick="psApplyAnalysis()" style="padding:13px 28px"><i data-lucide="wand-2" style="width:14px;height:14px"></i> تطبيق التحليل واستكمل</button><button class="ps-btn-ghost" onclick="psAnalyze()" style="padding:13px 22px;color:#cbd5e1">↻ تحليل جديد</button></div>`;
   $('ps-ai-result').innerHTML=html;
   if(window.lucide)lucide.createIcons();
 }
