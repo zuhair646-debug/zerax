@@ -143,8 +143,33 @@ html,body{height:100%;background:var(--bg);color:#0a0a14;font-family:'IBM Plex S
 .pcard.add:hover{border-color:var(--purple);background:#faf5ff}
 
 /* ───── VIDEO STUDIO CHAT ───── */
-.vs-shell{display:grid;grid-template-columns:280px 1fr;gap:16px;height:calc(100vh - 130px)}
-@media (max-width:900px){.vs-shell{grid-template-columns:1fr;height:auto}}
+.ai-shell{display:grid;grid-template-columns:240px 1fr 320px;gap:14px;height:calc(100vh - 130px)}
+@media (max-width:1200px){.ai-shell{grid-template-columns:1fr;height:auto}}
+.vs-stages{background:transparent;display:flex;flex-direction:column;gap:10px;overflow-y:auto}
+.stage{background:#fff;border:1.5px solid var(--border);border-radius:14px;overflow:hidden;transition:all .25s}
+.stage.active{border-color:var(--purple);box-shadow:0 8px 24px rgba(124,58,237,.15);transform:translateY(-2px)}
+.stage.done{border-color:var(--emerald)}
+.stage-h{padding:10px 14px;background:var(--bg);border-bottom:1px solid var(--border);display:flex;align-items:center;gap:8px;font-size:12px}
+.stage-h i{width:16px;height:16px;color:var(--purple)}
+.stage.done .stage-h i{color:var(--emerald)}
+.stage-h .cost-pill{margin-right:auto;background:#fef3c7;color:#92400e;padding:2px 8px;border-radius:99px;font-size:10px;font-weight:900}
+.stage-body{padding:12px;min-height:80px;max-height:200px;overflow-y:auto;font-size:11px;line-height:1.6}
+.empty-st{color:var(--mute);text-align:center;padding:14px 6px;font-size:11px}
+.scene-line{padding:6px;border-bottom:1px dashed var(--border);font-size:11px}
+.scene-line:last-child{border-bottom:none}
+.scene-line b{color:var(--purple);font-size:10px}
+.img-grid{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+.img-grid img{width:100%;aspect-ratio:1;object-fit:cover;border-radius:6px;border:1px solid var(--border)}
+.audio-player{width:100%;margin-top:4px}
+.video-final{width:100%;border-radius:8px;border:2px solid var(--purple)}
+
+/* Animated counters */
+.kpi .val{transition:all .4s cubic-bezier(.34,1.56,.64,1)}
+.kpi:hover{transform:translateY(-3px);box-shadow:0 16px 36px rgba(0,0,0,.08)}
+.kpi:hover .ico{transform:scale(1.1) rotate(-5deg);transition:transform .3s}
+.kpi .ico{transition:transform .3s}
+.live-pulse{display:inline-flex;align-items:center;gap:5px;font-size:10px;color:var(--emerald);font-weight:900}
+.live-pulse::before{content:'';width:6px;height:6px;border-radius:50%;background:var(--emerald);animation:pulse 1.5s ease-in-out infinite}
 .vs-side{background:#fff;border:1px solid var(--border);border-radius:16px;padding:16px;overflow-y:auto}
 .vs-side h4{font-size:11px;font-weight:900;color:var(--mute);text-transform:uppercase;letter-spacing:1px;margin-bottom:10px}
 .vs-suggestion{display:block;width:100%;text-align:right;padding:10px;background:var(--bg);border:1px solid var(--border);border-radius:10px;font-size:12px;cursor:pointer;margin-bottom:6px;font-family:inherit;font-weight:700;color:#0a0a14;line-height:1.5}
@@ -401,38 +426,37 @@ html,body{height:100%;background:var(--bg);color:#0a0a14;font-family:'IBM Plex S
         </div>
       </div>
 
-      <!-- ─── VIDEO STUDIO CHAT ─── -->
+      <!-- ─── VIDEO STUDIO CHAT (Full AI Workspace) ─── -->
       <div class="page" data-page="video-studio">
-        <div class="vs-shell">
+        <div class="ai-shell">
+          <!-- Left: Suggestions + History -->
           <aside class="vs-side">
             <h4>💡 اقتراحات سريعة</h4>
-            <button class="vs-suggestion" onclick="vsSendSuggestion(this.dataset.q)" data-q="ولّد لي فيديو إعلاني لـ iPhone 17 Pro مدة 30 ثانية بأسلوب فاخر">🎬 فيديو إعلاني فاخر للـ iPhone 17 Pro <span class="emoji">📱</span></button>
-            <button class="vs-suggestion" onclick="vsSendSuggestion(this.dataset.q)" data-q="اعمل فيديو حماسي 15 ثانية لتخفيضات نهاية الأسبوع">⚡ تخفيضات حماسية 15 ثانية <span class="emoji">🔥</span></button>
-            <button class="vs-suggestion" onclick="vsSendSuggestion(this.dataset.q)" data-q="ولّد فيديو دافئ 45 ثانية لمنتج ساعة Apple Watch Ultra">⌚ Apple Watch Ultra دافئ <span class="emoji">💎</span></button>
+            <button class="vs-suggestion" onclick="vsSendSuggestion(this.dataset.q)" data-q="ولّد لي فيديو إعلاني لـ iPhone 17 Pro مدة 30 ثانية بأسلوب فاخر">🎬 iPhone 17 Pro فاخر <span class="emoji">📱</span></button>
+            <button class="vs-suggestion" onclick="vsSendSuggestion(this.dataset.q)" data-q="اعمل فيديو حماسي 15 ثانية لتخفيضات نهاية الأسبوع">⚡ تخفيضات حماسية 15 ث <span class="emoji">🔥</span></button>
+            <button class="vs-suggestion" onclick="vsSendSuggestion(this.dataset.q)" data-q="ولّد فيديو دافئ 45 ثانية لمنتج ساعة Apple Watch Ultra">⌚ Apple Watch دافئ <span class="emoji">💎</span></button>
             <button class="vs-suggestion" onclick="vsSendSuggestion(this.dataset.q)" data-q="فيديو تقني لسماعات AirPods Pro مدته 30 ثانية">🎧 AirPods Pro تقني <span class="emoji">🔬</span></button>
-            <button class="vs-suggestion" onclick="vsSendSuggestion(this.dataset.q)" data-q="فيديو موجز لجميع منتجاتي الجديدة لشهر هذا">🆕 ملخص منتجات الشهر <span class="emoji">📅</span></button>
-            <h4 style="margin-top:18px">📂 الفيديوهات السابقة</h4>
-            <div id="vs-history" style="font-size:11px;color:var(--mute);padding:14px;text-align:center">لا يوجد فيديوهات بعد</div>
+            <h4 style="margin-top:18px">📂 السجل</h4>
+            <div id="vs-history" style="font-size:11px;color:var(--mute);padding:14px;text-align:center">لا فيديوهات بعد</div>
           </aside>
 
+          <!-- Center: Chat -->
           <div class="vs-chat">
             <div class="vs-chat-head">
               <div class="avt">⚡</div>
-              <div><h4>Zerax AI</h4><div class="sub">مساعدك الإبداعي للفيديوهات الإعلانية</div></div>
+              <div><h4>Zerax AI Studio</h4><div class="sub">مساعدك الإبداعي · ذكاء صناعي متكامل</div></div>
               <div class="live"><span class="dot"></span> متصل</div>
             </div>
             <div class="vs-messages" id="vs-msgs">
-              <div class="msg ai">
-                <div class="avt">⚡</div>
-                <div class="bubble">
-                  مرحباً 👋 أنا Zerax AI، مساعدك لإنشاء فيديوهات إعلانية احترافية بـ AI.<br><br>
-                  <b>كيف تكتب طلبك:</b><br>
-                  • اذكر اسم المنتج أو الفئة<br>
-                  • حدد المدة (15 / 30 / 45 / 60 ثانية)<br>
-                  • اذكر النبرة (فاخرة / حماسية / دافئة / تقنية)<br><br>
-                  أو اضغط أي اقتراح من القائمة الجانبية 👈
-                </div>
-              </div>
+              <div class="msg ai"><div class="avt">⚡</div><div class="bubble">
+                مرحباً 👋 أنا <b>Zerax AI Studio</b>.<br><br>
+                <b>عملية الإنتاج:</b><br>
+                1️⃣ السيناريو (نص) → 5 نقاط<br>
+                2️⃣ الصور (Gemini Nano Banana) → 8 نقاط/صورة<br>
+                3️⃣ التعليق الصوتي (Zerax Voice) → 5 نقاط<br>
+                4️⃣ الفيديو النهائي → 5 نقاط/5ثوان<br><br>
+                اكتب طلبك أو اختر من القائمة الجانبية 👈
+              </div></div>
             </div>
             <div class="vs-input">
               <div class="attach-bar" id="vs-attach-bar"></div>
@@ -440,11 +464,31 @@ html,body{height:100%;background:var(--bg);color:#0a0a14;font-family:'IBM Plex S
                 <button class="ibtn" onclick="document.getElementById('vs-file').click()" title="ارفق صورة"><i data-lucide="image" style="width:18px;height:18px"></i></button>
                 <input type="file" id="vs-file" accept="image/*" multiple style="display:none" onchange="vsAttachFile(this)">
                 <button class="ibtn" id="vs-mic-btn" onclick="vsToggleVoice()" title="تسجيل صوتي"><i data-lucide="mic" style="width:18px;height:18px"></i></button>
-                <textarea id="vs-input-text" placeholder="اكتب طلبك… مثلاً: ولّد لي فيديو 30 ثانية لساعة Apple Watch بأسلوب فاخر" rows="1" oninput="vsAutoSize(this)" onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();vsSend()}"></textarea>
+                <textarea id="vs-input-text" placeholder="اكتب طلبك بالتفصيل…" rows="1" oninput="vsAutoSize(this)" onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();vsSend()}"></textarea>
                 <button class="ibtn send" onclick="vsSend()" title="إرسال"><i data-lucide="send" style="width:18px;height:18px"></i></button>
               </div>
             </div>
           </div>
+
+          <!-- Right: 4 Stage Panels -->
+          <aside class="vs-stages">
+            <div class="stage" id="stage-text">
+              <div class="stage-h"><i data-lucide="file-text"></i> <b>1. السيناريو</b> <span class="cost-pill">5 نقاط</span></div>
+              <div class="stage-body" id="st-text"><div class="empty-st">📝 سيظهر هنا النص المتولّد</div></div>
+            </div>
+            <div class="stage" id="stage-images">
+              <div class="stage-h"><i data-lucide="image"></i> <b>2. الصور</b> <span class="cost-pill">8/صورة</span></div>
+              <div class="stage-body" id="st-images"><div class="empty-st">🖼️ سيظهر هنا الصور</div></div>
+            </div>
+            <div class="stage" id="stage-audio">
+              <div class="stage-h"><i data-lucide="mic-2"></i> <b>3. الصوت</b> <span class="cost-pill">5 نقاط</span></div>
+              <div class="stage-body" id="st-audio"><div class="empty-st">🎙️ سيظهر هنا التعليق الصوتي</div></div>
+            </div>
+            <div class="stage" id="stage-video">
+              <div class="stage-h"><i data-lucide="film"></i> <b>4. الفيديو النهائي</b> <span class="cost-pill">5/5ث</span></div>
+              <div class="stage-body" id="st-video"><div class="empty-st">🎬 سيظهر هنا الفيديو الكامل</div></div>
+            </div>
+          </aside>
         </div>
       </div>
 
@@ -546,6 +590,8 @@ function goPage(p){
 // ───── RENDER ALL (initial) ─────
 function renderAll(){
   $('wallet-balance').textContent=WALLET.toLocaleString('ar-EG');
+  // Animate KPIs
+  setTimeout(()=>animateKPIs(),200);
   // Recent orders
   $('recent-orders').innerHTML=[
     {id:'#3047',cust:'نوف العتيبي',amt:'245 ر.س',st:'delivered',drv:'خالد العتيبي',time:'قبل دقيقتين'},
@@ -748,50 +794,104 @@ function vsAddMsg(role,html){
 }
 async function vsSend(){
   const txt=$('vs-input-text').value.trim();if(!txt&&!VS_ATTACHMENTS.length)return;
-  // User message
   let userHTML=txt.replace(/\n/g,'<br>');
   VS_ATTACHMENTS.forEach(a=>{if(a.type==='image')userHTML+=`<img src="${a.data}">`;else if(a.type==='audio')userHTML+=`<div style="margin-top:6px;padding:6px 10px;background:#fff;border-radius:8px;font-size:11px">🎙️ ${a.name}</div>`});
   vsAddMsg('user',userHTML);
   $('vs-input-text').value='';vsAutoSize($('vs-input-text'));
   VS_ATTACHMENTS=[];vsRenderAttachments();
 
-  // AI typing
-  const typingMsg=vsAddMsg('ai','<span class="typing"><span></span><span></span><span></span></span> يفكر…');
+  // Reset stages
+  ['text','images','audio','video'].forEach(s=>{const el=document.getElementById('stage-'+s);el.classList.remove('active','done');document.getElementById('st-'+s).innerHTML=`<div class="empty-st">⏳ بانتظار…</div>`;});
 
+  const typingMsg=vsAddMsg('ai','<span class="typing"><span></span><span></span><span></span></span> أحضّر العملية…');
   try{
-    // Detect intent (very simple parser)
     let duration=30,tone='energetic';
     if(/15/.test(txt))duration=15;else if(/45/.test(txt))duration=45;else if(/60/.test(txt))duration=60;
     if(/فاخر/.test(txt))tone='luxury';else if(/دافئ/.test(txt))tone='warm';else if(/تقني/.test(txt))tone='tech';
-    const productMatch=txt.match(/(?:فيديو|إعلان|لـ|عن|ل)\s+(.+?)(?:بأسلوب|مدته|مدة|ثانية|$)/);
-    const productName=(productMatch?productMatch[1]:txt.split(/\s+/).slice(0,6).join(' ')).trim();
+    const m=txt.match(/(?:فيديو|إعلان|لـ|عن|ل)\s+(.+?)(?:بأسلوب|مدته|مدة|ثانية|$)/);
+    const productName=(m?m[1]:txt.split(/\s+/).slice(0,6).join(' ')).trim();
 
-    typingMsg.querySelector('.bubble').innerHTML='🎬 أكتب لك قصة الفيديو الأول…';
+    // STAGE 1: storyboard
+    document.getElementById('stage-text').classList.add('active');
+    document.getElementById('st-text').innerHTML='<div class="empty-st"><span class="typing"><span></span><span></span><span></span></span> Gemini يكتب السيناريو…</div>';
+    typingMsg.querySelector('.bubble').innerHTML='📝 <b>الخطوة 1/4:</b> أكتب السيناريو…';
+
     const storyR=await fetch(API+'/api/promo-video/storyboard',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({product_name:productName,duration_seconds:duration,tone,lang:'ar',cta:'اطلب الآن'})});
     if(!storyR.ok)throw new Error('storyboard failed');
     const story=await storyR.json();
-    typingMsg.querySelector('.bubble').innerHTML=`✅ <b>${story.title}</b><br><br>القصة (${story.scenes.length} مشاهد):<br>`+story.scenes.map(s=>`<div style="font-size:11px;color:var(--mute);padding:5px 0;border-bottom:1px dashed var(--border)"><b>مشهد ${s.seq}:</b> ${s.narration}</div>`).join('')+`<br>⏳ الآن أركّب الفيديو بصوت Zerax… (~30 ث)`;
-    $('vs-msgs').scrollTop=$('vs-msgs').scrollHeight;
+    document.getElementById('stage-text').classList.remove('active');document.getElementById('stage-text').classList.add('done');
+    document.getElementById('st-text').innerHTML=`<b style="color:var(--purple);font-size:11px">📌 ${story.title}</b><br>`+story.scenes.map(s=>`<div class="scene-line"><b>مشهد ${s.seq}:</b><br>${s.narration}</div>`).join('');
+    typingMsg.querySelector('.bubble').innerHTML=`✅ <b>السيناريو جاهز!</b> ${story.title}<br><br>🖼️ <b>الخطوة 2/4:</b> أحضّر صور المشاهد…`;
+    WALLET-=(story.cost||5);localStorage.setItem('zx_credits',WALLET);$('wallet-balance').textContent=WALLET.toLocaleString('ar-EG');
 
-    const scenes=story.scenes.map((s,i)=>({narration:s.narration,image_url:[
-      'https://images.unsplash.com/photo-1592750475338-74b7b21085ab?w=800&q=85',
-      'https://images.unsplash.com/photo-1551816230-ef5deaed4a26?w=800&q=85',
-      'https://images.unsplash.com/photo-1606220945770-b5b6c2c55bf1?w=800&q=85',
-      'https://images.unsplash.com/photo-1517336714731-489689fd1ca8?w=800&q=85'
-    ][i%4]}));
+    // STAGE 2: images (use Unsplash placeholders for demo - real call would be image-studio)
+    document.getElementById('stage-images').classList.add('active');
+    document.getElementById('st-images').innerHTML='<div class="empty-st"><span class="typing"><span></span><span></span><span></span></span> Gemini يولّد الصور…</div>';
+    const imgs=story.scenes.map((s,i)=>['https://images.unsplash.com/photo-1592750475338-74b7b21085ab?w=600&q=85','https://images.unsplash.com/photo-1551816230-ef5deaed4a26?w=600&q=85','https://images.unsplash.com/photo-1606220945770-b5b6c2c55bf1?w=600&q=85','https://images.unsplash.com/photo-1517336714731-489689fd1ca8?w=600&q=85'][i%4]);
+    await new Promise(r=>setTimeout(r,1200));
+    document.getElementById('stage-images').classList.remove('active');document.getElementById('stage-images').classList.add('done');
+    document.getElementById('st-images').innerHTML=`<div class="img-grid">${imgs.map(u=>`<img src="${u}">`).join('')}</div><div style="margin-top:6px;font-size:10px;color:var(--mute)">✓ ${imgs.length} صور</div>`;
+    typingMsg.querySelector('.bubble').innerHTML=`✅ السيناريو + الصور جاهزة<br><br>🎙️ <b>الخطوة 3/4:</b> أولّد التعليق الصوتي (Zerax Voice)…`;
+
+    // STAGE 3 & 4: Generate video (TTS + ffmpeg combined)
+    document.getElementById('stage-audio').classList.add('active');
+    document.getElementById('st-audio').innerHTML='<div class="empty-st"><span class="typing"><span></span><span></span><span></span></span> Zerax Voice يسجّل…</div>';
+    document.getElementById('stage-video').classList.add('active');
+    document.getElementById('st-video').innerHTML='<div class="empty-st"><span class="typing"><span></span><span></span><span></span></span> ffmpeg يدمج المشاهد…</div>';
+
+    const scenes=story.scenes.map((s,i)=>({narration:s.narration,image_url:imgs[i]}));
     const vidR=await fetch(API+'/api/promo-video/generate',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({title:story.title,scenes,duration_seconds:duration,voice:'zerax_male_deep',full_narration:story.full_narration,cta:'اطلب الآن',lang:'ar'})});
     if(!vidR.ok)throw new Error('video failed');
     const vid=await vidR.json();
-    const cost=story.cost+vid.cost;
-    typingMsg.querySelector('.bubble').innerHTML=`🎉 <b>الفيديو جاهز!</b><br><br><video controls playsinline src="${API+vid.video_url}"></video><br><div style="margin-top:6px;font-size:11px;color:var(--mute)">⏱ ${vid.duration_seconds}ث · 🎬 ${vid.scenes_count} مشاهد · 🎙 ${vid.voice_used} · ⚡ خُصم ${cost} نقطة</div>`;
-    WALLET-=cost;localStorage.setItem('zx_credits',WALLET);$('wallet-balance').textContent=WALLET.toLocaleString('ar-EG');
-    $('vs-msgs').scrollTop=$('vs-msgs').scrollHeight;
+    document.getElementById('stage-audio').classList.remove('active');document.getElementById('stage-audio').classList.add('done');
+    document.getElementById('st-audio').innerHTML=`<audio class="audio-player" controls src="${API+vid.audio_url}"></audio><div style="margin-top:6px;font-size:10px;color:var(--mute)">🎙 ${vid.voice_used}</div>`;
+    document.getElementById('stage-video').classList.remove('active');document.getElementById('stage-video').classList.add('done');
+    document.getElementById('st-video').innerHTML=`<video class="video-final" controls playsinline src="${API+vid.video_url}"></video><div style="margin-top:6px;font-size:10px;color:var(--mute)">⏱ ${vid.duration_seconds}ث · 🎬 ${vid.scenes_count} مشاهد</div>`;
+    typingMsg.querySelector('.bubble').innerHTML=`🎉 <b>الفيديو جاهز!</b><br><br>شف اللوحات على اليمين 👈 — السيناريو، الصور، الصوت، والفيديو النهائي.<br><br>⚡ إجمالي خصم: <b>${story.cost+vid.cost} نقطة</b>`;
+    WALLET-=(vid.cost||30);localStorage.setItem('zx_credits',WALLET);$('wallet-balance').textContent=WALLET.toLocaleString('ar-EG');
+    setTimeout(()=>{if(window.lucide)lucide.createIcons()},50);
   }catch(e){
-    typingMsg.querySelector('.bubble').innerHTML=`❌ آسف، حصل خطأ: ${e.message}. حاول مرة ثانية أو اختر اقتراح من القائمة الجانبية.`;
+    typingMsg.querySelector('.bubble').innerHTML=`❌ خطأ: ${e.message}`;
   }
 }
 
 function rechargeOpen(){window.open('/mockups/app_mode_full.html','_blank')}
+
+// Animated KPI counters
+function animateKPIs(){
+  document.querySelectorAll('.kpi .val').forEach(el=>{
+    const txt=el.textContent.trim();
+    const numMatch=txt.match(/[\d,]+(\.\d+)?/);
+    if(!numMatch)return;
+    const target=parseFloat(numMatch[0].replace(/,/g,''));
+    if(isNaN(target))return;
+    const suffix=txt.substring(txt.indexOf(numMatch[0])+numMatch[0].length);
+    const prefix=txt.substring(0,txt.indexOf(numMatch[0]));
+    let cur=0;
+    const dur=1200,steps=40,inc=target/steps;
+    const itv=setInterval(()=>{
+      cur+=inc;
+      if(cur>=target){cur=target;clearInterval(itv);}
+      const formatted=cur>=1000?Math.floor(cur).toLocaleString('en-US'):cur.toFixed(target%1?2:0);
+      el.innerHTML=prefix+formatted+suffix;
+    },dur/steps);
+  });
+  // Chart breathing: subtle scale animation on key dot
+  const dot=document.querySelector('.chart-wrap circle[fill="#fbbf24"]');
+  if(dot){
+    let scale=1;
+    setInterval(()=>{scale=scale===1?1.3:1;dot.setAttribute('r',5*scale);},800);
+  }
+}
+
+// Add live pulse to KPI labels for "today" data
+setInterval(()=>{
+  document.querySelectorAll('.kpi:not(.no-pulse) .lbl').forEach(el=>{
+    if(el.textContent.includes('اليوم')&&!el.querySelector('.live-pulse')){
+      el.insertAdjacentHTML('beforeend',' <span class="live-pulse">حي</span>');
+    }
+  });
+},1000);
 
 // Init lucide icons on load
 window.addEventListener('load',()=>{if(window.lucide)lucide.createIcons()});
