@@ -23,6 +23,27 @@ Build "Zerax" — a multi-tenant Saudi/Arab AI commerce platform with:
 - **Dashboard**: Live KPIs (clickable), interactive SVG chart with hover tooltips,
   Top Products clickable, recent orders, **AI Weekly Report card** (dismissible)
 - **Products + Product Studio** (3 tabs, fullscreen toggle):
+  + **Stock management** (Feb 2026): SKU, low-stock threshold alert, out-of-stock badges
+  + **Expiry tracking** (Feb 2026): manufacturing date, expiry date, "ينتهي خلال X يوم" warning, color-coded badges on cards
+- **PDF Reports** (Feb 2026, NEW):
+  + 6 report types: Sales, Products, Customers, Inventory, ZATCA, Monthly Summary
+  + Real PDF generation via jsPDF (downloadable A4)
+  + WhatsApp share button (wa.me with formatted summary text)
+  + Email share button (mailto: prefilled)
+- **ZATCA Phase 2 E-Invoice** (Feb 2026, NEW, mock):
+  + Merchant config: VAT (15-digit), CR, name (ar/en), address
+  + CSR generation + CSID upload UI
+  + Environment switch (Sandbox / Production)
+  + Sample invoice generator with valid UBL 2.1 XML structure
+  + Real TLV QR code (tags 1-5) rendered via qrcode.js
+  + PDF/A-3 download (with embedded XML reference)
+- **Campaign Builder** (Feb 2026, NEW):
+  + 5-step wizard modal (basic info → audience → message → channels → budget)
+  + Audience targeting: segments (VIP/new/inactive/repeat/all), interests (7 categories), age range, gender
+  + 6 send channels (WhatsApp/SMS/Email/Push/Instagram/Snapchat) with per-channel cost
+  + Live audience + cost estimation
+  + Coupon attachment, preview button, scheduled launch
+- **Original Product Studio** (kept):
   1. Basic Info — image upload, name, price, stock, category
   2. Creative Studio — 5 types (product/logo/banner/section/animated) +
      bg-color/frame-color/aspect pickers
@@ -72,6 +93,7 @@ Build "Zerax" — a multi-tenant Saudi/Arab AI commerce platform with:
   - 🔐 OTP Login modal: phone-based auth (demo OTP `1234`), session persisted in localStorage, account-page shows logged-in state + logout
   - ⭐ Product Reviews: per-product reviews with 5-star picker + text, requires login, avg rating displayed, stored per product key
   - 🎟️ Coupons: 3 codes seeded (`WELCOME10` 10%, `SAVE50` flat 50, `FREESHIP` flat 25) with live cart total recalc including tax-on-discounted-base
+  - 🔗 Share Wishlist (NEW): `?wl=p1,p5,...` URL deep-link, WhatsApp/native share, clipboard fallback, auto-import on visit
   - Fixed pre-existing `pdJump()` orphan code that was breaking the page
 
 ### 🟡 MOCKED (functional UI, no live backend)
