@@ -429,6 +429,38 @@ select.ps-input option{background:#13131f;color:#fff}
 .ps-color-swatch{display:inline-flex;align-items:center;gap:6px;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);padding:5px 10px;border-radius:99px;font-size:11px;color:#fff;font-weight:700;margin:3px}
 .ps-color-swatch .dot{width:14px;height:14px;border-radius:50%;border:1.5px solid rgba(255,255,255,.3)}
 .ps-size-pill{display:inline-flex;align-items:center;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.08);padding:5px 11px;border-radius:8px;font-size:11px;color:#fff;font-weight:900;margin:3px}
+/* ─── SWITCH TOGGLE ─── */
+.switch-label{display:inline-flex;align-items:center;gap:8px;cursor:pointer}
+.switch-label input{display:none}
+.switch-track{width:44px;height:24px;background:rgba(255,255,255,.15);border-radius:99px;position:relative;transition:background .2s}
+.switch-track::after{content:'';position:absolute;width:18px;height:18px;border-radius:50%;background:#fff;top:3px;right:3px;transition:transform .2s}
+.switch-label input:checked + .switch-track{background:var(--emerald)}
+.switch-label input:checked + .switch-track::after{transform:translateX(-20px)}
+/* ─── DRIVER PAY CARDS ─── */
+.pay-card{display:block;background:#fff;border:2px solid var(--border);border-radius:12px;padding:14px;cursor:pointer;text-align:center;transition:all .15s}
+.pay-card:hover{border-color:var(--purple);background:#faf5ff}
+.pay-card.selected{border-color:var(--purple);background:#faf5ff;box-shadow:0 0 0 3px rgba(124,58,237,.1)}
+.pay-card b{display:block;font-size:13px;margin-bottom:4px}
+.pay-card span{display:block;font-size:10px;color:var(--mute)}
+/* ─── SERVICES GRID ─── */
+.services-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:14px;margin-top:14px}
+.svc-card{background:#fff;border:1.5px solid var(--border);border-radius:16px;padding:18px;transition:all .2s;position:relative;overflow:hidden}
+.svc-card.featured{border-color:var(--amber);box-shadow:0 8px 24px rgba(251,191,36,.1)}
+.svc-card.featured::before{content:'الأكثر طلباً';position:absolute;top:14px;left:14px;background:var(--amber);color:#0a0a14;font-size:9px;font-weight:900;padding:3px 9px;border-radius:99px;letter-spacing:.5px}
+.svc-card.active-svc{border-color:var(--emerald);background:linear-gradient(135deg,#fff,#f0fdf4)}
+.svc-card.active-svc::before{content:'✓ مُفعّل';position:absolute;top:14px;left:14px;background:var(--emerald);color:#fff;font-size:9px;font-weight:900;padding:3px 9px;border-radius:99px}
+.svc-icon{width:54px;height:54px;border-radius:14px;display:flex;align-items:center;justify-content:center;font-size:26px;margin-bottom:12px}
+.svc-card h4{font-size:14px;font-weight:900;margin-bottom:6px;color:#0a0a0a}
+.svc-card .svc-desc{font-size:11px;color:var(--mute);line-height:1.7;margin-bottom:12px;min-height:48px}
+.svc-feat{display:flex;align-items:center;gap:6px;font-size:11px;color:#374151;padding:5px 0}
+.svc-feat::before{content:'✓';color:var(--emerald);font-weight:900}
+.svc-price{margin-top:14px;padding-top:14px;border-top:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap}
+.svc-price b{font-size:20px;color:var(--purple);font-weight:900}
+.svc-price .period{font-size:11px;color:var(--mute);font-weight:700;margin-right:3px}
+.svc-price .one-time{font-size:10px;color:var(--amber);background:#fffbeb;padding:3px 8px;border-radius:99px;font-weight:900;border:1px solid #fcd34d}
+.svc-btn{padding:10px 16px;background:linear-gradient(135deg,var(--purple),var(--amber));color:#fff;border:none;border-radius:10px;font-family:inherit;font-weight:900;font-size:12px;cursor:pointer;display:inline-flex;align-items:center;gap:6px;transition:all .15s}
+.svc-btn:hover{transform:translateY(-1px);box-shadow:0 8px 20px rgba(124,58,237,.25)}
+.svc-btn.disabled{background:#e5e7eb;color:#9ca3af;cursor:not-allowed}
 /* ─── Product Studio fullscreen + creative subtabs ─── */
 .mod.prod-studio.fullscreen{padding:0}
 .mod.prod-studio.fullscreen .ps-box{margin:0;border-radius:0;max-width:none;width:100vw;height:100vh;max-height:none;min-height:100vh}
@@ -512,6 +544,7 @@ select.ps-input option{background:#13131f;color:#fff}
     <div class="nav-section">التسويق والذكاء الإصطناعي</div>
     <button class="nav-item" data-page="video-studio" onclick="goPage('video-studio')"><i data-lucide="clapperboard"></i> استوديو الفيديو الإعلاني</button>
     <button class="nav-item" data-page="social" onclick="goPage('social')"><i data-lucide="share-2"></i> الحسابات الاجتماعية <span class="badge" style="background:var(--emerald)" id="nav-social-count">3</span></button>
+    <button class="nav-item" data-page="services" onclick="goPage('services')"><i data-lucide="rocket"></i> الخدمات الإضافية <span class="badge" style="background:var(--amber);color:#0a0a14">جديد</span></button>
     <button class="nav-item" data-page="settings" onclick="goPage('settings')"><i data-lucide="settings"></i> الإعدادات</button>
 
     <div class="wallet">
@@ -656,18 +689,92 @@ select.ps-input option{background:#13131f;color:#fff}
         </div>
       </div>
 
-      <!-- ─── DELIVERY (placeholder linking to legacy ACP) ─── -->
+      <!-- ─── DELIVERY (with smart auto-dispatch) ─── -->
       <div class="page" data-page="delivery">
+        <!-- Auto-dispatch settings panel -->
+        <div class="panel" style="background:linear-gradient(135deg,#0a0a14,#13131f);color:#fff;border:none;margin-bottom:14px">
+          <div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap">
+            <div style="display:flex;align-items:center;gap:10px;flex:1;min-width:240px">
+              <div style="width:48px;height:48px;border-radius:12px;background:linear-gradient(135deg,var(--amber),var(--violet));display:flex;align-items:center;justify-content:center;font-size:22px;color:#0a0a14">⚡</div>
+              <div><b style="font-size:14px;color:#fff;display:block">الإسناد التلقائي الذكي</b><span style="font-size:11px;color:#94a3b8;display:block;margin-top:2px">أقرب سائق + تجميع الطلبات القريبة لنفس السائق</span></div>
+            </div>
+            <label class="switch-label"><input type="checkbox" id="dv-auto-dispatch" checked onchange="toggleAutoDispatch()"><span class="switch-track"></span><b style="font-size:12px;color:#fff">مُفعّل</b></label>
+            <button class="btn btn-amber" onclick="openDispatchSettings()" style="background:rgba(251,191,36,.15);color:var(--amber);border:1px solid rgba(251,191,36,.3)"><i data-lucide="sliders" style="width:13px;height:13px"></i> إعدادات الإسناد</button>
+          </div>
+          <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px;margin-top:14px;padding-top:14px;border-top:1px solid rgba(255,255,255,.08)">
+            <div style="background:rgba(255,255,255,.04);padding:10px 12px;border-radius:10px"><div style="font-size:10px;color:#94a3b8">نصف قطر البحث</div><b style="font-size:14px;color:#fff" id="dvs-radius">10 كم</b></div>
+            <div style="background:rgba(255,255,255,.04);padding:10px 12px;border-radius:10px"><div style="font-size:10px;color:#94a3b8">تجميع الطلبات</div><b style="font-size:14px;color:var(--emerald)" id="dvs-group">مُفعّل (≤2كم)</b></div>
+            <div style="background:rgba(255,255,255,.04);padding:10px 12px;border-radius:10px"><div style="font-size:10px;color:#94a3b8">رسوم تحويل السحب</div><b style="font-size:14px;color:var(--amber)" id="dvs-fee">4 ر.س</b></div>
+            <div style="background:rgba(255,255,255,.04);padding:10px 12px;border-radius:10px"><div style="font-size:10px;color:#94a3b8">معالجة الإسناد</div><b style="font-size:14px;color:#67e8f9">~2 ثانية</b></div>
+          </div>
+        </div>
         <div class="panel">
-          <div class="panel-head"><h3>🚚 إدارة التوصيل</h3></div>
+          <div class="panel-head"><h3>🚚 الطلبات والإسناد</h3><span style="font-size:11px;color:var(--mute);font-weight:700">يصير الإسناد تلقائياً بدون تدخل · يدوي اختياري</span></div>
           <div id="dv-stats" style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:20px"></div>
           <div style="overflow-x:auto"><table class="tbl">
-            <thead><tr><th>الطلب</th><th>العميل</th><th>المسافة</th><th>الرسوم</th><th>السائق</th><th>الحالة</th></tr></thead>
+            <thead><tr><th>الطلب</th><th>العميل</th><th>المسافة</th><th>الرسوم</th><th>السائق</th><th>الحالة</th><th>إجراء</th></tr></thead>
             <tbody id="dv-orders"></tbody>
           </table></div>
-          <h4 style="margin:20px 0 10px;font-size:14px;font-weight:900">السائقون</h4>
-          <div id="dv-drivers" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:10px"></div>
+          <h4 style="margin:20px 0 10px;font-size:14px;font-weight:900">السائقون <span style="font-size:10px;color:var(--mute);font-weight:700;margin-right:8px">— التاجر يحدد لكل سائق: عمولة % أو راتب شهري</span></h4>
+          <div id="dv-drivers" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:10px"></div>
         </div>
+      </div>
+
+      <!-- ─── DISPATCH SETTINGS MODAL ─── -->
+      <div class="mod" id="dispatch-mod" onclick="if(event.target===this)closeDispatchMod()">
+        <div class="box" style="max-width:520px">
+          <h3>⚡ إعدادات الإسناد التلقائي</h3>
+          <div class="field"><label>نصف قطر البحث عن السائق (كم)</label><input id="ds-radius" type="number" min="1" max="30" value="10"></div>
+          <div class="field"><label><input type="checkbox" id="ds-grouping" checked style="accent-color:var(--purple);margin-left:6px"> تجميع الطلبات القريبة لنفس السائق</label><div style="font-size:10px;color:var(--mute);margin-top:4px">إذا كان عند سائق طلب نشط وجاء طلب آخر يبعد ≤ المسافة المحددة، يُسند له</div></div>
+          <div class="field"><label>الحد الأقصى للمسافة بين طلبات الدفعة (كم)</label><input id="ds-grouping-radius" type="number" min="0.5" max="10" step="0.5" value="2"></div>
+          <div class="field"><label>الحد الأقصى للطلبات لكل سائق</label><input id="ds-max-orders" type="number" min="1" max="10" value="3"></div>
+          <div class="field"><label>أولوية الإسناد</label>
+            <select id="ds-priority"><option value="distance">الأقرب أولاً (افتراضي)</option><option value="rating">الأعلى تقييماً</option><option value="balanced">توزيع متوازن</option></select>
+          </div>
+          <div class="field" style="background:#faf5ff;border:1px solid #ddd6fe;padding:12px;border-radius:10px">
+            <label style="color:var(--purple);font-weight:900">💸 رسوم تحويل السحب (ر.س)</label>
+            <input id="ds-withdraw-fee" type="number" min="0" step="0.5" value="4">
+            <div style="font-size:10px;color:var(--mute);margin-top:4px">يُخصم من كل طلب سحب يقدّمه السائق (يغطي رسوم البنك/STC Pay/PayPal)</div>
+          </div>
+          <button class="btn btn-primary" onclick="saveDispatchSettings()" style="width:100%">💾 حفظ الإعدادات</button>
+        </div>
+      </div>
+
+      <!-- ─── DRIVER PAY MODEL MODAL ─── -->
+      <div class="mod" id="driver-pay-mod" onclick="if(event.target===this)closeDriverPayMod()">
+        <div class="box" style="max-width:520px">
+          <h3>💼 نظام الدفع للسائق</h3>
+          <div id="dpm-driver-info" style="background:#f9fafb;padding:12px;border-radius:10px;margin-bottom:14px;display:flex;align-items:center;gap:10px"></div>
+          <div class="field"><label>نظام الدفع</label>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:6px">
+              <label class="pay-card" data-mode="commission"><input type="radio" name="dpm-mode" value="commission" checked onchange="dpmToggleMode(this)" style="display:none"><b>💰 بالعمولة</b><span>نسبة من كل طلب</span></label>
+              <label class="pay-card" data-mode="salary"><input type="radio" name="dpm-mode" value="salary" onchange="dpmToggleMode(this)" style="display:none"><b>📅 راتب شهري</b><span>مبلغ ثابت شهرياً</span></label>
+            </div>
+          </div>
+          <div class="field" id="dpm-commission-fields">
+            <label>نسبة عمولة السائق من رسوم التوصيل (%)</label>
+            <input id="dpm-commission" type="number" min="0" max="100" value="70">
+            <div style="font-size:10px;color:var(--mute);margin-top:4px">مثال: 70% للسائق و 30% للمتجر · يحتسب على رسوم التوصيل لكل طلب</div>
+          </div>
+          <div class="field" id="dpm-salary-fields" style="display:none">
+            <label>الراتب الشهري (ر.س)</label>
+            <input id="dpm-salary" type="number" min="0" value="3000">
+            <label style="margin-top:10px">حافز إضافي لكل طلب (ر.س)</label>
+            <input id="dpm-bonus" type="number" min="0" step="0.5" value="2">
+          </div>
+          <div class="field"><label>وسيلة استلام المبالغ</label>
+            <select id="dpm-payout"><option value="bank">حساب بنكي (IBAN)</option><option value="stcpay">STC Pay</option><option value="urpay">urpay</option><option value="paypal">PayPal</option><option value="cash">نقداً</option></select>
+          </div>
+          <button class="btn btn-primary" onclick="saveDriverPay()" style="width:100%">💾 حفظ</button>
+        </div>
+      </div>
+
+      <!-- ─── MERCHANT SERVICES (7 services with auto-activation) ─── -->
+      <div class="page" data-page="services">
+        <div class="panel" style="background:linear-gradient(135deg,#0a0a14,#13131f);color:#fff;border:none">
+          <div style="display:flex;align-items:center;gap:14px"><div style="width:54px;height:54px;border-radius:14px;background:linear-gradient(135deg,var(--amber),var(--violet));display:flex;align-items:center;justify-content:center;font-size:26px;color:#0a0a14">🚀</div><div><h3 style="color:#fff;font-size:18px">الخدمات الإضافية</h3><p style="font-size:12px;color:#94a3b8;margin-top:4px;line-height:1.7">طوّر متجرك في ثوانٍ · ضغطة زر واحدة · بدون تدخل بشري · تفعيل تلقائي فوري</p></div></div>
+        </div>
+        <div class="services-grid" id="services-grid"></div>
       </div>
 
       <!-- ─── PAYROLL ─── -->
@@ -1082,7 +1189,7 @@ function goPage(p){
   CURRENT_PAGE=p;
   document.querySelectorAll('.page').forEach(el=>el.classList.toggle('active',el.dataset.page===p));
   document.querySelectorAll('.nav-item').forEach(el=>el.classList.toggle('active',el.dataset.page===p));
-  const titles={dashboard:'الرئيسية',products:'المنتجات',orders:'الطلبات',customers:'العملاء',delivery:'إدارة التوصيل',payroll:'المحاسبة والرواتب',gateways:'وسائل الدفع',settings:'الإعدادات','video-studio':'استوديو الفيديو الإعلاني',social:'الحسابات الاجتماعية'};
+  const titles={dashboard:'الرئيسية',products:'المنتجات',orders:'الطلبات',customers:'العملاء',delivery:'إدارة التوصيل',payroll:'المحاسبة والرواتب',gateways:'وسائل الدفع',settings:'الإعدادات','video-studio':'استوديو الفيديو الإعلاني',social:'الحسابات الاجتماعية',services:'الخدمات الإضافية'};
   $('page-title').textContent=titles[p]||p;
   document.getElementById('sidebar').classList.remove('open');
   // lazy load
@@ -1090,6 +1197,7 @@ function goPage(p){
   if(p==='payroll')loadPayroll();
   if(p==='gateways')loadGateways();
   if(p==='social')loadSocial();
+  if(p==='services')loadServices();
   if(p==='video-studio')renderSocialMini();
   setTimeout(()=>{if(window.lucide)lucide.createIcons()},50);
 }
@@ -1184,9 +1292,14 @@ async function loadDelivery(){
     ].map(s=>`<div class="kpi" style="--clr:${s.c};padding:14px"><div class="lbl">${s.l}</div><div class="val" style="font-size:20px">${s.v}</div></div>`).join('');
     $('dv-orders').innerHTML=(ord.orders||[]).slice(0,8).map(o=>{
       const drvObj=(drv.drivers||[]).find(d=>d.id===o.driver_id);
-      return `<tr><td><b>#${o.id.replace('ord_','')}</b></td><td>${o.customer_name}</td><td>${o.distance_km||0} كم</td><td><b>${o.delivery_fee_sar||0} ر.س</b></td><td>${drvObj?drvObj.name:'<span style="color:#dc2626">⚠️ لم يُسند</span>'}</td><td><span class="status-pill s-${o.status==='delivering'?'delivering':o.status==='delivered'?'delivered':o.status==='cancelled'?'cancelled':'pending'}">${({pending:'بانتظار',assigned:'مُسندة',picked_up:'تم الاستلام',delivering:'في طريقها',delivered:'تم التسليم',cancelled:'ملغاة'})[o.status]||o.status}</span></td></tr>`;
+      const needsAssign=!drvObj&&['pending','paid'].includes(o.status);
+      return `<tr><td><b>#${o.id.replace('ord_','')}</b></td><td>${o.customer_name}</td><td>${o.distance_km||0} كم</td><td><b>${o.delivery_fee_sar||0} ر.س</b></td><td>${drvObj?drvObj.name:'<span style="color:#dc2626;font-size:11px">⚠️ لم يُسند</span>'}</td><td><span class="status-pill s-${o.status==='delivering'?'delivering':o.status==='delivered'?'delivered':o.status==='cancelled'?'cancelled':'pending'}">${({pending:'بانتظار',assigned:'مُسندة',picked_up:'تم الاستلام',delivering:'في طريقها',delivered:'تم التسليم',cancelled:'ملغاة'})[o.status]||o.status}</span></td><td>${needsAssign?`<button class="btn btn-amber" style="padding:6px 11px;font-size:11px" onclick="autoAssignOrder('${o.id}')"><i data-lucide="zap" style="width:11px;height:11px"></i> إسناد تلقائي</button>`:'<span style="color:var(--mute);font-size:11px">—</span>'}</td></tr>`;
     }).join('');
-    $('dv-drivers').innerHTML=(drv.drivers||[]).map(d=>`<div class="panel" style="margin:0;padding:14px"><div style="display:flex;align-items:center;gap:10px"><div style="width:42px;height:42px;border-radius:50%;background:linear-gradient(135deg,var(--purple),var(--amber));color:#fff;display:flex;align-items:center;justify-content:center;font-weight:900">${d.name.charAt(0)}</div><div style="flex:1"><b style="font-size:13px">${d.name}</b><div style="font-size:10px;color:var(--mute);direction:ltr;text-align:right">${d.phone}</div></div><span class="status-pill ${d.status==='online'?'s-paid':d.status==='delivering'?'s-delivering':'s-pending'}">${d.status==='online'?'متاح':d.status==='delivering'?'في توصيل':'غير متاح'}</span></div><div style="margin-top:8px;font-size:11px;color:var(--mute)">⭐ ${(d.rating||5).toFixed(1)} · ${d.deliveries_today||0} توصيل · <b>${d.balance_pending_sar||0}</b> ر.س معلّق</div></div>`).join('');
+    $('dv-drivers').innerHTML=(drv.drivers||[]).map(d=>{
+      const pay=getDriverPay(d.id)||{mode:d.employment_type==='salaried'?'salary':'commission',commission:70,salary:3000,bonus:2,payout:d.payout_method||'bank'};
+      const modeLbl=pay.mode==='salary'?`📅 ${pay.salary} ر.س/شهر`:`💰 عمولة ${pay.commission}%`;
+      return `<div class="panel" style="margin:0;padding:14px"><div style="display:flex;align-items:center;gap:10px"><div style="width:42px;height:42px;border-radius:50%;background:linear-gradient(135deg,var(--purple),var(--amber));color:#fff;display:flex;align-items:center;justify-content:center;font-weight:900">${d.name.charAt(0)}</div><div style="flex:1;min-width:0"><b style="font-size:13px">${d.name}</b><div style="font-size:10px;color:var(--mute);direction:ltr;text-align:right">${d.phone}</div></div><span class="status-pill ${d.status==='online'?'s-paid':d.status==='delivering'?'s-delivering':'s-pending'}">${d.status==='online'?'متاح':d.status==='delivering'?'في توصيل':'غير متاح'}</span></div><div style="margin-top:8px;font-size:11px;color:var(--mute)">⭐ ${(d.rating||5).toFixed(1)} · ${d.deliveries_today||0} توصيل · <b>${d.balance_pending_sar||0}</b> ر.س معلّق</div><div style="margin-top:10px;padding:8px;background:var(--bg);border-radius:8px;display:flex;justify-content:space-between;align-items:center"><span style="font-size:11px;color:var(--mute)">نظام الدفع</span><b style="font-size:11px;color:${pay.mode==='salary'?'#1e40af':'#ec4899'}">${modeLbl}</b></div><div style="display:flex;gap:6px;margin-top:8px"><button class="btn btn-outline" style="flex:1;padding:7px;font-size:10px" onclick="openDriverPayMod('${d.id}','${d.name.replace(/'/g,'')}','${d.phone}')"><i data-lucide="settings" style="width:11px;height:11px"></i> نظام الدفع</button></div></div>`;
+    }).join('');
     setTimeout(()=>{if(window.lucide)lucide.createIcons()},50);
   }catch(e){}
 }
@@ -1216,6 +1329,135 @@ async function prRunAll(){
     toast('✓ تم تحويل '+d.total_paid_sar+' ر.س على '+d.processed+' سائق');
     loadPayroll();
   }catch(e){alert('فشل')}
+}
+
+// ───── AUTO-DISPATCH SETTINGS ─────
+function getDispatchCfg(){return JSON.parse(localStorage.getItem('zx_dispatch')||'{"enabled":true,"radius":10,"grouping":true,"groupRadius":2,"maxOrders":3,"priority":"distance","withdrawFee":4}');}
+function saveDispatchCfg(c){localStorage.setItem('zx_dispatch',JSON.stringify(c));}
+function toggleAutoDispatch(){const c=getDispatchCfg();c.enabled=document.getElementById('dv-auto-dispatch').checked;saveDispatchCfg(c);toast(c.enabled?'⚡ الإسناد التلقائي مُفعّل':'⏸ تم الإيقاف');}
+function openDispatchSettings(){
+  const c=getDispatchCfg();
+  document.getElementById('ds-radius').value=c.radius;
+  document.getElementById('ds-grouping').checked=c.grouping;
+  document.getElementById('ds-grouping-radius').value=c.groupRadius;
+  document.getElementById('ds-max-orders').value=c.maxOrders;
+  document.getElementById('ds-priority').value=c.priority;
+  document.getElementById('ds-withdraw-fee').value=c.withdrawFee;
+  document.getElementById('dispatch-mod').classList.add('open');
+}
+function closeDispatchMod(){document.getElementById('dispatch-mod').classList.remove('open')}
+function saveDispatchSettings(){
+  const c={
+    enabled:document.getElementById('dv-auto-dispatch').checked,
+    radius:+document.getElementById('ds-radius').value,
+    grouping:document.getElementById('ds-grouping').checked,
+    groupRadius:+document.getElementById('ds-grouping-radius').value,
+    maxOrders:+document.getElementById('ds-max-orders').value,
+    priority:document.getElementById('ds-priority').value,
+    withdrawFee:+document.getElementById('ds-withdraw-fee').value
+  };
+  saveDispatchCfg(c);
+  closeDispatchMod();
+  document.getElementById('dvs-radius').textContent=c.radius+' كم';
+  document.getElementById('dvs-group').textContent=c.grouping?`مُفعّل (≤${c.groupRadius}كم)`:'مُعطّل';
+  document.getElementById('dvs-fee').textContent=c.withdrawFee+' ر.س';
+  toast('✓ تم حفظ إعدادات الإسناد · سحب: '+c.withdrawFee+' ر.س لكل عملية');
+}
+async function autoAssignOrder(orderId){
+  const cfg=getDispatchCfg();
+  if(!cfg.enabled){alert('الإسناد التلقائي مُعطّل — فعّله أولاً');return;}
+  toast('⚡ يبحث عن أقرب سائق ضمن '+cfg.radius+' كم…');
+  try{
+    // Try real backend endpoint, fallback to local simulation
+    const r=await fetch(API+'/api/delivery/auto-assign',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({order_id:orderId,radius_km:cfg.radius,grouping:cfg.grouping,group_radius_km:cfg.groupRadius,max_orders:cfg.maxOrders,priority:cfg.priority})}).catch(()=>null);
+    if(r&&r.ok){const d=await r.json();toast('✓ أُسند للسائق: '+d.driver_name+' ('+d.distance_km+' كم)');loadDelivery();return;}
+  }catch(e){}
+  // Simulation fallback
+  setTimeout(()=>{toast('✓ أُسند تلقائياً لأقرب سائق (محاكاة)');loadDelivery();},1200);
+}
+
+// ───── DRIVER PAY MODEL ─────
+function getDriverPayAll(){return JSON.parse(localStorage.getItem('zx_driver_pay')||'{}');}
+function getDriverPay(id){return getDriverPayAll()[id];}
+let DPM_CURRENT=null;
+function openDriverPayMod(id,name,phone){
+  DPM_CURRENT=id;
+  const cur=getDriverPay(id)||{mode:'commission',commission:70,salary:3000,bonus:2,payout:'bank'};
+  document.getElementById('dpm-driver-info').innerHTML=`<div style="width:38px;height:38px;border-radius:50%;background:linear-gradient(135deg,var(--purple),var(--amber));color:#fff;display:flex;align-items:center;justify-content:center;font-weight:900">${name.charAt(0)}</div><div><b style="font-size:13px">${name}</b><div style="font-size:10px;color:var(--mute);direction:ltr;text-align:right">${phone}</div></div>`;
+  document.querySelectorAll('.pay-card').forEach(c=>c.classList.toggle('selected',c.dataset.mode===cur.mode));
+  document.querySelector(`input[name="dpm-mode"][value="${cur.mode}"]`).checked=true;
+  document.getElementById('dpm-commission').value=cur.commission;
+  document.getElementById('dpm-salary').value=cur.salary;
+  document.getElementById('dpm-bonus').value=cur.bonus;
+  document.getElementById('dpm-payout').value=cur.payout;
+  document.getElementById('dpm-commission-fields').style.display=cur.mode==='commission'?'block':'none';
+  document.getElementById('dpm-salary-fields').style.display=cur.mode==='salary'?'block':'none';
+  document.getElementById('driver-pay-mod').classList.add('open');
+}
+function closeDriverPayMod(){document.getElementById('driver-pay-mod').classList.remove('open')}
+function dpmToggleMode(inp){
+  document.querySelectorAll('.pay-card').forEach(c=>c.classList.toggle('selected',c.dataset.mode===inp.value));
+  document.getElementById('dpm-commission-fields').style.display=inp.value==='commission'?'block':'none';
+  document.getElementById('dpm-salary-fields').style.display=inp.value==='salary'?'block':'none';
+}
+function saveDriverPay(){
+  if(!DPM_CURRENT)return;
+  const all=getDriverPayAll();
+  all[DPM_CURRENT]={
+    mode:document.querySelector('input[name="dpm-mode"]:checked').value,
+    commission:+document.getElementById('dpm-commission').value,
+    salary:+document.getElementById('dpm-salary').value,
+    bonus:+document.getElementById('dpm-bonus').value,
+    payout:document.getElementById('dpm-payout').value
+  };
+  localStorage.setItem('zx_driver_pay',JSON.stringify(all));
+  closeDriverPayMod();
+  loadDelivery();
+  toast('✓ تم حفظ نظام الدفع للسائق');
+}
+
+// ───── MERCHANT SERVICES (7 services with auto-activation) ─────
+const SERVICES=[
+  {id:'domain',icon:'🌐',bg:'linear-gradient(135deg,#3b82f6,#06b6d4)',title:'نطاق متجر مخصص',desc:'احصل على رابط احترافي مثل mystore.com بدل الرابط الفرعي على Zerax',feats:['نطاق .com / .sa / .net','تركيب تلقائي خلال دقائق','SSL مجاني','تجديد سنوي تلقائي'],price:99,period:'سنوياً',featured:false,oneTime:false},
+  {id:'email',icon:'📧',bg:'linear-gradient(135deg,#ec4899,#f43f5e)',title:'إيميل بنطاق المتجر',desc:'5 صناديق بريد احترافية مثل info@mystore.com (يتطلب تفعيل النطاق)',feats:['5 صناديق بريد','مساحة 10 GB لكل صندوق','إعادة توجيه ذكي','حماية من البريد المزعج'],price:49,period:'سنوياً',featured:false,oneTime:false},
+  {id:'template',icon:'🎨',bg:'linear-gradient(135deg,#fbbf24,#f59e0b)',title:'قالب متجر فاخر',desc:'قوالب احترافية جاهزة (مطاعم، أزياء، عطور، صيدليات…) — تفعيل بضغطة',feats:['12+ قالب جاهز','تخصيص ألوان وخطوط','معاينة فورية قبل التفعيل','يتجدد كل شهر'],price:199,period:'مرة واحدة',featured:true,oneTime:true},
+  {id:'app',icon:'📱',bg:'linear-gradient(135deg,#7c3aed,#a78bfa)',title:'تطبيق متجر iOS/Android',desc:'تطبيق جوال بشعارك على App Store و Google Play — نبنيه ونرفعه لك',feats:['iOS + Android','اسم وشعار متجرك','إشعارات Push','تحديث تلقائي'],price:999,period:'مرة واحدة',featured:false,oneTime:true},
+  {id:'delivery_plus',icon:'🚚',bg:'linear-gradient(135deg,#10b981,#059669)',title:'خدمة التوصيل الذكية',desc:'الإسناد التلقائي + تتبع GPS + إشعارات WhatsApp للعميل والسائق',feats:['إسناد فوري للأقرب','تتبع لحظي للعميل','WhatsApp تلقائي','تقارير مفصّلة'],price:79,period:'شهرياً',featured:true,oneTime:false},
+  {id:'vip',icon:'⭐',bg:'linear-gradient(135deg,#ef4444,#dc2626)',title:'دعم VIP أولوية',desc:'فريق دعم خاص متاح 24/7 يرد خلال 5 دقائق + استشارات تسويقية',feats:['رد خلال 5 دقائق','مدير حساب مخصص','استشارات شهرية','أولوية في الإصلاحات'],price:99,period:'شهرياً',featured:false,oneTime:false},
+  {id:'ai_premium',icon:'🧠',bg:'linear-gradient(135deg,#06b6d4,#0891b2)',title:'AI Premium (Claude Opus)',desc:'استبدل Gemini Flash بـ Claude Opus 4.5 للنتائج الأفخم + رصيد نقاط مضاعف',feats:['Claude Opus 4.5','تحليل أعمق وأطول','صور 4K مزدوجة','+50% نقاط شهرياً'],price:149,period:'شهرياً',featured:false,oneTime:false}
+];
+function getActiveServices(){return JSON.parse(localStorage.getItem('zx_active_services')||'{}');}
+function loadServices(){
+  const active=getActiveServices();
+  document.getElementById('services-grid').innerHTML=SERVICES.map(s=>{
+    const isActive=!!active[s.id];
+    return `<div class="svc-card ${s.featured?'featured':''} ${isActive?'active-svc':''}">
+      <div class="svc-icon" style="background:${s.bg}">${s.icon}</div>
+      <h4>${s.title}</h4>
+      <div class="svc-desc">${s.desc}</div>
+      ${s.feats.map(f=>`<div class="svc-feat">${f}</div>`).join('')}
+      <div class="svc-price">
+        <div><b>${s.price}</b> ر.س <span class="period">/ ${s.period}</span>${s.oneTime?' <span class="one-time">دفعة واحدة</span>':''}</div>
+        ${isActive?`<button class="svc-btn" style="background:var(--emerald)" onclick="deactivateService('${s.id}')"><i data-lucide="check-circle" style="width:13px;height:13px"></i> مُفعّل · إلغاء</button>`:`<button class="svc-btn" onclick="activateService('${s.id}')"><i data-lucide="zap" style="width:13px;height:13px"></i> فعّل الآن</button>`}
+      </div>
+    </div>`;
+  }).join('');
+  setTimeout(()=>{if(window.lucide)lucide.createIcons()},50);
+}
+function activateService(id){
+  const svc=SERVICES.find(s=>s.id===id);if(!svc)return;
+  if(!confirm(`تفعيل خدمة "${svc.title}" بمبلغ ${svc.price} ر.س ${svc.oneTime?'(دفعة واحدة)':svc.period}؟\n\nسيتم الخصم من بطاقتك الافتراضية وتفعيل الخدمة تلقائياً بدون أي تدخل بشري.`))return;
+  const active=getActiveServices();
+  active[id]={activatedAt:Date.now(),expires:svc.oneTime?null:Date.now()+(svc.period==='سنوياً'?365:30)*86400000};
+  localStorage.setItem('zx_active_services',JSON.stringify(active));
+  loadServices();
+  toast('⚡ تم تفعيل "'+svc.title+'" تلقائياً · سيكون نشطاً خلال 60 ثانية');
+}
+function deactivateService(id){
+  if(!confirm('متأكد تبي تلغي الخدمة؟ بتظل نشطة حتى نهاية الفترة المدفوعة.'))return;
+  const active=getActiveServices();delete active[id];localStorage.setItem('zx_active_services',JSON.stringify(active));
+  loadServices();
+  toast('تم إلغاء التجديد التلقائي');
 }
 
 // ───── GATEWAYS ─────
