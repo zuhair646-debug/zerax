@@ -142,9 +142,122 @@ html,body{height:100%;background:var(--bg);color:#0a0a14;font-family:'IBM Plex S
 .pcard.add{border:2px dashed var(--border);display:flex;flex-direction:column;align-items:center;justify-content:center;padding:30px;text-align:center;color:var(--purple);font-weight:900}
 .pcard.add:hover{border-color:var(--purple);background:#faf5ff}
 
-/* ───── VIDEO STUDIO CHAT ───── */
-.ai-shell{display:grid;grid-template-columns:240px 1fr 320px;gap:14px;height:calc(100vh - 130px)}
-@media (max-width:1200px){.ai-shell{grid-template-columns:1fr;height:auto}}
+/* ───── VIDEO STUDIO (TABBED — DARK ZERAX THEME) ───── */
+.zx-studio{background:#0a0a14;border-radius:18px;overflow:hidden;border:1px solid rgba(255,255,255,.08);box-shadow:0 24px 60px rgba(0,0,0,.25);display:flex;flex-direction:column;height:calc(100vh - 120px);min-height:600px}
+.zx-studio-head{padding:16px 22px;background:linear-gradient(135deg,#0a0a14,#13131f);border-bottom:1px solid rgba(255,255,255,.08);display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+.zx-studio-head .brand{display:flex;align-items:center;gap:10px;color:#fff}
+.zx-studio-head .brand .logo{width:36px;height:36px;border-radius:10px;background:linear-gradient(135deg,var(--amber),var(--violet));display:flex;align-items:center;justify-content:center;font-weight:900;color:#0a0a14;font-size:15px}
+.zx-studio-head .brand h3{font-size:15px;font-weight:900;color:#fff}
+.zx-studio-head .brand .sub{font-size:10px;color:var(--mute);letter-spacing:.5px}
+.zx-studio-head .cfg{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-right:auto}
+.zx-studio-head .cfg select{padding:7px 10px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);border-radius:8px;color:#fff;font-family:inherit;font-weight:700;font-size:11px;outline:none;cursor:pointer}
+.zx-studio-head .cfg select option{background:#13131f;color:#fff}
+.zx-studio-head .cost-est{display:inline-flex;align-items:center;gap:6px;background:rgba(251,191,36,.12);color:var(--amber);border:1px solid rgba(251,191,36,.3);padding:6px 12px;border-radius:99px;font-size:11px;font-weight:900}
+/* Tab bar */
+.zx-tabs{display:flex;background:#13131f;border-bottom:1px solid rgba(255,255,255,.08);overflow-x:auto;scrollbar-width:none}
+.zx-tabs::-webkit-scrollbar{display:none}
+.zx-tab{flex:1;min-width:140px;padding:14px 16px;background:none;border:none;color:#94a3b8;font-family:inherit;font-weight:900;font-size:12px;cursor:pointer;position:relative;transition:all .2s;display:flex;flex-direction:column;align-items:center;gap:6px;border-left:1px solid rgba(255,255,255,.04)}
+.zx-tab:first-child{border-left:none}
+.zx-tab:hover{color:#cbd5e1;background:rgba(255,255,255,.02)}
+.zx-tab.active{color:var(--amber);background:linear-gradient(180deg,rgba(251,191,36,.06),transparent)}
+.zx-tab.active::after{content:'';position:absolute;bottom:0;left:10%;right:10%;height:2.5px;background:var(--amber);border-radius:2px 2px 0 0}
+.zx-tab.done{color:var(--emerald)}
+.zx-tab .num{display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;border-radius:50%;background:rgba(255,255,255,.06);font-size:10px;font-weight:900}
+.zx-tab.active .num{background:var(--amber);color:#0a0a14}
+.zx-tab.done .num{background:var(--emerald);color:#0a0a14}
+.zx-tab .lbl{font-size:11px}
+.zx-tab .cost{font-size:9px;color:var(--mute);font-weight:700;letter-spacing:.3px}
+.zx-tab.active .cost{color:var(--amber);opacity:.7}
+/* Tab content area */
+.zx-body{flex:1;overflow:hidden;display:flex;background:#0a0a14}
+.zx-panel{flex:1;display:none;flex-direction:column;overflow:hidden;color:#fff}
+.zx-panel.active{display:flex}
+.zx-panel-head{padding:14px 22px;border-bottom:1px solid rgba(255,255,255,.06);display:flex;align-items:center;gap:10px;background:rgba(255,255,255,.02)}
+.zx-panel-head .ico{width:38px;height:38px;border-radius:10px;display:flex;align-items:center;justify-content:center;flex-shrink:0;background:linear-gradient(135deg,var(--purple),var(--violet));color:#fff;font-size:18px}
+.zx-panel-head h4{font-size:15px;font-weight:900;color:#fff}
+.zx-panel-head .desc{font-size:11px;color:var(--mute);margin-top:2px;line-height:1.5}
+.zx-panel-head .status{margin-right:auto;font-size:11px;font-weight:900;display:flex;align-items:center;gap:6px;padding:6px 12px;border-radius:99px;background:rgba(255,255,255,.04);color:var(--mute)}
+.zx-panel-head .status.pending{background:rgba(251,191,36,.1);color:var(--amber)}
+.zx-panel-head .status.approved{background:rgba(16,185,129,.12);color:var(--emerald)}
+.zx-content{flex:1;overflow-y:auto;padding:22px;display:flex;flex-direction:column;gap:14px}
+.zx-empty{display:flex;flex-direction:column;align-items:center;justify-content:center;padding:60px 24px;text-align:center;color:var(--mute);flex:1}
+.zx-empty .big-ico{font-size:54px;margin-bottom:14px;opacity:.7}
+.zx-empty h5{color:#fff;font-size:16px;font-weight:900;margin-bottom:8px}
+.zx-empty p{font-size:13px;line-height:1.7;max-width:420px}
+.zx-empty .gen-btn{margin-top:18px;padding:13px 28px;background:linear-gradient(135deg,var(--purple),var(--amber));color:#fff;border:none;border-radius:12px;font-family:inherit;font-weight:900;font-size:13px;cursor:pointer;display:inline-flex;align-items:center;gap:8px;box-shadow:0 12px 28px rgba(124,58,237,.4)}
+.zx-empty .gen-btn:hover{transform:translateY(-2px);box-shadow:0 16px 36px rgba(124,58,237,.5)}
+.zx-empty .gen-btn:disabled{opacity:.5;cursor:not-allowed;transform:none}
+/* Cards inside panel */
+.zx-card{background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.06);border-radius:14px;padding:16px;color:#fff}
+.zx-card.approved{border-color:rgba(16,185,129,.3);background:rgba(16,185,129,.04)}
+.zx-card .ttl{font-size:12px;font-weight:900;color:var(--amber);text-transform:uppercase;letter-spacing:1px;margin-bottom:10px}
+.zx-card .narration{font-size:14px;line-height:1.9;background:rgba(0,0,0,.3);padding:14px;border-radius:10px;border-right:3px solid var(--amber);color:#f1f5f9}
+.zx-actions{display:flex;gap:8px;margin-top:14px;flex-wrap:wrap}
+.zx-btn{padding:9px 16px;border:none;border-radius:9px;font-family:inherit;font-weight:900;font-size:12px;cursor:pointer;display:inline-flex;align-items:center;gap:6px;transition:all .2s}
+.zx-btn.approve{background:var(--emerald);color:#fff}
+.zx-btn.approve:hover{background:#059669;transform:translateY(-1px)}
+.zx-btn.regen{background:rgba(255,255,255,.08);color:#fff;border:1px solid rgba(255,255,255,.12)}
+.zx-btn.regen:hover{background:rgba(255,255,255,.14)}
+.zx-btn.next{background:linear-gradient(135deg,var(--amber),#f59e0b);color:#0a0a14;margin-right:auto}
+.zx-btn:disabled{opacity:.4;cursor:not-allowed}
+/* Scene list */
+.zx-scene{background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.06);border-radius:12px;padding:14px;margin-bottom:10px;transition:all .2s}
+.zx-scene.approved{border-color:rgba(16,185,129,.35);background:rgba(16,185,129,.04)}
+.zx-scene .hdr{display:flex;align-items:center;gap:8px;margin-bottom:8px}
+.zx-scene .num{width:24px;height:24px;border-radius:50%;background:var(--purple);color:#fff;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:900}
+.zx-scene.approved .num{background:var(--emerald)}
+.zx-scene .dur{margin-right:auto;font-size:10px;color:var(--mute);background:rgba(255,255,255,.06);padding:3px 9px;border-radius:99px;font-weight:700}
+.zx-scene .field{margin-top:8px;font-size:12px;line-height:1.7;color:#cbd5e1}
+.zx-scene .field b{color:var(--violet);font-size:10px;text-transform:uppercase;letter-spacing:.5px;display:block;margin-bottom:3px}
+.zx-scene textarea{width:100%;background:rgba(0,0,0,.3);border:1px solid rgba(255,255,255,.08);border-radius:8px;padding:10px;color:#fff;font-family:inherit;font-size:12px;line-height:1.7;resize:vertical;min-height:60px;margin-top:4px;outline:none}
+.zx-scene textarea:focus{border-color:var(--amber)}
+/* Image grid */
+.zx-img-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:12px}
+.zx-img-card{background:rgba(255,255,255,.04);border:1.5px solid rgba(255,255,255,.06);border-radius:12px;overflow:hidden;position:relative;transition:all .2s}
+.zx-img-card.approved{border-color:var(--emerald)}
+.zx-img-card .img{width:100%;aspect-ratio:9/16;background:#000;background-size:cover;background-position:center;display:flex;align-items:center;justify-content:center;color:var(--mute);font-size:11px}
+.zx-img-card .img.loading::after{content:'';position:absolute;inset:0;background:linear-gradient(110deg,transparent 30%,rgba(255,255,255,.06) 50%,transparent 70%);animation:shimmer 1.5s linear infinite}
+@keyframes shimmer{from{transform:translateX(-100%)}to{transform:translateX(100%)}}
+.zx-img-card .meta{padding:10px 12px;font-size:11px;color:#cbd5e1}
+.zx-img-card .meta b{color:#fff;display:block;margin-bottom:3px;font-size:11px}
+.zx-img-card .badge-approved{position:absolute;top:8px;right:8px;background:var(--emerald);color:#fff;font-size:9px;font-weight:900;padding:3px 8px;border-radius:99px;display:none}
+.zx-img-card.approved .badge-approved{display:block}
+.zx-img-card .acts{display:flex;gap:4px;padding:0 10px 10px}
+.zx-img-card .acts button{flex:1;padding:7px;border:none;border-radius:7px;font-family:inherit;font-weight:900;font-size:10px;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:4px}
+.zx-img-card .acts .ok{background:var(--emerald);color:#fff}
+.zx-img-card .acts .re{background:rgba(255,255,255,.06);color:#cbd5e1;border:1px solid rgba(255,255,255,.08)}
+.zx-img-card.approved .acts .ok{background:rgba(16,185,129,.3);color:#a7f3d0}
+/* Voice preview */
+.zx-voice-preview{background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);border-radius:14px;padding:18px;display:flex;align-items:center;gap:14px}
+.zx-voice-preview audio{flex:1;height:40px}
+.zx-voice-preview .info{color:#fff;font-size:12px}
+.zx-voice-preview .info b{color:var(--amber)}
+/* Persistent chat bar */
+.zx-chatbar{background:#13131f;border-top:1px solid rgba(255,255,255,.08);padding:12px 16px}
+.zx-chatbar .row{display:flex;align-items:center;gap:8px;background:rgba(255,255,255,.04);border:1.5px solid rgba(255,255,255,.08);border-radius:14px;padding:6px 8px}
+.zx-chatbar .row:focus-within{border-color:var(--amber)}
+.zx-chatbar textarea{flex:1;background:none;border:none;outline:none;color:#fff;padding:8px;font-family:inherit;font-size:13px;resize:none;min-height:24px;max-height:100px;line-height:1.6}
+.zx-chatbar textarea::placeholder{color:var(--mute)}
+.zx-chatbar .ibtn{width:36px;height:36px;border-radius:50%;border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;background:rgba(255,255,255,.06);color:#cbd5e1;border:1px solid rgba(255,255,255,.08);flex-shrink:0}
+.zx-chatbar .ibtn:hover{background:rgba(255,255,255,.12);color:#fff}
+.zx-chatbar .ibtn.send{background:linear-gradient(135deg,var(--purple),var(--amber));color:#fff;border:none}
+.zx-chatbar .ibtn.send:hover{transform:scale(1.05)}
+.zx-suggestions-row{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px}
+.zx-sug{padding:7px 12px;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.06);border-radius:99px;color:#cbd5e1;font-family:inherit;font-weight:700;font-size:11px;cursor:pointer;display:inline-flex;align-items:center;gap:5px;transition:all .15s}
+.zx-sug:hover{background:rgba(251,191,36,.1);border-color:rgba(251,191,36,.3);color:var(--amber)}
+/* Final video preview */
+.zx-final{display:flex;flex-direction:column;align-items:center;gap:14px;padding:14px}
+.zx-final video{width:100%;max-width:380px;border-radius:14px;border:1px solid rgba(255,255,255,.08);box-shadow:0 24px 60px rgba(0,0,0,.4)}
+.zx-final .stats{display:flex;gap:8px;flex-wrap:wrap;justify-content:center}
+.zx-final .stat{background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.06);padding:8px 14px;border-radius:10px;font-size:11px;color:#cbd5e1}
+.zx-final .stat b{color:var(--amber);display:block;font-size:14px}
+/* progress steps */
+.zx-progress{display:flex;align-items:center;gap:8px;padding:14px 22px;background:rgba(255,255,255,.02);border-bottom:1px solid rgba(255,255,255,.06)}
+.zx-progress .pdot{flex:1;height:4px;background:rgba(255,255,255,.06);border-radius:99px;overflow:hidden;position:relative}
+.zx-progress .pdot.done{background:var(--emerald)}
+.zx-progress .pdot.active{background:linear-gradient(90deg,var(--amber),transparent);background-size:200% 100%;animation:slide 1.5s linear infinite}
+@keyframes slide{from{background-position:200% 0}to{background-position:-200% 0}}
+@media (max-width:900px){.zx-studio-head{flex-direction:column;align-items:flex-start}.zx-tab{min-width:90px;padding:10px 8px}.zx-tab .lbl{font-size:10px}.zx-tab .cost{display:none}}
 .vs-stages{background:transparent;display:flex;flex-direction:column;gap:10px;overflow-y:auto}
 .stage{background:#fff;border:1.5px solid var(--border);border-radius:14px;overflow:hidden;transition:all .25s}
 .stage.active{border-color:var(--purple);box-shadow:0 8px 24px rgba(124,58,237,.15);transform:translateY(-2px)}
@@ -474,119 +587,128 @@ html,body{height:100%;background:var(--bg);color:#0a0a14;font-family:'IBM Plex S
         </div>
       </div>
 
-      <!-- ─── VIDEO STUDIO CHAT (Full AI Workspace) ─── -->
+      <!-- ─── VIDEO STUDIO — TABBED DARK ZERAX ─── -->
       <div class="page" data-page="video-studio">
-        <!-- Studio config bar -->
-        <div class="panel" style="display:flex;flex-wrap:wrap;gap:14px;align-items:center;padding:14px 18px;margin-bottom:14px">
-          <div style="display:flex;align-items:center;gap:8px"><i data-lucide="languages" style="width:16px;height:16px;color:var(--purple)"></i><b style="font-size:12px">لغة الفيديو:</b>
-            <select id="vs-lang" style="padding:7px 10px;border:1px solid var(--border);border-radius:8px;font-family:inherit;font-weight:700;font-size:12px;background:#fff" onchange="vsUpdateConfig()">
-              <option value="ar-sa">🇸🇦 العربية - لهجة سعودية</option>
-              <option value="ar-eg">🇪🇬 العربية - لهجة مصرية</option>
-              <option value="ar-msa">🌍 العربية الفصحى</option>
-              <option value="en">🇬🇧 English</option>
-              <option value="fr">🇫🇷 Français</option>
-              <option value="hi">🇮🇳 हिन्दी</option>
-            </select>
-          </div>
-          <div style="display:flex;align-items:center;gap:8px"><i data-lucide="mic-2" style="width:16px;height:16px;color:var(--rose)"></i><b style="font-size:12px">الصوت:</b>
-            <select id="vs-voice" style="padding:7px 10px;border:1px solid var(--border);border-radius:8px;font-family:inherit;font-weight:700;font-size:12px;background:#fff" onchange="vsUpdateConfig()">
-              <option value="zerax_male_deep">🎙️ ذكر - عميق وفخم</option>
-              <option value="zerax_male_warm">🎙️ ذكر - دافئ وودود</option>
-              <option value="zerax_female_warm">🎤 أنثى - دافئة وراقية</option>
-              <option value="zerax_female_clear">🎤 أنثى - صافية وحيوية</option>
-              <option value="zerax_neutral">🔊 محايد - احترافي</option>
-            </select>
-            <button class="btn btn-outline" style="padding:6px 10px;font-size:11px" onclick="vsPreviewVoice()" title="سماع عيّنة"><i data-lucide="play" style="width:12px;height:12px"></i> عيّنة</button>
-          </div>
-          <div style="display:flex;align-items:center;gap:8px"><i data-lucide="sparkles" style="width:16px;height:16px;color:var(--amber)"></i><b style="font-size:12px">الأسلوب:</b>
-            <select id="vs-tone" style="padding:7px 10px;border:1px solid var(--border);border-radius:8px;font-family:inherit;font-weight:700;font-size:12px;background:#fff" onchange="vsUpdateConfig()">
-              <option value="energetic">⚡ حماسي</option>
-              <option value="luxury">💎 فاخر</option>
-              <option value="warm">🤗 دافئ</option>
-              <option value="tech">🔬 تقني</option>
-            </select>
-          </div>
-          <div style="display:flex;align-items:center;gap:8px"><i data-lucide="clock" style="width:16px;height:16px;color:var(--emerald)"></i><b style="font-size:12px">المدة:</b>
-            <select id="vs-duration" style="padding:7px 10px;border:1px solid var(--border);border-radius:8px;font-family:inherit;font-weight:700;font-size:12px;background:#fff" onchange="vsUpdateConfig()">
-              <option value="15">15 ثانية</option>
-              <option value="30" selected>30 ثانية</option>
-              <option value="45">45 ثانية</option>
-              <option value="60">60 ثانية</option>
-            </select>
-          </div>
-          <div style="margin-right:auto;display:flex;align-items:center;gap:6px;background:#faf5ff;border:1px solid #ddd6fe;padding:7px 12px;border-radius:99px;font-size:11px;font-weight:900;color:var(--purple)"><i data-lucide="zap" style="width:14px;height:14px"></i> تكلفة تقديرية: <b id="vs-cost-est">38 نقطة</b></div>
-        </div>
-
-        <div class="ai-shell">
-          <!-- Left: Suggestions + Social + History -->
-          <aside class="vs-side">
-            <h4>💡 اقتراحات سريعة</h4>
-            <button class="vs-suggestion" onclick="vsSendSuggestion(this.dataset.q)" data-q="ولّد لي فيديو إعلاني لـ iPhone 17 Pro مدة 30 ثانية بأسلوب فاخر">🎬 iPhone 17 Pro فاخر <span class="emoji">📱</span></button>
-            <button class="vs-suggestion" onclick="vsSendSuggestion(this.dataset.q)" data-q="اعمل فيديو حماسي 15 ثانية لتخفيضات نهاية الأسبوع">⚡ تخفيضات حماسية 15 ث <span class="emoji">🔥</span></button>
-            <button class="vs-suggestion" onclick="vsSendSuggestion(this.dataset.q)" data-q="ولّد فيديو دافئ 45 ثانية لمنتج ساعة Apple Watch Ultra">⌚ Apple Watch دافئ <span class="emoji">💎</span></button>
-            <button class="vs-suggestion" onclick="vsSendSuggestion(this.dataset.q)" data-q="فيديو تقني لسماعات AirPods Pro مدته 30 ثانية">🎧 AirPods Pro تقني <span class="emoji">🔬</span></button>
-
-            <h4 style="margin-top:18px">🌐 النشر على السوشال</h4>
-            <div id="vs-social-mini" style="display:flex;flex-direction:column;gap:6px"></div>
-
-            <h4 style="margin-top:18px">📂 السجل</h4>
-            <div id="vs-history" style="font-size:11px;color:var(--mute);padding:14px;text-align:center">لا فيديوهات بعد</div>
-          </aside>
-
-          <!-- Center: Chat -->
-          <div class="vs-chat">
-            <div class="vs-chat-head">
-              <div class="avt">⚡</div>
-              <div><h4>Zerax AI Studio</h4><div class="sub">مساعدك الإبداعي · ذكاء صناعي متكامل</div></div>
-              <div class="live"><span class="dot"></span> متصل</div>
+        <div class="zx-studio">
+          <!-- Header: brand + config -->
+          <div class="zx-studio-head">
+            <div class="brand">
+              <div class="logo">Z</div>
+              <div><h3>Zerax AI Studio</h3><div class="sub">⚡ POWERED BY GEMINI · CLAUDE · ZERAX VOICE</div></div>
             </div>
-            <div class="vs-messages" id="vs-msgs">
-              <div class="msg ai"><div class="avt">⚡</div><div class="bubble">
-                مرحباً 👋 أنا <b>Zerax AI Studio</b>.<br><br>
-                <b>عملية الإنتاج الكاملة:</b><br>
-                1️⃣ <b>السيناريو الكلامي</b> (Gemini يكتب نص الإعلان) → 5 نقاط<br>
-                2️⃣ <b>سيناريو الأحداث</b> (وصف كل لقطة + الكاميرا) → مجاناً<br>
-                3️⃣ <b>الصور</b> (Gemini Nano Banana لكل مشهد) → 8 نقاط/صورة<br>
-                4️⃣ <b>التعليق الصوتي</b> (Zerax Voice) → 5 نقاط<br>
-                5️⃣ <b>الفيديو النهائي</b> (ffmpeg) → 5 نقاط/5 ثوان<br><br>
-                اكتب طلبك أو اختر من القائمة الجانبية 👈
-              </div></div>
+            <div class="cfg">
+              <select id="vs-lang" onchange="vsUpdateConfig()" title="لغة الفيديو">
+                <option value="ar-sa">🇸🇦 سعودي</option>
+                <option value="ar-eg">🇪🇬 مصري</option>
+                <option value="ar-msa">🌍 فصحى</option>
+                <option value="en">🇬🇧 English</option>
+                <option value="fr">🇫🇷 Français</option>
+                <option value="hi">🇮🇳 हिन्दी</option>
+              </select>
+              <select id="vs-voice" onchange="vsUpdateConfig()" title="الصوت">
+                <option value="zerax_male_deep">🎙️ ذكر عميق</option>
+                <option value="zerax_male_warm">🎙️ ذكر دافئ</option>
+                <option value="zerax_female_warm">🎤 أنثى دافئة</option>
+                <option value="zerax_female_clear">🎤 أنثى صافية</option>
+                <option value="zerax_neutral">🔊 محايد</option>
+              </select>
+              <select id="vs-tone" onchange="vsUpdateConfig()" title="الأسلوب">
+                <option value="energetic">⚡ حماسي</option>
+                <option value="luxury">💎 فاخر</option>
+                <option value="warm">🤗 دافئ</option>
+                <option value="tech">🔬 تقني</option>
+              </select>
+              <select id="vs-duration" onchange="vsUpdateConfig()" title="المدة">
+                <option value="15">15 ث</option>
+                <option value="30" selected>30 ث</option>
+                <option value="45">45 ث</option>
+                <option value="60">60 ث</option>
+              </select>
             </div>
-            <div class="vs-input">
-              <div class="attach-bar" id="vs-attach-bar"></div>
-              <div class="input-row">
-                <button class="ibtn" onclick="document.getElementById('vs-file').click()" title="ارفق صورة مرجعية"><i data-lucide="image" style="width:18px;height:18px"></i></button>
-                <input type="file" id="vs-file" accept="image/*" multiple style="display:none" onchange="vsAttachFile(this)">
-                <button class="ibtn" id="vs-mic-btn" onclick="vsToggleVoice()" title="تسجيل صوتي"><i data-lucide="mic" style="width:18px;height:18px"></i></button>
-                <textarea id="vs-input-text" placeholder="اكتب طلبك بالتفصيل…" rows="1" oninput="vsAutoSize(this)" onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();vsSend()}"></textarea>
-                <button class="ibtn send" onclick="vsSend()" title="إرسال"><i data-lucide="send" style="width:18px;height:18px"></i></button>
+            <div class="cost-est"><i data-lucide="zap" style="width:13px;height:13px"></i> تكلفة كاملة: <b id="vs-cost-est">62 نقطة</b></div>
+          </div>
+
+          <!-- Progress bar -->
+          <div class="zx-progress">
+            <div class="pdot" id="prog-1"></div>
+            <div class="pdot" id="prog-2"></div>
+            <div class="pdot" id="prog-3"></div>
+            <div class="pdot" id="prog-4"></div>
+            <div class="pdot" id="prog-5"></div>
+          </div>
+
+          <!-- Tabs -->
+          <div class="zx-tabs">
+            <button class="zx-tab active" data-tab="script" onclick="vsSwitchTab('script')"><span class="num">1</span><span class="lbl">📝 السيناريو</span><span class="cost">5 نقاط</span></button>
+            <button class="zx-tab" data-tab="scenes" onclick="vsSwitchTab('scenes')"><span class="num">2</span><span class="lbl">🎬 المشاهد</span><span class="cost">مجاني</span></button>
+            <button class="zx-tab" data-tab="images" onclick="vsSwitchTab('images')"><span class="num">3</span><span class="lbl">🖼️ الصور</span><span class="cost">8/صورة</span></button>
+            <button class="zx-tab" data-tab="voice" onclick="vsSwitchTab('voice')"><span class="num">4</span><span class="lbl">🎙️ الصوت</span><span class="cost">5 نقاط</span></button>
+            <button class="zx-tab" data-tab="final" onclick="vsSwitchTab('final')"><span class="num">5</span><span class="lbl">🎥 الفيديو النهائي</span><span class="cost">30 نقطة</span></button>
+          </div>
+
+          <!-- Body: panels -->
+          <div class="zx-body">
+            <!-- TAB 1: SCRIPT -->
+            <div class="zx-panel active" data-panel="script">
+              <div class="zx-panel-head"><div class="ico" style="background:linear-gradient(135deg,#7c3aed,#a78bfa)">📝</div><div><h4>السيناريو الكلامي</h4><div class="desc">Gemini يكتب نص التعليق الصوتي حسب لهجتك ومدة الفيديو</div></div><div class="status pending" id="st-script">⏳ بانتظار التوليد</div></div>
+              <div class="zx-content" id="content-script">
+                <div class="zx-empty">
+                  <div class="big-ico">📝</div>
+                  <h5>اكتب فكرة فيديوك أو اختر اقتراح</h5>
+                  <p>مثل: "فيديو إعلاني لـ iPhone 17 Pro بأسلوب فاخر" — Gemini راح يكتب لك نص احترافي بلهجتك بدقة عالية. سيخصم 5 نقاط عند التوليد.</p>
+                </div>
+              </div>
+            </div>
+
+            <!-- TAB 2: SCENES -->
+            <div class="zx-panel" data-panel="scenes">
+              <div class="zx-panel-head"><div class="ico" style="background:linear-gradient(135deg,#ec4899,#f43f5e)">🎬</div><div><h4>المشاهد المكتوبة (Storyboard)</h4><div class="desc">قسّمنا السيناريو لمشاهد قصيرة — كل مشهد فيه: ما يحدث + الكاميرا + التعليق</div></div><div class="status" id="st-scenes-status">— لا توجد مشاهد</div></div>
+              <div class="zx-content" id="content-scenes">
+                <div class="zx-empty"><div class="big-ico">🎬</div><h5>المشاهد ستظهر بعد كتابة السيناريو</h5><p>اعتمد السيناريو في التبويب السابق أولاً.</p></div>
+              </div>
+            </div>
+
+            <!-- TAB 3: IMAGES -->
+            <div class="zx-panel" data-panel="images">
+              <div class="zx-panel-head"><div class="ico" style="background:linear-gradient(135deg,#10b981,#059669)">🖼️</div><div><h4>الصور (Gemini Nano Banana)</h4><div class="desc">صورة سينمائية لكل مشهد · 8 نقاط/صورة · موافقة فردية على كل صورة</div></div><div class="status" id="st-images-status">— لم تُولّد الصور</div></div>
+              <div class="zx-content" id="content-images">
+                <div class="zx-empty"><div class="big-ico">🖼️</div><h5>اعتمد المشاهد أولاً</h5><p>بعد ما توافق على المشاهد، Gemini راح يولّد صورة احترافية لكل مشهد.</p></div>
+              </div>
+            </div>
+
+            <!-- TAB 4: VOICE -->
+            <div class="zx-panel" data-panel="voice">
+              <div class="zx-panel-head"><div class="ico" style="background:linear-gradient(135deg,#fbbf24,#f59e0b)">🎙️</div><div><h4>التعليق الصوتي</h4><div class="desc">Zerax Voice ينطق السيناريو بالصوت المختار · سماع العيّنة قبل الموافقة</div></div><div class="status" id="st-voice-status">— لم يُولّد الصوت</div></div>
+              <div class="zx-content" id="content-voice">
+                <div class="zx-empty"><div class="big-ico">🎙️</div><h5>اعتمد الصور أولاً</h5><p>بعد ما توافق على الصور، نولّد التعليق الصوتي بصوت احترافي.</p></div>
+              </div>
+            </div>
+
+            <!-- TAB 5: FINAL VIDEO -->
+            <div class="zx-panel" data-panel="final">
+              <div class="zx-panel-head"><div class="ico" style="background:linear-gradient(135deg,#06b6d4,#0891b2)">🎥</div><div><h4>الفيديو النهائي</h4><div class="desc">دمج ذكي للصور + الصوت + lip-sync + توقيت دقيق · يخصم 30 نقطة عند التوليد فقط</div></div><div class="status" id="st-final-status">— لم يُدمج</div></div>
+              <div class="zx-content" id="content-final">
+                <div class="zx-empty"><div class="big-ico">🎥</div><h5>اعتمد الصوت أولاً</h5><p>بعد اعتماد جميع الخطوات (سيناريو + مشاهد + صور + صوت)، اضغط "إنتاج الفيديو" — راح يندمج بدقة عالية مع ضبط lip-sync ومخارج الكلمات.</p></div>
               </div>
             </div>
           </div>
 
-          <!-- Right: 5 Stage Panels -->
-          <aside class="vs-stages">
-            <div class="stage" id="stage-text">
-              <div class="stage-h"><i data-lucide="file-text"></i> <b>1. السيناريو الكلامي</b> <span class="cost-pill">5 نقاط</span></div>
-              <div class="stage-body" id="st-text"><div class="empty-st">📝 نص التعليق الصوتي اللي راح يقرأه AI</div></div>
+          <!-- Persistent chat bar -->
+          <div class="zx-chatbar">
+            <div class="zx-suggestions-row">
+              <button class="zx-sug" onclick="vsQuickStart('فيديو إعلاني لـ iPhone 17 Pro مدة 30 ثانية بأسلوب فاخر')">📱 iPhone 17 Pro فاخر</button>
+              <button class="zx-sug" onclick="vsQuickStart('فيديو حماسي 15 ثانية لتخفيضات نهاية الأسبوع')">🔥 تخفيضات حماسية</button>
+              <button class="zx-sug" onclick="vsQuickStart('فيديو دافئ 45 ثانية لساعة Apple Watch Ultra')">⌚ Apple Watch دافئ</button>
+              <button class="zx-sug" onclick="vsQuickStart('فيديو تقني 30 ثانية لسماعات AirPods Pro')">🎧 AirPods تقني</button>
             </div>
-            <div class="stage" id="stage-scenes">
-              <div class="stage-h"><i data-lucide="film"></i> <b>2. سيناريو الأحداث</b> <span class="cost-pill" style="background:#d1fae5;color:#065f46">مجاني</span></div>
-              <div class="stage-body" id="st-scenes"><div class="empty-st">🎬 وصف كل لقطة، الكاميرا، الحركة</div></div>
+            <div class="row">
+              <button class="ibtn" onclick="document.getElementById('vs-file').click()" title="ارفق صورة مرجعية"><i data-lucide="paperclip" style="width:16px;height:16px"></i></button>
+              <input type="file" id="vs-file" accept="image/*" multiple style="display:none" onchange="vsAttachFile(this)">
+              <button class="ibtn" onclick="vsPreviewVoice()" title="معاينة الصوت المختار"><i data-lucide="volume-2" style="width:16px;height:16px"></i></button>
+              <textarea id="vs-input-text" placeholder="اكتب فكرة فيديوك… (مثل: فيديو لـ iPhone 17 بأسلوب فاخر)" rows="1" oninput="vsAutoSize(this)" onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();vsHandleChat()}"></textarea>
+              <button class="ibtn send" onclick="vsHandleChat()" title="إرسال"><i data-lucide="send" style="width:16px;height:16px"></i></button>
             </div>
-            <div class="stage" id="stage-images">
-              <div class="stage-h"><i data-lucide="image"></i> <b>3. الصور (لقطات)</b> <span class="cost-pill">8/صورة</span></div>
-              <div class="stage-body" id="st-images"><div class="empty-st">🖼️ صور Gemini لكل مشهد</div></div>
-            </div>
-            <div class="stage" id="stage-audio">
-              <div class="stage-h"><i data-lucide="mic-2"></i> <b>4. الصوت</b> <span class="cost-pill">5 نقاط</span></div>
-              <div class="stage-body" id="st-audio"><div class="empty-st">🎙️ التعليق الصوتي بعد التوليد</div></div>
-            </div>
-            <div class="stage" id="stage-video">
-              <div class="stage-h"><i data-lucide="clapperboard"></i> <b>5. الفيديو النهائي</b> <span class="cost-pill">5/5ث</span></div>
-              <div class="stage-body" id="st-video"><div class="empty-st">🎬 ينعرض هنا الفيديو الجاهز للنشر</div></div>
-            </div>
-          </aside>
+          </div>
         </div>
       </div>
 
@@ -879,133 +1001,252 @@ function pmSave(){
   toast('✓ تم حفظ المنتج');
 }
 
-// ───── VIDEO STUDIO CHAT ─────
+// ───── VIDEO STUDIO (TABBED WORKFLOW) ─────
 let VS_ATTACHMENTS=[],VS_RECORDING=null;
-function vsAutoSize(t){t.style.height='auto';t.style.height=Math.min(t.scrollHeight,120)+'px'}
+let VS_STATE={tab:'script',idea:'',story:null,approvedScenes:{},images:{},approvedImages:{},audio:null,audioApproved:false,video:null};
+function vsAutoSize(t){t.style.height='auto';t.style.height=Math.min(t.scrollHeight,100)+'px'}
 function vsAttachFile(inp){
   for(const f of inp.files){
     const reader=new FileReader();
-    reader.onload=e=>{
-      VS_ATTACHMENTS.push({type:'image',data:e.target.result,name:f.name});
-      vsRenderAttachments();
-    };
+    reader.onload=e=>{VS_ATTACHMENTS.push({type:'image',data:e.target.result,name:f.name});toast('📎 ملف مرفق: '+f.name);};
     reader.readAsDataURL(f);
   }
   inp.value='';
 }
-function vsRenderAttachments(){
-  $('vs-attach-bar').innerHTML=VS_ATTACHMENTS.map((a,i)=>`<div class="attach-pill">📎 ${a.name?a.name.slice(0,18):a.type} <button onclick="VS_ATTACHMENTS.splice(${i},1);vsRenderAttachments()">✕</button></div>`).join('');
+function vsSwitchTab(tab){
+  VS_STATE.tab=tab;
+  document.querySelectorAll('.zx-tab').forEach(t=>t.classList.toggle('active',t.dataset.tab===tab));
+  document.querySelectorAll('.zx-panel').forEach(p=>p.classList.toggle('active',p.dataset.panel===tab));
+  vsRenderTab(tab);
 }
-async function vsToggleVoice(){
-  if(VS_RECORDING){VS_RECORDING.stop();return;}
-  try{
-    const stream=await navigator.mediaDevices.getUserMedia({audio:true});
-    const rec=new MediaRecorder(stream);
-    const chunks=[];
-    rec.ondataavailable=e=>chunks.push(e.data);
-    rec.onstop=()=>{
-      const blob=new Blob(chunks,{type:'audio/webm'});
-      VS_ATTACHMENTS.push({type:'audio',name:'تسجيل صوتي '+new Date().toLocaleTimeString('ar-SA'),blob});
-      vsRenderAttachments();
-      stream.getTracks().forEach(t=>t.stop());
-      VS_RECORDING=null;
-      $('vs-mic-btn').classList.remove('recording');
-    };
-    rec.start();
-    VS_RECORDING=rec;
-    $('vs-mic-btn').classList.add('recording');
-    toast('🎙️ التسجيل بدأ … اضغط الميكروفون مرة ثانية للإيقاف');
-  }catch(e){alert('لم نتمكن من الوصول للميكروفون')}
-}
-function vsSendSuggestion(q){$('vs-input-text').value=q;vsSend()}
-function vsAddMsg(role,html){
-  const m=document.createElement('div');
-  m.className='msg '+role;
-  m.innerHTML=`<div class="avt">${role==='user'?'م':'⚡'}</div><div class="bubble">${html}</div>`;
-  $('vs-msgs').appendChild(m);
-  $('vs-msgs').scrollTop=$('vs-msgs').scrollHeight;
-  return m;
-}
-async function vsSend(){
-  const txt=$('vs-input-text').value.trim();if(!txt&&!VS_ATTACHMENTS.length)return;
-  let userHTML=txt.replace(/\n/g,'<br>');
-  VS_ATTACHMENTS.forEach(a=>{if(a.type==='image')userHTML+=`<img src="${a.data}">`;else if(a.type==='audio')userHTML+=`<div style="margin-top:6px;padding:6px 10px;background:#fff;border-radius:8px;font-size:11px">🎙️ ${a.name}</div>`});
-  vsAddMsg('user',userHTML);
+function vsHandleChat(){
+  const txt=$('vs-input-text').value.trim();if(!txt)return;
+  VS_STATE.idea=txt;
   $('vs-input-text').value='';vsAutoSize($('vs-input-text'));
-  VS_ATTACHMENTS=[];vsRenderAttachments();
+  // Start workflow from script tab
+  vsSwitchTab('script');
+  vsGenerateScript();
+}
+function vsQuickStart(q){VS_STATE.idea=q;$('vs-input-text').value=q;vsSwitchTab('script');vsGenerateScript();}
+function vsGetConfig(){
+  return {
+    duration:parseInt($('vs-duration').value||'30'),
+    tone:$('vs-tone').value||'energetic',
+    langRaw:$('vs-lang').value||'ar-sa',
+    voice:$('vs-voice').value||'zerax_male_deep'
+  };
+}
+function vsSetProgress(step,state){const el=document.getElementById('prog-'+step);if(el){el.className='pdot '+state;}}
+function vsSetTabStatus(tab,state,label){
+  const t=document.querySelector(`.zx-tab[data-tab="${tab}"]`);if(t){t.classList.toggle('done',state==='done');t.classList.toggle('active',state==='active'||VS_STATE.tab===tab);}
+  const sMap={script:'st-script',scenes:'st-scenes-status',images:'st-images-status',voice:'st-voice-status',final:'st-final-status'};
+  const s=document.getElementById(sMap[tab]);if(s){s.textContent=label;s.className='status '+(state==='done'?'approved':state==='pending'?'pending':'');}
+}
 
-  // Reset stages
-  ['text','scenes','images','audio','video'].forEach(s=>{const el=document.getElementById('stage-'+s);if(el){el.classList.remove('active','done');const b=document.getElementById('st-'+s);if(b)b.innerHTML=`<div class="empty-st">⏳ بانتظار…</div>`;}});
-
-  const typingMsg=vsAddMsg('ai','<span class="typing"><span></span><span></span><span></span></span> أحضّر العملية…');
+// ───── STEP 1: SCRIPT ─────
+async function vsGenerateScript(){
+  const cfg=vsGetConfig();const lang=cfg.langRaw.startsWith('ar')?'ar':cfg.langRaw;
+  if(!VS_STATE.idea){VS_STATE.idea=$('vs-input-text').value.trim()||'منتج جذاب';}
+  if(WALLET<5){alert('رصيد غير كافٍ — تحتاج 5 نقاط للسيناريو');return;}
+  document.getElementById('content-script').innerHTML=`<div class="zx-empty"><div class="big-ico">⏳</div><h5>Gemini يكتب السيناريو…</h5><p>بـ <b style="color:var(--amber)">${({'ar-sa':'لهجة سعودية','ar-eg':'لهجة مصرية','ar-msa':'العربية الفصحى','en':'English','fr':'Français','hi':'हिन्दी'})[cfg.langRaw]||lang}</b> · مدة ${cfg.duration} ثانية · أسلوب ${({energetic:'حماسي',luxury:'فاخر',warm:'دافئ',tech:'تقني'})[cfg.tone]}</p></div>`;
+  vsSetProgress(1,'active');vsSetTabStatus('script','pending','🔄 جاري التوليد...');
   try{
-    // Read config selectors
-    const duration=parseInt(document.getElementById('vs-duration').value||'30');
-    const tone=document.getElementById('vs-tone').value||'energetic';
-    const langRaw=document.getElementById('vs-lang').value||'ar-sa';
-    const lang=langRaw.startsWith('ar')?'ar':langRaw;
-    const voice=document.getElementById('vs-voice').value||'zerax_male_deep';
-    const m=txt.match(/(?:فيديو|إعلان|لـ|عن|ل)\s+(.+?)(?:بأسلوب|مدته|مدة|ثانية|$)/);
-    const productName=(m?m[1]:txt.split(/\s+/).slice(0,6).join(' ')).trim();
+    const m=VS_STATE.idea.match(/(?:فيديو|إعلان|لـ|عن|ل)\s+(.+?)(?:بأسلوب|مدته|مدة|ثانية|$)/);
+    const productName=(m?m[1]:VS_STATE.idea.split(/\s+/).slice(0,6).join(' ')).trim();
+    const r=await fetch(API+'/api/promo-video/storyboard',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({product_name:productName,duration_seconds:cfg.duration,tone:cfg.tone,lang,cta:lang==='ar'?'اطلب الآن':'Order now'})});
+    if(!r.ok)throw new Error('فشل توليد السيناريو');
+    VS_STATE.story=await r.json();
+    // Charge immediately
+    WALLET-=(VS_STATE.story.cost||5);localStorage.setItem('zx_credits',WALLET);$('wallet-balance').textContent=WALLET.toLocaleString('ar-EG');
+    toast('✓ سيناريو جاهز · -5 نقاط');
+    vsRenderTab('script');
+    vsSetProgress(1,'done');vsSetTabStatus('script','done','✓ مولّد');
+  }catch(e){
+    document.getElementById('content-script').innerHTML=`<div class="zx-empty"><div class="big-ico">❌</div><h5>خطأ</h5><p>${e.message}</p><button class="gen-btn" onclick="vsGenerateScript()">↻ حاول مرة ثانية</button></div>`;
+    vsSetProgress(1,'');vsSetTabStatus('script','','❌ فشل');
+  }
+}
 
-    // STAGE 1: storyboard
-    document.getElementById('stage-text').classList.add('active');
-    document.getElementById('st-text').innerHTML='<div class="empty-st"><span class="typing"><span></span><span></span><span></span></span> Gemini يكتب السيناريو الكلامي…</div>';
-    typingMsg.querySelector('.bubble').innerHTML=`📝 <b>الخطوة 1/5:</b> أكتب السيناريو الكلامي بـ <b>${({'ar-sa':'لهجة سعودية','ar-eg':'لهجة مصرية','ar-msa':'العربية الفصحى','en':'English','fr':'Français','hi':'हिन्दी'})[langRaw]||lang}</b>…`;
+function vsRenderTab(tab){
+  if(tab==='script')return vsRenderScript();
+  if(tab==='scenes')return vsRenderScenes();
+  if(tab==='images')return vsRenderImages();
+  if(tab==='voice')return vsRenderVoice();
+  if(tab==='final')return vsRenderFinal();
+}
 
-    const storyR=await fetch(API+'/api/promo-video/storyboard',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({product_name:productName,duration_seconds:duration,tone,lang,cta:lang==='ar'?'اطلب الآن':'Order now'})});
-    if(!storyR.ok)throw new Error('storyboard failed');
-    const story=await storyR.json();
+function vsRenderScript(){
+  const el=document.getElementById('content-script');
+  if(!VS_STATE.story){
+    el.innerHTML=`<div class="zx-empty"><div class="big-ico">📝</div><h5>اكتب فكرة فيديوك أو اختر اقتراح</h5><p>Gemini راح يكتب نص احترافي بلهجتك. سيخصم 5 نقاط لحظة التوليد.</p><button class="gen-btn" onclick="vsGenerateScript()" ${WALLET<5?'disabled':''}><i data-lucide="sparkles" style="width:16px;height:16px"></i> توليد السيناريو · 5 نقاط</button></div>`;
+  }else{
+    const s=VS_STATE.story;const cfg=vsGetConfig();
+    el.innerHTML=`<div class="zx-card approved"><div class="ttl">📌 ${s.title}</div><div class="narration">${s.full_narration||s.scenes.map(x=>x.narration).join(' ')}</div><div style="margin-top:10px;font-size:11px;color:var(--mute)">⏱️ ${s.duration_seconds||cfg.duration} ث · 🎙️ سيُقرأ بـ <b style="color:var(--amber)">${({zerax_male_deep:'ذكر عميق',zerax_male_warm:'ذكر دافئ',zerax_female_warm:'أنثى دافئة',zerax_female_clear:'أنثى صافية',zerax_neutral:'محايد'})[cfg.voice]}</b> بـ <b style="color:var(--amber)">${({'ar-sa':'لهجة سعودية','ar-eg':'لهجة مصرية','ar-msa':'الفصحى','en':'English','fr':'Français','hi':'हिन्दी'})[cfg.langRaw]}</b></div><div class="zx-actions"><button class="zx-btn approve" onclick="vsApproveScript()">✓ اعتماد والانتقال للمشاهد</button><button class="zx-btn regen" onclick="vsGenerateScript()">↻ إعادة توليد (-5)</button></div></div>`;
+  }
+  if(window.lucide)lucide.createIcons();
+}
+function vsApproveScript(){toast('✅ تم اعتماد السيناريو');vsSwitchTab('scenes');}
 
-    // Stage 1: text only (the narration)
-    document.getElementById('stage-text').classList.remove('active');document.getElementById('stage-text').classList.add('done');
-    document.getElementById('st-text').innerHTML=`<b style="color:var(--purple);font-size:11px;display:block;margin-bottom:6px">📌 ${story.title}</b><div style="background:#faf5ff;padding:8px;border-radius:8px;border-right:3px solid var(--purple);font-size:11px;line-height:1.7">${story.full_narration||story.scenes.map(s=>s.narration).join(' ')}</div><div style="margin-top:6px;font-size:10px;color:var(--mute)">🎙️ سيُقرأ بصوت: <b>${({zerax_male_deep:'ذكر عميق',zerax_male_warm:'ذكر دافئ',zerax_female_warm:'أنثى دافئة',zerax_female_clear:'أنثى صافية',zerax_neutral:'محايد'})[voice]}</b></div>`;
+// ───── STEP 2: SCENES ─────
+function vsRenderScenes(){
+  const el=document.getElementById('content-scenes');
+  if(!VS_STATE.story){
+    el.innerHTML=`<div class="zx-empty"><div class="big-ico">🎬</div><h5>اعتمد السيناريو أولاً</h5><p>ارجع للتبويب 1 لتوليد السيناريو.</p><button class="gen-btn" onclick="vsSwitchTab('script')">← العودة للسيناريو</button></div>`;
+    return;
+  }
+  const scenes=VS_STATE.story.scenes||[];
+  const allApproved=scenes.every((s,i)=>VS_STATE.approvedScenes[i]);
+  el.innerHTML=`<div style="margin-bottom:10px;color:var(--mute);font-size:12px">📊 ${Object.keys(VS_STATE.approvedScenes).filter(k=>VS_STATE.approvedScenes[k]).length}/${scenes.length} مشهد معتمد · مجاني · عدّل أي مشهد قبل الاعتماد</div>`+
+  scenes.map((s,i)=>{
+    const ok=VS_STATE.approvedScenes[i];
+    return `<div class="zx-scene ${ok?'approved':''}" id="scene-${i}"><div class="hdr"><span class="num">${s.seq||i+1}</span><span style="font-weight:900;font-size:13px">مشهد ${s.seq||i+1}</span><span class="dur">${s.duration||5} ث</span></div><div class="field"><b>📹 الرؤية البصرية / حركة الكاميرا</b><textarea data-scene="${i}" data-field="visual">${s.visual_prompt||''}</textarea></div><div class="field"><b>💬 نص على الشاشة</b><textarea data-scene="${i}" data-field="text_overlay" rows="1">${s.text_overlay||''}</textarea></div><div class="field"><b>🗣️ التعليق الصوتي (سيُنطق)</b><textarea data-scene="${i}" data-field="narration">${s.narration||''}</textarea></div><div class="zx-actions"><button class="zx-btn ${ok?'regen':'approve'}" onclick="vsToggleScene(${i})">${ok?'↺ إلغاء الاعتماد':'✓ اعتماد المشهد'}</button></div></div>`;
+  }).join('')+
+  (allApproved?`<div style="text-align:center;padding:20px"><button class="zx-btn next" onclick="vsApproveAllScenes()" style="padding:14px 28px;font-size:13px">المشاهد معتمدة · انتقل لتوليد الصور →</button></div>`:`<div style="text-align:center;padding:14px;color:var(--mute);font-size:12px">اعتمد جميع المشاهد للانتقال للصور</div>`);
+}
+function vsToggleScene(i){
+  // Save edits
+  document.querySelectorAll(`textarea[data-scene="${i}"]`).forEach(t=>{
+    VS_STATE.story.scenes[i][t.dataset.field]=t.value;
+  });
+  VS_STATE.approvedScenes[i]=!VS_STATE.approvedScenes[i];
+  vsRenderScenes();
+  toast(VS_STATE.approvedScenes[i]?'✓ مشهد '+(i+1)+' معتمد':'↺ مشهد '+(i+1)+' أُلغي اعتماده');
+}
+function vsApproveAllScenes(){
+  vsSetProgress(2,'done');vsSetTabStatus('scenes','done','✓ جميع المشاهد معتمدة');
+  toast('✅ جميع المشاهد معتمدة — لننتقل للصور');
+  vsSwitchTab('images');
+}
 
-    // Stage 2: SCENES (event scenario)
-    document.getElementById('stage-scenes').classList.add('done');
-    document.getElementById('st-scenes').innerHTML=story.scenes.map(s=>`<div class="scene-line"><b>مشهد ${s.seq} (${s.duration||5}ث):</b><br><span style="color:#7c3aed;font-size:10px">📹 الكاميرا/البصري:</span> ${s.visual_prompt}<br>${s.text_overlay?`<span style="color:#fbbf24;font-size:10px">💬 نص على الشاشة:</span> ${s.text_overlay}<br>`:''}<span style="color:#10b981;font-size:10px">🗣️ التعليق:</span> "${s.narration}"</div>`).join('');
+// ───── STEP 3: IMAGES ─────
+function vsRenderImages(){
+  const el=document.getElementById('content-images');
+  if(!VS_STATE.story||!Object.keys(VS_STATE.approvedScenes).some(k=>VS_STATE.approvedScenes[k])){
+    el.innerHTML=`<div class="zx-empty"><div class="big-ico">🖼️</div><h5>اعتمد المشاهد أولاً</h5><p>ارجع للتبويب 2 واعتمد المشاهد.</p><button class="gen-btn" onclick="vsSwitchTab('scenes')">← العودة للمشاهد</button></div>`;
+    return;
+  }
+  const scenes=VS_STATE.story.scenes;
+  const total=scenes.length;const generated=Object.keys(VS_STATE.images).length;const approved=Object.keys(VS_STATE.approvedImages).filter(k=>VS_STATE.approvedImages[k]).length;
+  const allGenerated=generated===total;const allApproved=approved===total;
+  let html=`<div style="margin-bottom:14px;color:var(--mute);font-size:12px;display:flex;align-items:center;gap:10px;flex-wrap:wrap"><span>🖼️ ${generated}/${total} صور مولّدة · ${approved}/${total} معتمدة</span>${!allGenerated?`<button class="zx-btn next" onclick="vsGenerateAllImages()" ${WALLET<total*8?'disabled':''}>توليد جميع الصور · ${total*8} نقطة</button>`:''}</div>`;
+  html+=`<div class="zx-img-grid">`;
+  scenes.forEach((s,i)=>{
+    const img=VS_STATE.images[i];const ok=VS_STATE.approvedImages[i];
+    html+=`<div class="zx-img-card ${ok?'approved':''}"><div class="badge-approved">✓ معتمد</div><div class="img ${!img?'loading':''}" style="${img?`background-image:url('${img}')`:''}">${!img?'<span style="color:#475569">🎨 مشهد '+(i+1)+'</span>':''}</div><div class="meta"><b>مشهد ${i+1}</b><span style="color:var(--mute);font-size:10px">${(s.visual_prompt||'').slice(0,80)}…</span></div><div class="acts">${img?(ok?`<button class="ok"><i data-lucide="check" style="width:11px;height:11px"></i> معتمد</button><button class="re" onclick="vsRegenImage(${i})">↻</button>`:`<button class="ok" onclick="vsApproveImage(${i})"><i data-lucide="check" style="width:11px;height:11px"></i> اعتماد</button><button class="re" onclick="vsRegenImage(${i})"><i data-lucide="refresh-cw" style="width:11px;height:11px"></i> -8</button>`):`<button class="ok" onclick="vsGenImage(${i})" ${WALLET<8?'disabled':''}>توليد · 8 نقاط</button>`}</div></div>`;
+  });
+  html+=`</div>`;
+  if(allApproved)html+=`<div style="text-align:center;padding:20px"><button class="zx-btn next" onclick="vsApproveAllImages()" style="padding:14px 28px;font-size:13px">جميع الصور معتمدة · انتقل للصوت →</button></div>`;
+  el.innerHTML=html;
+  if(window.lucide)lucide.createIcons();
+}
+async function vsGenImage(i){
+  if(WALLET<8){alert('رصيد غير كافٍ — تحتاج 8 نقاط');return;}
+  const s=VS_STATE.story.scenes[i];
+  // Show loading
+  const card=document.querySelectorAll('.zx-img-card')[i];if(card){card.querySelector('.img').classList.add('loading');card.querySelector('.img').innerHTML='⏳ Gemini يولّد…';}
+  try{
+    const r=await fetch(API+'/api/image-studio/generate',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({prompt:s.visual_prompt+', cinematic lighting, commercial photography, ultra realistic, 4k',count:1,style:'lifestyle',width:1080,height:1920})});
+    const d=await r.json();
+    const url=(d.images&&d.images[0])||['https://images.unsplash.com/photo-1592750475338-74b7b21085ab?w=600&q=85','https://images.unsplash.com/photo-1551816230-ef5deaed4a26?w=600&q=85','https://images.unsplash.com/photo-1606220945770-b5b6c2c55bf1?w=600&q=85'][i%3];
+    VS_STATE.images[i]=url;
+    WALLET-=8;localStorage.setItem('zx_credits',WALLET);$('wallet-balance').textContent=WALLET.toLocaleString('ar-EG');
+    toast('✓ صورة مشهد '+(i+1)+' · -8 نقاط');
+    vsRenderImages();
+  }catch(e){toast('❌ فشل توليد الصورة');vsRenderImages();}
+}
+async function vsGenerateAllImages(){
+  const scenes=VS_STATE.story.scenes;const missing=scenes.map((_,i)=>i).filter(i=>!VS_STATE.images[i]);
+  if(WALLET<missing.length*8){alert('رصيد غير كافٍ — تحتاج '+(missing.length*8)+' نقطة');return;}
+  for(const i of missing){await vsGenImage(i);}
+}
+function vsApproveImage(i){VS_STATE.approvedImages[i]=true;vsRenderImages();toast('✓ صورة '+(i+1)+' معتمدة');}
+async function vsRegenImage(i){if(WALLET<8){alert('رصيد غير كافٍ');return;}delete VS_STATE.approvedImages[i];delete VS_STATE.images[i];vsRenderImages();await vsGenImage(i);}
+function vsApproveAllImages(){vsSetProgress(3,'done');vsSetTabStatus('images','done','✓ جميع الصور معتمدة');toast('✅ كل الصور معتمدة');vsSwitchTab('voice');}
 
-    typingMsg.querySelector('.bubble').innerHTML=`✅ السيناريو + الأحداث جاهزة!<br><br>🖼️ <b>الخطوة 3/5:</b> Gemini يولّد ${story.scenes.length} صور حقيقية…`;
-    WALLET-=(story.cost||5);localStorage.setItem('zx_credits',WALLET);$('wallet-balance').textContent=WALLET.toLocaleString('ar-EG');
+// ───── STEP 4: VOICE ─────
+function vsRenderVoice(){
+  const el=document.getElementById('content-voice');
+  if(!VS_STATE.story||!Object.values(VS_STATE.approvedImages).every(Boolean)||Object.keys(VS_STATE.approvedImages).length<VS_STATE.story.scenes.length){
+    el.innerHTML=`<div class="zx-empty"><div class="big-ico">🎙️</div><h5>اعتمد جميع الصور أولاً</h5><p>ارجع للتبويب 3 واعتمد كل الصور.</p><button class="gen-btn" onclick="vsSwitchTab('images')">← العودة للصور</button></div>`;
+    return;
+  }
+  const cfg=vsGetConfig();
+  if(!VS_STATE.audio){
+    el.innerHTML=`<div class="zx-empty"><div class="big-ico">🎙️</div><h5>توليد التعليق الصوتي</h5><p>سيُقرأ السيناريو بصوت <b style="color:var(--amber)">${({zerax_male_deep:'ذكر عميق',zerax_male_warm:'ذكر دافئ',zerax_female_warm:'أنثى دافئة',zerax_female_clear:'أنثى صافية',zerax_neutral:'محايد'})[cfg.voice]}</b>. تقدر تستمع للعينة وتعتمد قبل الدمج النهائي. سيخصم 5 نقاط.</p><button class="gen-btn" onclick="vsGenerateVoice()" ${WALLET<5?'disabled':''}><i data-lucide="mic-2" style="width:16px;height:16px"></i> توليد الصوت · 5 نقاط</button></div>`;
+  }else{
+    el.innerHTML=`<div class="zx-card ${VS_STATE.audioApproved?'approved':''}"><div class="ttl">🎙️ التعليق الصوتي</div><div class="zx-voice-preview"><audio controls src="${API+VS_STATE.audio.audio_url}"></audio><div class="info">صوت: <b>${VS_STATE.audio.voice_used||cfg.voice}</b></div></div><div class="narration" style="margin-top:14px">${VS_STATE.story.full_narration||VS_STATE.story.scenes.map(s=>s.narration).join(' ')}</div><div class="zx-actions"><button class="zx-btn ${VS_STATE.audioApproved?'regen':'approve'}" onclick="vsApproveVoice()">${VS_STATE.audioApproved?'↺ إلغاء الاعتماد':'✓ اعتماد والانتقال للفيديو'}</button><button class="zx-btn regen" onclick="vsGenerateVoice()">↻ إعادة توليد (-5)</button></div></div>`;
+  }
+  if(window.lucide)lucide.createIcons();
+}
+async function vsGenerateVoice(){
+  if(WALLET<5){alert('رصيد غير كافٍ');return;}
+  const cfg=vsGetConfig();const lang=cfg.langRaw.startsWith('ar')?'ar':cfg.langRaw;
+  document.getElementById('content-voice').innerHTML=`<div class="zx-empty"><div class="big-ico">⏳</div><h5>Zerax Voice يسجّل…</h5><p>جودة سينمائية مع مخارج كلمات دقيقة</p></div>`;
+  try{
+    const text=VS_STATE.story.full_narration||VS_STATE.story.scenes.map(s=>s.narration).join(' ');
+    const r=await fetch(API+'/api/promo-video/generate',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({title:VS_STATE.story.title,scenes:[{narration:text,image_url:VS_STATE.images[0]||''}],duration_seconds:cfg.duration,voice:cfg.voice,full_narration:text,cta:lang==='ar'?'':'',lang})});
+    if(!r.ok)throw new Error('فشل توليد الصوت');
+    const d=await r.json();
+    VS_STATE.audio={audio_url:d.audio_url,voice_used:d.voice_used};
+    WALLET-=5;localStorage.setItem('zx_credits',WALLET);$('wallet-balance').textContent=WALLET.toLocaleString('ar-EG');
+    toast('✓ صوت جاهز · -5 نقاط');
+    vsRenderVoice();
+  }catch(e){toast('❌ '+e.message);vsRenderVoice();}
+}
+function vsApproveVoice(){VS_STATE.audioApproved=!VS_STATE.audioApproved;vsRenderVoice();if(VS_STATE.audioApproved){vsSetProgress(4,'done');vsSetTabStatus('voice','done','✓ الصوت معتمد');toast('✅ الصوت معتمد · جاهز للدمج النهائي');setTimeout(()=>vsSwitchTab('final'),600);}}
+async function vsPreviewVoice(){
+  const cfg=vsGetConfig();
+  toast('🔊 جاري توليد عيّنة الصوت…');
+  try{
+    const r=await fetch(API+'/api/promo-video/generate',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({title:'عيّنة',scenes:[{narration:'مرحباً، هذا هو صوت زيراكس، استمع لجودة الصوت الإحترافي.',image_url:'https://images.unsplash.com/photo-1592750475338-74b7b21085ab?w=600&q=85'}],duration_seconds:5,voice:cfg.voice,full_narration:'مرحباً، هذا هو صوت زيراكس، استمع لجودة الصوت الإحترافي.',cta:'',lang:'ar'})});
+    const d=await r.json();
+    const a=new Audio(API+d.audio_url);a.play();
+    toast('▶️ تشغيل العيّنة (مجاني)');
+  }catch(e){toast('❌ فشل توليد العيّنة');}
+}
 
-    // STAGE 3: GENERATE REAL AI IMAGES (Gemini Nano Banana)
-    document.getElementById('stage-images').classList.add('active');
-    document.getElementById('st-images').innerHTML='<div class="empty-st"><span class="typing"><span></span><span></span><span></span></span> Gemini يولّد ' + story.scenes.length + ' صور حقيقية…<br>قد يستغرق دقيقة</div>';
-    const imgPromises=story.scenes.map(s=>
-      fetch(API+'/api/image-studio/generate',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({prompt:s.visual_prompt+', cinematic lighting, commercial photography',count:1,style:'lifestyle',width:1080,height:1920})}).then(r=>r.json()).catch(()=>null)
-    );
-    const imgResults=await Promise.all(imgPromises);
-    const imgs=imgResults.map((r,i)=> r && r.images && r.images[0] ? r.images[0] : ['https://images.unsplash.com/photo-1592750475338-74b7b21085ab?w=600&q=85','https://images.unsplash.com/photo-1551816230-ef5deaed4a26?w=600&q=85','https://images.unsplash.com/photo-1606220945770-b5b6c2c55bf1?w=600&q=85','https://images.unsplash.com/photo-1517336714731-489689fd1ca8?w=600&q=85'][i%4]);
-    document.getElementById('stage-images').classList.remove('active');document.getElementById('stage-images').classList.add('done');
-    document.getElementById('st-images').innerHTML=`<div class="img-grid">${imgs.map((u,i)=>`<img src="${u}" onclick="window.open(this.src,'_blank')" title="مشهد ${i+1} - اضغط للتكبير" style="cursor:zoom-in">`).join('')}</div><div style="margin-top:6px;font-size:10px;color:var(--mute)">✓ ${imgs.length} صور · ${imgResults.filter(r=>r&&r.images).length} منها من Gemini AI</div>`;
-    typingMsg.querySelector('.bubble').innerHTML=`✅ ${imgs.length} صور AI جاهزة<br><br>🎙️ <b>الخطوة 4/5:</b> Zerax Voice يسجّل التعليق…`;
-    WALLET-=story.scenes.length*8;localStorage.setItem('zx_credits',WALLET);$('wallet-balance').textContent=WALLET.toLocaleString('ar-EG');
-
-    // STAGE 4 & 5: Generate video (TTS + ffmpeg combined)
-    document.getElementById('stage-audio').classList.add('active');
-    document.getElementById('st-audio').innerHTML='<div class="empty-st"><span class="typing"><span></span><span></span><span></span></span> Zerax Voice يسجّل…</div>';
-    document.getElementById('stage-video').classList.add('active');
-    document.getElementById('st-video').innerHTML='<div class="empty-st"><span class="typing"><span></span><span></span><span></span></span> ffmpeg يدمج المشاهد…</div>';
-
-    const scenes=story.scenes.map((s,i)=>({narration:s.narration,image_url:imgs[i]}));
-    const vidR=await fetch(API+'/api/promo-video/generate',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({title:story.title,scenes,duration_seconds:duration,voice,full_narration:story.full_narration,cta:lang==='ar'?'اطلب الآن':'Order now',lang})});
-    if(!vidR.ok)throw new Error('video failed');
-    const vid=await vidR.json();
-    document.getElementById('stage-audio').classList.remove('active');document.getElementById('stage-audio').classList.add('done');
-    document.getElementById('st-audio').innerHTML=`<audio class="audio-player" controls src="${API+vid.audio_url}"></audio><div style="margin-top:6px;font-size:10px;color:var(--mute)">🎙 ${vid.voice_used}</div>`;
-    document.getElementById('stage-video').classList.remove('active');document.getElementById('stage-video').classList.add('done');
-    document.getElementById('st-video').innerHTML=`<video class="video-final" controls playsinline src="${API+vid.video_url}"></video><div style="margin-top:6px;font-size:10px;color:var(--mute)">⏱ ${vid.duration_seconds}ث · 🎬 ${vid.scenes_count} مشاهد</div><div style="display:flex;gap:5px;margin-top:8px;flex-wrap:wrap"><button class="btn btn-outline" style="padding:5px 10px;font-size:10px" onclick="vsDownload('${API+vid.video_url}','${story.title}')"><i data-lucide="download" style="width:11px;height:11px"></i> تحميل</button><button class="btn btn-primary" style="padding:5px 10px;font-size:10px" onclick="vsPublish('${API+vid.video_url}','${story.title}')"><i data-lucide="share-2" style="width:11px;height:11px"></i> نشر للسوشال</button></div>`;
-    typingMsg.querySelector('.bubble').innerHTML=`🎉 <b>الفيديو جاهز!</b><br><br>شف اللوحات على اليمين 👈 — السيناريو، الأحداث، الصور، الصوت، والفيديو النهائي.<br><br>⚡ إجمالي خصم: <b>${story.cost+vid.cost} نقطة</b><br><br>💡 تقدر تنشره مباشرة على حساباتك (انستقرام، تيك توك، X، سناب، يوتيوب) من زر "نشر للسوشال"`;
-    // Add to history
+// ───── STEP 5: FINAL VIDEO ─────
+function vsRenderFinal(){
+  const el=document.getElementById('content-final');
+  if(!VS_STATE.audioApproved){
+    el.innerHTML=`<div class="zx-empty"><div class="big-ico">🎥</div><h5>اعتمد جميع الخطوات أولاً</h5><p>تأكد إن السيناريو + المشاهد + الصور + الصوت كلها معتمدة قبل الدمج النهائي.</p><button class="gen-btn" onclick="vsSwitchTab('voice')">← العودة للصوت</button></div>`;
+    return;
+  }
+  if(!VS_STATE.video){
+    el.innerHTML=`<div class="zx-empty"><div class="big-ico">🎥</div><h5>كل شي جاهز للدمج النهائي ✨</h5><p style="max-width:480px">ffmpeg راح يدمج الصور المعتمدة + الصوت + ضبط lip-sync ومخارج الكلمات بدقة. <b style="color:var(--amber)">هذي الخطوة الكبيرة الوحيدة اللي تخصم 30 نقطة عند التوليد فقط — مو قبل.</b></p><button class="gen-btn" onclick="vsRenderFinalVideo()" ${WALLET<30?'disabled':''} style="font-size:14px;padding:16px 32px"><i data-lucide="film" style="width:18px;height:18px"></i> إنتاج الفيديو النهائي · 30 نقطة</button></div>`;
+  }else{
+    const v=VS_STATE.video;
+    el.innerHTML=`<div class="zx-final"><video controls playsinline src="${API+v.video_url}"></video><div class="stats"><div class="stat"><b>${v.duration_seconds}ث</b>المدة</div><div class="stat"><b>${v.scenes_count}</b>مشاهد</div><div class="stat"><b>1080×1920</b>HD عمودي</div><div class="stat"><b>${v.voice_used||''}</b>الصوت</div></div><div class="zx-actions" style="justify-content:center"><button class="zx-btn approve" onclick="vsDownload('${API+v.video_url}','${VS_STATE.story.title}')"><i data-lucide="download" style="width:13px;height:13px"></i> تحميل MP4</button><button class="zx-btn next" onclick="vsPublish('${API+v.video_url}','${VS_STATE.story.title}')"><i data-lucide="share-2" style="width:13px;height:13px"></i> نشر للحسابات الاجتماعية</button><button class="zx-btn regen" onclick="vsResetStudio()"><i data-lucide="plus" style="width:13px;height:13px"></i> فيديو جديد</button></div></div>`;
+  }
+  if(window.lucide)lucide.createIcons();
+}
+async function vsRenderFinalVideo(){
+  if(WALLET<30){alert('رصيد غير كافٍ — تحتاج 30 نقطة');return;}
+  const cfg=vsGetConfig();const lang=cfg.langRaw.startsWith('ar')?'ar':cfg.langRaw;
+  document.getElementById('content-final').innerHTML=`<div class="zx-empty"><div class="big-ico">🎬</div><h5>ffmpeg يدمج…</h5><p>قد يستغرق دقيقة — نضبط lip-sync + توقيت دقيق + جودة سينمائية</p></div>`;
+  vsSetProgress(5,'active');vsSetTabStatus('final','pending','🔄 جاري الدمج…');
+  try{
+    const scenes=VS_STATE.story.scenes.map((s,i)=>({narration:s.narration,image_url:VS_STATE.images[i]||''}));
+    const r=await fetch(API+'/api/promo-video/generate',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({title:VS_STATE.story.title,scenes,duration_seconds:cfg.duration,voice:cfg.voice,full_narration:VS_STATE.story.full_narration,cta:lang==='ar'?'اطلب الآن':'Order now',lang})});
+    if(!r.ok)throw new Error('فشل الدمج');
+    VS_STATE.video=await r.json();
+    WALLET-=30;localStorage.setItem('zx_credits',WALLET);$('wallet-balance').textContent=WALLET.toLocaleString('ar-EG');
+    toast('🎉 الفيديو جاهز · -30 نقطة');
+    // Save to history
     const hist=JSON.parse(localStorage.getItem('zx_vs_history')||'[]');
-    hist.unshift({title:story.title,url:vid.video_url,date:new Date().toLocaleString('ar-SA')});
+    hist.unshift({title:VS_STATE.story.title,url:VS_STATE.video.video_url,date:new Date().toLocaleString('ar-SA')});
     localStorage.setItem('zx_vs_history',JSON.stringify(hist.slice(0,10)));
     renderVsHistory();
-    WALLET-=(vid.cost||30);localStorage.setItem('zx_credits',WALLET);$('wallet-balance').textContent=WALLET.toLocaleString('ar-EG');
-    setTimeout(()=>{if(window.lucide)lucide.createIcons()},50);
-  }catch(e){
-    typingMsg.querySelector('.bubble').innerHTML=`❌ خطأ: ${e.message}`;
-  }
+    vsSetProgress(5,'done');vsSetTabStatus('final','done','✓ منتج');
+    vsRenderFinal();
+  }catch(e){toast('❌ '+e.message);document.getElementById('content-final').innerHTML=`<div class="zx-empty"><div class="big-ico">❌</div><h5>فشل الدمج</h5><p>${e.message}</p><button class="gen-btn" onclick="vsRenderFinalVideo()">↻ حاول مرة ثانية</button></div>`;}
+}
+function vsResetStudio(){
+  if(!confirm('متأكد تبي تبدأ من جديد؟'))return;
+  VS_STATE={tab:'script',idea:'',story:null,approvedScenes:{},images:{},approvedImages:{},audio:null,audioApproved:false,video:null};
+  ['prog-1','prog-2','prog-3','prog-4','prog-5'].forEach(id=>{const e=document.getElementById(id);if(e)e.className='pdot'});
+  document.querySelectorAll('.zx-tab').forEach(t=>t.classList.remove('done'));
+  vsSwitchTab('script');vsRenderScript();
 }
 
 function rechargeOpen(){window.open('/mockups/app_mode_full.html','_blank')}
@@ -1080,18 +1321,8 @@ function setupChart(){
 function vsUpdateConfig(){
   const dur=parseInt(document.getElementById('vs-duration').value||'30');
   const scenes=Math.ceil(dur/5);
-  const cost=5+(scenes*8)+5+(scenes);
+  const cost=5+(scenes*8)+5+30;
   document.getElementById('vs-cost-est').textContent=cost+' نقطة';
-}
-async function vsPreviewVoice(){
-  const v=document.getElementById('vs-voice').value;
-  toast('🔊 جاري توليد عيّنة الصوت…');
-  try{
-    const r=await fetch(API+'/api/promo-video/generate',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({title:'عيّنة',scenes:[{narration:'مرحباً، هذا هو صوت زيراكس، استمع لجودة الصوت الإحترافي.',image_url:'https://images.unsplash.com/photo-1592750475338-74b7b21085ab?w=600&q=85'}],duration_seconds:5,voice:v,full_narration:'مرحباً، هذا هو صوت زيراكس، استمع لجودة الصوت الإحترافي.',cta:'',lang:'ar'})});
-    const d=await r.json();
-    const a=new Audio(API+d.audio_url);a.play();
-    toast('▶️ تشغيل العيّنة');
-  }catch(e){toast('❌ فشل توليد العيّنة');}
 }
 function vsDownload(url,title){const a=document.createElement('a');a.href=url;a.download=(title||'video')+'.mp4';a.click();toast('⬇️ بدأ التحميل');}
 function vsPublish(url,title){
