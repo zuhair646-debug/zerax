@@ -3002,20 +3002,32 @@ function aiChatSend(){
 
   const reqId=++LAST_AI_REQUEST_ID;
   setTimeout(async()=>{
-    // Race the LLM endpoint against a 3-second timeout — fallback to mock so the chat never hangs
-    const fetchPromise=fetch(API+'/api/image-studio/product-info',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:productName,lang:'ar',options:[...AI_CHAT_OPTS,...spec.extras],user_spec:spec})})
-      .then(r=>r.ok?r.json():null).catch(()=>null);
-    const timeoutPromise=new Promise(resolve=>setTimeout(()=>resolve(null),3000));
+    // Try the new claude_core endpoint first (real AI), fall back to mock if slow/unavailable
+    const token=localStorage.getItem('zx_token')||'';
+    const fetchPromise=fetch(API+'/api/ai/product-chat',{
+      method:'POST',
+      headers:{'Content-Type':'application/json',...(token?{'Authorization':'Bearer '+token}:{})},
+      body:JSON.stringify({prompt:txt||productName,user_spec:spec,session_id:'prod-editor-'+(productName||'new')})
+    }).then(r=>r.ok?r.json():null).catch(()=>null);
+    const timeoutPromise=new Promise(resolve=>setTimeout(()=>resolve(null),20000));
     const d=await Promise.race([fetchPromise,timeoutPromise])||{};
     if(reqId!==LAST_AI_REQUEST_ID)return; // ignore stale responses
+    const isReal=d&&!d.fallback&&!d.error&&d.title;
     LAST_AI_RESULT={
       title:d.title||productName,
       description:d.description||`${productName} — منتج أصلي عالي الجودة بمواصفات تقنية متقدمة. مصمم ليلبي احتياجاتك اليومية بأداء استثنائي وضمان رسمي معتمد.`,
-      price:d.price_range||'',
+      price:(d.recommended_price_sar?`${d.recommended_price_sar} ر.س`:'')||d.price_range||'',
       images:d.images||['https://images.unsplash.com/photo-1592750475338-74b7b21085ab?w=600','https://images.unsplash.com/photo-1591337676887-a217a6970a8a?w=600','https://images.unsplash.com/photo-1546054454-aa26e2b734c7?w=600','https://images.unsplash.com/photo-1605236453806-6ff36851218e?w=600','https://images.unsplash.com/photo-1556656793-08538906a9f8?w=600'],
+      specs_obj:d.specs||null,
+      features:d.features||null,
+      benefits:d.benefits||null,
+      warnings:d.warnings||null,
+      warranty_obj:d.warranty||null,
+      usage:d.usage_instructions||null,
+      respects:d.respects||null,
       spec:spec,
+      _is_real:isReal,
     };
-    // Trim images to user-requested count
     if(spec.count&&LAST_AI_RESULT.images.length>spec.count)LAST_AI_RESULT.images=LAST_AI_RESULT.images.slice(0,spec.count);
     aiChatPush('bot',buildAIResultBubble(LAST_AI_RESULT));
   },1500);
@@ -3024,17 +3036,32 @@ function aiChatSend(){
 // Build comprehensive product info bubble with FULL details inside the chat
 function buildAIResultBubble(res){
   const spec=res.spec||{};
-  const respectsColor=spec.colors.length?`<span style="color:#10b981">✓ التزمت بلون <b>${spec.colors.join(' · ')}</b></span>`:'';
-  const respectsBg=spec.bg?`<span style="color:#10b981">✓ خلفية <b>${spec.bg}</b> كما طلبت</span>`:'';
+  const respects=res.respects||{};
+  const respColor=spec.colors.length||respects.color?`<span style="color:#10b981">✓ التزمت بلون <b>${respects.color||spec.colors.join(' · ')}</b></span>`:'';
+  const respBg=spec.bg||respects.background?`<span style="color:#10b981">✓ خلفية <b>${respects.background||spec.bg}</b> كما طلبت</span>`:'';
+  const respCount=spec.count||respects.count?`<span style="color:#10b981">✓ ${respects.count||spec.count} صور كما طلبت</span>`:'';
+  const realBadge=res._is_real?`<span style="background:#10b981;color:#0a0a14;padding:2px 8px;border-radius:99px;font-size:9px;font-weight:900;margin-right:6px">✓ AI حقيقي</span>`:`<span style="background:#fbbf24;color:#0a0a14;padding:2px 8px;border-radius:99px;font-size:9px;font-weight:900;margin-right:6px">⚡ تجريبي</span>`;
   const imagesHtml=res.images.map(u=>`<div style="border-radius:8px;overflow:hidden;border:1.5px solid #312e81;background:#0f172a;flex:0 0 calc(50% - 4px)"><img src="${u}" style="width:100%;height:120px;object-fit:cover;display:block"></div>`).join('');
-  const isMedicine=spec.extras.includes('medicine');
-  const isFood=/طعام|food|drink|مشروب/i.test(res.title);
-  const showSpecs=spec.extras.includes('specs')||true;
-  const showBenefits=spec.extras.includes('benefits')||isMedicine;
-  const showWarranty=spec.extras.includes('warranty');
+  // Build specs section — prefer real specs from claude_core
+  const specsHtml=res.specs_obj
+    ? Object.entries(res.specs_obj).map(([k,v])=>`<div style="font-size:11px;color:#cbd5e1;line-height:1.9">• <b style="color:#fbbf24">${k}:</b> ${v}</div>`).join('')
+    : `<div style="font-size:11px;color:#cbd5e1;line-height:1.9">• معالج: A19 Bionic<br/>• شاشة: 6.9" ProMotion 120Hz<br/>• بطارية: 24 ساعة استخدام<br/>• كاميرا: 48MP ثلاثية + LiDAR<br/>• الذاكرة: 256GB / 512GB / 1TB<br/>• مقاوم للماء IP68</div>`;
+  const benefitsHtml=res.benefits&&res.benefits.length
+    ? res.benefits.map(b=>`<div style="font-size:11px;color:#cbd5e1;line-height:1.9">• ${b}</div>`).join('')
+    : `<div style="font-size:11px;color:#cbd5e1;line-height:1.9">• أداء استثنائي للعمل والترفيه<br/>• كاميرا احترافية بدقة 4K<br/>• حماية بيانات متقدمة<br/>• شحن سريع لاسلكي</div>`;
+  const warningsHtml=res.warnings&&res.warnings.length
+    ? `<div style="margin-top:10px;background:#7f1d1d20;border:1px solid #dc2626;border-radius:10px;padding:10px"><b style="color:#fca5a5;font-size:11px">⚠️ تحذيرات وموانع</b>${res.warnings.map(w=>`<div style="margin-top:4px;font-size:11px;color:#fca5a5;line-height:1.8">• ${w}</div>`).join('')}</div>`
+    : '';
+  const usageHtml=res.usage&&res.usage.length
+    ? `<div style="margin-top:10px;background:#0f172a;border:1px solid #312e81;border-radius:10px;padding:10px"><b style="color:#fbbf24;font-size:11px">📝 طريقة الاستخدام</b>${res.usage.map((s,i)=>`<div style="margin-top:4px;font-size:11px;color:#cbd5e1;line-height:1.8">${i+1}. ${s}</div>`).join('')}</div>`
+    : '';
+  const warrObj=res.warranty_obj||{};
+  const warrHtml=warrObj.duration||warrObj.official_url
+    ? `<div style="margin-top:10px;background:#0f172a;border:1px solid #312e81;border-radius:10px;padding:10px"><b style="color:#fbbf24;font-size:11px">🛡️ الضمان الرسمي</b><div style="margin-top:6px;font-size:11px;color:#cbd5e1;line-height:1.9">• المدة: ${warrObj.duration||'سنة'}<br/>${warrObj.official_url?`• <a href="${warrObj.official_url}" target="_blank" style="color:#10b981">رابط الضمان الرسمي ←</a>`:'• مرفق عند الاعتماد'}</div></div>`
+    : '';
   return `
-    <b style="color:#10b981;font-size:14px">✅ تم البحث والتوليد بنجاح!</b>
-    ${respectsColor||respectsBg?`<div style="margin-top:6px;font-size:11px;line-height:1.7">${respectsColor}${respectsColor&&respectsBg?' · ':''}${respectsBg}</div>`:''}
+    <div style="display:flex;align-items:center;gap:6px;margin-bottom:6px">${realBadge}<b style="color:#10b981;font-size:14px">✅ تم البحث والتوليد بنجاح!</b></div>
+    ${respColor||respBg||respCount?`<div style="margin-top:6px;font-size:11px;line-height:1.7">${[respColor,respBg,respCount].filter(Boolean).join(' · ')}</div>`:''}
     <div style="margin-top:12px;background:#0f172a;border:1px solid #312e81;border-radius:10px;padding:12px">
       <b style="color:#fbbf24;font-size:13px">📋 ${res.title}</b>
       <p style="color:#cbd5e1;font-size:11px;margin-top:6px;line-height:1.7">${res.description}</p>
@@ -3044,11 +3071,11 @@ function buildAIResultBubble(res){
       <b style="color:#fbbf24;font-size:11px;display:block;margin-bottom:6px">🎨 الصور المولّدة (${res.images.length})</b>
       <div style="display:flex;flex-wrap:wrap;gap:8px">${imagesHtml}</div>
     </div>
-    ${showSpecs?`<div style="margin-top:10px;background:#0f172a;border:1px solid #312e81;border-radius:10px;padding:10px"><b style="color:#fbbf24;font-size:11px">📋 المواصفات</b><div style="margin-top:6px;font-size:11px;color:#cbd5e1;line-height:1.9">• معالج: A19 Bionic<br/>• شاشة: 6.9" ProMotion 120Hz<br/>• بطارية: 24 ساعة استخدام<br/>• كاميرا: 48MP ثلاثية + LiDAR<br/>• الذاكرة: 256GB / 512GB / 1TB<br/>• مقاوم للماء IP68</div></div>`:''}
-    ${showBenefits?`<div style="margin-top:10px;background:#0f172a;border:1px solid #312e81;border-radius:10px;padding:10px"><b style="color:#fbbf24;font-size:11px">✨ الفوائد والاستخدامات</b><div style="margin-top:6px;font-size:11px;color:#cbd5e1;line-height:1.9">• أداء استثنائي للعمل والترفيه<br/>• كاميرا احترافية بدقة 4K<br/>• حماية بيانات متقدمة<br/>• شحن سريع لاسلكي</div></div>`:''}
-    ${isMedicine?`<div style="margin-top:10px;background:#7f1d1d20;border:1px solid #dc2626;border-radius:10px;padding:10px"><b style="color:#fca5a5;font-size:11px">⚠️ تحذيرات وموانع</b><div style="margin-top:6px;font-size:11px;color:#fca5a5;line-height:1.9">• استشر الطبيب قبل الاستعمال<br/>• لا يُستخدم في حالة الحساسية<br/>• الجرعة: حسب وصف الطبيب<br/>• يُحفظ بعيداً عن الأطفال</div></div>`:''}
-    ${isFood?`<div style="margin-top:10px;background:#0f172a;border:1px solid #312e81;border-radius:10px;padding:10px"><b style="color:#fbbf24;font-size:11px">🍔 المكونات والقيمة الغذائية</b><div style="margin-top:6px;font-size:11px;color:#cbd5e1;line-height:1.9">• المكونات الأساسية مذكورة<br/>• السعرات الحرارية: حسب الحصة<br/>• مسببات حساسية محتملة: تحقق من الملصق</div></div>`:''}
-    ${showWarranty?`<div style="margin-top:10px;background:#0f172a;border:1px solid #312e81;border-radius:10px;padding:10px"><b style="color:#fbbf24;font-size:11px">🛡️ الضمان الرسمي</b><div style="margin-top:6px;font-size:11px;color:#cbd5e1;line-height:1.9">• سنة واحدة من المُصنّع<br/>• يشمل عيوب التصنيع<br/>• مرفق رابط الضمان الرسمي عند الاعتماد</div></div>`:''}
+    <div style="margin-top:10px;background:#0f172a;border:1px solid #312e81;border-radius:10px;padding:10px"><b style="color:#fbbf24;font-size:11px">📋 المواصفات</b><div style="margin-top:6px">${specsHtml}</div></div>
+    <div style="margin-top:10px;background:#0f172a;border:1px solid #312e81;border-radius:10px;padding:10px"><b style="color:#fbbf24;font-size:11px">✨ الفوائد والمميزات</b><div style="margin-top:6px">${benefitsHtml}</div></div>
+    ${usageHtml}
+    ${warningsHtml}
+    ${warrHtml}
     <div style="margin-top:14px;padding-top:12px;border-top:1px dashed #312e81;display:flex;gap:8px;flex-wrap:wrap">
       <button onclick="aiApprove()" data-testid="ai-approve-btn" style="flex:1;min-width:120px;background:linear-gradient(135deg,#10b981,#059669);color:#fff;border:none;padding:11px 16px;border-radius:10px;font-family:inherit;font-weight:900;font-size:12px;cursor:pointer">✓ اعتماد ونقل للمعاينة<br><small style="font-weight:700;font-size:9px;opacity:.85">(يُحفظ المحتوى — لا خصم إضافي)</small></button>
       <button onclick="aiReject()" data-testid="ai-reject-btn" style="flex:1;min-width:120px;background:#1f1f2e;color:#fca5a5;border:1px solid #dc2626;padding:11px 16px;border-radius:10px;font-family:inherit;font-weight:900;font-size:12px;cursor:pointer">✗ عدم اعتماد · ابدأ من جديد<br><small style="font-weight:700;font-size:9px;opacity:.85">(يُلغى المحتوى — لا خصم إضافي)</small></button>

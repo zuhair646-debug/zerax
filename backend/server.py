@@ -3564,7 +3564,13 @@ try:
     # Store Router — merchant products + customer OTP auth + wishlist + reviews (Feb 2026)
     from routers.store_router import router as _store_router
     app.include_router(_store_router)
-    logging.getLogger(__name__).info("Care Portal + Image/Video Studio + Delivery + Payroll + Payments + Store modules registered")
+    # Store V2 — Orders, Checkout, Wallet, Returns, Subscriptions, Branches, Referrals, Saved Cards, AI Profile (Feb 2026)
+    from routers.store_v2_router import router as _store_v2_router
+    app.include_router(_store_v2_router)
+    # AI Router — unified claude_core entry point (Feb 2026)
+    from routers.ai_router import router as _ai_router
+    app.include_router(_ai_router)
+    logging.getLogger(__name__).info("Care Portal + Image/Video Studio + Delivery + Payroll + Payments + Store + Store V2 + AI modules registered")
 except Exception as _care_e:
     logging.getLogger(__name__).error(f"Failed to register care_portal module: {_care_e}", exc_info=True)
 
