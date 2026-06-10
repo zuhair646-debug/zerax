@@ -122,9 +122,10 @@ body{font-family:var(--font,'Tajawal'),sans-serif;background:#f3f4f6;color:#0a0a
 .success{text-align:center;padding:30px 10px}
 .success .ico{font-size:60px;color:#22c55e;margin-bottom:10px}
 /* MARKET PICKER (compact) */
-.market-popover{position:absolute;top:60px;background:#fff;border-radius:14px;box-shadow:0 12px 40px rgba(0,0,0,.15);padding:12px;width:280px;max-height:60vh;overflow-y:auto;display:none;z-index:100}
-[dir="rtl"] .market-popover{right:16px}[dir="ltr"] .market-popover{left:16px}
+.market-popover{position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:#fff;border-radius:16px;box-shadow:0 24px 70px rgba(0,0,0,.35);padding:14px;width:min(360px,92vw);max-height:75vh;overflow-y:auto;display:none;z-index:600}
 .market-popover.open{display:block}
+.market-popover.open::before{content:'';position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:-1;backdrop-filter:blur(4px)}
+.market-popover .close-mp{position:absolute;top:10px;left:10px;width:28px;height:28px;border-radius:50%;background:#f3f4f6;border:none;cursor:pointer;font-size:14px;font-weight:900}
 .market-popover .note{font-size:11px;color:#6b7280;padding:8px 10px;background:#f9fafb;border-radius:8px;margin-bottom:8px;line-height:1.5}
 .market-item{display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:8px;cursor:pointer;font-size:13px}
 .market-item:hover{background:#f3f4f6}
@@ -680,6 +681,8 @@ body.dark .acc-stat .k{color:#94a3b8}
 
 <!-- MARKET POPOVER -->
 <div class="market-popover" id="market-popover" onclick="event.stopPropagation()">
+  <button class="close-mp" onclick="document.getElementById('market-popover').classList.remove('open')" aria-label="close">✕</button>
+  <h3 style="font-size:14px;font-weight:900;margin:0 0 10px;padding-right:30px">🌍 اختر السوق والعملة</h3>
   <div class="note" id="market-note">⚠️ تحديد السوق يحدد <b>اللغة + العملة + بوابات الدفع + شركات الشحن + الضرائب</b> تلقائياً. لو اخترت سوق غير دولتك، ستحتاج تسجيل في بوابات الدفع المحلية لهذا السوق.</div>
   <div id="market-list"></div>
 </div>
@@ -855,7 +858,7 @@ body.dark .acc-stat .k{color:#94a3b8}
 </nav>
 
 <!-- AI CUSTOMER ASSISTANT (FAB, shows only if merchant enabled it) -->
-<button id="ai-assistant-fab" data-testid="ai-customer-assistant" onclick="openAiAssistant()" style="display:none;position:fixed;bottom:90px;left:14px;width:56px;height:56px;border-radius:50%;background:linear-gradient(135deg,#7c3aed,#ec4899);color:#fff;border:none;cursor:pointer;box-shadow:0 6px 24px rgba(124,58,237,.45);z-index:90;font-size:22px;font-weight:900;display:flex;align-items:center;justify-content:center" title="مساعد ذكي">✨</button>
+<button id="ai-assistant-fab" data-testid="ai-customer-assistant" onclick="openAiAssistant()" style="display:none" title="مساعد ذكي" aria-hidden="true">✨</button>
 
 <!-- AI ASSISTANT MODAL -->
 <div class="modal-bg" id="ai-modal" onclick="if(event.target===this)closeAiAssistant()">
@@ -1035,7 +1038,7 @@ body.dark .acc-stat .k{color:#94a3b8}
     <h4>🌐 اللغة والمنطقة</h4>
     <div class="acc-row">
       <div class="lbl">اللغة</div>
-      <button onclick="toggleLang()" data-testid="set-lang-toggle" style="background:var(--zx-bg);border:1px solid #e5e7eb;padding:8px 14px;border-radius:99px;font-family:inherit;font-weight:700;font-size:12px;cursor:pointer;color:var(--zx-text)">🌐 <span id="lang-flag">🇸🇦</span> <span id="lang-label">العربية</span></button>
+      <button onclick="toggleLang()" data-testid="set-lang-toggle" style="background:var(--zx-bg);border:1px solid #e5e7eb;padding:8px 14px;border-radius:99px;font-family:inherit;font-weight:700;font-size:12px;cursor:pointer;color:var(--zx-text)">🌐 <span data-id="lang-flag">🇸🇦</span> <span data-id="lang-label">العربية</span></button>
     </div>
     <div class="acc-row" style="border-bottom:none">
       <div class="lbl">السوق / العملة</div>
@@ -1921,19 +1924,15 @@ function applyLocale(){
   document.documentElement.style.setProperty('--dir',CURRENT_MARKET.direction);
   document.documentElement.dir=CURRENT_LANG==='ar'?'rtl':(CURRENT_MARKET.direction);
   document.documentElement.lang=CURRENT_LANG;
-  const brandEl=document.getElementById('brand');
-  if(brandEl){
-    // Logo is now an <img>, no text update needed
-    return;
-  }
   const mlbl=document.getElementById('market-label');
   if(mlbl)mlbl.textContent=(CURRENT_LANG==='en'?(CURRENT_MARKET.name_en||CURRENT_MARKET.name_ar):(CURRENT_MARKET.name_ar||CURRENT_MARKET.name_en));
-  const lf=document.getElementById('lang-flag');
-  if(lf)lf.textContent=CURRENT_LANG==='ar'?'🇸🇦':'🇬🇧';
-  const ll=document.getElementById('lang-label');
-  if(ll)ll.textContent=CURRENT_LANG==='ar'?'العربية':'English';
+  // Update ALL lang-flag / lang-label elements (popover + account page both have them)
+  document.querySelectorAll('#lang-flag,[data-id="lang-flag"]').forEach(el=>{el.textContent=CURRENT_LANG==='ar'?'🇸🇦':'🇬🇧';});
+  document.querySelectorAll('#lang-label,[data-id="lang-label"]').forEach(el=>{el.textContent=CURRENT_LANG==='ar'?'العربية':'English';});
   const s=document.getElementById('search');
   if(s)s.placeholder=TRANS[CURRENT_LANG]?.search_ph||TRANS.en.search_ph;
+  const mn=document.getElementById('acc-market-name');
+  if(mn&&CURRENT_MARKET)mn.textContent=CURRENT_LANG==='ar'?CURRENT_MARKET.name_ar:CURRENT_MARKET.name_en;
 }
 
 // ═══════════════════════ LANGUAGE TOGGLE ═══════════════════════
@@ -2477,7 +2476,7 @@ async function loadMerchantProducts(){
       // Show AI assistant only on per-merchant page (assume enabled by default — merchant can toggle off in admin)
       const aiFab=document.getElementById('ai-assistant-fab');
       const merchantSettings=JSON.parse(localStorage.getItem('zx_merchant_'+merchantId+'_settings')||'{"ai_assistant":true}');
-      if(aiFab)aiFab.style.display=merchantSettings.ai_assistant?'flex':'none';
+    if(aiFab)aiFab.style.display='none'; /* AI FAB disabled on customer storefront (it's a merchant control panel feature) */
     }else{
       const existingIds=new Set(PRODUCTS.map(p=>p.id));
       const newOnes=adapted.filter(p=>!existingIds.has(p.id));
@@ -4773,6 +4772,22 @@ function applyAllOverrides(){
     const obj=typeof ov==='string'?{url:ov,type:'image'}:ov;
     if(stack){
       if(obj.type==='video'){stack.innerHTML='';const v=document.getElementById('banner-video');v.src=obj.url;v.style.opacity='1';v.load();}
+      else{stack.innerHTML=`<img src="${obj.url}" alt="banner" style="opacity:1;animation:bnr-fade 18s linear infinite">`;}
+    }
+  }
+  Object.keys(IMG_OVERRIDES).forEach(k=>{
+    if(k.startsWith('product:')){
+      const id=k.split(':')[1];
+      const p=PRODUCTS.find(x=>x.id===id);
+      if(p){const v=IMG_OVERRIDES[k];p.img=typeof v==='string'?v:v.url;}
+    }
+  });
+}
+
+init();
+</script>
+</body></html>
+onst v=document.getElementById('banner-video');v.src=obj.url;v.style.opacity='1';v.load();}
       else{stack.innerHTML=`<img src="${obj.url}" alt="banner" style="opacity:1;animation:bnr-fade 18s linear infinite">`;}
     }
   }
