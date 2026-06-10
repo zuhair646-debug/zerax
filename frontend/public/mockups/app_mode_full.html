@@ -351,6 +351,20 @@ body.admin-mode .add-product-card{display:flex}
 /* Customer-side: hide merchant-only AI edit/studio buttons EVERYWHERE */
 .img-edit-btn,.cat-edit-btn,.banner-edit-btn,.studio-btn,[data-merchant-only],.admin-toggle{display:none !important}
 body.admin-mode .img-edit-btn,body.admin-mode .studio-btn{display:none !important}
+/* ───── DARK MODE ───── */
+body.dark{background:#0a0a14;color:#e2e8f0}
+body.dark .top{background:#13131f;border-bottom:1px solid #1f1f2e}
+body.dark .search{background:#1f1f2e;color:#e2e8f0;border-color:#2d2d3f}
+body.dark .pill-btn,body.dark .cart-btn{background:#1f1f2e;color:#e2e8f0;border-color:#2d2d3f}
+body.dark .p-card{background:#13131f;color:#e2e8f0;border:1px solid #1f1f2e}
+body.dark .p-card .name,body.dark .p-card .desc{color:#e2e8f0}
+body.dark .p-card .p-price{color:#fbbf24}
+body.dark .bnav{background:#13131f;border-top:1px solid #1f1f2e}
+body.dark .bnav a{color:#94a3b8}
+body.dark .bnav a.active{color:#fbbf24}
+body.dark .cart-foot,body.dark .modal{background:#13131f;color:#e2e8f0}
+body.dark #header-settings-popover{background:#13131f;border-color:#2d2d3f;color:#e2e8f0}
+body.dark #header-settings-popover button{background:#1f1f2e;color:#e2e8f0;border-color:#2d2d3f}
 .p-card-stack{position:absolute;inset:0}
 .p-card-stack img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;opacity:0;transition:opacity .5s;cursor:zoom-in}
 .p-card-stack img.active{opacity:1}
@@ -594,14 +608,20 @@ body.admin-mode .img-edit-btn,body.admin-mode .studio-btn{display:none !importan
 
 <!-- HEADER -->
 <header class="top">
-  <a href="https://zerax.sa" target="_blank" rel="noopener" class="logo" id="brand" style="text-decoration:none;color:inherit;display:flex;align-items:center;gap:8px"><span style="font-weight:900;background:linear-gradient(135deg,#7c3aed,#0a0a0a);color:#fff;width:32px;height:32px;border-radius:8px;display:inline-flex;align-items:center;justify-content:center;font-size:14px">Z</span><span style="font-weight:900">Zerax</span></a>
+  <a href="https://zerax.sa" target="_blank" rel="noopener" class="logo" id="brand" style="text-decoration:none;color:inherit;display:flex;align-items:center;gap:8px"><span style="font-weight:900;background:linear-gradient(135deg,#fbbf24,#0a0a0a);color:#fff;width:34px;height:34px;border-radius:8px;display:inline-flex;align-items:center;justify-content:center;font-size:14px;position:relative;font-family:'IBM Plex Sans Arabic',serif"><span style="position:absolute;top:-7px;font-size:11px">👑</span>Z</span><span style="font-weight:900;background:linear-gradient(135deg,#fbbf24,#d97706);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;letter-spacing:.5px">Zerax</span></a>
   <input class="search" id="search" placeholder="ابحث...">
-  <button class="pill-btn" onclick="toggleLang()" data-key="lang_btn"><span id="lang-flag">🇸🇦</span> <span id="lang-label">عربي</span></button>
-  <button class="pill-btn" onclick="toggleMarketPopover(event)" id="market-btn">🌍 <span id="market-label">السعودية</span></button>
+  <button class="pill-btn" data-testid="header-settings-btn" onclick="toggleHeaderSettings(event)" title="الإعدادات" style="padding:8px 12px">⚙️</button>
   <button class="pill-btn admin-toggle" id="admin-btn" onclick="toggleAdminMode()" title="وضع التحكم" style="padding:8px 10px;display:none"><span style="font-size:14px">♛</span></button>
   <button class="pill-btn admin-toggle" id="acp-open-btn" onclick="openAcp()" title="لوحة تحكم التاجر" style="padding:8px 12px;display:none;background:linear-gradient(135deg,#7c3aed,#0a0a0a);color:#fbbf24 !important"><span style="font-size:13px">🛠️</span></button>
   <button class="cart-btn" data-testid="header-login-btn" onclick="openLogin()" title="تسجيل دخول" id="header-login-btn" style="background:#fff;border:1px solid #e9d5ff;color:#7c3aed">👤</button>
 </header>
+<!-- HEADER SETTINGS POPOVER -->
+<div id="header-settings-popover" style="display:none;position:fixed;top:60px;left:14px;background:#fff;border:1px solid #e5e7eb;border-radius:14px;box-shadow:0 12px 40px rgba(0,0,0,.18);padding:12px;min-width:220px;z-index:200">
+  <div style="font-size:10px;color:#7c3aed;font-weight:900;margin-bottom:8px">⚙️ تخصيصاتك</div>
+  <button onclick="toggleLang()" style="width:100%;padding:10px;background:#faf5ff;border:1px solid #ddd6fe;border-radius:10px;font-family:inherit;font-size:12px;font-weight:700;cursor:pointer;text-align:right;margin-bottom:6px">🌐 <span id="lang-flag">🇸🇦</span> <span id="lang-label">عربي</span></button>
+  <button onclick="toggleMarketPopover(event)" style="width:100%;padding:10px;background:#faf5ff;border:1px solid #ddd6fe;border-radius:10px;font-family:inherit;font-size:12px;font-weight:700;cursor:pointer;text-align:right;margin-bottom:6px">🌍 <span id="market-label">السعودية</span></button>
+  <button data-testid="dark-mode-toggle" onclick="toggleDarkMode()" id="dark-mode-btn" style="width:100%;padding:10px;background:#fef3c7;border:1px solid #fde68a;border-radius:10px;font-family:inherit;font-size:12px;font-weight:700;cursor:pointer;text-align:right">🌙 الوضع الليلي</button>
+</div>
 
 <!-- MARKET POPOVER -->
 <div class="market-popover" id="market-popover" onclick="event.stopPropagation()">
@@ -818,9 +838,9 @@ body.admin-mode .img-edit-btn,body.admin-mode .studio-btn{display:none !importan
 
 <!-- POWERED BY FOOTER -->
 <div style="background:#0a0a0a;color:#94a3b8;padding:20px 14px 80px;text-align:center;font-size:11px;line-height:1.9">
-  <a href="https://zerax.sa" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;gap:8px;text-decoration:none;color:#fff;font-weight:900;font-size:13px">
-    <span style="background:linear-gradient(135deg,#7c3aed,#fbbf24);color:#fff;width:28px;height:28px;border-radius:8px;display:inline-flex;align-items:center;justify-content:center;font-size:13px">Z</span>
-    <span>Powered by <b style="color:#fbbf24">Zerax</b></span>
+  <a href="https://zerax.sa" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;gap:8px;text-decoration:none;font-weight:900;font-size:14px">
+    <span style="background:linear-gradient(135deg,#fbbf24,#0a0a0a);color:#fff;width:34px;height:34px;border-radius:8px;display:inline-flex;align-items:center;justify-content:center;font-size:14px;position:relative"><span style="position:absolute;top:-7px;font-size:11px">👑</span>Z</span>
+    <span style="background:linear-gradient(135deg,#fbbf24,#d97706);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;letter-spacing:.5px">Zerax</span>
   </a>
   <div style="margin-top:6px;opacity:.7">الشركة المطوّرة · <a href="https://zerax.sa" target="_blank" rel="noopener" style="color:#fbbf24;text-decoration:none">zerax.sa</a></div>
 </div>
@@ -2142,6 +2162,34 @@ async function loadMerchantProducts(){
     console.log(`[storefront] loaded ${adapted.length} merchant products (merchant=${merchantId||'all'})`);
   }catch(e){console.warn('loadMerchantProducts failed',e);}
 }
+// ───── HEADER SETTINGS POPOVER + DARK MODE ─────
+function toggleHeaderSettings(e){
+  e?.stopPropagation();
+  const p=document.getElementById('header-settings-popover');
+  if(!p)return;
+  p.style.display=p.style.display==='none'?'block':'none';
+  if(p.style.display==='block'){
+    setTimeout(()=>{
+      document.addEventListener('click',function _h(ev){
+        if(!p.contains(ev.target)){p.style.display='none';document.removeEventListener('click',_h);}
+      });
+    },100);
+  }
+}
+function toggleDarkMode(){
+  document.body.classList.toggle('dark');
+  const isDark=document.body.classList.contains('dark');
+  localStorage.setItem('zx_dark',isDark?'1':'0');
+  const btn=document.getElementById('dark-mode-btn');
+  if(btn)btn.innerHTML=isDark?'☀️ الوضع النهاري':'🌙 الوضع الليلي';
+  toast(isDark?'🌙 تم تفعيل الوضع الليلي':'☀️ تم تفعيل الوضع النهاري');
+}
+// Restore dark mode on load
+if(localStorage.getItem('zx_dark')==='1'){
+  document.body.classList.add('dark');
+  setTimeout(()=>{const b=document.getElementById('dark-mode-btn');if(b)b.innerHTML='☀️ الوضع النهاري';},200);
+}
+
 // ───── AI CUSTOMER ASSISTANT ─────
 let _aiQuestionsCount=0;
 let _aiBusy=false;
@@ -3241,6 +3289,14 @@ function showProductDetail(pid){
     vWrap.style.display='block';
   } else { vWrap.style.display='none'; }
   document.getElementById('pd-info').innerHTML=html||`<div class="pd-empty">${CURRENT_LANG==='ar'?'ℹ️ التاجر لم يضف تفاصيل تفصيلية لهذا المنتج بعد.':'ℹ️ The merchant has not added detailed info for this product yet.'}</div>`;
+  // Add "Ask Zerax AI" CTA in product detail
+  const askCta=document.createElement('div');
+  askCta.style.cssText='background:linear-gradient(135deg,#faf5ff,#fdf2f8);border:2px dashed #7c3aed;border-radius:14px;padding:16px;margin:14px 0;text-align:center;cursor:pointer;transition:transform .2s';
+  askCta.onmouseenter=()=>askCta.style.transform='scale(1.02)';
+  askCta.onmouseleave=()=>askCta.style.transform='scale(1)';
+  askCta.onclick=()=>{openAiAssistant();setTimeout(()=>{document.getElementById('ai-input').value='قارن هذا المنتج مع منتجات مشابهة';aiAskCustomer('قارن هذا المنتج مع منتجات مشابهة');},300);};
+  askCta.innerHTML='<div style="font-size:24px;margin-bottom:6px">✨</div><b style="font-size:14px;color:#7c3aed">تردد في الشراء؟ اسأل Zerax AI</b><div style="font-size:11px;color:#6b7280;margin-top:4px;line-height:1.6">قارن مع منتجات مشابهة · اطّلع على تجارب العملاء · احصل على توصية فورية</div><div style="margin-top:8px;background:#7c3aed;color:#fff;padding:8px 16px;border-radius:99px;font-size:11px;font-weight:900;display:inline-block">💬 اسأل الآن (مجاناً أول مرة)</div>';
+  document.getElementById('pd-info').appendChild(askCta);
   renderProductReviews(pid);
   showView('product');
   window.scrollTo({top:0,behavior:'smooth'});
