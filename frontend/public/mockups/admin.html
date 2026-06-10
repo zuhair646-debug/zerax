@@ -1760,41 +1760,55 @@ select.ps-input option{background:#13131f;color:#fff}
     <div class="ps-body">
       <!-- TAB 1: BASIC INFO -->
       <div class="ps-panel active" data-pspanel="info">
-        <!-- Manual Mode Notice with AI shortcut -->
-        <div style="background:linear-gradient(135deg,#0f172a,#1e293b);border:1px solid #312e81;border-radius:14px;padding:14px 18px;margin:18px 22px 0;display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap">
-          <div style="display:flex;align-items:center;gap:12px;flex:1;min-width:280px">
-            <div style="width:42px;height:42px;border-radius:10px;background:linear-gradient(135deg,#10b981,#059669);color:#fff;display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0">✏️</div>
-            <div><b style="color:#fbbf24;font-size:13px;display:block">الإضافة اليدوية الكاملة</b><span style="font-size:11px;color:#94a3b8;line-height:1.6">صلاحيات كاملة · ارفع صورتك · اكتب معلوماتك · بدون أي تدخل من AI</span></div>
+        <!-- Manual Mode Notice with AI shortcut (collapsible) -->
+        <div id="ai-shortcut-banner" style="margin:18px 22px 0">
+          <div id="ai-shortcut-collapsed" style="display:none;background:linear-gradient(135deg,#0f172a,#1e293b);border:1px solid #312e81;border-radius:12px;padding:8px 14px;display:flex;align-items:center;justify-content:space-between;gap:10px;cursor:pointer" onclick="toggleAIShortcut(true)">
+            <div style="display:flex;align-items:center;gap:8px"><span style="font-size:14px">✨</span><b style="color:#fbbf24;font-size:11px">شات AI متاح للمساعدة</b></div>
+            <button type="button" style="background:none;border:none;color:#94a3b8;font-size:14px;cursor:pointer">⌄</button>
           </div>
-          <button onclick="psSwitchTab('ai')" style="background:linear-gradient(135deg,#fbbf24,#f59e0b);color:#0a0a14;border:none;padding:10px 16px;border-radius:10px;font-family:inherit;font-weight:900;font-size:12px;cursor:pointer;white-space:nowrap;display:flex;align-items:center;gap:6px">✨ أو استخدم شات AI ←</button>
+          <div id="ai-shortcut-expanded" style="background:linear-gradient(135deg,#0f172a,#1e293b);border:1px solid #312e81;border-radius:14px;padding:14px 18px;display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap">
+            <div style="display:flex;align-items:center;gap:12px;flex:1;min-width:280px">
+              <div style="width:42px;height:42px;border-radius:10px;background:linear-gradient(135deg,#10b981,#059669);color:#fff;display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0">✏️</div>
+              <div><b style="color:#fbbf24;font-size:13px;display:block">الإضافة اليدوية الكاملة</b><span style="font-size:11px;color:#94a3b8;line-height:1.6">صلاحيات كاملة · ارفع صورتك · اكتب معلوماتك · بدون أي تدخل من AI</span></div>
+            </div>
+            <div style="display:flex;gap:8px;align-items:center">
+              <button onclick="psSwitchTab('ai')" style="background:linear-gradient(135deg,#fbbf24,#f59e0b);color:#0a0a14;border:none;padding:10px 16px;border-radius:10px;font-family:inherit;font-weight:900;font-size:12px;cursor:pointer;white-space:nowrap;display:flex;align-items:center;gap:6px">✨ أو استخدم شات AI ←</button>
+              <button onclick="toggleAIShortcut(false)" title="طي" style="background:#1f1f2e;color:#94a3b8;border:1px solid #312e81;width:36px;height:36px;border-radius:10px;cursor:pointer;font-size:14px">⌃</button>
+            </div>
+          </div>
         </div>
 
-        <!-- TOOLS PICKER BAR (smart category-based tools) -->
-        <div style="background:#0a0a14;border:1px solid #1e293b;border-radius:14px;padding:14px 18px;margin:14px 22px 0">
+        <!-- TOOLS PICKER BAR (smart category-based tools · collapsible) -->
+        <div id="tools-picker-box" style="background:#0a0a14;border:1px solid #1e293b;border-radius:14px;padding:14px 18px;margin:14px 22px 0">
           <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;flex-wrap:wrap;gap:10px">
-            <div><b style="color:#fbbf24;font-size:13px">🛠️ أدوات المنتج</b><span style="color:#94a3b8;font-size:11px;margin-right:8px">حدد نوع المنتج لتظهر أدواته تلقائياً · أو فعّل أدوات يدوياً</span></div>
-            <select id="tool-preset" onchange="applyToolPreset(this.value)" style="background:#1f1f2e;color:#fbbf24;border:1px solid #312e81;padding:8px 12px;border-radius:8px;font-family:inherit;font-weight:700;font-size:12px;cursor:pointer">
-              <option value="">— اختر نوع المنتج —</option>
-              <option value="phones">📱 جوالات وإلكترونيات</option>
-              <option value="clothes">👕 ملابس</option>
-              <option value="shoes">👟 أحذية</option>
-              <option value="watches">⌚ ساعات ومجوهرات</option>
-              <option value="food">🍔 أطعمة ومشروبات</option>
-              <option value="beauty">💄 جمال وعطور</option>
-              <option value="perfume">🌹 عطور فقط</option>
-              <option value="meds">💊 أدوية ومكملات</option>
-              <option value="home">🏠 منزل وأثاث</option>
-              <option value="kids">🧸 ألعاب أطفال</option>
-              <option value="sports">⚽ رياضة ومعدات</option>
-              <option value="books">📚 كتب ومطبوعات</option>
-              <option value="cars">🚗 سيارات وقطع غيار</option>
-              <option value="pets">🐕 حيوانات أليفة</option>
-              <option value="custom">⚙️ مخصص (يدوي)</option>
-            </select>
+            <div style="flex:1;min-width:200px"><b style="color:#fbbf24;font-size:13px">🛠️ أدوات المنتج</b><span style="color:#94a3b8;font-size:11px;margin-right:8px" id="tools-hint">حدد نوع المنتج لتظهر أدواته تلقائياً · أو فعّل أدوات يدوياً</span></div>
+            <div style="display:flex;gap:8px;align-items:center">
+              <select id="tool-preset" onchange="applyToolPreset(this.value)" style="background:#1f1f2e;color:#fbbf24;border:1px solid #312e81;padding:8px 12px;border-radius:8px;font-family:inherit;font-weight:700;font-size:12px;cursor:pointer">
+                <option value="">— اختر نوع المنتج —</option>
+                <option value="phones">📱 جوالات وإلكترونيات</option>
+                <option value="clothes">👕 ملابس</option>
+                <option value="shoes">👟 أحذية</option>
+                <option value="watches">⌚ ساعات ومجوهرات</option>
+                <option value="food">🍔 أطعمة ومشروبات</option>
+                <option value="beauty">💄 جمال وعطور</option>
+                <option value="perfume">🌹 عطور فقط</option>
+                <option value="meds">💊 أدوية ومكملات</option>
+                <option value="home">🏠 منزل وأثاث</option>
+                <option value="kids">🧸 ألعاب أطفال</option>
+                <option value="sports">⚽ رياضة ومعدات</option>
+                <option value="books">📚 كتب ومطبوعات</option>
+                <option value="cars">🚗 سيارات وقطع غيار</option>
+                <option value="pets">🐕 حيوانات أليفة</option>
+                <option value="custom">⚙️ مخصص (يدوي)</option>
+              </select>
+              <button id="tools-collapse-btn" onclick="toggleToolsPicker()" title="طي / فتح" style="display:none;background:#1f1f2e;color:#94a3b8;border:1px solid #312e81;width:36px;height:36px;border-radius:10px;cursor:pointer;font-size:14px">⌃</button>
+            </div>
           </div>
-          <div style="display:flex;flex-wrap:wrap;gap:6px" id="tools-active-chips"><span style="color:#475569;font-size:11px">لا أدوات مفعّلة بعد · اختر نوع المنتج فوق</span></div>
-          <div style="margin-top:10px;font-size:10px;color:#94a3b8;background:#0f172a;padding:8px 10px;border-radius:8px;line-height:1.6">💡 بعد اختيار النوع، انتقل لتاب "🎯 المتغيّرات والضمان" أعلى الصفحة لتعبئة الأدوات. أو اضغط زر "⚙️ تعبئة الأدوات الآن" أسفل.</div>
-          <button onclick="psSwitchTab('variants')" id="goto-variants-btn" style="display:none;margin-top:10px;background:linear-gradient(135deg,#fbbf24,#f59e0b);color:#0a0a14;border:none;padding:10px 18px;border-radius:10px;font-family:inherit;font-weight:900;font-size:12px;cursor:pointer;width:100%">⚙️ افتح أدوات المنتج لتعبئتها ←</button>
+          <div id="tools-body">
+            <div style="display:flex;flex-wrap:wrap;gap:6px" id="tools-active-chips"><span style="color:#475569;font-size:11px">لا أدوات مفعّلة بعد · اختر نوع المنتج فوق</span></div>
+            <div style="margin-top:10px;font-size:10px;color:#94a3b8;background:#0f172a;padding:8px 10px;border-radius:8px;line-height:1.6">💡 اضغط على أي أداة بالأعلى لفتح قسم تعبئتها مباشرة · أو اضغط زر "⚙️ تعبئة الأدوات الآن" أسفل.</div>
+            <button onclick="psSwitchTab('variants')" id="goto-variants-btn" style="display:none;margin-top:10px;background:linear-gradient(135deg,#fbbf24,#f59e0b);color:#0a0a14;border:none;padding:10px 18px;border-radius:10px;font-family:inherit;font-weight:900;font-size:12px;cursor:pointer;width:100%">⚙️ افتح أدوات المنتج لتعبئتها ←</button>
+          </div>
         </div>
         <div class="ps-grid-2">
           <div>
@@ -1802,7 +1816,6 @@ select.ps-input option{background:#13131f;color:#fff}
             <div class="ps-upload" onclick="document.getElementById('pm-img').click()" id="pm-img-preview">
               <i data-lucide="upload-cloud" style="width:42px;height:42px;color:#94a3b8;margin-bottom:8px"></i>
               <p style="font-size:12px;color:#94a3b8;text-align:center">اضغط لرفع صورة أو<br>اسحبها هنا</p>
-              <button type="button" class="ps-mini-btn" onclick="event.stopPropagation();psSwitchTab('image')"><i data-lucide="sparkles" style="width:11px;height:11px"></i> أو ولّد بـ AI</button>
             </div>
             <input type="file" id="pm-img" accept="image/*" style="display:none" onchange="pmPreviewImg(this)">
           </div>
@@ -1966,13 +1979,12 @@ select.ps-input option{background:#13131f;color:#fff}
 
       <!-- TAB 4: AI SMART CHAT (luxury split — chat + results) -->
       <div class="ps-panel" data-pspanel="ai">
-        <!-- Header -->
-        <div style="background:linear-gradient(135deg,#0f172a,#1e293b);padding:14px 22px;border-bottom:1px solid #312e81;display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap">
-          <div style="display:flex;align-items:center;gap:12px">
+        <!-- Header (no "return to scratch" bar — user requested removal) -->
+        <div style="background:linear-gradient(135deg,#0f172a,#1e293b);padding:14px 22px;border-bottom:1px solid #312e81;display:flex;align-items:center;gap:14px;flex-wrap:wrap">
+          <div style="display:flex;align-items:center;gap:12px;flex:1">
             <div style="width:42px;height:42px;border-radius:10px;background:linear-gradient(135deg,#7c3aed,#ec4899);color:#fff;display:flex;align-items:center;justify-content:center;font-size:20px">🤖</div>
             <div><b style="color:#fbbf24;font-size:14px;display:block">شات Zerax AI الذكي</b><span style="font-size:11px;color:#94a3b8">يعتمد على معلوماتك · يبحث · يولّد صور · يجمع كل شيء في صفحة واحدة</span></div>
           </div>
-          <button onclick="psSwitchTab('info')" style="background:#1f1f2e;color:#94a3b8;border:1px solid #312e81;padding:8px 14px;border-radius:8px;font-family:inherit;font-weight:700;font-size:11px;cursor:pointer">↩ رجوع للإضافة اليدوية</button>
         </div>
 
         <!-- Quick options bar (relies on user data above) -->
@@ -1991,32 +2003,34 @@ select.ps-input option{background:#13131f;color:#fff}
         </div>
 
         <!-- Single column FULL chat -->
-        <div style="display:flex;flex-direction:column;min-height:520px;background:#0a0a14">
-          <div id="ai-chat-msgs" style="flex:1;overflow-y:auto;padding:20px 24px;max-height:480px">
+        <div style="display:flex;flex-direction:column;min-height:540px;background:#0a0a14">
+          <div id="ai-chat-msgs" style="flex:1;overflow-y:auto;padding:20px 24px;max-height:440px">
             <div class="ai-msg ai-msg-bot">
               <div class="ai-avt">🤖</div>
               <div class="ai-bubble"><b style="color:#fbbf24">مرحباً! 👋</b><br/>اكتب اسم منتجك في تاب "إضافة يدوية" أولاً، ثم رجع لي وأنا أعتمد عليك:<br/>✅ أبحث في الإنترنت<br/>✅ أولّد صور بألوانك وخلفيتك<br/>✅ أنقل النتائج لتاب "المعاينة" مباشرة<br/><br/>💰 <b style="color:#10b981">كل رسالة = 5 نقاط Zerax</b> · يمكنك إرفاق صور/روابط</div>
             </div>
           </div>
-          <div style="padding:14px 18px;border-top:1px solid #1e293b;background:#0f172a">
-            <div style="display:flex;gap:8px;align-items:end">
-              <button onclick="document.getElementById('ai-upload-img').click()" title="ارفع صورة" style="background:#1f1f2e;color:#94a3b8;border:1px solid #312e81;width:38px;height:38px;border-radius:10px;cursor:pointer;font-size:16px;flex-shrink:0">📷</button>
+          <!-- CHAT INPUT BOX (always visible — user can type here) -->
+          <div style="padding:14px 18px;border-top:2px solid #fbbf24;background:linear-gradient(180deg,#0f172a,#1a1a2e);position:sticky;bottom:0">
+            <div style="display:flex;gap:8px;align-items:stretch">
+              <button onclick="document.getElementById('ai-upload-img').click()" title="ارفع صورة" style="background:#1f1f2e;color:#fbbf24;border:1px solid #312e81;width:46px;border-radius:12px;cursor:pointer;font-size:18px;flex-shrink:0">📷</button>
               <input type="file" id="ai-upload-img" accept="image/*" style="display:none" onchange="aiChatAttach(this)">
-              <button onclick="aiAttachLink()" title="أضف رابط" style="background:#1f1f2e;color:#94a3b8;border:1px solid #312e81;width:38px;height:38px;border-radius:10px;cursor:pointer;font-size:16px;flex-shrink:0">🔗</button>
-              <textarea id="ai-chat-input" placeholder="مثلاً: 'ابحث عن iPhone 17 Pro Max وولّد لي 5 صور بألوان مختلفة وخلفية بيضاء'" rows="2" style="flex:1;background:#1f1f2e;color:#fff;border:1px solid #312e81;border-radius:10px;padding:10px 12px;font-family:inherit;font-size:12px;resize:none;outline:none"></textarea>
-              <button onclick="aiChatSend()" data-testid="ai-chat-send" style="background:linear-gradient(135deg,#fbbf24,#f59e0b);color:#0a0a14;border:none;padding:0 18px;border-radius:10px;font-family:inherit;font-weight:900;font-size:12px;cursor:pointer;height:64px">إرسال ✨<br><small style="font-weight:700">(-5 نقاط)</small></button>
+              <button onclick="aiAttachLink()" title="أضف رابط" style="background:#1f1f2e;color:#fbbf24;border:1px solid #312e81;width:46px;border-radius:12px;cursor:pointer;font-size:18px;flex-shrink:0">🔗</button>
+              <textarea id="ai-chat-input" placeholder="✍️ اكتب رسالتك هنا... مثل: ابحث عن iPhone 17 Pro Max وولّد لي 5 صور بألوان مختلفة وخلفية بيضاء" rows="2" onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();aiChatSend();}" style="flex:1;background:#1f1f2e;color:#fff;border:1.5px solid #fbbf24;border-radius:12px;padding:12px 14px;font-family:inherit;font-size:13px;resize:none;outline:none;min-height:52px"></textarea>
+              <button onclick="aiChatSend()" data-testid="ai-chat-send" style="background:linear-gradient(135deg,#fbbf24,#f59e0b);color:#0a0a14;border:none;padding:0 20px;border-radius:12px;font-family:inherit;font-weight:900;font-size:13px;cursor:pointer;min-width:110px">إرسال ✨<br><small style="font-weight:700;font-size:10px">(-5 نقاط)</small></button>
             </div>
+            <div style="margin-top:8px;font-size:10px;color:#64748b;text-align:center">💡 اضغط Enter للإرسال · Shift+Enter لسطر جديد</div>
           </div>
         </div>
       </div>
 
-      <!-- TAB: PREVIEW (customer view) -->
+      <!-- TAB: PREVIEW (customer view · dark theme) -->
       <div class="ps-panel" data-pspanel="preview">
         <div style="background:linear-gradient(135deg,#0f172a,#1e293b);padding:14px 22px;border-bottom:1px solid #10b981;display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap">
           <div style="display:flex;align-items:center;gap:12px"><div style="width:42px;height:42px;border-radius:10px;background:linear-gradient(135deg,#10b981,#059669);color:#fff;display:flex;align-items:center;justify-content:center;font-size:20px">👁️</div><div><b style="color:#10b981;font-size:14px;display:block">معاينة العميل</b><span style="font-size:11px;color:#94a3b8">هكذا سيرى العميل منتجك · اضغط "نشر مباشر" لينشر فوراً</span></div></div>
           <div style="display:flex;gap:8px"><button onclick="psSwitchTab('info')" style="background:#1f1f2e;color:#94a3b8;border:1px solid #312e81;padding:8px 14px;border-radius:8px;font-family:inherit;font-weight:700;font-size:11px;cursor:pointer">↩ تعديل</button><button onclick="publishProductLive()" data-testid="publish-live-btn" style="background:linear-gradient(135deg,#10b981,#059669);color:#fff;border:none;padding:8px 18px;border-radius:8px;font-family:inherit;font-weight:900;font-size:12px;cursor:pointer">🚀 نشر مباشر</button></div>
         </div>
-        <div id="preview-content" style="padding:22px;background:#f8fafc;min-height:400px"></div>
+        <div id="preview-content" style="padding:40px 22px;background:#0a0a14;min-height:480px;display:flex;justify-content:center;align-items:flex-start"></div>
       </div>
     </div>
     <!-- Footer -->
@@ -2994,7 +3008,7 @@ function renderProductPreview(){
   const colors=Array.from(document.querySelectorAll('#variant-colors .color-pill')).map(p=>({name:p.querySelector('span:nth-child(2)')?.textContent,bg:p.querySelector('span:first-child')?.style.background}));
   const storage=Array.from(document.querySelectorAll('#variant-storage .chip-pill')).map(p=>p.dataset.val);
   const sizes=Array.from(document.querySelectorAll('#variant-sizes .chip-pill')).map(p=>p.dataset.val);
-  host.innerHTML=`<div style="max-width:480px;margin:0 auto;background:#fff;border-radius:16px;overflow:hidden;box-shadow:0 12px 40px rgba(0,0,0,.1);font-family:system-ui">
+  host.innerHTML=`<div style="max-width:480px;margin:0 auto;background:#fff;border-radius:18px;overflow:hidden;box-shadow:0 30px 80px rgba(124,58,237,.25), 0 0 0 1px rgba(255,255,255,.05);font-family:system-ui">
     <div style="position:relative">${imgPrev?`<img src="${imgPrev}" style="width:100%;height:340px;object-fit:cover;display:block">`:`<div style="width:100%;height:340px;background:#f3f4f6;display:flex;align-items:center;justify-content:center;color:#9ca3af;font-size:14px">📷 لا توجد صورة بعد</div>`}<button style="position:absolute;top:14px;right:14px;background:#fff;border:none;width:38px;height:38px;border-radius:50%;font-size:16px;cursor:pointer;box-shadow:0 4px 12px rgba(0,0,0,.15)">🤍</button></div>
     ${aiImgs.length>1?`<div style="display:flex;gap:6px;padding:10px;overflow-x:auto">${aiImgs.slice(0,5).map(u=>`<img src="${u}" style="width:60px;height:60px;object-fit:cover;border-radius:8px;border:2px solid #e5e7eb;flex-shrink:0">`).join('')}</div>`:''}
     <div style="padding:18px"><h2 style="font-size:18px;font-weight:900;color:#0a0a0a;margin-bottom:6px">${name}</h2><div style="font-size:13px;color:#6b7280;line-height:1.7;margin-bottom:12px">${desc}</div>
@@ -3054,35 +3068,73 @@ function applyToolPreset(key){
   renderActiveTools();
   toast(`✓ تم تفعيل ${ACTIVE_TOOLS.size} أداة لنوع المنتج`);
 }
+// Collapse / expand helpers for the manual tab
+function toggleAIShortcut(open){
+  const exp=document.getElementById('ai-shortcut-expanded');
+  const col=document.getElementById('ai-shortcut-collapsed');
+  if(!exp||!col)return;
+  if(open){exp.style.display='flex';col.style.display='none';}
+  else{exp.style.display='none';col.style.display='flex';}
+}
+function toggleToolsPicker(){
+  const body=document.getElementById('tools-body');
+  const btn=document.getElementById('tools-collapse-btn');
+  if(!body||!btn)return;
+  const collapsed=body.style.display==='none';
+  body.style.display=collapsed?'block':'none';
+  btn.textContent=collapsed?'⌃':'⌄';
+  btn.title=collapsed?'طي':'فتح';
+}
 function renderActiveTools(){
   const host=document.getElementById('tools-active-chips');if(!host)return;
   const gotoBtn=document.getElementById('goto-variants-btn');
-  if(!ACTIVE_TOOLS.size){host.innerHTML='<span style="color:#475569;font-size:11px">لا أدوات مفعّلة بعد · اختر نوع المنتج فوق</span>';if(gotoBtn)gotoBtn.style.display='none';return;}
-  host.innerHTML=Array.from(ACTIVE_TOOLS).map(t=>`<div class="tool-chip" data-tool="${t}" style="background:linear-gradient(135deg,#fbbf2420,#f59e0b20);border:1px solid #fbbf24;color:#fbbf24;padding:6px 12px;border-radius:99px;font-size:11px;font-weight:700;cursor:pointer;display:inline-flex;align-items:center;gap:6px" onclick="scrollToTool('${t}')">${TOOL_LABELS[t]||t} <button onclick="event.stopPropagation();ACTIVE_TOOLS.delete('${t}');renderActiveTools();" style="background:none;border:none;color:#dc2626;cursor:pointer;font-weight:900;font-size:14px">×</button></div>`).join('')+
-    `<button onclick="openToolPickerDialog()" style="background:#1f1f2e;color:#94a3b8;border:1px dashed #475569;padding:6px 12px;border-radius:99px;font-size:11px;font-weight:700;cursor:pointer">+ أداة</button>`;
+  const collapseBtn=document.getElementById('tools-collapse-btn');
+  if(!ACTIVE_TOOLS.size){host.innerHTML='<span style="color:#475569;font-size:11px">لا أدوات مفعّلة بعد · اختر نوع المنتج فوق</span>';if(gotoBtn)gotoBtn.style.display='none';if(collapseBtn)collapseBtn.style.display='none';return;}
+  host.innerHTML=Array.from(ACTIVE_TOOLS).map(t=>`<div class="tool-chip" data-tool="${t}" title="اضغط لفتح قسم تعبئة ${TOOL_LABELS[t]||t}" style="background:linear-gradient(135deg,#fbbf2420,#f59e0b20);border:1.5px solid #fbbf24;color:#fbbf24;padding:7px 14px;border-radius:99px;font-size:11px;font-weight:800;cursor:pointer;display:inline-flex;align-items:center;gap:6px;transition:all .15s;user-select:none" onmouseover="this.style.background='linear-gradient(135deg,#fbbf24,#f59e0b)';this.style.color='#0a0a14'" onmouseout="this.style.background='linear-gradient(135deg,#fbbf2420,#f59e0b20)';this.style.color='#fbbf24'" onclick="scrollToTool('${t}')">${TOOL_LABELS[t]||t} <button onclick="event.stopPropagation();ACTIVE_TOOLS.delete('${t}');renderActiveTools();" style="background:rgba(220,38,38,.15);border:none;color:#dc2626;cursor:pointer;font-weight:900;font-size:13px;width:18px;height:18px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center">×</button></div>`).join('')+
+    `<button onclick="openToolPickerDialog()" style="background:#1f1f2e;color:#94a3b8;border:1px dashed #475569;padding:7px 14px;border-radius:99px;font-size:11px;font-weight:700;cursor:pointer">+ أداة</button>`;
   if(gotoBtn)gotoBtn.style.display='block';
+  if(collapseBtn)collapseBtn.style.display='inline-flex';
   showInlineVariantsForActiveTools();
 }
 function openToolPickerDialog(){
   const allTools=Object.keys(TOOL_LABELS);
   const inactive=allTools.filter(t=>!ACTIVE_TOOLS.has(t));
   if(!inactive.length){toast('كل الأدوات مفعّلة');return;}
-  const choice=prompt('اختر أداة لتفعيلها:\n\n'+inactive.map((t,i)=>`${i+1}- ${TOOL_LABELS[t]}`).join('\n')+'\n\nاكتب الرقم:');
-  if(!choice)return;
-  const idx=parseInt(choice)-1;
-  if(inactive[idx]){ACTIVE_TOOLS.add(inactive[idx]);renderActiveTools();}
+  // Build picker modal
+  let m=document.getElementById('tool-picker-modal');
+  if(!m){m=document.createElement('div');m.id='tool-picker-modal';m.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px';document.body.appendChild(m);}
+  m.innerHTML=`<div style="background:#0f172a;border:1px solid #312e81;border-radius:16px;max-width:460px;width:100%;max-height:80vh;overflow:hidden;display:flex;flex-direction:column;box-shadow:0 30px 80px rgba(0,0,0,.5)">
+    <div style="padding:16px 20px;border-bottom:1px solid #1e293b;display:flex;justify-content:space-between;align-items:center"><b style="color:#fbbf24;font-size:14px">🛠️ اختر أداة لتفعيلها</b><button onclick="document.getElementById('tool-picker-modal').remove()" style="background:#1f1f2e;color:#94a3b8;border:none;width:30px;height:30px;border-radius:50%;font-size:14px;cursor:pointer">✕</button></div>
+    <div style="padding:14px 18px;overflow-y:auto;flex:1">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+        ${inactive.map(t=>`<button onclick="ACTIVE_TOOLS.add('${t}');renderActiveTools();document.getElementById('tool-picker-modal').remove();toast('✓ تم تفعيل '+'${TOOL_LABELS[t]}')" style="background:#1f1f2e;color:#cbd5e1;border:1px solid #312e81;padding:10px 14px;border-radius:10px;font-family:inherit;font-weight:700;font-size:12px;cursor:pointer;text-align:right;transition:all .15s" onmouseover="this.style.borderColor='#fbbf24';this.style.color='#fbbf24'" onmouseout="this.style.borderColor='#312e81';this.style.color='#cbd5e1'">${TOOL_LABELS[t]}</button>`).join('')}
+      </div>
+    </div>
+  </div>`;
 }
 function scrollToTool(tool){
-  // For colors/sizes/materials etc we have inline sections — try to scroll
-  const map={colors:'variant-colors',storage:'variant-storage',sizes_clothes:'variant-sizes',sizes_shoes:'variant-sizes',materials:'variant-materials',flavors:'variant-flavors'};
+  // Switch to the variants/tools panel first since variant editors live there
+  const map={colors:'variant-colors',storage:'variant-storage',sizes_clothes:'variant-sizes',sizes_shoes:'variant-sizes',materials:'variant-materials',flavors:'variant-flavors',warranty:'pm-warranty-name',specs:'variant-specs'};
   const target=map[tool];
-  if(target){
-    const el=document.getElementById(target);
-    if(el)el.scrollIntoView({behavior:'smooth',block:'center'});
-  } else {
-    // For other tools, just toast a hint
-    toast(`💡 أداة "${TOOL_LABELS[tool]}" — أضفها في قسم المواصفات`);
-  }
+  psSwitchTab('variants');
+  setTimeout(()=>{
+    if(target){
+      const el=document.getElementById(target);
+      if(el){
+        el.scrollIntoView({behavior:'smooth',block:'center'});
+        // Flash highlight effect to draw the eye
+        const wrap=el.closest('.vf-section')||el.parentElement;
+        if(wrap){
+          const orig=wrap.style.boxShadow;
+          wrap.style.transition='box-shadow .4s';
+          wrap.style.boxShadow='0 0 0 3px #fbbf24';
+          setTimeout(()=>{wrap.style.boxShadow=orig||'';},1400);
+        }
+      }
+    } else {
+      toast(`💡 أداة "${TOOL_LABELS[tool]}" — أضفها في قسم المواصفات`);
+    }
+  },120);
 }
 function showInlineVariantsForActiveTools(){
   // Auto-enable variant field toggles for active tools
@@ -3565,7 +3617,7 @@ async function pmSave(){
     renderProducts();
     renderAll();
     ['pm-name','pm-price','pm-desc'].forEach(id=>$(id).value='');
-    $('pm-img-preview').innerHTML=`<i data-lucide="upload-cloud" style="width:42px;height:42px;color:#94a3b8;margin-bottom:8px"></i><p style="font-size:12px;color:#94a3b8;text-align:center">اضغط لرفع صورة أو<br>اسحبها هنا</p><button type="button" class="ps-mini-btn" onclick="event.stopPropagation();psSwitchTab('image')"><i data-lucide="sparkles" style="width:11px;height:11px"></i> أو ولّد بـ AI</button>`;
+    $('pm-img-preview').innerHTML=`<i data-lucide="upload-cloud" style="width:42px;height:42px;color:#94a3b8;margin-bottom:8px"></i><p style="font-size:12px;color:#94a3b8;text-align:center">اضغط لرفع صورة أو<br>اسحبها هنا</p>`;
     toast('✓ تم حفظ المنتج في قاعدة البيانات');
   }catch(e){alert('فشل الحفظ: '+e.message);}
 }
