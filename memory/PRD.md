@@ -1,72 +1,105 @@
 # Zerax — Multi-tenant AI Commerce Platform (PRD)
 
 ## Original Problem Statement
-Build "Zerax", a multi-tenant AI platform that includes:
+Build "Zerax" — a multi-tenant Saudi/Arab AI commerce platform with:
 1. Conversational FreeBuild chat interface for building sites/apps from scratch
 2. Smart Orchestrator unifying AI models (Anthropic Claude)
 3. Ready Sites module (template-first)
 4. Integrated Video Studio for AI-generated promo videos
 5. Driver App + Delivery management (Haversine + dynamic pricing)
-6. Global & local payment gateway catalog (Tabby, Tamara, Klarna, Alipay, Stripe…)
-7. Standalone professional Admin Dashboard `admin.html` with real-time KPIs and 4-stage AI chat workspace
+6. Global & local payment gateway catalog
+7. Standalone professional Admin Dashboard with real-time KPIs and AI workspace
 
-## Current Implementation Status (Feb 2026)
+## Financial Model (Confirmed by User — Feb 2026)
+**Tech-partner only, NO commission on sales.** Revenue from:
+- 💳 Monthly subscriptions (99-299 SAR/month tiers)
+- ⚡ AI point packs (1000/2000/5000/10000)
+- 🚚 Delivery service fees (from drivers' withdrawals, not merchants)
+- 🛠️ One-time add-ons: domain, custom email, premium template, mobile app
 
-### ✅ Completed
-- `admin.html` (Merchant Control Panel) — RTL Arabic, sidebar nav, KPIs, top products, recent orders, orders/customers/delivery/payroll/gateways/settings pages
-- **Video Studio AI** — Full studio inside admin panel:
-  - Language picker (Saudi/Egyptian/MSA/English/French/Hindi)
-  - Voice picker with preview (5 Zerax voices via OpenAI TTS)
-  - Tone & duration selectors with cost estimator
-  - 5-stage workspace: Script text · Event scenario · AI images · Audio · Final video
-  - Real Gemini Nano Banana image generation per scene
-  - ffmpeg video assembly with TTS narration
-  - Publish-to-social flow
-- **Social Media Connections** — 8 platforms (Instagram, TikTok, X, Snapchat, YouTube, FB, WhatsApp Business, Telegram) with connect/disconnect + recent posts table
-- **Interactive Dashboard Chart** — SVG line chart with hover tooltips showing day-specific income + delta % comparison
-- **Clickable everything** — KPIs jump to relevant pages, top products open product editor, notifications dropdown, user menu dropdown, global search filters products
-- Backend routers: `image_studio_router.py`, `video_studio_router.py`, `delivery_router.py`, `payment_gateways_router.py`, `payroll_router.py`
-- Driver PWA + Delivery tracking (`driver_app.html`, `track.html`)
-- Global payment gateways catalog with per-country filtering
+## Current State (Feb 2026)
 
-### 🟡 Mocked / Static (functional UI but no live DB)
-- `admin.html` login is local-only (`merchant@zerax.com / zerax2026`); no JWT enforcement
-- Products list and recent orders use `MOCK_PRODUCTS` / seeded data
-- Social media accounts are localStorage-only (no real OAuth)
+### ✅ COMPLETED in admin.html (Merchant Control Panel)
+- **Dashboard**: Live KPIs (clickable), interactive SVG chart with hover tooltips,
+  Top Products clickable, recent orders, **AI Weekly Report card** (dismissible)
+- **Products + Product Studio** (3 tabs, fullscreen toggle):
+  1. Basic Info — image upload, name, price, stock, category
+  2. Creative Studio — 5 types (product/logo/banner/section/animated) +
+     bg-color/frame-color/aspect pickers
+  3. Deep AI Analysis — 12 sections: title, what's new, comparison, features,
+     benefits, usage steps, side effects, specs, colors, sizes, warranty, official URL
+- **Video Studio** (5 tabs, fullscreen, dark Zerax theme):
+  1. Script (Gemini storyboard with 44 dialects + 12 voices)
+  2. Scenes (editable storyboard, approve per scene)
+  3. Images (Gemini Nano Banana, approve per image, 8pts each)
+  4. Voice (Zerax TTS, preview before approve, 5pts)
+  5. Final Video (ffmpeg merge, 30pts on click only)
+  + Working mic (Web Speech API, dialect-aware)
+  + Voice preview button
+  + Real-time cost estimator
+- **Delivery** with auto-dispatch:
+  - Master toggle + per-order auto-assign button
+  - Settings: radius, grouping, max orders/driver, priority, withdraw fee
+  - Driver pay model per driver (commission % or monthly salary + bonus)
+  - 5 payout methods (bank/STC Pay/urpay/PayPal/cash)
+- **Smart Management**:
+  - Auto-post to 7 social platforms (Instagram, TikTok, X, Snapchat, FB, WhatsApp, Telegram)
+  - Customizable post template with variables
+  - 5 timing options (immediate/+15min/+1hr/peak/manual)
+  - Smart Replies: 2 modes (canned free / AI 1pt per reply)
+  - Personality config, daily limit, auto-handoff to human
+- **Services Catalog** (7 services with auto-activation):
+  1. Custom domain (99 SAR/year)
+  2. Branded email (49 SAR/year)
+  3. Premium template (199 SAR one-time)
+  4. iOS/Android app (999 SAR one-time)
+  5. Smart delivery (79 SAR/month)
+  6. VIP support (99 SAR/month)
+  7. AI Premium Claude Opus (149 SAR/month)
+- **Social Media** page (8 platforms with connect/disconnect + recent posts)
+- **Recharge modal** (4 packages: 1k/2k/5k/10k)
+- **Wallet** default 5000 points + auto-boost on low balance
+- **Notifications & user dropdown menus**
+- **Global search** filters products
 
-### 🔴 Pending (Priority Order)
+### ✅ COMPLETED in app_mode_full.html (Customer Storefront)
+- Rich product detail page with deep AI analysis renderer (`buildRichAnalysisClientHTML`)
+- Light-themed cards matching customer-facing aesthetic
+- 8 dynamic sections rendered when analysis exists
+- Falls back to legacy info.html for old products
 
-**P1**
-- JWT login + MongoDB persistence for admin.html (replace localStorage)
-- Hook product CRUD to real `/api/products` endpoints
-- Replace seeded recent orders with `/api/orders?limit=5`
+### 🟡 MOCKED (functional UI, no live backend)
+- admin.html login uses localStorage (no JWT)
+- Products + orders use seed data (no MongoDB sync between admin/customer)
+- Social OAuth not implemented (toggles save to localStorage)
+- Service activations are localStorage flags only
+- Auto-dispatch endpoint /api/delivery/auto-assign falls back to simulation
+
+### 🔴 PENDING (Priority Order)
+
+**P1 — CRITICAL NEXT**
+- Zerax Landing Page (marketing site) — promised next
+- MongoDB persistence for admin.html ↔ app_mode_full.html sync
+- JWT real auth on admin.html
 
 **P2**
-- Tabby & Tamara live payment execution APIs
-- ZATCA Phase-2 e-invoicing (XML + PDF/A-3 + QR)
-- Real OAuth for social media accounts (Meta/Google/X APIs)
+- Real OAuth (Meta/Google/X) for social connections
+- Backend: /api/delivery/auto-assign with Haversine + nearest driver logic
+- Backend: /api/social/auto-post (Meta Graph, TikTok Business, Twitter API)
+- Backend: /api/replies/smart (Gemini-powered DM responder)
+- Tabby/Tamara live payment execution
+- ZATCA Phase 2 (XML + PDF/A-3 + QR)
 
 **P3**
-- Unify AI agents via `claude_core.py` orchestrator
-- Voice agent / Call-center AI via LiveKit + ElevenLabs
-
-## Code Architecture
-- `/app/backend/routers/` — FastAPI routers prefixed with `/api`
-- `/app/backend/modules/payments/` — gateway catalogs and enrichment
-- `/app/frontend/public/mockups/` — vanilla HTML SPAs (`admin.html`, `app_mode_full.html`, `driver_app.html`, `track.html`, `index.html`)
-- `/app/frontend/src/` — React main shell (FreeBuild, Ready Sites, App Studio…)
-
-## Key API Endpoints
-- `POST /api/image-studio/generate` — Gemini Nano Banana image gen
-- `POST /api/promo-video/storyboard` — Storyboard scene generation
-- `POST /api/promo-video/generate` — TTS + ffmpeg video assembly
-- `GET /api/payments/by-country?country=SA` — Gateway catalog
-- `GET /api/delivery/stats|orders|drivers` — Delivery dashboard
-- `POST /api/payroll/run` — Process driver payouts
+- ElevenLabs voice integration (cinematic quality)
+- claude_core orchestrator for unified AI agents
+- LiveKit voice agent / call-center AI
+- Voice/Video section on main marketing site
 
 ## Tech Stack
-FastAPI + MongoDB · Vanilla HTML/JS (mockups) + React (main app) · Gemini Nano Banana (Emergent LLM Key) · OpenAI TTS · ffmpeg · Chart via SVG
+FastAPI + MongoDB · Vanilla HTML/JS mockups + React main app ·
+Gemini Nano Banana (Emergent LLM Key) · OpenAI TTS · ffmpeg · Web Speech API
 
 ## Test Credentials
-- Admin panel: `merchant@zerax.com` / `zerax2026` (local-only)
+- Admin panel: `merchant@zerax.com` / `zerax2026` (localStorage only)
 - Driver app: phone `0552222222` / OTP `1234`
