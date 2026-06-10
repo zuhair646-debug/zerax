@@ -5346,6 +5346,7 @@ function themeSet(key, value) {
 function applyThemeLive() {
   const root = document.documentElement;
   const c = CURRENT_THEME.colors;
+  // New zx-* variables
   root.style.setProperty('--zx-bg', c.bg);
   root.style.setProperty('--zx-bg-2', c.bg);
   root.style.setProperty('--zx-surface', c.surface);
@@ -5355,14 +5356,37 @@ function applyThemeLive() {
   root.style.setProperty('--zx-amber', c.amber);
   root.style.setProperty('--zx-text', c.text);
   root.style.setProperty('--zx-border', c.border);
-  root.style.setProperty('--zx-font', `'${CURRENT_THEME.font_family}', sans-serif`);
+  // ALSO override the legacy variables that admin.html UI uses everywhere
+  root.style.setProperty('--purple', c.accent);
+  root.style.setProperty('--violet', c.accent);
+  root.style.setProperty('--amber', c.amber);
+  root.style.setProperty('--bg', c.bg);
+  root.style.setProperty('--panel', c.surface);
+  root.style.setProperty('--border', c.border);
+  root.style.setProperty('--ink', c.bg);
+  root.style.setProperty('--ink2', c.surface);
+  root.style.setProperty('--sidebar', c.surface);
+  // Font family — set on root AND body so all elements inherit
+  const fontStack = `'${CURRENT_THEME.font_family}','Tajawal','Cairo',sans-serif`;
+  root.style.setProperty('--zx-font', fontStack);
+  document.body.style.fontFamily = fontStack;
+  document.documentElement.style.fontFamily = fontStack;
+  // Apply font to all panels/cards/buttons explicitly (some override font-family in inline styles)
+  document.querySelectorAll('button, input, select, textarea, .panel, .card, .pcard, .ps-input, h1,h2,h3,h4').forEach(el => {
+    el.style.fontFamily = fontStack;
+  });
+  // Font size on body
   if(CURRENT_THEME.font_size) document.body.style.fontSize = CURRENT_THEME.font_size + 'px';
+  // Mode: toggle classes + main bg color
   document.body.classList.toggle('zx-dark', CURRENT_THEME.mode === 'dark');
   document.body.classList.toggle('zx-light', CURRENT_THEME.mode === 'light');
+  document.body.classList.toggle('dark-mode', CURRENT_THEME.mode === 'dark');
+  document.body.style.background = c.bg;
+  document.body.style.color = c.text;
   // Update preview area
   const prev = document.getElementById('tm-preview');
   if(prev) {
-    prev.style.fontFamily = `'${CURRENT_THEME.font_family}', sans-serif`;
+    prev.style.fontFamily = fontStack;
     prev.style.fontSize = (CURRENT_THEME.font_size || 15) + 'px';
     prev.style.color = c.text;
   }
