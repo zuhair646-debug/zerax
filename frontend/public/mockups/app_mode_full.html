@@ -365,6 +365,59 @@ body.dark .bnav a.active{color:#fbbf24}
 body.dark .cart-foot,body.dark .modal{background:#13131f;color:#e2e8f0}
 body.dark #header-settings-popover{background:#13131f;border-color:#2d2d3f;color:#e2e8f0}
 body.dark #header-settings-popover button{background:#1f1f2e;color:#e2e8f0;border-color:#2d2d3f}
+/* ═══ ACCOUNT / SETTINGS THEME SYSTEM ═══ */
+:root{--zx-accent:#7c3aed;--zx-accent2:#ec4899;--zx-text:#0a0a0a;--zx-bg:#f3f4f6;--zx-card:#fff;--zx-font-scale:1}
+body{font-size:calc(14px * var(--zx-font-scale))}
+body.dark{--zx-text:#e2e8f0;--zx-bg:#0a0a14;--zx-card:#13131f}
+.acc-section{background:var(--zx-card,#fff);border-radius:14px;padding:14px;margin-top:12px;box-shadow:0 2px 12px rgba(0,0,0,.05)}
+body.dark .acc-section{box-shadow:0 2px 12px rgba(0,0,0,.4)}
+.acc-section h4{font-size:13px;font-weight:900;margin-bottom:10px;color:var(--zx-text);display:flex;align-items:center;gap:6px}
+.acc-section h4 .badge{background:linear-gradient(135deg,var(--zx-accent),var(--zx-accent2));color:#fff;padding:2px 8px;border-radius:99px;font-size:9px}
+.acc-row{display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid #f3f4f6;gap:10px}
+body.dark .acc-row{border-bottom-color:#1f1f2e}
+.acc-row:last-child{border-bottom:none}
+.acc-row .lbl{flex:1;font-size:12px;color:#6b7280}
+body.dark .acc-row .lbl{color:#94a3b8}
+.acc-row .val{font-size:12px;font-weight:700;color:var(--zx-text)}
+.acc-toggle{position:relative;width:44px;height:24px;background:#e5e7eb;border-radius:99px;border:none;cursor:pointer;transition:background .2s;flex-shrink:0}
+.acc-toggle::after{content:'';position:absolute;top:2px;left:2px;width:20px;height:20px;background:#fff;border-radius:50%;transition:left .2s;box-shadow:0 1px 3px rgba(0,0,0,.2)}
+.acc-toggle.on{background:var(--zx-accent)}
+.acc-toggle.on::after{left:22px}
+[dir="rtl"] .acc-toggle::after{left:auto;right:2px}
+[dir="rtl"] .acc-toggle.on::after{right:22px;left:auto}
+.acc-swatch-row{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px}
+.acc-swatch{width:34px;height:34px;border-radius:50%;cursor:pointer;border:3px solid transparent;transition:transform .15s;position:relative}
+.acc-swatch:hover{transform:scale(1.1)}
+.acc-swatch.active{border-color:#0a0a0a;box-shadow:0 0 0 2px #fff,0 0 0 4px var(--zx-accent)}
+body.dark .acc-swatch.active{border-color:#fbbf24;box-shadow:0 0 0 2px #13131f,0 0 0 4px #fbbf24}
+.acc-font-pick{display:flex;gap:8px;margin-top:8px}
+.acc-font-pick button{flex:1;padding:10px;border:1.5px solid #e5e7eb;background:var(--zx-card,#fff);border-radius:10px;cursor:pointer;font-family:inherit;font-weight:700;color:var(--zx-text)}
+.acc-font-pick button.active{border-color:var(--zx-accent);background:color-mix(in srgb,var(--zx-accent) 8%,transparent);color:var(--zx-accent)}
+body.dark .acc-font-pick button{background:#1f1f2e;border-color:#2d2d3f}
+.acc-avatar-zone{position:relative;width:80px;height:80px;border-radius:50%;background:linear-gradient(135deg,var(--zx-accent),var(--zx-accent2));display:flex;align-items:center;justify-content:center;color:#fff;font-size:32px;font-weight:900;overflow:hidden;cursor:pointer;flex-shrink:0}
+.acc-avatar-zone img{width:100%;height:100%;object-fit:cover}
+.acc-avatar-zone .edit-pill{position:absolute;bottom:-2px;right:-2px;background:var(--zx-accent);color:#fff;width:26px;height:26px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:12px;border:2px solid #fff}
+body.dark .acc-avatar-zone .edit-pill{border-color:#13131f}
+.acc-order-row{display:flex;justify-content:space-between;align-items:center;padding:10px;background:var(--zx-bg);border-radius:10px;margin-bottom:6px;font-size:12px}
+.acc-order-row .num{font-weight:900;color:var(--zx-accent)}
+.acc-stat-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:14px}
+.acc-stat{background:linear-gradient(135deg,color-mix(in srgb,var(--zx-accent) 10%,#fff),color-mix(in srgb,var(--zx-accent2) 8%,#fff));border-radius:12px;padding:14px 8px;text-align:center;border:1px solid color-mix(in srgb,var(--zx-accent) 18%,#fff)}
+body.dark .acc-stat{background:linear-gradient(135deg,#1a1a2e,#2d1b3d);border-color:#2d2d3f}
+.acc-stat .v{font-size:18px;font-weight:900;color:var(--zx-accent)}
+.acc-stat .k{font-size:10px;color:#6b7280;margin-top:2px}
+body.dark .acc-stat .k{color:#94a3b8}
+/* AI Services styling */
+.p-card.ai-service{background:linear-gradient(135deg,#0f0f23,#1a1a3a);color:#e2e8f0;border:1px solid #312e81}
+.p-card.ai-service .name,.p-card.ai-service .desc{color:#e2e8f0}
+.p-card.ai-service .p-price{color:#fbbf24}
+.p-card.ai-service .ai-badge{position:absolute;top:8px;left:8px;background:linear-gradient(135deg,#fbbf24,#dc2626);color:#fff;padding:3px 9px;border-radius:99px;font-size:9px;font-weight:900;z-index:7;display:flex;align-items:center;gap:3px}
+[dir="rtl"] .p-card.ai-service .ai-badge{left:auto;right:8px}
+/* MOBILE PRODUCT IMAGE FIX */
+@media (max-width:480px){
+  .p-card{max-width:100%}
+  .p-card img,.p-card-stack img{max-width:100%;height:120px}
+  .grid{gap:10px;padding:10px 12px 20px}
+}
 .p-card-stack{position:absolute;inset:0}
 .p-card-stack img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;opacity:0;transition:opacity .5s;cursor:zoom-in}
 .p-card-stack img.active{opacity:1}
@@ -607,15 +660,15 @@ body.dark #header-settings-popover button{background:#1f1f2e;color:#e2e8f0;borde
 <body>
 
 <!-- HEADER -->
-<header class="top">
-  <a href="#" onclick="showView('home');return false;" class="logo" id="brand" style="text-decoration:none;color:inherit;display:flex;align-items:center;gap:8px"><img src="/zerax-logo.png" alt="Zerax" style="height:38px;width:auto;object-fit:contain"></a>
-  <input class="search" id="search" placeholder="ابحث...">
-  <button class="pill-btn" data-testid="header-settings-btn" onclick="toggleHeaderSettings(event)" title="الإعدادات" style="padding:8px 12px">⚙️</button>
-  <button class="pill-btn admin-toggle" id="admin-btn" onclick="toggleAdminMode()" title="وضع التحكم" style="padding:8px 10px;display:none"><span style="font-size:14px">♛</span></button>
-  <button class="pill-btn admin-toggle" id="acp-open-btn" onclick="openAcp()" title="لوحة تحكم التاجر" style="padding:8px 12px;display:none;background:linear-gradient(135deg,#7c3aed,#0a0a0a);color:#fbbf24 !important"><span style="font-size:13px">🛠️</span></button>
-  <button class="cart-btn" data-testid="header-login-btn" onclick="openLogin()" title="تسجيل دخول" id="header-login-btn" style="background:#fff;border:1px solid #e9d5ff;color:#7c3aed">👤</button>
+<header class="top" style="justify-content:center;position:relative">
+  <a href="https://zerax.com" target="_blank" rel="noopener" class="logo" id="brand" style="text-decoration:none;color:inherit;display:flex;align-items:center;gap:8px;position:absolute;left:50%;transform:translateX(-50%)" title="Zerax — انتقل للموقع الرئيسي"><img src="/zerax-logo.png" alt="Zerax" style="height:42px;width:auto;object-fit:contain"></a>
+  <input class="search" id="search" placeholder="ابحث..." style="margin-right:auto">
+  <button class="cart-btn" data-testid="header-account-btn" onclick="showView('account')" title="حسابي" id="header-login-btn" style="background:linear-gradient(135deg,#7c3aed,#ec4899);border:none;color:#fff;flex-shrink:0">👤</button>
+  <!-- Hidden legacy buttons for backward JS compatibility -->
+  <button class="pill-btn admin-toggle" id="admin-btn" onclick="toggleAdminMode()" style="display:none"></button>
+  <button class="pill-btn admin-toggle" id="acp-open-btn" onclick="openAcp()" style="display:none"></button>
 </header>
-<!-- HEADER SETTINGS POPOVER (customer-side: only language + dark mode, NO country) -->
+<!-- HEADER SETTINGS POPOVER (now repurposed - kept hidden for legacy code; settings live in Account page) -->
 <div id="header-settings-popover" style="display:none;position:fixed;top:60px;left:14px;background:#fff;border:1px solid #e5e7eb;border-radius:14px;box-shadow:0 12px 40px rgba(0,0,0,.18);padding:12px;min-width:220px;z-index:200">
   <div style="font-size:10px;color:#7c3aed;font-weight:900;margin-bottom:8px">⚙️ تخصيصاتك</div>
   <button onclick="toggleLang()" style="width:100%;padding:10px;background:#faf5ff;border:1px solid #ddd6fe;border-radius:10px;font-family:inherit;font-size:12px;font-weight:700;cursor:pointer;text-align:right;margin-bottom:6px">🌐 <span id="lang-flag">🇸🇦</span> <span id="lang-label">عربي</span></button>
@@ -897,34 +950,142 @@ body.dark #header-settings-popover button{background:#1f1f2e;color:#e2e8f0;borde
   <div id="orders-list"></div>
 </section>
 
-<!-- ═══════════════════ ACCOUNT PAGE ═══════════════════ -->
+<!-- ═══════════════════ ACCOUNT PAGE (Profile + Settings) ═══════════════════ -->
 <section id="view-account" style="display:none;padding:0 16px 24px" data-view-section>
-  <h2 style="font-size:20px;font-weight:900;margin:18px 0 16px" data-key="my_account">👤 حسابي</h2>
-  <div style="background:#fff;border-radius:14px;padding:18px;box-shadow:0 2px 12px rgba(0,0,0,.05)">
-    <div style="display:flex;align-items:center;gap:14px;margin-bottom:18px">
-      <div id="acc-avatar" style="width:64px;height:64px;border-radius:50%;background:linear-gradient(135deg,#7c3aed,#ec4899);display:flex;align-items:center;justify-content:center;color:#fff;font-size:28px;font-weight:900">👤</div>
-      <div style="flex:1">
-        <p style="font-size:12px;color:#6b7280;margin-bottom:2px" data-key="hello">مرحباً</p>
-        <b style="font-size:16px" id="acc-greet">زائر عزيز</b>
+  <h2 style="font-size:20px;font-weight:900;margin:18px 0 16px;color:var(--zx-text)" data-key="my_account">👤 حسابي</h2>
+
+  <!-- PROFILE CARD -->
+  <div class="acc-section" style="margin-top:0">
+    <div style="display:flex;align-items:center;gap:14px;margin-bottom:14px">
+      <label for="acc-avatar-input" class="acc-avatar-zone">
+        <span id="acc-avatar">👤</span>
+        <span class="edit-pill">📷</span>
+      </label>
+      <input type="file" id="acc-avatar-input" accept="image/*" style="display:none" onchange="onAvatarUpload(event)">
+      <div style="flex:1;min-width:0">
+        <p style="font-size:11px;color:#6b7280;margin-bottom:2px" data-key="hello">مرحباً</p>
+        <b style="font-size:16px;color:var(--zx-text)" id="acc-greet">زائر عزيز</b>
+        <div id="acc-membership" style="font-size:10px;color:var(--zx-accent);margin-top:3px;font-weight:900">⭐ عضو فضي</div>
       </div>
     </div>
+    <!-- Stats -->
+    <div class="acc-stat-grid">
+      <div class="acc-stat"><div class="v" id="acc-orders-count">0</div><div class="k" data-key="orders_count">عدد الطلبات</div></div>
+      <div class="acc-stat"><div class="v">⭐ <span id="acc-points">0</span></div><div class="k" data-key="loyalty_points">نقاط الولاء</div></div>
+      <div class="acc-stat"><div class="v">❤ <span id="acc-wish-count">0</span></div><div class="k">المفضلة</div></div>
+    </div>
+    <!-- Editable fields -->
     <label style="font-size:11px;color:#6b7280;font-weight:700" data-key="acc_name">الاسم</label>
-    <input id="acc-name" placeholder="اكتب اسمك" data-key-ph="acc_name_ph" style="width:100%;padding:12px;border:1px solid #e5e7eb;border-radius:10px;font-family:inherit;font-size:14px;margin:6px 0 12px;outline:none" />
+    <input id="acc-name" placeholder="اكتب اسمك" data-key-ph="acc_name_ph" style="width:100%;padding:12px;border:1px solid #e5e7eb;border-radius:10px;font-family:inherit;font-size:14px;margin:6px 0 10px;outline:none;background:var(--zx-card);color:var(--zx-text)" />
+    <label style="font-size:11px;color:#6b7280;font-weight:700">📧 البريد الإلكتروني</label>
+    <input id="acc-email" type="email" placeholder="example@mail.com" style="width:100%;padding:12px;border:1px solid #e5e7eb;border-radius:10px;font-family:inherit;font-size:14px;margin:6px 0 10px;outline:none;direction:ltr;background:var(--zx-card);color:var(--zx-text)" />
     <label style="font-size:11px;color:#6b7280;font-weight:700" data-key="acc_phone">رقم الجوال</label>
-    <input id="acc-phone" placeholder="+966 5X XXX XXXX" style="width:100%;padding:12px;border:1px solid #e5e7eb;border-radius:10px;font-family:inherit;font-size:14px;margin:6px 0 12px;outline:none" />
+    <input id="acc-phone" placeholder="+966 5X XXX XXXX" style="width:100%;padding:12px;border:1px solid #e5e7eb;border-radius:10px;font-family:inherit;font-size:14px;margin:6px 0 10px;outline:none;direction:ltr;background:var(--zx-card);color:var(--zx-text)" />
     <label style="font-size:11px;color:#6b7280;font-weight:700" data-key="acc_addr">العنوان</label>
-    <input id="acc-addr" placeholder="مدينتك وحيك" data-key-ph="acc_addr_ph" style="width:100%;padding:12px;border:1px solid #e5e7eb;border-radius:10px;font-family:inherit;font-size:14px;margin:6px 0 14px;outline:none" />
-    <button onclick="saveAccount()" data-key="save_data" style="width:100%;padding:14px;background:linear-gradient(135deg,#7c3aed,#ec4899);color:#fff;border:none;border-radius:10px;font-family:inherit;font-weight:900;font-size:14px;cursor:pointer">💾 حفظ البيانات</button>
+    <input id="acc-addr" placeholder="مدينتك وحيك" data-key-ph="acc_addr_ph" style="width:100%;padding:12px;border:1px solid #e5e7eb;border-radius:10px;font-family:inherit;font-size:14px;margin:6px 0 10px;outline:none;background:var(--zx-card);color:var(--zx-text)" />
+    <label style="font-size:11px;color:#6b7280;font-weight:700">🎂 تاريخ الميلاد (اختياري)</label>
+    <input id="acc-bday" type="date" style="width:100%;padding:12px;border:1px solid #e5e7eb;border-radius:10px;font-family:inherit;font-size:14px;margin:6px 0 14px;outline:none;background:var(--zx-card);color:var(--zx-text)" />
+    <button onclick="saveAccount()" data-key="save_data" style="width:100%;padding:14px;background:linear-gradient(135deg,var(--zx-accent),var(--zx-accent2));color:#fff;border:none;border-radius:10px;font-family:inherit;font-weight:900;font-size:14px;cursor:pointer">💾 حفظ البيانات</button>
   </div>
-  <div style="background:#fff;border-radius:14px;padding:14px;margin-top:12px;box-shadow:0 2px 12px rgba(0,0,0,.05)">
-    <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid #f3f4f6">
-      <span style="color:#6b7280;font-size:13px" data-key="orders_count">عدد الطلبات</span><b id="acc-orders-count">0</b>
+
+  <!-- APPEARANCE SETTINGS -->
+  <div class="acc-section">
+    <h4>🎨 المظهر <span class="badge">جديد</span></h4>
+    <div class="acc-row">
+      <div class="lbl">🌙 الوضع الليلي</div>
+      <button id="set-dark-toggle" class="acc-toggle" data-testid="set-dark-toggle" onclick="toggleDarkMode()" aria-label="dark-mode"></button>
     </div>
-    <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0">
-      <span style="color:#6b7280;font-size:13px" data-key="loyalty_points">نقاط الولاء</span><b style="color:#7c3aed">⭐ <span id="acc-points">0</span></b>
+    <div class="acc-row" style="display:block;border-bottom:1px solid #f3f4f6">
+      <div style="display:flex;justify-content:space-between;align-items:center;width:100%"><div class="lbl">🎨 لون الواجهة</div><div class="val" id="set-accent-name">بنفسجي</div></div>
+      <div class="acc-swatch-row" id="set-accent-row">
+        <div class="acc-swatch active" data-c1="#7c3aed" data-c2="#ec4899" data-name="بنفسجي/وردي" style="background:linear-gradient(135deg,#7c3aed,#ec4899)" onclick="pickAccent(this)"></div>
+        <div class="acc-swatch" data-c1="#0ea5e9" data-c2="#22d3ee" data-name="أزرق سماوي" style="background:linear-gradient(135deg,#0ea5e9,#22d3ee)" onclick="pickAccent(this)"></div>
+        <div class="acc-swatch" data-c1="#10b981" data-c2="#34d399" data-name="أخضر زمردي" style="background:linear-gradient(135deg,#10b981,#34d399)" onclick="pickAccent(this)"></div>
+        <div class="acc-swatch" data-c1="#f59e0b" data-c2="#f97316" data-name="برتقالي ذهبي" style="background:linear-gradient(135deg,#f59e0b,#f97316)" onclick="pickAccent(this)"></div>
+        <div class="acc-swatch" data-c1="#dc2626" data-c2="#f43f5e" data-name="أحمر عنابي" style="background:linear-gradient(135deg,#dc2626,#f43f5e)" onclick="pickAccent(this)"></div>
+        <div class="acc-swatch" data-c1="#1e40af" data-c2="#3b82f6" data-name="أزرق ملكي" style="background:linear-gradient(135deg,#1e40af,#3b82f6)" onclick="pickAccent(this)"></div>
+        <div class="acc-swatch" data-c1="#0a0a0a" data-c2="#374151" data-name="أسود فاخر" style="background:linear-gradient(135deg,#0a0a0a,#374151)" onclick="pickAccent(this)"></div>
+        <div class="acc-swatch" data-c1="#a16207" data-c2="#eab308" data-name="ذهبي ملكي" style="background:linear-gradient(135deg,#a16207,#eab308)" onclick="pickAccent(this)"></div>
+      </div>
+    </div>
+    <div class="acc-row" style="display:block">
+      <div style="display:flex;justify-content:space-between;align-items:center;width:100%"><div class="lbl">🖋️ لون النص</div><div class="val" id="set-textcolor-name">افتراضي</div></div>
+      <div class="acc-swatch-row" id="set-text-row">
+        <div class="acc-swatch active" data-tc="" data-name="افتراضي" style="background:linear-gradient(135deg,#0a0a0a,#6b7280)" onclick="pickTextColor(this)"></div>
+        <div class="acc-swatch" data-tc="#1e293b" data-name="رمادي داكن" style="background:#1e293b" onclick="pickTextColor(this)"></div>
+        <div class="acc-swatch" data-tc="#7c2d12" data-name="بني" style="background:#7c2d12" onclick="pickTextColor(this)"></div>
+        <div class="acc-swatch" data-tc="#1e3a8a" data-name="أزرق" style="background:#1e3a8a" onclick="pickTextColor(this)"></div>
+        <div class="acc-swatch" data-tc="#065f46" data-name="أخضر" style="background:#065f46" onclick="pickTextColor(this)"></div>
+        <div class="acc-swatch" data-tc="#831843" data-name="فوشيا" style="background:#831843" onclick="pickTextColor(this)"></div>
+      </div>
+    </div>
+    <div class="acc-row" style="display:block;border-bottom:none">
+      <div style="display:flex;justify-content:space-between;align-items:center;width:100%"><div class="lbl">🔠 حجم الخط</div><div class="val" id="set-fontsize-name">عادي</div></div>
+      <div class="acc-font-pick">
+        <button data-fs="0.85" onclick="pickFontSize(this)">صغير</button>
+        <button data-fs="1" class="active" onclick="pickFontSize(this)">عادي</button>
+        <button data-fs="1.15" onclick="pickFontSize(this)">كبير</button>
+        <button data-fs="1.3" onclick="pickFontSize(this)">كبير جداً</button>
+      </div>
     </div>
   </div>
+
+  <!-- LANGUAGE & REGION -->
+  <div class="acc-section">
+    <h4>🌐 اللغة والمنطقة</h4>
+    <div class="acc-row">
+      <div class="lbl">اللغة</div>
+      <button onclick="toggleLang()" data-testid="set-lang-toggle" style="background:var(--zx-bg);border:1px solid #e5e7eb;padding:8px 14px;border-radius:99px;font-family:inherit;font-weight:700;font-size:12px;cursor:pointer;color:var(--zx-text)">🌐 <span id="lang-flag">🇸🇦</span> <span id="lang-label">العربية</span></button>
+    </div>
+    <div class="acc-row" style="border-bottom:none">
+      <div class="lbl">السوق / العملة</div>
+      <button onclick="toggleMarketPopover(event)" style="background:var(--zx-bg);border:1px solid #e5e7eb;padding:8px 14px;border-radius:99px;font-family:inherit;font-weight:700;font-size:12px;cursor:pointer;color:var(--zx-text)" id="acc-market-btn">🌍 <span id="acc-market-name">السعودية</span></button>
+    </div>
+  </div>
+
+  <!-- NOTIFICATIONS -->
+  <div class="acc-section">
+    <h4>🔔 الإشعارات</h4>
+    <div class="acc-row"><div class="lbl">إشعارات الطلبات</div><button class="acc-toggle on" data-pref="notif_orders" onclick="togglePref(this)"></button></div>
+    <div class="acc-row"><div class="lbl">العروض والتخفيضات</div><button class="acc-toggle on" data-pref="notif_offers" onclick="togglePref(this)"></button></div>
+    <div class="acc-row"><div class="lbl">منتجات جديدة</div><button class="acc-toggle" data-pref="notif_new" onclick="togglePref(this)"></button></div>
+    <div class="acc-row" style="border-bottom:none"><div class="lbl">رسائل البريد الإلكتروني</div><button class="acc-toggle on" data-pref="notif_email" onclick="togglePref(this)"></button></div>
+  </div>
+
+  <!-- ORDER HISTORY -->
+  <div class="acc-section">
+    <h4 style="display:flex;justify-content:space-between;align-items:center"><span>📦 سجل طلباتي</span><a onclick="showView('orders')" style="font-size:11px;color:var(--zx-accent);cursor:pointer;font-weight:700">الكل ←</a></h4>
+    <div id="acc-orders-list"><div style="text-align:center;color:#9ca3af;padding:18px;font-size:12px">لا توجد طلبات بعد</div></div>
+  </div>
+
+  <!-- ADDRESSES -->
+  <div class="acc-section">
+    <h4 style="display:flex;justify-content:space-between;align-items:center"><span>📍 عناويني</span><button onclick="addAddress()" style="font-size:10px;color:var(--zx-accent);background:none;border:1px dashed var(--zx-accent);padding:4px 10px;border-radius:99px;cursor:pointer;font-family:inherit">+ إضافة</button></h4>
+    <div id="acc-addresses-list"><div style="text-align:center;color:#9ca3af;padding:14px;font-size:12px">لم تضف عناوين بعد</div></div>
+  </div>
+
+  <!-- SECURITY -->
+  <div class="acc-section">
+    <h4>🔐 الأمان والخصوصية</h4>
+    <div class="acc-row" style="cursor:pointer" onclick="alert('سيتم إرسال كود تأكيد لجوالك')"><div class="lbl">🔑 تغيير رقم الجوال</div><div class="val" style="color:var(--zx-accent)">›</div></div>
+    <div class="acc-row" style="cursor:pointer" onclick="alert('سيتم إرسال رابط لبريدك')"><div class="lbl">📧 تغيير البريد</div><div class="val" style="color:var(--zx-accent)">›</div></div>
+    <div class="acc-row" style="cursor:pointer" onclick="downloadMyData()"><div class="lbl">⬇️ تنزيل بياناتي (GDPR)</div><div class="val" style="color:var(--zx-accent)">›</div></div>
+    <div class="acc-row" style="cursor:pointer;border-bottom:none" onclick="confirmDeleteAccount()"><div class="lbl" style="color:#ef4444">🗑️ حذف حسابي</div><div class="val" style="color:#ef4444">›</div></div>
+  </div>
+
+  <!-- SUPPORT -->
+  <div class="acc-section">
+    <h4>💬 الدعم والمساعدة</h4>
+    <div class="acc-row" style="cursor:pointer" onclick="openAiAssistant()"><div class="lbl">✨ تحدث مع Zerax AI</div><div class="val" style="color:var(--zx-accent)">›</div></div>
+    <div class="acc-row" style="cursor:pointer" onclick="window.open('https://wa.me/966512345678','_blank')"><div class="lbl">💚 واتساب الدعم</div><div class="val" style="color:#25D366">›</div></div>
+    <div class="acc-row" style="cursor:pointer" onclick="alert('الأسئلة الشائعة قريباً')"><div class="lbl">❓ الأسئلة الشائعة</div><div class="val" style="color:var(--zx-accent)">›</div></div>
+    <div class="acc-row" style="cursor:pointer;border-bottom:none" onclick="alert('سياسة الخصوصية والشروط')"><div class="lbl">📜 الشروط والسياسات</div><div class="val" style="color:var(--zx-accent)">›</div></div>
+  </div>
+
+  <!-- AUTH ACTION -->
   <div id="acc-auth-block" style="margin-top:14px"></div>
+
+  <div style="text-align:center;font-size:10px;color:#9ca3af;margin-top:18px">Zerax · النسخة 2.6 · 2026</div>
 </section>
 
 <!-- ═══════════════════ WISHLIST PAGE ═══════════════════ -->
@@ -1658,13 +1819,43 @@ let PRODUCTS = [
   {id:'p30',cat:'home',ar:'سلطانية فخار',en:'Ceramic Bowl Set',descAr:'6 قطع · صناعة يدوية · سيراميك ياباني',descEn:'6-piece · Handmade · Japanese ceramic',sar:215,img:'https://images.unsplash.com/photo-1610701596007-11502861dcfa?w=500'},
   {id:'p31',cat:'home',ar:'منشفة قطن مصرية',en:'Egyptian Cotton Towels',descAr:'4 قطع · قطن مصري 100% · امتصاص فائق',descEn:'4-piece · 100% Egyptian cotton · Super absorbent',sar:185,img:'https://images.unsplash.com/photo-1571902943202-507ec2618e8f?w=500'},
   {id:'p32',cat:'home',ar:'بخار كهربائي للملابس',en:'Electric Clothes Steamer',descAr:'1500 واط · خزان 240مل · جاهز في 30 ثانية',descEn:'1500W · 240ml tank · Ready in 30s',sar:295,img:'https://images.unsplash.com/photo-1521903062400-b80f2cb8cb9d?w=500'},
+  // Sports & Fitness
+  {id:'p50',cat:'sports',ar:'دراجة هوائية جبلية',en:'Mountain Bike',descAr:'21 سرعة · إطار ألومنيوم · قابل للطي',descEn:'21 speeds · Aluminum frame · Foldable',sar:1890,img:'https://images.unsplash.com/photo-1485965120184-e220f721d03e?w=500'},
+  {id:'p51',cat:'sports',ar:'مجموعة دامبلز قابلة للتعديل',en:'Adjustable Dumbbell Set',descAr:'2.5-25 كجم · سهل التعديل · مع ستاند',descEn:'2.5-25 kg · Quick adjust · With stand',sar:1450,img:'https://images.unsplash.com/photo-1638536532686-d610adfc8e5c?w=500'},
+  {id:'p52',cat:'sports',ar:'سجادة يوغا فاخرة',en:'Premium Yoga Mat',descAr:'6 مم · مضادة للانزلاق · صديقة للبيئة',descEn:'6mm · Non-slip · Eco-friendly',sar:165,img:'https://images.unsplash.com/photo-1592432678016-e910b452f9a2?w=500'},
+  {id:'p53',cat:'sports',ar:'حذاء جري احترافي',en:'Pro Running Shoes',descAr:'تقنية ضد الصدمات · خفيف · مقاسات 38-46',descEn:'Shock absorbing · Lightweight · 38-46',sar:680,img:'https://images.unsplash.com/photo-1542291026-7eec264c27ff?w=500'},
+  {id:'p54',cat:'sports',ar:'ساعة جري GPS',en:'GPS Running Watch',descAr:'بطارية 14 يوم · GPS متقدم · مراقبة القلب',descEn:'14-day battery · Advanced GPS · HR monitor',sar:1290,img:'https://images.unsplash.com/photo-1576243345690-4e4b79b63288?w=500'},
+  // Food & Grocery
+  {id:'p60',cat:'food',ar:'قهوة عربية مختصة',en:'Specialty Arabic Coffee',descAr:'محمصة طازجة · 250 جرام · حبوب مختارة',descEn:'Freshly roasted · 250g · Select beans',sar:75,img:'https://images.unsplash.com/photo-1559056199-641a0ac8b55e?w=500'},
+  {id:'p61',cat:'food',ar:'عسل سدر طبيعي',en:'Natural Sidr Honey',descAr:'1 كجم · يمني أصلي · غير مبستر',descEn:'1kg · Authentic Yemeni · Raw',sar:485,img:'https://images.unsplash.com/photo-1587049352846-4a222e784d38?w=500'},
+  {id:'p62',cat:'food',ar:'تمر مجدول فاخر',en:'Premium Medjool Dates',descAr:'1 كجم · فاخر · من نخيل المدينة',descEn:'1kg · Premium · From Madinah',sar:165,img:'https://images.unsplash.com/photo-1581375074612-d1fd0e661aeb?w=500'},
+  {id:'p63',cat:'food',ar:'زعفران إيراني فاخر',en:'Premium Iranian Saffron',descAr:'1 جرام · صنف نقي · علبة فاخرة',descEn:'1g · Pure grade · Luxury box',sar:120,img:'https://images.unsplash.com/photo-1599909533930-f2a1aab7e1e7?w=500'},
+  {id:'p64',cat:'food',ar:'زيت زيتون بكر ممتاز',en:'Extra Virgin Olive Oil',descAr:'500 مل · سوري أصلي · معصور بارد',descEn:'500ml · Syrian · Cold-pressed',sar:95,img:'https://images.unsplash.com/photo-1474979266404-7eaacbcd87c5?w=500'},
+  // Kids & Toys
+  {id:'p70',cat:'kids',ar:'دراجة أطفال 3 عجلات',en:'Kids 3-Wheel Bike',descAr:'للأعمار 3-7 سنوات · مقعد قابل للتعديل · آمنة',descEn:'Age 3-7 · Adjustable seat · Safe',sar:295,img:'https://images.unsplash.com/photo-1597740049577-d8f4c947be15?w=500'},
+  {id:'p71',cat:'kids',ar:'مجموعة ليجو 1500 قطعة',en:'LEGO Set 1500 pcs',descAr:'إبداعية · للأعمار 6+ · صندوق منظم',descEn:'Creative · Age 6+ · Storage box',sar:485,img:'https://images.unsplash.com/photo-1558877385-8c1b8c4b4d28?w=500'},
+  {id:'p72',cat:'kids',ar:'سيارة ريموت سباق',en:'RC Racing Car',descAr:'سرعة 40 كم/س · بطارية 60 دقيقة · 4WD',descEn:'40 km/h · 60min battery · 4WD',sar:450,img:'https://images.unsplash.com/photo-1558060370-d644479cb6f7?w=500'},
+  {id:'p73',cat:'kids',ar:'دمية باربي سيت كامل',en:'Barbie Complete Set',descAr:'دمية + 5 ملابس + اكسسوارات · هدية رائعة',descEn:'Doll + 5 outfits + accessories · Great gift',sar:215,img:'https://images.unsplash.com/photo-1558877385-8c1b8c4b4d28?w=500'},
+  // ═══ SMART AI SERVICES (Pay with Zerax Credits) ═══
+  {id:'ai1',cat:'ai_services',ar:'تحليل صورة منتج بالذكاء الاصطناعي',en:'AI Product Image Analysis',descAr:'حلل صورة وأنشئ وصف احترافي · 30 نقطة',descEn:'Analyze image + pro description · 30 credits',sar:30,img:'https://images.unsplash.com/photo-1677442136019-21780ecad995?w=500',isAI:true,credits:30,svc:'image_analyze'},
+  {id:'ai2',cat:'ai_services',ar:'توليد صور إعلانية احترافية',en:'Pro Ad Image Generator',descAr:'صورة إعلانية بجودة عالية · نموذج Nano Banana · 50 نقطة',descEn:'High-quality ad image · 50 credits',sar:50,img:'https://images.unsplash.com/photo-1620712943543-bcc4688e7485?w=500',isAI:true,credits:50,svc:'image_gen'},
+  {id:'ai3',cat:'ai_services',ar:'توليد فيديو إعلاني (Sora 2)',en:'AI Promo Video (Sora 2)',descAr:'فيديو إعلاني 10 ثواني بجودة سينمائية · 200 نقطة',descEn:'10-sec cinematic promo video · 200 credits',sar:200,img:'https://images.unsplash.com/photo-1574375927938-d5a98e8ffe85?w=500',isAI:true,credits:200,svc:'video_gen'},
+  {id:'ai4',cat:'ai_services',ar:'كتابة حملة إعلانية كاملة',en:'Full Ad Campaign Writer',descAr:'محتوى إعلاني لمنصات متعددة · GPT-5.2 · 40 نقطة',descEn:'Multi-platform ad copy · GPT-5.2 · 40 credits',sar:40,img:'https://images.unsplash.com/photo-1432888622747-4eb9a8efeb07?w=500',isAI:true,credits:40,svc:'ad_writer'},
+  {id:'ai5',cat:'ai_services',ar:'تحليل سوق ومنافسين',en:'Market & Competitor Analysis',descAr:'تقرير تحليلي شامل · بحث ويب · 80 نقطة',descEn:'Comprehensive report · Web research · 80 credits',sar:80,img:'https://images.unsplash.com/photo-1551288049-bebda4e38f71?w=500',isAI:true,credits:80,svc:'market_analysis'},
+  {id:'ai6',cat:'ai_services',ar:'مساعد عملاء ذكي 24/7',en:'24/7 AI Customer Assistant',descAr:'شات بوت ذكي للرد على عملائك · شهر · 500 نقطة',descEn:'Smart chatbot for customers · Monthly · 500 credits',sar:500,img:'https://images.unsplash.com/photo-1531746790731-6c087fecd65a?w=500',isAI:true,credits:500,svc:'ai_chatbot'},
+  {id:'ai7',cat:'ai_services',ar:'تصميم شعار احترافي',en:'Pro Logo Designer',descAr:'5 نماذج شعار بأسلوبك · ملفات SVG · 60 نقطة',descEn:'5 logo variations · SVG files · 60 credits',sar:60,img:'https://images.unsplash.com/photo-1626785774573-4b799315345d?w=500',isAI:true,credits:60,svc:'logo_design'},
+  {id:'ai8',cat:'ai_services',ar:'ترجمة احترافية متعددة اللغات',en:'Pro Multi-language Translation',descAr:'ترجمة فاخرة لـ 12 لغة · 1000 كلمة · 25 نقطة',descEn:'Premium translation 12 languages · 25 credits',sar:25,img:'https://images.unsplash.com/photo-1546410531-bb4caa6b424d?w=500',isAI:true,credits:25,svc:'translation'},
 ];
 const CATS=[
   {id:'all',ar:'الكل',en:'All',ico:'📦'},
+  {id:'ai_services',ar:'🤖 خدمات AI',en:'🤖 AI Services',ico:'🤖'},
   {id:'electronics',ar:'إلكترونيات',en:'Electronics',ico:'📱'},
   {id:'fashion',ar:'أزياء',en:'Fashion',ico:'👗'},
   {id:'beauty',ar:'تجميل ومكياج',en:'Beauty & Makeup',ico:'💄'},
   {id:'home',ar:'منزل',en:'Home',ico:'🏠'},
+  {id:'sports',ar:'رياضة',en:'Sports',ico:'⚽'},
+  {id:'food',ar:'مأكولات',en:'Food',ico:'🍯'},
+  {id:'kids',ar:'أطفال',en:'Kids',ico:'🧸'},
 ];
 const REVIEWS=[
   {ar:'تجربة شراء ممتازة! المنتجات أصلية والتوصيل سريع جداً',en:'Amazing shopping experience! Authentic products and very fast delivery',name:'أحمد · Ahmed',stars:5},
@@ -1975,8 +2166,10 @@ const CAT_IMAGES={
   makeup:'https://images.unsplash.com/photo-1487412947147-5cebf100ffc2?w=1600&q=90&auto=format&fit=crop',
   electronics:'https://images.unsplash.com/photo-1550009158-9ebf69173e03?w=1600&q=90&auto=format&fit=crop',
   home:'https://images.unsplash.com/photo-1618220179428-22790b461013?w=1600&q=90&auto=format&fit=crop',
+  sports:'https://images.unsplash.com/photo-1517649763962-0c623066013b?w=1600&q=90&auto=format&fit=crop',
   sport:'https://images.unsplash.com/photo-1517649763962-0c623066013b?w=1600&q=90&auto=format&fit=crop',
   kids:'https://images.unsplash.com/photo-1503454537195-1dcabb73ffb9?w=1600&q=90&auto=format&fit=crop',
+  ai_services:'https://images.unsplash.com/photo-1677442136019-21780ecad995?w=1600&q=90&auto=format&fit=crop',
 };
 
 // Mini icons for the Quick Categories (top of home) — vivid emoji-style category vibes
@@ -2035,30 +2228,160 @@ function getAccount(){return JSON.parse(localStorage.getItem('zx_account')||'{}'
 function renderAccount(){
   const a=getAccount();
   const u=getUser();
-  document.getElementById('acc-name').value=(u&&u.name)||a.name||'';
+  const nameVal=(u&&u.name)||a.name||'';
+  document.getElementById('acc-name').value=nameVal;
   document.getElementById('acc-phone').value=(u&&u.phone)||a.phone||'';
   document.getElementById('acc-addr').value=a.address||'';
-  document.getElementById('acc-greet').textContent=(u&&u.name)||a.name||tx('guest');
-  document.getElementById('acc-avatar').textContent=((u&&u.name)||a.name)?((u&&u.name)||a.name).charAt(0).toUpperCase():'👤';
+  const emailEl=document.getElementById('acc-email');if(emailEl)emailEl.value=a.email||'';
+  const bdayEl=document.getElementById('acc-bday');if(bdayEl)bdayEl.value=a.bday||'';
+  document.getElementById('acc-greet').textContent=nameVal||tx('guest');
+  // Avatar (image or letter)
+  const avEl=document.getElementById('acc-avatar');
+  if(avEl){
+    if(a.avatar){avEl.innerHTML=`<img src="${a.avatar}" alt="avatar">`;}
+    else{avEl.textContent=nameVal?nameVal.charAt(0).toUpperCase():'👤';}
+  }
   const orders=getOrders();
   document.getElementById('acc-orders-count').textContent=orders.length;
   document.getElementById('acc-points').textContent=orders.length*10;
+  const wcEl=document.getElementById('acc-wish-count');if(wcEl)wcEl.textContent=(typeof WISHLIST!=='undefined'?WISHLIST.length:0);
+  // Membership tier
+  const memEl=document.getElementById('acc-membership');
+  if(memEl){
+    const tier=orders.length>=20?{ico:'💎',name:'بلاتيني',col:'#06b6d4'}:orders.length>=10?{ico:'🥇',name:'ذهبي',col:'#eab308'}:orders.length>=3?{ico:'🥈',name:'فضي',col:'#94a3b8'}:{ico:'🥉',name:'برونزي',col:'#a16207'};
+    memEl.innerHTML=`${tier.ico} عضو ${tier.name}`;
+    memEl.style.color=tier.col;
+  }
+  // Orders list (last 3)
+  const ol=document.getElementById('acc-orders-list');
+  if(ol){
+    if(!orders.length){ol.innerHTML='<div style="text-align:center;color:#9ca3af;padding:18px;font-size:12px">لا توجد طلبات بعد</div>';}
+    else{
+      ol.innerHTML=orders.slice(0,3).map((o,i)=>`<div class="acc-order-row"><div><b class="num">#${o.id||(1000+i)}</b><div style="font-size:10px;color:#9ca3af;margin-top:2px">${o.date||'—'} · ${(o.items||[]).length} منتج</div></div><div style="text-align:left"><b style="color:var(--zx-accent)">${curSym()} ${formatPrice(o.total||0)}</b><div style="font-size:10px;color:#10b981">✓ ${o.status||'مؤكد'}</div></div></div>`).join('');
+    }
+  }
+  // Addresses
+  const al=document.getElementById('acc-addresses-list');
+  const addrs=JSON.parse(localStorage.getItem('zx_addresses')||'[]');
+  if(al){
+    if(!addrs.length){al.innerHTML='<div style="text-align:center;color:#9ca3af;padding:14px;font-size:12px">لم تضف عناوين بعد</div>';}
+    else{al.innerHTML=addrs.map((ad,i)=>`<div class="acc-order-row"><div><b>${ad.label||'العنوان '+(i+1)}</b><div style="font-size:10px;color:#9ca3af;margin-top:2px">${ad.full}</div></div><button onclick="deleteAddress(${i})" style="background:#fef2f2;color:#ef4444;border:1px solid #fecaca;padding:6px 10px;border-radius:8px;font-family:inherit;font-size:10px;cursor:pointer">حذف</button></div>`).join('');}
+  }
+  // Sync dark mode toggle visual
+  const dt=document.getElementById('set-dark-toggle');
+  if(dt)dt.classList.toggle('on',document.body.classList.contains('dark'));
+  // Sync preferences
+  const prefs=JSON.parse(localStorage.getItem('zx_prefs')||'{"notif_orders":true,"notif_offers":true,"notif_new":false,"notif_email":true}');
+  document.querySelectorAll('[data-pref]').forEach(b=>{b.classList.toggle('on',!!prefs[b.dataset.pref]);});
+  // Market name
+  const mn=document.getElementById('acc-market-name');
+  if(mn&&CURRENT_MARKET)mn.textContent=CURRENT_LANG==='ar'?CURRENT_MARKET.name_ar:CURRENT_MARKET.name_en;
   const ab=document.getElementById('acc-auth-block');
   if(u){
     ab.innerHTML=`<div style="background:linear-gradient(135deg,#10b98115,#7c3aed15);border:1px solid #10b98140;border-radius:14px;padding:14px;display:flex;align-items:center;justify-content:space-between">
-      <div><div style="font-size:11px;color:#10b981;font-weight:900">✓ مسجّل دخول</div><div style="font-size:13px;color:#0a0a0a;margin-top:2px;direction:ltr">${u.phone}</div></div>
-      <button data-testid="logout-btn" onclick="logout()" style="padding:10px 16px;background:#fff;border:1px solid #ef4444;color:#ef4444;border-radius:10px;font-family:inherit;font-weight:900;font-size:12px;cursor:pointer">🚪 خروج</button>
+      <div><div style="font-size:11px;color:#10b981;font-weight:900">✓ مسجّل دخول</div><div style="font-size:13px;color:var(--zx-text);margin-top:2px;direction:ltr">${u.phone}</div></div>
+      <button data-testid="logout-btn" onclick="logout()" style="padding:10px 16px;background:var(--zx-card);border:1px solid #ef4444;color:#ef4444;border-radius:10px;font-family:inherit;font-weight:900;font-size:12px;cursor:pointer">🚪 خروج</button>
     </div>`;
   } else {
-    ab.innerHTML=`<button data-testid="account-login-btn" onclick="openLogin()" style="width:100%;padding:14px;background:linear-gradient(135deg,#7c3aed,#ec4899);color:#fff;border:none;border-radius:12px;font-family:inherit;font-weight:900;font-size:14px;cursor:pointer">🔐 تسجيل دخول / اشتراك</button>`;
+    ab.innerHTML=`<button data-testid="account-login-btn" onclick="openLogin()" style="width:100%;padding:14px;background:linear-gradient(135deg,var(--zx-accent),var(--zx-accent2));color:#fff;border:none;border-radius:12px;font-family:inherit;font-weight:900;font-size:14px;cursor:pointer">🔐 تسجيل دخول / اشتراك</button>`;
   }
 }
 function saveAccount(){
-  const a={name:document.getElementById('acc-name').value.trim(),phone:document.getElementById('acc-phone').value.trim(),address:document.getElementById('acc-addr').value.trim()};
+  const a={
+    name:document.getElementById('acc-name').value.trim(),
+    phone:document.getElementById('acc-phone').value.trim(),
+    address:document.getElementById('acc-addr').value.trim(),
+    email:(document.getElementById('acc-email')||{}).value?.trim()||'',
+    bday:(document.getElementById('acc-bday')||{}).value||'',
+    avatar:(getAccount().avatar)||''
+  };
   localStorage.setItem('zx_account',JSON.stringify(a));
   renderAccount();
-  alert(tx('saved_ok'));
+  toast(tx('saved_ok'));
 }
+function onAvatarUpload(e){
+  const file=e.target.files?.[0];if(!file)return;
+  if(file.size>2*1024*1024){alert('الصورة كبيرة (الحد الأقصى 2MB)');return;}
+  const r=new FileReader();
+  r.onload=ev=>{
+    const a=getAccount();a.avatar=ev.target.result;
+    localStorage.setItem('zx_account',JSON.stringify(a));
+    renderAccount();
+    toast('✓ تم تحديث الصورة');
+  };
+  r.readAsDataURL(file);
+}
+function pickAccent(el){
+  document.querySelectorAll('#set-accent-row .acc-swatch').forEach(s=>s.classList.remove('active'));
+  el.classList.add('active');
+  const c1=el.dataset.c1,c2=el.dataset.c2,name=el.dataset.name;
+  document.documentElement.style.setProperty('--zx-accent',c1);
+  document.documentElement.style.setProperty('--zx-accent2',c2);
+  document.getElementById('set-accent-name').textContent=name;
+  localStorage.setItem('zx_theme_accent',JSON.stringify({c1,c2,name}));
+  toast('✓ تم تطبيق اللون');
+}
+function pickTextColor(el){
+  document.querySelectorAll('#set-text-row .acc-swatch').forEach(s=>s.classList.remove('active'));
+  el.classList.add('active');
+  const tc=el.dataset.tc;
+  if(tc){document.documentElement.style.setProperty('--zx-text',tc);}
+  else{document.documentElement.style.removeProperty('--zx-text');}
+  document.getElementById('set-textcolor-name').textContent=el.dataset.name;
+  localStorage.setItem('zx_text_color',tc||'');
+}
+function pickFontSize(btn){
+  document.querySelectorAll('.acc-font-pick button').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+  const fs=btn.dataset.fs;
+  document.documentElement.style.setProperty('--zx-font-scale',fs);
+  document.getElementById('set-fontsize-name').textContent=btn.textContent;
+  localStorage.setItem('zx_font_scale',fs);
+}
+function togglePref(btn){
+  btn.classList.toggle('on');
+  const prefs=JSON.parse(localStorage.getItem('zx_prefs')||'{}');
+  prefs[btn.dataset.pref]=btn.classList.contains('on');
+  localStorage.setItem('zx_prefs',JSON.stringify(prefs));
+}
+function addAddress(){
+  const label=prompt('اسم العنوان (مثال: المنزل، الشغل):');if(!label)return;
+  const full=prompt('العنوان الكامل:');if(!full)return;
+  const addrs=JSON.parse(localStorage.getItem('zx_addresses')||'[]');
+  addrs.push({label,full});
+  localStorage.setItem('zx_addresses',JSON.stringify(addrs));
+  renderAccount();toast('✓ تمت إضافة العنوان');
+}
+function deleteAddress(i){
+  const addrs=JSON.parse(localStorage.getItem('zx_addresses')||'[]');
+  addrs.splice(i,1);
+  localStorage.setItem('zx_addresses',JSON.stringify(addrs));
+  renderAccount();
+}
+function downloadMyData(){
+  const data={account:getAccount(),orders:getOrders(),addresses:JSON.parse(localStorage.getItem('zx_addresses')||'[]'),wishlist:typeof WISHLIST!=='undefined'?WISHLIST:[],preferences:JSON.parse(localStorage.getItem('zx_prefs')||'{}')};
+  const blob=new Blob([JSON.stringify(data,null,2)],{type:'application/json'});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a');a.href=url;a.download='my-zerax-data.json';a.click();
+  URL.revokeObjectURL(url);
+  toast('✓ تم تنزيل بياناتك');
+}
+function confirmDeleteAccount(){
+  if(!confirm('⚠️ هل أنت متأكد من حذف حسابك؟ كل البيانات ستفقد نهائياً.'))return;
+  if(!confirm('تأكيد أخير: لن نستطيع استرجاع بياناتك. متأكد؟'))return;
+  ['zx_account','zx_orders','zx_addresses','zx_user','zx_cust_token','zx_prefs','zx_theme_accent','zx_text_color','zx_font_scale','zx_dark'].forEach(k=>localStorage.removeItem(k));
+  alert('تم حذف حسابك. ستتم إعادة تحميل الصفحة.');
+  location.reload();
+}
+// Apply saved theme settings on load
+(function applySavedTheme(){
+  try{
+    const t=JSON.parse(localStorage.getItem('zx_theme_accent')||'null');
+    if(t){document.documentElement.style.setProperty('--zx-accent',t.c1);document.documentElement.style.setProperty('--zx-accent2',t.c2);}
+    const tc=localStorage.getItem('zx_text_color');if(tc)document.documentElement.style.setProperty('--zx-text',tc);
+    const fs=localStorage.getItem('zx_font_scale');if(fs)document.documentElement.style.setProperty('--zx-font-scale',fs);
+  }catch(_){}
+})();
 
 // ═══════════════════════ AUTH (OTP via real backend) ═══════════════════════
 const API_BASE_CUST = window.location.origin;
@@ -2185,6 +2508,9 @@ function toggleDarkMode(){
   localStorage.setItem('zx_dark',isDark?'1':'0');
   const btn=document.getElementById('dark-mode-btn');
   if(btn)btn.innerHTML=isDark?'☀️ الوضع النهاري':'🌙 الوضع الليلي';
+  // Sync new account toggle
+  const t=document.getElementById('set-dark-toggle');
+  if(t)t.classList.toggle('on',isDark);
   toast(isDark?'🌙 تم تفعيل الوضع الليلي':'☀️ تم تفعيل الوضع النهاري');
 }
 // Restore dark mode on load
@@ -2462,6 +2788,27 @@ function startReviewSlider(){renderReviews();setInterval(()=>goReview(revIdx+1),
 
 // ═══════════════════════ CART ═══════════════════════
 function addToCart(pid){
+  const p=PRODUCTS.find(x=>x.id===pid);
+  // Smart AI Service — pay with Zerax credits instantly, no cart
+  if(p&&(p.isAI||p.cat==='ai_services')){
+    if(!getUser()){requireLogin('يلزم تسجيل الدخول لشراء خدمات الذكاء الاصطناعي');return;}
+    const cost=p.credits||p.sar;
+    if(ZERAX_CREDITS<cost){
+      toast('⚠️ رصيدك غير كافي · لديك '+ZERAX_CREDITS+' نقطة · السعر '+cost);
+      const tb=document.getElementById('topup-banner');if(tb)tb.style.display='flex';
+      return;
+    }
+    if(!confirm(`شراء خدمة "${CURRENT_LANG==='ar'?p.ar:p.en}" مقابل ${cost} نقطة؟`))return;
+    ZERAX_CREDITS-=cost;
+    localStorage.setItem('zx_credits',String(ZERAX_CREDITS));
+    const el=document.getElementById('zerax-credits');if(el)el.textContent=ZERAX_CREDITS;
+    // Log the AI service purchase as an order
+    const orders=getOrders();
+    orders.unshift({id:Date.now(),date:new Date().toLocaleDateString('ar'),items:[{id:p.id,qty:1,name:p.ar}],total:cost,status:'مفعّل · خدمة AI',isAI:true});
+    localStorage.setItem('zx_orders',JSON.stringify(orders));
+    toast('✓ تم تفعيل الخدمة · سيتواصل معك فريقنا');
+    return;
+  }
   const ex=CART.find(c=>c.id===pid);
   if(ex)ex.qty++;else CART.push({id:pid,qty:1});
   saveCart();
@@ -3203,9 +3550,12 @@ function pCardHtml(p){
   const stack=imgs.map((g,i)=>`<img src="${g.url}" alt="${name} ${i+1}" class="${i===0?'active':''}" data-i="${i}">`).join('');
   const dots=imgs.length>1?`<div class="p-card-dots">${imgs.map((_,i)=>`<span class="${i===0?'active':''}"></span>`).join('')}</div>`:'';
   const navs=imgs.length>1?`<button class="p-card-nav p-card-prev" onclick="event.stopPropagation();pCardNav(this,-1)" aria-label="prev">‹</button><button class="p-card-nav p-card-next" onclick="event.stopPropagation();pCardNav(this,1)" aria-label="next">›</button>`:'';
-  return `<div class="p-card" onmouseenter="pCardHover(this,true)" onmouseleave="pCardHover(this,false)" onclick="if(!event.target.closest('.add-btn,.p-card-nav,.wish-heart,img'))showProductDetail('${p.id}')">
-    <div class="editable-img-host"><div class="p-card-stack" data-pid="${p.id}">${stack}</div>${dots}${navs}<button class="wish-heart ${inWish(p.id)?'active':''}" data-testid="wish-toggle-${p.id}" onclick="event.stopPropagation();toggleWish('${p.id}')" title="المفضلة">${inWish(p.id)?'❤':'🤍'}</button></div>
-    <div class="p-info" onclick="event.stopPropagation();showProductDetail('${p.id}')" style="cursor:pointer"><div class="name">${name}</div><div class="desc">${desc}</div><div class="p-row"><div class="p-price">${curSym()} ${formatPrice(p.sar)}</div><button class="add-btn" onclick="event.stopPropagation();addToCart('${p.id}')">+</button></div></div>
+  const isAI=p.isAI||p.cat==='ai_services';
+  const aiBadge=isAI?`<div class="ai-badge">✨ AI · ${p.credits||p.sar} نقطة</div>`:'';
+  const priceLabel=isAI?`⭐ ${p.credits||p.sar} <small style="font-size:9px;opacity:.85">نقطة</small>`:`${curSym()} ${formatPrice(p.sar)}`;
+  return `<div class="p-card ${isAI?'ai-service':''}" onmouseenter="pCardHover(this,true)" onmouseleave="pCardHover(this,false)" onclick="if(!event.target.closest('.add-btn,.p-card-nav,.wish-heart,img'))showProductDetail('${p.id}')">
+    <div class="editable-img-host">${aiBadge}<div class="p-card-stack" data-pid="${p.id}">${stack}</div>${dots}${navs}<button class="wish-heart ${inWish(p.id)?'active':''}" data-testid="wish-toggle-${p.id}" onclick="event.stopPropagation();toggleWish('${p.id}')" title="المفضلة">${inWish(p.id)?'❤':'🤍'}</button></div>
+    <div class="p-info" onclick="event.stopPropagation();showProductDetail('${p.id}')" style="cursor:pointer"><div class="name">${name}</div><div class="desc">${desc}</div><div class="p-row"><div class="p-price">${priceLabel}</div><button class="add-btn" onclick="event.stopPropagation();addToCart('${p.id}')" title="${isAI?'اشترِ بالنقاط':'أضف للسلة'}">${isAI?'⭐':'+'}</button></div></div>
   </div>`;
 }
 // Hover auto-rotate logic
