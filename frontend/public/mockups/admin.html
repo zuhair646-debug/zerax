@@ -565,6 +565,7 @@ select.ps-input option{background:#13131f;color:#fff}
     <button class="nav-item" data-page="delivery" onclick="goPage('delivery')"><i data-lucide="truck"></i> التوصيل</button>
     <button class="nav-item" data-page="payroll" onclick="goPage('payroll')"><i data-lucide="wallet"></i> المحاسبة</button>
     <button class="nav-item" data-page="gateways" onclick="goPage('gateways')"><i data-lucide="credit-card"></i> وسائل الدفع</button>
+    <button class="nav-item" data-page="markets" onclick="goPage('markets')" data-testid="nav-markets"><i data-lucide="globe"></i> الأسواق المستهدفة <span class="badge" style="background:var(--purple)">جديد</span></button>
     <button class="nav-item" data-page="reports" onclick="goPage('reports')" data-testid="nav-reports"><i data-lucide="file-text"></i> تقارير PDF <span class="badge" style="background:var(--emerald)">جديد</span></button>
     <button class="nav-item" data-page="zatca" onclick="goPage('zatca')" data-testid="nav-zatca"><i data-lucide="receipt"></i> الفاتورة الإلكترونية ZATCA</button>
     <button class="nav-item" data-page="credits" onclick="goPage('credits')" data-testid="nav-credits"><i data-lucide="coins"></i> النقاط والاشتراك <span class="badge" style="background:#dc2626">!</span></button>
@@ -1081,6 +1082,54 @@ select.ps-input option{background:#13131f;color:#fff}
           <div id="gw-list"></div>
         </div>
       </div>
+
+      <!-- ─── MARKETS PAGE ─── -->
+      <div class="page" data-page="markets">
+        <div class="panel" style="background:linear-gradient(135deg,#0a0a14,#1a1a3a);color:#e2e8f0;border:1px solid #312e81">
+          <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:14px;flex-wrap:wrap">
+            <div>
+              <h3 style="color:#fbbf24;display:flex;align-items:center;gap:8px"><i data-lucide="globe" style="width:20px"></i> الأسواق المستهدفة</h3>
+              <p style="font-size:12px;color:#94a3b8;margin-top:6px;line-height:1.7;max-width:560px">حدد الدول التي يستهدفها متجرك. لكل سوق <b style="color:#fbbf24">عملة + بوابات دفع + شركات شحن + ضرائب</b> خاصة. النظام يعرض للعميل تلقائياً حسب موقعه الجغرافي.</p>
+            </div>
+            <button onclick="mktSaveAll()" data-testid="mkt-save-btn" style="background:linear-gradient(135deg,#fbbf24,#f59e0b);color:#0a0a14;border:none;padding:10px 18px;border-radius:10px;font-family:inherit;font-weight:900;font-size:13px;cursor:pointer;display:flex;align-items:center;gap:6px">💾 حفظ التغييرات</button>
+          </div>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px;margin-top:14px" id="mkt-summary-grid">
+          <div class="panel" style="text-align:center"><div style="font-size:11px;color:var(--text-mut)">أسواق مفعّلة</div><div style="font-size:24px;font-weight:900;color:var(--purple);margin-top:4px" id="mkt-stat-active">0</div></div>
+          <div class="panel" style="text-align:center"><div style="font-size:11px;color:var(--text-mut)">بوابات دفع مشتركة</div><div style="font-size:24px;font-weight:900;color:var(--emerald);margin-top:4px" id="mkt-stat-gateways">0</div></div>
+          <div class="panel" style="text-align:center"><div style="font-size:11px;color:var(--text-mut)">شركات شحن</div><div style="font-size:24px;font-weight:900;color:var(--amber);margin-top:4px" id="mkt-stat-shipping">0</div></div>
+        </div>
+
+        <!-- Quick presets -->
+        <div class="panel" style="margin-top:14px">
+          <h4 style="font-size:13px;font-weight:900;margin-bottom:10px">⚡ باقات سريعة (تختار الأسواق بضغطة)</h4>
+          <div style="display:flex;gap:8px;flex-wrap:wrap">
+            <button class="mkt-preset" data-mkt-preset="gulf" onclick="mktApplyPreset(this)" style="padding:10px 14px;border:1.5px solid var(--border);background:var(--surface);border-radius:10px;font-family:inherit;font-weight:700;font-size:12px;cursor:pointer">🌴 دول الخليج (6)</button>
+            <button class="mkt-preset" data-mkt-preset="levant" onclick="mktApplyPreset(this)" style="padding:10px 14px;border:1.5px solid var(--border);background:var(--surface);border-radius:10px;font-family:inherit;font-weight:700;font-size:12px;cursor:pointer">🌅 الشام (5)</button>
+            <button class="mkt-preset" data-mkt-preset="north_africa" onclick="mktApplyPreset(this)" style="padding:10px 14px;border:1.5px solid var(--border);background:var(--surface);border-radius:10px;font-family:inherit;font-weight:700;font-size:12px;cursor:pointer">🏜️ شمال أفريقيا (5)</button>
+            <button class="mkt-preset" data-mkt-preset="arab_all" onclick="mktApplyPreset(this)" style="padding:10px 14px;border:1.5px solid var(--border);background:var(--surface);border-radius:10px;font-family:inherit;font-weight:700;font-size:12px;cursor:pointer">🌍 كل الدول العربية (18)</button>
+            <button class="mkt-preset" data-mkt-preset="global" onclick="mktApplyPreset(this)" style="padding:10px 14px;border:1.5px solid var(--border);background:var(--surface);border-radius:10px;font-family:inherit;font-weight:700;font-size:12px;cursor:pointer">🌐 عالمي (كل الأسواق)</button>
+            <button class="mkt-preset" data-mkt-preset="clear" onclick="mktApplyPreset(this)" style="padding:10px 14px;border:1.5px solid #fecaca;background:#fef2f2;color:#dc2626;border-radius:10px;font-family:inherit;font-weight:700;font-size:12px;cursor:pointer">🗑️ مسح الكل</button>
+          </div>
+        </div>
+
+        <!-- Markets grid -->
+        <div class="panel" style="margin-top:14px">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;gap:10px;flex-wrap:wrap">
+            <h4 style="font-size:13px;font-weight:900">🗺️ كل الأسواق المتاحة</h4>
+            <input id="mkt-search" placeholder="ابحث عن سوق..." style="padding:8px 12px;border:1px solid var(--border);border-radius:8px;font-family:inherit;font-size:12px;width:200px" oninput="mktRender()">
+          </div>
+          <div id="mkt-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:10px"></div>
+        </div>
+
+        <!-- Active markets detail (gateways + shipping per market) -->
+        <div class="panel" style="margin-top:14px">
+          <h4 style="font-size:13px;font-weight:900;margin-bottom:10px">⚙️ إعدادات الأسواق المفعّلة</h4>
+          <p style="font-size:11px;color:var(--text-mut);margin-bottom:10px">اضغط على سوق للتحكم بـ بوابات الدفع وشركات الشحن والضرائب الخاصة به</p>
+          <div id="mkt-active-list"><div style="text-align:center;padding:30px;color:var(--text-mut);font-size:12px">لم تفعّل أي سوق بعد · اختر سوق أو باقة سريعة من الأعلى</div></div>
+        </div>
+      </div>
+      <!-- ─── /MARKETS ─── -->
 
       <!-- ─── VIDEO STUDIO — TABBED DARK ZERAX ─── -->
       <div class="page" data-page="video-studio">
@@ -1802,13 +1851,14 @@ function goPage(p){
   CURRENT_PAGE=p;
   document.querySelectorAll('.page').forEach(el=>el.classList.toggle('active',el.dataset.page===p));
   document.querySelectorAll('.nav-item').forEach(el=>el.classList.toggle('active',el.dataset.page===p));
-  const titles={dashboard:'الرئيسية',products:'المنتجات',orders:'الطلبات',customers:'العملاء',delivery:'إدارة التوصيل',payroll:'المحاسبة والرواتب',gateways:'وسائل الدفع',settings:'الإعدادات','video-studio':'استوديو الفيديو الإعلاني',social:'الحسابات الاجتماعية',services:'الخدمات الإضافية','smart-mgmt':'الإدارة الذكية',marketing:'التسويق والمبيعات',reviews:'التقييمات والمراجعات',themes:'ألوان المتجر',reports:'تقارير PDF',zatca:'الفاتورة الإلكترونية ZATCA',credits:'النقاط والاشتراك'};
+  const titles={dashboard:'الرئيسية',products:'المنتجات',orders:'الطلبات',customers:'العملاء',delivery:'إدارة التوصيل',payroll:'المحاسبة والرواتب',gateways:'وسائل الدفع',markets:'الأسواق المستهدفة',settings:'الإعدادات','video-studio':'استوديو الفيديو الإعلاني',social:'الحسابات الاجتماعية',services:'الخدمات الإضافية','smart-mgmt':'الإدارة الذكية',marketing:'التسويق والمبيعات',reviews:'التقييمات والمراجعات',themes:'ألوان المتجر',reports:'تقارير PDF',zatca:'الفاتورة الإلكترونية ZATCA',credits:'النقاط والاشتراك'};
   $('page-title').textContent=titles[p]||p;
   document.getElementById('sidebar').classList.remove('open');
   // lazy load
   if(p==='delivery')loadDelivery();
   if(p==='payroll')loadPayroll();
   if(p==='gateways')loadGateways();
+  if(p==='markets')loadMarkets();
   if(p==='social')loadSocial();
   if(p==='services')loadServices();
   if(p==='smart-mgmt')loadSmartMgmt();
@@ -2345,7 +2395,152 @@ function gwToggleEnable(gid,on){
   toast(on?('✓ تم تفعيل '+gid):('⏸ تم إيقاف '+gid));
 }
 
-// ───── PRODUCT MODAL ─────
+// ───────────────────────── MARKETS MODULE (Multi-Market Targeting) ─────────────────────────
+const MKT_PRESETS={
+  gulf:['sa','ae','kw','qa','bh','om'],
+  levant:['jo','lb','sy','ps','iq'],
+  north_africa:['eg','ma','dz','tn','ly'],
+  arab_all:['sa','ae','kw','qa','bh','om','jo','lb','sy','ps','iq','eg','ma','dz','tn','ly','ye','sd'],
+  global:'ALL',
+  clear:[]
+};
+let MKT_DATA=[]; // full markets list from /api/ready-sites/markets
+let MKT_ACTIVE=new Set(JSON.parse(localStorage.getItem('zx_active_markets')||'["sa"]'));
+let MKT_CONFIG=JSON.parse(localStorage.getItem('zx_markets_config')||'{}'); // {market_id:{gateways:[], shipping:[], vat:15}}
+
+async function loadMarkets(){
+  if(!MKT_DATA.length){
+    try{
+      const r=await fetch(API+'/api/ready-sites/markets');
+      const d=await r.json();
+      MKT_DATA=d.markets||[];
+    }catch(e){
+      console.warn('loadMarkets failed',e);
+      toast('⚠️ فشل تحميل قائمة الأسواق');return;
+    }
+  }
+  mktRender();
+}
+
+function mktRender(){
+  const search=($('mkt-search')?.value||'').toLowerCase().trim();
+  const filtered=search?MKT_DATA.filter(m=>m.name_ar.toLowerCase().includes(search)||m.name_en.toLowerCase().includes(search)||m.currency.toLowerCase().includes(search)):MKT_DATA;
+  const grid=$('mkt-grid');
+  grid.innerHTML=filtered.map(m=>{
+    const active=MKT_ACTIVE.has(m.id);
+    return `<div class="mkt-card" data-mkt-id="${m.id}" onclick="mktToggle('${m.id}')" style="border:2px solid ${active?'var(--purple)':'var(--border)'};background:${active?'linear-gradient(135deg,#faf5ff,#fdf2f8)':'var(--surface)'};border-radius:12px;padding:12px;cursor:pointer;transition:all .15s;position:relative">
+      ${active?'<div style="position:absolute;top:6px;left:6px;background:var(--purple);color:#fff;width:22px;height:22px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:900">✓</div>':''}
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+        <span style="font-size:26px">${m.flag}</span>
+        <div style="flex:1;min-width:0"><b style="font-size:13px;display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${m.name_ar}</b><div style="font-size:10px;color:var(--text-mut)">${m.currency} · ${m.language.toUpperCase()}</div></div>
+      </div>
+      <div style="display:flex;gap:4px;flex-wrap:wrap;font-size:9px">
+        <span style="background:#dbeafe;color:#1e3a8a;padding:2px 6px;border-radius:6px;font-weight:700">💳 ${m.payment_methods_count}</span>
+        <span style="background:#fef3c7;color:#92400e;padding:2px 6px;border-radius:6px;font-weight:700">🚚 ${m.shipping_carriers_count}</span>
+      </div>
+    </div>`;
+  }).join('');
+  mktUpdateActiveList();
+  mktUpdateStats();
+}
+
+function mktToggle(id){
+  if(MKT_ACTIVE.has(id))MKT_ACTIVE.delete(id);else MKT_ACTIVE.add(id);
+  if(!MKT_ACTIVE.size)MKT_ACTIVE.add('sa'); // always keep at least one
+  mktRender();
+}
+
+function mktApplyPreset(btn){
+  const key=btn.dataset.mktPreset;
+  const preset=MKT_PRESETS[key];
+  if(preset==='ALL'){MKT_ACTIVE=new Set(MKT_DATA.map(m=>m.id));}
+  else if(Array.isArray(preset)){MKT_ACTIVE=new Set(preset.length?preset:['sa']);}
+  mktRender();
+  toast('✓ تم تطبيق الباقة: '+btn.textContent.trim());
+}
+
+function mktUpdateStats(){
+  $('mkt-stat-active').textContent=MKT_ACTIVE.size;
+  // Count unique gateways & shipping across active markets (need fetch on detail expand)
+  const activeMarkets=MKT_DATA.filter(m=>MKT_ACTIVE.has(m.id));
+  const gw=activeMarkets.reduce((s,m)=>s+m.payment_methods_count,0);
+  const sh=activeMarkets.reduce((s,m)=>s+m.shipping_carriers_count,0);
+  $('mkt-stat-gateways').textContent=gw;
+  $('mkt-stat-shipping').textContent=sh;
+}
+
+function mktUpdateActiveList(){
+  const host=$('mkt-active-list');
+  if(!MKT_ACTIVE.size){host.innerHTML='<div style="text-align:center;padding:30px;color:var(--text-mut);font-size:12px">لم تفعّل أي سوق بعد</div>';return;}
+  const list=MKT_DATA.filter(m=>MKT_ACTIVE.has(m.id));
+  host.innerHTML=list.map(m=>{
+    const cfg=MKT_CONFIG[m.id]||{vat:m.id==='sa'?15:m.id==='ae'?5:0};
+    return `<div style="border:1px solid var(--border);border-radius:12px;margin-bottom:8px;background:var(--surface);overflow:hidden">
+      <div style="padding:12px 14px;display:flex;align-items:center;gap:10px;cursor:pointer" onclick="mktExpand('${m.id}',this)">
+        <span style="font-size:22px">${m.flag}</span>
+        <div style="flex:1"><b style="font-size:13px">${m.name_ar} · ${m.name_en}</b>
+          <div style="font-size:10px;color:var(--text-mut);margin-top:2px">${m.currency} · ${m.language.toUpperCase()} · 💳 ${m.payment_methods_count} بوابة · 🚚 ${m.shipping_carriers_count} شركة · ضريبة ${cfg.vat}%</div>
+        </div>
+        <span class="mkt-chev" style="color:var(--purple);font-weight:900;font-size:14px">▼</span>
+      </div>
+      <div class="mkt-detail" id="mkt-detail-${m.id}" style="display:none;padding:14px;border-top:1px solid var(--border);background:#fff"></div>
+    </div>`;
+  }).join('');
+}
+
+async function mktExpand(id,headerEl){
+  const detail=$('mkt-detail-'+id);
+  const chev=headerEl.querySelector('.mkt-chev');
+  if(detail.style.display==='block'){detail.style.display='none';chev.textContent='▼';return;}
+  // fetch full market data
+  detail.innerHTML='<div style="text-align:center;padding:20px;color:var(--text-mut);font-size:12px">⏳ جاري التحميل...</div>';
+  detail.style.display='block';chev.textContent='▲';
+  try{
+    const r=await fetch(API+'/api/ready-sites/market/'+id);
+    const m=await r.json();
+    const cfg=MKT_CONFIG[id]||{gateways:[],shipping:[],vat:m.tax?.rate||0};
+    const cfgGw=new Set(cfg.gateways||m.payment_gateways.slice(0,5).map(g=>g.id));
+    const cfgSh=new Set(cfg.shipping||m.shipping_carriers.slice(0,3).map(s=>s.id));
+    detail.innerHTML=`
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
+        <div><h5 style="font-size:12px;font-weight:900;margin-bottom:8px;color:var(--purple)">💳 بوابات الدفع المتاحة (${m.payment_gateways.length})</h5>
+          <div style="max-height:240px;overflow-y:auto">${m.payment_gateways.map(g=>`<label style="display:flex;align-items:center;gap:8px;padding:7px 9px;border-radius:8px;cursor:pointer;font-size:11px" onmouseover="this.style.background='#faf5ff'" onmouseout="this.style.background='transparent'"><input type="checkbox" data-mkt-gw="${id}:${g.id}" ${cfgGw.has(g.id)?'checked':''} onchange="mktSaveGw('${id}','${g.id}',this.checked)"><span style="flex:1"><b>${g.name_ar||g.name}</b><div style="font-size:10px;color:var(--text-mut)">${g.fees_hint||g.type||''}</div></span></label>`).join('')}</div>
+        </div>
+        <div><h5 style="font-size:12px;font-weight:900;margin-bottom:8px;color:var(--amber)">🚚 شركات الشحن (${m.shipping_carriers.length})</h5>
+          <div style="max-height:240px;overflow-y:auto">${m.shipping_carriers.map(s=>`<label style="display:flex;align-items:center;gap:8px;padding:7px 9px;border-radius:8px;cursor:pointer;font-size:11px" onmouseover="this.style.background='#fffbeb'" onmouseout="this.style.background='transparent'"><input type="checkbox" data-mkt-sh="${id}:${s.id}" ${cfgSh.has(s.id)?'checked':''} onchange="mktSaveSh('${id}','${s.id}',this.checked)"><span style="flex:1"><b>${s.name_ar||s.name}</b><div style="font-size:10px;color:var(--text-mut)">${s.delivery_estimate||''}</div></span></label>`).join('')}</div>
+        </div>
+      </div>
+      <div style="margin-top:14px;padding-top:14px;border-top:1px dashed var(--border);display:grid;grid-template-columns:1fr 1fr;gap:14px">
+        <div><label style="font-size:11px;font-weight:900;display:block;margin-bottom:4px">💰 معدل الضريبة (%)</label><input type="number" value="${cfg.vat}" min="0" max="50" step="0.5" data-mkt-vat="${id}" onchange="mktSaveVat('${id}',this.value)" style="width:100%;padding:8px;border:1px solid var(--border);border-radius:8px;font-family:inherit;font-size:12px"></div>
+        <div><label style="font-size:11px;font-weight:900;display:block;margin-bottom:4px">📜 رقم التسجيل الضريبي</label><input type="text" placeholder="مثال: 300011234500003" data-mkt-tax-id="${id}" value="${cfg.tax_id||''}" onchange="mktSaveTaxId('${id}',this.value)" style="width:100%;padding:8px;border:1px solid var(--border);border-radius:8px;font-family:inherit;font-size:12px;direction:ltr"></div>
+      </div>
+      <div style="margin-top:10px;padding:10px;background:#f0fdf4;border:1px solid #86efac;border-radius:8px;font-size:11px;color:#065f46;line-height:1.7">✓ <b>${m.payment_gateways.length}</b> بوابة دفع · <b>${m.shipping_carriers.length}</b> شركة شحن · العملة <b>${m.currency}</b> · اللغة <b>${m.language.toUpperCase()}</b></div>
+    `;
+  }catch(e){detail.innerHTML='<div style="text-align:center;padding:20px;color:#dc2626;font-size:12px">⚠️ فشل التحميل</div>';}
+}
+
+function mktSaveGw(mid,gid,on){
+  MKT_CONFIG[mid]=MKT_CONFIG[mid]||{gateways:[],shipping:[],vat:0};
+  const arr=new Set(MKT_CONFIG[mid].gateways||[]);
+  if(on)arr.add(gid);else arr.delete(gid);
+  MKT_CONFIG[mid].gateways=Array.from(arr);
+}
+function mktSaveSh(mid,sid,on){
+  MKT_CONFIG[mid]=MKT_CONFIG[mid]||{gateways:[],shipping:[],vat:0};
+  const arr=new Set(MKT_CONFIG[mid].shipping||[]);
+  if(on)arr.add(sid);else arr.delete(sid);
+  MKT_CONFIG[mid].shipping=Array.from(arr);
+}
+function mktSaveVat(mid,v){MKT_CONFIG[mid]=MKT_CONFIG[mid]||{gateways:[],shipping:[],vat:0};MKT_CONFIG[mid].vat=parseFloat(v)||0;}
+function mktSaveTaxId(mid,v){MKT_CONFIG[mid]=MKT_CONFIG[mid]||{gateways:[],shipping:[],vat:0};MKT_CONFIG[mid].tax_id=v;}
+
+function mktSaveAll(){
+  localStorage.setItem('zx_active_markets',JSON.stringify(Array.from(MKT_ACTIVE)));
+  localStorage.setItem('zx_markets_config',JSON.stringify(MKT_CONFIG));
+  toast('✓ تم حفظ إعدادات '+MKT_ACTIVE.size+' سوق · ستظهر تلقائياً للعملاء حسب موقعهم');
+}
+
+
 function openProductModal(){
   EDITING_PRODUCT_ID=null;
   $('prod-mod').classList.add('open');
