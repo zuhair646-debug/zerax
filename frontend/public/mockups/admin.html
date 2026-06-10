@@ -1841,7 +1841,10 @@ select.ps-input option{background:#13131f;color:#fff}
             <select id="pm-cat" class="ps-input"><option value="electronics">📱 إلكترونيات</option><option value="fashion">👗 أزياء</option><option value="beauty">💄 جمال وعناية</option><option value="home">🏠 منزل ومطبخ</option><option value="food">🍔 أطعمة</option><option value="health">💊 صحة ودواء</option><option value="pet">🐾 حيوانات أليفة</option><option value="sports">⚽ رياضة</option><option value="kids">🧸 أطفال</option></select>
             <label class="ps-lbl" style="margin-top:10px">الوصف القصير</label>
             <textarea id="pm-desc" class="ps-input" rows="4" placeholder="وصف قصير للمنتج"></textarea>
-            <button class="ps-btn-amber" onclick="psSwitchTab('ai')" style="margin-top:10px;width:100%"><i data-lucide="brain" style="width:14px;height:14px"></i> ادفع للذكاء الإصطناعي يحلل ويعبّي كل شي (10 نقاط)</button>
+            <!-- Small inline approve button (replaces the big orange AI-analyze banner — AI lives in tab 2) -->
+            <div style="margin-top:14px;display:flex;justify-content:flex-end;gap:8px">
+              <button type="button" onclick="psSwitchTab('preview')" data-testid="manual-approve-btn" style="background:linear-gradient(135deg,#10b981,#059669);color:#fff;border:none;padding:9px 18px;border-radius:9px;font-family:inherit;font-weight:800;font-size:12px;cursor:pointer;display:inline-flex;align-items:center;gap:6px;box-shadow:0 4px 12px rgba(16,185,129,.25)"><i data-lucide="check" style="width:13px;height:13px"></i> اعتماد ومعاينة</button>
+            </div>
           </div>
         </div>
         <!-- Applied analysis preview (rendered after psApplyAnalysis) -->
