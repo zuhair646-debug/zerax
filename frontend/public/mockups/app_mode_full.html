@@ -1052,6 +1052,23 @@ body.dark .acc-stat .k{color:#94a3b8}
     <div class="acc-row" style="border-bottom:none"><div class="lbl">رسائل البريد الإلكتروني</div><button class="acc-toggle on" data-pref="notif_email" onclick="togglePref(this)"></button></div>
   </div>
 
+  <!-- WALLET (Store Credit) -->
+  <div class="acc-section" id="acc-wallet">
+    <h4 style="display:flex;justify-content:space-between;align-items:center"><span>💳 محفظتي · Store Credit</span><span style="font-size:10px;color:var(--zx-accent)" id="acc-credit-history-toggle" onclick="toggleCreditHistory()" style="cursor:pointer">السجل ←</span></h4>
+    <div style="background:linear-gradient(135deg,var(--zx-accent),var(--zx-accent2));color:#fff;border-radius:14px;padding:18px;margin-top:8px">
+      <div style="font-size:11px;opacity:.85;font-weight:700">الرصيد المتاح</div>
+      <div style="font-size:28px;font-weight:900;margin-top:2px"><span id="acc-credit-balance">0.00</span> <small style="font-size:14px;opacity:.85">ر.س</small></div>
+      <div style="font-size:10px;opacity:.75;margin-top:8px">💡 يُستخدم تلقائياً عند الدفع · مكتسب من المبالغ المستردة والمكافآت</div>
+    </div>
+    <div id="acc-credit-history" style="display:none;margin-top:10px;max-height:200px;overflow-y:auto"></div>
+  </div>
+
+  <!-- RETURNS HISTORY -->
+  <div class="acc-section" id="acc-returns" style="display:none">
+    <h4>↩️ طلبات الإرجاع</h4>
+    <div id="acc-returns-list"></div>
+  </div>
+
   <!-- ORDER HISTORY -->
   <div class="acc-section">
     <h4 style="display:flex;justify-content:space-between;align-items:center"><span>📦 سجل طلباتي</span><a onclick="showView('orders')" style="font-size:11px;color:var(--zx-accent);cursor:pointer;font-weight:700">الكل ←</a></h4>
@@ -1127,6 +1144,36 @@ body.dark .acc-stat .k{color:#94a3b8}
       <input id="login-otp" data-testid="login-otp-input" placeholder="○ ○ ○ ○" type="tel" maxlength="4" style="width:100%;padding:14px;border:2px solid #7c3aed;border-radius:10px;font-family:inherit;font-size:24px;margin:6px 0 14px;outline:none;text-align:center;font-weight:900;letter-spacing:14px">
       <button onclick="verifyOtp()" data-testid="login-verify-otp-btn" style="width:100%;padding:14px;background:linear-gradient(135deg,#7c3aed,#ec4899);color:#fff;border:none;border-radius:10px;font-family:inherit;font-weight:900;font-size:14px;cursor:pointer">✓ تحقق وادخل</button>
       <button onclick="loginBackToPhone()" style="width:100%;padding:10px;background:transparent;border:none;color:#7c3aed;font-family:inherit;font-size:12px;cursor:pointer;margin-top:8px">← تعديل رقم الجوال</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════ RETURN REQUEST MODAL ═══════════════════ -->
+<div class="modal-bg" id="return-modal" onclick="if(event.target===this)closeReturnRequest()">
+  <div class="modal" style="max-width:420px">
+    <div style="text-align:center;margin-bottom:14px">
+      <div style="width:60px;height:60px;border-radius:50%;background:#fef2f2;color:#dc2626;display:inline-flex;align-items:center;justify-content:center;font-size:28px;margin-bottom:10px">↩️</div>
+      <h3 style="font-size:17px;font-weight:900">طلب إرجاع</h3>
+      <p style="color:#6b7280;font-size:11px;margin-top:4px" id="return-order-info">—</p>
+    </div>
+    <input type="hidden" id="return-order-id">
+    <label style="font-size:11px;color:#6b7280;font-weight:700">سبب الإرجاع <span style="color:#ef4444">*</span></label>
+    <select id="return-reason" style="width:100%;padding:12px;border:1px solid #e5e7eb;border-radius:10px;font-family:inherit;font-size:14px;margin:6px 0 12px;outline:none;background:#fff">
+      <option value="">— اختر السبب —</option>
+      <option value="مقاس مش مناسب">📏 المقاس غير مناسب</option>
+      <option value="المنتج معطوب">⚠️ المنتج معطوب أو تالف</option>
+      <option value="مختلف عن الوصف">📷 مختلف عن الوصف/الصور</option>
+      <option value="غيّرت رأيي">🤔 غيّرت رأيي</option>
+      <option value="جودة ضعيفة">⭐ الجودة ضعيفة</option>
+      <option value="استلمت منتج خاطئ">📦 استلمت منتج خاطئ</option>
+      <option value="سبب آخر">📝 سبب آخر</option>
+    </select>
+    <label style="font-size:11px;color:#6b7280;font-weight:700">ملاحظات إضافية (اختياري)</label>
+    <textarea id="return-notes" placeholder="اكتب أي تفاصيل تساعد التاجر..." rows="3" style="width:100%;padding:12px;border:1px solid #e5e7eb;border-radius:10px;font-family:inherit;font-size:13px;margin:6px 0 14px;outline:none;resize:vertical"></textarea>
+    <div style="background:#f0fdf4;border:1px solid #86efac;border-radius:10px;padding:10px;font-size:11px;color:#065f46;line-height:1.7;margin-bottom:14px">💡 سيتم استرداد المبلغ كاملاً إلى <b>محفظتك Store Credit</b> فوراً بعد تأكيد التاجر — جاهز للاستخدام في طلبك التالي.</div>
+    <div style="display:flex;gap:8px">
+      <button onclick="closeReturnRequest()" style="flex:1;padding:13px;background:#f3f4f6;color:#374151;border:none;border-radius:10px;font-family:inherit;font-weight:900;font-size:13px;cursor:pointer">إلغاء</button>
+      <button onclick="submitReturnRequest()" data-testid="submit-return-btn" style="flex:1;padding:13px;background:linear-gradient(135deg,#dc2626,#f43f5e);color:#fff;border:none;border-radius:10px;font-family:inherit;font-weight:900;font-size:13px;cursor:pointer">📤 إرسال الطلب</button>
     </div>
   </div>
 </div>
@@ -2213,10 +2260,91 @@ function saveOrder(order){const o=getOrders();o.unshift(order);localStorage.setI
 function renderOrders(){
   const orders=getOrders();const list=document.getElementById('orders-list');
   if(!orders.length){list.innerHTML=`<div style="background:#fff;border-radius:14px;padding:60px 20px;text-align:center;color:#9ca3af"><div style="font-size:60px;margin-bottom:14px">📭</div><b style="font-size:16px;color:#0a0a0a">${tx('no_orders')}</b><p style="margin-top:8px;font-size:13px">${tx('no_orders_sub')}</p><button onclick="showView('home')" style="margin-top:16px;padding:12px 22px;background:#7c3aed;color:#fff;border:none;border-radius:10px;font-family:inherit;font-weight:900;font-size:13px;cursor:pointer">${tx('shop_now')}</button></div>`;return;}
+  const returns=getReturns();
   list.innerHTML=orders.map(o=>{
     const date=new Date(o.date).toLocaleDateString(CURRENT_LANG==='ar'?'ar-SA':'en-US');
-    return `<div style="background:#fff;border-radius:14px;padding:16px;margin-bottom:12px;box-shadow:0 2px 12px rgba(0,0,0,.05)"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px"><b style="font-size:13px">#${o.id}</b><span style="background:#10b98120;color:#059669;padding:3px 10px;border-radius:99px;font-size:11px;font-weight:900">${tx('status_confirmed')}</span></div><p style="color:#6b7280;font-size:12px;margin-bottom:8px">${date}</p><div style="display:flex;justify-content:space-between;align-items:center;padding-top:8px;border-top:1px solid #f3f4f6"><span style="font-size:12px;color:#6b7280">${o.items} ${tx('items_label')}</span><b style="color:#7c3aed">${o.currency} ${o.total}</b></div></div>`;
+    const canReorder=Array.isArray(o.cartItems)&&o.cartItems.length>0;
+    const existingReturn=returns.find(r=>r.orderId===o.id);
+    const statusMap={confirmed:{ar:'مؤكد',en:'Confirmed',col:'#10b981'},shipped:{ar:'تم الشحن',en:'Shipped',col:'#3b82f6'},delivered:{ar:'تم التسليم',en:'Delivered',col:'#10b981'},cancelled:{ar:'ملغي',en:'Cancelled',col:'#ef4444'}};
+    const st=statusMap[o.status]||statusMap.confirmed;
+    return `<div style="background:var(--zx-card,#fff);border-radius:14px;padding:14px;margin-bottom:12px;box-shadow:0 2px 12px rgba(0,0,0,.05)">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px"><b style="font-size:13px;color:var(--zx-text)">#${o.id}</b><span style="background:${st.col}20;color:${st.col};padding:3px 10px;border-radius:99px;font-size:11px;font-weight:900">${CURRENT_LANG==='ar'?st.ar:st.en}</span></div>
+      <p style="color:#6b7280;font-size:12px;margin-bottom:8px">${date} · ${o.items} ${tx('items_label')}</p>
+      ${o.credit_used>0?`<div style="background:#fef3c7;color:#92400e;padding:5px 10px;border-radius:8px;font-size:10px;font-weight:700;margin-bottom:8px;display:inline-block">💳 خصم ${o.currency} ${o.credit_used.toFixed(2)} من المحفظة</div>`:''}
+      <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-top:1px solid #f3f4f6;border-bottom:1px solid #f3f4f6;margin-bottom:10px"><span style="font-size:12px;color:#6b7280">الإجمالي</span><b style="color:var(--zx-accent);font-size:15px">${o.currency} ${o.total}</b></div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap">
+        ${canReorder?`<button onclick="reorderOrder('${o.id}')" data-testid="reorder-${o.id}" style="flex:1;min-width:120px;padding:9px;background:linear-gradient(135deg,var(--zx-accent),var(--zx-accent2));color:#fff;border:none;border-radius:8px;font-family:inherit;font-weight:900;font-size:11px;cursor:pointer">🔁 اطلب مرة ثانية</button>`:''}
+        ${existingReturn?`<button disabled style="flex:1;min-width:120px;padding:9px;background:#fef3c7;color:#92400e;border:1px solid #fde68a;border-radius:8px;font-family:inherit;font-weight:900;font-size:11px;cursor:not-allowed">🔁 طلب إرجاع #${existingReturn.id} · ${existingReturn.status}</button>`:`<button onclick="openReturnRequest('${o.id}')" data-testid="return-${o.id}" style="flex:1;min-width:120px;padding:9px;background:var(--zx-card,#fff);color:#dc2626;border:1.5px solid #fecaca;border-radius:8px;font-family:inherit;font-weight:900;font-size:11px;cursor:pointer">↩️ طلب إرجاع</button>`}
+      </div>
+    </div>`;
   }).join('');
+}
+
+// ═══════════════════════ REORDER ═══════════════════════
+function reorderOrder(orderId){
+  const o=getOrders().find(x=>x.id===orderId);
+  if(!o||!Array.isArray(o.cartItems)){alert('لا يمكن إعادة هذا الطلب');return;}
+  // Validate products still exist
+  const valid=o.cartItems.filter(ci=>PRODUCTS.find(p=>p.id===ci.id));
+  const missing=o.cartItems.length-valid.length;
+  if(!valid.length){alert('للأسف، المنتجات في هذا الطلب لم تعد متوفرة');return;}
+  if(!confirm(`سيتم إضافة ${valid.length} منتج للسلة${missing?` (${missing} منتج غير متوفر حالياً)`:''}. متابعة؟`))return;
+  valid.forEach(ci=>{
+    const ex=CART.find(c=>c.id===ci.id);
+    if(ex)ex.qty+=ci.qty;else CART.push({id:ci.id,qty:ci.qty});
+  });
+  saveCart();
+  toast(`✓ تم إضافة ${valid.length} منتج للسلة`);
+  setTimeout(()=>openCart(),400);
+}
+
+// ═══════════════════════ STORE CREDIT (محفظة المتجر) ═══════════════════════
+function getStoreCredit(){return parseFloat(localStorage.getItem('zx_store_credit')||'0');}
+function setStoreCredit(v){localStorage.setItem('zx_store_credit',String(Math.max(0,v)));}
+function getCreditHistory(){return JSON.parse(localStorage.getItem('zx_credit_history')||'[]');}
+function addStoreCredit(amount,reason){
+  const v=getStoreCredit()+amount;
+  setStoreCredit(v);
+  const h=getCreditHistory();
+  h.unshift({date:new Date().toISOString(),amount,reason,balance:v,type:'credit'});
+  localStorage.setItem('zx_credit_history',JSON.stringify(h.slice(0,50)));
+  return v;
+}
+function deductStoreCredit(amount,reason){
+  const v=Math.max(0,getStoreCredit()-amount);
+  setStoreCredit(v);
+  const h=getCreditHistory();
+  h.unshift({date:new Date().toISOString(),amount:-amount,reason,balance:v,type:'debit'});
+  localStorage.setItem('zx_credit_history',JSON.stringify(h.slice(0,50)));
+  return v;
+}
+
+// ═══════════════════════ RETURNS REQUEST ═══════════════════════
+function getReturns(){return JSON.parse(localStorage.getItem('zx_returns')||'[]');}
+function openReturnRequest(orderId){
+  const o=getOrders().find(x=>x.id===orderId);if(!o){alert('الطلب غير موجود');return;}
+  document.getElementById('return-order-id').value=orderId;
+  document.getElementById('return-order-info').textContent=`الطلب #${o.id} · ${o.currency} ${o.total}`;
+  document.getElementById('return-reason').value='';
+  document.getElementById('return-notes').value='';
+  document.getElementById('return-modal').classList.add('open');
+}
+function closeReturnRequest(){document.getElementById('return-modal').classList.remove('open');}
+function submitReturnRequest(){
+  const orderId=document.getElementById('return-order-id').value;
+  const reason=document.getElementById('return-reason').value;
+  const notes=document.getElementById('return-notes').value.trim();
+  if(!reason){alert('اختر سبب الإرجاع');return;}
+  const o=getOrders().find(x=>x.id===orderId);
+  const ret={id:'RET-'+Date.now().toString(36).toUpperCase(),orderId,reason,notes,date:new Date().toISOString(),status:'بانتظار الاستلام',order_total:o?.total_raw||0,order_currency:o?.currency||curSym()};
+  const arr=getReturns();arr.unshift(ret);localStorage.setItem('zx_returns',JSON.stringify(arr));
+  // Refund: instantly add to wallet (simulated; in production this happens after merchant verifies)
+  if(o&&o.total_raw){
+    addStoreCredit(o.total_raw,`استرداد طلب #${o.id}`);
+  }
+  closeReturnRequest();
+  alert(`✓ تم استلام طلب الإرجاع ${ret.id}\n\nسيتواصل معك التاجر خلال 24 ساعة لجدولة استلام المنتج.\n\n💰 المبلغ المسترد سيُضاف إلى محفظتك تلقائياً بعد التحقق.`);
+  renderOrders();renderAccount();
 }
 
 // ═══════════════════════ ACCOUNT ═══════════════════════
@@ -2269,6 +2397,27 @@ function renderAccount(){
   // Sync preferences
   const prefs=JSON.parse(localStorage.getItem('zx_prefs')||'{"notif_orders":true,"notif_offers":true,"notif_new":false,"notif_email":true}');
   document.querySelectorAll('[data-pref]').forEach(b=>{b.classList.toggle('on',!!prefs[b.dataset.pref]);});
+  // Store Credit balance
+  const bal=getStoreCredit();
+  const balEl=document.getElementById('acc-credit-balance');
+  if(balEl)balEl.textContent=bal.toFixed(2);
+  // Credit history
+  const hist=getCreditHistory();
+  const histEl=document.getElementById('acc-credit-history');
+  if(histEl){
+    histEl.innerHTML=hist.length?hist.map(h=>`<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid #f3f4f6;font-size:12px"><div><b style="color:var(--zx-text)">${h.reason}</b><div style="font-size:10px;color:#9ca3af;margin-top:2px">${new Date(h.date).toLocaleDateString('ar-SA')}</div></div><b style="color:${h.amount>=0?'#10b981':'#ef4444'}">${h.amount>=0?'+':''}${h.amount.toFixed(2)} ر.س</b></div>`).join(''):'<div style="text-align:center;color:#9ca3af;padding:12px;font-size:12px">لا توجد حركات بعد</div>';
+  }
+  // Returns history
+  const returns=getReturns();
+  const retSection=document.getElementById('acc-returns');
+  const retList=document.getElementById('acc-returns-list');
+  if(retSection&&retList){
+    if(returns.length){retSection.style.display='block';retList.innerHTML=returns.slice(0,5).map(r=>{
+      const stCol=r.status==='بانتظار الاستلام'?'#f59e0b':r.status==='تم الاسترداد'?'#10b981':'#3b82f6';
+      return `<div style="background:var(--zx-bg);border-radius:10px;padding:10px;margin-bottom:6px"><div style="display:flex;justify-content:space-between;align-items:center"><b style="font-size:11px;color:var(--zx-accent)">#${r.id}</b><span style="background:${stCol}20;color:${stCol};padding:2px 8px;border-radius:99px;font-size:10px;font-weight:900">${r.status}</span></div><div style="font-size:10px;color:#6b7280;margin-top:4px">طلب #${r.orderId} · ${r.reason}</div></div>`;
+    }).join('');}
+    else{retSection.style.display='none';}
+  }
   // Market name
   const mn=document.getElementById('acc-market-name');
   if(mn&&CURRENT_MARKET)mn.textContent=CURRENT_LANG==='ar'?CURRENT_MARKET.name_ar:CURRENT_MARKET.name_en;
@@ -2340,6 +2489,11 @@ function togglePref(btn){
   prefs[btn.dataset.pref]=btn.classList.contains('on');
   localStorage.setItem('zx_prefs',JSON.stringify(prefs));
 }
+function toggleCreditHistory(){
+  const h=document.getElementById('acc-credit-history');
+  if(!h)return;
+  h.style.display=h.style.display==='none'?'block':'none';
+}
 function addAddress(){
   const label=prompt('اسم العنوان (مثال: المنزل، الشغل):');if(!label)return;
   const full=prompt('العنوان الكامل:');if(!full)return;
@@ -2376,6 +2530,27 @@ function confirmDeleteAccount(){
     if(t){document.documentElement.style.setProperty('--zx-accent',t.c1);document.documentElement.style.setProperty('--zx-accent2',t.c2);}
     const tc=localStorage.getItem('zx_text_color');if(tc)document.documentElement.style.setProperty('--zx-text',tc);
     const fs=localStorage.getItem('zx_font_scale');if(fs)document.documentElement.style.setProperty('--zx-font-scale',fs);
+  }catch(_){}
+})();
+
+// Seed demo orders + wallet credit for first-time visitors (for testing the new P0 features)
+(function seedDemoOrdersAndCredit(){
+  try{
+    if(localStorage.getItem('zx_seeded_p0')==='1')return;
+    const existing=JSON.parse(localStorage.getItem('zx_orders')||'[]');
+    if(existing.length>0){localStorage.setItem('zx_seeded_p0','1');return;}
+    const demoOrders=[
+      {id:'A1B2C3',date:new Date(Date.now()-86400000*3).toISOString(),items:3,cartItems:[{id:'p1',qty:1},{id:'p3',qty:2}],total:'983.00',total_raw:983,currency:'ر.س',payment:'mada',branch:'الفرع الرئيسي',shipping:'standard',status:'delivered'},
+      {id:'D4E5F6',date:new Date(Date.now()-86400000*7).toISOString(),items:2,cartItems:[{id:'p7',qty:1},{id:'p17',qty:1}],total:'1630.00',total_raw:1630,currency:'ر.س',payment:'visa',branch:'الفرع الرئيسي',shipping:'express',status:'delivered'},
+      {id:'G7H8I9',date:new Date(Date.now()-86400000*14).toISOString(),items:1,cartItems:[{id:'p11',qty:1}],total:'5499.00',total_raw:5499,currency:'ر.س',payment:'tabby',branch:'الفرع الرئيسي',shipping:'standard',status:'delivered'},
+    ];
+    localStorage.setItem('zx_orders',JSON.stringify(demoOrders));
+    // Seed wallet with 50 SAR welcome bonus
+    localStorage.setItem('zx_store_credit','50');
+    localStorage.setItem('zx_credit_history',JSON.stringify([
+      {date:new Date().toISOString(),amount:50,reason:'🎁 هدية ترحيب — مرحباً بك!',balance:50,type:'credit'}
+    ]));
+    localStorage.setItem('zx_seeded_p0','1');
   }catch(_){}
 })();
 
@@ -2974,7 +3149,20 @@ function renderShippingOptions(){
       <div class="ship-opt-left"><div class="ico">${s.ico}</div><div><b>${CURRENT_LANG==='ar'?s.ar:s.en}</b><small>${CURRENT_LANG==='ar'?s.etaAr:s.etaEn}</small></div></div>
       ${fee}
     </div>`;
-  }).join('')+`<button class="checkout-btn" onclick="completeOrder()" style="margin-top:14px">${tx('checkout')}</button>`;
+  }).join('')+
+    `<div id="checkout-credit-block" style="margin-top:12px"></div>`+
+    `<button class="checkout-btn" onclick="completeOrder()" style="margin-top:14px">${tx('checkout')}</button>`;
+  renderCheckoutCredit();
+}
+function renderCheckoutCredit(){
+  const host=document.getElementById('checkout-credit-block');
+  if(!host)return;
+  const bal=getStoreCredit();
+  if(bal<=0){host.innerHTML='';return;}
+  host.innerHTML=`<label style="display:flex;align-items:center;gap:10px;padding:12px 14px;background:linear-gradient(135deg,#faf5ff,#fdf2f8);border:1.5px solid #ddd6fe;border-radius:10px;cursor:pointer">
+    <input type="checkbox" id="use-store-credit" checked style="width:18px;height:18px;accent-color:#7c3aed">
+    <div style="flex:1"><b style="font-size:13px;color:#7c3aed">💳 استخدم محفظتي</b><div style="font-size:11px;color:#6b7280;margin-top:2px">رصيدك: <b style="color:#7c3aed">${bal.toFixed(2)} ر.س</b> · سيُخصم تلقائياً من الإجمالي</div></div>
+  </label>`;
 }
 function selectShipping(id){SELECTED_SHIPPING=id;renderShippingOptions();}
 
@@ -2985,17 +3173,27 @@ function completeOrder(){
   const subtotal=CART.reduce((s,c)=>{const p=PRODUCTS.find(x=>x.id===c.id);return s+(p?p.sar*c.qty:0)},0);
   const taxRate=typeof CURRENT_MARKET.tax?.rate==='number'?CURRENT_MARKET.tax.rate:0;
   const shipFee=(SHIP_METHODS.find(s=>s.id===SELECTED_SHIPPING)||{sar:0}).sar;
-  const total=subtotal*(1+taxRate/100)+shipFee;
+  // Apply Store Credit if customer chose to use it
+  const useCredit=document.getElementById('use-store-credit')?.checked;
+  const availableCredit=getStoreCredit();
+  const gross=subtotal*(1+taxRate/100)+shipFee;
+  const creditUsed=useCredit?Math.min(availableCredit,gross):0;
+  const total=gross-creditUsed;
   const branch=BRANCHES.find(b=>b.id===SELECTED_BRANCH);
+  if(creditUsed>0)deductStoreCredit(creditUsed,'استخدام في طلب جديد');
   saveOrder({
     id:Math.random().toString(36).slice(2,8).toUpperCase(),
     date:new Date().toISOString(),
     items:items,
+    cartItems:[...CART], // for reorder
     total:formatPrice(total),
+    total_raw:total,
+    credit_used:creditUsed,
     currency:curSym(),
     payment:PAYMENT_CHOSEN,
     branch:branch?(CURRENT_LANG==='ar'?branch.ar:branch.en):'',
     shipping:SELECTED_SHIPPING,
+    status:'confirmed'
   });
   document.getElementById('checkout-form').style.display='none';
   document.getElementById('checkout-success').style.display='block';
