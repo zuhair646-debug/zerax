@@ -423,7 +423,11 @@ body.studio-fs{overflow:hidden}
 .ps-tab.active .num{background:var(--amber);color:#0a0a14}
 .ps-body{flex:1;overflow:hidden;display:flex;background:#0a0a14;min-height:0}
 .ps-panel{flex:1;display:none;flex-direction:column;overflow:hidden;color:#fff}
-.ps-panel.active{display:flex}
+.ps-panel.active{display:flex;overflow-y:auto;scrollbar-width:thin;scrollbar-color:#fbbf24 #1e293b}
+.ps-panel.active::-webkit-scrollbar{width:10px}
+.ps-panel.active::-webkit-scrollbar-track{background:#1e293b;border-radius:8px}
+.ps-panel.active::-webkit-scrollbar-thumb{background:linear-gradient(180deg,#fbbf24,#f59e0b);border-radius:8px;border:2px solid #1e293b}
+.ps-panel.active::-webkit-scrollbar-thumb:hover{background:linear-gradient(180deg,#fcd34d,#fbbf24)}
 .ps-panel-head{padding:14px 22px;border-bottom:1px solid rgba(255,255,255,.06);display:flex;align-items:center;gap:10px;background:rgba(255,255,255,.02)}
 .ps-panel-head .ico{width:38px;height:38px;border-radius:10px;display:flex;align-items:center;justify-content:center;flex-shrink:0;color:#fff;font-size:18px}
 .ps-panel-head h4{font-size:14px;font-weight:900;color:#fff;margin:0}
@@ -2033,7 +2037,7 @@ select.ps-input option{background:#13131f;color:#fff}
           <div><b style="color:#10b981;font-size:13px;display:block">معاينة العميل</b><span style="font-size:10px;color:#94a3b8">هكذا سيرى العميل منتجك في المتجر</span></div>
           <button onclick="psSwitchTab('info')" style="margin-right:auto;background:#1f1f2e;color:#94a3b8;border:1px solid #312e81;padding:7px 12px;border-radius:7px;font-family:inherit;font-weight:700;font-size:11px;cursor:pointer">↩ تعديل</button>
         </div>
-        <div id="preview-content" style="padding:36px 22px 16px;background:#0a0a14;min-height:440px;display:flex;justify-content:center;align-items:flex-start"></div>
+        <div id="preview-content" style="padding:24px 22px 8px;background:#0a0a14;min-height:320px;display:flex;justify-content:center;align-items:flex-start"></div>
         <!-- Small polite publish button at the bottom of preview content -->
         <div style="padding:16px 22px 22px;background:#0a0a14;display:flex;justify-content:center;border-top:1px dashed #1e293b">
           <button onclick="publishProductLive()" data-testid="publish-live-btn" style="background:linear-gradient(135deg,#10b981,#059669);color:#fff;border:none;padding:10px 28px;border-radius:9px;font-family:inherit;font-weight:800;font-size:12px;cursor:pointer;display:inline-flex;align-items:center;gap:6px;box-shadow:0 6px 16px rgba(16,185,129,.3)">🚀 نشر للموقع · يصبح متاحاً للعملاء</button>
