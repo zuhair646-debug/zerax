@@ -76,7 +76,7 @@ body{font-family:var(--font,'Tajawal'),sans-serif;background:#f3f4f6;color:#0a0a
 .r-dot{width:8px;height:8px;border-radius:50%;background:#d1d5db;border:none;cursor:pointer}
 .r-dot.active{width:24px;border-radius:99px;background:#7c3aed}
 /* BOTTOM NAV */
-.bnav{position:fixed;bottom:0;right:0;left:0;background:#fff;display:grid;grid-template-columns:repeat(5,1fr);padding:8px 0;box-shadow:0 -4px 20px rgba(0,0,0,.08);z-index:80}
+.bnav{position:fixed;bottom:0;right:0;left:0;background:#fff;display:grid;grid-template-columns:repeat(6,1fr);padding:8px 0;box-shadow:0 -4px 20px rgba(0,0,0,.08);z-index:80}
 .bnav a{display:flex;flex-direction:column;align-items:center;gap:2px;color:#6b7280;text-decoration:none;font-size:10px;font-weight:700;padding:6px;cursor:pointer}
 .bnav a.active{color:#7c3aed}
 .bnav .ico{font-size:22px}
@@ -345,6 +345,9 @@ body.admin-mode .add-product-card{display:flex}
 /* PRODUCT CARD - hover auto-rotate gallery */
 .p-card{position:relative}
 .p-card .editable-img-host{position:relative;aspect-ratio:1;overflow:hidden}
+.wish-heart{position:absolute;top:8px;left:8px;width:34px;height:34px;border-radius:50%;background:rgba(255,255,255,.92);border:none;font-size:16px;display:flex;align-items:center;justify-content:center;cursor:pointer;backdrop-filter:blur(6px);box-shadow:0 2px 8px rgba(0,0,0,.15);z-index:6;transition:transform .15s ease,background .2s ease;color:#ec4899}
+.wish-heart:hover{transform:scale(1.12)}
+.wish-heart.active{background:#ec4899;color:#fff;box-shadow:0 4px 14px rgba(236,72,153,.45)}
 .p-card-stack{position:absolute;inset:0}
 .p-card-stack img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;opacity:0;transition:opacity .5s;cursor:zoom-in}
 .p-card-stack img.active{opacity:1}
@@ -594,7 +597,9 @@ body.admin-mode .add-product-card{display:flex}
   <button class="pill-btn" onclick="toggleMarketPopover(event)" id="market-btn">🌍 <span id="market-label">السعودية</span></button>
   <button class="pill-btn admin-toggle" id="admin-btn" onclick="toggleAdminMode()" title="وضع التحكم" style="padding:8px 10px"><span style="font-size:14px">♛</span></button>
   <button class="pill-btn admin-toggle" id="acp-open-btn" onclick="openAcp()" title="لوحة تحكم التاجر" style="padding:8px 12px;display:none;background:linear-gradient(135deg,#7c3aed,#0a0a0a);color:#fbbf24 !important"><span style="font-size:13px">🛠️</span></button>
-  <button class="cart-btn" onclick="openCart()">🛒<span class="cart-badge" id="cart-badge">0</span></button>
+  <button class="cart-btn" data-testid="header-wishlist-btn" onclick="showView('wishlist')" title="المفضلة" style="background:#fff;border:1px solid #fee2e2;color:#ec4899">❤<span class="cart-badge" id="wish-badge" style="background:#ec4899">0</span></button>
+  <button class="cart-btn" data-testid="header-login-btn" onclick="openLogin()" title="تسجيل دخول" id="header-login-btn" style="background:#fff;border:1px solid #e9d5ff;color:#7c3aed">👤</button>
+  <button class="cart-btn" onclick="openCart()" data-testid="header-cart-btn">🛒<span class="cart-badge" id="cart-badge">0</span></button>
 </header>
 
 <!-- MARKET POPOVER -->
@@ -681,7 +686,12 @@ body.admin-mode .add-product-card{display:flex}
   <div class="cart-body" id="cart-body"></div>
   <div class="cart-foot" id="cart-foot" style="display:none">
     <div class="total-row"><span data-key="subtotal">المجموع</span><span id="subtotal">0</span></div>
+    <div class="total-row" id="discount-row" style="display:none;color:#10b981"><span>الخصم (<span id="coupon-label">-</span>)</span><span id="discount-line">0</span></div>
     <div class="total-row"><span data-key="tax">الضريبة</span><span id="tax-line">0</span></div>
+    <div style="display:flex;gap:6px;margin:10px 0">
+      <input id="coupon-input" data-testid="coupon-input" placeholder="🎟️ كود الخصم (مثل WELCOME10)" style="flex:1;padding:10px;border:1px dashed #ec4899;border-radius:8px;font-family:inherit;font-size:12px;outline:none;background:#fdf2f8">
+      <button onclick="applyCoupon()" data-testid="apply-coupon-btn" style="padding:10px 14px;background:#ec4899;color:#fff;border:none;border-radius:8px;font-family:inherit;font-weight:900;font-size:12px;cursor:pointer">طبّق</button>
+    </div>
     <div class="total-row big"><span data-key="total">الإجمالي</span><span id="total">0</span></div>
     <button class="checkout-btn" onclick="openCheckout()" data-key="checkout">إتمام الطلب</button>
   </div>
@@ -763,6 +773,7 @@ body.admin-mode .add-product-card{display:flex}
   <a class="active" data-view="home" onclick="showView('home')"><div class="ico">🏠</div><span data-key="home">الرئيسية</span></a>
   <a data-view="search" onclick="showView('search')"><div class="ico">🔍</div><span data-key="search">بحث</span></a>
   <a data-view="cart" onclick="openCart()"><div class="ico">🛒</div><span data-key="cart">السلة</span></a>
+  <a data-view="wishlist" data-testid="bnav-wishlist" onclick="showView('wishlist')"><div class="ico">❤</div><span>المفضلة</span></a>
   <a data-view="orders" onclick="showView('orders')"><div class="ico">📋</div><span data-key="orders">طلباتي</span></a>
   <a data-view="account" onclick="showView('account')"><div class="ico">👤</div><span data-key="account">حسابي</span></a>
 </nav>
@@ -810,6 +821,7 @@ body.admin-mode .add-product-card{display:flex}
   <div class="pd-price-row"><div class="pd-price" id="pd-price"></div><button class="pd-cta" id="pd-add-btn"><span data-key="add_to_cart">🛒 أضف للسلة</span></button></div>
   <div id="pd-variants" class="pdp-variants" style="display:none"></div>
   <div id="pd-info" class="pd-info-html"></div>
+  <div id="pd-reviews" style="margin-top:24px"></div>
 </section>
 
 <section id="view-orders" style="display:none;padding:0 16px 24px" data-view-section>
@@ -844,7 +856,48 @@ body.admin-mode .add-product-card{display:flex}
       <span style="color:#6b7280;font-size:13px" data-key="loyalty_points">نقاط الولاء</span><b style="color:#7c3aed">⭐ <span id="acc-points">0</span></b>
     </div>
   </div>
+  <div id="acc-auth-block" style="margin-top:14px"></div>
 </section>
+
+<!-- ═══════════════════ WISHLIST PAGE ═══════════════════ -->
+<section id="view-wishlist" style="display:none;padding:0 16px 24px" data-view-section>
+  <h2 style="font-size:20px;font-weight:900;margin:18px 0 16px">❤ <span id="wishlist-title">قائمة المفضلة</span></h2>
+  <div class="grid" id="wishlist-grid"></div>
+  <div id="wishlist-empty" style="display:none;background:#fff;border-radius:14px;padding:60px 20px;text-align:center;color:#9ca3af">
+    <div style="font-size:60px;margin-bottom:14px">💔</div>
+    <b style="font-size:16px;color:#0a0a0a" id="wishlist-empty-title">قائمة المفضلة فارغة</b>
+    <p style="margin-top:8px;font-size:13px" id="wishlist-empty-sub">اضغط ❤ على أي منتج لإضافته هنا</p>
+    <button onclick="showView('home')" data-testid="wishlist-shop-btn" style="margin-top:16px;padding:12px 22px;background:#ec4899;color:#fff;border:none;border-radius:10px;font-family:inherit;font-weight:900;font-size:13px;cursor:pointer">🛒 ابدأ التسوق</button>
+  </div>
+</section>
+
+<!-- ═══════════════════ LOGIN MODAL (OTP) ═══════════════════ -->
+<div class="modal-bg" id="login-modal" onclick="if(event.target===this)closeLogin()">
+  <div class="modal" style="max-width:380px">
+    <div id="login-step-1">
+      <div style="text-align:center;margin-bottom:14px">
+        <div style="width:64px;height:64px;border-radius:50%;background:linear-gradient(135deg,#7c3aed,#ec4899);display:inline-flex;align-items:center;justify-content:center;color:#fff;font-size:30px;margin-bottom:10px">👋</div>
+        <h3 id="login-title" style="font-size:18px;font-weight:900">مرحباً فيك في سوقي</h3>
+        <p class="sub" id="login-sub" style="color:#6b7280;font-size:12px;margin-top:4px">سجّل دخولك برقم جوالك — نرسل لك كود OTP</p>
+      </div>
+      <label style="font-size:11px;color:#6b7280;font-weight:700">رقم الجوال</label>
+      <input id="login-phone" data-testid="login-phone-input" placeholder="+966 5X XXX XXXX" type="tel" style="width:100%;padding:13px;border:1px solid #e5e7eb;border-radius:10px;font-family:inherit;font-size:14px;margin:6px 0 14px;outline:none;direction:ltr;text-align:center;font-weight:900;letter-spacing:1px">
+      <button onclick="requestOtp()" data-testid="login-request-otp-btn" style="width:100%;padding:14px;background:linear-gradient(135deg,#7c3aed,#ec4899);color:#fff;border:none;border-radius:10px;font-family:inherit;font-weight:900;font-size:14px;cursor:pointer">📲 أرسل رمز OTP</button>
+      <p style="text-align:center;color:#9ca3af;font-size:10px;margin-top:12px">بالاستمرار توافق على <a href="#" style="color:#7c3aed">الشروط</a> و<a href="#" style="color:#7c3aed">سياسة الخصوصية</a></p>
+    </div>
+    <div id="login-step-2" style="display:none">
+      <div style="text-align:center;margin-bottom:14px">
+        <div style="width:64px;height:64px;border-radius:50%;background:#10b98120;display:inline-flex;align-items:center;justify-content:center;color:#10b981;font-size:30px;margin-bottom:10px">📲</div>
+        <h3 style="font-size:18px;font-weight:900">أدخل رمز التحقق</h3>
+        <p class="sub" style="color:#6b7280;font-size:12px;margin-top:4px">أرسلنا لك كود من 4 أرقام إلى <b id="login-phone-echo">-</b></p>
+        <p style="color:#7c3aed;font-size:11px;margin-top:4px;background:#faf5ff;padding:6px;border-radius:8px">💡 للتجربة: استخدم <b>1234</b></p>
+      </div>
+      <input id="login-otp" data-testid="login-otp-input" placeholder="○ ○ ○ ○" type="tel" maxlength="4" style="width:100%;padding:14px;border:2px solid #7c3aed;border-radius:10px;font-family:inherit;font-size:24px;margin:6px 0 14px;outline:none;text-align:center;font-weight:900;letter-spacing:14px">
+      <button onclick="verifyOtp()" data-testid="login-verify-otp-btn" style="width:100%;padding:14px;background:linear-gradient(135deg,#7c3aed,#ec4899);color:#fff;border:none;border-radius:10px;font-family:inherit;font-weight:900;font-size:14px;cursor:pointer">✓ تحقق وادخل</button>
+      <button onclick="loginBackToPhone()" style="width:100%;padding:10px;background:transparent;border:none;color:#7c3aed;font-family:inherit;font-size:12px;cursor:pointer;margin-top:8px">← تعديل رقم الجوال</button>
+    </div>
+  </div>
+</div>
 
 <!-- ═══════════════════ IMAGE STUDIO MODAL (AI Generate / Upload / Library) ═══════════════════ -->
 <div class="studio-modal" id="studio-modal" onclick="if(event.target===this)closeStudio()">
@@ -1585,6 +1638,8 @@ async function init(){
   startBannerSlider();
   startReviewSlider();
   updateCart();
+  updateWishBadge();
+  updateAuthUi();
   applyAdminModeOnInit();
   document.body.addEventListener('click',()=>{document.getElementById('market-popover').classList.remove('open')});
 }
@@ -1803,6 +1858,7 @@ function showView(view, param){
   if(view==='category'){renderCategoryPage(param);document.getElementById('view-category').style.display='block';}
   if(view==='orders'){renderOrders();document.getElementById('view-orders').style.display='block';}
   if(view==='account'){renderAccount();document.getElementById('view-account').style.display='block';}
+  if(view==='wishlist'){renderWishlist();document.getElementById('view-wishlist').style.display='block';}
   if(view==='product'){document.getElementById('view-product').style.display='block';}
   window.scrollTo({top:0,behavior:'smooth'});
 }
@@ -1900,20 +1956,157 @@ function renderOrders(){
 function getAccount(){return JSON.parse(localStorage.getItem('zx_account')||'{}');}
 function renderAccount(){
   const a=getAccount();
-  document.getElementById('acc-name').value=a.name||'';
-  document.getElementById('acc-phone').value=a.phone||'';
+  const u=getUser();
+  document.getElementById('acc-name').value=(u&&u.name)||a.name||'';
+  document.getElementById('acc-phone').value=(u&&u.phone)||a.phone||'';
   document.getElementById('acc-addr').value=a.address||'';
-  document.getElementById('acc-greet').textContent=a.name||tx('guest');
-  document.getElementById('acc-avatar').textContent=a.name?a.name.charAt(0).toUpperCase():'👤';
+  document.getElementById('acc-greet').textContent=(u&&u.name)||a.name||tx('guest');
+  document.getElementById('acc-avatar').textContent=((u&&u.name)||a.name)?((u&&u.name)||a.name).charAt(0).toUpperCase():'👤';
   const orders=getOrders();
   document.getElementById('acc-orders-count').textContent=orders.length;
   document.getElementById('acc-points').textContent=orders.length*10;
+  const ab=document.getElementById('acc-auth-block');
+  if(u){
+    ab.innerHTML=`<div style="background:linear-gradient(135deg,#10b98115,#7c3aed15);border:1px solid #10b98140;border-radius:14px;padding:14px;display:flex;align-items:center;justify-content:space-between">
+      <div><div style="font-size:11px;color:#10b981;font-weight:900">✓ مسجّل دخول</div><div style="font-size:13px;color:#0a0a0a;margin-top:2px;direction:ltr">${u.phone}</div></div>
+      <button data-testid="logout-btn" onclick="logout()" style="padding:10px 16px;background:#fff;border:1px solid #ef4444;color:#ef4444;border-radius:10px;font-family:inherit;font-weight:900;font-size:12px;cursor:pointer">🚪 خروج</button>
+    </div>`;
+  } else {
+    ab.innerHTML=`<button data-testid="account-login-btn" onclick="openLogin()" style="width:100%;padding:14px;background:linear-gradient(135deg,#7c3aed,#ec4899);color:#fff;border:none;border-radius:12px;font-family:inherit;font-weight:900;font-size:14px;cursor:pointer">🔐 تسجيل دخول / اشتراك</button>`;
+  }
 }
 function saveAccount(){
   const a={name:document.getElementById('acc-name').value.trim(),phone:document.getElementById('acc-phone').value.trim(),address:document.getElementById('acc-addr').value.trim()};
   localStorage.setItem('zx_account',JSON.stringify(a));
   renderAccount();
   alert(tx('saved_ok'));
+}
+
+// ═══════════════════════ AUTH (OTP) ═══════════════════════
+function getUser(){try{return JSON.parse(localStorage.getItem('zx_user')||'null');}catch(_){return null;}}
+function setUser(u){if(u)localStorage.setItem('zx_user',JSON.stringify(u));else localStorage.removeItem('zx_user');updateAuthUi();}
+function openLogin(){document.getElementById('login-modal').classList.add('open');document.getElementById('login-step-1').style.display='block';document.getElementById('login-step-2').style.display='none';setTimeout(()=>document.getElementById('login-phone').focus(),100);}
+function closeLogin(){document.getElementById('login-modal').classList.remove('open');}
+let _pendingLoginPhone=null;
+function requestOtp(){
+  const phone=document.getElementById('login-phone').value.trim();
+  if(phone.replace(/\D/g,'').length<7){alert('رقم الجوال غير صحيح');return;}
+  _pendingLoginPhone=phone;
+  document.getElementById('login-phone-echo').textContent=phone;
+  document.getElementById('login-step-1').style.display='none';
+  document.getElementById('login-step-2').style.display='block';
+  setTimeout(()=>document.getElementById('login-otp').focus(),100);
+}
+function loginBackToPhone(){
+  document.getElementById('login-step-2').style.display='none';
+  document.getElementById('login-step-1').style.display='block';
+}
+function verifyOtp(){
+  const code=document.getElementById('login-otp').value.trim();
+  if(code!=='1234'){alert('الكود غير صحيح. للتجربة استخدم 1234');return;}
+  const acc=getAccount();
+  setUser({phone:_pendingLoginPhone,name:acc.name||'',token:'demo-'+Date.now()});
+  document.getElementById('login-otp').value='';
+  document.getElementById('login-phone').value='';
+  closeLogin();
+  toast('✓ تم تسجيل الدخول');
+  renderAccount();
+}
+function logout(){setUser(null);toast('تم تسجيل الخروج');renderAccount();}
+function requireLogin(reason){
+  if(getUser())return true;
+  if(confirm((reason||'يلزم تسجيل الدخول')+'. تسجيل دخول الآن؟'))openLogin();
+  return false;
+}
+function updateAuthUi(){
+  const u=getUser();
+  const btn=document.getElementById('header-login-btn');
+  if(btn)btn.innerHTML=u?'<span style="color:#10b981">✓</span>':'👤';
+}
+
+// ═══════════════════════ WISHLIST ═══════════════════════
+let WISHLIST=JSON.parse(localStorage.getItem('zx_wishlist')||'[]');
+function saveWishlist(){localStorage.setItem('zx_wishlist',JSON.stringify(WISHLIST));updateWishBadge();}
+function inWish(pid){return WISHLIST.includes(pid);}
+function toggleWish(pid){
+  if(inWish(pid))WISHLIST=WISHLIST.filter(x=>x!==pid);
+  else{WISHLIST.push(pid);toast('❤ تمت الإضافة للمفضلة');}
+  saveWishlist();
+  renderProducts();
+  if(document.getElementById('view-wishlist').style.display!=='none')renderWishlist();
+}
+function updateWishBadge(){const b=document.getElementById('wish-badge');if(b)b.textContent=WISHLIST.length;}
+function renderWishlist(){
+  const grid=document.getElementById('wishlist-grid');
+  const empty=document.getElementById('wishlist-empty');
+  const items=WISHLIST.map(id=>PRODUCTS.find(p=>p.id===id)).filter(Boolean);
+  if(!items.length){grid.innerHTML='';grid.style.display='none';empty.style.display='block';return;}
+  grid.style.display='';empty.style.display='none';
+  grid.innerHTML=items.map(pCardHtml).join('');
+}
+
+// ═══════════════════════ PRODUCT REVIEWS (per-product) ═══════════════════════
+function getReviews(pid){try{return JSON.parse(localStorage.getItem('zx_reviews_'+pid)||'[]');}catch(_){return[];}}
+function saveReviewsFor(pid,arr){localStorage.setItem('zx_reviews_'+pid,JSON.stringify(arr));}
+let _pdReviewStars=5;
+function pickReviewStars(n){_pdReviewStars=n;document.querySelectorAll('.pd-rev-star').forEach((el,i)=>{el.textContent=i<n?'★':'☆';el.style.color=i<n?'#f59e0b':'#d1d5db';});}
+function renderProductReviews(pid){
+  const list=getReviews(pid);
+  const avg=list.length?(list.reduce((s,r)=>s+r.stars,0)/list.length).toFixed(1):'—';
+  const u=getUser();
+  let html=`<div style="background:#fff;border-radius:14px;padding:16px;box-shadow:0 2px 12px rgba(0,0,0,.05)">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
+      <h3 style="font-size:16px;font-weight:900">⭐ تقييمات المنتج</h3>
+      <div style="font-size:13px;color:#6b7280"><b style="color:#f59e0b">${avg}</b> · ${list.length} تقييم</div>
+    </div>`;
+  if(list.length){
+    html+=`<div style="display:flex;flex-direction:column;gap:10px;margin-bottom:14px">`+list.slice().reverse().map(r=>`
+      <div style="background:#fafafa;border-radius:10px;padding:12px">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+          <b style="font-size:13px">${(r.name||'عميل').slice(0,30)}</b>
+          <span style="color:#f59e0b;font-size:13px">${'★'.repeat(r.stars)}${'☆'.repeat(5-r.stars)}</span>
+        </div>
+        <p style="font-size:12px;color:#374151;line-height:1.6;margin:0">${(r.text||'').replace(/[<>]/g,'')}</p>
+        <small style="color:#9ca3af;font-size:10px">${new Date(r.date).toLocaleDateString('ar-SA')}</small>
+      </div>`).join('')+`</div>`;
+  } else {
+    html+=`<p style="text-align:center;color:#9ca3af;font-size:13px;padding:18px 0">لا توجد تقييمات بعد · كن أول من يقيّم</p>`;
+  }
+  html+=`<div style="border-top:1px dashed #e5e7eb;padding-top:14px">
+    <h4 style="font-size:13px;font-weight:900;margin-bottom:10px">✍️ اكتب تقييمك</h4>
+    <div style="display:flex;gap:4px;margin-bottom:10px" id="pd-rev-stars">
+      ${[1,2,3,4,5].map(n=>`<button class="pd-rev-star" data-testid="rev-star-${n}" onclick="pickReviewStars(${n})" style="background:none;border:none;font-size:24px;cursor:pointer;color:#f59e0b">★</button>`).join('')}
+    </div>
+    <textarea id="pd-rev-text" data-testid="pd-rev-text" placeholder="${u?'شاركنا تجربتك...':'سجّل دخولك للكتابة'}" ${u?'':'disabled'} style="width:100%;min-height:60px;padding:10px;border:1px solid #e5e7eb;border-radius:10px;font-family:inherit;font-size:13px;outline:none;resize:vertical;margin-bottom:10px"></textarea>
+    <button data-testid="submit-review-btn" onclick="submitReview('${pid}')" style="width:100%;padding:12px;background:linear-gradient(135deg,#7c3aed,#ec4899);color:#fff;border:none;border-radius:10px;font-family:inherit;font-weight:900;font-size:13px;cursor:pointer">${u?'📨 نشر التقييم':'🔐 سجّل دخول للنشر'}</button>
+  </div></div>`;
+  document.getElementById('pd-reviews').innerHTML=html;
+  _pdReviewStars=5;
+}
+function submitReview(pid){
+  if(!requireLogin('يلزم تسجيل الدخول لنشر التقييم'))return;
+  const text=document.getElementById('pd-rev-text').value.trim();
+  if(!text){alert('اكتب نص التقييم أولاً');return;}
+  const u=getUser();
+  const acc=getAccount();
+  const list=getReviews(pid);
+  list.push({name:acc.name||u.phone,stars:_pdReviewStars,text,date:Date.now()});
+  saveReviewsFor(pid,list);
+  toast('✓ تم نشر تقييمك');
+  renderProductReviews(pid);
+}
+
+// ═══════════════════════ COUPONS ═══════════════════════
+const COUPONS={'WELCOME10':{code:'WELCOME10',type:'percent',value:10,label:'خصم 10% للترحيب'},'SAVE50':{code:'SAVE50',type:'flat',value:50,label:'خصم 50 ر.س'},'FREESHIP':{code:'FREESHIP',type:'flat',value:25,label:'شحن مجاني (يخصم 25)'}};
+let ACTIVE_COUPON=JSON.parse(localStorage.getItem('zx_coupon')||'null');
+function applyCoupon(){
+  const code=(document.getElementById('coupon-input').value||'').trim().toUpperCase();
+  if(!code){ACTIVE_COUPON=null;localStorage.removeItem('zx_coupon');updateCart();toast('تم إلغاء الكود');return;}
+  const c=COUPONS[code];
+  if(!c){alert('الكود غير صحيح أو منتهي');return;}
+  ACTIVE_COUPON=c;localStorage.setItem('zx_coupon',JSON.stringify(c));
+  updateCart();
+  toast('🎟️ '+c.label);
 }
 
 let bannerIdx=0;
@@ -1976,10 +2169,17 @@ function updateCart(){
   body.innerHTML=CART.map(c=>{const p=PRODUCTS.find(x=>x.id===c.id);if(!p)return'';const n=CURRENT_LANG==='ar'?p.ar:p.en;return `<div class="cart-item"><img src="${p.img}"><div class="cart-item-info"><div class="n">${n}</div><div class="p">${curSym()} ${formatPrice(p.sar*c.qty)}</div><div class="qty-row"><button class="qty-btn" onclick="changeQty('${p.id}',-1)">−</button><span class="qty-num">${c.qty}</span><button class="qty-btn" onclick="changeQty('${p.id}',1)">+</button></div></div></div>`;}).join('');
   const sub=CART.reduce((s,c)=>{const p=PRODUCTS.find(x=>x.id===c.id);return s+(p?p.sar*c.qty:0);},0);
   const taxRate=typeof CURRENT_MARKET.tax?.rate==='number'?CURRENT_MARKET.tax.rate:0;
-  const tax=sub*(taxRate/100);
+  const coup=ACTIVE_COUPON;
+  let discount=0;
+  if(coup){discount=coup.type==='percent'?sub*(coup.value/100):Math.min(coup.value,sub);}
+  const taxBase=Math.max(0,sub-discount);
+  const tax=taxBase*(taxRate/100);
   document.getElementById('subtotal').textContent=`${curSym()} ${formatPrice(sub)}`;
   document.getElementById('tax-line').textContent=`${curSym()} ${formatPrice(tax)}`;
-  document.getElementById('total').textContent=`${curSym()} ${formatPrice(sub+tax)}`;
+  const dRow=document.getElementById('discount-row');
+  if(coup){dRow.style.display='flex';document.getElementById('coupon-label').textContent=coup.code;document.getElementById('discount-line').textContent=`- ${curSym()} ${formatPrice(discount)}`;}
+  else{dRow.style.display='none';}
+  document.getElementById('total').textContent=`${curSym()} ${formatPrice(taxBase+tax)}`;
   foot.style.display='block';
 }
 function openCart(){document.getElementById('cart-drawer').classList.add('open')}
@@ -2687,8 +2887,8 @@ function pCardHtml(p){
   const stack=imgs.map((g,i)=>`<img src="${g.url}" alt="${name} ${i+1}" class="${i===0?'active':''}" data-i="${i}">`).join('');
   const dots=imgs.length>1?`<div class="p-card-dots">${imgs.map((_,i)=>`<span class="${i===0?'active':''}"></span>`).join('')}</div>`:'';
   const navs=imgs.length>1?`<button class="p-card-nav p-card-prev" onclick="event.stopPropagation();pCardNav(this,-1)" aria-label="prev">‹</button><button class="p-card-nav p-card-next" onclick="event.stopPropagation();pCardNav(this,1)" aria-label="next">›</button>`:'';
-  return `<div class="p-card" onmouseenter="pCardHover(this,true)" onmouseleave="pCardHover(this,false)" onclick="if(!event.target.closest('.img-edit-btn,.add-btn,.p-card-nav,img'))showProductDetail('${p.id}')">
-    <div class="editable-img-host"><div class="p-card-stack" data-pid="${p.id}">${stack}</div>${dots}${navs}<button class="img-edit-btn" onclick="event.stopPropagation();openStudio('product:${p.id}')" title="تحرير">✨</button></div>
+  return `<div class="p-card" onmouseenter="pCardHover(this,true)" onmouseleave="pCardHover(this,false)" onclick="if(!event.target.closest('.img-edit-btn,.add-btn,.p-card-nav,.wish-heart,img'))showProductDetail('${p.id}')">
+    <div class="editable-img-host"><div class="p-card-stack" data-pid="${p.id}">${stack}</div>${dots}${navs}<button class="img-edit-btn" onclick="event.stopPropagation();openStudio('product:${p.id}')" title="تحرير">✨</button><button class="wish-heart ${inWish(p.id)?'active':''}" data-testid="wish-toggle-${p.id}" onclick="event.stopPropagation();toggleWish('${p.id}')" title="المفضلة">${inWish(p.id)?'❤':'🤍'}</button></div>
     <div class="p-info" onclick="event.stopPropagation();showProductDetail('${p.id}')" style="cursor:pointer"><div class="name">${name}</div><div class="desc">${desc}</div><div class="p-row"><div class="p-price">${curSym()} ${formatPrice(p.sar)}</div><button class="add-btn" onclick="event.stopPropagation();addToCart('${p.id}')">+</button></div></div>
   </div>`;
 }
@@ -2776,6 +2976,7 @@ function showProductDetail(pid){
     vWrap.style.display='block';
   } else { vWrap.style.display='none'; }
   document.getElementById('pd-info').innerHTML=html||`<div class="pd-empty">${CURRENT_LANG==='ar'?'ℹ️ التاجر لم يضف تفاصيل تفصيلية لهذا المنتج بعد.':'ℹ️ The merchant has not added detailed info for this product yet.'}</div>`;
+  renderProductReviews(pid);
   showView('product');
   window.scrollTo({top:0,behavior:'smooth'});
 }
@@ -2794,6 +2995,7 @@ function buildRichAnalysisClientHTML(d){
   if(d.official_url){const u=d.official_url.startsWith('http')?d.official_url:'https://'+d.official_url;html+=`<div class="pdai-card"><h3><span class="ic" style="background:#faf5ff;color:#7c3aed">🌐</span> ${L?'الموقع الرسمي':'Official site'}</h3><a class="pdai-link" href="${u}" target="_blank">${d.official_url} ↗</a></div>`;}
   return html;
 }
+function pdJump(i,pid){
   _pdIndex=i;
   const gallery=(PRODUCT_GALLERIES[pid]||[]).filter(g=>g.type==='image');
   if(!gallery[i])return;
