@@ -2565,11 +2565,18 @@ body.cs-fullscreen .cs-pill-fs{background:linear-gradient(135deg,#fbbf24,#f59e0b
       💡 أي فكرة تبي تطورها</span>
     </div>
   </div>
-  <!-- Quick suggestion chips -->
-  <div style="padding:8px 14px;display:flex;gap:6px;flex-wrap:wrap;border-top:1px solid #1f2937;background:#0f0f1a">
-    <button onclick="sendAiQuick('كيف أداء متجري هذا الأسبوع؟')" style="background:#1f2937;border:1px solid #374151;color:#e5e7eb;font-size:11px;padding:5px 10px;border-radius:99px;cursor:pointer;font-family:inherit">📊 أداء متجري</button>
-    <button onclick="sendAiQuick('أعطني خطة تسويقية لزيادة المبيعات')" style="background:#1f2937;border:1px solid #374151;color:#e5e7eb;font-size:11px;padding:5px 10px;border-radius:99px;cursor:pointer;font-family:inherit">🎯 خطة تسويق</button>
-    <button onclick="sendAiQuick('وش نصائحك لتخفيضات الجمعة البيضاء؟')" style="background:#1f2937;border:1px solid #374151;color:#e5e7eb;font-size:11px;padding:5px 10px;border-radius:99px;cursor:pointer;font-family:inherit">💡 نصائح</button>
+  <!-- Quick suggestion chips — marketing & market knowledge tools -->
+  <div style="padding:8px 14px;display:flex;gap:6px;flex-wrap:wrap;border-top:1px solid #1f2937;background:#0f0f1a;max-height:115px;overflow-y:auto">
+    <button onclick="sendAiQuick('حلل أداء متجري في الأسبوع الماضي بالتفصيل (المبيعات، الزوار، الطلبات، أفضل المنتجات).')" style="background:#1f2937;border:1px solid #374151;color:#fbbf24;font-size:11px;padding:5px 10px;border-radius:99px;cursor:pointer;font-family:inherit;font-weight:600">📊 تحليل أدائي</button>
+    <button onclick="sendAiQuick('وش الترند في السوق السعودي حالياً في قطاع التجارة الإلكترونية؟ أعطني 5 ترندات بمصادر.')" style="background:#1f2937;border:1px solid #374151;color:#fbbf24;font-size:11px;padding:5px 10px;border-radius:99px;cursor:pointer;font-family:inherit;font-weight:600">📈 ترندات السوق</button>
+    <button onclick="sendAiQuick('سو دراسة سوق لمنتجي — منافسين، أسعار، استراتيجيات، فرص.')" style="background:#1f2937;border:1px solid #374151;color:#fbbf24;font-size:11px;padding:5px 10px;border-radius:99px;cursor:pointer;font-family:inherit;font-weight:600">🔍 دراسة سوق</button>
+    <button onclick="sendAiQuick('وين أعلن لمتجري؟ أعطني أفضل القنوات لاستهداف العملاء السعوديين بالميزانية والـ ROI لكل قناة.')" style="background:#1f2937;border:1px solid #374151;color:#fbbf24;font-size:11px;padding:5px 10px;border-radius:99px;cursor:pointer;font-family:inherit;font-weight:600">📢 وين أعلن</button>
+    <button onclick="sendAiQuick('سوي لي خطة تسويقية شهرية لرفع المبيعات 30% مع الجدول الزمني والميزانية.')" style="background:#1f2937;border:1px solid #374151;color:#fbbf24;font-size:11px;padding:5px 10px;border-radius:99px;cursor:pointer;font-family:inherit;font-weight:600">🎯 خطة تسويقية</button>
+    <button onclick="sendAiQuick('وش الحملات اللي تنجح في رمضان والعيد للسوق السعودي؟ أعطني أمثلة من تجار ناجحين.')" style="background:#1f2937;border:1px solid #374151;color:#fbbf24;font-size:11px;padding:5px 10px;border-radius:99px;cursor:pointer;font-family:inherit;font-weight:600">🌙 حملات المواسم</button>
+    <button onclick="sendAiQuick('ابتدع لي اسم متجر + شعار + قصة علامة تجارية فريدة لمنتجاتي.')" style="background:#1f2937;border:1px solid #374151;color:#fbbf24;font-size:11px;padding:5px 10px;border-radius:99px;cursor:pointer;font-family:inherit;font-weight:600">💡 هوية تجارية</button>
+    <button onclick="sendAiQuick('وش الأسعار المنافسة لمنتجاتي في السوق؟ كيف أحدد سعر يضمن أرباح وجاذبية؟')" style="background:#1f2937;border:1px solid #374151;color:#fbbf24;font-size:11px;padding:5px 10px;border-radius:99px;cursor:pointer;font-family:inherit;font-weight:600">💰 تسعير ذكي</button>
+    <button onclick="sendAiQuick('سوي لي محتوى سوشيال ميديا أسبوع كامل (انستجرام + تيك توك + سناب) لمتجري.')" style="background:#1f2937;border:1px solid #374151;color:#fbbf24;font-size:11px;padding:5px 10px;border-radius:99px;cursor:pointer;font-family:inherit;font-weight:600">📱 محتوى سوشيال</button>
+    <button onclick="sendAiQuick('وش قانون التجارة الإلكترونية في السعودية واللوائح الضريبية اللي ألتزم فيها كتاجر؟')" style="background:#1f2937;border:1px solid #374151;color:#fbbf24;font-size:11px;padding:5px 10px;border-radius:99px;cursor:pointer;font-family:inherit;font-weight:600">⚖️ قوانين التجارة</button>
   </div>
   <div style="border-top:1px solid #1f2937;padding:12px;display:flex;gap:8px;background:#0f0f1a;align-items:center">
     <input id="ai-chat-input" data-testid="ai-chat-input" placeholder="اسأل أي شي..." onkeydown="if(event.key==='Enter')sendAiChat()" style="flex:1;padding:10px 14px;background:#1f2937;border:1px solid #374151;color:#fff;border-radius:9px;font-family:inherit;font-size:13px;outline:none">

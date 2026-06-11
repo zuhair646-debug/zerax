@@ -3878,7 +3878,7 @@ function csWizardStepIdea(){
       </div>
       <div style="margin-top:10px;display:flex;gap:6px">
         <input type="text" id="cs-wizard-idea-input" placeholder="أو اكتب فكرتك المخصصة..." onkeydown="if(event.key==='Enter')csWizardPick('idea',this.value,null)" style="flex:1;background:#0a0a14;border:1px solid #312e81;border-radius:9px;padding:9px 12px;color:#fff;font-family:inherit;font-size:12px" data-testid="wiz-idea-input">
-        <button onclick="csWizardPick('idea',document.getElementById('cs-wizard-idea-input').value,null)" style="background:linear-gradient(135deg,#7c3aed,#ec4899);border:none;color:#fff;padding:9px 14px;border-radius:9px;cursor:pointer;font-family:inherit;font-size:11px;font-weight:800">إرسال</button>
+        <button onclick="csWizardPick('idea',document.getElementById('cs-wizard-idea-input').value,null)" style="background:#fbbf24;border:none;color:#0a0a14;padding:9px 14px;border-radius:9px;cursor:pointer;font-family:inherit;font-size:11px;font-weight:900">إرسال</button>
       </div>
       <button class="cs-wizard-back" onclick="csWizardStepType()">← رجوع</button>
     </div>`;
@@ -4115,7 +4115,7 @@ function csWizardStepSectionCat(){
       </div>
       <div style="margin-top:10px;display:flex;gap:6px">
         <input type="text" id="cs-wiz-cat-text" placeholder="أو اكتب اسم قسم آخر..." onkeydown="if(event.key==='Enter')csWizardPick('sectionCat',{ar:this.value,en:this.value},null)" style="flex:1;background:#0a0a14;border:1px solid #312e81;border-radius:9px;padding:9px 12px;color:#fff;font-family:inherit;font-size:12px">
-        <button onclick="csWizardPick('sectionCat',{ar:document.getElementById('cs-wiz-cat-text').value,en:document.getElementById('cs-wiz-cat-text').value},null)" style="background:#10b981;border:none;color:#fff;padding:9px 14px;border-radius:9px;cursor:pointer;font-family:inherit;font-size:11px;font-weight:800">إرسال</button>
+        <button onclick="csWizardPick('sectionCat',{ar:document.getElementById('cs-wiz-cat-text').value,en:document.getElementById('cs-wiz-cat-text').value},null)" style="background:#fbbf24;border:none;color:#0a0a14;padding:9px 14px;border-radius:9px;cursor:pointer;font-family:inherit;font-size:11px;font-weight:900">إرسال</button>
       </div>
       <button class="cs-wizard-back" onclick="csWizardStepType()">← رجوع</button>
     </div>`;
