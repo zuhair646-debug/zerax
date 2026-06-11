@@ -2020,9 +2020,13 @@ function psSwitchTab(tab){
   document.querySelectorAll('.ps-panel').forEach(p=>p.classList.toggle('active',p.dataset.pspanel===tab));
   if(tab==='ai'){const aiInp=$('ps-ai-name');if(aiInp&&!aiInp.value&&$('pm-name').value)aiInp.value=$('pm-name').value;}
   if(tab==='image'){psHydrateCustomColorsFromServer().then(()=>psRenderColorPresets());psRenderColorPresets();}
-  // Hide modal footer on ALL tabs — approval/publish lives inside each tab now
+  // Show modal footer (which contains "حفظ المنتج" button) on tabs that need an explicit save action.
+  // Hide on tabs that have inline save flows (AI generates → publish; preview is read-only).
   const foot=document.getElementById('ps-modal-foot');
-  if(foot)foot.style.display='none';
+  if(foot){
+    const showSaveTabs=['info','variants','image'];
+    foot.style.display=showSaveTabs.includes(tab)?'flex':'none';
+  }
   setTimeout(()=>{if(window.lucide)lucide.createIcons()},50);
 }
 function psToggleFullscreen(){

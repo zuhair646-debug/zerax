@@ -2101,6 +2101,20 @@ select.ps-input option{background:#13131f;color:#fff}
               <div class="spec-row" style="display:grid;grid-template-columns:1fr 2fr 30px;gap:6px"><input class="ps-input" placeholder="الاسم (مثل: المعالج)"><input class="ps-input" placeholder="القيمة (مثل: A19 Bionic)"><button onclick="this.parentElement.remove()" style="background:#fef2f2;color:#dc2626;border:1px solid #fecaca;border-radius:6px;font-weight:900;cursor:pointer">×</button></div>
             </div>
           </div>
+
+          <!-- VARIANTS TAB — INLINE ACTION BAR (clear path to save/preview without scrolling to find footer) -->
+          <div style="margin-top:24px;padding:16px;background:linear-gradient(135deg,#0f172a,#1e293b);border:1px dashed #fbbf24;border-radius:12px;display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:12px">
+            <div style="flex:1;min-width:220px">
+              <b style="color:#fbbf24;font-size:13px;display:block;margin-bottom:4px">✅ خلصت تعبئة الأدوات؟</b>
+              <span style="font-size:11px;color:#94a3b8;line-height:1.55">احفظ التغييرات أولاً، ثم شاهد كيف يظهر المنتج للعميل قبل النشر النهائي.</span>
+            </div>
+            <div style="display:flex;gap:8px;flex-wrap:wrap">
+              <button onclick="psSwitchTab('info')" data-testid="variants-back-btn" style="background:#1f1f2e;color:#94a3b8;border:1px solid #312e81;padding:9px 16px;border-radius:9px;font-family:inherit;font-weight:700;font-size:11px;cursor:pointer">↩ رجوع للمعلومات</button>
+              <button onclick="pmSave()" data-testid="variants-save-btn" style="background:linear-gradient(135deg,#7c3aed,#6d28d9);color:#fff;border:none;padding:9px 18px;border-radius:9px;font-family:inherit;font-weight:900;font-size:12px;cursor:pointer;display:inline-flex;align-items:center;gap:6px;box-shadow:0 4px 12px rgba(124,58,237,.4)"><i data-lucide="save" style="width:13px;height:13px"></i> حفظ المنتج</button>
+              <button onclick="pmSave();setTimeout(()=>{psSwitchTab('preview');if(typeof renderProductPreview==='function')renderProductPreview()},400)" data-testid="variants-save-preview-btn" style="background:linear-gradient(135deg,#10b981,#059669);color:#fff;border:none;padding:9px 18px;border-radius:9px;font-family:inherit;font-weight:900;font-size:12px;cursor:pointer;display:inline-flex;align-items:center;gap:6px;box-shadow:0 4px 12px rgba(16,185,129,.4)"><i data-lucide="eye" style="width:13px;height:13px"></i> حفظ ومعاينة العميل ←</button>
+            </div>
+          </div>
+
         </div>
       </div>
 
