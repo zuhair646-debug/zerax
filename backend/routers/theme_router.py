@@ -70,6 +70,7 @@ class ThemeIn(BaseModel):
     logo_url: Optional[str] = None
     store_name: Optional[str] = None
     tagline: Optional[str] = None
+    custom_palette: Optional[list] = None  # merchant's saved custom colors [{ar,en,hex}, ...]
 
 
 @router.get("/defaults")
@@ -100,7 +101,7 @@ async def get_theme_by_merchant(merchant_id: str):
 async def update_my_theme(body: ThemeIn, u: dict = Depends(merchant_user)):
     """Merchant updates their theme. Only sent fields are overwritten."""
     update: Dict[str, Any] = {}
-    for k in ("mode", "font_family", "font_size", "radius_scale", "buttons_style", "use_glass", "logo_url", "store_name", "tagline"):
+    for k in ("mode", "font_family", "font_size", "radius_scale", "buttons_style", "use_glass", "logo_url", "store_name", "tagline", "custom_palette"):
         v = getattr(body, k)
         if v is not None:
             update[k] = v

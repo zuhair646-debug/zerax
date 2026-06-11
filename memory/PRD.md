@@ -344,6 +344,32 @@ User purchased `zenrex.ai` from Porkbun (registered until Jun 11 2028) and asked
 ## 📧 Owner Email Forwarding (Porkbun → Gmail)
 - All `@zenrex.ai` mail forwards to **`zenrex.ai@gmail.com`** via Porkbun Email Forwarding.
 
+## 🎨 Color System Overhaul (Jun 11 2026)
+**Bug fix + major enhancement to Product Studio color picker.**
+
+### Root cause of "hex → white image" bug
+Previous code sent raw hex like `#000000` inside the Gemini prompt: `"isolated product shot on a #000000 background"`. Gemini AI cannot reliably parse hex codes in natural-language prompts → defaults to white.
+
+### Fix + Enhancements
+1. **Hex → English color name resolver** (`psHexToName()`): every hex is converted to a Gemini-friendly natural name (e.g., `#000000` → `"pure black"`, `#7c3aed` → `"vibrant purple"`). Falls back to brightness/RGB analysis for unknown hex (e.g., `"warm reddish tone"`).
+2. **6 categorized color palettes** (~50 named colors):
+   - ⚪ أساسي (basics: 6 colors)
+   - 🔥 دافي (warm: 8 colors)
+   - ❄️ بارد (cool: 8 colors)
+   - 🌸 باستيل (pastels: 8 colors)
+   - ⚡ نيون (vibrant: 8 colors)
+   - 💎 فاخر (luxury: 8 colors)
+3. **Custom Color Tool**: merchant adds their own brand colors via "+ أضف لون" modal (Arabic name + English name + hex). Hover preset to show name in tooltip; click ✕ to delete.
+4. **Persistence**: custom palette saved to `localStorage.zx_custom_colors` AND synced to MongoDB via `PUT /api/theme/merchant/me` with `custom_palette: [{ar,en,hex},...]` field on `merchant_themes` doc.
+5. **Cross-device sync**: `psHydrateCustomColorsFromServer()` pulls latest palette on every studio open.
+6. **Customer-store integration**: storefront fetches merchant theme via `/api/theme/by-merchant/{merchant_id}` — custom_palette is now part of the public theme response.
+
+### Files touched
+- `frontend/public/mockups/admin.js` — color palette logic, hex→name resolver, custom color modal
+- `frontend/public/mockups/admin.html` — CSS for categorized presets, custom color modal styling
+- `backend/routers/theme_router.py` — added `custom_palette: Optional[list]` to `ThemeIn` model + save logic
+
+
 ## MongoDB Atlas Migration (Jun 11 2026) ⭐
 - **Status**: ✅ COMPLETE & VERIFIED IN PRODUCTION
 - **Cluster**: `cluster0.1tkzj4x.mongodb.net` (M2 Shared, Free tier eligible)

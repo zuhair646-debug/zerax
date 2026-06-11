@@ -1924,14 +1924,102 @@ async function pmSave(){
 }
 
 // ───── PRODUCT STUDIO ─────
-let PS_STATE={style:'product',ctype:'product',images:[],approvedImg:null,analysis:null,uploadedImg:null,aiImg:null,bgColor:'#ffffff',frameColor:'#7c3aed',aspect:'1:1'};
-const PS_COLOR_PRESETS=['#ffffff','#000000','#0a0a14','#7c3aed','#fbbf24','#10b981','#f43f5e','#06b6d4','#f3f4f6','#fef3c7','#dbeafe','#fce7f3'];
+let PS_STATE={style:'product',ctype:'product',images:[],approvedImg:null,analysis:null,uploadedImg:null,aiImg:null,bgColor:'#ffffff',bgColorName:'pure white',frameColor:'#7c3aed',frameColorName:'vibrant purple',aspect:'1:1'};
+
+// ── Categorized Color Palette (50+ named colors mapped to English names for AI prompts) ──
+const PS_COLOR_CATEGORIES={
+  basics:{label:'⚪ أساسي',colors:[
+    {hex:'#ffffff',ar:'أبيض',en:'pure white'},
+    {hex:'#000000',ar:'أسود',en:'pure black'},
+    {hex:'#6b7280',ar:'رمادي',en:'medium gray'},
+    {hex:'#f3f4f6',ar:'رمادي فاتح',en:'light gray'},
+    {hex:'#1f2937',ar:'فحمي',en:'charcoal gray'},
+    {hex:'#0a0a14',ar:'أسود فاخر',en:'rich black'},
+  ]},
+  warm:{label:'🔥 دافي',colors:[
+    {hex:'#ef4444',ar:'أحمر',en:'bright red'},
+    {hex:'#dc2626',ar:'أحمر داكن',en:'crimson red'},
+    {hex:'#f97316',ar:'برتقالي',en:'vivid orange'},
+    {hex:'#fbbf24',ar:'أصفر ذهبي',en:'golden yellow'},
+    {hex:'#facc15',ar:'أصفر',en:'sunny yellow'},
+    {hex:'#d97706',ar:'كهرماني',en:'amber brown'},
+    {hex:'#b45309',ar:'بني داكن',en:'dark brown'},
+    {hex:'#92400e',ar:'بني محمر',en:'reddish brown'},
+  ]},
+  cool:{label:'❄️ بارد',colors:[
+    {hex:'#3b82f6',ar:'أزرق',en:'royal blue'},
+    {hex:'#1e40af',ar:'أزرق ملكي',en:'deep navy blue'},
+    {hex:'#0ea5e9',ar:'سماوي',en:'sky blue'},
+    {hex:'#06b6d4',ar:'تركوازي',en:'turquoise cyan'},
+    {hex:'#0891b2',ar:'فيروزي',en:'teal blue'},
+    {hex:'#10b981',ar:'أخضر زمردي',en:'emerald green'},
+    {hex:'#22c55e',ar:'أخضر',en:'vivid green'},
+    {hex:'#15803d',ar:'أخضر غابة',en:'forest green'},
+  ]},
+  pastels:{label:'🌸 باستيل',colors:[
+    {hex:'#fef3c7',ar:'كريمي',en:'cream beige'},
+    {hex:'#fde68a',ar:'أصفر باهت',en:'pale yellow'},
+    {hex:'#fbcfe8',ar:'وردي فاتح',en:'soft pink'},
+    {hex:'#fce7f3',ar:'وردي باهت',en:'blush pink'},
+    {hex:'#ddd6fe',ar:'بنفسجي فاتح',en:'lavender purple'},
+    {hex:'#dbeafe',ar:'أزرق فاتح',en:'baby blue'},
+    {hex:'#d1fae5',ar:'أخضر نعناعي',en:'mint green'},
+    {hex:'#fed7aa',ar:'خوخي',en:'peach orange'},
+  ]},
+  vibrant:{label:'⚡ نيون',colors:[
+    {hex:'#a855f7',ar:'بنفسجي',en:'electric purple'},
+    {hex:'#7c3aed',ar:'بنفسجي زاهي',en:'vibrant purple'},
+    {hex:'#ec4899',ar:'وردي زاهي',en:'hot pink'},
+    {hex:'#f43f5e',ar:'وردي روز',en:'rose pink'},
+    {hex:'#84cc16',ar:'أخضر ليموني',en:'lime green'},
+    {hex:'#14b8a6',ar:'تركوازي مائي',en:'teal cyan'},
+    {hex:'#8b5cf6',ar:'بنفسجي ملكي',en:'royal violet'},
+    {hex:'#d946ef',ar:'فوشيا',en:'magenta fuchsia'},
+  ]},
+  luxury:{label:'💎 فاخر',colors:[
+    {hex:'#d4af37',ar:'ذهبي',en:'metallic gold'},
+    {hex:'#c0c0c0',ar:'فضي',en:'metallic silver'},
+    {hex:'#b76e79',ar:'ذهبي وردي',en:'rose gold'},
+    {hex:'#cd7f32',ar:'برونزي',en:'bronze copper'},
+    {hex:'#7f1d1d',ar:'أحمر نبيذي',en:'wine burgundy'},
+    {hex:'#1e3a8a',ar:'كحلي عميق',en:'midnight navy'},
+    {hex:'#064e3b',ar:'أخضر غامق',en:'deep emerald'},
+    {hex:'#581c87',ar:'بنفسجي فاخر',en:'royal plum purple'},
+  ]},
+};
+
+// Helper: find color name from hex (for AI prompt clarity)
+function psHexToName(hex){
+  hex=(hex||'').toLowerCase();
+  for(const cat of Object.values(PS_COLOR_CATEGORIES)){
+    const f=cat.colors.find(c=>c.hex.toLowerCase()===hex);
+    if(f)return f.en;
+  }
+  // Custom colors
+  try{
+    const cu=JSON.parse(localStorage.getItem('zx_custom_colors')||'[]');
+    const f=cu.find(c=>(c.hex||'').toLowerCase()===hex);
+    if(f)return f.en||f.ar||hex;
+  }catch(e){}
+  // Fallback: generic hex-to-name by brightness
+  if(!hex||!hex.startsWith('#'))return 'neutral';
+  const r=parseInt(hex.slice(1,3),16),g=parseInt(hex.slice(3,5),16),b=parseInt(hex.slice(5,7),16);
+  const lum=(0.299*r+0.587*g+0.114*b);
+  if(lum>235)return 'very light off-white';
+  if(lum<20)return 'very dark near-black';
+  if(r>g&&r>b)return 'warm reddish tone';
+  if(g>r&&g>b)return 'natural green tone';
+  if(b>r&&b>g)return 'cool blue tone';
+  return 'balanced neutral tone';
+}
+
 const PS_FRAME_PRESETS=['#7c3aed','#fbbf24','#000000','#10b981','#f43f5e','#06b6d4','#ec4899','#8b5cf6','transparent'];
+
 function psSwitchTab(tab){
   document.querySelectorAll('.ps-tab').forEach(t=>t.classList.toggle('active',t.dataset.pstab===tab));
   document.querySelectorAll('.ps-panel').forEach(p=>p.classList.toggle('active',p.dataset.pspanel===tab));
   if(tab==='ai'){const aiInp=$('ps-ai-name');if(aiInp&&!aiInp.value&&$('pm-name').value)aiInp.value=$('pm-name').value;}
-  if(tab==='image')psRenderColorPresets();
+  if(tab==='image'){psHydrateCustomColorsFromServer().then(()=>psRenderColorPresets());psRenderColorPresets();}
   // Hide modal footer on ALL tabs — approval/publish lives inside each tab now
   const foot=document.getElementById('ps-modal-foot');
   if(foot)foot.style.display='none';
@@ -1943,14 +2031,128 @@ function psToggleFullscreen(){
   const btn=document.getElementById('ps-fs-btn');
   if(btn){btn.innerHTML=isFs?'<i data-lucide="minimize-2" style="width:16px;height:16px"></i>':'<i data-lucide="maximize-2" style="width:16px;height:16px"></i>';if(window.lucide)lucide.createIcons();btn.title=isFs?'تصغير':'ملء الشاشة';}
 }
+
 function psRenderColorPresets(){
-  const bg=document.getElementById('ps-bg-presets');const fr=document.getElementById('ps-frame-presets');
-  if(bg&&!bg.children.length)bg.innerHTML=PS_COLOR_PRESETS.map(c=>`<span class="preset" style="background:${c}" onclick="document.getElementById('ps-bg-color').value='${c}';psUpdatePreviewBg()"></span>`).join('');
-  if(fr&&!fr.children.length)fr.innerHTML=PS_FRAME_PRESETS.map(c=>`<span class="preset" style="background:${c==='transparent'?'repeating-linear-gradient(45deg,#666,#666 4px,#999 4px,#999 8px)':c}" onclick="document.getElementById('ps-frame-color').value='${c==='transparent'?'#ffffff':c}';psUpdatePreviewBg()"></span>`).join('');
+  const bg=document.getElementById('ps-bg-presets');
+  const fr=document.getElementById('ps-frame-presets');
+  if(bg&&!bg.children.length){
+    let html='';
+    for(const [key,cat] of Object.entries(PS_COLOR_CATEGORIES)){
+      html+=`<div class="ps-color-cat-label">${cat.label}</div><div class="ps-color-cat-row">`;
+      html+=cat.colors.map(c=>`<span class="preset" style="background:${c.hex};border:1px solid ${c.hex==='#ffffff'?'#d1d5db':c.hex}" title="${c.ar} · ${c.en}" data-testid="bg-color-${c.en.replace(/\s+/g,'-')}" onclick="psPickBgColor('${c.hex}','${c.ar}','${c.en}')"></span>`).join('');
+      html+='</div>';
+    }
+    // Custom colors row
+    const customColors=psGetCustomColors();
+    html+=`<div class="ps-color-cat-label" style="display:flex;align-items:center;justify-content:space-between">✨ ألواني المخصصة <button class="ps-custom-add-btn" onclick="psOpenAddCustomColor()" data-testid="add-custom-color-btn">+ أضف لون</button></div><div class="ps-color-cat-row" id="ps-custom-bg-row">`;
+    html+=customColors.map((c,i)=>`<span class="preset" style="background:${c.hex};border:1px solid ${c.hex==='#ffffff'?'#d1d5db':c.hex};position:relative" title="${c.ar} · ${c.en}" onclick="psPickBgColor('${c.hex}','${c.ar}','${c.en}')"><button class="ps-custom-del" onclick="event.stopPropagation();psDeleteCustomColor(${i})" title="حذف">×</button></span>`).join('');
+    if(!customColors.length)html+='<span style="font-size:11px;color:#94a3b8;padding:6px">— لا توجد ألوان مخصصة بعد —</span>';
+    html+='</div>';
+    bg.innerHTML=html;
+  }
+  if(fr&&!fr.children.length){
+    fr.innerHTML=PS_FRAME_PRESETS.map(c=>`<span class="preset" style="background:${c==='transparent'?'repeating-linear-gradient(45deg,#666,#666 4px,#999 4px,#999 8px)':c}" title="${c==='transparent'?'شفاف':'إطار '+c}" onclick="document.getElementById('ps-frame-color').value='${c==='transparent'?'#ffffff':c}';psUpdatePreviewBg()"></span>`).join('');
+  }
 }
+
+function psPickBgColor(hex,ar,en){
+  const inp=document.getElementById('ps-bg-color');
+  if(inp)inp.value=hex;
+  PS_STATE.bgColor=hex;
+  PS_STATE.bgColorName=en||psHexToName(hex);
+  const lbl=document.getElementById('ps-bg-color-label');
+  if(lbl)lbl.textContent=`🎨 ${ar||'لون'} · ${hex}`;
+  psUpdatePreviewBg();
+}
+
 function psUpdatePreviewBg(){
   PS_STATE.bgColor=document.getElementById('ps-bg-color').value;
   PS_STATE.frameColor=document.getElementById('ps-frame-color').value;
+  // Always re-resolve the English name so AI prompt is accurate even if user types hex manually
+  PS_STATE.bgColorName=psHexToName(PS_STATE.bgColor);
+  PS_STATE.frameColorName=psHexToName(PS_STATE.frameColor);
+  const lbl=document.getElementById('ps-bg-color-label');
+  if(lbl)lbl.textContent=`🎨 لون الخلفية · ${PS_STATE.bgColor}`;
+}
+
+// ── Custom color management (localStorage + sync to backend merchant theme) ──
+function psGetCustomColors(){
+  try{return JSON.parse(localStorage.getItem('zx_custom_colors')||'[]');}catch(e){return [];}
+}
+// Hydrate custom colors from server on first studio open (so they survive device changes)
+async function psHydrateCustomColorsFromServer(){
+  try{
+    const r=await fetch(API+'/api/theme/merchant/me',{headers:{'Authorization':'Bearer '+(localStorage.getItem('zx_token')||'')}});
+    if(!r.ok)return;
+    const t=await r.json();
+    if(t&&Array.isArray(t.custom_palette)&&t.custom_palette.length){
+      localStorage.setItem('zx_custom_colors',JSON.stringify(t.custom_palette));
+    }
+  }catch(e){}
+}
+function psSaveCustomColors(list){
+  localStorage.setItem('zx_custom_colors',JSON.stringify(list));
+  // Also push to merchant theme for customer-store integration
+  try{
+    fetch(API+'/api/theme/merchant/me',{
+      method:'PUT',
+      headers:{'Content-Type':'application/json','Authorization':'Bearer '+(localStorage.getItem('zx_token')||'')},
+      body:JSON.stringify({custom_palette:list})
+    }).catch(()=>{});
+  }catch(e){}
+}
+function psOpenAddCustomColor(){
+  const modal=document.createElement('div');
+  modal.className='ps-custom-modal';
+  modal.innerHTML=`
+    <div class="ps-custom-card">
+      <h4 style="margin:0 0 14px;color:#fff;font-size:16px">✨ أضف لونك المخصص</h4>
+      <label style="display:block;font-size:11px;color:#94a3b8;margin-bottom:4px">الاسم بالعربي (مثلاً: أزرق الشركة)</label>
+      <input type="text" id="pccx-ar" placeholder="أزرق الشركة" style="width:100%;padding:9px;border:1px solid #312e81;border-radius:8px;background:#0a0a14;color:#fff;font-family:inherit;margin-bottom:10px" data-testid="custom-color-name-ar">
+      <label style="display:block;font-size:11px;color:#94a3b8;margin-bottom:4px">الاسم بالإنجليزي (لذكاء AI — مثلاً: corporate blue)</label>
+      <input type="text" id="pccx-en" placeholder="corporate blue" style="width:100%;padding:9px;border:1px solid #312e81;border-radius:8px;background:#0a0a14;color:#fff;font-family:inherit;margin-bottom:10px" data-testid="custom-color-name-en">
+      <label style="display:block;font-size:11px;color:#94a3b8;margin-bottom:4px">اللون</label>
+      <div style="display:flex;gap:10px;align-items:center;margin-bottom:18px">
+        <input type="color" id="pccx-hex" value="#7c3aed" style="width:60px;height:42px;border:none;background:transparent;cursor:pointer" data-testid="custom-color-hex">
+        <input type="text" id="pccx-hex-txt" value="#7c3aed" oninput="document.getElementById('pccx-hex').value=this.value" style="flex:1;padding:9px;border:1px solid #312e81;border-radius:8px;background:#0a0a14;color:#fff;font-family:monospace">
+        <span id="pccx-preview" style="width:42px;height:42px;border-radius:8px;background:#7c3aed;border:2px solid #fff"></span>
+      </div>
+      <div style="display:flex;gap:8px;justify-content:flex-end">
+        <button onclick="this.closest('.ps-custom-modal').remove()" style="padding:9px 16px;background:transparent;border:1px solid #312e81;color:#94a3b8;border-radius:8px;cursor:pointer;font-family:inherit">إلغاء</button>
+        <button onclick="psSaveNewCustomColor()" data-testid="save-custom-color" style="padding:9px 16px;background:linear-gradient(135deg,#7c3aed,#ec4899);border:none;color:#fff;border-radius:8px;cursor:pointer;font-family:inherit;font-weight:900">💾 احفظ اللون</button>
+      </div>
+    </div>`;
+  document.body.appendChild(modal);
+  // Sync hex picker preview
+  const hexPick=document.getElementById('pccx-hex');
+  const hexTxt=document.getElementById('pccx-hex-txt');
+  const prv=document.getElementById('pccx-preview');
+  hexPick.oninput=()=>{hexTxt.value=hexPick.value;prv.style.background=hexPick.value;};
+  hexTxt.oninput=()=>{prv.style.background=hexTxt.value;hexPick.value=hexTxt.value;};
+}
+function psSaveNewCustomColor(){
+  const ar=document.getElementById('pccx-ar').value.trim();
+  const en=document.getElementById('pccx-en').value.trim();
+  const hex=document.getElementById('pccx-hex').value;
+  if(!ar||!hex){toast('❌ اكتب الاسم العربي واختر اللون');return;}
+  const list=psGetCustomColors();
+  list.push({ar,en:en||ar,hex});
+  psSaveCustomColors(list);
+  document.querySelector('.ps-custom-modal')?.remove();
+  // Re-render presets
+  const bg=document.getElementById('ps-bg-presets');
+  if(bg)bg.innerHTML='';
+  psRenderColorPresets();
+  toast('✓ تم حفظ اللون — متوفر الآن في لوحة الألوان وفي متجر العميل');
+}
+function psDeleteCustomColor(i){
+  const list=psGetCustomColors();
+  list.splice(i,1);
+  psSaveCustomColors(list);
+  const bg=document.getElementById('ps-bg-presets');
+  if(bg)bg.innerHTML='';
+  psRenderColorPresets();
+  toast('✓ تم حذف اللون');
 }
 function psSelectCType(el){
   document.querySelectorAll('.ps-subtab').forEach(s=>s.classList.remove('active'));
@@ -2000,9 +2202,13 @@ async function psGenerateImages(){
   PS_STATE.bgColor=document.getElementById('ps-bg-color').value;
   PS_STATE.frameColor=document.getElementById('ps-frame-color').value;
   PS_STATE.aspect=document.getElementById('ps-aspect').value;
+  // Resolve color hex → English natural-language name for AI clarity
+  // (Gemini cannot reliably parse hex codes — sending "#000000" produces white output)
+  const bgName=psHexToName(PS_STATE.bgColor);
+  PS_STATE.bgColorName=bgName;
   // Build prompt
   const stylePrompts={product:'commercial product photography, studio lighting, sharp focus, 4k',lifestyle:'lifestyle photography, natural setting, soft natural lighting',luxury:'luxury product photography, dramatic lighting, premium aesthetic',flat:'flat lay product photography, top-down view, organized composition'};
-  const ctypePrompts={product:`${name}, isolated product shot on a ${PS_STATE.bgColor} background, ${stylePrompts[PS_STATE.style]}`,logo:`Modern minimalist LOGO for "${name}", clean vector style, ${PS_STATE.bgColor} background, professional brand identity, no text artifacts`,banner:`Wide promotional BANNER for "${name}", ${PS_STATE.bgColor} background, ${stylePrompts[PS_STATE.style]}, eye-catching marketing composition`,section:`Hero SECTION image showcasing "${name}", ${stylePrompts[PS_STATE.style]}, ${PS_STATE.bgColor} background, web-ready composition`,animated:`Animated promotional BANNER concept for "${name}", dynamic energetic composition, ${PS_STATE.bgColor} background, ${stylePrompts[PS_STATE.style]}, GIF-friendly`};
+  const ctypePrompts={product:`${name}, isolated product shot on a SOLID ${bgName} background (color ${PS_STATE.bgColor}), ${stylePrompts[PS_STATE.style]}`,logo:`Modern minimalist LOGO for "${name}", clean vector style, SOLID ${bgName} background (color ${PS_STATE.bgColor}), professional brand identity, no text artifacts`,banner:`Wide promotional BANNER for "${name}", SOLID ${bgName} background (color ${PS_STATE.bgColor}), ${stylePrompts[PS_STATE.style]}, eye-catching marketing composition`,section:`Hero SECTION image showcasing "${name}", ${stylePrompts[PS_STATE.style]}, SOLID ${bgName} background (color ${PS_STATE.bgColor}), web-ready composition`,animated:`Animated promotional BANNER concept for "${name}", dynamic energetic composition, SOLID ${bgName} background (color ${PS_STATE.bgColor}), ${stylePrompts[PS_STATE.style]}, GIF-friendly`};
   const prompt=ctypePrompts[PS_STATE.ctype];
   // Build dimensions from aspect
   const aspectDims={'1:1':[1024,1024],'9:16':[1080,1920],'16:9':[1920,1080],'4:5':[1080,1350],'3:1':[1920,640]};
