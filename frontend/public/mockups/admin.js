@@ -3834,8 +3834,8 @@ function csWizardStepType(){
   CS_WIZARD.step = 'type';
   const html = `
     <div class="cs-wizard-card">
-      <div class="wiz-head"><span class="wiz-step">١ / ٥</span><b style="color:#fbbf24;font-size:11px">ابدأ هنا</b></div>
-      <div class="wiz-q">أهلاً! 👋 وش حابب نصمم اليوم؟</div>
+      <div class="wiz-head"><span class="wiz-step">١ / ٥</span><b style="color:#fbbf24;font-size:11px">وش رايك نسوي اليوم؟</b></div>
+      <div class="wiz-q">اختر نوع التصميم — وأنا معاك للنهاية 🎨</div>
       <div class="cs-wizard-opts col-2">
         <button class="cs-wopt" onclick="csWizardPick('type','banner', this)" data-testid="wiz-type-banner">
           <span class="wopt-ico" style="background:linear-gradient(135deg,#7c3aed,#ec4899);color:#fff"><i data-lucide="image" style="width:18px;height:18px"></i></span>
@@ -4512,8 +4512,8 @@ function csOpenGallery(){
     orig.apply(this, arguments);
     if(p === 'creative-studio'){
       setTimeout(()=>{
-        csRenderPresets();
         csLoadLibrary();
+        csSyncPoints();
         // Start the wizard if chat is empty (first visit)
         const body = document.getElementById('cs-chat-body');
         if(body && !body.querySelector('.cs-wizard-card') && !body.querySelector('.cs-msg-imggrid')){
@@ -4525,3 +4525,12 @@ function csOpenGallery(){
     }
   };
 })();
+
+// Sync points with the global WALLET (the sidebar wallet shows the same number)
+function csSyncPoints(){
+  const v = (typeof WALLET !== 'undefined') ? WALLET : parseInt(localStorage.getItem('zx_credits')||'5000');
+  const el = document.getElementById('cs-points-val');
+  if(el) el.textContent = v.toLocaleString('ar-EG');
+}
+// Re-sync points when wallet changes elsewhere (poll lightly)
+setInterval(()=>{ if(document.querySelector('.page[data-page="creative-studio"]')?.style.display !== 'none') csSyncPoints(); }, 2500);
