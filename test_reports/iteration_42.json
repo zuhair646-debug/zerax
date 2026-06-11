@@ -1,0 +1,56 @@
+{
+  "summary": "DEEP interactive E2E testing on https://zenrex.ai (storefront + admin). Customer cart/checkout UI flow works visually end-to-end (add → cart drawer → form → COD → confirmation modal). HOWEVER, the order is NEVER persisted to the backend — it is purely client-side JS. Admin orders list, KPIs, drivers, customers etc. are ALL hardcoded demo data, not driven by API. This is a launch blocker per the user's expectation that 'order placed on storefront must appear in admin'. Also found leftover 'Zerax Owner' display string in admin profile after rebrand.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "admin.html — user profile in sidebar", "issue": "Displays 'Zerax Owner' instead of 'Zenrex Owner'. Rebrand leftover (literal string in HTML/JS).", "selector": "sidebar profile name area", "priority": "HIGH"},
+      {"component": "app_mode_full.html — checkout payment radio", "issue": "No visible 'Cash on Delivery' radio/button BEFORE filling the form on a 1280×900 viewport — the COD option exists in DOM (text 'الدفع عند الاستلام' is clickable) but is not visually prominent or labelled as a payment option alongside Visa/Tabby/Tamara/Apple Pay. Verify card-style payment selector UI is complete.", "selector": "#checkout payment-methods", "priority": "MEDIUM"},
+      {"component": "admin.html — onboarding welcome modal", "issue": "After login, a 4-step onboarding modal ('مرحباً فيك في Zenrex') overlays the whole dashboard and BLOCKS clicks on the side-nav (الطلبات, المنتجات, etc.) until user manually clicks 'تخطّى'. Should auto-dismiss for returning sessions or not block nav.", "selector": "fixed onboarding overlay", "priority": "MEDIUM"}
+    ],
+    "integration_issues": [
+      {"flow": "Customer places order (storefront → admin)", "issue": "CRITICAL — order is ONLY client-side. Placing an order via app_mode_full.html (filled name 'TEST عميل', phone 0552222222, address, picked branch 'فرع الرياض - العليا', clicked إتمام الطلب) shows the success modal 'تم تأكيد طلبك!' but NO POST request is sent to /api/orders or /api/store/orders. Admin orders list still shows only the 5 hardcoded demo orders (#3043-#3047) with pre-baked names. The cross-check the user explicitly requested FAILS.", "affected_selectors": ["#cart-drawer إتمام الطلب", "checkout submit", "admin orders list"]},
+      {"flow": "Admin dashboard KPIs", "issue": "All KPIs are hardcoded — 'إيرادات اليوم 1,245 ر.س', 'طلبات اليوم 5', the 7-day revenue chart values 6200/8100/7500/11400/10200/13800/12450, 'أفضل المنتجات' = 'منتج اختبار 0 مبيعات'. Only 2 API calls fire during the admin session: POST /api/auth/login (200) and GET /api/store/products (200). No /api/orders, /api/customers, /api/drivers, /api/analytics calls. Entire admin is static demo content.", "affected_selectors": ["KPI cards", "revenue chart", "best-sellers", "latest-orders"]},
+      {"flow": "Storefront product list", "issue": "Shows 14+ products with images even though backend /api/store/products returns only 1 ('منتج اختبار ر.س 99'). The other 13 (iPhone 16 Pro, MacBook Air, AirPods, iPad, ساعة كلاسيكية, etc.) are hardcoded in JS. User claimed 'only 1 seeded product' — confirmed: only that one is real, rest are mock. This will mislead end customers who try to actually buy a hardcoded product.", "affected_selectors": ["product-grid"]}
+    ],
+    "design_issues": [
+      {"screen": "Storefront footer (app_mode_full.html)", "issues": ["Footer contact info shows '+966512345678', 'WhatsApp', 'info@brand.sa', 'الرياض، السعودية' — domain 'brand.sa' is a placeholder, not zenrex.ai. Should be branded with real Zenrex contact email (e.g., info@zenrex.ai or zenrex.ai@gmail.com)."]},
+      {"screen": "Storefront welcome modal", "issues": ["Geolocation modal is well designed but has no test-id; close button only via 'تجاوز الآن' link at bottom — no X icon visible at modal corner on first paint."]}
+    ]
+  },
+  "test_report_links": [
+    "/app/test_reports/screenshots/storefront_initial.png",
+    "/app/test_reports/screenshots/cart_open.png",
+    "/app/test_reports/screenshots/checkout_form.png",
+    "/app/test_reports/screenshots/checkout_filled.png",
+    "/app/test_reports/screenshots/after_submit.png",
+    "/app/test_reports/screenshots/admin_dashboard.png",
+    "/app/test_reports/screenshots/admin_orders_list.png"
+  ],
+  "action_items": [
+    "BLOCKER #1 — Wire customer storefront checkout submit to a real POST /api/store/orders (or /api/orders) call. The 'إتمام الطلب' submit in app_mode_full.html currently only opens a success modal and empties the cart in localStorage; no network request is made.",
+    "BLOCKER #2 — Drive admin orders list, KPI cards, revenue chart, customers section, and drivers section from real API endpoints. Currently 100% hardcoded demo data. Confirmed only /api/auth/login + /api/store/products are called during full admin browse.",
+    "BLOCKER #3 — Replace 'Zerax Owner' literal in admin sidebar user profile with the actual logged-in user name (or 'Zenrex Owner' for the demo seed).",
+    "Replace storefront hardcoded products (iPhone, MacBook, AirPods, etc.) with /api/store/products response, OR clearly mark them as 'demo only'. Otherwise customers will checkout a product that doesn't exist in the DB.",
+    "Update storefront footer placeholder '+966512345678 / info@brand.sa / WhatsApp' with real Zenrex contact info.",
+    "Make admin onboarding modal non-blocking (or remember dismissal in localStorage) — currently blocks the entire side-nav after every login.",
+    "Add explicit Cash on Delivery (COD) radio button in checkout payment block alongside Visa/Tabby/Tamara/Apple Pay so users can clearly choose it."
+  ],
+  "critical_code_review_comments": [
+    "Customer checkout in app_mode_full.html is mocked end-to-end — the 'success' UX gives users a false confidence. Several thousand lines of JS render the flow but it never persists. Must hook to real backend before going live.",
+    "Admin dashboard is essentially a static demo wrapper around a real login API. Showing fake 1,245 ر.س revenue / 5 orders today / fabricated customer names like 'نوف العتيبي' is misleading the merchant and risks legitimate complaints once they realize their real orders are missing.",
+    "Rebrand audit was not exhaustive: 'Zerax Owner' is still rendered in the admin sidebar. Recommend grep -ri 'zerax' /app/frontend/public/mockups/ to catch all remaining instances.",
+    "Storefront has hardcoded product catalogue mixed with backend-driven products. This dual-source UX is fragile — clicking 'add to cart' on a hardcoded product will let user proceed to a checkout that the backend cannot fulfil.",
+    "Only 2 of the dozens of backend endpoints (delivery, scheduling, withdrawals, ratings, payouts, external delivery) appear to be actually wired into the mockups based on network trace. The 5+ delivery/scheduling/withdrawal routers under /app/backend/routers/ exist but the front-end never calls them in normal flow."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "N/A (frontend-only run)", "frontend": "Storefront cart UI 100%, storefront persistence 0%, admin login 100%, admin data integration 0%, cross-check storefront→admin 0%"},
+  "test_credentials": "owner@zenrex.ai / owner123 (works, returns JWT). Customer/driver OTP 1234 (not tested this run).",
+  "seed_data_creation": "Attempted to place a TEST order ('TEST عميل', 0552222222, total 113.85 ر.س). The order success modal appeared but no record was created in the backend — no clean-up needed.",
+  "retest_needed": true,
+  "main_agent_can_self_test": false,
+  "context_for_next_testing_agent": "Previous iteration_41 did smoke testing only. This iteration_42 did INTERACTIVE testing on storefront cart→checkout→COD submit and admin login→dashboard→orders. Confirmed customer order DOES NOT persist (no /api/orders POST). Admin orders/KPIs are static demo data. Driver app (driver_app.html), driver_manager.html, errand.html, scheduling, reviews+translation, mobile 375x667, and payment methods (Visa/Tabby/Tamara/Apple Pay) — NOT tested due to time and because the BLOCKER above (orders don't persist) makes deeper testing redundant until the integration is fixed. Once the storefront order POST is wired up, retest: (a) re-run a COD order and verify it appears in admin orders list with correct items/phone/total; (b) test all 5 payment methods at checkout; (c) test driver login + accept order; (d) test driver_manager pricing config flows to checkout total; (e) test errand.html validation + Haversine pricing; (f) mobile viewport 375x667 for storefront + driver app.",
+  "rca of the issue": "ROOT CAUSE — The HTML mockups were authored as standalone vanilla-JS demos and rebranded Zerax→Zenrex without simultaneously wiring their cart/order/admin-data layers to the actual FastAPI backend. The JS holds product catalogues, orders, KPIs, customers, drivers as in-memory/hardcoded constants. Login + product list ARE wired (proven by network trace), so the auth+products path is the reference pattern; all other surfaces need the same treatment. REPRODUCTION: (1) open https://zenrex.ai/mockups/app_mode_full.html, dismiss geolocation modal, click '+' on any product, click bottom-nav السلة, click إتمام الطلب, fill name/phone/address, pick branch, click any payment method, observe success modal but no /api/orders POST in DevTools Network tab. (2) open https://zenrex.ai/mockups/admin.html, login owner@zenrex.ai/owner123, dismiss onboarding, click الطلبات — orders #3043-#3047 are hardcoded; the order from (1) is missing. MITIGATION: in app_mode_full.html locate the checkout submit handler (search for 'إتمام الطلب' click handler) and add a fetch POST to /api/store/orders (or /api/orders) with the cart, customer info, branch_id, payment_method, total. In admin.html similarly replace the hardcoded orders array with a GET /api/orders?merchant_id=<jwt-merchant-id> call."
+}
