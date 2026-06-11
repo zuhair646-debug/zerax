@@ -777,6 +777,7 @@ async function bootApp(){
   schedulePrayerCheck();
   scheduleMobileBranchRefresh();
   scheduleIncomingOrderDemo();
+  startExternalOrderPolling();
   schedulePWAPrompt();
   if (window.lucide) lucide.createIcons();
 }
@@ -914,12 +915,65 @@ window.openWithdraw = function(){
     </div>`;
   document.body.insertAdjacentHTML('beforeend', html);
 };
-window.confirmWithdraw = function(net){
-  document.getElementById('wd-modal')?.remove();
-  toast(`✓ تم تقديم طلب سحب ${net} ر.س — سيُحوّل خلال 24 ساعة`, 'success');
-  STATE.earnings.today = 0; STATE.earnings.week = 0;
-  $('#earn-today').textContent = '0'; $('#er-today').textContent = '0 ر.س'; $('#er-week').textContent = '0 ر.س';
+window.confirmWithdraw = async function(net){
+  const method = document.getElementById('wd-method').value;
+  const account = document.getElementById('wd-account').value.trim();
+  if (!account){ toast('أدخل رقم الحساب', 'error'); return; }
+  const gross = STATE.earnings.today + STATE.earnings.week;
+  try {
+    const r = await fetch(API + '/api/delivery/withdrawals', {
+      method:'POST',
+      headers:{'Authorization':'DriverToken ' + STATE.token, 'Content-Type':'application/json'},
+      body: JSON.stringify({
+        amount_gross_sar: gross,
+        method, account,
+        driver_name: STATE.driver?.name || '',
+        driver_phone: STATE.driver?.phone || '',
+      })
+    });
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.detail || 'فشل');
+    document.getElementById('wd-modal')?.remove();
+    toast(`✓ تم تقديم طلب سحب ${d.withdrawal.amount_net_sar} ر.س — التاجر يراجع الطلب`, 'success');
+    STATE.earnings.today = 0; STATE.earnings.week = 0;
+    $('#earn-today').textContent = '0'; $('#er-today').textContent = '0 ر.س'; $('#er-week').textContent = '0 ر.س';
+  } catch(e){ toast(e.message || 'فشل السحب', 'error'); }
 };
+
+// ═══════════ POLL REAL EXTERNAL ORDERS (HungerStation-style) ═══════════
+let ORDER_POLL_TIMER = null;
+const SEEN_ORDER_IDS = new Set();
+function startExternalOrderPolling(){
+  // Poll every 10s for real external orders awaiting driver
+  ORDER_POLL_TIMER = setInterval(async () => {
+    if (!$$('.sb-status.active.online').length) return;
+    if (INCOMING) return;  // already showing a popup
+    try {
+      const r = await fetch(API + '/api/delivery/external/driver/feed', {
+        headers:{'Authorization':'DriverToken ' + STATE.token}
+      });
+      if (!r.ok) return;
+      const d = await r.json();
+      const fresh = (d.orders || []).find(o => !SEEN_ORDER_IDS.has(o.id));
+      if (fresh){
+        SEEN_ORDER_IDS.add(fresh.id);
+        const firstStop = fresh.stops && fresh.stops[0];
+        showIncomingOrder({
+          id: fresh.id,
+          customer: fresh.customer_name,
+          from: fresh.branch_name || 'الفرع الرئيسي',
+          to: firstStop ? firstStop.label : 'موقع العميل',
+          dist: fresh.distance_km + ' كم',
+          time: fresh.eta_minutes + ' د',
+          fee: fresh.earnings_sar,
+          lat: firstStop ? firstStop.lat : 24.7136,
+          lng: firstStop ? firstStop.lng : 46.6753,
+          external: true,
+        });
+      }
+    } catch(e){}
+  }, 10000);
+}
 
 // Refresh mobile-branch positions periodically (food truck mode)
 function scheduleMobileBranchRefresh(){

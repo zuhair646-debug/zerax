@@ -853,6 +853,8 @@ select.ps-input option{background:#13131f;color:#fff}
             </div>
             <label class="switch-label"><input type="checkbox" id="dv-auto-dispatch" checked onchange="toggleAutoDispatch()"><span class="switch-track"></span><b style="font-size:12px;color:#fff">مُفعّل</b></label>
             <button class="btn btn-amber" onclick="openDispatchSettings()" style="background:rgba(251,191,36,.15);color:var(--amber);border:1px solid rgba(251,191,36,.3)"><i data-lucide="sliders" style="width:13px;height:13px"></i> إعدادات الإسناد</button>
+            <button class="btn" onclick="openExternalOrdersMod()" data-testid="open-external-orders-btn" style="background:rgba(6,182,212,.15);color:var(--cyan);border:1px solid rgba(6,182,212,.3)"><i data-lucide="truck" style="width:13px;height:13px"></i> طلبات توصيل خارجي <span id="ext-count" style="background:var(--cyan);color:#000;padding:1px 7px;border-radius:99px;font-size:10px;margin-right:4px"></span></button>
+            <button class="btn" onclick="openWithdrawalsMod()" data-testid="open-withdrawals-btn" style="background:rgba(16,185,129,.15);color:#10b981;border:1px solid rgba(16,185,129,.3)"><i data-lucide="wallet" style="width:13px;height:13px"></i> طلبات سحب السائقين <span id="wd-count" style="background:#10b981;color:#000;padding:1px 7px;border-radius:99px;font-size:10px;margin-right:4px"></span></button>
             <button class="btn" onclick="openDriverManager()" data-testid="open-driver-manager-btn" style="background:linear-gradient(135deg,#7c3aed,#06b6d4);color:#fff;border:none"><i data-lucide="settings-2" style="width:13px;height:13px"></i> إدارة تطبيق السائق</button>
           </div>
           <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px;margin-top:14px;padding-top:14px;border-top:1px solid rgba(255,255,255,.08)">
@@ -2634,6 +2636,101 @@ function openDriverManager(){
   const tok = localStorage.getItem('zx_token') || localStorage.getItem('zerax_token') || localStorage.getItem('token') || '';
   window.location.href = '/mockups/driver_manager.html?t=' + encodeURIComponent(tok);
 }
+
+// ═══════════ EXTERNAL ORDERS + WITHDRAWALS MODALS ═══════════
+async function _authHdr(){
+  const tok = localStorage.getItem('zx_token') || localStorage.getItem('zerax_token') || localStorage.getItem('token') || '';
+  return {'Authorization':'Bearer '+tok, 'Content-Type':'application/json'};
+}
+async function openExternalOrdersMod(){
+  const r = await fetch(window.location.origin + '/api/delivery/external/orders', {headers: await _authHdr()});
+  const d = await r.json();
+  const items = d.orders || [];
+  document.getElementById('ext-count').textContent = items.length;
+  const rows = items.map(o => `
+    <div style="background:#1a1a2e;border:1px solid #2a2a44;border-radius:12px;padding:14px;margin-bottom:8px">
+      <div style="display:flex;justify-content:space-between;align-items:start;margin-bottom:8px">
+        <div>
+          <b style="color:#fff">${o.id}</b> <span style="color:#fbbf24;font-size:10px;padding:2px 7px;background:rgba(251,191,36,.15);border-radius:99px;font-weight:900">${o.service_type==='errand'?'مشوار':'توصيل'}</span> <span style="color:#94a3b8;font-size:11px">${o.customer_name} · ${o.customer_phone}</span>
+        </div>
+        <div style="color:#10b981;font-weight:900;font-size:16px">${o.total_sar} ر.س</div>
+      </div>
+      <div style="font-size:11px;color:#94a3b8;margin-bottom:6px">${o.stops.length} نقطة · ${o.distance_km} كم · ${o.eta_minutes} د${o.scheduled_for ? ' · 📅 '+o.scheduled_for : ''}</div>
+      <div style="font-size:11px;color:#fff;margin-bottom:10px">السائق يأخذ: <b style="color:#10b981">${o.driver_share_sar} ر.س</b> · ربحك: <b style="color:#7c3aed">${o.merchant_share_sar} ر.س</b></div>
+      <div style="display:flex;gap:6px">
+        <span style="padding:3px 10px;background:${o.status==='pending_merchant'?'rgba(251,191,36,.2)':o.status==='accepted'?'rgba(16,185,129,.2)':o.status==='delivered'?'rgba(6,182,212,.2)':'rgba(148,163,184,.2)'};color:#fff;border-radius:99px;font-size:10px;font-weight:900">${o.status}</span>
+        ${o.status==='pending_merchant' ? `<button onclick="acceptExt('${o.id}')" style="margin-right:auto;padding:6px 14px;background:#10b981;border:none;color:#fff;border-radius:8px;font-family:inherit;font-weight:900;font-size:11px;cursor:pointer">قبول وإسناد</button><button onclick="rejectExt('${o.id}')" style="padding:6px 14px;background:transparent;border:1px solid #ef4444;color:#ef4444;border-radius:8px;font-family:inherit;font-weight:900;font-size:11px;cursor:pointer">رفض</button>` : ''}
+      </div>
+    </div>`).join('') || '<div style="text-align:center;padding:30px;color:#94a3b8">لا توجد طلبات توصيل خارجي بعد</div>';
+  document.body.insertAdjacentHTML('beforeend', `
+    <div class="modal-bg open" id="ext-mod" onclick="if(event.target===this)document.getElementById('ext-mod').remove()" style="z-index:9500">
+      <div class="modal" style="max-width:640px;max-height:85vh;overflow-y:auto;background:#0a0a14;color:#fff">
+        <h3 style="margin-bottom:14px;color:#fff">🚚 طلبات التوصيل الخارجي (Mrsool-style)</h3>
+        ${rows}
+      </div>
+    </div>`);
+}
+window.acceptExt = async function(id){
+  await fetch(window.location.origin + '/api/delivery/external/orders/'+id+'/accept', {method:'POST', headers: await _authHdr(), body:'{}'});
+  document.getElementById('ext-mod')?.remove();
+  openExternalOrdersMod();
+};
+window.rejectExt = async function(id){
+  await fetch(window.location.origin + '/api/delivery/external/orders/'+id+'/reject', {method:'POST', headers: await _authHdr(), body: JSON.stringify({reason:'merchant_rejected'})});
+  document.getElementById('ext-mod')?.remove();
+  openExternalOrdersMod();
+};
+
+async function openWithdrawalsMod(){
+  const r = await fetch(window.location.origin + '/api/delivery/withdrawals', {headers: await _authHdr()});
+  const d = await r.json();
+  const items = d.withdrawals || [];
+  document.getElementById('wd-count').textContent = items.filter(w => w.status==='pending').length;
+  const rows = items.map(w => `
+    <div style="background:#1a1a2e;border:1px solid #2a2a44;border-radius:12px;padding:14px;margin-bottom:8px">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+        <div><b style="color:#fff">${w.driver_name || 'سائق'}</b> <span style="color:#94a3b8;font-size:11px">${w.driver_phone || ''}</span></div>
+        <div style="color:#10b981;font-weight:900">${w.amount_net_sar} ر.س <small style="color:#94a3b8;font-weight:500">(صافي)</small></div>
+      </div>
+      <div style="font-size:11px;color:#94a3b8;margin-bottom:8px">إجمالي: ${w.amount_gross_sar} · رسم: ${w.fee_sar} · ${w.method.toUpperCase()}: <span style="direction:ltr">${w.account.slice(0,20)}</span></div>
+      <div style="display:flex;gap:6px;align-items:center">
+        <span style="padding:3px 10px;background:${w.status==='pending'?'rgba(251,191,36,.2)':w.status==='approved'?'rgba(16,185,129,.2)':'rgba(239,68,68,.2)'};color:#fff;border-radius:99px;font-size:10px;font-weight:900">${w.status==='pending'?'⏳ معلّق':w.status==='approved'?'✓ مُعتمد':'✗ مرفوض'}</span>
+        ${w.status==='pending' ? `<button onclick="approveWd('${w.id}')" style="margin-right:auto;padding:5px 12px;background:#10b981;border:none;color:#fff;border-radius:8px;font-family:inherit;font-weight:900;font-size:11px;cursor:pointer">اعتماد التحويل</button><button onclick="rejectWd('${w.id}')" style="padding:5px 12px;background:transparent;border:1px solid #ef4444;color:#ef4444;border-radius:8px;font-family:inherit;font-weight:900;font-size:11px;cursor:pointer">رفض</button>` : ''}
+      </div>
+    </div>`).join('') || '<div style="text-align:center;padding:30px;color:#94a3b8">لا توجد طلبات سحب بعد</div>';
+  document.body.insertAdjacentHTML('beforeend', `
+    <div class="modal-bg open" id="wd-mod" onclick="if(event.target===this)document.getElementById('wd-mod').remove()" style="z-index:9500">
+      <div class="modal" style="max-width:640px;max-height:85vh;overflow-y:auto;background:#0a0a14;color:#fff">
+        <h3 style="margin-bottom:14px;color:#fff">💸 طلبات سحب السائقين</h3>
+        ${rows}
+      </div>
+    </div>`);
+}
+window.approveWd = async function(id){
+  await fetch(window.location.origin + '/api/delivery/withdrawals/'+id+'/approve', {method:'POST', headers: await _authHdr()});
+  document.getElementById('wd-mod')?.remove();
+  openWithdrawalsMod();
+};
+window.rejectWd = async function(id){
+  await fetch(window.location.origin + '/api/delivery/withdrawals/'+id+'/reject', {method:'POST', headers: await _authHdr(), body: JSON.stringify({reason:'rejected'})});
+  document.getElementById('wd-mod')?.remove();
+  openWithdrawalsMod();
+};
+
+// Poll badge counts every 30s
+setInterval(async () => {
+  try {
+    const tok = localStorage.getItem('zx_token') || localStorage.getItem('zerax_token') || localStorage.getItem('token') || '';
+    if (!tok) return;
+    const [e, w] = await Promise.all([
+      fetch(window.location.origin + '/api/delivery/external/orders?status=pending_merchant', {headers:{'Authorization':'Bearer '+tok}}).then(r=>r.json()).catch(()=>({orders:[]})),
+      fetch(window.location.origin + '/api/delivery/withdrawals?status=pending', {headers:{'Authorization':'Bearer '+tok}}).then(r=>r.json()).catch(()=>({withdrawals:[]})),
+    ]);
+    const eEl = document.getElementById('ext-count'), wEl = document.getElementById('wd-count');
+    if (eEl) eEl.textContent = (e.orders||[]).length || '';
+    if (wEl) wEl.textContent = (w.withdrawals||[]).length || '';
+  } catch(err){}
+}, 30000);
 function saveDispatchSettings(){
   const c={
     enabled:document.getElementById('dv-auto-dispatch').checked,
