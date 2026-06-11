@@ -19,6 +19,21 @@
 - Password: `owner123`
 - **Note**: Domain migrated from `@zitex.com` to `@zerax.com` during the Zerax rebrand (Feb 16 2026).
 
+## 🌐 Production VPS (Hetzner — Jun 11 2026)
+- **Public URL**: `http://91.98.154.148`
+- **SSH**: `ssh -i /root/.ssh/zerax_deploy root@91.98.154.148`
+- **Admin/Merchant dashboard**: `http://91.98.154.148/mockups/admin.html`
+- **Customer storefront**: `http://91.98.154.148/mockups/app_mode_full.html`
+- **Driver app**: `http://91.98.154.148/mockups/driver_app.html`
+- **Same credentials apply** (owner@zerax.com/owner123, phone/OTP=1234)
+- **JWT_SECRET**: `zerax-prod-jwt-secret-2026-hetzner-91-98-154-148` (fixed across restarts)
+- **DB**: MongoDB `zerax_prod` inside `zerax-mongo-1` container
+- **Owner seeded via**: `docker exec zerax-backend-1 python /app/scripts/seed_owner.py`
+- **Nginx config**: `/etc/nginx/sites-enabled/zerax` (gzip enabled — 4-5x smaller payloads)
+- **⚠️ LLM Blocker**: EMERGENT_LLM_KEY is restricted to Emergent platform only on Free tier (returns 403 from external VPS). Production AI calls fail until either:
+  - (a) User upgrades Emergent plan (paid), OR
+  - (b) `claude_core.py` is refactored to use direct keys (Anthropic/Gemini/OpenAI SDKs) — keys already present in `.env`
+
 ## Demo Site — Cozy Cafe Demo
 
 ### Client Dashboard (for end-client to manage their site)

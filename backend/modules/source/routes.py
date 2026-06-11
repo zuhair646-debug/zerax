@@ -92,7 +92,7 @@ def _is_secret_env(rel_path: str) -> bool:
 def init_routes(database, auth_dep) -> APIRouter:
     r = APIRouter(prefix="/source", tags=["source"])
 
-    JWT_SECRET = os.environ.get("JWT_SECRET", "change-me")
+    JWT_SECRET = os.environ.get("JWT_SECRET", "your-secret-key")
 
     async def _flex_auth(request: Request, token: Optional[str] = Query(None)) -> dict:
         """

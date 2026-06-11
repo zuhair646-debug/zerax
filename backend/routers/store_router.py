@@ -25,7 +25,7 @@ _mongo = AsyncIOMotorClient(os.environ["MONGO_URL"])
 db = _mongo[os.environ["DB_NAME"]]
 
 # ── JWT helper ────────────────────────────────────────────────────────────────
-JWT_SECRET = os.environ.get("JWT_SECRET", "change-me")
+JWT_SECRET = os.environ.get("JWT_SECRET", "your-secret-key")
 JWT_ALG = "HS256"
 
 
