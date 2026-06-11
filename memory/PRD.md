@@ -324,8 +324,25 @@ User purchased `zenrex.ai` from Porkbun (registered until Jun 11 2028) and asked
 - Created `/app/deploy/deploy.sh` — one-command deploy script for future updates (`bash deploy.sh zenrex.ai`).
 
 **Pending (user action required)**:
-- Add DNS A records in Porkbun: `@ → 91.98.154.148` and `www → 91.98.154.148`.
-- Once DNS propagates (~5-30 min), provision Let's Encrypt SSL via `certbot --nginx -d zenrex.ai -d www.zenrex.ai`.
+- ~~Add DNS A records in Porkbun~~ ✅ DONE (Jun 11 2026 12:35).
+- ~~Provision Let's Encrypt SSL~~ ✅ DONE — `https://zenrex.ai` live with auto-renewal.
+
+## 🔒 SSL/HTTPS Live (Jun 11 2026 12:50)
+
+- **Certbot installed** on VPS and configured for Nginx.
+- **Let's Encrypt certificate** issued for `zenrex.ai` + `www.zenrex.ai`, expires Sep 9 2026.
+- **Auto-renewal** scheduled by certbot systemd timer (no manual work needed).
+- **HTTP → HTTPS redirect** active (301 redirect on port 80).
+- **Backend CORS** updated to allow `https://zenrex.ai` + `https://www.zenrex.ai`.
+- **React rebuild** with final `REACT_APP_BACKEND_URL=https://zenrex.ai` deployed.
+
+**Final verification**:
+- `https://zenrex.ai` → 200 OK, title "Zenrex | منصة الإبداع بالذكاء الاصطناعي", green lock, no JS errors.
+- `https://zenrex.ai/api/store/health` → 200 OK with `{"ok":true,...}`.
+- Login: `owner@zenrex.ai` / `owner123` → JWT issued.
+
+## 📧 Owner Email Forwarding (Porkbun → Gmail)
+- All `@zenrex.ai` mail forwards to **`zenrex.ai@gmail.com`** via Porkbun Email Forwarding.
 
 
 
