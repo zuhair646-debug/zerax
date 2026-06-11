@@ -30,9 +30,13 @@
 - **DB**: MongoDB `zerax_prod` inside `zerax-mongo-1` container
 - **Owner seeded via**: `docker exec zerax-backend-1 python /app/scripts/seed_owner.py`
 - **Nginx config**: `/etc/nginx/sites-enabled/zerax` (gzip enabled — 4-5x smaller payloads)
-- **⚠️ LLM Blocker**: EMERGENT_LLM_KEY is restricted to Emergent platform only on Free tier (returns 403 from external VPS). Production AI calls fail until either:
-  - (a) User upgrades Emergent plan (paid), OR
-  - (b) `claude_core.py` is refactored to use direct keys (Anthropic/Gemini/OpenAI SDKs) — keys already present in `.env`
+- **⚠️ LLM Blocker**: ~~EMERGENT_LLM_KEY restricted to Emergent platform~~ **RESOLVED Jun 11 2026** via direct-SDK shim (`backend/direct_llm_shim.py`).
+  - When `USE_DIRECT_LLM=1` is set, `emergentintegrations.llm.chat` is transparently redirected to direct provider calls using `ANTHROPIC_API_KEY`, `GEMINI_API_KEY`, `OPENAI_DIRECT_KEY` from `.env`.
+  - **All 20+ files using `LlmChat` keep working unchanged** — the shim mimics the same interface (`with_model`, `with_params`, `send_message`, `send_message_multimodal_response`).
+  - Supported providers: `anthropic` (Claude Sonnet 4.5/4.6) · `gemini` (text + Nano Banana image gen) · `openai` (GPT-4o/GPT-5).
+  - Automatic fallback chain: if primary provider fails, the shim tries the others.
+  - Image generation uses `gemini-3.1-flash-image` (Nano Banana current production model).
+  - On Emergent's preview/dev environment: leave `USE_DIRECT_LLM` unset to continue using the universal key.
 
 ## Demo Site — Cozy Cafe Demo
 

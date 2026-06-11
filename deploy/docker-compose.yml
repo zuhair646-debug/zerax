@@ -18,6 +18,10 @@ services:
       - DB_NAME=zerax_prod
       - CORS_ORIGINS=*
       - PYTHONUNBUFFERED=1
+      # USE_DIRECT_LLM=1 activates direct provider keys (Anthropic/Gemini/OpenAI),
+      # bypassing Emergent's universal key which is restricted to free users
+      # inside the Emergent platform only. See backend/direct_llm_shim.py.
+      - USE_DIRECT_LLM=1
     command: bash -c 'apt-get update -qq && apt-get install -y -qq build-essential >/dev/null 2>&1 && pip install --no-cache-dir --extra-index-url https://d33sy5i8bnduwe.cloudfront.net/simple/ -r requirements.txt && uvicorn server:app --host 0.0.0.0 --port 8001'
     ports: ['127.0.0.1:8001:8001']
     depends_on: [mongo]

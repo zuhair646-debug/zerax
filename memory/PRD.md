@@ -156,8 +156,21 @@ Build "Zerax" — a multi-tenant Saudi/Arab AI commerce platform with:
 
 ## Tech Stack
 FastAPI + MongoDB · Vanilla HTML/JS mockups + React main app ·
-Gemini Nano Banana (Emergent LLM Key) · OpenAI TTS · ffmpeg · Web Speech API
+**Direct-SDK LLM (Jun 2026)**: Anthropic Claude Sonnet 4.5/4.6 · Google Gemini 2.5/3.1 (text + Nano Banana image gen) · OpenAI GPT-4o/5 · OpenAI Whisper · ElevenLabs Arabic TTS · ffmpeg · Web Speech API ·
+**Bypass shim**: `backend/direct_llm_shim.py` transparently replaces `emergentintegrations.llm.chat` when `USE_DIRECT_LLM=1`, making the platform 100% independent of Emergent's platform.
+
+## Production Deployment (Hetzner VPS — Jun 11 2026)
+- **IP**: `91.98.154.148`
+- **Stack**: Docker (`docker-compose.yml`) + Nginx (gzip + caching + uploads)
+- **DB**: MongoDB `zerax_prod` inside `zerax-mongo-1`
+- **Backend**: Uvicorn inside `zerax-backend-1` (auto-pip-install on start)
+- **JWT_SECRET**: Fixed via `.env` (no token loss on restart)
+- **AI**: Fully working via direct provider keys (Claude/Gemini/OpenAI)
+- **Image serving**: `/static/uploads/` → `/opt/zerax/data/uploads/` (persistent volume)
+- **Gzip**: HTML/CSS/JS compressed 4-5x (admin.html 506 KB → 123 KB)
 
 ## Test Credentials
-- Admin panel: `merchant@zerax.com` / `zerax2026` (localStorage only)
+- Admin panel: `owner@zerax.com` / `owner123` (real JWT)
 - Driver app: phone `0552222222` / OTP `1234`
+- VPS SSH: `ssh -i /root/.ssh/zerax_deploy root@91.98.154.148`
+

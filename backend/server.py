@@ -5,7 +5,42 @@ from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
 import os
+import sys
 import logging
+from pathlib import Path
+
+# Load .env EARLY so USE_DIRECT_LLM (and provider keys) are available before shim install
+_BACKEND_DIR = Path(__file__).parent
+load_dotenv(_BACKEND_DIR / '.env')
+
+# ─── EMERGENT-INTEGRATIONS SHIM (must run BEFORE any module imports it) ───
+# When USE_DIRECT_LLM=1 (set on external VPS deployments), redirect
+# `emergentintegrations.llm.chat` to our direct-SDK shim so the platform
+# works independently of Emergent's universal key. See direct_llm_shim.py.
+if os.environ.get("USE_DIRECT_LLM", "").strip() in ("1", "true", "True"):
+    try:
+        sys.path.insert(0, str(_BACKEND_DIR))
+        import direct_llm_shim as _shim
+        import types as _types
+        # If the real emergentintegrations package is installed, keep it (for .payments etc.)
+        # and only override the .llm.chat submodule with our direct shim.
+        try:
+            import emergentintegrations  # noqa: F401
+            try:
+                import emergentintegrations.llm  # noqa: F401
+            except Exception:
+                sys.modules["emergentintegrations.llm"] = _types.ModuleType("emergentintegrations.llm")
+        except Exception:
+            # Real package not installed — create minimal stubs
+            sys.modules["emergentintegrations"] = _types.ModuleType("emergentintegrations")
+            sys.modules["emergentintegrations.llm"] = _types.ModuleType("emergentintegrations.llm")
+        # Always override the chat submodule with our direct-SDK shim
+        sys.modules["emergentintegrations.llm.chat"] = _shim
+        logging.getLogger(__name__).info("✅ Direct LLM shim activated — bypassing Emergent universal key")
+    except Exception as _shim_err:
+        logging.getLogger(__name__).warning(f"Direct LLM shim init failed: {_shim_err}")
+
+
 from pathlib import Path
 from pydantic import BaseModel, Field, ConfigDict, EmailStr
 from typing import Any, Dict, List, Optional, Literal
@@ -58,8 +93,8 @@ except ImportError:
     OPENAI_AVAILABLE = False
     openai = None
 
-ROOT_DIR = Path(__file__).parent
-load_dotenv(ROOT_DIR / '.env')
+ROOT_DIR = _BACKEND_DIR
+# .env already loaded above (before LLM shim install)
 
 # Initialize Sentry error monitoring (backend)
 SENTRY_DSN = os.environ.get('SENTRY_DSN')
