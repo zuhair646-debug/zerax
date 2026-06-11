@@ -19,6 +19,10 @@
 - Password: `owner123`
 - **Note**: Domain migrated from `@zitex.com` to `@zenrex.ai` during the Zenrex rebrand (Feb 16 2026).
 
+## 📧 Owner Notification Email (Jun 11 2026)
+- **Personal Gmail (receives all forwarded mail)**: `zenrex.ai@gmail.com`
+- All domain emails (`owner@zenrex.ai`, `support@zenrex.ai`, `hello@zenrex.ai`, `info@zenrex.ai`) should forward to this Gmail via Porkbun Email Forwarding.
+
 ## 🌐 Production VPS (Hetzner — Jun 11 2026)
 - **Public URL**: `http://91.98.154.148`
 - **SSH**: `ssh -i /root/.ssh/zenrex_deploy root@91.98.154.148`
