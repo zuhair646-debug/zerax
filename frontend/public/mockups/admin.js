@@ -3870,19 +3870,23 @@ function csWizardStepIdea(){
   const sugs = ideas[CS_STATE.type] || [];
   const html = `
     <div class="cs-wizard-card">
-      <div class="wiz-head"><span class="wiz-step">٢ / ٥</span><b style="color:#fbbf24;font-size:11px">الفكرة</b></div>
-      <div class="wiz-q">حلو! 🎯 الحين اكتب فكرتك بكلامك الطبيعي — أو اختر اقتراح سريع:</div>
-      <div class="wiz-hint">💡 كل ما كانت الفكرة دقيقة، كانت النتيجة أحلى. اذكر: المناسبة + الجو + أي تفاصيل بصرية</div>
-      <div class="cs-wizard-opts col-2" style="margin-top:12px">
-        ${sugs.map(s=>`<button class="cs-wopt" onclick="csWizardPick('idea','${s.replace(/'/g,'')}',this)" style="padding:9px 12px"><span class="wopt-text"><b style="font-size:11.5px">${s}</b></span></button>`).join('')}
-      </div>
-      <div style="margin-top:10px;display:flex;gap:6px">
-        <input type="text" id="cs-wizard-idea-input" placeholder="أو اكتب فكرتك المخصصة..." onkeydown="if(event.key==='Enter')csWizardPick('idea',this.value,null)" style="flex:1;background:#0a0a14;border:1px solid #312e81;border-radius:9px;padding:9px 12px;color:#fff;font-family:inherit;font-size:12px" data-testid="wiz-idea-input">
-        <button onclick="csWizardPick('idea',document.getElementById('cs-wizard-idea-input').value,null)" style="background:#fbbf24;border:none;color:#0a0a14;padding:9px 14px;border-radius:9px;cursor:pointer;font-family:inherit;font-size:11px;font-weight:900">إرسال</button>
+      <div class="wiz-head"><span class="wiz-step">٢ / ٦</span><b style="color:#fbbf24;font-size:11px">الفكرة</b></div>
+      <div class="wiz-q">🎯 اختر فكرة جاهزة أو اضغط "غير ذلك" واكتبها بصندوق الكتابة:</div>
+      <div class="cs-wizard-opts" style="margin-top:12px">
+        ${sugs.map(s=>`<button class="cs-wopt" onclick="csWizardPick('idea','${s.replace(/'/g,'')}',this)"><span class="wopt-text"><b style="font-size:11.5px">${s}</b></span></button>`).join('')}
+        <button class="cs-wopt" onclick="csWizardAskCustom('idea','✏️ اكتب فكرتك الكاملة في صندوق الكتابة بالأسفل — وأنا أكمل معاك للخطوة اللي بعدها 👇')" style="border-style:dashed"><span class="wopt-text"><b style="font-size:11.5px">✏️ غير ذلك</b></span></button>
       </div>
       <button class="cs-wizard-back" onclick="csWizardStepType()">← رجوع</button>
     </div>`;
   csAppendHTML(html);
+}
+
+// Generic "غير ذلك" handler — bot asks via message, user replies via MAIN chat input
+function csWizardAskCustom(stepKey, askText){
+  CS_WIZARD.step = stepKey;
+  CS_WIZARD.awaitingCustom = stepKey;
+  csBotMsg(askText);
+  setTimeout(()=>document.getElementById('cs-chat-text')?.focus(), 100);
 }
 
 // Step 3 — Pick size with SMART guidance per type
@@ -4338,20 +4342,38 @@ async function csSendChat(){
   if(!txt){ toast('💬 اكتب رسالة أو اختر من الخيارات بالأعلى'); return; }
   csUserMsg(txt);
   inp.value = '';
-  // If wizard is mid-flow at the "idea" step, treat this as the idea (no credit charge for this UX step)
-  if(CS_WIZARD.step === 'idea'){
-    CS_STATE._chatPrompt = txt;
-    setTimeout(csWizardStepSize, 200);
+  // If the wizard is awaiting a custom value for a specific step, route the answer back to that step
+  if(CS_WIZARD.awaitingCustom){
+    const step = CS_WIZARD.awaitingCustom;
+    CS_WIZARD.awaitingCustom = null;
+    if(step === 'idea'){
+      CS_STATE._chatPrompt = txt;
+      setTimeout(csWizardStepSize, 200);
+    } else if(step === 'color'){
+      const isHex = /^#[0-9a-f]{6}$/i.test(txt);
+      CS_STATE.bgColor = isHex ? txt : '#7c3aed';
+      CS_STATE.bgColorName = txt;
+      setTimeout(csWizardStepStyle, 200);
+    } else if(step === 'size'){
+      const m = txt.match(/(\d+)\s*[x×]\s*(\d+)/i);
+      if(m){
+        CS_STATE.customW = +m[1]; CS_STATE.customH = +m[2]; CS_STATE.aspect = 'custom';
+      }
+      setTimeout(csWizardStepColor, 200);
+    } else if(step === 'sectionCat'){
+      CS_STATE.category = txt; CS_STATE.categoryEn = txt;
+      setTimeout(csWizardStepIdea, 200);
+    }
     return;
   }
-  // Otherwise — free-form AI conversation. Charge 1 credit per AI reply.
+  // Free-form chat with AI — charge 1 credit
   CS_STATE._chatPrompt = txt;
   if(typeof WALLET !== 'undefined' && WALLET >= 1){
     WALLET -= 1; localStorage.setItem('zx_credits', WALLET);
     const wb = document.getElementById('wallet-balance'); if(wb) wb.textContent = WALLET.toLocaleString('ar-EG');
     csSyncPoints();
   }
-  csBotMsg(`✓ سجلت فكرتك: "<b>${txt}</b>"<br>إذا تبيها كصورة مباشرة — اضغط زر <b>"محادثة جديدة"</b> ثم اتبع الخيارات.`);
+  csBotMsg(`✓ سجلت فكرتك: "<b>${txt}</b>"<br>اضغط "محادثة جديدة" 🔄 لو تبي تبدأ من جديد، أو خلني أساعدك أكثر.`);
 }
 
 // ═══════════════════════════════════════════════════════════════════
@@ -4424,9 +4446,16 @@ async function csGenerate(){
     minimal: 'minimalist composition, clean lines, lots of negative space',
     dramatic: 'dramatic cinematic lighting, deep shadows, moody atmosphere',
   };
-  // ⛓️ STRICT color enforcement — repeated and emphasized so Gemini cannot ignore it
-  const colorLock = `STRICT REQUIREMENT: The background MUST be ${CS_STATE.bgColorName} (hex ${CS_STATE.bgColor}). DO NOT use any other background color. The background is ${CS_STATE.bgColorName}, not white, not gray, not any other color — exactly ${CS_STATE.bgColorName}. Accent color is ${CS_STATE.frameColorName}.`;
-  const finalPrompt = `${typeLabels[CS_STATE.type]}. ${userPrompt ? userPrompt+'. ' : ''}${stylePrompts[CS_STATE.style]}. ${colorLock} High quality, 4K, professional commercial composition.`;
+  // ⛓️ STRICT enforcement — repeated rules so AI cannot drift from user specs.
+  // The user's chat prompt is treated as TOP PRIORITY and replicated word-for-word.
+  const sizeLock = (CS_STATE.customW && CS_STATE.customH)
+    ? `Output dimensions MUST be EXACTLY ${CS_STATE.customW}×${CS_STATE.customH} pixels.`
+    : '';
+  const colorLock = `STRICT REQUIREMENT: The background MUST be ${CS_STATE.bgColorName} (hex ${CS_STATE.bgColor}). DO NOT use any other background color. The background is ${CS_STATE.bgColorName} — exactly. Accent color is ${CS_STATE.frameColorName}.`;
+  const userLock = userPrompt
+    ? `MUST FOLLOW THE USER'S REQUEST EXACTLY: "${userPrompt}". Every detail mentioned by the user (subjects, props, mood, composition) must appear in the result.`
+    : '';
+  const finalPrompt = `${typeLabels[CS_STATE.type]}. ${userLock} ${stylePrompts[CS_STATE.style]}. ${colorLock} ${sizeLock} High quality, 4K, professional commercial composition.`;
 
   try{
     // Resolve dimensions
