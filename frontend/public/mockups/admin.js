@@ -4407,6 +4407,31 @@ async function csSendChat(){
     const wb = document.getElementById('wallet-balance'); if(wb) wb.textContent = WALLET.toLocaleString('ar-EG');
     csSyncPoints();
   }
+  // ─── Post-generation refinement mode: user wants to tweak the just-generated images ───
+  if(CS_WIZARD.postGenChat){
+    // Accumulate refinement instructions on top of the original concept
+    CS_STATE.refineInstructions = (CS_STATE.refineInstructions ? CS_STATE.refineInstructions + ' • ' : '') + txt;
+    const n = CS_STATE.imageCount || 4;
+    const cost = n * 8;
+    csBotMsg(`
+      ✓ سجّلت تعديلك: "<b>${txt}</b>"<br>
+      جاهز أولّد لك <b>${n} صور</b> جديدة بنفس فكرتك + هذا التعديل.
+      <div class="cs-refine-banner">
+        <i data-lucide="wand-2" style="width:18px;height:18px;color:#fbbf24"></i>
+        <div style="flex:1;min-width:140px"><b>ولّد من جديد بالتعديلات</b><br><small>السعر: <b style="color:#fbbf24">${cost} نقطة</b> · رصيدك: ${(WALLET||0).toLocaleString('ar-EG')}</small></div>
+        <button class="cs-refine-btn" onclick="csGenerate()" data-testid="cs-regenerate-btn" ${(WALLET||0)<cost?'disabled':''}>
+          <i data-lucide="sparkles" style="width:14px;height:14px"></i> ولّد · ${cost} نقطة
+        </button>
+        <button class="cs-refine-btn" style="background:#1f2937;color:#fbbf24;border:1px solid #374151" onclick="CS_STATE.refineInstructions='';CS_WIZARD.postGenChat=false;csBotMsg('🔄 بدأنا محادثة جديدة. ابدأ من الأدوات اليمين.');">
+          محادثة جديدة
+        </button>
+      </div>
+    `);
+    if(window.lucide) setTimeout(()=>lucide.createIcons(), 30);
+    // Merge the refinement into the prompt so csGenerate will use it
+    CS_STATE._chatPrompt = (CS_STATE.finalConcept || CS_STATE._chatPrompt || '') + ' — تعديلات إضافية: ' + CS_STATE.refineInstructions;
+    return;
+  }
   csBotMsg(`✓ سجلت فكرتك: "<b>${txt}</b>"<br>اضغط "محادثة جديدة" 🔄 لو تبي تبدأ من جديد، أو خلني أساعدك أكثر.`);
 }
 
@@ -4448,7 +4473,7 @@ function csToggleVoice(){
   try{ rec.start(); CS_VOICE_REC = rec; }catch(e){ toast('❌ فشل بدء التسجيل'); }
 }
 
-// Generate via Gemini Nano Banana — STRICT color enforcement, dynamic count
+// Generate via Gemini Nano Banana — STRICT color enforcement, dynamic count, animated loading
 async function csGenerate(){
   const n = CS_STATE.imageCount || 4;
   const cost = n * 8;
@@ -4456,8 +4481,28 @@ async function csGenerate(){
     toast(`⚠️ رصيدك غير كافٍ — تحتاج ${cost} نقطة (عندك ${WALLET})`);
     return;
   }
+  // Show animated loading message inside chat (spinning Zenrex logo + status text)
+  const body = document.getElementById('cs-chat-body');
+  const loader = document.createElement('div');
+  loader.className = 'cs-msg cs-msg-bot cs-loader-msg';
+  loader.id = 'cs-active-loader';
+  const refineNote = CS_STATE.refineInstructions ? `<div style="color:#10b981;font-size:11px;margin-top:4px">📝 مع تعديلاتك: <i>${CS_STATE.refineInstructions.slice(0,80)}${CS_STATE.refineInstructions.length>80?'…':''}</i></div>` : '';
+  loader.innerHTML = `
+    <div class="cs-msg-inner" style="display:flex;align-items:center;gap:14px">
+      <div class="cs-logo-spin"><img src="/zenrex-logo-sm.png" alt="generating..."></div>
+      <div style="flex:1">
+        <b style="color:#fbbf24;font-size:14px;display:block">يجري التوليد...</b>
+        <span style="color:#9ca3af;font-size:12px" id="cs-loader-status">🎨 جاري إعداد ${n} صور حسب فكرتك بالضبط — اصبر لحظات...</span>
+        ${refineNote}
+      </div>
+    </div>`;
+  if(body){ body.appendChild(loader); body.scrollTop = body.scrollHeight; }
+  // Cycle through status messages so user knows something's happening
+  const statuses = ['🎨 جاري تجهيز التركيبة...', '🖼️ الذكاء يرسم الآن...', '✨ إضافة التفاصيل النهائية...', `📦 توليد ${n} صور...`];
+  let si = 0;
+  const statusTimer = setInterval(()=>{ si=(si+1)%statuses.length; const el=document.getElementById('cs-loader-status'); if(el) el.textContent = statuses[si]; }, 1800);
   const btns = document.querySelectorAll('.cs-gen-btn-inline, .cs-gen-btn');
-  btns.forEach(btn=>{ btn.disabled = true; btn.innerHTML = '<i data-lucide="loader" style="width:14px;height:14px"></i> جاري التوليد...'; });
+  btns.forEach(btn=>{ btn.disabled = true; });
   if(window.lucide) lucide.createIcons();
   // Build typed prompt with HARD color enforcement
   const userPrompt = (document.getElementById('cs-chat-text')?.value || CS_STATE._chatPrompt || '').trim();
@@ -4506,19 +4551,21 @@ async function csGenerate(){
     const imgs = results.flatMap(r => (r?.images || r?.urls || (r?.image_url?[r.image_url]:[])) || []).filter(Boolean);
     if(!imgs.length) throw new Error('no images returned');
     CS_STATE.generated = imgs;
+    clearInterval(statusTimer); document.getElementById('cs-active-loader')?.remove();
     csAppendImageGrid(imgs);
-    // ✅ Deduct credits ONLY on successful generation
+    CS_WIZARD.postGenChat = true; // enable free-chat refinement mode
     if(typeof WALLET !== 'undefined'){
       WALLET -= cost; localStorage.setItem('zx_credits', WALLET);
       const wb = document.getElementById('wallet-balance'); if(wb) wb.textContent = WALLET.toLocaleString('ar-EG');
       csSyncPoints();
     }
+    csBotMsg(`✅ خلصت! ولّدت لك <b>${imgs.length} صور</b>. اضغط على الصورة اللي تعجبك لاختيارها، ثم اعتمدها أو ضعها مباشرة في مكانها.<br><br>🎨 <b>أبي أعدّل؟</b> اكتب في صندوق الكتابة تحت أي تعديل تبيه (مثل: "خلي الإضاءة أقوى" أو "أضف ورود"، أو "غيّر الخلفية لون أغمق") وراح أرسل لك زر "ولّد من جديد" يأخذ <b>${cost} نقطة</b>.`);
   } catch(e){
-    // Fallback to placeholder so the UX is testable without AI key
+    clearInterval(statusTimer); document.getElementById('cs-active-loader')?.remove();
     const placeholders = Array.from({length:n},(_,i)=>`https://picsum.photos/seed/${CS_STATE.type}-${Date.now()}-${i+1}/800/600`);
     CS_STATE.generated = placeholders;
     csAppendImageGrid(placeholders, true);
-    // Charge a smaller fee on fallback (2 pts) so it's not totally free but doesn't penalize the user
+    CS_WIZARD.postGenChat = true;
     if(typeof WALLET !== 'undefined'){
       WALLET -= 2; localStorage.setItem('zx_credits', WALLET);
       const wb = document.getElementById('wallet-balance'); if(wb) wb.textContent = WALLET.toLocaleString('ar-EG');

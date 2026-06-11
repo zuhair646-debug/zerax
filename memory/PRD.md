@@ -404,6 +404,19 @@ Previous code sent raw hex like `#000000` inside the Gemini prompt: `"isolated p
 - **Fallback**: Local `zerax-mongo-1` container still running with snapshot in `/tmp/mongo_backup` and persistent volume `/opt/zerax/data/mongo` — can revert by editing docker-compose.
 - **Compose backup**: `/opt/zerax/docker-compose.yml.bak.<timestamp>` (pre-migration version)
 
+## Creative Studio — Loading Spinner & Post-Generation Conversational Refinement (Feb 11 2026) ⭐
+- **Status**: ✅ COMPLETE & VERIFIED via screenshot
+- **Files**: `/app/frontend/public/mockups/admin.html` (CSS additions), `/app/frontend/public/mockups/admin.js` (csGenerate + csSendChat)
+- **What was built**:
+  - **Spinning Zenrex logo loader**: Inline chat message with `.cs-logo-spin` (rotating gold-bordered Zenrex logo + glow pulse) while images are being generated. Cycles through 4 status messages every 1.8s.
+  - **Status badge for refinements**: When user provides a tweak after first generation, the loader now shows a green `📝 مع تعديلاتك: ...` line indicating the refinement is being applied.
+  - **Post-generation chat mode**: `CS_WIZARD.postGenChat = true` after the first batch — user can type any modification (e.g., "خلي الإضاءة أقوى"), the bot logs it, and emits an inline action banner with two buttons:
+    - 🚀 **ولّد · 32 نقطة** → triggers `csGenerate()` again with the merged prompt (`finalConcept + refineInstructions`).
+    - 🔄 **محادثة جديدة** → resets refineInstructions + exits postGenChat mode.
+  - **Charge model**: 1 pt per chat message + n×8 pts per regeneration (4 images = 32 pts).
+- **data-testid added**: `cs-regenerate-btn` for E2E.
+
+
 
 
 
