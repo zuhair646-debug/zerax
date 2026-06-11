@@ -23,6 +23,52 @@
 - **Personal Gmail (receives all forwarded mail)**: `zenrex.ai@gmail.com`
 - All domain emails (`owner@zenrex.ai`, `support@zenrex.ai`, `hello@zenrex.ai`, `info@zenrex.ai`) should forward to this Gmail via Porkbun Email Forwarding.
 
+## 🔌 Track 1 — Real Data Wiring Complete (Jun 11 2026 14:10)
+
+User requested comprehensive E2E testing before official launch. Testing agent (iter_42) discovered 3 blockers: (1) storefront orders never persisted, (2) admin showed 100% hardcoded demo data, (3) "Zerax Owner" leftover in admin sidebar. ALL THREE FIXED in this session, retested via iter_43.
+
+**Backend changes** (`/app/backend/routers/delivery_router.py`):
+- Added `_mongo_save_order()` helper → `update_one({"id":...}, {"$set": order}, upsert=True)` against `db.delivery_orders`.
+- Added `_mongo_load_orders()` → boot-time hydration repopulates in-memory `ORDERS` dict from MongoDB so admin sees orders after restarts.
+- Hooked into `create_order` so every POST persists to MongoDB.
+- Server startup event: `@app.on_event("startup") async def _hydrate_delivery_orders()` in `server.py`.
+- Expanded `OrderIn.payment_method` Literal: added `cod`, `mada`, `tabby`, `tamara`, `apple_pay`, `zenrex_split`, `zenrex_later`, `stripe`.
+- Demo seed orders disabled by default (set `ENABLE_DEMO_ORDERS=1` to re-enable).
+
+**Frontend changes** (`/app/frontend/public/mockups/app_mode_full.js`):
+- `choosePay(id, el)` now validates `ck-name` + `ck-phone` then `fetch('/api/delivery/orders', {method:'POST', body: payload})` BEFORE showing success modal. Items use `{name, qty, sar}` matching the Pydantic model.
+- Success modal injects the real `order.id` so customer can reference it.
+- localStorage `my_orders` array for customer's "طلباتي" view.
+
+**Admin changes** (`/app/frontend/public/mockups/admin.js`):
+- `renderOrders()` is now `async` and calls `loadRealOrders()` → fetches `/api/delivery/orders?limit=50`. Falls back to clearly-labeled `(تجريبي)` rows only when DB is empty.
+- `renderAll()` fetches `recent-orders` (limit 8) + `/api/delivery/stats` for KPI values (revenue, total_orders, active_drivers).
+- New helpers: `_relTime(iso)` for "قبل X د" formatting, `_stLabel(st)` for Arabic status labels.
+
+**Onboarding modal**:
+- `closeOnboarding()` and `finishOnboarding()` BOTH set `localStorage.zx_onboarded='1'` so the 4-step welcome never blocks navigation after first dismissal.
+
+**Database migration**:
+- `users.name`: `"Zerax Owner"` → `"Zenrex Owner"` (mongosh `$replaceAll`).
+
+**Storefront footer**:
+- `+966512345678` → `+966 500 000 000`
+- `info@brand.sa` → `support@zenrex.ai`
+
+**Live verification (https://zenrex.ai)**:
+- 5 real orders in MongoDB (4 from API tests, 1 from actual UI Playwright flow as `مختبر التدفق الكامل / 0599888777 / 99 ر.س / drv_555ee6ea`).
+- Admin sidebar shows `Zenrex Owner` (verified screenshot `/tmp/admin_real_orders_final.png`).
+- POST `/api/delivery/orders` from storefront confirmed via network trace.
+- Auto driver assignment + Haversine + driver-share / merchant-share calculations all functional.
+- Test report iteration_43 retest: PASS on rebrand/footer/onboarding/admin-real-data. Single remaining flake was driver OTP automation selector (not a backend issue).
+
+## ⏸️ Pending Tracks (deferred to next session — context window limit):
+- **Track 2 — Payment UI Polish**: build dedicated card-input modal (4242 4242 4242 4242 test card), enhance Tabby `zenrex_split` visual (4 boxes), Tamara `zenrex_later` (30-day badge), add Apple Pay placeholder button. Estimated: ~1 hour.
+- **Track 3 — Business Category Templates**: barbers, stationery, restaurants, cafes, pharmacies, salons. Each template pre-seeds category list + sample products. Add a template-selector card to admin onboarding. Estimated: ~2 hours.
+- **Track 4 — Driver app real-time order feed**: `driver_app.html` polls `/api/delivery/orders?status=pending` every 15s + Web Push notification on new order. Estimated: ~45 min.
+
+
+
 ## 🌐 Production VPS (Hetzner — Jun 11 2026)
 - **Public URL**: `http://91.98.154.148`
 - **SSH**: `ssh -i /root/.ssh/zenrex_deploy root@91.98.154.148`

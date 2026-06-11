@@ -1676,7 +1676,7 @@ function choosePay(id,el){
   // Validate required customer info before POST
   const nm = (document.getElementById('ck-name')||{}).value || '';
   const ph = (document.getElementById('ck-phone')||{}).value || '';
-  const ad = (document.getElementById('ck-address')||{}).value || '';
+  const ad = (document.getElementById('ck-addr')||{}).value || '';
   if (!nm.trim() || !ph.trim()) { alert('الرجاء تعبئة الاسم ورقم الجوال قبل إتمام الطلب'); return; }
   // POST order to backend (persist + show in admin/driver) — fire & forget, but await response for ID
   const cartTotal = (typeof CART !== 'undefined') ? CART.reduce((s,it)=>s+(it.price*it.qty),0) : 0;
@@ -1687,7 +1687,7 @@ function choosePay(id,el){
     items: (CART||[]).map(it=>({name:it.name||'منتج', qty:it.qty||1, sar:it.price||0})),
     total_sar: cartTotal,
     payment_method: id || 'cod',
-    notes: ((document.getElementById('ck-notes')||{}).value || '') + (window.CK_SCHED && window.CK_SCHED.mode==='schedule' ? ` | موعد التوصيل: ${window.CK_SCHED.date} ${window.CK_SCHED.time}` : ''),
+    notes: (window.CK_SCHED && window.CK_SCHED.mode==='schedule' ? `موعد التوصيل: ${window.CK_SCHED.date} ${window.CK_SCHED.time}` : ''),
     zone: 'central',
   };
   let orderIdReal = null;
