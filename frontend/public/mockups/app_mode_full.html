@@ -848,6 +848,23 @@ body.dark .acc-stat .k{color:#94a3b8}
         <div id="ship-list"></div>
       </div>
 
+      <!-- DELIVERY TIME (now / scheduled) -->
+      <div class="ck-section" id="ck-time-section">
+        <h4>⏰ موعد التوصيل</h4>
+        <div id="ck-open-status" style="margin-bottom:10px;font-size:12px;font-weight:900;padding:8px 12px;border-radius:9px"></div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:8px">
+          <button type="button" id="ck-when-now" data-testid="ck-when-now" style="padding:11px;border-radius:10px;border:none;cursor:pointer;font-weight:900;font-size:12px;background:linear-gradient(135deg,#7c3aed,#06b6d4);color:#fff;font-family:inherit">⚡ في أقرب وقت</button>
+          <button type="button" id="ck-when-sched" data-testid="ck-when-sched" style="padding:11px;border-radius:10px;border:1.5px solid #e5e7eb;cursor:pointer;font-weight:900;font-size:12px;background:#fff;color:#6b7280;font-family:inherit">📅 حجز موعد</button>
+        </div>
+        <div id="ck-sched-picker" style="display:none">
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">
+            <select id="ck-sched-date" data-testid="ck-sched-date" style="padding:11px;border:1.5px solid #e5e7eb;border-radius:10px;font-family:inherit;font-size:12px;background:#fff"></select>
+            <select id="ck-sched-time" data-testid="ck-sched-time" style="padding:11px;border:1.5px solid #e5e7eb;border-radius:10px;font-family:inherit;font-size:12px;background:#fff"><option>-- اختر الوقت --</option></select>
+          </div>
+          <div id="ck-eta-info" style="margin-top:8px;font-size:11px;font-weight:700;color:#0891b2;padding:8px 10px;background:#cffafe;border-radius:9px;display:none"></div>
+        </div>
+      </div>
+
       <!-- PAYMENT -->
       <div class="ck-section">
         <h4 data-key="select_payment">اختر طريقة الدفع</h4>
@@ -3296,13 +3313,120 @@ function openCheckout(){
   renderBranches();
   // Init map after modal animation
   setTimeout(initCheckoutMap,300);
+  // Initialize delivery time picker
+  initDeliveryTime();
 }
+
+// ═══════════════════════════════════════════════════════════════════
+// DELIVERY TIME (now / scheduled) — per-cart scheduling
+// ═══════════════════════════════════════════════════════════════════
+window.CK_SCHED = {mode:'now', date:'', time:'', eta_window:''};
+async function initDeliveryTime(){
+  // Reset
+  window.CK_SCHED = {mode:'now', date:'', time:'', eta_window:''};
+  // Show is-open banner
+  try {
+    const r = await fetch(API_BASE_CUST + '/api/delivery/schedule/is-open?merchant_id=demo');
+    const d = await r.json();
+    const banner = document.getElementById('ck-open-status');
+    if (d.is_open || d.is_24_7){
+      banner.style.background = '#dcfce7'; banner.style.color = '#15803d';
+      banner.innerHTML = `🟢 المتجر مفتوح الآن ${d.is_24_7 ? '· 24/7' : ''}`;
+    } else {
+      banner.style.background = '#fee2e2'; banner.style.color = '#b91c1c';
+      banner.innerHTML = `🔴 مغلق · يفتح ${d.next_open_label || ''}`;
+    }
+  } catch(e){}
+  // Bind buttons
+  const nowBtn = document.getElementById('ck-when-now');
+  const schBtn = document.getElementById('ck-when-sched');
+  const picker = document.getElementById('ck-sched-picker');
+  nowBtn.onclick = () => {
+    window.CK_SCHED = {mode:'now', date:'', time:'', eta_window:''};
+    nowBtn.style.background = 'linear-gradient(135deg,#7c3aed,#06b6d4)'; nowBtn.style.color = '#fff'; nowBtn.style.border = 'none';
+    schBtn.style.background = '#fff'; schBtn.style.color = '#6b7280'; schBtn.style.border = '1.5px solid #e5e7eb';
+    picker.style.display = 'none';
+  };
+  schBtn.onclick = async () => {
+    window.CK_SCHED.mode = 'schedule';
+    schBtn.style.background = 'linear-gradient(135deg,#7c3aed,#06b6d4)'; schBtn.style.color = '#fff'; schBtn.style.border = 'none';
+    nowBtn.style.background = '#fff'; nowBtn.style.color = '#6b7280'; nowBtn.style.border = '1.5px solid #e5e7eb';
+    picker.style.display = 'block';
+    // Populate dates (next 7 days)
+    const sel = document.getElementById('ck-sched-date');
+    sel.innerHTML = '';
+    const today = new Date();
+    const dayNamesAr = ['الأحد','الاثنين','الثلاثاء','الأربعاء','الخميس','الجمعة','السبت'];
+    for (let i=0; i<7; i++){
+      const d = new Date(today); d.setDate(today.getDate() + i);
+      const iso = d.toISOString().slice(0,10);
+      const lbl = (i===0?'اليوم':(i===1?'بكرة':dayNamesAr[d.getDay()])) + ' · ' + iso;
+      const opt = document.createElement('option'); opt.value = iso; opt.textContent = lbl;
+      sel.appendChild(opt);
+    }
+    sel.onchange = () => loadCkSlots(sel.value);
+    await loadCkSlots(sel.value);
+  };
+}
+async function loadCkSlots(date){
+  const r = await fetch(API_BASE_CUST + `/api/delivery/schedule/slots?merchant_id=demo&date=${date}`);
+  const d = await r.json();
+  const ts = document.getElementById('ck-sched-time');
+  ts.innerHTML = '<option value="">-- اختر الوقت --</option>';
+  (d.slots || []).forEach(s => {
+    const o = document.createElement('option');
+    o.value = s.value;
+    o.dataset.eta = s.eta_window || '';
+    o.textContent = s.label + (s.eta_window ? '  (الوصول: ' + s.eta_window + ')' : '');
+    ts.appendChild(o);
+  });
+  if ((d.slots || []).length === 0){
+    ts.innerHTML = '<option value="">لا توجد فترات متاحة</option>';
+  }
+  ts.onchange = () => {
+    window.CK_SCHED.date = date;
+    window.CK_SCHED.time = ts.value;
+    window.CK_SCHED.eta_window = ts.selectedOptions[0]?.dataset.eta || '';
+    const info = document.getElementById('ck-eta-info');
+    if (window.CK_SCHED.time){
+      info.style.display = 'block';
+      info.innerHTML = `📦 السائق يستلم قبل الموعد بـ <b>30 دقيقة</b> · بيوصلك بين <b>${window.CK_SCHED.eta_window}</b>`;
+    } else {
+      info.style.display = 'none';
+    }
+  };
+}
+
 function closeCheckout(){document.getElementById('checkout-modal').classList.remove('open');CHECKOUT_MAP=null;}
 function choosePay(id,el){
   PAYMENT_CHOSEN=id;
   document.querySelectorAll('.pay-option').forEach(e=>e.style.borderColor='#e5e7eb');
   el.style.borderColor='#7c3aed';el.style.background='#faf5ff';
+  // Auto-submit after picking payment (existing flow). Inject scheduling into the order.
+  // If scheduled mode requires a time, block submission and prompt user.
+  if (window.CK_SCHED && window.CK_SCHED.mode === 'schedule' && !window.CK_SCHED.time){
+    alert('اختر وقت التوصيل من قائمة "حجز موعد" أولاً');
+    return;
+  }
+  // Show success after a brief delay (existing demo flow)
+  setTimeout(()=>{
+    document.getElementById('checkout-form').style.display='none';
+    document.getElementById('checkout-success').style.display='block';
+    // Inject scheduling info into success message
+    const subEl = document.querySelector('#checkout-success p');
+    if (window.CK_SCHED && window.CK_SCHED.mode === 'schedule' && window.CK_SCHED.time){
+      subEl.innerHTML = `✅ موعد التوصيل: <b>${window.CK_SCHED.date} الساعة ${window.CK_SCHED.time}</b><br>📦 السائق يصلك بين <b>${window.CK_SCHED.eta_window}</b>`;
+    } else {
+      const t = (window.translations||{})[window.CURRENT_LANG||'ar'];
+      subEl.innerHTML = (t && t.order_success_sub) || 'سيتم التواصل معك للتوصيل قريباً';
+    }
+    // Clear cart
+    if (typeof CART !== 'undefined'){ CART.length = 0; if (typeof updateCart === 'function') updateCart(); }
+  }, 400);
 }
+
+// Backend base URL used by checkout schedule API
+const API_BASE_CUST = window.location.origin;
 
 // ═══════════════════════ MAP + BRANCHES + STOCK LOGIC ═══════════════════════
 function haversineKm(lat1,lng1,lat2,lng2){
