@@ -33,13 +33,42 @@ import uuid
 import math
 import random
 import logging
+import asyncio
 from datetime import datetime, timezone, timedelta
 from typing import Optional, List, Dict, Literal
 from fastapi import APIRouter, HTTPException, Header
 from pydantic import BaseModel, Field
 
+# Re-use the shared Mongo handle from store_router (single AsyncIOMotorClient app-wide)
+try:
+    from routers.store_router import db as _db
+except Exception:
+    _db = None
+
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/delivery", tags=["delivery"])
+
+# Mongo collection helpers (no-op if DB not wired)
+async def _mongo_save_order(order: dict):
+    if _db is None:
+        return
+    try:
+        await _db.delivery_orders.update_one({"id": order["id"]}, {"$set": order}, upsert=True)
+    except Exception as e:
+        logger.warning("mongo_save_order failed: %s", e)
+
+
+async def _mongo_load_orders():
+    """Boot-time load: rebuild in-memory ORDERS from MongoDB so admin shows real data after restart."""
+    if _db is None:
+        return
+    try:
+        async for doc in _db.delivery_orders.find({}):
+            doc.pop("_id", None)
+            ORDERS[doc["id"]] = doc
+        logger.info("Loaded %d delivery orders from MongoDB", len(ORDERS))
+    except Exception as e:
+        logger.warning("mongo_load_orders failed: %s", e)
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Helpers
@@ -230,8 +259,11 @@ def _seed_demo():
             "notes": "",
         }
 
-
 _seed_demo()
+import os as _os_seed
+if _os_seed.environ.get("ENABLE_DEMO_ORDERS") != "1":
+    # Production mode: clear fake demo orders so admin only shows real ones.
+    ORDERS.clear()
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -279,7 +311,7 @@ class OrderIn(BaseModel):
     branch_id: Optional[str] = None
     items: List[OrderItem]
     total_sar: float
-    payment_method: Literal["cash", "card", "wallet"] = "cash"
+    payment_method: Literal["cash", "card", "wallet", "cod", "mada", "tabby", "tamara", "apple_pay", "zenrex_split", "zenrex_later", "stripe"] = "cash"
     notes: str = ""
 
 
@@ -579,6 +611,7 @@ async def create_order(payload: OrderIn):
         "rating": None,
         "notes": payload.notes,
     }
+    await _mongo_save_order(ORDERS[oid])
     return ORDERS[oid]
 
 

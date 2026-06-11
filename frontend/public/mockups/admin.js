@@ -153,18 +153,33 @@ function goPage(p){
 }
 
 // ───── RENDER ALL (initial) ─────
-function renderAll(){
+async function renderAll(){
   $('wallet-balance').textContent=WALLET.toLocaleString('ar-EG');
   // Animate KPIs
   setTimeout(()=>animateKPIs(),200);
-  // Recent orders
-  $('recent-orders').innerHTML=[
-    {id:'#3047',cust:'نوف العتيبي',amt:'245 ر.س',st:'delivered',drv:'خالد العتيبي',time:'قبل دقيقتين'},
-    {id:'#3046',cust:'خالد المطيري',amt:'89 ر.س',st:'delivering',drv:'أحمد السبيعي',time:'قبل 15 دقيقة'},
-    {id:'#3045',cust:'ريم القحطاني',amt:'320 ر.س',st:'paid',drv:'—',time:'قبل ساعة'},
-    {id:'#3044',cust:'محمد الزهراني',amt:'145 ر.س',st:'pending',drv:'—',time:'قبل ساعتين'},
-    {id:'#3043',cust:'سارة العنزي',amt:'67 ر.س',st:'pending',drv:'—',time:'قبل 3 ساعات'}
-  ].map(o=>`<tr><td><b>${o.id}</b></td><td>${o.cust}</td><td><b>${o.amt}</b></td><td><span class="status-pill s-${o.st}">${({delivered:'تم التسليم',delivering:'في طريقها',paid:'مدفوع',pending:'بانتظار'})[o.st]}</span></td><td>${o.drv}</td><td style="color:var(--mute);font-size:11px">${o.time}</td></tr>`).join('');
+  // Recent orders — fetch from backend (real)
+  try{
+    const real = await loadRealOrders(8);
+    const display = real.length ? real : [
+      {id:'#demo-3047',cust:'(عرض تجريبي) نوف العتيبي',amt:'245 ر.س',st:'delivered',drv:'خالد العتيبي',time:'قبل دقيقتين'},
+      {id:'#demo-3046',cust:'(عرض تجريبي) خالد المطيري',amt:'89 ر.س',st:'delivering',drv:'أحمد السبيعي',time:'قبل 15 د'}
+    ];
+    $('recent-orders').innerHTML = display.map(o=>{
+      const amt = typeof o.amt==='string' ? o.amt : (o.amt + ' ر.س');
+      return `<tr><td><b>${(o.id||'').replace('ord_','#')}</b></td><td>${o.cust}</td><td><b>${amt}</b></td><td><span class="status-pill s-${o.st}">${_stLabel(o.st)}</span></td><td>${o.drv}</td><td style="color:var(--mute);font-size:11px">${o.time||''}</td></tr>`;
+    }).join('');
+  }catch(e){console.warn('recent-orders failed',e);}
+  // Real KPIs (from /api/delivery/stats)
+  try{
+    const s = await fetch((API||window.location.origin)+'/api/delivery/stats').then(r=>r.json());
+    const set = (sel,val)=>{const el=document.querySelector(sel); if(el) el.textContent=val;};
+    if (s){
+      // Revenue today
+      set('[data-kpi="revenue"] .val', (s.revenue_today_sar||0).toLocaleString('ar-EG')+' ر.س');
+      set('[data-kpi="orders"] .val', String(s.total_orders||0));
+      set('[data-kpi="drivers"] .val', String(s.active_drivers||0));
+    }
+  }catch(e){console.warn('KPIs failed',e);}
   // Top products
   $('top-products').innerHTML=[...PRODUCTS].sort((a,b)=>b.sales-a.sales).slice(0,5).map((p,i)=>
     `<div onclick="goPage('products');editProduct('${p.id}')" style="display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--border);cursor:pointer;transition:background .15s" onmouseover="this.style.background='#faf5ff'" onmouseout="this.style.background='transparent'"><div style="width:34px;height:34px;border-radius:50%;background:#faf5ff;color:var(--purple);display:flex;align-items:center;justify-content:center;font-weight:900">${i+1}</div><img src="${p.img}" style="width:38px;height:38px;border-radius:8px;object-fit:cover" loading="lazy" decoding="async"><div style="flex:1;min-width:0"><div style="font-size:12px;font-weight:900;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${p.name}</div><div style="font-size:10px;color:var(--mute)">${p.sales} مبيعات</div></div><b style="color:var(--purple);font-size:13px">${p.price}</b></div>`).join('');
@@ -297,15 +312,43 @@ async function regenProductImg(id){
   // Kept for backward compat — but now redirects to image studio
   openImageStudioFor(id);
 }
-function renderOrders(){
+// ───── REAL DATA HELPERS ─────
+async function loadRealOrders(limit){
+  try{
+    const r = await fetch((API||window.location.origin) + '/api/delivery/orders?limit=' + (limit||50));
+    const d = await r.json();
+    return (d.orders||[]).map(o=>({
+      id: o.id || ('#' + (o.id||'?')),
+      cust: o.customer_name || 'عميل',
+      ph: o.customer_phone || '',
+      amt: Math.round(o.total_sar||0),
+      st: ({pending:'pending', assigned:'paid', picked_up:'delivering', delivering:'delivering', delivered:'delivered', cancelled:'cancelled'})[o.status] || 'pending',
+      drv: o.driver_id ? (o.driver_name || o.driver_id) : '—',
+      time: o.created_at ? _relTime(o.created_at) : '',
+      raw: o
+    }));
+  }catch(e){console.warn('loadRealOrders failed',e);return [];}
+}
+function _relTime(iso){
+  try{const d=new Date(iso);const s=Math.floor((Date.now()-d.getTime())/1000);
+    if(s<60)return 'قبل ثوانٍ';
+    if(s<3600)return 'قبل '+Math.floor(s/60)+' د';
+    if(s<86400)return 'قبل '+Math.floor(s/3600)+' س';
+    return 'قبل '+Math.floor(s/86400)+' يوم';
+  }catch(e){return '';}
+}
+function _stLabel(st){return ({delivered:'تم التسليم',delivering:'في طريقها',paid:'مدفوع',pending:'بانتظار',cancelled:'ملغي'})[st]||st;}
+
+async function renderOrders(){
+  // Real orders first (from MongoDB-backed /api/delivery/orders)
+  const real = await loadRealOrders(50);
   const seed=[
-    {id:'ord_3047',cust:'نوف العتيبي',ph:'0567778888',amt:245,st:'delivered',drv:'خالد العتيبي'},
-    {id:'ord_3046',cust:'خالد المطيري',ph:'0561234567',amt:89,st:'delivering',drv:'أحمد السبيعي'},
-    {id:'ord_3045',cust:'ريم القحطاني',ph:'0578889999',amt:320,st:'paid',drv:'—'},
-    {id:'ord_3044',cust:'محمد الزهراني',ph:'0533123456',amt:145,st:'pending',drv:'—'},
-    {id:'ord_3043',cust:'سارة العنزي',ph:'0598765432',amt:67,st:'pending',drv:'—'}
+    {id:'ord_demo_3047',cust:'نوف العتيبي (تجريبي)',ph:'0567778888',amt:245,st:'delivered',drv:'خالد العتيبي'},
+    {id:'ord_demo_3046',cust:'خالد المطيري (تجريبي)',ph:'0561234567',amt:89,st:'delivering',drv:'أحمد السبيعي'},
+    {id:'ord_demo_3045',cust:'ريم القحطاني (تجريبي)',ph:'0578889999',amt:320,st:'paid',drv:'—'}
   ];
-  $('orders-table').innerHTML=seed.map(o=>`<tr><td><b>${o.id.replace('ord_','#')}</b></td><td>${o.cust}</td><td style="direction:ltr;text-align:right">${o.ph}</td><td><b>${o.amt} ر.س</b></td><td><span class="status-pill s-${o.st}">${({delivered:'تم التسليم',delivering:'في طريقها',paid:'مدفوع',pending:'بانتظار'})[o.st]}</span></td><td>${o.drv}</td><td><a href="/mockups/track.html?id=${o.id}" target="_blank" style="color:var(--purple);font-weight:900;text-decoration:none;font-size:11px">🔍 تتبع ↗</a></td></tr>`).join('');
+  const rows = real.length ? real : seed;
+  $('orders-table').innerHTML=rows.map(o=>`<tr><td><b>${(o.id||'').replace('ord_','#')}</b></td><td>${o.cust}</td><td style="direction:ltr;text-align:right">${o.ph}</td><td><b>${o.amt} ر.س</b></td><td><span class="status-pill s-${o.st}">${_stLabel(o.st)}</span></td><td>${o.drv}</td><td><a href="/mockups/track.html?id=${o.id}" target="_blank" style="color:var(--purple);font-weight:900;text-decoration:none;font-size:11px">🔍 تتبع ↗</a></td></tr>`).join('');
 }
 function renderCustomers(){
   $('customers-table').innerHTML=MOCK_CUSTOMERS.map(c=>`<tr><td><div style="display:flex;align-items:center;gap:10px"><div style="width:34px;height:34px;border-radius:50%;background:linear-gradient(135deg,var(--purple),var(--amber));color:#fff;display:flex;align-items:center;justify-content:center;font-weight:900">${c.name.charAt(0)}</div><b>${c.name}</b></div></td><td style="direction:ltr;text-align:right">${c.phone}</td><td><b>${c.orders}</b></td><td><b style="color:var(--purple)">${c.total} ر.س</b></td><td style="color:var(--mute);font-size:11px">${c.last}</td></tr>`).join('');
@@ -2867,10 +2910,13 @@ function openOnboarding(){
   document.body.appendChild(m);
 }
 function closeOnboarding(){
+  // Always remember dismissal so it never blocks future sessions.
+  localStorage.setItem('zx_onboarded','1');
   const m=document.getElementById('onboarding-modal');if(m)m.remove();
 }
 function finishOnboarding(){
-  if(document.getElementById('dont-show-again')?.checked)localStorage.setItem('zx_onboarded','1');
+  // Always remember (not just when checkbox is checked) — UX best practice.
+  localStorage.setItem('zx_onboarded','1');
   closeOnboarding();
   toast('🚀 صرت جاهز · استكشف لوحتك');
 }

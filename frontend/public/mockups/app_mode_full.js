@@ -303,7 +303,7 @@ function renderUI(){
   });
   // contact info update
   const b=CURRENT_MARKET;
-  document.getElementById('phone-link').innerHTML='📞 +966512345678';
+  document.getElementById('phone-link').innerHTML='📞 +966 500 000 000';
   document.getElementById('whatsapp-link').innerHTML='💬 '+(b.chat_apps?.[0]?.name||'WhatsApp');
   // payments & shipping in footer
   const pf=document.getElementById('payments-footer');
@@ -1673,6 +1673,38 @@ function choosePay(id,el){
     alert('اختر وقت التوصيل من قائمة "حجز موعد" أولاً');
     return;
   }
+  // Validate required customer info before POST
+  const nm = (document.getElementById('ck-name')||{}).value || '';
+  const ph = (document.getElementById('ck-phone')||{}).value || '';
+  const ad = (document.getElementById('ck-address')||{}).value || '';
+  if (!nm.trim() || !ph.trim()) { alert('الرجاء تعبئة الاسم ورقم الجوال قبل إتمام الطلب'); return; }
+  // POST order to backend (persist + show in admin/driver) — fire & forget, but await response for ID
+  const cartTotal = (typeof CART !== 'undefined') ? CART.reduce((s,it)=>s+(it.price*it.qty),0) : 0;
+  const payload = {
+    customer_name: nm.trim(),
+    customer_phone: ph.trim(),
+    address: ad.trim() || 'غير محدد',
+    items: (CART||[]).map(it=>({name:it.name||'منتج', qty:it.qty||1, sar:it.price||0})),
+    total_sar: cartTotal,
+    payment_method: id || 'cod',
+    notes: ((document.getElementById('ck-notes')||{}).value || '') + (window.CK_SCHED && window.CK_SCHED.mode==='schedule' ? ` | موعد التوصيل: ${window.CK_SCHED.date} ${window.CK_SCHED.time}` : ''),
+    zone: 'central',
+  };
+  let orderIdReal = null;
+  fetch((window.location.origin) + '/api/delivery/orders', {
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body: JSON.stringify(payload)
+  }).then(r=>r.json()).then(d=>{
+    orderIdReal = d && d.id ? d.id : null;
+    if (orderIdReal){
+      // Save order id in localStorage for "طلباتي" view
+      try { const arr=JSON.parse(localStorage.getItem('my_orders')||'[]'); arr.unshift({id:orderIdReal,total:cartTotal,at:Date.now(),items:payload.items.length}); localStorage.setItem('my_orders',JSON.stringify(arr.slice(0,50))); } catch(e){}
+      // Inject order id into success modal if visible
+      const sub = document.querySelector('#checkout-success p');
+      if (sub && !sub.innerHTML.includes(orderIdReal)) sub.innerHTML = (sub.innerHTML||'') + `<br><span style="opacity:.7;font-size:11px">رقم الطلب: <b style="color:#7c3aed">${orderIdReal}</b></span>`;
+    }
+  }).catch(e=>console.warn('order POST failed', e));
   setTimeout(()=>{
     document.getElementById('checkout-form').style.display='none';
     document.getElementById('checkout-success').style.display='block';

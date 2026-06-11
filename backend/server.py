@@ -4062,6 +4062,17 @@ except Exception as _pre:
     logging.getLogger(__name__).error(f"pricing module failed: {_pre}\n{_tb.format_exc()[:500]}")
 
 
+# ─── Boot-time: rebuild in-memory ORDERS dict from MongoDB so admin shows persisted deliveries ──
+@app.on_event("startup")
+async def _hydrate_delivery_orders():
+    try:
+        from routers.delivery_router import _mongo_load_orders
+        await _mongo_load_orders()
+    except Exception as _exc:
+        logging.getLogger(__name__).warning(f"delivery orders hydration skipped: {_exc}")
+
+
+
 @app.get("/api/iframe-test")
 async def serve_iframe_test():
     """Deprecated — handled by modules.games.routes. Kept as fallback."""
