@@ -554,14 +554,15 @@ select.ps-input option{background:#13131f;color:#fff}
 .cs-type-pill:hover{border-color:#7c3aed;color:#fff}
 .cs-type-pill.active{background:linear-gradient(135deg,rgba(124,58,237,.2),rgba(236,72,153,.15));border-color:#fbbf24;color:#fbbf24;box-shadow:0 4px 14px rgba(124,58,237,.25)}
 
-.cs-body-v2{display:grid;grid-template-columns:1fr 320px;gap:0;min-height:560px}
-@media (max-width:1100px){.cs-body-v2{grid-template-columns:1fr}}
-.cs-chat-main{display:flex;flex-direction:column;background:#0a0a14;border-left:1px solid #312e81;min-height:560px;max-height:calc(100vh - 240px)}
-.cs-chat-body-v2{flex:1;overflow-y:auto;padding:20px 24px;display:flex;flex-direction:column;gap:14px;max-height:none}
+.cs-body-v2{display:block;min-height:560px}
+.cs-chat-main{display:flex;flex-direction:column;background:#0a0a14;min-height:560px;max-height:calc(100vh - 240px);width:100%}
+.cs-chat-body-v2{flex:1;overflow-y:auto;padding:24px 32px;display:flex;flex-direction:column;gap:14px;max-height:none;max-width:1100px;width:100%;margin:0 auto}
+@media (max-width:768px){.cs-chat-body-v2{padding:18px 14px}}
 .cs-chat-body-v2::-webkit-scrollbar{width:8px}
 .cs-chat-body-v2::-webkit-scrollbar-track{background:transparent}
 .cs-chat-body-v2::-webkit-scrollbar-thumb{background:#312e81;border-radius:8px}
-.cs-chat-input-v2{display:flex;gap:8px;padding:14px 20px;border-top:1px solid #312e81;background:rgba(0,0,0,.4);align-items:center}
+.cs-chat-input-v2{display:flex;gap:8px;padding:16px 28px;border-top:1px solid #312e81;background:rgba(0,0,0,.4);align-items:center;max-width:1100px;width:100%;margin:0 auto;box-sizing:border-box}
+@media (max-width:768px){.cs-chat-input-v2{padding:12px 14px}}
 .cs-chat-input-v2 input[type="text"],.cs-chat-input-v2 #cs-chat-text{flex:1;background:#1e1b4b;border:1px solid #312e81;border-radius:10px;padding:11px 14px;color:#fff;font-family:inherit;font-size:13px}
 .cs-chat-input-v2 input:focus{outline:none;border-color:#fbbf24}
 .cs-chat-attach{background:#1e1b4b;border:1px solid #312e81;color:#a78bfa;width:38px;height:38px;border-radius:10px;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:.15s}
@@ -636,32 +637,32 @@ body.cs-fullscreen .cs-pill-fs{background:linear-gradient(135deg,#fbbf24,#f59e0b
   .cs-body-v2{grid-template-columns:1fr!important}
 }
 
-/* ──────────────────────── WIZARD CARDS (in-chat options) ──────────────────────── */
-.cs-wizard-card{background:linear-gradient(135deg,rgba(124,58,237,.08),rgba(236,72,153,.05));border:1px solid rgba(124,58,237,.3);border-radius:14px;padding:14px 16px;max-width:620px;align-self:flex-start;animation:csSlideIn .35s ease}
+/* ──────────────────────── WIZARD ROWS (inline in chat — wide & clean, NOT boxed) ──────────────────────── */
+.cs-wizard-card{background:transparent;border:none;border-radius:0;padding:6px 0 14px;max-width:100%;align-self:stretch;animation:csSlideIn .35s ease;border-bottom:1px dashed rgba(124,58,237,.2)}
 @keyframes csSlideIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
-.cs-wizard-card .wiz-head{display:flex;align-items:center;gap:8px;margin-bottom:10px}
-.cs-wizard-card .wiz-step{background:#fbbf24;color:#0a0a14;padding:2px 9px;border-radius:99px;font-size:10px;font-weight:900}
-.cs-wizard-card .wiz-q{font-size:13.5px;color:#fff;font-weight:700;line-height:1.55}
-.cs-wizard-card .wiz-hint{font-size:11px;color:#a78bfa;margin-top:5px;background:rgba(167,139,250,.08);padding:6px 10px;border-radius:8px}
-.cs-wizard-opts{display:grid;gap:7px;margin-top:12px}
-.cs-wizard-opts.col-2{grid-template-columns:repeat(2,1fr)}
-.cs-wizard-opts.col-3{grid-template-columns:repeat(3,1fr)}
-.cs-wizard-opts.col-4{grid-template-columns:repeat(4,1fr)}
-@media (max-width:640px){.cs-wizard-opts.col-3,.cs-wizard-opts.col-4{grid-template-columns:repeat(2,1fr)}}
-.cs-wopt{background:#0a0a14;border:1px solid #312e81;color:#cbd5e1;border-radius:10px;padding:11px 12px;cursor:pointer;font-family:inherit;font-size:12px;font-weight:700;text-align:right;transition:.15s;display:flex;align-items:center;gap:9px;line-height:1.45}
-.cs-wopt:hover{border-color:#7c3aed;background:rgba(124,58,237,.08);transform:translateY(-1px);color:#fff}
-.cs-wopt.chosen{background:linear-gradient(135deg,#10b981,#059669);border-color:#10b981;color:#fff}
-.cs-wopt .wopt-ico{width:32px;height:32px;border-radius:8px;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:16px}
-.cs-wopt .wopt-text{flex:1;min-width:0}
-.cs-wopt .wopt-text b{display:block;color:#fff;font-size:12.5px;margin-bottom:2px}
-.cs-wopt .wopt-text small{color:#94a3b8;font-size:10px;font-weight:500;display:block}
-.cs-wopt-color{display:flex;align-items:center;gap:8px;padding:8px 11px}
-.cs-wopt-color .swatch{width:22px;height:22px;border-radius:50%;border:2px solid rgba(255,255,255,.15);flex-shrink:0}
-.cs-wopt-color b{color:#fff;font-size:12px}
-.cs-wizard-back{margin-top:10px;background:transparent;border:1px dashed #475569;color:#94a3b8;padding:5px 11px;border-radius:99px;font-family:inherit;font-size:10px;cursor:pointer}
+.cs-wizard-card .wiz-head{display:flex;align-items:center;gap:10px;margin-bottom:8px}
+.cs-wizard-card .wiz-step{background:linear-gradient(135deg,#fbbf24,#f59e0b);color:#0a0a14;padding:3px 11px;border-radius:99px;font-size:10px;font-weight:900;letter-spacing:.3px}
+.cs-wizard-card .wiz-q{font-size:14px;color:#fff;font-weight:700;line-height:1.55;padding-right:2px}
+.cs-wizard-card .wiz-hint{font-size:11px;color:#a78bfa;margin-top:6px;background:rgba(167,139,250,.08);padding:7px 12px;border-radius:8px;display:inline-block}
+
+/* Option ROWS — wide horizontal line of buttons, NOT a grid of boxes */
+.cs-wizard-opts{display:flex;flex-wrap:wrap;gap:8px;margin-top:14px;align-items:stretch}
+.cs-wizard-opts.col-2,.cs-wizard-opts.col-3,.cs-wizard-opts.col-4{display:flex;flex-wrap:wrap;gap:8px}
+.cs-wopt{background:#0f0f1a;border:1px solid #312e81;color:#cbd5e1;border-radius:12px;padding:10px 16px;cursor:pointer;font-family:inherit;font-size:12.5px;font-weight:700;text-align:right;transition:all .18s;display:inline-flex;align-items:center;gap:9px;line-height:1.4;min-height:42px;flex:0 0 auto}
+.cs-wopt:hover{border-color:#7c3aed;background:rgba(124,58,237,.12);transform:translateY(-1px);color:#fff;box-shadow:0 6px 16px rgba(124,58,237,.18)}
+.cs-wopt.chosen{background:linear-gradient(135deg,#10b981,#059669);border-color:#10b981;color:#fff;box-shadow:0 4px 14px rgba(16,185,129,.3)}
+.cs-wopt .wopt-ico{width:28px;height:28px;border-radius:8px;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:15px}
+.cs-wopt .wopt-text{display:flex;flex-direction:column;align-items:flex-start;line-height:1.3}
+.cs-wopt .wopt-text b{color:#fff;font-size:12.5px;font-weight:900}
+.cs-wopt .wopt-text small{color:#94a3b8;font-size:10px;font-weight:500;margin-top:1px}
+.cs-wopt:hover .wopt-text small{color:#cbd5e1}
+.cs-wopt-color{display:inline-flex;align-items:center;gap:9px;padding:8px 14px}
+.cs-wopt-color .swatch{width:20px;height:20px;border-radius:50%;border:2px solid rgba(255,255,255,.15);flex-shrink:0;box-shadow:0 2px 6px rgba(0,0,0,.3)}
+.cs-wopt-color b{color:#fff;font-size:12px;font-weight:800}
+.cs-wizard-back{margin-top:12px;background:transparent;border:1px dashed #475569;color:#94a3b8;padding:6px 13px;border-radius:99px;font-family:inherit;font-size:10.5px;cursor:pointer;transition:.15s}
 .cs-wizard-back:hover{border-color:#fbbf24;color:#fbbf24}
 
-/* Summary card (final step) */
+/* Summary card (final step) — keep this one as a card */
 .cs-summary{background:rgba(16,185,129,.06);border:1px solid rgba(16,185,129,.3);border-radius:12px;padding:14px;margin-top:12px}
 .cs-summary-row{display:flex;justify-content:space-between;padding:5px 0;font-size:12px;border-bottom:1px dashed rgba(16,185,129,.15)}
 .cs-summary-row:last-child{border:0}
@@ -1653,7 +1654,6 @@ body.cs-fullscreen .cs-pill-fs{background:linear-gradient(135deg,#fbbf24,#f59e0b
               </div>
             </div>
             <div class="cs-head-right">
-              <button class="cs-pill" onclick="csToggleSidebar()" id="cs-sidebar-toggle-btn" title="إظهار/إخفاء أدوات الجانب"><i data-lucide="panel-right" style="width:13px;height:13px"></i> <span class="hide-mobile">الأدوات</span></button>
               <button class="cs-pill" onclick="csRestartWizard()" title="بدء جلسة جديدة"><i data-lucide="rotate-ccw" style="width:13px;height:13px"></i> <span class="hide-mobile">جديد</span></button>
               <button class="cs-pill" onclick="csOpenFullscreenPreview()" data-testid="cs-preview-fs"><i data-lucide="monitor" style="width:13px;height:13px"></i> <span class="hide-mobile">معاينة بكامل الشاشة</span></button>
               <button class="cs-pill" onclick="csOpenGallery()" data-testid="cs-gallery-btn"><i data-lucide="layout-grid" style="width:13px;height:13px"></i> <span class="hide-mobile">المكتبة</span> <span id="cs-gallery-count" style="background:#7c3aed;color:#fff;padding:1px 7px;border-radius:99px;font-size:10px;margin-right:4px">0</span></button>
@@ -1671,22 +1671,19 @@ body.cs-fullscreen .cs-pill-fs{background:linear-gradient(135deg,#fbbf24,#f59e0b
           </div>
 
           <div class="cs-body cs-body-v2">
-            <!-- MAIN · CHAT (biggest area) -->
+            <!-- MAIN · CHAT (full width — tools live inside wizard cards) -->
             <div class="cs-chat-main">
               <div class="cs-chat-body cs-chat-body-v2" id="cs-chat-body">
                 <div class="cs-msg cs-msg-bot">
                   <b>أهلاً! 👋 أنا مساعدك الإبداعي.</b><br>
-                  اكتب وش تبي بكلامك الطبيعي ووفّر التفاصيل — مثل:<br>
-                  • <i>"بنر تخفيضات نهاية الأسبوع · خلفية سوداء · أحرف ذهبية"</i><br>
-                  • <i>"لوجو لمحل قهوة باسم ركن البن · مينيمال · لون بني"</i><br>
-                  • <i>"صورة قسم لتصنيف الإلكترونيات بخلفية متدرجة زرقاء"</i><br>
-                  <span style="display:block;margin-top:8px;font-size:11px;color:#a78bfa;background:rgba(167,139,250,.1);padding:7px 10px;border-radius:8px">💡 الذكاء الاصطناعي ملزم بالألوان والمواصفات اللي تختارها من الأدوات في اليمين — لا يحيد عنها.</span>
+                  راح أرشدك خطوة بخطوة وأطلع لك كل الأدوات داخل المحادثة هنا — ما تحتاج تروح يمين ويسار.<br>
+                  <span style="display:block;margin-top:8px;font-size:11px;color:#a78bfa;background:rgba(167,139,250,.1);padding:7px 10px;border-radius:8px">💡 الذكاء الاصطناعي ملزم بالاختيارات اللي تضغطها — مايحيد عنها.</span>
                 </div>
               </div>
               <div class="cs-chat-input cs-chat-input-v2">
                 <button class="cs-chat-attach" title="إرفاق صورة مرجعية" onclick="document.getElementById('cs-ref-file').click()"><i data-lucide="paperclip" style="width:15px;height:15px"></i></button>
                 <input type="file" id="cs-ref-file" accept="image/*" style="display:none" onchange="csAttachRef(this)">
-                <input id="cs-chat-text" placeholder="اطلب أي صورة بكلامك الطبيعي — أو اضغط 'توليد' بعد ضبط الأدوات..." onkeydown="if(event.key==='Enter')csSendChat()" data-testid="cs-chat-input">
+                <input id="cs-chat-text" placeholder="اكتب رسالتك أو اتبع الخطوات داخل المحادثة..." onkeydown="if(event.key==='Enter')csSendChat()" data-testid="cs-chat-input">
                 <button class="cs-gen-btn-inline" onclick="csGenerate()" data-testid="cs-generate-btn" title="توليد 4 صور">
                   <i data-lucide="sparkles" style="width:14px;height:14px"></i>
                   <span>توليد · 32 نقطة</span>
@@ -1694,89 +1691,6 @@ body.cs-fullscreen .cs-pill-fs{background:linear-gradient(135deg,#fbbf24,#f59e0b
                 <button class="cs-chat-send" onclick="csSendChat()" data-testid="cs-chat-send" title="إرسال"><i data-lucide="send" style="width:14px;height:14px"></i></button>
               </div>
             </div>
-
-            <!-- RIGHT · TOOLS SIDEBAR (compact, scrollable) -->
-            <aside class="cs-tools-side">
-              <div class="cs-tools-side-head">
-                <i data-lucide="sliders-horizontal" style="width:14px;height:14px;color:#fbbf24"></i>
-                <b style="font-size:12px;color:#fff">الأدوات</b>
-                <span style="font-size:10px;color:#94a3b8;margin-right:auto">الذكاء يحترمها بدقة</span>
-              </div>
-              <div class="cs-tools cs-tools-v2">
-                <details class="cs-tool" open>
-                  <summary><i data-lucide="palette" style="width:13px;height:13px"></i> 🎨 الخلفية <span class="cs-tool-hint" id="cs-bg-hint">أبيض</span></summary>
-                  <div class="cs-tool-body" id="cs-bg-presets"></div>
-                </details>
-                <details class="cs-tool">
-                  <summary><i data-lucide="frame" style="width:13px;height:13px"></i> 🖼️ الإطار <span class="cs-tool-hint" id="cs-frame-hint">بنفسجي</span></summary>
-                  <div class="cs-tool-body" id="cs-frame-presets"></div>
-                </details>
-                <details class="cs-tool">
-                  <summary><i data-lucide="ruler" style="width:13px;height:13px"></i> 📐 النسبة <span class="cs-tool-hint" id="cs-aspect-hint">16:9</span></summary>
-                  <div class="cs-tool-body">
-                    <div class="cs-aspect-grid">
-                      <button class="cs-aspect-btn active" data-csasp="16:9" onclick="csPickAspect('16:9',this)">16:9<br><small>بنر عريض</small></button>
-                      <button class="cs-aspect-btn" data-csasp="1:1" onclick="csPickAspect('1:1',this)">1:1<br><small>مربع</small></button>
-                      <button class="cs-aspect-btn" data-csasp="9:16" onclick="csPickAspect('9:16',this)">9:16<br><small>ستوري</small></button>
-                      <button class="cs-aspect-btn" data-csasp="4:5" onclick="csPickAspect('4:5',this)">4:5<br><small>إنستا</small></button>
-                      <button class="cs-aspect-btn" data-csasp="3:1" onclick="csPickAspect('3:1',this)">3:1<br><small>هيرو</small></button>
-                      <button class="cs-aspect-btn" data-csasp="4:3" onclick="csPickAspect('4:3',this)">4:3<br><small>كلاسيك</small></button>
-                    </div>
-                    <!-- Custom dimensions -->
-                    <div class="cs-custom-dim">
-                      <label style="font-size:10px;color:#94a3b8;display:block;margin-bottom:4px">أو حدد المقاس بدقة:</label>
-                      <div style="display:flex;gap:5px;align-items:center">
-                        <input type="number" id="cs-cw" placeholder="عرض" min="256" max="3840" style="flex:1;background:#0a0a14;border:1px solid #312e81;color:#fff;border-radius:6px;padding:5px 7px;font-size:11px;font-family:inherit" oninput="csCustomDim()">
-                        <span style="color:#475569">×</span>
-                        <input type="number" id="cs-ch" placeholder="طول" min="256" max="3840" style="flex:1;background:#0a0a14;border:1px solid #312e81;color:#fff;border-radius:6px;padding:5px 7px;font-size:11px;font-family:inherit" oninput="csCustomDim()">
-                      </div>
-                    </div>
-                  </div>
-                </details>
-                <details class="cs-tool">
-                  <summary><i data-lucide="sparkles" style="width:13px;height:13px"></i> ✨ النمط <span class="cs-tool-hint" id="cs-style-hint">حياتي</span></summary>
-                  <div class="cs-tool-body">
-                    <div class="cs-style-grid">
-                      <button class="cs-style-btn active" data-csstl="lifestyle" onclick="csPickStyle('lifestyle','حياتي',this)">🌿<br>حياتي</button>
-                      <button class="cs-style-btn" data-csstl="luxury" onclick="csPickStyle('luxury','فاخر',this)">💎<br>فاخر</button>
-                      <button class="cs-style-btn" data-csstl="studio" onclick="csPickStyle('studio','استوديو',this)">📸<br>استوديو</button>
-                      <button class="cs-style-btn" data-csstl="flat" onclick="csPickStyle('flat','فلات',this)">📐<br>فلات</button>
-                      <button class="cs-style-btn" data-csstl="minimal" onclick="csPickStyle('minimal','مينيمال',this)">⚪<br>مينيمال</button>
-                      <button class="cs-style-btn" data-csstl="dramatic" onclick="csPickStyle('dramatic','درامي',this)">🌑<br>درامي</button>
-                    </div>
-                  </div>
-                </details>
-                <details class="cs-tool cs-tool-section" id="cs-tool-cat" style="display:none">
-                  <summary><i data-lucide="folder" style="width:13px;height:13px"></i> 🗂️ القسم <span class="cs-tool-hint" id="cs-cat-hint">ملابس</span></summary>
-                  <div class="cs-tool-body">
-                    <div class="cs-cat-grid">
-                      <button class="cs-cat-btn active" onclick="csPickCat('ملابس','clothing fashion apparel',this)">👕 ملابس</button>
-                      <button class="cs-cat-btn" onclick="csPickCat('جوالات','smartphones mobile devices',this)">📱 جوالات</button>
-                      <button class="cs-cat-btn" onclick="csPickCat('إلكترونيات','consumer electronics gadgets',this)">💻 إلكترونيات</button>
-                      <button class="cs-cat-btn" onclick="csPickCat('عطور','luxury perfumes fragrances',this)">🌸 عطور</button>
-                      <button class="cs-cat-btn" onclick="csPickCat('مطعم','restaurant food cuisine',this)">🍽️ مطعم</button>
-                      <button class="cs-cat-btn" onclick="csPickCat('حلاقة','barber shop grooming',this)">💈 حلاقة</button>
-                      <button class="cs-cat-btn" onclick="csPickCat('صيدلية','pharmacy medicine wellness',this)">💊 صيدلية</button>
-                      <button class="cs-cat-btn" onclick="csPickCat('قهوة','specialty coffee café',this)">☕ قهوة</button>
-                      <button class="cs-cat-btn" onclick="csPickCat('رياضة','sports fitness athletics',this)">⚽ رياضة</button>
-                      <input type="text" id="cs-cat-custom" placeholder="أو اكتب اسم قسم..." onchange="csPickCat(this.value,this.value,null)" style="grid-column:1/-1;padding:7px 9px;background:#0a0a14;border:1px dashed #312e81;border-radius:7px;color:#fff;font-family:inherit;font-size:11px;margin-top:4px">
-                    </div>
-                  </div>
-                </details>
-                <!-- Placement target — where will this image be used? -->
-                <details class="cs-tool">
-                  <summary><i data-lucide="map-pin" style="width:13px;height:13px"></i> 📍 المكان <span class="cs-tool-hint" id="cs-place-hint">مكتبة</span></summary>
-                  <div class="cs-tool-body">
-                    <div style="display:flex;flex-direction:column;gap:5px">
-                      <button class="cs-place-btn active" data-csp="library" onclick="csPickPlace('library','مكتبة',this)">📚 احفظ في المكتبة فقط</button>
-                      <button class="cs-place-btn" data-csp="hero" onclick="csPickPlace('hero','بنر هيرو',this)">🌟 ضع كبنر هيرو في الصفحة الرئيسية</button>
-                      <button class="cs-place-btn" data-csp="category" onclick="csPickPlace('category','صفحة قسم',this)">🗂️ ضع في صفحة القسم (يتطلب اختيار قسم)</button>
-                      <button class="cs-place-btn" data-csp="promo" onclick="csPickPlace('promo','إعلان جانبي',this)">📢 ضع كإعلان جانبي</button>
-                    </div>
-                  </div>
-                </details>
-              </div>
-            </aside>
           </div>
         </div>
       </div>
