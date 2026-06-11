@@ -885,6 +885,14 @@ body.cs-fullscreen .cs-pill-fs{background:linear-gradient(135deg,#fbbf24,#f59e0b
       </div>
       <div class="topbar-actions" style="position:relative">
         <div style="position:relative">
+          <!-- Z Brand AI button (replaces old corner fab) -->
+          <button class="notif-btn z-ai-btn" onclick="toggleAiChat()" title="مساعد Z الذكي" data-testid="topbar-z-ai" style="background:linear-gradient(135deg,#7c3aed,#ec4899);border:none;color:#fff;display:flex;flex-direction:column;align-items:center;justify-content:center;line-height:1;padding:0;width:44px;height:44px;box-shadow:0 4px 14px rgba(124,58,237,.35);position:relative">
+            <span style="font-size:8px;line-height:1;margin-bottom:1px;filter:drop-shadow(0 1px 2px rgba(0,0,0,.4))">👑</span>
+            <span style="font-size:16px;font-weight:900;line-height:1;letter-spacing:.5px">Z</span>
+            <span style="position:absolute;bottom:-3px;background:#fbbf24;color:#0a0a14;font-size:7px;font-weight:900;padding:1px 5px;border-radius:99px;line-height:1.3">AI</span>
+          </button>
+        </div>
+        <div style="position:relative">
           <button class="notif-btn" onclick="toggleDropdown('notif-dd')" title="الإشعارات"><i data-lucide="bell" style="width:18px;height:18px"></i><span class="dot"></span></button>
           <div class="dropdown" id="notif-dd" style="left:auto;right:0">
             <div style="padding:12px 14px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:8px"><b style="font-size:13px;flex:1">🔔 الإشعارات</b><a href="#" onclick="markAllRead();return false" style="font-size:10px;color:var(--purple);font-weight:900;text-decoration:none">قراءة الكل</a></div>
@@ -2491,7 +2499,8 @@ body.cs-fullscreen .cs-pill-fs{background:linear-gradient(135deg,#fbbf24,#f59e0b
 <script src="business_templates.js"></script>
 
 <!-- ─── AI Assistant (Track #7) — Floating chat tied to /api/ai/chat (Claude Opus 4.5) ─── -->
-<button id="ai-fab" data-testid="ai-fab" onclick="toggleAiChat()" style="position:fixed;bottom:24px;left:24px;width:60px;height:60px;border-radius:50%;background:linear-gradient(135deg,#7c3aed,#ec4899);color:#fff;border:none;cursor:pointer;box-shadow:0 12px 32px rgba(124,58,237,.45);z-index:200;font-size:24px;transition:transform .2s" onmouseover="this.style.transform='scale(1.1)'" onmouseout="this.style.transform='scale(1)'">🤖</button>
+<!-- Old corner FAB removed — moved to topbar next to bell (see #topbar-z-ai) -->
+<button id="ai-fab" data-testid="ai-fab" onclick="toggleAiChat()" style="display:none"></button>
 
 <div id="ai-chat-panel" data-testid="ai-chat-panel" style="display:none;position:fixed;bottom:96px;left:24px;width:380px;max-width:90vw;height:540px;max-height:80vh;background:#fff;border-radius:18px;box-shadow:0 20px 60px rgba(0,0,0,.3);z-index:200;flex-direction:column;overflow:hidden;font-family:inherit">
   <div style="background:linear-gradient(135deg,#7c3aed,#ec4899);color:#fff;padding:14px 18px;display:flex;justify-content:space-between;align-items:center">

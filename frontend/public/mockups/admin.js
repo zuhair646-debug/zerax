@@ -4291,16 +4291,28 @@ function csUserMsg(text){
 async function csSendChat(){
   const inp = document.getElementById('cs-chat-text');
   const txt = (inp?.value || '').trim();
-  if(!txt) return;
+  if(!txt){ toast('💬 اكتب رسالة أو اتبع الخطوات بالأزرار'); return; }
   csUserMsg(txt);
   inp.value = '';
-  csBotMsg(`✓ تمام، جاهز نولّد <b>${txt}</b>؟<br>الأدوات الحالية: ${CS_STATE.aspect} · ${CS_STATE.styleAr} · ${CS_STATE.bgColorName}<br>اضغط <b>"توليد 4 صور"</b> 👇`);
-  // Store as the prompt seed
+  // If wizard is mid-flow at the "idea" step, treat this as the idea
+  if(CS_WIZARD.step === 'idea'){
+    CS_STATE._chatPrompt = txt;
+    setTimeout(csWizardStepSize, 200);
+    return;
+  }
+  // Otherwise it's a free chat — store as prompt seed for next generate
   CS_STATE._chatPrompt = txt;
+  csBotMsg(`✓ سجلت فكرتك: "<b>${txt}</b>"<br>إذا تبيها كصورة مباشرة — اضغط زر <b>"توليد"</b> 🎨`);
 }
 
 // Generate via Gemini Nano Banana — STRICT color enforcement
 async function csGenerate(){
+  // Check & deduct credits (32 points)
+  const cost = 32;
+  if(typeof WALLET !== 'undefined' && WALLET < cost){
+    toast(`⚠️ رصيدك غير كافٍ — تحتاج ${cost} نقطة (عندك ${WALLET})`);
+    return;
+  }
   const btns = document.querySelectorAll('.cs-gen-btn-inline, .cs-gen-btn');
   btns.forEach(btn=>{ btn.disabled = true; btn.innerHTML = '<i data-lucide="loader" style="width:14px;height:14px"></i> جاري التوليد...'; });
   if(window.lucide) lucide.createIcons();
@@ -4345,11 +4357,23 @@ async function csGenerate(){
     if(!imgs.length) throw new Error('no images returned');
     CS_STATE.generated = imgs;
     csAppendImageGrid(imgs);
+    // ✅ Deduct credits ONLY on successful generation
+    if(typeof WALLET !== 'undefined'){
+      WALLET -= cost; localStorage.setItem('zx_credits', WALLET);
+      const wb = document.getElementById('wallet-balance'); if(wb) wb.textContent = WALLET.toLocaleString('ar-EG');
+      csSyncPoints();
+    }
   } catch(e){
     // Fallback to placeholder so the UX is testable without AI key
     const placeholders = [1,2,3,4].map(i=>`https://picsum.photos/seed/${CS_STATE.type}-${Date.now()}-${i}/800/600`);
     CS_STATE.generated = placeholders;
     csAppendImageGrid(placeholders, true);
+    // Charge a smaller fee on fallback (2 pts) so it's not totally free but doesn't penalize the user
+    if(typeof WALLET !== 'undefined'){
+      WALLET -= 2; localStorage.setItem('zx_credits', WALLET);
+      const wb = document.getElementById('wallet-balance'); if(wb) wb.textContent = WALLET.toLocaleString('ar-EG');
+      csSyncPoints();
+    }
   }
   btns.forEach(btn=>{ btn.disabled = false; btn.innerHTML = '<i data-lucide="sparkles" style="width:14px;height:14px"></i> <span>توليد · 32 نقطة</span>'; });
   if(window.lucide) lucide.createIcons();
@@ -4528,9 +4552,12 @@ function csOpenGallery(){
 
 // Sync points with the global WALLET (the sidebar wallet shows the same number)
 function csSyncPoints(){
-  const v = (typeof WALLET !== 'undefined') ? WALLET : parseInt(localStorage.getItem('zx_credits')||'5000');
+  const v = (typeof WALLET !== 'undefined' && WALLET) ? WALLET : parseInt(localStorage.getItem('zx_credits')||'5000');
   const el = document.getElementById('cs-points-val');
   if(el) el.textContent = v.toLocaleString('ar-EG');
 }
 // Re-sync points when wallet changes elsewhere (poll lightly)
 setInterval(()=>{ if(document.querySelector('.page[data-page="creative-studio"]')?.style.display !== 'none') csSyncPoints(); }, 2500);
+// Also sync as soon as DOM is ready (even before user opens the studio)
+if(document.readyState !== 'loading'){ csSyncPoints(); }
+else { document.addEventListener('DOMContentLoaded', csSyncPoints); }
