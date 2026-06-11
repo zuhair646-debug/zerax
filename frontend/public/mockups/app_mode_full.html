@@ -699,7 +699,7 @@ body.dark .acc-stat .k{color:#94a3b8}
 
 <!-- HEADER -->
 <header class="top" style="justify-content:center;position:relative">
-  <a href="https://zerax.com" target="_blank" rel="noopener" class="logo" id="brand" style="text-decoration:none;color:inherit;display:flex;align-items:center;gap:8px;position:absolute;left:50%;transform:translateX(-50%)" title="Zerax — انتقل للموقع الرئيسي"><img src="/zerax-logo.png" alt="Zerax" style="height:42px;width:auto;object-fit:contain"></a>
+  <a href="https://zerax.com" target="_blank" rel="noopener" class="logo" id="brand" style="text-decoration:none;color:inherit;display:flex;align-items:center;gap:8px;position:absolute;left:50%;transform:translateX(-50%)" title="Zerax — انتقل للموقع الرئيسي"><img src="/zerax-logo.png" alt="Zerax" style="height:42px;width:auto;object-fit:contain" loading="lazy" decoding="async"></a>
   <input class="search" id="search" placeholder="ابحث..." style="margin-right:auto">
   <a href="/mockups/errand.html" data-testid="header-errand-btn" title="اطلب توصيل / مشوار" style="background:linear-gradient(135deg,#7c3aed,#06b6d4);color:#fff;text-decoration:none;padding:8px 12px;border-radius:99px;font-weight:900;font-size:12px;display:inline-flex;align-items:center;gap:5px;flex-shrink:0;margin-left:6px">🚚 توصيل</a>
   <button class="cart-btn" data-testid="header-account-btn" onclick="showView('account')" title="حسابي" id="header-login-btn" style="background:linear-gradient(135deg,#7c3aed,#ec4899);border:none;color:#fff;flex-shrink:0">👤</button>
@@ -742,11 +742,11 @@ body.dark .acc-stat .k{color:#94a3b8}
 <div class="banner editable-img-host" id="banner">
   <button class="img-edit-btn" onclick="openStudio('main_banner')" title="تحرير الصورة">✨</button>
   <div class="banner-img-stack" id="banner-img-stack">
-    <img src="https://images.unsplash.com/photo-1607082348824-0a96f2a4b9da?w=1600&q=85" alt="shopping bags" />
-    <img src="https://images.unsplash.com/photo-1607083206869-4c7672e72a8a?w=1600&q=85" alt="boutique" />
-    <img src="https://images.unsplash.com/photo-1483985988355-763728e1935b?w=1600&q=85" alt="fashion" />
+    <img src="https://images.unsplash.com/photo-1607082348824-0a96f2a4b9da?w=1600&q=85" alt="shopping bags" loading="lazy" decoding="async"/>
+    <img src="https://images.unsplash.com/photo-1607083206869-4c7672e72a8a?w=1600&q=85" alt="boutique" loading="lazy" decoding="async"/>
+    <img src="https://images.unsplash.com/photo-1483985988355-763728e1935b?w=1600&q=85" alt="fashion" loading="lazy" decoding="async"/>
   </div>
-  <video class="banner-video" id="banner-video" muted loop playsinline preload="auto" autoplay></video>
+  <video class="banner-video" id="banner-video" muted loop playsinline preload="none"></video>
   <div class="banner-overlay"></div>
   <div class="banner-sheen"></div>
 </div>
@@ -974,7 +974,7 @@ body.dark .acc-stat .k{color:#94a3b8}
 <!-- POWERED BY FOOTER (home only) -->
 <div id="powered-footer" data-home-only="true" style="background:#0a0a0a;color:#94a3b8;padding:24px 14px 90px;text-align:center;font-size:11px;line-height:1.9">
   <a href="#" onclick="showView('home');return false;" style="display:inline-block;text-decoration:none">
-    <img src="/zerax-logo.png" alt="Zerax" style="height:60px;width:auto;object-fit:contain;filter:drop-shadow(0 4px 14px rgba(251,191,36,.25))">
+    <img src="/zerax-logo.png" alt="Zerax" style="height:60px;width:auto;object-fit:contain;filter:drop-shadow(0 4px 14px rgba(251,191,36,.25))" loading="lazy" decoding="async">
   </a>
   <div style="margin-top:8px;opacity:.7;font-size:11px">الشركة المطوّرة</div>
 </div>
@@ -986,7 +986,7 @@ body.dark .acc-stat .k{color:#94a3b8}
   <div id="cat-banner" class="editable-img-host" style="height:240px;border-radius:18px;position:relative;overflow:hidden;margin-bottom:16px;color:#fff;box-shadow:0 10px 30px rgba(0,0,0,.15);background:linear-gradient(135deg,#7c3aed,#ec4899,#f59e0b);background-size:200% 200%;animation:cat-grad-shift 8s ease-in-out infinite">
     <button class="img-edit-btn" onclick="openStudio('cat_banner:'+activeCat)" title="تحرير الصورة">✨</button>
     <!-- Full-bleed background image (always loads instantly) -->
-    <img id="cat-banner-img" alt="" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;z-index:1;animation:cat-kenburns 18s ease-in-out infinite alternate" />
+    <img id="cat-banner-img" alt="" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;z-index:1;animation:cat-kenburns 18s ease-in-out infinite alternate" loading="lazy" decoding="async"/>
     <!-- Optional video on top (only when loaded) -->
     <video id="cat-banner-video" muted loop playsinline preload="metadata" crossorigin="anonymous"
       style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;z-index:2;opacity:0;transition:opacity .6s"></video>
@@ -1015,7 +1015,7 @@ body.dark .acc-stat .k{color:#94a3b8}
 <!-- ═══════════════════ PRODUCT DETAIL PAGE ═══════════════════ -->
 <section id="view-product" style="display:none;padding:0 16px 24px" data-view-section>
   <button onclick="showView('home')" class="pill-btn" style="margin:18px 0;background:#fff;color:#0a0a0a"><span data-key="back">رجوع</span></button>
-  <div class="pd-hero editable-img-host"><img id="pd-hero-img" alt=""><button class="img-edit-btn" id="pd-edit-btn" title="تحرير">✨</button></div>
+  <div class="pd-hero editable-img-host"><img id="pd-hero-img" alt="" loading="lazy" decoding="async"><button class="img-edit-btn" id="pd-edit-btn" title="تحرير">✨</button></div>
   <div class="pd-thumbs" id="pd-thumbs"></div>
   <h1 class="pd-title" id="pd-title"></h1>
   <p style="font-size:13px;color:#6b7280;line-height:1.7" id="pd-tagline"></p>
@@ -1415,7 +1415,7 @@ body.dark .acc-stat .k{color:#94a3b8}
         </div>
         <div class="gen-loading" id="gen-loading"><div class="spin"></div><b data-key="generating">جاري التوليد...</b><p style="font-size:12px;color:#6b7280;margin-top:6px" data-key="generating_sub">Zerax AI Engine يشتغل...</p></div>
         <div class="gen-preview" id="gen-preview">
-          <img id="gen-preview-img" alt="generated">
+          <img id="gen-preview-img" alt="generated" loading="lazy" decoding="async">
           <video id="gen-preview-video" controls playsinline style="width:100%;border-radius:12px;border:2px solid #7c3aed;display:none"></video>
           <div class="multi-grid" id="gen-multi-grid" style="display:none"></div>
           <div class="gen-actions">
@@ -1815,7 +1815,7 @@ body.dark .acc-stat .k{color:#94a3b8}
   <button class="lb-nav lb-prev" onclick="lbPrev()" title="السابق">‹</button>
   <button class="lb-nav lb-next" onclick="lbNext()" title="التالي">›</button>
   <div class="lb-stage" id="lb-stage">
-    <img class="lb-img" id="lb-img" alt="" draggable="false">
+    <img class="lb-img" id="lb-img" alt="" draggable="false" loading="lazy" decoding="async">
     <video class="lb-img" id="lb-video" controls playsinline style="display:none;background:#000"></video>
   </div>
   <div class="lb-thumbs" id="lb-thumbs"></div>
@@ -2157,7 +2157,7 @@ function renderSocialIcons(){
   const host=document.getElementById('social-icons');
   if(!host)return;
   const builtin=preset.map(s=>`<a href="${s.url}" target="_blank" aria-label="${s.name}" title="${s.name}" style="background:#1e293b" onmouseover="this.style.background='${s.color}';this.style.color='#fff'" onmouseout="this.style.background='#1e293b';this.style.color='#cbd5e1'"><i class="${s.icon}"></i></a>`).join('');
-  const custom=CUSTOM_SOCIALS.map(s=>`<a class="custom" href="${s.url}" target="_blank" aria-label="${s.name}" title="${s.name}"><img src="${s.image}" alt="${s.name}"></a>`).join('');
+  const custom=CUSTOM_SOCIALS.map(s=>`<a class="custom" href="${s.url}" target="_blank" aria-label="${s.name}" title="${s.name}"><img src="${s.image}" alt="${s.name}" loading="lazy" decoding="async"></a>`).join('');
   host.innerHTML=builtin+custom;
 }
 
@@ -2181,7 +2181,7 @@ function onCustomSocialImage(e){
     _pendingSocialImage=ev.target.result;
     const zone=document.getElementById('cs-upload-zone');
     zone.classList.add('has-preview');
-    zone.innerHTML=`<img src="${_pendingSocialImage}" alt="preview"><p style="font-size:11px;color:#22c55e;margin-top:6px;font-weight:900">✓ ${CURRENT_LANG==='ar'?'تم رفع الصورة':'Image uploaded'}</p>`;
+    zone.innerHTML=`<img src="${_pendingSocialImage}" alt="preview" loading="lazy" decoding="async"><p style="font-size:11px;color:#22c55e;margin-top:6px;font-weight:900">✓ ${CURRENT_LANG==='ar'?'تم رفع الصورة':'Image uploaded'}</p>`;
   };
   reader.readAsDataURL(file);
 }
@@ -2210,7 +2210,7 @@ function renderCustomSocialList(){
   const host=document.getElementById('cs-list');
   if(!host)return;
   if(!CUSTOM_SOCIALS.length){host.innerHTML='<p style="font-size:11px;color:#9ca3af;text-align:center;padding:10px">'+(CURRENT_LANG==='ar'?'لا توجد مواقع مخصصة بعد':'No custom socials yet')+'</p>';return;}
-  host.innerHTML=CUSTOM_SOCIALS.map(s=>`<div class="custom-social-row"><img src="${s.image}" alt="${s.name}"><div class="info"><b>${s.name}</b><small>${s.url}</small></div><button class="del" onclick="deleteCustomSocial('${s.id}')">✕</button></div>`).join('');
+  host.innerHTML=CUSTOM_SOCIALS.map(s=>`<div class="custom-social-row"><img src="${s.image}" alt="${s.name}" loading="lazy" decoding="async"><div class="info"><b>${s.name}</b><small>${s.url}</small></div><button class="del" onclick="deleteCustomSocial('${s.id}')">✕</button></div>`).join('');
 }
 
 // ═══════════════════════ MARKET ═══════════════════════
@@ -2600,7 +2600,7 @@ function renderAccount(){
   // Avatar (image or letter)
   const avEl=document.getElementById('acc-avatar');
   if(avEl){
-    if(a.avatar){avEl.innerHTML=`<img src="${a.avatar}" alt="avatar">`;}
+    if(a.avatar){avEl.innerHTML=`<img src="${a.avatar}" alt="avatar" loading="lazy" decoding="async">`;}
     else{avEl.textContent=nameVal?nameVal.charAt(0).toUpperCase():'👤';}
   }
   const orders=getOrders();
@@ -2690,7 +2690,7 @@ function renderAccount(){
         const nextDate=new Date(s.nextDelivery).toLocaleDateString('ar-SA');
         const freqMap={weekly:'أسبوعياً',biweekly:'كل أسبوعين',monthly:'شهرياً',quarterly:'كل 3 أشهر'};
         return `<div style="background:linear-gradient(135deg,#faf5ff,#fdf2f8);border:1.5px solid #e9d5ff;border-radius:12px;padding:12px;margin-bottom:8px">
-          <div style="display:flex;align-items:center;gap:10px"><img src="${p?.img||''}" style="width:48px;height:48px;border-radius:8px;object-fit:cover"><div style="flex:1;min-width:0"><b style="font-size:12px;color:var(--zx-text)">${name}</b><div style="font-size:10px;color:#6b7280;margin-top:2px">⏰ ${freqMap[s.frequency]||s.frequency} · 📅 التالي: <b>${nextDate}</b></div></div><b style="color:var(--zx-accent);font-size:13px">${curSym()} ${formatPrice(p?.sar||0)}</b></div>
+          <div style="display:flex;align-items:center;gap:10px"><img src="${p?.img||''}" style="width:48px;height:48px;border-radius:8px;object-fit:cover" loading="lazy" decoding="async"><div style="flex:1;min-width:0"><b style="font-size:12px;color:var(--zx-text)">${name}</b><div style="font-size:10px;color:#6b7280;margin-top:2px">⏰ ${freqMap[s.frequency]||s.frequency} · 📅 التالي: <b>${nextDate}</b></div></div><b style="color:var(--zx-accent);font-size:13px">${curSym()} ${formatPrice(p?.sar||0)}</b></div>
           <div style="display:flex;gap:6px;margin-top:10px"><button onclick="pauseSubscription(${i})" style="flex:1;padding:7px;background:var(--zx-card,#fff);border:1px solid #e5e7eb;border-radius:7px;font-family:inherit;font-size:10px;cursor:pointer;font-weight:700">${s.paused?'▶️ استئناف':'⏸️ إيقاف مؤقت'}</button><button onclick="skipNextDelivery(${i})" style="flex:1;padding:7px;background:var(--zx-card,#fff);border:1px solid #e5e7eb;border-radius:7px;font-family:inherit;font-size:10px;cursor:pointer;font-weight:700">⏭️ تخطي مرة</button><button onclick="cancelSubscription(${i})" style="flex:1;padding:7px;background:#fef2f2;color:#dc2626;border:1px solid #fecaca;border-radius:7px;font-family:inherit;font-size:10px;cursor:pointer;font-weight:700">❌ إلغاء</button></div>
         </div>`;
       }).join('');
@@ -3372,7 +3372,7 @@ function updateCart(){
   const bnavCart=document.getElementById('bnav-cart-badge');
   if(bnavCart){bnavCart.textContent=total;bnavCart.style.display=total>0?'flex':'none';}
   if(!CART.length){body.innerHTML=`<div class="empty-cart"><div class="ico">🛒</div><b>${t.cart_empty}</b><p style="margin-top:6px;font-size:13px">${t.cart_empty_sub}</p></div>`;foot.style.display='none';return;}
-  body.innerHTML=CART.map(c=>{const p=PRODUCTS.find(x=>x.id===c.id);if(!p)return'';const n=CURRENT_LANG==='ar'?p.ar:p.en;return `<div class="cart-item"><img src="${p.img}"><div class="cart-item-info"><div class="n">${n}</div><div class="p">${curSym()} ${formatPrice(p.sar*c.qty)}</div><div class="qty-row"><button class="qty-btn" onclick="changeQty('${p.id}',-1)">−</button><span class="qty-num">${c.qty}</span><button class="qty-btn" onclick="changeQty('${p.id}',1)">+</button></div></div></div>`;}).join('');
+  body.innerHTML=CART.map(c=>{const p=PRODUCTS.find(x=>x.id===c.id);if(!p)return'';const n=CURRENT_LANG==='ar'?p.ar:p.en;return `<div class="cart-item"><img src="${p.img}" loading="lazy" decoding="async"><div class="cart-item-info"><div class="n">${n}</div><div class="p">${curSym()} ${formatPrice(p.sar*c.qty)}</div><div class="qty-row"><button class="qty-btn" onclick="changeQty('${p.id}',-1)">−</button><span class="qty-num">${c.qty}</span><button class="qty-btn" onclick="changeQty('${p.id}',1)">+</button></div></div></div>`;}).join('');
   const sub=CART.reduce((s,c)=>{const p=PRODUCTS.find(x=>x.id===c.id);return s+(p?p.sar*c.qty:0);},0);
   const taxRate=typeof CURRENT_MARKET.tax?.rate==='number'?CURRENT_MARKET.tax.rate:0;
   const coup=ACTIVE_COUPON;
@@ -4101,7 +4101,7 @@ function onStudioLogoUpload(e){
   const reader=new FileReader();
   reader.onload=ev=>{
     STUDIO_LOGO=ev.target.result;
-    document.getElementById('studio-logo-preview').innerHTML=`<img src="${STUDIO_LOGO}" alt="logo">`;
+    document.getElementById('studio-logo-preview').innerHTML=`<img src="${STUDIO_LOGO}" alt="logo" loading="lazy" decoding="async">`;
     document.getElementById('studio-logo-status').textContent=CURRENT_LANG==='ar'?'✓ سيُضاف اللوغو':'✓ Logo will be added';
   };
   reader.readAsDataURL(file);
@@ -4162,7 +4162,7 @@ function openStudio(target){
   // Build library tab
   const libKey=target.startsWith('product:')||target.startsWith('cat_icon:')?'product':(target.startsWith('cat_banner:')?'cat_banner':target);
   const lib=STUDIO_LIBRARY[libKey]||STUDIO_LIBRARY.cat_banner;
-  document.getElementById('lib-grid').innerHTML=lib.map(u=>`<img src="${u}" onclick="pickFromLibrary('${u}')" alt="library">`).join('');
+  document.getElementById('lib-grid').innerHTML=lib.map(u=>`<img src="${u}" onclick="pickFromLibrary('${u}')" alt="library" loading="lazy" decoding="async">`).join('');
   // Show video mode only for banners
   const videoModeEl=document.querySelector('.studio-mode[data-mode="video"]');
   if(videoModeEl)videoModeEl.style.display=(target==='main_banner'||target.startsWith('cat_banner:'))?'block':'none';
@@ -4285,7 +4285,7 @@ async function runGeneration(){
     } else {
       const grid=document.getElementById('gen-multi-grid');
       grid.style.display='grid';
-      grid.innerHTML=urls.map((u,i)=>`<img src="${u}" data-i="${i}" onclick="pickMultiVariant(${i},this)" alt="variant ${i+1}" class="${i===0?'picked':''}">`).join('');
+      grid.innerHTML=urls.map((u,i)=>`<img src="${u}" data-i="${i}" onclick="pickMultiVariant(${i},this)" alt="variant ${i+1}" class="${i===0?'picked':''}" loading="lazy" decoding="async">`).join('');
     }
     ZERAX_CREDITS-=(data.cost||cost);
     localStorage.setItem('zx_credits',String(ZERAX_CREDITS));
@@ -4389,7 +4389,7 @@ function applyImageOverride(target,url,type){
     const stack=document.getElementById('banner-img-stack');
     if(stack){
       if(type==='video'){stack.innerHTML='';const v=document.getElementById('banner-video');v.src=url;v.style.opacity='1';v.load();v.play().catch(()=>{});}
-      else{stack.innerHTML=`<img src="${url}" alt="banner" style="opacity:1;animation:bnr-fade 18s linear infinite">`;}
+      else{stack.innerHTML=`<img src="${url}" alt="banner" style="opacity:1;animation:bnr-fade 18s linear infinite" loading="lazy" decoding="async">`;}
     }
   } else if(target.startsWith('cat_banner:')){
     document.getElementById('cat-banner-img').src=url;
@@ -4414,7 +4414,7 @@ function pCardHtml(p){
   const gallery=(PRODUCT_GALLERIES[p.id]||[{type:'image',url:p.img}]).filter(g=>g.type==='image').slice(0,5);
   const imgs=gallery.length?gallery:[{url:p.img}];
   const FALLBACK_IMG='https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=600';
-  const stack=imgs.map((g,i)=>`<img src="${g.url||FALLBACK_IMG}" alt="${name} ${i+1}" class="${i===0?'active':''}" data-i="${i}" onerror="this.onerror=null;this.src='${FALLBACK_IMG}'">`).join('');
+  const stack=imgs.map((g,i)=>`<img src="${g.url||FALLBACK_IMG}" alt="${name} ${i+1}" class="${i===0?'active':''}" data-i="${i}" onerror="this.onerror=null;this.src='${FALLBACK_IMG}'" loading="lazy" decoding="async">`).join('');
   const dots=imgs.length>1?`<div class="p-card-dots">${imgs.map((_,i)=>`<span class="${i===0?'active':''}"></span>`).join('')}</div>`:'';
   const navs=imgs.length>1?`<button class="p-card-nav p-card-prev" onclick="event.stopPropagation();pCardNav(this,-1)" aria-label="prev">‹</button><button class="p-card-nav p-card-next" onclick="event.stopPropagation();pCardNav(this,1)" aria-label="next">›</button>`:'';
   const isAI=p.isAI||p.cat==='ai_services';
@@ -4484,7 +4484,7 @@ function showProductDetail(pid){
   const heroImg=document.getElementById('pd-hero-img');
   heroImg.src=gallery[0].url;
   heroImg.onclick=()=>openLightbox(gallery[0].url,pid);
-  document.getElementById('pd-thumbs').innerHTML=gallery.map((g,i)=>`<img src="${g.url}" class="${i===0?'active':''}" onclick="pdJump(${i},'${pid}')" alt="">`).join('');
+  document.getElementById('pd-thumbs').innerHTML=gallery.map((g,i)=>`<img src="${g.url}" class="${i===0?'active':''}" onclick="pdJump(${i},'${pid}')" alt="" loading="lazy" decoding="async">`).join('');
   document.getElementById('pd-title').textContent=name;
   document.getElementById('pd-tagline').textContent=desc;
   document.getElementById('pd-price').textContent=curSym()+' '+formatPrice(p.sar);
@@ -4647,7 +4647,7 @@ function renderSavedImages(){
   if(!host)return;
   if(!SAVED_IMAGES.length){host.innerHTML='';if(empty)empty.style.display='block';return;}
   if(empty)empty.style.display='none';
-  host.innerHTML=SAVED_IMAGES.map(s=>`<div class="saved-card" onclick="applySavedImage('${s.id}')"><img src="${s.url}" alt=""><button class="del" onclick="event.stopPropagation();deleteSavedImage('${s.id}')">✕</button><div class="meta">${(s.prompt||'').slice(0,40)}</div></div>`).join('');
+  host.innerHTML=SAVED_IMAGES.map(s=>`<div class="saved-card" onclick="applySavedImage('${s.id}')"><img src="${s.url}" alt="" loading="lazy" decoding="async"><button class="del" onclick="event.stopPropagation();deleteSavedImage('${s.id}')">✕</button><div class="meta">${(s.prompt||'').slice(0,40)}</div></div>`).join('');
 }
 function applySavedImage(id){
   const item=SAVED_IMAGES.find(s=>s.id===id);
@@ -4716,7 +4716,7 @@ function acpRenderProductGrid(){
   if(!grid)return;
   const recent=PRODUCTS.slice(0,7);
   grid.innerHTML=`<div class="acp-pcard adding" onclick="acpStartNewProduct()"><div class="plus">＋</div><b style="font-size:11px">منتج جديد</b></div>`+
-    recent.map(p=>`<div class="acp-pcard" onclick="acpEditProduct('${p.id}')"><img src="${p.img}" alt=""><div class="nm">${(CURRENT_LANG==='ar'?p.ar:p.en).slice(0,30)}</div></div>`).join('');
+    recent.map(p=>`<div class="acp-pcard" onclick="acpEditProduct('${p.id}')"><img src="${p.img}" alt="" loading="lazy" decoding="async"><div class="nm">${(CURRENT_LANG==='ar'?p.ar:p.en).slice(0,30)}</div></div>`).join('');
 }
 function acpStartNewProduct(){
   acpResetForm();
@@ -5577,7 +5577,7 @@ function showLbItem(){
   const thumbs=document.getElementById('lb-thumbs');
   if(LB_GALLERY.length>1){
     thumbs.style.display='flex';
-    thumbs.innerHTML=LB_GALLERY.map((g,i)=>`<img src="${g.type==='video'?'https://cdn-icons-png.flaticon.com/512/727/727245.png':g.url}" class="${i===LB_INDEX?'active':''}" onclick="jumpLb(${i})" alt="">`).join('');
+    thumbs.innerHTML=LB_GALLERY.map((g,i)=>`<img src="${g.type==='video'?'https://cdn-icons-png.flaticon.com/512/727/727245.png':g.url}" class="${i===LB_INDEX?'active':''}" onclick="jumpLb(${i})" alt="" loading="lazy" decoding="async">`).join('');
   } else thumbs.style.display='none';
   // Show/hide nav buttons
   const showNav=LB_GALLERY.length>1;
@@ -5663,7 +5663,7 @@ function applyAllOverrides(){
     const obj=typeof ov==='string'?{url:ov,type:'image'}:ov;
     if(stack){
       if(obj.type==='video'){stack.innerHTML='';const v=document.getElementById('banner-video');v.src=obj.url;v.style.opacity='1';v.load();}
-      else{stack.innerHTML=`<img src="${obj.url}" alt="banner" style="opacity:1;animation:bnr-fade 18s linear infinite">`;}
+      else{stack.innerHTML=`<img src="${obj.url}" alt="banner" style="opacity:1;animation:bnr-fade 18s linear infinite" loading="lazy" decoding="async">`;}
     }
   }
   Object.keys(IMG_OVERRIDES).forEach(k=>{

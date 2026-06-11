@@ -282,7 +282,7 @@ img{max-width:100%;display:block}
     <div class="consult-ok" id="consult-ok">✓ <span data-key="consult_ok">Request received. Our concierge will call you within 24 hours.</span></div>
   </div>
   <div class="consult-img">
-    <img src="https://images.unsplash.com/photo-1605100804763-247f67b3557e?w=1200&q=85" alt="Showroom">
+    <img src="https://images.unsplash.com/photo-1605100804763-247f67b3557e?w=1200&q=85" alt="Showroom" loading="lazy" decoding="async">
   </div>
 </section>
 
@@ -535,7 +535,7 @@ function renderProducts(){
   grid.innerHTML=filtered.map((p,i)=>{
     const name=CURRENT_LANG==='ar'?p.ar:p.en;
     const desc=CURRENT_LANG==='ar'?p.descAr:p.descEn;
-    return `<div class="product" onclick="openDetail('${p.id}')"><div class="product-frame"><img class="product-img" src="${p.img}" alt="${name}"><div class="num">N° ${String(i+1).padStart(2,'0')}</div><div class="name">${name}</div><div class="desc">${desc}</div><div class="price">${CURRENT_MARKET.symbol} ${formatPrice(p.sar)}</div><div class="product-actions" onclick="event.stopPropagation()"><button class="p-act" onclick="openDetail('${p.id}')">${t.view_detail}</button><button class="p-act solid" onclick="addToCart('${p.id}')">+</button></div></div></div>`;
+    return `<div class="product" onclick="openDetail('${p.id}')"><div class="product-frame"><img class="product-img" src="${p.img}" alt="${name}" loading="lazy" decoding="async"><div class="num">N° ${String(i+1).padStart(2,'0')}</div><div class="name">${name}</div><div class="desc">${desc}</div><div class="price">${CURRENT_MARKET.symbol} ${formatPrice(p.sar)}</div><div class="product-actions" onclick="event.stopPropagation()"><button class="p-act" onclick="openDetail('${p.id}')">${t.view_detail}</button><button class="p-act solid" onclick="addToCart('${p.id}')">+</button></div></div></div>`;
   }).join('');
 }
 
@@ -546,7 +546,7 @@ function openDetail(pid){
   const name=CURRENT_LANG==='ar'?p.ar:p.en;
   const desc=CURRENT_LANG==='ar'?p.descAr:p.descEn;
   document.getElementById('detail-modal-body').innerHTML=`
-    <div class="detail-img"><img src="${p.img}" alt="${name}"></div>
+    <div class="detail-img"><img src="${p.img}" alt="${name}" loading="lazy" decoding="async"></div>
     <div class="detail-info">
       <div class="label">N° ${p.id.toUpperCase()}</div>
       <h3>${name}</h3>
@@ -598,7 +598,7 @@ function updateCart(){
   body.innerHTML=CART.map(c=>{
     const p=PRODUCTS.find(x=>x.id===c.id);if(!p)return'';
     const n=CURRENT_LANG==='ar'?p.ar:p.en;
-    return `<div class="cart-item"><img src="${p.img}"><div class="ci-info"><div class="ci-name">${n}</div><div class="ci-price">${CURRENT_MARKET.symbol} ${formatPrice(p.sar*c.qty)}</div><div class="qty-row"><button class="qty-btn" onclick="changeQty('${p.id}',-1)">−</button><span class="qty-num">${c.qty}</span><button class="qty-btn" onclick="changeQty('${p.id}',1)">+</button></div></div></div>`;
+    return `<div class="cart-item"><img src="${p.img}" loading="lazy" decoding="async"><div class="ci-info"><div class="ci-name">${n}</div><div class="ci-price">${CURRENT_MARKET.symbol} ${formatPrice(p.sar*c.qty)}</div><div class="qty-row"><button class="qty-btn" onclick="changeQty('${p.id}',-1)">−</button><span class="qty-num">${c.qty}</span><button class="qty-btn" onclick="changeQty('${p.id}',1)">+</button></div></div></div>`;
   }).join('');
   const sub=CART.reduce((s,c)=>{const p=PRODUCTS.find(x=>x.id===c.id);return s+(p?p.sar*c.qty:0);},0);
   const taxRate=typeof CURRENT_MARKET.tax?.rate==='number'?CURRENT_MARKET.tax.rate:0;

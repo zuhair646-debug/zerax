@@ -222,7 +222,7 @@ img{max-width:100%;display:block}
 
 <!-- SCENE 1: HERO -->
 <section class="scene-hero">
-  <img class="hero-bg" id="hero-img" src="https://images.unsplash.com/photo-1414235077428-338989a2e8c0?w=2000&q=85">
+  <img class="hero-bg" id="hero-img" src="https://images.unsplash.com/photo-1414235077428-338989a2e8c0?w=2000&q=85" loading="lazy" decoding="async">
   <div class="hero-content">
     <div class="hero-tagline" data-key="hero_tag">Fine Dining · Riyadh · Est. 2026</div>
     <h1 class="hero-title sf" data-key="hero_title_html">A taste of <b>elegance</b> in every bite</h1>
@@ -243,7 +243,7 @@ img{max-width:100%;display:block}
     <p data-key="story_p3">الشيف خالد، حفيد تلك المائدة، يقدّم لك تراثاً سعودياً بلمسة عصرية فاخرة.</p>
   </div>
   <div class="story-img-wrap">
-    <img src="https://images.unsplash.com/photo-1577219491135-ce391730fb2c?w=1200&q=85">
+    <img src="https://images.unsplash.com/photo-1577219491135-ce391730fb2c?w=1200&q=85" loading="lazy" decoding="async">
   </div>
 </section>
 
@@ -260,14 +260,14 @@ img{max-width:100%;display:block}
   <div class="sec-label" data-key="chapter3">CHAPTER THREE</div>
   <h2 class="sec-title sf" data-key="gallery_title_html">A Visual <b>Journey</b></h2>
   <div class="gallery-grid">
-    <div class="gallery-item"><img src="https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=600&q=80"></div>
-    <div class="gallery-item"><img src="https://images.unsplash.com/photo-1466978913421-dad2ebd01d17?w=600&q=80"></div>
-    <div class="gallery-item"><img src="https://images.unsplash.com/photo-1414235077428-338989a2e8c0?w=600&q=80"></div>
-    <div class="gallery-item"><img src="https://images.unsplash.com/photo-1559339352-11d035aa65de?w=600&q=80"></div>
-    <div class="gallery-item"><img src="https://images.unsplash.com/photo-1559925393-8be0ec4767c8?w=600&q=80"></div>
-    <div class="gallery-item"><img src="https://images.unsplash.com/photo-1551218808-94e220e084d2?w=600&q=80"></div>
-    <div class="gallery-item"><img src="https://images.unsplash.com/photo-1414235077428-338989a2e8c0?w=600&q=80&fit=crop&crop=focalpoint&fp-x=.2"></div>
-    <div class="gallery-item"><img src="https://images.unsplash.com/photo-1592861956120-e524fc739696?w=600&q=80"></div>
+    <div class="gallery-item"><img src="https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=600&q=80" loading="lazy" decoding="async"></div>
+    <div class="gallery-item"><img src="https://images.unsplash.com/photo-1466978913421-dad2ebd01d17?w=600&q=80" loading="lazy" decoding="async"></div>
+    <div class="gallery-item"><img src="https://images.unsplash.com/photo-1414235077428-338989a2e8c0?w=600&q=80" loading="lazy" decoding="async"></div>
+    <div class="gallery-item"><img src="https://images.unsplash.com/photo-1559339352-11d035aa65de?w=600&q=80" loading="lazy" decoding="async"></div>
+    <div class="gallery-item"><img src="https://images.unsplash.com/photo-1559925393-8be0ec4767c8?w=600&q=80" loading="lazy" decoding="async"></div>
+    <div class="gallery-item"><img src="https://images.unsplash.com/photo-1551218808-94e220e084d2?w=600&q=80" loading="lazy" decoding="async"></div>
+    <div class="gallery-item"><img src="https://images.unsplash.com/photo-1414235077428-338989a2e8c0?w=600&q=80&fit=crop&crop=focalpoint&fp-x=.2" loading="lazy" decoding="async"></div>
+    <div class="gallery-item"><img src="https://images.unsplash.com/photo-1592861956120-e524fc739696?w=600&q=80" loading="lazy" decoding="async"></div>
   </div>
 </section>
 
@@ -550,7 +550,7 @@ function renderDishes(){
   grid.innerHTML=filtered.map((d,i)=>{
     const name=CURRENT_LANG==='ar'?d.ar:d.en;
     const desc=CURRENT_LANG==='ar'?d.descAr:d.descEn;
-    return `<div class="dish"><div class="dish-img"><img src="${d.img}" alt="${name}"></div><div class="dish-num">N° ${String(i+1).padStart(2,'0')}</div><div class="dish-name">${name}</div><div class="dish-desc">${desc}</div><div class="dish-row"><div class="dish-price">${CURRENT_MARKET.symbol} ${formatPrice(d.sar)}</div><button class="dish-add" onclick="addToCart('${d.id}')" aria-label="add">+</button></div></div>`;
+    return `<div class="dish"><div class="dish-img"><img src="${d.img}" alt="${name}" loading="lazy" decoding="async"></div><div class="dish-num">N° ${String(i+1).padStart(2,'0')}</div><div class="dish-name">${name}</div><div class="dish-desc">${desc}</div><div class="dish-row"><div class="dish-price">${CURRENT_MARKET.symbol} ${formatPrice(d.sar)}</div><button class="dish-add" onclick="addToCart('${d.id}')" aria-label="add">+</button></div></div>`;
   }).join('');
 }
 
@@ -593,7 +593,7 @@ function updateCart(){
   body.innerHTML=CART.map(c=>{
     const d=MENU.find(x=>x.id===c.id);if(!d)return'';
     const n=CURRENT_LANG==='ar'?d.ar:d.en;
-    return `<div class="cart-item"><img src="${d.img}"><div class="ci-info"><div class="ci-name">${n}</div><div class="ci-price">${CURRENT_MARKET.symbol} ${formatPrice(d.sar*c.qty)}</div><div class="qty-row"><button class="qty-btn" onclick="changeQty('${d.id}',-1)">−</button><span class="qty-num">${c.qty}</span><button class="qty-btn" onclick="changeQty('${d.id}',1)">+</button></div></div></div>`;
+    return `<div class="cart-item"><img src="${d.img}" loading="lazy" decoding="async"><div class="ci-info"><div class="ci-name">${n}</div><div class="ci-price">${CURRENT_MARKET.symbol} ${formatPrice(d.sar*c.qty)}</div><div class="qty-row"><button class="qty-btn" onclick="changeQty('${d.id}',-1)">−</button><span class="qty-num">${c.qty}</span><button class="qty-btn" onclick="changeQty('${d.id}',1)">+</button></div></div></div>`;
   }).join('');
   const sub=CART.reduce((s,c)=>{const d=MENU.find(x=>x.id===c.id);return s+(d?d.sar*c.qty:0);},0);
   const taxRate=typeof CURRENT_MARKET.tax?.rate==='number'?CURRENT_MARKET.tax.rate:0;
