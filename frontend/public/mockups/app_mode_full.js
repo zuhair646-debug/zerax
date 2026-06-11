@@ -1664,6 +1664,12 @@ async function loadCkSlots(date){
 function closeCheckout(){document.getElementById('checkout-modal').classList.remove('open');CHECKOUT_MAP=null;}
 function choosePay(id,el){
   PAYMENT_CHOSEN=id;
+  // Card-based methods: open card-input modal first instead of submitting directly
+  if (['card','mada','visa','mastercard'].includes(id) && !window.__skipCardModal){
+    const m = document.getElementById('card-input-modal');
+    if (m) { m.style.display='flex'; return; }
+  }
+  window.__skipCardModal = false;
   document.querySelectorAll('.pay-option').forEach(e=>e.style.borderColor='#e5e7eb');
   // For custom BNPL cards, also reset border
   document.querySelectorAll('[data-testid^="pay-zenrex-"]').forEach(e=>e.style.border='2px solid transparent');
@@ -3872,3 +3878,39 @@ function applyAllOverrides(){
 }
 
 init();
+
+
+// ─── Track 2 — Card Payment Form helpers (Sandbox mode) ───
+function updateCardPreview(){
+  const num = (document.getElementById('card-num')||{}).value || '';
+  const name = (document.getElementById('card-name')||{}).value || '';
+  const exp = (document.getElementById('card-exp')||{}).value || '';
+  // Format card number with spaces every 4 digits
+  const formatted = num.replace(/\s/g,'').replace(/(.{4})/g,'$1 ').trim();
+  if (document.getElementById('card-num')) document.getElementById('card-num').value = formatted;
+  const previewEl = document.getElementById('card-num-preview');
+  if (previewEl) previewEl.textContent = formatted.padEnd(19, '•').replace(/(?<=\S)(\s)\b/g,'$1').slice(0,19) || '•••• •••• •••• ••••';
+  const nameEl = document.getElementById('card-name-preview');
+  if (nameEl) nameEl.textContent = (name.toUpperCase() || 'YOUR NAME');
+  // Auto-format exp (MM/YY)
+  let e = exp.replace(/\D/g,'');
+  if (e.length >= 3) e = e.slice(0,2) + '/' + e.slice(2,4);
+  if (exp !== e && document.getElementById('card-exp')) document.getElementById('card-exp').value = e;
+  const expEl = document.getElementById('card-exp-preview');
+  if (expEl) expEl.textContent = e || 'MM/YY';
+}
+
+function submitCardPayment(){
+  const num = ((document.getElementById('card-num')||{}).value || '').replace(/\s/g,'');
+  const name = (document.getElementById('card-name')||{}).value || '';
+  const exp = (document.getElementById('card-exp')||{}).value || '';
+  const cvc = (document.getElementById('card-cvc')||{}).value || '';
+  if (num.length < 13) { alert('رقم بطاقة غير صحيح'); return; }
+  if (!name.trim()) { alert('أدخل اسم حامل البطاقة'); return; }
+  if (!/^\d{2}\/\d{2}$/.test(exp)) { alert('تاريخ الانتهاء غير صحيح (MM/YY)'); return; }
+  if (cvc.length < 3) { alert('CVC غير صحيح'); return; }
+  document.getElementById('card-input-modal').style.display = 'none';
+  // Submit using card flow, bypassing the modal redirect
+  window.__skipCardModal = true;
+  choosePay('card', null);
+}

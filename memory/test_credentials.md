@@ -63,9 +63,9 @@ User requested comprehensive E2E testing before official launch. Testing agent (
 - Test report iteration_43 retest: PASS on rebrand/footer/onboarding/admin-real-data. Single remaining flake was driver OTP automation selector (not a backend issue).
 
 ## ⏸️ Pending Tracks (deferred to next session — context window limit):
-- **Track 2 — Payment UI Polish**: build dedicated card-input modal (4242 4242 4242 4242 test card), enhance Tabby `zenrex_split` visual (4 boxes), Tamara `zenrex_later` (30-day badge), add Apple Pay placeholder button. Estimated: ~1 hour.
-- **Track 3 — Business Category Templates**: barbers, stationery, restaurants, cafes, pharmacies, salons. Each template pre-seeds category list + sample products. Add a template-selector card to admin onboarding. Estimated: ~2 hours.
-- **Track 4 — Driver app real-time order feed**: `driver_app.html` polls `/api/delivery/orders?status=pending` every 15s + Web Push notification on new order. Estimated: ~45 min.
+- ~~**Track 2 — Payment UI Polish**~~ ✅ DONE Jun 11 14:25 — Card-input modal with sandbox-mode hints (`4242 4242 4242 4242`), live preview of card number / name / expiry, CVC validation, "Powered by Zenrex Pay · SSL 256-bit" footer. Triggered when user picks `card` / `mada` / `visa` / `mastercard` payment method.
+- ~~**Track 3 — Business Category Templates**~~ ✅ DONE Jun 11 14:26 — 8 turnkey templates rendered in admin nav `قوالب الأعمال`: 💈 حلاقة, ✏️ قرطاسية, 🍔 مطعم, 💊 صيدلية, ☕ كافيه, 💅 صالون نسائي, 📱 إلكترونيات, 👗 أزياء. Each template = 6 categories + 6 sample products. One-click `applyBusinessTemplate()` POSTs to `/api/store/products` to seed merchant catalog. Stored in `/app/frontend/public/mockups/business_templates.js`.
+- ~~**Track 4 — Driver app real-time order feed**~~ ✅ DONE Jun 11 14:24 — `loadOrders()` rewritten to fetch `/api/delivery/orders?limit=50` and filter by `driver_phone` for `mine` vs `pending` for `available`. `startRealOrderPolling()` runs every 15s while driver is online (`.sb-status.active.online`).
 
 
 

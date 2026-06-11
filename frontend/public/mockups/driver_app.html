@@ -1161,17 +1161,59 @@ function renderSurge(){
 // ═══════════════════════════════════════════════════════════════════
 // ORDERS
 // ═══════════════════════════════════════════════════════════════════
-function loadOrders(){
-  STATE.availableOrders = [
-    {id:'#3045', customer:'نوف العتيبي', from:'الفرع الرئيسي', to:'حي النرجس', fee:18, dist:'6.2 كم', time:'25 د', urgent:false, tip:5},
-    {id:'#3046', customer:'خالد المطيري', from:'فرع الشمال', to:'حي العليا', fee:22, dist:'3.1 كم', time:'15 د', urgent:true, tip:0},
-    {id:'#3047', customer:'سارة العنزي', from:'الفرع الرئيسي', to:'حي السويدي', fee:15, dist:'8.4 كم', time:'30 د', urgent:false, tip:10},
-  ];
-  STATE.orders = [
-    {id:'#3041', customer:'محمد الزهراني', from:'الفرع الرئيسي', to:'حي الحمراء', fee:14, status:'picking_up', tip:5},
-  ];
+async function loadOrders(){
+  // Try real backend first — fetch orders assigned to this driver (or all pending if not logged in via driver token)
+  try {
+    const r = await fetch(API + '/api/delivery/orders?limit=50');
+    const d = await r.json();
+    const all = d.orders || [];
+    const driverPhone = (STATE.driver && STATE.driver.phone) || '';
+    // "available" = pending or unassigned, "mine" = assigned to me
+    const available = all.filter(o => o.status === 'pending');
+    const mine = all.filter(o =>
+      o.driver_id && (o.driver_phone === driverPhone || o.driver_id === (STATE.driver||{}).id) &&
+      ['assigned','picked_up','delivering'].includes(o.status)
+    );
+    STATE.availableOrders = available.map(o => ({
+      id: o.id,
+      customer: o.customer_name,
+      from: o.branch_name || 'الفرع الرئيسي',
+      to: o.address || 'موقع العميل',
+      fee: o.driver_share_sar || o.delivery_fee_sar || 10,
+      dist: (o.distance_km || 0).toFixed(1) + ' كم',
+      time: (o.eta_min || 25) + ' د',
+      urgent: false,
+      tip: 0,
+      raw: o
+    }));
+    STATE.orders = mine.map(o => ({
+      id: o.id,
+      customer: o.customer_name,
+      from: o.branch_name || 'الفرع',
+      to: o.address || 'العميل',
+      fee: o.driver_share_sar || 10,
+      status: o.status === 'assigned' ? 'picking_up' : (o.status === 'picked_up' ? 'delivering' : 'delivering'),
+      tip: 0,
+      raw: o
+    }));
+  } catch(e){
+    console.warn('loadOrders fallback to empty', e);
+    STATE.availableOrders = [];
+    STATE.orders = [];
+  }
   renderOrdersSection();
 }
+
+// Poll for new orders every 15 seconds
+let __ORDERS_POLL_TIMER = null;
+function startRealOrderPolling(){
+  if (__ORDERS_POLL_TIMER) clearInterval(__ORDERS_POLL_TIMER);
+  __ORDERS_POLL_TIMER = setInterval(() => {
+    if ($$('.sb-status.active.online').length) loadOrders();
+  }, 15000);
+}
+// Auto-start polling after page boots
+setTimeout(startRealOrderPolling, 5000);
 
 function renderOrdersSection(){
   $('#ord-today').textContent = '8';

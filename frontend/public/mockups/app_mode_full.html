@@ -884,6 +884,36 @@ body.dark .acc-stat .k{color:#94a3b8}
         <div class="modal-pay-list" id="pay-list"></div>
       </div>
     </div>
+
+    <!-- ─── CARD INPUT MODAL (Track 2 — sandbox card form) ─── -->
+    <div id="card-input-modal" style="display:none;background:rgba(15,23,42,.55);position:fixed;inset:0;z-index:99;justify-content:center;align-items:center" data-testid="card-modal">
+      <div style="background:#fff;border-radius:18px;width:92%;max-width:380px;padding:22px;box-shadow:0 30px 80px rgba(0,0,0,.4);font-family:inherit">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
+          <h3 style="font-size:15px;font-weight:900">💳 إدخال بيانات البطاقة</h3>
+          <button onclick="document.getElementById('card-input-modal').style.display='none'" style="border:none;background:#f3f4f6;border-radius:50%;width:30px;height:30px;cursor:pointer;font-size:14px;color:#6b7280">×</button>
+        </div>
+        <div style="background:linear-gradient(135deg,#7c3aed,#a855f7);border-radius:12px;padding:14px;color:#fff;margin-bottom:16px">
+          <div style="font-size:10px;opacity:.8;letter-spacing:2px;margin-bottom:6px">VISA / MASTERCARD / MADA</div>
+          <div id="card-num-preview" style="font-size:17px;letter-spacing:3px;font-weight:900;font-family:monospace">•••• •••• •••• ••••</div>
+          <div style="display:flex;justify-content:space-between;margin-top:14px;font-size:11px">
+            <div><div style="opacity:.7;font-size:9px">CARD HOLDER</div><div id="card-name-preview" style="font-weight:700">YOUR NAME</div></div>
+            <div><div style="opacity:.7;font-size:9px">EXP</div><div id="card-exp-preview" style="font-weight:700">MM/YY</div></div>
+          </div>
+        </div>
+        <div style="background:#fef3c7;border:1px solid #fbbf24;border-radius:9px;padding:9px 11px;margin-bottom:14px;font-size:11px;color:#92400e">
+          <b>🧪 وضع التجربة (Sandbox)</b><br>استخدم بطاقة الاختبار: <code style="background:#fff;padding:2px 6px;border-radius:5px;font-weight:900;color:#7c3aed">4242 4242 4242 4242</code>
+        </div>
+        <input id="card-num" placeholder="رقم البطاقة" maxlength="19" oninput="updateCardPreview()" data-testid="card-num" style="width:100%;padding:13px;border:1.5px solid #e5e7eb;border-radius:10px;font-family:monospace;font-size:14px;letter-spacing:2px;margin-bottom:10px;direction:ltr;text-align:left">
+        <input id="card-name" placeholder="اسم حامل البطاقة" oninput="updateCardPreview()" data-testid="card-name" style="width:100%;padding:13px;border:1.5px solid #e5e7eb;border-radius:10px;font-size:13px;margin-bottom:10px">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px">
+          <input id="card-exp" placeholder="MM/YY" maxlength="5" oninput="updateCardPreview()" data-testid="card-exp" style="padding:13px;border:1.5px solid #e5e7eb;border-radius:10px;font-family:monospace;font-size:14px;direction:ltr;text-align:center">
+          <input id="card-cvc" placeholder="CVC" maxlength="4" data-testid="card-cvc" style="padding:13px;border:1.5px solid #e5e7eb;border-radius:10px;font-family:monospace;font-size:14px;direction:ltr;text-align:center">
+        </div>
+        <button onclick="submitCardPayment()" data-testid="card-submit" style="width:100%;padding:14px;background:linear-gradient(135deg,#7c3aed,#06b6d4);color:#fff;border:none;border-radius:11px;font-weight:900;font-size:14px;cursor:pointer;font-family:inherit">🔒 ادفع بأمان</button>
+        <div style="text-align:center;margin-top:10px;font-size:10px;color:#94a3b8">🔐 Powered by Zenrex Pay · SSL 256-bit</div>
+      </div>
+    </div>
+    
     <div id="checkout-success" style="display:none" class="success">
       <div class="ico">✓</div>
       <h3 data-key="order_success">تم تأكيد طلبك!</h3>

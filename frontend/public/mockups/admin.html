@@ -586,6 +586,7 @@ select.ps-input option{background:#13131f;color:#fff}
     <div class="nav-section">القائمة الرئيسية</div>
     <button class="nav-item active" data-page="dashboard" onclick="goPage('dashboard')"><i data-lucide="layout-dashboard"></i> الرئيسية</button>
     <button class="nav-item" data-page="products" onclick="goPage('products')"><i data-lucide="package"></i> المنتجات</button>
+    <button class="nav-item" data-page="templates" onclick="goPage('templates')" data-testid="nav-templates"><i data-lucide="layout-grid"></i> قوالب الأعمال</button>
     <button class="nav-item" data-page="orders" onclick="goPage('orders')"><i data-lucide="shopping-bag"></i> الطلبات <span class="badge" id="nav-pending-count">2</span></button>
     <button class="nav-item" data-page="customers" onclick="goPage('customers')"><i data-lucide="users"></i> العملاء</button>
 
@@ -791,6 +792,11 @@ select.ps-input option{background:#13131f;color:#fff}
       </div>
 
       <!-- ─── /DASHBOARD ─── -->
+
+      <!-- ─── BUSINESS TEMPLATES ─── -->
+      <div class="page" data-page="templates">
+        <div id="biz-templates-root"></div>
+      </div>
 
       <!-- ─── PRODUCTS ─── -->
       <div class="page" data-page="products">
@@ -2160,5 +2166,18 @@ select.ps-input option{background:#13131f;color:#fff}
 <div class="toast" id="toast"></div>
 
 <script src="admin.js"></script>
+<script src="business_templates.js"></script>
+<script>
+// Auto-render business templates when navigated to.
+(function(){
+  const origGoPage = window.goPage;
+  window.goPage = function(p){
+    if (typeof origGoPage === 'function') origGoPage(p);
+    if (p === 'templates' && typeof renderBusinessTemplates === 'function') {
+      setTimeout(()=>renderBusinessTemplates('#biz-templates-root'), 100);
+    }
+  };
+})();
+</script>
 </body>
 </html>
