@@ -274,6 +274,26 @@ Extracted the single huge inline `<script>` block from each large mockup into an
 - Main JS bundle (`main.2ea727e7.js`): cached 1 year + gzip + immutable.
 
 
+## 🔑 Critical Env Fix — USE_DIRECT_LLM Activated on VPS (Jun 11 2026 04:44)
+
+**Issue**: Although the .env file had `USE_DIRECT_LLM=1`, the running container was started before the value was injected — so the shim was NEVER active. All AI calls would silently fall back to the dead `EMERGENT_LLM_KEY` (restricted from VPS).
+
+**Fix**:
+1. Confirmed `USE_DIRECT_LLM=1` in `/opt/zerax/backend/.env`.
+2. Pinned it permanently in `docker-compose.yml` `environment:` block (survives `.env` rewrites).
+3. `docker compose up -d --force-recreate backend` (90s rebuild with pip install).
+
+**Verified live on VPS**:
+- `POST /api/auth/login owner@zerax.com / owner123` → 200 + JWT (191 chars)
+- `POST /api/ai/chat` → `{"content":"أهلاً","agent":"freebuild","model_used":"claude-opus-4-5","cost_estimate_usd":0.025065}`
+- `POST /api/store/reviews/translate` → `{"ok":true,"translated":"هذا المنتج رائع"}` (Gemini direct)
+- **VPS is now 100% independent from Emergent platform.** No Emergent network calls in any AI path.
+
+### Login Credentials (user confusion noted)
+The previous email `owner@zitex.com` (pre-rebrand) returns 401 — the correct email post-rebrand is `owner@zerax.com` / `owner123`.
+
+
+
 
 
 
