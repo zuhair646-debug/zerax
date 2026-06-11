@@ -251,5 +251,29 @@ Extracted the single huge inline `<script>` block from each large mockup into an
 - Visual layout identical (welcome modal, banner, categories, login form all rendering correctly).
 
 
+## 🚀 Full React App Deployed to VPS — Jun 11 2026
+
+**Discovery**: Until this point, the VPS at `91.98.154.148` was serving ONLY the static HTML mockups (admin, app_mode_full, driver_app). The actual standalone **React Zerax platform** (FreeBuild, Smart Orchestrator, Ready Sites, AI Chat workspace, Image Studio, Video Studio, Auto-Coder) had never been deployed to VPS — it only lived on the Emergent preview URL.
+
+**Fix Applied**:
+1. Built React app with `REACT_APP_BACKEND_URL=http://91.98.154.148` so API calls go through VPS Nginx.
+2. Stripped `.map` files (15MB savings).
+3. rsynced `build/` (76MB) → `/opt/zerax/frontend/build/` on VPS.
+4. Rewrote Nginx config (`/etc/nginx/sites-available/zerax`):
+   - `root` switched from `frontend/public` → `frontend/build`
+   - Added SPA fallback `try_files $uri $uri/ /index.html` for React Router
+   - Kept `/api/` proxy → `127.0.0.1:8001`
+   - Kept `/mockups/` location intact (admin.html, app_mode_full.html, driver_app.html still work)
+   - Added 1-year `Cache-Control: public, immutable` for hashed CRA bundles in `/static/`
+5. `nginx -t && systemctl reload nginx` → all green.
+
+**Verified**:
+- `http://91.98.154.148/` → React Zerax homepage loads (DOMContentLoaded 0.09s), title "Zerax | منصة الإبداع بالذكاء الاصطناعي", no JS errors.
+- `http://91.98.154.148/api/store/health` → 200 in 234ms, payload `{"ok":true,"products":1,"customers":1,"reviews":0}`.
+- `http://91.98.154.148/mockups/admin.html` → still 200 (mockups preserved).
+- Main JS bundle (`main.2ea727e7.js`): cached 1 year + gzip + immutable.
+
+
+
 
 
