@@ -224,4 +224,32 @@ FastAPI + MongoDB · Vanilla HTML/JS mockups + React main app ·
 - No more 25+ parallel image fetches on initial render.
 
 
+### 📦 Phase 2 — Inline JS Extraction (Jun 11 2026)
+
+Extracted the single huge inline `<script>` block from each large mockup into an external `.js` file so the browser can cache it for 7 days (`Cache-Control: public, immutable, max-age=604800`).
+
+**Files created**:
+- `frontend/public/mockups/app_mode_full.js` — 263KB / 3842 lines (extracted from `app_mode_full.html`)
+- `frontend/public/mockups/admin.js` — 273KB / 3441 lines (extracted from `admin.html`)
+
+**HTML file size reduction (uncompressed)**:
+- `app_mode_full.html`: 432KB → **161KB** (-63%)
+- `admin.html`: 508KB → **235KB** (-54%)
+
+**Cold-cache visit** (first time, both files downloaded in parallel + gzipped):
+- HTML: 34KB gzipped in ~340ms
+- JS: 76KB gzipped in ~450ms
+- DOMContentLoaded: **0.05–0.09s** in headless Chromium.
+
+**Warm-cache visit** (repeat visit):
+- Only the HTML is fetched (~34KB gzipped). JS is loaded instantly from disk cache.
+- Time to interactive: **~150ms** (essentially TTFB only).
+
+**Verified**:
+- All global JS functions (`getUser`, `translateReview`, etc.) still defined post-extraction.
+- No JS console errors on either page.
+- Visual layout identical (welcome modal, banner, categories, login form all rendering correctly).
+
+
+
 
