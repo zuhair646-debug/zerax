@@ -3713,3 +3713,281 @@ async function loadMyTheme() {
 }
 // Auto-load theme after login
 setTimeout(loadMyTheme, 1500);
+
+
+// ═══════════════════════════════════════════════════════════════════
+// CREATIVE STUDIO — standalone AI image generator (banners/logos/sections)
+// Free chat + accordion tools + Gemini Nano Banana generation
+// ═══════════════════════════════════════════════════════════════════
+const CS_STATE = {
+  type: 'banner',           // banner | logo | section | general
+  bgColor: '#ffffff',
+  bgColorName: 'pure white',
+  frameColor: '#7c3aed',
+  frameColorName: 'vibrant purple',
+  aspect: '16:9',
+  style: 'lifestyle',
+  styleAr: 'حياتي',
+  category: 'ملابس',
+  categoryEn: 'clothing fashion apparel',
+  generated: [],
+  approved: [],
+};
+
+// Type-specific defaults (smart presets when user picks a type)
+const CS_TYPE_DEFAULTS = {
+  banner:  { aspect:'16:9', style:'lifestyle', placeholder:'بنر تخفيضات نهاية الأسبوع · ألوان دافية · أجواء فاخرة' },
+  logo:    { aspect:'1:1',  style:'minimal',   placeholder:'لوجو لمحل قهوة باسم "ركن البن" · حروف عربية أنيقة' },
+  section: { aspect:'1:1',  style:'studio',    placeholder:'صورة قسم لتصنيف الإلكترونيات · خلفية متدرجة' },
+  general: { aspect:'4:5',  style:'lifestyle', placeholder:'صورة إعلانية لمتجرنا · أجواء عائلية' },
+};
+
+function csPickType(t){
+  CS_STATE.type = t;
+  document.querySelectorAll('.cs-type-card').forEach(c=>c.classList.toggle('active', c.dataset.cstype===t));
+  // Show/hide section-specific tool
+  const catTool = document.getElementById('cs-tool-cat');
+  if(catTool) catTool.style.display = t==='section' ? 'block' : 'none';
+  // Apply smart defaults
+  const d = CS_TYPE_DEFAULTS[t];
+  if(d){
+    CS_STATE.aspect = d.aspect;
+    CS_STATE.style = d.style;
+    document.querySelectorAll('.cs-aspect-btn').forEach(b=>b.classList.toggle('active', b.dataset.csasp===d.aspect));
+    document.querySelectorAll('.cs-style-btn').forEach(b=>b.classList.toggle('active', b.dataset.csstl===d.style));
+    const ah = document.getElementById('cs-aspect-hint'); if(ah) ah.textContent = d.aspect;
+    const inp = document.getElementById('cs-chat-text'); if(inp) inp.placeholder = d.placeholder;
+  }
+  // Bot guidance message
+  const labels = { banner:'بنر إعلاني', logo:'لوجو', section:'صورة قسم', general:'صورة عامة' };
+  csBotMsg(`✨ اخترت <b>${labels[t]}</b>. ضبطت الأدوات تلقائياً — تقدر تعدلها أو اكتب وصفك مباشرة 👇`);
+}
+
+function csPickAspect(a, el){
+  CS_STATE.aspect = a;
+  document.querySelectorAll('.cs-aspect-btn').forEach(b=>b.classList.remove('active'));
+  if(el) el.classList.add('active');
+  const h = document.getElementById('cs-aspect-hint'); if(h) h.textContent = a;
+}
+function csPickStyle(s, ar, el){
+  CS_STATE.style = s; CS_STATE.styleAr = ar;
+  document.querySelectorAll('.cs-style-btn').forEach(b=>b.classList.remove('active'));
+  if(el) el.classList.add('active');
+  const h = document.getElementById('cs-style-hint'); if(h) h.textContent = ar;
+}
+function csPickCat(ar, en, el){
+  CS_STATE.category = ar; CS_STATE.categoryEn = en;
+  if(el){
+    document.querySelectorAll('.cs-cat-btn').forEach(b=>b.classList.remove('active'));
+    el.classList.add('active');
+  }
+  const h = document.getElementById('cs-cat-hint'); if(h) h.textContent = ar;
+}
+
+// Render the categorized color presets in BG + Frame tools (reuse from product studio palette)
+function csRenderPresets(){
+  if(typeof PS_COLOR_CATEGORIES === 'undefined') return;
+  const bg = document.getElementById('cs-bg-presets');
+  const fr = document.getElementById('cs-frame-presets');
+  if(bg && !bg.children.length){
+    let html = '';
+    for(const [k,cat] of Object.entries(PS_COLOR_CATEGORIES)){
+      html += `<div class="ps-color-cat-label" style="padding-top:4px">${cat.label}</div><div class="ps-color-cat-row">`;
+      html += cat.colors.map(c=>`<span class="preset" style="background:${c.hex};border:1px solid ${c.hex==='#ffffff'?'#d1d5db':c.hex}" title="${c.ar} · ${c.en}" onclick="csPickBg('${c.hex}','${c.ar}','${c.en}')"></span>`).join('');
+      html += '</div>';
+    }
+    const customs = (typeof psGetCustomColors==='function') ? psGetCustomColors() : [];
+    if(customs.length){
+      html += `<div class="ps-color-cat-label">✨ ألواني المخصصة</div><div class="ps-color-cat-row">`;
+      html += customs.map(c=>`<span class="preset" style="background:${c.hex};border:1px solid ${c.hex==='#ffffff'?'#d1d5db':c.hex}" title="${c.ar} · ${c.en||c.ar}" onclick="csPickBg('${c.hex}','${c.ar}','${(c.en||c.ar).replace(/'/g,'')}')"></span>`).join('');
+      html += '</div>';
+    }
+    // Inject inline preset CSS scope (CS uses its own micro presets)
+    bg.style.cssText = 'display:flex;flex-direction:column;gap:4px;max-height:260px;overflow-y:auto';
+    bg.innerHTML = html;
+  }
+  if(fr && !fr.children.length){
+    const presets = ['#7c3aed','#fbbf24','#000000','#ffffff','#10b981','#f43f5e','#06b6d4','#ec4899','#1e3a8a','#d4af37','transparent'];
+    fr.innerHTML = presets.map(c=>`<span class="preset" style="background:${c==='transparent'?'repeating-linear-gradient(45deg,#666,#666 4px,#999 4px,#999 8px)':c};border:1px solid ${c==='#ffffff'?'#d1d5db':c}" title="${c}" onclick="csPickFrame('${c==='transparent'?'#ffffff':c}','${c==='transparent'?'transparent':c}')"></span>`).join('');
+    fr.style.cssText = 'display:flex;flex-wrap:wrap;gap:5px';
+  }
+}
+function csPickBg(hex, ar, en){
+  CS_STATE.bgColor = hex; CS_STATE.bgColorName = en || (typeof psHexToName==='function'?psHexToName(hex):'neutral');
+  const h = document.getElementById('cs-bg-hint'); if(h) h.textContent = ar;
+}
+function csPickFrame(hex, label){
+  CS_STATE.frameColor = hex; CS_STATE.frameColorName = (typeof psHexToName==='function'?psHexToName(hex):hex);
+  const h = document.getElementById('cs-frame-hint'); if(h) h.textContent = label;
+}
+
+// Free chat
+function csBotMsg(html){
+  const body = document.getElementById('cs-chat-body');
+  if(!body) return;
+  const div = document.createElement('div');
+  div.className = 'cs-msg cs-msg-bot';
+  div.innerHTML = html;
+  body.appendChild(div);
+  body.scrollTop = body.scrollHeight;
+}
+function csUserMsg(text){
+  const body = document.getElementById('cs-chat-body');
+  if(!body) return;
+  const div = document.createElement('div');
+  div.className = 'cs-msg cs-msg-user';
+  div.textContent = text;
+  body.appendChild(div);
+  body.scrollTop = body.scrollHeight;
+}
+async function csSendChat(){
+  const inp = document.getElementById('cs-chat-text');
+  const txt = (inp?.value || '').trim();
+  if(!txt) return;
+  csUserMsg(txt);
+  inp.value = '';
+  csBotMsg(`✓ تمام، جاهز نولّد <b>${txt}</b>؟<br>الأدوات الحالية: ${CS_STATE.aspect} · ${CS_STATE.styleAr} · ${CS_STATE.bgColorName}<br>اضغط <b>"توليد 4 صور"</b> 👇`);
+  // Store as the prompt seed
+  CS_STATE._chatPrompt = txt;
+}
+
+// Generate via Gemini Nano Banana
+async function csGenerate(){
+  const btn = document.querySelector('.cs-gen-btn');
+  if(btn){ btn.disabled = true; btn.innerHTML = '<i data-lucide="loader" style="width:16px;height:16px"></i> جاري التوليد...'; if(window.lucide) lucide.createIcons(); }
+  // Build typed prompt
+  const userPrompt = CS_STATE._chatPrompt || '';
+  const typeLabels = {
+    banner: `Wide promotional BANNER for an online store. Eye-catching marketing composition`,
+    logo: `Modern minimalist LOGO design. Clean vector style, professional brand identity, no text artifacts`,
+    section: `Category tile artwork representing "${CS_STATE.categoryEn}". Iconic, recognizable subject`,
+    general: `Premium advertising image`,
+  };
+  const stylePrompts = {
+    lifestyle: 'lifestyle photography, natural setting, soft natural lighting',
+    luxury: 'luxury aesthetic, dramatic lighting, gold/black premium tones',
+    studio: 'commercial studio photography, sharp focus, professional lighting',
+    flat: 'flat lay composition, top-down view, organized arrangement',
+    minimal: 'minimalist composition, clean lines, lots of negative space',
+    dramatic: 'dramatic cinematic lighting, deep shadows, moody atmosphere',
+  };
+  const finalPrompt = `${typeLabels[CS_STATE.type]}. ${userPrompt ? userPrompt+'. ' : ''}${stylePrompts[CS_STATE.style]}. SOLID ${CS_STATE.bgColorName} background (color ${CS_STATE.bgColor}), accent ${CS_STATE.frameColorName}. High quality, 4K, professional.`;
+
+  try{
+    // Reuse same image-studio endpoint as product modal (consistency + credits)
+    // Map aspect ratio to width/height
+    const aspectMap = { '16:9':[1920,1080], '1:1':[1024,1024], '9:16':[1080,1920], '4:5':[1024,1280], '3:1':[1920,640], '4:3':[1024,768] };
+    const [w,h] = aspectMap[CS_STATE.aspect] || [1024,1024];
+    const promises = [1,2,3,4].map((_,i)=>fetch(API+'/api/image-studio/generate',{
+      method:'POST',
+      headers:{'Content-Type':'application/json','Authorization':'Bearer '+(localStorage.getItem('zx_token')||'')},
+      body: JSON.stringify({ prompt: finalPrompt+', variation '+(i+1), count:1, style: CS_STATE.style==='flat'?'product':CS_STATE.style, width:w, height:h })
+    }).then(r=>r.json()).catch(()=>null));
+    const results = await Promise.all(promises);
+    const imgs = results.flatMap(r => (r?.images || r?.urls || (r?.image_url?[r.image_url]:[])) || []).filter(Boolean);
+    if(!imgs.length) throw new Error('no images returned');
+    CS_STATE.generated = imgs;
+    csRenderCanvas(imgs);
+    csBotMsg(`✅ تم توليد <b>${imgs.length}</b> صورة! اختر منها — مرّر فوق أي صورة لرؤية أزرار الاعتماد والتحميل.`);
+  } catch(e){
+    // Fallback to placeholder so the UX is testable without AI key
+    const placeholders = [1,2,3,4].map(i=>`https://picsum.photos/seed/${CS_STATE.type}-${Date.now()}-${i}/800/600`);
+    CS_STATE.generated = placeholders;
+    csRenderCanvas(placeholders);
+    csBotMsg(`⚠️ المولّد غير متصل الآن — عرضت صور تجريبية. (${e.message})`);
+  }
+  if(btn){ btn.disabled = false; btn.innerHTML = '<i data-lucide="sparkles" style="width:16px;height:16px"></i> <span>توليد 4 صور · 32 نقطة</span>'; if(window.lucide) lucide.createIcons(); }
+}
+
+function csRenderCanvas(imgs){
+  const frame = document.getElementById('cs-canvas-frame');
+  const grid = document.getElementById('cs-canvas-grid');
+  if(frame) frame.style.display = 'none';
+  if(grid){
+    grid.style.display = 'grid';
+    grid.innerHTML = imgs.map((u,i)=>`
+      <div class="cs-gen-tile" data-csi="${i}">
+        <img src="${u}" alt="generated ${i+1}" loading="lazy">
+        <div class="cs-tile-actions">
+          <button class="cs-tile-approve" onclick="csApprove(${i})" data-testid="cs-approve-${i}">✓ اعتماد</button>
+          <button class="cs-tile-download" onclick="csDownload(${i})" data-testid="cs-download-${i}">⬇</button>
+        </div>
+      </div>
+    `).join('');
+  }
+}
+
+function csApprove(i){
+  const url = CS_STATE.generated[i];
+  if(!url) return;
+  const tile = document.querySelector(`.cs-gen-tile[data-csi="${i}"]`);
+  if(tile) tile.classList.add('approved');
+  // Save to library
+  CS_STATE.approved.push({ url, type: CS_STATE.type, ts: Date.now(), category: CS_STATE.type==='section'?CS_STATE.category:null });
+  csSaveLibrary();
+  // Bump count
+  const cnt = document.getElementById('cs-gallery-count');
+  if(cnt) cnt.textContent = CS_STATE.approved.length;
+  toast('✓ تم اعتماد الصورة وحفظها في المكتبة');
+}
+
+function csDownload(i){
+  const url = CS_STATE.generated[i];
+  if(!url) return;
+  const a = document.createElement('a');
+  a.href = url; a.download = `zenrex-${CS_STATE.type}-${Date.now()}.jpg`; a.target='_blank';
+  document.body.appendChild(a); a.click(); a.remove();
+}
+
+function csSaveLibrary(){
+  localStorage.setItem('zx_cs_library', JSON.stringify(CS_STATE.approved));
+  // Push to server (merchant-scoped) — non-blocking
+  fetch(API + '/api/theme/merchant/me', {
+    method: 'PUT',
+    headers: {'Content-Type':'application/json','Authorization':'Bearer '+(localStorage.getItem('zx_token')||'')},
+    body: JSON.stringify({ creative_library: CS_STATE.approved })
+  }).catch(()=>{});
+}
+
+function csLoadLibrary(){
+  try{ CS_STATE.approved = JSON.parse(localStorage.getItem('zx_cs_library')||'[]'); }catch(e){ CS_STATE.approved = []; }
+  const cnt = document.getElementById('cs-gallery-count');
+  if(cnt) cnt.textContent = CS_STATE.approved.length;
+}
+
+function csOpenGallery(){
+  csLoadLibrary();
+  const modal = document.createElement('div');
+  modal.className = 'cs-gallery-modal';
+  const labelMap = { banner:'بنر', logo:'لوجو', section:'قسم', general:'عام' };
+  const tiles = CS_STATE.approved.length
+    ? CS_STATE.approved.map((a,i)=>`<div class="cs-gallery-tile" onclick="window.open('${a.url}','_blank')"><img src="${a.url}" loading="lazy"><span class="cs-gallery-tag">${labelMap[a.type]||a.type}${a.category?' · '+a.category:''}</span></div>`).join('')
+    : `<div style="grid-column:1/-1;text-align:center;color:#94a3b8;padding:60px 20px"><i data-lucide="image-off" style="width:48px;height:48px;color:#312e81"></i><br><b style="display:block;margin-top:12px;font-size:14px">المكتبة فارغة</b><span style="font-size:12px">ولّد صورة واضغط "اعتماد" لتحفظها هنا</span></div>`;
+  modal.innerHTML = `
+    <div class="cs-gallery-card">
+      <div class="cs-gallery-head">
+        <div style="width:38px;height:38px;border-radius:10px;background:linear-gradient(135deg,#ec4899,#7c3aed);color:#fff;display:flex;align-items:center;justify-content:center"><i data-lucide="layout-grid" style="width:18px;height:18px"></i></div>
+        <div><b style="color:#fff;font-size:14px;display:block">مكتبة الصور المعتمدة</b><span style="font-size:11px;color:#94a3b8">${CS_STATE.approved.length} صورة محفوظة</span></div>
+        <button onclick="this.closest('.cs-gallery-modal').remove()" style="margin-right:auto;background:transparent;border:1px solid #312e81;color:#fff;width:36px;height:36px;border-radius:50%;cursor:pointer">×</button>
+      </div>
+      <div class="cs-gallery-body">${tiles}</div>
+    </div>`;
+  document.body.appendChild(modal);
+  if(window.lucide) setTimeout(()=>lucide.createIcons(), 50);
+}
+
+// Auto-init when navigating to creative-studio page
+(function csHookGoPage(){
+  const orig = window.goPage;
+  if(typeof orig !== 'function') return;
+  window.goPage = function(p){
+    orig.apply(this, arguments);
+    if(p === 'creative-studio'){
+      setTimeout(()=>{
+        csRenderPresets();
+        csLoadLibrary();
+        if(window.lucide) lucide.createIcons();
+      }, 80);
+    }
+  };
+})();

@@ -532,6 +532,90 @@ select.ps-input option{background:#13131f;color:#fff}
 .preset:hover .ps-custom-del{display:block}
 .ps-custom-modal{position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.75);backdrop-filter:blur(8px);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px}
 .ps-custom-card{background:#1e1b4b;border:1px solid #312e81;border-radius:16px;padding:24px;max-width:440px;width:100%;box-shadow:0 24px 60px rgba(124,58,237,.4)}
+
+/* ═══════════════════════════════════════════════════════════════════
+   CREATIVE STUDIO — standalone AI image generator for non-product art
+   ═══════════════════════════════════════════════════════════════════ */
+.cs-wrap{background:linear-gradient(135deg,#0a0a14 0%,#13131f 50%,#1e1b4b 100%);border-radius:18px;overflow:hidden;border:1px solid #312e81;min-height:calc(100vh - 140px)}
+.cs-head{padding:18px 24px;background:rgba(0,0,0,.35);border-bottom:1px solid #312e81;display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap}
+.cs-head-left{display:flex;align-items:center;gap:14px}
+.cs-head-ico{width:48px;height:48px;border-radius:12px;background:linear-gradient(135deg,#ec4899,#7c3aed);color:#fff;display:flex;align-items:center;justify-content:center;box-shadow:0 8px 24px rgba(236,72,153,.3)}
+.cs-head-right{display:flex;gap:8px;flex-wrap:wrap}
+.cs-pill{display:inline-flex;align-items:center;gap:6px;padding:7px 13px;background:rgba(255,255,255,.05);border:1px solid #312e81;color:#cbd5e1;border-radius:99px;font-family:inherit;font-size:11px;font-weight:800;cursor:pointer;transition:.15s}
+.cs-pill:hover{background:rgba(124,58,237,.15);border-color:#7c3aed;color:#fff}
+.cs-pill-warn{background:linear-gradient(135deg,#fbbf24,#f59e0b);color:#0a0a14;border:none}
+.cs-body{display:grid;grid-template-columns:1fr 1.3fr;gap:0;min-height:580px}
+@media (max-width:980px){.cs-body{grid-template-columns:1fr}}
+
+/* LEFT — type cards + chat */
+.cs-left{padding:18px;border-left:1px solid #312e81;display:flex;flex-direction:column;gap:14px}
+.cs-types{display:grid;grid-template-columns:repeat(2,1fr);gap:8px}
+.cs-type-card{background:#0a0a14;border:1px solid #312e81;border-radius:11px;padding:11px 8px;cursor:pointer;color:#cbd5e1;font-family:inherit;text-align:center;transition:.18s;display:flex;flex-direction:column;align-items:center;gap:5px}
+.cs-type-card:hover{transform:translateY(-2px);border-color:#7c3aed}
+.cs-type-card.active{background:linear-gradient(135deg,rgba(124,58,237,.18),rgba(236,72,153,.12));border-color:#fbbf24;box-shadow:0 6px 20px rgba(124,58,237,.25)}
+.cs-type-card .cs-type-ico{width:38px;height:38px;border-radius:10px;color:#fff;display:flex;align-items:center;justify-content:center}
+.cs-type-card b{font-size:12px;color:#fff;display:block}
+.cs-type-card span{font-size:9.5px;color:#94a3b8}
+
+.cs-chat{flex:1;background:#0a0a14;border:1px solid #312e81;border-radius:12px;display:flex;flex-direction:column;min-height:280px;overflow:hidden}
+.cs-chat-head{padding:10px 14px;border-bottom:1px solid #312e81;display:flex;align-items:center;gap:8px;background:rgba(124,58,237,.08)}
+.cs-chat-body{flex:1;overflow-y:auto;padding:14px;display:flex;flex-direction:column;gap:8px;max-height:280px}
+.cs-msg{padding:9px 12px;border-radius:10px;font-size:12px;line-height:1.6;max-width:88%}
+.cs-msg-bot{background:rgba(124,58,237,.12);border:1px solid rgba(124,58,237,.3);color:#e0e7ff;align-self:flex-start}
+.cs-msg-user{background:linear-gradient(135deg,#fbbf24,#f59e0b);color:#0a0a14;align-self:flex-end;font-weight:700}
+.cs-chat-input{display:flex;gap:6px;padding:10px;border-top:1px solid #312e81;background:rgba(0,0,0,.3)}
+.cs-chat-input input{flex:1;background:#1e1b4b;border:1px solid #312e81;border-radius:8px;padding:8px 11px;color:#fff;font-family:inherit;font-size:12px}
+.cs-chat-input input:focus{outline:none;border-color:#fbbf24}
+.cs-chat-input button{background:linear-gradient(135deg,#7c3aed,#ec4899);border:none;color:#fff;width:38px;border-radius:8px;cursor:pointer;display:flex;align-items:center;justify-content:center}
+
+/* RIGHT — accordion tools + canvas */
+.cs-right{padding:18px;display:flex;flex-direction:column;gap:14px}
+.cs-tools{background:#0a0a14;border:1px solid #312e81;border-radius:12px;padding:6px;display:flex;flex-direction:column;gap:4px}
+.cs-tool{background:rgba(255,255,255,.02);border-radius:9px;overflow:hidden;border:1px solid transparent;transition:.15s}
+.cs-tool[open]{background:rgba(124,58,237,.08);border-color:rgba(124,58,237,.25)}
+.cs-tool summary{padding:10px 13px;cursor:pointer;font-size:12px;font-weight:800;color:#fff;display:flex;align-items:center;gap:8px;list-style:none;user-select:none}
+.cs-tool summary::-webkit-details-marker{display:none}
+.cs-tool summary::after{content:'▼';margin-right:auto;font-size:9px;color:#94a3b8;transition:.2s}
+.cs-tool[open] summary::after{transform:rotate(180deg)}
+.cs-tool-hint{margin-right:auto;background:rgba(255,255,255,.08);padding:2px 9px;border-radius:99px;font-size:10px;color:#fbbf24;font-weight:700}
+.cs-tool-body{padding:8px 13px 13px;border-top:1px dashed rgba(124,58,237,.2)}
+.cs-aspect-grid,.cs-style-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}
+.cs-aspect-btn,.cs-style-btn,.cs-cat-btn{background:#1e1b4b;border:1px solid #312e81;border-radius:8px;padding:8px 6px;color:#cbd5e1;font-family:inherit;font-size:10px;font-weight:700;cursor:pointer;transition:.15s;line-height:1.4}
+.cs-aspect-btn small,.cs-style-btn small{font-size:8.5px;color:#64748b;font-weight:500}
+.cs-aspect-btn:hover,.cs-style-btn:hover,.cs-cat-btn:hover{border-color:#7c3aed;color:#fff}
+.cs-aspect-btn.active,.cs-style-btn.active,.cs-cat-btn.active{background:linear-gradient(135deg,#7c3aed,#ec4899);border-color:#fbbf24;color:#fff}
+.cs-cat-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}
+
+/* Canvas */
+.cs-canvas{flex:1;background:#0a0a14;border:1px solid #312e81;border-radius:14px;padding:14px;display:flex;flex-direction:column;gap:12px;min-height:340px}
+.cs-canvas-frame{flex:1;background:repeating-linear-gradient(45deg,rgba(124,58,237,.04) 0 14px,transparent 14px 28px);border:1px dashed #312e81;border-radius:11px;display:flex;align-items:center;justify-content:center;min-height:240px}
+.cs-canvas-empty{text-align:center;color:#475569;display:flex;flex-direction:column;align-items:center;gap:10px;padding:30px}
+.cs-canvas-empty b{font-size:14px;color:#94a3b8;display:block}
+.cs-canvas-empty span{font-size:11px;color:#64748b}
+.cs-canvas-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:10px}
+.cs-canvas-grid .cs-gen-tile{position:relative;border-radius:10px;overflow:hidden;border:2px solid transparent;cursor:pointer;transition:.18s;background:#1e1b4b;aspect-ratio:1}
+.cs-canvas-grid .cs-gen-tile img{width:100%;height:100%;object-fit:cover;display:block}
+.cs-canvas-grid .cs-gen-tile:hover{border-color:#7c3aed;transform:scale(1.02)}
+.cs-canvas-grid .cs-gen-tile.approved{border-color:#10b981;box-shadow:0 0 0 3px rgba(16,185,129,.25)}
+.cs-canvas-grid .cs-gen-tile .cs-tile-actions{position:absolute;bottom:0;left:0;right:0;padding:8px;background:linear-gradient(0deg,rgba(0,0,0,.9),transparent);display:flex;gap:6px;opacity:0;transition:.18s}
+.cs-canvas-grid .cs-gen-tile:hover .cs-tile-actions{opacity:1}
+.cs-tile-actions button{flex:1;border:none;padding:6px 8px;border-radius:6px;font-size:10px;font-weight:800;cursor:pointer;font-family:inherit}
+.cs-tile-approve{background:linear-gradient(135deg,#10b981,#059669);color:#fff}
+.cs-tile-download{background:rgba(255,255,255,.15);color:#fff}
+.cs-canvas-actions{display:flex;justify-content:center;padding-top:6px}
+.cs-gen-btn{background:linear-gradient(135deg,#fbbf24,#f59e0b);color:#0a0a14;border:none;padding:12px 32px;border-radius:11px;font-family:inherit;font-weight:900;font-size:13px;cursor:pointer;display:inline-flex;align-items:center;gap:8px;box-shadow:0 8px 24px rgba(251,191,36,.35);transition:.15s}
+.cs-gen-btn:hover{transform:translateY(-2px);box-shadow:0 12px 30px rgba(251,191,36,.45)}
+.cs-gen-btn:disabled{opacity:.5;cursor:not-allowed;transform:none}
+
+/* Gallery modal — shared with custom color modal styling */
+.cs-gallery-modal{position:fixed;inset:0;background:rgba(0,0,0,.85);backdrop-filter:blur(10px);z-index:9999;display:flex;align-items:center;justify-content:center;padding:24px}
+.cs-gallery-card{background:#0a0a14;border:1px solid #312e81;border-radius:16px;max-width:1080px;width:100%;max-height:90vh;overflow:hidden;display:flex;flex-direction:column}
+.cs-gallery-head{padding:18px 22px;border-bottom:1px solid #312e81;display:flex;align-items:center;gap:12px;background:linear-gradient(135deg,rgba(236,72,153,.12),rgba(124,58,237,.12))}
+.cs-gallery-body{flex:1;overflow-y:auto;padding:22px;display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:14px}
+.cs-gallery-tile{position:relative;border-radius:11px;overflow:hidden;background:#1e1b4b;border:1px solid #312e81;cursor:pointer;aspect-ratio:1;transition:.15s}
+.cs-gallery-tile:hover{transform:scale(1.03);border-color:#7c3aed}
+.cs-gallery-tile img{width:100%;height:100%;object-fit:cover}
+.cs-gallery-tile .cs-gallery-tag{position:absolute;top:8px;right:8px;background:rgba(0,0,0,.7);color:#fff;padding:3px 9px;border-radius:99px;font-size:10px;font-weight:700;backdrop-filter:blur(4px)}
 /* Deep analysis card variants */
 .ps-ai-card.benefits{border-color:rgba(16,185,129,.25);background:rgba(16,185,129,.04)}
 .ps-ai-card.benefits h5{color:var(--emerald)}
@@ -610,6 +694,7 @@ select.ps-input option{background:#13131f;color:#fff}
     <button class="nav-item" data-page="credits" onclick="goPage('credits')" data-testid="nav-credits"><i data-lucide="coins"></i> النقاط والاشتراك <span class="badge" style="background:#dc2626">!</span></button>
 
     <div class="nav-section">التسويق والذكاء الإصطناعي</div>
+    <button class="nav-item" data-page="creative-studio" onclick="goPage('creative-studio')" data-testid="nav-creative-studio"><i data-lucide="image-plus"></i> الاستوديو الإبداعي <span class="badge" style="background:linear-gradient(135deg,#ec4899,#7c3aed);color:#fff">جديد</span></button>
     <button class="nav-item" data-page="video-studio" onclick="goPage('video-studio')"><i data-lucide="clapperboard"></i> استوديو الفيديو الإعلاني</button>
     <button class="nav-item" data-page="social" onclick="goPage('social')"><i data-lucide="share-2"></i> الحسابات الاجتماعية <span class="badge" style="background:var(--emerald)" id="nav-social-count">3</span></button>
     <button class="nav-item" data-page="services" onclick="goPage('services')"><i data-lucide="rocket"></i> الخدمات الإضافية <span class="badge" style="background:var(--amber);color:#0a0a14">جديد</span></button>
@@ -1404,6 +1489,154 @@ select.ps-input option{background:#13131f;color:#fff}
       <!-- ─── /BRANCHES ─── -->
 
       <!-- ─── VIDEO STUDIO — TABBED DARK ZENREX ─── -->
+      <!-- ═══════════════════════════════════════════════════════════════════
+           CREATIVE STUDIO · standalone AI image generator for banners/logos/sections
+           (NOT product photos — those live inside product modal · NOT videos)
+           Free chat + accordion tools + full preview + approval gallery
+           ═══════════════════════════════════════════════════════════════════ -->
+      <div class="page" data-page="creative-studio">
+        <div class="cs-wrap">
+          <!-- Header -->
+          <div class="cs-head">
+            <div class="cs-head-left">
+              <div class="cs-head-ico"><i data-lucide="image-plus" style="width:22px;height:22px"></i></div>
+              <div>
+                <h2 style="margin:0;font-size:20px;font-weight:900;color:#fff">الاستوديو الإبداعي</h2>
+                <div style="font-size:11px;color:#cbd5e1;margin-top:3px">صور البنرات · اللوجوهات · أقسام المتجر · إعلانات داخلية · <b style="color:#fbbf24">Gemini Nano Banana</b></div>
+              </div>
+            </div>
+            <div class="cs-head-right">
+              <button class="cs-pill" onclick="csOpenGallery()" data-testid="cs-gallery-btn"><i data-lucide="layout-grid" style="width:13px;height:13px"></i> المكتبة <span id="cs-gallery-count" style="background:#7c3aed;color:#fff;padding:1px 7px;border-radius:99px;font-size:10px;margin-right:4px">0</span></button>
+              <button class="cs-pill cs-pill-warn" data-testid="cs-points"><i data-lucide="coins" style="width:13px;height:13px"></i> <span id="cs-points-val">2,400</span> نقطة</button>
+            </div>
+          </div>
+
+          <div class="cs-body">
+            <!-- LEFT · CHAT + TYPE SELECTOR -->
+            <div class="cs-left">
+              <!-- Type cards (Banner / Logo / Section / General) -->
+              <div class="cs-types">
+                <button class="cs-type-card active" data-cstype="banner" onclick="csPickType('banner')" data-testid="cs-type-banner">
+                  <div class="cs-type-ico" style="background:linear-gradient(135deg,#7c3aed,#ec4899)"><i data-lucide="image" style="width:20px;height:20px"></i></div>
+                  <b>بنر</b>
+                  <span>صور إعلانية واسعة</span>
+                </button>
+                <button class="cs-type-card" data-cstype="logo" onclick="csPickType('logo')" data-testid="cs-type-logo">
+                  <div class="cs-type-ico" style="background:linear-gradient(135deg,#fbbf24,#f59e0b)"><i data-lucide="hexagon" style="width:20px;height:20px"></i></div>
+                  <b>لوجو</b>
+                  <span>هوية بصرية وعلامة تجارية</span>
+                </button>
+                <button class="cs-type-card" data-cstype="section" onclick="csPickType('section')" data-testid="cs-type-section">
+                  <div class="cs-type-ico" style="background:linear-gradient(135deg,#10b981,#059669)"><i data-lucide="layout-grid" style="width:20px;height:20px"></i></div>
+                  <b>صورة قسم</b>
+                  <span>تصنيفات: ملابس · جوالات · ...</span>
+                </button>
+                <button class="cs-type-card" data-cstype="general" onclick="csPickType('general')" data-testid="cs-type-general">
+                  <div class="cs-type-ico" style="background:linear-gradient(135deg,#0ea5e9,#3b82f6)"><i data-lucide="sparkles" style="width:20px;height:20px"></i></div>
+                  <b>عام</b>
+                  <span>صور داخلية · إعلانات حرة</span>
+                </button>
+              </div>
+
+              <!-- Free Chat -->
+              <div class="cs-chat">
+                <div class="cs-chat-head">
+                  <i data-lucide="bot" style="width:16px;height:16px;color:#fbbf24"></i>
+                  <b style="font-size:13px;color:#fff">شات AI الإبداعي</b>
+                  <span style="font-size:10px;color:#94a3b8;margin-right:auto">اطلب أي صورة بكلامك الطبيعي</span>
+                </div>
+                <div class="cs-chat-body" id="cs-chat-body">
+                  <div class="cs-msg cs-msg-bot"><b>أهلين! 👋</b><br>اكتب لي وش تبي بالضبط — مثلاً:<br>• "بنر تخفيضات نهاية الأسبوع بألوان دافية"<br>• "لوجو لمحل قهوة باسم ركن البن"<br>• "صورة قسم لتصنيف الإلكترونيات"<br>أو اضغط أي نوع فوق + استخدم الأدوات تحت 👇</div>
+                </div>
+                <div class="cs-chat-input">
+                  <input id="cs-chat-text" placeholder="اكتب وصف الصورة اللي تبيها..." onkeydown="if(event.key==='Enter')csSendChat()" data-testid="cs-chat-input">
+                  <button onclick="csSendChat()" data-testid="cs-chat-send"><i data-lucide="send" style="width:14px;height:14px"></i></button>
+                </div>
+              </div>
+            </div>
+
+            <!-- RIGHT · ACCORDION TOOLS + PREVIEW + GENERATE -->
+            <div class="cs-right">
+              <!-- Accordion Tools -->
+              <div class="cs-tools">
+                <details class="cs-tool" open>
+                  <summary><i data-lucide="palette" style="width:14px;height:14px"></i> 🎨 لون الخلفية <span class="cs-tool-hint" id="cs-bg-hint">أبيض</span></summary>
+                  <div class="cs-tool-body" id="cs-bg-presets"></div>
+                </details>
+                <details class="cs-tool">
+                  <summary><i data-lucide="frame" style="width:14px;height:14px"></i> 🖼️ لون الإطار <span class="cs-tool-hint" id="cs-frame-hint">بنفسجي</span></summary>
+                  <div class="cs-tool-body" id="cs-frame-presets"></div>
+                </details>
+                <details class="cs-tool">
+                  <summary><i data-lucide="aspect-ratio" style="width:14px;height:14px"></i> 📐 النسبة <span class="cs-tool-hint" id="cs-aspect-hint">16:9</span></summary>
+                  <div class="cs-tool-body">
+                    <div class="cs-aspect-grid">
+                      <button class="cs-aspect-btn active" data-csasp="16:9" onclick="csPickAspect('16:9',this)">16:9<br><small>بنر عريض</small></button>
+                      <button class="cs-aspect-btn" data-csasp="1:1" onclick="csPickAspect('1:1',this)">1:1<br><small>مربع</small></button>
+                      <button class="cs-aspect-btn" data-csasp="9:16" onclick="csPickAspect('9:16',this)">9:16<br><small>ستوري</small></button>
+                      <button class="cs-aspect-btn" data-csasp="4:5" onclick="csPickAspect('4:5',this)">4:5<br><small>إنستقرام</small></button>
+                      <button class="cs-aspect-btn" data-csasp="3:1" onclick="csPickAspect('3:1',this)">3:1<br><small>هيرو</small></button>
+                      <button class="cs-aspect-btn" data-csasp="4:3" onclick="csPickAspect('4:3',this)">4:3<br><small>كلاسيك</small></button>
+                    </div>
+                  </div>
+                </details>
+                <details class="cs-tool">
+                  <summary><i data-lucide="sparkles" style="width:14px;height:14px"></i> ✨ النمط <span class="cs-tool-hint" id="cs-style-hint">حياتي</span></summary>
+                  <div class="cs-tool-body">
+                    <div class="cs-style-grid">
+                      <button class="cs-style-btn active" data-csstl="lifestyle" onclick="csPickStyle('lifestyle','حياتي',this)">🌿<br>حياتي</button>
+                      <button class="cs-style-btn" data-csstl="luxury" onclick="csPickStyle('luxury','فاخر',this)">💎<br>فاخر</button>
+                      <button class="cs-style-btn" data-csstl="studio" onclick="csPickStyle('studio','استوديو',this)">📸<br>استوديو</button>
+                      <button class="cs-style-btn" data-csstl="flat" onclick="csPickStyle('flat','فلات',this)">📐<br>فلات</button>
+                      <button class="cs-style-btn" data-csstl="minimal" onclick="csPickStyle('minimal','مينيمال',this)">⚪<br>مينيمال</button>
+                      <button class="cs-style-btn" data-csstl="dramatic" onclick="csPickStyle('dramatic','درامي',this)">🌑<br>درامي</button>
+                    </div>
+                  </div>
+                </details>
+                <!-- Section-specific extra tool — only visible when type=section -->
+                <details class="cs-tool cs-tool-section" id="cs-tool-cat" style="display:none">
+                  <summary><i data-lucide="folder" style="width:14px;height:14px"></i> 🗂️ القسم/التصنيف <span class="cs-tool-hint" id="cs-cat-hint">ملابس</span></summary>
+                  <div class="cs-tool-body">
+                    <div class="cs-cat-grid">
+                      <button class="cs-cat-btn active" onclick="csPickCat('ملابس','clothing fashion apparel',this)">👕 ملابس</button>
+                      <button class="cs-cat-btn" onclick="csPickCat('جوالات','smartphones mobile devices',this)">📱 جوالات</button>
+                      <button class="cs-cat-btn" onclick="csPickCat('إلكترونيات','consumer electronics gadgets',this)">💻 إلكترونيات</button>
+                      <button class="cs-cat-btn" onclick="csPickCat('عطور','luxury perfumes fragrances',this)">🌸 عطور</button>
+                      <button class="cs-cat-btn" onclick="csPickCat('مطعم','restaurant food cuisine',this)">🍽️ مطعم</button>
+                      <button class="cs-cat-btn" onclick="csPickCat('حلاقة','barber shop grooming',this)">💈 حلاقة</button>
+                      <button class="cs-cat-btn" onclick="csPickCat('صيدلية','pharmacy medicine wellness',this)">💊 صيدلية</button>
+                      <button class="cs-cat-btn" onclick="csPickCat('قهوة','specialty coffee café',this)">☕ قهوة</button>
+                      <button class="cs-cat-btn" onclick="csPickCat('رياضة','sports fitness athletics',this)">⚽ رياضة</button>
+                      <input type="text" id="cs-cat-custom" placeholder="أو اكتب اسم قسم مخصص..." onchange="csPickCat(this.value,this.value,null)" style="grid-column:1/-1;padding:8px 10px;background:#0a0a14;border:1px dashed #312e81;border-radius:8px;color:#fff;font-family:inherit;font-size:12px;margin-top:4px">
+                    </div>
+                  </div>
+                </details>
+              </div>
+
+              <!-- Preview Canvas + Generate -->
+              <div class="cs-canvas">
+                <div class="cs-canvas-frame" id="cs-canvas-frame">
+                  <div class="cs-canvas-empty">
+                    <i data-lucide="image" style="width:48px;height:48px;color:#312e81"></i>
+                    <b>المعاينة</b>
+                    <span>اضغط "توليد" → تظهر هنا 4 اقتراحات</span>
+                  </div>
+                </div>
+                <div class="cs-canvas-grid" id="cs-canvas-grid" style="display:none"></div>
+                <div class="cs-canvas-actions">
+                  <button class="cs-gen-btn" onclick="csGenerate()" data-testid="cs-generate-btn">
+                    <i data-lucide="sparkles" style="width:16px;height:16px"></i>
+                    <span>توليد 4 صور · 32 نقطة</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ════════════════════════════ END CREATIVE STUDIO ════════════════════════════ -->
+
       <div class="page" data-page="video-studio">
         <div class="zx-studio">
           <!-- Header: brand + config -->
