@@ -253,6 +253,41 @@ html.glance .btn{padding:14px 22px;font-size:15px}
 .heat-flash.show{display:block}
 @keyframes flash{50%{opacity:.5}}
 
+/* === Incoming Order Popup (HungerStation-style — front and center) === */
+.incoming-overlay{position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:9800;display:none;align-items:center;justify-content:center;padding:18px;backdrop-filter:blur(8px)}
+.incoming-overlay.show{display:flex}
+.incoming-card{background:var(--surface);border:2.5px solid var(--purple);border-radius:24px;padding:24px;max-width:480px;width:100%;box-shadow:0 30px 80px rgba(124,58,237,.5);animation:incomingPulse 1.6s ease-in-out infinite, slideDown .35s ease-out}
+@keyframes incomingPulse{50%{box-shadow:0 30px 80px rgba(124,58,237,.7), 0 0 0 6px rgba(124,58,237,.25)}}
+@keyframes slideDown{from{opacity:0;transform:translateY(-30px)}}
+.incoming-card .top{display:flex;align-items:center;gap:10px;margin-bottom:14px}
+.incoming-card .alert-ico{width:54px;height:54px;border-radius:14px;background:var(--grad);display:flex;align-items:center;justify-content:center;color:#fff;font-size:24px;animation:bounce 1s ease-in-out infinite}
+@keyframes bounce{50%{transform:translateY(-4px)}}
+.incoming-card .meta{flex:1}
+.incoming-card .meta .ttl{font-weight:900;font-size:18px;color:var(--text)}
+.incoming-card .meta .sub{font-size:12px;color:var(--mute);margin-top:2px}
+.incoming-card .countdown{padding:4px 12px;background:rgba(239,68,68,.15);color:var(--rose);border-radius:99px;font-weight:900;font-size:13px}
+.incoming-card .summary{background:var(--bg2);border-radius:14px;padding:14px;margin-bottom:14px}
+.incoming-card .summary .row{display:flex;justify-content:space-between;padding:4px 0;font-size:13px}
+.incoming-card .summary .row b{color:var(--text)}
+.incoming-card .summary .earn{font-weight:900;font-size:22px;color:var(--emerald);text-align:center;padding:12px;background:rgba(16,185,129,.1);border-radius:11px;margin-top:8px}
+.incoming-card .actions{display:flex;gap:8px}
+.incoming-card .actions .accept{flex:2;padding:15px;background:var(--grad-cool);color:#fff;border:none;border-radius:13px;font-weight:900;font-size:15px;cursor:pointer;font-family:inherit;box-shadow:0 6px 22px rgba(16,185,129,.4)}
+.incoming-card .actions .reject{flex:1;padding:15px;background:transparent;color:var(--rose);border:1.5px solid var(--rose);border-radius:13px;font-weight:900;font-size:13px;cursor:pointer;font-family:inherit}
+.incoming-card .actions button:active{transform:scale(.96)}
+
+/* === PWA install prompt === */
+.pwa-prompt{position:fixed;bottom:90px;left:14px;right:14px;background:var(--surface);border:1.5px solid var(--purple);border-radius:16px;padding:14px;display:none;align-items:center;gap:10px;box-shadow:0 12px 40px rgba(124,58,237,.3);z-index:300}
+.pwa-prompt.show{display:flex}
+.pwa-prompt .ico{width:42px;height:42px;border-radius:11px;background:var(--grad);display:flex;align-items:center;justify-content:center;color:#fff;font-size:20px;flex-shrink:0}
+.pwa-prompt .txt{flex:1;font-size:12px}
+.pwa-prompt .txt b{color:var(--text);display:block;margin-bottom:2px}
+.pwa-prompt button{padding:8px 14px;background:var(--grad);color:#fff;border:none;border-radius:9px;font-family:inherit;font-weight:900;font-size:12px;cursor:pointer}
+.pwa-prompt .close{background:transparent;color:var(--mute);padding:4px}
+
+/* === Open in Maps button === */
+.maps-btn{padding:8px 12px;background:#1a73e8;color:#fff;border:none;border-radius:9px;font-family:inherit;font-weight:900;font-size:11px;cursor:pointer;display:inline-flex;align-items:center;gap:5px;text-decoration:none}
+.maps-btn:hover{background:#1557b0}
+
 /* === Prayer pause overlay === */
 .prayer-overlay{position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:9500;display:none;flex-direction:column;justify-content:center;align-items:center;color:#fff;padding:24px;text-align:center}
 .prayer-overlay.show{display:flex}
@@ -529,6 +564,42 @@ html.glance .btn{padding:14px 22px;font-size:15px}
 <!-- Heat alert -->
 <div class="heat-flash" id="heat-flash"></div>
 
+<!-- INCOMING ORDER POPUP (HungerStation-style, front & center) -->
+<div class="incoming-overlay" id="incoming-overlay">
+  <div class="incoming-card">
+    <div class="top">
+      <div class="alert-ico">🛵</div>
+      <div class="meta">
+        <div class="ttl">طلب جديد!</div>
+        <div class="sub" id="inc-customer">— · — كم</div>
+      </div>
+      <div class="countdown" id="inc-countdown">15</div>
+    </div>
+    <div class="summary">
+      <div class="row"><span>من:</span> <b id="inc-from">—</b></div>
+      <div class="row"><span>إلى:</span> <b id="inc-to">—</b></div>
+      <div class="row"><span>المسافة:</span> <b id="inc-dist">—</b></div>
+      <div class="row"><span>المدة المتوقعة:</span> <b id="inc-eta">—</b></div>
+      <div class="earn">أجرتك: <span id="inc-earn">—</span> ر.س</div>
+    </div>
+    <div class="actions">
+      <button class="accept" data-testid="incoming-accept" onclick="acceptIncoming()">✓ قبول الطلب</button>
+      <button class="reject" data-testid="incoming-reject" onclick="rejectIncoming()">رفض</button>
+    </div>
+  </div>
+</div>
+
+<!-- PWA Install Prompt -->
+<div class="pwa-prompt" id="pwa-prompt">
+  <div class="ico">📱</div>
+  <div class="txt">
+    <b>ثبّت التطبيق على جوالك</b>
+    <span>للوصول السريع والإشعارات الفورية</span>
+  </div>
+  <button data-testid="pwa-install" onclick="installPWA()">تثبيت</button>
+  <button class="close" onclick="document.getElementById('pwa-prompt').classList.remove('show')">✕</button>
+</div>
+
 <script>
 // ═══════════════════════════════════════════════════════════════════
 // CONFIG
@@ -705,8 +776,150 @@ async function bootApp(){
   scheduleHeatCheck();
   schedulePrayerCheck();
   scheduleMobileBranchRefresh();
+  scheduleIncomingOrderDemo();
+  schedulePWAPrompt();
   if (window.lucide) lucide.createIcons();
 }
+
+// ═══════════ INCOMING ORDER POPUP (HungerStation-style) ═══════════
+let INCOMING = null;
+let INCOMING_TIMER = null;
+function showIncomingOrder(o){
+  INCOMING = o;
+  $('#inc-customer').textContent = `${o.customer} · ${o.dist}`;
+  $('#inc-from').textContent = o.from;
+  $('#inc-to').textContent = o.to;
+  $('#inc-dist').textContent = o.dist;
+  $('#inc-eta').textContent = o.time;
+  $('#inc-earn').textContent = o.fee;
+  let secs = 15;
+  $('#inc-countdown').textContent = secs;
+  $('#incoming-overlay').classList.add('show');
+  // Play notification sound (best effort)
+  try {
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    const osc = ctx.createOscillator(); const g = ctx.createGain();
+    osc.connect(g); g.connect(ctx.destination);
+    osc.frequency.value = 880; g.gain.value = 0.15;
+    osc.start(); setTimeout(() => osc.stop(), 250);
+  } catch(e){}
+  // Vibrate (mobile)
+  if (navigator.vibrate) navigator.vibrate([200, 100, 200]);
+  if (INCOMING_TIMER) clearInterval(INCOMING_TIMER);
+  INCOMING_TIMER = setInterval(() => {
+    secs--;
+    $('#inc-countdown').textContent = secs;
+    if (secs <= 0){ rejectIncoming(); }
+  }, 1000);
+}
+window.acceptIncoming = function(){
+  if (INCOMING_TIMER) clearInterval(INCOMING_TIMER);
+  $('#incoming-overlay').classList.remove('show');
+  if (INCOMING){
+    STATE.orders.push({...INCOMING, status:'accepted'});
+    renderOrdersSection();
+    toast('✓ تم قبول الطلب — تحرّك للاستلام', 'success');
+    navTo('orders');
+  }
+};
+window.rejectIncoming = function(){
+  if (INCOMING_TIMER) clearInterval(INCOMING_TIMER);
+  $('#incoming-overlay').classList.remove('show');
+  toast('تم تخطي الطلب');
+};
+function scheduleIncomingOrderDemo(){
+  // Demo: pop an incoming order 12 seconds after boot if status is online
+  setTimeout(() => {
+    if (!$$('.sb-status.active.online').length) return;
+    showIncomingOrder({
+      id: '#3091',
+      customer: 'منى الزهراني',
+      from: 'الفرع الرئيسي',
+      to: 'حي الياسمين، شارع 12',
+      dist: '4.6 كم',
+      time: '18 د',
+      fee: 19,
+      urgent: false,
+      lat: 24.78,
+      lng: 46.69,
+    });
+  }, 12000);
+}
+
+// ═══════════ OPEN IN GOOGLE MAPS ═══════════
+window.openInMaps = function(lat, lng, label){
+  const url = `https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}&travelmode=driving`;
+  window.open(url, '_blank');
+};
+
+// ═══════════ PWA INSTALL ═══════════
+let DEFERRED_PROMPT = null;
+window.addEventListener('beforeinstallprompt', (e) => {
+  e.preventDefault();
+  DEFERRED_PROMPT = e;
+  // Show our custom prompt
+  setTimeout(() => $('#pwa-prompt').classList.add('show'), 8000);
+});
+window.installPWA = async function(){
+  $('#pwa-prompt').classList.remove('show');
+  if (DEFERRED_PROMPT){
+    DEFERRED_PROMPT.prompt();
+    const choice = await DEFERRED_PROMPT.userChoice;
+    if (choice.outcome === 'accepted') toast('✓ سيتم تثبيت التطبيق', 'success');
+    DEFERRED_PROMPT = null;
+  } else {
+    toast('للتثبيت: اضغط على ⋮ ثم "إضافة إلى الشاشة الرئيسية"');
+  }
+};
+function schedulePWAPrompt(){
+  // Show prompt after 8s if beforeinstallprompt didn't fire (e.g. iOS Safari)
+  setTimeout(() => {
+    if (!DEFERRED_PROMPT && !localStorage.getItem('pwa-dismissed')){
+      // Just show informational
+    }
+  }, 8000);
+}
+
+// ═══════════ WITHDRAWAL FLOW (with merchant-set fee) ═══════════
+window.openWithdraw = function(){
+  const balance = STATE.earnings.today + STATE.earnings.week;
+  const min = STATE.config?.earnings?.instant_pay_min_sar || 50;
+  const fee = STATE.config?.earnings?.withdrawal_fee_sar ?? 4;
+  if (balance < min){ toast(`الحد الأدنى للسحب ${min} ر.س — رصيدك ${balance}`, 'error'); return; }
+  const html = `
+    <div class="modal-bd show" id="wd-modal" onclick="if(event.target===this)this.remove()">
+      <div class="modal" style="max-width:420px">
+        <h3>💸 طلب سحب أرباح</h3>
+        <p>المبلغ سيُحوّل خلال ساعات إلى محفظتك / حسابك</p>
+        <div style="background:var(--bg2);border-radius:11px;padding:12px;margin-bottom:14px">
+          <div style="display:flex;justify-content:space-between;font-size:13px;padding:4px 0"><span class="muted">الرصيد المتاح:</span> <b>${balance} ر.س</b></div>
+          <div style="display:flex;justify-content:space-between;font-size:13px;padding:4px 0"><span class="muted">رسم التحويل (يحدده التاجر):</span> <b style="color:var(--rose)">- ${fee} ر.س</b></div>
+          <div style="display:flex;justify-content:space-between;font-size:15px;padding:8px 0 0;border-top:1px dashed var(--border);margin-top:6px"><b>سيُحوّل إليك:</b> <b style="color:var(--emerald)">${balance - fee} ر.س</b></div>
+        </div>
+        <div style="margin-bottom:10px">
+          <label class="muted" style="font-size:11px;font-weight:700;display:block;margin-bottom:5px">طريقة الاستلام</label>
+          <select id="wd-method" style="width:100%;padding:11px;background:var(--bg2);border:1px solid var(--border);border-radius:11px;color:var(--text);font-family:inherit">
+            <option value="iban">حوالة بنكية (IBAN)</option>
+            <option value="stc_pay">STC Pay</option>
+            <option value="urpay">UrPay</option>
+            <option value="wallet">محفظة Zerax</option>
+          </select>
+        </div>
+        <div style="margin-bottom:14px">
+          <label class="muted" style="font-size:11px;font-weight:700;display:block;margin-bottom:5px">رقم الحساب / IBAN / رقم المحفظة</label>
+          <input id="wd-account" placeholder="SA00 0000 0000 0000 0000 0000" style="width:100%;padding:11px;background:var(--bg2);border:1px solid var(--border);border-radius:11px;color:var(--text);font-family:inherit;direction:ltr;text-align:left">
+        </div>
+        <button class="btn btn-cool" style="width:100%" onclick="confirmWithdraw(${balance - fee})">تأكيد السحب</button>
+      </div>
+    </div>`;
+  document.body.insertAdjacentHTML('beforeend', html);
+};
+window.confirmWithdraw = function(net){
+  document.getElementById('wd-modal')?.remove();
+  toast(`✓ تم تقديم طلب سحب ${net} ر.س — سيُحوّل خلال 24 ساعة`, 'success');
+  STATE.earnings.today = 0; STATE.earnings.week = 0;
+  $('#earn-today').textContent = '0'; $('#er-today').textContent = '0 ر.س'; $('#er-week').textContent = '0 ر.س';
+};
 
 // Refresh mobile-branch positions periodically (food truck mode)
 function scheduleMobileBranchRefresh(){
@@ -944,7 +1157,8 @@ function orderCard(o, isAvailable){
       ${isAvailable
         ? `<button class="accept" data-testid="accept-${o.id.replace('#','')}" onclick="acceptOrder('${o.id}')"><i data-lucide="check" style="width:14px;height:14px"></i> قبول</button>
            <button class="reject" data-testid="reject-${o.id.replace('#','')}" onclick="rejectOrder('${o.id}')">رفض</button>`
-        : `<button onclick="navigateOrder('${o.id}')" data-testid="navigate-${o.id.replace('#','')}"><i data-lucide="navigation" style="width:14px;height:14px"></i> ملاحة</button>
+        : `<button onclick="openInMaps(${o.lat||24.7136}, ${o.lng||46.6753}, '${o.to||""}')" data-testid="maps-${o.id.replace('#','')}" class="maps-btn" style="flex:0 0 auto"><i data-lucide="map" style="width:14px;height:14px"></i> Google Maps</button>
+           <button onclick="navigateOrder('${o.id}')" data-testid="navigate-${o.id.replace('#','')}"><i data-lucide="navigation" style="width:14px;height:14px"></i> ملاحة</button>
            <button onclick="markDelivered('${o.id}')" class="accept" data-testid="delivered-${o.id.replace('#','')}"><i data-lucide="check-circle" style="width:14px;height:14px"></i> تم التسليم</button>`}
     </div>
   `;
@@ -1007,7 +1221,7 @@ function renderEarningsFeatures(){
   const wrap = $('#earnings-features');
   wrap.innerHTML = '';
   if (flag('earnings.instant_pay_enabled')){
-    wrap.appendChild(featureCard('⚡ السحب الفوري', `اسحب أرباحك أي وقت (الحد الأدنى: ${STATE.config?.earnings?.instant_pay_min_sar || 50} ر.س)`, 'سحب الآن', 'instant-pay-btn', () => toast('تم إرسال طلب السحب', 'success')));
+    wrap.appendChild(featureCard('⚡ السحب الفوري', `اسحب أرباحك أي وقت (الحد الأدنى: ${STATE.config?.earnings?.instant_pay_min_sar || 50} ر.س · رسم: ${STATE.config?.earnings?.withdrawal_fee_sar ?? 4} ر.س)`, 'سحب الآن', 'instant-pay-btn', () => openWithdraw()));
   }
   if (flag('earnings.fuel_cost_calculator')){
     wrap.appendChild(featureCard('⛽ حاسبة الوقود', 'احسب صافي الربح بعد البنزين تلقائياً', 'حساب', 'fuel-calc-btn', () => toast('صافي اليوم: 73 ر.س بعد الوقود')));

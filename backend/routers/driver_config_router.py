@@ -72,6 +72,7 @@ DEFAULTS: Dict[str, Any] = {
         "weekly_challenge_reward_sar": 500,
         "instant_pay_enabled": True,
         "instant_pay_min_sar": 50,
+        "withdrawal_fee_sar": 4,
         "show_tip_tracker": True,
         "earnings_predictor": True,
         "fuel_cost_calculator": True,

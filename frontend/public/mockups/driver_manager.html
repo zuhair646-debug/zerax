@@ -139,6 +139,7 @@ html,body{background:var(--bg);color:var(--text);font-family:'IBM Plex Sans Arab
         <div class="field"><label>مكافأة التحدي (ر.س)</label><input type="number" id="earn-week-reward" data-testid="earn-week-reward"></div>
         <div class="field"><label>مضاعف Surge</label><input type="number" id="earn-surge" step="0.1" data-testid="earn-surge"></div>
         <div class="field"><label>حد أدنى للسحب الفوري (ر.س)</label><input type="number" id="earn-min-payout" data-testid="earn-min-payout"></div>
+        <div class="field"><label>رسم السحب لكل عملية (ر.س)</label><input type="number" id="earn-wd-fee" step="0.5" data-testid="earn-wd-fee"></div>
       </div>
     </div>
   </div>
@@ -412,6 +413,7 @@ function renderAll(){
   $('earn-week-reward').value = CFG.earnings?.weekly_challenge_reward_sar || 500;
   $('earn-surge').value = CFG.earnings?.surge_multiplier || 1.5;
   $('earn-min-payout').value = CFG.earnings?.instant_pay_min_sar || 50;
+  $('earn-wd-fee').value = CFG.earnings?.withdrawal_fee_sar ?? 4;
   $('ord-max-batch').value = CFG.orders?.max_batch_size || 3;
   $('ord-batch-radius').value = CFG.orders?.batch_radius_km || 2;
   $('ord-prearrival').value = CFG.orders?.pre_arrival_minutes || 2;
@@ -703,6 +705,7 @@ async function saveConfig(){
   CFG.earnings.weekly_challenge_reward_sar = parseInt($('earn-week-reward').value) || 500;
   CFG.earnings.surge_multiplier = parseFloat($('earn-surge').value) || 1.5;
   CFG.earnings.instant_pay_min_sar = parseInt($('earn-min-payout').value) || 50;
+  CFG.earnings.withdrawal_fee_sar = parseFloat($('earn-wd-fee').value) || 4;
   CFG.orders.max_batch_size = parseInt($('ord-max-batch').value) || 3;
   CFG.orders.batch_radius_km = parseFloat($('ord-batch-radius').value) || 2;
   CFG.orders.pre_arrival_minutes = parseInt($('ord-prearrival').value) || 2;
