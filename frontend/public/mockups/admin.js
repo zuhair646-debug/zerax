@@ -4296,6 +4296,12 @@ function csUserMsg(text){
   body.appendChild(wrap);
   body.scrollTop = body.scrollHeight;
 }
+function csQuickChat(text){
+  const inp = document.getElementById('cs-chat-text');
+  if(inp){ inp.value = text; inp.focus(); }
+  setTimeout(()=>csSendChat(), 100);
+}
+
 async function csSendChat(){
   const inp = document.getElementById('cs-chat-text');
   const txt = (inp?.value || '').trim();

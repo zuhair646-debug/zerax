@@ -547,8 +547,19 @@ select.ps-input option{background:#13131f;color:#fff}
 .cs-body{display:grid;grid-template-columns:1fr 1.3fr;gap:0;min-height:580px}
 @media (max-width:980px){.cs-body{grid-template-columns:1fr}}
 
-/* v2 — Clean header (just identity) + Studio toolbar above chat input */
-.cs-head-clean{padding:18px 24px;background:rgba(0,0,0,.25);border-bottom:1px solid #312e81;display:flex;align-items:center}
+/* v2 — Clean header (identity + corner controls: points + fullscreen) */
+.cs-head-clean{padding:18px 24px;background:rgba(0,0,0,.35);border-bottom:1px solid #312e81;display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+
+/* Corner fullscreen button (in header, next to points) */
+.cs-corner-fs{background:#1f2937;border:1px solid #374151;color:#fff;width:38px;height:38px;border-radius:9px;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:.15s}
+.cs-corner-fs:hover{background:#fbbf24;border-color:#fbbf24;color:#0a0a14}
+body.cs-fullscreen .cs-corner-fs{background:#fbbf24;border-color:#fbbf24;color:#0a0a14}
+
+/* Quick suggestion chips (always visible inside chat) */
+.cs-quick-chips{display:flex;flex-wrap:wrap;gap:6px;padding:10px 28px;border-top:1px solid rgba(255,255,255,.04);background:#0a0a14;max-width:1100px;width:100%;margin:0 auto;box-sizing:border-box}
+@media (max-width:768px){.cs-quick-chips{padding:10px 14px}}
+.cs-quick-chip{background:transparent;border:1px solid #374151;color:#9ca3af;padding:5px 11px;border-radius:99px;font-family:inherit;font-size:11px;font-weight:500;cursor:pointer;transition:.15s;white-space:nowrap}
+.cs-quick-chip:hover{background:#1f2937;color:#fbbf24;border-color:#fbbf24}
 
 /* Studio Bar — horizontal toolbar JUST above the chat input. Replaces all the cluttered header pills. */
 .cs-studio-bar{display:flex;align-items:center;gap:6px;padding:10px 28px;background:rgba(0,0,0,.55);border-top:1px solid #312e81;flex-wrap:wrap;max-width:1100px;width:100%;margin:0 auto;box-sizing:border-box}
@@ -743,7 +754,9 @@ body.cs-fullscreen .cs-pill-fs{background:linear-gradient(135deg,#fbbf24,#f59e0b
 .cs-chat-input{display:flex;gap:6px;padding:10px;border-top:1px solid #312e81;background:rgba(0,0,0,.3)}
 .cs-chat-input input{flex:1;background:#1e1b4b;border:1px solid #312e81;border-radius:8px;padding:8px 11px;color:#fff;font-family:inherit;font-size:12px}
 .cs-chat-input input:focus{outline:none;border-color:#fbbf24}
-.cs-chat-input button{background:linear-gradient(135deg,#7c3aed,#ec4899);border:none;color:#fff;width:38px;border-radius:8px;cursor:pointer;display:flex;align-items:center;justify-content:center}
+.cs-chat-input .cs-chat-send{background:#fbbf24;color:#0a0a14;border:none;width:38px;height:38px;border-radius:10px;cursor:pointer;display:flex;align-items:center;justify-content:center}
+.cs-chat-input .cs-chat-send:hover{background:#f59e0b}
+.cs-chat-input .cs-chat-mic{background:#1f2937;border:1px solid #374151;color:#9ca3af}
 
 /* RIGHT — accordion tools + canvas */
 .cs-right{padding:18px;display:flex;flex-direction:column;gap:14px}
@@ -1678,7 +1691,7 @@ body.cs-fullscreen .cs-pill-fs{background:linear-gradient(135deg,#fbbf24,#f59e0b
            ═══════════════════════════════════════════════════════════════════ -->
       <div class="page" data-page="creative-studio">
         <div class="cs-wrap">
-          <!-- Header — minimal, just identity with official Zenrex logo -->
+          <!-- Header — minimal + points + fullscreen on the left corner -->
           <div class="cs-head cs-head-clean">
             <div class="cs-head-left">
               <div class="cs-head-ico" style="background:#0a0a14;border:1px solid #fbbf24;padding:6px"><img src="/zenrex-logo-sm.png" alt="Zenrex" style="width:32px;height:32px;object-fit:contain;display:block"></div>
@@ -1686,6 +1699,11 @@ body.cs-fullscreen .cs-pill-fs{background:linear-gradient(135deg,#fbbf24,#f59e0b
                 <h2 style="margin:0;font-size:20px;font-weight:900;color:#fff">الاستوديو الإبداعي · <span style="background:linear-gradient(135deg,#fbbf24,#f59e0b);-webkit-background-clip:text;-webkit-text-fill-color:transparent">Zenrex AI</span></h2>
                 <div style="font-size:11px;color:#cbd5e1;margin-top:3px">شات تفاعلي مدعوم بالذكاء الاصطناعي</div>
               </div>
+            </div>
+            <!-- Corner controls: points + fullscreen toggle -->
+            <div style="display:flex;align-items:center;gap:8px;margin-right:auto">
+              <span class="csb-points" data-testid="cs-points" style="margin:0"><i data-lucide="coins" style="width:13px;height:13px"></i> <b id="cs-points-val">—</b><span class="csb-points-lbl"> نقطة</span></span>
+              <button class="cs-corner-fs" onclick="csToggleFullscreen()" id="cs-fs-btn" data-testid="cs-fullscreen-btn" title="كامل الشاشة (ESC للخروج)"><i data-lucide="maximize-2" style="width:15px;height:15px"></i></button>
             </div>
           </div>
 
@@ -1701,16 +1719,24 @@ body.cs-fullscreen .cs-pill-fs{background:linear-gradient(135deg,#fbbf24,#f59e0b
                   </div>
                 </div>
               </div>
-              <!-- Studio Bar — clean horizontal toolbar JUST ABOVE the chat input -->
+              <!-- Studio Bar — clean toolbar above the chat input (fullscreen + points moved to header corner) -->
               <div class="cs-studio-bar">
-                <button class="csb-action" onclick="document.getElementById('cs-ref-file').click()" title="ارفع صورة مرجعية أو صورة قديمة لتعديلها"><i data-lucide="upload" style="width:13px;height:13px"></i> <span>رفع صورة</span></button>
+                <button class="csb-action" onclick="document.getElementById('cs-ref-file').click()" title="ارفع صورة مرجعية"><i data-lucide="upload" style="width:13px;height:13px"></i> <span>رفع صورة</span></button>
                 <input type="file" id="cs-ref-file" accept="image/*" style="display:none" onchange="csAttachRef(this)">
-                <button class="csb-action" onclick="csRestartWizard()" data-testid="csb-new" title="بدء جلسة شات جديدة"><i data-lucide="rotate-ccw" style="width:13px;height:13px"></i> <span>محادثة جديدة</span></button>
-                <button class="csb-action" onclick="csOpenGallery()" data-testid="csb-gallery" title="مكتبة الصور المعتمدة"><i data-lucide="layout-grid" style="width:13px;height:13px"></i> <span>المكتبة</span> <span class="csb-badge" id="cs-gallery-count">0</span></button>
-                <button class="csb-action" onclick="csOpenFullscreenPreview()" data-testid="csb-preview" title="معاينة المتجر بالكامل"><i data-lucide="monitor" style="width:13px;height:13px"></i> <span>معاينة المتجر</span></button>
-                <button class="csb-action csb-fs" onclick="csToggleFullscreen()" id="cs-fs-btn" data-testid="csb-fs" title="شات بكامل الشاشة (ESC للخروج)"><i data-lucide="maximize-2" style="width:13px;height:13px"></i> <span>كامل الشاشة</span></button>
-                <span class="csb-spacer"></span>
-                <span class="csb-points" data-testid="cs-points"><i data-lucide="coins" style="width:13px;height:13px"></i> <b id="cs-points-val">—</b><span class="csb-points-lbl"> نقطة</span></span>
+                <button class="csb-action" onclick="csRestartWizard()" data-testid="csb-new" title="بدء محادثة جديدة"><i data-lucide="rotate-ccw" style="width:13px;height:13px"></i> <span>محادثة جديدة</span></button>
+                <button class="csb-action" onclick="csOpenGallery()" data-testid="csb-gallery" title="المكتبة"><i data-lucide="layout-grid" style="width:13px;height:13px"></i> <span>المكتبة</span> <span class="csb-badge" id="cs-gallery-count">0</span></button>
+                <button class="csb-action" onclick="csOpenFullscreenPreview()" data-testid="csb-preview" title="معاينة المتجر"><i data-lucide="monitor" style="width:13px;height:13px"></i> <span>معاينة المتجر</span></button>
+              </div>
+              <!-- Quick suggestion chips — always available — click to fill input/send -->
+              <div class="cs-quick-chips" id="cs-quick-chips">
+                <button class="cs-quick-chip" onclick="csQuickChat('ابي بنر تخفيضات نهاية الأسبوع')">🖼️ بنر تخفيضات</button>
+                <button class="cs-quick-chip" onclick="csQuickChat('سو لي لوجو لمتجري')">🎨 لوجو متجري</button>
+                <button class="cs-quick-chip" onclick="csQuickChat('صورة قسم للملابس')">🗂️ صورة قسم</button>
+                <button class="cs-quick-chip" onclick="csQuickChat('إعلان عن منتج جديد')">📢 إعلان جديد</button>
+                <button class="cs-quick-chip" onclick="csQuickChat('بنر لرمضان')">🌙 بنر رمضان</button>
+                <button class="cs-quick-chip" onclick="csQuickChat('بنر للجمعة البيضاء')">⚪ الجمعة البيضاء</button>
+                <button class="cs-quick-chip" onclick="csQuickChat('صورة هيرو للصفحة الرئيسية')">🌟 صورة هيرو</button>
+                <button class="cs-quick-chip" onclick="csRestartWizard()">🔄 ابدأ من جديد</button>
               </div>
               <div class="cs-chat-input cs-chat-input-v2">
                 <input id="cs-chat-text" placeholder="اكتب رسالتك أو اتبع الخيارات بالأعلى..." onkeydown="if(event.key==='Enter')csSendChat()" data-testid="cs-chat-input" autocomplete="off">
