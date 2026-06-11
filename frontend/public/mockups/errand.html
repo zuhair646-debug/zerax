@@ -148,6 +148,26 @@ button,input,select,textarea{font-family:inherit}
       <div class="sw" id="sw-return" data-testid="sw-return"></div>
     </div>
 
+    <div class="section-title"><i data-lucide="calendar-clock" style="width:13px;height:13px"></i> موعد التوصيل</div>
+    <div id="open-status-banner" style="margin-bottom:10px"></div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:8px">
+      <button class="type-tab active" id="when-now" data-testid="when-now" style="padding:11px;border-radius:11px;border:none;cursor:pointer;font-weight:900;font-size:12px;background:var(--grad);color:#fff;font-family:inherit">⚡ الآن</button>
+      <button class="type-tab" id="when-schedule" data-testid="when-schedule" style="padding:11px;border-radius:11px;border:1.5px solid var(--border);cursor:pointer;font-weight:900;font-size:12px;background:var(--surface);color:var(--mute);font-family:inherit">📅 حجز موعد</button>
+    </div>
+    <div id="schedule-picker" style="display:none">
+      <div class="inline">
+        <div class="field">
+          <label>التاريخ</label>
+          <select id="sched-date" data-testid="sched-date"></select>
+        </div>
+        <div class="field">
+          <label>الوقت</label>
+          <select id="sched-time" data-testid="sched-time"><option value="">-- اختر --</option></select>
+        </div>
+      </div>
+      <div id="sched-eta-info" style="font-size:11px;color:var(--cyan);padding:8px;background:rgba(6,182,212,.08);border-radius:9px;display:none"></div>
+    </div>
+
     <div class="section-title"><i data-lucide="user" style="width:13px;height:13px"></i> بياناتك</div>
     <div class="inline">
       <div class="field"><label>الاسم</label><input id="cust-name" placeholder="اسمك الكامل" data-testid="cust-name"></div>
@@ -447,6 +467,7 @@ $('pay-btn').onclick = async () => {
   $('pay-btn').disabled = true;
   $('pay-btn').innerHTML = '⏳ يتم الدفع...';
   try {
+    const scheduledISO = (SCHED_MODE === 'schedule' && SCHED_DATE && SCHED_TIME) ? `${SCHED_DATE}T${SCHED_TIME}:00` : null;
     const r = await fetch(API + '/api/delivery/external/order', {
       method:'POST', headers:{'Content-Type':'application/json'},
       body: JSON.stringify({
@@ -460,6 +481,8 @@ $('pay-btn').onclick = async () => {
         service_type: STATE.serviceType,
         payment_method: $('pay-method').value,
         notes: $('notes').value,
+        scheduled_for: scheduledISO,
+        eta_window: SCHED_ETA_WIN || null,
       })
     });
     const d = await r.json();
@@ -478,7 +501,92 @@ $('pay-btn').onclick = async () => {
 };
 
 loadBranches();
+loadScheduleStatus();
 if (window.lucide) lucide.createIcons();
+
+// ═══════════════════ SCHEDULING ═══════════════════
+let SCHED_MODE = 'now';
+let SCHED_DATE = '', SCHED_TIME = '', SCHED_ETA_WIN = '';
+
+async function loadScheduleStatus(){
+  try {
+    const mid = STATE.merchantId || 'demo';
+    const r = await fetch(API + '/api/delivery/schedule/is-open?merchant_id=' + mid);
+    const d = await r.json();
+    const banner = document.getElementById('open-status-banner');
+    if (d.is_open || d.is_24_7){
+      banner.innerHTML = `<div style="padding:9px 12px;background:rgba(16,185,129,.12);border:1px solid rgba(16,185,129,.3);border-radius:10px;font-size:12px;color:#10b981;font-weight:900">🟢 مفتوح الآن ${d.is_24_7 ? '· 24/7' : ''}</div>`;
+    } else {
+      banner.innerHTML = `<div style="padding:9px 12px;background:rgba(239,68,68,.12);border:1px solid rgba(239,68,68,.3);border-radius:10px;font-size:12px;color:#ef4444;font-weight:900">🔴 مغلق · يفتح ${d.next_open_label || ''}</div>`;
+    }
+  } catch(e){}
+}
+
+document.getElementById('when-now').onclick = () => {
+  SCHED_MODE = 'now'; SCHED_DATE = ''; SCHED_TIME = ''; SCHED_ETA_WIN = '';
+  document.getElementById('when-now').style.background = 'linear-gradient(135deg,#7c3aed,#06b6d4)';
+  document.getElementById('when-now').style.color = '#fff';
+  document.getElementById('when-now').style.border = 'none';
+  document.getElementById('when-schedule').style.background = 'var(--surface)';
+  document.getElementById('when-schedule').style.color = 'var(--mute)';
+  document.getElementById('when-schedule').style.border = '1.5px solid var(--border)';
+  document.getElementById('schedule-picker').style.display = 'none';
+};
+document.getElementById('when-schedule').onclick = async () => {
+  SCHED_MODE = 'schedule';
+  document.getElementById('when-schedule').style.background = 'linear-gradient(135deg,#7c3aed,#06b6d4)';
+  document.getElementById('when-schedule').style.color = '#fff';
+  document.getElementById('when-schedule').style.border = 'none';
+  document.getElementById('when-now').style.background = 'var(--surface)';
+  document.getElementById('when-now').style.color = 'var(--mute)';
+  document.getElementById('when-now').style.border = '1.5px solid var(--border)';
+  document.getElementById('schedule-picker').style.display = 'block';
+  // Populate date picker (next 7 days)
+  const sel = document.getElementById('sched-date');
+  sel.innerHTML = '';
+  const today = new Date();
+  const dayNamesAr = ['الأحد','الاثنين','الثلاثاء','الأربعاء','الخميس','الجمعة','السبت'];
+  for (let i=0; i<7; i++){
+    const d = new Date(today); d.setDate(today.getDate() + i);
+    const iso = d.toISOString().slice(0,10);
+    const lbl = (i===0?'اليوم':(i===1?'بكرة':dayNamesAr[d.getDay()])) + ' · ' + iso;
+    const opt = document.createElement('option'); opt.value = iso; opt.textContent = lbl;
+    sel.appendChild(opt);
+  }
+  sel.onchange = () => loadSlots(sel.value);
+  await loadSlots(sel.value);
+};
+
+async function loadSlots(date){
+  const mid = STATE.merchantId || 'demo';
+  const r = await fetch(API + `/api/delivery/schedule/slots?merchant_id=${mid}&date=${date}`);
+  const d = await r.json();
+  const ts = document.getElementById('sched-time');
+  ts.innerHTML = '<option value="">-- اختر الوقت --</option>';
+  (d.slots || []).forEach(s => {
+    const o = document.createElement('option');
+    o.value = s.value;
+    o.dataset.eta = s.eta_window || '';
+    o.textContent = s.label + (s.eta_window ? '  (الوصول: ' + s.eta_window + ')' : '');
+    ts.appendChild(o);
+  });
+  if ((d.slots || []).length === 0){
+    ts.innerHTML = '<option value="">لا توجد فترات متاحة في هذا اليوم</option>';
+  }
+  ts.onchange = () => {
+    SCHED_DATE = date;
+    SCHED_TIME = ts.value;
+    SCHED_ETA_WIN = ts.selectedOptions[0]?.dataset.eta || '';
+    const info = document.getElementById('sched-eta-info');
+    if (SCHED_TIME){
+      info.style.display = 'block';
+      info.innerHTML = `📦 السائق يستلم الطلب قبل الموعد بـ <b>30 دقيقة</b> · بيوصلك بين <b>${SCHED_ETA_WIN}</b>`;
+    } else {
+      info.style.display = 'none';
+    }
+  };
+}
+
 </script>
 </body>
 </html>

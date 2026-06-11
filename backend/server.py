@@ -3617,6 +3617,9 @@ try:
     # External Delivery (Mrsool-style errand service) — Jun 2026
     from routers.external_delivery_router import router as _ext_delivery_router
     app.include_router(_ext_delivery_router)
+    # Delivery Scheduling — operating hours + scheduled deliveries (Jun 2026)
+    from routers.schedule_router import router as _schedule_router
+    app.include_router(_schedule_router)
     logging.getLogger(__name__).info("Care Portal + Image/Video Studio + Delivery + Payroll + Payments + Store + Store V2 + AI + Sandbox + Theme + Driver-Config + External-Delivery modules registered")
 except Exception as _care_e:
     logging.getLogger(__name__).error(f"Failed to register care_portal module: {_care_e}", exc_info=True)

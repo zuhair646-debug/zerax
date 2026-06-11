@@ -113,6 +113,8 @@ class OrderIn(BaseModel):
     service_type: str = "delivery"
     payment_method: str = "card"          # card | apple_pay | mada
     notes: Optional[str] = ""
+    scheduled_for: Optional[str] = None    # ISO datetime "2026-06-12T09:00" — null = ASAP
+    eta_window: Optional[str] = None       # e.g. "08:30 – 09:15"
 
 
 # ─────────────────────────────────────────────────────────────────────────
@@ -296,6 +298,9 @@ async def create_order(body: OrderIn):
         "assigned_driver_id": None,
         "notes": body.notes or "",
         "eta_minutes": quote_data["eta_minutes"],
+        "scheduled_for": body.scheduled_for,
+        "eta_window": body.eta_window,
+        "is_scheduled": bool(body.scheduled_for),
         "created_at": _now(),
         "updated_at": _now(),
     }

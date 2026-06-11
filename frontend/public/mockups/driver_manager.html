@@ -99,6 +99,7 @@ html,body{background:var(--bg);color:var(--text);font-family:'IBM Plex Sans Arab
     <button class="tab" data-tab="wellbeing" data-testid="tab-wellbeing"><i data-lucide="heart" style="width:14px;height:14px"></i> الصحة</button>
     <button class="tab" data-tab="gamification" data-testid="tab-gamification"><i data-lucide="trophy" style="width:14px;height:14px"></i> الإنجازات</button>
     <button class="tab" data-tab="external" data-testid="tab-external"><i data-lucide="truck" style="width:14px;height:14px"></i> توصيل خارجي</button>
+    <button class="tab" data-tab="hours" data-testid="tab-hours"><i data-lucide="clock" style="width:14px;height:14px"></i> ساعات العمل</button>
     <button class="tab" data-tab="branches" data-testid="tab-branches"><i data-lucide="store" style="width:14px;height:14px"></i> الفروع</button>
     <button class="tab" data-tab="order" data-testid="tab-order"><i data-lucide="list" style="width:14px;height:14px"></i> ترتيب القوائم</button>
   </div>
@@ -231,6 +232,44 @@ html,body{background:var(--bg);color:var(--text);font-family:'IBM Plex Sans Arab
     </div>
   </div>
 
+  <!-- WORKING HOURS -->
+  <div class="section" data-section="hours">
+    <div class="card">
+      <h3><span class="ico"><i data-lucide="clock" style="width:16px;height:16px"></i></span> ساعات عمل التوصيل</h3>
+      <p>حدد فترات العمل لكل يوم. يمكنك إضافة عدة فترات (مثلاً: 6 ص → 12 ظ، ثم 4 م → 12 ص). العملاء بيشوفون "مغلق - يفتح الساعة X" خارج هذه الأوقات.</p>
+      <div class="toggle-row">
+        <div class="info">
+          <div class="nm">🌍 مفتوح 24/7</div>
+          <div class="desc">إذا فعّلت هذا، تتجاهل الجدول وتشتغل طوال اليوم</div>
+        </div>
+        <div class="sw" id="sw-24-7" data-testid="sw-24-7"></div>
+      </div>
+      <div id="hours-grid"></div>
+    </div>
+    <div class="card">
+      <h3><span class="ico"><i data-lucide="calendar-clock" style="width:16px;height:16px"></i></span> الحجز المسبق (Scheduled Delivery)</h3>
+      <p>يقدر العميل يحجز توصيل لموعد مستقبلي (بكرة الساعة 9 مثلاً). النظام يحسب نافذة وصول مرنة ويرسل الطلب للسائق قبل الموعد.</p>
+      <div class="toggle-row">
+        <div class="info">
+          <div class="nm">⚡ تفعيل الحجز المسبق</div>
+          <div class="desc">إذا أوقفته، العميل يقدر يطلب فقط "الآن"</div>
+        </div>
+        <div class="sw" id="sw-sched" data-testid="sw-sched"></div>
+      </div>
+      <div class="inline">
+        <div class="field"><label>أقصى أيام للحجز المسبق</label><input type="number" id="sch-advance-days" min="1" max="60" data-testid="sch-advance-days"></div>
+        <div class="field"><label>مدة الفترة (دقيقة)</label><input type="number" id="sch-interval" min="15" max="120" step="5" data-testid="sch-interval"></div>
+        <div class="field"><label>وقت تجهيز السائق (دقيقة)</label><input type="number" id="sch-prep" min="0" max="120" data-testid="sch-prep"></div>
+        <div class="field"><label>نافذة الوصول (± دقيقة)</label><input type="number" id="sch-eta-win" min="15" max="120" data-testid="sch-eta-win"></div>
+        <div class="field"><label>أدنى تقديم للحجز (دقيقة)</label><input type="number" id="sch-min-ahead" min="15" max="240" data-testid="sch-min-ahead"></div>
+        <div class="field"><label>حد الطلبات لكل فترة</label><input type="number" id="sch-max-slot" min="1" max="50" data-testid="sch-max-slot"></div>
+      </div>
+      <div style="background:rgba(6,182,212,.08);border:1px dashed rgba(6,182,212,.3);padding:12px;border-radius:11px;font-size:12px;color:var(--cyan);font-weight:700">
+        💡 مثال: العميل اختار الساعة 9:00 ص، نافذة الوصول 45 د → بتوصل بين 8:30 و 9:15. السائق يستلم الطلب الساعة 8:30.
+      </div>
+    </div>
+  </div>
+
   <!-- BRANCHES -->
   <div class="section" data-section="branches">
     <div class="card">
@@ -333,7 +372,6 @@ function toast(msg){
 }
 
 async function load(){
-  // Get merchant token from localStorage (set by admin.html on login)
   TOKEN = localStorage.getItem('zx_token') || localStorage.getItem('zerax_token') || localStorage.getItem('token') || '';
   if (!TOKEN){
     const params = new URLSearchParams(location.search);
@@ -350,11 +388,18 @@ async function load(){
     const d = await r.json();
     CFG = d.config;
     BRANCHES = d.branches || [];
+    // Load schedule separately
+    const sr = await fetch(API + '/api/delivery/schedule/hours');
+    if (sr.ok){ SCHEDULE = await sr.json(); }
     renderAll();
   } catch(e){
     alert('تعذر تحميل الإعدادات. تأكد من تسجيل دخول التاجر.');
   }
 }
+
+let SCHEDULE = {is_24_7:false, hours:{}, scheduling:{}};
+const DAYS_ORDER = ['saturday','sunday','monday','tuesday','wednesday','thursday','friday'];
+const DAY_NAMES = {saturday:'السبت',sunday:'الأحد',monday:'الاثنين',tuesday:'الثلاثاء',wednesday:'الأربعاء',thursday:'الخميس',friday:'الجمعة'};
 
 function renderAll(){
   for (const section in TOGGLES){
@@ -390,7 +435,83 @@ function renderAll(){
   $('sos3').value = sos[2] || '';
   renderBranches();
   renderOrder();
+  renderHours();
   if (window.lucide) lucide.createIcons();
+}
+
+function renderHours(){
+  // Toggle states
+  const sw24 = $('sw-24-7');
+  sw24.classList.toggle('on', !!SCHEDULE.is_24_7);
+  sw24.onclick = () => { sw24.classList.toggle('on'); SCHEDULE.is_24_7 = sw24.classList.contains('on'); };
+
+  const swSched = $('sw-sched');
+  swSched.classList.toggle('on', !!(SCHEDULE.scheduling?.enabled));
+  swSched.onclick = () => {
+    swSched.classList.toggle('on');
+    SCHEDULE.scheduling = SCHEDULE.scheduling || {};
+    SCHEDULE.scheduling.enabled = swSched.classList.contains('on');
+  };
+
+  // Numeric fields
+  const sc = SCHEDULE.scheduling || {};
+  $('sch-advance-days').value = sc.advance_booking_days || 7;
+  $('sch-interval').value = sc.slot_interval_minutes || 30;
+  $('sch-prep').value = sc.preparation_minutes || 30;
+  $('sch-eta-win').value = sc.eta_window_minutes || 45;
+  $('sch-min-ahead').value = sc.min_advance_minutes || 60;
+  $('sch-max-slot').value = sc.max_orders_per_slot || 10;
+
+  // Per-day windows
+  const grid = $('hours-grid');
+  grid.innerHTML = '';
+  DAYS_ORDER.forEach(d => {
+    const wins = (SCHEDULE.hours?.[d]) || [];
+    const card = document.createElement('div');
+    card.style.cssText = 'background:var(--bg2);border:1px solid var(--border);border-radius:11px;padding:12px;margin-bottom:8px';
+    card.dataset.day = d;
+    card.dataset.testid = 'day-' + d;
+    card.innerHTML = `
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+        <b style="font-size:13px">${DAY_NAMES[d]}</b>
+        <button class="btn btn-ghost add-win" data-day="${d}" data-testid="add-win-${d}" style="padding:5px 10px;font-size:11px"><i data-lucide="plus" style="width:11px;height:11px"></i> أضف فترة</button>
+      </div>
+      <div class="wins" data-day="${d}"></div>
+    `;
+    const winsEl = card.querySelector('.wins');
+    wins.forEach((w, i) => winsEl.appendChild(buildWindow(d, i, w)));
+    if (wins.length === 0){
+      winsEl.innerHTML = '<div style="color:var(--mute);font-size:11px;font-style:italic">مغلق طوال اليوم</div>';
+    }
+    card.querySelector('.add-win').onclick = () => {
+      SCHEDULE.hours = SCHEDULE.hours || {};
+      SCHEDULE.hours[d] = SCHEDULE.hours[d] || [];
+      SCHEDULE.hours[d].push({open:'09:00', close:'22:00'});
+      renderHours();
+    };
+    grid.appendChild(card);
+  });
+  if (window.lucide) lucide.createIcons();
+}
+
+function buildWindow(day, idx, w){
+  const row = document.createElement('div');
+  row.style.cssText = 'display:flex;gap:8px;align-items:center;margin-bottom:6px';
+  row.innerHTML = `
+    <span style="font-size:11px;color:var(--mute);min-width:42px">من</span>
+    <input type="time" value="${w.open || '09:00'}" data-testid="open-${day}-${idx}" style="padding:7px;background:var(--bg);border:1px solid var(--border);border-radius:7px;color:var(--text);font-family:inherit;font-size:12px;flex:1">
+    <span style="font-size:11px;color:var(--mute);min-width:42px;text-align:center">إلى</span>
+    <input type="time" value="${w.close || '22:00'}" data-testid="close-${day}-${idx}" style="padding:7px;background:var(--bg);border:1px solid var(--border);border-radius:7px;color:var(--text);font-family:inherit;font-size:12px;flex:1">
+    <button class="btn btn-danger del-win" data-day="${day}" data-idx="${idx}" data-testid="del-win-${day}-${idx}" style="padding:6px 8px;font-size:11px"><i data-lucide="x" style="width:11px;height:11px"></i></button>
+  `;
+  const [oI, cI] = row.querySelectorAll('input');
+  oI.onchange = () => { SCHEDULE.hours[day][idx].open = oI.value; };
+  cI.onchange = () => { SCHEDULE.hours[day][idx].close = cI.value; };
+  row.querySelector('.del-win').onclick = () => {
+    SCHEDULE.hours[day].splice(idx, 1);
+    renderHours();
+  };
+  return row;
 }
 
 function $(id){return document.getElementById(id)}
@@ -609,6 +730,22 @@ async function saveConfig(){
   const r = await fetch(API + '/api/delivery/config', {
     method:'PUT', headers:{'Authorization':'Bearer ' + TOKEN, 'Content-Type':'application/json'},
     body: JSON.stringify({config: CFG})
+  });
+  // Save schedule separately
+  SCHEDULE.scheduling = SCHEDULE.scheduling || {};
+  SCHEDULE.scheduling.advance_booking_days = parseInt($('sch-advance-days').value) || 7;
+  SCHEDULE.scheduling.slot_interval_minutes = parseInt($('sch-interval').value) || 30;
+  SCHEDULE.scheduling.preparation_minutes = parseInt($('sch-prep').value) || 30;
+  SCHEDULE.scheduling.eta_window_minutes = parseInt($('sch-eta-win').value) || 45;
+  SCHEDULE.scheduling.min_advance_minutes = parseInt($('sch-min-ahead').value) || 60;
+  SCHEDULE.scheduling.max_orders_per_slot = parseInt($('sch-max-slot').value) || 10;
+  await fetch(API + '/api/delivery/schedule/hours', {
+    method:'PUT', headers:{'Authorization':'Bearer ' + TOKEN, 'Content-Type':'application/json'},
+    body: JSON.stringify({
+      is_24_7: SCHEDULE.is_24_7,
+      hours: SCHEDULE.hours,
+      scheduling: SCHEDULE.scheduling,
+    })
   });
   if (r.ok){
     toast('✓ تم حفظ كل الإعدادات');
