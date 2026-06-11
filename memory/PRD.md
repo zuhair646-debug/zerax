@@ -162,8 +162,8 @@ FastAPI + MongoDB · Vanilla HTML/JS mockups + React main app ·
 ## Production Deployment (Hetzner VPS — Jun 11 2026)
 - **IP**: `91.98.154.148`
 - **Stack**: Docker (`docker-compose.yml`) + Nginx (gzip + caching + uploads)
-- **DB**: MongoDB `zenrex_prod` inside `zenrex-mongo-1`
-- **Backend**: Uvicorn inside `zenrex-backend-1` (auto-pip-install on start)
+- **DB**: ⭐ **MongoDB Atlas M2** (`cluster0.1tkzj4x.mongodb.net`) DB=`zerax_prod` — migrated Jun 11 2026 (146 docs). Local `zerax-mongo-1` kept as fallback backup.
+- **Backend**: Uvicorn inside `zerax-backend-1` (auto-pip-install on start)
 - **JWT_SECRET**: Fixed via `.env` (no token loss on restart)
 - **AI**: Fully working via direct provider keys (Claude/Gemini/OpenAI/FAL.ai 1.5s)
 - **Image serving**: `/static/uploads/` → `/opt/zenrex/data/uploads/` (persistent volume)
@@ -343,6 +343,19 @@ User purchased `zenrex.ai` from Porkbun (registered until Jun 11 2028) and asked
 
 ## 📧 Owner Email Forwarding (Porkbun → Gmail)
 - All `@zenrex.ai` mail forwards to **`zenrex.ai@gmail.com`** via Porkbun Email Forwarding.
+
+## MongoDB Atlas Migration (Jun 11 2026) ⭐
+- **Status**: ✅ COMPLETE & VERIFIED IN PRODUCTION
+- **Cluster**: `cluster0.1tkzj4x.mongodb.net` (M2 Shared, Free tier eligible)
+- **User**: `zenrex_admin`
+- **DB**: `zerax_prod` (kept legacy name for backward-compat with code)
+- **Migrated**: 146 documents across 24 collections (users, orders, products, pricing_plans, etc.)
+- **IP Access**: `0.0.0.0/0` (allow all — can be tightened to `91.98.154.148/32` later)
+- **Connection** via `docker-compose.yml` env: `MONGO_URL=mongodb+srv://zenrex_admin:***@cluster0.1tkzj4x.mongodb.net/...`
+- **Verified**: Write test passed (created order from production frontend → confirmed in Atlas)
+- **Fallback**: Local `zerax-mongo-1` container still running with snapshot in `/tmp/mongo_backup` and persistent volume `/opt/zerax/data/mongo` — can revert by editing docker-compose.
+- **Compose backup**: `/opt/zerax/docker-compose.yml.bak.<timestamp>` (pre-migration version)
+
 
 
 

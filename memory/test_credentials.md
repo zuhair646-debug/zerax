@@ -70,14 +70,19 @@ User requested comprehensive E2E testing before official launch. Testing agent (
 
 
 ## 🌐 Production VPS (Hetzner — Jun 11 2026)
-- **Public URL**: `http://91.98.154.148`
-- **SSH**: `ssh -i /root/.ssh/zenrex_deploy root@91.98.154.148`
-- **Admin/Merchant dashboard**: `http://91.98.154.148/mockups/admin.html`
-- **Customer storefront**: `http://91.98.154.148/mockups/app_mode_full.html`
-- **Driver app**: `http://91.98.154.148/mockups/driver_app.html`
+- **Public URL**: `https://zenrex.ai`
+- **SSH**: `ssh -i /root/.ssh/zerax_deploy root@91.98.154.148`
+- **Admin/Merchant dashboard**: `https://zenrex.ai/mockups/admin.html`
+- **Customer storefront**: `https://zenrex.ai/mockups/app_mode_full.html`
+- **Driver app**: `https://zenrex.ai/mockups/driver_app.html`
 - **Same credentials apply** (owner@zenrex.ai/owner123, phone/OTP=1234)
 - **JWT_SECRET**: `zenrex-prod-jwt-secret-2026-hetzner-91-98-154-148` (fixed across restarts)
-- **DB**: MongoDB `zenrex_prod` inside `zenrex-mongo-1` container
+- **DB**: ⭐ **MongoDB Atlas M2** — `cluster0.1tkzj4x.mongodb.net` / `zerax_prod`
+  - User: `zenrex_admin`
+  - Password: `uqTwj4zKvAURQXkz`
+  - Full URI: `mongodb+srv://zenrex_admin:uqTwj4zKvAURQXkz@cluster0.1tkzj4x.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0`
+  - Migrated Jun 11 2026 from local `zerax-mongo-1` (146 docs, 24 collections)
+  - Local container kept as fallback in `docker-compose.yml`
 - **Owner seeded via**: `docker exec zenrex-backend-1 python /app/scripts/seed_owner.py`
 - **Nginx config**: `/etc/nginx/sites-enabled/zenrex` (gzip enabled — 4-5x smaller payloads)
 - **⚠️ LLM Blocker**: ~~EMERGENT_LLM_KEY restricted to Emergent platform~~ **RESOLVED Jun 11 2026** via direct-SDK shim (`backend/direct_llm_shim.py`).
