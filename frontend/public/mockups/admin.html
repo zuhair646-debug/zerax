@@ -853,6 +853,7 @@ select.ps-input option{background:#13131f;color:#fff}
             </div>
             <label class="switch-label"><input type="checkbox" id="dv-auto-dispatch" checked onchange="toggleAutoDispatch()"><span class="switch-track"></span><b style="font-size:12px;color:#fff">مُفعّل</b></label>
             <button class="btn btn-amber" onclick="openDispatchSettings()" style="background:rgba(251,191,36,.15);color:var(--amber);border:1px solid rgba(251,191,36,.3)"><i data-lucide="sliders" style="width:13px;height:13px"></i> إعدادات الإسناد</button>
+            <button class="btn" onclick="openDriverManager()" data-testid="open-driver-manager-btn" style="background:linear-gradient(135deg,#7c3aed,#06b6d4);color:#fff;border:none"><i data-lucide="settings-2" style="width:13px;height:13px"></i> إدارة تطبيق السائق</button>
           </div>
           <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px;margin-top:14px;padding-top:14px;border-top:1px solid rgba(255,255,255,.08)">
             <div style="background:rgba(255,255,255,.04);padding:10px 12px;border-radius:10px"><div style="font-size:10px;color:#94a3b8">نصف قطر البحث</div><b style="font-size:14px;color:#fff" id="dvs-radius">10 كم</b></div>
@@ -2628,6 +2629,11 @@ function openDispatchSettings(){
   document.getElementById('dispatch-mod').classList.add('open');
 }
 function closeDispatchMod(){document.getElementById('dispatch-mod').classList.remove('open')}
+function openDriverManager(){
+  // Pass current token to driver_manager via URL param
+  const tok = localStorage.getItem('zx_token') || localStorage.getItem('zerax_token') || localStorage.getItem('token') || '';
+  window.location.href = '/mockups/driver_manager.html?t=' + encodeURIComponent(tok);
+}
 function saveDispatchSettings(){
   const c={
     enabled:document.getElementById('dv-auto-dispatch').checked,

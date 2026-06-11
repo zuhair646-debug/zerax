@@ -165,12 +165,41 @@ FastAPI + MongoDB · Vanilla HTML/JS mockups + React main app ·
 - **DB**: MongoDB `zerax_prod` inside `zerax-mongo-1`
 - **Backend**: Uvicorn inside `zerax-backend-1` (auto-pip-install on start)
 - **JWT_SECRET**: Fixed via `.env` (no token loss on restart)
-- **AI**: Fully working via direct provider keys (Claude/Gemini/OpenAI)
+- **AI**: Fully working via direct provider keys (Claude/Gemini/OpenAI/FAL.ai 1.5s)
 - **Image serving**: `/static/uploads/` → `/opt/zerax/data/uploads/` (persistent volume)
 - **Gzip**: HTML/CSS/JS compressed 4-5x (admin.html 506 KB → 123 KB)
+- **All keys**: ANTHROPIC, GEMINI, OPENAI, ELEVENLABS, FAL — all active
+
+## Driver Experience v2 (Jun 11 2026) — MAJOR REWRITE
+**Backend** (`backend/routers/driver_config_router.py`):
+- `GET/PUT /api/delivery/config` — per-merchant feature toggles + branding (42 features in 9 sections)
+- `POST /api/delivery/config/reset` — restore defaults
+- `GET/POST/PATCH/DELETE /api/delivery/config/branches[/{id}]` — full branches CRUD with map coords + capacity status
+- `GET /api/delivery/config/public` — driver-facing config (no merchant secrets)
+- Mongo collection: `driver_configs` (one doc per merchant)
+
+**Frontend** — Driver app (`frontend/public/mockups/driver_app.html`):
+- Sidebar with 9 sections: Map · Orders · Earnings · AI Coach · Achievements · Leaderboard · Profile · Settings · Support
+- Live multi-branch Leaflet map with capacity colors (green=active, blue=available, amber=busy, gray=closed)
+- Real-time Surge banner, heat alert toast, prayer pause overlay, driver pulse marker
+- Earnings chart, instant pay, fuel calc, tip QR, weekly streak tracker
+- AI Coach with rotating tips, voice command FAB, route memory
+- 10 unlockable achievement badges, weekly leaderboard with gold/silver/bronze
+- Floating SOS button, theme toggle, glance mode, PWA manifest
+- All 42 features gated by merchant config flags
+
+**Frontend** — Merchant config (`frontend/public/mockups/driver_manager.html`):
+- 9 tabs: General · Earnings · Orders · AI · Saudi · Wellbeing · Gamification · Branches · Feature Order
+- 42 toggles + numeric fields (streak amount/count, weekly challenge, surge multiplier, etc.)
+- Branding picker (primary/accent colors, logo URL, app name)
+- Branch map with click-to-add + capacity selector + delete
+- Drag-and-drop section ordering
+- SOS emergency contacts (up to 3 phones)
+- Linked from admin.html → Delivery page → "إدارة تطبيق السائق" button
 
 ## Test Credentials
 - Admin panel: `owner@zerax.com` / `owner123` (real JWT)
 - Driver app: phone `0552222222` / OTP `1234`
 - VPS SSH: `ssh -i /root/.ssh/zerax_deploy root@91.98.154.148`
+
 

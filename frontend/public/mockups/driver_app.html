@@ -1,500 +1,1232 @@
 <!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
-<!-- Zerax Unified Dark Theme — applied platform-wide -->
-<link rel="stylesheet" href="/mockups/zerax-theme.css">
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
 <meta name="theme-color" content="#0a0a14">
 <title>Zerax Driver — تطبيق السائق</title>
+<link rel="manifest" href="/mockups/driver_manifest.json">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;500;700;900&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://unpkg.com/lucide@latest"></script>
 <style>
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
-:root{--ink:#0a0a14;--ink2:#13131f;--amber:#fbbf24;--purple:#a78bfa;--emerald:#10b981;--rose:#ef4444;--mute:#94a3b8;--surface:#1a1a2e;--surface2:#22223a}
-html,body{height:100%;background:var(--ink);color:#fff;font-family:'IBM Plex Sans Arabic',system-ui,sans-serif}
-body{display:flex;justify-content:center}
-#app{width:100%;max-width:480px;min-height:100vh;background:var(--ink);display:flex;flex-direction:column;position:relative}
+:root{
+  --bg:#0a0a14; --bg2:#13131f; --surface:#1a1a2e; --surface2:#22223a;
+  --border:#2a2a44; --text:#fff; --mute:#94a3b8;
+  --purple:#a78bfa; --purple-deep:#7c3aed; --cyan:#06b6d4;
+  --amber:#fbbf24; --emerald:#10b981; --rose:#ef4444;
+  --grad:linear-gradient(135deg,#7c3aed,#06b6d4);
+  --grad-warm:linear-gradient(135deg,#fbbf24,#ef4444);
+  --grad-cool:linear-gradient(135deg,#10b981,#06b6d4);
+  --sidebar-w:260px;
+}
+html.light{
+  --bg:#f8fafc; --bg2:#fff; --surface:#fff; --surface2:#f1f5f9;
+  --border:#e2e8f0; --text:#0f172a; --mute:#64748b;
+}
+html,body{height:100%;background:var(--bg);color:var(--text);font-family:'IBM Plex Sans Arabic',system-ui,sans-serif;overflow:hidden}
+button{font-family:inherit}
+.icon{width:18px;height:18px;stroke-width:2}
 
-/* ── LOGIN ── */
-.login-screen{flex:1;display:flex;flex-direction:column;justify-content:center;align-items:center;padding:24px;text-align:center;background:radial-gradient(ellipse at top,#1a1a3e 0%,var(--ink) 60%)}
-.login-screen .badge{display:inline-block;padding:6px 14px;background:rgba(251,191,36,.15);color:var(--amber);border-radius:99px;font-size:11px;font-weight:900;margin-bottom:20px;border:1px solid rgba(251,191,36,.3)}
-.login-screen h1{font-size:32px;font-weight:900;background:linear-gradient(135deg,var(--amber),var(--purple));-webkit-background-clip:text;background-clip:text;color:transparent;margin-bottom:10px}
-.login-screen .sub{color:var(--mute);font-size:14px;margin-bottom:40px}
-.login-card{width:100%;max-width:360px;background:var(--surface);border:1.5px solid #2a2a44;border-radius:24px;padding:24px}
-.login-card h3{font-size:16px;font-weight:900;margin-bottom:6px}
-.login-card p.help{font-size:11px;color:var(--mute);margin-bottom:18px;line-height:1.7}
-.login-card input{width:100%;padding:14px;background:var(--ink2);border:1.5px solid #2a2a44;border-radius:14px;color:#fff;font-family:inherit;font-size:15px;font-weight:700;letter-spacing:1px;text-align:center;direction:ltr;margin-bottom:12px;outline:none}
-.login-card input:focus{border-color:var(--amber)}
-.login-card button{width:100%;padding:15px;background:linear-gradient(135deg,var(--amber),#f59e0b);color:#000;border:none;border-radius:14px;font-family:inherit;font-weight:900;font-size:15px;cursor:pointer;box-shadow:0 6px 22px rgba(251,191,36,.3)}
+/* === LOGIN === */
+.login-screen{position:fixed;inset:0;display:flex;flex-direction:column;justify-content:center;align-items:center;padding:24px;text-align:center;background:radial-gradient(ellipse at top,#1a1a3e 0%,var(--bg) 60%);z-index:9999}
+.login-screen .badge{display:inline-flex;align-items:center;gap:6px;padding:6px 14px;background:rgba(167,139,250,.15);color:var(--purple);border-radius:99px;font-size:11px;font-weight:900;margin-bottom:20px;border:1px solid rgba(167,139,250,.3)}
+.login-screen h1{font-size:38px;font-weight:900;background:var(--grad);-webkit-background-clip:text;background-clip:text;color:transparent;margin-bottom:8px}
+.login-screen .sub{color:var(--mute);font-size:14px;margin-bottom:36px;max-width:320px}
+.login-card{width:100%;max-width:380px;background:var(--surface);border:1.5px solid var(--border);border-radius:24px;padding:26px;box-shadow:0 20px 60px rgba(0,0,0,.3)}
+.login-card h3{font-size:17px;font-weight:900;margin-bottom:6px;color:var(--text)}
+.login-card p.help{font-size:12px;color:var(--mute);margin-bottom:18px;line-height:1.7}
+.login-card input{width:100%;padding:15px;background:var(--bg2);border:1.5px solid var(--border);border-radius:14px;color:var(--text);font-family:inherit;font-size:16px;font-weight:700;letter-spacing:1.5px;text-align:center;direction:ltr;margin-bottom:12px;outline:none;transition:border-color .2s}
+.login-card input:focus{border-color:var(--purple)}
+.login-card button{width:100%;padding:16px;background:var(--grad);color:#fff;border:none;border-radius:14px;font-family:inherit;font-weight:900;font-size:15px;cursor:pointer;box-shadow:0 8px 26px rgba(124,58,237,.35);transition:transform .15s}
+.login-card button:active{transform:scale(.97)}
 .login-card button:disabled{opacity:.5}
-.login-card .demo-hint{margin-top:14px;padding:10px;background:rgba(167,139,250,.08);border:1px dashed rgba(167,139,250,.3);border-radius:10px;font-size:11px;color:var(--purple);line-height:1.6}
-.login-card .demo-hint b{color:#fff}
+.login-card .demo-hint{margin-top:14px;padding:10px;background:rgba(6,182,212,.08);border:1px dashed rgba(6,182,212,.3);border-radius:10px;font-size:11px;color:var(--cyan);line-height:1.6}
+.login-card .demo-hint b{color:var(--text)}
 .login-card .err{color:var(--rose);font-size:12px;margin-bottom:10px;display:none}
 .login-card .err.show{display:block}
 
-/* ── MAIN APP HEADER ── */
-.app-header{padding:16px;background:linear-gradient(180deg,#1a1a3e,#13131f);display:flex;align-items:center;gap:12px;border-bottom:1px solid #2a2a44;position:sticky;top:0;z-index:50;backdrop-filter:blur(8px)}
-.app-header .avatar{width:46px;height:46px;border-radius:50%;background:linear-gradient(135deg,var(--amber),var(--purple));display:flex;align-items:center;justify-content:center;font-weight:900;color:#000;font-size:18px}
-.app-header .info{flex:1;min-width:0}
-.app-header .info .nm{font-size:14px;font-weight:900;line-height:1.2}
-.app-header .info .meta{font-size:10px;color:var(--mute);margin-top:2px}
-.status-toggle{padding:6px 12px;border-radius:99px;font-size:11px;font-weight:900;cursor:pointer;border:1.5px solid;font-family:inherit;display:flex;align-items:center;gap:5px}
-.status-toggle.online{background:rgba(16,185,129,.15);color:var(--emerald);border-color:var(--emerald)}
-.status-toggle.offline{background:rgba(148,163,184,.1);color:var(--mute);border-color:#374151}
-.status-toggle .dot{width:8px;height:8px;border-radius:50%;background:currentColor}
-.status-toggle.online .dot{animation:pulse 1.8s ease-in-out infinite}
-@keyframes pulse{50%{box-shadow:0 0 0 6px rgba(16,185,129,.25)}}
+/* === APP SHELL === */
+#app{display:none;height:100vh;display:none;flex-direction:row}
+#app.show{display:flex}
 
-/* ── STATS STRIP ── */
-.stats-strip{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;padding:14px}
-.stat{background:var(--surface);border:1.5px solid #2a2a44;border-radius:14px;padding:12px 8px;text-align:center}
-.stat .v{font-size:18px;font-weight:900;color:var(--amber)}
-.stat .l{font-size:10px;color:var(--mute);margin-top:3px}
+/* === SIDEBAR === */
+.sidebar{width:var(--sidebar-w);background:var(--bg2);border-left:1px solid var(--border);display:flex;flex-direction:column;flex-shrink:0;transition:transform .25s;z-index:100}
+.sb-brand{padding:18px 20px;display:flex;align-items:center;gap:10px;border-bottom:1px solid var(--border)}
+.sb-brand .logo{width:36px;height:36px;border-radius:10px;background:var(--grad);display:flex;align-items:center;justify-content:center;color:#fff}
+.sb-brand .name{font-weight:900;font-size:15px;color:var(--text)}
+.sb-brand .name .sub{font-size:10px;color:var(--mute);font-weight:500;margin-top:1px}
 
-/* ── TABS ── */
-.tabs{display:flex;padding:0 14px;gap:6px;border-bottom:1px solid #2a2a44;margin-bottom:8px}
-.tab{flex:1;background:none;border:none;color:var(--mute);font-family:inherit;font-weight:900;font-size:12px;padding:12px 8px;cursor:pointer;border-bottom:3px solid transparent;display:flex;align-items:center;justify-content:center;gap:5px}
-.tab.active{color:var(--amber);border-bottom-color:var(--amber)}
-.tab .count{background:var(--amber);color:#000;padding:1px 7px;border-radius:99px;font-size:10px;font-weight:900}
+.sb-driver{padding:14px 18px;border-bottom:1px solid var(--border)}
+.sb-driver .avatar{width:44px;height:44px;border-radius:50%;background:var(--grad);display:flex;align-items:center;justify-content:center;color:#fff;font-weight:900;font-size:16px}
+.sb-driver .row{display:flex;align-items:center;gap:10px;margin-bottom:8px}
+.sb-driver .nm{font-weight:900;font-size:13px;color:var(--text)}
+.sb-driver .stars{color:var(--amber);font-size:11px;margin-top:2px}
+.sb-status-wrap{display:flex;gap:6px;margin-top:6px}
+.sb-status{flex:1;padding:7px;border-radius:9px;font-size:10px;font-weight:900;cursor:pointer;border:1.5px solid var(--border);background:var(--surface);color:var(--mute);transition:all .15s;display:flex;align-items:center;justify-content:center;gap:4px}
+.sb-status.active.online{background:rgba(16,185,129,.15);color:var(--emerald);border-color:var(--emerald)}
+.sb-status.active.break{background:rgba(251,191,36,.15);color:var(--amber);border-color:var(--amber)}
+.sb-status.active.offline{background:rgba(148,163,184,.1);color:var(--mute);border-color:var(--border)}
 
-/* ── ORDER LIST ── */
-.list-wrap{padding:0 14px 24px;flex:1;overflow-y:auto}
-.section{display:none}.section.active{display:block}
-.empty{text-align:center;color:var(--mute);padding:60px 20px;font-size:13px;line-height:1.6}
-.empty .ico{font-size:54px;opacity:.4;margin-bottom:10px;display:block}
+.sb-nav{flex:1;overflow-y:auto;padding:8px 10px;display:flex;flex-direction:column;gap:2px}
+.sb-nav::-webkit-scrollbar{width:0}
+.sb-item{display:flex;align-items:center;gap:11px;padding:11px 12px;border-radius:11px;color:var(--mute);font-weight:700;font-size:13px;cursor:pointer;border:none;background:transparent;width:100%;text-align:right;transition:all .15s;font-family:inherit}
+.sb-item:hover{background:var(--surface);color:var(--text)}
+.sb-item.active{background:var(--grad);color:#fff;box-shadow:0 4px 14px rgba(124,58,237,.3)}
+.sb-item .ico{width:18px;height:18px;flex-shrink:0}
+.sb-item .badge{margin-right:auto;padding:2px 8px;border-radius:99px;font-size:10px;font-weight:900;background:var(--rose);color:#fff}
+.sb-item.active .badge{background:rgba(255,255,255,.25)}
 
-.order-card{background:var(--surface);border:1.5px solid #2a2a44;border-radius:16px;padding:14px;margin-bottom:10px;cursor:pointer;transition:all .15s}
-.order-card:active{transform:scale(.98)}
-.order-card .row1{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px}
-.order-card .cust{font-size:14px;font-weight:900}
-.order-card .phone{font-size:11px;color:var(--mute);direction:ltr;text-align:right}
-.order-card .badge{padding:3px 10px;border-radius:99px;font-size:10px;font-weight:900;white-space:nowrap}
-.order-card .badge.pending{background:rgba(251,191,36,.15);color:var(--amber)}
-.order-card .badge.assigned{background:rgba(167,139,250,.15);color:var(--purple)}
-.order-card .badge.picked_up{background:rgba(59,130,246,.15);color:#3b82f6}
-.order-card .badge.delivering{background:rgba(236,72,153,.15);color:#ec4899}
-.order-card .badge.delivered{background:rgba(16,185,129,.15);color:var(--emerald)}
-.order-card .badge.cancelled{background:rgba(239,68,68,.15);color:var(--rose)}
-.order-card .addr{font-size:12px;color:var(--mute);line-height:1.6;margin-bottom:8px;display:flex;gap:5px;align-items:flex-start}
-.order-card .addr svg{flex-shrink:0;margin-top:2px}
-.order-card .items{font-size:11px;color:#cbd5e1;margin-bottom:8px}
-.order-card .totalrow{display:flex;justify-content:space-between;align-items:center;padding-top:8px;border-top:1px dashed #2a2a44}
-.order-card .total{font-size:14px;font-weight:900;color:var(--amber)}
-.order-card .pmeth{font-size:10px;background:var(--ink2);padding:3px 8px;border-radius:99px;color:#cbd5e1}
+.sb-foot{padding:12px 14px;border-top:1px solid var(--border);display:flex;gap:6px}
+.sb-foot button{flex:1;padding:8px;background:var(--surface);border:1px solid var(--border);border-radius:9px;color:var(--mute);font-size:11px;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:4px;font-family:inherit}
+.sb-foot button:hover{color:var(--text);border-color:var(--purple)}
 
-/* ── ORDER DETAIL OVERLAY ── */
-.detail-overlay{position:fixed;inset:0;background:var(--ink);z-index:200;display:none;flex-direction:column;max-width:480px;margin:0 auto;left:0;right:0}
-.detail-overlay.open{display:flex}
-.detail-head{padding:14px;display:flex;align-items:center;gap:12px;border-bottom:1px solid #2a2a44;background:var(--ink2)}
-.detail-head .back{background:var(--surface);color:#fff;border:none;width:36px;height:36px;border-radius:50%;font-size:18px;cursor:pointer}
-.detail-head h2{font-size:15px;font-weight:900;flex:1}
-.detail-body{flex:1;overflow-y:auto;padding:14px}
-#detail-map{height:240px;border-radius:16px;margin-bottom:14px;border:1.5px solid #2a2a44;background:var(--surface)}
-.detail-info{background:var(--surface);border:1.5px solid #2a2a44;border-radius:16px;padding:14px;margin-bottom:12px}
-.detail-info .label{font-size:10px;color:var(--mute);font-weight:900;text-transform:uppercase;letter-spacing:1px;margin-bottom:3px}
-.detail-info .val{font-size:14px;font-weight:700}
-.detail-info .ph{direction:ltr;text-align:right;font-family:'IBM Plex Sans Arabic'}
-.detail-info-row{display:grid;grid-template-columns:1fr 1fr;gap:10px}
-.timeline{padding:0 4px}
-.timeline .step{display:flex;gap:10px;margin-bottom:10px;align-items:flex-start}
-.timeline .step .dot{width:14px;height:14px;border-radius:50%;background:var(--surface2);border:2px solid #2a2a44;flex-shrink:0;margin-top:3px;position:relative}
-.timeline .step.done .dot{background:var(--emerald);border-color:var(--emerald)}
-.timeline .step.current .dot{background:var(--amber);border-color:var(--amber);animation:pulse 1.5s ease-in-out infinite}
-.timeline .step .step-lbl{font-size:12px;font-weight:700}
-.timeline .step .step-tm{font-size:10px;color:var(--mute);margin-top:2px}
-.action-bar{position:sticky;bottom:0;padding:12px;background:linear-gradient(180deg,transparent,var(--ink) 30%);display:flex;gap:8px}
-.action-bar .btn{flex:1;padding:14px;border:none;border-radius:14px;font-family:inherit;font-weight:900;font-size:13px;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px}
-.action-bar .btn.primary{background:linear-gradient(135deg,var(--amber),#f59e0b);color:#000;box-shadow:0 6px 22px rgba(251,191,36,.3)}
-.action-bar .btn.secondary{background:var(--surface);color:#fff;border:1.5px solid #2a2a44}
-.action-bar .btn.danger{background:rgba(239,68,68,.15);color:var(--rose);border:1.5px solid rgba(239,68,68,.3)}
-.action-bar .btn:disabled{opacity:.5}
+/* === MAIN === */
+.main{flex:1;overflow:hidden;display:flex;flex-direction:column;background:var(--bg)}
+.topbar{padding:14px 22px;display:flex;align-items:center;gap:12px;border-bottom:1px solid var(--border);background:var(--bg2);flex-shrink:0}
+.topbar .menu-btn{display:none;background:transparent;border:none;color:var(--text);cursor:pointer}
+.topbar .title{font-weight:900;font-size:16px;color:var(--text);flex:1}
+.topbar .title .sub{font-size:11px;color:var(--mute);font-weight:500;display:block;margin-top:2px}
+.topbar .earn-pill{padding:7px 13px;background:rgba(16,185,129,.12);border:1px solid rgba(16,185,129,.3);border-radius:99px;display:flex;align-items:center;gap:6px;font-weight:900;font-size:12px;color:var(--emerald)}
+.topbar .icon-btn{width:36px;height:36px;border-radius:50%;background:var(--surface);border:1px solid var(--border);color:var(--mute);cursor:pointer;display:flex;align-items:center;justify-content:center;position:relative}
+.topbar .icon-btn:hover{color:var(--text);border-color:var(--purple)}
+.topbar .icon-btn .dot{position:absolute;top:6px;left:8px;width:8px;height:8px;border-radius:50%;background:var(--rose)}
 
-/* ── EARNINGS ── */
-.earn-card{background:linear-gradient(135deg,#1a1a3e,#2a1a4e);border:1.5px solid rgba(167,139,250,.3);border-radius:18px;padding:18px;margin-bottom:14px;text-align:center}
-.earn-card .lbl{font-size:11px;color:var(--mute);margin-bottom:6px;font-weight:900;text-transform:uppercase;letter-spacing:1px}
-.earn-card .amount{font-size:32px;font-weight:900;background:linear-gradient(135deg,var(--amber),var(--purple));-webkit-background-clip:text;background-clip:text;color:transparent}
-.earn-card .unit{font-size:14px;color:var(--mute);font-weight:700;margin-right:6px}
-.earn-stats{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:12px}
-.earn-stat{background:var(--surface);border:1.5px solid #2a2a44;border-radius:12px;padding:10px;text-align:center}
-.earn-stat .v{font-size:16px;font-weight:900;color:#fff}
-.earn-stat .l{font-size:10px;color:var(--mute);margin-top:3px}
+.section{display:none;flex:1;overflow-y:auto;padding:22px}
+.section.active{display:block}
+.section h2{font-size:20px;font-weight:900;margin-bottom:6px;color:var(--text)}
+.section .lead{color:var(--mute);font-size:13px;margin-bottom:20px}
 
-.toast{position:fixed;bottom:80px;left:50%;transform:translateX(-50%);background:var(--surface);color:#fff;padding:11px 18px;border-radius:99px;font-size:12px;font-weight:900;box-shadow:0 10px 30px rgba(0,0,0,.5);z-index:500;border:1.5px solid var(--amber);opacity:0;transition:opacity .25s,transform .25s;pointer-events:none}
-.toast.show{opacity:1;transform:translate(-50%,-10px)}
+/* === Generic cards/grids === */
+.card{background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:16px;transition:transform .15s, box-shadow .15s}
+.card:hover{box-shadow:0 10px 30px rgba(0,0,0,.15)}
+.row{display:flex;align-items:center;gap:12px}
+.between{justify-content:space-between}
+.muted{color:var(--mute);font-size:12px}
+.tag{display:inline-flex;align-items:center;gap:4px;padding:3px 9px;border-radius:99px;font-size:11px;font-weight:900}
+.t-emerald{background:rgba(16,185,129,.12);color:var(--emerald);border:1px solid rgba(16,185,129,.3)}
+.t-amber{background:rgba(251,191,36,.12);color:var(--amber);border:1px solid rgba(251,191,36,.3)}
+.t-purple{background:rgba(167,139,250,.12);color:var(--purple);border:1px solid rgba(167,139,250,.3)}
+.t-rose{background:rgba(239,68,68,.12);color:var(--rose);border:1px solid rgba(239,68,68,.3)}
+.t-cyan{background:rgba(6,182,212,.12);color:var(--cyan);border:1px solid rgba(6,182,212,.3)}
+.btn{padding:10px 16px;background:var(--grad);color:#fff;border:none;border-radius:11px;font-weight:900;font-size:13px;cursor:pointer;display:inline-flex;align-items:center;gap:6px;font-family:inherit;box-shadow:0 4px 14px rgba(124,58,237,.25)}
+.btn:active{transform:scale(.97)}
+.btn-ghost{background:var(--surface);border:1px solid var(--border);color:var(--text);box-shadow:none}
+.btn-warm{background:var(--grad-warm);box-shadow:0 4px 14px rgba(251,191,36,.25)}
+.btn-cool{background:var(--grad-cool);box-shadow:0 4px 14px rgba(16,185,129,.25)}
+.btn-danger{background:linear-gradient(135deg,#dc2626,#b91c1c)}
 
-/* Bottom nav */
-.bottom-nav{display:flex;background:var(--surface);border-top:1px solid #2a2a44;padding:6px 0 calc(env(safe-area-inset-bottom)+6px);position:sticky;bottom:0;z-index:30}
-.bn-item{flex:1;background:none;border:none;color:var(--mute);font-family:inherit;cursor:pointer;padding:8px;display:flex;flex-direction:column;align-items:center;gap:3px;font-size:10px;font-weight:700}
-.bn-item.active{color:var(--amber)}
-.bn-item svg{width:22px;height:22px}
+/* === MAP === */
+#map{height:calc(100vh - 180px);border-radius:16px;border:1px solid var(--border);overflow:hidden}
+.map-overlay{position:absolute;z-index:500;background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:12px;box-shadow:0 8px 24px rgba(0,0,0,.2);max-width:280px}
+.legend{display:flex;gap:10px;flex-wrap:wrap;margin-top:8px}
+.legend-item{display:flex;align-items:center;gap:5px;font-size:11px;color:var(--text)}
+.legend-dot{width:10px;height:10px;border-radius:50%}
+.branch-popup{padding:4px;min-width:200px;color:#000}
+.branch-popup b{display:block;margin-bottom:4px}
+
+/* === Stat tiles === */
+.stats-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px;margin-bottom:18px}
+.stat-tile{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:14px;position:relative;overflow:hidden}
+.stat-tile.accent::before{content:'';position:absolute;inset:0;background:var(--grad);opacity:.06}
+.stat-tile .lbl{font-size:11px;color:var(--mute);font-weight:700;display:flex;align-items:center;gap:5px;margin-bottom:6px}
+.stat-tile .val{font-size:24px;font-weight:900;color:var(--text);line-height:1.1}
+.stat-tile .delta{font-size:10px;font-weight:700;margin-top:4px}
+.stat-tile.up .delta{color:var(--emerald)}
+.stat-tile.down .delta{color:var(--rose)}
+
+/* === Order card === */
+.order-card{background:var(--surface);border:1.5px solid var(--border);border-radius:16px;padding:14px;margin-bottom:10px;cursor:pointer;transition:border-color .15s, transform .15s}
+.order-card:hover{border-color:var(--purple);transform:translateY(-1px)}
+.order-card.urgent{border-color:var(--rose);background:linear-gradient(135deg,rgba(239,68,68,.06),var(--surface))}
+.order-card .top{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px}
+.order-card .id{font-weight:900;font-size:13px;color:var(--text)}
+.order-card .meta{font-size:11px;color:var(--mute);margin-top:2px}
+.order-card .fee{font-weight:900;font-size:16px;color:var(--emerald)}
+.order-card .route{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--text);margin-top:8px;padding:8px;background:var(--bg2);border-radius:9px}
+.order-card .route .pin{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+.order-card .actions{display:flex;gap:6px;margin-top:10px}
+.order-card .actions button{flex:1;padding:9px;border-radius:9px;font-weight:900;font-size:11px;cursor:pointer;border:1px solid var(--border);background:var(--bg2);color:var(--text);font-family:inherit}
+.order-card .actions button.accept{background:var(--emerald);border-color:var(--emerald);color:#fff}
+.order-card .actions button.reject{background:transparent;color:var(--rose);border-color:var(--rose)}
+
+/* === Achievement / Badge === */
+.badges-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:12px}
+.badge-card{background:var(--surface);border:1.5px solid var(--border);border-radius:14px;padding:14px;text-align:center;position:relative;overflow:hidden}
+.badge-card.unlocked{border-color:var(--amber);background:linear-gradient(135deg,rgba(251,191,36,.08),var(--surface))}
+.badge-card.locked{opacity:.4}
+.badge-card .ico{font-size:34px;margin-bottom:6px;filter:saturate(1.2)}
+.badge-card .nm{font-weight:900;font-size:12px;color:var(--text)}
+.badge-card .desc{font-size:10px;color:var(--mute);margin-top:3px;line-height:1.5}
+
+/* === Leaderboard === */
+.lb-row{display:flex;align-items:center;gap:12px;padding:10px;border-radius:11px;background:var(--surface);border:1px solid var(--border);margin-bottom:6px}
+.lb-row.me{border-color:var(--purple);background:rgba(167,139,250,.06)}
+.lb-row .rank{width:32px;height:32px;border-radius:50%;background:var(--bg2);display:flex;align-items:center;justify-content:center;font-weight:900;font-size:12px}
+.lb-row .rank.gold{background:linear-gradient(135deg,#fbbf24,#f59e0b);color:#000}
+.lb-row .rank.silver{background:linear-gradient(135deg,#cbd5e1,#94a3b8);color:#000}
+.lb-row .rank.bronze{background:linear-gradient(135deg,#c2410c,#9a3412);color:#fff}
+.lb-row .nm{flex:1;font-weight:900;font-size:13px}
+.lb-row .nm .sub{font-size:11px;color:var(--mute);font-weight:500;display:block;margin-top:2px}
+.lb-row .pts{font-weight:900;color:var(--amber);font-size:14px}
+
+/* === Toggles in settings === */
+.toggle-row{display:flex;align-items:center;gap:12px;padding:14px;background:var(--surface);border:1px solid var(--border);border-radius:12px;margin-bottom:6px}
+.toggle-row .ico{width:36px;height:36px;border-radius:10px;background:var(--bg2);display:flex;align-items:center;justify-content:center;color:var(--purple);flex-shrink:0}
+.toggle-row .info{flex:1;min-width:0}
+.toggle-row .info .nm{font-weight:900;font-size:13px;color:var(--text)}
+.toggle-row .info .desc{font-size:11px;color:var(--mute);margin-top:2px;line-height:1.5}
+.toggle-row .lock{font-size:10px;color:var(--mute);font-weight:700}
+.sw{width:44px;height:24px;background:var(--border);border-radius:99px;position:relative;cursor:pointer;transition:background .2s;flex-shrink:0}
+.sw::after{content:'';position:absolute;width:18px;height:18px;background:#fff;border-radius:50%;top:3px;right:3px;transition:transform .2s}
+.sw.on{background:var(--grad)}
+.sw.on::after{transform:translateX(-20px)}
+.sw.disabled{opacity:.4;pointer-events:none}
+
+/* === Coach card === */
+.coach-banner{padding:20px;background:linear-gradient(135deg,rgba(124,58,237,.15),rgba(6,182,212,.15));border:1px solid rgba(124,58,237,.3);border-radius:18px;display:flex;gap:14px;align-items:center;margin-bottom:18px}
+.coach-banner .ai-ico{width:56px;height:56px;border-radius:14px;background:var(--grad);display:flex;align-items:center;justify-content:center;color:#fff;flex-shrink:0;font-size:24px}
+.coach-banner .txt{flex:1}
+.coach-banner h3{font-size:14px;font-weight:900;margin-bottom:4px;color:var(--text)}
+.coach-banner p{font-size:12px;color:var(--mute);line-height:1.6}
+
+/* === Earnings chart === */
+.earn-chart{height:200px;background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:14px;position:relative;display:flex;align-items:flex-end;gap:8px}
+.earn-chart .bar{flex:1;background:var(--grad);border-radius:6px 6px 0 0;min-height:8px;position:relative;transition:opacity .2s}
+.earn-chart .bar:hover{opacity:.85}
+.earn-chart .bar .lbl{position:absolute;bottom:-22px;left:50%;transform:translateX(-50%);font-size:10px;color:var(--mute);white-space:nowrap}
+.earn-chart .bar .val{position:absolute;top:-22px;left:50%;transform:translateX(-50%);font-size:10px;font-weight:900;color:var(--text);white-space:nowrap}
+
+/* === Modals === */
+.modal-bd{position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:9000;display:none;align-items:center;justify-content:center;padding:14px}
+.modal-bd.show{display:flex}
+.modal{background:var(--surface);border:1px solid var(--border);border-radius:20px;max-width:480px;width:100%;max-height:90vh;overflow-y:auto;padding:24px}
+.modal h3{font-size:18px;font-weight:900;margin-bottom:6px;color:var(--text)}
+.modal p{color:var(--mute);font-size:13px;margin-bottom:16px;line-height:1.7}
+
+/* === SOS === */
+.sos-fab{position:fixed;bottom:20px;left:20px;width:54px;height:54px;border-radius:50%;background:var(--rose);color:#fff;border:none;cursor:pointer;box-shadow:0 10px 30px rgba(239,68,68,.5);z-index:200;display:flex;align-items:center;justify-content:center;font-weight:900;font-size:11px}
+.sos-fab:active{transform:scale(.92)}
+
+/* === Voice button === */
+.voice-fab{position:fixed;bottom:20px;left:84px;width:46px;height:46px;border-radius:50%;background:var(--grad);color:#fff;border:none;cursor:pointer;box-shadow:0 8px 22px rgba(124,58,237,.4);z-index:200;display:flex;align-items:center;justify-content:center}
+.voice-fab.listening{animation:pulse 1.4s ease-in-out infinite}
+@keyframes pulse{50%{box-shadow:0 0 0 12px rgba(124,58,237,.25)}}
+
+/* === Surge indicator === */
+.surge-banner{padding:12px 16px;background:linear-gradient(90deg,rgba(239,68,68,.15),rgba(251,191,36,.15));border:1px solid rgba(239,68,68,.3);border-radius:12px;display:flex;align-items:center;gap:10px;margin-bottom:14px}
+.surge-banner .ico{width:36px;height:36px;border-radius:10px;background:var(--rose);display:flex;align-items:center;justify-content:center;color:#fff}
+.surge-banner .txt{flex:1;font-size:12px;color:var(--text)}
+.surge-banner .txt b{display:block;font-size:14px;font-weight:900;margin-bottom:2px}
+.surge-banner .mult{padding:4px 10px;background:#000;color:var(--amber);border-radius:8px;font-weight:900;font-size:14px}
+
+/* === Toast === */
+.toast{position:fixed;top:20px;left:50%;transform:translateX(-50%);padding:12px 22px;background:var(--surface);border:1px solid var(--border);border-radius:12px;font-weight:700;font-size:13px;z-index:9999;box-shadow:0 12px 40px rgba(0,0,0,.4);animation:toast-in .3s ease-out}
+.toast.success{border-color:var(--emerald);color:var(--emerald)}
+.toast.error{border-color:var(--rose);color:var(--rose)}
+@keyframes toast-in{from{opacity:0;transform:translateX(-50%) translateY(-10px)}}
+
+/* === Responsive === */
+@media (max-width: 900px){
+  .sidebar{position:fixed;top:0;right:0;bottom:0;transform:translateX(100%);box-shadow:-10px 0 40px rgba(0,0,0,.5)}
+  .sidebar.open{transform:translateX(0)}
+  .topbar .menu-btn{display:flex}
+  .section{padding:16px}
+  #map{height:calc(100vh - 200px)}
+}
+@media (max-width: 540px){
+  .section h2{font-size:17px}
+  .stats-grid{grid-template-columns:1fr 1fr}
+  .topbar .earn-pill .lbl{display:none}
+}
+
+/* === Glance mode (large text for driving) === */
+html.glance .stat-tile .val{font-size:32px}
+html.glance .order-card .fee{font-size:20px}
+html.glance .btn{padding:14px 22px;font-size:15px}
+
+/* === Heat alert flash === */
+.heat-flash{position:fixed;inset:0;background:rgba(239,68,68,.15);pointer-events:none;z-index:50;animation:flash 1.5s ease-in-out infinite;display:none}
+.heat-flash.show{display:block}
+@keyframes flash{50%{opacity:.5}}
+
+/* === Prayer pause overlay === */
+.prayer-overlay{position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:9500;display:none;flex-direction:column;justify-content:center;align-items:center;color:#fff;padding:24px;text-align:center}
+.prayer-overlay.show{display:flex}
+.prayer-overlay .ico{font-size:64px;margin-bottom:14px}
+.prayer-overlay h2{font-size:24px;font-weight:900;margin-bottom:8px}
+.prayer-overlay p{font-size:14px;color:var(--mute);margin-bottom:20px;max-width:340px}
+.prayer-overlay button{padding:14px 32px;background:var(--purple);color:#fff;border:none;border-radius:99px;font-family:inherit;font-weight:900;cursor:pointer}
 </style>
 </head>
-<body class="zx-dark">
-<div id="app">
+<body>
 
-  <!-- LOGIN SCREEN -->
-  <div id="login-screen" class="login-screen">
-    <div class="badge">⚡ ZERAX DRIVER</div>
-    <h1>تطبيق السائق</h1>
-    <p class="sub">سجل دخول برقم جوالك للوصول لطلباتك</p>
-
-    <div class="login-card" id="phone-card">
-      <h3>رقم الجوال</h3>
-      <p class="help">أدخل رقم جوالك المسجل لدى المتجر</p>
-      <input id="phone-input" placeholder="05XXXXXXXX" type="tel" maxlength="10" inputmode="numeric">
-      <div class="err" id="phone-err"></div>
-      <button id="send-otp-btn" onclick="sendOtp()">إرسال رمز التحقق</button>
-      <div class="demo-hint">
-        💡 <b>سائقي التجربة:</b><br>
-        0501111111 (أحمد) · 0552222222 (خالد) · 0533333333 (سلطان) · 0544444444 (فيصل) · 0555555555 (بدر)
-      </div>
-    </div>
-
-    <div class="login-card" id="otp-card" style="display:none">
-      <h3>رمز التحقق</h3>
-      <p class="help">أرسلنا رمزاً مكوناً من 4 أرقام (للتجربة: <b style="color:#fbbf24">1234</b>)</p>
-      <input id="otp-input" placeholder="0000" type="tel" maxlength="4" inputmode="numeric">
-      <div class="err" id="otp-err"></div>
-      <button id="verify-btn" onclick="verifyOtp()">تحقق ودخول</button>
-      <button onclick="backToPhone()" style="background:none;color:var(--mute);box-shadow:none;margin-top:8px;border:1px solid #2a2a44">← تغيير الرقم</button>
-    </div>
+<!-- LOGIN -->
+<div class="login-screen" id="login-screen">
+  <div class="badge">
+    <i data-lucide="zap" class="icon"></i> Zerax Driver Pro
   </div>
-
-  <!-- MAIN APP -->
-  <div id="main-app" style="display:none;flex-direction:column;flex:1">
-    <div class="app-header">
-      <div class="avatar" id="h-avatar">س</div>
-      <div class="info">
-        <div class="nm" id="h-name">السائق</div>
-        <div class="meta">⭐ <span id="h-rating">5.0</span> · <span id="h-area">—</span></div>
-      </div>
-      <button class="status-toggle online" id="status-btn" onclick="toggleAvailability()"><span class="dot"></span><span id="status-label">متاح</span></button>
-    </div>
-
-    <div class="stats-strip">
-      <div class="stat"><div class="v" id="s-today">0</div><div class="l">طلبات اليوم</div></div>
-      <div class="stat"><div class="v" id="s-earnings">0</div><div class="l">أرباح اليوم (ر.س)</div></div>
-      <div class="stat"><div class="v" id="s-rating">5.0</div><div class="l">التقييم</div></div>
-    </div>
-
-    <div class="tabs">
-      <button class="tab active" data-tab="active" onclick="switchTab('active')">📋 النشطة <span class="count" id="c-active">0</span></button>
-      <button class="tab" data-tab="done" onclick="switchTab('done')">✓ المنجزة</button>
-      <button class="tab" data-tab="earn" onclick="switchTab('earn')">💰 الأرباح</button>
-    </div>
-
-    <div class="list-wrap">
-      <div class="section active" data-section="active" id="sec-active"></div>
-      <div class="section" data-section="done" id="sec-done"></div>
-      <div class="section" data-section="earn">
-        <div class="earn-card">
-          <div class="lbl">إجمالي أرباحك هذا الأسبوع</div>
-          <div class="amount"><span id="e-week">0</span><span class="unit">ر.س</span></div>
-        </div>
-        <div class="earn-stats">
-          <div class="earn-stat"><div class="v" id="e-today">0</div><div class="l">اليوم</div></div>
-          <div class="earn-stat"><div class="v" id="e-deliv">0</div><div class="l">توصيلات</div></div>
-          <div class="earn-stat"><div class="v" id="e-avg">0</div><div class="l">متوسط/طلب</div></div>
-        </div>
-        <div style="background:var(--surface);border:1.5px solid #2a2a44;border-radius:14px;padding:14px;font-size:12px;color:var(--mute);line-height:1.8;text-align:center">
-          💡 <b style="color:#fff">نصيحة:</b> فعّل وضع "متاح" في ساعات الذروة (1م-3م و 7م-10م) لتحصل على طلبات أكثر.
-        </div>
-      </div>
-    </div>
-
-    <nav class="bottom-nav">
-      <button class="bn-item active" onclick="switchTab('active')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>الطلبات</button>
-      <button class="bn-item" onclick="switchTab('earn')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>الأرباح</button>
-      <button class="bn-item" onclick="logout()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>خروج</button>
-    </nav>
+  <h1>تطبيق السائق</h1>
+  <p class="sub">أوصِل، اربح، تنافس — كل شي في تطبيق واحد</p>
+  <div class="login-card" id="login-step-phone">
+    <h3>أدخل رقم جوالك</h3>
+    <p class="help">رقم سعودي يبدأ بـ <b>05</b> · سترسل لك OTP من <b>4 أرقام</b></p>
+    <input id="login-phone" type="tel" inputmode="numeric" maxlength="10" placeholder="05XXXXXXXX" data-testid="login-phone-input">
+    <div class="err" id="login-err"></div>
+    <button id="login-send" data-testid="login-send-otp-btn">إرسال الرمز</button>
+    <div class="demo-hint">💡 تجريبي: استخدم <b>0552222222</b></div>
   </div>
-
-  <!-- ORDER DETAIL OVERLAY -->
-  <div class="detail-overlay" id="detail-overlay">
-    <div class="detail-head">
-      <button class="back" onclick="closeDetail()">←</button>
-      <h2 id="d-title">تفاصيل الطلب</h2>
-    </div>
-    <div class="detail-body" id="detail-body"></div>
-    <div class="action-bar" id="action-bar"></div>
+  <div class="login-card" id="login-step-otp" style="display:none">
+    <h3>رمز التحقق</h3>
+    <p class="help">أدخل الرمز المُرسل لـ <b id="login-phone-show"></b></p>
+    <input id="login-otp" type="tel" inputmode="numeric" maxlength="4" placeholder="••••" data-testid="login-otp-input">
+    <div class="err" id="otp-err"></div>
+    <button id="login-verify" data-testid="login-verify-otp-btn">تأكيد</button>
+    <div class="demo-hint">💡 الرمز التجريبي: <b>1234</b></div>
   </div>
-
-  <div class="toast" id="toast"></div>
 </div>
 
+<!-- MAIN APP -->
+<div id="app">
+  <!-- SIDEBAR -->
+  <aside class="sidebar" id="sidebar" data-testid="sidebar">
+    <div class="sb-brand">
+      <div class="logo"><i data-lucide="zap" class="icon"></i></div>
+      <div class="name">Zerax Driver<span class="sub">منصة السائقين</span></div>
+    </div>
+    <div class="sb-driver">
+      <div class="row">
+        <div class="avatar" id="drv-avatar">س</div>
+        <div style="flex:1;min-width:0">
+          <div class="nm" id="drv-name">السائق</div>
+          <div class="stars" id="drv-rating">★★★★★ 5.0</div>
+        </div>
+      </div>
+      <div class="sb-status-wrap">
+        <button class="sb-status active online" data-status="online" data-testid="status-online-btn"><span class="dot"></span> متاح</button>
+        <button class="sb-status" data-status="break" data-testid="status-break-btn"><i data-lucide="coffee" style="width:11px;height:11px"></i> راحة</button>
+        <button class="sb-status" data-status="offline" data-testid="status-offline-btn"><i data-lucide="power" style="width:11px;height:11px"></i> مغلق</button>
+      </div>
+    </div>
+    <nav class="sb-nav" id="sb-nav">
+      <!-- nav items injected dynamically based on feature flags -->
+    </nav>
+    <div class="sb-foot">
+      <button id="theme-toggle" data-testid="theme-toggle-btn"><i data-lucide="moon" class="icon" style="width:14px;height:14px"></i> ثيم</button>
+      <button id="logout-btn" data-testid="logout-btn"><i data-lucide="log-out" class="icon" style="width:14px;height:14px"></i> خروج</button>
+    </div>
+  </aside>
+
+  <!-- MAIN CONTENT -->
+  <main class="main">
+    <div class="topbar">
+      <button class="menu-btn" id="menu-btn" data-testid="menu-btn"><i data-lucide="menu" class="icon"></i></button>
+      <div class="title">
+        <span id="page-title">الخريطة الحية</span>
+        <span class="sub" id="page-sub">تتبع طلباتك وفروعك</span>
+      </div>
+      <div class="earn-pill" data-testid="earnings-pill">
+        <i data-lucide="trending-up" class="icon" style="width:14px;height:14px"></i>
+        <span class="lbl">اليوم:</span>
+        <span id="earn-today">0</span> ر.س
+      </div>
+      <button class="icon-btn" data-testid="notifications-btn" id="bell-btn" title="إشعارات">
+        <i data-lucide="bell" class="icon"></i>
+        <span class="dot" id="bell-dot" style="display:none"></span>
+      </button>
+    </div>
+
+    <!-- ═══════════ SECTIONS ═══════════ -->
+
+    <!-- 🗺️ MAP -->
+    <section class="section active" data-section="map" data-testid="section-map">
+      <div id="surge-banner-wrap"></div>
+      <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap" id="branch-pills"></div>
+      <div id="map" data-testid="live-map"></div>
+      <div style="display:flex;gap:6px;margin-top:10px;flex-wrap:wrap">
+        <span class="tag t-emerald"><span class="legend-dot" style="background:#10b981"></span> فرع نشط</span>
+        <span class="tag t-cyan"><span class="legend-dot" style="background:#06b6d4"></span> فرع متاح</span>
+        <span class="tag t-amber"><span class="legend-dot" style="background:#fbbf24"></span> فرع مزدحم</span>
+        <span class="tag t-rose"><span class="legend-dot" style="background:#ef4444"></span> طلب عاجل</span>
+        <span class="tag t-purple"><span class="legend-dot" style="background:#a78bfa"></span> موقعك</span>
+      </div>
+    </section>
+
+    <!-- 📦 ORDERS -->
+    <section class="section" data-section="orders" data-testid="section-orders">
+      <h2>الطلبات</h2>
+      <p class="lead">طلباتك النشطة + الطلبات المنتظرة في منطقتك</p>
+      <div class="stats-grid">
+        <div class="stat-tile accent up"><div class="lbl"><i data-lucide="package" style="width:12px;height:12px"></i> اليوم</div><div class="val" id="ord-today">0</div><div class="delta">+0 عن الأمس</div></div>
+        <div class="stat-tile"><div class="lbl"><i data-lucide="check-circle" style="width:12px;height:12px"></i> مكتمل</div><div class="val" id="ord-done">0</div></div>
+        <div class="stat-tile"><div class="lbl"><i data-lucide="clock" style="width:12px;height:12px"></i> قيد التنفيذ</div><div class="val" id="ord-active">0</div></div>
+        <div class="stat-tile"><div class="lbl"><i data-lucide="layers" style="width:12px;height:12px"></i> وضع التجميع</div><div class="val" id="batch-on">مفعّل</div></div>
+      </div>
+      <h3 style="font-weight:900;font-size:14px;margin:18px 0 10px">طلبات متاحة</h3>
+      <div id="available-orders"></div>
+      <h3 style="font-weight:900;font-size:14px;margin:18px 0 10px">طلباتك النشطة</h3>
+      <div id="active-orders"></div>
+    </section>
+
+    <!-- 💰 EARNINGS -->
+    <section class="section" data-section="earnings" data-testid="section-earnings">
+      <h2>الأرباح</h2>
+      <p class="lead">تتبع أرباحك، البقشيش، والمنطق المالية</p>
+      <div class="stats-grid">
+        <div class="stat-tile accent"><div class="lbl"><i data-lucide="banknote" style="width:12px;height:12px"></i> اليوم</div><div class="val" id="er-today">0 ر.س</div></div>
+        <div class="stat-tile"><div class="lbl"><i data-lucide="calendar" style="width:12px;height:12px"></i> الأسبوع</div><div class="val" id="er-week">0 ر.س</div></div>
+        <div class="stat-tile"><div class="lbl"><i data-lucide="calendar-days" style="width:12px;height:12px"></i> الشهر</div><div class="val" id="er-month">0 ر.س</div></div>
+        <div class="stat-tile up"><div class="lbl"><i data-lucide="gift" style="width:12px;height:12px"></i> بقشيش هذا الأسبوع</div><div class="val" id="er-tips">0 ر.س</div></div>
+      </div>
+      <h3 style="font-weight:900;font-size:14px;margin:18px 0 10px">آخر 7 أيام</h3>
+      <div class="earn-chart" id="earn-chart"></div>
+      <div id="earnings-features" style="margin-top:36px"></div>
+    </section>
+
+    <!-- 🤖 AI COACH -->
+    <section class="section" data-section="coach" data-testid="section-coach">
+      <h2>المُساعد الذكي</h2>
+      <p class="lead">تحليل ذكي يخبرك أين تربح أكثر ومتى تأخذ راحة</p>
+      <div class="coach-banner">
+        <div class="ai-ico">🧠</div>
+        <div class="txt">
+          <h3 id="coach-tip-title">جاري التحليل...</h3>
+          <p id="coach-tip-body">المساعد يفحص حركة الطلبات حولك الآن</p>
+        </div>
+      </div>
+      <div id="ai-cards"></div>
+    </section>
+
+    <!-- 🏆 ACHIEVEMENTS -->
+    <section class="section" data-section="achievements" data-testid="section-achievements">
+      <h2>الإنجازات</h2>
+      <p class="lead">شارات وتحديات تكسبك مكافآت إضافية</p>
+      <div class="card" style="margin-bottom:18px">
+        <div class="row between">
+          <div>
+            <div style="font-weight:900;font-size:14px">السلسلة الحالية 🔥</div>
+            <div class="muted" style="margin-top:4px">3 توصيلات متتالية = +15 ر.س</div>
+          </div>
+          <div style="font-weight:900;font-size:24px;color:var(--amber)" id="streak-count">2 / 3</div>
+        </div>
+        <div style="height:6px;background:var(--bg2);border-radius:99px;margin-top:10px;overflow:hidden">
+          <div id="streak-bar" style="height:100%;background:var(--grad-warm);width:67%;transition:width .5s"></div>
+        </div>
+      </div>
+      <div class="card" style="margin-bottom:18px;background:linear-gradient(135deg,rgba(124,58,237,.1),rgba(6,182,212,.1));border-color:rgba(124,58,237,.3)">
+        <div class="row between">
+          <div>
+            <div style="font-weight:900;font-size:14px">تحدي الأسبوع 🎯</div>
+            <div class="muted" style="margin-top:4px">50 توصيلة = 500 ريال مكافأة</div>
+          </div>
+          <div style="font-weight:900;font-size:24px" id="challenge-pct">14 / 50</div>
+        </div>
+        <div style="height:6px;background:var(--bg2);border-radius:99px;margin-top:10px;overflow:hidden">
+          <div id="challenge-bar" style="height:100%;background:var(--grad);width:28%;transition:width .5s"></div>
+        </div>
+      </div>
+      <h3 style="font-weight:900;font-size:14px;margin:18px 0 10px">شاراتك</h3>
+      <div class="badges-grid" id="badges-grid"></div>
+    </section>
+
+    <!-- 👑 LEADERBOARD -->
+    <section class="section" data-section="leaderboard" data-testid="section-leaderboard">
+      <h2>الترتيب الأسبوعي</h2>
+      <p class="lead">أفضل السائقين هذا الأسبوع — الفائز الأول يربح 1000 ريال</p>
+      <div id="leaderboard-list"></div>
+    </section>
+
+    <!-- 👤 PROFILE -->
+    <section class="section" data-section="profile" data-testid="section-profile">
+      <h2>ملفك الشخصي</h2>
+      <p class="lead">إحصائياتك ومهاراتك</p>
+      <div class="card" style="display:flex;gap:14px;align-items:center;margin-bottom:18px">
+        <div style="width:64px;height:64px;border-radius:50%;background:var(--grad);display:flex;align-items:center;justify-content:center;color:#fff;font-weight:900;font-size:24px" id="pf-avatar">س</div>
+        <div style="flex:1">
+          <div style="font-weight:900;font-size:16px" id="pf-name">السائق</div>
+          <div class="muted" style="margin-top:2px"><span id="pf-phone">05XXXXXXXX</span> · <span id="pf-vehicle">موتر</span></div>
+          <div style="margin-top:6px;color:var(--amber);font-weight:900" id="pf-rating">★★★★★ 5.0 (124 تقييم)</div>
+        </div>
+      </div>
+      <div class="stats-grid">
+        <div class="stat-tile"><div class="lbl">إجمالي توصيلات</div><div class="val" id="pf-total">0</div></div>
+        <div class="stat-tile"><div class="lbl">نسبة القبول</div><div class="val" id="pf-acc">0%</div></div>
+        <div class="stat-tile"><div class="lbl">متوسط الوقت</div><div class="val" id="pf-avg">0 د</div></div>
+        <div class="stat-tile"><div class="lbl">الانضمام</div><div class="val" id="pf-since">—</div></div>
+      </div>
+      <h3 style="font-weight:900;font-size:14px;margin:18px 0 10px">مهاراتك</h3>
+      <div style="display:flex;flex-wrap:wrap;gap:6px" id="skills-list"></div>
+    </section>
+
+    <!-- ⚙️ SETTINGS -->
+    <section class="section" data-section="settings" data-testid="section-settings">
+      <h2>الإعدادات</h2>
+      <p class="lead">خصص تجربتك — بعض الإعدادات يحددها التاجر</p>
+      <div id="settings-list"></div>
+    </section>
+
+    <!-- 🆘 SUPPORT -->
+    <section class="section" data-section="support" data-testid="section-support">
+      <h2>الدعم والطوارئ</h2>
+      <p class="lead">SOS · تأمين · اتصال بالدعم</p>
+      <div class="card" style="background:linear-gradient(135deg,rgba(239,68,68,.1),rgba(220,38,38,.1));border-color:rgba(239,68,68,.3);margin-bottom:12px">
+        <div class="row between">
+          <div>
+            <div style="font-weight:900;font-size:14px;color:var(--rose)">🚨 زر الطوارئ SOS</div>
+            <div class="muted" style="margin-top:4px">يرسل موقعك + ينبه التاجر + جهات الاتصال الطارئة</div>
+          </div>
+          <button class="btn btn-danger" data-testid="sos-btn" onclick="triggerSOS()"><i data-lucide="alert-triangle" class="icon"></i> SOS</button>
+        </div>
+      </div>
+      <div class="card" style="margin-bottom:12px">
+        <div class="row between">
+          <div>
+            <div style="font-weight:900;font-size:14px">💼 رفع مطالبة تأمين</div>
+            <div class="muted" style="margin-top:4px">حادث، عطل في المركبة، أو إصابة</div>
+          </div>
+          <button class="btn btn-ghost" data-testid="insurance-btn">رفع مطالبة</button>
+        </div>
+      </div>
+      <div class="card" style="margin-bottom:12px">
+        <div class="row between">
+          <div>
+            <div style="font-weight:900;font-size:14px">💬 دعم فني فوري</div>
+            <div class="muted" style="margin-top:4px">دردشة مع فريق دعم Zerax</div>
+          </div>
+          <button class="btn" data-testid="support-chat-btn"><i data-lucide="message-circle" class="icon"></i> ابدأ المحادثة</button>
+        </div>
+      </div>
+      <div class="card">
+        <div class="row between">
+          <div>
+            <div style="font-weight:900;font-size:14px">📞 الدعم الهاتفي</div>
+            <div class="muted" style="margin-top:4px">920000000 · 24/7</div>
+          </div>
+          <a href="tel:920000000" class="btn btn-cool"><i data-lucide="phone" class="icon"></i> اتصل</a>
+        </div>
+      </div>
+    </section>
+  </main>
+</div>
+
+<!-- Floating action buttons -->
+<button class="sos-fab" id="sos-fab" data-testid="sos-fab" onclick="triggerSOS()" style="display:none" title="SOS">SOS</button>
+<button class="voice-fab" id="voice-fab" data-testid="voice-fab" onclick="toggleVoice()" style="display:none" title="أوامر صوتية">
+  <i data-lucide="mic" class="icon"></i>
+</button>
+
+<!-- Prayer overlay -->
+<div class="prayer-overlay" id="prayer-overlay">
+  <div class="ico">🕌</div>
+  <h2>وقت الصلاة</h2>
+  <p>تم إيقاف استلام الطلبات تلقائياً. أبشر، استرح وأدِّ صلاتك بطمأنينة.</p>
+  <button onclick="document.getElementById('prayer-overlay').classList.remove('show')" data-testid="resume-after-prayer-btn">استئناف</button>
+</div>
+
+<!-- Heat alert -->
+<div class="heat-flash" id="heat-flash"></div>
+
 <script>
-const API = window.location.origin;
-let TOKEN = localStorage.getItem('zrx_drv_token') || null;
-let DRIVER = null;
-let CURRENT_ORDER = null;
-let MAP = null, MARKER_DRV = null, MARKER_DEST = null;
-let LOCATION_INTERVAL = null;
+// ═══════════════════════════════════════════════════════════════════
+// CONFIG
+// ═══════════════════════════════════════════════════════════════════
+const API = (typeof REACT_APP_BACKEND_URL !== 'undefined' && REACT_APP_BACKEND_URL) ? REACT_APP_BACKEND_URL : window.location.origin;
+const STATE = {
+  driver: null,
+  token: null,
+  config: null,
+  branches: [],
+  orders: [],
+  availableOrders: [],
+  earnings: {today: 0, week: 0, month: 0, tips: 0, weeklyChart: [40, 65, 80, 55, 90, 110, 75]},
+  badges: [
+    {id:'first', name:'أول توصيلة', icon:'🎉', desc:'أكمل أول توصيلة', unlocked:true},
+    {id:'10', name:'بطل البداية', icon:'⭐', desc:'10 توصيلات', unlocked:true},
+    {id:'50', name:'محترف', icon:'🏅', desc:'50 توصيلة', unlocked:true},
+    {id:'100', name:'سيد الطريق', icon:'👑', desc:'100 توصيلة', unlocked:true},
+    {id:'streak7', name:'سبعة أيام', icon:'🔥', desc:'7 أيام متتالية', unlocked:true},
+    {id:'night', name:'فارس الليل', icon:'🌙', desc:'20 توصيلة ليلية', unlocked:false},
+    {id:'speed', name:'السريع', icon:'⚡', desc:'متوسط < 20 دقيقة', unlocked:true},
+    {id:'rated', name:'الذهبي', icon:'🌟', desc:'تقييم 4.9+', unlocked:true},
+    {id:'500', name:'الأسطورة', icon:'🏆', desc:'500 توصيلة', unlocked:false},
+    {id:'ramadan', name:'رمضاني', icon:'🌙', desc:'موسم رمضان', unlocked:false},
+  ],
+  leaderboard: [
+    {name:'سلطان القحطاني', city:'الرياض', deliveries:127, pts:2540, me:false},
+    {name:'محمد العتيبي', city:'الرياض', deliveries:118, pts:2360, me:false},
+    {name:'خالد الدوسري', city:'الرياض', deliveries:105, pts:2100, me:false},
+    {name:'أحمد السبيعي', city:'الرياض', deliveries:96, pts:1920, me:true},
+    {name:'فيصل المطيري', city:'الرياض', deliveries:88, pts:1760, me:false},
+    {name:'بدر الشمري', city:'الرياض', deliveries:81, pts:1620, me:false},
+    {name:'تركي العنزي', city:'الرياض', deliveries:75, pts:1500, me:false},
+  ],
+  skills: ['خبير دراجة', 'ممتاز شمال', '100 توصيل', 'تقييم ذهبي', 'سريع'],
+  map: null,
+  markers: {branches: [], orders: [], driver: null},
+  voiceListening: false,
+  currentSection: 'map',
+};
 
-function $(id){return document.getElementById(id);}
-function toast(msg){const t=$('toast');t.textContent=msg;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),2400);}
+const FEATURES = [
+  {id:'map', name:'الخريطة', icon:'map', sub:'تتبع طلباتك وفروعك', flag:'ui.show_live_map'},
+  {id:'orders', name:'الطلبات', icon:'package', sub:'النشطة والمتاحة', flag:null, badge:'available'},
+  {id:'earnings', name:'الأرباح', icon:'banknote', sub:'يومي وأسبوعي', flag:null},
+  {id:'coach', name:'المساعد الذكي', icon:'brain', sub:'AI Coach', flag:'ai.standby_coach'},
+  {id:'achievements', name:'الإنجازات', icon:'award', sub:'شاراتك وتحدياتك', flag:'gamification.achievements'},
+  {id:'leaderboard', name:'الترتيب', icon:'trophy', sub:'الأفضل أسبوعياً', flag:'gamification.leaderboard'},
+  {id:'profile', name:'ملفي', icon:'user', sub:'إحصائياتك', flag:null},
+  {id:'settings', name:'الإعدادات', icon:'settings', sub:'الثيم واللغة', flag:null},
+  {id:'support', name:'الدعم', icon:'life-buoy', sub:'SOS والمساعدة', flag:null},
+];
 
-// ───── LOGIN ─────
-async function sendOtp(){
-  const phone=$('phone-input').value.trim();
-  if(!/^05\d{8}$/.test(phone)){$('phone-err').textContent='رقم الجوال يجب أن يبدأ بـ 05 ويتكون من 10 أرقام';$('phone-err').classList.add('show');return;}
-  $('phone-err').classList.remove('show');
-  const btn=$('send-otp-btn');btn.disabled=true;btn.textContent='⏳ جاري الإرسال...';
-  try{
-    const r=await fetch(API+'/api/delivery/driver/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({phone})});
-    if(!r.ok){const e=await r.json().catch(()=>({detail:'فشل'}));$('phone-err').textContent=e.detail;$('phone-err').classList.add('show');return;}
-    $('phone-card').style.display='none';
-    $('otp-card').style.display='block';
-    $('otp-input').focus();
-  }catch(e){toast('فشل الاتصال');}
-  finally{btn.disabled=false;btn.textContent='إرسال رمز التحقق';}
+// ═══════════════════════════════════════════════════════════════════
+// HELPERS
+// ═══════════════════════════════════════════════════════════════════
+function $(s){return document.querySelector(s)}
+function $$(s){return Array.from(document.querySelectorAll(s))}
+function flag(path){
+  if (!path || !STATE.config) return true;
+  const parts = path.split('.');
+  let cur = STATE.config;
+  for (const p of parts){ if (cur && typeof cur === 'object') cur = cur[p]; else return false; }
+  return !!cur;
 }
-function backToPhone(){$('phone-card').style.display='block';$('otp-card').style.display='none';}
-async function verifyOtp(){
-  const phone=$('phone-input').value.trim();
-  const code=$('otp-input').value.trim();
-  if(code.length!==4){$('otp-err').textContent='أدخل 4 أرقام';$('otp-err').classList.add('show');return;}
-  $('otp-err').classList.remove('show');
-  const btn=$('verify-btn');btn.disabled=true;btn.textContent='⏳ يتم التحقق...';
-  try{
-    const r=await fetch(API+'/api/delivery/driver/verify-otp',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({phone,code})});
-    if(!r.ok){const e=await r.json().catch(()=>({detail:'فشل'}));$('otp-err').textContent=e.detail;$('otp-err').classList.add('show');return;}
-    const data=await r.json();
-    TOKEN=data.token;DRIVER=data.driver;
-    localStorage.setItem('zrx_drv_token',TOKEN);
-    enterApp();
-  }catch(e){toast('فشل التحقق');}
-  finally{btn.disabled=false;btn.textContent='تحقق ودخول';}
-}
-function logout(){localStorage.removeItem('zrx_drv_token');TOKEN=null;DRIVER=null;location.reload();}
-
-// ───── MAIN APP ─────
-async function enterApp(){
-  $('login-screen').style.display='none';
-  $('main-app').style.display='flex';
-  // Resolve driver from token
-  try{
-    const r=await fetch(API+'/api/delivery/driver/me',{headers:{'Authorization':'DriverToken '+TOKEN}});
-    if(!r.ok)throw new Error('expired');
-    DRIVER=await r.json();
-    renderHeader();
-    await refreshFeed();
-  }catch(e){logout();}
-}
-function renderHeader(){
-  $('h-name').textContent=DRIVER.name;
-  $('h-avatar').textContent=DRIVER.name.charAt(0);
-  $('h-rating').textContent=(DRIVER.rating||5).toFixed(1);
-  $('h-area').textContent=areaLabel(DRIVER.area);
-  $('s-rating').textContent=(DRIVER.rating||5).toFixed(1);
-  setStatusUI(DRIVER.status);
-}
-function areaLabel(id){const m={north_riyadh:'شمال الرياض',south_riyadh:'جنوب الرياض',east_riyadh:'شرق الرياض',west_riyadh:'غرب الرياض',central:'وسط الرياض'};return m[id]||id;}
-function setStatusUI(st){
-  const btn=$('status-btn'),lbl=$('status-label');
-  btn.classList.remove('online','offline');
-  if(st==='online'||st==='delivering'){btn.classList.add('online');lbl.textContent=st==='delivering'?'في توصيل':'متاح';}
-  else{btn.classList.add('offline');lbl.textContent='غير متاح';}
-}
-async function toggleAvailability(){
-  const next=(DRIVER.status==='offline')?'online':'offline';
-  try{
-    const r=await fetch(API+'/api/delivery/drivers/'+DRIVER.id,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({status:next})});
-    if(!r.ok)throw new Error('failed');
-    DRIVER=await r.json();
-    setStatusUI(DRIVER.status);
-    toast(next==='online'?'✓ متاح للطلبات':'✓ تم إيقاف الاستقبال');
-  }catch(e){toast('فشل التحديث');}
+function toast(msg, kind='success'){
+  const el = document.createElement('div');
+  el.className = 'toast ' + kind;
+  el.textContent = msg;
+  document.body.appendChild(el);
+  setTimeout(() => el.remove(), 2800);
 }
 
-async function refreshFeed(){
-  try{
-    const r=await fetch(API+'/api/delivery/driver/feed',{headers:{'Authorization':'DriverToken '+TOKEN}});
-    if(!r.ok)throw new Error();
-    const data=await r.json();
-    DRIVER=data.driver;
-    renderActive(data.active);
-    renderDone(data.done_today);
-    renderEarnings(data.summary,data.done_today.length+data.active.length);
-  }catch(e){console.warn(e);}
-}
-function renderActive(orders){
-  $('c-active').textContent=orders.length;
-  $('s-today').textContent=orders.length+($('s-today').textContent.includes('+')?0:0);
-  if(orders.length===0){
-    $('sec-active').innerHTML='<div class="empty"><span class="ico">📭</span>ما عندك طلبات نشطة حالياً<br><small>تأكد أنك بحالة "متاح" لاستقبال الطلبات الجديدة</small></div>';
+// ═══════════════════════════════════════════════════════════════════
+// LOGIN
+// ═══════════════════════════════════════════════════════════════════
+$('#login-send').onclick = async () => {
+  const phone = $('#login-phone').value.trim();
+  if (!/^05\d{8}$/.test(phone)){
+    $('#login-err').textContent = 'رقم جوال غير صحيح';
+    $('#login-err').classList.add('show');
     return;
   }
-  $('sec-active').innerHTML=orders.map(orderCardHtml).join('');
-}
-function renderDone(orders){
-  if(orders.length===0){
-    $('sec-done').innerHTML='<div class="empty"><span class="ico">📦</span>لا توجد توصيلات منجزة اليوم</div>';return;
+  $('#login-err').classList.remove('show');
+  $('#login-send').disabled = true;
+  $('#login-send').textContent = 'جاري الإرسال...';
+  try {
+    const r = await fetch(API + '/api/delivery/driver/login', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({phone})
+    });
+    if (!r.ok) throw new Error('failed');
+    $('#login-step-phone').style.display = 'none';
+    $('#login-step-otp').style.display = 'block';
+    $('#login-phone-show').textContent = phone;
+    setTimeout(() => $('#login-otp').focus(), 100);
+    STATE._pendingPhone = phone;
+  } catch(e){
+    $('#login-err').textContent = 'تعذر الإرسال — حاول مرة أخرى';
+    $('#login-err').classList.add('show');
+  } finally {
+    $('#login-send').disabled = false;
+    $('#login-send').textContent = 'إرسال الرمز';
   }
-  $('sec-done').innerHTML=orders.map(orderCardHtml).join('');
+};
+
+$('#login-verify').onclick = async () => {
+  const code = $('#login-otp').value.trim();
+  if (!/^\d{4}$/.test(code)){
+    $('#otp-err').textContent = 'الرمز يجب أن يكون 4 أرقام';
+    $('#otp-err').classList.add('show');
+    return;
+  }
+  $('#otp-err').classList.remove('show');
+  $('#login-verify').disabled = true;
+  try {
+    const r = await fetch(API + '/api/delivery/driver/verify-otp', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({phone: STATE._pendingPhone, code})
+    });
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.detail || 'فشل');
+    STATE.token = d.token;
+    STATE.driver = d.driver;
+    localStorage.setItem('zerax_driver_token', d.token);
+    localStorage.setItem('zerax_driver', JSON.stringify(d.driver));
+    bootApp();
+  } catch(e){
+    $('#otp-err').textContent = e.message || 'الرمز غير صحيح';
+    $('#otp-err').classList.add('show');
+  } finally {
+    $('#login-verify').disabled = false;
+  }
+};
+
+// ═══════════════════════════════════════════════════════════════════
+// BOOT
+// ═══════════════════════════════════════════════════════════════════
+async function bootApp(){
+  $('#login-screen').style.display = 'none';
+  $('#app').classList.add('show');
+  $('#app').style.display = 'flex';
+  // Load config
+  try {
+    const r = await fetch(API + '/api/delivery/config/public', {
+      headers:{'Authorization':'DriverToken ' + STATE.token}
+    });
+    const d = await r.json();
+    STATE.config = d.config;
+    STATE.branches = d.branches || [];
+    if (STATE.config.ui.dark_mode_default) document.documentElement.classList.remove('light');
+    else document.documentElement.classList.add('light');
+    if (STATE.config.ui.glance_mode) document.documentElement.classList.add('glance');
+  } catch(e){
+    STATE.config = {}; STATE.branches = [];
+  }
+  // Render UI
+  renderHeader();
+  renderSidebar();
+  renderSettings();
+  renderEarningsFeatures();
+  renderAICoach();
+  renderAchievements();
+  renderLeaderboard();
+  renderProfile();
+  // Load fake/demo orders
+  loadOrders();
+  // Init map
+  setTimeout(initMap, 100);
+  // Show floating buttons
+  if (flag('wellbeing.sos_button')) $('#sos-fab').style.display = 'flex';
+  if (flag('ai.voice_commands')) $('#voice-fab').style.display = 'flex';
+  // Schedule background tasks
+  scheduleHeatCheck();
+  schedulePrayerCheck();
+  if (window.lucide) lucide.createIcons();
 }
-function renderEarnings(s,totalToday){
-  $('s-earnings').textContent=s.earnings_today_sar||0;
-  $('s-today').textContent=totalToday;
-  $('e-today').textContent=(s.earnings_today_sar||0)+' ر.س';
-  $('e-week').textContent=(s.earnings_week_sar||0).toLocaleString('ar-EG');
-  $('e-deliv').textContent=s.deliveries_today||0;
-  const avg=s.deliveries_today?Math.round((s.earnings_today_sar||0)/s.deliveries_today):0;
-  $('e-avg').textContent=avg+' ر.س';
+
+function renderHeader(){
+  const d = STATE.driver || {};
+  $('#drv-name').textContent = d.name || 'السائق';
+  $('#drv-avatar').textContent = (d.name||'س')[0];
+  $('#drv-rating').textContent = '★'.repeat(Math.round(d.rating||5)) + ' ' + (d.rating||5);
+  $('#pf-name').textContent = d.name || 'السائق';
+  $('#pf-avatar').textContent = (d.name||'س')[0];
+  $('#pf-phone').textContent = d.phone || '05XXXXXXXX';
+  $('#pf-vehicle').textContent = d.vehicle || 'موتر';
+  $('#pf-rating').textContent = '★'.repeat(Math.round(d.rating||5)) + ' ' + (d.rating||5) + ' (124 تقييم)';
+  $('#earn-today').textContent = STATE.earnings.today;
+  $('#er-today').textContent = STATE.earnings.today + ' ر.س';
+  $('#er-week').textContent = STATE.earnings.week + ' ر.س';
+  $('#er-month').textContent = STATE.earnings.month + ' ر.س';
+  $('#er-tips').textContent = STATE.earnings.tips + ' ر.س';
+  $('#pf-total').textContent = '96';
+  $('#pf-acc').textContent = '92%';
+  $('#pf-avg').textContent = '23 د';
+  $('#pf-since').textContent = '2024';
 }
-function statusLabel(st){return{pending:'بانتظار تأكيد',assigned:'مُسند إليك',picked_up:'تم الاستلام',delivering:'في طريقها',delivered:'تم التسليم',cancelled:'ملغاة'}[st]||st;}
-function orderCardHtml(o){
-  return `<div class="order-card" onclick="openDetail('${o.id}')">
-    <div class="row1">
-      <div><div class="cust">${o.customer_name}</div><div class="phone">${o.customer_phone}</div></div>
-      <span class="badge ${o.status}">${statusLabel(o.status)}</span>
-    </div>
-    <div class="addr"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>${o.address}</div>
-    <div class="items">📦 ${o.items.map(i=>`${i.name} ×${i.qty}`).join(' · ')}</div>
-    <div class="totalrow">
-      <span class="total">${o.total_sar} ر.س</span>
-      <span class="pmeth">${o.payment_method==='cash'?'💵 كاش':o.payment_method==='card'?'💳 شبكة':'⚡ محفظة'}</span>
-    </div>
+
+function renderSidebar(){
+  const nav = $('#sb-nav');
+  nav.innerHTML = '';
+  const order = STATE.config?.feature_order || FEATURES.map(f => f.id);
+  for (const fid of order){
+    const f = FEATURES.find(x => x.id === fid);
+    if (!f) continue;
+    if (f.flag && !flag(f.flag)) continue;
+    const btn = document.createElement('button');
+    btn.className = 'sb-item' + (fid === STATE.currentSection ? ' active' : '');
+    btn.dataset.section = fid;
+    btn.dataset.testid = `nav-${fid}`;
+    btn.innerHTML = `<i data-lucide="${f.icon}" class="ico"></i> ${f.name}`;
+    btn.onclick = () => navTo(fid);
+    nav.appendChild(btn);
+  }
+  if (window.lucide) lucide.createIcons();
+}
+
+function navTo(id){
+  STATE.currentSection = id;
+  $$('.section').forEach(s => s.classList.toggle('active', s.dataset.section === id));
+  $$('.sb-item').forEach(b => b.classList.toggle('active', b.dataset.section === id));
+  const f = FEATURES.find(x => x.id === id);
+  if (f){ $('#page-title').textContent = f.name; $('#page-sub').textContent = f.sub; }
+  if (id === 'map' && STATE.map) setTimeout(() => STATE.map.invalidateSize(), 50);
+  $('#sidebar').classList.remove('open');
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// MAP
+// ═══════════════════════════════════════════════════════════════════
+function initMap(){
+  if (!flag('ui.show_live_map')) return;
+  const center = STATE.branches[0] ? [STATE.branches[0].lat, STATE.branches[0].lng] : [24.7136, 46.6753];
+  STATE.map = L.map('map', {zoomControl: true, attributionControl: false}).setView(center, 12);
+  // Light/dark tile based on theme
+  const isDark = !document.documentElement.classList.contains('light');
+  const tileURL = isDark
+    ? 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png'
+    : 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png';
+  L.tileLayer(tileURL, {maxZoom: 19, subdomains: 'abcd'}).addTo(STATE.map);
+  drawBranches();
+  drawDriverLocation();
+  drawDemoOrders();
+  renderBranchPills();
+  renderSurge();
+}
+
+function drawBranches(){
+  if (!flag('ui.show_branches_on_map')) return;
+  STATE.markers.branches.forEach(m => m.remove());
+  STATE.markers.branches = [];
+  if (STATE.branches.length === 0){
+    // Use demo branches if none configured
+    STATE.branches = [
+      {id:'b1', name_ar:'الفرع الرئيسي', lat:24.7136, lng:46.6753, capacity_status:'normal', is_main:true},
+      {id:'b2', name_ar:'فرع الشمال', lat:24.82, lng:46.62, capacity_status:'busy'},
+      {id:'b3', name_ar:'فرع الشرق', lat:24.70, lng:46.79, capacity_status:'normal'},
+    ];
+  }
+  STATE.branches.forEach((b, i) => {
+    const color = b.capacity_status === 'closed' ? '#64748b' :
+                  b.capacity_status === 'busy' ? '#fbbf24' :
+                  i === 0 ? '#10b981' : '#06b6d4';
+    const html = `<div style="width:36px;height:36px;background:${color};border:3px solid #fff;border-radius:50% 50% 50% 0;transform:rotate(-45deg);box-shadow:0 4px 12px rgba(0,0,0,.3);display:flex;align-items:center;justify-content:center"><span style="transform:rotate(45deg);color:#fff;font-weight:900;font-size:14px">${i+1}</span></div>`;
+    const icon = L.divIcon({html, iconSize:[36,36], className:'', iconAnchor:[18,36]});
+    const m = L.marker([b.lat, b.lng], {icon}).addTo(STATE.map);
+    m.bindPopup(`<div class="branch-popup"><b>${b.name_ar}</b>${b.is_main ? '<span style="color:#10b981;font-size:11px">⭐ رئيسي</span><br>':''}<small>📍 ${b.address || 'الرياض'}</small><br><small>📞 ${b.phone || 'غير محدد'}</small><br><small>الحالة: <b style="color:${color}">${b.capacity_status === 'busy' ? 'مزدحم' : b.capacity_status === 'closed' ? 'مغلق' : 'متاح'}</b></small></div>`);
+    STATE.markers.branches.push(m);
+  });
+}
+
+function drawDriverLocation(){
+  const pos = STATE.driver?.current_location || {lat:24.72, lng:46.68};
+  const html = `<div style="width:18px;height:18px;background:#a78bfa;border:3px solid #fff;border-radius:50%;box-shadow:0 0 0 4px rgba(167,139,250,.35),0 4px 12px rgba(0,0,0,.3)"></div>`;
+  const icon = L.divIcon({html, iconSize:[18,18], className:'', iconAnchor:[9,9]});
+  STATE.markers.driver = L.marker([pos.lat, pos.lng], {icon, zIndexOffset:1000}).addTo(STATE.map);
+}
+
+function drawDemoOrders(){
+  const orders = [
+    {lat:24.835, lng:46.665, customer:'نوف العتيبي', fee:18, urgent:false},
+    {lat:24.706, lng:46.678, customer:'خالد المطيري', fee:22, urgent:true},
+    {lat:24.615, lng:46.690, customer:'سارة العنزي', fee:15, urgent:false},
+  ];
+  orders.forEach(o => {
+    const color = o.urgent ? '#ef4444' : '#06b6d4';
+    const html = `<div style="width:28px;height:28px;background:${color};border:2px solid #fff;border-radius:50%;display:flex;align-items:center;justify-content:center;box-shadow:0 4px 12px rgba(0,0,0,.3);font-size:14px">📦</div>`;
+    const icon = L.divIcon({html, iconSize:[28,28], className:'', iconAnchor:[14,14]});
+    const m = L.marker([o.lat, o.lng], {icon}).addTo(STATE.map);
+    m.bindPopup(`<div class="branch-popup"><b>${o.customer}</b><small>الأجرة: <b style="color:#10b981">${o.fee} ر.س</b></small>${o.urgent?'<br><small style="color:#ef4444">⚡ عاجل</small>':''}</div>`);
+    STATE.markers.orders.push(m);
+  });
+}
+
+function renderBranchPills(){
+  const wrap = $('#branch-pills');
+  wrap.innerHTML = '';
+  STATE.branches.forEach((b, i) => {
+    const c = b.capacity_status === 'busy' ? 'amber' : (i === 0 ? 'emerald' : 'cyan');
+    const pill = document.createElement('button');
+    pill.className = `tag t-${c}`;
+    pill.style.cursor = 'pointer';
+    pill.style.fontWeight = '900';
+    pill.style.padding = '6px 12px';
+    pill.innerHTML = `<i data-lucide="store" style="width:11px;height:11px"></i> ${b.name_ar}`;
+    pill.dataset.testid = `branch-pill-${b.id}`;
+    pill.onclick = () => STATE.map && STATE.map.setView([b.lat, b.lng], 15);
+    wrap.appendChild(pill);
+  });
+  if (window.lucide) lucide.createIcons();
+}
+
+function renderSurge(){
+  if (!flag('earnings.show_surge_zones')) return;
+  const mult = STATE.config?.earnings?.surge_multiplier || 1.5;
+  $('#surge-banner-wrap').innerHTML = `<div class="surge-banner">
+    <div class="ico"><i data-lucide="flame" class="icon"></i></div>
+    <div class="txt"><b>منطقة ذهبية في حي العليا!</b>4 طلبات منتظرة · السعر مضاعف ${mult}x</div>
+    <div class="mult">x${mult}</div>
   </div>`;
+  if (window.lucide) lucide.createIcons();
 }
 
-function switchTab(t){
-  document.querySelectorAll('.tab').forEach(b=>b.classList.toggle('active',b.dataset.tab===t));
-  document.querySelectorAll('.section').forEach(s=>s.classList.toggle('active',s.dataset.section===t));
+// ═══════════════════════════════════════════════════════════════════
+// ORDERS
+// ═══════════════════════════════════════════════════════════════════
+function loadOrders(){
+  STATE.availableOrders = [
+    {id:'#3045', customer:'نوف العتيبي', from:'الفرع الرئيسي', to:'حي النرجس', fee:18, dist:'6.2 كم', time:'25 د', urgent:false, tip:5},
+    {id:'#3046', customer:'خالد المطيري', from:'فرع الشمال', to:'حي العليا', fee:22, dist:'3.1 كم', time:'15 د', urgent:true, tip:0},
+    {id:'#3047', customer:'سارة العنزي', from:'الفرع الرئيسي', to:'حي السويدي', fee:15, dist:'8.4 كم', time:'30 د', urgent:false, tip:10},
+  ];
+  STATE.orders = [
+    {id:'#3041', customer:'محمد الزهراني', from:'الفرع الرئيسي', to:'حي الحمراء', fee:14, status:'picking_up', tip:5},
+  ];
+  renderOrdersSection();
 }
 
-// ───── ORDER DETAIL ─────
-async function openDetail(id){
-  CURRENT_ORDER=null;
-  try{
-    const r=await fetch(API+'/api/delivery/orders/'+id);
-    if(!r.ok)throw new Error();
-    CURRENT_ORDER=await r.json();
-  }catch(e){toast('فشل تحميل الطلب');return;}
-  renderDetail();
-  $('detail-overlay').classList.add('open');
-  setTimeout(initMap,150);
+function renderOrdersSection(){
+  $('#ord-today').textContent = '8';
+  $('#ord-done').textContent = '6';
+  $('#ord-active').textContent = STATE.orders.length;
+  $('#batch-on').textContent = flag('orders.order_batching') ? 'مفعّل' : 'مغلق';
+  const avail = $('#available-orders');
+  avail.innerHTML = '';
+  if (STATE.availableOrders.length === 0){
+    avail.innerHTML = '<div class="card" style="text-align:center;color:var(--mute)">لا طلبات متاحة الآن</div>';
+  } else {
+    STATE.availableOrders.forEach(o => avail.appendChild(orderCard(o, true)));
+  }
+  const active = $('#active-orders');
+  active.innerHTML = '';
+  if (STATE.orders.length === 0){
+    active.innerHTML = '<div class="card" style="text-align:center;color:var(--mute)">لا طلبات نشطة الآن</div>';
+  } else {
+    STATE.orders.forEach(o => active.appendChild(orderCard(o, false)));
+  }
 }
-function closeDetail(){
-  $('detail-overlay').classList.remove('open');
-  if(LOCATION_INTERVAL){clearInterval(LOCATION_INTERVAL);LOCATION_INTERVAL=null;}
-  if(MAP){MAP.remove();MAP=null;MARKER_DRV=null;MARKER_DEST=null;}
-  refreshFeed();
-}
-function renderDetail(){
-  const o=CURRENT_ORDER;
-  $('d-title').textContent='#'+o.id.replace('ord_','');
-  const steps=['pending','assigned','picked_up','delivering','delivered'];
-  const idx=steps.indexOf(o.status);
-  const logMap=Object.fromEntries(o.status_log.map(l=>[l.status,l.at]));
-  $('detail-body').innerHTML=`
-    <div id="detail-map"></div>
-    <div class="detail-info">
-      <div class="label">العميل</div>
-      <div class="val">${o.customer_name}</div>
-      <div style="margin-top:10px"><a href="tel:${o.customer_phone}" style="color:var(--amber);font-weight:900;font-size:14px;direction:ltr;display:block;text-align:right">📞 ${o.customer_phone}</a></div>
-    </div>
-    <div class="detail-info">
-      <div class="label">عنوان التسليم</div>
-      <div class="val">${o.address}</div>
-      <a href="https://maps.google.com/?q=${o.current_location?o.current_location.lat+','+o.current_location.lng:''}" target="_blank" style="display:inline-block;margin-top:8px;padding:8px 14px;background:rgba(167,139,250,.15);color:var(--purple);border-radius:99px;font-size:12px;font-weight:900;text-decoration:none">🗺️ افتح الخريطة</a>
-    </div>
-    <div class="detail-info-row" style="margin-bottom:12px">
-      <div class="detail-info" style="margin:0">
-        <div class="label">المبلغ الإجمالي</div>
-        <div class="val" style="color:var(--amber);font-size:20px">${o.total_sar} ر.س</div>
-        <div style="font-size:10px;color:var(--mute);margin-top:3px">+ توصيل ${o.delivery_fee_sar} ر.س</div>
+
+function orderCard(o, isAvailable){
+  const wrap = document.createElement('div');
+  wrap.className = 'order-card ' + (o.urgent ? 'urgent' : '');
+  wrap.dataset.testid = `order-card-${o.id.replace('#','')}`;
+  const tipHTML = (o.tip && flag('earnings.show_tip_tracker')) ? `<span class="tag t-amber" style="margin-right:6px"><i data-lucide="gift" style="width:11px;height:11px"></i> +${o.tip} بقشيش متوقع</span>` : '';
+  wrap.innerHTML = `
+    <div class="top">
+      <div>
+        <div class="id">${o.id} ${o.urgent ? '<span class="tag t-rose" style="margin-right:4px">⚡ عاجل</span>' : ''} ${tipHTML}</div>
+        <div class="meta">${o.customer} · ${o.dist || ''} · ${o.time || ''}</div>
       </div>
-      <div class="detail-info" style="margin:0">
-        <div class="label">طريقة الدفع</div>
-        <div class="val">${o.payment_method==='cash'?'💵 كاش عند الاستلام':o.payment_method==='card'?'💳 مدفوع شبكة':'⚡ محفظة'}</div>
-      </div>
+      <div class="fee">${o.fee} ر.س</div>
     </div>
-    <div class="detail-info">
-      <div class="label">المنتجات</div>
-      ${o.items.map(i=>`<div style="display:flex;justify-content:space-between;padding:6px 0;font-size:13px;border-bottom:1px dashed #2a2a44"><span>${i.name} ×${i.qty}</span><b>${i.sar} ر.س</b></div>`).join('')}
-    </div>
-    <div class="detail-info">
-      <div class="label">تتبع الحالة</div>
-      <div class="timeline" style="margin-top:10px">
-        ${steps.map((s,i)=>{
-          const done=i<idx,curr=i===idx;
-          const tm=logMap[s]?new Date(logMap[s]).toLocaleTimeString('ar-SA',{hour:'2-digit',minute:'2-digit'}):'';
-          return `<div class="step ${done?'done':''} ${curr?'current':''}"><div class="dot"></div><div><div class="step-lbl">${statusLabel(s)}</div>${tm?`<div class="step-tm">${tm}</div>`:''}</div></div>`;
-        }).join('')}
-      </div>
+    <div class="route"><span class="pin" style="background:#10b981"></span><b>${o.from}</b></div>
+    <div class="route" style="margin-top:4px"><span class="pin" style="background:#ef4444"></span>${o.to}</div>
+    <div class="actions">
+      ${isAvailable
+        ? `<button class="accept" data-testid="accept-${o.id.replace('#','')}" onclick="acceptOrder('${o.id}')"><i data-lucide="check" style="width:14px;height:14px"></i> قبول</button>
+           <button class="reject" data-testid="reject-${o.id.replace('#','')}" onclick="rejectOrder('${o.id}')">رفض</button>`
+        : `<button onclick="navigateOrder('${o.id}')" data-testid="navigate-${o.id.replace('#','')}"><i data-lucide="navigation" style="width:14px;height:14px"></i> ملاحة</button>
+           <button onclick="markDelivered('${o.id}')" class="accept" data-testid="delivered-${o.id.replace('#','')}"><i data-lucide="check-circle" style="width:14px;height:14px"></i> تم التسليم</button>`}
     </div>
   `;
-  renderActionBar();
+  setTimeout(() => window.lucide && lucide.createIcons(), 0);
+  return wrap;
 }
-function renderActionBar(){
-  const o=CURRENT_ORDER;const ab=$('action-bar');
-  const transitions={pending:'assigned',assigned:'picked_up',picked_up:'delivering',delivering:'delivered'};
-  const nextLbl={assigned:'✓ قبول الطلب',picked_up:'📦 استلمت الطلب',delivering:'🚗 بدأت التوصيل',delivered:'✅ تم التسليم'};
-  const next=transitions[o.status];
-  let html='';
-  if(next){html+=`<button class="btn primary" onclick="updateStatus('${next}')">${nextLbl[next]}</button>`;}
-  if(o.status==='delivered'||o.status==='cancelled'){html+=`<button class="btn secondary" onclick="closeDetail()">إغلاق</button>`;}
-  else{html+=`<button class="btn danger" onclick="if(confirm('إلغاء الطلب؟'))updateStatus('cancelled')">إلغاء</button>`;}
-  ab.innerHTML=html;
+
+window.acceptOrder = function(id){
+  const i = STATE.availableOrders.findIndex(o => o.id === id);
+  if (i < 0) return;
+  const o = STATE.availableOrders.splice(i, 1)[0];
+  STATE.orders.push({...o, status:'accepted'});
+  renderOrdersSection();
+  toast('✓ تم قبول الطلب ' + id, 'success');
+};
+window.rejectOrder = function(id){
+  STATE.availableOrders = STATE.availableOrders.filter(o => o.id !== id);
+  renderOrdersSection();
+  toast('تم تخطي ' + id);
+};
+window.navigateOrder = function(id){ toast('🧭 فتح الملاحة لـ ' + id); };
+window.markDelivered = function(id){
+  STATE.orders = STATE.orders.filter(o => o.id !== id);
+  STATE.earnings.today += 14;
+  $('#earn-today').textContent = STATE.earnings.today;
+  $('#er-today').textContent = STATE.earnings.today + ' ر.س';
+  renderOrdersSection();
+  // Streak update
+  const cur = parseInt(($('#streak-count').textContent || '0').split('/')[0]) + 1;
+  const target = STATE.config?.earnings?.streak_bonus_count || 3;
+  $('#streak-count').textContent = `${Math.min(cur, target)} / ${target}`;
+  $('#streak-bar').style.width = Math.min(100, (cur/target)*100) + '%';
+  if (cur >= target){
+    const bonus = STATE.config?.earnings?.streak_bonus_amount_sar || 15;
+    toast(`🔥 سلسلة! +${bonus} ر.س مكافأة`, 'success');
+    STATE.earnings.today += bonus;
+    $('#earn-today').textContent = STATE.earnings.today;
+  } else {
+    toast('✓ تم التسليم — أحسنت!', 'success');
+  }
+};
+
+// ═══════════════════════════════════════════════════════════════════
+// EARNINGS CHART
+// ═══════════════════════════════════════════════════════════════════
+function renderEarningsFeatures(){
+  // Render chart
+  const chart = $('#earn-chart');
+  chart.innerHTML = '';
+  const days = ['س','ح','ن','ث','ر','خ','ج'];
+  const max = Math.max(...STATE.earnings.weeklyChart);
+  STATE.earnings.weeklyChart.forEach((v, i) => {
+    const bar = document.createElement('div');
+    bar.className = 'bar';
+    bar.style.height = (v / max * 90) + '%';
+    bar.innerHTML = `<span class="val">${v}</span><span class="lbl">${days[i]}</span>`;
+    chart.appendChild(bar);
+  });
+  // Render extra earnings features as cards
+  const wrap = $('#earnings-features');
+  wrap.innerHTML = '';
+  if (flag('earnings.instant_pay_enabled')){
+    wrap.appendChild(featureCard('⚡ السحب الفوري', `اسحب أرباحك أي وقت (الحد الأدنى: ${STATE.config?.earnings?.instant_pay_min_sar || 50} ر.س)`, 'سحب الآن', 'instant-pay-btn', () => toast('تم إرسال طلب السحب', 'success')));
+  }
+  if (flag('earnings.fuel_cost_calculator')){
+    wrap.appendChild(featureCard('⛽ حاسبة الوقود', 'احسب صافي الربح بعد البنزين تلقائياً', 'حساب', 'fuel-calc-btn', () => toast('صافي اليوم: 73 ر.س بعد الوقود')));
+  }
+  if (flag('earnings.show_tip_tracker')){
+    wrap.appendChild(featureCard('🎁 سجل البقشيش', `جمعت ${STATE.earnings.tips} ر.س بقشيش هذا الأسبوع`, 'عرض', 'tip-log-btn', () => toast('فتح سجل البقشيش...')));
+  }
+  if (flag('advanced.tip_qr')){
+    wrap.appendChild(featureCard('📱 QR للبقشيش', 'العميل يدفع بقشيش بمسح كود على حقيبتك', 'عرض QR', 'tip-qr-btn', () => toast('فتح QR البقشيش...')));
+  }
 }
-async function updateStatus(st){
-  try{
-    const r=await fetch(API+'/api/delivery/orders/'+CURRENT_ORDER.id+'/status',{
-      method:'PATCH',headers:{'Content-Type':'application/json','Authorization':'DriverToken '+TOKEN},
-      body:JSON.stringify({status:st})
-    });
-    if(!r.ok){const e=await r.json().catch(()=>({}));toast(e.detail||'فشل التحديث');return;}
-    CURRENT_ORDER=await r.json();
-    toast('✓ تم تحديث الحالة');
-    renderDetail();
-    setTimeout(initMap,100);
-    // Start location ping if delivering
-    if(st==='delivering')startLocationPing();
-    else if(LOCATION_INTERVAL){clearInterval(LOCATION_INTERVAL);LOCATION_INTERVAL=null;}
-    if(st==='delivered'){setTimeout(closeDetail,1500);}
-  }catch(e){toast('فشل');}
+function featureCard(title, desc, btn, testid, onClick){
+  const c = document.createElement('div');
+  c.className = 'card';
+  c.style.marginBottom = '10px';
+  c.innerHTML = `<div class="row between">
+    <div>
+      <div style="font-weight:900;font-size:14px">${title}</div>
+      <div class="muted" style="margin-top:4px">${desc}</div>
+    </div>
+    <button class="btn" data-testid="${testid}">${btn}</button>
+  </div>`;
+  c.querySelector('button').onclick = onClick;
+  return c;
 }
-function startLocationPing(){
-  if(LOCATION_INTERVAL)clearInterval(LOCATION_INTERVAL);
-  const ping=async(lat,lng)=>{
-    try{await fetch(API+'/api/delivery/orders/'+CURRENT_ORDER.id+'/location',{method:'POST',headers:{'Content-Type':'application/json','Authorization':'DriverToken '+TOKEN},body:JSON.stringify({lat,lng})});}catch(_){}
+
+// ═══════════════════════════════════════════════════════════════════
+// AI COACH
+// ═══════════════════════════════════════════════════════════════════
+function renderAICoach(){
+  if (!flag('ai.standby_coach')){
+    $('#coach-tip-title').textContent = 'المساعد الذكي معطّل';
+    $('#coach-tip-body').textContent = 'فعّله من إعدادات التاجر';
+    return;
+  }
+  const tips = [
+    {t:'🔥 توجه لحي العليا الآن', b:'4 طلبات متوقعة خلال 10 دقائق · السعر مضاعف 1.5x'},
+    {t:'☕ خذ راحة 10 دقائق', b:'شغلت 4 ساعات متواصلة — الاستراحة ترفع تركيزك 30%'},
+    {t:'⛽ تعبئة وقود قريباً', b:'مستوى البطارية/الوقود منخفض حسب التقدير'},
+    {t:'⭐ تقييم عالي اليوم', b:'متوسطك 4.9 — استمر بهذا الأداء للحصول على أولوية الطلبات'},
+  ];
+  let idx = 0;
+  const update = () => {
+    const tip = tips[idx % tips.length];
+    $('#coach-tip-title').textContent = tip.t;
+    $('#coach-tip-body').textContent = tip.b;
+    idx++;
   };
-  // Simulate moving location every 8 seconds (demo)
-  let lat=DRIVER.current_location?.lat||24.74;
-  let lng=DRIVER.current_location?.lng||46.66;
-  ping(lat,lng);
-  LOCATION_INTERVAL=setInterval(()=>{
-    lat+=(Math.random()-0.5)*0.003;lng+=(Math.random()-0.5)*0.003;
-    ping(lat,lng);
-    if(MARKER_DRV){MARKER_DRV.setLatLng([lat,lng]);}
-  },8000);
-}
-function initMap(){
-  const el=document.getElementById('detail-map');if(!el||!window.L)return;
-  if(MAP){MAP.remove();MAP=null;}
-  // Use driver location or default Riyadh
-  const lat=CURRENT_ORDER.current_location?.lat||DRIVER.current_location?.lat||24.7136;
-  const lng=CURRENT_ORDER.current_location?.lng||DRIVER.current_location?.lng||46.6753;
-  MAP=L.map(el,{zoomControl:true,attributionControl:false}).setView([lat,lng],13);
-  L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',{maxZoom:19}).addTo(MAP);
-  const drvIcon=L.divIcon({className:'',html:'<div style="background:#fbbf24;width:30px;height:30px;border-radius:50%;border:3px solid #0a0a14;box-shadow:0 0 0 4px rgba(251,191,36,.3);display:flex;align-items:center;justify-content:center;font-size:14px">🚗</div>',iconSize:[30,30],iconAnchor:[15,15]});
-  MARKER_DRV=L.marker([lat,lng],{icon:drvIcon}).addTo(MAP);
-  // Destination marker offset by small distance
-  const destLat=lat+0.012,destLng=lng+0.008;
-  const destIcon=L.divIcon({className:'',html:'<div style="background:#10b981;width:30px;height:30px;border-radius:50%;border:3px solid #0a0a14;box-shadow:0 0 0 4px rgba(16,185,129,.3);display:flex;align-items:center;justify-content:center;font-size:14px">📍</div>',iconSize:[30,30],iconAnchor:[15,15]});
-  MARKER_DEST=L.marker([destLat,destLng],{icon:destIcon}).addTo(MAP);
-  L.polyline([[lat,lng],[destLat,destLng]],{color:'#a78bfa',weight:3,opacity:.7,dashArray:'8'}).addTo(MAP);
-  MAP.fitBounds(L.latLngBounds([lat,lng],[destLat,destLng]).pad(0.5));
+  update();
+  setInterval(update, 12000);
+
+  const cards = $('#ai-cards');
+  cards.innerHTML = '';
+  if (flag('ai.smart_predictor')){
+    cards.appendChild(featureCard('📊 توقع أرباحك', 'إذا كملت ساعتين تقدر تكسب 87 ر.س إضافية', 'تفاصيل', 'predict-btn', () => toast('تحليل أرباحك القادمة...')));
+  }
+  if (flag('ai.route_memory')){
+    cards.appendChild(featureCard('🧭 ذاكرة الطرق', 'يتعلم أفضل طرقك ويقترحها تلقائياً', 'عرض', 'route-mem-btn', () => toast('فتح ذاكرة الطرق...')));
+  }
+  if (flag('ai.voice_commands')){
+    cards.appendChild(featureCard('🎙️ أوامر صوتية', 'قُل "وصلت" أو "استلمت" بدلاً من الضغط', 'تجربة', 'voice-test-btn', toggleVoice));
+  }
+  if (flag('advanced.weather_adaptive_ui')){
+    cards.appendChild(featureCard('🌤️ تكيّف الطقس', 'الواجهة تتغير حسب المطر والحرارة لراحتك', 'الحالة', 'weather-btn', () => toast('الطقس: مشمس 33°')));
+  }
 }
 
-// Auto-restore session
-if(TOKEN){enterApp();}
+// ═══════════════════════════════════════════════════════════════════
+// ACHIEVEMENTS
+// ═══════════════════════════════════════════════════════════════════
+function renderAchievements(){
+  const grid = $('#badges-grid');
+  grid.innerHTML = '';
+  STATE.badges.forEach(b => {
+    const c = document.createElement('div');
+    c.className = 'badge-card ' + (b.unlocked ? 'unlocked' : 'locked');
+    c.dataset.testid = `badge-${b.id}`;
+    c.innerHTML = `<div class="ico">${b.icon}</div><div class="nm">${b.name}</div><div class="desc">${b.desc}</div>`;
+    grid.appendChild(c);
+  });
+}
 
-// Auto-refresh feed every 30s while logged in
-setInterval(()=>{if(TOKEN&&!$('detail-overlay').classList.contains('open'))refreshFeed();},30000);
+// ═══════════════════════════════════════════════════════════════════
+// LEADERBOARD
+// ═══════════════════════════════════════════════════════════════════
+function renderLeaderboard(){
+  if (!flag('gamification.leaderboard')) return;
+  const list = $('#leaderboard-list');
+  list.innerHTML = '';
+  STATE.leaderboard.forEach((u, i) => {
+    const row = document.createElement('div');
+    row.className = 'lb-row' + (u.me ? ' me' : '');
+    row.dataset.testid = `lb-row-${i}`;
+    const rankClass = i === 0 ? 'gold' : i === 1 ? 'silver' : i === 2 ? 'bronze' : '';
+    row.innerHTML = `
+      <div class="rank ${rankClass}">${i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : '#'+(i+1)}</div>
+      <div class="nm">${u.name}${u.me ? ' <span class="tag t-purple" style="font-size:9px;padding:2px 6px">أنت</span>' : ''}
+        <span class="sub">${u.city} · ${u.deliveries} توصيلة</span>
+      </div>
+      <div class="pts">${u.pts.toLocaleString('ar')} نقطة</div>
+    `;
+    list.appendChild(row);
+  });
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// PROFILE
+// ═══════════════════════════════════════════════════════════════════
+function renderProfile(){
+  const wrap = $('#skills-list');
+  wrap.innerHTML = '';
+  STATE.skills.forEach(s => {
+    const tag = document.createElement('span');
+    tag.className = 'tag t-purple';
+    tag.style.padding = '6px 12px';
+    tag.style.fontWeight = '900';
+    tag.innerHTML = `<i data-lucide="badge-check" style="width:11px;height:11px"></i> ${s}`;
+    wrap.appendChild(tag);
+  });
+  if (window.lucide) lucide.createIcons();
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// SETTINGS (driver-side preferences)
+// ═══════════════════════════════════════════════════════════════════
+function renderSettings(){
+  const list = $('#settings-list');
+  list.innerHTML = '';
+  const items = [
+    {icon:'sun', name:'الوضع الفاتح/الداكن', desc:'بدّل بين الفاتح والداكن', flag:null, key:'theme', val: !document.documentElement.classList.contains('light')},
+    {icon:'languages', name:'اللغة', desc:'العربية · English · اردو', flag:null, key:'lang', val: true},
+    {icon:'volume-2', name:'تنبيهات صوتية', desc:'أصوات الإشعارات والطلبات', flag:null, val: true},
+    {icon:'vibrate', name:'اهتزاز', desc:'اهتزاز الجوال للإشعارات', flag:null, val: true},
+    {icon:'battery', name:'وضع توفير البطارية', desc:'يقلل دقة GPS لتوفير البطارية', flag:'advanced.battery_saver', val: false},
+    {icon:'wifi-off', name:'الوضع غير المتصل', desc:'يحفظ آخر حالة لو انقطع النت', flag:'advanced.offline_mode', val: true},
+    {icon:'zap', name:'وضع القيادة (Glance)', desc:'أرقام أكبر وألوان واضحة', flag:'ui.glance_mode', val: document.documentElement.classList.contains('glance')},
+    {icon:'cloud-sun', name:'تنبيهات الحرارة', desc:'تنبيه عند الحرارة العالية (> 42°)', flag:'saudi.heat_alerts', val: true},
+    {icon:'moon', name:'إيقاف وقت الصلاة', desc:'إيقاف تلقائي للطلبات وقت الصلاة', flag:'saudi.prayer_time_pause', val: true},
+    {icon:'camera', name:'إثبات تسليم بصورة', desc:'تصوير الطلب عند الباب', flag:'orders.photo_proof_required', val: true},
+    {icon:'package', name:'تجميع الطلبات', desc:`استلام ${STATE.config?.orders?.max_batch_size || 3} طلبات قريبة معاً`, flag:'orders.order_batching', val: true},
+    {icon:'message-square', name:'دردشة مع العميل', desc:'دردشة مباشرة مع ترجمة آلية', flag:'orders.customer_chat', val: true},
+  ];
+  items.forEach(it => {
+    const merchantControlled = it.flag && !flag(it.flag);
+    const row = document.createElement('div');
+    row.className = 'toggle-row';
+    row.innerHTML = `
+      <div class="ico"><i data-lucide="${it.icon}" class="icon"></i></div>
+      <div class="info">
+        <div class="nm">${it.name}</div>
+        <div class="desc">${it.desc}${merchantControlled ? ' · <span class="lock">🔒 محدد من التاجر</span>' : ''}</div>
+      </div>
+      <div class="sw ${it.val ? 'on' : ''} ${merchantControlled ? 'disabled' : ''}" data-testid="toggle-${it.key || it.icon}"></div>
+    `;
+    if (!merchantControlled){
+      const sw = row.querySelector('.sw');
+      sw.onclick = () => {
+        sw.classList.toggle('on');
+        if (it.icon === 'sun') toggleTheme();
+        if (it.icon === 'zap') document.documentElement.classList.toggle('glance');
+      };
+    }
+    list.appendChild(row);
+  });
+  if (window.lucide) lucide.createIcons();
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// STATUS TOGGLE
+// ═══════════════════════════════════════════════════════════════════
+$$('.sb-status').forEach(btn => btn.onclick = () => {
+  $$('.sb-status').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  const status = btn.dataset.status;
+  btn.classList.add(status);
+  toast(status === 'online' ? '✓ أنت متاح الآن' : status === 'break' ? '☕ في راحة' : '🚫 غير متصل');
+});
+
+// ═══════════════════════════════════════════════════════════════════
+// THEME TOGGLE
+// ═══════════════════════════════════════════════════════════════════
+function toggleTheme(){
+  document.documentElement.classList.toggle('light');
+  if (STATE.map){
+    STATE.map.remove();
+    STATE.map = null;
+    setTimeout(initMap, 50);
+  }
+}
+$('#theme-toggle').onclick = toggleTheme;
+$('#logout-btn').onclick = () => {
+  localStorage.removeItem('zerax_driver_token');
+  localStorage.removeItem('zerax_driver');
+  location.reload();
+};
+$('#menu-btn').onclick = () => $('#sidebar').classList.toggle('open');
+
+// ═══════════════════════════════════════════════════════════════════
+// SOS
+// ═══════════════════════════════════════════════════════════════════
+window.triggerSOS = function(){
+  if (!confirm('تأكيد إرسال SOS؟ سيتم تنبيه التاجر + جهات الطوارئ + إرسال موقعك')) return;
+  toast('🚨 تم إرسال SOS — التاجر تم تنبيهه + موقعك مُرسل', 'error');
+};
+
+// ═══════════════════════════════════════════════════════════════════
+// VOICE
+// ═══════════════════════════════════════════════════════════════════
+window.toggleVoice = function(){
+  if (!flag('ai.voice_commands')) return;
+  STATE.voiceListening = !STATE.voiceListening;
+  $('#voice-fab').classList.toggle('listening', STATE.voiceListening);
+  toast(STATE.voiceListening ? '🎙️ يستمع... قُل: وصلت / استلمت / حالة' : 'توقف الاستماع');
+  if (STATE.voiceListening){
+    setTimeout(() => {
+      STATE.voiceListening = false;
+      $('#voice-fab').classList.remove('listening');
+      toast('✓ تم تنفيذ الأمر');
+    }, 4000);
+  }
+};
+
+// ═══════════════════════════════════════════════════════════════════
+// HEAT + PRAYER CHECKS
+// ═══════════════════════════════════════════════════════════════════
+function scheduleHeatCheck(){
+  if (!flag('saudi.heat_alerts')) return;
+  const temp = 38 + Math.floor(Math.random() * 8); // demo: 38-46°
+  const threshold = STATE.config?.saudi?.heat_alert_threshold_c || 42;
+  if (temp >= threshold){
+    setTimeout(() => {
+      toast(`🌡️ تنبيه حرارة: ${temp}° — اشرب ماء، وخذ راحة`, 'error');
+    }, 5000);
+  }
+}
+function schedulePrayerCheck(){
+  if (!flag('saudi.prayer_time_pause')) return;
+  // Demo: trigger overlay 30 sec after boot
+  setTimeout(() => {
+    if (STATE.currentSection !== 'support') $('#prayer-overlay').classList.add('show');
+  }, 45000);
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// AUTO RESTORE
+// ═══════════════════════════════════════════════════════════════════
+const savedTok = localStorage.getItem('zerax_driver_token');
+const savedDrv = localStorage.getItem('zerax_driver');
+if (savedTok && savedDrv){
+  STATE.token = savedTok;
+  STATE.driver = JSON.parse(savedDrv);
+  bootApp();
+}
+
+if (window.lucide) lucide.createIcons();
 </script>
 </body>
 </html>

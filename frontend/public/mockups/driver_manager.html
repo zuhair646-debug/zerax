@@ -1,0 +1,552 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#0a0a14">
+<title>Zerax — إدارة تطبيق السائق</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;500;700;900&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://unpkg.com/lucide@latest"></script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#0a0a14;--bg2:#13131f;--surface:#1a1a2e;--border:#2a2a44;
+  --text:#fff;--mute:#94a3b8;--purple:#a78bfa;--cyan:#06b6d4;
+  --amber:#fbbf24;--emerald:#10b981;--rose:#ef4444;
+  --grad:linear-gradient(135deg,#7c3aed,#06b6d4);
+}
+html.light{--bg:#f8fafc;--bg2:#fff;--surface:#fff;--border:#e2e8f0;--text:#0f172a;--mute:#64748b}
+html,body{background:var(--bg);color:var(--text);font-family:'IBM Plex Sans Arabic',system-ui,sans-serif;min-height:100vh}
+.wrap{max-width:1200px;margin:0 auto;padding:24px}
+.topbar{display:flex;align-items:center;gap:14px;padding:16px;background:var(--surface);border:1px solid var(--border);border-radius:16px;margin-bottom:20px}
+.topbar .logo{width:40px;height:40px;border-radius:11px;background:var(--grad);display:flex;align-items:center;justify-content:center;color:#fff;font-weight:900}
+.topbar h1{font-size:18px;font-weight:900;flex:1}
+.topbar h1 .sub{display:block;font-size:11px;color:var(--mute);font-weight:500;margin-top:2px}
+.topbar .back{padding:10px 16px;background:var(--bg2);border:1px solid var(--border);border-radius:11px;color:var(--text);text-decoration:none;font-size:13px;font-weight:700;display:inline-flex;align-items:center;gap:6px}
+
+.tabs{display:flex;gap:6px;background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:6px;margin-bottom:18px;overflow-x:auto}
+.tab{padding:11px 16px;background:transparent;border:none;color:var(--mute);font-size:13px;font-weight:900;cursor:pointer;border-radius:9px;display:flex;align-items:center;gap:7px;white-space:nowrap;font-family:inherit}
+.tab.active{background:var(--grad);color:#fff}
+.tab:hover:not(.active){color:var(--text);background:var(--bg2)}
+
+.section{display:none}
+.section.active{display:block}
+
+.card{background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:18px;margin-bottom:14px}
+.card h3{font-size:15px;font-weight:900;margin-bottom:8px;display:flex;align-items:center;gap:8px}
+.card h3 .ico{width:28px;height:28px;border-radius:8px;background:var(--bg2);display:flex;align-items:center;justify-content:center;color:var(--purple)}
+.card p{font-size:12px;color:var(--mute);margin-bottom:14px;line-height:1.6}
+
+.toggle-row{display:flex;align-items:center;gap:14px;padding:12px;background:var(--bg2);border:1px solid var(--border);border-radius:11px;margin-bottom:6px}
+.toggle-row .info{flex:1;min-width:0}
+.toggle-row .info .nm{font-weight:900;font-size:13px}
+.toggle-row .info .desc{font-size:11px;color:var(--mute);margin-top:2px;line-height:1.5}
+.sw{width:46px;height:26px;background:var(--border);border-radius:99px;position:relative;cursor:pointer;transition:background .2s;flex-shrink:0}
+.sw::after{content:'';position:absolute;width:20px;height:20px;background:#fff;border-radius:50%;top:3px;right:3px;transition:transform .2s;box-shadow:0 2px 6px rgba(0,0,0,.2)}
+.sw.on{background:var(--grad)}
+.sw.on::after{transform:translateX(-20px)}
+
+.field{margin-bottom:12px}
+.field label{display:block;font-size:12px;font-weight:700;color:var(--text);margin-bottom:6px}
+.field input,.field select,.field textarea{width:100%;padding:11px 14px;background:var(--bg);border:1.5px solid var(--border);border-radius:11px;color:var(--text);font-family:inherit;font-size:13px;outline:none}
+.field input:focus{border-color:var(--purple)}
+.inline{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+
+.btn{padding:11px 18px;background:var(--grad);color:#fff;border:none;border-radius:11px;font-weight:900;font-size:13px;cursor:pointer;font-family:inherit;display:inline-flex;align-items:center;gap:6px;box-shadow:0 4px 14px rgba(124,58,237,.25)}
+.btn-ghost{background:transparent;border:1px solid var(--border);color:var(--text);box-shadow:none}
+.btn-danger{background:linear-gradient(135deg,#dc2626,#b91c1c)}
+.btn:active{transform:scale(.97)}
+.toast{position:fixed;top:20px;left:50%;transform:translateX(-50%);padding:12px 22px;background:var(--surface);border:1.5px solid var(--emerald);color:var(--emerald);border-radius:12px;font-weight:900;z-index:9999;box-shadow:0 12px 40px rgba(0,0,0,.4)}
+
+/* Branches map */
+#bmap{height:380px;border-radius:14px;border:1px solid var(--border);margin-bottom:14px}
+.branch-row{display:flex;gap:12px;align-items:center;padding:12px;background:var(--bg2);border:1px solid var(--border);border-radius:11px;margin-bottom:8px}
+.branch-row .num{width:32px;height:32px;border-radius:50% 50% 50% 0;background:var(--purple);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:900;transform:rotate(-45deg);flex-shrink:0}
+.branch-row .num span{transform:rotate(45deg)}
+.branch-row .nfo{flex:1;min-width:0}
+.branch-row .nfo .nm{font-weight:900;font-size:13px}
+.branch-row .nfo .meta{font-size:11px;color:var(--mute);margin-top:2px}
+
+/* Feature order drag */
+.order-list{display:flex;flex-direction:column;gap:6px}
+.order-item{display:flex;gap:10px;align-items:center;padding:10px 12px;background:var(--bg2);border:1px solid var(--border);border-radius:9px;cursor:grab;font-weight:700;font-size:13px}
+.order-item:active{cursor:grabbing}
+.order-item .drag{color:var(--mute)}
+
+@media(max-width:768px){
+  .wrap{padding:14px}
+  .inline{grid-template-columns:1fr}
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="topbar">
+    <div class="logo"><i data-lucide="truck"></i></div>
+    <h1>إدارة تطبيق السائق <span class="sub">فعّل أو ألغِ أي ميزة · رتّب القوائم · أضف فروعك</span></h1>
+    <a href="/mockups/admin.html" class="back" data-testid="back-to-admin"><i data-lucide="arrow-right" style="width:14px;height:14px"></i> رجوع</a>
+  </div>
+
+  <div class="tabs" id="tabs">
+    <button class="tab active" data-tab="general" data-testid="tab-general"><i data-lucide="sliders" style="width:14px;height:14px"></i> عام</button>
+    <button class="tab" data-tab="earnings" data-testid="tab-earnings"><i data-lucide="banknote" style="width:14px;height:14px"></i> الأرباح</button>
+    <button class="tab" data-tab="orders" data-testid="tab-orders"><i data-lucide="package" style="width:14px;height:14px"></i> الطلبات</button>
+    <button class="tab" data-tab="ai" data-testid="tab-ai"><i data-lucide="brain" style="width:14px;height:14px"></i> الذكاء</button>
+    <button class="tab" data-tab="saudi" data-testid="tab-saudi"><i data-lucide="flag" style="width:14px;height:14px"></i> السعودي</button>
+    <button class="tab" data-tab="wellbeing" data-testid="tab-wellbeing"><i data-lucide="heart" style="width:14px;height:14px"></i> الصحة</button>
+    <button class="tab" data-tab="gamification" data-testid="tab-gamification"><i data-lucide="trophy" style="width:14px;height:14px"></i> الإنجازات</button>
+    <button class="tab" data-tab="branches" data-testid="tab-branches"><i data-lucide="store" style="width:14px;height:14px"></i> الفروع</button>
+    <button class="tab" data-tab="order" data-testid="tab-order"><i data-lucide="list" style="width:14px;height:14px"></i> ترتيب القوائم</button>
+  </div>
+
+  <!-- GENERAL UI -->
+  <div class="section active" data-section="general">
+    <div class="card">
+      <h3><span class="ico"><i data-lucide="layout" style="width:16px;height:16px"></i></span> واجهة التطبيق</h3>
+      <p>تحكم في الخريطة والثيم وأسلوب العرض</p>
+      <div id="ui-toggles"></div>
+    </div>
+    <div class="card">
+      <h3><span class="ico"><i data-lucide="palette" style="width:16px;height:16px"></i></span> هوية بصرية</h3>
+      <p>غيّر اللون الرئيسي والشعار حسب علامتك التجارية</p>
+      <div class="inline">
+        <div class="field"><label>اللون الرئيسي</label><input type="color" id="brand-primary" value="#7c3aed" data-testid="brand-primary"></div>
+        <div class="field"><label>اللون الثانوي</label><input type="color" id="brand-accent" value="#06b6d4" data-testid="brand-accent"></div>
+      </div>
+      <div class="field"><label>اسم التطبيق</label><input id="brand-name" placeholder="Zerax Driver" data-testid="brand-name"></div>
+      <div class="field"><label>رابط الشعار (URL)</label><input id="brand-logo" placeholder="https://..." data-testid="brand-logo"></div>
+    </div>
+  </div>
+
+  <!-- EARNINGS -->
+  <div class="section" data-section="earnings">
+    <div class="card">
+      <h3><span class="ico"><i data-lucide="trending-up" style="width:16px;height:16px"></i></span> ميزات الأرباح</h3>
+      <p>اختر ما يظهر للسائق في قسم الأرباح</p>
+      <div id="earnings-toggles"></div>
+    </div>
+    <div class="card">
+      <h3><span class="ico"><i data-lucide="settings" style="width:16px;height:16px"></i></span> إعدادات المالية</h3>
+      <div class="inline">
+        <div class="field"><label>مكافأة السلسلة (ر.س)</label><input type="number" id="earn-streak-amt" data-testid="earn-streak-amt"></div>
+        <div class="field"><label>عدد توصيلات السلسلة</label><input type="number" id="earn-streak-cnt" data-testid="earn-streak-cnt"></div>
+        <div class="field"><label>هدف التحدي الأسبوعي</label><input type="number" id="earn-week-target" data-testid="earn-week-target"></div>
+        <div class="field"><label>مكافأة التحدي (ر.س)</label><input type="number" id="earn-week-reward" data-testid="earn-week-reward"></div>
+        <div class="field"><label>مضاعف Surge</label><input type="number" id="earn-surge" step="0.1" data-testid="earn-surge"></div>
+        <div class="field"><label>حد أدنى للسحب الفوري (ر.س)</label><input type="number" id="earn-min-payout" data-testid="earn-min-payout"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ORDERS -->
+  <div class="section" data-section="orders">
+    <div class="card">
+      <h3><span class="ico"><i data-lucide="package" style="width:16px;height:16px"></i></span> إدارة الطلبات</h3>
+      <p>تجميع الطلبات، الدردشة، إثبات التسليم</p>
+      <div id="orders-toggles"></div>
+    </div>
+    <div class="card">
+      <h3><span class="ico"><i data-lucide="layers" style="width:16px;height:16px"></i></span> إعدادات التجميع</h3>
+      <div class="inline">
+        <div class="field"><label>أقصى طلبات للتجميع</label><input type="number" id="ord-max-batch" data-testid="ord-max-batch"></div>
+        <div class="field"><label>نصف قطر التجميع (كم)</label><input type="number" id="ord-batch-radius" step="0.5" data-testid="ord-batch-radius"></div>
+        <div class="field"><label>دقائق التنبيه قبل الوصول</label><input type="number" id="ord-prearrival" data-testid="ord-prearrival"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- AI -->
+  <div class="section" data-section="ai">
+    <div class="card">
+      <h3><span class="ico"><i data-lucide="brain" style="width:16px;height:16px"></i></span> ميزات الذكاء الاصطناعي</h3>
+      <p>المساعد الذكي يحلل ويقترح للسائق</p>
+      <div id="ai-toggles"></div>
+    </div>
+  </div>
+
+  <!-- SAUDI -->
+  <div class="section" data-section="saudi">
+    <div class="card">
+      <h3><span class="ico"><i data-lucide="flag" style="width:16px;height:16px"></i></span> ميزات سعودية</h3>
+      <p>مدفوعات محلية، إيقاف الصلاة، تنبيهات الحرارة</p>
+      <div id="saudi-toggles"></div>
+    </div>
+    <div class="card">
+      <h3><span class="ico"><i data-lucide="thermometer" style="width:16px;height:16px"></i></span> عتبة تنبيه الحرارة</h3>
+      <div class="field"><label>التنبيه عند درجة (°C)</label><input type="number" id="saudi-heat-threshold" data-testid="saudi-heat-threshold"></div>
+    </div>
+  </div>
+
+  <!-- WELLBEING -->
+  <div class="section" data-section="wellbeing">
+    <div class="card">
+      <h3><span class="ico"><i data-lucide="heart" style="width:16px;height:16px"></i></span> صحة وسلامة السائق</h3>
+      <p>SOS، تأمين، تنبيهات الإرهاق</p>
+      <div id="wellbeing-toggles"></div>
+    </div>
+    <div class="card">
+      <h3><span class="ico"><i data-lucide="phone" style="width:16px;height:16px"></i></span> جهات اتصال طوارئ SOS</h3>
+      <p>أرقام تتلقى تنبيه فوري عند ضغط زر SOS</p>
+      <div class="field"><label>رقم 1</label><input id="sos1" placeholder="05XXXXXXXX" data-testid="sos1"></div>
+      <div class="field"><label>رقم 2</label><input id="sos2" placeholder="05XXXXXXXX" data-testid="sos2"></div>
+      <div class="field"><label>رقم 3</label><input id="sos3" placeholder="05XXXXXXXX" data-testid="sos3"></div>
+    </div>
+  </div>
+
+  <!-- GAMIFICATION -->
+  <div class="section" data-section="gamification">
+    <div class="card">
+      <h3><span class="ico"><i data-lucide="trophy" style="width:16px;height:16px"></i></span> الإنجازات والتحفيز</h3>
+      <p>الترتيب، الشارات، التحديات، المنتدى</p>
+      <div id="gam-toggles"></div>
+    </div>
+  </div>
+
+  <!-- BRANCHES -->
+  <div class="section" data-section="branches">
+    <div class="card">
+      <h3><span class="ico"><i data-lucide="store" style="width:16px;height:16px"></i></span> فروعك على الخريطة</h3>
+      <p>أضف فرعاً جديداً بالضغط على الخريطة، أو من الزر</p>
+      <div id="bmap"></div>
+      <button class="btn" id="add-branch-btn" data-testid="add-branch-btn"><i data-lucide="plus" style="width:14px;height:14px"></i> إضافة فرع جديد</button>
+    </div>
+    <div class="card">
+      <h3><span class="ico"><i data-lucide="list" style="width:16px;height:16px"></i></span> الفروع المُسجَّلة</h3>
+      <div id="branches-list"></div>
+    </div>
+  </div>
+
+  <!-- ORDER -->
+  <div class="section" data-section="order">
+    <div class="card">
+      <h3><span class="ico"><i data-lucide="move-vertical" style="width:16px;height:16px"></i></span> ترتيب القوائم في تطبيق السائق</h3>
+      <p>اسحب لإعادة الترتيب. ما تخفيه هنا لا يظهر للسائق إطلاقاً</p>
+      <div class="order-list" id="order-list"></div>
+    </div>
+  </div>
+
+  <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:18px;flex-wrap:wrap">
+    <button class="btn btn-ghost" onclick="resetConfig()" data-testid="reset-btn"><i data-lucide="rotate-ccw" style="width:14px;height:14px"></i> إرجاع للافتراضي</button>
+    <button class="btn" onclick="saveConfig()" data-testid="save-btn"><i data-lucide="save" style="width:14px;height:14px"></i> حفظ كل التغييرات</button>
+  </div>
+</div>
+
+<script>
+const API = window.location.origin;
+let CFG = {}, BRANCHES = [], TOKEN = '';
+
+const TOGGLES = {
+  ui: [
+    {k:'show_live_map', n:'الخريطة الحية', d:'عرض الخريطة في الصفحة الرئيسية'},
+    {k:'show_branches_on_map', n:'عرض الفروع على الخريطة', d:'علامات للفروع مع الحالة'},
+    {k:'show_heatmap', n:'Heatmap الطلبات', d:'بقع حرارية لمناطق الطلبات الكثيرة'},
+    {k:'show_traffic', n:'حركة المرور', d:'طبقة الزحام الحي على الخريطة'},
+    {k:'dark_mode_default', n:'الوضع الداكن افتراضياً', d:'بدء التطبيق بالوضع الداكن'},
+    {k:'glance_mode', n:'وضع القيادة (Glance)', d:'أرقام أكبر وتباين عالي للقيادة'},
+    {k:'rtl_layout', n:'تخطيط من اليمين', d:'الواجهة العربية RTL'},
+  ],
+  earnings: [
+    {k:'show_surge_zones', n:'المناطق الذهبية (Surge)', d:'إظهار مناطق السعر المضاعف'},
+    {k:'show_streak_bonuses', n:'مكافآت السلسلة', d:'مكافأة على التوصيلات المتتالية'},
+    {k:'show_weekly_challenges', n:'تحديات أسبوعية', d:'تحدي + مكافأة كل أسبوع'},
+    {k:'instant_pay_enabled', n:'السحب الفوري', d:'السائق يقدر يسحب أي وقت'},
+    {k:'show_tip_tracker', n:'تتبع البقشيش', d:'عرض البقشيش المتراكم'},
+    {k:'earnings_predictor', n:'متنبئ الأرباح', d:'توقع كم يكسب لو كمل ساعتين'},
+    {k:'fuel_cost_calculator', n:'حاسبة الوقود', d:'حساب صافي الربح بعد البنزين'},
+  ],
+  orders: [
+    {k:'order_batching', n:'تجميع الطلبات', d:'استلام عدة طلبات قريبة معاً'},
+    {k:'photo_proof_required', n:'إثبات تسليم بالصورة', d:'صورة للطلب عند الباب إجبارية'},
+    {k:'contactless_delivery', n:'توصيل بدون تلامس', d:'وضع خاص لتسليم باب البيت'},
+    {k:'customer_chat', n:'دردشة مع العميل', d:'رسائل فورية داخل التطبيق'},
+    {k:'auto_translate_chat', n:'ترجمة آلية للدردشة', d:'يترجم لغة السائق ↔ العميل'},
+    {k:'pre_arrival_notification', n:'إشعار قبل الوصول', d:'إشعار للعميل قبل دقائق'},
+  ],
+  ai: [
+    {k:'standby_coach', n:'مدرّب AI', d:'يقول للسائق أين ينتظر للأرباح'},
+    {k:'voice_commands', n:'أوامر صوتية', d:'"وصلت" / "استلمت" بدل الضغط'},
+    {k:'route_memory', n:'ذاكرة الطرق', d:'يتعلم أفضل طرق السائق'},
+    {k:'photo_verification', n:'تحقق ذكي من الصور', d:'AI يتأكد من صورة التسليم'},
+    {k:'smart_predictor', n:'متنبئ ذكي', d:'يتنبأ بأرباح الساعتين القادمة'},
+  ],
+  saudi: [
+    {k:'cash_on_delivery', n:'الدفع عند الاستلام', d:'استلام نقدي مع تتبع'},
+    {k:'mada_pos', n:'مدى POS', d:'سحب من بطاقة مدى عند الباب'},
+    {k:'apple_pay_pos', n:'Apple Pay POS', d:'استقبال Apple Pay'},
+    {k:'prayer_time_pause', n:'إيقاف وقت الصلاة', d:'إيقاف تلقائي للطلبات'},
+    {k:'heat_alerts', n:'تنبيهات الحرارة', d:'تنبيه عند حر شديد'},
+    {k:'hajj_mode', n:'وضع الحاج/العمرة', d:'وضع خاص لمواسم العمرة'},
+  ],
+  wellbeing: [
+    {k:'break_timer', n:'مؤقت الراحة', d:'يذكّر السائق بأخذ راحة'},
+    {k:'fatigue_alerts', n:'تنبيهات الإرهاق', d:'تنبيه بعد ساعات طويلة'},
+    {k:'sos_button', n:'زر طوارئ SOS', d:'تنبيه فوري عند الخطر'},
+    {k:'insurance_quick_file', n:'تأمين سريع', d:'رفع مطالبة تأمين من التطبيق'},
+  ],
+  gamification: [
+    {k:'leaderboard', n:'ترتيب أسبوعي', d:'منافسة مع باقي السائقين'},
+    {k:'skills_badges', n:'شارات المهارات', d:'شارات إنجازات تظهر للعملاء'},
+    {k:'driver_forum', n:'منتدى السائقين', d:'مجتمع داخل التطبيق'},
+    {k:'achievements', n:'الإنجازات والميداليات', d:'نظام شارات شامل'},
+  ],
+};
+
+function toast(msg){
+  const t = document.createElement('div');
+  t.className = 'toast';
+  t.textContent = msg;
+  document.body.appendChild(t);
+  setTimeout(() => t.remove(), 2400);
+}
+
+async function load(){
+  // Get merchant token from localStorage (set by admin.html on login)
+  TOKEN = localStorage.getItem('zx_token') || localStorage.getItem('zerax_token') || localStorage.getItem('token') || '';
+  if (!TOKEN){
+    const params = new URLSearchParams(location.search);
+    TOKEN = params.get('t') || '';
+  }
+  if (!TOKEN){
+    alert('يجب تسجيل الدخول من لوحة التاجر أولاً');
+    location.href = '/mockups/admin.html';
+    return;
+  }
+  try {
+    const r = await fetch(API + '/api/delivery/config', {headers:{'Authorization':'Bearer ' + TOKEN}});
+    if (!r.ok) throw new Error('failed');
+    const d = await r.json();
+    CFG = d.config;
+    BRANCHES = d.branches || [];
+    renderAll();
+  } catch(e){
+    alert('تعذر تحميل الإعدادات. تأكد من تسجيل دخول التاجر.');
+  }
+}
+
+function renderAll(){
+  for (const section in TOGGLES){
+    renderToggles(section);
+  }
+  // Number inputs
+  $('earn-streak-amt').value = CFG.earnings?.streak_bonus_amount_sar || 15;
+  $('earn-streak-cnt').value = CFG.earnings?.streak_bonus_count || 3;
+  $('earn-week-target').value = CFG.earnings?.weekly_challenge_target || 50;
+  $('earn-week-reward').value = CFG.earnings?.weekly_challenge_reward_sar || 500;
+  $('earn-surge').value = CFG.earnings?.surge_multiplier || 1.5;
+  $('earn-min-payout').value = CFG.earnings?.instant_pay_min_sar || 50;
+  $('ord-max-batch').value = CFG.orders?.max_batch_size || 3;
+  $('ord-batch-radius').value = CFG.orders?.batch_radius_km || 2;
+  $('ord-prearrival').value = CFG.orders?.pre_arrival_minutes || 2;
+  $('saudi-heat-threshold').value = CFG.saudi?.heat_alert_threshold_c || 42;
+  $('brand-primary').value = CFG.branding?.primary_color || '#7c3aed';
+  $('brand-accent').value = CFG.branding?.accent_color || '#06b6d4';
+  $('brand-name').value = CFG.branding?.app_name || 'Zerax Driver';
+  $('brand-logo').value = CFG.branding?.logo_url || '';
+  const sos = CFG.wellbeing?.sos_contacts || [];
+  $('sos1').value = sos[0] || '';
+  $('sos2').value = sos[1] || '';
+  $('sos3').value = sos[2] || '';
+  renderBranches();
+  renderOrder();
+  if (window.lucide) lucide.createIcons();
+}
+
+function $(id){return document.getElementById(id)}
+
+function renderToggles(section){
+  const wrap = $(section + '-toggles');
+  if (!wrap) return;
+  wrap.innerHTML = '';
+  TOGGLES[section].forEach(t => {
+    const cur = CFG[section] && CFG[section][t.k];
+    const row = document.createElement('div');
+    row.className = 'toggle-row';
+    row.innerHTML = `
+      <div class="info">
+        <div class="nm">${t.n}</div>
+        <div class="desc">${t.d}</div>
+      </div>
+      <div class="sw ${cur ? 'on' : ''}" data-testid="tg-${section}-${t.k}"></div>
+    `;
+    row.querySelector('.sw').onclick = () => {
+      CFG[section] = CFG[section] || {};
+      CFG[section][t.k] = !CFG[section][t.k];
+      row.querySelector('.sw').classList.toggle('on');
+    };
+    wrap.appendChild(row);
+  });
+}
+
+function renderBranches(){
+  const list = $('branches-list');
+  list.innerHTML = '';
+  BRANCHES.forEach((b, i) => {
+    const row = document.createElement('div');
+    row.className = 'branch-row';
+    row.innerHTML = `
+      <div class="num"><span>${i+1}</span></div>
+      <div class="nfo">
+        <div class="nm">${b.name_ar} ${b.is_main ? '⭐' : ''}</div>
+        <div class="meta">📍 ${b.address || '—'} · 📞 ${b.phone || '—'} · ${b.lat.toFixed(4)}, ${b.lng.toFixed(4)}</div>
+      </div>
+      <select class="branch-status" data-id="${b.id}" style="padding:6px 10px;background:var(--bg);border:1px solid var(--border);border-radius:8px;color:var(--text);font-family:inherit;font-size:11px" data-testid="branch-status-${b.id}">
+        <option value="normal" ${b.capacity_status==='normal'?'selected':''}>متاح</option>
+        <option value="busy" ${b.capacity_status==='busy'?'selected':''}>مزدحم</option>
+        <option value="closed" ${b.capacity_status==='closed'?'selected':''}>مغلق</option>
+      </select>
+      <button class="btn btn-danger" data-testid="del-branch-${b.id}" style="padding:6px 10px;font-size:11px"><i data-lucide="trash-2" style="width:12px;height:12px"></i></button>
+    `;
+    row.querySelector('.branch-status').onchange = (e) => {
+      b.capacity_status = e.target.value;
+    };
+    row.querySelector('.btn-danger').onclick = async () => {
+      if (!confirm('حذف الفرع ' + b.name_ar + '؟')) return;
+      const r = await fetch(API + '/api/delivery/config/branches/' + b.id, {method:'DELETE', headers:{'Authorization':'Bearer ' + TOKEN}});
+      if (r.ok){
+        BRANCHES = BRANCHES.filter(x => x.id !== b.id);
+        renderBranches();
+        if (window.bmap) initBranchMap();
+        toast('تم حذف الفرع');
+      }
+    };
+    list.appendChild(row);
+  });
+  if (window.lucide) lucide.createIcons();
+}
+
+let bmap, bmarkers = [];
+function initBranchMap(){
+  if (bmap) bmap.remove();
+  const center = BRANCHES[0] ? [BRANCHES[0].lat, BRANCHES[0].lng] : [24.7136, 46.6753];
+  bmap = L.map('bmap').setView(center, 11);
+  L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {subdomains:'abcd'}).addTo(bmap);
+  bmarkers.forEach(m => m.remove());
+  bmarkers = [];
+  BRANCHES.forEach((b, i) => {
+    const color = b.capacity_status === 'closed' ? '#64748b' : b.capacity_status === 'busy' ? '#fbbf24' : '#10b981';
+    const html = `<div style="width:34px;height:34px;background:${color};border:3px solid #fff;border-radius:50% 50% 50% 0;transform:rotate(-45deg);box-shadow:0 4px 12px rgba(0,0,0,.3);display:flex;align-items:center;justify-content:center"><span style="transform:rotate(45deg);color:#fff;font-weight:900;font-size:13px">${i+1}</span></div>`;
+    const m = L.marker([b.lat, b.lng], {icon: L.divIcon({html, iconSize:[34,34], className:'', iconAnchor:[17,34]})}).addTo(bmap);
+    m.bindPopup(`<b>${b.name_ar}</b><br>${b.address || ''}`);
+    bmarkers.push(m);
+  });
+  bmap.on('click', async (e) => {
+    const name = prompt('اسم الفرع الجديد:');
+    if (!name) return;
+    const r = await fetch(API + '/api/delivery/config/branches', {
+      method:'POST',
+      headers:{'Authorization':'Bearer ' + TOKEN, 'Content-Type':'application/json'},
+      body: JSON.stringify({name_ar:name, lat:e.latlng.lat, lng:e.latlng.lng, address:'', phone:'', is_main: BRANCHES.length === 0, capacity_status:'normal'})
+    });
+    if (r.ok){
+      const d = await r.json();
+      BRANCHES.push(d.branch);
+      renderBranches();
+      initBranchMap();
+      toast('✓ تم إضافة الفرع');
+    }
+  });
+}
+
+$('add-branch-btn').onclick = () => {
+  toast('اضغط على الخريطة لإضافة موقع الفرع');
+};
+
+function renderOrder(){
+  const list = $('order-list');
+  list.innerHTML = '';
+  const order = CFG.feature_order || ['map','orders','earnings','coach','achievements','leaderboard','profile','settings','support'];
+  const names = {map:'🗺️ الخريطة', orders:'📦 الطلبات', earnings:'💰 الأرباح', coach:'🧠 المساعد الذكي', achievements:'🏆 الإنجازات', leaderboard:'👑 الترتيب', profile:'👤 الملف', settings:'⚙️ الإعدادات', support:'🆘 الدعم'};
+  order.forEach(id => {
+    const div = document.createElement('div');
+    div.className = 'order-item';
+    div.draggable = true;
+    div.dataset.id = id;
+    div.dataset.testid = 'order-' + id;
+    div.innerHTML = `<i data-lucide="grip-vertical" class="drag" style="width:16px;height:16px"></i> ${names[id] || id}`;
+    list.appendChild(div);
+  });
+  if (window.lucide) lucide.createIcons();
+  // Simple HTML5 drag
+  let dragSrc;
+  list.querySelectorAll('.order-item').forEach(el => {
+    el.ondragstart = e => { dragSrc = el; el.style.opacity = '0.4'; };
+    el.ondragend = e => { el.style.opacity = '1'; };
+    el.ondragover = e => { e.preventDefault(); };
+    el.ondrop = e => {
+      e.preventDefault();
+      if (dragSrc !== el){
+        const rect = el.getBoundingClientRect();
+        const after = (e.clientY - rect.top) > rect.height / 2;
+        list.insertBefore(dragSrc, after ? el.nextSibling : el);
+      }
+    };
+  });
+}
+
+async function saveConfig(){
+  // Pull numeric values into CFG
+  CFG.earnings.streak_bonus_amount_sar = parseInt($('earn-streak-amt').value) || 15;
+  CFG.earnings.streak_bonus_count = parseInt($('earn-streak-cnt').value) || 3;
+  CFG.earnings.weekly_challenge_target = parseInt($('earn-week-target').value) || 50;
+  CFG.earnings.weekly_challenge_reward_sar = parseInt($('earn-week-reward').value) || 500;
+  CFG.earnings.surge_multiplier = parseFloat($('earn-surge').value) || 1.5;
+  CFG.earnings.instant_pay_min_sar = parseInt($('earn-min-payout').value) || 50;
+  CFG.orders.max_batch_size = parseInt($('ord-max-batch').value) || 3;
+  CFG.orders.batch_radius_km = parseFloat($('ord-batch-radius').value) || 2;
+  CFG.orders.pre_arrival_minutes = parseInt($('ord-prearrival').value) || 2;
+  CFG.saudi.heat_alert_threshold_c = parseInt($('saudi-heat-threshold').value) || 42;
+  CFG.branding = CFG.branding || {};
+  CFG.branding.primary_color = $('brand-primary').value;
+  CFG.branding.accent_color = $('brand-accent').value;
+  CFG.branding.app_name = $('brand-name').value || 'Zerax Driver';
+  CFG.branding.logo_url = $('brand-logo').value;
+  CFG.wellbeing = CFG.wellbeing || {};
+  CFG.wellbeing.sos_contacts = [$('sos1').value, $('sos2').value, $('sos3').value].filter(Boolean);
+  // Feature order
+  const ord = Array.from(document.querySelectorAll('#order-list .order-item')).map(el => el.dataset.id);
+  CFG.feature_order = ord;
+  // Save
+  const r = await fetch(API + '/api/delivery/config', {
+    method:'PUT', headers:{'Authorization':'Bearer ' + TOKEN, 'Content-Type':'application/json'},
+    body: JSON.stringify({config: CFG})
+  });
+  if (r.ok){
+    toast('✓ تم حفظ كل الإعدادات');
+  } else {
+    toast('❌ فشل الحفظ');
+  }
+  // Update branch statuses if changed
+  for (const b of BRANCHES){
+    await fetch(API + '/api/delivery/config/branches/' + b.id, {
+      method:'PATCH', headers:{'Authorization':'Bearer ' + TOKEN, 'Content-Type':'application/json'},
+      body: JSON.stringify({capacity_status: b.capacity_status})
+    }).catch(() => {});
+  }
+}
+
+async function resetConfig(){
+  if (!confirm('استعادة الإعدادات الافتراضية لكل الميزات؟')) return;
+  const r = await fetch(API + '/api/delivery/config/reset', {method:'POST', headers:{'Authorization':'Bearer ' + TOKEN}});
+  if (r.ok){
+    await load();
+    toast('✓ تم الاستعادة');
+  }
+}
+
+// Tab switching
+document.querySelectorAll('.tab').forEach(t => t.onclick = () => {
+  document.querySelectorAll('.tab').forEach(x => x.classList.toggle('active', x === t));
+  document.querySelectorAll('.section').forEach(s => s.classList.toggle('active', s.dataset.section === t.dataset.tab));
+  if (t.dataset.tab === 'branches'){
+    setTimeout(initBranchMap, 100);
+  }
+});
+
+load();
+if (window.lucide) lucide.createIcons();
+</script>
+</body>
+</html>
