@@ -756,7 +756,13 @@ body.cs-fullscreen .cs-pill-fs{background:linear-gradient(135deg,#fbbf24,#f59e0b
 .cs-chat-input input:focus{outline:none;border-color:#fbbf24}
 .cs-chat-input .cs-chat-send{background:#fbbf24;color:#0a0a14;border:none;width:38px;height:38px;border-radius:10px;cursor:pointer;display:flex;align-items:center;justify-content:center}
 .cs-chat-input .cs-chat-send:hover{background:#f59e0b}
-.cs-chat-input .cs-chat-mic{background:#1f2937;border:1px solid #374151;color:#9ca3af}
+.cs-chat-input .cs-chat-mic,.cs-chat-input .cs-chat-upload{background:#1f2937;border:1px solid #374151;color:#9ca3af;width:38px;height:38px;border-radius:10px;cursor:pointer;display:flex;align-items:center;justify-content:center}
+.cs-chat-input .cs-chat-upload:hover,.cs-chat-input .cs-chat-mic:hover{border-color:#fbbf24;color:#fbbf24}
+
+/* Push chat input to BOTTOM of viewport — chat body flexes to fill */
+.cs-chat-main{justify-content:flex-end}
+.cs-chat-body-v2{flex:1 1 auto;min-height:280px}
+body.cs-fullscreen .cs-chat-body-v2{min-height:calc(100vh - 220px)}
 
 /* RIGHT — accordion tools + canvas */
 .cs-right{padding:18px;display:flex;flex-direction:column;gap:14px}
@@ -1700,10 +1706,12 @@ body.cs-fullscreen .cs-pill-fs{background:linear-gradient(135deg,#fbbf24,#f59e0b
                 <div style="font-size:11px;color:#cbd5e1;margin-top:3px">شات تفاعلي مدعوم بالذكاء الاصطناعي</div>
               </div>
             </div>
-            <!-- Corner controls: points + fullscreen toggle -->
-            <div style="display:flex;align-items:center;gap:8px;margin-right:auto">
+            <!-- Corner controls: points + معاينة + المكتبة + fullscreen toggle -->
+            <div style="display:flex;align-items:center;gap:8px;margin-right:auto;flex-wrap:wrap">
+              <button class="cs-corner-fs" onclick="csOpenGallery()" data-testid="csb-gallery" title="المكتبة"><i data-lucide="layout-grid" style="width:15px;height:15px"></i><span style="position:absolute;top:-4px;right:-4px;background:#fbbf24;color:#0a0a14;border-radius:99px;font-size:9px;font-weight:900;padding:0 5px;min-width:16px" id="cs-gallery-count">0</span></button>
+              <button class="cs-corner-fs" onclick="csOpenFullscreenPreview()" data-testid="csb-preview" title="معاينة المتجر"><i data-lucide="monitor" style="width:15px;height:15px"></i></button>
               <span class="csb-points" data-testid="cs-points" style="margin:0"><i data-lucide="coins" style="width:13px;height:13px"></i> <b id="cs-points-val">—</b><span class="csb-points-lbl"> نقطة</span></span>
-              <button class="cs-corner-fs" onclick="csToggleFullscreen()" id="cs-fs-btn" data-testid="cs-fullscreen-btn" title="كامل الشاشة (ESC للخروج)"><i data-lucide="maximize-2" style="width:15px;height:15px"></i></button>
+              <button class="cs-corner-fs" onclick="csToggleFullscreen()" id="cs-fs-btn" data-testid="cs-fullscreen-btn" title="كامل الشاشة"><i data-lucide="maximize-2" style="width:15px;height:15px"></i></button>
             </div>
           </div>
 
@@ -1719,16 +1727,10 @@ body.cs-fullscreen .cs-pill-fs{background:linear-gradient(135deg,#fbbf24,#f59e0b
                   </div>
                 </div>
               </div>
-              <!-- Studio Bar — clean toolbar above the chat input (fullscreen + points moved to header corner) -->
-              <div class="cs-studio-bar">
-                <button class="csb-action" onclick="document.getElementById('cs-ref-file').click()" title="ارفع صورة مرجعية"><i data-lucide="upload" style="width:13px;height:13px"></i> <span>رفع صورة</span></button>
-                <input type="file" id="cs-ref-file" accept="image/*" style="display:none" onchange="csAttachRef(this)">
-                <button class="csb-action" onclick="csRestartWizard()" data-testid="csb-new" title="بدء محادثة جديدة"><i data-lucide="rotate-ccw" style="width:13px;height:13px"></i> <span>محادثة جديدة</span></button>
-                <button class="csb-action" onclick="csOpenGallery()" data-testid="csb-gallery" title="المكتبة"><i data-lucide="layout-grid" style="width:13px;height:13px"></i> <span>المكتبة</span> <span class="csb-badge" id="cs-gallery-count">0</span></button>
-                <button class="csb-action" onclick="csOpenFullscreenPreview()" data-testid="csb-preview" title="معاينة المتجر"><i data-lucide="monitor" style="width:13px;height:13px"></i> <span>معاينة المتجر</span></button>
-              </div>
-              <!-- Quick suggestion chips — always available — click to fill input/send -->
-              <div class="cs-quick-chips" id="cs-quick-chips">
+              <!-- Studio toolbar REMOVED — actions moved to header (gallery/preview/fullscreen) or next to chat input (upload) -->
+              <input type="file" id="cs-ref-file" accept="image/*" style="display:none" onchange="csAttachRef(this)">
+              <!-- Quick suggestion chips — hidden by default; appear only via "ابدأ من جديد" button -->
+              <div class="cs-quick-chips" id="cs-quick-chips" style="display:none">
                 <button class="cs-quick-chip" onclick="csQuickChat('ابي بنر تخفيضات نهاية الأسبوع')">🖼️ بنر تخفيضات</button>
                 <button class="cs-quick-chip" onclick="csQuickChat('سو لي لوجو لمتجري')">🎨 لوجو متجري</button>
                 <button class="cs-quick-chip" onclick="csQuickChat('صورة قسم للملابس')">🗂️ صورة قسم</button>
@@ -1739,8 +1741,9 @@ body.cs-fullscreen .cs-pill-fs{background:linear-gradient(135deg,#fbbf24,#f59e0b
                 <button class="cs-quick-chip" onclick="csRestartWizard()">🔄 ابدأ من جديد</button>
               </div>
               <div class="cs-chat-input cs-chat-input-v2">
-                <input id="cs-chat-text" placeholder="اكتب رسالتك أو اتبع الخيارات بالأعلى..." onkeydown="if(event.key==='Enter')csSendChat()" data-testid="cs-chat-input" autocomplete="off">
-                <button class="cs-chat-mic" id="cs-mic-btn" onclick="csToggleVoice()" data-testid="cs-mic-btn" title="سجل بصوتك (تحويل إلى نص)"><i data-lucide="mic" style="width:14px;height:14px"></i></button>
+                <input id="cs-chat-text" placeholder="اكتب رسالتك أو اتبع الخيارات في المحادثة..." onkeydown="if(event.key==='Enter')csSendChat()" data-testid="cs-chat-input" autocomplete="off">
+                <button class="cs-chat-upload" onclick="document.getElementById('cs-ref-file').click()" data-testid="cs-upload-btn" title="رفع صورة"><i data-lucide="paperclip" style="width:14px;height:14px"></i></button>
+                <button class="cs-chat-mic" id="cs-mic-btn" onclick="csToggleVoice()" data-testid="cs-mic-btn" title="سجل بصوتك"><i data-lucide="mic" style="width:14px;height:14px"></i></button>
                 <button class="cs-chat-send" onclick="csSendChat()" data-testid="cs-chat-send" title="إرسال"><i data-lucide="send" style="width:14px;height:14px"></i></button>
               </div>
             </div>

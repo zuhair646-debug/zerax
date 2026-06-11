@@ -4004,12 +4004,35 @@ function csWizardStepStyle(){
   ];
   const html = `
     <div class="cs-wizard-card">
-      <div class="wiz-head"><span class="wiz-step">٥ / ٥</span><b style="color:#fbbf24;font-size:11px">النمط</b></div>
+      <div class="wiz-head"><span class="wiz-step">٥ / ٦</span><b style="color:#fbbf24;font-size:11px">النمط</b></div>
       <div class="wiz-q">✨ اختار النمط البصري:</div>
       <div class="cs-wizard-opts col-3" style="margin-top:12px">
         ${styles.map(s=>`<button class="cs-wopt" onclick="csWizardPick('style','${s.k}',this);CS_STATE.styleAr='${s.ar}'"><span class="wopt-ico" style="background:rgba(251,191,36,.15);font-size:22px">${s.ico}</span><span class="wopt-text"><b>${s.ar}</b><small>${s.desc}</small></span></button>`).join('')}
       </div>
       <button class="cs-wizard-back" onclick="csWizardStepColor()">← رجوع</button>
+    </div>`;
+  csAppendHTML(html);
+}
+
+// Step 6 — Pick number of images (NEW — replaces the fixed "4 images" assumption)
+function csWizardStepCount(){
+  CS_WIZARD.step = 'count';
+  const counts = [
+    {n:1, label:'صورة واحدة', cost:8, hint:'تجربة سريعة'},
+    {n:2, label:'صورتين', cost:16, hint:'مقارنة بسيطة'},
+    {n:4, label:'أربع صور', cost:32, hint:'⭐ الأكثر تنوعاً'},
+    {n:6, label:'ست صور', cost:48, hint:'تشكيلة واسعة'},
+    {n:8, label:'ثمان صور', cost:64, hint:'أقصى تنوع'},
+  ];
+  const html = `
+    <div class="cs-wizard-card">
+      <div class="wiz-head"><span class="wiz-step">٦ / ٦</span><b style="color:#fbbf24;font-size:11px">عدد الصور</b></div>
+      <div class="wiz-q">📦 كم صورة تبيني أولّد لك؟</div>
+      <div class="wiz-hint">💰 كل صورة = ٨ نقاط. اختار حسب رصيدك (${(typeof WALLET!=='undefined'?WALLET:0).toLocaleString('ar-EG')} نقطة متوفرة).</div>
+      <div class="cs-wizard-opts" style="margin-top:12px">
+        ${counts.map(c=>`<button class="cs-wopt" onclick="csWizardPick('count',${c.n},this)"><span class="wopt-ico" style="background:rgba(251,191,36,.15);font-size:14px">${c.n}</span><span class="wopt-text"><b>${c.label}</b><small>${c.hint} · ${c.cost} نقطة</small></span></button>`).join('')}
+      </div>
+      <button class="cs-wizard-back" onclick="csWizardStepStyle()">← رجوع</button>
     </div>`;
   csAppendHTML(html);
 }
@@ -4032,14 +4055,16 @@ function csWizardStepSummary(){
         <div class="cs-summary-row"><span>لون الخلفية</span><span style="display:inline-flex;align-items:center;gap:6px"><span style="width:14px;height:14px;border-radius:50%;background:${CS_STATE.bgColor};border:1px solid rgba(255,255,255,.2);display:inline-block"></span>${CS_STATE.bgColorName} (${CS_STATE.bgColor})</span></div>
         <div class="cs-summary-row"><span>النمط</span><span>${CS_STATE.styleAr}</span></div>
         ${CS_STATE.type==='section'?`<div class="cs-summary-row"><span>القسم</span><span>${CS_STATE.category}</span></div>`:''}
+        <div class="cs-summary-row"><span>عدد الصور</span><span>${CS_STATE.imageCount||4} صورة</span></div>
         <div class="cs-summary-row"><span>المكان</span><span>${CS_STATE.placementAr}</span></div>
       </div>
-      <div style="display:flex;gap:8px;margin-top:14px">
+      <div style="display:flex;gap:8px;margin-top:14px;flex-wrap:wrap">
         <button onclick="csWizardStepColor()" class="cs-wizard-back" style="font-size:11px;padding:8px 13px">↻ غيّر اللون</button>
         <button onclick="csWizardStepSize()" class="cs-wizard-back" style="font-size:11px;padding:8px 13px">↻ غيّر المقاس</button>
-        <button onclick="csGenerate()" data-testid="wiz-generate" style="margin-right:auto;background:linear-gradient(135deg,#fbbf24,#f59e0b);color:#0a0a14;border:none;padding:11px 22px;border-radius:11px;font-family:inherit;font-weight:900;font-size:13px;cursor:pointer;display:inline-flex;align-items:center;gap:7px;box-shadow:0 6px 18px rgba(251,191,36,.35)">
+        <button onclick="csWizardStepCount()" class="cs-wizard-back" style="font-size:11px;padding:8px 13px">↻ غيّر العدد</button>
+        <button onclick="csGenerate()" data-testid="wiz-generate" style="margin-right:auto;background:#fbbf24;color:#0a0a14;border:none;padding:11px 22px;border-radius:11px;font-family:inherit;font-weight:900;font-size:13px;cursor:pointer;display:inline-flex;align-items:center;gap:7px">
           <i data-lucide="sparkles" style="width:14px;height:14px"></i>
-          توليد 4 صور · 32 نقطة
+          توليد ${CS_STATE.imageCount||4} صور · ${(CS_STATE.imageCount||4)*8} نقطة
         </button>
       </div>
     </div>`;
@@ -4087,6 +4112,11 @@ function csWizardPick(step, value, el){
     case 'style':
       CS_STATE.style = value;
       csUserMsg(`✨ ${CS_STATE.styleAr}`);
+      setTimeout(csWizardStepCount, 200);
+      break;
+    case 'count':
+      CS_STATE.imageCount = value;
+      csUserMsg(`📦 ${value} صورة`);
       setTimeout(csWizardStepSummary, 200);
       break;
   }
@@ -4362,10 +4392,10 @@ function csToggleVoice(){
   try{ rec.start(); CS_VOICE_REC = rec; }catch(e){ toast('❌ فشل بدء التسجيل'); }
 }
 
-// Generate via Gemini Nano Banana — STRICT color enforcement
+// Generate via Gemini Nano Banana — STRICT color enforcement, dynamic count
 async function csGenerate(){
-  // Check & deduct credits (32 points)
-  const cost = 32;
+  const n = CS_STATE.imageCount || 4;
+  const cost = n * 8;
   if(typeof WALLET !== 'undefined' && WALLET < cost){
     toast(`⚠️ رصيدك غير كافٍ — تحتاج ${cost} نقطة (عندك ${WALLET})`);
     return;
@@ -4404,7 +4434,7 @@ async function csGenerate(){
     let w, h;
     if(CS_STATE.customW && CS_STATE.customH){ w = CS_STATE.customW; h = CS_STATE.customH; }
     else { [w,h] = aspectMap[CS_STATE.aspect] || [1024,1024]; }
-    const promises = [1,2,3,4].map((_,i)=>fetch(API+'/api/image-studio/generate',{
+    const promises = Array.from({length:n},(_,i)=>fetch(API+'/api/image-studio/generate',{
       method:'POST',
       headers:{'Content-Type':'application/json','Authorization':'Bearer '+(localStorage.getItem('zx_token')||'')},
       body: JSON.stringify({ prompt: finalPrompt+', variation '+(i+1), count:1, style: CS_STATE.style==='flat'?'product':CS_STATE.style, width:w, height:h })
@@ -4422,7 +4452,7 @@ async function csGenerate(){
     }
   } catch(e){
     // Fallback to placeholder so the UX is testable without AI key
-    const placeholders = [1,2,3,4].map(i=>`https://picsum.photos/seed/${CS_STATE.type}-${Date.now()}-${i}/800/600`);
+    const placeholders = Array.from({length:n},(_,i)=>`https://picsum.photos/seed/${CS_STATE.type}-${Date.now()}-${i+1}/800/600`);
     CS_STATE.generated = placeholders;
     csAppendImageGrid(placeholders, true);
     // Charge a smaller fee on fallback (2 pts) so it's not totally free but doesn't penalize the user
