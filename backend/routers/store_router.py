@@ -266,6 +266,12 @@ async def list_reviews(product_id: str):
 @router.post("/reviews")
 async def add_review(body: ReviewIn, u: dict = Depends(customer_user)):
     cust = await db.customers.find_one({"id": u["customer_id"]}, {"_id": 0})
+    # Check if customer actually purchased this product
+    has_purchase = await db.store_orders.find_one({
+        "customer_id": u["customer_id"],
+        "items.product_id": body.product_id,
+        "status": {"$in": ["completed", "delivered", "paid"]},
+    })
     doc = {
         "id": "rev" + secrets.token_urlsafe(8),
         "product_id": body.product_id,
@@ -273,11 +279,62 @@ async def add_review(body: ReviewIn, u: dict = Depends(customer_user)):
         "name": (cust or {}).get("name") or u.get("phone") or "عميل",
         "stars": body.stars,
         "text": body.text.strip(),
+        "verified_purchase": bool(has_purchase),
         "created_at": datetime.now(timezone.utc).isoformat(),
     }
     await db.product_reviews.insert_one(dict(doc))
     doc.pop("_id", None)
     return doc
+
+
+class TranslateIn(BaseModel):
+    text: str
+    target_lang: str = "ar"   # ar / en / zh / hi / fr / es / ur ...
+
+
+@router.post("/reviews/translate")
+async def translate_review(body: TranslateIn):
+    """Translate a review comment to a target language using direct LLM shim."""
+    try:
+        from emergentintegrations.llm.chat import LlmChat, UserMessage
+        lang_names = {
+            "ar":"Arabic","en":"English","zh":"Chinese (Simplified)",
+            "hi":"Hindi","fr":"French","es":"Spanish","ur":"Urdu",
+            "tr":"Turkish","fa":"Persian","bn":"Bengali","de":"German",
+        }
+        target_name = lang_names.get(body.target_lang, "Arabic")
+        chat = LlmChat(api_key="x", session_id="trans_"+secrets.token_urlsafe(4),
+                       system_message=f"You are a precise translator. Translate the given text to {target_name}. Output ONLY the translation, no explanations, no quotes.")
+        chat.with_model("gemini", "gemini-2.5-flash")
+        out = await chat.send_message(UserMessage(text=body.text))
+        return {"ok": True, "translated": (out or "").strip(), "target_lang": body.target_lang}
+    except Exception as e:
+        return {"ok": False, "translated": body.text, "error": str(e)[:200]}
+
+
+@router.get("/orders/customer/pending-reviews")
+async def customer_pending_reviews(u: dict = Depends(customer_user)):
+    """Returns delivered orders + which products this customer hasn't reviewed yet."""
+    orders = await db.store_orders.find(
+        {"customer_id": u["customer_id"], "status": {"$in": ["completed","delivered","paid"]}},
+        {"_id": 0}
+    ).sort("created_at", -1).limit(50).to_list(50)
+    # Get all this customer's review product_ids
+    revs = await db.product_reviews.find({"customer_id": u["customer_id"]}, {"_id":0,"product_id":1}).to_list(500)
+    reviewed = {r["product_id"] for r in revs}
+    pending = []
+    for o in orders:
+        for it in o.get("items", []):
+            pid = it.get("product_id") or it.get("id")
+            if pid and pid not in reviewed:
+                pending.append({
+                    "order_id": o.get("id"),
+                    "product_id": pid,
+                    "product_name": it.get("name") or it.get("title") or "منتج",
+                    "image": it.get("image") or "",
+                    "delivered_at": o.get("delivered_at") or o.get("created_at"),
+                })
+    return {"pending": pending, "count": len(pending)}
 
 
 # ╔══════════════════════════════════════════════════════════════════════════════

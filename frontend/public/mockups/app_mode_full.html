@@ -2834,6 +2834,87 @@ function confirmDeleteAccount(){
 
 // ═══════════════════════ AUTH (OTP via real backend) ═══════════════════════
 const API_BASE_CUST = window.location.origin;
+
+// ═══════════ PRODUCT REVIEWS + TRANSLATION ═══════════
+async function loadProductReviews(pid){
+  const wrap = document.getElementById('pd-reviews');
+  if (!wrap) return;
+  wrap.innerHTML = '<div style="color:#9ca3af;font-size:12px;text-align:center;padding:20px">جاري تحميل التعليقات...</div>';
+  try {
+    const r = await fetch(window.location.origin + '/api/store/reviews/' + pid);
+    const d = await r.json();
+    const items = d.items || [];
+    const langOptions = [['ar','العربية'],['en','English'],['zh','中文'],['hi','हिन्दी'],['ur','اردو'],['fr','Français'],['es','Español'],['tr','Türkçe']];
+    wrap.innerHTML = `
+      <div style="border-top:1px solid #e5e7eb;padding-top:18px">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
+          <h3 style="font-size:16px;font-weight:900;color:#0f172a;margin:0">⭐ تعليقات العملاء (${d.count})</h3>
+          ${d.count ? `<div style="color:#f59e0b;font-weight:900">${d.avg}★</div>` : ''}
+        </div>
+        ${items.length ? items.map(rv => `
+          <div style="background:#fff;border:1px solid #e5e7eb;border-radius:13px;padding:14px;margin-bottom:8px" data-testid="review-${rv.id}">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+              <div>
+                <b style="font-size:13px;color:#0f172a">${rv.name}</b>
+                ${rv.verified_purchase ? '<span style="display:inline-block;margin-right:6px;padding:2px 8px;background:rgba(16,185,129,.12);color:#059669;border-radius:99px;font-size:10px;font-weight:900">✓ شراء مؤكد</span>' : ''}
+              </div>
+              <div style="color:#f59e0b;font-weight:900;font-size:13px">${'★'.repeat(rv.stars)}${'☆'.repeat(5-rv.stars)}</div>
+            </div>
+            <div style="color:#374151;font-size:13px;line-height:1.7" id="rt-${rv.id}">${rv.text}</div>
+            <div style="display:flex;gap:6px;align-items:center;margin-top:8px;flex-wrap:wrap">
+              <div style="color:#9ca3af;font-size:10px">${new Date(rv.created_at).toLocaleDateString('ar-SA')}</div>
+              <select onchange="translateReview('${rv.id}', this.value)" data-testid="trans-${rv.id}" style="margin-right:auto;padding:3px 8px;background:#f3f4f6;border:1px solid #e5e7eb;border-radius:7px;font-family:inherit;font-size:10px;cursor:pointer;color:#0f172a">
+                <option value="">🌐 ترجمة...</option>
+                ${langOptions.map(([c,n]) => `<option value="${c}">${n}</option>`).join('')}
+              </select>
+            </div>
+          </div>
+        `).join('') : '<div style="text-align:center;color:#9ca3af;padding:30px;background:#f9fafb;border-radius:12px">لا توجد تعليقات بعد · كن أول من يعلق!</div>'}
+        <button onclick="openReviewModal('${pid}')" data-testid="add-review-btn" style="margin-top:10px;width:100%;padding:11px;background:linear-gradient(135deg,#7c3aed,#06b6d4);color:#fff;border:none;border-radius:11px;font-family:inherit;font-weight:900;cursor:pointer">✍️ أضف تعليقك</button>
+      </div>`;
+  } catch(e){ wrap.innerHTML = '<div style="color:#ef4444;text-align:center;padding:20px">تعذر تحميل التعليقات</div>'; }
+}
+
+window.translateReview = async function(revId, lang){
+  if (!lang) return;
+  const el = document.getElementById('rt-' + revId);
+  if (!el) return;
+  const original = el.dataset.original || el.textContent;
+  el.dataset.original = original;
+  el.innerHTML = '<span style="color:#9ca3af;font-size:11px">🌐 جاري الترجمة...</span>';
+  try {
+    const r = await fetch(window.location.origin + '/api/store/reviews/translate', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({text: original, target_lang: lang})
+    });
+    const d = await r.json();
+    const esc = original.replace(/'/g,"\\'");
+    el.innerHTML = `${d.translated || original}<br><a href="#" onclick="event.preventDefault();document.getElementById('rt-${revId}').textContent='${esc}'" style="color:#7c3aed;font-size:11px;font-weight:700;text-decoration:none">↩ النص الأصلي</a>`;
+  } catch(e){ el.textContent = original; }
+};
+
+window.openReviewModal = function(pid){
+  const html = `<div id="rev-mod" style="position:fixed;inset:0;background:rgba(0,0,0,.7);display:flex;align-items:center;justify-content:center;z-index:9700;padding:14px" onclick="if(event.target===this)document.getElementById('rev-mod').remove()"><div style="background:#fff;border-radius:20px;max-width:420px;width:100%;padding:24px"><h3 style="font-size:18px;font-weight:900;color:#0f172a;margin-bottom:6px">✍️ اكتب تعليقك</h3><p style="font-size:12px;color:#64748b;margin-bottom:14px">قيّم المنتج بصدق — تجربتك تساعد العملاء</p><div style="text-align:center;margin-bottom:14px" id="rev-stars">${[1,2,3,4,5].map(n=>`<span data-n="${n}" data-testid="rev-star-${n}" onclick="setRevStars(${n})" style="font-size:36px;color:#fbbf24;cursor:pointer;margin:0 3px">★</span>`).join('')}</div><textarea id="rev-text" data-testid="rev-text" placeholder="شارك تجربتك (إيجابية أو سلبية)..." style="width:100%;padding:11px;border:1.5px solid #e5e7eb;border-radius:11px;font-family:inherit;font-size:13px;margin-bottom:12px;resize:vertical;min-height:80px"></textarea><div style="display:flex;gap:8px"><button onclick="document.getElementById('rev-mod').remove()" style="flex:1;padding:11px;background:#fff;border:1px solid #e5e7eb;color:#64748b;border-radius:11px;font-family:inherit;font-weight:700;cursor:pointer">إلغاء</button><button onclick="submitReview('${pid}')" data-testid="submit-review" style="flex:2;padding:11px;background:linear-gradient(135deg,#7c3aed,#06b6d4);color:#fff;border:none;border-radius:11px;font-family:inherit;font-weight:900;cursor:pointer">نشر التعليق</button></div></div></div>`;
+  document.body.insertAdjacentHTML('beforeend', html);
+  window._revStars = 5;
+};
+window.setRevStars = function(n){ window._revStars = n; document.querySelectorAll('#rev-stars span').forEach(s => s.style.color = parseInt(s.dataset.n) <= n ? '#fbbf24' : '#cbd5e1'); };
+window.submitReview = async function(pid){
+  const text = document.getElementById('rev-text').value.trim();
+  if (text.length < 3){ alert('اكتب تعليقاً (3 أحرف على الأقل)'); return; }
+  const tok = localStorage.getItem('zx_cust_token') || localStorage.getItem('cust_token') || localStorage.getItem('customer_token') || '';
+  if (!tok){ alert('سجّل دخولك أولاً'); return; }
+  try {
+    const r = await fetch(window.location.origin + '/api/store/reviews', {
+      method:'POST', headers:{'Content-Type':'application/json', 'Authorization':'Bearer ' + tok},
+      body: JSON.stringify({product_id: pid, stars: window._revStars || 5, text})
+    });
+    if (!r.ok) throw new Error('fail');
+    document.getElementById('rev-mod').remove();
+    alert('✓ شكراً! نُشر تعليقك');
+    loadProductReviews(pid);
+  } catch(e){ alert('فشل النشر'); }
+};
 function getUser(){try{return JSON.parse(localStorage.getItem('zx_user')||'null');}catch(_){return null;}}
 function setUser(u){if(u)localStorage.setItem('zx_user',JSON.stringify(u));else localStorage.removeItem('zx_user');updateAuthUi();}
 function getCustToken(){return localStorage.getItem('zx_cust_token')||'';}
@@ -4416,6 +4497,8 @@ function showProductDetail(pid){
     else{subBtn.style.display='';subBtn.onclick=()=>{subscribeToProduct(pid);};}
   }
   document.getElementById('pd-edit-btn').onclick=(e)=>{e.stopPropagation();openStudio('product:'+pid);};
+  // Load product reviews
+  loadProductReviews(pid);
   const info=PRODUCT_INFO[pid];
   // Use rich builder if any of the new deep fields exist; fallback to legacy html
   const hasRichFields = info && (
