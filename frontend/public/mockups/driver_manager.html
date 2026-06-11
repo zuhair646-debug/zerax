@@ -98,6 +98,7 @@ html,body{background:var(--bg);color:var(--text);font-family:'IBM Plex Sans Arab
     <button class="tab" data-tab="saudi" data-testid="tab-saudi"><i data-lucide="flag" style="width:14px;height:14px"></i> السعودي</button>
     <button class="tab" data-tab="wellbeing" data-testid="tab-wellbeing"><i data-lucide="heart" style="width:14px;height:14px"></i> الصحة</button>
     <button class="tab" data-tab="gamification" data-testid="tab-gamification"><i data-lucide="trophy" style="width:14px;height:14px"></i> الإنجازات</button>
+    <button class="tab" data-tab="external" data-testid="tab-external"><i data-lucide="truck" style="width:14px;height:14px"></i> توصيل خارجي</button>
     <button class="tab" data-tab="branches" data-testid="tab-branches"><i data-lucide="store" style="width:14px;height:14px"></i> الفروع</button>
     <button class="tab" data-tab="order" data-testid="tab-order"><i data-lucide="list" style="width:14px;height:14px"></i> ترتيب القوائم</button>
   </div>
@@ -205,6 +206,31 @@ html,body{background:var(--bg);color:var(--text);font-family:'IBM Plex Sans Arab
     </div>
   </div>
 
+  <!-- EXTERNAL DELIVERY -->
+  <div class="section" data-section="external">
+    <div class="card">
+      <h3><span class="ico"><i data-lucide="truck" style="width:16px;height:16px"></i></span> خدمة التوصيل الخارجي (Mrsool-style)</h3>
+      <p>يطلب العميل توصيل / مشوار من نقطة لأي نقطة. النظام يحسب المسافة + السعر تلقائياً. العميل يدفع أونلاين مباشرة. الطلب يصلك في لوحة التحكم. السائق يشوف عمولته فقط (مو المبلغ الكامل).</p>
+      <div id="external-toggles"></div>
+    </div>
+    <div class="card">
+      <h3><span class="ico"><i data-lucide="calculator" style="width:16px;height:16px"></i></span> إعدادات التسعير</h3>
+      <p>التاجر يحدد رسومه وعمولة السائق. الفرق بين المبلغين هو ربح المتجر.</p>
+      <div class="inline">
+        <div class="field"><label>الرسم الأساسي (ر.س)</label><input type="number" id="ext-base" data-testid="ext-base"></div>
+        <div class="field"><label>سعر الكيلو (ر.س)</label><input type="number" id="ext-per-km" step="0.1" data-testid="ext-per-km"></div>
+        <div class="field"><label>حد أدنى للطلب (ر.س)</label><input type="number" id="ext-min" data-testid="ext-min"></div>
+        <div class="field"><label>حد أقصى (ر.س)</label><input type="number" id="ext-max" data-testid="ext-max"></div>
+        <div class="field"><label>خصم رحلة العودة (%)</label><input type="number" id="ext-return-disc" data-testid="ext-return-disc"></div>
+        <div class="field"><label>عمولة السائق من المبلغ (%)</label><input type="number" id="ext-driver-pct" data-testid="ext-driver-pct"></div>
+        <div class="field"><label>رسم إضافي للمشاوير (ر.س)</label><input type="number" id="ext-errand" data-testid="ext-errand"></div>
+      </div>
+      <div style="background:rgba(16,185,129,.08);border:1px dashed rgba(16,185,129,.3);padding:12px;border-radius:11px;margin-top:8px;font-size:12px;color:var(--emerald);font-weight:700">
+        💡 مثال: العميل دفع 50 ر.س، نسبة السائق 80% → السائق يشوف "أجرتك: 40 ر.س"، والمتجر يربح 10 ر.س.
+      </div>
+    </div>
+  </div>
+
   <!-- BRANCHES -->
   <div class="section" data-section="branches">
     <div class="card">
@@ -292,6 +318,10 @@ const TOGGLES = {
     {k:'driver_forum', n:'منتدى السائقين', d:'مجتمع داخل التطبيق'},
     {k:'achievements', n:'الإنجازات والميداليات', d:'نظام شارات شامل'},
   ],
+  external_delivery: [
+    {k:'enabled', n:'تفعيل التوصيل الخارجي', d:'العميل يقدر يطلب توصيل/مشوار من خارج المتجر'},
+    {k:'auto_accept', n:'قبول تلقائي', d:'الطلبات تُقبل وتُسند تلقائياً بدون تدخلك'},
+  ],
 };
 
 function toast(msg){
@@ -341,6 +371,15 @@ function renderAll(){
   $('ord-batch-radius').value = CFG.orders?.batch_radius_km || 2;
   $('ord-prearrival').value = CFG.orders?.pre_arrival_minutes || 2;
   $('saudi-heat-threshold').value = CFG.saudi?.heat_alert_threshold_c || 42;
+  // External delivery numeric fields
+  const ed = CFG.external_delivery || {};
+  $('ext-base').value = ed.base_fee_sar ?? 8;
+  $('ext-per-km').value = ed.per_km_sar ?? 1.80;
+  $('ext-min').value = ed.min_total_sar ?? 12;
+  $('ext-max').value = ed.max_total_sar ?? 250;
+  $('ext-return-disc').value = ed.return_discount_pct ?? 15;
+  $('ext-driver-pct').value = ed.driver_share_pct ?? 80;
+  $('ext-errand').value = ed.errand_extra_sar ?? 5;
   $('brand-primary').value = CFG.branding?.primary_color || '#7c3aed';
   $('brand-accent').value = CFG.branding?.accent_color || '#06b6d4';
   $('brand-name').value = CFG.branding?.app_name || 'Zerax Driver';
@@ -547,6 +586,15 @@ async function saveConfig(){
   CFG.orders.batch_radius_km = parseFloat($('ord-batch-radius').value) || 2;
   CFG.orders.pre_arrival_minutes = parseInt($('ord-prearrival').value) || 2;
   CFG.saudi.heat_alert_threshold_c = parseInt($('saudi-heat-threshold').value) || 42;
+  // External delivery numeric values
+  CFG.external_delivery = CFG.external_delivery || {};
+  CFG.external_delivery.base_fee_sar = parseFloat($('ext-base').value) || 8;
+  CFG.external_delivery.per_km_sar = parseFloat($('ext-per-km').value) || 1.80;
+  CFG.external_delivery.min_total_sar = parseFloat($('ext-min').value) || 12;
+  CFG.external_delivery.max_total_sar = parseFloat($('ext-max').value) || 250;
+  CFG.external_delivery.return_discount_pct = parseFloat($('ext-return-disc').value) || 15;
+  CFG.external_delivery.driver_share_pct = parseFloat($('ext-driver-pct').value) || 80;
+  CFG.external_delivery.errand_extra_sar = parseFloat($('ext-errand').value) || 5;
   CFG.branding = CFG.branding || {};
   CFG.branding.primary_color = $('brand-primary').value;
   CFG.branding.accent_color = $('brand-accent').value;

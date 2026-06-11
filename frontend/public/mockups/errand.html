@@ -1,0 +1,484 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<meta name="theme-color" content="#0a0a14">
+<title>Zerax — اطلب توصيل / مشوار</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;500;700;900&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://unpkg.com/lucide@latest"></script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+:root{
+  --bg:#0a0a14;--bg2:#13131f;--surface:#1a1a2e;--border:#2a2a44;
+  --text:#fff;--mute:#94a3b8;--purple:#a78bfa;--cyan:#06b6d4;
+  --amber:#fbbf24;--emerald:#10b981;--rose:#ef4444;
+  --grad:linear-gradient(135deg,#7c3aed,#06b6d4);
+}
+html.light{--bg:#f8fafc;--bg2:#fff;--surface:#fff;--border:#e2e8f0;--text:#0f172a;--mute:#64748b}
+html,body{background:var(--bg);color:var(--text);font-family:'IBM Plex Sans Arabic',system-ui,sans-serif;min-height:100vh}
+button,input,select,textarea{font-family:inherit}
+
+.layout{display:grid;grid-template-columns:1fr 420px;height:100vh}
+@media(max-width:900px){.layout{grid-template-columns:1fr;grid-template-rows:50vh 50vh}.panel{overflow-y:auto}}
+
+#map{width:100%;height:100%;border:none}
+.panel{background:var(--bg2);border-right:1px solid var(--border);overflow-y:auto;padding:18px}
+
+.head{display:flex;align-items:center;gap:12px;padding-bottom:14px;border-bottom:1px solid var(--border);margin-bottom:18px}
+.head .logo{width:42px;height:42px;border-radius:12px;background:var(--grad);display:flex;align-items:center;justify-content:center;color:#fff}
+.head h1{font-size:17px;font-weight:900}
+.head h1 .sub{display:block;font-size:11px;color:var(--mute);font-weight:500;margin-top:2px}
+.head .back{padding:8px 12px;background:var(--surface);border:1px solid var(--border);border-radius:10px;color:var(--text);text-decoration:none;font-size:12px;font-weight:700}
+
+.type-tabs{display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:5px;margin-bottom:16px}
+.type-tab{padding:10px;background:transparent;border:none;color:var(--mute);font-weight:900;font-size:12px;cursor:pointer;border-radius:8px;display:flex;flex-direction:column;align-items:center;gap:4px}
+.type-tab.active{background:var(--grad);color:#fff}
+.type-tab i{width:18px;height:18px}
+
+.section-title{font-size:13px;font-weight:900;color:var(--mute);margin:14px 0 8px;display:flex;align-items:center;gap:6px;text-transform:uppercase;letter-spacing:.5px}
+
+.field{margin-bottom:10px}
+.field label{display:block;font-size:11px;font-weight:700;color:var(--mute);margin-bottom:4px}
+.field input,.field textarea,.field select{width:100%;padding:11px 13px;background:var(--surface);border:1.5px solid var(--border);border-radius:11px;color:var(--text);font-size:13px;outline:none;transition:border-color .15s}
+.field input:focus,.field textarea:focus{border-color:var(--purple)}
+.inline{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+
+.stop-card{background:var(--surface);border:1.5px solid var(--border);border-radius:12px;padding:12px;margin-bottom:8px;position:relative}
+.stop-card .top{display:flex;align-items:center;gap:8px;margin-bottom:8px}
+.stop-card .pin{width:24px;height:24px;border-radius:50%;display:flex;align-items:center;justify-content:center;color:#fff;font-weight:900;font-size:11px;flex-shrink:0}
+.stop-card .pin.cust{background:var(--purple)}
+.stop-card .pin.stop{background:var(--cyan)}
+.stop-card .pin.ret{background:var(--amber);color:#000}
+.stop-card .lbl{flex:1;font-weight:900;font-size:13px}
+.stop-card .del-stop{background:transparent;border:none;color:var(--rose);cursor:pointer;padding:4px}
+.stop-card .meta{font-size:11px;color:var(--mute)}
+.add-stop-btn{width:100%;padding:11px;background:transparent;border:1.5px dashed var(--border);border-radius:11px;color:var(--mute);font-weight:700;font-size:12px;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px;margin-top:4px}
+.add-stop-btn:hover{border-color:var(--purple);color:var(--purple)}
+
+.toggle-row{display:flex;align-items:center;gap:10px;padding:11px;background:var(--surface);border:1px solid var(--border);border-radius:10px;margin-bottom:8px}
+.toggle-row .info{flex:1}
+.toggle-row .info .nm{font-weight:900;font-size:12px}
+.toggle-row .info .desc{font-size:10px;color:var(--mute);margin-top:2px}
+.sw{width:42px;height:24px;background:var(--border);border-radius:99px;position:relative;cursor:pointer;transition:.2s;flex-shrink:0}
+.sw::after{content:'';position:absolute;width:18px;height:18px;background:#fff;border-radius:50%;top:3px;right:3px;transition:.2s}
+.sw.on{background:var(--grad)}
+.sw.on::after{transform:translateX(-18px)}
+
+.quote-card{background:linear-gradient(135deg,rgba(124,58,237,.12),rgba(6,182,212,.12));border:1.5px solid rgba(124,58,237,.3);border-radius:14px;padding:14px;margin-top:14px}
+.quote-card .row{display:flex;justify-content:space-between;align-items:center;font-size:12px;padding:5px 0}
+.quote-card .row b{color:var(--text)}
+.quote-card .total{border-top:1px dashed var(--border);margin-top:8px;padding-top:10px;font-weight:900;font-size:18px;color:var(--text)}
+.quote-card .total .pr{color:var(--cyan);font-size:24px}
+.quote-card .legs{font-size:10px;color:var(--mute);margin-top:6px;padding:8px;background:rgba(0,0,0,.2);border-radius:8px;max-height:80px;overflow-y:auto}
+.quote-card .legs div{padding:2px 0}
+
+.pay-btn{width:100%;padding:15px;background:var(--grad);color:#fff;border:none;border-radius:13px;font-weight:900;font-size:14px;cursor:pointer;margin-top:14px;box-shadow:0 6px 22px rgba(124,58,237,.35);display:flex;align-items:center;justify-content:center;gap:8px}
+.pay-btn:active{transform:scale(.97)}
+.pay-btn:disabled{opacity:.5;cursor:not-allowed}
+
+.success-modal{position:fixed;inset:0;background:rgba(0,0,0,.85);display:none;align-items:center;justify-content:center;z-index:9999;padding:20px}
+.success-modal.show{display:flex}
+.success-modal .box{background:var(--surface);border-radius:24px;padding:28px;max-width:420px;width:100%;text-align:center}
+.success-modal .ico{font-size:60px;margin-bottom:12px}
+.success-modal h2{font-size:20px;font-weight:900;margin-bottom:8px;color:var(--emerald)}
+.success-modal p{font-size:13px;color:var(--mute);margin-bottom:14px;line-height:1.7}
+.success-modal .det{background:var(--bg2);border-radius:11px;padding:11px;margin-bottom:14px;font-size:12px;color:var(--text)}
+.success-modal .det b{color:var(--cyan)}
+.success-modal .close-btn{padding:11px 28px;background:var(--grad);color:#fff;border:none;border-radius:99px;font-weight:900;cursor:pointer}
+
+.toast{position:fixed;top:20px;left:50%;transform:translateX(-50%);padding:12px 20px;background:var(--surface);border:1.5px solid var(--purple);border-radius:12px;font-weight:900;z-index:9999;color:var(--text);box-shadow:0 12px 40px rgba(0,0,0,.4)}
+.toast.err{border-color:var(--rose);color:var(--rose)}
+
+.click-hint{position:absolute;top:14px;left:14px;background:rgba(0,0,0,.7);color:#fff;padding:8px 14px;border-radius:99px;font-size:11px;font-weight:700;z-index:500;display:none;align-items:center;gap:6px}
+.click-hint.show{display:inline-flex}
+
+/* Map markers */
+.leaflet-marker-icon.cust-pin{filter:drop-shadow(0 0 8px rgba(167,139,250,.7))}
+</style>
+</head>
+<body>
+<div class="layout">
+  <div style="position:relative">
+    <div id="map"></div>
+    <div class="click-hint" id="click-hint"><i data-lucide="mouse-pointer-click" style="width:14px;height:14px"></i> اضغط على الخريطة لإضافة نقطة</div>
+  </div>
+  <div class="panel">
+    <div class="head">
+      <div class="logo"><i data-lucide="package-2"></i></div>
+      <h1>اطلب توصيل<span class="sub">Zerax · مشوار حسب الطلب</span></h1>
+      <a href="/mockups/app_mode_full.html" class="back" data-testid="back-to-store">← متجر</a>
+    </div>
+
+    <div class="type-tabs">
+      <button class="type-tab active" data-type="delivery" data-testid="type-delivery">
+        <i data-lucide="package"></i> توصيل
+      </button>
+      <button class="type-tab" data-type="errand" data-testid="type-errand">
+        <i data-lucide="shopping-bag"></i> مشوار
+      </button>
+      <button class="type-tab" data-type="pickup" data-testid="type-pickup">
+        <i data-lucide="hand"></i> استلام
+      </button>
+    </div>
+
+    <div class="section-title"><i data-lucide="map-pin" style="width:13px;height:13px"></i> موقعك (للتسليم)</div>
+    <div class="field">
+      <button class="add-stop-btn" id="set-my-location" data-testid="set-my-location" style="border-style:solid;border-color:var(--purple);color:var(--purple)">
+        <i data-lucide="locate-fixed" style="width:14px;height:14px"></i>
+        <span id="my-loc-txt">حدد موقعك (GPS أو على الخريطة)</span>
+      </button>
+    </div>
+
+    <div class="section-title"><i data-lucide="navigation" style="width:13px;height:13px"></i> نقاط التوصيل</div>
+    <div id="stops-list"></div>
+    <button class="add-stop-btn" id="add-stop-btn" data-testid="add-stop-btn">
+      <i data-lucide="plus-circle" style="width:14px;height:14px"></i> أضف نقطة جديدة
+    </button>
+
+    <div class="section-title"><i data-lucide="settings" style="width:13px;height:13px"></i> خيارات</div>
+    <div class="toggle-row">
+      <div class="info">
+        <div class="nm">🔁 الرجوع لموقعي</div>
+        <div class="desc">السائق يرجع لك (مع خصم 15%)</div>
+      </div>
+      <div class="sw" id="sw-return" data-testid="sw-return"></div>
+    </div>
+
+    <div class="section-title"><i data-lucide="user" style="width:13px;height:13px"></i> بياناتك</div>
+    <div class="inline">
+      <div class="field"><label>الاسم</label><input id="cust-name" placeholder="اسمك الكامل" data-testid="cust-name"></div>
+      <div class="field"><label>الجوال</label><input id="cust-phone" type="tel" placeholder="05XXXXXXXX" data-testid="cust-phone"></div>
+    </div>
+    <div class="field"><label>ملاحظات (اختياري)</label><textarea id="notes" rows="2" placeholder="مثل: الباب الجانبي / احذر القطة..." data-testid="notes"></textarea></div>
+
+    <div class="section-title"><i data-lucide="credit-card" style="width:13px;height:13px"></i> طريقة الدفع</div>
+    <div class="field">
+      <select id="pay-method" data-testid="pay-method">
+        <option value="card">💳 بطاقة ائتمان (Visa / Mastercard)</option>
+        <option value="mada">🇸🇦 مدى</option>
+        <option value="apple_pay"> Apple Pay</option>
+      </select>
+    </div>
+
+    <div class="quote-card" id="quote-card" style="display:none">
+      <div class="row"><span class="muted">المسافة الإجمالية:</span> <b id="q-dist">— كم</b></div>
+      <div class="row"><span class="muted">الرسم الأساسي:</span> <b id="q-base">— ر.س</b></div>
+      <div class="row"><span class="muted">أجرة المسافة:</span> <b id="q-dist-fee">— ر.س</b></div>
+      <div class="row" id="q-extra-row" style="display:none"><span class="muted">رسم مشوار:</span> <b id="q-extra">— ر.س</b></div>
+      <div class="row"><span class="muted">المدة المتوقعة:</span> <b id="q-eta">— د</b></div>
+      <div class="row"><span class="muted">الفرع الأقرب:</span> <b id="q-branch">—</b></div>
+      <div class="legs" id="q-legs"></div>
+      <div class="total row"><span>الإجمالي:</span> <span class="pr"><span id="q-total">—</span> ر.س</span></div>
+    </div>
+
+    <button class="pay-btn" id="pay-btn" data-testid="pay-btn" disabled>
+      <i data-lucide="lock" style="width:16px;height:16px"></i> ادفع الآن واحجز السائق
+    </button>
+  </div>
+</div>
+
+<div class="success-modal" id="success">
+  <div class="box">
+    <div class="ico">✅</div>
+    <h2>تم استلام طلبك!</h2>
+    <p>دفعت بنجاح. التاجر بيتأكد من الطلب ويرسل سائق خلال دقائق.</p>
+    <div class="det">
+      رقم الطلب: <b id="ok-oid">—</b><br>
+      المبلغ المدفوع: <b id="ok-total">—</b> ر.س<br>
+      المدة المتوقعة: <b id="ok-eta">—</b> دقيقة
+    </div>
+    <button class="close-btn" onclick="document.getElementById('success').classList.remove('show')">حسناً</button>
+  </div>
+</div>
+
+<script>
+const API = window.location.origin;
+const STATE = {
+  serviceType:'delivery',
+  customer:{lat:null, lng:null, marker:null},
+  stops:[],
+  stopMarkers:[],
+  returnTrip:false,
+  merchantId:null,
+  branches:[],
+  branchMarkers:[],
+  routeLine:null,
+  pickMode:null,   // 'customer' | 'stop' | null
+  quote:null,
+};
+
+function $(id){return document.getElementById(id)}
+function toast(m, kind=''){
+  const t = document.createElement('div'); t.className='toast '+kind; t.textContent=m;
+  document.body.appendChild(t); setTimeout(()=>t.remove(), 2400);
+}
+
+// Init map
+const map = L.map('map').setView([24.7136, 46.6753], 12);
+L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {subdomains:'abcd', maxZoom:19}).addTo(map);
+
+// Fetch merchant_id from URL or default
+const params = new URLSearchParams(location.search);
+STATE.merchantId = params.get('m') || params.get('merchant_id') || '';
+
+// Load branches
+async function loadBranches(){
+  if (!STATE.merchantId){
+    // Demo mode: fetch any merchant's config
+    try {
+      const r = await fetch(API + '/api/delivery/config/public');
+      const d = await r.json();
+      STATE.branches = d.branches || [];
+    } catch(e){}
+  } else {
+    try {
+      const r = await fetch(API + '/api/delivery/config/public?merchant_id=' + STATE.merchantId);
+      const d = await r.json();
+      STATE.branches = d.branches || [];
+    } catch(e){}
+  }
+  drawBranches();
+}
+function drawBranches(){
+  STATE.branchMarkers.forEach(m => m.remove());
+  STATE.branchMarkers = [];
+  STATE.branches.forEach((b, i) => {
+    const html = `<div style="width:34px;height:34px;background:#10b981;border:3px solid #fff;border-radius:50% 50% 50% 0;transform:rotate(-45deg);display:flex;align-items:center;justify-content:center;box-shadow:0 4px 12px rgba(0,0,0,.3)"><span style="transform:rotate(45deg);color:#fff;font-weight:900;font-size:13px">🏪</span></div>`;
+    const m = L.marker([b.lat, b.lng], {icon: L.divIcon({html, iconSize:[34,34], className:'', iconAnchor:[17,34]})}).addTo(map);
+    m.bindPopup(`<b>${b.name_ar}</b><br><small>${b.address || ''}</small>`);
+    STATE.branchMarkers.push(m);
+  });
+}
+
+// Service type tabs
+document.querySelectorAll('.type-tab').forEach(t => t.onclick = () => {
+  document.querySelectorAll('.type-tab').forEach(x => x.classList.toggle('active', x === t));
+  STATE.serviceType = t.dataset.type;
+  quote();
+});
+
+// Set my location
+$('set-my-location').onclick = () => {
+  if (navigator.geolocation){
+    navigator.geolocation.getCurrentPosition((pos) => {
+      setCustomerLocation(pos.coords.latitude, pos.coords.longitude);
+    }, () => {
+      toast('GPS غير متاح — اضغط على الخريطة لتحديد موقعك');
+      STATE.pickMode = 'customer';
+      $('click-hint').classList.add('show');
+    }, {enableHighAccuracy:true, timeout:8000});
+  } else {
+    STATE.pickMode = 'customer';
+    $('click-hint').classList.add('show');
+  }
+};
+
+function setCustomerLocation(lat, lng){
+  STATE.customer.lat = lat; STATE.customer.lng = lng;
+  if (STATE.customer.marker) STATE.customer.marker.remove();
+  const html = `<div class="cust-pin" style="width:24px;height:24px;background:#a78bfa;border:4px solid #fff;border-radius:50%;box-shadow:0 0 0 5px rgba(167,139,250,.3)"></div>`;
+  STATE.customer.marker = L.marker([lat, lng], {icon: L.divIcon({html, iconSize:[24,24], className:'', iconAnchor:[12,12]}), zIndexOffset:1000}).addTo(map);
+  STATE.customer.marker.bindPopup('<b>موقعك</b>');
+  map.setView([lat, lng], 13);
+  $('my-loc-txt').textContent = `موقعك: ${lat.toFixed(4)}, ${lng.toFixed(4)} ✓`;
+  STATE.pickMode = null;
+  $('click-hint').classList.remove('show');
+  quote();
+}
+
+// Add stop
+$('add-stop-btn').onclick = () => {
+  STATE.pickMode = 'stop';
+  $('click-hint').classList.add('show');
+  toast('اضغط على الخريطة لإضافة نقطة');
+};
+
+// Map click
+map.on('click', (e) => {
+  if (STATE.pickMode === 'customer'){
+    setCustomerLocation(e.latlng.lat, e.latlng.lng);
+  } else if (STATE.pickMode === 'stop'){
+    addStop(e.latlng.lat, e.latlng.lng);
+  }
+});
+
+function addStop(lat, lng){
+  const idx = STATE.stops.length + 1;
+  const label = prompt(`اسم النقطة ${idx} (مثل: صيدلية النهدي / بيت صديقي):`, 'نقطة ' + idx) || ('نقطة ' + idx);
+  const instructions = STATE.serviceType === 'errand' ? (prompt('وش تبي السائق يجيب من هذه النقطة؟ (اختياري)', '') || '') : '';
+  STATE.stops.push({label, lat, lng, type:'stop', address:'', instructions});
+  const html = `<div style="width:30px;height:30px;background:#06b6d4;border:3px solid #fff;border-radius:50%;display:flex;align-items:center;justify-content:center;color:#fff;font-weight:900;font-size:13px;box-shadow:0 4px 12px rgba(0,0,0,.3)">${idx}</div>`;
+  const m = L.marker([lat, lng], {icon: L.divIcon({html, iconSize:[30,30], className:'', iconAnchor:[15,15]})}).addTo(map);
+  m.bindPopup(`<b>${label}</b>${instructions ? '<br>📝 '+instructions : ''}`);
+  STATE.stopMarkers.push(m);
+  STATE.pickMode = null;
+  $('click-hint').classList.remove('show');
+  renderStops();
+  quote();
+}
+
+function renderStops(){
+  const list = $('stops-list');
+  list.innerHTML = '';
+  STATE.stops.forEach((s, i) => {
+    const row = document.createElement('div');
+    row.className = 'stop-card';
+    row.dataset.testid = 'stop-' + i;
+    row.innerHTML = `
+      <div class="top">
+        <div class="pin stop">${i+1}</div>
+        <div class="lbl">${s.label}</div>
+        <button class="del-stop" data-testid="del-stop-${i}"><i data-lucide="x" style="width:14px;height:14px"></i></button>
+      </div>
+      <div class="meta">📍 ${s.lat.toFixed(4)}, ${s.lng.toFixed(4)}${s.instructions ? '<br>📝 ' + s.instructions : ''}</div>
+    `;
+    row.querySelector('.del-stop').onclick = () => {
+      STATE.stops.splice(i, 1);
+      STATE.stopMarkers[i].remove();
+      STATE.stopMarkers.splice(i, 1);
+      renderStops();
+      quote();
+    };
+    list.appendChild(row);
+  });
+  if (window.lucide) lucide.createIcons();
+}
+
+// Return trip toggle
+$('sw-return').onclick = () => {
+  $('sw-return').classList.toggle('on');
+  STATE.returnTrip = $('sw-return').classList.contains('on');
+  quote();
+};
+
+// Quote (live calc as user adds stops)
+let quoteTimer = null;
+function quote(){
+  clearTimeout(quoteTimer);
+  quoteTimer = setTimeout(_quoteNow, 300);
+}
+async function _quoteNow(){
+  if (!STATE.customer.lat || STATE.stops.length === 0){
+    $('quote-card').style.display = 'none';
+    $('pay-btn').disabled = true;
+    return;
+  }
+  // Find merchant_id if not set: pick first branch's merchant from any active doc
+  if (!STATE.merchantId){
+    // Try fetching public config to get merchant if branches non-empty
+    try {
+      const r = await fetch(API + '/api/delivery/config/public');
+      const d = await r.json();
+      // We don't have merchant_id directly in public, so fall back: ask user
+      // For demo, use the branches loaded earlier — but we need merchant_id for /quote
+    } catch(e){}
+  }
+  // If still no merchant_id, ask the backend for any merchant (demo)
+  let mid = STATE.merchantId;
+  if (!mid){
+    // Try to use a known demo merchant id - fall back to login query
+    mid = 'demo';
+  }
+  try {
+    const r = await fetch(API + '/api/delivery/external/quote', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({
+        merchant_id: mid || 'demo',
+        customer_lat: STATE.customer.lat,
+        customer_lng: STATE.customer.lng,
+        stops: STATE.stops.map(s => ({label:s.label, lat:s.lat, lng:s.lng, type:s.type, instructions:s.instructions})),
+        return_to_customer: STATE.returnTrip,
+        service_type: STATE.serviceType,
+      })
+    });
+    if (!r.ok){
+      const err = await r.text();
+      $('quote-card').style.display = 'none';
+      $('pay-btn').disabled = true;
+      console.warn('quote failed', err);
+      return;
+    }
+    const q = await r.json();
+    STATE.quote = q;
+    $('q-dist').textContent = q.distance_km + ' كم';
+    $('q-base').textContent = q.base_fee_sar + ' ر.س';
+    $('q-dist-fee').textContent = q.distance_fee_sar + ' ر.س';
+    $('q-eta').textContent = q.eta_minutes + ' د';
+    $('q-branch').textContent = q.nearest_branch ? q.nearest_branch.name_ar : 'بدون فرع';
+    $('q-total').textContent = q.total_sar;
+    if (q.extra_fee_sar > 0){
+      $('q-extra-row').style.display = 'flex';
+      $('q-extra').textContent = q.extra_fee_sar + ' ر.س';
+    } else {
+      $('q-extra-row').style.display = 'none';
+    }
+    $('q-legs').innerHTML = q.legs.map((l, i) => `<div>${i+1}. ${l.from} → ${l.to} <span style="color:var(--purple)">(${l.km} كم)</span></div>`).join('');
+    $('quote-card').style.display = 'block';
+    drawRoute(q);
+    $('pay-btn').disabled = !($('cust-name').value && /^05\d{8}$/.test($('cust-phone').value));
+  } catch(e){
+    console.warn(e);
+  }
+}
+
+function drawRoute(q){
+  if (STATE.routeLine){ STATE.routeLine.remove(); STATE.routeLine = null; }
+  const points = [];
+  if (q.nearest_branch) points.push([q.nearest_branch.lat, q.nearest_branch.lng]);
+  STATE.stops.forEach(s => points.push([s.lat, s.lng]));
+  if (STATE.returnTrip) points.push([STATE.customer.lat, STATE.customer.lng]);
+  STATE.routeLine = L.polyline(points, {color:'#a78bfa', weight:3, dashArray:'8,6', opacity:.8}).addTo(map);
+}
+
+// Live validation for pay button
+['cust-name','cust-phone'].forEach(id => {
+  $(id).oninput = () => {
+    $('pay-btn').disabled = !(STATE.quote && $('cust-name').value && /^05\d{8}$/.test($('cust-phone').value));
+  };
+});
+
+// Pay
+$('pay-btn').onclick = async () => {
+  if (!STATE.quote) return;
+  $('pay-btn').disabled = true;
+  $('pay-btn').innerHTML = '⏳ يتم الدفع...';
+  try {
+    const r = await fetch(API + '/api/delivery/external/order', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({
+        merchant_id: STATE.merchantId || 'demo',
+        customer_name: $('cust-name').value,
+        customer_phone: $('cust-phone').value,
+        customer_lat: STATE.customer.lat,
+        customer_lng: STATE.customer.lng,
+        stops: STATE.stops.map(s => ({label:s.label, lat:s.lat, lng:s.lng, type:s.type, instructions:s.instructions})),
+        return_to_customer: STATE.returnTrip,
+        service_type: STATE.serviceType,
+        payment_method: $('pay-method').value,
+        notes: $('notes').value,
+      })
+    });
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.detail || 'فشل');
+    $('ok-oid').textContent = d.order_id;
+    $('ok-total').textContent = d.total_sar;
+    $('ok-eta').textContent = d.eta_minutes;
+    $('success').classList.add('show');
+  } catch(e){
+    toast(e.message || 'فشل الدفع', 'err');
+  } finally {
+    $('pay-btn').disabled = false;
+    $('pay-btn').innerHTML = '<i data-lucide="lock" style="width:16px;height:16px"></i> ادفع الآن واحجز السائق';
+    if (window.lucide) lucide.createIcons();
+  }
+};
+
+loadBranches();
+if (window.lucide) lucide.createIcons();
+</script>
+</body>
+</html>

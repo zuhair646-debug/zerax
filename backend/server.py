@@ -3614,7 +3614,10 @@ try:
     # Driver Config Router — merchant-controlled driver app feature toggles + branches (Jun 2026)
     from routers.driver_config_router import router as _driver_cfg_router
     app.include_router(_driver_cfg_router)
-    logging.getLogger(__name__).info("Care Portal + Image/Video Studio + Delivery + Payroll + Payments + Store + Store V2 + AI + Sandbox + Theme + Driver-Config modules registered")
+    # External Delivery (Mrsool-style errand service) — Jun 2026
+    from routers.external_delivery_router import router as _ext_delivery_router
+    app.include_router(_ext_delivery_router)
+    logging.getLogger(__name__).info("Care Portal + Image/Video Studio + Delivery + Payroll + Payments + Store + Store V2 + AI + Sandbox + Theme + Driver-Config + External-Delivery modules registered")
 except Exception as _care_e:
     logging.getLogger(__name__).error(f"Failed to register care_portal module: {_care_e}", exc_info=True)
 

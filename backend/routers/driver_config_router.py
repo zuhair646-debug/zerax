@@ -137,6 +137,17 @@ DEFAULTS: Dict[str, Any] = {
         "logo_url": "",
         "app_name": "Zerax Driver",
     },
+    "external_delivery": {
+        "enabled": True,
+        "base_fee_sar": 8,
+        "per_km_sar": 1.80,
+        "min_total_sar": 12,
+        "max_total_sar": 250,
+        "return_discount_pct": 15,
+        "driver_share_pct": 80,
+        "errand_extra_sar": 5,
+        "auto_accept": False,
+    },
     "feature_order": [
         "map", "orders", "earnings", "coach", "achievements",
         "leaderboard", "profile", "settings", "support"
