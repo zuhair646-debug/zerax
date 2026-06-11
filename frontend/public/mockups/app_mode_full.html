@@ -3420,31 +3420,114 @@ function closeCheckout(){document.getElementById('checkout-modal').classList.rem
 function choosePay(id,el){
   PAYMENT_CHOSEN=id;
   document.querySelectorAll('.pay-option').forEach(e=>e.style.borderColor='#e5e7eb');
-  el.style.borderColor='#7c3aed';el.style.background='#faf5ff';
-  // Auto-submit after picking payment (existing flow). Inject scheduling into the order.
+  // For custom BNPL cards, also reset border
+  document.querySelectorAll('[data-testid^="pay-zerax-"]').forEach(e=>e.style.border='2px solid transparent');
+  if (el) { el.style.borderColor='#7c3aed'; el.style.background = el.style.background || '#faf5ff'; }
   // If scheduled mode requires a time, block submission and prompt user.
   if (window.CK_SCHED && window.CK_SCHED.mode === 'schedule' && !window.CK_SCHED.time){
     alert('اختر وقت التوصيل من قائمة "حجز موعد" أولاً');
     return;
   }
-  // Show success after a brief delay (existing demo flow)
   setTimeout(()=>{
     document.getElementById('checkout-form').style.display='none';
     document.getElementById('checkout-success').style.display='block';
-    // Inject scheduling info into success message
     const subEl = document.querySelector('#checkout-success p');
-    if (window.CK_SCHED && window.CK_SCHED.mode === 'schedule' && window.CK_SCHED.time){
-      subEl.innerHTML = `✅ موعد التوصيل: <b>${window.CK_SCHED.date} الساعة ${window.CK_SCHED.time}</b><br>📦 السائق يصلك بين <b>${window.CK_SCHED.eta_window}</b>`;
-    } else {
-      const t = (window.translations||{})[window.CURRENT_LANG||'ar'];
-      subEl.innerHTML = (t && t.order_success_sub) || 'سيتم التواصل معك للتوصيل قريباً';
+    let extra = '';
+    if (id === 'zerax_split'){
+      const total = (typeof CART !== 'undefined') ? CART.reduce((s,it) => s + (it.price * it.qty), 0) : 0;
+      extra = `<br>💳 سيتم تقسيمها على <b>4 دفعات</b> = <b>${(total/4).toFixed(0)} ر.س/شهر</b>`;
+    } else if (id === 'zerax_later'){
+      extra = `<br>🕐 ستُسدّد خلال <b>30 يوماً</b> بدون فوائد`;
     }
-    // Clear cart
+    if (window.CK_SCHED && window.CK_SCHED.mode === 'schedule' && window.CK_SCHED.time){
+      subEl.innerHTML = `✅ موعد التوصيل: <b>${window.CK_SCHED.date} الساعة ${window.CK_SCHED.time}</b><br>📦 السائق يصلك بين <b>${window.CK_SCHED.eta_window}</b>${extra}`;
+    } else {
+      subEl.innerHTML = 'سيتم التواصل معك للتوصيل قريباً' + extra;
+    }
+    // Show "Rate Your Delivery" button after a few seconds
+    setTimeout(() => {
+      if (document.getElementById('rate-btn-inject')) return;
+      const successEl = document.getElementById('checkout-success');
+      if (!successEl) return;
+      const rateBtn = document.createElement('button');
+      rateBtn.id = 'rate-btn-inject';
+      rateBtn.dataset.testid = 'rate-delivery-btn';
+      rateBtn.onclick = () => openRateModal();
+      rateBtn.style.cssText = 'margin-top:14px;width:100%;padding:12px;background:linear-gradient(135deg,#fbbf24,#f59e0b);color:#fff;border:none;border-radius:11px;font-weight:900;font-size:14px;cursor:pointer;font-family:inherit';
+      rateBtn.innerHTML = '⭐ قيّم تجربة التوصيل';
+      successEl.appendChild(rateBtn);
+    }, 2000);
     if (typeof CART !== 'undefined'){ CART.length = 0; if (typeof updateCart === 'function') updateCart(); }
   }, 400);
 }
 
-// Backend base URL used by checkout schedule API
+// ═════════ RATE DRIVER MODAL ═════════
+window.openRateModal = function(){
+  let stars = 5;
+  const html = `
+    <div id="rate-mod" style="position:fixed;inset:0;background:rgba(0,0,0,.7);display:flex;align-items:center;justify-content:center;z-index:9700;padding:14px" onclick="if(event.target===this)closeRateMod()">
+      <div style="background:#fff;border-radius:20px;max-width:380px;width:100%;padding:24px">
+        <h3 style="font-size:18px;font-weight:900;margin-bottom:6px;color:#0f172a">قيّم سائقك</h3>
+        <p style="font-size:12px;color:#64748b;margin-bottom:18px">رأيك يساعد التجار والعملاء الآخرين</p>
+        <div style="text-align:center;margin-bottom:14px">
+          <div style="width:64px;height:64px;border-radius:50%;background:linear-gradient(135deg,#7c3aed,#06b6d4);display:inline-flex;align-items:center;justify-content:center;color:#fff;font-weight:900;font-size:24px;margin-bottom:8px">س</div>
+          <div style="font-weight:900;font-size:14px;color:#0f172a">السائق</div>
+        </div>
+        <div style="text-align:center;margin-bottom:14px" id="rt-stars">
+          ${[1,2,3,4,5].map(n => `<span data-n="${n}" data-testid="star-${n}" onclick="setStars(${n})" style="font-size:36px;color:#fbbf24;cursor:pointer;margin:0 4px">★</span>`).join('')}
+        </div>
+        <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px;justify-content:center">
+          ${['سريع','مهذب','نظيف','ودود','محترف','دقيق'].map(t => `<button class="rt-tag" data-tag="${t}" data-testid="tag-${t}" onclick="toggleTag('${t}',this)" style="padding:5px 12px;border:1.5px solid #e5e7eb;background:#fff;border-radius:99px;font-family:inherit;font-size:11px;font-weight:700;cursor:pointer;color:#0f172a">${t}</button>`).join('')}
+        </div>
+        <textarea id="rt-comment" data-testid="rate-comment" placeholder="اكتب تعليق (اختياري)..." style="width:100%;padding:11px;border:1.5px solid #e5e7eb;border-radius:11px;font-family:inherit;font-size:13px;margin-bottom:12px;resize:vertical;min-height:60px"></textarea>
+        <div style="display:flex;gap:8px">
+          <button onclick="closeRateMod()" style="flex:1;padding:11px;background:#fff;border:1px solid #e5e7eb;color:#64748b;border-radius:11px;font-family:inherit;font-weight:700;cursor:pointer">لاحقاً</button>
+          <button onclick="submitRating()" data-testid="submit-rating" style="flex:2;padding:11px;background:linear-gradient(135deg,#7c3aed,#06b6d4);color:#fff;border:none;border-radius:11px;font-family:inherit;font-weight:900;cursor:pointer">إرسال التقييم</button>
+        </div>
+      </div>
+    </div>`;
+  document.body.insertAdjacentHTML('beforeend', html);
+  window._rateStars = 5; window._rateTags = [];
+};
+window.setStars = function(n){
+  window._rateStars = n;
+  document.querySelectorAll('#rt-stars span').forEach(s => {
+    s.style.color = parseInt(s.dataset.n) <= n ? '#fbbf24' : '#cbd5e1';
+  });
+};
+window.toggleTag = function(t, el){
+  window._rateTags = window._rateTags || [];
+  const i = window._rateTags.indexOf(t);
+  if (i >= 0){
+    window._rateTags.splice(i, 1);
+    el.style.background = '#fff'; el.style.color = '#0f172a'; el.style.borderColor = '#e5e7eb';
+  } else {
+    window._rateTags.push(t);
+    el.style.background = 'linear-gradient(135deg,#7c3aed,#06b6d4)'; el.style.color = '#fff'; el.style.borderColor = 'transparent';
+  }
+};
+window.closeRateMod = function(){ document.getElementById('rate-mod')?.remove(); };
+window.submitRating = async function(){
+  const comment = document.getElementById('rt-comment').value.trim();
+  try {
+    const r = await fetch(window.location.origin + '/api/delivery/ratings', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({
+        driver_id: '0552222222',
+        driver_name: 'السائق التجريبي',
+        customer_name: document.getElementById('cust-name')?.value || 'عميل',
+        customer_phone: document.getElementById('cust-phone')?.value || '',
+        stars: window._rateStars || 5,
+        comment, tags: window._rateTags || [],
+      })
+    });
+    if (!r.ok) throw new Error('fail');
+    closeRateMod();
+    alert('✓ شكراً! تم إرسال تقييمك');
+  } catch(e){
+    alert('فشل الإرسال — حاول مرة ثانية');
+  }
+};
 const API_BASE_CUST = window.location.origin;
 
 // ═══════════════════════ MAP + BRANCHES + STOCK LOGIC ═══════════════════════

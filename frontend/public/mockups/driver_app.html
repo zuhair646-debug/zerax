@@ -494,6 +494,8 @@ html.glance .btn{padding:14px 22px;font-size:15px}
       </div>
       <h3 style="font-weight:900;font-size:14px;margin:18px 0 10px">مهاراتك</h3>
       <div style="display:flex;flex-wrap:wrap;gap:6px" id="skills-list"></div>
+      <h3 style="font-weight:900;font-size:14px;margin:18px 0 10px">تقييمات العملاء</h3>
+      <div id="my-ratings"><div class="muted" style="text-align:center;padding:20px">جاري التحميل...</div></div>
     </section>
 
     <!-- ⚙️ SETTINGS -->
@@ -1395,7 +1397,61 @@ function renderProfile(){
     tag.innerHTML = `<i data-lucide="badge-check" style="width:11px;height:11px"></i> ${s}`;
     wrap.appendChild(tag);
   });
+  loadMyRatings();
   if (window.lucide) lucide.createIcons();
+}
+
+async function loadMyRatings(){
+  const phone = STATE.driver?.phone || '0552222222';
+  try {
+    const r = await fetch(API + '/api/delivery/ratings/driver/' + encodeURIComponent(phone));
+    const d = await r.json();
+    const wrap = $('#my-ratings');
+    if (!d.summary.count){
+      wrap.innerHTML = '<div class="card" style="text-align:center;color:var(--mute)">ما عندك تقييمات بعد — أكمل توصيلات تجيك تقييمات</div>';
+      return;
+    }
+    // Update header rating with real data
+    $('#drv-rating').textContent = '★'.repeat(Math.round(d.summary.avg)) + ' ' + d.summary.avg;
+    $('#pf-rating').textContent = '★'.repeat(Math.round(d.summary.avg)) + ' ' + d.summary.avg + ' (' + d.summary.count + ' تقييم)';
+    const bd = d.summary.breakdown;
+    wrap.innerHTML = `
+      <div class="card" style="margin-bottom:14px">
+        <div style="display:flex;gap:14px;align-items:center">
+          <div style="text-align:center">
+            <div style="font-size:36px;font-weight:900;color:var(--amber)">${d.summary.avg}</div>
+            <div style="color:var(--amber);font-size:16px">${'★'.repeat(Math.round(d.summary.avg))}${'☆'.repeat(5-Math.round(d.summary.avg))}</div>
+            <div class="muted" style="font-size:11px;margin-top:2px">${d.summary.count} تقييم</div>
+          </div>
+          <div style="flex:1">
+            ${['5','4','3','2','1'].map(s => {
+              const pct = d.summary.count ? (bd[s] / d.summary.count * 100) : 0;
+              return `<div style="display:flex;align-items:center;gap:7px;font-size:11px;margin-bottom:3px">
+                <span style="color:var(--mute);min-width:14px">${s}★</span>
+                <div style="flex:1;height:6px;background:var(--bg2);border-radius:99px;overflow:hidden">
+                  <div style="height:100%;background:var(--grad-warm);width:${pct}%"></div>
+                </div>
+                <span style="color:var(--mute);min-width:24px;text-align:left">${bd[s]}</span>
+              </div>`;
+            }).join('')}
+          </div>
+        </div>
+      </div>
+      ${d.ratings.map(r => `
+        <div class="card" style="margin-bottom:8px">
+          <div class="row between" style="margin-bottom:5px">
+            <div style="font-weight:900;font-size:13px">${r.customer_name}</div>
+            <div style="color:var(--amber);font-weight:900">${'★'.repeat(r.stars)}${'☆'.repeat(5-r.stars)}</div>
+          </div>
+          ${r.comment ? `<div style="font-size:12px;color:var(--text);margin-top:5px;line-height:1.6">"${r.comment}"</div>` : ''}
+          ${r.tags && r.tags.length ? `<div style="display:flex;gap:4px;flex-wrap:wrap;margin-top:7px">${r.tags.map(t => `<span class="tag t-emerald" style="font-size:9px;padding:2px 8px">${t}</span>`).join('')}</div>` : ''}
+          <div class="muted" style="font-size:10px;margin-top:6px">${new Date(r.created_at).toLocaleDateString('ar-SA')}</div>
+        </div>
+      `).join('')}
+    `;
+  } catch(e){
+    $('#my-ratings').innerHTML = '<div class="card" style="text-align:center;color:var(--rose)">تعذر تحميل التقييمات</div>';
+  }
 }
 
 // ═══════════════════════════════════════════════════════════════════

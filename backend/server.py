@@ -3623,6 +3623,9 @@ try:
     # Withdrawals (driver earnings → merchant approval) — Jun 2026
     from routers.withdrawals_router import router as _wd_router
     app.include_router(_wd_router)
+    # Driver Ratings & Reviews — Jun 2026
+    from routers.ratings_router import router as _ratings_router
+    app.include_router(_ratings_router)
     logging.getLogger(__name__).info("Care Portal + Image/Video Studio + Delivery + Payroll + Payments + Store + Store V2 + AI + Sandbox + Theme + Driver-Config + External-Delivery modules registered")
 except Exception as _care_e:
     logging.getLogger(__name__).error(f"Failed to register care_portal module: {_care_e}", exc_info=True)
