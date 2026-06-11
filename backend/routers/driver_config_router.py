@@ -175,9 +175,16 @@ class Branch(BaseModel):
     phone: Optional[str] = ""
     is_main: bool = False
     is_active: bool = True
+    is_mobile: bool = False                # Food-truck / mobile vendor mode
+    last_location_update: Optional[str] = None
     operating_hours: Dict[str, str] = Field(default_factory=lambda: {"open": "08:00", "close": "23:30"})
     capacity_status: str = "normal"  # normal / busy / closed
     drivers_assigned: List[str] = Field(default_factory=list)
+
+
+class LocationUpdate(BaseModel):
+    lat: float
+    lng: float
 
 
 # ─────────────────────────────────────────────────────────────────────────
@@ -332,6 +339,57 @@ async def delete_branch(branch_id: str, user=Depends(_merchant_user)):
         {"$set": {"branches": branches, "updated_at": datetime.now(timezone.utc).isoformat()}},
     )
     return {"ok": True, "count": len(branches)}
+
+
+# ─────────────────────────────────────────────────────────────────────────
+# Mobile-branch live location update (for Food Truck / Mobile Vendor mode)
+# Can be called either by the merchant (Bearer JWT) or by an authorized
+# device sharing the branch_id (e.g. driver app on the truck).
+# ─────────────────────────────────────────────────────────────────────────
+@router.patch("/branches/{branch_id}/location")
+async def update_branch_location(
+    branch_id: str,
+    body: LocationUpdate,
+    authorization: Optional[str] = Header(None),
+):
+    db = _db()
+    # Find which merchant owns this branch
+    doc = await db.driver_configs.find_one({"branches.id": branch_id})
+    if not doc:
+        raise HTTPException(404, "Branch not found")
+
+    # Auth: accept merchant Bearer JWT OR DriverToken (driver on the truck)
+    authorized = False
+    if authorization and authorization.startswith("Bearer "):
+        try:
+            payload = jwt.decode(authorization.split(" ", 1)[1], JWT_SECRET, algorithms=["HS256"])
+            if payload.get("user_id") == doc.get("merchant_id") or payload.get("sub") == doc.get("merchant_id"):
+                authorized = True
+        except Exception:
+            pass
+    elif authorization and authorization.lower().startswith("drivertoken "):
+        # Trust DriverToken (issued by delivery_router OTP flow)
+        authorized = True
+    if not authorized:
+        raise HTTPException(401, "Unauthorized to update this branch location")
+
+    # Find the branch and verify it's mobile
+    branches = doc.get("branches", [])
+    target = next((b for b in branches if b.get("id") == branch_id), None)
+    if not target:
+        raise HTTPException(404, "Branch not found")
+    if not target.get("is_mobile"):
+        raise HTTPException(400, "This branch is not in mobile mode — enable 'is_mobile' first")
+
+    target["lat"] = body.lat
+    target["lng"] = body.lng
+    target["last_location_update"] = datetime.now(timezone.utc).isoformat()
+
+    await db.driver_configs.update_one(
+        {"merchant_id": doc["merchant_id"]},
+        {"$set": {"branches": branches, "updated_at": datetime.now(timezone.utc).isoformat()}},
+    )
+    return {"ok": True, "branch": target}
 
 
 # ─────────────────────────────────────────────────────────────────────────

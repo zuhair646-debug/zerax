@@ -704,7 +704,36 @@ async function bootApp(){
   // Schedule background tasks
   scheduleHeatCheck();
   schedulePrayerCheck();
+  scheduleMobileBranchRefresh();
   if (window.lucide) lucide.createIcons();
+}
+
+// Refresh mobile-branch positions periodically (food truck mode)
+function scheduleMobileBranchRefresh(){
+  const hasMobile = STATE.branches.some(b => b.is_mobile);
+  if (!hasMobile) return;
+  setInterval(async () => {
+    try {
+      const r = await fetch(API + '/api/delivery/config/public', {
+        headers:{'Authorization':'DriverToken ' + STATE.token}
+      });
+      const d = await r.json();
+      const newBranches = d.branches || [];
+      // Update any moved branches
+      let moved = false;
+      newBranches.forEach(nb => {
+        const cur = STATE.branches.find(b => b.id === nb.id);
+        if (cur && nb.is_mobile && (cur.lat !== nb.lat || cur.lng !== nb.lng)){
+          cur.lat = nb.lat; cur.lng = nb.lng; cur.last_location_update = nb.last_location_update;
+          moved = true;
+        }
+      });
+      if (moved && STATE.map){
+        drawBranches();
+        toast('🚚 فرع محمول تحرّك — تم تحديث الخريطة');
+      }
+    } catch(e){}
+  }, 30000);
 }
 
 function renderHeader(){
@@ -790,13 +819,20 @@ function drawBranches(){
     ];
   }
   STATE.branches.forEach((b, i) => {
+    const isMobile = b.is_mobile;
     const color = b.capacity_status === 'closed' ? '#64748b' :
                   b.capacity_status === 'busy' ? '#fbbf24' :
+                  isMobile ? '#fbbf24' :
                   i === 0 ? '#10b981' : '#06b6d4';
-    const html = `<div style="width:36px;height:36px;background:${color};border:3px solid #fff;border-radius:50% 50% 50% 0;transform:rotate(-45deg);box-shadow:0 4px 12px rgba(0,0,0,.3);display:flex;align-items:center;justify-content:center"><span style="transform:rotate(45deg);color:#fff;font-weight:900;font-size:14px">${i+1}</span></div>`;
-    const icon = L.divIcon({html, iconSize:[36,36], className:'', iconAnchor:[18,36]});
+    const inner = isMobile ? '🚚' : (i+1);
+    const html = isMobile
+      ? `<div style="width:40px;height:40px;background:${color};border:3px solid #fff;border-radius:50%;box-shadow:0 4px 12px rgba(0,0,0,.3),0 0 0 4px rgba(251,191,36,.2);display:flex;align-items:center;justify-content:center;font-size:18px;animation:pulse 2s ease-in-out infinite">${inner}</div>`
+      : `<div style="width:36px;height:36px;background:${color};border:3px solid #fff;border-radius:50% 50% 50% 0;transform:rotate(-45deg);box-shadow:0 4px 12px rgba(0,0,0,.3);display:flex;align-items:center;justify-content:center"><span style="transform:rotate(45deg);color:#fff;font-weight:900;font-size:14px">${inner}</span></div>`;
+    const icon = L.divIcon({html, iconSize: isMobile?[40,40]:[36,36], className:'', iconAnchor: isMobile?[20,20]:[18,36]});
     const m = L.marker([b.lat, b.lng], {icon}).addTo(STATE.map);
-    m.bindPopup(`<div class="branch-popup"><b>${b.name_ar}</b>${b.is_main ? '<span style="color:#10b981;font-size:11px">⭐ رئيسي</span><br>':''}<small>📍 ${b.address || 'الرياض'}</small><br><small>📞 ${b.phone || 'غير محدد'}</small><br><small>الحالة: <b style="color:${color}">${b.capacity_status === 'busy' ? 'مزدحم' : b.capacity_status === 'closed' ? 'مغلق' : 'متاح'}</b></small></div>`);
+    const lastUpd = b.last_location_update ? `<br><small style="color:#06b6d4">📍 آخر تحديث: ${new Date(b.last_location_update).toLocaleTimeString('ar-SA',{hour:'2-digit',minute:'2-digit'})}</small>` : '';
+    const mobileTag = isMobile ? '<br><small style="color:#fbbf24;font-weight:900">🚚 فرع محمول — موقع متغير</small>' : '';
+    m.bindPopup(`<div class="branch-popup"><b>${b.name_ar}</b>${b.is_main ? '<span style="color:#10b981;font-size:11px">⭐ رئيسي</span><br>':''}${mobileTag}<small>📍 ${b.address || 'الرياض'}</small><br><small>📞 ${b.phone || 'غير محدد'}</small><br><small>الحالة: <b style="color:${color}">${b.capacity_status === 'busy' ? 'مزدحم' : b.capacity_status === 'closed' ? 'مغلق' : 'متاح'}</b></small>${lastUpd}</div>`);
     STATE.markers.branches.push(m);
   });
 }

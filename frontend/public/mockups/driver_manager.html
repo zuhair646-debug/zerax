@@ -386,23 +386,72 @@ function renderBranches(){
   BRANCHES.forEach((b, i) => {
     const row = document.createElement('div');
     row.className = 'branch-row';
+    const mobileTag = b.is_mobile ? '<span style="display:inline-flex;align-items:center;gap:3px;padding:2px 7px;border-radius:99px;background:rgba(251,191,36,.15);color:var(--amber);font-size:10px;font-weight:900;margin-right:5px">🚚 محمول</span>' : '';
+    const lastUpd = b.last_location_update ? `<span style="color:var(--cyan)"> · آخر تحديث: ${new Date(b.last_location_update).toLocaleTimeString('ar-SA',{hour:'2-digit',minute:'2-digit'})}</span>` : '';
     row.innerHTML = `
       <div class="num"><span>${i+1}</span></div>
       <div class="nfo">
-        <div class="nm">${b.name_ar} ${b.is_main ? '⭐' : ''}</div>
-        <div class="meta">📍 ${b.address || '—'} · 📞 ${b.phone || '—'} · ${b.lat.toFixed(4)}, ${b.lng.toFixed(4)}</div>
+        <div class="nm">${b.name_ar} ${b.is_main ? '⭐' : ''} ${mobileTag}</div>
+        <div class="meta">📍 ${b.address || '—'} · 📞 ${b.phone || '—'} · ${b.lat.toFixed(4)}, ${b.lng.toFixed(4)}${lastUpd}</div>
       </div>
-      <select class="branch-status" data-id="${b.id}" style="padding:6px 10px;background:var(--bg);border:1px solid var(--border);border-radius:8px;color:var(--text);font-family:inherit;font-size:11px" data-testid="branch-status-${b.id}">
-        <option value="normal" ${b.capacity_status==='normal'?'selected':''}>متاح</option>
-        <option value="busy" ${b.capacity_status==='busy'?'selected':''}>مزدحم</option>
-        <option value="closed" ${b.capacity_status==='closed'?'selected':''}>مغلق</option>
-      </select>
-      <button class="btn btn-danger" data-testid="del-branch-${b.id}" style="padding:6px 10px;font-size:11px"><i data-lucide="trash-2" style="width:12px;height:12px"></i></button>
+      <div style="display:flex;flex-direction:column;gap:4px;align-items:flex-end">
+        <label style="display:flex;align-items:center;gap:5px;font-size:10px;font-weight:700;color:var(--mute);cursor:pointer">
+          <input type="checkbox" class="mobile-toggle" data-id="${b.id}" ${b.is_mobile ? 'checked' : ''} data-testid="mobile-toggle-${b.id}" style="accent-color:var(--amber);cursor:pointer"> فرع محمول
+        </label>
+        <select class="branch-status" data-id="${b.id}" style="padding:6px 10px;background:var(--bg);border:1px solid var(--border);border-radius:8px;color:var(--text);font-family:inherit;font-size:11px" data-testid="branch-status-${b.id}">
+          <option value="normal" ${b.capacity_status==='normal'?'selected':''}>متاح</option>
+          <option value="busy" ${b.capacity_status==='busy'?'selected':''}>مزدحم</option>
+          <option value="closed" ${b.capacity_status==='closed'?'selected':''}>مغلق</option>
+        </select>
+      </div>
+      ${b.is_mobile ? `<button class="btn btn-ghost update-loc" data-id="${b.id}" data-testid="update-loc-${b.id}" style="padding:6px 10px;font-size:11px"><i data-lucide="map-pin" style="width:12px;height:12px"></i> تحديث الموقع</button>` : ''}
+      <button class="btn btn-danger del-br" data-id="${b.id}" data-testid="del-branch-${b.id}" style="padding:6px 10px;font-size:11px"><i data-lucide="trash-2" style="width:12px;height:12px"></i></button>
     `;
-    row.querySelector('.branch-status').onchange = (e) => {
-      b.capacity_status = e.target.value;
+    row.querySelector('.branch-status').onchange = (e) => { b.capacity_status = e.target.value; };
+    row.querySelector('.mobile-toggle').onchange = async (e) => {
+      const checked = e.target.checked;
+      const r = await fetch(API + '/api/delivery/config/branches/' + b.id, {
+        method:'PATCH', headers:{'Authorization':'Bearer ' + TOKEN, 'Content-Type':'application/json'},
+        body: JSON.stringify({is_mobile: checked})
+      });
+      if (r.ok){
+        b.is_mobile = checked;
+        renderBranches();
+        toast(checked ? '🚚 تم تفعيل وضع الفرع المحمول' : '🏠 تم تثبيت الفرع في موقعه الحالي');
+      }
     };
-    row.querySelector('.btn-danger').onclick = async () => {
+    const updLoc = row.querySelector('.update-loc');
+    if (updLoc){
+      updLoc.onclick = () => {
+        if (!navigator.geolocation){ toast('GPS غير متاح في هذا المتصفح'); return; }
+        updLoc.disabled = true;
+        updLoc.innerHTML = '<i data-lucide="loader-2" style="width:12px;height:12px"></i> جاري...';
+        if (window.lucide) lucide.createIcons();
+        navigator.geolocation.getCurrentPosition(async (pos) => {
+          const lat = pos.coords.latitude, lng = pos.coords.longitude;
+          const r = await fetch(API + '/api/delivery/config/branches/' + b.id + '/location', {
+            method:'PATCH', headers:{'Authorization':'Bearer ' + TOKEN, 'Content-Type':'application/json'},
+            body: JSON.stringify({lat, lng})
+          });
+          if (r.ok){
+            const d = await r.json();
+            b.lat = d.branch.lat; b.lng = d.branch.lng;
+            b.last_location_update = d.branch.last_location_update;
+            renderBranches();
+            initBranchMap();
+            toast('✓ تم تحديث موقع الفرع المحمول');
+          } else {
+            toast('❌ فشل التحديث');
+          }
+          updLoc.disabled = false;
+        }, (err) => {
+          toast('❌ تعذر الحصول على الموقع: ' + (err.message || ''));
+          updLoc.disabled = false;
+          renderBranches();
+        }, {enableHighAccuracy: true, timeout: 10000});
+      };
+    }
+    row.querySelector('.del-br').onclick = async () => {
       if (!confirm('حذف الفرع ' + b.name_ar + '؟')) return;
       const r = await fetch(API + '/api/delivery/config/branches/' + b.id, {method:'DELETE', headers:{'Authorization':'Bearer ' + TOKEN}});
       if (r.ok){
