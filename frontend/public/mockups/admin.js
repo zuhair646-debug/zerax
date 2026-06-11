@@ -3834,7 +3834,7 @@ function csWizardStepType(){
   CS_WIZARD.step = 'type';
   const html = `
     <div class="cs-wizard-card">
-      <div class="wiz-head"><span class="wiz-step">١ / ٥</span><b style="color:#fbbf24;font-size:11px">وش رايك نسوي اليوم؟</b></div>
+      <div class="wiz-head"><span class="wiz-step">١ / ٧</span><b style="color:#fbbf24;font-size:11px">وش رايك نسوي اليوم؟</b></div>
       <div class="wiz-q">اختر نوع التصميم — وأنا معاك للنهاية 🎨</div>
       <div class="cs-wizard-opts col-2">
         <button class="cs-wopt" onclick="csWizardPick('type','banner', this)" data-testid="wiz-type-banner">
@@ -3870,7 +3870,7 @@ function csWizardStepIdea(){
   const sugs = ideas[CS_STATE.type] || [];
   const html = `
     <div class="cs-wizard-card">
-      <div class="wiz-head"><span class="wiz-step">٢ / ٦</span><b style="color:#fbbf24;font-size:11px">الفكرة</b></div>
+      <div class="wiz-head"><span class="wiz-step">٢ / ٧</span><b style="color:#fbbf24;font-size:11px">الفكرة</b></div>
       <div class="wiz-q">🎯 اختر فكرة جاهزة أو اضغط "غير ذلك" واكتبها بصندوق الكتابة:</div>
       <div class="cs-wizard-opts" style="margin-top:12px">
         ${sugs.map(s=>`<button class="cs-wopt" onclick="csWizardPick('idea','${s.replace(/'/g,'')}',this)"><span class="wopt-text"><b style="font-size:11.5px">${s}</b></span></button>`).join('')}
@@ -3919,7 +3919,7 @@ function csWizardStepSize(){
   const opts = recs[CS_STATE.type] || recs.general;
   const html = `
     <div class="cs-wizard-card">
-      <div class="wiz-head"><span class="wiz-step">٣ / ٥</span><b style="color:#fbbf24;font-size:11px">المقاس</b></div>
+      <div class="wiz-head"><span class="wiz-step">٣ / ٧</span><b style="color:#fbbf24;font-size:11px">المقاس</b></div>
       <div class="wiz-q">📐 اختار المقاس المناسب لمكان النشر:</div>
       <div class="wiz-hint">💡 المقاسات الموصى بها لـ "${ {banner:'البنر',logo:'اللوجو',section:'صورة القسم',general:'الصورة العامة'}[CS_STATE.type] }" حسب أفضل الممارسات في متجر Zenrex.</div>
       <div class="cs-wizard-opts" style="margin-top:12px">
@@ -3959,7 +3959,7 @@ function csWizardStepColor(){
   ];
   const html = `
     <div class="cs-wizard-card">
-      <div class="wiz-head"><span class="wiz-step">٤ / ٥</span><b style="color:#fbbf24;font-size:11px">اللون</b></div>
+      <div class="wiz-head"><span class="wiz-step">٤ / ٧</span><b style="color:#fbbf24;font-size:11px">اللون</b></div>
       <div class="wiz-q">🎨 وش لون الخلفية اللي تتخيلها؟</div>
       <div class="wiz-hint">⛓️ الذكاء الاصطناعي ملزم باللون اللي تختاره — مايحيد عنه. لو تبي لون غير الموجود، اختر "لون آخر" واكتبه.</div>
       <div class="cs-wizard-opts col-3" style="margin-top:12px">
@@ -3975,7 +3975,7 @@ function csWizardStepColor(){
 function csWizardAskCustomColor(){
   const html = `
     <div class="cs-wizard-card">
-      <div class="wiz-head"><span class="wiz-step">٤ / ٥</span><b style="color:#fbbf24;font-size:11px">لون مخصص</b></div>
+      <div class="wiz-head"><span class="wiz-step">٤ / ٧</span><b style="color:#fbbf24;font-size:11px">لون مخصص</b></div>
       <div class="wiz-q">✏️ اكتب اللون اللي تبيه (بالعربي أو الإنجليزي أو hex):</div>
       <div class="wiz-hint">أمثلة: "أزرق سماوي ناعم" · "wine burgundy" · "#5b21b6"</div>
       <div style="margin-top:12px;display:flex;gap:6px">
@@ -4008,7 +4008,7 @@ function csWizardStepStyle(){
   ];
   const html = `
     <div class="cs-wizard-card">
-      <div class="wiz-head"><span class="wiz-step">٥ / ٦</span><b style="color:#fbbf24;font-size:11px">النمط</b></div>
+      <div class="wiz-head"><span class="wiz-step">٥ / ٧</span><b style="color:#fbbf24;font-size:11px">النمط</b></div>
       <div class="wiz-q">✨ اختار النمط البصري:</div>
       <div class="cs-wizard-opts col-3" style="margin-top:12px">
         ${styles.map(s=>`<button class="cs-wopt" onclick="csWizardPick('style','${s.k}',this);CS_STATE.styleAr='${s.ar}'"><span class="wopt-ico" style="background:rgba(251,191,36,.15);font-size:22px">${s.ico}</span><span class="wopt-text"><b>${s.ar}</b><small>${s.desc}</small></span></button>`).join('')}
@@ -4030,7 +4030,7 @@ function csWizardStepCount(){
   ];
   const html = `
     <div class="cs-wizard-card">
-      <div class="wiz-head"><span class="wiz-step">٦ / ٦</span><b style="color:#fbbf24;font-size:11px">عدد الصور</b></div>
+      <div class="wiz-head"><span class="wiz-step">٦ / ٧</span><b style="color:#fbbf24;font-size:11px">عدد الصور</b></div>
       <div class="wiz-q">📦 كم صورة تبيني أولّد لك؟</div>
       <div class="wiz-hint">💰 كل صورة = ٨ نقاط. اختار حسب رصيدك (${(typeof WALLET!=='undefined'?WALLET:0).toLocaleString('ar-EG')} نقطة متوفرة).</div>
       <div class="cs-wizard-opts" style="margin-top:12px">
@@ -4054,7 +4054,7 @@ function csWizardStepSummary(){
       <div class="wiz-q">جمعت كل اختياراتك — راجع وولّد 🚀</div>
       <div class="cs-summary">
         <div class="cs-summary-row"><span>النوع</span><span>${typeLabels[CS_STATE.type]||CS_STATE.type}</span></div>
-        <div class="cs-summary-row"><span>الفكرة</span><span style="max-width:60%;text-align:left;direction:rtl">${CS_STATE._chatPrompt || '—'}</span></div>
+        ${CS_STATE.finalConcept ? `<div class="cs-summary-row" style="background:rgba(251,191,36,.08);padding:10px;border-radius:8px;margin:6px 0;border:1px solid rgba(251,191,36,.3)"><span style="color:#fbbf24;font-weight:900">💎 الفكرة النهائية</span><span style="max-width:70%;text-align:left;direction:rtl;color:#fff;font-weight:600">${CS_STATE.finalConcept}</span></div>` : `<div class="cs-summary-row"><span>الفكرة</span><span style="max-width:60%;text-align:left;direction:rtl">${CS_STATE._chatPrompt || '—'}</span></div>`}
         <div class="cs-summary-row"><span>المقاس</span><span>${sizeLabel}</span></div>
         <div class="cs-summary-row"><span>لون الخلفية</span><span style="display:inline-flex;align-items:center;gap:6px"><span style="width:14px;height:14px;border-radius:50%;background:${CS_STATE.bgColor};border:1px solid rgba(255,255,255,.2);display:inline-block"></span>${CS_STATE.bgColorName} (${CS_STATE.bgColor})</span></div>
         <div class="cs-summary-row"><span>النمط</span><span>${CS_STATE.styleAr}</span></div>
@@ -4121,9 +4121,39 @@ function csWizardPick(step, value, el){
     case 'count':
       CS_STATE.imageCount = value;
       csUserMsg(`📦 ${value} صورة`);
+      setTimeout(csWizardStepFinalConcept, 200);
+      break;
+    case 'finalConcept':
+      // value is the detailed final concept text from user
+      CS_STATE.finalConcept = value;
+      CS_STATE._chatPrompt = value; // overwrite with the LATEST, most detailed version
+      csUserMsg(`💎 ${value}`);
       setTimeout(csWizardStepSummary, 200);
       break;
   }
+}
+
+// Step 7 — FINAL CONCEPT — user writes the detailed creative idea in the main chat
+// (this is the most important step — replaces "AI guesses on its own")
+function csWizardStepFinalConcept(){
+  CS_WIZARD.step = 'finalConcept';
+  CS_WIZARD.awaitingCustom = 'finalConcept';
+  const html = `
+    <div class="cs-wizard-card">
+      <div class="wiz-head"><span class="wiz-step">٧ / ٧</span><b style="color:#10b981;font-size:11px">الفكرة النهائية المفصّلة</b></div>
+      <div class="wiz-q">💎 خلاص جمعت الإعدادات التقنية. الحين <b style="color:#fbbf24">اكتب فكرتك بالتفصيل</b> في صندوق الكتابة بالأسفل 👇</div>
+      <div class="wiz-hint">
+        ✍️ <b>كل ما كتبت تفاصيل أكثر، كانت النتيجة أدق.</b><br>
+        مثال: <i>"لوجو لمتجر ملابس باسم 'الذوق' — حروف عربية أنيقة بخط ثلث، مع رمز ورقة شجر ذهبية فوق الحرف الأول، خلفية سوداء، طابع راقي ومستوحى من التراث السعودي"</i><br><br>
+        🔒 الذكاء ملزم بـ <b>كل كلمة</b> تكتبها — مايضيف من عنده ومايحذف.
+      </div>
+      <button class="cs-wizard-back" onclick="csWizardStepCount()">← رجوع</button>
+    </div>`;
+  csAppendHTML(html);
+  setTimeout(()=>{
+    const inp = document.getElementById('cs-chat-text');
+    if(inp){ inp.focus(); inp.placeholder = '💎 اكتب فكرتك النهائية بالتفصيل هنا...'; }
+  }, 100);
 }
 
 // Section category sub-step (only when type=section)
@@ -4349,6 +4379,10 @@ async function csSendChat(){
     if(step === 'idea'){
       CS_STATE._chatPrompt = txt;
       setTimeout(csWizardStepSize, 200);
+    } else if(step === 'finalConcept'){
+      CS_STATE.finalConcept = txt;
+      CS_STATE._chatPrompt = txt; // The detailed final concept takes priority
+      setTimeout(csWizardStepSummary, 200);
     } else if(step === 'color'){
       const isHex = /^#[0-9a-f]{6}$/i.test(txt);
       CS_STATE.bgColor = isHex ? txt : '#7c3aed';
