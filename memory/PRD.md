@@ -344,6 +344,28 @@ User purchased `zenrex.ai` from Porkbun (registered until Jun 11 2028) and asked
 ## 📧 Owner Email Forwarding (Porkbun → Gmail)
 - All `@zenrex.ai` mail forwards to **`zenrex.ai@gmail.com`** via Porkbun Email Forwarding.
 
+## 🎨 Creative Studio v2 (Jun 11 2026) — Conversational Wizard
+**Full redesign per user feedback (3 iterations in one session):**
+
+### Final architecture
+- **Top-level sidebar nav item** "🎨 الاستوديو الإبداعي" (NOT inside product modal)
+- **Fullscreen toggle**: hides app sidebar/topbar/onboarding; chat fills viewport (ESC to exit)
+- **Conversational wizard** inside the chat (5 steps + section sub-step + summary):
+  1. Type (banner/logo/section/general) — 4 interactive cards
+  2. Idea — 4 type-specific suggestions + free text input
+  3. Size — smart per-type recommendations with hints ("✅ Recommended for homepage hero", "⚠️ Too small")
+  4. Color — 15 popular colors + "🎨 لون آخر" opens free-text input (Arabic/English/hex all valid)
+  5. Style — 6 visual styles
+  - Final summary card + Generate
+- **STRICT color enforcement** in prompt: color name repeated 3× with "MUST be / DO NOT use other"
+- **In-chat image grid** as bot message with 4 action buttons (اعتماد/حفظ ووضع/تحميل/ولّد أفضل)
+- **Realistic placement preview** inline below approved images (mini hero/category-tile/promo mockup)
+- **Fullscreen storefront preview** overlay: real mock of `zenrex.ai/store/...` with hero banner + categories grid; new images get golden "جديد" badge
+- **Publish to storefront** button in fullscreen preview → saves `creative_library` to `merchant_themes` collection on MongoDB Atlas
+
+### Files
+- `frontend/public/mockups/admin.html` — new page (#creative-studio), wizard CSS, fullscreen styles
+- `frontend/public/mockups/admin.js` — `CS_STATE`, `CS_WIZARD`, `csWizardStep*`, `csToggleFullscreen`, `csOpenFullscreenPreview`, `csPublishToStorefront`
 ## 🎨 Color System Overhaul (Jun 11 2026)
 **Bug fix + major enhancement to Product Studio color picker.**
 

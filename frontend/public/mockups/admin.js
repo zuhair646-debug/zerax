@@ -3788,6 +3788,419 @@ function csPickPlace(p, ar, el){
   const h = document.getElementById('cs-place-hint'); if(h) h.textContent = ar;
 }
 
+// ═══════════════════════════════════════════════════════════════════
+// FULLSCREEN MODE — chat takes the whole viewport (hides app shell)
+// ═══════════════════════════════════════════════════════════════════
+function csToggleFullscreen(){
+  const on = document.body.classList.toggle('cs-fullscreen');
+  const btn = document.getElementById('cs-fs-btn');
+  if(btn){
+    btn.innerHTML = on
+      ? '<i data-lucide="minimize-2" style="width:13px;height:13px"></i> <span class="hide-mobile">خروج</span>'
+      : '<i data-lucide="maximize-2" style="width:13px;height:13px"></i> <span class="hide-mobile">كامل الشاشة</span>';
+    btn.title = on ? 'خروج من الوضع الكامل' : 'شات بكامل الشاشة';
+  }
+  if(window.lucide) lucide.createIcons();
+  // ESC to exit
+  if(on){
+    const handler = (e)=>{ if(e.key==='Escape'){ csToggleFullscreen(); document.removeEventListener('keydown', handler); } };
+    document.addEventListener('keydown', handler);
+  }
+}
+function csToggleSidebar(){
+  document.body.classList.toggle('cs-tools-collapsed');
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// CONVERSATIONAL WIZARD — guides user step-by-step inside the chat
+// Steps: TYPE → IDEA → SIZE → COLOR → STYLE → SUMMARY → GENERATE
+// ═══════════════════════════════════════════════════════════════════
+const CS_WIZARD = {
+  step: 'type',
+  done: false,
+};
+
+function csRestartWizard(){
+  const body = document.getElementById('cs-chat-body');
+  if(body) body.innerHTML = '';
+  CS_WIZARD.step = 'type'; CS_WIZARD.done = false;
+  // Reset state to defaults
+  CS_STATE._chatPrompt = ''; CS_STATE.customW = null; CS_STATE.customH = null;
+  csWizardStepType();
+}
+
+// Step 1 — Pick type (banner/logo/section/general)
+function csWizardStepType(){
+  CS_WIZARD.step = 'type';
+  const html = `
+    <div class="cs-wizard-card">
+      <div class="wiz-head"><span class="wiz-step">١ / ٥</span><b style="color:#fbbf24;font-size:11px">ابدأ هنا</b></div>
+      <div class="wiz-q">أهلاً! 👋 وش حابب نصمم اليوم؟</div>
+      <div class="cs-wizard-opts col-2">
+        <button class="cs-wopt" onclick="csWizardPick('type','banner', this)" data-testid="wiz-type-banner">
+          <span class="wopt-ico" style="background:linear-gradient(135deg,#7c3aed,#ec4899);color:#fff"><i data-lucide="image" style="width:18px;height:18px"></i></span>
+          <span class="wopt-text"><b>🖼️ بنر إعلاني</b><small>عرض/تخفيضات/إعلان كبير</small></span>
+        </button>
+        <button class="cs-wopt" onclick="csWizardPick('type','logo', this)" data-testid="wiz-type-logo">
+          <span class="wopt-ico" style="background:linear-gradient(135deg,#fbbf24,#f59e0b);color:#0a0a14"><i data-lucide="hexagon" style="width:18px;height:18px"></i></span>
+          <span class="wopt-text"><b>🎨 لوجو</b><small>هوية بصرية للمتجر</small></span>
+        </button>
+        <button class="cs-wopt" onclick="csWizardPick('type','section', this)" data-testid="wiz-type-section">
+          <span class="wopt-ico" style="background:linear-gradient(135deg,#10b981,#059669);color:#fff"><i data-lucide="layout-grid" style="width:18px;height:18px"></i></span>
+          <span class="wopt-text"><b>🗂️ صورة قسم</b><small>ملابس/جوالات/عطور...</small></span>
+        </button>
+        <button class="cs-wopt" onclick="csWizardPick('type','general', this)" data-testid="wiz-type-general">
+          <span class="wopt-ico" style="background:linear-gradient(135deg,#0ea5e9,#3b82f6);color:#fff"><i data-lucide="sparkles" style="width:18px;height:18px"></i></span>
+          <span class="wopt-text"><b>✨ صورة عامة</b><small>إعلان داخلي حر</small></span>
+        </button>
+      </div>
+    </div>`;
+  csAppendHTML(html);
+}
+
+// Step 2 — Describe the idea (free text + quick chips)
+function csWizardStepIdea(){
+  CS_WIZARD.step = 'idea';
+  const ideas = {
+    banner: ['تخفيضات نهاية الأسبوع','عرض رمضان الكبير','تشكيلة صيف 2026','عروض الجمعة البيضاء'],
+    logo: ['متجر إلكتروني عام','مقهى مينيمالي','محل رياضي','عطور فاخرة'],
+    section: ['الأكثر مبيعاً','الأحدث','عروض حصرية','تشكيلة جديدة'],
+    general: ['إعلان عودة المدارس','حملة الولاء','إعلان منتج جديد','تذكير عربة'],
+  };
+  const sugs = ideas[CS_STATE.type] || [];
+  const html = `
+    <div class="cs-wizard-card">
+      <div class="wiz-head"><span class="wiz-step">٢ / ٥</span><b style="color:#fbbf24;font-size:11px">الفكرة</b></div>
+      <div class="wiz-q">حلو! 🎯 الحين اكتب فكرتك بكلامك الطبيعي — أو اختر اقتراح سريع:</div>
+      <div class="wiz-hint">💡 كل ما كانت الفكرة دقيقة، كانت النتيجة أحلى. اذكر: المناسبة + الجو + أي تفاصيل بصرية</div>
+      <div class="cs-wizard-opts col-2" style="margin-top:12px">
+        ${sugs.map(s=>`<button class="cs-wopt" onclick="csWizardPick('idea','${s.replace(/'/g,'')}',this)" style="padding:9px 12px"><span class="wopt-text"><b style="font-size:11.5px">${s}</b></span></button>`).join('')}
+      </div>
+      <div style="margin-top:10px;display:flex;gap:6px">
+        <input type="text" id="cs-wizard-idea-input" placeholder="أو اكتب فكرتك المخصصة..." onkeydown="if(event.key==='Enter')csWizardPick('idea',this.value,null)" style="flex:1;background:#0a0a14;border:1px solid #312e81;border-radius:9px;padding:9px 12px;color:#fff;font-family:inherit;font-size:12px" data-testid="wiz-idea-input">
+        <button onclick="csWizardPick('idea',document.getElementById('cs-wizard-idea-input').value,null)" style="background:linear-gradient(135deg,#7c3aed,#ec4899);border:none;color:#fff;padding:9px 14px;border-radius:9px;cursor:pointer;font-family:inherit;font-size:11px;font-weight:800">إرسال</button>
+      </div>
+      <button class="cs-wizard-back" onclick="csWizardStepType()">← رجوع</button>
+    </div>`;
+  csAppendHTML(html);
+}
+
+// Step 3 — Pick size with SMART guidance per type
+function csWizardStepSize(){
+  CS_WIZARD.step = 'size';
+  const recs = {
+    banner: [
+      {label:'هيرو رئيسي · 1920×600',w:1920,h:600,asp:'banner_hero',hint:'✅ المقاس الموصى به للصفحة الرئيسية'},
+      {label:'بنر متوسط · 1200×400',w:1200,h:400,asp:'banner_med',hint:'🟡 جيد للبنرات الداخلية'},
+      {label:'بنر صغير · 800×300',w:800,h:300,asp:'banner_sm',hint:'⚠️ صغير — قد يكون قليل التأثير'},
+      {label:'موبايل عمودي · 1080×1920',w:1080,h:1920,asp:'9:16',hint:'📱 ستوري للسوشيال'},
+    ],
+    logo: [
+      {label:'لوجو قياسي · 512×512',w:512,h:512,asp:'1:1',hint:'✅ قياسي لكل الاستخدامات'},
+      {label:'لوجو HD · 1024×1024',w:1024,h:1024,asp:'1:1',hint:'⭐ جودة عالية للطباعة'},
+      {label:'لوجو عريض · 1200×400',w:1200,h:400,asp:'banner_med',hint:'للهيدر العلوي'},
+    ],
+    section: [
+      {label:'مربع قسم · 600×600',w:600,h:600,asp:'1:1',hint:'✅ مناسب لشبكة 3 أعمدة'},
+      {label:'مستطيل قسم · 800×600',w:800,h:600,asp:'4:3',hint:'🟡 لتصاميم أعرض'},
+      {label:'قسم عريض · 1200×400',w:1200,h:400,asp:'banner_med',hint:'لقسم مميز كامل'},
+    ],
+    general: [
+      {label:'مربع · 1024×1024',w:1024,h:1024,asp:'1:1',hint:'الافتراضي'},
+      {label:'إنستجرام · 1024×1280',w:1024,h:1280,asp:'4:5',hint:'📸 منشور سوشيال'},
+      {label:'ستوري · 1080×1920',w:1080,h:1920,asp:'9:16',hint:'📱 ستوري'},
+      {label:'بنر · 1920×1080',w:1920,h:1080,asp:'16:9',hint:'يوتيوب/يوتيوب shorts'},
+    ],
+  };
+  const opts = recs[CS_STATE.type] || recs.general;
+  const html = `
+    <div class="cs-wizard-card">
+      <div class="wiz-head"><span class="wiz-step">٣ / ٥</span><b style="color:#fbbf24;font-size:11px">المقاس</b></div>
+      <div class="wiz-q">📐 اختار المقاس المناسب لمكان النشر:</div>
+      <div class="wiz-hint">💡 المقاسات الموصى بها لـ "${ {banner:'البنر',logo:'اللوجو',section:'صورة القسم',general:'الصورة العامة'}[CS_STATE.type] }" حسب أفضل الممارسات في متجر Zenrex.</div>
+      <div class="cs-wizard-opts" style="margin-top:12px">
+        ${opts.map((o,i)=>`<button class="cs-wopt" onclick="csWizardPick('size',{w:${o.w},h:${o.h},asp:'${o.asp}',label:'${o.label.replace(/'/g,'')}'},this)" data-testid="wiz-size-${i}"><span class="wopt-ico" style="background:rgba(124,58,237,.15);color:#a78bfa">${o.w}<br>×${o.h}</span><span class="wopt-text"><b>${o.label}</b><small>${o.hint}</small></span></button>`).join('')}
+      </div>
+      <div style="margin-top:10px;display:flex;gap:6px;align-items:center;background:rgba(124,58,237,.08);padding:8px;border-radius:9px;border:1px dashed rgba(124,58,237,.3)">
+        <span style="font-size:10px;color:#a78bfa;font-weight:700">أو مقاس مخصص:</span>
+        <input type="number" id="csw-cw" placeholder="عرض" min="256" max="3840" style="width:75px;background:#0a0a14;border:1px solid #312e81;color:#fff;border-radius:6px;padding:5px 8px;font-size:11px;font-family:inherit">
+        <span style="color:#475569">×</span>
+        <input type="number" id="csw-ch" placeholder="طول" min="256" max="3840" style="width:75px;background:#0a0a14;border:1px solid #312e81;color:#fff;border-radius:6px;padding:5px 8px;font-size:11px;font-family:inherit">
+        <button onclick="csWizardPick('size',{w:+document.getElementById('csw-cw').value,h:+document.getElementById('csw-ch').value,asp:'custom',label:'مخصص'},null)" style="background:#fbbf24;color:#0a0a14;border:none;padding:5px 12px;border-radius:7px;font-family:inherit;font-size:11px;font-weight:900;cursor:pointer">تأكيد</button>
+      </div>
+      <button class="cs-wizard-back" onclick="csWizardStepIdea()">← رجوع</button>
+    </div>`;
+  csAppendHTML(html);
+}
+
+// Step 4 — Color picker (wide palette + "Other" option)
+function csWizardStepColor(){
+  CS_WIZARD.step = 'color';
+  const popular = [
+    {hex:'#ffffff',ar:'أبيض',en:'pure white'},
+    {hex:'#000000',ar:'أسود',en:'pure black'},
+    {hex:'#1e3a8a',ar:'كحلي',en:'deep navy blue'},
+    {hex:'#7c3aed',ar:'بنفسجي',en:'vibrant purple'},
+    {hex:'#ec4899',ar:'وردي',en:'hot pink'},
+    {hex:'#ef4444',ar:'أحمر',en:'bright red'},
+    {hex:'#f97316',ar:'برتقالي',en:'vivid orange'},
+    {hex:'#fbbf24',ar:'ذهبي',en:'golden yellow'},
+    {hex:'#10b981',ar:'أخضر',en:'emerald green'},
+    {hex:'#06b6d4',ar:'تركوازي',en:'turquoise cyan'},
+    {hex:'#d4af37',ar:'ذهب لامع',en:'metallic gold'},
+    {hex:'#92400e',ar:'بني',en:'rich brown'},
+    {hex:'#581c87',ar:'بنفسجي فاخر',en:'royal plum'},
+    {hex:'#0a0a14',ar:'أسود فاخر',en:'luxury black'},
+    {hex:'#fef3c7',ar:'كريمي',en:'cream beige'},
+  ];
+  const html = `
+    <div class="cs-wizard-card">
+      <div class="wiz-head"><span class="wiz-step">٤ / ٥</span><b style="color:#fbbf24;font-size:11px">اللون</b></div>
+      <div class="wiz-q">🎨 وش لون الخلفية اللي تتخيلها؟</div>
+      <div class="wiz-hint">⛓️ الذكاء الاصطناعي ملزم باللون اللي تختاره — مايحيد عنه. لو تبي لون غير الموجود، اختر "لون آخر" واكتبه.</div>
+      <div class="cs-wizard-opts col-3" style="margin-top:12px">
+        ${popular.map(c=>`<button class="cs-wopt cs-wopt-color" onclick="csWizardPick('color',{hex:'${c.hex}',ar:'${c.ar}',en:'${c.en}'},this)"><span class="swatch" style="background:${c.hex}"></span><b>${c.ar}</b></button>`).join('')}
+        <button class="cs-wopt cs-wopt-color" onclick="csWizardAskCustomColor()" data-testid="wiz-color-other"><span class="swatch" style="background:repeating-linear-gradient(45deg,#7c3aed,#ec4899 4px,#fbbf24 4px,#fbbf24 8px)"></span><b>🎨 لون آخر</b></button>
+      </div>
+      <button class="cs-wizard-back" onclick="csWizardStepSize()">← رجوع</button>
+    </div>`;
+  csAppendHTML(html);
+}
+
+// Ask user to write a custom color (free text)
+function csWizardAskCustomColor(){
+  const html = `
+    <div class="cs-wizard-card">
+      <div class="wiz-head"><span class="wiz-step">٤ / ٥</span><b style="color:#fbbf24;font-size:11px">لون مخصص</b></div>
+      <div class="wiz-q">✏️ اكتب اللون اللي تبيه (بالعربي أو الإنجليزي أو hex):</div>
+      <div class="wiz-hint">أمثلة: "أزرق سماوي ناعم" · "wine burgundy" · "#5b21b6"</div>
+      <div style="margin-top:12px;display:flex;gap:6px">
+        <input type="text" id="cs-wiz-color-text" placeholder="مثلاً: أزرق فيروزي مائي..." onkeydown="if(event.key==='Enter')csWizardSubmitCustomColor()" style="flex:1;background:#0a0a14;border:1px solid #fbbf24;border-radius:9px;padding:11px 13px;color:#fff;font-family:inherit;font-size:13px" data-testid="wiz-color-custom-input">
+        <button onclick="csWizardSubmitCustomColor()" style="background:linear-gradient(135deg,#fbbf24,#f59e0b);border:none;color:#0a0a14;padding:11px 18px;border-radius:9px;cursor:pointer;font-family:inherit;font-size:12px;font-weight:900">✓ تأكيد</button>
+      </div>
+      <button class="cs-wizard-back" onclick="csWizardStepColor()">← رجوع للألوان الجاهزة</button>
+    </div>`;
+  csAppendHTML(html);
+  setTimeout(()=>document.getElementById('cs-wiz-color-text')?.focus(), 100);
+}
+function csWizardSubmitCustomColor(){
+  const txt = document.getElementById('cs-wiz-color-text')?.value?.trim();
+  if(!txt){ toast('❌ اكتب اسم اللون'); return; }
+  // If hex provided directly, use it; otherwise pass natural-language name to AI
+  const isHex = /^#[0-9a-f]{6}$/i.test(txt);
+  csWizardPick('color', { hex: isHex ? txt : '#7c3aed', ar: txt, en: txt }, null);
+}
+
+// Step 5 — Pick style
+function csWizardStepStyle(){
+  CS_WIZARD.step = 'style';
+  const styles = [
+    {k:'lifestyle',ar:'حياتي',ico:'🌿',desc:'جو طبيعي وحيوي'},
+    {k:'luxury',ar:'فاخر',ico:'💎',desc:'إضاءة درامية وألوان ذهبية'},
+    {k:'studio',ar:'استوديو',ico:'📸',desc:'احترافي بإضاءة دقيقة'},
+    {k:'minimal',ar:'مينيمال',ico:'⚪',desc:'بسيط ونظيف ومساحات بيضاء'},
+    {k:'flat',ar:'فلات',ico:'📐',desc:'من فوق ومرتب'},
+    {k:'dramatic',ar:'درامي',ico:'🌑',desc:'ظلال عميقة وأجواء سينمائية'},
+  ];
+  const html = `
+    <div class="cs-wizard-card">
+      <div class="wiz-head"><span class="wiz-step">٥ / ٥</span><b style="color:#fbbf24;font-size:11px">النمط</b></div>
+      <div class="wiz-q">✨ اختار النمط البصري:</div>
+      <div class="cs-wizard-opts col-3" style="margin-top:12px">
+        ${styles.map(s=>`<button class="cs-wopt" onclick="csWizardPick('style','${s.k}',this);CS_STATE.styleAr='${s.ar}'"><span class="wopt-ico" style="background:rgba(251,191,36,.15);font-size:22px">${s.ico}</span><span class="wopt-text"><b>${s.ar}</b><small>${s.desc}</small></span></button>`).join('')}
+      </div>
+      <button class="cs-wizard-back" onclick="csWizardStepColor()">← رجوع</button>
+    </div>`;
+  csAppendHTML(html);
+}
+
+// Step 6 — Summary + Generate
+function csWizardStepSummary(){
+  CS_WIZARD.step = 'summary';
+  CS_WIZARD.done = true;
+  const typeLabels = {banner:'🖼️ بنر',logo:'🎨 لوجو',section:'🗂️ صورة قسم',general:'✨ صورة عامة'};
+  const sizeLabel = (CS_STATE.customW && CS_STATE.customH)
+    ? `${CS_STATE.customW}×${CS_STATE.customH}` : CS_STATE.aspect;
+  const html = `
+    <div class="cs-wizard-card">
+      <div class="wiz-head"><span class="wiz-step" style="background:#10b981;color:#fff">✓ جاهز</span><b style="color:#10b981;font-size:11px">المراجعة الأخيرة</b></div>
+      <div class="wiz-q">جمعت كل اختياراتك — راجع وولّد 🚀</div>
+      <div class="cs-summary">
+        <div class="cs-summary-row"><span>النوع</span><span>${typeLabels[CS_STATE.type]||CS_STATE.type}</span></div>
+        <div class="cs-summary-row"><span>الفكرة</span><span style="max-width:60%;text-align:left;direction:rtl">${CS_STATE._chatPrompt || '—'}</span></div>
+        <div class="cs-summary-row"><span>المقاس</span><span>${sizeLabel}</span></div>
+        <div class="cs-summary-row"><span>لون الخلفية</span><span style="display:inline-flex;align-items:center;gap:6px"><span style="width:14px;height:14px;border-radius:50%;background:${CS_STATE.bgColor};border:1px solid rgba(255,255,255,.2);display:inline-block"></span>${CS_STATE.bgColorName} (${CS_STATE.bgColor})</span></div>
+        <div class="cs-summary-row"><span>النمط</span><span>${CS_STATE.styleAr}</span></div>
+        ${CS_STATE.type==='section'?`<div class="cs-summary-row"><span>القسم</span><span>${CS_STATE.category}</span></div>`:''}
+        <div class="cs-summary-row"><span>المكان</span><span>${CS_STATE.placementAr}</span></div>
+      </div>
+      <div style="display:flex;gap:8px;margin-top:14px">
+        <button onclick="csWizardStepColor()" class="cs-wizard-back" style="font-size:11px;padding:8px 13px">↻ غيّر اللون</button>
+        <button onclick="csWizardStepSize()" class="cs-wizard-back" style="font-size:11px;padding:8px 13px">↻ غيّر المقاس</button>
+        <button onclick="csGenerate()" data-testid="wiz-generate" style="margin-right:auto;background:linear-gradient(135deg,#fbbf24,#f59e0b);color:#0a0a14;border:none;padding:11px 22px;border-radius:11px;font-family:inherit;font-weight:900;font-size:13px;cursor:pointer;display:inline-flex;align-items:center;gap:7px;box-shadow:0 6px 18px rgba(251,191,36,.35)">
+          <i data-lucide="sparkles" style="width:14px;height:14px"></i>
+          توليد 4 صور · 32 نقطة
+        </button>
+      </div>
+    </div>`;
+  csAppendHTML(html);
+}
+
+// Wizard router — receives picks and advances to next step
+function csWizardPick(step, value, el){
+  if(el){
+    el.closest('.cs-wizard-opts')?.querySelectorAll('.cs-wopt').forEach(b=>b.classList.remove('chosen'));
+    el.classList.add('chosen');
+  }
+  switch(step){
+    case 'type':
+      CS_STATE.type = value;
+      // Apply smart defaults silently
+      const d = CS_TYPE_DEFAULTS[value]; if(d){ CS_STATE.aspect = d.aspect; CS_STATE.style = d.style; }
+      csUserMsg({banner:'🖼️ بنر',logo:'🎨 لوجو',section:'🗂️ صورة قسم',general:'✨ صورة عامة'}[value]||value);
+      if(value==='section'){ csWizardStepSectionCat(); } else { setTimeout(csWizardStepIdea, 200); }
+      break;
+    case 'sectionCat':
+      CS_STATE.category = value.ar; CS_STATE.categoryEn = value.en;
+      csUserMsg(value.ar);
+      setTimeout(csWizardStepIdea, 200);
+      break;
+    case 'idea':
+      const idea = (value||'').trim();
+      if(!idea){ toast('❌ اكتب فكرتك أو اختر اقتراح'); return; }
+      CS_STATE._chatPrompt = idea;
+      csUserMsg(idea);
+      setTimeout(csWizardStepSize, 200);
+      break;
+    case 'size':
+      const sz = value;
+      CS_STATE.customW = sz.w; CS_STATE.customH = sz.h; CS_STATE.aspect = sz.asp;
+      csUserMsg(`${sz.label} (${sz.w}×${sz.h})`);
+      setTimeout(csWizardStepColor, 200);
+      break;
+    case 'color':
+      CS_STATE.bgColor = value.hex;
+      CS_STATE.bgColorName = value.en || (typeof psHexToName==='function'?psHexToName(value.hex):'neutral');
+      csUserMsg(`🎨 ${value.ar}`);
+      setTimeout(csWizardStepStyle, 200);
+      break;
+    case 'style':
+      CS_STATE.style = value;
+      csUserMsg(`✨ ${CS_STATE.styleAr}`);
+      setTimeout(csWizardStepSummary, 200);
+      break;
+  }
+}
+
+// Section category sub-step (only when type=section)
+function csWizardStepSectionCat(){
+  CS_WIZARD.step = 'sectionCat';
+  const cats = [
+    {ar:'ملابس',en:'clothing fashion apparel',ico:'👕'},
+    {ar:'جوالات',en:'smartphones mobile',ico:'📱'},
+    {ar:'إلكترونيات',en:'consumer electronics',ico:'💻'},
+    {ar:'عطور',en:'luxury perfumes',ico:'🌸'},
+    {ar:'مطعم',en:'restaurant food',ico:'🍽️'},
+    {ar:'حلاقة',en:'barber shop',ico:'💈'},
+    {ar:'صيدلية',en:'pharmacy wellness',ico:'💊'},
+    {ar:'قهوة',en:'specialty coffee café',ico:'☕'},
+    {ar:'رياضة',en:'sports fitness',ico:'⚽'},
+  ];
+  const html = `
+    <div class="cs-wizard-card">
+      <div class="wiz-head"><span class="wiz-step">١ب / ٥</span><b style="color:#fbbf24;font-size:11px">القسم</b></div>
+      <div class="wiz-q">🗂️ أي قسم/تصنيف نصمم له؟</div>
+      <div class="cs-wizard-opts col-3" style="margin-top:12px">
+        ${cats.map(c=>`<button class="cs-wopt" onclick="csWizardPick('sectionCat',{ar:'${c.ar}',en:'${c.en}'},this)"><span class="wopt-ico" style="background:rgba(16,185,129,.15);font-size:18px">${c.ico}</span><span class="wopt-text"><b>${c.ar}</b></span></button>`).join('')}
+      </div>
+      <div style="margin-top:10px;display:flex;gap:6px">
+        <input type="text" id="cs-wiz-cat-text" placeholder="أو اكتب اسم قسم آخر..." onkeydown="if(event.key==='Enter')csWizardPick('sectionCat',{ar:this.value,en:this.value},null)" style="flex:1;background:#0a0a14;border:1px solid #312e81;border-radius:9px;padding:9px 12px;color:#fff;font-family:inherit;font-size:12px">
+        <button onclick="csWizardPick('sectionCat',{ar:document.getElementById('cs-wiz-cat-text').value,en:document.getElementById('cs-wiz-cat-text').value},null)" style="background:#10b981;border:none;color:#fff;padding:9px 14px;border-radius:9px;cursor:pointer;font-family:inherit;font-size:11px;font-weight:800">إرسال</button>
+      </div>
+      <button class="cs-wizard-back" onclick="csWizardStepType()">← رجوع</button>
+    </div>`;
+  csAppendHTML(html);
+}
+
+// Append a raw HTML block to the chat body
+function csAppendHTML(html){
+  const body = document.getElementById('cs-chat-body');
+  if(!body) return;
+  const tmp = document.createElement('div');
+  tmp.innerHTML = html;
+  while(tmp.firstChild) body.appendChild(tmp.firstChild);
+  body.scrollTop = body.scrollHeight;
+  if(window.lucide) setTimeout(()=>lucide.createIcons(), 30);
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// FULLSCREEN STOREFRONT PREVIEW — show how the storefront looks with new asset
+// ═══════════════════════════════════════════════════════════════════
+function csOpenFullscreenPreview(){
+  const lastApproved = CS_STATE.approved.slice().reverse()[0];
+  if(!lastApproved){ toast('⚠️ اعتمد صورة واحدة أولاً عشان نشوف المعاينة'); return; }
+  const heroImg = (CS_STATE.approved.find(a=>a.type==='banner') || lastApproved).url;
+  const sections = CS_STATE.approved.filter(a=>a.type==='section');
+  // Build category tiles — mix new ones with placeholders
+  const allCats = [
+    {ar:'ملابس',img:sections.find(s=>s.category==='ملابس')?.url, ph:'https://picsum.photos/seed/clothing/400'},
+    {ar:'جوالات',img:sections.find(s=>s.category==='جوالات')?.url, ph:'https://picsum.photos/seed/phones/400'},
+    {ar:'إلكترونيات',img:sections.find(s=>s.category==='إلكترونيات')?.url, ph:'https://picsum.photos/seed/elec/400'},
+    {ar:'عطور',img:sections.find(s=>s.category==='عطور')?.url, ph:'https://picsum.photos/seed/perfume/400'},
+    {ar:'قهوة',img:sections.find(s=>s.category==='قهوة')?.url, ph:'https://picsum.photos/seed/coffee/400'},
+    {ar:'رياضة',img:sections.find(s=>s.category==='رياضة')?.url, ph:'https://picsum.photos/seed/sports/400'},
+  ];
+  const overlay = document.createElement('div');
+  overlay.className = 'cs-fs-preview';
+  overlay.id = 'cs-fs-preview-overlay';
+  overlay.innerHTML = `
+    <div class="cs-fs-preview-head">
+      <button class="cs-fs-close" onclick="document.getElementById('cs-fs-preview-overlay')?.remove()"><i data-lucide="x" style="width:14px;height:14px"></i></button>
+      <h3>📺 معاينة المتجر بكامل الشاشة</h3>
+      <span class="url"><i data-lucide="lock" style="width:11px;height:11px"></i> https://zenrex.ai/store/${(localStorage.getItem('zx_merchant_slug')||'demo-store')}</span>
+      <button class="cs-fs-publish" onclick="csPublishToStorefront()" data-testid="cs-publish-btn"><i data-lucide="rocket" style="width:14px;height:14px"></i> اعتماد ونشر مباشر للمتجر</button>
+    </div>
+    <div class="cs-fs-preview-body">
+      <div class="cs-fs-store">
+        <div class="cs-fs-store-nav">
+          <span class="logo">Zenrex</span>
+          <span style="opacity:.7">الرئيسية</span>
+          <span style="opacity:.7">الأقسام</span>
+          <span style="opacity:.7">العروض</span>
+          <span style="margin-right:auto;opacity:.7">🛒 السلة</span>
+        </div>
+        <div class="cs-fs-store-hero">
+          <img src="${heroImg}" alt="hero">
+          <div class="hero-overlay"><div class="hero-text"><h1>${CS_STATE._chatPrompt || 'متجرنا الجديد'}</h1><div style="opacity:.85;font-size:14px">عروض حصرية تنتظرك — تسوّق الآن</div></div></div>
+        </div>
+        <div class="cs-fs-store-cats">
+          <h3>🗂️ تصفّح الأقسام</h3>
+          <div class="grid">
+            ${allCats.map(c=>`<div class="cat-tile ${c.img?'is-new':''}">${c.img?'<span class="new-badge">جديد</span>':''}<img src="${c.img||c.ph}" loading="lazy"><div class="tag">${c.ar}</div></div>`).join('')}
+          </div>
+        </div>
+      </div>
+    </div>`;
+  document.body.appendChild(overlay);
+  if(window.lucide) setTimeout(()=>lucide.createIcons(), 50);
+}
+
+function csPublishToStorefront(){
+  // Push everything to the merchant theme so the customer storefront uses it
+  fetch(API + '/api/theme/merchant/me', {
+    method: 'PUT',
+    headers: {'Content-Type':'application/json','Authorization':'Bearer '+(localStorage.getItem('zx_token')||'')},
+    body: JSON.stringify({ creative_library: CS_STATE.approved })
+  })
+  .then(r=>r.json())
+  .then(()=>{
+    toast('🚀 تم النشر! الصور المعتمدة جاهزة في متجر العميل');
+    document.getElementById('cs-fs-preview-overlay')?.remove();
+    csBotMsg('🚀 <b>تم النشر للمتجر بنجاح!</b> الصور المعتمدة الحين متاحة في صفحة العميل على zenrex.ai/store/...');
+  })
+  .catch(()=>toast('❌ فشل النشر — حاول مرة ثانية'));
+}
+
 function csAttachRef(input){
   const f = input.files?.[0]; if(!f) return;
   const rdr = new FileReader();
@@ -4101,6 +4514,12 @@ function csOpenGallery(){
       setTimeout(()=>{
         csRenderPresets();
         csLoadLibrary();
+        // Start the wizard if chat is empty (first visit)
+        const body = document.getElementById('cs-chat-body');
+        if(body && !body.querySelector('.cs-wizard-card') && !body.querySelector('.cs-msg-imggrid')){
+          body.innerHTML = '';
+          csWizardStepType();
+        }
         if(window.lucide) lucide.createIcons();
       }, 80);
     }
