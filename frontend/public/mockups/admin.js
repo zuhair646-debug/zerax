@@ -114,6 +114,24 @@ function showApp(){
   loadProductsFromAPI();
   renderAll();
   maybeShowOnboarding();
+  // ─── Auto-refresh orders + KPIs every 20s so admin sees real-time updates ───
+  if (!window.__zx_admin_poll){
+    window.__zx_admin_poll = setInterval(() => {
+      try { renderOrders(); } catch(_){}
+      // Re-fetch recent orders + KPIs (no full re-render to avoid flicker)
+      try {
+        loadRealOrders(8).then(real => {
+          if (!real.length) return;
+          const el = document.getElementById('recent-orders');
+          if (el) el.innerHTML = real.map(o => `<tr><td><b>${(o.id||'').replace('ord_','#')}</b></td><td>${o.cust}</td><td><b>${o.amt} ر.س</b></td><td><span class="status-pill s-${o.st}">${_stLabel(o.st)}</span></td><td>${o.drv}</td><td style="color:var(--mute);font-size:11px">${o.time||''}</td></tr>`).join('');
+        });
+        fetch((window.API||window.location.origin)+'/api/delivery/stats').then(r=>r.json()).then(s=>{
+          const set=(sel,val)=>{const el=document.querySelector(sel);if(el)el.textContent=val;};
+          if(s){set('[data-kpi="revenue"] .val',(s.revenue_today_sar||0).toLocaleString('ar-EG')+' ر.س');set('[data-kpi="orders"] .val',String(s.total_orders||0));set('[data-kpi="drivers"] .val',String(s.active_drivers||0));}
+        });
+      } catch(_){}
+    }, 20000);
+  }
   setTimeout(()=>{
     if(window.lucide)lucide.createIcons();
     setupKpiClicks();

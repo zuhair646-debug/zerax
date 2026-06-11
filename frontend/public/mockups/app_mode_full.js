@@ -1705,7 +1705,23 @@ function choosePay(id,el){
     orderIdReal = d && d.id ? d.id : null;
     if (orderIdReal){
       // Save order id in localStorage for "طلباتي" view
-      try { const arr=JSON.parse(localStorage.getItem('my_orders')||'[]'); arr.unshift({id:orderIdReal,total:cartTotal,at:Date.now(),items:payload.items.length}); localStorage.setItem('my_orders',JSON.stringify(arr.slice(0,50))); } catch(e){}
+      try {
+        // Save to localStorage in the shape getOrders() expects so "طلباتي" UI works.
+        const newOrder = {
+          id: orderIdReal,
+          date: new Date().toISOString(),
+          status: 'confirmed',
+          total: cartTotal.toFixed(2),
+          currency: 'ر.س',
+          items: (payload.items||[]).reduce((s,i)=>s+(i.qty||1),0),
+          cartItems: (CART||[]).map(it=>({id:it.id, qty:it.qty})),
+          paymentMethod: id || 'cod',
+          credit_used: 0,
+          backend_id: orderIdReal
+        };
+        if (typeof saveOrder === 'function') saveOrder(newOrder);
+        else { const arr=JSON.parse(localStorage.getItem('zx_orders')||'[]'); arr.unshift(newOrder); localStorage.setItem('zx_orders',JSON.stringify(arr.slice(0,50))); }
+      } catch(e){ console.warn('saveOrder failed', e); }
       // Inject order id into success modal if visible
       const sub = document.querySelector('#checkout-success p');
       if (sub && !sub.innerHTML.includes(orderIdReal)) sub.innerHTML = (sub.innerHTML||'') + `<br><span style="opacity:.7;font-size:11px">رقم الطلب: <b style="color:#7c3aed">${orderIdReal}</b></span>`;
