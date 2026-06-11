@@ -1,5 +1,5 @@
 """
-Zerax Deployment Service
+Zenrex Deployment Service
 خدمة نشر المواقع والتطبيقات
 """
 import os
@@ -87,7 +87,7 @@ npm run build
 4. انشر!
 
 ---
-تم إنشاؤه بواسطة Zerax AI
+تم إنشاؤه بواسطة Zenrex AI
 '''
 }
 
@@ -119,7 +119,7 @@ HTML_TEMPLATE = {
 - أي استضافة ويب
 
 ---
-تم إنشاؤه بواسطة Zerax AI
+تم إنشاؤه بواسطة Zenrex AI
 '''
 }
 
@@ -127,7 +127,7 @@ HTML_TEMPLATE = {
 class DeploymentService:
     """خدمة نشر المشاريع"""
     
-    def __init__(self, db, storage_path: str = "/tmp/zerax_projects"):
+    def __init__(self, db, storage_path: str = "/tmp/zenrex_projects"):
         self.db = db
         self.storage_path = Path(storage_path)
         self.storage_path.mkdir(parents=True, exist_ok=True)
@@ -156,7 +156,7 @@ class DeploymentService:
             
             # استبدال المتغيرات في القالب
             title = metadata.get("title", project_name) if metadata else project_name
-            description = metadata.get("description", "موقع تم إنشاؤه بواسطة Zerax AI") if metadata else ""
+            description = metadata.get("description", "موقع تم إنشاؤه بواسطة Zenrex AI") if metadata else ""
             
             # كتابة ملفات القالب
             for filename, content in template.items():

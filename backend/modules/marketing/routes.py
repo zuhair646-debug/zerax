@@ -27,7 +27,7 @@ from .personas import PERSONAS, PERSONA_MAP
 from .content_gen import generate_post, generate_batch
 from .connectors import get_all_status, publish_to
 
-logger = logging.getLogger("zerax.marketing.routes")
+logger = logging.getLogger("zenrex.marketing.routes")
 
 
 # Models
@@ -230,7 +230,7 @@ def create_marketing_router(db, require_owner_dep):
         """Send a test message to verify the channel is wired up correctly."""
         from .connectors import publish_to as _pub
         test_post = {
-            "text": payload.get("text") or "🤖 رسالة اختبار من Zerax Marketing Suite ✨\nلو وصلتك = القناة شغّالة 100%!",
+            "text": payload.get("text") or "🤖 رسالة اختبار من Zenrex Marketing Suite ✨\nلو وصلتك = القناة شغّالة 100%!",
             "image_url": None,
             "topic": "اختبار",
             "to_number": payload.get("to_number"),

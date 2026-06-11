@@ -25,7 +25,7 @@ from typing import Any, Dict, List, Optional
 from fastapi import APIRouter, HTTPException, Depends, Query
 from pydantic import BaseModel
 
-logger = logging.getLogger("zerax.admin.intelligence")
+logger = logging.getLogger("zenrex.admin.intelligence")
 
 router = APIRouter(prefix="/admin/intelligence", tags=["admin", "intelligence"])
 
@@ -549,7 +549,7 @@ def build_router(db, get_current_user):
         context_blob = "\n".join(ctx_lines)[:18000]  # cap tokens
 
         prompt = (
-            "أنت محلل سلوك عملاء محترف لمنصة Zerax (مواقع، تطبيقات، ألعاب، صور وفيديوهات بالذكاء الاصطناعي).\n"
+            "أنت محلل سلوك عملاء محترف لمنصة Zenrex (مواقع، تطبيقات، ألعاب، صور وفيديوهات بالذكاء الاصطناعي).\n"
             "ستحلل سلوك عميل واحد من السياق التالي وتعطي تقرير محترف بصيغة JSON صارمة فقط:\n\n"
             "```json\n"
             "{\n"

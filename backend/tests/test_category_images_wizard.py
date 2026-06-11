@@ -1,5 +1,5 @@
 """
-Comprehensive E2E tests for Zerax Website Builder — Feb 2026 Release
+Comprehensive E2E tests for Zenrex Website Builder — Feb 2026 Release
 Tests:
 1. Categories API — verify 25 categories including cosmetics, automotive, realestate
 2. Layouts per category — verify 25 layouts each for key categories
@@ -18,7 +18,7 @@ import time
 BASE_URL = os.environ.get('REACT_APP_BACKEND_URL', '').rstrip('/')
 
 # Test credentials from /app/memory/test_credentials.md
-OWNER_EMAIL = "owner@zerax.com"
+OWNER_EMAIL = "owner@zenrex.ai"
 OWNER_PASSWORD = "owner123"
 
 

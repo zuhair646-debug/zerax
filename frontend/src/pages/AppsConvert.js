@@ -37,7 +37,7 @@ export default function AppsConvert() {
 
   // local editable fields
   const [name, setName] = useState('');
-  const [pkg, setPkg] = useState('com.zerax.app');
+  const [pkg, setPkg] = useState('com.zenrex.ai');
   const [color, setColor] = useState('#10b981');
   const [appType, setAppType] = useState('pwa');
 
@@ -55,7 +55,7 @@ export default function AppsConvert() {
         const d = await r.json();
         setDoc(d);
         setName(d.name || '');
-        setPkg(d.package_id || 'com.zerax.app');
+        setPkg(d.package_id || 'com.zenrex.ai');
         setColor(d.primary_color || '#10b981');
         setAppType(d.app_type || 'pwa');
       } catch (e) {

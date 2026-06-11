@@ -1,5 +1,5 @@
 """
-Zerax Delivery Scheduling
+Zenrex Delivery Scheduling
 ──────────────────────────────────────────────────────────────────────────
 Per-merchant operating hours (multi-window per day) + scheduled delivery
 bookings. Customers can:

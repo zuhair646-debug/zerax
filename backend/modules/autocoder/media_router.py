@@ -1,5 +1,5 @@
 """
-Media Router — Quality-First Edition for Zerax
+Media Router — Quality-First Edition for Zenrex
 ═══════════════════════════════════════════════════════════════════════════
 Smart selection of premium media models (image / video / voice / edit).
 

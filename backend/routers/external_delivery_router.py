@@ -1,5 +1,5 @@
 """
-Zerax External Delivery / Errand Service (Mrsool-style)
+Zenrex External Delivery / Errand Service (Mrsool-style)
 ──────────────────────────────────────────────────────────────────────────
 Customer requests a delivery from any pickup → any drop-off (multi-stop
 supported, optional return trip). System auto-computes distance via

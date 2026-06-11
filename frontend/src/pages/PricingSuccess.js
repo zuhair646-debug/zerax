@@ -99,7 +99,7 @@ export default function PricingSuccess({ user }) {
       <div className="bg-zinc-900 border border-emerald-500/30 rounded-2xl p-10 max-w-lg w-full">
         <CheckCircle2 className="w-20 h-20 text-emerald-400 mx-auto mb-6" />
         <h1 className="text-3xl font-bold text-center mb-2" data-testid="billing-success-title">تم الدفع بنجاح! 🎉</h1>
-        <p className="text-center text-zinc-400 mb-8">شكراً لاشتراكك في Zerax</p>
+        <p className="text-center text-zinc-400 mb-8">شكراً لاشتراكك في Zenrex</p>
 
         <div className="bg-black/30 rounded-xl p-6 space-y-3 mb-6">
           <div className="flex justify-between">

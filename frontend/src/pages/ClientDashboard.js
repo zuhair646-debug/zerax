@@ -167,7 +167,7 @@ const ClientDashboard = ({ user, setUser }) => {
         <div className="mb-10 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
           <div>
             <h1 className="text-3xl md:text-4xl font-black text-white mb-1" data-testid="dashboard-title">
-              مرحباً، {user?.name || 'عميل Zerax'}
+              مرحباً، {user?.name || 'عميل Zenrex'}
               {user?.is_owner && <Crown className="w-7 h-7 inline ms-2 text-amber-400" />}
             </h1>
             <p className="text-gray-400 text-sm">مكتبتك الخاصة · وصول من أي جهاز · شارك بسهولة</p>

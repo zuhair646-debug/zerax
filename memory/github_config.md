@@ -2,8 +2,8 @@
 
 ## Repository
 - **Owner**: `zuhair646-debug`
-- **Repo**: `zuhair646-debug/zerax`
-- **URL**: https://github.com/zuhair646-debug/zerax
+- **Repo**: `zuhair646-debug/zenrex`
+- **URL**: https://github.com/zuhair646-debug/zenrex
 
 ## Credentials Location
 All credentials are stored in `/app/backend/.env` (protected from git via `.gitignore`):

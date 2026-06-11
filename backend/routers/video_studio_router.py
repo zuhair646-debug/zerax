@@ -1,14 +1,14 @@
 """
-Zerax Video Studio — Promo Video Generator
+Zenrex Video Studio — Promo Video Generator
 -------------------------------------------
 Generates short marketing videos (15s / 30s / 45s / 60s) for merchants.
 
 Pipeline:
   1. (optional) AI storyboard generation → Arabic narration + scene prompts
-  2. Zerax Voice Engine (currently OpenAI TTS, abstracted) → MP3 narration
+  2. Zenrex Voice Engine (currently OpenAI TTS, abstracted) → MP3 narration
   3. ffmpeg slideshow stitch (scene images + audio + logo + title) → MP4
 
-Designed so the underlying TTS / video provider can be swapped with Zerax's own
+Designed so the underlying TTS / video provider can be swapped with Zenrex's own
 internal engine without touching the frontend contract.
 """
 import os
@@ -43,34 +43,34 @@ TMP_DIR.mkdir(parents=True, exist_ok=True)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Pricing (Zerax credits)  — frontend MUST mirror these
+# Pricing (Zenrex credits)  — frontend MUST mirror these
 # ─────────────────────────────────────────────────────────────────────────────
 COST_STORYBOARD = 5
 COST_PER_5_SECONDS = 5   # 30s = 30 credits, 45s = 45 credits, 60s = 60 credits
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Voice abstraction — "Zerax Voice Engine"
+# Voice abstraction — "Zenrex Voice Engine"
 # Currently powered by OpenAI TTS via EMERGENT_LLM_KEY.
-# Swap this single mapping when the real Zerax voice service is online.
+# Swap this single mapping when the real Zenrex voice service is online.
 # ─────────────────────────────────────────────────────────────────────────────
-ZERAX_VOICE_MAP = {
+ZENREX_VOICE_MAP = {
     # Arabic voices (5 main characters)
-    "zerax_male_deep":     {"provider": "openai_tts", "voice": "onyx",   "model": "tts-1-hd"},
-    "zerax_male_warm":     {"provider": "openai_tts", "voice": "echo",   "model": "tts-1-hd"},
-    "zerax_male_youth":    {"provider": "openai_tts", "voice": "fable",  "model": "tts-1-hd"},
-    "zerax_female_warm":   {"provider": "openai_tts", "voice": "shimmer","model": "tts-1-hd"},
-    "zerax_female_clear":  {"provider": "openai_tts", "voice": "nova",   "model": "tts-1-hd"},
-    "zerax_neutral":       {"provider": "openai_tts", "voice": "alloy",  "model": "tts-1-hd"},
+    "zenrex_male_deep":     {"provider": "openai_tts", "voice": "onyx",   "model": "tts-1-hd"},
+    "zenrex_male_warm":     {"provider": "openai_tts", "voice": "echo",   "model": "tts-1-hd"},
+    "zenrex_male_youth":    {"provider": "openai_tts", "voice": "fable",  "model": "tts-1-hd"},
+    "zenrex_female_warm":   {"provider": "openai_tts", "voice": "shimmer","model": "tts-1-hd"},
+    "zenrex_female_clear":  {"provider": "openai_tts", "voice": "nova",   "model": "tts-1-hd"},
+    "zenrex_neutral":       {"provider": "openai_tts", "voice": "alloy",  "model": "tts-1-hd"},
     # Premium character variants (mapped to same underlying TTS voices but exposed as distinct personalities)
-    "zerax_narrator_pro":  {"provider": "openai_tts", "voice": "onyx",   "model": "tts-1-hd"},
-    "zerax_friend_chat":   {"provider": "openai_tts", "voice": "echo",   "model": "tts-1-hd"},
-    "zerax_announcer":     {"provider": "openai_tts", "voice": "fable",  "model": "tts-1-hd"},
-    "zerax_storyteller_f": {"provider": "openai_tts", "voice": "shimmer","model": "tts-1-hd"},
-    "zerax_news_anchor":   {"provider": "openai_tts", "voice": "nova",   "model": "tts-1-hd"},
-    "zerax_documentary":   {"provider": "openai_tts", "voice": "alloy",  "model": "tts-1-hd"},
+    "zenrex_narrator_pro":  {"provider": "openai_tts", "voice": "onyx",   "model": "tts-1-hd"},
+    "zenrex_friend_chat":   {"provider": "openai_tts", "voice": "echo",   "model": "tts-1-hd"},
+    "zenrex_announcer":     {"provider": "openai_tts", "voice": "fable",  "model": "tts-1-hd"},
+    "zenrex_storyteller_f": {"provider": "openai_tts", "voice": "shimmer","model": "tts-1-hd"},
+    "zenrex_news_anchor":   {"provider": "openai_tts", "voice": "nova",   "model": "tts-1-hd"},
+    "zenrex_documentary":   {"provider": "openai_tts", "voice": "alloy",  "model": "tts-1-hd"},
 }
-DEFAULT_VOICE = "zerax_male_deep"
+DEFAULT_VOICE = "zenrex_male_deep"
 
 
 # ═════════════════════════════════════════════════════════════════════════════
@@ -178,7 +178,7 @@ async def generate_storyboard(req: StoryboardRequest):
     lang_short = "Arabic" if is_arabic else "the target language"
 
     sys_msg = (
-        f"You are Zerax MarketingDirector — an elite advertising copywriter. "
+        f"You are Zenrex MarketingDirector — an elite advertising copywriter. "
         f"You MUST write all narration and titles in: {lang_instruction}. "
         f"NEVER use English unless the requested language IS English. Output ONLY valid JSON. No markdown, no commentary."
     )
@@ -345,7 +345,7 @@ async def generate_video(req: VideoGenerateRequest):
     if len(req.scenes) > 8:
         raise HTTPException(status_code=400, detail="max 8 scenes")
 
-    voice_cfg = ZERAX_VOICE_MAP.get(req.voice) or ZERAX_VOICE_MAP[DEFAULT_VOICE]
+    voice_cfg = ZENREX_VOICE_MAP.get(req.voice) or ZENREX_VOICE_MAP[DEFAULT_VOICE]
     job_id = uuid.uuid4().hex[:14]
     work_dir = TMP_DIR / job_id
     work_dir.mkdir(parents=True, exist_ok=True)
@@ -524,7 +524,7 @@ async def generate_video(req: VideoGenerateRequest):
 
 
 # ═════════════════════════════════════════════════════════════════════════════
-# 3) ZERAX CREDITS — mock recharge endpoint (synced with main Zerax wallet)
+# 3) ZENREX CREDITS — mock recharge endpoint (synced with main Zenrex wallet)
 # ═════════════════════════════════════════════════════════════════════════════
 class RechargeRequest(BaseModel):
     package_id: str       # 'starter' | 'pro' | 'agency' | 'enterprise'
@@ -559,7 +559,7 @@ async def list_packages():
 async def recharge_credits(req: RechargeRequest):
     """Mock recharge — simulates the inline payment gateway flow.
 
-    In production this should call the real Zerax wallet service.
+    In production this should call the real Zenrex wallet service.
     """
     pkg = CREDIT_PACKAGES.get(req.package_id)
     if not pkg:
@@ -587,6 +587,6 @@ async def health():
     return {
         "status": "ok",
         "ffmpeg": shutil.which("ffmpeg") is not None,
-        "voices": list(ZERAX_VOICE_MAP.keys()),
+        "voices": list(ZENREX_VOICE_MAP.keys()),
         "packages": list(CREDIT_PACKAGES.keys()),
     }

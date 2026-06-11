@@ -519,7 +519,7 @@ function MultiplayerPanel({ projectId, token, accent }) {
       .then(b => {
         const url = URL.createObjectURL(b);
         const a = document.createElement('a');
-        a.href = url; a.download = `zerax-${stack}.zip`; a.click();
+        a.href = url; a.download = `zenrex-${stack}.zip`; a.click();
         URL.revokeObjectURL(url);
       });
   };
@@ -747,7 +747,7 @@ function UnityPanel({ projectId, token, accent }) {
       const b = await r.blob();
       const url = URL.createObjectURL(b);
       const a = document.createElement('a');
-      a.href = url; a.download = `zerax-unity-${projectId.slice(0, 8)}.zip`; a.click();
+      a.href = url; a.download = `zenrex-unity-${projectId.slice(0, 8)}.zip`; a.click();
       URL.revokeObjectURL(url);
     } finally { setBusy(false); }
   };
@@ -774,8 +774,8 @@ function UnityPanel({ projectId, token, accent }) {
         تنزيل Unity SDK .zip
       </button>
       <p className="text-[11px] text-zinc-500 leading-relaxed">
-        داخل الـZIP: <code>Zerax/ZeraxClient.cs</code>, <code>Zerax/ZeraxImporter.cs</code>, <code>manifest.json</code>, <code>README.md</code>.
-        ضع المجلد في <code>Assets/</code>، ثبّت GLTFast، أضف <code>ZeraxImporter</code> لـGameObject في المشهد، اضغط Play.
+        داخل الـZIP: <code>Zenrex/ZenrexClient.cs</code>, <code>Zenrex/ZenrexImporter.cs</code>, <code>manifest.json</code>, <code>README.md</code>.
+        ضع المجلد في <code>Assets/</code>، ثبّت GLTFast، أضف <code>ZenrexImporter</code> لـGameObject في المشهد، اضغط Play.
       </p>
     </div>
   );

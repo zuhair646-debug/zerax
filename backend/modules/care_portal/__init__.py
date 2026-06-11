@@ -1,5 +1,5 @@
 """
-Zerax Care Portal — Post-delivery client dashboard
+Zenrex Care Portal — Post-delivery client dashboard
 ====================================================
 After a Ready Site is delivered, the client (merchant) gets a Care Portal at
 /care/{project_id} where they can:

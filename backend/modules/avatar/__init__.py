@@ -1,8 +1,8 @@
 """
-Zerax AI Avatar — premium animated assistant module.
+Zenrex AI Avatar — premium animated assistant module.
 
 Provides:
-    POST /api/avatar/chat                  — chat with Zerax main-site avatar (Zara/Layla)
+    POST /api/avatar/chat                  — chat with Zenrex main-site avatar (Zara/Layla)
     GET  /api/merchant/avatar/pricing      — pricing & trial info
     GET  /api/merchant/avatar/me           — owner fetches their avatar config
     POST /api/merchant/avatar/start-trial  — owner starts 14-day free trial (one-time)
@@ -52,7 +52,7 @@ def _avatar_system_prompt(persona_gender: str = "female") -> str:
     is_male = (persona_gender or "female").lower() == "male"
     if is_male:
         identity = (
-            "أنت محمد المنصاري — مساعد صوتي ذكي سعودي على منصة Zerax.\n"
+            "أنت محمد المنصاري — مساعد صوتي ذكي سعودي على منصة Zenrex.\n"
             "صوتك رجالي دافئ، شخصيتك واثقة لطيفة محترمة.\n"
             "تتكلم مع مستخدمة (أنثى) بأسلوب أخوي محترم — بدون إفراط بالألقاب."
         )
@@ -60,7 +60,7 @@ def _avatar_system_prompt(persona_gender: str = "female") -> str:
         examples = '"هلا والله" "أبشري" "تأمري أمر" "تمام يا أستاذة" "حياك الله"'
     else:
         identity = (
-            "أنتِ ليان — مساعدة صوتية ذكية سعودية على منصة Zerax.\n"
+            "أنتِ ليان — مساعدة صوتية ذكية سعودية على منصة Zenrex.\n"
             "صوتك بنوتي ناعم واثق، شخصيتك ودودة لبقة احترافية.\n"
             "تتكلمين مع مستخدم (ذكر) بأسلوب محترم لطيف — بدون دلع زائد."
         )
@@ -86,17 +86,17 @@ def _avatar_system_prompt(persona_gender: str = "female") -> str:
 - نصائح حياتية (مشاكل شخصية، عمل، دراسة)
 - استشارات تقنية (برمجة، تصميم، أدوات)
 - محادثة عادية (نكات، قصص، تشجيع)
-- بالطبع كل خدمات Zerax
+- بالطبع كل خدمات Zenrex
 
 لو سُئل عن شي مالك علم به، قول بصراحة: "والله ما عندي معلومة دقيقة عن هذا، بس..."
 
-خدمات Zerax (لو سُئل تحديداً):
+خدمات Zenrex (لو سُئل تحديداً):
 - مواقع جاهزة (25 تخصص)
 - توليد صور AI (5 نقاط)
 - توليد فيديو AI (4-12 نقطة/ثانية)
 - استوديو ذكي للمتجر
 
-Intent routing — لو طلب صراحة شي من Zerax، افهم القصد:
+Intent routing — لو طلب صراحة شي من Zenrex، افهم القصد:
 - يبغى صورة → اكتشف الموضوع ورد: "تمام، خلّنا نسوي صورة [الموضوع]. أنقلك للاستوديو الآن"
 - يبغى فيديو → "تمام، فيديو [النوع]. أحوّلك للويزارد"
 - يبغى موقع → "ممتاز، موقع [النوع]. أوديك لصفحة المواقع"
@@ -105,7 +105,7 @@ Intent routing — لو طلب صراحة شي من Zerax، افهم القصد:
 """
 
 # Backward-compatible default (female persona)
-ZERAX_AVATAR_SYSTEM = _avatar_system_prompt("female")
+ZENREX_AVATAR_SYSTEM = _avatar_system_prompt("female")
 
 
 def _merchant_system_message(config: Dict[str, Any]) -> str:
@@ -299,9 +299,9 @@ def create_avatar_router(db, get_current_user) -> APIRouter:
                 'AI': 'إيه آي',
                 'OK': 'أوكي',
                 'ok': 'أوكي',
-                'Zerax': 'زيتكس',
-                'zerax': 'زيتكس',
-                'ZERAX': 'زيتكس',
+                'Zenrex': 'زيتكس',
+                'zenrex': 'زيتكس',
+                'ZENREX': 'زيتكس',
             }
             for k, v in replacements.items():
                 clean = clean.replace(k, v)
@@ -495,10 +495,10 @@ def create_avatar_router(db, get_current_user) -> APIRouter:
         routes = {"image": "/chat/image", "video": "/chat/video", "site": "/websites", "avatar": "/dashboard/avatar"}
         return {"intent": intent, "subject": subject or None, "route": routes.get(intent)}
 
-    # ===== ZERAX MAIN AVATAR (public, no auth) =====
+    # ===== ZENREX MAIN AVATAR (public, no auth) =====
     @router.post("/avatar/chat")
-    async def zerax_avatar_chat(payload: AvatarChatIn):
-        sid = payload.session_id or "zerax-public"
+    async def zenrex_avatar_chat(payload: AvatarChatIn):
+        sid = payload.session_id or "zenrex-public"
 
         # Determine AI persona based on user gender (OPPOSITE-gender voice)
         persona = _resolve_persona(payload.user_gender)
@@ -537,7 +537,7 @@ def create_avatar_router(db, get_current_user) -> APIRouter:
             usage = await _check_anon_usage(payload.anon_id)
 
         await db.avatar_conversations.insert_one({
-            "site": "zerax",
+            "site": "zenrex",
             "session_id": sid,
             "user_message": payload.message,
             "assistant_reply": text,
@@ -558,9 +558,9 @@ def create_avatar_router(db, get_current_user) -> APIRouter:
             "intent": intent_data,
         }
 
-    # ===== ZERAX GREETING (auto-greet on entry — fast Haiku-based) =====
+    # ===== ZENREX GREETING (auto-greet on entry — fast Haiku-based) =====
     @router.post("/avatar/greet")
-    async def zerax_greet(payload: Dict[str, Any]):
+    async def zenrex_greet(payload: Dict[str, Any]):
         """Quick personalized greeting on app entry. Uses Haiku for speed."""
         user_name = payload.get("user_name") or "صديقي"
         user_gender = payload.get("user_gender")
@@ -587,7 +587,7 @@ def create_avatar_router(db, get_current_user) -> APIRouter:
         sys = f"""{char_persona}
 بدون إيموجي. لهجة سعودية طبيعية. استخدم اسم المستخدم.
 """
-        user_msg = f"المستخدم اسمه {user_name} وفتح موقع Zerax الآن. الوقت: {time_phrase}. حيّه ترحيب طبيعي قصير وذكّره إنه يقدر يطلب صور أو فيديو أو موقع بالكلام."
+        user_msg = f"المستخدم اسمه {user_name} وفتح موقع Zenrex الآن. الوقت: {time_phrase}. حيّه ترحيب طبيعي قصير وذكّره إنه يقدر يطلب صور أو فيديو أو موقع بالكلام."
 
         try:
             from emergentintegrations.llm.chat import LlmChat, UserMessage

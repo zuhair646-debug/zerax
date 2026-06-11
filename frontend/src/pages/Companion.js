@@ -1,5 +1,5 @@
 /**
- * Zerax Companion — Mobile-first PWA page.
+ * Zenrex Companion — Mobile-first PWA page.
  * Route: /companion
  *
  * Flow:
@@ -246,7 +246,7 @@ export default function Companion() {
       {/* PWA install banner */}
       {installPromptShown && (
         <div className="bg-gradient-to-r from-amber-500/90 to-yellow-500/90 text-black px-3 py-2 text-xs flex items-center justify-between" data-testid="pwa-install-banner">
-          <span className="font-black">📱 ثبّت Zerax كتطبيق على جوالك</span>
+          <span className="font-black">📱 ثبّت Zenrex كتطبيق على جوالك</span>
           <div className="flex gap-2">
             <button onClick={promptInstall} className="px-3 py-1 bg-black text-amber-300 rounded-full font-black" data-testid="pwa-install-btn">ثبّت</button>
             <button onClick={() => setInstallPromptShown(false)} className="text-black/70">✕</button>
@@ -592,7 +592,7 @@ function ProfileEditor({ profile, saveProfile, navigate }) {
   const shareApp = () => {
     const url = window.location.origin + '/companion';
     if (navigator.share) {
-      navigator.share({ title: 'Zerax Companion', text: 'رفيقتي الذكية — جربها!', url });
+      navigator.share({ title: 'Zenrex Companion', text: 'رفيقتي الذكية — جربها!', url });
     } else {
       navigator.clipboard.writeText(url);
       toast.success('تم نسخ الرابط');

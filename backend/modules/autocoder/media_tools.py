@@ -1,7 +1,7 @@
 """
 Auto-Coder — Media generation tools (image / video / audio / screenshot).
 These give the Owner Auto-Coder the ability to actually CREATE assets while
-building Zerax (logos, hero images, voiceovers, video clips, visual diffs).
+building Zenrex (logos, hero images, voiceovers, video clips, visual diffs).
 
 Each tool returns a dict with `ok`, a `url` to the produced asset (when
 applicable) and any provider metadata. URLs use the static mount that

@@ -70,7 +70,7 @@ const AdminDashboard = ({ user }) => {
     },
     {
       title: 'جاهزية الذكاء',
-      desc: 'شوف نماذج AI، التكاملات الناقصة، روابط المفاتيح، وأولويات ترقية Zerax.',
+      desc: 'شوف نماذج AI، التكاملات الناقصة، روابط المفاتيح، وأولويات ترقية Zenrex.',
       path: '/admin/ai-readiness',
       icon: <Brain className="w-5 h-5" />,
       badge: 'تقرير شامل',
@@ -106,7 +106,7 @@ const AdminDashboard = ({ user }) => {
               </div>
               <h2 className="text-2xl font-black text-white md:text-3xl">إذا ما شفت التغيير: ابدأ من هنا</h2>
               <p className="mt-3 text-sm leading-7 text-slate-300">
-                رتّبت لك مدخل واضح لكل ما يخص ذكاء Zerax: اطلب تنفيذ مهام من برمجة زيتاكس، راقب جاهزية الذكاء، وشوف المفاتيح والخدمات الناقصة بروابط مباشرة.
+                رتّبت لك مدخل واضح لكل ما يخص ذكاء Zenrex: اطلب تنفيذ مهام من برمجة زيتاكس، راقب جاهزية الذكاء، وشوف المفاتيح والخدمات الناقصة بروابط مباشرة.
               </p>
             </div>
             <div className="grid min-w-[280px] grid-cols-2 gap-3 text-center">

@@ -1,5 +1,5 @@
 """
-Zerax Shipping Module
+Zenrex Shipping Module
 ─────────────────────
 نظام شحن متكامل للمتاجر السعودية مع 6 شركات شحن محلية + خيارات دولية.
 
@@ -333,7 +333,7 @@ def detect_country_from_ip(ip: str) -> Tuple[str, Optional[str]]:
             return ("SA", None)  # localhost — افتراض السعودية للاختبار
         req = urllib.request.Request(
             f"https://ipapi.co/{ip}/json/",
-            headers={"User-Agent": "Zerax/1.0"},
+            headers={"User-Agent": "Zenrex/1.0"},
         )
         with urllib.request.urlopen(req, timeout=3) as resp:
             data = _json.loads(resp.read())

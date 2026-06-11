@@ -4,7 +4,7 @@
  * Picks the best initial language for a visitor in 3 layers:
  *   1. Manual override   — if the user ever picked a language from the
  *                          LanguagePicker, we ALWAYS honor that choice
- *                          (stored in localStorage as `zerax_lang_manual`).
+ *                          (stored in localStorage as `zenrex_lang_manual`).
  *   2. Browser language  — navigator.language (instant, no network).
  *   3. IP geolocation    — ipapi.co (free, CORS-enabled) — runs in the
  *                          background and upgrades the choice when the
@@ -83,8 +83,8 @@ const COUNTRY_TO_LANG = {
 };
 
 const FALLBACK = 'en';   // when we have no clue
-const KEY_MANUAL = 'zerax_lang_manual';   // user-chosen
-const KEY_PERSIST = 'zerax_lang';          // i18next's persisted key
+const KEY_MANUAL = 'zenrex_lang_manual';   // user-chosen
+const KEY_PERSIST = 'zenrex_lang';          // i18next's persisted key
 
 function isSupported(code) {
   return Boolean(code && LANG_BY_CODE[code]);
@@ -110,7 +110,7 @@ export function getInitialLanguage() {
       if (isSupported(code)) return code;
     }
   } catch (_) { /* SSR / privacy mode */ }
-  return 'ar'; // Zerax default — Arabic
+  return 'ar'; // Zenrex default — Arabic
 }
 
 export function hasManualChoice() {

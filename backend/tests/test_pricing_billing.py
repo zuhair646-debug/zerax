@@ -1,5 +1,5 @@
 """
-Backend tests for Zerax Pricing & Billing system (iteration_35).
+Backend tests for Zenrex Pricing & Billing system (iteration_35).
 
 Covers:
 - Public catalog endpoints: /api/pricing/plans, /packs, /tax-config, /service-costs
@@ -32,7 +32,7 @@ def _load_base_url():
 
 
 BASE_URL = _load_base_url()
-ADMIN_EMAIL = "owner@zerax.com"
+ADMIN_EMAIL = "owner@zenrex.ai"
 ADMIN_PASSWORD = "owner123"
 
 
@@ -188,8 +188,8 @@ class TestUserBilling:
             "item_id": "indie",
             "billing_cycle": "monthly",
             "promo_code": "LAUNCH50",
-            "return_url": "https://zerax.app/billing/return",
-            "cancel_url": "https://zerax.app/billing/cancel",
+            "return_url": "https://zenrex.ai/billing/return",
+            "cancel_url": "https://zenrex.ai/billing/cancel",
         }
         r = requests.post(f"{BASE_URL}/api/pricing/checkout", headers=user_headers,
                           json=body, timeout=45)
@@ -208,8 +208,8 @@ class TestUserBilling:
             "item_type": "pack",
             "item_id": "pack_power",
             "billing_cycle": "monthly",
-            "return_url": "https://zerax.app/billing/return",
-            "cancel_url": "https://zerax.app/billing/cancel",
+            "return_url": "https://zenrex.ai/billing/return",
+            "cancel_url": "https://zenrex.ai/billing/cancel",
         }
         r = requests.post(f"{BASE_URL}/api/pricing/checkout", headers=user_headers,
                           json=body, timeout=45)

@@ -14,8 +14,8 @@ import {
 import ChatInput from '../components/ChatInput';
 
 const API = process.env.REACT_APP_BACKEND_URL;
-const SESSION_KEY = 'zerax_autocoder_session';
-const MODEL_KEY = 'zerax_autocoder_model';
+const SESSION_KEY = 'zenrex_autocoder_session';
+const MODEL_KEY = 'zenrex_autocoder_model';
 
 const OWNER_MISSION_STEPS = [
   { title: 'أفهم الطلب', desc: 'ألخّص الهدف، أحدد الملفات/الخدمات، وأوضح لك وش راح أبني.', icon: Target, tone: 'amber' },
@@ -27,7 +27,7 @@ const OWNER_MISSION_STEPS = [
 const OWNER_QUICK_PROMPTS = [
   'افحص نفسك كـ AutoCoder وطلع لي تقرير نواقصك وقدراتك وخطة ترقيتك القادمة',
   'رتّب لي خطة تطوير قسم برمجة زيتاكس لمدة أسبوع بالأولويات والروابط المطلوبة',
-  'اعمل health check شامل للمنصة ثم أعطني خلاصة مربعة بما يحتاجه Zerax الآن',
+  'اعمل health check شامل للمنصة ثم أعطني خلاصة مربعة بما يحتاجه Zenrex الآن',
   'اقترح تحسين واجهة جديدة للمالك ثم نفّذها واختبرها وانشرها',
 ];
 

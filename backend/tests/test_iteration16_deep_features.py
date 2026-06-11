@@ -19,7 +19,7 @@ if not BASE_URL:
     raise RuntimeError("REACT_APP_BACKEND_URL not set")
 
 # Test credentials from /app/memory/test_credentials.md
-OWNER_EMAIL = "owner@zerax.com"
+OWNER_EMAIL = "owner@zenrex.ai"
 OWNER_PASSWORD = "owner123"
 
 
@@ -27,7 +27,7 @@ class TestAuthFlow:
     """1. AUTH: Login as owner and verify token"""
     
     def test_owner_login(self):
-        """Login as owner@zerax.com/owner123 — verify token returned"""
+        """Login as owner@zenrex.ai/owner123 — verify token returned"""
         response = requests.post(f"{BASE_URL}/api/auth/login", json={
             "email": OWNER_EMAIL,
             "password": OWNER_PASSWORD

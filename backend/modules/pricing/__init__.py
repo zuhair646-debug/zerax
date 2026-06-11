@@ -1,5 +1,5 @@
 """
-Zerax Pricing & Billing — credit-based pay-as-you-go + subscription system.
+Zenrex Pricing & Billing — credit-based pay-as-you-go + subscription system.
 Payment: PayPal v2 REST API (LIVE mode).
 Invoice: PDF (Arabic) via ReportLab + email delivery via Resend.
 """

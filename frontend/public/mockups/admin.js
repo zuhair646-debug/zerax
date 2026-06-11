@@ -472,13 +472,13 @@ function openDispatchSettings(){
 function closeDispatchMod(){document.getElementById('dispatch-mod').classList.remove('open')}
 function openDriverManager(){
   // Pass current token to driver_manager via URL param
-  const tok = localStorage.getItem('zx_token') || localStorage.getItem('zerax_token') || localStorage.getItem('token') || '';
+  const tok = localStorage.getItem('zx_token') || localStorage.getItem('zenrex_token') || localStorage.getItem('token') || '';
   window.location.href = '/mockups/driver_manager.html?t=' + encodeURIComponent(tok);
 }
 
 // ═══════════ EXTERNAL ORDERS + WITHDRAWALS MODALS ═══════════
 async function _authHdr(){
-  const tok = localStorage.getItem('zx_token') || localStorage.getItem('zerax_token') || localStorage.getItem('token') || '';
+  const tok = localStorage.getItem('zx_token') || localStorage.getItem('zenrex_token') || localStorage.getItem('token') || '';
   return {'Authorization':'Bearer '+tok, 'Content-Type':'application/json'};
 }
 async function openExternalOrdersMod(){
@@ -600,7 +600,7 @@ async function openRatingsMod(){
 // Poll badge counts every 30s
 setInterval(async () => {
   try {
-    const tok = localStorage.getItem('zx_token') || localStorage.getItem('zerax_token') || localStorage.getItem('token') || '';
+    const tok = localStorage.getItem('zx_token') || localStorage.getItem('zenrex_token') || localStorage.getItem('token') || '';
     if (!tok) return;
     const [e, w] = await Promise.all([
       fetch(window.location.origin + '/api/delivery/external/orders?status=pending_merchant', {headers:{'Authorization':'Bearer '+tok}}).then(r=>r.json()).catch(()=>({orders:[]})),
@@ -683,7 +683,7 @@ function saveDriverPay(){
 
 // ───── MERCHANT SERVICES (7 services with auto-activation) ─────
 const SERVICES=[
-  {id:'domain',icon:'🌐',bg:'linear-gradient(135deg,#3b82f6,#06b6d4)',title:'نطاق متجر مخصص',desc:'احصل على رابط احترافي مثل mystore.com بدل الرابط الفرعي على Zerax',feats:['نطاق .com / .sa / .net','تركيب تلقائي خلال دقائق','SSL مجاني','تجديد سنوي تلقائي'],price:99,period:'سنوياً',featured:false,oneTime:false},
+  {id:'domain',icon:'🌐',bg:'linear-gradient(135deg,#3b82f6,#06b6d4)',title:'نطاق متجر مخصص',desc:'احصل على رابط احترافي مثل mystore.com بدل الرابط الفرعي على Zenrex',feats:['نطاق .com / .sa / .net','تركيب تلقائي خلال دقائق','SSL مجاني','تجديد سنوي تلقائي'],price:99,period:'سنوياً',featured:false,oneTime:false},
   {id:'email',icon:'📧',bg:'linear-gradient(135deg,#ec4899,#f43f5e)',title:'إيميل بنطاق المتجر',desc:'5 صناديق بريد احترافية مثل info@mystore.com (يتطلب تفعيل النطاق)',feats:['5 صناديق بريد','مساحة 10 GB لكل صندوق','إعادة توجيه ذكي','حماية من البريد المزعج'],price:49,period:'سنوياً',featured:false,oneTime:false},
   {id:'template',icon:'🎨',bg:'linear-gradient(135deg,#fbbf24,#f59e0b)',title:'قالب متجر فاخر',desc:'قوالب احترافية جاهزة (مطاعم، أزياء، عطور، صيدليات…) — تفعيل بضغطة',feats:['12+ قالب جاهز','تخصيص ألوان وخطوط','معاينة فورية قبل التفعيل','يتجدد كل شهر'],price:199,period:'مرة واحدة',featured:true,oneTime:true},
   {id:'app',icon:'📱',bg:'linear-gradient(135deg,#7c3aed,#a78bfa)',title:'تطبيق متجر iOS/Android',desc:'تطبيق جوال بشعارك على App Store و Google Play — نبنيه ونرفعه لك',feats:['iOS + Android','اسم وشعار متجرك','إشعارات Push','تحديث تلقائي'],price:999,period:'مرة واحدة',featured:false,oneTime:true},
@@ -785,7 +785,7 @@ function autoPostNewProduct(product){
     .replace(/\{\{title\}\}/g,product.name||'')
     .replace(/\{\{description\}\}/g,product.desc||(product.analysis&&product.analysis.description)||'')
     .replace(/\{\{price\}\}/g,product.price||0)
-    .replace(/\{\{link\}\}/g,'zerax.shop/p/'+product.id);
+    .replace(/\{\{link\}\}/g,'zenrex.ai/p/'+product.id);
   // Deduct points (2 per platform)
   const cost=active.length*2;
   if(WALLET<cost)return;
@@ -822,7 +822,7 @@ async function gwLoad(){
           <input type="${c.type==='password'?'password':'text'}" placeholder="${c.where_ar||''}" data-gw="${g.id}" data-cred="${c.name}" style="width:100%;padding:9px;border:1px solid var(--border);border-radius:8px;font-family:monospace;font-size:11px;direction:ltr">
           <div style="font-size:10px;color:var(--mute);margin-top:3px">📍 ${c.where_ar||'—'}</div>
         </div>`).join(''):'<div style="color:var(--mute);font-size:11px">لا تحتاج مفاتيح — تربط مباشرة</div>';
-      const tipHtml=g.ai_helper_ar?`<div style="background:#faf5ff;border:1px solid #ddd6fe;border-radius:10px;padding:10px;margin-top:10px;font-size:11px;color:#5b21b6;line-height:1.8">💡 <b>نصيحة Zerax AI:</b> ${g.ai_helper_ar}</div>`:'';
+      const tipHtml=g.ai_helper_ar?`<div style="background:#faf5ff;border:1px solid #ddd6fe;border-radius:10px;padding:10px;margin-top:10px;font-size:11px;color:#5b21b6;line-height:1.8">💡 <b>نصيحة Zenrex AI:</b> ${g.ai_helper_ar}</div>`:'';
       return `<div style="background:#fff;border:1.5px solid var(--border);border-radius:14px;padding:14px;margin-bottom:10px">
         <div style="display:grid;grid-template-columns:auto 1fr auto;gap:14px;align-items:center">
           <div style="width:48px;height:48px;border-radius:10px;background:${g.badge.bg};color:${g.badge.fg};display:flex;align-items:center;justify-content:center;font-weight:900;font-size:10px;text-align:center;line-height:1.1">${g.name_en.slice(0,8)}</div>
@@ -846,7 +846,7 @@ async function gwLoad(){
             <button class="btn btn-primary" data-testid="gw-save-${g.id}" onclick="gwSaveKeys('${g.id}')" style="flex:1;padding:10px;font-size:12px"><i data-lucide="save" style="width:13px;height:13px"></i> حفظ المفاتيح بشكل آمن</button>
             <button class="btn btn-outline" data-testid="gw-test-${g.id}" onclick="gwTestConnection('${g.id}')" style="padding:10px 14px;font-size:12px"><i data-lucide="zap" style="width:13px;height:13px"></i> اختبر الاتصال</button>
           </div>
-          <div style="margin-top:10px;font-size:10px;color:var(--mute);background:#fef3c7;border:1px solid #fde68a;border-radius:8px;padding:8px;line-height:1.6">⚠️ <b>تنبيه:</b> Zerax ما تاخذ أي عمولة على معاملاتك — المفاتيح تروح مباشرة لـ ${g.name_ar}. الأموال تنزل في حسابك مباشرة.</div>
+          <div style="margin-top:10px;font-size:10px;color:var(--mute);background:#fef3c7;border:1px solid #fde68a;border-radius:8px;padding:8px;line-height:1.6">⚠️ <b>تنبيه:</b> Zenrex ما تاخذ أي عمولة على معاملاتك — المفاتيح تروح مباشرة لـ ${g.name_ar}. الأموال تنزل في حسابك مباشرة.</div>
         </div>
       </div>`;
     }).join('');
@@ -998,12 +998,12 @@ async function bulkSaveAllProducts(){
 
 // ───── AI SMART CHAT (luxury) ─────
 // ═══════════════════════════════════════════════════════════════════════════
-// ZERAX AI · CORE SYSTEM RULES (will be sent as system prompt to LLM later)
+// ZENREX AI · CORE SYSTEM RULES (will be sent as system prompt to LLM later)
 // User explicitly requested these strict rules so the model never wastes credits
 // on irrelevant outputs. Keep this constant SINGLE SOURCE OF TRUTH.
 // ═══════════════════════════════════════════════════════════════════════════
-const ZERAX_AI_SYSTEM_RULES = {
-  role: "Zerax Product AI — مساعد ذكي لإضافة المنتجات في متاجر التجار السعوديين/العرب",
+const ZENREX_AI_SYSTEM_RULES = {
+  role: "Zenrex Product AI — مساعد ذكي لإضافة المنتجات في متاجر التجار السعوديين/العرب",
   language: "Saudi Arabic dialect (primary) · English fallback",
   must_obey: [
     "التزم بمتطلبات العميل حرفياً — لو طلب لون أبيض ولا تعطه أزرق",
@@ -1077,8 +1077,8 @@ function aiChatSend(){
   const txt=input.value.trim();
   if(!txt&&!AI_CHAT_ATTACH){toast('اكتب طلبك أو ارفع صورة');return;}
   // Charge 5 credits per message
-  if(typeof ZERAX_CREDITS!=='undefined'&&ZERAX_CREDITS<5){toast('⚠️ رصيد النقاط غير كافي · تحتاج 5 نقاط');return;}
-  if(typeof ZERAX_CREDITS!=='undefined'){ZERAX_CREDITS-=5;localStorage.setItem('zx_credits',String(ZERAX_CREDITS));const e=document.getElementById('zerax-credits');if(e)e.textContent=ZERAX_CREDITS;}
+  if(typeof ZENREX_CREDITS!=='undefined'&&ZENREX_CREDITS<5){toast('⚠️ رصيد النقاط غير كافي · تحتاج 5 نقاط');return;}
+  if(typeof ZENREX_CREDITS!=='undefined'){ZENREX_CREDITS-=5;localStorage.setItem('zx_credits',String(ZENREX_CREDITS));const e=document.getElementById('zenrex-credits');if(e)e.textContent=ZENREX_CREDITS;}
 
   const productName=document.getElementById('pm-name')?.value.trim()||(txt.split(' ').slice(0,4).join(' '))||'المنتج';
   const spec=parseUserSpec(txt);
@@ -1532,7 +1532,7 @@ function mktSaveAll(){
 
 // ───────────────────────── BRANCHES MANAGEMENT (Multi-Branch Sub-Dashboards with Subscription) ─────────────────────────
 let MERCHANT_BRANCHES=JSON.parse(localStorage.getItem('zx_merchant_branches')||'null')||[
-  {id:'br-main',name_ar:'الفرع الرئيسي',name_en:'Main Branch',addr:'الرياض - العليا',phone:'+966112345678',lat:24.6877,lng:46.6857,manager_name:'مدير عام',manager_email:'owner@zerax.com',active:true,is_main:true,created_at:Date.now()-90*86400000}
+  {id:'br-main',name_ar:'الفرع الرئيسي',name_en:'Main Branch',addr:'الرياض - العليا',phone:'+966112345678',lat:24.6877,lng:46.6857,manager_name:'مدير عام',manager_email:'owner@zenrex.ai',active:true,is_main:true,created_at:Date.now()-90*86400000}
 ];
 
 function branchFeeFor(index){
@@ -2066,7 +2066,7 @@ function vsGetConfig(){
     duration:parseInt($('vs-duration').value||'30'),
     tone:$('vs-tone').value||'energetic',
     langRaw:$('vs-lang').value||'ar-sa',
-    voice:$('vs-voice').value||'zerax_male_deep'
+    voice:$('vs-voice').value||'zenrex_male_deep'
   };
 }
 function vsSetProgress(step,state){const el=document.getElementById('prog-'+step);if(el){el.className='pdot '+state;}}
@@ -2214,7 +2214,7 @@ function vsRenderVoice(){
 async function vsGenerateVoice(){
   if(WALLET<5){alert('رصيد غير كافٍ');return;}
   const cfg=vsGetConfig();const lang=cfg.langRaw.startsWith('ar')?'ar':cfg.langRaw;
-  document.getElementById('content-voice').innerHTML=`<div class="zx-empty"><div class="big-ico">⏳</div><h5>Zerax Voice يسجّل…</h5><p>جودة سينمائية مع مخارج كلمات دقيقة</p></div>`;
+  document.getElementById('content-voice').innerHTML=`<div class="zx-empty"><div class="big-ico">⏳</div><h5>Zenrex Voice يسجّل…</h5><p>جودة سينمائية مع مخارج كلمات دقيقة</p></div>`;
   try{
     const text=VS_STATE.story.full_narration||VS_STATE.story.scenes.map(s=>s.narration).join(' ');
     const firstImg=VS_STATE.images[0]||'';
@@ -2474,7 +2474,7 @@ async function downloadReportPDF(){
     }
     // Footer with branding (last page)
     pdf.setFontSize(8);pdf.setTextColor(150,150,160);
-    pdf.text('Generated by Zerax Platform · zerax.sa',105,pdfH-5,{align:'center'});
+    pdf.text('Generated by Zenrex Platform · zenrex.ai',105,pdfH-5,{align:'center'});
     const filename=`${_currentReport.type}-report-${Date.now()}.pdf`;
     pdf.save(filename);
     toast('📥 تم تحميل: '+filename);
@@ -2489,7 +2489,7 @@ function shareReportWhatsapp(){
   if(!_currentReport){alert('اختر التقرير أولاً');return;}
   const msg=`📊 *${_currentReport.title}*\n\n`+
     _currentReport.summary.map(s=>`• ${s.k}: *${s.v}*`).join('\n')+
-    `\n\n📅 ${new Date().toLocaleDateString('ar-SA')}\n\n_تم إنشاؤه من منصة Zerax_`;
+    `\n\n📅 ${new Date().toLocaleDateString('ar-SA')}\n\n_تم إنشاؤه من منصة Zenrex_`;
   const url=`https://wa.me/?text=${encodeURIComponent(msg)}`;
   window.open(url,'_blank');
   toast('💬 جاهز للإرسال — حمّل الـPDF ثم أرفقه يدوياً');
@@ -2690,7 +2690,7 @@ ${items.map((it,i)=>`  <cac:InvoiceLine><cbc:ID>${i+1}</cbc:ID><cbc:InvoicedQuan
           ✓ هذه فاتورة إلكترونية معتمدة من هيئة الزكاة والضريبة والجمارك ZATCA<br>
           <span style="direction:ltr;display:inline-block">Electronic invoice compliant with ZATCA e-invoicing regulations Phase 2</span>
         </div>
-        <div style="font-size:10px;color:#7c3aed;font-weight:900">⚡ صادرة من Zerax Platform</div>
+        <div style="font-size:10px;color:#7c3aed;font-weight:900">⚡ صادرة من Zenrex Platform</div>
       </div>
     </div>
     <!-- DETAILS (collapsed) for developers -->
@@ -2821,7 +2821,7 @@ function openOnboarding(){
       <div style="position:absolute;inset:0;background:radial-gradient(circle at 30% 20%,rgba(124,58,237,.25),transparent 60%),radial-gradient(circle at 80% 80%,rgba(251,191,36,.15),transparent 60%);pointer-events:none"></div>
       <div style="position:relative">
         <div style="font-size:50px;margin-bottom:10px;filter:drop-shadow(0 4px 20px rgba(251,191,36,.4))">🎉</div>
-        <h2 style="color:#fff;font-size:24px;font-weight:900;letter-spacing:.5px">مرحباً فيك في Zerax</h2>
+        <h2 style="color:#fff;font-size:24px;font-weight:900;letter-spacing:.5px">مرحباً فيك في Zenrex</h2>
         <p style="font-size:13px;color:#cbd5e1;margin-top:8px">في 4 خطوات بسيطة، متجرك يصير جاهز ١٠٠٪</p>
       </div>
     </div>
@@ -2838,7 +2838,7 @@ function openOnboarding(){
         </div>
         <div style="background:rgba(245,158,11,.07);border:1px solid rgba(245,158,11,.3);border-radius:14px;padding:16px;display:flex;align-items:center;gap:14px">
           <div style="width:42px;height:42px;border-radius:50%;background:linear-gradient(135deg,#fbbf24,#f59e0b);color:#0a0a14;display:flex;align-items:center;justify-content:center;font-weight:900;font-size:16px;box-shadow:0 6px 16px rgba(245,158,11,.3)">3</div>
-          <div style="flex:1"><b style="font-size:13px;color:#fbbf24">🔐 اربط مفاتيح المزودين</b><div style="font-size:11px;color:#94a3b8;margin-top:4px;line-height:1.7">إيميل (Resend) · SMS (Unifonic) · واتساب (Meta) · الدفع (Tabby/Tamara)<br>الرسوم تدفعها مباشرة لكل مزود — Zerax ما تتدخل</div></div>
+          <div style="flex:1"><b style="font-size:13px;color:#fbbf24">🔐 اربط مفاتيح المزودين</b><div style="font-size:11px;color:#94a3b8;margin-top:4px;line-height:1.7">إيميل (Resend) · SMS (Unifonic) · واتساب (Meta) · الدفع (Tabby/Tamara)<br>الرسوم تدفعها مباشرة لكل مزود — Zenrex ما تتدخل</div></div>
           <button onclick="closeOnboarding();goPage('credits')" style="background:linear-gradient(135deg,#fbbf24,#f59e0b);color:#0a0a14;border:none;padding:8px 14px;border-radius:8px;font-family:inherit;font-weight:900;font-size:11px;cursor:pointer">اذهب ←</button>
         </div>
         <div style="background:rgba(236,72,153,.07);border:1px solid rgba(236,72,153,.3);border-radius:14px;padding:16px;display:flex;align-items:center;gap:14px">
@@ -2852,7 +2852,7 @@ function openOnboarding(){
         • <b style="color:#a855f7">الإيميل</b> → كل طلب جديد ينرسل تأكيد للعميل + تحديث للتاجر تلقائياً<br>
         • <b style="color:#a855f7">SMS</b> → تنبيهات تجديد طلب + استرداد سلة متروكة + حملات تسويقية<br>
         • <b style="color:#a855f7">واتساب</b> → دعم فوري + إشعارات طلبات + رد AI الذكي على استفسارات<br>
-        • <b style="color:#a855f7">الدفع</b> → الأموال تدخل حسابك مباشرة (Zerax ما تمسها)<br>
+        • <b style="color:#a855f7">الدفع</b> → الأموال تدخل حسابك مباشرة (Zenrex ما تمسها)<br>
         • <b style="color:#a855f7">الذكاء الاصطناعي</b> → توليد صور المنتجات + كتابة الأوصاف + ردود تلقائية + تحليل سلوك العملاء
       </div>
     </div>
@@ -2888,7 +2888,7 @@ function aiSuggestAudience(){
     {name:'العائدون بعد فترة (Win-back)',count:67,reason:'آخر طلب قبل 60-90 يوم — يحتاج تذكير',matchPct:72,segments:['inactive'],cats:[]},
     {name:'مشتروا المنتجات المكمّلة',count:34,reason:'اشتروا جوال — مرشحين للسماعات/الإكسسوارات',matchPct:85,segments:['repeat'],cats:['electronics']},
   ];
-  let html=`<div style="background:linear-gradient(135deg,#faf5ff,#fdf2f8);border:2px solid #7c3aed;border-radius:14px;padding:16px;margin-bottom:14px"><div style="display:flex;align-items:center;gap:10px;margin-bottom:12px"><div style="font-size:24px">🧠</div><div><b style="color:#7c3aed">اقتراحات Zerax AI — الجمهور الأمثل</b><div style="font-size:11px;color:#6b7280">بناءً على ${total} منتج و سلوك ${cats.length} تصنيف</div></div></div>`;
+  let html=`<div style="background:linear-gradient(135deg,#faf5ff,#fdf2f8);border:2px solid #7c3aed;border-radius:14px;padding:16px;margin-bottom:14px"><div style="display:flex;align-items:center;gap:10px;margin-bottom:12px"><div style="font-size:24px">🧠</div><div><b style="color:#7c3aed">اقتراحات Zenrex AI — الجمهور الأمثل</b><div style="font-size:11px;color:#6b7280">بناءً على ${total} منتج و سلوك ${cats.length} تصنيف</div></div></div>`;
   html+=suggestions.map((s,i)=>`<div style="background:#fff;border:1px solid #e5e7eb;border-radius:10px;padding:12px;margin-bottom:8px;cursor:pointer" onclick="aiApplyAudience(${i})" data-testid="ai-aud-${i}">
     <div style="display:flex;justify-content:space-between;align-items:start;gap:10px">
       <div style="flex:1"><b style="font-size:13px">${s.name}</b><div style="font-size:11px;color:#6b7280;margin-top:3px">${s.reason}</div></div>
@@ -3020,7 +3020,7 @@ function maybeHideAiReport(){
 
 function rechargeOpen(){
   const html=`<div id="zx-recharge-modal"style="position:fixed;inset:0;background:rgba(10,10,20,.75);backdrop-filter:blur(10px);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px" onclick="if(event.target===this)document.body.removeChild(this)"><div style="background:#13131f;border:1px solid rgba(255,255,255,.1);border-radius:18px;max-width:440px;width:100%;color:#fff;box-shadow:0 24px 60px rgba(0,0,0,.5);overflow:hidden">
-    <div style="padding:24px 22px 18px;border-bottom:1px solid rgba(255,255,255,.06);text-align:center"><div style="font-size:42px;margin-bottom:8px">⚡</div><h3 style="font-size:18px;font-weight:900;margin-bottom:4px">شحن رصيد Zerax</h3><div style="font-size:11px;color:var(--mute)">رصيدك الحالي: <b style="color:var(--amber)" id="zx-rc-bal">${WALLET.toLocaleString('en-US')}</b> نقطة</div></div>
+    <div style="padding:24px 22px 18px;border-bottom:1px solid rgba(255,255,255,.06);text-align:center"><div style="font-size:42px;margin-bottom:8px">⚡</div><h3 style="font-size:18px;font-weight:900;margin-bottom:4px">شحن رصيد Zenrex</h3><div style="font-size:11px;color:var(--mute)">رصيدك الحالي: <b style="color:var(--amber)" id="zx-rc-bal">${WALLET.toLocaleString('en-US')}</b> نقطة</div></div>
     <div style="padding:18px 22px;display:grid;grid-template-columns:repeat(2,1fr);gap:10px">
       <button class="zx-pkg" onclick="vsAddCredits(1000)" style="background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);border-radius:12px;padding:14px;cursor:pointer;color:#fff;font-family:inherit;text-align:right"><div style="font-size:11px;color:var(--mute);margin-bottom:4px">باقة تجربة</div><div style="font-size:22px;font-weight:900;color:var(--amber)">1,000</div><div style="font-size:10px;color:var(--mute);margin-top:4px">نقطة · مجاناً للعرض</div></button>
       <button class="zx-pkg" onclick="vsAddCredits(2000)" style="background:rgba(124,58,237,.1);border:1px solid rgba(124,58,237,.3);border-radius:12px;padding:14px;cursor:pointer;color:#fff;font-family:inherit;text-align:right;position:relative"><div style="position:absolute;top:-8px;left:8px;background:var(--amber);color:#0a0a14;font-size:9px;font-weight:900;padding:2px 7px;border-radius:99px">الأكثر طلباً</div><div style="font-size:11px;color:var(--mute);margin-bottom:4px">باقة احترافية</div><div style="font-size:22px;font-weight:900;color:var(--amber)">2,000</div><div style="font-size:10px;color:var(--mute);margin-top:4px">نقطة · مجاناً للعرض</div></button>
@@ -3095,7 +3095,7 @@ function vsLangLabel(code){
   return ({'ar-sa':'سعودية (نجدية)','ar-sa-hijazi':'حجازية','ar-sa-eastern':'شرقية','ar-sa-southern':'جنوبية','ar-kw':'كويتية','ar-ae':'إماراتية','ar-qa':'قطرية','ar-bh':'بحرينية','ar-om':'عُمانية','ar-eg':'مصرية','ar-jo':'أردنية','ar-lb':'لبنانية','ar-sy':'سورية','ar-ps':'فلسطينية','ar-iq':'عراقية','ar-ye':'يمنية','ar-ma':'مغربية','ar-dz':'جزائرية','ar-tn':'تونسية','ar-ly':'ليبية','ar-sd':'سودانية','ar-msa':'الفصحى','en-us':'English (US)','en-gb':'English (UK)','fr':'Français','es':'Español','de':'Deutsch','it':'Italiano','pt-br':'Português','ru':'Русский','tr':'Türkçe','fa':'فارسی','ur':'اردو','hi':'हिन्दी','bn':'বাংলা','id':'Indonesia','ms':'Melayu','th':'ไทย','vi':'Việt','zh-cn':'中文 普通话','zh-tw':'中文 台灣','ja':'日本語','ko':'한국어','sw':'Kiswahili'})[code]||code;
 }
 function vsVoiceLabel(code){
-  return ({zerax_male_deep:'ذكر عميق فخم',zerax_male_warm:'ذكر دافئ ودود',zerax_male_youth:'ذكر شبابي حيوي',zerax_narrator_pro:'راوي احترافي',zerax_friend_chat:'صديق محادثة',zerax_announcer:'مذيع رسمي',zerax_female_warm:'أنثى دافئة',zerax_female_clear:'أنثى صافية',zerax_storyteller_f:'راوية قصص',zerax_news_anchor:'مذيعة أخبار',zerax_neutral:'محايد احترافي',zerax_documentary:'وثائقي عميق'})[code]||code;
+  return ({zenrex_male_deep:'ذكر عميق فخم',zenrex_male_warm:'ذكر دافئ ودود',zenrex_male_youth:'ذكر شبابي حيوي',zenrex_narrator_pro:'راوي احترافي',zenrex_friend_chat:'صديق محادثة',zenrex_announcer:'مذيع رسمي',zenrex_female_warm:'أنثى دافئة',zenrex_female_clear:'أنثى صافية',zenrex_storyteller_f:'راوية قصص',zenrex_news_anchor:'مذيعة أخبار',zenrex_neutral:'محايد احترافي',zenrex_documentary:'وثائقي عميق'})[code]||code;
 }
 
 // ───── DROPDOWNS ─────
@@ -3309,7 +3309,7 @@ let CURRENT_THEME = {
   colors: { bg:'#0a0a14', surface:'#14142b', accent:'#7c3aed', amber:'#fbbf24', text:'#f1f5f9', border:'#2d2d4a' }
 };
 const THEME_PRESETS = {
-  zerax:   { mode:'dark',  font_family:'Tajawal', colors:{bg:'#0a0a14',surface:'#14142b',accent:'#7c3aed',amber:'#fbbf24',text:'#f1f5f9',border:'#2d2d4a'} },
+  zenrex:   { mode:'dark',  font_family:'Tajawal', colors:{bg:'#0a0a14',surface:'#14142b',accent:'#7c3aed',amber:'#fbbf24',text:'#f1f5f9',border:'#2d2d4a'} },
   luxury:  { mode:'dark',  font_family:'Cairo',   colors:{bg:'#0a0908',surface:'#1c1916',accent:'#fbbf24',amber:'#d97706',text:'#fef3c7',border:'#3f3a2e'} },
   emerald: { mode:'dark',  font_family:'Rubik',   colors:{bg:'#022c22',surface:'#064e3b',accent:'#10b981',amber:'#34d399',text:'#ecfdf5',border:'#065f46'} },
   rose:    { mode:'dark',  font_family:'Almarai', colors:{bg:'#1f1129',surface:'#2d1b3d',accent:'#ec4899',amber:'#f9a8d4',text:'#fce7f3',border:'#4a2554'} },
@@ -3406,11 +3406,11 @@ async function saveTheme() {
 }
 
 async function resetTheme() {
-  if(!confirm('استعادة الهوية الافتراضية لـ Zerax؟')) return;
+  if(!confirm('استعادة الهوية الافتراضية لـ Zenrex؟')) return;
   try {
     const token = localStorage.getItem('zx_token') || '';
     await fetch(API+'/api/theme/merchant/reset', {method:'POST', headers:{...(token?{'Authorization':'Bearer '+token}:{})}});
-    applyPreset('zerax');
+    applyPreset('zenrex');
     toast('✓ تم استعادة الهوية الافتراضية');
   } catch(e) { toast('⚠️ '+e.message); }
 }

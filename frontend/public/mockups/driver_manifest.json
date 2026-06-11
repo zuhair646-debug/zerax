@@ -1,7 +1,7 @@
 {
-  "name": "Zerax Driver",
-  "short_name": "Zerax",
-  "description": "تطبيق السائق - Zerax",
+  "name": "Zenrex Driver",
+  "short_name": "Zenrex",
+  "description": "تطبيق السائق - Zenrex",
   "start_url": "/mockups/driver_app.html",
   "display": "standalone",
   "orientation": "portrait",

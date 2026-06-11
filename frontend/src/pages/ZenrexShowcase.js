@@ -19,7 +19,7 @@ const TYPE_LABEL = {
   realestate: 'عقار',
 };
 
-export default function ZeraxShowcase() {
+export default function ZenrexShowcase() {
   const [sites, setSites] = useState([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -58,18 +58,18 @@ export default function ZeraxShowcase() {
   const totalVisits = useMemo(() => sites.reduce((a, s) => a + (s.visits || 0), 0), [sites]);
 
   return (
-    <div dir="rtl" style={styles.page} data-testid="zerax-showcase-page">
+    <div dir="rtl" style={styles.page} data-testid="zenrex-showcase-page">
       {/* Hero */}
       <section style={styles.hero}>
-        <Link to="/" style={styles.backLink} data-testid="back-to-home">← العودة لـ Zerax</Link>
+        <Link to="/" style={styles.backLink} data-testid="back-to-home">← العودة لـ Zenrex</Link>
         <div style={styles.heroInner}>
-          <div style={styles.zeraxBadge}>
-            <span style={styles.zeraxBadgeDot}>Z</span>
-            <span style={{ color: '#fbbf24', fontWeight: 900 }}>Zerax Showcase</span>
+          <div style={styles.zenrexBadge}>
+            <span style={styles.zenrexBadgeDot}>Z</span>
+            <span style={{ color: '#fbbf24', fontWeight: 900 }}>Zenrex Showcase</span>
           </div>
           <h1 style={styles.heroTitle}>مواقع مبنية بـ <span style={styles.heroAccent}>الذكاء الاصطناعي</span></h1>
           <p style={styles.heroSub}>
-            كل موقع تشوفه هنا تم بناؤه على منصة <strong>Zerax</strong> في أقل من 60 ثانية —
+            كل موقع تشوفه هنا تم بناؤه على منصة <strong>Zenrex</strong> في أقل من 60 ثانية —
             من النمط البصري حتى لوحة الإدارة الكاملة وتطبيق السائق.
           </p>
 
@@ -138,7 +138,7 @@ export default function ZeraxShowcase() {
       </section>
 
       <footer style={styles.foot}>
-        <span>© Zerax 2026 — منصة بناء المواقع بالذكاء الاصطناعي</span>
+        <span>© Zenrex 2026 — منصة بناء المواقع بالذكاء الاصطناعي</span>
       </footer>
     </div>
   );
@@ -209,7 +209,7 @@ const styles = {
     marginBottom: 28,
   },
   heroInner: { maxWidth: 1100, margin: '0 auto', textAlign: 'center' },
-  zeraxBadge: {
+  zenrexBadge: {
     display: 'inline-flex',
     alignItems: 'center',
     gap: 8,
@@ -220,7 +220,7 @@ const styles = {
     marginBottom: 18,
     fontSize: 13,
   },
-  zeraxBadgeDot: {
+  zenrexBadgeDot: {
     width: 24, height: 24, borderRadius: '50%',
     background: 'linear-gradient(135deg,#fbbf24,#a52a2a)',
     display: 'inline-flex', alignItems: 'center', justifyContent: 'center',

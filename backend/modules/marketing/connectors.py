@@ -9,7 +9,7 @@ import logging
 import httpx
 from typing import Optional, Dict, Any
 
-logger = logging.getLogger("zerax.marketing.connectors")
+logger = logging.getLogger("zenrex.marketing.connectors")
 
 
 # ─── Telegram ─────────────────────────────────────────────
@@ -23,7 +23,7 @@ async def telegram_publish(text: str, image_url: Optional[str] = None, channel_i
         if image_url:
             # Telegram needs absolute URL or upload; build absolute from backend
             if image_url.startswith("/"):
-                public = os.environ.get("PUBLIC_BASE_URL", "https://zerax-production.up.railway.app")
+                public = os.environ.get("PUBLIC_BASE_URL", "https://zenrex-production.up.railway.app")
                 image_url = public.rstrip("/") + image_url
             r = await client.post(f"{base}/sendPhoto", data={
                 "chat_id": chat_id, "caption": text[:1024], "photo": image_url, "parse_mode": "HTML",
@@ -46,10 +46,10 @@ async def discord_publish(text: str, image_url: Optional[str] = None) -> Dict[st
     webhook = os.environ.get("DISCORD_WEBHOOK_URL")
     if not webhook:
         raise ValueError("DISCORD_WEBHOOK_URL required. Server Settings → Integrations → Create Webhook.")
-    payload: Dict[str, Any] = {"content": text[:2000], "username": "Zerax AI"}
+    payload: Dict[str, Any] = {"content": text[:2000], "username": "Zenrex AI"}
     if image_url:
         if image_url.startswith("/"):
-            public = os.environ.get("PUBLIC_BASE_URL", "https://zerax-production.up.railway.app")
+            public = os.environ.get("PUBLIC_BASE_URL", "https://zenrex-production.up.railway.app")
             image_url = public.rstrip("/") + image_url
         payload["embeds"] = [{"image": {"url": image_url}}]
     async with httpx.AsyncClient(timeout=30) as client:
@@ -63,11 +63,11 @@ def discord_is_configured() -> bool:
 
 
 # ─── Email (Resend) ─────────────────────────────────────────
-async def email_publish(text: str, subject: str = "Zerax — جديد!", to_list: Optional[list] = None, image_url: Optional[str] = None) -> Dict[str, Any]:
+async def email_publish(text: str, subject: str = "Zenrex — جديد!", to_list: Optional[list] = None, image_url: Optional[str] = None) -> Dict[str, Any]:
     api_key = os.environ.get("RESEND_API_KEY")
     if not api_key:
         raise ValueError("RESEND_API_KEY required from resend.com.")
-    sender = os.environ.get("RESEND_FROM", "Zerax <noreply@zerax.com>")
+    sender = os.environ.get("RESEND_FROM", "Zenrex <noreply@zenrex.ai>")
     recipients = to_list or []
     if not recipients:
         # fallback to a configured newsletter list
@@ -79,10 +79,10 @@ async def email_publish(text: str, subject: str = "Zerax — جديد!", to_list
     img_html = ""
     if image_url:
         if image_url.startswith("/"):
-            public = os.environ.get("PUBLIC_BASE_URL", "https://zerax-production.up.railway.app")
+            public = os.environ.get("PUBLIC_BASE_URL", "https://zenrex-production.up.railway.app")
             image_url = public.rstrip("/") + image_url
         img_html = f'<img src="{image_url}" style="max-width:100%;border-radius:12px;margin:16px 0"/>'
-    html = f'<div dir="rtl" style="font-family:system-ui;line-height:1.7;color:#1a1a1a">{img_html}<div style="white-space:pre-wrap">{text}</div><div style="margin-top:24px;padding-top:16px;border-top:1px solid #eee;font-size:12px;color:#888">للإيقاف اضغط <a href="https://zerax.com/unsubscribe">هنا</a></div></div>'
+    html = f'<div dir="rtl" style="font-family:system-ui;line-height:1.7;color:#1a1a1a">{img_html}<div style="white-space:pre-wrap">{text}</div><div style="margin-top:24px;padding-top:16px;border-top:1px solid #eee;font-size:12px;color:#888">للإيقاف اضغط <a href="https://zenrex.ai/unsubscribe">هنا</a></div></div>'
 
     async with httpx.AsyncClient(timeout=30) as client:
         r = await client.post(
@@ -150,7 +150,7 @@ async def instagram_publish(text: str, image_url: str) -> Dict[str, Any]:
     if not image_url:
         raise ValueError("Instagram requires an image URL.")
     if image_url.startswith("/"):
-        public = os.environ.get("PUBLIC_BASE_URL", "https://zerax-production.up.railway.app")
+        public = os.environ.get("PUBLIC_BASE_URL", "https://zenrex-production.up.railway.app")
         image_url = public.rstrip("/") + image_url
 
     async with httpx.AsyncClient(timeout=60) as client:
@@ -188,13 +188,13 @@ CONNECTORS = {
         "needs_image": False,
         "fields": [
             {"key": "TELEGRAM_BOT_TOKEN", "label": "Bot Token", "placeholder": "1234567890:AAH...", "secret": True, "required": True},
-            {"key": "TELEGRAM_CHANNEL_ID", "label": "Channel ID أو @username", "placeholder": "@zerax_official أو -1001234567", "secret": False, "required": True},
+            {"key": "TELEGRAM_CHANNEL_ID", "label": "Channel ID أو @username", "placeholder": "@zenrex_official أو -1001234567", "secret": False, "required": True},
         ],
         "setup_steps": [
             "افتح @BotFather في Telegram",
-            "أرسل /newbot ثم سمّ البوت ZeraxBot",
+            "أرسل /newbot ثم سمّ البوت ZenrexBot",
             "انسخ الـ Token الذي يعطيك إياه",
-            "أنشئ قناة عامة (مثل @zerax_official) واجعل البوت admin فيها",
+            "أنشئ قناة عامة (مثل @zenrex_official) واجعل البوت admin فيها",
             "الصق الـ Token و اسم القناة في الحقول أعلاه واضغط حفظ",
         ],
     },
@@ -226,7 +226,7 @@ CONNECTORS = {
         "needs_image": False,
         "fields": [
             {"key": "RESEND_API_KEY", "label": "Resend API Key", "placeholder": "re_xxxxx", "secret": True, "required": True},
-            {"key": "RESEND_FROM", "label": "From عنوان المرسل", "placeholder": "Zerax <noreply@zerax.com>", "secret": False, "required": False},
+            {"key": "RESEND_FROM", "label": "From عنوان المرسل", "placeholder": "Zenrex <noreply@zenrex.ai>", "secret": False, "required": False},
             {"key": "MARKETING_NEWSLETTER_LIST", "label": "قائمة بريد (مفصولة بفواصل)", "placeholder": "user1@example.com, user2@example.com", "secret": False, "required": False},
         ],
         "setup_steps": [
@@ -327,7 +327,7 @@ async def publish_to(channel: str, post: Dict[str, Any]) -> Dict[str, Any]:
             raise ValueError("MARKETING_WHATSAPP_TEST or post.to_number required for WhatsApp")
         return await fn(text, to)
     if channel == "email":
-        return await fn(text, subject=post.get("subject", f"Zerax — {post.get('topic','')}"), image_url=img)
+        return await fn(text, subject=post.get("subject", f"Zenrex — {post.get('topic','')}"), image_url=img)
     if channel == "instagram":
         return await fn(text, img)
     return await fn(text, img)

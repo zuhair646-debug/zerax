@@ -14,7 +14,7 @@
 import React, { useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
-import { ZeraxLogo } from '@/components/Navbar';
+import { ZenrexLogo } from '@/components/Navbar';
 
 const API = process.env.REACT_APP_BACKEND_URL;
 
@@ -63,7 +63,7 @@ export default function AuthCallback({ setUser }) {
 
   return (
     <div className="min-h-screen bg-[#08080f] flex flex-col items-center justify-center text-white" dir="rtl" data-testid="auth-callback">
-      <ZeraxLogo size="xl" />
+      <ZenrexLogo size="xl" />
       <div className="mt-6 flex items-center gap-3 text-amber-300">
         <div className="w-5 h-5 border-2 border-amber-400 border-t-transparent rounded-full animate-spin"></div>
         <span className="font-bold">جارٍ تسجيل الدخول...</span>

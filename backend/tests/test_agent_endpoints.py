@@ -1,5 +1,5 @@
 """
-Test suite for Zerax AI Agent endpoints.
+Test suite for Zenrex AI Agent endpoints.
 
 Tests:
 - POST /api/agent/chat — SSE streaming with tool calls
@@ -19,7 +19,7 @@ import time
 BASE_URL = os.environ.get('REACT_APP_BACKEND_URL', '').rstrip('/')
 
 # Test credentials from test_credentials.md
-OWNER_EMAIL = "owner@zerax.com"
+OWNER_EMAIL = "owner@zenrex.ai"
 OWNER_PASSWORD = "owner123"
 
 

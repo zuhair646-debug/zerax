@@ -283,7 +283,7 @@ export default function Pricing({ user }) {
 
                   <button
                     disabled={isFree || isEnt || checkingOut === `subscription-${plan.id}`}
-                    onClick={() => isEnt ? window.location.href = 'mailto:zerax.zx0@gmail.com' : checkout('subscription', plan.id, cycle)}
+                    onClick={() => isEnt ? window.location.href = 'mailto:zenrex.zx0@gmail.com' : checkout('subscription', plan.id, cycle)}
                     data-testid={`subscribe-${plan.id}-btn`}
                     className={`w-full py-3 rounded-lg font-bold transition ${
                       isFree

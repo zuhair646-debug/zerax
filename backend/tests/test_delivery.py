@@ -1,4 +1,4 @@
-"""Tests for Zerax Delivery + Driver Management API."""
+"""Tests for Zenrex Delivery + Driver Management API."""
 import os
 import pytest
 import requests

@@ -8,7 +8,7 @@
  *   - Subtle "speaking" animation on the character
  *
  * Used in TWO places:
- *   - Landing page (talks about Zerax platform): pass mode="zerax"
+ *   - Landing page (talks about Zenrex platform): pass mode="zenrex"
  *   - Merchant sites (talks about the shop's products): pass mode="merchant" slug={slug}
  */
 import React, { useEffect, useRef, useState } from 'react';
@@ -17,14 +17,14 @@ import { toast } from 'sonner';
 
 const API = process.env.REACT_APP_BACKEND_URL;
 
-export default function AIAssistantAvatar({ mode = 'zerax', slug = null, characterStyle = 'friendly_arab_woman' }) {
+export default function AIAssistantAvatar({ mode = 'zenrex', slug = null, characterStyle = 'friendly_arab_woman' }) {
   const [open, setOpen] = useState(false);
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState('');
   const [busy, setBusy] = useState(false);
   const [muted, setMuted] = useState(false);
   const [speaking, setSpeaking] = useState(false);
-  const [enabled, setEnabled] = useState(mode === 'zerax'); // zerax always on; merchant must subscribe
+  const [enabled, setEnabled] = useState(mode === 'zenrex'); // zenrex always on; merchant must subscribe
   const audioRef = useRef(null);
   const sessionRef = useRef(null);
   const scrollRef = useRef(null);
@@ -46,8 +46,8 @@ export default function AIAssistantAvatar({ mode = 'zerax', slug = null, charact
   // Greeting message on first open
   useEffect(() => {
     if (open && messages.length === 0) {
-      const greeting = mode === 'zerax'
-        ? 'أهلاً بك في Zerax! 👋 أنا مساعدك الذكي. اسألني عن أي خدمة — مواقع، صور، فيديوهات، أو طريقة الاشتراك.'
+      const greeting = mode === 'zenrex'
+        ? 'أهلاً بك في Zenrex! 👋 أنا مساعدك الذكي. اسألني عن أي خدمة — مواقع، صور، فيديوهات، أو طريقة الاشتراك.'
         : 'مرحباً! 👋 أنا مساعدك الذكي في هذا المتجر. اسألني عن أي منتج أو خدمة وسأشرحها لك.';
       setMessages([{ role: 'assistant', content: greeting }]);
     }
@@ -62,7 +62,7 @@ export default function AIAssistantAvatar({ mode = 'zerax', slug = null, charact
     setMessages(m => [...m, { role: 'user', content: text }]);
     setBusy(true);
 
-    const url = mode === 'zerax'
+    const url = mode === 'zenrex'
       ? `${API}/api/avatar/chat`
       : `${API}/api/merchant/avatar/${slug}/chat`;
     try {
@@ -146,7 +146,7 @@ export default function AIAssistantAvatar({ mode = 'zerax', slug = null, charact
             </div>
             <div className="flex-1 text-right">
               <div className="text-sm font-black text-white">
-                {mode === 'zerax' ? 'مساعد Zerax' : 'مساعد المتجر'}
+                {mode === 'zenrex' ? 'مساعد Zenrex' : 'مساعد المتجر'}
               </div>
               <div className="text-[10px] text-emerald-400 flex items-center gap-1 justify-end">
                 <span className="w-1.5 h-1.5 bg-emerald-400 rounded-full" />

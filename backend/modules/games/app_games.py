@@ -447,7 +447,7 @@ class AppGameWorkflow:
         return {
             "platform": platform,
             "status": "success",
-            "download_url": f"https://builds.zerax.app/{project['id']}/{platform}.zip",
+            "download_url": f"https://builds.zenrex.ai/{project['id']}/{platform}.zip",
             "size_mb": 85,
             "tested": True,
             "test_results": {
@@ -485,7 +485,7 @@ class AppGameWorkflow:
         """Deploy to specific store."""
         # TODO: Use Google Play API / App Store Connect API
         if platform == "Android":
-            return "https://play.google.com/store/apps/details?id=com.zerax.game"
+            return "https://play.google.com/store/apps/details?id=com.zenrex.game"
         elif platform == "iOS":
             return "https://apps.apple.com/app/id123456789"
         else:

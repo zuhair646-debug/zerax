@@ -171,7 +171,7 @@ API_INVENTORY = """
   POST /api/wizard/video/generate         — توليد فيديو (يخصم credits)
   POST /api/avatar/chat                   — محادثة Zara/Layla
   POST /api/speech/transcribe             — تفريغ صوت
-  POST /api/companion/chat                — Zerax Companion
+  POST /api/companion/chat                — Zenrex Companion
 
 👑 Owner-only (admin + passcode):
   GET  /api/admin/stats                   — إحصائيات

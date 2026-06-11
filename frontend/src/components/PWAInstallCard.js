@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Smartphone, Download, CheckCircle2, Apple } from 'lucide-react';
 
 /**
- * Zerax PWA Install Card
+ * Zenrex PWA Install Card
  * A reusable installable-app card for any control panel (Customer / Merchant / Admin).
  * Handles:
  *  - Android/Chrome: triggers `beforeinstallprompt` deferred event
@@ -70,7 +70,7 @@ const PWAInstallCard = () => {
       safeRm('zx_pwa_installed');
       alert(
         'لتثبيت التطبيق:\n\n' +
-        '• على Chrome (Android/Desktop): افتح القائمة (⋮) → "تثبيت Zerax".\n' +
+        '• على Chrome (Android/Desktop): افتح القائمة (⋮) → "تثبيت Zenrex".\n' +
         '• على Safari (iPhone/iPad): زر المشاركة ⬆ → "إضافة إلى الشاشة الرئيسية".\n\n' +
         'إذا قمت بحذف التطبيق سابقاً، أعد فتح الموقع وانتظر بضع ثوانٍ ليظهر زر التثبيت تلقائياً.'
       );
@@ -85,7 +85,7 @@ const PWAInstallCard = () => {
         data-testid="pwa-install-card-installed"
       >
         <h3 className="text-white font-black text-sm mb-3 flex items-center gap-2">
-          <CheckCircle2 className="w-4 h-4 text-emerald-400" /> تطبيق Zerax
+          <CheckCircle2 className="w-4 h-4 text-emerald-400" /> تطبيق Zenrex
         </h3>
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 rounded-lg bg-emerald-500/15 flex items-center justify-center">
@@ -108,7 +108,7 @@ const PWAInstallCard = () => {
         data-testid="pwa-install-card-ios"
       >
         <h3 className="text-white font-black text-sm mb-3 flex items-center gap-2">
-          <Apple className="w-4 h-4 text-purple-300" /> ثبّت تطبيق Zerax على آيفونك
+          <Apple className="w-4 h-4 text-purple-300" /> ثبّت تطبيق Zenrex على آيفونك
         </h3>
         <p className="text-purple-200/70 text-xs mb-4 leading-relaxed">
           استخدم Safari واضغط الزر أدناه — ستظهر لك ٣ خطوات مصورة لإضافة التطبيق إلى شاشتك الرئيسية.
@@ -133,10 +133,10 @@ const PWAInstallCard = () => {
         data-testid="pwa-install-card-installable"
       >
         <h3 className="text-white font-black text-sm mb-3 flex items-center gap-2">
-          <Smartphone className="w-4 h-4 text-amber-400" /> ثبّت تطبيق Zerax
+          <Smartphone className="w-4 h-4 text-amber-400" /> ثبّت تطبيق Zenrex
         </h3>
         <p className="text-amber-200/70 text-xs mb-4 leading-relaxed">
-          احصل على Zerax كتطبيق على جهازك — تشغيل أسرع، شاشة كاملة، بدون شريط المتصفح.
+          احصل على Zenrex كتطبيق على جهازك — تشغيل أسرع، شاشة كاملة، بدون شريط المتصفح.
         </p>
         <button
           type="button"
@@ -157,7 +157,7 @@ const PWAInstallCard = () => {
       data-testid="pwa-install-card-manual"
     >
       <h3 className="text-white font-black text-sm mb-3 flex items-center gap-2">
-        <Smartphone className="w-4 h-4 text-amber-400" /> تطبيق Zerax
+        <Smartphone className="w-4 h-4 text-amber-400" /> تطبيق Zenrex
       </h3>
       <p className="text-gray-400 text-xs mb-4 leading-relaxed">
         لم نتمكن من اكتشاف خيار التثبيت التلقائي على هذا المتصفح. اضغط الزر لرؤية تعليمات التثبيت اليدوية.

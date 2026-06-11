@@ -13,7 +13,7 @@ BASE_URL = os.environ.get('REACT_APP_BACKEND_URL', '').rstrip('/')
 def owner_token():
     """Get owner authentication token"""
     response = requests.post(f"{BASE_URL}/api/auth/login", json={
-        "email": "owner@zerax.com",
+        "email": "owner@zenrex.ai",
         "password": "owner123"
     })
     assert response.status_code == 200, f"Owner login failed: {response.text}"

@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
 <meta name="theme-color" content="#0a0a14">
-<title>Zerax Driver — تطبيق السائق</title>
+<title>Zenrex Driver — تطبيق السائق</title>
 <link rel="manifest" href="/mockups/driver_manifest.json">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;500;700;900&display=swap" rel="stylesheet">
@@ -302,7 +302,7 @@ html.glance .btn{padding:14px 22px;font-size:15px}
 <!-- LOGIN -->
 <div class="login-screen" id="login-screen">
   <div class="badge">
-    <i data-lucide="zap" class="icon"></i> Zerax Driver Pro
+    <i data-lucide="zap" class="icon"></i> Zenrex Driver Pro
   </div>
   <h1>تطبيق السائق</h1>
   <p class="sub">أوصِل، اربح، تنافس — كل شي في تطبيق واحد</p>
@@ -330,7 +330,7 @@ html.glance .btn{padding:14px 22px;font-size:15px}
   <aside class="sidebar" id="sidebar" data-testid="sidebar">
     <div class="sb-brand">
       <div class="logo"><i data-lucide="zap" class="icon"></i></div>
-      <div class="name">Zerax Driver<span class="sub">منصة السائقين</span></div>
+      <div class="name">Zenrex Driver<span class="sub">منصة السائقين</span></div>
     </div>
     <div class="sb-driver">
       <div class="row">
@@ -531,7 +531,7 @@ html.glance .btn{padding:14px 22px;font-size:15px}
         <div class="row between">
           <div>
             <div style="font-weight:900;font-size:14px">💬 دعم فني فوري</div>
-            <div class="muted" style="margin-top:4px">دردشة مع فريق دعم Zerax</div>
+            <div class="muted" style="margin-top:4px">دردشة مع فريق دعم Zenrex</div>
           </div>
           <button class="btn" data-testid="support-chat-btn"><i data-lucide="message-circle" class="icon"></i> ابدأ المحادثة</button>
         </div>
@@ -726,8 +726,8 @@ $('#login-verify').onclick = async () => {
     if (!r.ok) throw new Error(d.detail || 'فشل');
     STATE.token = d.token;
     STATE.driver = d.driver;
-    localStorage.setItem('zerax_driver_token', d.token);
-    localStorage.setItem('zerax_driver', JSON.stringify(d.driver));
+    localStorage.setItem('zenrex_driver_token', d.token);
+    localStorage.setItem('zenrex_driver', JSON.stringify(d.driver));
     bootApp();
   } catch(e){
     $('#otp-err').textContent = e.message || 'الرمز غير صحيح';
@@ -905,7 +905,7 @@ window.openWithdraw = function(){
             <option value="iban">حوالة بنكية (IBAN)</option>
             <option value="stc_pay">STC Pay</option>
             <option value="urpay">UrPay</option>
-            <option value="wallet">محفظة Zerax</option>
+            <option value="wallet">محفظة Zenrex</option>
           </select>
         </div>
         <div style="margin-bottom:14px">
@@ -1523,8 +1523,8 @@ function toggleTheme(){
 }
 $('#theme-toggle').onclick = toggleTheme;
 $('#logout-btn').onclick = () => {
-  localStorage.removeItem('zerax_driver_token');
-  localStorage.removeItem('zerax_driver');
+  localStorage.removeItem('zenrex_driver_token');
+  localStorage.removeItem('zenrex_driver');
   location.reload();
 };
 $('#menu-btn').onclick = () => $('#sidebar').classList.toggle('open');
@@ -1578,8 +1578,8 @@ function schedulePrayerCheck(){
 // ═══════════════════════════════════════════════════════════════════
 // AUTO RESTORE
 // ═══════════════════════════════════════════════════════════════════
-const savedTok = localStorage.getItem('zerax_driver_token');
-const savedDrv = localStorage.getItem('zerax_driver');
+const savedTok = localStorage.getItem('zenrex_driver_token');
+const savedDrv = localStorage.getItem('zenrex_driver');
 if (savedTok && savedDrv){
   STATE.token = savedTok;
   STATE.driver = JSON.parse(savedDrv);

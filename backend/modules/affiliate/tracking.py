@@ -31,7 +31,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request, Query
 from fastapi.responses import RedirectResponse, HTMLResponse
 from pydantic import BaseModel, Field
 
-logger = logging.getLogger("zerax.affiliate.tracking")
+logger = logging.getLogger("zenrex.affiliate.tracking")
 
 router = APIRouter(tags=["affiliate-tracking"])
 
@@ -214,7 +214,7 @@ def build_router(db, get_current_user):
         # Redirect + set attribution cookie (30 days)
         resp = RedirectResponse(url=dest, status_code=302)
         resp.set_cookie(
-            "zerax_aff",
+            "zenrex_aff",
             code,
             max_age=60 * 60 * 24 * 30,  # 30 days
             httponly=False,
@@ -223,7 +223,7 @@ def build_router(db, get_current_user):
         )
         # Also store click id so signup-binding is precise
         resp.set_cookie(
-            "zerax_aff_click",
+            "zenrex_aff_click",
             click["id"],
             max_age=60 * 60 * 24 * 30,
             httponly=False,
@@ -421,7 +421,7 @@ def build_router(db, get_current_user):
         if not aff:
             raise HTTPException(403, "أنت لست مسوّقاً")
         code = aff.get("code")
-        base = os.environ.get("PUBLIC_BASE_URL", "").rstrip("/") or "https://zerax.com"
+        base = os.environ.get("PUBLIC_BASE_URL", "").rstrip("/") or "https://zenrex.ai"
         # Prefer a short tracker route
         params = f"utm_source={platform}&utm_medium=social&utm_campaign={campaign}"
         return {

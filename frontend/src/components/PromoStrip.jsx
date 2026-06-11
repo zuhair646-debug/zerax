@@ -9,9 +9,9 @@ import { Sparkles, X } from 'lucide-react';
  */
 const PROMO = {
   text: 'خصم 20% على باقة Premium الأسبوع · استخدم الكود',
-  code: 'ZERAX20',
+  code: 'ZENREX20',
   cta: 'اشتري الآن',
-  href: '/pricing?promo=ZERAX20',
+  href: '/pricing?promo=ZENREX20',
 };
 
 export const PromoStrip = () => {
@@ -19,16 +19,16 @@ export const PromoStrip = () => {
   const [dismissed, setDismissed] = useState(false);
 
   useEffect(() => {
-    setDismissed(sessionStorage.getItem('zerax_promo_dismissed') === '1');
+    setDismissed(sessionStorage.getItem('zenrex_promo_dismissed') === '1');
   }, []);
 
   if (dismissed) return null;
 
   const close = (e) => {
     e.stopPropagation();
-    sessionStorage.setItem('zerax_promo_dismissed', '1');
+    sessionStorage.setItem('zenrex_promo_dismissed', '1');
     setDismissed(true);
-    window.dispatchEvent(new CustomEvent('zerax:promo-change', { detail: { shown: false } }));
+    window.dispatchEvent(new CustomEvent('zenrex:promo-change', { detail: { shown: false } }));
   };
 
   return (

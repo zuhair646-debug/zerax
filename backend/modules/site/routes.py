@@ -1,5 +1,5 @@
 """
-Zerax Site Banner & Stories
+Zenrex Site Banner & Stories
 ───────────────────────────
 The platform's own marketing site (NOT the multi-tenant storefronts) gets the same
 treatment storefronts get: a rotating animated banner + stories ribbon, displayed in

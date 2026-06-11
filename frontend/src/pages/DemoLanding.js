@@ -55,7 +55,7 @@ export default function DemoLanding() {
         </Link>
         <div className="flex items-center gap-2">
           <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-yellow-400 to-orange-500 flex items-center justify-center font-black text-black">Z</div>
-          <span className="font-black">Zerax</span>
+          <span className="font-black">Zenrex</span>
         </div>
         {step !== 3 && (
           <Link to="/register" className="text-xs px-3 py-1.5 rounded-full bg-white/10 hover:bg-white/20" data-testid="header-register">

@@ -1,5 +1,5 @@
 """
-Zerax Driver Payroll & Statements
+Zenrex Driver Payroll & Statements
 ==================================
 End-of-month accounting layer on top of the delivery system.
 
@@ -148,7 +148,7 @@ async def run(payload: RunPayrollIn):
                 f"💰 المبلغ: {line['amount_sar']} ر.س\n"
                 f"💳 الوسيلة: {line['payout_method']} · {line['payout_account']}\n"
                 f"🧾 رقم العملية: {payout['reference']}\n\n"
-                f"شكراً لعملك معنا — Zerax"
+                f"شكراً لعملك معنا — Zenrex"
             )
         results.append({**line, "status": "paid", "reference": payout["reference"], "whatsapp_message": wa_msg})
 
@@ -184,7 +184,7 @@ def _generate_statement_html(driver: dict, month: int, year: int) -> str:
     ref = "ZRX-STMT-" + uuid.uuid4().hex[:10].upper()
 
     # ZATCA-style QR text (simplified TLV — production would use proper TLV encoding)
-    qr_text = f"Zerax|{driver['name']}|{label}|{grand} SAR|{ref}"
+    qr_text = f"Zenrex|{driver['name']}|{label}|{grand} SAR|{ref}"
     qr_b64_url = f"https://api.qrserver.com/v1/create-qr-code/?size=150x150&data={qr_text.replace(' ', '%20')}"
 
     return f"""<!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="utf-8">
@@ -219,7 +219,7 @@ tr:last-child td{{border-bottom:none}}
 </style></head><body><div class="sheet">
 
 <div class="hd">
-  <div class="logo">⚡ Zerax</div>
+  <div class="logo">⚡ Zenrex</div>
   <div class="meta">
     رقم الكشف: <b>{ref}</b><br>
     التاريخ: {datetime.now(timezone.utc).strftime('%Y-%m-%d')}<br>
@@ -228,7 +228,7 @@ tr:last-child td{{border-bottom:none}}
 </div>
 
 <h1>كشف راتب السائق — {label}</h1>
-<p class="sub">هذا الكشف صادر تلقائياً من نظام Zerax للتجارة الذكية. يحتوي على إجمالي مستحقات السائق لشهر {label} مع تفصيل التوصيلات والضريبة المضافة.</p>
+<p class="sub">هذا الكشف صادر تلقائياً من نظام Zenrex للتجارة الذكية. يحتوي على إجمالي مستحقات السائق لشهر {label} مع تفصيل التوصيلات والضريبة المضافة.</p>
 
 <div class="row2">
   <div class="box"><div class="lbl">اسم السائق</div><div class="val">{driver['name']}</div></div>
@@ -265,7 +265,7 @@ tr:last-child td{{border-bottom:none}}
 </div>
 
 <div class="foot">
-  ⚡ صادر من نظام Zerax للتجارة الذكية · zerax.com<br>
+  ⚡ صادر من نظام Zenrex للتجارة الذكية · zenrex.ai<br>
   هذا الكشف رسمي ومعتمد إلكترونياً ولا يحتاج توقيع
 </div>
 </div></body></html>"""

@@ -8,28 +8,28 @@
 
 ## Merchant Control Panel (Real Backend Auth — Feb 2026)
 - URL: `${REACT_APP_BACKEND_URL}/mockups/admin.html`
-- Login: `owner@zerax.com` / `owner123` (real JWT via `/api/auth/login`)
+- Login: `owner@zenrex.ai` / `owner123` (real JWT via `/api/auth/login`)
 - Products now persist to MongoDB via `/api/store/products` (per-merchant scoped by `merchant_id`)
 - Customer login on storefront: any phone, OTP = `1234` (real backend via `/api/store/customer/request-otp` + `/verify-otp`)
 - Wishlist + Reviews sync to MongoDB when customer is logged in
 
 ## Platform Owner (Admin)
 - URL: `/login`
-- Email: `owner@zerax.com`
+- Email: `owner@zenrex.ai`
 - Password: `owner123`
-- **Note**: Domain migrated from `@zitex.com` to `@zerax.com` during the Zerax rebrand (Feb 16 2026).
+- **Note**: Domain migrated from `@zitex.com` to `@zenrex.ai` during the Zenrex rebrand (Feb 16 2026).
 
 ## 🌐 Production VPS (Hetzner — Jun 11 2026)
 - **Public URL**: `http://91.98.154.148`
-- **SSH**: `ssh -i /root/.ssh/zerax_deploy root@91.98.154.148`
+- **SSH**: `ssh -i /root/.ssh/zenrex_deploy root@91.98.154.148`
 - **Admin/Merchant dashboard**: `http://91.98.154.148/mockups/admin.html`
 - **Customer storefront**: `http://91.98.154.148/mockups/app_mode_full.html`
 - **Driver app**: `http://91.98.154.148/mockups/driver_app.html`
-- **Same credentials apply** (owner@zerax.com/owner123, phone/OTP=1234)
-- **JWT_SECRET**: `zerax-prod-jwt-secret-2026-hetzner-91-98-154-148` (fixed across restarts)
-- **DB**: MongoDB `zerax_prod` inside `zerax-mongo-1` container
-- **Owner seeded via**: `docker exec zerax-backend-1 python /app/scripts/seed_owner.py`
-- **Nginx config**: `/etc/nginx/sites-enabled/zerax` (gzip enabled — 4-5x smaller payloads)
+- **Same credentials apply** (owner@zenrex.ai/owner123, phone/OTP=1234)
+- **JWT_SECRET**: `zenrex-prod-jwt-secret-2026-hetzner-91-98-154-148` (fixed across restarts)
+- **DB**: MongoDB `zenrex_prod` inside `zenrex-mongo-1` container
+- **Owner seeded via**: `docker exec zenrex-backend-1 python /app/scripts/seed_owner.py`
+- **Nginx config**: `/etc/nginx/sites-enabled/zenrex` (gzip enabled — 4-5x smaller payloads)
 - **⚠️ LLM Blocker**: ~~EMERGENT_LLM_KEY restricted to Emergent platform~~ **RESOLVED Jun 11 2026** via direct-SDK shim (`backend/direct_llm_shim.py`).
   - When `USE_DIRECT_LLM=1` is set, `emergentintegrations.llm.chat` is transparently redirected to direct provider calls using `ANTHROPIC_API_KEY`, `GEMINI_API_KEY`, `OPENAI_DIRECT_KEY` from `.env`.
   - **All 20+ files using `LlmChat` keep working unchanged** — the shim mimics the same interface (`with_model`, `with_params`, `send_message`, `send_message_multimodal_response`).
@@ -65,7 +65,7 @@
 - Driver auth: `Authorization: DriverToken <token>` (from `/driver/login`)
 
 ## Stripe Subscription Gate Test User (Website Studio paywall)
-- Email: `gatetest@zerax.com`
+- Email: `gatetest@zenrex.ai`
 - Password: `test123`
 - Role: client (non-owner — hits paywall)
 - Has active `studio_monthly` subscription (paid via Stripe test card 4242 4242 4242 4242, 12/34, 123, ZIP 12345)
@@ -79,7 +79,7 @@
 
 ## Zitex Auto-Coder (برمجة زيتاكس) — Owner-Only Codebase Agent
 - Route: `/admin/autocoder` (requires `is_owner=true` user)
-- **🔑 Current passcode (Jun 2026)**: `zerax2026`
+- **🔑 Current passcode (Jun 2026)**: `zenrex2026`
 - **Recovery codes** (use once each if you forget the passcode):
   - `5702-2746-0033-A0B1`
   - `60F3-BBB7-2628-CE0E`
@@ -89,7 +89,7 @@
   - `6266-B1DE-07D6-7912`
 - First visit shows **Setup screen** → owner picks passcode (≥6 chars) → system generates 6 one-time recovery codes
 - Subsequent visits show **Lock screen** → enter passcode → 4-hour session token
-- Session token stored client-side in `localStorage.zerax_autocoder_session` and sent in `X-AutoCoder-Token` header
+- Session token stored client-side in `localStorage.zenrex_autocoder_session` and sent in `X-AutoCoder-Token` header
 - Forgot passcode? → "نسيت كلمة السر؟" → enter recovery code + new passcode (consumes the recovery code; if all 6 used, system regenerates a fresh batch)
 - All actions audited in `autocoder_audit` collection (visible via `GET /api/autocoder/audit`)
 - Tools available to the AI: `read_file`, `write_file`, `edit_file`, `delete_file`, `list_dir`, `search_code`, `run_command` (full bash), `restart_service`, `git_status`, `git_diff`, `git_commit_push`

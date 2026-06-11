@@ -79,7 +79,7 @@ Major UX consolidation per user's explicit Saudi-Arabic requests.
 ### 1. Admin Control Panel (ACP) — `#acp-modal`
 Replaced the scattered admin workflow with a unified merchant dashboard that auto-opens when the ♛ button is toggled.
 - **Tabs**: 📦 Products · 🎬 Video Studio
-- **Credits bar**: Live Zerax balance + inline `+ شحن` button (always visible)
+- **Credits bar**: Live Zenrex balance + inline `+ شحن` button (always visible)
 - **Product editor**: name / price / category / official URL / description
 - **AI Auto-Fill button**: relocated FROM inside the Image Studio TO the ACP product form (per user request). Calls existing `/api/image-studio/product-info` and renders variants (colors swatches + warranty link). Costs 10 credits.
 - **Image Studio button**: opens the gallery editor for the current product (kept as secondary action, no longer the primary entry-point for AI)
@@ -87,14 +87,14 @@ Replaced the scattered admin workflow with a unified merchant dashboard that aut
 ### 2. Promo Video Studio — `POST /api/promo-video/*`
 NEW backend router `/app/backend/routers/video_studio_router.py` (~527 lines). Three-stage pipeline:
 1. **Storyboard** (`/storyboard`): Gemini 2.5 Flash generates JSON storyboard — title + N scenes × (narration · visual_prompt · text_overlay) tuned to duration (15/30/45/60s) and tone (energetic/luxury/warm/tech). Cost: 5 credits.
-2. **Zerax Voice Engine** (TTS): Abstracted under voice IDs `zerax_male_deep`, `zerax_male_warm`, `zerax_female_warm`, `zerax_female_clear`. Currently powered by OpenAI `tts-1-hd` via `EMERGENT_LLM_KEY` (designed to be swapped with Zerax's own voice provider later — single mapping in `ZERAX_VOICE_MAP`).
+2. **Zenrex Voice Engine** (TTS): Abstracted under voice IDs `zenrex_male_deep`, `zenrex_male_warm`, `zenrex_female_warm`, `zenrex_female_clear`. Currently powered by OpenAI `tts-1-hd` via `EMERGENT_LLM_KEY` (designed to be swapped with Zenrex's own voice provider later — single mapping in `ZENREX_VOICE_MAP`).
 3. **Video render** (`/generate`): ffmpeg pipeline — scene images → per-scene clips with ken-burns zoom → concat → optional logo watermark overlay → title + CTA drawtext (Noto Arabic font) → mux with padded TTS audio → final 1080×1920 vertical MP4 at `/api/static/videos/{id}.mp4`. Cost: 5 credits per 5 seconds.
 
 ### 3. Inline Recharge Gateway — `#rch-modal`
-User explicitly requested credits be topped up **without leaving the merchant's site** (no redirect to the main Zerax wallet).
+User explicitly requested credits be topped up **without leaving the merchant's site** (no redirect to the main Zenrex wallet).
 - **4 packages**: Starter (500/49 SAR), Pro (2500/199 SAR, default + "الأكثر طلباً" badge), Agency (6000/449), Enterprise (15000/999)
 - **5 payment methods**: Mada · Visa · Mastercard · Apple Pay · STC Pay
-- **Backend `/recharge`**: INTENTIONALLY MOCKED — simulates 400 ms gateway latency, returns transaction ID + receipt number. Placeholder for the real Zerax wallet API.
+- **Backend `/recharge`**: INTENTIONALLY MOCKED — simulates 400 ms gateway latency, returns transaction ID + receipt number. Placeholder for the real Zenrex wallet API.
 - **Skeleton-free open**: Falls back to static packages instantly, then refreshes from API in background.
 
 ### 4. Cleanup
@@ -152,7 +152,7 @@ Luxury 3D portfolio template for jewelry, watches, real estate, fine art, cars.
 - **Currency RATES map**: 43+ currencies converted from SAR baseline
 - **Universal i18n pattern**: `data-key`, `data-key-ph`, `data-key-opt` + `_html` suffix for innerHTML
 - **Universal market popover**: same UX across all 3 templates
-- **Zitex footer**: Branded "CRAFTED BY ZITEX" footer with link to zerax.com
+- **Zitex footer**: Branded "CRAFTED BY ZITEX" footer with link to zenrex.ai
 - **Pushed to GitHub**: 2 commits (`93c634b`, `51407c4`) on main branch
 
 ### Tested
@@ -244,11 +244,11 @@ Luxury 3D portfolio template for jewelry, watches, real estate, fine art, cars.
 - يستخرج: IP, User-Agent, Referer, UTM (utm_source/medium/campaign/content), post_url
 - يحدد المنصة تلقائياً (twitter/instagram/facebook/youtube/tiktok/whatsapp/telegram/linkedin/google/...) من الـ Referer host + UTM source
 - يحلل الـ User-Agent → device (mobile/desktop/tablet) + browser + OS
-- يضع cookie `zerax_aff_click` (30 يوم) لربط الـ click بالـ signup لاحقاً
+- يضع cookie `zenrex_aff_click` (30 يوم) لربط الـ click بالـ signup لاحقاً
 - Redirect مع `?aff=CODE` للـ landing
 
 **Server-side signup binding** (في `server.py /api/auth/register`):
-- يقرأ `zerax_aff_click` cookie من الـ request
+- يقرأ `zenrex_aff_click` cookie من الـ request
 - يحدّث `affiliate_clicks` بـ `converted_to_signup=true`, `signup_user_id`, `signup_at`
 - ⇒ نعرف **بالضبط** من أي ضغطة جاء التسجيل
 
@@ -331,7 +331,7 @@ Luxury 3D portfolio template for jewelry, watches, real estate, fine art, cars.
 **Route**: `/admin/intelligence` (protected by `ProtectedRoute adminOnly`)
 **AdminDashboard tile**: "مركز ذكاء العملاء 🧠" أضيف مع icon Sparkles + amber→orange gradient.
 
-**اختبار live (curl on owner@zerax.com)**:
+**اختبار live (curl on owner@zenrex.ai)**:
 - `GET /clients` → 51 عميل، اول واحد له 52 websites, 9 games, 4 images, 23 videos, 199 chats ✅
 - `GET /clients/{owner_id}/360` → engagement=100/100, counts كاملة ✅
 - `GET /clients/{owner_id}/projects` → 52 websites, 9 games, 3 apps ✅
@@ -454,7 +454,7 @@ Luxury 3D portfolio template for jewelry, watches, real estate, fine art, cars.
 **الطلب**: المستخدم يبي اللغة تتعين تلقائياً حسب منطقة الزائر، بدون ما يحتاج يفتح الـ Picker. ولو غيّر يدوياً، نحترم اختياره.
 
 **الحل** — اكتشاف بثلاث طبقات (`/app/frontend/src/i18n/geoLanguage.js`):
-1. **Manual override يفوز دايماً**: مفتاح `zerax_lang_manual` في localStorage — يُحفظ فقط عند الاختيار اليدوي من Picker
+1. **Manual override يفوز دايماً**: مفتاح `zenrex_lang_manual` في localStorage — يُحفظ فقط عند الاختيار اليدوي من Picker
 2. **Browser language (instant)**: `navigator.language` (مثلاً `fr-FR` → `fr`) — يُطبَّق قبل أول render
 3. **IP geolocation (background)**: ipapi.co + ipwho.is + geojs.io (fallbacks) — يرفع اللغة لـ country-based لو الزائر فرنسي ومتصفحه إنجليزي
 
@@ -475,7 +475,7 @@ Luxury 3D portfolio template for jewelry, watches, real estate, fine art, cars.
 
 **ملفات معدّلة/جديدة**:
 - `/app/frontend/src/i18n/geoLanguage.js` (جديد — 145 سطر)
-- `/app/frontend/src/i18n/index.js` (استبدال `localStorage.getItem('zerax_lang') || 'ar'` بـ `getInitialLanguage()` + background geo invocation)
+- `/app/frontend/src/i18n/index.js` (استبدال `localStorage.getItem('zenrex_lang') || 'ar'` بـ `getInitialLanguage()` + background geo invocation)
 - `/app/frontend/src/components/LanguagePicker.js` (`markManualChoice(code)` عند الاختيار اليدوي)
 
 ---
@@ -543,7 +543,7 @@ Bug Fixes shipped this session:
   - 3-pane layout: **Assets sidebar | Chat | Live Preview iframe** with desktop/mobile toggle and show/hide preview
   - Polls project every 4s for async asset generation status
   - `data-testid` on every interactive element (new-project-btn, type-{id}, create-project-btn, chat-input, chat-send-btn, approve-asset-{id}, preview-iframe, …)
-- AI agent ("freebuild" in `zerax_ai`) instructs Claude Sonnet to consult first then emit tags then HTML
+- AI agent ("freebuild" in `zenrex_ai`) instructs Claude Sonnet to consult first then emit tags then HTML
 - Tested: 16/16 backend pytest pass, frontend smoke ✅ (`/app/test_reports/iteration_37.json`)
 - Pytest regression: `/app/backend/tests/test_freebuild_chat.py` (~60s, hits live Claude+Fal)
 - Pushed to `main` → Railway auto-redeploys
@@ -555,7 +555,7 @@ Bug Fixes shipped this session:
 - Replaces AI generation for Ready Sites — zero hallucinations
 - 3 hand-crafted templates: app_mode / story_mode / showroom_mode
 - Auto-routes by business type (restaurant→story, jewelry→showroom)
-- Brand/contact/products injected via `window.ZERAX_CONFIG` + regex string replacement
+- Brand/contact/products injected via `window.ZENREX_CONFIG` + regex string replacement
 - Every generated site is **PWA-ready by default** (per-project manifest)
 - Fallback to legacy AI agent if template render fails
 
@@ -596,7 +596,7 @@ Bug Fixes shipped this session:
 
 ### Header Cleanup (`app_mode_full.html`)
 - Removed left logo, settings gear button (⚙️), admin shortcut buttons
-- Centered Zerax logo only — now linked to https://zerax.com (opens in new tab)
+- Centered Zenrex logo only — now linked to https://zenrex.ai (opens in new tab)
 - Single account icon on the left → opens the new full Account page
 
 ### Full Account / Settings Page Redesign
@@ -621,7 +621,7 @@ Bug Fixes shipped this session:
   - Image analysis (30 pts) · Pro ad image (50) · Sora 2 video (200) · Ad copywriter (40)
   - Market analysis (80) · 24/7 chatbot (500/mo) · Logo design (60) · Pro translation (25)
 - Special card styling (dark navy gradient + golden AI badge)
-- Pays via Zerax credits (no cart): requires login → instant credit deduction
+- Pays via Zenrex credits (no cart): requires login → instant credit deduction
 - Logged into orders as "خدمة AI"
 
 ### More Categories + Products (30+ new)
@@ -633,4 +633,4 @@ Bug Fixes shipped this session:
 - Grid gap reduced on screens <480px
 
 ### Push
-- Commit `0a406e7` → main → github.com/zuhair646-debug/zerax
+- Commit `0a406e7` → main → github.com/zuhair646-debug/zenrex

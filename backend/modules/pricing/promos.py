@@ -5,7 +5,7 @@ import logging
 from datetime import datetime, timezone
 from typing import Dict, Any, Optional
 
-log = logging.getLogger("zerax.pricing.promos")
+log = logging.getLogger("zenrex.pricing.promos")
 
 
 async def validate_and_apply_promo(

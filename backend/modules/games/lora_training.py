@@ -17,7 +17,7 @@ Endpoints exposed via `game_router.py`:
 Project document fields added by this module (under `lora`):
   status         : queued | training | ready | error
   lora_url       : URL to the trained `diffusers_lora_file` (used in gen)
-  trigger_word   : short token to mention in prompts (auto: zerax_{id8})
+  trigger_word   : short token to mention in prompts (auto: zenrex_{id8})
   num_images     : how many images were sent to training
   started_at     : ISO timestamp
   finished_at    : ISO timestamp
@@ -126,7 +126,7 @@ def _make_training_zip(image_bytes_list: List[bytes]) -> str:
     Each image is renamed to image_NN.png inside the archive (fal expects
     a flat zip of images; no captions = use trigger_word instead).
     """
-    fd, path = tempfile.mkstemp(prefix="zerax_lora_", suffix=".zip")
+    fd, path = tempfile.mkstemp(prefix="zenrex_lora_", suffix=".zip")
     os.close(fd)
     with zipfile.ZipFile(path, "w", compression=zipfile.ZIP_STORED) as zf:
         for i, b in enumerate(image_bytes_list, start=1):
@@ -170,7 +170,7 @@ async def _submit_training(images_data_url: str, trigger_word: str) -> Dict[str,
 
 async def run_style_training_background(db, project_id: str) -> None:
     """The actual long-running task. Updates the project doc as it progresses."""
-    trigger_word = f"zerax_{project_id[:8].replace('-', '')}"
+    trigger_word = f"zenrex_{project_id[:8].replace('-', '')}"
     started_at = datetime.now(timezone.utc).isoformat()
 
     # mark as training

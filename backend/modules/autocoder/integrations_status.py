@@ -11,7 +11,7 @@ import os
 from typing import Any, Dict, List, Optional
 
 
-# All integrations Zerax *could* use, their env-var names, and how to obtain.
+# All integrations Zenrex *could* use, their env-var names, and how to obtain.
 # This is the single source of truth — keep it in sync with the Independence UI cards.
 INTEGRATIONS_CATALOG: List[Dict[str, Any]] = [
     # ───────── LLM providers ─────────
@@ -121,7 +121,7 @@ def _check_one(item: Dict[str, Any]) -> Dict[str, Any]:
 
 
 async def tool_integrations_status(category: Optional[str] = None) -> Dict[str, Any]:
-    """List ALL Zerax integrations and which env-vars are configured.
+    """List ALL Zenrex integrations and which env-vars are configured.
 
     Args:
         category: optional filter — 'llm', 'llm-optional', 'media', 'payments',
@@ -159,7 +159,7 @@ async def tool_integrations_status(category: Optional[str] = None) -> Dict[str, 
 INTEGRATIONS_ANTHROPIC_TOOLS: List[Dict[str, Any]] = [
     {
         "name": "integrations_status",
-        "description": "📊 اعرض حالة كل تكاملات Zerax (LLM، دفع، تخزين، realtime…) — وش مهيأ ووش ناقص. اختياري filter بالـcategory.",
+        "description": "📊 اعرض حالة كل تكاملات Zenrex (LLM، دفع، تخزين، realtime…) — وش مهيأ ووش ناقص. اختياري filter بالـcategory.",
         "input_schema": {"type": "object", "properties": {
             "category": {"type": "string", "enum": [
                 "llm", "llm-optional", "media", "payments", "auth", "infra",

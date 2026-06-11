@@ -24,7 +24,7 @@ def _load_base_url():
     raise RuntimeError("REACT_APP_BACKEND_URL not set")
 
 BASE_URL = _load_base_url()
-OWNER_EMAIL = "owner@zerax.com"
+OWNER_EMAIL = "owner@zenrex.ai"
 OWNER_PASSWORD = "owner123"
 
 

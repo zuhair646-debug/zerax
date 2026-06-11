@@ -25,7 +25,7 @@ APP_STUDIO_TOOLS: List[Dict[str, Any]] = [
         "type": "function",
         "function": {
             "name": "add_feature_to_project",
-            "description": "Add a feature to the current project. The user is charged the feature cost in Zerax credits. Refuse silently if already added.",
+            "description": "Add a feature to the current project. The user is charged the feature cost in Zenrex credits. Refuse silently if already added.",
             "parameters": {
                 "type": "object",
                 "properties": {

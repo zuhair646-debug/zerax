@@ -1,5 +1,5 @@
 """
-Zerax Delivery & Driver Management
+Zenrex Delivery & Driver Management
 -----------------------------------
 Three-sided delivery system: merchant ↔ driver ↔ customer.
 

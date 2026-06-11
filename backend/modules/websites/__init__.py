@@ -1,4 +1,4 @@
-"""Zerax Websites Module — standalone, self-contained."""
+"""Zenrex Websites Module — standalone, self-contained."""
 from .routes import register_routes
 
 __all__ = ["register_routes"]

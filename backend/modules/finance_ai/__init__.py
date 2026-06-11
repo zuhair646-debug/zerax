@@ -1,4 +1,4 @@
-"""AI-assisted finance intelligence for Zerax owner dashboard.
+"""AI-assisted finance intelligence for Zenrex owner dashboard.
 
 Read-only by default: summarizes payments, credit liability, revenue quality,
 risk signals, and owner recommendations without mutating users/payments.

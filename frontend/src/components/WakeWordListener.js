@@ -1,18 +1,18 @@
 /**
  * Wake Word Listener — background speech recognition watching for
  * "يا زارا" / "يا ليلى" / "زارا" / "ليلى". On detection, dispatches a
- * custom event `zerax:wake-word` with {character: 'zara'|'layla'}.
+ * custom event `zenrex:wake-word` with {character: 'zara'|'layla'}.
  *
  * - Toggle (on/off) persisted to localStorage.
- * - Auto-pauses when VoiceStage is open (listens for `zerax:voice-stage-open`
- *   and `zerax:voice-stage-close` events dispatched elsewhere).
+ * - Auto-pauses when VoiceStage is open (listens for `zenrex:voice-stage-open`
+ *   and `zenrex:voice-stage-close` events dispatched elsewhere).
  * - Shows a small floating indicator on the bottom-left corner.
  */
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { Mic, MicOff } from 'lucide-react';
 
 const SR = (typeof window !== 'undefined') && (window.SpeechRecognition || window.webkitSpeechRecognition);
-const LS_KEY = 'zerax_wake_word_enabled';
+const LS_KEY = 'zenrex_wake_word_enabled';
 
 // Wake word patterns — allow small variations
 const WAKE_PATTERNS = [
@@ -60,7 +60,7 @@ export default function WakeWordListener() {
         for (const p of WAKE_PATTERNS) {
           if (p.re.test(txt)) {
             try { rec.stop(); } catch (_) {}
-            window.dispatchEvent(new CustomEvent('zerax:wake-word', { detail: { character: p.char, heard: txt } }));
+            window.dispatchEvent(new CustomEvent('zenrex:wake-word', { detail: { character: p.char, heard: txt } }));
             return;
           }
         }
@@ -97,11 +97,11 @@ export default function WakeWordListener() {
   useEffect(() => {
     const onOpen = () => setPaused(true);
     const onClose = () => setPaused(false);
-    window.addEventListener('zerax:voice-stage-open', onOpen);
-    window.addEventListener('zerax:voice-stage-close', onClose);
+    window.addEventListener('zenrex:voice-stage-open', onOpen);
+    window.addEventListener('zenrex:voice-stage-close', onClose);
     return () => {
-      window.removeEventListener('zerax:voice-stage-open', onOpen);
-      window.removeEventListener('zerax:voice-stage-close', onClose);
+      window.removeEventListener('zenrex:voice-stage-open', onOpen);
+      window.removeEventListener('zenrex:voice-stage-close', onClose);
     };
   }, []);
 

@@ -1,15 +1,15 @@
 <!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
-<!-- Zerax Unified Dark Theme — applied platform-wide -->
-<link rel="stylesheet" href="/mockups/zerax-theme.css">
+<!-- Zenrex Unified Dark Theme — applied platform-wide -->
+<link rel="stylesheet" href="/mockups/zenrex-theme.css">
 <!-- Arabic font families for theme customizer -->
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;700;900&family=Cairo:wght@400;700;900&family=IBM+Plex+Sans+Arabic:wght@400;700&family=Rubik:wght@400;700;900&family=Almarai:wght@400;700;800&family=Noto+Kufi+Arabic:wght@400;700;900&family=Amiri:wght@400;700&family=Reem+Kufi:wght@400;700&display=swap" rel="stylesheet">
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Zerax — لوحة تحكم التاجر</title>
+<title>Zenrex — لوحة تحكم التاجر</title>
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;500;700;900&display=swap" rel="stylesheet">
 <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js" defer></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js" defer></script>
@@ -162,7 +162,7 @@ body.dark-mode .pay-card.selected{background:rgba(124,58,237,.15);border-color:v
 .pcard.add{border:2px dashed var(--border);display:flex;flex-direction:column;align-items:center;justify-content:center;padding:30px;text-align:center;color:var(--purple);font-weight:900}
 .pcard.add:hover{border-color:var(--purple);background:#faf5ff}
 
-/* ───── VIDEO STUDIO (TABBED — DARK ZERAX THEME) ───── */
+/* ───── VIDEO STUDIO (TABBED — DARK ZENREX THEME) ───── */
 .zx-studio{background:#0a0a14;border-radius:18px;overflow:hidden;border:1px solid rgba(255,255,255,.08);box-shadow:0 24px 60px rgba(0,0,0,.25);display:flex;flex-direction:column;height:calc(100vh - 120px);min-height:600px}
 .zx-studio-head{padding:16px 22px;background:linear-gradient(135deg,#0a0a14,#13131f);border-bottom:1px solid rgba(255,255,255,.08);display:flex;align-items:center;gap:14px;flex-wrap:wrap}
 .zx-studio-head .brand{display:flex;align-items:center;gap:10px;color:#fff}
@@ -389,7 +389,7 @@ body.studio-fs{overflow:hidden}
 .mod.open{display:flex}
 .mod .box{background:#fff;border-radius:18px;width:100%;max-width:480px;max-height:90vh;overflow-y:auto;padding:24px}
 .mod h3{font-size:16px;font-weight:900;margin-bottom:14px}
-/* ─── PRODUCT STUDIO (Dark Zerax Theme) ─── */
+/* ─── PRODUCT STUDIO (Dark Zenrex Theme) ─── */
 .mod.prod-studio{background:rgba(10,10,20,.78);backdrop-filter:blur(10px);align-items:stretch;padding:0}
 .mod.prod-studio.open{display:flex;justify-content:center}
 .mod.prod-studio .ps-box{background:#0a0a14;border:1px solid rgba(255,255,255,.08);border-radius:18px;width:100%;max-width:1100px;margin:24px auto;overflow:hidden;display:flex;flex-direction:column;color:#fff;box-shadow:0 32px 80px rgba(0,0,0,.5);max-height:calc(100vh - 48px)}
@@ -552,11 +552,11 @@ select.ps-input option{background:#13131f;color:#fff}
 <!-- ═══════════════════ LOGIN ═══════════════════ -->
 <div class="login-bg" id="login-screen">
   <div class="login-card">
-    <div class="logo"><img src="/zerax-logo.png" alt="Zerax" style="height:54px;width:auto;object-fit:contain" loading="lazy" decoding="async"></div>
+    <div class="logo"><img src="/zenrex-logo.png" alt="Zenrex" style="height:54px;width:auto;object-fit:contain" loading="lazy" decoding="async"></div>
     <p class="sub">سجّل دخولك للوصول إلى لوحة تحكم تاجرك</p>
     <form onsubmit="event.preventDefault();doLogin()">
       <label>البريد الإلكتروني</label>
-      <input id="li-email" data-testid="login-email" type="email" placeholder="owner@zerax.com" value="owner@zerax.com" autocomplete="username">
+      <input id="li-email" data-testid="login-email" type="email" placeholder="owner@zenrex.ai" value="owner@zenrex.ai" autocomplete="username">
       <label>كلمة المرور</label>
       <input id="li-pass" data-testid="login-password" type="password" placeholder="••••••••" value="owner123" autocomplete="current-password">
       <div class="err" id="li-err"></div>
@@ -564,7 +564,7 @@ select.ps-input option{background:#13131f;color:#fff}
     </form>
     <div class="demo">
       💡 <b>حساب التجربة (متصل بـ MongoDB حقيقي):</b><br>
-      البريد: <b>owner@zerax.com</b><br>
+      البريد: <b>owner@zenrex.ai</b><br>
       كلمة المرور: <b>owner123</b>
     </div>
     <div style="margin-top:14px;text-align:center;font-size:11px;color:var(--mute)">
@@ -579,8 +579,8 @@ select.ps-input option{background:#13131f;color:#fff}
   <!-- SIDEBAR -->
   <aside class="sidebar" id="sidebar">
     <div class="brand">
-      <div class="logo" style="padding:0;background:transparent"><img src="/zerax-logo.png" alt="Zerax" style="height:42px;width:auto;object-fit:contain" loading="lazy" decoding="async"></div>
-      <div><div class="nm">Zerax</div><div class="role">لوحة التاجر</div></div>
+      <div class="logo" style="padding:0;background:transparent"><img src="/zenrex-logo.png" alt="Zenrex" style="height:42px;width:auto;object-fit:contain" loading="lazy" decoding="async"></div>
+      <div><div class="nm">Zenrex</div><div class="role">لوحة التاجر</div></div>
     </div>
 
     <div class="nav-section">القائمة الرئيسية</div>
@@ -610,7 +610,7 @@ select.ps-input option{background:#13131f;color:#fff}
     <button class="nav-item" data-page="settings" onclick="goPage('settings')"><i data-lucide="settings"></i> الإعدادات</button>
 
     <div class="wallet">
-      <div class="lbl">رصيد نقاط Zerax</div>
+      <div class="lbl">رصيد نقاط Zenrex</div>
       <div class="amt"><span id="wallet-balance">5,000</span></div>
       <button onclick="rechargeOpen()">+ شحن الرصيد</button>
     </div>
@@ -797,7 +797,7 @@ select.ps-input option{background:#13131f;color:#fff}
         <div class="panel" style="background:linear-gradient(135deg,#0a0a14,#1a1a3a);color:#e2e8f0;border:1px solid #312e81;margin-bottom:14px">
           <div style="display:flex;justify-content:space-between;align-items:center;gap:14px;flex-wrap:wrap">
             <div>
-              <h3 style="color:#fbbf24;font-size:15px;font-weight:900;display:flex;align-items:center;gap:8px">🚀 ابدأ بسرعة: اطلب من Zerax AI</h3>
+              <h3 style="color:#fbbf24;font-size:15px;font-weight:900;display:flex;align-items:center;gap:8px">🚀 ابدأ بسرعة: اطلب من Zenrex AI</h3>
               <p style="font-size:11px;color:#94a3b8;margin-top:6px;line-height:1.7;max-width:560px">أضف منتجات جاهزة لكل قسم تجربة فورية · أو اضغط "بحث AI" لأي منتج موجود ليبحث في الإنترنت ويعبّي كل المعلومات (وصف، مواصفات، صور، فيديوهات، رابط رسمي) مجاناً · <b style="color:#fbbf24">صفر تكلفة على التاجر</b></p>
             </div>
             <div style="display:flex;gap:8px;flex-wrap:wrap">
@@ -1044,7 +1044,7 @@ select.ps-input option{background:#13131f;color:#fff}
             </div>
             <!-- Step 4: Channels -->
             <h4 style="font-size:13px;font-weight:900;margin-bottom:10px;color:var(--purple)">④ قنوات الإرسال <span style="background:#10b98115;color:#10b981;padding:3px 8px;border-radius:99px;font-size:10px;font-weight:900;margin-right:6px">مجاني — يستخدم مفاتيحك</span></h4>
-            <p style="font-size:11px;color:var(--mute);margin-bottom:8px">⚠️ تأكد إنك ربطت مفاتيحك في صفحة <b>"النقاط والاشتراك"</b> قبل الإطلاق. التكلفة تروح للمزود مباشرة، Zerax ما تاخذ شي.</p>
+            <p style="font-size:11px;color:var(--mute);margin-bottom:8px">⚠️ تأكد إنك ربطت مفاتيحك في صفحة <b>"النقاط والاشتراك"</b> قبل الإطلاق. التكلفة تروح للمزود مباشرة، Zenrex ما تاخذ شي.</p>
             <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:18px" id="cmp-channels">
               <label class="chip-toggle"><input type="checkbox" value="whatsapp" checked data-testid="ch-whatsapp"><span>💬 واتساب (مفتاحك)</span></label>
               <label class="chip-toggle"><input type="checkbox" value="sms" data-testid="ch-sms"><span>📱 SMS (مفتاحك)</span></label>
@@ -1093,7 +1093,7 @@ select.ps-input option{background:#13131f;color:#fff}
         <div class="panel" style="margin-top:14px">
           <div class="panel-head"><h3>🌗 وضع العرض الافتراضي</h3></div>
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
-            <label class="pay-card" data-tm-mode="dark"><input type="radio" name="theme-mode" value="dark" checked onchange="themeSet('mode','dark')" style="display:none"><div style="font-size:28px;margin-bottom:6px">🌙</div><b>وضع ليلي (مُوصى به)</b><span>فاخر · يريح العين · هوية Zerax</span></label>
+            <label class="pay-card" data-tm-mode="dark"><input type="radio" name="theme-mode" value="dark" checked onchange="themeSet('mode','dark')" style="display:none"><div style="font-size:28px;margin-bottom:6px">🌙</div><b>وضع ليلي (مُوصى به)</b><span>فاخر · يريح العين · هوية Zenrex</span></label>
             <label class="pay-card" data-tm-mode="light"><input type="radio" name="theme-mode" value="light" onchange="themeSet('mode','light')" style="display:none"><div style="font-size:28px;margin-bottom:6px">☀️</div><b>وضع نهاري</b><span>خلفية فاتحة · نص داكن</span></label>
           </div>
         </div>
@@ -1112,7 +1112,7 @@ select.ps-input option{background:#13131f;color:#fff}
           <!-- Quick presets -->
           <div style="margin-top:14px;display:flex;flex-wrap:wrap;gap:8px">
             <span style="font-size:11px;color:#94a3b8;font-weight:700;align-self:center;margin-left:6px">ثيمات جاهزة:</span>
-            <button onclick="applyPreset('zerax')" data-testid="preset-zerax" style="background:linear-gradient(135deg,#7c3aed,#a855f7);color:#fff;border:none;padding:8px 14px;border-radius:8px;font-family:inherit;font-weight:800;font-size:11px;cursor:pointer">Zerax الافتراضي</button>
+            <button onclick="applyPreset('zenrex')" data-testid="preset-zenrex" style="background:linear-gradient(135deg,#7c3aed,#a855f7);color:#fff;border:none;padding:8px 14px;border-radius:8px;font-family:inherit;font-weight:800;font-size:11px;cursor:pointer">Zenrex الافتراضي</button>
             <button onclick="applyPreset('luxury')" style="background:linear-gradient(135deg,#0a0a14,#fbbf24);color:#fbbf24;border:1px solid #fbbf24;padding:8px 14px;border-radius:8px;font-family:inherit;font-weight:800;font-size:11px;cursor:pointer">Luxury Gold</button>
             <button onclick="applyPreset('emerald')" style="background:linear-gradient(135deg,#0f172a,#10b981);color:#fff;border:none;padding:8px 14px;border-radius:8px;font-family:inherit;font-weight:800;font-size:11px;cursor:pointer">Emerald Night</button>
             <button onclick="applyPreset('rose')" style="background:linear-gradient(135deg,#1f1129,#ec4899);color:#fff;border:none;padding:8px 14px;border-radius:8px;font-family:inherit;font-weight:800;font-size:11px;cursor:pointer">Rose Velvet</button>
@@ -1388,14 +1388,14 @@ select.ps-input option{background:#13131f;color:#fff}
       </div>
       <!-- ─── /BRANCHES ─── -->
 
-      <!-- ─── VIDEO STUDIO — TABBED DARK ZERAX ─── -->
+      <!-- ─── VIDEO STUDIO — TABBED DARK ZENREX ─── -->
       <div class="page" data-page="video-studio">
         <div class="zx-studio">
           <!-- Header: brand + config -->
           <div class="zx-studio-head">
             <div class="brand">
               <div class="logo">Z</div>
-              <div><h3>Zerax AI Studio</h3><div class="sub">⚡ POWERED BY GEMINI · CLAUDE · ZERAX VOICE</div></div>
+              <div><h3>Zenrex AI Studio</h3><div class="sub">⚡ POWERED BY GEMINI · CLAUDE · ZENREX VOICE</div></div>
             </div>
             <div class="cfg">
               <select id="vs-lang" onchange="vsUpdateConfig()" title="لغة الفيديو واللهجة">
@@ -1452,22 +1452,22 @@ select.ps-input option{background:#13131f;color:#fff}
               </select>
               <select id="vs-voice" onchange="vsUpdateConfig()" title="الصوت">
                 <optgroup label="🎙️ أصوات ذكور">
-                  <option value="zerax_male_deep">🎙️ ذكر · عميق وفخم</option>
-                  <option value="zerax_male_warm">🎙️ ذكر · دافئ وودود</option>
-                  <option value="zerax_male_youth">🎙️ ذكر · شبابي حيوي</option>
-                  <option value="zerax_narrator_pro">🎙️ راوي احترافي</option>
-                  <option value="zerax_friend_chat">🎙️ صديق محادثة</option>
-                  <option value="zerax_announcer">🎙️ مذيع رسمي</option>
+                  <option value="zenrex_male_deep">🎙️ ذكر · عميق وفخم</option>
+                  <option value="zenrex_male_warm">🎙️ ذكر · دافئ وودود</option>
+                  <option value="zenrex_male_youth">🎙️ ذكر · شبابي حيوي</option>
+                  <option value="zenrex_narrator_pro">🎙️ راوي احترافي</option>
+                  <option value="zenrex_friend_chat">🎙️ صديق محادثة</option>
+                  <option value="zenrex_announcer">🎙️ مذيع رسمي</option>
                 </optgroup>
                 <optgroup label="🎤 أصوات إناث">
-                  <option value="zerax_female_warm">🎤 أنثى · دافئة وراقية</option>
-                  <option value="zerax_female_clear">🎤 أنثى · صافية وحيوية</option>
-                  <option value="zerax_storyteller_f">🎤 راوية قصص</option>
-                  <option value="zerax_news_anchor">🎤 مذيعة أخبار</option>
+                  <option value="zenrex_female_warm">🎤 أنثى · دافئة وراقية</option>
+                  <option value="zenrex_female_clear">🎤 أنثى · صافية وحيوية</option>
+                  <option value="zenrex_storyteller_f">🎤 راوية قصص</option>
+                  <option value="zenrex_news_anchor">🎤 مذيعة أخبار</option>
                 </optgroup>
                 <optgroup label="🔊 أصوات محايدة">
-                  <option value="zerax_neutral">🔊 محايد · احترافي</option>
-                  <option value="zerax_documentary">🎬 وثائقي عميق</option>
+                  <option value="zenrex_neutral">🔊 محايد · احترافي</option>
+                  <option value="zenrex_documentary">🎬 وثائقي عميق</option>
                 </optgroup>
               </select>
               <select id="vs-tone" onchange="vsUpdateConfig()" title="الأسلوب">
@@ -1537,7 +1537,7 @@ select.ps-input option{background:#13131f;color:#fff}
 
             <!-- TAB 4: VOICE -->
             <div class="zx-panel" data-panel="voice">
-              <div class="zx-panel-head"><div class="ico" style="background:linear-gradient(135deg,#fbbf24,#f59e0b)">🎙️</div><div><h4>التعليق الصوتي</h4><div class="desc">Zerax Voice ينطق السيناريو بالصوت المختار · سماع العيّنة قبل الموافقة</div></div><div class="status" id="st-voice-status">— لم يُولّد الصوت</div></div>
+              <div class="zx-panel-head"><div class="ico" style="background:linear-gradient(135deg,#fbbf24,#f59e0b)">🎙️</div><div><h4>التعليق الصوتي</h4><div class="desc">Zenrex Voice ينطق السيناريو بالصوت المختار · سماع العيّنة قبل الموافقة</div></div><div class="status" id="st-voice-status">— لم يُولّد الصوت</div></div>
               <div class="zx-content" id="content-voice">
                 <div class="zx-empty"><div class="big-ico">🎙️</div><h5>اعتمد الصور أولاً</h5><p>بعد ما توافق على الصور، نولّد التعليق الصوتي بصوت احترافي.</p></div>
               </div>
@@ -1629,7 +1629,7 @@ select.ps-input option{background:#13131f;color:#fff}
             <div class="field"><label style="font-size:11px;font-weight:900;color:var(--mute);display:block;margin-bottom:5px">الرقم الضريبي (15 رقم)</label><input id="z-vat" data-testid="z-vat" placeholder="300000000000003" style="width:100%;padding:10px;border:1px solid var(--border);border-radius:8px;font-family:monospace;direction:ltr;font-weight:700"></div>
             <div class="field"><label style="font-size:11px;font-weight:900;color:var(--mute);display:block;margin-bottom:5px">السجل التجاري</label><input id="z-cr" data-testid="z-cr" placeholder="1010234567" style="width:100%;padding:10px;border:1px solid var(--border);border-radius:8px;font-family:monospace;direction:ltr;font-weight:700"></div>
             <div class="field"><label style="font-size:11px;font-weight:900;color:var(--mute);display:block;margin-bottom:5px">اسم المنشأة (عربي)</label><input id="z-name-ar" data-testid="z-name-ar" placeholder="شركة زيراكس للتجارة الإلكترونية" style="width:100%;padding:10px;border:1px solid var(--border);border-radius:8px;font-weight:700"></div>
-            <div class="field"><label style="font-size:11px;font-weight:900;color:var(--mute);display:block;margin-bottom:5px">اسم المنشأة (إنجليزي)</label><input id="z-name-en" data-testid="z-name-en" placeholder="Zerax Trading LLC" style="width:100%;padding:10px;border:1px solid var(--border);border-radius:8px;font-weight:700;direction:ltr"></div>
+            <div class="field"><label style="font-size:11px;font-weight:900;color:var(--mute);display:block;margin-bottom:5px">اسم المنشأة (إنجليزي)</label><input id="z-name-en" data-testid="z-name-en" placeholder="Zenrex Trading LLC" style="width:100%;padding:10px;border:1px solid var(--border);border-radius:8px;font-weight:700;direction:ltr"></div>
             <div class="field" style="grid-column:1/-1"><label style="font-size:11px;font-weight:900;color:var(--mute);display:block;margin-bottom:5px">العنوان الرسمي</label><input id="z-address" data-testid="z-address" placeholder="حي العليا، طريق الملك فهد، الرياض 11564" style="width:100%;padding:10px;border:1px solid var(--border);border-radius:8px;font-weight:700"></div>
           </div>
         </div>
@@ -1662,8 +1662,8 @@ select.ps-input option{background:#13131f;color:#fff}
         <!-- Business model clarity banner -->
         <div class="panel" style="background:linear-gradient(135deg,#10b981,#059669);color:#fff;border:none">
           <div style="display:flex;gap:14px;align-items:start"><div style="font-size:36px">🌍</div><div style="flex:1">
-            <h3 style="color:#fff">نموذج Zerax — منصة عالمية مرنة</h3>
-            <p style="margin-top:8px;font-size:13px;color:rgba(255,255,255,.95);line-height:1.9">Zerax يوفر <b>العقل والأتمتة والذكاء الاصطناعي فقط</b>. أنت كتاجر تستخدم <b>مفاتيحك الخاصة</b> لكل خدمة (إيميل، SMS، واتساب، دفع) — تخصم الرسوم على حسابك مباشرة عند مزود الخدمة. <b>Zerax ما تاخذ أي عمولة</b> على هذي الخدمات. النقاط تنخصم فقط على خدمات الذكاء الاصطناعي اللي نحن نوفرها.</p>
+            <h3 style="color:#fff">نموذج Zenrex — منصة عالمية مرنة</h3>
+            <p style="margin-top:8px;font-size:13px;color:rgba(255,255,255,.95);line-height:1.9">Zenrex يوفر <b>العقل والأتمتة والذكاء الاصطناعي فقط</b>. أنت كتاجر تستخدم <b>مفاتيحك الخاصة</b> لكل خدمة (إيميل، SMS، واتساب، دفع) — تخصم الرسوم على حسابك مباشرة عند مزود الخدمة. <b>Zenrex ما تاخذ أي عمولة</b> على هذي الخدمات. النقاط تنخصم فقط على خدمات الذكاء الاصطناعي اللي نحن نوفرها.</p>
           </div></div>
         </div>
 
@@ -1744,21 +1744,21 @@ select.ps-input option{background:#13131f;color:#fff}
 
         <!-- WHAT POINTS COVER -->
         <div class="panel" style="margin-top:14px">
-          <div class="panel-head"><h3>💎 ما الذي تشتري بالنقاط؟ (خدمات Zerax الذكية فقط)</h3></div>
+          <div class="panel-head"><h3>💎 ما الذي تشتري بالنقاط؟ (خدمات Zenrex الذكية فقط)</h3></div>
           <table class="tbl"><thead><tr><th>الخدمة</th><th>التكلفة</th><th>المزود الفعلي (ندفع له نحن)</th><th>الحالة</th></tr></thead><tbody>
-            <tr><td>🤖 رد AI ذكي على عميل</td><td><b>1 نقطة</b> (~0.10 ر.س)</td><td>OpenAI GPT-5 / Claude (مدفوع من Zerax)</td><td><span class="status-pill s-paid">✓ مفعّل</span></td></tr>
-            <tr><td>🖼️ توليد صورة منتج بـ AI</td><td><b>8 نقطة</b> (~0.80 ر.س)</td><td>Gemini Nano Banana (مدفوع من Zerax)</td><td><span class="status-pill s-paid">✓ مفعّل</span></td></tr>
-            <tr><td>🎬 توليد فيديو إعلاني AI</td><td><b>32-40 نقطة</b> (~3-4 ر.س)</td><td>Gemini + ElevenLabs (مدفوع من Zerax)</td><td><span class="status-pill s-paid">✓ مفعّل</span></td></tr>
-            <tr><td>📊 تحليل سلوك العملاء بـ AI</td><td><b>5 نقطة</b> / تحليل</td><td>Claude AI (مدفوع من Zerax)</td><td><span class="status-pill s-paid">✓ مفعّل</span></td></tr>
-            <tr><td>✨ تحسين وصف منتج بـ AI</td><td><b>2 نقطة</b></td><td>OpenAI (مدفوع من Zerax)</td><td><span class="status-pill s-paid">✓ مفعّل</span></td></tr>
-            <tr><td>🎯 اقتراح جمهور حملة بـ AI</td><td><b>3 نقطة</b></td><td>Claude AI (مدفوع من Zerax)</td><td><span class="status-pill s-paid">✓ مفعّل</span></td></tr>
+            <tr><td>🤖 رد AI ذكي على عميل</td><td><b>1 نقطة</b> (~0.10 ر.س)</td><td>OpenAI GPT-5 / Claude (مدفوع من Zenrex)</td><td><span class="status-pill s-paid">✓ مفعّل</span></td></tr>
+            <tr><td>🖼️ توليد صورة منتج بـ AI</td><td><b>8 نقطة</b> (~0.80 ر.س)</td><td>Gemini Nano Banana (مدفوع من Zenrex)</td><td><span class="status-pill s-paid">✓ مفعّل</span></td></tr>
+            <tr><td>🎬 توليد فيديو إعلاني AI</td><td><b>32-40 نقطة</b> (~3-4 ر.س)</td><td>Gemini + ElevenLabs (مدفوع من Zenrex)</td><td><span class="status-pill s-paid">✓ مفعّل</span></td></tr>
+            <tr><td>📊 تحليل سلوك العملاء بـ AI</td><td><b>5 نقطة</b> / تحليل</td><td>Claude AI (مدفوع من Zenrex)</td><td><span class="status-pill s-paid">✓ مفعّل</span></td></tr>
+            <tr><td>✨ تحسين وصف منتج بـ AI</td><td><b>2 نقطة</b></td><td>OpenAI (مدفوع من Zenrex)</td><td><span class="status-pill s-paid">✓ مفعّل</span></td></tr>
+            <tr><td>🎯 اقتراح جمهور حملة بـ AI</td><td><b>3 نقطة</b></td><td>Claude AI (مدفوع من Zenrex)</td><td><span class="status-pill s-paid">✓ مفعّل</span></td></tr>
           </tbody></table>
         </div>
 
         <!-- WHAT DOES NOT COST POINTS -->
         <div class="panel" style="margin-top:14px">
           <div class="panel-head"><h3>🆓 خدمات بدون نقاط — تستخدم مفاتيحك الخاصة</h3></div>
-          <table class="tbl"><thead><tr><th>الخدمة</th><th>تكلفة Zerax</th><th>تكلفتك المباشرة (للمزود)</th><th>أين تربط مفاتيحك؟</th></tr></thead><tbody>
+          <table class="tbl"><thead><tr><th>الخدمة</th><th>تكلفة Zenrex</th><th>تكلفتك المباشرة (للمزود)</th><th>أين تربط مفاتيحك؟</th></tr></thead><tbody>
             <tr><td>📧 إرسال إيميل</td><td><b style="color:#10b981">0 نقطة (مجاناً)</b></td><td>~0.001-0.005$ / إيميل</td><td>Resend / SendGrid / Mailgun</td></tr>
             <tr><td>📱 SMS</td><td><b style="color:#10b981">0 نقطة (مجاناً)</b></td><td>~0.15 ر.س / رسالة</td><td>Unifonic / Twilio / 4Jawaly</td></tr>
             <tr><td>💬 واتساب Business</td><td><b style="color:#10b981">0 نقطة (مجاناً)</b></td><td>أول 1000 مجاناً، بعدها ~0.20 ر.س</td><td>Meta Cloud API / Twilio</td></tr>
@@ -1767,7 +1767,7 @@ select.ps-input option{background:#13131f;color:#fff}
             <tr><td>📦 الشحن والتوصيل</td><td><b style="color:#10b981">0 نقطة (مجاناً)</b></td><td>سعر شركة الشحن</td><td>SMSA / Aramex / DHL</td></tr>
           </tbody></table>
           <div style="background:#dcfce7;border:1px solid #86efac;border-radius:10px;padding:12px;margin-top:14px;font-size:12px;color:#166534;line-height:1.9">
-            ✓ <b>هذا يعني:</b> أنت تفتح حسابك مع المزود في بلدك (وفق قوانين بلدك) — تربط مفاتيحك بـ Zerax — وتدفع للمزود مباشرة. Zerax ما تتدخل في معاملاتك الخارجية أبداً.
+            ✓ <b>هذا يعني:</b> أنت تفتح حسابك مع المزود في بلدك (وفق قوانين بلدك) — تربط مفاتيحك بـ Zenrex — وتدفع للمزود مباشرة. Zenrex ما تتدخل في معاملاتك الخارجية أبداً.
           </div>
         </div>
 
@@ -1812,7 +1812,7 @@ select.ps-input option{background:#13131f;color:#fff}
             <div style="background:#fff;border:2px solid #e5e7eb;border-radius:14px;padding:18px;text-align:center"><div style="font-size:28px">🥉</div><b style="font-size:14px">باقة البداية</b><div style="font-size:24px;font-weight:900;color:#7c3aed;margin:6px 0">500 نقطة</div><div style="font-size:11px;color:#6b7280;text-decoration:line-through">75 ر.س</div><div style="font-size:18px;font-weight:900;color:#10b981">50 ر.س</div><button class="btn btn-primary" data-testid="buy-500" onclick="buyCredits(500,50)" style="margin-top:10px;width:100%">اشتر الآن</button></div>
             <div style="background:linear-gradient(135deg,#faf5ff,#fdf2f8);border:2px solid #7c3aed;border-radius:14px;padding:18px;text-align:center;position:relative"><div style="position:absolute;top:-10px;left:50%;transform:translateX(-50%);background:#7c3aed;color:#fff;padding:3px 10px;border-radius:99px;font-size:10px;font-weight:900">الأشهر ⭐</div><div style="font-size:28px">🥈</div><b style="font-size:14px">باقة المتوسط</b><div style="font-size:24px;font-weight:900;color:#7c3aed;margin:6px 0">2,500 نقطة</div><div style="font-size:11px;color:#6b7280;text-decoration:line-through">375 ر.س</div><div style="font-size:18px;font-weight:900;color:#10b981">200 ر.س</div><button class="btn btn-primary" data-testid="buy-2500" onclick="buyCredits(2500,200)" style="margin-top:10px;width:100%">اشتر الآن</button></div>
             <div style="background:#fff;border:2px solid #e5e7eb;border-radius:14px;padding:18px;text-align:center"><div style="font-size:28px">🥇</div><b style="font-size:14px">باقة المحترفين</b><div style="font-size:24px;font-weight:900;color:#7c3aed;margin:6px 0">10,000 نقطة</div><div style="font-size:11px;color:#6b7280;text-decoration:line-through">1,500 ر.س</div><div style="font-size:18px;font-weight:900;color:#10b981">700 ر.س</div><button class="btn btn-primary" data-testid="buy-10000" onclick="buyCredits(10000,700)" style="margin-top:10px;width:100%">اشتر الآن</button></div>
-            <div style="background:linear-gradient(135deg,#0a0a14,#13131f);color:#fff;border-radius:14px;padding:18px;text-align:center"><div style="font-size:28px">💎</div><b style="font-size:14px">المؤسسات</b><div style="font-size:24px;font-weight:900;color:#fbbf24;margin:6px 0">50,000+</div><div style="font-size:13px;color:#94a3b8;margin-top:8px">حسب الاستخدام · سعر مخصص</div><button class="btn btn-amber" onclick="alert('تواصل: sales@zerax.sa')" style="margin-top:10px;width:100%;background:#fbbf24;color:#000;border:none">تواصل مع المبيعات</button></div>
+            <div style="background:linear-gradient(135deg,#0a0a14,#13131f);color:#fff;border-radius:14px;padding:18px;text-align:center"><div style="font-size:28px">💎</div><b style="font-size:14px">المؤسسات</b><div style="font-size:24px;font-weight:900;color:#fbbf24;margin:6px 0">50,000+</div><div style="font-size:13px;color:#94a3b8;margin-top:8px">حسب الاستخدام · سعر مخصص</div><button class="btn btn-amber" onclick="alert('تواصل: sales@zenrex.ai')" style="margin-top:10px;width:100%;background:#fbbf24;color:#000;border:none">تواصل مع المبيعات</button></div>
           </div>
         </div>
       </div>
@@ -1845,14 +1845,14 @@ select.ps-input option{background:#13131f;color:#fff}
   </main>
 </div>
 
-<!-- PRODUCT STUDIO — Dark Zerax theme with AI deep analysis -->
+<!-- PRODUCT STUDIO — Dark Zenrex theme with AI deep analysis -->
 <div class="mod prod-studio" id="prod-mod" onclick="if(event.target===this)closeProductModal()">
   <div class="ps-box">
     <!-- Studio header -->
     <div class="ps-head">
       <div class="brand">
         <div class="logo">Z</div>
-        <div><h3 id="ps-title">📦 إضافة منتج جديد</h3><div class="sub">⚡ ZERAX PRODUCT AI · صور + لوجو + بانر + تحليل عميق</div></div>
+        <div><h3 id="ps-title">📦 إضافة منتج جديد</h3><div class="sub">⚡ ZENREX PRODUCT AI · صور + لوجو + بانر + تحليل عميق</div></div>
       </div>
       <button class="ps-close" onclick="psToggleFullscreen()" title="ملء الشاشة" id="ps-fs-btn"><i data-lucide="maximize-2" style="width:16px;height:16px"></i></button>
       <button class="ps-close" onclick="closeProductModal()" title="إغلاق"><i data-lucide="x" style="width:18px;height:18px"></i></button>
@@ -2098,7 +2098,7 @@ select.ps-input option{background:#13131f;color:#fff}
             <div class="ai-msg ai-msg-bot">
               <div class="ai-avt">🤖</div>
               <div class="ai-bubble">
-                <b style="color:#fbbf24;font-size:14px">مرحباً، أنا Zerax AI 👋</b>
+                <b style="color:#fbbf24;font-size:14px">مرحباً، أنا Zenrex AI 👋</b>
                 <div style="margin-top:8px;font-size:12px;color:#cbd5e1;line-height:1.8">
                   أنا مساعدك الذكي لإضافة المنتجات. أبحث · أحلل · أولّد صور · أعتمد على معلوماتك بدقة.
                 </div>

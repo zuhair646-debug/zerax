@@ -43,7 +43,7 @@ export default function ChatImage({ user }) {
 
     // Pull voice intent if user came from Voice Stage
     try {
-      const raw = sessionStorage.getItem('zerax_voice_intent');
+      const raw = sessionStorage.getItem('zenrex_voice_intent');
       if (raw) {
         const data = JSON.parse(raw);
         if (data.intent === 'image' && data.subject && (Date.now() - (data.ts || 0)) < 60000) {
@@ -53,7 +53,7 @@ export default function ChatImage({ user }) {
             toast.success(`✓ سمعتك: "${data.subject}". اضغطي تأكيد أو عدّلي`);
           }, 800);
         }
-        sessionStorage.removeItem('zerax_voice_intent');
+        sessionStorage.removeItem('zenrex_voice_intent');
       }
     } catch (_) {}
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -260,7 +260,7 @@ export default function ChatImage({ user }) {
               <div className="text-sm font-bold text-emerald-300 mb-2">✓ الصورة جاهزة</div>
               <img src={result.media_url} alt="generated" className="w-full rounded-xl mb-3" />
               <div className="flex gap-2">
-                <a href={result.media_url} download={`zerax-${result.id}.png`} className="flex-1">
+                <a href={result.media_url} download={`zenrex-${result.id}.png`} className="flex-1">
                   <Button variant="outline" className="w-full border-emerald-400/30 text-emerald-300">تحميل</Button>
                 </a>
                 <Button onClick={restart}

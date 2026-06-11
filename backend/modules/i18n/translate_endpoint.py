@@ -16,7 +16,7 @@ from pydantic import BaseModel
 
 from .languages_meta import LANG_NAME_BY_CODE
 
-logger = logging.getLogger("zerax.i18n.translate")
+logger = logging.getLogger("zenrex.i18n.translate")
 
 router = APIRouter(prefix="/i18n", tags=["i18n"])
 

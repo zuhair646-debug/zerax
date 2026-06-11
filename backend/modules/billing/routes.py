@@ -1,4 +1,4 @@
-"""Stripe subscription billing routes for Zerax Website Studio gate.
+"""Stripe subscription billing routes for Zenrex Website Studio gate.
 
 Uses emergentintegrations Stripe SDK. Single fixed package: studio_monthly @ $50 USD.
 Subscription is simulated as a one-time $50 payment granting 30 days of studio access.
@@ -131,7 +131,7 @@ def register_routes(app, db, get_current_user):
         metadata = {
             "user_id": current_user["user_id"],
             "package_id": body.package_id,
-            "source": "zerax_studio_gate",
+            "source": "zenrex_studio_gate",
         }
 
         stripe = _stripe_client(http_request)

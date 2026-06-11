@@ -6,7 +6,7 @@ import { toast } from 'sonner';
 const API = process.env.REACT_APP_BACKEND_URL;
 const authH = () => ({ Authorization: `Bearer ${localStorage.getItem('token')}` });
 
-// Credit cost per category (Zerax points)
+// Credit cost per category (Zenrex points)
 const CATEGORY_CREDITS = {
   restaurant: 250, coffee: 250, store: 280, barber: 200, salon_women: 220,
   pets: 200, clinic: 250, bakery: 230, car_wash: 200, sports_club: 240,

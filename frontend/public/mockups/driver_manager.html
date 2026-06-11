@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="theme-color" content="#0a0a14">
-<title>Zerax — إدارة تطبيق السائق</title>
+<title>Zenrex — إدارة تطبيق السائق</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;500;700;900&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
@@ -118,7 +118,7 @@ html,body{background:var(--bg);color:var(--text);font-family:'IBM Plex Sans Arab
         <div class="field"><label>اللون الرئيسي</label><input type="color" id="brand-primary" value="#7c3aed" data-testid="brand-primary"></div>
         <div class="field"><label>اللون الثانوي</label><input type="color" id="brand-accent" value="#06b6d4" data-testid="brand-accent"></div>
       </div>
-      <div class="field"><label>اسم التطبيق</label><input id="brand-name" placeholder="Zerax Driver" data-testid="brand-name"></div>
+      <div class="field"><label>اسم التطبيق</label><input id="brand-name" placeholder="Zenrex Driver" data-testid="brand-name"></div>
       <div class="field"><label>رابط الشعار (URL)</label><input id="brand-logo" placeholder="https://..." data-testid="brand-logo"></div>
     </div>
   </div>
@@ -373,7 +373,7 @@ function toast(msg){
 }
 
 async function load(){
-  TOKEN = localStorage.getItem('zx_token') || localStorage.getItem('zerax_token') || localStorage.getItem('token') || '';
+  TOKEN = localStorage.getItem('zx_token') || localStorage.getItem('zenrex_token') || localStorage.getItem('token') || '';
   if (!TOKEN){
     const params = new URLSearchParams(location.search);
     TOKEN = params.get('t') || '';
@@ -429,7 +429,7 @@ function renderAll(){
   $('ext-errand').value = ed.errand_extra_sar ?? 5;
   $('brand-primary').value = CFG.branding?.primary_color || '#7c3aed';
   $('brand-accent').value = CFG.branding?.accent_color || '#06b6d4';
-  $('brand-name').value = CFG.branding?.app_name || 'Zerax Driver';
+  $('brand-name').value = CFG.branding?.app_name || 'Zenrex Driver';
   $('brand-logo').value = CFG.branding?.logo_url || '';
   const sos = CFG.wellbeing?.sos_contacts || [];
   $('sos1').value = sos[0] || '';
@@ -722,7 +722,7 @@ async function saveConfig(){
   CFG.branding = CFG.branding || {};
   CFG.branding.primary_color = $('brand-primary').value;
   CFG.branding.accent_color = $('brand-accent').value;
-  CFG.branding.app_name = $('brand-name').value || 'Zerax Driver';
+  CFG.branding.app_name = $('brand-name').value || 'Zenrex Driver';
   CFG.branding.logo_url = $('brand-logo').value;
   CFG.wellbeing = CFG.wellbeing || {};
   CFG.wellbeing.sos_contacts = [$('sos1').value, $('sos2').value, $('sos3').value].filter(Boolean);

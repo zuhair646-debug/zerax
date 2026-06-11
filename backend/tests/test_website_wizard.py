@@ -1,5 +1,5 @@
 """
-Test suite for Zerax Website Studio Wizard Feature
+Test suite for Zenrex Website Studio Wizard Feature
 Tests: Templates, Variants, Wizard Steps, Project Creation, Wizard Answers, Independence
 """
 import pytest
@@ -10,7 +10,7 @@ import time
 BASE_URL = os.environ.get('REACT_APP_BACKEND_URL', '').rstrip('/')
 
 # Test credentials
-TEST_EMAIL = "owner@zerax.com"
+TEST_EMAIL = "owner@zenrex.ai"
 TEST_PASSWORD = "owner123"
 
 

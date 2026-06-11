@@ -258,7 +258,7 @@ function Header({ step }) {
     <div style={{ marginBottom: 32 }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 18 }}>
         <div>
-          <div style={{ fontSize: 12, color: '#fbbf24', letterSpacing: 4, marginBottom: 6 }}>ZERAX · المواقع الجاهزة</div>
+          <div style={{ fontSize: 12, color: '#fbbf24', letterSpacing: 4, marginBottom: 6 }}>ZENREX · المواقع الجاهزة</div>
           <h1 style={{ fontSize: 36, fontWeight: 900, margin: 0, lineHeight: 1, background: 'linear-gradient(90deg,#fbbf24,#ec4899)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
             ابنِ موقع مطعمك في 6 خطوات
           </h1>

@@ -12,7 +12,7 @@ import logging
 import httpx
 from typing import Dict, Any, Optional
 
-log = logging.getLogger("zerax.pricing.paypal")
+log = logging.getLogger("zenrex.pricing.paypal")
 
 PAYPAL_BASE_LIVE = "https://api-m.paypal.com"
 PAYPAL_BASE_SANDBOX = "https://api-m.sandbox.paypal.com"
@@ -45,7 +45,7 @@ async def create_order(
     amount_usd: float,
     return_url: str,
     cancel_url: str,
-    description: str = "Zerax Purchase",
+    description: str = "Zenrex Purchase",
     custom_id: Optional[str] = None,
 ) -> Dict[str, Any]:
     """Creates a v2 order. Returns {order_id, approval_url}."""
@@ -61,7 +61,7 @@ async def create_order(
             **({"custom_id": custom_id} if custom_id else {}),
         }],
         "application_context": {
-            "brand_name": "Zerax",
+            "brand_name": "Zenrex",
             "shipping_preference": "NO_SHIPPING",
             "user_action": "PAY_NOW",
             "return_url": return_url,

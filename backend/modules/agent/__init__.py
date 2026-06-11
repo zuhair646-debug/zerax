@@ -1,7 +1,7 @@
 """
-Zerax AI Agent — open thinking agent with full tool suite.
+Zenrex AI Agent — open thinking agent with full tool suite.
 
-This is THE single AI brain for Zerax. It thinks, listens, and executes.
+This is THE single AI brain for Zenrex. It thinks, listens, and executes.
 It can:
     • Build complete websites (build_website / update_website)
     • Search the web, fetch pages
@@ -47,7 +47,7 @@ def _now() -> str:
 # ════════════════════════════════════════════════════════════════════════
 #  System prompt — open, conversational, tool-using
 # ════════════════════════════════════════════════════════════════════════
-AGENT_SYSTEM_PROMPT = """أنت ذكاء Zerax — عقل واحد متكامل قادر يفكّر ويبني وينفّذ.
+AGENT_SYSTEM_PROMPT = """أنت ذكاء Zenrex — عقل واحد متكامل قادر يفكّر ويبني وينفّذ.
 
 🎯 شخصيتك (ثابتة، لا تتغيّر):
 - تتحدث عربية سعودية طبيعية واضحة (مو رسمي جاف).
@@ -372,8 +372,8 @@ def create_agent_router(db, get_current_user):
 
     @router.get("/primitives/quran.js")
     async def serve_quran_primitives():
-        """Static JS exposing ZeraxQuran data primitives (reciters, surahs, fetchSurah, audioUrl)."""
-        fp = Path("/app/backend/static/zerax_primitives_quran.js")
+        """Static JS exposing ZenrexQuran data primitives (reciters, surahs, fetchSurah, audioUrl)."""
+        fp = Path("/app/backend/static/zenrex_primitives_quran.js")
         if not fp.exists():
             raise HTTPException(404, "primitives not found")
         return FileResponse(str(fp), media_type="application/javascript")
@@ -400,7 +400,7 @@ def create_public_agent_router(db) -> APIRouter:
 
 def _empty_preview_html() -> str:
     return """<!doctype html><html dir="rtl" lang="ar"><head><meta charset="utf-8">
-<title>معاينة Zerax</title>
+<title>معاينة Zenrex</title>
 <style>
 body{margin:0;background:#0a0a12;color:#fff;font-family:'Tajawal',system-ui;display:grid;place-items:center;min-height:100vh;text-align:center}
 .empty{padding:40px;border-radius:24px;background:rgba(255,255,255,.04);border:1px solid rgba(245,158,11,.2)}

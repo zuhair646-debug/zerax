@@ -3,8 +3,8 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Zerax · جرّب الآن مجاناً</title>
-<link rel="stylesheet" href="/mockups/zerax-theme.css">
+<title>Zenrex · جرّب الآن مجاناً</title>
+<link rel="stylesheet" href="/mockups/zenrex-theme.css">
 <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;700;900&display=swap" rel="stylesheet">
 <style>
   *{box-sizing:border-box;margin:0;padding:0}
@@ -57,7 +57,7 @@
 
 <div class="hero">
   <div class="hero-card">
-    <div class="logo">Zerax</div>
+    <div class="logo">Zenrex</div>
     <div class="tagline">منصة المتاجر الذكية المتكاملة</div>
 
     <h1>جرّب لوحة تحكم متجرك<br><span class="accent">بدون تسجيل · بدون بطاقة</span></h1>
@@ -97,8 +97,8 @@
         <label>مدة التجربة</label>
         <select id="trial-duration" data-testid="trial-duration">
           <option value="3">3 ساعات (مجاناً)</option>
-          <option value="24">24 ساعة (20 نقطة Zerax)</option>
-          <option value="72">3 أيام (60 نقطة Zerax)</option>
+          <option value="24">24 ساعة (20 نقطة Zenrex)</option>
+          <option value="72">3 أيام (60 نقطة Zenrex)</option>
         </select>
       </div>
       <button class="btn-start" onclick="startTrial()" data-testid="start-trial-btn">⚡ ابدأ التجربة الآن</button>
@@ -186,7 +186,7 @@ function showResult(d) {
   document.getElementById('drv-otp').textContent = 'رمز OTP: ' + d.credentials.driver.otp;
   document.getElementById('drv-url').href = d.urls.driver;
   // Persist for follow-up
-  localStorage.setItem('zerax_active_trial', JSON.stringify(d));
+  localStorage.setItem('zenrex_active_trial', JSON.stringify(d));
   startCountdown(new Date(d.expires_at));
   document.getElementById('result-box').scrollIntoView({behavior:'smooth', block:'start'});
 }
@@ -220,13 +220,13 @@ function copyVal(id) {
 
 // Resume an active trial if user reloads
 (function resumeIfExists() {
-  const raw = localStorage.getItem('zerax_active_trial');
+  const raw = localStorage.getItem('zenrex_active_trial');
   if (!raw) return;
   try {
     const d = JSON.parse(raw);
     if (new Date(d.expires_at) > new Date()) showResult(d);
-    else localStorage.removeItem('zerax_active_trial');
-  } catch(_) { localStorage.removeItem('zerax_active_trial'); }
+    else localStorage.removeItem('zenrex_active_trial');
+  } catch(_) { localStorage.removeItem('zenrex_active_trial'); }
 })();
 </script>
 </body>

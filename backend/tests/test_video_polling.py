@@ -1,5 +1,5 @@
 """
-Zerax Video Polling API Tests
+Zenrex Video Polling API Tests
 Tests for the new video generation background task and polling mechanism:
 - Video request creation
 - Video-requests endpoint
@@ -14,7 +14,7 @@ import time
 BASE_URL = os.environ.get('REACT_APP_BACKEND_URL', 'https://ai-cinematic-hub-2.preview.emergentagent.com').rstrip('/')
 
 # Test credentials
-TEST_EMAIL = "owner@zerax.com"
+TEST_EMAIL = "owner@zenrex.ai"
 TEST_PASSWORD = "owner123"
 
 

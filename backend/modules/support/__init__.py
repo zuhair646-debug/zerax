@@ -36,7 +36,7 @@ from typing import Optional, List
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
-logger = logging.getLogger("zerax.support")
+logger = logging.getLogger("zenrex.support")
 router = APIRouter(tags=["support"])
 
 
@@ -283,7 +283,7 @@ def build_router(db, get_current_user):
             from anthropic import AsyncAnthropic
             client = AsyncAnthropic(api_key=os.environ.get("ANTHROPIC_API_KEY", ""))
             prompt = (
-                "أنت موظف دعم فني محترف لمنصة Zerax (مواقع وتطبيقات وألعاب وصور وفيديوهات بالذكاء الاصطناعي). "
+                "أنت موظف دعم فني محترف لمنصة Zenrex (مواقع وتطبيقات وألعاب وصور وفيديوهات بالذكاء الاصطناعي). "
                 "أجب بإيجاز (4 أسطر كحد أقصى) وبالعربية ووُدّ. "
                 "إذا لم تعرف الإجابة، قل: 'سأحوّل سؤالك لفريقنا — اضغط إرسال التذكرة'.\n\n"
                 f"سؤال العميل: {body.question}"

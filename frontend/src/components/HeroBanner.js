@@ -8,9 +8,9 @@ import { Play, Image as ImageIcon, Gamepad2, Smartphone, Sparkles, ArrowLeft } f
  */
 const SLIDES = [
   {
-    id: 'zerax-intro',
+    id: 'zenrex-intro',
     kind: 'brand',
-    title: 'ذكاء Zerax',
+    title: 'ذكاء Zenrex',
     sub: 'يبني، يبحث، يولّد — في شات واحد',
     cta: 'ابدأ الآن',
     target: '/ai-agent',
@@ -144,7 +144,7 @@ export default function HeroBanner({ onGo }) {
                   className="text-[10px] sm:text-[11px] font-black tracking-widest mb-0.5"
                   style={{ color: s.accent }}
                 >
-                  {s.kind === 'brand' ? 'منصّة Zerax' : 'استكشف القسم'}
+                  {s.kind === 'brand' ? 'منصّة Zenrex' : 'استكشف القسم'}
                 </div>
                 <h3 className="text-base sm:text-xl font-black text-white leading-tight truncate">{s.title}</h3>
                 <p className="hidden sm:block text-[11px] sm:text-xs text-white/65 mt-0.5 truncate">{s.sub}</p>
@@ -205,15 +205,15 @@ export default function HeroBanner({ onGo }) {
 // ─────────────────────────────────────────────────────────
 function MotionLayer({ type, accent }) {
   if (type === 'orbit') {
-    // Zerax brand slide: transparent L1 logo, gentle float + glow only (no rings, no box)
+    // Zenrex brand slide: transparent L1 logo, gentle float + glow only (no rings, no box)
     return (
       <div
         className="absolute right-4 sm:right-8 top-1/2 -translate-y-1/2 pointer-events-none flex items-center justify-center"
         style={{ width: 120, height: 120 }}
       >
         <img
-          src="/zerax-logo.png"
-          alt="Zerax"
+          src="/zenrex-logo.png"
+          alt="Zenrex"
           className="hb-brand-logo"
           width={112}
           height={112}

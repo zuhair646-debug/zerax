@@ -1,5 +1,5 @@
 """
-Zerax AI Core — Unified AI Orchestrator
+Zenrex AI Core — Unified AI Orchestrator
 ========================================
 Single source of truth for all AI agent calls in the platform.
   • Uses EMERGENT_LLM_KEY via emergentintegrations
@@ -7,11 +7,11 @@ Single source of truth for all AI agent calls in the platform.
   • Applies strict domain rules (medicines/food/electronics/clothes/cosmetics)
   • Returns structured JSON suitable for product editor / sites / chatbots
 
-The merchant never trains the AI manually — Zerax pre-trains it during the
+The merchant never trains the AI manually — Zenrex pre-trains it during the
 onboarding flow when a Ready Site is delivered. The AI then behaves per-merchant
 without any manual configuration.
 
-Owner: Zerax Platform (Feb 2026)
+Owner: Zenrex Platform (Feb 2026)
 """
 from __future__ import annotations
 
@@ -30,11 +30,11 @@ db = _mongo[os.environ["DB_NAME"]]
 
 
 # ═══════════════════════════════════════════════════════════════════════════
-# CORE SYSTEM RULES — mirrored in admin.html as ZERAX_AI_SYSTEM_RULES
+# CORE SYSTEM RULES — mirrored in admin.html as ZENREX_AI_SYSTEM_RULES
 # This is the SINGLE source of truth for AI behaviour platform-wide.
 # ═══════════════════════════════════════════════════════════════════════════
-ZERAX_AI_CORE_RULES = {
-    "identity": "Zerax Product AI — مساعد ذكي عربي لإضافة المنتجات وإدارة المتاجر",
+ZENREX_AI_CORE_RULES = {
+    "identity": "Zenrex Product AI — مساعد ذكي عربي لإضافة المنتجات وإدارة المتاجر",
     "language": "Saudi Arabic dialect primary, English fallback",
     "must_obey": [
         "Honor user-specified COLOR exactly — never substitute",
@@ -79,10 +79,10 @@ async def load_merchant_context(merchant_id: str) -> Dict[str, Any]:
 
 def _build_system_message(merchant_ctx: Dict[str, Any], task: str) -> str:
     """Assemble the system prompt: core rules + merchant context + task-specific guidance."""
-    rules_json = json.dumps(ZERAX_AI_CORE_RULES, ensure_ascii=False, indent=2)
+    rules_json = json.dumps(ZENREX_AI_CORE_RULES, ensure_ascii=False, indent=2)
     parts = [
-        f"You are {ZERAX_AI_CORE_RULES['identity']}.",
-        f"Language: {ZERAX_AI_CORE_RULES['language']}.",
+        f"You are {ZENREX_AI_CORE_RULES['identity']}.",
+        f"Language: {ZENREX_AI_CORE_RULES['language']}.",
         "",
         "═══ CORE RULES (MUST FOLLOW) ═══",
         rules_json,
@@ -180,7 +180,7 @@ async def product_research_chat(
 
 
 # ───────────────────────────────────────────────────────────────────────────
-# Onboarding interview — used by Zerax at store handover
+# Onboarding interview — used by Zenrex at store handover
 # ───────────────────────────────────────────────────────────────────────────
 async def onboarding_extract(merchant_input: str) -> Dict[str, Any]:
     """

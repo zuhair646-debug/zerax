@@ -1,5 +1,5 @@
 /* ═══════════════════════════════════════════════════════════════════════════
-   ZERAX UNIFIED DARK THEME · v1.0
+   ZENREX UNIFIED DARK THEME · v1.0
    ───────────────────────────────────────────────────────────────────────────
    Single source of truth for the platform's luxurious dark aesthetic.
    Used by: admin.html · app_mode_full.html · driver_app.html
@@ -19,7 +19,7 @@
   --zx-border-soft:   #1f1f3a;        /* whisper-soft border */
 
   /* ───── BRAND ACCENTS ───── */
-  --zx-accent:        #7c3aed;        /* Zerax violet · primary */
+  --zx-accent:        #7c3aed;        /* Zenrex violet · primary */
   --zx-accent-2:      #a855f7;        /* lighter violet */
   --zx-accent-soft:   #7c3aed20;      /* tint for backgrounds */
   --zx-amber:         #fbbf24;        /* gold · secondary */

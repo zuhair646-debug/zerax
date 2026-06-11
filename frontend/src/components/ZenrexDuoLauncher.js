@@ -1,5 +1,5 @@
 /**
- * ZeraxDuoLauncher v8 — AMBIENT VOICE ONLY (no chat panel, no 3D).
+ * ZenrexDuoLauncher v8 — AMBIENT VOICE ONLY (no chat panel, no 3D).
  *
  * Just mounts AmbientVoiceAgent on every eligible page.
  * User either:
@@ -10,6 +10,6 @@
 import React from 'react';
 import AmbientVoiceAgent from './AmbientVoiceAgent';
 
-export default function ZeraxDuoLauncher() {
+export default function ZenrexDuoLauncher() {
   return <AmbientVoiceAgent />;
 }

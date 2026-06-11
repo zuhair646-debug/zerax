@@ -2,7 +2,7 @@
 🛒 LoRA Asset Marketplace
 ═══════════════════════════════════════════════════════════════════════
 Every trained Flux LoRA (see lora_training.py) can optionally be
-published to the marketplace. Other Zerax creators can browse and
+published to the marketplace. Other Zenrex creators can browse and
 install LoRAs into their own projects, instantly inheriting a proven
 art style.
 
@@ -14,7 +14,7 @@ Collections:
       lora_url, trigger_word,
       title, description, tags: [...],
       preview_images: [url, url, url],   # 3 sample renders
-      price: 0 | INT (Zerax points),
+      price: 0 | INT (Zenrex points),
       installs: INT, rating_avg: FLOAT, rating_count: INT,
       published_at, updated_at,
       is_active: bool

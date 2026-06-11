@@ -8,7 +8,7 @@ from typing import Optional, Dict, Any, List
 from emergentintegrations.llm.chat import LlmChat, UserMessage
 from .personas import PERSONA_MAP, CONTENT_BUCKETS
 
-logger = logging.getLogger("zerax.marketing.content")
+logger = logging.getLogger("zenrex.marketing.content")
 
 PLATFORM_LIMITS = {
     "twitter": 280,
@@ -39,7 +39,7 @@ def _build_prompt(persona_id: str, platform: str, bucket: Dict[str, Any], topic_
     hashtags = " ".join(p["hashtags"][:3])
     extra = f"\nالموضوع المطلوب: {topic_hint}\n" if topic_hint else ""
 
-    return f"""اكتب منشور تسويقي لـ Zerax (منصة AI سعودية تبني مواقع/تطبيقات/صور/فيديوهات).
+    return f"""اكتب منشور تسويقي لـ Zenrex (منصة AI سعودية تبني مواقع/تطبيقات/صور/فيديوهات).
 
 الجمهور المستهدف: {p['name']} {p['emoji']}
 وصف الجمهور: {p['description']}
@@ -53,9 +53,9 @@ def _build_prompt(persona_id: str, platform: str, bucket: Dict[str, Any], topic_
 - ابدأ بـ hook قوي يجذب الانتباه في أول 10 كلمات
 - اللهجة سعودية طبيعية (مش عامية مبالغ فيها، مهنية ودودة)
 - استخدم emojis بشكل متوازن (3-5 emojis في المنشور كله)
-- اختم بـ CTA واضح يحوّل الناس لـ https://zerax.com
+- اختم بـ CTA واضح يحوّل الناس لـ https://zenrex.ai
 - أضف هاشتاقات: {hashtags}
-- مهم: لا تتظاهر أنك منتج آخر. أنت Zerax. شفّاف وفخور بهويتك السعودية.
+- مهم: لا تتظاهر أنك منتج آخر. أنت Zenrex. شفّاف وفخور بهويتك السعودية.
 
 أرجع JSON فقط بهذا الشكل بدون أي نص آخر:
 {{

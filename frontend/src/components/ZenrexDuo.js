@@ -1,7 +1,7 @@
 /**
- * ZeraxDuo — the signature dual AI assistants: Zara (زارا) + Layla (ليلى).
+ * ZenrexDuo — the signature dual AI assistants: Zara (زارا) + Layla (ليلى).
  *
- * Permanent bottom-of-screen companions for the main Zerax site.
+ * Permanent bottom-of-screen companions for the main Zenrex site.
  *
  * Features:
  *   - Always visible: both peek from the bottom corners (idle animations)
@@ -22,7 +22,7 @@ import { toast } from 'sonner';
 const API = process.env.REACT_APP_BACKEND_URL;
 
 // Idle animation keyframes (appended to <head> once)
-const STYLE_ID = 'zerax-duo-styles';
+const STYLE_ID = 'zenrex-duo-styles';
 if (typeof window !== 'undefined' && !document.getElementById(STYLE_ID)) {
   const style = document.createElement('style');
   style.id = STYLE_ID;
@@ -57,7 +57,7 @@ function detectIntent(userText) {
   return null;
 }
 
-export default function ZeraxDuo() {
+export default function ZenrexDuo() {
   const navigate = useNavigate();
   const [openChar, setOpenChar] = useState(null);  // 'zara' | 'layla' | null
   const [messages, setMessages] = useState([]);

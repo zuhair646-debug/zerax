@@ -377,7 +377,7 @@ function GithubForm({ client, save, saving }) {
   const [token, setToken] = useState('');
   return (
     <div className="space-y-2">
-      <Field label="Repo (user/repo)"><input value={repo} onChange={e => setRepo(e.target.value)} placeholder="zuhair646-debug/zerax" className="inp" data-testid="gh-repo" /></Field>
+      <Field label="Repo (user/repo)"><input value={repo} onChange={e => setRepo(e.target.value)} placeholder="zuhair646-debug/zenrex" className="inp" data-testid="gh-repo" /></Field>
       <Field label="Branch"><input value={branch} onChange={e => setBranch(e.target.value)} className="inp" data-testid="gh-branch" /></Field>
       <Field label={`Token ${g.has_token ? `(محفوظ: ${g.token_mask})` : ''}`}>
         <input type="password" value={token} onChange={e => setToken(e.target.value)} placeholder={g.has_token ? 'اترك فارغاً للإبقاء' : 'ghp_...'} className="inp" data-testid="gh-token" />
@@ -642,7 +642,7 @@ function ChatTab({ client, H }) {
             <div className="py-6">
               <div className="text-center text-white/60 mb-5">
                 <div className="text-4xl mb-2">🤖</div>
-                <div className="font-black text-lg">Zerax DevOps Agent</div>
+                <div className="font-black text-lg">Zenrex DevOps Agent</div>
                 <div className="text-xs mt-2">وكيل ذكي يصلح، ينشر، ويدير مشاريع العملاء تلقائياً</div>
               </div>
               <div className="max-w-md mx-auto space-y-2">

@@ -171,7 +171,7 @@ export default function AdminSiteBanner() {
       <Navbar transparent />
       <div className="container mx-auto px-4 md:px-8 max-w-6xl pt-24 pb-12">
         <h1 className="text-3xl font-black mb-2 bg-gradient-to-r from-amber-400 to-yellow-500 bg-clip-text text-transparent">🎬 إدارة البنر والحالات</h1>
-        <p className="text-sm opacity-70 mb-6">تتحكّم بالبنر الدوّار والحالات الظاهرة على Zerax (داخل وخارج الموقع).</p>
+        <p className="text-sm opacity-70 mb-6">تتحكّم بالبنر الدوّار والحالات الظاهرة على Zenrex (داخل وخارج الموقع).</p>
 
         <div className="flex gap-1 p-1 bg-white/5 rounded-xl w-fit mb-6">
           {[

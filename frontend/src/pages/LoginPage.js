@@ -5,7 +5,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { toast } from 'sonner';
 import { Sparkles, ShieldCheck, Zap, ArrowLeft } from 'lucide-react';
-import { ZeraxLogo } from '@/components/Navbar';
+import { ZenrexLogo } from '@/components/Navbar';
 import SiteBannerStories from '@/components/SiteBannerStories';
 
 const LoginPage = ({ setUser }) => {
@@ -42,8 +42,8 @@ const LoginPage = ({ setUser }) => {
       <header className="fixed top-0 inset-x-0 z-30 backdrop-blur-xl bg-[#08080f]/80 border-b border-amber-500/10">
         <div className="max-w-6xl mx-auto h-14 px-4 md:px-8 flex items-center justify-between">
           <Link to="/" className="flex items-center gap-2 group" data-testid="header-home">
-            <ZeraxLogo size="md" />
-            <span className="font-black text-base tracking-tight bg-gradient-to-r from-amber-300 via-yellow-400 to-amber-500 bg-clip-text text-transparent group-hover:opacity-90">Zerax</span>
+            <ZenrexLogo size="md" />
+            <span className="font-black text-base tracking-tight bg-gradient-to-r from-amber-300 via-yellow-400 to-amber-500 bg-clip-text text-transparent group-hover:opacity-90">Zenrex</span>
           </Link>
           <Link to="/register" className="text-xs md:text-sm font-bold text-amber-300/90 hover:text-amber-200 flex items-center gap-1.5 transition-colors" data-testid="register-link-header">
             إنشاء حساب
@@ -78,7 +78,7 @@ const LoginPage = ({ setUser }) => {
                   <span className="text-white/90">بأناقة لا تُضاهى</span>
                 </h1>
                 <p className="text-base text-white/60 leading-relaxed">
-                  مواقع، متاجر، ألعاب، صور، فيديوهات — كل شيء بنقرة. منصّة Zerax تحوّل أفكارك إلى منتجات احترافية جاهزة للنشر.
+                  مواقع، متاجر، ألعاب، صور، فيديوهات — كل شيء بنقرة. منصّة Zenrex تحوّل أفكارك إلى منتجات احترافية جاهزة للنشر.
                 </p>
                 <div className="grid grid-cols-2 gap-3 max-w-sm">
                   <Pill icon={<Zap className="w-3.5 h-3.5" />} label="إنشاء فوري" />
@@ -100,7 +100,7 @@ const LoginPage = ({ setUser }) => {
                     <Link to="/" className="mb-4 group">
                       <div className="relative">
                         <div className="absolute inset-0 rounded-full bg-amber-500/20 blur-xl group-hover:bg-amber-500/30 transition-all"></div>
-                        <ZeraxLogo size="xl" />
+                        <ZenrexLogo size="xl" />
                       </div>
                     </Link>
                     <h2 className="text-3xl font-black tracking-tight bg-gradient-to-r from-amber-300 via-yellow-400 to-amber-500 bg-clip-text text-transparent" data-testid="login-title">

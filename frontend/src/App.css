@@ -132,39 +132,39 @@ html {
   }
 }
 
-/* ─── Zerax official logo (image L1 — royal Z) ─── */
-.zerax-logo-img-wrap { line-height: 0; vertical-align: middle; }
-.zerax-logo-img { display: block; will-change: transform, filter; }
+/* ─── Zenrex official logo (image L1 — royal Z) ─── */
+.zenrex-logo-img-wrap { line-height: 0; vertical-align: middle; }
+.zenrex-logo-img { display: block; will-change: transform, filter; }
 
 /* Gentle floating + breathing glow that lives INSIDE the Z's golden surface */
-@keyframes zerax-img-float {
+@keyframes zenrex-img-float {
   0%, 100% { transform: rotate(0deg) translateY(0) scale(1); }
   25%      { transform: rotate(4deg)  translateY(-1px) scale(1.02); }
   50%      { transform: rotate(0deg)  translateY(0)    scale(1.035); }
   75%      { transform: rotate(-4deg) translateY(-1px) scale(1.02); }
 }
-@keyframes zerax-img-glow {
+@keyframes zenrex-img-glow {
   0%, 100% { filter: drop-shadow(0 0 3px rgba(251,191,36,.45)) drop-shadow(0 0 8px rgba(245,158,11,.25)) brightness(1); }
   50%      { filter: drop-shadow(0 0 8px rgba(251,191,36,.85)) drop-shadow(0 0 18px rgba(245,158,11,.55)) brightness(1.12); }
 }
-.zerax-logo-img-animated .zerax-logo-img {
+.zenrex-logo-img-animated .zenrex-logo-img {
   animation:
-    zerax-img-float 8s ease-in-out infinite,
-    zerax-img-glow  3.6s ease-in-out infinite;
+    zenrex-img-float 8s ease-in-out infinite,
+    zenrex-img-glow  3.6s ease-in-out infinite;
   transform-origin: center center;
 }
 /* On hover: full slow spin + brighter pulse */
-@keyframes zerax-img-spin-cw {
+@keyframes zenrex-img-spin-cw {
   from { transform: rotate(0deg); }
   to   { transform: rotate(360deg); }
 }
-.zerax-logo-img-wrap:hover .zerax-logo-img {
+.zenrex-logo-img-wrap:hover .zenrex-logo-img {
   animation:
-    zerax-img-spin-cw 3.6s linear infinite,
-    zerax-img-glow    1.8s ease-in-out infinite;
+    zenrex-img-spin-cw 3.6s linear infinite,
+    zenrex-img-glow    1.8s ease-in-out infinite;
 }
 @media (prefers-reduced-motion: reduce) {
-  .zerax-logo-img-animated .zerax-logo-img { animation: zerax-img-glow 4s ease-in-out infinite; }
+  .zenrex-logo-img-animated .zenrex-logo-img { animation: zenrex-img-glow 4s ease-in-out infinite; }
 }
 
 /* ─── AI thinking indicator (FreeBuild chat) ──────────────── */

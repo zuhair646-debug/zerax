@@ -2,20 +2,20 @@ services:
   mongo:
     image: mongo:7
     restart: unless-stopped
-    volumes: [/opt/zerax/data/mongo:/data/db]
-    networks: [zerax]
+    volumes: [/opt/zenrex/data/mongo:/data/db]
+    networks: [zenrex]
   backend:
     image: python:3.11-slim
     restart: unless-stopped
     working_dir: /app
     volumes:
-      - /opt/zerax/backend:/app
-      - /opt/zerax/data/uploads:/app/static/uploads
+      - /opt/zenrex/backend:/app
+      - /opt/zenrex/data/uploads:/app/static/uploads
     env_file:
-      - /opt/zerax/backend/.env
+      - /opt/zenrex/backend/.env
     environment:
       - MONGO_URL=mongodb://mongo:27017
-      - DB_NAME=zerax_prod
+      - DB_NAME=zenrex_prod
       - CORS_ORIGINS=*
       - PYTHONUNBUFFERED=1
       # USE_DIRECT_LLM=1 activates direct provider keys (Anthropic/Gemini/OpenAI),
@@ -25,6 +25,6 @@ services:
     command: bash -c 'apt-get update -qq && apt-get install -y -qq build-essential >/dev/null 2>&1 && pip install --no-cache-dir --extra-index-url https://d33sy5i8bnduwe.cloudfront.net/simple/ -r requirements.txt && uvicorn server:app --host 0.0.0.0 --port 8001'
     ports: ['127.0.0.1:8001:8001']
     depends_on: [mongo]
-    networks: [zerax]
+    networks: [zenrex]
 networks:
-  zerax: {}
+  zenrex: {}

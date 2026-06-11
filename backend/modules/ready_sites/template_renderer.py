@@ -1,5 +1,5 @@
 """
-Zerax Template Renderer — Template-First Engine
+Zenrex Template Renderer — Template-First Engine
 ================================================
 Generates production-ready sites from 3 hand-crafted master templates:
   • app_mode      → e-commerce, services, stores
@@ -85,7 +85,7 @@ def _build_config(
 
 
 def _inject_config_and_pwa(html: str, config: dict, project_id: str) -> str:
-    """Inject the runtime config + PWA manifest + Zerax branding footer into the template."""
+    """Inject the runtime config + PWA manifest + Zenrex branding footer into the template."""
     cfg_json = json.dumps(config, ensure_ascii=False)
     head_injection = (
         '<link rel="manifest" href="/api/ready-sites/manifest/' + project_id + '.webmanifest">\n'
@@ -93,35 +93,35 @@ def _inject_config_and_pwa(html: str, config: dict, project_id: str) -> str:
         '<meta name="apple-mobile-web-app-capable" content="yes">\n'
         '<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">\n'
         '<meta name="apple-mobile-web-app-title" content="' + config["BRAND"] + '">\n'
-        '<script>window.ZERAX_CONFIG=' + cfg_json + ';</script>\n'
+        '<script>window.ZENREX_CONFIG=' + cfg_json + ';</script>\n'
         '<style>'
         # Gold shimmer for the in-footer brand mark — does NOT float over the page
-        '@keyframes zerax-gold-shine{0%,100%{background-position:0% 50%}50%{background-position:100% 50%}}'
-        '@keyframes zerax-gold-glow{0%,100%{filter:drop-shadow(0 0 4px rgba(212,175,55,.35))}'
+        '@keyframes zenrex-gold-shine{0%,100%{background-position:0% 50%}50%{background-position:100% 50%}}'
+        '@keyframes zenrex-gold-glow{0%,100%{filter:drop-shadow(0 0 4px rgba(212,175,55,.35))}'
         '50%{filter:drop-shadow(0 0 12px rgba(212,175,55,.75))}}'
         # Wrapper: full-width band placed AFTER the site footer
-        '.zerax-credit{display:flex;justify-content:center;align-items:center;'
+        '.zenrex-credit{display:flex;justify-content:center;align-items:center;'
         'padding:20px 16px;background:#000;border-top:1px solid rgba(212,175,55,.18);position:relative}'
-        '.zerax-credit::before{content:"";position:absolute;left:0;right:0;top:-1px;height:1px;'
+        '.zenrex-credit::before{content:"";position:absolute;left:0;right:0;top:-1px;height:1px;'
         'background:linear-gradient(90deg,transparent,rgba(212,175,55,.6),transparent)}'
-        # The clickable pill (matches Zerax logo: dark glass + gold accents)
-        '.zerax-credit a{display:inline-flex;align-items:center;gap:10px;padding:7px 18px 7px 8px;border-radius:99px;'
+        # The clickable pill (matches Zenrex logo: dark glass + gold accents)
+        '.zenrex-credit a{display:inline-flex;align-items:center;gap:10px;padding:7px 18px 7px 8px;border-radius:99px;'
         'background:linear-gradient(135deg,#0a0a14,#0e0a18);border:1px solid rgba(212,175,55,.35);'
-        'text-decoration:none;animation:zerax-gold-glow 3s ease-in-out infinite;transition:transform .25s;cursor:pointer}'
-        '.zerax-credit a:hover{transform:translateY(-1px) scale(1.03)}'
-        # Real Zerax logo image inside a circular dark frame
-        '.zerax-credit .zerax-mark{width:32px;height:32px;border-radius:50%;display:inline-flex;'
+        'text-decoration:none;animation:zenrex-gold-glow 3s ease-in-out infinite;transition:transform .25s;cursor:pointer}'
+        '.zenrex-credit a:hover{transform:translateY(-1px) scale(1.03)}'
+        # Real Zenrex logo image inside a circular dark frame
+        '.zenrex-credit .zenrex-mark{width:32px;height:32px;border-radius:50%;display:inline-flex;'
         'align-items:center;justify-content:center;background:#000;'
         'border:1.5px solid rgba(212,175,55,.5);padding:3px;box-shadow:inset 0 0 8px rgba(212,175,55,.15)}'
-        '.zerax-credit .zerax-mark img{width:100%;height:100%;object-fit:contain;'
+        '.zenrex-credit .zenrex-mark img{width:100%;height:100%;object-fit:contain;'
         'filter:drop-shadow(0 0 3px rgba(212,175,55,.5))}'
-        '.zerax-credit .zerax-txt{display:flex;flex-direction:column;line-height:1.15;font-family:-apple-system,Tajawal,sans-serif}'
-        '.zerax-credit .zerax-txt small{color:#9ca3af;font-size:9px;letter-spacing:2.5px;font-weight:700;text-transform:uppercase}'
-        '.zerax-credit .zerax-txt b{font-size:13px;letter-spacing:3px;font-weight:900;'
+        '.zenrex-credit .zenrex-txt{display:flex;flex-direction:column;line-height:1.15;font-family:-apple-system,Tajawal,sans-serif}'
+        '.zenrex-credit .zenrex-txt small{color:#9ca3af;font-size:9px;letter-spacing:2.5px;font-weight:700;text-transform:uppercase}'
+        '.zenrex-credit .zenrex-txt b{font-size:13px;letter-spacing:3px;font-weight:900;'
         'background:linear-gradient(135deg,#f4d77a,#d4af37,#b8862f);background-size:200% 100%;'
         '-webkit-background-clip:text;background-clip:text;color:transparent;'
-        'animation:zerax-gold-shine 4s linear infinite}'
-        '@media print{.zerax-credit{display:none}}'
+        'animation:zenrex-gold-shine 4s linear infinite}'
+        '@media print{.zenrex-credit{display:none}}'
         '</style>\n'
     )
     html = html.replace("</head>", head_injection + "</head>", 1)
@@ -132,7 +132,7 @@ def _inject_config_and_pwa(html: str, config: dict, project_id: str) -> str:
         '(function(){'
         "var pid='" + project_id + "';"
         "fetch('/api/care/pwa-status/'+pid).then(function(r){return r.json()}).then(function(s){"
-        "  window.ZERAX_PWA_ENABLED=!!s.pwa_enabled;"
+        "  window.ZENREX_PWA_ENABLED=!!s.pwa_enabled;"
         "  if(!s.pwa_enabled){"
         "    var m=document.querySelector('link[rel=manifest]');if(m)m.remove();return;"
         "  }"
@@ -147,15 +147,15 @@ def _inject_config_and_pwa(html: str, config: dict, project_id: str) -> str:
     # In-flow branding band — placed at the absolute end of the document
     # (after the site footer, before </body>). Does not float, does not overlap UI.
     brand_band = (
-        '<div class="zerax-credit" role="contentinfo" aria-label="Powered by Zerax">'
-        '<a href="https://zerax.com?ref=' + project_id + '" target="_blank" rel="noopener noreferrer" '
+        '<div class="zenrex-credit" role="contentinfo" aria-label="Powered by Zenrex">'
+        '<a href="https://zenrex.ai?ref=' + project_id + '" target="_blank" rel="noopener noreferrer" '
         'onclick="event.stopPropagation();window.open(this.href,\'_blank\');return false;">'
-        '<span class="zerax-mark"><img src="/zerax-logo.png" alt="Zerax" /></span>'
-        '<span class="zerax-txt"><small>POWERED BY</small><b>ZERAX</b></span>'
+        '<span class="zenrex-mark"><img src="/zenrex-logo.png" alt="Zenrex" /></span>'
+        '<span class="zenrex-txt"><small>POWERED BY</small><b>ZENREX</b></span>'
         '</a>'
         '</div>\n'
         # Hide legacy in-template brand pill (any variant) so we only have ONE brand mark
-        '<style>.zx-zerax-brand,.zx-zitex-brand,.zx-zerax-bar a.zx-zerax-brand{display:none!important}</style>\n'
+        '<style>.zx-zenrex-brand,.zx-zitex-brand,.zx-zenrex-bar a.zx-zenrex-brand{display:none!important}</style>\n'
     )
     html = html.replace("</body>", brand_band + pwa_script + "</body>", 1)
     return html

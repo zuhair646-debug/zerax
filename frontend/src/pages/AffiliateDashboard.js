@@ -168,7 +168,7 @@ export default function AffiliateDashboard({ user }) {
         <div className="pt-24 px-4 max-w-2xl mx-auto text-center">
           <Sparkles className="w-16 h-16 text-amber-400 mx-auto mb-4" />
           <h1 className="text-3xl font-black mb-3">انضم لبرنامج المسوّقين</h1>
-          <p className="text-zinc-400 mb-6">احصل على عمولة 20% على كل عميل تجلبه. ادعم منصة Zerax وكسب المال.</p>
+          <p className="text-zinc-400 mb-6">احصل على عمولة 20% على كل عميل تجلبه. ادعم منصة Zenrex وكسب المال.</p>
           <button
             className="px-6 py-3 bg-gradient-to-r from-amber-500 to-orange-500 text-zinc-950 rounded-lg font-black"
             onClick={async () => {

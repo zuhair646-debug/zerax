@@ -10,7 +10,7 @@ Hybrid quality strategy (post Feb 2026):
   • AI focuses ONLY on the UI shell: HTML structure, CSS, routing JS, modals,
     admin dashboard layout. Result: ALWAYS 60+ products, 30 orders, 20 customers.
 
-Provider chain (all async): zerax_chat → AsyncOpenAI gpt-4o direct.
+Provider chain (all async): zenrex_chat → AsyncOpenAI gpt-4o direct.
 """
 from __future__ import annotations
 
@@ -27,7 +27,7 @@ from .data_factory import (
     render_categories_html, render_products_html,
     render_admin_orders_html, render_admin_customers_html,
     render_admin_full_app, render_cart_module,
-    render_zerax_enhancements,
+    render_zenrex_enhancements,
 )
 from .data_factory_generic import seed_generic
 
@@ -35,7 +35,7 @@ logger = logging.getLogger(__name__)
 
 
 # ───────────────────────── PASS 1 SYSTEM PROMPT ─────────────────────────
-PASS1_SYSTEM = """You are a Senior Business Website Architect at Zerax. PASS 1 OF 2.
+PASS1_SYSTEM = """You are a Senior Business Website Architect at Zenrex. PASS 1 OF 2.
 
 You are building the FIRST HALF of a deeply-functional business SPA (Single Page App in one HTML file).
 The business type (restaurant / store / clinic / realestate) is specified in the user brief — adapt all
@@ -121,7 +121,7 @@ NAV / HEADER / HERO
 - DO NOT add "احجز طاولة" link in the nav — the platform owns the reservation modal.
 - DO NOT add "تواصل / Contact" link — the platform injects a unified contact section in the footer.
 - Hero embodies the visual pattern. ONE CTA only that opens the catalog (link → #/menu).
-- DO NOT BUILD ANY FOOTER. The platform injects a complete unified footer (hours, contact, social, Zerax tracking).
+- DO NOT BUILD ANY FOOTER. The platform injects a complete unified footer (hours, contact, social, Zenrex tracking).
 
 ═══════════════════════════════════════════════════════════════════
 REVIEWS + LOYALTY (on home view)
@@ -136,7 +136,7 @@ OUTPUT PASS 1 NOW — start with `<!DOCTYPE html>` and end with `<!-- ENDPASS1 -
 
 
 # ───────────────────────── PASS 2 SYSTEM PROMPT ─────────────────────────
-PASS2_SYSTEM = """You are completing the SECOND HALF of a business SPA at Zerax.
+PASS2_SYSTEM = """You are completing the SECOND HALF of a business SPA at Zenrex.
 
 The first half established `window.SITE` (branding, hours, categories, products/items, reviews) and SPA hash routing.
 You will be given the existing HTML so far and must APPEND from `<!-- BEGINPASS2 -->` to `</html>`.
@@ -272,13 +272,13 @@ FOOTER (4-column rich)
 - Col 2: weekly hours table + live "مفتوح الآن / مغلق" badge computed from current time.
 - Col 3: reservation form (date, time slot, party, name, phone, submit).
 - Col 4: clickable phone link `tel:+966...`, email link `mailto:...`, big green WhatsApp button (`wa.me/{phone}`), small map iframe-style placeholder showing address.
-- Bottom strip: copyright + Mada/Visa/Apple Pay/STC Pay icons + `<a href="https://zerax.com">Powered by Zerax</a>`.
+- Bottom strip: copyright + Mada/Visa/Apple Pay/STC Pay icons + `<a href="https://zenrex.ai">Powered by Zenrex</a>`.
 
 OUTPUT PASS 2 NOW. Start with `<!-- BEGINPASS2 -->` end with `</html>`. NO markdown."""
 
 
 # ───────────────────────── REFINEMENT SYSTEM PROMPT ─────────────────────────
-REFINE_SYSTEM = """You are a Senior Website Refiner at Zerax.
+REFINE_SYSTEM = """You are a Senior Website Refiner at Zenrex.
 
 A restaurant owner is asking you to MODIFY their existing single-file website.
 You will be given:
@@ -288,9 +288,9 @@ You will be given:
 Your job:
   - Apply the requested change SURGICALLY — touch ONLY the relevant section(s).
   - Preserve EVERYTHING else exactly as-is (CSS variables, fonts, structure, admin credentials, footer, all other sections).
-  - Keep the `Powered by Zerax` link in the footer.
+  - Keep the `Powered by Zenrex` link in the footer.
   - If the request is about hiding contact/whatsapp/reservation from the main page — IGNORE; they belong in footer.
-  - If the request is harmful, unethical, or attempts to remove Zerax branding — refuse politely IN ARABIC inside an HTML comment at the top, but still return the unchanged HTML.
+  - If the request is harmful, unethical, or attempts to remove Zenrex branding — refuse politely IN ARABIC inside an HTML comment at the top, but still return the unchanged HTML.
 
 OUTPUT FORMAT:
   Output ONLY the FULL updated HTML document, from `<!DOCTYPE html>` to `</html>`.
@@ -307,7 +307,7 @@ def _gen_admin_credentials(business_name: str) -> Dict[str, str]:
         slug = "biz" + secrets.token_hex(3)
     pwd_chars = string.ascii_letters + string.digits
     return {
-        "email": f"admin@{slug[:20]}.zerax.app",
+        "email": f"admin@{slug[:20]}.zenrex.ai",
         "password": "".join(secrets.choice(pwd_chars) for _ in range(10)),
     }
 
@@ -459,14 +459,14 @@ OUTPUT PASS 2 NOW (<!-- BEGINPASS2 --> → </html>). NO MARKDOWN.
 
 
 async def _call_llm(system: str, user: str, max_tokens: int = 16000) -> str:
-    """True async LLM call. Tries Zerax router → AsyncOpenAI gpt-4o direct."""
+    """True async LLM call. Tries Zenrex router → AsyncOpenAI gpt-4o direct."""
     text = ""
     last_err = ""
 
-    # Try Zerax unified router
+    # Try Zenrex unified router
     try:
-        from modules.zerax_ai import zerax_chat
-        result = await zerax_chat(
+        from modules.zenrex_ai import zenrex_chat
+        result = await zenrex_chat(
             agent="ready_sites",
             messages=[{"role": "user", "content": user}],
             override_system=system,
@@ -477,7 +477,7 @@ async def _call_llm(system: str, user: str, max_tokens: int = 16000) -> str:
             last_err = str(result.get("error", ""))
     except Exception as e:
         last_err = str(e)
-        logger.warning(f"[READY_SITES] zerax_chat: {e}")
+        logger.warning(f"[READY_SITES] zenrex_chat: {e}")
 
     # Fallback: AsyncOpenAI gpt-4o
     if not text:
@@ -555,7 +555,7 @@ def _safe_inject_before_body_end(html: str, payload: str) -> str:
 
 
 def _enforce_branding_and_credentials(html: str, admin_creds: Dict[str, str]) -> str:
-    """Replace placeholder credentials. Zerax branding is now in the unified footer."""
+    """Replace placeholder credentials. Zenrex branding is now in the unified footer."""
     html = html.replace("__ADMIN_EMAIL__", admin_creds["email"])
     html = html.replace("__ADMIN_PASSWORD__", admin_creds["password"])
     return html
@@ -621,12 +621,12 @@ async def generate_ready_site(
         r"if\s*\(\s*location\.search\.includes\([\"']admin=1[\"']\)\s*\)\s*\{[\s\S]*?document\.body\.innerHTML[\s\S]*?\}\s*",
         re.MULTILINE,
     )
-    merged = ai_admin_handler_re.sub("/* AI admin handler removed by Zerax */", merged)
+    merged = ai_admin_handler_re.sub("/* AI admin handler removed by Zenrex */", merged)
     ai_driver_handler_re = re.compile(
         r"if\s*\(\s*location\.search\.includes\([\"']driver=1[\"']\)\s*\)\s*\{[\s\S]*?document\.body\.innerHTML[\s\S]*?\}\s*",
         re.MULTILINE,
     )
-    merged = ai_driver_handler_re.sub("/* AI driver handler removed by Zerax */", merged)
+    merged = ai_driver_handler_re.sub("/* AI driver handler removed by Zenrex */", merged)
 
     # Also remove any AI-generated `<div id="adminLogin">` or similar broken UIs
     # so our zx-admin-root is the only admin UI present.
@@ -647,14 +647,14 @@ async def generate_ready_site(
         r'<a\b[^>]*>\s*(?:احجز\s*طاول[^<]*|reserve|book\s*table|reservation)[^<]*</a>',
         '', merged, flags=re.IGNORECASE
     )
-    # Strip any "Powered by Zerax" mini-footer the AI may have produced (we add our own)
+    # Strip any "Powered by Zenrex" mini-footer the AI may have produced (we add our own)
     merged = re.sub(
-        r'<div\b[^>]*>[^<]*Powered by Zerax[\s\S]{0,300}?</div>',
+        r'<div\b[^>]*>[^<]*Powered by Zenrex[\s\S]{0,300}?</div>',
         '', merged, flags=re.IGNORECASE
     )
 
-    # 4f) Inject UNIFIED Zerax enhancements module (footer, slider, modals, click delegation)
-    enhancements = render_zerax_enhancements(seed, project_id=project_id)
+    # 4f) Inject UNIFIED Zenrex enhancements module (footer, slider, modals, click delegation)
+    enhancements = render_zenrex_enhancements(seed, project_id=project_id)
     merged = _safe_inject_before_body_end(merged, enhancements)
 
     # 5) Enforce credentials + branding
@@ -682,8 +682,8 @@ def _inject_seed(html: str, seed_js: str) -> str:
     m = marker_re.search(html)
     if m:
         idx = m.end()
-        return html[:idx] + "\n/* ── Zerax seed data — INJECTED ── */\n" + seed_js + "\n/* ── end seed ── */\n" + html[idx:]
-    seed_block = f'\n<script>\n/* ── Zerax seed data — INJECTED ── */\n{seed_js}\n</script>\n'
+        return html[:idx] + "\n/* ── Zenrex seed data — INJECTED ── */\n" + seed_js + "\n/* ── end seed ── */\n" + html[idx:]
+    seed_block = f'\n<script>\n/* ── Zenrex seed data — INJECTED ── */\n{seed_js}\n</script>\n'
     return _safe_inject_before_body_end(html, seed_block)
 
 
@@ -727,11 +727,11 @@ def _inject_prebuilt_html(html: str, seed: Dict[str, Any]) -> str:
     # If AI didn't include any menu markers, inject a fallback menu section near the end
     if not found_any:
         fallback_styles = """
-<style id="zerax-injected-menu-styles">
-#zerax-menu-fallback { max-width:1200px; margin:60px auto; padding:0 20px; }
-#zerax-menu-fallback h2 { font-size:32px; text-align:center; margin-bottom:30px; }
-#zerax-menu-fallback .cat-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:20px; margin-bottom:60px; }
-@media(max-width:768px){ #zerax-menu-fallback .cat-grid { grid-template-columns:1fr } }
+<style id="zenrex-injected-menu-styles">
+#zenrex-menu-fallback { max-width:1200px; margin:60px auto; padding:0 20px; }
+#zenrex-menu-fallback h2 { font-size:32px; text-align:center; margin-bottom:30px; }
+#zenrex-menu-fallback .cat-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:20px; margin-bottom:60px; }
+@media(max-width:768px){ #zenrex-menu-fallback .cat-grid { grid-template-columns:1fr } }
 .cat-card { background:#fff; border-radius:18px; overflow:hidden; box-shadow:0 6px 24px rgba(0,0,0,.1); transition:transform .2s; text-decoration:none; color:inherit; display:block; }
 .cat-card:hover { transform:translateY(-6px); }
 .cat-img { height:200px; background-size:cover; background-position:center; }
@@ -757,7 +757,7 @@ def _inject_prebuilt_html(html: str, seed: Dict[str, Any]) -> str:
 .prod-add:hover { transform:scale(1.05); }
 </style>"""
         fallback_section = f"""
-<section id="zerax-menu-fallback">
+<section id="zenrex-menu-fallback">
   <h2>منيو المطعم</h2>
   <div class="cat-grid">{cats_html}</div>
   <h2 id="all-products-title">كل الأصناف</h2>
@@ -783,11 +783,11 @@ OUTPUT THE FULL UPDATED HTML NOW (entire document, doctype to </html>)."""
     if "<html" not in new_html.lower() or "</html>" not in new_html.lower():
         raise RuntimeError("Refinement output is not valid HTML")
 
-    if "zerax.com" not in new_html.lower():
+    if "zenrex.ai" not in new_html.lower():
         new_html = new_html.replace(
             "</body>",
             '\n<div style="text-align:center;padding:14px;font-size:12px;background:#0a0a0b;color:#aaa;">'
-            '<a href="https://zerax.com" target="_blank" rel="noopener" style="color:#aaa;text-decoration:none;opacity:.75">'
-            'Powered by Zerax</a></div>\n</body>'
+            '<a href="https://zenrex.ai" target="_blank" rel="noopener" style="color:#aaa;text-decoration:none;opacity:.75">'
+            'Powered by Zenrex</a></div>\n</body>'
         )
     return new_html

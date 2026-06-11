@@ -12,7 +12,7 @@ import os
 BASE_URL = os.environ.get('REACT_APP_BACKEND_URL', 'https://ai-cinematic-hub-2.preview.emergentagent.com').rstrip('/')
 
 # Test credentials
-OWNER_EMAIL = "owner@zerax.com"
+OWNER_EMAIL = "owner@zenrex.ai"
 OWNER_PASSWORD = "owner123"
 
 # All 20 archetype IDs

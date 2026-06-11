@@ -1,5 +1,5 @@
 """
-Zerax pricing catalog — single source of truth.
+Zenrex pricing catalog — single source of truth.
 Stored in DB on first boot via seeds.py, can be edited from admin panel.
 All prices in USD. 1 credit = $0.001.
 """

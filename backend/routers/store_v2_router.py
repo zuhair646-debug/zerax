@@ -10,12 +10,12 @@ Adds the missing pieces that were previously localStorage-only:
   • Multi-Branch (with inventory per branch)
   • Referrals
   • Saved Cards
-  • Merchant AI Profile (onboarding context for Zerax AI)
+  • Merchant AI Profile (onboarding context for Zenrex AI)
 
 All endpoints are prefixed with /api/store/v2.
 Reuses the JWT helpers from store_router.py so auth stays unified.
 
-Owner: Zerax Platform (Feb 2026)
+Owner: Zenrex Platform (Feb 2026)
 """
 from __future__ import annotations
 
@@ -500,7 +500,7 @@ async def delete_saved_card(card_id: str, u: dict = Depends(customer_user)):
 # ╔══════════════════════════════════════════════════════════════════════════════
 # ║  MERCHANT AI PROFILE  (the "auto-train" context the user requested)
 # ║  Filled at merchant-store-creation time, NOT by the merchant manually.
-# ║  Zerax AI uses this as system context to behave per-merchant.
+# ║  Zenrex AI uses this as system context to behave per-merchant.
 # ╚══════════════════════════════════════════════════════════════════════════════
 class MerchantAIProfileIn(BaseModel):
     industry: str = ""  # electronics | clothes | food | meds | beauty | home | sports | books | cars | pets ...

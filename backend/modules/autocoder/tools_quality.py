@@ -290,13 +290,13 @@ async def tool_frontend_check(
     """Run frontend tooling (yarn). mode: 'lint' | 'install' | 'build'.
 
     On Railway production, /app/frontend does NOT exist (only /backend was copied).
-    To run frontend tools there, we auto-clone the repo into /tmp/zerax_workdir
-    via the existing git tooling and use /tmp/zerax_workdir/frontend.
+    To run frontend tools there, we auto-clone the repo into /tmp/zenrex_workdir
+    via the existing git tooling and use /tmp/zenrex_workdir/frontend.
     """
     import subprocess
     # Auto-resolve cwd: prefer /app/frontend (dev), fall back to cloned workdir (prod)
     if cwd is None:
-        for candidate in ("/app/frontend", "/tmp/zerax_workdir/frontend"):
+        for candidate in ("/app/frontend", "/tmp/zenrex_workdir/frontend"):
             if Path(candidate, "package.json").exists():
                 cwd = candidate
                 break
@@ -313,7 +313,7 @@ async def tool_frontend_check(
                 pass
         if cwd is None:
             return {"ok": False,
-                    "error": "package.json not found in /app/frontend or /tmp/zerax_workdir/frontend",
+                    "error": "package.json not found in /app/frontend or /tmp/zenrex_workdir/frontend",
                     "hint": "Run git_status / git_commit_push first to seed the workdir, or set GITHUB_TOKEN+GITHUB_REPO"}
 
     # Quick capability probe

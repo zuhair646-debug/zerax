@@ -5,7 +5,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { toast } from 'sonner';
-import { ZeraxLogo } from '@/components/Navbar';
+import { ZenrexLogo } from '@/components/Navbar';
 import { Gift, Sparkles, ShieldCheck, ArrowLeft } from 'lucide-react';
 import SiteBannerStories from '@/components/SiteBannerStories';
 
@@ -82,8 +82,8 @@ const RegisterPage = ({ setUser }) => {
       <header className="fixed top-0 inset-x-0 z-30 backdrop-blur-xl bg-[#08080f]/80 border-b border-amber-500/10">
         <div className="max-w-6xl mx-auto h-14 px-4 md:px-8 flex items-center justify-between">
           <Link to="/" className="flex items-center gap-2 group">
-            <ZeraxLogo size="md" />
-            <span className="font-black text-base tracking-tight bg-gradient-to-r from-amber-300 via-yellow-400 to-amber-500 bg-clip-text text-transparent">Zerax</span>
+            <ZenrexLogo size="md" />
+            <span className="font-black text-base tracking-tight bg-gradient-to-r from-amber-300 via-yellow-400 to-amber-500 bg-clip-text text-transparent">Zenrex</span>
           </Link>
           <Link to="/login" className="text-xs md:text-sm font-bold text-amber-300/90 hover:text-amber-200 flex items-center gap-1.5 transition-colors" data-testid="login-link-header">
             تسجيل الدخول
@@ -137,13 +137,13 @@ const RegisterPage = ({ setUser }) => {
                     <Link to="/" className="mb-4 group">
                       <div className="relative">
                         <div className="absolute inset-0 rounded-full bg-amber-500/20 blur-xl group-hover:bg-amber-500/30 transition-all"></div>
-                        <ZeraxLogo size="xl" />
+                        <ZenrexLogo size="xl" />
                       </div>
                     </Link>
                     <h2 className="text-3xl font-black tracking-tight bg-gradient-to-r from-amber-300 via-yellow-400 to-amber-500 bg-clip-text text-transparent" data-testid="register-title">
                       إنشاء حساب
                     </h2>
-                    <p className="text-xs text-white/50 mt-1.5">ابدأ رحلتك مع Zerax مجاناً</p>
+                    <p className="text-xs text-white/50 mt-1.5">ابدأ رحلتك مع Zenrex مجاناً</p>
                   </div>
 
                   <form onSubmit={handleSubmit} className="space-y-3.5">

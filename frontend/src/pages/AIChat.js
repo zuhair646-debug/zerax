@@ -14,10 +14,10 @@ import {
   Smartphone
 } from 'lucide-react';
 
-// ============== Zerax Logo Animation ==============
-const ZERAX_LOGO_URL = "https://static.prod-images.emergentagent.com/jobs/d28c1cbc-c039-46df-a176-2e32ebb0f715/images/f7f88c5a96c3a3978fb84a31dd4d6b922be1568a9083c93bf3cef363e8c17387.png";
+// ============== Zenrex Logo Animation ==============
+const ZENREX_LOGO_URL = "https://static.prod-images.emergentagent.com/jobs/d28c1cbc-c039-46df-a176-2e32ebb0f715/images/f7f88c5a96c3a3978fb84a31dd4d6b922be1568a9083c93bf3cef363e8c17387.png";
 
-const ZeraxLogo = memo(({ isAnimating, size = 'md' }) => {
+const ZenrexLogo = memo(({ isAnimating, size = 'md' }) => {
   const sizeClasses = {
     sm: 'w-8 h-8',
     md: 'w-10 h-10',
@@ -28,8 +28,8 @@ const ZeraxLogo = memo(({ isAnimating, size = 'md' }) => {
   return (
     <div className={`${sizeClasses[size]} relative flex-shrink-0`}>
       <img 
-        src={ZERAX_LOGO_URL} 
-        alt="Zerax" 
+        src={ZENREX_LOGO_URL} 
+        alt="Zenrex" 
         className={`w-full h-full object-contain rounded-full ${isAnimating ? 'animate-spin-slow' : ''}`}
       />
       {isAnimating && (
@@ -539,7 +539,7 @@ const ChatMessage = memo(({ msg, idx, renderAttachment, onPlayAudio, onGenerateT
               )}
             </div>
           </div>
-          <ZeraxLogo size="sm" isAnimating={isTyping} />
+          <ZenrexLogo size="sm" isAnimating={isTyping} />
         </div>
       )}
     </div>
@@ -737,7 +737,7 @@ const LivePreviewPanel = memo(({ code, isOpen, onClose, onRefresh, isFullscreen,
                   placeholder="my-project"
                   className="flex-1 bg-transparent text-white px-2 py-3 text-sm focus:outline-none"
                 />
-                <span className="px-3 text-gray-500 text-sm">.zerax.app</span>
+                <span className="px-3 text-gray-500 text-sm">.zenrex.ai</span>
               </div>
               <p className="text-xs text-gray-500 mt-1">حروف إنجليزية صغيرة وأرقام وشرطات فقط</p>
             </div>
@@ -1428,15 +1428,15 @@ const AIChat = ({ user }) => {
       return;
     }
     
-    // Remove Zerax badge for export
-    let cleanCode = previewCode.replace(/<!-- Zerax Badge -->[\s\S]*?<\/div>/g, '');
+    // Remove Zenrex badge for export
+    let cleanCode = previewCode.replace(/<!-- Zenrex Badge -->[\s\S]*?<\/div>/g, '');
     
     // Download as HTML file
     const blob = new Blob([cleanCode], { type: 'text/html' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = 'zerax-project.html';
+    a.download = 'zenrex-project.html';
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
@@ -1540,7 +1540,7 @@ const AIChat = ({ user }) => {
               </div>
             )}
             <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
-              <Button size="sm" onClick={() => downloadAsset(attachment.url, 'zerax-image.png')} className="bg-white/20 backdrop-blur">
+              <Button size="sm" onClick={() => downloadAsset(attachment.url, 'zenrex-image.png')} className="bg-white/20 backdrop-blur">
                 <Download className="w-4 h-4 me-1" /> تحميل
               </Button>
               <Button
@@ -1589,7 +1589,7 @@ const AIChat = ({ user }) => {
             </div>
             <video src={attachment.url} controls className="w-full rounded-xl" preload="metadata" />
             <div className="flex gap-2 mt-2">
-              <Button size="sm" onClick={() => downloadAsset(attachment.url, 'zerax-video.mp4')} className="bg-orange-500 hover:bg-orange-600">
+              <Button size="sm" onClick={() => downloadAsset(attachment.url, 'zenrex-video.mp4')} className="bg-orange-500 hover:bg-orange-600">
                 <Download className="w-4 h-4 me-1" /> تحميل
               </Button>
               <Button size="sm" onClick={() => openSocialExport({ id: attachment.id || 'temp', url: attachment.url, type: 'video' })} className="bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600">
@@ -1629,7 +1629,7 @@ const AIChat = ({ user }) => {
               <Button size="sm" onClick={() => onPreview(attachment.code || Object.values(attachment.files || {})[0])} className="bg-green-500 hover:bg-green-600">
                 <Eye className="w-4 h-4 me-1" /> معاينة
               </Button>
-              <Button size="sm" variant="outline" onClick={() => downloadAsset(URL.createObjectURL(new Blob([attachment.code], { type: 'text/html' })), `zerax-${attachment.type}.html`)}>
+              <Button size="sm" variant="outline" onClick={() => downloadAsset(URL.createObjectURL(new Blob([attachment.code], { type: 'text/html' })), `zenrex-${attachment.type}.html`)}>
                 <Download className="w-4 h-4 me-1" /> تحميل
               </Button>
             </div>
@@ -1758,9 +1758,9 @@ const AIChat = ({ user }) => {
               <div className="flex-1 overflow-y-auto">
                 <div className="max-w-5xl mx-auto px-4 py-8 sm:py-12">
                   <div className="text-center mb-8 sm:mb-10">
-                    <ZeraxLogo size="xl" isAnimating={false} />
+                    <ZenrexLogo size="xl" isAnimating={false} />
                     <h1 className="text-3xl sm:text-4xl font-black text-white mt-5 mb-2">
-                      مرحباً بك في <span className="text-transparent bg-clip-text bg-gradient-to-r from-amber-400 via-yellow-400 to-amber-500">Zerax</span>
+                      مرحباً بك في <span className="text-transparent bg-clip-text bg-gradient-to-r from-amber-400 via-yellow-400 to-amber-500">Zenrex</span>
                     </h1>
                     <p className="text-amber-200/80 text-sm sm:text-base">مساعدك الذكي لإنشاء المواقع والصور والفيديوهات والتطبيقات</p>
                   </div>
@@ -1953,7 +1953,7 @@ const AIChat = ({ user }) => {
                               <span className="text-gray-400 text-sm mr-2">جاري التفكير...</span>
                             </div>
                           </div>
-                          <ZeraxLogo size="sm" isAnimating={true} />
+                          <ZenrexLogo size="sm" isAnimating={true} />
                         </div>
                       </div>
                     )}

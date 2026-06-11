@@ -116,7 +116,7 @@ export default function AIAgent() {
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `zerax-site-${conversationId.slice(0, 8)}.html`;
+      a.download = `zenrex-site-${conversationId.slice(0, 8)}.html`;
       a.click();
       URL.revokeObjectURL(url);
       toast.success('تم تحميل الملف');
@@ -253,7 +253,7 @@ export default function AIAgent() {
             <ArrowLeft className="w-4 h-4" />
           </button>
           <h1 className="font-black text-sm flex items-center gap-1.5">
-            <Sparkles className="w-4 h-4 text-amber-400" /> Zerax AI
+            <Sparkles className="w-4 h-4 text-amber-400" /> Zenrex AI
           </h1>
         </div>
         <div className="flex items-center gap-2">

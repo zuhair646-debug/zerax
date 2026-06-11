@@ -68,7 +68,7 @@ export default function MobileAppMarketplace() {
       const d = await fetchJson(`/api/mobile-app/remix/${id}`, { method: 'POST' });
       toast.success('تم نسخ القالب! خذني للباني...');
       // Pass session_id via localStorage so MobileAppBuilder picks it up
-      localStorage.setItem('zerax_mobile_remix_session', d.session_id);
+      localStorage.setItem('zenrex_mobile_remix_session', d.session_id);
       navigate('/dashboard/apps');
     } catch (e) {
       toast.error(e.message);

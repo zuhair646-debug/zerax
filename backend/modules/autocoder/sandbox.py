@@ -2,7 +2,7 @@
 Sandbox Mode — give the Auto-Coder a safe playground to test ideas before
 pushing them to production.
 
-The sandbox lives at `/tmp/zerax_sandbox` and is a clone of the relevant
+The sandbox lives at `/tmp/zenrex_sandbox` and is a clone of the relevant
 parts of `/app` (backend + frontend src). The AI can `sandbox_write` files
 in it, run validation (`sandbox_validate`), preview the result, and finally
 `sandbox_promote` to copy back into `/app` once happy.
@@ -33,7 +33,7 @@ from typing import Any, Dict, List, Optional
 logger = logging.getLogger(__name__)
 
 REPO_ROOT = Path("/app")
-SANDBOX_ROOT = Path("/tmp/zerax_sandbox")
+SANDBOX_ROOT = Path("/tmp/zenrex_sandbox")
 
 # Subdirs that get copied into the sandbox (small subset to keep it light).
 SYNC_PAIRS = [
@@ -158,7 +158,7 @@ async def tool_sandbox_write(path: str, content: str) -> Dict[str, Any]:
 
 
 async def tool_sandbox_run(cmd: str, timeout: int = 60) -> Dict[str, Any]:
-    """Run bash inside the sandbox directory. cwd is locked to /tmp/zerax_sandbox."""
+    """Run bash inside the sandbox directory. cwd is locked to /tmp/zenrex_sandbox."""
     if not SANDBOX_ROOT.exists():
         return {"ok": False, "error": "sandbox not initialised"}
     try:
@@ -282,7 +282,7 @@ async def tool_sandbox_reset() -> Dict[str, Any]:
 SANDBOX_ANTHROPIC_TOOLS: List[Dict[str, Any]] = [
     {
         "name": "sandbox_init",
-        "description": "🧪 أنشئ بيئة sandbox آمنة في /tmp/zerax_sandbox تنسخ /app الحالي. استخدمها قبل أي تغيير محفوف بالمخاطر.",
+        "description": "🧪 أنشئ بيئة sandbox آمنة في /tmp/zenrex_sandbox تنسخ /app الحالي. استخدمها قبل أي تغيير محفوف بالمخاطر.",
         "input_schema": {"type": "object", "properties": {}, "required": []},
     },
     {
@@ -306,7 +306,7 @@ SANDBOX_ANTHROPIC_TOOLS: List[Dict[str, Any]] = [
     },
     {
         "name": "sandbox_run",
-        "description": "نفّذ أمر bash داخل /tmp/zerax_sandbox (cwd مقفول).",
+        "description": "نفّذ أمر bash داخل /tmp/zenrex_sandbox (cwd مقفول).",
         "input_schema": {"type": "object", "properties": {
             "cmd": {"type": "string"}, "timeout": {"type": "integer"},
         }, "required": ["cmd"]},
@@ -413,7 +413,7 @@ SANDBOX_PROMPT_RULES = """
   - تختبر فكرة جديدة لست متأكد منها
 
 الـworkflow:
-  ١. sandbox_init()                            — يجهّز /tmp/zerax_sandbox
+  ١. sandbox_init()                            — يجهّز /tmp/zenrex_sandbox
   ٢. sandbox_write(path, new_content)          — كرّر للملفات اللي تبي
   ٣. sandbox_validate()                        — compile-check
   ٤. sandbox_diff()                            — راجع التغييرات

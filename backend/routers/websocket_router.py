@@ -1,5 +1,5 @@
 """
-Zerax WebSocket Router - Real-time Chat
+Zenrex WebSocket Router - Real-time Chat
 شات حي مع تحديثات التقدم
 """
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect

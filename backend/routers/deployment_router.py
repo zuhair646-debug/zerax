@@ -1,5 +1,5 @@
 """
-Zerax Deployment API Router
+Zenrex Deployment API Router
 راوتر API للنشر
 """
 from fastapi import APIRouter, HTTPException, Depends

@@ -1,10 +1,10 @@
 """
-Zerax AI Router — exposes claude_core to the frontend
+Zenrex AI Router — exposes claude_core to the frontend
 ======================================================
 Thin HTTP layer over claude_core orchestrator.
 All endpoints prefixed with /api/ai.
 
-Owner: Zerax Platform (Feb 2026)
+Owner: Zenrex Platform (Feb 2026)
 """
 from __future__ import annotations
 
@@ -63,7 +63,7 @@ async def onboarding_extract(body: OnboardingIn, u: dict = Depends(merchant_user
 @router.get("/rules")
 async def get_ai_rules():
     """Public — returns the core rules so frontend can display them transparently."""
-    return claude_core.ZERAX_AI_CORE_RULES
+    return claude_core.ZENREX_AI_CORE_RULES
 
 
 @router.get("/health")
@@ -72,5 +72,5 @@ async def ai_health():
     return {
         "ok": True,
         "has_key": bool(os.environ.get("EMERGENT_LLM_KEY")),
-        "rules_loaded": bool(claude_core.ZERAX_AI_CORE_RULES),
+        "rules_loaded": bool(claude_core.ZENREX_AI_CORE_RULES),
     }

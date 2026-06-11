@@ -9,7 +9,7 @@
  *   - No 3D characters, no full-screen overlay
  *
  * When AI detects an intent (image/video/website), navigates to target
- * section AND writes `zerax_voice_intent` to sessionStorage so the
+ * section AND writes `zenrex_voice_intent` to sessionStorage so the
  * section page can auto-fill the prompt.
  */
 import React, { useState, useEffect, useRef, useCallback } from 'react';
@@ -19,9 +19,9 @@ import { toast } from 'sonner';
 
 const API = process.env.REACT_APP_BACKEND_URL;
 const SR = (typeof window !== 'undefined') && (window.SpeechRecognition || window.webkitSpeechRecognition);
-const STORE_NAME_KEY = 'zerax_user_name';
-const ANON_ID_KEY = 'zerax_anon_id';
-const SESSION_KEY = 'zerax_voice_session_id';
+const STORE_NAME_KEY = 'zenrex_user_name';
+const ANON_ID_KEY = 'zenrex_anon_id';
+const SESSION_KEY = 'zenrex_voice_session_id';
 
 function getUserName() {
   try {
@@ -188,14 +188,14 @@ export default function VoicePanel({ open, onClose, user }) {
       if (d.intent && d.intent.intent && d.intent.intent !== 'unclear' && d.intent.subject) {
         const route = INTENT_ROUTES[d.intent.intent];
         if (route && location.pathname !== route) {
-          sessionStorage.setItem('zerax_voice_intent', JSON.stringify({
+          sessionStorage.setItem('zenrex_voice_intent', JSON.stringify({
             intent: d.intent.intent,
             subject: d.intent.subject,
             from_voice: true,
             ts: Date.now(),
           }));
-          // Separate key for ZeraxDuoLauncher to re-open panel after navigation
-          sessionStorage.setItem('zerax_voice_reopen', JSON.stringify({ ts: Date.now() }));
+          // Separate key for ZenrexDuoLauncher to re-open panel after navigation
+          sessionStorage.setItem('zenrex_voice_reopen', JSON.stringify({ ts: Date.now() }));
           toast.success(`تمام! أخذك إلى ${d.intent.intent === 'image' ? 'قسم الصور' : d.intent.intent === 'video' ? 'قسم الفيديو' : 'القسم المطلوب'}`);
           setTimeout(() => navigate(route), 1200);
         }

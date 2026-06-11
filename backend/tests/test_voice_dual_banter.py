@@ -24,9 +24,9 @@ def api_client():
 
 @pytest.fixture
 def auth_token(api_client):
-    """Get authentication token for owner@zerax.com"""
+    """Get authentication token for owner@zenrex.ai"""
     response = api_client.post(f"{BASE_URL}/api/auth/login", json={
-        "email": "owner@zerax.com",
+        "email": "owner@zenrex.ai",
         "password": "owner123"
     })
     if response.status_code == 200:
@@ -278,7 +278,7 @@ class TestRegression:
     """Regression tests for existing functionality"""
     
     def test_avatar_chat_saudi_dialect(self, api_client):
-        """Test 14a: Zerax main avatar chat still in Saudi dialect"""
+        """Test 14a: Zenrex main avatar chat still in Saudi dialect"""
         response = api_client.post(f"{BASE_URL}/api/avatar/chat", json={
             "message": "مرحبا، كيف حالك؟",
             "want_voice": False,

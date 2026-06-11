@@ -7,7 +7,7 @@ from datetime import datetime, timezone
 
 from .catalog import PLANS, CREDIT_PACKS, DEFAULT_PROMOS, TAX_CONFIG, SERVICE_COSTS
 
-log = logging.getLogger("zerax.pricing.seeds")
+log = logging.getLogger("zenrex.pricing.seeds")
 
 
 async def seed_pricing_defaults(db):

@@ -1,7 +1,7 @@
 """
-🎮 Zerax Game Runtime — Backend-as-a-Service for AI-generated games
+🎮 Zenrex Game Runtime — Backend-as-a-Service for AI-generated games
 ─────────────────────────────────────────────────────────────────────
-Provides EVERY backend primitive a Zerax-generated game needs, so games
+Provides EVERY backend primitive a Zenrex-generated game needs, so games
 deployed via the existing static-site live preview can still have:
   • Player auth (per-project namespace, JWT)
   • Save/load player progress (cross-device)
@@ -33,7 +33,7 @@ from pydantic import BaseModel, Field
 logger = logging.getLogger(__name__)
 
 # JWT secret for player tokens (scoped per project)
-PLAYER_JWT_SECRET = os.environ.get("PLAYER_JWT_SECRET") or os.environ.get("JWT_SECRET") or "zerax-player-fallback"
+PLAYER_JWT_SECRET = os.environ.get("PLAYER_JWT_SECRET") or os.environ.get("JWT_SECRET") or "zenrex-player-fallback"
 PLAYER_TOKEN_TTL_HOURS = 24 * 14  # 2 weeks
 
 
@@ -500,9 +500,9 @@ GENRE_TEMPLATES = [
             {"id": "ui", "title": "UI Panels", "assets": ["resource_bar", "inventory", "build_menu", "battle_report"]},
             {"id": "economy", "title": "Economy Loop", "code": "production_rates + upgrade_costs"},
             {"id": "combat", "title": "Combat System", "code": "turn_based_resolution"},
-            {"id": "multiplayer", "title": "Multiplayer (use Zerax Runtime)", "code": "room_state + leaderboard"},
+            {"id": "multiplayer", "title": "Multiplayer (use Zenrex Runtime)", "code": "room_state + leaderboard"},
         ],
-        "engines": ["zerax_runtime_save", "zerax_runtime_leaderboard", "zerax_runtime_multiplayer"],
+        "engines": ["zenrex_runtime_save", "zenrex_runtime_leaderboard", "zenrex_runtime_multiplayer"],
     },
     {
         "id": "platformer",
@@ -516,9 +516,9 @@ GENRE_TEMPLATES = [
             {"id": "collectibles", "title": "Coins & Power-ups", "assets": ["coin", "mushroom", "star"]},
             {"id": "mechanics", "title": "Physics & Movement", "code": "Phaser Arcade Physics + jump curve"},
             {"id": "levels", "title": "Level Design (10 stages)", "code": "JSON tilemap loader"},
-            {"id": "save", "title": "Save Progress (Zerax Runtime)", "code": "best_level + collectibles_count"},
+            {"id": "save", "title": "Save Progress (Zenrex Runtime)", "code": "best_level + collectibles_count"},
         ],
-        "engines": ["zerax_runtime_save", "zerax_runtime_achievements"],
+        "engines": ["zenrex_runtime_save", "zenrex_runtime_achievements"],
     },
     {
         "id": "puzzle_match3",
@@ -532,9 +532,9 @@ GENRE_TEMPLATES = [
             {"id": "cascades", "title": "Cascade & Refill", "code": "gravity + spawn_top_row"},
             {"id": "powerups", "title": "Power-ups", "code": "row_clear + bomb + color_clear"},
             {"id": "levels", "title": "Level Goals (50 levels)", "code": "objective JSON file"},
-            {"id": "leaderboard", "title": "Global Best Scores (Zerax Runtime)", "code": "submit_score per level"},
+            {"id": "leaderboard", "title": "Global Best Scores (Zenrex Runtime)", "code": "submit_score per level"},
         ],
-        "engines": ["zerax_runtime_leaderboard", "zerax_runtime_save"],
+        "engines": ["zenrex_runtime_leaderboard", "zenrex_runtime_save"],
     },
     {
         "id": "idle_clicker",
@@ -547,10 +547,10 @@ GENRE_TEMPLATES = [
             {"id": "upgrades", "title": "Upgrades", "assets": ["upgrade_icons"]},
             {"id": "economy", "title": "Production Math", "code": "exponential_growth_curve"},
             {"id": "prestige", "title": "Prestige/Reset System", "code": "soul_currency_loop"},
-            {"id": "save", "title": "Auto-save (Zerax Runtime)", "code": "save every 30s"},
+            {"id": "save", "title": "Auto-save (Zenrex Runtime)", "code": "save every 30s"},
             {"id": "achievements", "title": "Achievements (50 unlocks)", "code": "unlock thresholds"},
         ],
-        "engines": ["zerax_runtime_save", "zerax_runtime_achievements"],
+        "engines": ["zenrex_runtime_save", "zenrex_runtime_achievements"],
     },
     {
         "id": "turn_based_rpg",
@@ -564,9 +564,9 @@ GENRE_TEMPLATES = [
             {"id": "items", "title": "Items & Inventory", "assets": ["sword_icon", "potion_icon", "armor_icon"]},
             {"id": "story", "title": "Story Beats (10 chapters)", "code": "dialogue_tree.json"},
             {"id": "combat_math", "title": "Combat Formulas", "code": "atk - def + crit + status"},
-            {"id": "save", "title": "Save Anywhere (Zerax Runtime)", "code": "save full party state"},
+            {"id": "save", "title": "Save Anywhere (Zenrex Runtime)", "code": "save full party state"},
         ],
-        "engines": ["zerax_runtime_save", "zerax_runtime_achievements"],
+        "engines": ["zenrex_runtime_save", "zenrex_runtime_achievements"],
     },
     {
         "id": "action_fps",
@@ -579,27 +579,27 @@ GENRE_TEMPLATES = [
             {"id": "enemies", "title": "Enemy NPCs", "assets": ["enemy_grunt_3d", "boss_3d"]},
             {"id": "movement", "title": "WASD + Mouse Look", "code": "PointerLockControls + collision"},
             {"id": "shooting", "title": "Hit Detection", "code": "raycaster + damage falloff"},
-            {"id": "rooms", "title": "PvP Rooms (Zerax Runtime)", "code": "WebSocket realtime"},
-            {"id": "leaderboard", "title": "K/D Leaderboard (Zerax Runtime)", "code": "submit kills/deaths"},
+            {"id": "rooms", "title": "PvP Rooms (Zenrex Runtime)", "code": "WebSocket realtime"},
+            {"id": "leaderboard", "title": "K/D Leaderboard (Zenrex Runtime)", "code": "submit kills/deaths"},
         ],
-        "engines": ["zerax_runtime_multiplayer", "zerax_runtime_leaderboard"],
+        "engines": ["zenrex_runtime_multiplayer", "zenrex_runtime_leaderboard"],
     },
 ]
 
 
 # ═══════════════════════════════════════════════════════════════
-# 🧰 JS SDK TEMPLATE — what every Zerax-generated game embeds
+# 🧰 JS SDK TEMPLATE — what every Zenrex-generated game embeds
 # ═══════════════════════════════════════════════════════════════
-_SDK_TEMPLATE = r"""/* Zerax Game Runtime SDK
+_SDK_TEMPLATE = r"""/* Zenrex Game Runtime SDK
  * ─────────────────────────────────────────────
  * One-line backend for AI-generated games:
  *   <script src="__BACKEND_URL__/api/game-runtime/__PROJECT_ID__/sdk.js"></script>
  *   <script>
- *     await ZeraxGame.guest();   // anonymous instant play
- *     await ZeraxGame.save({level:5, gold:1200});
- *     const top = await ZeraxGame.leaderboard.top();
- *     ZeraxGame.unlock('first_blood');
- *     const room = ZeraxGame.join('arena-1');
+ *     await ZenrexGame.guest();   // anonymous instant play
+ *     await ZenrexGame.save({level:5, gold:1200});
+ *     const top = await ZenrexGame.leaderboard.top();
+ *     ZenrexGame.unlock('first_blood');
+ *     const room = ZenrexGame.join('arena-1');
  *     room.onMessage(m => console.log(m));
  *     room.send({type:'shoot', x:120, y:80});
  *   </script>
@@ -608,7 +608,7 @@ _SDK_TEMPLATE = r"""/* Zerax Game Runtime SDK
   const BACKEND = "__BACKEND_URL__";
   const PID = "__PROJECT_ID__";
   const BASE = BACKEND + "/api/game-runtime/" + PID;
-  const LSKEY = "zerax_token_" + PID;
+  const LSKEY = "zenrex_token_" + PID;
 
   function _hdr(){
     const t = localStorage.getItem(LSKEY);
@@ -629,7 +629,7 @@ _SDK_TEMPLATE = r"""/* Zerax Game Runtime SDK
     return r.json();
   }
 
-  const ZeraxGame = {
+  const ZenrexGame = {
     backend: BACKEND, projectId: PID,
     player: null,
 
@@ -694,6 +694,6 @@ _SDK_TEMPLATE = r"""/* Zerax Game Runtime SDK
     async rooms(){ return (await _get("/rooms")).rooms; },
   };
 
-  global.ZeraxGame = ZeraxGame;
+  global.ZenrexGame = ZenrexGame;
 })(typeof window !== "undefined" ? window : globalThis);
 """

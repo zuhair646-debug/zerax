@@ -2,31 +2,31 @@
   {
     "id": "l1",
     "name": "ملكي تراثي",
-    "path": "/app/backend/static/zerax_logos/l1.png",
+    "path": "/app/backend/static/zenrex_logos/l1.png",
     "size_kb": 947
   },
   {
     "id": "l2",
     "name": "هندسي مودرن",
-    "path": "/app/backend/static/zerax_logos/l2.png",
+    "path": "/app/backend/static/zenrex_logos/l2.png",
     "size_kb": 1516
   },
   {
     "id": "l3",
     "name": "نخيل سعودي",
-    "path": "/app/backend/static/zerax_logos/l3.png",
+    "path": "/app/backend/static/zenrex_logos/l3.png",
     "size_kb": 1233
   },
   {
     "id": "l4",
     "name": "ليزر نيون",
-    "path": "/app/backend/static/zerax_logos/l4.png",
+    "path": "/app/backend/static/zenrex_logos/l4.png",
     "size_kb": 1268
   },
   {
     "id": "l5",
     "name": "درع وسيف",
-    "path": "/app/backend/static/zerax_logos/l5.png",
+    "path": "/app/backend/static/zenrex_logos/l5.png",
     "size_kb": 1413
   }
 ]

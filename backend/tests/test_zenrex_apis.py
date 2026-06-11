@@ -1,5 +1,5 @@
 """
-Zerax Platform API Tests
+Zenrex Platform API Tests
 Testing: voices, TTS, image editing, admin activity logs, user management
 """
 
@@ -12,7 +12,7 @@ from datetime import datetime
 BASE_URL = os.environ.get('REACT_APP_BACKEND_URL', 'https://ai-cinematic-hub-2.preview.emergentagent.com')
 
 # Test credentials
-OWNER_EMAIL = "owner@zerax.com"
+OWNER_EMAIL = "owner@zenrex.ai"
 OWNER_PASSWORD = "owner123"
 TEST_USER_EMAIL = f"TEST_user_{datetime.now().strftime('%H%M%S')}@test.com"
 TEST_USER_PASSWORD = "testpass123"
@@ -188,7 +188,7 @@ class TestTTSAPI:
             f"{BASE_URL}/api/tts/generate",
             headers={"Authorization": f"Bearer {owner_auth}"},
             json={
-                "text": "مرحباً بكم في منصة Zerax",
+                "text": "مرحباً بكم في منصة Zenrex",
                 "voice_id": voice_id,
                 "stability": 0.5,
                 "similarity_boost": 0.75

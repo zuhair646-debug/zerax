@@ -187,7 +187,7 @@ def _section_footer(d, theme) -> str:
         chips = "".join(f'<span class="pay-chip">{_esc(pay_map.get(m, m))}</span>' for m in methods if m != "none")
         if chips:
             pay_html = f'<div class="footer-pay" data-hl="payment"><div class="pay-label">وسائل الدفع المقبولة:</div><div class="pay-chips">{chips}</div></div>'
-    return f"""<footer class="site-footer" data-hl="footer"><div class="container">{brand_html}{pay_html}<div class="footer-meta"><span>© 2026 — جميع الحقوق محفوظة</span><span>مدعوم من Zerax</span></div></div></footer>"""
+    return f"""<footer class="site-footer" data-hl="footer"><div class="container">{brand_html}{pay_html}<div class="footer-meta"><span>© 2026 — جميع الحقوق محفوظة</span><span>مدعوم من Zenrex</span></div></div></footer>"""
 
 
 

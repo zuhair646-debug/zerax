@@ -1,5 +1,5 @@
 """
-Channel Bridge — connects Zerax platform-generated assets (studio images/videos)
+Channel Bridge — connects Zenrex platform-generated assets (studio images/videos)
 to the owner's client websites. Auto-publishes to stories/banners or media library.
 
 Endpoints:
@@ -8,7 +8,7 @@ Endpoints:
     POST /api/bridge/push-to-banner        — push a studio asset as Banner slide
     GET  /api/bridge/history?project_id=   — list assets pushed to a site
 
-Each push deducts 2 points (small ops fee). Only Zerax-generated assets
+Each push deducts 2 points (small ops fee). Only Zenrex-generated assets
 (from studio_assets, video_wizard_results, image_wizard_results) are bridgeable.
 """
 from __future__ import annotations
@@ -112,7 +112,7 @@ def create_bridge_router(db, get_current_user) -> APIRouter:
             "link": payload.link or "",
             "visible": True,
             "position": existing_count,
-            "source": f"zerax_bridge_{payload.asset_source}",
+            "source": f"zenrex_bridge_{payload.asset_source}",
             "source_asset_id": payload.asset_id,
             "created_at": _now().isoformat(),
         }
@@ -181,7 +181,7 @@ def create_bridge_router(db, get_current_user) -> APIRouter:
             "cta_link": payload.cta_link or "",
             "visible": True,
             "position": existing_count,
-            "source": f"zerax_bridge_{payload.asset_source}",
+            "source": f"zenrex_bridge_{payload.asset_source}",
             "source_asset_id": payload.asset_id,
             "created_at": _now().isoformat(),
         }

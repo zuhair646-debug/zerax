@@ -451,7 +451,7 @@ export function ModernChatTab({ client, H }) {
             <div className="py-6">
               <div className="text-center text-white/60 mb-5">
                 <div className="text-4xl mb-2">🤖</div>
-                <div className="font-black text-lg">Zerax DevOps Agent</div>
+                <div className="font-black text-lg">Zenrex DevOps Agent</div>
                 <div className="text-xs mt-2">وكيل ذكي يصلح، ينشر، ويدير مشاريع العملاء تلقائياً</div>
               </div>
               <div className="max-w-md mx-auto space-y-2">

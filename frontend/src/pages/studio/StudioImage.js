@@ -276,7 +276,7 @@ export default function StudioImage({ user }) {
                     <Button onClick={() => setEditOpen(true)} variant="outline" className="flex-1 border-amber-400/30 text-amber-300 hover:bg-amber-400/10" data-testid="studio-image-edit-btn">
                       <Pencil className="w-4 h-4 me-1.5" /> تعديل ({pricing.edit} نقاط)
                     </Button>
-                    <a href={result.media_url} download={`zerax-${result.id}.png`} className="flex-1">
+                    <a href={result.media_url} download={`zenrex-${result.id}.png`} className="flex-1">
                       <Button variant="outline" className="w-full border-emerald-400/30 text-emerald-300 hover:bg-emerald-400/10" data-testid="studio-image-download">
                         تحميل
                       </Button>

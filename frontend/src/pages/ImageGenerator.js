@@ -133,7 +133,7 @@ const ImageGenerator = ({ user }) => {
     }
   };
 
-  const downloadImage = async (imageUrl, filename = 'zerax-image.png') => {
+  const downloadImage = async (imageUrl, filename = 'zenrex-image.png') => {
     try {
       // Log download
       const token = localStorage.getItem('token');
@@ -254,7 +254,7 @@ const ImageGenerator = ({ user }) => {
                           data-testid="generated-image"
                         />
                         <Button
-                          onClick={() => downloadImage(generatedImage, `zerax-${Date.now()}.png`)}
+                          onClick={() => downloadImage(generatedImage, `zenrex-${Date.now()}.png`)}
                           className="absolute bottom-4 left-4 bg-white/20 backdrop-blur-sm hover:bg-white/30"
                           size="sm"
                           data-testid="download-generated-btn"
@@ -387,7 +387,7 @@ const ImageGenerator = ({ user }) => {
                               data-testid="edited-image"
                             />
                             <Button
-                              onClick={() => downloadImage(editedImage, `zerax-edited-${Date.now()}.png`)}
+                              onClick={() => downloadImage(editedImage, `zenrex-edited-${Date.now()}.png`)}
                               className="absolute bottom-4 left-4 bg-white/20 backdrop-blur-sm hover:bg-white/30"
                               size="sm"
                               data-testid="download-edited-btn"
@@ -433,7 +433,7 @@ const ImageGenerator = ({ user }) => {
                             <Button
                               size="sm"
                               variant="secondary"
-                              onClick={() => downloadImage(item.edited_image_url || item.image_url, `zerax-${item.id}.png`)}
+                              onClick={() => downloadImage(item.edited_image_url || item.image_url, `zenrex-${item.id}.png`)}
                               className="bg-white/20 hover:bg-white/30 text-white"
                             >
                               <Download className="w-3 h-3 me-1" />

@@ -507,7 +507,7 @@ def render_cart_module(seed: Dict[str, Any]) -> str:
     """Pre-built cart drawer + working addToCart + checkout flow. Overrides any AI-defined cart."""
     brand_phone = seed["branding"]["whatsapp"]
     return f"""
-<!-- ═══ Zerax Cart Module ═══ -->
+<!-- ═══ Zenrex Cart Module ═══ -->
 <style>
 #zx-cart-btn{{position:fixed;bottom:24px;left:24px;width:62px;height:62px;border-radius:50%;background:#a52a2a;color:#fff;border:none;cursor:pointer;box-shadow:0 10px 30px rgba(165,42,42,.4);z-index:9000;font-size:24px;transition:transform .2s}}
 #zx-cart-btn:hover{{transform:scale(1.08)}}
@@ -673,9 +673,9 @@ def render_cart_module(seed: Dict[str, Any]) -> str:
 """
 
 
-def render_zerax_enhancements(seed: Dict[str, Any], project_id: str = "") -> str:
+def render_zenrex_enhancements(seed: Dict[str, Any], project_id: str = "") -> str:
     """Unified enhancements: global add-to-cart delegation, category filter, reservation modal,
-    contact smooth-scroll, reviews slider, and clean Zerax footer with tracking link.
+    contact smooth-scroll, reviews slider, and clean Zenrex footer with tracking link.
 
     This is injected near </body> AFTER the AI's HTML, so it overrides AI behaviour.
     """
@@ -705,11 +705,11 @@ def render_zerax_enhancements(seed: Dict[str, Any], project_id: str = "") -> str
     for c in cats:
         cat_pills += f'<button class="zx-cat-pill" data-cat="{c["id"]}">{c["name"]}</button>'
 
-    track_url = f"https://zerax.com/?ref={project_id}" if project_id else "https://zerax.com"
+    track_url = f"https://zenrex.ai/?ref={project_id}" if project_id else "https://zenrex.ai"
     map_q = (branding.get("address") or branding.get("city") or "Riyadh").replace(" ", "+")
 
     return f"""
-<!-- ═══ Zerax Enhancements Module ═══ -->
+<!-- ═══ Zenrex Enhancements Module ═══ -->
 <style>
 /* Reservation modal */
 #zx-resv-modal,#zx-contact-modal{{position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:9300;display:none;align-items:center;justify-content:center;direction:rtl;font-family:'Tajawal',sans-serif}}
@@ -750,7 +750,7 @@ def render_zerax_enhancements(seed: Dict[str, Any], project_id: str = "") -> str
 .zx-rev-dot{{width:10px;height:10px;border-radius:50%;background:#d1d5db;border:none;cursor:pointer;transition:all .2s;padding:0}}
 .zx-rev-dot.active{{width:30px;border-radius:99px;background:#a52a2a}}
 
-/* Unified Zerax footer */
+/* Unified Zenrex footer */
 #zx-footer{{background:#0a0a0b;color:#cbd5e1;padding:50px 24px 0;direction:rtl;font-family:'Tajawal',sans-serif}}
 #zx-footer-inner{{max-width:1200px;margin:0 auto}}
 .zx-foot-grid{{display:grid;grid-template-columns:1.4fr 1fr 1fr 1.2fr;gap:36px;padding-bottom:36px}}
@@ -773,15 +773,15 @@ def render_zerax_enhancements(seed: Dict[str, Any], project_id: str = "") -> str
 .zx-contact-list .zx-ico{{font-size:16px}}
 .zx-map-mini{{margin-top:10px;width:100%;height:140px;border:none;border-radius:10px;background:#1e293b}}
 
-/* Zerax tracker bar */
-.zx-zerax-bar{{border-top:1px solid #1e293b;padding:18px 0;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:14px}}
-.zx-zerax-copy{{color:#64748b;font-size:12px}}
-.zx-zerax-brand{{display:flex;align-items:center;gap:10px;text-decoration:none;padding:8px 14px;border-radius:99px;background:linear-gradient(135deg,rgba(251,191,36,.1),rgba(165,42,42,.1));border:1px solid rgba(251,191,36,.2);transition:all .25s}}
-.zx-zerax-brand:hover{{background:linear-gradient(135deg,rgba(251,191,36,.2),rgba(165,42,42,.2));border-color:#fbbf24;transform:translateY(-2px)}}
-.zx-zerax-logo{{width:28px;height:28px;border-radius:50%;background:linear-gradient(135deg,#fbbf24,#a52a2a);display:flex;align-items:center;justify-content:center;color:#fff;font-weight:900;font-size:13px}}
-.zx-zerax-text{{display:flex;flex-direction:column;line-height:1.2}}
-.zx-zerax-text small{{color:#64748b;font-size:10px}}
-.zx-zerax-text strong{{color:#fbbf24;font-size:13px;font-weight:900}}
+/* Zenrex tracker bar */
+.zx-zenrex-bar{{border-top:1px solid #1e293b;padding:18px 0;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:14px}}
+.zx-zenrex-copy{{color:#64748b;font-size:12px}}
+.zx-zenrex-brand{{display:flex;align-items:center;gap:10px;text-decoration:none;padding:8px 14px;border-radius:99px;background:linear-gradient(135deg,rgba(251,191,36,.1),rgba(165,42,42,.1));border:1px solid rgba(251,191,36,.2);transition:all .25s}}
+.zx-zenrex-brand:hover{{background:linear-gradient(135deg,rgba(251,191,36,.2),rgba(165,42,42,.2));border-color:#fbbf24;transform:translateY(-2px)}}
+.zx-zenrex-logo{{width:28px;height:28px;border-radius:50%;background:linear-gradient(135deg,#fbbf24,#a52a2a);display:flex;align-items:center;justify-content:center;color:#fff;font-weight:900;font-size:13px}}
+.zx-zenrex-text{{display:flex;flex-direction:column;line-height:1.2}}
+.zx-zenrex-text small{{color:#64748b;font-size:10px}}
+.zx-zenrex-text strong{{color:#fbbf24;font-size:13px;font-weight:900}}
 .zx-pay-icons{{display:flex;gap:8px;align-items:center}}
 .zx-pay-icons span{{padding:5px 10px;background:#1e293b;border-radius:6px;font-size:10px;color:#94a3b8;font-weight:700}}
 
@@ -832,7 +832,7 @@ def render_zerax_enhancements(seed: Dict[str, Any], project_id: str = "") -> str
   <div class="zx-rev-dots" id="zx-rev-dots"></div>
 </section>
 
-<!-- ═══ Unified Zerax Footer ═══ -->
+<!-- ═══ Unified Zenrex Footer ═══ -->
 <footer id="zx-footer">
   <div id="zx-footer-inner">
     <div class="zx-foot-grid">
@@ -873,23 +873,23 @@ def render_zerax_enhancements(seed: Dict[str, Any], project_id: str = "") -> str
       </div>
     </div>
 
-    <div class="zx-zerax-bar">
-      <div class="zx-zerax-copy">© {branding.get('name','مطعمي')} {seed.get('year', 2026)} — جميع الحقوق محفوظة</div>
+    <div class="zx-zenrex-bar">
+      <div class="zx-zenrex-copy">© {branding.get('name','مطعمي')} {seed.get('year', 2026)} — جميع الحقوق محفوظة</div>
       <div class="zx-pay-icons">
         <span>Mada</span><span>Visa</span><span>Apple Pay</span><span>STC Pay</span>
       </div>
-      <a class="zx-zerax-brand" href="{track_url}" target="_blank" rel="noopener" data-zx-tracker="{project_id}">
-        <div class="zx-zerax-logo">Z</div>
-        <div class="zx-zerax-text">
+      <a class="zx-zenrex-brand" href="{track_url}" target="_blank" rel="noopener" data-zx-tracker="{project_id}">
+        <div class="zx-zenrex-logo">Z</div>
+        <div class="zx-zenrex-text">
           <small>صُنع بواسطة</small>
-          <strong>Zerax</strong>
+          <strong>Zenrex</strong>
         </div>
       </a>
     </div>
     <div style="text-align:center;padding:12px 0 18px;border-top:1px solid #1e293b">
-      <a href="https://zerax.com/showcase" target="_blank" rel="noopener" data-zx-showcase style="color:#64748b;font-size:11px;text-decoration:none;display:inline-flex;align-items:center;gap:6px">
+      <a href="https://zenrex.ai/showcase" target="_blank" rel="noopener" data-zx-showcase style="color:#64748b;font-size:11px;text-decoration:none;display:inline-flex;align-items:center;gap:6px">
         <span>✨</span>
-        <span>شاهد <strong style="color:#fbbf24" data-zx-showcase-count>+100</strong> موقع آخر مبني على منصة Zerax</span>
+        <span>شاهد <strong style="color:#fbbf24" data-zx-showcase-count>+100</strong> موقع آخر مبني على منصة Zenrex</span>
         <span>←</span>
       </a>
     </div>
@@ -1020,21 +1020,21 @@ def render_zerax_enhancements(seed: Dict[str, Any], project_id: str = "") -> str
     }}
   }}
 
-  /* ═══ 7. Zerax tracker ping + dynamic site count ═══ */
+  /* ═══ 7. Zenrex tracker ping + dynamic site count ═══ */
   const trkLink = document.querySelector('[data-zx-tracker]');
   if(trkLink){{
     const pid = trkLink.getAttribute('data-zx-tracker');
     if(pid){{
       try{{
         const img = new Image();
-        img.src = 'https://zerax.com/api/ready-sites/track-visit/' + pid + '?t=' + Date.now();
+        img.src = 'https://zenrex.ai/api/ready-sites/track-visit/' + pid + '?t=' + Date.now();
       }}catch(_){{}}
     }}
   }}
   const countEl = document.querySelector('[data-zx-showcase-count]');
   if(countEl){{
     try{{
-      fetch('https://zerax.com/api/ready-sites/showcase?limit=1')
+      fetch('https://zenrex.ai/api/ready-sites/showcase?limit=1')
         .then(r => r.ok ? r.json() : null)
         .then(d => {{
           if(d && d.total_built){{ countEl.textContent = '+' + d.total_built; }}
@@ -1081,7 +1081,7 @@ def render_admin_full_app(seed: Dict[str, Any], admin_email: str, admin_password
     analytics = seed["analytics"]["today"]
 
     return f"""
-<!-- ═══ Zerax Admin Module ═══ -->
+<!-- ═══ Zenrex Admin Module ═══ -->
 <style>
 #zx-admin-root,#zx-driver-root{{display:none;font-family:'Tajawal',sans-serif;direction:rtl}}
 #zx-admin-root.active,#zx-driver-root.active{{display:block;position:fixed;inset:0;background:#f3f4f6;z-index:9999;overflow-y:auto}}

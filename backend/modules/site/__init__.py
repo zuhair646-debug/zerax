@@ -1,1 +1,1 @@
-"""Site (Zerax marketing/main app) banner + stories module."""
+"""Site (Zenrex marketing/main app) banner + stories module."""

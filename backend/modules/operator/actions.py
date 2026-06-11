@@ -217,7 +217,7 @@ async def vercel_redeploy(token: str, project_id: str) -> Dict[str, Any]:
                 "name": last.get("name"),
                 "deploymentId": last.get("uid"),
                 "target": "production",
-                "meta": {"trigger": "zerax-operator"},
+                "meta": {"trigger": "zenrex-operator"},
             },
         )
         r.raise_for_status()

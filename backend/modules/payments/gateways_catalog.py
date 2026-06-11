@@ -1,7 +1,7 @@
 """
-Zerax Global Payment Gateways Catalog
+Zenrex Global Payment Gateways Catalog
 ======================================
-Single source of truth for every payment gateway Zerax supports (or plans to
+Single source of truth for every payment gateway Zenrex supports (or plans to
 support). Designed so the actual API integration can be plugged in later
 without touching the frontend: each gateway is fully described — branding,
 constraints, supported countries/currencies, BNPL split rules, badge design

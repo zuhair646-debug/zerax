@@ -9,12 +9,12 @@ const ShareHistory = ({ user, setUser }) => {
   const [history, setHistory] = useState([]);
 
   useEffect(() => {
-    setHistory(JSON.parse(localStorage.getItem('zerax_share_history') || '[]'));
+    setHistory(JSON.parse(localStorage.getItem('zenrex_share_history') || '[]'));
   }, []);
 
   const clear = () => {
     if (window.confirm('متأكدة من حذف كل السجل؟')) {
-      localStorage.removeItem('zerax_share_history');
+      localStorage.removeItem('zenrex_share_history');
       setHistory([]);
     }
   };

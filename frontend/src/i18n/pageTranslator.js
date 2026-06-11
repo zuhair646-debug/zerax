@@ -1,5 +1,5 @@
 /**
- * Live DOM Translator for Zerax
+ * Live DOM Translator for Zenrex
  * ------------------------------------------------------------------
  * Translates EVERY visible Arabic/English text node on the page into
  * the user's chosen language via the batch Claude endpoint.
@@ -19,7 +19,7 @@
  */
 
 const API = process.env.REACT_APP_BACKEND_URL || '';
-const CACHE_PREFIX = 'zerax_pt_';
+const CACHE_PREFIX = 'zenrex_pt_';
 const SKIP_TAGS = new Set([
   'SCRIPT', 'STYLE', 'CODE', 'PRE', 'TEXTAREA', 'INPUT',
   'NOSCRIPT', 'IFRAME', 'CANVAS', 'SVG', 'PATH', 'KBD', 'SAMP',
@@ -408,7 +408,7 @@ async function sweepAndTranslate() {
 
 // Exported for debugging in the browser console
 if (typeof window !== 'undefined') {
-  window.__zeraxI18n = {
+  window.__zenrexI18n = {
     apply: applyPageLanguage,
     clearCache: () => {
       memCache.clear();

@@ -2,7 +2,7 @@
 Store Router — Merchant products + Customer auth + Wishlist + Reviews + Orders.
 All endpoints are prefixed with /api/store.
 
-Owner: Zerax Platform (Feb 2026)
+Owner: Zenrex Platform (Feb 2026)
 """
 from __future__ import annotations
 

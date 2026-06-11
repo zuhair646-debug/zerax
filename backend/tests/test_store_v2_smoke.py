@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Smoke tests for Zerax Store V2 + AI router.
+Smoke tests for Zenrex Store V2 + AI router.
 Run: python3 /app/backend/tests/test_store_v2_smoke.py
 """
 import os
@@ -8,8 +8,8 @@ import sys
 import json
 import requests
 
-BASE = os.environ.get("ZERAX_BASE_URL", "https://ai-cinematic-hub-2.preview.emergentagent.com")
-ADMIN_EMAIL = "owner@zerax.com"
+BASE = os.environ.get("ZENREX_BASE_URL", "https://ai-cinematic-hub-2.preview.emergentagent.com")
+ADMIN_EMAIL = "owner@zenrex.ai"
 ADMIN_PASS = "owner123"
 PHONE = "0552222222"
 OTP = "1234"
@@ -167,7 +167,7 @@ def test_ai_profile(merch_tok: str):
 
 
 def main():
-    print(f"━━━ Zerax V2 Smoke Tests · {BASE} ━━━")
+    print(f"━━━ Zenrex V2 Smoke Tests · {BASE} ━━━")
     test_health()
     merch_tok = _login_admin()
     cust_tok = _login_customer()

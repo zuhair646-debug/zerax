@@ -10,7 +10,7 @@ export default function PublicSite() {
 
   useEffect(() => {
     if (!slug) return;
-    document.title = `${slug} | Zerax`;
+    document.title = `${slug} | Zenrex`;
     fetch(`${API}/api/websites/public/${slug}`)
       .then(async (r) => {
         if (!r.ok) throw new Error('not_found');
@@ -26,7 +26,7 @@ export default function PublicSite() {
         <div style={{textAlign:'center',padding:40}}>
           <div style={{fontSize:64}}>🔍</div>
           <h1 style={{color:'#FFD700'}}>{err}</h1>
-          <a href="/" style={{color:'#FFD700',textDecoration:'underline'}}>العودة لـ Zerax</a>
+          <a href="/" style={{color:'#FFD700',textDecoration:'underline'}}>العودة لـ Zenrex</a>
         </div>
       </div>
     );
@@ -40,7 +40,7 @@ export default function PublicSite() {
     );
   }
 
-  // Use an iframe with srcDoc so the site's CSS can't affect Zerax header routes
+  // Use an iframe with srcDoc so the site's CSS can't affect Zenrex header routes
   return (
     <iframe
       srcDoc={html}

@@ -160,10 +160,10 @@ function Dashboard({ data, reload }) {
           <button onClick={copyLink} className={`px-4 py-2 rounded-lg font-black text-sm ${copied ? 'bg-emerald-500 text-black' : 'bg-white/10 hover:bg-white/20'}`} data-testid="copy-link">
             {copied ? '✓ نُسخ' : '📋 نسخ'}
           </button>
-          <a href={`https://wa.me/?text=${encodeURIComponent('انضم لـ Zerax: ' + link)}`} target="_blank" rel="noopener" className="px-4 py-2 bg-emerald-500 text-black rounded-lg font-black text-sm">📱 واتساب</a>
+          <a href={`https://wa.me/?text=${encodeURIComponent('انضم لـ Zenrex: ' + link)}`} target="_blank" rel="noopener" className="px-4 py-2 bg-emerald-500 text-black rounded-lg font-black text-sm">📱 واتساب</a>
         </div>
         <p className="text-[11px] text-white/55 mt-3 leading-relaxed">
-          🎯 شارك هذا الرابط على وسائل التواصل أو مع شبكة معارفك. عند تسجيل أي عميل عبر هذا الرابط ودفعه لاشتراك Zerax،
+          🎯 شارك هذا الرابط على وسائل التواصل أو مع شبكة معارفك. عند تسجيل أي عميل عبر هذا الرابط ودفعه لاشتراك Zenrex،
           ستحصل تلقائياً على <b className="text-emerald-300">{aff.commission_pct}%</b> من قيمة كل دفعة <b>مدى الحياة</b>.
         </p>
       </div>

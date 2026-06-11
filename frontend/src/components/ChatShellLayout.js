@@ -67,7 +67,7 @@ export default function ChatShellLayout({
     try {
       if (navigator.share) {
         await navigator.share({
-          title: 'انضم لـZerax واحصل على خصم',
+          title: 'انضم لـZenrex واحصل على خصم',
           text: 'سجّل عبر رابطي واحصل على خصم ٢٠٪ على أول اشتراك',
           url,
         });

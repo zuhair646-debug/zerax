@@ -1,5 +1,5 @@
 """
-Zerax Theme Router — Per-merchant theme customization
+Zenrex Theme Router — Per-merchant theme customization
 ======================================================
 Stores merchant theme overrides (colors / fonts / radius).
 Theme is applied automatically to: admin.html (their dashboard),
@@ -9,7 +9,7 @@ The default theme is the elegant DARK aesthetic; merchant can tweak.
 The customer/driver UIs READ the merchant theme at load time
 so each store looks unique without code changes.
 
-Owner: Zerax Platform (Feb 2026)
+Owner: Zenrex Platform (Feb 2026)
 """
 from __future__ import annotations
 
@@ -31,7 +31,7 @@ def _now() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
-# Default Zerax dark theme — used when merchant hasn't customized
+# Default Zenrex dark theme — used when merchant hasn't customized
 DEFAULT_THEME: Dict[str, Any] = {
     "mode": "dark",
     "colors": {

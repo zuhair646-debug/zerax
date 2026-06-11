@@ -1,5 +1,5 @@
 """
-Zerax Trial / Demo System
+Zenrex Trial / Demo System
 ==========================
 Lets prospective merchants try the full platform instantly:
   1. Click "Try Free" → unique tenant created in seconds
@@ -12,7 +12,7 @@ All trial data lives under collection `trial_tenants` and shares the existing
 collections but tagged with `tenant_id = trial_xxx` so it's invisible to
 production users.
 
-Owner: Zerax Platform (Feb 2026)
+Owner: Zenrex Platform (Feb 2026)
 """
 from __future__ import annotations
 
@@ -106,7 +106,7 @@ async def start_trial(body: TrialStartIn, request: Request):
 
     trial_id = _gen_id("trial")
     short = secrets.token_hex(3).upper()  # 6-char readable suffix
-    admin_email = f"trial-{short.lower()}@zerax.demo"
+    admin_email = f"trial-{short.lower()}@zenrex.ai"
     admin_pwd = secrets.token_urlsafe(8)
     customer_phone = "055" + str(secrets.randbelow(10000000)).zfill(7)
     expires_at = _now() + timedelta(hours=body.duration_hours)
@@ -187,7 +187,7 @@ async def start_trial(body: TrialStartIn, request: Request):
         upsert=True,
     )
 
-    # Pre-seed the merchant theme (Zerax default — they can customize)
+    # Pre-seed the merchant theme (Zenrex default — they can customize)
     await db.merchant_themes.update_one(
         {"merchant_id": trial_id},
         {"$set": {

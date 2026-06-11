@@ -113,7 +113,7 @@ mongo_url = os.environ['MONGO_URL']
 client = AsyncIOMotorClient(mongo_url)
 db = client[os.environ['DB_NAME']]
 
-app = FastAPI(title="Zerax API", description="AI-Powered Creative Platform")
+app = FastAPI(title="Zenrex API", description="AI-Powered Creative Platform")
 api_router = APIRouter(prefix="/api")
 
 # 🛡️ L1 — Global rate limiter (slowapi) — keyed by real client IP (honors X-Forwarded-For)
@@ -618,7 +618,7 @@ async def register(user_data: UserRegisterWithReferral, request: Request):
 
     # 🆕 Click→signup attribution: read tracking cookie set by /api/r/{code}
     try:
-        click_id = request.cookies.get("zerax_aff_click")
+        click_id = request.cookies.get("zenrex_aff_click")
         if click_id:
             from modules.affiliate.tracking import build_router as _ignored  # ensure module imported
             await db.affiliate_clicks.update_one(
@@ -1525,7 +1525,7 @@ async def create_payment(payment_data: PaymentCreate, current_user: dict = Depen
         "videos_monthly": "اشتراك فيديو شهري"
     }.get(payment_data.payment_type, payment_data.payment_type)
     
-    message = f"""💰 دفعة جديدة في Zerax!
+    message = f"""💰 دفعة جديدة في Zenrex!
 
 👤 العميل: {user_doc.get('name', 'Unknown')}
 📧 البريد: {user_doc.get('email', '')}
@@ -1732,7 +1732,7 @@ async def get_referral_info(current_user: dict = Depends(get_current_user)):
     
     return {
         "referral_code": referral_code,
-        "referral_link": f"https://zerax.com/register?ref={referral_code}",
+        "referral_link": f"https://zenrex.ai/register?ref={referral_code}",
         "total_referrals": referrals_count,
         "bonus_points": user_doc.get('bonus_points', 0),
         "rewards": PRICING_CONFIG["referral_rewards"]
@@ -1890,8 +1890,8 @@ async def create_payment_order(request: CreateOrderRequest, current_user: dict =
                 "intent": "sale",
                 "payer": {"payment_method": "paypal"},
                 "redirect_urls": {
-                    "return_url": f"{os.environ.get('FRONTEND_URL', 'https://zerax.com')}/payment/success",
-                    "cancel_url": f"{os.environ.get('FRONTEND_URL', 'https://zerax.com')}/payment/cancel"
+                    "return_url": f"{os.environ.get('FRONTEND_URL', 'https://zenrex.ai')}/payment/success",
+                    "cancel_url": f"{os.environ.get('FRONTEND_URL', 'https://zenrex.ai')}/payment/cancel"
                 },
                 "transactions": [{
                     "item_list": {
@@ -1907,7 +1907,7 @@ async def create_payment_order(request: CreateOrderRequest, current_user: dict =
                         "total": str(request.amount),
                         "currency": request.currency
                     },
-                    "description": f"Zerax - {package_name} ({credits_to_add} نقطة)"
+                    "description": f"Zenrex - {package_name} ({credits_to_add} نقطة)"
                 }]
             })
             
@@ -2400,7 +2400,7 @@ async def get_public_offers():
 # Object Storage Configuration
 STORAGE_URL = "https://integrations.emergentagent.com/objstore/api/v1/storage"
 EMERGENT_KEY = os.environ.get('EMERGENT_LLM_KEY')
-APP_NAME = "zerax-files"
+APP_NAME = "zenrex-files"
 
 import requests as http_requests  # noqa: E402
 import tempfile  # noqa: E402,F811
@@ -3375,7 +3375,7 @@ try:
 except Exception as _se:
     logging.getLogger(__name__).error(f"Failed to register source module: {_se}", exc_info=True)
 
-# ============== SITE BANNER & STORIES (Zerax main marketing site) ==============
+# ============== SITE BANNER & STORIES (Zenrex main marketing site) ==============
 try:
     from modules.site.routes import init_routes as init_site_routes
 
@@ -3584,7 +3584,7 @@ try:
     # Real AI Image Studio (Gemini Nano Banana)
     from routers.image_studio_router import router as _image_studio_router
     app.include_router(_image_studio_router)
-    # Video Studio (storyboard + Zerax Voice TTS + ffmpeg slideshow)
+    # Video Studio (storyboard + Zenrex Voice TTS + ffmpeg slideshow)
     from routers.video_studio_router import router as _video_studio_router
     app.include_router(_video_studio_router)
     # Delivery & Driver Management (merchant + driver + customer tracking)
@@ -3645,7 +3645,7 @@ try:
     _fb2_router = create_freebuild_v2_router(db, get_current_user)
     app.include_router(_fb2_router)
 
-    # Zerax AI Agent — free-form conversational chat with tools
+    # Zenrex AI Agent — free-form conversational chat with tools
     from modules.agent import create_agent_router, create_public_agent_router
     _agent_router = create_agent_router(db, get_current_user)
     app.include_router(_agent_router)
@@ -3655,7 +3655,7 @@ try:
 except Exception as _fb2e:
     logging.getLogger(__name__).error(f"Failed to register freebuild v2 module: {_fb2e}", exc_info=True)
 
-# ============== AUTOCODER (Owner-only AI that programs Zerax itself) ==============
+# ============== AUTOCODER (Owner-only AI that programs Zenrex itself) ==============
 try:
     from modules.autocoder import create_autocoder_router
     _ac_router = create_autocoder_router(db, get_current_user, require_owner)
@@ -3709,7 +3709,7 @@ try:
 except Exception as _mobe:
     logging.getLogger(__name__).error(f"Failed to register mobile-app module: {_mobe}", exc_info=True)
 
-# ============== CHANNEL BRIDGE (Push Zerax-generated assets to owner's client websites) ==============
+# ============== CHANNEL BRIDGE (Push Zenrex-generated assets to owner's client websites) ==============
 try:
     from modules.bridge import create_bridge_router
     _br_router = create_bridge_router(db, get_current_user)
@@ -3942,7 +3942,7 @@ async def delete_user_element(el_id: str, current_user: dict = Depends(get_curre
 # Health check endpoint - MUST be before other routers
 @app.get("/api/health")
 async def health_check():
-    return {"status": "healthy", "service": "zerax-api"}
+    return {"status": "healthy", "service": "zenrex-api"}
 
 # Version endpoint — exposes git commit so we can verify what's actually deployed
 @app.get("/api/version")
@@ -3966,7 +3966,7 @@ async def api_version():
         sha = os.environ.get("GIT_COMMIT", os.environ.get("RAILWAY_GIT_COMMIT_SHA", ""))[:8]
         msg = os.environ.get("RAILWAY_GIT_COMMIT_MESSAGE", "")[:120]
     return {
-        "service": "zerax-api",
+        "service": "zenrex-api",
         "commit": sha or "unknown",
         "commit_message": msg,
         "deployed_at": os.environ.get("RAILWAY_DEPLOYMENT_DRAINING_SECONDS") or "n/a",
@@ -3981,7 +3981,7 @@ try:
 except Exception as _ge:
     logging.getLogger(__name__).error(f"games module failed: {_ge}")
 
-# 🎮 Zerax Game Runtime — Backend-as-a-Service for AI-generated games
+# 🎮 Zenrex Game Runtime — Backend-as-a-Service for AI-generated games
 # Provides auth/save/leaderboard/achievements/multiplayer/SDK for every project.
 try:
     from modules.game_runtime import create_router as _gr_create
@@ -4018,7 +4018,7 @@ try:
 except Exception as _gee:
     logging.getLogger(__name__).error(f"game_extras module failed: {_gee}")
 
-# 🛡️ Zerax Security Center — 10-layer enterprise protection + admin control room
+# 🛡️ Zenrex Security Center — 10-layer enterprise protection + admin control room
 try:
     from modules.security import (
         create_router as _sec_create,
@@ -4170,25 +4170,25 @@ app.mount("/uploads", StaticFiles(directory="/app/backend/uploads"), name="autoc
 
 
 # ═══════════════════════════════════════════════════════════════════
-# 🧠 ZERAX AI — Unified Intelligence Layer (Smart Router + Boundaries)
+# 🧠 ZENREX AI — Unified Intelligence Layer (Smart Router + Boundaries)
 # ═══════════════════════════════════════════════════════════════════
-from modules.zerax_ai import zerax_chat as _zerax_chat, list_agents as _list_agents
+from modules.zenrex_ai import zenrex_chat as _zenrex_chat, list_agents as _list_agents
 
 
-class ZeraxAIRequest(BaseModel):
+class ZenrexAIRequest(BaseModel):
     agent: str = Field(..., description="freebuild|mobile_app|game_studio|cinema|image_studio|avatar|support|marketing")
     messages: List[Dict[str, str]] = Field(..., description="Chat history [{role, content}]")
     extra_context: Optional[str] = None
 
 
 @api_router.get("/ai/agents")
-async def list_zerax_agents():
-    """Returns metadata for every Zerax AI agent (admin/debug)."""
+async def list_zenrex_agents():
+    """Returns metadata for every Zenrex AI agent (admin/debug)."""
     return {"agents": _list_agents()}
 
 
 @api_router.post("/ai/chat")
-async def zerax_ai_chat(req: ZeraxAIRequest, current_user: dict = Depends(get_current_user)):
+async def zenrex_ai_chat(req: ZenrexAIRequest, current_user: dict = Depends(get_current_user)):
     """
     Universal AI chat endpoint — routes to the best model with strict boundaries.
 
@@ -4199,7 +4199,7 @@ async def zerax_ai_chat(req: ZeraxAIRequest, current_user: dict = Depends(get_cu
           "messages": [{"role":"user","content":"اعمل لي موقع بيع قهوة"}]
         }
     """
-    result = await _zerax_chat(
+    result = await _zenrex_chat(
         agent=req.agent,
         messages=req.messages,
         user_id=current_user["user_id"],

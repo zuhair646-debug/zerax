@@ -1,5 +1,5 @@
 """
-Zerax Payment Gateways API
+Zenrex Payment Gateways API
 ==========================
 Exposes the global gateways catalog so the merchant can:
   1. Browse all available gateways per country

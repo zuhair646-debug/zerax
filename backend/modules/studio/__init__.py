@@ -1,5 +1,5 @@
 """
-Zerax Studio Module — deep AI generation studio for merchants/clients.
+Zenrex Studio Module — deep AI generation studio for merchants/clients.
 
 Provides three premium studio endpoints:
     POST /api/studio/image/generate   — deep scenario-driven image generation

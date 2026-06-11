@@ -4,23 +4,23 @@ import { Button } from '@/components/ui/button';
 import { LogOut, LayoutDashboard, Shield, Menu, X, ArrowRight } from 'lucide-react';
 import LanguagePicker from '@/components/LanguagePicker';
 
-// شعار Zerax — الصورة المعتمدة (L1: ملكي تراثي ذهبي) + حركة دوران لطيفة في المكان
-export const ZeraxLogo = ({ size = 'md', animated = true }) => {
+// شعار Zenrex — الصورة المعتمدة (L1: ملكي تراثي ذهبي) + حركة دوران لطيفة في المكان
+export const ZenrexLogo = ({ size = 'md', animated = true }) => {
   const px = { sm: 32, md: 44, lg: 64, xl: 96 }[size] || 44;
   // pick small image for sm/md, large for lg/xl — saves bandwidth
-  const src = px <= 48 ? '/zerax-logo-sm.png' : '/zerax-logo.png';
+  const src = px <= 48 ? '/zenrex-logo-sm.png' : '/zenrex-logo.png';
   return (
     <span
-      className={`zerax-logo-img-wrap ${animated ? 'zerax-logo-img-animated' : ''}`}
+      className={`zenrex-logo-img-wrap ${animated ? 'zenrex-logo-img-animated' : ''}`}
       style={{ width: px, height: px, display: 'inline-block', position: 'relative' }}
-      aria-label="Zerax"
+      aria-label="Zenrex"
     >
       <img
         src={src}
-        alt="Zerax"
+        alt="Zenrex"
         width={px}
         height={px}
-        className="zerax-logo-img"
+        className="zenrex-logo-img"
         draggable={false}
         style={{ width: '100%', height: '100%', objectFit: 'contain', userSelect: 'none' }}
       />
@@ -33,14 +33,14 @@ export const Navbar = ({ user, transparent = false, setUser }) => {
   const location = useLocation();
   const [isMenuOpen, setIsMenuOpen] = React.useState(false);
   const [promoShown, setPromoShown] = React.useState(
-    () => typeof window !== 'undefined' && sessionStorage.getItem('zerax_promo_dismissed') !== '1'
+    () => typeof window !== 'undefined' && sessionStorage.getItem('zenrex_promo_dismissed') !== '1'
   );
 
   // React only when promo is actually closed — no polling interval that causes re-render glitches.
   React.useEffect(() => {
     const onPromoChange = (e) => setPromoShown(e.detail?.shown === true);
-    window.addEventListener('zerax:promo-change', onPromoChange);
-    return () => window.removeEventListener('zerax:promo-change', onPromoChange);
+    window.addEventListener('zenrex:promo-change', onPromoChange);
+    return () => window.removeEventListener('zenrex:promo-change', onPromoChange);
   }, []);
 
   // Show "back" arrow on every page EXCEPT the landing page itself.
@@ -86,8 +86,8 @@ export const Navbar = ({ user, transparent = false, setUser }) => {
               </button>
             )}
             <Link to="/" className="flex items-center gap-3" data-testid="navbar-logo" data-no-translate="true">
-              <ZeraxLogo size="md" />
-              <span className="text-2xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-amber-400 to-yellow-500">Zerax</span>
+              <ZenrexLogo size="md" />
+              <span className="text-2xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-amber-400 to-yellow-500">Zenrex</span>
             </Link>
           </div>
 

@@ -2356,7 +2356,7 @@ body{{font-family:'Tajawal',sans-serif;background:#0b0f1f;color:#fff;padding:20p
                 {"name": "WordPress", "pros": "قوالب كثيرة", "cons": "بطيء، يحتاج صيانة، hacked بسهولة"},
                 {"name": "Wix", "pros": "سهل للمبتدئ", "cons": "غالٍ، ملكية ضعيفة، SEO متوسط"},
                 {"name": "Shopify", "pros": "متخصص متاجر", "cons": "رسوم 2.9% على كل طلب + $29/شهر"},
-                {"name": "Zerax", "pros": "أسرع + مجاني الاستضافة + AI مدمج + عربي أصيل", "cons": "—"},
+                {"name": "Zenrex", "pros": "أسرع + مجاني الاستضافة + AI مدمج + عربي أصيل", "cons": "—"},
             ],
         }
 
@@ -2715,7 +2715,7 @@ body{{font-family:'Tajawal',sans-serif;background:#0b0f1f;color:#fff;padding:20p
             cust = {
                 "name": data["customer"].get("name"),
                 "phone": data["customer"].get("phone"),
-                "email": data["customer"].get("email") or f"{data['customer'].get('phone','user')}@zerax.site",
+                "email": data["customer"].get("email") or f"{data['customer'].get('phone','user')}@zenrex.ai",
                 "address": order.get("address"),
                 "city": order.get("city") or "الرياض",
             }

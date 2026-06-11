@@ -7,7 +7,7 @@ import requests
 BASE_URL = os.environ.get("REACT_APP_BACKEND_URL", "https://ai-cinematic-hub-2.preview.emergentagent.com").rstrip("/")
 API = f"{BASE_URL}/api"
 
-OWNER_EMAIL = "owner@zerax.com"
+OWNER_EMAIL = "owner@zenrex.ai"
 OWNER_PASSWORD = "owner123"
 AUDIT_EMAIL = "audit_1780793976@test.com"
 AUDIT_PASSWORD = "Test1234!"
@@ -274,7 +274,7 @@ class TestGenerationIntegration:
         assert len(body) > 5000, f"HTML too small: {len(body)} bytes"
         assert "<html" in body.lower()
         assert "<style" in body.lower()
-        assert "zerax.com" in body.lower()
+        assert "zenrex.ai" in body.lower()
 
         # Projects list contains this id
         plist = http.get(f"{API}/ready-sites/projects", headers=h, timeout=15)

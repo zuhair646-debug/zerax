@@ -141,7 +141,7 @@ async def tool_fetch_url(url: str, max_chars: int = 8000) -> Dict[str, Any]:
     try:
         async with httpx.AsyncClient(timeout=25, follow_redirects=True) as c:
             r = await c.get(url, headers={
-                "User-Agent": "Mozilla/5.0 ZeraxBot/1.0",
+                "User-Agent": "Mozilla/5.0 ZenrexBot/1.0",
                 "Accept": "text/html,text/plain,application/json,*/*",
             })
         ctype = r.headers.get("content-type", "").split(";")[0].strip()

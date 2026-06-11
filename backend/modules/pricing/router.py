@@ -40,7 +40,7 @@ from .paypal_client import create_order, capture_order, get_order
 from .promos import validate_and_apply_promo, redeem_promo
 from .invoices import generate_invoice_pdf, send_invoice_email, next_invoice_number
 
-log = logging.getLogger("zerax.pricing.router")
+log = logging.getLogger("zenrex.pricing.router")
 
 
 # ════════════════════════════════════════════════════════════════
@@ -168,14 +168,14 @@ def create_router(db, get_current_user, get_admin_user):
             if base <= 0:
                 raise HTTPException(status_code=400, detail="الباقة المجانية لا تتطلب دفع")
             credits_to_add = int(plan["credits_per_month"]) * (12 if body.billing_cycle == "yearly" else 1)
-            description = f"Zerax {plan['name']} — {body.billing_cycle}"
+            description = f"Zenrex {plan['name']} — {body.billing_cycle}"
         elif body.item_type == "pack":
             pack = await db.credit_packs.find_one({"id": body.item_id}, {"_id": 0})
             if not pack:
                 raise HTTPException(status_code=404, detail="Pack not found")
             base = float(pack["price_usd"])
             credits_to_add = int(pack["credits"])
-            description = f"Zerax {pack['name_ar']} pack"
+            description = f"Zenrex {pack['name_ar']} pack"
         else:
             raise HTTPException(status_code=400, detail="item_type must be 'subscription' or 'pack'")
 
@@ -768,9 +768,9 @@ def create_router(db, get_current_user, get_admin_user):
         try:
             result = await create_order(
                 amount_usd=1.00,
-                return_url="https://zerax.app/billing/test-return",
-                cancel_url="https://zerax.app/billing/test-cancel",
-                description="Zerax PayPal credential test",
+                return_url="https://zenrex.ai/billing/test-return",
+                cancel_url="https://zenrex.ai/billing/test-cancel",
+                description="Zenrex PayPal credential test",
             )
             return {
                 "ok": True,

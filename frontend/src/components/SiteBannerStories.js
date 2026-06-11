@@ -1,5 +1,5 @@
 /**
- * SiteBannerStories — luxurious rotating banner + Stories ribbon for Zerax's own site.
+ * SiteBannerStories — luxurious rotating banner + Stories ribbon for Zenrex's own site.
  *
  * Renders:
  *   • A full-width hero banner that auto-rotates between admin-managed slides
@@ -34,12 +34,12 @@ export default function SiteBannerStories({ placement = 'outside' }) {
   const seenRef = useRef(loadSeen());
 
   function loadSeen() {
-    try { return JSON.parse(localStorage.getItem('zerax_seen_stories') || '[]'); } catch (_) { return []; }
+    try { return JSON.parse(localStorage.getItem('zenrex_seen_stories') || '[]'); } catch (_) { return []; }
   }
   function markSeen(id) {
     if (!seenRef.current.includes(id)) {
       seenRef.current.push(id);
-      try { localStorage.setItem('zerax_seen_stories', JSON.stringify(seenRef.current.slice(-100))); } catch (_) {}
+      try { localStorage.setItem('zenrex_seen_stories', JSON.stringify(seenRef.current.slice(-100))); } catch (_) {}
     }
   }
 

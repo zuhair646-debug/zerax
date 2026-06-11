@@ -19,7 +19,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-logger = logging.getLogger("zerax.autocoder.superpowers")
+logger = logging.getLogger("zenrex.autocoder.superpowers")
 
 MEMORY_DIR = Path("/app/memory")
 PRD_PATH = MEMORY_DIR / "PRD.md"
@@ -242,7 +242,7 @@ async def tool_update_prd(section: str, content: str, append: bool = True) -> Di
     """
     try:
         MEMORY_DIR.mkdir(parents=True, exist_ok=True)
-        existing = PRD_PATH.read_text(encoding="utf-8") if PRD_PATH.exists() else "# Zerax AI Platform - PRD\n\n"
+        existing = PRD_PATH.read_text(encoding="utf-8") if PRD_PATH.exists() else "# Zenrex AI Platform - PRD\n\n"
 
         new_block = f"\n### {section}\n\n{content.strip()}\n\n---\n"
         if append and existing.startswith("#"):
@@ -257,7 +257,7 @@ async def tool_update_prd(section: str, content: str, append: bool = True) -> Di
         # Also mirror into CHANGELOG.md
         ts = datetime.now(timezone.utc).isoformat()[:19]
         try:
-            cl_existing = CHANGELOG_PATH.read_text(encoding="utf-8") if CHANGELOG_PATH.exists() else "# Zerax Changelog\n\n"
+            cl_existing = CHANGELOG_PATH.read_text(encoding="utf-8") if CHANGELOG_PATH.exists() else "# Zenrex Changelog\n\n"
             cl_new = f"\n## {ts} — {section}\n\n{content.strip()}\n"
             CHANGELOG_PATH.write_text(cl_existing + cl_new, encoding="utf-8")
         except Exception:
@@ -305,7 +305,7 @@ SUPERPOWERS_ANTHROPIC_TOOLS = [
         "input_schema": {
             "type": "object",
             "properties": {
-                "url": {"type": "string", "description": "الـURL الكامل (e.g. https://zerax.vercel.app/games/web)"},
+                "url": {"type": "string", "description": "الـURL الكامل (e.g. https://zenrex.vercel.app/games/web)"},
                 "viewport": {"type": "string", "description": "WxH (default 1920x1080)"},
                 "wait_ms": {"type": "integer", "description": "كم millisecond ينتظر قبل الـscreenshot (default 3000)"},
             },

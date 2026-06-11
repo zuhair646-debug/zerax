@@ -1,7 +1,7 @@
-# Zerax — Multi-tenant AI Commerce Platform (PRD)
+# Zenrex — Multi-tenant AI Commerce Platform (PRD)
 
 ## Original Problem Statement
-Build "Zerax" — a multi-tenant Saudi/Arab AI commerce platform with:
+Build "Zenrex" — a multi-tenant Saudi/Arab AI commerce platform with:
 1. Conversational FreeBuild chat interface for building sites/apps from scratch
 2. Smart Orchestrator unifying AI models (Anthropic Claude)
 3. Ready Sites module (template-first)
@@ -49,11 +49,11 @@ Build "Zerax" — a multi-tenant Saudi/Arab AI commerce platform with:
      bg-color/frame-color/aspect pickers
   3. Deep AI Analysis — 12 sections: title, what's new, comparison, features,
      benefits, usage steps, side effects, specs, colors, sizes, warranty, official URL
-- **Video Studio** (5 tabs, fullscreen, dark Zerax theme):
+- **Video Studio** (5 tabs, fullscreen, dark Zenrex theme):
   1. Script (Gemini storyboard with 44 dialects + 12 voices)
   2. Scenes (editable storyboard, approve per scene)
   3. Images (Gemini Nano Banana, approve per image, 8pts each)
-  4. Voice (Zerax TTS, preview before approve, 5pts)
+  4. Voice (Zenrex TTS, preview before approve, 5pts)
   5. Final Video (ffmpeg merge, 30pts on click only)
   + Working mic (Web Speech API, dialect-aware)
   + Voice preview button
@@ -106,7 +106,7 @@ Build "Zerax" — a multi-tenant Saudi/Arab AI commerce platform with:
 - `admin.html`: real `/api/auth/login` flow, JWT stored in localStorage, all products CRUD goes through API
 - `app_mode_full.html`: real customer OTP via backend, wishlist + reviews sync to MongoDB when logged in
 - Mongo collections used: `users` (existing), `store_products`, `customers`, `customer_otps`, `customer_wishlists`, `product_reviews`
-- Test creds: `owner@zerax.com` / `owner123` (admin), any phone + OTP `1234` (customer)
+- Test creds: `owner@zenrex.ai` / `owner123` (admin), any phone + OTP `1234` (customer)
 
 ### 🟡 MOCKED (functional UI, no live backend)
 - admin.html login uses localStorage (no JWT)
@@ -116,7 +116,7 @@ Build "Zerax" — a multi-tenant Saudi/Arab AI commerce platform with:
 - Auto-dispatch endpoint /api/delivery/auto-assign falls back to simulation
 
 ### 🟢 LATEST (Feb 10, 2026 · Dark Theme + Sandbox Wave — LAUNCH-READY)
-- **🌙 Zerax Unified Dark Theme** (`/mockups/zerax-theme.css`):
+- **🌙 Zenrex Unified Dark Theme** (`/mockups/zenrex-theme.css`):
   - Single source of truth via CSS variables (`--zx-*`)
   - Deep navy-black bg (`#0a0a14`), elegant violet/amber accents, subtle borders
   - Injected into `admin.html`, `app_mode_full.html`, `driver_app.html`
@@ -129,14 +129,14 @@ Build "Zerax" — a multi-tenant Saudi/Arab AI commerce platform with:
   - `POST /merchant/reset` — restore platform default
 - **🏖️ Sandbox Router** (`/api/sandbox/*`): Full end-to-end test mode for ALL checkout
   - 10 Payment Gateways (Tabby/Tamara/Mada/STC Pay/HyperPay/Moyasar/Stripe/PayPal/ApplePay/COD)
-  - 6 Shipping Providers (Aramex/SMSA/Naqel/DHL/J&T/Zerax Fleet)
+  - 6 Shipping Providers (Aramex/SMSA/Naqel/DHL/J&T/Zenrex Fleet)
   - Beautiful PSP-branded checkout pages (Tabby green, Tamara purple, etc.)
   - Smoke-tested end-to-end: Tabby payment → Aramex label → 5-event delivery timeline
 
 ### 🔴 PENDING (Priority Order)
 
 **P1 — CRITICAL NEXT**
-- Zerax Landing Page (marketing site) — promised next
+- Zenrex Landing Page (marketing site) — promised next
 - MongoDB persistence for admin.html ↔ app_mode_full.html sync
 - JWT real auth on admin.html
 
@@ -162,11 +162,11 @@ FastAPI + MongoDB · Vanilla HTML/JS mockups + React main app ·
 ## Production Deployment (Hetzner VPS — Jun 11 2026)
 - **IP**: `91.98.154.148`
 - **Stack**: Docker (`docker-compose.yml`) + Nginx (gzip + caching + uploads)
-- **DB**: MongoDB `zerax_prod` inside `zerax-mongo-1`
-- **Backend**: Uvicorn inside `zerax-backend-1` (auto-pip-install on start)
+- **DB**: MongoDB `zenrex_prod` inside `zenrex-mongo-1`
+- **Backend**: Uvicorn inside `zenrex-backend-1` (auto-pip-install on start)
 - **JWT_SECRET**: Fixed via `.env` (no token loss on restart)
 - **AI**: Fully working via direct provider keys (Claude/Gemini/OpenAI/FAL.ai 1.5s)
-- **Image serving**: `/static/uploads/` → `/opt/zerax/data/uploads/` (persistent volume)
+- **Image serving**: `/static/uploads/` → `/opt/zenrex/data/uploads/` (persistent volume)
 - **Gzip**: HTML/CSS/JS compressed 4-5x (admin.html 506 KB → 123 KB)
 - **All keys**: ANTHROPIC, GEMINI, OPENAI, ELEVENLABS, FAL — all active
 
@@ -198,9 +198,9 @@ FastAPI + MongoDB · Vanilla HTML/JS mockups + React main app ·
 - Linked from admin.html → Delivery page → "إدارة تطبيق السائق" button
 
 ## Test Credentials
-- Admin panel: `owner@zerax.com` / `owner123` (real JWT)
+- Admin panel: `owner@zenrex.ai` / `owner123` (real JWT)
 - Driver app: phone `0552222222` / OTP `1234`
-- VPS SSH: `ssh -i /root/.ssh/zerax_deploy root@91.98.154.148`
+- VPS SSH: `ssh -i /root/.ssh/zenrex_deploy root@91.98.154.148`
 
 
 ## 🚀 VPS Performance Fix — Jun 11 2026
@@ -253,13 +253,13 @@ Extracted the single huge inline `<script>` block from each large mockup into an
 
 ## 🚀 Full React App Deployed to VPS — Jun 11 2026
 
-**Discovery**: Until this point, the VPS at `91.98.154.148` was serving ONLY the static HTML mockups (admin, app_mode_full, driver_app). The actual standalone **React Zerax platform** (FreeBuild, Smart Orchestrator, Ready Sites, AI Chat workspace, Image Studio, Video Studio, Auto-Coder) had never been deployed to VPS — it only lived on the Emergent preview URL.
+**Discovery**: Until this point, the VPS at `91.98.154.148` was serving ONLY the static HTML mockups (admin, app_mode_full, driver_app). The actual standalone **React Zenrex platform** (FreeBuild, Smart Orchestrator, Ready Sites, AI Chat workspace, Image Studio, Video Studio, Auto-Coder) had never been deployed to VPS — it only lived on the Emergent preview URL.
 
 **Fix Applied**:
 1. Built React app with `REACT_APP_BACKEND_URL=http://91.98.154.148` so API calls go through VPS Nginx.
 2. Stripped `.map` files (15MB savings).
-3. rsynced `build/` (76MB) → `/opt/zerax/frontend/build/` on VPS.
-4. Rewrote Nginx config (`/etc/nginx/sites-available/zerax`):
+3. rsynced `build/` (76MB) → `/opt/zenrex/frontend/build/` on VPS.
+4. Rewrote Nginx config (`/etc/nginx/sites-available/zenrex`):
    - `root` switched from `frontend/public` → `frontend/build`
    - Added SPA fallback `try_files $uri $uri/ /index.html` for React Router
    - Kept `/api/` proxy → `127.0.0.1:8001`
@@ -268,7 +268,7 @@ Extracted the single huge inline `<script>` block from each large mockup into an
 5. `nginx -t && systemctl reload nginx` → all green.
 
 **Verified**:
-- `http://91.98.154.148/` → React Zerax homepage loads (DOMContentLoaded 0.09s), title "Zerax | منصة الإبداع بالذكاء الاصطناعي", no JS errors.
+- `http://91.98.154.148/` → React Zenrex homepage loads (DOMContentLoaded 0.09s), title "Zenrex | منصة الإبداع بالذكاء الاصطناعي", no JS errors.
 - `http://91.98.154.148/api/store/health` → 200 in 234ms, payload `{"ok":true,"products":1,"customers":1,"reviews":0}`.
 - `http://91.98.154.148/mockups/admin.html` → still 200 (mockups preserved).
 - Main JS bundle (`main.2ea727e7.js`): cached 1 year + gzip + immutable.
@@ -279,18 +279,54 @@ Extracted the single huge inline `<script>` block from each large mockup into an
 **Issue**: Although the .env file had `USE_DIRECT_LLM=1`, the running container was started before the value was injected — so the shim was NEVER active. All AI calls would silently fall back to the dead `EMERGENT_LLM_KEY` (restricted from VPS).
 
 **Fix**:
-1. Confirmed `USE_DIRECT_LLM=1` in `/opt/zerax/backend/.env`.
+1. Confirmed `USE_DIRECT_LLM=1` in `/opt/zenrex/backend/.env`.
 2. Pinned it permanently in `docker-compose.yml` `environment:` block (survives `.env` rewrites).
 3. `docker compose up -d --force-recreate backend` (90s rebuild with pip install).
 
 **Verified live on VPS**:
-- `POST /api/auth/login owner@zerax.com / owner123` → 200 + JWT (191 chars)
+- `POST /api/auth/login owner@zenrex.ai / owner123` → 200 + JWT (191 chars)
 - `POST /api/ai/chat` → `{"content":"أهلاً","agent":"freebuild","model_used":"claude-opus-4-5","cost_estimate_usd":0.025065}`
 - `POST /api/store/reviews/translate` → `{"ok":true,"translated":"هذا المنتج رائع"}` (Gemini direct)
 - **VPS is now 100% independent from Emergent platform.** No Emergent network calls in any AI path.
 
 ### Login Credentials (user confusion noted)
-The previous email `owner@zitex.com` (pre-rebrand) returns 401 — the correct email post-rebrand is `owner@zerax.com` / `owner123`.
+The previous email `owner@zitex.com` (pre-rebrand) returns 401 — the correct email post-rebrand is `owner@zenrex.ai` / `owner123`.
+
+
+## 🎨 Full Rebrand: Zerax → Zenrex (Jun 11 2026)
+
+User purchased `zenrex.ai` from Porkbun (registered until Jun 11 2028) and asked for a global rebrand.
+
+**Scope of rename**:
+- **236 source files** updated via `rebrand.py` script (Pass 1: email/domain refs + whole-word "Zerax").
+- **87 additional files** updated via `rebrand2.py` (Pass 2: compound identifiers — `ZeraxClient` → `ZenrexClient`, `ZERAX_CREDITS` → `ZENREX_CREDITS`, etc.).
+- **10 source files renamed**: `ZeraxDuo.js` → `ZenrexDuo.js`, `ZeraxShowcase.js` → `ZenrexShowcase.js`, `zerax-logo.png` → `zenrex-logo.png`, 4 test files, etc.
+- **2 directories renamed**: `backend/modules/zerax_ai` → `zenrex_ai`, `backend/static/zerax_logos` → `zenrex_logos`.
+- **CSS theme** renamed: `zerax-theme.css` → `zenrex-theme.css`.
+- **Nginx config** renamed: `nginx-zerax.conf` → `nginx-zenrex.conf`.
+- **Database**: `users.email` migration — `owner@zerax.com` → `owner@zenrex.ai` (Mongo `updateMany` with `$replaceAll`).
+- **All `@zerax.com` / `zerax.app` / `zerax.com` / etc. references** → `@zenrex.ai` / `zenrex.ai`.
+- **Old `.zip` backups** removed (zerax-railway.zip, zerax-source-code.zip, zerax-independent.zip).
+
+**React rebuild**: `REACT_APP_BACKEND_URL=https://zenrex.ai yarn build` — 32s, no errors.
+
+**VPS deployment**:
+- rsync'd new build + backend code to Hetzner.
+- Updated Nginx config with `server_name zenrex.ai www.zenrex.ai _`.
+- Restarted backend container — health check 200 OK.
+- Verified frontend: page title `"Zenrex | منصة الإبداع بالذكاء الاصطناعي"`, all UI rebranded, no JS errors.
+
+**Login verified**:
+- ✅ `owner@zenrex.ai` / `owner123` → 200 OK + JWT (191 chars)
+- ❌ `owner@zerax.com` → 401 Invalid credentials (as expected)
+
+**New tooling**:
+- Created `/app/deploy/deploy.sh` — one-command deploy script for future updates (`bash deploy.sh zenrex.ai`).
+
+**Pending (user action required)**:
+- Add DNS A records in Porkbun: `@ → 91.98.154.148` and `www → 91.98.154.148`.
+- Once DNS propagates (~5-30 min), provision Let's Encrypt SSL via `certbot --nginx -d zenrex.ai -d www.zenrex.ai`.
+
 
 
 

@@ -1,4 +1,4 @@
-"""Backend tests for the Zerax Promo Video Studio (/api/promo-video/*)."""
+"""Backend tests for the Zenrex Promo Video Studio (/api/promo-video/*)."""
 import os
 import time
 import requests
@@ -18,7 +18,7 @@ def test_health():
     data = r.json()
     assert data["status"] == "ok"
     assert data["ffmpeg"] is True
-    assert "zerax_male_deep" in data["voices"]
+    assert "zenrex_male_deep" in data["voices"]
 
 
 # ─── Storyboard ──────────────────────────────────────────────────────────────
@@ -96,7 +96,7 @@ def test_generate_video_15s():
     payload = {
         "title": "ساعة Apple Watch Ultra 2",
         "duration_seconds": 15,
-        "voice": "zerax_male_deep",
+        "voice": "zenrex_male_deep",
         "cta": "اطلب الآن",
         "scenes": [
             {"seq": 1, "narration": "اكتشف الفخامة في كل تفصيل.",  "image_url": UNSPLASH_IMG},

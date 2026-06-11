@@ -671,7 +671,7 @@ function FinalizeModal({ open, projectId, projectName, onClose, onConverted, onU
 
   const choose = async (pathId, priceUsd) => {
     if (pathId === 'host_with_us') {
-      toast.success('🚀 موقعك سينشر على Zerax قريباً — جاري الإعداد');
+      toast.success('🚀 موقعك سينشر على Zenrex قريباً — جاري الإعداد');
       return;
     }
     // Paid tiers: unlock (MOCKED — Lemon Squeezy wiring later)
@@ -1071,12 +1071,12 @@ function ConnectionsPanel({ open, projectId, onClose }) {
 function CodeActions({ project, projectId, onOpenConnections }) {
   const [pushing, setPushing] = useState(false);
   const [repoName, setRepoName] = useState(() =>
-    (project.name || 'zerax-site')
+    (project.name || 'zenrex-site')
       .toLowerCase()
       .replace(/[^a-z0-9\s-]/g, '')
       .trim()
       .replace(/\s+/g, '-')
-      .slice(0, 40) || 'zerax-site'
+      .slice(0, 40) || 'zenrex-site'
   );
 
   const copyAll = async () => {
@@ -1333,7 +1333,7 @@ function ChatWorkspace({ projectId }) {
       // Pass the user's UI language so the AI replies in the same language
       try {
         const lang = (typeof window !== 'undefined' && window.localStorage)
-          ? (localStorage.getItem('zerax_lang_manual') || localStorage.getItem('zerax_lang') || 'ar')
+          ? (localStorage.getItem('zenrex_lang_manual') || localStorage.getItem('zenrex_lang') || 'ar')
           : 'ar';
         fd.append('user_language', lang);
       } catch (_) { fd.append('user_language', 'ar'); }
@@ -2222,8 +2222,8 @@ function ChatWorkspace({ projectId }) {
                       <span className="absolute inset-0 rounded-full bg-cyan-400/40 blur-md animate-ping" />
                       <span className="absolute inset-0 rounded-full bg-emerald-400/30 blur animate-pulse" />
                       <img
-                        src="/zerax-logo-sm.png"
-                        alt="Zerax"
+                        src="/zenrex-logo-sm.png"
+                        alt="Zenrex"
                         className="relative w-7 h-7 rounded-full object-contain ai-think-spin"
                         style={{ filter: 'drop-shadow(0 0 6px rgba(34,211,238,0.8))' }}
                       />

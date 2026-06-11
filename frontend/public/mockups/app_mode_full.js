@@ -1,7 +1,7 @@
 const API = window.location.origin;
 
-// ═══════════════════════ ZERAX CREDITS + ADMIN MODE + IMAGE OVERRIDES ═══════════════════════
-let ZERAX_CREDITS=parseInt(localStorage.getItem('zx_credits')||'50',10);
+// ═══════════════════════ ZENREX CREDITS + ADMIN MODE + IMAGE OVERRIDES ═══════════════════════
+let ZENREX_CREDITS=parseInt(localStorage.getItem('zx_credits')||'50',10);
 let ADMIN_MODE=localStorage.getItem('zx_admin')==='1';
 let STUDIO_TARGET=null;
 let GEN_RESULT=null;
@@ -179,7 +179,7 @@ let PRODUCTS = [
   {id:'p71',cat:'kids',ar:'مجموعة ليجو 1500 قطعة',en:'LEGO Set 1500 pcs',descAr:'إبداعية · للأعمار 6+ · صندوق منظم',descEn:'Creative · Age 6+ · Storage box',sar:485,img:'https://images.unsplash.com/photo-1558877385-8c1b8c4b4d28?w=500'},
   {id:'p72',cat:'kids',ar:'سيارة ريموت سباق',en:'RC Racing Car',descAr:'سرعة 40 كم/س · بطارية 60 دقيقة · 4WD',descEn:'40 km/h · 60min battery · 4WD',sar:450,img:'https://images.unsplash.com/photo-1558060370-d644479cb6f7?w=500'},
   {id:'p73',cat:'kids',ar:'دمية باربي سيت كامل',en:'Barbie Complete Set',descAr:'دمية + 5 ملابس + اكسسوارات · هدية رائعة',descEn:'Doll + 5 outfits + accessories · Great gift',sar:215,img:'https://images.unsplash.com/photo-1558877385-8c1b8c4b4d28?w=500'},
-  // ═══ SMART AI SERVICES (Pay with Zerax Credits) ═══
+  // ═══ SMART AI SERVICES (Pay with Zenrex Credits) ═══
   {id:'ai1',cat:'ai_services',ar:'تحليل صورة منتج بالذكاء الاصطناعي',en:'AI Product Image Analysis',descAr:'حلل صورة وأنشئ وصف احترافي · 30 نقطة',descEn:'Analyze image + pro description · 30 credits',sar:30,img:'https://images.unsplash.com/photo-1677442136019-21780ecad995?w=500',isAI:true,credits:30,svc:'image_analyze'},
   {id:'ai2',cat:'ai_services',ar:'توليد صور إعلانية احترافية',en:'Pro Ad Image Generator',descAr:'صورة إعلانية بجودة عالية · نموذج Nano Banana · 50 نقطة',descEn:'High-quality ad image · 50 credits',sar:50,img:'https://images.unsplash.com/photo-1620712943543-bcc4688e7485?w=500',isAI:true,credits:50,svc:'image_gen'},
   {id:'ai3',cat:'ai_services',ar:'توليد فيديو إعلاني (Sora 2)',en:'AI Promo Video (Sora 2)',descAr:'فيديو إعلاني 10 ثواني بجودة سينمائية · 200 نقطة',descEn:'10-sec cinematic promo video · 200 credits',sar:200,img:'https://images.unsplash.com/photo-1574375927938-d5a98e8ffe85?w=500',isAI:true,credits:200,svc:'video_gen'},
@@ -206,8 +206,8 @@ const REVIEWS=[
   {ar:'أسعار منافسة جداً وجودة عالية، تعاملي الثالث',en:'Very competitive prices and high quality, my third time',name:'محمد · Mohammed',stars:5},
 ];
 const TRANS={
-  ar:{lang_btn:'عربي',home:'الرئيسية',products:'المنتجات',contact:'تواصل معنا',book_now:'احجز موعد',cart:'السلة',search:'بحث',orders:'طلباتي',account:'حسابي',featured:'⭐ المنتجات المميّزة',see_all:'الكل ←',reviews_title:'آراء عملائنا',reviews_sub:'قالوا عنا...',cart_title:'🛒 السلة',subtotal:'المجموع',tax:'الضريبة',total:'الإجمالي',checkout:'إتمام الطلب',checkout_title:'💳 إتمام الطلب',checkout_sub:'اختر طريقة الدفع',select_payment:'اختر طريقة الدفع',order_success:'تم تأكيد طلبك!',order_success_sub:'سيتم التواصل معك قريباً',close:'إغلاق',reserve_title:'📅 احجز موعدك',reserve_sub:'سنتواصل معك للتأكيد',confirm_book:'تأكيد الحجز',name:'الاسم الكامل',phone:'رقم الجوال',address:'العنوان',notes:'ملاحظات',rights:'جميع الحقوق محفوظة',made_by:'صُنع بواسطة',quick_links:'روابط سريعة',payments:'طرق الدفع',shipping:'الشحن',cart_empty:'سلتك فارغة',cart_empty_sub:'أضف منتجات لتبدأ التسوق',search_ph:'ابحث عن منتج...',brand:'Zerax',back:'رجوع',shop_now:'تسوّق الآن',my_orders:'📋 طلباتي',my_account:'👤 حسابي',hello:'مرحباً',guest:'زائر عزيز',acc_name:'الاسم',acc_phone:'رقم الجوال',acc_addr:'العنوان',acc_addr_ph:'مدينتك وحيك',acc_name_ph:'اكتب اسمك',save_data:'💾 حفظ البيانات',orders_count:'عدد الطلبات',loyalty_points:'نقاط الولاء',products_label:'المنتجات',follow_us:'تابعنا',exclusive_offers:'عروض حصرية',cart_empty_alert:'السلة فارغة',choose_payment_alert:'اختر طريقة الدفع',fill_name_alert:'املأ الاسم',saved_ok:'✓ تم حفظ بياناتك',booking_ok:'تم استلام حجزك! سنتواصل معك للتأكيد.',products_in:'منتج',items_label:'منتج',status_confirmed:'مؤكد',no_orders:'لا توجد طلبات بعد',no_orders_sub:'ابدأ التسوق وستظهر طلباتك هنا',pick_branch:'🏪 اختر فرع التسليم',pick_shipping:'🚚 طريقة الشحن',map_loading:'جاري تحميل الخريطة...',locate_me:'📍 حدد موقعي تلقائياً',nearest:'الأقرب',km_away:'كم',stock_warn_title:'⚠️ تنبيه: منتجات غير متوفرة بالفرع الأقرب',stock_warn_msg:'بعض المنتجات غير متوفرة في الفرع الأقرب. اختر:',ship_from_other:'🚛 شحن من فرع آخر',ship_from_other_sub:'رسوم توصيل إضافية',remove_item:'🗑️ احذف من السلة',shipping_fee:'رسوم الشحن',pickup_free:'مجاناً',choose_branch_alert:'اختر فرع التسليم أولاً',add_custom_social:'+ إضافة موقع تواصل مخصص',custom_social_title:'إضافة موقع تواصل اجتماعي',custom_social_name:'اسم الموقع (مثلاً: Threads)',custom_social_url:'الرابط المباشر',custom_social_upload:'📷 ارفع صورة/شعار الموقع',custom_social_save:'حفظ ونشر',admin_custom:'إدارة المواقع المخصصة',admin:'لوحة التحكم'},
-  en:{lang_btn:'English',home:'Home',products:'Products',contact:'Contact',book_now:'Book Now',cart:'Cart',search:'Search',orders:'Orders',account:'Account',featured:'⭐ Featured Products',see_all:'See all →',reviews_title:'Customer Reviews',reviews_sub:'What they said about us...',cart_title:'🛒 Cart',subtotal:'Subtotal',tax:'Tax',total:'Total',checkout:'Checkout',checkout_title:'💳 Checkout',checkout_sub:'Choose payment method',select_payment:'Select payment method',order_success:'Order Confirmed!',order_success_sub:'We will contact you shortly',close:'Close',reserve_title:'📅 Book Appointment',reserve_sub:'We will confirm with you',confirm_book:'Confirm Booking',name:'Full Name',phone:'Phone Number',address:'Address',notes:'Notes (optional)',rights:'All rights reserved',made_by:'Made by',quick_links:'Quick Links',payments:'Payments',shipping:'Shipping',cart_empty:'Your cart is empty',cart_empty_sub:'Add products to start shopping',search_ph:'Search for products...',brand:'Zerax',back:'Back',shop_now:'Shop Now',my_orders:'📋 My Orders',my_account:'👤 My Account',hello:'Hello',guest:'Dear guest',acc_name:'Name',acc_phone:'Phone',acc_addr:'Address',acc_addr_ph:'Your city & district',acc_name_ph:'Type your name',save_data:'💾 Save Info',orders_count:'Orders count',loyalty_points:'Loyalty points',products_label:'Products',follow_us:'Follow Us',exclusive_offers:'EXCLUSIVE OFFERS',cart_empty_alert:'Cart is empty',choose_payment_alert:'Choose a payment method',fill_name_alert:'Please fill in your name',saved_ok:'✓ Account saved',booking_ok:'Booking received! We will contact you to confirm.',products_in:'items',items_label:'items',status_confirmed:'Confirmed',no_orders:'No orders yet',no_orders_sub:'Start shopping and your orders will appear here',pick_branch:'🏪 Choose delivery branch',pick_shipping:'🚚 Shipping method',map_loading:'Loading map...',locate_me:'📍 Auto-detect my location',nearest:'NEAREST',km_away:'km',stock_warn_title:'⚠️ Heads up: items missing from nearest branch',stock_warn_msg:'Some items are out-of-stock in the closest branch. Choose:',ship_from_other:'🚛 Ship from another branch',ship_from_other_sub:'Extra delivery fee applies',remove_item:'🗑️ Remove from cart',shipping_fee:'Shipping fee',pickup_free:'FREE',choose_branch_alert:'Please choose a delivery branch first',add_custom_social:'+ Add custom social',custom_social_title:'Add custom social network',custom_social_name:'Network name (e.g. Threads)',custom_social_url:'Direct link',custom_social_upload:'📷 Upload logo/icon image',custom_social_save:'Save & publish',admin_custom:'Manage custom socials',admin:'Admin'}
+  ar:{lang_btn:'عربي',home:'الرئيسية',products:'المنتجات',contact:'تواصل معنا',book_now:'احجز موعد',cart:'السلة',search:'بحث',orders:'طلباتي',account:'حسابي',featured:'⭐ المنتجات المميّزة',see_all:'الكل ←',reviews_title:'آراء عملائنا',reviews_sub:'قالوا عنا...',cart_title:'🛒 السلة',subtotal:'المجموع',tax:'الضريبة',total:'الإجمالي',checkout:'إتمام الطلب',checkout_title:'💳 إتمام الطلب',checkout_sub:'اختر طريقة الدفع',select_payment:'اختر طريقة الدفع',order_success:'تم تأكيد طلبك!',order_success_sub:'سيتم التواصل معك قريباً',close:'إغلاق',reserve_title:'📅 احجز موعدك',reserve_sub:'سنتواصل معك للتأكيد',confirm_book:'تأكيد الحجز',name:'الاسم الكامل',phone:'رقم الجوال',address:'العنوان',notes:'ملاحظات',rights:'جميع الحقوق محفوظة',made_by:'صُنع بواسطة',quick_links:'روابط سريعة',payments:'طرق الدفع',shipping:'الشحن',cart_empty:'سلتك فارغة',cart_empty_sub:'أضف منتجات لتبدأ التسوق',search_ph:'ابحث عن منتج...',brand:'Zenrex',back:'رجوع',shop_now:'تسوّق الآن',my_orders:'📋 طلباتي',my_account:'👤 حسابي',hello:'مرحباً',guest:'زائر عزيز',acc_name:'الاسم',acc_phone:'رقم الجوال',acc_addr:'العنوان',acc_addr_ph:'مدينتك وحيك',acc_name_ph:'اكتب اسمك',save_data:'💾 حفظ البيانات',orders_count:'عدد الطلبات',loyalty_points:'نقاط الولاء',products_label:'المنتجات',follow_us:'تابعنا',exclusive_offers:'عروض حصرية',cart_empty_alert:'السلة فارغة',choose_payment_alert:'اختر طريقة الدفع',fill_name_alert:'املأ الاسم',saved_ok:'✓ تم حفظ بياناتك',booking_ok:'تم استلام حجزك! سنتواصل معك للتأكيد.',products_in:'منتج',items_label:'منتج',status_confirmed:'مؤكد',no_orders:'لا توجد طلبات بعد',no_orders_sub:'ابدأ التسوق وستظهر طلباتك هنا',pick_branch:'🏪 اختر فرع التسليم',pick_shipping:'🚚 طريقة الشحن',map_loading:'جاري تحميل الخريطة...',locate_me:'📍 حدد موقعي تلقائياً',nearest:'الأقرب',km_away:'كم',stock_warn_title:'⚠️ تنبيه: منتجات غير متوفرة بالفرع الأقرب',stock_warn_msg:'بعض المنتجات غير متوفرة في الفرع الأقرب. اختر:',ship_from_other:'🚛 شحن من فرع آخر',ship_from_other_sub:'رسوم توصيل إضافية',remove_item:'🗑️ احذف من السلة',shipping_fee:'رسوم الشحن',pickup_free:'مجاناً',choose_branch_alert:'اختر فرع التسليم أولاً',add_custom_social:'+ إضافة موقع تواصل مخصص',custom_social_title:'إضافة موقع تواصل اجتماعي',custom_social_name:'اسم الموقع (مثلاً: Threads)',custom_social_url:'الرابط المباشر',custom_social_upload:'📷 ارفع صورة/شعار الموقع',custom_social_save:'حفظ ونشر',admin_custom:'إدارة المواقع المخصصة',admin:'لوحة التحكم'},
+  en:{lang_btn:'English',home:'Home',products:'Products',contact:'Contact',book_now:'Book Now',cart:'Cart',search:'Search',orders:'Orders',account:'Account',featured:'⭐ Featured Products',see_all:'See all →',reviews_title:'Customer Reviews',reviews_sub:'What they said about us...',cart_title:'🛒 Cart',subtotal:'Subtotal',tax:'Tax',total:'Total',checkout:'Checkout',checkout_title:'💳 Checkout',checkout_sub:'Choose payment method',select_payment:'Select payment method',order_success:'Order Confirmed!',order_success_sub:'We will contact you shortly',close:'Close',reserve_title:'📅 Book Appointment',reserve_sub:'We will confirm with you',confirm_book:'Confirm Booking',name:'Full Name',phone:'Phone Number',address:'Address',notes:'Notes (optional)',rights:'All rights reserved',made_by:'Made by',quick_links:'Quick Links',payments:'Payments',shipping:'Shipping',cart_empty:'Your cart is empty',cart_empty_sub:'Add products to start shopping',search_ph:'Search for products...',brand:'Zenrex',back:'Back',shop_now:'Shop Now',my_orders:'📋 My Orders',my_account:'👤 My Account',hello:'Hello',guest:'Dear guest',acc_name:'Name',acc_phone:'Phone',acc_addr:'Address',acc_addr_ph:'Your city & district',acc_name_ph:'Type your name',save_data:'💾 Save Info',orders_count:'Orders count',loyalty_points:'Loyalty points',products_label:'Products',follow_us:'Follow Us',exclusive_offers:'EXCLUSIVE OFFERS',cart_empty_alert:'Cart is empty',choose_payment_alert:'Choose a payment method',fill_name_alert:'Please fill in your name',saved_ok:'✓ Account saved',booking_ok:'Booking received! We will contact you to confirm.',products_in:'items',items_label:'items',status_confirmed:'Confirmed',no_orders:'No orders yet',no_orders_sub:'Start shopping and your orders will appear here',pick_branch:'🏪 Choose delivery branch',pick_shipping:'🚚 Shipping method',map_loading:'Loading map...',locate_me:'📍 Auto-detect my location',nearest:'NEAREST',km_away:'km',stock_warn_title:'⚠️ Heads up: items missing from nearest branch',stock_warn_msg:'Some items are out-of-stock in the closest branch. Choose:',ship_from_other:'🚛 Ship from another branch',ship_from_other_sub:'Extra delivery fee applies',remove_item:'🗑️ Remove from cart',shipping_fee:'Shipping fee',pickup_free:'FREE',choose_branch_alert:'Please choose a delivery branch first',add_custom_social:'+ Add custom social',custom_social_title:'Add custom social network',custom_social_name:'Network name (e.g. Threads)',custom_social_url:'Direct link',custom_social_upload:'📷 Upload logo/icon image',custom_social_save:'Save & publish',admin_custom:'Manage custom socials',admin:'Admin'}
 };
 // Currency symbol per language (so SAR displays as "SAR" in English instead of "ر.س")
 const CURRENCY_SYMBOLS_EN={SAR:'SAR',AED:'AED',KWD:'KWD',QAR:'QAR',BHD:'BHD',OMR:'OMR',IQD:'IQD',SYP:'SYP',JOD:'JOD',LBP:'LBP',EGP:'EGP',IRR:'IRR',YER:'YER',ILS:'ILS',CNY:'¥',JPY:'¥',KRW:'₩',INR:'₹',USD:'$',GBP:'£',EUR:'€',CHF:'CHF',SEK:'kr',RUB:'₽',TRY:'₺',MAD:'MAD',DZD:'DZD',TND:'TND',LYD:'LYD',SDG:'SDG',PKR:'₨',BDT:'৳',IDR:'Rp',MYR:'RM',THB:'฿',PHP:'₱',VND:'₫',CAD:'CA$',MXN:'MX$',BRL:'R$',ARS:'AR$',ZAR:'R',NGN:'₦',KES:'KSh',AUD:'A$'};
@@ -653,7 +653,7 @@ function copyRefCode(){
 }
 function shareRefWhatsapp(){
   const code=document.getElementById('ref-code').textContent;
-  const msg=`🎉 جربت متجر Zerax — تجربة رائعة! استخدم كود الإحالة ${code} عند التسجيل واحصل على 25 ر.س هدية ترحيب 🎁\n\n👇 التطبيق:\n${location.origin}/mockups/app_mode_full.html?ref=${code}`;
+  const msg=`🎉 جربت متجر Zenrex — تجربة رائعة! استخدم كود الإحالة ${code} عند التسجيل واحصل على 25 ر.س هدية ترحيب 🎁\n\n👇 التطبيق:\n${location.origin}/mockups/app_mode_full.html?ref=${code}`;
   window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`,'_blank');
 }
 // On page load, check if URL has ?ref= and credit the referrer (mock)
@@ -954,7 +954,7 @@ function downloadMyData(){
   const data={account:getAccount(),orders:getOrders(),addresses:JSON.parse(localStorage.getItem('zx_addresses')||'[]'),wishlist:typeof WISHLIST!=='undefined'?WISHLIST:[],preferences:JSON.parse(localStorage.getItem('zx_prefs')||'{}')};
   const blob=new Blob([JSON.stringify(data,null,2)],{type:'application/json'});
   const url=URL.createObjectURL(blob);
-  const a=document.createElement('a');a.href=url;a.download='my-zerax-data.json';a.click();
+  const a=document.createElement('a');a.href=url;a.download='my-zenrex-data.json';a.click();
   URL.revokeObjectURL(url);
   toast('✓ تم تنزيل بياناتك');
 }
@@ -1234,7 +1234,7 @@ async function aiAskCustomer(q){
   // Render "typing" indicator
   const typing=document.createElement('div');
   typing.style.cssText='background:#f3f4f6;color:#6b7280;padding:10px 14px;border-radius:14px 14px 14px 4px;margin:6px auto 6px 0;max-width:80%;font-size:12px;width:fit-content;float:left;clear:both';
-  typing.innerHTML='<b style="color:#7c3aed">✨ Zerax AI</b> · يكتب...';
+  typing.innerHTML='<b style="color:#7c3aed">✨ Zenrex AI</b> · يكتب...';
   log.appendChild(typing);
   log.scrollTop=log.scrollHeight;
   document.getElementById('ai-input').value='';
@@ -1254,7 +1254,7 @@ async function aiAskCustomer(q){
   let resp=responses.default;
   for(const k in responses){if(q.includes(k)){resp=responses[k];break;}}
   // Replace typing with actual response
-  typing.innerHTML=`<b style="color:#7c3aed">✨ Zerax AI:</b><br>${resp}`;
+  typing.innerHTML=`<b style="color:#7c3aed">✨ Zenrex AI:</b><br>${resp}`;
   typing.style.color='#1f2937';
   // Append cost indicator
   if(!isFree){
@@ -1497,19 +1497,19 @@ function addToCart(pid){
     }else{toast('⚠️ هذا المنتج غير متوفر حالياً');}
     return;
   }
-  // Smart AI Service — pay with Zerax credits instantly, no cart
+  // Smart AI Service — pay with Zenrex credits instantly, no cart
   if(p&&(p.isAI||p.cat==='ai_services')){
     if(!getUser()){requireLogin('يلزم تسجيل الدخول لشراء خدمات الذكاء الاصطناعي');return;}
     const cost=p.credits||p.sar;
-    if(ZERAX_CREDITS<cost){
-      toast('⚠️ رصيدك غير كافي · لديك '+ZERAX_CREDITS+' نقطة · السعر '+cost);
+    if(ZENREX_CREDITS<cost){
+      toast('⚠️ رصيدك غير كافي · لديك '+ZENREX_CREDITS+' نقطة · السعر '+cost);
       const tb=document.getElementById('topup-banner');if(tb)tb.style.display='flex';
       return;
     }
     if(!confirm(`شراء خدمة "${CURRENT_LANG==='ar'?p.ar:p.en}" مقابل ${cost} نقطة؟`))return;
-    ZERAX_CREDITS-=cost;
-    localStorage.setItem('zx_credits',String(ZERAX_CREDITS));
-    const el=document.getElementById('zerax-credits');if(el)el.textContent=ZERAX_CREDITS;
+    ZENREX_CREDITS-=cost;
+    localStorage.setItem('zx_credits',String(ZENREX_CREDITS));
+    const el=document.getElementById('zenrex-credits');if(el)el.textContent=ZENREX_CREDITS;
     const orders=getOrders();
     orders.unshift({id:Date.now(),date:new Date().toLocaleDateString('ar'),items:[{id:p.id,qty:1,name:p.ar}],total:cost,status:'مفعّل · خدمة AI',isAI:true});
     localStorage.setItem('zx_orders',JSON.stringify(orders));
@@ -1666,7 +1666,7 @@ function choosePay(id,el){
   PAYMENT_CHOSEN=id;
   document.querySelectorAll('.pay-option').forEach(e=>e.style.borderColor='#e5e7eb');
   // For custom BNPL cards, also reset border
-  document.querySelectorAll('[data-testid^="pay-zerax-"]').forEach(e=>e.style.border='2px solid transparent');
+  document.querySelectorAll('[data-testid^="pay-zenrex-"]').forEach(e=>e.style.border='2px solid transparent');
   if (el) { el.style.borderColor='#7c3aed'; el.style.background = el.style.background || '#faf5ff'; }
   // If scheduled mode requires a time, block submission and prompt user.
   if (window.CK_SCHED && window.CK_SCHED.mode === 'schedule' && !window.CK_SCHED.time){
@@ -1678,10 +1678,10 @@ function choosePay(id,el){
     document.getElementById('checkout-success').style.display='block';
     const subEl = document.querySelector('#checkout-success p');
     let extra = '';
-    if (id === 'zerax_split'){
+    if (id === 'zenrex_split'){
       const total = (typeof CART !== 'undefined') ? CART.reduce((s,it) => s + (it.price * it.qty), 0) : 0;
       extra = `<br>💳 سيتم تقسيمها على <b>4 دفعات</b> = <b>${(total/4).toFixed(0)} ر.س/شهر</b>`;
-    } else if (id === 'zerax_later'){
+    } else if (id === 'zenrex_later'){
       extra = `<br>🕐 ستُسدّد خلال <b>30 يوماً</b> بدون فوائد`;
     }
     if (window.CK_SCHED && window.CK_SCHED.mode === 'schedule' && window.CK_SCHED.time){
@@ -2277,12 +2277,12 @@ function openStudio(target){
   STUDIO_BG='white';STUDIO_PERSON=false;
   document.getElementById('clarify-overlay')?.classList.remove('open');
   document.getElementById('studio-modal').classList.add('open');
-  document.getElementById('zerax-credits').textContent=ZERAX_CREDITS;
+  document.getElementById('zenrex-credits').textContent=ZENREX_CREDITS;
   document.getElementById('ai-prompt').value='';
   document.getElementById('ai-prompt').dataset.autoFilled='';
   document.getElementById('gen-preview').classList.remove('show');
   document.getElementById('gen-loading').classList.remove('show');
-  document.getElementById('topup-banner').style.display=ZERAX_CREDITS<5?'flex':'none';
+  document.getElementById('topup-banner').style.display=ZENREX_CREDITS<5?'flex':'none';
   document.getElementById('studio-logo-preview').innerHTML='🏷️';
   document.getElementById('studio-logo-status').textContent=CURRENT_LANG==='ar'?'يطبع على زاوية الصورة المولّدة':'Will be stamped';
   // Context detection: figure out where the user is editing
@@ -2390,7 +2390,7 @@ function generateAI(){
 async function runGeneration(){
   const prompt=document.getElementById('ai-prompt').value.trim();
   const cost=STUDIO_MODE==='video'?15:(STUDIO_COUNT*5);
-  if(ZERAX_CREDITS<cost){document.getElementById('topup-banner').style.display='flex';return;}
+  if(ZENREX_CREDITS<cost){document.getElementById('topup-banner').style.display='flex';return;}
   document.getElementById('gen-btn').disabled=true;
   document.getElementById('gen-loading').classList.add('show');
   document.getElementById('gen-preview').classList.remove('show');
@@ -2409,9 +2409,9 @@ async function runGeneration(){
       const v=document.getElementById('gen-preview-video');
       v.src=GEN_VIDEO;v.style.display='block';v.load();v.play().catch(()=>{});
       document.getElementById('gen-btn').disabled=false;
-      ZERAX_CREDITS-=cost;
-      localStorage.setItem('zx_credits',String(ZERAX_CREDITS));
-      document.getElementById('zerax-credits').textContent=ZERAX_CREDITS;
+      ZENREX_CREDITS-=cost;
+      localStorage.setItem('zx_credits',String(ZENREX_CREDITS));
+      document.getElementById('zenrex-credits').textContent=ZENREX_CREDITS;
     },1500);
     return;
   }
@@ -2451,9 +2451,9 @@ async function runGeneration(){
       grid.style.display='grid';
       grid.innerHTML=urls.map((u,i)=>`<img src="${u}" data-i="${i}" onclick="pickMultiVariant(${i},this)" alt="variant ${i+1}" class="${i===0?'picked':''}" loading="lazy" decoding="async">`).join('');
     }
-    ZERAX_CREDITS-=(data.cost||cost);
-    localStorage.setItem('zx_credits',String(ZERAX_CREDITS));
-    document.getElementById('zerax-credits').textContent=ZERAX_CREDITS;
+    ZENREX_CREDITS-=(data.cost||cost);
+    localStorage.setItem('zx_credits',String(ZENREX_CREDITS));
+    document.getElementById('zenrex-credits').textContent=ZENREX_CREDITS;
   } catch(e) {
     document.getElementById('gen-loading').classList.remove('show');
     alert((CURRENT_LANG==='ar'?'فشل التوليد: ':'Generation failed: ')+e.message);
@@ -2540,9 +2540,9 @@ function onStudioUpload(e){
 }
 function pickFromLibrary(url){applyImageOverride(STUDIO_TARGET,url);closeStudio();}
 function topupCredits(){
-  ZERAX_CREDITS+=100;
-  localStorage.setItem('zx_credits',String(ZERAX_CREDITS));
-  document.getElementById('zerax-credits').textContent=ZERAX_CREDITS;
+  ZENREX_CREDITS+=100;
+  localStorage.setItem('zx_credits',String(ZENREX_CREDITS));
+  document.getElementById('zenrex-credits').textContent=ZENREX_CREDITS;
   document.getElementById('topup-banner').style.display='none';
   alert(CURRENT_LANG==='ar'?'✓ تم شحن ١٠٠ نقطة (محاكاة - في الإنتاج عبر Stripe)':'✓ +100 credits (mocked Stripe)');
 }
@@ -2696,13 +2696,13 @@ function showProductDetail(pid){
     vWrap.style.display='block';
   } else { vWrap.style.display='none'; }
   document.getElementById('pd-info').innerHTML=html||`<div class="pd-empty">${CURRENT_LANG==='ar'?'ℹ️ التاجر لم يضف تفاصيل تفصيلية لهذا المنتج بعد.':'ℹ️ The merchant has not added detailed info for this product yet.'}</div>`;
-  // Add "Ask Zerax AI" CTA in product detail
+  // Add "Ask Zenrex AI" CTA in product detail
   const askCta=document.createElement('div');
   askCta.style.cssText='background:linear-gradient(135deg,#faf5ff,#fdf2f8);border:2px dashed #7c3aed;border-radius:14px;padding:16px;margin:14px 0;text-align:center;cursor:pointer;transition:transform .2s';
   askCta.onmouseenter=()=>askCta.style.transform='scale(1.02)';
   askCta.onmouseleave=()=>askCta.style.transform='scale(1)';
   askCta.onclick=()=>{openAiAssistant();setTimeout(()=>{document.getElementById('ai-input').value='قارن هذا المنتج مع منتجات مشابهة';aiAskCustomer('قارن هذا المنتج مع منتجات مشابهة');},300);};
-  askCta.innerHTML='<div style="font-size:24px;margin-bottom:6px">✨</div><b style="font-size:14px;color:#7c3aed">تردد في الشراء؟ اسأل Zerax AI</b><div style="font-size:11px;color:#6b7280;margin-top:4px;line-height:1.6">قارن مع منتجات مشابهة · اطّلع على تجارب العملاء · احصل على توصية فورية</div><div style="margin-top:8px;background:#7c3aed;color:#fff;padding:8px 16px;border-radius:99px;font-size:11px;font-weight:900;display:inline-block">💬 اسأل الآن (مجاناً أول مرة)</div>';
+  askCta.innerHTML='<div style="font-size:24px;margin-bottom:6px">✨</div><b style="font-size:14px;color:#7c3aed">تردد في الشراء؟ اسأل Zenrex AI</b><div style="font-size:11px;color:#6b7280;margin-top:4px;line-height:1.6">قارن مع منتجات مشابهة · اطّلع على تجارب العملاء · احصل على توصية فورية</div><div style="margin-top:8px;background:#7c3aed;color:#fff;padding:8px 16px;border-radius:99px;font-size:11px;font-weight:900;display:inline-block">💬 اسأل الآن (مجاناً أول مرة)</div>';
   document.getElementById('pd-info').appendChild(askCta);
   renderProductReviews(pid);
   showView('product');
@@ -2757,7 +2757,7 @@ async function aiFillProductInfo(){
   const name=document.getElementById('info-name').value.trim()||(p?(CURRENT_LANG==='ar'?p.ar:p.en):'');
   const url=document.getElementById('info-url').value.trim();
   if(!name){alert(CURRENT_LANG==='ar'?'اكتب اسم المنتج':'Enter product name');return;}
-  if(ZERAX_CREDITS<10){document.getElementById('topup-banner').style.display='flex';return;}
+  if(ZENREX_CREDITS<10){document.getElementById('topup-banner').style.display='flex';return;}
   const btn=document.getElementById('info-fill-btn');btn.disabled=true;btn.innerHTML='⏳ '+(CURRENT_LANG==='ar'?'الذكاء يبحث في الإنترنت…':'AI researching…');
   const result=document.getElementById('info-result');result.classList.remove('show');
   try{
@@ -2777,9 +2777,9 @@ async function aiFillProductInfo(){
     // Render result preview
     result.innerHTML=`<h5>${data.title}</h5><div class="desc">${data.description}</div>`+(data.features.length?`<b style="font-size:11px;color:#7c3aed">المميزات:</b><ul>${data.features.map(f=>`<li>${f}</li>`).join('')}</ul>`:'')+(Object.keys(data.specs).length?`<b style="font-size:11px;color:#7c3aed">المواصفات:</b><div class="specs">${Object.entries(data.specs).map(([k,v])=>`<div><b>${k}</b>${v}</div>`).join('')}</div>`:'');
     result.classList.add('show');
-    ZERAX_CREDITS-=(data.cost||10);
-    localStorage.setItem('zx_credits',String(ZERAX_CREDITS));
-    document.getElementById('zerax-credits').textContent=ZERAX_CREDITS;
+    ZENREX_CREDITS-=(data.cost||10);
+    localStorage.setItem('zx_credits',String(ZENREX_CREDITS));
+    document.getElementById('zenrex-credits').textContent=ZENREX_CREDITS;
     renderProducts();
     if(document.getElementById('view-category').style.display==='block')renderCategoryPage(activeCat);
     toast(CURRENT_LANG==='ar'?'✓ تم تعبئة المعلومات تلقائياً':'✓ Info filled');
@@ -2872,8 +2872,8 @@ function switchAcpTab(tab){
   if(tab==='gateways')gwInit();
 }
 function syncCreditsDisplay(){
-  const el=document.getElementById('acp-credits-value');if(el)el.textContent=ZERAX_CREDITS;
-  const e2=document.getElementById('zerax-credits');if(e2)e2.textContent=ZERAX_CREDITS;
+  const el=document.getElementById('acp-credits-value');if(el)el.textContent=ZENREX_CREDITS;
+  const e2=document.getElementById('zenrex-credits');if(e2)e2.textContent=ZENREX_CREDITS;
 }
 function acpRenderProductGrid(){
   const grid=document.getElementById('acp-product-grid');
@@ -2947,7 +2947,7 @@ function acpSaveProduct(){
 async function acpAiFillProduct(){
   const name=document.getElementById('acp-pname').value.trim();
   if(!name){alert(CURRENT_LANG==='ar'?'اكتب اسم المنتج أولاً':'Enter product name first');return;}
-  if(ZERAX_CREDITS<10){openRecharge();return;}
+  if(ZENREX_CREDITS<10){openRecharge();return;}
   const btn=document.getElementById('acp-ai-btn');
   btn.disabled=true;
   const originalHTML=btn.innerHTML;
@@ -2982,8 +2982,8 @@ async function acpAiFillProduct(){
       PRODUCT_INFO[ACP_EDITING_PID]=data;
       try{localStorage.setItem('zx_product_info',JSON.stringify(PRODUCT_INFO));}catch(_){}
     }
-    ZERAX_CREDITS-=(data.cost||10);
-    localStorage.setItem('zx_credits',String(ZERAX_CREDITS));
+    ZENREX_CREDITS-=(data.cost||10);
+    localStorage.setItem('zx_credits',String(ZENREX_CREDITS));
     syncCreditsDisplay();
     toast(CURRENT_LANG==='ar'?'✓ تم توليد المعلومات':'✓ Info generated');
   }catch(e){
@@ -2994,7 +2994,7 @@ async function acpAiFillProduct(){
 }
 
 // ═══════════════════════ VIDEO STUDIO ═══════════════════════
-let VS_DURATION=30, VS_TONE='energetic', VS_VOICE='zerax_male_deep';
+let VS_DURATION=30, VS_TONE='energetic', VS_VOICE='zenrex_male_deep';
 let VS_STORYBOARD=null, VS_PRODUCT_ID=null, VS_LAST_VIDEO=null;
 function vsSetDuration(d){VS_DURATION=d;document.querySelectorAll('#vs-duration-row .vs-pill').forEach(p=>p.classList.toggle('active',+p.dataset.d===d));vsUpdateRenderCost();}
 function vsSetTone(t){VS_TONE=t;document.querySelectorAll('#vs-tone-row .vs-pill').forEach(p=>p.classList.toggle('active',p.dataset.t===t));}
@@ -3008,7 +3008,7 @@ async function vsGenerateStoryboard(){
   const sel=document.getElementById('vs-product');
   const pid=sel?.value;
   if(!pid){alert('اختر منتج');return;}
-  if(ZERAX_CREDITS<5){openRecharge();return;}
+  if(ZENREX_CREDITS<5){openRecharge();return;}
   VS_PRODUCT_ID=pid;
   const p=PRODUCTS.find(x=>x.id===pid);
   const cta=document.getElementById('vs-cta').value.trim()||'اطلب الآن';
@@ -3032,8 +3032,8 @@ async function vsGenerateStoryboard(){
       `<div class="vs-scene"><div class="seq">${s.seq}</div><div class="narr">${s.narration}<small>🎨 ${s.visual_prompt.slice(0,70)}</small></div></div>`
     ).join('');
     document.getElementById('vs-storyboard-preview').style.display='block';
-    ZERAX_CREDITS-=(data.cost||5);
-    localStorage.setItem('zx_credits',String(ZERAX_CREDITS));
+    ZENREX_CREDITS-=(data.cost||5);
+    localStorage.setItem('zx_credits',String(ZENREX_CREDITS));
     syncCreditsDisplay();
     toast('✓ تم توليد القصة');
   }catch(e){alert('فشل التوليد: '+e.message);}
@@ -3042,7 +3042,7 @@ async function vsGenerateStoryboard(){
 async function vsRenderVideo(){
   if(!VS_STORYBOARD){alert('ولّد القصة أولاً');return;}
   const cost=Math.floor(VS_DURATION/5)*5;
-  if(ZERAX_CREDITS<cost){openRecharge();return;}
+  if(ZENREX_CREDITS<cost){openRecharge();return;}
   const p=PRODUCTS.find(x=>x.id===VS_PRODUCT_ID);
   // Build scenes with product gallery images (fallback to p.img)
   const gallery=PRODUCT_GALLERIES?.[VS_PRODUCT_ID]||[{type:'image',url:p?.img}];
@@ -3070,8 +3070,8 @@ async function vsRenderVideo(){
     document.getElementById('vs-video-meta').innerHTML=
       `<div style="margin-top:8px"><span class="vs-info-pill">⏱ ${data.duration_seconds}s</span><span class="vs-info-pill">🎬 ${data.scenes_count} مشاهد</span><span class="vs-info-pill">🎙 ${data.voice_used}</span><span class="vs-info-pill">⚡ -${data.cost} نقطة</span></div>`;
     document.getElementById('vs-video-result').classList.add('show');
-    ZERAX_CREDITS-=(data.cost||cost);
-    localStorage.setItem('zx_credits',String(ZERAX_CREDITS));
+    ZENREX_CREDITS-=(data.cost||cost);
+    localStorage.setItem('zx_credits',String(ZENREX_CREDITS));
     syncCreditsDisplay();
     toast('✓ تم توليد الفيديو');
   }catch(e){alert('فشل التوليد: '+e.message);}
@@ -3081,11 +3081,11 @@ function vsDownloadVideo(){
   if(!VS_LAST_VIDEO)return;
   const a=document.createElement('a');
   a.href=API+VS_LAST_VIDEO.video_url;
-  a.download='zerax-promo.mp4';
+  a.download='zenrex-promo.mp4';
   document.body.appendChild(a);a.click();a.remove();
 }
 
-// ═══════════════════════ RECHARGE (Inline Zerax wallet top-up) ═══════════════════════
+// ═══════════════════════ RECHARGE (Inline Zenrex wallet top-up) ═══════════════════════
 let RCH_PKG='pro', RCH_METHOD='mada', RCH_PACKAGES=[];
 async function openRecharge(){
   document.getElementById('rch-modal').classList.add('open');
@@ -3143,12 +3143,12 @@ async function rchConfirm(){
     });
     if(!res.ok)throw new Error('payment failed');
     const data=await res.json();
-    ZERAX_CREDITS+=data.credits_added;
-    localStorage.setItem('zx_credits',String(ZERAX_CREDITS));
+    ZENREX_CREDITS+=data.credits_added;
+    localStorage.setItem('zx_credits',String(ZENREX_CREDITS));
     syncCreditsDisplay();
     // Show success screen
     document.getElementById('rch-body-main').style.display='none';
-    document.getElementById('rch-credits-added').innerHTML=`+ <b style="color:#10b981;font-size:22px">${data.credits_added.toLocaleString()}</b> نقطة Zerax أُضيفت لرصيدك`;
+    document.getElementById('rch-credits-added').innerHTML=`+ <b style="color:#10b981;font-size:22px">${data.credits_added.toLocaleString()}</b> نقطة Zenrex أُضيفت لرصيدك`;
     document.getElementById('rch-receipt').innerHTML=`رقم العملية: ${data.transaction_id}<br>الإيصال: ${data.receipt_number}<br>طريقة الدفع: ${data.payment_method.toUpperCase()}`;
     document.getElementById('rch-success').classList.add('show');
   }catch(e){alert('فشل الدفع: '+e.message);}

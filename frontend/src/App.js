@@ -13,7 +13,7 @@ import PayoutsAdmin from '@/pages/PayoutsAdmin';
 import LandingPage from '@/pages/LandingPage';
 import DemoLanding from '@/pages/DemoLanding';
 import VrmPreview from '@/pages/VrmPreview';
-import ZeraxDuoLauncher from '@/components/ZeraxDuoLauncher';
+import ZenrexDuoLauncher from '@/components/ZenrexDuoLauncher';
 import GlobalAvatarMount from '@/components/GlobalAvatarMount';
 import LoginPage from '@/pages/LoginPage';
 import RegisterPage from '@/pages/RegisterPage';
@@ -99,7 +99,7 @@ import PricingSuccess from '@/pages/PricingSuccess';
 import PricingAdmin from '@/pages/PricingAdmin';
 import Companion from '@/pages/Companion';
 import ReadySites from '@/pages/ReadySites';
-import ZeraxShowcase from '@/pages/ZeraxShowcase';
+import ZenrexShowcase from '@/pages/ZenrexShowcase';
 import CarePortal from '@/pages/CarePortal';
 import '@/App.css';
 
@@ -254,7 +254,7 @@ function App() {
           <Route path="/ready-sites" element={<ProtectedRoute><ReadySites user={user} /></ProtectedRoute>} />
           <Route path="/dashboard/ready-sites" element={<ProtectedRoute><ReadySites user={user} /></ProtectedRoute>} />
           <Route path="/care/:projectId" element={<ProtectedRoute><CarePortal user={user} /></ProtectedRoute>} />
-          <Route path="/showcase" element={<ZeraxShowcase />} />
+          <Route path="/showcase" element={<ZenrexShowcase />} />
           {/* 💰 Pricing & Billing */}
           <Route path="/pricing" element={<Pricing user={user} />} />
           <Route path="/billing" element={<ProtectedRoute><Billing user={user} /></ProtectedRoute>} />

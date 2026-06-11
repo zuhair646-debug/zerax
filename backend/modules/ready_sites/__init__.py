@@ -1,5 +1,5 @@
 """
-Zerax Ready-Made Sites Module — Wizard-driven deep-vertical AI site builder.
+Zenrex Ready-Made Sites Module — Wizard-driven deep-vertical AI site builder.
 
 Flow:
     1) Pick site type (restaurant / store / clinic / ...)
@@ -119,7 +119,7 @@ async def _run_generation(db, session_id: str, user_id: str) -> None:
         branding = sess.get("branding") or {}
         enabled = sess.get("features") or []
 
-        # Pre-generate project_id so Zerax tracking link is unique per site.
+        # Pre-generate project_id so Zenrex tracking link is unique per site.
         project_id = str(uuid.uuid4())
 
         # === TEMPLATE-FIRST ENGINE (Feb 2026 pivot) ===
@@ -535,10 +535,10 @@ def create_ready_sites_router(db, get_current_user) -> APIRouter:
         except Exception as e:
             raise HTTPException(500, f"Preview render failed: {str(e)[:200]}")
 
-    # ---- Zerax Branding Tracker (public) ----
+    # ---- Zenrex Branding Tracker (public) ----
     @router.get("/track-visit/{project_id}")
     async def track_visit(project_id: str):
-        """Fired from the Zerax footer pixel. Records that an end-customer saw the site."""
+        """Fired from the Zenrex footer pixel. Records that an end-customer saw the site."""
         try:
             await db.ready_sites_projects.update_one(
                 {"id": project_id},
@@ -554,12 +554,12 @@ def create_ready_sites_router(db, get_current_user) -> APIRouter:
         return Response(content=gif, media_type="image/gif",
                         headers={"Cache-Control": "no-store, no-cache, must-revalidate, max-age=0"})
 
-    # ---- Public Showcase — every site built on Zerax (social proof gallery) ----
+    # ---- Public Showcase — every site built on Zenrex (social proof gallery) ----
     @router.get("/showcase")
     async def public_showcase(limit: int = 60, type_id: Optional[str] = None):
-        """Public gallery of every site ever built on the Zerax platform.
-        Used as social proof on https://zerax.com/showcase and linked from every
-        generated site's Zerax footer link."""
+        """Public gallery of every site ever built on the Zenrex platform.
+        Used as social proof on https://zenrex.ai/showcase and linked from every
+        generated site's Zenrex footer link."""
         query: Dict[str, Any] = {}
         if type_id:
             query["type_id"] = type_id
@@ -593,10 +593,10 @@ def create_ready_sites_router(db, get_current_user) -> APIRouter:
             "total_built": await db.ready_sites_projects.count_documents({}),
         }
 
-    # ---- Zerax Admin: view ALL ready-site projects across all tenants ----
+    # ---- Zenrex Admin: view ALL ready-site projects across all tenants ----
     @router.get("/admin/owned-sites")
     async def admin_owned_sites(user=Depends(get_current_user)):
-        """Returns every Ready Site we've ever built. Used by Zerax's own admin dashboard
+        """Returns every Ready Site we've ever built. Used by Zenrex's own admin dashboard
         to track customer sites that carry our branded footer link."""
         if not user.get("is_admin"):
             raise HTTPException(403, "صلاحيات المسؤول مطلوبة")
@@ -608,7 +608,7 @@ def create_ready_sites_router(db, get_current_user) -> APIRouter:
         # Enrich with the live preview link
         for it in items:
             it["preview_url"] = f"/api/ready-sites/preview/{it['id']}"
-            it["track_url"] = f"https://zerax.com/?ref={it['id']}"
+            it["track_url"] = f"https://zenrex.ai/?ref={it['id']}"
         # Aggregate totals
         total_sites = len(items)
         total_visits = sum(int(it.get("visits_count", 0) or 0) for it in items)

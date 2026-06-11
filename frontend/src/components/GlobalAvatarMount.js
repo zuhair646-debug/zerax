@@ -1,11 +1,11 @@
 /**
- * GlobalAvatarMount — renders ZeraxDuoLauncher on every page,
+ * GlobalAvatarMount — renders ZenrexDuoLauncher on every page,
  * EXCEPT routes where the avatars would interfere (login/register flow,
  * VRM preview diagnostic page, public site preview).
  */
 import React from 'react';
 import { useLocation } from 'react-router-dom';
-import ZeraxDuoLauncher from './ZeraxDuoLauncher';
+import ZenrexDuoLauncher from './ZenrexDuoLauncher';
 
 const HIDDEN_ROUTES = [
   '/vrm-preview',

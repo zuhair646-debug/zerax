@@ -1,5 +1,5 @@
 """
-Zerax Driver Experience Configuration
+Zenrex Driver Experience Configuration
 ──────────────────────────────────────────────────────────────────────────
 Per-merchant configuration of the driver-app feature surface. The merchant
 decides via the admin panel which features are enabled/visible/configured
@@ -136,7 +136,7 @@ DEFAULTS: Dict[str, Any] = {
         "primary_color": "#7c3aed",
         "accent_color": "#06b6d4",
         "logo_url": "",
-        "app_name": "Zerax Driver",
+        "app_name": "Zenrex Driver",
     },
     "external_delivery": {
         "enabled": True,

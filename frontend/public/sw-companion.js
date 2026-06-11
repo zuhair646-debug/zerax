@@ -1,8 +1,8 @@
 /**
- * Zerax Companion — Service Worker
+ * Zenrex Companion — Service Worker
  * Registers for PWA install + basic offline shell + notification display.
  */
-const CACHE_VERSION = 'zerax-companion-v1';
+const CACHE_VERSION = 'zenrex-companion-v1';
 const SHELL = [
   '/companion',
   '/avatars/f1_zara.png',

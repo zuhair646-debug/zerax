@@ -119,7 +119,7 @@ class TestProjectCreationWithSampleData:
     def auth_token(self):
         """Get authentication token for owner"""
         response = requests.post(f"{BASE_URL}/api/auth/login", json={
-            "email": "owner@zerax.com",
+            "email": "owner@zenrex.ai",
             "password": "owner123"
         })
         if response.status_code == 200:

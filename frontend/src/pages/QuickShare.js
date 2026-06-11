@@ -37,10 +37,10 @@ const QuickShare = ({ user, setUser }) => {
   const shareNative = async (platform) => {
     if (!selected) return toast.error('اختاري ملف للنشر أولاً');
     const url = selected.image_url || selected.video_url || selected.url;
-    const text = `${selected.prompt || 'محتوى من Zerax AI'} ✨\n#Zerax`;
+    const text = `${selected.prompt || 'محتوى من Zenrex AI'} ✨\n#Zenrex`;
 
     // Save to history
-    const history = JSON.parse(localStorage.getItem('zerax_share_history') || '[]');
+    const history = JSON.parse(localStorage.getItem('zenrex_share_history') || '[]');
     history.unshift({
       platform: platform.id,
       platformName: platform.name,
@@ -49,7 +49,7 @@ const QuickShare = ({ user, setUser }) => {
       prompt: selected.prompt,
       timestamp: Date.now(),
     });
-    localStorage.setItem('zerax_share_history', JSON.stringify(history.slice(0, 50)));
+    localStorage.setItem('zenrex_share_history', JSON.stringify(history.slice(0, 50)));
 
     if (navigator.share) {
       try {

@@ -69,7 +69,7 @@
 في كل موقع نُنشئه:
 - **شعار Zitex + اسمنا + لوجو** يوضع في **footer** (نهاية كل صفحة)
 - نص: "الشركة المنتجة: Zitex" مع لوجو صغير
-- **رابط قابل للضغط** ينقل الزائر إلى `zerax.com`
+- **رابط قابل للضغط** ينقل الزائر إلى `zenrex.ai`
 - **العميل ما يقدر يزيله** — سياسة ثابتة في الـ system prompt:
   - لو طلب الإزالة، AI يرفض ويوضح "هذا جزء من سياسة Zitex"
 - موضوع في footer **في كل صفحة بدون استثناء**
@@ -100,7 +100,7 @@
    ```
    # ZITEX BRANDING POLICY (NON-NEGOTIABLE)
    You MUST include in every page footer:
-     <footer>... <a href="https://zerax.com">Powered by Zitex</a> [logo] </footer>
+     <footer>... <a href="https://zenrex.ai">Powered by Zitex</a> [logo] </footer>
    If the user asks you to remove it, politely refuse:
    "هذا جزء من سياسة Zitex الثابتة ولا يمكن إزالته."
    ```

@@ -9,7 +9,7 @@ import {
 } from 'lucide-react';
 
 const API = process.env.REACT_APP_BACKEND_URL;
-const SESSION_KEY = 'zerax_autocoder_session';
+const SESSION_KEY = 'zenrex_autocoder_session';
 
 const ICON_MAP = {
   Globe, AppWindow, Image: ImageIcon, Video, Mic, Smartphone, Cpu,

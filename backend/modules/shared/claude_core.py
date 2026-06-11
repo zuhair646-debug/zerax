@@ -1,5 +1,5 @@
 """
-Shared Claude streaming agent core — used by every AI section across Zerax
+Shared Claude streaming agent core — used by every AI section across Zenrex
 (FreeBuild, Game Studio, App Studio, Marketing, Companion, Mobile Builder, ...).
 
 Goals:
@@ -29,7 +29,7 @@ import asyncio
 import logging
 from typing import Any, AsyncGenerator, Awaitable, Callable, Dict, List, Optional
 
-logger = logging.getLogger("zerax.shared.claude_core")
+logger = logging.getLogger("zenrex.shared.claude_core")
 
 DEFAULT_MODEL = "claude-sonnet-4-5-20250929"
 DEFAULT_MAX_TOKENS = 8000

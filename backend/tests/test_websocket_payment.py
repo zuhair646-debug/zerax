@@ -1,5 +1,5 @@
 """
-Test suite for Zerax P1 Features:
+Test suite for Zenrex P1 Features:
 1. Real-time WebSockets (client + driver feeds)
 2. Multi-tenant Payment Gateways (Moyasar, Tabby, Tamara, COD)
 
@@ -14,7 +14,7 @@ import json
 BASE_URL = os.environ.get('REACT_APP_BACKEND_URL', '').rstrip('/')
 
 # Test credentials from test_credentials.md
-OWNER_EMAIL = "owner@zerax.com"
+OWNER_EMAIL = "owner@zenrex.ai"
 OWNER_PASSWORD = "owner123"
 CLIENT_SLUG = "cozy-cafe-demo"
 CLIENT_PASSWORD = "WKDWkG0d"

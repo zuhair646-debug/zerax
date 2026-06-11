@@ -1,5 +1,5 @@
 """
-Zerax Shipping Features V2 Tests — Iteration 18
+Zenrex Shipping Features V2 Tests — Iteration 18
 ═══════════════════════════════════════════════════
 Tests for 3 NEW revenue/UX features on top of the shipping system:
 1. COD Markup (auto extra fee on cash-on-delivery orders)
@@ -18,7 +18,7 @@ if not BASE_URL:
     BASE_URL = "https://ai-cinematic-hub-2.preview.emergentagent.com"
 
 # Test credentials from /app/memory/test_credentials.md
-OWNER_EMAIL = "owner@zerax.com"
+OWNER_EMAIL = "owner@zenrex.ai"
 OWNER_PASSWORD = "owner123"
 TEST_SLUG = "cozy-cafe-demo"
 PROJECT_ID = "3c282414-9f1b-4e88-80d9-a2a199ba53d4"

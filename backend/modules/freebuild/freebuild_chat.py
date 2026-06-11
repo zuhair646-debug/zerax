@@ -1304,8 +1304,8 @@ def make_freebuild_chat_router(db, get_current_user):
         logger.info(f"freebuild route: task={task_type} label={task_label}")
 
         try:
-            from modules.zerax_ai import zerax_chat
-            result = await zerax_chat(
+            from modules.zenrex_ai import zenrex_chat
+            result = await zenrex_chat(
                 agent="freebuild",
                 messages=msg_list,
                 user_id=user["user_id"],
@@ -1326,7 +1326,7 @@ def make_freebuild_chat_router(db, get_current_user):
                     {"role": "assistant", "content": ai_text},
                     {"role": "user", "content": f"⚠️ تنبيه نظام داخلي (لا تظهره للمستخدم): {error_msg}"},
                 ]
-                retry_result = await zerax_chat(
+                retry_result = await zenrex_chat(
                     agent="freebuild",
                     messages=retry_msgs,
                     user_id=user["user_id"],
@@ -1362,7 +1362,7 @@ def make_freebuild_chat_router(db, get_current_user):
                     {"role": "assistant", "content": ai_text},
                     {"role": "user", "content": fix_prompt},
                 ]
-                fix_result = await zerax_chat(
+                fix_result = await zenrex_chat(
                     agent="freebuild",
                     messages=fix_msgs,
                     user_id=user["user_id"],
@@ -1723,11 +1723,11 @@ def make_freebuild_chat_router(db, get_current_user):
             "paths": [
                 {
                     "id": "host_with_us",
-                    "title": "🏠 استضف معنا على Zerax",
+                    "title": "🏠 استضف معنا على Zenrex",
                     "price_usd": 0,
-                    "subtitle": "مجاني تماماً — موقعك على دومين Zerax، نتولى الاستضافة والصيانة",
+                    "subtitle": "مجاني تماماً — موقعك على دومين Zenrex، نتولى الاستضافة والصيانة",
                     "features": [
-                        "نشر فوري على نطاق zerax.com",
+                        "نشر فوري على نطاق zenrex.ai",
                         "SSL مجاني وأداء عالي",
                         "تعديل لاحق عبر نفس الشات",
                         "لا تحتاج خبرة تقنية",
@@ -1911,7 +1911,7 @@ def make_freebuild_chat_router(db, get_current_user):
             cr_r = await cli.post(
                 "https://api.github.com/user/repos",
                 headers=headers,
-                json={"name": repo_name, "private": private, "auto_init": True, "description": f"Built with Zerax — {proj.get('name','')}"},
+                json={"name": repo_name, "private": private, "auto_init": True, "description": f"Built with Zenrex — {proj.get('name','')}"},
             )
             if cr_r.status_code not in (201, 422):  # 422 = already exists
                 raise HTTPException(400, f"فشل إنشاء المستودع: {cr_r.status_code} — {cr_r.text[:120]}")
@@ -1926,7 +1926,7 @@ def make_freebuild_chat_router(db, get_current_user):
             # 4) PUT index.html
             content_b64 = base64.b64encode(proj["current_html"].encode()).decode()
             payload = {
-                "message": f"Update from Zerax — {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M')}",
+                "message": f"Update from Zenrex — {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M')}",
                 "content": content_b64,
             }
             if sha:
@@ -1974,7 +1974,7 @@ def make_freebuild_chat_router(db, get_current_user):
             update["name"] = name.strip()[:80]
         if package_id is not None:
             # normalize: only lowercase + dots + dashes
-            pkg = re.sub(r"[^a-z0-9.\-]", "", package_id.lower()) or "com.zerax.app"
+            pkg = re.sub(r"[^a-z0-9.\-]", "", package_id.lower()) or "com.zenrex.ai"
             update["package_id"] = pkg[:80]
         if primary_color is not None and primary_color.startswith("#"):
             update["primary_color"] = primary_color[:7]
@@ -2012,10 +2012,10 @@ def make_freebuild_chat_router(db, get_current_user):
         pseudo_project = {
             "id": aid,
             "type": app_type,
-            "title": doc.get("name", "تطبيق Zerax"),
+            "title": doc.get("name", "تطبيق Zenrex"),
             "description": doc.get("description", ""),
             "primary_color": doc.get("primary_color", "#10b981"),
-            "package_id": doc.get("package_id", "com.zerax.app"),
+            "package_id": doc.get("package_id", "com.zenrex.ai"),
             "imports": [{"kind": "freebuild_site", "html_snapshot": doc["current_html"]}],
         }
         try:

@@ -31,8 +31,8 @@ const MyImages = ({ user, setUser }) => {
     if (navigator.share) {
       try {
         await navigator.share({
-          title: 'صورة من Zerax AI',
-          text: img.prompt || 'تم إنشاؤها بواسطة Zerax',
+          title: 'صورة من Zenrex AI',
+          text: img.prompt || 'تم إنشاؤها بواسطة Zenrex',
           url,
         });
         toast.success('تمت المشاركة بنجاح');
@@ -47,7 +47,7 @@ const MyImages = ({ user, setUser }) => {
     const url = img.image_url || img.url;
     const a = document.createElement('a');
     a.href = url;
-    a.download = `zerax-image-${img.id || Date.now()}.png`;
+    a.download = `zenrex-image-${img.id || Date.now()}.png`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);

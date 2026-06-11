@@ -1,5 +1,5 @@
 """
-Zerax Mobile App Builder — conversational builder for mobile-style apps.
+Zenrex Mobile App Builder — conversational builder for mobile-style apps.
 
 Generates a self-contained SPA optimised for an iPhone-frame preview.
 Categories: 🎮 Games (canvas+JS), 📱 Apps (lists/forms/dashboards), 🛠️ Tools
@@ -121,12 +121,12 @@ async def _llm_turn(messages: List[Dict[str, str]]) -> Dict[str, Any]:
     raw = ""
     last_err = None
 
-    # NEW: route through Zerax AI Smart Router first (best model + boundaries)
+    # NEW: route through Zenrex AI Smart Router first (best model + boundaries)
     try:
-        from modules.zerax_ai import zerax_chat
+        from modules.zenrex_ai import zenrex_chat
         sys_combined = "\n\n".join(m["content"] for m in messages if m["role"] == "system")
         user_msgs = [m for m in messages if m["role"] != "system"]
-        result = await zerax_chat(
+        result = await zenrex_chat(
             agent="mobile_app",
             messages=user_msgs,
             override_system=sys_combined + "\n\n⚠️ ردّك لازم يكون JSON صالح فقط.",
@@ -139,8 +139,8 @@ async def _llm_turn(messages: List[Dict[str, str]]) -> Dict[str, Any]:
                     raw = raw[4:].strip()
                 raw = raw.rstrip("`").strip()
     except Exception as e:
-        last_err = f"zerax_ai: {type(e).__name__}: {str(e)[:200]}"
-        logger.warning(f"[MOBILE-APP] zerax_ai failed: {last_err}")
+        last_err = f"zenrex_ai: {type(e).__name__}: {str(e)[:200]}"
+        logger.warning(f"[MOBILE-APP] zenrex_ai failed: {last_err}")
 
     if not raw and direct_key:
         try:
@@ -563,11 +563,11 @@ def create_mobile_app_router(db, get_current_user):
         if not p:
             raise HTTPException(404, "project not found")
         html = (p.get("html") or "").replace("`", "\\`").replace("$", "\\$")
-        app_name = p.get("name", "ZeraxApp")
+        app_name = p.get("name", "ZenrexApp")
         # Sanitise app_name for the JS string
         safe_name = app_name.replace('"', '\\"').replace("\n", " ")[:80]
         package_json = {
-            "name": "zerax-app",
+            "name": "zenrex-app",
             "version": "1.0.0",
             "main": "node_modules/expo/AppEntry.js",
             "scripts": {
@@ -609,7 +609,7 @@ def create_mobile_app_router(db, get_current_user):
         )
         readme = (
             f"# {safe_name}\n\n"
-            "تم توليد هذا المشروع تلقائياً عبر **Zerax Mobile App Builder**.\n\n"
+            "تم توليد هذا المشروع تلقائياً عبر **Zenrex Mobile App Builder**.\n\n"
             "## كيف تشغّله محلياً\n\n"
             "```bash\n"
             "npm install -g expo-cli\n"
@@ -642,7 +642,7 @@ def create_mobile_app_router(db, get_current_user):
                         "splash": {"backgroundColor": "#0a0a14"},
                         "assetBundlePatterns": ["**/*"],
                         "ios": {"supportsTablet": True},
-                        "android": {"package": f"com.zerax.{safe_name.lower().replace(' ', '')[:20]}"},
+                        "android": {"package": f"com.zenrex.{safe_name.lower().replace(' ', '')[:20]}"},
                         "web": {"favicon": "./assets/favicon.png"},
                     }
                 }, indent=2, ensure_ascii=False),

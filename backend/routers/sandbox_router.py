@@ -1,19 +1,19 @@
 """
-Zerax Sandbox Payments & Shipping Router
+Zenrex Sandbox Payments & Shipping Router
 ==========================================
 Provides full end-to-end test (sandbox) flows for every payment gateway and
 shipping provider so merchants can run REAL orders against fake keys.
 
 Concept:
   • Each merchant has a `payment_configs` entry per gateway (mode + keys)
-  • In `sandbox` mode → Zerax simulates the PSP flow (checkout page, callback)
-  • In `live` mode → Zerax forwards to the real PSP using merchant's keys
+  • In `sandbox` mode → Zenrex simulates the PSP flow (checkout page, callback)
+  • In `live` mode → Zenrex forwards to the real PSP using merchant's keys
   • Same applies to shipping providers (Aramex/SMSA/DHL)
 
 This lets merchants launch a fully working site BEFORE getting real keys.
 When they swap to live, only the keys change — UI/flow stay identical.
 
-Owner: Zerax Platform (Feb 2026)
+Owner: Zenrex Platform (Feb 2026)
 """
 from __future__ import annotations
 
@@ -57,8 +57,8 @@ PAYMENT_GATEWAYS = {
         "color": "#3bcd5a",
         "description": "اقسط على 4 دفعات بدون فوائد",
         "sandbox_keys": {
-            "public_key": "pk_test_zerax_tabby_sandbox_2026",
-            "secret_key": "sk_test_zerax_tabby_sandbox_2026",
+            "public_key": "pk_test_zenrex_tabby_sandbox_2026",
+            "secret_key": "sk_test_zenrex_tabby_sandbox_2026",
         },
         "live_keys_needed": ["public_key", "secret_key", "merchant_code"],
         "dashboard_url": "https://merchant.tabby.ai",
@@ -71,8 +71,8 @@ PAYMENT_GATEWAYS = {
         "color": "#aa00ff",
         "description": "اشتري الآن وادفع لاحقاً",
         "sandbox_keys": {
-            "api_token": "tamara_test_zerax_sandbox_2026",
-            "notification_token": "tamara_notify_zerax_sandbox_2026",
+            "api_token": "tamara_test_zenrex_sandbox_2026",
+            "notification_token": "tamara_notify_zenrex_sandbox_2026",
         },
         "live_keys_needed": ["api_token", "notification_token"],
         "dashboard_url": "https://partners.tamara.co",
@@ -100,7 +100,7 @@ PAYMENT_GATEWAYS = {
         "description": "محفظة STC Pay الإلكترونية",
         "sandbox_keys": {
             "merchant_id": "STCPAY_TEST_ZRX",
-            "api_key": "stcpay_test_zerax_2026",
+            "api_key": "stcpay_test_zenrex_2026",
         },
         "live_keys_needed": ["merchant_id", "api_key"],
         "dashboard_url": "https://business.stcpay.com.sa",
@@ -127,8 +127,8 @@ PAYMENT_GATEWAYS = {
         "color": "#1FB373",
         "description": "بوابة دفع سعودية متكاملة",
         "sandbox_keys": {
-            "publishable_key": "pk_test_zerax_moyasar_sandbox",
-            "secret_key": "sk_test_zerax_moyasar_sandbox",
+            "publishable_key": "pk_test_zenrex_moyasar_sandbox",
+            "secret_key": "sk_test_zenrex_moyasar_sandbox",
         },
         "live_keys_needed": ["publishable_key", "secret_key"],
         "dashboard_url": "https://dashboard.moyasar.com",
@@ -141,8 +141,8 @@ PAYMENT_GATEWAYS = {
         "color": "#635bff",
         "description": "بوابة الدفع العالمية",
         "sandbox_keys": {
-            "publishable_key": "pk_test_zerax_stripe_sandbox_2026",
-            "secret_key": "sk_test_zerax_stripe_sandbox_2026",
+            "publishable_key": "pk_test_zenrex_stripe_sandbox_2026",
+            "secret_key": "sk_test_zenrex_stripe_sandbox_2026",
         },
         "live_keys_needed": ["publishable_key", "secret_key"],
         "dashboard_url": "https://dashboard.stripe.com",
@@ -155,8 +155,8 @@ PAYMENT_GATEWAYS = {
         "color": "#003087",
         "description": "محفظة PayPal العالمية",
         "sandbox_keys": {
-            "client_id": "AYpv-paypal-sandbox-zerax-2026",
-            "client_secret": "EHqyt-paypal-sandbox-zerax-2026",
+            "client_id": "AYpv-paypal-sandbox-zenrex-2026",
+            "client_secret": "EHqyt-paypal-sandbox-zenrex-2026",
         },
         "live_keys_needed": ["client_id", "client_secret"],
         "dashboard_url": "https://developer.paypal.com",
@@ -168,7 +168,7 @@ PAYMENT_GATEWAYS = {
         "logo": "⚫",
         "color": "#000000",
         "description": "الدفع عبر Apple Pay (يتطلب HyperPay/Moyasar)",
-        "sandbox_keys": {"merchant_identifier": "merchant.com.zerax.sandbox"},
+        "sandbox_keys": {"merchant_identifier": "merchant.com.zenrex.sandbox"},
         "live_keys_needed": ["merchant_identifier", "domain_verification_file"],
         "dashboard_url": "https://developer.apple.com/apple-pay",
     },
@@ -195,7 +195,7 @@ SHIPPING_PROVIDERS = {
         "logo": "🟥",
         "color": "#dc2626",
         "tracking_url": "https://www.aramex.com/track/results?ShipmentNumber={tracking}",
-        "sandbox_keys": {"username": "aramex_test_zerax_2026", "password": "aramex_sandbox_pwd"},
+        "sandbox_keys": {"username": "aramex_test_zenrex_2026", "password": "aramex_sandbox_pwd"},
         "live_keys_needed": ["username", "password", "account_number"],
         "base_fee_sar": 15,
         "per_kg_sar": 5,
@@ -207,7 +207,7 @@ SHIPPING_PROVIDERS = {
         "logo": "🟦",
         "color": "#1e40af",
         "tracking_url": "https://www.smsaexpress.com/track?trackingNumber={tracking}",
-        "sandbox_keys": {"api_key": "smsa_test_zerax_sandbox_2026"},
+        "sandbox_keys": {"api_key": "smsa_test_zenrex_sandbox_2026"},
         "live_keys_needed": ["api_key", "passkey"],
         "base_fee_sar": 12,
         "per_kg_sar": 4,
@@ -219,7 +219,7 @@ SHIPPING_PROVIDERS = {
         "logo": "🟧",
         "color": "#f97316",
         "tracking_url": "https://www.naqelexpress.com/track/{tracking}",
-        "sandbox_keys": {"client_id": "naqel_test_zerax", "client_secret": "naqel_sandbox_secret"},
+        "sandbox_keys": {"client_id": "naqel_test_zenrex", "client_secret": "naqel_sandbox_secret"},
         "live_keys_needed": ["client_id", "client_secret"],
         "base_fee_sar": 14,
         "per_kg_sar": 4.5,
@@ -231,7 +231,7 @@ SHIPPING_PROVIDERS = {
         "logo": "🟨",
         "color": "#fbbf24",
         "tracking_url": "https://www.dhl.com/track?tracking-id={tracking}",
-        "sandbox_keys": {"api_key": "dhl_test_zerax_sandbox", "api_secret": "dhl_sandbox_secret"},
+        "sandbox_keys": {"api_key": "dhl_test_zenrex_sandbox", "api_secret": "dhl_sandbox_secret"},
         "live_keys_needed": ["api_key", "api_secret", "account_number"],
         "base_fee_sar": 45,
         "per_kg_sar": 12,
@@ -243,14 +243,14 @@ SHIPPING_PROVIDERS = {
         "logo": "🟧",
         "color": "#ea580c",
         "tracking_url": "https://www.jtexpress.sa/index/query/gzquery.html?bills={tracking}",
-        "sandbox_keys": {"api_key": "jt_test_zerax_sandbox"},
+        "sandbox_keys": {"api_key": "jt_test_zenrex_sandbox"},
         "live_keys_needed": ["api_key", "customer_code"],
         "base_fee_sar": 13,
         "per_kg_sar": 4,
         "delivery_days": "1-3",
     },
-    "zerax_fleet": {
-        "name": "أسطول Zerax الداخلي",
+    "zenrex_fleet": {
+        "name": "أسطول Zenrex الداخلي",
         "country": "sa",
         "logo": "🚗",
         "color": "#7c3aed",
@@ -437,7 +437,7 @@ class InitCheckoutIn(BaseModel):
 async def init_payment_checkout(body: InitCheckoutIn, request: Request):
     """
     Creates a payment session.
-    SANDBOX mode → returns a Zerax-hosted checkout URL that simulates the PSP
+    SANDBOX mode → returns a Zenrex-hosted checkout URL that simulates the PSP
     LIVE mode → would forward to real PSP (TODO when merchant brings real keys)
     """
     if body.gateway_id not in PAYMENT_GATEWAYS:
@@ -534,7 +534,7 @@ async def sandbox_checkout_page(session_id: str):
       </div>
     </div>
     <div class="foot">
-      🛡️ صفحة محاكاة Zerax Sandbox · لن يتم خصم أي مبلغ حقيقي<br>
+      🛡️ صفحة محاكاة Zenrex Sandbox · لن يتم خصم أي مبلغ حقيقي<br>
       عند تفعيل المفاتيح الحقيقية، ستنتقل هذه الصفحة إلى {name} مباشرة
     </div>
   </div>
@@ -698,7 +698,7 @@ async def advance_shipment(body: AdvanceShipmentIn):
     label = await db.shipping_labels.find_one({"tracking_number": body.tracking_number})
     if not label:
         raise HTTPException(status_code=404, detail="Tracking number not found")
-    event = {"status": body.new_status, "at": _now_iso(), "location": "محاكاة Zerax Sandbox"}
+    event = {"status": body.new_status, "at": _now_iso(), "location": "محاكاة Zenrex Sandbox"}
     await db.shipping_labels.update_one(
         {"tracking_number": body.tracking_number},
         {"$set": {"status": body.new_status, "updated_at": _now_iso()}, "$push": {"events": event}},
