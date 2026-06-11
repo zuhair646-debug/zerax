@@ -3726,12 +3726,18 @@ const CS_STATE = {
   frameColor: '#7c3aed',
   frameColorName: 'vibrant purple',
   aspect: '16:9',
+  customW: null,
+  customH: null,
   style: 'lifestyle',
   styleAr: 'حياتي',
   category: 'ملابس',
   categoryEn: 'clothing fashion apparel',
+  placement: 'library',
+  placementAr: 'مكتبة',
+  refImage: null,
   generated: [],
   approved: [],
+  _chatPrompt: '',
 };
 
 // Type-specific defaults (smart presets when user picks a type)
@@ -3744,7 +3750,7 @@ const CS_TYPE_DEFAULTS = {
 
 function csPickType(t){
   CS_STATE.type = t;
-  document.querySelectorAll('.cs-type-card').forEach(c=>c.classList.toggle('active', c.dataset.cstype===t));
+  document.querySelectorAll('.cs-type-card, .cs-type-pill').forEach(c=>c.classList.toggle('active', c.dataset.cstype===t));
   // Show/hide section-specific tool
   const catTool = document.getElementById('cs-tool-cat');
   if(catTool) catTool.style.display = t==='section' ? 'block' : 'none';
@@ -3760,7 +3766,36 @@ function csPickType(t){
   }
   // Bot guidance message
   const labels = { banner:'بنر إعلاني', logo:'لوجو', section:'صورة قسم', general:'صورة عامة' };
-  csBotMsg(`✨ اخترت <b>${labels[t]}</b>. ضبطت الأدوات تلقائياً — تقدر تعدلها أو اكتب وصفك مباشرة 👇`);
+  csBotMsg(`✨ اخترت <b>${labels[t]}</b>. ضبطت الأدوات الذكية تلقائياً — تقدر تعدلها من الشريط اليمين أو اكتب وصفك مباشرة 👇`);
+}
+
+function csCustomDim(){
+  const w = parseInt(document.getElementById('cs-cw')?.value || 0);
+  const h = parseInt(document.getElementById('cs-ch')?.value || 0);
+  if(w >= 256 && h >= 256){
+    CS_STATE.customW = w; CS_STATE.customH = h;
+    document.querySelectorAll('.cs-aspect-btn').forEach(b=>b.classList.remove('active'));
+    const hint = document.getElementById('cs-aspect-hint'); if(hint) hint.textContent = `${w}×${h}`;
+  } else {
+    CS_STATE.customW = null; CS_STATE.customH = null;
+  }
+}
+
+function csPickPlace(p, ar, el){
+  CS_STATE.placement = p; CS_STATE.placementAr = ar;
+  document.querySelectorAll('.cs-place-btn').forEach(b=>b.classList.remove('active'));
+  if(el) el.classList.add('active');
+  const h = document.getElementById('cs-place-hint'); if(h) h.textContent = ar;
+}
+
+function csAttachRef(input){
+  const f = input.files?.[0]; if(!f) return;
+  const rdr = new FileReader();
+  rdr.onload = e => {
+    CS_STATE.refImage = e.target.result;
+    csBotMsg(`📎 تم إرفاق صورة مرجعية — سأستخدمها كإلهام للتوليد.`);
+  };
+  rdr.readAsDataURL(f);
 }
 
 function csPickAspect(a, el){
@@ -3851,33 +3886,42 @@ async function csSendChat(){
   CS_STATE._chatPrompt = txt;
 }
 
-// Generate via Gemini Nano Banana
+// Generate via Gemini Nano Banana — STRICT color enforcement
 async function csGenerate(){
-  const btn = document.querySelector('.cs-gen-btn');
-  if(btn){ btn.disabled = true; btn.innerHTML = '<i data-lucide="loader" style="width:16px;height:16px"></i> جاري التوليد...'; if(window.lucide) lucide.createIcons(); }
-  // Build typed prompt
-  const userPrompt = CS_STATE._chatPrompt || '';
+  const btns = document.querySelectorAll('.cs-gen-btn-inline, .cs-gen-btn');
+  btns.forEach(btn=>{ btn.disabled = true; btn.innerHTML = '<i data-lucide="loader" style="width:14px;height:14px"></i> جاري التوليد...'; });
+  if(window.lucide) lucide.createIcons();
+  // Build typed prompt with HARD color enforcement
+  const userPrompt = (document.getElementById('cs-chat-text')?.value || CS_STATE._chatPrompt || '').trim();
+  if(userPrompt && !CS_STATE._chatPrompt){
+    csUserMsg(userPrompt);
+    CS_STATE._chatPrompt = userPrompt;
+    const inp = document.getElementById('cs-chat-text'); if(inp) inp.value = '';
+  }
   const typeLabels = {
     banner: `Wide promotional BANNER for an online store. Eye-catching marketing composition`,
     logo: `Modern minimalist LOGO design. Clean vector style, professional brand identity, no text artifacts`,
-    section: `Category tile artwork representing "${CS_STATE.categoryEn}". Iconic, recognizable subject`,
-    general: `Premium advertising image`,
+    section: `Category tile artwork representing "${CS_STATE.categoryEn}". Iconic, recognizable subject matter`,
+    general: `Premium advertising image for an online store`,
   };
   const stylePrompts = {
     lifestyle: 'lifestyle photography, natural setting, soft natural lighting',
-    luxury: 'luxury aesthetic, dramatic lighting, gold/black premium tones',
+    luxury: 'luxury aesthetic, dramatic lighting, premium gold/black tones',
     studio: 'commercial studio photography, sharp focus, professional lighting',
     flat: 'flat lay composition, top-down view, organized arrangement',
     minimal: 'minimalist composition, clean lines, lots of negative space',
     dramatic: 'dramatic cinematic lighting, deep shadows, moody atmosphere',
   };
-  const finalPrompt = `${typeLabels[CS_STATE.type]}. ${userPrompt ? userPrompt+'. ' : ''}${stylePrompts[CS_STATE.style]}. SOLID ${CS_STATE.bgColorName} background (color ${CS_STATE.bgColor}), accent ${CS_STATE.frameColorName}. High quality, 4K, professional.`;
+  // ⛓️ STRICT color enforcement — repeated and emphasized so Gemini cannot ignore it
+  const colorLock = `STRICT REQUIREMENT: The background MUST be ${CS_STATE.bgColorName} (hex ${CS_STATE.bgColor}). DO NOT use any other background color. The background is ${CS_STATE.bgColorName}, not white, not gray, not any other color — exactly ${CS_STATE.bgColorName}. Accent color is ${CS_STATE.frameColorName}.`;
+  const finalPrompt = `${typeLabels[CS_STATE.type]}. ${userPrompt ? userPrompt+'. ' : ''}${stylePrompts[CS_STATE.style]}. ${colorLock} High quality, 4K, professional commercial composition.`;
 
   try{
-    // Reuse same image-studio endpoint as product modal (consistency + credits)
-    // Map aspect ratio to width/height
+    // Resolve dimensions
     const aspectMap = { '16:9':[1920,1080], '1:1':[1024,1024], '9:16':[1080,1920], '4:5':[1024,1280], '3:1':[1920,640], '4:3':[1024,768] };
-    const [w,h] = aspectMap[CS_STATE.aspect] || [1024,1024];
+    let w, h;
+    if(CS_STATE.customW && CS_STATE.customH){ w = CS_STATE.customW; h = CS_STATE.customH; }
+    else { [w,h] = aspectMap[CS_STATE.aspect] || [1024,1024]; }
     const promises = [1,2,3,4].map((_,i)=>fetch(API+'/api/image-studio/generate',{
       method:'POST',
       headers:{'Content-Type':'application/json','Authorization':'Bearer '+(localStorage.getItem('zx_token')||'')},
@@ -3887,56 +3931,127 @@ async function csGenerate(){
     const imgs = results.flatMap(r => (r?.images || r?.urls || (r?.image_url?[r.image_url]:[])) || []).filter(Boolean);
     if(!imgs.length) throw new Error('no images returned');
     CS_STATE.generated = imgs;
-    csRenderCanvas(imgs);
-    csBotMsg(`✅ تم توليد <b>${imgs.length}</b> صورة! اختر منها — مرّر فوق أي صورة لرؤية أزرار الاعتماد والتحميل.`);
+    csAppendImageGrid(imgs);
   } catch(e){
     // Fallback to placeholder so the UX is testable without AI key
     const placeholders = [1,2,3,4].map(i=>`https://picsum.photos/seed/${CS_STATE.type}-${Date.now()}-${i}/800/600`);
     CS_STATE.generated = placeholders;
-    csRenderCanvas(placeholders);
-    csBotMsg(`⚠️ المولّد غير متصل الآن — عرضت صور تجريبية. (${e.message})`);
+    csAppendImageGrid(placeholders, true);
   }
-  if(btn){ btn.disabled = false; btn.innerHTML = '<i data-lucide="sparkles" style="width:16px;height:16px"></i> <span>توليد 4 صور · 32 نقطة</span>'; if(window.lucide) lucide.createIcons(); }
+  btns.forEach(btn=>{ btn.disabled = false; btn.innerHTML = '<i data-lucide="sparkles" style="width:14px;height:14px"></i> <span>توليد · 32 نقطة</span>'; });
+  if(window.lucide) lucide.createIcons();
 }
 
-function csRenderCanvas(imgs){
-  const frame = document.getElementById('cs-canvas-frame');
-  const grid = document.getElementById('cs-canvas-grid');
-  if(frame) frame.style.display = 'none';
-  if(grid){
-    grid.style.display = 'grid';
-    grid.innerHTML = imgs.map((u,i)=>`
-      <div class="cs-gen-tile" data-csi="${i}">
-        <img src="${u}" alt="generated ${i+1}" loading="lazy">
-        <div class="cs-tile-actions">
-          <button class="cs-tile-approve" onclick="csApprove(${i})" data-testid="cs-approve-${i}">✓ اعتماد</button>
-          <button class="cs-tile-download" onclick="csDownload(${i})" data-testid="cs-download-${i}">⬇</button>
+// Append 4-image grid AS A MESSAGE inside the chat (with Approve / Save / Download buttons per tile)
+function csAppendImageGrid(imgs, isPlaceholder){
+  const body = document.getElementById('cs-chat-body');
+  if(!body) return;
+  const stamp = Date.now();
+  const wrap = document.createElement('div');
+  wrap.className = 'cs-msg-imggrid';
+  const note = isPlaceholder
+    ? `<span style="color:#f59e0b">⚠️ صور تجريبية (المولّد غير متصل)</span>`
+    : `<span style="color:#10b981">✅ تم توليد ${imgs.length} صور بنجاح</span>`;
+  wrap.innerHTML = `
+    <div class="cs-imggrid-head">
+      <i data-lucide="image" style="width:14px;height:14px"></i>
+      <b>الصور المُولّدة</b>
+      <span style="margin-right:auto;font-size:10px">${note}</span>
+    </div>
+    <div class="cs-imggrid" data-grid="${stamp}">
+      ${imgs.map((u,i)=>`
+        <div class="cs-imggrid-tile" data-csi="${stamp}-${i}" data-url="${u}" onclick="csSelectTile(this)">
+          <img src="${u}" alt="g${i+1}" loading="lazy">
+          <span class="badge-approved">✓ معتمد</span>
         </div>
-      </div>
-    `).join('');
-  }
+      `).join('')}
+    </div>
+    <div class="cs-imggrid-actions">
+      <button class="a-approve" onclick="csApproveSelected('${stamp}')" data-testid="cs-approve-${stamp}"><i data-lucide="check" style="width:12px;height:12px"></i> اعتماد المختار</button>
+      <button class="a-save" onclick="csSaveAndPlace('${stamp}')" data-testid="cs-save-${stamp}"><i data-lucide="save" style="width:12px;height:12px"></i> حفظ ووضع في <span id="csp-${stamp}">${CS_STATE.placementAr}</span></button>
+      <button class="a-download" onclick="csDownloadSelected('${stamp}')"><i data-lucide="download" style="width:12px;height:12px"></i> تحميل</button>
+      <button class="a-refine" onclick="csRefine('${stamp}')"><i data-lucide="wand-2" style="width:12px;height:12px"></i> ولّد أفضل</button>
+    </div>
+    <div class="cs-place-preview" id="cspv-${stamp}" style="display:none">
+      <div class="cs-place-preview-label" id="cspvl-${stamp}">📍 معاينة الوضع: ${CS_STATE.placementAr}</div>
+      <div class="cs-place-preview-frame" id="cspvf-${stamp}"></div>
+    </div>
+  `;
+  body.appendChild(wrap);
+  body.scrollTop = body.scrollHeight;
+  if(window.lucide) setTimeout(()=>lucide.createIcons(), 30);
+  // Bot follow-up message
+  csBotMsg(`اختر الصورة اللي تعجبك (ضغطة)، ثم:<br>• <b>"اعتماد المختار"</b> → يحفظها في مكتبتك<br>• <b>"حفظ ووضع في..."</b> → يحفظها ويضعها مباشرة في المكان المحدد من الأدوات (<b>${CS_STATE.placementAr}</b>)<br>• <b>"ولّد أفضل"</b> → اطلب تعديلات إضافية`);
 }
 
-function csApprove(i){
-  const url = CS_STATE.generated[i];
-  if(!url) return;
-  const tile = document.querySelector(`.cs-gen-tile[data-csi="${i}"]`);
-  if(tile) tile.classList.add('approved');
-  // Save to library
-  CS_STATE.approved.push({ url, type: CS_STATE.type, ts: Date.now(), category: CS_STATE.type==='section'?CS_STATE.category:null });
+// Select a tile (highlight, mark as the "chosen" one for action buttons)
+function csSelectTile(el){
+  const grid = el.closest('.cs-imggrid');
+  if(!grid) return;
+  grid.querySelectorAll('.cs-imggrid-tile').forEach(t=>t.classList.remove('selected'));
+  el.classList.add('selected');
+  el.style.borderColor = '#fbbf24';
+  el.style.boxShadow = '0 0 0 3px rgba(251,191,36,.3)';
+  // Restore others
+  grid.querySelectorAll('.cs-imggrid-tile:not(.selected)').forEach(t=>{ t.style.borderColor = ''; t.style.boxShadow = ''; });
+}
+function csGetSelectedUrl(stamp){
+  const grid = document.querySelector(`.cs-imggrid[data-grid="${stamp}"]`);
+  if(!grid) return null;
+  const sel = grid.querySelector('.cs-imggrid-tile.selected') || grid.querySelector('.cs-imggrid-tile');
+  return sel?.dataset.url;
+}
+function csApproveSelected(stamp){
+  const url = csGetSelectedUrl(stamp);
+  if(!url){ toast('❌ اختر صورة أولاً'); return; }
+  const sel = document.querySelector(`.cs-imggrid[data-grid="${stamp}"] .cs-imggrid-tile.selected`) || document.querySelector(`.cs-imggrid[data-grid="${stamp}"] .cs-imggrid-tile`);
+  if(sel) sel.classList.add('approved');
+  CS_STATE.approved.push({ url, type: CS_STATE.type, ts: Date.now(), category: CS_STATE.type==='section'?CS_STATE.category:null, placement: 'library' });
   csSaveLibrary();
-  // Bump count
-  const cnt = document.getElementById('cs-gallery-count');
-  if(cnt) cnt.textContent = CS_STATE.approved.length;
-  toast('✓ تم اعتماد الصورة وحفظها في المكتبة');
+  const cnt = document.getElementById('cs-gallery-count'); if(cnt) cnt.textContent = CS_STATE.approved.length;
+  csBotMsg(`✓ تم اعتماد الصورة وحفظها في <b>المكتبة</b>. تقدر تشوفها من زر "المكتبة" بالأعلى.`);
 }
-
-function csDownload(i){
-  const url = CS_STATE.generated[i];
-  if(!url) return;
+function csSaveAndPlace(stamp){
+  const url = csGetSelectedUrl(stamp);
+  if(!url){ toast('❌ اختر صورة أولاً'); return; }
+  const sel = document.querySelector(`.cs-imggrid[data-grid="${stamp}"] .cs-imggrid-tile.selected`) || document.querySelector(`.cs-imggrid[data-grid="${stamp}"] .cs-imggrid-tile`);
+  if(sel) sel.classList.add('approved');
+  CS_STATE.approved.push({ url, type: CS_STATE.type, ts: Date.now(), category: CS_STATE.type==='section'?CS_STATE.category:null, placement: CS_STATE.placement, placementAr: CS_STATE.placementAr });
+  csSaveLibrary();
+  const cnt = document.getElementById('cs-gallery-count'); if(cnt) cnt.textContent = CS_STATE.approved.length;
+  // Render realistic placement preview
+  const pv = document.getElementById('cspv-'+stamp);
+  const pvf = document.getElementById('cspvf-'+stamp);
+  if(pv && pvf){
+    pv.style.display = 'block';
+    pvf.innerHTML = csBuildPlacementPreview(url);
+  }
+  csBotMsg(`💾 تم الحفظ ووضعه في <b>${CS_STATE.placementAr}</b>. شوف معاينة الوضع الواقعية أسفل الصور 👇`);
+}
+function csDownloadSelected(stamp){
+  const url = csGetSelectedUrl(stamp);
+  if(!url){ toast('❌ اختر صورة أولاً'); return; }
   const a = document.createElement('a');
   a.href = url; a.download = `zenrex-${CS_STATE.type}-${Date.now()}.jpg`; a.target='_blank';
   document.body.appendChild(a); a.click(); a.remove();
+}
+function csRefine(stamp){
+  csBotMsg(`🪄 اكتب التعديلات اللي تبيها في صندوق الإدخال (مثلاً: "اجعل الخلفية أغمق" أو "أضف إضاءة دافئة") ثم اضغط <b>توليد</b> مرة أخرى.`);
+  const inp = document.getElementById('cs-chat-text'); if(inp) inp.focus();
+}
+
+// Build a small realistic preview of WHERE the approved image will appear in the customer storefront
+function csBuildPlacementPreview(imgUrl){
+  switch(CS_STATE.placement){
+    case 'hero':
+      return `<div style="width:100%;max-width:420px"><div style="background:#0a0a14;border-radius:8px;padding:8px"><div style="background:url('${imgUrl}') center/cover;border-radius:6px;aspect-ratio:16/9;display:flex;align-items:center;justify-content:center;color:#fff;text-shadow:0 2px 8px rgba(0,0,0,.6);font-weight:900;font-size:14px">بنر هيرو</div><div style="margin-top:6px;display:flex;gap:4px;justify-content:center"><span style="width:6px;height:6px;border-radius:50%;background:#fbbf24"></span><span style="width:6px;height:6px;border-radius:50%;background:#475569"></span><span style="width:6px;height:6px;border-radius:50%;background:#475569"></span></div></div></div>`;
+    case 'category':
+      return `<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;max-width:380px;width:100%"><div style="aspect-ratio:1;border-radius:8px;background:#1e1b4b;display:flex;align-items:center;justify-content:center;color:#475569;font-size:10px">قسم</div><div style="aspect-ratio:1;border-radius:8px;background:url('${imgUrl}') center/cover;border:2px solid #10b981;position:relative"><span style="position:absolute;bottom:4px;right:4px;background:rgba(0,0,0,.7);color:#fff;font-size:9px;padding:2px 6px;border-radius:99px">${CS_STATE.category}</span></div><div style="aspect-ratio:1;border-radius:8px;background:#1e1b4b;display:flex;align-items:center;justify-content:center;color:#475569;font-size:10px">قسم</div></div>`;
+    case 'promo':
+      return `<div style="background:#0a0a14;border:1px solid #1e293b;border-radius:8px;padding:10px;max-width:340px;width:100%;display:flex;gap:10px;align-items:center"><img src="${imgUrl}" style="width:80px;height:80px;border-radius:8px;object-fit:cover"><div style="flex:1;color:#cbd5e1"><b style="font-size:12px;display:block;color:#fff">إعلان جانبي</b><span style="font-size:10px;color:#94a3b8">يظهر في الشريط الجانبي للمتجر</span></div></div>`;
+    default: // library
+      return `<div style="text-align:center;color:#94a3b8;font-size:11px;padding:18px"><i data-lucide="library" style="width:24px;height:24px;color:#475569"></i><br>محفوظ في المكتبة فقط — استخدمه لاحقاً</div>`;
+  }
 }
 
 function csSaveLibrary(){

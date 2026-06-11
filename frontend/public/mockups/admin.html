@@ -547,6 +547,70 @@ select.ps-input option{background:#13131f;color:#fff}
 .cs-body{display:grid;grid-template-columns:1fr 1.3fr;gap:0;min-height:580px}
 @media (max-width:980px){.cs-body{grid-template-columns:1fr}}
 
+/* v2 — Chat-first layout: chat takes 70%, tools sidebar 30% */
+.cs-type-strip{padding:10px 22px;background:rgba(0,0,0,.25);border-bottom:1px solid #312e81;display:flex;gap:8px;flex-wrap:wrap;overflow-x:auto}
+.cs-type-pill{display:inline-flex;align-items:center;gap:7px;background:#0a0a14;border:1px solid #312e81;color:#cbd5e1;padding:6px 12px 6px 7px;border-radius:99px;font-family:inherit;font-size:12px;font-weight:800;cursor:pointer;transition:.15s;white-space:nowrap}
+.cs-type-pill .ico{width:24px;height:24px;border-radius:50%;color:#fff;display:flex;align-items:center;justify-content:center}
+.cs-type-pill:hover{border-color:#7c3aed;color:#fff}
+.cs-type-pill.active{background:linear-gradient(135deg,rgba(124,58,237,.2),rgba(236,72,153,.15));border-color:#fbbf24;color:#fbbf24;box-shadow:0 4px 14px rgba(124,58,237,.25)}
+
+.cs-body-v2{display:grid;grid-template-columns:1fr 320px;gap:0;min-height:560px}
+@media (max-width:1100px){.cs-body-v2{grid-template-columns:1fr}}
+.cs-chat-main{display:flex;flex-direction:column;background:#0a0a14;border-left:1px solid #312e81;min-height:560px;max-height:calc(100vh - 240px)}
+.cs-chat-body-v2{flex:1;overflow-y:auto;padding:20px 24px;display:flex;flex-direction:column;gap:14px;max-height:none}
+.cs-chat-body-v2::-webkit-scrollbar{width:8px}
+.cs-chat-body-v2::-webkit-scrollbar-track{background:transparent}
+.cs-chat-body-v2::-webkit-scrollbar-thumb{background:#312e81;border-radius:8px}
+.cs-chat-input-v2{display:flex;gap:8px;padding:14px 20px;border-top:1px solid #312e81;background:rgba(0,0,0,.4);align-items:center}
+.cs-chat-input-v2 input[type="text"],.cs-chat-input-v2 #cs-chat-text{flex:1;background:#1e1b4b;border:1px solid #312e81;border-radius:10px;padding:11px 14px;color:#fff;font-family:inherit;font-size:13px}
+.cs-chat-input-v2 input:focus{outline:none;border-color:#fbbf24}
+.cs-chat-attach{background:#1e1b4b;border:1px solid #312e81;color:#a78bfa;width:38px;height:38px;border-radius:10px;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:.15s}
+.cs-chat-attach:hover{border-color:#7c3aed;color:#fff}
+.cs-chat-send{background:linear-gradient(135deg,#7c3aed,#ec4899);border:none;color:#fff;width:38px;height:38px;border-radius:10px;cursor:pointer;display:flex;align-items:center;justify-content:center}
+.cs-gen-btn-inline{background:linear-gradient(135deg,#fbbf24,#f59e0b);color:#0a0a14;border:none;padding:9px 14px;border-radius:10px;font-family:inherit;font-weight:900;font-size:12px;cursor:pointer;display:inline-flex;align-items:center;gap:6px;box-shadow:0 4px 14px rgba(251,191,36,.3);transition:.15s;white-space:nowrap}
+.cs-gen-btn-inline:hover{transform:translateY(-1px);box-shadow:0 6px 18px rgba(251,191,36,.4)}
+.cs-gen-btn-inline:disabled{opacity:.5;cursor:not-allowed;transform:none}
+
+/* Right tools sidebar */
+.cs-tools-side{background:#13131f;display:flex;flex-direction:column;max-height:calc(100vh - 240px);overflow:hidden}
+.cs-tools-side-head{padding:12px 16px;display:flex;align-items:center;gap:8px;background:rgba(124,58,237,.1);border-bottom:1px solid #312e81}
+.cs-tools-v2{padding:8px;display:flex;flex-direction:column;gap:4px;overflow-y:auto}
+.cs-tools-v2::-webkit-scrollbar{width:6px}
+.cs-tools-v2::-webkit-scrollbar-thumb{background:#312e81;border-radius:4px}
+.cs-tools-v2 .cs-tool{background:rgba(255,255,255,.02);border-radius:8px;border:1px solid transparent}
+.cs-tools-v2 .cs-tool[open]{background:rgba(124,58,237,.08);border-color:rgba(124,58,237,.25)}
+.cs-tools-v2 .cs-tool summary{padding:8px 11px;font-size:11.5px}
+.cs-tools-v2 .cs-tool-body{padding:6px 11px 10px}
+.cs-custom-dim{margin-top:8px;padding-top:8px;border-top:1px dashed rgba(124,58,237,.2)}
+.cs-place-btn{background:#1e1b4b;border:1px solid #312e81;color:#cbd5e1;border-radius:7px;padding:7px 9px;font-family:inherit;font-size:11px;cursor:pointer;text-align:right;transition:.15s}
+.cs-place-btn:hover{border-color:#7c3aed;color:#fff}
+.cs-place-btn.active{background:linear-gradient(135deg,#10b981,#059669);border-color:#10b981;color:#fff;font-weight:700}
+
+/* In-chat image generation results — appears as a bot message with 4-tile grid */
+.cs-msg-imggrid{background:rgba(124,58,237,.06);border:1px solid rgba(124,58,237,.3);border-radius:12px;padding:12px;max-width:560px;align-self:flex-start}
+.cs-imggrid-head{display:flex;align-items:center;gap:8px;margin-bottom:10px;font-size:12px;color:#a78bfa;font-weight:700}
+.cs-imggrid{display:grid;grid-template-columns:repeat(2,1fr);gap:8px}
+.cs-imggrid-tile{position:relative;border-radius:10px;overflow:hidden;border:2px solid transparent;cursor:pointer;transition:.18s;background:#1e1b4b;aspect-ratio:1}
+.cs-imggrid-tile img{width:100%;height:100%;object-fit:cover;display:block}
+.cs-imggrid-tile:hover{border-color:#7c3aed;transform:scale(1.02)}
+.cs-imggrid-tile.approved{border-color:#10b981;box-shadow:0 0 0 3px rgba(16,185,129,.25)}
+.cs-imggrid-tile .badge-approved{position:absolute;top:6px;left:6px;background:#10b981;color:#fff;padding:2px 7px;border-radius:99px;font-size:9px;font-weight:900;display:none}
+.cs-imggrid-tile.approved .badge-approved{display:inline-block}
+.cs-imggrid-actions{display:flex;gap:6px;margin-top:10px;flex-wrap:wrap}
+.cs-imggrid-actions button{flex:1;min-width:90px;padding:8px 10px;border-radius:8px;font-family:inherit;font-size:11px;font-weight:800;cursor:pointer;border:none;display:inline-flex;align-items:center;justify-content:center;gap:5px;transition:.15s}
+.cs-imggrid-actions .a-approve{background:linear-gradient(135deg,#10b981,#059669);color:#fff}
+.cs-imggrid-actions .a-save{background:linear-gradient(135deg,#7c3aed,#6d28d9);color:#fff}
+.cs-imggrid-actions .a-download{background:rgba(255,255,255,.1);color:#fff;border:1px solid #312e81}
+.cs-imggrid-actions .a-refine{background:rgba(251,191,36,.15);color:#fbbf24;border:1px solid rgba(251,191,36,.4)}
+.cs-imggrid-actions button:hover{transform:translateY(-1px)}
+
+/* Realistic placement preview (small but accurate mockup) */
+.cs-place-preview{margin-top:10px;background:#0f172a;border:1px solid #1e293b;border-radius:10px;overflow:hidden}
+.cs-place-preview-label{padding:6px 11px;background:rgba(16,185,129,.1);color:#10b981;font-size:10px;font-weight:800;border-bottom:1px solid #1e293b}
+.cs-place-preview-frame{padding:10px;display:flex;justify-content:center;align-items:center;min-height:120px;background:repeating-linear-gradient(45deg,rgba(255,255,255,.02) 0 10px,transparent 10px 20px)}
+.cs-place-preview-frame img{max-width:100%;max-height:160px;border-radius:6px;display:block}
+
+
 /* LEFT — type cards + chat */
 .cs-left{padding:18px;border-left:1px solid #312e81;display:flex;flex-direction:column;gap:14px}
 .cs-types{display:grid;grid-template-columns:repeat(2,1fr);gap:8px}
@@ -1490,9 +1554,7 @@ select.ps-input option{background:#13131f;color:#fff}
 
       <!-- ─── VIDEO STUDIO — TABBED DARK ZENREX ─── -->
       <!-- ═══════════════════════════════════════════════════════════════════
-           CREATIVE STUDIO · standalone AI image generator for banners/logos/sections
-           (NOT product photos — those live inside product modal · NOT videos)
-           Free chat + accordion tools + full preview + approval gallery
+           CREATIVE STUDIO · Chat-first layout · Tools sidebar · In-chat results
            ═══════════════════════════════════════════════════════════════════ -->
       <div class="page" data-page="creative-studio">
         <div class="cs-wrap">
@@ -1511,77 +1573,79 @@ select.ps-input option{background:#13131f;color:#fff}
             </div>
           </div>
 
-          <div class="cs-body">
-            <!-- LEFT · CHAT + TYPE SELECTOR -->
-            <div class="cs-left">
-              <!-- Type cards (Banner / Logo / Section / General) -->
-              <div class="cs-types">
-                <button class="cs-type-card active" data-cstype="banner" onclick="csPickType('banner')" data-testid="cs-type-banner">
-                  <div class="cs-type-ico" style="background:linear-gradient(135deg,#7c3aed,#ec4899)"><i data-lucide="image" style="width:20px;height:20px"></i></div>
-                  <b>بنر</b>
-                  <span>صور إعلانية واسعة</span>
-                </button>
-                <button class="cs-type-card" data-cstype="logo" onclick="csPickType('logo')" data-testid="cs-type-logo">
-                  <div class="cs-type-ico" style="background:linear-gradient(135deg,#fbbf24,#f59e0b)"><i data-lucide="hexagon" style="width:20px;height:20px"></i></div>
-                  <b>لوجو</b>
-                  <span>هوية بصرية وعلامة تجارية</span>
-                </button>
-                <button class="cs-type-card" data-cstype="section" onclick="csPickType('section')" data-testid="cs-type-section">
-                  <div class="cs-type-ico" style="background:linear-gradient(135deg,#10b981,#059669)"><i data-lucide="layout-grid" style="width:20px;height:20px"></i></div>
-                  <b>صورة قسم</b>
-                  <span>تصنيفات: ملابس · جوالات · ...</span>
-                </button>
-                <button class="cs-type-card" data-cstype="general" onclick="csPickType('general')" data-testid="cs-type-general">
-                  <div class="cs-type-ico" style="background:linear-gradient(135deg,#0ea5e9,#3b82f6)"><i data-lucide="sparkles" style="width:20px;height:20px"></i></div>
-                  <b>عام</b>
-                  <span>صور داخلية · إعلانات حرة</span>
-                </button>
-              </div>
+          <!-- Type pills (sticky strip — quickly pick type without opening accordion) -->
+          <div class="cs-type-strip">
+            <button class="cs-type-pill active" data-cstype="banner" onclick="csPickType('banner')" data-testid="cs-type-banner"><span class="ico" style="background:linear-gradient(135deg,#7c3aed,#ec4899)"><i data-lucide="image" style="width:14px;height:14px"></i></span> بنر</button>
+            <button class="cs-type-pill" data-cstype="logo" onclick="csPickType('logo')" data-testid="cs-type-logo"><span class="ico" style="background:linear-gradient(135deg,#fbbf24,#f59e0b)"><i data-lucide="hexagon" style="width:14px;height:14px"></i></span> لوجو</button>
+            <button class="cs-type-pill" data-cstype="section" onclick="csPickType('section')" data-testid="cs-type-section"><span class="ico" style="background:linear-gradient(135deg,#10b981,#059669)"><i data-lucide="layout-grid" style="width:14px;height:14px"></i></span> صورة قسم</button>
+            <button class="cs-type-pill" data-cstype="general" onclick="csPickType('general')" data-testid="cs-type-general"><span class="ico" style="background:linear-gradient(135deg,#0ea5e9,#3b82f6)"><i data-lucide="sparkles" style="width:14px;height:14px"></i></span> عام</button>
+          </div>
 
-              <!-- Free Chat -->
-              <div class="cs-chat">
-                <div class="cs-chat-head">
-                  <i data-lucide="bot" style="width:16px;height:16px;color:#fbbf24"></i>
-                  <b style="font-size:13px;color:#fff">شات AI الإبداعي</b>
-                  <span style="font-size:10px;color:#94a3b8;margin-right:auto">اطلب أي صورة بكلامك الطبيعي</span>
+          <div class="cs-body cs-body-v2">
+            <!-- MAIN · CHAT (biggest area) -->
+            <div class="cs-chat-main">
+              <div class="cs-chat-body cs-chat-body-v2" id="cs-chat-body">
+                <div class="cs-msg cs-msg-bot">
+                  <b>أهلاً! 👋 أنا مساعدك الإبداعي.</b><br>
+                  اكتب وش تبي بكلامك الطبيعي ووفّر التفاصيل — مثل:<br>
+                  • <i>"بنر تخفيضات نهاية الأسبوع · خلفية سوداء · أحرف ذهبية"</i><br>
+                  • <i>"لوجو لمحل قهوة باسم ركن البن · مينيمال · لون بني"</i><br>
+                  • <i>"صورة قسم لتصنيف الإلكترونيات بخلفية متدرجة زرقاء"</i><br>
+                  <span style="display:block;margin-top:8px;font-size:11px;color:#a78bfa;background:rgba(167,139,250,.1);padding:7px 10px;border-radius:8px">💡 الذكاء الاصطناعي ملزم بالألوان والمواصفات اللي تختارها من الأدوات في اليمين — لا يحيد عنها.</span>
                 </div>
-                <div class="cs-chat-body" id="cs-chat-body">
-                  <div class="cs-msg cs-msg-bot"><b>أهلين! 👋</b><br>اكتب لي وش تبي بالضبط — مثلاً:<br>• "بنر تخفيضات نهاية الأسبوع بألوان دافية"<br>• "لوجو لمحل قهوة باسم ركن البن"<br>• "صورة قسم لتصنيف الإلكترونيات"<br>أو اضغط أي نوع فوق + استخدم الأدوات تحت 👇</div>
-                </div>
-                <div class="cs-chat-input">
-                  <input id="cs-chat-text" placeholder="اكتب وصف الصورة اللي تبيها..." onkeydown="if(event.key==='Enter')csSendChat()" data-testid="cs-chat-input">
-                  <button onclick="csSendChat()" data-testid="cs-chat-send"><i data-lucide="send" style="width:14px;height:14px"></i></button>
-                </div>
+              </div>
+              <div class="cs-chat-input cs-chat-input-v2">
+                <button class="cs-chat-attach" title="إرفاق صورة مرجعية" onclick="document.getElementById('cs-ref-file').click()"><i data-lucide="paperclip" style="width:15px;height:15px"></i></button>
+                <input type="file" id="cs-ref-file" accept="image/*" style="display:none" onchange="csAttachRef(this)">
+                <input id="cs-chat-text" placeholder="اطلب أي صورة بكلامك الطبيعي — أو اضغط 'توليد' بعد ضبط الأدوات..." onkeydown="if(event.key==='Enter')csSendChat()" data-testid="cs-chat-input">
+                <button class="cs-gen-btn-inline" onclick="csGenerate()" data-testid="cs-generate-btn" title="توليد 4 صور">
+                  <i data-lucide="sparkles" style="width:14px;height:14px"></i>
+                  <span>توليد · 32 نقطة</span>
+                </button>
+                <button class="cs-chat-send" onclick="csSendChat()" data-testid="cs-chat-send" title="إرسال"><i data-lucide="send" style="width:14px;height:14px"></i></button>
               </div>
             </div>
 
-            <!-- RIGHT · ACCORDION TOOLS + PREVIEW + GENERATE -->
-            <div class="cs-right">
-              <!-- Accordion Tools -->
-              <div class="cs-tools">
+            <!-- RIGHT · TOOLS SIDEBAR (compact, scrollable) -->
+            <aside class="cs-tools-side">
+              <div class="cs-tools-side-head">
+                <i data-lucide="sliders-horizontal" style="width:14px;height:14px;color:#fbbf24"></i>
+                <b style="font-size:12px;color:#fff">الأدوات</b>
+                <span style="font-size:10px;color:#94a3b8;margin-right:auto">الذكاء يحترمها بدقة</span>
+              </div>
+              <div class="cs-tools cs-tools-v2">
                 <details class="cs-tool" open>
-                  <summary><i data-lucide="palette" style="width:14px;height:14px"></i> 🎨 لون الخلفية <span class="cs-tool-hint" id="cs-bg-hint">أبيض</span></summary>
+                  <summary><i data-lucide="palette" style="width:13px;height:13px"></i> 🎨 الخلفية <span class="cs-tool-hint" id="cs-bg-hint">أبيض</span></summary>
                   <div class="cs-tool-body" id="cs-bg-presets"></div>
                 </details>
                 <details class="cs-tool">
-                  <summary><i data-lucide="frame" style="width:14px;height:14px"></i> 🖼️ لون الإطار <span class="cs-tool-hint" id="cs-frame-hint">بنفسجي</span></summary>
+                  <summary><i data-lucide="frame" style="width:13px;height:13px"></i> 🖼️ الإطار <span class="cs-tool-hint" id="cs-frame-hint">بنفسجي</span></summary>
                   <div class="cs-tool-body" id="cs-frame-presets"></div>
                 </details>
                 <details class="cs-tool">
-                  <summary><i data-lucide="aspect-ratio" style="width:14px;height:14px"></i> 📐 النسبة <span class="cs-tool-hint" id="cs-aspect-hint">16:9</span></summary>
+                  <summary><i data-lucide="ruler" style="width:13px;height:13px"></i> 📐 النسبة <span class="cs-tool-hint" id="cs-aspect-hint">16:9</span></summary>
                   <div class="cs-tool-body">
                     <div class="cs-aspect-grid">
                       <button class="cs-aspect-btn active" data-csasp="16:9" onclick="csPickAspect('16:9',this)">16:9<br><small>بنر عريض</small></button>
                       <button class="cs-aspect-btn" data-csasp="1:1" onclick="csPickAspect('1:1',this)">1:1<br><small>مربع</small></button>
                       <button class="cs-aspect-btn" data-csasp="9:16" onclick="csPickAspect('9:16',this)">9:16<br><small>ستوري</small></button>
-                      <button class="cs-aspect-btn" data-csasp="4:5" onclick="csPickAspect('4:5',this)">4:5<br><small>إنستقرام</small></button>
+                      <button class="cs-aspect-btn" data-csasp="4:5" onclick="csPickAspect('4:5',this)">4:5<br><small>إنستا</small></button>
                       <button class="cs-aspect-btn" data-csasp="3:1" onclick="csPickAspect('3:1',this)">3:1<br><small>هيرو</small></button>
                       <button class="cs-aspect-btn" data-csasp="4:3" onclick="csPickAspect('4:3',this)">4:3<br><small>كلاسيك</small></button>
+                    </div>
+                    <!-- Custom dimensions -->
+                    <div class="cs-custom-dim">
+                      <label style="font-size:10px;color:#94a3b8;display:block;margin-bottom:4px">أو حدد المقاس بدقة:</label>
+                      <div style="display:flex;gap:5px;align-items:center">
+                        <input type="number" id="cs-cw" placeholder="عرض" min="256" max="3840" style="flex:1;background:#0a0a14;border:1px solid #312e81;color:#fff;border-radius:6px;padding:5px 7px;font-size:11px;font-family:inherit" oninput="csCustomDim()">
+                        <span style="color:#475569">×</span>
+                        <input type="number" id="cs-ch" placeholder="طول" min="256" max="3840" style="flex:1;background:#0a0a14;border:1px solid #312e81;color:#fff;border-radius:6px;padding:5px 7px;font-size:11px;font-family:inherit" oninput="csCustomDim()">
+                      </div>
                     </div>
                   </div>
                 </details>
                 <details class="cs-tool">
-                  <summary><i data-lucide="sparkles" style="width:14px;height:14px"></i> ✨ النمط <span class="cs-tool-hint" id="cs-style-hint">حياتي</span></summary>
+                  <summary><i data-lucide="sparkles" style="width:13px;height:13px"></i> ✨ النمط <span class="cs-tool-hint" id="cs-style-hint">حياتي</span></summary>
                   <div class="cs-tool-body">
                     <div class="cs-style-grid">
                       <button class="cs-style-btn active" data-csstl="lifestyle" onclick="csPickStyle('lifestyle','حياتي',this)">🌿<br>حياتي</button>
@@ -1593,9 +1657,8 @@ select.ps-input option{background:#13131f;color:#fff}
                     </div>
                   </div>
                 </details>
-                <!-- Section-specific extra tool — only visible when type=section -->
                 <details class="cs-tool cs-tool-section" id="cs-tool-cat" style="display:none">
-                  <summary><i data-lucide="folder" style="width:14px;height:14px"></i> 🗂️ القسم/التصنيف <span class="cs-tool-hint" id="cs-cat-hint">ملابس</span></summary>
+                  <summary><i data-lucide="folder" style="width:13px;height:13px"></i> 🗂️ القسم <span class="cs-tool-hint" id="cs-cat-hint">ملابس</span></summary>
                   <div class="cs-tool-body">
                     <div class="cs-cat-grid">
                       <button class="cs-cat-btn active" onclick="csPickCat('ملابس','clothing fashion apparel',this)">👕 ملابس</button>
@@ -1607,30 +1670,24 @@ select.ps-input option{background:#13131f;color:#fff}
                       <button class="cs-cat-btn" onclick="csPickCat('صيدلية','pharmacy medicine wellness',this)">💊 صيدلية</button>
                       <button class="cs-cat-btn" onclick="csPickCat('قهوة','specialty coffee café',this)">☕ قهوة</button>
                       <button class="cs-cat-btn" onclick="csPickCat('رياضة','sports fitness athletics',this)">⚽ رياضة</button>
-                      <input type="text" id="cs-cat-custom" placeholder="أو اكتب اسم قسم مخصص..." onchange="csPickCat(this.value,this.value,null)" style="grid-column:1/-1;padding:8px 10px;background:#0a0a14;border:1px dashed #312e81;border-radius:8px;color:#fff;font-family:inherit;font-size:12px;margin-top:4px">
+                      <input type="text" id="cs-cat-custom" placeholder="أو اكتب اسم قسم..." onchange="csPickCat(this.value,this.value,null)" style="grid-column:1/-1;padding:7px 9px;background:#0a0a14;border:1px dashed #312e81;border-radius:7px;color:#fff;font-family:inherit;font-size:11px;margin-top:4px">
+                    </div>
+                  </div>
+                </details>
+                <!-- Placement target — where will this image be used? -->
+                <details class="cs-tool">
+                  <summary><i data-lucide="map-pin" style="width:13px;height:13px"></i> 📍 المكان <span class="cs-tool-hint" id="cs-place-hint">مكتبة</span></summary>
+                  <div class="cs-tool-body">
+                    <div style="display:flex;flex-direction:column;gap:5px">
+                      <button class="cs-place-btn active" data-csp="library" onclick="csPickPlace('library','مكتبة',this)">📚 احفظ في المكتبة فقط</button>
+                      <button class="cs-place-btn" data-csp="hero" onclick="csPickPlace('hero','بنر هيرو',this)">🌟 ضع كبنر هيرو في الصفحة الرئيسية</button>
+                      <button class="cs-place-btn" data-csp="category" onclick="csPickPlace('category','صفحة قسم',this)">🗂️ ضع في صفحة القسم (يتطلب اختيار قسم)</button>
+                      <button class="cs-place-btn" data-csp="promo" onclick="csPickPlace('promo','إعلان جانبي',this)">📢 ضع كإعلان جانبي</button>
                     </div>
                   </div>
                 </details>
               </div>
-
-              <!-- Preview Canvas + Generate -->
-              <div class="cs-canvas">
-                <div class="cs-canvas-frame" id="cs-canvas-frame">
-                  <div class="cs-canvas-empty">
-                    <i data-lucide="image" style="width:48px;height:48px;color:#312e81"></i>
-                    <b>المعاينة</b>
-                    <span>اضغط "توليد" → تظهر هنا 4 اقتراحات</span>
-                  </div>
-                </div>
-                <div class="cs-canvas-grid" id="cs-canvas-grid" style="display:none"></div>
-                <div class="cs-canvas-actions">
-                  <button class="cs-gen-btn" onclick="csGenerate()" data-testid="cs-generate-btn">
-                    <i data-lucide="sparkles" style="width:16px;height:16px"></i>
-                    <span>توليد 4 صور · 32 نقطة</span>
-                  </button>
-                </div>
-              </div>
-            </div>
+            </aside>
           </div>
         </div>
       </div>
