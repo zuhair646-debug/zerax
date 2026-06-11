@@ -575,14 +575,15 @@ body.cs-fullscreen .csb-action.csb-fs{background:linear-gradient(135deg,#fbbf24,
 .cs-chat-body-v2::-webkit-scrollbar-thumb{background:#312e81;border-radius:8px}
 .cs-chat-input-v2{display:flex;gap:8px;padding:16px 28px;border-top:1px solid #312e81;background:rgba(0,0,0,.4);align-items:center;max-width:1100px;width:100%;margin:0 auto;box-sizing:border-box}
 @media (max-width:768px){.cs-chat-input-v2{padding:12px 14px}}
-.cs-chat-input-v2 input[type="text"],.cs-chat-input-v2 #cs-chat-text{flex:1;background:#1e1b4b;border:1px solid #312e81;border-radius:10px;padding:11px 14px;color:#fff;font-family:inherit;font-size:13px}
-.cs-chat-input-v2 input:focus{outline:none;border-color:#fbbf24}
-.cs-chat-attach{background:#1e1b4b;border:1px solid #312e81;color:#a78bfa;width:38px;height:38px;border-radius:10px;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:.15s}
-.cs-chat-attach:hover{border-color:#7c3aed;color:#fff}
-.cs-chat-send{background:linear-gradient(135deg,#7c3aed,#ec4899);border:none;color:#fff;width:38px;height:38px;border-radius:10px;cursor:pointer;display:flex;align-items:center;justify-content:center}
-.cs-gen-btn-inline{background:linear-gradient(135deg,#fbbf24,#f59e0b);color:#0a0a14;border:none;padding:9px 14px;border-radius:10px;font-family:inherit;font-weight:900;font-size:12px;cursor:pointer;display:inline-flex;align-items:center;gap:6px;box-shadow:0 4px 14px rgba(251,191,36,.3);transition:.15s;white-space:nowrap}
-.cs-gen-btn-inline:hover{transform:translateY(-1px);box-shadow:0 6px 18px rgba(251,191,36,.4)}
-.cs-gen-btn-inline:disabled{opacity:.5;cursor:not-allowed;transform:none}
+.cs-chat-input-v2 input[type="text"],.cs-chat-input-v2 #cs-chat-text{flex:1;background:#1f2937;border:1px solid #374151;border-radius:10px;padding:12px 16px;color:#fff!important;font-family:inherit;font-size:13px;outline:none;-webkit-text-fill-color:#fff!important}
+.cs-chat-input-v2 input::placeholder,.cs-chat-input-v2 #cs-chat-text::placeholder{color:#6b7280!important;opacity:1}
+.cs-chat-input-v2 input:focus,.cs-chat-input-v2 #cs-chat-text:focus{border-color:#fbbf24}
+.cs-chat-mic{background:#1f2937;border:1px solid #374151;color:#9ca3af;width:38px;height:38px;border-radius:10px;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:.15s}
+.cs-chat-mic:hover{border-color:#fbbf24;color:#fbbf24}
+.cs-chat-mic.recording{background:#dc2626;border-color:#dc2626;color:#fff;animation:csMicPulse 1s ease infinite}
+@keyframes csMicPulse{0%,100%{box-shadow:0 0 0 0 rgba(220,38,38,.5)}50%{box-shadow:0 0 0 6px rgba(220,38,38,0)}}
+.cs-chat-send{background:#fbbf24;border:none;color:#0a0a14;width:38px;height:38px;border-radius:10px;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:.15s}
+.cs-chat-send:hover{background:#f59e0b}
 
 /* Right tools sidebar */
 .cs-tools-side{background:#13131f;display:flex;flex-direction:column;max-height:calc(100vh - 240px);overflow:hidden}
@@ -674,16 +675,17 @@ body.cs-fullscreen .cs-pill-fs{background:linear-gradient(135deg,#fbbf24,#f59e0b
 /* Option ROWS — DARK muted buttons (no pink/purple) */
 .cs-wizard-opts{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px;align-items:stretch}
 .cs-wizard-opts.col-2,.cs-wizard-opts.col-3,.cs-wizard-opts.col-4{display:flex;flex-wrap:wrap;gap:8px}
-.cs-wopt{background:#1f2937;border:1px solid #374151;color:#e5e7eb;border-radius:10px;padding:10px 16px;cursor:pointer;font-family:inherit;font-size:12.5px;font-weight:600;text-align:right;transition:all .18s;display:inline-flex;align-items:center;gap:9px;line-height:1.4;min-height:42px;flex:0 0 auto}
-.cs-wopt:hover{background:#374151;border-color:#4b5563;color:#fff}
-.cs-wopt.chosen{background:#fbbf24;border-color:#fbbf24;color:#0a0a14;font-weight:900}
-.cs-wopt .wopt-ico{width:28px;height:28px;border-radius:7px;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:15px;background:#0a0a14;border:1px solid #374151}
-.cs-wopt .wopt-text{display:flex;flex-direction:column;align-items:flex-start;line-height:1.3}
-.cs-wopt .wopt-text b{color:#fff;font-size:12.5px;font-weight:800}
-.cs-wopt .wopt-text small{color:#9ca3af;font-size:10.5px;font-weight:500;margin-top:1px}
-.cs-wopt-color{display:inline-flex;align-items:center;gap:9px;padding:8px 14px}
-.cs-wopt-color .swatch{width:20px;height:20px;border-radius:50%;border:2px solid rgba(255,255,255,.15);flex-shrink:0;box-shadow:0 2px 6px rgba(0,0,0,.5)}
-.cs-wopt-color b{color:#fff;font-size:12px;font-weight:700}
+.cs-wopt{background:#1f2937;border:1px solid #374151;color:#fff;border-radius:8px;padding:7px 12px;cursor:pointer;font-family:inherit;font-size:12px;font-weight:500;text-align:right;transition:all .15s;display:inline-flex;align-items:center;gap:7px;line-height:1.4;min-height:32px;flex:0 0 auto}
+.cs-wopt:hover{background:#374151;border-color:#fbbf24;color:#fff}
+.cs-wopt.chosen{background:#fbbf24;border-color:#fbbf24;color:#0a0a14;font-weight:700}
+.cs-wopt .wopt-ico{width:22px;height:22px;border-radius:5px;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:13px;background:#0a0a14;border:1px solid #374151}
+.cs-wopt .wopt-text{display:flex;flex-direction:column;align-items:flex-start;line-height:1.25}
+.cs-wopt .wopt-text b{color:#fff;font-size:12px;font-weight:600}
+.cs-wopt .wopt-text small{color:#9ca3af;font-size:10px;font-weight:400;margin-top:0}
+.cs-wopt.chosen .wopt-text b,.cs-wopt.chosen .wopt-text small{color:#0a0a14}
+.cs-wopt-color{display:inline-flex;align-items:center;gap:7px;padding:6px 11px}
+.cs-wopt-color .swatch{width:16px;height:16px;border-radius:50%;border:1.5px solid rgba(255,255,255,.15);flex-shrink:0}
+.cs-wopt-color b{color:#fff;font-size:11.5px;font-weight:600}
 .cs-wizard-back{margin-top:12px;background:transparent;border:1px solid #374151;color:#9ca3af;padding:6px 13px;border-radius:8px;font-family:inherit;font-size:10.5px;cursor:pointer;transition:.15s}
 .cs-wizard-back:hover{background:#1f2937;color:#fbbf24;border-color:#4b5563}
 
@@ -898,10 +900,10 @@ body.cs-fullscreen .cs-pill-fs{background:linear-gradient(135deg,#fbbf24,#f59e0b
       </div>
       <div class="topbar-actions" style="position:relative">
         <div style="position:relative">
-          <!-- Z Brand AI button (uses the OFFICIAL Zenrex logo from /zenrex-logo-sm.png) -->
-          <button class="notif-btn z-ai-btn" onclick="toggleAiChat()" title="مساعد Z الذكي · Zenrex AI" data-testid="topbar-z-ai" style="background:radial-gradient(circle at 30% 30%,#fde68a 0%,#fbbf24 35%,#0a0a14 100%);border:1px solid #fbbf24;color:#0a0a14;display:flex;align-items:center;justify-content:center;padding:0;width:44px;height:44px;box-shadow:0 4px 14px rgba(251,191,36,.35);position:relative;overflow:visible">
-            <img src="/zenrex-logo-sm.png" alt="Zenrex AI" style="width:30px;height:30px;object-fit:contain;filter:drop-shadow(0 1px 2px rgba(0,0,0,.3))">
-            <span style="position:absolute;bottom:-4px;right:-4px;background:linear-gradient(135deg,#7c3aed,#ec4899);color:#fff;font-size:7px;font-weight:900;padding:1px 5px;border-radius:99px;line-height:1.3;letter-spacing:.3px;box-shadow:0 2px 6px rgba(124,58,237,.4)">AI</span>
+          <!-- Z Brand AI button — BLACK background (logo always on black per brand) -->
+          <button class="notif-btn z-ai-btn" onclick="toggleAiChat()" title="مساعد Zenrex AI · شات ذكاء عام" data-testid="topbar-z-ai" style="background:#0a0a14;border:1px solid #fbbf24;color:#fff;display:flex;align-items:center;justify-content:center;padding:0;width:44px;height:44px;box-shadow:0 4px 14px rgba(251,191,36,.25);position:relative;overflow:visible">
+            <img src="/zenrex-logo-sm.png" alt="Zenrex AI" style="width:30px;height:30px;object-fit:contain">
+            <span style="position:absolute;bottom:-4px;right:-4px;background:#0a0a14;color:#fbbf24;font-size:7px;font-weight:900;padding:1px 5px;border-radius:99px;line-height:1.3;letter-spacing:.3px;border:1px solid #fbbf24">AI</span>
           </button>
         </div>
         <div style="position:relative">
@@ -1679,7 +1681,7 @@ body.cs-fullscreen .cs-pill-fs{background:linear-gradient(135deg,#fbbf24,#f59e0b
           <!-- Header — minimal, just identity with official Zenrex logo -->
           <div class="cs-head cs-head-clean">
             <div class="cs-head-left">
-              <div class="cs-head-ico" style="background:radial-gradient(circle at 30% 30%,#fde68a 0%,#fbbf24 35%,#0a0a14 100%);border:1px solid #fbbf24;padding:6px"><img src="/zenrex-logo-sm.png" alt="Zenrex" style="width:32px;height:32px;object-fit:contain;display:block"></div>
+              <div class="cs-head-ico" style="background:#0a0a14;border:1px solid #fbbf24;padding:6px"><img src="/zenrex-logo-sm.png" alt="Zenrex" style="width:32px;height:32px;object-fit:contain;display:block"></div>
               <div>
                 <h2 style="margin:0;font-size:20px;font-weight:900;color:#fff">الاستوديو الإبداعي · <span style="background:linear-gradient(135deg,#fbbf24,#f59e0b);-webkit-background-clip:text;-webkit-text-fill-color:transparent">Zenrex AI</span></h2>
                 <div style="font-size:11px;color:#cbd5e1;margin-top:3px">شات تفاعلي مدعوم بالذكاء الاصطناعي</div>
@@ -1711,11 +1713,8 @@ body.cs-fullscreen .cs-pill-fs{background:linear-gradient(135deg,#fbbf24,#f59e0b
                 <span class="csb-points" data-testid="cs-points"><i data-lucide="coins" style="width:13px;height:13px"></i> <b id="cs-points-val">—</b><span class="csb-points-lbl"> نقطة</span></span>
               </div>
               <div class="cs-chat-input cs-chat-input-v2">
-                <input id="cs-chat-text" placeholder="اكتب رسالتك أو اتبع الخطوات داخل المحادثة..." onkeydown="if(event.key==='Enter')csSendChat()" data-testid="cs-chat-input">
-                <button class="cs-gen-btn-inline" onclick="csGenerate()" data-testid="cs-generate-btn" title="توليد 4 صور">
-                  <i data-lucide="sparkles" style="width:14px;height:14px"></i>
-                  <span>توليد · 32 نقطة</span>
-                </button>
+                <input id="cs-chat-text" placeholder="اكتب رسالتك أو اتبع الخيارات بالأعلى..." onkeydown="if(event.key==='Enter')csSendChat()" data-testid="cs-chat-input" autocomplete="off">
+                <button class="cs-chat-mic" id="cs-mic-btn" onclick="csToggleVoice()" data-testid="cs-mic-btn" title="سجل بصوتك (تحويل إلى نص)"><i data-lucide="mic" style="width:14px;height:14px"></i></button>
                 <button class="cs-chat-send" onclick="csSendChat()" data-testid="cs-chat-send" title="إرسال"><i data-lucide="send" style="width:14px;height:14px"></i></button>
               </div>
             </div>
@@ -2516,26 +2515,40 @@ body.cs-fullscreen .cs-pill-fs{background:linear-gradient(135deg,#fbbf24,#f59e0b
 <!-- Old corner FAB removed — moved to topbar next to bell (see #topbar-z-ai) -->
 <button id="ai-fab" data-testid="ai-fab" onclick="toggleAiChat()" style="display:none"></button>
 
-<div id="ai-chat-panel" data-testid="ai-chat-panel" style="display:none;position:fixed;bottom:96px;left:24px;width:380px;max-width:90vw;height:540px;max-height:80vh;background:#fff;border-radius:18px;box-shadow:0 20px 60px rgba(0,0,0,.3);z-index:200;flex-direction:column;overflow:hidden;font-family:inherit">
-  <div style="background:linear-gradient(135deg,#7c3aed,#ec4899);color:#fff;padding:14px 18px;display:flex;justify-content:space-between;align-items:center">
-    <div>
-      <div style="font-size:14px;font-weight:900">🤖 Zenrex AI</div>
-      <div style="font-size:10px;opacity:.85">Claude Opus 4.5 · مساعدك الذكي</div>
+<!-- Topbar Z AI · General-purpose dark chat (black bg + Zenrex logo) -->
+<div id="ai-chat-panel" data-testid="ai-chat-panel" style="display:none;position:fixed;bottom:30px;left:30px;width:420px;max-width:92vw;height:580px;max-height:84vh;background:#0a0a14;border:1px solid #fbbf24;border-radius:16px;box-shadow:0 24px 70px rgba(0,0,0,.6);z-index:200;flex-direction:column;overflow:hidden;font-family:inherit">
+  <div style="background:#0f0f1a;color:#fff;padding:14px 18px;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid #1f2937">
+    <div style="display:flex;align-items:center;gap:10px">
+      <div style="background:#0a0a14;border:1px solid #fbbf24;width:36px;height:36px;border-radius:9px;display:flex;align-items:center;justify-content:center;padding:4px"><img src="/zenrex-logo-sm.png" alt="Zenrex AI" style="width:28px;height:28px;object-fit:contain"></div>
+      <div>
+        <div style="font-size:14px;font-weight:900;color:#fff">Zenrex AI</div>
+        <div style="font-size:10px;color:#9ca3af">مساعدك الذكي العام · سؤال أي شي</div>
+      </div>
     </div>
-    <button onclick="toggleAiChat()" style="background:rgba(255,255,255,.2);color:#fff;border:none;width:30px;height:30px;border-radius:50%;cursor:pointer;font-size:14px">×</button>
+    <button onclick="toggleAiChat()" data-testid="ai-chat-close" style="background:#1f2937;color:#9ca3af;border:1px solid #374151;width:32px;height:32px;border-radius:8px;cursor:pointer;font-size:14px">×</button>
   </div>
-  <div id="ai-chat-msgs" style="flex:1;padding:14px;overflow-y:auto;background:#faf5ff;display:flex;flex-direction:column;gap:10px">
-    <div style="background:#fff;padding:10px 14px;border-radius:12px;font-size:12px;color:#0f172a;line-height:1.6;box-shadow:0 1px 3px rgba(0,0,0,.05);align-self:flex-start;max-width:85%">
-      مرحبا! أنا Zenrex AI 🤖 — اسألني عن:<br>
-      • كيفية إضافة منتج أو قسم<br>
-      • تحليل أداء متجرك<br>
-      • نصائح تسويق وحملات<br>
-      • أي شي تحتاجه!
+  <div id="ai-chat-msgs" style="flex:1;padding:18px;overflow-y:auto;background:#0a0a14;display:flex;flex-direction:column;gap:14px">
+    <div style="background:#1f2937;border:1px solid #374151;padding:12px 14px;border-radius:10px;font-size:13px;color:#e5e7eb;line-height:1.7;align-self:flex-start;max-width:90%">
+      هلا والله 👋 معاك <b style="color:#fbbf24">Zenrex AI</b><br>
+      أنا مساعدك الذكي العام — اسألني عن:<br>
+      <span style="display:block;margin-top:6px;color:#9ca3af;font-size:12px">
+      📊 تحليل أداء متجرك وأرقامك<br>
+      📈 تذبذب السوق ونصائح بيع<br>
+      🎯 خطة تسويقية للعملاء الجدد<br>
+      💻 أسئلة برمجية وتقنية<br>
+      💡 أي فكرة تبي تطورها</span>
     </div>
   </div>
-  <div style="border-top:1px solid #e5e7eb;padding:10px;display:flex;gap:8px;background:#fff">
-    <input id="ai-chat-input" data-testid="ai-chat-input" placeholder="اكتب رسالتك..." onkeydown="if(event.key==='Enter')sendAiChat()" style="flex:1;padding:10px 14px;border:1.5px solid #e5e7eb;border-radius:10px;font-family:inherit;font-size:13px;outline:none">
-    <button onclick="sendAiChat()" data-testid="ai-chat-send" style="background:linear-gradient(135deg,#7c3aed,#ec4899);color:#fff;border:none;border-radius:10px;padding:0 16px;cursor:pointer;font-weight:900;font-size:13px">➤</button>
+  <!-- Quick suggestion chips -->
+  <div style="padding:8px 14px;display:flex;gap:6px;flex-wrap:wrap;border-top:1px solid #1f2937;background:#0f0f1a">
+    <button onclick="sendAiQuick('كيف أداء متجري هذا الأسبوع؟')" style="background:#1f2937;border:1px solid #374151;color:#e5e7eb;font-size:11px;padding:5px 10px;border-radius:99px;cursor:pointer;font-family:inherit">📊 أداء متجري</button>
+    <button onclick="sendAiQuick('أعطني خطة تسويقية لزيادة المبيعات')" style="background:#1f2937;border:1px solid #374151;color:#e5e7eb;font-size:11px;padding:5px 10px;border-radius:99px;cursor:pointer;font-family:inherit">🎯 خطة تسويق</button>
+    <button onclick="sendAiQuick('وش نصائحك لتخفيضات الجمعة البيضاء؟')" style="background:#1f2937;border:1px solid #374151;color:#e5e7eb;font-size:11px;padding:5px 10px;border-radius:99px;cursor:pointer;font-family:inherit">💡 نصائح</button>
+  </div>
+  <div style="border-top:1px solid #1f2937;padding:12px;display:flex;gap:8px;background:#0f0f1a;align-items:center">
+    <input id="ai-chat-input" data-testid="ai-chat-input" placeholder="اسأل أي شي..." onkeydown="if(event.key==='Enter')sendAiChat()" style="flex:1;padding:10px 14px;background:#1f2937;border:1px solid #374151;color:#fff;border-radius:9px;font-family:inherit;font-size:13px;outline:none">
+    <button onclick="csToggleVoice && csToggleVoice('ai-chat-input')" title="تسجيل صوتي" style="background:#1f2937;border:1px solid #374151;color:#9ca3af;width:38px;height:38px;border-radius:9px;cursor:pointer;display:flex;align-items:center;justify-content:center"><i data-lucide="mic" style="width:14px;height:14px"></i></button>
+    <button onclick="sendAiChat()" data-testid="ai-chat-send" style="background:#fbbf24;color:#0a0a14;border:none;border-radius:9px;padding:0 16px;cursor:pointer;font-weight:900;font-size:14px;height:38px">➤</button>
   </div>
 </div>
 
@@ -2550,13 +2563,13 @@ async function sendAiChat(){
   const msg = (inp.value || '').trim();
   if (!msg) return;
   const msgs = document.getElementById('ai-chat-msgs');
-  msgs.insertAdjacentHTML('beforeend', `<div style="background:linear-gradient(135deg,#7c3aed,#ec4899);color:#fff;padding:10px 14px;border-radius:12px;font-size:12px;align-self:flex-end;max-width:85%">${msg}</div>`);
+  msgs.insertAdjacentHTML('beforeend', `<div style="background:#fbbf24;color:#0a0a14;padding:10px 14px;border-radius:10px;font-size:13px;align-self:flex-end;max-width:90%;font-weight:500">${msg}</div>`);
   inp.value = '';
   msgs.scrollTop = msgs.scrollHeight;
-  // Typing indicator
+  // Typing indicator (dark style)
   const typing = document.createElement('div');
   typing.id = 'ai-typing';
-  typing.style.cssText = 'background:#fff;padding:10px 14px;border-radius:12px;font-size:12px;color:#94a3b8;align-self:flex-start;max-width:85%;font-style:italic';
+  typing.style.cssText = 'background:#1f2937;border:1px solid #374151;padding:10px 14px;border-radius:10px;font-size:12px;color:#9ca3af;align-self:flex-start;max-width:85%;font-style:italic';
   typing.textContent = 'يكتب...';
   msgs.appendChild(typing);
   msgs.scrollTop = msgs.scrollHeight;
@@ -2567,18 +2580,30 @@ async function sendAiChat(){
       headers:{'Content-Type':'application/json','Authorization':'Bearer ' + token},
       body: JSON.stringify({
         agent:'freebuild',
-        messages:[{role:'user', content: msg + ' (السياق: أنا تاجر في منصة Zenrex لإدارة متجر إلكتروني. أجبني بإيجاز وبالعربية)'}]
+        messages:[{role:'user', content: msg + ' (السياق: أنا تاجر في منصة Zenrex. ساعدني في: تحليل أداء، نصائح تسويق، أسئلة برمجية، تذبذب السوق، أو أي شي عام. أجبني بالعربية باختصار ووضوح)'}]
       })
     });
     const d = await r.json();
     document.getElementById('ai-typing')?.remove();
     const content = d.content || d.message || d.text || (d.detail ? 'خطأ: '+d.detail : 'لم أتمكن من الإجابة. حاول مرة أخرى.');
-    msgs.insertAdjacentHTML('beforeend', `<div style="background:#fff;padding:10px 14px;border-radius:12px;font-size:12px;color:#0f172a;line-height:1.6;box-shadow:0 1px 3px rgba(0,0,0,.05);align-self:flex-start;max-width:85%;white-space:pre-wrap">${content}</div>`);
+    msgs.insertAdjacentHTML('beforeend', `<div style="background:#1f2937;border:1px solid #374151;padding:12px 14px;border-radius:10px;font-size:13px;color:#e5e7eb;line-height:1.7;align-self:flex-start;max-width:90%;white-space:pre-wrap">${content}</div>`);
     msgs.scrollTop = msgs.scrollHeight;
+    // Deduct 1 point per AI reply (so the company benefits)
+    if(typeof WALLET !== 'undefined' && WALLET >= 1){
+      WALLET -= 1; localStorage.setItem('zx_credits', WALLET);
+      const wb = document.getElementById('wallet-balance'); if(wb) wb.textContent = WALLET.toLocaleString('ar-EG');
+      if(typeof csSyncPoints === 'function') csSyncPoints();
+    }
   } catch(e) {
     document.getElementById('ai-typing')?.remove();
-    msgs.insertAdjacentHTML('beforeend', `<div style="background:#fef2f2;color:#991b1b;padding:10px 14px;border-radius:12px;font-size:12px;align-self:flex-start;max-width:85%">⚠️ فشل الاتصال. تأكد من تسجيل الدخول وحاول مرة أخرى.</div>`);
+    msgs.insertAdjacentHTML('beforeend', `<div style="background:#7f1d1d;color:#fee2e2;padding:10px 14px;border-radius:10px;font-size:12px;align-self:flex-start;max-width:85%">⚠️ فشل الاتصال. تأكد من تسجيل الدخول وحاول مرة أخرى.</div>`);
   }
+}
+function sendAiQuick(text){
+  const inp = document.getElementById('ai-chat-input');
+  if(!inp) return;
+  inp.value = text;
+  sendAiChat();
 }
 
 // ─── Auto-render business templates when navigated to ───

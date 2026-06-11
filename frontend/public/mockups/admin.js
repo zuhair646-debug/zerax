@@ -4281,12 +4281,8 @@ function csBotMsg(html){
   wrap.appendChild(inner);
   body.appendChild(wrap);
   body.scrollTop = body.scrollHeight;
-  // ⚡ Deduct 1 credit per AI response (so the company benefits per interaction)
-  if(typeof WALLET !== 'undefined' && WALLET > 0){
-    WALLET -= 1; localStorage.setItem('zx_credits', WALLET);
-    const wb = document.getElementById('wallet-balance'); if(wb) wb.textContent = WALLET.toLocaleString('ar-EG');
-    csSyncPoints();
-  }
+  // NOTE: Wizard messages are pre-programmed (not real AI calls) — DO NOT charge credits.
+  // Credits are charged only on actual AI usage: free-form chat replies via csSendChat + image generation.
 }
 function csUserMsg(text){
   const body = document.getElementById('cs-chat-body');
@@ -4303,18 +4299,61 @@ function csUserMsg(text){
 async function csSendChat(){
   const inp = document.getElementById('cs-chat-text');
   const txt = (inp?.value || '').trim();
-  if(!txt){ toast('💬 اكتب رسالة أو اتبع الخطوات بالأزرار'); return; }
+  if(!txt){ toast('💬 اكتب رسالة أو اختر من الخيارات بالأعلى'); return; }
   csUserMsg(txt);
   inp.value = '';
-  // If wizard is mid-flow at the "idea" step, treat this as the idea
+  // If wizard is mid-flow at the "idea" step, treat this as the idea (no credit charge for this UX step)
   if(CS_WIZARD.step === 'idea'){
     CS_STATE._chatPrompt = txt;
     setTimeout(csWizardStepSize, 200);
     return;
   }
-  // Otherwise it's a free chat — store as prompt seed for next generate
+  // Otherwise — free-form AI conversation. Charge 1 credit per AI reply.
   CS_STATE._chatPrompt = txt;
-  csBotMsg(`✓ سجلت فكرتك: "<b>${txt}</b>"<br>إذا تبيها كصورة مباشرة — اضغط زر <b>"توليد"</b> 🎨`);
+  if(typeof WALLET !== 'undefined' && WALLET >= 1){
+    WALLET -= 1; localStorage.setItem('zx_credits', WALLET);
+    const wb = document.getElementById('wallet-balance'); if(wb) wb.textContent = WALLET.toLocaleString('ar-EG');
+    csSyncPoints();
+  }
+  csBotMsg(`✓ سجلت فكرتك: "<b>${txt}</b>"<br>إذا تبيها كصورة مباشرة — اضغط زر <b>"محادثة جديدة"</b> ثم اتبع الخيارات.`);
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// VOICE RECORDING — Web Speech API (Arabic)
+// ═══════════════════════════════════════════════════════════════════
+let CS_VOICE_REC = null;
+function csToggleVoice(){
+  const btn = document.getElementById('cs-mic-btn');
+  if(!btn) return;
+  // Stop if currently recording
+  if(CS_VOICE_REC){
+    try{ CS_VOICE_REC.stop(); }catch(e){}
+    CS_VOICE_REC = null;
+    btn.classList.remove('recording');
+    return;
+  }
+  // Start recording
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if(!SR){
+    toast('⚠️ المتصفح لا يدعم التسجيل الصوتي — جرب Chrome أو Edge');
+    return;
+  }
+  const rec = new SR();
+  rec.lang = 'ar-SA';
+  rec.continuous = false;
+  rec.interimResults = true;
+  rec.onstart = ()=>{ btn.classList.add('recording'); toast('🎤 اتكلم الآن...'); };
+  rec.onerror = (e)=>{ btn.classList.remove('recording'); toast('❌ فشل التسجيل: '+(e.error||'unknown')); CS_VOICE_REC = null; };
+  rec.onend = ()=>{ btn.classList.remove('recording'); CS_VOICE_REC = null; };
+  rec.onresult = (e)=>{
+    const txt = Array.from(e.results).map(r=>r[0].transcript).join('');
+    const inp = document.getElementById('cs-chat-text');
+    if(inp) inp.value = txt;
+    if(e.results[0].isFinal){
+      setTimeout(()=>csSendChat(), 200);
+    }
+  };
+  try{ rec.start(); CS_VOICE_REC = rec; }catch(e){ toast('❌ فشل بدء التسجيل'); }
 }
 
 // Generate via Gemini Nano Banana — STRICT color enforcement
