@@ -1,0 +1,46 @@
+{
+  "summary": "Re-tested Track 1 fixes on https://zenrex.ai per iteration_42 blockers. PASS: rebrand cleanup (no 'Zerax' anywhere, sidebar shows Zenrex), storefront footer now reads 'support@zenrex.ai' (no more 'info@brand.sa'), onboarding modal dismissal persists in localStorage as 'zx_onboarded' and does NOT reappear on reload, admin dashboard now makes REAL API calls (/api/delivery/orders, /api/delivery/stats, /api/store/products) instead of static demo data, and no fake demo names like 'سارة العنزي' are rendered. FAIL: the headline Track 1 fix — customer storefront placing a COD order via UI and persisting it to MongoDB — is STILL NOT WORKING. Walking the cart → checkout → fill name/phone/address/branch → COD → submit flow produced ZERO POST requests to /api/delivery/orders or /api/store/orders (only GETs were observed). Consequently the test order never appeared in admin orders or driver feed. Driver OTP flow could not be fully verified because the OTP input layout changed (single field, not 4 boxes) — minor selector issue, not a backend blocker.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [
+      {"flow": "Customer storefront → place COD order → persist to MongoDB → appear in admin", "issue": "BLOCKER (regression of iter_42 #1 — NOT fixed). Filled cart + checkout form with unique customer 'مختبر فحص 6716' / 0599186716, picked branch, clicked COD, hit 'إتمام الطلب'. Network trace captured ZERO POST to /api/delivery/orders, /api/store/orders, or /api/orders during the entire storefront session. Only GET /api/store/products + GET /api/ready-sites/* fired. Order therefore did not appear in admin orders list nor in driver feed. The storefront checkout submit handler is still purely client-side.", "affected_selectors": ["app_mode_full.html checkout submit (إتمام الطلب)", "admin orders table"]},
+      {"flow": "Driver app phone+OTP login (0552222222 / 1234)", "issue": "Could not complete OTP step in automated test — OTP screen renders a single combined input, not 4 separate digit inputs; my test script only handled the 4-box variant. Manual verification needed. Note: POST /api/delivery/driver/login DID fire (so phone step is wired), but verify-otp not reached due to fill mismatch.", "affected_selectors": ["driver_app.html OTP input"]}
+    ],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/test_reports/screenshots/iter43/01_storefront.png",
+    "/app/test_reports/screenshots/iter43/02_cart.png",
+    "/app/test_reports/screenshots/iter43/03_checkout_filled.png",
+    "/app/test_reports/screenshots/iter43/04_after_submit.png",
+    "/app/test_reports/screenshots/iter43/05_admin_initial.png",
+    "/app/test_reports/screenshots/iter43/06_admin_orders.png",
+    "/app/test_reports/screenshots/iter43/07_admin_reload.png",
+    "/app/test_reports/screenshots/iter43/08_driver_initial.png",
+    "/app/test_reports/screenshots/iter43/09_driver_loggedin.png",
+    "/app/test_reports/screenshots/iter43/10_errand.png",
+    "/app/test_reports/screenshots/iter43/11_driver_manager.png"
+  ],
+  "action_items": [
+    "BLOCKER (still open from iter_42) — Wire the storefront 'إتمام الطلب' (choosePay/submit) handler in /app/frontend/public/mockups/app_mode_full.js to actually fetch POST /api/delivery/orders (or /api/store/orders) with {customer_name, customer_phone, address, branch_id, items, total, payment_method:'cod'}. Verify by network tab. Reference pattern: admin.js renderOrders() already correctly fetches GET /api/delivery/orders?limit=50 — the create side just needs the same treatment.",
+    "Minor — Driver OTP input: either expose 4 separate boxes with data-testid='otp-digit-{i}' OR add data-testid='otp-input' on the combined input so automation can target it reliably. Then re-test driver_app feed showing the newly created order.",
+    "Once order POST is wired, retest end-to-end: storefront COD order → admin orders table shows it with matching name/phone/total → driver_app feed shows it as available → driver accepts → status update propagates back to admin.",
+    "Retest errand.html form submission to /api/delivery/external or equivalent (couldn't validate without submitting because the storefront blocker takes priority).",
+    "Retest driver_manager.html pricing PATCH /api/delivery/settings → next storefront checkout reflects new per_km / base fee."
+  ],
+  "critical_code_review_comments": [
+    "Track 1 admin-side wiring is genuinely done — admin.js now fetches /api/delivery/orders + /api/delivery/stats + /api/store/products. KPIs/orders should be live once real orders exist. Good progress vs iter_42.",
+    "However the storefront submit is still mocked. Verify by grepping app_mode_full.js for 'fetch(' near choosePay/إتمام الطلب — most likely the success modal is opened directly without awaiting any backend call.",
+    "Rebrand cleanup is now complete (no Zerax anywhere), and footer email + onboarding persistence are correctly fixed. These were quick wins and are verified.",
+    "Recommend adding a smoke-test endpoint hit (e.g., a small JS assertion that POST /api/delivery/orders returns 200/201) inside the existing choosePay handler so this regression cannot ship again."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "N/A (frontend-only run)", "frontend": "Footer 100%, Rebrand 100%, Onboarding-persistence 100%, Admin live-data 100%, Storefront order-persistence 0% (blocker remains), Driver feed E2E 0% (gated by storefront blocker), errand/driver_manager basic load 100%"},
+  "test_credentials": "owner@zenrex.ai / owner123 (works). Driver 0552222222 / OTP 1234 (login API hit, verify-otp not completed due to input-shape mismatch).",
+  "seed_data_creation": "Attempted: customer 'مختبر فحص 6716' phone 0599186716 on storefront — but order was never persisted (no POST), so nothing to clean up.",
+  "retest_needed": true,
+  "main_agent_can_self_test": false,
+  "context_for_next_testing_agent": "iter_42 had 3 BLOCKERS: (1) storefront order persistence, (2) admin static data, (3) Zerax rebrand. THIS RUN (iter_43): (2) and (3) FIXED + footer email + onboarding persistence FIXED. (1) STILL OPEN — the storefront still does not POST the order. Main agent must hook choosePay()/إتمام الطلب submit in /app/frontend/public/mockups/app_mode_full.js to /api/delivery/orders POST. Once fixed, repeat: place COD order with unique name/phone → verify GET /api/delivery/orders in admin returns it → verify driver_app feed returns it → driver accepts → admin sees status change. Also re-verify driver OTP UI by either standardizing on 4 boxes with data-testid='otp-digit-N' or adding data-testid='otp-input' to combined input.",
+  "rca of the issue": "ROOT CAUSE — In /app/frontend/public/mockups/app_mode_full.js the choosePay() / checkout submit handler likely still goes: clearCart() → showSuccessModal() without an intermediate await fetch('/api/delivery/orders',{method:'POST',body:JSON.stringify(orderPayload)}). Confirmed via DevTools Network during automated test: only GETs were issued, no order POST. REPRODUCTION: open https://zenrex.ai/mockups/app_mode_full.html, add product, open cart, click إتمام الطلب, fill form, pick COD, submit — observe success modal but no POST in Network. MITIGATION: in app_mode_full.js locate the success-modal trigger after إتمام الطلب and wrap it in: const res = await fetch(`${API}/api/delivery/orders`, {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({customer_name, customer_phone, address, branch_id, items, total_sar:total, payment_method:'cod'})}); if(!res.ok){alert('فشل إنشاء الطلب'); return;} const order = await res.json(); then show success modal with order.id. Admin GET /api/delivery/orders already works and will surface it instantly."
+}
