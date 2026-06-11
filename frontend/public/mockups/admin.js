@@ -4273,19 +4273,31 @@ function csPickFrame(hex, label){
 function csBotMsg(html){
   const body = document.getElementById('cs-chat-body');
   if(!body) return;
-  const div = document.createElement('div');
-  div.className = 'cs-msg cs-msg-bot';
-  div.innerHTML = html;
-  body.appendChild(div);
+  const wrap = document.createElement('div');
+  wrap.className = 'cs-msg cs-msg-bot';
+  const inner = document.createElement('div');
+  inner.className = 'cs-msg-inner';
+  inner.innerHTML = html;
+  wrap.appendChild(inner);
+  body.appendChild(wrap);
   body.scrollTop = body.scrollHeight;
+  // ⚡ Deduct 1 credit per AI response (so the company benefits per interaction)
+  if(typeof WALLET !== 'undefined' && WALLET > 0){
+    WALLET -= 1; localStorage.setItem('zx_credits', WALLET);
+    const wb = document.getElementById('wallet-balance'); if(wb) wb.textContent = WALLET.toLocaleString('ar-EG');
+    csSyncPoints();
+  }
 }
 function csUserMsg(text){
   const body = document.getElementById('cs-chat-body');
   if(!body) return;
-  const div = document.createElement('div');
-  div.className = 'cs-msg cs-msg-user';
-  div.textContent = text;
-  body.appendChild(div);
+  const wrap = document.createElement('div');
+  wrap.className = 'cs-msg cs-msg-user';
+  const inner = document.createElement('div');
+  inner.className = 'cs-msg-inner';
+  inner.textContent = text;
+  wrap.appendChild(inner);
+  body.appendChild(wrap);
   body.scrollTop = body.scrollHeight;
 }
 async function csSendChat(){

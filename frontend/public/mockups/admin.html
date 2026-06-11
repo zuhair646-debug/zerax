@@ -649,37 +649,50 @@ body.cs-fullscreen .cs-pill-fs{background:linear-gradient(135deg,#fbbf24,#f59e0b
   .cs-body-v2{grid-template-columns:1fr!important}
 }
 
-/* ──────────────────────── WIZARD ROWS (inline in chat — wide & clean, NOT boxed) ──────────────────────── */
-.cs-wizard-card{background:transparent;border:none;border-radius:0;padding:6px 0 14px;max-width:100%;align-self:stretch;animation:csSlideIn .35s ease;border-bottom:1px dashed rgba(124,58,237,.2)}
+/* ──────────────────────── CHAT MESSAGES — ChatGPT-style clean (white text, dark/muted tones) ──────────────────────── */
+.cs-msg{padding:18px 0;border:none;background:transparent;color:#e5e7eb;display:flex;gap:14px;border-bottom:1px solid rgba(255,255,255,.04);font-size:14px;line-height:1.75;max-width:100%;align-items:flex-start}
+.cs-msg-inner{flex:1;min-width:0}
+.cs-msg-bot::before,.cs-msg-user::before{content:'';flex-shrink:0;width:34px;height:34px;border-radius:8px;background-position:center;background-repeat:no-repeat}
+.cs-msg-bot::before{background-color:#0a0a14;border:1px solid #fbbf24;background-image:url('/zenrex-logo-sm.png');background-size:80%}
+.cs-msg-user::before{background:linear-gradient(135deg,#475569,#1e293b);border:1px solid #475569;display:flex;align-items:center;justify-content:center;background-image:linear-gradient(135deg,#475569,#1e293b);position:relative}
+.cs-msg-user .cs-msg-inner{color:#f9fafb;font-weight:500}
+.cs-msg b{color:#fff;font-weight:700}
+.cs-msg i{color:#cbd5e1}
+
+/* User avatar shows "أنت" text — use a clean SVG-via-CSS trick */
+.cs-msg-user::before{background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%23fbbf24'><path d='M12 2a5 5 0 015 5 5 5 0 01-5 5 5 5 0 01-5-5 5 5 0 015-5m0 12c5 0 9 2.5 9 5v3H3v-3c0-2.5 4-5 9-5z'/></svg>");background-size:60%}
+
+/* ──────────────────────── WIZARD — dark / muted style (NOT pink/purple bubbles) ──────────────────────── */
+.cs-wizard-card{background:transparent;border:none;border-radius:0;padding:18px 0 14px 0;max-width:100%;align-self:stretch;animation:csSlideIn .35s ease;color:#e5e7eb;border-bottom:1px solid rgba(255,255,255,.04);position:relative;padding-right:48px}
 @keyframes csSlideIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
-.cs-wizard-card .wiz-head{display:flex;align-items:center;gap:10px;margin-bottom:8px}
-.cs-wizard-card .wiz-step{background:linear-gradient(135deg,#fbbf24,#f59e0b);color:#0a0a14;padding:3px 11px;border-radius:99px;font-size:10px;font-weight:900;letter-spacing:.3px}
-.cs-wizard-card .wiz-q{font-size:14px;color:#fff;font-weight:700;line-height:1.55;padding-right:2px}
-.cs-wizard-card .wiz-hint{font-size:11px;color:#a78bfa;margin-top:6px;background:rgba(167,139,250,.08);padding:7px 12px;border-radius:8px;display:inline-block}
+.cs-wizard-card::before{content:'';position:absolute;top:18px;right:0;width:34px;height:34px;background:#0a0a14;border:1px solid #fbbf24;border-radius:8px;background-image:url('/zenrex-logo-sm.png');background-size:80%;background-repeat:no-repeat;background-position:center}
+.cs-wizard-card .wiz-head{display:flex;align-items:center;gap:10px;margin-bottom:6px}
+.cs-wizard-card .wiz-step{background:#1f2937;color:#fbbf24;padding:3px 11px;border-radius:99px;font-size:10px;font-weight:900;letter-spacing:.3px;border:1px solid #374151}
+.cs-wizard-card .wiz-q{font-size:14.5px;color:#fff;font-weight:600;line-height:1.65}
+.cs-wizard-card .wiz-hint{font-size:11.5px;color:#9ca3af;margin-top:6px;background:#0f172a;border:1px solid #1e293b;padding:8px 12px;border-radius:8px;display:block}
 
-/* Option ROWS — wide horizontal line of buttons, NOT a grid of boxes */
-.cs-wizard-opts{display:flex;flex-wrap:wrap;gap:8px;margin-top:14px;align-items:stretch}
+/* Option ROWS — DARK muted buttons (no pink/purple) */
+.cs-wizard-opts{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px;align-items:stretch}
 .cs-wizard-opts.col-2,.cs-wizard-opts.col-3,.cs-wizard-opts.col-4{display:flex;flex-wrap:wrap;gap:8px}
-.cs-wopt{background:#0f0f1a;border:1px solid #312e81;color:#cbd5e1;border-radius:12px;padding:10px 16px;cursor:pointer;font-family:inherit;font-size:12.5px;font-weight:700;text-align:right;transition:all .18s;display:inline-flex;align-items:center;gap:9px;line-height:1.4;min-height:42px;flex:0 0 auto}
-.cs-wopt:hover{border-color:#7c3aed;background:rgba(124,58,237,.12);transform:translateY(-1px);color:#fff;box-shadow:0 6px 16px rgba(124,58,237,.18)}
-.cs-wopt.chosen{background:linear-gradient(135deg,#10b981,#059669);border-color:#10b981;color:#fff;box-shadow:0 4px 14px rgba(16,185,129,.3)}
-.cs-wopt .wopt-ico{width:28px;height:28px;border-radius:8px;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:15px}
+.cs-wopt{background:#1f2937;border:1px solid #374151;color:#e5e7eb;border-radius:10px;padding:10px 16px;cursor:pointer;font-family:inherit;font-size:12.5px;font-weight:600;text-align:right;transition:all .18s;display:inline-flex;align-items:center;gap:9px;line-height:1.4;min-height:42px;flex:0 0 auto}
+.cs-wopt:hover{background:#374151;border-color:#4b5563;color:#fff}
+.cs-wopt.chosen{background:#fbbf24;border-color:#fbbf24;color:#0a0a14;font-weight:900}
+.cs-wopt .wopt-ico{width:28px;height:28px;border-radius:7px;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:15px;background:#0a0a14;border:1px solid #374151}
 .cs-wopt .wopt-text{display:flex;flex-direction:column;align-items:flex-start;line-height:1.3}
-.cs-wopt .wopt-text b{color:#fff;font-size:12.5px;font-weight:900}
-.cs-wopt .wopt-text small{color:#94a3b8;font-size:10px;font-weight:500;margin-top:1px}
-.cs-wopt:hover .wopt-text small{color:#cbd5e1}
+.cs-wopt .wopt-text b{color:#fff;font-size:12.5px;font-weight:800}
+.cs-wopt .wopt-text small{color:#9ca3af;font-size:10.5px;font-weight:500;margin-top:1px}
 .cs-wopt-color{display:inline-flex;align-items:center;gap:9px;padding:8px 14px}
-.cs-wopt-color .swatch{width:20px;height:20px;border-radius:50%;border:2px solid rgba(255,255,255,.15);flex-shrink:0;box-shadow:0 2px 6px rgba(0,0,0,.3)}
-.cs-wopt-color b{color:#fff;font-size:12px;font-weight:800}
-.cs-wizard-back{margin-top:12px;background:transparent;border:1px dashed #475569;color:#94a3b8;padding:6px 13px;border-radius:99px;font-family:inherit;font-size:10.5px;cursor:pointer;transition:.15s}
-.cs-wizard-back:hover{border-color:#fbbf24;color:#fbbf24}
+.cs-wopt-color .swatch{width:20px;height:20px;border-radius:50%;border:2px solid rgba(255,255,255,.15);flex-shrink:0;box-shadow:0 2px 6px rgba(0,0,0,.5)}
+.cs-wopt-color b{color:#fff;font-size:12px;font-weight:700}
+.cs-wizard-back{margin-top:12px;background:transparent;border:1px solid #374151;color:#9ca3af;padding:6px 13px;border-radius:8px;font-family:inherit;font-size:10.5px;cursor:pointer;transition:.15s}
+.cs-wizard-back:hover{background:#1f2937;color:#fbbf24;border-color:#4b5563}
 
-/* Summary card (final step) — keep this one as a card */
-.cs-summary{background:rgba(16,185,129,.06);border:1px solid rgba(16,185,129,.3);border-radius:12px;padding:14px;margin-top:12px}
-.cs-summary-row{display:flex;justify-content:space-between;padding:5px 0;font-size:12px;border-bottom:1px dashed rgba(16,185,129,.15)}
+/* Summary card (final step) — muted dark green for "ready" */
+.cs-summary{background:#0f1419;border:1px solid #1e293b;border-radius:10px;padding:14px;margin-top:12px}
+.cs-summary-row{display:flex;justify-content:space-between;padding:6px 0;font-size:12.5px;border-bottom:1px solid rgba(255,255,255,.04)}
 .cs-summary-row:last-child{border:0}
-.cs-summary-row span:first-child{color:#94a3b8}
-.cs-summary-row span:last-child{color:#fff;font-weight:700}
+.cs-summary-row span:first-child{color:#9ca3af}
+.cs-summary-row span:last-child{color:#fff;font-weight:600}
 
 /* ──────────────────────── FULLSCREEN PREVIEW OVERLAY ──────────────────────── */
 .cs-fs-preview{position:fixed;inset:0;background:#0a0a14;z-index:10000;display:flex;flex-direction:column;animation:csSlideIn .25s}
@@ -885,11 +898,10 @@ body.cs-fullscreen .cs-pill-fs{background:linear-gradient(135deg,#fbbf24,#f59e0b
       </div>
       <div class="topbar-actions" style="position:relative">
         <div style="position:relative">
-          <!-- Z Brand AI button (replaces old corner fab) -->
-          <button class="notif-btn z-ai-btn" onclick="toggleAiChat()" title="مساعد Z الذكي" data-testid="topbar-z-ai" style="background:linear-gradient(135deg,#7c3aed,#ec4899);border:none;color:#fff;display:flex;flex-direction:column;align-items:center;justify-content:center;line-height:1;padding:0;width:44px;height:44px;box-shadow:0 4px 14px rgba(124,58,237,.35);position:relative">
-            <span style="font-size:8px;line-height:1;margin-bottom:1px;filter:drop-shadow(0 1px 2px rgba(0,0,0,.4))">👑</span>
-            <span style="font-size:16px;font-weight:900;line-height:1;letter-spacing:.5px">Z</span>
-            <span style="position:absolute;bottom:-3px;background:#fbbf24;color:#0a0a14;font-size:7px;font-weight:900;padding:1px 5px;border-radius:99px;line-height:1.3">AI</span>
+          <!-- Z Brand AI button (uses the OFFICIAL Zenrex logo from /zenrex-logo-sm.png) -->
+          <button class="notif-btn z-ai-btn" onclick="toggleAiChat()" title="مساعد Z الذكي · Zenrex AI" data-testid="topbar-z-ai" style="background:radial-gradient(circle at 30% 30%,#fde68a 0%,#fbbf24 35%,#0a0a14 100%);border:1px solid #fbbf24;color:#0a0a14;display:flex;align-items:center;justify-content:center;padding:0;width:44px;height:44px;box-shadow:0 4px 14px rgba(251,191,36,.35);position:relative;overflow:visible">
+            <img src="/zenrex-logo-sm.png" alt="Zenrex AI" style="width:30px;height:30px;object-fit:contain;filter:drop-shadow(0 1px 2px rgba(0,0,0,.3))">
+            <span style="position:absolute;bottom:-4px;right:-4px;background:linear-gradient(135deg,#7c3aed,#ec4899);color:#fff;font-size:7px;font-weight:900;padding:1px 5px;border-radius:99px;line-height:1.3;letter-spacing:.3px;box-shadow:0 2px 6px rgba(124,58,237,.4)">AI</span>
           </button>
         </div>
         <div style="position:relative">
@@ -1664,13 +1676,13 @@ body.cs-fullscreen .cs-pill-fs{background:linear-gradient(135deg,#fbbf24,#f59e0b
            ═══════════════════════════════════════════════════════════════════ -->
       <div class="page" data-page="creative-studio">
         <div class="cs-wrap">
-          <!-- Header — minimal, just identity (no pills) -->
+          <!-- Header — minimal, just identity with official Zenrex logo -->
           <div class="cs-head cs-head-clean">
             <div class="cs-head-left">
-              <div class="cs-head-ico"><i data-lucide="image-plus" style="width:22px;height:22px"></i></div>
+              <div class="cs-head-ico" style="background:radial-gradient(circle at 30% 30%,#fde68a 0%,#fbbf24 35%,#0a0a14 100%);border:1px solid #fbbf24;padding:6px"><img src="/zenrex-logo-sm.png" alt="Zenrex" style="width:32px;height:32px;object-fit:contain;display:block"></div>
               <div>
-                <h2 style="margin:0;font-size:20px;font-weight:900;color:#fff">الاستوديو الإبداعي · <span style="background:linear-gradient(135deg,#fbbf24,#ec4899);-webkit-background-clip:text;-webkit-text-fill-color:transparent">Z</span></h2>
-                <div style="font-size:11px;color:#cbd5e1;margin-top:3px">شات تفاعلي — اتبع الخطوات اللي تظهر في المحادثة</div>
+                <h2 style="margin:0;font-size:20px;font-weight:900;color:#fff">الاستوديو الإبداعي · <span style="background:linear-gradient(135deg,#fbbf24,#f59e0b);-webkit-background-clip:text;-webkit-text-fill-color:transparent">Zenrex AI</span></h2>
+                <div style="font-size:11px;color:#cbd5e1;margin-top:3px">شات تفاعلي مدعوم بالذكاء الاصطناعي</div>
               </div>
             </div>
           </div>
@@ -1680,9 +1692,11 @@ body.cs-fullscreen .cs-pill-fs{background:linear-gradient(135deg,#fbbf24,#f59e0b
             <div class="cs-chat-main">
               <div class="cs-chat-body cs-chat-body-v2" id="cs-chat-body">
                 <div class="cs-msg cs-msg-bot">
-                  <b>هلا والله 👋 معاك <span style="background:linear-gradient(135deg,#fbbf24,#ec4899);-webkit-background-clip:text;-webkit-text-fill-color:transparent;font-weight:900">Z</span> — مساعدك في الاستوديو الإبداعي.</b><br>
-                  راح أمشي معاك خطوة بخطوة. اختياراتك تظهر هنا بالمحادثة مباشرة 👇<br>
-                  <span style="display:block;margin-top:8px;font-size:11px;color:#a78bfa;background:rgba(167,139,250,.1);padding:7px 10px;border-radius:8px">💡 الذكاء ملزم بأي اختيار تضغطه — مايحيد عنه أبداً.</span>
+                  <div class="cs-msg-inner">
+                    <b>هلا والله 👋 معاك Zenrex AI</b><br>
+                    أنا هنا أساعدك تصمم بنر، لوجو، صورة قسم، أو أي شي بصري لمتجرك. راح أمشي معاك خطوة بخطوة.<br>
+                    <span style="display:block;margin-top:10px;font-size:12px;color:#9ca3af">💡 الذكاء ملزم بكل اختيار تضغطه — مايحيد عنه أبداً.</span>
+                  </div>
                 </div>
               </div>
               <!-- Studio Bar — clean horizontal toolbar JUST ABOVE the chat input -->
