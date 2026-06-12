@@ -124,9 +124,16 @@ async def test_desktop_pair_tool():
     res = await desktop_pair(Ctx(), {})
     assert res["ok"] is True
     assert len(res["code"]) == 6
+    # Code charset must exclude 0/O/I/1
+    for c in res["code"]:
+        assert c not in "0OI1", f"invalid char {c} in code {res['code']}"
     assert "download_url" in res
     assert "/api/desktop-agent/download" in res["download_url"]
-    assert res["code"] in res["instructions"]
+    # New: explicit verbatim instruction for the model
+    assert "display_block" in res
+    assert res["code"] in res["display_block"]
+    assert "model_instruction" in res
+    assert res["code"] in res["model_instruction"]
 
 
 @pytest.mark.asyncio

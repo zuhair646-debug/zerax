@@ -27,10 +27,14 @@ DESKTOP_TOOL_SCHEMAS: List[Dict[str, Any]] = [
         "description": (
             "🖥️ Start a pairing handshake so the OWNER can connect their PHYSICAL "
             "laptop (Mac/Windows/Linux) to this AI session. Returns a 6-character "
-            "code and a ZIP download URL for the Zenrex Desktop Agent. Use this "
-            "ONCE per session before any other `desktop_*` tool. After the user "
-            "runs the agent with the code, you gain native OS control: mouse, "
-            "keyboard, downloads, opening apps, screenshots of the whole desktop."
+            "`code` field + a ready-rendered `display_block`. "
+            "⚠️ CRITICAL: The `code` field is AUTHORITATIVE — echo it VERBATIM to "
+            "the user. Never invent, paraphrase, or modify it. Valid characters "
+            "are uppercase A-Z and digits 2-9 only (no 0/O/I/1). Prefer copying "
+            "the entire `display_block` text into your reply to guarantee accuracy. "
+            "Use this ONCE per session before any other `desktop_*` tool. After "
+            "the user runs the agent with the code, you gain native OS control: "
+            "mouse, keyboard, downloads, opening apps, screenshots of the whole desktop."
         ),
         "input_schema": {"type": "object", "properties": {}, "required": []},
     },
@@ -127,23 +131,34 @@ async def desktop_pair(ctx, args: Dict[str, Any]) -> Dict[str, Any]:
         from .local_browser_relay import create_desktop_pairing
         info = create_desktop_pairing(ctx.project_id)
         base = _public_base()
-        sh_cmd = f'curl -fsSL {base}/api/desktop-agent/bootstrap.sh | bash -s -- {info["code"]}'
-        ps_cmd = f'iwr {base}/api/desktop-agent/bootstrap.ps1 -useb | iex'
+        code = info["code"]  # <-- AUTHORITATIVE. Echo this string verbatim.
+        ps_cmd = f"iwr {base}/api/desktop-agent/bootstrap.ps1 -useb | iex"
+        sh_cmd = f"curl -fsSL {base}/api/desktop-agent/bootstrap.sh | bash"
+        # display_block is ready-to-render markdown the model can copy 1:1.
+        display_block = (
+            f"🔑 **رمز ربط الجهاز:** `{code}`  ⏱️ صالح 10 دقايق\n\n"
+            f"━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+            f"**الحالة الأولى — التطبيق مركّب عندك:**\n"
+            f"افتح أيقونة **\"Zenrex Desktop Agent\"** من سطح المكتب → "
+            f"الصق الرمز `{code}` في الخانة → اضغط **Connect**.\n\n"
+            f"**الحالة الثانية — أول مرة (يحتاج تثبيت):**\n"
+            f"افتح **PowerShell** (Start → اكتب `powershell`) والصق:\n"
+            f"```powershell\n{ps_cmd}\n```\n"
+            f"لما يطلب الرمز اكتب: **`{code}`**\n"
+            f"━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+        )
         return {
             "ok": True,
-            "code": info["code"],
+            "code": code,                                            # <-- AUTHORITATIVE
             "expires_in_seconds": info["expires_in_seconds"],
             "download_url": f"{base}/api/desktop-agent/download" if base else "/api/desktop-agent/download",
-            "one_line_install_mac_linux": sh_cmd,
-            "one_line_install_windows": ps_cmd,
-            "instructions": (
-                "🚀 **أسهل طريقة — أمر واحد ينزّل ويشغّل كل شي:**\n\n"
-                f"**Mac / Linux** (Terminal):\n"
-                f"```bash\n{sh_cmd}\n```\n\n"
-                f"**Windows** (PowerShell):\n"
-                f"```powershell\n{ps_cmd} {info['code']}\n```\n\n"
-                f"🔑 الرمز: **{info['code']}** (صالح 10 دقايق)\n"
-                f"بعد التشغيل بيطلع لك ✅ Connected، وأقدر أتحكم في جهازك مباشرة."
+            "install_command_windows": ps_cmd,
+            "install_command_mac_linux": sh_cmd,
+            "display_block": display_block,
+            "model_instruction": (
+                "CRITICAL: Echo the `code` field VERBATIM in your reply. "
+                "Do NOT modify, rephrase, or invent a code. The user MUST receive "
+                f"exactly: {code}"
             ),
         }
     except Exception as e:
