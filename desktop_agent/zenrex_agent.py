@@ -176,7 +176,13 @@ def download_file(params: dict) -> dict:
     name = "".join(c for c in name if c.isalnum() or c in "._-")[:120] or "download"
     dest = DOWNLOADS_DIR / name
     try:
-        urllib.request.urlretrieve(url, dest)
+        req = urllib.request.Request(url, headers={
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+                          "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+            "Accept": "*/*",
+        })
+        with urllib.request.urlopen(req, timeout=30) as resp, open(dest, "wb") as f:
+            f.write(resp.read())
         return {"ok": True, "path": str(dest), "bytes": dest.stat().st_size}
     except Exception as e:
         return {"ok": False, "error": f"{type(e).__name__}: {e}"}

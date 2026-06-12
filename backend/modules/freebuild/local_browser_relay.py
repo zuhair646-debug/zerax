@@ -205,6 +205,51 @@ _DESKTOP_PENDING: Dict[str, Dict[str, asyncio.Future]] = {}
 
 DESKTOP_COMMAND_TIMEOUT_SECONDS = 60  # screenshots / downloads can take longer
 
+# ─── MongoDB persistence (survives backend restarts) ──────────────────────────
+# When the backend reboots, in-memory _DESKTOP_PAIRINGS is wiped — but the
+# Desktop Agent script on the user's machine keeps trying to reconnect using
+# its saved code. We persist pairings to Mongo so reconnections work seamlessly.
+_db_ref: Any = None  # set by server startup via set_relay_db()
+
+
+def set_relay_db(db) -> None:
+    """Called once from server.py to give the relay a MongoDB handle."""
+    global _db_ref
+    _db_ref = db
+
+
+async def _persist_pairing(code: str, project_id: str, expires_at: float) -> None:
+    if _db_ref is None:
+        return
+    try:
+        await _db_ref.desktop_pairings.update_one(
+            {"_id": code},
+            {"$set": {"project_id": project_id, "expires_at": expires_at,
+                      "ws_connected": False}},
+            upsert=True,
+        )
+    except Exception as e:
+        logger.warning(f"[desktop] persist failed: {e}")
+
+
+async def _lookup_pairing_in_db(code: str) -> Optional[Dict[str, Any]]:
+    if _db_ref is None:
+        return None
+    try:
+        doc = await _db_ref.desktop_pairings.find_one({"_id": code})
+        if not doc:
+            return None
+        if doc.get("expires_at", 0) < time.time():
+            return None
+        return {
+            "project_id": doc["project_id"],
+            "expires_at": doc["expires_at"],
+            "ws_connected": False,
+        }
+    except Exception as e:
+        logger.warning(f"[desktop] db lookup failed: {e}")
+        return None
+
 
 def _cleanup_expired_desktop_pairings() -> None:
     now = time.time()
@@ -217,11 +262,18 @@ def create_desktop_pairing(project_id: str) -> Dict[str, Any]:
     """Generate a 6-char pairing code for the Desktop Agent."""
     _cleanup_expired_desktop_pairings()
     code = _generate_pairing_code()
+    expires_at = time.time() + PAIRING_TTL_SECONDS
     _DESKTOP_PAIRINGS[code] = {
         "project_id": project_id,
-        "expires_at": time.time() + PAIRING_TTL_SECONDS,
+        "expires_at": expires_at,
         "ws_connected": False,
     }
+    # Persist (best-effort, async); fire-and-forget so the sync API stays simple.
+    try:
+        asyncio.create_task(_persist_pairing(code, project_id, expires_at))
+    except RuntimeError:
+        # No running loop (e.g. called from sync context) — skip persistence
+        pass
     return {
         "code": code,
         "expires_in_seconds": PAIRING_TTL_SECONDS,
@@ -582,6 +634,12 @@ async def desktop_agent_ws(ws: WebSocket, code: str = Query(...)):
     await ws.accept()
     _cleanup_expired_desktop_pairings()
     pairing = _DESKTOP_PAIRINGS.get(code)
+    if not pairing:
+        # Fallback: maybe backend restarted and lost the in-memory pairing.
+        # Try MongoDB so the running agent can reconnect transparently.
+        pairing = await _lookup_pairing_in_db(code)
+        if pairing:
+            _DESKTOP_PAIRINGS[code] = pairing  # warm in-memory cache
     if not pairing:
         await ws.send_json({"type": "error", "message": "invalid_or_expired_pairing_code"})
         await ws.close(code=4401)

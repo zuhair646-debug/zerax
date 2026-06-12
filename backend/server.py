@@ -3371,10 +3371,12 @@ try:
     from modules.freebuild.local_browser_relay import (
         router as _local_browser_router,
         desktop_router as _desktop_agent_router,
+        set_relay_db as _set_relay_db,
     )
     app.include_router(_local_browser_router)
     app.include_router(_desktop_agent_router)
-    logging.getLogger(__name__).info("Local browser relay + Desktop Agent relay registered")
+    _set_relay_db(db)  # enable MongoDB persistence for desktop pairings
+    logging.getLogger(__name__).info("Local browser relay + Desktop Agent relay registered (with Mongo persistence)")
 except Exception as _lbe:
     logging.getLogger(__name__).error(f"Failed to register local browser relay: {_lbe}", exc_info=True)
 
