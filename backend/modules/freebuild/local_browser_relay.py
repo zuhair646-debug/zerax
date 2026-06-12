@@ -296,6 +296,23 @@ async def desktop_status(project_id: str = Query(...)):
     }
 
 
+@desktop_router.post("/act")
+async def desktop_act_http(request: Request):
+    """Direct HTTP bridge to a paired Desktop Agent.
+
+    Body: {project_id, action, params?}.  Used by the chat when running tools
+    from outside the in-process AI loop, and by automated tests.
+    """
+    body = await request.json()
+    project_id = body.get("project_id")
+    action = body.get("action")
+    params = body.get("params") or {}
+    if not project_id or not action:
+        raise HTTPException(400, "project_id + action required")
+    result = await send_command_to_desktop(project_id, action, params)
+    return result
+
+
 def _bootstrap_sh(public_base: str) -> str:
     """One-liner Bash installer for macOS/Linux.
 
