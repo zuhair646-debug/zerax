@@ -209,7 +209,45 @@ TOOLS_SCHEMA: List[Dict[str, Any]] = [
         },
     },
     {
+        "name": "test_page",
+        "description": (
+            "🔬 افتح صفحة في متصفح حقيقي وارجع تقرير عنها: "
+            "(1) صورة سكرين شوت تشوف الصفحة بعينك، "
+            "(2) عدد عناصر <video> الموجودة، "
+            "(3) أخطاء console JavaScript، "
+            "(4) حجم الصفحة وعنوانها. "
+            "استخدمها بعد ما تنشر الموقع بـ publish_site عشان **تتأكد فعلياً** إن "
+            "الفيديوهات تشتغل، الـ JS مو مكسور، والتصميم سليم. **لا تقل أبداً 'ما أقدر أختبر' — استخدم هذي الأداة!**"
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "url": {"type": "string", "description": "URL الكامل للصفحة (مثل https://zenrex.ai/s/my-site)"},
+            },
+            "required": ["url"],
+        },
+    },
+    {
         "name": "publish_site",
+        "description": (
+            "🚀 Publish the current site LIVE on Zenrex platform. After calling this, "
+            "the site is instantly accessible at https://zenrex.ai/s/{slug} with free SSL "
+            "and global CDN. NO GitHub, NO Vercel, NO Railway needed — Zenrex IS the host. "
+            "Use this when the user says 'publish', 'go live', 'release', or 'انشر/أطلق/نزّل'. "
+            "Pick a slug that matches the brand (e.g. 'kafe-fajr' for 'كافيه الفجر')."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "slug": {
+                    "type": "string",
+                    "description": "URL slug: lowercase, digits, hyphens. 3-60 chars. e.g. 'kafe-fajr', 'noor-electronics'."
+                },
+            },
+            "required": ["slug"],
+        },
+    },
+    {
         "description": (
             "🚀 Publish the current site LIVE on Zenrex platform. After calling this, "
             "the site is instantly accessible at https://zenrex.ai/s/{slug} with free SSL "
@@ -557,6 +595,76 @@ async def _exec_tool_async(ctx: FreeBuildToolContext, name: str, args: Dict[str,
                     return {"ok": True, "url": imgs[0], "model": data.get("model", "gemini-nano-banana"), "description": description}
             except Exception as e:
                 return {"ok": False, "error": f"image gen failed: {type(e).__name__}: {str(e)[:200]}"}
+        if name == "test_page":
+            url = (args.get("url") or "").strip()
+            if not url.startswith(("http://", "https://")):
+                return {"ok": False, "error": "url must start with http(s)://"}
+            try:
+                from playwright.async_api import async_playwright
+                async with async_playwright() as pw:
+                    browser = await pw.chromium.launch(headless=True, args=["--no-sandbox", "--disable-dev-shm-usage"])
+                    ctx_b = await browser.new_context(viewport={"width": 1280, "height": 720})
+                    page = await ctx_b.new_page()
+                    console_errors = []
+                    page.on("console", lambda msg: console_errors.append(f"[{msg.type}] {msg.text[:200]}") if msg.type in ("error", "warning") else None)
+                    try:
+                        await page.goto(url, wait_until="domcontentloaded", timeout=20000)
+                    except Exception as e:
+                        console_errors.append(f"[nav_error] {type(e).__name__}: {str(e)[:200]}")
+                    await page.wait_for_timeout(2500)
+                    title = await page.title()
+                    metrics = await page.evaluate("""() => {
+                        const videos = Array.from(document.querySelectorAll('video'));
+                        return {
+                            video_count: videos.length,
+                            video_sources: videos.map(v => v.currentSrc || (v.querySelector('source')?.src) || '').slice(0, 10),
+                            video_ready_states: videos.map(v => v.readyState).slice(0, 10),
+                            iframe_count: document.querySelectorAll('iframe').length,
+                            img_count: document.querySelectorAll('img').length,
+                            section_count: document.querySelectorAll('section').length,
+                            has_h1: !!document.querySelector('h1'),
+                            body_text_len: document.body.innerText.length,
+                            scroll_height: document.body.scrollHeight,
+                        };
+                    }""")
+                    import os as _os, uuid as _uuid, shutil as _sh, datetime as _dt
+                    snap_id = _uuid.uuid4().hex[:16]
+                    media_dir = "/app/backend/uploads/freebuild_media"
+                    _os.makedirs(media_dir, exist_ok=True)
+                    snap_path = f"{media_dir}/{snap_id}.jpg"
+                    await page.screenshot(path=snap_path, type="jpeg", quality=55, full_page=False)
+                    await browser.close()
+                    snapshot_url = f"https://zenrex.ai/api/freebuild-chat/media/file/{snap_id}.jpg"
+                    if ctx.db is not None:
+                        try:
+                            await ctx.db.freebuild_media_assets.insert_one({
+                                "id": snap_id, "filename": f"{snap_id}.jpg", "ext": "jpg",
+                                "kind": "screenshot", "url_tested": url,
+                                "public_url": snapshot_url,
+                                "created_at": _dt.datetime.now(_dt.timezone.utc).isoformat(),
+                            })
+                        except Exception:
+                            pass
+                    return {
+                        "ok": True,
+                        "url": url,
+                        "title": title,
+                        "screenshot_url": snapshot_url,
+                        "metrics": metrics,
+                        "console_errors": console_errors[:20],
+                        "summary": (
+                            f"فتحت الصفحة ({title[:60]}). "
+                            f"video={metrics['video_count']} img={metrics['img_count']} sections={metrics['section_count']}. "
+                            f"console errors: {len(console_errors)}. "
+                            f"📸 screenshot: {snapshot_url}"
+                        ),
+                    }
+            except ImportError:
+                return {"ok": False, "error": "playwright غير مثبت في السيرفر"}
+            except Exception as e:
+                return {"ok": False, "error": f"test_page failed: {type(e).__name__}: {str(e)[:200]}"}
+
+
 
         if name == "publish_site":
             slug = (args.get("slug") or "").strip().lower()
@@ -707,6 +815,7 @@ AGENT_SYSTEM_PROMPT = """أنت **Zenrex Code Brain** — مهندس برمجي 
 🚀 **النشر والمفاتيح:**
 - `publish_site(slug)` — انشر الموقع لايف على Zenrex فوراً. الموقع يصبح متاح على `https://zenrex.ai/s/{slug}` مع SSL مجاني. **لا تحتاج GitHub ولا Vercel ولا Railway** — Zenrex هي المنصة. استخدمها لما العميل يقول "انشر" أو "أطلق" أو "نزّل".
 - `request_credential(service, label, instructions)` — اطلب من العميل مفتاح API أو token مثل YouTube Data API، Stripe، webhook URL. الواجهة تعرض modal آمن للعميل لإدخاله. **لا تقل أبداً "ما أقدر" — اطلب المفتاح أولاً!**
+- `test_page(url)` — 🔬 **عينك الحقيقية!** افتح أي صفحة في متصفح حقيقي وارجع: سكرين شوت + عدد الفيديوهات + console errors + بنية الصفحة. **بعد كل `publish_site` لازم تستدعي `test_page` فوراً** للتأكد إن الصفحة شغّالة. لو الـ metrics تقول `video_count=0` بينما تتوقع فيديوهات → الـ HTML مكسور، أصلحه. **لا تقل أبداً "ما أقدر أختبر" — هذه الأداة هي عينك.**
 
 📨 **الإنهاء:**
 - `finish(summary)` — أنهِ وأرسل التقرير للعميل
@@ -1185,6 +1294,8 @@ TOOL_LABELS_AR: Dict[str, Dict[str, str]] = {
                             "done": "✅ تم إنشاء الصورة"},
     "lint_javascript":    {"running": "🧪 يفحص الـJS للأخطاء الإملائية والبنيوية...",
                             "done": "✅ انتهى فحص الـJS"},
+    "test_page":          {"running": "🔬 يفتح الصفحة في متصفح حقيقي ويتحقق منها بصرياً...",
+                            "done": "✅ اختبار الصفحة اكتمل + سكرين شوت جاهز"},
     "finish":             {"running": "📝 يجهّز التقرير النهائي...",
                             "done": "✅ جاهز"},
 }
