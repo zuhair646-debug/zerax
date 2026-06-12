@@ -1,0 +1,534 @@
+"""
+Zenrex Desktop Agent — GUI version (Tkinter, runs with pythonw.exe, no terminal).
+
+Saves the last-used pairing code to ~/.zenrex-desktop-agent/.last_code so the
+app remembers it across launches. The user just clicks Connect.
+"""
+from __future__ import annotations
+
+import asyncio
+import base64
+import io
+import json
+import logging
+import os
+import platform
+import queue
+import subprocess
+import sys
+import threading
+import time
+import urllib.request
+import webbrowser
+from datetime import datetime
+from pathlib import Path
+from tkinter import Tk, StringVar, ttk, Text, END, DISABLED, NORMAL, messagebox, Frame, Label, Button, Entry
+
+# Required deps (installed by bootstrap)
+import pyautogui
+import mss
+from PIL import Image
+import websockets
+
+# ─── Config & constants ──────────────────────────────────────────────────────
+SCRIPT_DIR = Path(__file__).resolve().parent
+LAST_CODE_FILE = SCRIPT_DIR / ".last_code"
+DEFAULT_WS = "wss://zenrex.ai/api/desktop-agent/ws"
+DOWNLOADS_DIR = Path.home() / "Downloads"
+DOWNLOADS_DIR.mkdir(parents=True, exist_ok=True)
+
+pyautogui.FAILSAFE = True
+
+
+def _load_server() -> str:
+    if os.environ.get("ZENREX_SERVER"):
+        return os.environ["ZENREX_SERVER"]
+    cfg = SCRIPT_DIR / "config.json"
+    if cfg.exists():
+        try:
+            data = json.loads(cfg.read_text(encoding="utf-8"))
+            if data.get("server_ws"):
+                return str(data["server_ws"])
+        except Exception:
+            pass
+    return DEFAULT_WS
+
+
+def _platform_base() -> str:
+    cfg = SCRIPT_DIR / "config.json"
+    if cfg.exists():
+        try:
+            return json.loads(cfg.read_text(encoding="utf-8")).get("platform", "")
+        except Exception:
+            return ""
+    return ""
+
+
+# ─── Action handlers (same as console version) ──────────────────────────────
+def _safe_path(p: str) -> Path:
+    return Path(os.path.expanduser(str(p))).resolve()
+
+
+def screenshot(_):
+    with mss.mss() as sct:
+        mon = sct.monitors[1]
+        sct_img = sct.grab(mon)
+        img = Image.frombytes("RGB", sct_img.size, sct_img.bgra, "raw", "BGRX")
+        if img.width > 1600:
+            r = 1600 / img.width
+            img = img.resize((1600, int(img.height * r)), Image.LANCZOS)
+        buf = io.BytesIO()
+        img.save(buf, format="JPEG", quality=55)
+        return {"ok": True, "screenshot_b64": base64.b64encode(buf.getvalue()).decode("ascii"),
+                "size": {"width": mon["width"], "height": mon["height"]},
+                "encoded_size": {"width": img.width, "height": img.height}}
+
+
+def move_mouse(p):
+    pyautogui.moveTo(int(p.get("x", 0)), int(p.get("y", 0)), duration=float(p.get("duration", 0.2)))
+    return {"ok": True}
+
+
+def click(p):
+    x, y = p.get("x"), p.get("y")
+    btn, n = p.get("button", "left"), int(p.get("clicks", 1))
+    if x is not None and y is not None:
+        pyautogui.click(int(x), int(y), clicks=n, button=btn)
+    else:
+        pyautogui.click(clicks=n, button=btn)
+    return {"ok": True}
+
+
+def double_click(p):
+    q = dict(p); q["clicks"] = 2; return click(q)
+
+
+def right_click(p):
+    q = dict(p); q["button"] = "right"; return click(q)
+
+
+def type_text(p):
+    text = p.get("text", "")
+    try:
+        pyautogui.typewrite(text, interval=float(p.get("interval", 0.02)))
+    except Exception:
+        try:
+            import pyperclip
+            pyperclip.copy(text)
+            paste = "command+v" if platform.system() == "Darwin" else "ctrl+v"
+            pyautogui.hotkey(*paste.split("+"))
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+    return {"ok": True, "chars": len(text)}
+
+
+def press_key(p):
+    parts = [x.strip() for x in p.get("key", "").split("+") if x.strip()]
+    if not parts:
+        return {"ok": False, "error": "key required"}
+    if len(parts) == 1:
+        pyautogui.press(parts[0])
+    else:
+        pyautogui.hotkey(*parts)
+    return {"ok": True}
+
+
+def scroll(p):
+    pyautogui.scroll(int(p.get("amount", -3))); return {"ok": True}
+
+
+def download_file(p):
+    url = p.get("url", "")
+    if not url:
+        return {"ok": False, "error": "url required"}
+    name = p.get("filename") or url.rsplit("/", 1)[-1].split("?")[0] or "download"
+    name = "".join(c for c in name if c.isalnum() or c in "._-")[:120] or "download"
+    dest = DOWNLOADS_DIR / name
+    try:
+        urllib.request.urlretrieve(url, dest)
+        return {"ok": True, "path": str(dest), "bytes": dest.stat().st_size}
+    except Exception as e:
+        return {"ok": False, "error": str(e)}
+
+
+def open_app(p):
+    name = p.get("name", "")
+    s = platform.system()
+    try:
+        if s == "Darwin":
+            subprocess.Popen(["open", "-a", name])
+        elif s == "Windows":
+            subprocess.Popen(["start", "", name], shell=True)
+        else:
+            subprocess.Popen([name])
+        return {"ok": True, "app": name}
+    except Exception as e:
+        return {"ok": False, "error": str(e)}
+
+
+def open_url(p):
+    url = p.get("url", "")
+    if not url:
+        return {"ok": False, "error": "url required"}
+    webbrowser.open(url); return {"ok": True, "url": url}
+
+
+def cursor_position(_):
+    x, y = pyautogui.position(); return {"ok": True, "x": int(x), "y": int(y)}
+
+
+def screen_size(_):
+    w, h = pyautogui.size(); return {"ok": True, "width": int(w), "height": int(h)}
+
+
+def list_dir(p):
+    path = _safe_path(p.get("path") or str(Path.home()))
+    if not path.is_dir():
+        return {"ok": False, "error": "not a directory"}
+    out = []
+    for c in sorted(path.iterdir(), key=lambda x: (not x.is_dir(), x.name.lower()))[:500]:
+        try:
+            out.append({"name": c.name, "is_dir": c.is_dir(),
+                        "size": c.stat().st_size if c.is_file() else None})
+        except Exception:
+            pass
+    return {"ok": True, "path": str(path), "entries": out, "count": len(out)}
+
+
+def read_file(p):
+    path = _safe_path(p.get("path", ""))
+    if not path.is_file():
+        return {"ok": False, "error": "not found"}
+    data = path.read_bytes()[:int(p.get("max_bytes", 200_000))]
+    try:
+        return {"ok": True, "path": str(path), "text": data.decode("utf-8"),
+                "size_total": path.stat().st_size, "size_returned": len(data)}
+    except UnicodeDecodeError:
+        return {"ok": True, "path": str(path),
+                "binary_b64": base64.b64encode(data).decode("ascii"),
+                "size_total": path.stat().st_size, "size_returned": len(data)}
+
+
+def write_file(p):
+    path = _safe_path(p.get("path", ""))
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(str(p.get("content", "")), encoding="utf-8")
+    return {"ok": True, "path": str(path), "bytes": path.stat().st_size}
+
+
+def make_dir(p):
+    path = _safe_path(p.get("path", "")); path.mkdir(parents=True, exist_ok=True)
+    return {"ok": True, "path": str(path)}
+
+
+ACTIONS = {
+    "screenshot": screenshot, "move_mouse": move_mouse, "click": click,
+    "double_click": double_click, "right_click": right_click,
+    "type": type_text, "press_key": press_key, "scroll": scroll,
+    "download_file": download_file, "open_app": open_app, "open_url": open_url,
+    "cursor_position": cursor_position, "screen_size": screen_size,
+    "list_dir": list_dir, "read_file": read_file, "write_file": write_file,
+    "make_dir": make_dir,
+}
+
+
+# ─── WebSocket worker thread ─────────────────────────────────────────────────
+class AgentWorker(threading.Thread):
+    def __init__(self, server_url: str, code: str, log_q: queue.Queue, status_q: queue.Queue):
+        super().__init__(daemon=True)
+        self.server_url = server_url
+        self.code = code
+        self.log_q = log_q
+        self.status_q = status_q
+        self._stop = threading.Event()
+        self._loop = None
+
+    def log(self, msg: str):
+        ts = datetime.now().strftime("%H:%M:%S")
+        try:
+            self.log_q.put_nowait(f"[{ts}] {msg}")
+        except queue.Full:
+            pass
+
+    def status(self, state: str):
+        try:
+            self.status_q.put_nowait(state)
+        except queue.Full:
+            pass
+
+    def stop(self):
+        self._stop.set()
+        if self._loop and self._loop.is_running():
+            self._loop.call_soon_threadsafe(self._loop.stop)
+
+    async def _run_async(self):
+        url = f"{self.server_url}?code={self.code}"
+        self.log(f"Connecting to {url} …")
+        backoff = 2
+        while not self._stop.is_set():
+            try:
+                async with websockets.connect(url, ping_interval=20, max_size=8 * 1024 * 1024) as ws:
+                    self.status("connected")
+                    self.log("✅ Connected — waiting for AI commands")
+                    backoff = 2
+                    # Hello
+                    info = {
+                        "os": platform.system(), "release": platform.release(),
+                        "machine": platform.machine(), "python": sys.version.split()[0],
+                        "screen": list(pyautogui.size()),
+                        "downloads": str(DOWNLOADS_DIR),
+                        "user": os.environ.get("USER") or os.environ.get("USERNAME") or "",
+                    }
+                    await ws.send(json.dumps({"type": "hello", "info": info}))
+                    async for raw in ws:
+                        if self._stop.is_set():
+                            break
+                        try:
+                            msg = json.loads(raw)
+                        except Exception:
+                            continue
+                        t = msg.get("type")
+                        if t == "command":
+                            action = msg.get("action", "")
+                            params = msg.get("params") or {}
+                            self.log(f"→ {action}")
+                            fn = ACTIONS.get(action)
+                            if not fn:
+                                payload = {"ok": False, "error": f"unknown action: {action}"}
+                            else:
+                                try:
+                                    payload = fn(params)
+                                except Exception as e:
+                                    payload = {"ok": False, "error": f"{type(e).__name__}: {e}"}
+                            await ws.send(json.dumps({
+                                "type": "response",
+                                "request_id": msg.get("request_id"),
+                                "payload": payload,
+                            }))
+                        elif t == "ping":
+                            await ws.send(json.dumps({"type": "pong"}))
+                        elif t == "paired":
+                            self.log(f"🔗 Paired with project {msg.get('project_id')}")
+                        elif t == "error":
+                            self.log(f"⚠️ Server: {msg.get('message')}")
+            except Exception as e:
+                if self._stop.is_set():
+                    break
+                self.status("reconnecting")
+                self.log(f"Disconnected ({e.__class__.__name__}); retry in {backoff}s")
+                await asyncio.sleep(backoff)
+                backoff = min(backoff * 2, 30)
+        self.status("disconnected")
+        self.log("Stopped.")
+
+    def run(self):
+        try:
+            self._loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(self._loop)
+            self._loop.run_until_complete(self._run_async())
+        except Exception as e:
+            self.log(f"Fatal: {e}")
+            self.status("disconnected")
+
+
+# ─── GUI ─────────────────────────────────────────────────────────────────────
+class ZenrexGUI:
+    PRIMARY = "#7c3aed"        # purple
+    BG = "#0f0f17"             # near-black
+    BG2 = "#1a1a26"
+    FG = "#e5e7eb"
+    MUTED = "#9ca3af"
+    OK = "#10b981"
+    WARN = "#f59e0b"
+    ERR = "#ef4444"
+
+    def __init__(self):
+        self.root = Tk()
+        self.root.title("Zenrex Desktop Agent")
+        self.root.geometry("520x520")
+        self.root.configure(bg=self.BG)
+        self.root.resizable(False, False)
+        try:
+            self.root.iconbitmap(default="")
+        except Exception:
+            pass
+
+        self.code_var = StringVar()
+        self.worker: AgentWorker | None = None
+        self.log_q: queue.Queue = queue.Queue(maxsize=200)
+        self.status_q: queue.Queue = queue.Queue(maxsize=50)
+
+        self._build_ui()
+        self._load_last_code()
+        # Poll worker queues every 100ms
+        self.root.after(100, self._drain_queues)
+        self.root.protocol("WM_DELETE_WINDOW", self._on_close)
+
+    # ─── UI construction ────────────────────────────────────────────────────
+    def _build_ui(self):
+        # Header
+        header = Frame(self.root, bg=self.BG, pady=20)
+        header.pack(fill="x")
+        Label(header, text="⚡ Zenrex Desktop Agent",
+              font=("Segoe UI", 18, "bold"), fg=self.FG, bg=self.BG).pack()
+        Label(header, text="Native OS control for Zenrex AI",
+              font=("Segoe UI", 10), fg=self.MUTED, bg=self.BG).pack(pady=(2, 0))
+
+        # Status pill
+        self.status_frame = Frame(self.root, bg=self.BG, pady=8)
+        self.status_frame.pack()
+        self.status_dot = Label(self.status_frame, text="●", font=("Segoe UI", 14, "bold"),
+                                fg=self.ERR, bg=self.BG)
+        self.status_dot.pack(side="left", padx=(0, 6))
+        self.status_text = Label(self.status_frame, text="Not connected",
+                                  font=("Segoe UI", 10), fg=self.MUTED, bg=self.BG)
+        self.status_text.pack(side="left")
+
+        # Code input card
+        card = Frame(self.root, bg=self.BG2, padx=24, pady=20)
+        card.pack(fill="x", padx=24, pady=8)
+        Label(card, text="Pairing code", font=("Segoe UI", 9, "bold"),
+              fg=self.MUTED, bg=self.BG2).pack(anchor="w")
+        entry_row = Frame(card, bg=self.BG2)
+        entry_row.pack(fill="x", pady=(8, 0))
+        self.code_entry = Entry(entry_row, textvariable=self.code_var, font=("Consolas", 16, "bold"),
+                                bg=self.BG, fg=self.FG, insertbackground=self.FG,
+                                relief="flat", justify="center", width=14)
+        self.code_entry.pack(side="left", ipady=8, padx=(0, 8), fill="x", expand=True)
+        self.connect_btn = Button(entry_row, text="Connect", font=("Segoe UI", 10, "bold"),
+                                   bg=self.PRIMARY, fg="white", relief="flat",
+                                   activebackground="#6d28d9", activeforeground="white",
+                                   padx=18, pady=8, cursor="hand2",
+                                   command=self._toggle_connection)
+        self.connect_btn.pack(side="right")
+
+        # Get-code helper
+        help_row = Frame(self.root, bg=self.BG)
+        help_row.pack(fill="x", padx=24, pady=(0, 8))
+        Label(help_row, text="Need a code? In your Zenrex chat type:",
+              font=("Segoe UI", 9), fg=self.MUTED, bg=self.BG).pack(side="left")
+        Label(help_row, text="\"اربط جهازي\"", font=("Segoe UI", 9, "bold"),
+              fg=self.PRIMARY, bg=self.BG).pack(side="left", padx=4)
+        platform_url = _platform_base()
+        if platform_url:
+            link = Label(help_row, text="↗ Open chat", font=("Segoe UI", 9, "underline"),
+                          fg=self.PRIMARY, bg=self.BG, cursor="hand2")
+            link.pack(side="right")
+            link.bind("<Button-1>", lambda e: webbrowser.open(platform_url))
+
+        # Activity log
+        log_label_row = Frame(self.root, bg=self.BG)
+        log_label_row.pack(fill="x", padx=24, pady=(12, 4))
+        Label(log_label_row, text="Activity", font=("Segoe UI", 9, "bold"),
+              fg=self.MUTED, bg=self.BG).pack(side="left")
+
+        log_card = Frame(self.root, bg=self.BG2)
+        log_card.pack(fill="both", expand=True, padx=24, pady=(0, 16))
+        self.log_text = Text(log_card, font=("Consolas", 9), bg=self.BG2, fg=self.FG,
+                              relief="flat", height=12, padx=12, pady=10, wrap="word")
+        self.log_text.pack(fill="both", expand=True)
+        self.log_text.configure(state=DISABLED)
+
+        # Footer
+        footer = Frame(self.root, bg=self.BG, pady=8)
+        footer.pack(fill="x")
+        Label(footer,
+              text="🛡️ Move mouse to top-left to abort any AI action  •  Close window to disconnect",
+              font=("Segoe UI", 8), fg=self.MUTED, bg=self.BG).pack()
+
+    # ─── State management ───────────────────────────────────────────────────
+    def _set_status(self, state: str):
+        mapping = {
+            "connected":    (self.OK,    "Connected — AI can control this machine"),
+            "reconnecting": (self.WARN,  "Reconnecting…"),
+            "disconnected": (self.ERR,   "Not connected"),
+        }
+        color, text = mapping.get(state, (self.MUTED, state))
+        self.status_dot.config(fg=color)
+        self.status_text.config(text=text)
+        # Update button label
+        if state == "connected" or state == "reconnecting":
+            self.connect_btn.config(text="Disconnect", bg="#374151")
+        else:
+            self.connect_btn.config(text="Connect", bg=self.PRIMARY)
+
+    def _append_log(self, msg: str):
+        self.log_text.configure(state=NORMAL)
+        self.log_text.insert(END, msg + "\n")
+        # Cap to last 400 lines
+        if int(self.log_text.index("end-1c").split(".")[0]) > 400:
+            self.log_text.delete("1.0", "200.0")
+        self.log_text.see(END)
+        self.log_text.configure(state=DISABLED)
+
+    def _drain_queues(self):
+        try:
+            while True:
+                self._append_log(self.log_q.get_nowait())
+        except queue.Empty:
+            pass
+        try:
+            while True:
+                self._set_status(self.status_q.get_nowait())
+        except queue.Empty:
+            pass
+        self.root.after(100, self._drain_queues)
+
+    # ─── Connection control ─────────────────────────────────────────────────
+    def _toggle_connection(self):
+        if self.worker and self.worker.is_alive():
+            self._disconnect()
+        else:
+            self._connect()
+
+    def _connect(self):
+        code = self.code_var.get().strip().upper()
+        if len(code) < 4:
+            messagebox.showwarning("Invalid code", "Please paste the pairing code from your Zenrex chat.")
+            return
+        self.code_var.set(code)
+        self._save_last_code(code)
+        self._set_status("reconnecting")
+        self._append_log(f"Starting connection with code {code}…")
+        self.worker = AgentWorker(_load_server(), code, self.log_q, self.status_q)
+        self.worker.start()
+
+    def _disconnect(self):
+        if self.worker:
+            self._append_log("Disconnect requested.")
+            self.worker.stop()
+        self._set_status("disconnected")
+
+    def _save_last_code(self, code: str):
+        try:
+            LAST_CODE_FILE.write_text(code, encoding="utf-8")
+        except Exception:
+            pass
+
+    def _load_last_code(self):
+        if LAST_CODE_FILE.exists():
+            try:
+                code = LAST_CODE_FILE.read_text(encoding="utf-8").strip().upper()
+                if code:
+                    self.code_var.set(code)
+            except Exception:
+                pass
+
+    def _on_close(self):
+        if self.worker and self.worker.is_alive():
+            self.worker.stop()
+        self.root.after(150, self.root.destroy)
+
+    def run(self):
+        self.root.mainloop()
+
+
+def main():
+    # Silence noisy stderr from websockets in pythonw mode
+    logging.basicConfig(level=logging.WARNING)
+    app = ZenrexGUI()
+    app.run()
+
+
+if __name__ == "__main__":
+    main()

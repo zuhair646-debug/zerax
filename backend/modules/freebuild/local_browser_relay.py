@@ -316,85 +316,123 @@ async def desktop_act_http(request: Request):
 def _bootstrap_sh(public_base: str) -> str:
     """One-liner Bash installer for macOS/Linux.
 
-    Usage:  curl -fsSL <base>/api/desktop-agent/bootstrap.sh | bash -s -- <code>
+    Installs + launches the GUI app. Optional code arg pre-fills the input.
+    Usage:  curl -fsSL <base>/api/desktop-agent/bootstrap.sh | bash [-s -- CODE]
     """
     return f"""#!/usr/bin/env bash
-# Zenrex Desktop Agent — one-line bootstrap (macOS / Linux)
+# Zenrex Desktop Agent  one-line bootstrap (macOS / Linux / GUI)
 set -e
 
 CODE="${{1:-}}"
-if [ -z "$CODE" ]; then
-    echo ""
-    read -p "🔑 Paste the 6-character pairing code from Zenrex: " CODE
-fi
 
 DEST="$HOME/.zenrex-desktop-agent"
 ZIP_URL="{public_base}/api/desktop-agent/download"
 
 echo ""
 echo "═══════════════════════════════════════════════════════════"
-echo "  🤖 Zenrex Desktop Agent — One-line installer"
+echo "   Zenrex Desktop Agent  Installer"
 echo "═══════════════════════════════════════════════════════════"
-echo "→ Install dir: $DEST"
 
-# 1. Check Python
+# 1. Python check
 if ! command -v python3 >/dev/null 2>&1; then
-    echo "❌ Python 3 not found."
-    echo "   Mac:    brew install python3"
-    echo "   Linux:  sudo apt install python3 python3-pip python3-tk scrot"
+    echo "Python 3 not found."
+    echo "  Mac:    brew install python3"
+    echo "  Linux:  sudo apt install python3 python3-pip python3-tk scrot"
     exit 1
 fi
-echo "✓ Python $(python3 -c 'import sys; print(\"%d.%d\" % sys.version_info[:2])')"
+echo "OK Python $(python3 -c 'import sys; print(\"%d.%d\" % sys.version_info[:2])')"
 
 # 2. Download + extract
 mkdir -p "$DEST"
 TMP=$(mktemp -d)
-echo "→ Downloading agent ZIP..."
+echo "-> Downloading agent..."
 curl -fsSL "$ZIP_URL" -o "$TMP/agent.zip"
-
-echo "→ Extracting..."
+echo "-> Extracting..."
 unzip -qo "$TMP/agent.zip" -d "$TMP"
-# The ZIP contains a desktop_agent/ folder; flatten it into DEST.
 cp -R "$TMP/desktop_agent/." "$DEST/"
 rm -rf "$TMP"
 chmod +x "$DEST/install.sh" "$DEST/run.sh" 2>/dev/null || true
 
-# 3. Set up venv + install deps
+# 3. venv + deps
 cd "$DEST"
 if [ ! -d ".venv" ]; then
-    echo "→ Creating virtual environment..."
+    echo "-> Creating virtual environment..."
     python3 -m venv .venv
 fi
-echo "→ Installing dependencies (PyAutoGUI, mss, Pillow, websockets, pyperclip)..."
+echo "-> Installing dependencies (1-2 min first time)..."
 ./.venv/bin/pip install --quiet --upgrade pip
 ./.venv/bin/pip install --quiet -r requirements.txt
 
-# 4. Run!
+# 4. Save pre-filled code
+if [ -n "$CODE" ]; then
+    printf '%s' "$(echo "$CODE" | tr '[:lower:]' '[:upper:]' | xargs)" > "$DEST/.last_code"
+fi
+
+# 5. Create launcher
+OS="$(uname -s)"
+if [ "$OS" = "Darwin" ]; then
+    # macOS: create a tiny .command wrapper on the Desktop
+    LAUNCHER="$HOME/Desktop/Zenrex Desktop Agent.command"
+    cat > "$LAUNCHER" <<EOF
+#!/usr/bin/env bash
+cd "$DEST"
+exec ./.venv/bin/python zenrex_gui.pyw
+EOF
+    chmod +x "$LAUNCHER"
+    echo "OK Desktop shortcut created: $LAUNCHER"
+else
+    # Linux: create .desktop entry
+    APPS_DIR="$HOME/.local/share/applications"
+    mkdir -p "$APPS_DIR"
+    cat > "$APPS_DIR/zenrex-desktop-agent.desktop" <<EOF
+[Desktop Entry]
+Type=Application
+Name=Zenrex Desktop Agent
+Comment=Native OS control bridge for Zenrex AI
+Exec=$DEST/.venv/bin/python $DEST/zenrex_gui.pyw
+Icon=utilities-terminal
+Terminal=false
+Categories=Utility;
+EOF
+    chmod +x "$APPS_DIR/zenrex-desktop-agent.desktop"
+    cp "$APPS_DIR/zenrex-desktop-agent.desktop" "$HOME/Desktop/" 2>/dev/null || true
+    chmod +x "$HOME/Desktop/zenrex-desktop-agent.desktop" 2>/dev/null || true
+    echo "OK Application launcher created"
+fi
+
 echo ""
-echo "✅ Setup complete. Connecting to Zenrex with code: $CODE"
-echo "   (Press Ctrl+C anytime to disconnect.)"
+echo "═══════════════════════════════════════════════════════════"
+echo "  OK  Installation complete."
+echo "  Launching the app now..."
+echo "═══════════════════════════════════════════════════════════"
 echo ""
-exec ./.venv/bin/python zenrex_agent.py --code "$CODE"
+
+# 6. Launch GUI (detached, no terminal)
+nohup "$DEST/.venv/bin/python" "$DEST/zenrex_gui.pyw" >/dev/null 2>&1 &
+disown 2>/dev/null || true
 """
 
 
 def _bootstrap_ps1(public_base: str) -> str:
     """One-liner PowerShell installer for Windows.
 
+    Installs everything, creates Desktop + Start-Menu shortcuts to the GUI
+    version, and launches it. The user only needs to type the code in a
+    proper window — no terminal stays open after install.
+
     Usage:  iwr <base>/api/desktop-agent/bootstrap.ps1 -useb | iex
     """
-    return f"""# Zenrex Desktop Agent  one-line bootstrap (Windows PowerShell)
+    return f"""# Zenrex Desktop Agent  one-line installer (Windows / GUI)
 $ErrorActionPreference = "Stop"
 
 Write-Host ""
 Write-Host "═══════════════════════════════════════════════════════════"
-Write-Host "   Zenrex Desktop Agent  One-line installer (Windows)"
+Write-Host "   Zenrex Desktop Agent  Installer (Windows)"
 Write-Host "═══════════════════════════════════════════════════════════"
 
-$Code = if ($args.Count -gt 0) {{ $args[0] }} else {{ Read-Host "Paste the 6-character pairing code from Zenrex" }}
-if (-not $Code) {{ Write-Error "Pairing code required."; exit 1 }}
+$Code = if ($args.Count -gt 0) {{ $args[0] }} else {{ Read-Host "Pairing code (or press Enter to skip and enter it in the app)" }}
 
-$Dest = Join-Path $env:USERPROFILE ".zenrex-desktop-agent"
+$Dest   = Join-Path $env:USERPROFILE ".zenrex-desktop-agent"
 $ZipUrl = "{public_base}/api/desktop-agent/download"
 
 # 1. Python check
@@ -409,7 +447,7 @@ Write-Host "OK Python found"
 New-Item -ItemType Directory -Force -Path $Dest | Out-Null
 $Tmp = New-Item -ItemType Directory -Force -Path (Join-Path $env:TEMP "zenrex-da-$(Get-Random)")
 $ZipPath = Join-Path $Tmp.FullName "agent.zip"
-Write-Host "-> Downloading agent ZIP..."
+Write-Host "-> Downloading agent..."
 Invoke-WebRequest -UseBasicParsing -Uri $ZipUrl -OutFile $ZipPath
 
 Write-Host "-> Extracting..."
@@ -423,16 +461,53 @@ if (-not (Test-Path ".venv\\Scripts\\python.exe")) {{
     Write-Host "-> Creating virtual environment..."
     python -m venv .venv
 }}
-Write-Host "-> Installing dependencies..."
+Write-Host "-> Installing dependencies (this may take 1-2 minutes)..."
 & ".\\.venv\\Scripts\\python.exe" -m pip install --quiet --upgrade pip
 & ".\\.venv\\Scripts\\python.exe" -m pip install --quiet -r requirements.txt
 
-# 4. Run
+# 4. Save last code (so the GUI prefills it)
+if ($Code -and $Code.Trim()) {{
+    Set-Content -Path (Join-Path $Dest ".last_code") -Value $Code.Trim().ToUpper() -NoNewline
+}}
+
+# 5. Create Desktop + Start-Menu shortcut pointing to pythonw + GUI script
+$Pythonw = Join-Path $Dest ".venv\\Scripts\\pythonw.exe"
+$Target  = Join-Path $Dest "zenrex_gui.pyw"
+$WS = New-Object -ComObject WScript.Shell
+
+$DesktopLnk = Join-Path ([Environment]::GetFolderPath("Desktop")) "Zenrex Desktop Agent.lnk"
+$Lnk = $WS.CreateShortcut($DesktopLnk)
+$Lnk.TargetPath = $Pythonw
+$Lnk.Arguments = '"' + $Target + '"'
+$Lnk.WorkingDirectory = $Dest
+$Lnk.Description = "Zenrex Desktop Agent  native OS control bridge"
+$Lnk.IconLocation = "shell32.dll,13"
+$Lnk.Save()
+
+$StartMenuDir = Join-Path $env:APPDATA "Microsoft\\Windows\\Start Menu\\Programs\\Zenrex"
+New-Item -ItemType Directory -Force -Path $StartMenuDir | Out-Null
+$StartLnk = Join-Path $StartMenuDir "Zenrex Desktop Agent.lnk"
+$Lnk2 = $WS.CreateShortcut($StartLnk)
+$Lnk2.TargetPath = $Pythonw
+$Lnk2.Arguments = '"' + $Target + '"'
+$Lnk2.WorkingDirectory = $Dest
+$Lnk2.Description = "Zenrex Desktop Agent"
+$Lnk2.IconLocation = "shell32.dll,13"
+$Lnk2.Save()
+
 Write-Host ""
-Write-Host "OK Setup complete. Connecting to Zenrex with code: $Code"
-Write-Host "   (Press Ctrl+C to disconnect.)"
+Write-Host "═══════════════════════════════════════════════════════════"
+Write-Host "  OK  Installation complete."
 Write-Host ""
-& ".\\.venv\\Scripts\\python.exe" zenrex_agent.py --code $Code
+Write-Host "  Shortcut added to your Desktop:  'Zenrex Desktop Agent'"
+Write-Host "  And to Start menu  -> Zenrex  -> Zenrex Desktop Agent"
+Write-Host ""
+Write-Host "  Launching the app now..."
+Write-Host "═══════════════════════════════════════════════════════════"
+Write-Host ""
+
+# 6. Launch the GUI (no console window, fully detached)
+Start-Process -FilePath $Pythonw -ArgumentList ('"' + $Target + '"') -WorkingDirectory $Dest -WindowStyle Hidden
 """
 
 
