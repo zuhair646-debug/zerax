@@ -19,6 +19,37 @@ Build "Zenrex" — a multi-tenant Saudi/Arab AI commerce platform with:
 
 ## Current State (Feb 2026)
 
+### 🚀 Jun 12 2026 — Phase 2: Software Engineer Mode (14 advanced tools)
+Following user mandate "أبي الذكاء يكون أفضل من أي شيء — أضف كل الأدوات بلا حدود",
+shipped a second wave of 14 capability tools that transform Zenrex AI from a
+"single-page HTML builder" into a full-stack software engineer:
+
+**New module:** `/app/backend/modules/freebuild/advanced_tools.py` (700 lines, isolated from `freebuild_agent.py`).
+
+**Tools added (now 44 total in TOOLS_SCHEMA):**
+- 🔥 `run_shell(command, timeout, cwd)` — Sandboxed bash per-project at `/tmp/zenrex_ws/{project_id}/`. Network on, 120s max, 100KB output cap. Forbidden patterns: `rm -rf /`, `sudo`, fork bombs, `/etc/passwd` etc.
+- 👁️ `analyze_file(file, question)` — Vision/Audio AI via Emergent LLM Key. Routes by extension: images → Claude vision; PDFs → DocumentContent (with `pdftoppm` fallback); audio → OpenAI Whisper transcribe → Claude answer; text → Claude.
+- 📁 `read_file / write_file / list_files / delete_file / move_file` — Multi-file workspace per project (5MB cap, 200 files cap).
+- 🗄️ `db_query / db_count` — Read-only MongoDB access scoped to project's `merchant_id`. Whitelist: products, store_products, orders, delivery_orders, customers, drivers, deliveries, freebuild_chat_projects.
+- 🚀 `deploy_to(provider, project_name)` — Deploy to Vercel/Netlify via their APIs (with `vercel_token`/`netlify_token` from saved credentials or env). Cloudflare Pages and GitHub Pages routed via existing tools.
+- 🧪 `run_e2e_test(base_url, steps[])` — Playwright multi-step flow runner. Actions: goto, click, fill, wait, assert_text, screenshot. Returns per-step pass/fail + final screenshot.
+- 📧 `send_email(to, subject, html, from)` — Resend API.
+- 📱 `send_sms(to, message)` — Twilio REST API.
+- 🎬 `generate_video(prompt, model, duration, aspect_ratio, image_url)` — fal.ai video generation. Supports Hailuo / Kling / Luma Dream Machine.
+
+**Env-var aliases:** `_get_cred()` now auto-resolves multiple common env var names (e.g. `RESEND_API_KEY` → `resend_key`), so already-configured keys in `/app/backend/.env` work without re-saving.
+
+**Pre-configured keys discovered in `.env`:**
+- `FAL_KEY` ✅ — video generation works out of the box.
+- `VERCEL_TOKEN` ✅ — Vercel deploys work.
+- `RESEND_API_KEY` ✅ — email sending works.
+
+**Tests:** 25 new pytest cases at `/app/backend/tests/test_advanced_tools.py` covering wiring (schemas + labels + sentinel), shell sandbox safety, file system CRUD, path traversal blocking, size limits, DB whitelist enforcement, and "needs_credential" branches for all third-party tools. **25/25 passing.**
+
+**System Prompt:** Added a new "Software Engineer Mode" section listing all 14 advanced tools with usage hints in Arabic.
+
+**Deployed:** Synced to `zenrex.ai` VPS via `/app/deploy/deploy.sh` + `docker compose restart backend`.
+
 ### 🆕 Jun 12 2026 — AI Brain Limitlessness (Anti-Hallucination + Universal Capability)
 The user complained the AI was repeatedly lying about API keys ("this key doesn't work")
 even when the keys were perfectly valid. Root cause: AI had NO tool for GitHub, NO way to

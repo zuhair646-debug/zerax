@@ -71,17 +71,16 @@ User requested comprehensive E2E testing before official launch. Testing agent (
 
 ## 🔐 Stored API Credentials (Jun 12 2026)
 
-**GitHub Personal Access Token** (verified working — `validate_credential` returns HTTP 200):
-- Token: `ghp_REDACTED_OLD_TOKEN`
-- Account: `zuhair646-debug`
-- Scopes: `repo` (read + write to repos)
-- Stored in `/app/backend/.env` as `GITHUB_PAT=...`
-- Auto-loaded by the AI's `github_*` tools as a fallback when no per-project credential exists.
+**Already-configured in `/app/backend/.env` (auto-resolved by `_get_cred()` env-var aliases):**
+- `FAL_KEY=423f71b4-16b5-46e1-ade6-...` → resolves for `fal_key` (Cinema Studio video generation works out of the box).
+- `VERCEL_TOKEN=vcp_6CiuacOvaOswjxZ1uS2J...` → resolves for `vercel_token` (Vercel deploys work).
+- `RESEND_API_KEY=re_dzXgkb3L_...` → resolves for `resend_key` (email sending works).
+- `GITHUB_PAT=ghp_FhBF...` (account: `zuhair646-debug`, scope=`repo`) → resolves for `github_pat`.
 
-**ElevenLabs Key** (CURRENTLY INVALID — returns HTTP 401):
-- Old key in `.env`: `sk_1615de2ff615...` (revoked or expired)
-- Action: User needs to provide a fresh key at https://elevenlabs.io → Profile → API Keys.
-- Once provided, the AI will save it via `save_credential('elevenlabs_key', ...)` then test it.
+**Currently invalid (needs replacement from user):**
+- `ELEVENLABS_API_KEY=sk_1615de2ff615...` → returns HTTP 401. Get fresh key at https://elevenlabs.io → Profile → API Keys.
+
+**How keys are looked up:** The AI calls `validate_credential(service)` which first checks the per-project encrypted store (`freebuild_credentials` collection), then falls back to `os.environ` aliases. So a key in `.env` works for ALL projects without needing per-project `save_credential`.
 
 ## 🌐 Production VPS (Hetzner — Jun 11 2026)
 - **Public URL**: `https://zenrex.ai`

@@ -41,6 +41,12 @@ from .freebuild_chat import (
     _dec,
     _mask,
 )
+from .advanced_tools import (
+    ADVANCED_TOOL_SCHEMAS,
+    ADVANCED_TOOL_LABELS_AR,
+    ADVANCED_TOOL_NAMES,
+    dispatch_advanced,
+)
 
 
 def _now() -> str:
@@ -574,6 +580,8 @@ TOOLS_SCHEMA: List[Dict[str, Any]] = [
         },
     },
 ]
+# Append the advanced tool schemas (run_shell, analyze_file, file system, db_query, etc.)
+TOOLS_SCHEMA.extend(ADVANCED_TOOL_SCHEMAS)
 
 
 # ─── Tool Implementations ─────────────────────────────────────────────────────
@@ -730,7 +738,7 @@ def _exec_tool(ctx: FreeBuildToolContext, name: str, args: Dict[str, Any]) -> Di
                     "save_credential", "validate_credential", "list_credentials",
                     "delete_credential", "recommend_service",
                     "github_list_repos", "github_create_repo", "github_push_file",
-                    "github_get_file"):
+                    "github_get_file") or name in ADVANCED_TOOL_NAMES:
             return {"__async__": True, "tool": name, "args": args}
         return {"error": f"unknown tool: {name}"}
     except Exception as e:
@@ -1450,6 +1458,10 @@ async def _exec_tool_async(ctx: FreeBuildToolContext, name: str, args: Dict[str,
             except Exception as e:
                 return {"ok": False, "error": f"{name}: {type(e).__name__}: {str(e)[:200]}"}
 
+        # ── Advanced capability tools (shell, FS, DB, deploy, e2e, msg, video) ──
+        if name in ADVANCED_TOOL_NAMES:
+            return await dispatch_advanced(ctx, name, args)
+
         return {"ok": False, "error": f"unknown async tool: {name}"}
     except Exception as e:
         logger.exception(f"async tool {name} failed")
@@ -1710,6 +1722,33 @@ AGENT_SYSTEM_PROMPT = """أنت **Zenrex Code Brain** — مهندس برمجي 
 - `github_push_file(repo, path, content, message)` — ارفع/حدّث ملف. لو الملف موجود لازم تجيب الـ sha أولاً عبر `github_get_file`.
 - `github_get_file(repo, path)` — اقرأ ملف من GitHub.
 - يحتاج مفتاح `github_pat` محفوظ. لو غير موجود، استدعِ `recommend_service('backup')` لتشرح للعميل، ثم `request_credential('github_pat', 'مفتاح GitHub PAT', '...')`.
+
+═══════════════════════════════════════════════════════════
+⚡ **القدرات المتقدمة (Mode: Software Engineer):**
+
+🔥 **`run_shell(command, timeout?, cwd?)`** — Bash داخل sandbox خاص بالمشروع في `/tmp/zenrex_ws/{project_id}/`. مفتوح لك الإنترنت + جميع أدوات Linux: `ffmpeg`, `imagemagick`, `yt-dlp`, `pandoc`, `curl`, `jq`, `git`, `npm`, `pip`, `sharp`, إلخ. حد أعلى 120 ثانية، 100KB إخراج. **استخدمها بدل ما تكتب كود معقّد** — مثلاً تحويل صور بـ ImageMagick بسطر واحد بدل ما تطلب من العميل أداة جديدة.
+
+👁️ **`analyze_file(file, question)`** — رؤية / تحليل ملفات العميل. صور (PNG/JPG/WebP)، PDF، صوت (MP3/WAV)، نص. **هذا تطوّر كبير** — العميل يرفع منيو PDF → تستخرج المنتجات والأسعار. يرفع صورة منافس → توصف التصميم. يرفع ملاحظة صوتية بالعربي → تفرّغها وترد.
+
+📁 **نظام ملفات متعدد (workspace كامل لكل مشروع):**
+- `write_file(path, content, binary?)` — أكتب ملف (CSS, JS, JSON, CSV, README، إلخ). حد 5MB.
+- `read_file(path, max_bytes?)` — اقرأ ملف من المشروع.
+- `list_files(subpath?)` — فهرس كامل بالأحجام.
+- `delete_file(path)` — احذف ملف أو مجلد.
+- `move_file(src, dst)` — انقل/أعد تسمية ملف.
+استخدمها لتبني مشاريع متعددة الملفات (React/Vue/Next.js)، لتخزين بيانات العميل، لتجهيز ملفات للنشر.
+
+🗄️ **`db_query(collection, filter?, limit?, sort_by?, sort_desc?)` + `db_count(collection, filter?)`** — وصول مباشر لبيانات التاجر في MongoDB. المجموعات المسموحة: `products`, `store_products`, `orders`, `delivery_orders`, `customers`, `drivers`, `deliveries`. **مهم جداً** — لما العميل يسأل "كم بعت اليوم؟" أو "وش أكثر منتج مبيعاً؟" استدع `db_query` وحط له الإجابة الحقيقية.
+
+🚀 **`deploy_to(provider, project_name)`** — نشر للمنصات الخارجية. `vercel`, `netlify`. يحتاج `vercel_token` أو `netlify_token` محفوظ. النشر الافتراضي على Zenrex بـ `publish_site` يبقى الأسرع والأبسط.
+
+🧪 **`run_e2e_test(base_url, steps[])`** — اختبر تدفقات كاملة في متصفح Playwright حقيقي. الخطوات: `goto`, `click`, `fill`, `wait`, `assert_text`, `screenshot`. مثال: اختبر تسجيل الدخول → إضافة منتج → الدفع. ارجع نجاح/فشل كل خطوة + سكرين شوت أخير.
+
+📧 **`send_email(to, subject, html, from?)`** — إرسال إيميل عبر Resend (يحتاج `resend_key`).
+
+📱 **`send_sms(to, message)`** — إرسال SMS عبر Twilio (يحتاج `twilio_sid` + `twilio_auth` + `twilio_from`).
+
+🎬 **`generate_video(prompt, model?, duration_seconds?, aspect_ratio?, image_url?)`** — توليد فيديو عبر fal.ai (يحتاج `fal_key`). الموديلات: `minimax/hailuo` ($0.05/s), `fal-ai/kling-video/v1/standard` ($0.06/s), `fal-ai/luma-dream-machine` ($0.40/s). مدة 3-10 ثواني. للاستخدام في Cinema Studio.
 
 📨 **الإنهاء:**
 - `finish(summary)` — أنهِ وأرسل التقرير للعميل
@@ -2237,6 +2276,8 @@ TOOL_LABELS_AR: Dict[str, Dict[str, str]] = {
     "finish":             {"running": "📝 يجهّز التقرير النهائي...",
                             "done": "✅ جاهز"},
 }
+# Merge in labels for the advanced tools (run_shell, analyze_file, etc.)
+TOOL_LABELS_AR.update(ADVANCED_TOOL_LABELS_AR)
 
 
 def _sse(event: str, data: Dict[str, Any]) -> str:
