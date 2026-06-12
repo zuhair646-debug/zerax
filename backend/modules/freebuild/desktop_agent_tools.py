@@ -122,18 +122,23 @@ async def desktop_pair(ctx, args: Dict[str, Any]) -> Dict[str, Any]:
         from .local_browser_relay import create_desktop_pairing
         info = create_desktop_pairing(ctx.project_id)
         base = _public_base()
+        sh_cmd = f'curl -fsSL {base}/api/desktop-agent/bootstrap.sh | bash -s -- {info["code"]}'
+        ps_cmd = f'iwr {base}/api/desktop-agent/bootstrap.ps1 -useb | iex'
         return {
             "ok": True,
             "code": info["code"],
             "expires_in_seconds": info["expires_in_seconds"],
             "download_url": f"{base}/api/desktop-agent/download" if base else "/api/desktop-agent/download",
+            "one_line_install_mac_linux": sh_cmd,
+            "one_line_install_windows": ps_cmd,
             "instructions": (
-                f"📥 نزّل التطبيق من: {base}/api/desktop-agent/download\n"
-                f"📦 فك الـ ZIP، وشغّل ملف التشغيل المناسب لنظامك:\n"
-                f"   • Mac/Linux: ./install.sh ثم ./run.sh\n"
-                f"   • Windows:   انقر مزدوج على install.bat ثم run.bat\n"
-                f"🔑 الرمز اللي بيطلبه السكربت: **{info['code']}**\n"
-                f"بعد ما يطلع لك ✅ Connected، استدعِ `desktop_act` كيف ما تبي."
+                "🚀 **أسهل طريقة — أمر واحد ينزّل ويشغّل كل شي:**\n\n"
+                f"**Mac / Linux** (Terminal):\n"
+                f"```bash\n{sh_cmd}\n```\n\n"
+                f"**Windows** (PowerShell):\n"
+                f"```powershell\n{ps_cmd} {info['code']}\n```\n\n"
+                f"🔑 الرمز: **{info['code']}** (صالح 10 دقايق)\n"
+                f"بعد التشغيل بيطلع لك ✅ Connected، وأقدر أتحكم في جهازك مباشرة."
             ),
         }
     except Exception as e:

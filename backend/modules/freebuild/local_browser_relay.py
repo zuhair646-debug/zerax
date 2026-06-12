@@ -296,6 +296,155 @@ async def desktop_status(project_id: str = Query(...)):
     }
 
 
+def _bootstrap_sh(public_base: str) -> str:
+    """One-liner Bash installer for macOS/Linux.
+
+    Usage:  curl -fsSL <base>/api/desktop-agent/bootstrap.sh | bash -s -- <code>
+    """
+    return f"""#!/usr/bin/env bash
+# Zenrex Desktop Agent — one-line bootstrap (macOS / Linux)
+set -e
+
+CODE="${{1:-}}"
+if [ -z "$CODE" ]; then
+    echo ""
+    read -p "🔑 Paste the 6-character pairing code from Zenrex: " CODE
+fi
+
+DEST="$HOME/.zenrex-desktop-agent"
+ZIP_URL="{public_base}/api/desktop-agent/download"
+
+echo ""
+echo "═══════════════════════════════════════════════════════════"
+echo "  🤖 Zenrex Desktop Agent — One-line installer"
+echo "═══════════════════════════════════════════════════════════"
+echo "→ Install dir: $DEST"
+
+# 1. Check Python
+if ! command -v python3 >/dev/null 2>&1; then
+    echo "❌ Python 3 not found."
+    echo "   Mac:    brew install python3"
+    echo "   Linux:  sudo apt install python3 python3-pip python3-tk scrot"
+    exit 1
+fi
+echo "✓ Python $(python3 -c 'import sys; print(\"%d.%d\" % sys.version_info[:2])')"
+
+# 2. Download + extract
+mkdir -p "$DEST"
+TMP=$(mktemp -d)
+echo "→ Downloading agent ZIP..."
+curl -fsSL "$ZIP_URL" -o "$TMP/agent.zip"
+
+echo "→ Extracting..."
+unzip -qo "$TMP/agent.zip" -d "$TMP"
+# The ZIP contains a desktop_agent/ folder; flatten it into DEST.
+cp -R "$TMP/desktop_agent/." "$DEST/"
+rm -rf "$TMP"
+chmod +x "$DEST/install.sh" "$DEST/run.sh" 2>/dev/null || true
+
+# 3. Set up venv + install deps
+cd "$DEST"
+if [ ! -d ".venv" ]; then
+    echo "→ Creating virtual environment..."
+    python3 -m venv .venv
+fi
+echo "→ Installing dependencies (PyAutoGUI, mss, Pillow, websockets, pyperclip)..."
+./.venv/bin/pip install --quiet --upgrade pip
+./.venv/bin/pip install --quiet -r requirements.txt
+
+# 4. Run!
+echo ""
+echo "✅ Setup complete. Connecting to Zenrex with code: $CODE"
+echo "   (Press Ctrl+C anytime to disconnect.)"
+echo ""
+exec ./.venv/bin/python zenrex_agent.py --code "$CODE"
+"""
+
+
+def _bootstrap_ps1(public_base: str) -> str:
+    """One-liner PowerShell installer for Windows.
+
+    Usage:  iwr <base>/api/desktop-agent/bootstrap.ps1 -useb | iex
+    """
+    return f"""# Zenrex Desktop Agent  one-line bootstrap (Windows PowerShell)
+$ErrorActionPreference = "Stop"
+
+Write-Host ""
+Write-Host "═══════════════════════════════════════════════════════════"
+Write-Host "   Zenrex Desktop Agent  One-line installer (Windows)"
+Write-Host "═══════════════════════════════════════════════════════════"
+
+$Code = if ($args.Count -gt 0) {{ $args[0] }} else {{ Read-Host "Paste the 6-character pairing code from Zenrex" }}
+if (-not $Code) {{ Write-Error "Pairing code required."; exit 1 }}
+
+$Dest = Join-Path $env:USERPROFILE ".zenrex-desktop-agent"
+$ZipUrl = "{public_base}/api/desktop-agent/download"
+
+# 1. Python check
+$py = Get-Command python -ErrorAction SilentlyContinue
+if (-not $py) {{
+    Write-Host "Python not found. Install from https://www.python.org/downloads/ (check 'Add to PATH')."
+    exit 1
+}}
+Write-Host "OK Python found"
+
+# 2. Download + extract
+New-Item -ItemType Directory -Force -Path $Dest | Out-Null
+$Tmp = New-Item -ItemType Directory -Force -Path (Join-Path $env:TEMP "zenrex-da-$(Get-Random)")
+$ZipPath = Join-Path $Tmp.FullName "agent.zip"
+Write-Host "-> Downloading agent ZIP..."
+Invoke-WebRequest -UseBasicParsing -Uri $ZipUrl -OutFile $ZipPath
+
+Write-Host "-> Extracting..."
+Expand-Archive -Path $ZipPath -DestinationPath $Tmp.FullName -Force
+Copy-Item -Recurse -Force (Join-Path $Tmp.FullName "desktop_agent\\*") $Dest
+Remove-Item -Recurse -Force $Tmp
+
+# 3. venv + deps
+Set-Location $Dest
+if (-not (Test-Path ".venv\\Scripts\\python.exe")) {{
+    Write-Host "-> Creating virtual environment..."
+    python -m venv .venv
+}}
+Write-Host "-> Installing dependencies..."
+& ".\\.venv\\Scripts\\python.exe" -m pip install --quiet --upgrade pip
+& ".\\.venv\\Scripts\\python.exe" -m pip install --quiet -r requirements.txt
+
+# 4. Run
+Write-Host ""
+Write-Host "OK Setup complete. Connecting to Zenrex with code: $Code"
+Write-Host "   (Press Ctrl+C to disconnect.)"
+Write-Host ""
+& ".\\.venv\\Scripts\\python.exe" zenrex_agent.py --code $Code
+"""
+
+
+def _resolve_public_base(request: Request) -> str:
+    public_base = os.environ.get("BACKEND_URL", "").rstrip("/")
+    if not public_base:
+        scheme = "https" if request.url.scheme in ("https", "wss") else "http"
+        public_base = f"{scheme}://{request.url.netloc}"
+    return public_base
+
+
+@desktop_router.get("/bootstrap.sh")
+async def desktop_bootstrap_sh(request: Request):
+    """One-line installer (Bash) — `curl ... | bash -s -- CODE`."""
+    from fastapi.responses import PlainTextResponse
+    script = _bootstrap_sh(_resolve_public_base(request))
+    return PlainTextResponse(script, media_type="text/x-shellscript",
+                              headers={"Cache-Control": "no-store"})
+
+
+@desktop_router.get("/bootstrap.ps1")
+async def desktop_bootstrap_ps1(request: Request):
+    """One-line installer (PowerShell) — `iwr ... | iex`."""
+    from fastapi.responses import PlainTextResponse
+    script = _bootstrap_ps1(_resolve_public_base(request))
+    return PlainTextResponse(script, media_type="text/plain",
+                              headers={"Cache-Control": "no-store"})
+
+
 @desktop_router.get("/download")
 async def desktop_download(request: Request):
     """Return a ready-to-run ZIP of the Desktop Agent.
