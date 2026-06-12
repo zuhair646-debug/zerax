@@ -44,13 +44,26 @@
     <body>
         <noscript>You need to enable JavaScript to run this app.</noscript>
         <div id="root"></div>
-        <button
-            id="zenrex-pwa-install"
-            style="display:none;position:fixed;bottom:20px;inset-inline-end:20px;z-index:99999;padding:12px 18px;background:linear-gradient(135deg,#7c3aed,#a855f7);color:#fff;border:none;border-radius:99px;font-family:'IBM Plex Sans Arabic',sans-serif;font-size:14px;font-weight:700;cursor:pointer;box-shadow:0 10px 30px rgba(124,58,237,.45);align-items:center;gap:8px"
-            aria-label="تثبيت تطبيق Zenrex"
+        <div
+            id="zenrex-pwa-install-wrap"
+            style="display:none;position:fixed;bottom:20px;inset-inline-end:20px;z-index:99999;align-items:center;gap:6px"
         >
-            <span style="font-size:18px">📱</span><span>تثبيت تطبيق Zenrex</span>
-        </button>
+            <button
+                id="zenrex-pwa-install"
+                style="padding:12px 18px;background:linear-gradient(135deg,#7c3aed,#a855f7);color:#fff;border:none;border-radius:99px;font-family:'IBM Plex Sans Arabic',sans-serif;font-size:14px;font-weight:700;cursor:pointer;box-shadow:0 10px 30px rgba(124,58,237,.45);display:inline-flex;align-items:center;gap:8px"
+                aria-label="تثبيت تطبيق Zenrex"
+                data-testid="pwa-install-btn"
+            >
+                <span style="font-size:18px">📱</span><span>تثبيت تطبيق Zenrex</span>
+            </button>
+            <button
+                id="zenrex-pwa-install-close"
+                style="width:28px;height:28px;border-radius:50%;background:rgba(0,0,0,.6);color:#fff;border:1px solid rgba(255,255,255,.2);font-size:14px;font-weight:900;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;backdrop-filter:blur(8px);transition:.15s"
+                aria-label="إخفاء زر التثبيت"
+                data-testid="pwa-install-close"
+                title="إخفاء"
+            >✕</button>
+        </div>
         <script>
             // Zenrex PWA — Service Worker registration + install prompt
             if ('serviceWorker' in navigator) {
@@ -84,6 +97,43 @@
             // Capture install prompt (Android/Chrome) — show our own custom button
             var deferredPrompt = null;
             var installBtn = document.getElementById('zenrex-pwa-install');
+            var installWrap = document.getElementById('zenrex-pwa-install-wrap');
+            var installClose = document.getElementById('zenrex-pwa-install-close');
+
+            // Helper: should the install widget be visible right now?
+            // Rules:
+            //   1. ONLY on the homepage ("/")  → hide on every other route
+            //   2. If the user dismissed it (X), keep hidden for 30 days
+            //   3. If already running in standalone or marked installed, hide
+            function zxShouldShowInstall() {
+                if (window.location.pathname !== '/') return false;
+                try {
+                    var dismissedUntil = parseInt(localStorage.getItem('zx_pwa_install_dismissed_until') || '0', 10);
+                    if (dismissedUntil && Date.now() < dismissedUntil) return false;
+                } catch (_) {}
+                if (localStorage.getItem('zx_pwa_installed') === '1') return false;
+                return true;
+            }
+            function zxApplyInstallVisibility() {
+                if (!installWrap) return;
+                installWrap.style.display = zxShouldShowInstall() ? 'inline-flex' : 'none';
+            }
+            // Run on every SPA route change (React Router uses history API)
+            (function () {
+                var _push = history.pushState; var _replace = history.replaceState;
+                history.pushState = function () { _push.apply(this, arguments); setTimeout(zxApplyInstallVisibility, 0); };
+                history.replaceState = function () { _replace.apply(this, arguments); setTimeout(zxApplyInstallVisibility, 0); };
+                window.addEventListener('popstate', zxApplyInstallVisibility);
+            })();
+            // Close button → dismiss for 30 days
+            if (installClose) {
+                installClose.addEventListener('click', function (e) {
+                    e.stopPropagation();
+                    try { localStorage.setItem('zx_pwa_install_dismissed_until', String(Date.now() + 30 * 86400000)); } catch (_) {}
+                    if (installWrap) installWrap.style.display = 'none';
+                });
+            }
+
             // Check if user is CURRENTLY running inside the installed PWA
             var isInStandalone =
                 window.matchMedia('(display-mode: standalone)').matches ||
@@ -91,21 +141,16 @@
             // If running standalone, mark it; otherwise we let the browser decide via beforeinstallprompt
             if (isInStandalone) {
                 try { localStorage.setItem('zx_pwa_installed', '1'); } catch (_) {}
-                if (installBtn) installBtn.style.display = 'none';
-            } else if (localStorage.getItem('zx_pwa_installed') === '1' && installBtn) {
-                // We THINK it's installed (flag set), but user may have uninstalled.
-                // Hide button for now — beforeinstallprompt will re-show it if Chrome detects re-installable state.
-                installBtn.style.display = 'none';
+                if (installWrap) installWrap.style.display = 'none';
+            } else if (localStorage.getItem('zx_pwa_installed') === '1' && installWrap) {
+                installWrap.style.display = 'none';
             }
             window.addEventListener('beforeinstallprompt', function (e) {
                 e.preventDefault();
                 deferredPrompt = e;
-                // Expose globally so React PWAInstallCard can also use it from Profile page
                 window.__zxDeferredPrompt = e;
-                // Chrome firing this event means the app IS installable right now (i.e. NOT currently installed)
-                // → clear stale flag and re-show the button
                 try { localStorage.removeItem('zx_pwa_installed'); } catch (_) {}
-                if (installBtn) installBtn.style.display = 'inline-flex';
+                zxApplyInstallVisibility();
             });
             if (installBtn) {
                 installBtn.addEventListener('click', function () {
@@ -117,13 +162,13 @@
                         }
                         deferredPrompt = null;
                         window.__zxDeferredPrompt = null;
-                        installBtn.style.display = 'none';
+                        if (installWrap) installWrap.style.display = 'none';
                     });
                 });
             }
             window.addEventListener('appinstalled', function () {
                 try { localStorage.setItem('zx_pwa_installed', '1'); } catch (_) {}
-                if (installBtn) installBtn.style.display = 'none';
+                if (installWrap) installWrap.style.display = 'none';
                 console.log('[Zenrex PWA] App installed successfully');
             });
 
@@ -132,7 +177,7 @@
             if (isIOS && !isInStandalone && installBtn) {
                 installBtn.innerHTML =
                     '<span style="font-size:18px">📱</span><span>ثبّت Zenrex على شاشتك</span>';
-                installBtn.style.display = 'inline-flex';
+                zxApplyInstallVisibility();
                 installBtn.addEventListener('click', function () {
                     showIOSInstallGuide();
                 });

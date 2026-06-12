@@ -20,7 +20,8 @@ export default function FloatingLanguagePicker() {
   const hide =
     location.pathname.startsWith('/login') ||
     location.pathname.startsWith('/register') ||
-    location.pathname.startsWith('/auth');
+    location.pathname.startsWith('/auth') ||
+    location.pathname.startsWith('/freebuild');
   if (hide) return null;
   return (
     <div

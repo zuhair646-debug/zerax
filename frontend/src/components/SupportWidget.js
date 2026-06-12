@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useLocation } from 'react-router-dom';
 import { MessageCircle, X, Send, Sparkles, Loader2, ChevronLeft } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -20,6 +21,7 @@ function api(p, opts = {}) {
  *  3. Browse their existing tickets and reply to admin
  */
 export default function SupportWidget({ user }) {
+  const location = useLocation();
   const [open, setOpen] = useState(false);
   const [view, setView] = useState('ask'); // ask | ticket | list | thread
   const [question, setQuestion] = useState('');
@@ -88,6 +90,8 @@ export default function SupportWidget({ user }) {
   };
 
   if (!user) return null;
+  // Hide on the FreeBuild Chat workspace (own AI workspace — no need for support widget overlay)
+  if (location.pathname.startsWith('/freebuild')) return null;
 
   return (
     <>
