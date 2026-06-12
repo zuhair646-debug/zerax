@@ -1197,20 +1197,17 @@ function CodeActions({ project, projectId, onOpenConnections }) {
 // with a stagger, then animates to "in progress" → "done".
 // Purely visual progress: shows the user a clear roadmap.
 // ─────────────────────────────────────────────────────────────
-function PlanTaskCard({ plan }) {
+function PlanTaskCard({ plan, updates }) {
   const steps = plan?.steps || [];
   const total = steps.length;
   const eta = plan?.estimated_minutes || 5;
-  // Stagger states: each step starts pending → in-progress → done
-  // Using elapsed wall-clock to advance (purely visual; no backend tracking yet)
-  const [tick, setTick] = useState(0);
-  useEffect(() => {
-    // advance the visual progress every 1.5s
-    const id = setInterval(() => setTick((t) => t + 1), 1500);
-    // stop ticking after all steps have animated
-    const stopAt = setTimeout(() => clearInterval(id), 1500 * (total + 2));
-    return () => { clearInterval(id); clearTimeout(stopAt); };
-  }, [total]);
+  // Build a status map from REAL update_plan_step events (no more visual timer)
+  const statusByIdx = {};
+  (updates || []).forEach((u) => {
+    statusByIdx[u.step_index] = { status: u.status, note: u.note };
+  });
+  const doneCount = Object.values(statusByIdx).filter((s) => s.status === 'done').length;
+  const inProgressIdx = Object.entries(statusByIdx).find(([, s]) => s.status === 'in_progress')?.[0];
 
   return (
     <div
@@ -1234,21 +1231,23 @@ function PlanTaskCard({ plan }) {
       {/* Steps */}
       <div className="px-4 py-3 space-y-2">
         {steps.map((stepText, idx) => {
-          // Visual progress: step i becomes "in-progress" when tick >= i, "done" when tick >= i+1
-          const status = tick > idx ? 'done' : tick === idx ? 'progress' : 'pending';
+          const u = statusByIdx[idx];
+          const status = u?.status || 'pending';
+          const note = u?.note || '';
+          const isFailed = status === 'failed';
           return (
             <div
               key={idx}
               className={`flex items-start gap-3 px-3 py-2 rounded-lg transition-all duration-500 ${
                 status === 'done'
                   ? 'bg-emerald-500/10 border border-emerald-500/30'
-                  : status === 'progress'
-                  ? 'bg-cyan-500/10 border border-cyan-500/40'
+                  : status === 'in_progress'
+                  ? 'bg-cyan-500/10 border border-cyan-500/40 ring-1 ring-cyan-400/20'
+                  : isFailed
+                  ? 'bg-red-500/10 border border-red-500/40'
                   : 'bg-zinc-900/40 border border-zinc-800/60'
               }`}
-              style={{
-                animation: `fadeInUp 400ms ease-out ${idx * 80}ms both`,
-              }}
+              style={{ animation: `fadeInUp 400ms ease-out ${idx * 80}ms both` }}
               data-testid={`plan-step-${idx}`}
             >
               {/* Status icon */}
@@ -1260,9 +1259,14 @@ function PlanTaskCard({ plan }) {
                     </svg>
                   </div>
                 )}
-                {status === 'progress' && (
+                {status === 'in_progress' && (
                   <div className="w-5 h-5 rounded-full bg-cyan-500/30 border border-cyan-300/80 flex items-center justify-center">
                     <div className="w-2 h-2 rounded-full bg-cyan-300 animate-pulse" />
+                  </div>
+                )}
+                {isFailed && (
+                  <div className="w-5 h-5 rounded-full bg-red-500/20 border border-red-400/60 flex items-center justify-center">
+                    <span className="text-red-300 text-[10px] font-bold">✕</span>
                   </div>
                 )}
                 {status === 'pending' && (
@@ -1274,18 +1278,25 @@ function PlanTaskCard({ plan }) {
               <div className="flex-1 min-w-0">
                 <div className={`text-[11px] font-bold mb-0.5 ${
                   status === 'done' ? 'text-emerald-400/70' :
-                  status === 'progress' ? 'text-cyan-300' :
+                  status === 'in_progress' ? 'text-cyan-300' :
+                  isFailed ? 'text-red-400' :
                   'text-zinc-600'
                 }`}>
                   {String(idx + 1).padStart(2, '0')}
                 </div>
                 <div className={`text-xs leading-snug ${
                   status === 'done' ? 'text-emerald-100/90 line-through decoration-emerald-500/40 decoration-1' :
-                  status === 'progress' ? 'text-white' :
+                  status === 'in_progress' ? 'text-white' :
+                  isFailed ? 'text-red-200' :
                   'text-zinc-500'
                 }`}>
                   {stepText}
                 </div>
+                {note && (
+                  <div className={`mt-1 text-[10px] ${isFailed ? 'text-red-300/80' : 'text-cyan-300/70'}`}>
+                    💬 {note}
+                  </div>
+                )}
               </div>
             </div>
           );
@@ -1297,13 +1308,138 @@ function PlanTaskCard({ plan }) {
         <div className="h-1 bg-zinc-900 rounded-full overflow-hidden">
           <div
             className="h-full bg-gradient-to-r from-cyan-500 to-emerald-400 transition-all duration-700 ease-out"
-            style={{ width: `${Math.min(100, (Math.min(tick, total) / Math.max(total, 1)) * 100)}%` }}
+            style={{ width: `${total > 0 ? (doneCount / total) * 100 : 0}%` }}
           />
         </div>
         <div className="mt-1.5 flex justify-between text-[10px] text-zinc-500">
-          <span>{Math.min(tick, total)} / {total} خطوة</span>
-          <span>{Math.round(Math.min(100, (Math.min(tick, total) / Math.max(total, 1)) * 100))}%</span>
+          <span>
+            {doneCount} / {total} خطوة
+            {inProgressIdx !== undefined && <span className="text-cyan-400 mr-2">• #{Number(inProgressIdx) + 1} جارية</span>}
+          </span>
+          <span>{Math.round((doneCount / Math.max(total, 1)) * 100)}%</span>
         </div>
+      </div>
+    </div>
+  );
+}
+
+
+// ─────────────────────────────────────────────────────────────
+// AuditReportCard — comprehensive multi-angle audit results.
+// Rendered when the AI calls `audit_project`. Shows per-category
+// scores + overall grade + expandable details per check.
+// ─────────────────────────────────────────────────────────────
+function AuditReportCard({ report }) {
+  const [openCheck, setOpenCheck] = useState(null);
+  const checks = report?.checks || {};
+  const scores = report?.scores || {};
+  const overall = report?.overall_score || 0;
+  const grade = report?.grade || '';
+  const elapsed = report?.elapsed_seconds || 0;
+  const checkLabels = {
+    html: { label: 'بنية HTML', icon: '📐' },
+    js: { label: 'JavaScript', icon: '⚡' },
+    visual: { label: 'الاختبار البصري الحي', icon: '👁️' },
+    security: { label: 'الأمن', icon: '🛡️' },
+    performance: { label: 'الأداء', icon: '🚀' },
+    seo: { label: 'SEO', icon: '🔍' },
+    accessibility: { label: 'الوصولية', icon: '♿' },
+  };
+  const scoreColor = (s) => {
+    if (s === null || s === undefined) return 'text-zinc-500';
+    if (s >= 90) return 'text-emerald-400';
+    if (s >= 75) return 'text-cyan-400';
+    if (s >= 60) return 'text-amber-400';
+    if (s >= 40) return 'text-orange-400';
+    return 'text-red-400';
+  };
+  const overallColor = scoreColor(overall);
+
+  return (
+    <div
+      className="my-2 rounded-2xl overflow-hidden border border-purple-500/30 bg-gradient-to-br from-zinc-950 via-zinc-950 to-purple-950/20 shadow-lg shadow-purple-500/5"
+      data-testid="audit-report-card"
+    >
+      {/* Header */}
+      <div className="px-4 py-3 border-b border-purple-500/20 bg-purple-500/5 flex items-center gap-3">
+        <div className="text-xl">🔍</div>
+        <div className="flex-1 min-w-0">
+          <div className="text-xs text-purple-400/80 font-bold uppercase tracking-wider">تقرير التدقيق الشامل</div>
+          <div className="text-sm text-white font-semibold" data-testid="audit-grade">{grade}</div>
+        </div>
+        <div className={`text-2xl font-black ${overallColor}`} data-testid="audit-overall-score">
+          {overall}<span className="text-sm text-zinc-500">/100</span>
+        </div>
+      </div>
+
+      {/* Per-category scores */}
+      <div className="px-4 py-3 grid grid-cols-1 sm:grid-cols-2 gap-2">
+        {Object.entries(scores).map(([key, score]) => {
+          const lbl = checkLabels[key] || { label: key, icon: '•' };
+          const isOpen = openCheck === key;
+          const check = checks[key] || {};
+          const isSkipped = check.skipped;
+          return (
+            <div
+              key={key}
+              className="rounded-lg border border-zinc-800 bg-zinc-900/40 overflow-hidden transition-all"
+              data-testid={`audit-check-${key}`}
+            >
+              <button
+                onClick={() => setOpenCheck(isOpen ? null : key)}
+                className="w-full flex items-center gap-3 px-3 py-2 hover:bg-zinc-900/60 transition"
+              >
+                <span className="text-lg">{lbl.icon}</span>
+                <span className="text-xs text-white font-semibold flex-1 text-right">{lbl.label}</span>
+                {isSkipped ? (
+                  <span className="text-[10px] text-zinc-500">— تخطّى</span>
+                ) : (
+                  <span className={`text-sm font-bold ${scoreColor(score)}`}>
+                    {score !== null && score !== undefined ? `${score}` : '—'}
+                  </span>
+                )}
+                <svg className={`w-3 h-3 text-zinc-500 transition-transform ${isOpen ? 'rotate-180' : ''}`} viewBox="0 0 12 12" fill="none">
+                  <path d="M3 5L6 8L9 5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+                </svg>
+              </button>
+              {isOpen && (
+                <div className="px-3 pb-3 pt-1 text-[11px] text-zinc-300 leading-relaxed border-t border-zinc-800 max-h-60 overflow-y-auto" dir="auto">
+                  {check.review && <pre className="whitespace-pre-wrap font-sans">{check.review}</pre>}
+                  {check.error && <div className="text-red-400">❌ {check.error}</div>}
+                  {check.issues && check.issues.length > 0 && (
+                    <ul className="list-disc list-inside space-y-1">
+                      {check.issues.slice(0, 8).map((iss, ii) => (
+                        <li key={ii}>{typeof iss === 'string' ? iss : JSON.stringify(iss)}</li>
+                      ))}
+                    </ul>
+                  )}
+                  {check.errors && check.errors.length > 0 && (
+                    <ul className="list-disc list-inside space-y-1 text-red-300">
+                      {check.errors.slice(0, 5).map((e, ei) => (
+                        <li key={ei}>{typeof e === 'string' ? e : (e.message || JSON.stringify(e))}</li>
+                      ))}
+                    </ul>
+                  )}
+                  {check.console_errors && check.console_errors.length > 0 && (
+                    <div className="text-red-300">
+                      Console errors: {check.console_errors.length}
+                    </div>
+                  )}
+                  {check.skipped && <div className="text-zinc-500">{check.reason}</div>}
+                  {!check.review && !check.error && !check.issues?.length && !check.errors?.length && !check.skipped && (
+                    <div className="text-emerald-400/80">✓ ما فيه ملاحظات</div>
+                  )}
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Footer */}
+      <div className="px-4 pb-3 pt-1 flex justify-between text-[10px] text-zinc-500">
+        <span>تم الفحص في {elapsed}s</span>
+        <span>اضغط على أي قسم لرؤية التفاصيل</span>
       </div>
     </div>
   );
@@ -2331,11 +2467,29 @@ function ChatWorkspace({ projectId }) {
                           }
                           if (s.kind === 'tool') {
                             const isDone = s.phase === 'done';
-                            // Special card renderer for `plan_task` results — checklist with staggered animations.
+                            // Special card renderer for `plan_task` results — checklist with REAL progress tracking.
                             if (s.name === 'plan_task' && isDone && s.result?.kind === 'plan') {
-                                                                  return (
-                                <PlanTaskCard key={sIdx} plan={s.result} />
+                              // Collect all update_plan_step events matching this plan_id from liveSteps
+                              const planId = s.result.plan_id;
+                              const stepUpdates = (m.live_steps || []).filter(
+                                (x) => x.kind === 'tool' &&
+                                       x.name === 'update_plan_step' &&
+                                       x.phase === 'done' &&
+                                       x.result?.plan_id === planId
+                              ).map((x) => ({
+                                step_index: x.result.step_index,
+                                status: x.result.status,
+                                note: x.result.note || '',
+                              }));
+                              return (
+                                <PlanTaskCard key={sIdx} plan={s.result} updates={stepUpdates} />
                               );
+                            }
+                            // Hide update_plan_step from the noisy generic tool list (it updates the card silently)
+                            if (s.name === 'update_plan_step') return null;
+                            // Special card for audit_project
+                            if (s.name === 'audit_project' && isDone && s.result?.kind === 'audit_report') {
+                              return <AuditReportCard key={sIdx} report={s.result} />;
                             }
                             return (
                               <div key={sIdx} className={`flex gap-2 text-[11px] px-3 py-1.5 rounded border ${

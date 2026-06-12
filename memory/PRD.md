@@ -19,6 +19,38 @@ Build "Zenrex" — a multi-tenant Saudi/Arab AI commerce platform with:
 
 ## Current State (Feb 2026)
 
+### 🧠 Jun 12 2026 — Phase 4: Real Plan Tracking + Persistent Memory + Comprehensive Audit (53 total tools)
+
+User mandate: "ربط الخطة بالحقيقة + ذاكرة مستديمة + تدقيق شامل من الصفر إلى الإنتاج".
+Shipped 6 new tools + frontend cards that close 3 critical gaps:
+
+**New module:** `/app/backend/modules/freebuild/memory_audit_tools.py` (~430 lines).
+
+**Tools added:**
+
+🔄 **Plan Tracking (real progress):**
+- `update_plan_step(plan_id, step_index, status, note?)` — AI marks each step `in_progress` / `done` / `failed` as it works through a plan. The `PlanTaskCard` in the UI now reads these REAL events instead of the previous timer-based animation. Steps show actual completion + notes.
+
+🧠 **Persistent Memory (across sessions):**
+- `memory_save(key, value, scope)` — scope=`project` (this project) or `merchant` (all merchant's projects).
+- `memory_recall(key)`, `memory_list()`, `memory_delete(key)`.
+- **Auto-injection:** `freebuild_agent.py` now calls `load_project_memories_for_prompt()` once at the start of every turn and PREPENDS the formatted memory block to the system prompt. So the AI literally cannot forget customer preferences/brand facts/decisions.
+- Storage: new `freebuild_memories` collection. Max 1000 chars per value, snake_case keys.
+
+🔍 **Comprehensive Audit:**
+- `audit_project(include_visual_test?, include_specialists?, live_url?)` — runs in this order: HTML validation → JS lint → live Playwright test (test_page) → 4 PARALLEL specialist reviews (security_auditor, performance_optimizer, seo_strategist, accessibility_auditor) via the existing `delegate` tool. Returns scored report per category + overall grade (🟢 ممتاز / 🟡 جيد جداً / 🟠 يحتاج تحسين / 🔴 ضعيف). 30-60s total. Persisted to `freebuild_audits`.
+
+**Frontend (`FreeBuildChat.js`):**
+- `PlanTaskCard` rewritten: now reads `updates[]` prop derived from `liveSteps` of all `update_plan_step` events matching the same `plan_id`. Shows real status per step, in-progress ring animation, failure cross icon, per-step notes.
+- New `AuditReportCard` component: header with overall grade + score, expandable per-category cards (HTML / JS / Visual / Security / Performance / SEO / Accessibility), color-coded scores (🟢 >90, 🟡 75-90, 🟠 60-75, 🟠 40-60, 🔴 <40).
+- `update_plan_step` tool calls are hidden from the live steps panel (they silently update the card).
+
+**System prompt:** New section "تتبّع الخطط + الذاكرة الطويلة + التدقيق الشامل" with explicit usage rules.
+
+**Tests:** 14 new pytest cases in `/app/backend/tests/test_memory_audit_tools.py`. **65/65 total advanced-tool tests passing** across Phase 1-4.
+
+**Deployed:** Synced to `zenrex.ai` VPS, backend restarted, frontend build pushed.
+
 ### 🧠 Jun 12 2026 — Phase 3: Smart Workflow Tools (47 total tools)
 Following user mandate to make Zenrex AI surpass E1 (the dev agent), shipped
 3 high-leverage tools that close the gap with senior human engineering:

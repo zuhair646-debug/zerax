@@ -53,6 +53,13 @@ from .workflow_tools import (
     WORKFLOW_TOOL_NAMES,
     dispatch_workflow,
 )
+from .memory_audit_tools import (
+    PHASE4_TOOL_SCHEMAS,
+    PHASE4_TOOL_LABELS_AR,
+    PHASE4_TOOL_NAMES,
+    dispatch_phase4,
+    load_project_memories_for_prompt,
+)
 
 
 def _now() -> str:
@@ -590,6 +597,7 @@ TOOLS_SCHEMA: List[Dict[str, Any]] = [
 TOOLS_SCHEMA.extend(ADVANCED_TOOL_SCHEMAS)
 # Append the workflow tools (ask_user_inline, plan_task, delegate)
 TOOLS_SCHEMA.extend(WORKFLOW_TOOL_SCHEMAS)
+TOOLS_SCHEMA.extend(PHASE4_TOOL_SCHEMAS)
 
 
 # ─── Tool Implementations ─────────────────────────────────────────────────────
@@ -746,7 +754,7 @@ def _exec_tool(ctx: FreeBuildToolContext, name: str, args: Dict[str, Any]) -> Di
                     "save_credential", "validate_credential", "list_credentials",
                     "delete_credential", "recommend_service",
                     "github_list_repos", "github_create_repo", "github_push_file",
-                    "github_get_file") or name in ADVANCED_TOOL_NAMES or name in WORKFLOW_TOOL_NAMES:
+                    "github_get_file") or name in ADVANCED_TOOL_NAMES or name in WORKFLOW_TOOL_NAMES or name in PHASE4_TOOL_NAMES:
             return {"__async__": True, "tool": name, "args": args}
         return {"error": f"unknown tool: {name}"}
     except Exception as e:
@@ -1474,6 +1482,10 @@ async def _exec_tool_async(ctx: FreeBuildToolContext, name: str, args: Dict[str,
         if name in WORKFLOW_TOOL_NAMES:
             return await dispatch_workflow(ctx, name, args)
 
+        # ── Phase 4: memory + audit + plan tracking ──
+        if name in PHASE4_TOOL_NAMES:
+            return await dispatch_phase4(ctx, name, args)
+
         return {"ok": False, "error": f"unknown async tool: {name}"}
     except Exception as e:
         logger.exception(f"async tool {name} failed")
@@ -1779,6 +1791,28 @@ AGENT_SYSTEM_PROMPT = """أنت **Zenrex Code Brain** — مهندس برمجي 
   • `accessibility_auditor` — مدقّق WCAG 2.1 AA مع تخصص RTL
 يرجع رد المتخصص فتضمّنه في عملك. **استخدمه لما تحتاج رأي خبير في موضوع ضيّق** — مثلاً قبل ما تنشر، استدعِ `delegate('security_auditor', ...)` على الكود.
 
+═══════════════════════════════════════════════════════════
+🔄 **تتبّع الخطط (Plan Tracking) + الذاكرة الطويلة + التدقيق الشامل:**
+
+🔄 **`update_plan_step(plan_id, step_index, status, note?)`** — بعد ما تنشر خطة بـ `plan_task` وتبدأ تنفّذها، **استدعِ هذي الأداة بعد كل خطوة** بحالة `in_progress` (لما تبدأها) ثم `done` (لما تخلصها). الكرت في الواجهة يحدّث نفسه live يشوف العميل التقدّم فعلياً مش بصرياً فقط.
+
+🧠 **الذاكرة الطويلة (تستمر عبر الجلسات + auto-injected في system prompt):**
+  • `memory_save(key, value, scope?)` — احفظ معلومة مهمة عن المشروع/العميل (تفضيلاته، اسم المتجر، الألوان المعتمدة، خياراته السابقة). الـ scope: `project` (هذا المشروع فقط) أو `merchant` (لكل مشاريع التاجر).
+  • `memory_recall(key)` — استرجع ذاكرة محددة (نادراً تحتاجها لأن كل الذكريات تنحقن تلقائياً في system prompt في بداية كل turn).
+  • `memory_list()` — قائمة كل الذكريات.
+  • `memory_delete(key, scope)` — احذف ذاكرة قديمة/خاطئة.
+  **متى تستخدمها:** أي مرة تكتشف شي مهم العميل قاله مرة واحدة وتبيك تذكره دائماً — `memory_save("brand_colors", "ذهبي وأسود")`, `memory_save("preferred_payment", "Moyasar")`. لا تحفظ المعلومات اللي يفترض تنساها (الكلام الفضفاض).
+
+🔍 **`audit_project(include_visual_test?, include_specialists?, live_url?)`** — **التدقيق الشامل** للموقع من كل الجوانب. لما العميل يقول "راجع الموقع" أو "دقّق" أو قبل الإطلاق:
+  1. فحص بنية HTML
+  2. فحص JavaScript
+  3. اختبار حي في متصفح (test_page)
+  4. مراجعة أمن متخصصة
+  5. مراجعة أداء متخصصة
+  6. مراجعة SEO متخصصة
+  7. مراجعة accessibility (WCAG 2.1 AA + RTL)
+  يستغرق 30-60 ثانية ويرجع تقرير مفصّل + درجة لكل جانب + درجة إجمالية + تقدير عام (🟢 ممتاز / 🟡 جيد جداً / 🟠 يحتاج تحسين / 🔴 ضعيف). **استخدمه قبل publish_site لأي مشروع جدي**.
+
 📨 **الإنهاء:**
 - `finish(summary)` — أنهِ وأرسل التقرير للعميل
 
@@ -2060,12 +2094,23 @@ async def _run_anthropic_agent(
     iterations = 0
     model_used = model
 
+    # ── Auto-inject long-term memories into the system prompt (once per turn) ──
+    base_prompt = get_system_prompt(project)
+    try:
+        merchant_id = project.get("merchant_id") or project.get("user_id") or project.get("owner_id")
+        memory_block = await load_project_memories_for_prompt(
+            ctx.db, ctx.project_id, merchant_id
+        )
+        full_system_prompt = base_prompt + (memory_block or "")
+    except Exception:
+        full_system_prompt = base_prompt
+
     for _step in range(max_iterations):
         iterations += 1
         try:
             resp = await client.messages.create(
                 model=model,
-                system=get_system_prompt(project),
+                system=full_system_prompt,
                 max_tokens=8000,
                 tools=TOOLS_SCHEMA,
                 messages=messages,
@@ -2308,6 +2353,7 @@ TOOL_LABELS_AR: Dict[str, Dict[str, str]] = {
 # Merge in labels for the advanced tools (run_shell, analyze_file, etc.)
 TOOL_LABELS_AR.update(ADVANCED_TOOL_LABELS_AR)
 TOOL_LABELS_AR.update(WORKFLOW_TOOL_LABELS_AR)
+TOOL_LABELS_AR.update(PHASE4_TOOL_LABELS_AR)
 
 
 def _sse(event: str, data: Dict[str, Any]) -> str:
