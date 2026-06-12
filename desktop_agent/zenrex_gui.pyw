@@ -37,6 +37,10 @@ DEFAULT_WS = "wss://zenrex.ai/api/desktop-agent/ws"
 DOWNLOADS_DIR = Path.home() / "Downloads"
 DOWNLOADS_DIR.mkdir(parents=True, exist_ok=True)
 
+# Local version — bumped whenever zenrex_gui.pyw changes meaningfully.
+# Compared against server's /api/desktop-agent/version on startup.
+AGENT_VERSION = "0.4.0"
+
 pyautogui.FAILSAFE = True
 
 
@@ -91,12 +95,103 @@ def _smooth_duration(from_x: int, from_y: int, to_x: int, to_y: int) -> float:
     return max(0.4, min(1.6, dist / 600.0))
 
 
+# ─── Cursor halo (always-on-top circle that follows AI-driven mouse) ─────────
+_HALO_REF = {"tk": None, "win": None, "canvas": None}
+
+
+def _ensure_halo_root():
+    """Lazily create a hidden Tk root + a small transparent Toplevel that
+    renders a glowing purple ring around the cursor. Threaded — uses the
+    main Tk event loop via after()."""
+    if _HALO_REF["tk"] is not None:
+        return _HALO_REF
+    try:
+        from tkinter import Tk, Toplevel, Canvas
+        # Reuse the main app's Tk root if possible — set externally.
+        if _HALO_REF["tk"] is None:
+            return None  # main app hasn't registered yet
+    except Exception:
+        return None
+
+
+def register_halo_root(tk_root):
+    """Called by the GUI on init so the halo can use the main Tk loop."""
+    from tkinter import Toplevel, Canvas
+    win = Toplevel(tk_root)
+    win.overrideredirect(True)
+    win.attributes("-topmost", True)
+    try:
+        win.attributes("-transparentcolor", "#010101")  # this exact color becomes see-through
+    except Exception:
+        pass
+    win.configure(bg="#010101")
+    SIZE = 60
+    canvas = Canvas(win, width=SIZE, height=SIZE, bg="#010101", highlightthickness=0)
+    canvas.pack()
+    # Two concentric rings — outer purple glow + inner white
+    canvas.create_oval(4, 4, SIZE - 4, SIZE - 4, outline="#a78bfa", width=4)
+    canvas.create_oval(20, 20, SIZE - 20, SIZE - 20, outline="#ffffff", width=2)
+    win.geometry(f"{SIZE}x{SIZE}+{-100}+{-100}")  # off-screen initially
+    win.withdraw()
+    _HALO_REF["tk"] = tk_root
+    _HALO_REF["win"] = win
+    _HALO_REF["canvas"] = canvas
+    _HALO_REF["size"] = SIZE
+
+
+def _halo_show_at(x: int, y: int, duration_ms: int = 600):
+    win = _HALO_REF.get("win")
+    if win is None:
+        return
+    sz = _HALO_REF.get("size", 60)
+    def _do():
+        try:
+            win.geometry(f"{sz}x{sz}+{x - sz // 2}+{y - sz // 2}")
+            win.deiconify(); win.lift()
+        except Exception:
+            pass
+    def _hide():
+        try: win.withdraw()
+        except Exception: pass
+    tk_root = _HALO_REF.get("tk")
+    if tk_root:
+        try:
+            tk_root.after(0, _do)
+            tk_root.after(duration_ms, _hide)
+        except Exception:
+            pass
+
+
+def _halo_follow(target_x: int, target_y: int, duration_s: float):
+    """Move the halo along with the mouse during a smooth move. Runs in the
+    calling thread (the WebSocket worker) — schedules tk updates via after()."""
+    win = _HALO_REF.get("win")
+    tk_root = _HALO_REF.get("tk")
+    if win is None or tk_root is None:
+        return
+    sz = _HALO_REF.get("size", 60)
+    steps = max(8, int(duration_s * 20))  # ~20 fps
+    delay = duration_s / steps
+    tk_root.after(0, lambda: (win.deiconify(), win.lift()))
+    for _ in range(steps):
+        time.sleep(delay)
+        try:
+            cx, cy = pyautogui.position()
+            tk_root.after(0, lambda x=cx, y=cy: win.geometry(f"{sz}x{sz}+{x - sz // 2}+{y - sz // 2}"))
+        except Exception:
+            pass
+    tk_root.after(400, lambda: win.withdraw())
+
+
 def move_mouse(p):
     cur_x, cur_y = pyautogui.position()
     tx = int(p.get("x", 0)); ty = int(p.get("y", 0))
     dur = p.get("duration")
     if dur is None:
         dur = _smooth_duration(cur_x, cur_y, tx, ty)
+    # Halo follow in a daemon thread (it polls cursor in real time)
+    import threading as _t
+    _t.Thread(target=_halo_follow, args=(tx, ty, float(dur)), daemon=True).start()
     pyautogui.moveTo(tx, ty, duration=float(dur), tween=pyautogui.easeInOutQuad)
     return {"ok": True, "duration": dur}
 
@@ -105,12 +200,13 @@ def click(p):
     x, y = p.get("x"), p.get("y")
     btn, n = p.get("button", "left"), int(p.get("clicks", 1))
     if x is not None and y is not None:
-        # Move smoothly first so the user SEES where the click will land
         cur_x, cur_y = pyautogui.position()
-        pyautogui.moveTo(int(x), int(y),
-                          duration=_smooth_duration(cur_x, cur_y, int(x), int(y)),
-                          tween=pyautogui.easeInOutQuad)
+        dur = _smooth_duration(cur_x, cur_y, int(x), int(y))
+        import threading as _t
+        _t.Thread(target=_halo_follow, args=(int(x), int(y), dur), daemon=True).start()
+        pyautogui.moveTo(int(x), int(y), duration=dur, tween=pyautogui.easeInOutQuad)
         time.sleep(0.15)
+        _halo_show_at(int(x), int(y), 350)
         pyautogui.click(int(x), int(y), clicks=n, button=btn)
     else:
         pyautogui.click(clicks=n, button=btn)
@@ -569,6 +665,8 @@ class ZenrexGUI:
 
         self._build_ui()
         self._build_overlay()
+        # Register the halo with our Tk root so action functions can show it
+        register_halo_root(self.root)
         self._load_last_code()
         # Poll worker queues every 100ms
         self.root.after(100, self._drain_queues)
@@ -581,7 +679,7 @@ class ZenrexGUI:
         header.pack(fill="x")
         Label(header, text="⚡ Zenrex Desktop Agent",
               font=("Segoe UI", 18, "bold"), fg=self.FG, bg=self.BG).pack()
-        Label(header, text="Native OS control for Zenrex AI",
+        Label(header, text=f"v{AGENT_VERSION} · Native OS control for Zenrex AI",
               font=("Segoe UI", 10), fg=self.MUTED, bg=self.BG).pack(pady=(2, 0))
 
         # Status pill
@@ -845,8 +943,52 @@ class ZenrexGUI:
         self.root.mainloop()
 
 
+def _check_and_self_update() -> bool:
+    """Check server for a newer version. If found, download and replace
+    zenrex_gui.pyw, then return True signalling the caller to restart.
+
+    Returns False on any error (silently — we never want to block startup).
+    """
+    try:
+        cfg = SCRIPT_DIR / "config.json"
+        if not cfg.exists():
+            return False
+        data = json.loads(cfg.read_text(encoding="utf-8"))
+        platform_url = (data.get("platform") or "").rstrip("/")
+        if not platform_url:
+            return False
+        import urllib.request
+        with urllib.request.urlopen(f"{platform_url}/api/desktop-agent/version", timeout=5) as r:
+            info = json.loads(r.read().decode("utf-8"))
+        remote_ver = (info.get("version") or "").strip()
+        if not remote_ver or remote_ver == AGENT_VERSION:
+            return False
+        # New version available — fetch the new GUI source.
+        gui_url = f"{platform_url}{info.get('gui_url', '/api/desktop-agent/gui-source')}"
+        with urllib.request.urlopen(gui_url, timeout=15) as r:
+            new_src = r.read().decode("utf-8")
+        if "AGENT_VERSION" not in new_src or "ZenrexGUI" not in new_src:
+            return False  # safety: refuse to replace with something that doesn't look like the agent
+        target = SCRIPT_DIR / "zenrex_gui.pyw"
+        backup = SCRIPT_DIR / "zenrex_gui.pyw.bak"
+        try:
+            if target.exists():
+                target.replace(backup)
+        except Exception:
+            pass
+        target.write_text(new_src, encoding="utf-8")
+        return True
+    except Exception:
+        return False
+
+
 def main():
-    # Silence noisy stderr from websockets in pythonw mode
+    # 1. Self-update check (silent; non-fatal)
+    if _check_and_self_update():
+        # Re-exec the (now updated) script with same args
+        os.execv(sys.executable, [sys.executable, str(SCRIPT_DIR / "zenrex_gui.pyw")] + sys.argv[1:])
+
+    # 2. Silence noisy stderr from websockets in pythonw mode
     logging.basicConfig(level=logging.WARNING)
     app = ZenrexGUI()
     app.run()

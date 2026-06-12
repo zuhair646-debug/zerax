@@ -365,6 +365,142 @@ async def desktop_act_http(request: Request):
     return result
 
 
+# ── Live screen streaming ───────────────────────────────────────────────────
+DESKTOP_AGENT_VERSION = "0.4.0"
+
+
+@desktop_router.get("/version")
+async def desktop_version():
+    """Used by the desktop agent on startup to check for updates."""
+    return {
+        "version": DESKTOP_AGENT_VERSION,
+        "gui_url": "/api/desktop-agent/gui-source",
+    }
+
+
+@desktop_router.get("/gui-source")
+async def desktop_gui_source():
+    """Returns the latest zenrex_gui.pyw — used by the agent's self-update."""
+    from fastapi.responses import PlainTextResponse
+    gui_path = Path(__file__).resolve().parents[3] / "desktop_agent" / "zenrex_gui.pyw"
+    if not gui_path.exists():
+        raise HTTPException(404, "gui source not found")
+    return PlainTextResponse(gui_path.read_text(encoding="utf-8"),
+                              media_type="text/x-python",
+                              headers={"Cache-Control": "no-store"})
+
+
+@desktop_router.get("/frame/{project_id}")
+async def desktop_live_frame(project_id: str):
+    """Return a single JPEG of the connected agent's screen — used by the live viewer.
+    Returns 204 if no agent is paired so the viewer page just keeps polling.
+    """
+    if not is_desktop_agent_connected(project_id):
+        from fastapi.responses import Response
+        return Response(status_code=204)
+    result = await send_command_to_desktop(project_id, "screenshot", {})
+    if not result.get("ok") or not result.get("screenshot_b64"):
+        from fastapi.responses import Response
+        return Response(status_code=204)
+    import base64 as _b64
+    from fastapi.responses import Response
+    img_bytes = _b64.b64decode(result["screenshot_b64"])
+    return Response(content=img_bytes, media_type="image/jpeg",
+                     headers={"Cache-Control": "no-store"})
+
+
+@desktop_router.get("/live/{project_id}")
+async def desktop_live_viewer(project_id: str):
+    """A simple HTML page that polls /frame/{project_id} every 1.5s to show
+    the owner's screen live. Open in any browser tab.
+    """
+    from fastapi.responses import HTMLResponse
+    html = """<!DOCTYPE html>
+<html lang="ar" dir="rtl"><head><meta charset="utf-8">
+<title>Zenrex Live View</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { background: #0a0a14; color: #e5e7eb; font-family: 'Segoe UI', Tahoma, sans-serif;
+         min-height: 100vh; display: flex; flex-direction: column; }
+  header { padding: 14px 24px; background: #15151f; border-bottom: 1px solid #2a2a36;
+           display: flex; justify-content: space-between; align-items: center; }
+  h1 { font-size: 16px; font-weight: 600; color: #a78bfa; }
+  .status { display: flex; align-items: center; gap: 8px; font-size: 12px; color: #9ca3af; }
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: #ef4444;
+         transition: background 0.3s; }
+  .dot.live { background: #10b981; box-shadow: 0 0 8px #10b981; }
+  .frame-wrap { flex: 1; display: flex; justify-content: center; align-items: center;
+                padding: 24px; background: #0a0a14; }
+  .frame-wrap img { max-width: 100%; max-height: calc(100vh - 110px); object-fit: contain;
+                    border-radius: 12px; box-shadow: 0 8px 40px rgba(124,58,237,0.25);
+                    border: 1px solid #2a2a36; }
+  .empty { text-align: center; padding: 80px 24px; color: #6b7280; }
+  .empty h2 { color: #9ca3af; margin-bottom: 8px; font-size: 18px; }
+  .pulse { display: inline-block; animation: pulse 1.5s infinite; }
+  @keyframes pulse { 0%, 100% { opacity: 0.5; } 50% { opacity: 1; } }
+</style></head>
+<body>
+  <header>
+    <h1>⚡ Zenrex — Live View</h1>
+    <div class="status">
+      <span class="dot" id="dot"></span>
+      <span id="state">يتصل...</span>
+      <span id="fps" style="margin-right:12px"></span>
+    </div>
+  </header>
+  <div class="frame-wrap" id="wrap">
+    <div class="empty" id="empty">
+      <h2>⏳ في انتظار اتصال Desktop Agent</h2>
+      <p>افتح تطبيق Zenrex Desktop Agent على جهازك واضغط Connect.</p>
+    </div>
+    <img id="frame" style="display:none" alt="screen">
+  </div>
+<script>
+  const PROJECT = location.pathname.split('/').pop();
+  const img = document.getElementById('frame');
+  const empty = document.getElementById('empty');
+  const dot = document.getElementById('dot');
+  const state = document.getElementById('state');
+  const fps = document.getElementById('fps');
+  let lastTs = 0, frames = 0;
+  async function tick(){
+    try{
+      const t0 = performance.now();
+      const r = await fetch(`/api/desktop-agent/frame/${PROJECT}?t=${Date.now()}`);
+      if (r.status === 204) {
+        dot.classList.remove('live');
+        state.textContent = 'في انتظار الاتصال';
+        empty.style.display = 'block';
+        img.style.display = 'none';
+      } else if (r.ok) {
+        const blob = await r.blob();
+        const url = URL.createObjectURL(blob);
+        const old = img.src;
+        img.onload = () => { if (old.startsWith('blob:')) URL.revokeObjectURL(old); };
+        img.src = url;
+        empty.style.display = 'none';
+        img.style.display = 'block';
+        dot.classList.add('live');
+        state.textContent = 'متصل  ●  Live';
+        frames++;
+        const now = performance.now();
+        if (now - lastTs > 2000) {
+          fps.textContent = `~${(frames * 1000 / (now - lastTs)).toFixed(1)} fps`;
+          frames = 0; lastTs = now;
+        }
+      }
+    }catch(e){
+      dot.classList.remove('live');
+      state.textContent = 'خطأ اتصال';
+    }
+    setTimeout(tick, 1200);  // ~0.8 fps — light on bandwidth
+  }
+  tick();
+</script>
+</body></html>"""
+    return HTMLResponse(html)
+
+
 def _bootstrap_sh(public_base: str) -> str:
     """One-liner Bash installer for macOS/Linux.
 
