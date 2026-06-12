@@ -47,6 +47,12 @@ from .advanced_tools import (
     ADVANCED_TOOL_NAMES,
     dispatch_advanced,
 )
+from .workflow_tools import (
+    WORKFLOW_TOOL_SCHEMAS,
+    WORKFLOW_TOOL_LABELS_AR,
+    WORKFLOW_TOOL_NAMES,
+    dispatch_workflow,
+)
 
 
 def _now() -> str:
@@ -582,6 +588,8 @@ TOOLS_SCHEMA: List[Dict[str, Any]] = [
 ]
 # Append the advanced tool schemas (run_shell, analyze_file, file system, db_query, etc.)
 TOOLS_SCHEMA.extend(ADVANCED_TOOL_SCHEMAS)
+# Append the workflow tools (ask_user_inline, plan_task, delegate)
+TOOLS_SCHEMA.extend(WORKFLOW_TOOL_SCHEMAS)
 
 
 # ─── Tool Implementations ─────────────────────────────────────────────────────
@@ -738,7 +746,7 @@ def _exec_tool(ctx: FreeBuildToolContext, name: str, args: Dict[str, Any]) -> Di
                     "save_credential", "validate_credential", "list_credentials",
                     "delete_credential", "recommend_service",
                     "github_list_repos", "github_create_repo", "github_push_file",
-                    "github_get_file") or name in ADVANCED_TOOL_NAMES:
+                    "github_get_file") or name in ADVANCED_TOOL_NAMES or name in WORKFLOW_TOOL_NAMES:
             return {"__async__": True, "tool": name, "args": args}
         return {"error": f"unknown tool: {name}"}
     except Exception as e:
@@ -1462,6 +1470,10 @@ async def _exec_tool_async(ctx: FreeBuildToolContext, name: str, args: Dict[str,
         if name in ADVANCED_TOOL_NAMES:
             return await dispatch_advanced(ctx, name, args)
 
+        # ── Workflow tools (ask_user_inline, plan_task, delegate) ──
+        if name in WORKFLOW_TOOL_NAMES:
+            return await dispatch_workflow(ctx, name, args)
+
         return {"ok": False, "error": f"unknown async tool: {name}"}
     except Exception as e:
         logger.exception(f"async tool {name} failed")
@@ -1749,6 +1761,23 @@ AGENT_SYSTEM_PROMPT = """أنت **Zenrex Code Brain** — مهندس برمجي 
 📱 **`send_sms(to, message)`** — إرسال SMS عبر Twilio (يحتاج `twilio_sid` + `twilio_auth` + `twilio_from`).
 
 🎬 **`generate_video(prompt, model?, duration_seconds?, aspect_ratio?, image_url?)`** — توليد فيديو عبر fal.ai (يحتاج `fal_key`). الموديلات: `minimax/hailuo` ($0.05/s), `fal-ai/kling-video/v1/standard` ($0.06/s), `fal-ai/luma-dream-machine` ($0.40/s). مدة 3-10 ثواني. للاستخدام في Cinema Studio.
+
+═══════════════════════════════════════════════════════════
+🧠 **أدوات سير العمل الذكي (Smart Workflow):**
+
+🔌 **`ask_user_inline(question, options[], allow_free_text?, context?)`** — لما تحتاج قرار قبل ما تكمّل (مثل "Vercel ولا Netlify؟" أو "أي قالب تفضل؟ أ/ب/ج/د"). تطلع نافذة في الواجهة فيها أزرار اختيار + خانة "أخرى" اختيارية. **بعد ما تستدعيها أوقف عن استدعاء أدوات ثانية في نفس الـ turn** — الـ loop ينتهي طبيعياً، إجابة العميل تجي في الرسالة الجاية وتكمل من هناك. **استخدمها بدل ما تكتب سؤال في نص الرد فقط** — الواجهة بأزرار أسرع وأوضح.
+
+📋 **`plan_task(title, steps[], estimated_minutes?)`** — قبل أي مهمة من 3 خطوات أو أكثر، أعلن خطتك. تظهر بطاقة قائمة تحقّق في الشات يشوفها العميل ويوافق/يصحّح قبل ما تبدأ. **مهم جداً للمشاريع الكبيرة** — تعطي العميل شفافية وتحميه من نسف تصميمه. للمهام الصغيرة (1-2 خطوة) لا تستخدمها.
+
+🧠 **`delegate(role, task, context?)`** — استشر متخصص مصغّر لمهمة محددة. الأدوار المتاحة:
+  • `designer` — نقد بصري + اقتراحات CSS لقسم معيّن
+  • `copywriter` — نصوص تسويقية بالعربي (عناوين، CTAs، فقرات)
+  • `security_auditor` — رصد ثغرات XSS / Injection / تسريب مفاتيح
+  • `performance_optimizer` — رصد بطء + اقتراحات تحسين الأداء
+  • `data_analyst` — تحليل بيانات التاجر (الطلبات، المنتجات، العملاء)
+  • `seo_strategist` — تحسين SEO عربي + meta tags + schema.org
+  • `accessibility_auditor` — مدقّق WCAG 2.1 AA مع تخصص RTL
+يرجع رد المتخصص فتضمّنه في عملك. **استخدمه لما تحتاج رأي خبير في موضوع ضيّق** — مثلاً قبل ما تنشر، استدعِ `delegate('security_auditor', ...)` على الكود.
 
 📨 **الإنهاء:**
 - `finish(summary)` — أنهِ وأرسل التقرير للعميل
@@ -2278,6 +2307,7 @@ TOOL_LABELS_AR: Dict[str, Dict[str, str]] = {
 }
 # Merge in labels for the advanced tools (run_shell, analyze_file, etc.)
 TOOL_LABELS_AR.update(ADVANCED_TOOL_LABELS_AR)
+TOOL_LABELS_AR.update(WORKFLOW_TOOL_LABELS_AR)
 
 
 def _sse(event: str, data: Dict[str, Any]) -> str:

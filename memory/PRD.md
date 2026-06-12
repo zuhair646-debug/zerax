@@ -19,6 +19,28 @@ Build "Zenrex" — a multi-tenant Saudi/Arab AI commerce platform with:
 
 ## Current State (Feb 2026)
 
+### 🧠 Jun 12 2026 — Phase 3: Smart Workflow Tools (47 total tools)
+Following user mandate to make Zenrex AI surpass E1 (the dev agent), shipped
+3 high-leverage tools that close the gap with senior human engineering:
+
+**New module:** `/app/backend/modules/freebuild/workflow_tools.py` (~280 lines).
+
+**Tools added:**
+- 🔌 `ask_user_inline(question, options[2-6], allow_free_text, context)` — Pauses the agent mid-turn and emits a sentinel that the frontend `InlineChoiceModal` detects → user clicks an option (or types free text) → user's choice becomes their next chat message → agent resumes. **HUGE upgrade** vs burying questions in prose.
+- 📋 `plan_task(title, steps[2-12], estimated_minutes)` — Announces a structured roadmap BEFORE multi-step tasks. Persisted to `freebuild_plans` collection so the UI can re-render and track per-step status. Forces transparency.
+- 🧠 `delegate(role, task, context)` — Spawns a focused Claude Haiku 4.5 call with a role-tuned system prompt. 7 specialist roles: `designer`, `copywriter`, `security_auditor`, `performance_optimizer`, `data_analyst`, `seo_strategist`, `accessibility_auditor`. Returns the specialist's analysis for the main flow to incorporate.
+
+**Frontend (`/app/frontend/src/pages/FreeBuildChat.js`):**
+- Added `InlineChoiceModal` component (cyan-themed, RTL, options as buttons + optional free text input + Enter-to-submit).
+- SSE `tool` event handler now detects the `ask_user_inline` sentinel (kind=`choice` + `pending_user_input`) → pops the Modal automatically.
+- Picked option is pre-filled in the chat input — user reviews and hits send to continue.
+
+**System prompt:** New "Smart Workflow" section with the 3 tools and explicit usage rules (e.g. "after `ask_user_inline` STOP calling other tools this turn").
+
+**Tests:** 13 new pytest cases at `/app/backend/tests/test_workflow_tools.py` covering wiring + each tool's contract + persistence + a REAL Anthropic delegate call. **13/13 passing.** Combined with Phase 1 + Phase 2, **51/51 total advanced-tool tests passing.**
+
+**Deployed:** Synced to `zenrex.ai` VPS, backend restarted.
+
 ### 🚀 Jun 12 2026 — Phase 2: Software Engineer Mode (14 advanced tools)
 Following user mandate "أبي الذكاء يكون أفضل من أي شيء — أضف كل الأدوات بلا حدود",
 shipped a second wave of 14 capability tools that transform Zenrex AI from a

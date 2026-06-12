@@ -1192,6 +1192,80 @@ function CodeActions({ project, projectId, onOpenConnections }) {
 }
 
 // ─────────────────────────────────────────────────────────────
+// Inline Choice Modal (used by the AI's `ask_user_inline` tool)
+// AI pauses mid-turn → user clicks an option → user's choice
+// becomes their next chat message → AI resumes.
+// ─────────────────────────────────────────────────────────────
+function InlineChoiceModal({ request, freeText, setFreeText, onClose, onPick }) {
+  if (!request) return null;
+  return (
+    <div
+      className="fixed inset-0 z-[100] bg-black/70 backdrop-blur-sm flex items-center justify-center p-4"
+      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
+      data-testid="inline-choice-modal"
+    >
+      <div className="bg-gradient-to-b from-zinc-900 to-black border border-cyan-500/40 rounded-2xl max-w-lg w-full p-6 shadow-2xl">
+        <div className="flex items-start gap-3 mb-4">
+          <div className="text-3xl">🤔</div>
+          <div className="flex-1">
+            <h2 className="text-base font-bold text-cyan-300 leading-snug" data-testid="inline-choice-question">
+              {request.question}
+            </h2>
+            {request.context && (
+              <p className="text-xs text-zinc-500 mt-1">{request.context}</p>
+            )}
+          </div>
+          <button
+            onClick={onClose}
+            className="text-zinc-500 hover:text-white text-xl leading-none"
+            data-testid="inline-choice-close"
+          >×</button>
+        </div>
+
+        <div className="space-y-2">
+          {(request.options || []).map((opt, i) => (
+            <button
+              key={i}
+              onClick={() => onPick(opt)}
+              className="w-full text-right px-4 py-3 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 hover:border-cyan-500/60 text-white text-sm font-semibold transition group"
+              data-testid={`inline-choice-option-${i}`}
+            >
+              <span className="text-cyan-400 group-hover:text-cyan-300 ml-2">›</span>
+              {opt}
+            </button>
+          ))}
+        </div>
+
+        {request.allow_free_text && (
+          <div className="mt-4 pt-4 border-t border-zinc-800">
+            <label className="block text-xs text-zinc-500 mb-2">أو اكتب جوابك بحرية:</label>
+            <div className="flex gap-2">
+              <input
+                value={freeText}
+                onChange={(e) => setFreeText(e.target.value)}
+                placeholder="اكتب هنا..."
+                className="flex-1 bg-zinc-950 border border-zinc-700 focus:border-cyan-500 rounded-lg px-3 py-2 text-white text-sm outline-none"
+                onKeyDown={(e) => { if (e.key === 'Enter' && freeText.trim()) onPick(freeText.trim()); }}
+                data-testid="inline-choice-free-input"
+              />
+              <button
+                onClick={() => freeText.trim() && onPick(freeText.trim())}
+                disabled={!freeText.trim()}
+                className="px-4 py-2 rounded-lg bg-cyan-500 hover:bg-cyan-400 text-black text-sm font-bold transition disabled:opacity-40"
+                data-testid="inline-choice-free-submit"
+              >
+                إرسال
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+
+// ─────────────────────────────────────────────────────────────
 // Secure Credential Request Modal
 // AI tool `request_credential` emits a sentinel → this modal pops up
 // so the user can paste an API key safely. Value is encrypted at rest.
@@ -1303,6 +1377,8 @@ function ChatWorkspace({ projectId }) {
   const [credentialRequest, setCredentialRequest] = useState(null); // {service, label, instructions}
   const [credentialValue, setCredentialValue] = useState('');
   const [credentialSubmitting, setCredentialSubmitting] = useState(false);
+  const [inlineChoice, setInlineChoice] = useState(null); // {question, options, allow_free_text, context}
+  const [inlineChoiceText, setInlineChoiceText] = useState('');
   const chatEndRef = useRef(null);
   const chatScrollRef = useRef(null);
   const userScrolledUpRef = useRef(false);
@@ -1530,6 +1606,21 @@ function ChatWorkspace({ projectId }) {
                   instructions: payload.result.instructions || '',
                 });
                 setCredentialValue('');
+              }
+              // Detect ask_user_inline sentinel → open Inline Choice Modal.
+              if (
+                payload?.name === 'ask_user_inline' &&
+                payload?.phase === 'done' &&
+                payload?.result?.pending_user_input &&
+                payload?.result?.kind === 'choice'
+              ) {
+                setInlineChoice({
+                  question: payload.result.question,
+                  options: payload.result.options || [],
+                  allow_free_text: payload.result.allow_free_text !== false,
+                  context: payload.result.context || '',
+                });
+                setInlineChoiceText('');
               }
             } else if (eventName === 'tool_building') {
               // Update or push a "building" indicator. Now also carries a live
@@ -2681,6 +2772,20 @@ function ChatWorkspace({ projectId }) {
             toast.error(`خطأ: ${e.message || e}`);
             setCredentialSubmitting(false);
           }
+        }}
+      />
+      <InlineChoiceModal
+        request={inlineChoice}
+        freeText={inlineChoiceText}
+        setFreeText={setInlineChoiceText}
+        onClose={() => { setInlineChoice(null); setInlineChoiceText(''); }}
+        onPick={(picked) => {
+          if (!picked) return;
+          setInlineChoice(null);
+          setInlineChoiceText('');
+          // Pre-fill the chat input with the user's choice so they review + send
+          setMessage(picked);
+          toast.info('اضغط إرسال أو عدّل قبلها.');
         }}
       />
     </div>
