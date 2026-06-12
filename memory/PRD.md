@@ -19,6 +19,43 @@ Build "Zenrex" — a multi-tenant Saudi/Arab AI commerce platform with:
 
 ## Current State (Feb 2026)
 
+
+### 🖥️ Jun 12 2026 — Phase 9: Desktop Agent (Native OS Control) — 68 total tools
+
+**Problem:** Chrome Extension only controls browser tabs. User explicitly asked the AI
+to control their physical laptop — move mouse, type, open apps, save files to Downloads.
+
+**Shipped:**
+- 📦 **Downloadable Desktop Agent** (`/api/desktop-agent/download` → `ZenrexDesktopAgent.zip`).
+  Backend generates ZIP on-the-fly with `config.json` auto-baked with the right WebSocket URL.
+- 🛠 Cross-platform installer scripts: `install.sh`/`run.sh` (Mac/Linux) and `install.bat`/`run.bat` (Windows).
+  Creates an isolated `.venv` so the agent doesn't pollute system Python.
+- 🔌 **WebSocket relay** `/api/desktop-agent/ws?code=...` — pairs the running script
+  to a project, routes commands both ways, with proper timeout / disconnect handling.
+- 🤖 **4 new AI tools (OWNER-only):**
+  - `desktop_pair` — issues a 6-char code + ZIP download URL.
+  - `desktop_status` — checks live connection.
+  - `desktop_screenshot` — JPEG of owner's primary display (down-scaled to 1600px).
+  - `desktop_act(action, params)` — executes a single OS action.
+- 🖱 **Supported actions** in `zenrex_agent.py`:
+  `move_mouse`, `click`/`double_click`/`right_click`, `type` (Unicode via clipboard fallback),
+  `press_key`, `scroll`, `download_file`, `open_app`, `open_url`,
+  `cursor_position`, `screen_size`, `list_dir`, `read_file`, `write_file`,
+  `make_dir`, `run_shell` (gated by `--allow-shell`).
+- 🛡 Safety: PyAutoGUI FAILSAFE (corner-mouse abort), shell disabled by default,
+  pairing codes expire in 10 min, only one connection per project, all traffic over `wss://`.
+- ✅ 10 unit tests in `test_desktop_agent_relay.py` all green
+  (pairing, round-trip with fake WS, timeout handling, owner-only enforcement, tool layer).
+
+**Files:**
+- `/app/desktop_agent/zenrex_agent.py` — the main agent script (~430 lines).
+- `/app/desktop_agent/install.{sh,bat}`, `run.{sh,bat}`, `requirements.txt`, `README.md`.
+- `/app/backend/modules/freebuild/local_browser_relay.py` — extended with desktop endpoints.
+- `/app/backend/modules/freebuild/desktop_agent_tools.py` — new tool implementations.
+- `/app/backend/modules/freebuild/freebuild_agent.py` — schema + dispatcher + OWNER_ONLY wiring.
+- `/app/backend/tests/test_desktop_agent_relay.py` — 10 tests, all passing.
+
+
 ### 📤 Jun 12 2026 — Phase 8: File Sharing + Phase 7: Owner-only Permissions (64 total tools)
 
 **Phase 8 (file sharing):** User reported the AI couldn't deliver a file to him. Investigation

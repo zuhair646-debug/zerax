@@ -1,68 +1,77 @@
-# Zenrex Desktop Agent
+# Zenrex Desktop Agent 🤖
 
-**Full remote control of your Mac / Windows / Linux by the Zenrex AI.**
+**Full native control of your Mac / Windows / Linux by the Zenrex AI.**
 
-Unlike the Chrome Extension (which controls only browser tabs), the Desktop Agent
-lets the AI see your **whole screen** and control your **mouse + keyboard +
-downloads + apps** — exactly like sitting next to you.
+Unlike a Chrome Extension (browser-only), this agent lets the AI **see your whole screen** and control your **mouse + keyboard + downloads + apps** — exactly like a colleague sharing their desktop with you.
 
-## Installation
+---
 
+## 🚀 Quick start
+
+### Mac / Linux
 ```bash
-# 1. Install Python 3.10+ if you don't have it.
-#    Mac:    brew install python3
-#    Win:    https://www.python.org/downloads/
-#    Linux:  sudo apt install python3-pip python3-tk
-
-# 2. Install dependencies
-pip install -r requirements.txt
-
-# 3. macOS only: grant Accessibility + Screen Recording permission to your Terminal
-#    System Settings → Privacy & Security → Accessibility / Screen Recording
-#    → enable Terminal (or iTerm)
+./install.sh   # one-time setup
+./run.sh       # starts the agent and asks for the pairing code
 ```
 
-## Pair with Zenrex
-
-1. In any Zenrex chat, ask the AI: **"اربط جهازي للتحكم الكامل"**
-2. The AI returns a 6-character code (e.g. `MQBQFB`).
-3. Run the agent with that code:
-
-```bash
-python zenrex_agent.py --code MQBQFB
+### Windows
+```
+install.bat    # one-time setup
+run.bat        # starts the agent and asks for the pairing code
 ```
 
-4. The terminal will show `✅ Connected.` — you're paired.
+> **Get the pairing code first**: in any Zenrex chat say **"اربط جهازي للتحكم الكامل"** and the AI will return a 6-character code.
 
-5. Now ask the AI things like:
-   - `"نزّل ملف هذا الـ ZIP في مجلد Downloads عندي"`
-   - `"افتح VS Code وأنشئ ملف جديد"`
-   - `"خذ سكرين شوت للشاشة كاملة"`
-   - `"اكتب لي تغريدة في تويتر"` (يفتح Chrome ويكتب)
+---
 
-## Safety
+## 🔒 Safety
 
-- 🛑 **FAILSAFE**: Move your mouse to the **top-left corner** of the screen to instantly abort whatever the AI is doing.
-- 🔒 **Shell disabled by default.** Add `--allow-shell` only if you trust the AI to run terminal commands.
-- 🔌 Stop the agent anytime with **Ctrl+C** in the terminal.
+| | |
+|---|---|
+| 🛑 **FAILSAFE** | Slam your mouse to the **top-left corner** of the screen → any AI-driven action is instantly aborted. |
+| 🔌 **Stop anytime** | `Ctrl+C` in the terminal |
+| 🚫 **Shell disabled by default** | Add `--allow-shell` (or edit run.sh / run.bat) only if you trust the AI to run terminal commands. |
+| 🔐 **Encrypted** | All commands travel over `wss://` (TLS) |
+| ⏱️ **Pairing expires** | Codes are valid for 10 minutes only |
 
-## What the AI can do
+---
+
+## 🛠 What the AI can do
 
 | Action | Description |
 |---|---|
-| `screenshot` | Capture full primary screen as JPEG |
-| `move_mouse(x, y)` | Move cursor |
-| `click(x, y, button, clicks)` | Click at coordinates |
-| `type(text)` | Type text at cursor |
-| `press_key(key)` | Press key/combo, e.g. `cmd+space`, `enter`, `cmd+c` |
-| `scroll(amount)` | Scroll up (+) or down (-) |
-| `download_file(url, filename)` | Download URL → `~/Downloads/` |
-| `open_app(name)` | Open native app |
-| `run_shell(command)` | Run terminal command (needs `--allow-shell`) |
+| `screenshot` | Capture your primary screen as JPEG |
+| `move_mouse(x,y)` | Move cursor |
+| `click / double_click / right_click` | Click at coordinates |
+| `type(text)` | Type text (supports Arabic via clipboard fallback) |
+| `press_key(key)` | Press combo, e.g. `cmd+space`, `enter`, `ctrl+c` |
+| `scroll(amount)` | + up, − down |
+| `download_file(url, filename?)` | Save URL → `~/Downloads/` |
+| `open_app(name)` | Open a native app (VS Code, Safari, …) |
+| `open_url(url)` | Open URL in default browser |
+| `list_dir(path)` | List a folder |
+| `read_file(path)` | Read a text/binary file (limited bytes) |
+| `write_file(path, content)` | Save text to a file |
+| `make_dir(path)` | Create a folder |
+| `run_shell(command)` | Terminal command (needs `--allow-shell`) |
 
-## Privacy
+---
 
-- All commands and screenshots travel encrypted over WebSocket (`wss://`)
-- Pairing codes expire in 10 minutes
-- One agent connection per project
-- No keylogger, no telemetry — source is open at `/app/desktop_agent/`
+## 🆘 Troubleshooting
+
+**macOS** – the script can't move the mouse?
+1. System Settings → Privacy & Security → **Accessibility** → enable Terminal.
+2. Same panel → **Screen Recording** → enable Terminal.
+3. Restart the agent.
+
+**Windows** – pip errors?
+- Re-install Python and tick **“Add Python to PATH”**.
+
+**Linux** – `pyautogui` complains about Xlib?
+```
+sudo apt install python3-tk python3-dev scrot
+```
+
+---
+
+Source is open in `/app/desktop_agent/`. No telemetry. No keylogger. Stop the script and you're disconnected — the AI loses all access.

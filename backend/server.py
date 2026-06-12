@@ -3368,9 +3368,13 @@ except Exception as _fae:
 
 # ============== LOCAL BROWSER RELAY (Chrome Extension → AI bridge) ==============
 try:
-    from modules.freebuild.local_browser_relay import router as _local_browser_router
+    from modules.freebuild.local_browser_relay import (
+        router as _local_browser_router,
+        desktop_router as _desktop_agent_router,
+    )
     app.include_router(_local_browser_router)
-    logging.getLogger(__name__).info("Local browser relay registered (WebSocket bridge to Chrome extension)")
+    app.include_router(_desktop_agent_router)
+    logging.getLogger(__name__).info("Local browser relay + Desktop Agent relay registered")
 except Exception as _lbe:
     logging.getLogger(__name__).error(f"Failed to register local browser relay: {_lbe}", exc_info=True)
 

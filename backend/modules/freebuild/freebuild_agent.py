@@ -66,6 +66,12 @@ from .browser_use_tools import (
     PHASE5_TOOL_NAMES,
     dispatch_browser,
 )
+from .desktop_agent_tools import (
+    DESKTOP_TOOL_SCHEMAS,
+    DESKTOP_TOOL_LABELS_AR,
+    DESKTOP_TOOL_NAMES,
+    dispatch_desktop,
+)
 
 
 def _now() -> str:
@@ -605,6 +611,7 @@ TOOLS_SCHEMA.extend(ADVANCED_TOOL_SCHEMAS)
 TOOLS_SCHEMA.extend(WORKFLOW_TOOL_SCHEMAS)
 TOOLS_SCHEMA.extend(PHASE4_TOOL_SCHEMAS)
 TOOLS_SCHEMA.extend(PHASE5_TOOL_SCHEMAS)
+TOOLS_SCHEMA.extend(DESKTOP_TOOL_SCHEMAS)
 
 
 # Tools restricted to the OWNER role only (high-risk / privileged capabilities).
@@ -612,6 +619,8 @@ TOOLS_SCHEMA.extend(PHASE5_TOOL_SCHEMAS)
 OWNER_ONLY_TOOL_NAMES = {
     # Local browser control — driving the owner's actual laptop
     "local_browser_pair", "local_browser_status", "local_browser_act",
+    # Desktop Agent — native OS control on the owner's physical machine
+    "desktop_pair", "desktop_status", "desktop_screenshot", "desktop_act",
     # Server-side shell — can install packages, run scripts
     "run_shell",
     # Deployment to external hosts under the owner's accounts
@@ -792,7 +801,7 @@ def _exec_tool(ctx: FreeBuildToolContext, name: str, args: Dict[str, Any]) -> Di
                     "save_credential", "validate_credential", "list_credentials",
                     "delete_credential", "recommend_service",
                     "github_list_repos", "github_create_repo", "github_push_file",
-                    "github_get_file") or name in ADVANCED_TOOL_NAMES or name in WORKFLOW_TOOL_NAMES or name in PHASE4_TOOL_NAMES or name in PHASE5_TOOL_NAMES:
+                    "github_get_file") or name in ADVANCED_TOOL_NAMES or name in WORKFLOW_TOOL_NAMES or name in PHASE4_TOOL_NAMES or name in PHASE5_TOOL_NAMES or name in DESKTOP_TOOL_NAMES:
             return {"__async__": True, "tool": name, "args": args}
         return {"error": f"unknown tool: {name}"}
     except Exception as e:
@@ -1537,6 +1546,10 @@ async def _exec_tool_async(ctx: FreeBuildToolContext, name: str, args: Dict[str,
         # ── Phase 5: Browser Use (vision-guided autonomous browsing) ──
         if name in PHASE5_TOOL_NAMES:
             return await dispatch_browser(ctx, name, args)
+
+        # ── Desktop Agent (native OS control via WebSocket bridge) ──
+        if name in DESKTOP_TOOL_NAMES:
+            return await dispatch_desktop(ctx, name, args)
 
         return {"ok": False, "error": f"unknown async tool: {name}"}
     except Exception as e:
@@ -2488,6 +2501,7 @@ TOOL_LABELS_AR.update(ADVANCED_TOOL_LABELS_AR)
 TOOL_LABELS_AR.update(WORKFLOW_TOOL_LABELS_AR)
 TOOL_LABELS_AR.update(PHASE4_TOOL_LABELS_AR)
 TOOL_LABELS_AR.update(PHASE5_TOOL_LABELS_AR)
+TOOL_LABELS_AR.update(DESKTOP_TOOL_LABELS_AR)
 
 
 def _sse(event: str, data: Dict[str, Any]) -> str:
