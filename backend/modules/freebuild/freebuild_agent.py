@@ -209,6 +209,84 @@ TOOLS_SCHEMA: List[Dict[str, Any]] = [
         },
     },
     {
+        "name": "publish_site",
+        "description": (
+            "🚀 Publish the current site LIVE on Zenrex platform. After calling this, "
+            "the site is instantly accessible at https://zenrex.ai/s/{slug} with free SSL "
+            "and global CDN. NO GitHub, NO Vercel, NO Railway needed — Zenrex IS the host. "
+            "Use this when the user says 'publish', 'go live', 'release', or 'انشر/أطلق/نزّل'. "
+            "Pick a slug that matches the brand (e.g. 'kafe-fajr' for 'كافيه الفجر')."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "slug": {
+                    "type": "string",
+                    "description": "URL slug: lowercase, digits, hyphens. 3-60 chars. e.g. 'kafe-fajr', 'noor-electronics'."
+                },
+            },
+            "required": ["slug"],
+        },
+    },
+    {
+        "name": "request_credential",
+        "description": (
+            "🔑 Ask the user for an API key / access token / credential mid-conversation. "
+            "Use this WHENEVER you need an external service the user must authorize: YouTube "
+            "Data API key, TikTok session, Spotify token, Stripe key, custom webhook URL, etc. "
+            "The frontend will pop a secure modal asking the user to paste the value. "
+            "The value is encrypted at rest. Returns immediately — you'll get the value in a "
+            "follow-up tool call result that includes the credential. NEVER say 'I cannot' — "
+            "always request the credential first."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "service": {
+                    "type": "string",
+                    "description": "Short snake_case identifier, e.g. 'youtube_api', 'tiktok_session', 'spotify_token'."
+                },
+                "label": {
+                    "type": "string",
+                    "description": "Human-readable label in Arabic, e.g. 'مفتاح يوتيوب API'."
+                },
+                "instructions": {
+                    "type": "string",
+                    "description": "Arabic instructions on HOW the user can get the credential, with step-by-step links."
+                },
+            },
+            "required": ["service", "label", "instructions"],
+        },
+    },
+    {
+        "name": "download_media",
+        "description": (
+            "🎬 Download a video/audio clip from YouTube, TikTok, Instagram, Twitter/X, "
+            "Facebook, Vimeo, SoundCloud, or any of 1000+ supported sites (via yt-dlp). "
+            "The file is saved to permanent storage and you get a public URL to embed in "
+            "the user's site. Perfect for building video gallery sites, content "
+            "aggregators, podcast hubs, or social media archives. "
+            "If the source requires auth (private TikTok, etc.), use request_credential first "
+            "to ask the user for cookies/session."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "url": {
+                    "type": "string",
+                    "description": "Full URL of the video/audio (e.g. 'https://www.youtube.com/watch?v=...')."
+                },
+                "format": {
+                    "type": "string",
+                    "enum": ["mp4_720p", "mp4_1080p", "mp3_audio"],
+                    "default": "mp4_720p",
+                    "description": "Output format: 720p mp4 (default, fast), 1080p mp4, or audio-only mp3."
+                },
+            },
+            "required": ["url"],
+        },
+    },
+    {
         "name": "finish",
         "description": (
             "Call this when the work is done. Provide a short Arabic summary "
@@ -235,8 +313,11 @@ TOOLS_SCHEMA: List[Dict[str, Any]] = [
 class FreeBuildToolContext:
     """Holds mutable project state during an agent run."""
 
-    def __init__(self, project: Dict[str, Any]):
+    def __init__(self, project: Dict[str, Any], auth_token: Optional[str] = None, db=None):
         self.project = dict(project)  # copy
+        self.project_id: Optional[str] = project.get("id")
+        self.auth_token: Optional[str] = auth_token
+        self.db = db
         self.current_html: str = project.get("current_html") or ""
         self.changes_made: int = 0
         self.snapshots_to_create: List[Dict[str, Any]] = []
@@ -477,6 +558,93 @@ async def _exec_tool_async(ctx: FreeBuildToolContext, name: str, args: Dict[str,
             except Exception as e:
                 return {"ok": False, "error": f"image gen failed: {type(e).__name__}: {str(e)[:200]}"}
 
+        if name == "publish_site":
+            slug = (args.get("slug") or "").strip().lower()
+            if not slug:
+                return {"ok": False, "error": "slug مطلوب"}
+            if ctx.project_id is None:
+                return {"ok": False, "error": "project_id غير متوفر في الـcontext"}
+            try:
+                import httpx
+                async with httpx.AsyncClient(timeout=30) as cl:
+                    r = await cl.post(
+                        f"http://localhost:8001/api/freebuild-chat/project/{ctx.project_id}/publish",
+                        data={"slug": slug},
+                        headers={"Authorization": f"Bearer {ctx.auth_token}"} if ctx.auth_token else {},
+                    )
+                    if r.status_code != 200:
+                        return {"ok": False, "error": f"النشر فشل ({r.status_code}): {r.text[:200]}"}
+                    data = r.json()
+                    return {"ok": True, "url": data.get("url"), "slug": slug, "message": f"✅ موقعك مُتاح الآن على {data.get('url')}"}
+            except Exception as e:
+                return {"ok": False, "error": f"publish failed: {type(e).__name__}: {str(e)[:200]}"}
+
+        if name == "request_credential":
+            service = (args.get("service") or "").strip().lower()
+            label = (args.get("label") or service).strip()
+            instructions = (args.get("instructions") or "").strip()
+            if not service:
+                return {"ok": False, "error": "service مطلوب"}
+            # Check if the credential already exists for this project — if yes, return the (decrypted) value
+            if ctx.project_id and ctx.db is not None:
+                try:
+                    existing = await ctx.db.freebuild_credentials.find_one(
+                        {"project_id": ctx.project_id, "service": service}
+                    )
+                    if existing and existing.get("value_enc"):
+                        from cryptography.fernet import Fernet
+                        import base64, hashlib, os as _os
+                        seed = _os.environ.get("JWT_SECRET", "fallback-dev-secret-do-not-use")
+                        key = base64.urlsafe_b64encode(hashlib.sha256(seed.encode()).digest())
+                        try:
+                            plain = Fernet(key).decrypt(existing["value_enc"].encode()).decode()
+                            return {"ok": True, "service": service, "value": plain, "from_cache": True, "label": label}
+                        except Exception:
+                            pass
+                except Exception:
+                    pass
+            # Else emit a sentinel — frontend pops a modal asking the user for the credential.
+            return {
+                "ok": True,
+                "needs_user_input": True,
+                "service": service,
+                "label": label,
+                "instructions": instructions,
+                "message": f"🔑 يحتاج مفتاح: {label} — انتظر العميل يدخله من واجهة الشات.",
+            }
+
+        if name == "download_media":
+            url = (args.get("url") or "").strip()
+            fmt = (args.get("format") or "mp4_720p").strip()
+            if not url.startswith(("http://", "https://")):
+                return {"ok": False, "error": "url must start with http(s)://"}
+            try:
+                import httpx
+                async with httpx.AsyncClient(timeout=180) as cl:
+                    r = await cl.post(
+                        "http://localhost:8001/api/freebuild-chat/media/download",
+                        data={
+                            "url": url,
+                            "format": fmt,
+                            "project_id": ctx.project_id or "",
+                        },
+                        headers={"Authorization": f"Bearer {ctx.auth_token}"} if ctx.auth_token else {},
+                    )
+                    if r.status_code != 200:
+                        return {"ok": False, "error": f"download failed ({r.status_code}): {r.text[:200]}"}
+                    data = r.json()
+                    return {
+                        "ok": True,
+                        "file_url": data.get("file_url"),
+                        "thumbnail_url": data.get("thumbnail_url"),
+                        "title": data.get("title"),
+                        "duration": data.get("duration"),
+                        "source": data.get("source"),
+                        "format": fmt,
+                    }
+            except Exception as e:
+                return {"ok": False, "error": f"download failed: {type(e).__name__}: {str(e)[:200]}"}
+
         return {"ok": False, "error": f"unknown async tool: {name}"}
     except Exception as e:
         logger.exception(f"async tool {name} failed")
@@ -532,6 +700,11 @@ AGENT_SYSTEM_PROMPT = """أنت **Zenrex Code Brain** — مهندس برمجي 
 
 🎨 **التوليد:**
 - `generate_image(description)` — ولّد صورة AI حقيقية (Gemini Nano Banana) — استخدمها للـ Hero الرئيسي أو أي صورة فريدة
+- `download_media(url)` — حمّل فيديو/صوت من YouTube/TikTok/Instagram/X/Vimeo/SoundCloud وأكثر من 1000 موقع (yt-dlp). مثالي لبناء معارض فيديو ومواقع تجميع محتوى.
+
+🚀 **النشر والمفاتيح:**
+- `publish_site(slug)` — انشر الموقع لايف على Zenrex فوراً. الموقع يصبح متاح على `https://zenrex.ai/s/{slug}` مع SSL مجاني. **لا تحتاج GitHub ولا Vercel ولا Railway** — Zenrex هي المنصة. استخدمها لما العميل يقول "انشر" أو "أطلق" أو "نزّل".
+- `request_credential(service, label, instructions)` — اطلب من العميل مفتاح API أو token مثل YouTube Data API، Stripe، webhook URL. الواجهة تعرض modal آمن للعميل لإدخاله. **لا تقل أبداً "ما أقدر" — اطلب المفتاح أولاً!**
 
 📨 **الإنهاء:**
 - `finish(summary)` — أنهِ وأرسل التقرير للعميل
@@ -611,6 +784,8 @@ async def run_agent_turn(
     history_messages: List[Dict[str, str]],
     max_iterations: int = 30,
     model: str = "claude-sonnet-4-5-20250929",
+    auth_token: Optional[str] = None,
+    db: Any = None,
 ) -> Dict[str, Any]:
     """
     Run one agentic turn. The AI may call multiple tools before issuing finish().
@@ -630,7 +805,7 @@ async def run_agent_turn(
     for provider, prov_model in providers_to_try:
         try:
             if provider in ("anthropic", "emergent_anthropic"):
-                result = await _run_anthropic_agent(project, user_message, history_messages, max_iterations, prov_model, use_emergent=(provider == "emergent_anthropic"))
+                result = await _run_anthropic_agent(project, user_message, history_messages, max_iterations, prov_model, use_emergent=(provider == "emergent_anthropic"), auth_token=auth_token, db=db)
             else:
                 result = await _run_openai_compat_agent(project, user_message, history_messages, max_iterations, provider, prov_model)
             if result.get("ok"):
@@ -654,6 +829,8 @@ async def _run_anthropic_agent(
     max_iterations: int,
     model: str,
     use_emergent: bool = False,
+    auth_token: Optional[str] = None,
+    db: Any = None,
 ) -> Dict[str, Any]:
     """Anthropic native tool-use agent loop."""
     try:
@@ -674,7 +851,7 @@ async def _run_anthropic_agent(
         if not api_key:
             return {"ok": False, "error": "ANTHROPIC_API_KEY not configured"}
         client = AsyncAnthropic(api_key=api_key)
-    ctx = FreeBuildToolContext(project)
+    ctx = FreeBuildToolContext(project, auth_token=auth_token, db=db)
 
     initial_state = _exec_tool(ctx, "read_current_html", {})
     template_note = ""
@@ -934,6 +1111,8 @@ async def stream_agent_turn(
     max_iterations: int = 100,
     ctx_holder: Optional[Dict[str, Any]] = None,
     user_language: str = "ar",
+    auth_token: Optional[str] = None,
+    db: Any = None,
 ) -> AsyncGenerator[str, None]:
     """SSE generator: yields live thinking events while the agent works.
 
@@ -960,7 +1139,7 @@ async def stream_agent_turn(
         try:
             yield _sse("provider", {"name": provider, "model": model, "message": f"🧠 يستخدم {model}"})
             await asyncio.sleep(0)
-            async for chunk in _stream_one_provider(project, user_message, history_messages, max_iterations, provider, model, ctx_holder=ctx_holder, user_language=user_language):
+            async for chunk in _stream_one_provider(project, user_message, history_messages, max_iterations, provider, model, ctx_holder=ctx_holder, user_language=user_language, auth_token=auth_token, db=db):
                 yield chunk
             return
         except _ProviderUnavailable as e:
@@ -988,9 +1167,11 @@ async def _stream_one_provider(
     model: str,
     ctx_holder: Optional[Dict[str, Any]] = None,
     user_language: str = "ar",
+    auth_token: Optional[str] = None,
+    db: Any = None,
 ) -> AsyncGenerator[str, None]:
     """Run the tool loop for one provider, yielding SSE chunks per step."""
-    ctx = FreeBuildToolContext(project)
+    ctx = FreeBuildToolContext(project, auth_token=auth_token, db=db)
     if ctx_holder is not None:
         ctx_holder["ctx"] = ctx
 

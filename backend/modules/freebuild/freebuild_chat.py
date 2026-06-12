@@ -1817,6 +1817,268 @@ def make_freebuild_chat_router(db, get_current_user):
             raise HTTPException(404)
         return {"ok": True, "tier": tier}
 
+    # ═══════════════════════════════════════════════════════════════════════
+    # PUBLISH FLOW — host on Zenrex platform (no GitHub/Vercel needed)
+    #
+    # Vision: user says "publish" in chat → AI calls publish_site tool →
+    # site goes live at https://zenrex.ai/s/{slug} in seconds.
+    # ═══════════════════════════════════════════════════════════════════════
+    @router.post("/project/{pid}/publish")
+    async def publish_project(
+        pid: str,
+        slug: str = Form(...),
+        user=Depends(get_current_user),
+    ):
+        """Publish a finished FreeBuild project to a live URL on Zenrex.
+
+        - Validates slug (lowercase letters, digits, hyphens; 3-60 chars)
+        - Ensures slug is globally unique
+        - Marks the project as published and stores its slug
+        - Returns the live URL
+        """
+        slug = (slug or "").strip().lower()
+        if not re.match(r"^[a-z0-9][a-z0-9-]{1,58}[a-z0-9]$", slug):
+            raise HTTPException(400, "الـ slug لازم 3-60 حرف، حروف صغيرة وأرقام وشُرَط فقط")
+        # Look in chat-projects collection first (new flow), then legacy
+        proj = await db.freebuild_chat_projects.find_one({"id": pid, "user_id": user["user_id"]}, {"_id": 0})
+        collection = db.freebuild_chat_projects
+        if not proj:
+            proj = await db.freebuild_projects.find_one({"id": pid, "user_id": user["user_id"]}, {"_id": 0})
+            collection = db.freebuild_projects
+        if not proj:
+            raise HTTPException(404, "المشروع غير موجود")
+        if not proj.get("current_html"):
+            raise HTTPException(400, "الموقع فاضي — أكمل البناء أولاً")
+        # slug uniqueness check (skip if this project already owns it)
+        existing = await db.freebuild_published_sites.find_one({"slug": slug})
+        if existing and existing.get("project_id") != pid:
+            raise HTTPException(409, f"الـ slug '{slug}' محجوز — اختر اسم ثاني")
+        now = _now()
+        await db.freebuild_published_sites.update_one(
+            {"slug": slug},
+            {"$set": {
+                "slug": slug,
+                "project_id": pid,
+                "user_id": user["user_id"],
+                "current_html": proj["current_html"],
+                "name": proj.get("name") or slug,
+                "updated_at": now,
+            }, "$setOnInsert": {"created_at": now, "views": 0}},
+            upsert=True,
+        )
+        await collection.update_one(
+            {"id": pid},
+            {"$set": {"published": True, "published_slug": slug, "published_at": now}},
+        )
+        live_url = f"https://zenrex.ai/s/{slug}"
+        logger.info(f"[publish] user={user['user_id']} project={pid} slug={slug}")
+        return {
+            "ok": True,
+            "slug": slug,
+            "url": live_url,
+            "message": f"✅ موقعك نُشر على {live_url}",
+        }
+
+    @router.get("/published-sites/{slug}", include_in_schema=False)
+    async def serve_published_site(slug: str):
+        """Public endpoint — serves the raw HTML of a published site.
+        Nginx routes /s/{slug} → /api/freebuild-chat/published-sites/{slug}
+        so end-users see the clean URL https://zenrex.ai/s/{slug}.
+        """
+        from fastapi.responses import HTMLResponse
+        slug = (slug or "").strip().lower()
+        site = await db.freebuild_published_sites.find_one({"slug": slug})
+        if not site:
+            return HTMLResponse(
+                "<!doctype html><html dir='rtl'><head><meta charset='utf-8'><title>غير موجود</title></head>"
+                "<body style='font-family:sans-serif;text-align:center;padding:80px;background:#0a0a14;color:#fbbf24'>"
+                "<h1>الموقع غير موجود</h1><p>الرابط منتهي أو الموقع لم يُنشر بعد.</p>"
+                "<p><a href='https://zenrex.ai' style='color:#fbbf24'>← العودة إلى Zenrex</a></p>"
+                "</body></html>",
+                status_code=404
+            )
+        # Async view-count increment (fire-and-forget)
+        try:
+            await db.freebuild_published_sites.update_one({"slug": slug}, {"$inc": {"views": 1}})
+        except Exception:
+            pass
+        return HTMLResponse(site["current_html"])
+
+    # ═══════════════════════════════════════════════════════════════════════
+    # CREDENTIAL REQUEST FLOW — AI asks user for an API key / token
+    # mid-conversation. Encrypted at rest, scoped to a project.
+    # ═══════════════════════════════════════════════════════════════════════
+    @router.post("/project/{pid}/credential")
+    async def save_project_credential(
+        pid: str,
+        service: str = Form(...),
+        label: str = Form(""),
+        value: str = Form(...),
+        user=Depends(get_current_user),
+    ):
+        """Generic credential storage — used when AI asks the user for e.g.
+        YouTube API key, Spotify token, custom webhook, etc."""
+        service = (service or "").strip().lower()
+        if not re.match(r"^[a-z][a-z0-9_-]{1,40}$", service):
+            raise HTTPException(400, "اسم الخدمة غير صالح")
+        if not value or len(value.strip()) < 4:
+            raise HTTPException(400, "القيمة قصيرة جداً")
+        await db.freebuild_credentials.update_one(
+            {"project_id": pid, "user_id": user["user_id"], "service": service},
+            {"$set": {
+                "project_id": pid,
+                "user_id": user["user_id"],
+                "service": service,
+                "label": label or service,
+                "value_enc": _enc(value.strip()),
+                "mask": _mask(value.strip()),
+                "updated_at": _now(),
+            }, "$setOnInsert": {"created_at": _now()}},
+            upsert=True,
+        )
+        return {"ok": True, "service": service, "mask": _mask(value.strip())}
+
+    @router.get("/project/{pid}/credentials")
+    async def list_project_credentials(pid: str, user=Depends(get_current_user)):
+        items = await db.freebuild_credentials.find(
+            {"project_id": pid, "user_id": user["user_id"]},
+            {"_id": 0, "service": 1, "label": 1, "mask": 1, "updated_at": 1},
+        ).to_list(length=50)
+        return {"credentials": items}
+
+    # ═══════════════════════════════════════════════════════════════════════
+    # MEDIA DOWNLOAD — yt-dlp wrapper for YouTube/TikTok/Instagram/X/etc.
+    # AI tool 'download_media' calls this. Files are stored on disk under
+    # /app/backend/uploads/freebuild_media (mounted on VPS as a volume) and
+    # served via /api/freebuild-chat/media/file/{name}.
+    # ═══════════════════════════════════════════════════════════════════════
+    MEDIA_DIR = "/app/backend/uploads/freebuild_media"
+
+    @router.post("/media/download")
+    async def media_download(
+        url: str = Form(...),
+        format: str = Form("mp4_720p"),
+        project_id: str = Form(""),
+        user=Depends(get_current_user),
+    ):
+        """Download a video/audio clip via yt-dlp and store it on the server.
+
+        Returns a public URL the AI can embed in the user's site.
+        """
+        if not url.startswith(("http://", "https://")):
+            raise HTTPException(400, "url must be http(s)://")
+
+        os.makedirs(MEDIA_DIR, exist_ok=True)
+        file_id = uuid.uuid4().hex[:16]
+
+        # Resolve format → yt-dlp args
+        if format == "mp3_audio":
+            fmt_args = ["-f", "bestaudio/best", "-x", "--audio-format", "mp3"]
+            ext = "mp3"
+        elif format == "mp4_1080p":
+            fmt_args = ["-f", "bv*[height<=1080][ext=mp4]+ba[ext=m4a]/b[height<=1080][ext=mp4]/b[height<=1080]", "--merge-output-format", "mp4"]
+            ext = "mp4"
+        else:  # default mp4_720p
+            fmt_args = ["-f", "bv*[height<=720][ext=mp4]+ba[ext=m4a]/b[height<=720][ext=mp4]/b[height<=720]", "--merge-output-format", "mp4"]
+            ext = "mp4"
+
+        out_path = os.path.join(MEDIA_DIR, f"{file_id}.%(ext)s")
+        # Write JSON metadata too
+        meta_path = os.path.join(MEDIA_DIR, f"{file_id}.info.json")
+
+        import subprocess as _sp
+        cmd = [
+            "yt-dlp",
+            "--no-playlist",
+            "--no-warnings",
+            "--restrict-filenames",
+            "--write-info-json",
+            "-o", out_path,
+        ] + fmt_args + [url]
+
+        try:
+            proc = await asyncio.create_subprocess_exec(
+                *cmd,
+                stdout=_sp.PIPE,
+                stderr=_sp.PIPE,
+            )
+            try:
+                stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=150)
+            except asyncio.TimeoutError:
+                proc.kill()
+                raise HTTPException(504, "تنزيل الميديا تجاوز الـ150 ثانية — جرّب مقطع أقصر")
+            if proc.returncode != 0:
+                err_msg = (stderr.decode("utf-8", errors="ignore") or "")[-500:]
+                logger.warning(f"yt-dlp failed: {err_msg}")
+                raise HTTPException(502, f"yt-dlp فشل: {err_msg}")
+        except FileNotFoundError:
+            raise HTTPException(500, "yt-dlp غير مثبت على السيرفر — راجع متطلبات النظام")
+
+        # Find the produced file (yt-dlp expands %(ext)s itself)
+        produced_files = [f for f in os.listdir(MEDIA_DIR) if f.startswith(file_id) and not f.endswith(".info.json")]
+        if not produced_files:
+            raise HTTPException(500, "yt-dlp ما أنتج ملف")
+        actual_file = produced_files[0]
+        actual_ext = actual_file.rsplit(".", 1)[-1]
+
+        # Parse metadata
+        title = ""
+        duration = None
+        thumbnail = None
+        source_url = url
+        try:
+            if os.path.exists(meta_path):
+                with open(meta_path, "r", encoding="utf-8") as f:
+                    meta = json.load(f)
+                title = meta.get("title", "") or ""
+                duration = meta.get("duration")
+                thumbnail = meta.get("thumbnail")
+                source_url = meta.get("webpage_url") or url
+        except Exception:
+            pass
+
+        public_url = f"https://zenrex.ai/api/freebuild-chat/media/file/{file_id}.{actual_ext}"
+
+        # Record in DB for cleanup + listing
+        await db.freebuild_media_assets.insert_one({
+            "id": file_id,
+            "user_id": user["user_id"],
+            "project_id": project_id or None,
+            "filename": actual_file,
+            "ext": actual_ext,
+            "source_url": source_url,
+            "title": title,
+            "duration": duration,
+            "thumbnail_url": thumbnail,
+            "format": format,
+            "public_url": public_url,
+            "created_at": _now(),
+        })
+
+        return {
+            "ok": True,
+            "file_id": file_id,
+            "file_url": public_url,
+            "thumbnail_url": thumbnail,
+            "title": title,
+            "duration": duration,
+            "source": source_url,
+            "format": format,
+        }
+
+    @router.get("/media/file/{filename}", include_in_schema=False)
+    async def serve_media(filename: str):
+        from fastapi.responses import FileResponse
+        # Prevent path traversal
+        safe_name = os.path.basename(filename)
+        path = os.path.join(MEDIA_DIR, safe_name)
+        if not os.path.isfile(path):
+            raise HTTPException(404)
+        # Infer content-type from extension
+        ext = safe_name.rsplit(".", 1)[-1].lower()
+        ct = {"mp4": "video/mp4", "mp3": "audio/mpeg", "webm": "video/webm", "m4a": "audio/mp4"}.get(ext, "application/octet-stream")
+        return FileResponse(path, media_type=ct, filename=safe_name)
+
     # Save a deployment provider token (encrypted at rest)
     @router.post("/project/{pid}/connections/{provider}")
     async def save_connection(
@@ -2140,10 +2402,27 @@ def make_freebuild_chat_router(db, get_current_user):
             raise HTTPException(500, "agent module unavailable")
 
         history = proj.get("messages") or []
+        # Extract bearer token from current Request scope for sub-API calls (publish_site tool, etc.)
+        from fastapi import Request as _Req  # local import to avoid top-level churn
+        _request: Optional[_Req] = None  # we don't have direct access here — Depends would need refactor.
+        # Workaround: re-sign a short-lived JWT for the current user so the agent tools
+        # can call protected endpoints as the same user.
+        try:
+            import jwt as _jwt, time as _time
+            _secret = os.environ.get("JWT_SECRET", "")
+            _agent_token = _jwt.encode(
+                {"user_id": user["user_id"], "email": user.get("email", ""), "role": user.get("role", "user"),
+                 "iat": int(_time.time()), "exp": int(_time.time()) + 3600},
+                _secret, algorithm="HS256",
+            ) if _secret else None
+        except Exception:
+            _agent_token = None
         result = await run_agent_turn(
             project=proj,
             user_message=message,
             history_messages=history,
+            auth_token=_agent_token,
+            db=db,
         )
         if not result.get("ok"):
             raise HTTPException(502, result.get("error", "agent failed"))
@@ -2208,6 +2487,18 @@ def make_freebuild_chat_router(db, get_current_user):
             raise HTTPException(500, "agent module unavailable")
 
         history = proj.get("messages") or []
+        # Mint a short-lived JWT so the agent tools (publish_site, download_media, etc.)
+        # can call protected /api endpoints as the same user.
+        try:
+            import jwt as _jwt, time as _time
+            _secret = os.environ.get("JWT_SECRET", "")
+            _agent_token = _jwt.encode(
+                {"user_id": user["user_id"], "email": user.get("email", ""), "role": user.get("role", "user"),
+                 "iat": int(_time.time()), "exp": int(_time.time()) + 3600},
+                _secret, algorithm="HS256",
+            ) if _secret else None
+        except Exception:
+            _agent_token = None
         # We need to capture the final state to persist; we re-parse SSE in a tee.
         captured: Dict[str, Any] = {"summary": "", "options": [], "iterations": 0,
                                      "model_used": "", "html_updated": False,
@@ -2219,7 +2510,7 @@ def make_freebuild_chat_router(db, get_current_user):
             ctx_holder: Dict[str, Any] = {}
             last_persisted_changes = 0
             try:
-                async for chunk in _s(proj, message, history, ctx_holder=ctx_holder, user_language=user_language):
+                async for chunk in _s(proj, message, history, ctx_holder=ctx_holder, user_language=user_language, auth_token=_agent_token, db=db):
                     # Match the SSE event line exactly (chunks always start with 'event: <name>\n')
                     if chunk.startswith("event: done\n"):
                         try:
