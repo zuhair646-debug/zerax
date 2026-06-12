@@ -1939,6 +1939,30 @@ def make_freebuild_chat_router(db, get_current_user):
     # CREDENTIAL REQUEST FLOW — AI asks user for an API key / token
     # mid-conversation. Encrypted at rest, scoped to a project.
     # ═══════════════════════════════════════════════════════════════════════
+    @router.get("/shared/{token}")
+    async def download_shared_file(token: str):
+        """Serve a file shared by the AI via the `share_file_with_user` tool."""
+        from fastapi.responses import FileResponse
+        from pathlib import Path as _Path
+        import time as _time
+
+        SHARED_DIR = _Path("/tmp/zenrex_shared")
+        if not re.match(r"^[A-Za-z0-9_-]{16,32}$", token):
+            raise HTTPException(400, "invalid token")
+        doc = await db.freebuild_shared_files.find_one({"token": token})
+        if not doc:
+            raise HTTPException(404, "link not found or expired")
+        if doc.get("expires_at", 0) < _time.time():
+            raise HTTPException(410, "link expired")
+        full = SHARED_DIR / doc["public_filename"]
+        if not full.exists():
+            raise HTTPException(404, "file missing on server")
+        return FileResponse(
+            path=str(full),
+            filename=doc.get("filename", "download"),
+            media_type="application/octet-stream",
+        )
+
     @router.post("/project/{pid}/credential")
     async def save_project_credential(
         pid: str,

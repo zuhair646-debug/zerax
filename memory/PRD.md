@@ -19,6 +19,26 @@ Build "Zenrex" — a multi-tenant Saudi/Arab AI commerce platform with:
 
 ## Current State (Feb 2026)
 
+### 📤 Jun 12 2026 — Phase 8: File Sharing + Phase 7: Owner-only Permissions (64 total tools)
+
+**Phase 8 (file sharing):** User reported the AI couldn't deliver a file to him. Investigation
+showed this was the AI being honest about a real gap — there was no tool to push files from
+the server workspace to the user's device. Shipped:
+- 📤 `share_file_with_user(path, label, ttl_hours)` — copies workspace file to a tokenized public
+  endpoint and returns a download URL the chat renders as a clickable link.
+- New route `GET /api/freebuild-chat/shared/{token}` serves the file with proper filename.
+- Tracked in `freebuild_shared_files` collection. Tokens via `secrets.token_urlsafe(16)`.
+- Chrome Extension `.zip` published at `https://zenrex.ai/static/downloads/zenrex-extension.zip`.
+
+**Phase 7 (owner-only permissions):**
+- 11 high-risk tools (`local_browser_*`, `run_shell`, `db_query/count`, `send_email/sms`, `deploy_to`,
+  `github_create_repo/push_file`) restricted to platform owner (role=owner/admin/superuser).
+- `tools_for_user(is_owner)` filters the schema sent to Claude. Owner = 64, customer = 53.
+- Double-safety: `_dispatch_tool` rejects owner-only tool calls with `permission_denied:true`.
+- New `MODE_ADDENDUM_OWNER_ASSISTANT` persona — addresses the owner directly, manages the whole
+  platform (merchants/orders/drivers), produces daily reports.
+- Route hookup: `freebuild_chat.py` reads `user.role`, passes `is_owner=True` only for admins.
+
 ### 🖥️ Jun 12 2026 — Phase 6: Unified Developer Mode + Local Browser Control (63 total tools)
 
 User mandate: "وحّد AutoCoder مع FreeBuild + أضف تحكم الشاشة الفعلي (يدخل لابتوبي ويسوي امامي)".

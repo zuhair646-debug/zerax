@@ -151,6 +151,28 @@ ADVANCED_TOOL_SCHEMAS: List[Dict[str, Any]] = [
         },
     },
     {
+        "name": "share_file_with_user",
+        "description": (
+            "📤 Share a workspace file with the user as a DOWNLOADABLE LINK in the "
+            "chat. Use this whenever the user asks you to 'send', 'give', 'download', "
+            "or 'attach' a file. Copies the file to a public download endpoint and "
+            "returns a URL the user can click to download. **IMPORTANT**: this is "
+            "the ONLY way to deliver a file to the user's device — without it, files "
+            "created via `write_file` remain stuck on the server. Always call this "
+            "after creating a deliverable file."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "path": {"type": "string", "description": "Workspace-relative file path (must exist)."},
+                "label": {"type": "string", "description": "User-visible label, e.g. 'تقرير المبيعات اليومي'."},
+                "ttl_hours": {"type": "integer", "default": 24, "minimum": 1, "maximum": 168,
+                              "description": "How long the download link stays valid."},
+            },
+            "required": ["path"],
+        },
+    },
+    {
         "name": "db_query",
         "description": (
             "🗄️ Query the merchant's MongoDB collections directly. Use this to fetch "
@@ -297,6 +319,7 @@ ADVANCED_TOOL_LABELS_AR: Dict[str, Dict[str, str]] = {
     "list_files":      {"running": "📂 يفهرس ملفات المشروع...",     "done": "✅ القائمة جاهزة"},
     "delete_file":     {"running": "🗑️ يحذف الملف...",             "done": "✅ تم الحذف"},
     "move_file":       {"running": "↔️ ينقل الملف...",             "done": "✅ تم النقل"},
+    "share_file_with_user": {"running": "📤 يحضّر رابط التحميل...",  "done": "✅ الرابط جاهز"},
     "db_query":        {"running": "🗄️ يستعلم من قاعدة البيانات...", "done": "✅ النتائج جاهزة"},
     "db_count":        {"running": "🧮 يحسب عدد السجلات...",        "done": "✅ تم العد"},
     "deploy_to":       {"running": "🚀 ينشر على المنصة الخارجية...", "done": "✅ تم النشر"},
@@ -502,6 +525,64 @@ async def move_file(ctx, args: Dict[str, Any]) -> Dict[str, Any]:
         return {"ok": True, "src": args["src"], "dst": args["dst"]}
     except Exception as e:
         return {"ok": False, "error": f"{type(e).__name__}: {str(e)[:200]}"}
+
+
+# ─── share_file_with_user — publish a workspace file as a download link ─────
+SHARED_DIR = Path("/tmp/zenrex_shared")
+SHARED_DIR.mkdir(parents=True, exist_ok=True)
+
+
+async def share_file_with_user(ctx, args: Dict[str, Any]) -> Dict[str, Any]:
+    rel = (args.get("path") or "").strip().lstrip("/")
+    if not rel:
+        return {"ok": False, "error": "path required"}
+    src = _safe_path(ctx.project_id, rel)
+    if not src or not src.exists() or not src.is_file():
+        return {"ok": False, "error": f"file not found in workspace: {rel}"}
+    label = (args.get("label") or src.name).strip()[:200]
+    ttl_hours = max(1, min(int(args.get("ttl_hours") or 24), 168))
+
+    # Copy to public shared directory with a random token
+    import secrets as _secrets
+    token = _secrets.token_urlsafe(16)
+    # Preserve original extension for proper MIME
+    ext = src.suffix
+    safe_name = re.sub(r"[^a-zA-Z0-9_.-]", "_", src.name)
+    public_filename = f"{token}_{safe_name}"
+    dst = SHARED_DIR / public_filename
+    try:
+        shutil.copy2(src, dst)
+        size = dst.stat().st_size
+        expires_at = time.time() + ttl_hours * 3600
+        # Track in DB so the download endpoint can validate
+        if ctx.db is not None:
+            try:
+                await ctx.db.freebuild_shared_files.insert_one({
+                    "token": token,
+                    "filename": safe_name,
+                    "public_filename": public_filename,
+                    "project_id": ctx.project_id,
+                    "label": label,
+                    "size": size,
+                    "expires_at": expires_at,
+                    "created_at": time.time(),
+                })
+            except Exception:
+                pass
+        # The download URL — served by a route registered in server.py
+        download_url = f"/api/freebuild-chat/shared/{token}"
+        return {
+            "ok": True,
+            "kind": "download_link",
+            "label": label,
+            "filename": safe_name,
+            "size_bytes": size,
+            "download_url": download_url,
+            "expires_in_hours": ttl_hours,
+            "message": f"📤 الملف '{label}' جاهز للتحميل: {download_url}",
+        }
+    except Exception as e:
+        return {"ok": False, "error": f"share failed: {type(e).__name__}: {str(e)[:200]}"}
 
 
 # ─── Vision/AI file analysis ──────────────────────────────────────────────────
@@ -1019,6 +1100,7 @@ async def dispatch_advanced(ctx, name: str, args: Dict[str, Any]) -> Dict[str, A
         "list_files": list_files,
         "delete_file": delete_file,
         "move_file": move_file,
+        "share_file_with_user": share_file_with_user,
         "db_query": db_query,
         "db_count": db_count,
         "deploy_to": deploy_to,
