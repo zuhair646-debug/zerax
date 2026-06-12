@@ -1192,6 +1192,125 @@ function CodeActions({ project, projectId, onOpenConnections }) {
 }
 
 // ─────────────────────────────────────────────────────────────
+// Plan Task Card — beautiful animated checklist rendered when
+// the AI calls `plan_task(title, steps)`. Each step fades in
+// with a stagger, then animates to "in progress" → "done".
+// Purely visual progress: shows the user a clear roadmap.
+// ─────────────────────────────────────────────────────────────
+function PlanTaskCard({ plan }) {
+  const steps = plan?.steps || [];
+  const total = steps.length;
+  const eta = plan?.estimated_minutes || 5;
+  // Stagger states: each step starts pending → in-progress → done
+  // Using elapsed wall-clock to advance (purely visual; no backend tracking yet)
+  const [tick, setTick] = useState(0);
+  useEffect(() => {
+    // advance the visual progress every 1.5s
+    const id = setInterval(() => setTick((t) => t + 1), 1500);
+    // stop ticking after all steps have animated
+    const stopAt = setTimeout(() => clearInterval(id), 1500 * (total + 2));
+    return () => { clearInterval(id); clearTimeout(stopAt); };
+  }, [total]);
+
+  return (
+    <div
+      className="my-2 rounded-2xl overflow-hidden border border-cyan-500/30 bg-gradient-to-br from-zinc-950 via-zinc-950 to-cyan-950/20 shadow-lg shadow-cyan-500/5"
+      data-testid="plan-task-card"
+    >
+      {/* Header */}
+      <div className="px-4 py-3 border-b border-cyan-500/20 bg-cyan-500/5 flex items-center gap-3">
+        <div className="text-xl">📋</div>
+        <div className="flex-1 min-w-0">
+          <div className="text-xs text-cyan-400/80 font-bold uppercase tracking-wider">خطة العمل</div>
+          <div className="text-sm text-white font-semibold truncate" data-testid="plan-task-title">
+            {plan?.title}
+          </div>
+        </div>
+        <div className="text-[10px] text-zinc-400 bg-zinc-900/60 px-2 py-1 rounded-full border border-zinc-700/50 shrink-0">
+          ⏱ ~{eta}د
+        </div>
+      </div>
+
+      {/* Steps */}
+      <div className="px-4 py-3 space-y-2">
+        {steps.map((stepText, idx) => {
+          // Visual progress: step i becomes "in-progress" when tick >= i, "done" when tick >= i+1
+          const status = tick > idx ? 'done' : tick === idx ? 'progress' : 'pending';
+          return (
+            <div
+              key={idx}
+              className={`flex items-start gap-3 px-3 py-2 rounded-lg transition-all duration-500 ${
+                status === 'done'
+                  ? 'bg-emerald-500/10 border border-emerald-500/30'
+                  : status === 'progress'
+                  ? 'bg-cyan-500/10 border border-cyan-500/40'
+                  : 'bg-zinc-900/40 border border-zinc-800/60'
+              }`}
+              style={{
+                animation: `fadeInUp 400ms ease-out ${idx * 80}ms both`,
+              }}
+              data-testid={`plan-step-${idx}`}
+            >
+              {/* Status icon */}
+              <div className="mt-0.5 shrink-0">
+                {status === 'done' && (
+                  <div className="w-5 h-5 rounded-full bg-emerald-500/20 border border-emerald-400/60 flex items-center justify-center">
+                    <svg className="w-3 h-3 text-emerald-300" viewBox="0 0 12 12" fill="none">
+                      <path d="M2 6L5 9L10 3" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
+                  </div>
+                )}
+                {status === 'progress' && (
+                  <div className="w-5 h-5 rounded-full bg-cyan-500/30 border border-cyan-300/80 flex items-center justify-center">
+                    <div className="w-2 h-2 rounded-full bg-cyan-300 animate-pulse" />
+                  </div>
+                )}
+                {status === 'pending' && (
+                  <div className="w-5 h-5 rounded-full bg-zinc-800 border border-zinc-700" />
+                )}
+              </div>
+
+              {/* Step number + text */}
+              <div className="flex-1 min-w-0">
+                <div className={`text-[11px] font-bold mb-0.5 ${
+                  status === 'done' ? 'text-emerald-400/70' :
+                  status === 'progress' ? 'text-cyan-300' :
+                  'text-zinc-600'
+                }`}>
+                  {String(idx + 1).padStart(2, '0')}
+                </div>
+                <div className={`text-xs leading-snug ${
+                  status === 'done' ? 'text-emerald-100/90 line-through decoration-emerald-500/40 decoration-1' :
+                  status === 'progress' ? 'text-white' :
+                  'text-zinc-500'
+                }`}>
+                  {stepText}
+                </div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Footer progress bar */}
+      <div className="px-4 pb-3">
+        <div className="h-1 bg-zinc-900 rounded-full overflow-hidden">
+          <div
+            className="h-full bg-gradient-to-r from-cyan-500 to-emerald-400 transition-all duration-700 ease-out"
+            style={{ width: `${Math.min(100, (Math.min(tick, total) / Math.max(total, 1)) * 100)}%` }}
+          />
+        </div>
+        <div className="mt-1.5 flex justify-between text-[10px] text-zinc-500">
+          <span>{Math.min(tick, total)} / {total} خطوة</span>
+          <span>{Math.round(Math.min(100, (Math.min(tick, total) / Math.max(total, 1)) * 100))}%</span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+
+// ─────────────────────────────────────────────────────────────
 // Inline Choice Modal (used by the AI's `ask_user_inline` tool)
 // AI pauses mid-turn → user clicks an option → user's choice
 // becomes their next chat message → AI resumes.
@@ -2212,6 +2331,12 @@ function ChatWorkspace({ projectId }) {
                           }
                           if (s.kind === 'tool') {
                             const isDone = s.phase === 'done';
+                            // Special card renderer for `plan_task` results — checklist with staggered animations.
+                            if (s.name === 'plan_task' && isDone && s.result?.kind === 'plan') {
+                                                                  return (
+                                <PlanTaskCard key={sIdx} plan={s.result} />
+                              );
+                            }
                             return (
                               <div key={sIdx} className={`flex gap-2 text-[11px] px-3 py-1.5 rounded border ${
                                 isDone
