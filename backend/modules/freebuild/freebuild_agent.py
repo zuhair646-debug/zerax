@@ -142,6 +142,73 @@ TOOLS_SCHEMA: List[Dict[str, Any]] = [
         },
     },
     {
+        "name": "web_search",
+        "description": (
+            "Search the LIVE web for ANY topic — current best practices, design inspiration, "
+            "library docs, color palettes, font pairings, real business data, news, prices, "
+            "Saudi market trends, etc. Use this WHENEVER you feel uncertain or need fresh data. "
+            "NEVER say 'I don't know' — ALWAYS search first. Returns titles + URLs + snippets."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "query": {"type": "string", "description": "Search query in Arabic or English."},
+                "max_results": {"type": "integer", "default": 5, "description": "1-10 results"},
+            },
+            "required": ["query"],
+        },
+    },
+    {
+        "name": "fetch_url",
+        "description": (
+            "Fetch the raw HTML/text content of any public URL. Use this to inspect "
+            "competitor sites for inspiration, pull real data, verify a link works, or "
+            "scrape content the user references. Returns up to 50KB of cleaned text."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "url": {"type": "string", "description": "Full URL including https://"},
+            },
+            "required": ["url"],
+        },
+    },
+    {
+        "name": "generate_image",
+        "description": (
+            "Generate a REAL AI image via Gemini Nano Banana (NOT a stock photo URL — "
+            "a freshly generated PNG). Use this when the user wants a hero image, logo "
+            "concept, product mockup, or any visual that doesn't exist on Unsplash. "
+            "Returns a permanent URL like /api/freebuild/v2/img/{hash}.png that you "
+            "can drop into <img src=> directly."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "description": {"type": "string", "description": "English prompt describing the desired image, e.g. 'modern coffee shop interior at sunset, warm tones, cinematic'."},
+                "width": {"type": "integer", "default": 1024},
+                "height": {"type": "integer", "default": 1024},
+            },
+            "required": ["description"],
+        },
+    },
+    {
+        "name": "lint_javascript",
+        "description": (
+            "Run a JavaScript syntax + common-bug check on a code snippet OR the inline "
+            "<script> blocks of current_html. Detects undefined variables, unclosed brackets, "
+            "missing semicolons in tricky spots, and broken event handlers. Call this AFTER "
+            "writing any non-trivial JS to catch errors BEFORE the user sees them."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "code": {"type": "string", "description": "JS code to lint. Pass empty string to lint all inline <script> in current_html."},
+            },
+            "required": [],
+        },
+    },
+    {
         "name": "finish",
         "description": (
             "Call this when the work is done. Provide a short Arabic summary "
@@ -190,7 +257,8 @@ class FreeBuildToolContext:
 
 
 def _exec_tool(ctx: FreeBuildToolContext, name: str, args: Dict[str, Any]) -> Dict[str, Any]:
-    """Synchronously execute a single tool call and return the result."""
+    """Synchronously execute a single tool call and return the result.
+    NOTE: async tools (web_search, fetch_url, generate_image) are dispatched via _exec_tool_async."""
     try:
         if name == "read_current_html":
             html = ctx.current_html
@@ -276,78 +344,264 @@ def _exec_tool(ctx: FreeBuildToolContext, name: str, args: Dict[str, Any]) -> Di
                 end = min(len(ctx.current_html), m.end() + 50)
                 hits.append({"match": m.group(0)[:200], "context": ctx.current_html[start:end]})
             return {"hits": hits, "count": len(hits)}
+        if name == "lint_javascript":
+            code = (args.get("code") or "").strip()
+            if not code:
+                # Extract all inline <script> blocks from current_html
+                scripts = re.findall(r"<script\b[^>]*>([\s\S]*?)</script>", ctx.current_html, re.I)
+                code = "\n".join(s for s in scripts if "src=" not in s[:100])
+            if not code.strip():
+                return {"ok": True, "issues": [], "message": "no inline JS found"}
+            issues = []
+            # Basic structural checks
+            stack = []
+            pairs = {")": "(", "]": "[", "}": "{"}
+            for i, ch in enumerate(code):
+                if ch in "([{":
+                    stack.append((ch, i))
+                elif ch in ")]}":
+                    if not stack or stack[-1][0] != pairs[ch]:
+                        issues.append({"severity": "high", "code": "unmatched_bracket", "message": f"غير متطابق '{ch}' عند الموضع {i}", "line": code[:i].count('\n')+1})
+                        break
+                    stack.pop()
+            if stack:
+                ch, i = stack[-1]
+                issues.append({"severity": "high", "code": "unclosed_bracket", "message": f"غير مغلق '{ch}' عند الموضع {i}", "line": code[:i].count('\n')+1})
+            # Common undefined-variable patterns (simple)
+            for m in re.finditer(r"\b(addEventListner|getElementByID|innerHtml|onclik|querySelectorALL)\b", code):
+                issues.append({"severity": "high", "code": "typo", "message": f"خطأ إملائي في API: '{m.group(1)}'", "fix_hint": "تحقق من تهجئة الـDOM API"})
+            # Strict-mode reserved words used as vars
+            for m in re.finditer(r"\b(?:var|let|const)\s+(arguments|eval|implements|interface|package|private|protected|public|static|yield)\b", code):
+                issues.append({"severity": "medium", "code": "reserved_word", "message": f"كلمة محجوزة كمتغير: '{m.group(1)}'"})
+            return {"ok": True, "issues": issues, "is_clean": len([i for i in issues if i["severity"] == "high"]) == 0, "lines_checked": code.count("\n")+1}
+        # Async tools — return a sentinel so the caller knows to await them
+        if name in ("web_search", "fetch_url", "generate_image"):
+            return {"__async__": True, "tool": name, "args": args}
         return {"error": f"unknown tool: {name}"}
     except Exception as e:
         logger.exception(f"tool {name} failed")
         return {"error": f"{type(e).__name__}: {str(e)[:200]}"}
 
 
+async def _dispatch_tool(ctx: FreeBuildToolContext, name: str, args: Dict[str, Any]) -> Dict[str, Any]:
+    """Unified dispatcher — handles both sync and async tools."""
+    result = _exec_tool(ctx, name, args)
+    if isinstance(result, dict) and result.get("__async__"):
+        return await _exec_tool_async(ctx, name, args)
+    return result
+
+
+# ─── Async Tool Dispatcher (web_search, fetch_url, generate_image) ────────────
+async def _exec_tool_async(ctx: FreeBuildToolContext, name: str, args: Dict[str, Any]) -> Dict[str, Any]:
+    try:
+        if name == "web_search":
+            query = (args.get("query") or "").strip()
+            max_results = max(1, min(int(args.get("max_results") or 5), 10))
+            if not query:
+                return {"ok": False, "error": "query is required"}
+            # Use Tavily if key present, else DuckDuckGo HTML scrape as a free fallback
+            tavily_key = os.environ.get("TAVILY_API_KEY", "").strip()
+            try:
+                import httpx
+            except ImportError:
+                return {"ok": False, "error": "httpx not installed"}
+            results = []
+            if tavily_key:
+                try:
+                    async with httpx.AsyncClient(timeout=15) as cl:
+                        r = await cl.post("https://api.tavily.com/search", json={
+                            "api_key": tavily_key, "query": query, "max_results": max_results,
+                            "search_depth": "basic", "include_answer": False,
+                        })
+                        data = r.json()
+                        for item in (data.get("results") or [])[:max_results]:
+                            results.append({"title": item.get("title", ""), "url": item.get("url", ""), "snippet": (item.get("content") or "")[:250]})
+                except Exception as e:
+                    logger.warning(f"tavily failed: {e}")
+            if not results:
+                # DuckDuckGo HTML fallback
+                try:
+                    async with httpx.AsyncClient(timeout=15, follow_redirects=True, headers={"User-Agent": "Mozilla/5.0"}) as cl:
+                        r = await cl.get("https://html.duckduckgo.com/html/", params={"q": query})
+                        html = r.text
+                        # very simple parse
+                        for m in list(re.finditer(r'<a[^>]+class="result__a"[^>]+href="([^"]+)"[^>]*>(.*?)</a>', html, re.I | re.S))[:max_results]:
+                            url_raw = m.group(1)
+                            # ddg wraps in redirect: /l/?uddg=...
+                            actual = re.search(r"uddg=([^&]+)", url_raw)
+                            from urllib.parse import unquote
+                            url = unquote(actual.group(1)) if actual else url_raw
+                            title = re.sub(r"<[^>]+>", "", m.group(2)).strip()[:120]
+                            results.append({"title": title, "url": url, "snippet": ""})
+                except Exception as e:
+                    return {"ok": False, "error": f"search failed: {e}"}
+            return {"ok": True, "query": query, "results_count": len(results), "results": results}
+
+        if name == "fetch_url":
+            url = (args.get("url") or "").strip()
+            if not url.startswith(("http://", "https://")):
+                return {"ok": False, "error": "url must start with http:// or https://"}
+            try:
+                import httpx
+                async with httpx.AsyncClient(timeout=20, follow_redirects=True, headers={"User-Agent": "Mozilla/5.0 ZenrexBot/1.0"}) as cl:
+                    r = await cl.get(url)
+                    content_type = r.headers.get("content-type", "")
+                    if "html" in content_type or "text" in content_type:
+                        # Strip scripts/styles, keep visible structure
+                        clean = re.sub(r"<script[\s\S]*?</script>", "", r.text, flags=re.I)
+                        clean = re.sub(r"<style[\s\S]*?</style>", "", clean, flags=re.I)
+                        # Limit to 50KB
+                        return {"ok": True, "url": url, "status": r.status_code, "content_type": content_type, "size": len(r.text), "text": clean[:50000]}
+                    return {"ok": True, "url": url, "status": r.status_code, "content_type": content_type, "size": len(r.content), "text": "[non-text content]"}
+            except Exception as e:
+                return {"ok": False, "error": f"fetch failed: {type(e).__name__}: {str(e)[:200]}"}
+
+        if name == "generate_image":
+            description = (args.get("description") or "").strip()
+            if not description:
+                return {"ok": False, "error": "description is required"}
+            w = int(args.get("width") or 1024)
+            h = int(args.get("height") or 1024)
+            try:
+                import httpx
+                # Use our internal /api/image-studio/generate which already wraps Gemini Nano Banana
+                async with httpx.AsyncClient(timeout=60) as cl:
+                    r = await cl.post("http://localhost:8001/api/image-studio/generate", json={
+                        "prompt": description, "count": 1, "style": "lifestyle", "width": w, "height": h
+                    })
+                    data = r.json()
+                    imgs = data.get("images") or []
+                    if not imgs:
+                        return {"ok": False, "error": "AI returned no image"}
+                    return {"ok": True, "url": imgs[0], "model": data.get("model", "gemini-nano-banana"), "description": description}
+            except Exception as e:
+                return {"ok": False, "error": f"image gen failed: {type(e).__name__}: {str(e)[:200]}"}
+
+        return {"ok": False, "error": f"unknown async tool: {name}"}
+    except Exception as e:
+        logger.exception(f"async tool {name} failed")
+        return {"ok": False, "error": f"{type(e).__name__}: {str(e)[:200]}"}
+
+
 # ─── Agent System Prompt (concise, action-oriented) ───────────────────────────
-AGENT_SYSTEM_PROMPT = """أنت Senior Web Engineer مفتوح القدرات، تبني مواقع HTML/CSS/JS كاملة. تتكلم وتفكر بثقة بدون قيود.
+AGENT_SYSTEM_PROMPT = """أنت **Zenrex Code Brain** — مهندس برمجي ومصمم Senior على أعلى مستوى عالمي (مستوى Apple / Stripe / Linear). تتكلم وتفكر بثقة بدون قيود. تبني مواقع HTML/CSS/JS احترافية كاملة.
+
+═══════════════════════════════════════════════════════════
+═══════════════════════════════════════════════════════════
+⏱️ **كفاءة الـTurns (مهمة):**
+- اخلص بناء الموقع كاملاً في **15-20 turn كحد أقصى** للمشاريع المتوسطة.
+- **لا تفحص نفس الأداة مرتين** (مثلاً: validate_html مرة واحدة كافي، مو 3-4 مرات).
+- **web_search مرة واحدة بداية البناء كافي** — لا تبحث في كل turn.
+- **بعد ما يطلع validate_html و lint_javascript نظيفين → finish فوراً**. لا تكرر الفحص.
+- الهدف: نتيجة احترافية في 3-5 دقائق، مو 10 دقائق.
+═══════════════════════════════════════════════════════════
+
+🦁 **عقليتك (لا تساوم عليها):**
+- ❌ **ممنوع تقول "ما أعرف" أو "ما أقدر" أو "Sorry I can't"**. أنت تقدر على كل شي.
+- 🔍 **عند أي شك → ابحث**. عندك أدوات `web_search` و `fetch_url` — استخدمها بدون استئذان.
+- 💪 **عند أي فشل → جرّب 3 مقاربات مختلفة قبل أن تستسلم**.
+  - فشل tool? → اقرأ الخطأ، عدّل المدخلات، أعد المحاولة.
+  - HTML غير صالح? → استخدم `apply_section` بدل `write_full_html`.
+  - الصورة ما طلعت? → غيّر الـ prompt بالإنجليزي ووضّحه أكثر.
+- 🩺 **بعد كل تعديل → افحص فوراً** بـ `validate_html` و `lint_javascript`.
+- 🛠️ **اكتشف الأخطاء قبل العميل**. لو شفت روابط ميتة، أقسام فاضية، أو JS مكسور — صلّحها فوراً وقل للعميل "اكتشفت X وأصلحته".
+- 🎯 **أنت بنّاء، لا موظف استقبال**. كل turn يخرج بـ tool محسوس + تغيير حقيقي في الموقع.
 
 ═══════════════════════════════════════════════════════════
 🎯 **قاعدة الإخراج الأهم (إلزامية لكل تيرن)**:
 قبل أي أداة، اكتب **سطر-سطرين بالعربي يشرح وش بتسوي الآن** (مثال: "تمام، بأقرأ الموقع الحالي عشان أعرف بناءه")، **ثم استدع الأداة**. ❌ ممنوع تطلق tool بدون نص يسبقها — العميل يحتاج يشوفك تفكر.
 ═══════════════════════════════════════════════════════════
 
-عندك هذي الأدوات — استخدمها فوراً بدون استئذان:
-- read_current_html — اقرأ الموقع
-- write_full_html — اكتب موقع كامل (≤6000 token من HTML فقط، للمشروع الفاضي)
-- apply_section — أضف/استبدل قسم محدد (الأفضل للتعديلات)
-- update_nav — حدّث القائمة
-- validate_html — افحص الأخطاء
-- search_html — ابحث في الكود
-- list_sections — اعرض الأقسام
-- finish — أنهِ وارسل ردك للعميل
+🧰 **أدواتك الكاملة (12 أداة، استخدمها فوراً بدون استئذان):**
 
-🔥 قواعد إلزامية:
+📖 **القراءة والفحص:**
+- `read_current_html` — اقرأ الموقع الحالي وبنيته
+- `list_sections` — اعرض كل أقسام الموقع
+- `search_html(pattern)` — ابحث داخل الكود بـ regex
+- `validate_html` — افحص الـHTML للأخطاء (روابط ميتة، أقسام فاضية)
+- `lint_javascript(code)` — افحص الـJS للأخطاء البنيوية والإملائية
+
+✏️ **الكتابة والتعديل:**
+- `write_full_html(html)` — اكتب موقع كامل (للمشروع الفاضي فقط)
+- `apply_section(id, html, op)` — أضف/استبدل قسم محدد (الأفضل للتعديلات)
+- `update_nav(items)` — حدّث قائمة التنقّل
+
+🌐 **البحث والاستكشاف:**
+- `web_search(query)` — ابحث في الإنترنت عن أي شي (تصاميم، ألوان، بيانات، أسعار، إلخ)
+- `fetch_url(url)` — حمّل محتوى أي صفحة للتحليل (مواقع منافسين، مراجع)
+
+🎨 **التوليد:**
+- `generate_image(description)` — ولّد صورة AI حقيقية (Gemini Nano Banana) — استخدمها للـ Hero الرئيسي أو أي صورة فريدة
+
+📨 **الإنهاء:**
+- `finish(summary)` — أنهِ وأرسل التقرير للعميل
+
+═══════════════════════════════════════════════════════════
+🔥 **قواعد إلزامية:**
+
 1. **نفّذ، لا تسأل** — أي طلب فيه "صمم/ابني/عدّل/غيّر/اعمل" → نفّذه فوراً.
 2. **خذ قرارات** — لو الطلب فيه حرية ("على كيفك") → ابني فوراً بأفضل ما تقدر.
 3. **كل تيرن لازم يخرج بـtool محسوس** (write/apply/update/validate). الكلام بدون أداة = فشل.
 4. **ابني تدريجياً، لا تبني الموقع كله في write_full_html واحد**:
-   - الخطوة 1: write_full_html بـshell + Hero فقط (~2500 token)
-   - الخطوة 2: apply_section لقسم الخدمات
-   - الخطوة 3: apply_section لقسم الاتصال
-   - الخطوة 4: validate_html
-   - الخطوة 5: finish بملخص
-   هذي الطريقة تتجنب hit max_tokens وتعطي العميل feedback مستمر.
-5. **ممنوع تقول "الملف كبير" أو "ما أقدر أكتب كل هذا"** — لو حسيت الـHTML طويل، استخدم apply_section بدل write_full_html.
+   - الخطوة 1: `write_full_html` بـshell + Hero فقط (~2500 token)
+   - الخطوة 2: `apply_section` لقسم الخدمات
+   - الخطوة 3: `apply_section` لقسم الاتصال
+   - الخطوة 4: `validate_html` + `lint_javascript`
+   - الخطوة 5: `finish` بملخص
+5. **استخدم `web_search` و `fetch_url` بسخاء** — لو العميل قال "زي موقع X" → افتحه واطلع منه ألهام بنية وألوان.
+6. **استخدم `generate_image` للـ Hero** — مو unsplash. الصورة المولّدة تخدم برند العميل أحسن.
 
 ═══════════════════════════════════════════════════════════
 🔒 **حلقة التحقق الذاتي (إلزامية قبل finish)**:
 بعد ما تخلص البناء، **قبل ما تستدعي finish**، لازم تسوي التسلسل التالي:
-  أ) **validate_html** — افحص الموقع (روابط ميتة، أقسام فاضية، JS مفقود)
-  ب) لو وجدت أي مشكلة → اشرح للعميل بسطر "اكتشفت X، أصلحها الآن" ثم استخدم apply_section/update_nav لإصلاحها
-  ج) **validate_html مرة ثانية** — تأكد إن المشاكل اتحلت
-  د) كرّر (ب)+(ج) حتى يطلع validate نظيف بدون أخطاء
-  هـ) **finish** بملخص شامل: "بنيت X + اكتشفت Y وأصلحته + النتيجة نظيفة 100%"
+  أ) **`validate_html`** — افحص الموقع (روابط ميتة، أقسام فاضية، JS مفقود)
+  ب) **`lint_javascript`** — افحص أي JS كتبته
+  ج) لو وجدت أي مشكلة → اشرح للعميل بسطر "اكتشفت X، أصلحها الآن" ثم استخدم `apply_section`/`update_nav` لإصلاحها
+  د) كرّر (أ)+(ب)+(ج) حتى يطلع validate و lint نظيفين بدون أخطاء high severity
+  هـ) **`finish`** بملخص شامل: "بنيت X + اكتشفت Y وأصلحته + النتيجة نظيفة 100%"
 
-❌ ممنوع تنادي finish قبل ما تتأكد. ❌ ممنوع تقول "خلصت" والموقع فيه مشكلة.
+❌ ممنوع تنادي `finish` قبل ما تتأكد. ❌ ممنوع تقول "خلصت" والموقع فيه مشكلة.
 ═══════════════════════════════════════════════════════════
 
-6. **finish لازم يكون 3-6 جمل** تشرح اللي سويت + اللي فحصته + اقتراح خطوة جاية. ❌ ما تنهي بـ"تم".
+7. **`finish` لازم يكون 3-6 جمل** تشرح اللي سويت + اللي فحصته + اقتراح خطوة جاية. ❌ ما تنهي بـ"تم".
 
 🔄 **لو العميل كتب "كمّل" أو "أكمل" أو "continue"**:
 يعني الـstream انقطع قبل ما تخلص. اقرأ `read_current_html` فوراً، شوف وين وقفت، وكمّل من نفس النقطة. لا تبدأ من الصفر.
 
-🎨 جودة التصميم:
+🎨 **جودة التصميم (معايير غير قابلة للتفاوض):**
 - Tailwind CSS via CDN
 - خط Cairo أو Tajawal من Google Fonts للعربي
 - RTL + responsive (mobile-first)
-- روابط nav كلها #section-id (SPA routing JS مع showPage function)
-- صور حقيقية من unsplash.com/random/600x400/?keyword
-- 3 ألوان رئيسية متناسقة، spacing مريح، animations بسيطة
+- روابط nav كلها `#section-id` (SPA routing JS مع `showPage` function)
+- صور: **استخدم `generate_image` للـ Hero**، unsplash للباقي (`unsplash.com/random/600x400/?keyword`)
+- 3 ألوان رئيسية متناسقة، spacing مريح، animations بسيطة (CSS transitions)
 - لا placeholders، لا lorem ipsum بالإنجليزي للمحتوى العربي
+- كل قسم له padding كافي (`py-20 px-6`), كل button له hover effect
+- استخدم Flexbox/Grid، لا تستخدم floats
 
-📝 **مثال تيرن نموذجي للمشروع الفاضي**:
-نص: "تمام، الموقع فاضي. بأبني shell كامل بـHero أولاً."
-[tool: write_full_html بـHTML قصير ~2500 token = shell + nav + hero + sections فاضية + footer + script]
-[tool: apply_section لقسم الخدمات بمحتوى كامل]
-[tool: apply_section لقسم الاتصال بفورم]
+═══════════════════════════════════════════════════════════
+📝 **مثال تيرن نموذجي لمشروع فاضي ("موقع لمقهى مودرن"):**
+
+نص: "تمام، بأبحث أول عن أحدث تصاميم مقاهي 2026 عشان أبني شي عصري."
+[tool: web_search query="modern coffee shop website design 2026 trends"]
+نص: "ممتاز، شفت trends — minimalism + warm tones. بأولّد صورة Hero احترافية الآن."
+[tool: generate_image description="cozy modern coffee shop interior, warm golden hour lighting, exposed brick wall, baristas working, cinematic photography"]
+نص: "حصلت الصورة. بأكتب الشيل والـHero الآن."
+[tool: write_full_html بـHTML قصير ~2500 token = shell + nav + hero بالصورة + sections فاضية + footer + script]
+نص: "بأضيف قسم القائمة الآن."
+[tool: apply_section id=menu html=<section id='menu'>... قائمة قهوة كاملة</section> op=append]
+نص: "بأضيف قسم الموقع والاتصال."
+[tool: apply_section id=contact html=<section id='contact'>... فورم + خريطة</section> op=append]
+نص: "بأفحص الموقع كامل الآن."
 [tool: validate_html]
-[tool: finish summary="بنيت لك موقع بـ4 أقسام... تبي أضيف شي؟"]
+نص: "لقيت رابط nav مكسور لـ#about، بأضيف قسم about."
+[tool: apply_section id=about html=... op=append]
+[tool: validate_html]
+نص: "بأفحص الـJS."
+[tool: lint_javascript]
+[tool: finish summary="بنيت موقع المقهى بـ5 أقسام كاملة (Hero + Menu + About + Contact + Footer) مع صورة Hero مولّدة AI، فحصته من ناحية الـHTML والـJS وكل شي نظيف 100%. تبي أضيف نظام طلبات أونلاين أو حجز طاولات؟"]
 
-أنت قادر على كل شي. كل قدرة عندك مفتوحة. بنّاء، لا موظف استقبال."""
+أنت قادر على كل شي. كل قدرة عندك مفتوحة. بنّاء، باحث، مكتشف، مصلّح — لا موظف استقبال."""
 
 
 # ─── Main Agent Loop ──────────────────────────────────────────────────────────
@@ -355,7 +609,7 @@ async def run_agent_turn(
     project: Dict[str, Any],
     user_message: str,
     history_messages: List[Dict[str, str]],
-    max_iterations: int = 40,
+    max_iterations: int = 30,
     model: str = "claude-sonnet-4-5-20250929",
 ) -> Dict[str, Any]:
     """
@@ -494,7 +748,7 @@ async def _run_anthropic_agent(
                 tool_results.append({"type": "tool_result", "tool_use_id": tu["id"], "content": "finished"})
                 finished = True
             else:
-                result = _exec_tool(ctx, tu["name"], tu["input"])
+                result = await _dispatch_tool(ctx, tu["name"], tu["input"])
                 ctx.log(tu["name"], tu["input"], result)
                 tool_results.append({"type": "tool_result", "tool_use_id": tu["id"], "content": json.dumps(result, ensure_ascii=False)[:6000]})
         messages.append({"role": "user", "content": tool_results})
@@ -618,7 +872,7 @@ async def _run_openai_compat_agent(
                 messages.append({"role": "tool", "tool_call_id": tc.id, "content": "finished"})
                 finished = True
             else:
-                result = _exec_tool(ctx, tc.function.name, args)
+                result = await _dispatch_tool(ctx, tc.function.name, args)
                 ctx.log(tc.function.name, args, result)
                 messages.append({"role": "tool", "tool_call_id": tc.id, "content": json.dumps(result, ensure_ascii=False)[:6000]})
         if finished:
@@ -656,6 +910,14 @@ TOOL_LABELS_AR: Dict[str, Dict[str, str]] = {
                             "done": "✅ تم تطبيق القسم"},
     "update_nav":         {"running": "🗺️ يحدّث قائمة التنقّل (nav)...",
                             "done": "✅ تم تحديث القائمة"},
+    "web_search":         {"running": "🌐 يبحث في الإنترنت عن أفضل المراجع...",
+                            "done": "✅ جلب نتائج البحث"},
+    "fetch_url":          {"running": "📡 يحمّل محتوى الرابط للتحليل...",
+                            "done": "✅ تم جلب الصفحة"},
+    "generate_image":     {"running": "🎨 يولّد صورة AI من جيميني نانو بنانا...",
+                            "done": "✅ تم إنشاء الصورة"},
+    "lint_javascript":    {"running": "🧪 يفحص الـJS للأخطاء الإملائية والبنيوية...",
+                            "done": "✅ انتهى فحص الـJS"},
     "finish":             {"running": "📝 يجهّز التقرير النهائي...",
                             "done": "✅ جاهز"},
 }
@@ -1042,7 +1304,7 @@ async def _stream_one_provider(
                 yield _sse("tool", {"name": "finish", "phase": "done", "label": TOOL_LABELS_AR["finish"]["done"], "step": iterations})
                 await asyncio.sleep(0)
             else:
-                result = _exec_tool(ctx, tu["name"], tu["input"])
+                result = await _dispatch_tool(ctx, tu["name"], tu["input"])
                 ctx.log(tu["name"], tu["input"], result)
                 label_done = TOOL_LABELS_AR.get(tu["name"], {}).get("done", "✅ تم")
                 # Add a short result snippet to the label
