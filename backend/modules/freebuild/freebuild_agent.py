@@ -2015,16 +2015,35 @@ MODE_ADDENDUM_VIDEO = """
 """
 
 
+MODE_ADDENDUM_DEVELOPER = """
+═══════════════════════════════════════════════════════════
+👨‍💻 **DEVELOPER MODE — البرمجي الكامل (Zenrex Code Brain)**
+
+أنت الآن في وضع المطوّر — تبني/تعدّل/تنشر منتجات برمجية حقيقية (Backend + Frontend + DevOps).
+**هذا الوضع يحل محل AutoCoder القديم تماماً** ويعطيك صلاحيات أوسع:
+
+- **كل أدوات FreeBuild** متاحة (60 أداة): shell, files, DB, github, deploy, browser_use, audit, memory, delegate (security_auditor, performance_optimizer, ...).
+- **التركيز هنا برمجي**: استخدم `run_shell` لتشغيل `pytest`, `npm test`, `git`, `docker compose`. استخدم `read_file`/`write_file` للكود متعدد الملفات. استخدم `github_*` لـ push وعمل PRs.
+- **الـ audit_project يصير "code review شامل"** يشمل أمن + أداء + accessibility.
+- **delegate('security_auditor')** بعد كل تعديل حسّاس.
+- **memory_save** لحفظ قرارات معمارية (مثلاً: "نستخدم Postgres مع Alembic"، "Auth = JWT مع HttpOnly cookies").
+
+**أنت مهندس Senior — تقترح، تنفذ، تختبر، تنشر. لا تنتظر إذن لكل خطوة صغيرة.**
+"""
+
+
 def get_system_prompt(project: Dict[str, Any]) -> str:
     """Return the system prompt customized for the project's mode.
 
-    Modes: 'website' (default), 'image_studio', 'video_studio'.
+    Modes: 'website' (default), 'image_studio', 'video_studio', 'developer'.
     """
     mode = (project or {}).get("mode", "website")
     if mode == "image_studio":
         return AGENT_SYSTEM_PROMPT + "\n" + MODE_ADDENDUM_IMAGE
     if mode == "video_studio":
         return AGENT_SYSTEM_PROMPT + "\n" + MODE_ADDENDUM_VIDEO
+    if mode == "developer":
+        return AGENT_SYSTEM_PROMPT + "\n" + MODE_ADDENDUM_DEVELOPER
     return AGENT_SYSTEM_PROMPT
 
 

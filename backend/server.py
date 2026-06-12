@@ -3366,6 +3366,14 @@ try:
 except Exception as _fae:
     logging.getLogger(__name__).error(f"Failed to register finance AI module: {_fae}", exc_info=True)
 
+# ============== LOCAL BROWSER RELAY (Chrome Extension → AI bridge) ==============
+try:
+    from modules.freebuild.local_browser_relay import router as _local_browser_router
+    app.include_router(_local_browser_router)
+    logging.getLogger(__name__).info("Local browser relay registered (WebSocket bridge to Chrome extension)")
+except Exception as _lbe:
+    logging.getLogger(__name__).error(f"Failed to register local browser relay: {_lbe}", exc_info=True)
+
 # ============== SOURCE CODE DOWNLOADER (owner-only) ==============
 try:
     from modules.source.routes import init_routes as init_source_routes

@@ -238,7 +238,9 @@ function App() {
           <Route path="/dashboard/bridge" element={<ProtectedRoute><ChannelBridge user={user} /></ProtectedRoute>} />
           <Route path="/admin/ai-core" element={<ProtectedRoute adminOnly><AdminAICore user={user} /></ProtectedRoute>} />
           <Route path="/admin/autocoder" element={<ProtectedRoute adminOnly><AdminAutoCoder user={user} /></ProtectedRoute>} />
-          <Route path="/admin/quality-router" element={<ProtectedRoute adminOnly><AdminQualityRouter user={user} /></ProtectedRoute>} />
+          {/* Unified developer-mode shortcut → reuses FreeBuild engine (60 tools) with developer prompt */}
+          <Route path="/admin/zenrex-coder" element={<Navigate to="/freebuild/chat?mode=developer" replace />} />
+          <Route path="/dev" element={<Navigate to="/freebuild/chat?mode=developer" replace />} />          <Route path="/admin/quality-router" element={<ProtectedRoute adminOnly><AdminQualityRouter user={user} /></ProtectedRoute>} />
           <Route path="/admin/sections" element={<ProtectedRoute adminOnly><AdminSections user={user} /></ProtectedRoute>} />
           <Route path="/admin/api-keys" element={<ProtectedRoute adminOnly><AdminApiKeys user={user} /></ProtectedRoute>} />
           <Route path="/admin/independence" element={<ProtectedRoute adminOnly><AdminIndependence user={user} /></ProtectedRoute>} />

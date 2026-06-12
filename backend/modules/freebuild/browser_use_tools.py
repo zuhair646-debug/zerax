@@ -145,6 +145,47 @@ PHASE5_TOOL_SCHEMAS: List[Dict[str, Any]] = [
             "required": ["session_id"],
         },
     },
+    # ─── LOCAL BROWSER (user's laptop via Chrome extension) ────────────────
+    {
+        "name": "local_browser_pair",
+        "description": (
+            "📱 Generate a pairing code for the user to connect their LOCAL Chrome "
+            "(via the Zenrex Chrome Extension) to this AI session. Use this when "
+            "the user wants the AI to control THEIR laptop browser directly — "
+            "the AI works on the user's real signed-in tabs (Gmail, social media, "
+            "their merchant dashboard, etc.) and the user watches it happen live. "
+            "Returns a 6-character code the user pastes into the extension popup. "
+            "Pairing valid 10 minutes."
+        ),
+        "input_schema": {"type": "object", "properties": {}, "required": []},
+    },
+    {
+        "name": "local_browser_status",
+        "description": "🔌 Check if the user's Chrome Extension is currently connected to this project.",
+        "input_schema": {"type": "object", "properties": {}, "required": []},
+    },
+    {
+        "name": "local_browser_act",
+        "description": (
+            "🖥️ Send a high-level command to the user's LOCAL Chrome (must be paired first). "
+            "Actions: 'navigate' (params: url), 'screenshot', 'click' (params: selector or text), "
+            "'type' (params: selector, text), 'scroll' (params: y), 'eval' (params: code — runs "
+            "in page context), 'get_url', 'open_tab' (params: url), 'list_tabs'. The user sees "
+            "everything happen live on their actual screen. NEVER perform destructive actions "
+            "without explicit user confirmation."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "action": {"type": "string",
+                           "enum": ["navigate", "screenshot", "click", "type", "scroll",
+                                    "eval", "get_url", "open_tab", "list_tabs"]},
+                "params": {"type": "object",
+                           "description": "Action-specific parameters (url, selector, text, code, y, ...)."},
+            },
+            "required": ["action"],
+        },
+    },
 ]
 
 
@@ -163,6 +204,12 @@ PHASE5_TOOL_LABELS_AR: Dict[str, Dict[str, str]] = {
                                "done": "✅ القائمة جاهزة"},
     "browser_close":         {"running": "🛑 يغلق المتصفح...",
                                "done": "✅ تم إغلاق الجلسة"},
+    "local_browser_pair":    {"running": "📱 يولّد رمز ربط للإضافة...",
+                               "done": "✅ الرمز جاهز — أعطه للعميل"},
+    "local_browser_status":  {"running": "🔌 يتحقق من حالة الاتصال...",
+                               "done": "✅ تم الفحص"},
+    "local_browser_act":     {"running": "🖥️ ينفّذ على متصفحك المحلي...",
+                               "done": "✅ تم التنفيذ على شاشتك"},
 }
 
 
@@ -610,6 +657,66 @@ async def browser_act(ctx, args: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 
+# ─── LOCAL BROWSER (Chrome Extension on the user's laptop) ────────────────────
+async def local_browser_pair(ctx, args: Dict[str, Any]) -> Dict[str, Any]:
+    if not ctx.project_id:
+        return {"ok": False, "error": "project_id required"}
+    try:
+        from .local_browser_relay import _generate_pairing_code, _PAIRINGS, PAIRING_TTL_SECONDS
+        code = _generate_pairing_code()
+        _PAIRINGS[code] = {
+            "project_id": ctx.project_id,
+            "expires_at": time.time() + PAIRING_TTL_SECONDS,
+            "ws_connected": False,
+        }
+        return {
+            "ok": True,
+            "code": code,
+            "expires_in_seconds": PAIRING_TTL_SECONDS,
+            "instructions": (
+                f"📱 افتح إضافة Zenrex في متصفح Chrome، الصق هذا الرمز: **{code}**، ثم اضغط 'ربط'. "
+                "بعد الربط، أقدر أتحكم في تابات Chrome عندك مباشرة وأنت تشوف كل شي يحصل أمامك."
+            ),
+            "extension_install_url": "https://zenrex.ai/chrome-extension",
+        }
+    except Exception as e:
+        return {"ok": False, "error": f"{type(e).__name__}: {str(e)[:200]}"}
+
+
+async def local_browser_status(ctx, args: Dict[str, Any]) -> Dict[str, Any]:
+    if not ctx.project_id:
+        return {"ok": False, "error": "project_id required"}
+    try:
+        from .local_browser_relay import is_extension_connected
+        connected = is_extension_connected(ctx.project_id)
+        return {
+            "ok": True,
+            "connected": connected,
+            "message": ("✅ الإضافة متصلة وجاهزة." if connected
+                        else "❌ الإضافة غير متصلة. استدعِ `local_browser_pair` لربطها."),
+        }
+    except Exception as e:
+        return {"ok": False, "error": f"{type(e).__name__}: {str(e)[:200]}"}
+
+
+async def local_browser_act(ctx, args: Dict[str, Any]) -> Dict[str, Any]:
+    if not ctx.project_id:
+        return {"ok": False, "error": "project_id required"}
+    action = (args.get("action") or "").strip().lower()
+    params = args.get("params") or {}
+    if not action:
+        return {"ok": False, "error": "action required"}
+    try:
+        from .local_browser_relay import send_command_to_extension
+        result = await send_command_to_extension(ctx.project_id, action, params)
+        # Attach metadata
+        result["kind"] = "local_browser_step"
+        result["action"] = action
+        return result
+    except Exception as e:
+        return {"ok": False, "error": f"{type(e).__name__}: {str(e)[:200]}"}
+
+
 # ─── Master dispatcher ────────────────────────────────────────────────────────
 async def dispatch_browser(ctx, name: str, args: Dict[str, Any]) -> Dict[str, Any]:
     fn_map = {
@@ -620,6 +727,9 @@ async def dispatch_browser(ctx, name: str, args: Dict[str, Any]) -> Dict[str, An
         "browser_save_session": browser_save_session,
         "browser_list_accounts": browser_list_accounts,
         "browser_close": browser_close,
+        "local_browser_pair": local_browser_pair,
+        "local_browser_status": local_browser_status,
+        "local_browser_act": local_browser_act,
     }
     fn = fn_map.get(name)
     if not fn:

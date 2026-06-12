@@ -19,6 +19,56 @@ Build "Zenrex" — a multi-tenant Saudi/Arab AI commerce platform with:
 
 ## Current State (Feb 2026)
 
+### 🖥️ Jun 12 2026 — Phase 6: Unified Developer Mode + Local Browser Control (63 total tools)
+
+User mandate: "وحّد AutoCoder مع FreeBuild + أضف تحكم الشاشة الفعلي (يدخل لابتوبي ويسوي امامي)".
+
+**Two big shifts shipped:**
+
+#### A. AutoCoder → FreeBuild Unification
+- Added `MODE_ADDENDUM_DEVELOPER` to `freebuild_agent.py` — when `project.mode == "developer"`, the system prompt gains a "senior software engineer" addendum that focuses on programming + DevOps.
+- New routes in `App.js`:
+  - `/admin/zenrex-coder` → redirects to `/freebuild/chat?mode=developer`
+  - `/dev` → same shortcut
+- The user can now do ALL programming via the unified 63-tool engine instead of the old AutoCoder (multi-LLM, ~15 tools, no browser use, no audit).
+- Old `autocoder` module left in place for backward compat with admin tooling (status, key-unlock, etc.) but the chat path is now FreeBuild.
+
+#### B. Local Browser Control (Chrome Extension)
+The AI can now drive the **user's own Chrome** — operating on his REAL signed-in tabs (Gmail, social media, dashboards, GitHub, ad managers) — and the user watches it happen LIVE on his actual screen.
+
+**New backend module:** `/app/backend/modules/freebuild/local_browser_relay.py` (~170 lines).
+- `POST /api/local-browser/pair` → generates a 6-char pairing code, valid 10 min.
+- `GET  /api/local-browser/status?project_id=...` → connection check.
+- `WS   /api/local-browser/ws?code=...` → extension connects here; bound to project_id.
+- Helpers `send_command_to_extension(project_id, action, params)` for the AI tools to use.
+- `_PENDING_RESPONSES` futures map → request_id-based async response routing.
+- Registered in `server.py` as a top-level FastAPI router.
+
+**New AI tools (in `browser_use_tools.py`):**
+- 📱 `local_browser_pair()` — returns 6-char code + Arabic instructions.
+- 🔌 `local_browser_status()` — checks WS connection.
+- 🖥️ `local_browser_act(action, params)` — sends a command to the extension. Actions: `navigate`, `open_tab`, `list_tabs`, `get_url`, `screenshot`, `click`, `type`, `scroll`, `eval`.
+
+**New Chrome Extension (`/app/chrome_extension/`):**
+- `manifest.json` — Manifest V3, permissions: tabs, scripting, activeTab, storage, notifications, `<all_urls>`.
+- `background.js` (~190 lines) — persistent WS connection with auto-reconnect; dispatches AI commands to active tab via `chrome.scripting.executeScript`; click/type/scroll/eval handlers inside page context.
+- `popup.html` + `popup.js` — RTL Arabic UI: paste pairing code → 'ربط' → status panel (✅ connected / ❌ disconnected); unpair button.
+- Generated 16/48/128px gold-on-black "Z" icons.
+- `README.md` with install instructions (Developer mode → Load unpacked).
+
+**Privacy model:**
+- Extension reads no cookies/passwords; only sees the rendered DOM.
+- Sessions stay on the user's machine.
+- Disconnect anytime via popup → unpair.
+- One pairing per project.
+
+**Deployed:** `https://zenrex.ai/api/local-browser/pair` returns valid codes in production. Backend running.
+
+**What's NOT shipped (next iteration):**
+- Chrome Web Store listing (requires $5 developer account + review).
+- Live screencast / video stream of the AI's actions (currently shows command-by-command log; user watches the actual browser).
+- E2E test suite for extension (Playwright Extension testing is complex).
+
 ### 🌐 Jun 12 2026 — Phase 5: Browser Use — Vision-guided autonomous browsing (60 total tools)
 
 User mandate: "نقدر نخلي الذكاء يستخدم الجهاز مباشرة + يدير حساباتي". Shipped a
