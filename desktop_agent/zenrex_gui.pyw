@@ -181,34 +181,63 @@ def download_file(p):
 def _focus_window_by_title(needle: str) -> bool:
     """Bring a window matching `needle` (case-insensitive substring) to the front.
     Returns True if a window was activated.
+
+    On Windows, also falls back to Win32 SetForegroundWindow for stubborn windows.
     """
     try:
         import pygetwindow as gw
     except Exception:
         return False
+    needle_low = needle.lower().strip()
+    if not needle_low:
+        return False
+    candidates = []
     try:
-        needle_low = needle.lower()
         for w in gw.getAllWindows():
             try:
-                if needle_low in (w.title or "").lower() and (w.title or "").strip():
-                    try:
-                        if w.isMinimized:
-                            w.restore()
-                    except Exception:
-                        pass
-                    try:
-                        w.activate()
-                    except Exception:
-                        # Common Win32 fallback: minimize + restore forces foreground
-                        try:
-                            w.minimize(); time.sleep(0.1); w.restore()
-                        except Exception:
-                            pass
-                    return True
+                title = (w.title or "").strip()
+                if not title:
+                    continue
+                if needle_low in title.lower():
+                    candidates.append(w)
             except Exception:
                 continue
     except Exception:
+        return False
+    if not candidates:
+        return False
+    # Prefer non-minimized, larger (likely the main window)
+    candidates.sort(key=lambda w: (
+        getattr(w, "isMinimized", False),
+        -(getattr(w, "width", 0) or 0) * (getattr(w, "height", 0) or 0),
+    ))
+    w = candidates[0]
+    # Strategy 1: gw.activate
+    try:
+        if getattr(w, "isMinimized", False):
+            try: w.restore()
+            except Exception: pass
+        w.activate()
+        return True
+    except Exception:
         pass
+    # Strategy 2: minimize-restore cycle (forces foreground on Win32)
+    try:
+        w.minimize(); time.sleep(0.08); w.restore()
+        return True
+    except Exception:
+        pass
+    # Strategy 3: Win32 SetForegroundWindow via ctypes (last resort)
+    if platform.system() == "Windows":
+        try:
+            import ctypes
+            hwnd = getattr(w, "_hWnd", None)
+            if hwnd:
+                ctypes.windll.user32.ShowWindow(hwnd, 9)  # SW_RESTORE
+                ctypes.windll.user32.SetForegroundWindow(hwnd)
+                return True
+        except Exception:
+            pass
     return False
 
 
