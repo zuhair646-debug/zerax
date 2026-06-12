@@ -332,7 +332,7 @@ const LandingPage = ({ user }) => {
           gradient: 'from-purple-500/20 to-violet-500/10',
           accent: '#a855f7',
           bgImage: 'https://images.unsplash.com/photo-1502691876148-a84978e59af8?auto=format&fit=crop&w=800&q=70',
-          action: () => goOrRegister('/chat/image'),
+          action: () => goOrRegister('/image-studio'),
         },
         {
           type: 'video',
@@ -341,7 +341,7 @@ const LandingPage = ({ user }) => {
           gradient: 'from-rose-500/20 to-pink-500/10',
           accent: '#f43f5e',
           bgImage: 'https://images.unsplash.com/photo-1485846234645-a62644f84728?auto=format&fit=crop&w=800&q=70',
-          action: () => goOrRegister('/chat/video'),
+          action: () => goOrRegister('/video-studio'),
         },
         {
           type: 'voice',
