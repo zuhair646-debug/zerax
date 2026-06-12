@@ -489,14 +489,29 @@ class ZenrexGUI:
         entry_row.pack(fill="x", pady=(8, 0))
         self.code_entry = Entry(entry_row, textvariable=self.code_var, font=("Consolas", 16, "bold"),
                                 bg=self.BG, fg=self.FG, insertbackground=self.FG,
-                                relief="flat", justify="center", width=14)
-        self.code_entry.pack(side="left", ipady=8, padx=(0, 8), fill="x", expand=True)
+                                relief="flat", justify="center", width=12)
+        self.code_entry.pack(side="left", ipady=8, padx=(0, 6), fill="x", expand=True)
+        # Paste button — pulls clipboard into the entry
+        self.paste_btn = Button(entry_row, text="📋", font=("Segoe UI", 11),
+                                 bg=self.BG, fg=self.FG, relief="flat",
+                                 activebackground=self.BG2, activeforeground="white",
+                                 padx=10, pady=8, cursor="hand2",
+                                 command=self._paste_clipboard)
+        self.paste_btn.pack(side="left", padx=(0, 6))
+        # Connect button
         self.connect_btn = Button(entry_row, text="Connect", font=("Segoe UI", 10, "bold"),
                                    bg=self.PRIMARY, fg="white", relief="flat",
                                    activebackground="#6d28d9", activeforeground="white",
                                    padx=18, pady=8, cursor="hand2",
                                    command=self._toggle_connection)
         self.connect_btn.pack(side="right")
+        # Keyboard bindings: Ctrl+V paste + Enter to connect
+        self.code_entry.bind("<Control-v>", lambda e: self._paste_clipboard() or "break")
+        self.code_entry.bind("<Control-V>", lambda e: self._paste_clipboard() or "break")
+        # Some Arabic-layout keyboards send different keysym for V — bind to any printable too
+        self.code_entry.bind("<Return>", lambda e: self._toggle_connection())
+        # Right-click context menu (Cut/Copy/Paste)
+        self._build_entry_context_menu()
 
         # Get-code helper
         help_row = Frame(self.root, bg=self.BG)
@@ -569,6 +584,42 @@ class ZenrexGUI:
         except queue.Empty:
             pass
         self.root.after(100, self._drain_queues)
+
+    # ─── Clipboard helpers ───────────────────────────────────────────────────
+    def _paste_clipboard(self):
+        """Replace the entry text with clipboard contents (uppercased, stripped)."""
+        try:
+            text = self.root.clipboard_get()
+        except Exception:
+            return
+        cleaned = "".join(c for c in text if c.isalnum()).upper()[:6]
+        if cleaned:
+            self.code_var.set(cleaned)
+            self.code_entry.icursor("end")
+            # Flash the paste button for feedback
+            self.paste_btn.config(text="✓")
+            self.root.after(800, lambda: self.paste_btn.config(text="📋"))
+
+    def _build_entry_context_menu(self):
+        from tkinter import Menu
+        m = Menu(self.root, tearoff=0, bg=self.BG2, fg=self.FG,
+                  activebackground=self.PRIMARY, activeforeground="white",
+                  bd=0)
+        m.add_command(label="Paste", command=self._paste_clipboard)
+        m.add_command(label="Copy", command=lambda: (
+            self.root.clipboard_clear(),
+            self.root.clipboard_append(self.code_var.get())
+        ))
+        m.add_command(label="Clear", command=lambda: self.code_var.set(""))
+        self._entry_menu = m
+
+        def show_menu(e):
+            try:
+                m.tk_popup(e.x_root, e.y_root)
+            finally:
+                m.grab_release()
+        self.code_entry.bind("<Button-3>", show_menu)        # right-click
+        self.code_entry.bind("<Button-2>", show_menu)        # middle-click (some setups)
 
     # ─── Connection control ─────────────────────────────────────────────────
     def _toggle_connection(self):
