@@ -209,6 +209,97 @@ TOOLS_SCHEMA: List[Dict[str, Any]] = [
         },
     },
     {
+        "name": "list_voices",
+        "description": (
+            "🎙️ اجلب قائمة الأصوات المتاحة من ElevenLabs مع عينات MP3. "
+            "استخدمها لما العميل يبي يختار صوت — راح ترجع لك قائمة بأسماء الأصوات، اللغات، "
+            "الأعمار، اللهجات، ورابط MP3 sample لكل صوت. اعرضها للعميل بترتيب جميل في "
+            "قسم HTML مع مشغّل صوت لكل sample."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "language": {"type": "string", "description": "فلتر اللغة (مثل 'ar', 'en'). فاضي = كل اللغات."},
+                "limit": {"type": "integer", "default": 20, "description": "عدد الأصوات (1-50)"},
+            },
+            "required": [],
+        },
+    },
+    {
+        "name": "generate_voiceover",
+        "description": (
+            "🗣️ ولّد تعليق صوتي MP3 بـ ElevenLabs من نص. النتيجة: ملف MP3 دائم تقدر "
+            "تضمنه في الفيديو أو الموقع بـ <audio src='URL'>. مثالي لـ: سرد الفيلم، "
+            "تعليق التيكتوك، الـ podcast، الأدلة الصوتية، إلخ."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "text": {"type": "string", "description": "النص المراد تحويله لصوت (عربي/إنجليزي/أي لغة)."},
+                "voice_id": {"type": "string", "description": "معرّف الصوت من list_voices. لو فاضي → افتراضي (Rachel)."},
+                "model": {"type": "string", "default": "eleven_multilingual_v2", "description": "eleven_multilingual_v2 (دعم 32 لغة) أو eleven_v3 (عواطف عميقة)"},
+            },
+            "required": ["text"],
+        },
+    },
+    {
+        "name": "write_script",
+        "description": (
+            "📝 اكتب سيناريو سينمائي منظم بصيغة Hollywood: Logline → Treatment → "
+            "Shot list مفصّل. النتيجة محفوظة كـ HTML section في الموقع، تقدر تعدّلها "
+            "تدريجياً بـ apply_section. استخدمها قبل أي توليد فيديو."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "title": {"type": "string", "description": "عنوان الفيلم/الحلقة"},
+                "genre": {"type": "string", "description": "النوع: دراما/كوميديا/أكشن/توعوي/إعلان/إلخ"},
+                "duration_seconds": {"type": "integer", "description": "المدة بالثواني (مثلاً 60 لإعلان، 300 لمشهد قصير)"},
+                "logline": {"type": "string", "description": "الفكرة في جملة واحدة"},
+                "synopsis": {"type": "string", "description": "ملخص قصير 2-4 أسطر"},
+            },
+            "required": ["title", "logline"],
+        },
+    },
+    {
+        "name": "generate_storyboard",
+        "description": (
+            "🎭 ولّد ستوري بورد سينمائي لمشاهد الفيلم. لكل مشهد → keyframe احترافي "
+            "بـ Gemini Nano Banana (style: cinematic, 16:9 aspect ratio). النتيجة: صور "
+            "URLs جاهزة للاستخدام في الـ apply_section."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "scenes": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "قائمة وصف بالإنجليزي لكل مشهد (max 6 مشاهد). مثال: ['wide shot of busy Riyadh street at night, neon lights, cinematic', 'close-up of young Saudi entrepreneur at laptop, warm desk lamp']",
+                },
+                "style": {"type": "string", "default": "cinematic", "description": "نمط الصور: cinematic / anime / documentary / commercial"},
+            },
+            "required": ["scenes"],
+        },
+    },
+    {
+        "name": "update_world_bible",
+        "description": (
+            "📚 احفظ معلومات السلسلة (الشخصيات، المواقع، الأحداث، قواعد الإخراج) في "
+            "ذاكرة دائمة للمشروع. ضرورية لأفلام السلاسل المتعددة الحلقات للمحافظة على "
+            "اتساق الشخصيات والأحداث عبر الحلقات."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "characters": {"type": "array", "items": {"type": "object"}, "description": "[{name, description, voice_id, traits}]"},
+                "locations": {"type": "array", "items": {"type": "object"}, "description": "[{name, description, era, mood}]"},
+                "plot_points": {"type": "array", "items": {"type": "string"}, "description": "أحداث رئيسية بالترتيب الزمني"},
+                "style_rules": {"type": "string", "description": "قواعد الإخراج (مثل: 'دائماً golden hour، ألوان دافئة، إيقاع بطيء')"},
+            },
+            "required": [],
+        },
+    },
+    {
         "name": "test_page",
         "description": (
             "🔬 افتح صفحة في متصفح حقيقي وارجع تقرير عنها: "
@@ -475,7 +566,10 @@ def _exec_tool(ctx: FreeBuildToolContext, name: str, args: Dict[str, Any]) -> Di
                 issues.append({"severity": "medium", "code": "reserved_word", "message": f"كلمة محجوزة كمتغير: '{m.group(1)}'"})
             return {"ok": True, "issues": issues, "is_clean": len([i for i in issues if i["severity"] == "high"]) == 0, "lines_checked": code.count("\n")+1}
         # Async tools — return a sentinel so the caller knows to await them
-        if name in ("web_search", "fetch_url", "generate_image", "test_page", "publish_site", "request_credential", "download_media"):
+        if name in ("web_search", "fetch_url", "generate_image", "test_page", "publish_site",
+                    "request_credential", "download_media",
+                    "list_voices", "generate_voiceover", "write_script",
+                    "generate_storyboard", "update_world_bible"):
             return {"__async__": True, "tool": name, "args": args}
         return {"error": f"unknown tool: {name}"}
     except Exception as e:
@@ -734,6 +828,170 @@ async def _exec_tool_async(ctx: FreeBuildToolContext, name: str, args: Dict[str,
             except Exception as e:
                 return {"ok": False, "error": f"download failed: {type(e).__name__}: {str(e)[:200]}"}
 
+        if name == "list_voices":
+            try:
+                import httpx, os as _os
+                key = _os.environ.get("ELEVENLABS_API_KEY", "")
+                if not key:
+                    return {"ok": False, "error": "ELEVENLABS_API_KEY غير مكوّن"}
+                async with httpx.AsyncClient(timeout=15) as cl:
+                    r = await cl.get("https://api.elevenlabs.io/v2/voices", headers={"xi-api-key": key},
+                                     params={"page_size": min(int(args.get("limit") or 20), 50)})
+                    if r.status_code != 200:
+                        return {"ok": False, "error": f"ElevenLabs: {r.status_code} {r.text[:200]}"}
+                    data = r.json()
+                    lang_filter = (args.get("language") or "").strip().lower()
+                    voices = []
+                    for v in data.get("voices", []):
+                        labels = v.get("labels") or {}
+                        lang = (labels.get("language") or "").lower()
+                        if lang_filter and lang_filter not in lang:
+                            continue
+                        voices.append({
+                            "voice_id": v.get("voice_id"),
+                            "name": v.get("name"),
+                            "language": lang,
+                            "gender": labels.get("gender", ""),
+                            "age": labels.get("age", ""),
+                            "accent": labels.get("accent", ""),
+                            "description": labels.get("description", ""),
+                            "preview_url": v.get("preview_url"),
+                        })
+                    return {"ok": True, "count": len(voices), "voices": voices[:50]}
+            except Exception as e:
+                return {"ok": False, "error": f"list_voices: {type(e).__name__}: {str(e)[:200]}"}
+
+        if name == "generate_voiceover":
+            text = (args.get("text") or "").strip()
+            if not text:
+                return {"ok": False, "error": "text مطلوب"}
+            if len(text) > 5000:
+                return {"ok": False, "error": "النص طويل (>5000 حرف). قسّمه على دفعات."}
+            voice_id = (args.get("voice_id") or "21m00Tcm4TlvDq8ikWAM").strip()  # Rachel default
+            model_id = (args.get("model") or "eleven_multilingual_v2").strip()
+            try:
+                import httpx, os as _os, uuid as _uuid
+                key = _os.environ.get("ELEVENLABS_API_KEY", "")
+                async with httpx.AsyncClient(timeout=120) as cl:
+                    r = await cl.post(
+                        f"https://api.elevenlabs.io/v1/text-to-speech/{voice_id}",
+                        headers={"xi-api-key": key, "Content-Type": "application/json", "Accept": "audio/mpeg"},
+                        json={"text": text, "model_id": model_id,
+                              "voice_settings": {"stability": 0.5, "similarity_boost": 0.75, "style": 0.0}},
+                    )
+                    if r.status_code != 200:
+                        return {"ok": False, "error": f"ElevenLabs: {r.status_code} {r.text[:200]}"}
+                    media_dir = "/app/backend/uploads/freebuild_media"
+                    _os.makedirs(media_dir, exist_ok=True)
+                    file_id = _uuid.uuid4().hex[:16]
+                    path = f"{media_dir}/{file_id}.mp3"
+                    with open(path, "wb") as f:
+                        f.write(r.content)
+                    public_url = f"https://zenrex.ai/api/freebuild-chat/media/file/{file_id}.mp3"
+                    if ctx.db is not None:
+                        try:
+                            import datetime as _dt
+                            await ctx.db.freebuild_media_assets.insert_one({
+                                "id": file_id, "filename": f"{file_id}.mp3", "ext": "mp3",
+                                "kind": "voiceover", "voice_id": voice_id, "text_len": len(text),
+                                "public_url": public_url, "created_at": _dt.datetime.now(_dt.timezone.utc).isoformat(),
+                            })
+                        except Exception:
+                            pass
+                    return {"ok": True, "audio_url": public_url, "voice_id": voice_id,
+                            "model": model_id, "size_bytes": len(r.content),
+                            "embed_html": f'<audio controls src="{public_url}"></audio>'}
+            except Exception as e:
+                return {"ok": False, "error": f"voiceover: {type(e).__name__}: {str(e)[:200]}"}
+
+        if name == "write_script":
+            # AI-side helper — actually we just return a structured template the model can fill
+            # via subsequent apply_section calls. This tool's purpose is to FORCE structure.
+            title = (args.get("title") or "").strip()
+            logline = (args.get("logline") or "").strip()
+            genre = (args.get("genre") or "drama").strip()
+            duration = int(args.get("duration_seconds") or 60)
+            synopsis = (args.get("synopsis") or "").strip()
+            script_template = f"""<section id="script" style="background:#0a0a14;color:#fbbf24;padding:60px 30px;font-family:Cairo,sans-serif">
+<h2 style="font-size:36px;margin-bottom:20px">📜 سيناريو: {title}</h2>
+<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:15px;margin-bottom:30px">
+  <div style="background:#1a1625;padding:15px;border-radius:10px"><b>النوع:</b> {genre}</div>
+  <div style="background:#1a1625;padding:15px;border-radius:10px"><b>المدة:</b> {duration} ثانية</div>
+</div>
+<h3 style="color:#e5e5e5;margin-top:30px">Logline:</h3>
+<p style="color:#fff;font-size:18px;line-height:1.7">{logline}</p>
+{f'<h3 style="color:#e5e5e5;margin-top:30px">Synopsis:</h3><p style="color:#d4d4d8;font-size:16px;line-height:1.7">{synopsis}</p>' if synopsis else ''}
+<h3 style="color:#e5e5e5;margin-top:30px">📋 Shot List:</h3>
+<p style="color:#a78bfa;font-style:italic">سيتم ملء قائمة المشاهد بعد توليد الستوري بورد...</p>
+</section>"""
+            return {"ok": True, "script_html": script_template, "title": title,
+                    "logline": logline, "duration_seconds": duration,
+                    "next_step": "Use apply_section with this HTML, then call generate_storyboard."}
+
+        if name == "generate_storyboard":
+            scenes = args.get("scenes") or []
+            if not scenes or not isinstance(scenes, list):
+                return {"ok": False, "error": "scenes (قائمة) مطلوبة"}
+            style = (args.get("style") or "cinematic").strip()
+            results = []
+            try:
+                import httpx
+                async with httpx.AsyncClient(timeout=90) as cl:
+                    for i, scene in enumerate(scenes[:6]):  # max 6
+                        prompt = f"{scene}, {style} style, 16:9 aspect ratio, professional cinematography, dramatic lighting"
+                        r = await cl.post("http://localhost:8001/api/image-studio/generate", json={
+                            "prompt": prompt, "count": 1, "style": style, "width": 1280, "height": 720
+                        })
+                        try:
+                            data = r.json()
+                            imgs = data.get("images") or []
+                            results.append({"scene_index": i + 1, "description": scene,
+                                            "image_url": imgs[0] if imgs else None,
+                                            "ok": bool(imgs)})
+                        except Exception:
+                            results.append({"scene_index": i + 1, "description": scene, "ok": False})
+                # Build a storyboard HTML section
+                cards = "".join(
+                    f'<div style="background:#1a1625;border-radius:12px;overflow:hidden;border:1px solid #fbbf24">'
+                    f'<img src="{r.get("image_url","")}" style="width:100%;height:200px;object-fit:cover" />'
+                    f'<div style="padding:15px"><h4 style="color:#fbbf24;margin:0 0 8px">مشهد {r["scene_index"]}</h4>'
+                    f'<p style="color:#d4d4d8;font-size:13px;margin:0">{r["description"]}</p></div></div>'
+                    for r in results if r.get("ok")
+                )
+                section_html = (
+                    '<section id="storyboard" style="background:#08070d;color:#fbbf24;padding:60px 30px;font-family:Cairo,sans-serif">'
+                    '<h2 style="font-size:36px;margin-bottom:30px">🎭 الستوري بورد</h2>'
+                    f'<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:20px">{cards}</div>'
+                    '</section>'
+                )
+                return {"ok": True, "scenes_generated": len([r for r in results if r.get("ok")]),
+                        "results": results, "section_html": section_html}
+            except Exception as e:
+                return {"ok": False, "error": f"storyboard: {type(e).__name__}: {str(e)[:200]}"}
+
+        if name == "update_world_bible":
+            if not ctx.project_id or ctx.db is None:
+                return {"ok": False, "error": "project_id أو db غير متوفر"}
+            update_data = {
+                "characters": args.get("characters") or [],
+                "locations": args.get("locations") or [],
+                "plot_points": args.get("plot_points") or [],
+                "style_rules": args.get("style_rules") or "",
+                "updated_at": __import__("datetime").datetime.now(__import__("datetime").timezone.utc).isoformat(),
+            }
+            try:
+                await ctx.db.cinema_world_bible.update_one(
+                    {"project_id": ctx.project_id},
+                    {"$set": {"project_id": ctx.project_id, **update_data}},
+                    upsert=True,
+                )
+                return {"ok": True, "saved": True, "project_id": ctx.project_id,
+                        "character_count": len(update_data["characters"]),
+                        "location_count": len(update_data["locations"]),
+                        "plot_count": len(update_data["plot_points"])}
+            except Exception as e:
+                return {"ok": False, "error": f"world_bible: {type(e).__name__}: {str(e)[:200]}"}
+
         return {"ok": False, "error": f"unknown async tool: {name}"}
     except Exception as e:
         logger.exception(f"async tool {name} failed")
@@ -918,11 +1176,27 @@ MODE_ADDENDUM_VIDEO = """
    - ولّد صورة keyframe لكل مشهد رئيسي (style: cinematic, 16:9)
    - استخدم prompts مثل: "cinematic wide shot, golden hour, anamorphic lens, shallow depth of field"
 
-3. **مرحلة التوليد** (Sora 2 / Veo 3 / Kling):
-   - **ملاحظة**: حالياً أداة `generate_video` غير مفعّلة بعد. حتى تكون متاحة:
-     a. **اطلب من العميل مفاتيح**: `request_credential("fal_ai_key", "مفتاح fal.ai للوصول لـ Veo 3 و Kling", "اذهب إلى fal.ai/dashboard ...")`
-     b. **استخدم `download_media`** لجلب مرجعيات سينمائية من يوتيوب للاستلهام/مونتاج
-     c. **اشرح للعميل** أن المرحلة الحالية stub، ومع مفتاح fal.ai راح نولّد فعلياً.
+🛠️ **أدواتك السينمائية المتاحة:**
+- `list_voices(language='ar', limit=20)` — اجلب الأصوات + عينات MP3 للعميل يختار
+- `generate_voiceover(text, voice_id, model)` — ولّد تعليق صوتي MP3 احترافي
+- `write_script(title, logline, genre, duration_seconds, synopsis)` — اكتب سيناريو منظم
+- `generate_storyboard(scenes=[...], style='cinematic')` — keyframes لكل مشهد
+- `update_world_bible(characters, locations, plot_points, style_rules)` — احفظ ذاكرة السلسلة (للمسلسلات)
+- `download_media` — مرجعيات سينمائية + مونتاج
+- `request_credential` — اطلب مفاتيح fal.ai/OpenAI من العميل (لتوليد فيديو حقيقي لاحقاً)
+- `generate_image` — صور أغلفة، بوسترات، شخصيات
+- `apply_section` / `write_full_html` — صفحة عرض الفيلم النهائية
+- `publish_site` — نشر صفحة الفيلم على zenrex.ai/s/{slug}
+- `test_page` — تأكد من الصفحة قبل التسليم
+
+🎯 **سير عمل مثالي لفيلم قصير (60 ثانية):**
+1. `write_script` → سيناريو + logline
+2. `list_voices(language='ar')` → اعرض الأصوات للعميل
+3. (انتظر اختيار العميل للصوت)
+4. `generate_voiceover` → تعليق صوتي بالصوت المختار
+5. `generate_storyboard(scenes=[...])` → keyframes لـ 4-6 مشاهد
+6. `apply_section` → ابني صفحة عرض الفيلم: poster + audio player + storyboard
+7. `publish_site` → نشر + `test_page` للتأكد
 
 4. **مرحلة الصوت**:
    - تعليق صوتي → `request_credential("elevenlabs_key", ...)` ثم استخدم Whisper voices.
@@ -1281,6 +1555,16 @@ TOOL_LABELS_AR: Dict[str, Dict[str, str]] = {
                             "done": "✅ انتهى فحص الـJS"},
     "test_page":          {"running": "🔬 يفتح الصفحة في متصفح حقيقي ويتحقق منها بصرياً...",
                             "done": "✅ اختبار الصفحة اكتمل + سكرين شوت جاهز"},
+    "list_voices":        {"running": "🎙️ يجلب قائمة الأصوات من ElevenLabs...",
+                            "done": "✅ الأصوات جاهزة مع عينات MP3"},
+    "generate_voiceover": {"running": "🗣️ يولّد التعليق الصوتي MP3...",
+                            "done": "✅ التعليق الصوتي جاهز"},
+    "write_script":       {"running": "📝 يكتب السيناريو السينمائي...",
+                            "done": "✅ السيناريو جاهز"},
+    "generate_storyboard":{"running": "🎭 يولّد الستوري بورد ومشاهد المفاتيح...",
+                            "done": "✅ الستوري بورد جاهز"},
+    "update_world_bible": {"running": "📚 يحفظ تفاصيل العالم القصصي...",
+                            "done": "✅ ذاكرة المشروع محدّثة"},
     "finish":             {"running": "📝 يجهّز التقرير النهائي...",
                             "done": "✅ جاهز"},
 }
