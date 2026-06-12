@@ -84,15 +84,33 @@ def screenshot(_):
                 "encoded_size": {"width": img.width, "height": img.height}}
 
 
+def _smooth_duration(from_x: int, from_y: int, to_x: int, to_y: int) -> float:
+    """Pick a duration that feels human: ~600px/sec, min 0.4s, max 1.6s."""
+    import math
+    dist = math.hypot(to_x - from_x, to_y - from_y)
+    return max(0.4, min(1.6, dist / 600.0))
+
+
 def move_mouse(p):
-    pyautogui.moveTo(int(p.get("x", 0)), int(p.get("y", 0)), duration=float(p.get("duration", 0.2)))
-    return {"ok": True}
+    cur_x, cur_y = pyautogui.position()
+    tx = int(p.get("x", 0)); ty = int(p.get("y", 0))
+    dur = p.get("duration")
+    if dur is None:
+        dur = _smooth_duration(cur_x, cur_y, tx, ty)
+    pyautogui.moveTo(tx, ty, duration=float(dur), tween=pyautogui.easeInOutQuad)
+    return {"ok": True, "duration": dur}
 
 
 def click(p):
     x, y = p.get("x"), p.get("y")
     btn, n = p.get("button", "left"), int(p.get("clicks", 1))
     if x is not None and y is not None:
+        # Move smoothly first so the user SEES where the click will land
+        cur_x, cur_y = pyautogui.position()
+        pyautogui.moveTo(int(x), int(y),
+                          duration=_smooth_duration(cur_x, cur_y, int(x), int(y)),
+                          tween=pyautogui.easeInOutQuad)
+        time.sleep(0.15)
         pyautogui.click(int(x), int(y), clicks=n, button=btn)
     else:
         pyautogui.click(clicks=n, button=btn)
@@ -109,8 +127,11 @@ def right_click(p):
 
 def type_text(p):
     text = p.get("text", "")
+    # Default to a "visible-typing" speed (~25 chars/sec) so the user sees
+    # each character appear. Caller can override with explicit interval.
+    interval = float(p.get("interval", 0.04))
     try:
-        pyautogui.typewrite(text, interval=float(p.get("interval", 0.02)))
+        pyautogui.typewrite(text, interval=interval)
     except Exception:
         try:
             import pyperclip
@@ -334,14 +355,62 @@ ACTIONS = {
 }
 
 
+# Human-readable description of each action for the floating overlay
+ACTION_LABELS_AR = {
+    "screenshot":      ("📸", "يلتقط شاشتك..."),
+    "move_mouse":      ("🖱️", "يحرّك الماوس..."),
+    "click":           ("👆", "يضغط..."),
+    "double_click":    ("👆👆", "ضغط مزدوج..."),
+    "right_click":     ("🖱️", "ضغط يمين..."),
+    "type":            ("⌨️", "يكتب..."),
+    "press_key":       ("🎹", "يضغط مفتاح..."),
+    "scroll":          ("🖱️", "يمرّر الشاشة..."),
+    "download_file":   ("📥", "ينزّل ملف..."),
+    "open_app":        ("🚀", "يفتح تطبيق..."),
+    "open_url":        ("🌐", "يفتح موقع..."),
+    "focus_window":    ("🎯", "يجيب نافذة للواجهة..."),
+    "cursor_position": ("📍", "يتحقق من موقع الماوس..."),
+    "screen_size":     ("📐", "يقيس الشاشة..."),
+    "list_dir":        ("📁", "يتصفح مجلد..."),
+    "read_file":       ("📖", "يقرأ ملف..."),
+    "write_file":      ("✍️", "يكتب ملف..."),
+    "make_dir":        ("📁", "ينشئ مجلد..."),
+    "run_shell":       ("💻", "ينفّذ أمر..."),
+}
+
+
+def _humanize_action(action: str, params: dict) -> str:
+    icon, label = ACTION_LABELS_AR.get(action, ("⚙️", action))
+    detail = ""
+    if action == "type" and params.get("text"):
+        t = str(params["text"]); detail = f": “{t[:40]}{'…' if len(t)>40 else ''}”"
+    elif action == "open_url" and params.get("url"):
+        detail = f": {params['url'][:50]}"
+    elif action == "open_app" and params.get("name"):
+        detail = f": {params['name']}"
+    elif action == "click" and params.get("x") is not None:
+        detail = f" @ ({params['x']}, {params['y']})"
+    elif action == "move_mouse":
+        detail = f" → ({params.get('x','?')}, {params.get('y','?')})"
+    elif action == "download_file" and params.get("url"):
+        detail = f": {params['url'][:40]}…"
+    elif action == "press_key" and params.get("key"):
+        detail = f": {params['key']}"
+    elif action in ("write_file", "read_file", "list_dir") and params.get("path"):
+        detail = f": {params['path']}"
+    return f"{icon}  {label}{detail}"
+
+
 # ─── WebSocket worker thread ─────────────────────────────────────────────────
 class AgentWorker(threading.Thread):
-    def __init__(self, server_url: str, code: str, log_q: queue.Queue, status_q: queue.Queue):
+    def __init__(self, server_url: str, code: str, log_q: queue.Queue,
+                 status_q: queue.Queue, action_q: queue.Queue):
         super().__init__(daemon=True)
         self.server_url = server_url
         self.code = code
         self.log_q = log_q
         self.status_q = status_q
+        self.action_q = action_q
         self._stop = threading.Event()
         self._loop = None
 
@@ -355,6 +424,12 @@ class AgentWorker(threading.Thread):
     def status(self, state: str):
         try:
             self.status_q.put_nowait(state)
+        except queue.Full:
+            pass
+
+    def announce(self, text: str):
+        try:
+            self.action_q.put_nowait(text)
         except queue.Full:
             pass
 
@@ -393,7 +468,9 @@ class AgentWorker(threading.Thread):
                         if t == "command":
                             action = msg.get("action", "")
                             params = msg.get("params") or {}
+                            human = _humanize_action(action, params)
                             self.log(f"→ {action}")
+                            self.announce(human)
                             fn = ACTIONS.get(action)
                             if not fn:
                                 payload = {"ok": False, "error": f"unknown action: {action}"}
@@ -459,8 +536,10 @@ class ZenrexGUI:
         self.worker: AgentWorker | None = None
         self.log_q: queue.Queue = queue.Queue(maxsize=200)
         self.status_q: queue.Queue = queue.Queue(maxsize=50)
+        self.action_q: queue.Queue = queue.Queue(maxsize=200)
 
         self._build_ui()
+        self._build_overlay()
         self._load_last_code()
         # Poll worker queues every 100ms
         self.root.after(100, self._drain_queues)
@@ -589,7 +668,68 @@ class ZenrexGUI:
                 self._set_status(self.status_q.get_nowait())
         except queue.Empty:
             pass
+        try:
+            while True:
+                self._show_overlay(self.action_q.get_nowait())
+        except queue.Empty:
+            pass
         self.root.after(100, self._drain_queues)
+
+    def _build_overlay(self):
+        """A small always-on-top widget that announces the AI's current action.
+
+        Positioned bottom-right by default. Auto-hides after 3s of inactivity.
+        """
+        from tkinter import Toplevel
+        self.overlay = Toplevel(self.root)
+        self.overlay.overrideredirect(True)         # no window decorations
+        self.overlay.attributes("-topmost", True)   # always on top
+        try:
+            self.overlay.attributes("-alpha", 0.92)
+        except Exception:
+            pass
+        self.overlay.configure(bg="#0a0a14")
+        # Position bottom-right
+        sw = self.overlay.winfo_screenwidth()
+        sh = self.overlay.winfo_screenheight()
+        w, h = 480, 64
+        self.overlay.geometry(f"{w}x{h}+{sw - w - 24}+{sh - h - 80}")
+        # Inner frame with a thin purple left border
+        border = Frame(self.overlay, bg=self.PRIMARY)
+        border.pack(side="left", fill="y")
+        Label(border, text="", width=1, bg=self.PRIMARY).pack(fill="y")
+        body = Frame(self.overlay, bg="#0a0a14")
+        body.pack(side="left", fill="both", expand=True, padx=14, pady=10)
+        Label(body, text="ZENREX AI", font=("Segoe UI", 7, "bold"),
+              fg=self.PRIMARY, bg="#0a0a14").pack(anchor="w")
+        self.overlay_action_label = Label(
+            body, text="", font=("Segoe UI", 11, "bold"),
+            fg="white", bg="#0a0a14", anchor="w", justify="left",
+        )
+        self.overlay_action_label.pack(anchor="w", fill="x")
+        self.overlay.withdraw()  # hidden until first action
+        self._overlay_hide_job = None
+
+    def _show_overlay(self, text: str):
+        self.overlay_action_label.config(text=text)
+        try:
+            self.overlay.deiconify()
+            self.overlay.lift()
+        except Exception:
+            pass
+        # Cancel previous hide job
+        if self._overlay_hide_job is not None:
+            try:
+                self.root.after_cancel(self._overlay_hide_job)
+            except Exception:
+                pass
+        self._overlay_hide_job = self.root.after(4000, self._hide_overlay)
+
+    def _hide_overlay(self):
+        try:
+            self.overlay.withdraw()
+        except Exception:
+            pass
 
     # ─── Clipboard helpers ───────────────────────────────────────────────────
     def _paste_clipboard(self):
@@ -643,7 +783,7 @@ class ZenrexGUI:
         self._save_last_code(code)
         self._set_status("reconnecting")
         self._append_log(f"Starting connection with code {code}…")
-        self.worker = AgentWorker(_load_server(), code, self.log_q, self.status_q)
+        self.worker = AgentWorker(_load_server(), code, self.log_q, self.status_q, self.action_q)
         self.worker.start()
 
     def _disconnect(self):
