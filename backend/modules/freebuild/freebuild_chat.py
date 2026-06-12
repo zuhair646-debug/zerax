@@ -796,6 +796,7 @@ class ProjectIn(BaseModel):
     name: str
     description: str = ""
     category_id: Optional[str] = None  # if set → template-based mode (websites)
+    mode: Optional[str] = None  # 'website' (default), 'image_studio', 'video_studio'
 
 
 class ChatIn(BaseModel):
@@ -821,6 +822,35 @@ def make_freebuild_chat_router(db, get_current_user):
                 category_meta = next((c for c in CATEGORIES if c["id"] == payload.category_id), None)
             except Exception:
                 category_meta = None
+        # Validate and normalize mode (defaults to 'website')
+        valid_modes = {"website", "image_studio", "video_studio"}
+        proj_mode = (payload.mode or "website").strip().lower()
+        if proj_mode not in valid_modes:
+            proj_mode = "website"
+
+        # Mode-specific greeting (shown as first AI message in the chat)
+        mode_greetings = {
+            "image_studio": (
+                "أهلاً وسهلاً في **استوديو الصور** 🎨\n\n"
+                "أنا هنا أساعدك تولّد صور احترافية: بوسترات، إعلانات، Hero، أغلفة، شخصيات، صور سوشيال.\n\n"
+                "**ابدأ:** قول لي وش تبي بالعربي العادي (مثل: \"صورة لمقهى دافئ وقت الغروب\")، "
+                "وأنا أترجمها لـ prompt احترافي وأولّدها."
+            ),
+            "video_studio": (
+                "أهلاً في **استوديو الفيديوهات** 🎬\n\n"
+                "أنا أقدر أحمّل لك مقاطع من **يوتيوب، تيكتوك، إنستا، X، فيميو، ساوندكلاود** + أكثر من 1000 موقع.\n\n"
+                "**ابدأ:** الصق رابط مقطع، أو اكتب لي وش تبي مكتبة فيديو لها (مثلاً: \"اجمع لي 10 مقاطع طبخ من تيكتوك\")."
+            ),
+        }
+        initial_messages = []
+        if proj_mode in mode_greetings:
+            initial_messages.append({
+                "id": str(uuid.uuid4()),
+                "role": "assistant",
+                "content": mode_greetings[proj_mode],
+                "timestamp": _now(),
+            })
+
         await db.freebuild_projects.insert_one({
             "id": pid,
             "user_id": user["user_id"],
@@ -828,18 +858,19 @@ def make_freebuild_chat_router(db, get_current_user):
             "category_id": payload.category_id,
             "category_name": (category_meta or {}).get("name"),
             "category_icon": (category_meta or {}).get("icon"),
+            "mode": proj_mode,
             "name": payload.name.strip()[:120],
             "description": payload.description.strip()[:1500],
             "status": "active",
             "current_phase": "design" if payload.category_id else "discovery",
-            "messages": [],
+            "messages": initial_messages,
             "approved_assets": [],
             "current_html": None,
             "preview_url": None,
             "created_at": _now(),
             "updated_at": _now(),
         })
-        return {"id": pid, "name": payload.name}
+        return {"id": pid, "name": payload.name, "mode": proj_mode}
 
     # ===== List projects =====
     @router.get("/projects")

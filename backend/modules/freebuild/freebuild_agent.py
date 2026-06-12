@@ -779,6 +779,63 @@ AGENT_SYSTEM_PROMPT = """أنت **Zenrex Code Brain** — مهندس برمجي 
 أنت قادر على كل شي. كل قدرة عندك مفتوحة. بنّاء، باحث، مكتشف، مصلّح — لا موظف استقبال."""
 
 
+# ─── Mode-specific addenda (image studio / video studio) ──────────────────────
+MODE_ADDENDUM_IMAGE = """
+═══════════════════════════════════════════════════════════
+🎨 **وضع متخصص: استوديو الصور (Image Studio)**
+
+أنت الآن في **وضع متخصص في توليد وتحرير الصور**. مهمتك الأساسية: إنتاج صور احترافية للعميل (بوسترات، Hero للمواقع، إعلانات، شخصيات، منتجات، صور قصص سوشيال، أغلفة، إلخ).
+
+🎯 **القواعد الإلزامية في هذا الوضع:**
+- استدعِ `generate_image` بسخاء — هذا هو الهدف الرئيسي.
+- بعد كل صورة، **استخدم `apply_section`** لإضافة قسم في الصفحة يعرض الصورة بحجم كبير + معلوماتها (الـ prompt، التاريخ، زر تنزيل) — هذا يحوّل الموقع لـ **معرض الصور الشخصي للعميل**.
+- المعرض يكون نمطه: عرض شبكي 2-3 أعمدة، نقرة على الصورة تكبّرها (lightbox)، زر تنزيل أسفل كل صورة.
+- لو العميل يصف الصورة بالعربي → ترجم لـ prompt إنجليزي احترافي بنفسك (مفصّل، مع lighting، style، composition، mood) قبل استدعاء `generate_image`.
+- لو الصورة الأولى ما عجبت العميل → غيّر الـ prompt واطلب رأيه قبل ما تولّد الثانية (حافظ على نقاطه).
+
+🚫 **لا تبني موقع كامل بأقسام Hero/Contact/إلخ.** الهدف **معرض صور فقط**.
+═══════════════════════════════════════════════════════════
+"""
+
+MODE_ADDENDUM_VIDEO = """
+═══════════════════════════════════════════════════════════
+🎬 **وضع متخصص: استوديو الفيديوهات (Video Studio)**
+
+أنت الآن في **وضع متخصص في الفيديوهات**. مهمتك الأساسية: تجميع، تنزيل، وتنظيم مكتبة فيديو احترافية للعميل (يوتيوب، تيكتوك، إنستا، إلخ).
+
+🎯 **القواعد الإلزامية في هذا الوضع:**
+- استخدم `download_media` لأي رابط يوتيوب/تيكتوك/إنستا/X يعطيه العميل. **لا تقل أبداً "ما أقدر" أو "غير شغّالة"** — جرّب فعلياً!
+- بعد كل تنزيل، **استخدم `apply_section`** لإضافة قسم بطاقة فيديو فيه:
+  - مشغّل HTML5 `<video controls poster="thumbnail_url">` يستخدم الـ `file_url` كمصدر
+  - عنوان المقطع (من `title`)
+  - رابط المصدر الأصلي
+  - مدة المقطع (من `duration`)
+  - زر "تنزيل" (يستخدم `file_url`)
+- الموقع يكون **مكتبة فيديو احترافية**: شبكة بطاقات، Hero بعنوان "مكتبة فيديو [العميل]"، فلتر بسيط بتاجات.
+- لو العميل قال "لو حملت كذا فيديو دفعة وحدة" → استدعِ `download_media` متتالياً لكل رابط ثم `apply_section` لكل واحد.
+- لو العميل يبي مقاطع خاصة (private TikTok/IG) → استخدم `request_credential` لطلب cookies أو session token.
+
+🛠️ **مونتاج بسيط (المرحلة الحالية): ما عندك أداة دمج/قص بعد. لو العميل طلب → اقترح عليه:**
+   "أقدر أحمّل المقاطع وأرتبها في مكتبة جميلة. أدوات الدمج والقص قادمة قريباً."
+
+🚫 **لا تبني موقع كامل بأقسام Hero/Contact.** الهدف **مكتبة فيديو فقط**.
+═══════════════════════════════════════════════════════════
+"""
+
+
+def get_system_prompt(project: Dict[str, Any]) -> str:
+    """Return the system prompt customized for the project's mode.
+
+    Modes: 'website' (default), 'image_studio', 'video_studio'.
+    """
+    mode = (project or {}).get("mode", "website")
+    if mode == "image_studio":
+        return AGENT_SYSTEM_PROMPT + "\n" + MODE_ADDENDUM_IMAGE
+    if mode == "video_studio":
+        return AGENT_SYSTEM_PROMPT + "\n" + MODE_ADDENDUM_VIDEO
+    return AGENT_SYSTEM_PROMPT
+
+
 # ─── Main Agent Loop ──────────────────────────────────────────────────────────
 async def run_agent_turn(
     project: Dict[str, Any],
@@ -890,7 +947,7 @@ async def _run_anthropic_agent(
         try:
             resp = await client.messages.create(
                 model=model,
-                system=AGENT_SYSTEM_PROMPT,
+                system=get_system_prompt(project),
                 max_tokens=8000,
                 tools=TOOLS_SCHEMA,
                 messages=messages,
@@ -996,7 +1053,7 @@ async def _run_openai_compat_agent(
         for t in TOOLS_SCHEMA
     ]
 
-    messages: List[Dict[str, Any]] = [{"role": "system", "content": AGENT_SYSTEM_PROMPT}]
+    messages: List[Dict[str, Any]] = [{"role": "system", "content": get_system_prompt(project)}]
     for m in history_messages[-12:]:
         if m.get("role") in ("user", "assistant"):
             content = m.get("content", "")
@@ -1231,7 +1288,7 @@ async def _stream_one_provider(
         else:
             client = AsyncAnthropic(api_key=os.environ.get("ANTHROPIC_API_KEY", ""))
         messages: List[Dict[str, Any]] = []
-        sys_prompt = AGENT_SYSTEM_PROMPT + _lang_directive
+        sys_prompt = get_system_prompt(project) + _lang_directive
     else:
         from openai import AsyncOpenAI
         if provider == "moonshot":
@@ -1239,7 +1296,7 @@ async def _stream_one_provider(
                                  base_url="https://api.moonshot.ai/v1")
         else:
             client = AsyncOpenAI(api_key=os.environ.get("OPENAI_DIRECT_KEY") or os.environ.get("OPENAI_API_KEY", ""))
-        messages = [{"role": "system", "content": AGENT_SYSTEM_PROMPT + _lang_directive}]
+        messages = [{"role": "system", "content": get_system_prompt(project) + _lang_directive}]
         sys_prompt = None
         openai_tools = [{"type": "function", "function": {"name": t["name"], "description": t["description"], "parameters": t["input_schema"]}} for t in TOOLS_SCHEMA]
 
