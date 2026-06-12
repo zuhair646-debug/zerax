@@ -190,10 +190,44 @@ def open_app(params: dict) -> dict:
     try:
         if system == "Darwin":
             subprocess.Popen(["open", "-a", name])
+            time.sleep(0.8)
         elif system == "Windows":
-            subprocess.Popen(["start", "", name], shell=True)
-        else:
+            aliases = {
+                "notepad": "notepad.exe", "chrome": "chrome.exe",
+                "edge": "msedge.exe", "firefox": "firefox.exe",
+                "calculator": "calc.exe", "calc": "calc.exe",
+                "explorer": "explorer.exe", "cmd": "cmd.exe",
+                "powershell": "powershell.exe", "terminal": "wt.exe",
+                "vs code": "code.cmd", "vscode": "code.cmd", "code": "code.cmd",
+            }
+            exe = aliases.get(name.lower(), name)
+            try:
+                subprocess.Popen([exe], shell=False)
+            except FileNotFoundError:
+                subprocess.Popen(["start", "", exe], shell=True)
+            time.sleep(1.5)
+            # Try to bring to front
+            try:
+                import pygetwindow as gw
+                hints = [name, exe.replace(".exe", "")]
+                for hint in hints:
+                    matches = [w for w in gw.getAllWindows()
+                               if hint.lower() in (w.title or "").lower() and (w.title or "").strip()]
+                    if matches:
+                        try:
+                            matches[0].activate()
+                        except Exception:
+                            try:
+                                matches[0].minimize(); time.sleep(0.1); matches[0].restore()
+                            except Exception:
+                                pass
+                        break
+            except Exception:
+                pass
+            time.sleep(0.4)
+        else:  # Linux
             subprocess.Popen([name])
+            time.sleep(0.8)
         return {"ok": True, "app": name}
     except Exception as e:
         return {"ok": False, "error": f"{type(e).__name__}: {e}"}

@@ -69,7 +69,7 @@ DESKTOP_TOOL_SCHEMAS: List[Dict[str, Any]] = [
                     "enum": [
                         "move_mouse", "click", "double_click", "right_click",
                         "type", "press_key", "scroll",
-                        "download_file", "open_app", "open_url",
+                        "download_file", "open_app", "open_url", "focus_window",
                         "cursor_position", "screen_size",
                         "list_dir", "read_file", "write_file", "make_dir",
                         "run_shell",
@@ -77,9 +77,14 @@ DESKTOP_TOOL_SCHEMAS: List[Dict[str, Any]] = [
                     "description": (
                         "move_mouse(x,y) | click(x,y,button,clicks) | "
                         "double_click(x,y) | right_click(x,y) | type(text) | "
-                        "press_key(key — e.g. 'cmd+space','enter','ctrl+c') | "
+                        "press_key(key — Windows uses 'winleft+r' not 'win+r'; "
+                        "'enter','ctrl+c','alt+tab') | "
                         "scroll(amount: + up / - down) | download_file(url,filename?) "
-                        "| open_app(name — e.g. 'VS Code','Safari') | open_url(url) | "
+                        "| open_app(name — e.g. 'notepad','chrome','VS Code'). "
+                        "On Windows tries to bring window to focus automatically. | "
+                        "open_url(url) — opens in default browser + focuses it. | "
+                        "focus_window(title) — bring an existing window to front by "
+                        "title substring (e.g. 'Notepad','Chrome'). | "
                         "cursor_position() | screen_size() | list_dir(path) | "
                         "read_file(path,max_bytes?) | write_file(path,content) | "
                         "make_dir(path) | run_shell(command,timeout?) — shell needs "

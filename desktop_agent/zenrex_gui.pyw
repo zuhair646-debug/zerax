@@ -151,26 +151,121 @@ def download_file(p):
         return {"ok": False, "error": str(e)}
 
 
+def _focus_window_by_title(needle: str) -> bool:
+    """Bring a window matching `needle` (case-insensitive substring) to the front.
+    Returns True if a window was activated.
+    """
+    try:
+        import pygetwindow as gw
+    except Exception:
+        return False
+    try:
+        needle_low = needle.lower()
+        for w in gw.getAllWindows():
+            try:
+                if needle_low in (w.title or "").lower() and (w.title or "").strip():
+                    try:
+                        if w.isMinimized:
+                            w.restore()
+                    except Exception:
+                        pass
+                    try:
+                        w.activate()
+                    except Exception:
+                        # Common Win32 fallback: minimize + restore forces foreground
+                        try:
+                            w.minimize(); time.sleep(0.1); w.restore()
+                        except Exception:
+                            pass
+                    return True
+            except Exception:
+                continue
+    except Exception:
+        pass
+    return False
+
+
+# Map common app aliases to executables + likely window-title fragments
+_WIN_APP_ALIASES = {
+    "notepad":     ("notepad.exe",     ["Notepad", "المفكرة"]),
+    "chrome":      ("chrome.exe",      ["Chrome", "Google Chrome"]),
+    "edge":        ("msedge.exe",      ["Edge", "Microsoft Edge"]),
+    "firefox":     ("firefox.exe",     ["Firefox", "Mozilla Firefox"]),
+    "calculator":  ("calc.exe",        ["Calculator", "الآلة الحاسبة"]),
+    "calc":        ("calc.exe",        ["Calculator", "الآلة الحاسبة"]),
+    "explorer":    ("explorer.exe",    ["File Explorer", "مستكشف الملفات"]),
+    "file explorer": ("explorer.exe",  ["File Explorer", "مستكشف الملفات"]),
+    "cmd":         ("cmd.exe",         ["Command Prompt", "cmd"]),
+    "powershell":  ("powershell.exe",  ["PowerShell"]),
+    "terminal":    ("wt.exe",          ["Terminal"]),
+    "vs code":     ("code.cmd",        ["Visual Studio Code", "VS Code"]),
+    "vscode":      ("code.cmd",        ["Visual Studio Code", "VS Code"]),
+    "code":        ("code.cmd",        ["Visual Studio Code", "VS Code"]),
+}
+
+
 def open_app(p):
-    name = p.get("name", "")
+    name = (p.get("name") or "").strip()
+    if not name:
+        return {"ok": False, "error": "name required"}
     s = platform.system()
     try:
         if s == "Darwin":
             subprocess.Popen(["open", "-a", name])
+            time.sleep(0.8)
         elif s == "Windows":
-            subprocess.Popen(["start", "", name], shell=True)
-        else:
+            key = name.lower()
+            exe, title_hints = _WIN_APP_ALIASES.get(key, (None, [name]))
+            # Choose what to spawn
+            if exe:
+                # Try direct exe first (faster, no shell overhead)
+                try:
+                    subprocess.Popen([exe], shell=False)
+                except FileNotFoundError:
+                    subprocess.Popen(["start", "", exe], shell=True)
+            else:
+                subprocess.Popen(["start", "", name], shell=True)
+            # Wait + try to bring to front using any matching title hint
+            focused = False
+            for _ in range(15):  # up to ~3s
+                time.sleep(0.2)
+                for hint in title_hints:
+                    if _focus_window_by_title(hint):
+                        focused = True
+                        break
+                if focused:
+                    break
+            # Final small settle delay so the app accepts keystrokes
+            time.sleep(0.4)
+            return {"ok": True, "app": name, "focused": focused}
+        else:  # Linux
             subprocess.Popen([name])
+            time.sleep(0.8)
         return {"ok": True, "app": name}
     except Exception as e:
-        return {"ok": False, "error": str(e)}
+        return {"ok": False, "error": f"{type(e).__name__}: {e}"}
+
+
+def focus_window(p):
+    """Bring an existing window to the front by title substring."""
+    title = (p.get("title") or "").strip()
+    if not title:
+        return {"ok": False, "error": "title required"}
+    return {"ok": _focus_window_by_title(title), "title": title}
 
 
 def open_url(p):
     url = p.get("url", "")
     if not url:
         return {"ok": False, "error": "url required"}
-    webbrowser.open(url); return {"ok": True, "url": url}
+    webbrowser.open(url)
+    # Give the browser ~1.5s + try to focus
+    time.sleep(1.2)
+    for hint in ("Chrome", "Edge", "Firefox", "Opera", "Safari"):
+        if _focus_window_by_title(hint):
+            break
+    time.sleep(0.3)
+    return {"ok": True, "url": url}
 
 
 def cursor_position(_):
@@ -226,6 +321,7 @@ ACTIONS = {
     "double_click": double_click, "right_click": right_click,
     "type": type_text, "press_key": press_key, "scroll": scroll,
     "download_file": download_file, "open_app": open_app, "open_url": open_url,
+    "focus_window": focus_window,
     "cursor_position": cursor_position, "screen_size": screen_size,
     "list_dir": list_dir, "read_file": read_file, "write_file": write_file,
     "make_dir": make_dir,
