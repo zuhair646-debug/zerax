@@ -248,25 +248,6 @@ TOOLS_SCHEMA: List[Dict[str, Any]] = [
         },
     },
     {
-        "description": (
-            "🚀 Publish the current site LIVE on Zenrex platform. After calling this, "
-            "the site is instantly accessible at https://zenrex.ai/s/{slug} with free SSL "
-            "and global CDN. NO GitHub, NO Vercel, NO Railway needed — Zenrex IS the host. "
-            "Use this when the user says 'publish', 'go live', 'release', or 'انشر/أطلق/نزّل'. "
-            "Pick a slug that matches the brand (e.g. 'kafe-fajr' for 'كافيه الفجر')."
-        ),
-        "input_schema": {
-            "type": "object",
-            "properties": {
-                "slug": {
-                    "type": "string",
-                    "description": "URL slug: lowercase, digits, hyphens. 3-60 chars. e.g. 'kafe-fajr', 'noor-electronics'."
-                },
-            },
-            "required": ["slug"],
-        },
-    },
-    {
         "name": "request_credential",
         "description": (
             "🔑 Ask the user for an API key / access token / credential mid-conversation. "
