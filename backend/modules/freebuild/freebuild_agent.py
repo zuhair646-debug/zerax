@@ -607,15 +607,46 @@ TOOLS_SCHEMA.extend(PHASE4_TOOL_SCHEMAS)
 TOOLS_SCHEMA.extend(PHASE5_TOOL_SCHEMAS)
 
 
+# Tools restricted to the OWNER role only (high-risk / privileged capabilities).
+# Filtered out of the schema sent to non-owner customers.
+OWNER_ONLY_TOOL_NAMES = {
+    # Local browser control — driving the owner's actual laptop
+    "local_browser_pair", "local_browser_status", "local_browser_act",
+    # Server-side shell — can install packages, run scripts
+    "run_shell",
+    # Deployment to external hosts under the owner's accounts
+    "deploy_to",
+    # Sending real emails / SMS from the owner's accounts
+    "send_email", "send_sms",
+    # Direct DB queries — exposes raw merchant data
+    "db_query", "db_count",
+    # GitHub push — modifies the owner's repos
+    "github_create_repo", "github_push_file",
+}
+
+
+def tools_for_user(is_owner: bool) -> List[Dict[str, Any]]:
+    """Return the tool schema list filtered by user role.
+
+    Non-owner customers see ~50 tools (no shell, deploy, local-browser, etc.).
+    Owner sees the full 63 tools.
+    """
+    if is_owner:
+        return TOOLS_SCHEMA
+    return [t for t in TOOLS_SCHEMA if t["name"] not in OWNER_ONLY_TOOL_NAMES]
+
+
 # ─── Tool Implementations ─────────────────────────────────────────────────────
 class FreeBuildToolContext:
     """Holds mutable project state during an agent run."""
 
-    def __init__(self, project: Dict[str, Any], auth_token: Optional[str] = None, db=None):
+    def __init__(self, project: Dict[str, Any], auth_token: Optional[str] = None, db=None,
+                 is_owner: bool = False):
         self.project = dict(project)  # copy
         self.project_id: Optional[str] = project.get("id")
         self.auth_token: Optional[str] = auth_token
         self.db = db
+        self.is_owner: bool = bool(is_owner)
         self.current_html: str = project.get("current_html") or ""
         self.changes_made: int = 0
         self.snapshots_to_create: List[Dict[str, Any]] = []
@@ -770,7 +801,17 @@ def _exec_tool(ctx: FreeBuildToolContext, name: str, args: Dict[str, Any]) -> Di
 
 
 async def _dispatch_tool(ctx: FreeBuildToolContext, name: str, args: Dict[str, Any]) -> Dict[str, Any]:
-    """Unified dispatcher — handles both sync and async tools."""
+    """Unified dispatcher — handles both sync and async tools.
+
+    Owner-only tools are double-guarded here: even if a non-owner schema somehow
+    sent the tool call, it's rejected at dispatch time.
+    """
+    if name in OWNER_ONLY_TOOL_NAMES and not ctx.is_owner:
+        return {
+            "ok": False,
+            "error": f"🔒 '{name}' is an owner-only tool — not available for customer accounts.",
+            "permission_denied": True,
+        }
     result = _exec_tool(ctx, name, args)
     if isinstance(result, dict) and result.get("__async__"):
         return await _exec_tool_async(ctx, name, args)
@@ -2032,10 +2073,40 @@ MODE_ADDENDUM_DEVELOPER = """
 """
 
 
+MODE_ADDENDUM_OWNER_ASSISTANT = """
+═══════════════════════════════════════════════════════════
+👑 **وضع مالك المنصة (Owner Assistant) — أنت Zenrex Operator**
+
+أنت **يد المالك الأمينة** على منصة Zenrex بالكامل. شخصيتك مختلفة:
+
+**هويتك:**
+- ما تتعامل مع زبون، تتعامل مع **مالك المنصة** نفسه. هو يأمر، أنت تنفّذ.
+- **مسؤول عن كل شي على zenrex.ai**: التجار، المتاجر، الطلبات، الموظفين، السائقين، الإعلانات، الفواتير، الـ SaaS، الـ Cinema Studio، الأخطاء، التقارير اليومية، الدعم الفني.
+- لو شي خربان على المنصة، **اكتشفه وأصلحه قبل ما العميل يبلّغ**.
+- تقدم **تقارير دورية**: مبيعات اليوم، طلبات معلّقة، تجار جدد، أخطاء حصلت، كل صباح.
+
+**أدواتك الخاصة (مفعّلة لك فقط):**
+- 🖥️ `local_browser_*` — تتحكم بمتصفح المالك مباشرة (Gmail، لوحات تحكم خارجية، حسابات سوشال ميديا، إلخ).
+- 💻 `run_shell` — تشغيل أوامر على السيرفر (SSH، ffmpeg، git).
+- 🚀 `deploy_to` — نشر مشاريع جديدة على Vercel/Netlify.
+- 📧 `send_email`/`send_sms` — إرسال رسائل من حساب المنصة الرسمي.
+- 🗄️ `db_query`/`db_count` — قراءة كل بيانات التجار/الطلبات/السائقين مباشرة.
+- 🐙 `github_create_repo`/`github_push_file` — التحكم بـ GitHub.
+
+**قواعد سلوكك:**
+1. لا تخاطب المالك بـ "حضرتك" أو "العميل" — اخاطبه مباشرة بصيغة المساعد: "وش تبيني أسوي؟"
+2. كل قرار تنفيذ كبير (نشر، حذف، تحويل أموال) → استدعِ `ask_user_inline` قبل التنفيذ.
+3. عند رصد مشكلة على المنصة، استخدم `db_query` وعطه أرقام دقيقة (مش تقديرات).
+4. للتشخيص الفني عند العميل النهائي، استدعِ `delegate('security_auditor')` أو `delegate('performance_optimizer')`.
+5. سجّل القرارات المهمة في `memory_save(scope='merchant')` — أنت ذاكرة المنصة الطويلة.
+6. **هذا الذكاء مستقل**: لا يشاركه العملاء العاديون. أنت تشتغل للمالك حصرياً.
+"""
+
+
 def get_system_prompt(project: Dict[str, Any]) -> str:
     """Return the system prompt customized for the project's mode.
 
-    Modes: 'website' (default), 'image_studio', 'video_studio', 'developer'.
+    Modes: 'website' (default), 'image_studio', 'video_studio', 'developer', 'owner_assistant'.
     """
     mode = (project or {}).get("mode", "website")
     if mode == "image_studio":
@@ -2044,6 +2115,8 @@ def get_system_prompt(project: Dict[str, Any]) -> str:
         return AGENT_SYSTEM_PROMPT + "\n" + MODE_ADDENDUM_VIDEO
     if mode == "developer":
         return AGENT_SYSTEM_PROMPT + "\n" + MODE_ADDENDUM_DEVELOPER
+    if mode == "owner_assistant":
+        return AGENT_SYSTEM_PROMPT + "\n" + MODE_ADDENDUM_DEVELOPER + "\n" + MODE_ADDENDUM_OWNER_ASSISTANT
     return AGENT_SYSTEM_PROMPT
 
 
@@ -2056,6 +2129,7 @@ async def run_agent_turn(
     model: str = "claude-sonnet-4-5-20250929",
     auth_token: Optional[str] = None,
     db: Any = None,
+    is_owner: bool = False,
 ) -> Dict[str, Any]:
     """
     Run one agentic turn. The AI may call multiple tools before issuing finish().
@@ -2121,7 +2195,7 @@ async def _run_anthropic_agent(
         if not api_key:
             return {"ok": False, "error": "ANTHROPIC_API_KEY not configured"}
         client = AsyncAnthropic(api_key=api_key)
-    ctx = FreeBuildToolContext(project, auth_token=auth_token, db=db)
+    ctx = FreeBuildToolContext(project, auth_token=auth_token, db=db, is_owner=is_owner)
 
     initial_state = _exec_tool(ctx, "read_current_html", {})
     template_note = ""
@@ -2171,7 +2245,7 @@ async def _run_anthropic_agent(
                 model=model,
                 system=full_system_prompt,
                 max_tokens=8000,
-                tools=TOOLS_SCHEMA,
+                tools=tools_for_user(ctx.is_owner),
                 messages=messages,
             )
         except Exception as e:
@@ -2600,7 +2674,7 @@ async def _stream_one_provider(
                     # the "starts writing then restarts" issue users were reporting.
                     async with client.messages.stream(
                         model=model, system=sys_prompt, max_tokens=16000,
-                        tools=TOOLS_SCHEMA, messages=messages,
+                        tools=tools_for_user(ctx.is_owner), messages=messages,
                     ) as st:
                         async for ev in st:
                             await queue.put(("event", ev))

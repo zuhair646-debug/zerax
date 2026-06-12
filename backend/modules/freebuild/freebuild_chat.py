@@ -2448,12 +2448,15 @@ def make_freebuild_chat_router(db, get_current_user):
             ) if _secret else None
         except Exception:
             _agent_token = None
+        # Owner check — only the platform owner gets access to local_browser_*, run_shell, etc.
+        is_platform_owner = (user.get("role") or "").lower() in ("owner", "admin", "superuser")
         result = await run_agent_turn(
             project=proj,
             user_message=message,
             history_messages=history,
             auth_token=_agent_token,
             db=db,
+            is_owner=is_platform_owner,
         )
         if not result.get("ok"):
             raise HTTPException(502, result.get("error", "agent failed"))
