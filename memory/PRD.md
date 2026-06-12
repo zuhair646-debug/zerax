@@ -19,6 +19,37 @@ Build "Zenrex" — a multi-tenant Saudi/Arab AI commerce platform with:
 
 ## Current State (Feb 2026)
 
+### 🌐 Jun 12 2026 — Phase 5: Browser Use — Vision-guided autonomous browsing (60 total tools)
+
+User mandate: "نقدر نخلي الذكاء يستخدم الجهاز مباشرة + يدير حساباتي". Shipped a
+complete browser-automation suite where the AI uses Playwright + Claude Vision
+to log into the user's accounts and perform tasks on their behalf.
+
+**New module:** `/app/backend/modules/freebuild/browser_use_tools.py` (~480 lines).
+
+**Tools added:**
+- 🌐 `browser_start(account_label?, headless?)` — opens a real Playwright Chromium session. If `account_label` matches a previously-saved login, the session loads ALREADY-signed-in via encrypted storage_state. Returns `session_id`.
+- ↗️ `browser_goto(session_id, url, wait_seconds?)` — navigates + returns screenshot + title + final URL.
+- 🧠 `browser_act(session_id, instruction, max_steps?)` — **the autonomy loop.** Up to 8 cycles of: take screenshot → send to Claude Vision with structured JSON-action system prompt → parse decision {action: click|type|press|scroll|goto|wait|done|give_up} → execute on Playwright page → repeat. Returns full step log + final screenshot.
+- 📸 `browser_screenshot(session_id, full_page?)` — manual capture.
+- 💾 `browser_save_session(session_id, account_label)` — persists cookies + localStorage **Fernet-encrypted** to `freebuild_browser_sessions` collection. Next `browser_start` with same label = instant signed-in.
+- 📋 `browser_list_accounts()` — list saved browser logins for this project.
+- 🛑 `browser_close(session_id)` — cleanup.
+
+**Architecture:**
+- Module-level `_SESSIONS` dict keyed by `session_id` (in-memory).
+- 30-min idle timeout with auto-cleanup.
+- All sessions strictly scoped to `project_id` (cross-project access rejected).
+- Storage state encrypted at rest using existing Fernet key.
+
+**Vision system prompt** (in `_BROWSER_ACT_SYSTEM_PROMPT`): forces Claude to reply with ONLY a JSON object per step, supports text-based + CSS selectors, refuses destructive actions without explicit user confirmation.
+
+**Tests:** 14 new pytest cases at `/app/backend/tests/test_browser_use_tools.py` — including real-browser tests that visit example.com, save/reload storage state encryption round-trip, cross-project isolation. **79/79 total advanced-tool tests passing.**
+
+**Infrastructure:** Playwright chromium-headless-shell v1217 installed on the VPS at `/pw-browsers/`.
+
+**Deployed:** Synced to `zenrex.ai` VPS, backend restarted.
+
 ### 🧠 Jun 12 2026 — Phase 4: Real Plan Tracking + Persistent Memory + Comprehensive Audit (53 total tools)
 
 User mandate: "ربط الخطة بالحقيقة + ذاكرة مستديمة + تدقيق شامل من الصفر إلى الإنتاج".

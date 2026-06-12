@@ -60,6 +60,12 @@ from .memory_audit_tools import (
     dispatch_phase4,
     load_project_memories_for_prompt,
 )
+from .browser_use_tools import (
+    PHASE5_TOOL_SCHEMAS,
+    PHASE5_TOOL_LABELS_AR,
+    PHASE5_TOOL_NAMES,
+    dispatch_browser,
+)
 
 
 def _now() -> str:
@@ -598,6 +604,7 @@ TOOLS_SCHEMA.extend(ADVANCED_TOOL_SCHEMAS)
 # Append the workflow tools (ask_user_inline, plan_task, delegate)
 TOOLS_SCHEMA.extend(WORKFLOW_TOOL_SCHEMAS)
 TOOLS_SCHEMA.extend(PHASE4_TOOL_SCHEMAS)
+TOOLS_SCHEMA.extend(PHASE5_TOOL_SCHEMAS)
 
 
 # ─── Tool Implementations ─────────────────────────────────────────────────────
@@ -754,7 +761,7 @@ def _exec_tool(ctx: FreeBuildToolContext, name: str, args: Dict[str, Any]) -> Di
                     "save_credential", "validate_credential", "list_credentials",
                     "delete_credential", "recommend_service",
                     "github_list_repos", "github_create_repo", "github_push_file",
-                    "github_get_file") or name in ADVANCED_TOOL_NAMES or name in WORKFLOW_TOOL_NAMES or name in PHASE4_TOOL_NAMES:
+                    "github_get_file") or name in ADVANCED_TOOL_NAMES or name in WORKFLOW_TOOL_NAMES or name in PHASE4_TOOL_NAMES or name in PHASE5_TOOL_NAMES:
             return {"__async__": True, "tool": name, "args": args}
         return {"error": f"unknown tool: {name}"}
     except Exception as e:
@@ -1486,6 +1493,10 @@ async def _exec_tool_async(ctx: FreeBuildToolContext, name: str, args: Dict[str,
         if name in PHASE4_TOOL_NAMES:
             return await dispatch_phase4(ctx, name, args)
 
+        # ── Phase 5: Browser Use (vision-guided autonomous browsing) ──
+        if name in PHASE5_TOOL_NAMES:
+            return await dispatch_browser(ctx, name, args)
+
         return {"ok": False, "error": f"unknown async tool: {name}"}
     except Exception as e:
         logger.exception(f"async tool {name} failed")
@@ -1812,6 +1823,35 @@ AGENT_SYSTEM_PROMPT = """أنت **Zenrex Code Brain** — مهندس برمجي 
   6. مراجعة SEO متخصصة
   7. مراجعة accessibility (WCAG 2.1 AA + RTL)
   يستغرق 30-60 ثانية ويرجع تقرير مفصّل + درجة لكل جانب + درجة إجمالية + تقدير عام (🟢 ممتاز / 🟡 جيد جداً / 🟠 يحتاج تحسين / 🔴 ضعيف). **استخدمه قبل publish_site لأي مشروع جدي**.
+
+═══════════════════════════════════════════════════════════
+🌐 **التحكم بالمتصفح (Browser Use — Vision-guided autonomous browsing):**
+
+تقدر تفتح متصفح حقيقي وتدير حسابات العميل (Gmail, Twitter, Stripe Dashboard, WhatsApp Web, لوحات إدارة، إلخ) بنفسك. الذكاء عندك Vision يشوف الشاشة ويقرر الكلكات.
+
+🌐 **`browser_start(account_label?, headless?)`** — افتح متصفح. لو الـ `account_label` محفوظ من قبل، الجلسة تتحمّل مسجّلة دخول مباشرة (بدون يوزر/باسوورد). ارجع `session_id` للأدوات الجاية.
+
+↗️ **`browser_goto(session_id, url)`** — تصفّح لرابط معيّن، ارجع سكرين شوت + العنوان.
+
+🧠 **`browser_act(session_id, instruction, max_steps?)`** — **الأقوى!** حلقة autonomy: التقاط سكرين شوت → vision تقرر الخطوة الجاية → تنفيذها → تكرار حتى 8 خطوات. مثال:
+  - `"سجّل دخولي بالإيميل X والباسوورد Y"` — بعدها استدعِ `browser_save_session`
+  - `"افتح أحدث إيميل في الـ inbox وارجع لي محتواه"`
+  - `"اذهب إلى Stripe Dashboard وقول لي رصيد payouts"`
+  - `"اكتب تغريدة فيها 'إعلان جديد!' وانشرها"`
+
+📸 **`browser_screenshot(session_id, full_page?)`** — التقط سكرين شوت يدوياً.
+
+💾 **`browser_save_session(session_id, account_label)`** — احفظ حالة الجلسة (كوكيز + localStorage) **مشفّرة**. مرة جاية، أي browser_start بنفس الـ label يفتح وأنت مسجّل دخول مباشرة.
+
+📋 **`browser_list_accounts()`** — قائمة الحسابات المحفوظة.
+
+🛑 **`browser_close(session_id)`** — أغلق المتصفح بعد ما تخلص.
+
+⚠️ **قواعد ذهبية للـ Browser Use:**
+- لا تقم بأي عملية حساسة (حذف، تحويل أموال، نشر) إلا لو العميل **صرّح بها بوضوح** في رسالته.
+- بعد كل عملية تسجيل دخول ناجحة، استدعِ `browser_save_session` فوراً.
+- إذا طلبت credentials ولا تعرفها، استدعِ `request_credential` أولاً.
+- اختم بـ `browser_close` لو خلصت من الجلسة.
 
 📨 **الإنهاء:**
 - `finish(summary)` — أنهِ وأرسل التقرير للعميل
@@ -2354,6 +2394,7 @@ TOOL_LABELS_AR: Dict[str, Dict[str, str]] = {
 TOOL_LABELS_AR.update(ADVANCED_TOOL_LABELS_AR)
 TOOL_LABELS_AR.update(WORKFLOW_TOOL_LABELS_AR)
 TOOL_LABELS_AR.update(PHASE4_TOOL_LABELS_AR)
+TOOL_LABELS_AR.update(PHASE5_TOOL_LABELS_AR)
 
 
 def _sse(event: str, data: Dict[str, Any]) -> str:
