@@ -475,7 +475,7 @@ def _exec_tool(ctx: FreeBuildToolContext, name: str, args: Dict[str, Any]) -> Di
                 issues.append({"severity": "medium", "code": "reserved_word", "message": f"كلمة محجوزة كمتغير: '{m.group(1)}'"})
             return {"ok": True, "issues": issues, "is_clean": len([i for i in issues if i["severity"] == "high"]) == 0, "lines_checked": code.count("\n")+1}
         # Async tools — return a sentinel so the caller knows to await them
-        if name in ("web_search", "fetch_url", "generate_image"):
+        if name in ("web_search", "fetch_url", "generate_image", "test_page", "publish_site", "request_credential", "download_media"):
             return {"__async__": True, "tool": name, "args": args}
         return {"error": f"unknown tool: {name}"}
     except Exception as e:
