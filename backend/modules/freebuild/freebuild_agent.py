@@ -37,6 +37,9 @@ from .freebuild_chat import (
     _merge_sections,
     _summarize_html,
     _verify_anchor_links,
+    _enc,
+    _dec,
+    _mask,
 )
 
 
@@ -397,6 +400,160 @@ TOOLS_SCHEMA: List[Dict[str, Any]] = [
         },
     },
     {
+        "name": "save_credential",
+        "description": (
+            "💾 Save / update a credential that the user pasted into the chat. Use this "
+            "IMMEDIATELY whenever the user provides ANY API key, token, password, or "
+            "secret in their message (e.g. 'هذا مفتاحي ghp_...', 'use this key: sk_...'). "
+            "The value is encrypted and stored per-project. After saving, IMMEDIATELY call "
+            "`validate_credential` to verify it works before claiming anything. "
+            "NEVER claim a key is broken without running validate_credential first."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "service": {"type": "string", "description": "snake_case id, e.g. 'github_pat', 'elevenlabs_key', 'stripe_secret', 'openai_key'."},
+                "value": {"type": "string", "description": "The raw secret/key/token the user provided."},
+                "label": {"type": "string", "description": "Arabic human-readable label, e.g. 'مفتاح GitHub الشخصي'."},
+            },
+            "required": ["service", "value"],
+        },
+    },
+    {
+        "name": "validate_credential",
+        "description": (
+            "🧪 Test whether a stored credential ACTUALLY works by hitting the real "
+            "third-party API. Returns HTTP status + scopes + account info. Supported "
+            "services with real validation: github_pat, elevenlabs_key, openai_key, "
+            "anthropic_key, stripe_secret, fal_key, tavily_api_key. For unknown "
+            "services, returns a stored-mask check only. **You MUST call this before "
+            "telling the user a key 'does not work' — otherwise you are hallucinating.**"
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "service": {"type": "string", "description": "Service id previously saved via save_credential."},
+            },
+            "required": ["service"],
+        },
+    },
+    {
+        "name": "list_credentials",
+        "description": (
+            "📋 List all credentials saved for this project (masked values, no plaintext). "
+            "Use this when the user asks 'وش المفاتيح المحفوظة' or before assuming a key "
+            "is missing. Returns: service id, label, masked preview, last update time."
+        ),
+        "input_schema": {"type": "object", "properties": {}, "required": []},
+    },
+    {
+        "name": "delete_credential",
+        "description": (
+            "🗑️ Delete a stored credential (e.g. user wants to replace an invalid key, "
+            "or rotate a leaked one). Always confirm with the user first."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "service": {"type": "string"},
+            },
+            "required": ["service"],
+        },
+    },
+    {
+        "name": "recommend_service",
+        "description": (
+            "🎯 Recommend the best 3rd-party SaaS service for a category — with pricing, "
+            "free tiers, sign-up URLs, and step-by-step instructions in Arabic on how to "
+            "obtain the API key. Categories: 'hosting', 'payments', 'email', 'sms', "
+            "'storage', 'auth', 'database', 'analytics', 'cdn', 'domain', 'image_ai', "
+            "'video_ai', 'voice_ai', 'llm', 'monitoring', 'backup'. Use this BEFORE "
+            "asking the user for a credential so they know which service to sign up to. "
+            "Returns 3 options ranked best-to-good with pros, cons, prices, signup links."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "category": {"type": "string", "description": "One of the supported categories above."},
+                "requirements": {"type": "string", "description": "What the user needs (Arabic ok), e.g. 'يحتاج SMS رخيص للسعودية'."},
+                "region": {"type": "string", "description": "Optional region code, e.g. 'SA', 'EU', 'US'.", "default": "SA"},
+            },
+            "required": ["category"],
+        },
+    },
+    {
+        "name": "github_list_repos",
+        "description": (
+            "📦 List the user's GitHub repositories using the stored github_pat. "
+            "Use this to show the user where their code lives, or before pushing files. "
+            "Requires github_pat to be saved (call save_credential first if missing). "
+            "Returns: repo name, full_name, private, default_branch, html_url."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "limit": {"type": "integer", "default": 30, "minimum": 1, "maximum": 100},
+            },
+            "required": [],
+        },
+    },
+    {
+        "name": "github_create_repo",
+        "description": (
+            "🆕 Create a new GitHub repository under the authenticated user. Use this "
+            "when the user says 'سوي ريبو لـ X' or 'أنشئ مشروع GitHub'. Requires "
+            "github_pat with `repo` scope."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "name": {"type": "string", "description": "Repo name, lowercase-with-dashes."},
+                "description": {"type": "string", "default": ""},
+                "private": {"type": "boolean", "default": True},
+                "auto_init": {"type": "boolean", "default": True, "description": "Create with initial README."},
+            },
+            "required": ["name"],
+        },
+    },
+    {
+        "name": "github_push_file",
+        "description": (
+            "⬆️ Create or update a single file in a GitHub repo (commits directly to "
+            "default branch via Contents API). Use this to push the user's site code "
+            "to a public repo, or to back up generated HTML/JSON. Requires github_pat. "
+            "Pass `repo` as 'owner/repo' format. If the file already exists, you MUST "
+            "first call `github_get_file` to get its sha, then pass it back."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "repo": {"type": "string", "description": "Format: 'owner/reponame'."},
+                "path": {"type": "string", "description": "Path inside the repo, e.g. 'index.html', 'src/app.js'."},
+                "content": {"type": "string", "description": "Raw text content (will be base64-encoded server-side)."},
+                "message": {"type": "string", "description": "Commit message in Arabic or English."},
+                "sha": {"type": "string", "description": "REQUIRED when updating an existing file. Get it from github_get_file."},
+                "branch": {"type": "string", "description": "Optional branch name; defaults to repo default branch."},
+            },
+            "required": ["repo", "path", "content", "message"],
+        },
+    },
+    {
+        "name": "github_get_file",
+        "description": (
+            "📥 Read a file from a GitHub repo. Returns content + sha (sha is needed "
+            "if you want to update the file afterwards via github_push_file)."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "repo": {"type": "string", "description": "Format: 'owner/reponame'."},
+                "path": {"type": "string"},
+                "branch": {"type": "string"},
+            },
+            "required": ["repo", "path"],
+        },
+    },
+    {
         "name": "finish",
         "description": (
             "Call this when the work is done. Provide a short Arabic summary "
@@ -569,7 +726,11 @@ def _exec_tool(ctx: FreeBuildToolContext, name: str, args: Dict[str, Any]) -> Di
         if name in ("web_search", "fetch_url", "generate_image", "test_page", "publish_site",
                     "request_credential", "download_media",
                     "list_voices", "generate_voiceover", "write_script",
-                    "generate_storyboard", "update_world_bible"):
+                    "generate_storyboard", "update_world_bible",
+                    "save_credential", "validate_credential", "list_credentials",
+                    "delete_credential", "recommend_service",
+                    "github_list_repos", "github_create_repo", "github_push_file",
+                    "github_get_file"):
             return {"__async__": True, "tool": name, "args": args}
         return {"error": f"unknown tool: {name}"}
     except Exception as e:
@@ -992,10 +1153,480 @@ async def _exec_tool_async(ctx: FreeBuildToolContext, name: str, args: Dict[str,
             except Exception as e:
                 return {"ok": False, "error": f"world_bible: {type(e).__name__}: {str(e)[:200]}"}
 
+        # ── Credential Management ──────────────────────────────────────────
+        if name == "save_credential":
+            if ctx.project_id is None or ctx.db is None:
+                return {"ok": False, "error": "project_id أو DB غير متوفرين"}
+            service = (args.get("service") or "").strip().lower()
+            value = (args.get("value") or "").strip()
+            label = (args.get("label") or service).strip()
+            if not service or not value:
+                return {"ok": False, "error": "service و value مطلوبين"}
+            if not re.match(r"^[a-z][a-z0-9_-]{1,40}$", service):
+                return {"ok": False, "error": f"اسم خدمة غير صالح: '{service}' — استخدم snake_case (مثل github_pat)"}
+            if len(value) < 4:
+                return {"ok": False, "error": "القيمة قصيرة جداً (<4 حرف). تأكد من نسخ المفتاح كاملاً."}
+            try:
+                import datetime as _dt
+                now = _dt.datetime.now(_dt.timezone.utc).isoformat()
+                await ctx.db.freebuild_credentials.update_one(
+                    {"project_id": ctx.project_id, "service": service},
+                    {"$set": {
+                        "project_id": ctx.project_id,
+                        "service": service,
+                        "label": label,
+                        "value_enc": _enc(value),
+                        "mask": _mask(value),
+                        "updated_at": now,
+                    }, "$setOnInsert": {"created_at": now}},
+                    upsert=True,
+                )
+                return {"ok": True, "service": service, "mask": _mask(value), "label": label,
+                        "message": f"✅ تم حفظ {label} بأمان (مشفّر). الخطوة الجاية: استدعِ `validate_credential` لتأكيد إنه شغّال."}
+            except Exception as e:
+                return {"ok": False, "error": f"save_credential: {type(e).__name__}: {str(e)[:200]}"}
+
+        if name == "validate_credential":
+            if ctx.project_id is None or ctx.db is None:
+                return {"ok": False, "error": "project_id أو DB غير متوفرين"}
+            service = (args.get("service") or "").strip().lower()
+            if not service:
+                return {"ok": False, "error": "service مطلوب"}
+            try:
+                doc = await ctx.db.freebuild_credentials.find_one(
+                    {"project_id": ctx.project_id, "service": service}
+                )
+                if not doc:
+                    return {"ok": False, "service": service, "saved": False,
+                            "error": f"لا يوجد مفتاح محفوظ للخدمة '{service}'. استدعِ `save_credential` أولاً أو اطلب من العميل عبر `request_credential`."}
+                val = _dec(doc.get("value_enc") or "")
+                if not val:
+                    return {"ok": False, "service": service, "error": "فشل فك تشفير القيمة المحفوظة (قد يكون JWT_SECRET تغيّر)."}
+                import httpx
+                async with httpx.AsyncClient(timeout=15, follow_redirects=False) as cl:
+                    # Per-service real validation
+                    if service in ("github_pat", "github_token", "github"):
+                        r = await cl.get("https://api.github.com/user",
+                                         headers={"Authorization": f"token {val}", "Accept": "application/vnd.github+json"})
+                        if r.status_code == 200:
+                            data = r.json()
+                            scopes = r.headers.get("x-oauth-scopes", "")
+                            rl = r.headers.get("x-ratelimit-remaining", "")
+                            return {"ok": True, "service": service, "valid": True, "http_status": 200,
+                                    "account": data.get("login"), "name": data.get("name") or "",
+                                    "scopes": scopes, "rate_limit_remaining": rl,
+                                    "message": f"✅ المفتاح شغّال 100%. الحساب: {data.get('login')}، الصلاحيات: {scopes or 'محدودة'}، الحد المتبقي: {rl}."}
+                        return {"ok": False, "service": service, "valid": False, "http_status": r.status_code,
+                                "error": f"GitHub رفض المفتاح: HTTP {r.status_code} — {r.text[:200]}"}
+                    if service in ("elevenlabs_key", "elevenlabs"):
+                        r = await cl.get("https://api.elevenlabs.io/v1/user",
+                                         headers={"xi-api-key": val})
+                        if r.status_code == 200:
+                            data = r.json()
+                            return {"ok": True, "service": service, "valid": True, "http_status": 200,
+                                    "tier": (data.get("subscription") or {}).get("tier"),
+                                    "character_count": (data.get("subscription") or {}).get("character_count"),
+                                    "character_limit": (data.get("subscription") or {}).get("character_limit"),
+                                    "message": f"✅ ElevenLabs شغّال. الباقة: {(data.get('subscription') or {}).get('tier')}."}
+                        return {"ok": False, "service": service, "valid": False, "http_status": r.status_code,
+                                "error": f"ElevenLabs رفض المفتاح: HTTP {r.status_code} — {r.text[:200]}"}
+                    if service in ("openai_key", "openai"):
+                        r = await cl.get("https://api.openai.com/v1/models",
+                                         headers={"Authorization": f"Bearer {val}"})
+                        if r.status_code == 200:
+                            n = len((r.json() or {}).get("data") or [])
+                            return {"ok": True, "service": service, "valid": True, "http_status": 200,
+                                    "models_available": n,
+                                    "message": f"✅ OpenAI شغّال. {n} موديل متاح."}
+                        return {"ok": False, "service": service, "valid": False, "http_status": r.status_code,
+                                "error": f"OpenAI رفض المفتاح: HTTP {r.status_code} — {r.text[:200]}"}
+                    if service in ("anthropic_key", "anthropic"):
+                        r = await cl.post("https://api.anthropic.com/v1/messages",
+                                          headers={"x-api-key": val, "anthropic-version": "2023-06-01", "Content-Type": "application/json"},
+                                          json={"model": "claude-3-5-haiku-20241022", "max_tokens": 1,
+                                                "messages": [{"role": "user", "content": "hi"}]})
+                        if r.status_code in (200, 400):
+                            return {"ok": True, "service": service, "valid": True, "http_status": r.status_code,
+                                    "message": "✅ Anthropic شغّال."}
+                        return {"ok": False, "service": service, "valid": False, "http_status": r.status_code,
+                                "error": f"Anthropic رفض المفتاح: HTTP {r.status_code} — {r.text[:200]}"}
+                    if service in ("stripe_secret", "stripe", "stripe_key"):
+                        r = await cl.get("https://api.stripe.com/v1/account",
+                                         headers={"Authorization": f"Bearer {val}"})
+                        if r.status_code == 200:
+                            data = r.json()
+                            return {"ok": True, "service": service, "valid": True, "http_status": 200,
+                                    "account_id": data.get("id"), "country": data.get("country"),
+                                    "default_currency": data.get("default_currency"),
+                                    "message": f"✅ Stripe شغّال. الحساب: {data.get('id')}, العملة: {data.get('default_currency')}."}
+                        return {"ok": False, "service": service, "valid": False, "http_status": r.status_code,
+                                "error": f"Stripe رفض المفتاح: HTTP {r.status_code} — {r.text[:200]}"}
+                    if service in ("fal_key", "fal", "fal_ai_key"):
+                        r = await cl.get("https://queue.fal.run/health",
+                                         headers={"Authorization": f"Key {val}"})
+                        # fal.ai doesn't have a clean /me endpoint; we hit a public health probe
+                        # which still returns 401 for invalid keys.
+                        return {"ok": r.status_code < 500, "service": service,
+                                "valid": r.status_code != 401, "http_status": r.status_code,
+                                "message": ("✅ مفتاح fal.ai مقبول (محتاج اختبار توليد فعلي للتأكد النهائي)."
+                                            if r.status_code != 401 else f"❌ fal.ai رفض المفتاح: HTTP {r.status_code}")}
+                    if service in ("tavily_api_key", "tavily"):
+                        r = await cl.post("https://api.tavily.com/search",
+                                          json={"api_key": val, "query": "ping", "max_results": 1})
+                        if r.status_code == 200:
+                            return {"ok": True, "service": service, "valid": True,
+                                    "message": "✅ Tavily شغّال."}
+                        return {"ok": False, "service": service, "valid": False, "http_status": r.status_code,
+                                "error": f"Tavily رفض المفتاح: HTTP {r.status_code} — {r.text[:200]}"}
+                # Unknown service → can only confirm it's stored, not that it works
+                return {"ok": True, "service": service, "valid": None, "stored_only": True,
+                        "mask": doc.get("mask", ""),
+                        "message": f"⚠️ ما عندي اختبار حقيقي لخدمة '{service}' بعد — لكن المفتاح محفوظ ومتاح. لو تبيه يُختبر فعلياً، استخدمه في أداة المهمة الفعلية واشف النتيجة."}
+            except Exception as e:
+                return {"ok": False, "error": f"validate_credential: {type(e).__name__}: {str(e)[:200]}"}
+
+        if name == "list_credentials":
+            if ctx.project_id is None or ctx.db is None:
+                return {"ok": False, "error": "project_id أو DB غير متوفرين"}
+            try:
+                items = await ctx.db.freebuild_credentials.find(
+                    {"project_id": ctx.project_id},
+                    {"_id": 0, "service": 1, "label": 1, "mask": 1, "updated_at": 1, "created_at": 1},
+                ).to_list(length=100)
+                return {"ok": True, "count": len(items), "credentials": items,
+                        "message": (f"عندك {len(items)} مفتاح محفوظ." if items else "ما فيه أي مفتاح محفوظ بعد.")}
+            except Exception as e:
+                return {"ok": False, "error": f"list_credentials: {type(e).__name__}: {str(e)[:200]}"}
+
+        if name == "delete_credential":
+            if ctx.project_id is None or ctx.db is None:
+                return {"ok": False, "error": "project_id أو DB غير متوفرين"}
+            service = (args.get("service") or "").strip().lower()
+            if not service:
+                return {"ok": False, "error": "service مطلوب"}
+            try:
+                r = await ctx.db.freebuild_credentials.delete_one(
+                    {"project_id": ctx.project_id, "service": service}
+                )
+                return {"ok": True, "service": service, "deleted_count": r.deleted_count,
+                        "message": (f"✅ تم حذف {service}." if r.deleted_count else f"⚠️ لا يوجد مفتاح بإسم {service}.")}
+            except Exception as e:
+                return {"ok": False, "error": f"delete_credential: {type(e).__name__}: {str(e)[:200]}"}
+
+        if name == "recommend_service":
+            category = (args.get("category") or "").strip().lower()
+            requirements = (args.get("requirements") or "").strip()
+            region = (args.get("region") or "SA").strip().upper()
+            catalog = _SERVICE_CATALOG.get(category)
+            if not catalog:
+                supported = ", ".join(sorted(_SERVICE_CATALOG.keys()))
+                return {"ok": False, "error": f"الفئة '{category}' غير مدعومة. الفئات المتاحة: {supported}"}
+            # Filter by region if region-specific services exist
+            picks = [s for s in catalog if (not s.get("regions")) or region in s["regions"] or "GLOBAL" in s["regions"]]
+            if not picks:
+                picks = catalog
+            return {"ok": True, "category": category, "region": region,
+                    "requirements_context": requirements,
+                    "recommendations": picks[:3],
+                    "message": f"حصّلت لك {len(picks[:3])} خيارات لـ {category}. اقترح الأول لأنه عادة الأنسب."}
+
+        # ── GitHub Tools ───────────────────────────────────────────────────
+        if name in ("github_list_repos", "github_create_repo", "github_push_file", "github_get_file"):
+            # Get the saved github_pat for this project (fallback to env)
+            pat = None
+            if ctx.project_id and ctx.db is not None:
+                try:
+                    doc = await ctx.db.freebuild_credentials.find_one(
+                        {"project_id": ctx.project_id, "service": "github_pat"}
+                    )
+                    if doc:
+                        pat = _dec(doc.get("value_enc") or "")
+                except Exception:
+                    pat = None
+            if not pat:
+                pat = os.environ.get("GITHUB_PAT", "").strip() or None
+            if not pat:
+                return {"ok": False, "needs_credential": True, "service": "github_pat",
+                        "error": "ما فيه مفتاح GitHub محفوظ. استدعِ `request_credential('github_pat', 'مفتاح GitHub الشخصي', '...')` أو `save_credential` لو العميل أعطاك المفتاح في الشات."}
+            import httpx
+            headers = {"Authorization": f"token {pat}", "Accept": "application/vnd.github+json"}
+            try:
+                async with httpx.AsyncClient(timeout=30) as cl:
+                    if name == "github_list_repos":
+                        limit = max(1, min(int(args.get("limit") or 30), 100))
+                        r = await cl.get("https://api.github.com/user/repos",
+                                         headers=headers,
+                                         params={"per_page": limit, "sort": "updated", "affiliation": "owner"})
+                        if r.status_code != 200:
+                            return {"ok": False, "http_status": r.status_code,
+                                    "error": f"GitHub: {r.status_code} {r.text[:200]}"}
+                        repos = [{"name": x.get("name"), "full_name": x.get("full_name"),
+                                  "private": x.get("private"), "default_branch": x.get("default_branch"),
+                                  "html_url": x.get("html_url"), "description": x.get("description"),
+                                  "updated_at": x.get("updated_at")}
+                                 for x in (r.json() or [])]
+                        return {"ok": True, "count": len(repos), "repos": repos}
+
+                    if name == "github_create_repo":
+                        body = {
+                            "name": (args.get("name") or "").strip(),
+                            "description": (args.get("description") or "").strip(),
+                            "private": bool(args.get("private", True)),
+                            "auto_init": bool(args.get("auto_init", True)),
+                        }
+                        if not body["name"]:
+                            return {"ok": False, "error": "name مطلوب"}
+                        r = await cl.post("https://api.github.com/user/repos", headers=headers, json=body)
+                        if r.status_code not in (200, 201):
+                            return {"ok": False, "http_status": r.status_code,
+                                    "error": f"GitHub: {r.status_code} {r.text[:300]}"}
+                        d = r.json()
+                        return {"ok": True, "full_name": d.get("full_name"), "html_url": d.get("html_url"),
+                                "default_branch": d.get("default_branch"), "clone_url": d.get("clone_url"),
+                                "message": f"✅ تم إنشاء {d.get('full_name')}. الرابط: {d.get('html_url')}"}
+
+                    if name == "github_get_file":
+                        repo = (args.get("repo") or "").strip()
+                        path = (args.get("path") or "").strip().lstrip("/")
+                        params = {}
+                        if args.get("branch"):
+                            params["ref"] = args["branch"]
+                        r = await cl.get(f"https://api.github.com/repos/{repo}/contents/{path}",
+                                         headers=headers, params=params)
+                        if r.status_code != 200:
+                            return {"ok": False, "http_status": r.status_code,
+                                    "error": f"GitHub: {r.status_code} {r.text[:200]}"}
+                        d = r.json()
+                        import base64 as _b64
+                        content = ""
+                        try:
+                            if d.get("encoding") == "base64":
+                                content = _b64.b64decode(d.get("content") or "").decode("utf-8", errors="replace")
+                        except Exception:
+                            content = ""
+                        return {"ok": True, "path": path, "sha": d.get("sha"), "size": d.get("size"),
+                                "content": content[:50000], "truncated": len(content) > 50000,
+                                "html_url": d.get("html_url")}
+
+                    if name == "github_push_file":
+                        repo = (args.get("repo") or "").strip()
+                        path = (args.get("path") or "").strip().lstrip("/")
+                        content = args.get("content") or ""
+                        message = (args.get("message") or "update via Zenrex AI").strip()
+                        sha = args.get("sha")
+                        branch = args.get("branch")
+                        if not repo or not path:
+                            return {"ok": False, "error": "repo و path مطلوبين"}
+                        import base64 as _b64
+                        body = {
+                            "message": message,
+                            "content": _b64.b64encode(content.encode("utf-8")).decode("ascii"),
+                        }
+                        if sha:
+                            body["sha"] = sha
+                        if branch:
+                            body["branch"] = branch
+                        r = await cl.put(f"https://api.github.com/repos/{repo}/contents/{path}",
+                                         headers=headers, json=body)
+                        if r.status_code not in (200, 201):
+                            # If file exists and we got 422, auto-fetch sha and retry
+                            if r.status_code == 422 and "sha" not in body:
+                                gr = await cl.get(f"https://api.github.com/repos/{repo}/contents/{path}",
+                                                  headers=headers,
+                                                  params={"ref": branch} if branch else None)
+                                if gr.status_code == 200:
+                                    body["sha"] = (gr.json() or {}).get("sha")
+                                    r = await cl.put(f"https://api.github.com/repos/{repo}/contents/{path}",
+                                                     headers=headers, json=body)
+                            if r.status_code not in (200, 201):
+                                return {"ok": False, "http_status": r.status_code,
+                                        "error": f"GitHub push: {r.status_code} {r.text[:300]}"}
+                        d = r.json() or {}
+                        commit = d.get("commit") or {}
+                        return {"ok": True, "path": path,
+                                "commit_sha": commit.get("sha"),
+                                "html_url": (d.get("content") or {}).get("html_url"),
+                                "message": f"✅ تم رفع {path} بنجاح. الـ commit: {(commit.get('sha') or '')[:7]}"}
+            except Exception as e:
+                return {"ok": False, "error": f"{name}: {type(e).__name__}: {str(e)[:200]}"}
+
         return {"ok": False, "error": f"unknown async tool: {name}"}
     except Exception as e:
         logger.exception(f"async tool {name} failed")
         return {"ok": False, "error": f"{type(e).__name__}: {str(e)[:200]}"}
+
+
+# ─── Service Recommendation Catalog ──────────────────────────────────────────
+# Used by the `recommend_service` tool. Each category lists 3+ services ranked
+# best-to-good with prices, sign-up URL, and step-by-step Arabic instructions
+# on how to obtain the API key. Update as the market changes.
+_SERVICE_CATALOG: Dict[str, List[Dict[str, Any]]] = {
+    "hosting": [
+        {"name": "Zenrex (هذي المنصة نفسها)", "best_for": "نشر فوري بنقرة، مجاني، يدعم SSL", "free_tier": "نعم — غير محدود",
+         "pricing": "مجاني للجميع داخل zenrex.ai/s/{slug}", "signup_url": "https://zenrex.ai",
+         "how_to_get_key": "ما تحتاج مفتاح — استخدم `publish_site(slug)` مباشرة.", "regions": ["GLOBAL"]},
+        {"name": "Vercel", "best_for": "Next.js / static sites مع CDN عالمي", "free_tier": "نعم — 100GB bandwidth/شهر",
+         "pricing": "مجاني للاستخدام الشخصي، $20/شهر للفرق", "signup_url": "https://vercel.com/signup",
+         "how_to_get_key": "1) سجّل في vercel.com 2) اذهب لـ Settings → Tokens 3) Create Token 4) انسخه وارسله لي عبر `request_credential('vercel_token', ...)`", "regions": ["GLOBAL"]},
+        {"name": "Cloudflare Pages", "best_for": "أداء فاحش + DDoS مجاني", "free_tier": "نعم — Unlimited bandwidth",
+         "pricing": "مجاني تماماً للمواقع الثابتة", "signup_url": "https://pages.cloudflare.com",
+         "how_to_get_key": "1) سجّل في cloudflare.com 2) My Profile → API Tokens 3) Create Token (Edit Cloudflare Pages template) 4) انسخه وارسله لي", "regions": ["GLOBAL"]},
+    ],
+    "payments": [
+        {"name": "Moyasar (سعودي)", "best_for": "متاجر سعودية — مدى/Apple Pay/STC Pay", "free_tier": "لا (نسبة 2.75%)",
+         "pricing": "2.75% + 1 ريال لكل عملية", "signup_url": "https://moyasar.com/ar/signup",
+         "how_to_get_key": "1) سجّل في moyasar.com 2) فعّل حسابك (سجل تجاري) 3) لوحة التحكم → API Keys 4) انسخ Secret Key وارسله", "regions": ["SA"]},
+        {"name": "Stripe", "best_for": "عالمي، أفضل DX، يدعم الاشتراكات", "free_tier": "لا (2.9% + $0.30)",
+         "pricing": "2.9% + $0.30 لكل عملية", "signup_url": "https://dashboard.stripe.com/register",
+         "how_to_get_key": "1) سجّل في stripe.com 2) Developers → API Keys 3) انسخ Secret Key (sk_live_... أو sk_test_...) 4) ارسله لي", "regions": ["GLOBAL"]},
+        {"name": "Tabby / Tamara", "best_for": "تقسيط بدون فوائد للسعودية والخليج", "free_tier": "لا",
+         "pricing": "نسبة على البائع متفاوض عليها", "signup_url": "https://tabby.ai/sa/merchants",
+         "how_to_get_key": "1) سجّل كتاجر 2) فريقهم يتواصل معك لتفعيل الـ API 3) لما تجيبني الـ Public Key والـ Secret Key، أحفظهم لك", "regions": ["SA", "AE", "KW"]},
+    ],
+    "email": [
+        {"name": "Resend", "best_for": "أحدث API، أسهل تكامل، 3000 إيميل مجاناً", "free_tier": "نعم — 3000/شهر",
+         "pricing": "$20 لـ 50K إيميل", "signup_url": "https://resend.com/signup",
+         "how_to_get_key": "1) سجّل في resend.com 2) أضف دومينك 3) API Keys → Create 4) انسخه (re_...) وارسله", "regions": ["GLOBAL"]},
+        {"name": "SendGrid", "best_for": "موثوقية عالية، 100 إيميل/يوم مجاناً", "free_tier": "نعم — 100/يوم",
+         "pricing": "$19.95 لـ 50K", "signup_url": "https://signup.sendgrid.com/",
+         "how_to_get_key": "1) سجّل 2) Settings → API Keys → Create 3) انسخه (SG....) وارسله", "regions": ["GLOBAL"]},
+        {"name": "AWS SES", "best_for": "أرخص حل للحجم العالي", "free_tier": "نعم — 62K إيميل/شهر من EC2",
+         "pricing": "$0.10 لكل 1000 إيميل", "signup_url": "https://aws.amazon.com/ses/",
+         "how_to_get_key": "يحتاج إعداد متقدم — أنصحك بـ Resend في البداية.", "regions": ["GLOBAL"]},
+    ],
+    "sms": [
+        {"name": "Unifonic (سعودي)", "best_for": "أرخص خيار للسعودية، يدعم الـ OTP العربي", "free_tier": "نعم — 10 رسائل تجريبية",
+         "pricing": "0.05 - 0.12 ريال لكل SMS", "signup_url": "https://www.unifonic.com/ar",
+         "how_to_get_key": "1) سجّل في unifonic.com 2) فعّل حسابك (سجل تجاري) 3) API → App SID + Token 4) ارسلهم", "regions": ["SA", "AE"]},
+        {"name": "Twilio", "best_for": "عالمي + WhatsApp + الصوت", "free_tier": "نعم — رصيد $15",
+         "pricing": "$0.0075 - $0.05 لكل SMS حسب الدولة", "signup_url": "https://www.twilio.com/try-twilio",
+         "how_to_get_key": "1) سجّل في twilio.com 2) Console → Account SID + Auth Token 3) ارسلهم لي", "regions": ["GLOBAL"]},
+        {"name": "Taqnyat (سعودي)", "best_for": "موثوق + يدعم SMS سعودي بأسعار جيدة", "free_tier": "لا",
+         "pricing": "0.07 ريال/SMS", "signup_url": "https://taqnyat.sa",
+         "how_to_get_key": "1) سجّل 2) API Tokens 3) Bearer Token وارسله", "regions": ["SA"]},
+    ],
+    "storage": [
+        {"name": "Cloudflare R2", "best_for": "بدون رسوم Egress — أرخص S3 alternative", "free_tier": "نعم — 10GB",
+         "pricing": "$0.015/GB لـ Storage، صفر للـ Egress", "signup_url": "https://dash.cloudflare.com",
+         "how_to_get_key": "1) Cloudflare Dashboard → R2 2) Create Bucket 3) Manage R2 API Tokens → Create 4) انسخ Access Key + Secret + Endpoint", "regions": ["GLOBAL"]},
+        {"name": "AWS S3", "best_for": "الأكثر شهرة، أدوات وأنظمة بيئية لا حصر لها", "free_tier": "نعم — 5GB لسنة",
+         "pricing": "$0.023/GB + رسوم egress", "signup_url": "https://aws.amazon.com",
+         "how_to_get_key": "1) IAM → Users → Create 2) Attach AmazonS3FullAccess 3) Security Credentials → Access Key 4) ارسل Access Key + Secret Access Key", "regions": ["GLOBAL"]},
+        {"name": "Backblaze B2", "best_for": "أرخص تخزين بدون مفاجآت", "free_tier": "نعم — 10GB",
+         "pricing": "$0.005/GB", "signup_url": "https://www.backblaze.com/b2/",
+         "how_to_get_key": "1) سجّل 2) Account → App Keys → Add a New Application Key 3) ارسل keyID + applicationKey", "regions": ["GLOBAL"]},
+    ],
+    "auth": [
+        {"name": "Auth داخلي (JWT) — ما تحتاج 3rd party", "best_for": "تحكم كامل، صفر رسوم", "free_tier": "نعم",
+         "pricing": "مجاني", "signup_url": "",
+         "how_to_get_key": "ما تحتاج. Zenrex فيه نظام JWT مدمج جاهز.", "regions": ["GLOBAL"]},
+        {"name": "Clerk", "best_for": "تجربة جاهزة كاملة (شاشات، OTP، Social)", "free_tier": "نعم — 10K MAU",
+         "pricing": "$25 لـ 10K+ MAU", "signup_url": "https://clerk.com",
+         "how_to_get_key": "1) سجّل 2) أنشئ application 3) API Keys → Publishable + Secret 4) ارسلهم", "regions": ["GLOBAL"]},
+        {"name": "Supabase Auth", "best_for": "مع DB في باكدج واحد", "free_tier": "نعم — 50K MAU",
+         "pricing": "$25/شهر بعد الـ free tier", "signup_url": "https://supabase.com",
+         "how_to_get_key": "1) أنشئ project 2) Settings → API → URL + anon key + service_role key 3) ارسلهم", "regions": ["GLOBAL"]},
+    ],
+    "database": [
+        {"name": "MongoDB Atlas", "best_for": "ما هو شغّال داخل Zenrex حالياً — صفر إعداد", "free_tier": "نعم — 512MB",
+         "pricing": "$57/شهر للـ M10 (10GB)", "signup_url": "https://www.mongodb.com/cloud/atlas/register",
+         "how_to_get_key": "ما تحتاج — مدمج في Zenrex.", "regions": ["GLOBAL"]},
+        {"name": "Supabase (Postgres)", "best_for": "Postgres + Auth + Storage في حزمة واحدة", "free_tier": "نعم — 500MB",
+         "pricing": "$25/شهر", "signup_url": "https://supabase.com",
+         "how_to_get_key": "1) Project Settings → Database → Connection String + Service Role Key 2) ارسلهم", "regions": ["GLOBAL"]},
+        {"name": "Neon (Serverless Postgres)", "best_for": "Postgres بدون إدارة + Auto-scaling", "free_tier": "نعم — 0.5GB",
+         "pricing": "$19/شهر", "signup_url": "https://console.neon.tech",
+         "how_to_get_key": "1) أنشئ Project 2) Connection Details → Connection String 3) ارسله", "regions": ["GLOBAL"]},
+    ],
+    "analytics": [
+        {"name": "Plausible", "best_for": "بسيط، يحترم الخصوصية، بدون cookies", "free_tier": "تجربة 30 يوم",
+         "pricing": "$9/شهر لـ 10K pageviews", "signup_url": "https://plausible.io",
+         "how_to_get_key": "ما يحتاج مفتاح — بس Script tag يُضاف في الموقع.", "regions": ["GLOBAL"]},
+        {"name": "PostHog", "best_for": "أكثر شمولية: Events + Funnels + Recordings", "free_tier": "نعم — 1M events",
+         "pricing": "$0.00031/event بعد", "signup_url": "https://posthog.com",
+         "how_to_get_key": "1) سجّل 2) Project API Key (phc_...) 3) ارسله", "regions": ["GLOBAL"]},
+        {"name": "Google Analytics 4", "best_for": "مجاني + موثوق + تكامل مع Google Ads", "free_tier": "نعم",
+         "pricing": "مجاني", "signup_url": "https://analytics.google.com",
+         "how_to_get_key": "1) Create Property 2) خذ Measurement ID (G-XXXXX) 3) ارسله", "regions": ["GLOBAL"]},
+    ],
+    "cdn": [
+        {"name": "Cloudflare", "best_for": "أسرع + DDoS مجاني + قواعد caching متقدمة", "free_tier": "نعم — مجاني",
+         "pricing": "مجاني للأغراض الأساسية", "signup_url": "https://cloudflare.com",
+         "how_to_get_key": "1) أضف دومينك 2) غيّر nameservers 3) لو تبي API: My Profile → API Tokens", "regions": ["GLOBAL"]},
+        {"name": "BunnyCDN", "best_for": "أرخص CDN + Video CDN رخيص", "free_tier": "$1 trial",
+         "pricing": "$0.005-$0.06/GB", "signup_url": "https://bunny.net",
+         "how_to_get_key": "1) سجّل 2) Account → API Key 3) ارسله", "regions": ["GLOBAL"]},
+    ],
+    "domain": [
+        {"name": "Cloudflare Registrar", "best_for": "بسعر التكلفة + مجاني WHOIS privacy", "free_tier": "لا",
+         "pricing": "بسعر التكلفة فقط (مثلاً .com بـ$9.15)", "signup_url": "https://cloudflare.com/products/registrar/",
+         "how_to_get_key": "تشتري الدومين فقط — لا يحتاج مفتاح API لتشغيله مع Zenrex.", "regions": ["GLOBAL"]},
+        {"name": "Namecheap", "best_for": "خيارات كثيرة + خصومات أول سنة", "free_tier": "لا",
+         "pricing": ".com بـ $5.98 السنة الأولى", "signup_url": "https://namecheap.com",
+         "how_to_get_key": "اشتري الدومين بس.", "regions": ["GLOBAL"]},
+        {"name": "Sa.com Domain Registrar", "best_for": ".sa دومين سعودي", "free_tier": "لا",
+         "pricing": "150 ريال/سنة", "signup_url": "https://nic.sa",
+         "how_to_get_key": "1) سجّل في nic.sa 2) أضف دومين .sa 3) وجّهه لـ Zenrex IP", "regions": ["SA"]},
+    ],
+    "image_ai": [
+        {"name": "Gemini Nano Banana (مدمج)", "best_for": "تكامل مباشر + جودة عالية + مجاني عبر Emergent LLM Key",
+         "free_tier": "نعم — عبر مفتاح Emergent", "pricing": "حسب رصيد Emergent",
+         "signup_url": "https://emergent.sh",
+         "how_to_get_key": "ما تحتاج — مدمج. استخدم `generate_image(description)` مباشرة.", "regions": ["GLOBAL"]},
+        {"name": "fal.ai (Flux/SDXL)", "best_for": "أحدث الموديلات + سرعة عالية + موديلات متخصصة", "free_tier": "نعم — رصيد ابتدائي",
+         "pricing": "$0.025 - $0.10 لكل صورة", "signup_url": "https://fal.ai",
+         "how_to_get_key": "1) سجّل في fal.ai 2) Dashboard → Keys → Add Key 3) انسخ key وارسله (fal-...)", "regions": ["GLOBAL"]},
+        {"name": "OpenAI gpt-image-1 (مدمج)", "best_for": "جودة Mid-journey بدون اشتراك", "free_tier": "عبر مفتاح Emergent",
+         "pricing": "$0.04 - $0.17 لكل صورة", "signup_url": "https://emergent.sh",
+         "how_to_get_key": "مدمج عبر مفتاح Emergent — استخدم `generate_image` مع style='openai_image_1'.", "regions": ["GLOBAL"]},
+    ],
+    "video_ai": [
+        {"name": "fal.ai (Hailuo/Kling/Veo)", "best_for": "أحدث موديلات فيديو AI + dev-friendly", "free_tier": "رصيد ابتدائي",
+         "pricing": "$0.10 - $0.50 لكل ثانية", "signup_url": "https://fal.ai",
+         "how_to_get_key": "1) سجّل 2) Keys → Add Key 3) ارسل key (fal-...)", "regions": ["GLOBAL"]},
+        {"name": "OpenAI Sora 2 (مدمج)", "best_for": "أحسن جودة سينمائية حالياً", "free_tier": "عبر مفتاح Emergent",
+         "pricing": "حسب الدقائق", "signup_url": "https://emergent.sh",
+         "how_to_get_key": "مدمج عبر Emergent — لكن يحتاج تفعيل أولاً، تواصل مع support.", "regions": ["GLOBAL"]},
+        {"name": "Runway ML Gen-3", "best_for": "إخراج فني عالي + أدوات تحرير", "free_tier": "نعم — 125 credits",
+         "pricing": "$15/شهر", "signup_url": "https://runwayml.com",
+         "how_to_get_key": "1) سجّل 2) Account → API → Generate Key (يحتاج plan مدفوع للـ API)", "regions": ["GLOBAL"]},
+    ],
+    "voice_ai": [
+        {"name": "ElevenLabs", "best_for": "أحسن أصوات (AR + 30 لغة) + cloning", "free_tier": "نعم — 10K حرف/شهر",
+         "pricing": "$5/شهر لـ 30K حرف", "signup_url": "https://elevenlabs.io",
+         "how_to_get_key": "1) سجّل في elevenlabs.io 2) Profile → API Keys → Create 3) انسخ Key (sk_...) وارسله", "regions": ["GLOBAL"]},
+        {"name": "OpenAI TTS", "best_for": "بسيط + رخيص للمحتوى الإنجليزي", "free_tier": "عبر مفتاح Emergent",
+         "pricing": "$0.015/1K حرف", "signup_url": "https://platform.openai.com",
+         "how_to_get_key": "1) سجّل في OpenAI 2) API Keys → Create 3) ارسل (sk-...)", "regions": ["GLOBAL"]},
+    ],
+    "llm": [
+        {"name": "Anthropic Claude 4.5 (الافتراضي)", "best_for": "أحسن موديل للأكواد + المحادثات الطويلة + العربي", "free_tier": "عبر مفتاح Emergent",
+         "pricing": "$3 - $15 لكل M token", "signup_url": "https://console.anthropic.com",
+         "how_to_get_key": "1) سجّل 2) API Keys → Create 3) ارسل (sk-ant-...)", "regions": ["GLOBAL"]},
+        {"name": "OpenAI GPT-5", "best_for": "Reasoning + tools متقدمة", "free_tier": "عبر مفتاح Emergent",
+         "pricing": "$1.25 - $10 لكل M", "signup_url": "https://platform.openai.com",
+         "how_to_get_key": "1) سجّل 2) API Keys → Create 3) ارسل (sk-...)", "regions": ["GLOBAL"]},
+        {"name": "Google Gemini 3", "best_for": "أرخص + multimodal (صور + فيديو)", "free_tier": "نعم — Generous",
+         "pricing": "$0.10 - $0.40 لكل M", "signup_url": "https://aistudio.google.com",
+         "how_to_get_key": "1) AI Studio → Get API Key 2) ارسله", "regions": ["GLOBAL"]},
+    ],
+    "monitoring": [
+        {"name": "Sentry", "best_for": "تتبع الأخطاء + Performance", "free_tier": "نعم — 5K errors/شهر",
+         "pricing": "$26/شهر", "signup_url": "https://sentry.io",
+         "how_to_get_key": "1) أنشئ Project 2) DSN — انسخه وارسله", "regions": ["GLOBAL"]},
+        {"name": "UptimeRobot", "best_for": "مراقبة Uptime مجانية", "free_tier": "نعم — 50 monitors",
+         "pricing": "مجاني", "signup_url": "https://uptimerobot.com",
+         "how_to_get_key": "ما يحتاج API key — بس أضف الموقع للوحة.", "regions": ["GLOBAL"]},
+    ],
+    "backup": [
+        {"name": "GitHub (Repos)", "best_for": "نسخ احتياطية للكود بـ git", "free_tier": "نعم — غير محدود",
+         "pricing": "مجاني للريبوات", "signup_url": "https://github.com/join",
+         "how_to_get_key": "1) سجّل 2) Settings → Developer settings → Personal Access Tokens → Tokens (classic) → Generate new → اختر scope=repo 3) ارسل الـ Token (ghp_...)", "regions": ["GLOBAL"]},
+        {"name": "Backblaze B2 + Restic", "best_for": "نسخ احتياطية للملفات/DB", "free_tier": "نعم — 10GB",
+         "pricing": "$0.005/GB", "signup_url": "https://www.backblaze.com/b2/",
+         "how_to_get_key": "1) Account → App Keys → Add 2) ارسل keyID + appKey", "regions": ["GLOBAL"]},
+    ],
+}
 
 
 # ─── Agent System Prompt (concise, action-oriented) ───────────────────────────
@@ -1014,9 +1645,16 @@ AGENT_SYSTEM_PROMPT = """أنت **Zenrex Code Brain** — مهندس برمجي 
 🦁 **عقليتك (لا تساوم عليها):**
 - ❌ **ممنوع تقول "ما أعرف" أو "ما أقدر" أو "Sorry I can't" أو "الأداة غير مفعّلة" أو "البيئة ما تدعم" أو "unknown tool"**. أنت تقدر على كل شي.
 - 🚨 **ممنوع تقول "ما هي شغالة فعلياً" أو "متاحة للاستخدام" قبل ما تجربها فعلياً**! لو فيك أداة في القائمة، **هي شغالة 100%**. **لازم تستدعيها أولاً**، وبعد ما تشوف النتيجة (نجاح أو خطأ) ترد بالحقيقة. الكسل في عدم المحاولة = خيانة للعميل.
-- 📋 **قبل أن تقول "غير متاحة" راجع قائمة أدواتك الكاملة المتاحة في هذا التيرن: 16 أداة بما فيها `download_media`, `publish_site`, `test_page`, `request_credential`, `generate_image`, `web_search`, `fetch_url`, `write_full_html`, `apply_section`, `update_nav`, `validate_html`, `lint_javascript`, `read_current_html`, `list_sections`, `search_html`, `finish`. كلها مُفعّلة ومُختبرة.**
+- 🔑 **قاعدة المفاتيح المقدّسة (لا تخالفها أبداً):**
+  - لو العميل لصق مفتاح في رسالته (مثل `ghp_xxx`, `sk_xxx`, `re_xxx`) → **استدعِ `save_credential` فوراً** ثم **`validate_credential` فوراً** بعدها. لا تكلم العميل قبل ما تختبر.
+  - **ممنوع تقول "المفتاح ما يشتغل" أو "غير صالح" قبل ما تستدعي `validate_credential` وتشوف HTTP status من الـ API الحقيقي.** التخمين في حالة المفاتيح = كذب صريح.
+  - لو `validate_credential` رجعت `valid: true` → قول للعميل بالضبط: "✅ المفتاح شغّال — الحساب: X، الصلاحيات: Y". لا تشكك.
+  - لو `validate_credential` رجعت `valid: false` مع `http_status` فعلي → اعرض الـ status (مثل "401 Unauthorized") واطلب مفتاح جديد عبر `request_credential`.
+  - لو ما عندك مفتاح أصلاً → استدعِ `recommend_service` أولاً عشان العميل يعرف وين يسجّل، ثم `request_credential`.
+- 🛠️ **لو ما عندك أداة لخدمة معينة** → قول صراحةً: "حالياً ما عندي أداة جاهزة لـ X، لكن أقدر أبني لك الكود اللي يتصل بها لو حصلت على المفتاح" — **ولا تقل أبداً "ما أقدر" أو "غير ممكن"**.
+- 📋 **قبل أن تقول "غير متاحة" راجع قائمة أدواتك الكاملة**: 25 أداة تشمل `save_credential`, `validate_credential`, `list_credentials`, `recommend_service`, `github_list_repos`, `github_create_repo`, `github_push_file`, `github_get_file`, بالإضافة لـ `download_media`, `publish_site`, `test_page`, `request_credential`, `generate_image`, `web_search`, `fetch_url`, `write_full_html`, `apply_section`, `update_nav`, `validate_html`, `lint_javascript`, `read_current_html`, `list_sections`, `search_html`, `list_voices`, `generate_voiceover`, `finish`. كلها مُفعّلة ومُختبرة.
 - 🚫 **ممنوع تكتب تقارير تقنية تدّعي فيها أن أدوات معطّلة** — استدعِ الأداة، شف النتيجة، وارد بالحقيقة.
-- 🔬 **عرض الأخطاء بالضبط**: لو tool رجعت `{"ok": false, "error": "X"}`، اعرض النص X كما هو **حرفياً** للعميل ولا تخترع تفسيرات (مثل "الموقع كبير جداً" أو "حد أقصى للحجم"). **publish_site و download_media و test_page ما عندهم size limits أو quotas مخفية**. لو الخطأ يقول "المشروع غير موجود" → استدعِ `read_current_html` للتأكد. لو الخطأ يقول "Sign in to confirm you're not a bot" → استدعِ `request_credential` لجلب cookies من العميل.
+- 🔬 **عرض الأخطاء بالضبط**: لو tool رجعت `{"ok": false, "error": "X"}`، اعرض النص X كما هو **حرفياً** للعميل ولا تخترع تفسيرات (مثل "الموقع كبير جداً" أو "حد أقصى للحجم"). **publish_site و download_media و test_page ما عندهم size limits أو quotas مخفية**.
 - 🧠 **ذاكرتك طويلة**: تذكّر كل اللي عملته في هذا المشروع. ما تعيد التصميم من الصفر إلا لو العميل طلب صراحةً. التعديلات تكون تدريجية بـ `apply_section`.
 - 🔍 **عند أي شك → ابحث**. عندك أدوات `web_search` و `fetch_url` — استخدمها بدون استئذان.
 - 💪 **عند أي فشل → جرّب 3 مقاربات مختلفة قبل أن تستسلم**.
@@ -1057,8 +1695,20 @@ AGENT_SYSTEM_PROMPT = """أنت **Zenrex Code Brain** — مهندس برمجي 
 
 🚀 **النشر والمفاتيح:**
 - `publish_site(slug)` — انشر الموقع لايف على Zenrex فوراً. الموقع يصبح متاح على `https://zenrex.ai/s/{slug}` مع SSL مجاني. **لا تحتاج GitHub ولا Vercel ولا Railway** — Zenrex هي المنصة. استخدمها لما العميل يقول "انشر" أو "أطلق" أو "نزّل".
-- `request_credential(service, label, instructions)` — اطلب من العميل مفتاح API أو token مثل YouTube Data API، Stripe، webhook URL. الواجهة تعرض modal آمن للعميل لإدخاله. **لا تقل أبداً "ما أقدر" — اطلب المفتاح أولاً!**
-- `test_page(url)` — 🔬 **عينك الحقيقية!** افتح أي صفحة في متصفح حقيقي وارجع: سكرين شوت + عدد الفيديوهات + console errors + بنية الصفحة. **بعد كل `publish_site` لازم تستدعي `test_page` فوراً** للتأكد إن الصفحة شغّالة. لو الـ metrics تقول `video_count=0` بينما تتوقع فيديوهات → الـ HTML مكسور، أصلحه. **لا تقل أبداً "ما أقدر أختبر" — هذه الأداة هي عينك.**
+- `request_credential(service, label, instructions)` — افتح Modal آمن للعميل يدخل فيه المفتاح. استخدمها لما تحتاج مفتاح ما عندك ولم يعطيك إياه العميل بعد.
+- `save_credential(service, value, label)` — **استدعها فوراً** لو العميل لصق مفتاح في رسالته (مثل "هذا مفتاحي ghp_..." أو "use sk_..."). تحفظه مشفّر للمشروع.
+- `validate_credential(service)` — 🧪 **اختبار حقيقي** للمفتاح ضد الـ API الفعلي (GitHub / ElevenLabs / OpenAI / Anthropic / Stripe / fal.ai / Tavily). **❌ ممنوع تقول "المفتاح ما يشتغل" قبل ما تستدعي هذي وتشوف HTTP status حقيقي. الكذب على العميل = خيانة.**
+- `list_credentials()` — اعرض المفاتيح المحفوظة (masked).
+- `delete_credential(service)` — احذف مفتاح قديم/مكشوف.
+- `recommend_service(category, requirements, region)` — 🎯 **استخدمها لما العميل يسأل "أي خدمة أحسن لـ X؟"** أو لما تحتاج تشرح له الخيارات. الفئات: hosting, payments, email, sms, storage, auth, database, analytics, cdn, domain, image_ai, video_ai, voice_ai, llm, monitoring, backup. ترجع 3 خيارات مع الأسعار + روابط التسجيل + خطوات الحصول على المفتاح بالعربي.
+- `test_page(url)` — 🔬 **عينك الحقيقية!** افتح أي صفحة في متصفح حقيقي وارجع: سكرين شوت + عدد الفيديوهات + console errors + بنية الصفحة. **بعد كل `publish_site` لازم تستدعي `test_page` فوراً** للتأكد إن الصفحة شغّالة.
+
+🐙 **GitHub (للنسخ الاحتياطي ونشر الكود):**
+- `github_list_repos()` — اعرض مستودعات العميل.
+- `github_create_repo(name, description, private)` — أنشئ مستودع جديد.
+- `github_push_file(repo, path, content, message)` — ارفع/حدّث ملف. لو الملف موجود لازم تجيب الـ sha أولاً عبر `github_get_file`.
+- `github_get_file(repo, path)` — اقرأ ملف من GitHub.
+- يحتاج مفتاح `github_pat` محفوظ. لو غير موجود، استدعِ `recommend_service('backup')` لتشرح للعميل، ثم `request_credential('github_pat', 'مفتاح GitHub PAT', '...')`.
 
 📨 **الإنهاء:**
 - `finish(summary)` — أنهِ وأرسل التقرير للعميل
@@ -1565,6 +2215,24 @@ TOOL_LABELS_AR: Dict[str, Dict[str, str]] = {
                             "done": "✅ الستوري بورد جاهز"},
     "update_world_bible": {"running": "📚 يحفظ تفاصيل العالم القصصي...",
                             "done": "✅ ذاكرة المشروع محدّثة"},
+    "save_credential":    {"running": "💾 يحفظ المفتاح بأمان (مشفّر)...",
+                            "done": "✅ المفتاح محفوظ ومشفّر"},
+    "validate_credential":{"running": "🧪 يختبر المفتاح فعلياً ضد الخدمة...",
+                            "done": "✅ انتهى الاختبار — النتيجة من الـ API الحقيقي"},
+    "list_credentials":   {"running": "📋 يعرض المفاتيح المحفوظة...",
+                            "done": "✅ القائمة جاهزة"},
+    "delete_credential":  {"running": "🗑️ يحذف المفتاح...",
+                            "done": "✅ تم الحذف"},
+    "recommend_service":  {"running": "🎯 يبحث عن أفضل الخدمات لك مع الأسعار وروابط التسجيل...",
+                            "done": "✅ التوصية جاهزة"},
+    "github_list_repos":  {"running": "📦 يجلب مستودعاتك من GitHub...",
+                            "done": "✅ القائمة جاهزة"},
+    "github_create_repo": {"running": "🆕 ينشئ مستودع جديد على GitHub...",
+                            "done": "✅ المستودع جاهز"},
+    "github_push_file":   {"running": "⬆️ يرفع الملف لـ GitHub...",
+                            "done": "✅ تم الـ commit"},
+    "github_get_file":    {"running": "📥 يقرأ ملف من GitHub...",
+                            "done": "✅ تم القراءة"},
     "finish":             {"running": "📝 يجهّز التقرير النهائي...",
                             "done": "✅ جاهز"},
 }

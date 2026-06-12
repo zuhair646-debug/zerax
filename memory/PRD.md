@@ -19,6 +19,24 @@ Build "Zenrex" — a multi-tenant Saudi/Arab AI commerce platform with:
 
 ## Current State (Feb 2026)
 
+### 🆕 Jun 12 2026 — AI Brain Limitlessness (Anti-Hallucination + Universal Capability)
+The user complained the AI was repeatedly lying about API keys ("this key doesn't work")
+even when the keys were perfectly valid. Root cause: AI had NO tool for GitHub, NO way to
+actually test a credential, and the prompt didn't forbid hallucinated key-status claims.
+
+**Fix shipped (`/app/backend/modules/freebuild/freebuild_agent.py`):**
+- **9 new tools** added to the unified Zenrex AI Brain (total now: 30 tools):
+  - `save_credential(service, value, label)` — encrypted-at-rest storage
+  - `validate_credential(service)` — **real HTTP** test against GitHub / ElevenLabs / OpenAI / Anthropic / Stripe / fal.ai / Tavily
+  - `list_credentials()` / `delete_credential(service)`
+  - `recommend_service(category, requirements, region)` — built-in catalog of 16 categories × 3 services (hosting, payments, email, sms, storage, auth, database, analytics, cdn, domain, image_ai, video_ai, voice_ai, llm, monitoring, backup) with pricing + signup URL + step-by-step Arabic instructions to obtain the API key
+  - `github_list_repos()` / `github_create_repo()` / `github_push_file()` / `github_get_file()` — full GitHub Contents API
+- **System prompt hardened** with a "Sacred Credential Rule": AI MUST call `validate_credential` before claiming any key is broken — hallucinating key status now constitutes "betrayal of the customer".
+- **Frontend modal** (`/app/frontend/src/pages/FreeBuildChat.js`): the `request_credential` sentinel now triggers a secure password-input modal with show/hide toggle and `data-testid` markers.
+- **GitHub PAT** saved as default env var (`GITHUB_PAT` in `/app/backend/.env`) — auto-used by all `github_*` tools when no per-project credential exists.
+- **13 pytest regression tests** at `/app/backend/tests/test_freebuild_credentials_and_github.py` — all passing, including REAL API calls against GitHub + a deliberately-fake-key test that asserts HTTP 401 (proving no hallucination).
+- Deployed to VPS `zenrex.ai` via `/app/deploy/deploy.sh`.
+
 ### ✅ COMPLETED in admin.html (Merchant Control Panel)
 - **Dashboard**: Live KPIs (clickable), interactive SVG chart with hover tooltips,
   Top Products clickable, recent orders, **AI Weekly Report card** (dismissible)

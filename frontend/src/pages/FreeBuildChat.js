@@ -1192,6 +1192,95 @@ function CodeActions({ project, projectId, onOpenConnections }) {
 }
 
 // ─────────────────────────────────────────────────────────────
+// Secure Credential Request Modal
+// AI tool `request_credential` emits a sentinel → this modal pops up
+// so the user can paste an API key safely. Value is encrypted at rest.
+// ─────────────────────────────────────────────────────────────
+function CredentialModal({ request, value, setValue, submitting, onClose, onSubmit }) {
+  const [showValue, setShowValue] = useState(false);
+  if (!request) return null;
+  return (
+    <div
+      className="fixed inset-0 z-[100] bg-black/70 backdrop-blur-sm flex items-center justify-center p-4"
+      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
+      data-testid="credential-modal"
+    >
+      <div className="bg-gradient-to-b from-zinc-900 to-black border border-amber-500/40 rounded-2xl max-w-lg w-full p-6 shadow-2xl">
+        <div className="flex items-start gap-3 mb-4">
+          <div className="text-3xl">🔑</div>
+          <div className="flex-1">
+            <h2 className="text-lg font-bold text-amber-300" data-testid="credential-modal-title">
+              {request.label || request.service}
+            </h2>
+            <p className="text-xs text-zinc-500 mt-0.5">الخدمة: {request.service}</p>
+          </div>
+          <button
+            onClick={onClose}
+            className="text-zinc-500 hover:text-white text-xl leading-none"
+            data-testid="credential-modal-close"
+          >×</button>
+        </div>
+
+        {request.instructions && (
+          <div className="bg-amber-500/10 border border-amber-500/20 rounded-lg p-3 mb-4">
+            <p className="text-xs text-amber-200 leading-relaxed whitespace-pre-wrap">
+              {request.instructions}
+            </p>
+          </div>
+        )}
+
+        <label className="block text-xs font-semibold text-zinc-400 mb-2">
+          الصق المفتاح هنا (سيتم تشفيره فوراً):
+        </label>
+        <div className="relative">
+          <input
+            type={showValue ? 'text' : 'password'}
+            value={value}
+            onChange={(e) => setValue(e.target.value)}
+            placeholder="paste your key here..."
+            className="w-full bg-zinc-950 border border-zinc-700 focus:border-amber-500 rounded-lg px-3 py-2.5 text-white text-sm font-mono outline-none transition"
+            autoFocus
+            dir="ltr"
+            data-testid="credential-input"
+          />
+          <button
+            type="button"
+            onClick={() => setShowValue(!showValue)}
+            className="absolute left-2 top-1/2 -translate-y-1/2 text-xs text-zinc-500 hover:text-zinc-300 px-2 py-1"
+            data-testid="credential-show-toggle"
+          >
+            {showValue ? '🙈 إخفاء' : '👁️ عرض'}
+          </button>
+        </div>
+
+        <div className="mt-2 text-[11px] text-zinc-600 leading-relaxed">
+          🔒 المفتاح يُخزّن مشفّراً (Fernet/AES-128) ولن يُعرض في الشات. الذكاء يقدر يستخدمه بس ما يقدر يطبعه نصياً.
+        </div>
+
+        <div className="flex gap-2 mt-5">
+          <button
+            onClick={onClose}
+            disabled={submitting}
+            className="flex-1 px-4 py-2.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-sm font-bold transition disabled:opacity-40"
+            data-testid="credential-cancel"
+          >
+            إلغاء
+          </button>
+          <button
+            onClick={onSubmit}
+            disabled={submitting || !value.trim() || value.trim().length < 4}
+            className="flex-1 px-4 py-2.5 rounded-lg bg-gradient-to-r from-amber-500 to-yellow-500 text-black text-sm font-bold transition hover:brightness-110 disabled:opacity-40 disabled:cursor-not-allowed"
+            data-testid="credential-submit"
+          >
+            {submitting ? '⏳ جاري الحفظ...' : '💾 حفظ المفتاح'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────
 // STEP 2: Chat Workspace (Game Studio style)
 // ─────────────────────────────────────────────────────────────
 function ChatWorkspace({ projectId }) {
@@ -1211,6 +1300,9 @@ function ChatWorkspace({ projectId }) {
   const [activeTab, setActiveTab] = useState('chat'); // chat | live | approved
   const [previewMode, setPreviewMode] = useState('desktop');
   const [myProjectsOpen, setMyProjectsOpen] = useState(false);
+  const [credentialRequest, setCredentialRequest] = useState(null); // {service, label, instructions}
+  const [credentialValue, setCredentialValue] = useState('');
+  const [credentialSubmitting, setCredentialSubmitting] = useState(false);
   const chatEndRef = useRef(null);
   const chatScrollRef = useRef(null);
   const userScrolledUpRef = useRef(false);
@@ -1425,6 +1517,20 @@ function ChatWorkspace({ projectId }) {
               if (last && last.kind === 'live_text') last.open = false;
             } else if (eventName === 'tool') {
               liveSteps.push({ kind: 'tool', ...payload });
+              // Detect request_credential sentinel → open secure modal so the
+              // user can paste their API key safely (encrypted at rest).
+              if (
+                payload?.name === 'request_credential' &&
+                payload?.phase === 'done' &&
+                payload?.result?.needs_user_input
+              ) {
+                setCredentialRequest({
+                  service: payload.result.service,
+                  label: payload.result.label || payload.result.service,
+                  instructions: payload.result.instructions || '',
+                });
+                setCredentialValue('');
+              }
             } else if (eventName === 'tool_building') {
               // Update or push a "building" indicator. Now also carries a live
               // snippet of the code being typed — like Cursor/Claude's editor.
@@ -2536,6 +2642,46 @@ function ChatWorkspace({ projectId }) {
         open={connectionsOpen}
         projectId={projectId}
         onClose={() => setConnectionsOpen(false)}
+      />
+      <CredentialModal
+        request={credentialRequest}
+        value={credentialValue}
+        setValue={setCredentialValue}
+        submitting={credentialSubmitting}
+        onClose={() => { setCredentialRequest(null); setCredentialValue(''); }}
+        onSubmit={async () => {
+          if (!credentialRequest || !credentialValue.trim()) return;
+          setCredentialSubmitting(true);
+          try {
+            const token = localStorage.getItem('token');
+            const fd = new FormData();
+            fd.append('service', credentialRequest.service);
+            fd.append('label', credentialRequest.label || credentialRequest.service);
+            fd.append('value', credentialValue.trim());
+            const r = await fetch(`${API}/api/freebuild-chat/project/${projectId}/credential`, {
+              method: 'POST',
+              headers: { Authorization: `Bearer ${token}` },
+              body: fd,
+            });
+            if (!r.ok) {
+              const t = await r.text();
+              toast.error(`فشل الحفظ: ${t.slice(0, 100)}`);
+              setCredentialSubmitting(false);
+              return;
+            }
+            const savedSvc = credentialRequest.service;
+            const savedLabel = credentialRequest.label || savedSvc;
+            toast.success(`✅ تم حفظ ${savedLabel} (مشفّر). اكتب "كمّل" عشان الذكاء يختبره ويواصل.`);
+            setCredentialRequest(null);
+            setCredentialValue('');
+            setCredentialSubmitting(false);
+            // Pre-fill a helpful continuation message in the input
+            setMessage(`تم حفظ مفتاح ${savedLabel}. اختبره الآن بـ validate_credential('${savedSvc}') وكمّل المهمة.`);
+          } catch (e) {
+            toast.error(`خطأ: ${e.message || e}`);
+            setCredentialSubmitting(false);
+          }
+        }}
       />
     </div>
   );

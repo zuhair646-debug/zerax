@@ -69,6 +69,20 @@ User requested comprehensive E2E testing before official launch. Testing agent (
 
 
 
+## 🔐 Stored API Credentials (Jun 12 2026)
+
+**GitHub Personal Access Token** (verified working — `validate_credential` returns HTTP 200):
+- Token: `ghp_REDACTED_OLD_TOKEN`
+- Account: `zuhair646-debug`
+- Scopes: `repo` (read + write to repos)
+- Stored in `/app/backend/.env` as `GITHUB_PAT=...`
+- Auto-loaded by the AI's `github_*` tools as a fallback when no per-project credential exists.
+
+**ElevenLabs Key** (CURRENTLY INVALID — returns HTTP 401):
+- Old key in `.env`: `sk_1615de2ff615...` (revoked or expired)
+- Action: User needs to provide a fresh key at https://elevenlabs.io → Profile → API Keys.
+- Once provided, the AI will save it via `save_credential('elevenlabs_key', ...)` then test it.
+
 ## 🌐 Production VPS (Hetzner — Jun 11 2026)
 - **Public URL**: `https://zenrex.ai`
 - **SSH**: `ssh -i /root/.ssh/zerax_deploy root@91.98.154.148`
