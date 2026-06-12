@@ -67,6 +67,12 @@ class StartIn(BaseModel):
     pass
 
 
+class QuickStartIn(BaseModel):
+    category_id: str = Field(..., description="restaurants / electronics / grocery / ...")
+    plan: str = Field("purchase", description="'purchase' or 'trial'")
+    business_name: Optional[str] = Field(None, description="Optional pre-filled business name")
+
+
 class SelectTypeIn(BaseModel):
     session_id: str
     type_id: str
@@ -240,9 +246,120 @@ def create_ready_sites_router(db, get_current_user) -> APIRouter:
             "generate_cost": GENERATE_COST,
         }
 
-    # ---- Start wizard session ----
+    # ─────────────────────────────────────────────────────────────────────────
+    # QUICK-START FLOW (new simplified flow):
+    #   Frontend pages: ReadySites (category picker) → ReadySitesPurchase (plan)
+    #   1. User picks a category (restaurants / electronics / grocery / ...)
+    #   2. User picks a plan ('purchase' = full, 'trial' = paid 7-day trial)
+    #   3. This endpoint creates a FreeBuild project with category context already
+    #      baked into the AI system prompt → user lands on /freebuild/chat/:id
+    #      and the AI immediately asks for logo + business name only.
+    # ─────────────────────────────────────────────────────────────────────────
+    QUICK_CATEGORY_LABELS = {
+        "restaurants": {"ar": "مطاعم وكافيهات", "en": "Restaurants & Cafes",
+                        "kind": "restaurant", "icon": "🍽️"},
+        "electronics": {"ar": "إلكترونيات وتقنية", "en": "Electronics & Tech",
+                        "kind": "store", "icon": "📱"},
+        "stationery":  {"ar": "قرطاسيات ومكتبات", "en": "Stationery & Bookstores",
+                        "kind": "store", "icon": "✏️"},
+        "grocery":     {"ar": "بقالات وسوبرماركت", "en": "Grocery & Supermarket",
+                        "kind": "store", "icon": "🛒"},
+        "pharmacy":    {"ar": "صيدليات", "en": "Pharmacies",
+                        "kind": "store", "icon": "💊"},
+        "fashion":     {"ar": "أزياء وموضة", "en": "Fashion",
+                        "kind": "store", "icon": "👗"},
+        "beauty":      {"ar": "تجميل وعطور", "en": "Beauty & Perfumes",
+                        "kind": "store", "icon": "💄"},
+        "flowers":     {"ar": "زهور وهدايا", "en": "Flowers & Gifts",
+                        "kind": "store", "icon": "🌸"},
+    }
+
     @router.post("/start")
-    async def start(_: StartIn, user=Depends(get_current_user)):
+    async def quick_start(payload: QuickStartIn, user=Depends(get_current_user)):
+        """Quick-start path: category → plan → FreeBuild project (no 6-step wizard).
+
+        Used by the new /ready-sites pages. Returns project_id for navigating to
+        /freebuild/chat/:id where the AI greets the user and asks for logo + name.
+        """
+        cat = QUICK_CATEGORY_LABELS.get(payload.category_id)
+        if not cat:
+            raise HTTPException(400, f"تخصص غير معروف: {payload.category_id}")
+        if payload.plan not in ("purchase", "trial"):
+            raise HTTPException(400, "الخطة لازم تكون purchase أو trial")
+
+        uid = user["user_id"]
+        now = _now()
+        project_id = str(uuid.uuid4())
+        trial_until = None
+        if payload.plan == "trial":
+            from datetime import timedelta
+            trial_until = (datetime.now(timezone.utc) + timedelta(days=7)).isoformat()
+
+        # Pre-seed a FreeBuild project (compatible with /api/freebuild-chat/project/{id})
+        # so the user lands on the SAME conversational chat used everywhere else.
+        # The AI system context is enriched with this category info → AI knows
+        # what kind of business it's building before asking the first question.
+        biz = (payload.business_name or "").strip()
+        # Build the first AI greeting as an actual message in the chat history,
+        # so it shows up immediately the moment the user lands on the chat page
+        # (no extra round-trip needed).
+        greeting_text = (
+            f"أهلاً وسهلاً! 👋\n\n"
+            f"مبروك اختيارك قالب **{cat['ar']}** {cat['icon']}.\n\n"
+            f"عشان أبدأ ببناء موقعك، أحتاج معلومتين فقط:\n\n"
+            f"1️⃣ **اسم متجرك** (مثل: مطعم الفجر، إلكترونيات الرياض، صيدلية النور...)\n"
+            f"2️⃣ **اللوغو**:\n"
+            f"   • ارفعه لو عندك واحد جاهز\n"
+            f"   • أو قول لي وصف بسيط وأنا أصمّمه لك مجاناً\n\n"
+            f"بمجرد ما تعطيني المعلومتين، راح أبني الموقع كاملاً في دقائق ✨"
+        )
+        first_message = {
+            "id": str(uuid.uuid4()),
+            "role": "assistant",
+            "content": greeting_text,
+            "timestamp": now,
+        }
+        project_doc = {
+            "id": project_id,
+            "user_id": uid,
+            "name": f"{cat['icon']} {biz or cat['ar']}",
+            "category_id": payload.category_id,
+            "category_name": cat["ar"],
+            "category_icon": cat["icon"],
+            "category_kind": cat["kind"],
+            "plan": payload.plan,
+            "trial_until": trial_until,
+            "source": "ready-sites",
+            "current_html": "",
+            "messages": [first_message],
+            "created_at": now,
+            "updated_at": now,
+        }
+        await db.freebuild_chat_projects.insert_one(project_doc)
+
+        # Log the purchase/trial action (for billing reconciliation later)
+        await db.ready_sites_purchases.insert_one({
+            "id": str(uuid.uuid4()),
+            "user_id": uid,
+            "project_id": project_id,
+            "category_id": payload.category_id,
+            "plan": payload.plan,
+            "amount_sar": 299 if payload.plan == "purchase" else 29,
+            "status": "completed",  # TODO: integrate real Stripe/payments
+            "created_at": now,
+        })
+
+        logger.info(f"[ready-sites] quick-start: user={uid} cat={payload.category_id} plan={payload.plan} project={project_id}")
+        return {
+            "project_id": project_id,
+            "category": cat,
+            "plan": payload.plan,
+            "redirect_to": f"/freebuild/chat/{project_id}?source=ready-sites&category={payload.category_id}",
+        }
+
+    # ---- Start wizard session (LEGACY 6-step flow — still kept for backward compat) ----
+    @router.post("/start-wizard")
+    async def start_wizard(_: StartIn, user=Depends(get_current_user)):
         sid = str(uuid.uuid4())
         await db.ready_sites_sessions.insert_one({
             "id": sid,

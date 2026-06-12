@@ -99,6 +99,7 @@ import PricingSuccess from '@/pages/PricingSuccess';
 import PricingAdmin from '@/pages/PricingAdmin';
 import Companion from '@/pages/Companion';
 import ReadySites from '@/pages/ReadySites';
+import ReadySitesPurchase from '@/pages/ReadySitesPurchase';
 import ZenrexShowcase from '@/pages/ZenrexShowcase';
 import CarePortal from '@/pages/CarePortal';
 import '@/App.css';
@@ -252,6 +253,7 @@ function App() {
           <Route path="/companion" element={<ProtectedRoute><Companion user={user} setUser={setUser} /></ProtectedRoute>} />
           {/* 🏪 Ready Sites — Wizard-driven AI restaurant site builder */}
           <Route path="/ready-sites" element={<ProtectedRoute><ReadySites user={user} /></ProtectedRoute>} />
+          <Route path="/ready-sites/purchase" element={<ProtectedRoute><ReadySitesPurchase user={user} /></ProtectedRoute>} />
           <Route path="/dashboard/ready-sites" element={<ProtectedRoute><ReadySites user={user} /></ProtectedRoute>} />
           <Route path="/care/:projectId" element={<ProtectedRoute><CarePortal user={user} /></ProtectedRoute>} />
           <Route path="/showcase" element={<ZenrexShowcase />} />
