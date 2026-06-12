@@ -2168,21 +2168,88 @@ MODE_ADDENDUM_OWNER_ASSISTANT = """
 """
 
 
-def get_system_prompt(project: Dict[str, Any]) -> str:
-    """Return the system prompt customized for the project's mode.
+# ── Desktop-control addendum — injected whenever is_owner=True (any mode) ──
+DESKTOP_OWNER_ADDENDUM = """
+
+═══════════════════════════════════════════════════════════════════
+🖥️ تحكم بجهاز المالك الفعلي (Desktop Agent) — قواعد إلزامية
+═══════════════════════════════════════════════════════════════════
+
+عندك أدوات `desktop_*` تتحكم بجهاز المالك الفيزيائي مباشرة (ماوس، كيبورد، ملفات، تطبيقات، تنزيلات). هذي الأدوات مفعّلة لك فقط لأنك تكلم المالك.
+
+🔄 **التسلسل الإلزامي** (افعله بهذا الترتيب لأي طلب يتضمن جهاز المالك):
+
+1️⃣ **`desktop_status()`** — تحقق من الاتصال أولاً.
+
+2️⃣ **إذا `connected: false`** → استدعِ `desktop_pair()`:
+   - الـ tool يرجع لك حقل `code` (6 أحرف) — **هذا الرمز الحقيقي الوحيد**.
+   - الـ tool يرجع أيضاً حقل `display_block` — **نص markdown جاهز كاملاً**.
+   - 🚨 **افعل بالضبط**: انسخ كامل قيمة `display_block` كما هي في ردّك، بدون تعديل حرف.
+   - مثال (حرفي):
+     ```
+     <user>: افتح Notepad على جهازي
+     <tool desktop_status>: {"connected": false}
+     <tool desktop_pair>: {"code": "ABC234", "display_block": "🔑 **رمز ربط الجهاز:** `ABC234`  ⏱️ صالح 10 دقايق\\n\\n..."}
+     <you reply>: تمام، عشان أفتح Notepad على جهازك لازم نربط Desktop Agent أولاً.
+     
+     🔑 **رمز ربط الجهاز:** `ABC234`  ⏱️ صالح 10 دقايق
+     
+     [... باقي display_block كما هو ...]
+     
+     قول لي "تم" لما تتصل وأفتح Notepad على طول.
+     ```
+
+3️⃣ **إذا `connected: true`** — نفّذ المهمة مباشرة بـ `desktop_act` بدون ما تطلب رمز.
+
+🚫 **ممنوعات صارمة**:
+- ❌ ممنوع تخترع أو تخمن رمز.
+- ❌ ممنوع تكتب 0/O/I/1 في الرمز (charset = A-Z + 2-9 فقط، بدون هذه).
+- ❌ ممنوع "تذكر" رمز من رسالة سابقة — الرموز تنتهي بعد 10 دقايق، استدعِ `desktop_pair` كل مرة.
+- ❌ ممنوع تعطي رمز قبل ما تستدعي `desktop_pair` فعلياً.
+
+✅ **القاعدة الذهبية**: لو ردك يحتوي رمز ما رجعه `desktop_pair` في نفس الدورة → الـ pairing راح يفشل والمالك راح يزعل.
+
+🎬 **سياسة الإيقاع المرئي** (Visible-Pacing):
+- قبل كل `desktop_act` يغيّر الواجهة (`click`, `type`, `open_url`, `open_app`)، اكتب سطر عربي قصير يقول وش رح تسوي الآن.
+- استخدم `desktop_screenshot` بعد كل خطوة كبيرة لتأكيد النتيجة.
+- لا تجمع 5 أوامر متتالية — خطوة، تأكيد، خطوة جاية.
+
+📍 **مرجع الأدوات السريع**:
+- `desktop_act(action="open_url", params={"url":"..."})` — يفتح موقع في المتصفح.
+- `desktop_act(action="open_app", params={"name":"notepad"})` — يفتح تطبيق (يجيب الفوكس تلقائياً).
+- `desktop_act(action="type", params={"text":"..."})` — يكتب نص (يدعم العربي).
+- `desktop_act(action="press_key", params={"key":"winleft+r"})` — مفتاح أو كومبو. (Windows: `winleft` مو `win`).
+- `desktop_act(action="click", params={"x":960,"y":600})` — كليك بإحداثيات.
+- `desktop_act(action="download_file", params={"url":"...","filename":"..."})` — يحمّل ملف إلى Downloads عند المالك.
+- `desktop_act(action="write_file", params={"path":"~/Downloads/x.txt","content":"..."})` — يكتب ملف.
+
+═══════════════════════════════════════════════════════════════════
+"""
+
+
+def get_system_prompt(project: Dict[str, Any], is_owner: bool = False) -> str:
+    """Return the system prompt customized for the project's mode and role.
 
     Modes: 'website' (default), 'image_studio', 'video_studio', 'developer', 'owner_assistant'.
+
+    When is_owner=True, the strict desktop-control policy is appended to every
+    mode — so a platform owner gets desktop tools no matter which project
+    flavour they're in.
     """
     mode = (project or {}).get("mode", "website")
     if mode == "image_studio":
-        return AGENT_SYSTEM_PROMPT + "\n" + MODE_ADDENDUM_IMAGE
-    if mode == "video_studio":
-        return AGENT_SYSTEM_PROMPT + "\n" + MODE_ADDENDUM_VIDEO
-    if mode == "developer":
-        return AGENT_SYSTEM_PROMPT + "\n" + MODE_ADDENDUM_DEVELOPER
-    if mode == "owner_assistant":
-        return AGENT_SYSTEM_PROMPT + "\n" + MODE_ADDENDUM_DEVELOPER + "\n" + MODE_ADDENDUM_OWNER_ASSISTANT
-    return AGENT_SYSTEM_PROMPT
+        base = AGENT_SYSTEM_PROMPT + "\n" + MODE_ADDENDUM_IMAGE
+    elif mode == "video_studio":
+        base = AGENT_SYSTEM_PROMPT + "\n" + MODE_ADDENDUM_VIDEO
+    elif mode == "developer":
+        base = AGENT_SYSTEM_PROMPT + "\n" + MODE_ADDENDUM_DEVELOPER
+    elif mode == "owner_assistant":
+        base = AGENT_SYSTEM_PROMPT + "\n" + MODE_ADDENDUM_DEVELOPER + "\n" + MODE_ADDENDUM_OWNER_ASSISTANT
+    else:
+        base = AGENT_SYSTEM_PROMPT
+    if is_owner:
+        base += DESKTOP_OWNER_ADDENDUM
+    return base
 
 
 # ─── Main Agent Loop ──────────────────────────────────────────────────────────
@@ -2294,7 +2361,7 @@ async def _run_anthropic_agent(
     model_used = model
 
     # ── Auto-inject long-term memories into the system prompt (once per turn) ──
-    base_prompt = get_system_prompt(project)
+    base_prompt = get_system_prompt(project, is_owner=is_owner)
     try:
         merchant_id = project.get("merchant_id") or project.get("user_id") or project.get("owner_id")
         memory_block = await load_project_memories_for_prompt(
@@ -2418,7 +2485,7 @@ async def _run_openai_compat_agent(
         for t in TOOLS_SCHEMA
     ]
 
-    messages: List[Dict[str, Any]] = [{"role": "system", "content": get_system_prompt(project)}]
+    messages: List[Dict[str, Any]] = [{"role": "system", "content": get_system_prompt(project, is_owner=is_owner)}]
     for m in history_messages[-12:]:
         if m.get("role") in ("user", "assistant"):
             content = m.get("content", "")
@@ -2691,7 +2758,7 @@ async def _stream_one_provider(
         else:
             client = AsyncAnthropic(api_key=os.environ.get("ANTHROPIC_API_KEY", ""))
         messages: List[Dict[str, Any]] = []
-        sys_prompt = get_system_prompt(project) + _lang_directive
+        sys_prompt = get_system_prompt(project, is_owner=is_owner) + _lang_directive
     else:
         from openai import AsyncOpenAI
         if provider == "moonshot":
@@ -2699,7 +2766,7 @@ async def _stream_one_provider(
                                  base_url="https://api.moonshot.ai/v1")
         else:
             client = AsyncOpenAI(api_key=os.environ.get("OPENAI_DIRECT_KEY") or os.environ.get("OPENAI_API_KEY", ""))
-        messages = [{"role": "system", "content": get_system_prompt(project) + _lang_directive}]
+        messages = [{"role": "system", "content": get_system_prompt(project, is_owner=is_owner) + _lang_directive}]
         sys_prompt = None
         openai_tools = [{"type": "function", "function": {"name": t["name"], "description": t["description"], "parameters": t["input_schema"]}} for t in TOOLS_SCHEMA]
 
