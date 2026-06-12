@@ -2545,6 +2545,8 @@ def make_freebuild_chat_router(db, get_current_user):
             raise HTTPException(500, "agent module unavailable")
 
         history = proj.get("messages") or []
+        # Owner check — only the platform owner gets access to local_browser_*, desktop_*, run_shell, etc.
+        is_platform_owner_stream = (user.get("role") or "").lower() in ("owner", "admin", "superuser")
         # Mint a short-lived JWT so the agent tools (publish_site, download_media, etc.)
         # can call protected /api endpoints as the same user.
         try:
@@ -2568,7 +2570,7 @@ def make_freebuild_chat_router(db, get_current_user):
             ctx_holder: Dict[str, Any] = {}
             last_persisted_changes = 0
             try:
-                async for chunk in _s(proj, message, history, ctx_holder=ctx_holder, user_language=user_language, auth_token=_agent_token, db=db):
+                async for chunk in _s(proj, message, history, ctx_holder=ctx_holder, user_language=user_language, auth_token=_agent_token, db=db, is_owner=is_platform_owner_stream):
                     # Match the SSE event line exactly (chunks always start with 'event: <name>\n')
                     if chunk.startswith("event: done\n"):
                         try:

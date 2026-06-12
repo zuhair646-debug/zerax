@@ -2115,7 +2115,7 @@ MODE_ADDENDUM_OWNER_ASSISTANT = """
 
 2. **إذا `connected: false`**:
    - استدعِ `desktop_pair` (يطلع لك رمز جديد + رابط تنزيل)
-   - 🚨 **قانون مقدّس**: لما يرجع الـ tool القيمة `code` — انسخها **حرف بحرف** في ردّك بالعربي. ممنوع تخترع، تتذكر، تخمن، أو تعدّل أي حرف من الرمز. لو غيرت حرف واحد، الـ pairing راح يفشل والعميل بيرجع زعلان. الرمز اللي يولّده السيرفر فقط (6 أحرف من المجموعة `[A-Z2-9]` بدون 0/O/I/1) هو اللي يقبله. حتى لو شفت رمز "أوضح" أو "أحلى"، استخدم اللي رجع من الـ tool حصراً.
+   - 🚨 **قانون مقدّس**: لما يرجع الـ tool القيمة `code` — انسخها **حرف بحرف (verbatim)** في ردّك بالعربي. ممنوع تخترع، تتذكر، تخمن، أو تعدّل أي حرف من الرمز. لو غيرت حرف واحد، الـ pairing راح يفشل والعميل بيرجع زعلان. الرمز اللي يولّده السيرفر فقط (6 أحرف من المجموعة `[A-Z2-9]` بدون 0/O/I/1) هو اللي يقبله. حتى لو شفت رمز "أوضح" أو "أحلى"، استخدم اللي رجع من الـ tool حصراً. الـ tool يرجع لك حقل `display_block` فيه ال markdown جاهز — انسخه كما هو في ردّك.
    - بعد ما تنسخ الـ `code`، اعرضه بصيغة بارزة:
      ```
      🔑 رمزك: **<code-from-tool-output>**
@@ -2206,9 +2206,9 @@ async def run_agent_turn(
     for provider, prov_model in providers_to_try:
         try:
             if provider in ("anthropic", "emergent_anthropic"):
-                result = await _run_anthropic_agent(project, user_message, history_messages, max_iterations, prov_model, use_emergent=(provider == "emergent_anthropic"), auth_token=auth_token, db=db)
+                result = await _run_anthropic_agent(project, user_message, history_messages, max_iterations, prov_model, use_emergent=(provider == "emergent_anthropic"), auth_token=auth_token, db=db, is_owner=is_owner)
             else:
-                result = await _run_openai_compat_agent(project, user_message, history_messages, max_iterations, provider, prov_model)
+                result = await _run_openai_compat_agent(project, user_message, history_messages, max_iterations, provider, prov_model, auth_token=auth_token, db=db, is_owner=is_owner)
             if result.get("ok"):
                 return result
             last_err = result.get("error", "unknown")
@@ -2232,6 +2232,7 @@ async def _run_anthropic_agent(
     use_emergent: bool = False,
     auth_token: Optional[str] = None,
     db: Any = None,
+    is_owner: bool = False,
 ) -> Dict[str, Any]:
     """Anthropic native tool-use agent loop."""
     try:
@@ -2364,6 +2365,9 @@ async def _run_openai_compat_agent(
     max_iterations: int,
     provider: str,
     model: str,
+    auth_token: Optional[str] = None,
+    db: Any = None,
+    is_owner: bool = False,
 ) -> Dict[str, Any]:
     """OpenAI-compatible tool-use agent (works for OpenAI, Moonshot/Kimi)."""
     try:
@@ -2381,7 +2385,7 @@ async def _run_openai_compat_agent(
         return {"ok": False, "error": f"{provider} API key not configured"}
 
     client = AsyncOpenAI(api_key=api_key, base_url=base_url) if base_url else AsyncOpenAI(api_key=api_key)
-    ctx = FreeBuildToolContext(project)
+    ctx = FreeBuildToolContext(project, auth_token=auth_token, db=db, is_owner=is_owner)
 
     initial_state = _exec_tool(ctx, "read_current_html", {})
     template_note = ""
@@ -2561,6 +2565,7 @@ async def stream_agent_turn(
     user_language: str = "ar",
     auth_token: Optional[str] = None,
     db: Any = None,
+    is_owner: bool = False,
 ) -> AsyncGenerator[str, None]:
     """SSE generator: yields live thinking events while the agent works.
 
@@ -2587,7 +2592,7 @@ async def stream_agent_turn(
         try:
             yield _sse("provider", {"name": provider, "model": model, "message": f"🧠 يستخدم {model}"})
             await asyncio.sleep(0)
-            async for chunk in _stream_one_provider(project, user_message, history_messages, max_iterations, provider, model, ctx_holder=ctx_holder, user_language=user_language, auth_token=auth_token, db=db):
+            async for chunk in _stream_one_provider(project, user_message, history_messages, max_iterations, provider, model, ctx_holder=ctx_holder, user_language=user_language, auth_token=auth_token, db=db, is_owner=is_owner):
                 yield chunk
             return
         except _ProviderUnavailable as e:
@@ -2617,9 +2622,10 @@ async def _stream_one_provider(
     user_language: str = "ar",
     auth_token: Optional[str] = None,
     db: Any = None,
+    is_owner: bool = False,
 ) -> AsyncGenerator[str, None]:
     """Run the tool loop for one provider, yielding SSE chunks per step."""
-    ctx = FreeBuildToolContext(project, auth_token=auth_token, db=db)
+    ctx = FreeBuildToolContext(project, auth_token=auth_token, db=db, is_owner=is_owner)
     if ctx_holder is not None:
         ctx_holder["ctx"] = ctx
 
