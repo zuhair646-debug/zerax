@@ -30,6 +30,7 @@ from fastapi.responses import JSONResponse
 logger = logging.getLogger("zenrex.local_browser")
 
 router = APIRouter(prefix="/api/local-browser", tags=["local-browser"])
+desktop_router = APIRouter(prefix="/api/desktop-agent", tags=["desktop-agent"])
 
 # In-memory: pairing_code → {project_id, expires_at, ws_connected}
 _PAIRINGS: Dict[str, Dict[str, Any]] = {}
