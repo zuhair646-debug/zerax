@@ -1,0 +1,77 @@
+{
+  "summary": "Phase 2 AI Trading Bot — comprehensive backend + frontend E2E testing. 20/20 backend pytest cases passed against /api/trading/* surface. Frontend /admin/my-trading renders correctly, all data-testids present, settings save flow persists end-to-end. No critical bugs found.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "/admin/my-trading header", "issues": ["Bilingual title overlap: 'My Smart Portfolio' (EN) renders on the right while '📈 محفظتي الذكية' (AR) renders on the left of the same line — visually cluttered. Consider showing one per active locale."]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_trading_phase2.py",
+    "/app/test_reports/pytest/trading_phase2_results.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "Trading module file size OK (~700 lines) but trending big — consider splitting AI strategy into its own submodule for maintainability.",
+    "Halal whitelist is enforced BEFORE Alpaca connection check on /trade, /quote, /ai-suggest — verified correct.",
+    "Owner JWT guard accepts 'owner', 'admin', 'superuser' roles — confirmed via /api/auth/login with owner@zerax.com.",
+    "Alpaca creds validated against Alpaca /v2/account BEFORE persisting — confirmed (FAKE/FAKE returns 400).",
+    "MongoDB _id is correctly excluded from /recent-trades, /ai-suggestions, /settings responses.",
+    "Cooldown + daily-loss circuit-breaker logic is in place but cannot be E2E tested without real Alpaca creds (per request, this is expected)."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_trading_phase2.py (new pytest suite)"
+  ],
+  "success_rate": {
+    "backend": "100% (20/20)",
+    "frontend": "100% of testable flows without Alpaca creds"
+  },
+  "test_credentials_used": {
+    "owner": "owner@zerax.com / owner123 (returned role=owner JWT)",
+    "non_owner": "audit_1780793976@test.com / Test1234! (returned 403 on /api/trading/status — guard works)"
+  },
+  "verified_flows": [
+    "POST /api/auth/login (owner) → JWT with role=owner ✓",
+    "GET /api/trading/status without Authorization → 401 ✓",
+    "GET /api/trading/status with owner JWT → ok=true, connected=false, halal_tickers_count=22 ✓",
+    "GET /api/trading/halal-stocks → 22 stocks, includes AAPL/MSFT/XOM with t/n/s fields ✓",
+    "GET /api/trading/account no creds → ok=true, connected=false, balance=0 ✓",
+    "GET /api/trading/recent-trades → ok=true, trades=[] ✓",
+    "GET /api/trading/ai-suggestions → ok=true, suggestions=[] ✓",
+    "GET /api/trading/settings → returns defaults / persisted values ✓",
+    "POST /api/trading/settings → persists, GET returns new values ✓",
+    "POST /api/trading/connect FAKE/FAKE → 400 'Invalid Alpaca credentials' ✓",
+    "GET /api/trading/quote/JPM → 400 'not in the Halal whitelist' ✓",
+    "GET /api/trading/quote/AAPL no creds → 400 'Alpaca not connected' ✓",
+    "POST /api/trading/trade JPM → 400 'Sharia-compliant' (Halal guard fires BEFORE Alpaca check) ✓",
+    "POST /api/trading/trade AAPL no creds → 400 'Alpaca not connected' ✓",
+    "POST /api/trading/trade AAPL no qty no notional → 400 'Provide either qty or notional' ✓",
+    "POST /api/trading/ai-suggest JPM → 400 (non-halal blocked) ✓",
+    "POST /api/trading/ai-suggest AAPL no creds → 400 'Alpaca not connected' ✓",
+    "POST /api/trading/agent/toggle?running=true → agent_running=true persisted ✓",
+    "GET /api/trading/market-clock no creds → 400 ✓",
+    "Non-owner JWT → 403 'Owner only' on /api/trading/status ✓",
+    "Frontend /admin/my-trading: page loads after owner localStorage token injection ✓",
+    "Frontend: conn-badge shows 'Not connected' ✓",
+    "Frontend: '22' halal stocks count visible ✓",
+    "Frontend: all 6 tabs render (tab-overview, tab-stocks, tab-positions, tab-trades, tab-ai-history, tab-settings) ✓",
+    "Frontend Halal List tab: stock-AAPL, stock-MSFT, stock-XOM, stock-BA cards present ✓",
+    "Frontend Settings tab: api-key-input, secret-key-input, paper-switch, save-creds-btn, max-position-pct, daily-loss-limit, cooldown-minutes, save-settings-btn all present ✓",
+    "Frontend Settings save: typed 13/4.5/9 → toast 'تم حفظ الإعدادات' appeared → GET /api/trading/settings confirmed persistence ✓"
+  ],
+  "not_tested": [
+    "Live Alpaca data flows (account/positions/quote/trade with valid creds) — requires real Alpaca paper-trading keys",
+    "Cooldown + daily-loss circuit-breaker runtime behaviour — requires Alpaca-executed trades",
+    "AI auto-execute path — requires Alpaca connection",
+    "Close-position endpoint runtime — requires real position"
+  ],
+  "seed_data_creation": "None. Tests are self-cleaning: reset settings to defaults after run, ensure no Alpaca creds saved (via /disconnect) before each session.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Phase 2 trading bot is fully working in 'no-Alpaca-keys' mode. All halal-screening and owner-guard logic verified at API layer. Next testing agent: if real Alpaca paper keys become available, extend test_trading_phase2.py with TestAlpacaLive class (connect → account → quote AAPL → trade AAPL notional=$10 → close-position AAPL → recent-trades). Frontend settings save uses NumField (controlled number input) — playwright .fill() does NOT trigger React onChange on it; use .type() with delay instead. Bilingual title overlap in header is cosmetic only."
+}
