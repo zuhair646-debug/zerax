@@ -3130,6 +3130,9 @@ async def _build_env_truth_banner() -> str:
     yarn_ok = await has("yarn")
     npm_ok = await has("npm")
     on_railway = bool(os.environ.get("RAILWAY_ENVIRONMENT"))
+    on_hetzner_prod = (os.environ.get("ENVIRONMENT") == "production" and
+                       os.environ.get("DEPLOY_TARGET") == "hetzner_vps")
+    prod_host = os.environ.get("PROD_HOST", "")
     # Check vault for tokens too (not just env)
     has_gh = bool(os.environ.get("GITHUB_TOKEN", "").strip())
     has_gh_repo = bool(os.environ.get("GITHUB_REPO", "").strip())
@@ -3160,7 +3163,13 @@ async def _build_env_truth_banner() -> str:
     has_ant = os.environ.get("ANTHROPIC_API_KEY", "").startswith("sk-ant")
 
     banner = "\n\n━━━━ 📊 الحالة الفعلية للبيئة (مُتحقّق منها قبل ما تردّ) ━━━━\n"
-    banner += f"البيئة: {'🚂 Railway production' if on_railway else '💻 Preview/local dev'}\n"
+    if on_hetzner_prod:
+        banner += f"البيئة: 🟢 **PRODUCTION on Hetzner VPS** ({prod_host or 'zenrex.ai'}, 91.98.154.148)\n"
+        banner += "        أي تغيير هنا = الجمهور والمالك يشوفه فوراً. اختبر بحذر، استخدم run_command بدل run_remote_ssh.\n"
+    elif on_railway:
+        banner += "البيئة: 🚂 Railway (legacy — قد تكون لا تزال نشطة كنسخة احتياطية)\n"
+    else:
+        banner += "البيئة: 💻 Preview / local dev (Emergent pod) — التغييرات هنا ما تنتشر للإنتاج إلا بـ push+pull+deploy\n"
     banner += f"أدوات النظام: git={'✅' if git_ok else '❌'}  curl={'✅' if curl_ok else '❌'}  "
     banner += f"jq={'✅' if jq_ok else '❌'}  supervisorctl={'✅' if sup_ok else '❌ (طبيعي على Railway)'}\n"
     banner += f"Frontend tools: node={'✅' if node_ok else '❌'}  yarn={'✅' if yarn_ok else '❌'}  npm={'✅' if npm_ok else '❌'}\n"
