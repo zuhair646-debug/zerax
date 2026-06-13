@@ -699,6 +699,11 @@ export default function AdminAutoCoder() {
       attachedFiles = [];
     }
     if ((!msg && attachedFiles.length === 0) || sending) return;
+
+    if (msg.length > 50000) {
+      toast.error(`رسالة طويلة جداً (${msg.length.toLocaleString()} حرف). قسّمها لعدة رسائل.`);
+      return;
+    }
     setInput('');
     setSending(true);
     setMessages((prev) => [...prev, {
@@ -714,6 +719,10 @@ export default function AdminAutoCoder() {
     setCurrentStream('');
     setCurrentTools([]);
     let lastTurnCost = null;
+    // ─ Move stream-state out of try so catch block can read them safely ─
+    let assistantText = '';
+    let toolEvents = [];
+    let serverError = null;
 
     try {
       // Backend now uses multipart/form-data (to support file attachments)
@@ -761,9 +770,7 @@ export default function AdminAutoCoder() {
       const reader = r.body.getReader();
       const decoder = new TextDecoder();
       let buffer = '';
-      let assistantText = '';
-      let toolEvents = [];
-      let serverError = null;
+      // assistantText/toolEvents/serverError already declared in outer scope above
 
       while (true) {
         const { value, done } = await reader.read();

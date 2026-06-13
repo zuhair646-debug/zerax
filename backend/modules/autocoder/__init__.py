@@ -139,7 +139,7 @@ from ..freebuild.desktop_agent_tools import (
     DESKTOP_TOOL_NAMES,
     dispatch_desktop,
 )
-from ..freebuild.freebuild_agent import DESKTOP_OWNER_ADDENDUM
+from ..freebuild.freebuild_agent import DESKTOP_OWNER_ADDENDUM, HONESTY_PERSISTENCE_RULES
 import contextvars
 
 # Per-request context: the AutoCoder conversation_id is used as the desktop
@@ -3012,7 +3012,7 @@ async def _autocoder_stream(messages: List[Dict[str, Any]], model: str = "claude
         lessons_block = await build_lessons_for_prompt(max_lessons=12)
     except Exception:
         lessons_block = ""
-    sys_prompt_full = AUTOCODER_SYSTEM_PROMPT + AUTONOMY_PROMPT_RULES + OPS_PROMPT_RULES + QUALITY_PROMPT_RULES + INDEX_PROMPT_RULES + SAFETY_PROMPT_RULES + LEARNING_PROMPT_RULES + SUPERPOWERS_PROMPT_RULES + DESKTOP_OWNER_ADDENDUM + (env_banner or "") + build_atlas_for_prompt() + build_atlas_v2_for_prompt() + build_universe_for_prompt() + lessons_block
+    sys_prompt_full = AUTOCODER_SYSTEM_PROMPT + AUTONOMY_PROMPT_RULES + OPS_PROMPT_RULES + QUALITY_PROMPT_RULES + INDEX_PROMPT_RULES + SAFETY_PROMPT_RULES + LEARNING_PROMPT_RULES + SUPERPOWERS_PROMPT_RULES + HONESTY_PERSISTENCE_RULES + DESKTOP_OWNER_ADDENDUM + (env_banner or "") + build_atlas_for_prompt() + build_atlas_v2_for_prompt() + build_universe_for_prompt() + lessons_block
     if model == "groq":
         groq_key = os.environ.get("GROQ_API_KEY", "").strip()
         async for evt in stream_via_groq(
@@ -3219,7 +3219,7 @@ async def _stream_direct_anthropic(anthropic_msgs: List[Dict[str, Any]], api_key
         task_brief = await build_session_brief(max_tasks=3)
     except Exception:
         task_brief = ""
-    sys_prompt_text = AUTOCODER_SYSTEM_PROMPT + AUTONOMY_PROMPT_RULES + OPS_PROMPT_RULES + QUALITY_PROMPT_RULES + INDEX_PROMPT_RULES + SAFETY_PROMPT_RULES + LEARNING_PROMPT_RULES + MEMORY_PROMPT_RULES + SANDBOX_PROMPT_RULES + WEB_SEARCH_PROMPT_RULES + ROUTER_PROMPT_RULES + CACHE_PROMPT_RULES + SUPERPOWERS_PROMPT_RULES + DESKTOP_OWNER_ADDENDUM + (env_banner or "") + build_atlas_for_prompt() + build_atlas_v2_for_prompt() + build_universe_for_prompt() + lessons_block + task_brief
+    sys_prompt_text = AUTOCODER_SYSTEM_PROMPT + AUTONOMY_PROMPT_RULES + OPS_PROMPT_RULES + QUALITY_PROMPT_RULES + INDEX_PROMPT_RULES + SAFETY_PROMPT_RULES + LEARNING_PROMPT_RULES + MEMORY_PROMPT_RULES + SANDBOX_PROMPT_RULES + WEB_SEARCH_PROMPT_RULES + ROUTER_PROMPT_RULES + CACHE_PROMPT_RULES + SUPERPOWERS_PROMPT_RULES + HONESTY_PERSISTENCE_RULES + DESKTOP_OWNER_ADDENDUM + (env_banner or "") + build_atlas_for_prompt() + build_atlas_v2_for_prompt() + build_universe_for_prompt() + lessons_block + task_brief
     system_blocks = [
         {"type": "text", "text": sys_prompt_text, "cache_control": {"type": "ephemeral"}}
     ]
