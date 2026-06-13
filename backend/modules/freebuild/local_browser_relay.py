@@ -366,7 +366,7 @@ async def desktop_act_http(request: Request):
 
 
 # ── Live screen streaming ───────────────────────────────────────────────────
-DESKTOP_AGENT_VERSION = "0.4.4"
+DESKTOP_AGENT_VERSION = "0.5.0"
 
 
 @desktop_router.get("/version")
@@ -664,29 +664,47 @@ if ($Code -and $Code.Trim()) {{
     Set-Content -Path (Join-Path $Dest ".last_code") -Value $Code.Trim().ToUpper() -NoNewline
 }}
 
-# 5. Create shortcuts using python.exe (NOT pythonw.exe).
-#    The script self-hides its console window via Win32 ShowWindow.
-$Python  = Join-Path $Dest ".venv\\Scripts\\python.exe"
-$Target  = Join-Path $Dest "zenrex_gui.pyw"
+# 5. Build a standalone .exe using PyInstaller. After this step the user has
+#    a single double-clickable file on Desktop — no Python or PowerShell
+#    needed for future launches.
+Write-Host "-> Building standalone ZenrexDesktopAgent.exe (1-2 min)..."
+& ".\\.venv\\Scripts\\python.exe" -m pip install --quiet pyinstaller
+& ".\\.venv\\Scripts\\python.exe" -m PyInstaller --noconfirm --onefile --windowed `
+    --name "ZenrexDesktopAgent" --clean `
+    --hidden-import pygetwindow --hidden-import mss --hidden-import websockets `
+    --hidden-import pyautogui --hidden-import PIL --hidden-import pyperclip `
+    --collect-all mss --collect-all websockets --collect-all pyautogui `
+    zenrex_gui.pyw 2>&1 | Out-Null
+
+$ExeSrc = Join-Path $Dest "dist\\ZenrexDesktopAgent.exe"
+$ExeDst = Join-Path ([Environment]::GetFolderPath("Desktop")) "ZenrexDesktopAgent.exe"
+$BuiltExe = $false
+if (Test-Path $ExeSrc) {{
+    Copy-Item -Force $ExeSrc $ExeDst
+    $BuiltExe = $true
+    Write-Host "OK Built ZenrexDesktopAgent.exe -> Desktop"
+}} else {{
+    Write-Host "!! PyInstaller build did not produce ZenrexDesktopAgent.exe — falling back to .py launcher"
+}}
+
+# 6. Create Start-Menu shortcut. Prefer the .exe if we built one.
+$Target = if ($BuiltExe) {{ $ExeDst }} else {{ Join-Path $Dest "zenrex_gui.pyw" }}
+$LaunchArgs = if ($BuiltExe) {{ "" }} else {{ '"' + $Target + '"' }}
+$LaunchExe = if ($BuiltExe) {{ $Target }} else {{ Join-Path $Dest ".venv\\Scripts\\python.exe" }}
+
 $WS = New-Object -ComObject WScript.Shell
 
-$DesktopLnk = Join-Path ([Environment]::GetFolderPath("Desktop")) "Zenrex Desktop Agent.lnk"
-$Lnk = $WS.CreateShortcut($DesktopLnk)
-$Lnk.TargetPath = $Python
-$Lnk.Arguments = '"' + $Target + '"'
-$Lnk.WorkingDirectory = $Dest
-$Lnk.WindowStyle = 7   # Minimised — console window stays hidden behind Tk window
-$Lnk.Description = "Zenrex Desktop Agent  native OS control bridge"
-$Lnk.IconLocation = "shell32.dll,13"
-$Lnk.Save()
+# Remove old shortcut (if any) and create a fresh one
+$OldLnk = Join-Path ([Environment]::GetFolderPath("Desktop")) "Zenrex Desktop Agent.lnk"
+if (Test-Path $OldLnk) {{ Remove-Item -Force $OldLnk -ErrorAction SilentlyContinue }}
 
 $StartMenuDir = Join-Path $env:APPDATA "Microsoft\\Windows\\Start Menu\\Programs\\Zenrex"
 New-Item -ItemType Directory -Force -Path $StartMenuDir | Out-Null
 $StartLnk = Join-Path $StartMenuDir "Zenrex Desktop Agent.lnk"
 $Lnk2 = $WS.CreateShortcut($StartLnk)
-$Lnk2.TargetPath = $Python
-$Lnk2.Arguments = '"' + $Target + '"'
-$Lnk2.WorkingDirectory = $Dest
+$Lnk2.TargetPath = $LaunchExe
+$Lnk2.Arguments = $LaunchArgs
+$Lnk2.WorkingDirectory = if ($BuiltExe) {{ [Environment]::GetFolderPath("Desktop") }} else {{ $Dest }}
 $Lnk2.WindowStyle = 7
 $Lnk2.Description = "Zenrex Desktop Agent"
 $Lnk2.IconLocation = "shell32.dll,13"
@@ -696,15 +714,21 @@ Write-Host ""
 Write-Host "═══════════════════════════════════════════════════════════"
 Write-Host "  OK  Installation complete."
 Write-Host ""
-Write-Host "  Shortcut added to Desktop  ->  Zenrex Desktop Agent"
-Write-Host "  Also in Start menu  ->  Zenrex  ->  Zenrex Desktop Agent"
-Write-Host ""
-Write-Host "  Launching the app now..."
+if ($BuiltExe) {{
+    Write-Host "  Standalone app on your Desktop:  ZenrexDesktopAgent.exe"
+    Write-Host "  Just double-click it. No Python or PowerShell needed!"
+}} else {{
+    Write-Host "  Shortcut: Start menu -> Zenrex -> Zenrex Desktop Agent"
+}}
 Write-Host "═══════════════════════════════════════════════════════════"
 Write-Host ""
 
-# 6. Launch the GUI (console window auto-hides itself)
-Start-Process -FilePath $Python -ArgumentList ('"' + $Target + '"') -WorkingDirectory $Dest -WindowStyle Hidden
+# 7. Launch the app now
+if ($BuiltExe) {{
+    Start-Process -FilePath $ExeDst -WindowStyle Hidden
+}} else {{
+    Start-Process -FilePath $LaunchExe -ArgumentList $LaunchArgs -WorkingDirectory $Dest -WindowStyle Hidden
+}}
 """
 
 

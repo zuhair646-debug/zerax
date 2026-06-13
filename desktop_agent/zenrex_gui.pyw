@@ -58,15 +58,29 @@ from PIL import Image
 import websockets
 
 # ─── Config & constants ──────────────────────────────────────────────────────
-SCRIPT_DIR = Path(__file__).resolve().parent
+def _resolve_script_dir() -> "Path":
+    """Where the agent stores its persistent files (.last_code, agent.log).
+    For source: directory containing this .pyw file.
+    For PyInstaller .exe: a stable folder in the user's profile."""
+    from pathlib import Path as _P
+    if getattr(_sys, "frozen", False):
+        # PyInstaller bundle — use a stable per-user directory
+        d = _P.home() / ".zenrex-desktop-agent"
+        d.mkdir(parents=True, exist_ok=True)
+        return d
+    return _P(__file__).resolve().parent
+
+
+SCRIPT_DIR = _resolve_script_dir()
 LAST_CODE_FILE = SCRIPT_DIR / ".last_code"
-DEFAULT_WS = "wss://zenrex.ai/api/desktop-agent/ws"
+# Default platform — baked at build time. The bootstrap installer writes
+# config.json next to the script (source mode) and PyInstaller picks up the
+# DEFAULT_WS literal as-is in frozen mode.
+DEFAULT_WS = "wss://ai-cinematic-hub-2.preview.emergentagent.com/api/desktop-agent/ws"
 DOWNLOADS_DIR = Path.home() / "Downloads"
 DOWNLOADS_DIR.mkdir(parents=True, exist_ok=True)
 
-# Local version — bumped whenever zenrex_gui.pyw changes meaningfully.
-# Compared against server's /api/desktop-agent/version on startup.
-AGENT_VERSION = "0.4.4"
+AGENT_VERSION = "0.5.0"   # First .exe release
 
 # Set to False to disable on-startup auto-update. Recommended OFF until we
 # have a code-signing pipeline — a single bad release can brick all clients.
