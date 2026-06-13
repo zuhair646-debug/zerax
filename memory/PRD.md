@@ -63,6 +63,39 @@ list + `execute_autocoder_tool` dispatcher (separate code path from FreeBuild's
 - AI calls `desktop_status` → `desktop_pair` in correct order.
 - Real code `NSLBBZ` appeared verbatim in the assistant reply.
 - Full `display_block` (PowerShell command + download URL) reproduced exactly.
+
+### 🔧 Feb 13 2026 (final batch) — UX wins + Trading visible + Desktop Code Bar
+
+**1. Trading tile in Admin Dashboard**
+`AdminDashboard.js` `quickActions` was missing a tile for `/admin/my-trading`.
+Added "تداولي الذكي 📈" (TrendingUp icon, green gradient).
+
+**2. Frontend was never rebuilt on prod VPS**
+The VPS had source pulled (`MyTradingDashboard.js` present) but
+`/opt/zerax/frontend/build/` was stale (Jun 11). Now I build locally with
+`REACT_APP_BACKEND_URL=https://zenrex.ai yarn build` and rsync to VPS:
+```
+rsync -avz --delete /app/frontend/build/  root@…:/opt/zerax/frontend/build/
+ssh … 'systemctl reload nginx'
+```
+Bundle hash `main.9f9d2584.js` confirmed on production.
+
+**3. Always-visible Desktop Pairing Code widget**
+The owner asked: "show me the code in the chat itself, don't make me ask the AI
+every time". Built `DesktopCodeBar` React component in `AdminAutoCoder.js`:
+- Top of the chat area, shows the current 6-char code in monospace
+- Click-to-copy with toast
+- Status dot (amber → emerald pulse when WS connects)
+- Refresh button mints a new code on demand
+- Polls `/api/autocoder/desktop-code` every 8s for live status
+
+Backend endpoint `GET /api/autocoder/desktop-code` (owner-only,
+`X-AutoCoder-Token`) uses a fixed `project_id = "owner-autocoder-desktop"` —
+the same slot the AI uses (`_desktop_wrapper` updated to bind to the same
+project_id). So a code copied from the bar is identical to whatever the AI
+would generate, and `desktop_act` from chat works the moment the user pairs.
+
+
 - No 0/O/I/1 characters; charset matches `[A-HJ-NP-Z2-9]`.
 
 
