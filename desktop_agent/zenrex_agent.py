@@ -368,15 +368,18 @@ ACTIONS = {
 
 # ─── WebSocket loop ──────────────────────────────────────────────────────────
 async def _hello(ws):
+    import socket as _socket
     info = {
         "os": platform.system(),
         "release": platform.release(),
         "machine": platform.machine(),
+        "hostname": _socket.gethostname(),
         "python": sys.version.split()[0],
         "screen": list(pyautogui.size()),
         "downloads": str(DOWNLOADS_DIR),
         "shell_enabled": _SHELL_ENABLED,
         "user": os.environ.get("USER") or os.environ.get("USERNAME") or "",
+        "agent_version": "0.7.0",
     }
     await ws.send(json.dumps({"type": "hello", "info": info}))
 
