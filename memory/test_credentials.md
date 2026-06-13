@@ -148,7 +148,7 @@ User requested comprehensive E2E testing before official launch. Testing agent (
 ## Zitex Auto-Coder (برمجة زيتاكس) — Owner-Only Codebase Agent
 - Route: `/admin/autocoder` (requires `is_owner=true` user)
 - **🔑 Preview passcode**: `test123456` (reset Feb 13 2026)
-- **🔑 Production passcode (`zenrex.ai`)**: `prod123456` (reset Feb 13 2026)
+- **🔑 Production passcode (`zenrex.ai`)**: `prod123456` (reset Feb 13 2026 — multiple times)
 - **Owner email on production**: `owner@zenrex.ai` / `owner123`
 - **Recovery codes** (PROD — use once each):
   - `7C9F-8D13-282D-B828`
