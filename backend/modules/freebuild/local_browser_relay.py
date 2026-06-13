@@ -284,6 +284,22 @@ def is_desktop_agent_connected(project_id: str) -> bool:
     return project_id in _DESKTOP_ACTIVE_WS
 
 
+def _fingerprint_of(info: Dict[str, Any]) -> str:
+    """Stable fingerprint for an agent's machine."""
+    if not info:
+        return ""
+    return f"{info.get('user','')}@{info.get('os','')}-{info.get('release','')}-{tuple(info.get('screen') or ())}"
+
+
+def _same_agent_machine(a: Dict[str, Any], b: Dict[str, Any]) -> bool:
+    """Return True if two hello info dicts look like the same machine."""
+    if not a or not b:
+        # If we have no info about the previous one, ASSUME different to be safe
+        # (so a new fully-identified machine cannot accidentally inherit a stale slot).
+        return False
+    return _fingerprint_of(a) == _fingerprint_of(b)
+
+
 async def send_command_to_desktop(project_id: str, action: str, params: Dict[str, Any]) -> Dict[str, Any]:
     """Send a command to the connected Desktop Agent and wait for its response."""
     ws = _DESKTOP_ACTIVE_WS.get(project_id)
@@ -341,11 +357,51 @@ async def desktop_pair(request: Request):
 
 @desktop_router.get("/status")
 async def desktop_status(project_id: str = Query(...)):
+    connected = is_desktop_agent_connected(project_id)
+    # Find the agent_info for the connected ws
+    agent_info: Dict[str, Any] = {}
+    active_code: Optional[str] = None
+    if connected:
+        for code, info in _DESKTOP_PAIRINGS.items():
+            if info.get("project_id") == project_id and info.get("ws_connected"):
+                agent_info = info.get("agent_info") or {}
+                active_code = code
+                break
     return {
         "ok": True,
         "project_id": project_id,
-        "connected": is_desktop_agent_connected(project_id),
+        "connected": connected,
+        "agent_info": agent_info,
+        "fingerprint": _fingerprint_of(agent_info) if agent_info else "",
+        "active_code": active_code,
     }
+
+
+@desktop_router.post("/force-takeover")
+async def desktop_force_takeover(request: Request):
+    """Forcibly disconnect the current agent for a project so a new one can take over.
+
+    Body: {project_id, code (the new pairing code)}.
+    Use when a stale agent is stuck claiming the project_id from a dead machine.
+    """
+    body = await request.json()
+    project_id = body.get("project_id")
+    code = body.get("code")
+    if not project_id:
+        raise HTTPException(400, "project_id required")
+    prev = _DESKTOP_ACTIVE_WS.get(project_id)
+    if prev:
+        try:
+            await prev.close(code=4000)
+        except Exception:
+            pass
+        _DESKTOP_ACTIVE_WS.pop(project_id, None)
+        # Clear pending futures so callers don't hang
+        for req_id, fut in list(_DESKTOP_PENDING.get(project_id, {}).items()):
+            if not fut.done():
+                fut.set_result({"ok": False, "error": "force_takeover"})
+        logger.info(f"[desktop-agent] force-takeover for {project_id} (next code={code})")
+    return {"ok": True, "kicked_previous": prev is not None}
 
 
 @desktop_router.post("/act")
@@ -828,12 +884,10 @@ async def desktop_agent_ws(ws: WebSocket, code: str = Query(...)):
         return
     project_id = pairing["project_id"]
     prev = _DESKTOP_ACTIVE_WS.get(project_id)
-    if prev:
-        try:
-            await prev.close(code=4000)
-        except Exception:
-            pass
-    _DESKTOP_ACTIVE_WS[project_id] = ws
+    prev_info = pairing.get("agent_info") or {}
+    new_info: Dict[str, Any] = {}
+
+    _DESKTOP_ACTIVE_WS[project_id] = ws  # tentatively claim slot
     pairing["ws_connected"] = True
     # Once paired successfully, extend the pairing forever (until ws disconnects)
     # so a long-running owner session never has to re-enter the code.
@@ -852,7 +906,61 @@ async def desktop_agent_ws(ws: WebSocket, code: str = Query(...)):
         "project_id": project_id,
         "message": "✅ Connected to Zenrex (Desktop Agent)",
     })
-    logger.info(f"[desktop-agent] connected for project {project_id}")
+    logger.info(f"[desktop-agent] connected for project {project_id} (code={code})")
+
+    # First, wait briefly for the agent's "hello" message so we can fingerprint.
+    # If a previous agent is connected from a DIFFERENT machine, reject the new
+    # one (don't kick the existing one — prevents the reconnect-loop bug where
+    # two agents from different machines fight forever).
+    try:
+        async with asyncio.timeout(3):
+            for _ in range(3):
+                data = await ws.receive_text()
+                try:
+                    msg = json.loads(data)
+                except Exception:
+                    continue
+                if msg.get("type") == "hello":
+                    new_info = msg.get("info") or {}
+                    break
+    except (asyncio.TimeoutError, Exception):
+        pass
+
+    # Fingerprint-based duplicate detection
+    if prev is not None and prev is not ws:
+        same_machine = _same_agent_machine(prev_info, new_info)
+        if same_machine:
+            # Genuine reconnect from same machine → quietly drop the old one
+            try:
+                await prev.close(code=4000)
+            except Exception:
+                pass
+            logger.info(f"[desktop-agent] replaced stale connection for {project_id} (same machine)")
+        else:
+            # Different machine trying to claim the same project → REJECT new
+            logger.warning(
+                f"[desktop-agent] REJECTING duplicate from different machine for {project_id}. "
+                f"prev={_fingerprint_of(prev_info)} new={_fingerprint_of(new_info)}"
+            )
+            # Restore previous as the active one
+            _DESKTOP_ACTIVE_WS[project_id] = prev
+            try:
+                await ws.send_json({
+                    "type": "error",
+                    "code": "duplicate_project",
+                    "message": (
+                        f"Already paired with another machine ({prev_info.get('user','?')}@"
+                        f"{prev_info.get('os','?')}). To take over, call "
+                        "POST /api/desktop-agent/force-takeover with this code."
+                    ),
+                })
+            except Exception:
+                pass
+            await ws.close(code=4409)  # 4409 = duplicate / conflict
+            return
+
+    pairing["agent_info"] = new_info or prev_info
+
     try:
         while True:
             data = await ws.receive_text()
