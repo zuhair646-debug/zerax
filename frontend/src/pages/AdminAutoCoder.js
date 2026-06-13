@@ -62,13 +62,17 @@ function pickLines(text = '', keywords = [], limit = 4) {
 function DesktopCodeBar({ acToken }) {
   const [code, setCode] = useState(null);
   const [connected, setConnected] = useState(false);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);  // start false, set true only on manual interactions
   const [copied, setCopied] = useState(false);
+  const [error, setError] = useState(null);
+  const [verified, setVerified] = useState(false); // backend confirmed the code is in DB
 
-  const load = async (forceNew = false) => {
+  // background = polling, doesn't show spinner / loading state
+  const load = async ({ forceNew = false, background = false } = {}) => {
     if (!acToken) return;
+    if (!background) setLoading(true);
+    if (!background) setError(null);
     try {
-      setLoading(true);
       const token = localStorage.getItem('token');
       const r = await fetch(`${API}/api/autocoder/desktop-code?force_new=${forceNew}`, {
         headers: {
@@ -76,23 +80,31 @@ function DesktopCodeBar({ acToken }) {
           'X-AutoCoder-Token': acToken,
         },
       });
+      if (!r.ok) {
+        const t = await r.text();
+        if (!background) setError(`HTTP ${r.status}: ${t.slice(0, 80)}`);
+        return;
+      }
       const d = await r.json();
       if (d.ok) {
         setCode(d.code);
         setConnected(d.connected);
+        setVerified(true);
+        setError(null);
         if (forceNew) toast.success(`رمز جديد: ${d.code}`);
       }
     } catch (e) {
-      console.warn('desktop-code fetch failed', e);
+      if (!background) setError(String(e).slice(0, 80));
     } finally {
-      setLoading(false);
+      if (!background) setLoading(false);
     }
   };
 
   useEffect(() => {
     if (!acToken) return;
-    load(false);
-    const t = setInterval(() => load(false), 8000);
+    load({ background: false });
+    // Background poll — never resets UI
+    const t = setInterval(() => load({ background: true }), 8000);
     return () => clearInterval(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [acToken]);
@@ -111,9 +123,18 @@ function DesktopCodeBar({ acToken }) {
 
   const statusDotClass = connected
     ? 'bg-emerald-400 shadow-[0_0_10px_rgba(52,211,153,0.8)] animate-pulse'
-    : 'bg-amber-400';
-  const statusLabel = connected ? 'الجهاز متصل' : 'في انتظار الاتصال';
-  const statusColor = connected ? 'text-emerald-300' : 'text-amber-300';
+    : verified
+      ? 'bg-amber-400'
+      : 'bg-rose-400';
+  const statusLabel = connected
+    ? 'الجهاز متصل'
+    : verified
+      ? 'الرمز جاهز — في انتظار الاتصال'
+      : (error || 'جاري التحضير...');
+  const statusColor = connected ? 'text-emerald-300' : verified ? 'text-amber-300' : 'text-rose-300';
+
+  // Always show the code if we have one, regardless of loading state
+  const codeDisplay = code || (loading ? '••••••' : '------');
 
   return (
     <div
@@ -129,11 +150,11 @@ function DesktopCodeBar({ acToken }) {
           onClick={copyCode}
           disabled={!code}
           data-testid="desktop-code-copy"
-          title="انقر للنسخ"
+          title={code ? `انقر لنسخ ${code}` : 'لم يُولَّد رمز بعد'}
           className="flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-black/50 border border-amber-400/30 hover:border-amber-300/60 hover:bg-black/70 transition group disabled:opacity-50"
         >
           <span className="font-mono text-base md:text-lg font-black tracking-[0.25em] text-amber-200 group-hover:text-amber-100">
-            {loading && !code ? '......' : (code || '------')}
+            {codeDisplay}
           </span>
           {copied ? (
             <CheckCircle2 className="w-3.5 h-3.5 text-emerald-300" />
@@ -143,7 +164,7 @@ function DesktopCodeBar({ acToken }) {
         </button>
         <div className={`flex items-center gap-1.5 ${statusColor}`}>
           <span className={`inline-block w-2 h-2 rounded-full ${statusDotClass}`}></span>
-          <span className="text-[10px] font-bold hidden md:inline">{statusLabel}</span>
+          <span className="text-[10px] font-bold hidden md:inline" title={error || ''}>{statusLabel}</span>
         </div>
       </div>
       <div className="flex items-center gap-2">
@@ -151,10 +172,10 @@ function DesktopCodeBar({ acToken }) {
           الصقه في Zenrex Desktop Agent ← Connect
         </span>
         <button
-          onClick={() => load(true)}
+          onClick={() => load({ forceNew: true, background: false })}
           data-testid="desktop-code-refresh"
           title="ولّد رمزاً جديداً"
-          className="p-1.5 rounded-md bg-amber-500/15 hover:bg-amber-500/25 border border-amber-400/30 text-amber-200 transition"
+          className="p-1.5 rounded-md bg-amber-500/15 hover:bg-amber-500/25 border border-amber-400/30 text-amber-200 transition disabled:opacity-50"
           disabled={loading}
         >
           <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
@@ -163,6 +184,7 @@ function DesktopCodeBar({ acToken }) {
     </div>
   );
 }
+
 
 
 
