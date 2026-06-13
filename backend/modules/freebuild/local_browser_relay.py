@@ -366,7 +366,7 @@ async def desktop_act_http(request: Request):
 
 
 # ── Live screen streaming ───────────────────────────────────────────────────
-DESKTOP_AGENT_VERSION = "0.4.3"
+DESKTOP_AGENT_VERSION = "0.4.4"
 
 
 @desktop_router.get("/version")
@@ -605,8 +605,9 @@ def _bootstrap_ps1(public_base: str) -> str:
     """One-liner PowerShell installer for Windows.
 
     Installs everything, creates Desktop + Start-Menu shortcuts to the GUI
-    version, and launches it. The user only needs to type the code in a
-    proper window — no terminal stays open after install.
+    version, and launches it. Uses python.exe (not pythonw.exe) — pythonw is
+    flaky on second launches and silently crashes when anything writes to
+    stdio. We hide its console via Win32 ShowWindow inside the script.
 
     Usage:  iwr <base>/api/desktop-agent/bootstrap.ps1 -useb | iex
     """
@@ -617,6 +618,11 @@ Write-Host ""
 Write-Host "═══════════════════════════════════════════════════════════"
 Write-Host "   Zenrex Desktop Agent  Installer (Windows)"
 Write-Host "═══════════════════════════════════════════════════════════"
+
+# Kill any previous instances so the install can overwrite files cleanly
+Get-Process pythonw -ErrorAction SilentlyContinue | Where-Object {{ $_.Path -like "*zenrex-desktop-agent*" }} | Stop-Process -Force -ErrorAction SilentlyContinue
+Get-Process python  -ErrorAction SilentlyContinue | Where-Object {{ $_.Path -like "*zenrex-desktop-agent*" }} | Stop-Process -Force -ErrorAction SilentlyContinue
+Start-Sleep -Milliseconds 400
 
 $Code = if ($args.Count -gt 0) {{ $args[0] }} else {{ Read-Host "Pairing code (or press Enter to skip and enter it in the app)" }}
 
@@ -658,16 +664,18 @@ if ($Code -and $Code.Trim()) {{
     Set-Content -Path (Join-Path $Dest ".last_code") -Value $Code.Trim().ToUpper() -NoNewline
 }}
 
-# 5. Create Desktop + Start-Menu shortcut pointing to pythonw + GUI script
-$Pythonw = Join-Path $Dest ".venv\\Scripts\\pythonw.exe"
+# 5. Create shortcuts using python.exe (NOT pythonw.exe).
+#    The script self-hides its console window via Win32 ShowWindow.
+$Python  = Join-Path $Dest ".venv\\Scripts\\python.exe"
 $Target  = Join-Path $Dest "zenrex_gui.pyw"
 $WS = New-Object -ComObject WScript.Shell
 
 $DesktopLnk = Join-Path ([Environment]::GetFolderPath("Desktop")) "Zenrex Desktop Agent.lnk"
 $Lnk = $WS.CreateShortcut($DesktopLnk)
-$Lnk.TargetPath = $Pythonw
+$Lnk.TargetPath = $Python
 $Lnk.Arguments = '"' + $Target + '"'
 $Lnk.WorkingDirectory = $Dest
+$Lnk.WindowStyle = 7   # Minimised — console window stays hidden behind Tk window
 $Lnk.Description = "Zenrex Desktop Agent  native OS control bridge"
 $Lnk.IconLocation = "shell32.dll,13"
 $Lnk.Save()
@@ -676,9 +684,10 @@ $StartMenuDir = Join-Path $env:APPDATA "Microsoft\\Windows\\Start Menu\\Programs
 New-Item -ItemType Directory -Force -Path $StartMenuDir | Out-Null
 $StartLnk = Join-Path $StartMenuDir "Zenrex Desktop Agent.lnk"
 $Lnk2 = $WS.CreateShortcut($StartLnk)
-$Lnk2.TargetPath = $Pythonw
+$Lnk2.TargetPath = $Python
 $Lnk2.Arguments = '"' + $Target + '"'
 $Lnk2.WorkingDirectory = $Dest
+$Lnk2.WindowStyle = 7
 $Lnk2.Description = "Zenrex Desktop Agent"
 $Lnk2.IconLocation = "shell32.dll,13"
 $Lnk2.Save()
@@ -687,15 +696,15 @@ Write-Host ""
 Write-Host "═══════════════════════════════════════════════════════════"
 Write-Host "  OK  Installation complete."
 Write-Host ""
-Write-Host "  Shortcut added to your Desktop:  'Zenrex Desktop Agent'"
-Write-Host "  And to Start menu  -> Zenrex  -> Zenrex Desktop Agent"
+Write-Host "  Shortcut added to Desktop  ->  Zenrex Desktop Agent"
+Write-Host "  Also in Start menu  ->  Zenrex  ->  Zenrex Desktop Agent"
 Write-Host ""
 Write-Host "  Launching the app now..."
 Write-Host "═══════════════════════════════════════════════════════════"
 Write-Host ""
 
-# 6. Launch the GUI (no console window, fully detached)
-Start-Process -FilePath $Pythonw -ArgumentList ('"' + $Target + '"') -WorkingDirectory $Dest -WindowStyle Hidden
+# 6. Launch the GUI (console window auto-hides itself)
+Start-Process -FilePath $Python -ArgumentList ('"' + $Target + '"') -WorkingDirectory $Dest -WindowStyle Hidden
 """
 
 

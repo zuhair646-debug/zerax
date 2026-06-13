@@ -1,16 +1,33 @@
 """
-Zenrex Desktop Agent — GUI version (Tkinter, runs with pythonw.exe, no terminal).
+Zenrex Desktop Agent — GUI version.
+
+Runs under python.exe with the console window hidden via Win32 ShowWindow.
+This is more reliable than pythonw.exe on Windows: pythonw silently aborts
+when anything tries to write to stdout/stderr, leaving the user with a
+white/empty window. Using python.exe + ShowWindow(SW_HIDE) gives us the
+same "no terminal" experience but with valid stdio streams.
 
 Saves the last-used pairing code to ~/.zenrex-desktop-agent/.last_code so the
 app remembers it across launches. The user just clicks Connect.
 """
 from __future__ import annotations
 
-# ─── CRITICAL: pythonw.exe safety — stdout/stderr are None ─────────────────
-# Any `print()`, traceback, or logging.basicConfig() that targets stderr
-# crashes the entire interpreter when run under pythonw.exe. Redirect both
-# to a real (devnull) stream BEFORE importing anything that might print.
+# ─── CRITICAL: hide the console window immediately, before any GUI work ─────
+# We launch via python.exe (not pythonw.exe) so stdio is valid. But we also
+# don't want the user to see a black console window flash up.
 import sys as _sys, os as _os
+try:
+    if _os.name == "nt":
+        import ctypes as _ctypes
+        _hwnd = _ctypes.windll.kernel32.GetConsoleWindow()
+        if _hwnd:
+            _ctypes.windll.user32.ShowWindow(_hwnd, 0)  # SW_HIDE
+except Exception:
+    pass
+
+# Belt-and-suspenders: if for any reason stdout/stderr are None (e.g. if
+# someone DOES launch us via pythonw.exe), give them a real sink so prints
+# and tracebacks never crash the interpreter.
 if _sys.stdout is None:
     _sys.stdout = open(_os.devnull, "w", encoding="utf-8")
 if _sys.stderr is None:
@@ -49,7 +66,7 @@ DOWNLOADS_DIR.mkdir(parents=True, exist_ok=True)
 
 # Local version — bumped whenever zenrex_gui.pyw changes meaningfully.
 # Compared against server's /api/desktop-agent/version on startup.
-AGENT_VERSION = "0.4.3"
+AGENT_VERSION = "0.4.4"
 
 # Set to False to disable on-startup auto-update. Recommended OFF until we
 # have a code-signing pipeline — a single bad release can brick all clients.
