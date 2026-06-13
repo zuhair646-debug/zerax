@@ -366,7 +366,7 @@ async def desktop_act_http(request: Request):
 
 
 # ── Live screen streaming ───────────────────────────────────────────────────
-DESKTOP_AGENT_VERSION = "0.5.0"
+DESKTOP_AGENT_VERSION = "0.5.1"
 
 
 @desktop_router.get("/version")
@@ -669,12 +669,25 @@ if ($Code -and $Code.Trim()) {{
 #    needed for future launches.
 Write-Host "-> Building standalone ZenrexDesktopAgent.exe (1-2 min)..."
 & ".\\.venv\\Scripts\\python.exe" -m pip install --quiet pyinstaller
-& ".\\.venv\\Scripts\\python.exe" -m PyInstaller --noconfirm --onefile --windowed `
-    --name "ZenrexDesktopAgent" --clean `
-    --hidden-import pygetwindow --hidden-import mss --hidden-import websockets `
-    --hidden-import pyautogui --hidden-import PIL --hidden-import pyperclip `
-    --collect-all mss --collect-all websockets --collect-all pyautogui `
-    zenrex_gui.pyw 2>&1 | Out-Null
+
+# PyInstaller writes INFO to stderr — PowerShell's Stop policy treats that as
+# an error and aborts our script. Switch to Continue, redirect stderr->stdout
+# so we can see real failures, then restore Stop.
+$PrevErrorPref = $ErrorActionPreference
+$ErrorActionPreference = "Continue"
+$global:LASTEXITCODE = 0
+$pyiArgs = @(
+    '-m','PyInstaller','--noconfirm','--onefile','--windowed',
+    '--name','ZenrexDesktopAgent','--clean',
+    '--hidden-import','pygetwindow','--hidden-import','mss',
+    '--hidden-import','websockets','--hidden-import','pyautogui',
+    '--hidden-import','PIL','--hidden-import','pyperclip',
+    '--collect-all','mss','--collect-all','websockets','--collect-all','pyautogui',
+    'zenrex_gui.pyw'
+)
+& ".\\.venv\\Scripts\\python.exe" @pyiArgs *>&1 | Out-Null
+$pyiExit = $LASTEXITCODE
+$ErrorActionPreference = $PrevErrorPref
 
 $ExeSrc = Join-Path $Dest "dist\\ZenrexDesktopAgent.exe"
 $ExeDst = Join-Path ([Environment]::GetFolderPath("Desktop")) "ZenrexDesktopAgent.exe"
@@ -684,7 +697,7 @@ if (Test-Path $ExeSrc) {{
     $BuiltExe = $true
     Write-Host "OK Built ZenrexDesktopAgent.exe -> Desktop"
 }} else {{
-    Write-Host "!! PyInstaller build did not produce ZenrexDesktopAgent.exe — falling back to .py launcher"
+    Write-Host "!! PyInstaller did not produce the .exe (exit=$pyiExit). Falling back to .py launcher."
 }}
 
 # 6. Create Start-Menu shortcut. Prefer the .exe if we built one.
