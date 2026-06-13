@@ -1730,13 +1730,15 @@ TOOL_HANDLERS.update(SUPERPOWERS_HANDLERS)
 
 
 # ── Desktop Agent tool wrappers ──────────────────────────────────────────────
-# The shared dispatch_desktop expects a `ctx` with `project_id`. We pull that
-# from the per-request ContextVar set in the /chat endpoint (uses conv_id).
+# The shared dispatch_desktop expects a `ctx` with `project_id`. For the owner's
+# AutoCoder chat we use a FIXED project_id so the same pairing code stays valid
+# across chats — and matches the always-visible widget shown in the UI.
+OWNER_DESKTOP_PROJECT_ID = "owner-autocoder-desktop"
+
+
 async def _desktop_wrapper(name: str, **kwargs):
-    conv_id = _AUTOCODER_CONV_ID_VAR.get("")
-    if not conv_id:
-        return {"ok": False, "error": "no_conversation_context — open a chat first"}
-    return await dispatch_desktop(_DesktopCtx(conv_id), name, kwargs)
+    # Always use the owner's persistent desktop slot — not per-conv.
+    return await dispatch_desktop(_DesktopCtx(OWNER_DESKTOP_PROJECT_ID), name, kwargs)
 
 
 for _dname in DESKTOP_TOOL_NAMES:
@@ -2050,6 +2052,77 @@ def create_autocoder_router(db, get_current_user, require_owner):
         return {
             "ok": True,
             "message": "تم مسح الإعدادات. ارجع لصفحة برمجة زيتاكس لإعداد كلمة سر جديدة.",
+        }
+
+    # ─── Owner desktop-agent code (always-visible widget) ────────────────────
+    # The owner wants a fixed "pairing code" panel in /admin/autocoder that
+    # shows the current code, status, and lets them refresh — without asking
+    # the AI for it each time. The AI shares the same project_id slot, so any
+    # code the owner creates here is also usable for `desktop_act` from chat.
+    OWNER_DESKTOP_PROJECT_ID = "owner-autocoder-desktop"
+
+    @router.get("/desktop-code")
+    async def autocoder_desktop_code(
+        force_new: bool = False,
+        x_autocoder_token: Optional[str] = Header(None),
+        owner=Depends(require_owner),
+    ):
+        """Owner-only: get (or create) a persistent pairing code for the
+        physical desktop. The same code stays valid for 24h.
+        Pass `?force_new=true` to invalidate the old one and mint fresh.
+        """
+        if not await _check_session_token(x_autocoder_token or ""):
+            raise HTTPException(401, "AutoCoder session expired — re-enter passcode")
+        from ..freebuild.local_browser_relay import (
+            create_desktop_pairing,
+            _DESKTOP_PAIRINGS,
+            is_desktop_agent_connected,
+            _persist_pairing,
+            PAIRING_TTL_SECONDS,
+        )
+        import time as _t
+
+        pid = OWNER_DESKTOP_PROJECT_ID
+        existing = None
+        if not force_new:
+            # Reuse a still-valid in-memory code for this project_id
+            for c, info in _DESKTOP_PAIRINGS.items():
+                if info.get("project_id") == pid and info.get("expires_at", 0) > _t.time():
+                    existing = (c, info)
+                    break
+            # Or DB fallback
+            if existing is None:
+                doc = await db.desktop_pairings.find_one({
+                    "project_id": pid,
+                    "expires_at": {"$gt": _t.time()},
+                })
+                if doc:
+                    existing = (doc["_id"], doc)
+                    _DESKTOP_PAIRINGS[doc["_id"]] = {
+                        "project_id": pid,
+                        "expires_at": doc["expires_at"],
+                        "ws_connected": False,
+                    }
+        if existing:
+            code, info = existing
+            return {
+                "ok": True,
+                "code": code,
+                "expires_at": info.get("expires_at"),
+                "connected": is_desktop_agent_connected(pid),
+                "fresh": False,
+            }
+
+        # Create a fresh one (and persist immediately — we're already async)
+        gen = create_desktop_pairing(pid)
+        code = gen["code"]
+        await _persist_pairing(code, pid, _t.time() + PAIRING_TTL_SECONDS)
+        return {
+            "ok": True,
+            "code": code,
+            "expires_at": _t.time() + PAIRING_TTL_SECONDS,
+            "connected": False,
+            "fresh": True,
         }
 
     @router.post("/setup")

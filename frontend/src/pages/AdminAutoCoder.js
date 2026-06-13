@@ -10,6 +10,7 @@ import {
   Activity, CheckCircle2, XCircle, Rocket, PackageCheck, BrainCircuit, Gauge,
   ClipboardList, Link as LinkIcon, Lightbulb, Target, Hammer, Compass,
   CheckSquare, TimerReset, Workflow, Wand2, ExternalLink, ListChecks,
+  Monitor, RefreshCw, Circle,
 } from 'lucide-react';
 import ChatInput from '../components/ChatInput';
 
@@ -56,6 +57,114 @@ function pickLines(text = '', keywords = [], limit = 4) {
   }
   return picked;
 }
+
+// ─── DesktopCodeBar — always-visible pairing widget for /admin/autocoder ────
+function DesktopCodeBar({ acToken }) {
+  const [code, setCode] = useState(null);
+  const [connected, setConnected] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [copied, setCopied] = useState(false);
+
+  const load = async (forceNew = false) => {
+    if (!acToken) return;
+    try {
+      setLoading(true);
+      const token = localStorage.getItem('token');
+      const r = await fetch(`${API}/api/autocoder/desktop-code?force_new=${forceNew}`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'X-AutoCoder-Token': acToken,
+        },
+      });
+      const d = await r.json();
+      if (d.ok) {
+        setCode(d.code);
+        setConnected(d.connected);
+        if (forceNew) toast.success(`رمز جديد: ${d.code}`);
+      }
+    } catch (e) {
+      console.warn('desktop-code fetch failed', e);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (!acToken) return;
+    load(false);
+    const t = setInterval(() => load(false), 8000);
+    return () => clearInterval(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [acToken]);
+
+  const copyCode = async () => {
+    if (!code) return;
+    try {
+      await navigator.clipboard.writeText(code);
+      setCopied(true);
+      toast.success(`نُسخ الرمز: ${code}`);
+      setTimeout(() => setCopied(false), 1800);
+    } catch {
+      toast.error('فشل النسخ');
+    }
+  };
+
+  const statusDotClass = connected
+    ? 'bg-emerald-400 shadow-[0_0_10px_rgba(52,211,153,0.8)] animate-pulse'
+    : 'bg-amber-400';
+  const statusLabel = connected ? 'الجهاز متصل' : 'في انتظار الاتصال';
+  const statusColor = connected ? 'text-emerald-300' : 'text-amber-300';
+
+  return (
+    <div
+      data-testid="desktop-code-bar"
+      className="border-b border-amber-500/15 bg-gradient-to-r from-black/40 via-amber-950/10 to-black/40 backdrop-blur px-3 md:px-5 py-2 flex items-center justify-between gap-2 flex-shrink-0"
+    >
+      <div className="flex items-center gap-2 min-w-0">
+        <div className="flex items-center gap-1.5">
+          <Monitor className="w-4 h-4 text-amber-300/80" />
+          <span className="text-[11px] font-bold text-amber-200/80 hidden sm:inline">رمز الجهاز:</span>
+        </div>
+        <button
+          onClick={copyCode}
+          disabled={!code}
+          data-testid="desktop-code-copy"
+          title="انقر للنسخ"
+          className="flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-black/50 border border-amber-400/30 hover:border-amber-300/60 hover:bg-black/70 transition group disabled:opacity-50"
+        >
+          <span className="font-mono text-base md:text-lg font-black tracking-[0.25em] text-amber-200 group-hover:text-amber-100">
+            {loading && !code ? '......' : (code || '------')}
+          </span>
+          {copied ? (
+            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-300" />
+          ) : (
+            <Copy className="w-3.5 h-3.5 text-amber-300/70 group-hover:text-amber-200" />
+          )}
+        </button>
+        <div className={`flex items-center gap-1.5 ${statusColor}`}>
+          <span className={`inline-block w-2 h-2 rounded-full ${statusDotClass}`}></span>
+          <span className="text-[10px] font-bold hidden md:inline">{statusLabel}</span>
+        </div>
+      </div>
+      <div className="flex items-center gap-2">
+        <span className="text-[10px] text-white/40 hidden lg:inline">
+          الصقه في Zenrex Desktop Agent ← Connect
+        </span>
+        <button
+          onClick={() => load(true)}
+          data-testid="desktop-code-refresh"
+          title="ولّد رمزاً جديداً"
+          className="p-1.5 rounded-md bg-amber-500/15 hover:bg-amber-500/25 border border-amber-400/30 text-amber-200 transition"
+          disabled={loading}
+        >
+          <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
+        </button>
+      </div>
+    </div>
+  );
+}
+
+
 
 function buildMessageInsights(message) {
   const text = message?.content || '';
@@ -994,6 +1103,7 @@ export default function AdminAutoCoder() {
         </aside>
 
         <main className="flex-1 flex flex-col min-w-0">
+          <DesktopCodeBar acToken={acToken} />
           <div ref={scrollRef} className="flex-1 overflow-y-auto p-4 md:p-6 space-y-4">
             <OwnerMissionPanel
               metaReport={metaReport}
