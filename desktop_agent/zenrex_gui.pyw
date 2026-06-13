@@ -6,6 +6,16 @@ app remembers it across launches. The user just clicks Connect.
 """
 from __future__ import annotations
 
+# ─── CRITICAL: pythonw.exe safety — stdout/stderr are None ─────────────────
+# Any `print()`, traceback, or logging.basicConfig() that targets stderr
+# crashes the entire interpreter when run under pythonw.exe. Redirect both
+# to a real (devnull) stream BEFORE importing anything that might print.
+import sys as _sys, os as _os
+if _sys.stdout is None:
+    _sys.stdout = open(_os.devnull, "w", encoding="utf-8")
+if _sys.stderr is None:
+    _sys.stderr = open(_os.devnull, "w", encoding="utf-8")
+
 import asyncio
 import base64
 import io
@@ -39,7 +49,7 @@ DOWNLOADS_DIR.mkdir(parents=True, exist_ok=True)
 
 # Local version — bumped whenever zenrex_gui.pyw changes meaningfully.
 # Compared against server's /api/desktop-agent/version on startup.
-AGENT_VERSION = "0.4.2"
+AGENT_VERSION = "0.4.3"
 
 # Set to False to disable on-startup auto-update. Recommended OFF until we
 # have a code-signing pipeline — a single bad release can brick all clients.
@@ -1039,7 +1049,14 @@ def main():
 
     # 2. Show GUI. On any crash, write a log file the user can inspect.
     try:
-        logging.basicConfig(level=logging.WARNING)
+        # Route logging to a file — pythonw.exe has no real stderr, so the
+        # default basicConfig() would crash on the first WARN.
+        logging.basicConfig(
+            filename=str(SCRIPT_DIR / "agent.log"),
+            filemode="a",
+            level=logging.WARNING,
+            format="[%(asctime)s] %(levelname)s %(name)s: %(message)s",
+        )
         app = ZenrexGUI()
         app.run()
     except BaseException as e:
