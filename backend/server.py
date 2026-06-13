@@ -3375,10 +3375,17 @@ try:
     )
     app.include_router(_local_browser_router)
     app.include_router(_desktop_agent_router)
-    _set_relay_db(db)  # enable MongoDB persistence for desktop pairings
+    _set_relay_db(db)
     logging.getLogger(__name__).info("Local browser relay + Desktop Agent relay registered (with Mongo persistence)")
 except Exception as _lbe:
     logging.getLogger(__name__).error(f"Failed to register local browser relay: {_lbe}", exc_info=True)
+
+try:
+    from modules.trading import router as _trading_router
+    app.include_router(_trading_router)
+    logging.getLogger(__name__).info("Trading module registered (owner-only)")
+except Exception as _te:
+    logging.getLogger(__name__).error(f"Failed to register trading router: {_te}", exc_info=True)
 
 # ============== SOURCE CODE DOWNLOADER (owner-only) ==============
 try:

@@ -85,6 +85,7 @@ import AvatarSettings from '@/pages/AvatarSettings';
 import ChannelBridge from '@/pages/ChannelBridge';
 import AdminAICore from '@/pages/AdminAICore';
 import AdminAutoCoder from '@/pages/AdminAutoCoder';
+import MyTradingDashboard from '@/pages/MyTradingDashboard';
 import AdminQualityRouter from '@/pages/AdminQualityRouter';
 import AdminSections from '@/pages/AdminSections';
 import AdminApiKeys from '@/pages/AdminApiKeys';
@@ -201,6 +202,7 @@ function App() {
           <Route path="/dashboard/apps-market" element={<MobileAppMarketplace />} />
           
           <Route path="/admin" element={<ProtectedRoute adminOnly><AdminDashboard user={user} /></ProtectedRoute>} />
+          <Route path="/admin/my-trading" element={<ProtectedRoute adminOnly><MyTradingDashboard user={user} /></ProtectedRoute>} />
           <Route path="/admin/requests" element={<ProtectedRoute adminOnly><AdminRequests user={user} /></ProtectedRoute>} />
           <Route path="/admin/payments" element={<ProtectedRoute adminOnly><AdminPayments user={user} /></ProtectedRoute>} />
           <Route path="/admin/clients" element={<ProtectedRoute adminOnly><AdminClients user={user} /></ProtectedRoute>} />
