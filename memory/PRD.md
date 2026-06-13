@@ -20,6 +20,36 @@ Build "Zenrex" — a multi-tenant Saudi/Arab AI commerce platform with:
 ## Current State (Feb 2026)
 
 
+### 🔧 Feb 13 2026 — AutoCoder Desktop Tools Parity Fix
+
+**Problem:** `/admin/autocoder` chat was missing the `desktop_*` tools (only FreeBuild had them).
+The AI kept hallucinating fake 6-char pairing codes that the server rejected.
+
+**Root cause:** AutoCoder's `_stream_direct_anthropic` uses its own `ANTHROPIC_TOOLS`
+list + `execute_autocoder_tool` dispatcher (separate code path from FreeBuild's
+`run_agent_turn`). The desktop tools were registered only on FreeBuild's side.
+
+**Fix in `/app/backend/modules/autocoder/__init__.py`:**
+1. Imported `DESKTOP_TOOL_SCHEMAS`, `DESKTOP_TOOL_NAMES`, `dispatch_desktop` from
+   `..freebuild.desktop_agent_tools` and `DESKTOP_OWNER_ADDENDUM` from `..freebuild.freebuild_agent`.
+2. Added a `_AUTOCODER_CONV_ID_VAR` ContextVar (set inside `/chat` `gen()`) so the
+   desktop dispatcher knows which pairing slot to use — the AutoCoder `conv_id`
+   doubles as the desktop `project_id`.
+3. Appended `DESKTOP_TOOL_SCHEMAS` to `ANTHROPIC_TOOLS`.
+4. Registered async wrapper handlers in `TOOL_HANDLERS` for each of the 4 desktop
+   tools that build a `_DesktopCtx(project_id=conv_id)` on the fly.
+5. Injected `DESKTOP_OWNER_ADDENDUM` (strict verbatim-code rules + visible-pacing
+   policy) into both `sys_prompt_full` (alt providers) and `sys_prompt_text`
+   (Anthropic direct stream).
+
+**Verified end-to-end:** `python3 /tmp/test_autocoder_desktop.py` →
+- AI calls `desktop_status` → `desktop_pair` in correct order.
+- Real code `NSLBBZ` appeared verbatim in the assistant reply.
+- Full `display_block` (PowerShell command + download URL) reproduced exactly.
+- No 0/O/I/1 characters; charset matches `[A-HJ-NP-Z2-9]`.
+
+
+
 ### 🖥️ Jun 12 2026 — Phase 9: Desktop Agent (Native OS Control) — 68 total tools
 
 **Problem:** Chrome Extension only controls browser tabs. User explicitly asked the AI

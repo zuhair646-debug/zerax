@@ -132,6 +132,29 @@ from .superpowers import (
     SUPERPOWERS_PROMPT_RULES,
 )
 
+# ── Desktop Agent (native OS control on owner's laptop) ──
+# Imported from FreeBuild so the same desktop tools work in /admin/autocoder too.
+from ..freebuild.desktop_agent_tools import (
+    DESKTOP_TOOL_SCHEMAS,
+    DESKTOP_TOOL_NAMES,
+    dispatch_desktop,
+)
+from ..freebuild.freebuild_agent import DESKTOP_OWNER_ADDENDUM
+import contextvars
+
+# Per-request context: the AutoCoder conversation_id is used as the desktop
+# `project_id` so each chat session gets its own pairing slot.
+_AUTOCODER_CONV_ID_VAR: contextvars.ContextVar[str] = contextvars.ContextVar(
+    "autocoder_conv_id", default=""
+)
+
+
+class _DesktopCtx:
+    """Minimal ctx object the desktop_agent_tools.dispatch_desktop expects."""
+    def __init__(self, project_id: str):
+        self.project_id = project_id
+        self.is_owner = True
+
 logger = logging.getLogger(__name__)
 
 # ════════════════════════════════════════════════════════════════════════
@@ -1637,7 +1660,7 @@ ANTHROPIC_TOOLS = [
             "required": ["collection"],
         },
     },
-]
+] + DESKTOP_TOOL_SCHEMAS
 
 TOOL_HANDLERS = {
     "list_dir": tool_list_dir,
@@ -1704,6 +1727,21 @@ TOOL_HANDLERS.update(ROUTER_TOOL_HANDLERS)
 TOOL_HANDLERS.update(CACHE_TOOL_HANDLERS)
 # Register Superpowers tools (project_context / screenshot_url / plan_* / update_prd / project_health)
 TOOL_HANDLERS.update(SUPERPOWERS_HANDLERS)
+
+
+# ── Desktop Agent tool wrappers ──────────────────────────────────────────────
+# The shared dispatch_desktop expects a `ctx` with `project_id`. We pull that
+# from the per-request ContextVar set in the /chat endpoint (uses conv_id).
+async def _desktop_wrapper(name: str, **kwargs):
+    conv_id = _AUTOCODER_CONV_ID_VAR.get("")
+    if not conv_id:
+        return {"ok": False, "error": "no_conversation_context — open a chat first"}
+    return await dispatch_desktop(_DesktopCtx(conv_id), name, kwargs)
+
+
+for _dname in DESKTOP_TOOL_NAMES:
+    # Bind name into default arg so each lambda keeps its own tool name.
+    TOOL_HANDLERS[_dname] = (lambda _n=_dname: (lambda **kw: _desktop_wrapper(_n, **kw)))()
 
 # db_query is bound to the live MongoDB at router creation time
 _db_query_bound: Optional[Any] = None
@@ -2263,6 +2301,9 @@ def create_autocoder_router(db, get_current_user, require_owner):
         )
 
         async def gen():
+            # Bind conversation_id into per-request context so desktop tools
+            # know which pairing slot to use.
+            _AUTOCODER_CONV_ID_VAR.set(conv_id)
             assistant_text = ""
             tool_events: List[Dict[str, Any]] = []
             usage_total = {"input": 0, "output": 0, "cached_read": 0, "cost_usd": 0.0}
@@ -2774,7 +2815,7 @@ async def _autocoder_stream(messages: List[Dict[str, Any]], model: str = "claude
         lessons_block = await build_lessons_for_prompt(max_lessons=12)
     except Exception:
         lessons_block = ""
-    sys_prompt_full = AUTOCODER_SYSTEM_PROMPT + AUTONOMY_PROMPT_RULES + OPS_PROMPT_RULES + QUALITY_PROMPT_RULES + INDEX_PROMPT_RULES + SAFETY_PROMPT_RULES + LEARNING_PROMPT_RULES + SUPERPOWERS_PROMPT_RULES + (env_banner or "") + build_atlas_for_prompt() + build_atlas_v2_for_prompt() + build_universe_for_prompt() + lessons_block
+    sys_prompt_full = AUTOCODER_SYSTEM_PROMPT + AUTONOMY_PROMPT_RULES + OPS_PROMPT_RULES + QUALITY_PROMPT_RULES + INDEX_PROMPT_RULES + SAFETY_PROMPT_RULES + LEARNING_PROMPT_RULES + SUPERPOWERS_PROMPT_RULES + DESKTOP_OWNER_ADDENDUM + (env_banner or "") + build_atlas_for_prompt() + build_atlas_v2_for_prompt() + build_universe_for_prompt() + lessons_block
     if model == "groq":
         groq_key = os.environ.get("GROQ_API_KEY", "").strip()
         async for evt in stream_via_groq(
@@ -2972,7 +3013,7 @@ async def _stream_direct_anthropic(anthropic_msgs: List[Dict[str, Any]], api_key
         task_brief = await build_session_brief(max_tasks=3)
     except Exception:
         task_brief = ""
-    sys_prompt_text = AUTOCODER_SYSTEM_PROMPT + AUTONOMY_PROMPT_RULES + OPS_PROMPT_RULES + QUALITY_PROMPT_RULES + INDEX_PROMPT_RULES + SAFETY_PROMPT_RULES + LEARNING_PROMPT_RULES + MEMORY_PROMPT_RULES + SANDBOX_PROMPT_RULES + WEB_SEARCH_PROMPT_RULES + ROUTER_PROMPT_RULES + CACHE_PROMPT_RULES + SUPERPOWERS_PROMPT_RULES + (env_banner or "") + build_atlas_for_prompt() + build_atlas_v2_for_prompt() + build_universe_for_prompt() + lessons_block + task_brief
+    sys_prompt_text = AUTOCODER_SYSTEM_PROMPT + AUTONOMY_PROMPT_RULES + OPS_PROMPT_RULES + QUALITY_PROMPT_RULES + INDEX_PROMPT_RULES + SAFETY_PROMPT_RULES + LEARNING_PROMPT_RULES + MEMORY_PROMPT_RULES + SANDBOX_PROMPT_RULES + WEB_SEARCH_PROMPT_RULES + ROUTER_PROMPT_RULES + CACHE_PROMPT_RULES + SUPERPOWERS_PROMPT_RULES + DESKTOP_OWNER_ADDENDUM + (env_banner or "") + build_atlas_for_prompt() + build_atlas_v2_for_prompt() + build_universe_for_prompt() + lessons_block + task_brief
     system_blocks = [
         {"type": "text", "text": sys_prompt_text, "cache_control": {"type": "ephemeral"}}
     ]
