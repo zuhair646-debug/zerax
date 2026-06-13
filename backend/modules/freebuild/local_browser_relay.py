@@ -366,7 +366,7 @@ async def desktop_act_http(request: Request):
 
 
 # ── Live screen streaming ───────────────────────────────────────────────────
-DESKTOP_AGENT_VERSION = "0.4.1"
+DESKTOP_AGENT_VERSION = "0.4.2"
 
 
 @desktop_router.get("/version")

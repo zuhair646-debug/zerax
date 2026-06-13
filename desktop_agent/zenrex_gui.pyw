@@ -39,7 +39,11 @@ DOWNLOADS_DIR.mkdir(parents=True, exist_ok=True)
 
 # Local version — bumped whenever zenrex_gui.pyw changes meaningfully.
 # Compared against server's /api/desktop-agent/version on startup.
-AGENT_VERSION = "0.4.1"
+AGENT_VERSION = "0.4.2"
+
+# Set to False to disable on-startup auto-update. Recommended OFF until we
+# have a code-signing pipeline — a single bad release can brick all clients.
+_AUTO_UPDATE_ENABLED = False
 
 pyautogui.FAILSAFE = True
 
@@ -1018,21 +1022,20 @@ def _log_fatal(exc: BaseException) -> str:
 
 
 def main():
-    # 1. Self-update (silent, defensive). If it succeeds, re-launch the new
-    #    file via a fresh subprocess and exit cleanly — safer than os.execv
-    #    when running under pythonw.exe.
-    try:
-        if _check_and_self_update():
-            try:
-                subprocess.Popen(
-                    [sys.executable, str(SCRIPT_DIR / "zenrex_gui.pyw")] + sys.argv[1:],
-                    close_fds=True,
-                )
-            except Exception:
-                pass
-            return  # exit current process; new one is launched
-    except Exception:
-        pass  # update failures never block startup
+    # 1. Self-update (disabled by default — set _AUTO_UPDATE_ENABLED=True at top).
+    if _AUTO_UPDATE_ENABLED:
+        try:
+            if _check_and_self_update():
+                try:
+                    subprocess.Popen(
+                        [sys.executable, str(SCRIPT_DIR / "zenrex_gui.pyw")] + sys.argv[1:],
+                        close_fds=True,
+                    )
+                except Exception:
+                    pass
+                return
+        except Exception:
+            pass
 
     # 2. Show GUI. On any crash, write a log file the user can inspect.
     try:
