@@ -43,6 +43,23 @@ list + `execute_autocoder_tool` dispatcher (separate code path from FreeBuild's
    (Anthropic direct stream).
 
 **Verified end-to-end:** `python3 /tmp/test_autocoder_desktop.py` →
+
+### 🔧 Feb 13 2026 (later) — Production deploy + 3 root-cause fixes
+
+**Root cause discovered**: Production `zenrex.ai` Desktop Agent failure was a chain of issues, NOT a single bug:
+
+1. **AutoCoder missing desktop tools** (fixed earlier) — wire `desktop_*` into ANTHROPIC_TOOLS.
+2. **Git push blocked 92 commits** — leaked `ghp_FhBF...` token in old commit `b697af6/memory/test_credentials.md:75` triggered GitHub secret-scanning. Used `git filter-repo --replace-text` to scrub the secret across all history, then force-pushed.
+3. **VPS deploy missed desktop_agent dir** — `/opt/zerax/desktop_agent/` exists on host but wasn't mounted into Docker container; added two volume mounts (`/desktop_agent` + `/app/../desktop_agent`).
+4. **`BACKEND_URL` pointed at preview** — production's `.env` had `BACKEND_URL=https://ai-cinematic-hub-2.preview.emergentagent.com` so the AI's `desktop_pair` tool generated codes in production's DB but pointed users to download from PREVIEW. Updated to `https://zenrex.ai` and force-recreated the container.
+
+**Plus 2 quality-of-life fixes** in `/app/desktop_agent/zenrex_gui.pyw` (v0.5.2):
+- Tight reconnect loop after clean server close → now respects backoff + breaks on server-error.
+- Server-side TTL: `PAIRING_TTL_SECONDS = 24h` (was 10 min). Once WS pairs successfully, pairing extended to 30 days.
+
+**Verified E2E on production**: AutoCoder chat → `desktop_status` → `desktop_pair` → returns code `W6EMP7` valid 24h in MongoDB → reply contains `iwr https://zenrex.ai/api/desktop-agent/bootstrap.ps1 -useb | iex` ✅
+
+
 - AI calls `desktop_status` → `desktop_pair` in correct order.
 - Real code `NSLBBZ` appeared verbatim in the assistant reply.
 - Full `display_block` (PowerShell command + download URL) reproduced exactly.

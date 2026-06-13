@@ -147,14 +147,16 @@ User requested comprehensive E2E testing before official launch. Testing agent (
 
 ## Zitex Auto-Coder (برمجة زيتاكس) — Owner-Only Codebase Agent
 - Route: `/admin/autocoder` (requires `is_owner=true` user)
-- **🔑 Current passcode (Jun 2026)**: `test123456` (reset Feb 13 2026)
-- **Recovery codes** (use once each if you forget the passcode):
-  - `23E7-5C93-DCF6-98B9`
-  - `4604-E32A-18ED-15DF`
-  - `76E8-D53E-8278-134B`
-  - `94F9-FFF3-E24C-6AF4`
-  - `5758-F024-A82F-9FC2`
-  - `E44F-D807-65B6-E75A`
+- **🔑 Preview passcode**: `test123456` (reset Feb 13 2026)
+- **🔑 Production passcode (`zenrex.ai`)**: `prod123456` (reset Feb 13 2026)
+- **Owner email on production**: `owner@zenrex.ai` / `owner123`
+- **Recovery codes** (PROD — use once each):
+  - `7C9F-8D13-282D-B828`
+  - `1ED9-DD8B-5C1B-DBCB`
+  - `DF61-BFDB-5D97-0B89`
+  - `5E56-7ADA-0023-23C3`
+  - `B987-D168-CA91-60E4`
+  - `43C6-675B-350A-2BD1`
 - First visit shows **Setup screen** → owner picks passcode (≥6 chars) → system generates 6 one-time recovery codes
 - Subsequent visits show **Lock screen** → enter passcode → 4-hour session token
 - Session token stored client-side in `localStorage.zenrex_autocoder_session` and sent in `X-AutoCoder-Token` header
