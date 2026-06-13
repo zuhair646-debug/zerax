@@ -109,6 +109,11 @@ from .web_search import (
     web_search_summarize, web_search_preview, WEB_SEARCH_PROMPT_RULES,
     bind_db as _bind_websearch_db,
 )
+from .error_intelligence import (
+    ERROR_INTEL_ANTHROPIC_TOOLS, ERROR_INTEL_TOOL_HANDLERS, ERROR_INTEL_TOOL_DEFS,
+    error_intel_summarize, error_intel_preview, ERROR_INTEL_PROMPT_RULES,
+    bind_db as _bind_error_intel_db,
+)
 from .railway_tools import (
     RAILWAY_ANTHROPIC_TOOLS, RAILWAY_TOOL_HANDLERS, RAILWAY_TOOL_DEFS,
     railway_summarize, railway_preview, bind_creds_getter as _bind_railway_creds,
@@ -1635,7 +1640,7 @@ ANTHROPIC_TOOLS = [
         "description": "EMERGENCY: if the latest deployment failed and you can't fix it quickly, this finds the last SUCCESS commit on Railway and force-pushes to it, restoring the platform. Use as a last resort when stuck.",
         "input_schema": {"type": "object", "properties": {}, "required": []},
     },
-] + EXTRA_ANTHROPIC_TOOLS + UNIVERSE_ANTHROPIC_TOOLS + QUALITY_ANTHROPIC_TOOLS + INDEX_ANTHROPIC_TOOLS + SAFETY_ANTHROPIC_TOOLS + LEARNING_ANTHROPIC_TOOLS + AUTONOMY_ANTHROPIC_TOOLS + OPS_ANTHROPIC_TOOLS + MEMORY_ANTHROPIC_TOOLS + SANDBOX_ANTHROPIC_TOOLS + INTEGRATIONS_ANTHROPIC_TOOLS + WEB_SEARCH_ANTHROPIC_TOOLS + RAILWAY_ANTHROPIC_TOOLS + VERCEL_ANTHROPIC_TOOLS + ROUTER_ANTHROPIC_TOOLS + CACHE_ANTHROPIC_TOOLS + SUPERPOWERS_ANTHROPIC_TOOLS + [
+] + EXTRA_ANTHROPIC_TOOLS + UNIVERSE_ANTHROPIC_TOOLS + QUALITY_ANTHROPIC_TOOLS + INDEX_ANTHROPIC_TOOLS + SAFETY_ANTHROPIC_TOOLS + LEARNING_ANTHROPIC_TOOLS + AUTONOMY_ANTHROPIC_TOOLS + OPS_ANTHROPIC_TOOLS + MEMORY_ANTHROPIC_TOOLS + SANDBOX_ANTHROPIC_TOOLS + INTEGRATIONS_ANTHROPIC_TOOLS + WEB_SEARCH_ANTHROPIC_TOOLS + ERROR_INTEL_ANTHROPIC_TOOLS + RAILWAY_ANTHROPIC_TOOLS + VERCEL_ANTHROPIC_TOOLS + ROUTER_ANTHROPIC_TOOLS + CACHE_ANTHROPIC_TOOLS + SUPERPOWERS_ANTHROPIC_TOOLS + [
     # ══ Media generation (Nano Banana, ElevenLabs, Sora, Playwright) ══
     {
         "name": "generate_image",
@@ -2024,6 +2029,8 @@ TOOL_HANDLERS.update(SANDBOX_TOOL_HANDLERS)
 TOOL_HANDLERS.update(INTEGRATIONS_TOOL_HANDLERS)
 # Register Web Search tools (Tavily)
 TOOL_HANDLERS.update(WEB_SEARCH_TOOL_HANDLERS)
+# Register Error Intelligence tools (StackOverflow + GitHub + lesson-from-error)
+TOOL_HANDLERS.update(ERROR_INTEL_TOOL_HANDLERS)
 # Register Railway tools (redeploy, build logs, runtime logs, env vars)
 TOOL_HANDLERS.update(RAILWAY_TOOL_HANDLERS)
 # Register Vercel tools (frontend deploy mirror)
@@ -2330,6 +2337,8 @@ def create_autocoder_router(db, get_current_user, require_owner):
     _bind_memory_db(db)
     # Bind the Web Search vault fallback to DB
     _bind_websearch_db(db)
+    # Bind Error Intelligence to DB (for lesson lookups)
+    _bind_error_intel_db(db)
     # Bind Railway tools to credentials getter (env or vault)
     _bind_railway_creds(_get_railway_creds)
     # Bind Vercel tools to credentials getter (env or vault)
@@ -3306,7 +3315,7 @@ async def _autocoder_stream(messages: List[Dict[str, Any]], model: str = "claude
         lessons_block = await build_lessons_for_prompt(max_lessons=12)
     except Exception:
         lessons_block = ""
-    sys_prompt_full = AUTOCODER_SYSTEM_PROMPT + AUTONOMY_PROMPT_RULES + OPS_PROMPT_RULES + QUALITY_PROMPT_RULES + INDEX_PROMPT_RULES + SAFETY_PROMPT_RULES + LEARNING_PROMPT_RULES + SUPERPOWERS_PROMPT_RULES + HONESTY_PERSISTENCE_RULES + DESKTOP_OWNER_ADDENDUM + (env_banner or "") + build_atlas_for_prompt() + build_atlas_v2_for_prompt() + build_universe_for_prompt() + lessons_block
+    sys_prompt_full = AUTOCODER_SYSTEM_PROMPT + AUTONOMY_PROMPT_RULES + OPS_PROMPT_RULES + QUALITY_PROMPT_RULES + INDEX_PROMPT_RULES + SAFETY_PROMPT_RULES + LEARNING_PROMPT_RULES + SUPERPOWERS_PROMPT_RULES + HONESTY_PERSISTENCE_RULES + ERROR_INTEL_PROMPT_RULES + DESKTOP_OWNER_ADDENDUM + (env_banner or "") + build_atlas_for_prompt() + build_atlas_v2_for_prompt() + build_universe_for_prompt() + lessons_block
     if model == "groq":
         groq_key = os.environ.get("GROQ_API_KEY", "").strip()
         async for evt in stream_via_groq(
@@ -3513,7 +3522,7 @@ async def _stream_direct_anthropic(anthropic_msgs: List[Dict[str, Any]], api_key
         task_brief = await build_session_brief(max_tasks=3)
     except Exception:
         task_brief = ""
-    sys_prompt_text = AUTOCODER_SYSTEM_PROMPT + AUTONOMY_PROMPT_RULES + OPS_PROMPT_RULES + QUALITY_PROMPT_RULES + INDEX_PROMPT_RULES + SAFETY_PROMPT_RULES + LEARNING_PROMPT_RULES + MEMORY_PROMPT_RULES + SANDBOX_PROMPT_RULES + WEB_SEARCH_PROMPT_RULES + ROUTER_PROMPT_RULES + CACHE_PROMPT_RULES + SUPERPOWERS_PROMPT_RULES + HONESTY_PERSISTENCE_RULES + DESKTOP_OWNER_ADDENDUM + (env_banner or "") + build_atlas_for_prompt() + build_atlas_v2_for_prompt() + build_universe_for_prompt() + lessons_block + task_brief
+    sys_prompt_text = AUTOCODER_SYSTEM_PROMPT + AUTONOMY_PROMPT_RULES + OPS_PROMPT_RULES + QUALITY_PROMPT_RULES + INDEX_PROMPT_RULES + SAFETY_PROMPT_RULES + LEARNING_PROMPT_RULES + MEMORY_PROMPT_RULES + SANDBOX_PROMPT_RULES + WEB_SEARCH_PROMPT_RULES + ERROR_INTEL_PROMPT_RULES + ROUTER_PROMPT_RULES + CACHE_PROMPT_RULES + SUPERPOWERS_PROMPT_RULES + HONESTY_PERSISTENCE_RULES + DESKTOP_OWNER_ADDENDUM + (env_banner or "") + build_atlas_for_prompt() + build_atlas_v2_for_prompt() + build_universe_for_prompt() + lessons_block + task_brief
     system_blocks = [
         {"type": "text", "text": sys_prompt_text, "cache_control": {"type": "ephemeral"}}
     ]
@@ -3880,6 +3889,9 @@ def _preview_for_ui(name: str, result: Dict[str, Any]) -> str:
     wp = web_search_preview(name, result)
     if wp is not None:
         return wp
+    eip = error_intel_preview(name, result)
+    if eip is not None:
+        return eip
     rp = railway_preview(name, result)
     if rp is not None:
         return rp
@@ -3963,6 +3975,9 @@ def _summarize(name: str, result: Dict[str, Any]) -> str:
     ws_s = web_search_summarize(name, result)
     if ws_s is not None:
         return ws_s
+    ei_s = error_intel_summarize(name, result)
+    if ei_s is not None:
+        return ei_s
     rs = railway_summarize(name, result)
     if rs is not None:
         return rs

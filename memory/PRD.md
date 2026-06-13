@@ -828,3 +828,31 @@ Previous code sent raw hex like `#000000` inside the Gemini prompt: `"isolated p
 
 
 
+
+
+### 🧠🔬 Feb 13 2026 — Owner AI Error Intelligence + Auto-Learn from Failures
+
+**Goal:** Make the Owner AI behave like a senior autonomous engineer — when it hits an error, it MUST research (not guess), then learn (so it never makes the same mistake twice).
+
+**New module** `/app/backend/modules/autocoder/error_intelligence.py` (300 lines) with 3 new tools:
+- `research_error(error, context?, language?, max_per_source?)` — parallel search across **StackOverflow** (Stack Exchange API v2.3, no key), **GitHub Issues** (uses GITHUB_PAT if set, public otherwise), **Tavily web**, and the AI's own **learning journal** (prior lessons). Returns SO sorted by score+answered, GH by reactions, plus a curated guidance string.
+- `learn_from_error(error, root_cause, fix, tags?, code_pattern?)` — structured wrapper around `record_lesson` that auto-adds `error-recovery` tag.
+- `diagnose_and_research(symptom, scope?, language?)` — chain: `auto_diagnose` then `research_error` on the most salient symptom. For opaque "something's broken" reports.
+
+**System prompt updated** with new `ERROR_INTEL_PROMPT_RULES` — mandatory 5-step **Error Recovery Protocol**:
+  1) `recall_lessons` — have I solved this before?
+  2) `research_error` — multi-source if no prior lesson
+  3) `diagnose_and_research` — when the report is vague
+  4) `try_until_works` — execute with retries (no claiming success without verification)
+  5) `learn_from_error` — record the structured lesson
+
+Protocol is injected into BOTH the legacy alt-provider system prompt and the direct-Anthropic stream prompt.
+
+**Wiring:** Added to `ANTHROPIC_TOOLS` schema list, `TOOL_HANDLERS` registry, summarize+preview helpers; `_bind_error_intel_db(db)` called inside `create_autocoder_router`.
+
+**Verified end-to-end:**
+- 120 tools now registered (was 117).
+- `research_error('AttributeError NoneType has no attribute split', language='python')` → SO 3, GH 3, lessons 0.
+- `learn_from_error(...)` → persisted to `autocoder_lessons` collection, retrievable via `query_lessons`.
+
+**Status:** ✅ DEPLOYED locally. Push to GitHub + pull on Hetzner VPS pending owner approval.
