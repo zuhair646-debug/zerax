@@ -46,7 +46,7 @@ _ACTIVE_WS: Dict[str, WebSocket] = {}
 # In-memory: project_id → asyncio.Future for pending command responses keyed by request_id
 _PENDING_RESPONSES: Dict[str, Dict[str, asyncio.Future]] = {}
 
-PAIRING_TTL_SECONDS = 10 * 60  # 10 minutes
+PAIRING_TTL_SECONDS = 24 * 60 * 60  # 24 hours (was 10 min — too short for owner workflow)
 COMMAND_TIMEOUT_SECONDS = 30
 
 
@@ -835,6 +835,17 @@ async def desktop_agent_ws(ws: WebSocket, code: str = Query(...)):
             pass
     _DESKTOP_ACTIVE_WS[project_id] = ws
     pairing["ws_connected"] = True
+    # Once paired successfully, extend the pairing forever (until ws disconnects)
+    # so a long-running owner session never has to re-enter the code.
+    pairing["expires_at"] = time.time() + 30 * 24 * 60 * 60  # 30 days from successful pair
+    try:
+        if _db_ref is not None:
+            await _db_ref.desktop_pairings.update_one(
+                {"_id": code},
+                {"$set": {"expires_at": pairing["expires_at"], "ws_connected": True}},
+            )
+    except Exception:
+        pass
     _DESKTOP_PENDING.setdefault(project_id, {})
     await ws.send_json({
         "type": "paired",

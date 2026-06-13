@@ -80,7 +80,7 @@ DEFAULT_WS = "wss://ai-cinematic-hub-2.preview.emergentagent.com/api/desktop-age
 DOWNLOADS_DIR = Path.home() / "Downloads"
 DOWNLOADS_DIR.mkdir(parents=True, exist_ok=True)
 
-AGENT_VERSION = "0.5.0"   # First .exe release
+AGENT_VERSION = "0.5.2"   # graceful error handling + no rapid reconnect loop
 
 # Set to False to disable on-startup auto-update. Recommended OFF until we
 # have a code-signing pipeline — a single bad release can brick all clients.
@@ -612,12 +612,14 @@ class AgentWorker(threading.Thread):
         url = f"{self.server_url}?code={self.code}"
         self.log(f"Connecting to {url} …")
         backoff = 2
+        last_error_msg: str | None = None
         while not self._stop.is_set():
             try:
                 async with websockets.connect(url, ping_interval=20, max_size=8 * 1024 * 1024) as ws:
                     self.status("connected")
                     self.log("✅ Connected — waiting for AI commands")
                     backoff = 2
+                    received_error = False
                     # Hello
                     info = {
                         "os": platform.system(), "release": platform.release(),
@@ -659,12 +661,28 @@ class AgentWorker(threading.Thread):
                         elif t == "paired":
                             self.log(f"🔗 Paired with project {msg.get('project_id')}")
                         elif t == "error":
-                            self.log(f"⚠️ Server: {msg.get('message')}")
+                            err = msg.get("message") or "unknown error"
+                            last_error_msg = err
+                            received_error = True
+                            self.log(f"⚠️ Server: {err}")
+                            self.status("error")
+                # async with exited cleanly. If the server sent us an error
+                # (e.g. invalid_or_expired_pairing_code), STOP retrying — the
+                # user must enter a fresh code. Otherwise back off normally.
+                if received_error:
+                    self.log(f"❌ Stopped: {last_error_msg}. Get a fresh code from the AI and click Connect again.")
+                    self.status("error")
+                    break
+                if not self._stop.is_set():
+                    self.status("reconnecting")
+                    self.log(f"Connection closed; retry in {backoff}s")
+                    await asyncio.sleep(backoff)
+                    backoff = min(backoff * 2, 30)
             except Exception as e:
                 if self._stop.is_set():
                     break
                 self.status("reconnecting")
-                self.log(f"Disconnected ({e.__class__.__name__}); retry in {backoff}s")
+                self.log(f"Disconnected ({e.__class__.__name__}: {e}); retry in {backoff}s")
                 await asyncio.sleep(backoff)
                 backoff = min(backoff * 2, 30)
         self.status("disconnected")
