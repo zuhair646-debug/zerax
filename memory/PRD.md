@@ -770,6 +770,57 @@ Previous code sent raw hex like `#000000` inside the Gemini prompt: `"isolated p
 - **data-testid added**: `cs-regenerate-btn` for E2E.
 
 
+### 📈 Feb 13 2026 — AI Trading Bot Phase 2 COMPLETE (P1 done)
+
+**What changed:** Replaced the mocked trading backend with full LIVE Alpaca integration + Claude Sonnet 4.5 AI strategy engine.
+
+**New backend endpoints in `/app/backend/modules/trading/__init__.py`:**
+- `GET /api/trading/status` — connection state + halal count
+- `GET /api/trading/halal-stocks` — 22 vetted Sharia-compliant US tickers
+- `POST /api/trading/connect` — validates against Alpaca `/v2/account` BEFORE persisting (FAKE creds → 400)
+- `POST /api/trading/disconnect`
+- `GET /api/trading/account` — real equity, cash, buying_power, positions, daily P&L
+- `GET /api/trading/quote/{ticker}` — latest bid/ask + 30d daily bars (halal-only)
+- `POST /api/trading/trade` — market or limit order; halal guard + daily-loss circuit-breaker + cooldown
+- `POST /api/trading/close-position/{ticker}`
+- `POST /api/trading/ai-suggest` — Claude `claude-sonnet-4-5-20250929` analyzes 15 daily bars + current position, returns JSON `{action,confidence,reasoning,suggested_notional_usd,stop_loss_pct,take_profit_pct}`; optional `auto_execute` if confidence ≥60 (capped at `max_notional`)
+- `GET/POST /api/trading/settings` — risk limits (max_position_pct, daily_loss_limit_pct, cooldown_minutes)
+- `POST /api/trading/agent/toggle?running=…`
+- `GET /api/trading/recent-trades`, `GET /api/trading/ai-suggestions`
+- `GET /api/trading/market-clock`
+
+**Sharia screening:** in-memory `HALAL_WHITELIST` of 22 tickers (Energy/Tech/Consumer/Healthcare/Industrial). Halal guard fires BEFORE Alpaca connection check on `/trade`, `/quote`, `/ai-suggest`.
+
+**Risk controls:** daily-loss circuit-breaker (halts trading if equity drop ≥ limit %), per-ticker cooldown (default 5min), creds validated against Alpaca before persist.
+
+**Frontend** `/app/frontend/src/pages/MyTradingDashboard.js` fully rewritten:
+- 6 tabs: Overview / Halal List / Positions / Trade History / AI Analytics / Settings
+- Market-clock badge (open/closed)
+- Per-stock "AI" + "Buy" buttons in Halal List
+- AI Dialog: shows decision/confidence/reasoning + "Execute Now" button
+- Manual trade dialog (buy/sell + notional)
+- Positions tab: live P&L per position + AI/Close buttons
+- AI Analytics: history of every Claude suggestion (color-coded)
+- Settings: Alpaca link form + Risk Limits form
+
+**Dependencies:** `alpaca-py==0.43.4` + transitive (`pytz==2026.2`, `sseclient-py==1.9.0`) added to `requirements.txt`. Claude via existing `emergentintegrations` + `EMERGENT_LLM_KEY`.
+
+**Tested:** `iteration_44.json` → 20/20 backend pytest pass + 100% frontend flows. Pytest suite at `/app/backend/tests/test_trading_phase2.py`. Live trading paths (account/quote/trade execution) require real Alpaca paper keys from user to fully E2E test.
+
+**Status:** ✅ READY for owner to add paper-trading keys at https://alpaca.markets and start using.
+
+---
+
+### Next Tasks (after Trading Phase 2)
+- **P2 — Cleanup AutoCoder code (Phase B):** consolidate FreeBuild vs AutoCoder dual logic paths in `/app/backend/modules/autocoder/`.
+- **P2 — Auto Sharia re-screening quarterly** from SEC EDGAR (debt ratios).
+- **P2 — TradingView chart embed** in MyTradingDashboard Positions/Quote view.
+- **P2 — Telegram notifications** on executed AI trades.
+- **P2 — WhatsApp Business API integration.**
+- **Future — App Builder (HTML→Capacitor/PWA), ZATCA Phase 2, live Tabby/Tamara.**
+
+
+
 
 
 
