@@ -202,6 +202,9 @@ from fastapi.responses import StreamingResponse
 _DESKTOP_PAIRINGS: Dict[str, Dict[str, Any]] = {}
 _DESKTOP_ACTIVE_WS: Dict[str, WebSocket] = {}
 _DESKTOP_PENDING: Dict[str, Dict[str, asyncio.Future]] = {}
+# Last time a duplicate-reject warning was logged for a given project_id,
+# used to throttle the log spam when a rogue agent reconnects in a tight loop.
+_DUPLICATE_REJECT_LOG: Dict[str, float] = {}
 
 DESKTOP_COMMAND_TIMEOUT_SECONDS = 60  # screenshots / downloads can take longer
 
@@ -443,7 +446,7 @@ async def desktop_act_http(request: Request):
 
 
 # ── Live screen streaming ───────────────────────────────────────────────────
-DESKTOP_AGENT_VERSION = "0.8.0"
+DESKTOP_AGENT_VERSION = "0.8.1"
 
 
 @desktop_router.get("/version")
@@ -986,8 +989,14 @@ async def desktop_agent_ws(ws: WebSocket, code: str = Query(...)):
     prev = _DESKTOP_ACTIVE_WS.get(project_id)
     prev_info = pairing.get("agent_info") or {}
     new_info: Dict[str, Any] = {}
+    has_prev = prev is not None and prev is not ws
 
-    _DESKTOP_ACTIVE_WS[project_id] = ws  # tentatively claim slot
+    # CRITICAL: If a previous agent is already connected, DO NOT claim the slot
+    # before validating the new agent's hello. Otherwise commands sent during
+    # the ~3s hello window are silently routed to the new (possibly rogue) ws.
+    # The slot is only claimed once we decide to accept the new connection.
+    if not has_prev:
+        _DESKTOP_ACTIVE_WS[project_id] = ws  # safe: no incumbent
     pairing["ws_connected"] = True
     # Once paired successfully, extend the pairing forever (until ws disconnects)
     # so a long-running owner session never has to re-enter the code.
@@ -1006,7 +1015,6 @@ async def desktop_agent_ws(ws: WebSocket, code: str = Query(...)):
         "project_id": project_id,
         "message": "✅ Connected to Zenrex (Desktop Agent)",
     })
-    logger.info(f"[desktop-agent] connected for project {project_id} (code={code})")
 
     # First, wait briefly for the agent's "hello" message so we can fingerprint.
     # If a previous agent is connected from a DIFFERENT machine, reject the new
@@ -1027,7 +1035,8 @@ async def desktop_agent_ws(ws: WebSocket, code: str = Query(...)):
         pass
 
     # Fingerprint-based duplicate detection
-    if prev is not None and prev is not ws:
+    accept_new = True
+    if has_prev:
         same_machine = _same_agent_machine(prev_info, new_info)
         if same_machine:
             # Genuine reconnect from same machine + same version → drop old one
@@ -1051,13 +1060,19 @@ async def desktop_agent_ws(ws: WebSocket, code: str = Query(...)):
                     f"{prev_info.get('agent_version','?')} → {new_info.get('agent_version','?')}"
                 )
             else:
-                # Genuinely different machine or downgrade attempt — REJECT new
-                logger.warning(
-                    f"[desktop-agent] REJECTING duplicate for {project_id}. "
-                    f"prev={_fingerprint_of(prev_info)}@v{prev_info.get('agent_version','?')} "
-                    f"new={_fingerprint_of(new_info)}@v{new_info.get('agent_version','?')}"
-                )
-                _DESKTOP_ACTIVE_WS[project_id] = prev
+                # Genuinely different machine or downgrade attempt — REJECT new.
+                # Throttle the log to once every 30s to stop spam from looping
+                # client reconnects.
+                now_ts = time.time()
+                last_log = _DUPLICATE_REJECT_LOG.get(project_id, 0)
+                if now_ts - last_log > 30:
+                    logger.warning(
+                        f"[desktop-agent] REJECTING duplicate for {project_id}. "
+                        f"prev={_fingerprint_of(prev_info)}@v{prev_info.get('agent_version','?')} "
+                        f"new={_fingerprint_of(new_info)}@v{new_info.get('agent_version','?')}"
+                    )
+                    _DUPLICATE_REJECT_LOG[project_id] = now_ts
+                accept_new = False
                 try:
                     await ws.send_json({
                         "type": "error",
@@ -1066,11 +1081,17 @@ async def desktop_agent_ws(ws: WebSocket, code: str = Query(...)):
                             f"Already paired with newer agent (v{prev_info.get('agent_version','?')}). "
                             "To take over, POST /api/desktop-agent/force-takeover."
                         ),
+                        # Hint client to back off so we stop the 3s reconnect storm
+                        "retry_after_seconds": 60,
                     })
                 except Exception:
                     pass
                 await ws.close(code=4409)
                 return
+
+    if accept_new:
+        _DESKTOP_ACTIVE_WS[project_id] = ws  # now safe to take over the slot
+        logger.info(f"[desktop-agent] connected for project {project_id} (code={code})")
 
     pairing["agent_info"] = new_info or prev_info
 

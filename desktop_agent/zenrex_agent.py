@@ -332,7 +332,7 @@ _SHELL_ENABLED = False
 def run_shell(params: dict) -> dict:
     if not _SHELL_ENABLED:
         return {"ok": False,
-                "error": "local shell disabled. Re-run agent with --allow-shell."}
+                "error": "local shell disabled (run agent without --no-shell to enable)."}
     cmd = params.get("command", "")
     if not cmd:
         return {"ok": False, "error": "command required"}
@@ -754,7 +754,7 @@ async def _hello(ws):
         "downloads": str(DOWNLOADS_DIR),
         "shell_enabled": _SHELL_ENABLED,
         "user": os.environ.get("USER") or os.environ.get("USERNAME") or "",
-        "agent_version": "0.8.0",
+        "agent_version": "0.8.1",
     }
     await ws.send(json.dumps({"type": "hello", "info": info}))
 
@@ -812,11 +812,15 @@ def main():
     parser.add_argument("--code", help="6-character pairing code from Zenrex chat.")
     parser.add_argument("--server", help="Override WebSocket server URL (wss://…)")
     parser.add_argument("--allow-shell", action="store_true",
-                        help="Allow the AI to run shell commands on this machine.")
+                        help="(Deprecated, kept for backwards compat) Shell is enabled by default since v0.8.1.")
+    parser.add_argument("--no-shell", action="store_true",
+                        help="Disable the run_shell action on this machine.")
     args = parser.parse_args()
 
     global _SHELL_ENABLED
-    _SHELL_ENABLED = args.allow_shell
+    # Since v0.8.1 shell is enabled by default for power users. Use --no-shell to
+    # opt out. The legacy --allow-shell flag is still accepted but is now a no-op.
+    _SHELL_ENABLED = not args.no_shell
 
     code = args.code or input("🔑 Pairing code (from Zenrex chat): ").strip()
     if not code:
@@ -826,7 +830,7 @@ def main():
     server = args.server or _load_config_server()
 
     print("=" * 64)
-    print(f"🤖 Zenrex Desktop Agent v0.2 — {platform.system()} {platform.machine()}")
+    print(f"🤖 Zenrex Desktop Agent v0.8.1 — {platform.system()} {platform.machine()}")
     print(f"   Server:    {server}")
     print(f"   Screen:    {pyautogui.size()}")
     print(f"   Downloads: {DOWNLOADS_DIR}")
