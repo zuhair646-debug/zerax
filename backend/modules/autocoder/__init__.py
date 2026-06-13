@@ -1894,9 +1894,20 @@ _HONESTY_VERBS = [
 ]
 
 
+# Sycophancy phrases — if these appear, the AI may be flattering instead of being honest.
+_SYCOPHANCY_PATTERNS = [
+    r"بالتأكيد\s+صحيح",
+    r"تماماً\s+كما\s+قلت",
+    r"معك\s+حق\s+تماماً",
+    r"أنت\s+محق\s+100%",
+    r"absolutely\s+correct",
+    r"you\s+are\s+absolutely\s+right",
+]
+
+
 def _build_verification_footer(text: str, events: List[Dict[str, Any]]) -> str:
-    """Detect 'I did X' claims in the AI reply that aren't backed by a tool call.
-    Returns a markdown banner to append; empty string if all claims look honest.
+    """Detect 'I did X' claims AND sycophancy in the AI reply that aren't backed
+    by evidence. Returns a markdown banner to append; empty if all is honest.
     """
     import re as _re
     if not text or len(text.strip()) < 20:
@@ -1921,20 +1932,45 @@ def _build_verification_footer(text: str, events: List[Dict[str, Any]]) -> str:
         m = _re.search(pat, text, _re.IGNORECASE)
         if m and not any(e in ran_tools for e in expected):
             suspicious.append((m.group(0)[:40], expected))
-    if not suspicious:
+
+    sycophancy_hits = []
+    for pat in _SYCOPHANCY_PATTERNS:
+        m = _re.search(pat, text, _re.IGNORECASE)
+        if m:
+            sycophancy_hits.append(m.group(0)[:40])
+
+    # Reflection Gate compliance check — if tools ran, the reply should have
+    # at least one "[نتيجة" prefix line acknowledging results
+    reflection_missing = False
+    if events and any(ev.get("type") == "tool" and (ev.get("status") == "done") for ev in events):
+        if "[نتيجة" not in text and "[result " not in text.lower():
+            reflection_missing = True
+
+    if not (suspicious or sycophancy_hits or reflection_missing):
         return ""
+
     lines = [
         "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━",
         "⚠️ **تحقّق آلي** (تنبيه من النظام، مو من الذكاء):",
         "",
-        "ادّعيت أفعالاً بدون استدعاء أداة فعلية:",
     ]
-    for phrase, expected in suspicious[:6]:
-        lines.append(f"  • «{phrase}» — لم تُنفّذ فعلياً. (المطلوب: `{'` أو `'.join(expected[:3])}`)")
-    lines.append("")
-    lines.append("⛔ الادعاءات أعلاه لم تُنجَز على الجهاز/السيرفر. أعد الطلب بصيغة 'سوّ هذا الفعل فعلياً' لتنفيذ حقيقي.")
+    if suspicious:
+        lines.append("**ادعاءات بدون أدوات تثبتها:**")
+        for phrase, expected in suspicious[:6]:
+            lines.append(f"  • «{phrase}» — لم تُنفّذ فعلياً. (المطلوب: `{'` أو `'.join(expected[:3])}`)")
+        lines.append("")
+    if sycophancy_hits:
+        lines.append("**عبارات مجاملة قد تُخفي عدم اتفاق فعلي:**")
+        for s in sycophancy_hits[:3]:
+            lines.append(f"  • «{s}» — تأكد إن الذكاء يوافق فعلاً وليس يجامل")
+        lines.append("")
+    if reflection_missing:
+        lines.append("**Reflection Gate**: الذكاء نفّذ أدوات لكن ما كتب سطر `[نتيجة …]` يلخّص النتيجة. القاعدة تتطلب ذلك.")
+        lines.append("")
+    lines.append("⛔ راجع الادعاءات أعلاه قبل ما تصدّق. أعد الطلب بصيغة 'سوّ هذا فعلياً' لو شككت.")
     lines.append("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
     return "\n".join(lines)
+
 
 
 # db_query is bound to the live MongoDB at router creation time
