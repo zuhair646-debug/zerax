@@ -39,7 +39,7 @@ DOWNLOADS_DIR.mkdir(parents=True, exist_ok=True)
 
 # Local version — bumped whenever zenrex_gui.pyw changes meaningfully.
 # Compared against server's /api/desktop-agent/version on startup.
-AGENT_VERSION = "0.4.0"
+AGENT_VERSION = "0.4.1"
 
 pyautogui.FAILSAFE = True
 
@@ -947,7 +947,10 @@ def _check_and_self_update() -> bool:
     """Check server for a newer version. If found, download and replace
     zenrex_gui.pyw, then return True signalling the caller to restart.
 
-    Returns False on any error (silently — we never want to block startup).
+    Defensive guarantees:
+      * Refuses to replace if downloaded source doesn't compile.
+      * Keeps a .bak so a corrupted update can be rolled back.
+      * Silent on any error — never blocks startup.
     """
     try:
         cfg = SCRIPT_DIR / "config.json"
@@ -963,17 +966,22 @@ def _check_and_self_update() -> bool:
         remote_ver = (info.get("version") or "").strip()
         if not remote_ver or remote_ver == AGENT_VERSION:
             return False
-        # New version available — fetch the new GUI source.
         gui_url = f"{platform_url}{info.get('gui_url', '/api/desktop-agent/gui-source')}"
         with urllib.request.urlopen(gui_url, timeout=15) as r:
             new_src = r.read().decode("utf-8")
-        if "AGENT_VERSION" not in new_src or "ZenrexGUI" not in new_src:
-            return False  # safety: refuse to replace with something that doesn't look like the agent
+        # Sanity check 1: must look like the agent
+        if "AGENT_VERSION" not in new_src or "ZenrexGUI" not in new_src or "ACTIONS" not in new_src:
+            return False
+        # Sanity check 2: must actually compile (catches syntax errors).
+        try:
+            compile(new_src, "zenrex_gui.pyw", "exec")
+        except SyntaxError:
+            return False
         target = SCRIPT_DIR / "zenrex_gui.pyw"
         backup = SCRIPT_DIR / "zenrex_gui.pyw.bak"
         try:
             if target.exists():
-                target.replace(backup)
+                backup.write_text(target.read_text(encoding="utf-8"), encoding="utf-8")
         except Exception:
             pass
         target.write_text(new_src, encoding="utf-8")
@@ -982,16 +990,71 @@ def _check_and_self_update() -> bool:
         return False
 
 
-def main():
-    # 1. Self-update check (silent; non-fatal)
-    if _check_and_self_update():
-        # Re-exec the (now updated) script with same args
-        os.execv(sys.executable, [sys.executable, str(SCRIPT_DIR / "zenrex_gui.pyw")] + sys.argv[1:])
+def _rollback_to_backup_if_needed():
+    """If a .bak exists, this means we updated previously. We keep .bak only
+    as long as the current version works — main() called us means it does."""
+    pass  # Reserved for future automated rollback
 
-    # 2. Silence noisy stderr from websockets in pythonw mode
-    logging.basicConfig(level=logging.WARNING)
-    app = ZenrexGUI()
-    app.run()
+
+def _log_fatal(exc: BaseException) -> str:
+    """Write the traceback to a known location so the user can read it.
+    Returns the path of the log file."""
+    import traceback
+    log_path = SCRIPT_DIR / "zenrex_error.log"
+    try:
+        log_path.write_text(
+            "Zenrex Desktop Agent — startup error\n"
+            f"Time: {datetime.now().isoformat()}\n"
+            f"Version: {AGENT_VERSION}\n"
+            f"Python: {sys.version}\n"
+            f"Script: {SCRIPT_DIR / 'zenrex_gui.pyw'}\n"
+            "\n--- Traceback ---\n"
+            + traceback.format_exc(),
+            encoding="utf-8",
+        )
+    except Exception:
+        pass
+    return str(log_path)
+
+
+def main():
+    # 1. Self-update (silent, defensive). If it succeeds, re-launch the new
+    #    file via a fresh subprocess and exit cleanly — safer than os.execv
+    #    when running under pythonw.exe.
+    try:
+        if _check_and_self_update():
+            try:
+                subprocess.Popen(
+                    [sys.executable, str(SCRIPT_DIR / "zenrex_gui.pyw")] + sys.argv[1:],
+                    close_fds=True,
+                )
+            except Exception:
+                pass
+            return  # exit current process; new one is launched
+    except Exception:
+        pass  # update failures never block startup
+
+    # 2. Show GUI. On any crash, write a log file the user can inspect.
+    try:
+        logging.basicConfig(level=logging.WARNING)
+        app = ZenrexGUI()
+        app.run()
+    except BaseException as e:
+        log_path = _log_fatal(e)
+        # Best-effort user notification via a tk error box
+        try:
+            from tkinter import Tk, messagebox
+            r = Tk(); r.withdraw()
+            messagebox.showerror(
+                "Zenrex Desktop Agent — error",
+                f"Failed to start.\n\n{type(e).__name__}: {e}\n\n"
+                f"Details written to:\n{log_path}\n\n"
+                "Try reinstalling via the bootstrap PowerShell command from your Zenrex chat.",
+            )
+            r.destroy()
+        except Exception:
+            pass
+        raise
 
 
 if __name__ == "__main__":
