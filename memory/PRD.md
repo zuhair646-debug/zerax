@@ -906,3 +906,45 @@ The reconnect loop bug had a second cause: old + new agents on same machine kept
 4. Old python.exe processes killed by WMI commandline filter
 5. New v0.8.0 process launches, hello includes `agent_version`, server's UPGRADE path kicks the old WS, new one becomes active
 
+
+
+### 🧠 Feb 13 2026 — Zenrex Mind v0.1.0 — Owner's Sovereign Local AI
+
+User asked for a fully local, fully-his AI that costs nothing, learns by itself, never connects to any global company. Built and deployed live on his machine.
+
+**Stack (100% free, open-source, local):**
+- Ollama 0.x (already installed at `C:\Users\zuhai\AppData\Local\Programs\Ollama`)
+- Qwen 2.5 3B model (pulled, 1.9GB, stored in `~/.ollama/models/`)
+- Zenrex Mind service: stdlib-only Python (no extra deps) — HTTP server on `127.0.0.1:7861`
+- SQLite for memory + auto-extracted lessons
+- Dark-themed RTL chat UI in vanilla HTML/JS
+
+**Files dropped to owner's machine (`~/.zenrex-desktop-agent/mind/`):**
+- `zenrex_mind.py` (16KB) — main service: chat API + lesson extractor + recall
+- `mind_web.html` (8.5KB) — chat UI + lessons explorer
+- `mind.db` — SQLite (conversations, messages, lessons tables)
+- `_launch_mind.bat` — restart helper
+
+**API surface (localhost only):**
+- `GET /` — chat UI
+- `GET /api/status` — health
+- `POST /api/chat` — send a message, get reply + lesson recall metadata
+- `GET /api/conversations`, `GET /api/history/:id`
+- `GET /api/lessons` — view what the AI has learned
+- `POST /api/teach` — manually inject a lesson
+
+**Self-learning loop:**
+1. After every reply, a background thread asks the model: "What's the one-line lesson from this exchange?"
+2. That lesson is stored in the `lessons` table with topic + tag extraction
+3. Next time the user asks something related, top 4 matching lessons are auto-injected as system context
+4. Lesson `uses` counter increments → more-used lessons rank higher
+
+**Live verification on owner's machine:**
+- ✅ Browser opened to http://localhost:7861 (confirmed via screenshot + vision)
+- ✅ First chat: Qwen 2.5 replied in Arabic (16s elapsed) — fully local Ollama call
+- ✅ SQLite created at `~/.zenrex-desktop-agent/mind/mind.db`
+- ✅ User's data sovereignty: no external requests outside Ollama localhost:11434
+
+**User-facing artifacts saved:**
+- `~/Downloads/zenrex_workspace/Zenrex_Mind_دليل_الاستخدام.md` — full Arabic guide
+- `~/Downloads/zenrex_workspace/E1_تقرير_v0.8.0.md` — earlier v0.8.0 report
