@@ -1738,6 +1738,67 @@ ANTHROPIC_TOOLS = [
             "required": ["command"],
         },
     },
+    {
+        "name": "self_verify_claim",
+        "description": (
+            "Prove that what you claim to have done actually worked. Pass the claim, "
+            "a verification shell command, and what you expect to see in output. "
+            "ALWAYS use this before saying 'تم/done' for non-trivial work. "
+            "If verification fails, retry the work and verify again until ok=true."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "claim": {"type": "string", "description": "What you claim happened, e.g. 'created folder /tmp/x'"},
+                "verification_method": {"type": "string", "description": "shell command to prove the claim, e.g. 'ls -la /tmp/x'"},
+                "expected": {"type": "string", "description": "substring expected in stdout to consider verified"},
+            },
+            "required": ["claim", "verification_method"],
+        },
+    },
+    {
+        "name": "auto_diagnose",
+        "description": (
+            "Gather production state (logs/health/db/desktop) to diagnose an issue. "
+            "Use this BEFORE inventing fixes. Returns structured findings + recommendation."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "issue": {"type": "string", "description": "what's broken/suspicious"},
+                "scope": {"type": "string", "enum": ["all", "backend", "nginx", "db", "desktop_agent"], "description": "which subsystem to probe"},
+            },
+            "required": ["issue"],
+        },
+    },
+    {
+        "name": "try_until_works",
+        "description": (
+            "Execute a multi-step plan with automatic retry. Each step has a goal, "
+            "command, and expected output. Steps retry up to max_attempts. "
+            "Use this for deploys, installs, or any operation that may need retries. "
+            "Returns step-by-step log."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "plan": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "goal": {"type": "string"},
+                            "command": {"type": "string"},
+                            "expected": {"type": "string"},
+                        },
+                        "required": ["goal", "command"],
+                    },
+                },
+                "max_attempts": {"type": "integer", "description": "1-5, default 3"},
+            },
+            "required": ["plan"],
+        },
+    },
 ] + DESKTOP_TOOL_SCHEMAS
 
 TOOL_HANDLERS = {
@@ -1818,6 +1879,128 @@ async def tool_run_remote_ssh(command: str, timeout: int = 60):
 
 
 TOOL_HANDLERS["run_remote_ssh"] = tool_run_remote_ssh
+
+
+# ─── Self-Healing Subagent Tools ──────────────────────────────────────────────
+# These give the Owner AI the same "delegate to specialist" power E1 has.
+async def tool_self_verify_claim(claim: str, verification_method: str, expected: str = ""):
+    """Prove a claim by running an actual verification command and comparing output.
+    Use this instead of trusting your own narrative. If output doesn't match
+    expectation, return ok=false with detailed reason. Never claim success
+    without calling this for non-trivial work.
+
+    Example:
+      claim="I deployed the new feature"
+      verification_method="curl -s https://zenrex.ai/api/health"
+      expected="healthy"
+    """
+    import asyncio as _aio
+    try:
+        proc = await _aio.create_subprocess_shell(
+            verification_method,
+            stdout=_aio.subprocess.PIPE,
+            stderr=_aio.subprocess.PIPE,
+        )
+        out, err = await _aio.wait_for(proc.communicate(), timeout=60)
+        stdout_s = (out or b"").decode("utf-8", errors="replace")[-3000:]
+        stderr_s = (err or b"").decode("utf-8", errors="replace")[-1000:]
+        passed = (
+            proc.returncode == 0
+            and (not expected or expected.lower() in stdout_s.lower())
+        )
+        return {
+            "ok": passed,
+            "claim": claim,
+            "verification_method": verification_method,
+            "expected": expected,
+            "actual_stdout": stdout_s,
+            "actual_stderr": stderr_s,
+            "exit_code": proc.returncode,
+            "verdict": "CLAIM_VERIFIED" if passed else "CLAIM_FALSIFIED",
+        }
+    except Exception as e:
+        return {"ok": False, "error": f"{type(e).__name__}: {str(e)[:300]}", "verdict": "VERIFICATION_FAILED"}
+
+
+async def tool_auto_diagnose(issue: str, scope: str = "all"):
+    """Triage a production issue by gathering all relevant context: backend logs,
+    container status, recent commits, db health. Returns a structured report.
+    scope can be: 'backend' / 'nginx' / 'db' / 'desktop_agent' / 'all'
+    """
+    import asyncio as _aio
+    report = {"issue": issue, "scope": scope, "findings": []}
+    ssh_key = "/root/.ssh/zerax_deploy"
+    if not _os.path.exists(ssh_key):
+        return {"ok": False, "error": "diagnose tool requires preview env access"}
+
+    cmds = []
+    if scope in ("all", "backend"):
+        cmds.append(("backend_logs", "docker logs zerax-backend-1 --tail 50 2>&1 | tail -30"))
+        cmds.append(("backend_health", "curl -s https://zenrex.ai/api/health"))
+    if scope in ("all", "nginx"):
+        cmds.append(("nginx_test", "nginx -t 2>&1 | head -5"))
+    if scope in ("all", "db"):
+        cmds.append(("mongo_status", "docker exec zerax-mongo-1 mongosh --quiet --eval 'db.runCommand({ping:1}).ok'"))
+        cmds.append(("recent_collections", "docker exec zerax-mongo-1 mongosh --quiet $DB_NAME --eval 'db.getCollectionNames().slice(0,15).join(\",\")' 2>&1 | tail -3"))
+    if scope in ("all", "desktop_agent"):
+        cmds.append(("active_pairings", "docker exec zerax-backend-1 python3 -c 'import sys;sys.path.insert(0,\"/app\");from modules.freebuild.local_browser_relay import _DESKTOP_ACTIVE_WS;print(f\"active={len(_DESKTOP_ACTIVE_WS)}\")'"))
+
+    for name, cmd in cmds:
+        try:
+            full = f"ssh -i {ssh_key} -o StrictHostKeyChecking=no -o ConnectTimeout=8 root@91.98.154.148 '{cmd}'"
+            proc = await _aio.create_subprocess_shell(full, stdout=_aio.subprocess.PIPE, stderr=_aio.subprocess.STDOUT)
+            out, _ = await _aio.wait_for(proc.communicate(), timeout=30)
+            report["findings"].append({"check": name, "output": (out or b"").decode("utf-8", errors="replace")[-800:], "exit": proc.returncode})
+        except Exception as e:
+            report["findings"].append({"check": name, "error": str(e)[:200]})
+
+    failed = [f for f in report["findings"] if f.get("exit") not in (None, 0)]
+    report["ok"] = len(failed) == 0
+    report["failed_checks"] = [f["check"] for f in failed]
+    report["recommendation"] = (
+        "All checks passed. Issue may be elsewhere — try retry or different scope."
+        if not failed
+        else f"Failed checks: {', '.join(f['check'] for f in failed)}. Inspect output above for root cause then fix with run_remote_ssh."
+    )
+    return report
+
+
+async def tool_try_until_works(plan: list, max_attempts: int = 3):
+    """Execute a list of shell commands sequentially, retrying each up to N times
+    with adjustments. Each plan item: {"goal": "...", "command": "...", "expected": "..."}
+    Returns step-by-step log. Self-healing: if a step fails, marks it and continues.
+    """
+    import asyncio as _aio
+    log = []
+    for i, step in enumerate(plan):
+        if not isinstance(step, dict):
+            continue
+        goal = step.get("goal", f"step_{i}")
+        cmd = step.get("command", "")
+        expected = step.get("expected", "")
+        attempts = []
+        for attempt in range(1, max_attempts + 1):
+            try:
+                proc = await _aio.create_subprocess_shell(
+                    cmd, stdout=_aio.subprocess.PIPE, stderr=_aio.subprocess.PIPE,
+                )
+                out, err = await _aio.wait_for(proc.communicate(), timeout=120)
+                stdout_s = (out or b"").decode("utf-8", errors="replace")[-2000:]
+                ok = proc.returncode == 0 and (not expected or expected.lower() in stdout_s.lower())
+                attempts.append({"attempt": attempt, "ok": ok, "stdout": stdout_s[-500:], "exit": proc.returncode})
+                if ok:
+                    break
+            except Exception as e:
+                attempts.append({"attempt": attempt, "ok": False, "error": str(e)[:200]})
+        log.append({"step": i, "goal": goal, "attempts": attempts, "succeeded": attempts and attempts[-1].get("ok")})
+    all_ok = all(s["succeeded"] for s in log)
+    return {"ok": all_ok, "log": log, "summary": f"{sum(1 for s in log if s['succeeded'])}/{len(log)} steps succeeded"}
+
+
+TOOL_HANDLERS["self_verify_claim"] = tool_self_verify_claim
+TOOL_HANDLERS["auto_diagnose"] = tool_auto_diagnose
+TOOL_HANDLERS["try_until_works"] = tool_try_until_works
+
 
 # Register Universe tools (300+ catalog operators)
 TOOL_HANDLERS.update(UNIVERSE_TOOL_HANDLERS)
