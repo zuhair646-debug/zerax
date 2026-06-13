@@ -99,6 +99,38 @@ would generate, and `desktop_act` from chat works the moment the user pairs.
 - No 0/O/I/1 characters; charset matches `[A-HJ-NP-Z2-9]`.
 
 
+### 🔧 Feb 13 2026 (FINAL ROOT CAUSE) — Nginx WebSocket proxy fix
+
+**The smoking gun**: Even with the AI generating real codes and the Desktop
+Agent .exe being correct, every pairing attempt returned `HTTP 404` on the
+WebSocket upgrade. Nginx was treating `wss://zenrex.ai/api/desktop-agent/ws`
+as plain HTTP because the WebSocket upgrade headers were never wired.
+
+**Fix in `/etc/nginx/sites-enabled/zenrex` (also copied to `sites-available/`)**:
+Added a NEW `location ~ ^/api/(desktop-agent/ws|local-browser/ws|.*/ws($|/))` block
+BEFORE the generic `location /api/` with:
+```nginx
+proxy_http_version 1.1;
+proxy_set_header Upgrade $http_upgrade;
+proxy_set_header Connection "upgrade";
+proxy_read_timeout 86400s;
+proxy_buffering off;
+```
+
+**E2E verified**: external `wss://zenrex.ai/api/desktop-agent/ws?code=TFZPJZ`
+returns `{"type":"paired","project_id":"owner-autocoder-desktop","message":"✅
+Connected to Zenrex (Desktop Agent)"}`. Owner can now pair the .exe from
+zenrex.ai successfully.
+
+**Companion frontend hardening (commit `bf1984a`)**:
+The `DesktopCodeBar` previously flipped `loading=true` on every 8s background
+poll. If any poll failed silently (e.g. JWT race condition between tabs), the
+code visually reset to "......". Refactored to keep last-known code and
+short-circuit `loading` on background polls. Status dot also surfaces error
+messages via tooltip.
+
+
+
 
 ### 🖥️ Jun 12 2026 — Phase 9: Desktop Agent (Native OS Control) — 68 total tools
 
