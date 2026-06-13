@@ -113,7 +113,8 @@ def move_mouse(params: dict) -> dict:
 
 
 def click(params: dict) -> dict:
-    x = params.get("x"); y = params.get("y")
+    x = params.get("x")
+    y = params.get("y")
     button = params.get("button", "left")
     clicks = int(params.get("clicks", 1))
     if x is not None and y is not None:
@@ -124,12 +125,14 @@ def click(params: dict) -> dict:
 
 
 def double_click(params: dict) -> dict:
-    p = dict(params); p["clicks"] = 2
+    p = dict(params)
+    p["clicks"] = 2
     return click(p)
 
 
 def right_click(params: dict) -> dict:
-    p = dict(params); p["button"] = "right"
+    p = dict(params)
+    p["button"] = "right"
     return click(p)
 
 
@@ -224,7 +227,9 @@ def open_app(params: dict) -> dict:
                             matches[0].activate()
                         except Exception:
                             try:
-                                matches[0].minimize(); time.sleep(0.1); matches[0].restore()
+                                matches[0].minimize()
+                                time.sleep(0.1)
+                                matches[0].restore()
                             except Exception:
                                 pass
                         break
@@ -366,6 +371,376 @@ ACTIONS = {
 }
 
 
+# ═════════════════════════════════════════════════════════════════════════════
+# v0.8.0 — Clipboard, Workspace, Overlay, Self-Update, File Search
+# ═════════════════════════════════════════════════════════════════════════════
+
+# ─── Workspace: dedicated folder for AI-generated files ──────────────────────
+WORKSPACE_DIR = Path.home() / "Downloads" / "zenrex_workspace"
+WORKSPACE_DIR.mkdir(parents=True, exist_ok=True)
+
+
+def _workspace_path(rel: str) -> Path:
+    """Resolve a path inside the workspace, blocking ../ escapes."""
+    rel = (rel or "").lstrip("/\\")
+    p = (WORKSPACE_DIR / rel).resolve()
+    if WORKSPACE_DIR.resolve() not in p.parents and p != WORKSPACE_DIR.resolve():
+        raise ValueError("path escapes workspace")
+    return p
+
+
+def workspace_save(params: dict) -> dict:
+    """Save a file in the workspace. content_b64 takes priority over content."""
+    filename = params.get("filename") or ""
+    if not filename:
+        return {"ok": False, "error": "filename required"}
+    try:
+        path = _workspace_path(filename)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        if params.get("content_b64"):
+            data = base64.b64decode(params["content_b64"])
+            path.write_bytes(data)
+        else:
+            path.write_text(str(params.get("content", "")), encoding="utf-8")
+        return {"ok": True, "path": str(path), "size": path.stat().st_size,
+                "workspace_relative": str(path.relative_to(WORKSPACE_DIR))}
+    except Exception as e:
+        return {"ok": False, "error": f"{type(e).__name__}: {e}"}
+
+
+def workspace_list(params: dict) -> dict:
+    subdir = (params.get("subdir") or "").strip()
+    try:
+        root = _workspace_path(subdir) if subdir else WORKSPACE_DIR
+        if not root.exists():
+            return {"ok": True, "root": str(root), "entries": [], "count": 0}
+        out = []
+        for p in sorted(root.rglob("*"))[:500]:
+            if p.is_file():
+                try:
+                    out.append({
+                        "name": str(p.relative_to(WORKSPACE_DIR)),
+                        "size": p.stat().st_size,
+                        "mtime": int(p.stat().st_mtime),
+                    })
+                except Exception:
+                    continue
+        return {"ok": True, "root": str(WORKSPACE_DIR), "entries": out, "count": len(out)}
+    except Exception as e:
+        return {"ok": False, "error": f"{type(e).__name__}: {e}"}
+
+
+def workspace_read(params: dict) -> dict:
+    """Read a file from the workspace by relative name."""
+    name = params.get("filename") or ""
+    if not name:
+        return {"ok": False, "error": "filename required"}
+    max_bytes = int(params.get("max_bytes", 500_000))
+    try:
+        path = _workspace_path(name)
+        if not path.exists():
+            return {"ok": False, "error": "file not in workspace"}
+        data = path.read_bytes()[:max_bytes]
+        try:
+            return {"ok": True, "path": str(path), "text": data.decode("utf-8"),
+                    "size_total": path.stat().st_size}
+        except UnicodeDecodeError:
+            return {"ok": True, "path": str(path),
+                    "content_b64": base64.b64encode(data).decode("ascii"),
+                    "size_total": path.stat().st_size}
+    except Exception as e:
+        return {"ok": False, "error": f"{type(e).__name__}: {e}"}
+
+
+def search_files(params: dict) -> dict:
+    """Search files on the OS by pattern. Default scope: Documents + Downloads + Desktop."""
+    pattern = params.get("pattern", "*").strip()
+    max_results = int(params.get("max_results", 100))
+    if "*" not in pattern and "?" not in pattern:
+        pattern = f"*{pattern}*"
+    roots_arg = params.get("roots") or []
+    if not roots_arg:
+        roots_arg = [
+            str(Path.home() / "Documents"),
+            str(Path.home() / "Downloads"),
+            str(Path.home() / "Desktop"),
+        ]
+    if isinstance(roots_arg, str):
+        roots_arg = [roots_arg]
+    found = []
+    seen = set()
+    try:
+        for r in roots_arg:
+            root = Path(r).expanduser()
+            if not root.exists():
+                continue
+            for p in root.rglob(pattern):
+                if len(found) >= max_results:
+                    break
+                if not p.is_file():
+                    continue
+                key = str(p)
+                if key in seen:
+                    continue
+                seen.add(key)
+                try:
+                    st = p.stat()
+                    found.append({
+                        "path": str(p),
+                        "name": p.name,
+                        "size": st.st_size,
+                        "mtime": int(st.st_mtime),
+                    })
+                except Exception:
+                    continue
+            if len(found) >= max_results:
+                break
+        return {"ok": True, "pattern": pattern, "count": len(found), "results": found}
+    except Exception as e:
+        return {"ok": False, "error": f"{type(e).__name__}: {e}"}
+
+
+# ─── Clipboard: pyperclip-based, supports any unicode ────────────────────────
+def _ensure_pyperclip():
+    try:
+        import pyperclip
+        return pyperclip
+    except ImportError:
+        try:
+            subprocess.check_call([sys.executable, "-m", "pip", "install", "-q", "pyperclip"])
+            import pyperclip
+            return pyperclip
+        except Exception:
+            return None
+
+
+def clipboard_set(params: dict) -> dict:
+    text = params.get("text", "")
+    pc = _ensure_pyperclip()
+    if pc is None:
+        return {"ok": False, "error": "pyperclip unavailable"}
+    try:
+        pc.copy(text)
+        return {"ok": True, "chars": len(text)}
+    except Exception as e:
+        return {"ok": False, "error": f"{type(e).__name__}: {e}"}
+
+
+def clipboard_get(_params: dict) -> dict:
+    pc = _ensure_pyperclip()
+    if pc is None:
+        return {"ok": False, "error": "pyperclip unavailable"}
+    try:
+        return {"ok": True, "text": pc.paste()}
+    except Exception as e:
+        return {"ok": False, "error": f"{type(e).__name__}: {e}"}
+
+
+def clipboard_paste(params: dict) -> dict:
+    """Type ANY text (Arabic, emoji, code) by writing to clipboard then Ctrl+V.
+
+    Much faster + more reliable than typewrite for non-ASCII or long text.
+    """
+    text = params.get("text", "")
+    if not text:
+        return {"ok": False, "error": "text required"}
+    pc = _ensure_pyperclip()
+    if pc is None:
+        # Fallback to typewrite
+        try:
+            pyautogui.typewrite(text, interval=0.005)
+            return {"ok": True, "method": "typewrite_fallback", "chars": len(text)}
+        except Exception as e:
+            return {"ok": False, "error": f"{type(e).__name__}: {e}"}
+    try:
+        # Preserve previous clipboard if asked
+        previous = None
+        if params.get("restore_clipboard"):
+            try:
+                previous = pc.paste()
+            except Exception:
+                pass
+        pc.copy(text)
+        time.sleep(0.08)
+        paste_key = "command+v" if platform.system() == "Darwin" else "ctrl+v"
+        pyautogui.hotkey(*paste_key.split("+"))
+        time.sleep(0.05)
+        if previous is not None:
+            try:
+                pc.copy(previous)
+            except Exception:
+                pass
+        return {"ok": True, "method": "clipboard_paste", "chars": len(text)}
+    except Exception as e:
+        return {"ok": False, "error": f"{type(e).__name__}: {e}"}
+
+
+# ─── On-screen overlay: floating status panel for the owner to watch ────────
+_OVERLAY_STATE: dict = {"thread": None, "queue": None, "alive": False}
+
+
+def _overlay_worker(initial_text: str):
+    """Tkinter overlay running in its own thread. Communicates via queue."""
+    import queue as _queue
+    import tkinter as tk
+
+    q = _OVERLAY_STATE["queue"]
+    root = tk.Tk()
+    root.title("Zenrex AI")
+    root.overrideredirect(True)
+    root.attributes("-topmost", True)
+    try:
+        root.attributes("-alpha", 0.92)
+    except Exception:
+        pass
+    # Position: top-right with margin
+    sw = root.winfo_screenwidth()
+    w, h = 420, 110
+    x, y = sw - w - 24, 24
+    root.geometry(f"{w}x{h}+{x}+{y}")
+    root.configure(bg="#0f0f17")
+
+    title_lbl = tk.Label(root, text="🤖 Zenrex AI", fg="#a78bfa", bg="#0f0f17",
+                        font=("Segoe UI", 11, "bold"), anchor="w", padx=14, pady=4)
+    title_lbl.pack(fill="x")
+    msg_lbl = tk.Label(root, text=initial_text, fg="#e5e7eb", bg="#0f0f17",
+                       font=("Segoe UI", 10), wraplength=400, justify="right",
+                       anchor="nw", padx=14, pady=4)
+    msg_lbl.pack(fill="both", expand=True)
+
+    def _drain():
+        try:
+            while True:
+                cmd = q.get_nowait()
+                if cmd[0] == "update":
+                    msg_lbl.config(text=cmd[1])
+                elif cmd[0] == "title":
+                    title_lbl.config(text=cmd[1])
+                elif cmd[0] == "hide":
+                    root.destroy()
+                    _OVERLAY_STATE["alive"] = False
+                    return
+        except _queue.Empty:
+            pass
+        if _OVERLAY_STATE["alive"]:
+            root.after(120, _drain)
+
+    _OVERLAY_STATE["alive"] = True
+    root.after(120, _drain)
+    try:
+        root.mainloop()
+    finally:
+        _OVERLAY_STATE["alive"] = False
+
+
+def overlay_show(params: dict) -> dict:
+    import queue
+    import threading
+    text = params.get("text", "")
+    if _OVERLAY_STATE["alive"]:
+        try:
+            _OVERLAY_STATE["queue"].put(("update", text))
+            return {"ok": True, "action": "updated"}
+        except Exception:
+            pass
+    _OVERLAY_STATE["queue"] = queue.Queue()
+    th = threading.Thread(target=_overlay_worker, args=(text,), daemon=True)
+    _OVERLAY_STATE["thread"] = th
+    th.start()
+    return {"ok": True, "action": "started"}
+
+
+def overlay_update(params: dict) -> dict:
+    if not _OVERLAY_STATE["alive"]:
+        return overlay_show(params)
+    try:
+        _OVERLAY_STATE["queue"].put(("update", params.get("text", "")))
+        if params.get("title"):
+            _OVERLAY_STATE["queue"].put(("title", params["title"]))
+        return {"ok": True}
+    except Exception as e:
+        return {"ok": False, "error": f"{type(e).__name__}: {e}"}
+
+
+def overlay_hide(_params: dict) -> dict:
+    if not _OVERLAY_STATE["alive"]:
+        return {"ok": True, "action": "already_hidden"}
+    try:
+        _OVERLAY_STATE["queue"].put(("hide", ""))
+        return {"ok": True, "action": "hiding"}
+    except Exception as e:
+        return {"ok": False, "error": f"{type(e).__name__}: {e}"}
+
+
+# ─── Self-update: download latest agent + restart ────────────────────────────
+def self_update(params: dict) -> dict:
+    """Fetch the newest zenrex_agent.py from server, overwrite self, restart."""
+    src_url = params.get("source_url") or os.environ.get(
+        "ZENREX_AGENT_SOURCE",
+        "https://zenrex.ai/api/desktop-agent/agent-source",
+    )
+    try:
+        req = urllib.request.Request(src_url, headers={"User-Agent": "ZenrexDesktopAgent"})
+        with urllib.request.urlopen(req, timeout=20) as r:
+            new_code = r.read().decode("utf-8")
+        if len(new_code) < 1000 or "ZENREX_AGENT_VERSION" not in new_code and "Zenrex Desktop Agent" not in new_code:
+            return {"ok": False, "error": "downloaded source looks invalid"}
+        target = Path(__file__).resolve()
+        backup = target.with_suffix(".py.bak")
+        try:
+            backup.write_bytes(target.read_bytes())
+        except Exception:
+            pass
+        target.write_text(new_code, encoding="utf-8")
+        # Schedule restart: launch a fresh interpreter in 1.5s, then exit
+        # Read code from .last_code if present so we reconnect with same pairing
+        last_code_path = SCRIPT_DIR / ".last_code"
+        last_code = last_code_path.read_text(encoding="utf-8").strip() if last_code_path.exists() else ""
+
+        if platform.system() == "Windows":
+            launcher = (
+                f"timeout /t 2 /nobreak >NUL & start \"\" \"{sys.executable}\" "
+                f"\"{target}\" --code {last_code}"
+            )
+            subprocess.Popen(["cmd", "/c", launcher], creationflags=0x00000008)  # DETACHED
+        else:
+            subprocess.Popen(
+                f"sleep 2; \"{sys.executable}\" \"{target}\" --code {last_code} &",
+                shell=True,
+            )
+
+        # Respond, then quit
+        def _quit():
+            time.sleep(0.6)
+            os._exit(0)
+
+        import threading
+        threading.Thread(target=_quit, daemon=True).start()
+        return {"ok": True, "restarting": True, "new_size": len(new_code)}
+    except Exception as e:
+        return {"ok": False, "error": f"{type(e).__name__}: {e}"}
+
+
+# Register all new actions
+ACTIONS.update({
+    # Clipboard
+    "clipboard_set": clipboard_set,
+    "clipboard_get": clipboard_get,
+    "clipboard_paste": clipboard_paste,
+    # Workspace
+    "workspace_save": workspace_save,
+    "workspace_list": workspace_list,
+    "workspace_read": workspace_read,
+    "search_files": search_files,
+    # Overlay
+    "overlay_show": overlay_show,
+    "overlay_update": overlay_update,
+    "overlay_hide": overlay_hide,
+    # Self-update
+    "self_update": self_update,
+})
+
+
 # ─── WebSocket loop ──────────────────────────────────────────────────────────
 async def _hello(ws):
     import socket as _socket
@@ -379,7 +754,7 @@ async def _hello(ws):
         "downloads": str(DOWNLOADS_DIR),
         "shell_enabled": _SHELL_ENABLED,
         "user": os.environ.get("USER") or os.environ.get("USERNAME") or "",
-        "agent_version": "0.7.0",
+        "agent_version": "0.8.0",
     }
     await ws.send(json.dumps({"type": "hello", "info": info}))
 
@@ -456,7 +831,7 @@ def main():
     print(f"   Screen:    {pyautogui.size()}")
     print(f"   Downloads: {DOWNLOADS_DIR}")
     print(f"   Shell exec: {'ENABLED ⚠️ ' if _SHELL_ENABLED else 'disabled (safe)'}")
-    print(f"   FAILSAFE:  Move mouse to top-left corner to abort any action.")
+    print("   FAILSAFE:  Move mouse to top-left corner to abort any action.")
     print("=" * 64)
 
     try:

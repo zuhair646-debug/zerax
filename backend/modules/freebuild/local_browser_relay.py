@@ -292,12 +292,33 @@ def _fingerprint_of(info: Dict[str, Any]) -> str:
 
 
 def _same_agent_machine(a: Dict[str, Any], b: Dict[str, Any]) -> bool:
-    """Return True if two hello info dicts look like the same machine."""
+    """Return True if two hello info dicts look like the same machine AND same agent version.
+
+    Differing agent versions => treat as different agents so the upgrade
+    flow can replace the older one cleanly without reconnect loops.
+    """
     if not a or not b:
         # If we have no info about the previous one, ASSUME different to be safe
         # (so a new fully-identified machine cannot accidentally inherit a stale slot).
         return False
-    return _fingerprint_of(a) == _fingerprint_of(b)
+    if _fingerprint_of(a) != _fingerprint_of(b):
+        return False
+    # Same machine — but if version differs, they are conceptually different
+    # agent instances and we should NOT silently auto-replace in a loop.
+    a_ver = (a.get("agent_version") or "").strip()
+    b_ver = (b.get("agent_version") or "").strip()
+    if a_ver != b_ver:
+        # Includes the case where one is empty (older agent without the field)
+        # vs the other being a versioned newer build.
+        return False
+    return True
+
+
+def _version_tuple(v: str) -> tuple:
+    try:
+        return tuple(int(p) for p in (v or "0").split(".") if p.isdigit())
+    except Exception:
+        return (0,)
 
 
 async def send_command_to_desktop(project_id: str, action: str, params: Dict[str, Any]) -> Dict[str, Any]:
@@ -422,7 +443,7 @@ async def desktop_act_http(request: Request):
 
 
 # ── Live screen streaming ───────────────────────────────────────────────────
-DESKTOP_AGENT_VERSION = "0.7.0"
+DESKTOP_AGENT_VERSION = "0.8.0"
 
 
 @desktop_router.get("/version")
@@ -431,7 +452,86 @@ async def desktop_version():
     return {
         "version": DESKTOP_AGENT_VERSION,
         "gui_url": "/api/desktop-agent/gui-source",
+        "agent_url": "/api/desktop-agent/agent-source",
     }
+
+
+@desktop_router.get("/agent-source")
+async def desktop_agent_source():
+    """Returns the latest zenrex_agent.py for self-update."""
+    from fastapi.responses import PlainTextResponse
+    agent_path = Path(__file__).resolve().parents[3] / "desktop_agent" / "zenrex_agent.py"
+    if not agent_path.exists():
+        raise HTTPException(404, "agent source not found")
+    return PlainTextResponse(agent_path.read_text(encoding="utf-8"),
+                              media_type="text/x-python",
+                              headers={"Cache-Control": "no-store"})
+
+
+@desktop_router.post("/find-element")
+async def desktop_find_element(request: Request):
+    """Vision-based UI element finder for the AI.
+
+    Body: {project_id, description (what to find), screenshot_b64?}.
+    If no screenshot provided, takes one. Uses Claude 3.5 Sonnet vision via
+    Emergent LLM key to identify pixel coordinates of the described element.
+    Returns {x, y, width, height, confidence, raw}.
+    """
+    import base64 as _b64
+    import json as _json
+    body = await request.json()
+    project_id = body.get("project_id")
+    description = (body.get("description") or "").strip()
+    if not project_id or not description:
+        raise HTTPException(400, "project_id + description required")
+
+    screenshot_b64 = body.get("screenshot_b64")
+    if not screenshot_b64:
+        result = await send_command_to_desktop(project_id, "screenshot", {})
+        if not result.get("ok"):
+            raise HTTPException(502, f"screenshot failed: {result.get('error')}")
+        screenshot_b64 = result.get("screenshot_b64", "")
+
+    try:
+        from emergentintegrations.llm.chat import LlmChat, UserMessage, ImageContent
+        emergent_key = os.environ.get("EMERGENT_LLM_KEY", "")
+        if not emergent_key:
+            raise HTTPException(500, "EMERGENT_LLM_KEY missing")
+        prompt = (
+            "You are a UI-element locator. Look at this screenshot and find: "
+            f"\"{description}\". "
+            "Reply with STRICT JSON only: "
+            "{\"x\": int, \"y\": int, \"width\": int, \"height\": int, "
+            "\"confidence\": 0-100, \"reasoning\": \"short\"}. "
+            "x,y must be the CENTER of the element. "
+            "If not found, set confidence=0 and x,y to 0."
+        )
+        chat = LlmChat(
+            api_key=emergent_key,
+            session_id=f"find-element-{int(time.time())}",
+            system_message="Return strict JSON only. No markdown, no prose.",
+        ).with_model("anthropic", "claude-sonnet-4-5-20250929")
+        msg = UserMessage(text=prompt, file_contents=[
+            ImageContent(image_base64=screenshot_b64),
+        ])
+        raw = await chat.send_message(msg)
+        text = raw if isinstance(raw, str) else getattr(raw, "content", str(raw))
+        # Parse JSON
+        text = text.strip().strip("`")
+        if text.lower().startswith("json"):
+            text = text[4:].strip()
+        si, ei = text.find("{"), text.rfind("}")
+        if si < 0 or ei <= si:
+            return {"ok": False, "error": "vision returned non-JSON", "raw": text[:400]}
+        data = _json.loads(text[si:ei + 1])
+        data["ok"] = True
+        data["description"] = description
+        return data
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception("find-element failed")
+        return {"ok": False, "error": f"{type(e).__name__}: {str(e)[:200]}"}
 
 
 @desktop_router.get("/gui-source")
@@ -930,34 +1030,47 @@ async def desktop_agent_ws(ws: WebSocket, code: str = Query(...)):
     if prev is not None and prev is not ws:
         same_machine = _same_agent_machine(prev_info, new_info)
         if same_machine:
-            # Genuine reconnect from same machine → quietly drop the old one
+            # Genuine reconnect from same machine + same version → drop old one
             try:
                 await prev.close(code=4000)
             except Exception:
                 pass
-            logger.info(f"[desktop-agent] replaced stale connection for {project_id} (same machine)")
+            logger.info(f"[desktop-agent] replaced stale connection for {project_id} (same machine+ver)")
         else:
-            # Different machine trying to claim the same project → REJECT new
-            logger.warning(
-                f"[desktop-agent] REJECTING duplicate from different machine for {project_id}. "
-                f"prev={_fingerprint_of(prev_info)} new={_fingerprint_of(new_info)}"
-            )
-            # Restore previous as the active one
-            _DESKTOP_ACTIVE_WS[project_id] = prev
-            try:
-                await ws.send_json({
-                    "type": "error",
-                    "code": "duplicate_project",
-                    "message": (
-                        f"Already paired with another machine ({prev_info.get('user','?')}@"
-                        f"{prev_info.get('os','?')}). To take over, call "
-                        "POST /api/desktop-agent/force-takeover with this code."
-                    ),
-                })
-            except Exception:
-                pass
-            await ws.close(code=4409)  # 4409 = duplicate / conflict
-            return
+            # Different machine OR different version. Prefer the NEWER version.
+            prev_ver = _version_tuple(prev_info.get("agent_version", ""))
+            new_ver = _version_tuple(new_info.get("agent_version", ""))
+            if new_ver > prev_ver and prev_info.get("user") == new_info.get("user"):
+                # Newer version on same user => upgrade: kick old, accept new
+                try:
+                    await prev.close(code=4000)
+                except Exception:
+                    pass
+                logger.info(
+                    f"[desktop-agent] UPGRADE for {project_id}: "
+                    f"{prev_info.get('agent_version','?')} → {new_info.get('agent_version','?')}"
+                )
+            else:
+                # Genuinely different machine or downgrade attempt — REJECT new
+                logger.warning(
+                    f"[desktop-agent] REJECTING duplicate for {project_id}. "
+                    f"prev={_fingerprint_of(prev_info)}@v{prev_info.get('agent_version','?')} "
+                    f"new={_fingerprint_of(new_info)}@v{new_info.get('agent_version','?')}"
+                )
+                _DESKTOP_ACTIVE_WS[project_id] = prev
+                try:
+                    await ws.send_json({
+                        "type": "error",
+                        "code": "duplicate_project",
+                        "message": (
+                            f"Already paired with newer agent (v{prev_info.get('agent_version','?')}). "
+                            "To take over, POST /api/desktop-agent/force-takeover."
+                        ),
+                    })
+                except Exception:
+                    pass
+                await ws.close(code=4409)
+                return
 
     pairing["agent_info"] = new_info or prev_info
 

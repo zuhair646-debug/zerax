@@ -856,3 +856,53 @@ Protocol is injected into BOTH the legacy alt-provider system prompt and the dir
 - `learn_from_error(...)` → persisted to `autocoder_lessons` collection, retrievable via `query_lessons`.
 
 **Status:** ✅ DEPLOYED locally. Push to GitHub + pull on Hetzner VPS pending owner approval.
+
+
+### 🚀 Feb 13 2026 — Desktop Agent v0.8.0 — Computer-Use Toolkit
+
+User wanted a complete "Computer Use" toolkit so the Owner AI can drive his Windows machine like a human (Claude Computer Use parity), with multi-language typing, vision-based element finding, screen overlay for live transparency, and file/workspace management.
+
+**Built in 3 layers as agreed (~600 LOC backend + 350 LOC agent):**
+
+#### Layer 1 — Speed + Accuracy
+- `clipboard_paste` (agent action) — writes ANY text (Arabic, emoji, code, 1000+ chars) via pyperclip + Ctrl+V. 10x faster than typewrite, handles all unicode.
+- `clipboard_set` / `clipboard_get` — direct clipboard control.
+- `desktop_find` (Owner AI tool) — Claude Vision (claude-sonnet-4-5-20250929) finds any UI element from natural-language description (e.g. "the Send button"). Returns {x, y, width, height, confidence}.
+- `desktop_click_text` — find + click composite.
+- `desktop_chat_send` — full smart chat send: find input → click → paste → click Send. Handles any chat UI.
+
+#### Layer 2 — Live Visibility
+- `overlay_show/update/hide` (agent actions) — Tkinter floating top-right semi-transparent (α=0.92) overlay window showing what the AI is doing live, so the owner can watch.
+
+#### Layer 3 — Files + Workspace
+- `workspace_save/list/read` — sandboxed `~/Downloads/zenrex_workspace/` for AI-generated reports, code, PDFs (path-traversal safe).
+- `search_files` — recursive search of Documents + Downloads + Desktop (or custom roots) by glob pattern.
+- `self_update` — agent downloads latest `zenrex_agent.py` from `/api/desktop-agent/agent-source` and restarts itself.
+
+**New server endpoints:**
+- `GET /api/desktop-agent/agent-source` — serves latest agent .py for self-update
+- `POST /api/desktop-agent/find-element` — Claude Vision endpoint for UI element lookup
+
+**Critical fix — version-aware duplicate detection:**
+The reconnect loop bug had a second cause: old + new agents on same machine kept replacing each other every 3s. Fixed via `_same_agent_machine()` now comparing `agent_version` field, plus `UPGRADE` path that kicks older versions when newer connects.
+
+**Deployment verified live on Hetzner:**
+- ✅ `agent_version: 0.8.0` confirmed on owner's machine (zuhair@Windows-11)
+- ✅ overlay window visible (confirmed via screenshot+vision analysis)
+- ✅ workspace files saved (`E1_تقرير_v0.8.0.md`, 1744 bytes)
+- ✅ Claude Vision found Windows Start button at (22, 948) with 95% confidence
+- ✅ search_files returned 3+ PDFs from user's Documents
+- ✅ Reconnect loop fully eliminated
+
+**Files changed:**
+- `/app/desktop_agent/zenrex_agent.py` (v0.7.0 → v0.8.0, +400 LOC)
+- `/app/backend/modules/freebuild/local_browser_relay.py` (+/agent-source, +/find-element, version-aware fingerprint, +/force-takeover)
+- `/app/backend/modules/freebuild/desktop_agent_tools.py` (+7 new Owner AI tools)
+
+**Self-update flow that worked:**
+1. Write new agent.py via existing `write_file` action (overwrites running file on disk)
+2. Open cmd.exe via `open_app`
+3. Type PowerShell launcher via `type` (Start-Process detached)
+4. Old python.exe processes killed by WMI commandline filter
+5. New v0.8.0 process launches, hello includes `agent_version`, server's UPGRADE path kicks the old WS, new one becomes active
+
