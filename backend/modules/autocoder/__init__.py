@@ -1869,6 +1869,74 @@ for _dname in DESKTOP_TOOL_NAMES:
     # Bind name into default arg so each lambda keeps its own tool name.
     TOOL_HANDLERS[_dname] = (lambda _n=_dname: (lambda **kw: _desktop_wrapper(_n, **kw)))()
 
+
+# ── Honesty footer builder ───────────────────────────────────────────────────
+# Maps "I-did-X" verbs (Arabic + English) to tool names that would legitimately
+# back the claim. If the AI says "أنشأت مجلد" without a desktop_act run_command,
+# we expose it transparently in a footer.
+_HONESTY_VERBS = [
+    (r"أنشأت\s+(?:مجلد|فولدر)|تم\s+إنشاء\s+(?:مجلد|الفولدر|المجلد)|created\s+(?:folder|directory)",
+     ["desktop_act", "run_command", "make_dir", "create_dir"]),
+    (r"حمّلت|حمَّلت|نزّلت|تم\s+تحميل|تم\s+التنزيل|downloaded",
+     ["desktop_act", "download_file", "fetch_url"]),
+    (r"ثبّت(?:ت|تُ)?|تم\s+التثبيت|installed",
+     ["desktop_act", "run_command"]),
+    (r"كتبت\s+(?:في|بـ|على)|typed",
+     ["desktop_act"]),
+    (r"نقرت|ضغطت|كبست|تم\s+النقر|clicked",
+     ["desktop_act"]),
+    (r"فتحت\s+(?:تطبيق|برنامج|نافذة|app|window|file)|تم\s+الفتح|opened",
+     ["desktop_act", "open_app", "open_url"]),
+    (r"شغّلت|تم\s+تشغيل|ran|executed",
+     ["desktop_act", "run_command", "run_remote_ssh", "shell_exec"]),
+    (r"نشرت|تم\s+النشر|deployed|pushed",
+     ["run_command", "git_commit_push", "run_remote_ssh"]),
+]
+
+
+def _build_verification_footer(text: str, events: List[Dict[str, Any]]) -> str:
+    """Detect 'I did X' claims in the AI reply that aren't backed by a tool call.
+    Returns a markdown banner to append; empty string if all claims look honest.
+    """
+    import re as _re
+    if not text or len(text.strip()) < 20:
+        return ""
+    ran_tools = set()
+    for ev in events or []:
+        if ev.get("type") != "tool":
+            continue
+        status = ev.get("status")
+        res = ev.get("result")
+        ok = isinstance(res, dict) and res.get("ok") is True
+        if status == "done" or ok:
+            nm = ev.get("name")
+            if nm:
+                ran_tools.add(nm)
+                args = ev.get("args") or {}
+                act = args.get("action") if isinstance(args, dict) else None
+                if act:
+                    ran_tools.add(act)
+    suspicious = []
+    for pat, expected in _HONESTY_VERBS:
+        m = _re.search(pat, text, _re.IGNORECASE)
+        if m and not any(e in ran_tools for e in expected):
+            suspicious.append((m.group(0)[:40], expected))
+    if not suspicious:
+        return ""
+    lines = [
+        "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━",
+        "⚠️ **تحقّق آلي** (تنبيه من النظام، مو من الذكاء):",
+        "",
+        "ادّعيت أفعالاً بدون استدعاء أداة فعلية:",
+    ]
+    for phrase, expected in suspicious[:6]:
+        lines.append(f"  • «{phrase}» — لم تُنفّذ فعلياً. (المطلوب: `{'` أو `'.join(expected[:3])}`)")
+    lines.append("")
+    lines.append("⛔ الادعاءات أعلاه لم تُنجَز على الجهاز/السيرفر. أعد الطلب بصيغة 'سوّ هذا الفعل فعلياً' لتنفيذ حقيقي.")
+    lines.append("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+    return "\n".join(lines)
+
+
 # db_query is bound to the live MongoDB at router creation time
 _db_query_bound: Optional[Any] = None
 _DB: Optional[Any] = None  # MongoDB instance (bound at router creation)
@@ -2553,6 +2621,13 @@ def create_autocoder_router(db, get_current_user, require_owner):
                         usage_total["cached_read"] += evt.get("cached_read", 0)
                         usage_total["cost_usd"] += evt.get("cost_usd", 0.0)
                     yield f"data: {json.dumps(evt, ensure_ascii=False)}\n\n"
+
+                verification_footer = _build_verification_footer(assistant_text, tool_events)
+                if verification_footer:
+                    nl = "\n\n"
+                    extra_text = nl + verification_footer
+                    assistant_text += extra_text
+                    yield f"data: {json.dumps({'type':'text','content': extra_text}, ensure_ascii=False)}\n\n"
 
                 await _persist_assistant_turn()
                 yield f"data: {json.dumps({'type':'saved','conversation_id':conv_id, 'turn_cost': round(usage_total['cost_usd'], 4)})}\n\n"

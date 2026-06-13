@@ -80,7 +80,7 @@ DEFAULT_WS = "wss://ai-cinematic-hub-2.preview.emergentagent.com/api/desktop-age
 DOWNLOADS_DIR = Path.home() / "Downloads"
 DOWNLOADS_DIR.mkdir(parents=True, exist_ok=True)
 
-AGENT_VERSION = "0.5.2"   # graceful error handling + no rapid reconnect loop
+AGENT_VERSION = "0.6.0"   # smart language switching + verbose loop guards
 
 # Set to False to disable on-startup auto-update. Recommended OFF until we
 # have a code-signing pipeline — a single bad release can brick all clients.
@@ -271,17 +271,70 @@ def type_text(p):
     # Default to a "visible-typing" speed (~25 chars/sec) so the user sees
     # each character appear. Caller can override with explicit interval.
     interval = float(p.get("interval", 0.04))
+    force_layout = (p.get("layout") or "").lower()  # "en" | "ar" | "" (auto)
+    method_used = "typewrite"
+    layout_switched = False
+
+    # Detect if text is pure ASCII (English/digits/punct) — typewrite handles this
+    # reliably. Arabic / Unicode goes via clipboard.
+    is_ascii = all(ord(c) < 128 for c in text)
+
+    # If the caller explicitly forces English, OR the text is ASCII and we're on
+    # Windows (where Arabic-IME-eating-ASCII is a thing), pre-toggle to English
+    # via Alt+Shift (Windows default IME switch hotkey).
+    if force_layout == "en" or (is_ascii and platform.system() == "Windows" and p.get("auto_layout", True)):
+        try:
+            pyautogui.hotkey("alt", "shift")
+            import time as _t
+            _t.sleep(0.25)
+            layout_switched = True
+        except Exception:
+            pass
+
     try:
-        pyautogui.typewrite(text, interval=interval)
+        if is_ascii:
+            pyautogui.typewrite(text, interval=interval)
+        else:
+            import pyperclip
+            pyperclip.copy(text)
+            paste = "command+v" if platform.system() == "Darwin" else "ctrl+v"
+            pyautogui.hotkey(*paste.split("+"))
+            method_used = "paste"
     except Exception:
         try:
             import pyperclip
             pyperclip.copy(text)
             paste = "command+v" if platform.system() == "Darwin" else "ctrl+v"
             pyautogui.hotkey(*paste.split("+"))
+            method_used = "paste-fallback"
         except Exception as e:
             return {"ok": False, "error": str(e)}
-    return {"ok": True, "chars": len(text)}
+
+    # Restore Arabic layout if we forced English explicitly
+    if force_layout == "en":
+        try:
+            pyautogui.hotkey("alt", "shift")
+        except Exception:
+            pass
+
+    return {
+        "ok": True,
+        "chars": len(text),
+        "method": method_used,
+        "layout_switched": layout_switched,
+        "is_ascii": is_ascii,
+    }
+
+
+def switch_keyboard(p):
+    """Toggle Windows IME (Alt+Shift) or specify lang ('en'|'ar'|'toggle')."""
+    lang = (p.get("lang") or "toggle").lower()
+    try:
+        # Alt+Shift cycles, Win+Space also works but cycles all installed languages
+        pyautogui.hotkey("alt", "shift")
+        return {"ok": True, "lang_requested": lang, "method": "alt+shift toggle"}
+    except Exception as e:
+        return {"ok": False, "error": str(e)}
 
 
 def press_key(p):
@@ -517,6 +570,7 @@ ACTIONS = {
     "screenshot": screenshot, "move_mouse": move_mouse, "click": click,
     "double_click": double_click, "right_click": right_click,
     "type": type_text, "press_key": press_key, "scroll": scroll,
+    "switch_keyboard": switch_keyboard,
     "download_file": download_file, "open_app": open_app, "open_url": open_url,
     "focus_window": focus_window,
     "cursor_position": cursor_position, "screen_size": screen_size,
@@ -534,6 +588,7 @@ ACTION_LABELS_AR = {
     "right_click":     ("🖱️", "ضغط يمين..."),
     "type":            ("⌨️", "يكتب..."),
     "press_key":       ("🎹", "يضغط مفتاح..."),
+    "switch_keyboard": ("🌐", "يبدّل لغة الكيبورد..."),
     "scroll":          ("🖱️", "يمرّر الشاشة..."),
     "download_file":   ("📥", "ينزّل ملف..."),
     "open_app":        ("🚀", "يفتح تطبيق..."),
