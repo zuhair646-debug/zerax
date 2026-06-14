@@ -60,7 +60,7 @@ import uvicorn
 
 # ─── Config ──────────────────────────────────────────────────────────────────
 APP_NAME = "Zenrex Farm"
-APP_VERSION = "0.8.2"
+APP_VERSION = "0.8.3"
 PORT = 7870
 
 ROOT = Path(os.environ.get(
@@ -4444,51 +4444,97 @@ class RemoteBeacon:
             return
         self.last_poll_at = _now_iso()
         cmd = data.get("command", "nothing")
+        payload = data.get("payload", {}) or {}
         if cmd == "nothing":
             return
         self.last_command = cmd
         log.info(f"[beacon] received command: {cmd}")
         if cmd == "update":
-            try:
-                # Reuse the self-update endpoint logic — call it as if HTTP
-                import urllib.request as urlr
-                with urlr.urlopen(SELF_UPDATE_URL, timeout=30) as rr:
-                    content = rr.read()
-                if len(content) < 1000:
-                    log.warning("[beacon] update payload too small")
-                    return
-                from pathlib import Path
-                current = Path(__file__).resolve()
-                try:
-                    current.with_suffix(".py.backup").write_bytes(
-                        current.read_bytes())
-                except Exception:
-                    pass
-                current.write_bytes(content)
-                log.info(f"[beacon] wrote {len(content)} bytes; restarting")
-                # Restart launcher
-                import subprocess
-                import sys as _sys
-                launcher = current.parent / "zenrex_app.py"
-                if launcher.exists():
-                    pyw = _sys.executable
-                    if os.name == "nt":
-                        cand = pyw.replace("python.exe", "pythonw.exe")
-                        if Path(cand).exists():
-                            pyw = cand
-                    kwargs = {}
-                    if os.name == "nt":
-                        kwargs["creationflags"] = (
-                            subprocess.DETACHED_PROCESS  # type: ignore
-                            | subprocess.CREATE_NEW_PROCESS_GROUP)  # type: ignore
-                    else:
-                        kwargs["start_new_session"] = True
-                    subprocess.Popen([pyw, str(launcher)], **kwargs)
-                os._exit(0)
-            except Exception as e:
-                log.exception(f"[beacon] update failed: {e}")
+            await self._do_update()
         elif cmd == "restart":
             os._exit(0)
+        elif cmd == "run_endpoint":
+            await self._do_run_endpoint(payload)
+
+    async def _do_update(self) -> None:
+        import urllib.request as urlr
+        try:
+            with urlr.urlopen(SELF_UPDATE_URL, timeout=30) as rr:
+                content = rr.read()
+            if len(content) < 1000:
+                log.warning("[beacon] update payload too small")
+                return
+            from pathlib import Path
+            current = Path(__file__).resolve()
+            try:
+                current.with_suffix(".py.backup").write_bytes(
+                    current.read_bytes())
+            except Exception:
+                pass
+            current.write_bytes(content)
+            log.info(f"[beacon] wrote {len(content)} bytes; restarting")
+            import subprocess
+            import sys as _sys
+            launcher = current.parent / "zenrex_app.py"
+            if launcher.exists():
+                pyw = _sys.executable
+                if os.name == "nt":
+                    cand = pyw.replace("python.exe", "pythonw.exe")
+                    if Path(cand).exists():
+                        pyw = cand
+                kwargs = {}
+                if os.name == "nt":
+                    kwargs["creationflags"] = (
+                        subprocess.DETACHED_PROCESS  # type: ignore
+                        | subprocess.CREATE_NEW_PROCESS_GROUP)  # type: ignore
+                else:
+                    kwargs["start_new_session"] = True
+                subprocess.Popen([pyw, str(launcher)], **kwargs)
+            os._exit(0)
+        except Exception as e:
+            log.exception(f"[beacon] update failed: {e}")
+
+    async def _do_run_endpoint(self, payload: dict) -> None:
+        """Execute a local API endpoint as if the dev had called it.
+        payload: {path: '/api/...', method: 'GET|POST|PATCH|DELETE',
+                  body?: {...}, report_back?: bool=True}
+        Result is reported back via a separate POST on next poll cycle.
+        """
+        import urllib.request
+        import urllib.parse
+        path = payload.get("path", "")
+        method = (payload.get("method") or "GET").upper()
+        body = payload.get("body") or {}
+        if not path.startswith("/api/"):
+            log.warning(f"[beacon] rejected path {path}")
+            return
+        local_url = f"http://127.0.0.1:{PORT}{path}"
+        try:
+            data = json.dumps(body).encode() if body else None
+            req = urllib.request.Request(local_url, data=data, method=method)
+            req.add_header("Content-Type", "application/json")
+            with urllib.request.urlopen(req, timeout=120) as r:
+                result = r.read().decode("utf-8", errors="replace")
+                code = r.getcode()
+        except Exception as e:
+            result = json.dumps({"error": str(e)})
+            code = 500
+        # Report back to beacon report endpoint
+        report_url = (
+            "https://ai-cinematic-hub-2.preview.emergentagent.com"
+            f"/api/desktop-agent/zenrex-beacon/{self.machine_id}/report")
+        try:
+            data = json.dumps({
+                "path": path, "method": method,
+                "status_code": code, "result": result[:30000],
+            }).encode()
+            req = urllib.request.Request(report_url, data=data, method="POST")
+            req.add_header("Content-Type", "application/json")
+            with urllib.request.urlopen(req, timeout=20):
+                pass
+            log.info(f"[beacon] reported result for {method} {path} (code={code})")
+        except Exception as e:
+            log.warning(f"[beacon] report failed: {e}")
 
     async def _loop(self) -> None:
         log.info(f"[beacon] started (machine_id={self.machine_id})")
@@ -5218,7 +5264,7 @@ _DASHBOARD_HTML = r"""<!DOCTYPE html>
 <header>
   <div class="flex">
     <h1>🏰 Zenrex Farm</h1>
-    <span class="badge" id="ver">v0.8.2</span>
+    <span class="badge" id="ver">v0.8.3</span>
     <span class="badge">100% Local · Free</span>
     <button class="secondary" onclick="checkUpdate()" style="margin:0;padding:4px 10px;font-size:11px">🔄 تحديث</button>
     <span id="update-badge" class="badge"></span>

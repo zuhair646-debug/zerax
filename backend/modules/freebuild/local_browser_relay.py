@@ -582,6 +582,34 @@ async def zenrex_beacon_list():
     ], "count": len(_ZENREX_BEACONS)}
 
 
+@desktop_router.post("/zenrex-beacon/{machine_id}/report")
+async def zenrex_beacon_report(machine_id: str, request: Request):
+    """Local Zenrex Farm reports back the result of a run_endpoint command."""
+    body = await request.json()
+    rec = _ZENREX_BEACONS.setdefault(machine_id, {})
+    reports = rec.setdefault("reports", [])
+    reports.append({
+        "at": datetime.now(timezone.utc).isoformat(),
+        "path": body.get("path", ""),
+        "method": body.get("method", ""),
+        "status_code": body.get("status_code"),
+        "result": body.get("result", "")[:30000],
+    })
+    # Keep only last 50 reports
+    if len(reports) > 50:
+        rec["reports"] = reports[-50:]
+    return {"ok": True}
+
+
+@desktop_router.get("/zenrex-beacon/{machine_id}/reports")
+async def zenrex_beacon_reports_get(machine_id: str, limit: int = 20):
+    """Read recent execution reports from this machine."""
+    rec = _ZENREX_BEACONS.get(machine_id, {})
+    reports = rec.get("reports", [])
+    return {"ok": True, "count": len(reports),
+            "reports": reports[-limit:]}
+
+
 @desktop_router.post("/find-element")
 async def desktop_find_element(request: Request):
     """Vision-based UI element finder for the AI.
