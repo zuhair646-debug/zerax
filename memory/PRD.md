@@ -211,5 +211,28 @@ Unify the AI brain and empower it with unified toolset. Fix mocked AI Trading Bo
   `input[name="name"]` for email field — was `input[name="email"]` before.
   Proven via headless Playwright + screenshot showing "Wrong email, account
   name or password" response from the live server.
-- ⚠ Defense (rally point troop sending) still MOCKED — logs the dispatch
-  intent but doesn't fill the form yet.
+
+### v0.5.0 → Raid + Stock (latest)
+- ✅ **scrape_village_stock(page, base)**: navigates to `/dorf1.php`, reads
+  `#l1..#l4` spans, returns true {wood, clay, iron, crop}. Wired into
+  TransferWorker's `random_all` mode — 80% of stockpile sent (60% for crop),
+  replacing the previous random 300–1500 heuristic.
+- ✅ **scrape_village_troops(page, base)**: visits rally point, parses the
+  troop table (`img.unit` + `td.num`), returns `{u1: n, u2: n, ...}`.
+- ✅ **send_raid_from_village(page, base, x, y, troops, attack_type)**:
+  rally-point form fill (`troops[tN]`), coords, attack type radio
+  (raid=3, attack=4, reinforce=2), submit+confirm.
+- ✅ **scan_map_radius(page, base, cx, cy, radius)**: posts to
+  `/api/v1/map/position`, returns tile list with owner/oasis/kind.
+- ✅ **RaidWorker**: Background loop that iterates "hunter" villages, scans
+  their N-radius, upserts tiles into `raid_targets`, picks targets that:
+  (a) are oases / unowned / Natars; (b) haven't been raided within
+  `cooldown_min`; (c) prioritised by lowest fail_count + highest success_count.
+  Sends `max_per_cycle` raids per hunter per cycle.
+- ✅ **Defense mode** now uses real `send_raid_from_village` with
+  `attack_type=reinforce` (no longer mocked).
+- ✅ **DB schema**: new tables `raid_targets` (UNIQUE on server,x,y) and
+  `raid_config` (hunter settings per village).
+- ✅ **Dashboard card**: Auto-Raid panel with hunter list, cycle config,
+  start/stop controls, and "🎯 أضف صياد" modal for per-village setup.
+- ✅ **64 endpoints total**, file: 4994 lines.

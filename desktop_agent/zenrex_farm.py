@@ -185,9 +185,35 @@ CREATE TABLE IF NOT EXISTS transfer_jobs (
     updated_at      TEXT
 );
 
+CREATE TABLE IF NOT EXISTS raid_targets (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    server          TEXT NOT NULL,
+    x               INTEGER NOT NULL,
+    y               INTEGER NOT NULL,
+    owner           TEXT,                    -- "Natars" | player name | empty
+    kind            TEXT,                    -- 'village' | 'oasis' | 'unknown'
+    last_seen       TEXT,
+    last_raid_at    TEXT,
+    success_count   INTEGER DEFAULT 0,
+    fail_count      INTEGER DEFAULT 0,
+    note            TEXT,
+    UNIQUE(server, x, y)
+);
+
+CREATE TABLE IF NOT EXISTS raid_config (
+    village_id      TEXT PRIMARY KEY,        -- hunter village
+    enabled         INTEGER DEFAULT 1,
+    radius          INTEGER DEFAULT 7,
+    max_per_cycle   INTEGER DEFAULT 8,
+    troops_json     TEXT,                    -- {"t4": 5} per raid
+    attack_type     TEXT DEFAULT 'raid',
+    cooldown_min    INTEGER DEFAULT 90
+);
+
 CREATE INDEX IF NOT EXISTS idx_events_village ON events(village_id, ts);
 CREATE INDEX IF NOT EXISTS idx_villages_state ON villages(state);
 CREATE INDEX IF NOT EXISTS idx_chat_session ON chat_messages(session_id, ts);
+CREATE INDEX IF NOT EXISTS idx_raid_targets_server ON raid_targets(server, last_raid_at);
 """
 
 # Indexes that reference newly-added columns (must run AFTER ALTER TABLE migrations)
@@ -811,7 +837,265 @@ async def send_resources_from_village(page, world_url_base: str,
             "sent": sent, "detail": url}
 
 
-# ─── Mail.tm activation link extraction ──────────────────────────────────────
+# ─── In-game scraping helpers ────────────────────────────────────────────────
+async def scrape_village_stock(page, world_url_base: str) -> dict[str, int]:
+    """Read the four resource counters from /dorf1.php. Returns
+    {wood, clay, iron, crop} as ints. Zero on failure."""
+    base = world_url_base.rstrip("/")
+    try:
+        await page.goto(f"{base}/dorf1.php", wait_until="domcontentloaded",
+                        timeout=15000)
+    except Exception:
+        return {"wood": 0, "clay": 0, "iron": 0, "crop": 0}
+    await asyncio.sleep(random.uniform(0.6, 1.2))
+    out = {"wood": 0, "clay": 0, "iron": 0, "crop": 0}
+    # Travian uses #l1..#l4 spans; sometimes nested inside #stockBar
+    for key, sel_ids in (
+        ("wood", ["#l1", "#stockBar #l1"]),
+        ("clay", ["#l2", "#stockBar #l2"]),
+        ("iron", ["#l3", "#stockBar #l3"]),
+        ("crop", ["#l4", "#stockBar #l4"]),
+    ):
+        for sel in sel_ids:
+            try:
+                txt = await page.locator(sel).first.inner_text(timeout=800)
+                # Travian formats like "1,234" or "1.234" or "1234"
+                digits = "".join(c for c in (txt or "")
+                                 if c.isdigit())
+                if digits:
+                    out[key] = int(digits)
+                    break
+            except Exception:
+                continue
+    return out
+
+
+async def scrape_village_troops(page, world_url_base: str) -> dict[str, int]:
+    """Read the rally point troop overview. Returns a dict
+    {unit_class_name: count}. Best-effort; returns {} on failure.
+
+    Looks at /build.php?gid=16 (rally point) and reads the troops table.
+    """
+    base = world_url_base.rstrip("/")
+    try:
+        await page.goto(f"{base}/build.php?gid=16",
+                        wait_until="domcontentloaded", timeout=15000)
+    except Exception:
+        return {}
+    await asyncio.sleep(random.uniform(0.6, 1.2))
+    troops: dict[str, int] = {}
+    # Rally point table rows look like:
+    # <td class="ico"><img class="unit uX"></td><td class="num">123</td>
+    try:
+        rows = await page.evaluate("""
+            () => Array.from(document.querySelectorAll('table tr')).map(tr => {
+              const img = tr.querySelector('img.unit, img[class*="unit"]');
+              const numEl = tr.querySelector('td.num, td.unum, td[align="right"]');
+              if (!img || !numEl) return null;
+              const cls = (img.className || '').match(/u[0-9]+/);
+              const n = (numEl.textContent || '').replace(/[^0-9]/g, '');
+              return cls ? {unit: cls[0], n: parseInt(n||'0')} : null;
+            }).filter(Boolean)
+        """)
+        for r in rows or []:
+            troops[r["unit"]] = troops.get(r["unit"], 0) + int(r.get("n", 0))
+    except Exception:
+        pass
+    return troops
+
+
+# ─── Rally point raid sender ─────────────────────────────────────────────────
+async def send_raid_from_village(page, world_url_base: str,
+                                 target_x: int, target_y: int,
+                                 troops: dict[str, int],
+                                 attack_type: str = "raid") -> dict[str, Any]:
+    """Fill the rally point 'send troops' form with the given troops, target
+    coords and attack type ('raid'|'attack'|'reinforce'), then submit.
+
+    troops dict can use either Travian unit ids ('u1','u2',...) or readable
+    names ('phalanx','legionnaire',...). For now we only support 't1'..'t10'
+    field names which map to whatever tribe owns the village.
+
+    Returns {ok, stage, sent, detail}.
+    """
+    base = world_url_base.rstrip("/")
+    rally = f"{base}/build.php?gid=16&tt=2"  # tt=2 → send troops tab
+    try:
+        await page.goto(rally, wait_until="domcontentloaded", timeout=20000)
+    except Exception as e:
+        return {"ok": False, "stage": "navigate_rally",
+                "detail": str(e), "sent": {}}
+    await asyncio.sleep(random.uniform(0.7, 1.3))
+
+    # Normalise troops keys → t1..t10 (Travian uses position 1..10 per tribe)
+    name_to_t = {
+        # Romans
+        "legionnaire": "t1", "praetorian": "t2", "imperian": "t3",
+        "equites legati": "t4", "equites imperatoris": "t5",
+        "equites caesaris": "t6", "battering ram": "t7",
+        # Teutons / Gauls / others — common ones
+        "phalanx": "t1", "swordsman": "t2", "pathfinder": "t3",
+        "theutates thunder": "t4", "druidrider": "t5", "haeduan": "t6",
+        "archer": "t3", "cavalry": "t4",
+    }
+    payload: dict[str, int] = {}
+    for k, v in (troops or {}).items():
+        n = int(v or 0)
+        if n <= 0:
+            continue
+        if k.startswith("t") and k[1:].isdigit():
+            payload[k] = n
+        else:
+            slot = name_to_t.get(k.lower())
+            if slot:
+                payload[slot] = payload.get(slot, 0) + n
+
+    if not payload:
+        return {"ok": False, "stage": "no_troops",
+                "detail": "no valid troops mapped", "sent": {}}
+
+    # Fill troop inputs (Travian uses input[name='troop[t1]'] or 'troops[t1]')
+    sent: dict[str, int] = {}
+    for slot, n in payload.items():
+        filled = False
+        for sel in (f"input[name='troops[{slot}]']",
+                    f"input[name='troop[{slot}]']",
+                    f"input[name='{slot}']",
+                    f"input#{slot}"):
+            try:
+                loc = page.locator(sel).first
+                await loc.wait_for(state="visible", timeout=1200)
+                await loc.click()
+                await loc.fill("")
+                await loc.type(str(n),
+                               delay=int(human_typing_interval() * 1000))
+                sent[slot] = n
+                filled = True
+                break
+            except Exception:
+                continue
+        if not filled:
+            # Slot not available in this village's tribe
+            pass
+
+    if not sent:
+        return {"ok": False, "stage": "fill_troops",
+                "detail": "no troop inputs found", "sent": {}}
+
+    # Fill x/y
+    for axis, sels in MARKET_COORD_SELECTORS.items():
+        val = target_x if axis == "x" else target_y
+        for sel in sels:
+            try:
+                loc = page.locator(sel).first
+                await loc.wait_for(state="visible", timeout=1200)
+                await loc.click()
+                await loc.fill("")
+                await loc.type(str(val),
+                               delay=int(human_typing_interval() * 1000))
+                break
+            except Exception:
+                continue
+
+    # Pick attack type radio. c=2 raid, c=3 attack, c=4 reinforce.
+    type_to_c = {"reinforce": 2, "raid": 3, "attack": 4}
+    c_val = type_to_c.get(attack_type.lower(), 3)
+    for sel in (f"input[name='c'][value='{c_val}']",
+                f"input[type='radio'][name='c'][value='{c_val}']",
+                "input[name='c'][value='3']"):
+        try:
+            await page.locator(sel).first.check(timeout=1000)
+            break
+        except Exception:
+            continue
+
+    # Submit
+    await asyncio.sleep(random.uniform(0.5, 1.0))
+    submitted = await _try_click_any(page, MARKET_SEND_SELECTORS,
+                                     timeout_ms=2000)
+    if not submitted:
+        return {"ok": False, "stage": "submit",
+                "detail": "no submit button", "sent": sent}
+
+    # Confirm
+    await asyncio.sleep(random.uniform(0.8, 1.4))
+    for sel in ("button.green:has-text('OK')", "button:has-text('Confirm')",
+                "button:has-text('OK')", "input[name='ok']",
+                "button[type='submit']"):
+        try:
+            loc = page.locator(sel).first
+            if await loc.is_visible(timeout=900):
+                await loc.click(timeout=1500)
+                break
+        except Exception:
+            continue
+    try:
+        await page.wait_for_load_state("networkidle", timeout=8000)
+    except Exception:
+        pass
+    url = page.url or ""
+    return {"ok": True, "stage": "raid_sent",
+            "sent": sent, "type": attack_type, "detail": url}
+
+
+# ─── Map scanner — discover potential raid targets in a radius ───────────────
+async def scan_map_radius(page, world_url_base: str,
+                          center_x: int, center_y: int,
+                          radius: int = 7) -> list[dict[str, Any]]:
+    """Use Travian's /api/v1/map/position to fetch tile info in the area.
+    Returns a list of {x, y, owner, oasis, kind} dicts for non-our tiles.
+
+    Travian's modern map endpoint accepts a POST with bounding box. Falls back
+    to GET /karte.php scraping if AJAX endpoint is gone.
+    """
+    base = world_url_base.rstrip("/")
+    payload = {
+        "data": {
+            "x": center_x, "y": center_y,
+            "zoomLevel": 3, "ignorePositions": []
+        }
+    }
+    # Try modern AJAX endpoint
+    try:
+        resp = await page.evaluate(
+            """async (args) => {
+              const r = await fetch(args.url, {
+                method:'POST', credentials:'include',
+                headers:{'Content-Type':'application/json',
+                         'X-Requested-With':'XMLHttpRequest'},
+                body: JSON.stringify(args.body)
+              });
+              return await r.text();
+            }""",
+            {"url": f"{base}/api/v1/map/position", "body": payload})
+        data = json.loads(resp) if resp else {}
+        tiles = data.get("tiles") or data.get("response", {}).get("data", [])
+    except Exception:
+        tiles = []
+
+    targets: list[dict[str, Any]] = []
+    for t in tiles:
+        try:
+            tx = int(t.get("x", t.get("position", {}).get("x", 0)))
+            ty = int(t.get("y", t.get("position", {}).get("y", 0)))
+            if abs(tx - center_x) > radius or abs(ty - center_y) > radius:
+                continue
+            owner = (t.get("text") or "") + " " + json.dumps(
+                t.get("tooltip", ""), ensure_ascii=False)[:200]
+            kind = t.get("type") or t.get("c") or ""
+            targets.append({
+                "x": tx, "y": ty,
+                "owner": owner.strip()[:120],
+                "kind": str(kind),
+                "is_oasis": "oasis" in owner.lower() or kind in (
+                    "0", "1", "2", "3"),
+            })
+        except Exception:
+            continue
+    return targets
+
+
+
 async def find_activation_link(token: str) -> Optional[str]:
     """Poll the mail.tm inbox for a Travian activation email and return the
     activation URL inside it. Returns None if no link is found."""
@@ -1845,15 +2129,37 @@ class TransferWorker:
                     continue
                 base = world["world_url"].split("/build.php", 1)[0]\
                                          .split("/dorf", 1)[0].rstrip("/")
+                # For random_all: replace heuristic with REAL stock scrape
+                if mode == "random_all":
+                    try:
+                        stock = await scrape_village_stock(page, base)
+                        # Keep a 20% safety margin so we don't drain everything
+                        entry["amounts"] = {
+                            "wood": int(stock.get("wood", 0) * 0.8),
+                            "clay": int(stock.get("clay", 0) * 0.8),
+                            "iron": int(stock.get("iron", 0) * 0.8),
+                            "crop": int(stock.get("crop", 0) * 0.6),
+                        }
+                        log_event(v["id"], "stock_scraped",
+                                  json.dumps(stock))
+                    except Exception as e:
+                        log_event(v["id"], "stock_scrape_failed", str(e))
                 if mode == "defense":
-                    # MOCKED: rally-point troop sending is a separate flow;
-                    # log it for now and move on.
-                    log_event(v["id"], "defense_dispatch_mocked",
-                              f"job#{job['id']} → ({tx},{ty}) troops="
-                              f"{entry.get('troops')}")
-                    progress.append({"vid": v["id"], "ok": True,
-                                     "stage": "rally_mocked",
-                                     "troops": entry.get("troops")})
+                    # Use real rally-point sender (raid=False → reinforce)
+                    try:
+                        result = await send_raid_from_village(
+                            page, base, tx, ty,
+                            entry.get("troops") or {},
+                            attack_type="reinforce")
+                    except Exception as e:
+                        result = {"ok": False, "stage": "exception",
+                                  "detail": str(e), "sent": {}}
+                    progress.append({"vid": v["id"], "ok": result.get("ok"),
+                                     "stage": result.get("stage"),
+                                     "sent": result.get("sent")})
+                    log_event(v["id"], "defense_dispatch",
+                              f"job#{job['id']} → ({tx},{ty}) "
+                              f"sent={result.get('sent')}")
                 else:
                     result = await send_resources_from_village(
                         page, base, tx, ty, entry["amounts"])
@@ -2012,6 +2318,298 @@ class ActivationWorker:
 
 
 ACTIVATION_WORKER = ActivationWorker()
+
+
+# ─── Raid Worker — scans map radius + dispatches raids from hunter villages ──
+class RaidWorker:
+    """For each enabled 'hunter' village (entry in raid_config):
+      1. Open browser → lobby → game world
+      2. Scan map in `radius` around the hunter's coords
+      3. Persist discovered tiles into `raid_targets` (UPSERT)
+      4. Pick `max_per_cycle` targets prioritising oases & inactive players
+         that we haven't raided within `cooldown_min`
+      5. For each, send a raid (default 5x cavalry) via rally point
+
+    Loops every cycle (default 15 min) then sleeps `cycle_min`.
+    """
+    DEFAULT_CYCLE_MIN = 15.0
+
+    def __init__(self) -> None:
+        self.task: Optional[asyncio.Task] = None
+        self.cancel = asyncio.Event()
+        self.cycle_min = self.DEFAULT_CYCLE_MIN
+        self.last_status: dict[str, Any] = {
+            "running": False, "current_hunter": None,
+            "last_cycle_at": None, "total_raids_sent": 0,
+            "last_targets_found": 0,
+        }
+
+    def _enabled_hunters(self) -> list[dict[str, Any]]:
+        with db_cur() as cur:
+            rows = cur.execute(
+                "SELECT v.*, c.radius, c.max_per_cycle, c.troops_json, "
+                "       c.attack_type, c.cooldown_min "
+                "FROM raid_config c "
+                "JOIN villages v ON v.id = c.village_id "
+                "WHERE c.enabled = 1 AND v.is_personal = 0 "
+                "AND v.state IN ('registered','active','browser_open')"
+            ).fetchall()
+        return [dict(r) for r in rows]
+
+    def _upsert_targets(self, server: str,
+                        tiles: list[dict[str, Any]]) -> int:
+        n = 0
+        now = _now_iso()
+        with db_cur() as cur:
+            for t in tiles:
+                try:
+                    cur.execute(
+                        "INSERT INTO raid_targets "
+                        "(server, x, y, owner, kind, last_seen) "
+                        "VALUES (?, ?, ?, ?, ?, ?) "
+                        "ON CONFLICT(server, x, y) DO UPDATE SET "
+                        "  owner = excluded.owner, last_seen = excluded.last_seen",
+                        (server, int(t["x"]), int(t["y"]),
+                         t.get("owner", ""),
+                         "oasis" if t.get("is_oasis") else "village",
+                         now))
+                    n += 1
+                except Exception:
+                    continue
+        return n
+
+    def _pick_targets(self, server: str, hunter_x: int, hunter_y: int,
+                      radius: int, max_n: int,
+                      cooldown_min: int) -> list[dict[str, Any]]:
+        from datetime import datetime, timezone, timedelta
+        cutoff = (datetime.now(timezone.utc) -
+                  timedelta(minutes=cooldown_min)).isoformat()
+        with db_cur() as cur:
+            rows = cur.execute(
+                "SELECT * FROM raid_targets WHERE server = ? "
+                "AND (last_raid_at IS NULL OR last_raid_at < ?) "
+                "AND (kind = 'oasis' OR owner = '' OR owner LIKE '%Natars%') "
+                "ORDER BY fail_count ASC, success_count DESC, "
+                "         last_raid_at IS NULL DESC, last_raid_at ASC "
+                "LIMIT 200",
+                (server, cutoff)).fetchall()
+        targets = []
+        for r in rows:
+            if abs(r["x"] - hunter_x) > radius or abs(r["y"] - hunter_y) > radius:
+                continue
+            targets.append(dict(r))
+            if len(targets) >= max_n:
+                break
+        return targets
+
+    def _mark_raid_result(self, target_id: int, ok: bool) -> None:
+        col = "success_count" if ok else "fail_count"
+        with db_cur() as cur:
+            cur.execute(
+                f"UPDATE raid_targets SET {col} = {col} + 1, "
+                "last_raid_at = ? WHERE id = ?",
+                (_now_iso(), target_id))
+
+    async def _process_hunter(self, hunter: dict[str, Any]) -> dict[str, Any]:
+        self.last_status["current_hunter"] = hunter["id"]
+        server = hunter["server"]
+        hx = int(hunter.get("coords_x") or 0)
+        hy = int(hunter.get("coords_y") or 0)
+        radius = int(hunter.get("radius") or 7)
+        max_n = int(hunter.get("max_per_cycle") or 8)
+        cooldown = int(hunter.get("cooldown_min") or 90)
+        troops_cfg = json.loads(hunter.get("troops_json") or '{"t4": 5}')
+        atk_type = hunter.get("attack_type") or "raid"
+
+        ctx, page = await FARM.open(hunter)
+        login = await lobby_auto_login(page, hunter)
+        if not login.get("ok"):
+            return {"ok": False, "stage": "login", "detail": login}
+        world = await enter_game_world(page, server_hint=server)
+        if not world.get("ok"):
+            return {"ok": False, "stage": "enter_world", "detail": world}
+        base = world["world_url"].split("/build.php", 1)[0]\
+                                 .split("/dorf", 1)[0].rstrip("/")
+
+        # 1) Scan map
+        tiles = await scan_map_radius(page, base, hx, hy, radius=radius)
+        found = self._upsert_targets(server, tiles)
+        self.last_status["last_targets_found"] = found
+        log_event(hunter["id"], "raid_scan",
+                  f"radius={radius} → {found} tiles upserted")
+
+        # 2) Pick targets
+        chosen = self._pick_targets(server, hx, hy, radius, max_n, cooldown)
+        log.info(f"[raid] hunter {hunter['id']} picked "
+                 f"{len(chosen)} / max {max_n} targets")
+
+        # 3) Send raids
+        sent_n = 0
+        for t in chosen:
+            if self.cancel.is_set():
+                break
+            try:
+                result = await send_raid_from_village(
+                    page, base, int(t["x"]), int(t["y"]),
+                    troops_cfg, attack_type=atk_type)
+                self._mark_raid_result(t["id"], bool(result.get("ok")))
+                log_event(hunter["id"], "raid_sent",
+                          f"({t['x']},{t['y']}) ok={result.get('ok')} "
+                          f"stage={result.get('stage')}")
+                if result.get("ok"):
+                    sent_n += 1
+                    self.last_status["total_raids_sent"] = (
+                        self.last_status.get("total_raids_sent", 0) + 1)
+            except Exception as e:
+                log_event(hunter["id"], "raid_error", str(e))
+                self._mark_raid_result(t["id"], False)
+            # Throttle between raids — 4–12 seconds
+            await asyncio.sleep(random.uniform(4.0, 12.0))
+
+        return {"ok": True, "hunter": hunter["id"],
+                "tiles_seen": found, "raids_sent": sent_n}
+
+    async def _loop(self) -> None:
+        log.info("[raid-worker] started")
+        self.last_status["running"] = True
+        while not self.cancel.is_set():
+            hunters = self._enabled_hunters()
+            if not hunters:
+                await asyncio.sleep(20)
+                continue
+            for h in hunters:
+                if self.cancel.is_set():
+                    break
+                try:
+                    await self._process_hunter(h)
+                except Exception:
+                    log.exception(
+                        f"[raid-worker] hunter {h.get('id')} failed")
+                # Spacing between hunters
+                await asyncio.sleep(random.uniform(15.0, 35.0))
+            self.last_status["last_cycle_at"] = _now_iso()
+            self.last_status["current_hunter"] = None
+            # Wait until next cycle
+            await asyncio.sleep(self.cycle_min * 60)
+        self.last_status["running"] = False
+        log.info("[raid-worker] stopped")
+
+    async def start(self) -> None:
+        if self.task and not self.task.done():
+            return
+        self.cancel.clear()
+        self.task = asyncio.create_task(self._loop())
+
+    async def stop(self) -> None:
+        self.cancel.set()
+        if self.task:
+            try:
+                await asyncio.wait_for(self.task, timeout=5)
+            except Exception:
+                pass
+
+
+RAID_WORKER = RaidWorker()
+
+
+@app.post("/api/raid/worker/start")
+async def api_rw_start():
+    await RAID_WORKER.start()
+    return {"ok": True, "status": RAID_WORKER.last_status}
+
+
+@app.post("/api/raid/worker/stop")
+async def api_rw_stop():
+    await RAID_WORKER.stop()
+    return {"ok": True, "status": RAID_WORKER.last_status}
+
+
+@app.get("/api/raid/worker/status")
+def api_rw_status():
+    return {"ok": True, "status": RAID_WORKER.last_status,
+            "cycle_min": RAID_WORKER.cycle_min}
+
+
+@app.post("/api/raid/worker/config")
+async def api_rw_global_config(request: Request):
+    """Set global raid worker config (currently: cycle_min)."""
+    body = await request.json()
+    if "cycle_min" in body:
+        RAID_WORKER.cycle_min = float(body["cycle_min"])
+    return {"ok": True, "cycle_min": RAID_WORKER.cycle_min}
+
+
+@app.get("/api/raid/hunters")
+def api_rw_hunters():
+    """List all hunter villages (rows in raid_config) joined with villages."""
+    with db_cur() as cur:
+        rows = cur.execute(
+            "SELECT c.*, v.name, v.server, v.coords_x, v.coords_y, v.tribe "
+            "FROM raid_config c JOIN villages v ON v.id = c.village_id "
+            "ORDER BY c.village_id").fetchall()
+    return {"ok": True, "hunters": [dict(r) for r in rows]}
+
+
+@app.post("/api/raid/hunters/{vid}")
+async def api_rw_set_hunter(vid: str, request: Request):
+    """Enable a village as raid hunter. Body: {enabled, radius, max_per_cycle,
+    troops_json, attack_type, cooldown_min}."""
+    v = get_village(vid)
+    if not v:
+        raise HTTPException(404, "village not found")
+    body = await request.json()
+    troops_json = body.get("troops_json")
+    if isinstance(troops_json, dict):
+        troops_json = json.dumps(troops_json)
+    with db_cur() as cur:
+        cur.execute(
+            "INSERT INTO raid_config (village_id, enabled, radius, "
+            "max_per_cycle, troops_json, attack_type, cooldown_min) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?) "
+            "ON CONFLICT(village_id) DO UPDATE SET "
+            "enabled = excluded.enabled, radius = excluded.radius, "
+            "max_per_cycle = excluded.max_per_cycle, "
+            "troops_json = excluded.troops_json, "
+            "attack_type = excluded.attack_type, "
+            "cooldown_min = excluded.cooldown_min",
+            (vid,
+             1 if body.get("enabled", True) else 0,
+             int(body.get("radius", 7)),
+             int(body.get("max_per_cycle", 8)),
+             troops_json or '{"t4": 5}',
+             body.get("attack_type", "raid"),
+             int(body.get("cooldown_min", 90))))
+    return {"ok": True, "village_id": vid}
+
+
+@app.delete("/api/raid/hunters/{vid}")
+def api_rw_del_hunter(vid: str):
+    with db_cur() as cur:
+        cur.execute("DELETE FROM raid_config WHERE village_id = ?", (vid,))
+    return {"ok": True}
+
+
+@app.get("/api/raid/targets")
+def api_rw_targets(server: Optional[str] = None, limit: int = 200):
+    where = ""
+    params: tuple = (limit,)
+    if server:
+        where = "WHERE server = ? "
+        params = (server, limit)
+    with db_cur() as cur:
+        rows = cur.execute(
+            f"SELECT * FROM raid_targets {where}"
+            "ORDER BY last_raid_at IS NULL DESC, last_raid_at ASC, "
+            "         success_count DESC LIMIT ?", params).fetchall()
+    return {"ok": True, "targets": [dict(r) for r in rows],
+            "count": len(rows)}
+
+
+@app.delete("/api/raid/targets/{tid}")
+def api_rw_del_target(tid: int):
+    with db_cur() as cur:
+        cur.execute("DELETE FROM raid_targets WHERE id = ?", (tid,))
+    return {"ok": True}
 
 
 @app.post("/api/transfer/worker/start")
@@ -3471,6 +4069,55 @@ _DASHBOARD_HTML = r"""<!DOCTYPE html>
     </div>
 
     <div class="card" style="margin-top:18px">
+      <h2>⚔️ عامل الإغارة التلقائية (Auto-Raid)</h2>
+      <div id="rw-status" class="small" style="margin:8px 0;padding:8px 10px;
+           background:#0a0a14;border-radius:8px"></div>
+      <div class="row">
+        <div><label>دورة (د)</label><input id="rw-cycle" type="number"
+             value="15" min="3" max="240"/></div>
+        <button class="secondary" onclick="setRaidCycle()">💾 احفظ</button>
+      </div>
+      <div class="row">
+        <button onclick="startRaid()">▶ شغّل</button>
+        <button class="danger" onclick="stopRaid()">■ أوقف</button>
+        <button class="secondary" onclick="openHunterDialog()">🎯 أضف صياد</button>
+      </div>
+      <div id="hunters-list" style="margin-top:8px;display:flex;
+           flex-direction:column;gap:6px;max-height:200px;overflow:auto"></div>
+      <p class="small" style="margin-top:6px;color:var(--muted)">
+        كل قرية صياد تمسح خريطتها كل دورة وترسل إغارات حسب إعداداتها.
+      </p>
+    </div>
+
+    <!-- Hunter setup modal -->
+    <div id="hunter-modal" style="display:none;position:fixed;inset:0;
+         background:rgba(0,0,0,0.8);z-index:100;align-items:center;
+         justify-content:center;padding:20px">
+      <div class="card" style="max-width:500px;width:100%">
+        <h2>🎯 ضبط قرية كصياد</h2>
+        <label>اختر القرية</label>
+        <select id="h-vid"></select>
+        <div class="row">
+          <div><label>نصف قطر</label><input id="h-radius" type="number" value="7" min="1" max="30"/></div>
+          <div><label>إغارات/دورة</label><input id="h-max" type="number" value="8" min="1" max="50"/></div>
+          <div><label>تبريد (د)</label><input id="h-cool" type="number" value="90" min="10" max="1440"/></div>
+        </div>
+        <label>نوع الهجوم</label>
+        <select id="h-type">
+          <option value="raid">⚔️ Raid (إغارة سريعة)</option>
+          <option value="attack">🔥 Attack (هجوم كامل)</option>
+        </select>
+        <label>الجنود لكل إغارة (JSON)</label>
+        <input id="h-troops" value='{"t4": 5}'/>
+        <p class="small" style="color:var(--muted)">t1..t10 = خانة الجندي حسب القبيلة. t4 عادة = خيّالة سريعة.</p>
+        <div class="row">
+          <button onclick="saveHunter()">💾 احفظ الصياد</button>
+          <button class="secondary" onclick="closeHunterDialog()">إلغاء</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="card" style="margin-top:18px">
       <h2>قائمة البروكسيات</h2>
       <p class="small">ضع كل بروكسي في سطر منفصل. الأشكال المقبولة:<br/>
       <code>http://host:port</code>, <code>http://user:pass@host:port</code>, <code>socks5://host:port</code></p>
@@ -3835,11 +4482,13 @@ refreshPool();
 loadSnapshots();
 loadJobs();
 refreshWorker();
+refreshRaid();
 setInterval(loadVillages, 8000);
 setInterval(refreshPool, 6000);
 setInterval(loadSnapshots, 15000);
 setInterval(loadJobs, 8000);
 setInterval(refreshWorker, 6000);
+setInterval(refreshRaid, 7000);
 
 async function loadSnapshots(){
   try {
@@ -3963,6 +4612,103 @@ async function startActivation(){
 async function stopActivation(){
   await fetch('/api/activation/stop', { method:'POST' });
   refreshWorker();
+}
+
+// ─── Auto-Raid UI ──────────────────────────────────────────────────────────
+async function refreshRaid(){
+  try {
+    const r = await fetch('/api/raid/worker/status'); const d = await r.json();
+    const s = d.status || {};
+    const el = $('#rw-status');
+    if (el) {
+      const cur = s.current_hunter || '—';
+      el.innerHTML = s.running ?
+        `<span style="color:#10b981">● شغّال</span> | صياد: ${cur} | إغارات: ${s.total_raids_sent||0} | آخر هدف: ${s.last_targets_found||0}` :
+        `<span style="color:#9ca3af">● متوقف</span> | دورة كل ${d.cycle_min} د`;
+    }
+  } catch(e) {}
+  try {
+    const r = await fetch('/api/raid/hunters'); const d = await r.json();
+    const box = $('#hunters-list');
+    if (!box) return;
+    if (!d.hunters.length) {
+      box.innerHTML = '<span class="small">— لا يوجد صيادين. اضغط "🎯 أضف صياد".</span>';
+      return;
+    }
+    box.innerHTML = d.hunters.map(h => {
+      const t = h.troops_json || '{}';
+      return `
+      <div style="padding:7px 9px;background:#0a0a14;border-radius:7px;
+           border:1px solid var(--line);font-size:11px;display:flex;
+           justify-content:space-between;align-items:center;gap:6px">
+        <div style="flex:1;min-width:0">
+          <div>${h.enabled ? '✅' : '⏸'} ${h.name} (${h.coords_x},${h.coords_y})</div>
+          <div class="small" style="color:var(--muted)">r=${h.radius} • max=${h.max_per_cycle} • cooldown=${h.cooldown_min}m • ${t}</div>
+        </div>
+        <button class="danger" style="margin:0;padding:3px 6px;font-size:10px"
+                onclick="delHunter('${h.village_id}')">🗑</button>
+      </div>`;
+    }).join('');
+  } catch(e) {}
+}
+
+async function startRaid(){
+  await fetch('/api/raid/worker/start', { method:'POST' });
+  refreshRaid();
+}
+async function stopRaid(){
+  await fetch('/api/raid/worker/stop', { method:'POST' });
+  refreshRaid();
+}
+async function setRaidCycle(){
+  const v = parseFloat($('#rw-cycle').value || '15');
+  await fetch('/api/raid/worker/config', { method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({cycle_min: v}) });
+  refreshRaid();
+}
+
+async function openHunterDialog(){
+  // Populate village dropdown
+  const r = await fetch('/api/villages'); const d = await r.json();
+  const sel = $('#h-vid');
+  sel.innerHTML = (d.villages || [])
+    .filter(v => !v.is_personal && (v.coords_x !== null))
+    .map(v => `<option value="${v.id}">${v.name} (${v.coords_x},${v.coords_y}) — ${v.server.replace('.travian.com','').replace('.x2.international','')}</option>`)
+    .join('');
+  $('#hunter-modal').style.display = 'flex';
+}
+function closeHunterDialog(){
+  $('#hunter-modal').style.display = 'none';
+}
+
+async function saveHunter(){
+  const vid = $('#h-vid').value;
+  let troops;
+  try {
+    troops = JSON.parse($('#h-troops').value || '{}');
+  } catch(e) { alert('JSON غير صحيح للجنود'); return; }
+  const body = {
+    enabled: true,
+    radius: parseInt($('#h-radius').value || '7'),
+    max_per_cycle: parseInt($('#h-max').value || '8'),
+    cooldown_min: parseInt($('#h-cool').value || '90'),
+    attack_type: $('#h-type').value,
+    troops_json: troops,
+  };
+  const r = await fetch(`/api/raid/hunters/${vid}`, { method:'POST',
+    headers:{'Content-Type':'application/json'}, body: JSON.stringify(body)});
+  const d = await r.json();
+  if (d.ok) {
+    closeHunterDialog();
+    refreshRaid();
+  } else alert('✗ ' + (d.error || 'failed'));
+}
+
+async function delHunter(vid){
+  if (!confirm('احذف هذا الصياد؟')) return;
+  await fetch(`/api/raid/hunters/${vid}`, { method:'DELETE' });
+  refreshRaid();
 }
 </script>
 </body></html>
