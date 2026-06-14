@@ -304,3 +304,40 @@ Validated end-to-end via FastAPI TestClient:
 - ✅ **Dashboard card**: Auto-Raid panel with hunter list, cycle config,
   start/stop controls, and "🎯 أضف صياد" modal for per-village setup.
 - ✅ **64 endpoints total**, file: 4994 lines.
+
+### v0.9.0 (2026-02-15) — BuildWorker
+- ✅ **BuildWorker**: NEW. Auto-upgrades resource fields (dorf1) and village
+  buildings (dorf2) for every active village. Strategy: visit dorf1, find
+  the lowest-level resource field that has a green ".green.new" upgrade
+  button visible (Travian only renders that when resources + queue slot
+  are both ready) → click. If no field upgradable, fall back to dorf2 and
+  walk the priority list (warehouse→granary→main→marketplace→cranny→
+  embassy→residence→barracks→wall→smithy). Cycles all villages every 60s,
+  4s pause between villages. Auto-starts at app boot unless
+  `ZENREX_NO_BUILDWORKER=1`.
+- ✅ Endpoints: `POST /api/build/worker/start|stop`, `GET /api/build/worker/status`.
+- ✅ Dashboard card "🏗️ بناء القرى التلقائي" with start/stop/refresh buttons,
+  live status badge (current village, total upgrades, last upgrade), and
+  visible priority list pills.
+- ✅ Constants: `TRAVIAN_GID` map (10..31), `DEFAULT_BUILD_PRIORITY`,
+  `DEFAULT_FIELD_CAP=10`.
+- ✅ Cloud serves new version at `/api/desktop-agent/zenrex-farm/zenrex_farm.py`
+  (307 KB). Existing local installs hit "🔄 تحديث" in dashboard → bot
+  self-updates via `/api/self-update/{check,apply}` + auto-restart.
+
+### Networking fix (2026-02-15)
+- ✅ Added server-side WebSocket heartbeat (every 25s) in
+  `/app/backend/modules/freebuild/local_browser_relay.py` so Cloudflare's
+  ~60s idle timeout no longer disconnects the desktop agent. Agent
+  already had handler for `{type:"ping"}` returning `{type:"pong"}`.
+
+## P0 Next (after user verifies v0.9.0 BuildWorker live on Z390)
+- [ ] User clicks "🔄 تحديث" in his local dashboard → confirm v0.9.0 boots.
+- [ ] User adds ≥1 multi-account village (state=registered) in dashboard.
+- [ ] Verify BuildWorker actually clicks upgrade buttons on a live Travian
+      ARABICS 8 village (check `events` table for `kind='build'` rows).
+- [ ] If DOM selectors mismatch on a particular tribe/skin, refine
+      `_try_upgrade_field` / `_try_upgrade_building` (currently uses
+      `a.green.new`, `button.green.new`, `a.build.green`, `button.build.green`).
+- [ ] Add TroopTrainWorker (mirror of BuildWorker, but for barracks/stable/
+      workshop unit training queues).

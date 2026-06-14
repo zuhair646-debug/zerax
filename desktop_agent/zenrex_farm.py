@@ -60,7 +60,7 @@ import uvicorn
 
 # ─── Config ──────────────────────────────────────────────────────────────────
 APP_NAME = "Zenrex Farm"
-APP_VERSION = "0.8.3"
+APP_VERSION = "0.9.0"
 PORT = 7870
 
 ROOT = Path(os.environ.get(
@@ -1906,6 +1906,18 @@ FARM = BrowserFarm()
 @app.on_event("startup")
 def _startup():
     init_db()
+
+
+@app.on_event("startup")
+async def _auto_start_build_worker():
+    # Auto-start the BuildWorker so new villages develop themselves.
+    # Disable by setting env ZENREX_NO_BUILDWORKER=1
+    if os.environ.get("ZENREX_NO_BUILDWORKER") == "1":
+        return
+    try:
+        await BUILD_WORKER.start()
+    except Exception as e:
+        log.warning(f"[build-worker] auto-start failed: {e}")
 
 
 @app.get("/health")
@@ -4120,6 +4132,309 @@ async def scan_incoming_attacks(page, world_url_base: str) -> list[dict[str, Any
     return parsed
 
 
+# ═══════════════════════════════════════════════════════════════════════════
+# BuildWorker (v0.9.0) — auto-upgrade resource fields & village buildings.
+# ═══════════════════════════════════════════════════════════════════════════
+
+# Travian Legends building IDs (gid) used by the BuildWorker.
+# Reference: https://blog.travian.com/2017/06/the-travian-buildings/
+TRAVIAN_GID = {
+    "warehouse":   10,
+    "granary":     11,
+    "smithy":      13,
+    "main":        15,  # Main Building
+    "rally":       16,  # Rally Point (already used by raid)
+    "marketplace": 17,
+    "embassy":     18,
+    "barracks":    19,
+    "stable":      20,
+    "workshop":    21,
+    "academy":     22,
+    "cranny":      23,
+    "town":        24,  # Town Hall
+    "residence":   25,
+    "palace":      26,
+    "treasury":    27,
+    "trade":       28,  # Trade Office
+    "wall":        31,  # City Wall / Earth Wall / Palisade (tribe specific)
+}
+
+# Default build priority — what to push in every village, top to bottom.
+DEFAULT_BUILD_PRIORITY: list[tuple[str, int]] = [
+    ("warehouse",   5),
+    ("granary",     5),
+    ("main",        5),
+    ("marketplace", 3),
+    ("cranny",     10),
+    ("embassy",     3),
+    ("residence",   5),
+    ("barracks",    3),
+    ("wall",        5),
+    ("smithy",      3),
+]
+
+# Max level for resource fields (1..18). Travian caps at 20.
+DEFAULT_FIELD_CAP = 10
+
+
+class BuildWorker:
+    """Auto-upgrades resource fields (dorf1) and village buildings (dorf2)
+    for every village with state IN ('registered','active','browser_open')
+    and not flagged `is_personal`.
+
+    Strategy per village per cycle:
+      1) Open / refresh the village in its persistent Playwright context.
+      2) Visit /dorf1.php → for the FIRST resource field that:
+           a) is below `field_cap`, AND
+           b) has a green ".green.new" upgrade link (Travian only renders it
+              when resources AND queue slot are both ready)
+         click upgrade. Stop after ONE successful upgrade per village.
+      3) If no field was upgradable, visit /dorf2.php and try the highest
+         priority building target from the build plan.
+      4) Move to next village. Sleep POLL_SEC between full cycles.
+    """
+    POLL_SEC = 60.0
+    PER_VILLAGE_PAUSE_SEC = 4.0
+
+    def __init__(self) -> None:
+        self.task: Optional[asyncio.Task] = None
+        self.cancel = asyncio.Event()
+        self.field_cap = DEFAULT_FIELD_CAP
+        self.priority: list[tuple[str, int]] = list(DEFAULT_BUILD_PRIORITY)
+        self.last_status: dict[str, Any] = {
+            "running": False,
+            "current_village": None,
+            "last_cycle_at": None,
+            "total_upgrades": 0,
+            "last_upgrade": None,
+        }
+
+    # ── DB helpers ──────────────────────────────────────────────────────
+    def _active_villages(self) -> list[dict[str, Any]]:
+        with db_cur() as cur:
+            rows = cur.execute(
+                "SELECT * FROM villages "
+                "WHERE is_personal = 0 "
+                "AND state IN ('registered','active','browser_open') "
+                "ORDER BY last_seen_at IS NULL DESC, last_seen_at ASC"
+            ).fetchall()
+        return [dict(r) for r in rows]
+
+    def _log_event(self, vid: str, detail: str) -> None:
+        try:
+            with db_cur() as cur:
+                cur.execute(
+                    "INSERT INTO events (village_id, ts, kind, detail) "
+                    "VALUES (?, ?, ?, ?)",
+                    (vid, _now_iso(), "build", detail[:500]))
+        except Exception:
+            pass
+
+    # ── Playwright actions ──────────────────────────────────────────────
+    async def _try_upgrade_field(self, page, base: str) -> Optional[dict[str, Any]]:
+        """Visit dorf1 and click the first green upgrade button on any field
+        below cap. Returns {slot, level} on success, None otherwise."""
+        try:
+            await page.goto(f"{base}/dorf1.php",
+                            wait_until="domcontentloaded", timeout=30000)
+        except Exception:
+            return None
+        # Travian dorf1: each .level element shows current level for a slot.
+        # Look for any field with an upgradable green button.
+        # Try slot-by-slot (1..18).
+        for slot in range(1, 19):
+            url = f"{base}/build.php?id={slot}"
+            try:
+                await page.goto(url, wait_until="domcontentloaded", timeout=20000)
+            except Exception:
+                continue
+            # current level
+            cur_lvl = 0
+            try:
+                lvl_el = await page.query_selector(".titleInHeader span.level, .build_title span")
+                if lvl_el:
+                    txt = (await lvl_el.text_content()) or ""
+                    m = re.search(r"\b(\d+)\b", txt)
+                    if m:
+                        cur_lvl = int(m.group(1))
+            except Exception:
+                pass
+            if cur_lvl >= self.field_cap:
+                continue
+            # Look for clickable upgrade
+            btn = None
+            for sel in ["a.green.new", "button.green.new",
+                        "a.build.green", "button.build.green"]:
+                try:
+                    btn = await page.query_selector(sel)
+                    if btn:
+                        break
+                except Exception:
+                    pass
+            if not btn:
+                continue
+            try:
+                await btn.click()
+                await page.wait_for_timeout(800)
+                return {"slot": slot, "level": cur_lvl + 1, "kind": "field"}
+            except Exception:
+                continue
+        return None
+
+    async def _try_upgrade_building(self, page, base: str) -> Optional[dict[str, Any]]:
+        """Visit dorf2 and try each priority target. Returns dict on success."""
+        try:
+            await page.goto(f"{base}/dorf2.php",
+                            wait_until="domcontentloaded", timeout=30000)
+        except Exception:
+            return None
+        for name, target_lvl in self.priority:
+            gid = TRAVIAN_GID.get(name)
+            if not gid:
+                continue
+            url = f"{base}/build.php?gid={gid}"
+            try:
+                await page.goto(url, wait_until="domcontentloaded", timeout=20000)
+            except Exception:
+                continue
+            cur_lvl = 0
+            try:
+                lvl_el = await page.query_selector(".titleInHeader span.level, .build_title span")
+                if lvl_el:
+                    txt = (await lvl_el.text_content()) or ""
+                    m = re.search(r"\b(\d+)\b", txt)
+                    if m:
+                        cur_lvl = int(m.group(1))
+            except Exception:
+                pass
+            if cur_lvl >= target_lvl:
+                continue
+            btn = None
+            for sel in ["a.green.new", "button.green.new",
+                        "a.build.green", "button.build.green"]:
+                try:
+                    btn = await page.query_selector(sel)
+                    if btn:
+                        break
+                except Exception:
+                    pass
+            if not btn:
+                continue
+            try:
+                await btn.click()
+                await page.wait_for_timeout(800)
+                return {"name": name, "gid": gid,
+                        "level": cur_lvl + 1, "kind": "building"}
+            except Exception:
+                continue
+        return None
+
+    async def _process_village(self, v: dict[str, Any]) -> dict[str, Any]:
+        self.last_status["current_village"] = v["id"]
+        try:
+            ctx, page = await FARM.open(v)
+        except Exception as e:
+            return {"ok": False, "stage": "open", "error": str(e)}
+        try:
+            login = await lobby_auto_login(page, v)
+            if not login.get("ok"):
+                return {"ok": False, "stage": "login", "detail": login}
+            world = await enter_game_world(page, server_hint=v.get("server"))
+            if not world.get("ok"):
+                return {"ok": False, "stage": "enter_world", "detail": world}
+            base = world["world_url"].split("/build.php", 1)[0]\
+                                     .split("/dorf", 1)[0].rstrip("/")
+
+            # 1) Try a field upgrade
+            r = await self._try_upgrade_field(page, base)
+            if r:
+                self.last_status["total_upgrades"] += 1
+                self.last_status["last_upgrade"] = {
+                    "village": v.get("name") or v["id"], **r,
+                    "at": _now_iso()}
+                self._log_event(v["id"],
+                                f"field slot={r['slot']} → L{r['level']}")
+                return {"ok": True, **r}
+
+            # 2) Try a building upgrade
+            r = await self._try_upgrade_building(page, base)
+            if r:
+                self.last_status["total_upgrades"] += 1
+                self.last_status["last_upgrade"] = {
+                    "village": v.get("name") or v["id"], **r,
+                    "at": _now_iso()}
+                self._log_event(v["id"],
+                                f"building {r['name']} → L{r['level']}")
+                return {"ok": True, **r}
+
+            return {"ok": True, "noop": True}
+        except Exception as e:
+            log.warning(f"[build-worker] error on {v.get('name')}: {e}")
+            return {"ok": False, "error": str(e)}
+
+    async def _loop(self) -> None:
+        log.info("[build-worker] started")
+        self.last_status["running"] = True
+        while not self.cancel.is_set():
+            try:
+                villages = self._active_villages()
+                for v in villages:
+                    if self.cancel.is_set():
+                        break
+                    await self._process_village(v)
+                    await asyncio.sleep(self.PER_VILLAGE_PAUSE_SEC)
+                self.last_status["last_cycle_at"] = _now_iso()
+            except Exception as e:
+                log.warning(f"[build-worker] cycle error: {e}")
+            try:
+                await asyncio.wait_for(self.cancel.wait(), timeout=self.POLL_SEC)
+            except asyncio.TimeoutError:
+                pass
+        self.last_status["running"] = False
+        log.info("[build-worker] stopped")
+
+    async def start(self) -> None:
+        if self.task and not self.task.done():
+            return
+        self.cancel.clear()
+        self.task = asyncio.create_task(self._loop())
+
+    async def stop(self) -> None:
+        self.cancel.set()
+        if self.task:
+            try:
+                await asyncio.wait_for(self.task, timeout=5)
+            except Exception:
+                pass
+
+
+BUILD_WORKER = BuildWorker()
+
+
+@app.post("/api/build/worker/start")
+async def api_build_worker_start():
+    await BUILD_WORKER.start()
+    return {"ok": True, "status": BUILD_WORKER.last_status}
+
+
+@app.post("/api/build/worker/stop")
+async def api_build_worker_stop():
+    await BUILD_WORKER.stop()
+    return {"ok": True, "status": BUILD_WORKER.last_status}
+
+
+@app.get("/api/build/worker/status")
+def api_build_worker_status():
+    return {"ok": True,
+            "running": bool(BUILD_WORKER.task and not BUILD_WORKER.task.done()),
+            "status": BUILD_WORKER.last_status,
+            "field_cap": BUILD_WORKER.field_cap,
+            "priority": [{"name": n, "target_level": l}
+                         for n, l in BUILD_WORKER.priority]}
+
+
+
+
 class DefenseWorker:
     """Background worker that:
       1) Scans each of our (non-personal? actually for now, ALL) villages
@@ -5644,6 +5959,26 @@ _DASHBOARD_HTML = r"""<!DOCTYPE html>
       </p>
     </div>
 
+    <div class="card" style="margin-top:18px;border:1px solid #f59e0b">
+      <h2>🏗️ بناء القرى التلقائي (Auto-Build Worker)</h2>
+      <p class="small" style="color:var(--muted);margin:6px 0 10px">
+        البوت يدخل كل قرية ويرفع مستوى الحقول (خشب/طين/حديد/قمح) والمباني المهمة
+        (مخزن، صومعة، مبنى رئيسي، سوق، مخبأ، سفارة، إقامة، ثكنات، سور) تلقائياً
+        كل ما تتوفر الموارد وخانة قائمة البناء.
+      </p>
+      <div id="bw-status" class="small" style="margin:8px 0;padding:8px 10px;
+           background:#0a0a14;border-radius:8px">— لا حالة —</div>
+      <div class="row">
+        <button onclick="startBuildWorker()" style="background:#10b981;color:#0a0a14"
+                data-testid="build-worker-start">▶ شغّل البناء التلقائي</button>
+        <button class="danger" onclick="stopBuildWorker()"
+                data-testid="build-worker-stop">■ أوقف</button>
+        <button class="secondary" onclick="refreshBuildStatus()"
+                data-testid="build-worker-refresh">↻ تحديث الحالة</button>
+      </div>
+      <div id="bw-priority" style="margin-top:10px"></div>
+    </div>
+
     <div class="card" style="margin-top:18px;border:1px solid #7f1d1d">
       <h2>🛡️ الدفاع التلقائي (يكتشف الهجمات + يرسل دفاعات)</h2>
       <div id="def-status" class="small" style="margin:8px 0;padding:8px 10px;
@@ -6528,6 +6863,43 @@ function setSpawnServer(url){
   $('#sp-server').value = clean;
   openSpawnDialog();
 }
+
+// ─── Build Worker UI ────────────────────────────────────────────────────────
+async function refreshBuildStatus(){
+  try {
+    const r = await fetch('/api/build/worker/status');
+    const d = await r.json();
+    const s = d.status || {};
+    const el = document.querySelector('#bw-status');
+    if (el) {
+      const last = s.last_upgrade ?
+        ` • آخر: ${s.last_upgrade.kind === 'field' ? 'حقل #'+s.last_upgrade.slot : s.last_upgrade.name}
+          → L${s.last_upgrade.level} (${s.last_upgrade.village||'?'})` : '';
+      el.innerHTML = d.running ?
+        `<span style="color:#10b981">● شغّال</span> • قرية حالية: ${s.current_village || '—'}
+         • مجموع الترقيات: ${s.total_upgrades || 0}${last}` :
+        `<span style="color:#9ca3af">● متوقف</span> • مجموع الترقيات: ${s.total_upgrades || 0}${last}`;
+    }
+    const pri = document.querySelector('#bw-priority');
+    if (pri && d.priority && d.priority.length) {
+      pri.innerHTML = '<div class="small" style="color:var(--muted);margin-bottom:6px">أولوية البناء:</div>' +
+        d.priority.map(p =>
+          `<span style="display:inline-block;padding:3px 8px;margin:2px;
+            background:#1a1a24;border-radius:12px;font-size:11px">
+            ${p.name} → L${p.target_level}</span>`).join('');
+    }
+  } catch(e) {}
+}
+async function startBuildWorker(){
+  await fetch('/api/build/worker/start', { method:'POST' });
+  refreshBuildStatus();
+}
+async function stopBuildWorker(){
+  await fetch('/api/build/worker/stop', { method:'POST' });
+  refreshBuildStatus();
+}
+setInterval(() => { if (document.querySelector('#bw-status')) refreshBuildStatus(); }, 15000);
+
 
 // ─── Defense Worker UI ──────────────────────────────────────────────────────
 async function refreshDefense(){
