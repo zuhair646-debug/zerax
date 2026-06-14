@@ -59,7 +59,7 @@ import uvicorn
 
 # ─── Config ──────────────────────────────────────────────────────────────────
 APP_NAME = "Zenrex Farm"
-APP_VERSION = "0.2.0"
+APP_VERSION = "0.3.0"
 PORT = 7870
 
 ROOT = Path(os.environ.get(
@@ -108,14 +108,23 @@ CREATE TABLE IF NOT EXISTS villages (
     schedule_json   TEXT,                    -- daily play windows (JSON list of [hh:mm,hh:mm])
     last_seen_at    TEXT,
     created_at      TEXT,
-    notes           TEXT
+    notes           TEXT,
+    -- Travian-specific fields
+    region          TEXT DEFAULT 'ANY',      -- NW | NE | SW | SE | ANY
+    coords_x        INTEGER,                 -- map x coordinate (set after registration)
+    coords_y        INTEGER,                 -- map y coordinate
+    tribe           TEXT,                    -- ROMANS | GAULS | TEUTONS | EGYPTIANS | HUNS
+    is_personal     INTEGER DEFAULT 0,       -- 1 = user's own village, excluded from bot ops
+    alliance        TEXT,                    -- alliance tag
+    in_game_uid     TEXT,                    -- Travian internal player id
+    capital_village TEXT                     -- name of the capital village in game
 );
 
 CREATE TABLE IF NOT EXISTS events (
     id              INTEGER PRIMARY KEY AUTOINCREMENT,
     village_id      TEXT NOT NULL,
     ts              TEXT NOT NULL,
-    kind            TEXT NOT NULL,           -- login | build | scout | error | screenshot
+    kind            TEXT NOT NULL,
     detail          TEXT,
     FOREIGN KEY (village_id) REFERENCES villages(id)
 );
@@ -127,13 +136,52 @@ CREATE TABLE IF NOT EXISTS build_queue (
     building        TEXT,
     target_level    INTEGER,
     ordered_at      TEXT,
-    status          TEXT DEFAULT 'pending',  -- pending | started | done | failed
+    status          TEXT DEFAULT 'pending',
     FOREIGN KEY (village_id) REFERENCES villages(id)
+);
+
+CREATE TABLE IF NOT EXISTS pool_state (
+    id              INTEGER PRIMARY KEY CHECK (id=1),
+    running         INTEGER DEFAULT 0,
+    max_parallel    INTEGER DEFAULT 10,
+    rotation_min    INTEGER DEFAULT 15,
+    cooldown_min    INTEGER DEFAULT 5,
+    current_batch   TEXT,                    -- JSON list of village ids active now
+    last_rotate_at  TEXT
 );
 
 CREATE INDEX IF NOT EXISTS idx_events_village ON events(village_id, ts);
 CREATE INDEX IF NOT EXISTS idx_villages_state ON villages(state);
 """
+
+# Indexes that reference newly-added columns (must run AFTER ALTER TABLE migrations)
+POST_MIGRATION_INDEXES = [
+    "CREATE INDEX IF NOT EXISTS idx_villages_region ON villages(region)",
+    "CREATE INDEX IF NOT EXISTS idx_villages_personal ON villages(is_personal)",
+]
+
+# Travian tribes — picked at registration time, affects play style
+TRIBES = ["ROMANS", "GAULS", "TEUTONS", "EGYPTIANS", "HUNS"]
+# Map regions — Travian world is divided into 4 quadrants by 0,0
+REGIONS = ["NW", "NE", "SW", "SE", "ANY"]
+
+# Coord ranges per region (Travian standard map -400..400)
+REGION_BOUNDS = {
+    "NW": (-400, -1,  1, 400),   # x<0, y>0
+    "NE": (1, 400,    1, 400),   # x>0, y>0
+    "SW": (-400, -1, -400, -1),  # x<0, y<0
+    "SE": (1, 400,   -400, -1),  # x>0, y<0
+    "ANY": (-400, 400, -400, 400),
+}
+
+
+def pick_region_coords(region: str) -> tuple[int, int]:
+    """Return a random (x, y) tuple inside the chosen region — Travian
+    registration usually lets you specify a preferred quadrant."""
+    if region not in REGION_BOUNDS:
+        region = "ANY"
+    x_lo, x_hi, y_lo, y_hi = REGION_BOUNDS[region]
+    return random.randint(x_lo, x_hi), random.randint(y_lo, y_hi)
 
 
 @contextmanager
@@ -151,6 +199,30 @@ def db_cur():
 def init_db() -> None:
     with db_cur() as cur:
         cur.executescript(SCHEMA)
+        # Migrations for existing DBs (idempotent — ignore errors if column exists)
+        for col_sql in [
+            "ALTER TABLE villages ADD COLUMN region TEXT DEFAULT 'ANY'",
+            "ALTER TABLE villages ADD COLUMN coords_x INTEGER",
+            "ALTER TABLE villages ADD COLUMN coords_y INTEGER",
+            "ALTER TABLE villages ADD COLUMN tribe TEXT",
+            "ALTER TABLE villages ADD COLUMN is_personal INTEGER DEFAULT 0",
+            "ALTER TABLE villages ADD COLUMN alliance TEXT",
+            "ALTER TABLE villages ADD COLUMN in_game_uid TEXT",
+            "ALTER TABLE villages ADD COLUMN capital_village TEXT",
+        ]:
+            try:
+                cur.execute(col_sql)
+            except sqlite3.OperationalError:
+                pass
+        # Indexes that depend on migrated columns
+        for idx_sql in POST_MIGRATION_INDEXES:
+            try:
+                cur.execute(idx_sql)
+            except sqlite3.OperationalError:
+                pass
+        # Seed pool_state row
+        cur.execute("INSERT OR IGNORE INTO pool_state (id, running, max_parallel, "
+                    "rotation_min, cooldown_min) VALUES (1, 0, 10, 15, 5)")
     log.info(f"DB ready at {DB_PATH}")
 
 
@@ -684,10 +756,15 @@ def _now_iso() -> str:
 def create_village(server: str = "ts8.x2.international.travian.com",
                    nationality: Optional[str] = None,
                    proxy: Optional[str] = None,
-                   strategy: str = "default") -> dict[str, Any]:
+                   strategy: str = "default",
+                   region: str = "ANY",
+                   tribe: Optional[str] = None,
+                   is_personal: bool = False) -> dict[str, Any]:
     ident = generate_identity(nationality=nationality)
     vid = f"v_{uuid.uuid4().hex[:10]}"
     profile_dir = str(BROWSERS_DIR / vid)
+    cx, cy = pick_region_coords(region)
+    chosen_tribe = tribe or random.choice(TRIBES)
     row = {
         "id": vid,
         "name": ident["name"],
@@ -709,19 +786,32 @@ def create_village(server: str = "ts8.x2.international.travian.com",
         "last_seen_at": None,
         "created_at": _now_iso(),
         "notes": "",
+        "region": region,
+        "coords_x": cx,
+        "coords_y": cy,
+        "tribe": chosen_tribe,
+        "is_personal": 1 if is_personal else 0,
+        "alliance": None,
+        "in_game_uid": None,
+        "capital_village": None,
     }
     with db_cur() as cur:
         cur.execute("""
             INSERT INTO villages (id, name, server, server_lang, email, password,
                 nationality, timezone, user_agent, screen_w, screen_h, locale,
                 proxy, profile_dir, state, strategy, schedule_json, last_seen_at,
-                created_at, notes)
+                created_at, notes, region, coords_x, coords_y, tribe, is_personal,
+                alliance, in_game_uid, capital_village)
             VALUES (:id, :name, :server, :server_lang, :email, :password,
                 :nationality, :timezone, :user_agent, :screen_w, :screen_h, :locale,
                 :proxy, :profile_dir, :state, :strategy, :schedule_json, :last_seen_at,
-                :created_at, :notes)
+                :created_at, :notes, :region, :coords_x, :coords_y, :tribe, :is_personal,
+                :alliance, :in_game_uid, :capital_village)
         """, row)
-    log_event(vid, "created", f"Identity {row['name']} ({row['nationality']})")
+    log_event(vid, "created",
+              f"{row['name']} ({row['nationality']}, {chosen_tribe}, "
+              f"region={region}, ({cx},{cy})"
+              f"{' [PERSONAL]' if is_personal else ''})")
     return row
 
 
@@ -1042,15 +1132,17 @@ def api_list_villages(server: Optional[str] = None):
 
 @app.post("/api/villages")
 async def api_create_villages(request: Request):
-    """Create N villages with name preset, optional auto-attach email, and proxy."""
+    """Create N villages with name preset, region, tribe, optional auto-email."""
     body = await request.json()
     count = max(1, min(500, int(body.get("count", 1))))
     server = body.get("server", "ts8.x2.international.travian.com")
     strategy = body.get("strategy", "default")
     use_proxies = bool(body.get("use_proxies", True))
     auto_email = bool(body.get("auto_email", False))
+    region = (body.get("region") or "ANY").upper()
+    tribe_preset = (body.get("tribe") or "MIXED").upper()
+    is_personal = bool(body.get("is_personal", False))
 
-    # Name preset: 'arabic' | 'english' | 'european' | 'mixed' | 'all' | "<CC>"
     preset = (body.get("name_preset") or "mixed").lower()
     if preset == "arabic":
         pool = ARABIC_NATIONALITIES
@@ -1069,8 +1161,12 @@ async def api_create_villages(request: Request):
     for i in range(count):
         nat = random.choice(pool)
         proxy = assign_proxy(i) if use_proxies else ""
+        tribe = (random.choice(TRIBES)
+                 if tribe_preset in ("MIXED", "ANY", "") else tribe_preset)
         v = create_village(server=server, nationality=nat,
-                           proxy=proxy, strategy=strategy)
+                           proxy=proxy, strategy=strategy,
+                           region=region, tribe=tribe,
+                           is_personal=is_personal)
         if auto_email:
             try:
                 acct = await create_email_for(v["id"])
@@ -1086,6 +1182,307 @@ async def api_create_villages(request: Request):
                 log_event(v["id"], "email_failed", str(e))
         created.append(v["id"])
     return {"ok": True, "created": len(created), "ids": created}
+
+
+@app.patch("/api/villages/{vid}")
+async def api_update_village(vid: str, request: Request):
+    """Update fields (region, tribe, is_personal, coords, alliance, state...)."""
+    v = get_village(vid)
+    if not v:
+        raise HTTPException(404, "village not found")
+    body = await request.json()
+    allowed = ["region", "tribe", "is_personal", "coords_x", "coords_y",
+               "alliance", "state", "strategy", "notes", "proxy", "email"]
+    updates = {k: body[k] for k in allowed if k in body}
+    if not updates:
+        return {"ok": True, "updated": 0}
+    if "is_personal" in updates:
+        updates["is_personal"] = 1 if updates["is_personal"] else 0
+    set_clause = ", ".join(f"{k} = :{k}" for k in updates)
+    updates["id"] = vid
+    with db_cur() as cur:
+        cur.execute(f"UPDATE villages SET {set_clause} WHERE id = :id", updates)
+    return {"ok": True, "updated": len(updates) - 1}
+
+
+# ─── Browser Pool Manager — concurrent slots + rotation ──────────────────────
+class BrowserPool:
+    """Cycles N villages through active browser slots.
+
+    Logic:
+      • At any time, max_parallel villages are 'active' (logged-in).
+      • Every rotation_min minutes: log-out current batch, wait cooldown_min,
+        log-in next batch (round-robin by last_seen_at).
+      • Personal villages (is_personal=1) are NEVER included.
+      • Goal: cover 100 villages in ~10 cycles × 15 min = 2.5 h per cycle.
+    """
+    def __init__(self) -> None:
+        self.task: Optional[asyncio.Task] = None
+        self.cancel_event = asyncio.Event()
+
+    def _read_config(self) -> dict[str, Any]:
+        with db_cur() as cur:
+            r = cur.execute("SELECT * FROM pool_state WHERE id=1").fetchone()
+        return dict(r) if r else {}
+
+    def _write_config(self, **kw) -> None:
+        if not kw:
+            return
+        sets = ", ".join(f"{k} = :{k}" for k in kw)
+        kw["id"] = 1
+        with db_cur() as cur:
+            cur.execute(f"UPDATE pool_state SET {sets} WHERE id = 1", kw)
+
+    async def _login_batch(self, vids: list[str]) -> None:
+        log.info(f"[pool] login batch ({len(vids)}): {vids}")
+        for vid in vids:
+            log_event(vid, "pool_login", "slot active for next rotation")
+            # TODO: real implementation — open Playwright browser + run strategy
+            #   ctx, page = await FARM.open(get_village(vid))
+            #   await execute_strategy(get_village(vid), ctx, page)
+        self._write_config(current_batch=json.dumps(vids),
+                           last_rotate_at=_now_iso())
+
+    async def _logout_batch(self, vids: list[str]) -> None:
+        log.info(f"[pool] logout batch ({len(vids)})")
+        for vid in vids:
+            log_event(vid, "pool_logout", "slot freed")
+
+    async def _loop(self) -> None:
+        log.info("[pool] orchestrator started")
+        cycle = 0
+        while not self.cancel_event.is_set():
+            cfg = self._read_config()
+            max_par = int(cfg.get("max_parallel", 10))
+            rot_min = int(cfg.get("rotation_min", 15))
+            cool_min = int(cfg.get("cooldown_min", 5))
+
+            with db_cur() as cur:
+                rows = cur.execute(
+                    "SELECT id FROM villages WHERE is_personal = 0 "
+                    "AND state IN ('registered','active','created') "
+                    "ORDER BY COALESCE(last_seen_at,'') ASC"
+                ).fetchall()
+            all_ids = [r["id"] for r in rows]
+            if not all_ids:
+                log.info("[pool] no villages — sleeping 30s")
+                try:
+                    await asyncio.wait_for(self.cancel_event.wait(), timeout=30)
+                except asyncio.TimeoutError:
+                    continue
+                break
+
+            batch = all_ids[:max_par]
+            await self._login_batch(batch)
+            with db_cur() as cur:
+                cur.executemany(
+                    "UPDATE villages SET last_seen_at = ? WHERE id = ?",
+                    [(_now_iso(), vid) for vid in batch],
+                )
+
+            try:
+                await asyncio.wait_for(self.cancel_event.wait(),
+                                       timeout=rot_min * 60)
+                break
+            except asyncio.TimeoutError:
+                pass
+
+            await self._logout_batch(batch)
+            cycle += 1
+            log.info(f"[pool] cycle {cycle} — cooling down {cool_min}m")
+            try:
+                await asyncio.wait_for(self.cancel_event.wait(),
+                                       timeout=cool_min * 60)
+                break
+            except asyncio.TimeoutError:
+                continue
+        self._write_config(running=0, current_batch="[]")
+        log.info("[pool] orchestrator stopped")
+
+    async def start(self) -> None:
+        if self.task and not self.task.done():
+            return
+        self.cancel_event.clear()
+        self._write_config(running=1)
+        self.task = asyncio.create_task(self._loop())
+
+    async def stop(self) -> None:
+        self.cancel_event.set()
+        if self.task:
+            try:
+                await asyncio.wait_for(self.task, timeout=3)
+            except asyncio.TimeoutError:
+                pass
+        self._write_config(running=0)
+
+
+POOL = BrowserPool()
+
+
+@app.post("/api/pool/start")
+async def api_pool_start():
+    await POOL.start()
+    return {"ok": True, "running": True}
+
+
+@app.post("/api/pool/stop")
+async def api_pool_stop():
+    await POOL.stop()
+    return {"ok": True, "running": False}
+
+
+@app.get("/api/pool/status")
+async def api_pool_status():
+    cfg = POOL._read_config()
+    return {"ok": True, "config": cfg}
+
+
+@app.post("/api/pool/config")
+async def api_pool_config(request: Request):
+    body = await request.json()
+    upd = {}
+    if "max_parallel" in body:
+        upd["max_parallel"] = max(1, min(50, int(body["max_parallel"])))
+    if "rotation_min" in body:
+        upd["rotation_min"] = max(2, min(180, int(body["rotation_min"])))
+    if "cooldown_min" in body:
+        upd["cooldown_min"] = max(0, min(60, int(body["cooldown_min"])))
+    if upd:
+        POOL._write_config(**upd)
+    return {"ok": True, "config": upd}
+
+
+# ─── Strategy YAML engine ───────────────────────────────────────────────────
+DEFAULT_STRATEGY = {
+    "name": "default",
+    "description": "ابني الإنتاج + المخابئ + قمح أولاً، ثم خلّص المهمات وخذ المكافآت",
+    "phases": [
+        {"name": "phase-1-resources", "until_day": 3, "actions": [
+            {"build": "Woodcutter", "to_level": 5},
+            {"build": "Claypit",    "to_level": 5},
+            {"build": "Ironmine",   "to_level": 4},
+            {"build": "Cropland",   "to_level": 5},
+            {"quest": "complete_all_tutorial"},
+        ]},
+        {"name": "phase-2-storage", "until_day": 5, "actions": [
+            {"build": "Warehouse",  "to_level": 5},
+            {"build": "Granary",    "to_level": 5},
+            {"build": "Cranny",     "to_level": 10},
+            {"quest": "collect_all_rewards"},
+        ]},
+        {"name": "phase-3-army", "until_day": 10, "actions": [
+            {"build": "Barracks",   "to_level": 3},
+            {"build": "Wall",       "to_level": 5},
+            {"build": "Embassy",    "to_level": 1},
+        ]},
+        {"name": "phase-4-economy", "until_day": 20, "actions": [
+            {"build": "Marketplace","to_level": 5},
+            {"build": "MainBuilding","to_level": 10},
+            {"transfer_to_personal": {"enabled": True, "min_resource": 5000}},
+        ]},
+    ],
+}
+
+
+def load_strategy(name: str = "default") -> dict[str, Any]:
+    path = ROOT / "strategies" / f"{name}.yaml"
+    if path.exists():
+        try:
+            import yaml
+            return yaml.safe_load(path.read_text(encoding="utf-8"))
+        except Exception as e:
+            log.warning(f"failed to load {path}: {e}")
+    return DEFAULT_STRATEGY
+
+
+def save_strategy(name: str, data: dict[str, Any]) -> Path:
+    path = ROOT / "strategies" / f"{name}.yaml"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        import yaml
+        path.write_text(yaml.safe_dump(data, allow_unicode=True, sort_keys=False),
+                        encoding="utf-8")
+    except ImportError:
+        path.write_text(json.dumps(data, ensure_ascii=False, indent=2),
+                        encoding="utf-8")
+    return path
+
+
+@app.get("/api/strategies")
+def api_list_strategies():
+    sdir = ROOT / "strategies"
+    sdir.mkdir(parents=True, exist_ok=True)
+    files = [p.stem for p in sdir.glob("*.yaml")]
+    if "default" not in files:
+        files.insert(0, "default")
+    return {"ok": True, "strategies": files}
+
+
+@app.get("/api/strategy/{name}")
+def api_get_strategy(name: str):
+    return {"ok": True, "name": name, "data": load_strategy(name)}
+
+
+@app.post("/api/strategy/{name}")
+async def api_save_strategy(name: str, request: Request):
+    body = await request.json()
+    save_strategy(name, body)
+    return {"ok": True}
+
+
+# ─── Alliance + Defense stubs ───────────────────────────────────────────────
+@app.post("/api/alliance/create")
+async def api_alliance_create(request: Request):
+    """Create an alliance via personal village's embassy, invite all bot villages."""
+    body = await request.json()
+    tag = (body.get("tag") or "ZNX").upper()[:8]
+    name = body.get("name") or "Zenrex Alliance"
+    server = body.get("server", "")
+    with db_cur() as cur:
+        personal = cur.execute(
+            "SELECT * FROM villages WHERE is_personal = 1 AND server = ? LIMIT 1",
+            (server,)).fetchone()
+        members = cur.execute(
+            "SELECT id, name, tribe, coords_x, coords_y FROM villages "
+            "WHERE is_personal = 0 AND server = ?", (server,)).fetchall()
+    if not personal:
+        return {"ok": False,
+                "error": "no personal village on this server — mark one with PATCH is_personal=true"}
+    return {
+        "ok": True, "feasible": True, "executable": False,
+        "tag": tag, "name": name, "server": server,
+        "personal_village": dict(personal),
+        "members_count": len(members),
+        "plan": [
+            f"1. Personal village '{personal['name']}' builds Embassy lvl1",
+            f"2. Personal creates alliance [{tag}] '{name}'",
+            f"3. Personal sends invitations to {len(members)} bot villages",
+            "4. Each bot village builds Embassy lvl1 then auto-accepts",
+            "5. (Optional) Split into 2 alliances + confederation pact",
+        ],
+        "executable_reason": "needs Playwright in-game automation (Phase 2)",
+    }
+
+
+@app.post("/api/defense/send")
+async def api_defense_send(request: Request):
+    """Send defensive troops from all bot villages to a target (usually personal)."""
+    body = await request.json()
+    server = body.get("server", "")
+    target_x = int(body.get("target_x", 0))
+    target_y = int(body.get("target_y", 0))
+    with db_cur() as cur:
+        sources = cur.execute(
+            "SELECT id, name, coords_x, coords_y FROM villages "
+            "WHERE server = ? AND is_personal = 0 "
+            "AND state IN ('registered','active')", (server,)).fetchall()
+    return {
+        "ok": True, "feasible": bool(sources), "executable": False,
+        "target": {"x": target_x, "y": target_y},
+        "sources_count": len(sources),
+        "sources": [dict(s) for s in sources[:20]],
+        "executable_reason": "needs registered villages + Playwright (Phase 2)",
+    }
 
 
 @app.delete("/api/villages/{vid}")
@@ -1412,8 +1809,8 @@ _DASHBOARD_HTML = r"""<!DOCTYPE html>
       <span class="small">آخر تحديث: <span id="last-refresh">—</span></span>
       <table id="villages-table">
         <thead><tr>
-          <th>الاسم</th><th>الجنسية</th><th>السيرفر</th><th>الحالة</th>
-          <th>IP/Proxy</th><th>الإيميل</th><th>إجراء</th>
+          <th>الاسم</th><th>الجنسية</th><th>القبيلة</th><th>المنطقة</th>
+          <th>السيرفر</th><th>الحالة</th><th>IP</th><th>الإيميل</th><th>إجراء</th>
         </tr></thead>
         <tbody></tbody>
       </table>
@@ -1468,6 +1865,30 @@ _DASHBOARD_HTML = r"""<!DOCTYPE html>
         <option value="JP">🇯🇵 ياباني فقط</option>
       </select>
 
+      <div class="row">
+        <div>
+          <label>المنطقة (Map Region)</label>
+          <select id="region">
+            <option value="ANY">🌐 أي منطقة</option>
+            <option value="NW">↖ شمال غربي</option>
+            <option value="NE">↗ شمال شرقي</option>
+            <option value="SW">↙ جنوب غربي</option>
+            <option value="SE">↘ جنوب شرقي</option>
+          </select>
+        </div>
+        <div>
+          <label>القبيلة (Tribe)</label>
+          <select id="tribe">
+            <option value="MIXED">🎲 خلطة</option>
+            <option value="ROMANS">⚔️ Romans</option>
+            <option value="GAULS">🛡️ Gauls</option>
+            <option value="TEUTONS">🪓 Teutons</option>
+            <option value="EGYPTIANS">🐪 Egyptians</option>
+            <option value="HUNS">🏹 Huns</option>
+          </select>
+        </div>
+      </div>
+
       <label>الخادم (Travian server)</label>
       <input id="server" value="ts8.x2.international.travian.com" list="server-list"/>
       <datalist id="server-list">
@@ -1496,6 +1917,37 @@ _DASHBOARD_HTML = r"""<!DOCTYPE html>
       </div>
 
       <button onclick="createVillages()">🏗️ أنشئ القرى</button>
+    </div>
+
+    <div class="card" style="margin-top:18px">
+      <h2>🔄 Browser Pool (تشغيل القرى بالتناوب)</h2>
+      <p class="small">يدير N قرى متوازية، يستبدلهم كل X دقيقة. القرى الشخصية مستثناة.</p>
+      <div id="pool-status" class="small" style="margin:8px 0;padding:8px 10px;background:#0a0a14;border-radius:8px"></div>
+      <div class="row">
+        <div><label>عدد متوازي</label><input id="pool-max" type="number" value="10" min="1" max="50"/></div>
+        <div><label>تناوب (د)</label><input id="pool-rot" type="number" value="15" min="2" max="180"/></div>
+        <div><label>تبريد (د)</label><input id="pool-cool" type="number" value="5" min="0" max="60"/></div>
+      </div>
+      <div class="row">
+        <button onclick="startPool()">▶ تشغيل</button>
+        <button class="danger" onclick="stopPool()">■ إيقاف</button>
+        <button class="secondary" onclick="savePoolConfig()">💾 احفظ</button>
+      </div>
+      <p class="small" style="margin-top:8px;color:#f59e0b">
+        ⚠ Phase 1: التناوب يعمل كـ log فقط. تنفيذ Playwright يحتاج تسجيل القرى أولاً.
+      </p>
+    </div>
+
+    <div class="card" style="margin-top:18px">
+      <h2>🤝 التحالف والدفاع</h2>
+      <div class="row">
+        <button onclick="createAlliance()">🤝 أنشئ تحالف</button>
+        <button class="secondary" onclick="openTransferDialog()">💱 نقل موارد</button>
+      </div>
+      <p class="small" style="margin-top:8px;color:var(--muted)">
+        ضع 👤 على قرية لجعلها <b>شخصية</b> — تُستثنى من التناوب وتُستخدم
+        كمستودع موارد + قاعدة التحالف.
+      </p>
     </div>
 
     <div class="card" style="margin-top:18px">
@@ -1558,16 +2010,19 @@ async function loadVillages(){
   $('#s-banned').textContent      = counts.banned || 0;
   const tbody = $('#villages-table tbody');
   tbody.innerHTML = d.villages.map(v => `
-    <tr>
-      <td>${v.name}</td>
+    <tr style="${v.is_personal ? 'background:#0f3a16' : ''}">
+      <td>${v.is_personal ? '👤 ' : ''}${v.name}</td>
       <td><span class="badge">${v.nationality}</span></td>
-      <td><span class="small">${v.server.replace('.travian.com','').replace('.x2.international','')}</span></td>
+      <td><span class="small">${v.tribe || '-'}</span></td>
+      <td><span class="badge">${v.region || 'ANY'}${v.coords_x!==null && v.coords_x!==undefined ? ` (${v.coords_x},${v.coords_y})` : ''}</span></td>
+      <td><span class="small">${(v.server||'').replace('.travian.com','').replace('.x2.international','')}</span></td>
       <td><span class="pill ${v.state}">${v.state}</span></td>
-      <td><span class="small">${v.proxy ? v.proxy.substring(0,28) : '🏠 مباشر'}</span></td>
+      <td><span class="small">${v.proxy ? v.proxy.substring(0,22) : '🏠 مباشر'}</span></td>
       <td><span class="small">${v.email || '—'}</span></td>
       <td>
-        <button class="secondary" onclick="openBrowser('${v.id}')">🦊 افتح</button>
+        <button class="secondary" onclick="openBrowser('${v.id}')">🦊</button>
         <button class="secondary" onclick="attachEmail('${v.id}')">📧</button>
+        <button class="secondary" onclick="togglePersonal('${v.id}', ${!v.is_personal})">${v.is_personal ? '⊖' : '👤'}</button>
         <button class="danger" onclick="delVillage('${v.id}')">🗑</button>
       </td>
     </tr>
@@ -1583,6 +2038,8 @@ async function createVillages(){
     strategy: $('#strategy').value,
     use_proxies: $('#use-proxies').checked,
     auto_email: $('#auto-email').checked,
+    region: $('#region') ? $('#region').value : 'ANY',
+    tribe:  $('#tribe')  ? $('#tribe').value  : 'MIXED',
   };
   const btn = event.target;
   btn.disabled = true; btn.textContent = '⏳ يُنشئ...';
@@ -1606,6 +2063,65 @@ function openTransferDialog(){
 function closeTransferDialog(){
   $('#transfer-modal').style.display = 'none';
 }
+
+async function togglePersonal(id, makePersonal){
+  const r = await fetch(`/api/villages/${id}`, { method:'PATCH',
+    headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({is_personal: makePersonal})});
+  await r.json();
+  loadVillages();
+}
+
+async function startPool(){
+  const r = await fetch('/api/pool/start', { method:'POST' });
+  const d = await r.json();
+  alert(d.ok ? '✓ Pool started' : '✗ failed');
+  refreshPool();
+}
+async function stopPool(){
+  const r = await fetch('/api/pool/stop', { method:'POST' });
+  await r.json();
+  refreshPool();
+}
+async function refreshPool(){
+  try {
+    const r = await fetch('/api/pool/status'); const d = await r.json();
+    const c = d.config || {};
+    const el = $('#pool-status');
+    if (el) {
+      el.innerHTML = c.running
+        ? `<span style="color:#10b981">● شغّال</span> | ${c.max_parallel} متوازي | rotation ${c.rotation_min}m | cooldown ${c.cooldown_min}m`
+        : `<span style="color:#9ca3af">● متوقف</span> | ${c.max_parallel||10} متوازي`;
+    }
+  } catch(e) {}
+}
+async function savePoolConfig(){
+  const body = {
+    max_parallel: parseInt($('#pool-max').value || '10'),
+    rotation_min: parseInt($('#pool-rot').value || '15'),
+    cooldown_min: parseInt($('#pool-cool').value || '5'),
+  };
+  await fetch('/api/pool/config', { method:'POST',
+    headers:{'Content-Type':'application/json'}, body: JSON.stringify(body) });
+  refreshPool();
+}
+
+async function createAlliance(){
+  const tag = prompt('Alliance tag (e.g. ZNX):', 'ZNX');
+  if (!tag) return;
+  const name = prompt('Alliance name:', 'Zenrex Alliance') || 'Zenrex Alliance';
+  const server = $('#server-filter').value || $('#server').value;
+  const r = await fetch('/api/alliance/create', { method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({tag, name, server})});
+  const d = await r.json();
+  if (!d.ok) { alert('✗ ' + d.error); return; }
+  let txt = `Alliance Plan [${d.tag}] '${d.name}'\nServer: ${d.server}\n\n`;
+  d.plan.forEach(p => txt += p + '\n');
+  if (!d.executable) txt += '\n⚠ ' + d.executable_reason;
+  alert(txt);
+}
+
 async function planTransfer(){
   const body = {
     server: $('#t-server').value,
@@ -1708,7 +2224,9 @@ loadNationalities();
 loadVillages();
 loadProxies();
 checkOllama();
+refreshPool();
 setInterval(loadVillages, 8000);
+setInterval(refreshPool, 6000);
 </script>
 </body></html>
 """

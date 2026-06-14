@@ -57,14 +57,23 @@ Unify the AI brain and empower it with unified toolset. Fix mocked AI Trading Bo
   - **Per-village deterministic fingerprint seeds** (`fingerprint_seed(vid)`)
     so each village has consistent identity across sessions.
   - **Human Bezier mouse + typing** (`bezier_curve`, `human_move_to`, `human_type`).
-  - **Multi-server / multi-domain support**: dashboard server filter + transfer
-    planner endpoint `/api/transfer/plan` (server-scoped).
-  - **12 nationalities now**: SA, EG, AE, KW (Arabic) + DE, FR, US, GB, JP, BR,
-    TR, RU. Presets: arabic / english / european / mixed.
-  - **Multi-provider email rotation**: mail.tm, 1secmail, guerrilla, internal
-    placeholders. Auto-attach on village creation. **PROVEN: 10 Arabic villages
-    created with 4 different email providers** (proton.me, 1secmail.{com,net,org},
-    web-library.net via mail.tm, hotmail.com, outlook.com).
+- 🟢 **NEW (2026-02) v0.3.0**: Zenrex Farm — Production-grade Multi-Village Engine
+  - **101 villages PROVEN created** (1 personal + 100 bot in NW region)
+    - Distribution: 21 Romans / 15 Gauls / 21 Teutons / 27 Egyptians / 17 Huns
+    - All bot villages in NW quadrant (coords x<0, y>0) — region selection works
+  - **Travian-specific fields**: `region` (NW/NE/SW/SE/ANY), `coords_x/y`,
+    `tribe` (5 tribes), `is_personal` (excludes from bot rotation),
+    `alliance`, `in_game_uid`, `capital_village`.
+  - **Browser Pool orchestrator**: `BrowserPool` class with start/stop/config.
+    Configurable max_parallel (1-50), rotation_min (2-180), cooldown_min (0-60).
+    Personal villages excluded. Round-robin by `last_seen_at`. Phase 1 logs the
+    rotation; Phase 2 will call Playwright open + run strategy.
+  - **Strategy YAML engine**: `~/.zenrex-farm/strategies/<name>.yaml`. Default
+    plan has 4 phases (resources → storage → army → economy + transfer-to-personal).
+  - **Alliance + Defense endpoints** (stub): `/api/alliance/create` plans the
+    embassy-build + invitation flow. `/api/defense/send` plans troop dispatch.
+  - **PATCH `/api/villages/{id}`**: toggle is_personal, set coords, alliance, etc.
+  - DB migrations idempotent (ALTER TABLE inside try/except, post-migration indexes).
 
 ## ⚠️ BLOCKERS (2026-02-12)
 - **Emergent LLM key budget exhausted**: 80.44/80.43. User wants FREE/INDEPENDENT
