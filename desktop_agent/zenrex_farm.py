@@ -27,6 +27,7 @@ Identity: This is Zenrex — created from scratch by Zuhair Abbas.
 from __future__ import annotations
 
 import asyncio
+import math
 import json
 import logging
 import os
@@ -59,7 +60,7 @@ import uvicorn
 
 # ─── Config ──────────────────────────────────────────────────────────────────
 APP_NAME = "Zenrex Farm"
-APP_VERSION = "0.7.0"
+APP_VERSION = "0.8.0"
 PORT = 7870
 
 ROOT = Path(os.environ.get(
@@ -241,6 +242,37 @@ CREATE TABLE IF NOT EXISTS task_queue (
     finished_at     TEXT,
     result_json     TEXT
 );
+
+CREATE TABLE IF NOT EXISTS incoming_attacks (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    village_id      TEXT NOT NULL,           -- our village being attacked
+    server          TEXT NOT NULL,
+    attacker_name   TEXT,
+    attacker_x      INTEGER,
+    attacker_y      INTEGER,
+    arrives_at      TEXT NOT NULL,           -- ISO timestamp
+    seconds_left    INTEGER,                 -- snapshot at detection
+    troops_estimate INTEGER,                 -- rough size estimate
+    kind            TEXT,                    -- 'attack' | 'raid' | 'siege'
+    detected_at     TEXT NOT NULL,
+    handled         INTEGER DEFAULT 0,       -- 0=fresh, 1=defense dispatched, -1=skipped
+    notes           TEXT,
+    UNIQUE(village_id, arrives_at, attacker_x, attacker_y)
+);
+
+CREATE TABLE IF NOT EXISTS defense_dispatches (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    attack_id       INTEGER,                 -- FK to incoming_attacks
+    source_vid      TEXT NOT NULL,           -- defender village
+    target_vid      TEXT NOT NULL,           -- attacked village
+    troops_json     TEXT NOT NULL,
+    travel_seconds  INTEGER,
+    sent_at         TEXT NOT NULL,
+    arrived_at      TEXT,
+    result          TEXT                     -- 'sent' | 'failed' | 'too_slow'
+);
+
+CREATE INDEX IF NOT EXISTS idx_attacks_handled ON incoming_attacks(handled, arrives_at);
 
 CREATE TABLE IF NOT EXISTS travian_worlds (
     id              INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -3933,6 +3965,394 @@ def api_travian_worlds(region: Optional[str] = None,
             "worlds": [dict(r) for r in rows]}
 
 
+# ─── Defense Worker — detect incoming attacks + auto-reinforce ──────────────
+# Approximate travel speeds (squares per hour) at 1x server speed.
+# Defense troops are slower than cavalry; we use the slowest practical unit
+# the user is likely sending (Phalanx/Spear class).
+DEFENSE_TROOP_SPEED_FIELDS_PER_HOUR = 6.0   # ~spear/legionnaire @ 1x
+SAFETY_MARGIN_SECONDS = 180                 # 3-min buffer before impact
+
+
+def _euclidean_fields(x1: int, y1: int, x2: int, y2: int) -> float:
+    return math.sqrt((x2 - x1) ** 2 + (y2 - y1) ** 2)
+
+
+def _travel_seconds(distance_fields: float, server_speed: float = 1.0) -> int:
+    hours = distance_fields / (DEFENSE_TROOP_SPEED_FIELDS_PER_HOUR
+                               * server_speed)
+    return int(hours * 3600)
+
+
+async def scan_incoming_attacks(page, world_url_base: str) -> list[dict[str, Any]]:
+    """Read the rally point 'incoming attacks' tab (tt=1) and parse the list.
+    Returns rows like {kind, attacker, arrives_at_iso, seconds_left, troops_estimate}.
+    """
+    base = world_url_base.rstrip("/")
+    try:
+        await page.goto(f"{base}/build.php?gid=16&tt=1",
+                        wait_until="domcontentloaded", timeout=15000)
+    except Exception:
+        return []
+    await asyncio.sleep(random.uniform(0.6, 1.2))
+    # Travian shows a table with rows. Each row has class 'inAttack' or
+    # 'inRaid'. Columns include movement type icon, timer, and attacker info.
+    parsed = []
+    try:
+        raw = await page.evaluate(r"""
+            () => {
+              const out = [];
+              const rows = document.querySelectorAll(
+                  'table tr.inAttack, table tr.inRaid, table tr.inSiege, '
+                  + 'table.movements tr');
+              rows.forEach(r => {
+                const cls = (r.className || '').toLowerCase();
+                const txt = (r.innerText || '').replace(/\s+/g, ' ').trim();
+                // Find the countdown <span class="timer" value="SECS">
+                const timer = r.querySelector('span.timer, [class*="timer"]');
+                const secs = timer ? parseInt(timer.getAttribute('value') || '0') : 0;
+                if (!secs) return;
+                let kind = 'attack';
+                if (cls.includes('inraid')) kind = 'raid';
+                else if (cls.includes('insiege') || cls.includes('chief')) kind = 'siege';
+                out.push({kind, text: txt, seconds_left: secs});
+              });
+              return out;
+            }
+        """)
+        for item in (raw or []):
+            secs = int(item.get("seconds_left", 0) or 0)
+            if secs <= 0:
+                continue
+            from datetime import datetime, timezone, timedelta
+            arrives = (datetime.now(timezone.utc) +
+                       timedelta(seconds=secs)).isoformat()
+            parsed.append({
+                "kind": item.get("kind", "attack"),
+                "seconds_left": secs,
+                "arrives_at": arrives,
+                "raw_text": (item.get("text") or "")[:200],
+            })
+    except Exception as e:
+        log.warning(f"[defense] scan parse failed: {e}")
+    return parsed
+
+
+class DefenseWorker:
+    """Background worker that:
+      1) Scans each of our (non-personal? actually for now, ALL) villages
+         every `cycle_min` minutes for incoming attacks via rally-point tt=1
+      2) Inserts new incoming_attacks rows (UNIQUE per attack)
+      3) For each fresh attack, finds the nearest defender village(s) on the
+         same server whose troops can ARRIVE before impact (with safety margin)
+      4) Dispatches reinforcement via send_raid_from_village(attack_type=reinforce)
+      5) Marks the attack `handled=1`
+    """
+    DEFAULT_CYCLE_MIN = 3.0          # check every 3 minutes
+    MIN_DEFENDER_TROOPS = 5          # only consider villages with at least N defensive units in cfg
+
+    def __init__(self) -> None:
+        self.task: Optional[asyncio.Task] = None
+        self.cancel = asyncio.Event()
+        self.cycle_min = self.DEFAULT_CYCLE_MIN
+        self.troops_to_send: dict[str, int] = {"t1": 500}  # default: 500 phalanx
+        self.last_status: dict[str, Any] = {
+            "running": False, "scanned": 0,
+            "attacks_seen": 0, "dispatched": 0,
+            "last_scan_at": None,
+        }
+
+    def _our_villages_on(self, server: str) -> list[dict[str, Any]]:
+        with db_cur() as cur:
+            rows = cur.execute(
+                "SELECT * FROM villages WHERE server = ? "
+                "AND state IN ('registered','active','browser_open')",
+                (server,)).fetchall()
+        return [dict(r) for r in rows]
+
+    def _insert_attack(self, vid: str, server: str,
+                       atk: dict[str, Any]) -> Optional[int]:
+        with db_cur() as cur:
+            try:
+                cur.execute(
+                    "INSERT OR IGNORE INTO incoming_attacks "
+                    "(village_id, server, attacker_name, attacker_x, "
+                    " attacker_y, arrives_at, seconds_left, troops_estimate, "
+                    " kind, detected_at, notes) "
+                    "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                    (vid, server, atk.get("attacker_name", ""),
+                     atk.get("attacker_x", 0), atk.get("attacker_y", 0),
+                     atk["arrives_at"], int(atk["seconds_left"]),
+                     int(atk.get("troops_estimate", 0)),
+                     atk.get("kind", "attack"), _now_iso(),
+                     atk.get("raw_text", "")[:300]))
+                if cur.rowcount:
+                    return cur.execute(
+                        "SELECT last_insert_rowid() AS i").fetchone()["i"]
+            except Exception:
+                pass
+        return None
+
+    def _pick_defenders(self, target_village: dict[str, Any],
+                        seconds_left: int) -> list[dict[str, Any]]:
+        """Return defender villages whose troops can arrive in time."""
+        tx = int(target_village.get("coords_x") or 0)
+        ty = int(target_village.get("coords_y") or 0)
+        server = target_village["server"]
+        max_travel = max(0, seconds_left - SAFETY_MARGIN_SECONDS)
+        if max_travel <= 0:
+            return []
+        candidates: list[dict[str, Any]] = []
+        for v in self._our_villages_on(server):
+            if v["id"] == target_village["id"]:
+                continue
+            vx = int(v.get("coords_x") or 0)
+            vy = int(v.get("coords_y") or 0)
+            dist = _euclidean_fields(vx, vy, tx, ty)
+            travel = _travel_seconds(dist)
+            if travel <= max_travel:
+                v["_dist"] = round(dist, 2)
+                v["_travel"] = travel
+                candidates.append(v)
+        candidates.sort(key=lambda x: x["_travel"])
+        return candidates
+
+    async def _dispatch_from(self, defender: dict[str, Any],
+                             target: dict[str, Any],
+                             attack_id: int) -> bool:
+        """Open the defender, navigate to rally point, send reinforcement
+        to the target village coords."""
+        tx = int(target.get("coords_x") or 0)
+        ty = int(target.get("coords_y") or 0)
+        try:
+            ctx, page = await FARM.open(defender)
+            login = await lobby_auto_login(page, defender)
+            if not login.get("ok"):
+                return False
+            world = await enter_game_world(page,
+                                           server_hint=defender["server"])
+            if not world.get("ok"):
+                return False
+            base = world["world_url"].split("/build.php", 1)[0]\
+                                     .split("/dorf", 1)[0].rstrip("/")
+            result = await send_raid_from_village(
+                page, base, tx, ty,
+                self.troops_to_send, attack_type="reinforce")
+            ok = bool(result.get("ok"))
+            with db_cur() as cur:
+                cur.execute(
+                    "INSERT INTO defense_dispatches "
+                    "(attack_id, source_vid, target_vid, troops_json, "
+                    " travel_seconds, sent_at, result) "
+                    "VALUES (?, ?, ?, ?, ?, ?, ?)",
+                    (attack_id, defender["id"], target["id"],
+                     json.dumps(self.troops_to_send),
+                     defender.get("_travel", 0),
+                     _now_iso(),
+                     "sent" if ok else "failed"))
+            log_event(defender["id"], "defense_dispatched",
+                      f"→ {target['id']} ({tx},{ty}) "
+                      f"travel={defender.get('_travel')}s ok={ok}")
+            return ok
+        except Exception as e:
+            log_event(defender["id"], "defense_error", str(e))
+            return False
+
+    async def _scan_one_village(self, v: dict[str, Any]) -> int:
+        """Scan ONE of our villages for incoming attacks. Returns count of
+        new attacks detected (and tries to defend them)."""
+        try:
+            ctx, page = await FARM.open(v)
+            login = await lobby_auto_login(page, v)
+            if not login.get("ok"):
+                return 0
+            world = await enter_game_world(page, server_hint=v["server"])
+            if not world.get("ok"):
+                return 0
+            base = world["world_url"].split("/build.php", 1)[0]\
+                                     .split("/dorf", 1)[0].rstrip("/")
+            attacks = await scan_incoming_attacks(page, base)
+        except Exception:
+            return 0
+
+        new_count = 0
+        for atk in attacks:
+            atk_id = self._insert_attack(v["id"], v["server"], atk)
+            if atk_id is None:
+                continue
+            new_count += 1
+            # Pick defenders & dispatch
+            defenders = self._pick_defenders(v, int(atk["seconds_left"]))
+            log.info(f"[defense] attack on {v['id']} in "
+                     f"{atk['seconds_left']}s — {len(defenders)} "
+                     f"defenders can reach in time")
+            dispatched = 0
+            for d in defenders[:3]:  # cap at 3 defenders per attack
+                if await self._dispatch_from(d, v, atk_id):
+                    dispatched += 1
+                    self.last_status["dispatched"] = (
+                        self.last_status.get("dispatched", 0) + 1)
+            with db_cur() as cur:
+                cur.execute(
+                    "UPDATE incoming_attacks SET handled = ?, notes = ? "
+                    "WHERE id = ?",
+                    (1 if dispatched else -1,
+                     f"defenders_dispatched={dispatched}", atk_id))
+        return new_count
+
+    async def _loop(self) -> None:
+        log.info("[defense] started")
+        self.last_status["running"] = True
+        while not self.cancel.is_set():
+            with db_cur() as cur:
+                ours = cur.execute(
+                    "SELECT * FROM villages WHERE "
+                    "state IN ('registered','active','browser_open')"
+                ).fetchall()
+            ours = [dict(r) for r in ours]
+            self.last_status["scanned"] = len(ours)
+            for v in ours:
+                if self.cancel.is_set():
+                    break
+                try:
+                    n = await self._scan_one_village(v)
+                    self.last_status["attacks_seen"] = (
+                        self.last_status.get("attacks_seen", 0) + n)
+                except Exception:
+                    log.exception(
+                        f"[defense] scan {v.get('id')} failed")
+                await asyncio.sleep(random.uniform(8.0, 18.0))
+            self.last_status["last_scan_at"] = _now_iso()
+            await asyncio.sleep(self.cycle_min * 60)
+        self.last_status["running"] = False
+        log.info("[defense] stopped")
+
+    async def start(self) -> None:
+        if self.task and not self.task.done():
+            return
+        self.cancel.clear()
+        self.task = asyncio.create_task(self._loop())
+
+    async def stop(self) -> None:
+        self.cancel.set()
+        if self.task:
+            try:
+                await asyncio.wait_for(self.task, timeout=5)
+            except Exception:
+                pass
+
+
+DEFENSE_WORKER = DefenseWorker()
+
+
+@app.post("/api/defense/worker/start")
+async def api_def_start():
+    await DEFENSE_WORKER.start()
+    return {"ok": True, "status": DEFENSE_WORKER.last_status}
+
+
+@app.post("/api/defense/worker/stop")
+async def api_def_stop():
+    await DEFENSE_WORKER.stop()
+    return {"ok": True, "status": DEFENSE_WORKER.last_status}
+
+
+@app.get("/api/defense/worker/status")
+def api_def_status():
+    return {"ok": True, "status": DEFENSE_WORKER.last_status,
+            "cycle_min": DEFENSE_WORKER.cycle_min,
+            "troops_to_send": DEFENSE_WORKER.troops_to_send}
+
+
+@app.post("/api/defense/worker/config")
+async def api_def_config(request: Request):
+    """Body: {cycle_min?, troops_to_send?:{t1: 500,...}}"""
+    body = await request.json()
+    if "cycle_min" in body:
+        DEFENSE_WORKER.cycle_min = float(body["cycle_min"])
+    if "troops_to_send" in body and isinstance(body["troops_to_send"], dict):
+        DEFENSE_WORKER.troops_to_send = {
+            k: int(v) for k, v in body["troops_to_send"].items() if int(v or 0) > 0}
+    return {"ok": True, "cycle_min": DEFENSE_WORKER.cycle_min,
+            "troops_to_send": DEFENSE_WORKER.troops_to_send}
+
+
+@app.get("/api/defense/attacks")
+def api_def_attacks(handled: Optional[int] = None, limit: int = 50):
+    where, params = [], []
+    if handled is not None:
+        where.append("handled = ?")
+        params.append(int(handled))
+    sql = "SELECT a.*, v.name as village_name FROM incoming_attacks a "\
+          "LEFT JOIN villages v ON v.id = a.village_id"
+    if where:
+        sql += " WHERE " + " AND ".join(where)
+    sql += " ORDER BY arrives_at ASC LIMIT ?"
+    with db_cur() as cur:
+        rows = cur.execute(sql, tuple(params) + (limit,)).fetchall()
+    return {"ok": True, "attacks": [dict(r) for r in rows]}
+
+
+@app.get("/api/defense/dispatches")
+def api_def_dispatches(limit: int = 50):
+    with db_cur() as cur:
+        rows = cur.execute(
+            "SELECT * FROM defense_dispatches ORDER BY id DESC LIMIT ?",
+            (limit,)).fetchall()
+    return {"ok": True, "dispatches": [dict(r) for r in rows]}
+
+
+# ─── Self-Update — pull latest zenrex_farm.py from the cloud ─────────────────
+SELF_UPDATE_URL = (
+    "https://ai-cinematic-hub-2.preview.emergentagent.com"
+    "/api/desktop-agent/zenrex-farm/zenrex_farm.py")
+
+
+@app.get("/api/self-update/check")
+async def api_self_update_check():
+    """Compare local version with remote zenrex_farm.py. Returns version diff."""
+    import urllib.request
+    try:
+        with urllib.request.urlopen(SELF_UPDATE_URL, timeout=10) as r:
+            remote = r.read().decode("utf-8", errors="replace")
+    except Exception as e:
+        return {"ok": False, "error": str(e), "local": APP_VERSION}
+    import re
+    m = re.search(r'APP_VERSION\s*=\s*["\']([^"\']+)["\']', remote)
+    remote_ver = m.group(1) if m else "unknown"
+    return {"ok": True, "local": APP_VERSION, "remote": remote_ver,
+            "update_available": remote_ver != APP_VERSION,
+            "remote_size": len(remote)}
+
+
+@app.post("/api/self-update/apply")
+async def api_self_update_apply():
+    """Download latest zenrex_farm.py and overwrite the current file.
+    The user must restart the app for it to take effect."""
+    import urllib.request
+    from pathlib import Path
+    try:
+        with urllib.request.urlopen(SELF_UPDATE_URL, timeout=30) as r:
+            content = r.read()
+    except Exception as e:
+        return {"ok": False, "error": str(e)}
+    if len(content) < 1000:
+        return {"ok": False, "error": "remote file looks invalid"}
+    current = Path(__file__).resolve()
+    # Backup current file
+    try:
+        backup = current.with_suffix(".py.backup")
+        backup.write_bytes(current.read_bytes())
+    except Exception:
+        pass
+    try:
+        current.write_bytes(content)
+    except Exception as e:
+        return {"ok": False, "error": f"write failed: {e}"}
+    return {"ok": True, "bytes_written": len(content),
+            "path": str(current),
+            "message": "تم التحديث. أعد تشغيل التطبيق ليأخذ التغييرات."}
+
+
 @app.post("/api/transfer/plan")
 async def api_transfer_plan(request: Request):
     """Plan a resource transfer to a target coords from all our villages on a server.
@@ -4543,8 +4963,10 @@ _DASHBOARD_HTML = r"""<!DOCTYPE html>
 <header>
   <div class="flex">
     <h1>🏰 Zenrex Farm</h1>
-    <span class="badge" id="ver">v0.7.0</span>
+    <span class="badge" id="ver">v0.8.0</span>
     <span class="badge">100% Local · Free</span>
+    <button class="secondary" onclick="checkUpdate()" style="margin:0;padding:4px 10px;font-size:11px">🔄 تحديث</button>
+    <span id="update-badge" class="badge"></span>
   </div>
   <div class="flex">
     <a href="/chat" style="text-decoration:none">
@@ -4918,6 +5340,29 @@ _DASHBOARD_HTML = r"""<!DOCTYPE html>
            flex-direction:column;gap:6px;max-height:200px;overflow:auto"></div>
       <p class="small" style="margin-top:6px;color:var(--muted)">
         كل قرية صياد تمسح خريطتها كل دورة وترسل إغارات حسب إعداداتها.
+      </p>
+    </div>
+
+    <div class="card" style="margin-top:18px;border:1px solid #7f1d1d">
+      <h2>🛡️ الدفاع التلقائي (يكتشف الهجمات + يرسل دفاعات)</h2>
+      <div id="def-status" class="small" style="margin:8px 0;padding:8px 10px;
+           background:#0a0a14;border-radius:8px"></div>
+      <div class="row">
+        <div><label>دورة الفحص (د)</label><input id="def-cycle" type="number" value="3" min="1" max="30"/></div>
+        <div><label>الجنود لكل إرسال (JSON)</label><input id="def-troops" value='{"t1": 500}'/></div>
+        <button class="secondary" onclick="saveDefenseConfig()">💾</button>
+      </div>
+      <div class="row">
+        <button onclick="startDefense()" style="background:#10b981;color:#0a0a14">▶ شغّل الحماية</button>
+        <button class="danger" onclick="stopDefense()">■ أوقف</button>
+      </div>
+      <div id="attacks-list" style="margin-top:10px;display:flex;flex-direction:column;
+           gap:6px;max-height:240px;overflow:auto"></div>
+      <p class="small" style="margin-top:6px;color:var(--muted)">
+        • يفحص rally point لكل قراك كل X دقيقة<br/>
+        • لو في هجوم: يحسب المسافة + الوقت المتبقي<br/>
+        • يختار القرى اللي جنودها تقدر توصل قبل الهجوم بـ 3 دقايق<br/>
+        • يرسل تعزيزات تلقائياً (لين 3 قرى مدافِعة)
       </p>
     </div>
 
@@ -5318,6 +5763,7 @@ refreshRaid();
 refreshSpawn();
 refreshTaskManager();
 loadRegions();
+refreshDefense();
 setInterval(loadVillages, 8000);
 setInterval(refreshPool, 6000);
 setInterval(loadSnapshots, 15000);
@@ -5326,6 +5772,7 @@ setInterval(refreshWorker, 6000);
 setInterval(refreshRaid, 7000);
 setInterval(refreshSpawn, 5000);
 setInterval(refreshTaskManager, 7000);
+setInterval(refreshDefense, 8000);
 
 async function loadSnapshots(){
   try {
@@ -5779,6 +6226,113 @@ function setSpawnServer(url){
   // Open spawn modal pre-filled
   $('#sp-server').value = clean;
   openSpawnDialog();
+}
+
+// ─── Defense Worker UI ──────────────────────────────────────────────────────
+async function refreshDefense(){
+  try {
+    const r1 = await fetch('/api/defense/worker/status');
+    const d = await r1.json();
+    const s = d.status || {};
+    const el = $('#def-status');
+    if (el) {
+      el.innerHTML = s.running ?
+        `<span style="color:#10b981">● حماية شغّالة</span> | قرى مسحت: ${s.scanned||0} | هجمات: ${s.attacks_seen||0} | دفاعات أُرسلت: ${s.dispatched||0}` :
+        `<span style="color:#9ca3af">● متوقف</span> | كل ${d.cycle_min||3} د`;
+    }
+    // Update inputs with current config
+    if (d.cycle_min) $('#def-cycle').value = d.cycle_min;
+    if (d.troops_to_send) $('#def-troops').value = JSON.stringify(d.troops_to_send);
+  } catch(e) {}
+  try {
+    const r = await fetch('/api/defense/attacks?limit=10');
+    const d = await r.json();
+    const box = $('#attacks-list');
+    if (!d.attacks || !d.attacks.length) {
+      box.innerHTML = '<span class="small" style="color:var(--muted)">— لا توجد هجمات مرصودة. (تأكد إن الحماية شغّالة)</span>';
+      return;
+    }
+    box.innerHTML = d.attacks.map(a => {
+      const handled = a.handled === 1 ? '🛡 محمية' : a.handled === -1 ? '⚠ تخطّيت' : '🔴 جديدة';
+      const eta = a.arrives_at ? new Date(a.arrives_at).toLocaleTimeString('ar-SA',{hour:'2-digit',minute:'2-digit'}) : '—';
+      const kindIcon = a.kind === 'raid' ? '⚔️' : a.kind === 'siege' ? '🏰' : '🔥';
+      return `
+      <div style="padding:8px 10px;background:#0a0a14;border-radius:7px;
+           border:1px solid ${a.handled === 1 ? '#10b981' : '#7f1d1d'};
+           font-size:11px">
+        <div style="display:flex;justify-content:space-between">
+          <b>${kindIcon} ${a.kind}</b>
+          <span>${handled}</span>
+        </div>
+        <div class="small" style="color:var(--muted)">
+          هدف: ${a.village_name||a.village_id?.slice(-6)} • وصول: ${eta} • متبقي: ${a.seconds_left}s
+        </div>
+        ${a.notes ? `<div class="small" style="color:#a78bfa">${a.notes}</div>` : ''}
+      </div>`;
+    }).join('');
+  } catch(e) {}
+}
+
+async function startDefense(){
+  await fetch('/api/defense/worker/start', { method:'POST' });
+  refreshDefense();
+}
+async function stopDefense(){
+  await fetch('/api/defense/worker/stop', { method:'POST' });
+  refreshDefense();
+}
+async function saveDefenseConfig(){
+  let troops;
+  try {
+    troops = JSON.parse($('#def-troops').value || '{}');
+  } catch(e) { alert('JSON غير صحيح للجنود'); return; }
+  await fetch('/api/defense/worker/config', { method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({
+      cycle_min: parseFloat($('#def-cycle').value || '3'),
+      troops_to_send: troops
+    })});
+  refreshDefense();
+}
+
+// ─── Self-Update UI ─────────────────────────────────────────────────────────
+async function checkUpdate(){
+  const badge = $('#update-badge');
+  badge.textContent = '⏳ يفحص...';
+  badge.style.background = '#1f2937';
+  badge.style.color = '#9ca3af';
+  try {
+    const r = await fetch('/api/self-update/check');
+    const d = await r.json();
+    if (!d.ok) {
+      badge.textContent = `✗ ${(d.error||'').slice(0,30)}`;
+      badge.style.background = '#7f1d1d';
+      badge.style.color = '#fca5a5';
+      return;
+    }
+    if (d.update_available) {
+      if (confirm(`نسخة جديدة متوفرة: ${d.remote}\nنسختك: ${d.local}\n\nتبي تحدّث الآن؟ (لازم إعادة تشغيل التطبيق بعد التحديث)`)) {
+        const r2 = await fetch('/api/self-update/apply', { method:'POST' });
+        const d2 = await r2.json();
+        if (d2.ok) {
+          alert(`✅ تم التحديث (${d2.bytes_written} bytes)\n\nأقفل التطبيق وأعد فتحه من سطح المكتب.`);
+          badge.textContent = '✓ محدّث — أعد التشغيل';
+          badge.style.background = '#064e3b';
+          badge.style.color = '#10b981';
+        } else {
+          alert('✗ فشل التحديث: ' + d2.error);
+        }
+      }
+    } else {
+      badge.textContent = `✓ آخر نسخة (${d.local})`;
+      badge.style.background = '#064e3b';
+      badge.style.color = '#10b981';
+      setTimeout(() => { badge.textContent = ''; }, 4000);
+    }
+  } catch(e) {
+    badge.textContent = '✗ خطأ';
+    badge.style.background = '#7f1d1d';
+  }
 }
 </script>
 </body></html>
