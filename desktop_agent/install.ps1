@@ -1,143 +1,129 @@
-# Zenrex Farm — One-Click Installer (v0.6.0)
-# ═════════════════════════════════════════════════════
-# الاستخدام (PowerShell — لا يحتاج Admin):
-#   iwr "https://ai-cinematic-hub-2.preview.emergentagent.com/api/desktop-agent/zenrex-farm/install.ps1" -OutFile install.ps1 ; .\install.ps1
+# Zenrex Farm v0.6.0 - One-Click Installer
+# ASCII-only to avoid PowerShell 5 encoding issues.
+# Usage:
+#   cd $env:USERPROFILE; iwr "https://ai-cinematic-hub-2.preview.emergentagent.com/api/desktop-agent/zenrex-farm/install.ps1" -OutFile install.ps1 -UseBasicParsing; powershell -ExecutionPolicy Bypass -File .\install.ps1
 
 $ErrorActionPreference = "Stop"
-$LogPrefix = "[Zenrex]"
-function Write-Step($msg){ Write-Host "$LogPrefix $msg" -ForegroundColor Cyan }
-function Write-Ok($msg)  { Write-Host "$LogPrefix [+] $msg" -ForegroundColor Green }
-function Write-Warn($msg){ Write-Host "$LogPrefix [!] $msg" -ForegroundColor Yellow }
-function Write-Err($msg) { Write-Host "$LogPrefix [X] $msg" -ForegroundColor Red }
+$Tag = "[Zenrex]"
+function S($m){ Write-Host "$Tag $m" -ForegroundColor Cyan }
+function K($m){ Write-Host "$Tag [+] $m" -ForegroundColor Green }
+function W($m){ Write-Host "$Tag [!] $m" -ForegroundColor Yellow }
+function E($m){ Write-Host "$Tag [X] $m" -ForegroundColor Red }
 
 Write-Host ""
-Write-Host "╔═══════════════════════════════════════════════════════╗" -ForegroundColor Magenta
-Write-Host "║   Zenrex Farm v0.6.0 — Travian Multi-Village Bot     ║" -ForegroundColor Magenta
-Write-Host "║   one-click installer · by Zuhair Abbas              ║" -ForegroundColor Magenta
-Write-Host "╚═══════════════════════════════════════════════════════╝" -ForegroundColor Magenta
+Write-Host "==========================================" -ForegroundColor Magenta
+Write-Host "  Zenrex Farm v0.6.0 - by Zuhair Abbas" -ForegroundColor Magenta
+Write-Host "==========================================" -ForegroundColor Magenta
 Write-Host ""
 
-# ─── 1) Install directory ────────────────────────────────────────────────────
+# 1) Install directory
 $InstallDir = "$env:USERPROFILE\Zenrex-Farm"
-Write-Step "مجلد التثبيت: $InstallDir"
+S "Install dir: $InstallDir"
 New-Item -ItemType Directory -Force -Path $InstallDir | Out-Null
 Set-Location $InstallDir
 
-# ─── 2) Python check ────────────────────────────────────────────────────────
-Write-Step "فحص Python..."
+# 2) Check Python
+S "Checking Python..."
 $PyVer = & python --version 2>&1
 if ($LASTEXITCODE -ne 0) {
-    Write-Err "Python غير منصّب. حمّله من https://python.org (3.11 أو أحدث)"
-    Write-Err "مهم: علّم خانة 'Add Python to PATH' أثناء التثبيت"
+    E "Python not installed. Get it from https://python.org (3.11+)"
+    E "IMPORTANT: tick 'Add Python to PATH' during install"
     exit 1
 }
-Write-Ok "Python موجود: $PyVer"
+K "Python: $PyVer"
 
-# ─── 3) Install pip packages ────────────────────────────────────────────────
-Write-Step "تثبيت تبعيات Python..."
-$pkgs = @(
-    "fastapi", "uvicorn[standard]", "playwright",
-    "pywebview", "pystray", "Pillow", "requests"
-)
+# 3) Install pip packages
+S "Installing Python deps (may take 2-3 min)..."
+$pkgs = @("fastapi", "uvicorn[standard]", "playwright",
+          "pywebview", "pystray", "Pillow", "requests")
 foreach ($p in $pkgs) {
-    Write-Host "  → $p"
+    Write-Host "  -> $p"
     & python -m pip install --quiet --upgrade $p 2>&1 | Out-Null
 }
-Write-Ok "كل التبعيات مثبّتة"
+K "All deps installed"
 
-# ─── 4) Playwright Chromium ─────────────────────────────────────────────────
-Write-Step "تثبيت Chromium لـ Playwright (قد يأخذ دقيقة)..."
+# 4) Playwright Chromium
+S "Installing Chromium for Playwright (may take 1 min)..."
 & python -m playwright install chromium 2>&1 | Out-Null
-Write-Ok "Chromium جاهز"
+K "Chromium ready"
 
-# ─── 5) Download Zenrex source files ────────────────────────────────────────
+# 5) Download source files
 $BaseUrl = if ($env:ZENREX_SOURCE_URL) { $env:ZENREX_SOURCE_URL }
            else { "https://ai-cinematic-hub-2.preview.emergentagent.com/api/desktop-agent/zenrex-farm" }
-Write-Step "تحميل ملفات Zenrex من السحابة..."
-Write-Host "  → URL: $BaseUrl"
+S "Downloading from: $BaseUrl"
 foreach ($f in @("zenrex_farm.py", "zenrex_app.py")) {
     $dest = Join-Path $InstallDir $f
     try {
         Invoke-WebRequest -Uri "$BaseUrl/$f" -OutFile $dest -UseBasicParsing -TimeoutSec 30
         $size = (Get-Item $dest).Length
-        Write-Ok "نُزّل $f ($size bytes)"
+        K "Downloaded $f ($size bytes)"
     } catch {
-        Write-Err "تعذّر تحميل $f من $BaseUrl/$f"
-        Write-Err "  السبب: $($_.Exception.Message)"
-        # Fallback: look in same dir as installer
-        $InstallerDir = Split-Path -Parent $MyInvocation.MyCommand.Path
-        $src = Join-Path $InstallerDir $f
-        if (Test-Path $src) {
-            Copy-Item $src $dest -Force
-            Write-Ok "نُسخ من المجلد المحلي بدلاً"
-        } else {
-            exit 1
-        }
+        E "Failed to download $f"
+        E ("  reason: " + $_.Exception.Message)
+        exit 1
     }
 }
 
-# ─── 6) Download Travian icon ───────────────────────────────────────────────
+# 6) Travian icon
 $IconPath = Join-Path $InstallDir "zenrex_icon.ico"
-Write-Step "تحميل أيقونة Travian Legends..."
-$IconSources = @(
-    "https://www.travian.com/favicon.ico",
-    "https://lobby.legends.travian.com/favicon.ico"
-)
+S "Downloading Travian icon..."
 $IconOk = $false
-foreach ($url in $IconSources) {
+foreach ($url in @("https://www.travian.com/favicon.ico",
+                   "https://lobby.legends.travian.com/favicon.ico")) {
     try {
         Invoke-WebRequest -Uri $url -OutFile $IconPath -UseBasicParsing -TimeoutSec 12
         if ((Get-Item $IconPath).Length -gt 500) { $IconOk = $true; break }
     } catch {}
 }
 if (-not $IconOk) {
-    Write-Warn "تعذّر التحميل — سأنشئ أيقونة بديلة"
-    python -c "from PIL import Image, ImageDraw; img=Image.new('RGBA',(256,256),(15,20,35,255)); d=ImageDraw.Draw(img); d.ellipse([16,16,240,240],fill=(167,139,250,255)); img.save(r'$IconPath',sizes=[(256,256),(128,128),(64,64),(32,32),(16,16)])"
+    W "Icon download failed, generating fallback"
+    $pyCode = "from PIL import Image, ImageDraw; img=Image.new('RGBA',(256,256),(15,20,35,255)); d=ImageDraw.Draw(img); d.ellipse([16,16,240,240],fill=(167,139,250,255)); img.save(r'$IconPath',sizes=[(256,256),(128,128),(64,64),(32,32),(16,16)])"
+    python -c $pyCode 2>&1 | Out-Null
 }
-Write-Ok "الأيقونة: $IconPath"
+K "Icon: $IconPath"
 
-# ─── 7) Create desktop shortcut ─────────────────────────────────────────────
-Write-Step "إنشاء شورت كت على سطح المكتب..."
+# 7) Create desktop shortcut
+S "Creating desktop shortcut..."
 $Pythonw = (Get-Command pythonw -ErrorAction SilentlyContinue).Source
 if (-not $Pythonw) { $Pythonw = (Get-Command python).Source }
 $Launcher = Join-Path $InstallDir "zenrex_app.py"
 $DesktopPath = [Environment]::GetFolderPath("Desktop")
 $ShortcutPath = Join-Path $DesktopPath "Zenrex Farm.lnk"
 
-$WScriptShell = New-Object -ComObject WScript.Shell
-$Shortcut = $WScriptShell.CreateShortcut($ShortcutPath)
-$Shortcut.TargetPath = $Pythonw
-$Shortcut.Arguments = "`"$Launcher`""
-$Shortcut.WorkingDirectory = $InstallDir
-$Shortcut.IconLocation = $IconPath
-$Shortcut.WindowStyle = 7
-$Shortcut.Description = "Zenrex Farm — مزرعة قرى Travian (v0.6.0)"
-$Shortcut.Save()
-Write-Ok "شورت كت: $ShortcutPath"
+$WSS = New-Object -ComObject WScript.Shell
+$sc = $WSS.CreateShortcut($ShortcutPath)
+$sc.TargetPath = $Pythonw
+$sc.Arguments = "`"$Launcher`""
+$sc.WorkingDirectory = $InstallDir
+$sc.IconLocation = $IconPath
+$sc.WindowStyle = 7
+$sc.Description = "Zenrex Farm v0.6.0 - Travian Multi-Village Bot"
+$sc.Save()
+K "Shortcut: $ShortcutPath"
 
-# ─── 8) Start menu shortcut (bonus) ─────────────────────────────────────────
+# 8) Start menu shortcut
 $StartMenu = "$env:APPDATA\Microsoft\Windows\Start Menu\Programs\Zenrex Farm.lnk"
-$sm = $WScriptShell.CreateShortcut($StartMenu)
+$sm = $WSS.CreateShortcut($StartMenu)
 $sm.TargetPath = $Pythonw
 $sm.Arguments = "`"$Launcher`""
 $sm.WorkingDirectory = $InstallDir
 $sm.IconLocation = $IconPath
 $sm.WindowStyle = 7
 $sm.Save()
+K "Start menu entry added"
 
-# ─── 9) Done ────────────────────────────────────────────────────────────────
+# 9) Done
 Write-Host ""
-Write-Host "╔═══════════════════════════════════════════════════════╗" -ForegroundColor Yellow
-Write-Host "║   [+] Zenrex Farm v0.6.0 جاهز للتشغيل!               ║" -ForegroundColor Yellow
-Write-Host "╠═══════════════════════════════════════════════════════╣" -ForegroundColor Yellow
-Write-Host "║   * المسار:  $InstallDir" -ForegroundColor White
-Write-Host "║   * شغّل:    دبل كلك على 'Zenrex Farm' على سطح المكتب" -ForegroundColor White
-Write-Host "║   * أيضاً:   ابحث 'Zenrex' في قائمة Start" -ForegroundColor White
-Write-Host "║   * الإصدار: v0.6.0 (Auto-Spawn + Task Manager)      ║" -ForegroundColor White
-Write-Host "╚═══════════════════════════════════════════════════════╝" -ForegroundColor Yellow
+Write-Host "==========================================" -ForegroundColor Yellow
+Write-Host "  [+] Zenrex Farm v0.6.0 READY!" -ForegroundColor Yellow
+Write-Host "==========================================" -ForegroundColor Yellow
+Write-Host "  Path:  $InstallDir"
+Write-Host "  Run:   Double-click 'Zenrex Farm' on Desktop"
+Write-Host "  Or:    Search 'Zenrex' in Start menu"
+Write-Host "==========================================" -ForegroundColor Yellow
 Write-Host ""
-$launch = Read-Host "تبي أشغّله الحين؟ (Y/N)"
+$launch = Read-Host "Launch now? (Y/N)"
 if ($launch -eq "Y" -or $launch -eq "y") {
     Start-Process $ShortcutPath
-    Write-Host "[+] انطلق! النافذة بتفتح خلال 5 ثوانٍ..." -ForegroundColor Green
+    Write-Host "[+] Launching... a Native window will open in a few seconds" -ForegroundColor Green
 }
