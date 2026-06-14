@@ -28,7 +28,10 @@ docstring_parser==0.18.0
 ecdsa==0.19.1
 elevenlabs==2.45.0
 email-validator==2.3.0
-emergentintegrations==0.1.1
+# emergentintegrations removed — replaced by /app/backend/direct_llm_shim.py
+# using official openai + anthropic + google-genai SDKs with your own keys
+# (zenrex.ai independence — Feb 2026).
+# emergentintegrations==0.1.1
 executing==2.2.1
 fal_client==1.0.0
 fastapi==0.109.0
