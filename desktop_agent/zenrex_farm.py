@@ -1298,9 +1298,14 @@ class BrowserFarm:
             # Format expected: "http://user:pass@host:port" or "socks5://host:port"
             proxy_cfg = {"server": proxy_url}
 
+        # Allow forcing headless via env (required when running in the cloud
+        # container without an X server). Defaults to headed locally for
+        # debug, headless when ZENREX_CLOUD=1 / ZENREX_HEADLESS=1.
+        _headless = (os.environ.get("ZENREX_CLOUD") == "1"
+                     or os.environ.get("ZENREX_HEADLESS") == "1")
         ctx = await pw.chromium.launch_persistent_context(
             user_data_dir=str(profile_dir),
-            headless=False,                # visible for now; toggle for prod
+            headless=_headless,
             user_agent=village.get("user_agent") or "",
             viewport={"width": int(village.get("screen_w", 1920)),
                       "height": int(village.get("screen_h", 1080))},
@@ -3610,7 +3615,19 @@ async def api_register_travian(vid: str, request: Request):
     # Real execution (Phase 2 — requires testing on ONE village first)
     try:
         ctx, page = await FARM.open(v)
-        url = f"https://{v['server']}/register.php"
+        # `v['server']` may be either a short code ("ts8.x1.arabics") or a
+        # full hostname ("ts8.x1.arabics.travian.com"). Normalise to a full
+        # `https://<host>/register.php` URL.
+        srv = (v.get("server") or "").strip()
+        if not srv:
+            return {"ok": False, "error": "village has no server", "village": vid}
+        host = srv
+        if host.startswith("http://") or host.startswith("https://"):
+            host = host.split("://", 1)[1]
+        host = host.rstrip("/")
+        if not host.endswith(".travian.com") and "travian" not in host:
+            host = f"{host}.travian.com"
+        url = f"https://{host}/register.php"
         await page.goto(url, wait_until="domcontentloaded", timeout=60000)
         await asyncio.sleep(human_pause())
 
