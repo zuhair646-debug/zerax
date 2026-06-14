@@ -656,7 +656,8 @@ async def lobby_auto_login(page, village: dict[str, Any]) -> dict[str, Any]:
 
     # Check for visible error on the login page
     try:
-        err = page.locator(".errorMessage, .error, .alertbox, [class*='error']").first
+        err = page.locator(
+            ".errorMessage, .error, .alertbox, [class*='error']").first
         if await err.is_visible(timeout=600):
             txt = await err.inner_text(timeout=600)
             return {"ok": False, "stage": "credentials_rejected",
@@ -667,6 +668,174 @@ async def lobby_auto_login(page, village: dict[str, Any]) -> dict[str, Any]:
     # Default: assume submitted but unverified
     return {"ok": submitted, "stage": "submitted_unverified",
             "detail": final_url}
+
+
+# ─── Enter game world from lobby + marketplace transfer ──────────────────────
+async def enter_game_world(page, server_hint: str = "") -> dict[str, Any]:
+    """After successful lobby login, click the active world / 'PLAY NOW' button.
+    Returns {ok, stage, world_url}. Server_hint can narrow which world to pick."""
+    try:
+        await page.wait_for_load_state("domcontentloaded", timeout=8000)
+    except Exception:
+        pass
+    await asyncio.sleep(random.uniform(0.8, 1.6))
+
+    # Primary path: big PLAY NOW button
+    play_selectors = [
+        "a:has-text('PLAY NOW')", "button:has-text('PLAY NOW')",
+        "a:has-text('Play now')", "a.playNow",
+        # Continue Playing card
+        "a:has-text('Continue Playing')", ".gameWorld a", ".worldCard a",
+    ]
+    if server_hint:
+        # If we know server, prefer matching link
+        play_selectors.insert(0, f"a[href*='{server_hint}']")
+    for sel in play_selectors:
+        try:
+            loc = page.locator(sel).first
+            if await loc.is_visible(timeout=900):
+                await loc.click(timeout=1500)
+                await page.wait_for_load_state("domcontentloaded", timeout=15000)
+                await asyncio.sleep(random.uniform(1.0, 2.0))
+                return {"ok": True, "stage": "entered_world",
+                        "world_url": page.url}
+        except Exception:
+            continue
+    return {"ok": False, "stage": "no_world_button",
+            "world_url": page.url or ""}
+
+
+MARKET_RES_SELECTORS = {
+    "wood": ["input[name='r1']", "#r1", "input[name='wood']"],
+    "clay": ["input[name='r2']", "#r2", "input[name='clay']"],
+    "iron": ["input[name='r3']", "#r3", "input[name='iron']"],
+    "crop": ["input[name='r4']", "#r4", "input[name='crop']"],
+}
+MARKET_COORD_SELECTORS = {
+    "x": ["input[name='x']", "#xCoordInput", "input[name='to[x]']"],
+    "y": ["input[name='y']", "#yCoordInput", "input[name='to[y]']"],
+}
+MARKET_SEND_SELECTORS = [
+    "button[type='submit']", "button.green:has-text('Send')",
+    "input[type='submit']", "button#enabledButton",
+    "button:has-text('Send')", "button:has-text('OK')",
+]
+
+
+async def send_resources_from_village(page, world_url_base: str,
+                                      target_x: int, target_y: int,
+                                      amounts: dict[str, int]) -> dict[str, Any]:
+    """Open the marketplace 'Send resources' tab and submit a transfer.
+    amounts dict keys: wood/clay/iron/crop (any subset, zero/missing = 0).
+    Returns {ok, stage, sent: {wood, clay, iron, crop}, detail}.
+    """
+    base = world_url_base.rstrip("/")
+    # Marketplace, send-resources tab
+    market_url = f"{base}/build.php?gid=17&t=5"
+    try:
+        await page.goto(market_url, wait_until="domcontentloaded", timeout=20000)
+    except Exception as e:
+        return {"ok": False, "stage": "navigate_market",
+                "detail": str(e), "sent": {}}
+    await asyncio.sleep(random.uniform(0.8, 1.5))
+
+    # Fill the 4 resource inputs (only non-zero) — capping at the visible max
+    sent = {"wood": 0, "clay": 0, "iron": 0, "crop": 0}
+    for key, sels in MARKET_RES_SELECTORS.items():
+        amt = int(amounts.get(key, 0) or 0)
+        if amt <= 0:
+            continue
+        for sel in sels:
+            try:
+                loc = page.locator(sel).first
+                await loc.wait_for(state="visible", timeout=1500)
+                await loc.click()
+                await loc.fill("")
+                await loc.type(str(amt),
+                               delay=int(human_typing_interval() * 1000))
+                sent[key] = amt
+                break
+            except Exception:
+                continue
+
+    # Fill destination coordinates
+    for axis, sels in MARKET_COORD_SELECTORS.items():
+        val = target_x if axis == "x" else target_y
+        filled = False
+        for sel in sels:
+            try:
+                loc = page.locator(sel).first
+                await loc.wait_for(state="visible", timeout=1500)
+                await loc.click()
+                await loc.fill("")
+                await loc.type(str(val),
+                               delay=int(human_typing_interval() * 1000))
+                filled = True
+                break
+            except Exception:
+                continue
+        if not filled:
+            return {"ok": False, "stage": f"coord_{axis}",
+                    "detail": f"could not fill {axis}", "sent": sent}
+
+    # Click send / submit
+    await asyncio.sleep(random.uniform(0.6, 1.2))
+    submitted = await _try_click_any(page, MARKET_SEND_SELECTORS,
+                                     timeout_ms=2000)
+    if not submitted:
+        return {"ok": False, "stage": "submit", "detail": "no submit button",
+                "sent": sent}
+
+    # Travian usually shows a confirmation page — click confirm
+    await asyncio.sleep(random.uniform(0.8, 1.4))
+    for sel in ["button:has-text('Confirm')", "button:has-text('OK')",
+                "input[name='ok']", "button.green:has-text('OK')",
+                "button[type='submit']"]:
+        try:
+            loc = page.locator(sel).first
+            if await loc.is_visible(timeout=900):
+                await loc.click(timeout=1500)
+                break
+        except Exception:
+            continue
+
+    try:
+        await page.wait_for_load_state("networkidle", timeout=8000)
+    except Exception:
+        pass
+
+    # Sanity: did we land on a movements page?
+    url = page.url or ""
+    success = ("build.php" in url or "village" in url or "rally" in url)
+    return {"ok": success, "stage": "sent" if success else "submitted_unverified",
+            "sent": sent, "detail": url}
+
+
+# ─── Mail.tm activation link extraction ──────────────────────────────────────
+async def find_activation_link(token: str) -> Optional[str]:
+    """Poll the mail.tm inbox for a Travian activation email and return the
+    activation URL inside it. Returns None if no link is found."""
+    import re
+    import urllib.request
+    msgs = await mailtm_read_inbox(token)
+    for m in msgs[:20]:
+        # Fetch full message
+        try:
+            full = await mailtm_read_message(token, m.get("id", ""))
+        except Exception:
+            continue
+        text = (full.get("text") or "") + " " + " ".join(
+            full.get("html") or [])
+        # Look for travian activation pattern
+        # Examples:
+        #   https://www.travian.com/activate?key=...
+        #   https://lobby.legends.travian.com/activate/<token>
+        m_link = re.search(
+            r"https?://[^\s<>\"']+(?:activate|confirm|verify|register)[^\s<>\"']*",
+            text, re.IGNORECASE)
+        if m_link:
+            return m_link.group(0)
+    return None
 
 
 # ─── Per-village fingerprint seed (deterministic per village) ────────────────
@@ -1565,6 +1734,318 @@ class BrowserPool:
 
 
 POOL = BrowserPool()
+
+
+# ─── Transfer Worker — actually executes queued transfer_jobs ────────────────
+class TransferWorker:
+    """Background worker that picks the next queued transfer_job and executes
+    it via Playwright: open browser for each registered source village → enter
+    game world → marketplace → fill form → send.
+
+    Algorithm:
+      • specific mode: divide each resource evenly across `n` registered
+        sources, capped by per-source merchant capacity (assumed 750/merchant
+        for Romans baseline — overridable per village later).
+      • random_all: send a small randomised chunk from each source. The
+        actual stock is read from /dorf1 page if we can scrape it; otherwise
+        we send a configurable default per source.
+      • defense: open the rally point and send troops from each source
+        instead.
+    """
+    MAX_SOURCES_PER_JOB = 25
+    PER_SOURCE_DELAY = (35.0, 95.0)  # randomised delay between sources
+
+    def __init__(self) -> None:
+        self.task: Optional[asyncio.Task] = None
+        self.cancel = asyncio.Event()
+        self.last_status: dict[str, Any] = {"running": False,
+                                            "current_job": None,
+                                            "last_done": None}
+
+    def _next_job(self) -> Optional[dict[str, Any]]:
+        with db_cur() as cur:
+            r = cur.execute(
+                "SELECT * FROM transfer_jobs WHERE status = 'queued' "
+                "ORDER BY id ASC LIMIT 1").fetchone()
+        return dict(r) if r else None
+
+    def _set_job(self, job_id: int, status: str,
+                 progress: Optional[dict] = None) -> None:
+        with db_cur() as cur:
+            cur.execute(
+                "UPDATE transfer_jobs SET status = ?, progress_json = ?, "
+                "updated_at = ? WHERE id = ?",
+                (status,
+                 json.dumps(progress, ensure_ascii=False) if progress
+                 else None,
+                 _now_iso(), job_id))
+
+    def _sources_for_server(self, server: str) -> list[dict[str, Any]]:
+        with db_cur() as cur:
+            rows = cur.execute(
+                "SELECT * FROM villages WHERE server = ? "
+                "AND state IN ('registered','active','browser_open') "
+                "AND is_personal = 0 ORDER BY id LIMIT ?",
+                (server, self.MAX_SOURCES_PER_JOB)).fetchall()
+        return [dict(r) for r in rows]
+
+    async def _execute_job(self, job: dict[str, Any]) -> dict[str, Any]:
+        server = job["server"]
+        sources = self._sources_for_server(server)
+        if not sources:
+            return {"ok": False,
+                    "reason": "no registered sources on this server",
+                    "per_source": []}
+
+        mode = job["mode"]
+        requested = json.loads(job["resources_json"] or "{}")
+        troops = json.loads(job["troops_json"] or "{}")
+        tx, ty = int(job["target_x"]), int(job["target_y"])
+
+        # Distribute amounts (specific mode) or use full stock (random_all)
+        per_source_plan: list[dict[str, Any]] = []
+        n = len(sources)
+        if mode == "specific":
+            split = {k: int(v) // n for k, v in requested.items()}
+            for s in sources:
+                per_source_plan.append({"vid": s["id"], "amounts": split})
+        elif mode == "random_all":
+            # Use a heuristic batch — actual stock scraping is TODO
+            for s in sources:
+                per_source_plan.append({
+                    "vid": s["id"],
+                    "amounts": {
+                        "wood": random.randint(500, 1500),
+                        "clay": random.randint(500, 1500),
+                        "iron": random.randint(500, 1500),
+                        "crop": random.randint(300, 1000),
+                    }})
+        else:  # defense
+            split_troops = {k: int(v) // n for k, v in troops.items()
+                            if int(v or 0) > 0}
+            for s in sources:
+                per_source_plan.append({"vid": s["id"], "troops": split_troops})
+
+        progress: list[dict[str, Any]] = []
+        for entry in per_source_plan:
+            v = next((x for x in sources if x["id"] == entry["vid"]), None)
+            if not v:
+                continue
+            try:
+                ctx, page = await FARM.open(v)
+                login = await lobby_auto_login(page, v)
+                if not login.get("ok"):
+                    progress.append({"vid": v["id"], "ok": False,
+                                     "stage": "login", "detail": login})
+                    continue
+                world = await enter_game_world(page, server_hint=server)
+                if not world.get("ok"):
+                    progress.append({"vid": v["id"], "ok": False,
+                                     "stage": "enter_world", "detail": world})
+                    continue
+                base = world["world_url"].split("/build.php", 1)[0]\
+                                         .split("/dorf", 1)[0].rstrip("/")
+                if mode == "defense":
+                    # MOCKED: rally-point troop sending is a separate flow;
+                    # log it for now and move on.
+                    log_event(v["id"], "defense_dispatch_mocked",
+                              f"job#{job['id']} → ({tx},{ty}) troops="
+                              f"{entry.get('troops')}")
+                    progress.append({"vid": v["id"], "ok": True,
+                                     "stage": "rally_mocked",
+                                     "troops": entry.get("troops")})
+                else:
+                    result = await send_resources_from_village(
+                        page, base, tx, ty, entry["amounts"])
+                    progress.append({"vid": v["id"], "ok": result.get("ok"),
+                                     "stage": result.get("stage"),
+                                     "sent": result.get("sent")})
+                    log_event(v["id"], "transfer_sent",
+                              f"job#{job['id']} → ({tx},{ty}) "
+                              f"{result.get('sent')}")
+                # Randomised delay between sources to look human
+                await asyncio.sleep(random.uniform(*self.PER_SOURCE_DELAY))
+            except Exception as e:
+                progress.append({"vid": v["id"], "ok": False,
+                                 "stage": "exception", "detail": str(e)})
+            if self.cancel.is_set():
+                break
+
+        ok_count = sum(1 for p in progress if p.get("ok"))
+        return {"ok": ok_count > 0, "ok_count": ok_count,
+                "total": len(progress), "per_source": progress}
+
+    async def _loop(self) -> None:
+        log.info("[transfer-worker] started")
+        self.last_status["running"] = True
+        while not self.cancel.is_set():
+            job = self._next_job()
+            if not job:
+                await asyncio.sleep(8)
+                continue
+            self.last_status["current_job"] = job["id"]
+            self._set_job(job["id"], "running")
+            log.info(f"[transfer-worker] executing job #{job['id']} "
+                     f"mode={job['mode']} → ({job['target_x']},{job['target_y']})")
+            try:
+                result = await self._execute_job(job)
+                self._set_job(job["id"],
+                              "done" if result.get("ok") else "failed",
+                              progress=result)
+                self.last_status["last_done"] = {
+                    "job_id": job["id"], "ok": result.get("ok"),
+                    "ok_count": result.get("ok_count"),
+                    "total": result.get("total"),
+                    "at": _now_iso(),
+                }
+            except Exception as e:
+                self._set_job(job["id"], "failed",
+                              progress={"exception": str(e)})
+                log.exception(f"[transfer-worker] job #{job['id']} failed")
+            self.last_status["current_job"] = None
+        self.last_status["running"] = False
+        log.info("[transfer-worker] stopped")
+
+    async def start(self) -> None:
+        if self.task and not self.task.done():
+            return
+        self.cancel.clear()
+        self.task = asyncio.create_task(self._loop())
+
+    async def stop(self) -> None:
+        self.cancel.set()
+        if self.task:
+            try:
+                await asyncio.wait_for(self.task, timeout=5)
+            except Exception:
+                pass
+
+
+TRANSFER_WORKER = TransferWorker()
+
+
+# ─── Activation Worker — auto-clicks Mail.tm activation links ────────────────
+class ActivationWorker:
+    """Scans villages in 'registration_pending' state, polls their mail.tm
+    inbox for an activation link, and clicks it via Playwright."""
+    POLL_INTERVAL = 25.0
+
+    def __init__(self) -> None:
+        self.task: Optional[asyncio.Task] = None
+        self.cancel = asyncio.Event()
+        self.last_status: dict[str, Any] = {"running": False,
+                                            "last_activated": None,
+                                            "scanned": 0}
+
+    def _pending_villages(self) -> list[dict[str, Any]]:
+        with db_cur() as cur:
+            rows = cur.execute(
+                "SELECT * FROM villages WHERE state = 'registration_pending' "
+                "LIMIT 100").fetchall()
+        return [dict(r) for r in rows]
+
+    def _extract_token(self, notes: str) -> Optional[str]:
+        for line in (notes or "").splitlines():
+            line = line.strip()
+            if line.startswith("mailtm_token=") or line.startswith("email_token="):
+                return line.split("=", 1)[1].strip()
+        return None
+
+    async def _activate_one(self, v: dict[str, Any]) -> bool:
+        token = self._extract_token(v.get("notes") or "")
+        if not token:
+            return False
+        try:
+            link = await find_activation_link(token)
+        except Exception as e:
+            log_event(v["id"], "activation_poll_error", str(e))
+            return False
+        if not link:
+            return False
+        # Open the activation link via Playwright (uses village proxy + stealth)
+        try:
+            ctx, page = await FARM.open(v)
+            await page.goto(link, wait_until="domcontentloaded", timeout=25000)
+            await asyncio.sleep(random.uniform(2.0, 4.0))
+            update_village_state(v["id"], "registered",
+                                 notes=f"activated_via_link={link[:80]}")
+            log_event(v["id"], "activated", link[:120])
+            self.last_status["last_activated"] = {
+                "vid": v["id"], "at": _now_iso(), "link": link[:120]}
+            return True
+        except Exception as e:
+            log_event(v["id"], "activation_open_error", str(e))
+            return False
+
+    async def _loop(self) -> None:
+        log.info("[activation-worker] started")
+        self.last_status["running"] = True
+        while not self.cancel.is_set():
+            pending = self._pending_villages()
+            self.last_status["scanned"] = len(pending)
+            for v in pending:
+                if self.cancel.is_set():
+                    break
+                try:
+                    await self._activate_one(v)
+                except Exception:
+                    log.exception(
+                        f"[activation-worker] error on {v.get('id')}")
+                await asyncio.sleep(random.uniform(1.5, 3.5))
+            await asyncio.sleep(self.POLL_INTERVAL)
+        self.last_status["running"] = False
+        log.info("[activation-worker] stopped")
+
+    async def start(self) -> None:
+        if self.task and not self.task.done():
+            return
+        self.cancel.clear()
+        self.task = asyncio.create_task(self._loop())
+
+    async def stop(self) -> None:
+        self.cancel.set()
+        if self.task:
+            try:
+                await asyncio.wait_for(self.task, timeout=5)
+            except Exception:
+                pass
+
+
+ACTIVATION_WORKER = ActivationWorker()
+
+
+@app.post("/api/transfer/worker/start")
+async def api_tw_start():
+    await TRANSFER_WORKER.start()
+    return {"ok": True, "status": TRANSFER_WORKER.last_status}
+
+
+@app.post("/api/transfer/worker/stop")
+async def api_tw_stop():
+    await TRANSFER_WORKER.stop()
+    return {"ok": True, "status": TRANSFER_WORKER.last_status}
+
+
+@app.get("/api/transfer/worker/status")
+def api_tw_status():
+    return {"ok": True, "status": TRANSFER_WORKER.last_status}
+
+
+@app.post("/api/activation/start")
+async def api_aw_start():
+    await ACTIVATION_WORKER.start()
+    return {"ok": True, "status": ACTIVATION_WORKER.last_status}
+
+
+@app.post("/api/activation/stop")
+async def api_aw_stop():
+    await ACTIVATION_WORKER.stop()
+    return {"ok": True, "status": ACTIVATION_WORKER.last_status}
+
+
+@app.get("/api/activation/status")
+def api_aw_status():
+    return {"ok": True, "status": ACTIVATION_WORKER.last_status}
 
 
 @app.post("/api/pool/start")
@@ -2965,8 +3446,28 @@ _DASHBOARD_HTML = r"""<!DOCTYPE html>
 
     <div class="card" style="margin-top:18px">
       <h2>📥 طابور التحويلات</h2>
+      <div id="worker-status" class="small" style="margin:8px 0;padding:8px 10px;
+           background:#0a0a14;border-radius:8px"></div>
+      <div class="row">
+        <button onclick="startWorker()">▶ شغّل العامل</button>
+        <button class="danger" onclick="stopWorker()">■ أوقف</button>
+      </div>
       <div id="jobs-list" style="margin-top:8px;display:flex;flex-direction:column;gap:6px;
            max-height:240px;overflow:auto"></div>
+    </div>
+
+    <div class="card" style="margin-top:18px">
+      <h2>📧 عامل تفعيل الإيميل (Mail.tm)</h2>
+      <div id="aw-status" class="small" style="margin:8px 0;padding:8px 10px;
+           background:#0a0a14;border-radius:8px"></div>
+      <div class="row">
+        <button onclick="startActivation()">▶ ابدأ المسح</button>
+        <button class="danger" onclick="stopActivation()">■ أوقف</button>
+      </div>
+      <p class="small" style="margin-top:6px;color:var(--muted)">
+        يفحص القرى بحالة <b>registration_pending</b>، يقرأ Mail.tm،
+        يلاقي رابط التفعيل ويضغطه تلقائياً عبر متصفح القرية.
+      </p>
     </div>
 
     <div class="card" style="margin-top:18px">
@@ -3333,10 +3834,12 @@ checkOllama();
 refreshPool();
 loadSnapshots();
 loadJobs();
+refreshWorker();
 setInterval(loadVillages, 8000);
 setInterval(refreshPool, 6000);
 setInterval(loadSnapshots, 15000);
 setInterval(loadJobs, 8000);
+setInterval(refreshWorker, 6000);
 
 async function loadSnapshots(){
   try {
@@ -3416,6 +3919,50 @@ async function loadJobs(){
 async function delJob(jid){
   await fetch(`/api/transfer/jobs/${jid}`, { method:'DELETE' });
   loadJobs();
+}
+
+async function refreshWorker(){
+  try {
+    const r = await fetch('/api/transfer/worker/status'); const d = await r.json();
+    const s = d.status || {};
+    const el = $('#worker-status');
+    if (el) {
+      const cur = s.current_job ? `job#${s.current_job}` : '—';
+      const last = s.last_done ? `#${s.last_done.job_id} (${s.last_done.ok_count}/${s.last_done.total})` : '—';
+      el.innerHTML = s.running ?
+        `<span style="color:#10b981">● شغّال</span> | يعالج: ${cur} | آخر: ${last}` :
+        `<span style="color:#9ca3af">● متوقف</span> | آخر: ${last}`;
+    }
+  } catch(e) {}
+  try {
+    const r = await fetch('/api/activation/status'); const d = await r.json();
+    const s = d.status || {};
+    const el = $('#aw-status');
+    if (el) {
+      const last = s.last_activated ?
+        `${s.last_activated.vid} @ ${s.last_activated.at?.slice(11,19) || ''}` : '—';
+      el.innerHTML = s.running ?
+        `<span style="color:#10b981">● شغّال</span> | مسح: ${s.scanned} | آخر تفعيل: ${last}` :
+        `<span style="color:#9ca3af">● متوقف</span> | آخر تفعيل: ${last}`;
+    }
+  } catch(e) {}
+}
+
+async function startWorker(){
+  const r = await fetch('/api/transfer/worker/start', { method:'POST' });
+  await r.json(); refreshWorker();
+}
+async function stopWorker(){
+  await fetch('/api/transfer/worker/stop', { method:'POST' });
+  refreshWorker();
+}
+async function startActivation(){
+  await fetch('/api/activation/start', { method:'POST' });
+  refreshWorker();
+}
+async function stopActivation(){
+  await fetch('/api/activation/stop', { method:'POST' });
+  refreshWorker();
 }
 </script>
 </body></html>

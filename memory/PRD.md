@@ -182,18 +182,34 @@ Unify the AI brain and empower it with unified toolset. Fix mocked AI Trading Bo
     `DELETE /api/transfer/jobs/{id}`
 
 ### Pending / Next
-- 🔴 P0: **Transfer Worker** — actually execute queued `transfer_jobs` via
-  Playwright (open marketplace, fill form, submit). Currently jobs only queue.
-- 🔴 P0: **Mail.tm Activation Polling** — after register, poll inbox for
-  activation link and click it automatically.
-- 🟡 P1: Auto-register (improve existing `/api/villages/{vid}/register-travian`
-  selectors per lobby version).
 - 🟡 P1: Auto-Raid worker that scans 30-tile radius and dispatches raids.
 - 🟡 P1: Alliance auto-invite for villages registered on the same server.
-- 🟢 P2: Refactor `zenrex_farm.py` (3700+ lines) into modules
+- 🟡 P1: Stock scraping in random_all mode (currently uses random heuristic
+  batches between 300–1500 per resource).
+- 🟡 P1: Rally point troop sending (defense mode currently mocked).
+- 🟢 P2: Refactor `zenrex_farm.py` (3900+ lines) into modules
   (`db.py`, `stealth.py`, `lobby.py`, `routes/`).
 
 ### Files
-- `/app/desktop_agent/zenrex_farm.py` (v0.5.0, ~3700 lines)
+- `/app/desktop_agent/zenrex_farm.py` (v0.5.0, ~3900 lines)
+- `/app/desktop_agent/test_auto_login_live.py` (live E2E test against Travian)
+- `/app/desktop_agent/test_inspect_lobby.py` (HTML inspector for selector discovery)
 - Dashboard: `http://127.0.0.1:7870/`
 - Chat: `http://127.0.0.1:7870/chat`
+
+### v0.5.0 → Workers Added (continued session)
+- ✅ **TransferWorker**: Background asyncio task that picks queued
+  `transfer_jobs`, picks up to 25 registered source villages per server,
+  opens each via Playwright, runs `lobby_auto_login` → `enter_game_world` →
+  `send_resources_from_village` (fills `r1..r4`, x/y, clicks send+confirm).
+  Endpoints: `/api/transfer/worker/{start,stop,status}`.
+- ✅ **ActivationWorker**: Scans villages in `registration_pending` state,
+  reads their Mail.tm inbox via stored `mailtm_token`, regex-extracts
+  the activation URL, opens it via the village's stealth context, and
+  promotes state to `registered`. Endpoints: `/api/activation/{start,stop,status}`.
+- ✅ **Live-verified** lobby selectors against real Travian (June 2026):
+  `input[name="name"]` for email field — was `input[name="email"]` before.
+  Proven via headless Playwright + screenshot showing "Wrong email, account
+  name or password" response from the live server.
+- ⚠ Defense (rally point troop sending) still MOCKED — logs the dispatch
+  intent but doesn't fill the form yet.
