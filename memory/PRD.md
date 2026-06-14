@@ -57,7 +57,22 @@ Unify the AI brain and empower it with unified toolset. Fix mocked AI Trading Bo
   - **Per-village deterministic fingerprint seeds** (`fingerprint_seed(vid)`)
     so each village has consistent identity across sessions.
   - **Human Bezier mouse + typing** (`bezier_curve`, `human_move_to`, `human_type`).
-- 🟢 **NEW (2026-02) v0.3.0**: Zenrex Farm — Production-grade Multi-Village Engine
+- 🟢 **NEW (2026-02) v0.4.0**: Zenrex Farm — Complete Travian Strategy Engine
+  - **Updated default strategy** with smart rules:
+    - `storage_rules`: cranny_min=20000, cranny_target=50000, **cranny_ratio=1.2**
+      (cranny capacity ≥ 1.2 × warehouse) — protects loot
+    - `raid_rules`: scan_radius=30, max_target_pop=100, first_strike=2 troops,
+      spy_first=true, skip_spy_if_ally_attacking=true, split_troops=true
+    - `attack_units` + `defense_units` per-tribe (5 tribes × 2 units each)
+    - Phase ordering fixed: **Cranny BEFORE Warehouse/Granary** (loot protection)
+  - **Defense send v2**: `mode: "all" | "spec"` with per-tribe troop_spec
+  - **Attack scan endpoint** `/api/attack/scan` — defines bounding box + filters
+  - **Attack raid endpoint** `/api/attack/raid` — spy-then-strike logic
+  - **Travian registration endpoint** `/api/villages/{id}/register-travian`
+    with `dry_run=true` for pre-flight checks + full Playwright form-fill flow
+    (selectors for name/email/password/tribe/region/TOS/submit)
+  - **Browser launcher v2** — returns proxy/tribe info, proper error handling
+  - All endpoints tested via curl: health, strategy, defense plan, dry-run register
   - **101 villages PROVEN created** (1 personal + 100 bot in NW region)
     - Distribution: 21 Romans / 15 Gauls / 21 Teutons / 27 Egyptians / 17 Huns
     - All bot villages in NW quadrant (coords x<0, y>0) — region selection works

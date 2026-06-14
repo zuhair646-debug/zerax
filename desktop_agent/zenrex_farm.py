@@ -59,7 +59,7 @@ import uvicorn
 
 # ─── Config ──────────────────────────────────────────────────────────────────
 APP_NAME = "Zenrex Farm"
-APP_VERSION = "0.3.0"
+APP_VERSION = "0.4.0"
 PORT = 7870
 
 ROOT = Path(os.environ.get(
@@ -1356,6 +1356,37 @@ async def api_pool_config(request: Request):
 DEFAULT_STRATEGY = {
     "name": "default",
     "description": "ابني الإنتاج + المخابئ + قمح أولاً، ثم خلّص المهمات وخذ المكافآت",
+    # Smart storage rule: cranny must always cover stockpile (loot protection)
+    "storage_rules": {
+        "cranny_min_capacity":    20000,   # min loot-protection per village
+        "cranny_target_capacity": 50000,
+        "warehouse_target_level": 10,      # caps at level 20 (80k/120k)
+        "granary_target_level":   10,
+        "cranny_ratio":           1.2,     # cranny capacity ≥ 1.2 × warehouse
+    },
+    "raid_rules": {
+        "enabled":            True,
+        "scan_radius":        30,            # fields N/S/E/W from village
+        "max_target_pop":     100,           # only farm small villages
+        "first_strike_units": 2,             # send 2 troops to probe
+        "spy_first":          True,          # send a scout first
+        "skip_spy_if_ally_attacking": True,  # piggy-back on ally attacks
+        "split_troops":       True,          # divide forces among multiple targets
+    },
+    "attack_units": {
+        "ROMANS":    ["Equites Imperatoris", "Imperian"],
+        "GAULS":     ["Theutates Thunder", "Swordsman"],
+        "TEUTONS":   ["Paladin", "Clubswinger"],
+        "EGYPTIANS": ["Sopdu Explorer", "Ash Warden"],
+        "HUNS":      ["Steppe Rider", "Bowman"],
+    },
+    "defense_units": {
+        "ROMANS":    ["Praetorian", "Legionnaire"],
+        "GAULS":     ["Phalanx", "Druidrider"],
+        "TEUTONS":   ["Spearman", "Paladin"],
+        "EGYPTIANS": ["Ash Warden", "Khopesh Warrior"],
+        "HUNS":      ["Spotter", "Bowman"],
+    },
     "phases": [
         {"name": "phase-1-resources", "until_day": 3, "actions": [
             {"build": "Woodcutter", "to_level": 5},
@@ -1365,19 +1396,21 @@ DEFAULT_STRATEGY = {
             {"quest": "complete_all_tutorial"},
         ]},
         {"name": "phase-2-storage", "until_day": 5, "actions": [
+            {"build": "Cranny",     "to_level": 10},   # FIRST (loot protection)
             {"build": "Warehouse",  "to_level": 5},
             {"build": "Granary",    "to_level": 5},
-            {"build": "Cranny",     "to_level": 10},
             {"quest": "collect_all_rewards"},
         ]},
         {"name": "phase-3-army", "until_day": 10, "actions": [
             {"build": "Barracks",   "to_level": 3},
             {"build": "Wall",       "to_level": 5},
             {"build": "Embassy",    "to_level": 1},
+            {"train": "defense_units", "count_per_day": 20},
         ]},
         {"name": "phase-4-economy", "until_day": 20, "actions": [
             {"build": "Marketplace","to_level": 5},
             {"build": "MainBuilding","to_level": 10},
+            {"raid": {"enabled": True, "frequency_hours": 2}},
             {"transfer_to_personal": {"enabled": True, "min_resource": 5000}},
         ]},
     ],
@@ -1466,22 +1499,91 @@ async def api_alliance_create(request: Request):
 
 @app.post("/api/defense/send")
 async def api_defense_send(request: Request):
-    """Send defensive troops from all bot villages to a target (usually personal)."""
+    """Send defensive troops from all bot villages to a target (usually personal).
+
+    Body: {
+      server: str,
+      target_x: int, target_y: int,
+      mode: "all" | "spec",                # all = send everything, spec = use troop_spec
+      troop_spec: {ROMANS: {Praetorian: 50, Legionnaire: 20}, GAULS: {...}, ...}
+    }
+    """
     body = await request.json()
     server = body.get("server", "")
     target_x = int(body.get("target_x", 0))
     target_y = int(body.get("target_y", 0))
+    mode = body.get("mode", "all")
+    troop_spec = body.get("troop_spec", {})
     with db_cur() as cur:
         sources = cur.execute(
-            "SELECT id, name, coords_x, coords_y FROM villages "
+            "SELECT id, name, tribe, coords_x, coords_y FROM villages "
             "WHERE server = ? AND is_personal = 0 "
             "AND state IN ('registered','active')", (server,)).fetchall()
+    dispatch = []
+    for s in sources:
+        s = dict(s)
+        tribe = s.get("tribe", "ROMANS")
+        if mode == "all":
+            s["plan"] = "send_all_defense_units"
+        else:
+            s["plan"] = troop_spec.get(tribe, {})
+        dispatch.append(s)
     return {
         "ok": True, "feasible": bool(sources), "executable": False,
         "target": {"x": target_x, "y": target_y},
+        "mode": mode,
         "sources_count": len(sources),
-        "sources": [dict(s) for s in sources[:20]],
+        "dispatch": dispatch[:20],
         "executable_reason": "needs registered villages + Playwright (Phase 2)",
+    }
+
+
+@app.post("/api/attack/scan")
+async def api_attack_scan(request: Request):
+    """Scan the map around a village for small target villages to raid.
+
+    Body: {village_id, radius=30, max_pop=100}
+    Returns candidate targets (Phase 2 will scrape /karte.php from in-game).
+    """
+    body = await request.json()
+    vid = body.get("village_id", "")
+    radius = int(body.get("radius", 30))
+    max_pop = int(body.get("max_pop", 100))
+    v = get_village(vid)
+    if not v:
+        raise HTTPException(404, "village not found")
+    cx, cy = v.get("coords_x") or 0, v.get("coords_y") or 0
+    return {
+        "ok": True, "executable": False,
+        "village": {"id": vid, "name": v["name"], "coords": (cx, cy)},
+        "scan_area": {
+            "x_range": [cx - radius, cx + radius],
+            "y_range": [cy - radius, cy + radius],
+            "fields_count": (2 * radius + 1) ** 2,
+        },
+        "filters": {"max_pop": max_pop},
+        "executable_reason": "needs Playwright + Travian map API scraping",
+    }
+
+
+@app.post("/api/attack/raid")
+async def api_attack_raid(request: Request):
+    """Plan a raid: scout first (unless ally is attacking), then dispatch troops
+    based on the spy report. Phase-2 stub."""
+    body = await request.json()
+    return {
+        "ok": True, "executable": False,
+        "village_id": body.get("village_id"),
+        "target": {"x": body.get("target_x"), "y": body.get("target_y")},
+        "plan": [
+            "1. send_spy(level_3_scout) → wait 30s for report",
+            "2. parse_report() → get enemy_troops + resources",
+            "3. if ally_pre_attacking(target) → skip spy, attack directly",
+            "4. calculate_troops_needed(enemy_defense, target_loot)",
+            "5. send_raid(units=calculated)",
+            "6. log_loot_to_db()",
+        ],
+        "executable_reason": "needs registered village + Playwright (Phase 2)",
     }
 
 
@@ -1503,23 +1605,6 @@ def api_get_village(vid: str):
     return v
 
 
-@app.post("/api/villages/{vid}/open-browser")
-async def api_open_browser(vid: str):
-    """Open the Playwright browser for this village (visible window)."""
-    v = get_village(vid)
-    if not v:
-        raise HTTPException(404, "village not found")
-    try:
-        ctx, page = await FARM.open(v)
-        await page.goto(f"https://{v['server']}", wait_until="domcontentloaded")
-        log_event(vid, "open_browser", f"navigated to {v['server']}")
-        update_village_state(vid, "browser_open")
-        return {"ok": True, "village": vid}
-    except Exception as e:
-        log_event(vid, "error", f"open_browser: {e}")
-        return JSONResponse({"ok": False, "error": str(e)}, status_code=500)
-
-
 @app.post("/api/proxies/refresh-free")
 async def api_refresh_free_proxies(request: Request):
     """Pull fresh free proxies from public sources, test them, save the live ones."""
@@ -1533,6 +1618,130 @@ async def api_refresh_free_proxies(request: Request):
         PROXIES_FILE.write_text("\n".join(merged) + "\n", encoding="utf-8")
     return {"ok": True, "found_alive": len(alive),
             "total_now": len(load_proxies())}
+
+
+@app.post("/api/villages/{vid}/open-browser")
+async def api_open_browser(vid: str):
+    """Open the Playwright browser for this village (visible window).
+    The browser stays open until the user closes it manually.
+    """
+    v = get_village(vid)
+    if not v:
+        raise HTTPException(404, "village not found")
+    try:
+        ctx, page = await FARM.open(v)
+        # Navigate to server homepage (login form)
+        url = (f"https://{v['server']}" if not v['server'].startswith("http")
+               else v['server'])
+        try:
+            await page.goto(url, wait_until="domcontentloaded", timeout=30000)
+        except Exception:
+            pass
+        log_event(vid, "open_browser",
+                  f"navigated to {url} | proxy={v['proxy'] or 'direct'}")
+        update_village_state(vid, "browser_open")
+        return {"ok": True, "village": vid, "url": url,
+                "proxy": v["proxy"] or None, "tribe": v.get("tribe")}
+    except Exception as e:
+        log_event(vid, "error", f"open_browser: {e}")
+        return JSONResponse({"ok": False, "error": str(e)}, status_code=500)
+
+
+@app.post("/api/villages/{vid}/register-travian")
+async def api_register_travian(vid: str, request: Request):
+    """Auto-register this village in Travian. Phase 2 — uses Playwright to fill
+    the signup form + verify email via mail.tm.
+
+    Body: {dry_run: bool}  — when True, only validates pre-conditions.
+    """
+    v = get_village(vid)
+    if not v:
+        raise HTTPException(404, "village not found")
+    body = await request.json() if request.headers.get("content-length") else {}
+    dry_run = bool(body.get("dry_run", True))
+
+    # Pre-flight checks
+    issues = []
+    if not v.get("email"):
+        issues.append("no email attached — call attach-email first")
+    if "@example.local" in (v.get("email") or ""):
+        issues.append("placeholder email — needs real mailbox")
+    if not v.get("tribe"):
+        issues.append("tribe not set")
+    if v.get("state") != "created":
+        issues.append(f"state must be 'created' (is '{v.get('state')}')")
+
+    if dry_run or issues:
+        return {
+            "ok": not issues, "dry_run": True, "village": vid,
+            "village_name": v["name"], "tribe": v.get("tribe"),
+            "email": v.get("email"), "region": v.get("region"),
+            "coords": (v.get("coords_x"), v.get("coords_y")),
+            "issues": issues,
+            "ready": not issues,
+        }
+
+    # Real execution (Phase 2 — requires testing on ONE village first)
+    try:
+        ctx, page = await FARM.open(v)
+        url = f"https://{v['server']}/register.php"
+        await page.goto(url, wait_until="domcontentloaded", timeout=60000)
+        await asyncio.sleep(human_pause())
+
+        # Fill form (selectors may need adjusting per Travian version)
+        await human_type(page, "input[name='name']", v["name"])
+        await human_type(page, "input[name='email']", v["email"])
+        await human_type(page, "input[name='password']", v["password"])
+        await human_type(page, "input[name='password2']", v["password"])
+
+        # Pick tribe (1=Romans, 2=Teutons, 3=Gauls, 6=Egyptians, 7=Huns)
+        tribe_map = {"ROMANS": 1, "TEUTONS": 2, "GAULS": 3,
+                     "EGYPTIANS": 6, "HUNS": 7}
+        tribe_id = tribe_map.get(v.get("tribe", "ROMANS"), 1)
+        await page.click(f"input[name='tribe'][value='{tribe_id}']")
+        await asyncio.sleep(human_pause())
+
+        # Pick region (NW=1, NE=2, SW=3, SE=4 — approximate, may vary)
+        region_map = {"NW": 1, "NE": 2, "SW": 3, "SE": 4, "ANY": 5}
+        region_id = region_map.get(v.get("region", "ANY"), 5)
+        try:
+            await page.click(f"input[name='start'][value='{region_id}']")
+        except Exception:
+            pass
+
+        # Accept TOS
+        for tos_sel in ["input[name='agb']", "input[name='tos']",
+                        "input#agb", "input[type='checkbox']"]:
+            try:
+                await page.check(tos_sel)
+                break
+            except Exception:
+                continue
+
+        # Submit
+        await asyncio.sleep(human_pause())
+        for submit_sel in ["button[type='submit']", "input[type='submit']",
+                           "button#registerSubmit", "button.green"]:
+            try:
+                await page.click(submit_sel)
+                break
+            except Exception:
+                continue
+
+        await asyncio.sleep(5)
+        log_event(vid, "register_submitted",
+                  f"form submitted at {url} — waiting for activation email")
+        update_village_state(vid, "registration_pending")
+
+        return {
+            "ok": True, "dry_run": False, "village": vid,
+            "status": "form_submitted",
+            "next_step": "poll mail.tm inbox for activation link",
+        }
+    except Exception as e:
+        log_event(vid, "register_failed", str(e))
+        return JSONResponse({"ok": False, "error": str(e),
+                             "village": vid}, status_code=500)
 
 
 @app.post("/api/villages/{vid}/attach-email")
