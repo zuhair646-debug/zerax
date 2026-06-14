@@ -503,8 +503,12 @@ LOBBY_COOKIE_SELECTORS = [
     "button[mode='primary']:has-text('Akzeptieren')",
 ]
 LOBBY_EMAIL_SELECTORS = [
+    # Travian lobby uses input[name="name"] for the email/account field
+    "input[name='name']:not([type='hidden'])",
+    "input[placeholder*='Email' i]", "input[placeholder*='account' i]",
     "input[name='email']", "input[type='email']", "#email",
-    "input[autocomplete='email']", "input[placeholder*='mail' i]",
+    "input[autocomplete='email']", "input[autocomplete='username']",
+    "input[placeholder*='mail' i]",
 ]
 LOBBY_PASS_SELECTORS = [
     "input[name='password']", "input[type='password']", "#password",
