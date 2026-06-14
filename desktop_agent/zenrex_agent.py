@@ -34,6 +34,13 @@ import os
 import platform
 import subprocess
 import sys
+
+# Force UTF-8 stdout on Windows so emoji/non-ASCII in prints don't crash
+try:
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+    sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+except Exception:
+    pass
 import time
 import urllib.request
 from pathlib import Path
@@ -830,11 +837,11 @@ def main():
     server = args.server or _load_config_server()
 
     print("=" * 64)
-    print(f"🤖 Zenrex Desktop Agent v0.8.1 — {platform.system()} {platform.machine()}")
+    print(f"[ZENREX] Zenrex Desktop Agent v0.8.1 - {platform.system()} {platform.machine()}")
     print(f"   Server:    {server}")
     print(f"   Screen:    {pyautogui.size()}")
     print(f"   Downloads: {DOWNLOADS_DIR}")
-    print(f"   Shell exec: {'ENABLED ⚠️ ' if _SHELL_ENABLED else 'disabled (safe)'}")
+    print(f"   Shell exec: {'ENABLED [!] ' if _SHELL_ENABLED else 'disabled (safe)'}")
     print("   FAILSAFE:  Move mouse to top-left corner to abort any action.")
     print("=" * 64)
 
