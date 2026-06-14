@@ -115,7 +115,7 @@ K "Start menu entry added"
 # 9) Done
 Write-Host ""
 Write-Host "==========================================" -ForegroundColor Yellow
-Write-Host "  [+] Zenrex Farm v0.6.0 READY!" -ForegroundColor Yellow
+Write-Host "  [+] Zenrex Farm READY!" -ForegroundColor Yellow
 Write-Host "==========================================" -ForegroundColor Yellow
 Write-Host "  Path:  $InstallDir"
 Write-Host "  Run:   Double-click 'Zenrex Farm' on Desktop"
