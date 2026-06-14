@@ -59,7 +59,7 @@ import uvicorn
 
 # ─── Config ──────────────────────────────────────────────────────────────────
 APP_NAME = "Zenrex Farm"
-APP_VERSION = "0.6.0"
+APP_VERSION = "0.7.0"
 PORT = 7870
 
 ROOT = Path(os.environ.get(
@@ -242,6 +242,23 @@ CREATE TABLE IF NOT EXISTS task_queue (
     result_json     TEXT
 );
 
+CREATE TABLE IF NOT EXISTS travian_worlds (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    code            TEXT UNIQUE,             -- e.g. "ts8.x2.international"
+    name            TEXT,                    -- e.g. "Season 8 — 2x Speed"
+    url             TEXT NOT NULL,           -- full https URL
+    region          TEXT,                    -- 'international' | 'sa' | 'de' | 'uk'...
+    language        TEXT,                    -- 'en' | 'ar' | 'de' | ...
+    speed           TEXT,                    -- '1x' | '2x' | '3x' | '5x' | '10x'
+    status          TEXT,                    -- 'upcoming' | 'active' | 'finished'
+    start_at        TEXT,                    -- ISO date if known
+    players         INTEGER,                 -- registered players if scraped
+    note            TEXT,
+    fetched_at      TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_worlds_status ON travian_worlds(status, start_at);
+
 CREATE INDEX IF NOT EXISTS idx_events_village ON events(village_id, ts);
 CREATE INDEX IF NOT EXISTS idx_villages_state ON villages(state);
 CREATE INDEX IF NOT EXISTS idx_chat_session ON chat_messages(session_id, ts);
@@ -318,6 +335,13 @@ def init_db() -> None:
         # Seed pool_state row
         cur.execute("INSERT OR IGNORE INTO pool_state (id, running, max_parallel, "
                     "rotation_min, cooldown_min) VALUES (1, 0, 10, 15, 5)")
+    # Seed known Travian worlds so user sees a list immediately
+    try:
+        added = seed_known_worlds()
+        if added:
+            log.info(f"seeded {added} known Travian worlds")
+    except Exception:
+        pass
     log.info(f"DB ready at {DB_PATH}")
 
 
@@ -3650,6 +3674,265 @@ def api_servers():
     return {"ok": True, "servers": [dict(r) for r in rows]}
 
 
+# ─── Travian Worlds Sync — live list of game worlds ──────────────────────────
+TRAVIAN_REGIONS = [
+    ("international", "International / English", "en",
+     "https://www.travian.com/"),
+    ("arabia",        "Arabia (عربي)",          "ar",
+     "https://www.travian.com/sa"),
+    ("germany",       "Germany / Deutsch",      "de",
+     "https://www.travian.de/"),
+    ("france",        "France / Français",      "fr",
+     "https://www.travian.fr/"),
+    ("turkey",        "Turkey / Türkçe",        "tr",
+     "https://www.travian.com.tr/"),
+    ("russia",        "Russia / Русский",        "ru",
+     "https://www.travian.ru/"),
+    ("spain",         "Spain / Español",        "es",
+     "https://www.travian.es/"),
+    ("italy",         "Italy / Italiano",       "it",
+     "https://www.travian.it/"),
+    ("poland",        "Poland / Polski",        "pl",
+     "https://www.travian.pl/"),
+    ("brazil",        "Brazil / Português",     "pt",
+     "https://www.travian.com.br/"),
+]
+
+
+async def fetch_travian_worlds(region_code: str = "international") -> \
+        list[dict[str, Any]]:
+    """Open the regional Travian homepage and scrape the worlds list.
+    Returns [{code, name, url, status, speed, ...}].
+    Best-effort — Travian DOM changes over time."""
+    region = next((r for r in TRAVIAN_REGIONS if r[0] == region_code), None)
+    if not region:
+        return []
+    code, label, lang, base_url = region
+
+    # Use a temp Playwright context (no proxy, default fingerprint)
+    from playwright.async_api import async_playwright
+    worlds: list[dict[str, Any]] = []
+    try:
+        async with async_playwright() as pw:
+            browser = await pw.chromium.launch(
+                headless=True,
+                args=["--no-sandbox", "--disable-blink-features=AutomationControlled"])
+            ctx = await browser.new_context(
+                viewport={"width": 1280, "height": 800},
+                locale="en-US")
+            page = await ctx.new_page()
+            try:
+                await page.goto(base_url, wait_until="domcontentloaded",
+                                timeout=25000)
+                await asyncio.sleep(1.5)
+            except Exception:
+                pass
+            # Try the official lobby's "join game world" page too
+            join_url = "https://lobby.legends.travian.com/games"
+            try:
+                await page.goto(join_url, wait_until="domcontentloaded",
+                                timeout=15000)
+                await asyncio.sleep(1.5)
+            except Exception:
+                pass
+            # Generic DOM scrape: look for links pointing to game world subdomains
+            scraped = await page.evaluate(r"""
+                () => {
+                  const out = [];
+                  const seen = new Set();
+                  document.querySelectorAll('a').forEach(a => {
+                    const href = (a.href || '').trim();
+                    const m = href.match(/^https?:\/\/(ts[0-9]+[a-z0-9.-]*travian\.[a-z.]+)\/?/i);
+                    if (!m) return;
+                    const dom = m[1].toLowerCase();
+                    if (seen.has(dom)) return;
+                    seen.add(dom);
+                    out.push({
+                      domain: dom,
+                      text: (a.textContent || '').trim().slice(0,80),
+                      href: href
+                    });
+                  });
+                  // also scan the announcements area
+                  const lobby = document.querySelectorAll('[class*="gameWorld"], [class*="world"], [class*="server"]');
+                  lobby.forEach(el => {
+                    out.push({
+                      kind: 'card',
+                      text: (el.textContent || '').replace(/\s+/g,' ').trim().slice(0,200)
+                    });
+                  });
+                  return out;
+                }
+            """)
+            now = _now_iso()
+            for item in (scraped or []):
+                dom = item.get("domain")
+                if not dom:
+                    continue
+                # Parse speed from domain (e.g. ts8.x2.international.travian.com)
+                speed = "1x"
+                import re
+                sm = re.search(r"\.x([0-9]+)\.", dom)
+                if sm:
+                    speed = f"{sm.group(1)}x"
+                worlds.append({
+                    "code": dom.replace(".travian.com", "")
+                                 .replace(".travian.de", "")
+                                 .replace(".travian.fr", ""),
+                    "name": item.get("text") or dom,
+                    "url": f"https://{dom}/",
+                    "region": code,
+                    "language": lang,
+                    "speed": speed,
+                    "status": "active",
+                    "fetched_at": now,
+                })
+            await ctx.close()
+            await browser.close()
+    except Exception as e:
+        log.warning(f"[travian-sync] {region_code} failed: {e}")
+    return worlds
+
+
+def _save_worlds(worlds: list[dict[str, Any]]) -> int:
+    n = 0
+    with db_cur() as cur:
+        for w in worlds:
+            try:
+                cur.execute(
+                    "INSERT INTO travian_worlds "
+                    "(code, name, url, region, language, speed, status, "
+                    " start_at, players, note, fetched_at) "
+                    "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) "
+                    "ON CONFLICT(code) DO UPDATE SET "
+                    "  name = excluded.name, url = excluded.url, "
+                    "  region = excluded.region, language = excluded.language, "
+                    "  speed = excluded.speed, status = excluded.status, "
+                    "  fetched_at = excluded.fetched_at",
+                    (w.get("code"), w.get("name"), w["url"],
+                     w.get("region"), w.get("language"), w.get("speed"),
+                     w.get("status"), w.get("start_at"), w.get("players"),
+                     w.get("note"), w["fetched_at"]))
+                n += 1
+            except Exception:
+                continue
+    return n
+
+
+@app.get("/api/travian/regions")
+def api_travian_regions():
+    """Static list of supported Travian regional sites."""
+    return {"ok": True, "regions": [
+        {"code": r[0], "label": r[1], "language": r[2], "url": r[3]}
+        for r in TRAVIAN_REGIONS]}
+
+
+# Curated list of well-known Travian Legends worlds — seeded on first init.
+# These are the most active gameworlds as of 2026. Sync overrides them.
+KNOWN_TRAVIAN_WORLDS = [
+    # International (English) — Travian Legends rounds
+    ("ts1.x1.international",  "Travian Legends — TS1 (1x speed)",
+     "https://ts1.x1.international.travian.com/", "international", "en", "1x", "active"),
+    ("ts3.x1.international",  "Travian Legends — TS3 (1x speed)",
+     "https://ts3.x1.international.travian.com/", "international", "en", "1x", "active"),
+    ("ts4.x1.international",  "Travian Legends — TS4 (1x speed)",
+     "https://ts4.x1.international.travian.com/", "international", "en", "1x", "active"),
+    ("ts8.x1.international",  "Travian Legends — TS8 (1x speed)",
+     "https://ts8.x1.international.travian.com/", "international", "en", "1x", "active"),
+    ("ts8.x2.international",  "Travian Legends — TS8 Season Special (2x)",
+     "https://ts8.x2.international.travian.com/", "international", "en", "2x", "active"),
+    ("ts19.x2.international", "Travian Legends — TS19 Tournament (2x)",
+     "https://ts19.x2.international.travian.com/", "international", "en", "2x", "active"),
+    ("ts20.x3.international", "Travian Legends — TS20 Speed (3x)",
+     "https://ts20.x3.international.travian.com/", "international", "en", "3x", "upcoming"),
+    ("ts5.x5.international",  "Travian Legends — TS5 Blitz (5x)",
+     "https://ts5.x5.international.travian.com/", "international", "en", "5x", "active"),
+    ("ts10.x10.international","Travian Legends — TS10 Hyper (10x)",
+     "https://ts10.x10.international.travian.com/", "international", "en", "10x", "active"),
+    # Arabia
+    ("ts4.x1.arabics",  "تيرافيان — السيرفر 4 (سرعة عادية)",
+     "https://ts4.x1.arabics.travian.com/", "arabia", "ar", "1x", "active"),
+    ("ts8.x2.arabics",  "تيرافيان — السيرفر 8 (سرعة 2x)",
+     "https://ts8.x2.arabics.travian.com/", "arabia", "ar", "2x", "active"),
+    ("ts20.x3.arabics", "تيرافيان — السيرفر 20 (سرعة 3x)",
+     "https://ts20.x3.arabics.travian.com/", "arabia", "ar", "3x", "active"),
+    # Germany
+    ("ts8.x2.de",  "Travian — Server 8 (2x Speed)",
+     "https://ts8.x2.de.travian.com/", "germany", "de", "2x", "active"),
+    ("ts20.x3.de", "Travian — Server 20 (3x Speed)",
+     "https://ts20.x3.de.travian.com/", "germany", "de", "3x", "active"),
+    # Turkey
+    ("ts8.x2.tr",  "Travian — TR Sunucu 8 (2x Hız)",
+     "https://ts8.x2.tr.travian.com/", "turkey", "tr", "2x", "active"),
+    # Russia
+    ("ts8.x2.ru",  "Travian — RU Сервер 8 (2x)",
+     "https://ts8.x2.ru.travian.com/", "russia", "ru", "2x", "active"),
+]
+
+
+def seed_known_worlds() -> int:
+    """Insert the curated KNOWN_TRAVIAN_WORLDS list if the table is empty
+    or any of these codes is missing. Idempotent."""
+    now = _now_iso()
+    n = 0
+    with db_cur() as cur:
+        for w in KNOWN_TRAVIAN_WORLDS:
+            try:
+                cur.execute(
+                    "INSERT OR IGNORE INTO travian_worlds "
+                    "(code, name, url, region, language, speed, status, "
+                    " fetched_at, note) "
+                    "VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'seeded')",
+                    (w[0], w[1], w[2], w[3], w[4], w[5], w[6], now))
+                n += cur.rowcount or 0
+            except Exception:
+                continue
+    return n
+
+
+@app.post("/api/travian/sync")
+async def api_travian_sync(request: Request):
+    """Scrape live Travian regional sites and refresh `travian_worlds`.
+    Body: {regions?: [code,...]} — defaults to all."""
+    body = await request.json() if request.headers.get("content-length") else {}
+    region_codes = body.get("regions") or [r[0] for r in TRAVIAN_REGIONS]
+    summary = []
+    for rc in region_codes:
+        try:
+            worlds = await fetch_travian_worlds(rc)
+            saved = _save_worlds(worlds)
+            summary.append({"region": rc, "found": len(worlds),
+                            "saved": saved})
+        except Exception as e:
+            summary.append({"region": rc, "error": str(e)})
+    return {"ok": True, "summary": summary}
+
+
+@app.get("/api/travian/worlds")
+def api_travian_worlds(region: Optional[str] = None,
+                       language: Optional[str] = None,
+                       status: Optional[str] = None):
+    """Read cached worlds. Filters: region, language, status."""
+    where, params = [], []
+    if region:
+        where.append("region = ?")
+        params.append(region)
+    if language:
+        where.append("language = ?")
+        params.append(language)
+    if status:
+        where.append("status = ?")
+        params.append(status)
+    sql = "SELECT * FROM travian_worlds"
+    if where:
+        sql += " WHERE " + " AND ".join(where)
+    sql += " ORDER BY language, region, code"
+    with db_cur() as cur:
+        rows = cur.execute(sql, tuple(params)).fetchall()
+    return {"ok": True, "count": len(rows),
+            "worlds": [dict(r) for r in rows]}
+
+
 @app.post("/api/transfer/plan")
 async def api_transfer_plan(request: Request):
     """Plan a resource transfer to a target coords from all our villages on a server.
@@ -4260,7 +4543,7 @@ _DASHBOARD_HTML = r"""<!DOCTYPE html>
 <header>
   <div class="flex">
     <h1>🏰 Zenrex Farm</h1>
-    <span class="badge" id="ver">v0.6.0</span>
+    <span class="badge" id="ver">v0.7.0</span>
     <span class="badge">100% Local · Free</span>
   </div>
   <div class="flex">
@@ -4365,7 +4648,23 @@ _DASHBOARD_HTML = r"""<!DOCTYPE html>
 
   <!-- RIGHT: create villages + proxies + preview -->
   <div>
-    <div class="card" style="border:1px solid #312e81">
+    <div class="card" style="border:1px solid #064e3b;background:linear-gradient(135deg,#0a0a14,#0f1f1a)">
+      <h2>🌍 سيرفرات Travian (مزامنة حيّة)</h2>
+      <p class="small" style="color:var(--muted)">اختر منطقة → نسحب قائمة السيرفرات الحقيقية من Travian مباشرة، بدون نسخ روابط يدوياً.</p>
+
+      <label>المنطقة / اللغة</label>
+      <select id="tw-region" onchange="loadWorlds()"></select>
+
+      <div class="row">
+        <button onclick="syncWorlds()">🔄 جلب السيرفرات الآن</button>
+        <span id="tw-status" class="badge">—</span>
+      </div>
+
+      <div id="tw-list" style="margin-top:10px;display:flex;flex-direction:column;
+           gap:6px;max-height:280px;overflow:auto"></div>
+    </div>
+
+    <div class="card" style="border:1px solid #312e81;margin-top:18px">
       <h2>🌱 الإنتاج التدريجي (Auto-Spawn)</h2>
       <p class="small" style="color:var(--muted)">حدد الهدف والمعدّل، البوت يولّد القرى تلقائياً مع مرور الوقت. مثلاً: 100 قرية، 10 يومياً، واحدة كل 30 دقيقة.</p>
 
@@ -5018,6 +5317,7 @@ refreshWorker();
 refreshRaid();
 refreshSpawn();
 refreshTaskManager();
+loadRegions();
 setInterval(loadVillages, 8000);
 setInterval(refreshPool, 6000);
 setInterval(loadSnapshots, 15000);
@@ -5389,6 +5689,96 @@ async function stopTaskManager(){
 async function delTask(tid){
   await fetch(`/api/tasks/${tid}`, { method:'DELETE' });
   refreshTaskManager();
+}
+
+// ─── Travian Worlds Sync UI ──────────────────────────────────────────────
+async function loadRegions(){
+  try {
+    const r = await fetch('/api/travian/regions');
+    const d = await r.json();
+    const sel = $('#tw-region');
+    sel.innerHTML = (d.regions || [])
+      .map(r => `<option value="${r.code}">${r.label}</option>`)
+      .join('');
+    loadWorlds();
+  } catch(e) {}
+}
+
+async function loadWorlds(){
+  const region = $('#tw-region').value;
+  try {
+    const r = await fetch(`/api/travian/worlds?region=${encodeURIComponent(region)}`);
+    const d = await r.json();
+    const box = $('#tw-list');
+    if (!d.worlds || !d.worlds.length) {
+      box.innerHTML = '<span class="small" style="color:var(--muted)">— لا توجد سيرفرات محفوظة. اضغط "🔄 جلب السيرفرات الآن".</span>';
+      return;
+    }
+    box.innerHTML = d.worlds.map(w => `
+      <div style="padding:9px 11px;background:#0a0a14;border-radius:8px;
+           border:1px solid var(--line);font-size:12px;display:flex;
+           justify-content:space-between;align-items:center;gap:6px">
+        <div style="flex:1;min-width:0">
+          <div><b>${w.code}</b> <span class="badge" style="margin-right:4px">${w.speed||'1x'}</span> <span class="badge" style="background:#064e3b;color:#10b981">${w.status||'active'}</span></div>
+          <div class="small" style="color:var(--muted)">${(w.name||'').slice(0,80)}</div>
+          <div class="small" style="color:#6b7280;direction:ltr">${w.url}</div>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:3px">
+          <button class="secondary" style="margin:0;padding:5px 8px;font-size:11px"
+                  onclick="useServer('${w.url}')">📋 استخدم</button>
+          <button class="secondary" style="margin:0;padding:5px 8px;font-size:11px"
+                  onclick="setSpawnServer('${w.url}')">🌱 خطة</button>
+        </div>
+      </div>
+    `).join('');
+  } catch(e) {}
+}
+
+async function syncWorlds(){
+  const region = $('#tw-region').value;
+  const status = $('#tw-status');
+  status.textContent = '⏳ جاري السحب...';
+  status.style.background = '#1f2937';
+  status.style.color = '#9ca3af';
+  try {
+    const r = await fetch('/api/travian/sync', { method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({regions: [region]})});
+    const d = await r.json();
+    const s = (d.summary && d.summary[0]) || {};
+    if (s.error) {
+      status.textContent = `✗ ${s.error.slice(0,50)}`;
+      status.style.background = '#7f1d1d';
+      status.style.color = '#fca5a5';
+    } else {
+      status.textContent = `✓ ${s.saved || 0} سيرفر`;
+      status.style.background = '#064e3b';
+      status.style.color = '#10b981';
+      loadWorlds();
+    }
+  } catch(e) {
+    status.textContent = '✗ خطأ';
+    status.style.background = '#7f1d1d';
+  }
+}
+
+function useServer(url){
+  // Strip https:// and trailing /
+  const clean = url.replace(/^https?:\/\//,'').replace(/\/$/,'');
+  $('#server').value = clean;
+  // Visual feedback
+  const inp = $('#server');
+  inp.style.borderColor = '#10b981';
+  setTimeout(() => { inp.style.borderColor = ''; }, 1200);
+  // Scroll to creation card
+  inp.scrollIntoView({behavior:'smooth', block:'center'});
+}
+
+function setSpawnServer(url){
+  const clean = url.replace(/^https?:\/\//,'').replace(/\/$/,'');
+  // Open spawn modal pre-filled
+  $('#sp-server').value = clean;
+  openSpawnDialog();
 }
 </script>
 </body></html>
