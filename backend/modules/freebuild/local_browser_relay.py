@@ -1049,7 +1049,16 @@ async def desktop_agent_ws(ws: WebSocket, code: str = Query(...)):
             # Different machine OR different version. Prefer the NEWER version.
             prev_ver = _version_tuple(prev_info.get("agent_version", ""))
             new_ver = _version_tuple(new_info.get("agent_version", ""))
-            if new_ver > prev_ver and prev_info.get("user") == new_info.get("user"):
+            # Allow upgrade if either (a) same user with newer version, OR
+            # (b) the new agent reports a version while the previous one didn't
+            # (i.e., legacy GUI vs new CLI — the new one is preferred even if
+            # the username differs, because we expect the user to want their
+            # newer install to take over).
+            prev_user = prev_info.get("user")
+            new_user = new_info.get("user")
+            same_user_upgrade = (new_ver > prev_ver and prev_user == new_user)
+            legacy_replacement = (new_ver > (0,) and prev_ver == (0,))
+            if same_user_upgrade or legacy_replacement:
                 # Newer version on same user => upgrade: kick old, accept new
                 try:
                     await prev.close(code=4000)
