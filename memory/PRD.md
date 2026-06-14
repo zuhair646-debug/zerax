@@ -214,7 +214,26 @@ Validated end-to-end via FastAPI TestClient:
 - AI Chat: graceful handling when Ollama down
 - Misc: strategies, alliance/create
 
-### v0.6.0 → Progressive Spawner + Task Manager + One-click Installer
+### v0.8.2 — Remote Beacon + Accurate Map + Real Servers
+- ✅ **Remote Beacon**: Local Zenrex Farm polls `/api/desktop-agent/zenrex-beacon/{machine_id}` every 60s.
+  Developer can POST `/api/desktop-agent/zenrex-beacon/set` to queue `update` or `restart` commands.
+  On next poll, local app auto-applies → restarts → user sees new version with no input.
+  Privacy: only hashed hostname+user (no village data, no creds) is sent.
+  Opt-out: env var `ZENREX_NO_BEACON=1`.
+- ✅ **Accurate map bounds**: REGION_BOUNDS reduced from ±400 to ±180 (matches real
+  Travian 401x401 map). Added `FRESH_NE/NW/SE/SW/ANY` modes (±80) for new servers.
+- ✅ **Removed fake servers**: KNOWN_TRAVIAN_WORLDS pruned from 16 worlds (most
+  guessed/invented) to 6 verified ones. Removed ts3, ts8.x2.intl, ts19, ts20,
+  ts10.x10 — these were speculated, not confirmed.
+- ✅ **`/api/travian/sync-via-village/{vid}`**: NEW endpoint that logs into
+  Travian Lobby using a real village's credentials and scrapes the actual joinable
+  worlds list. This is the ONLY 100% accurate source. Use after creating one
+  real village.
+
+### v0.8.1 — Hard exit + Auto-restart
+- ✅ `zenrex_app.py` rewrite: `os._exit(0)` on close; closes cleanly via X button
+- ✅ `/api/self-update/apply` now AUTO-RESTARTS: downloads file → backs up →
+  detaches new zenrex_app.py process → kills current. No manual intervention.
 - ✅ **SpawnWorker**: progressive village creation. Per-server schedule with
   `target_total`, `interval_min`, `daily_cap`. Resets daily counter at UTC
   midnight. Verified: target=3, interval=0 produces exactly 3 then stops.

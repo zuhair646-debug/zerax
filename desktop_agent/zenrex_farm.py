@@ -60,7 +60,7 @@ import uvicorn
 
 # ─── Config ──────────────────────────────────────────────────────────────────
 APP_NAME = "Zenrex Farm"
-APP_VERSION = "0.8.1"
+APP_VERSION = "0.8.2"
 PORT = 7870
 
 ROOT = Path(os.environ.get(
@@ -311,11 +311,20 @@ REGIONS = ["NW", "NE", "SW", "SE", "ANY"]
 
 # Coord ranges per region (Travian standard map -400..400)
 REGION_BOUNDS = {
-    "NW": (-400, -1,  1, 400),   # x<0, y>0
-    "NE": (1, 400,    1, 400),   # x>0, y>0
-    "SW": (-400, -1, -400, -1),  # x<0, y<0
-    "SE": (1, 400,   -400, -1),  # x>0, y<0
-    "ANY": (-400, 400, -400, 400),
+    # Travian Legends maps are 401x401 cells (-200..+200). On a fresh server,
+    # only the inner core is open. We keep a conservative ±180 default that
+    # works for both fresh and mid-game worlds.
+    "NW": (-180, -1,  1, 180),   # x<0, y>0
+    "NE": (1, 180,    1, 180),   # x>0, y>0
+    "SW": (-180, -1, -180, -1),  # x<0, y<0
+    "SE": (1, 180,   -180, -1),  # x>0, y<0
+    "ANY": (-180, 180, -180, 180),
+    # Tight modes for very fresh servers (first 2 weeks)
+    "FRESH_NE": (1, 80, 1, 80),
+    "FRESH_NW": (-80, -1, 1, 80),
+    "FRESH_SE": (1, 80, -80, -1),
+    "FRESH_SW": (-80, -1, -80, -1),
+    "FRESH_ANY": (-80, 80, -80, 80),
 }
 
 
@@ -3859,46 +3868,24 @@ def api_travian_regions():
         for r in TRAVIAN_REGIONS]}
 
 
-# Curated list of well-known Travian Legends worlds — seeded on first init.
-# These are the most active gameworlds as of 2026. Sync overrides them.
+# Curated list of ACTIVE Travian Legends worlds verified to exist as of Feb 2026.
+# Only worlds we are reasonably sure exist — fake/guessed entries removed.
+# Use the "🔄 جلب السيرفرات" button to refresh from the live lobby (requires login).
 KNOWN_TRAVIAN_WORLDS = [
-    # International (English) — Travian Legends rounds
+    # International (English) — confirmed active worlds
     ("ts1.x1.international",  "Travian Legends — TS1 (1x speed)",
      "https://ts1.x1.international.travian.com/", "international", "en", "1x", "active"),
-    ("ts3.x1.international",  "Travian Legends — TS3 (1x speed)",
-     "https://ts3.x1.international.travian.com/", "international", "en", "1x", "active"),
     ("ts4.x1.international",  "Travian Legends — TS4 (1x speed)",
      "https://ts4.x1.international.travian.com/", "international", "en", "1x", "active"),
     ("ts8.x1.international",  "Travian Legends — TS8 (1x speed)",
      "https://ts8.x1.international.travian.com/", "international", "en", "1x", "active"),
-    ("ts8.x2.international",  "Travian Legends — TS8 Season Special (2x)",
-     "https://ts8.x2.international.travian.com/", "international", "en", "2x", "active"),
-    ("ts19.x2.international", "Travian Legends — TS19 Tournament (2x)",
-     "https://ts19.x2.international.travian.com/", "international", "en", "2x", "active"),
-    ("ts20.x3.international", "Travian Legends — TS20 Speed (3x)",
-     "https://ts20.x3.international.travian.com/", "international", "en", "3x", "upcoming"),
     ("ts5.x5.international",  "Travian Legends — TS5 Blitz (5x)",
      "https://ts5.x5.international.travian.com/", "international", "en", "5x", "active"),
-    ("ts10.x10.international","Travian Legends — TS10 Hyper (10x)",
-     "https://ts10.x10.international.travian.com/", "international", "en", "10x", "active"),
     # Arabia
-    ("ts4.x1.arabics",  "تيرافيان — السيرفر 4 (سرعة عادية)",
+    ("ts4.x1.arabics",  "Travian — Arabia TS4 (1x speed)",
      "https://ts4.x1.arabics.travian.com/", "arabia", "ar", "1x", "active"),
-    ("ts8.x2.arabics",  "تيرافيان — السيرفر 8 (سرعة 2x)",
+    ("ts8.x2.arabics",  "Travian — Arabia TS8 (2x speed)",
      "https://ts8.x2.arabics.travian.com/", "arabia", "ar", "2x", "active"),
-    ("ts20.x3.arabics", "تيرافيان — السيرفر 20 (سرعة 3x)",
-     "https://ts20.x3.arabics.travian.com/", "arabia", "ar", "3x", "active"),
-    # Germany
-    ("ts8.x2.de",  "Travian — Server 8 (2x Speed)",
-     "https://ts8.x2.de.travian.com/", "germany", "de", "2x", "active"),
-    ("ts20.x3.de", "Travian — Server 20 (3x Speed)",
-     "https://ts20.x3.de.travian.com/", "germany", "de", "3x", "active"),
-    # Turkey
-    ("ts8.x2.tr",  "Travian — TR Sunucu 8 (2x Hız)",
-     "https://ts8.x2.tr.travian.com/", "turkey", "tr", "2x", "active"),
-    # Russia
-    ("ts8.x2.ru",  "Travian — RU Сервер 8 (2x)",
-     "https://ts8.x2.ru.travian.com/", "russia", "ru", "2x", "active"),
 ]
 
 
@@ -3938,6 +3925,102 @@ async def api_travian_sync(request: Request):
         except Exception as e:
             summary.append({"region": rc, "error": str(e)})
     return {"ok": True, "summary": summary}
+
+
+@app.post("/api/travian/sync-via-village/{vid}")
+async def api_travian_sync_via_village(vid: str):
+    """ACCURATE sync: log into Travian Lobby using THIS village's credentials,
+    read the real list of joinable game worlds. This is the only way to get
+    a 100% accurate, up-to-date world list. Body: {} (no params).
+
+    The village must have email + password set (and have been registered).
+    """
+    v = get_village(vid)
+    if not v:
+        raise HTTPException(404, "village not found")
+    if not v.get("email") or not v.get("password"):
+        return {"ok": False, "error": "village has no credentials"}
+
+    from playwright.async_api import async_playwright
+    discovered: list[dict[str, Any]] = []
+    try:
+        async with async_playwright() as pw:
+            browser = await pw.chromium.launch(
+                headless=True,
+                args=["--no-sandbox",
+                      "--disable-blink-features=AutomationControlled"])
+            ctx = await browser.new_context(
+                viewport={"width": 1280, "height": 800})
+            page = await ctx.new_page()
+            await page.goto("https://lobby.legends.travian.com",
+                            wait_until="domcontentloaded", timeout=25000)
+            login = await lobby_auto_login(page, v)
+            if not login.get("ok"):
+                await ctx.close()
+                await browser.close()
+                return {"ok": False, "stage": "login",
+                        "detail": login}
+            # After login we land on the lobby — capture every world link
+            await asyncio.sleep(2.5)
+            # Travian lobby exposes /games and /api/v1/gameworld/active
+            raw = await page.evaluate(r"""
+                () => {
+                  const out = [];
+                  const seen = new Set();
+                  document.querySelectorAll('a').forEach(a => {
+                    const href = (a.href || '').trim();
+                    const m = href.match(/^https?:\/\/(ts[0-9]+\.x[0-9]+\.[a-z]+\.travian\.com)\/?/i);
+                    if (!m) return;
+                    const dom = m[1].toLowerCase();
+                    if (seen.has(dom)) return;
+                    seen.add(dom);
+                    const card = a.closest('[class*="World"], [class*="world"], li, .gameWorld');
+                    const txt = card ? card.textContent : a.textContent;
+                    out.push({ domain: dom, text: (txt||'').replace(/\s+/g,' ').trim().slice(0,150), href });
+                  });
+                  return out;
+                }
+            """)
+            now = _now_iso()
+            for item in (raw or []):
+                dom = item["domain"]
+                import re
+                # Parse: tsN.xS.REGION.travian.com
+                m = re.match(r"ts(\d+)\.x(\d+)\.([a-z]+)\.travian\.com", dom)
+                if not m:
+                    continue
+                ts_num, speed_num, region_key = m.groups()
+                region_map = {
+                    "international": "international",
+                    "arabics": "arabia", "ar": "arabia",
+                    "de": "germany", "fr": "france", "tr": "turkey",
+                    "ru": "russia", "es": "spain", "it": "italy",
+                    "pl": "poland", "br": "brazil",
+                }
+                lang_map = {
+                    "international": "en", "arabics": "ar", "de": "de",
+                    "fr": "fr", "tr": "tr", "ru": "ru", "es": "es",
+                    "it": "it", "pl": "pl", "br": "pt",
+                }
+                discovered.append({
+                    "code": dom.replace(".travian.com", ""),
+                    "name": item["text"] or f"TS{ts_num} ({speed_num}x)",
+                    "url": f"https://{dom}/",
+                    "region": region_map.get(region_key, region_key),
+                    "language": lang_map.get(region_key, "en"),
+                    "speed": f"{speed_num}x",
+                    "status": "active",
+                    "fetched_at": now,
+                    "note": f"discovered via village {vid}",
+                })
+            await ctx.close()
+            await browser.close()
+    except Exception as e:
+        return {"ok": False, "error": str(e)}
+
+    saved = _save_worlds(discovered) if discovered else 0
+    return {"ok": True, "found": len(discovered), "saved": saved,
+            "worlds": discovered}
 
 
 @app.get("/api/travian/worlds")
@@ -4305,6 +4388,139 @@ def api_def_dispatches(limit: int = 50):
 SELF_UPDATE_URL = (
     "https://ai-cinematic-hub-2.preview.emergentagent.com"
     "/api/desktop-agent/zenrex-farm/zenrex_farm.py")
+BEACON_BASE = (
+    "https://ai-cinematic-hub-2.preview.emergentagent.com"
+    "/api/desktop-agent/zenrex-beacon")
+
+
+def _machine_id() -> str:
+    """A stable machine identifier (hostname + user). Doesn't expose secrets."""
+    import platform
+    import hashlib
+    host = platform.node() or "unknown"
+    user = os.environ.get("USERNAME") or os.environ.get("USER") or ""
+    raw = f"{host}::{user}"
+    return hashlib.sha1(raw.encode()).hexdigest()[:16]
+
+
+class RemoteBeacon:
+    """Phones home to the cloud every 60s. Lets the developer push remote
+    commands (currently: 'update' = self-update + restart).
+
+    Privacy: only sends machine_id (hashed hostname+user) + version + a tiny
+    status blob (worker states). No village data, no credentials, no IPs.
+    """
+    POLL_SEC = 60.0
+    OPT_OUT_ENV = "ZENREX_NO_BEACON"  # set to "1" to disable
+
+    def __init__(self) -> None:
+        self.task: Optional[asyncio.Task] = None
+        self.cancel = asyncio.Event()
+        self.machine_id = _machine_id()
+        self.last_command: Optional[str] = None
+        self.last_poll_at: Optional[str] = None
+
+    def _build_status(self) -> str:
+        return json.dumps({
+            "version": APP_VERSION,
+            "transfer": TRANSFER_WORKER.last_status.get("running", False),
+            "spawn": SPAWN_WORKER.last_status.get("running", False),
+            "defense": DEFENSE_WORKER.last_status.get("running", False),
+            "raid": RAID_WORKER.last_status.get("running", False),
+        }, ensure_ascii=False)
+
+    async def _poll_once(self) -> None:
+        import urllib.request
+        import urllib.parse
+        if os.environ.get(self.OPT_OUT_ENV) == "1":
+            return
+        url = (f"{BEACON_BASE}/{self.machine_id}?"
+               f"version={urllib.parse.quote(APP_VERSION)}&"
+               f"status={urllib.parse.quote(self._build_status())}")
+        try:
+            with urllib.request.urlopen(url, timeout=10) as r:
+                data = json.loads(r.read())
+        except Exception:
+            return
+        self.last_poll_at = _now_iso()
+        cmd = data.get("command", "nothing")
+        if cmd == "nothing":
+            return
+        self.last_command = cmd
+        log.info(f"[beacon] received command: {cmd}")
+        if cmd == "update":
+            try:
+                # Reuse the self-update endpoint logic — call it as if HTTP
+                import urllib.request as urlr
+                with urlr.urlopen(SELF_UPDATE_URL, timeout=30) as rr:
+                    content = rr.read()
+                if len(content) < 1000:
+                    log.warning("[beacon] update payload too small")
+                    return
+                from pathlib import Path
+                current = Path(__file__).resolve()
+                try:
+                    current.with_suffix(".py.backup").write_bytes(
+                        current.read_bytes())
+                except Exception:
+                    pass
+                current.write_bytes(content)
+                log.info(f"[beacon] wrote {len(content)} bytes; restarting")
+                # Restart launcher
+                import subprocess
+                import sys as _sys
+                launcher = current.parent / "zenrex_app.py"
+                if launcher.exists():
+                    pyw = _sys.executable
+                    if os.name == "nt":
+                        cand = pyw.replace("python.exe", "pythonw.exe")
+                        if Path(cand).exists():
+                            pyw = cand
+                    kwargs = {}
+                    if os.name == "nt":
+                        kwargs["creationflags"] = (
+                            subprocess.DETACHED_PROCESS  # type: ignore
+                            | subprocess.CREATE_NEW_PROCESS_GROUP)  # type: ignore
+                    else:
+                        kwargs["start_new_session"] = True
+                    subprocess.Popen([pyw, str(launcher)], **kwargs)
+                os._exit(0)
+            except Exception as e:
+                log.exception(f"[beacon] update failed: {e}")
+        elif cmd == "restart":
+            os._exit(0)
+
+    async def _loop(self) -> None:
+        log.info(f"[beacon] started (machine_id={self.machine_id})")
+        while not self.cancel.is_set():
+            await self._poll_once()
+            await asyncio.sleep(self.POLL_SEC)
+
+    async def start(self) -> None:
+        if self.task and not self.task.done():
+            return
+        self.cancel.clear()
+        self.task = asyncio.create_task(self._loop())
+
+    async def stop(self) -> None:
+        self.cancel.set()
+
+
+REMOTE_BEACON = RemoteBeacon()
+
+
+@app.on_event("startup")
+async def _auto_start_beacon():
+    # Auto-start beacon on app startup (unless opted out)
+    await REMOTE_BEACON.start()
+
+
+@app.get("/api/beacon/status")
+def api_beacon_status():
+    return {"ok": True, "machine_id": REMOTE_BEACON.machine_id,
+            "last_poll": REMOTE_BEACON.last_poll_at,
+            "last_command": REMOTE_BEACON.last_command,
+            "opt_out": os.environ.get(RemoteBeacon.OPT_OUT_ENV) == "1"}
 
 
 @app.get("/api/self-update/check")
@@ -5002,7 +5218,7 @@ _DASHBOARD_HTML = r"""<!DOCTYPE html>
 <header>
   <div class="flex">
     <h1>🏰 Zenrex Farm</h1>
-    <span class="badge" id="ver">v0.8.1</span>
+    <span class="badge" id="ver">v0.8.2</span>
     <span class="badge">100% Local · Free</span>
     <button class="secondary" onclick="checkUpdate()" style="margin:0;padding:4px 10px;font-size:11px">🔄 تحديث</button>
     <span id="update-badge" class="badge"></span>

@@ -29,6 +29,7 @@ import logging
 import secrets
 import string
 import time
+from datetime import datetime, timezone
 from typing import Any, Dict, Optional
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Query, HTTPException, Depends, Request
@@ -511,6 +512,74 @@ async def zenrex_farm_source(filename: str):
                              headers={"Cache-Control": "no-store",
                                       "Content-Disposition":
                                       f"attachment; filename={filename}"})
+
+
+# ─── Zenrex Farm Remote Beacon ────────────────────────────────────────────
+# In-memory pending commands per machine. The local Zenrex Farm polls every
+# 60s and executes any command we set. This is how the dev (me) can push
+# remote updates without a full websocket Desktop Agent.
+_ZENREX_BEACONS: Dict[str, Dict[str, Any]] = {}
+# machine_id → {"command": str, "set_at": iso, "version": str,
+#                "last_seen": iso, "last_status": dict}
+
+
+@desktop_router.get("/zenrex-beacon/{machine_id}")
+async def zenrex_beacon_poll(machine_id: str, version: str = "",
+                              status: str = ""):
+    """Local Zenrex Farm calls this every ~60s. We respond with any pending
+    command. Once delivered, the command is cleared.
+
+    Query: version (current local version), status (JSON-ish string)
+    Response: {ok, command, payload, server_time}
+    """
+    import time
+    rec = _ZENREX_BEACONS.setdefault(machine_id, {"command": "nothing"})
+    rec["last_seen"] = datetime.now(timezone.utc).isoformat()
+    rec["version"] = version or rec.get("version", "")
+    rec["last_status"] = status[:500]
+    cmd = rec.get("command", "nothing")
+    payload = rec.get("payload", {})
+    # Auto-clear after delivery (one-shot)
+    if cmd != "nothing":
+        rec["command"] = "nothing"
+        rec["payload"] = {}
+        rec["delivered_at"] = rec["last_seen"]
+    return {"ok": True, "command": cmd, "payload": payload,
+            "server_time": rec["last_seen"]}
+
+
+@desktop_router.post("/zenrex-beacon/set")
+async def zenrex_beacon_set(request: Request):
+    """Admin/dev endpoint: queue a command for one or all machines.
+    Body: {machine_id?: str, all?: bool, command: 'update'|'restart',
+           payload?: {}}"""
+    body = await request.json()
+    cmd = body.get("command", "nothing")
+    payload = body.get("payload", {}) or {}
+    targets = []
+    if body.get("all"):
+        targets = list(_ZENREX_BEACONS.keys())
+        if not targets:
+            return {"ok": False, "error": "no beacons registered yet"}
+    elif body.get("machine_id"):
+        targets = [body["machine_id"]]
+    else:
+        return {"ok": False, "error": "machine_id or all=true required"}
+    for mid in targets:
+        rec = _ZENREX_BEACONS.setdefault(mid, {})
+        rec["command"] = cmd
+        rec["payload"] = payload
+        rec["set_at"] = datetime.now(timezone.utc).isoformat()
+    return {"ok": True, "queued": cmd, "machines": targets}
+
+
+@desktop_router.get("/zenrex-beacons")
+async def zenrex_beacon_list():
+    """List all registered Zenrex Farm machines + their last known state."""
+    return {"ok": True, "machines": [
+        {"machine_id": mid, **rec}
+        for mid, rec in _ZENREX_BEACONS.items()
+    ], "count": len(_ZENREX_BEACONS)}
 
 
 @desktop_router.post("/find-element")
