@@ -66,7 +66,14 @@ APP_NAME = "Zenrex PC Control"
 APP_VERSION = "0.1.0"
 PORT = 7862
 
-# Emergent LLM key — baked in at install time via env var.
+# Backend that hosts the Emergent LLM Key (server-side Claude call).
+BACKEND_BASE = os.environ.get(
+    "ZENREX_BACKEND",
+    "https://ai-cinematic-hub-2.preview.emergentagent.com",
+).rstrip("/")
+
+# Emergent LLM key — only used if we ever fall back to direct calls
+# (will fail with FREE_USER_EXTERNAL_ACCESS_DENIED). Default path is backend.
 EMERGENT_LLM_KEY = os.environ.get("EMERGENT_LLM_KEY", "").strip()
 
 pyautogui.FAILSAFE = True   # mouse to top-left aborts
@@ -252,67 +259,53 @@ Previous actions taken so far (most-recent last):
 async def _claude_decide(game: GameState, jpg_bytes: bytes,
                          enc_w: int, enc_h: int,
                          real_w: int, real_h: int) -> Dict[str, Any]:
-    """Send screenshot to Claude Sonnet 4.5 via Emergent LLM and parse JSON."""
-    if not EMERGENT_LLM_KEY:
-        return {"action": "error",
-                "error": "EMERGENT_LLM_KEY missing — pass it via env to enable game mode."}
-    try:
-        from emergentintegrations.llm.chat import LlmChat, UserMessage, ImageContent
-    except Exception as e:
-        return {"action": "error",
-                "error": f"emergentintegrations not installed: {e}"}
+    """Ask the backend to call Claude vision (Emergent LLM key only works server-side)."""
+    import urllib.request
+    import urllib.error
 
     history_brief = []
     for h in game.history[-6:]:
         history_brief.append({
-            "i": h.get("iteration"),
-            "action": h.get("action", {}).get("action"),
-            "x": h.get("action", {}).get("x"),
-            "y": h.get("action", {}).get("y"),
-            "thought": (h.get("action", {}).get("thought", "") or "")[:120],
+            "iteration": h.get("iteration"),
+            "action": h.get("action"),
+            "result": h.get("result"),
         })
-    history_txt = json.dumps(history_brief, ensure_ascii=False, indent=2)
-
-    sys_msg = GAME_SYSTEM_PROMPT.format(
-        game_name=game.game_name, goal=game.goal,
-        enc_w=enc_w, enc_h=enc_h, real_w=real_w, real_h=real_h,
-        history=history_txt,
-    )
-
-    chat = (
-        LlmChat(api_key=EMERGENT_LLM_KEY,
-                session_id=f"zenrex-game-{int(game.started_at or time.time())}",
-                system_message=sys_msg)
-        .with_model("anthropic", "claude-sonnet-4-5-20250929")
-    )
-    b64 = base64.b64encode(jpg_bytes).decode("ascii")
-    msg = UserMessage(
-        text=(f"Iteration {game.iteration}/{game.max_iterations}. "
-              f"Reply with strict JSON describing the next single action."),
-        file_contents=[ImageContent(image_base64=b64)],
-    )
+    body = {
+        "game_name": game.game_name,
+        "goal": game.goal,
+        "iteration": game.iteration,
+        "max_iterations": game.max_iterations,
+        "history": history_brief,
+        "screenshot_b64": base64.b64encode(jpg_bytes).decode("ascii"),
+        "encoded_size": {"width": enc_w, "height": enc_h},
+        "real_size": {"width": real_w, "height": real_h},
+    }
+    url = f"{BACKEND_BASE}/api/desktop-agent/pc-control-decide"
     try:
-        raw = await chat.send_message(msg)
-    except Exception as e:
-        return {"action": "error", "error": f"LLM call failed: {e}"}
-
-    text = raw if isinstance(raw, str) else getattr(raw, "content", str(raw))
-    text = text.strip().strip("`")
-    if text.lower().startswith("json"):
-        text = text[4:].strip()
-    si, ei = text.find("{"), text.rfind("}")
-    if si < 0 or ei <= si:
-        return {"action": "error", "error": f"non-JSON LLM reply: {text[:200]}"}
-    try:
-        data = json.loads(text[si:ei + 1])
-        # Scale coordinates if they appear to be at the encoded resolution
-        if "x" in data and "y" in data and isinstance(data.get("x"), (int, float)):
-            if enc_w and real_w and enc_w != real_w:
-                data["x"] = int(round(float(data["x"]) * real_w / enc_w))
-                data["y"] = int(round(float(data["y"]) * real_h / enc_h))
+        req = urllib.request.Request(
+            url,
+            data=json.dumps(body).encode("utf-8"),
+            headers={"Content-Type": "application/json",
+                     "User-Agent": "Zenrex-PC-Control/0.2"},
+            method="POST",
+        )
+        # Use a thread to avoid blocking the event loop on a sync call
+        loop = asyncio.get_event_loop()
+        def _do_request():
+            with urllib.request.urlopen(req, timeout=45) as resp:
+                return resp.read().decode("utf-8")
+        raw = await loop.run_in_executor(None, _do_request)
+        data = json.loads(raw)
         return data
+    except urllib.error.HTTPError as e:
+        try:
+            err_body = e.read().decode("utf-8")[:300]
+        except Exception:
+            err_body = ""
+        return {"action": "error",
+                "error": f"backend HTTP {e.code}: {err_body}"}
     except Exception as e:
-        return {"action": "error", "error": f"JSON parse failed: {e}"}
+        return {"action": "error", "error": f"backend call failed: {e}"}
 
 
 async def _execute_action(action: Dict[str, Any]) -> Dict[str, Any]:

@@ -942,6 +942,120 @@ async def desktop_pc_control_source():
                               headers={"Cache-Control": "no-store"})
 
 
+@desktop_router.post("/pc-control-decide")
+async def desktop_pc_control_decide(request: Request):
+    """Server-side Claude vision call for the local Zenrex PC-Control game loop.
+
+    The Emergent Universal LLM key only works from within the Emergent platform,
+    so the user's local PC cannot call Claude directly. Instead, the local game
+    loop POSTs the current screenshot + game state HERE and we relay it to
+    Claude Sonnet 4.5 vision using the Universal key on the backend.
+
+    Body: {
+        game_name: str, goal: str,
+        iteration: int, max_iterations: int,
+        history: [ {iteration, action, result}, ... ],
+        screenshot_b64: str (jpeg),
+        encoded_size: {width,height},
+        real_size: {width,height},
+    }
+    Returns: {thought, action, x?, y?, text?, key?, keys?, amount?, wait_seconds?, done?}
+    """
+    import json as _json
+    body = await request.json()
+    screenshot_b64 = body.get("screenshot_b64") or ""
+    if not screenshot_b64:
+        return JSONResponse({"action": "error", "error": "screenshot_b64 required"}, status_code=400)
+
+    enc = body.get("encoded_size") or {}
+    real = body.get("real_size") or {}
+    enc_w, enc_h = int(enc.get("width", 1280)), int(enc.get("height", 720))
+    real_w, real_h = int(real.get("width", 1920)), int(real.get("height", 1080))
+
+    history = body.get("history") or []
+    history_brief = []
+    for h in history[-6:]:
+        a = h.get("action") or {}
+        history_brief.append({
+            "i": h.get("iteration"),
+            "action": a.get("action"),
+            "x": a.get("x"),
+            "y": a.get("y"),
+            "thought": (a.get("thought", "") or "")[:120],
+        })
+
+    sys_prompt = f"""You are Zenrex — an autonomous PC-control AI created from scratch by Zuhair Abbas.
+You are playing the game "{body.get('game_name','Unknown')}". Your goal: {body.get('goal','explore')}
+
+You receive a screenshot of the current screen.
+You MUST reply with STRICT JSON ONLY (no markdown, no prose) describing the NEXT single action:
+
+{{
+  "thought": "short reasoning about what you see (in the user's language)",
+  "action": "click" | "double_click" | "right_click" | "type" | "key" | "hotkey" | "scroll" | "wait" | "done",
+  "x": int (required for click actions),
+  "y": int (required for click actions),
+  "text": "string" (required for action=type),
+  "key": "string" (required for action=key, e.g. 'enter','esc','tab'),
+  "keys": ["ctrl","c"] (required for action=hotkey),
+  "amount": int (for scroll: negative=down, positive=up),
+  "wait_seconds": float (for action=wait, default 2),
+  "done": false (set true ONLY if the goal is fully accomplished)
+}}
+
+Rules:
+- Screenshot resolution: {enc_w}x{enc_h}. Real screen: {real_w}x{real_h}. Emit coordinates in the screenshot resolution; runtime scales.
+- Be conservative. Slow, deliberate actions.
+- If the page is loading, return action=wait with wait_seconds=2-4.
+- NEVER click outside the visible window. NEVER take destructive actions.
+- If goal accomplished, set "done": true.
+
+Previous actions (most-recent last):
+{_json.dumps(history_brief, ensure_ascii=False, indent=2)}"""
+
+    try:
+        from emergentintegrations.llm.chat import LlmChat, UserMessage, ImageContent
+    except Exception as e:
+        return {"action": "error", "error": f"emergentintegrations import failed: {e}"}
+
+    emergent_key = os.environ.get("EMERGENT_LLM_KEY", "")
+    if not emergent_key:
+        return {"action": "error", "error": "EMERGENT_LLM_KEY missing on server"}
+
+    chat = (
+        LlmChat(api_key=emergent_key,
+                session_id=f"pc-control-{body.get('game_name','x')}-{int(time.time()/60)}",
+                system_message=sys_prompt)
+        .with_model("anthropic", "claude-sonnet-4-5-20250929")
+    )
+    msg = UserMessage(
+        text=f"Iteration {body.get('iteration','?')}/{body.get('max_iterations','?')}. Reply with strict JSON.",
+        file_contents=[ImageContent(image_base64=screenshot_b64)],
+    )
+    try:
+        raw = await chat.send_message(msg)
+    except Exception as e:
+        return {"action": "error", "error": f"LLM call failed: {str(e)[:300]}"}
+
+    text = raw if isinstance(raw, str) else getattr(raw, "content", str(raw))
+    text = text.strip().strip("`")
+    if text.lower().startswith("json"):
+        text = text[4:].strip()
+    si, ei = text.find("{"), text.rfind("}")
+    if si < 0 or ei <= si:
+        return {"action": "error", "error": f"non-JSON LLM reply: {text[:200]}"}
+    try:
+        data = _json.loads(text[si:ei + 1])
+        # Scale coordinates from encoded to real screen if needed
+        if "x" in data and "y" in data and isinstance(data.get("x"), (int, float)):
+            if enc_w and real_w and enc_w != real_w:
+                data["x"] = int(round(float(data["x"]) * real_w / enc_w))
+                data["y"] = int(round(float(data["y"]) * real_h / enc_h))
+        return data
+    except Exception as e:
+        return {"action": "error", "error": f"JSON parse failed: {e}"}
+
+
 @desktop_router.get("/install-games-and-control.ps1")
 async def desktop_install_games_and_control(request: Request):
     """One-liner PowerShell installer that:
