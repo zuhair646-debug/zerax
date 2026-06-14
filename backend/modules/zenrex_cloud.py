@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import os
 import sys
+import asyncio
 import logging
 from typing import Iterable
 
@@ -23,7 +24,9 @@ DESKTOP_AGENT_DIR = "/app/desktop_agent"
 if DESKTOP_AGENT_DIR not in sys.path:
     sys.path.insert(0, DESKTOP_AGENT_DIR)
 
-# Workers must not auto-start on the cloud
+# Flag this process as the cloud host so endpoints can short-circuit work
+# that only makes sense when running on the user's PC (self-update, beacon).
+os.environ.setdefault("ZENREX_CLOUD", "1")
 os.environ.setdefault("ZENREX_NO_BUILDWORKER", "1")
 os.environ.setdefault("ZENREX_NO_BEACON", "1")
 

@@ -4894,6 +4894,11 @@ def api_beacon_status():
 @app.get("/api/self-update/check")
 async def api_self_update_check():
     """Compare local version with remote zenrex_farm.py. Returns version diff."""
+    # Cloud mode: we ARE the remote, so there's nothing to update.
+    if os.environ.get("ZENREX_CLOUD") == "1":
+        return {"ok": True, "local": APP_VERSION, "remote": APP_VERSION,
+                "update_available": False, "cloud": True,
+                "remote_size": 0}
     import urllib.request
     try:
         req = urllib.request.Request(
@@ -6992,6 +6997,13 @@ async function checkUpdate(){
   try {
     const r = await fetch('/api/self-update/check');
     const d = await r.json();
+    if (d.cloud) {
+      badge.textContent = `☁ نسخة سحابية v${d.local}`;
+      badge.style.background = '#064e3b';
+      badge.style.color = '#10b981';
+      setTimeout(() => { badge.textContent = ''; }, 4000);
+      return;
+    }
     if (!d.ok) {
       badge.textContent = `✗ ${(d.error||'').slice(0,30)}`;
       badge.style.background = '#7f1d1d';
