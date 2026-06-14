@@ -307,6 +307,28 @@ Validated end-to-end via FastAPI TestClient:
 
 ### v0.9.0 (2026-02-15) — BuildWorker
 - ✅ **BuildWorker**: NEW. Auto-upgrades resource fields (dorf1) and village
+
+### AI Brain Expansion (2026-02-15) — 4 new specialised modes
+- ✅ Added `MODE_ADDENDUM_APPS` — Apps Studio Pro (web + mobile apps, full
+  stack, tests, deploy, Stripe, Auth — Cursor / v0 / Lovable level).
+- ✅ Added `MODE_ADDENDUM_GAMES` — Games Studio Pro (Pixi.js / Three.js /
+  Phaser / Babylon.js / Unity SDK exports + multiplayer scaffolds).
+- ✅ Added `MODE_ADDENDUM_ANIME` — Anime Studio Pro (Studio Ghibli / 90s
+  cel-shaded style lock + character bible + voice dubbing).
+- ✅ Added `MODE_ADDENDUM_LONGFORM_VIDEO` — Long-Form Video Pro (10 min →
+  2 h, chunked + stitched, voice-first workflow, ffmpeg + fal.ai).
+- ✅ `get_system_prompt(project, is_owner)` now routes 9 modes: `website`,
+  `image_studio`, `video_studio`, `developer`, `apps_studio`,
+  `games_studio`, `anime_studio`, `longform_video`, `owner_assistant`.
+- ✅ `/app/memory/ZENREX_AI_BRAIN_STANDARD.md` updated with the 9-mode
+  matrix.
+- ✅ Every new mode carries domain-specific "ممنوع" rules → these are the
+  anti-hallucination guardrails the owner asked to propagate across every
+  section (Apps, Games, Anime, Long-form video).
+- ✅ Smoke-tested: each mode's `get_system_prompt` returns the right
+  addendum (prompt char-count grew 19k→23k for anime/longform, 21k for
+  apps).
+
   buildings (dorf2) for every active village. Strategy: visit dorf1, find
   the lowest-level resource field that has a green ".green.new" upgrade
   button visible (Travian only renders that when resources + queue slot

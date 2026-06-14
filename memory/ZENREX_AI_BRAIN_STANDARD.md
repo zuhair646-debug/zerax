@@ -76,13 +76,26 @@ Output: 64K tokens
 
 ---
 
-## 🎨 الـ Modes الثلاثة (نفس النموذج، نفس الأدوات، system prompt متغيّر)
+## 🎨 الـ Modes الـ٩ (نفس النموذج، نفس الأدوات، system prompt متغيّر)
 
 | Mode | الـ Addendum | الاستخدام |
 |---|---|---|
 | `website` (default) | الـ prompt الأساسي | بناء مواقع HTML |
 | `image_studio` | Image Studio addendum | معارض صور AI |
-| `video_studio` | Cinema/Video addendum | أفلام + إعلانات + reels |
+| `video_studio` | Cinema addendum | أفلام قصيرة (≤ 10 دقائق) + إعلانات + reels |
+| `developer` | Developer addendum | برمجة عامة (FastAPI + React + DB + tests + deploy) |
+| `apps_studio` | Developer + Apps addendum | تطبيقات ويب + موبايل production-ready (Cursor / v0 / Lovable style) |
+| `games_studio` | Games addendum | ألعاب 2D/3D/Anime — Pixi/Three/Phaser/Unity + multiplayer |
+| `anime_studio` | Video + Anime addendum | أفلام أنمي مع character bible + style lock + voice dubbing |
+| `longform_video` | Video + Long-Form addendum | فيديوهات طويلة ١٠ دقائق → ساعتين (chunked + stitched) |
+| `owner_assistant` | Developer + Owner addendum | مساعد مالك Zenrex — Desktop Agent + full platform control |
+
+**كل mode موروث من القاعدة الأساسية** — يعني rules مكافحة الهلوسة في الـ base prompt تنطبق على الكل. كل mode يضيف **خبرات متخصصة + ضوابط مهنية** فوق ذلك.
+
+📂 الكود: `/app/backend/modules/freebuild/freebuild_agent.py`
+- `AGENT_SYSTEM_PROMPT` (line ~1734) — القاعدة الأساسية
+- `MODE_ADDENDUM_*` constants — كل تخصص
+- `get_system_prompt(project, is_owner)` — يجمعها
 
 ---
 
