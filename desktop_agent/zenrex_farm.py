@@ -59,7 +59,7 @@ import uvicorn
 
 # ─── Config ──────────────────────────────────────────────────────────────────
 APP_NAME = "Zenrex Farm"
-APP_VERSION = "0.4.2"
+APP_VERSION = "0.5.0"
 PORT = 7870
 
 ROOT = Path(os.environ.get(
@@ -150,8 +150,44 @@ CREATE TABLE IF NOT EXISTS pool_state (
     last_rotate_at  TEXT
 );
 
+CREATE TABLE IF NOT EXISTS chat_messages (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    session_id      TEXT NOT NULL,
+    role            TEXT NOT NULL,           -- 'user' | 'assistant' | 'system'
+    content         TEXT NOT NULL,
+    intent          TEXT,                    -- parsed intent tag (e.g. plan_proposal, clone_strategy)
+    meta_json       TEXT,                    -- JSON payload (proposed actions, vid refs, etc.)
+    approved        INTEGER DEFAULT 0,       -- 0=pending, 1=approved, -1=rejected
+    ts              TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS strategy_snapshots (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    source_vid      TEXT NOT NULL,           -- village we copied state from
+    name            TEXT NOT NULL,           -- human label
+    state_json      TEXT NOT NULL,           -- captured build queue + state
+    created_at      TEXT NOT NULL,
+    notes           TEXT
+);
+
+CREATE TABLE IF NOT EXISTS transfer_jobs (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    server          TEXT NOT NULL,
+    target_x        INTEGER NOT NULL,
+    target_y        INTEGER NOT NULL,
+    target_name     TEXT,
+    mode            TEXT NOT NULL,           -- 'specific' | 'random_all' | 'defense'
+    resources_json  TEXT,                    -- requested per-resource breakdown
+    troops_json     TEXT,                    -- requested defense troop breakdown
+    status          TEXT DEFAULT 'queued',   -- queued | running | done | failed
+    progress_json   TEXT,                    -- per-source progress
+    created_at      TEXT NOT NULL,
+    updated_at      TEXT
+);
+
 CREATE INDEX IF NOT EXISTS idx_events_village ON events(village_id, ts);
 CREATE INDEX IF NOT EXISTS idx_villages_state ON villages(state);
+CREATE INDEX IF NOT EXISTS idx_chat_session ON chat_messages(session_id, ts);
 """
 
 # Indexes that reference newly-added columns (must run AFTER ALTER TABLE migrations)
@@ -455,6 +491,178 @@ async def human_type(page, selector: str, text: str) -> None:
         # Every 8-15 chars, "think" briefly
         if i and i % random.randint(8, 15) == 0:
             await asyncio.sleep(random.uniform(0.25, 0.95))
+
+
+# ─── Travian Lobby: auto cookies + auto login ────────────────────────────────
+LOBBY_COOKIE_SELECTORS = [
+    "#cmpwelcomebtnyes a", ".cmpboxbtnyes a", ".cmpboxbtnyes",
+    "button[aria-label='Accept all']", "button:has-text('Accept all')",
+    "button:has-text('Accept')", "button:has-text('I agree')",
+    "button:has-text('Agree')", "button:has-text('قبول')",
+    "button:has-text('موافق')", "#onetrust-accept-btn-handler",
+    "button[mode='primary']:has-text('Akzeptieren')",
+]
+LOBBY_EMAIL_SELECTORS = [
+    "input[name='email']", "input[type='email']", "#email",
+    "input[autocomplete='email']", "input[placeholder*='mail' i]",
+]
+LOBBY_PASS_SELECTORS = [
+    "input[name='password']", "input[type='password']", "#password",
+    "input[autocomplete='current-password']",
+]
+LOBBY_SUBMIT_SELECTORS = [
+    "button[type='submit']", "button.loginButton", "button:has-text('Login')",
+    "button:has-text('Log in')", "button:has-text('تسجيل الدخول')",
+    "button:has-text('Anmelden')", "input[type='submit']",
+]
+
+
+async def _try_click_any(page, selectors: list[str], timeout_ms: int = 1200) -> bool:
+    """Try each selector; click the first that is visible. Returns success."""
+    for sel in selectors:
+        try:
+            loc = page.locator(sel).first
+            await loc.wait_for(state="visible", timeout=timeout_ms)
+            await loc.click(timeout=timeout_ms)
+            return True
+        except Exception:
+            continue
+    return False
+
+
+async def _try_fill_any(page, selectors: list[str], value: str,
+                        timeout_ms: int = 1500) -> bool:
+    for sel in selectors:
+        try:
+            loc = page.locator(sel).first
+            await loc.wait_for(state="visible", timeout=timeout_ms)
+            await loc.click(timeout=timeout_ms)
+            await asyncio.sleep(random.uniform(0.15, 0.40))
+            # Use realistic typing for stealth
+            await loc.fill("")
+            for ch in value:
+                await page.keyboard.type(ch,
+                                         delay=int(human_typing_interval() * 1000))
+            return True
+        except Exception:
+            continue
+    return False
+
+
+async def lobby_accept_cookies(page) -> bool:
+    """Dismiss the Travian/CMP cookie consent banner (if present)."""
+    # Wait a moment for the banner script to load
+    await asyncio.sleep(random.uniform(0.6, 1.4))
+    # Some CMPs live inside iframes — try main page first
+    if await _try_click_any(page, LOBBY_COOKIE_SELECTORS, timeout_ms=1500):
+        await asyncio.sleep(random.uniform(0.3, 0.8))
+        return True
+    # Try inside any iframe
+    for frame in page.frames:
+        if frame == page.main_frame:
+            continue
+        for sel in LOBBY_COOKIE_SELECTORS:
+            try:
+                loc = frame.locator(sel).first
+                await loc.click(timeout=900)
+                await asyncio.sleep(random.uniform(0.3, 0.8))
+                return True
+            except Exception:
+                continue
+    return False
+
+
+async def lobby_auto_login(page, village: dict[str, Any]) -> dict[str, Any]:
+    """Attempt to log this village into the Travian lobby.
+    Returns {ok, stage, detail}. Safe to call repeatedly — it short-circuits
+    if already logged in (detected by sign of dashboard URL / user menu)."""
+    email = (village.get("email") or "").strip()
+    password = (village.get("password") or "").strip()
+    if not email or not password:
+        return {"ok": False, "stage": "preflight",
+                "detail": "missing email/password on village"}
+    if "@example.local" in email:
+        return {"ok": False, "stage": "preflight",
+                "detail": "placeholder email — attach a real one first"}
+
+    # Cookie banner first
+    try:
+        await lobby_accept_cookies(page)
+    except Exception:
+        pass
+
+    # If we're already in the lobby (dashboard), bail out happy
+    try:
+        url = page.url or ""
+        if any(p in url for p in ("/dashboard", "/games", "/account",
+                                  "/avatarSelection")):
+            return {"ok": True, "stage": "already_logged_in", "detail": url}
+    except Exception:
+        pass
+
+    # Some lobby flows show a big "Login" trigger button before the form
+    for trigger in [
+        "a:has-text('Login')", "button:has-text('Login')",
+        "a:has-text('Log in')", "button:has-text('Log in')",
+        ".loginButton",
+    ]:
+        try:
+            loc = page.locator(trigger).first
+            if await loc.is_visible(timeout=400):
+                await loc.click(timeout=900)
+                await asyncio.sleep(random.uniform(0.4, 0.9))
+                break
+        except Exception:
+            continue
+
+    # Fill email
+    ok_email = await _try_fill_any(page, LOBBY_EMAIL_SELECTORS, email)
+    if not ok_email:
+        return {"ok": False, "stage": "email_field",
+                "detail": "no email input found"}
+    await asyncio.sleep(random.uniform(0.3, 0.7))
+
+    # Fill password
+    ok_pass = await _try_fill_any(page, LOBBY_PASS_SELECTORS, password)
+    if not ok_pass:
+        return {"ok": False, "stage": "password_field",
+                "detail": "no password input found"}
+    await asyncio.sleep(random.uniform(0.5, 1.1))
+
+    # Click submit. If submit click fails, press Enter as fallback.
+    submitted = await _try_click_any(page, LOBBY_SUBMIT_SELECTORS, timeout_ms=1500)
+    if not submitted:
+        try:
+            await page.keyboard.press("Enter")
+            submitted = True
+        except Exception:
+            pass
+
+    # Wait a moment for the form to process
+    try:
+        await page.wait_for_load_state("networkidle", timeout=8000)
+    except Exception:
+        pass
+
+    # Verify result by URL or DOM presence of error banner
+    final_url = page.url or ""
+    if any(p in final_url for p in ("/dashboard", "/games", "/account",
+                                    "/avatarSelection", "/start")):
+        return {"ok": True, "stage": "logged_in", "detail": final_url}
+
+    # Check for visible error on the login page
+    try:
+        err = page.locator(".errorMessage, .error, .alertbox, [class*='error']").first
+        if await err.is_visible(timeout=600):
+            txt = await err.inner_text(timeout=600)
+            return {"ok": False, "stage": "credentials_rejected",
+                    "detail": txt.strip()[:200]}
+    except Exception:
+        pass
+
+    # Default: assume submitted but unverified
+    return {"ok": submitted, "stage": "submitted_unverified",
+            "detail": final_url}
 
 
 # ─── Per-village fingerprint seed (deterministic per village) ────────────────
@@ -1713,7 +1921,10 @@ async def api_refresh_free_proxies(request: Request):
 @app.post("/api/villages/{vid}/open-browser")
 async def api_open_browser(vid: str):
     """Open the Playwright browser for this village (visible window).
-    Re-clicking on same village = focus existing window, not duplicate."""
+    Re-clicking on same village = focus existing window, not duplicate.
+
+    Body (optional): {auto_login: bool=true}
+    """
     v = get_village(vid)
     if not v:
         raise HTTPException(404, "village not found")
@@ -1723,16 +1934,32 @@ async def api_open_browser(vid: str):
         srv = v['server'] or "https://lobby.legends.travian.com"
         if not srv.startswith("http"):
             srv = f"https://{srv}"
+        # If user typed a gameworld server, login still happens at the lobby
+        login_url = "https://lobby.legends.travian.com"
         try:
-            await page.goto(srv, wait_until="domcontentloaded", timeout=30000)
+            await page.goto(login_url, wait_until="domcontentloaded",
+                            timeout=30000)
         except Exception:
             pass
+
+        # Try auto-login (best-effort; never blocks the browser opening)
+        login_result = {"ok": False, "stage": "skipped", "detail": "no creds"}
+        try:
+            login_result = await lobby_auto_login(page, v)
+        except Exception as e:
+            login_result = {"ok": False, "stage": "exception", "detail": str(e)}
+
         log_event(vid, "open_browser",
-                  f"navigated to {srv} | proxy={v['proxy'] or 'direct'}")
-        update_village_state(vid, "browser_open")
-        return {"ok": True, "village": vid, "url": srv,
+                  f"login={login_result.get('stage')} | "
+                  f"proxy={v['proxy'] or 'direct'}")
+        update_village_state(
+            vid, "browser_open" if not login_result.get("ok") else "active",
+            notes=f"auto_login:{login_result.get('stage')}",
+        )
+        return {"ok": True, "village": vid, "url": login_url,
                 "proxy": v["proxy"] or None, "tribe": v.get("tribe"),
-                "reused": vid in FARM._open}
+                "reused": vid in FARM._open,
+                "login": login_result}
     except Exception as e:
         log_event(vid, "error", f"open_browser: {e}")
         return JSONResponse({"ok": False, "error": str(e)}, status_code=500)
@@ -2029,6 +2256,435 @@ def dashboard():
     return HTMLResponse(_DASHBOARD_HTML)
 
 
+@app.get("/chat", response_class=HTMLResponse)
+def chat_page():
+    return HTMLResponse(_CHAT_HTML)
+
+
+# ─── AI Chat (Ollama-backed) ─────────────────────────────────────────────────
+DEFAULT_SYSTEM_PROMPT = """أنت "زِنركس برين" — العقل المساعد لمزرعة قرى Travian.
+الهدف الاستراتيجي للمالك (زهير): تشغيل ١٠٠+ قرية بأمان لبيع الموارد للاعبين حقيقيين عبر تحويلات داخل التحالف بأسعار مدفوعة.
+
+قواعد سلوكك:
+1) تكلم بالعربية السعودية بشكل مختصر وعملي.
+2) لما المالك يقترح خطة، اقترح خطة مضادّة فيها مخاطر ومكاسب، ثم انتظر اعتماده.
+3) عند إعلان "اعتمد الخطة" نفّذها كأوامر JSON واضحة.
+4) لا تقترح حركات تكشف الفارم (تحويلات ضخمة من حسابات حديثة، نفس IP، نفس الوقت...).
+5) أعد دوماً ملخص قصير + JSON إجراءات قابل للتنفيذ في حقل actions اذا كان فيه قرار.
+
+شكل الرد المطلوب:
+[نص للمحادثة بالعربية...]
+<<ACTIONS>>
+{ "intent": "...", "actions": [ ... ] }
+<<END>>
+"""
+
+
+async def ollama_chat(messages: list[dict[str, str]],
+                      model: Optional[str] = None,
+                      timeout: float = 90.0) -> str:
+    """Send a chat request to local Ollama. Returns the assistant text.
+    If Ollama is unreachable, raises RuntimeError."""
+    import urllib.request
+    import urllib.error
+    mdl = model or OLLAMA_TEXT_MODEL
+    body = json.dumps({
+        "model": mdl,
+        "messages": messages,
+        "stream": False,
+        "options": {"temperature": 0.6, "num_ctx": 8192},
+    }).encode("utf-8")
+    req = urllib.request.Request(
+        f"{OLLAMA_HOST.rstrip('/')}/api/chat",
+        data=body, headers={"Content-Type": "application/json"})
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            payload = json.loads(resp.read())
+    except urllib.error.URLError as e:
+        raise RuntimeError(f"Ollama unreachable at {OLLAMA_HOST}: {e}")
+    except Exception as e:
+        raise RuntimeError(f"Ollama error: {e}")
+    msg = payload.get("message") or {}
+    content = msg.get("content") or payload.get("response") or ""
+    return content
+
+
+def parse_actions_block(text: str) -> Optional[dict[str, Any]]:
+    """Extract the <<ACTIONS>>{...}<<END>> JSON block from the LLM reply."""
+    if "<<ACTIONS>>" not in text or "<<END>>" not in text:
+        return None
+    try:
+        chunk = text.split("<<ACTIONS>>", 1)[1].split("<<END>>", 1)[0].strip()
+        return json.loads(chunk)
+    except Exception:
+        return None
+
+
+def strip_actions_block(text: str) -> str:
+    if "<<ACTIONS>>" not in text:
+        return text
+    return text.split("<<ACTIONS>>", 1)[0].strip()
+
+
+def build_farm_context() -> str:
+    """Snapshot of the farm to feed the LLM as system context."""
+    with db_cur() as cur:
+        total = cur.execute("SELECT COUNT(*) c FROM villages").fetchone()["c"]
+        per_state = cur.execute(
+            "SELECT state, COUNT(*) c FROM villages GROUP BY state").fetchall()
+        per_server = cur.execute(
+            "SELECT server, COUNT(*) c FROM villages GROUP BY server "
+            "ORDER BY c DESC LIMIT 5").fetchall()
+        personal = cur.execute(
+            "SELECT name, server, coords_x, coords_y, tribe FROM villages "
+            "WHERE is_personal=1 LIMIT 10").fetchall()
+        snaps = cur.execute(
+            "SELECT id, name FROM strategy_snapshots "
+            "ORDER BY id DESC LIMIT 6").fetchall()
+    return json.dumps({
+        "total_villages": total,
+        "by_state": {r["state"]: r["c"] for r in per_state},
+        "top_servers": [{"server": r["server"], "count": r["c"]}
+                        for r in per_server],
+        "personal_villages": [dict(r) for r in personal],
+        "available_snapshots": [dict(r) for r in snaps],
+    }, ensure_ascii=False)
+
+
+@app.post("/api/ai/chat")
+async def api_ai_chat(request: Request):
+    """Conversational endpoint with Ollama. Persists history per session.
+    Body: {session_id: str, message: str, model?: str}
+    Returns: {ok, reply, actions, ollama_model, session_id}
+    """
+    body = await request.json()
+    session_id = (body.get("session_id") or "default").strip() or "default"
+    user_msg = (body.get("message") or "").strip()
+    model = body.get("model") or OLLAMA_TEXT_MODEL
+    if not user_msg:
+        return JSONResponse({"ok": False, "error": "empty message"},
+                            status_code=400)
+
+    # Load history (last 30) for context
+    with db_cur() as cur:
+        rows = cur.execute(
+            "SELECT role, content FROM chat_messages "
+            "WHERE session_id = ? ORDER BY id DESC LIMIT 30",
+            (session_id,)).fetchall()
+    history = [{"role": r["role"], "content": r["content"]} for r in reversed(rows)]
+
+    # Compose context messages
+    context_blob = build_farm_context()
+    messages = [
+        {"role": "system", "content": DEFAULT_SYSTEM_PROMPT},
+        {"role": "system",
+         "content": f"حالة المزرعة الحالية:\n{context_blob}"},
+        *history,
+        {"role": "user", "content": user_msg},
+    ]
+
+    # Save user message immediately
+    with db_cur() as cur:
+        cur.execute(
+            "INSERT INTO chat_messages (session_id, role, content, ts) "
+            "VALUES (?, 'user', ?, ?)",
+            (session_id, user_msg, _now_iso()))
+
+    # Call Ollama
+    try:
+        raw = await ollama_chat(messages, model=model)
+    except Exception as e:
+        err = (
+            "ما قدرت أوصل لـ Ollama على جهازك. تأكّد إنه شغّال على "
+            f"{OLLAMA_HOST} وإن النموذج '{model}' محمّل. "
+            f"(تشغيل: `ollama serve` ثم `ollama pull {model}`)"
+            f"\n\nالخطأ: {e}"
+        )
+        with db_cur() as cur:
+            cur.execute(
+                "INSERT INTO chat_messages (session_id, role, content, intent, ts) "
+                "VALUES (?, 'assistant', ?, 'error', ?)",
+                (session_id, err, _now_iso()))
+        return {"ok": False, "reply": err, "actions": None,
+                "ollama_model": model, "session_id": session_id}
+
+    actions = parse_actions_block(raw)
+    visible = strip_actions_block(raw)
+    intent = (actions or {}).get("intent") if actions else None
+
+    with db_cur() as cur:
+        cur.execute(
+            "INSERT INTO chat_messages "
+            "(session_id, role, content, intent, meta_json, ts) "
+            "VALUES (?, 'assistant', ?, ?, ?, ?)",
+            (session_id, visible, intent,
+             json.dumps(actions, ensure_ascii=False) if actions else None,
+             _now_iso()))
+
+    return {"ok": True, "reply": visible, "actions": actions,
+            "ollama_model": model, "session_id": session_id}
+
+
+@app.get("/api/ai/history")
+def api_ai_history(session_id: str = "default", limit: int = 100):
+    with db_cur() as cur:
+        rows = cur.execute(
+            "SELECT id, role, content, intent, meta_json, approved, ts "
+            "FROM chat_messages WHERE session_id = ? "
+            "ORDER BY id ASC LIMIT ?",
+            (session_id, limit)).fetchall()
+    return {"ok": True, "session_id": session_id,
+            "messages": [dict(r) for r in rows]}
+
+
+@app.post("/api/ai/clear")
+async def api_ai_clear(request: Request):
+    body = await request.json() if request.headers.get("content-length") else {}
+    session_id = body.get("session_id", "default")
+    with db_cur() as cur:
+        cur.execute("DELETE FROM chat_messages WHERE session_id = ?",
+                    (session_id,))
+    return {"ok": True}
+
+
+@app.post("/api/ai/approve/{msg_id}")
+async def api_ai_approve(msg_id: int, request: Request):
+    """Approve an LLM-proposed action set. Stores the decision in DB.
+    Body: {approved: bool}
+    """
+    body = await request.json() if request.headers.get("content-length") else {}
+    approved = 1 if body.get("approved", True) else -1
+    with db_cur() as cur:
+        cur.execute("UPDATE chat_messages SET approved = ? WHERE id = ?",
+                    (approved, msg_id))
+        row = cur.execute(
+            "SELECT meta_json FROM chat_messages WHERE id = ?",
+            (msg_id,)).fetchone()
+    return {"ok": True, "approved": approved,
+            "actions": json.loads(row["meta_json"]) if row and row["meta_json"]
+            else None}
+
+
+@app.get("/api/ai/status")
+def api_ai_status():
+    """Quick reachability + model list for the local Ollama server."""
+    import urllib.request
+    try:
+        with urllib.request.urlopen(f"{OLLAMA_HOST.rstrip('/')}/api/tags",
+                                    timeout=4) as r:
+            data = json.loads(r.read())
+        models = [m.get("name") for m in data.get("models", []) if m.get("name")]
+        return {"ok": True, "host": OLLAMA_HOST, "models": models,
+                "default_text": OLLAMA_TEXT_MODEL,
+                "default_vision": OLLAMA_VISION_MODEL}
+    except Exception as e:
+        return {"ok": False, "host": OLLAMA_HOST, "error": str(e),
+                "models": [], "default_text": OLLAMA_TEXT_MODEL}
+
+
+# ─── Strategy Snapshots — clone "what I'm doing in this village" ─────────────
+@app.post("/api/villages/{vid}/snapshot-strategy")
+async def api_snapshot_strategy(vid: str, request: Request):
+    """Capture a snapshot of THIS village's current strategy/build-queue/state
+    so the user can later say "apply this to all other villages"."""
+    v = get_village(vid)
+    if not v:
+        raise HTTPException(404, "village not found")
+    body = await request.json() if request.headers.get("content-length") else {}
+    label = (body.get("name") or f"snapshot من {v['name']}").strip()
+
+    with db_cur() as cur:
+        bq = cur.execute(
+            "SELECT slot, building, target_level, status "
+            "FROM build_queue WHERE village_id = ?", (vid,)).fetchall()
+    state_obj = {
+        "tribe": v.get("tribe"),
+        "strategy": v.get("strategy"),
+        "region": v.get("region"),
+        "schedule_json": v.get("schedule_json"),
+        "build_queue": [dict(b) for b in bq],
+        "notes": v.get("notes") or "",
+    }
+    with db_cur() as cur:
+        cur.execute(
+            "INSERT INTO strategy_snapshots "
+            "(source_vid, name, state_json, created_at) "
+            "VALUES (?, ?, ?, ?)",
+            (vid, label, json.dumps(state_obj, ensure_ascii=False),
+             _now_iso()))
+        snap_id = cur.execute(
+            "SELECT last_insert_rowid() AS i").fetchone()["i"]
+    log_event(vid, "strategy_snapshot", f"#{snap_id} '{label}'")
+    return {"ok": True, "snapshot_id": snap_id, "name": label, "state": state_obj}
+
+
+@app.get("/api/snapshots")
+def api_list_snapshots():
+    with db_cur() as cur:
+        rows = cur.execute(
+            "SELECT id, source_vid, name, created_at, "
+            "       SUBSTR(state_json, 1, 200) as preview "
+            "FROM strategy_snapshots ORDER BY id DESC LIMIT 50").fetchall()
+    return {"ok": True, "snapshots": [dict(r) for r in rows]}
+
+
+@app.delete("/api/snapshots/{snap_id}")
+def api_delete_snapshot(snap_id: int):
+    with db_cur() as cur:
+        cur.execute("DELETE FROM strategy_snapshots WHERE id = ?", (snap_id,))
+    return {"ok": True}
+
+
+@app.post("/api/snapshots/{snap_id}/apply")
+async def api_apply_snapshot(snap_id: int, request: Request):
+    """Apply a snapshot to a target set of villages.
+    Body: {scope: 'all'|'server'|'ids', server?: str, ids?: [str],
+           exclude_personal: bool=true, copy_build_queue: bool=true}
+    """
+    body = await request.json()
+    scope = body.get("scope", "all")
+    copy_q = bool(body.get("copy_build_queue", True))
+    excl_pers = bool(body.get("exclude_personal", True))
+
+    with db_cur() as cur:
+        snap = cur.execute(
+            "SELECT * FROM strategy_snapshots WHERE id = ?",
+            (snap_id,)).fetchone()
+    if not snap:
+        raise HTTPException(404, "snapshot not found")
+    state = json.loads(snap["state_json"])
+
+    # Resolve target villages
+    with db_cur() as cur:
+        if scope == "ids":
+            ids = body.get("ids") or []
+            if not ids:
+                return {"ok": False, "error": "no ids provided"}
+            q = (f"SELECT id, is_personal FROM villages WHERE id IN "
+                 f"({','.join('?'*len(ids))})")
+            rows = cur.execute(q, ids).fetchall()
+        elif scope == "server":
+            srv = body.get("server", "")
+            rows = cur.execute(
+                "SELECT id, is_personal FROM villages WHERE server = ?",
+                (srv,)).fetchall()
+        else:
+            rows = cur.execute(
+                "SELECT id, is_personal FROM villages").fetchall()
+
+    applied = []
+    skipped = []
+    with db_cur() as cur:
+        for r in rows:
+            if r["id"] == snap["source_vid"]:
+                skipped.append({"id": r["id"], "reason": "source village"})
+                continue
+            if excl_pers and r["is_personal"]:
+                skipped.append({"id": r["id"], "reason": "personal village"})
+                continue
+            cur.execute(
+                "UPDATE villages SET strategy = ?, schedule_json = ?, "
+                "notes = COALESCE(notes,'') || ? WHERE id = ?",
+                (state.get("strategy", "default"),
+                 state.get("schedule_json"),
+                 f"\napplied_snapshot=#{snap_id}@{_now_iso()}",
+                 r["id"]))
+            if copy_q:
+                # Clear and copy queue
+                cur.execute("DELETE FROM build_queue WHERE village_id = ?",
+                            (r["id"],))
+                for b in state.get("build_queue", []):
+                    cur.execute(
+                        "INSERT INTO build_queue "
+                        "(village_id, slot, building, target_level, "
+                        " ordered_at, status) "
+                        "VALUES (?, ?, ?, ?, ?, 'pending')",
+                        (r["id"], b.get("slot"), b.get("building"),
+                         b.get("target_level"), _now_iso()))
+            applied.append(r["id"])
+    # Log AFTER the write transaction has committed to avoid SQLite locking
+    for vid_applied in applied:
+        log_event(vid_applied, "snapshot_applied", f"#{snap_id}")
+    return {"ok": True, "applied": len(applied), "skipped": len(skipped),
+            "applied_ids": applied, "skipped_details": skipped}
+
+
+# ─── Transfer Execution + Smart Modes ────────────────────────────────────────
+RESOURCE_KEYS = ("wood", "clay", "iron", "crop")
+
+
+def _parse_resource_request(body: dict) -> tuple[str, dict[str, int]]:
+    """Return (mode, requested_map). mode in {specific, random_all, defense}.
+    'random_all' means: ignore amounts, just send all available resources
+    from each source. 'specific' = user-typed amounts. 'defense' = troop
+    transfer (handled separately)."""
+    mode = (body.get("mode") or "specific").lower()
+    if mode not in ("specific", "random_all", "defense"):
+        mode = "specific"
+    req = {k: int(body.get(f"amount_{k}", 0) or 0) for k in RESOURCE_KEYS}
+    return mode, req
+
+
+@app.post("/api/transfer/queue")
+async def api_transfer_queue(request: Request):
+    """Persist a transfer job (specific / random_all / defense) for later
+    execution by the worker pool. Returns the job id.
+
+    Body: {server, target_x, target_y, target_village_name, mode,
+           amount_wood?, amount_clay?, amount_iron?, amount_crop?,
+           troops?: {phalanx: int, legionnaire: int, ...} }
+    """
+    body = await request.json()
+    server = body.get("server", "")
+    tx = int(body.get("target_x", 0))
+    ty = int(body.get("target_y", 0))
+    tname = body.get("target_village_name", "")
+    mode, req = _parse_resource_request(body)
+    troops = body.get("troops") or {}
+
+    if mode == "specific" and sum(req.values()) <= 0:
+        return JSONResponse({"ok": False,
+                             "error": "في الوضع 'specific' لازم تحط كميات"},
+                            status_code=400)
+    if mode == "defense" and (not troops or sum(
+            int(v or 0) for v in troops.values()) <= 0):
+        return JSONResponse({"ok": False,
+                             "error": "في وضع الدفاع لازم تحدد جنود"},
+                            status_code=400)
+
+    with db_cur() as cur:
+        cur.execute(
+            "INSERT INTO transfer_jobs "
+            "(server, target_x, target_y, target_name, mode, "
+            " resources_json, troops_json, status, created_at) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, 'queued', ?)",
+            (server, tx, ty, tname, mode,
+             json.dumps(req), json.dumps(troops), _now_iso()))
+        job_id = cur.execute(
+            "SELECT last_insert_rowid() AS i").fetchone()["i"]
+    return {"ok": True, "job_id": job_id, "mode": mode,
+            "resources": req, "troops": troops}
+
+
+@app.get("/api/transfer/jobs")
+def api_transfer_jobs(limit: int = 30):
+    with db_cur() as cur:
+        rows = cur.execute(
+            "SELECT id, server, target_x, target_y, target_name, mode, "
+            "       resources_json, troops_json, status, created_at "
+            "FROM transfer_jobs ORDER BY id DESC LIMIT ?",
+            (limit,)).fetchall()
+    return {"ok": True, "jobs": [dict(r) for r in rows]}
+
+
+@app.delete("/api/transfer/jobs/{job_id}")
+def api_delete_transfer_job(job_id: int):
+    with db_cur() as cur:
+        cur.execute("DELETE FROM transfer_jobs WHERE id = ?", (job_id,))
+    return {"ok": True}
+
+
+
 # ─── Dashboard HTML ──────────────────────────────────────────────────────────
 _DASHBOARD_HTML = r"""<!DOCTYPE html>
 <html lang="ar" dir="rtl"><head>
@@ -2089,10 +2745,15 @@ _DASHBOARD_HTML = r"""<!DOCTYPE html>
 <header>
   <div class="flex">
     <h1>🏰 Zenrex Farm</h1>
-    <span class="badge" id="ver">v0.1.0</span>
+    <span class="badge" id="ver">v0.5.0</span>
     <span class="badge">100% Local · Free</span>
   </div>
   <div class="flex">
+    <a href="/chat" style="text-decoration:none">
+      <span class="badge" style="background:#312e81;color:#a78bfa;cursor:pointer">
+        🧠 العقل الاستراتيجي
+      </span>
+    </a>
     <span class="badge" id="proxy-status">— Proxies</span>
     <span class="badge" id="ollama-status">— Ollama</span>
   </div>
@@ -2136,8 +2797,14 @@ _DASHBOARD_HTML = r"""<!DOCTYPE html>
     <div id="transfer-modal" style="display:none;position:fixed;inset:0;
          background:rgba(0,0,0,0.8);z-index:100;align-items:center;
          justify-content:center;padding:20px">
-      <div class="card" style="max-width:520px;width:100%;max-height:90vh;overflow:auto">
-        <h2>💱 نقل موارد للوجهة</h2>
+      <div class="card" style="max-width:560px;width:100%;max-height:90vh;overflow:auto">
+        <h2>💱 نقل موارد / دفاع</h2>
+        <label>الوضع</label>
+        <select id="t-mode" onchange="updateTransferMode()">
+          <option value="specific">🎯 محدد (تحدد كميات كل مورد)</option>
+          <option value="random_all">🎲 عشوائي / كل المتوفر</option>
+          <option value="defense">🛡 دفاع (إرسال جنود)</option>
+        </select>
         <label>السيرفر</label>
         <select id="t-server"></select>
         <div class="row">
@@ -2146,14 +2813,34 @@ _DASHBOARD_HTML = r"""<!DOCTYPE html>
         </div>
         <label>اسم القرية الهدف</label>
         <input id="t-name" placeholder="مثلاً: قرية الهدف"/>
-        <div class="row">
-          <div><label>🪵 خشب</label><input id="t-wood" type="number" value="0"/></div>
-          <div><label>🧱 طين</label><input id="t-clay" type="number" value="0"/></div>
-          <div><label>⚒️ حديد</label><input id="t-iron" type="number" value="0"/></div>
-          <div><label>🌾 قمح</label><input id="t-crop" type="number" value="0"/></div>
+
+        <div id="t-resources">
+          <div class="row">
+            <div><label>🪵 خشب</label><input id="t-wood" type="number" value="0"/></div>
+            <div><label>🧱 طين</label><input id="t-clay" type="number" value="0"/></div>
+            <div><label>⚒️ حديد</label><input id="t-iron" type="number" value="0"/></div>
+            <div><label>🌾 قمح</label><input id="t-crop" type="number" value="0"/></div>
+          </div>
+          <p class="small" id="t-mode-hint" style="margin-top:6px;color:var(--muted)">
+            في وضع <b>محدد</b>: حدد الكمية لكل مورد.
+          </p>
         </div>
+
+        <div id="t-troops" style="display:none">
+          <div class="row">
+            <div><label>🛡 فالانكس</label><input id="t-phalanx" type="number" value="0"/></div>
+            <div><label>🗡 ليجيونر</label><input id="t-legionnaire" type="number" value="0"/></div>
+            <div><label>🏹 رماة</label><input id="t-archer" type="number" value="0"/></div>
+            <div><label>🐎 فرسان</label><input id="t-cavalry" type="number" value="0"/></div>
+          </div>
+          <p class="small" style="margin-top:6px;color:var(--muted)">
+            الجنود يُرسلون من القرى المسجّلة فقط كدعم دفاعي.
+          </p>
+        </div>
+
         <div class="row">
           <button onclick="planTransfer()">🧮 احسب الخطة</button>
+          <button class="secondary" onclick="queueTransfer()">📥 ضع في الطابور</button>
           <button class="secondary" onclick="closeTransferDialog()">إلغاء</button>
         </div>
         <div id="transfer-result" class="small" style="margin-top:12px"></div>
@@ -2267,6 +2954,18 @@ _DASHBOARD_HTML = r"""<!DOCTYPE html>
     </div>
 
     <div class="card" style="margin-top:18px">
+      <h2>📋 Snapshots — استراتيجيات محفوظة</h2>
+      <p class="small" style="color:var(--muted)">انسخ خطّتك من قرية إلى البقية. اضغط 📋 جنب أي قرية.</p>
+      <div id="snapshots-list" style="margin-top:8px;display:flex;flex-direction:column;gap:6px"></div>
+    </div>
+
+    <div class="card" style="margin-top:18px">
+      <h2>📥 طابور التحويلات</h2>
+      <div id="jobs-list" style="margin-top:8px;display:flex;flex-direction:column;gap:6px;
+           max-height:240px;overflow:auto"></div>
+    </div>
+
+    <div class="card" style="margin-top:18px">
       <h2>قائمة البروكسيات</h2>
       <p class="small">ضع كل بروكسي في سطر منفصل. الأشكال المقبولة:<br/>
       <code>http://host:port</code>, <code>http://user:pass@host:port</code>, <code>socks5://host:port</code></p>
@@ -2336,9 +3035,10 @@ async function loadVillages(){
       <td><span class="small">${v.proxy ? v.proxy.substring(0,22) : '🏠 مباشر'}</span></td>
       <td><span class="small">${v.email || '—'}</span></td>
       <td>
-        <button class="secondary" onclick="openBrowser('${v.id}')">🦊</button>
-        <button class="secondary" onclick="attachEmail('${v.id}')">📧</button>
-        <button class="secondary" onclick="togglePersonal('${v.id}', ${!v.is_personal})">${v.is_personal ? '⊖' : '👤'}</button>
+        <button class="secondary" onclick="openBrowser('${v.id}')" title="افتح المتصفح ودخول تلقائي">🦊</button>
+        <button class="secondary" onclick="attachEmail('${v.id}')" title="إنشاء إيميل مؤقت">📧</button>
+        <button class="secondary" onclick="snapshotStrategy('${v.id}', '${(v.name||'').replace(/'/g, '\\\'')}')" title="انسخ استراتيجية هذه القرية لباقي القرى">📋</button>
+        <button class="secondary" onclick="togglePersonal('${v.id}', ${!v.is_personal})" title="قرية شخصية">${v.is_personal ? '⊖' : '👤'}</button>
         <button class="danger" onclick="delVillage('${v.id}')">🗑</button>
       </td>
     </tr>
@@ -2438,17 +3138,54 @@ async function createAlliance(){
   alert(txt);
 }
 
-async function planTransfer(){
-  const body = {
+function updateTransferMode(){
+  const mode = $('#t-mode').value;
+  const resBox = $('#t-resources');
+  const trpBox = $('#t-troops');
+  const hint = $('#t-mode-hint');
+  if (mode === 'defense') {
+    resBox.style.display = 'none';
+    trpBox.style.display = 'block';
+  } else {
+    resBox.style.display = 'block';
+    trpBox.style.display = 'none';
+    if (mode === 'random_all') {
+      hint.innerHTML = 'في وضع <b>عشوائي/كل المتوفر</b>: تترك الكميات صفر — البوت يرسل كل اللي عند كل قرية تلقائياً.';
+    } else {
+      hint.innerHTML = 'في وضع <b>محدد</b>: حدد الكمية لكل مورد.';
+    }
+  }
+}
+
+function collectTransferBody(){
+  return {
     server: $('#t-server').value,
     target_x: parseInt($('#t-x').value || '0'),
     target_y: parseInt($('#t-y').value || '0'),
     target_village_name: $('#t-name').value || 'الهدف',
+    mode: $('#t-mode').value,
     amount_wood: parseInt($('#t-wood').value || '0'),
     amount_clay: parseInt($('#t-clay').value || '0'),
     amount_iron: parseInt($('#t-iron').value || '0'),
     amount_crop: parseInt($('#t-crop').value || '0'),
+    troops: {
+      phalanx: parseInt($('#t-phalanx') ? $('#t-phalanx').value || '0' : '0'),
+      legionnaire: parseInt($('#t-legionnaire') ? $('#t-legionnaire').value || '0' : '0'),
+      archer: parseInt($('#t-archer') ? $('#t-archer').value || '0' : '0'),
+      cavalry: parseInt($('#t-cavalry') ? $('#t-cavalry').value || '0' : '0'),
+    }
   };
+}
+
+async function planTransfer(){
+  const body = collectTransferBody();
+  // /api/transfer/plan only supports specific amounts; for other modes, synthesize 1 unit
+  if (body.mode === 'random_all') {
+    body.amount_wood = body.amount_wood || 1;
+    body.amount_clay = body.amount_clay || 1;
+    body.amount_iron = body.amount_iron || 1;
+    body.amount_crop = body.amount_crop || 1;
+  }
   const r = await fetch('/api/transfer/plan', { method:'POST',
     headers:{'Content-Type':'application/json'}, body: JSON.stringify(body) });
   const d = await r.json();
@@ -2466,6 +3203,16 @@ async function planTransfer(){
   out.innerHTML = html;
 }
 
+async function queueTransfer(){
+  const body = collectTransferBody();
+  const r = await fetch('/api/transfer/queue', { method:'POST',
+    headers:{'Content-Type':'application/json'}, body: JSON.stringify(body)});
+  const d = await r.json();
+  const out = $('#transfer-result');
+  if (!d.ok) { out.innerHTML = '<span style="color:#ef4444">✗ ' + d.error + '</span>'; return; }
+  out.innerHTML = `<span style="color:#10b981">✓ تم وضع المهمة #${d.job_id} في الطابور (وضع: ${d.mode})</span>`;
+}
+
 async function delVillage(id){
   if (!confirm('احذف هذه القرية؟ (الملفات تبقى)')) return;
   await fetch(`/api/villages/${id}`, { method:'DELETE' });
@@ -2475,8 +3222,38 @@ async function delVillage(id){
 async function openBrowser(id){
   const r = await fetch(`/api/villages/${id}/open-browser`, { method:'POST' });
   const d = await r.json();
-  if (!d.ok) alert('✗ ' + d.error);
-  else loadVillages();
+  if (!d.ok) { alert('✗ ' + d.error); return; }
+  const l = d.login || {};
+  if (l.stage === 'logged_in' || l.stage === 'already_logged_in') {
+    // silent success — village is ready
+  } else if (l.stage === 'preflight') {
+    alert(`⚠ المتصفح فتح، لكن ما قدر يسجّل دخول:\n${l.detail}\n\nأنشئ إيميل أولاً (📧) أو سجّل القرية في Travian.`);
+  } else if (l.stage === 'credentials_rejected') {
+    alert(`✗ بيانات الدخول مرفوضة من Travian:\n${l.detail}`);
+  } else if (l.stage === 'submitted_unverified') {
+    // Probably first-time login or needs registration — silent.
+  } else if (l.stage === 'email_field' || l.stage === 'password_field') {
+    alert(`⚠ المتصفح فتح، لكن ما لقى حقول الدخول (قد يكون مسجّل أصلاً، أو الصفحة لسه تحمّل).`);
+  }
+  loadVillages();
+}
+
+async function snapshotStrategy(id, vname){
+  const name = prompt('سمّ هذه الـ snapshot:', `snapshot من ${vname}`);
+  if (!name) return;
+  const r = await fetch(`/api/villages/${id}/snapshot-strategy`, {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({name})});
+  const d = await r.json();
+  if (!d.ok) { alert('✗ ' + (d.error || 'failed')); return; }
+  if (confirm(`✓ تم حفظ snapshot #${d.snapshot_id} '${d.name}'\n\nتبي تطبّقها على كل القرى الأخرى الآن؟`)) {
+    const r2 = await fetch(`/api/snapshots/${d.snapshot_id}/apply`, {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({scope:'all', exclude_personal:true,
+                            copy_build_queue:true})});
+    const d2 = await r2.json();
+    alert(`✓ تطبيق على ${d2.applied} قرية (تم تخطّي ${d2.skipped})`);
+  }
 }
 
 async function attachEmail(id){
@@ -2530,8 +3307,17 @@ async function previewIdentity(){
 
 async function checkOllama(){
   try {
-    const r = await fetch('/health'); const d = await r.json();
-    $('#ollama-status').textContent = `🧠 Ollama: ${d.ollama_vision_model}`;
+    const r = await fetch('/api/ai/status'); const d = await r.json();
+    const el = $('#ollama-status');
+    if (d.ok) {
+      const tag = (d.models && d.models[0]) || d.default_text || '—';
+      el.textContent = `🧠 Ollama: ${d.models ? d.models.length : 0} موديل (${tag})`;
+      el.classList.add('live');
+    } else {
+      el.textContent = '🧠 Ollama: غير متصل';
+      el.style.background = '#7f1d1d';
+      el.style.color = '#fca5a5';
+    }
   } catch {}
 }
 
@@ -2541,8 +3327,348 @@ loadVillages();
 loadProxies();
 checkOllama();
 refreshPool();
+loadSnapshots();
+loadJobs();
 setInterval(loadVillages, 8000);
 setInterval(refreshPool, 6000);
+setInterval(loadSnapshots, 15000);
+setInterval(loadJobs, 8000);
+
+async function loadSnapshots(){
+  try {
+    const r = await fetch('/api/snapshots'); const d = await r.json();
+    const box = $('#snapshots-list');
+    if (!d.snapshots || !d.snapshots.length) {
+      box.innerHTML = '<span class="small">— لا توجد snapshots بعد. اضغط 📋 على أي قرية.</span>';
+      return;
+    }
+    box.innerHTML = d.snapshots.map(s => `
+      <div style="padding:8px 10px;background:#0a0a14;border-radius:8px;
+           border:1px solid var(--line);display:flex;justify-content:space-between;
+           align-items:center;gap:6px">
+        <div style="flex:1;min-width:0">
+          <div style="font-size:12px;font-weight:600">${s.name}</div>
+          <div class="small" style="color:var(--muted)">#${s.id} • ${s.source_vid}</div>
+        </div>
+        <button class="secondary" style="margin:0;padding:5px 8px;font-size:11px"
+                onclick="applySnap(${s.id})">طبّق</button>
+        <button class="danger" style="margin:0;padding:5px 8px;font-size:11px"
+                onclick="delSnap(${s.id})">🗑</button>
+      </div>`).join('');
+  } catch(e) {}
+}
+
+async function applySnap(sid){
+  if (!confirm('طبّق هذه الـ snapshot على كل القرى (ما عدا الشخصية)؟')) return;
+  const r = await fetch(`/api/snapshots/${sid}/apply`, { method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({scope:'all', exclude_personal:true,
+                          copy_build_queue:true})});
+  const d = await r.json();
+  alert(`✓ تم التطبيق على ${d.applied} قرية (تم تخطّي ${d.skipped})`);
+}
+
+async function delSnap(sid){
+  if (!confirm('احذف هذه الـ snapshot؟')) return;
+  await fetch(`/api/snapshots/${sid}`, { method:'DELETE' });
+  loadSnapshots();
+}
+
+async function loadJobs(){
+  try {
+    const r = await fetch('/api/transfer/jobs'); const d = await r.json();
+    const box = $('#jobs-list');
+    if (!d.jobs || !d.jobs.length) {
+      box.innerHTML = '<span class="small">— الطابور فارغ.</span>';
+      return;
+    }
+    box.innerHTML = d.jobs.map(j => {
+      const res = j.resources_json ? JSON.parse(j.resources_json) : {};
+      const trp = j.troops_json ? JSON.parse(j.troops_json) : {};
+      const modeIcon = j.mode === 'defense' ? '🛡' : j.mode === 'random_all' ? '🎲' : '🎯';
+      const summary = j.mode === 'defense' ?
+        Object.entries(trp).filter(([_,v])=>v>0).map(([k,v])=>`${v} ${k}`).join(', ') :
+        Object.entries(res).filter(([_,v])=>v>0).map(([k,v])=>`${v} ${k}`).join(', ') || 'كل المتوفر';
+      const statusColor = j.status === 'done' ? '#10b981' :
+                          j.status === 'failed' ? '#ef4444' :
+                          j.status === 'running' ? '#a78bfa' : '#9ca3af';
+      return `
+      <div style="padding:7px 9px;background:#0a0a14;border-radius:7px;
+           border:1px solid var(--line);font-size:11px;display:flex;
+           justify-content:space-between;align-items:center;gap:6px">
+        <div style="flex:1;min-width:0">
+          <div>${modeIcon} #${j.id} → (${j.target_x},${j.target_y}) ${j.target_name||''}</div>
+          <div class="small" style="color:var(--muted)">${summary}</div>
+        </div>
+        <span class="pill" style="background:transparent;color:${statusColor};
+              border:1px solid ${statusColor}">${j.status}</span>
+        <button class="danger" style="margin:0;padding:3px 6px;font-size:10px"
+                onclick="delJob(${j.id})">🗑</button>
+      </div>`;
+    }).join('');
+  } catch(e) {}
+}
+
+async function delJob(jid){
+  await fetch(`/api/transfer/jobs/${jid}`, { method:'DELETE' });
+  loadJobs();
+}
+</script>
+</body></html>
+"""
+
+
+# ─── AI Chat HTML ────────────────────────────────────────────────────────────
+_CHAT_HTML = r"""<!DOCTYPE html>
+<html lang="ar" dir="rtl"><head>
+<meta charset="utf-8"/>
+<title>Zenrex Brain — العقل الاستراتيجي</title>
+<style>
+ :root{ --bg:#08080f; --panel:#11111c; --line:#252535; --text:#e8e8f0;
+        --muted:#8888a0; --accent:#a78bfa; --green:#10b981; --red:#ef4444;
+        --amber:#f59e0b; --blue:#3b82f6; }
+ *{box-sizing:border-box;margin:0;padding:0}
+ body{background:var(--bg);color:var(--text);min-height:100vh;
+      font-family:'Segoe UI',Tahoma,Arial,sans-serif;font-size:14px;
+      display:flex;flex-direction:column}
+ header{padding:14px 24px;background:var(--panel);border-bottom:1px solid var(--line);
+        display:flex;justify-content:space-between;align-items:center;gap:12px}
+ h1{font-size:18px;color:var(--accent);font-weight:700}
+ .badge{font-size:11px;padding:3px 9px;border-radius:6px;background:#222;color:var(--muted)}
+ .badge.live{background:#064e3b;color:#10b981}
+ .badge.bad{background:#7f1d1d;color:#fca5a5}
+ main{flex:1;display:grid;grid-template-columns:280px 1fr;gap:0;min-height:0}
+ aside{background:var(--panel);border-left:1px solid var(--line);padding:16px;
+       display:flex;flex-direction:column;gap:12px;overflow:auto}
+ aside h2{font-size:12px;color:var(--accent);font-weight:600;
+          text-transform:uppercase;letter-spacing:0.07em}
+ .chat-area{display:flex;flex-direction:column;min-height:0}
+ .messages{flex:1;overflow:auto;padding:24px;display:flex;flex-direction:column;
+           gap:14px;background:var(--bg)}
+ .msg{max-width:720px;padding:12px 16px;border-radius:14px;line-height:1.7;
+      white-space:pre-wrap;word-wrap:break-word}
+ .msg.user{background:#1e1b4b;color:#e0e7ff;align-self:flex-start;
+           border:1px solid #312e81}
+ .msg.assistant{background:#11111c;color:var(--text);align-self:flex-end;
+                border:1px solid var(--line)}
+ .msg.system{background:#0a0a14;color:var(--muted);align-self:center;
+             font-size:12px;border:1px dashed var(--line);max-width:520px}
+ .actions{margin-top:10px;padding:10px;background:#0a0a14;border-radius:8px;
+          font-size:12px;border:1px solid #312e81}
+ .actions pre{color:#a78bfa;font-family:'Consolas',monospace;font-size:11px;
+              overflow:auto;margin:6px 0}
+ .actions .row{display:flex;gap:6px}
+ .composer{padding:14px 20px;background:var(--panel);border-top:1px solid var(--line);
+           display:flex;gap:10px}
+ .composer textarea{flex:1;background:#0a0a14;border:1px solid var(--line);
+                    color:var(--text);padding:11px 14px;border-radius:10px;
+                    font-family:inherit;font-size:14px;resize:none;min-height:46px;
+                    max-height:140px}
+ .composer button{background:var(--accent);color:#0a0a14;border:none;padding:0 22px;
+                  border-radius:10px;font-weight:600;cursor:pointer}
+ .composer button:disabled{filter:grayscale(0.6);cursor:not-allowed}
+ .meta{font-size:11px;color:var(--muted);margin-top:6px}
+ button.mini{background:#222;color:var(--text);border:1px solid var(--line);
+             padding:5px 10px;border-radius:6px;font-size:11px;cursor:pointer}
+ button.mini.approve{background:#064e3b;color:#10b981;border-color:#065f46}
+ button.mini.reject{background:#7f1d1d;color:#fca5a5;border-color:#991b1b}
+ .quick{display:flex;flex-direction:column;gap:6px}
+ .quick button{text-align:right;background:#0a0a14;border:1px solid var(--line);
+               color:var(--text);padding:8px 10px;border-radius:8px;font-size:12px;
+               cursor:pointer}
+ .quick button:hover{border-color:var(--accent)}
+ a{color:var(--accent);text-decoration:none}
+</style></head>
+<body>
+<header>
+  <div style="display:flex;gap:10px;align-items:center">
+    <h1>🧠 Zenrex Brain — العقل الاستراتيجي</h1>
+    <span class="badge">v0.5.0</span>
+  </div>
+  <div style="display:flex;gap:8px;align-items:center">
+    <a href="/" class="badge" style="background:#1e3a8a;color:#93c5fd">🏰 لوحة المزرعة</a>
+    <span class="badge" id="ollama-tag">— Ollama</span>
+    <button class="mini" onclick="clearChat()">🗑 محادثة جديدة</button>
+  </div>
+</header>
+
+<main>
+  <aside>
+    <div>
+      <h2>الموديل</h2>
+      <select id="model" style="width:100%;background:#0a0a14;color:var(--text);
+              border:1px solid var(--line);padding:8px;border-radius:8px"></select>
+      <p class="meta" id="ollama-meta">جارٍ الفحص...</p>
+    </div>
+    <div>
+      <h2>أوامر سريعة</h2>
+      <div class="quick">
+        <button onclick="sendQuick('ايش الخطة المقترحة لاول 100 قرية على ts8؟ خل التحالف يصير جاهز ليبيع موارد')">📋 اقترح خطة افتتاحية</button>
+        <button onclick="sendQuick('انا اخترت قرية شخصية اشتغل فيها. شوف وضعها وسوي مثلها على باقي القرى')">🔁 انسخ خطتي للقرى</button>
+        <button onclick="sendQuick('عطني خطة دفاع لازم اطبقها لما يهجم احد القرى')">🛡 خطة دفاع</button>
+        <button onclick="sendQuick('متى افضل وقت احوّل الموارد للزبون اللي بشتري؟')">💰 توقيت بيع موارد</button>
+        <button onclick="sendQuick('وش المخاطر اللي تعرّض الفارم للحظر؟')">⚠ تقييم مخاطر</button>
+      </div>
+    </div>
+    <div>
+      <h2>حالة المزرعة</h2>
+      <pre id="ctx-snap" style="font-size:11px;color:var(--muted);
+           background:#0a0a14;padding:8px;border-radius:6px;overflow:auto"></pre>
+    </div>
+  </aside>
+
+  <section class="chat-area">
+    <div id="messages" class="messages">
+      <div class="msg system">
+        ابدأ بكتابة الخطة، أو استخدم الأوامر السريعة. كل ما تقترح خطة، أرد بمقترح + JSON اجراءات قابل للاعتماد أو الرفض.
+      </div>
+    </div>
+    <div class="composer">
+      <textarea id="input" placeholder="اكتب لي الخطة، أو اسأل عن الاستراتيجية..." onkeydown="handleKey(event)"></textarea>
+      <button id="send-btn" onclick="sendMessage()">إرسال</button>
+    </div>
+  </section>
+</main>
+
+<script>
+const $ = s => document.querySelector(s);
+const SID = 'main';
+
+function handleKey(e){
+  if (e.key === 'Enter' && !e.shiftKey) {
+    e.preventDefault();
+    sendMessage();
+  }
+}
+
+function renderMessages(rows){
+  const box = $('#messages');
+  box.innerHTML = '';
+  if (!rows || !rows.length) {
+    box.innerHTML = '<div class="msg system">ابدأ بكتابة الخطة، أو استخدم الأوامر السريعة.</div>';
+    return;
+  }
+  rows.forEach(m => {
+    const div = document.createElement('div');
+    div.className = 'msg ' + (m.role || 'assistant');
+    div.textContent = m.content;
+    if (m.meta_json) {
+      try {
+        const obj = JSON.parse(m.meta_json);
+        const a = document.createElement('div');
+        a.className = 'actions';
+        const intent = obj.intent || 'action';
+        a.innerHTML = `<b style="color:#a78bfa">📦 إجراء مقترح: ${intent}</b>` +
+          `<pre>${JSON.stringify(obj, null, 2)}</pre>` +
+          `<div class="row"><button class="mini approve" onclick="approve(${m.id}, true)">✓ اعتمد</button>` +
+          `<button class="mini reject" onclick="approve(${m.id}, false)">✗ ارفض</button></div>` +
+          (m.approved === 1 ? '<div class="meta" style="color:#10b981">معتمد</div>' :
+           m.approved === -1 ? '<div class="meta" style="color:#ef4444">مرفوض</div>' : '');
+        div.appendChild(a);
+      } catch(e) {}
+    }
+    box.appendChild(div);
+  });
+  box.scrollTop = box.scrollHeight;
+}
+
+async function loadHistory(){
+  const r = await fetch(`/api/ai/history?session_id=${SID}`);
+  const d = await r.json();
+  renderMessages(d.messages || []);
+}
+
+async function loadStatus(){
+  const r = await fetch('/api/ai/status');
+  const d = await r.json();
+  const tag = $('#ollama-tag');
+  const meta = $('#ollama-meta');
+  const sel = $('#model');
+  if (d.ok) {
+    tag.textContent = `🧠 ${d.models.length} موديل`;
+    tag.classList.add('live');
+    sel.innerHTML = d.models.map(m => `<option value="${m}">${m}</option>`).join('');
+    if (d.default_text && d.models.includes(d.default_text)) sel.value = d.default_text;
+    meta.textContent = `متصل بـ ${d.host}`;
+  } else {
+    tag.textContent = '🧠 غير متصل';
+    tag.classList.add('bad');
+    sel.innerHTML = '<option value="qwen2.5:7b">qwen2.5:7b</option>';
+    meta.innerHTML = `❌ ${d.error || 'تعذّر الاتصال'}.<br/>`+
+      `شغّل: <code>ollama serve</code> ثم <code>ollama pull qwen2.5:7b</code>`;
+  }
+}
+
+async function loadCtx(){
+  try {
+    const r = await fetch('/api/villages'); const d = await r.json();
+    const states = {};
+    (d.villages||[]).forEach(v => states[v.state] = (states[v.state]||0)+1);
+    $('#ctx-snap').textContent = JSON.stringify({
+      total: d.total, by_state: states
+    }, null, 2);
+  } catch(e) {}
+}
+
+async function sendMessage(){
+  const ta = $('#input');
+  const txt = (ta.value || '').trim();
+  if (!txt) return;
+  const btn = $('#send-btn');
+  btn.disabled = true; btn.textContent = '...';
+  ta.value = '';
+  // Optimistic add of user msg
+  const box = $('#messages');
+  const u = document.createElement('div');
+  u.className = 'msg user'; u.textContent = txt;
+  box.appendChild(u);
+  // Thinking placeholder
+  const t = document.createElement('div');
+  t.className = 'msg assistant'; t.id = 'thinking';
+  t.textContent = '… يفكّر زِنركس برين';
+  box.appendChild(t);
+  box.scrollTop = box.scrollHeight;
+  try {
+    const r = await fetch('/api/ai/chat', { method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({session_id:SID, message:txt,
+                            model: $('#model').value || undefined})});
+    const d = await r.json();
+    document.getElementById('thinking')?.remove();
+    await loadHistory();
+  } catch(e) {
+    document.getElementById('thinking')?.remove();
+    alert('فشل الإرسال: ' + e);
+  } finally {
+    btn.disabled = false; btn.textContent = 'إرسال';
+  }
+}
+
+function sendQuick(text){
+  $('#input').value = text;
+  sendMessage();
+}
+
+async function approve(msgId, ok){
+  await fetch(`/api/ai/approve/${msgId}`, { method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({approved: ok})});
+  loadHistory();
+}
+
+async function clearChat(){
+  if (!confirm('مسح كل المحادثة؟')) return;
+  await fetch('/api/ai/clear', { method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({session_id:SID})});
+  loadHistory();
+}
+
+// boot
+loadStatus();
+loadHistory();
+loadCtx();
+setInterval(loadCtx, 12000);
 </script>
 </body></html>
 """

@@ -148,3 +148,52 @@ Unify the AI brain and empower it with unified toolset. Fix mocked AI Trading Bo
 - Cooling: AIO 240mm + multiple case fans
 - PSU: Team Group GX
 - Issue: CR2032 dead (date/time resets — user buying replacement)
+
+
+## Session 2026-02 (continued) — Zenrex Farm v0.5.0
+### Implemented
+- **Auto-Login**: `/api/villages/{vid}/open-browser` now:
+  - Always navigates to `https://lobby.legends.travian.com`
+  - Auto-accepts cookie banners (CMP / OneTrust / iframe variants)
+  - Fills email + password using human-typing
+  - Submits login form; falls back to Enter key
+  - Returns `login.stage`: `logged_in | already_logged_in | submitted_unverified |
+    preflight | credentials_rejected | email_field | password_field | exception`
+- **AI Strategy Chat** (`/chat` page + `/api/ai/chat`):
+  - Backed by local Ollama (`OLLAMA_TEXT_MODEL`, default `qwen2.5:7b`)
+  - System prompt teaches the LLM about Zuhair's goal: 100 villages selling
+    resources to real players via in-alliance transfers
+  - LLM returns conversational reply + `<<ACTIONS>>{...}<<END>>` JSON block
+  - Approve/Reject buttons persist user decision to `chat_messages.approved`
+  - Session history in SQLite `chat_messages` table
+  - Endpoints: `/api/ai/chat`, `/api/ai/history`, `/api/ai/clear`,
+    `/api/ai/approve/{msg_id}`, `/api/ai/status`
+- **Strategy Snapshots**:
+  - 📋 button on each village row captures its strategy/build queue
+  - `/api/villages/{vid}/snapshot-strategy` → row in `strategy_snapshots`
+  - `/api/snapshots/{id}/apply` clones to all/server/specific-ids
+    (excludes personal villages by default)
+- **Transfer Modes**:
+  - `specific`: user-typed per-resource amounts
+  - `random_all`: send whatever each source has (no amounts needed)
+  - `defense`: send troops (phalanx/legionnaire/archer/cavalry)
+  - Persisted in `transfer_jobs` table for worker pickup
+  - Endpoints: `/api/transfer/queue`, `/api/transfer/jobs`,
+    `DELETE /api/transfer/jobs/{id}`
+
+### Pending / Next
+- 🔴 P0: **Transfer Worker** — actually execute queued `transfer_jobs` via
+  Playwright (open marketplace, fill form, submit). Currently jobs only queue.
+- 🔴 P0: **Mail.tm Activation Polling** — after register, poll inbox for
+  activation link and click it automatically.
+- 🟡 P1: Auto-register (improve existing `/api/villages/{vid}/register-travian`
+  selectors per lobby version).
+- 🟡 P1: Auto-Raid worker that scans 30-tile radius and dispatches raids.
+- 🟡 P1: Alliance auto-invite for villages registered on the same server.
+- 🟢 P2: Refactor `zenrex_farm.py` (3700+ lines) into modules
+  (`db.py`, `stealth.py`, `lobby.py`, `routes/`).
+
+### Files
+- `/app/desktop_agent/zenrex_farm.py` (v0.5.0, ~3700 lines)
+- Dashboard: `http://127.0.0.1:7870/`
+- Chat: `http://127.0.0.1:7870/chat`
