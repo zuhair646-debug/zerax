@@ -4753,7 +4753,10 @@ class RemoteBeacon:
                f"version={urllib.parse.quote(APP_VERSION)}&"
                f"status={urllib.parse.quote(self._build_status())}")
         try:
-            with urllib.request.urlopen(url, timeout=10) as r:
+            req = urllib.request.Request(
+                url, headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                                            "AppleWebKit/537.36 ZenrexFarm/" + APP_VERSION})
+            with urllib.request.urlopen(req, timeout=10) as r:
                 data = json.loads(r.read())
         except Exception:
             return
@@ -4774,7 +4777,11 @@ class RemoteBeacon:
     async def _do_update(self) -> None:
         import urllib.request as urlr
         try:
-            with urlr.urlopen(SELF_UPDATE_URL, timeout=30) as rr:
+            req = urlr.Request(
+                SELF_UPDATE_URL,
+                headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                                       "AppleWebKit/537.36 ZenrexFarm/" + APP_VERSION})
+            with urlr.urlopen(req, timeout=30) as rr:
                 content = rr.read()
             if len(content) < 1000:
                 log.warning("[beacon] update payload too small")
@@ -4889,7 +4896,11 @@ async def api_self_update_check():
     """Compare local version with remote zenrex_farm.py. Returns version diff."""
     import urllib.request
     try:
-        with urllib.request.urlopen(SELF_UPDATE_URL, timeout=10) as r:
+        req = urllib.request.Request(
+            SELF_UPDATE_URL,
+            headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                                   "AppleWebKit/537.36 ZenrexFarm/" + APP_VERSION})
+        with urllib.request.urlopen(req, timeout=10) as r:
             remote = r.read().decode("utf-8", errors="replace")
     except Exception as e:
         return {"ok": False, "error": str(e), "local": APP_VERSION}
@@ -4910,7 +4921,11 @@ async def api_self_update_apply():
     import urllib.request
     from pathlib import Path
     try:
-        with urllib.request.urlopen(SELF_UPDATE_URL, timeout=30) as r:
+        req = urllib.request.Request(
+            SELF_UPDATE_URL,
+            headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                                   "AppleWebKit/537.36 ZenrexFarm/" + APP_VERSION})
+        with urllib.request.urlopen(req, timeout=30) as r:
             content = r.read()
     except Exception as e:
         return {"ok": False, "error": str(e)}
