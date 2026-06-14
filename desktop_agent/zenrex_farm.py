@@ -59,7 +59,7 @@ import uvicorn
 
 # ─── Config ──────────────────────────────────────────────────────────────────
 APP_NAME = "Zenrex Farm"
-APP_VERSION = "0.4.0"
+APP_VERSION = "0.4.1"
 PORT = 7870
 
 ROOT = Path(os.environ.get(
@@ -1077,26 +1077,33 @@ async def email_internal(village_id: str) -> dict[str, str]:
 
 async def create_email_for(village_id: str,
                            prefer: Optional[str] = None) -> dict[str, str]:
-    """Round-robin/fall-through across providers. `prefer` = mail.tm | 1secmail |
-    guerrilla | internal. None = random."""
-    order = [prefer] if prefer else random.sample(EMAIL_PROVIDERS, len(EMAIL_PROVIDERS))
+    """Try real providers ONLY (no placeholder fallback). Each provider is
+    retried 2 times with backoff. Raises if no real mailbox can be created."""
+    # Real providers only — order by reliability (Travian has been observed
+    # to flag less, in this order).
+    real_providers = ["mail.tm", "1secmail", "guerrilla"]
+    order = [prefer] if prefer in real_providers else random.sample(
+        real_providers, len(real_providers))
     last_err = ""
     for p in order:
-        try:
-            if p == "mail.tm":
-                acct = await mailtm_create_account()
-                acct["provider"] = "mail.tm"
-                return acct
-            if p == "1secmail":
-                return await email_1secmail()
-            if p == "guerrilla":
-                return await email_guerrilla()
-            if p == "internal":
-                return await email_internal(village_id)
-        except Exception as e:
-            last_err = f"{p}: {e}"
-            log.warning(f"email provider {p} failed: {e}")
-    raise RuntimeError(f"all email providers failed. last: {last_err}")
+        for attempt in (1, 2):
+            try:
+                if p == "mail.tm":
+                    acct = await mailtm_create_account()
+                    acct["provider"] = "mail.tm"
+                    return acct
+                if p == "1secmail":
+                    return await email_1secmail()
+                if p == "guerrilla":
+                    return await email_guerrilla()
+            except Exception as e:
+                last_err = f"{p} attempt {attempt}: {e}"
+                log.warning(last_err)
+                await asyncio.sleep(1.5 * attempt)
+    # If ALL providers failed, raise — no placeholder fallback.
+    raise RuntimeError(
+        f"All real email providers failed (mail.tm/1secmail/guerrilla). "
+        f"Last error: {last_err}. Try again in a minute (likely rate-limited).")
 
 
 # ─── FastAPI app + dashboard ─────────────────────────────────────────────────
@@ -1603,6 +1610,60 @@ def api_get_village(vid: str):
         raise HTTPException(404, "village not found")
     v["events"] = list_events(vid, limit=50)
     return v
+
+
+@app.post("/api/villages/bulk-reattach-emails")
+async def api_bulk_reattach_emails(request: Request):
+    """Re-attach REAL emails to all villages that currently have placeholders
+    (any email containing 'example.local', '@gmail.com', '@hotmail.com',
+    '@outlook.com', '@yahoo.com', '@icloud.com', '@proton.me' WITHOUT a
+    valid mail.tm/1secmail/guerrilla token in notes).
+    """
+    body = await request.json() if request.headers.get("content-length") else {}
+    only_placeholders = bool(body.get("only_placeholders", True))
+    bad_domains = ["example.local", "gmail.com", "hotmail.com", "outlook.com",
+                   "yahoo.com", "icloud.com", "proton.me", "tutanota.com",
+                   "yandex.com"]
+    with db_cur() as cur:
+        rows = cur.execute("SELECT id, email, notes FROM villages").fetchall()
+    target_ids = []
+    for r in rows:
+        email = (r["email"] or "").lower()
+        notes = (r["notes"] or "").lower()
+        is_placeholder = any(d in email for d in bad_domains)
+        has_real_token = ("email_provider=mail.tm" in notes or
+                          "email_provider=1secmail" in notes or
+                          "email_provider=guerrilla" in notes or
+                          "mailtm_token=" in notes)
+        if not only_placeholders or (is_placeholder and not has_real_token):
+            target_ids.append(r["id"])
+
+    log.info(f"bulk-reattach: {len(target_ids)} villages to fix")
+    fixed, failed = [], []
+    for vid in target_ids:
+        try:
+            acct = await create_email_for(vid)
+            v = get_village(vid)
+            with db_cur() as cur:
+                cur.execute(
+                    "UPDATE villages SET email = ?, notes = ? WHERE id = ?",
+                    (acct["email"],
+                     (v.get("notes") or "") +
+                     f"\nemail_provider={acct['provider']}\n"
+                     f"email_token={acct.get('token','')}",
+                     vid))
+            log_event(vid, "email_reattached",
+                      f"{acct['provider']}: {acct['email']}")
+            fixed.append({"id": vid, "email": acct["email"],
+                          "provider": acct["provider"]})
+            # Soft rate-limit so we don't trigger mail.tm 429
+            await asyncio.sleep(2.5)
+        except Exception as e:
+            failed.append({"id": vid, "error": str(e)[:200]})
+            log.warning(f"reattach failed for {vid}: {e}")
+            await asyncio.sleep(5)
+    return {"ok": True, "fixed": len(fixed), "failed": len(failed),
+            "fixed_list": fixed, "failed_list": failed}
 
 
 @app.post("/api/proxies/refresh-free")
