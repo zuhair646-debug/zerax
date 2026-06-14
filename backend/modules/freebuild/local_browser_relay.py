@@ -401,6 +401,26 @@ async def desktop_status(project_id: str = Query(...)):
     }
 
 
+@desktop_router.get("/active-list")
+async def desktop_active_list():
+    """List ALL currently-connected desktop agents (by project_id).
+    Used to discover which project_id a freshly-paired user is on."""
+    out = []
+    for pid, ws in list(_DESKTOP_ACTIVE_WS.items()):
+        info = {}
+        for code, p in _DESKTOP_PAIRINGS.items():
+            if p.get("project_id") == pid and p.get("ws_connected"):
+                info = p.get("agent_info") or {}
+                break
+        out.append({
+            "project_id": pid,
+            "fingerprint": _fingerprint_of(info) if info else "",
+            "agent_info": info,
+            "ws_alive": ws is not None,
+        })
+    return {"ok": True, "active": out, "count": len(out)}
+
+
 @desktop_router.post("/force-takeover")
 async def desktop_force_takeover(request: Request):
     """Forcibly disconnect the current agent for a project so a new one can take over.
