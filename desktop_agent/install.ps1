@@ -1,18 +1,21 @@
 # Zenrex Farm — One-Click Installer (v0.6.0)
 # ═════════════════════════════════════════════════════
-# تثبيت كامل من الصفر — يخلق مجلد جديد ويحط شورت كت بأيقونة Travian
-#
-# الاستخدام (PowerShell كـ Admin):
-#   iwr -uri "<URL>/install.ps1" -outfile install.ps1; .\install.ps1
-#
-# أو محلياً: .\install.ps1
+# الاستخدام (PowerShell — لا يحتاج Admin):
+#   iwr "https://ai-cinematic-hub-2.preview.emergentagent.com/api/desktop-agent/zenrex-farm/install.ps1" -OutFile install.ps1 ; .\install.ps1
 
 $ErrorActionPreference = "Stop"
 $LogPrefix = "[Zenrex]"
 function Write-Step($msg){ Write-Host "$LogPrefix $msg" -ForegroundColor Cyan }
-function Write-Ok($msg)  { Write-Host "$LogPrefix ✓ $msg" -ForegroundColor Green }
-function Write-Warn($msg){ Write-Host "$LogPrefix ⚠ $msg" -ForegroundColor Yellow }
-function Write-Err($msg) { Write-Host "$LogPrefix ✗ $msg" -ForegroundColor Red }
+function Write-Ok($msg)  { Write-Host "$LogPrefix [+] $msg" -ForegroundColor Green }
+function Write-Warn($msg){ Write-Host "$LogPrefix [!] $msg" -ForegroundColor Yellow }
+function Write-Err($msg) { Write-Host "$LogPrefix [X] $msg" -ForegroundColor Red }
+
+Write-Host ""
+Write-Host "╔═══════════════════════════════════════════════════════╗" -ForegroundColor Magenta
+Write-Host "║   Zenrex Farm v0.6.0 — Travian Multi-Village Bot     ║" -ForegroundColor Magenta
+Write-Host "║   one-click installer · by Zuhair Abbas              ║" -ForegroundColor Magenta
+Write-Host "╚═══════════════════════════════════════════════════════╝" -ForegroundColor Magenta
+Write-Host ""
 
 # ─── 1) Install directory ────────────────────────────────────────────────────
 $InstallDir = "$env:USERPROFILE\Zenrex-Farm"
@@ -124,14 +127,17 @@ $sm.Save()
 
 # ─── 9) Done ────────────────────────────────────────────────────────────────
 Write-Host ""
-Write-Host "═══════════════════════════════════════════════════════" -ForegroundColor Cyan
-Write-Host " 🏰 Zenrex Farm v0.6.0 جاهز!" -ForegroundColor Yellow
-Write-Host "   📁 المسار: $InstallDir" -ForegroundColor White
-Write-Host "   🚀 شغّل: دبل كلك على 'Zenrex Farm' على سطح المكتب" -ForegroundColor White
-Write-Host "   💡 أو ابحث 'Zenrex' في قائمة Start" -ForegroundColor White
-Write-Host "═══════════════════════════════════════════════════════" -ForegroundColor Cyan
+Write-Host "╔═══════════════════════════════════════════════════════╗" -ForegroundColor Yellow
+Write-Host "║   [+] Zenrex Farm v0.6.0 جاهز للتشغيل!               ║" -ForegroundColor Yellow
+Write-Host "╠═══════════════════════════════════════════════════════╣" -ForegroundColor Yellow
+Write-Host "║   * المسار:  $InstallDir" -ForegroundColor White
+Write-Host "║   * شغّل:    دبل كلك على 'Zenrex Farm' على سطح المكتب" -ForegroundColor White
+Write-Host "║   * أيضاً:   ابحث 'Zenrex' في قائمة Start" -ForegroundColor White
+Write-Host "║   * الإصدار: v0.6.0 (Auto-Spawn + Task Manager)      ║" -ForegroundColor White
+Write-Host "╚═══════════════════════════════════════════════════════╝" -ForegroundColor Yellow
 Write-Host ""
 $launch = Read-Host "تبي أشغّله الحين؟ (Y/N)"
 if ($launch -eq "Y" -or $launch -eq "y") {
     Start-Process $ShortcutPath
+    Write-Host "[+] انطلق! النافذة بتفتح خلال 5 ثوانٍ..." -ForegroundColor Green
 }
