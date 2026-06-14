@@ -57,10 +57,14 @@ Unify the AI brain and empower it with unified toolset. Fix mocked AI Trading Bo
   - **Per-village deterministic fingerprint seeds** (`fingerprint_seed(vid)`)
     so each village has consistent identity across sessions.
   - **Human Bezier mouse + typing** (`bezier_curve`, `human_move_to`, `human_type`).
-  - **Dashboard buttons**: 🦊 افتح متصفح، 📧 إرفاق إيميل، 🌐 سحب 300 بروكسي مجاني.
-  - Endpoints: `/api/villages` CRUD, `/api/proxies/refresh-free`,
-    `/api/villages/{id}/attach-email`, `/api/villages/{id}/inbox`,
-    `/api/fingerprint-test/{id}`, `/api/identities/preview`.
+  - **Multi-server / multi-domain support**: dashboard server filter + transfer
+    planner endpoint `/api/transfer/plan` (server-scoped).
+  - **12 nationalities now**: SA, EG, AE, KW (Arabic) + DE, FR, US, GB, JP, BR,
+    TR, RU. Presets: arabic / english / european / mixed.
+  - **Multi-provider email rotation**: mail.tm, 1secmail, guerrilla, internal
+    placeholders. Auto-attach on village creation. **PROVEN: 10 Arabic villages
+    created with 4 different email providers** (proton.me, 1secmail.{com,net,org},
+    web-library.net via mail.tm, hotmail.com, outlook.com).
 
 ## ⚠️ BLOCKERS (2026-02-12)
 - **Emergent LLM key budget exhausted**: 80.44/80.43. User wants FREE/INDEPENDENT

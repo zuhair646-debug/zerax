@@ -189,10 +189,34 @@ NAME_POOLS: dict[str, dict[str, list[str]]] = {
     },
     "SA": {
         "first": ["Mohammed", "Ahmed", "Khalid", "Saud", "Faisal", "Abdulaziz",
-                  "Sultan", "Fahd", "Bandar", "Yousef"],
+                  "Sultan", "Fahd", "Bandar", "Yousef", "Ali", "Omar", "Salman",
+                  "Turki", "Nawaf", "Majed", "Bader", "Waleed"],
         "last":  ["Al-Otaibi", "Al-Shahri", "Al-Qahtani", "Al-Harbi", "Al-Ghamdi",
-                  "Al-Mutairi", "Al-Dosari", "Al-Subaie", "Al-Rashidi"],
+                  "Al-Mutairi", "Al-Dosari", "Al-Subaie", "Al-Rashidi",
+                  "Al-Anazi", "Al-Zahrani", "Al-Shamri", "Al-Juhani"],
         "locales": ["ar-SA"], "timezone": "Asia/Riyadh",
+    },
+    "EG": {  # Egypt
+        "first": ["Ahmed", "Mohamed", "Mahmoud", "Mostafa", "Omar", "Karim",
+                  "Hassan", "Hossam", "Tarek", "Sherif", "Yasmin", "Nour",
+                  "Salma", "Mariam", "Hana", "Farida"],
+        "last":  ["El-Masry", "Hassan", "Mahmoud", "Ali", "Ibrahim", "Said",
+                  "Abdelrahman", "El-Sayed", "Mostafa", "Khalil", "Fouad"],
+        "locales": ["ar-EG"], "timezone": "Africa/Cairo",
+    },
+    "AE": {  # UAE
+        "first": ["Hamdan", "Mansour", "Saif", "Hamad", "Rashid", "Khalifa",
+                  "Sultan", "Mohammed", "Latifa", "Fatima", "Mariam", "Reem"],
+        "last":  ["Al-Maktoum", "Al-Nahyan", "Al-Marri", "Al-Ali", "Al-Hashimi",
+                  "Al-Suwaidi", "Al-Falasi", "Al-Mazrouei"],
+        "locales": ["ar-AE"], "timezone": "Asia/Dubai",
+    },
+    "KW": {  # Kuwait
+        "first": ["Nasser", "Jaber", "Saad", "Mishal", "Sabah", "Anwar",
+                  "Mohammed", "Yousef", "Dana", "Reem", "Latifa"],
+        "last":  ["Al-Sabah", "Al-Mutawa", "Al-Rashed", "Al-Adwani",
+                  "Al-Khaled", "Al-Mubarak", "Al-Saqr"],
+        "locales": ["ar-KW"], "timezone": "Asia/Kuwait",
     },
     "JP": {
         "first": ["Hiroshi", "Takeshi", "Kenji", "Yuki", "Akira", "Daisuke",
@@ -208,7 +232,27 @@ NAME_POOLS: dict[str, dict[str, list[str]]] = {
                   "Costa", "Ferreira", "Rodrigues"],
         "locales": ["pt-BR"], "timezone": "America/Sao_Paulo",
     },
+    "TR": {  # Turkey
+        "first": ["Ahmet", "Mehmet", "Mustafa", "Ali", "Hüseyin", "Hasan",
+                  "İbrahim", "Yusuf", "Emre", "Ayşe", "Fatma", "Zeynep"],
+        "last":  ["Yılmaz", "Kaya", "Demir", "Şahin", "Çelik", "Yıldız",
+                  "Yıldırım", "Öztürk", "Aydın"],
+        "locales": ["tr-TR"], "timezone": "Europe/Istanbul",
+    },
+    "RU": {
+        "first": ["Alexander", "Sergei", "Dmitri", "Andrei", "Mikhail", "Ivan",
+                  "Nikolai", "Vladimir", "Anna", "Elena", "Maria", "Olga"],
+        "last":  ["Ivanov", "Smirnov", "Kuznetsov", "Popov", "Vasiliev",
+                  "Petrov", "Sokolov", "Mikhailov"],
+        "locales": ["ru-RU"], "timezone": "Europe/Moscow",
+    },
 }
+
+# Convenience presets
+ARABIC_NATIONALITIES = ["SA", "EG", "AE", "KW"]
+ENGLISH_NATIONALITIES = ["US", "GB"]
+EUROPEAN_NATIONALITIES = ["DE", "FR", "GB", "RU", "TR"]
+ALL_NATIONALITIES = list(NAME_POOLS.keys())
 
 UA_DESKTOP_TEMPLATES = [
     # Modern Chrome on Windows
@@ -882,6 +926,89 @@ async def mailtm_read_message(token: str, msg_id: str) -> dict[str, Any]:
         return json.loads(resp.read())
 
 
+# ─── Multi-provider email rotation (no signup, all free) ─────────────────────
+EMAIL_PROVIDERS = ["mail.tm", "1secmail", "guerrilla", "internal"]
+
+
+async def email_1secmail() -> dict[str, str]:
+    """1secmail.com — no registration, just GET endpoints."""
+    import urllib.request
+    # 1) Get available domains
+    try:
+        with urllib.request.urlopen(
+            "https://www.1secmail.com/api/v1/?action=getDomainList",
+            timeout=6) as r:
+            domains = json.loads(r.read())
+    except Exception:
+        domains = ["1secmail.com", "1secmail.org", "1secmail.net"]
+    domain = random.choice(domains)
+    local = "".join(random.choices(string.ascii_lowercase + string.digits, k=12))
+    email = f"{local}@{domain}"
+    password = "".join(random.choices(string.ascii_letters + string.digits, k=14))
+    # 1secmail doesn't need creation — mailbox is created on first poll
+    return {"email": email, "password": password, "token": f"1sec:{local}:{domain}",
+            "account_id": local, "provider": "1secmail"}
+
+
+async def email_guerrilla() -> dict[str, str]:
+    """Guerrilla Mail — free, no signup."""
+    import urllib.request
+    try:
+        with urllib.request.urlopen(
+            "https://api.guerrillamail.com/ajax.php?f=get_email_address",
+            timeout=6) as r:
+            d = json.loads(r.read())
+        email = d.get("email_addr", "")
+        sid = d.get("sid_token", "")
+        if not email:
+            raise RuntimeError("no email returned")
+    except Exception as e:
+        raise RuntimeError(f"guerrilla failed: {e}")
+    password = "".join(random.choices(string.ascii_letters + string.digits, k=14))
+    return {"email": email, "password": password,
+            "token": f"guerrilla:{sid}", "account_id": sid,
+            "provider": "guerrilla"}
+
+
+async def email_internal(village_id: str) -> dict[str, str]:
+    """Last-resort: generate a plausible-looking email using village id +
+    a popular free-email domain. NOT a real mailbox — only useful when the
+    target site doesn't verify."""
+    handle = "".join(random.choices(string.ascii_lowercase + string.digits, k=10))
+    domain = random.choice([
+        "gmail.com", "yahoo.com", "hotmail.com", "outlook.com",
+        "icloud.com", "yandex.com", "proton.me", "tutanota.com",
+    ])
+    email = f"{handle}{village_id[-4:]}@{domain}"
+    password = "".join(random.choices(string.ascii_letters + string.digits, k=14))
+    return {"email": email, "password": password,
+            "token": "", "account_id": "", "provider": "internal-placeholder"}
+
+
+async def create_email_for(village_id: str,
+                           prefer: Optional[str] = None) -> dict[str, str]:
+    """Round-robin/fall-through across providers. `prefer` = mail.tm | 1secmail |
+    guerrilla | internal. None = random."""
+    order = [prefer] if prefer else random.sample(EMAIL_PROVIDERS, len(EMAIL_PROVIDERS))
+    last_err = ""
+    for p in order:
+        try:
+            if p == "mail.tm":
+                acct = await mailtm_create_account()
+                acct["provider"] = "mail.tm"
+                return acct
+            if p == "1secmail":
+                return await email_1secmail()
+            if p == "guerrilla":
+                return await email_guerrilla()
+            if p == "internal":
+                return await email_internal(village_id)
+        except Exception as e:
+            last_err = f"{p}: {e}"
+            log.warning(f"email provider {p} failed: {e}")
+    raise RuntimeError(f"all email providers failed. last: {last_err}")
+
+
 # ─── FastAPI app + dashboard ─────────────────────────────────────────────────
 app = FastAPI(title=APP_NAME, version=APP_VERSION)
 FARM = BrowserFarm()
@@ -906,27 +1033,57 @@ def health():
 
 
 @app.get("/api/villages")
-def api_list_villages():
+def api_list_villages(server: Optional[str] = None):
     rows = list_villages()
+    if server:
+        rows = [r for r in rows if r.get("server") == server]
     return {"ok": True, "total": len(rows), "villages": rows}
 
 
 @app.post("/api/villages")
 async def api_create_villages(request: Request):
-    """Create N villages with optional nationality + proxy round-robin."""
+    """Create N villages with name preset, optional auto-attach email, and proxy."""
     body = await request.json()
     count = max(1, min(500, int(body.get("count", 1))))
-    nationality = body.get("nationality")            # None = mixed
     server = body.get("server", "ts8.x2.international.travian.com")
     strategy = body.get("strategy", "default")
     use_proxies = bool(body.get("use_proxies", True))
+    auto_email = bool(body.get("auto_email", False))
+
+    # Name preset: 'arabic' | 'english' | 'european' | 'mixed' | 'all' | "<CC>"
+    preset = (body.get("name_preset") or "mixed").lower()
+    if preset == "arabic":
+        pool = ARABIC_NATIONALITIES
+    elif preset == "english":
+        pool = ENGLISH_NATIONALITIES
+    elif preset == "european":
+        pool = EUROPEAN_NATIONALITIES
+    elif preset in ("mixed", "all"):
+        pool = ALL_NATIONALITIES
+    elif preset.upper() in NAME_POOLS:
+        pool = [preset.upper()]
+    else:
+        pool = ALL_NATIONALITIES
 
     created = []
     for i in range(count):
-        nat = nationality or random.choice(list(NAME_POOLS.keys()))
+        nat = random.choice(pool)
         proxy = assign_proxy(i) if use_proxies else ""
         v = create_village(server=server, nationality=nat,
                            proxy=proxy, strategy=strategy)
+        if auto_email:
+            try:
+                acct = await create_email_for(v["id"])
+                with db_cur() as cur:
+                    cur.execute("UPDATE villages SET email = ?, notes = ? WHERE id = ?",
+                                (acct["email"],
+                                 (v.get("notes") or "") +
+                                 f"\nemail_provider={acct['provider']}",
+                                 v["id"]))
+                log_event(v["id"], "email_attached",
+                          f"{acct['provider']}: {acct['email']}")
+            except Exception as e:
+                log_event(v["id"], "email_failed", str(e))
         created.append(v["id"])
     return {"ok": True, "created": len(created), "ids": created}
 
@@ -982,23 +1139,29 @@ async def api_refresh_free_proxies(request: Request):
 
 
 @app.post("/api/villages/{vid}/attach-email")
-async def api_attach_email(vid: str):
-    """Create a fresh mail.tm temporary mailbox and attach it to a village."""
+async def api_attach_email(vid: str, request: Request):
+    """Create a fresh temporary mailbox (any provider) and attach it to a village."""
     v = get_village(vid)
     if not v:
         raise HTTPException(404, "village not found")
     try:
-        acct = await mailtm_create_account()
+        body = await request.json() if request.headers.get("content-length") else {}
+    except Exception:
+        body = {}
+    prefer = body.get("provider")
+    try:
+        acct = await create_email_for(vid, prefer=prefer)
     except Exception as e:
         return JSONResponse({"ok": False, "error": str(e)}, status_code=500)
     with db_cur() as cur:
         cur.execute("UPDATE villages SET email = ?, notes = ? WHERE id = ?",
                     (acct["email"],
                      (v.get("notes") or "") +
-                     f"\nmailtm_token={acct['token']}\nmailtm_id={acct['account_id']}",
+                     f"\nemail_provider={acct['provider']}\nemail_token={acct['token']}\n"
+                     f"email_id={acct['account_id']}",
                      vid))
-    log_event(vid, "email_attached", f"mail.tm: {acct['email']}")
-    return {"ok": True, "email": acct["email"]}
+    log_event(vid, "email_attached", f"{acct['provider']}: {acct['email']}")
+    return {"ok": True, "email": acct["email"], "provider": acct["provider"]}
 
 
 @app.post("/api/villages/{vid}/inbox")
@@ -1019,6 +1182,85 @@ async def api_inbox(vid: str):
                             status_code=400)
     msgs = await mailtm_read_inbox(token)
     return {"ok": True, "count": len(msgs), "messages": msgs[:20]}
+
+
+@app.get("/api/servers")
+def api_servers():
+    """List all unique servers with village counts."""
+    with db_cur() as cur:
+        rows = cur.execute(
+            "SELECT server, COUNT(*) as n FROM villages GROUP BY server "
+            "ORDER BY n DESC"
+        ).fetchall()
+    return {"ok": True, "servers": [dict(r) for r in rows]}
+
+
+@app.post("/api/transfer/plan")
+async def api_transfer_plan(request: Request):
+    """Plan a resource transfer to a target coords from all our villages on a server.
+
+    Body: {server, target_x, target_y, target_village_name,
+           amount_wood, amount_clay, amount_iron, amount_crop}
+    Returns a plan: which villages contribute what, how many merchants needed.
+
+    NOTE: This only PLANS — actual execution requires registered villages
+    with active Travian sessions (next phase).
+    """
+    body = await request.json()
+    server = body.get("server", "")
+    target_x = int(body.get("target_x", 0))
+    target_y = int(body.get("target_y", 0))
+    target_name = body.get("target_village_name", "Unknown")
+    requested = {
+        "wood":  int(body.get("amount_wood", 0)),
+        "clay":  int(body.get("amount_clay", 0)),
+        "iron":  int(body.get("amount_iron", 0)),
+        "crop":  int(body.get("amount_crop", 0)),
+    }
+    total_requested = sum(requested.values())
+    if total_requested <= 0:
+        return JSONResponse({"ok": False, "error": "no resources requested"},
+                            status_code=400)
+
+    with db_cur() as cur:
+        sources = cur.execute(
+            "SELECT * FROM villages WHERE server = ? AND state IN ('registered','active') "
+            "ORDER BY id",
+            (server,)
+        ).fetchall()
+
+    if not sources:
+        return {"ok": True, "plan": [], "feasible": False,
+                "reason": "no registered villages on this server (need to register first)"}
+
+    # Round-robin even split across sources (real implementation will query
+    # each village's actual stockpile + merchants).
+    n = len(sources)
+    per = {k: total_requested // n for k in requested}
+    plan = []
+    for s in sources:
+        plan.append({
+            "village_id": s["id"],
+            "village_name": s["name"],
+            "wood":  per["wood"]  if requested["wood"]  else 0,
+            "clay":  per["clay"]  if requested["clay"]  else 0,
+            "iron":  per["iron"]  if requested["iron"]  else 0,
+            "crop":  per["crop"]  if requested["crop"]  else 0,
+            "merchants_estimated": max(1, total_requested // (n * 1000)),
+        })
+    return {
+        "ok": True, "feasible": True, "plan": plan,
+        "target": {"x": target_x, "y": target_y, "name": target_name},
+        "server": server,
+        "total_requested": total_requested,
+        "sources_count": n,
+        "executable": False,
+        "executable_reason": (
+            "Resource transfer execution requires villages registered in Travian "
+            "with active sessions. Currently villages exist only as local "
+            "identities. Run /api/villages/{id}/register first (next phase)."
+        ),
+    }
 
 
 @app.get("/api/fingerprint-test/{vid}")
@@ -1155,17 +1397,54 @@ _DASHBOARD_HTML = r"""<!DOCTYPE html>
 
     <div class="card">
       <h2>القرى</h2>
-      <div class="flex" style="justify-content:space-between;margin-bottom:8px">
-        <span class="small">آخر تحديث: <span id="last-refresh">—</span></span>
-        <button class="secondary" onclick="loadVillages()">↻ تحديث</button>
+      <div class="flex" style="justify-content:space-between;margin-bottom:8px;flex-wrap:wrap;gap:8px">
+        <div class="flex" style="gap:8px">
+          <label style="margin:0;color:var(--text)">السيرفر:</label>
+          <select id="server-filter" onchange="loadVillages()" style="margin:0;width:auto">
+            <option value="">📡 الكل</option>
+          </select>
+        </div>
+        <div class="flex" style="gap:8px">
+          <button class="secondary" onclick="loadVillages()">↻ تحديث</button>
+          <button onclick="openTransferDialog()">💱 نقل موارد</button>
+        </div>
       </div>
+      <span class="small">آخر تحديث: <span id="last-refresh">—</span></span>
       <table id="villages-table">
         <thead><tr>
-          <th>الاسم</th><th>الجنسية</th><th>الخادم</th><th>الحالة</th>
+          <th>الاسم</th><th>الجنسية</th><th>السيرفر</th><th>الحالة</th>
           <th>IP/Proxy</th><th>الإيميل</th><th>إجراء</th>
         </tr></thead>
         <tbody></tbody>
       </table>
+    </div>
+
+    <!-- Resource Transfer Modal -->
+    <div id="transfer-modal" style="display:none;position:fixed;inset:0;
+         background:rgba(0,0,0,0.8);z-index:100;align-items:center;
+         justify-content:center;padding:20px">
+      <div class="card" style="max-width:520px;width:100%;max-height:90vh;overflow:auto">
+        <h2>💱 نقل موارد للوجهة</h2>
+        <label>السيرفر</label>
+        <select id="t-server"></select>
+        <div class="row">
+          <div><label>X</label><input id="t-x" type="number" value="0"/></div>
+          <div><label>Y</label><input id="t-y" type="number" value="0"/></div>
+        </div>
+        <label>اسم القرية الهدف</label>
+        <input id="t-name" placeholder="مثلاً: قرية الهدف"/>
+        <div class="row">
+          <div><label>🪵 خشب</label><input id="t-wood" type="number" value="0"/></div>
+          <div><label>🧱 طين</label><input id="t-clay" type="number" value="0"/></div>
+          <div><label>⚒️ حديد</label><input id="t-iron" type="number" value="0"/></div>
+          <div><label>🌾 قمح</label><input id="t-crop" type="number" value="0"/></div>
+        </div>
+        <div class="row">
+          <button onclick="planTransfer()">🧮 احسب الخطة</button>
+          <button class="secondary" onclick="closeTransferDialog()">إلغاء</button>
+        </div>
+        <div id="transfer-result" class="small" style="margin-top:12px"></div>
+      </div>
     </div>
   </div>
 
@@ -1176,13 +1455,27 @@ _DASHBOARD_HTML = r"""<!DOCTYPE html>
       <label>عدد القرى</label>
       <input id="count" type="number" min="1" max="500" value="5"/>
 
-      <label>الجنسية (اتركها فارغة = خلطة)</label>
-      <select id="nationality">
-        <option value="">🌍 خلطة عشوائية</option>
+      <label>الجنسية / الأسماء</label>
+      <select id="name-preset">
+        <option value="mixed">🌍 خلطة كاملة (كل الجنسيات)</option>
+        <option value="arabic">🕌 عربي فقط (SA/EG/AE/KW)</option>
+        <option value="english">🇬🇧 إنجليزي فقط (US/GB)</option>
+        <option value="european">🇪🇺 أوروبي (DE/FR/GB/RU/TR)</option>
+        <option value="SA">🇸🇦 سعودي فقط</option>
+        <option value="EG">🇪🇬 مصري فقط</option>
+        <option value="DE">🇩🇪 ألماني فقط</option>
+        <option value="US">🇺🇸 أمريكي فقط</option>
+        <option value="JP">🇯🇵 ياباني فقط</option>
       </select>
 
       <label>الخادم (Travian server)</label>
-      <input id="server" value="ts8.x2.international.travian.com"/>
+      <input id="server" value="ts8.x2.international.travian.com" list="server-list"/>
+      <datalist id="server-list">
+        <option value="ts8.x2.international.travian.com"></option>
+        <option value="ts7.travian.com"></option>
+        <option value="ts4.travian.sa"></option>
+        <option value="ts5.travian.com"></option>
+      </datalist>
 
       <label>الخطة</label>
       <select id="strategy">
@@ -1194,7 +1487,11 @@ _DASHBOARD_HTML = r"""<!DOCTYPE html>
       <div class="row" style="margin-top:6px">
         <label class="flex" style="margin-top:0">
           <input type="checkbox" id="use-proxies" checked style="width:auto;margin-left:6px"/>
-          استخدم البروكسيات (Round-robin من proxies.txt)
+          استخدم البروكسيات
+        </label>
+        <label class="flex" style="margin-top:0">
+          <input type="checkbox" id="auto-email" checked style="width:auto;margin-left:6px"/>
+          إيميل تلقائي (مزوّدات متعددة)
         </label>
       </div>
 
@@ -1227,18 +1524,32 @@ socks5://user:pass@5.6.7.8:1080"></textarea>
 const $ = s => document.querySelector(s);
 
 async function loadNationalities(){
-  const r = await fetch('/api/nationalities'); const d = await r.json();
-  const sel = $('#nationality');
-  d.available.forEach(n => {
+  const r = await fetch('/api/servers'); const d = await r.json();
+  const sel = $('#server-filter');
+  sel.innerHTML = '<option value="">📡 الكل</option>';
+  (d.servers || []).forEach(s => {
     const o = document.createElement('option');
-    o.value = n.code;
-    o.textContent = `${n.code} — ${n.first_sample} ${n.last_sample} (${n.timezone})`;
+    o.value = s.server;
+    o.textContent = `${s.server} (${s.n})`;
     sel.appendChild(o);
   });
+  // Mirror server list to transfer modal
+  const tsel = $('#t-server');
+  if (tsel) {
+    tsel.innerHTML = '';
+    (d.servers || []).forEach(s => {
+      const o = document.createElement('option');
+      o.value = s.server;
+      o.textContent = `${s.server} (${s.n} قرية)`;
+      tsel.appendChild(o);
+    });
+  }
 }
 
 async function loadVillages(){
-  const r = await fetch('/api/villages'); const d = await r.json();
+  const f = $('#server-filter').value;
+  const url = f ? `/api/villages?server=${encodeURIComponent(f)}` : '/api/villages';
+  const r = await fetch(url); const d = await r.json();
   $('#s-total').textContent = d.total;
   const counts = { active:0, registered:0, banned:0 };
   d.villages.forEach(v => { counts[v.state] = (counts[v.state]||0)+1; });
@@ -1250,13 +1561,13 @@ async function loadVillages(){
     <tr>
       <td>${v.name}</td>
       <td><span class="badge">${v.nationality}</span></td>
-      <td><span class="small">${v.server}</span></td>
+      <td><span class="small">${v.server.replace('.travian.com','').replace('.x2.international','')}</span></td>
       <td><span class="pill ${v.state}">${v.state}</span></td>
-      <td><span class="small">${v.proxy || '🏠 مباشر'}</span></td>
-      <td><span class="small">${v.email}</span></td>
+      <td><span class="small">${v.proxy ? v.proxy.substring(0,28) : '🏠 مباشر'}</span></td>
+      <td><span class="small">${v.email || '—'}</span></td>
       <td>
         <button class="secondary" onclick="openBrowser('${v.id}')">🦊 افتح</button>
-        <button class="secondary" onclick="attachEmail('${v.id}')">📧 إيميل</button>
+        <button class="secondary" onclick="attachEmail('${v.id}')">📧</button>
         <button class="danger" onclick="delVillage('${v.id}')">🗑</button>
       </td>
     </tr>
@@ -1267,18 +1578,60 @@ async function loadVillages(){
 async function createVillages(){
   const body = {
     count: parseInt($('#count').value || '1'),
-    nationality: $('#nationality').value || null,
+    name_preset: $('#name-preset').value,
     server: $('#server').value,
     strategy: $('#strategy').value,
-    use_proxies: $('#use-proxies').checked
+    use_proxies: $('#use-proxies').checked,
+    auto_email: $('#auto-email').checked,
   };
-  const r = await fetch('/api/villages', { method:'POST',
+  const btn = event.target;
+  btn.disabled = true; btn.textContent = '⏳ يُنشئ...';
+  try {
+    const r = await fetch('/api/villages', { method:'POST',
+      headers:{'Content-Type':'application/json'}, body: JSON.stringify(body) });
+    const d = await r.json();
+    if (d.ok) {
+      alert(`✓ أُنشئت ${d.created} قرية`);
+      loadNationalities();
+      loadVillages();
+    } else alert('✗ ' + (d.error || 'unknown'));
+  } finally {
+    btn.disabled = false; btn.textContent = '🏗️ أنشئ القرى';
+  }
+}
+
+function openTransferDialog(){
+  $('#transfer-modal').style.display = 'flex';
+}
+function closeTransferDialog(){
+  $('#transfer-modal').style.display = 'none';
+}
+async function planTransfer(){
+  const body = {
+    server: $('#t-server').value,
+    target_x: parseInt($('#t-x').value || '0'),
+    target_y: parseInt($('#t-y').value || '0'),
+    target_village_name: $('#t-name').value || 'الهدف',
+    amount_wood: parseInt($('#t-wood').value || '0'),
+    amount_clay: parseInt($('#t-clay').value || '0'),
+    amount_iron: parseInt($('#t-iron').value || '0'),
+    amount_crop: parseInt($('#t-crop').value || '0'),
+  };
+  const r = await fetch('/api/transfer/plan', { method:'POST',
     headers:{'Content-Type':'application/json'}, body: JSON.stringify(body) });
   const d = await r.json();
-  if (d.ok) {
-    alert(`✓ أُنشئت ${d.created} قرية`);
-    loadVillages();
-  } else alert('✗ ' + (d.error || 'unknown'));
+  const out = $('#transfer-result');
+  if (!d.ok) { out.innerHTML = '<span style="color:#ef4444">✗ ' + d.error + '</span>'; return; }
+  if (!d.feasible) {
+    out.innerHTML = '<span style="color:#f59e0b">⚠ ' + d.reason + '</span>';
+    return;
+  }
+  let html = `<b>الخطة (${d.sources_count} قرية مصدر):</b><br/>`;
+  d.plan.forEach(p => {
+    html += `• ${p.village_name}: ${p.wood}🪵 ${p.clay}🧱 ${p.iron}⚒️ ${p.crop}🌾 (${p.merchants_estimated} تاجر)<br/>`;
+  });
+  if (!d.executable) html += '<br/><span style="color:#f59e0b">⚠ ' + d.executable_reason + '</span>';
+  out.innerHTML = html;
 }
 
 async function delVillage(id){
