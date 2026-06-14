@@ -5594,7 +5594,7 @@ _DASHBOARD_HTML = r"""<!DOCTYPE html>
 <header>
   <div class="flex">
     <h1>🏰 Zenrex Farm</h1>
-    <span class="badge" id="ver">v0.8.3</span>
+    <span class="badge" id="ver">v0.9.0</span>
     <span class="badge">100% Local · Free</span>
     <button class="secondary" onclick="checkUpdate()" style="margin:0;padding:4px 10px;font-size:11px">🔄 تحديث</button>
     <span id="update-badge" class="badge"></span>

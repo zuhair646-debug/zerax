@@ -3387,6 +3387,15 @@ try:
 except Exception as _te:
     logging.getLogger(__name__).error(f"Failed to register trading router: {_te}", exc_info=True)
 
+# ============== ZENREX FARM — cloud-hosted dashboard ==============
+try:
+    from modules import zenrex_cloud as _zenrex_cloud
+    _zenrex_cloud.mount(app)
+    logging.getLogger(__name__).info(
+        f"Zenrex Farm mounted at {_zenrex_cloud.MOUNT_PREFIX}/ (no install required)")
+except Exception as _zce:
+    logging.getLogger(__name__).error(f"Failed to mount Zenrex Farm: {_zce}", exc_info=True)
+
 # ============== SOURCE CODE DOWNLOADER (owner-only) ==============
 try:
     from modules.source.routes import init_routes as init_source_routes
