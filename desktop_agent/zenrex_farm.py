@@ -59,7 +59,7 @@ import uvicorn
 
 # ─── Config ──────────────────────────────────────────────────────────────────
 APP_NAME = "Zenrex Farm"
-APP_VERSION = "0.5.0"
+APP_VERSION = "0.6.0"
 PORT = 7870
 
 ROOT = Path(os.environ.get(
@@ -210,10 +210,43 @@ CREATE TABLE IF NOT EXISTS raid_config (
     cooldown_min    INTEGER DEFAULT 90
 );
 
+CREATE TABLE IF NOT EXISTS spawn_schedules (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    server          TEXT NOT NULL,
+    name_preset     TEXT DEFAULT 'mixed',
+    tribe_preset    TEXT DEFAULT 'MIXED',
+    region          TEXT DEFAULT 'ANY',
+    use_proxies     INTEGER DEFAULT 1,
+    auto_email      INTEGER DEFAULT 1,
+    target_total    INTEGER NOT NULL,        -- target village count on this server
+    interval_min    INTEGER DEFAULT 30,      -- minutes between spawns
+    daily_cap       INTEGER DEFAULT 10,      -- max villages per 24h
+    enabled         INTEGER DEFAULT 1,
+    last_spawn_at   TEXT,
+    spawned_total   INTEGER DEFAULT 0,
+    spawned_today   INTEGER DEFAULT 0,
+    day_anchor      TEXT,                    -- ISO date for "today" counter
+    created_at      TEXT
+);
+
+CREATE TABLE IF NOT EXISTS task_queue (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    village_id      TEXT NOT NULL,
+    kind            TEXT NOT NULL,           -- 'register' | 'build' | 'raid_setup' | 'transfer' ...
+    payload_json    TEXT,
+    priority        INTEGER DEFAULT 5,       -- 1=high, 9=low
+    status          TEXT DEFAULT 'queued',   -- queued | running | done | failed
+    created_at      TEXT NOT NULL,
+    started_at      TEXT,
+    finished_at     TEXT,
+    result_json     TEXT
+);
+
 CREATE INDEX IF NOT EXISTS idx_events_village ON events(village_id, ts);
 CREATE INDEX IF NOT EXISTS idx_villages_state ON villages(state);
 CREATE INDEX IF NOT EXISTS idx_chat_session ON chat_messages(session_id, ts);
 CREATE INDEX IF NOT EXISTS idx_raid_targets_server ON raid_targets(server, last_raid_at);
+CREATE INDEX IF NOT EXISTS idx_tasks_status ON task_queue(status, priority, created_at);
 """
 
 # Indexes that reference newly-added columns (must run AFTER ALTER TABLE migrations)
@@ -2612,6 +2645,405 @@ def api_rw_del_target(tid: int):
     return {"ok": True}
 
 
+# ─── Spawn Worker — progressive village creation on a schedule ──────────────
+class SpawnWorker:
+    """Background worker that creates villages slowly on a schedule.
+
+    Each schedule row has: server, target_total, interval_min, daily_cap.
+    The worker iterates enabled schedules every cycle (default 60s) and:
+      1) Resets daily counter if a new day started
+      2) Skips if target reached OR daily cap reached
+      3) Skips if `interval_min` hasn't elapsed since last_spawn_at
+      4) Otherwise creates ONE village honoring all preferences
+      5) Optionally enqueues follow-up tasks (attach-email, register, ...)
+    """
+    POLL_SEC = 25.0
+
+    def __init__(self) -> None:
+        self.task: Optional[asyncio.Task] = None
+        self.cancel = asyncio.Event()
+        self.last_status: dict[str, Any] = {"running": False,
+                                            "last_spawned": None,
+                                            "schedules_active": 0}
+
+    def _active_schedules(self) -> list[dict[str, Any]]:
+        with db_cur() as cur:
+            rows = cur.execute(
+                "SELECT * FROM spawn_schedules WHERE enabled = 1"
+            ).fetchall()
+        return [dict(r) for r in rows]
+
+    def _server_count(self, server: str) -> int:
+        with db_cur() as cur:
+            return cur.execute(
+                "SELECT COUNT(*) c FROM villages WHERE server = ?",
+                (server,)).fetchone()["c"]
+
+    def _resolve_pool(self, preset: str) -> list[str]:
+        p = (preset or "mixed").lower()
+        if p == "arabic":
+            return list(ARABIC_NATIONALITIES)
+        if p == "english":
+            return list(ENGLISH_NATIONALITIES)
+        if p == "european":
+            return list(EUROPEAN_NATIONALITIES)
+        if p in ("mixed", "all"):
+            return list(ALL_NATIONALITIES)
+        if p.upper() in NAME_POOLS:
+            return [p.upper()]
+        return list(ALL_NATIONALITIES)
+
+    def _today_iso(self) -> str:
+        from datetime import datetime, timezone
+        return datetime.now(timezone.utc).date().isoformat()
+
+    def _minutes_since(self, ts: Optional[str]) -> float:
+        if not ts:
+            return 1e9
+        from datetime import datetime, timezone
+        try:
+            dt = datetime.fromisoformat(ts.replace("Z", "+00:00"))
+            return (datetime.now(timezone.utc) - dt).total_seconds() / 60.0
+        except Exception:
+            return 1e9
+
+    async def _spawn_one(self, sched: dict[str, Any]) -> Optional[str]:
+        # Reset daily counter on new day
+        today = self._today_iso()
+        if sched.get("day_anchor") != today:
+            with db_cur() as cur:
+                cur.execute(
+                    "UPDATE spawn_schedules SET day_anchor = ?, "
+                    "spawned_today = 0 WHERE id = ?",
+                    (today, sched["id"]))
+            sched["day_anchor"] = today
+            sched["spawned_today"] = 0
+
+        # Gating: target / daily cap / interval
+        current = self._server_count(sched["server"])
+        target = int(sched.get("target_total") or 0)
+        if target and current >= target:
+            return None
+        daily_cap = int(sched.get("daily_cap") or 0)
+        if daily_cap and int(sched.get("spawned_today") or 0) >= daily_cap:
+            return None
+        interval = int(sched.get("interval_min") if sched.get("interval_min") is not None else 30)
+        if self._minutes_since(sched.get("last_spawn_at")) < interval:
+            return None
+
+        # Pick nationality + tribe
+        pool = self._resolve_pool(sched.get("name_preset"))
+        nat = random.choice(pool)
+        tribe_preset = (sched.get("tribe_preset") or "MIXED").upper()
+        tribe = (random.choice(TRIBES)
+                 if tribe_preset in ("MIXED", "ANY", "") else tribe_preset)
+        proxy = assign_proxy(current) if sched.get("use_proxies") else ""
+
+        v = create_village(
+            server=sched["server"], nationality=nat,
+            proxy=proxy, strategy="default",
+            region=(sched.get("region") or "ANY").upper(),
+            tribe=tribe, is_personal=False)
+
+        # Optional auto-email
+        if sched.get("auto_email"):
+            try:
+                acct = await create_email_for(v["id"])
+                with db_cur() as cur:
+                    cur.execute(
+                        "UPDATE villages SET email = ?, notes = ? WHERE id = ?",
+                        (acct["email"],
+                         (v.get("notes") or "") +
+                         f"\nemail_provider={acct['provider']}\n"
+                         f"mailtm_token={acct.get('token','')}",
+                         v["id"]))
+                log_event(v["id"], "email_attached",
+                          f"{acct['provider']}: {acct['email']}")
+            except Exception as e:
+                log_event(v["id"], "email_attach_failed", str(e))
+
+        # Update schedule counters
+        with db_cur() as cur:
+            cur.execute(
+                "UPDATE spawn_schedules SET last_spawn_at = ?, "
+                "spawned_total = spawned_total + 1, "
+                "spawned_today = spawned_today + 1 WHERE id = ?",
+                (_now_iso(), sched["id"]))
+
+        # Auto-queue follow-up tasks via TaskManager
+        TASK_MANAGER.enqueue(v["id"], "register",
+                             payload={"server": sched["server"]},
+                             priority=3)
+
+        log.info(f"[spawner] spawned {v['id']} on {sched['server']} "
+                 f"({current + 1}/{sched['target_total']})")
+        return v["id"]
+
+    async def _loop(self) -> None:
+        log.info("[spawner] started")
+        self.last_status["running"] = True
+        while not self.cancel.is_set():
+            scheds = self._active_schedules()
+            self.last_status["schedules_active"] = len(scheds)
+            for s in scheds:
+                if self.cancel.is_set():
+                    break
+                try:
+                    vid = await self._spawn_one(s)
+                    if vid:
+                        self.last_status["last_spawned"] = {
+                            "vid": vid, "server": s["server"],
+                            "at": _now_iso()}
+                except Exception:
+                    log.exception(
+                        f"[spawner] schedule {s.get('id')} failed")
+            await asyncio.sleep(self.POLL_SEC)
+        self.last_status["running"] = False
+        log.info("[spawner] stopped")
+
+    async def start(self) -> None:
+        if self.task and not self.task.done():
+            return
+        self.cancel.clear()
+        self.task = asyncio.create_task(self._loop())
+
+    async def stop(self) -> None:
+        self.cancel.set()
+        if self.task:
+            try:
+                await asyncio.wait_for(self.task, timeout=5)
+            except Exception:
+                pass
+
+
+# ─── Task Manager — auto-detect and queue work for villages ─────────────────
+class TaskManager:
+    """Lightweight task system that watches village states and queues work
+    automatically. Examples of auto-tasks:
+      • village `state=created` + has email   → enqueue 'register'
+      • village `state=registration_pending`  → ActivationWorker handles it
+      • village `state=registered`            → enqueue 'open_browser_warmup'
+      • village `state=active` and configured → kept in raid_config if hunter
+
+    The manager itself doesn't *execute* tasks — it inserts rows into
+    `task_queue` for the appropriate worker to consume.
+    """
+    POLL_SEC = 45.0
+
+    def __init__(self) -> None:
+        self.task: Optional[asyncio.Task] = None
+        self.cancel = asyncio.Event()
+        self.last_status: dict[str, Any] = {"running": False,
+                                            "tasks_queued": 0,
+                                            "tasks_done": 0,
+                                            "last_scan_at": None}
+
+    def enqueue(self, village_id: str, kind: str,
+                payload: Optional[dict] = None,
+                priority: int = 5,
+                dedupe: bool = True) -> Optional[int]:
+        """Insert a new task. If dedupe=True, skips if an identical queued
+        task already exists."""
+        with db_cur() as cur:
+            if dedupe:
+                existing = cur.execute(
+                    "SELECT id FROM task_queue WHERE village_id = ? "
+                    "AND kind = ? AND status IN ('queued','running')",
+                    (village_id, kind)).fetchone()
+                if existing:
+                    return existing["id"]
+            cur.execute(
+                "INSERT INTO task_queue "
+                "(village_id, kind, payload_json, priority, created_at) "
+                "VALUES (?, ?, ?, ?, ?)",
+                (village_id, kind,
+                 json.dumps(payload, ensure_ascii=False) if payload else None,
+                 int(priority), _now_iso()))
+            new_id = cur.execute(
+                "SELECT last_insert_rowid() AS i").fetchone()["i"]
+        self.last_status["tasks_queued"] = (
+            self.last_status.get("tasks_queued", 0) + 1)
+        return new_id
+
+    def _scan(self) -> dict[str, int]:
+        """One scan pass — looks at every village and enqueues tasks
+        appropriate for its current state. Returns {tasks_added}."""
+        added = 0
+        with db_cur() as cur:
+            villages = cur.execute(
+                "SELECT id, state, email, server, is_personal, tribe "
+                "FROM villages").fetchall()
+        for v in villages:
+            v = dict(v)
+            vid = v["id"]
+            state = v.get("state") or "created"
+            if v.get("is_personal"):
+                continue
+            if state == "created":
+                if v.get("email") and "@example.local" not in (v["email"] or ""):
+                    if self.enqueue(vid, "register",
+                                    payload={"server": v["server"]},
+                                    priority=3):
+                        added += 1
+                else:
+                    if self.enqueue(vid, "attach_email", priority=2):
+                        added += 1
+            elif state == "registered":
+                if self.enqueue(vid, "open_browser_warmup",
+                                payload={"reason": "first_login"},
+                                priority=4):
+                    added += 1
+        return {"tasks_added": added}
+
+    async def _loop(self) -> None:
+        log.info("[task-manager] started")
+        self.last_status["running"] = True
+        while not self.cancel.is_set():
+            try:
+                res = self._scan()
+                self.last_status["last_scan_at"] = _now_iso()
+                self.last_status["tasks_queued"] = (
+                    self.last_status.get("tasks_queued", 0)
+                    + res["tasks_added"])
+            except Exception:
+                log.exception("[task-manager] scan failed")
+            await asyncio.sleep(self.POLL_SEC)
+        self.last_status["running"] = False
+        log.info("[task-manager] stopped")
+
+    async def start(self) -> None:
+        if self.task and not self.task.done():
+            return
+        self.cancel.clear()
+        self.task = asyncio.create_task(self._loop())
+
+    async def stop(self) -> None:
+        self.cancel.set()
+        if self.task:
+            try:
+                await asyncio.wait_for(self.task, timeout=5)
+            except Exception:
+                pass
+
+
+TASK_MANAGER = TaskManager()
+SPAWN_WORKER = SpawnWorker()
+
+
+# Spawn schedule endpoints ────────────────────────────────────────────────────
+@app.get("/api/spawn/schedules")
+def api_spawn_list():
+    with db_cur() as cur:
+        rows = cur.execute(
+            "SELECT * FROM spawn_schedules ORDER BY id DESC").fetchall()
+    return {"ok": True, "schedules": [dict(r) for r in rows]}
+
+
+@app.post("/api/spawn/schedules")
+async def api_spawn_create(request: Request):
+    """Create or update a spawn schedule.
+    Body: {id?, server, name_preset, tribe_preset, region, use_proxies,
+           auto_email, target_total, interval_min, daily_cap, enabled}"""
+    body = await request.json()
+    fields = {
+        "server": body.get("server", ""),
+        "name_preset": body.get("name_preset", "mixed"),
+        "tribe_preset": body.get("tribe_preset", "MIXED"),
+        "region": body.get("region", "ANY"),
+        "use_proxies": 1 if body.get("use_proxies", True) else 0,
+        "auto_email": 1 if body.get("auto_email", True) else 0,
+        "target_total": int(body.get("target_total", 10)),
+        "interval_min": int(body.get("interval_min", 30)),
+        "daily_cap": int(body.get("daily_cap", 10)),
+        "enabled": 1 if body.get("enabled", True) else 0,
+    }
+    sid = body.get("id")
+    with db_cur() as cur:
+        if sid:
+            sets = ", ".join(f"{k} = :{k}" for k in fields)
+            fields["id"] = int(sid)
+            cur.execute(f"UPDATE spawn_schedules SET {sets} WHERE id = :id",
+                        fields)
+        else:
+            fields["created_at"] = _now_iso()
+            cur.execute(
+                "INSERT INTO spawn_schedules "
+                "(server, name_preset, tribe_preset, region, use_proxies, "
+                " auto_email, target_total, interval_min, daily_cap, "
+                " enabled, created_at) "
+                "VALUES (:server, :name_preset, :tribe_preset, :region, "
+                " :use_proxies, :auto_email, :target_total, :interval_min, "
+                " :daily_cap, :enabled, :created_at)", fields)
+            sid = cur.execute(
+                "SELECT last_insert_rowid() AS i").fetchone()["i"]
+    return {"ok": True, "id": sid}
+
+
+@app.delete("/api/spawn/schedules/{sid}")
+def api_spawn_delete(sid: int):
+    with db_cur() as cur:
+        cur.execute("DELETE FROM spawn_schedules WHERE id = ?", (sid,))
+    return {"ok": True}
+
+
+@app.post("/api/spawn/worker/start")
+async def api_spawn_start():
+    await SPAWN_WORKER.start()
+    return {"ok": True, "status": SPAWN_WORKER.last_status}
+
+
+@app.post("/api/spawn/worker/stop")
+async def api_spawn_stop():
+    await SPAWN_WORKER.stop()
+    return {"ok": True, "status": SPAWN_WORKER.last_status}
+
+
+@app.get("/api/spawn/worker/status")
+def api_spawn_status():
+    return {"ok": True, "status": SPAWN_WORKER.last_status}
+
+
+# Task manager endpoints ──────────────────────────────────────────────────────
+@app.post("/api/tasks/manager/start")
+async def api_tm_start():
+    await TASK_MANAGER.start()
+    return {"ok": True, "status": TASK_MANAGER.last_status}
+
+
+@app.post("/api/tasks/manager/stop")
+async def api_tm_stop():
+    await TASK_MANAGER.stop()
+    return {"ok": True, "status": TASK_MANAGER.last_status}
+
+
+@app.get("/api/tasks/manager/status")
+def api_tm_status():
+    return {"ok": True, "status": TASK_MANAGER.last_status}
+
+
+@app.get("/api/tasks")
+def api_tasks_list(status: Optional[str] = None, limit: int = 100):
+    where = ""
+    params: tuple = ()
+    if status:
+        where = "WHERE status = ? "
+        params = (status,)
+    with db_cur() as cur:
+        rows = cur.execute(
+            f"SELECT t.*, v.name as village_name FROM task_queue t "
+            "LEFT JOIN villages v ON v.id = t.village_id "
+            f"{where}ORDER BY priority ASC, id DESC LIMIT ?",
+            params + (limit,)).fetchall()
+    return {"ok": True, "tasks": [dict(r) for r in rows]}
+
+
+@app.delete("/api/tasks/{tid}")
+def api_task_delete(tid: int):
+    with db_cur() as cur:
+        cur.execute("DELETE FROM task_queue WHERE id = ?", (tid,))
+    return {"ok": True}
+
+
 @app.post("/api/transfer/worker/start")
 async def api_tw_start():
     await TRANSFER_WORKER.start()
@@ -3828,7 +4260,7 @@ _DASHBOARD_HTML = r"""<!DOCTYPE html>
 <header>
   <div class="flex">
     <h1>🏰 Zenrex Farm</h1>
-    <span class="badge" id="ver">v0.5.0</span>
+    <span class="badge" id="ver">v0.6.0</span>
     <span class="badge">100% Local · Free</span>
   </div>
   <div class="flex">
@@ -3933,8 +4365,109 @@ _DASHBOARD_HTML = r"""<!DOCTYPE html>
 
   <!-- RIGHT: create villages + proxies + preview -->
   <div>
-    <div class="card">
-      <h2>إنشاء قرى جديدة</h2>
+    <div class="card" style="border:1px solid #312e81">
+      <h2>🌱 الإنتاج التدريجي (Auto-Spawn)</h2>
+      <p class="small" style="color:var(--muted)">حدد الهدف والمعدّل، البوت يولّد القرى تلقائياً مع مرور الوقت. مثلاً: 100 قرية، 10 يومياً، واحدة كل 30 دقيقة.</p>
+
+      <div id="spawn-status" class="small" style="margin:8px 0;padding:8px 10px;
+           background:#0a0a14;border-radius:8px;border:1px solid var(--line)"></div>
+
+      <div class="row">
+        <button onclick="startSpawn()">▶ شغّل المولّد</button>
+        <button class="danger" onclick="stopSpawn()">■ أوقف</button>
+        <button class="secondary" onclick="openSpawnDialog()">➕ خطة جديدة</button>
+      </div>
+
+      <div id="spawn-list" style="margin-top:10px;display:flex;
+           flex-direction:column;gap:6px"></div>
+    </div>
+
+    <!-- Spawn Schedule modal -->
+    <div id="spawn-modal" style="display:none;position:fixed;inset:0;
+         background:rgba(0,0,0,0.85);z-index:100;align-items:center;
+         justify-content:center;padding:20px">
+      <div class="card" style="max-width:540px;width:100%;max-height:90vh;overflow:auto">
+        <h2>🌱 خطة إنتاج تدريجي</h2>
+
+        <label>الخادم (Travian server)</label>
+        <input id="sp-server" value="ts8.x2.international.travian.com" list="server-list"/>
+
+        <div class="row">
+          <div><label>🎯 الهدف الكلي</label><input id="sp-target" type="number" value="100" min="1" max="500"/></div>
+          <div><label>📅 الحد اليومي</label><input id="sp-daily" type="number" value="10" min="1" max="100"/></div>
+          <div><label>⏱ الفاصل (د)</label><input id="sp-interval" type="number" value="30" min="5" max="240"/></div>
+        </div>
+
+        <label>الجنسية</label>
+        <select id="sp-preset">
+          <option value="mixed">🌍 خلطة كاملة</option>
+          <option value="arabic">🕌 عربي فقط</option>
+          <option value="english">🇬🇧 إنجليزي فقط</option>
+          <option value="european">🇪🇺 أوروبي</option>
+        </select>
+
+        <div class="row">
+          <div>
+            <label>المنطقة</label>
+            <select id="sp-region">
+              <option value="ANY">أي منطقة</option>
+              <option value="NW">↖ NW</option><option value="NE">↗ NE</option>
+              <option value="SW">↙ SW</option><option value="SE">↘ SE</option>
+            </select>
+          </div>
+          <div>
+            <label>القبيلة</label>
+            <select id="sp-tribe">
+              <option value="MIXED">🎲 خلطة</option>
+              <option value="ROMANS">⚔️ Romans</option>
+              <option value="GAULS">🛡️ Gauls</option>
+              <option value="TEUTONS">🪓 Teutons</option>
+              <option value="EGYPTIANS">🐪 Egyptians</option>
+              <option value="HUNS">🏹 Huns</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="row" style="margin-top:6px">
+          <label class="flex" style="margin-top:0">
+            <input type="checkbox" id="sp-proxies" checked style="width:auto;margin-left:6px"/>
+            بروكسي مختلف لكل قرية
+          </label>
+          <label class="flex" style="margin-top:0">
+            <input type="checkbox" id="sp-email" checked style="width:auto;margin-left:6px"/>
+            إيميل تلقائي (Mail.tm)
+          </label>
+        </div>
+
+        <div class="row">
+          <button onclick="saveSpawn()">💾 احفظ الخطة وشغّل</button>
+          <button class="secondary" onclick="closeSpawnDialog()">إلغاء</button>
+        </div>
+        <p class="small" style="margin-top:10px;color:var(--muted)">
+          💡 ملاحظة: البوت يولّد قرية واحدة كل فاصل زمني، ويوقف لو وصل للحد اليومي،
+          ويستأنف بعد منتصف الليل تلقائياً. حالة القرية الجديدة تكون <b>created</b>
+          ثم Task Manager يلتقطها ويرتّب لها تسجيل + بناء.
+        </p>
+      </div>
+    </div>
+
+    <div class="card" style="margin-top:18px">
+      <h2>📋 مهام تلقائية (Task Manager)</h2>
+      <div id="tm-status" class="small" style="margin:8px 0;padding:8px 10px;
+           background:#0a0a14;border-radius:8px"></div>
+      <div class="row">
+        <button onclick="startTaskManager()">▶ ابدأ المراقبة</button>
+        <button class="danger" onclick="stopTaskManager()">■ أوقف</button>
+      </div>
+      <div id="tasks-list" style="margin-top:8px;display:flex;flex-direction:column;
+           gap:5px;max-height:220px;overflow:auto"></div>
+      <p class="small" style="margin-top:6px;color:var(--muted)">
+        يكتشف تلقائياً: قرية بدون إيميل → ⏬ مهمة إيميل. قرية بإيميل ومش مسجّلة → ⏬ مهمة تسجيل. قرية مسجّلة → ⏬ مهمة دخول أول. وهكذا.
+      </p>
+    </div>
+
+    <div class="card" style="margin-top:18px">
+      <h2>إنشاء قرى يدوياً (دفعة واحدة)</h2>
       <label>عدد القرى</label>
       <input id="count" type="number" min="1" max="500" value="5"/>
 
@@ -4483,12 +5016,16 @@ loadSnapshots();
 loadJobs();
 refreshWorker();
 refreshRaid();
+refreshSpawn();
+refreshTaskManager();
 setInterval(loadVillages, 8000);
 setInterval(refreshPool, 6000);
 setInterval(loadSnapshots, 15000);
 setInterval(loadJobs, 8000);
 setInterval(refreshWorker, 6000);
 setInterval(refreshRaid, 7000);
+setInterval(refreshSpawn, 5000);
+setInterval(refreshTaskManager, 7000);
 
 async function loadSnapshots(){
   try {
@@ -4709,6 +5246,149 @@ async function delHunter(vid){
   if (!confirm('احذف هذا الصياد؟')) return;
   await fetch(`/api/raid/hunters/${vid}`, { method:'DELETE' });
   refreshRaid();
+}
+
+// ─── Spawn Worker UI ──────────────────────────────────────────────────────
+async function refreshSpawn(){
+  try {
+    const r1 = await fetch('/api/spawn/worker/status');
+    const s = (await r1.json()).status || {};
+    const el = $('#spawn-status');
+    if (el) {
+      const last = s.last_spawned ?
+        `${s.last_spawned.vid?.slice(-6)} @ ${s.last_spawned.at?.slice(11,19)}` : '—';
+      el.innerHTML = s.running ?
+        `<span style="color:#10b981">● شغّال</span> | خطط نشطة: ${s.schedules_active||0} | آخر قرية: ${last}` :
+        `<span style="color:#9ca3af">● متوقف</span> | آخر قرية: ${last}`;
+    }
+  } catch(e) {}
+  try {
+    const r2 = await fetch('/api/spawn/schedules');
+    const d = await r2.json();
+    const box = $('#spawn-list');
+    if (!box) return;
+    if (!d.schedules.length) {
+      box.innerHTML = '<span class="small">— لا توجد خطط. اضغط "➕ خطة جديدة".</span>';
+      return;
+    }
+    box.innerHTML = d.schedules.map(s => {
+      const pct = s.target_total ? Math.round((s.spawned_total||0) / s.target_total * 100) : 0;
+      const srv = (s.server||'').replace('.travian.com','').replace('.x2.international','');
+      return `
+      <div style="padding:9px 11px;background:#0a0a14;border-radius:8px;
+           border:1px solid var(--line);font-size:11px">
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:6px">
+          <div style="flex:1;min-width:0">
+            <div><b>${srv}</b> ${s.enabled ? '✅' : '⏸'}</div>
+            <div class="small" style="color:var(--muted)">
+              ${s.spawned_total||0}/${s.target_total} • اليوم ${s.spawned_today||0}/${s.daily_cap} • كل ${s.interval_min}د • ${s.name_preset} • ${s.tribe_preset}
+            </div>
+          </div>
+          <button class="danger" style="margin:0;padding:3px 6px;font-size:10px"
+                  onclick="delSpawn(${s.id})">🗑</button>
+        </div>
+        <div style="margin-top:6px;height:6px;background:#1f1f2e;border-radius:3px;overflow:hidden">
+          <div style="height:100%;width:${pct}%;background:linear-gradient(90deg,#a78bfa,#10b981);transition:width 0.3s"></div>
+        </div>
+      </div>`;
+    }).join('');
+  } catch(e) {}
+}
+
+async function startSpawn(){
+  await fetch('/api/spawn/worker/start', { method:'POST' });
+  refreshSpawn();
+}
+async function stopSpawn(){
+  await fetch('/api/spawn/worker/stop', { method:'POST' });
+  refreshSpawn();
+}
+function openSpawnDialog(){ $('#spawn-modal').style.display = 'flex'; }
+function closeSpawnDialog(){ $('#spawn-modal').style.display = 'none'; }
+
+async function saveSpawn(){
+  const body = {
+    server: $('#sp-server').value,
+    name_preset: $('#sp-preset').value,
+    tribe_preset: $('#sp-tribe').value,
+    region: $('#sp-region').value,
+    use_proxies: $('#sp-proxies').checked,
+    auto_email: $('#sp-email').checked,
+    target_total: parseInt($('#sp-target').value || '100'),
+    interval_min: parseInt($('#sp-interval').value || '30'),
+    daily_cap: parseInt($('#sp-daily').value || '10'),
+    enabled: true,
+  };
+  const r = await fetch('/api/spawn/schedules', { method:'POST',
+    headers:{'Content-Type':'application/json'}, body: JSON.stringify(body)});
+  const d = await r.json();
+  if (d.ok) {
+    closeSpawnDialog();
+    // Auto-start worker so user sees immediate effect
+    await fetch('/api/spawn/worker/start', { method:'POST' });
+    refreshSpawn();
+    loadVillages();
+  } else alert('✗ ' + (d.error || 'failed'));
+}
+
+async function delSpawn(sid){
+  if (!confirm('احذف خطة الإنتاج هذه؟')) return;
+  await fetch(`/api/spawn/schedules/${sid}`, { method:'DELETE' });
+  refreshSpawn();
+}
+
+// ─── Task Manager UI ──────────────────────────────────────────────────────
+async function refreshTaskManager(){
+  try {
+    const r1 = await fetch('/api/tasks/manager/status');
+    const s = (await r1.json()).status || {};
+    const el = $('#tm-status');
+    if (el) {
+      const t = s.last_scan_at ? s.last_scan_at.slice(11,19) : '—';
+      el.innerHTML = s.running ?
+        `<span style="color:#10b981">● مراقبة</span> | مهام: ${s.tasks_queued||0} | آخر فحص: ${t}` :
+        `<span style="color:#9ca3af">● متوقف</span> | مهام مسجّلة: ${s.tasks_queued||0}`;
+    }
+  } catch(e) {}
+  try {
+    const r2 = await fetch('/api/tasks?status=queued&limit=20');
+    const d = await r2.json();
+    const box = $('#tasks-list');
+    if (!box) return;
+    if (!d.tasks || !d.tasks.length) {
+      box.innerHTML = '<span class="small">— الطابور فارغ.</span>';
+      return;
+    }
+    box.innerHTML = d.tasks.map(t => {
+      const icon = {register:'📝', attach_email:'📧', open_browser_warmup:'🦊',
+                    build:'🏗️', raid_setup:'⚔️', transfer:'💱'}[t.kind] || '📋';
+      const prio = t.priority <= 3 ? '🔴' : t.priority <= 5 ? '🟡' : '🟢';
+      return `
+      <div style="padding:6px 9px;background:#0a0a14;border-radius:6px;
+           border:1px solid var(--line);font-size:11px;display:flex;
+           justify-content:space-between;align-items:center;gap:6px">
+        <div style="flex:1;min-width:0">
+          <div>${prio} ${icon} <b>${t.kind}</b> → ${t.village_name||t.village_id?.slice(-6)}</div>
+          <div class="small" style="color:var(--muted)">${t.created_at?.slice(11,19)}</div>
+        </div>
+        <button class="danger" style="margin:0;padding:2px 5px;font-size:10px"
+                onclick="delTask(${t.id})">🗑</button>
+      </div>`;
+    }).join('');
+  } catch(e) {}
+}
+
+async function startTaskManager(){
+  await fetch('/api/tasks/manager/start', { method:'POST' });
+  refreshTaskManager();
+}
+async function stopTaskManager(){
+  await fetch('/api/tasks/manager/stop', { method:'POST' });
+  refreshTaskManager();
+}
+async function delTask(tid){
+  await fetch(`/api/tasks/${tid}`, { method:'DELETE' });
+  refreshTaskManager();
 }
 </script>
 </body></html>

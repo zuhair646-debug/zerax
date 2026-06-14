@@ -214,7 +214,39 @@ Validated end-to-end via FastAPI TestClient:
 - AI Chat: graceful handling when Ollama down
 - Misc: strategies, alliance/create
 
-### v0.5.0 → Workers Added (continued session)
+### v0.6.0 → Progressive Spawner + Task Manager + One-click Installer
+- ✅ **SpawnWorker**: progressive village creation. Per-server schedule with
+  `target_total`, `interval_min`, `daily_cap`. Resets daily counter at UTC
+  midnight. Verified: target=3, interval=0 produces exactly 3 then stops.
+  Endpoints: `/api/spawn/{schedules,worker/{start,stop,status}}`.
+- ✅ **TaskManager**: scans village states every 45s and auto-queues work:
+  - `state=created` + no email → enqueue `attach_email` (P2)
+  - `state=created` + has email → enqueue `register` (P3)
+  - `state=registered` → enqueue `open_browser_warmup` (P4)
+  - Dedupes by (vid, kind) — no duplicate tasks.
+  - Endpoints: `/api/tasks/manager/{start,stop,status}`, `/api/tasks`.
+- ✅ **Dashboard cards**: 🌱 Auto-Spawn (with modal: target / daily cap /
+  interval / nationality / region / tribe / proxies / email), 📋 Task Manager
+  (live queue with priorities ⚪🟢🟡🔴).
+- ✅ **One-click installer** `install.ps1`:
+  - Public URL: `https://ai-cinematic-hub-2.preview.emergentagent.com/api/desktop-agent/zenrex-farm/install.ps1`
+  - Downloads zenrex_farm.py + zenrex_app.py from `/api/desktop-agent/zenrex-farm/{file}`
+  - Installs Python deps + Playwright Chromium
+  - Downloads Travian Legends favicon
+  - Creates desktop shortcut + Start menu entry
+- ✅ **Backend route** `/api/desktop-agent/zenrex-farm/{filename}` serves
+  `zenrex_farm.py`, `zenrex_app.py`, `install.ps1`, test files.
+- ✅ **Bug fix in Spawner**: `int(0 or 30)=30` was preventing immediate spawns
+  when user set `interval_min=0`. Fixed with explicit None check.
+- ✅ **75 endpoints**, file: 5,158 lines, 44/44 QA pass.
+
+### Files (latest)
+- `/app/desktop_agent/zenrex_farm.py` (v0.6.0, ~5158 lines)
+- `/app/desktop_agent/zenrex_app.py` — desktop launcher (pywebview + tray)
+- `/app/desktop_agent/install.ps1` — one-click installer w/ public URL
+- `/app/desktop_agent/test_qa_full.py` — 44-case E2E QA
+- `/app/backend/modules/freebuild/local_browser_relay.py` — added
+  `/api/desktop-agent/zenrex-farm/{file}` route
 - ✅ **TransferWorker**: Background asyncio task that picks queued
   `transfer_jobs`, picks up to 25 registered source villages per server,
   opens each via Playwright, runs `lobby_auto_login` → `enter_game_world` →

@@ -471,6 +471,28 @@ async def desktop_agent_source():
                               headers={"Cache-Control": "no-store"})
 
 
+@desktop_router.get("/zenrex-farm/{filename}")
+async def zenrex_farm_source(filename: str):
+    """Serve any file from /app/desktop_agent for the one-click installer.
+    Supported: zenrex_farm.py, zenrex_app.py, install.ps1
+    """
+    from fastapi.responses import PlainTextResponse, FileResponse
+    allowed = {"zenrex_farm.py", "zenrex_app.py", "install.ps1",
+               "test_qa_full.py", "test_auto_login_live.py"}
+    if filename not in allowed:
+        raise HTTPException(404, "file not allowed")
+    path = Path(__file__).resolve().parents[3] / "desktop_agent" / filename
+    if not path.exists():
+        raise HTTPException(404, f"{filename} not found")
+    media = ("text/x-python" if filename.endswith(".py")
+             else "text/plain")
+    return PlainTextResponse(path.read_text(encoding="utf-8"),
+                             media_type=media,
+                             headers={"Cache-Control": "no-store",
+                                      "Content-Disposition":
+                                      f"attachment; filename={filename}"})
+
+
 @desktop_router.post("/find-element")
 async def desktop_find_element(request: Request):
     """Vision-based UI element finder for the AI.
