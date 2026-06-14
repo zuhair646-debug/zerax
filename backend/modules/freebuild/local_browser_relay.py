@@ -499,6 +499,7 @@ async def zenrex_farm_source(filename: str):
     """
     from fastapi.responses import PlainTextResponse, FileResponse
     allowed = {"zenrex_farm.py", "zenrex_app.py", "install.ps1",
+               "install_desktop_agent.ps1",
                "test_qa_full.py", "test_auto_login_live.py"}
     if filename not in allowed:
         raise HTTPException(404, "file not allowed")
