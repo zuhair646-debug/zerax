@@ -59,7 +59,7 @@ import uvicorn
 
 # ─── Config ──────────────────────────────────────────────────────────────────
 APP_NAME = "Zenrex Farm"
-APP_VERSION = "0.4.1"
+APP_VERSION = "0.4.2"
 PORT = 7870
 
 ROOT = Path(os.environ.get(
@@ -480,14 +480,17 @@ def fingerprint_seed(village_id: str) -> dict[str, Any]:
 class BrowserFarm:
     """Manages persistent Playwright contexts, one per village.
 
-    Concurrency: stays well below human cluster behaviour by capping
-    parallel active contexts to MAX_PARALLEL (default 4).
+    Tracks open contexts so re-clicking 'open' on the same village brings the
+    existing window forward instead of trying to launch a duplicate (which
+    would fail because user_data_dir is locked by the first instance).
     """
     MAX_PARALLEL = 4
 
     def __init__(self) -> None:
         self._semaphore = asyncio.Semaphore(self.MAX_PARALLEL)
         self._playwright = None
+        # village_id -> (context, page)  — only contexts still alive
+        self._open: dict[str, tuple] = {}
 
     async def _ensure_playwright(self):
         if self._playwright is None:
@@ -502,7 +505,23 @@ class BrowserFarm:
         return self._playwright
 
     async def open(self, village: dict[str, Any]):
-        """Open a persistent context for a village. Returns (context, page)."""
+        """Open a persistent context for a village. Returns (context, page).
+        If a window is already open for this village, focus it instead of
+        creating a duplicate."""
+        vid = village["id"]
+        # Check existing
+        existing = self._open.get(vid)
+        if existing:
+            ctx, page = existing
+            try:
+                # Ensure still alive
+                if ctx.pages and not page.is_closed():
+                    await page.bring_to_front()
+                    return ctx, page
+            except Exception:
+                pass
+            self._open.pop(vid, None)
+
         await self._ensure_playwright()
         pw = self._playwright
 
@@ -543,6 +562,16 @@ class BrowserFarm:
         await ctx.add_init_script(stealth_js)
 
         page = ctx.pages[0] if ctx.pages else await ctx.new_page()
+        # Track for re-use on subsequent 'open' clicks
+        self._open[village["id"]] = (ctx, page)
+        # Auto-cleanup when window closes
+        def _on_close(*_a):
+            self._open.pop(village["id"], None)
+        try:
+            page.on("close", _on_close)
+            ctx.on("close", _on_close)
+        except Exception:
+            pass
         return ctx, page
 
 
@@ -753,7 +782,7 @@ def _now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
-def create_village(server: str = "ts8.x2.international.travian.com",
+def create_village(server: str = "https://lobby.legends.travian.com",
                    nationality: Optional[str] = None,
                    proxy: Optional[str] = None,
                    strategy: str = "default",
@@ -1142,7 +1171,7 @@ async def api_create_villages(request: Request):
     """Create N villages with name preset, region, tribe, optional auto-email."""
     body = await request.json()
     count = max(1, min(500, int(body.get("count", 1))))
-    server = body.get("server", "ts8.x2.international.travian.com")
+    server = body.get("server", "https://lobby.legends.travian.com")
     strategy = body.get("strategy", "default")
     use_proxies = bool(body.get("use_proxies", True))
     auto_email = bool(body.get("auto_email", False))
@@ -1684,28 +1713,45 @@ async def api_refresh_free_proxies(request: Request):
 @app.post("/api/villages/{vid}/open-browser")
 async def api_open_browser(vid: str):
     """Open the Playwright browser for this village (visible window).
-    The browser stays open until the user closes it manually.
-    """
+    Re-clicking on same village = focus existing window, not duplicate."""
     v = get_village(vid)
     if not v:
         raise HTTPException(404, "village not found")
     try:
         ctx, page = await FARM.open(v)
-        # Navigate to server homepage (login form)
-        url = (f"https://{v['server']}" if not v['server'].startswith("http")
-               else v['server'])
+        # Build target URL — ensure scheme present
+        srv = v['server'] or "https://lobby.legends.travian.com"
+        if not srv.startswith("http"):
+            srv = f"https://{srv}"
         try:
-            await page.goto(url, wait_until="domcontentloaded", timeout=30000)
+            await page.goto(srv, wait_until="domcontentloaded", timeout=30000)
         except Exception:
             pass
         log_event(vid, "open_browser",
-                  f"navigated to {url} | proxy={v['proxy'] or 'direct'}")
+                  f"navigated to {srv} | proxy={v['proxy'] or 'direct'}")
         update_village_state(vid, "browser_open")
-        return {"ok": True, "village": vid, "url": url,
-                "proxy": v["proxy"] or None, "tribe": v.get("tribe")}
+        return {"ok": True, "village": vid, "url": srv,
+                "proxy": v["proxy"] or None, "tribe": v.get("tribe"),
+                "reused": vid in FARM._open}
     except Exception as e:
         log_event(vid, "error", f"open_browser: {e}")
         return JSONResponse({"ok": False, "error": str(e)}, status_code=500)
+
+
+@app.post("/api/villages/bulk-update-server")
+async def api_bulk_update_server(request: Request):
+    """Update the server URL for all villages matching an old value."""
+    body = await request.json()
+    old = body.get("from", "")
+    new = body.get("to", "https://lobby.legends.travian.com")
+    with db_cur() as cur:
+        if old:
+            res = cur.execute("UPDATE villages SET server = ? WHERE server = ?",
+                              (new, old))
+        else:
+            res = cur.execute("UPDATE villages SET server = ?", (new,))
+        n = res.rowcount
+    return {"ok": True, "updated": n, "new_server": new}
 
 
 @app.post("/api/villages/{vid}/register-travian")
