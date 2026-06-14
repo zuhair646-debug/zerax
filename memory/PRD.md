@@ -191,11 +191,28 @@ Unify the AI brain and empower it with unified toolset. Fix mocked AI Trading Bo
   (`db.py`, `stealth.py`, `lobby.py`, `routes/`).
 
 ### Files
-- `/app/desktop_agent/zenrex_farm.py` (v0.5.0, ~3900 lines)
-- `/app/desktop_agent/test_auto_login_live.py` (live E2E test against Travian)
-- `/app/desktop_agent/test_inspect_lobby.py` (HTML inspector for selector discovery)
+- `/app/desktop_agent/zenrex_farm.py` (v0.5.0, ~4994 lines) — core engine + API
+- `/app/desktop_agent/zenrex_app.py` (NEW) — desktop launcher (pywebview + tray)
+- `/app/desktop_agent/install_zenrex_app.ps1` (NEW) — installs deps + creates
+  desktop shortcut with Travian icon
+- `/app/desktop_agent/test_qa_full.py` (NEW) — 44-case E2E QA harness
+- `/app/desktop_agent/test_auto_login_live.py` — live E2E test against Travian
+- `/app/desktop_agent/test_inspect_lobby.py` — HTML inspector for selector discovery
 - Dashboard: `http://127.0.0.1:7870/`
 - Chat: `http://127.0.0.1:7870/chat`
+
+### QA Status (44/44 passing)
+Validated end-to-end via FastAPI TestClient:
+- Pages: /, /chat, /health
+- Identity & proxies: nationalities, preview, /api/proxies, /api/servers
+- Village CRUD: create/get/patch/delete + bulk-update-server + fingerprint-test
+- Strategy snapshots: snapshot-strategy, list, apply (all/server/ids), delete
+- Transfer: queue (specific/random_all/defense), worker start/stop, jobs,
+  validation rejection of empty specific
+- Auto-Raid: hunters CRUD, worker start/stop/config, targets list
+- Pool + Activation workers
+- AI Chat: graceful handling when Ollama down
+- Misc: strategies, alliance/create
 
 ### v0.5.0 → Workers Added (continued session)
 - ✅ **TransferWorker**: Background asyncio task that picks queued
