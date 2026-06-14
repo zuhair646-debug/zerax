@@ -942,6 +942,127 @@ async def desktop_pc_control_source():
                               headers={"Cache-Control": "no-store"})
 
 
+@desktop_router.get("/farm-source")
+async def desktop_farm_source():
+    """Returns zenrex_farm.py (Travian multi-village bot farm orchestrator)."""
+    from fastapi.responses import PlainTextResponse
+    src = Path(__file__).resolve().parents[3] / "desktop_agent" / "zenrex_farm.py"
+    if not src.exists():
+        raise HTTPException(404, "farm source not found")
+    return PlainTextResponse(src.read_text(encoding="utf-8"),
+                              media_type="text/x-python",
+                              headers={"Cache-Control": "no-store"})
+
+
+@desktop_router.get("/install-farm.ps1")
+async def desktop_install_farm(request: Request):
+    """One-liner installer for Zenrex Farm (multi-village Travian engine).
+
+    Installs locally (no external paid services):
+      • Playwright + Chromium
+      • Faker, FastAPI, uvicorn, sqlite (stdlib)
+      • Downloads zenrex_farm.py
+      • Creates Desktop shortcut "Zenrex Farm"
+      • Starts the service on http://127.0.0.1:7870
+
+    Optionally tries to start Ollama + pull qwen2.5vl:7b if user runs with -WithOllama
+    """
+    from fastapi.responses import PlainTextResponse
+    public_base = _resolve_public_base(request)
+    script = f"""# Zenrex Farm installer (Windows) - 100% local & free
+param([switch]$WithOllama)
+$ErrorActionPreference = "Continue"
+
+Write-Host ""
+Write-Host "═══════════════════════════════════════════════════════════"
+Write-Host "  Zenrex Farm — Multi-Village Travian Engine"
+Write-Host "  100% Local · Zero Paid Services · By Zuhair Abbas"
+Write-Host "═══════════════════════════════════════════════════════════"
+Write-Host ""
+
+$Base = "{public_base}"
+$Dest = Join-Path $env:USERPROFILE ".zenrex-farm"
+$AgentDest = Join-Path $env:USERPROFILE ".zenrex-desktop-agent"
+New-Item -ItemType Directory -Force -Path $Dest, "$Dest\\browsers", "$Dest\\logs" | Out-Null
+
+# 1. Install Python deps
+Write-Host "[1/5] Installing Python packages (playwright, faker, fastapi)..." -ForegroundColor Cyan
+$py = Get-Command python -ErrorAction SilentlyContinue
+if (-not $py) {{ Write-Host "  !! Python not found. Aborting." -ForegroundColor Red; exit 1 }}
+& python -m pip install --quiet --upgrade `
+    playwright faker fastapi uvicorn pyyaml *>&1 | Out-Null
+
+# 2. Install Chromium for Playwright (one-time, ~150MB)
+Write-Host "[2/5] Installing Chromium for Playwright (~150MB, one-time)..." -ForegroundColor Cyan
+& python -m playwright install chromium 2>&1 | Out-Null
+
+# 3. Download zenrex_farm.py
+Write-Host "[3/5] Downloading Zenrex Farm engine..." -ForegroundColor Cyan
+$FarmPy = Join-Path $AgentDest "zenrex_farm.py"
+Invoke-WebRequest -UseBasicParsing -Uri "$Base/api/desktop-agent/farm-source" -OutFile $FarmPy
+
+# 4. Optional: start Ollama + pull vision model
+if ($WithOllama) {{
+    Write-Host "[4/5] Setting up Ollama + Qwen 2.5 VL (vision model, ~5GB)..." -ForegroundColor Cyan
+    $oll = Get-Command ollama -ErrorAction SilentlyContinue
+    if ($oll) {{
+        Start-Process -FilePath "ollama" -ArgumentList "serve" -WindowStyle Hidden -Wait:$false
+        Start-Sleep -Seconds 3
+        & ollama pull qwen2.5vl:7b 2>&1 | Out-Host
+    }} else {{
+        Write-Host "  !! Ollama not installed. Get it from https://ollama.com/download" -ForegroundColor Yellow
+    }}
+}} else {{
+    Write-Host "[4/5] (skipped) Ollama setup — re-run with -WithOllama to enable local vision" -ForegroundColor Yellow
+}}
+
+# 5. Launch Zenrex Farm + desktop shortcut
+Write-Host "[5/5] Starting Zenrex Farm..." -ForegroundColor Cyan
+
+# Kill any old instance
+Get-Process python -EA SilentlyContinue | Where-Object {{
+    $_.MainWindowTitle -like "*ZenrexFarm*"
+}} | Stop-Process -Force -EA SilentlyContinue
+Start-Sleep -Milliseconds 400
+
+# Launch hidden
+$Launcher = Join-Path $AgentDest "start_farm.bat"
+@"
+@echo off
+cd /d %~dp0
+start "ZenrexFarm" /MIN python zenrex_farm.py --no-browser
+"@ | Out-File -Encoding ASCII -FilePath $Launcher -Force
+Start-Process -FilePath $Launcher -WindowStyle Hidden
+
+# Desktop shortcuts
+$WS = New-Object -ComObject WScript.Shell
+$L = $WS.CreateShortcut(
+    (Join-Path ([Environment]::GetFolderPath("Desktop")) "Zenrex Farm.lnk"))
+$L.TargetPath = "http://127.0.0.1:7870"
+$L.IconLocation = "shell32.dll,77"
+$L.Description = "Zenrex Farm dashboard (multi-village Travian engine)"
+$L.Save()
+
+# Wait + open
+Start-Sleep -Seconds 4
+Start-Process "http://127.0.0.1:7870"
+
+Write-Host ""
+Write-Host "═══════════════════════════════════════════════════════════" -ForegroundColor Green
+Write-Host "  ✓ DONE!" -ForegroundColor Green
+Write-Host ""
+Write-Host "  • Dashboard:   http://127.0.0.1:7870"
+Write-Host "  • Data dir:    $Dest"
+Write-Host "  • Engine:      $FarmPy"
+Write-Host "  • Shortcut:    'Zenrex Farm' on Desktop"
+Write-Host ""
+Write-Host "  جرّب: افتح اللوحة، أنشئ 5 قرى تجريبية، واضغط '🦊 افتح' على وحدة."
+Write-Host "═══════════════════════════════════════════════════════════" -ForegroundColor Green
+"""
+    return PlainTextResponse(script, media_type="text/plain",
+                              headers={"Cache-Control": "no-store"})
+
+
 @desktop_router.post("/pc-control-decide")
 async def desktop_pc_control_decide(request: Request):
     """Server-side Claude vision call for the local Zenrex PC-Control game loop.

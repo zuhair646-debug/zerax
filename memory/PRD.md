@@ -41,12 +41,39 @@ Unify the AI brain and empower it with unified toolset. Fix mocked AI Trading Bo
     Local game-loop now POSTs screenshots to backend `pc-control-decide` which
     calls Claude with the key. Bypasses FREE_USER_EXTERNAL_ACCESS_DENIED.
 
-## ⚠️ BLOCKER (2026-02-12)
-- **Emergent LLM key budget exhausted**: 80.44/80.43. User must top-up via
-  Profile → Universal Key → Add Balance (or enable Auto Top-up) before Game
-  Mode can resume. All infrastructure verified working end-to-end.
+- 🟢 **NEW (2026-02)**: Zenrex Farm — multi-village Travian bot engine
+  - File: `/app/desktop_agent/zenrex_farm.py` (port 7870, FastAPI + SQLite)
+  - 100% local · zero paid services · runs on user's Z390 PC
+  - Endpoints: `/api/villages` (CRUD), `/api/proxies`, `/api/identities/preview`,
+    `/api/nationalities`, `/api/villages/{id}/open-browser`
+  - **Identity generator**: 7 nationalities (DE/FR/US/GB/SA/JP/BR) with coherent
+    names, UAs, screen resolutions, locales, timezones. Plus password + email.
+  - **Browser farm**: Playwright persistent contexts (one user-data-dir per
+    village). Stealth injection (hide webdriver, randomize WebGL/canvas/plugins,
+    spoof languages, Chrome runtime presence).
+  - **Proxy management**: round-robin from `~/.zenrex-farm/proxies.txt`. User
+    can paste any combination of http/socks5/auth proxies.
+  - **SQLite DB**: `~/.zenrex-farm/farm.db` with villages, events, build_queue.
+  - **Beautiful RTL Arabic dashboard** with stats, table, create form, proxy
+    manager, identity preview.
+  - One-liner installer: `/api/desktop-agent/install-farm.ps1`
+  - **PROVEN**: Created 5 villages with mixed nationalities (Jürgen Becker DE,
+    Khalid Al-Ghamdi SA, Patrick Petit FR, Akira Watanabe JP, Thomas Schulz DE).
+    Dashboard fully functional at http://127.0.0.1:7870.
+
+## ⚠️ BLOCKERS (2026-02-12)
+- **Emergent LLM key budget exhausted**: 80.44/80.43. User wants FREE/INDEPENDENT
+  alternative — plan: switch farm/control to Ollama qwen2.5vl:7b (local vision).
+- **Playwright Chromium download**: ~150MB, still installing in background on
+  user's PC (started via separate `start /MIN python -m playwright install`).
 
 ## P0 Next Tasks (when user returns)
+- [ ] Verify Chromium installed → test "🦊 افتح" button (Playwright opens a real
+      stealth browser for a village)
+- [ ] Add Ollama vision client to farm (replace Claude for autonomous play)
+- [ ] Travian registration flow (Playwright script: fill signup form per village)
+- [ ] Strategy engine: YAML plan → next-action queue per village
+- [ ] Tor/free-proxy auto-fetcher (no need for user to buy proxies)
 1. Verify Desktop Agent connected from Z390 PC (via /api/desktop-agent/status)
 2. Detect exact RTX model (run nvidia-smi via run_shell)
 3. Install latest NVIDIA driver from nvidia.com
