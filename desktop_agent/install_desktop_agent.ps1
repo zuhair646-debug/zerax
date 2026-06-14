@@ -1,5 +1,5 @@
-# Zenrex Desktop Agent — Full Reset + Install
-# ════════════════════════════════════════════════
+# Zenrex Desktop Agent - Full Reset + Install
+# ================================================
 # This script:
 #   1. KILLS every running Python/Zenrex process
 #   2. DELETES the old Zenrex-Farm folder (full clean)
@@ -17,7 +17,7 @@ function W($m){ Write-Host "$Tag [!] $m" -ForegroundColor Yellow }
 
 Write-Host ""
 Write-Host "==========================================" -ForegroundColor Magenta
-Write-Host "  Zenrex Desktop Agent — Full Reset" -ForegroundColor Magenta
+Write-Host "  Zenrex Desktop Agent - Full Reset" -ForegroundColor Magenta
 Write-Host "==========================================" -ForegroundColor Magenta
 Write-Host ""
 
@@ -39,7 +39,7 @@ if (Test-Path $OldFolder) {
 $Desktops = @(
     [Environment]::GetFolderPath("Desktop"),
     "$env:USERPROFILE\OneDrive\Desktop",
-    "$env:USERPROFILE\OneDrive\سطح المكتب"
+    "$env:USERPROFILE\OneDrive\Desktop_AR"
 )
 foreach ($d in $Desktops) {
     $lnk = Join-Path $d "Zenrex Farm.lnk"
@@ -126,7 +126,7 @@ $sc = $WSS.CreateShortcut($ShortcutPath)
 $sc.TargetPath = $LauncherBat
 $sc.WorkingDirectory = $InstallDir
 $sc.WindowStyle = 7
-$sc.Description = "Zenrex Desktop Agent — connects to Zenrex AI"
+$sc.Description = "Zenrex Desktop Agent - connects to Zenrex AI"
 $sc.Save()
 K "Shortcut: $ShortcutPath"
 
