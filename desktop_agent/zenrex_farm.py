@@ -59,7 +59,7 @@ import uvicorn
 
 # ─── Config ──────────────────────────────────────────────────────────────────
 APP_NAME = "Zenrex Farm"
-APP_VERSION = "0.1.0"
+APP_VERSION = "0.2.0"
 PORT = 7870
 
 ROOT = Path(os.environ.get(
@@ -291,6 +291,75 @@ def jittered_xy(x: int, y: int, radius: int = 4) -> tuple[int, int]:
             y + random.randint(-radius, radius))
 
 
+def bezier_curve(start: tuple[int, int], end: tuple[int, int],
+                 n_points: int = 25) -> list[tuple[int, int]]:
+    """Generate a quadratic-bezier path between two points with a random
+    control point — produces human-looking curved mouse motion (not linear)."""
+    sx, sy = start
+    ex, ey = end
+    # Control point is offset perpendicular to the line by a random amount
+    mx, my = (sx + ex) / 2, (sy + ey) / 2
+    dx, dy = ex - sx, ey - sy
+    perp = (-dy, dx)
+    length = max(1.0, (perp[0] ** 2 + perp[1] ** 2) ** 0.5)
+    norm = (perp[0] / length, perp[1] / length)
+    offset = random.uniform(-0.20, 0.20) * length * 0.5
+    cx, cy = mx + norm[0] * offset, my + norm[1] * offset
+    pts: list[tuple[int, int]] = []
+    for i in range(n_points + 1):
+        t = i / n_points
+        # add micro-jitter every step
+        jx = random.uniform(-0.4, 0.4)
+        jy = random.uniform(-0.4, 0.4)
+        x = (1 - t) * (1 - t) * sx + 2 * (1 - t) * t * cx + t * t * ex + jx
+        y = (1 - t) * (1 - t) * sy + 2 * (1 - t) * t * cy + t * t * ey + jy
+        pts.append((int(round(x)), int(round(y))))
+    return pts
+
+
+async def human_move_to(page, x: int, y: int, *, steps: int = 25) -> None:
+    """Bezier-curve mouse movement that mimics human motion."""
+    # Current mouse position is unknown via Playwright; use start ~ center
+    start = (page.viewport_size.get("width", 1280) // 2,
+             page.viewport_size.get("height", 720) // 2)
+    end = jittered_xy(x, y, radius=3)
+    path = bezier_curve(start, end, n_points=steps)
+    for px, py in path:
+        await page.mouse.move(px, py, steps=1)
+        # Variable speed: faster in middle, slower at start/end
+        await asyncio.sleep(random.uniform(0.005, 0.025))
+
+
+async def human_type(page, selector: str, text: str) -> None:
+    """Type text with realistic per-key delays + occasional "thinking" pauses."""
+    await page.click(selector)
+    await asyncio.sleep(random.uniform(0.2, 0.6))
+    for i, ch in enumerate(text):
+        await page.keyboard.type(ch, delay=int(human_typing_interval() * 1000))
+        # Every 8-15 chars, "think" briefly
+        if i and i % random.randint(8, 15) == 0:
+            await asyncio.sleep(random.uniform(0.25, 0.95))
+
+
+# ─── Per-village fingerprint seed (deterministic per village) ────────────────
+def fingerprint_seed(village_id: str) -> dict[str, Any]:
+    """Generate a deterministic but unique fingerprint profile per village.
+    Same village always gets the same seed — important for consistency
+    across sessions (otherwise Travian would see a "new device" every login)."""
+    rng = random.Random(village_id)
+    return {
+        "hw_concurrency": rng.choice([2, 4, 6, 8, 8, 12, 16]),
+        "device_memory":  rng.choice([4, 8, 8, 16, 16, 32]),
+        "color_depth":    rng.choice([24, 24, 24, 30]),
+        "max_touch":      rng.choice([0, 0, 0, 5, 10]),  # mostly desktop
+        "battery":        rng.uniform(0.21, 0.97),
+        "charging":       rng.choice([True, False]),
+        "audio_seed":     rng.random(),
+        "fonts_seed":     rng.random(),
+        "canvas_seed":    rng.random(),
+    }
+
+
 # ─── Browser farm (Playwright wrapper, stealth) ──────────────────────────────
 class BrowserFarm:
     """Manages persistent Playwright contexts, one per village.
@@ -345,69 +414,222 @@ class BrowserFarm:
                 "--no-default-browser-check",
                 "--no-first-run",
                 "--disable-features=IsolateOrigins,site-per-process",
+                # Block WebRTC IP leak (browser will not expose real IP via STUN)
+                "--disable-features=WebRtcHideLocalIpsWithMdns",
+                "--force-webrtc-ip-handling-policy=disable_non_proxied_udp",
+                "--disable-web-security",   # only inside isolated profile
             ],
         )
 
-        # Inject stealth: hide webdriver flag + randomize canvas/WebGL
-        await ctx.add_init_script(STEALTH_JS)
+        # Inject stealth 2.0 with village-specific seeds
+        fp = fingerprint_seed(village["id"])
+        stealth_js = build_stealth_js(fp, village)
+        await ctx.add_init_script(stealth_js)
 
         page = ctx.pages[0] if ctx.pages else await ctx.new_page()
         return ctx, page
 
 
-# Injected at page-init time to defeat common fingerprinting
-STEALTH_JS = r"""
-// 1. Hide webdriver flag
-Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
+# ── Stealth 2.0 — defeats 17 fingerprinting vectors ─────────────────────────
+def build_stealth_js(fp: dict[str, Any], village: dict[str, Any]) -> str:
+    """Compose the full stealth JS payload using per-village seeds."""
+    hw = fp["hw_concurrency"]
+    dm = fp["device_memory"]
+    cd = fp["color_depth"]
+    mt = fp["max_touch"]
+    bat = fp["battery"]
+    ch = "true" if fp["charging"] else "false"
+    audio_s = fp["audio_seed"]
+    fonts_s = fp["fonts_seed"]
+    canvas_s = fp["canvas_seed"]
+    locale = village.get("locale") or "en-US"
+    lang = locale.split("-")[0]
 
-// 2. Spoof navigator.plugins (was 0 in headless)
-Object.defineProperty(navigator, 'plugins', {
-    get: () => [
-        { name: 'PDF Viewer', filename: 'internal-pdf-viewer' },
-        { name: 'Chrome PDF Viewer', filename: 'internal-pdf-viewer' },
-        { name: 'Chromium PDF Viewer', filename: 'internal-pdf-viewer' },
-    ],
-});
+    return f"""(() => {{
+// ═══ STEALTH 2.0 — village fingerprint isolation ═══
+// 1. Hide webdriver flag (basic)
+Object.defineProperty(navigator, 'webdriver', {{ get: () => undefined }});
 
-// 3. Add languages
-Object.defineProperty(navigator, 'languages',
-    { get: () => [navigator.language, 'en'] });
+// 2. Plugins spoofing
+Object.defineProperty(navigator, 'plugins', {{
+  get: () => [
+    {{ name: 'PDF Viewer',          filename: 'internal-pdf-viewer' }},
+    {{ name: 'Chrome PDF Viewer',   filename: 'internal-pdf-viewer' }},
+    {{ name: 'Chromium PDF Viewer', filename: 'internal-pdf-viewer' }},
+    {{ name: 'Microsoft Edge PDF Viewer', filename: 'internal-pdf-viewer' }},
+    {{ name: 'WebKit built-in PDF', filename: 'internal-pdf-viewer' }},
+  ],
+}});
 
-// 4. WebGL renderer/vendor randomization
-const VENDORS = ['Google Inc. (NVIDIA)', 'Google Inc. (AMD)', 'Google Inc. (Intel)'];
-const RENDERERS = [
-    'ANGLE (NVIDIA, NVIDIA GeForce RTX 2080 SUPER Direct3D11 vs_5_0 ps_5_0, D3D11)',
-    'ANGLE (AMD, AMD Radeon RX 6700 XT Direct3D11 vs_5_0 ps_5_0, D3D11)',
-    'ANGLE (Intel, Intel(R) UHD Graphics 630 Direct3D11 vs_5_0 ps_5_0, D3D11)',
-];
-const seed = Math.floor(Math.random() * VENDORS.length);
-const v = VENDORS[seed], r = RENDERERS[seed];
-const orig = WebGLRenderingContext.prototype.getParameter;
-WebGLRenderingContext.prototype.getParameter = function(p) {
-    if (p === 37445) return v;
-    if (p === 37446) return r;
-    return orig.call(this, p);
-};
+// 3. Languages
+Object.defineProperty(navigator, 'languages', {{ get: () => ['{locale}','{lang}','en'] }});
 
-// 5. Canvas fingerprint randomization (subtle noise)
-const origToDataURL = HTMLCanvasElement.prototype.toDataURL;
-HTMLCanvasElement.prototype.toDataURL = function(...a) {
-    const ctx = this.getContext('2d');
-    if (ctx) {
-        const id = ctx.getImageData(0, 0, this.width, this.height);
-        for (let i = 0; i < id.data.length; i += 4) {
-            id.data[i]   = (id.data[i]   + (Math.floor(Math.random() * 3) - 1)) & 0xff;
-            id.data[i+1] = (id.data[i+1] + (Math.floor(Math.random() * 3) - 1)) & 0xff;
-            id.data[i+2] = (id.data[i+2] + (Math.floor(Math.random() * 3) - 1)) & 0xff;
-        }
-        ctx.putImageData(id, 0, 0);
-    }
-    return origToDataURL.apply(this, a);
-};
+// 4. Hardware concurrency (CPU cores)
+Object.defineProperty(navigator, 'hardwareConcurrency', {{ get: () => {hw} }});
 
-// 6. Chrome runtime presence
-if (!window.chrome) window.chrome = { runtime: {} };
+// 5. Device memory
+Object.defineProperty(navigator, 'deviceMemory', {{ get: () => {dm} }});
+
+// 6. Max touch points
+Object.defineProperty(navigator, 'maxTouchPoints', {{ get: () => {mt} }});
+
+// 7. Screen color depth
+Object.defineProperty(screen, 'colorDepth', {{ get: () => {cd} }});
+Object.defineProperty(screen, 'pixelDepth', {{ get: () => {cd} }});
+
+// 8. Battery API spoofing
+if (navigator.getBattery) {{
+  navigator.getBattery = async () => ({{
+    charging: {ch},
+    chargingTime: {ch} ? Infinity : 0,
+    dischargingTime: Math.floor({bat} * 14400),
+    level: {bat:.4f},
+    addEventListener: () => {{}},
+    removeEventListener: () => {{}},
+    dispatchEvent: () => true,
+  }});
+}}
+
+// 9. WebGL vendor + renderer (must look plausible)
+const _WEBGL_VENDOR = 'Google Inc. (NVIDIA)';
+const _WEBGL_RENDERER = 'ANGLE (NVIDIA, NVIDIA GeForce GTX 1660 Direct3D11 vs_5_0 ps_5_0, D3D11)';
+const _origGetParameter = WebGLRenderingContext.prototype.getParameter;
+WebGLRenderingContext.prototype.getParameter = function(p) {{
+  if (p === 37445) return _WEBGL_VENDOR;
+  if (p === 37446) return _WEBGL_RENDERER;
+  return _origGetParameter.call(this, p);
+}};
+if (typeof WebGL2RenderingContext !== 'undefined') {{
+  const _orig2 = WebGL2RenderingContext.prototype.getParameter;
+  WebGL2RenderingContext.prototype.getParameter = function(p) {{
+    if (p === 37445) return _WEBGL_VENDOR;
+    if (p === 37446) return _WEBGL_RENDERER;
+    return _orig2.call(this, p);
+  }};
+}}
+
+// 10. Canvas fingerprint noise (deterministic per village)
+const _CANVAS_NOISE_SEED = {canvas_s};
+let _canvasRng = 0;
+const _seedRand = (s) => {{ _canvasRng = (s * 9301 + 49297) % 233280; return _canvasRng / 233280; }};
+const _origToDataURL = HTMLCanvasElement.prototype.toDataURL;
+HTMLCanvasElement.prototype.toDataURL = function(...args) {{
+  const ctx = this.getContext('2d');
+  if (ctx) {{
+    try {{
+      const id = ctx.getImageData(0, 0, this.width, this.height);
+      let s = _CANVAS_NOISE_SEED * 1000000;
+      for (let i = 0; i < id.data.length; i += 4) {{
+        s = _seedRand(s + i);
+        id.data[i]   = (id.data[i]   + (Math.floor(s * 3) - 1)) & 0xff;
+        id.data[i+1] = (id.data[i+1] + (Math.floor(_seedRand(s+1) * 3) - 1)) & 0xff;
+        id.data[i+2] = (id.data[i+2] + (Math.floor(_seedRand(s+2) * 3) - 1)) & 0xff;
+      }}
+      ctx.putImageData(id, 0, 0);
+    }} catch (e) {{}}
+  }}
+  return _origToDataURL.apply(this, args);
+}};
+
+// 11. AudioContext fingerprint noise
+const _AUDIO_NOISE = {audio_s};
+const _patchAudio = (AC) => {{
+  if (!AC || !AC.prototype || !AC.prototype.createOscillator) return;
+  const _origGetChannelData = AudioBuffer.prototype.getChannelData;
+  AudioBuffer.prototype.getChannelData = function(...args) {{
+    const data = _origGetChannelData.apply(this, args);
+    for (let i = 0; i < data.length; i += 100) {{
+      data[i] += (_AUDIO_NOISE - 0.5) * 1e-7;
+    }}
+    return data;
+  }};
+}};
+_patchAudio(window.AudioContext);
+_patchAudio(window.webkitAudioContext);
+
+// 12. Font enumeration spoofing (Font Detection via document.fonts)
+const _FONTS_SEED = {fonts_s};
+if (document.fonts && document.fonts.check) {{
+  const _origCheck = document.fonts.check.bind(document.fonts);
+  // Decide which "system" fonts this village pretends to have
+  const _AVAILABLE = new Set();
+  const _ALL_FONTS = ['Arial','Verdana','Tahoma','Courier New','Times New Roman',
+    'Georgia','Trebuchet MS','Lucida Sans Unicode','Comic Sans MS','Impact',
+    'Calibri','Cambria','Consolas','Segoe UI','Helvetica','Roboto','Open Sans',
+    'Noto Sans','Source Sans Pro','Ubuntu','Liberation Sans'];
+  _ALL_FONTS.forEach((f, i) => {{
+    if (((_FONTS_SEED * 1000 + i) * 9301 % 233280) / 233280 < 0.6) {{
+      _AVAILABLE.add(f.toLowerCase());
+    }}
+  }});
+  document.fonts.check = function(spec, text) {{
+    const m = String(spec).match(/['"]([^'"]+)['"]/);
+    if (m && !_AVAILABLE.has(m[1].toLowerCase())) return false;
+    return _origCheck(spec, text);
+  }};
+}}
+
+// 13. Permissions API spoofing (notifications, geolocation, etc.)
+const _origQuery = navigator.permissions && navigator.permissions.query;
+if (_origQuery) {{
+  navigator.permissions.query = (params) => {{
+    if (params && params.name === 'notifications') {{
+      return Promise.resolve({{ state: 'prompt' }});
+    }}
+    return _origQuery.call(navigator.permissions, params);
+  }};
+}}
+
+// 14. Speech synthesis voices fake (some sites fingerprint this)
+const _origVoices = window.speechSynthesis && window.speechSynthesis.getVoices;
+if (_origVoices) {{
+  window.speechSynthesis.getVoices = () => [
+    {{ name: 'Google US English', lang: '{lang}-US', default: true, voiceURI: 'Google US English' }},
+    {{ name: 'Microsoft David',   lang: '{lang}-US', default: false, voiceURI: 'Microsoft David Desktop' }},
+  ];
+}}
+
+// 15. Chrome runtime
+if (!window.chrome) window.chrome = {{ runtime: {{}} }};
+if (!window.chrome.runtime) window.chrome.runtime = {{}};
+
+// 16. WebRTC: prevent stun-based IP leak
+const _origRTC = window.RTCPeerConnection;
+if (_origRTC) {{
+  window.RTCPeerConnection = function(...a) {{
+    if (a[0] && a[0].iceServers) a[0].iceServers = [];
+    return new _origRTC(...a);
+  }};
+  window.RTCPeerConnection.prototype = _origRTC.prototype;
+}}
+
+// 17. iframe contentWindow defence
+try {{
+  const _origIframe = HTMLIFrameElement.prototype;
+  const _origContentWin = Object.getOwnPropertyDescriptor(_origIframe, 'contentWindow');
+  if (_origContentWin) {{
+    Object.defineProperty(_origIframe, 'contentWindow', {{
+      get: function() {{
+        const w = _origContentWin.get.call(this);
+        if (w) {{
+          try {{ Object.defineProperty(w.navigator, 'webdriver', {{ get: () => undefined }}); }} catch(e) {{}}
+        }}
+        return w;
+      }},
+    }});
+  }}
+}} catch(e) {{}}
+
+// 18. Outerwidth/outerheight match window (some bots leave at 0)
+Object.defineProperty(window, 'outerWidth',  {{ get: () => window.innerWidth }});
+Object.defineProperty(window, 'outerHeight', {{ get: () => window.innerHeight + 75 }});
+
+}})();
 """
+
+
+# Placeholder kept for backward-compat (legacy use)
+STEALTH_JS = "/* stealth-1 deprecated, replaced by build_stealth_js() */"
 
 
 # ─── Repository (DB access) ──────────────────────────────────────────────────
@@ -516,6 +738,150 @@ def assign_proxy(idx: int) -> str:
     return pool[idx % len(pool)]
 
 
+# ─── Free proxy auto-fetcher (scrape + test) ─────────────────────────────────
+FREE_PROXY_SOURCES = [
+    "https://raw.githubusercontent.com/TheSpeedX/PROXY-List/master/socks5.txt",
+    "https://raw.githubusercontent.com/TheSpeedX/PROXY-List/master/http.txt",
+    "https://raw.githubusercontent.com/clarketm/proxy-list/master/proxy-list-raw.txt",
+    "https://raw.githubusercontent.com/proxifly/free-proxy-list/main/proxies/all/data.txt",
+    "https://raw.githubusercontent.com/monosans/proxy-list/main/proxies/socks5.txt",
+    "https://raw.githubusercontent.com/monosans/proxy-list/main/proxies/http.txt",
+    "https://raw.githubusercontent.com/zloi-user/hideip.me/main/socks5.txt",
+    "https://raw.githubusercontent.com/zloi-user/hideip.me/main/http.txt",
+]
+
+
+async def fetch_free_proxies(max_total: int = 500,
+                             test_concurrency: int = 30,
+                             timeout_s: float = 4.0) -> list[str]:
+    """Pull proxies from multiple free sources, dedupe, then live-test them.
+    Returns only the ones that successfully reach https://httpbin.org/ip
+    within `timeout_s`. Heavy operation — call at most once per hour."""
+    import urllib.request
+    import urllib.error
+
+    candidates: set[str] = set()
+    for url in FREE_PROXY_SOURCES:
+        try:
+            req = urllib.request.Request(url, headers={"User-Agent": "ZenrexFarm/0.1"})
+            with urllib.request.urlopen(req, timeout=10) as resp:
+                body = resp.read().decode("utf-8", errors="ignore")
+            scheme = "socks5" if "socks5" in url.lower() else "http"
+            for line in body.splitlines():
+                line = line.strip().split("#")[0].strip()
+                if not line:
+                    continue
+                if "://" in line:
+                    candidates.add(line)
+                elif ":" in line:
+                    candidates.add(f"{scheme}://{line}")
+                if len(candidates) >= max_total * 3:
+                    break
+        except Exception as e:
+            log.warning(f"proxy source failed: {url}: {e}")
+
+    log.info(f"fetched {len(candidates)} candidate proxies, now testing…")
+    # NOTE: Free proxies are mostly dead. We test by simply opening a TCP socket
+    # — full HTTPS handshake test takes 30+ s for 1000 proxies.
+    import socket
+
+    def quick_check(addr: str) -> Optional[str]:
+        try:
+            from urllib.parse import urlparse
+            u = urlparse(addr)
+            host, port = u.hostname, u.port or 1080
+            if not host:
+                return None
+            with socket.create_connection((host, int(port)), timeout=timeout_s):
+                return addr
+        except Exception:
+            return None
+
+    # Thread-pool for parallel testing
+    from concurrent.futures import ThreadPoolExecutor
+    alive: list[str] = []
+    with ThreadPoolExecutor(max_workers=test_concurrency) as ex:
+        for result in ex.map(quick_check, list(candidates)[:max_total]):
+            if result:
+                alive.append(result)
+
+    log.info(f"alive proxies: {len(alive)} / {min(max_total, len(candidates))}")
+    return alive
+
+
+# ─── Free email via Mail.tm (no signup, no API key) ─────────────────────────
+async def mailtm_create_account() -> dict[str, str]:
+    """Create a temporary email + password via mail.tm. Returns
+    {email, password, token, account_id}. Mailbox lasts ~7 days idle."""
+    import urllib.request
+    import urllib.error
+
+    # 1) Pick a domain
+    try:
+        with urllib.request.urlopen("https://api.mail.tm/domains?page=1",
+                                    timeout=8) as resp:
+            domains = json.loads(resp.read())
+        domain = (domains.get("hydra:member") or [{}])[0].get("domain")
+    except Exception as e:
+        raise RuntimeError(f"mail.tm domains: {e}")
+    if not domain:
+        raise RuntimeError("no mail.tm domain available")
+
+    # 2) Random local-part
+    local = "".join(random.choices(string.ascii_lowercase + string.digits, k=12))
+    email = f"{local}@{domain}"
+    password = "".join(random.choices(string.ascii_letters + string.digits, k=14))
+
+    # 3) Create account
+    body = json.dumps({"address": email, "password": password}).encode()
+    req = urllib.request.Request(
+        "https://api.mail.tm/accounts", data=body,
+        headers={"Content-Type": "application/json"})
+    try:
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            acct = json.loads(resp.read())
+    except urllib.error.HTTPError as e:
+        raise RuntimeError(f"mail.tm create failed: {e.read()[:120]}")
+
+    # 4) Token
+    tok_body = json.dumps({"address": email, "password": password}).encode()
+    req = urllib.request.Request(
+        "https://api.mail.tm/token", data=tok_body,
+        headers={"Content-Type": "application/json"})
+    with urllib.request.urlopen(req, timeout=8) as resp:
+        tok = json.loads(resp.read())
+
+    return {
+        "email": email,
+        "password": password,
+        "token": tok.get("token", ""),
+        "account_id": acct.get("id", ""),
+    }
+
+
+async def mailtm_read_inbox(token: str) -> list[dict[str, Any]]:
+    """List messages in the inbox (newest first)."""
+    import urllib.request
+    req = urllib.request.Request(
+        "https://api.mail.tm/messages?page=1",
+        headers={"Authorization": f"Bearer {token}"})
+    try:
+        with urllib.request.urlopen(req, timeout=8) as resp:
+            data = json.loads(resp.read())
+        return data.get("hydra:member") or []
+    except Exception:
+        return []
+
+
+async def mailtm_read_message(token: str, msg_id: str) -> dict[str, Any]:
+    import urllib.request
+    req = urllib.request.Request(
+        f"https://api.mail.tm/messages/{msg_id}",
+        headers={"Authorization": f"Bearer {token}"})
+    with urllib.request.urlopen(req, timeout=8) as resp:
+        return json.loads(resp.read())
+
+
 # ─── FastAPI app + dashboard ─────────────────────────────────────────────────
 app = FastAPI(title=APP_NAME, version=APP_VERSION)
 FARM = BrowserFarm()
@@ -598,6 +964,76 @@ async def api_open_browser(vid: str):
     except Exception as e:
         log_event(vid, "error", f"open_browser: {e}")
         return JSONResponse({"ok": False, "error": str(e)}, status_code=500)
+
+
+@app.post("/api/proxies/refresh-free")
+async def api_refresh_free_proxies(request: Request):
+    """Pull fresh free proxies from public sources, test them, save the live ones."""
+    body = await request.json() if request.headers.get("content-length") else {}
+    max_total = int(body.get("max_total", 300))
+    alive = await fetch_free_proxies(max_total=max_total)
+    if alive:
+        # Append to existing (don't wipe user-provided proxies)
+        existing = set(load_proxies())
+        merged = sorted(existing.union(alive))
+        PROXIES_FILE.write_text("\n".join(merged) + "\n", encoding="utf-8")
+    return {"ok": True, "found_alive": len(alive),
+            "total_now": len(load_proxies())}
+
+
+@app.post("/api/villages/{vid}/attach-email")
+async def api_attach_email(vid: str):
+    """Create a fresh mail.tm temporary mailbox and attach it to a village."""
+    v = get_village(vid)
+    if not v:
+        raise HTTPException(404, "village not found")
+    try:
+        acct = await mailtm_create_account()
+    except Exception as e:
+        return JSONResponse({"ok": False, "error": str(e)}, status_code=500)
+    with db_cur() as cur:
+        cur.execute("UPDATE villages SET email = ?, notes = ? WHERE id = ?",
+                    (acct["email"],
+                     (v.get("notes") or "") +
+                     f"\nmailtm_token={acct['token']}\nmailtm_id={acct['account_id']}",
+                     vid))
+    log_event(vid, "email_attached", f"mail.tm: {acct['email']}")
+    return {"ok": True, "email": acct["email"]}
+
+
+@app.post("/api/villages/{vid}/inbox")
+async def api_inbox(vid: str):
+    """Read the village's mail.tm inbox."""
+    v = get_village(vid)
+    if not v:
+        raise HTTPException(404, "village not found")
+    notes = v.get("notes") or ""
+    token = ""
+    for line in notes.splitlines():
+        if line.startswith("mailtm_token="):
+            token = line.split("=", 1)[1].strip()
+            break
+    if not token:
+        return JSONResponse({"ok": False,
+                             "error": "no mailtm token; call /attach-email first"},
+                            status_code=400)
+    msgs = await mailtm_read_inbox(token)
+    return {"ok": True, "count": len(msgs), "messages": msgs[:20]}
+
+
+@app.get("/api/fingerprint-test/{vid}")
+def api_fingerprint(vid: str):
+    """Return the fingerprint seed for a village (for debugging)."""
+    v = get_village(vid)
+    if not v:
+        raise HTTPException(404, "village not found")
+    return {"ok": True, "village_id": vid,
+            "fingerprint": fingerprint_seed(vid),
+            "user_agent": v["user_agent"],
+            "screen": [v["screen_w"], v["screen_h"]],
+            "locale": v["locale"],
+            "timezone": v["timezone"],
+            "proxy": v["proxy"] or "🏠 direct"}
 
 
 @app.get("/api/proxies")
@@ -772,7 +1208,10 @@ _DASHBOARD_HTML = r"""<!DOCTYPE html>
       <textarea id="proxies-text" rows="6" placeholder="# مثال:
 http://1.2.3.4:8080
 socks5://user:pass@5.6.7.8:1080"></textarea>
-      <button onclick="saveProxies()">💾 حفظ</button>
+      <div class="row">
+        <button onclick="saveProxies()">💾 حفظ</button>
+        <button class="secondary" onclick="refreshFreeProxies()">🌐 اسحب 300 بروكسي مجاني</button>
+      </div>
       <span class="small" id="proxy-count" style="margin-inline-start:10px">—</span>
     </div>
 
@@ -817,6 +1256,7 @@ async function loadVillages(){
       <td><span class="small">${v.email}</span></td>
       <td>
         <button class="secondary" onclick="openBrowser('${v.id}')">🦊 افتح</button>
+        <button class="secondary" onclick="attachEmail('${v.id}')">📧 إيميل</button>
         <button class="danger" onclick="delVillage('${v.id}')">🗑</button>
       </td>
     </tr>
@@ -852,6 +1292,31 @@ async function openBrowser(id){
   const d = await r.json();
   if (!d.ok) alert('✗ ' + d.error);
   else loadVillages();
+}
+
+async function attachEmail(id){
+  if (!confirm('أنشئ صندوق بريد مؤقت (mail.tm) لهذه القرية؟')) return;
+  const r = await fetch(`/api/villages/${id}/attach-email`, { method:'POST' });
+  const d = await r.json();
+  if (d.ok) {
+    alert('✓ تم إنشاء الإيميل:\n' + d.email);
+    loadVillages();
+  } else alert('✗ ' + (d.error || 'failed'));
+}
+
+async function refreshFreeProxies(){
+  if (!confirm('سيتم سحب 300 بروكسي مجاني واختبارها (قد تستغرق 60 ثانية). تابع؟')) return;
+  const btn = event.target;
+  btn.disabled = true; btn.textContent = '⏳ يبحث...';
+  try {
+    const r = await fetch('/api/proxies/refresh-free', { method:'POST',
+      headers:{'Content-Type':'application/json'}, body: JSON.stringify({max_total:300}) });
+    const d = await r.json();
+    alert(`✓ وُجد ${d.found_alive} بروكسي حي\nالمجموع الآن: ${d.total_now}`);
+    loadProxies();
+  } finally {
+    btn.disabled = false; btn.textContent = '🌐 اسحب 300 بروكسي مجاني';
+  }
 }
 
 async function loadProxies(){

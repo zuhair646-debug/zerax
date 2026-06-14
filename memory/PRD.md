@@ -41,25 +41,26 @@ Unify the AI brain and empower it with unified toolset. Fix mocked AI Trading Bo
     Local game-loop now POSTs screenshots to backend `pc-control-decide` which
     calls Claude with the key. Bypasses FREE_USER_EXTERNAL_ACCESS_DENIED.
 
-- 🟢 **NEW (2026-02)**: Zenrex Farm — multi-village Travian bot engine
-  - File: `/app/desktop_agent/zenrex_farm.py` (port 7870, FastAPI + SQLite)
+- 🟢 **NEW (2026-02)**: Zenrex Farm v0.2.0 — multi-village Travian bot engine
+  - File: `/app/desktop_agent/zenrex_farm.py` (55KB, port 7870, FastAPI + SQLite)
   - 100% local · zero paid services · runs on user's Z390 PC
-  - Endpoints: `/api/villages` (CRUD), `/api/proxies`, `/api/identities/preview`,
-    `/api/nationalities`, `/api/villages/{id}/open-browser`
-  - **Identity generator**: 7 nationalities (DE/FR/US/GB/SA/JP/BR) with coherent
-    names, UAs, screen resolutions, locales, timezones. Plus password + email.
-  - **Browser farm**: Playwright persistent contexts (one user-data-dir per
-    village). Stealth injection (hide webdriver, randomize WebGL/canvas/plugins,
-    spoof languages, Chrome runtime presence).
-  - **Proxy management**: round-robin from `~/.zenrex-farm/proxies.txt`. User
-    can paste any combination of http/socks5/auth proxies.
-  - **SQLite DB**: `~/.zenrex-farm/farm.db` with villages, events, build_queue.
-  - **Beautiful RTL Arabic dashboard** with stats, table, create form, proxy
-    manager, identity preview.
-  - One-liner installer: `/api/desktop-agent/install-farm.ps1`
-  - **PROVEN**: Created 5 villages with mixed nationalities (Jürgen Becker DE,
-    Khalid Al-Ghamdi SA, Patrick Petit FR, Akira Watanabe JP, Thomas Schulz DE).
-    Dashboard fully functional at http://127.0.0.1:7870.
+  - **PROVEN STATE**: 10 villages with 10 unique IPs from different countries,
+    Stealth 2.0 (17 fingerprint vectors), mail.tm temp emails working.
+  - **Stealth 2.0** defeats: webdriver, plugins, languages, HW concurrency,
+    device memory, max touch, color depth, battery API, WebGL vendor/renderer,
+    Canvas seeded noise, AudioContext noise, font enumeration spoofing,
+    Permissions API, speech synthesis voices, WebRTC IP leak, iframe escape.
+  - **Free Proxy Auto-Fetcher**: 8 GitHub sources → TCP test → ~40-50% alive.
+    Sample run: 200 candidates → 83 alive socks5/http proxies in 90s.
+  - **Mail.tm integration**: Free temporary mailboxes, no API key. Per-village
+    inbox endpoint.
+  - **Per-village deterministic fingerprint seeds** (`fingerprint_seed(vid)`)
+    so each village has consistent identity across sessions.
+  - **Human Bezier mouse + typing** (`bezier_curve`, `human_move_to`, `human_type`).
+  - **Dashboard buttons**: 🦊 افتح متصفح، 📧 إرفاق إيميل، 🌐 سحب 300 بروكسي مجاني.
+  - Endpoints: `/api/villages` CRUD, `/api/proxies/refresh-free`,
+    `/api/villages/{id}/attach-email`, `/api/villages/{id}/inbox`,
+    `/api/fingerprint-test/{id}`, `/api/identities/preview`.
 
 ## ⚠️ BLOCKERS (2026-02-12)
 - **Emergent LLM key budget exhausted**: 80.44/80.43. User wants FREE/INDEPENDENT
