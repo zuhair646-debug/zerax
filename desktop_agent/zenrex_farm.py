@@ -3728,27 +3728,22 @@ def api_servers():
 
 
 # ─── Travian Worlds Sync — live list of game worlds ──────────────────────────
+# Region codes here MUST match the subdomain used in real Travian URLs
+# (e.g. `arabics` not `arabia`, since the URL is `tsX.x1.arabics.travian.com`).
+# This keeps probe + UI + DB rows in sync.
 TRAVIAN_REGIONS = [
     ("international", "International / English", "en",
      "https://www.travian.com/"),
-    ("arabia",        "Arabia (عربي)",          "ar",
+    ("arabics",       "Arabia (عربي)",          "ar",
      "https://www.travian.com/sa"),
-    ("germany",       "Germany / Deutsch",      "de",
-     "https://www.travian.de/"),
-    ("france",        "France / Français",      "fr",
-     "https://www.travian.fr/"),
-    ("turkey",        "Turkey / Türkçe",        "tr",
-     "https://www.travian.com.tr/"),
-    ("russia",        "Russia / Русский",        "ru",
-     "https://www.travian.ru/"),
-    ("spain",         "Spain / Español",        "es",
-     "https://www.travian.es/"),
-    ("italy",         "Italy / Italiano",       "it",
-     "https://www.travian.it/"),
-    ("poland",        "Poland / Polski",        "pl",
-     "https://www.travian.pl/"),
-    ("brazil",        "Brazil / Português",     "pt",
-     "https://www.travian.com.br/"),
+    ("europe",        "Europe",                 "en",
+     "https://www.travian.com/eu"),
+    ("america",       "America",                "en",
+     "https://www.travian.com/us"),
+    ("asia",          "Asia",                   "en",
+     "https://www.travian.com/asia"),
+    ("anglosphere",   "Anglosphere",            "en",
+     "https://www.travian.com/uk"),
 ]
 
 
@@ -3880,11 +3875,97 @@ def api_travian_regions():
         for r in TRAVIAN_REGIONS]}
 
 
-# Curated list of ACTIVE Travian Legends worlds verified to exist as of Feb 2026.
-# Only worlds we are reasonably sure exist — fake/guessed entries removed.
-# Use the "🔄 جلب السيرفرات" button to refresh from the live lobby (requires login).
+# Live Travian server probe — replaces the old Playwright DOM scrape.
+# Travian Legends servers follow a predictable URL scheme:
+#   https://ts<N>.x<SPEED>.<REGION>.travian.com/
+# We HTTP-GET each candidate and keep the ones returning 200/301/302.
+# Reliable, fast (under 10s with parallelism), zero DOM brittleness.
+TRAVIAN_PROBE_REGIONS = ["international", "arabics", "europe", "america",
+                        "asia", "anglosphere"]
+TRAVIAN_PROBE_NUMBERS = list(range(1, 15))  # ts1..ts14
+TRAVIAN_PROBE_SPEEDS  = [1, 2, 3, 5, 10]
+
+
+def _probe_one_url(url: str) -> tuple[str, int]:
+    import urllib.request as urlr
+    import urllib.error as urle
+    # Two attempts to absorb transient DNS / TCP flakiness on cloud egress
+    for attempt in (1, 2):
+        try:
+            req = urlr.Request(
+                url, method="GET",
+                headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                                       "AppleWebKit/537.36 (KHTML, like Gecko) "
+                                       "Chrome/120.0.0.0 Safari/537.36"})
+            with urlr.urlopen(req, timeout=6) as r:
+                return (url, r.status)
+        except urle.HTTPError as e:
+            return (url, e.code)
+        except Exception:
+            if attempt == 2:
+                return (url, 0)
+    return (url, 0)
+
+
+REGION_DISPLAY = {
+    "international": "International / English",
+    "arabics":       "Arabia (عربي)",
+    "europe":        "Europe",
+    "america":       "America",
+    "asia":          "Asia",
+    "anglosphere":   "Anglosphere",
+}
+REGION_LANG = {
+    "international": "en", "arabics": "ar", "europe": "en",
+    "america": "en", "asia": "en", "anglosphere": "en",
+}
+
+
+def probe_live_worlds() -> list[dict[str, Any]]:
+    """HTTP-probe every plausible Travian world URL and return the live ones.
+
+    This is the *authoritative* source of truth for which servers exist
+    right now — independent of any static seed list or DOM scraping.
+    """
+    import concurrent.futures
+    candidates: list[tuple[str, str, int, int]] = []  # (url, region, n, speed)
+    for region in TRAVIAN_PROBE_REGIONS:
+        for n in TRAVIAN_PROBE_NUMBERS:
+            for sp in TRAVIAN_PROBE_SPEEDS:
+                url = f"https://ts{n}.x{sp}.{region}.travian.com/"
+                candidates.append((url, region, n, sp))
+
+    live: list[dict[str, Any]] = []
+    now = _now_iso()
+    with concurrent.futures.ThreadPoolExecutor(max_workers=30) as ex:
+        results = list(ex.map(lambda c: (_probe_one_url(c[0]), c),
+                              candidates))
+    for (url, code), (_, region, n, sp) in results:
+        if code not in (200, 301, 302):
+            continue
+        speed_label = f"{sp}x"
+        live.append({
+            "code":   f"ts{n}.x{sp}.{region}",
+            "name":   f"Travian Legends — TS{n} ({speed_label}, {region})",
+            "url":    url,
+            "region": region,
+            "language": REGION_LANG.get(region, "en"),
+            "speed":  speed_label,
+            "status": "active",
+            "start_at": None,
+            "players": None,
+            "note":   "probed-live",
+            "fetched_at": now,
+        })
+    # Stable ordering: region group, then world number, then speed
+    live.sort(key=lambda w: (w["region"], int(w["code"].split(".")[0][2:]),
+                              int(w["speed"].rstrip("x"))))
+    return live
+
+
+# Curated fallback list (used only when the live probe finds nothing —
+# e.g. offline or all 30+ parallel HTTP probes time out).
 KNOWN_TRAVIAN_WORLDS = [
-    # International (English) — confirmed active worlds
     ("ts1.x1.international",  "Travian Legends — TS1 (1x speed)",
      "https://ts1.x1.international.travian.com/", "international", "en", "1x", "active"),
     ("ts4.x1.international",  "Travian Legends — TS4 (1x speed)",
@@ -3923,20 +4004,25 @@ def seed_known_worlds() -> int:
 
 @app.post("/api/travian/sync")
 async def api_travian_sync(request: Request):
-    """Scrape live Travian regional sites and refresh `travian_worlds`.
-    Body: {regions?: [code,...]} — defaults to all."""
-    body = await request.json() if request.headers.get("content-length") else {}
-    region_codes = body.get("regions") or [r[0] for r in TRAVIAN_REGIONS]
-    summary = []
-    for rc in region_codes:
-        try:
-            worlds = await fetch_travian_worlds(rc)
-            saved = _save_worlds(worlds)
-            summary.append({"region": rc, "found": len(worlds),
-                            "saved": saved})
-        except Exception as e:
-            summary.append({"region": rc, "error": str(e)})
-    return {"ok": True, "summary": summary}
+    """HTTP-probe every plausible Travian Legends URL and persist the live
+    ones into `travian_worlds`. Optional body `{regions: [...]}` is ignored
+    (probe covers ALL regions in one parallel pass — under 15s).
+    """
+    import functools
+    worlds = await asyncio.get_event_loop().run_in_executor(
+        None, functools.partial(probe_live_worlds))
+    saved = _save_worlds(worlds)
+    # Bump every world we DID see this probe back to 'active' (it may have
+    # been marked inactive previously by a flaky earlier probe).
+    if worlds:
+        with db_cur() as cur:
+            for w in worlds:
+                cur.execute(
+                    "UPDATE travian_worlds SET status = 'active', "
+                    "fetched_at = ? WHERE code = ?",
+                    (w["fetched_at"], w["code"]))
+    return {"ok": True, "found": len(worlds), "saved": saved,
+            "worlds": worlds[:60]}
 
 
 @app.post("/api/travian/sync-via-village/{vid}")

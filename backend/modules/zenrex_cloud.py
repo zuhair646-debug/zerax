@@ -46,6 +46,21 @@ try:
         logger.info("[zenrex-cloud] init_db() done")
     except Exception as _idb:
         logger.warning(f"[zenrex-cloud] init_db failed: {_idb}")
+
+    # One-time live HTTP probe of all Travian Legends URLs so the user
+    # sees real, currently-responding servers (not just static seed).
+    # Runs in a background thread; no blocking of import.
+    def _initial_probe():
+        try:
+            worlds = zenrex_farm.probe_live_worlds()
+            saved = zenrex_farm._save_worlds(worlds)
+            logger.info(f"[zenrex-cloud] initial probe: {len(worlds)} live worlds, {saved} saved")
+        except Exception as e:
+            logger.warning(f"[zenrex-cloud] initial probe failed: {e}")
+
+    import threading
+    threading.Thread(target=_initial_probe, daemon=True).start()
+
     logger.info(f"[zenrex-cloud] loaded zenrex_farm v{zenrex_farm.APP_VERSION}")
 except Exception as exc:  # pragma: no cover
     logger.exception(f"[zenrex-cloud] failed to import zenrex_farm: {exc}")
