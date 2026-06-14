@@ -25,6 +25,14 @@ Unify the AI brain and empower it with unified toolset. Fix mocked AI Trading Bo
 ## In Progress (Session End State)
 - 🟡 User installing Desktop Agent on Z390 PC via PowerShell installer
 - 🟡 Need to detect exact NVIDIA RTX model after agent connects
+- 🟢 **NEW (2026-02)**: Zenrex PC-Control + Game-Mode service deployed
+  - File: `/app/desktop_agent/zenrex_pc_control.py` (port 7862, FastAPI)
+  - Endpoints: `/screen.jpg`, `/control/{click,move,type,key,scroll,hotkey}`,
+    `/game/{start,stop,status}`
+  - Game loop: screenshot → Claude Sonnet 4.5 vision → JSON action → pyautogui
+  - Beautiful RTL Arabic control panel UI with live screen + manual + game-mode
+  - One-liner installer: `/api/desktop-agent/install-games-and-control.ps1`
+    also installs Epic Games (Fortnite), Steam (PUBG), Whisper, opens Travian
 
 ## P0 Next Tasks (when user returns)
 1. Verify Desktop Agent connected from Z390 PC (via /api/desktop-agent/status)

@@ -930,6 +930,156 @@ async def desktop_bootstrap_ps1(request: Request):
                               headers={"Cache-Control": "no-store"})
 
 
+@desktop_router.get("/pc-control-source")
+async def desktop_pc_control_source():
+    """Returns the latest zenrex_pc_control.py (PC control + game-mode service)."""
+    from fastapi.responses import PlainTextResponse
+    src = Path(__file__).resolve().parents[3] / "desktop_agent" / "zenrex_pc_control.py"
+    if not src.exists():
+        raise HTTPException(404, "pc-control source not found")
+    return PlainTextResponse(src.read_text(encoding="utf-8"),
+                              media_type="text/x-python",
+                              headers={"Cache-Control": "no-store"})
+
+
+@desktop_router.get("/install-games-and-control.ps1")
+async def desktop_install_games_and_control(request: Request):
+    """One-liner PowerShell installer that:
+      • Installs Epic Games Launcher (Fortnite)
+      • Installs Steam (PUBG, Travian alternatives)
+      • Installs OpenAI Whisper for the voice-record button
+      • Deploys Zenrex PC Control + Game Mode service on port 7862
+      • Creates a Desktop shortcut "Zenrex Control" that opens the panel
+      • Opens Travian in the default browser
+
+    Usage on the Z390 PC (PowerShell):
+        iwr -useb https://<host>/api/desktop-agent/install-games-and-control.ps1 | iex
+    """
+    from fastapi.responses import PlainTextResponse
+    public_base = _resolve_public_base(request)
+    emergent_key = os.environ.get("EMERGENT_LLM_KEY", "")
+    script = f"""# Zenrex — Games + PC Control + Whisper installer (Windows)
+$ErrorActionPreference = "Continue"
+
+Write-Host ""
+Write-Host "═══════════════════════════════════════════════════════════"
+Write-Host "  Zenrex — Games + AI PC-Control Installer"
+Write-Host "  By Zuhair Abbas"
+Write-Host "═══════════════════════════════════════════════════════════"
+Write-Host ""
+
+$Base    = "{public_base}"
+$Dest    = Join-Path $env:USERPROFILE ".zenrex-desktop-agent"
+$EmergentKey = "{emergent_key}"
+
+New-Item -ItemType Directory -Force -Path $Dest | Out-Null
+
+# ─── 1. Install games via winget (silent, non-blocking) ─────────────────────
+Write-Host "[1/6] Installing Epic Games Launcher (Fortnite)..." -ForegroundColor Cyan
+$winget = Get-Command winget -ErrorAction SilentlyContinue
+if ($winget) {{
+    Start-Process -FilePath "winget" -ArgumentList @(
+        "install","--id","EpicGames.EpicGamesLauncher",
+        "-e","--accept-package-agreements","--accept-source-agreements","--silent"
+    ) -WindowStyle Hidden -Wait:$false
+    Write-Host "  → Epic Games install started in background." -ForegroundColor Green
+
+    Write-Host "[2/6] Installing Steam (for PUBG)..." -ForegroundColor Cyan
+    Start-Process -FilePath "winget" -ArgumentList @(
+        "install","--id","Valve.Steam",
+        "-e","--accept-package-agreements","--accept-source-agreements","--silent"
+    ) -WindowStyle Hidden -Wait:$false
+    Write-Host "  → Steam install started in background." -ForegroundColor Green
+}} else {{
+    Write-Host "  !! winget not found — skipping game installers." -ForegroundColor Yellow
+    Write-Host "     Install App-Installer from Microsoft Store and re-run." -ForegroundColor Yellow
+}}
+
+# ─── 3. Open Travian in default browser (immediate test) ────────────────────
+Write-Host "[3/6] Opening Travian in your default browser..." -ForegroundColor Cyan
+Start-Process "https://www.travian.com"
+
+# ─── 4. Install Whisper (voice-to-text) ─────────────────────────────────────
+Write-Host "[4/6] Installing OpenAI Whisper (voice button)..." -ForegroundColor Cyan
+$py = Get-Command python -ErrorAction SilentlyContinue
+if ($py) {{
+    & python -m pip install --quiet --upgrade openai-whisper *>&1 | Out-Null
+    Write-Host "  → Whisper installed." -ForegroundColor Green
+}} else {{
+    Write-Host "  !! Python not found — skipping Whisper." -ForegroundColor Yellow
+}}
+
+# ─── 5. Deploy Zenrex PC-Control + Game-Mode service ────────────────────────
+Write-Host "[5/6] Deploying Zenrex PC-Control + Game-Mode service..." -ForegroundColor Cyan
+$ControlPy = Join-Path $Dest "zenrex_pc_control.py"
+Invoke-WebRequest -UseBasicParsing -Uri "$Base/api/desktop-agent/pc-control-source" -OutFile $ControlPy
+
+# Install/upgrade Python deps for the control service
+if ($py) {{
+    & python -m pip install --quiet --upgrade `
+        fastapi uvicorn pyautogui mss pillow pyperclip emergentintegrations *>&1 | Out-Null
+    Write-Host "  → Python deps installed (fastapi, pyautogui, mss, emergentintegrations)." -ForegroundColor Green
+}}
+
+# Persist the Emergent LLM key into a launcher .bat so the service can use it
+$Launcher = Join-Path $Dest "start_pc_control.bat"
+@"
+@echo off
+setlocal
+set EMERGENT_LLM_KEY=$EmergentKey
+cd /d %~dp0
+start "" /B pythonw zenrex_pc_control.py
+"@ | Out-File -Encoding ASCII -FilePath $Launcher -Force
+
+# Kill any previous instance (so we can re-run safely)
+Get-Process python,pythonw -ErrorAction SilentlyContinue | Where-Object {{
+    $_.CommandLine -like "*zenrex_pc_control*"
+}} | Stop-Process -Force -ErrorAction SilentlyContinue
+Start-Sleep -Milliseconds 400
+
+# Launch the service (hidden)
+Start-Process -FilePath $Launcher -WindowStyle Hidden
+
+# ─── 6. Create desktop shortcut "Zenrex Control" ────────────────────────────
+Write-Host "[6/6] Creating Desktop shortcut..." -ForegroundColor Cyan
+$WS = New-Object -ComObject WScript.Shell
+$LnkPath = Join-Path ([Environment]::GetFolderPath("Desktop")) "Zenrex Control.lnk"
+$Lnk = $WS.CreateShortcut($LnkPath)
+$Lnk.TargetPath = "http://127.0.0.1:7862"
+$Lnk.IconLocation = "shell32.dll,14"
+$Lnk.Description = "Zenrex PC Control + Game Mode"
+$Lnk.Save()
+
+# Also: shortcut to (re)start the service
+$StartLnk = Join-Path ([Environment]::GetFolderPath("Desktop")) "Start Zenrex Control.lnk"
+$L2 = $WS.CreateShortcut($StartLnk)
+$L2.TargetPath = $Launcher
+$L2.WindowStyle = 7
+$L2.IconLocation = "shell32.dll,137"
+$L2.Description = "Restart Zenrex PC-Control service"
+$L2.Save()
+
+# Wait for service to come up then open it
+Start-Sleep -Seconds 3
+Start-Process "http://127.0.0.1:7862"
+
+Write-Host ""
+Write-Host "═══════════════════════════════════════════════════════════" -ForegroundColor Green
+Write-Host "  ✓ Done!" -ForegroundColor Green
+Write-Host ""
+Write-Host "  • Epic Games + Steam → installing silently in background"
+Write-Host "  • Travian            → opened in your browser"
+Write-Host "  • Zenrex Control     → running at http://127.0.0.1:7862"
+Write-Host "  • Desktop shortcut   → 'Zenrex Control'"
+Write-Host ""
+Write-Host "  جرّب الآن: افتح 'Zenrex Control' من سطح المكتب،"
+Write-Host "  اختر Travian من الأزرار، واضغط 'ابدأ اللعب'."
+Write-Host "═══════════════════════════════════════════════════════════" -ForegroundColor Green
+"""
+    return PlainTextResponse(script, media_type="text/plain",
+                              headers={"Cache-Control": "no-store"})
+
+
 @desktop_router.get("/download")
 async def desktop_download(request: Request):
     """Return a ready-to-run ZIP of the Desktop Agent.
