@@ -1631,6 +1631,23 @@ async def desktop_agent_ws(ws: WebSocket, code: str = Query(...)):
 
     pairing["agent_info"] = new_info or prev_info
 
+    # Server-side heartbeat: send "ping" every 25s to defeat Cloudflare's
+    # ~60s idle-timeout for WebSockets. Agent already responds with "pong".
+    async def _heartbeat():
+        try:
+            while True:
+                await asyncio.sleep(25)
+                if _DESKTOP_ACTIVE_WS.get(project_id) is not ws:
+                    return
+                try:
+                    await ws.send_json({"type": "ping", "ts": time.time()})
+                except Exception:
+                    return
+        except asyncio.CancelledError:
+            return
+
+    heartbeat_task = asyncio.create_task(_heartbeat())
+
     try:
         while True:
             data = await ws.receive_text()
@@ -1641,6 +1658,9 @@ async def desktop_agent_ws(ws: WebSocket, code: str = Query(...)):
             mtype = msg.get("type")
             if mtype == "ping":
                 await ws.send_json({"type": "pong", "ts": time.time()})
+            elif mtype == "pong":
+                # Heartbeat reply — keep-alive ack, nothing else to do.
+                pass
             elif mtype == "response":
                 req_id = msg.get("request_id")
                 fut = _DESKTOP_PENDING.get(project_id, {}).pop(req_id, None)
@@ -1656,6 +1676,7 @@ async def desktop_agent_ws(ws: WebSocket, code: str = Query(...)):
     except Exception as e:
         logger.warning(f"[desktop-agent] ws error: {e}")
     finally:
+        heartbeat_task.cancel()
         if _DESKTOP_ACTIVE_WS.get(project_id) is ws:
             _DESKTOP_ACTIVE_WS.pop(project_id, None)
         for req_id, fut in list(_DESKTOP_PENDING.get(project_id, {}).items()):
