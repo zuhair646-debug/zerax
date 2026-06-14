@@ -19,10 +19,19 @@ import asyncio
 import logging
 from typing import Iterable
 
-# Make the desktop_agent package importable
-DESKTOP_AGENT_DIR = "/app/desktop_agent"
-if DESKTOP_AGENT_DIR not in sys.path:
-    sys.path.insert(0, DESKTOP_AGENT_DIR)
+# Make the desktop_agent package importable. We probe several locations
+# because the layout differs between dev (preview container) and prod
+# (Docker compose on the Hetzner VPS).
+for candidate in (
+    "/app/desktop_agent",          # dev / preview
+    "/desktop_agent",              # prod docker mount
+    os.path.join(os.path.dirname(__file__), "..", "..", "desktop_agent"),
+):
+    cand = os.path.abspath(candidate)
+    if os.path.isfile(os.path.join(cand, "zenrex_farm.py")):
+        if cand not in sys.path:
+            sys.path.insert(0, cand)
+        break
 
 # Flag this process as the cloud host so endpoints can short-circuit work
 # that only makes sense when running on the user's PC (self-update, beacon).
