@@ -60,7 +60,7 @@ import uvicorn
 
 # ─── Config ──────────────────────────────────────────────────────────────────
 APP_NAME = "Zenrex Farm"
-APP_VERSION = "0.8.0"
+APP_VERSION = "0.8.1"
 PORT = 7870
 
 ROOT = Path(os.environ.get(
@@ -4326,8 +4326,10 @@ async def api_self_update_check():
 
 @app.post("/api/self-update/apply")
 async def api_self_update_apply():
-    """Download latest zenrex_farm.py and overwrite the current file.
-    The user must restart the app for it to take effect."""
+    """Download latest zenrex_farm.py, overwrite the current file, AND
+    automatically relaunch zenrex_app.py so the new code takes effect
+    without manual intervention. Body: {auto_restart?: bool=true}.
+    """
     import urllib.request
     from pathlib import Path
     try:
@@ -4348,9 +4350,46 @@ async def api_self_update_apply():
         current.write_bytes(content)
     except Exception as e:
         return {"ok": False, "error": f"write failed: {e}"}
+
+    # ─── Auto-restart: spawn a fresh zenrex_app.py and hard-exit ─────────
+    # We do this in a delayed thread so the HTTP response still gets sent.
+    def _delayed_restart():
+        import time
+        import subprocess
+        import sys as _sys
+        time.sleep(2.0)  # give the response time to flush
+        launcher = current.parent / "zenrex_app.py"
+        if not launcher.exists():
+            os._exit(0)
+        # Find pythonw if available (Windows — hides console)
+        pyw = _sys.executable
+        if os.name == "nt":
+            cand = pyw.replace("python.exe", "pythonw.exe")
+            if Path(cand).exists():
+                pyw = cand
+        try:
+            # Detach so it survives our exit
+            kwargs = {}
+            if os.name == "nt":
+                kwargs["creationflags"] = (
+                    subprocess.DETACHED_PROCESS  # type: ignore
+                    | subprocess.CREATE_NEW_PROCESS_GROUP)  # type: ignore
+            else:
+                kwargs["start_new_session"] = True
+            subprocess.Popen([pyw, str(launcher)], **kwargs)
+        except Exception:
+            pass
+        # Hard-exit current process so the file lock is released and the
+        # new process can take over the port.
+        os._exit(0)
+
+    import threading as _th
+    _th.Thread(target=_delayed_restart, daemon=True).start()
+
     return {"ok": True, "bytes_written": len(content),
             "path": str(current),
-            "message": "تم التحديث. أعد تشغيل التطبيق ليأخذ التغييرات."}
+            "auto_restart": True,
+            "message": "تم التحديث. التطبيق راح يعيد التشغيل تلقائياً خلال ثانيتين."}
 
 
 @app.post("/api/transfer/plan")
@@ -4963,7 +5002,7 @@ _DASHBOARD_HTML = r"""<!DOCTYPE html>
 <header>
   <div class="flex">
     <h1>🏰 Zenrex Farm</h1>
-    <span class="badge" id="ver">v0.8.0</span>
+    <span class="badge" id="ver">v0.8.1</span>
     <span class="badge">100% Local · Free</span>
     <button class="secondary" onclick="checkUpdate()" style="margin:0;padding:4px 10px;font-size:11px">🔄 تحديث</button>
     <span id="update-badge" class="badge"></span>
@@ -6311,14 +6350,23 @@ async function checkUpdate(){
       return;
     }
     if (d.update_available) {
-      if (confirm(`نسخة جديدة متوفرة: ${d.remote}\nنسختك: ${d.local}\n\nتبي تحدّث الآن؟ (لازم إعادة تشغيل التطبيق بعد التحديث)`)) {
+      if (confirm(`نسخة جديدة متوفرة: ${d.remote}\nنسختك: ${d.local}\n\nتبي تحدّث الآن؟ التطبيق راح يعيد التشغيل تلقائياً.`)) {
         const r2 = await fetch('/api/self-update/apply', { method:'POST' });
         const d2 = await r2.json();
         if (d2.ok) {
-          alert(`✅ تم التحديث (${d2.bytes_written} bytes)\n\nأقفل التطبيق وأعد فتحه من سطح المكتب.`);
-          badge.textContent = '✓ محدّث — أعد التشغيل';
+          badge.textContent = '✓ يعيد التشغيل...';
           badge.style.background = '#064e3b';
           badge.style.color = '#10b981';
+          // Show big overlay because the window is about to die
+          document.body.insertAdjacentHTML('beforeend', `
+            <div style="position:fixed;inset:0;background:rgba(0,0,0,0.92);
+                 z-index:9999;display:flex;align-items:center;justify-content:center;
+                 flex-direction:column;color:#fff">
+              <div style="font-size:48px;animation:spin 1.5s linear infinite">🔄</div>
+              <h1 style="margin-top:20px">تم التحديث — يعيد التشغيل</h1>
+              <p style="color:#a78bfa">النافذة الحالية بتقفل خلال ثانيتين، ونافذة جديدة بتفتح تلقائياً</p>
+              <style>@keyframes spin { 100% { transform: rotate(360deg); } }</style>
+            </div>`);
         } else {
           alert('✗ فشل التحديث: ' + d2.error);
         }
