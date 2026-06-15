@@ -1,8 +1,11 @@
 # Test Credentials
 
 ## Owner/Admin (Production: zenrex.ai)
-- Email: `owner@zerax.com`
-- Password: `owner123`
+- **Email:** `admin@zenrex.ai`
+- **Password:** `owner123`
+- **Name:** `Zenrex Admin`
+- **Role:** owner (full platform control)
+- **Updated:** 2026-02-15 — unified to match site name (was `owner@zerax.com`)
 
 ## Desktop Agent Pairing
 - Project ID: `owner-autocoder-desktop`
