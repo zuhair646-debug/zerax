@@ -849,6 +849,24 @@ async def _dispatch_tool(ctx: FreeBuildToolContext, name: str, args: Dict[str, A
             "error": f"🔒 '{name}' is an owner-only tool — not available for customer accounts.",
             "permission_denied": True,
         }
+    # ── Mode-aware tool guards ─────────────────────────────────────────
+    # Block website-building tools when the project is in a video/image/
+    # voice mode. The agent was bleeding credits creating "showcase pages"
+    # for films when the customer just wanted the film delivered as assets.
+    _mode = (ctx.project or {}).get("mode") or "website"
+    _video_modes = {"video_studio", "anime_studio", "longform_video", "image_studio"}
+    _website_only_tools = {"write_full_html", "apply_section", "update_nav", "publish_site"}
+    if _mode in _video_modes and name in _website_only_tools:
+        return {
+            "ok": False,
+            "error": (
+                f"🚫 الأداة `{name}` غير مسموحة في وضع {_mode} — "
+                "المنتج النهائي = الأصول (سيناريو + صور + صوت + فيديوهات)، "
+                "ليس صفحة ويب. اعرض الأصول مباشرة في الشات."
+            ),
+            "mode_blocked": True,
+            "current_mode": _mode,
+        }
     # ── Expert sub-agents (design / testing / troubleshoot / integration)
     if name in EXPERT_TOOL_NAMES:
         # Auto-inject current HTML so design expert always has the latest state
@@ -2211,40 +2229,34 @@ MODE_ADDENDUM_VIDEO = """
 - `generate_storyboard(scenes=[...], style='cinematic')` — keyframes لكل مشهد
 - `update_world_bible(characters, locations, plot_points, style_rules)` — احفظ ذاكرة السلسلة (للمسلسلات)
 - `download_media` — مرجعيات سينمائية + مونتاج
-- `request_credential` — اطلب مفاتيح fal.ai/OpenAI من العميل (لتوليد فيديو حقيقي لاحقاً)
 - `generate_image` — صور أغلفة، بوسترات، شخصيات
-- `apply_section` / `write_full_html` — صفحة عرض الفيلم النهائية
-- `publish_site` — نشر صفحة الفيلم على zenrex.ai/s/{slug}
-- `test_page` — تأكد من الصفحة قبل التسليم
+- `request_credential` — اطلب مفاتيح fal.ai لتوليد فيديو حقيقي بحركة (Sora 2 / Kling / Hailuo)
 
-🎯 **سير عمل مثالي لفيلم قصير (60 ثانية):**
-1. `write_script` → سيناريو + logline
-2. `list_voices(language='ar')` → اعرض الأصوات للعميل
-3. (انتظر اختيار العميل للصوت)
-4. `generate_voiceover` → تعليق صوتي بالصوت المختار
-5. `generate_storyboard(scenes=[...])` → keyframes لـ 4-6 مشاهد
-6. `apply_section` → ابني صفحة عرض الفيلم: poster + audio player + storyboard
-7. `publish_site` → نشر + `test_page` للتأكد
-
-4. **مرحلة الصوت**:
-   - تعليق صوتي → `request_credential("elevenlabs_key", ...)` ثم استخدم Whisper voices.
-   - موسيقى → ولّد brief، اطلب من العميل اختيار من مكتبة (أو يجيب key لـ Suno).
-
-5. **مرحلة المونتاج**:
-   - رتّب المشاهد + الموسيقى + الصوت في timeline منطقي.
-   - أضف سب-تايتلز (Whisper) عربي + إنجليزي.
-
-🛠️ **بناء صفحة العرض النهائية** (`write_full_html` + `apply_section`):
-- Hero بعنوان الفيلم + poster (من keyframe المولّد).
-- مشغّل فيديو رئيسي.
-- قسم "Behind the Scenes" بالستوري بورد.
-- معلومات الفيلم (المدة، اللغة، الأنماط).
-- زر **تنزيل HD** + زر **مشاركة**.
-
-🚫 **ممنوع**:
-- ❌ تقول "ما أقدر أولّد فيديو" — اطلب المفتاح أولاً.
+🚫🚫🚫 **ممنوع منعاً باتاً في وضع الفيديو** 🚫🚫🚫:
+- ❌ **ممنوع `write_full_html` أو `apply_section`** — العميل ما طلب موقع، طلب **فيلم**.
+- ❌ **ممنوع `publish_site`** — الفيلم يُحفظ كأصول (script.md + storyboard.png + voiceover.mp3) في معرض المشروع، **مو كصفحة ويب**.
+- ❌ **ممنوع "بأبني صفحة عرض الفيلم"** — هذه فكرة قديمة خاطئة. الفيلم نفسه = المنتج النهائي.
+- ❌ **ممنوع تطلب مفتاح ElevenLabs** — OpenAI TTS عندنا ويدعم كل اللغات (انظر `generate_voiceover`).
+- ❌ تقول "ما أقدر أولّد فيديو" — اطلب مفتاح `fal_key` فقط (واحد فقط) واستخدم Sora/Kling/Hailuo.
 - ❌ تنتج مشهد فيه أخطاء حركية (يد ٦ أصابع، وجه مشوّه، حركة غير منطقية).
-- ❌ تعرض الفيديو الأصلي من يوتيوب كأنه نتاجك (الـ `download_media` للمرجعية والمونتاج فقط).
+- ❌ تعرض الفيديو الأصلي من يوتيوب كأنه نتاجك (`download_media` للمرجعية فقط).
+
+🎯 **سير العمل الإلزامي لكل مشروع فيلم** (لا تخرج عنه):
+
+1. **مرحلة السيناريو** → `write_script` (سيناريو منظم) + `apply_section` على قسم `script` فقط داخل المعرض الداخلي.
+2. **اعرض السيناريو في الشات بـ markdown** واطلب موافقة العميل.
+3. **بعد الموافقة** → `generate_storyboard` بـ 4-6 keyframes سينمائية.
+4. **اعرض الصور في الشات** (الأداة ترجع image_url، يظهر تلقائياً) واطلب موافقة.
+5. **بعد الموافقة على الستوري بورد** → `list_voices(language=...)` لعرض الأصوات.
+6. **العميل يختار صوت** → `generate_voiceover` بنفس voice_id.
+7. **اعرض الـ MP3 player في الشات** (الأداة ترجع embed_html).
+8. **(اختياري) لو العميل يبي فيديو متحرك حقيقي** → اطلب مفتاح `fal_key` ثم `generate_video` لكل keyframe.
+9. **النهاية**: لخّص في رسالة واحدة:
+   - رابط السيناريو النهائي (text)
+   - روابط الـ keyframes (5-6 صور)
+   - رابط الـ voiceover (MP3 player)
+   - (لو فيه) روابط فيديوهات الـ scenes
+10. **`finish`** — لا تبني موقع. لا تنشر شي. الفيلم نفسه = المنتج.
 
 ═══════════════════════════════════════════════════════════
 """
