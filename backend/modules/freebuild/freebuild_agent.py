@@ -277,6 +277,25 @@ TOOLS_SCHEMA: List[Dict[str, Any]] = [
         },
     },
     {
+        "name": "generate_subtitles",
+        "description": (
+            "📝 ولّد ملف ترجمة SRT احترافي للفيديو. لو لغة الترجمة تختلف عن لغة الكلام، "
+            "الأداة تترجم بدقة (مثلاً كلام كوري → ترجمة عربية). توقيت كل سطر يتوزّع "
+            "تلقائياً على مدة الفيديو. النتيجة: ملف .srt دائم تقدر تضمنه مع الفيديو. "
+            "**استخدمها بعد generate_voiceover** عشان توقيت الترجمة يطابق الصوت."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "source_text": {"type": "string", "description": "نص السيناريو الأصلي (بنفس لغة الكلام في الفيلم)"},
+                "spoken_language": {"type": "string", "description": "لغة الكلام في الفيديو (ko, ar, en, ja, ...)"},
+                "subtitle_language": {"type": "string", "description": "لغة الترجمة المطلوبة على الشاشة (ar, en, ko, ...)"},
+                "total_duration_seconds": {"type": "number", "description": "مدة الفيديو بالثواني (لتوزيع التوقيت)"},
+            },
+            "required": ["source_text", "subtitle_language"],
+        },
+    },
+    {
         "name": "write_script",
         "description": (
             "📝 اكتب سيناريو سينمائي منظم بصيغة Hollywood: Logline → Treatment → "
@@ -1279,6 +1298,88 @@ async def _exec_tool_async(ctx: FreeBuildToolContext, name: str, args: Dict[str,
             except Exception as e:
                 return {"ok": False, "error": f"voiceover: {type(e).__name__}: {str(e)[:200]}"}
 
+        if name == "generate_subtitles":
+            # Build clean subtitles (SRT + plain text) for the voiceover. The agent
+            # passes the source script + the spoken language + the desired
+            # subtitle language. If they match → just timestamp the script.
+            # If different → call an LLM to translate accurately first.
+            source_text = (args.get("source_text") or "").strip()
+            spoken_lang = (args.get("spoken_language") or "ar").strip()
+            sub_lang = (args.get("subtitle_language") or "").strip().lower()
+            total_duration = float(args.get("total_duration_seconds") or 60)
+            if not source_text:
+                return {"ok": False, "error": "source_text مطلوب"}
+            if not sub_lang or sub_lang == "none":
+                return {"ok": False, "error": "subtitle_language مطلوب (ar/en/ko/ja/fr/es/...)"}
+            try:
+                final_text = source_text
+                # Translate if subtitle language differs from spoken language
+                if not spoken_lang.lower().startswith(sub_lang[:2]):
+                    from anthropic import AsyncAnthropic
+                    import os as _os
+                    api_key = _os.environ.get("ANTHROPIC_API_KEY", "")
+                    if not api_key:
+                        return {"ok": False, "error": "ANTHROPIC_API_KEY مفقود — ما أقدر أترجم"}
+                    aclient = AsyncAnthropic(api_key=api_key)
+                    sys = (
+                        f"You are a professional subtitle translator. Translate the text below "
+                        f"from {spoken_lang} to {sub_lang}. Keep sentences SHORT (max 7 words each) "
+                        f"so they fit on screen. Preserve emotion and tone. Output ONLY the translated "
+                        f"text, one sentence per line. No commentary."
+                    )
+                    r = await aclient.messages.create(
+                        model="claude-haiku-4-5-20251001",
+                        max_tokens=1500, system=sys,
+                        messages=[{"role": "user", "content": source_text[:4000]}],
+                    )
+                    final_text = "".join(b.text for b in r.content if getattr(b, "type", "") == "text").strip()
+                # Build SRT — split on sentence breaks, allocate proportional time
+                import re as _re
+                sentences = [s.strip() for s in _re.split(r"[\.\!\?\n]+", final_text) if s.strip()]
+                if not sentences:
+                    return {"ok": False, "error": "no sentences extracted"}
+                per_sentence = max(1.5, total_duration / max(1, len(sentences)))
+                srt_lines = []
+                for i, sent in enumerate(sentences):
+                    start = i * per_sentence
+                    end = (i + 1) * per_sentence
+                    def _ts(t):
+                        h = int(t // 3600); m = int((t % 3600) // 60)
+                        s = int(t % 60); ms = int((t - int(t)) * 1000)
+                        return f"{h:02d}:{m:02d}:{s:02d},{ms:03d}"
+                    srt_lines.append(f"{i+1}\n{_ts(start)} --> {_ts(end)}\n{sent}\n")
+                srt_content = "\n".join(srt_lines)
+                # Persist as a media asset
+                import os as _os2, uuid as _uuid2
+                media_dir = "/app/backend/uploads/freebuild_media"
+                _os2.makedirs(media_dir, exist_ok=True)
+                file_id = _uuid2.uuid4().hex[:16]
+                path = f"{media_dir}/{file_id}.srt"
+                with open(path, "w", encoding="utf-8") as f:
+                    f.write(srt_content)
+                public_url = f"https://zenrex.ai/api/freebuild-chat/media/file/{file_id}.srt"
+                if ctx.db is not None:
+                    try:
+                        import datetime as _dt2
+                        await ctx.db.freebuild_media_assets.insert_one({
+                            "id": file_id, "filename": f"{file_id}.srt", "ext": "srt",
+                            "kind": "subtitles", "language": sub_lang,
+                            "spoken_language": spoken_lang, "text": final_text[:4000],
+                            "public_url": public_url,
+                            "created_at": _dt2.datetime.now(_dt2.timezone.utc).isoformat(),
+                        })
+                    except Exception:
+                        pass
+                return {
+                    "ok": True, "subtitle_url": public_url,
+                    "subtitle_language": sub_lang, "spoken_language": spoken_lang,
+                    "sentence_count": len(sentences),
+                    "translated": not spoken_lang.lower().startswith(sub_lang[:2]),
+                    "text_preview": final_text[:300],
+                }
+            except Exception as e:
+                return {"ok": False, "error": f"subtitles: {type(e).__name__}: {str(e)[:200]}"}
+
         if name == "write_script":
             # AI-side helper — actually we just return a structured template the model can fill
             # via subsequent apply_section calls. This tool's purpose is to FORCE structure.
@@ -2231,6 +2332,9 @@ MODE_ADDENDUM_VIDEO = """
 - `download_media` — مرجعيات سينمائية + مونتاج
 - `generate_image` — صور أغلفة، بوسترات، شخصيات
 - `request_credential` — اطلب مفاتيح fal.ai لتوليد فيديو حقيقي بحركة (Sora 2 / Kling / Hailuo)
+
+🎬 **قاعدة الترجمة الإلزامية (Subtitle Mandate)**:
+لو العميل اختار لغة منطوقة غير لغة بلده (مثلاً صنّع فيلم كوري وهو سعودي)، **يجب** تسأله بسؤال واحد قصير: *"تبي ترجمة تظهر تحت الفيديو؟ بأي لغة (عربي / إنجليزي / لا أحتاج)؟"* — قبل ما تولّد voiceover، لأن نص الترجمة لازم يكون جاهز مع الـ keyframes.
 
 🚫🚫🚫 **ممنوع منعاً باتاً في وضع الفيديو** 🚫🚫🚫:
 - ❌ **ممنوع `write_full_html` أو `apply_section`** — العميل ما طلب موقع، طلب **فيلم**.

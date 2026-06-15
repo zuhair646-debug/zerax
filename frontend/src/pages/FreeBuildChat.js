@@ -5,7 +5,7 @@ import {
   CheckCircle2, Check, Image as ImageIcon, FolderOpen, Code,
   Monitor, Smartphone, Trash2, MessageSquare, Paperclip, X,
   ZoomIn, Reply, Download, ExternalLink, Rocket, Smartphone as Phone,
-  Crown, Github, Globe2, Cloud, Link2, Copy, FileText, Plug,
+  Crown, Github, Globe2, Cloud, Link2, Copy, FileText, Plug, Mic,
   History, RotateCcw, Clock,
 } from 'lucide-react';
 import { toast } from 'sonner';
@@ -3007,32 +3007,71 @@ function ChatWorkspace({ projectId }) {
                 </div>
               ) : (
                 <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
-                  {approvedAssets.map((a) => (
-                    <button
-                      key={a.id}
-                      type="button"
-                      onClick={() => setLightboxAsset(a)}
-                      data-testid={`approved-asset-${a.id}`}
-                      className="rounded-xl overflow-hidden border border-violet-500/30 bg-black/30 hover:border-violet-400 transition-all text-right group"
-                    >
-                      {a.image_url && (
-                        <div className="relative">
-                          <img
-                            src={a.image_url.startsWith('http') ? a.image_url : `${API}${a.image_url}`}
-                            alt=""
-                            className="w-full aspect-square object-cover transition-transform group-hover:scale-[1.04]"
-                          />
-                          <div className="absolute inset-0 bg-black/0 group-hover:bg-black/40 transition-all flex items-center justify-center">
-                            <ZoomIn className="w-6 h-6 text-white opacity-0 group-hover:opacity-100 transition-opacity" />
+                  {approvedAssets.map((a) => {
+                    // Detect audio assets (voiceover MP3s) and render them with a built-in player
+                    const audioUrl = a.audio_url || (a.url && /\.(mp3|wav|m4a|ogg)/i.test(a.url) ? a.url : '');
+                    if (audioUrl) {
+                      return (
+                        <div
+                          key={a.id}
+                          data-testid={`approved-audio-${a.id}`}
+                          className="rounded-xl overflow-hidden border border-amber-500/30 bg-black/30 p-3 flex flex-col gap-2"
+                        >
+                          <div className="flex items-center gap-2">
+                            <Mic className="w-4 h-4 text-amber-400" />
+                            <p className="text-[10px] text-amber-300 font-bold">{a.type || 'voiceover'}</p>
+                          </div>
+                          <audio controls src={audioUrl.startsWith('http') ? audioUrl : `${API}${audioUrl}`} className="w-full h-8" />
+                          <p className="text-[10px] text-zinc-400 truncate">{a.prompt || a.voice_id || ''}</p>
+                        </div>
+                      );
+                    }
+                    // Detect subtitle / script text assets
+                    if (a.kind === 'script' || a.kind === 'subtitles' || a.text) {
+                      return (
+                        <div
+                          key={a.id}
+                          data-testid={`approved-text-${a.id}`}
+                          className="rounded-xl overflow-hidden border border-cyan-500/30 bg-black/30 p-3 flex flex-col gap-2"
+                        >
+                          <div className="flex items-center gap-2">
+                            <FileText className="w-4 h-4 text-cyan-400" />
+                            <p className="text-[10px] text-cyan-300 font-bold">{a.kind || 'text'}{a.language ? ` · ${a.language}` : ''}</p>
+                          </div>
+                          <div className="text-[10px] text-zinc-300 leading-relaxed max-h-32 overflow-auto whitespace-pre-wrap" dir="rtl">
+                            {(a.text || a.prompt || '').slice(0, 400)}{(a.text || '').length > 400 ? '…' : ''}
                           </div>
                         </div>
-                      )}
-                      <div className="p-2">
-                        <p className="text-[10px] text-violet-300 font-bold">{a.type}</p>
-                        <p className="text-[10px] text-zinc-500 truncate">{a.prompt}</p>
-                      </div>
-                    </button>
-                  ))}
+                      );
+                    }
+                    // Default: image asset
+                    return (
+                      <button
+                        key={a.id}
+                        type="button"
+                        onClick={() => setLightboxAsset(a)}
+                        data-testid={`approved-asset-${a.id}`}
+                        className="rounded-xl overflow-hidden border border-violet-500/30 bg-black/30 hover:border-violet-400 transition-all text-right group"
+                      >
+                        {a.image_url && (
+                          <div className="relative">
+                            <img
+                              src={a.image_url.startsWith('http') ? a.image_url : `${API}${a.image_url}`}
+                              alt=""
+                              className="w-full aspect-square object-cover transition-transform group-hover:scale-[1.04]"
+                            />
+                            <div className="absolute inset-0 bg-black/0 group-hover:bg-black/40 transition-all flex items-center justify-center">
+                              <ZoomIn className="w-6 h-6 text-white opacity-0 group-hover:opacity-100 transition-opacity" />
+                            </div>
+                          </div>
+                        )}
+                        <div className="p-2">
+                          <p className="text-[10px] text-violet-300 font-bold">{a.type}</p>
+                          <p className="text-[10px] text-zinc-500 truncate">{a.prompt}</p>
+                        </div>
+                      </button>
+                    );
+                  })}
                 </div>
               )}
             </div>
