@@ -1,6 +1,20 @@
 # Zitex Changelog
 
 
+### 🆕 Feb 2026 — Old Hosting Eradication (Railway + Vercel) ✅
+Resolved P0 issue: user could still access old "Zenrex/Zerax" web frontend via cached Vercel aliases (`zitex.vercel.app` was serving stale Zenrex HTML with `x-vercel-cache: HIT`).
+
+**Actions performed:**
+- Railway projects deleted (3 failed/legacy): `helpful-passion` (zerax old backend), `elegant-commitment` (amen-videos-api failed), `radiant-youthfulness` (amen-videos-api failed)
+- Railway projects kept (3 working): `zitex` (mobile delivery app — `zitex-backend` repo), `earnest-spontaneity` + `powerful-purpose` (amen-videos working — user's separate project)
+- Vercel deployments forcibly purged (3 deployments deleted via API): `dpl_6tEhTMpWSRZPuCYXUvVHDe3Wdrsm`, `dpl_9xRoD4aUoVDhvJPvBkVxsA1xPYyr`, `dpl_EhVwKL7U9tP89wE83M6wQkUAe881`, `dpl_9XcEMaTDuj6jyypCqezZ7K8Kt8XW` — these were keeping `zitex.vercel.app` alive via edge cache despite the project being deleted
+- Verified all 6 ghost URLs now return HTTP 404: `zitex.vercel.app`, `zitex-zuhair646-7047s-projects.vercel.app`, `zitex-game-147c4977.vercel.app`, `zitex-production.up.railway.app`, `zerax-production.up.railway.app`, `test-ashen-nine-t5rt5h70ms.vercel.app`
+- Production `zenrex.ai` confirmed live (HTTP 200, Brand API serving Zenrex branding correctly)
+
+**Note**: `zerax.vercel.app` (which still returns HTTP 200 serving a "Modern Chat App") does NOT belong to user's Vercel account — Vercel API returned `forbidden` on it. It's another user's project that coincidentally uses the name.
+
+
+
 ### 🆕 Feb 17 2026 — Phase 16: Distance-based Pricing + Driver Employment Models + Multi-country Payouts ✅
 Massive upgrade to the delivery system per the user's explicit Saudi-Arabic specs:
 
