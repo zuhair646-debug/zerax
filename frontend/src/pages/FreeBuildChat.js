@@ -2430,10 +2430,16 @@ function ChatWorkspace({ projectId }) {
                             );
                           }
                           if (s.kind === 'live_text') {
-                            // Live streaming text from Claude (typing animation)
+                            // Live streaming text from Claude — render markdown INCREMENTALLY so the
+                            // user sees nicely formatted headings/lists/checkmarks as they type
+                            // (no more raw `##` + `-` characters flickering before the final swap).
+                            // After streaming completes, hide these bubbles because the same text
+                            // already lives in m.content (rendered above) — otherwise it would
+                            // appear twice and cause the layout shuffle the user complained about.
+                            if (!s.open && m.agent_streaming === false) return null;
                             return (
-                              <div key={sIdx} className="text-sm leading-relaxed text-zinc-100 bg-zinc-900/40 border-r-2 border-emerald-500/50 px-3 py-2 rounded whitespace-pre-wrap">
-                                {s.text}
+                              <div key={sIdx} className="text-sm leading-relaxed text-zinc-100 bg-zinc-900/40 border-r-2 border-emerald-500/50 px-3 py-2 rounded">
+                                <MarkdownText>{s.text || ''}</MarkdownText>
                                 {s.open && <span className="inline-block w-1.5 h-4 bg-emerald-400 ml-0.5 align-middle animate-pulse" />}
                               </div>
                             );
