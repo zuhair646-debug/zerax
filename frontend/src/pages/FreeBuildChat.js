@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
+import VideoStudioPreview from './VideoStudioPreview';
 import {
   Globe, Send, Loader2, Sparkles, Eye, ArrowRight, ArrowLeft,
   CheckCircle2, Check, Image as ImageIcon, FolderOpen, Code,
@@ -2889,6 +2890,13 @@ function ChatWorkspace({ projectId }) {
 
           {activeTab === 'live' && (
             <div className="flex-1 overflow-hidden bg-black/40 flex flex-col" data-testid="tab-content-live">
+              {/* For video/anime/longform projects, the "live preview" shows a slideshow
+                  studio (synchronized keyframes + voiceover + subtitles + watermark)
+                  instead of an HTML iframe — the customer never gets a website here. */}
+              {['video_studio', 'anime_studio', 'longform_video', 'image_studio'].includes(project?.mode) ? (
+                <VideoStudioPreview project={project} />
+              ) : (
+                <>
               <div className="px-4 py-3 border-b border-white/10 flex items-center justify-between gap-3">
                 <h2 className="text-sm font-bold text-cyan-300 flex items-center gap-2">
                   <Eye className="w-4 h-4" /> <span>المعاينة الحية</span>
@@ -2990,6 +2998,8 @@ function ChatWorkspace({ projectId }) {
                   </div>
                 )}
               </div>
+                </>
+              )}
             </div>
           )}
 
