@@ -11,6 +11,18 @@ Unify the AI brain and empower it with unified toolset. Fix mocked AI Trading Bo
 - 100% LOCAL AI requirement (no OpenAI/Anthropic for Family AI)
 
 
+## Session 2026-02-15b — Welcome + 7-Phase Cinematic Workflow
+- ✅ **Welcome auto-message** for ALL studio modes (video, anime, longform, game, app) — seeds first AI greeting + 6 visual cards at project creation
+- ✅ **Phase 1 (Film Type)** — 6 rich cards including "غير ذلك" free-text option (Pollinations images: cartoon/anime/cinematic/action/horror/custom)
+- ✅ **Phase 2 (Characters)** — AI is proactive: suggests additional characters with images, writes to `character_sheet` doc on approval, locks consistency
+- ✅ **Phase 3 (Scenario)** — AI offers 2-3 alternative storylines for the user to pick (no single forced scenario)
+- ✅ **Phase 5 (Storyboard) — Character Lock**: agent MUST `read_project_doc('character_sheet')` and inject character description verbatim into every shot prompt → guarantees 100% character consistency across scenes
+- ✅ Removed duplicate "محادثة استشارية" from old VideoStudio.js → replaced with redirect card to the modern FreeBuildChat
+- ✅ Backend accepts 8 modes: website, image_studio, video_studio, anime_studio, longform_video, app, game, automation, data_analyst
+- ✅ Saved comprehensive market research at `/app/memory/MARKET_RESEARCH_AI_VIDEO_PRICING.md` (Sora $6/min, Kling $4.20, Freelancer $50-500, Production agency $1k-50k)
+- ✅ Deployed to Hetzner zenrex.ai — verified 6 cards render in production
+
+
 ## Session 2026-02-15 — Rich Visual Options + Inline Images
 - ✅ AI Brain `finish` tool now accepts:
   - Rich options `{label, emoji?, image_url?, description?}` OR plain strings

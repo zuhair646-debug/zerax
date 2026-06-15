@@ -823,31 +823,158 @@ def make_freebuild_chat_router(db, get_current_user):
             except Exception:
                 category_meta = None
         # Validate and normalize mode (defaults to 'website')
-        valid_modes = {"website", "image_studio", "video_studio"}
+        valid_modes = {
+            "website", "image_studio", "video_studio",
+            "anime_studio", "longform_video",
+            "app", "game", "automation", "data_analyst",
+        }
         proj_mode = (payload.mode or "website").strip().lower()
         if proj_mode not in valid_modes:
             proj_mode = "website"
 
-        # Mode-specific greeting (shown as first AI message in the chat)
+        # Mode-specific greeting (shown as first AI message in the chat).
+        # For studio modes we seed both `content` (markdown) and `options` (rich
+        # clickable cards) so the user lands on a populated, actionable screen
+        # — never an empty chat.
+        FILM_TYPE_OPTIONS = [
+            {"label": "كرتون", "emoji": "🎨",
+             "description": "Pixar/Disney — عائلي وملوّن",
+             "image_url": "https://image.pollinations.ai/prompt/Pixar%203D%20family%20cartoon%20movie%20still%20cinematic?width=512&height=288&nologo=true"},
+            {"label": "أنمي ياباني", "emoji": "🌸",
+             "description": "Studio Ghibli — عيون كبيرة وألوان حالمة",
+             "image_url": "https://image.pollinations.ai/prompt/Studio%20Ghibli%20anime%20still%20masterpiece?width=512&height=288&nologo=true"},
+            {"label": "سينمائي واقعي", "emoji": "🎬",
+             "description": "Hollywood — إضاءة احترافية ولقطات حية",
+             "image_url": "https://image.pollinations.ai/prompt/cinematic%20Hollywood%20film%20still%20realistic%2070mm?width=512&height=288&nologo=true"},
+            {"label": "أكشن قتالي", "emoji": "💥",
+             "description": "Anime/Cinematic Action — مشاهد قتال مكثّفة",
+             "image_url": "https://image.pollinations.ai/prompt/epic%20anime%20action%20fight%20scene%20cinematic?width=512&height=288&nologo=true"},
+            {"label": "رعب", "emoji": "👻",
+             "description": "ظلال داكنة، توتر، أجواء مخيفة",
+             "image_url": "https://image.pollinations.ai/prompt/horror%20movie%20still%20dark%20atmospheric%20cinematic?width=512&height=288&nologo=true"},
+            {"label": "غير ذلك — اكتب فكرتك", "emoji": "✍️",
+             "description": "وثائقي، إعلان، موسيقي، مفهوم خاص...",
+             "image_url": "https://image.pollinations.ai/prompt/abstract%20colorful%20creative%20idea%20concept%20art?width=512&height=288&nologo=true"},
+        ]
+
         mode_greetings = {
-            "image_studio": (
-                "أهلاً وسهلاً في **استوديو الصور** 🎨\n\n"
-                "أنا هنا أساعدك تولّد صور احترافية: بوسترات، إعلانات، Hero، أغلفة، شخصيات، صور سوشيال.\n\n"
-                "**ابدأ:** قول لي وش تبي بالعربي العادي (مثل: \"صورة لمقهى دافئ وقت الغروب\")، "
-                "وأنا أترجمها لـ prompt احترافي وأولّدها."
-            ),
-            "video_studio": (
-                "أهلاً في **استوديو الفيديوهات** 🎬\n\n"
-                "أنا أقدر أحمّل لك مقاطع من **يوتيوب، تيكتوك، إنستا، X، فيميو، ساوندكلاود** + أكثر من 1000 موقع.\n\n"
-                "**ابدأ:** الصق رابط مقطع، أو اكتب لي وش تبي مكتبة فيديو لها (مثلاً: \"اجمع لي 10 مقاطع طبخ من تيكتوك\")."
-            ),
+            "image_studio": {
+                "content": (
+                    "أهلاً وسهلاً في **استوديو الصور** 🎨\n\n"
+                    "أنا هنا أساعدك تولّد صور احترافية: بوسترات، إعلانات، Hero، أغلفة، شخصيات، صور سوشيال.\n\n"
+                    "**ابدأ:** قول لي وش تبي بالعربي العادي (مثل: \"صورة لمقهى دافئ وقت الغروب\")، "
+                    "وأنا أترجمها لـ prompt احترافي وأولّدها."
+                ),
+                "options": [],
+            },
+            "video_studio": {
+                "content": (
+                    "مرحبا بك في **استوديو زنركس للأفلام** 🎬\n\n"
+                    "أنا مخرجك الذكي. خلنا نبدأ سوا خطوة بخطوة:\n\n"
+                    "**📍 المرحلة 1 من 7 — نوع الفيلم**\n\n"
+                    "وش الفيلم اللي تبي تسويه اليوم؟ اختر من الكروت تحت، "
+                    "أو اضغط **\"غير ذلك\"** واكتب فكرتك بحرية كاملة."
+                ),
+                "options": FILM_TYPE_OPTIONS,
+            },
+            "anime_studio": {
+                "content": (
+                    "مرحبا بك في **استوديو الأنمي** 🌸\n\n"
+                    "أنا هنا أصنع لك فيلم أنمي كامل بأسلوب ياباني محترف.\n\n"
+                    "**📍 المرحلة 1 من 7 — نوع الأنمي**\n\n"
+                    "أي ستايل تفضّل؟"
+                ),
+                "options": [
+                    {"label": "Studio Ghibli", "emoji": "🍃",
+                     "description": "حالم، طبيعي، عاطفي (Spirited Away)",
+                     "image_url": "https://image.pollinations.ai/prompt/Studio%20Ghibli%20anime%20Spirited%20Away%20style?width=512&height=288&nologo=true"},
+                    {"label": "Shonen Action", "emoji": "⚔️",
+                     "description": "حركة قوية (Demon Slayer, Naruto)",
+                     "image_url": "https://image.pollinations.ai/prompt/Demon%20Slayer%20anime%20action%20shonen?width=512&height=288&nologo=true"},
+                    {"label": "Cyberpunk Anime", "emoji": "🌃",
+                     "description": "مستقبلي، نيون (Ghost in the Shell)",
+                     "image_url": "https://image.pollinations.ai/prompt/cyberpunk%20anime%20neon%20Ghost%20in%20the%20Shell?width=512&height=288&nologo=true"},
+                    {"label": "Slice of Life", "emoji": "🏫",
+                     "description": "حياة يومية رومانسية (Your Name)",
+                     "image_url": "https://image.pollinations.ai/prompt/Your%20Name%20anime%20slice%20of%20life%20romantic?width=512&height=288&nologo=true"},
+                    {"label": "Chibi / Comedy", "emoji": "😄",
+                     "description": "شخصيات صغيرة كوميدية",
+                     "image_url": "https://image.pollinations.ai/prompt/chibi%20anime%20comedy%20cute%20characters?width=512&height=288&nologo=true"},
+                    {"label": "غير ذلك — اكتب فكرتك", "emoji": "✍️",
+                     "description": "Mecha، Isekai، Magical Girl، ...",
+                     "image_url": "https://image.pollinations.ai/prompt/abstract%20anime%20creative%20concept?width=512&height=288&nologo=true"},
+                ],
+            },
+            "longform_video": {
+                "content": (
+                    "مرحبا بك في **استوديو الفيديو الطويل** 🎥\n\n"
+                    "هنا نسوي محتوى طويل: يوتيوب، وثائقيات، دروس، بودكاست مرئي.\n\n"
+                    "**📍 المرحلة 1 من 7 — نوع المحتوى**\n\n"
+                    "أي نوع تبي تنتج؟"
+                ),
+                "options": [
+                    {"label": "Tutorial تعليمي", "emoji": "📚",
+                     "description": "شرح خطوة بخطوة، Screen recording",
+                     "image_url": "https://image.pollinations.ai/prompt/educational%20tutorial%20video%20screen%20recording?width=512&height=288&nologo=true"},
+                    {"label": "Documentary وثائقي", "emoji": "🎙️",
+                     "description": "قصة حقيقية مع راوي وأرشيف",
+                     "image_url": "https://image.pollinations.ai/prompt/documentary%20film%20narrator%20archive?width=512&height=288&nologo=true"},
+                    {"label": "Vlog", "emoji": "📹",
+                     "description": "تجربتك الشخصية، يوميات",
+                     "image_url": "https://image.pollinations.ai/prompt/vlog%20personal%20experience%20daily?width=512&height=288&nologo=true"},
+                    {"label": "Podcast مرئي", "emoji": "🎧",
+                     "description": "مقابلة طويلة، نقاش",
+                     "image_url": "https://image.pollinations.ai/prompt/video%20podcast%20interview%20studio?width=512&height=288&nologo=true"},
+                    {"label": "Review مراجعة", "emoji": "⭐",
+                     "description": "تقييم منتج أو فيلم",
+                     "image_url": "https://image.pollinations.ai/prompt/product%20review%20video%20cinematic?width=512&height=288&nologo=true"},
+                    {"label": "غير ذلك — اكتب فكرتك", "emoji": "✍️",
+                     "description": "محاضرة، Storytime، Reaction...",
+                     "image_url": "https://image.pollinations.ai/prompt/abstract%20creative%20concept%20art?width=512&height=288&nologo=true"},
+                ],
+            },
+            "game": {
+                "content": (
+                    "مرحبا بك في **استوديو الألعاب** 🎮\n\n"
+                    "أنا أبني لك لعبة كاملة، من الفكرة للنشر.\n\n"
+                    "**📍 المرحلة 1 — نوع اللعبة**\n\n"
+                    "أي نمط لعب تفضّل؟"
+                ),
+                "options": [
+                    {"label": "Platformer 2D", "emoji": "🦔", "description": "قفز ومنصّات (Mario, Sonic)"},
+                    {"label": "Puzzle", "emoji": "🧩", "description": "ألغاز ذكية"},
+                    {"label": "Arcade", "emoji": "👾", "description": "سريعة وممتعة"},
+                    {"label": "RPG", "emoji": "⚔️", "description": "مغامرة مع شخصية تتطور"},
+                    {"label": "Casual / Hyper-Casual", "emoji": "🎯", "description": "بسيطة للموبايل"},
+                    {"label": "غير ذلك", "emoji": "✍️", "description": "اكتب فكرتك"},
+                ],
+            },
+            "app": {
+                "content": (
+                    "مرحبا بك في **استوديو التطبيقات** 📱\n\n"
+                    "أبني لك تطبيق ويب أو موبايل كامل.\n\n"
+                    "**📍 المرحلة 1 — نوع التطبيق**\n\n"
+                    "أي فئة؟"
+                ),
+                "options": [
+                    {"label": "SaaS / لوحة تحكم", "emoji": "📊", "description": "Dashboard + Auth + DB"},
+                    {"label": "تطبيق سوشيال", "emoji": "💬", "description": "Chat، Feed، Profiles"},
+                    {"label": "E-commerce", "emoji": "🛒", "description": "متجر إلكتروني"},
+                    {"label": "Productivity", "emoji": "✅", "description": "To-do، Notes، Calendar"},
+                    {"label": "Booking / Marketplace", "emoji": "🗓️", "description": "حجوزات، وساطة"},
+                    {"label": "غير ذلك", "emoji": "✍️", "description": "اكتب فكرتك"},
+                ],
+            },
         }
         initial_messages = []
         if proj_mode in mode_greetings:
+            greeting = mode_greetings[proj_mode]
             initial_messages.append({
                 "id": str(uuid.uuid4()),
                 "role": "assistant",
-                "content": mode_greetings[proj_mode],
+                "content": greeting["content"],
+                "options": greeting.get("options", []),
+                "inline_images": [],
                 "timestamp": _now(),
             })
 

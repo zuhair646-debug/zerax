@@ -918,33 +918,21 @@ function ChatTab({ activeEpisode, briefInput, setBriefInput, busy, onGenerate,
         </>
       )}
 
-      <div className="bg-[#12161e] border border-zinc-800 rounded-2xl p-5">
-        <div className="text-sm font-semibold mb-3 flex items-center gap-2"><MessageSquare className="w-4 h-4 text-amber-400" /> محادثة استشارية</div>
-        <div className="space-y-3 max-h-80 overflow-y-auto mb-3 pr-1">
-          {chatTurns.length === 0 && (
-            <div className="text-xs text-zinc-500 text-center py-6">اسأل عن أفكار، ستايلات، طول لقطات…</div>
-          )}
-          {chatTurns.map((t, i) => (
-            <div key={i} className="text-sm">
-              <div className={`text-[10px] mb-0.5 ${t.role === 'user' ? 'text-amber-400' : 'text-emerald-400'}`}>
-                {t.role === 'user' ? 'أنت' : 'زيتاكس فيديو'} {t.cached && <span className="text-zinc-500">· من الذاكرة</span>}
-              </div>
-              <div className="whitespace-pre-wrap leading-6 text-zinc-200">{t.content}</div>
-              {t.redirect && (
-                <a href={t.redirect.to_route} className="text-xs text-sky-400 underline mt-1 inline-block">{t.redirect.to_label} ←</a>
-              )}
-            </div>
-          ))}
+      <div className="bg-gradient-to-br from-violet-500/10 to-fuchsia-500/10 border border-violet-500/30 rounded-2xl p-5" data-testid="modern-chat-redirect">
+        <div className="text-sm font-semibold mb-2 flex items-center gap-2 text-violet-200">
+          <MessageSquare className="w-4 h-4" /> تبي تحاور المخرج الذكي؟
         </div>
-        <div className="flex gap-2">
-          <input value={chatInput} onChange={(e) => setChatInput(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && sendChat()}
-            disabled={chatBusy} className="flex-1 bg-zinc-900 border border-zinc-700 rounded-lg px-3 py-2 text-sm"
-            placeholder="اكتب سؤالك…" data-testid="chat-input" />
-          <button onClick={sendChat} disabled={chatBusy || !chatInput.trim()}
-            className="px-4 bg-amber-500 hover:bg-amber-400 disabled:opacity-50 text-black font-medium rounded-lg text-sm" data-testid="chat-send-btn">
-            {chatBusy ? <Loader2 className="w-4 h-4 animate-spin" /> : 'إرسال'}
-          </button>
-        </div>
+        <p className="text-xs text-zinc-300 mb-3 leading-6">
+          المحادثة الذكية انتقلت للشات الرئيسي — هناك تقدر ترفع صور وفيديوهات،
+          تسجل صوتك، وتشتغل مع المخرج الذكي بـ 7 مراحل (نوع الفيلم → شخصيات → سيناريو → ستوري بورد → ...).
+        </p>
+        <a
+          href="/freebuild/new?mode=video_studio"
+          className="inline-flex items-center gap-2 px-4 py-2 bg-violet-500 hover:bg-violet-400 text-white font-medium rounded-lg text-sm transition"
+          data-testid="open-modern-video-chat"
+        >
+          <Sparkles className="w-4 h-4" /> افتح في الشات الذكي
+        </a>
       </div>
     </div>
   );
