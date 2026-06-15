@@ -147,8 +147,10 @@ async def google_callback(request: Request, code: str = "", state: str = "", err
     picture = profile.get("picture") or ""
     google_sub = profile.get("sub") or ""
     # ── Upsert the user in our DB ──
-    from server import db, create_token, _now_iso  # type: ignore
+    from server import db, create_token  # type: ignore
+    import datetime as _dt
     import uuid
+    _now_iso_str = _dt.datetime.now(_dt.timezone.utc).isoformat()
     try:
         existing = await db.users.find_one({"email": email})
         if existing:
@@ -157,7 +159,7 @@ async def google_callback(request: Request, code: str = "", state: str = "", err
                 {"$set": {
                     "google_sub": google_sub,
                     "picture": picture or existing.get("picture", ""),
-                    "last_login_at": _now_iso() if callable(getattr(__import__("server"), "_now_iso", None)) else None,
+                    "last_login_at": _now_iso_str,
                     "name": existing.get("name") or name,
                 }},
             )
@@ -173,7 +175,7 @@ async def google_callback(request: Request, code: str = "", state: str = "", err
                 "role": "user",
                 "google_sub": google_sub,
                 "auth_provider": "google",
-                "created_at": __import__("datetime").datetime.now(__import__("datetime").timezone.utc).isoformat(),
+                "created_at": _now_iso_str,
             })
             role = "user"
     except Exception as e:
