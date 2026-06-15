@@ -921,23 +921,74 @@ def make_freebuild_chat_router(db, get_current_user):
             except Exception:
                 pass
 
-        # Read uploaded image files → base64 (for vision context)
+        # Read uploaded files → split into:
+        #   • image/*  → vision input (base64) for the LLM
+        #   • text-based (txt, md, csv, json, html, css, js, py, etc) → inline as text
+        #   • PDF       → extract text via pypdf if installed; else note attachment
+        #   • video/audio → cannot be sent to text-LLM; record metadata so the
+        #                   assistant knows it exists and can suggest next steps
         vision_images: List[Dict[str, Any]] = []
         attachment_meta: List[Dict[str, str]] = []
-        for f in files[:4]:  # max 4 images per turn
+        text_blobs: List[Dict[str, str]] = []   # {name, kind, text}
+        non_text_notes: List[str] = []
+        TEXT_EXTS = {".txt", ".md", ".csv", ".json", ".html", ".htm", ".css", ".js", ".ts", ".jsx", ".tsx", ".py", ".xml", ".yaml", ".yml", ".log", ".sql"}
+        for f in files[:6]:  # up to 6 attachments per turn
             try:
                 data = await f.read()
-                if len(data) > 6 * 1024 * 1024:  # 6 MB
+                size = len(data)
+                ctype = (f.content_type or "application/octet-stream").lower()
+                name = f.filename or "file"
+                # Hard size cap (50 MB) — anything bigger is rejected.
+                if size > 50 * 1024 * 1024:
+                    non_text_notes.append(f"⚠️ تم تخطّي {name} (الحجم {size//(1024*1024)}MB > 50MB)")
                     continue
-                ctype = (f.content_type or "image/png").lower()
-                if not ctype.startswith("image/"):
+                attachment_meta.append({"name": name, "type": ctype, "size": size})
+                # ── images → vision (capped at 6 MB each to avoid LLM payload bloat)
+                if ctype.startswith("image/"):
+                    if size <= 6 * 1024 * 1024:
+                        b64 = base64.b64encode(data).decode()
+                        vision_images.append({
+                            "type": "image",
+                            "source": {"type": "base64", "media_type": ctype, "data": b64},
+                        })
+                    else:
+                        non_text_notes.append(f"🖼️ صورة كبيرة ({size//(1024*1024)}MB): {name} — مرفقة لكن غير مرئية للنموذج، صف لي محتواها لو محتاج")
                     continue
-                b64 = base64.b64encode(data).decode()
-                vision_images.append({
-                    "type": "image",
-                    "source": {"type": "base64", "media_type": ctype, "data": b64},
-                })
-                attachment_meta.append({"name": f.filename or "image", "type": ctype, "size": len(data)})
+                # ── text-based files → inline (truncate at ~40k chars to stay sane)
+                ext = ("." + name.rsplit(".", 1)[-1].lower()) if "." in name else ""
+                if ctype.startswith("text/") or ext in TEXT_EXTS or ctype in ("application/json", "application/xml"):
+                    try:
+                        body = data.decode("utf-8", errors="replace")
+                    except Exception:
+                        body = data.decode("latin-1", errors="replace")
+                    text_blobs.append({"name": name, "kind": ext.lstrip(".") or "txt", "text": body[:40000]})
+                    continue
+                # ── PDF → try to extract via pypdf
+                if ctype == "application/pdf" or ext == ".pdf":
+                    try:
+                        from pypdf import PdfReader  # pip install pypdf
+                        import io as _io
+                        rdr = PdfReader(_io.BytesIO(data))
+                        pages_txt = []
+                        for p in rdr.pages[:30]:  # cap at 30 pages
+                            try:
+                                pages_txt.append(p.extract_text() or "")
+                            except Exception:
+                                continue
+                        joined = "\n\n".join(t for t in pages_txt if t.strip())
+                        text_blobs.append({"name": name, "kind": "pdf", "text": joined[:40000] or "(PDF فارغ من النص — قد يكون صور)"})
+                    except Exception as _e:
+                        non_text_notes.append(f"📄 PDF مرفق: {name} — ما قدرت أستخرج النص ({_e.__class__.__name__})")
+                    continue
+                # ── video / audio → metadata only
+                if ctype.startswith("video/"):
+                    non_text_notes.append(f"🎬 فيديو مرفق: {name} ({size//(1024*1024)}MB) — صف لي محتواه أو حدّد اللقطات المهمة")
+                    continue
+                if ctype.startswith("audio/"):
+                    non_text_notes.append(f"🎙️ صوت مرفق: {name} ({size//1024}KB) — لو تبيني أفرّغه كنص، استخدم زر تسجيل الصوت في الشات")
+                    continue
+                # ── unknown binary
+                non_text_notes.append(f"📎 ملف مرفق: {name} (نوع غير معروف: {ctype}, الحجم {size//1024}KB)")
             except Exception as _e:
                 logger.warning(f"freebuild attachment read failed: {_e}")
 
@@ -1000,6 +1051,23 @@ def make_freebuild_chat_router(db, get_current_user):
             user_content: Any = [{"type": "text", "text": prefix_text}] + vision_images
         else:
             user_content = prefix_text
+        # Inline extracted text (PDFs, code, docs) so the LLM can actually read them
+        if text_blobs:
+            blob_text = "\n\n".join(
+                f"📎 **ملف مرفق: `{b['name']}`** (نوع: {b['kind']})\n```{b['kind']}\n{b['text']}\n```"
+                for b in text_blobs
+            )
+            if isinstance(user_content, list):
+                user_content[0]["text"] = (user_content[0]["text"] or "") + "\n\n" + blob_text
+            else:
+                user_content = (user_content or "") + "\n\n" + blob_text
+        # Note any non-text attachments the LLM can't directly process
+        if non_text_notes:
+            notes_text = "\n\n📌 **مرفقات إضافية:**\n" + "\n".join(f"- {n}" for n in non_text_notes)
+            if isinstance(user_content, list):
+                user_content[0]["text"] = (user_content[0]["text"] or "") + notes_text
+            else:
+                user_content = (user_content or "") + notes_text
         msg_list.append({"role": "user", "content": user_content})
 
         # Context for the agent (no website type — fully open / from scratch)

@@ -1712,6 +1712,11 @@ function ChatWorkspace({ projectId }) {
   const chatScrollRef = useRef(null);
   const userScrolledUpRef = useRef(false);
   const fileInputRef = useRef(null);
+  // AbortController for the in-flight SSE stream — lets the user hit "Stop"
+  // when they don't like the direction the AI is taking. When aborted, we
+  // queue a follow-up that prompts: "What do you want me to change?"
+  const streamAbortRef = useRef(null);
+  const [stopReason, setStopReason] = useState(null); // 'user_cancel' | null
 
   // Auto-scroll to bottom when AI streams new content — UNLESS the user has
   // scrolled up to read earlier output (we respect their intent).
@@ -1840,11 +1845,16 @@ function ChatWorkspace({ projectId }) {
       // live thinking — every tool call streams into the chat as a visible step)
       const useAgent = filesToSend.length === 0 && !refAsset?.id;
       if (useAgent) {
-        // Stream Server-Sent Events; render each step live
+        // Stream Server-Sent Events; render each step live.
+        // Bind an AbortController so the user can hit "Stop" mid-stream.
+        const abortController = new AbortController();
+        streamAbortRef.current = abortController;
+        setStopReason(null);
         const r = await fetch(`${API}/api/freebuild-chat/project/${projectId}/agent-chat-stream`, {
           method: 'POST',
           headers: { Authorization: `Bearer ${token}` },
           body: fd,
+          signal: abortController.signal,
         });
         if (!r.ok) throw new Error(`HTTP ${r.status}`);
         const reader = r.body.getReader();
@@ -1981,7 +1991,9 @@ function ChatWorkspace({ projectId }) {
         // GRACEFUL INTERRUPTION HANDLING:
         // If the stream ended (proxy timeout, network blip) without a 'done' event,
         // synthesize a helpful summary that PRESERVES the work shown above.
+        // Also handles user-initiated cancel via the Stop button.
         if (!streamReceivedDone) {
+          const wasUserCancel = abortController.signal.aborted;
           // Collect the AI's last narration so it stays visible as the message body
           const allNarration = liveSteps
             .filter((s) => s.kind === 'live_text' && (s.text || '').trim())
@@ -1990,14 +2002,28 @@ function ChatWorkspace({ projectId }) {
           const completedTools = liveSteps.filter((s) => s.kind === 'tool' && s.phase === 'done').length;
           const builtTools = liveSteps.filter((s) => s.kind === 'tool_building' && s.done);
           const codeBytes = builtTools.reduce((acc, b) => acc + (b.bytes || 0), 0);
-          // Build summary: keep narration intact, append a small interruption note
-          const interruptNote = codeBytes > 0
-            ? `\n\n💾 خلصت من كتابة ~${codeBytes.toLocaleString()} حرف لكن الاتصال انقطع قبل ما أحفظ. ابعث "كمّل" أكمل من حيث وقفت.`
-            : completedTools > 0
-              ? `\n\n⏸️ نفّذت ${completedTools} خطوة وانقطع الاتصال. ابعث "كمّل" نكمل.`
-              : `\n\n⏸️ انقطع الاتصال قبل ما أبدأ. أعد المحاولة من فضلك.`;
+          let interruptNote;
+          if (wasUserCancel) {
+            interruptNote = `\n\n🛑 **أوقفت التنفيذ بناءً على طلبك.** عشان ما تخسر رصيد، خبّرني الحين:\n\n- وش بالضبط ما عجبك في النتيجة الحالية؟\n- تبيها تغيير **جذري** (نبدأ من الصفر) ولاّ **تعديلات** بس على نفس الفكرة؟\n- عندك مرجع أو فكرة محددة في بالك؟ ارفقها لي (صورة/فيديو/ملف) وأنا أرتّب نفسي من جديد.`;
+            setLastTask({ label: '🛑 أوقفه المستخدم', model: '' });
+          } else {
+            interruptNote = codeBytes > 0
+              ? `\n\n💾 خلصت من كتابة ~${codeBytes.toLocaleString()} حرف لكن الاتصال انقطع قبل ما أحفظ. ابعث "كمّل" أكمل من حيث وقفت.`
+              : completedTools > 0
+                ? `\n\n⏸️ نفّذت ${completedTools} خطوة وانقطع الاتصال. ابعث "كمّل" نكمل.`
+                : `\n\n⏸️ انقطع الاتصال قبل ما أبدأ. أعد المحاولة من فضلك.`;
+            setLastTask({ label: '⏸️ انقطع', model: '' });
+          }
           finalSummary = allNarration ? allNarration + interruptNote : interruptNote.trim();
-          setLastTask({ label: '⏸️ انقطع', model: '' });
+          if (wasUserCancel) {
+            // Offer one-click choice chips so the user can answer fast.
+            finalOptions = [
+              { id: 'change_radical', label: '🔄 غيّر كل شي من جديد', emoji: '🔄' },
+              { id: 'change_partial', label: '✏️ بس عدّل قسم معيّن', emoji: '✏️' },
+              { id: 'change_style',   label: '🎨 غيّر الستايل/الألوان', emoji: '🎨' },
+              { id: 'change_text',    label: '📝 غيّر النصوص فقط',     emoji: '📝' },
+            ];
+          }
         }
         // Finalize: mark message as not streaming
         setProject((p) => {
@@ -2075,16 +2101,33 @@ function ChatWorkspace({ projectId }) {
       const pr = await fetch(`${API}/api/freebuild-chat/project/${projectId}`, { headers: { Authorization: `Bearer ${token}` } });
       if (pr.ok) setProject(await pr.json());
     } catch (e) {
-      toast.error(e.message);
-      setMessage(msgText); // restore on error
-      setAttachments(filesToSend);
-      setReplyToAsset(refAsset);
+      // AbortError is the user clicking Stop — already handled inside the try
+      // block via the wasUserCancel branch. Don't surface it as an error toast.
+      if (e?.name === 'AbortError') {
+        // no-op: graceful cancel
+      } else {
+        toast.error(e.message);
+        setMessage(msgText); // restore on error
+        setAttachments(filesToSend);
+        setReplyToAsset(refAsset);
+      }
     } finally {
+      streamAbortRef.current = null;
       clearInterval(stageTimer);
       setLoading(false);
       setThinkingStage(0);
     }
   };
+
+  // User-initiated cancel of the in-flight SSE stream. We let the existing
+  // !streamReceivedDone branch synthesize the friendly "ما أعجبك؟" follow-up
+  // — the user can answer in plain Arabic or click an option chip.
+  const stopStream = useCallback(() => {
+    if (streamAbortRef.current) {
+      setStopReason('user_cancel');
+      try { streamAbortRef.current.abort(); } catch { /* already aborted */ }
+    }
+  }, []);
 
   // Note: legacy THINKING_STAGES removed — replaced by live SSE agent steps
   // streamed directly into the assistant message bubble (see agent_steps in JSX).
@@ -2991,46 +3034,71 @@ function ChatWorkspace({ projectId }) {
             {/* Attached file chips */}
             {attachments.length > 0 && (
               <div className="mb-2 flex gap-2 flex-wrap" data-testid="attachment-chips">
-                {attachments.map((file, i) => (
-                  <div key={i} className="px-2.5 py-1.5 bg-emerald-500/10 border border-emerald-500/30 rounded-lg flex items-center gap-2 text-xs">
-                    <Paperclip className="w-3.5 h-3.5 text-emerald-300" />
-                    <span className="text-emerald-100 max-w-[140px] truncate">{file.name}</span>
-                    <button
-                      type="button"
-                      onClick={() => setAttachments(attachments.filter((_, j) => j !== i))}
-                      data-testid={`remove-attachment-${i}`}
-                      className="text-zinc-400 hover:text-red-400"
-                      aria-label="إزالة المرفق"
-                    >
-                      <X className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
-                ))}
+                {attachments.map((file, i) => {
+                  const mime = file.type || '';
+                  const isImg = mime.startsWith('image/');
+                  const isVid = mime.startsWith('video/');
+                  const isAud = mime.startsWith('audio/');
+                  const icon = isImg ? <ImageIcon className="w-3.5 h-3.5 text-emerald-300" />
+                    : isVid ? <Eye className="w-3.5 h-3.5 text-violet-300" />
+                    : isAud ? <FileText className="w-3.5 h-3.5 text-amber-300" />
+                    : <FileText className="w-3.5 h-3.5 text-cyan-300" />;
+                  const previewUrl = isImg ? URL.createObjectURL(file) : null;
+                  const sizeKb = file.size / 1024;
+                  const sizeLabel = sizeKb > 1024 ? `${(sizeKb / 1024).toFixed(1)}MB` : `${Math.round(sizeKb)}KB`;
+                  return (
+                    <div key={i} className="px-2.5 py-1.5 bg-emerald-500/10 border border-emerald-500/30 rounded-lg flex items-center gap-2 text-xs">
+                      {previewUrl ? (
+                        <img src={previewUrl} alt="" className="w-7 h-7 object-cover rounded" onLoad={(e) => URL.revokeObjectURL(e.target.src)} />
+                      ) : icon}
+                      <div className="flex flex-col min-w-0">
+                        <span className="text-emerald-100 max-w-[140px] truncate">{file.name}</span>
+                        <span className="text-[9px] text-zinc-400">{sizeLabel}</span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setAttachments(attachments.filter((_, j) => j !== i))}
+                        data-testid={`remove-attachment-${i}`}
+                        className="text-zinc-400 hover:text-red-400"
+                        aria-label="إزالة المرفق"
+                      >
+                        <X className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  );
+                })}
               </div>
             )}
 
             <div className="flex gap-2">
-              {/* Hidden file input */}
+              {/* Hidden file input — accepts images, videos, audio, PDFs, docs, code, archives.
+                  The AI reads images natively (vision) and uses OCR/parsing for the rest. */}
               <input
                 type="file"
                 ref={fileInputRef}
-                accept="image/*"
+                accept="image/*,video/*,audio/*,application/pdf,.doc,.docx,.ppt,.pptx,.xls,.xlsx,.txt,.md,.csv,.json,.html,.css,.js,.ts,.py,.zip"
                 multiple
                 onChange={(e) => {
                   const newFiles = Array.from(e.target.files || []);
-                  setAttachments((prev) => [...prev, ...newFiles].slice(0, 4));
+                  const MAX_MB = 50;
+                  const tooBig = newFiles.filter((f) => f.size > MAX_MB * 1024 * 1024);
+                  const okFiles = newFiles.filter((f) => f.size <= MAX_MB * 1024 * 1024);
+                  if (tooBig.length) {
+                    toast.error(`الحد الأقصى ${MAX_MB} ميجا — ${tooBig.length} ملف(ات) تم تخطّيها`);
+                  }
+                  setAttachments((prev) => [...prev, ...okFiles].slice(0, 6));
                   e.target.value = '';
                 }}
                 className="hidden"
                 data-testid="file-input-hidden"
               />
-              {/* Attach button */}
+              {/* Attach button — now supports everything (image/video/audio/file). */}
               <button
                 type="button"
                 onClick={() => fileInputRef.current?.click()}
                 disabled={loading}
                 data-testid="attach-file-btn"
-                title="أرفق صورة (Hero مرجعي، شعار قديم، إلهام...)"
+                title="أرفق صورة، فيديو، صوت، PDF، Word، Excel، أو أي ملف (حتى 50 ميجا، 6 ملفات)"
                 className="px-3 py-3 bg-white/5 hover:bg-emerald-500/20 hover:border-emerald-400/40 border border-white/10 rounded-xl transition-all text-zinc-300 hover:text-emerald-200 disabled:opacity-50"
               >
                 <Paperclip className="w-5 h-5" />
@@ -3052,16 +3120,31 @@ function ChatWorkspace({ projectId }) {
                 data-testid="chat-input"
                 className="flex-1 bg-black/40 border border-white/15 rounded-xl px-4 py-3 outline-none focus:border-emerald-400 text-sm"
               />
-              {/* Send */}
-              <button
-                type="button"
-                onClick={send}
-                disabled={loading || (!message.trim() && attachments.length === 0 && !replyToAsset)}
-                data-testid="chat-send-btn"
-                className="px-5 py-3 bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-400 hover:to-teal-500 disabled:from-zinc-700 disabled:to-zinc-800 text-black font-bold rounded-xl flex items-center gap-2"
-              >
-                {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : <Send className="w-5 h-5" />}
-              </button>
+              {/* Send / Stop — same button morphs based on streaming state.
+                  While the AI is writing, this becomes a red "Stop" button so the
+                  user can interrupt instantly (saves credits if direction is wrong). */}
+              {loading ? (
+                <button
+                  type="button"
+                  onClick={stopStream}
+                  data-testid="chat-stop-btn"
+                  title="أوقف الذكاء الآن — لو ما عجبك التوجه نوضّح له وش تبي"
+                  className="px-5 py-3 bg-gradient-to-r from-red-500 to-rose-600 hover:from-red-400 hover:to-rose-500 text-white font-bold rounded-xl flex items-center gap-2 animate-pulse shadow-lg shadow-red-500/30"
+                >
+                  <span className="w-3.5 h-3.5 bg-white rounded-sm" />
+                  <span className="text-xs">إيقاف</span>
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={send}
+                  disabled={!message.trim() && attachments.length === 0 && !replyToAsset}
+                  data-testid="chat-send-btn"
+                  className="px-5 py-3 bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-400 hover:to-teal-500 disabled:from-zinc-700 disabled:to-zinc-800 text-black font-bold rounded-xl flex items-center gap-2"
+                >
+                  <Send className="w-5 h-5" />
+                </button>
+              )}
             </div>
           </div>
         </div>
