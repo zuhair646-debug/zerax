@@ -95,8 +95,22 @@ export default function VoiceRecorderButton({ onTranscript, accentColor = 'amber
       toast.error('متصفحك لا يدعم التسجيل الصوتي. جرّب Chrome أو Safari محدث.');
       return;
     }
+    // HTTPS / localhost check — getUserMedia requires a secure context. If we're
+    // running over plain http (rare since prod is HTTPS), the API silently fails.
+    if (typeof window !== 'undefined' && !window.isSecureContext) {
+      toast.error('التسجيل يحتاج اتصال آمن (HTTPS). افتح zenrex.ai بدل العنوان المباشر.');
+      return;
+    }
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      // Request mic with permissive constraints that work across iOS Safari,
+      // Android Chrome, and desktop browsers. Echo-cancel + noise-suppress on.
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true,
+        },
+      });
       const mimeType = getSupportedAudioMimeType();
       const recorder = mimeType ? new MediaRecorder(stream, { mimeType }) : new MediaRecorder(stream);
 
@@ -133,8 +147,45 @@ export default function VoiceRecorderButton({ onTranscript, accentColor = 'amber
       setSeconds(0);
       timerRef.current = setInterval(() => setSeconds((s) => s + 1), 1000);
     } catch (e) {
-      console.error('mic permission denied:', e);
-      toast.error('يحتاج إذن الميكروفون. اسمح للموقع وحاول مرة أخرى.');
+      console.error('mic error:', e?.name, e?.message);
+      // Diagnose the exact failure so the user gets a useful next step instead
+      // of a generic "permission denied" toast.
+      const errName = e?.name || '';
+      const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+      const isAndroid = /Android/i.test(navigator.userAgent);
+      const isStandalone = window.matchMedia('(display-mode: standalone)').matches
+        || window.navigator.standalone === true;
+
+      if (errName === 'NotAllowedError' || errName === 'PermissionDeniedError') {
+        // User (or Safari) blocked the permission previously.
+        let hint = '';
+        if (isIOS) {
+          hint = isStandalone
+            ? 'افتح الإعدادات → Zenrex → الميكروفون → فعّله، ثم أعد فتح التطبيق.'
+            : 'اضغط "aA" في شريط Safari → إعدادات الموقع → الميكروفون → "اسمح".';
+        } else if (isAndroid) {
+          hint = 'اضغط القفل 🔒 بجانب العنوان → الأذونات → الميكروفون → اسمح.';
+        } else {
+          hint = 'اضغط أيقونة القفل 🔒 بجانب العنوان → الميكروفون → اسمح.';
+        }
+        toast.error('الميكروفون مرفوض', {
+          description: hint,
+          duration: 9000,
+        });
+      } else if (errName === 'NotFoundError' || errName === 'DevicesNotFoundError') {
+        toast.error('ما لقيت ميكروفون متصل بجهازك');
+      } else if (errName === 'NotReadableError' || errName === 'TrackStartError') {
+        toast.error('الميكروفون مشغول بتطبيق ثاني — أقفل واتساب/تيمز وحاول.');
+      } else if (errName === 'OverconstrainedError') {
+        toast.error('إعدادات الميكروفون غير مدعومة — جرّب من متصفح ثاني.');
+      } else if (errName === 'SecurityError') {
+        toast.error('السياسة الأمنية ترفض التسجيل. تأكد إن الموقع HTTPS وحدّث المتصفح.');
+      } else {
+        toast.error(`فشل التسجيل: ${errName || 'سبب غير معروف'}`, {
+          description: e?.message || '',
+          duration: 7000,
+        });
+      }
       setRecording(false);
     }
   };
