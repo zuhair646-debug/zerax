@@ -10,6 +10,20 @@ Unify the AI brain and empower it with unified toolset. Fix mocked AI Trading Bo
 - Kids: حسين (Hussain) + عباس (Abbas)
 - 100% LOCAL AI requirement (no OpenAI/Anthropic for Family AI)
 
+
+## Session 2026-02-15 — Rich Visual Options + Inline Images
+- ✅ AI Brain `finish` tool now accepts:
+  - Rich options `{label, emoji?, image_url?, description?}` OR plain strings
+  - NEW `inline_images: [{url, caption?}]` — AI can attach reference images directly to its reply
+- ✅ AI Brain `ask_user_inline` tool — same rich-options schema
+- ✅ Frontend `OptionsPicker` + `InlineChoiceModal` render beautiful image cards when image_url provided; fall back to pill chips otherwise
+- ✅ Assistant messages render `inline_images` as lazy-loaded clickable gallery (lightbox enabled)
+- ✅ Video Mode Phase 1 — strict rule: first reply MUST be `ask_user_inline` with 5 visual film-type cards; YouTube/web_search/image_gen forbidden in Phase 1
+- ✅ Hardened fal.ai pricing — hardcoded the only allowed prices (LTX=$0.005/s, Hailuo=$0.04, Kling=$0.07, Sora Turbo=$0.10, Sora Pro=$0.30); AI must say "I don't know" instead of guessing
+- ✅ Tests: 10 new + 1 updated; all 24 passing (test_workflow_tools.py + test_finish_options.py)
+- ✅ Deployed to Hetzner (zenrex.ai) — health check passing
+- Writing style untouched — markdown streaming preserved as-is
+
 ## What's Implemented
 - ✅ AI Trading Bot live (Alpaca + Claude Sharia screening)
 - ✅ Desktop Agent v0.8.1 (clipboard_paste, run_shell, self_update, shell-on-by-default)

@@ -33,10 +33,15 @@ WORKFLOW_TOOL_SCHEMAS: List[Dict[str, Any]] = [
             "🔌 PAUSE the conversation mid-turn and pop a Modal in the UI with a "
             "specific question + multiple-choice options. Use this WHENEVER you need "
             "a decision before continuing (e.g. 'هل تبيني أنشر على Vercel ولا Netlify؟', "
-            "'أي قالب تفضل؟ a/b/c'). DO NOT continue calling other tools after this — "
-            "the agent loop will end naturally; the user's choice arrives as the next "
-            "chat message and you continue from there. Far better than burying a "
-            "question in prose — the UI gives clickable buttons."
+            "'أي نوع فيديو؟ كرتون/أنمي/سينمائي/رعب'). DO NOT continue calling other "
+            "tools after this — the agent loop will end naturally; the user's choice "
+            "arrives as the next chat message and you continue from there.\n\n"
+            "**Rich options (recommended for visual choices like film type, design "
+            "style, theme):** Pass options as objects with `label`, `emoji`, and "
+            "optional `image_url` (use https URLs from your generated assets, or "
+            "fetched images, or trusted public CDNs). The UI renders these as "
+            "beautiful clickable cards with images.\n\n"
+            "Plain strings are also fine for simple yes/no/text choices."
         ),
         "input_schema": {
             "type": "object",
@@ -44,8 +49,26 @@ WORKFLOW_TOOL_SCHEMAS: List[Dict[str, Any]] = [
                 "question": {"type": "string", "description": "Arabic question shown to the user (one sentence ideally)."},
                 "options": {
                     "type": "array",
-                    "items": {"type": "string"},
-                    "description": "Up to 6 short choice labels (e.g. 'Vercel', 'Netlify', 'Cloudflare Pages').",
+                    "description": (
+                        "2-6 choices. Each item is either a plain string (e.g. "
+                        "'Vercel') OR an object {label, emoji?, image_url?, "
+                        "description?} for rich visual cards."
+                    ),
+                    "items": {
+                        "oneOf": [
+                            {"type": "string"},
+                            {
+                                "type": "object",
+                                "properties": {
+                                    "label": {"type": "string", "description": "Short Arabic label shown on the card (max 40 chars)."},
+                                    "emoji": {"type": "string", "description": "Single emoji that visually represents this choice."},
+                                    "image_url": {"type": "string", "description": "Optional https URL to an example image (~16:9 ratio looks best)."},
+                                    "description": {"type": "string", "description": "Optional 1-line Arabic explainer (max 80 chars)."},
+                                },
+                                "required": ["label"],
+                            },
+                        ]
+                    },
                     "minItems": 2,
                     "maxItems": 6,
                 },
@@ -175,12 +198,37 @@ _ROLE_PROMPTS = {
 async def ask_user_inline(ctx, args: Dict[str, Any]) -> Dict[str, Any]:
     """Emit a sentinel that the frontend Modal layer will detect."""
     question = (args.get("question") or "").strip()
-    options = args.get("options") or []
+    raw_options = args.get("options") or []
     if not question:
         return {"ok": False, "error": "question is required"}
-    if not isinstance(options, list) or not (2 <= len(options) <= 6):
-        return {"ok": False, "error": "options must be a list of 2-6 strings"}
-    options = [str(o).strip()[:80] for o in options if str(o).strip()]
+    if not isinstance(raw_options, list) or not (2 <= len(raw_options) <= 6):
+        return {"ok": False, "error": "options must be a list of 2-6 items"}
+
+    # Normalize: accept plain strings OR rich objects {label, emoji?, image_url?, description?}
+    options: List[Dict[str, Any]] = []
+    for o in raw_options:
+        if isinstance(o, str):
+            lbl = o.strip()[:80]
+            if lbl:
+                options.append({"label": lbl})
+        elif isinstance(o, dict):
+            lbl = str(o.get("label") or "").strip()[:80]
+            if not lbl:
+                continue
+            item: Dict[str, Any] = {"label": lbl}
+            emoji = str(o.get("emoji") or "").strip()
+            if emoji:
+                item["emoji"] = emoji[:4]
+            img = str(o.get("image_url") or "").strip()
+            if img and img.startswith(("http://", "https://", "/")):
+                item["image_url"] = img[:500]
+            desc = str(o.get("description") or "").strip()
+            if desc:
+                item["description"] = desc[:120]
+            options.append(item)
+    if len(options) < 2:
+        return {"ok": False, "error": "at least 2 valid options required"}
+
     allow_free = bool(args.get("allow_free_text", True))
     ctxt = (args.get("context") or "").strip()
     return {

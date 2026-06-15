@@ -35,9 +35,9 @@ $SSH 'nginx -t > /dev/null 2>&1 && systemctl reload nginx' && echo "✓ Nginx re
 $SSH 'cd /opt/zerax && docker compose restart backend > /dev/null' && echo "✓ Backend restarted"
 
 # 5) Health check
-sleep 8
-HEALTH=$(curl -s -m 5 "http://$VPS_IP/api/store/health")
-if [[ "$HEALTH" == *"ok\":true"* ]]; then
+sleep 12
+HEALTH=$(curl -sk -m 8 "https://$DOMAIN/api/health")
+if [[ "$HEALTH" == *"healthy"* ]]; then
   echo "✓ Health check passed: $HEALTH"
   echo ""
   echo "🎉 Deployed! https://$DOMAIN (or http://$VPS_IP)"

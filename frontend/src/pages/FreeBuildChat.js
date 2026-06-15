@@ -436,12 +436,29 @@ function OptionsPicker({ messageIdx, options, savedAnswer, onConfirm }) {
   const [comment, setComment] = useState('');
   const [confirming, setConfirming] = useState(false);
 
-  // If user already answered this question (saved on a later user turn), show the answer locked
+  // Normalize each option: accept plain string OR {label, emoji?, image_url?, description?}.
+  const norm = (options || []).map((o) => {
+    if (typeof o === 'string') return { label: o };
+    if (o && typeof o === 'object') return {
+      label: o.label || o.id || '',
+      emoji: o.emoji || '',
+      image_url: o.image_url || '',
+      description: o.description || '',
+    };
+    return { label: String(o ?? '') };
+  }).filter((o) => o.label);
+
+  const hasImages = norm.some((o) => !!o.image_url);
+  const hasDescriptions = norm.some((o) => !!o.description);
+  const isRichLayout = hasImages || hasDescriptions;
+
+  // If user already answered this question, show the answer locked
   if (savedAnswer) {
+    const picks = savedAnswer.picks || [];
     return (
       <div className="mt-3 flex flex-wrap gap-1.5" data-testid={`options-locked-${messageIdx}`}>
-        {options.map((opt, i) => {
-          const isPicked = savedAnswer.picks?.includes(opt);
+        {norm.map((opt, i) => {
+          const isPicked = picks.includes(opt.label);
           return (
             <span
               key={i}
@@ -451,7 +468,7 @@ function OptionsPicker({ messageIdx, options, savedAnswer, onConfirm }) {
                   : 'bg-zinc-800/40 border-white/5 text-zinc-500 line-through opacity-60'
               }`}
             >
-              {isPicked && '✓ '}{opt}
+              {isPicked && '✓ '}{opt.emoji ? `${opt.emoji} ` : ''}{opt.label}
             </span>
           );
         })}
@@ -459,8 +476,8 @@ function OptionsPicker({ messageIdx, options, savedAnswer, onConfirm }) {
     );
   }
 
-  const toggle = (opt) => {
-    setSelected((prev) => prev.includes(opt) ? prev.filter((x) => x !== opt) : [...prev, opt]);
+  const toggle = (label) => {
+    setSelected((prev) => prev.includes(label) ? prev.filter((x) => x !== label) : [...prev, label]);
   };
 
   const submit = async () => {
@@ -476,17 +493,111 @@ function OptionsPicker({ messageIdx, options, savedAnswer, onConfirm }) {
     }
   };
 
+  // ─── Rich card layout (with images/descriptions) ───
+  if (isRichLayout) {
+    return (
+      <div className="mt-3" data-testid={`options-${messageIdx}`}>
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
+          {norm.map((opt, i) => {
+            const isSelected = selected.includes(opt.label);
+            return (
+              <button
+                key={i}
+                type="button"
+                onClick={() => toggle(opt.label)}
+                disabled={confirming}
+                data-testid={`option-${messageIdx}-${i}`}
+                className={`group relative text-right rounded-xl overflow-hidden border transition-all duration-200 ${
+                  isSelected
+                    ? 'border-emerald-400 ring-2 ring-emerald-400/60 shadow-lg shadow-emerald-500/30 scale-[1.02]'
+                    : 'border-white/10 hover:border-emerald-400/50 hover:scale-[1.01] bg-zinc-900/60'
+                }`}
+              >
+                {opt.image_url ? (
+                  <div className="relative aspect-video bg-zinc-900 overflow-hidden">
+                    <img
+                      src={opt.image_url}
+                      alt={opt.label}
+                      loading="lazy"
+                      className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
+                      onError={(e) => { e.currentTarget.style.display = 'none'; }}
+                    />
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/30 to-transparent" />
+                    {opt.emoji && (
+                      <div className="absolute top-1.5 right-1.5 text-lg drop-shadow-lg">{opt.emoji}</div>
+                    )}
+                    {isSelected && (
+                      <div className="absolute top-1.5 left-1.5 w-6 h-6 rounded-full bg-emerald-500 text-black flex items-center justify-center shadow-lg">
+                        <Check className="w-3.5 h-3.5" />
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <div className="aspect-video bg-gradient-to-br from-zinc-800 to-zinc-900 flex items-center justify-center text-4xl">
+                    {opt.emoji || '✨'}
+                  </div>
+                )}
+                <div className="p-2">
+                  <p className={`text-xs font-black ${isSelected ? 'text-emerald-300' : 'text-white'}`}>
+                    {opt.label}
+                  </p>
+                  {opt.description && (
+                    <p className="text-[10px] text-zinc-400 mt-0.5 line-clamp-2 leading-snug">
+                      {opt.description}
+                    </p>
+                  )}
+                </div>
+              </button>
+            );
+          })}
+        </div>
+        {selected.length > 0 && (
+          <p className="text-[11px] text-emerald-400 mt-2 font-bold">
+            ✓ اخترت {selected.length} {selected.length === 1 ? 'خيار' : 'خيارات'}
+          </p>
+        )}
+        <div className="mt-3 flex gap-2">
+          <input
+            type="text"
+            placeholder="اكتب تعليق أو اختيار آخر (اختياري)..."
+            value={comment}
+            onChange={(e) => setComment(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && submit()}
+            disabled={confirming}
+            data-testid={`option-comment-${messageIdx}`}
+            className="flex-1 bg-black/30 border border-white/10 rounded-lg px-3 py-2 text-xs outline-none focus:border-emerald-400"
+          />
+          <button
+            type="button"
+            onClick={submit}
+            disabled={confirming || (selected.length === 0 && !comment.trim())}
+            data-testid={`option-confirm-${messageIdx}`}
+            className="px-4 py-2 bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-400 hover:to-teal-500 disabled:from-zinc-700 disabled:to-zinc-800 text-black font-bold text-xs rounded-lg flex items-center gap-1.5"
+          >
+            {confirming ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : (
+              <>
+                <ArrowLeft className="w-3.5 h-3.5" />
+                <span>تأكيد</span>
+              </>
+            )}
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // ─── Simple chip/pill layout (no images) ───
   return (
     <div className="mt-3" data-testid={`options-${messageIdx}`}>
       <div className="flex flex-wrap gap-2">
-        {options.map((opt, i) => {
-          const isSelected = selected.includes(opt);
+        {norm.map((opt, i) => {
+          const isSelected = selected.includes(opt.label);
           const accent = OPT_ACCENTS[i % OPT_ACCENTS.length];
           return (
             <button
               key={i}
               type="button"
-              onClick={() => toggle(opt)}
+              onClick={() => toggle(opt.label)}
               disabled={confirming}
               data-testid={`option-${messageIdx}-${i}`}
               className={`group inline-flex items-center gap-2 px-3 py-2 rounded-full text-xs font-bold border transition-all duration-200 ${
@@ -500,9 +611,9 @@ function OptionsPicker({ messageIdx, options, savedAnswer, onConfirm }) {
                   isSelected ? 'bg-black/30 text-emerald-100 ring-white/30' : `${accent.num} ring-1`
                 }`}
               >
-                {isSelected ? <Check className="w-3 h-3" /> : (i + 1)}
+                {isSelected ? <Check className="w-3 h-3" /> : (opt.emoji || (i + 1))}
               </span>
-              <span>{opt}</span>
+              <span>{opt.label}</span>
             </button>
           );
         })}
@@ -1529,13 +1640,26 @@ function AuditReportCard({ report }) {
 // ─────────────────────────────────────────────────────────────
 function InlineChoiceModal({ request, freeText, setFreeText, onClose, onPick }) {
   if (!request) return null;
+  const rawOpts = request.options || [];
+  // Normalize: accept strings or {label, emoji?, image_url?, description?}
+  const norm = rawOpts.map((o) => {
+    if (typeof o === 'string') return { label: o };
+    if (o && typeof o === 'object') return {
+      label: o.label || o.id || '',
+      emoji: o.emoji || '',
+      image_url: o.image_url || '',
+      description: o.description || '',
+    };
+    return { label: String(o ?? '') };
+  }).filter((o) => o.label);
+  const hasImages = norm.some((o) => !!o.image_url);
   return (
     <div
       className="fixed inset-0 z-[100] bg-black/70 backdrop-blur-sm flex items-center justify-center p-4"
       onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
       data-testid="inline-choice-modal"
     >
-      <div className="bg-gradient-to-b from-zinc-900 to-black border border-cyan-500/40 rounded-2xl max-w-lg w-full p-6 shadow-2xl">
+      <div className={`bg-gradient-to-b from-zinc-900 to-black border border-cyan-500/40 rounded-2xl ${hasImages ? 'max-w-3xl' : 'max-w-lg'} w-full p-6 shadow-2xl max-h-[90vh] overflow-y-auto`}>
         <div className="flex items-start gap-3 mb-4">
           <div className="text-3xl">🤔</div>
           <div className="flex-1">
@@ -1553,19 +1677,66 @@ function InlineChoiceModal({ request, freeText, setFreeText, onClose, onPick }) 
           >×</button>
         </div>
 
-        <div className="space-y-2">
-          {(request.options || []).map((opt, i) => (
-            <button
-              key={i}
-              onClick={() => onPick(opt)}
-              className="w-full text-right px-4 py-3 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 hover:border-cyan-500/60 text-white text-sm font-semibold transition group"
-              data-testid={`inline-choice-option-${i}`}
-            >
-              <span className="text-cyan-400 group-hover:text-cyan-300 ml-2">›</span>
-              {opt}
-            </button>
-          ))}
-        </div>
+        {hasImages ? (
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+            {norm.map((opt, i) => (
+              <button
+                key={i}
+                onClick={() => onPick(opt.label)}
+                className="group relative text-right rounded-xl overflow-hidden border border-zinc-800 hover:border-cyan-400 hover:scale-[1.03] transition-all duration-200 bg-zinc-900/60"
+                data-testid={`inline-choice-option-${i}`}
+              >
+                {opt.image_url ? (
+                  <div className="relative aspect-video bg-zinc-900 overflow-hidden">
+                    <img
+                      src={opt.image_url}
+                      alt={opt.label}
+                      loading="lazy"
+                      className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-110"
+                      onError={(e) => { e.currentTarget.style.display = 'none'; }}
+                    />
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/40 to-transparent" />
+                    {opt.emoji && (
+                      <div className="absolute top-2 right-2 text-xl drop-shadow-lg">{opt.emoji}</div>
+                    )}
+                  </div>
+                ) : (
+                  <div className="aspect-video bg-gradient-to-br from-zinc-800 to-zinc-900 flex items-center justify-center text-5xl">
+                    {opt.emoji || '✨'}
+                  </div>
+                )}
+                <div className="p-2.5">
+                  <p className="text-sm font-black text-white group-hover:text-cyan-300 transition-colors">
+                    {opt.label}
+                  </p>
+                  {opt.description && (
+                    <p className="text-[11px] text-zinc-400 mt-1 line-clamp-2 leading-snug">
+                      {opt.description}
+                    </p>
+                  )}
+                </div>
+              </button>
+            ))}
+          </div>
+        ) : (
+          <div className="space-y-2">
+            {norm.map((opt, i) => (
+              <button
+                key={i}
+                onClick={() => onPick(opt.label)}
+                className="w-full text-right px-4 py-3 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 hover:border-cyan-500/60 text-white text-sm font-semibold transition group flex items-center gap-2"
+                data-testid={`inline-choice-option-${i}`}
+              >
+                {opt.emoji && <span className="text-lg">{opt.emoji}</span>}
+                <span className="flex-1">{opt.label}</span>
+                {opt.description && (
+                  <span className="text-[11px] text-zinc-500 hidden sm:inline">{opt.description}</span>
+                )}
+                <span className="text-cyan-400 group-hover:text-cyan-300">›</span>
+              </button>
+            ))}
+          </div>
+        )}
 
         {request.allow_free_text && (
           <div className="mt-4 pt-4 border-t border-zinc-800">
@@ -1864,6 +2035,7 @@ function ChatWorkspace({ projectId }) {
         let buf = '';
         let finalSummary = '';
         let finalOptions = [];
+        let finalInlineImages = [];
         let liveSteps = [];
         let htmlUpdated = false;
         const stepsHolderId = `agent-steps-${Date.now()}`;
@@ -1980,6 +2152,7 @@ function ChatWorkspace({ projectId }) {
               streamReceivedDone = true;
               finalSummary = payload.summary || '';
               finalOptions = payload.options || [];
+              finalInlineImages = payload.inline_images || [];
               htmlUpdated = !!payload.html_updated;
               setLastTask({ label: `🤖 Agent (${payload.iterations || 0} خطوة)`, model: payload.model_used || '' });
             } else if (eventName === 'error') {
@@ -2051,7 +2224,7 @@ function ChatWorkspace({ projectId }) {
           const msgs = [...(p.messages || [])];
           for (let i = msgs.length - 1; i >= 0; i--) {
             if (msgs[i].agent_holder_id === stepsHolderId) {
-              msgs[i] = { ...msgs[i], agent_streaming: false, options: finalOptions, content: finalSummary };
+              msgs[i] = { ...msgs[i], agent_streaming: false, options: finalOptions, inline_images: finalInlineImages, content: finalSummary };
               break;
             }
           }
@@ -2776,6 +2949,46 @@ function ChatWorkspace({ projectId }) {
                             </div>
                           );
                         })}
+                      </div>
+                    )}
+
+                    {/* AI's attached reference images (inline_images from finish() tool) */}
+                    {m.role === 'assistant' && m.inline_images && m.inline_images.length > 0 && (
+                      <div
+                        className={`mt-3 grid gap-2 ${
+                          m.inline_images.length === 1 ? 'grid-cols-1' :
+                          m.inline_images.length === 2 ? 'grid-cols-2' :
+                          'grid-cols-2 sm:grid-cols-3'
+                        }`}
+                        data-testid={`msg-inline-images-${i}`}
+                      >
+                        {m.inline_images.map((img, ii) => (
+                          <button
+                            key={ii}
+                            type="button"
+                            onClick={() => setLightboxAsset({ id: `inline-${i}-${ii}`, type: 'reference', image_url: img.url, prompt: img.caption || '' })}
+                            data-testid={`msg-inline-image-${i}-${ii}`}
+                            className="group relative rounded-xl overflow-hidden border border-white/10 hover:border-emerald-400/60 transition-all bg-zinc-900/60 text-right"
+                          >
+                            <div className="aspect-video bg-zinc-900 overflow-hidden">
+                              <img
+                                src={img.url.startsWith('http') ? img.url : `${API}${img.url}`}
+                                alt={img.caption || ''}
+                                loading="lazy"
+                                className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
+                                onError={(e) => { e.currentTarget.style.display = 'none'; }}
+                              />
+                            </div>
+                            {img.caption && (
+                              <p className="text-[11px] text-zinc-300 p-2 line-clamp-2 leading-snug">{img.caption}</p>
+                            )}
+                            <div className="absolute top-1.5 left-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                              <div className="px-2 py-1 rounded-md bg-black/70 backdrop-blur text-white text-[10px] flex items-center gap-1">
+                                <ZoomIn className="w-3 h-3" /> تكبير
+                              </div>
+                            </div>
+                          </button>
+                        ))}
                       </div>
                     )}
 

@@ -73,8 +73,26 @@ async def test_ask_user_inline_returns_sentinel(ctx):
     assert r["ok"] is True
     assert r["pending_user_input"] is True
     assert r["kind"] == "choice"
-    assert r["options"] == ["Vercel", "Netlify"]
+    # Options are now normalized to {label, ...} objects
+    assert r["options"] == [{"label": "Vercel"}, {"label": "Netlify"}]
     assert r["allow_free_text"] is True
+
+
+@pytest.mark.asyncio
+async def test_ask_user_inline_accepts_rich_options(ctx):
+    r = await ask_user_inline(ctx, {
+        "question": "أي نوع فيلم؟",
+        "options": [
+            {"label": "كرتون", "emoji": "🎨", "image_url": "https://x.com/a.jpg", "description": "Pixar style"},
+            {"label": "أنمي", "emoji": "🌸"},
+        ],
+    })
+    assert r["ok"] is True
+    assert r["options"][0]["label"] == "كرتون"
+    assert r["options"][0]["emoji"] == "🎨"
+    assert r["options"][0]["image_url"] == "https://x.com/a.jpg"
+    assert r["options"][0]["description"] == "Pixar style"
+    assert r["options"][1] == {"label": "أنمي", "emoji": "🌸"}
 
 
 @pytest.mark.asyncio

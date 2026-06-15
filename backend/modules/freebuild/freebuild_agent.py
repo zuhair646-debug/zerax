@@ -608,7 +608,14 @@ TOOLS_SCHEMA: List[Dict[str, Any]] = [
         "description": (
             "Call this when the work is done. Provide a short Arabic summary "
             "(2-4 lines) to show the user what was accomplished and the next "
-            "logical question/option. This is the ONLY way to end the loop."
+            "logical question/option. This is the ONLY way to end the loop.\n\n"
+            "**Rich options:** `options` can be plain strings OR objects "
+            "{label, emoji?, image_url?, description?} to render as visual cards.\n\n"
+            "**Inline images:** Use `inline_images` to attach reference/example "
+            "images directly inside this message bubble (e.g. style references, "
+            "color moodboards, character samples). These display as a small "
+            "gallery under the text. URLs must be https or absolute paths from "
+            "our own server."
         ),
         "input_schema": {
             "type": "object",
@@ -616,8 +623,36 @@ TOOLS_SCHEMA: List[Dict[str, Any]] = [
                 "summary": {"type": "string", "description": "Arabic message to the user."},
                 "options": {
                     "type": "array",
-                    "items": {"type": "string"},
-                    "description": "Optional list of clickable next-step options (max 4).",
+                    "items": {
+                        "oneOf": [
+                            {"type": "string"},
+                            {
+                                "type": "object",
+                                "properties": {
+                                    "label": {"type": "string"},
+                                    "emoji": {"type": "string"},
+                                    "image_url": {"type": "string"},
+                                    "description": {"type": "string"},
+                                },
+                                "required": ["label"],
+                            },
+                        ]
+                    },
+                    "description": "Optional list of clickable next-step options (max 6). Each can be a string or {label, emoji?, image_url?, description?}.",
+                    "maxItems": 6,
+                },
+                "inline_images": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "url": {"type": "string", "description": "https URL or absolute path to the image."},
+                            "caption": {"type": "string", "description": "Optional short Arabic caption."},
+                        },
+                        "required": ["url"],
+                    },
+                    "description": "Optional reference/example images shown inline under the message (max 6).",
+                    "maxItems": 6,
                 },
             },
             "required": ["summary"],
@@ -679,6 +714,57 @@ OWNER_ONLY_TOOL_NAMES = {
     # GitHub push — modifies the owner's repos
     "github_create_repo", "github_push_file",
 }
+
+
+def _normalize_finish_options(raw: Any) -> List[Any]:
+    """Normalize finish/options input. Accepts list of strings OR list of
+    {label, emoji?, image_url?, description?} dicts. Returns mixed list
+    (strings stay as strings; dicts get validated). Max 6 items.
+    Frontend's OptionsPicker handles both shapes.
+    """
+    if not isinstance(raw, list):
+        return []
+    out: List[Any] = []
+    for o in raw[:6]:
+        if isinstance(o, str):
+            s = o.strip()[:80]
+            if s:
+                out.append(s)
+        elif isinstance(o, dict):
+            lbl = str(o.get("label") or "").strip()[:80]
+            if not lbl:
+                continue
+            item: Dict[str, Any] = {"label": lbl}
+            emoji = str(o.get("emoji") or "").strip()
+            if emoji:
+                item["emoji"] = emoji[:4]
+            img = str(o.get("image_url") or "").strip()
+            if img and img.startswith(("http://", "https://", "/")):
+                item["image_url"] = img[:500]
+            desc = str(o.get("description") or "").strip()
+            if desc:
+                item["description"] = desc[:120]
+            out.append(item)
+    return out
+
+
+def _normalize_inline_images(raw: Any) -> List[Dict[str, Any]]:
+    """Normalize finish/inline_images. Accepts [{url, caption?}, ...]. Max 6."""
+    if not isinstance(raw, list):
+        return []
+    out: List[Dict[str, Any]] = []
+    for item in raw[:6]:
+        if not isinstance(item, dict):
+            continue
+        url = str(item.get("url") or "").strip()
+        if not url or not url.startswith(("http://", "https://", "/")):
+            continue
+        entry: Dict[str, Any] = {"url": url[:500]}
+        cap = str(item.get("caption") or "").strip()
+        if cap:
+            entry["caption"] = cap[:120]
+        out.append(entry)
+    return out
 
 
 def tools_for_user(is_owner: bool) -> List[Dict[str, Any]]:
@@ -2344,13 +2430,33 @@ MODE_ADDENDUM_VIDEO = """
 - ❌ تقول "ما أقدر أولّد فيديو" — اطلب مفتاح `fal_key` فقط (واحد فقط) واستخدم Sora/Kling/Hailuo.
 - ❌ تنتج مشهد فيه أخطاء حركية (يد ٦ أصابع، وجه مشوّه، حركة غير منطقية).
 - ❌ تعرض الفيديو الأصلي من يوتيوب كأنه نتاجك (`download_media` للمرجعية فقط).
+- ❌ **هلوسة أسعار fal.ai**: ممنوع تقول "$0.01/sec" أو أي رقم من راسك. الأسعار الرسمية الوحيدة المسموحة:
+  • LTX-Video → $0.005/s   • Hailuo → $0.04/s   • Kling → $0.07/s   • Sora 2 Turbo → $0.10/s   • Sora 2 Pro → $0.30/s
+  لو سألك العميل عن أي موديل غير هذي → قل "ما أعرف سعره الدقيق، خلني أتحقق من fal.ai مباشرة" ولا تخمّن.
 
 🎯 **سير العمل الإلزامي لكل مشروع فيلم** (لا تخرج عنه — اتبع المراحل السبع):
 
 **المرحلة 1 — نوع الفيلم (`film_type`):**
-   اسأل العميل بسؤال واحد محدد: *"وش نوع الفيلم اللي تبيه — كرتون / أنمي / سينمائي واقعي / رعب / وثائقي؟"*
-   احفظ الاختيار في `update_project_doc(doc_name='decisions', content='Film type: cartoon', mode='append')`.
-   ثم انتقل للمرحلة 2.
+   🚨 **أول رد لك في وضع الفيديو لازم يكون استدعاء `ask_user_inline` فوراً** — لا تستدعِ أي أداة ثانية قبلها (لا `download_media`، لا `web_search`، لا `generate_image`). الهدف: نخلي العميل يختار النوع بضغطة زر بدل ما نضيع وقت.
+
+   مثال صحيح (هذا اللي تسويه أول رد):
+   ```
+   ask_user_inline(
+     question="وش نوع الفيلم اللي تبيه؟",
+     context="اختر نوع واحد وكل المراحل الجاية (الشخصيات، السيناريو، اللقطات) تتطبّع على هالأسلوب.",
+     allow_free_text=True,
+     options=[
+       {"label":"كرتون", "emoji":"🎨", "description":"أسلوب Pixar/Disney عائلي ملوّن", "image_url":"https://image.pollinations.ai/prompt/Pixar%203D%20cartoon%20family%20movie%20still"},
+       {"label":"أنمي", "emoji":"🌸", "description":"Studio Ghibli — عيون كبيرة وألوان حالمة", "image_url":"https://image.pollinations.ai/prompt/Studio%20Ghibli%20anime%20still%20cinematic"},
+       {"label":"سينمائي واقعي", "emoji":"🎬", "description":"تصوير واقعي بإضاءة Hollywood", "image_url":"https://image.pollinations.ai/prompt/cinematic%20Hollywood%20film%20still%201080p"},
+       {"label":"رعب", "emoji":"👻", "description":"ظلال داكنة وتوتر", "image_url":"https://image.pollinations.ai/prompt/horror%20movie%20still%20dark%20atmospheric"},
+       {"label":"وثائقي", "emoji":"📽️", "description":"نبرة تعليمية / حقيقية", "image_url":"https://image.pollinations.ai/prompt/documentary%20film%20still%20realistic"}
+     ]
+   )
+   ```
+   بعد ما العميل يختار، احفظ في `update_project_doc(doc_name='decisions', content='Film type: X', mode='append')` ثم انتقل للمرحلة 2.
+
+   🚫 **ممنوع في المرحلة 1**: استدعاء `download_media` (يوتيوب)، `web_search`، أو `generate_image`. هذي خطوة سؤال فقط.
 
 **المرحلة 2 — تأسيس الشخصيات (`characters`):**
    اسأل: *"كم شخصية في الفيلم؟ اعطني أسماءهم، أعمارهم، وعلاقاتهم"*.
@@ -2959,7 +3065,8 @@ async def _run_anthropic_agent(
     messages.append({"role": "user", "content": f"{state_summary}\n\nالطلب: {user_message}"})
 
     summary = ""
-    options: List[str] = []
+    options: List[Any] = []
+    inline_images: List[Dict[str, Any]] = []
     iterations = 0
     model_used = model
 
@@ -3013,7 +3120,8 @@ async def _run_anthropic_agent(
         for tu in tool_uses:
             if tu["name"] == "finish":
                 summary = (tu["input"].get("summary") or "").strip()
-                options = [o for o in (tu["input"].get("options") or []) if isinstance(o, str)][:4]
+                options = _normalize_finish_options(tu["input"].get("options"))
+                inline_images = _normalize_inline_images(tu["input"].get("inline_images"))
                 ctx.log("finish", tu["input"], "agent finished")
                 tool_results.append({"type": "tool_result", "tool_use_id": tu["id"], "content": "finished"})
                 finished = True
@@ -3029,6 +3137,7 @@ async def _run_anthropic_agent(
         "ok": True,
         "summary": summary or "تم.",
         "options": options,
+        "inline_images": inline_images,
         "new_html": ctx.current_html if ctx.changes_made > 0 else None,
         "iterations": iterations,
         "tool_log": ctx.tool_log,
@@ -3099,7 +3208,8 @@ async def _run_openai_compat_agent(
     messages.append({"role": "user", "content": f"{state_summary}\n\nالطلب: {user_message}"})
 
     summary = ""
-    options: List[str] = []
+    options: List[Any] = []
+    inline_images: List[Dict[str, Any]] = []
     iterations = 0
     model_used = model
 
@@ -3140,7 +3250,8 @@ async def _run_openai_compat_agent(
                 args = {}
             if tc.function.name == "finish":
                 summary = (args.get("summary") or "").strip()
-                options = [o for o in (args.get("options") or []) if isinstance(o, str)][:4]
+                options = _normalize_finish_options(args.get("options"))
+                inline_images = _normalize_inline_images(args.get("inline_images"))
                 ctx.log("finish", args, "agent finished")
                 messages.append({"role": "tool", "tool_call_id": tc.id, "content": "finished"})
                 finished = True
@@ -3155,6 +3266,7 @@ async def _run_openai_compat_agent(
         "ok": True,
         "summary": summary or "تم.",
         "options": options,
+        "inline_images": inline_images,
         "new_html": ctx.current_html if ctx.changes_made > 0 else None,
         "iterations": iterations,
         "tool_log": ctx.tool_log,
@@ -3393,7 +3505,8 @@ async def _stream_one_provider(
 
     iterations = 0
     summary = ""
-    options: List[str] = []
+    options: List[Any] = []
+    inline_images: List[Dict[str, Any]] = []
     model_used = model
 
     for step in range(max_iterations):
@@ -3632,7 +3745,8 @@ async def _stream_one_provider(
 
             if tu["name"] == "finish":
                 summary = (tu["input"].get("summary") or "").strip()
-                options = [o for o in (tu["input"].get("options") or []) if isinstance(o, str)][:4]
+                options = _normalize_finish_options(tu["input"].get("options"))
+                inline_images = _normalize_inline_images(tu["input"].get("inline_images"))
                 ctx.log("finish", tu["input"], "finished")
                 if provider in ("anthropic", "emergent_anthropic"):
                     messages.append({"role": "user", "content": [{"type": "tool_result", "tool_use_id": tu["id"], "content": "finished"}]})
@@ -3700,6 +3814,7 @@ async def _stream_one_provider(
     yield _sse("done", {
         "summary": summary,
         "options": options,
+        "inline_images": inline_images,
         "iterations": iterations,
         "model_used": model_used,
         "html_updated": ctx.changes_made > 0,
