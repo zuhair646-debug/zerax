@@ -65,6 +65,71 @@ def shot_price(duration_seconds: int) -> int:
 
 
 # ════════════════════════════════════════════════════════════════════════
+# VOICE CATALOG — each voice tied to one or more languages so the UI can
+# filter voices by the currently-selected language. `tts_id` is the OpenAI
+# TTS voice name; `style` is a one-line Arabic description shown in the UI.
+# `sample_text` is the line played when the user hits the preview button.
+# ════════════════════════════════════════════════════════════════════════
+VOICE_CATALOG = [
+    # ── Arabic voices (all Arabic dialects share the same OpenAI voices;
+    #    the model adapts pronunciation based on the script text itself) ──
+    {"id": "ar_narrator_deep",   "name": "راوي عميق",       "gender": "male",
+     "tts_id": "onyx",   "languages": ["ar-saudi", "ar-msa", "ar-gulf", "ar-egyptian", "ar-kuwaiti"],
+     "style": "صوت رجولي عميق، مثالي للقصص الوثائقية والروائية"},
+    {"id": "ar_warm_friend",     "name": "صديق دافئ",       "gender": "male",
+     "tts_id": "echo",   "languages": ["ar-saudi", "ar-gulf", "ar-egyptian", "ar-kuwaiti", "ar-msa"],
+     "style": "صوت ودود متوسط، مناسب للحوارات اليومية والإعلانات الودية"},
+    {"id": "ar_youth_energy",    "name": "شاب حيوي",        "gender": "male",
+     "tts_id": "fable",  "languages": ["ar-saudi", "ar-msa", "ar-gulf"],
+     "style": "صوت شبابي نشيط، رائع للمحتوى التسويقي وسوشيال ميديا"},
+    {"id": "ar_storyteller_f",   "name": "حكواتية",         "gender": "female",
+     "tts_id": "shimmer","languages": ["ar-saudi", "ar-msa", "ar-egyptian", "ar-gulf"],
+     "style": "صوت أنثوي ناعم، مثالي للحكايات والمحتوى الطفولي"},
+    {"id": "ar_news_anchor_f",   "name": "مذيعة أخبار",     "gender": "female",
+     "tts_id": "nova",   "languages": ["ar-saudi", "ar-msa", "ar-egyptian"],
+     "style": "صوت أنثوي رسمي واضح، مثالي للأخبار والتقارير"},
+    {"id": "ar_neutral_pro",     "name": "محترف محايد",     "gender": "neutral",
+     "tts_id": "alloy",  "languages": ["ar-saudi", "ar-msa", "ar-gulf"],
+     "style": "صوت محايد احترافي، يناسب التعليقات التقنية"},
+    # ── English voices ──
+    {"id": "en_narrator_deep",   "name": "Deep Narrator",   "gender": "male",
+     "tts_id": "onyx",   "languages": ["en-us"],
+     "style": "Deep masculine voice, ideal for documentaries and dramatic narration"},
+    {"id": "en_warm_friend",     "name": "Warm Friend",     "gender": "male",
+     "tts_id": "echo",   "languages": ["en-us"],
+     "style": "Friendly mid-range voice, great for conversational content"},
+    {"id": "en_storyteller_f",   "name": "Storyteller",     "gender": "female",
+     "tts_id": "shimmer","languages": ["en-us"],
+     "style": "Soft feminine voice for storytelling and children's content"},
+    {"id": "en_anchor_f",        "name": "News Anchor",     "gender": "female",
+     "tts_id": "nova",   "languages": ["en-us"],
+     "style": "Clear, professional female voice for news and reports"},
+    # ── Other languages (OpenAI TTS handles them all via the same voices) ──
+    {"id": "multi_neutral",      "name": "Multilingual",    "gender": "neutral",
+     "tts_id": "alloy",  "languages": ["fr-fr", "es-es", "ja-jp", "tr-tr", "ur-pk"],
+     "style": "Versatile neutral voice that works across many languages"},
+    {"id": "multi_warm_f",       "name": "Multilingual Warm", "gender": "female",
+     "tts_id": "shimmer","languages": ["fr-fr", "es-es", "ja-jp", "tr-tr", "ur-pk"],
+     "style": "Warm female voice for international content"},
+]
+
+# Default sample phrases per language for the preview button
+VOICE_SAMPLE_TEXT = {
+    "ar-saudi":    "مرحباً، هذا اختبار للصوت في منصة زنركس. أتمنى أن يكون رائعاً.",
+    "ar-egyptian": "أهلاً، ده اختبار للصوت على منصة زنركس.",
+    "ar-kuwaiti":  "هلا والله، هذا اختبار للصوت في زنركس.",
+    "ar-gulf":     "هلا، هذا اختبار للصوت في منصة زنركس.",
+    "ar-msa":      "مرحباً بكم، هذا اختبار للصوت في منصة زنركس.",
+    "en-us":       "Hello! This is a voice test for the Zenrex platform.",
+    "fr-fr":       "Bonjour! Ceci est un test de voix pour la plateforme Zenrex.",
+    "es-es":       "¡Hola! Esta es una prueba de voz para la plataforma Zenrex.",
+    "ja-jp":       "こんにちは。これはゼンレックスの音声テストです。",
+    "tr-tr":       "Merhaba! Bu Zenrex platformu için bir ses testidir.",
+    "ur-pk":       "السلام علیکم۔ یہ زنریکس کے لیے آواز کا ٹیسٹ ہے۔",
+}
+
+
+# ════════════════════════════════════════════════════════════════════════
 # LANGUAGE / DIALECT / ART STYLE catalogues — surfaced to the frontend
 # ════════════════════════════════════════════════════════════════════════
 LANGUAGE_OPTIONS = [
@@ -486,6 +551,7 @@ def create_video_studio_router(db, get_current_user) -> APIRouter:
             "genres": GENRES,
             "aspect_ratios": ASPECT_RATIOS,
             "voice_genders": [{"id": "male", "label": "ذكر"}, {"id": "female", "label": "أنثى"}],
+            "voice_catalog": VOICE_CATALOG,
             "duration_tiers": [
                 {"seconds": t["max_seconds"], "credits": t["credits"], "label": t["label"]}
                 for t in PRICE_TIERS
@@ -496,6 +562,60 @@ def create_video_studio_router(db, get_current_user) -> APIRouter:
             "openai_billing_url": "https://platform.openai.com/account/billing/overview",
             "sora_access_url": "https://sora.com/onboarding",
         }
+
+    # ── Voice catalog filtered by language ───────────────────────────────
+    @router.get("/voices")
+    async def list_voices(language: str = "ar-saudi", _=Depends(get_current_user)):
+        """Return voices that support the given language. Each voice has an id
+        the client uses for preview + final voiceover generation."""
+        voices = [v for v in VOICE_CATALOG if language in v.get("languages", [])]
+        # Always include at least one fallback so the UI is never empty
+        if not voices:
+            voices = [v for v in VOICE_CATALOG if "ar-saudi" in v.get("languages", [])][:3]
+        return {"ok": True, "language": language, "voices": voices, "count": len(voices)}
+
+    # ── Voice preview — generates a 3-5 sec sample with the actual voice ─
+    @router.get("/voice-preview")
+    async def voice_preview(voice_id: str, language: str = "ar-saudi",
+                              user=Depends(get_current_user)):
+        """Return a small MP3 sample so the user can hear the voice before
+        committing. Caches the result per (voice_id, language) pair so we
+        only hit OpenAI TTS once and serve cached audio thereafter."""
+        from fastapi.responses import Response as _Response
+        voice = next((v for v in VOICE_CATALOG if v["id"] == voice_id), None)
+        if not voice:
+            raise HTTPException(404, "voice not found")
+        if not _owner_openai_key():
+            raise HTTPException(400, "أضف مفتاح OpenAI الخاص بك أولاً من /admin/independence")
+        cache_key = f"voice_preview::{voice_id}::{language}"
+        cached = await db.cache_blobs.find_one({"_id": cache_key})
+        if cached and cached.get("mp3_b64"):
+            import base64 as _b64
+            return _Response(content=_b64.b64decode(cached["mp3_b64"]),
+                             media_type="audio/mpeg",
+                             headers={"Cache-Control": "public, max-age=86400"})
+        sample = VOICE_SAMPLE_TEXT.get(language, VOICE_SAMPLE_TEXT["ar-saudi"])
+        try:
+            from openai import AsyncOpenAI
+            client = AsyncOpenAI(api_key=_owner_openai_key())
+            resp = await client.audio.speech.create(
+                model="tts-1-hd",
+                voice=voice["tts_id"],
+                input=sample,
+                response_format="mp3",
+            )
+            audio_bytes = resp.content if hasattr(resp, "content") else await resp.aread()
+            import base64 as _b64
+            await db.cache_blobs.update_one(
+                {"_id": cache_key},
+                {"$set": {"mp3_b64": _b64.b64encode(audio_bytes).decode("ascii"),
+                          "created_at": _now(), "voice_id": voice_id, "language": language}},
+                upsert=True,
+            )
+            return _Response(content=audio_bytes, media_type="audio/mpeg",
+                             headers={"Cache-Control": "public, max-age=86400"})
+        except Exception as e:
+            raise HTTPException(500, f"preview failed: {type(e).__name__}: {str(e)[:120]}")
 
     # ── Series CRUD ────────────────────────────────────────────────────
     @router.get("/series")

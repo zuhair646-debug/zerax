@@ -69,6 +69,7 @@ export default function VideoStudio() {
     genre: 'drama',
     aspect_ratio: '16x9',
     voice_gender: 'male',
+    voice_id: '',  // Auto-picked by VoicePicker on language change
     extra_directives: '',
   });
 
@@ -189,6 +190,7 @@ export default function VideoStudio() {
           genre: settings.genre,
           aspect_ratio: settings.aspect_ratio,
           voice_gender: settings.voice_gender,
+          voice_id: settings.voice_id,
           extra_directives: settings.extra_directives,
         }),
       });
@@ -628,14 +630,17 @@ function SettingsForm({ opts, settings, setSettings }) {
         </Field>
       </SettingsCard>
 
-      {/* ── 🎙️ Audio group ────────────────────────────────────────── */}
+      {/* ── 🎙️ Audio group — voice picker with live preview & language filter ── */}
       <SettingsCard color="rose" icon={<Mic2 className="w-3.5 h-3.5" />} title="الصوت">
-        <Field label="جنس الصوت الرئيسي">
-          <select value={settings.voice_gender} onChange={(e) => update('voice_gender', e.target.value)}
-            className="w-full bg-zinc-900 border border-rose-500/30 hover:border-rose-500/60 rounded-lg px-2 py-1.5" data-testid="settings-voice">
-            {(opts.voice_genders || []).map((v) => <option key={v.id} value={v.id}>{v.label}</option>)}
-          </select>
-        </Field>
+        <VoicePicker
+          language={settings.language}
+          selectedVoiceId={settings.voice_id}
+          fallbackGender={settings.voice_gender}
+          onSelectVoice={(vid, gender) => {
+            update('voice_id', vid);
+            if (gender) update('voice_gender', gender);
+          }}
+        />
       </SettingsCard>
 
       {/* ── ⏱️ Duration + count group ──────────────────────────────── */}
@@ -728,6 +733,130 @@ function Field({ label, children }) {
     <div>
       <label className="text-[10px] text-zinc-400 block mb-1">{label}</label>
       {children}
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// VoicePicker — voice cards filtered by language, with live preview button
+// ─────────────────────────────────────────────────────────────────────
+function VoicePicker({ language, selectedVoiceId, fallbackGender, onSelectVoice }) {
+  const [voices, setVoices] = React.useState([]);
+  const [loading, setLoading] = React.useState(false);
+  const [playingId, setPlayingId] = React.useState(null);
+  const audioRef = React.useRef(null);
+
+  // Load voices whenever the language changes — voices are filtered server-side
+  React.useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      setLoading(true);
+      try {
+        const r = await fetch(`${VS}/voices?language=${encodeURIComponent(language || 'ar-saudi')}`,
+          { headers: authHeaders() });
+        const d = await r.json();
+        if (!cancelled) {
+          setVoices(d.voices || []);
+          // If currently selected voice is no longer available for this language,
+          // auto-pick the first matching one (preserving the user's gender pref if possible).
+          if ((d.voices || []).length && !((d.voices || []).find((v) => v.id === selectedVoiceId))) {
+            const preferred = (d.voices || []).find((v) => v.gender === (fallbackGender || 'male'))
+              || d.voices[0];
+            onSelectVoice(preferred.id, preferred.gender);
+          }
+        }
+      } catch { /* keep stale list */ }
+      finally { if (!cancelled) setLoading(false); }
+    })();
+    return () => { cancelled = true; };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [language]);
+
+  // Cleanup audio when unmounting
+  React.useEffect(() => () => { audioRef.current?.pause(); audioRef.current = null; }, []);
+
+  const previewVoice = async (voice) => {
+    // Toggle: if this voice is already playing, stop it
+    if (playingId === voice.id && audioRef.current) {
+      audioRef.current.pause();
+      audioRef.current = null;
+      setPlayingId(null);
+      return;
+    }
+    // Stop any prior audio
+    if (audioRef.current) { audioRef.current.pause(); audioRef.current = null; }
+    setPlayingId(voice.id);
+    try {
+      const token = localStorage.getItem('token');
+      const url = `${VS}/voice-preview?voice_id=${encodeURIComponent(voice.id)}&language=${encodeURIComponent(language)}`;
+      // We can't put Authorization on a plain <audio> tag, so fetch the blob first
+      const r = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+      if (!r.ok) {
+        const err = await r.json().catch(() => ({}));
+        throw new Error(err?.detail || `HTTP ${r.status}`);
+      }
+      const blob = await r.blob();
+      const audio = new Audio(URL.createObjectURL(blob));
+      audioRef.current = audio;
+      audio.onended = () => { setPlayingId(null); audioRef.current = null; };
+      audio.onerror = () => { setPlayingId(null); audioRef.current = null; toast.error('فشل تشغيل المعاينة'); };
+      await audio.play();
+    } catch (e) {
+      setPlayingId(null);
+      toast.error(`فشل المعاينة: ${e.message || ''}`);
+    }
+  };
+
+  if (loading && voices.length === 0) {
+    return <div className="text-[10px] text-zinc-500 py-4 text-center" data-testid="voices-loading">جاري تحميل الأصوات…</div>;
+  }
+  if (!voices.length) {
+    return <div className="text-[10px] text-zinc-500 py-3 text-center" data-testid="voices-empty">ما فيه أصوات متاحة لهذه اللغة</div>;
+  }
+  return (
+    <div className="space-y-1.5" data-testid="voice-picker">
+      <div className="text-[10px] text-zinc-400 mb-1">
+        اختر صوتاً ({voices.length} متوفر للغة المختارة) — اضغط ▶︎ للاستماع
+      </div>
+      {voices.map((v) => {
+        const isSelected = selectedVoiceId === v.id;
+        const isPlaying = playingId === v.id;
+        const genderEmoji = v.gender === 'female' ? '👩' : v.gender === 'male' ? '👨' : '🎙️';
+        return (
+          <div
+            key={v.id}
+            className={`flex items-center gap-2 p-2 rounded-lg border cursor-pointer transition ${
+              isSelected
+                ? 'bg-rose-500/15 border-rose-400/60 ring-1 ring-rose-400/40'
+                : 'bg-zinc-900 border-rose-500/20 hover:border-rose-500/50'
+            }`}
+            onClick={() => onSelectVoice(v.id, v.gender)}
+            data-testid={`voice-card-${v.id}`}
+          >
+            <button
+              type="button"
+              onClick={(e) => { e.stopPropagation(); previewVoice(v); }}
+              className={`w-7 h-7 rounded-full flex items-center justify-center text-xs flex-shrink-0 ${
+                isPlaying
+                  ? 'bg-rose-500 text-white animate-pulse'
+                  : 'bg-rose-500/30 text-rose-100 hover:bg-rose-500/60'
+              }`}
+              data-testid={`voice-preview-btn-${v.id}`}
+              title={isPlaying ? 'إيقاف' : 'استماع'}
+            >
+              {isPlaying ? '⏸' : '▶︎'}
+            </button>
+            <div className="flex-1 min-w-0">
+              <div className="text-[11px] font-medium flex items-center gap-1">
+                <span>{genderEmoji}</span>
+                <span className="truncate">{v.name}</span>
+                {isSelected && <span className="text-[8px] bg-rose-400 text-black px-1 rounded ml-auto">مُختار</span>}
+              </div>
+              <div className="text-[9px] text-zinc-400 mt-0.5 leading-4 line-clamp-2">{v.style}</div>
+            </div>
+          </div>
+        );
+      })}
     </div>
   );
 }
