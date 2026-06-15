@@ -3396,6 +3396,14 @@ try:
 except Exception as _zce:
     logging.getLogger(__name__).error(f"Failed to mount Zenrex Farm: {_zce}", exc_info=True)
 
+# ============== BRAND MANAGER — central name/logo/colour ==============
+try:
+    from modules.brand import router as _brand_router
+    app.include_router(_brand_router)
+    logging.getLogger(__name__).info("Brand manager mounted at /api/brand/*")
+except Exception as _be:
+    logging.getLogger(__name__).error(f"Failed to mount brand manager: {_be}", exc_info=True)
+
 # ============== SOURCE CODE DOWNLOADER (owner-only) ==============
 try:
     from modules.source.routes import init_routes as init_source_routes
