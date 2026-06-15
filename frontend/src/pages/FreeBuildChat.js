@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import VideoStudioPreview from './VideoStudioPreview';
+import VideoPhaseTracker from '../components/VideoPhaseTracker';
 import {
   Globe, Send, Loader2, Sparkles, Eye, ArrowRight, ArrowLeft,
   CheckCircle2, Check, Image as ImageIcon, FolderOpen, Code,
@@ -2494,6 +2495,12 @@ function ChatWorkspace({ projectId }) {
               <span>محفوظ تلقائياً</span>
             </div>
           </div>
+
+          {/* Video/anime/longform projects get a phase tracker above the chat.
+              It's a non-disruptive layer — never interferes with message rendering. */}
+          {['video_studio', 'anime_studio', 'longform_video', 'image_studio'].includes(project?.mode) && (
+            <VideoPhaseTracker project={project} onOpenAssets={(phaseId) => setActiveTab('approved')} />
+          )}
 
           {/* Tab Content */}
           {activeTab === 'chat' && (
