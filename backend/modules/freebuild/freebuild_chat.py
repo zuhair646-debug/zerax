@@ -837,24 +837,27 @@ def make_freebuild_chat_router(db, get_current_user):
         # clickable cards) so the user lands on a populated, actionable screen
         # — never an empty chat.
         FILM_TYPE_OPTIONS = [
-            {"label": "كرتون", "emoji": "🎨",
-             "description": "Pixar/Disney — عائلي وملوّن",
-             "image_url": "https://image.pollinations.ai/prompt/Pixar%203D%20family%20cartoon%20movie%20still%20cinematic?width=512&height=288&nologo=true"},
+            {"label": "كرتون 3D عائلي", "emoji": "🎨",
+             "description": "Pixar / Disney — ألوان مبهجة وتعبيرات حيّة",
+             "image_url": "https://image.pollinations.ai/prompt/Pixar%20Disney%203D%20family%20animated%20movie%20still%2C%20cute%20characters%2C%20vibrant%20colors%2C%20cinematic%20lighting%2C%20octane%20render%2C%208k%2C%20masterpiece?width=512&height=288&nologo=true&seed=11"},
             {"label": "أنمي ياباني", "emoji": "🌸",
-             "description": "Studio Ghibli — عيون كبيرة وألوان حالمة",
-             "image_url": "https://image.pollinations.ai/prompt/Studio%20Ghibli%20anime%20still%20masterpiece?width=512&height=288&nologo=true"},
+             "description": "Studio Ghibli / Makoto Shinkai — عيون كبيرة وسماء حالمة",
+             "image_url": "https://image.pollinations.ai/prompt/Studio%20Ghibli%20anime%20masterpiece%2C%20Makoto%20Shinkai%20style%2C%20large%20expressive%20eyes%2C%20dreamy%20sky%2C%20cherry%20blossoms%2C%20cinematic%20composition%2C%20detailed?width=512&height=288&nologo=true&seed=22"},
             {"label": "سينمائي واقعي", "emoji": "🎬",
-             "description": "Hollywood — إضاءة احترافية ولقطات حية",
-             "image_url": "https://image.pollinations.ai/prompt/cinematic%20Hollywood%20film%20still%20realistic%2070mm?width=512&height=288&nologo=true"},
+             "description": "Hollywood 70mm — إضاءة Christopher Nolan",
+             "image_url": "https://image.pollinations.ai/prompt/cinematic%20Hollywood%20film%20still%2C%2070mm%20IMAX%2C%20Christopher%20Nolan%20lighting%2C%20realistic%20photograph%2C%20dramatic%20cinematography%2C%20golden%20hour?width=512&height=288&nologo=true&seed=33"},
             {"label": "أكشن قتالي", "emoji": "💥",
-             "description": "Anime/Cinematic Action — مشاهد قتال مكثّفة",
-             "image_url": "https://image.pollinations.ai/prompt/epic%20anime%20action%20fight%20scene%20cinematic?width=512&height=288&nologo=true"},
-            {"label": "رعب", "emoji": "👻",
-             "description": "ظلال داكنة، توتر، أجواء مخيفة",
-             "image_url": "https://image.pollinations.ai/prompt/horror%20movie%20still%20dark%20atmospheric%20cinematic?width=512&height=288&nologo=true"},
+             "description": "John Wick / Demon Slayer — مشاهد قتال سريعة ومبهرة",
+             "image_url": "https://image.pollinations.ai/prompt/epic%20anime%20action%20fight%20scene%2C%20John%20Wick%20Demon%20Slayer%20style%2C%20dynamic%20pose%2C%20motion%20blur%2C%20sparks%2C%20dramatic%20lighting%2C%20cinematic?width=512&height=288&nologo=true&seed=44"},
+            {"label": "رعب وإثارة", "emoji": "👻",
+             "description": "Conjuring / Hereditary — ظلال داكنة وأجواء مرعبة",
+             "image_url": "https://image.pollinations.ai/prompt/horror%20movie%20still%2C%20dark%20atmospheric%2C%20Conjuring%20Hereditary%20style%2C%20foggy%20haunted%20house%2C%20moonlight%2C%20cinematic%20suspense%2C%20unsettling?width=512&height=288&nologo=true&seed=55"},
+            {"label": "وثائقي / تعليمي", "emoji": "📽️",
+             "description": "ناشيونال جيوغرافيك — راوي + لقطات حقيقية",
+             "image_url": "https://image.pollinations.ai/prompt/National%20Geographic%20documentary%20still%2C%20realistic%20wildlife%20cinematography%2C%204K%20detailed%2C%20professional%20narrator%20setting?width=512&height=288&nologo=true&seed=66"},
             {"label": "غير ذلك — اكتب فكرتك", "emoji": "✍️",
-             "description": "وثائقي، إعلان، موسيقي، مفهوم خاص...",
-             "image_url": "https://image.pollinations.ai/prompt/abstract%20colorful%20creative%20idea%20concept%20art?width=512&height=288&nologo=true"},
+             "description": "إعلان، موسيقي، مفهوم خاص، Hybrid، ...",
+             "image_url": "https://image.pollinations.ai/prompt/abstract%20colorful%20creative%20idea%20concept%20art%2C%20artistic%20palette%2C%20many%20genres%20collage%2C%20cinematic%20mood?width=512&height=288&nologo=true&seed=77"},
         ]
 
         mode_greetings = {
@@ -978,6 +981,22 @@ def make_freebuild_chat_router(db, get_current_user):
                 "timestamp": _now(),
             })
 
+        # Pick the initial phase for this mode (the Phase Tracker uses this).
+        # Video-family modes always start at "film_type" so the tracker pill
+        # for "نوع الفيلم" is the active glowing one from the very first turn.
+        initial_phase_by_mode = {
+            "video_studio": "film_type",
+            "anime_studio": "film_type",
+            "longform_video": "film_type",
+            "image_studio": "concept",
+            "game": "concept",
+            "app": "concept",
+        }
+        if payload.category_id:
+            initial_phase = "design"
+        else:
+            initial_phase = initial_phase_by_mode.get(proj_mode, "discovery")
+
         await db.freebuild_projects.insert_one({
             "id": pid,
             "user_id": user["user_id"],
@@ -989,7 +1008,8 @@ def make_freebuild_chat_router(db, get_current_user):
             "name": payload.name.strip()[:120],
             "description": payload.description.strip()[:1500],
             "status": "active",
-            "current_phase": "design" if payload.category_id else "discovery",
+            "current_phase": initial_phase,
+            "phase_history": [],
             "messages": initial_messages,
             "approved_assets": [],
             "current_html": None,

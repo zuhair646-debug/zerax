@@ -11,6 +11,21 @@ Unify the AI brain and empower it with unified toolset. Fix mocked AI Trading Bo
 - 100% LOCAL AI requirement (no OpenAI/Anthropic for Family AI)
 
 
+## Session 2026-02-15c — Phase Auto-Advance + Anti-Hallucination + Free-Text Flow
+- ✅ **NEW tool `set_current_phase(new_phase, summary_of_decisions)`** in `workflow_tools.py`
+  - Atomically updates `project.current_phase` + appends previous to `phase_history`
+  - Writes the user's confirmed decisions to the `decisions` doc (always-loyal source of truth)
+  - Frontend's `VideoPhaseTracker` re-renders: completed phase turns ✅ green, new phase 🟡 glows
+- ✅ **AI Prompt hardening** in `freebuild_agent.py`:
+  - At end of EACH phase → MUST call `set_current_phase` (auto-advance counter 0/7→1/7→…→7/7)
+  - When user picks "غير ذلك" → AI asks free-form ("احكي لي فكرتك بكامل التفاصيل") — NO new options chips
+  - Before final `render` → MUST `finish()` with a full bullet recap of every prior phase's decisions; user must confirm before fal.ai is invoked (money guard)
+  - Anti-hallucination: every accepted decision written to `decisions` doc → later phases read it back, can't drift
+- ✅ **Phase initialization fix**: video/anime/longform projects now start with `current_phase: "film_type"` (was incorrectly "discovery") + empty `phase_history: []`
+- ✅ **Better Pollinations art**: 7 cards (was 6) with vivid seeded prompts — "Pixar/Disney 3D", "Ghibli/Makoto Shinkai", "70mm IMAX Nolan", "John Wick/Demon Slayer action", "Conjuring/Hereditary horror", "National Geographic documentary", "غير ذلك"
+- ✅ Tests: 24/24 still passing; deployed to zenrex.ai; visual smoke-test confirms phase pill glows + cards render
+
+
 ## Session 2026-02-15b — Welcome + 7-Phase Cinematic Workflow
 - ✅ **Welcome auto-message** for ALL studio modes (video, anime, longform, game, app) — seeds first AI greeting + 6 visual cards at project creation
 - ✅ **Phase 1 (Film Type)** — 6 rich cards including "غير ذلك" free-text option (Pollinations images: cartoon/anime/cinematic/action/horror/custom)

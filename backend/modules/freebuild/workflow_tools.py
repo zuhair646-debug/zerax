@@ -136,6 +136,39 @@ WORKFLOW_TOOL_SCHEMAS: List[Dict[str, Any]] = [
             "required": ["role", "task"],
         },
     },
+    {
+        "name": "set_current_phase",
+        "description": (
+            "🎬 Advance the Studio Phase Tracker to the next phase. Call this "
+            "**immediately after** the user has approved/answered everything you "
+            "need for the current phase.\n\n"
+            "The frontend's 7-phase Tracker visually marks the previous phase as "
+            "✅ green-done and animates the new one as 🟡 current. The progress "
+            "counter increments (e.g. 0/7 → 1/7 → 2/7).\n\n"
+            "Also pass `summary_of_decisions` — a 1-2 line recap of what the user "
+            "decided in the phase you just finished. This is shown to the user as "
+            "confirmation ('فهمت: اخترت أنمي Ghibli، شخصيات: عيون كبيرة...') and "
+            "is persisted to the `decisions` doc so all later phases stay loyal "
+            "to the user's actual choices (anti-hallucination guard).\n\n"
+            "**Valid phases (Video Studio):** film_type → characters → script → "
+            "voice → storyboard → preview → render.\n"
+            "**Valid phases (Website):** discovery → design → build → review → publish."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "new_phase": {
+                    "type": "string",
+                    "description": "ID of the phase to MOVE TO (the one that becomes 'current'). The previous one auto-marks as done.",
+                },
+                "summary_of_decisions": {
+                    "type": "string",
+                    "description": "1-2 lines summarizing what the user just decided in the phase you're closing. Will be shown to the user.",
+                },
+            },
+            "required": ["new_phase", "summary_of_decisions"],
+        },
+    },
 ]
 
 
@@ -143,6 +176,7 @@ WORKFLOW_TOOL_LABELS_AR: Dict[str, Dict[str, str]] = {
     "ask_user_inline": {"running": "⏸️ ينتظر اختيارك...",         "done": "✅ تم استلام الاختيار"},
     "plan_task":       {"running": "📋 يرسم خطة العمل...",         "done": "✅ الخطة جاهزة"},
     "delegate":        {"running": "🧠 يستشير المتخصص...",        "done": "✅ رأي المتخصص جاهز"},
+    "set_current_phase": {"running": "🎬 ينقلك للمرحلة الجاية...", "done": "✅ المرحلة الجاية مفتوحة"},
 }
 
 
@@ -352,12 +386,79 @@ async def delegate(ctx, args: Dict[str, Any]) -> Dict[str, Any]:
     return {"ok": False, "error": f"delegate failed: {last_err}"}
 
 
+async def set_current_phase(ctx, args: Dict[str, Any]) -> Dict[str, Any]:
+    """Advance the project's `current_phase` and record the closed-phase decisions.
+
+    Visual side-effect: the frontend Phase Tracker reads `project.current_phase`
+    + `project.phase_history` from the DB and renders the appropriate green/
+    glowing pills. So we update both atomically.
+    """
+    new_phase = (args.get("new_phase") or "").strip()
+    summary = (args.get("summary_of_decisions") or "").strip()
+    if not new_phase or len(new_phase) > 60:
+        return {"ok": False, "error": "new_phase is required (max 60 chars)"}
+    if not summary or len(summary) < 8:
+        return {"ok": False, "error": "summary_of_decisions is required (min 8 chars)"}
+
+    if ctx.db is None or not ctx.project_id:
+        return {"ok": False, "error": "no project in context"}
+
+    # Read current state to capture history correctly
+    try:
+        proj = await ctx.db.freebuild_projects.find_one(
+            {"id": ctx.project_id}, {"current_phase": 1, "phase_history": 1, "_id": 0}
+        ) or {}
+    except Exception as e:
+        return {"ok": False, "error": f"read failed: {type(e).__name__}: {str(e)[:120]}"}
+
+    old_phase = proj.get("current_phase") or ""
+    history = list(proj.get("phase_history") or [])
+    if old_phase and old_phase != new_phase and old_phase not in history:
+        history.append(old_phase)
+
+    # Append decision summary to the long-lived `decisions` engineering doc.
+    # Later phases auto-read this doc → loyal to user's actual choices,
+    # not whatever the AI hallucinates on the next turn.
+    decision_line = f"[{old_phase or 'init'} → {new_phase}] {summary}"
+    try:
+        from .project_docs import update_project_doc  # local import to avoid cycle
+        await update_project_doc(ctx.db, ctx.project_id, "decisions", decision_line, mode="append")
+    except Exception as e:
+        logger.warning(f"decisions doc append failed: {e}")
+
+    try:
+        await ctx.db.freebuild_projects.update_one(
+            {"id": ctx.project_id},
+            {"$set": {
+                "current_phase": new_phase,
+                "phase_history": history,
+                "updated_at": time.time(),
+            }},
+        )
+    except Exception as e:
+        return {"ok": False, "error": f"update failed: {type(e).__name__}: {str(e)[:120]}"}
+
+    return {
+        "ok": True,
+        "kind": "phase_advance",
+        "from_phase": old_phase,
+        "to_phase": new_phase,
+        "history": history,
+        "summary": summary,
+        "message": (
+            f"🎬 المرحلة '{old_phase}' خلصت ✅ — انتقلنا لـ '{new_phase}'. "
+            "Phase Tracker اتحدّث في الواجهة."
+        ),
+    }
+
+
 # ─── Master dispatcher ────────────────────────────────────────────────────────
 async def dispatch_workflow(ctx, name: str, args: Dict[str, Any]) -> Dict[str, Any]:
     fn_map = {
         "ask_user_inline": ask_user_inline,
         "plan_task": plan_task,
         "delegate": delegate,
+        "set_current_phase": set_current_phase,
     }
     fn = fn_map.get(name)
     if not fn:
