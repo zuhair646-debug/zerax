@@ -106,7 +106,10 @@ DESIGN_EXPERT_PROMPT = """أنت **خبير UI/UX سينيور** على مستو
 
 async def call_design_expert(task: str, current_html: str = "",
                               context: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
-    """Audit the current design and return structured recommendations."""
+    """Audit the current design and return structured recommendations.
+
+    Uses Sonnet (the smarter model) because UI/UX critique requires nuanced reasoning.
+    """
     payload_parts = [f"**المهمة من المهندس الرئيسي:**\n{task}"]
     if current_html:
         snippet = current_html[:18000]  # cap to avoid token bloat
@@ -114,7 +117,9 @@ async def call_design_expert(task: str, current_html: str = "",
     if context:
         payload_parts.append(f"\n**سياق إضافي:**\n```json\n{json.dumps(context, ensure_ascii=False, indent=2)[:2000]}\n```")
     try:
-        raw = await _ask_expert(DESIGN_EXPERT_PROMPT, "\n".join(payload_parts), max_tokens=2500)
+        # Sonnet for nuanced visual critique
+        raw = await _ask_expert(DESIGN_EXPERT_PROMPT, "\n".join(payload_parts),
+                                  model="claude-sonnet-4-5-20250929", max_tokens=2500)
         report = _try_parse_json(raw)
         return {"ok": True, "expert": "design", "report": report}
     except Exception as e:
@@ -157,14 +162,19 @@ TESTING_EXPERT_PROMPT = """أنت **خبير QA + Test Engineer**.
 
 async def call_testing_expert(feature: str, code_snippet: str = "",
                                 context: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
-    """Generate a focused test plan for a feature."""
+    """Generate a focused test plan for a feature.
+
+    Uses Haiku (18x cheaper) — test planning is structured/templated and doesn't
+    need Sonnet's deep reasoning. Cuts cost from ~$0.05 to ~$0.003 per call.
+    """
     parts = [f"**الميزة المطلوب اختبارها:**\n{feature}"]
     if code_snippet:
         parts.append(f"\n**الكود ذو الصلة:**\n```\n{code_snippet[:8000]}\n```")
     if context:
         parts.append(f"\n**سياق:**\n{json.dumps(context, ensure_ascii=False)[:1500]}")
     try:
-        raw = await _ask_expert(TESTING_EXPERT_PROMPT, "\n".join(parts), max_tokens=2000)
+        raw = await _ask_expert(TESTING_EXPERT_PROMPT, "\n".join(parts),
+                                  model="claude-haiku-4-5-20251001", max_tokens=2000)
         return {"ok": True, "expert": "testing", "report": _try_parse_json(raw)}
     except Exception as e:
         return {"ok": False, "expert": "testing", "error": str(e)}
@@ -203,7 +213,10 @@ TROUBLESHOOT_EXPERT_PROMPT = """أنت **خبير Root Cause Analysis (RCA)** �
 async def call_troubleshoot_expert(issue: str, error_logs: str = "",
                                      recent_actions: str = "",
                                      context: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
-    """Read-only RCA on a reported issue."""
+    """Read-only RCA on a reported issue.
+
+    Uses Haiku — diagnostic reasoning over logs is well-suited for the faster model.
+    """
     parts = [f"**المشكلة المبلَّغة:**\n{issue}"]
     if error_logs:
         parts.append(f"\n**Logs / Error messages:**\n```\n{error_logs[:6000]}\n```")
@@ -212,7 +225,8 @@ async def call_troubleshoot_expert(issue: str, error_logs: str = "",
     if context:
         parts.append(f"\n**سياق:**\n{json.dumps(context, ensure_ascii=False)[:1500]}")
     try:
-        raw = await _ask_expert(TROUBLESHOOT_EXPERT_PROMPT, "\n".join(parts), max_tokens=2000)
+        raw = await _ask_expert(TROUBLESHOOT_EXPERT_PROMPT, "\n".join(parts),
+                                  model="claude-haiku-4-5-20251001", max_tokens=2000)
         return {"ok": True, "expert": "troubleshoot", "report": _try_parse_json(raw)}
     except Exception as e:
         return {"ok": False, "expert": "troubleshoot", "error": str(e)}
@@ -251,14 +265,18 @@ INTEGRATION_EXPERT_PROMPT = """أنت **خبير 3rd Party Integration Playbooks
 
 async def call_integration_expert(service: str, use_case: str = "",
                                     context: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
-    """Get a focused integration playbook for a 3rd-party service."""
+    """Get a focused integration playbook for a 3rd-party service.
+
+    Uses Haiku — integration playbooks are largely lookup/templating; saves cost.
+    """
     parts = [f"**الخدمة المطلوب ربطها:** {service}"]
     if use_case:
         parts.append(f"\n**حالة الاستخدام:** {use_case}")
     if context:
         parts.append(f"\n**سياق:**\n{json.dumps(context, ensure_ascii=False)[:1500]}")
     try:
-        raw = await _ask_expert(INTEGRATION_EXPERT_PROMPT, "\n".join(parts), max_tokens=2200)
+        raw = await _ask_expert(INTEGRATION_EXPERT_PROMPT, "\n".join(parts),
+                                  model="claude-haiku-4-5-20251001", max_tokens=2200)
         return {"ok": True, "expert": "integration", "report": _try_parse_json(raw)}
     except Exception as e:
         return {"ok": False, "expert": "integration", "error": str(e)}

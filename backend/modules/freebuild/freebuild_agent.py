@@ -1901,6 +1901,27 @@ AGENT_SYSTEM_PROMPT = """أنت **Zenrex Code Brain** — مهندس برمجي 
 
 7. **انضباط الإخراج**: كل turn = جملة عربية قصيرة تشرح خطوتك + tool call فعلي + لا حشو فلسفي.
 
+8. 🚨 **بوابة التحقق الذاتي (Self-Verification Gate)** — قاعدة مقدسة:
+   **ممنوع منعاً باتاً تقول "خلصت" / "تم" / "جاهز" / "اشتغل" قبل ما تتحقق فعلياً بأداة:**
+   - بعد `publish_site` أو أي نشر → استدعِ `test_page(url)` فوراً وتأكد إن الصفحة طبيعية، الفيديوهات تشغّل، ما فيه console errors.
+   - بعد إضافة فيديو/صور → استدعِ `test_page` وتحقق من `videos_count > 0` ومن أن المصادر تحمّل.
+   - بعد ربط integration → استدعِ `validate_credential` للتأكد إن المفتاح يشتغل فعلياً مع الـ API.
+   - بعد كتابة HTML → استدعِ `validate_html` للتأكد من سلامة الـ markup.
+   - **القاعدة الذهبية**: "أقول 'خلصت' = أملك دليل من tool حقيقي على نجاح المهمة". لا أدلة = لا "خلصت".
+   - إذا الفحص فشل → اعرض الفشل بصراحة واقترح إصلاحاً، **لا تكذب على العميل**.
+
+9. 📸 **بروتوكول الصور — احط دليل على شغلك**:
+   - لما تنشر موقع → بعد `test_page`، الصورة الراجعة من الأداة (screenshot) تنزل تلقائياً في الشات كدليل.
+   - لما تشتغل على قسم → استدعِ `test_page` بعد التعديل لتعرض للعميل النتيجة بصرياً.
+   - لما تولّد صورة بـ `generate_image` → الصورة تظهر تلقائياً في الشات.
+   - **العميل لا يثق بالكلام — يثق بالصورة**. الصور = ثقة + مبيعات.
+
+10. 💰 **انضباط التكلفة (مهم — كل turn فيه فلوس)**:
+    - **لا تستدعِ خبير لكل سؤال** — استدعِ خبير فقط لما المهمة فعلاً غامضة أو حرجة.
+    - **لا تكرر نفس الأداة على نفس المدخل** — لو `read_current_html` قبل دقيقتين، النتيجة محفوظة في السياق.
+    - **`web_search` مرة واحدة بأفضل query** — مو 5 مرات بصياغات مختلفة.
+    - **`validate_html` و `lint_javascript` آخر شي قبل الإعلان عن النجاح، مو في كل turn**.
+
 ═══════════════════════════════════════════════════════════
 
 ═══════════════════════════════════════════════════════════
@@ -3195,9 +3216,23 @@ async def _stream_one_provider(
                     # 16K gives the agent enough headroom to emit full HTML sections
                     # in a single shot without truncating mid-JSON which was causing
                     # the "starts writing then restarts" issue users were reporting.
+                    #
+                    # 💰 PROMPT CACHING: marking the system prompt + tools as cached
+                    # gives a 90% discount on repeated calls within the same 5-min
+                    # window. Typical multi-turn session was burning ~$3-5 in input
+                    # tokens; caching drops this to ~$0.30. For a project with
+                    # 20+ turns this saves the user real money on every chat.
+                    _user_tools = tools_for_user(ctx.is_owner)
+                    # Mark the LAST tool with cache_control — Anthropic caches the
+                    # entire system+tools prefix up to and including the marked tool.
+                    if _user_tools:
+                        _user_tools = list(_user_tools)
+                        _user_tools[-1] = {**_user_tools[-1], "cache_control": {"type": "ephemeral"}}
+                    _cached_system = [{"type": "text", "text": sys_prompt, "cache_control": {"type": "ephemeral"}}] if sys_prompt else None
                     async with client.messages.stream(
-                        model=model, system=sys_prompt, max_tokens=16000,
-                        tools=tools_for_user(ctx.is_owner), messages=messages,
+                        model=model, system=_cached_system or sys_prompt, max_tokens=16000,
+                        tools=_user_tools, messages=messages,
+                        extra_headers={"anthropic-beta": "prompt-caching-2024-07-31"},
                     ) as st:
                         async for ev in st:
                             await queue.put(("event", ev))
@@ -3398,7 +3433,25 @@ async def _stream_one_provider(
                 yield _sse("tool", {"name": "finish", "phase": "done", "label": TOOL_LABELS_AR["finish"]["done"], "step": iterations})
                 await asyncio.sleep(0)
             else:
-                result = await _dispatch_tool(ctx, tu["name"], tu["input"])
+                # Wrap tool execution with periodic SSE heartbeats so the frontend
+                # doesn't think we disconnected during long-running tools like
+                # web_search / fetch_url / test_page (which can take 20-60s).
+                tool_task = asyncio.create_task(_dispatch_tool(ctx, tu["name"], tu["input"]))
+                _tool_start = asyncio.get_event_loop().time()
+                while not tool_task.done():
+                    try:
+                        await asyncio.wait_for(asyncio.shield(tool_task), timeout=5.0)
+                    except asyncio.TimeoutError:
+                        # Still running — emit a "still working" ping so the UI stays alive
+                        elapsed = int(asyncio.get_event_loop().time() - _tool_start)
+                        yield _sse("tool_progress", {
+                            "name": tu["name"],
+                            "elapsed_sec": elapsed,
+                            "message": f"⏳ لا يزال يعمل... ({elapsed}s)",
+                            "step": iterations,
+                        })
+                        await asyncio.sleep(0)
+                result = tool_task.result()
                 ctx.log(tu["name"], tu["input"], result)
                 label_done = TOOL_LABELS_AR.get(tu["name"], {}).get("done", "✅ تم")
                 # Add a short result snippet to the label

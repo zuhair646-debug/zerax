@@ -1984,6 +1984,24 @@ function ChatWorkspace({ projectId }) {
               liveSteps.push({ kind: 'error', message: payload.message });
             } else if (eventName === 'ping') {
               // Heartbeat — keeps proxies alive during long tool generation. No UI.
+            } else if (eventName === 'tool_progress') {
+              // Long-running tool keepalive — update the running tool's label so
+              // the user sees "still working (12s)" instead of a frozen UI.
+              const last = liveSteps.findLast?.(
+                (s) => s.kind === 'tool' && s.name === payload.name && s.phase === 'running'
+              );
+              if (last) {
+                last.label = payload.message || last.label;
+                last.elapsed_sec = payload.elapsed_sec;
+              } else {
+                liveSteps.push({
+                  kind: 'tool',
+                  name: payload.name,
+                  phase: 'running',
+                  label: payload.message,
+                  elapsed_sec: payload.elapsed_sec,
+                });
+              }
             }
             updateLive();
           }
