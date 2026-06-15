@@ -302,26 +302,28 @@ async def memory_delete(ctx, args: Dict[str, Any]) -> Dict[str, Any]:
 
 
 async def load_project_memories_for_prompt(db, project_id: Optional[str], merchant_id: Optional[str]) -> str:
-    """Helper used by freebuild_agent to inject saved memories into the system prompt."""
-    if db is None:
+    """Helper used by freebuild_agent to inject saved memories into the system prompt.
+
+    **CRITICAL**: only loads memories scoped to THIS project (not merchant-wide).
+    Merchant-scoped memories from OTHER projects were leaking into the current
+    chat and making the AI hallucinate context ("AI brings stuff from old
+    chats") — see user complaint dated Feb 2026. Now we strictly fence memory
+    to the current project_id only.
+    """
+    if db is None or not project_id:
         return ""
     try:
-        conditions = []
-        if project_id:
-            conditions.append({"project_id": project_id, "scope": "project"})
-        if merchant_id:
-            conditions.append({"merchant_id": merchant_id, "scope": "merchant"})
-        if not conditions:
-            return ""
-        cursor = db.freebuild_memories.find({"$or": conditions}, {"_id": 0, "key": 1, "value": 1, "scope": 1})
+        cursor = db.freebuild_memories.find(
+            {"project_id": project_id, "scope": "project"},
+            {"_id": 0, "key": 1, "value": 1},
+        )
         docs = await cursor.to_list(length=100)
         if not docs:
             return ""
         lines = ["", "═══════════════════════════════════════════════════════════",
-                 "🧠 **الذاكرة الطويلة لهذا المشروع (ذكّر نفسك بها):**", ""]
+                 "🧠 **ذاكرة هذا المشروع فقط (لا تخلطها بمشاريع ثانية):**", ""]
         for d in docs:
-            scope_emoji = "📌" if d.get("scope") == "project" else "🏪"
-            lines.append(f"  {scope_emoji} `{d['key']}`: {d['value']}")
+            lines.append(f"  📌 `{d['key']}`: {d['value']}")
         lines.append("")
         return "\n".join(lines)
     except Exception as e:

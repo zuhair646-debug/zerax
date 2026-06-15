@@ -2106,10 +2106,27 @@ function ChatWorkspace({ projectId }) {
       if (e?.name === 'AbortError') {
         // no-op: graceful cancel
       } else {
-        toast.error(e.message);
-        setMessage(msgText); // restore on error
-        setAttachments(filesToSend);
-        setReplyToAsset(refAsset);
+        // Stream errored unexpectedly (proxy timeout, network blip). Do NOT
+        // restore the user's typed message into the input — that confused users
+        // who thought the chat "reset". Instead, append a soft inline note to
+        // the in-flight assistant bubble so they see what happened in context.
+        const errMsg = String(e?.message || 'انقطع الاتصال');
+        setProject((p) => {
+          if (!p) return p;
+          const msgs = [...(p.messages || [])];
+          for (let i = msgs.length - 1; i >= 0; i--) {
+            if (msgs[i].role === 'assistant' && msgs[i].agent_streaming) {
+              const softNote = `\n\n⚠️ انقطع الاتصال (${errMsg.slice(0, 80)}) — ابعث "كمّل" أكمل من نفس النقطة بدون ما تخسر تقدّمك.`;
+              msgs[i] = {
+                ...msgs[i],
+                agent_streaming: false,
+                content: (msgs[i].content || '') + softNote,
+              };
+              break;
+            }
+          }
+          return { ...p, messages: msgs };
+        });
       }
     } finally {
       streamAbortRef.current = null;
