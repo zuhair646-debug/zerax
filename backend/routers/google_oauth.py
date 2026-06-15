@@ -36,6 +36,9 @@ PROD_REDIRECT_URI = "https://zenrex.ai/auth/google"
 # after 10 minutes. For multi-instance deployments this should move to Redis
 # but a single-VPS deployment is fine with a process-local dict.
 _state_cache: Dict[str, float] = {}
+# Separate dict for "redirect_after_login" paths so we don't mix float timestamps
+# with strings in _state_cache (which broke `now - v` purge logic).
+_redirect_cache: Dict[str, str] = {}
 
 
 def _new_state() -> str:
@@ -45,6 +48,7 @@ def _new_state() -> str:
     for k, v in list(_state_cache.items()):
         if now - v > 600:
             _state_cache.pop(k, None)
+            _redirect_cache.pop(k, None)
     state = secrets.token_urlsafe(32)
     _state_cache[state] = now
     return state
@@ -83,7 +87,7 @@ async def google_start(request: Request, redirect: str = "/"):
     state = _new_state()
     # Remember where to send the user after auth (sanitized to a relative path)
     redirect_path = redirect if redirect.startswith("/") else "/"
-    _state_cache[f"redir::{state}"] = redirect_path  # type: ignore
+    _redirect_cache[state] = redirect_path
     params = {
         "client_id": cid,
         "redirect_uri": PROD_REDIRECT_URI,
@@ -106,7 +110,7 @@ async def google_callback(request: Request, code: str = "", state: str = "", err
         return RedirectResponse(f"{_frontend_origin(request)}/login?error={error}", status_code=302)
     if not code or not state:
         raise HTTPException(400, "missing code or state")
-    redir_path = _state_cache.pop(f"redir::{state}", "/")  # type: ignore
+    redir_path = _redirect_cache.pop(state, "/")
     if not _consume_state(state):
         raise HTTPException(400, "invalid or expired state — CSRF protection")
     cid, csec = _client_creds()
