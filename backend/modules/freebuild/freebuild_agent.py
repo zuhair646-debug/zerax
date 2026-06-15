@@ -1117,35 +1117,64 @@ async def _exec_tool_async(ctx: FreeBuildToolContext, name: str, args: Dict[str,
                 return {"ok": False, "error": f"download failed: {type(e).__name__}: {str(e)[:200]}"}
 
         if name == "list_voices":
+            # Try ElevenLabs first (richer catalog). If no key, fall back to the
+            # OpenAI TTS catalog we already ship with — which supports Arabic,
+            # English, Korean, Japanese, French, Spanish, Turkish, Urdu, etc.
+            # The fallback means the agent never has to ask the user for a key
+            # when OPENAI_DIRECT_KEY is already configured (it is on production).
             try:
                 import httpx, os as _os
                 key = _os.environ.get("ELEVENLABS_API_KEY", "")
-                if not key:
-                    return {"ok": False, "error": "ELEVENLABS_API_KEY غير مكوّن"}
-                async with httpx.AsyncClient(timeout=15) as cl:
-                    r = await cl.get("https://api.elevenlabs.io/v2/voices", headers={"xi-api-key": key},
-                                     params={"page_size": min(int(args.get("limit") or 20), 50)})
-                    if r.status_code != 200:
-                        return {"ok": False, "error": f"ElevenLabs: {r.status_code} {r.text[:200]}"}
-                    data = r.json()
-                    lang_filter = (args.get("language") or "").strip().lower()
-                    voices = []
-                    for v in data.get("voices", []):
-                        labels = v.get("labels") or {}
-                        lang = (labels.get("language") or "").lower()
-                        if lang_filter and lang_filter not in lang:
-                            continue
-                        voices.append({
-                            "voice_id": v.get("voice_id"),
-                            "name": v.get("name"),
-                            "language": lang,
-                            "gender": labels.get("gender", ""),
-                            "age": labels.get("age", ""),
-                            "accent": labels.get("accent", ""),
-                            "description": labels.get("description", ""),
-                            "preview_url": v.get("preview_url"),
-                        })
-                    return {"ok": True, "count": len(voices), "voices": voices[:50]}
+                lang_filter = (args.get("language") or "").strip().lower()
+                if key:
+                    async with httpx.AsyncClient(timeout=15) as cl:
+                        r = await cl.get("https://api.elevenlabs.io/v2/voices",
+                                          headers={"xi-api-key": key},
+                                          params={"page_size": min(int(args.get("limit") or 20), 50)})
+                        if r.status_code == 200:
+                            data = r.json()
+                            voices = []
+                            for v in data.get("voices", []):
+                                labels = v.get("labels") or {}
+                                lang = (labels.get("language") or "").lower()
+                                if lang_filter and lang_filter not in lang:
+                                    continue
+                                voices.append({
+                                    "voice_id": v.get("voice_id"),
+                                    "name": v.get("name"),
+                                    "language": lang,
+                                    "gender": labels.get("gender", ""),
+                                    "accent": labels.get("accent", ""),
+                                    "description": labels.get("description", ""),
+                                    "preview_url": v.get("preview_url"),
+                                    "provider": "elevenlabs",
+                                })
+                            return {"ok": True, "provider": "elevenlabs",
+                                    "count": len(voices), "voices": voices[:50]}
+                # ── Fallback: OpenAI TTS catalog (no separate key needed) ──
+                openai_key = (_os.environ.get("OPENAI_DIRECT_KEY")
+                              or _os.environ.get("OPENAI_API_KEY", ""))
+                if not openai_key:
+                    return {"ok": False, "error": "ما فيه أي مفتاح صوتي مكوّن (ElevenLabs أو OpenAI)"}
+                # OpenAI TTS supports any text in any language using the same 6 voices.
+                # Each voice has its own character; we expose them with Arabic display names
+                # so the agent can pick the right one based on user intent.
+                openai_voices = [
+                    {"voice_id": "onyx",   "name": "Onyx — راوي عميق",   "language": "multi", "gender": "male",   "description": "صوت رجولي عميق، مثالي للقصص الوثائقية والرعب والدراما"},
+                    {"voice_id": "echo",   "name": "Echo — صديق دافئ",   "language": "multi", "gender": "male",   "description": "صوت ودود متوسط للحوارات والإعلانات"},
+                    {"voice_id": "fable",  "name": "Fable — شاب حيوي",    "language": "multi", "gender": "male",   "description": "صوت شبابي نشيط للمحتوى التسويقي"},
+                    {"voice_id": "alloy",  "name": "Alloy — محترف محايد", "language": "multi", "gender": "neutral","description": "صوت محايد احترافي للتعليقات التقنية"},
+                    {"voice_id": "nova",   "name": "Nova — مذيعة",        "language": "multi", "gender": "female", "description": "صوت أنثوي رسمي واضح للأخبار والتقارير"},
+                    {"voice_id": "shimmer","name": "Shimmer — حكواتية",   "language": "multi", "gender": "female", "description": "صوت أنثوي ناعم للحكايات وأصوات الأطفال"},
+                ]
+                # Tag voices with the requested language so the agent + UI can
+                # treat OpenAI voices as multilingual without lying about it
+                if lang_filter:
+                    for v in openai_voices:
+                        v["language"] = lang_filter
+                return {"ok": True, "provider": "openai_tts",
+                        "note": "OpenAI TTS multilingual — same 6 voices speak all languages including Korean, Japanese, Arabic, etc.",
+                        "count": len(openai_voices), "voices": openai_voices}
             except Exception as e:
                 return {"ok": False, "error": f"list_voices: {type(e).__name__}: {str(e)[:200]}"}
 
@@ -1155,40 +1184,80 @@ async def _exec_tool_async(ctx: FreeBuildToolContext, name: str, args: Dict[str,
                 return {"ok": False, "error": "text مطلوب"}
             if len(text) > 5000:
                 return {"ok": False, "error": "النص طويل (>5000 حرف). قسّمه على دفعات."}
-            voice_id = (args.get("voice_id") or "21m00Tcm4TlvDq8ikWAM").strip()  # Rachel default
+            requested_voice = (args.get("voice_id") or "").strip()
             model_id = (args.get("model") or "eleven_multilingual_v2").strip()
+            OPENAI_TTS_VOICES = {"alloy", "echo", "fable", "onyx", "nova", "shimmer"}
             try:
                 import httpx, os as _os, uuid as _uuid
-                key = _os.environ.get("ELEVENLABS_API_KEY", "")
-                async with httpx.AsyncClient(timeout=120) as cl:
-                    r = await cl.post(
-                        f"https://api.elevenlabs.io/v1/text-to-speech/{voice_id}",
-                        headers={"xi-api-key": key, "Content-Type": "application/json", "Accept": "audio/mpeg"},
-                        json={"text": text, "model_id": model_id,
-                              "voice_settings": {"stability": 0.5, "similarity_boost": 0.75, "style": 0.0}},
+                # ── Decide which provider to use ──
+                el_key = _os.environ.get("ELEVENLABS_API_KEY", "")
+                openai_key = (_os.environ.get("OPENAI_DIRECT_KEY")
+                              or _os.environ.get("OPENAI_API_KEY", ""))
+                # If voice_id is one of OpenAI's 6 voices → use OpenAI directly.
+                # Otherwise: prefer ElevenLabs if key exists, else fall back to OpenAI onyx.
+                use_openai = (requested_voice.lower() in OPENAI_TTS_VOICES) or not el_key
+                if use_openai and not openai_key:
+                    return {"ok": False, "error": "ما فيه مفتاح صوتي مكوّن (OPENAI_DIRECT_KEY أو ELEVENLABS_API_KEY)"}
+                audio_bytes = b""
+                used_provider = ""
+                used_voice = ""
+                if use_openai:
+                    from openai import AsyncOpenAI
+                    voice = requested_voice.lower() if requested_voice.lower() in OPENAI_TTS_VOICES else "onyx"
+                    client = AsyncOpenAI(api_key=openai_key)
+                    resp = await client.audio.speech.create(
+                        model="tts-1-hd", voice=voice, input=text, response_format="mp3",
                     )
-                    if r.status_code != 200:
-                        return {"ok": False, "error": f"ElevenLabs: {r.status_code} {r.text[:200]}"}
-                    media_dir = "/app/backend/uploads/freebuild_media"
-                    _os.makedirs(media_dir, exist_ok=True)
-                    file_id = _uuid.uuid4().hex[:16]
-                    path = f"{media_dir}/{file_id}.mp3"
-                    with open(path, "wb") as f:
-                        f.write(r.content)
-                    public_url = f"https://zenrex.ai/api/freebuild-chat/media/file/{file_id}.mp3"
-                    if ctx.db is not None:
-                        try:
-                            import datetime as _dt
-                            await ctx.db.freebuild_media_assets.insert_one({
-                                "id": file_id, "filename": f"{file_id}.mp3", "ext": "mp3",
-                                "kind": "voiceover", "voice_id": voice_id, "text_len": len(text),
-                                "public_url": public_url, "created_at": _dt.datetime.now(_dt.timezone.utc).isoformat(),
-                            })
-                        except Exception:
-                            pass
-                    return {"ok": True, "audio_url": public_url, "voice_id": voice_id,
-                            "model": model_id, "size_bytes": len(r.content),
-                            "embed_html": f'<audio controls src="{public_url}"></audio>'}
+                    audio_bytes = resp.content if hasattr(resp, "content") else await resp.aread()
+                    used_provider = "openai_tts"
+                    used_voice = voice
+                else:
+                    voice = requested_voice or "21m00Tcm4TlvDq8ikWAM"  # Rachel default
+                    async with httpx.AsyncClient(timeout=120) as cl:
+                        r = await cl.post(
+                            f"https://api.elevenlabs.io/v1/text-to-speech/{voice}",
+                            headers={"xi-api-key": el_key, "Content-Type": "application/json", "Accept": "audio/mpeg"},
+                            json={"text": text, "model_id": model_id,
+                                  "voice_settings": {"stability": 0.5, "similarity_boost": 0.75, "style": 0.0}},
+                        )
+                        if r.status_code != 200:
+                            # ElevenLabs failed → graceful fall back to OpenAI TTS
+                            if not openai_key:
+                                return {"ok": False, "error": f"ElevenLabs: {r.status_code} {r.text[:200]}"}
+                            from openai import AsyncOpenAI
+                            client = AsyncOpenAI(api_key=openai_key)
+                            resp = await client.audio.speech.create(
+                                model="tts-1-hd", voice="onyx", input=text, response_format="mp3",
+                            )
+                            audio_bytes = resp.content if hasattr(resp, "content") else await resp.aread()
+                            used_provider = "openai_tts (elevenlabs fallback)"
+                            used_voice = "onyx"
+                        else:
+                            audio_bytes = r.content
+                            used_provider = "elevenlabs"
+                            used_voice = voice
+                # ── Persist the audio file + return public URL ──
+                media_dir = "/app/backend/uploads/freebuild_media"
+                _os.makedirs(media_dir, exist_ok=True)
+                file_id = _uuid.uuid4().hex[:16]
+                path = f"{media_dir}/{file_id}.mp3"
+                with open(path, "wb") as f:
+                    f.write(audio_bytes)
+                public_url = f"https://zenrex.ai/api/freebuild-chat/media/file/{file_id}.mp3"
+                if ctx.db is not None:
+                    try:
+                        import datetime as _dt
+                        await ctx.db.freebuild_media_assets.insert_one({
+                            "id": file_id, "filename": f"{file_id}.mp3", "ext": "mp3",
+                            "kind": "voiceover", "voice_id": used_voice, "provider": used_provider,
+                            "text_len": len(text), "public_url": public_url,
+                            "created_at": _dt.datetime.now(_dt.timezone.utc).isoformat(),
+                        })
+                    except Exception:
+                        pass
+                return {"ok": True, "audio_url": public_url, "voice_id": used_voice,
+                        "provider": used_provider, "size_bytes": len(audio_bytes),
+                        "embed_html": f'<audio controls src="{public_url}"></audio>'}
             except Exception as e:
                 return {"ok": False, "error": f"voiceover: {type(e).__name__}: {str(e)[:200]}"}
 
@@ -1814,7 +1883,7 @@ AGENT_SYSTEM_PROMPT = """أنت **Zenrex Code Brain** — مهندس برمجي 
 
 - 🐙 **GitHub جاهز.** المفتاح محفوظ في `.env` كـ `GITHUB_PAT` افتراضي. تقدر تنشئ ريبو، ترفع كود، تقرأ ملفات، بدون استئذان لو الطلب واضح.
 
-- 🎙️ **لما تحتاج خدمة خارجية ما عندك مفتاحها** → `recommend_service(category)` ثم `request_credential` لو وافق.
+- 🎙️ **التعليق الصوتي يشتغل بدون أي مفتاح إضافي**: `generate_voiceover` يستخدم OpenAI TTS مباشرة (مفتاحه عندنا أصلاً) ويدعم **كل اللغات** بما فيها الكورية، اليابانية، العربية، الإنجليزية، الفرنسية، التركية، الأوردو. لا تطلب من العميل مفتاح ElevenLabs إلا لو هو طلب صراحةً أصوات ElevenLabs المخصصة (clone خاص). لاستخدام OpenAI TTS، استخدم voice_id من: `onyx, echo, fable, alloy, nova, shimmer` (6 أصوات متعددة اللغات).
 
 - 🧠 **ذاكرة هذا المشروع فقط**: لا تخلط بين مشاريع. مراجعة آخر 12 رسالة في *هذا* الـ project_id كافية.
 ═══════════════════════════════════════════════════════════

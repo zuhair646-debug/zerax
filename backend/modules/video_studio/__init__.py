@@ -106,11 +106,24 @@ VOICE_CATALOG = [
      "style": "Clear, professional female voice for news and reports"},
     # ── Other languages (OpenAI TTS handles them all via the same voices) ──
     {"id": "multi_neutral",      "name": "Multilingual",    "gender": "neutral",
-     "tts_id": "alloy",  "languages": ["fr-fr", "es-es", "ja-jp", "tr-tr", "ur-pk"],
+     "tts_id": "alloy",  "languages": ["fr-fr", "es-es", "ja-jp", "ko-kr", "tr-tr", "ur-pk"],
      "style": "Versatile neutral voice that works across many languages"},
     {"id": "multi_warm_f",       "name": "Multilingual Warm", "gender": "female",
-     "tts_id": "shimmer","languages": ["fr-fr", "es-es", "ja-jp", "tr-tr", "ur-pk"],
+     "tts_id": "shimmer","languages": ["fr-fr", "es-es", "ja-jp", "ko-kr", "tr-tr", "ur-pk"],
      "style": "Warm female voice for international content"},
+    # ── Korean-focused presets (same OpenAI voices, optimized presentation) ──
+    {"id": "ko_narrator_m",      "name": "한국어 라성 — راوي كوري", "gender": "male",
+     "tts_id": "onyx",   "languages": ["ko-kr"],
+     "style": "صوت رجولي عميق بنطق كوري — مثالي لأفلام الرعب والإثارة الكورية"},
+    {"id": "ko_friend_m",        "name": "한국어 친구 — كوري ودود",   "gender": "male",
+     "tts_id": "echo",   "languages": ["ko-kr"],
+     "style": "صوت كوري ودود متوسط للحوارات اليومية"},
+    {"id": "ko_storyteller_f",   "name": "한국어 이야기꾼 — حكواتية كورية", "gender": "female",
+     "tts_id": "shimmer","languages": ["ko-kr"],
+     "style": "صوت أنثوي كوري ناعم للأنميشن والميلودراما"},
+    {"id": "ko_anchor_f",        "name": "한국어 뉴스 — مذيعة كورية",       "gender": "female",
+     "tts_id": "nova",   "languages": ["ko-kr"],
+     "style": "صوت أنثوي كوري احترافي للأخبار والتقارير"},
 ]
 
 # Default sample phrases per language for the preview button
@@ -124,6 +137,7 @@ VOICE_SAMPLE_TEXT = {
     "fr-fr":       "Bonjour! Ceci est un test de voix pour la plateforme Zenrex.",
     "es-es":       "¡Hola! Esta es una prueba de voz para la plataforma Zenrex.",
     "ja-jp":       "こんにちは。これはゼンレックスの音声テストです。",
+    "ko-kr":       "안녕하세요. 이것은 젠렉스 플랫폼의 음성 테스트입니다.",
     "tr-tr":       "Merhaba! Bu Zenrex platformu için bir ses testidir.",
     "ur-pk":       "السلام علیکم۔ یہ زنریکس کے لیے آواز کا ٹیسٹ ہے۔",
 }
@@ -139,6 +153,7 @@ LANGUAGE_OPTIONS = [
     {"id": "ar-gulf",     "label": "عربي — خليجي",    "for_voice": "ar-SA"},
     {"id": "ar-msa",      "label": "عربي فصيح",       "for_voice": "ar-XA"},
     {"id": "en-us",       "label": "English",         "for_voice": "en-US"},
+    {"id": "ko-kr",       "label": "한국어 Korean",    "for_voice": "ko-KR"},
     {"id": "ja-jp",       "label": "日本語 Japanese", "for_voice": "ja-JP"},
     {"id": "fr-fr",       "label": "Français",        "for_voice": "fr-FR"},
     {"id": "es-es",       "label": "Español",         "for_voice": "es-ES"},
