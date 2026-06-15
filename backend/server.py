@@ -3489,6 +3489,14 @@ try:
 except Exception as _afe:
     logging.getLogger(__name__).error(f"Failed to register affiliate module: {_afe}", exc_info=True)
 
+# ============== GOOGLE OAUTH (direct, no third-party broker) ==================
+try:
+    from routers.google_oauth import router as _google_oauth_router
+    app.include_router(_google_oauth_router)
+    logging.getLogger(__name__).info("Google OAuth router registered (direct flow)")
+except Exception as _goe:
+    logging.getLogger(__name__).error(f"Failed to register Google OAuth: {_goe}", exc_info=True)
+
 # ============== STUDIO (Image/Video deep generation for merchants) ==============
 try:
     from modules.studio import create_router as create_studio_router

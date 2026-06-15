@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -12,6 +12,36 @@ const LoginPage = ({ setUser }) => {
   const navigate = useNavigate();
   const [formData, setFormData] = useState({ email: '', password: '' });
   const [loading, setLoading] = useState(false);
+
+  // Pick up the JWT that the Google OAuth callback drops in ?token=...
+  // The backend redirects to /login?token=JWT&google=1 after a successful
+  // sign-in/sign-up — we just store it, fetch the profile, and route the user.
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const token = params.get('token');
+    const isGoogle = params.get('google') === '1';
+    if (!token || !isGoogle) return;
+    (async () => {
+      try {
+        localStorage.setItem('token', token);
+        const r = await fetch(`${process.env.REACT_APP_BACKEND_URL}/api/auth/me`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (!r.ok) throw new Error(`HTTP ${r.status}`);
+        const u = await r.json();
+        localStorage.setItem('user', JSON.stringify(u));
+        setUser(u);
+        toast.success(`أهلاً ${u.name || u.email} 👋`);
+        // Strip the query string so a refresh doesn't re-trigger this flow
+        window.history.replaceState({}, document.title, '/login');
+        navigate(['admin', 'owner', 'super_admin'].includes(u.role) || u.is_owner ? '/admin' : '/');
+      } catch (e) {
+        toast.error(`فشل تسجيل الدخول بقوقل: ${e.message}`);
+        localStorage.removeItem('token');
+      }
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -158,8 +188,12 @@ const LoginPage = ({ setUser }) => {
                   <button
                     type="button"
                     onClick={() => {
-                      const redirect = `${window.location.origin}/auth-callback`;
-                      window.location.href = `https://auth.emergentagent.com/?redirect=${encodeURIComponent(redirect)}`;
+                      // Direct Google OAuth — backend handles the full flow and
+                      // redirects back to /login?token=... when done.
+                      // REMINDER: DO NOT HARDCODE THE URL, OR ADD ANY FALLBACKS
+                      // OR REDIRECT URLS, THIS BREAKS THE AUTH.
+                      const api = process.env.REACT_APP_BACKEND_URL;
+                      window.location.href = `${api}/api/auth/google/start`;
                     }}
                     className="w-full h-12 flex items-center justify-center gap-3 rounded-md bg-white text-gray-800 font-bold hover:bg-gray-100 transition-colors shadow-md"
                     data-testid="google-login-btn"

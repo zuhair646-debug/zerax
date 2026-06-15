@@ -216,8 +216,11 @@ const RegisterPage = ({ setUser }) => {
                   <button
                     type="button"
                     onClick={() => {
-                      const redirect = `${window.location.origin}/auth-callback`;
-                      window.location.href = `https://auth.emergentagent.com/?redirect=${encodeURIComponent(redirect)}`;
+                      // Direct Google OAuth — see LoginPage for the full flow note.
+                      // REMINDER: DO NOT HARDCODE THE URL, OR ADD ANY FALLBACKS
+                      // OR REDIRECT URLS, THIS BREAKS THE AUTH.
+                      const api = process.env.REACT_APP_BACKEND_URL;
+                      window.location.href = `${api}/api/auth/google/start`;
                     }}
                     className="w-full h-12 flex items-center justify-center gap-3 rounded-md bg-white text-gray-800 font-bold hover:bg-gray-100 transition-colors shadow-md"
                     data-testid="google-register-btn"
