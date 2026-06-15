@@ -344,6 +344,80 @@ function MarkdownText({ children }) {
 }
 
 // ─────────────────────────────────────────────────────────────
+// MESSAGE ACTIONS — clean copy/quote toolbar shown under finalized
+// assistant messages. Designed to be subtle ("بلا زحمة"): low-opacity
+// pills that brighten on hover. Three actions: copy raw text, quote
+// the message into the input box, share via Web Share API (mobile).
+// ─────────────────────────────────────────────────────────────
+function MessageActions({ content, onQuote }) {
+  const [copied, setCopied] = useState(false);
+  const text = String(content || '');
+
+  const doCopy = async () => {
+    try {
+      if (navigator.clipboard && window.isSecureContext) {
+        await navigator.clipboard.writeText(text);
+      } else {
+        const ta = document.createElement('textarea');
+        ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0';
+        document.body.appendChild(ta); ta.focus(); ta.select();
+        document.execCommand('copy'); document.body.removeChild(ta);
+      }
+      setCopied(true);
+      toast.success('تم النسخ ✨');
+      setTimeout(() => setCopied(false), 1800);
+    } catch {
+      toast.error('ما قدرت أنسخ — جرّب يدوي');
+    }
+  };
+
+  const doShare = async () => {
+    if (navigator.share) {
+      try { await navigator.share({ text, title: 'Zenrex AI' }); } catch { /* user cancelled */ }
+    } else {
+      const url = `https://wa.me/?text=${encodeURIComponent(text)}`;
+      window.open(url, '_blank', 'noopener,noreferrer');
+    }
+  };
+
+  if (!text.trim()) return null;
+  return (
+    <div className="mt-2 pt-2 border-t border-white/5 flex items-center gap-1 opacity-50 hover:opacity-100 transition-opacity" data-testid="message-actions">
+      <button
+        type="button"
+        onClick={doCopy}
+        data-testid="msg-action-copy"
+        className="text-[11px] text-zinc-400 hover:text-emerald-300 px-2 py-1 rounded-md hover:bg-emerald-500/10 flex items-center gap-1 transition-colors"
+        title="انسخ النص"
+      >
+        {copied ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
+        <span>{copied ? 'انتسخ' : 'نسخ'}</span>
+      </button>
+      <button
+        type="button"
+        onClick={() => onQuote && onQuote(text)}
+        data-testid="msg-action-quote"
+        className="text-[11px] text-zinc-400 hover:text-cyan-300 px-2 py-1 rounded-md hover:bg-cyan-500/10 flex items-center gap-1 transition-colors"
+        title="اقتبس هذي الرسالة في إجابتك"
+      >
+        <Reply className="w-3.5 h-3.5" />
+        <span>اقتباس</span>
+      </button>
+      <button
+        type="button"
+        onClick={doShare}
+        data-testid="msg-action-share"
+        className="text-[11px] text-zinc-400 hover:text-violet-300 px-2 py-1 rounded-md hover:bg-violet-500/10 flex items-center gap-1 transition-colors"
+        title="أرسل النص (واتساب/مشاركة)"
+      >
+        <ExternalLink className="w-3.5 h-3.5" />
+        <span>مشاركة</span>
+      </button>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────
 // OPTIONS PICKER (clickable pills the AI offers)
 // ─────────────────────────────────────────────────────────────
 // Color accents rotated by option index (unselected only).
@@ -2416,6 +2490,22 @@ function ChatWorkspace({ projectId }) {
                     <div className="text-sm leading-relaxed">
                       <MarkdownText>{m.content}</MarkdownText>
                     </div>
+
+                    {/* Clean copy/quote toolbar — only on finished assistant messages with content */}
+                    {m.role === 'assistant' && !m.agent_streaming && (m.content || '').trim().length > 0 && (
+                      <MessageActions
+                        content={m.content}
+                        onQuote={(text) => {
+                          const quoted = String(text)
+                            .split('\n')
+                            .map((ln) => '> ' + ln)
+                            .join('\n');
+                          setMessage((prev) => (prev ? `${quoted}\n\n${prev}` : `${quoted}\n\n`));
+                          const inp = document.querySelector('[data-testid="chat-input"]');
+                          if (inp) { try { inp.focus(); inp.scrollIntoView({ behavior: 'smooth', block: 'center' }); } catch { /* DOM not ready */ } }
+                        }}
+                      />
+                    )}
 
                     {/* Agent live thinking — visible while the agent reasons/calls tools */}
                     {m.role === 'assistant' && Array.isArray(m.agent_steps) && m.agent_steps.length > 0 && (
