@@ -66,6 +66,7 @@ import StudioVideo from '@/pages/studio/StudioVideo';
 import ChatVideo from '@/pages/chat/ChatVideo';
 import ChatImage from '@/pages/chat/ChatImage';
 import VideoStudio from '@/pages/VideoStudio';
+import VideoStudioModeSelector from '@/pages/VideoStudioModeSelector';
 import VideoRender from '@/pages/VideoRender';
 import FreeBuild from '@/pages/FreeBuild';
 import MobileAppBuilder from '@/pages/MobileAppBuilder';
@@ -265,7 +266,7 @@ function App() {
           <Route path="/ready-sites" element={<ProtectedRoute><ReadySites user={user} /></ProtectedRoute>} />
           <Route path="/ready-sites/purchase" element={<ProtectedRoute><ReadySitesPurchase user={user} /></ProtectedRoute>} />
           <Route path="/image-studio" element={<ProtectedRoute><StudioLanding mode="image_studio" user={user} /></ProtectedRoute>} />
-          <Route path="/video-studio" element={<ProtectedRoute><StudioLanding mode="video_studio" user={user} /></ProtectedRoute>} />
+          <Route path="/video-studio" element={<ProtectedRoute><VideoStudioModeSelector user={user} /></ProtectedRoute>} />
           <Route path="/dashboard/ready-sites" element={<ProtectedRoute><ReadySites user={user} /></ProtectedRoute>} />
           <Route path="/care/:projectId" element={<ProtectedRoute><CarePortal user={user} /></ProtectedRoute>} />
           <Route path="/showcase" element={<ZenrexShowcase />} />

@@ -799,6 +799,9 @@ class ProjectIn(BaseModel):
     description: str = ""
     category_id: Optional[str] = None  # if set → template-based mode (websites)
     mode: Optional[str] = None  # 'website' (default), 'image_studio', 'video_studio'
+    # When mode == 'video_studio', the user picks one of:
+    #   'stage_by_stage' (default) | 'open' | 'commercial' | 'voice_to_video'
+    video_submode: Optional[str] = None
 
 
 class ChatIn(BaseModel):
@@ -833,6 +836,14 @@ def make_freebuild_chat_router(db, get_current_user):
         proj_mode = (payload.mode or "website").strip().lower()
         if proj_mode not in valid_modes:
             proj_mode = "website"
+
+        # Validate video_submode (only applies when proj_mode == 'video_studio')
+        valid_video_submodes = {"stage_by_stage", "open", "commercial", "voice_to_video"}
+        raw_submode = (payload.video_submode or "").strip().lower()
+        if proj_mode == "video_studio":
+            video_submode = raw_submode if raw_submode in valid_video_submodes else "stage_by_stage"
+        else:
+            video_submode = None
 
         # Mode-specific greeting (shown as first AI message in the chat).
         # For studio modes we seed both `content` (markdown) and `options` (rich
@@ -983,6 +994,76 @@ def make_freebuild_chat_router(db, get_current_user):
                 "timestamp": _now(),
             })
 
+        # Override Video Studio greeting based on `video_submode` chosen by the user
+        if proj_mode == "video_studio" and video_submode and video_submode != "stage_by_stage":
+            sub_greetings = {
+                "open": {
+                    "content": (
+                        "أهلاً بك في **التوليد المفتوح** ✨\n\n"
+                        "هنا ما عندنا مراحل صارمة. تكتب فكرتك بحرّيتك الكاملة، وأنا أولّد لك مباشرة "
+                        "(فيديو، صوت، صور، مونتاج). الدفع يكون حسب الاستهلاك الفعلي.\n\n"
+                        "**ابدأ:** اكتب لي وش تبي. مثلاً: \"مقطع 8 ثواني، شخص يمشي في شارع رياض ليلاً، "
+                        "بأسلوب سينمائي ضباب وضوء أحمر.\""
+                    ),
+                    "options": [],
+                },
+                "commercial": {
+                    "content": (
+                        "أهلاً بك في **استوديو الإعلانات التجارية** 📢\n\n"
+                        "أنا متخصص في إنتاج إعلانات احترافية. عشان أبدأ، أحتاج منك:\n\n"
+                        "1. **شعار البراند (Logo)** — ارفع صورة الشعار الحالي\n"
+                        "2. **اسم البراند والمنتج** — مثلاً: \"مطعم الذواق - برجر الواغيو\"\n"
+                        "3. **رقم الجوال** للتواصل (يظهر بالإعلان)\n"
+                        "4. **رقم السجل التجاري (CR)**\n"
+                        "5. **الفكرة الإعلانية** — وش تبي توصّل للعميل؟\n\n"
+                        "بعد ما أستلم البيانات، راح أحرّك شعارك بأسلوب سينمائي، وأكتب سكربت إعلاني، "
+                        "وأضيف بياناتك بنهاية الإعلان بشكل احترافي."
+                    ),
+                    "options": [],
+                },
+                "voice_to_video": {
+                    "content": (
+                        "أهلاً بك في **استوديو الصوت → فيديو** 🎙️🎬\n\n"
+                        "هذا أذكى وضع عندنا. خلني أوضح لك الطريقة بالضبط:\n\n"
+                        "**1. أنت ترفع:** تسجيل صوتي (mp3/wav) أو فيديو فيه صوتك تحكي قصة/شرح/سيناريو.\n\n"
+                        "**2. أنا أسوي:**\n"
+                        "  • أستمع للصوت كاملاً وأفرّغه نصياً (transcription).\n"
+                        "  • أحدد الشخصيات اللي ذكرتها في القصة وأعرضها لك صور للموافقة.\n"
+                        "  • أحدد الأماكن والبيئات اللي تظهر فيها الأحداث.\n"
+                        "  • أقسّم الصوت لمشاهد (شخص يحكي للكاميرا = صورة المُلقي + شاشة هادئة) (سرد قصصي = توليد مشهد مرئي).\n"
+                        "  • أولّد كل مشهد بالستايل اللي تختاره (واقعي / أنمي / كرتون / سينمائي).\n"
+                        "  • أضيف مؤثرات صوتية متزامنة (باب يفتح، خطوات، رياح، ...).\n\n"
+                        "**3. صوتك الأصلي ما يتغيّر أبداً** — أنا أضيف اللقطات المرئية فقط فوق صوتك.\n\n"
+                        "**🎨 ابدأ بإجابة سؤال واحد:** أي ستايل بصري تفضل للقطات؟ (واقعي سينمائي / أنمي / كرتون / Cyberpunk / Vintage). "
+                        "وبعدها ارفع لي ملف الصوت."
+                    ),
+                    "options": [
+                        {"label": "واقعي سينمائي", "emoji": "🎬", "description": "صور ولقطات بأسلوب Hollywood 4K",
+                         "image_url": "https://image.pollinations.ai/prompt/cinematic%20realistic%204K%20Hollywood%20film%20still?width=512&height=288&nologo=true&seed=101"},
+                        {"label": "أنمي ياباني", "emoji": "🌸", "description": "Studio Ghibli أو Makoto Shinkai",
+                         "image_url": "https://image.pollinations.ai/prompt/Studio%20Ghibli%20anime%20masterpiece?width=512&height=288&nologo=true&seed=102"},
+                        {"label": "كرتون 3D", "emoji": "🎨", "description": "Pixar / Disney style",
+                         "image_url": "https://image.pollinations.ai/prompt/Pixar%20Disney%203D%20animated%20still?width=512&height=288&nologo=true&seed=103"},
+                        {"label": "Cyberpunk", "emoji": "🌃", "description": "مستقبلي نيون مظلم",
+                         "image_url": "https://image.pollinations.ai/prompt/cyberpunk%20neon%20futuristic%20cinematic?width=512&height=288&nologo=true&seed=104"},
+                        {"label": "Vintage / كلاسيكي", "emoji": "🎞️", "description": "أسلوب الأفلام القديمة",
+                         "image_url": "https://image.pollinations.ai/prompt/vintage%201970s%20film%20grain%20cinematic?width=512&height=288&nologo=true&seed=105"},
+                        {"label": "غير ذلك — اكتب الستايل", "emoji": "✍️", "description": "نوار، Watercolor، Stop-motion، ...",
+                         "image_url": "https://image.pollinations.ai/prompt/abstract%20creative%20visual%20style?width=512&height=288&nologo=true&seed=106"},
+                    ],
+                },
+            }
+            sub = sub_greetings.get(video_submode)
+            if sub:
+                initial_messages = [{
+                    "id": str(uuid.uuid4()),
+                    "role": "assistant",
+                    "content": sub["content"],
+                    "options": sub.get("options", []),
+                    "inline_images": [],
+                    "timestamp": _now(),
+                }]
+
         # Pick the initial phase for this mode (the Phase Tracker uses this).
         # Video-family modes always start at "film_type" so the tracker pill
         # for "نوع الفيلم" is the active glowing one from the very first turn.
@@ -998,6 +1079,10 @@ def make_freebuild_chat_router(db, get_current_user):
             initial_phase = "design"
         else:
             initial_phase = initial_phase_by_mode.get(proj_mode, "discovery")
+        # Non-stage submodes don't use the strict phase tracker → start on
+        # the freeform "discovery" phase so the tracker shows a neutral state.
+        if proj_mode == "video_studio" and video_submode in {"open", "commercial", "voice_to_video"}:
+            initial_phase = "discovery"
 
         await db.freebuild_projects.insert_one({
             "id": pid,
@@ -1007,6 +1092,7 @@ def make_freebuild_chat_router(db, get_current_user):
             "category_name": (category_meta or {}).get("name"),
             "category_icon": (category_meta or {}).get("icon"),
             "mode": proj_mode,
+            "video_submode": video_submode,
             "name": payload.name.strip()[:120],
             "description": payload.description.strip()[:1500],
             "status": "active",
@@ -1019,7 +1105,7 @@ def make_freebuild_chat_router(db, get_current_user):
             "created_at": _now(),
             "updated_at": _now(),
         })
-        return {"id": pid, "name": payload.name, "mode": proj_mode}
+        return {"id": pid, "name": payload.name, "mode": proj_mode, "video_submode": video_submode}
 
     # ===== List projects =====
     @router.get("/projects")

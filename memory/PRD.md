@@ -11,6 +11,37 @@ Unify the AI brain and empower it with unified toolset. Fix mocked AI Trading Bo
 - 100% LOCAL AI requirement (no OpenAI/Anthropic for Family AI)
 
 
+## Session 2026-02-16a — Video Studio: 4 Sub-Modes + Z+Crown UI
+
+### 🎬 Video Studio is now a 4-mode launcher (visit `/video-studio`)
+The legacy single-flow Studio Landing was replaced by `VideoStudioModeSelector.js`:
+1. **`stage_by_stage`** — original 7-phase guided flow (unchanged)
+2. **`open`** — freeform, no strict phases, pay-as-you-consume
+3. **`commercial`** — ad workflow that collects Logo + Phone + CR + ad idea, animates the logo and adds contact info
+4. **`voice_to_video`** — audio→video: user uploads voice recording, AI transcribes, identifies characters/places/scenes, gets approvals, generates matching visuals on top of the **original untouched audio**
+
+### 🔥 Z + Crown brand logo (SVG)
+- Custom inline SVG: red gradient Z with golden crown + 3 ruby gems
+- Glowing red side borders left/right (with `box-shadow` blur)
+- Visible at top of `/video-studio` and matches platform brand identity
+
+### 🧠 Backend
+- `ProjectIn` accepts new optional `video_submode` field
+- Validation: only `stage_by_stage` | `open` | `commercial` | `voice_to_video` (else falls back to stage_by_stage)
+- Custom Arabic greeting + option cards per submode (e.g., 6 visual-style cards for voice_to_video)
+- `get_system_prompt()` layers a new submode-specific addendum on top of `MODE_ADDENDUM_VIDEO`:
+  - `MODE_ADDENDUM_VIDEO_OPEN` — relaxes phase strictness
+  - `MODE_ADDENDUM_VIDEO_COMMERCIAL` — strict 6-step ad workflow
+  - `MODE_ADDENDUM_VIDEO_VOICE2VIDEO` — full 6-phase voice-to-video with character/place approval gates and Direct-Address vs Narrative scene detection
+
+### ✅ Verified on Preview + Production
+- All 4 submodes create projects with correct `video_submode` persisted
+- Voice→Video greeting renders 6 style cards (واقعي / أنمي / كرتون 3D / Cyberpunk / Vintage / غير ذلك)
+- Invalid submode safely falls back to `stage_by_stage`
+- Production deploy (Hetzner) executed via `bash deploy/deploy.sh zenrex.ai`
+
+
+
 ## Session 2026-02-15j — Inline Video Player + Voice Naturalness + Stop-When-Done
 
 ### 🎬 Inline Video Player (no more text links!)

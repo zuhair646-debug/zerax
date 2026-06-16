@@ -1,11 +1,18 @@
 # Test Credentials
 
-## Owner/Admin (Production: zenrex.ai)
+## Owner/Admin — Production (zenrex.ai)
 - **Email:** `admin@zenrex.ai`
 - **Password:** `owner123`
-- **Name:** `Zenrex Admin`
-- **Role:** owner (full platform control)
-- **Updated:** 2026-02-15 — unified to match site name (was `owner@zerax.com`)
+- **Role:** owner
+
+## Owner/Admin — Preview (preview.emergentagent.com)
+- **Email:** `owner@zerax.com`
+- **Password:** `owner123`
+- **Role:** owner
+
+**Note:** The two environments have different MongoDBs and different seeded users.
+- For preview testing: use `owner@zerax.com`
+- For production verification: use `admin@zenrex.ai`
 
 ## Desktop Agent Pairing
 - Project ID: `owner-autocoder-desktop`
