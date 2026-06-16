@@ -3504,6 +3504,13 @@ try:
 except Exception as _oe:
     logging.getLogger(__name__).error(f"Failed to register owner_notifications: {_oe}", exc_info=True)
 
+try:
+    from routers.storage_router import router as _storage_router
+    app.include_router(_storage_router)
+    logging.getLogger(__name__).info("Storage quota router registered")
+except Exception as _se:
+    logging.getLogger(__name__).error(f"Failed to register storage_router: {_se}", exc_info=True)
+
 # ============== STUDIO (Image/Video deep generation for merchants) ==============
 try:
     from modules.studio import create_router as create_studio_router

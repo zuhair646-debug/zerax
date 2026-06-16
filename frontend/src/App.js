@@ -92,6 +92,7 @@ import AdminIndependence from '@/pages/AdminIndependence';
 import AdminAIReadiness from '@/pages/AdminAIReadiness';
 import AdminLearning from '@/pages/AdminLearning';
 import AdminNotifications from '@/pages/AdminNotifications';
+import StoragePage from '@/pages/StoragePage';
 import SecurityControlRoom from '@/pages/SecurityControlRoom';
 import HoneypotCatcher from '@/pages/HoneypotCatcher';
 import Pricing from '@/pages/Pricing';
@@ -213,6 +214,7 @@ function App() {
           <Route path="/admin/credits" element={<ProtectedRoute adminOnly><AdminCredits user={user} /></ProtectedRoute>} />
           <Route path="/admin/training" element={<ProtectedRoute adminOnly><AdminTraining user={user} /></ProtectedRoute>} />
           <Route path="/admin/notifications" element={<ProtectedRoute adminOnly><AdminNotifications user={user} /></ProtectedRoute>} />
+          <Route path="/storage" element={<ProtectedRoute><StoragePage user={user} /></ProtectedRoute>} />
           <Route path="/chat" element={<ProtectedRoute><AIChat user={user} /></ProtectedRoute>} />
           <Route path="/projects" element={<ProtectedRoute><ProjectsPage user={user} /></ProtectedRoute>} />
           <Route path="/designer" element={<ProtectedRoute><VisualDesigner user={user} /></ProtectedRoute>} />

@@ -11,6 +11,35 @@ Unify the AI brain and empower it with unified toolset. Fix mocked AI Trading Bo
 - 100% LOCAL AI requirement (no OpenAI/Anthropic for Family AI)
 
 
+## Session 2026-02-15g — Storage Quotas + Recovery System
+
+### 📊 Byte-accurate storage tracking
+- **NEW endpoint** `GET /api/me/storage/usage` — walks every project, doc, snapshot, on-disk media file owned by the user and returns honest UTF-8 byte counts
+- Breakdown categories: messages_text · html_snapshots · current_html · engineering_docs · media_files_on_disk
+- Counts: projects · messages · docs · files
+- Tested on prod with admin@zenrex.ai: 1.9 MB used / 500 MB free quota across 9 projects, 125 messages
+
+### 💎 Storage tiers (price displayed as "advisory" — billing not enforced yet)
+| Tier | Quota | Price | Use case |
+|---|---:|---:|---|
+| Free (مجاني) | 500 MB | $0 | Casual users, ~10 short videos |
+| Creator (المبدع) | 5 GB | $5/mo | Short anime series 10-20 eps |
+| Studio (الاستوديو) | 50 GB | $25/mo | Long-form HD productions |
+| Enterprise (المؤسسة) | 500 GB | $99/mo | Agencies, studios |
+
+### 🛟 Recovery request flow
+- **NEW** `POST /api/me/storage/recovery-request` — user submits description of what was lost
+- Atomically creates a `recovery_requests` row + dispatches a `owner_notifications` entry so the admin bell rings
+- **NEW** `GET /api/me/storage/recovery-requests/mine` — user tracks their tickets (pending/in_progress/resolved/rejected)
+- **Owner endpoints** `GET /owner/all-recovery-requests` + `POST /owner/recovery-requests/{id}/resolve` for the admin dashboard
+
+### 🎨 Storage dashboard `/storage` (`pages/StoragePage.js`)
+- Big quota bar (cyan→emerald gradient; turns amber at 80%, red over 100%)
+- Per-category breakdown with mini-bars showing % of total
+- Tier ladder showing all 4 plans with current one highlighted
+- Recovery form built-in + history of user's prior recovery tickets
+
+
 ## Session 2026-02-15f — Data Durability + User Export
 
 ### 🛡️ Multi-layer durability guarantees
