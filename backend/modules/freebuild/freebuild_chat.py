@@ -2936,21 +2936,31 @@ def make_freebuild_chat_router(db, get_current_user):
             ) if _secret else None
         except Exception:
             _agent_token = None
-        # We need to capture the final state to persist; we re-parse SSE in a tee.
-        captured: Dict[str, Any] = {"summary": "", "options": [], "inline_images": [],
-                                     "inline_audio": [],
-                                     "iterations": 0,
-                                     "model_used": "", "html_updated": False,
-                                     "new_html": None, "snapshots": []}
-        # Note: changes are tracked via ctx_holder["ctx"] populated by stream_agent_turn
+        # ──────────────────────────────────────────────────────────────────
+        # 🔋 BACKGROUND-RESILIENT EXECUTION
+        # ──────────────────────────────────────────────────────────────────
+        # If the user closes the tab, loses internet, or refreshes the page,
+        # we DO NOT want the agent to die mid-thought. So we spawn the agent
+        # as a detached asyncio.Task that owns its own DB-persistence flow,
+        # and the SSE response just tails an asyncio.Queue. If the SSE
+        # consumer (client) goes away, the queue reader stops but the
+        # background task continues until `finish` is called by the agent.
+        # When the user reconnects, GET /project/{pid} will already show the
+        # final message because the task wrote it via its own `finally`.
+        import asyncio as _asyncio
+        event_queue: "_asyncio.Queue[str | None]" = _asyncio.Queue(maxsize=200)
+        ctx_holder: Dict[str, Any] = {}
 
-        async def event_stream():
-            from .freebuild_agent import stream_agent_turn as _s
-            ctx_holder: Dict[str, Any] = {}
+        async def _run_agent_in_background():
+            """Owns the agent lifecycle + the final DB write. Cancellation-safe."""
             last_persisted_changes = 0
             try:
-                async for chunk in _s(proj, message, history, ctx_holder=ctx_holder, user_language=user_language, auth_token=_agent_token, db=db, is_owner=is_platform_owner_stream):
-                    # Match the SSE event line exactly (chunks always start with 'event: <name>\n')
+                async for chunk in stream_agent_turn(
+                    proj, message, history, ctx_holder=ctx_holder,
+                    user_language=user_language, auth_token=_agent_token,
+                    db=db, is_owner=is_platform_owner_stream,
+                ):
+                    # Capture done events for final persistence
                     if chunk.startswith("event: done\n"):
                         try:
                             data_line = [ln for ln in chunk.split("\n") if ln.startswith("data:")][0][5:].strip()
@@ -2964,10 +2974,7 @@ def make_freebuild_chat_router(db, get_current_user):
                             captured["html_updated"] = done.get("html_updated", False)
                         except Exception:
                             logger.exception("agent stream: failed to parse done event")
-                    # ⚡ MID-STREAM CHECKPOINT: every time a tool finishes successfully
-                    # AND the HTML has new changes, write the latest HTML to the DB
-                    # right away. This way if the client disconnects (proxy timeout,
-                    # tab close, network drop), the work isn't lost.
+                    # Mid-stream HTML checkpoint — survives disconnects
                     if chunk.startswith("event: tool\n") and '"phase": "done"' in chunk:
                         ctx_now = ctx_holder.get("ctx")
                         if ctx_now and ctx_now.changes_made > last_persisted_changes and ctx_now.current_html:
@@ -2979,17 +2986,22 @@ def make_freebuild_chat_router(db, get_current_user):
                                               "agent_in_progress": True}},
                                 )
                                 last_persisted_changes = ctx_now.changes_made
-                                logger.info(f"[agent-stream] mid-stream HTML checkpoint saved (changes={last_persisted_changes})")
                             except Exception:
                                 logger.exception("mid-stream checkpoint failed")
-                    yield chunk
+                    # Push to queue — drop oldest if full (keeps memory bounded)
+                    try:
+                        event_queue.put_nowait(chunk)
+                    except _asyncio.QueueFull:
+                        try:
+                            event_queue.get_nowait()
+                            event_queue.put_nowait(chunk)
+                        except _asyncio.QueueEmpty:
+                            pass
             finally:
-                # Final persist runs even if the client disconnected mid-stream.
+                # Persist to DB even on cancellation
                 final_ctx = ctx_holder.get("ctx")
                 new_html = final_ctx.current_html if (final_ctx and final_ctx.changes_made > 0) else None
                 snapshots = final_ctx.snapshots_to_create if final_ctx else []
-                # If no done event received (interrupted), synthesize a summary
-                # from any narration the AI managed to produce
                 if not captured.get("summary"):
                     if final_ctx and final_ctx.changes_made > 0:
                         captured["summary"] = (
@@ -2997,9 +3009,7 @@ def make_freebuild_chat_router(db, get_current_user):
                             "العمل محفوظ — ابعث 'كمّل' وأكمل من حيث وقفت."
                         )
                     else:
-                        captured["summary"] = (
-                            "⏸️ انقطع الاتصال قبل ما أبدأ. أعد إرسال طلبك من فضلك."
-                        )
+                        captured["summary"] = "⏸️ انقطع الاتصال قبل ما أبدأ. أعد إرسال طلبك من فضلك."
                     captured["html_updated"] = bool(new_html)
                 try:
                     update_set: Dict[str, Any] = {"updated_at": _now(), "agent_in_progress": False}
@@ -3030,7 +3040,32 @@ def make_freebuild_chat_router(db, get_current_user):
                         {"$push": push_ops, "$set": update_set},
                     )
                 except Exception:
-                    logger.exception("agent stream: final persist failed")
+                    logger.exception("background agent persist failed")
+                # Signal queue completion
+                try:
+                    event_queue.put_nowait(None)
+                except _asyncio.QueueFull:
+                    pass
+
+        # Mark project as in-progress + spawn the background task
+        await db.freebuild_projects.update_one(
+            {"id": pid}, {"$set": {"agent_in_progress": True, "updated_at": _now()}},
+        )
+        bg_task = _asyncio.create_task(_run_agent_in_background())
+
+        async def event_stream():
+            """Tail the queue. If client goes away, this generator dies but
+            `bg_task` keeps running independently and finishes its `finally`."""
+            try:
+                while True:
+                    chunk = await event_queue.get()
+                    if chunk is None:
+                        break
+                    yield chunk
+            except _asyncio.CancelledError:
+                # Client disconnected — DO NOT cancel bg_task
+                logger.info(f"[agent-stream] client disconnected, bg task continues for project {pid}")
+                raise
 
         return StreamingResponse(
             event_stream(),
@@ -3041,8 +3076,6 @@ def make_freebuild_chat_router(db, get_current_user):
                 "Connection": "keep-alive",
             },
         )
-
-    return router
 
     return router
 

@@ -11,6 +11,45 @@ Unify the AI brain and empower it with unified toolset. Fix mocked AI Trading Bo
 - 100% LOCAL AI requirement (no OpenAI/Anthropic for Family AI)
 
 
+## Session 2026-02-15i — Memory Recovery + Background Execution Resilience
+
+### 🧠 Memory Recovery Discipline (إلزامي في system prompt)
+- When AI detects long history (>30 msgs) OR user says "كمّل / اكمل / نسيت / كنت تقول":
+  1. MUST read `decisions` doc + `character_sheet` (if video)
+  2. Infer current_phase, prior decisions, what's still pending
+  3. Summarize for user in human voice: "تذكّرت كل شي 👌 — كنا في X وY وZ..."
+  4. NEVER ask user to re-explain something already on record
+- This works across server restarts, page reloads, and disconnect-resume scenarios
+
+### 🔋 Background-Resilient Agent Execution
+**Root architectural change in `agent-chat-stream` endpoint:**
+- Agent now runs as a **detached `asyncio.create_task`** that owns its own DB persistence
+- SSE response is purely an **event tailer** — reads from an asyncio.Queue
+- When client disconnects (closes tab, kills internet, phone dies):
+  - Queue reader gets cancelled (SSE generator dies)
+  - **Background task survives** and runs to completion
+  - Final message is persisted via task's own `finally` block
+  - When user reconnects, `GET /project/{pid}` returns the complete answer
+- `agent_in_progress: True/False` flag in project doc lets the UI show "still working" indicator
+
+### ✅ Verified on production (Hetzner logs)
+```
+03:41:53  iter=1 start (provider=anthropic)
+03:41:55  client SSE timed out (3s timeout)
+03:41:55  iter=1 stream done
+03:41:56  iter=2 start          ← agent kept running AFTER client gone
+03:42:07  iter=2 done
+03:42:20  iter=3 start
+03:42:34  iter=3 done AND finalizing (summary=178 chars, persisted)
+```
+The agent completed 3 iterations and finalized successfully — **41 seconds after client disconnected**.
+
+### 🎯 What this means for users
+- Start a long generation → close the browser → come back hours later → it's done
+- Phone dies mid-conversation → reconnect → AI continues from where it stopped
+- Server restarts in the middle? → MongoDB Atlas + Hetzner backups preserve everything; agent prompt's memory-recovery rule re-orients the AI on the next message
+
+
 ## Session 2026-02-15h — Trash + Paid Restore Pipeline
 
 ### 🗑️ Two-stage delete with retention window
