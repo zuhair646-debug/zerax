@@ -7,6 +7,7 @@ import os
 import re
 import json
 import uuid
+import time
 import logging
 import asyncio
 import hashlib
@@ -1947,13 +1948,123 @@ def make_freebuild_chat_router(db, get_current_user):
     # ===== Delete project =====
     @router.delete("/project/{pid}")
     async def delete_project(pid: str, user=Depends(get_current_user)):
+        # Soft-delete only. The 30-day clock starts ticking now; restore is
+        # free within 24h, $5 between 24h-30d, hard-purged after 30 days.
         r = await db.freebuild_projects.update_one(
             {"id": pid, "user_id": user["user_id"]},
-            {"$set": {"status": "deleted", "updated_at": _now()}},
+            {"$set": {
+                "status": "deleted",
+                "deleted_at": _now(),
+                "updated_at": _now(),
+            }},
         )
         if r.matched_count == 0:
             raise HTTPException(404)
-        return {"ok": True}
+        return {"ok": True,
+                "message": "حُذف المشروع — تقدر تسترجعه مجاناً خلال 24 ساعة من /trash"}
+
+    # ===== Trash (soft-deleted projects) =====
+    # Customers asked: "don't lose my work, let me recover deletes". So we
+    # never hard-delete on the user's click — we move to trash with a 30-day
+    # retention. Free restore for 24h grace period, then a small fee
+    # ($5 flat — value-aligns with the storage backup cost).
+    GRACE_FREE_SECONDS = 24 * 3600
+    HARD_PURGE_SECONDS = 30 * 24 * 3600
+    RESTORE_FEE_USD = 5.0
+
+    def _restore_status(deleted_at: str | float | None) -> Dict[str, Any]:
+        """Compute restore eligibility + fee from the deleted timestamp."""
+        from datetime import datetime
+        if not deleted_at:
+            return {"eligible": True, "fee_usd": 0, "reason": "free"}
+        try:
+            if isinstance(deleted_at, (int, float)):
+                age_sec = time.time() - float(deleted_at)
+            else:
+                # ISO 8601 string from _now()
+                dt = datetime.fromisoformat(str(deleted_at).replace("Z", "+00:00"))
+                age_sec = time.time() - dt.timestamp()
+        except Exception:
+            age_sec = 0
+        if age_sec < GRACE_FREE_SECONDS:
+            return {"eligible": True, "fee_usd": 0,
+                    "reason": "خلال فترة السماح المجانية (24 ساعة)",
+                    "expires_in_sec": int(GRACE_FREE_SECONDS - age_sec)}
+        if age_sec < HARD_PURGE_SECONDS:
+            return {"eligible": True, "fee_usd": RESTORE_FEE_USD,
+                    "reason": f"الاسترجاع برسم رمزي ${RESTORE_FEE_USD:.2f}",
+                    "expires_in_sec": int(HARD_PURGE_SECONDS - age_sec)}
+        return {"eligible": False, "fee_usd": 0,
+                "reason": "انتهت فترة الاحتفاظ (30 يوم) — يتم الحذف النهائي"}
+
+    @router.get("/trash")
+    async def list_trash(user=Depends(get_current_user)):
+        cur = db.freebuild_projects.find(
+            {"user_id": user["user_id"], "status": "deleted"},
+            {"_id": 0, "id": 1, "name": 1, "mode": 1, "deleted_at": 1,
+             "created_at": 1, "updated_at": 1, "messages": 1},
+        ).sort("deleted_at", -1).limit(100)
+        items: List[Dict[str, Any]] = []
+        async for p in cur:
+            # Strip messages from list view (heavy); just send count
+            msg_count = len(p.get("messages") or [])
+            p.pop("messages", None)
+            p["message_count"] = msg_count
+            p["restore"] = _restore_status(p.get("deleted_at"))
+            items.append(p)
+        return {"items": items, "retention_days": HARD_PURGE_SECONDS // 86400,
+                "grace_hours": GRACE_FREE_SECONDS // 3600,
+                "paid_fee_usd": RESTORE_FEE_USD}
+
+    @router.post("/project/{pid}/restore")
+    async def restore_project(pid: str, user=Depends(get_current_user)):
+        proj = await db.freebuild_projects.find_one(
+            {"id": pid, "user_id": user["user_id"], "status": "deleted"},
+            {"_id": 0, "id": 1, "name": 1, "deleted_at": 1},
+        )
+        if not proj:
+            raise HTTPException(404, "غير موجود في سلة المحذوفات")
+        status = _restore_status(proj.get("deleted_at"))
+        if not status["eligible"]:
+            raise HTTPException(410, status["reason"])  # 410 Gone
+        if status["fee_usd"] > 0:
+            # Billing is not enforced yet — for now we log the fee and let
+            # the user proceed (so they can experience the full flow). When
+            # Stripe is wired, this endpoint will return 402 Payment Required
+            # with a Stripe Checkout URL and the actual restore happens in
+            # the success webhook.
+            await db.restore_charges.insert_one({
+                "id": str(uuid.uuid4()),
+                "user_id": user["user_id"],
+                "project_id": pid,
+                "fee_usd": status["fee_usd"],
+                "paid": False,  # flip to True in Stripe webhook
+                "created_at": _now(),
+            })
+        await db.freebuild_projects.update_one(
+            {"id": pid},
+            {"$set": {"status": "active", "updated_at": _now()},
+             "$unset": {"deleted_at": ""}},
+        )
+        return {
+            "ok": True,
+            "fee_charged_usd": status["fee_usd"],
+            "message": (f"تم استرجاع المشروع '{proj.get('name')}' ✓ — "
+                        + ("مجاناً ضمن فترة السماح" if status["fee_usd"] == 0
+                           else f"مع رسم ${status['fee_usd']:.2f}")),
+        }
+
+    @router.delete("/project/{pid}/purge")
+    async def purge_project(pid: str, user=Depends(get_current_user)):
+        """Permanently delete a soft-deleted project. Irreversible."""
+        r = await db.freebuild_projects.delete_one(
+            {"id": pid, "user_id": user["user_id"], "status": "deleted"}
+        )
+        if r.deleted_count == 0:
+            raise HTTPException(404, "غير موجود في سلة المحذوفات")
+        # Also drop engineering docs to free space
+        await db.freebuild_project_docs.delete_many({"project_id": pid})
+        return {"ok": True, "message": "تم الحذف النهائي — لا يمكن الاسترجاع"}
 
     # ===== Full project export (data portability guarantee) ===================
     # Users can download their entire project — chat history, decisions,

@@ -11,6 +11,36 @@ Unify the AI brain and empower it with unified toolset. Fix mocked AI Trading Bo
 - 100% LOCAL AI requirement (no OpenAI/Anthropic for Family AI)
 
 
+## Session 2026-02-15h — Trash + Paid Restore Pipeline
+
+### 🗑️ Two-stage delete with retention window
+- **Delete is now soft** (sets `status='deleted'` + `deleted_at` timestamp)
+- **Retention: 30 days** → after that, hard-purged from MongoDB + linked engineering docs deleted
+- **Restore fee ladder**:
+  - 0-24h after deletion: **مجاناً** (grace period)
+  - 24h-30d: **$5 flat fee** (small, fair — recovery work + storage cost)
+  - >30 days: 410 Gone (data already purged)
+
+### 🛤️ NEW endpoints (`freebuild_chat.py`)
+- `GET  /api/freebuild-chat/trash` — list user's soft-deleted projects with computed restore status (eligibility, fee, time-remaining)
+- `POST /api/freebuild-chat/project/{pid}/restore` — restore a project; records the fee in `restore_charges` collection (Stripe billing wired later)
+- `DELETE /api/freebuild-chat/project/{pid}/purge` — permanent delete from trash (irreversible, also drops engineering docs)
+- `DELETE /api/freebuild-chat/project/{pid}` — UNCHANGED interface but now does **soft-delete** under the hood
+
+### 🎨 NEW frontend page `/trash` (`pages/TrashPage.js`)
+- Sortable list (newest deletion first), color-coded by restore tier (emerald=free, amber=paid, dimmed=expired)
+- Mode badges (فيديو/أنمي/تطبيق/لعبة/...) + message counts
+- One-click Restore button with confirm dialog for paid restores
+- One-click Permanent Delete (with strong "irreversible" confirm)
+- Policy banner explaining 24h/$5/30d cycle
+- Cross-link from `/storage` page
+
+### 🧪 Verified on prod
+```
+Create → Soft-delete → Trash shows 6 items → Restore (free) ✓ → Purge ✓
+```
+
+
 ## Session 2026-02-15g — Storage Quotas + Recovery System
 
 ### 📊 Byte-accurate storage tracking

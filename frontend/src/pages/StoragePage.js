@@ -236,6 +236,15 @@ export default function StoragePage() {
               {showRecovery ? 'إخفاء' : 'فتح نموذج الاسترداد'}
             </button>
           </div>
+          <div className="mt-2 mb-2">
+            <a
+              href="/trash"
+              data-testid="open-trash-link"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-zinc-800/60 hover:bg-zinc-700/70 border border-rose-400/30 text-rose-200 text-[11px] font-bold transition"
+            >
+              🗑️ سلة المحذوفات — استرجع مشاريعك المحذوفة (24 ساعة مجاني، بعدها $5)
+            </a>
+          </div>
           {showRecovery && (
             <div className="space-y-2 pt-2 border-t border-white/10">
               <textarea
