@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import VideoStudioPreview from './VideoStudioPreview';
-import VideoPhaseTracker from '../components/VideoPhaseTracker';
+import VideoPhaseTracker, { VIDEO_PHASES } from '../components/VideoPhaseTracker';
 import {
   Globe, Send, Loader2, Sparkles, Eye, ArrowRight, ArrowLeft,
   CheckCircle2, Check, Image as ImageIcon, FolderOpen, Code,
@@ -2119,8 +2119,21 @@ function ChatWorkspace({ projectId }) {
   const [thinkingStage, setThinkingStage] = useState(0);
   const [lastTask, setLastTask] = useState(null); // {label, model}
   const [loading, setLoading] = useState(false);
-  const [activePhase, setActivePhase] = useState('discovery');
+  // Active phase = either a user-clicked override OR what the backend currently
+  // tracks for this project (so when the AI calls set_current_phase the sidebar
+  // updates automatically).
+  const [activePhaseOverride, setActivePhaseOverride] = useState(null);
+  const activePhase = activePhaseOverride || project?.current_phase || 'discovery';
+  const setActivePhase = setActivePhaseOverride;
   const [activeTab, setActiveTab] = useState('chat'); // chat | live | approved
+
+  // Mode helpers — video modes hide HTML/Build/Deploy UI entirely.
+  const isVideoMode = ['video_studio', 'anime_studio', 'longform_video'].includes(project?.mode);
+  const isStudioMode = isVideoMode || project?.mode === 'image_studio';
+  const VIDEO_PHASE_EMOJI = { film_type: '🎞️', characters: '👥', script: '📝', voice: '🎙️', storyboard: '🖼️', preview: '👁️', render: '✨' };
+  const sidebarPhases = isVideoMode
+    ? VIDEO_PHASES.map((p) => ({ id: p.id, title: p.label, icon: VIDEO_PHASE_EMOJI[p.id] || '🎬', desc: p.desc }))
+    : PHASES;
   const [previewMode, setPreviewMode] = useState('desktop');
   const [myProjectsOpen, setMyProjectsOpen] = useState(false);
   const [credentialRequest, setCredentialRequest] = useState(null); // {service, label, instructions}
@@ -2721,10 +2734,11 @@ function ChatWorkspace({ projectId }) {
           <Globe className="w-6 h-6 text-emerald-400 shrink-0" />
           <div className="min-w-0">
             <h1 className="font-bold text-base sm:text-lg truncate" data-testid="project-title">{project.name}</h1>
-            <p className="text-xs text-zinc-500 truncate">{PHASES.find((p) => p.id === activePhase)?.title}</p>
+            <p className="text-xs text-zinc-500 truncate">{sidebarPhases.find((p) => p.id === activePhase)?.title}</p>
           </div>
         </div>
         <div className="flex items-center gap-2 shrink-0">
+          {!isVideoMode && (
           <button
             type="button"
             onClick={async () => {
@@ -2754,7 +2768,8 @@ function ChatWorkspace({ projectId }) {
             <Download className="w-3.5 h-3.5" />
             <span className="hidden sm:inline">نسخة احتياطية</span>
           </button>
-          {project.current_html && (
+          )}
+          {!isVideoMode && project.current_html && (
             <button
               type="button"
               onClick={() => setSnapshotsOpen(true)}
@@ -2766,7 +2781,7 @@ function ChatWorkspace({ projectId }) {
               <span className="hidden sm:inline">السجل</span>
             </button>
           )}
-          {project.code_unlocked && (
+          {!isVideoMode && project.code_unlocked && (
             <button
               type="button"
               onClick={() => setConnectionsOpen(true)}
@@ -2778,7 +2793,7 @@ function ChatWorkspace({ projectId }) {
               <span className="hidden sm:inline">الاتصالات</span>
             </button>
           )}
-          {project.current_html && (
+          {!isVideoMode && project.current_html && (
             <button
               type="button"
               onClick={() => setFinalizeOpen(true)}
@@ -2791,9 +2806,9 @@ function ChatWorkspace({ projectId }) {
               <span className="sm:hidden">إنهاء</span>
             </button>
           )}
-          <div className="px-3 py-1.5 bg-emerald-500/10 border border-emerald-500/30 rounded-lg flex items-center gap-1.5">
-            <Sparkles className="w-3.5 h-3.5 text-emerald-400" />
-            <span className="text-xs text-emerald-300 font-bold hidden sm:inline">من الصفر</span>
+          <div className={`px-3 py-1.5 ${isVideoMode ? 'bg-red-500/10 border-red-500/30' : 'bg-emerald-500/10 border-emerald-500/30'} border rounded-lg flex items-center gap-1.5`}>
+            <Sparkles className={`w-3.5 h-3.5 ${isVideoMode ? 'text-red-400' : 'text-emerald-400'}`} />
+            <span className={`text-xs ${isVideoMode ? 'text-red-300' : 'text-emerald-300'} font-bold hidden sm:inline`}>{isVideoMode ? '🎬 استوديو الفيديو' : 'من الصفر'}</span>
           </div>
         </div>
       </div>
@@ -2806,13 +2821,20 @@ function ChatWorkspace({ projectId }) {
             <span>📋</span> <span>المراحل</span>
           </h2>
           <div className="space-y-2">
-            {PHASES.map((phase) => {
+            {sidebarPhases.map((phase) => {
               const isActive = activePhase === phase.id;
-              // Compute a per-phase status hint
+              // Compute a per-phase status hint based on mode
               let stat = '';
               const qcount = messages.filter((mm) => mm.role === 'assistant' && (mm.options || []).length > 0).length;
               const variantsCount = messages.reduce((s, mm) => s + (mm.design_variants?.length || 0), 0);
-              if (phase.id === 'discovery') stat = `${qcount} سؤال طُرح`;
+              if (isVideoMode) {
+                // Video-specific phase status
+                const phaseHistory = new Set(project?.phase_history || []);
+                const currentPhase = project?.current_phase || 'film_type';
+                if (phaseHistory.has(phase.id)) stat = '✓ منتهية';
+                else if (phase.id === currentPhase) stat = '🟠 جارية الآن';
+                else stat = '🔒 مقفلة';
+              } else if (phase.id === 'discovery') stat = `${qcount} سؤال طُرح`;
               else if (phase.id === 'design')   stat = variantsCount > 0 ? `${variantsCount} تصميم` : 'بانتظار خيارات';
               else if (phase.id === 'assets')   stat = `${approvedAssets.length} معتمد`;
               else if (phase.id === 'build')    stat = project.code_unlocked ? '🔓 مفتوح' : '🔒 مقفل';
@@ -2821,7 +2843,12 @@ function ChatWorkspace({ projectId }) {
 
               const handleClick = () => {
                 setActivePhase(phase.id);
-                // Functional routing — each phase opens the right context
+                if (isVideoMode) {
+                  // Video mode: just open chat — all phases are conversational
+                  setActiveTab('chat');
+                  return;
+                }
+                // Functional routing — each phase opens the right context (website mode)
                 if (phase.id === 'assets') setActiveTab('approved');
                 else if (phase.id === 'preview') setActiveTab('live');
                 else if (phase.id === 'build') {
@@ -2860,8 +2887,8 @@ function ChatWorkspace({ projectId }) {
             })}
           </div>
 
-          {/* Lock-state mini card for "Build" phase */}
-          {!project.code_unlocked && (
+          {/* Lock-state mini card for "Build" phase — website mode only */}
+          {!isVideoMode && !project.code_unlocked && (
             <div className="mt-4 rounded-lg border border-amber-500/30 bg-gradient-to-b from-amber-500/10 to-zinc-900 p-3">
               <div className="flex items-center gap-2 mb-1">
                 <span className="w-7 h-7 rounded-md bg-amber-500/20 flex items-center justify-center">
@@ -2924,7 +2951,8 @@ function ChatWorkspace({ projectId }) {
               )}
             </button>
             <div className="flex-1" />
-            {/* GitHub push / paywall button — single visible CTA in the chat header */}
+            {/* GitHub push / paywall button — website mode only */}
+            {!isVideoMode && (
             <button
               type="button"
               onClick={() => {
@@ -2958,6 +2986,7 @@ function ChatWorkspace({ projectId }) {
                 </>
               )}
             </button>
+            )}
             <div className="text-[10px] text-zinc-500 hidden sm:flex items-center gap-1.5 px-2">
               <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
               <span>محفوظ تلقائياً</span>
