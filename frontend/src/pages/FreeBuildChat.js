@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import VideoStudioPreview from './VideoStudioPreview';
 import VideoPhaseTracker, { VIDEO_PHASES } from '../components/VideoPhaseTracker';
+import ZCrownSpinner from '../components/ZCrownSpinner';
 import {
   Globe, Send, Loader2, Sparkles, Eye, ArrowRight, ArrowLeft,
   CheckCircle2, Check, Image as ImageIcon, FolderOpen, Code,
@@ -3088,6 +3089,13 @@ function ChatWorkspace({ projectId }) {
                           if (inp) { try { inp.focus(); inp.scrollIntoView({ behavior: 'smooth', block: 'center' }); } catch { /* DOM not ready */ } }
                         }}
                       />
+                    )}
+
+                    {/* Brand spinner — only while the agent is actively working */}
+                    {m.role === 'assistant' && m.agent_streaming && (
+                      <div className="mt-3" data-testid={`agent-spinner-${i}`}>
+                        <ZCrownSpinner size={28} label="الذكاء الصناعي يعمل الآن…" />
+                      </div>
                     )}
 
                     {/* Agent live thinking — visible while the agent reasons/calls tools */}

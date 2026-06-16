@@ -4151,6 +4151,7 @@ async def _stream_one_provider(
     inline_video: List[Dict[str, Any]] = []
     model_used = model
 
+    stall_recovery_used = False  # One-shot anti-stall guard for this turn
     for step in range(max_iterations):
         iterations += 1
         logger.info(f"[agent-stream] iter={iterations} start (provider={provider})")
@@ -4374,8 +4375,41 @@ async def _stream_one_provider(
                     await asyncio.sleep(0)
 
         if not tool_uses:
-            # No more tools — model wrapped up with text
-            summary = "\n".join(text_chunks).strip()
+            # No tool calls this turn. Two possibilities:
+            #  (a) Model wrapped up cleanly with a final answer  → break naturally.
+            #  (b) Model "stalled": wrote "جاري ..." / "بأشغّل" / "..." but didn't
+            #      call any tool, expecting the user to type "كمّل". This is the
+            #      bug the user complained about. We auto-inject a continuation
+            #      directive and let the loop run one more time — ONCE per turn
+            #      (tracked via `stall_recovery_used`) to avoid infinite loops.
+            joined = "\n".join(text_chunks).strip()
+            STALL_MARKERS = (
+                "جاري", "خلّيني", "خليني", "أبدأ الآن", "ابدأ الآن", "بأشغّل",
+                "بأشغل", "بأجلب", "بأحضّر", "بأحضر", "يلا بنا", "Let me",
+                "I'll start", "starting now", "fetching", "loading",
+            )
+            looks_stalled = bool(joined) and (
+                joined.endswith(("...", "…")) or any(m in joined[-200:] for m in STALL_MARKERS)
+            )
+            if looks_stalled and not stall_recovery_used:
+                stall_recovery_used = True
+                logger.info("[agent-stream] stall detected — injecting auto-continue directive")
+                # Send a synthetic 'user' message that forces the model to act
+                nudge_text = (
+                    "أنت كتبت أنك ستفعل شيئاً (مثل 'جاري' أو 'بأشغّل') لكن **لم تستدعِ أي أداة فعلية**. "
+                    "هذا انتهاك مباشر لقاعدة Anti-Stall. **استدعِ الأداة الآن في هذا الرد بالضبط** "
+                    "(`list_voices`, `generate_voiceover`, `generate_image`, `generate_video`, إلخ) "
+                    "ولا تكتب أي نص فيه 'جاري' بدون tool_use في نفس الرسالة. ابدأ التنفيذ فوراً."
+                )
+                if provider in ("anthropic", "emergent_anthropic"):
+                    messages.append({"role": "user", "content": [{"type": "text", "text": nudge_text}]})
+                else:
+                    messages.append({"role": "user", "content": nudge_text})
+                yield _sse("thinking", {"text": "🔄 تم رصد توقف غير مبرّر — الـ AI ينفّذ الأداة الآن..."})
+                await asyncio.sleep(0)
+                continue  # Run one more iteration of the outer for-loop
+            # Otherwise: clean finish
+            summary = joined
             break
 
         # Execute each tool, emit "tool" events
