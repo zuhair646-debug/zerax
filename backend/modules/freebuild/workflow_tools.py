@@ -603,7 +603,10 @@ async def generate_video(ctx, args: Dict[str, Any]) -> Dict[str, Any]:
     headers = {"Authorization": f"Key {fal_key}", "Content-Type": "application/json"}
 
     try:
-        async with httpx.AsyncClient(timeout=180) as cl:
+        # fal.ai video models (Hailuo/Kling/Sora) often take 2-4 minutes server-side.
+        # Use a generous 300s timeout to accommodate peak-load latency. If even
+        # this isn't enough, the AI surfaces the timeout to the user gracefully.
+        async with httpx.AsyncClient(timeout=300) as cl:
             r = await cl.post(f"https://fal.run/{endpoint}", json=payload, headers=headers)
         if r.status_code == 401 or r.status_code == 403:
             await notify_owner(ctx, {

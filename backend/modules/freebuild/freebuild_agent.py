@@ -1175,25 +1175,56 @@ async def _exec_tool_async(ctx: FreeBuildToolContext, name: str, args: Dict[str,
                 return {"ok": False, "error": f"fetch failed: {type(e).__name__}: {str(e)[:200]}"}
 
         if name == "generate_image":
-            description = (args.get("description") or "").strip()
+            description = (args.get("description") or args.get("prompt") or "").strip()
             if not description:
                 return {"ok": False, "error": "description is required"}
-            w = int(args.get("width") or 1024)
-            h = int(args.get("height") or 1024)
+            w = int(args.get("width") or 1280)
+            h = int(args.get("height") or 720)
             try:
-                import httpx
-                # Use our internal /api/image-studio/generate which already wraps Gemini Nano Banana
-                async with httpx.AsyncClient(timeout=60) as cl:
-                    r = await cl.post("http://localhost:8001/api/image-studio/generate", json={
-                        "prompt": description, "count": 1, "style": "lifestyle", "width": w, "height": h
-                    })
-                    data = r.json()
-                    imgs = data.get("images") or []
-                    if not imgs:
-                        return {"ok": False, "error": "AI returned no image"}
-                    return {"ok": True, "url": imgs[0], "model": data.get("model", "gemini-nano-banana"), "description": description}
+                import httpx, os as _os, uuid as _uuid
+                # ✅ Use fal.ai Flux DIRECTLY (the platform's primary independent
+                # image provider). NO Emergent / NO litellm — we own this stack.
+                fal_key = (_os.environ.get("FAL_KEY") or _os.environ.get("FAL_API_KEY") or "").strip()
+                if not fal_key:
+                    return {"ok": False, "error": "FAL_KEY missing in .env"}
+                # Pick fal aspect ratio from w/h
+                aspect = "square_hd"
+                if w > h * 1.2:
+                    aspect = "landscape_16_9"
+                elif h > w * 1.2:
+                    aspect = "portrait_9_16"
+                async with httpx.AsyncClient(timeout=120) as cl:
+                    r = await cl.post(
+                        "https://fal.run/fal-ai/flux/schnell",
+                        headers={"Authorization": f"Key {fal_key}", "Content-Type": "application/json"},
+                        json={"prompt": description, "image_size": aspect, "num_inference_steps": 4, "num_images": 1},
+                    )
+                if r.status_code != 200:
+                    # Notify owner with diagnostic details
+                    try:
+                        if ctx.db is not None:
+                            import datetime as _dt
+                            await ctx.db.owner_notifications.insert_one({
+                                "id": _uuid.uuid4().hex, "category": "integration_failure",
+                                "service": "fal.ai", "summary": f"generate_image HTTP {r.status_code}",
+                                "details": r.text[:300],
+                                "created_at": _dt.datetime.now(_dt.timezone.utc).isoformat(),
+                                "read": False,
+                            })
+                    except Exception:
+                        pass
+                    return {"ok": False, "error": f"fal.ai HTTP {r.status_code}: {r.text[:200]}"}
+                data = r.json()
+                imgs = data.get("images") or []
+                if not imgs:
+                    return {"ok": False, "error": "fal.ai returned no image"}
+                img_url = imgs[0].get("url") if isinstance(imgs[0], dict) else imgs[0]
+                return {"ok": True, "url": img_url, "image_url": img_url,
+                        "model": "fal-ai/flux/schnell", "provider": "fal.ai",
+                        "description": description, "width": imgs[0].get("width") if isinstance(imgs[0], dict) else w,
+                        "height": imgs[0].get("height") if isinstance(imgs[0], dict) else h}
             except Exception as e:
-                return {"ok": False, "error": f"image gen failed: {type(e).__name__}: {str(e)[:200]}"}
+                return {"ok": False, "error": f"generate_image: {type(e).__name__}: {str(e)[:200]}"}
         if name == "test_page":
             url = (args.get("url") or "").strip()
             if not url.startswith(("http://", "https://")):
@@ -2224,15 +2255,44 @@ AGENT_SYSTEM_PROMPT = """أنت **Zenrex Code Brain** — مهندس برمجي 
 - 🐙 **GitHub جاهز.** المفتاح محفوظ في `.env` كـ `GITHUB_PAT` افتراضي. تقدر تنشئ ريبو، ترفع كود، تقرأ ملفات، بدون استئذان لو الطلب واضح.
 
 - 🎙️ **التعليق الصوتي يستخدم ElevenLabs فقط — أفضل مزوّد عالمياً للأصوات العربية والمتعددة** (قانون مطلق):
-   • المنصة تستخدم **ElevenLabs فقط**. **ممنوع OpenAI TTS أو أي مزوّد آخر** (المالك يرفضها لجودتها الأقل).
-   • استدعِ `list_voices(language='ar')` للحصول على `voice_id` الحقيقي (مثل `21m00Tcm4TlvDq8ikWAM`). **مو الاسم العرض** ("Adam Arabic" خطأ، استخدم `voice_id` من response).
+   • المنصة تستخدم **ElevenLabs فقط**. **ممنوع OpenAI TTS أو أي مزوّد آخر**.
+   • استدعِ `list_voices(language='ar')` للحصول على `voice_id` الحقيقي (مثل `21m00Tcm4TlvDq8ikWAM`).
    • استدعِ `generate_voiceover(text, voice_id)` بعدها لإنتاج MP3 احترافي.
 
-   🟡 **لو رجعت الأداة `ok=False, error="voice_service_down"`** (يعني خدمة الصوت معطّلة عند المالك مؤقتاً):
-   1. الأداة سبق أبلغت المالك (`notify_owner`) تلقائياً — ما يحتاج تتصل بأي أداة إضافية.
-   2. **قول للعميل بصراحة وكلمات بشرية**: *"خدمة الصوت معطّلة عندنا مؤقتاً، الفريق يعمل على إصلاحها. أكمل لك بقية المراحل (سيناريو/شخصيات/لقطات) وراح نضيف الصوت لما ترجع الخدمة."*
-   3. **لا تتوقف عن العمل** — استمر بإنتاج بقية المراحل (script, storyboard, characters, video).
-   4. `finish` بدون audio عوضاً عن المراوغة.
+   🚫🚫🚫 **قاعدة الذهب: ممنوع تماماً ادعاء فشل خدمة لم تجربها** 🚫🚫🚫
+   
+   إذا كنت ستذكر أن خدمة معطّلة (صوت، صور، فيديو، أي شيء)، **يجب** أن يكون هذا فقط:
+   1. **بعد** أن استدعيت الأداة الفعلية في نفس الـ turn، و
+   2. **بعد** أن رجعت لك بـ `ok: false, error: "voice_service_down"` (أو ما يشابه).
+   
+   ❌ **ممنوع منعاً مطلقاً** تكتب عبارات مثل:
+   - "للأسف خدمة الصوت معطّلة"
+   - "خدمة توليد الصور معطّلة"  
+   - "الخدمات معطّلة مؤقتاً"
+   
+   **قبل** أن تستدعي الأداة. هذي **كذبة** عقابها فقدان الثقة. الـ AI الصادق يجرب أولاً ثم يصدق على النتيجة الفعلية.
+   
+   ✅ **النمط الصحيح للصوت** (نفّذه حرفياً):
+   ```
+   Turn N: العميل قال "أبي صوت مصري"
+   ↓
+   You: [تكتب نص قصير: "بأشغّل ElevenLabs الآن"] + [تستدعي tool: list_voices(language='ar')] + [تستدعي tool: generate_voiceover(text, voice_id)]
+   ↓
+   Tool result: ok=true, audio_url=...
+   ↓
+   You: تعرض الصوت للعميل مع inline_audio
+   ```
+   
+   ✅ **النمط الصحيح إذا فشلت فعلاً** (نادر، تقع فقط بعد محاولة حقيقية):
+   ```
+   Turn N: العميل قال "أبي صوت"
+   ↓
+   You: [تستدعي tool: generate_voiceover(...)] 
+   ↓
+   Tool result: ok=false, error="voice_service_down"
+   ↓
+   You: تعتذر بسطر واحد + تكمّل بقية المراحل + ما تطلب من العميل أي مفتاح
+   ```
 
    ❌❌❌ **عبارات محظورة حظراً مطلقاً (لا تكتبها أبداً، مهما كان السبب)**:
    - ❌ "النظام الحالي مربوط بـ OpenAI TTS فقط"
@@ -4375,39 +4435,61 @@ async def _stream_one_provider(
                     await asyncio.sleep(0)
 
         if not tool_uses:
-            # No tool calls this turn. Two possibilities:
+            # No tool calls this turn. Three possibilities:
             #  (a) Model wrapped up cleanly with a final answer  → break naturally.
-            #  (b) Model "stalled": wrote "جاري ..." / "بأشغّل" / "..." but didn't
-            #      call any tool, expecting the user to type "كمّل". This is the
-            #      bug the user complained about. We auto-inject a continuation
-            #      directive and let the loop run one more time — ONCE per turn
-            #      (tracked via `stall_recovery_used`) to avoid infinite loops.
+            #  (b) Model "stalled": wrote "جاري ..." but didn't call any tool.
+            #  (c) Model LIED: claimed a service is "down" / "معطّلة" without
+            #      actually calling the tool to verify. This is the worst case
+            #      because it directly damages user trust. We catch it here and
+            #      force a retry.
+            #  All three are handled with a one-shot auto-continue nudge.
             joined = "\n".join(text_chunks).strip()
             STALL_MARKERS = (
                 "جاري", "خلّيني", "خليني", "أبدأ الآن", "ابدأ الآن", "بأشغّل",
                 "بأشغل", "بأجلب", "بأحضّر", "بأحضر", "يلا بنا", "Let me",
                 "I'll start", "starting now", "fetching", "loading",
             )
-            looks_stalled = bool(joined) and (
-                joined.endswith(("...", "…")) or any(m in joined[-200:] for m in STALL_MARKERS)
+            # 🚨 False-failure markers: AI claiming a service is down without calling it.
+            FALSE_FAILURE_MARKERS = (
+                "خدمة الصوت معطّلة", "خدمة الصوت معطلة",
+                "خدمة توليد الصور معطّلة", "خدمة توليد الصور معطلة",
+                "خدمة الفيديو معطّلة", "خدمة الفيديو معطلة",
+                "الخدمات معطّلة", "الخدمات معطلة",
+                "voice service is down", "image service is down",
+                "service is currently down", "service is unavailable",
             )
-            if looks_stalled and not stall_recovery_used:
+            looks_stalled = bool(joined) and (
+                joined.endswith(("...", "…")) or any(m in joined[-300:] for m in STALL_MARKERS)
+            )
+            looks_falsely_failing = bool(joined) and any(m in joined for m in FALSE_FAILURE_MARKERS)
+            if (looks_stalled or looks_falsely_failing) and not stall_recovery_used:
                 stall_recovery_used = True
-                logger.info("[agent-stream] stall detected — injecting auto-continue directive")
-                # Send a synthetic 'user' message that forces the model to act
-                nudge_text = (
-                    "أنت كتبت أنك ستفعل شيئاً (مثل 'جاري' أو 'بأشغّل') لكن **لم تستدعِ أي أداة فعلية**. "
-                    "هذا انتهاك مباشر لقاعدة Anti-Stall. **استدعِ الأداة الآن في هذا الرد بالضبط** "
-                    "(`list_voices`, `generate_voiceover`, `generate_image`, `generate_video`, إلخ) "
-                    "ولا تكتب أي نص فيه 'جاري' بدون tool_use في نفس الرسالة. ابدأ التنفيذ فوراً."
-                )
+                if looks_falsely_failing:
+                    logger.info("[agent-stream] FALSE-failure claim detected — AI lied about service being down. Forcing tool retry.")
+                    nudge_text = (
+                        "🚨 **انتهاك خطير**: أنت ادعيت أن إحدى الخدمات (الصوت/الصور/الفيديو) معطّلة، "
+                        "لكنك **لم تستدعِ أي أداة فعلية للتحقق**. هذا كذب صريح.\n\n"
+                        "الخدمات شغّالة 100% (المالك أكّد ذلك بفحص مباشر). استدعِ الأداة الفعلية الآن في هذا الرد بالضبط:\n"
+                        "- للصوت: `list_voices(language='ar')` ثم `generate_voiceover(text='...', voice_id='...')`\n"
+                        "- للصور: `generate_image(prompt='...')`\n"
+                        "- للفيديو: `generate_video(prompt='...')`\n\n"
+                        "**ممنوع تكتب رد ثاني فيه عبارة 'الخدمة معطّلة' بدون نتيجة أداة حقيقية في نفس الرد.**"
+                    )
+                else:
+                    logger.info("[agent-stream] stall detected — injecting auto-continue directive")
+                    nudge_text = (
+                        "أنت كتبت أنك ستفعل شيئاً (مثل 'جاري' أو 'بأشغّل') لكن **لم تستدعِ أي أداة فعلية**. "
+                        "هذا انتهاك مباشر لقاعدة Anti-Stall. **استدعِ الأداة الآن في هذا الرد بالضبط** "
+                        "(`list_voices`, `generate_voiceover`, `generate_image`, `generate_video`, إلخ) "
+                        "ولا تكتب أي نص فيه 'جاري' بدون tool_use في نفس الرسالة. ابدأ التنفيذ فوراً."
+                    )
                 if provider in ("anthropic", "emergent_anthropic"):
                     messages.append({"role": "user", "content": [{"type": "text", "text": nudge_text}]})
                 else:
                     messages.append({"role": "user", "content": nudge_text})
                 yield _sse("thinking", {"text": "🔄 تم رصد توقف غير مبرّر — الـ AI ينفّذ الأداة الآن..."})
                 await asyncio.sleep(0)
-                continue  # Run one more iteration of the outer for-loop
+                continue
             # Otherwise: clean finish
             summary = joined
             break

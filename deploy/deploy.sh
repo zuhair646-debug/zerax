@@ -31,8 +31,8 @@ echo "✓ Files synced"
 # 3) Hot-reload Nginx (no downtime)
 $SSH 'nginx -t > /dev/null 2>&1 && systemctl reload nginx' && echo "✓ Nginx reloaded"
 
-# 4) Backend restart (only needed if backend code or .env changed)
-$SSH 'cd /opt/zerax && docker compose restart backend > /dev/null' && echo "✓ Backend restarted"
+# 4) Backend recreate (down+up — restart alone does NOT reload .env env_file!)
+$SSH 'cd /opt/zerax && docker compose up -d --force-recreate backend > /dev/null 2>&1' && echo "✓ Backend recreated (env reloaded)"
 
 # 5) Health check
 sleep 12
