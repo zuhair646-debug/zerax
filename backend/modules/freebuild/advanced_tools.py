@@ -287,26 +287,11 @@ ADVANCED_TOOL_SCHEMAS: List[Dict[str, Any]] = [
             "required": ["to", "message"],
         },
     },
-    {
-        "name": "generate_video",
-        "description": (
-            "🎬 Generate a video clip via fal.ai. Needs `fal_key` saved. Models: "
-            "'minimax/hailuo' (6s, $0.05/s), 'kling-video/v1/standard' (5s, $0.06/s), "
-            "'fal-ai/luma-dream-machine' (5s, $0.40/s). Returns the video URL."
-        ),
-        "input_schema": {
-            "type": "object",
-            "properties": {
-                "prompt": {"type": "string", "description": "English description of the scene."},
-                "model": {"type": "string", "default": "minimax/hailuo",
-                          "enum": ["minimax/hailuo", "fal-ai/kling-video/v1/standard", "fal-ai/luma-dream-machine"]},
-                "duration_seconds": {"type": "integer", "default": 6, "minimum": 3, "maximum": 10},
-                "aspect_ratio": {"type": "string", "default": "16:9", "enum": ["16:9", "9:16", "1:1"]},
-                "image_url": {"type": "string", "description": "Optional starting frame (image-to-video)."},
-            },
-            "required": ["prompt"],
-        },
-    },
+    # NOTE: `generate_video` was REMOVED from this file (was duplicate of
+    # workflow_tools.py:generate_video) — Anthropic rejected the schema with
+    # "Tool names must be unique" → all video-mode chat streams 500'd.
+    # The version in workflow_tools.py is the canonical one (uses server-side
+    # FAL_KEY, auto-notifies owner on failure, never leaks credentials).
 ]
 
 
