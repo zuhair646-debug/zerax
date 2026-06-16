@@ -123,3 +123,32 @@
 **الإصلاح**: حذف النسخة القديمة من `advanced_tools.py` وإبقاء النسخة المحدّثة في `workflow_tools.py` (هي اللي تستخدم `FAL_KEY` من الخادم تلقائياً + ترسل إشعار للمالك لو فشلت).
 
 📅 آخر تحديث: 16 فبراير 2026
+
+---
+
+## 📌 تصنيف ذكي حسب طريقة الدفع
+
+### 💸 Pay-as-you-go (يستهلك حسب الاستخدام)
+- Anthropic Claude, OpenAI, fal.ai, ElevenLabs, Gemini, Groq, Tavily, Alpha Vantage, Stripe (% من العميل)
+
+### 💳 Subscription شهري/سنوي ثابت
+- **Hetzner VPS**: ~5-10€/شهر (السيرفر) ✅
+- **MongoDB Atlas**: $0 (Free M0) ✅
+- **Vercel**: $0 (Hobby) ✅
+- **Railway**: $0 (Hobby) ✅
+- **Resend**: $0 (Free 3K/شهر) — DNS verification غير ضرورية قبل الانطلاق
+- **Domain zenrex.ai**: ~$10-15/سنة ✅
+
+### ⏳ مستقبلية (مش الآن)
+- Sentry (مراقبة) — $0-26/شهر
+- Cloudflare CDN — $0-20/شهر
+- Backblaze B2 (تخزين فيديو) — $0.006/GB/شهر
+- Twilio SMS — $0.05/رسالة
+- 2Captcha — $1-3/1000
+
+### ❌ لا تشترك أبداً (Pay-as-you-go أرخص لاستهلاكك)
+- OpenAI Plus ($20/شهر) — للويب فقط
+- Claude Pro ($20/شهر)
+- ElevenLabs Subscription
+- fal.ai Subscription
+- Resend Pro ($20/شهر) قبل ما تصل 3,000 إيميل/شهر
