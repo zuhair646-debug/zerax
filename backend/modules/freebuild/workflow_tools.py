@@ -169,14 +169,71 @@ WORKFLOW_TOOL_SCHEMAS: List[Dict[str, Any]] = [
             "required": ["new_phase", "summary_of_decisions"],
         },
     },
+    {
+        "name": "generate_video",
+        "description": (
+            "🎬 Generate a real animated video clip via fal.ai using the "
+            "**server-configured** FAL_KEY. Never ask the user for a key — it is "
+            "preloaded on the server. Use this in Phase 7 (Render) after Storyboard "
+            "is approved.\n\n"
+            "Models (price per second):\n"
+            "  • `ltx-video`            → $0.005/s — cheap drafts\n"
+            "  • `minimax/hailuo`       → $0.04/s — good quality, fast\n"
+            "  • `kling-video/v1`       → $0.07/s — cinematic\n"
+            "  • `sora-2-turbo`         → $0.10/s — premium\n\n"
+            "Returns `{ok, video_url, duration_sec, cost_usd, model_used}` on "
+            "success. On failure, automatically posts a notification to the owner."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "prompt": {"type": "string", "description": "Detailed scene description in English (fal.ai understands English best)."},
+                "model": {"type": "string", "description": "One of: ltx-video, hailuo, kling, sora-2-turbo. Defaults to hailuo."},
+                "duration_seconds": {"type": "integer", "minimum": 3, "maximum": 10,
+                                     "description": "Clip duration in seconds (3-10). Default 6."},
+                "image_url": {"type": "string", "description": "Optional reference image URL (img2video)."},
+                "scene_id": {"type": "string", "description": "Optional scene identifier for tracking (e.g. 'scene_1', 'shot_03'). Helps with notifications."},
+            },
+            "required": ["prompt"],
+        },
+    },
+    {
+        "name": "notify_owner",
+        "description": (
+            "🚨 Send an in-app notification to the platform owner when something "
+            "goes wrong that the user shouldn't see directly — e.g. an API key "
+            "rejected, fal.ai out of credit, integration timeout. The notification "
+            "appears in the owner's dashboard bell icon and includes the project "
+            "context so they can investigate.\n\n"
+            "**Do not** mention key names or technical details to the user — just "
+            "say 'صار عطل تقني مؤقت'. THIS tool is how the team gets alerted "
+            "instead of bothering the user.\n\n"
+            "Categories: `integration_failure`, `quota_exceeded`, `key_invalid`, "
+            "`api_timeout`, `user_complaint`, `other`."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "category": {"type": "string",
+                             "enum": ["integration_failure", "quota_exceeded", "key_invalid",
+                                      "api_timeout", "user_complaint", "other"]},
+                "summary": {"type": "string", "description": "1-line title (e.g. 'fal.ai رفض المفتاح أثناء توليد المشهد 1')."},
+                "details": {"type": "string", "description": "Full error context: which tool, which API, full error message, what user was trying to do. Max 2000 chars."},
+                "severity": {"type": "string", "enum": ["low", "medium", "high", "critical"], "default": "medium"},
+            },
+            "required": ["category", "summary"],
+        },
+    },
 ]
 
 
 WORKFLOW_TOOL_LABELS_AR: Dict[str, Dict[str, str]] = {
-    "ask_user_inline": {"running": "⏸️ ينتظر اختيارك...",         "done": "✅ تم استلام الاختيار"},
-    "plan_task":       {"running": "📋 يرسم خطة العمل...",         "done": "✅ الخطة جاهزة"},
-    "delegate":        {"running": "🧠 يستشير المتخصص...",        "done": "✅ رأي المتخصص جاهز"},
-    "set_current_phase": {"running": "🎬 ينقلك للمرحلة الجاية...", "done": "✅ المرحلة الجاية مفتوحة"},
+    "ask_user_inline":  {"running": "⏸️ ينتظر اختيارك...",         "done": "✅ تم استلام الاختيار"},
+    "plan_task":        {"running": "📋 يرسم خطة العمل...",         "done": "✅ الخطة جاهزة"},
+    "delegate":         {"running": "🧠 يستشير المتخصص...",        "done": "✅ رأي المتخصص جاهز"},
+    "set_current_phase": {"running": "🎬 ينقلك للمرحلة الجاية...",  "done": "✅ المرحلة الجاية مفتوحة"},
+    "notify_owner":     {"running": "✉️ يبلّغ الفريق بصمت...",     "done": "✅ تم التبليغ"},
+    "generate_video":   {"running": "🎥 يولّد مشهد فيديو...",       "done": "✅ المشهد جاهز"},
 }
 
 
@@ -452,6 +509,163 @@ async def set_current_phase(ctx, args: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 
+async def notify_owner(ctx, args: Dict[str, Any]) -> Dict[str, Any]:
+    """Insert an admin notification into the `owner_notifications` collection.
+
+    The owner's dashboard polls this collection (or subscribes via SSE) and
+    shows a red dot on the bell icon. This is how the agent escalates problems
+    silently instead of confessing technical details to end-users.
+    """
+    category = (args.get("category") or "other").strip()
+    summary = (args.get("summary") or "").strip()[:200]
+    details = (args.get("details") or "").strip()[:2000]
+    severity = (args.get("severity") or "medium").strip().lower()
+    if severity not in {"low", "medium", "high", "critical"}:
+        severity = "medium"
+    if not summary:
+        return {"ok": False, "error": "summary required"}
+    if ctx.db is None:
+        return {"ok": False, "error": "no db"}
+    doc = {
+        "id": str(uuid.uuid4()),
+        "created_at": time.time(),
+        "category": category,
+        "summary": summary,
+        "details": details,
+        "severity": severity,
+        "project_id": ctx.project_id,
+        "user_id": getattr(ctx, "user_id", None),
+        "read": False,
+    }
+    try:
+        await ctx.db.owner_notifications.insert_one(doc)
+    except Exception as e:
+        logger.warning(f"notify_owner insert failed: {e}")
+        return {"ok": False, "error": str(e)[:120]}
+    logger.warning(f"[OWNER NOTIFY] {severity.upper()} · {category} · {summary}")
+    return {
+        "ok": True,
+        "notification_id": doc["id"],
+        "message": "✉️ تم إرسال إشعار للمالك بصمت — استمر بأدب مع العميل بدون ذكر التفاصيل التقنية.",
+    }
+
+
+async def generate_video(ctx, args: Dict[str, Any]) -> Dict[str, Any]:
+    """Generate a real animated clip via fal.ai using the server-side FAL_KEY.
+
+    Never asks the user for a key. If FAL_KEY is missing or rejected, this
+    function:
+      1) Logs the failure
+      2) Auto-calls `notify_owner` so the team is alerted
+      3) Returns a generic technical-error result the AI can show the user
+         without exposing API/key details.
+    """
+    prompt = (args.get("prompt") or "").strip()
+    if not prompt:
+        return {"ok": False, "error": "prompt is required"}
+    model_slug = (args.get("model") or "hailuo").strip().lower()
+    duration = int(args.get("duration_seconds") or 6)
+    duration = max(3, min(10, duration))
+    image_url = (args.get("image_url") or "").strip() or None
+    scene_id = (args.get("scene_id") or "").strip() or None
+
+    fal_key = os.environ.get("FAL_KEY", "").strip()
+    if not fal_key:
+        # No key configured at all — escalate to owner, give user a generic
+        # apology that does NOT mention any technical detail.
+        await notify_owner(ctx, {
+            "category": "key_invalid", "severity": "critical",
+            "summary": "FAL_KEY غير مكوَّن على الخادم",
+            "details": (f"agent tried generate_video(model={model_slug}, dur={duration}s) "
+                        f"but env FAL_KEY is empty. scene={scene_id} project={ctx.project_id}"),
+        })
+        return {
+            "ok": False,
+            "error_for_user": "صار عندي عطل تقني مؤقت في خدمة توليد الفيديو. أبلغت الفريق فوراً.",
+            "internal_error": "FAL_KEY missing in env",
+        }
+
+    # Map our friendly slug → actual fal.ai endpoint + per-second pricing
+    model_map = {
+        "ltx-video":   ("fal-ai/ltx-video",                 0.005),
+        "hailuo":      ("fal-ai/minimax/hailuo-02/standard/text-to-video", 0.04),
+        "kling":       ("fal-ai/kling-video/v1/standard/text-to-video",    0.07),
+        "kling-pro":   ("fal-ai/kling-video/v1/pro/text-to-video",         0.15),
+        "sora-2-turbo": ("fal-ai/sora-2/text-to-video",      0.10),
+    }
+    endpoint, price_per_sec = model_map.get(model_slug, model_map["hailuo"])
+    estimated_cost = round(price_per_sec * duration, 4)
+
+    # Submit job
+    payload = {"prompt": prompt[:1500], "duration": duration}
+    if image_url:
+        payload["image_url"] = image_url
+    headers = {"Authorization": f"Key {fal_key}", "Content-Type": "application/json"}
+
+    try:
+        async with httpx.AsyncClient(timeout=180) as cl:
+            r = await cl.post(f"https://fal.run/{endpoint}", json=payload, headers=headers)
+        if r.status_code == 401 or r.status_code == 403:
+            await notify_owner(ctx, {
+                "category": "key_invalid", "severity": "critical",
+                "summary": f"fal.ai رفض المفتاح (HTTP {r.status_code})",
+                "details": (f"endpoint={endpoint} response={r.text[:500]} "
+                            f"scene={scene_id} project={ctx.project_id}"),
+            })
+            return {"ok": False,
+                    "error_for_user": "صار عطل تقني مؤقت في توليد الفيديو. أبلغت الفريق."}
+        if r.status_code == 402 or r.status_code == 429:
+            await notify_owner(ctx, {
+                "category": "quota_exceeded", "severity": "high",
+                "summary": f"fal.ai رصيد منتهي أو rate-limit (HTTP {r.status_code})",
+                "details": f"endpoint={endpoint} body={r.text[:500]} cost_attempted=${estimated_cost}",
+            })
+            return {"ok": False,
+                    "error_for_user": "خدمة توليد الفيديو مزدحمة مؤقتاً. أبلغت الفريق."}
+        if r.status_code >= 400:
+            await notify_owner(ctx, {
+                "category": "integration_failure", "severity": "medium",
+                "summary": f"fal.ai رد بـ HTTP {r.status_code}",
+                "details": f"endpoint={endpoint} body={r.text[:500]} prompt={prompt[:200]}",
+            })
+            return {"ok": False,
+                    "error_for_user": "صار عطل تقني في توليد المشهد. أبلغت الفريق."}
+        data = r.json()
+        video_url = (data.get("video") or {}).get("url") or data.get("url") or ""
+        if not video_url:
+            await notify_owner(ctx, {
+                "category": "integration_failure", "severity": "medium",
+                "summary": "fal.ai رد بنجاح لكن بدون video_url",
+                "details": f"endpoint={endpoint} keys={list(data.keys())[:10]}",
+            })
+            return {"ok": False,
+                    "error_for_user": "صار عطل تقني في توليد المشهد. أبلغت الفريق."}
+        return {
+            "ok": True,
+            "video_url": video_url,
+            "duration_sec": duration,
+            "model_used": model_slug,
+            "cost_usd": estimated_cost,
+            "scene_id": scene_id,
+        }
+    except httpx.TimeoutException:
+        await notify_owner(ctx, {
+            "category": "api_timeout", "severity": "medium",
+            "summary": "fal.ai timeout (180s)",
+            "details": f"endpoint={endpoint} prompt={prompt[:200]}",
+        })
+        return {"ok": False,
+                "error_for_user": "خدمة توليد الفيديو بطيئة الآن. أبلغت الفريق وراح يتولّون."}
+    except Exception as e:
+        await notify_owner(ctx, {
+            "category": "integration_failure", "severity": "medium",
+            "summary": f"خطأ غير متوقع في generate_video: {type(e).__name__}",
+            "details": f"endpoint={endpoint} error={str(e)[:500]}",
+        })
+        return {"ok": False,
+                "error_for_user": "صار عطل تقني مؤقت. أبلغت الفريق."}
+
+
 # ─── Master dispatcher ────────────────────────────────────────────────────────
 async def dispatch_workflow(ctx, name: str, args: Dict[str, Any]) -> Dict[str, Any]:
     fn_map = {
@@ -459,6 +673,8 @@ async def dispatch_workflow(ctx, name: str, args: Dict[str, Any]) -> Dict[str, A
         "plan_task": plan_task,
         "delegate": delegate,
         "set_current_phase": set_current_phase,
+        "notify_owner": notify_owner,
+        "generate_video": generate_video,
     }
     fn = fn_map.get(name)
     if not fn:

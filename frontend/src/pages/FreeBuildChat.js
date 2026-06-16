@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import VideoStudioPreview from './VideoStudioPreview';
 import VideoPhaseTracker from '../components/VideoPhaseTracker';
@@ -316,6 +316,88 @@ function Lightbox({ open, asset, onClose, onReply, onApprove }) {
 // ─────────────────────────────────────────────────────────────
 // MARKDOWN TEXT (styled prose for AI messages)
 // ─────────────────────────────────────────────────────────────
+/**
+ * Smart image component for chat markdown.
+ *
+ * Why this exists: AI tools return image URLs in many shapes — absolute https,
+ * relative `/uploads/...`, raw filesystem paths, transient pre-signed URLs that
+ * sometimes return 404. The default ReactMarkdown `<img>` renders a broken
+ * ❓ placeholder, which looked horrendous in the storyboard.
+ *
+ * We now: resolve relative URLs against the API base, lazy-load, show a clean
+ * Arabic shimmer while loading, and on error replace with a gentle retry card
+ * instead of a broken-icon. We also render quick **Approve / Edit / Regenerate**
+ * action chips beneath each image so the user can drive the workflow without
+ * typing — exactly what the user asked for ("اعتماد / تغيير / تعديل").
+ */
+function MarkdownImage({ src, alt, title }) {
+  const [loaded, setLoaded] = useState(false);
+  const [errored, setErrored] = useState(false);
+  if (!src) return null;
+  const url = src.startsWith('http') ? src : (src.startsWith('/') ? `${API}${src}` : src);
+
+  const sendChatLine = (text) => {
+    // Bubble up a "synthetic user message" so the AI knows the action.
+    try {
+      const evt = new CustomEvent('zenrex:option-pick', { detail: { text } });
+      window.dispatchEvent(evt);
+    } catch { /* ignore */ }
+  };
+
+  if (errored) {
+    return (
+      <div className="my-2 inline-block rounded-xl border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-[11px] text-amber-200 max-w-xs">
+        <div className="font-bold mb-0.5">⚠️ ما قدرت أحمّل الصورة</div>
+        <div className="text-zinc-400">{alt || 'reference'}</div>
+        <button
+          type="button"
+          onClick={() => { setErrored(false); setLoaded(false); }}
+          className="mt-1 px-2 py-0.5 rounded bg-amber-500/20 hover:bg-amber-500/30 text-amber-200 text-[10px]"
+        >إعادة المحاولة</button>
+      </div>
+    );
+  }
+
+  return (
+    <span className="block my-2.5">
+      <span className="block relative rounded-xl overflow-hidden border border-white/10 bg-zinc-900/60">
+        {!loaded && (
+          <span className="block absolute inset-0 bg-gradient-to-br from-zinc-800 to-zinc-900 animate-pulse" />
+        )}
+        <img
+          src={url}
+          alt={alt || ''}
+          title={title || alt || ''}
+          loading="lazy"
+          onLoad={() => setLoaded(true)}
+          onError={() => setErrored(true)}
+          className={`max-w-full h-auto block transition-opacity duration-300 ${loaded ? 'opacity-100' : 'opacity-0'}`}
+        />
+      </span>
+      {(alt || title) && (
+        <span className="block text-[11px] text-zinc-400 mt-1 px-1">{alt || title}</span>
+      )}
+      <span className="flex gap-1.5 mt-1.5 flex-wrap">
+        <button
+          type="button"
+          onClick={() => sendChatLine(`✓ اعتمد هذي الصورة: ${alt || 'الصورة المعروضة'}`)}
+          className="px-2.5 py-1 rounded-full text-[10px] font-bold bg-emerald-500/20 hover:bg-emerald-500/35 text-emerald-200 border border-emerald-500/40 transition"
+        >✓ اعتماد</button>
+        <button
+          type="button"
+          onClick={() => sendChatLine(`🔄 ولّد لي صورة بديلة لـ: ${alt || 'الصورة المعروضة'}`)}
+          className="px-2.5 py-1 rounded-full text-[10px] font-bold bg-cyan-500/20 hover:bg-cyan-500/35 text-cyan-200 border border-cyan-500/40 transition"
+        >🔄 تغيير</button>
+        <button
+          type="button"
+          onClick={() => sendChatLine(`✏️ عدّل على هذي الصورة: ${alt || 'الصورة'} — أبي تغيّر `)}
+          className="px-2.5 py-1 rounded-full text-[10px] font-bold bg-amber-500/20 hover:bg-amber-500/35 text-amber-200 border border-amber-500/40 transition"
+        >✏️ تعديل</button>
+      </span>
+    </span>
+  );
+}
+
 const MD_COMPONENTS = {
   h1: ({ node, ...p }) => <h1 className="text-base font-black text-emerald-200 mt-3 mb-2 first:mt-0" {...p} />,
   h2: ({ node, ...p }) => <h2 className="text-base font-black text-emerald-200 mt-3 mb-2 first:mt-0" {...p} />,
@@ -333,9 +415,19 @@ const MD_COMPONENTS = {
       : <code className="block p-3 rounded-lg bg-black/50 text-amber-100 text-[12px] font-mono overflow-x-auto" {...p} />,
   pre: ({ node, ...p }) => <pre className="my-2 overflow-x-auto" {...p} />,
   blockquote: ({ node, ...p }) => <blockquote className="border-r-2 border-emerald-500/40 pr-3 my-2 text-zinc-300 italic" {...p} />,
+  img: ({ node, src, alt, title }) => <MarkdownImage src={src} alt={alt} title={title} />,
 };
 
-function MarkdownText({ children }) {
+/**
+ * MarkdownText is `React.memo`'d so a re-render of the parent chat list doesn't
+ * re-parse every previous message. During SSE streaming, only the CURRENTLY
+ * growing message has a new `children` string; older bubbles short-circuit.
+ *
+ * This removed the visible "flicker / ripple" the user reported: as the agent
+ * streamed text deltas, ReactMarkdown was re-parsing every assistant message in
+ * the list on each delta, briefly blanking glyphs as virtual DOM diffed.
+ */
+const MarkdownText = React.memo(function MarkdownText({ children }) {
   return (
     <div className="prose prose-invert max-w-none" dir="rtl">
       <ReactMarkdown remarkPlugins={[remarkGfm]} components={MD_COMPONENTS}>
@@ -343,7 +435,7 @@ function MarkdownText({ children }) {
       </ReactMarkdown>
     </div>
   );
-}
+});
 
 // ─────────────────────────────────────────────────────────────
 // MESSAGE ACTIONS — clean copy/quote toolbar shown under finalized
@@ -2099,6 +2191,21 @@ function ChatWorkspace({ projectId }) {
       setTimeout(() => chatEndRef.current?.scrollIntoView({ behavior: 'smooth' }), 100);
     }
   }, [project?.messages?.length, activeTab]);
+
+  // Listen for in-chat action buttons (approve/regenerate/edit on images).
+  // The MarkdownImage component dispatches `zenrex:option-pick` events; we
+  // pre-fill the composer so the user can confirm or tweak before submitting
+  // (auto-send would surprise people who clicked accidentally).
+  useEffect(() => {
+    const onPick = (e) => {
+      const text = (e?.detail?.text || '').trim();
+      if (!text) return;
+      setMessage((prev) => (prev ? `${prev}\n${text}` : text));
+      setActiveTab('chat');
+    };
+    window.addEventListener('zenrex:option-pick', onPick);
+    return () => window.removeEventListener('zenrex:option-pick', onPick);
+  }, []);
 
   const send = async () => {
     if ((!message.trim() && attachments.length === 0 && !replyToAsset) || loading) return;

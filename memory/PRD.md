@@ -11,6 +11,39 @@ Unify the AI brain and empower it with unified toolset. Fix mocked AI Trading Bo
 - 100% LOCAL AI requirement (no OpenAI/Anthropic for Family AI)
 
 
+## Session 2026-02-15e — Silent Failure Handling + Smart Images + Stable Streaming
+
+### 🔐 Critical Business Fix: AI Never Asks Users for API Keys
+- **Root cause**: Phase 7 prompt was instructing AI to call `request_credential('fal_key')` when video generation failed. AI then exposed `https://fal.ai/dashboard/keys` URLs and key prefixes to end-users — a huge trust/security violation.
+- **Fix in prompt**: Hardcoded NEVER-ASK-FOR-KEYS rule. AI must use server-side `.env` keys silently.
+- **NEW tool `generate_video(prompt, model?, duration_seconds?, image_url?, scene_id?)`** in `workflow_tools.py`:
+  - Reads `FAL_KEY` from server env directly
+  - Maps friendly slugs → fal.ai endpoints: ltx-video, hailuo, kling, kling-pro, sora-2-turbo
+  - On 401/403/402/429/timeout/exception → auto-calls `notify_owner`, returns `error_for_user` (generic "صار عطل تقني") without leaking technical details
+- **NEW tool `notify_owner(category, summary, details?, severity?)`** in `workflow_tools.py`:
+  - Inserts into `owner_notifications` collection
+  - Categories: integration_failure, quota_exceeded, key_invalid, api_timeout, user_complaint, other
+  - Severity: low / medium / high / critical
+- **NEW backend router `/api/owner/notifications`** (`routers/owner_notifications.py`) — owner-only GET/POST endpoints
+- **NEW frontend page `/admin/notifications`** (`pages/AdminNotifications.js`) — auto-polls every 20s, severity-colored cards, mark-read actions, "open project" deep-links. Tested on prod ✅
+
+### 🖼️ Smart Image Rendering in Chat
+- **Root cause**: ReactMarkdown default `<img>` showed broken `?` placeholders when fal.ai URLs 404'd or relative paths weren't resolved.
+- **Fix**: NEW `MarkdownImage` component:
+  - Resolves relative paths against `${API}` automatically
+  - Shimmer placeholder while loading (animated gradient)
+  - Friendly Arabic error card with retry button on failure (instead of broken icon)
+  - Lazy-loads (`loading="lazy"`)
+- **NEW: Approve/Change/Edit chips beneath every chat image** (✓ اعتماد · 🔄 تغيير · ✏️ تعديل)
+  - Each chip dispatches `zenrex:option-pick` window event
+  - ChatWorkspace listens and pre-fills the composer with the right Arabic instruction
+  - User can confirm/tweak before submitting (no surprise auto-send)
+
+### 📝 Stable Text Streaming (no more flicker/ripple)
+- **Root cause**: Every SSE `text_delta` re-rendered the entire chat list, and ReactMarkdown re-parsed every prior assistant bubble each tick — virtual DOM diffing briefly blanked glyphs ("التموج" the user described).
+- **Fix**: `MarkdownText` wrapped in `React.memo` → only the currently growing bubble re-parses; older bubbles short-circuit.
+
+
 ## Session 2026-02-15d — Voice Samples + "غير ذلك" Auto-Submit + Stream Resilience
 
 ### 🎙️ Voice Sample System (Phase 4)

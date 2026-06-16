@@ -83,8 +83,7 @@ import LogoPicker from '@/pages/LogoPicker';
 import AdminMarketing from '@/pages/AdminMarketing';
 import AvatarSettings from '@/pages/AvatarSettings';
 import ChannelBridge from '@/pages/ChannelBridge';
-import AdminAICore from '@/pages/AdminAICore';
-import AdminAutoCoder from '@/pages/AdminAutoCoder';
+import AdminAICore from '@/pages/AdminAICore';import AdminAutoCoder from '@/pages/AdminAutoCoder';
 import MyTradingDashboard from '@/pages/MyTradingDashboard';
 import AdminQualityRouter from '@/pages/AdminQualityRouter';
 import AdminSections from '@/pages/AdminSections';
@@ -92,6 +91,7 @@ import AdminApiKeys from '@/pages/AdminApiKeys';
 import AdminIndependence from '@/pages/AdminIndependence';
 import AdminAIReadiness from '@/pages/AdminAIReadiness';
 import AdminLearning from '@/pages/AdminLearning';
+import AdminNotifications from '@/pages/AdminNotifications';
 import SecurityControlRoom from '@/pages/SecurityControlRoom';
 import HoneypotCatcher from '@/pages/HoneypotCatcher';
 import Pricing from '@/pages/Pricing';
@@ -212,6 +212,7 @@ function App() {
           <Route path="/admin/activity" element={<ProtectedRoute adminOnly><AdminActivity user={user} /></ProtectedRoute>} />
           <Route path="/admin/credits" element={<ProtectedRoute adminOnly><AdminCredits user={user} /></ProtectedRoute>} />
           <Route path="/admin/training" element={<ProtectedRoute adminOnly><AdminTraining user={user} /></ProtectedRoute>} />
+          <Route path="/admin/notifications" element={<ProtectedRoute adminOnly><AdminNotifications user={user} /></ProtectedRoute>} />
           <Route path="/chat" element={<ProtectedRoute><AIChat user={user} /></ProtectedRoute>} />
           <Route path="/projects" element={<ProtectedRoute><ProjectsPage user={user} /></ProtectedRoute>} />
           <Route path="/designer" element={<ProtectedRoute><VisualDesigner user={user} /></ProtectedRoute>} />

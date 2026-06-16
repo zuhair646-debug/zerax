@@ -846,6 +846,7 @@ class FreeBuildToolContext:
                  is_owner: bool = False):
         self.project = dict(project)  # copy
         self.project_id: Optional[str] = project.get("id")
+        self.user_id: Optional[str] = project.get("user_id")
         self.auth_token: Optional[str] = auth_token
         self.db = db
         self.is_owner: bool = bool(is_owner)
@@ -2477,17 +2478,30 @@ MODE_ADDENDUM_VIDEO = """
 - `update_world_bible(characters, locations, plot_points, style_rules)` — احفظ ذاكرة السلسلة (للمسلسلات)
 - `download_media` — مرجعيات سينمائية + مونتاج
 - `generate_image` — صور أغلفة، بوسترات، شخصيات
-- `request_credential` — اطلب مفاتيح fal.ai لتوليد فيديو حقيقي بحركة (Sora 2 / Kling / Hailuo)
+- `generate_video(prompt, model?, duration_seconds?)` — توليد فيديو حقيقي بحركة (Hailuo/Kling/Sora) **عبر مفتاح fal.ai المُكوَّن على الخادم — استخدمه مباشرة بدون أي سؤال**.
 
 🎬 **قاعدة الترجمة الإلزامية (Subtitle Mandate)**:
 لو العميل اختار لغة منطوقة غير لغة بلده (مثلاً صنّع فيلم كوري وهو سعودي)، **يجب** تسأله بسؤال واحد قصير: *"تبي ترجمة تظهر تحت الفيديو؟ بأي لغة (عربي / إنجليزي / لا أحتاج)؟"* — قبل ما تولّد voiceover، لأن نص الترجمة لازم يكون جاهز مع الـ keyframes.
+
+🔐🔐🔐 **قاعدة المفاتيح المقدّسة (NEVER ASK FOR KEYS)** 🔐🔐🔐:
+كل مفاتيح APIs (fal.ai, OpenAI, ElevenLabs, Anthropic, Pollinations, …) **مكوَّنة على الخادم في `.env`**.
+استخدمها مباشرة عبر الأدوات (`generate_video`, `generate_voiceover`, `generate_image`, …).
+
+❌❌❌ **ممنوع منعاً باتاً**:
+- ❌ تستدعي `request_credential` لمفاتيح خدمات الإنتاج (fal_key, openai_key, elevenlabs_key, anthropic_key, tavily_key, ...). هذي مكوَّنة على الخادم.
+- ❌ تطلب من العميل يفتح `fal.ai/dashboard/keys` أو يسجّل أو ينسخ مفتاح. **ولا مرة**.
+- ❌ تذكر أسماء مفاتيح (`fal_key`, `FAL_KEY`, `API_KEY`) للعميل أبداً. العميل ما يهمه التفاصيل التقنية.
+- ❌ تقول "إذا عندك مفتاح fal.ai الصقه هنا" — هذا تسريب للأسرار التشغيلية.
+
+✅ لو فشل توليد فيديو/صوت/صورة لأي سبب (مفتاح منتهي، rate limit، خطأ شبكة، عطل API):
+1. **استدع `notify_owner(category='integration_failure', summary='...', details='...')`** — يصل المالك إشعار فوري مع لقطة من المحادثة.
+2. اعتذر للعميل بكلمات بشرية بدون تفاصيل تقنية: *"صار عندي عطل تقني مؤقت في توليد الفيديو. أبلغت الفريق وراح يتولّون الأمر. هل تبيني أكمل بالصور المتحركة (slideshow) كحلٍّ مؤقت؟"*
+3. **استمر في إنتاج الأصول الباقية** (السيناريو، الصوت، الترجمة، الستوري بورد) بحيث لو حُلّت المشكلة تكون كل الأصول جاهزة للتحريك.
 
 🚫🚫🚫 **ممنوع منعاً باتاً في وضع الفيديو** 🚫🚫🚫:
 - ❌ **ممنوع `write_full_html` أو `apply_section`** — العميل ما طلب موقع، طلب **فيلم**.
 - ❌ **ممنوع `publish_site`** — الفيلم يُحفظ كأصول (script.md + storyboard.png + voiceover.mp3) في معرض المشروع، **مو كصفحة ويب**.
 - ❌ **ممنوع "بأبني صفحة عرض الفيلم"** — هذه فكرة قديمة خاطئة. الفيلم نفسه = المنتج النهائي.
-- ❌ **ممنوع تطلب مفتاح ElevenLabs** — OpenAI TTS عندنا ويدعم كل اللغات (انظر `generate_voiceover`).
-- ❌ تقول "ما أقدر أولّد فيديو" — اطلب مفتاح `fal_key` فقط (واحد فقط) واستخدم Sora/Kling/Hailuo.
 - ❌ تنتج مشهد فيه أخطاء حركية (يد ٦ أصابع، وجه مشوّه، حركة غير منطقية).
 - ❌ تعرض الفيديو الأصلي من يوتيوب كأنه نتاجك (`download_media` للمرجعية فقط).
 - ❌ **هلوسة أسعار fal.ai**: ممنوع تقول "$0.01/sec" أو أي رقم من راسك. الأسعار الرسمية الوحيدة المسموحة:

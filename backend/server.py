@@ -3497,6 +3497,13 @@ try:
 except Exception as _goe:
     logging.getLogger(__name__).error(f"Failed to register Google OAuth: {_goe}", exc_info=True)
 
+try:
+    from routers.owner_notifications import router as _owner_notif_router
+    app.include_router(_owner_notif_router)
+    logging.getLogger(__name__).info("Owner notifications router registered")
+except Exception as _oe:
+    logging.getLogger(__name__).error(f"Failed to register owner_notifications: {_oe}", exc_info=True)
+
 # ============== STUDIO (Image/Video deep generation for merchants) ==============
 try:
     from modules.studio import create_router as create_studio_router
