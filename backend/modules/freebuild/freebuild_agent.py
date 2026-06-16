@@ -677,6 +677,28 @@ TOOLS_SCHEMA: List[Dict[str, Any]] = [
                     ),
                     "maxItems": 4,
                 },
+                "inline_video": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "url": {"type": "string", "description": "https URL to the mp4/webm video file."},
+                            "poster_url": {"type": "string", "description": "Optional thumbnail image URL."},
+                            "caption": {"type": "string", "description": "Short Arabic caption."},
+                            "duration_sec": {"type": "number"},
+                            "model": {"type": "string", "description": "Generation model used (e.g. 'hailuo', 'kling', 'sora-2-turbo')."},
+                            "scene_id": {"type": "string", "description": "Scene identifier — useful in storyboards."},
+                            "cost_usd": {"type": "number", "description": "Actual cost of this clip in USD."},
+                        },
+                        "required": ["url"],
+                    },
+                    "description": (
+                        "Inline video clips. The chat renders an in-place HTML5 video player with "
+                        "play/pause/seek/download — never just a link. Use this after `generate_video` "
+                        "succeeds. Max 4 clips per message."
+                    ),
+                    "maxItems": 4,
+                },
             },
             "required": ["summary"],
         },
@@ -768,6 +790,36 @@ def _normalize_finish_options(raw: Any) -> List[Any]:
             if desc:
                 item["description"] = desc[:120]
             out.append(item)
+    return out
+
+
+def _normalize_inline_video(raw: Any) -> List[Dict[str, Any]]:
+    """Normalize finish/inline_video. Accepts [{url, poster_url?, caption?,
+    duration_sec?, model?, scene_id?, cost_usd?}, ...]. Max 4 clips.
+    """
+    if not isinstance(raw, list):
+        return []
+    out: List[Dict[str, Any]] = []
+    for item in raw[:4]:
+        if not isinstance(item, dict):
+            continue
+        url = str(item.get("url") or "").strip()
+        if not url or not url.startswith(("http://", "https://", "/")):
+            continue
+        entry: Dict[str, Any] = {"url": url[:500]}
+        for key, maxlen in (("poster_url", 500), ("caption", 200),
+                            ("model", 80), ("scene_id", 80)):
+            v = str(item.get(key) or "").strip()
+            if v:
+                entry[key] = v[:maxlen]
+        for nkey in ("duration_sec", "cost_usd"):
+            try:
+                nv = float(item.get(nkey) or 0)
+                if 0 < nv < 1e9:
+                    entry[nkey] = round(nv, 4)
+            except (TypeError, ValueError):
+                pass
+        out.append(entry)
     return out
 
 
@@ -2511,6 +2563,25 @@ MODE_ADDENDUM_VIDEO = """
 🎯 **سير العمل الإلزامي لكل مشروع فيلم** (لا تخرج عنه — اتبع المراحل السبع):
 
 ═══════════════════════════════════════════════════════════
+🛑 **قاعدة التوقف الفوري (Stop-When-Done Discipline)** 🛑
+
+لما تنتهي من المهمة المطلوبة → استدعِ `finish()` **فوراً** ولا تواصل التفكير.
+
+❌ **ممنوع تفعل:**
+- ❌ تكرر نفس الأداة بنفس المدخلات (`loop detection` — لو سويتها مرة بنجاح، خلاص).
+- ❌ تتجاوز **8 iterations** للمهمة الواحدة. لو وصلت 8 ولسا ما خلّصت، استدعِ `finish` بـ "وصلت لحد الأدوات المسموحة، التقدم محفوظ" بدل ما تستمر.
+- ❌ "تفكير زائد" بعد ما الناتج جاهز (مثلاً: تكرر تحسينات صغيرة على نص جاهز).
+- ❌ تستمر بعد ما تستدعي `ask_user_inline` — هذي وحدها توقف الدور تلقائياً.
+
+✅ **بمجرد ما تنتج النتيجة المطلوبة** (فيديو، صوت، صورة، سيناريو، إلخ):
+1. أرفقها في الرد عبر `finish(inline_video=[...] / inline_audio=[...] / inline_images=[...])`
+2. اكتب جملة قصيرة "تفضل، النتيجة جاهزة 👇"
+3. **استدعِ `finish` وخلاص**. لا تستدعي أدوات جديدة.
+
+هدف Zenrex = تجربة "ضغطة → نتيجة فورية"، **مش** "ضغطة → 30 دقيقة تفكير".
+═══════════════════════════════════════════════════════════
+
+═══════════════════════════════════════════════════════════
 🧠 **قاعدة الذاكرة والاسترداد (Memory Recovery Discipline)** 🧠
 
 لو لقيت المحادثة طويلة (>30 رسالة) أو لو العميل قال "كمّل" / "اكمل" / "لقد فقدت..." / "كنت تقول..." / "نسيت":
@@ -2646,9 +2717,52 @@ MODE_ADDENDUM_VIDEO = """
 **المرحلة 4 — الصوت + الترجمة (`voice`):**
    🎙️ **اسمعه قبل ما يدفع** — هذا أهم مبدأ في هذي المرحلة.
 
+   🔥🔥🔥 **قاعدة مطابقة اللهجة/النص (Dialect Coherence — Critical)** 🔥🔥🔥
+   جودة الصوت تنهار لما السيناريو ولهجة الصوت ما يتطابقون. الصوت يبيّن "روبوتي / AI" بسبب التنافر، مش بسبب الموديل. لذلك:
+   - 🗣️ **عامية سعودية** (شخصيات سعودية، فيلم محلي) → السيناريو لازم يُكتب **بالعامية**: "وش رايك؟"، "ابغى"، "ما يصير"، "خلني أشوف". **ممنوع فصحى**.
+   - 🗣️ **عامية مصرية** → "إزيك؟"، "عايز"، "مش حلو".
+   - 🗣️ **عامية شامية / خليجية** → بنفس الطريقة.
+   - 📖 **فصحى عربية رسمية** (وثائقي، خبر، تعليمي) → السيناريو **كله** فصحى نقية، علامات الإعراب، نطق الهمزة.
+   - 🌍 **لغة أجنبية** (كوري/إنجليزي/...) → السيناريو **بنفس اللغة**، لا تخلط لغتين في جملة.
+
+   **قبل ما تستدعي `generate_voiceover`**:
+   1. اسأل صراحة: *"اللهجة المطلوبة: عامية سعودية / عامية مصرية / فصحى رسمية / لغة أجنبية؟"*
+   2. **أعد كتابة السيناريو** بالكامل باللهجة المطلوبة. لا تترك أي جملة بلهجة مختلفة.
+   3. للأصوات الكورية/اليابانية → استخدم ElevenLabs Multilingual v2 (الأفضل لإخفاء طابع AI).
+   4. للعربية → استخدم ElevenLabs voice arabic-natural أو OpenAI TTS مع voice="nova" أو "shimmer" (الأكثر طبيعية).
+   5. **أضف Pause markers** (`...` أو `<break time="0.3s"/>`) في الأماكن المنطقية → يخلي الإيقاع بشري مش روبوتي.
+
    **خطوة 4.1 — اختيار اللغة + الصوت:**
-   اسأل: *"بأي لغة يتكلمون؟ هل تبي ترجمة على الشاشة وبأي لغة؟"*
-   ثم `list_voices(language=X)` واعرض الأصوات كـ `ask_user_inline` (مع وصف لكل صوت: "Korean Male Deep", "Korean Female Warm", إلخ).
+   اسأل: *"بأي لغة يتكلمون؟ وأي لهجة (لو عربي)؟ هل تبي ترجمة على الشاشة؟"*
+   ثم `list_voices(language=X)` واعرض الأصوات كـ `ask_user_inline`.
+
+   **خطوة 4.2 — عينة قصيرة مجانية (إجباري):**
+   ولّد **عينة 5 ثوان** من الجملة الأولى (بعد ما عدّلت السيناريو للهجة)، أرفقها عبر:
+   ```
+   finish(
+     summary="هذي عينة قصيرة 🎧 — اسمعها قبل ما نولّد كامل السيناريو",
+     inline_audio=[{
+       "url": "<audio_url>", "caption": "عينة بصوت Saudi Male — 5 ثوان",
+       "duration_sec": 5, "voice": "...", "kind": "sample",
+       "cost_estimate": "مجانية ✓"
+     }],
+     options=[
+       {"label":"✓ الصوت طبيعي — كمّل", "emoji":"👍"},
+       {"label":"🔄 جرّب صوت ثاني", "emoji":"🎚️"},
+       {"label":"⚡ ولّد السيناريو كامل", "emoji":"🎬"}
+     ]
+   )
+   ```
+
+   **خطوة 4.3 — السيناريو الكامل (مدفوع):**
+   بعد التأكيد → `generate_voiceover` كامل + `generate_subtitles` + أرفق:
+   ```
+   inline_audio=[{"url":"...", "kind":"full_scenario",
+                   "caption":"السيناريو الكامل مع الترجمة"}]
+   ```
+
+   **Disclaimer إجباري**:
+   > ⚠️ اسمع العينة كاملة قبل الموافقة. بعد توليد HD ما نقدر نرجع نغيّر الصوت إلا بتكلفة إضافية.
 
    **خطوة 4.2 — عينة قصيرة مجانية (إجباري):**
    قبل أي شي، ولّد **عينة 5 ثوان** من السيناريو (أول جملة فقط) بـ `generate_voiceover` بنفس الصوت المختار.
@@ -2703,7 +2817,23 @@ MODE_ADDENDUM_VIDEO = """
    اطلب من العميل المراجعة.
 
 **المرحلة 7 — التوليد النهائي HD (`render`):**
-   فقط بعد موافقة صريحة + خصم رصيد → fal.ai لتحويل الستوري بورد لفيديو متحرك حقيقي.
+   فقط بعد موافقة صريحة + خصم رصيد → استدعِ `generate_video` لكل لقطة (الأداة تستخدم FAL_KEY على الخادم تلقائياً، **ما تطلب مفتاح من العميل أبداً**).
+
+   لما تخلّص توليد كل اللقطات، أرفقها كلها في رد واحد عبر `finish`:
+   ```
+   finish(
+     summary="🎬 الفيلم جاهز! اضغط Play لكل مشهد أو حمّله من زر التحميل تحت الفيديو.",
+     inline_video=[
+       {"url":"<url1>", "scene_id":"المشهد 1", "duration_sec":6,
+        "model":"hailuo", "cost_usd":0.24, "caption":"الافتتاحية"},
+       {"url":"<url2>", "scene_id":"المشهد 2", ...},
+       ...
+     ],
+     inline_audio=[{"url":"<voiceover>", "kind":"voiceover",
+                    "caption":"التعليق الصوتي الكامل + الترجمة"}]
+   )
+   ```
+   **ممنوع** تعطي العميل روابط نصية — الفيديوهات لازم تطلع كمشغّل داخل الشات.
 
 ═══════════════════════════════════════════════════════════
 🎨 **معايير جودة الإنتاج (Zero AI-Slop Mandate)**:
@@ -3289,6 +3419,7 @@ async def _run_anthropic_agent(
     options: List[Any] = []
     inline_images: List[Dict[str, Any]] = []
     inline_audio: List[Dict[str, Any]] = []
+    inline_video: List[Dict[str, Any]] = []
     iterations = 0
     model_used = model
 
@@ -3345,6 +3476,7 @@ async def _run_anthropic_agent(
                 options = _normalize_finish_options(tu["input"].get("options"))
                 inline_images = _normalize_inline_images(tu["input"].get("inline_images"))
                 inline_audio = _normalize_inline_audio(tu["input"].get("inline_audio"))
+                inline_video = _normalize_inline_video(tu["input"].get("inline_video"))
                 ctx.log("finish", tu["input"], "agent finished")
                 tool_results.append({"type": "tool_result", "tool_use_id": tu["id"], "content": "finished"})
                 finished = True
@@ -3362,6 +3494,7 @@ async def _run_anthropic_agent(
         "options": options,
         "inline_images": inline_images,
         "inline_audio": inline_audio,
+        "inline_video": inline_video,
         "new_html": ctx.current_html if ctx.changes_made > 0 else None,
         "iterations": iterations,
         "tool_log": ctx.tool_log,
@@ -3435,6 +3568,7 @@ async def _run_openai_compat_agent(
     options: List[Any] = []
     inline_images: List[Dict[str, Any]] = []
     inline_audio: List[Dict[str, Any]] = []
+    inline_video: List[Dict[str, Any]] = []
     iterations = 0
     model_used = model
 
@@ -3478,6 +3612,7 @@ async def _run_openai_compat_agent(
                 options = _normalize_finish_options(args.get("options"))
                 inline_images = _normalize_inline_images(args.get("inline_images"))
                 inline_audio = _normalize_inline_audio(args.get("inline_audio"))
+                inline_video = _normalize_inline_video(args.get("inline_video"))
                 ctx.log("finish", args, "agent finished")
                 messages.append({"role": "tool", "tool_call_id": tc.id, "content": "finished"})
                 finished = True
@@ -3494,6 +3629,7 @@ async def _run_openai_compat_agent(
         "options": options,
         "inline_images": inline_images,
         "inline_audio": inline_audio,
+        "inline_video": inline_video,
         "new_html": ctx.current_html if ctx.changes_made > 0 else None,
         "iterations": iterations,
         "tool_log": ctx.tool_log,
@@ -3579,7 +3715,7 @@ async def stream_agent_turn(
     project: Dict[str, Any],
     user_message: str,
     history_messages: List[Dict[str, str]],
-    max_iterations: int = 100,
+    max_iterations: int = 40,
     ctx_holder: Optional[Dict[str, Any]] = None,
     user_language: str = "ar",
     auth_token: Optional[str] = None,
@@ -3636,6 +3772,7 @@ async def stream_agent_turn(
                 "options": [],
                 "inline_images": [],
                 "inline_audio": [],
+                "inline_video": [],
                 "iterations": 0,
                 "model_used": model,
                 "html_updated": False,
@@ -3649,6 +3786,7 @@ async def stream_agent_turn(
         "options": [],
         "inline_images": [],
         "inline_audio": [],
+        "inline_video": [],
         "iterations": 0,
         "model_used": "",
         "html_updated": False,
@@ -3767,6 +3905,7 @@ async def _stream_one_provider(
     options: List[Any] = []
     inline_images: List[Dict[str, Any]] = []
     inline_audio: List[Dict[str, Any]] = []
+    inline_video: List[Dict[str, Any]] = []
     model_used = model
 
     for step in range(max_iterations):
@@ -4008,6 +4147,7 @@ async def _stream_one_provider(
                 options = _normalize_finish_options(tu["input"].get("options"))
                 inline_images = _normalize_inline_images(tu["input"].get("inline_images"))
                 inline_audio = _normalize_inline_audio(tu["input"].get("inline_audio"))
+                inline_video = _normalize_inline_video(tu["input"].get("inline_video"))
                 ctx.log("finish", tu["input"], "finished")
                 if provider in ("anthropic", "emergent_anthropic"):
                     messages.append({"role": "user", "content": [{"type": "tool_result", "tool_use_id": tu["id"], "content": "finished"}]})
@@ -4077,6 +4217,7 @@ async def _stream_one_provider(
         "options": options,
         "inline_images": inline_images,
         "inline_audio": inline_audio,
+        "inline_video": inline_video,
         "iterations": iterations,
         "model_used": model_used,
         "html_updated": ctx.changes_made > 0,

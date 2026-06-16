@@ -2950,6 +2950,11 @@ def make_freebuild_chat_router(db, get_current_user):
         import asyncio as _asyncio
         event_queue: "_asyncio.Queue[str | None]" = _asyncio.Queue(maxsize=200)
         ctx_holder: Dict[str, Any] = {}
+        captured: Dict[str, Any] = {
+            "summary": "", "options": [], "inline_images": [],
+            "inline_audio": [], "inline_video": [],
+            "iterations": 0, "model_used": "", "html_updated": False,
+        }
 
         async def _run_agent_in_background():
             """Owns the agent lifecycle + the final DB write. Cancellation-safe."""
@@ -2969,6 +2974,7 @@ def make_freebuild_chat_router(db, get_current_user):
                             captured["options"] = done.get("options") or []
                             captured["inline_images"] = done.get("inline_images") or []
                             captured["inline_audio"] = done.get("inline_audio") or []
+                            captured["inline_video"] = done.get("inline_video") or []
                             captured["iterations"] = done.get("iterations", 0)
                             captured["model_used"] = done.get("model_used", "")
                             captured["html_updated"] = done.get("html_updated", False)
@@ -3025,6 +3031,7 @@ def make_freebuild_chat_router(db, get_current_user):
                                  "options": captured["options"],
                                  "inline_images": captured["inline_images"],
                                  "inline_audio": captured["inline_audio"],
+                                 "inline_video": captured["inline_video"],
                                  "design_variants": [],
                                  "agent_iterations": captured["iterations"],
                                  "model_used": captured["model_used"]},

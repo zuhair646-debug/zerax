@@ -11,6 +11,34 @@ Unify the AI brain and empower it with unified toolset. Fix mocked AI Trading Bo
 - 100% LOCAL AI requirement (no OpenAI/Anthropic for Family AI)
 
 
+## Session 2026-02-15j — Inline Video Player + Voice Naturalness + Stop-When-Done
+
+### 🎬 Inline Video Player (no more text links!)
+- **NEW** `inline_video=[{url, poster_url?, caption?, duration_sec?, model?, scene_id?, cost_usd?}]` in `finish()` tool
+- **NEW** `InlineVideoBubble` component — HTML5 `<video controls>` with play/pause/seek + download link + scene_id badge + cost display
+- AI's Phase 7 prompt rewritten: MUST attach all generated videos via `inline_video` (forbidden to give text URLs)
+- Wired through all 3 agent loops + SSE done event + DB persistence
+
+### 🗣️ Voice Naturalness — Dialect Coherence Rules
+**Root cause of robotic voice**: script-language mismatch with voice. Hardcoded into Phase 4 prompt:
+- 🗣️ Saudi voice → script MUST use Saudi colloquial ("وش رايك؟", "ابغى", "خلني أشوف")
+- 🗣️ Egyptian voice → Egyptian colloquial
+- 📖 Formal Arabic → fully MSA with diacritics
+- 🌍 Foreign language → entirely in that language, no language mixing
+- Pause markers `...` or `<break time="0.3s"/>` for human rhythm
+- Recommended voices: ElevenLabs Multilingual v2, OpenAI TTS "nova"/"shimmer"
+
+### 🛑 Stop-When-Done Discipline (no more 30-min loops!)
+**Root cause of long-running agent**: no hard limit + no rule to stop after success. Added system prompt rule:
+- ❌ Forbidden to repeat tool with same inputs (loop detection)
+- ❌ Hard cap: 8 iterations per task (was 100) — agent must `finish` after
+- ❌ Forbidden "overthinking" after output is ready
+- ✅ As soon as the deliverable is generated → attach via inline_* → call `finish` → done
+- Backend `max_iterations` for streaming agent reduced 100 → 40 as safety net
+
+### 🧪 Tests: 29/29 passing · Production healthy
+
+
 ## Session 2026-02-15i — Memory Recovery + Background Execution Resilience
 
 ### 🧠 Memory Recovery Discipline (إلزامي في system prompt)

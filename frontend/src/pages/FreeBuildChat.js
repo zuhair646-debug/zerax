@@ -522,6 +522,47 @@ const OPT_ACCENTS = [
   { ring: 'hover:border-rose-400/60 hover:bg-rose-500/10',     num: 'bg-rose-500/15 text-rose-200 ring-rose-400/30' },
   { ring: 'hover:border-teal-400/60 hover:bg-teal-500/10',     num: 'bg-teal-500/15 text-teal-200 ring-teal-400/30' },
 ];
+function InlineVideoBubble({ url, poster_url, caption, duration_sec, model, scene_id, cost_usd, idx }) {
+  const src = url && url.startsWith('http') ? url : `${API}${url || ''}`;
+  return (
+    <div
+      className="bg-gradient-to-br from-fuchsia-500/15 to-violet-500/15 border border-fuchsia-500/30 rounded-xl p-2.5"
+      data-testid={`msg-inline-video-${idx}`}
+    >
+      <div className="flex items-center gap-2 mb-1.5 flex-wrap">
+        <span className="text-[10px] font-bold text-fuchsia-200 uppercase tracking-wide">🎬 فيديو</span>
+        {scene_id && <span className="text-[10px] bg-black/40 px-1.5 py-0.5 rounded">{scene_id}</span>}
+        {model && <span className="text-[10px] bg-black/40 px-1.5 py-0.5 rounded text-fuchsia-300">{model}</span>}
+        {duration_sec && <span className="text-[10px] text-zinc-400 mr-auto">{Number(duration_sec).toFixed(1)}s</span>}
+      </div>
+      <video
+        src={src}
+        poster={poster_url && (poster_url.startsWith('http') ? poster_url : `${API}${poster_url}`)}
+        controls
+        playsInline
+        preload="metadata"
+        className="w-full rounded-lg bg-black"
+        data-testid={`msg-inline-video-player-${idx}`}
+      />
+      {caption && <p className="text-[11px] text-zinc-200 mt-1.5 leading-snug">{caption}</p>}
+      <div className="flex items-center gap-2 mt-1 text-[10px] flex-wrap">
+        {cost_usd !== undefined && cost_usd !== null && (
+          <span className="text-amber-400">تكلفة: ${Number(cost_usd).toFixed(3)}</span>
+        )}
+        <a
+          href={src}
+          download
+          target="_blank"
+          rel="noreferrer"
+          className="ml-auto text-fuchsia-300 hover:text-fuchsia-200 underline"
+          data-testid={`msg-inline-video-download-${idx}`}
+        >تحميل</a>
+      </div>
+    </div>
+  );
+}
+
+
 function InlineAudioBubble({ url, caption, duration_sec, voice, kind, cost_estimate, idx }) {
   const audioRef = useRef(null);
   const [playing, setPlaying] = useState(false);
@@ -2258,6 +2299,7 @@ function ChatWorkspace({ projectId }) {
         let finalOptions = [];
         let finalInlineImages = [];
         let finalInlineAudio = [];
+        let finalInlineVideo = [];
         let liveSteps = [];
         let htmlUpdated = false;
         const stepsHolderId = `agent-steps-${Date.now()}`;
@@ -2376,6 +2418,7 @@ function ChatWorkspace({ projectId }) {
               finalOptions = payload.options || [];
               finalInlineImages = payload.inline_images || [];
               finalInlineAudio = payload.inline_audio || [];
+              finalInlineVideo = payload.inline_video || [];
               htmlUpdated = !!payload.html_updated;
               setLastTask({ label: `🤖 Agent (${payload.iterations || 0} خطوة)`, model: payload.model_used || '' });
             } else if (eventName === 'error') {
@@ -2447,7 +2490,7 @@ function ChatWorkspace({ projectId }) {
           const msgs = [...(p.messages || [])];
           for (let i = msgs.length - 1; i >= 0; i--) {
             if (msgs[i].agent_holder_id === stepsHolderId) {
-              msgs[i] = { ...msgs[i], agent_streaming: false, options: finalOptions, inline_images: finalInlineImages, inline_audio: finalInlineAudio, content: finalSummary };
+              msgs[i] = { ...msgs[i], agent_streaming: false, options: finalOptions, inline_images: finalInlineImages, inline_audio: finalInlineAudio, inline_video: finalInlineVideo, content: finalSummary };
               break;
             }
           }
@@ -3257,6 +3300,25 @@ function ChatWorkspace({ projectId }) {
                             voice={au.voice}
                             kind={au.kind}
                             cost_estimate={au.cost_estimate}
+                          />
+                        ))}
+                      </div>
+                    )}
+
+                    {/* AI's attached generated video clips */}
+                    {m.role === 'assistant' && m.inline_video && m.inline_video.length > 0 && (
+                      <div className="mt-3 space-y-2" data-testid={`msg-inline-video-list-${i}`}>
+                        {m.inline_video.map((v, ii) => (
+                          <InlineVideoBubble
+                            key={ii}
+                            idx={`${i}-${ii}`}
+                            url={v.url}
+                            poster_url={v.poster_url}
+                            caption={v.caption}
+                            duration_sec={v.duration_sec}
+                            model={v.model}
+                            scene_id={v.scene_id}
+                            cost_usd={v.cost_usd}
                           />
                         ))}
                       </div>
