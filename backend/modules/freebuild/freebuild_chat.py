@@ -2776,6 +2776,7 @@ def make_freebuild_chat_router(db, get_current_user):
             _agent_token = None
         # We need to capture the final state to persist; we re-parse SSE in a tee.
         captured: Dict[str, Any] = {"summary": "", "options": [], "inline_images": [],
+                                     "inline_audio": [],
                                      "iterations": 0,
                                      "model_used": "", "html_updated": False,
                                      "new_html": None, "snapshots": []}
@@ -2795,6 +2796,7 @@ def make_freebuild_chat_router(db, get_current_user):
                             captured["summary"] = done.get("summary", "")
                             captured["options"] = done.get("options") or []
                             captured["inline_images"] = done.get("inline_images") or []
+                            captured["inline_audio"] = done.get("inline_audio") or []
                             captured["iterations"] = done.get("iterations", 0)
                             captured["model_used"] = done.get("model_used", "")
                             captured["html_updated"] = done.get("html_updated", False)
@@ -2850,6 +2852,7 @@ def make_freebuild_chat_router(db, get_current_user):
                                  "had_html": bool(new_html),
                                  "options": captured["options"],
                                  "inline_images": captured["inline_images"],
+                                 "inline_audio": captured["inline_audio"],
                                  "design_variants": [],
                                  "agent_iterations": captured["iterations"],
                                  "model_used": captured["model_used"]},

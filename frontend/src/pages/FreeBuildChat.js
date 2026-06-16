@@ -430,6 +430,99 @@ const OPT_ACCENTS = [
   { ring: 'hover:border-rose-400/60 hover:bg-rose-500/10',     num: 'bg-rose-500/15 text-rose-200 ring-rose-400/30' },
   { ring: 'hover:border-teal-400/60 hover:bg-teal-500/10',     num: 'bg-teal-500/15 text-teal-200 ring-teal-400/30' },
 ];
+function InlineAudioBubble({ url, caption, duration_sec, voice, kind, cost_estimate, idx }) {
+  const audioRef = useRef(null);
+  const [playing, setPlaying] = useState(false);
+  const [progress, setProgress] = useState(0);
+  const [actualDur, setActualDur] = useState(duration_sec || 0);
+
+  const toggle = () => {
+    const el = audioRef.current;
+    if (!el) return;
+    if (playing) {
+      el.pause();
+    } else {
+      el.play().catch(() => toast.error('ما قدرت أشغّل الصوت — تأكد من السماعة'));
+    }
+  };
+  const onLoaded = () => {
+    if (audioRef.current?.duration && !isNaN(audioRef.current.duration)) {
+      setActualDur(audioRef.current.duration);
+    }
+  };
+  const onTime = () => {
+    if (!audioRef.current || !audioRef.current.duration) return;
+    setProgress((audioRef.current.currentTime / audioRef.current.duration) * 100);
+  };
+  const onEnd = () => { setPlaying(false); setProgress(0); };
+  const seek = (e) => {
+    const el = audioRef.current;
+    if (!el || !el.duration) return;
+    const rect = e.currentTarget.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    el.currentTime = (x / rect.width) * el.duration;
+  };
+  const fmt = (s) => {
+    if (!s || isNaN(s)) return '0:00';
+    const m = Math.floor(s / 60); const sec = Math.floor(s % 60);
+    return `${m}:${String(sec).padStart(2, '0')}`;
+  };
+  const kindStyle = {
+    sample: { bg: 'from-cyan-500/15 to-blue-500/15', border: 'border-cyan-500/30', label: '🎧 عينة' },
+    full_scenario: { bg: 'from-violet-500/15 to-fuchsia-500/15', border: 'border-violet-500/30', label: '🎬 السيناريو الكامل' },
+    voiceover: { bg: 'from-emerald-500/15 to-teal-500/15', border: 'border-emerald-500/30', label: '🎙️ التعليق الصوتي' },
+  }[kind] || { bg: 'from-zinc-700/40 to-zinc-800/40', border: 'border-white/10', label: '🔊 صوت' };
+  const src = url && url.startsWith('http') ? url : `${API}${url || ''}`;
+
+  return (
+    <div
+      className={`bg-gradient-to-br ${kindStyle.bg} border ${kindStyle.border} rounded-xl p-3 flex items-center gap-3`}
+      data-testid={`msg-inline-audio-${idx}`}
+    >
+      <audio
+        ref={audioRef}
+        src={src}
+        onLoadedMetadata={onLoaded}
+        onTimeUpdate={onTime}
+        onEnded={onEnd}
+        onPlay={() => setPlaying(true)}
+        onPause={() => setPlaying(false)}
+        preload="metadata"
+      />
+      <button
+        type="button"
+        onClick={toggle}
+        data-testid={`msg-inline-audio-play-${idx}`}
+        className="w-10 h-10 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-white flex-shrink-0 transition"
+        aria-label={playing ? 'إيقاف' : 'تشغيل'}
+      >
+        {playing
+          ? <span className="block w-3 h-3 border-l-[3px] border-r-[3px] border-white" />
+          : <span className="block w-0 h-0 border-y-[6px] border-y-transparent border-l-[10px] border-l-white ml-1" />
+        }
+      </button>
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center justify-between gap-2 mb-1.5">
+          <span className="text-[10px] font-bold text-zinc-300 uppercase tracking-wide">{kindStyle.label}</span>
+          <span className="text-[10px] text-zinc-400 tabular-nums">{fmt(actualDur)}</span>
+        </div>
+        <div
+          onClick={seek}
+          className="h-1.5 bg-white/10 rounded-full overflow-hidden cursor-pointer"
+        >
+          <div className="h-full bg-white/70 transition-all" style={{ width: `${progress}%` }} />
+        </div>
+        {caption && <p className="text-[11px] text-zinc-200 mt-1.5 leading-snug">{caption}</p>}
+        <div className="flex items-center gap-2 mt-1 text-[10px] text-zinc-400 flex-wrap">
+          {voice && <span className="bg-black/30 px-1.5 py-0.5 rounded">{voice}</span>}
+          {cost_estimate && <span className="text-amber-400">{cost_estimate}</span>}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+
 
 function OptionsPicker({ messageIdx, options, savedAnswer, onConfirm }) {
   const [selected, setSelected] = useState([]);
@@ -480,6 +573,27 @@ function OptionsPicker({ messageIdx, options, savedAnswer, onConfirm }) {
     setSelected((prev) => prev.includes(label) ? prev.filter((x) => x !== label) : [...prev, label]);
   };
 
+  /**
+   * Detect "freeform" options like "غير ذلك — اكتب فكرتك". These are auto-submit:
+   * the user shouldn't have to ALSO type a comment + press تأكيد. One click =
+   * submission, then the AI takes over with a conversational follow-up like
+   * "احكي لي فكرتك بكامل التفاصيل".
+   */
+  const isFreeformOption = (label = '') => {
+    const s = String(label).toLowerCase();
+    return s.includes('غير ذلك') || s.includes('اكتب فكرتك') ||
+           s.includes('other') || s.includes('custom') || s.includes('free');
+  };
+
+  const submitImmediate = async (label) => {
+    setConfirming(true);
+    try {
+      await onConfirm({ picks: [label], comment: '' });
+    } finally {
+      setConfirming(false);
+    }
+  };
+
   const submit = async () => {
     if (selected.length === 0 && !comment.trim()) {
       toast.error('اختر خياراً أو اكتب تعليقاً');
@@ -504,7 +618,7 @@ function OptionsPicker({ messageIdx, options, savedAnswer, onConfirm }) {
               <button
                 key={i}
                 type="button"
-                onClick={() => toggle(opt.label)}
+                onClick={() => isFreeformOption(opt.label) ? submitImmediate(opt.label) : toggle(opt.label)}
                 disabled={confirming}
                 data-testid={`option-${messageIdx}-${i}`}
                 className={`group relative text-right rounded-xl overflow-hidden border transition-all duration-200 ${
@@ -597,7 +711,7 @@ function OptionsPicker({ messageIdx, options, savedAnswer, onConfirm }) {
             <button
               key={i}
               type="button"
-              onClick={() => toggle(opt.label)}
+              onClick={() => isFreeformOption(opt.label) ? submitImmediate(opt.label) : toggle(opt.label)}
               disabled={confirming}
               data-testid={`option-${messageIdx}-${i}`}
               className={`group inline-flex items-center gap-2 px-3 py-2 rounded-full text-xs font-bold border transition-all duration-200 ${
@@ -2036,6 +2150,7 @@ function ChatWorkspace({ projectId }) {
         let finalSummary = '';
         let finalOptions = [];
         let finalInlineImages = [];
+        let finalInlineAudio = [];
         let liveSteps = [];
         let htmlUpdated = false;
         const stepsHolderId = `agent-steps-${Date.now()}`;
@@ -2153,6 +2268,7 @@ function ChatWorkspace({ projectId }) {
               finalSummary = payload.summary || '';
               finalOptions = payload.options || [];
               finalInlineImages = payload.inline_images || [];
+              finalInlineAudio = payload.inline_audio || [];
               htmlUpdated = !!payload.html_updated;
               setLastTask({ label: `🤖 Agent (${payload.iterations || 0} خطوة)`, model: payload.model_used || '' });
             } else if (eventName === 'error') {
@@ -2224,7 +2340,7 @@ function ChatWorkspace({ projectId }) {
           const msgs = [...(p.messages || [])];
           for (let i = msgs.length - 1; i >= 0; i--) {
             if (msgs[i].agent_holder_id === stepsHolderId) {
-              msgs[i] = { ...msgs[i], agent_streaming: false, options: finalOptions, inline_images: finalInlineImages, content: finalSummary };
+              msgs[i] = { ...msgs[i], agent_streaming: false, options: finalOptions, inline_images: finalInlineImages, inline_audio: finalInlineAudio, content: finalSummary };
               break;
             }
           }
@@ -2988,6 +3104,24 @@ function ChatWorkspace({ projectId }) {
                               </div>
                             </div>
                           </button>
+                        ))}
+                      </div>
+                    )}
+
+                    {/* AI's attached voice clips (inline_audio from finish() tool) */}
+                    {m.role === 'assistant' && m.inline_audio && m.inline_audio.length > 0 && (
+                      <div className="mt-3 space-y-2" data-testid={`msg-inline-audio-list-${i}`}>
+                        {m.inline_audio.map((au, ii) => (
+                          <InlineAudioBubble
+                            key={ii}
+                            idx={`${i}-${ii}`}
+                            url={au.url}
+                            caption={au.caption}
+                            duration_sec={au.duration_sec}
+                            voice={au.voice}
+                            kind={au.kind}
+                            cost_estimate={au.cost_estimate}
+                          />
                         ))}
                       </div>
                     )}

@@ -11,6 +11,31 @@ Unify the AI brain and empower it with unified toolset. Fix mocked AI Trading Bo
 - 100% LOCAL AI requirement (no OpenAI/Anthropic for Family AI)
 
 
+## Session 2026-02-15d — Voice Samples + "غير ذلك" Auto-Submit + Stream Resilience
+
+### 🎙️ Voice Sample System (Phase 4)
+- ✅ NEW `finish(inline_audio=[{url, caption?, duration_sec?, voice?, kind, cost_estimate?}])` parameter
+- ✅ `kind` enum: `sample` (5s teaser, free) · `full_scenario` (paid full voiceover) · `voiceover` (final)
+- ✅ Frontend `InlineAudioBubble` — animated play/pause, seekable progress bar, kind-colored gradient bubble (cyan=sample, violet=full, emerald=voiceover), shows duration + voice ID + cost
+- ✅ Phase 4 prompt rewritten:
+  1. Ask language + show voice list as `ask_user_inline`
+  2. Generate **free 5s sample** of first sentence — attach via `inline_audio` with `kind=sample`
+  3. Three options after sample: "✓ كمّل / 🔄 جرّب صوت ثاني / ⚡ ولّد السيناريو كامل (مدفوع)"
+  4. If user picks "كامل" → show actual cost first, get confirmation, then generate
+  5. Always append Quality Disclaimer: "اسمع العينة قبل الموافقة. ما نقدر نرجع نغير الصوت بعد HD render إلا بتكلفة إضافية"
+- ✅ Tests: 5 new for `_normalize_inline_audio` (29/29 passing)
+
+### ✍️ "غير ذلك" Auto-Submit (was annoying)
+- ✅ `OptionsPicker` detects freeform option labels (`غير ذلك`, `اكتب فكرتك`, `other`, `custom`, `free`) → single-click submits immediately
+- ✅ No "اكتب تعليق" comment input shown — AI immediately responds with free-form chat invitation
+- ✅ Same logic applied to both rich-card and chip layouts
+
+### 🛡️ Stream Resilience (fixed mid-phase interruptions)
+- ✅ Root cause: when provider exception occurred in `_stream_one_provider`, only `error` event was sent — no `done`. Frontend then showed "انقطع الاتصال" misleadingly
+- ✅ Fix: every error path now ALSO emits a `done` event with `errored: true` + friendly Arabic recovery message ("ابعث 'كمّل' وأنا أرجع نفس المرحلة")
+- ✅ Decisions doc preserves all prior phase work → no data loss on retry
+
+
 ## Session 2026-02-15c — Phase Auto-Advance + Anti-Hallucination + Free-Text Flow
 - ✅ **NEW tool `set_current_phase(new_phase, summary_of_decisions)`** in `workflow_tools.py`
   - Atomically updates `project.current_phase` + appends previous to `phase_history`

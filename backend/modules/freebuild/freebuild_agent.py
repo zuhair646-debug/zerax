@@ -654,6 +654,29 @@ TOOLS_SCHEMA: List[Dict[str, Any]] = [
                     "description": "Optional reference/example images shown inline under the message (max 6).",
                     "maxItems": 6,
                 },
+                "inline_audio": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "url": {"type": "string", "description": "https URL or absolute path to the audio file (mp3/wav/ogg)."},
+                            "caption": {"type": "string", "description": "Short Arabic caption (e.g. 'عينة قصيرة بصوت كوري — 5 ثوان')."},
+                            "duration_sec": {"type": "number", "description": "Length of the clip in seconds (helps the UI show duration)."},
+                            "voice": {"type": "string", "description": "Voice identifier so the user knows which voice this is."},
+                            "kind": {"type": "string", "enum": ["sample", "full_scenario", "voiceover"],
+                                     "description": "What this clip represents — short sample vs. the full final voiceover."},
+                            "cost_estimate": {"type": "string", "description": "Optional human-readable cost note (e.g. 'تكلفة هذه العينة: 0.5 ريال')."},
+                        },
+                        "required": ["url"],
+                    },
+                    "description": (
+                        "Optional inline audio samples shown as a playable bubble inside the chat. "
+                        "Use this in Phase 4 (Voice) so the user can LISTEN before paying. "
+                        "Always attach a short sample first, then offer the full scenario voiceover only "
+                        "after the user approves the voice. Max 4 clips per message."
+                    ),
+                    "maxItems": 4,
+                },
             },
             "required": ["summary"],
         },
@@ -745,6 +768,43 @@ def _normalize_finish_options(raw: Any) -> List[Any]:
             if desc:
                 item["description"] = desc[:120]
             out.append(item)
+    return out
+
+
+def _normalize_inline_audio(raw: Any) -> List[Dict[str, Any]]:
+    """Normalize finish/inline_audio. Accepts [{url, caption?, duration_sec?,
+    voice?, kind?, cost_estimate?}, ...]. Max 4 clips. Bad URLs dropped.
+    """
+    if not isinstance(raw, list):
+        return []
+    out: List[Dict[str, Any]] = []
+    valid_kinds = {"sample", "full_scenario", "voiceover"}
+    for item in raw[:4]:
+        if not isinstance(item, dict):
+            continue
+        url = str(item.get("url") or "").strip()
+        if not url or not url.startswith(("http://", "https://", "/")):
+            continue
+        entry: Dict[str, Any] = {"url": url[:500]}
+        cap = str(item.get("caption") or "").strip()
+        if cap:
+            entry["caption"] = cap[:200]
+        try:
+            dur = float(item.get("duration_sec") or 0)
+            if 0 < dur < 3600:
+                entry["duration_sec"] = round(dur, 2)
+        except (TypeError, ValueError):
+            pass
+        voice = str(item.get("voice") or "").strip()
+        if voice:
+            entry["voice"] = voice[:80]
+        kind = str(item.get("kind") or "").strip().lower()
+        if kind in valid_kinds:
+            entry["kind"] = kind
+        cost = str(item.get("cost_estimate") or "").strip()
+        if cost:
+            entry["cost_estimate"] = cost[:120]
+        out.append(entry)
     return out
 
 
@@ -2557,8 +2617,49 @@ MODE_ADDENDUM_VIDEO = """
    - لا تنتقل لـ Phase 4 إلا بعد اعتماد.
 
 **المرحلة 4 — الصوت + الترجمة (`voice`):**
+   🎙️ **اسمعه قبل ما يدفع** — هذا أهم مبدأ في هذي المرحلة.
+
+   **خطوة 4.1 — اختيار اللغة + الصوت:**
    اسأل: *"بأي لغة يتكلمون؟ هل تبي ترجمة على الشاشة وبأي لغة؟"*
-   `list_voices(language=X)` → العميل يختار → `generate_voiceover` + `generate_subtitles`.
+   ثم `list_voices(language=X)` واعرض الأصوات كـ `ask_user_inline` (مع وصف لكل صوت: "Korean Male Deep", "Korean Female Warm", إلخ).
+
+   **خطوة 4.2 — عينة قصيرة مجانية (إجباري):**
+   قبل أي شي، ولّد **عينة 5 ثوان** من السيناريو (أول جملة فقط) بـ `generate_voiceover` بنفس الصوت المختار.
+   أرفقها في الرد عبر:
+   ```
+   finish(
+     summary="هذي عينة قصيرة من الصوت المختار 🎧 — اسمعها قبل ما نولّد كامل السيناريو",
+     inline_audio=[{
+       "url": "<audio_url>", "caption": "عينة قصيرة بصوت Korean Male — 5 ثوان",
+       "duration_sec": 5, "voice": "korean_male_01", "kind": "sample",
+       "cost_estimate": "هذي العينة مجانية ✓"
+     }],
+     options=[
+       {"label":"✓ هذا الصوت مناسب — كمّل", "emoji":"👍"},
+       {"label":"🔄 جرّب صوت ثاني", "emoji":"🎚️"},
+       {"label":"⚡ ولّد السيناريو كامل (5-15 ريال)", "emoji":"🎬", "description":"بعدها ما فيه رجعة سهلة، تأكد من العينة أولاً"}
+     ]
+   )
+   ```
+
+   **خطوة 4.3 — السيناريو الكامل (اختياري، مدفوع):**
+   فقط لو العميل ضغط "ولّد السيناريو كامل" → أنذره بالتكلفة الفعلية أولاً:
+   ```
+   ⚠️ تكلفة سيناريو كامل بصوت Korean Premium:
+   • طول السيناريو: 45 ثانية
+   • OpenAI TTS: ~3 ريال  أو  ElevenLabs Premium: ~15 ريال
+   تستمر؟
+   ```
+   بعد التأكيد → `generate_voiceover` كامل + `generate_subtitles` + أرفق بـ:
+   ```
+   inline_audio=[{"url":"...", "kind":"full_scenario",
+                   "caption":"السيناريو الكامل مع الترجمة — جاهز للإنتاج",
+                   "duration_sec":45, "cost_estimate":"خُصمت 15 ريال"}]
+   ```
+
+   **خطوة 4.4 — Quality Disclaimer (إجباري في finish):**
+   اختم الرسالة بـ:
+   > ⚠️ **مهم**: اسمع العينة كاملة قبل الموافقة. بعد توليد الفيديو النهائي بـ HD، ما نقدر نرجع نغيّر الصوت إلا بتكلفة إضافية. **جودتك مسؤوليتك بالاستماع المسبق.**
 
 **المرحلة 5 — اللقطات/الستوري بورد (`storyboard`):**
    اسأل: *"كم دقيقة الفيلم؟"* → احسب عدد اللقطات (تقريباً مشهد كل 6 ثوانٍ).
@@ -3160,6 +3261,7 @@ async def _run_anthropic_agent(
     summary = ""
     options: List[Any] = []
     inline_images: List[Dict[str, Any]] = []
+    inline_audio: List[Dict[str, Any]] = []
     iterations = 0
     model_used = model
 
@@ -3215,6 +3317,7 @@ async def _run_anthropic_agent(
                 summary = (tu["input"].get("summary") or "").strip()
                 options = _normalize_finish_options(tu["input"].get("options"))
                 inline_images = _normalize_inline_images(tu["input"].get("inline_images"))
+                inline_audio = _normalize_inline_audio(tu["input"].get("inline_audio"))
                 ctx.log("finish", tu["input"], "agent finished")
                 tool_results.append({"type": "tool_result", "tool_use_id": tu["id"], "content": "finished"})
                 finished = True
@@ -3231,6 +3334,7 @@ async def _run_anthropic_agent(
         "summary": summary or "تم.",
         "options": options,
         "inline_images": inline_images,
+        "inline_audio": inline_audio,
         "new_html": ctx.current_html if ctx.changes_made > 0 else None,
         "iterations": iterations,
         "tool_log": ctx.tool_log,
@@ -3303,6 +3407,7 @@ async def _run_openai_compat_agent(
     summary = ""
     options: List[Any] = []
     inline_images: List[Dict[str, Any]] = []
+    inline_audio: List[Dict[str, Any]] = []
     iterations = 0
     model_used = model
 
@@ -3345,6 +3450,7 @@ async def _run_openai_compat_agent(
                 summary = (args.get("summary") or "").strip()
                 options = _normalize_finish_options(args.get("options"))
                 inline_images = _normalize_inline_images(args.get("inline_images"))
+                inline_audio = _normalize_inline_audio(args.get("inline_audio"))
                 ctx.log("finish", args, "agent finished")
                 messages.append({"role": "tool", "tool_call_id": tc.id, "content": "finished"})
                 finished = True
@@ -3360,6 +3466,7 @@ async def _run_openai_compat_agent(
         "summary": summary or "تم.",
         "options": options,
         "inline_images": inline_images,
+        "inline_audio": inline_audio,
         "new_html": ctx.current_html if ctx.changes_made > 0 else None,
         "iterations": iterations,
         "tool_log": ctx.tool_log,
@@ -3486,9 +3593,41 @@ async def stream_agent_turn(
             await asyncio.sleep(0)
             continue
         except Exception as e:
-            yield _sse("error", {"message": f"{provider}: {type(e).__name__}: {str(e)[:200]}"})
+            # Surface the error AND emit a `done` so the frontend treats it as a
+            # completed (failed) turn rather than a network interruption. Without
+            # this `done`, the SSE consumer thinks the connection dropped and shows
+            # the "انقطع الاتصال — ابعث 'كمّل'" recovery banner — confusing the user
+            # mid-phase. The summary explains what went wrong.
+            err_msg = f"{type(e).__name__}: {str(e)[:200]}"
+            yield _sse("error", {"message": f"{provider}: {err_msg}"})
+            yield _sse("done", {
+                "summary": (
+                    f"⚠️ صار خطأ تقني خلال المرحلة الحالية:\n\n`{err_msg}`\n\n"
+                    "**ما تخسر شي** — كل قراراتك السابقة محفوظة في decisions doc. "
+                    "ابعث **\"كمّل\"** وأنا أرجع نفس المرحلة من حيث وقفت."
+                ),
+                "options": [],
+                "inline_images": [],
+                "inline_audio": [],
+                "iterations": 0,
+                "model_used": model,
+                "html_updated": False,
+                "tool_log": [],
+                "errored": True,
+            })
             return
     yield _sse("error", {"message": f"كل المزودات فشلت: {last_err}"})
+    yield _sse("done", {
+        "summary": f"⚠️ كل المزودات فشلت: {last_err or 'سبب غير معروف'}. أعد المحاولة بعد دقيقة.",
+        "options": [],
+        "inline_images": [],
+        "inline_audio": [],
+        "iterations": 0,
+        "model_used": "",
+        "html_updated": False,
+        "tool_log": [],
+        "errored": True,
+    })
 
 
 class _ProviderUnavailable(Exception):
@@ -3600,6 +3739,7 @@ async def _stream_one_provider(
     summary = ""
     options: List[Any] = []
     inline_images: List[Dict[str, Any]] = []
+    inline_audio: List[Dict[str, Any]] = []
     model_used = model
 
     for step in range(max_iterations):
@@ -3840,6 +3980,7 @@ async def _stream_one_provider(
                 summary = (tu["input"].get("summary") or "").strip()
                 options = _normalize_finish_options(tu["input"].get("options"))
                 inline_images = _normalize_inline_images(tu["input"].get("inline_images"))
+                inline_audio = _normalize_inline_audio(tu["input"].get("inline_audio"))
                 ctx.log("finish", tu["input"], "finished")
                 if provider in ("anthropic", "emergent_anthropic"):
                     messages.append({"role": "user", "content": [{"type": "tool_result", "tool_use_id": tu["id"], "content": "finished"}]})
@@ -3908,6 +4049,7 @@ async def _stream_one_provider(
         "summary": summary,
         "options": options,
         "inline_images": inline_images,
+        "inline_audio": inline_audio,
         "iterations": iterations,
         "model_used": model_used,
         "html_updated": ctx.changes_made > 0,

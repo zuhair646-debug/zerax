@@ -8,6 +8,7 @@ dropped — we never raise.
 from modules.freebuild.freebuild_agent import (
     _normalize_finish_options,
     _normalize_inline_images,
+    _normalize_inline_audio,
 )
 
 
@@ -88,3 +89,55 @@ def test_inline_images_caps_at_6():
         {"url": f"https://x.com/{i}.jpg"} for i in range(10)
     ])
     assert len(out) == 6
+
+
+# ─── Inline Audio (Phase 4 voice samples) ────────────────────────────────────
+def test_inline_audio_basic():
+    out = _normalize_inline_audio([
+        {"url": "https://x.com/a.mp3", "caption": "عينة",
+         "duration_sec": 5.2, "voice": "korean_male_01",
+         "kind": "sample", "cost_estimate": "مجانية"},
+    ])
+    assert out[0]["url"] == "https://x.com/a.mp3"
+    assert out[0]["caption"] == "عينة"
+    assert out[0]["duration_sec"] == 5.2
+    assert out[0]["voice"] == "korean_male_01"
+    assert out[0]["kind"] == "sample"
+    assert out[0]["cost_estimate"] == "مجانية"
+
+
+def test_inline_audio_rejects_invalid_kind():
+    out = _normalize_inline_audio([
+        {"url": "https://x.com/a.mp3", "kind": "INVALID"},
+        {"url": "https://x.com/b.mp3", "kind": "full_scenario"},
+    ])
+    assert "kind" not in out[0]
+    assert out[1]["kind"] == "full_scenario"
+
+
+def test_inline_audio_drops_bad_urls():
+    out = _normalize_inline_audio([
+        {"url": "javascript:bad"},
+        {"caption": "no url"},
+        {"url": "https://ok.com/a.mp3"},
+    ])
+    assert len(out) == 1
+    assert out[0]["url"] == "https://ok.com/a.mp3"
+
+
+def test_inline_audio_caps_at_4():
+    out = _normalize_inline_audio([
+        {"url": f"https://x.com/{i}.mp3"} for i in range(10)
+    ])
+    assert len(out) == 4
+
+
+def test_inline_audio_clips_unreasonable_duration():
+    out = _normalize_inline_audio([
+        {"url": "https://x.com/a.mp3", "duration_sec": -5},
+        {"url": "https://x.com/b.mp3", "duration_sec": 99999},
+        {"url": "https://x.com/c.mp3", "duration_sec": 10},
+    ])
+    assert "duration_sec" not in out[0]   # negative dropped
+    assert "duration_sec" not in out[1]   # too long dropped
+    assert out[2]["duration_sec"] == 10
