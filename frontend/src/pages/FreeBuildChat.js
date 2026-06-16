@@ -2682,6 +2682,35 @@ function ChatWorkspace({ projectId }) {
           </div>
         </div>
         <div className="flex items-center gap-2 shrink-0">
+          <button
+            type="button"
+            onClick={async () => {
+              try {
+                const token = localStorage.getItem('token');
+                const r = await fetch(`${API}/api/freebuild-chat/project/${projectId}/export`, {
+                  headers: { Authorization: `Bearer ${token}` },
+                });
+                if (!r.ok) throw new Error(`HTTP ${r.status}`);
+                const blob = await r.blob();
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                const safe = (project.name || 'project').replace(/[^a-zA-Z0-9-_\u0600-\u06FF]/g, '_').slice(0, 40);
+                a.download = `zenrex-${safe}-${projectId.slice(0, 8)}.json`;
+                document.body.appendChild(a); a.click(); a.remove();
+                URL.revokeObjectURL(url);
+                toast.success('تم تنزيل نسخة كاملة من المشروع 💾');
+              } catch (e) {
+                toast.error(`فشل التنزيل: ${e.message}`);
+              }
+            }}
+            data-testid="export-project"
+            className="px-3 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 border border-cyan-400/30 text-cyan-200 text-xs font-bold flex items-center gap-1.5"
+            title="تنزيل نسخة احتياطية كاملة من المشروع (رسائل + قرارات + شخصيات + أصول) — JSON"
+          >
+            <Download className="w-3.5 h-3.5" />
+            <span className="hidden sm:inline">نسخة احتياطية</span>
+          </button>
           {project.current_html && (
             <button
               type="button"

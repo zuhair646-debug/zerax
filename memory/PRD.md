@@ -11,6 +11,26 @@ Unify the AI brain and empower it with unified toolset. Fix mocked AI Trading Bo
 - 100% LOCAL AI requirement (no OpenAI/Anthropic for Family AI)
 
 
+## Session 2026-02-15f — Data Durability + User Export
+
+### 🛡️ Multi-layer durability guarantees
+1. **MongoDB Atlas (cloud)** — already replicates across 3 nodes + continuous incremental snapshots (last 24-48h on free tier).
+2. **Daily independent Hetzner backup** — `deploy/backup_mongo.sh` runs at 03:00 UTC via cron on Hetzner VPS, dumps full DB to gzipped archive in `/root/zenrex-backups/`, keeps 14 most recent. Optional GitHub Release upload if `GH_BACKUP_TOKEN` set.
+3. **Per-project user export** — NEW endpoint `GET /api/freebuild-chat/project/{pid}/export` returns the entire project (chat history, decisions doc, character_sheet, all engineering docs, approved assets) as a single JSON file the user can download.
+4. **NEW header button "نسخة احتياطية"** in chat header — one click downloads JSON named `zenrex-<project>-<id>.json`.
+
+### 🐛 Side-fixes
+- RFC 5987 filename encoding so Arabic project names don't trigger UnicodeEncodeError on download.
+- Fixed inadvertent import-on-call pattern for `JSONResponse`.
+
+### 📝 What user actually owns
+Per spec, the export includes:
+- `project` — name, mode, current_phase, phase_history, messages[], approved_assets[], current_html, html_snapshots[]
+- `docs[]` — every engineering doc (decisions, character_sheet, world_bible, PRD, ...)
+- `assets[]` — every generated/uploaded asset's metadata
+- `exported_at` + `exported_by` — provenance
+
+
 ## Session 2026-02-15e — Silent Failure Handling + Smart Images + Stable Streaming
 
 ### 🔐 Critical Business Fix: AI Never Asks Users for API Keys

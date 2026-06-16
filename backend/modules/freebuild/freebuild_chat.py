@@ -13,6 +13,7 @@ import hashlib
 from datetime import datetime, timezone
 from typing import Optional, List, Dict, Any
 from fastapi import APIRouter, HTTPException, Depends, Form, UploadFile, File
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 import base64
 from cryptography.fernet import Fernet, InvalidToken
@@ -1953,6 +1954,56 @@ def make_freebuild_chat_router(db, get_current_user):
         if r.matched_count == 0:
             raise HTTPException(404)
         return {"ok": True}
+
+    # ===== Full project export (data portability guarantee) ===================
+    # Users can download their entire project — chat history, decisions,
+    # character_sheet, assets, HTML, snapshots — as a single JSON file at any
+    # time. This is our promise that they never lose their work to a server
+    # migration / DB issue / our mistakes.
+    @router.get("/project/{pid}/export")
+    async def export_project(pid: str, user=Depends(get_current_user)):
+        proj = await db.freebuild_projects.find_one(
+            {"id": pid, "user_id": user["user_id"]}, {"_id": 0}
+        )
+        if not proj:
+            raise HTTPException(404)
+        # Pull every engineering doc (decisions, character_sheet, world_bible, PRD, ...)
+        docs_cur = db.freebuild_project_docs.find({"project_id": pid}, {"_id": 0})
+        docs: List[Dict[str, Any]] = [d async for d in docs_cur]
+        # Pull approved assets metadata (images/videos/voice clips already
+        # in the project's approved gallery)
+        assets_cur = db.freebuild_assets.find({"project_id": pid}, {"_id": 0})
+        try:
+            assets: List[Dict[str, Any]] = [a async for a in assets_cur]
+        except Exception:
+            assets = []
+        bundle = {
+            "format": "zenrex.project.v1",
+            "exported_at": _now(),
+            "exported_by": user.get("email") or user.get("user_id"),
+            "project": proj,
+            "docs": docs,
+            "assets": assets,
+        }
+        # Pretty filename: <project-name>-<short-id>.json
+        # HTTP headers are latin-1 only — strip non-ASCII for the legacy filename
+        # and use RFC 5987's filename* parameter for the Unicode version (browsers
+        # prefer this when available).
+        import urllib.parse as _urllib_parse
+        raw_name = (proj.get("name") or "project")[:40].replace("/", "_").replace(" ", "_")
+        ascii_name = "".join(ch for ch in raw_name if ord(ch) < 128) or "project"
+        utf8_name = _urllib_parse.quote(raw_name, safe="")
+        filename_ascii = f"zenrex-{ascii_name}-{pid[:8]}.json"
+        filename_utf8 = f"zenrex-{utf8_name}-{pid[:8]}.json"
+        return JSONResponse(
+            content=bundle,
+            headers={
+                "Content-Disposition": (
+                    f"attachment; filename=\"{filename_ascii}\"; "
+                    f"filename*=UTF-8''{filename_utf8}"
+                )
+            },
+        )
 
     # ===== Finalization options (when user wants to publish/take ownership) =====
     @router.get("/project/{pid}/finalize-options")
