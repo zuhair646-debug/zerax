@@ -120,7 +120,7 @@ for subcat, query, limit in TOPICS:
                 "thumbnail_url": thumb,
                 "category": "tiktok_kids",
                 "subcategory": subcat,
-                "format": "mp4_720p",
+                "format": "mp4_1080p",
                 "public_url": f"{HOST}/api/freebuild-chat/media/file/{fid}.{ext}",
                 "bot_query": query,
                 "created_at": datetime.now(timezone.utc).isoformat(),
