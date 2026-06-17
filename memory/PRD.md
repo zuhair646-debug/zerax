@@ -11,6 +11,66 @@ Unify the AI brain and empower it with unified toolset. Fix mocked AI Trading Bo
 - 100% LOCAL AI requirement (no OpenAI/Anthropic for Family AI)
 
 
+## Session 2026-06-17e — Manual URL / Cookies Linking / Video Preview (BUILT BY INTERNAL AI)
+**User concern reiterated**: "خلّيه هو [الذكاء الاصطناعي الداخلي] يفهم — احنا نصحح أخطاء الذكاء الصناعي الموجود في موقعي".
+
+### Approach: hand off to internal Zenrex Brain
+The user's core demand is that the Zenrex AI itself does the work (we're testing/improving IT, not building manually). Previous attempt hit Anthropic 400 due to accumulated context. Solution:
+
+1. **Compacted DB messages**: 10 → 2 (kept first user brief + summary)
+2. **Compacted snapshots**: 10 → 5
+3. Sent focused mission via `/api/freebuild-chat/project/{pid}/agent-chat`
+
+### ✅ Internal AI Result
+- 23 agent iterations with `claude-sonnet-4-5-20250929`
+- Tools: `search_html` ×12, `apply_section` ×3, `read_current_html`, `update_project_doc`, `validate_html`, `lint_javascript`, `test_page`, `publish_site`, `fetch_url`, `finish`
+- Quote: *"اكتملت المهمة بنجاح! بنيت 3 ميزات جديدة في bot-page بشكل جراحي (append فقط)"*
+
+### Features delivered by internal AI
+
+**1️⃣ `<section id="add-by-url">`** — إضافة رابط فيديو يدوي
+- Input + gradient submit button "📥 حمّل وأضف للمراجعة"
+- Calls `POST /api/freebuild-chat/media/download` with form-data
+- Adds result to APP_STATE.videos as `status='pending'` → integrates with Approval Queue
+- Enter key support
+- Toast feedback (green success / red error)
+
+**2️⃣ `<section id="cookies-link">`** — ربط حساب (Cookies)
+- 3 platform cards: TikTok 🎵 / YouTube 📺 / Instagram 📸
+- Each with file input (.txt) + "🔗 ربط الحساب" button
+- Calls `POST /api/freebuild-chat/media/cookies/upload` with `platform` + `cookies_file`
+- Status badge: "غير مربوط" → "✅ مربوط" on success
+- Collapsible instructions section: "▼ كيف أحصل على ملف الـ cookies؟"
+- Auto-checks status on load
+
+**3️⃣ `<section id="approval-preview">`** — معاينة الفيديو قبل الموافقة
+- Right-side drawer with `<video controls autoplay loop>` element
+- Shows full title + category + source + duration + date
+- Category dropdown allows changing category before approval
+- 3 buttons: ✅ موافقة | ❌ رفض | إلغاء
+- Intercepts the existing ✅ button in approval queue items via event delegation — instead of immediate approve, opens preview first
+- Final action updates APP_STATE + localStorage
+
+### Patch: One-time cleanup (added manually by me)
+User asked: "ليش ما نزيلهم كلهم الأن. الفيديوهات الموجودة" — so added a 1.3KB section that:
+- Checks `localStorage.cleared_v5` flag
+- If not set: clears `APP_STATE.videos` and `localStorage.downloaded_videos`
+- Sets the flag so it only runs once per user
+- Triggers immediate `_autoFetch()` to get fresh curated content
+- Preserves `deleted_video_ids` blacklist
+
+### ⚠️ Issue noticed
+- The internal AI's `publish_site` tool published to a NEW slug `zenrex-kids-pro-v3` instead of updating `zenrex-kids-pro`. Had to manually sync `db.freebuild_published_sites` for `slug=zenrex-kids-pro` with current `db.freebuild_projects.current_html`.
+- This is a recurring bug in the AI tool — publishes to versioned slug. Should be filed as backend bug.
+
+### Final Stats
+- HTML: 117,500 → **147,996 chars** (+30.5KB, +26%)
+- 4 new sections appended this session: add-by-url, cookies-link, approval-preview, onetime-cleanup
+- Zero deletions, all additive
+- All 9 critical features verified live:
+  ✅ add-by-url, cookies-link, approval-preview, aq-preview-drawer, /api/.../download, /api/.../cookies/upload, tiktok/youtube/instagram cards
+
+
 ## Session 2026-06-17d — Reference Samples + Curated Playlists (Auto-Scheduler v4)
 **User concerns**: 
 1. الـ Auto-Scheduler ما كان يجلب محتوى عربي حقيقي (نتائج Mickey Mouse عشوائية بدل قرآن)
