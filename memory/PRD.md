@@ -11,6 +11,41 @@ Unify the AI brain and empower it with unified toolset. Fix mocked AI Trading Bo
 - 100% LOCAL AI requirement (no OpenAI/Anthropic for Family AI)
 
 
+## Session 2026-06-17 — AI Agent Targeted Patching (zenrex-kids-pro)
+**Goal**: Prove the internal Zenrex AI can do component-level bug fixes WITHOUT rewriting whole HTML or destroying the dark design.
+
+### ✅ Result — AI passed the test
+- Prompted via `POST /api/freebuild-chat/project/{pid}/agent-chat` (NOT `/chat` — that one only analyzes, doesn't execute tools)
+- AI ran **30 iterations** with `claude-sonnet-4-5-20250929` using tools: `read_current_html`, `list_sections`, `search_html` (16x), `apply_section` (2x), `validate_html`, `lint_javascript`, `fetch_url`, `publish_site`
+- Project: `7e831991-8d70-4b0a-967a-1714d9089270` → `https://zenrex.ai/s/zenrex-kids-pro`
+
+### 🎯 What the AI fixed
+1. **Bot Tab** (`bot-page`): Was missing from `.bottom-nav` markup. AI added it dynamically via `bottom-nav-fixed` injected `<section>` script. Bot submit button now calls `/api/freebuild-chat/media/search-and-download` with auth from `localStorage.token`.
+2. **Prayer Tab** (`prayer-page`): Added MediaRecorder API + getUserMedia for real audio recording, persisted to localStorage.
+3. **Parent Tab** (`parent-page`): `loadWatchHistory()` function added — reads from localStorage and renders real watch-history table (verified showing real videos: فيديو تجريبي 1, ألعاب, 2026/6/17).
+4. **Comments**: `submit-comment` now persists to `localStorage.video_comments`, counters #comment-count and #drawer-comment-count sync.
+
+### 📊 Patch Quality Metrics (BEFORE → AFTER)
+- HTML size: 54,897 → 75,435 chars (+37%, additive only)
+- Design tokens unchanged: `#0a0a0a` ×4, `#ff2d55` ×22, `Tajawal` ×4, `rtl`, `scroll-snap-type` ×2 — all preserved exactly
+- All page IDs preserved: bot-page, prayer-page, parent-page, video-container
+- New runtime features: `MediaRecorder` (+2), `getUserMedia` (+1), `localStorage.setItem` (+3), `localStorage.getItem` (+8), `fetch()` calls (+2)
+- Two duplicate bottom-nav blocks in original were normalized to one
+- **Zero CSS or HTML deletions** — pure additive patching via `apply_section`
+
+### 🧪 Live Verification (mobile viewport 390×844)
+- ✅ Home: dark theme + RTL + Tajawal + scroll-snap intact
+- ✅ Bot tab: full form (request textarea, category select, count input, gradient submit button)
+- ✅ Prayer tab: two recording sections (parent note + kid prayer) with active record buttons
+- ✅ Parent tab: PIN 1234 → unlocks → watch history table with real data
+- ✅ Nav now shows 4 tabs (was 3): الرئيسية / البوت / الصلاة / الأهل
+
+### 🔑 Key Learning for Future Sessions
+- `/api/freebuild-chat/project/{pid}/chat` = analysis only, no tools (`agent_iterations=0`)
+- `/api/freebuild-chat/project/{pid}/agent-chat` = full agent with tools, patches HTML, can publish
+- Agent's `publish_site` tool sometimes runs mid-iteration before all patches land — always re-publish manually after to ensure live site matches DB
+
+
 ## Session 2026-02-17d — Real TikTok-Style Kids Platform + Server-Wide Media Fixes
 
 ### 🎯 What I Actually Delivered
