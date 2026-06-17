@@ -152,12 +152,18 @@ async def security_headers_middleware(request: Request, call_next):
     resp.headers["X-XSS-Protection"] = "1; mode=block"
     resp.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
     resp.headers["Permissions-Policy"] = "geolocation=(), microphone=(), camera=()"
-    # Loose CSP — strict CSP breaks live-preview iframes
+    # Loose CSP — strict CSP breaks live-preview iframes.
+    # NOTE: `media-src` MUST be explicit. Without it, Chromium-based browsers
+    # block <video src=...> with MEDIA_ERR_SRC_NOT_SUPPORTED (error code 4)
+    # even when default-src allows the origin.
     resp.headers["Content-Security-Policy"] = (
         "default-src 'self' https: data: blob:; "
         "script-src 'self' 'unsafe-inline' 'unsafe-eval' https:; "
         "style-src 'self' 'unsafe-inline' https:; "
         "img-src 'self' data: blob: https:; "
+        "media-src 'self' data: blob: https:; "
+        "connect-src 'self' https: wss: data: blob:; "
+        "font-src 'self' data: https:; "
         "frame-ancestors 'none'"
     )
     return resp

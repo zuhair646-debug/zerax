@@ -13,7 +13,7 @@ import asyncio
 import hashlib
 from datetime import datetime, timezone
 from typing import Optional, List, Dict, Any
-from fastapi import APIRouter, HTTPException, Depends, Form, UploadFile, File
+from fastapi import APIRouter, HTTPException, Depends, Form, UploadFile, File, Request
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 import base64
@@ -2594,14 +2594,28 @@ def make_freebuild_chat_router(db, get_current_user):
         file_id = uuid.uuid4().hex[:16]
 
         # Resolve format → yt-dlp args
+        # For direct media file URLs (ending in .mp4, .webm, etc.), skip
+        # format selection — yt-dlp's "generic" extractor can't filter by
+        # height when the source is already a single media stream.
+        url_low_for_fmt = url.lower().split("?")[0]
+        is_direct_media = url_low_for_fmt.endswith((".mp4", ".webm", ".mov", ".mkv", ".m4v", ".mp3", ".wav", ".m4a", ".ogg"))
         if format == "mp3_audio":
-            fmt_args = ["-f", "bestaudio/best", "-x", "--audio-format", "mp3"]
+            if is_direct_media:
+                fmt_args = ["-x", "--audio-format", "mp3"]
+            else:
+                fmt_args = ["-f", "bestaudio/best", "-x", "--audio-format", "mp3"]
             ext = "mp3"
         elif format == "mp4_1080p":
-            fmt_args = ["-f", "bv*[height<=1080][ext=mp4]+ba[ext=m4a]/b[height<=1080][ext=mp4]/b[height<=1080]", "--merge-output-format", "mp4"]
+            if is_direct_media:
+                fmt_args = []  # download as-is
+            else:
+                fmt_args = ["-f", "bv*[height<=1080][ext=mp4]+ba[ext=m4a]/b[height<=1080][ext=mp4]/b[height<=1080]", "--merge-output-format", "mp4"]
             ext = "mp4"
         else:  # default mp4_720p
-            fmt_args = ["-f", "bv*[height<=720][ext=mp4]+ba[ext=m4a]/b[height<=720][ext=mp4]/b[height<=720]", "--merge-output-format", "mp4"]
+            if is_direct_media:
+                fmt_args = []  # download as-is
+            else:
+                fmt_args = ["-f", "bv*[height<=720][ext=mp4]+ba[ext=m4a]/b[height<=720][ext=mp4]/b[height<=720]", "--merge-output-format", "mp4"]
             ext = "mp4"
 
         out_path = os.path.join(MEDIA_DIR, f"{file_id}.%(ext)s")
@@ -2940,9 +2954,20 @@ def make_freebuild_chat_router(db, get_current_user):
             "categories": [{"name": c["_id"], "count": c["count"]} for c in cats if c["_id"]],
         }
 
+    @router.head("/media/file/{filename}", include_in_schema=False)
     @router.get("/media/file/{filename}", include_in_schema=False)
-    async def serve_media(filename: str):
-        from fastapi.responses import FileResponse
+    async def serve_media(filename: str, request: Request):
+        """Range-aware media file server.
+
+        HTML5 <video> requires HTTP Range requests for seeking + streaming.
+        FastAPI's FileResponse does NOT handle Range — it sends the whole
+        file as 200 OK, which makes browsers reject the video (error code 4).
+        This implementation:
+          • Handles HEAD requests cleanly.
+          • Honors Range headers → returns 206 Partial Content.
+          • Falls back to full-file send when no Range header is present.
+        """
+        from fastapi.responses import Response, StreamingResponse
         # Prevent path traversal
         safe_name = os.path.basename(filename)
         path = os.path.join(MEDIA_DIR, safe_name)
@@ -2950,8 +2975,83 @@ def make_freebuild_chat_router(db, get_current_user):
             raise HTTPException(404)
         # Infer content-type from extension
         ext = safe_name.rsplit(".", 1)[-1].lower()
-        ct = {"mp4": "video/mp4", "mp3": "audio/mpeg", "webm": "video/webm", "m4a": "audio/mp4"}.get(ext, "application/octet-stream")
-        return FileResponse(path, media_type=ct, filename=safe_name)
+        ct = {
+            "mp4": "video/mp4", "mp3": "audio/mpeg", "webm": "video/webm",
+            "m4a": "audio/mp4", "mov": "video/quicktime", "wav": "audio/wav",
+            "ogg": "audio/ogg", "mkv": "video/x-matroska",
+        }.get(ext, "application/octet-stream")
+        file_size = os.path.getsize(path)
+
+        # HEAD → return metadata only
+        if request.method == "HEAD":
+            return Response(
+                status_code=200,
+                headers={
+                    "Content-Length": str(file_size),
+                    "Content-Type": ct,
+                    "Accept-Ranges": "bytes",
+                },
+            )
+
+        # Parse Range header (e.g. "bytes=0-1023" or "bytes=500-")
+        range_header = request.headers.get("range") or request.headers.get("Range")
+        if range_header and range_header.startswith("bytes="):
+            try:
+                spec = range_header.split("=", 1)[1]
+                start_s, end_s = (spec.split("-", 1) + [""])[:2]
+                start = int(start_s) if start_s else 0
+                end = int(end_s) if end_s else file_size - 1
+                end = min(end, file_size - 1)
+                if start < 0 or start > end:
+                    raise ValueError
+            except (ValueError, IndexError):
+                return Response(status_code=416, headers={"Content-Range": f"bytes */{file_size}"})
+
+            length = end - start + 1
+
+            def _iter_chunk():
+                with open(path, "rb") as f:
+                    f.seek(start)
+                    remaining = length
+                    chunk_size = 1024 * 1024  # 1MB
+                    while remaining > 0:
+                        chunk = f.read(min(chunk_size, remaining))
+                        if not chunk:
+                            break
+                        remaining -= len(chunk)
+                        yield chunk
+
+            return StreamingResponse(
+                _iter_chunk(),
+                status_code=206,
+                media_type=ct,
+                headers={
+                    "Content-Range": f"bytes {start}-{end}/{file_size}",
+                    "Accept-Ranges": "bytes",
+                    "Content-Length": str(length),
+                    "Cache-Control": "public, max-age=3600",
+                },
+            )
+
+        # No Range → send whole file
+        def _iter_full():
+            with open(path, "rb") as f:
+                while True:
+                    chunk = f.read(1024 * 1024)
+                    if not chunk:
+                        break
+                    yield chunk
+
+        return StreamingResponse(
+            _iter_full(),
+            status_code=200,
+            media_type=ct,
+            headers={
+                "Content-Length": str(file_size),
+                "Accept-Ranges": "bytes",
+                "Cache-Control": "public, max-age=3600",
+            },
+        )
 
     # Save a deployment provider token (encrypted at rest)
     @router.post("/project/{pid}/connections/{provider}")
