@@ -11,6 +11,74 @@ Unify the AI brain and empower it with unified toolset. Fix mocked AI Trading Bo
 - 100% LOCAL AI requirement (no OpenAI/Anthropic for Family AI)
 
 
+## Session 2026-06-17c — Parental Approval Queue + Video Detail Drawer
+**User asked**: 
+1. الفيديوهات اللي ينزّلها البوت تروح لقائمة مراجعة في تاب البوت
+2. الأهل يحذفون غير المناسب (ما يرجع يتحمل) أو يضغطون "اظهار في اللايف"
+3. الفيديوهات اللي ما تتم مراجعتها → تظهر تلقائياً للأطفال بعد 24 ساعة
+4. الـ overlay اللي يعرض العنوان فوق الفيد ينتقل فوق bottom-nav بسطر واحد + زر "ⓘ" للتفاصيل
+5. Reference Sample (Phase 2) — ارفع عينة فيديو/صوت + وصف، البوت يجلب مشابه
+
+### ✅ Phase 1: Approval Queue
+- Data model: each video has `status` (pending/approved/rejected) + `addedAt` (timestamp)
+- Auto-Scheduler v2: every new video starts as `status='pending'`
+- `renderVideos()` wrapped to ONLY show videos where:
+  - `status === 'approved'`, OR
+  - `status === 'pending'` AND `Date.now() - addedAt > 24h` (auto-approve)
+- Section "📥 الفيديوهات في انتظار المراجعة" added inside `bot-page` with badge counter
+- 3 actions per row: ✅ موافقة | 🗑️ حذف نهائي | 👁️ معاينة (opens source URL in new tab)
+- Rejected videos go to `localStorage.deleted_video_ids` blacklist — Auto-Scheduler skips them on next runs
+- Polling loop every 2s catches new videos added by scheduler and tags them as pending
+- Periodic UI refresh every 30s updates the countdown timer ("سيظهر تلقائياً بعد X ساعة و Y دقيقة")
+
+### ✅ Phase 3: Video-Info Overlay Redesign  
+- CSS override: `.video-info` now sits at `bottom: 90px` (above bottom-nav), full width, single-line truncate
+- Title shown as single ellipsis line (`white-space: nowrap; text-overflow: ellipsis`)
+- Description hidden (`.video-info p { display: none }`)
+- New "ⓘ" circle button injected on the right side
+- Click opens right-side drawer (`#vi-detail-drawer`) showing:
+  - العنوان الكامل
+  - الفئة (with emoji)
+  - المصدر
+  - تاريخ التحميل (Arabic locale)
+  - رقم الفيديو (LTR direction for IDs)
+  - رابط المصدر الأصلي (opens external)
+  - زر "🗑️ احذف هذا الفيديو نهائياً" (full width, red)
+
+### ✅ Content-safety filter in Auto-Scheduler v2
+- BLOCKLIST: `['xxx', 'adult', 'rated r', '18+', 'nude', 'sex', 'porn']`
+- Applied to both title AND description before adding to feed
+- Arabic-targeted queries: `quran kids tilawah recitation`, `latmiya ashura arabic children`, etc.
+
+### 🧪 Live Verification
+- Cleared localStorage → reloaded → after 30s: 9 videos fetched, all `status: 'pending'`, badge shows `9`, home feed empty (welcome screen)
+- Clicked Bot tab → approval queue rendered with all 9 items (Arabic dates, emoji per category, source labels)
+- Clicked ✅ on first item → status='approved', badge dropped to `8`, returned to Home → video now visible
+- Clicked ⓘ on home overlay → drawer slid in from right with all 6 metadata fields + delete button
+- All scripts initialized:
+  - `✅ Auto-Scheduler v2 initialized — pending queue mode`
+  - `✅ Approval system initialized`
+
+### Patch Architecture
+- Two new sections, both appended via direct MongoDB Atlas write (AI agent ran into Anthropic 400 from accumulated context):
+  - `<section id="auto-scheduler">` REPLACED with v2 (status+addedAt+blocklist) — 5.2KB
+  - `<section id="approval-system">` APPENDED (style + script for queue/drawer) — 18.1KB
+- HTML size: 87,262 → 105,266 (+18KB, +20.6%)
+- Zero CSS or markup deletions, pure additive patching
+- Old `auto-scheduler` section preserved structure, just upgraded internals
+
+### 🟡 Phase 2 — Reference Sample Upload (NOT YET BUILT)
+Requires backend work:
+1. New endpoint `POST /api/freebuild-chat/media/find-similar`
+2. Multipart file upload (image/audio/video, ≤25MB)
+3. Pipeline: Whisper (audio→text) OR Gemini Vision (image/video frame→description)
+4. AI synthesizes search query from extracted features + user's text description
+5. Returns ranked Archive.org identifiers
+6. Frontend: file picker in bot-page + textarea + "ابحث مشابه" button
+
+This is a 2-3 hour build. Deferred per session budget.
+
+
 ## Session 2026-06-17b — Real Video Auto-Scheduler (zenrex-kids-pro)
 **User asked**: حذف placeholder videos في الزاوية + بناء auto-bot scheduler يولّد 10 فيديوهات حقيقية كل 15 دقيقة + تحقق فعلي من النتائج
 
