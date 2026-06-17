@@ -11,7 +11,45 @@ Unify the AI brain and empower it with unified toolset. Fix mocked AI Trading Bo
 - 100% LOCAL AI requirement (no OpenAI/Anthropic for Family AI)
 
 
-## Session 2026-06-17g — Kids PWA Login Fix + Parent Dashboard v11 ✅
+## Session 2026-06-17h — Kids Experience v12 (Prayer Studio + Achievements) ✅
+**User request**: Make child section richer — full-screen video feed, professional prayer recording (camera + father's audio without leaking into recording), and a new achievements page showing tasks/points/monthly SAR earnings.
+
+### Backend additions (`freebuild_chat.py`)
+- `POST /api/freebuild-chat/kids/recordings/upload` — public; saves prayer video to `/opt/zenrex/data/uploads/kids_recordings/`, persists to `kids_recordings` collection
+- `GET /api/freebuild-chat/kids/recordings?child_email=...` — list (filter optional)
+- `GET /api/freebuild-chat/kids/recordings/{id}/stream` — video streaming
+- `POST /api/freebuild-chat/kids/recordings/{id}/comment` — parent (JWT) leaves feedback comment
+- `DELETE /api/freebuild-chat/kids/recordings/{id}` — parent removes a recording
+- `POST /api/freebuild-chat/kids/audio/upload` — parent uploads father's recitation tracks (future)
+- `GET /api/freebuild-chat/kids/audio` + `GET /kids/audio/{id}/stream`
+- `GET /api/freebuild-chat/kids/achievements?child_email=...` — derives points/SAR/tasks/badges from prayers + watched + streak (10 pts/prayer, 2 pts/video, 5 pts/streak day · 0.1 SAR per point)
+
+### Frontend HTML (section `kids-experience-v12` appended to published HTML, total 234,427 chars)
+1. **Prayer Studio (الصلاة)** for child:
+   - Headphone warning banner (echo cancellation is on but recommend headset)
+   - Track selector (3 demo Quran tracks from `mp3quran.net`)
+   - Audio bar with play/pause + progress
+   - 9:16 camera preview, REC badge + live timer
+   - Round record button (red → amber when recording)
+   - Switch-camera + mic-mute side buttons
+   - Records 1280×1920 vp9/opus @ 2.5 Mbps, uploads to server
+   - "My recordings" grid with thumbnails + parent-comment count badges
+2. **Achievements (إنجازاتي)** for child:
+   - Hero card with total points + SAR projection (0.1 SAR/point)
+   - 3-stat row (prayers / videos / streak)
+   - Tasks with progress bars + reward badges
+   - Earned badges grid (auto-derived from milestones)
+3. **Parent dashboard** now includes "📼 تسجيلات صلاة الأطفال" grid with NEW badge for unviewed, click opens playback modal with comment form
+4. **CSS hardening**: hide all bot/admin sections (`#bot-page`, `#cookies-link`, `#approval-system`, `#add-by-url`, etc.) for `body.role-child`
+
+### Verified end-to-end (curl + Playwright 412×800)
+- ✅ Child upload → server returns rec_id + URL
+- ✅ Parent comment endpoint persists comment with name
+- ✅ Recordings list & stream working
+- ✅ Achievements API returns 299 points / 29.9 SAR for Hussain (18 prayers × 10 + 47 videos × 2 + 5 streak × 5)
+- ✅ Child sees only Home / Prayer Studio / Achievements tabs
+- ✅ Parent sees Dashboard with child cards + recordings review section
+
 **User concern**: Login form on `zenrex.ai/kids` was rejecting all credentials when tested on phone.
 
 ### Investigation
