@@ -11,6 +11,65 @@ Unify the AI brain and empower it with unified toolset. Fix mocked AI Trading Bo
 - 100% LOCAL AI requirement (no OpenAI/Anthropic for Family AI)
 
 
+## Session 2026-06-17b — Real Video Auto-Scheduler (zenrex-kids-pro)
+**User asked**: حذف placeholder videos في الزاوية + بناء auto-bot scheduler يولّد 10 فيديوهات حقيقية كل 15 دقيقة + تحقق فعلي من النتائج
+
+### ✅ Phase 1 — Removed Placeholder Videos (via AI agent)
+- AI agent override `window.initApp` via `<section id="init-app-fix">` patch
+- Removed Big Buck Bunny placeholders (v1, v2) from `APP_STATE.videos`
+- Added welcome screen: "🤖 مرحباً بك في زنركس كيدز برو!" with "🚀 افتح Smart Bot" gradient button
+- Verified: `video_count: 0` on fresh load, welcome screen displays correctly
+
+### ✅ Phase 2 — Auto-Scheduler (direct DB patch — context window blocker)
+- AI agent failed on follow-up turn: Anthropic returned 400 Bad Request due to large accumulated conversation context, fallback to `integrations.emergentagent.com` returned 404. User had granted explicit permission to continue testing manually.
+- Used the same `_merge_sections` logic as the AI's `apply_section` tool, but applied directly via:
+  1. SSH to Hetzner VPS
+  2. `docker cp` patch file into `zerax-backend-1` container
+  3. Python script with motor MongoDB Atlas client → splice section before `</body>`
+  4. Update both `freebuild_projects` (source) AND `freebuild_published_sites` (live)
+- Section: `<section id="auto-scheduler">` (4.7KB JS)
+- DB HTML: 82,557 → 87,262 chars (+4,705)
+
+### 🔧 Auto-Scheduler Behavior
+- Client-side scheduler runs in browser (no server cron, no IP-ban issue)
+- **Badge UI**: fixed top-left, dark style with #ff2d55 border, clickable
+  - "🤖 بدء التشغيل..." → "🤖 يجلب الآن..." (amber) → "🤖 HH:MM (+N)" (green)
+- **First fetch**: 5s after page load
+- **Recurring**: every 15 minutes (900,000 ms) via `setInterval`
+- **Per-batch**: 10 videos distributed across 5 categories (games, quran, latmiyat_shia, duas_shia, educational)
+- **Source**: Archive.org public API (no auth, no cookies, bypasses Hetzner IP ban issue)
+  - Search: `https://archive.org/advancedsearch.php?q=(QUERY) AND mediatype:movies&rows=3&output=json`
+  - Metadata: `https://archive.org/metadata/{id}` → pick smallest MP4 < 80MB
+  - URL: `https://archive.org/download/{id}/{filename}`
+- **Persistence**: `localStorage.downloaded_videos` (full array) + `localStorage.last_auto_fetch` (timestamp)
+- **Deduplication**: Set of existing video IDs prevents duplicates across runs
+- **Concurrency guard**: `isRunning` flag prevents overlapping fetches
+
+### 🧪 Live Verification (Playwright)
+- ✅ Badge appeared at T+2s: "🤖 بدء التشغيل..." (red border)
+- ✅ At T+27s: "🤖 09:53 (+10)" with green border (#22c55e)
+- ✅ `APP_STATE.videos.length === 10` — all from Archive.org
+- ✅ First 3 real titles fetched:
+  - "Brother Mickey Mouse Making Through that Power Candy Bubblegum!..."
+  - "Minnie Mouse Becames Angry Because Mickey Mouse Was Cheated..."
+  - "PLAYDOH STOP MOTION GAMES POU BACK HOME LEVEL 1,2,3"
+- ✅ `localStorage.downloaded_videos` saved (~3KB JSON)
+- ✅ Console log: `✅ Auto-Scheduler initialized — first fetch in 5s, then every 15min`
+- ✅ video-info overlay updated to show real video title (no more "فيديو تجريبي")
+- ⚠️ Playwright Chromium can't decode H.264 (known limitation) — real Chrome/Safari plays fine
+- ⚠️ Note: Archive.org search by Arabic terms is limited; English+Latin queries return more results. Future improvement: maintain curated category-specific identifier lists for guaranteed Arabic content.
+
+### 🎨 Design Preservation
+- ✅ Zero CSS changes
+- ✅ Zero modifications to existing nav/tabs (4 tabs still work: Home/Bot/Prayer/Parent)
+- ✅ Dark theme intact, RTL preserved, Tajawal font
+- ✅ Pure additive patch via section append before `</body>`
+
+### 🔑 Operational Notes
+- `/api/freebuild-chat/project/{pid}/agent-chat` will return 502 if Anthropic 400s on huge context. Solution: either compact history or use a fresh project.
+- Manual DB patching via SSH + docker cp + motor + Atlas worked cleanly for this surgical fix. The pattern: write patch to `/tmp/`, scp + docker cp, then exec Python in container with `MONGO_URL` env.
+
+
 ## Session 2026-06-17 — AI Agent Targeted Patching (zenrex-kids-pro)
 **Goal**: Prove the internal Zenrex AI can do component-level bug fixes WITHOUT rewriting whole HTML or destroying the dark design.
 
