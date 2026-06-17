@@ -11,6 +11,65 @@ Unify the AI brain and empower it with unified toolset. Fix mocked AI Trading Bo
 - 100% LOCAL AI requirement (no OpenAI/Anthropic for Family AI)
 
 
+## Session 2026-02-17 — Honest Capability Boundary + Cost Discipline + Stylized Cinema Refocus
+
+### 🎯 Strategic Pivot: From "Hollywood AI" → "Stylized Cinema AI"
+User burned ~$17 on 24 seconds of premium Veo-3/Kling-Master testing. After honest cost/quality analysis with the user, repositioned the Video Studio to focus **only on what AI does well in Feb 2026**:
+- ✅ **KEEP**: Anime 2D/3D, Stylized Horror, Cyberpunk/Sci-fi, Fantasy, Nature/B-roll, Single-spokesperson + lipsync, Storyteller B-roll videos
+- ❌ **REMOVED**: "سينمائي واقعي بمستوى Hollywood", "وثائقي بشري واقعي" film_type options (anti-hallucination)
+- ❌ **DISALLOWED**: Realistic crowds, multi-character realistic interactions, realistic hand-to-hand combat, Arabic text inside video frames
+
+### 💰 Cost Discipline Guardrail (workflow_tools.py)
+- **`generate_video` default**: `model='hailuo'` ($0.04/s = $0.20 per 5-sec clip)
+- **Premium models** (`kling-pro`, `sora-2-turbo`, `sora-2-pro`) now REQUIRE `confirmed_premium=true` flag.
+- If agent calls a premium model without confirmed_premium, the tool returns `PREMIUM_GUARDRAIL` error instructing it to ask the user via `ask_user_inline` first and fall back to `hailuo`.
+- Expected cost savings: ~90-95% (from $17 per 24sec → ~$1 per minute video).
+
+### 🎌 Stylized Cinema Mode — Capability Map Hardened
+Updated `MODE_ADDENDUM_VIDEO` base prompt with:
+- Explicit allowed/forbidden capability boundary (so agent never promises Hollywood quality).
+- Multi-Clip Stitching instructions: split 45-second to 2-minute films into 6-15 stylized clips (5-8 sec each) with Style Lock + Character Lock + Color Palette Lock.
+- Film type options restructured: Anime 2D, Cartoon 3D, Stylized Horror, Cyberpunk/Sci-Fi, Anime Action/Fantasy, Nature/Atmosphere (NO realistic options).
+
+### 🎙️ Storyteller (Voice-to-Video) Refocused as Top Revenue Mode
+Completely rewrote `MODE_ADDENDUM_VIDEO_VOICE2VIDEO`:
+- Two input modes: voice upload OR text-only (ElevenLabs v3 generates voice).
+- B-roll only (no clear faces) — eliminates continuity problems.
+- Default `model='hailuo'` strictly enforced.
+- Target market: Arabic YouTube horror/true-crime/history channels (high commercial value).
+- Expected cost: $2.50-$3 per 1-minute video.
+
+### 📢 Commercial Ads Mode — Stylized + Sub-$1.50
+Refactored `MODE_ADDENDUM_VIDEO_COMMERCIAL` to:
+- 6 allowed ad types (Logo Reveal, Product Showcase, Food, Real Estate Drone-style, Service Animation, Fashion).
+- 3 forbidden types (realistic person using product, realistic crowds, large Arabic text inside video).
+- Default model `hailuo`, premium tiers blocked without user approval.
+- Expected ad cost: $0.80-$1.20 for 15-sec ad (vs $5+ before).
+
+### 🌐 Open Mode — Same Cost Discipline
+- Default `hailuo`, premium tiers blocked.
+- Smart suggestion: if user asks for realistic content, agent proposes stylized alternative before generating.
+
+### 🖥️ Frontend (`VideoStudioModeSelector.js`)
+- New hero title: **"استوديو الأفلام المُنَمَّطة"** (Stylized Film Studio)
+- New subtitle: lists Anime · Cartoon · Stylized Horror · Fantasy · YouTube Stories · Ads
+- Each of 4 mode cards now shows: realistic use cases, expected cost, and capability bullets.
+- **NEW** Capability Boundary banner (data-testid="capability-boundary-banner") below cards — explicitly tells user what AI can/cannot do, in honest plain Arabic.
+- Storyteller card badged "💰 الأعلى ربحاً" (Most Profitable) to highlight commercial focus.
+
+### ✅ Verified on Preview
+- `/video-studio` renders correctly with all 4 new cards.
+- Capability boundary banner visible.
+- Backend prompts loaded successfully after restart (no errors in logs).
+- `generate_video` tool now has `confirmed_premium` parameter in its schema.
+
+### Next Action Items
+- **Self-tested via screenshot** (UI rendering verified). Backend prompt changes are static text — no behavior change requires testing agent for UI.
+- Deploy to Hetzner production: `bash deploy/deploy.sh zenrex.ai` (pending user trigger).
+- Future: Add `daily_budget_cap` to user account settings (P2).
+- Future: Build `stitch_videos` server-side tool using ffmpeg for true single-file long videos (P2).
+
+
 ## Session 2026-02-16a — Video Studio: 4 Sub-Modes + Z+Crown UI
 
 ### 🎬 Video Studio is now a 4-mode launcher (visit `/video-studio`)

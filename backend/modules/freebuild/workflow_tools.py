@@ -176,11 +176,20 @@ WORKFLOW_TOOL_SCHEMAS: List[Dict[str, Any]] = [
             "**server-configured** FAL_KEY. Never ask the user for a key — it is "
             "preloaded on the server. Use this in Phase 7 (Render) after Storyboard "
             "is approved.\n\n"
+            "💰 **COST DISCIPLINE — STRICT**\n"
+            "  • Default model is `hailuo` (Hailuo Standard $0.04/s). Use this for 90% of clips.\n"
+            "  • `kling` (Kling Standard $0.07/s) — only for hero/key shots (1-2 per project).\n"
+            "  • `kling-pro` ($0.15/s) and `sora-2-turbo` ($0.10/s) are **PREMIUM tiers** and "
+            "    require the user to have explicitly approved them via `ask_user_inline` in "
+            "    the SAME conversation. You MUST pass `confirmed_premium=true` for these.\n"
+            "  • If you call a premium model without `confirmed_premium=true`, the tool will "
+            "    REFUSE and tell you to ask the user first.\n\n"
             "Models (price per second):\n"
-            "  • `ltx-video`            → $0.005/s — cheap drafts\n"
-            "  • `minimax/hailuo`       → $0.04/s — good quality, fast\n"
-            "  • `kling-video/v1`       → $0.07/s — cinematic\n"
-            "  • `sora-2-turbo`         → $0.10/s — premium\n\n"
+            "  • `ltx-video`            → $0.005/s — cheap drafts only\n"
+            "  • `hailuo` ⭐ DEFAULT    → $0.04/s — good quality, fast, recommended\n"
+            "  • `kling`                → $0.07/s — cinematic key shots\n"
+            "  • `kling-pro` ⚠️ PREMIUM → $0.15/s — needs confirmed_premium=true\n"
+            "  • `sora-2-turbo` ⚠️ PREMIUM → $0.10/s — needs confirmed_premium=true\n\n"
             "Returns `{ok, video_url, duration_sec, cost_usd, model_used}` on "
             "success. On failure, automatically posts a notification to the owner."
         ),
@@ -188,11 +197,12 @@ WORKFLOW_TOOL_SCHEMAS: List[Dict[str, Any]] = [
             "type": "object",
             "properties": {
                 "prompt": {"type": "string", "description": "Detailed scene description in English (fal.ai understands English best)."},
-                "model": {"type": "string", "description": "One of: ltx-video, hailuo, kling, sora-2-turbo. Defaults to hailuo."},
+                "model": {"type": "string", "description": "One of: ltx-video, hailuo (DEFAULT), kling, kling-pro (premium), sora-2-turbo (premium). Defaults to hailuo."},
                 "duration_seconds": {"type": "integer", "minimum": 3, "maximum": 10,
                                      "description": "Clip duration in seconds (3-10). Default 6."},
                 "image_url": {"type": "string", "description": "Optional reference image URL (img2video)."},
                 "scene_id": {"type": "string", "description": "Optional scene identifier for tracking (e.g. 'scene_1', 'shot_03'). Helps with notifications."},
+                "confirmed_premium": {"type": "boolean", "default": False, "description": "Must be true when calling kling-pro or sora-2-turbo. Pass only after explicit user approval via ask_user_inline."},
             },
             "required": ["prompt"],
         },
@@ -568,6 +578,24 @@ async def generate_video(ctx, args: Dict[str, Any]) -> Dict[str, Any]:
     duration = max(3, min(10, duration))
     image_url = (args.get("image_url") or "").strip() or None
     scene_id = (args.get("scene_id") or "").strip() or None
+    confirmed_premium = bool(args.get("confirmed_premium", False))
+
+    # 💰 Cost-Discipline Guardrail (Feb 2026):
+    # Premium tiers cost 3-5x more than Hailuo Standard. They MUST NOT fire
+    # without an explicit user approval flag set by the agent in the SAME turn.
+    PREMIUM_MODELS = {"kling-pro", "sora-2-turbo", "sora-2-pro"}
+    if model_slug in PREMIUM_MODELS and not confirmed_premium:
+        return {
+            "ok": False,
+            "error_for_user": None,  # don't surface to user — agent should ask first
+            "internal_error": (
+                f"PREMIUM_GUARDRAIL: model '{model_slug}' requires confirmed_premium=true. "
+                f"You must first call ask_user_inline to get explicit user approval for the "
+                f"premium tier (it costs 3-5x more than Hailuo Standard). Then retry with "
+                f"confirmed_premium=true. If the user did not approve, fall back to model='hailuo'."
+            ),
+            "suggested_fallback": "hailuo",
+        }
 
     fal_key = os.environ.get("FAL_KEY", "").strip()
     if not fal_key:

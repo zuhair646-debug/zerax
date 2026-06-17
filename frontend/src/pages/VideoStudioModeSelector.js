@@ -73,64 +73,68 @@ const ZCrownLogo = ({ size = 180 }) => (
 );
 
 // ───────────────────────────────────────────────────────────────────────────
-// 4 Modes
+// 4 Modes — Stylized Cinema Focus (Feb 2026)
+// AI strengths: anime, stylized content, B-roll, voice storytelling.
+// AI weaknesses removed: realistic Hollywood films, realistic crowds, etc.
 // ───────────────────────────────────────────────────────────────────────────
 const MODES = [
   {
     id: 'stage_by_stage',
-    title: 'مرحلي خطوة بخطوة',
-    subtitle: 'الأسلوب الكلاسيكي المرتب',
-    desc: 'الذكاء الصناعي يمشي معك في 7 مراحل واضحة: نوع الفيلم → السيناريو → الشخصيات → الصوت → الستوري بورد → التوليد → التسليم.',
+    title: 'الستوديو المرحلي',
+    subtitle: 'أفلام مُنَمَّطة طويلة بـ 7 مراحل',
+    desc: 'الذكاء الصناعي يمشي معك خطوة بخطوة لإنتاج فيلم أنمي / كرتون / رعب مُنَمَّط / خيال علمي / فانتازيا. يقسّم القصة إلى لقطات ٥-٨ ثوانٍ ويدمجها لفيلم ٤٥ ثانية - دقيقتين بنفس الستايل.',
     icon: Layers,
     accent: 'from-emerald-400 to-teal-500',
     bullets: [
-      'مناسب لو تبي تحكّم كل مرحلة قبل اللي بعدها',
-      'الـ Phase Tracker يظهر لك أين أنت بالضبط',
-      'تكلفة متوقّعة قبل ما تبدأ كل مرحلة',
+      'أنمي 2D / كرتون 3D / Cyberpunk / فانتازيا — كل المُنَمَّط',
+      'Multi-Clip Stitching: فيلم طويل من ٦-١٥ لقطة بنفس الستايل',
+      'تكلفة فيلم دقيقة: ~$2-$3 بدل $17',
+      'Character Lock + Style Lock لحفظ الاستمرارية',
     ],
     cta: 'ابدأ مرحلي',
   },
   {
     id: 'open',
     title: 'توليد مفتوح (Open)',
-    subtitle: 'حرية كاملة بدون مراحل',
-    desc: 'تكتب فكرتك بحرية، الذكاء الصناعي يولّد لك مباشرة بدون قيود مرحلية. الدفع حسب الاستهلاك الفعلي.',
+    subtitle: 'لقطة وحدة بلا مراحل',
+    desc: 'تكتب فكرتك مباشرة، الذكاء يولّد لقطة ٥-٨ ثوانٍ فوراً. مثالي للتجربة والأفكار السريعة. الافتراضي Hailuo Standard ($0.20 للقطة).',
     icon: Wand2,
     accent: 'from-violet-400 to-fuchsia-500',
     bullets: [
-      'لا توجد مراحل إلزامية — حرية إبداعية كاملة',
-      'مثالي للتجارب السريعة والمقاطع القصيرة',
-      'تدفع فقط مقابل ما يُستهلك (Open Credits)',
+      'لا مراحل، لا قوالب — حرية كاملة',
+      'افتراضي Hailuo Standard (~$0.20 للقطة)',
+      'تنبيه واضح قبل أي premium tier',
     ],
     cta: 'ابدأ مفتوح',
   },
   {
     id: 'commercial',
-    title: 'إعلانات تجارية',
-    subtitle: 'إعلان منتجك في دقائق',
-    desc: 'الذكاء الصناعي يطلب منك: شعار البراند + رقم الجوال + رقم السجل التجاري، ثم يحرّك الشعار ويكتب سكربت إعلاني احترافي ويضيف بيانات التواصل.',
+    title: 'إعلانات تجارية Stylized',
+    subtitle: 'إعلان منتجك في < $1.50',
+    desc: 'الذكاء يطلب: الشعار + رقم الجوال + رقم السجل التجاري + نوع الإعلان. ينتج Logo Reveal سينمائي + لقطات Stylized للمنتج + إطار نهاية احترافي.',
     icon: Megaphone,
     accent: 'from-amber-400 to-orange-500',
     bullets: [
-      'تحريك تلقائي للشعار بأنماط احترافية',
-      'سكربت إعلاني + Call-to-Action مزامن',
-      'بيانات التواصل (CR + جوال) تظهر بشكل سينمائي',
+      'Logo Reveal Cinematic + Product Showcase Stylized',
+      'بيانات التواصل (CR + جوال) overlay احترافي',
+      'تكلفة إعلان ١٥ ثانية: $0.80-$1.20 (بدل $5+)',
+      'مقاسات: 9:16 / 1:1 / 16:9 جاهزة',
     ],
     cta: 'ابدأ إعلان',
   },
   {
     id: 'voice_to_video',
-    title: 'صوتك → فيديو',
-    subtitle: 'الأذكى — قصتك بصوتك مع لقطات مولّدة',
-    desc: 'ترفع تسجيلك الصوتي أو فيديوهك. الذكاء يستمع، يفهم القصة، يحدد الشخصيات والأماكن، يطلب موافقتك، ثم يولّد لقطات مرئية تتزامن مع صوتك الأصلي. حتى المؤثرات الصوتية (باب يفتح، خطوات) تتزامن.',
+    title: 'الراوي (Storyteller)',
+    subtitle: 'الأقوى تجارياً — قصص يوتيوب',
+    desc: 'مثالي لقنوات قصص الرعب، الجرائم الحقيقية، التاريخ، والأساطير. ترفع تسجيلك (أو تكتب نص ونولّد الصوت بـ ElevenLabs v3)، الذكاء يقسّم القصة لمشاهد B-roll مُنَمَّطة تطابق كل جملة.',
     icon: Mic2,
     accent: 'from-rose-400 to-red-500',
-    badge: '🆕 الأذكى',
+    badge: '💰 الأعلى ربحاً',
     bullets: [
-      'يستخرج الشخصيات تلقائياً ويولّد صورة لكل واحدة',
-      'يفهم متى يولّد مشهد ومتى يعرض المُلقي مباشرة',
-      'يضيف مؤثرات صوتية متزامنة (فتح باب، أصوات بيئة)',
-      'يحفظ صوتك الأصلي كما هو — يضيف فوقه فقط',
+      'صوت من تسجيلك أو ElevenLabs v3 (عربي/إنجليزي)',
+      'لقطات B-roll مُنَمَّطة بدون وجوه (استمرارية مضمونة)',
+      'تكلفة فيديو دقيقة كاملة: ~$2.50-$3',
+      'مثالي لقنوات يوتيوب القصصية العربية',
     ],
     cta: 'ابدأ بالصوت',
   },
@@ -180,8 +184,7 @@ export default function VideoStudioModeSelector({ user }) {
         <div className="max-w-6xl mx-auto flex items-start gap-3">
           <Info className="w-5 h-5 text-amber-400 flex-shrink-0 mt-0.5" />
           <div className="flex-1 text-sm text-amber-100/90 leading-relaxed">
-            <b className="text-amber-300">اختر وضع الفيديو المناسب لك:</b> كل وضع له آلية مختلفة وأدوات مختلفة.
-            تقدر تنشئ مشاريع متعددة وتبدّل بينها وقت ما تبي.
+            <b className="text-amber-300">٤ أوضاع متخصّصة في المحتوى المُنَمَّط:</b> الأنمي، الكرتون، الرعب stylized، الفانتازيا، قصص اليوتيوب، الإعلانات. الافتراضي Hailuo Standard لتوفير ٩٠٪ من التكلفة.
           </div>
         </div>
       </div>
@@ -205,10 +208,12 @@ export default function VideoStudioModeSelector({ user }) {
             استوديو الأفلام والفيديوهات
           </div>
           <h1 className="text-4xl sm:text-5xl lg:text-6xl font-black bg-gradient-to-b from-white via-red-100 to-red-400 bg-clip-text text-transparent leading-tight">
-            اختر طريقتك في الإنتاج
+            استوديو الأفلام المُنَمَّطة
           </h1>
           <p className="text-base sm:text-lg text-gray-400 max-w-2xl mx-auto leading-relaxed">
-            4 أوضاع متخصصة. واحد منهم يناسب فكرتك تماماً.
+            أنمي · كرتون · رعب stylized · فانتازيا · قصص يوتيوب · إعلانات.
+            <br />
+            <span className="text-amber-300/90 text-sm">⚡ بأرخص نموذج مناسب، بدون هلوسة بمستوى Hollywood.</span>
           </p>
         </div>
       </header>
@@ -270,10 +275,26 @@ export default function VideoStudioModeSelector({ user }) {
           })}
         </div>
 
+        {/* Capability Boundary banner */}
+        <div className="mt-6 rounded-2xl border border-amber-500/20 bg-amber-500/[0.04] p-5" data-testid="capability-boundary-banner">
+          <div className="text-sm text-amber-100/90 leading-relaxed">
+            <b className="text-amber-300">حدود الذكاء الاصطناعي (نكون صريحين معك):</b>
+            <br />
+            <span className="text-emerald-300/90">✅ نطلع بامتياز:</span> أنمي 2D/3D، رعب stylized، cyberpunk، فانتازيا، لقطات طبيعة، motion graphics، متحدّث واحد + lipsync.
+            <br />
+            <span className="text-rose-300/90">❌ ما نوعدك بـ:</span> أفلام واقعية بمستوى Hollywood، حشود واقعية، قتال يدوي واقعي بين عدة شخصيات، نصوص عربية كبيرة داخل الفيديو. نقترح بدائل stylized تطلع أحلى وأرخص.
+          </div>
+        </div>
+
         {/* Help footer */}
-        <div className="mt-10 rounded-2xl border border-white/10 bg-white/[0.02] p-5 text-sm text-white/70 leading-relaxed">
-          <b className="text-amber-300">مو متأكد أي وضع تختار؟</b> ابدأ بـ <b>«مرحلي»</b> لو فكرتك جديدة ومعقّدة،
-          <b> «مفتوح»</b> لو عندك إلهام سريع، <b>«إعلانات»</b> لو تبي تسوّق منتج، أو <b>«صوتك → فيديو»</b> لو عندك قصة بصوتك جاهزة.
+        <div className="mt-4 rounded-2xl border border-white/10 bg-white/[0.02] p-5 text-sm text-white/70 leading-relaxed">
+          <b className="text-amber-300">مو متأكد أي وضع تختار؟</b>
+          <ul className="mt-2 space-y-1.5">
+            <li>🎬 <b>«مرحلي»</b> — لو تبي فيلم أنمي/كرتون طويل (٤٥ ثانية - دقيقتين) بستايل ثابت.</li>
+            <li>🎨 <b>«مفتوح»</b> — لو عندك فكرة لقطة وحدة سريعة.</li>
+            <li>📢 <b>«إعلانات»</b> — لو تبي تسوّق منتج/خدمة (Logo Reveal + Product Showcase).</li>
+            <li>🎙️ <b>«الراوي»</b> — لو عندك قصة (رعب، جريمة، تاريخ) تبي تحوّلها فيديو يوتيوب احترافي.</li>
+          </ul>
         </div>
       </main>
     </div>
