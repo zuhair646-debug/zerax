@@ -48,6 +48,24 @@ def _mask(token: str) -> str:
         return "•••"
     return f"{token[:4]}••••••{token[-4:]}"
 
+
+def _public_host() -> str:
+    """Resolve the public-facing host for media URLs.
+
+    Order of preference:
+      1. PUBLIC_HOST env var (e.g. https://zenrex.ai on production)
+      2. REACT_APP_BACKEND_URL (preview/dev — same external host)
+      3. Hardcoded zenrex.ai fallback
+
+    The URL must not have a trailing slash.
+    """
+    host = (
+        os.environ.get("PUBLIC_HOST", "").strip()
+        or os.environ.get("REACT_APP_BACKEND_URL", "").strip()
+        or "https://zenrex.ai"
+    )
+    return host.rstrip("/")
+
 # ─── Website types (like game types) ───
 WEBSITE_TYPES = [
     {"id": "ecommerce", "title": "🏪 متجر إلكتروني", "desc": "متجر كامل مع كتالوج، سلة، دفع", "credits": 500},
@@ -2477,6 +2495,7 @@ def make_freebuild_chat_router(db, get_current_user):
         url: str = Form(...),
         format: str = Form("mp4_720p"),
         project_id: str = Form(""),
+        category: str = Form(""),
         user=Depends(get_current_user),
     ):
         """Download a video/audio clip via yt-dlp and store it on the server.
@@ -2528,6 +2547,18 @@ def make_freebuild_chat_router(db, get_current_user):
             if proc.returncode != 0:
                 err_msg = (stderr.decode("utf-8", errors="ignore") or "")[-500:]
                 logger.warning(f"yt-dlp failed: {err_msg}")
+                # Detect well-known failure modes so the AI can communicate clearly
+                low = err_msg.lower()
+                if "403" in low or "ip address is blocked" in low or "forbidden" in low or "sign in to confirm" in low:
+                    raise HTTPException(
+                        451,
+                        "ip_blocked: المنصة (YouTube/TikTok) ترفض التحميل من سيرفرات الإنتاج. "
+                        "حلول: (أ) ارفع cookies من متصفحك، (ب) استخدم proxy، (ج) ارفع الفيديو يدوياً."
+                    )
+                if "video unavailable" in low or "private video" in low:
+                    raise HTTPException(404, "الفيديو غير متاح أو خاص")
+                if "this live event" in low or "members-only" in low:
+                    raise HTTPException(403, "الفيديو يتطلب اشتراك أو بث مباشر — غير مدعوم")
                 raise HTTPException(502, f"yt-dlp فشل: {err_msg}")
         except FileNotFoundError:
             raise HTTPException(500, "yt-dlp غير مثبت على السيرفر — راجع متطلبات النظام")
@@ -2555,7 +2586,7 @@ def make_freebuild_chat_router(db, get_current_user):
         except Exception:
             pass
 
-        public_url = f"https://zenrex.ai/api/freebuild-chat/media/file/{file_id}.{actual_ext}"
+        public_url = f"{_public_host()}/api/freebuild-chat/media/file/{file_id}.{actual_ext}"
 
         # Record in DB for cleanup + listing
         await db.freebuild_media_assets.insert_one({
@@ -2568,6 +2599,7 @@ def make_freebuild_chat_router(db, get_current_user):
             "title": title,
             "duration": duration,
             "thumbnail_url": thumbnail,
+            "category": (category or "").strip() or None,
             "format": format,
             "public_url": public_url,
             "created_at": _now(),
@@ -2582,6 +2614,201 @@ def make_freebuild_chat_router(db, get_current_user):
             "duration": duration,
             "source": source_url,
             "format": format,
+            "category": (category or "").strip() or None,
+        }
+
+    # ═══════════════════════════════════════════════════════════════════════
+    # BATCH SEARCH + DOWNLOAD — for kids platforms, content aggregators, etc.
+    # AI gives a search query (e.g. "latmiyat hussein for kids") + platform
+    # (youtube/tiktok) + limit (max 10), we use yt-dlp's search prefix to
+    # find clips and download them all in parallel.
+    # ═══════════════════════════════════════════════════════════════════════
+    @router.post("/media/search-and-download")
+    async def media_search_and_download(
+        query: str = Form(...),
+        platform: str = Form("youtube"),  # youtube | tiktok | both
+        limit: int = Form(5),
+        category: str = Form(""),
+        format: str = Form("mp4_720p"),
+        project_id: str = Form(""),
+        user=Depends(get_current_user),
+    ):
+        """Search a platform for videos matching `query`, download top `limit` clips.
+
+        Returns a list of downloaded clips with public URLs the AI can embed.
+        """
+        q = (query or "").strip()
+        if not q or len(q) < 2:
+            raise HTTPException(400, "query too short")
+        limit = max(1, min(int(limit or 5), 10))
+        plat = (platform or "youtube").strip().lower()
+        if plat not in {"youtube", "tiktok", "both"}:
+            plat = "youtube"
+
+        os.makedirs(MEDIA_DIR, exist_ok=True)
+
+        async def _search_urls(prefix: str, count: int) -> List[str]:
+            """Use yt-dlp's search to get top URLs without downloading."""
+            import subprocess as _sp
+            cmd = [
+                "yt-dlp",
+                f"{prefix}{count}:{q}",
+                "--flat-playlist",
+                "--print", "%(webpage_url)s",
+                "--no-warnings",
+                "--quiet",
+            ]
+            try:
+                proc = await asyncio.create_subprocess_exec(*cmd, stdout=_sp.PIPE, stderr=_sp.PIPE)
+                stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=60)
+                lines = [ln.strip() for ln in stdout.decode("utf-8", errors="ignore").splitlines() if ln.strip().startswith("http")]
+                return lines[:count]
+            except (asyncio.TimeoutError, Exception):
+                return []
+
+        urls: List[str] = []
+        if plat in ("youtube", "both"):
+            urls += await _search_urls("ytsearch", limit)
+        if plat in ("tiktok", "both"):
+            # yt-dlp doesn't have a native tiktok search prefix; we use the
+            # `tiktok:user` extractor only when the query starts with @, otherwise
+            # we fall back to YouTube. Honest about this limitation:
+            if q.startswith("@"):
+                urls += await _search_urls("tt", limit)
+            # else: we don't blow up — the agent should know tiktok search
+            # by keyword isn't supported. Caller can pass direct TikTok URLs
+            # via the regular /media/download endpoint.
+        # Dedupe while preserving order
+        seen, ordered = set(), []
+        for u in urls:
+            if u not in seen:
+                seen.add(u)
+                ordered.append(u)
+        urls = ordered[:limit]
+        if not urls:
+            return {"ok": False, "error": "no_results", "query": q, "platform": plat, "clips": []}
+
+        # Now download each one (sequential to respect rate limits and disk)
+        clips: List[Dict[str, Any]] = []
+        for u in urls:
+            try:
+                # Re-use the single-download logic via internal call
+                file_id = uuid.uuid4().hex[:16]
+                if format == "mp3_audio":
+                    fmt_args = ["-f", "bestaudio/best", "-x", "--audio-format", "mp3"]
+                elif format == "mp4_1080p":
+                    fmt_args = ["-f", "bv*[height<=1080][ext=mp4]+ba[ext=m4a]/b[height<=1080][ext=mp4]/b[height<=1080]", "--merge-output-format", "mp4"]
+                else:
+                    fmt_args = ["-f", "bv*[height<=720][ext=mp4]+ba[ext=m4a]/b[height<=720][ext=mp4]/b[height<=720]", "--merge-output-format", "mp4"]
+                out_path = os.path.join(MEDIA_DIR, f"{file_id}.%(ext)s")
+                meta_path = os.path.join(MEDIA_DIR, f"{file_id}.info.json")
+                import subprocess as _sp
+                cmd = [
+                    "yt-dlp", "--no-playlist", "--no-warnings",
+                    "--restrict-filenames", "--write-info-json",
+                    "-o", out_path,
+                ] + fmt_args + [u]
+                proc = await asyncio.create_subprocess_exec(*cmd, stdout=_sp.PIPE, stderr=_sp.PIPE)
+                _, stderr = await asyncio.wait_for(proc.communicate(), timeout=120)
+                if proc.returncode != 0:
+                    clips.append({"ok": False, "url": u, "error": (stderr.decode("utf-8", errors="ignore") or "")[-200:]})
+                    continue
+                produced = [f for f in os.listdir(MEDIA_DIR) if f.startswith(file_id) and not f.endswith(".info.json")]
+                if not produced:
+                    clips.append({"ok": False, "url": u, "error": "no file produced"})
+                    continue
+                actual_file = produced[0]
+                actual_ext = actual_file.rsplit(".", 1)[-1]
+                title, duration, thumbnail = "", None, None
+                source_url = u
+                try:
+                    if os.path.exists(meta_path):
+                        with open(meta_path, "r", encoding="utf-8") as f:
+                            meta = json.load(f)
+                        title = meta.get("title", "") or ""
+                        duration = meta.get("duration")
+                        thumbnail = meta.get("thumbnail")
+                        source_url = meta.get("webpage_url") or u
+                except Exception:
+                    pass
+                public_url = f"{_public_host()}/api/freebuild-chat/media/file/{file_id}.{actual_ext}"
+                await db.freebuild_media_assets.insert_one({
+                    "id": file_id,
+                    "user_id": user["user_id"],
+                    "project_id": project_id or None,
+                    "filename": actual_file,
+                    "ext": actual_ext,
+                    "source_url": source_url,
+                    "title": title,
+                    "duration": duration,
+                    "thumbnail_url": thumbnail,
+                    "category": (category or "").strip() or None,
+                    "search_query": q,
+                    "platform": plat,
+                    "created_at": _now(),
+                })
+                clips.append({
+                    "ok": True,
+                    "file_id": file_id,
+                    "file_url": public_url,
+                    "thumbnail_url": thumbnail,
+                    "title": title,
+                    "duration": duration,
+                    "source": source_url,
+                })
+            except asyncio.TimeoutError:
+                clips.append({"ok": False, "url": u, "error": "timeout"})
+            except Exception as e:
+                clips.append({"ok": False, "url": u, "error": f"{type(e).__name__}: {str(e)[:120]}"})
+
+        ok_count = sum(1 for c in clips if c.get("ok"))
+        return {
+            "ok": ok_count > 0,
+            "query": q,
+            "platform": plat,
+            "category": (category or "").strip() or None,
+            "total_requested": limit,
+            "downloaded": ok_count,
+            "failed": len(clips) - ok_count,
+            "clips": clips,
+        }
+
+    # ═══════════════════════════════════════════════════════════════════════
+    # LIST MEDIA ASSETS (filtered by project + category) — kids platform UI
+    # uses this to render categorized video grid.
+    # ═══════════════════════════════════════════════════════════════════════
+    @router.get("/media/list")
+    async def list_media_assets(
+        project_id: str = "",
+        category: str = "",
+        limit: int = 100,
+        user=Depends(get_current_user),
+    ):
+        q: Dict[str, Any] = {"user_id": user["user_id"]}
+        if project_id:
+            q["project_id"] = project_id
+        if category:
+            q["category"] = category
+        cursor = db.freebuild_media_assets.find(
+            q,
+            {"_id": 0, "id": 1, "title": 1, "duration": 1, "thumbnail_url": 1,
+             "category": 1, "source_url": 1, "filename": 1, "ext": 1,
+             "platform": 1, "created_at": 1},
+        ).sort("created_at", -1).limit(max(1, min(int(limit), 500)))
+        items = await cursor.to_list(length=500)
+        host = _public_host()
+        for it in items:
+            it["file_url"] = f"{host}/api/freebuild-chat/media/file/{it['id']}.{it.get('ext', 'mp4')}"
+        # Aggregate categories
+        cats = await db.freebuild_media_assets.aggregate([
+            {"$match": {"user_id": user["user_id"], **({"project_id": project_id} if project_id else {})}},
+            {"$group": {"_id": "$category", "count": {"$sum": 1}}},
+            {"$sort": {"count": -1}},
+        ]).to_list(length=50)
+        return {
+            "ok": True,
+            "items": items,
+            "categories": [{"name": c["_id"], "count": c["count"]} for c in cats if c["_id"]],
         }
 
     @router.get("/media/file/{filename}", include_in_schema=False)

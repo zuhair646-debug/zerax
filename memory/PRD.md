@@ -11,6 +11,46 @@ Unify the AI brain and empower it with unified toolset. Fix mocked AI Trading Bo
 - 100% LOCAL AI requirement (no OpenAI/Anthropic for Family AI)
 
 
+## Session 2026-02-17b — Kids Platform Bug Hunt: yt-dlp + Media Download Pipeline
+
+### 🐛 Bugs Discovered & Fixed
+User asked to test the website-builder AI on a real use case: a kids Islamic content platform that auto-downloads videos from YouTube/TikTok and categorizes them (Quran, Latmiyat, Duas, Mawalid, sheikh stories). While auditing, I found 6 production-blocking bugs:
+
+1. **`yt-dlp` NOT INSTALLED** — The AI was promising downloads but the binary was missing. Tool would silently fail. ✅ Fixed: installed `yt-dlp==2026.6.9` + `curl_cffi==0.15.0` + symlinked to `/usr/local/bin/yt-dlp` so subprocess can find it.
+
+2. **Hardcoded public URL** — `freebuild_chat.py` returned `https://zenrex.ai/...` for ALL environments, breaking preview env. ✅ Fixed: added `_public_host()` helper using `PUBLIC_HOST` env → `REACT_APP_BACKEND_URL` → fallback. Added `PUBLIC_HOST=https://ai-cinematic-hub-2.preview.emergentagent.com` to backend/.env.
+
+3. **No category metadata** — Downloaded clips had no way to be filtered by content type (Quran vs Latmiyat vs Duas). ✅ Fixed: added `category` parameter to download endpoint, schema, and tool API.
+
+4. **No batch search + download** — User explicitly wanted "AI automatically fetches videos by category". Single-URL download required manual link pasting. ✅ Fixed: new `POST /api/freebuild-chat/media/search-and-download` endpoint takes `{query, platform, limit, category}` and downloads top N clips matching the query in one call. Exposed as new AI tool `search_and_download_media`.
+
+5. **Generic 502 error on failure** — yt-dlp failures returned a useless 502 with no diagnosis. AI couldn't communicate root cause to user. ✅ Fixed: error classification (HTTP 451 for IP block, 404 for unavailable video, 403 for members-only). AI prompt now includes explicit handling for `ip_blocked` errors.
+
+6. **No system prompt awareness of IP block** — Critical real-world constraint: YouTube and TikTok actively block cloud server IPs. ✅ Fixed: added explicit disclosure block in `MODE_ADDENDUM` urging AI to be honest, NOT hallucinate success, and suggest concrete alternatives (Vimeo, Internet Archive, manual upload, cookies, production VPS).
+
+### 🆕 New API Endpoints
+- `POST /api/freebuild-chat/media/search-and-download` — batch fetch by query + category
+- `GET /api/freebuild-chat/media/list?project_id&category&limit` — frontend gallery uses this to render the categorized kids player UI; also returns aggregated category counts
+
+### 🆕 New AI Tools
+- `search_and_download_media(query, category, platform?, limit?, format?)` — required for kids platform auto-fetch use case
+- `download_media` now accepts `category` parameter
+
+### 🧪 Verified
+- ✅ yt-dlp installed and callable via PATH
+- ✅ `/media/list` returns `{ok:true, items:[], categories:[]}` correctly on empty DB
+- ✅ `/media/search-and-download` returns structured error correctly when IP-blocked (preview env)
+- ✅ yt-dlp successfully downloads from non-YouTube sources (tested Internet Archive: 317MB in 7s)
+- ⚠️ **Preview env limitation**: YouTube + TikTok block this server's IP (HTTP 403/451). Production Hetzner VPS likely works better (different IP class).
+
+### Next Action Items
+- 🚀 **Deploy to production**: `bash deploy/deploy.sh zenrex.ai` to test if Hetzner IP can reach YouTube/TikTok directly
+- 🍪 **P1**: Add cookie-upload UI so users can paste browser cookies for protected platforms
+- 🌐 **P2**: Optional residential proxy integration (Bright Data or similar) for full YouTube/TikTok reach
+- 🎨 **P2**: Build a "Kids Platform Template" — pre-made HTML with categorized video grid + child-safe player + parental controls. AI references this template via `apply_section` instead of building from scratch every time.
+- 📱 **P2**: PWA + offline cache so kids can watch downloaded clips without internet
+
+
 ## Session 2026-02-17 — Honest Capability Boundary + Cost Discipline + Stylized Cinema Refocus
 
 ### 🎯 Strategic Pivot: From "Hollywood AI" → "Stylized Cinema AI"

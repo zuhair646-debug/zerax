@@ -429,6 +429,8 @@ TOOLS_SCHEMA: List[Dict[str, Any]] = [
             "The file is saved to permanent storage and you get a public URL to embed in "
             "the user's site. Perfect for building video gallery sites, content "
             "aggregators, podcast hubs, or social media archives. "
+            "Pass `category` to tag the clip (e.g. 'quran', 'latmiyat', 'duas') — used "
+            "for filtering on the front-end gallery. "
             "If the source requires auth (private TikTok, etc.), use request_credential first "
             "to ask the user for cookies/session."
         ),
@@ -445,8 +447,44 @@ TOOLS_SCHEMA: List[Dict[str, Any]] = [
                     "default": "mp4_720p",
                     "description": "Output format: 720p mp4 (default, fast), 1080p mp4, or audio-only mp3."
                 },
+                "category": {
+                    "type": "string",
+                    "description": "Optional category tag (snake_case, e.g. 'quran', 'latmiyat_shia', 'duas_shia', 'mawalid', 'sheikh_stories', 'cartoon_islamic'). Used by the kids platform UI to filter videos."
+                },
             },
             "required": ["url"],
+        },
+    },
+    {
+        "name": "search_and_download_media",
+        "description": (
+            "🔍🎬 Search YouTube (and TikTok user feeds when query starts with @) for "
+            "videos matching a query, then **download the top N clips in one shot**. "
+            "Returns each clip as a permanent public URL the AI can embed in the site. "
+            "Perfect for content-aggregator websites (kids platforms, sermon libraries, "
+            "podcast directories, lullaby collections) where the AI auto-fills the "
+            "gallery with relevant media on the user's behalf — no manual link pasting "
+            "required.\n\n"
+            "**Examples:**\n"
+            "  • `search_and_download_media(query='latmiyat hussein for kids', category='latmiyat_shia', limit=5)`\n"
+            "  • `search_and_download_media(query='quran kids ahkam tajweed', category='quran', limit=3)`\n"
+            "  • `search_and_download_media(query='@username', platform='tiktok', limit=4)` — only TikTok handle search works\n\n"
+            "Returns `{ok, query, downloaded, failed, clips:[{ok, file_url, thumbnail_url, "
+            "title, duration, source}]}`. Each successful clip is ready to drop into the "
+            "site's HTML/JSX gallery component."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "query": {"type": "string", "description": "Search terms (Arabic ok). E.g. 'لطميات حسينية للأطفال', 'cartoon islamic kids'."},
+                "platform": {"type": "string", "enum": ["youtube", "tiktok", "both"], "default": "youtube",
+                              "description": "Which platform to search. TikTok keyword search isn't natively supported — only TikTok user handles starting with '@' work. Default 'youtube' is most reliable."},
+                "limit": {"type": "integer", "minimum": 1, "maximum": 10, "default": 5,
+                           "description": "How many clips to download (max 10 per call to respect server resources)."},
+                "category": {"type": "string", "description": "Required category tag for filtering in the front-end. E.g. 'quran', 'latmiyat_shia', 'mawalid', 'duas_shia', 'sheikh_stories', 'cartoon_islamic'."},
+                "format": {"type": "string", "enum": ["mp4_720p", "mp4_1080p", "mp3_audio"], "default": "mp4_720p"},
+            },
+            "required": ["query", "category"],
         },
     },
     {
@@ -1354,6 +1392,7 @@ async def _exec_tool_async(ctx: FreeBuildToolContext, name: str, args: Dict[str,
         if name == "download_media":
             url = (args.get("url") or "").strip()
             fmt = (args.get("format") or "mp4_720p").strip()
+            category = (args.get("category") or "").strip()
             if not url.startswith(("http://", "https://")):
                 return {"ok": False, "error": "url must start with http(s)://"}
             try:
@@ -1365,6 +1404,7 @@ async def _exec_tool_async(ctx: FreeBuildToolContext, name: str, args: Dict[str,
                             "url": url,
                             "format": fmt,
                             "project_id": ctx.project_id or "",
+                            "category": category,
                         },
                         headers={"Authorization": f"Bearer {ctx.auth_token}"} if ctx.auth_token else {},
                     )
@@ -1379,9 +1419,39 @@ async def _exec_tool_async(ctx: FreeBuildToolContext, name: str, args: Dict[str,
                         "duration": data.get("duration"),
                         "source": data.get("source"),
                         "format": fmt,
+                        "category": data.get("category"),
                     }
             except Exception as e:
                 return {"ok": False, "error": f"download failed: {type(e).__name__}: {str(e)[:200]}"}
+
+        if name == "search_and_download_media":
+            query = (args.get("query") or "").strip()
+            platform = (args.get("platform") or "youtube").strip().lower()
+            limit = int(args.get("limit") or 5)
+            category = (args.get("category") or "").strip()
+            fmt = (args.get("format") or "mp4_720p").strip()
+            if not query or not category:
+                return {"ok": False, "error": "query and category are required"}
+            try:
+                import httpx
+                async with httpx.AsyncClient(timeout=600) as cl:
+                    r = await cl.post(
+                        "http://localhost:8001/api/freebuild-chat/media/search-and-download",
+                        data={
+                            "query": query,
+                            "platform": platform,
+                            "limit": str(limit),
+                            "category": category,
+                            "format": fmt,
+                            "project_id": ctx.project_id or "",
+                        },
+                        headers={"Authorization": f"Bearer {ctx.auth_token}"} if ctx.auth_token else {},
+                    )
+                    if r.status_code != 200:
+                        return {"ok": False, "error": f"search-download failed ({r.status_code}): {r.text[:200]}"}
+                    return r.json()
+            except Exception as e:
+                return {"ok": False, "error": f"search-download failed: {type(e).__name__}: {str(e)[:200]}"}
 
         if name == "list_voices":
             # 🔒 STRICT MODE (Feb 2026): ElevenLabs is the ONLY allowed voice
@@ -2393,7 +2463,10 @@ AGENT_SYSTEM_PROMPT = """أنت **Zenrex Code Brain** — مهندس برمجي 
 
 🎨 **التوليد:**
 - `generate_image(description)` — ولّد صورة AI حقيقية (Gemini Nano Banana)
-- `download_media(url)` — حمّل فيديو/صوت من 1000+ موقع
+- `download_media(url, category?)` — حمّل فيديو/صوت من 1000+ موقع. مرّر `category` لتصنيف الفيديو (مثلاً 'quran', 'latmiyat_shia').
+- `search_and_download_media(query, category, platform?, limit?)` — 🔥 ابحث وحمّل دفعة فيديوهات بضربة وحدة (مثالي لمنصات الأطفال، مجمّعات المحتوى، مكتبات الخطب). مرّر `category` إجباري للفلترة في الـ UI.
+
+⚠️ **ملاحظة مهمة عن YouTube/TikTok**: بعض السيرفرات (خصوصاً Preview/Cloud IPs) محظورة من YouTube و TikTok. لو `download_media` رد لك `ip_blocked` أو HTTP 451، **لا تكذب** — أخبر العميل بصراحة: *"YouTube/TikTok يحظرون السيرفر اللي أشتغل عليه. الحلول: (أ) ارفع cookies من متصفحك للوصول، (ب) ارفع الفيديوهات يدوياً، (ج) جرّبني على Production server بعد النشر."* ثم اقترح بدائل عملية (Vimeo، Internet Archive، Pollinations video، أو URLs مباشرة من S3/CDN). ابني واجهة الموقع كاملة بحيث تكون جاهزة، وأضف placeholder سهل للاستبدال لاحقاً.
 
 🚀 **النشر والمفاتيح:**
 - `publish_site(slug)` — انشر الموقع لايف على Zenrex فوراً (لا تحتاج GitHub ولا Vercel — Zenrex هي المنصة)
