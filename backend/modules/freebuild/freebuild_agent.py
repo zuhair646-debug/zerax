@@ -1457,18 +1457,40 @@ async def _exec_tool_async(ctx: FreeBuildToolContext, name: str, args: Dict[str,
             if len(text) > 5000:
                 return {"ok": False, "error": "النص طويل (>5000 حرف). قسّمه على دفعات."}
             requested_voice = (args.get("voice_id") or "").strip()
-            model_id = (args.get("model") or "eleven_multilingual_v2").strip()
+            # 🆙 Quality upgrade (Feb 2026): default to ElevenLabs v3 — the new
+            # flagship model with 40% better naturalness, Arabic native support,
+            # and emotional tag understanding ([excited], [whisper], [sad]).
+            model_id = (args.get("model") or "eleven_v3").strip()
+            language_hint = (args.get("language") or "").strip().lower()
+            # 🎯 Auto-pick the native voice for the detected language when the
+            # caller didn't specify one. This is the SINGLE biggest quality win:
+            # English-trained voices (Rachel, Adam) butcher Arabic prosody.
+            NATIVE_VOICES = {
+                "ar": "2bnoa3wtrtcUW41TrSJM",  # Mohammed Almansari — Saudi pro male
+                "ar-female": "gVzwmdZzRgBrNjXaTmi5",  # Layan — Saudi pro female
+                # Japanese & others fall back to v3's multilingual default below
+            }
+            if not requested_voice:
+                # Heuristic: detect Arabic by character range
+                has_ar = any('\u0600' <= c <= '\u06FF' for c in text)
+                gender = (args.get("gender") or "").lower()
+                if has_ar or language_hint.startswith("ar"):
+                    requested_voice = NATIVE_VOICES["ar-female" if gender == "female" else "ar"]
+            # 🎚️ Optimal voice settings for cinematic narration:
+            # - stability 0.40 → more expressive variation (less robotic)
+            # - similarity 0.85 → high voice fidelity
+            # - style 0.45 → strong stylistic interpretation
+            # - use_speaker_boost → cleaner output
+            voice_settings = args.get("voice_settings") or {
+                "stability": 0.40,
+                "similarity_boost": 0.85,
+                "style": 0.45,
+                "use_speaker_boost": True,
+            }
             try:
                 import httpx, os as _os, uuid as _uuid
-                # 🔒 STRICT MODE (Feb 2026 — user requirement):
-                # ElevenLabs is the ONLY allowed voice provider on this platform.
-                # No OpenAI TTS fallback. No silent degradation. If ElevenLabs is
-                # unreachable / out of quota / key invalid → fail hard, notify owner,
-                # and let the agent surface a transparent "service temporarily down"
-                # message to the user (NEVER ask the user for a key).
                 el_key = (_os.environ.get("ELEVENLABS_API_KEY", "") or "").strip()
                 if not el_key:
-                    # Notify owner about missing key (best effort)
                     try:
                         if ctx.db is not None:
                             import datetime as _dt
@@ -1484,17 +1506,27 @@ async def _exec_tool_async(ctx: FreeBuildToolContext, name: str, args: Dict[str,
                         pass
                     return {"ok": False, "error": "voice_service_down",
                             "message_ar": "خدمة الصوت معطّلة مؤقتاً. الفريق يعمل على الحل، لا تطلب من العميل أي مفتاح."}
-                # Default voice (Rachel) if none specified. The agent SHOULD call
-                # list_voices first to pick a proper voice_id — but we don't fail
-                # if it didn't, we just use a sensible default.
+                # Default voice (Rachel) if none specified. We already auto-pick
+                # native Arabic voices above; this is just a final safety net.
                 voice = requested_voice or "21m00Tcm4TlvDq8ikWAM"
-                async with httpx.AsyncClient(timeout=120) as cl:
-                    r = await cl.post(
-                        f"https://api.elevenlabs.io/v1/text-to-speech/{voice}",
-                        headers={"xi-api-key": el_key, "Content-Type": "application/json", "Accept": "audio/mpeg"},
-                        json={"text": text, "model_id": model_id,
-                              "voice_settings": {"stability": 0.5, "similarity_boost": 0.75, "style": 0.0}},
-                    )
+
+                async def _call_eleven(_model_id: str):
+                    """Make the actual ElevenLabs request — extracted so we can
+                    fall back from v3 → multilingual_v2 if v3 fails for a voice."""
+                    async with httpx.AsyncClient(timeout=120) as cl:
+                        return await cl.post(
+                            f"https://api.elevenlabs.io/v1/text-to-speech/{voice}",
+                            headers={"xi-api-key": el_key, "Content-Type": "application/json", "Accept": "audio/mpeg"},
+                            json={"text": text, "model_id": _model_id, "voice_settings": voice_settings},
+                        )
+
+                r = await _call_eleven(model_id)
+                # If v3 isn't compatible with this voice (some voices are v2-only),
+                # automatically fall back to multilingual_v2 — never to OpenAI.
+                if r.status_code in (400, 422) and model_id == "eleven_v3":
+                    logger.info(f"[voiceover] v3 incompatible for voice {voice}, falling back to multilingual_v2")
+                    r = await _call_eleven("eleven_multilingual_v2")
+                    model_id = "eleven_multilingual_v2"
                 if r.status_code != 200:
                     # Notify owner with diagnostic details
                     err_snippet = r.text[:300]
@@ -1545,7 +1577,7 @@ async def _exec_tool_async(ctx: FreeBuildToolContext, name: str, args: Dict[str,
                     except Exception:
                         pass
                 return {"ok": True, "audio_url": public_url, "voice_id": used_voice,
-                        "provider": used_provider, "size_bytes": len(audio_bytes),
+                        "provider": used_provider, "model": model_id, "size_bytes": len(audio_bytes),
                         "embed_html": f'<audio controls src="{public_url}"></audio>'}
             except Exception as e:
                 return {"ok": False, "error": f"voiceover: {type(e).__name__}: {str(e)[:200]}"}
