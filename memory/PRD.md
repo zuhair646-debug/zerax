@@ -11,6 +11,71 @@ Unify the AI brain and empower it with unified toolset. Fix mocked AI Trading Bo
 - 100% LOCAL AI requirement (no OpenAI/Anthropic for Family AI)
 
 
+## Session 2026-06-17d — Reference Samples + Curated Playlists (Auto-Scheduler v4)
+**User concerns**: 
+1. الـ Auto-Scheduler ما كان يجلب محتوى عربي حقيقي (نتائج Mickey Mouse عشوائية بدل قرآن)
+2. مفقود مكان لإعطاء عينات مرجعية للبوت "أنا أحب فيديوهات بهذا الشكل"
+3. غير واضح من أين الـ Bot يجلب (TikTok? YouTube? Archive.org?)
+4. يبي أوتوماتيك بالكامل — يعطي عينة واحدة لكل فئة، البوت يجلب مشابه باستمرار
+
+### Reality check delivered to user
+- **TikTok/YouTube/Instagram** لا يدعمون email/password login من السيرفر (الحساب يتحظر فوراً)
+- الحلول الشرعية: cookies export من المتصفح أو APIs رسمية (لا توجد لـ TikTok)
+- **Archive.org** هو المصدر العملي الوحيد بدون cookies (محتوى عربي إسلامي حقيقي وآمن)
+
+### ✅ Patch 1: Curated Arabic Identifiers (Auto-Scheduler v4)
+Researched Archive.org manually and built verified identifier lists per category:
+- **quran** (6): الحصري المعلم, مشاري العفاسي معلم, مصحف تراويح الحرم النبوي
+- **games** (8): FerdyCartoonArabic, BabyBus Arabic (Mixed/Sick Song/GoToBed/etc), Athuth8Aengie9XeB9vu (دورة الماء), captain.-rabeh.-ep-45_202404
+- **latmiyat_shia** (3): اجعل شعارك مع عاشوراء (منصور السالمي), فضل صيام يوم عاشوراء, حلقة عبد الرحمن الدمشقية
+- **duas_shia** (2): tarawih+dua collection, Justbthat-ashuraProcession
+- **educational** (4): arabicalphabetcaterpillartrain, arabicalphabetforkidswithanimals, المنشاوي مع ترديد الاطفال, قاعدة نورانية
+
+Auto-Scheduler v4 algorithm:
+1. **Pass 1**: 2 random identifiers per category from CURATED (guaranteed Arabic quality)
+2. **Pass 2**: Live Archive.org search using `buildQueryFromDescription()` if user has set a Reference Sample, OR DEFAULT_QUERIES otherwise
+3. Expanded BLOCKLIST: `xxx, adult, rated r, 18+, nude, sex, porn, christian, jesus is`
+
+### ✅ Patch 2: Reference Samples UI (Train-the-bot)
+New section `<section id="reference-samples">` in `bot-page`:
+- 5 cards (one per category) with Arabic emoji + label
+- Each card: URL input (LTR) + description textarea (Arabic) + 💾 Save button + 🗑️ Clear (if saved)
+- Status badge: ⚪ فارغ → ✅ محفوظ (transitions on save)
+- Save action: stores in `localStorage.reference_samples` + triggers immediate `_autoFetch()`
+- Toast feedback: "✅ تم حفظ عينة X. البوت سيستخدمها في الجولة القادمة"
+- Cookies hint banner: explains why TikTok/YouTube need cookies, mentions "Get cookies.txt LOCALLY" extension
+
+### 🔄 How user's description becomes a query
+`buildQueryFromDescription(desc, category)`:
+1. Strips punctuation
+2. Filters Arabic + English stopwords (`the, a, an, of, مع, من, إلى, في, على, ال, هذا, اللي, شي`)
+3. Takes first 6 strongest tokens
+4. Appends 2-token category anchor (e.g. `arabic recitation kids` for quran)
+5. Submits to Archive.org Advanced Search
+
+Example: User writes "قراءة بطيئة بصوت العفاسي مع ترديد الأطفال" → query becomes `قراءة بطيئة بصوت العفاسي ترديد الأطفال recitation kids`
+
+### 🧪 Live verification (clean localStorage → fresh load)
+- ✅ Reference Samples section rendered with 5 cards
+- ✅ Quran card filled + saved → status badge ✅ محفوظ
+- ✅ Auto-fetch triggered: 10 videos loaded in 22 seconds
+- ✅ **Real Arabic titles**: "فيديو مصحف تراويح الحرم النبوي المدني 2015 رمضان", "FERDY CARTOON ARABIC"
+- ✅ 9 of 10 from `archive.org (مختار)` (curated), 1 from `archive.org` (live search)
+- ✅ Distribution: quran:3, games:2, latmiyat_shia:2, duas_shia:1, educational:2
+- ✅ Console: `✅ Auto-Scheduler v4 (curated + sample-driven) initialized`
+- ✅ Console: `✅ Reference Samples initialized`
+- ✅ All previous features still work (approval queue, drawer, navigation tabs)
+
+### Patch Stats
+- HTML: 105,266 → **117,500 chars** (+12.2KB)
+- Sections: `auto-scheduler` REPLACED (v3 → v4), `reference-samples` APPENDED (new)
+- Zero CSS/markup deletions, pure additive patching
+- Direct DB write via SSH + docker exec + motor MongoDB Atlas
+
+### What still requires user action
+- **YouTube/TikTok cookies**: User needs to use a browser extension (Get cookies.txt LOCALLY) to export cookies for those platforms, then upload via the existing `/api/freebuild-chat/media/cookies/upload` endpoint. UI for cookies upload INSIDE zenrex-kids-pro published site is a Future task.
+
+
 ## Session 2026-06-17c — Parental Approval Queue + Video Detail Drawer
 **User asked**: 
 1. الفيديوهات اللي ينزّلها البوت تروح لقائمة مراجعة في تاب البوت
