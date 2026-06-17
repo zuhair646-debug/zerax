@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import VideoStudioPreview from './VideoStudioPreview';
 import VideoPhaseTracker, { VIDEO_PHASES } from '../components/VideoPhaseTracker';
 import ZCrownSpinner from '../components/ZCrownSpinner';
+import CookiesManager from '../components/CookiesManager';
 import {
   Globe, Send, Loader2, Sparkles, Eye, ArrowRight, ArrowLeft,
   CheckCircle2, Check, Image as ImageIcon, FolderOpen, Code,
@@ -2117,6 +2118,7 @@ function ChatWorkspace({ projectId }) {
   const [finalizeOpen, setFinalizeOpen] = useState(false);
   const [connectionsOpen, setConnectionsOpen] = useState(false);
   const [snapshotsOpen, setSnapshotsOpen] = useState(false);
+  const [cookiesOpen, setCookiesOpen] = useState(false);
   const [thinkingStage, setThinkingStage] = useState(0);
   const [lastTask, setLastTask] = useState(null); // {label, model}
   const [loading, setLoading] = useState(false);
@@ -2818,6 +2820,19 @@ function ChatWorkspace({ projectId }) {
       <div className="flex-1 flex overflow-hidden">
         {/* RIGHT (sidebar in RTL): Phases */}
         <div className="w-56 lg:w-64 bg-zinc-900/50 border-l border-white/10 p-3 lg:p-4 overflow-y-auto shrink-0 hidden md:block">
+          {/* Cookies button — opens manager so user can upload YouTube/TikTok cookies */}
+          {!isVideoMode && (
+            <button
+              type="button"
+              onClick={() => setCookiesOpen(true)}
+              className="w-full mb-3 flex items-center justify-center gap-2 px-3 py-2 rounded-lg bg-amber-500/15 border border-amber-500/30 text-amber-200 hover:bg-amber-500/25 transition-colors text-xs font-bold"
+              data-testid="open-cookies-manager-btn"
+              title="رفع كوكيز YouTube/TikTok عشان الذكاء يقدر يحمّل الفيديوهات"
+            >
+              <span>🍪</span>
+              <span>كوكيز التحميل</span>
+            </button>
+          )}
           <h2 className="font-bold mb-3 text-emerald-400 text-sm flex items-center gap-1.5">
             <span>📋</span> <span>المراحل</span>
           </h2>
@@ -3864,6 +3879,10 @@ function ChatWorkspace({ projectId }) {
         open={connectionsOpen}
         projectId={projectId}
         onClose={() => setConnectionsOpen(false)}
+      />
+      <CookiesManager
+        open={cookiesOpen}
+        onClose={() => setCookiesOpen(false)}
       />
       <CredentialModal
         request={credentialRequest}

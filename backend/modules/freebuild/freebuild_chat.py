@@ -2489,6 +2489,91 @@ def make_freebuild_chat_router(db, get_current_user):
     # served via /api/freebuild-chat/media/file/{name}.
     # ═══════════════════════════════════════════════════════════════════════
     MEDIA_DIR = "/app/backend/uploads/freebuild_media"
+    COOKIES_DIR = "/app/backend/uploads/freebuild_cookies"
+
+    def _cookie_path_for(user_id: str, platform: str) -> str:
+        """Return the on-disk path of the cookies.txt for (user, platform).
+
+        platform is normalized so 'youtube.com', 'www.youtube.com', 'YouTube'
+        all map to 'youtube'. The directory is private to the server (no
+        public route exposes it).
+        """
+        p = (platform or "").strip().lower()
+        for token in ("youtube", "tiktok", "instagram", "facebook", "twitter", "x"):
+            if token in p:
+                p = token
+                break
+        else:
+            p = "generic"
+        safe_user = re.sub(r"[^a-zA-Z0-9_-]", "_", str(user_id))[:64]
+        return os.path.join(COOKIES_DIR, f"{safe_user}__{p}.txt")
+
+    @router.post("/media/cookies/upload")
+    async def upload_cookies(
+        platform: str = Form(...),
+        cookies_file: UploadFile = File(...),
+        user=Depends(get_current_user),
+    ):
+        """User uploads their browser cookies.txt so the AI can bypass
+        YouTube/TikTok/Instagram bot detection when downloading.
+
+        Use Chrome extension 'Get cookies.txt LOCALLY' (or Firefox addon
+        'cookies.txt') to export. We never log or expose the file contents.
+        """
+        os.makedirs(COOKIES_DIR, exist_ok=True)
+        raw = await cookies_file.read()
+        # Strict validation — Netscape cookies format header
+        text = raw.decode("utf-8", errors="ignore")
+        head = text.lstrip()[:200].lower()
+        if "netscape" not in head and "# host" not in head and "\t" not in text[:2000]:
+            raise HTTPException(
+                400,
+                "صيغة الكوكيز غير صحيحة. صدّرها من المتصفح بصيغة Netscape "
+                "(استخدم إضافة 'Get cookies.txt LOCALLY' للكروم أو 'cookies.txt' لفايرفوكس).",
+            )
+        if len(raw) > 1_000_000:
+            raise HTTPException(413, "ملف الكوكيز كبير جداً (الحد الأعلى 1MB)")
+        dest = _cookie_path_for(user["user_id"], platform)
+        with open(dest, "wb") as f:
+            f.write(raw)
+        # Restrict permissions
+        try:
+            os.chmod(dest, 0o600)
+        except Exception:
+            pass
+        # Track in DB (no content, only metadata)
+        await db.freebuild_cookies_meta.update_one(
+            {"user_id": user["user_id"], "platform": _cookie_path_for(user["user_id"], platform).rsplit("__", 1)[1].split(".")[0]},
+            {"$set": {"updated_at": _now(), "size_bytes": len(raw), "filename": cookies_file.filename or "cookies.txt"}},
+            upsert=True,
+        )
+        return {
+            "ok": True,
+            "platform": _cookie_path_for(user["user_id"], platform).rsplit("__", 1)[1].split(".")[0],
+            "size_bytes": len(raw),
+        }
+
+    @router.get("/media/cookies/list")
+    async def list_cookies(user=Depends(get_current_user)):
+        os.makedirs(COOKIES_DIR, exist_ok=True)
+        items = await db.freebuild_cookies_meta.find(
+            {"user_id": user["user_id"]},
+            {"_id": 0, "platform": 1, "updated_at": 1, "size_bytes": 1, "filename": 1},
+        ).to_list(length=20)
+        return {"cookies": items}
+
+    @router.delete("/media/cookies/{platform}")
+    async def delete_cookies(platform: str, user=Depends(get_current_user)):
+        dest = _cookie_path_for(user["user_id"], platform)
+        norm_platform = dest.rsplit("__", 1)[1].split(".")[0]
+        try:
+            os.remove(dest)
+        except FileNotFoundError:
+            pass
+        await db.freebuild_cookies_meta.delete_one(
+            {"user_id": user["user_id"], "platform": norm_platform}
+        )
+        return {"ok": True, "platform": norm_platform}
 
     @router.post("/media/download")
     async def media_download(
@@ -2524,6 +2609,32 @@ def make_freebuild_chat_router(db, get_current_user):
         meta_path = os.path.join(MEDIA_DIR, f"{file_id}.info.json")
 
         import subprocess as _sp
+
+        # ─────────────────────────────────────────────────────────────
+        # Cookies support: if the user has uploaded cookies for the
+        # detected platform (YouTube/TikTok/Instagram/…), pass them to
+        # yt-dlp via --cookies. This bypasses bot-detection blocks that
+        # otherwise return HTTP 403 on cloud server IPs.
+        # ─────────────────────────────────────────────────────────────
+        cookies_args: List[str] = []
+        detected_platform = ""
+        url_low = url.lower()
+        if "youtube.com" in url_low or "youtu.be" in url_low:
+            detected_platform = "youtube"
+        elif "tiktok.com" in url_low:
+            detected_platform = "tiktok"
+        elif "instagram.com" in url_low:
+            detected_platform = "instagram"
+        elif "facebook.com" in url_low or "fb.watch" in url_low:
+            detected_platform = "facebook"
+        elif "twitter.com" in url_low or "/x.com/" in url_low or url_low.startswith("https://x.com"):
+            detected_platform = "twitter"
+        if detected_platform:
+            cookie_path = _cookie_path_for(user["user_id"], detected_platform)
+            if os.path.exists(cookie_path):
+                cookies_args = ["--cookies", cookie_path]
+                logger.info(f"Using cookies for {detected_platform} (user={user['user_id'][:6]}...)")
+
         cmd = [
             "yt-dlp",
             "--no-playlist",
@@ -2531,7 +2642,7 @@ def make_freebuild_chat_router(db, get_current_user):
             "--restrict-filenames",
             "--write-info-json",
             "-o", out_path,
-        ] + fmt_args + [url]
+        ] + cookies_args + fmt_args + [url]
 
         try:
             proc = await asyncio.create_subprocess_exec(
@@ -2552,8 +2663,9 @@ def make_freebuild_chat_router(db, get_current_user):
                 if "403" in low or "ip address is blocked" in low or "forbidden" in low or "sign in to confirm" in low:
                     raise HTTPException(
                         451,
-                        "ip_blocked: المنصة (YouTube/TikTok) ترفض التحميل من سيرفرات الإنتاج. "
-                        "حلول: (أ) ارفع cookies من متصفحك، (ب) استخدم proxy، (ج) ارفع الفيديو يدوياً."
+                        f"ip_blocked: {detected_platform or 'المنصة'} ترفض التحميل من سيرفرات الإنتاج. "
+                        f"الحل المضمون: ارفع cookies.txt من متصفحك عبر POST /api/freebuild-chat/media/cookies/upload?platform={detected_platform or 'youtube'}. "
+                        "استخدم إضافة 'Get cookies.txt LOCALLY' للكروم."
                     )
                 if "video unavailable" in low or "private video" in low:
                     raise HTTPException(404, "الفيديو غير متاح أو خاص")
@@ -2650,6 +2762,9 @@ def make_freebuild_chat_router(db, get_current_user):
         async def _search_urls(prefix: str, count: int) -> List[str]:
             """Use yt-dlp's search to get top URLs without downloading."""
             import subprocess as _sp
+            # Use YouTube cookies for search too (helps with age-gated content)
+            ck = _cookie_path_for(user["user_id"], "youtube")
+            ck_args = ["--cookies", ck] if os.path.exists(ck) else []
             cmd = [
                 "yt-dlp",
                 f"{prefix}{count}:{q}",
@@ -2657,7 +2772,7 @@ def make_freebuild_chat_router(db, get_current_user):
                 "--print", "%(webpage_url)s",
                 "--no-warnings",
                 "--quiet",
-            ]
+            ] + ck_args
             try:
                 proc = await asyncio.create_subprocess_exec(*cmd, stdout=_sp.PIPE, stderr=_sp.PIPE)
                 stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=60)
@@ -2702,12 +2817,26 @@ def make_freebuild_chat_router(db, get_current_user):
                     fmt_args = ["-f", "bv*[height<=720][ext=mp4]+ba[ext=m4a]/b[height<=720][ext=mp4]/b[height<=720]", "--merge-output-format", "mp4"]
                 out_path = os.path.join(MEDIA_DIR, f"{file_id}.%(ext)s")
                 meta_path = os.path.join(MEDIA_DIR, f"{file_id}.info.json")
+                # Detect platform of this URL and load cookies if available
+                _u_low = u.lower()
+                _det = ""
+                if "youtube.com" in _u_low or "youtu.be" in _u_low:
+                    _det = "youtube"
+                elif "tiktok.com" in _u_low:
+                    _det = "tiktok"
+                elif "instagram.com" in _u_low:
+                    _det = "instagram"
+                _ck_args: List[str] = []
+                if _det:
+                    _ck = _cookie_path_for(user["user_id"], _det)
+                    if os.path.exists(_ck):
+                        _ck_args = ["--cookies", _ck]
                 import subprocess as _sp
                 cmd = [
                     "yt-dlp", "--no-playlist", "--no-warnings",
                     "--restrict-filenames", "--write-info-json",
                     "-o", out_path,
-                ] + fmt_args + [u]
+                ] + _ck_args + fmt_args + [u]
                 proc = await asyncio.create_subprocess_exec(*cmd, stdout=_sp.PIPE, stderr=_sp.PIPE)
                 _, stderr = await asyncio.wait_for(proc.communicate(), timeout=120)
                 if proc.returncode != 0:
