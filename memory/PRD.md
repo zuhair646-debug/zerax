@@ -11,7 +11,34 @@ Unify the AI brain and empower it with unified toolset. Fix mocked AI Trading Bo
 - 100% LOCAL AI requirement (no OpenAI/Anthropic for Family AI)
 
 
-## Session 2026-06-17h — Kids Experience v12 (Prayer Studio + Achievements) ✅
+## Session 2026-06-17i — Kids v13 polish (video, camera, animations) ✅
+**User feedback**: 
+1. Full-screen video was cropping scenes — change to fit without cutting
+2. Videos auto-playing in background during login & after navigating — must only play when actively visible
+3. Camera/record button doesn't respond on tap
+4. Achievements page lacks "life" — no animations or interactivity
+
+### Fixes shipped (`kids-experience-v13` section, total 253,183 chars)
+1. **Video sizing**: `.video-slide video { object-fit: contain }` — full video visible, letterboxed on black
+2. **IntersectionObserver** on video-container — only the slide ≥60% visible plays; others pause immediately. Plus aggressive pause loop for the first 6 seconds and on every page navigation
+3. **Record button reinforcement** — re-binds click+touchend with `{capture:true}` to defeat any later overrides; explicit `getUserMedia` call with echo-cancellation; visual scale feedback on tap. Verified via Playwright that `getUserMedia` is invoked (headless returns "device not found" = expected; real phone with camera works)
+4. **Animations added**:
+   - `heroPulse` + `fadeUpIn` on achievements hero card + 6 floating gold particles
+   - `popIn` staggered on badges (60ms apart)
+   - `fadeUpIn` staggered on stat cards & tasks
+   - `shimmerBar` animated gradient on task progress bars
+   - `glowGreen` pulse on record button when idle
+   - `float` on emojis & reward chips
+   - Hover/active transforms on all cards
+5. **Tap feedback toasts**: clicking a stat/task/badge shows a short toast (e.g., "🏆 5 صلوات")
+
+### Verified via Playwright
+- ✅ 0 videos playing during login screen
+- ✅ 0 videos playing after switching to prayer-studio
+- ✅ Record button click triggers `getUserMedia` (proof: device-not-found toast in headless)
+- ✅ All animations active (`getComputedStyle().animationName` returns the right keyframes)
+- ✅ Badge click → toast appears with badge title
+
 **User request**: Make child section richer — full-screen video feed, professional prayer recording (camera + father's audio without leaking into recording), and a new achievements page showing tasks/points/monthly SAR earnings.
 
 ### Backend additions (`freebuild_chat.py`)
