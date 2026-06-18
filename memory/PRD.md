@@ -25,6 +25,60 @@ Deploy Zenrex Farm to the cloud, expand the Zenrex AI Brain to specialized modes
 
 ## Changelog
 
+- **2026-06-18 (v33 — Parent Console + Audio/Video fixes + AI Categorization)**:
+  Major restructure of parent dashboard into a proper control center plus
+  P0 bug fixes for audio and video preload.
+  
+  **Backend additions (`/opt/zerax/backend/modules/freebuild/freebuild_chat.py`)**:
+  - **`/kids/categories` (GET/POST/DELETE)**: Parent-managed video categories.
+    Defaults seeded per parent: الكل, ألعاب, قرآن, تعليمي.
+  - **`/kids/parent-tasks` (GET/POST/DELETE)**: Parent-managed daily tasks.
+    Includes `needs_camera` flag, `points` per task, `icon`. Defaults seeded.
+  - **`/kids/auto-categorize` (POST)**: Single video AI categorization via
+    Claude Haiku 4.5 (Emergent LLM Key). Reads video title, returns category id.
+  - **`/kids/auto-categorize/all` (POST)**: Batch categorize all uncategorized
+    approved videos (max 50/call). Uses helper `_categorize_one`.
+  - **Fallback**: When LLM unavailable, falls back to keyword matching.
+  - **Default categories/tasks** are auto-seeded on first GET call per parent.
+  
+  **Frontend `parent-console-v33` section**:
+  - **AUDIO FIX**: Removes harmful `crossOrigin='anonymous'` set by v22 (was
+    preventing playback on Chrome Android per v25 PRD note). Force-unmutes
+    all videos on first user tap (touchstart/click capture once).
+  - **VIDEO PRELOAD FIX**: Prefetches next 2 videos as no-cors fetch warm-up,
+    sets `preload="auto"` only for current+next-2, `preload="metadata"` for rest.
+    Eliminates the slow-to-start issue.
+  - **Categories drawer**: Pills bar (`.pills-bar`) hidden. Replaced with
+    floating `🏷️` button (`#v33-cat-fab`) → opens bottom sheet drawer.
+    Selecting a category triggers the existing pill click for filter logic.
+  - **Parent dashboard restructure**: 7 tabs strip at top of parent-page:
+    🎬 Videos / 🏷️ Categories / 🎯 Tasks / 📿 Dhikr / 🕌 Prayers / 📊 Stats / ⚙️ Settings.
+    Legacy parent UI is relocated into the appropriate tabs.
+  - **Logout button**: Prominent red button on parent bar (sticky top) + 
+    full-width button in Settings tab. Clears all localStorage + reloads.
+  - **Categories CRUD UI**: Inline form (icon + title) + list with delete buttons.
+    System categories (like "الكل") can't be deleted.
+  - **Tasks CRUD UI**: Inline form (icon + title + points + needs_camera) + list.
+    Soft-delete (sets `is_active=false`).
+  - **Stats tab**: Per-child cards showing total points, today, streak, monthly SAR.
+    Recent activity ledger. Pulls from `/kids/points/summary`.
+  - **AI button**: "🤖 إعادة تصنيف الفيديوهات الموجودة" in Videos tab
+    calls `/kids/auto-categorize/all` to retro-categorize all videos.
+  - **Service Worker bumped** to `zenrex-kids-v9-v33`.
+  
+  **Child UI untouched** (per user instruction). Only parent role sees the
+  new dashboard via `body[data-zk-role="parent"]` CSS selector.
+  
+  **Verified end-to-end**:
+  - `GET /kids/categories`: returns 4-5 default + custom categories ✓
+  - `GET /kids/parent-tasks`: returns 6 default tasks ✓
+  - `POST /kids/auto-categorize` (single): Claude Haiku correctly tagged
+    "تحصَّن بالقرآن العظيم" → category=`quran` ✓
+  - `POST /kids/auto-categorize/all` (batch): 25 videos categorized in ~60s ✓
+  - Pills-bar `display: none`, FAB + drawer present in DOM ✓
+
+## Changelog
+
 - **2026-06-18 (v32 — Real points engine + production polish)**:
   Closed the loop on the points/rewards system end-to-end so kids' actions
   actually persist server-side instead of localStorage-only.
