@@ -2851,13 +2851,14 @@ def make_freebuild_chat_router(db, get_current_user):
             if is_direct_media:
                 fmt_args = []  # download as-is
             else:
-                fmt_args = ["-f", "bv*[height<=1080][ext=mp4]+ba[ext=m4a]/b[height<=1080][ext=mp4]/b[height<=1080]", "--merge-output-format", "mp4"]
+                # Tries 1080p mp4 streams, then any 1080p, then any mp4, then ANY video — ensures TikTok-style single-stream works
+                fmt_args = ["-f", "bv*[height<=1080][ext=mp4]+ba[ext=m4a]/b[height<=1080][ext=mp4]/b[height<=1080]/b[ext=mp4]/best", "--merge-output-format", "mp4"]
             ext = "mp4"
         else:  # default mp4_720p
             if is_direct_media:
                 fmt_args = []  # download as-is
             else:
-                fmt_args = ["-f", "bv*[height<=720][ext=mp4]+ba[ext=m4a]/b[height<=720][ext=mp4]/b[height<=720]", "--merge-output-format", "mp4"]
+                fmt_args = ["-f", "bv*[height<=720][ext=mp4]+ba[ext=m4a]/b[height<=720][ext=mp4]/b[height<=720]/b[ext=mp4]/best", "--merge-output-format", "mp4"]
             ext = "mp4"
 
         out_path = os.path.join(MEDIA_DIR, f"{file_id}.%(ext)s")
