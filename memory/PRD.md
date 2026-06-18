@@ -41,7 +41,26 @@ Deploy Zenrex Farm to the cloud, expand the Zenrex AI Brain to specialized modes
   if videos disappeared). Endpoint: `/api/freebuild-chat/kids/bot/approved` returns 26 docs.
   Each card has video preview + preview link + delete button.
 
-- **2026-06-18 (PRAYER MODULE v23)**: Built the new Prayer Studio (replaces old prayer UI).
+- **2026-06-18 (PRAYER MODULE v23)**: Built new Prayer Studio. Parent dashboard gets 5 prayer
+  cards (Fajr/Dhuhr/Asr/Maghrib/Isha) with 🎤 سجّل button → records voice via MediaRecorder
+  (audio/webm + echoCancellation). Backend adds `DELETE /kids/audio/{id}`, `POST /kids/audio/{id}/prayer`,
+  `POST /kids/audio/{id}/order`. Child side has fullscreen camera studio (`#pc-shell`): tap a
+  prayer tile → camera opens (front default, flip button) + parent's audio plays via Audio() →
+  video+mic recording starts (echoCancellation on child mic; headphones recommended for clean
+  audio isolation) → auto-stops at 16 minutes → uploads to `/kids/recordings/upload` for parent review.
+
+- **2026-06-18 (v24 — 4 user fixes)**:
+  1. **Main feed loads for parent too**: `loadAndShuffleChildFeed` now accepts both parent & child
+     roles (parent can verify what the kid sees). Random shuffle on every load (Fisher-Yates).
+  2. **Inline preview modal** (`#vpm-modal`): Replaced `window.open()` redirect for preview buttons.
+     Plays video/audio in a centered black modal — no more redirecting to main Zenrex app.
+     Reusable via `window.previewMedia(url, title, type)`.
+  3. **Prayer audio supports file upload**: Each prayer card now has 📁 رفع button + 🎤 سجّل button.
+     File upload shows confirmation with duration + size + prayer name before uploading.
+     Supports any audio/* format. No size limit beyond FastAPI default (~100MB), good for 20+ min recordings.
+  4. **YouTube cookies upload UI**: Added prominent red box in URL-download section with step-by-step
+     Arabic instructions on how to export cookies via "Get cookies.txt LOCALLY" Chrome extension.
+     One-click upload to `POST /media/cookies/upload?platform=youtube`. Fixes YouTube bot-detection.
   
   **Parent side** (in Parent Dashboard, section `pm-parent-1`):
     - 5 prayer cards: الفجر / الظهر / العصر / المغرب / العشاء (each with emoji icon)
