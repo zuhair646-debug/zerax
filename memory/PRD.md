@@ -31,13 +31,31 @@ Deploy Zenrex Farm to the cloud, expand the Zenrex AI Brain to specialized modes
   `/app/frontend/public/logo_previews/` (logo_v9_corniche_evening.png is the deployed one).
 - **2026-06-18**: Fixed Kids PWA install bug — `/kids` was loading the main Zenrex manifest +
   stale `data:` URI manifest with scope `/`, causing iOS/Android to install it as the main app
-  shortcut instead of a separate PWA. Cleaned the published-site HTML in MongoDB
-  (`freebuild_published_sites.zenrex-kids-pro`) — removed 3 bad manifest links, stale
-  `<section id="head">`, root-scope SW registration. Injected proper `<link rel="manifest"
-  data-pwa="kids" data-real="1" href="/kids/manifest.webmanifest">` plus apple-touch-icon +
-  apple-mobile-web-app-capable. Now `/kids` installs as a fully standalone PWA, separate from
-  the main `zenrex.ai` app, with the new family Corniche icon. Fix script preserved at
-  `/app/logo_gen/fix_kids_pwa.py`.
+  shortcut instead of a separate PWA. Cleaned the published-site HTML in MongoDB — removed 3
+  bad manifest links, stale `<section id="head">`, root-scope SW registration. Injected proper
+  `<link rel="manifest" data-pwa="kids" data-real="1" href="/kids/manifest.webmanifest">` plus
+  apple-touch-icon + apple-mobile-web-app-capable. Fix script at `/app/logo_gen/fix_kids_pwa.py`.
+
+- **2026-06-18**: Added "مكتبة الفيديوهات المعتمدة" section to Parent Dashboard so the parent
+  can see ALL approved videos (previously only the empty Pending queue was shown — appeared as
+  if videos disappeared). Endpoint: `/api/freebuild-chat/kids/bot/approved` returns 26 docs.
+  Each card has video preview + preview link + delete button.
+
+- **2026-06-18 (MAJOR CLEANUP)**: Removed ~200KB of obsolete duplicate sections from
+  `freebuild_published_sites.zenrex-kids-pro` HTML (308KB → ~108KB = 64% reduction).
+  Backup preserved in same doc as `backup_html_pre_cleanup_v1`. Removed sections:
+  `bot-page`, `bottom-nav-update`, `bottom-nav-fixed`, `pwa-sw-inline`, `fixes-core`,
+  `init-app-fix`, `bot-save-fix`, `auto-scheduler`, `approval-system`, `reference-samples`,
+  `add-by-url`, `cookies-link`, `approval-preview`, `onetime-cleanup`, `ui-bugfixes-v6`,
+  `ui-cleanup-v7`, `directed-scraping-v9`, `auth-roles-v10`, `kids-experience-v12/v13/v16`,
+  `dynamic-children-v19`, plus 2 dead `<script>` blocks binding to removed `#bot-submit`.
+  Fixed JS syntax error from orphan `}).catch(...)` left by earlier SW removal.
+  Exposed `window.APP_STATE`, `window.renderVideos`, `window.loadApproved` so post-cleanup
+  sections (v17/v18/v22 etc.) can access them. Result: app loads with 0 JS errors,
+  approved videos render in parent dash (26 cards) and child feed (26 playing videos),
+  bottom nav clean (3 buttons), URL-download triggers immediate refresh. Live sections:
+  `auth-roles-v11`, `pwa-install-v8`, `kids-experience-v17`, `parent-add-video-v18`,
+  `zk-clean-slate`, `bot-config-v20`, `server-children-v21`, `video-preload-v22`.
 - **2026-06 (prior)**: Built full Parent/Child backend auth, dynamic child mgmt widget,
   fullscreen TikTok video UI, yt-dlp fallback chain `/best`, manual URL downloader,
   auto-bot config UI (cookies + keywords + targeted usernames), deep DB purge of
