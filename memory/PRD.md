@@ -41,7 +41,37 @@ Deploy Zenrex Farm to the cloud, expand the Zenrex AI Brain to specialized modes
   if videos disappeared). Endpoint: `/api/freebuild-chat/kids/bot/approved` returns 26 docs.
   Each card has video preview + preview link + delete button.
 
-- **2026-06-18 (MAJOR CLEANUP)**: Removed ~200KB of obsolete duplicate sections from
+- **2026-06-18 (PRAYER MODULE v23)**: Built the new Prayer Studio (replaces old prayer UI).
+  
+  **Parent side** (in Parent Dashboard, section `pm-parent-1`):
+    - 5 prayer cards: الفجر / الظهر / العصر / المغرب / العشاء (each with emoji icon)
+    - Tap "🎤 سجّل" → records parent's voice via MediaRecorder (audio/webm)
+    - Tap "▶" to preview, "🗑" to delete
+    - Status shows "✅ مسجّل" or "لم يُسجّل بعد"
+    - Uses echoCancellation + noiseSuppression at capture
+    - Backend: POST `/api/freebuild-chat/kids/audio/upload` (existing) +
+      `POST /kids/audio/{aid}/prayer` (NEW — tag with prayer id) +
+      `DELETE /kids/audio/{aid}` (NEW)
+  
+  **Child side** (full-screen overlay `#pc-shell` triggered from nav prayer button):
+    - Sees 5 prayer tiles in same order as parent's recordings
+    - Disabled prayers grayed out if parent hasn't recorded yet
+    - Tap a tile → opens fullscreen camera studio
+    - Front camera default, "🔄" button switches front/back
+    - "●" button starts: video+audio recording (echoCancellation enabled for child mic) +
+      parent's audio plays via Audio() element through earphones
+    - Timer counter, **auto-stop at 16 minutes** (configurable)
+    - Mute/unmute parent audio button (🔊/🔇)
+    - On stop: uploads child's recording via `POST /api/freebuild-chat/kids/recordings/upload`
+      with audio_track = prayer name → parent can review in their dashboard
+    - HEADPHONES REQUIRED warning shown on the screen ("🎧 تأكد من توصيل السماعات قبل البدء")
+  
+  **Architecture decision**: Since child uses Bluetooth/wired headphones, parent's audio
+  goes directly into the child's ear (not played through speakers) → mic only picks up
+  child's voice. echoCancellation = belt-and-suspenders defense for any acoustic leakage.
+
+- **2026-06-18 (UI cleanup)**: Removed orphan "عنوان الفيديو / التصنيف" floating overlay
+  from bottom-right corner (legacy `.video-info` div, hidden via `display:none`).
   `freebuild_published_sites.zenrex-kids-pro` HTML (308KB → ~108KB = 64% reduction).
   Backup preserved in same doc as `backup_html_pre_cleanup_v1`. Removed sections:
   `bot-page`, `bottom-nav-update`, `bottom-nav-fixed`, `pwa-sw-inline`, `fixes-core`,
@@ -64,10 +94,19 @@ Deploy Zenrex Farm to the cloud, expand the Zenrex AI Brain to specialized modes
 ## Open Issues / Backlog
 ### P0 (None currently)
 
-### P1 — Prayer Recording Audio Overlap
-- Father's audio playback bleeds into child's microphone recording.
-- Needs Acoustic Echo Cancellation, headphone prompt, or UI lock during playback.
+### P1 — TikTok Channel Bulk Importer (commercially valuable)
+- Single field: paste channel URL → "اسحب كل القناة" button → background job pulls all videos
+- Uses existing `yt-dlp` infra + cookies. Progress bar via WebSocket or polling.
+- Cleaner UX than current bot-config-v20 widget.
 - Status: NOT STARTED.
+
+### P1 — Prayer Module — Reorder UI
+- Parent can record per prayer, but cannot YET drag-reorder the 5 cards (currently fixed order Fajr→Isha).
+- If needed: add `order` field via existing `POST /kids/audio/{aid}/order` endpoint (already created).
+
+### P1 — Prayer Recordings Review Tab
+- Parent dashboard needs a tab showing kid's prayer-recordings (`kids_recordings` collection).
+- Endpoint `GET /api/freebuild-chat/kids/recordings` already exists — just needs UI.
 
 ### P1 — Failed (Red) Video Downloads Not Cleaned Up
 - User reports: videos that failed to download still show as red/failed in DB.
@@ -85,6 +124,14 @@ Deploy Zenrex Farm to the cloud, expand the Zenrex AI Brain to specialized modes
 - Automated Travian Account Registration via 2captcha.
 - Backblaze B2 integration for storage when Hetzner VPS fills up (currently ~3%).
 - Mobile native iOS app wrapper for App Store.
+
+## Commercial Export Plan (Future)
+The current Kids PWA serves as a prototype for a multi-tenant commercial product:
+- Strip out: prayer module + achievements (those are personal).
+- Keep: parent-child auth, TikTok channel bulk import, video moderation flow,
+  approved feed, custom branding (logo per tenant).
+- Sell as a FreeBuild template: "تطبيق فيديو آمن للأطفال بإشراف ولي الأمر".
+- Tenants get their own slug under `/s/{tenant-slug}` with their own branding.
 
 ## Architecture Notes
 - Monolithic PWA HTML file approaches 300k chars — use `search_replace` carefully.
