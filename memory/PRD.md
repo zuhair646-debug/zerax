@@ -25,7 +25,28 @@ Deploy Zenrex Farm to the cloud, expand the Zenrex AI Brain to specialized modes
 
 ## Changelog
 
-- **2026-06-18 (v33 — Parent Console + Audio/Video fixes + AI Categorization)**:
+- **2026-06-18 (v34 — COMPREHENSIVE PARENT DASHBOARD + Audio/Video fixes)**:
+  Complete rebuild of parent dashboard from scratch (no widget relocations).
+  Fixes for audio overlap, slow video preload, broken category filter, camera permissions.
+  
+  **Backend additions**:
+  - `POST /kids/video-metadata`: yt-dlp --dump-json title/thumb/duration without download
+  - `GET /kids/parent-summary`: aggregated kids+stats endpoint
+  
+  **Frontend `parent-final-v34` (282KB total page)**:
+  - **Audio fix**: `enforceSingleVideo()` pauses all others when one plays + IntersectionObserver aggressively pauses off-screen videos
+  - **Preload speedup**: real `<link rel="preload" as="video">` for next 2 + preload=auto only for current ±2 + strips harmful crossOrigin
+  - **Category filter works**: drawer → `zkApplyCategory(id)` → display:none on non-matching slides + scroll to first visible
+  - **9-tab parent dashboard** (Videos/Cats/Tasks/Dhikr/Prayers/Kids/Stats/Bot/Settings) all self-contained, no relocations
+  - **Camera permission wrapper**: friendly modal with retry on NotAllowedError/NotFoundError/etc + auto-fallback constraints
+  - **Sticky red Logout button** on parent bar
+  - **Video URL preview**: paste URL → 🔍 معاينة → see title/thumb/duration → 📥 download + AI categorize
+  - **Stats panel**: per-kid cards with total points, monthly SAR, prayer/task recording counts, recent activity ledger + recordings with ▶ playback link
+  - Child UI completely untouched (4-tab UX preserved)
+  
+  **SW bumped** to `zenrex-kids-v10-v34`.
+
+
   Major restructure of parent dashboard into a proper control center plus
   P0 bug fixes for audio and video preload.
   
