@@ -13,7 +13,7 @@ import asyncio
 import hashlib
 from datetime import datetime, timezone
 from typing import Optional, List, Dict, Any
-from fastapi import APIRouter, HTTPException, Depends, Form, UploadFile, File, Request
+from fastapi import APIRouter, HTTPException, Depends, Form, UploadFile, File, Request, BackgroundTasks
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 import base64
@@ -2655,6 +2655,216 @@ def make_freebuild_chat_router(db, get_current_user):
             "badges": badges,
             "recent_recordings": rec_count,
         }
+
+    # ═══════════════════════════════════════════════════════════════════════
+    # KIDS PWA — Bot sources (followed accounts) + keyword filter + scrape
+    # ═══════════════════════════════════════════════════════════════════════
+    @router.get("/kids/bot/config")
+    async def kids_bot_get_config(user=Depends(get_current_user)):
+        doc = await db.kids_bot_config.find_one({"user_id": user["user_id"]}, {"_id": 0})
+        if not doc:
+            doc = {"sources": [], "keywords": [], "max_per_account": 10}
+        return {"ok": True, **doc}
+
+    @router.post("/kids/bot/config")
+    async def kids_bot_set_config(
+        sources: str = Form("[]"),
+        keywords: str = Form("[]"),
+        max_per_account: int = Form(10),
+        user=Depends(get_current_user),
+    ):
+        try:
+            srcs = json.loads(sources)
+            kws = json.loads(keywords)
+            if not isinstance(srcs, list) or not isinstance(kws, list):
+                raise ValueError("must be lists")
+        except Exception as e:
+            raise HTTPException(400, f"invalid JSON: {e}")
+        clean_srcs = []
+        for s in srcs[:50]:
+            if not isinstance(s, dict):
+                continue
+            platform = (s.get("platform") or "").lower().strip()
+            handle = (s.get("handle") or "").strip().lstrip("@")
+            if platform in ("tiktok", "youtube", "instagram") and handle:
+                clean_srcs.append({"platform": platform, "handle": handle})
+        clean_kws = [str(k).strip() for k in kws[:100] if str(k).strip()]
+        await db.kids_bot_config.update_one(
+            {"user_id": user["user_id"]},
+            {"$set": {
+                "user_id": user["user_id"],
+                "sources": clean_srcs,
+                "keywords": clean_kws,
+                "max_per_account": max(1, min(50, int(max_per_account or 10))),
+                "updated_at": _now(),
+            }},
+            upsert=True,
+        )
+        return {"ok": True, "sources_count": len(clean_srcs), "keywords_count": len(clean_kws)}
+
+    @router.post("/kids/bot/scrape")
+    async def kids_bot_scrape(
+        background_tasks: BackgroundTasks,
+        user=Depends(get_current_user),
+    ):
+        cfg = await db.kids_bot_config.find_one({"user_id": user["user_id"]})
+        if not cfg or not cfg.get("sources"):
+            raise HTTPException(400, "أضف حسابات للمتابعة أولاً")
+        run_id = uuid.uuid4().hex
+        await db.kids_bot_runs.insert_one({
+            "id": run_id,
+            "user_id": user["user_id"],
+            "status": "running",
+            "started_at": _now(),
+            "sources_count": len(cfg.get("sources", [])),
+            "downloaded": 0,
+            "rejected_by_filter": 0,
+            "errors": [],
+        })
+        background_tasks.add_task(_kids_bot_scrape_worker, user["user_id"], run_id, cfg)
+        return {"ok": True, "run_id": run_id, "sources": len(cfg.get("sources", []))}
+
+    @router.get("/kids/bot/runs")
+    async def kids_bot_list_runs(user=Depends(get_current_user)):
+        runs = await db.kids_bot_runs.find(
+            {"user_id": user["user_id"]}, {"_id": 0}
+        ).sort("started_at", -1).limit(10).to_list(length=10)
+        return {"ok": True, "runs": runs}
+
+    async def _kids_bot_scrape_worker(user_id: str, run_id: str, cfg: dict):
+        sources = cfg.get("sources", [])
+        keywords = [k.lower() for k in cfg.get("keywords", [])]
+        max_per = int(cfg.get("max_per_account", 10))
+        downloaded = 0
+        rejected = 0
+        errors = []
+        import subprocess as _sp
+        for src in sources:
+            platform = src["platform"]
+            handle = src["handle"]
+            if platform == "tiktok":
+                source_url = f"https://www.tiktok.com/@{handle}"
+            elif platform == "youtube":
+                source_url = f"https://www.youtube.com/@{handle}/shorts"
+            elif platform == "instagram":
+                source_url = f"https://www.instagram.com/{handle}/"
+            else:
+                continue
+            cookie_path = _cookie_path_for(user_id, platform)
+            cookie_args = ["--cookies", cookie_path] if os.path.exists(cookie_path) else []
+            try:
+                meta_proc = _sp.run(
+                    ["yt-dlp", "--no-warnings", "--flat-playlist",
+                     "--playlist-end", str(max_per), "--dump-json"] + cookie_args + [source_url],
+                    capture_output=True, text=True, timeout=60,
+                )
+                if meta_proc.returncode != 0:
+                    errors.append({"src": f"{platform}:{handle}", "err": (meta_proc.stderr or "")[:200]})
+                    continue
+                videos = []
+                for ln in (meta_proc.stdout or "").splitlines():
+                    if ln.strip():
+                        try:
+                            videos.append(json.loads(ln))
+                        except Exception:
+                            pass
+                for v in videos:
+                    title = (v.get("title") or v.get("description") or "").lower()
+                    if keywords and not any(k in title for k in keywords):
+                        rejected += 1
+                        continue
+                    vid_url = v.get("webpage_url") or v.get("url") or v.get("original_url")
+                    if not vid_url:
+                        continue
+                    file_id = uuid.uuid4().hex[:16]
+                    out_path = os.path.join(MEDIA_DIR, f"{file_id}.%(ext)s")
+                    dl_proc = _sp.run(
+                        ["yt-dlp", "--no-warnings", "--no-playlist",
+                         "-f", "bv*[height<=1080][ext=mp4]+ba[ext=m4a]/b[height<=1080][ext=mp4]/b/best",
+                         "--merge-output-format", "mp4",
+                         "-o", out_path] + cookie_args + [vid_url],
+                        capture_output=True, text=True, timeout=120,
+                    )
+                    if dl_proc.returncode == 0:
+                        actual = None
+                        for ext in ("mp4", "webm", "mkv"):
+                            p = os.path.join(MEDIA_DIR, f"{file_id}.{ext}")
+                            if os.path.exists(p):
+                                actual = p
+                                break
+                        if actual:
+                            try:
+                                size = os.path.getsize(actual)
+                            except Exception:
+                                size = 0
+                            await db.freebuild_media_assets.insert_one({
+                                "id": file_id,
+                                "user_id": user_id,
+                                "title": v.get("title") or "",
+                                "url": f"/api/freebuild-chat/media/file/{os.path.basename(actual)}",
+                                "source_url": vid_url,
+                                "platform": platform,
+                                "handle": handle,
+                                "duration": v.get("duration") or 0,
+                                "size_bytes": size,
+                                "thumbnail": v.get("thumbnail") or "",
+                                "approved": False,
+                                "created_at": _now(),
+                            })
+                            downloaded += 1
+                    else:
+                        errors.append({"vid": vid_url, "err": (dl_proc.stderr or "")[:200]})
+            except Exception as e:
+                errors.append({"src": f"{platform}:{handle}", "err": str(e)[:200]})
+        await db.kids_bot_runs.update_one(
+            {"id": run_id},
+            {"$set": {
+                "status": "done",
+                "ended_at": _now(),
+                "downloaded": downloaded,
+                "rejected_by_filter": rejected,
+                "errors": errors[:30],
+            }},
+        )
+
+    @router.get("/kids/bot/pending")
+    async def kids_bot_list_pending(user=Depends(get_current_user)):
+        items = await db.freebuild_media_assets.find(
+            {"user_id": user["user_id"], "approved": False},
+            {"_id": 0, "user_id": 0},
+        ).sort("created_at", -1).limit(100).to_list(length=100)
+        return {"ok": True, "items": items}
+
+    @router.get("/kids/bot/approved")
+    async def kids_bot_list_approved():
+        items = await db.freebuild_media_assets.find(
+            {"approved": True},
+            {"_id": 0, "user_id": 0},
+        ).sort("created_at", -1).limit(200).to_list(length=200)
+        return {"ok": True, "items": items}
+
+    @router.post("/kids/bot/approve/{vid_id}")
+    async def kids_bot_approve(vid_id: str, user=Depends(get_current_user)):
+        r = await db.freebuild_media_assets.update_one(
+            {"id": vid_id}, {"$set": {"approved": True, "approved_at": _now()}}
+        )
+        return {"ok": True, "matched": r.matched_count}
+
+    @router.delete("/kids/bot/reject/{vid_id}")
+    async def kids_bot_reject(vid_id: str, user=Depends(get_current_user)):
+        doc = await db.freebuild_media_assets.find_one({"id": vid_id})
+        if doc:
+            try:
+                fname = doc.get("url", "").rsplit("/", 1)[-1]
+                fpath = os.path.join(MEDIA_DIR, fname)
+                if os.path.exists(fpath):
+                    os.remove(fpath)
+            except Exception:
+                pass
+        await db.freebuild_media_assets.delete_one({"id": vid_id})
+        return {"ok": True}
+
+
 
 
 
