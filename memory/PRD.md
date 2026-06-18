@@ -24,6 +24,48 @@ Deploy Zenrex Farm to the cloud, expand the Zenrex AI Brain to specialized modes
   Child TikTok-style feed with SW media caching, achievements tab, prayer tab.
 
 ## Changelog
+
+- **2026-06-18 (v32 — Real points engine + production polish)**:
+  Closed the loop on the points/rewards system end-to-end so kids' actions
+  actually persist server-side instead of localStorage-only.
+  
+  **Backend changes (`/opt/zerax/backend/modules/freebuild/freebuild_chat.py`)**:
+  - **Relaxed child_email validation**: Now accepts any `@kids.*` domain (was hardcoded
+    to `@kids.local`). Fixes upload 403 for the real `@kids.zenrex.ai` accounts.
+  - **`POST /kids/recordings/upload`**: New fields `rec_type` (prayer|task|dhikr),
+    `task_id`, `task_title`, `points`. Auto-awards points (default: prayer=10, task=5)
+    on successful upload by inserting into new `kids_points` ledger.
+  - **`POST /kids/points/award`** (NEW): Client-driven point award.
+    Form: `child_email`, `kind`, `value`, `meta_json`. Returns running total.
+  - **`GET /kids/points/summary?child_email=...`** (NEW): Real totals, today/week
+    breakdown, by_kind aggregation, streak (consecutive days), monthly SAR.
+  - **`GET /kids/achievements`**: Refactored to use real `kids_points` + 
+    `kids_recordings` collections (dropped hardcoded `hussain@kids.local` baselines).
+  
+  **Frontend `production-polish-v32` section (in MongoDB published HTML)**:
+  - **Hide reactions on non-home tabs**: Real CSS selectors targeting
+    `.side-controls`, `#share-btn`, `#comment-drawer` (v31 had wrong selectors).
+  - **Backend points sync**: Intercepts `window.alert` calls matching dhikr/task
+    completion messages and POSTs to `/kids/points/award`. Also wraps `window.fetch`
+    so any task recording upload gets `rec_type=task` + correct `points` injected.
+  - **Live profile stats**: Pulls from `/kids/points/summary` on profile tab,
+    overrides localStorage display with real total, streak, and adds a
+    "today" pill (`#v32-today-pill`).
+  - **Strong headphones warning** (`#v32-headphones`): Red banner shown on prayer
+    card click ("لازم تلبس السماعة... عشان صوت أبوك ما يدخل في تسجيل صلاتك").
+  - **Auto-pause home videos when leaving home tab** (battery + audio focus).
+  - **Service Worker bumped** to `zenrex-kids-v8-v32` to force update on existing
+    PWA installs.
+  
+  **Verified end-to-end via prod curl + Playwright**:
+  - `POST /kids/points/award` returns running total.
+  - `GET /kids/points/summary` returns correct aggregations by kind + streak.
+  - `POST /kids/recordings/upload` with `rec_type=task` awards points automatically.
+  - `GET /kids/achievements` shows real prayer/task counts.
+  - CSS `display:none` confirmed on `.side-controls` when body[data-tab=profile].
+  - Login API works for `حسين@kids.zenrex.ai` with PIN 1234.
+
+
 - **2026-06-18**: Generated custom anime PWA logo featuring father (white thobe + glasses) and
   two sons (casual hoodies, peace sign + thumbs-up) on Jeddah Corniche evening background with
   metal railing. Deployed `icon-192.png` & `icon-512.png` to `/var/www/pwa_kids/`. SW bumped v4→v5.
@@ -168,9 +210,9 @@ Deploy Zenrex Farm to the cloud, expand the Zenrex AI Brain to specialized modes
 - Status: NOT STARTED (user explicitly said "نعالجها بعدين").
 
 ### P2 — Points & Rewards System
-- UI for achievements exists but backend logic for tracking prayer completion → points/money
-  needs to be tied to child's DB record.
-- Status: NOT STARTED.
+- ✅ **DONE (2026-06-18, v32)**: Real `kids_points` ledger + `/kids/points/award`,
+  `/kids/points/summary`, `/kids/achievements` all use real DB data. Frontend syncs
+  via fetch interception + alert hooks. Profile shows live total + today pill.
 
 ### Future / Backlog
 - Automated Travian Account Registration via 2captcha.

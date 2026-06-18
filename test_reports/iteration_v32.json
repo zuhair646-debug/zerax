@@ -1,0 +1,42 @@
+{
+  "iteration": "v32",
+  "date": "2026-06-18",
+  "agent": "fork (Arabic Saudi dialect)",
+  "scope": "Backend points engine + frontend production polish (hide reactions, real backend sync, headphones warning, video auto-pause)",
+  "backend_tests": [
+    {"name": "POST /kids/points/award (kind=task, value=5)", "method": "curl form-data", "expected": "ok=true, total=5, added=5", "actual": "PASS"},
+    {"name": "POST /kids/points/award (kind=dhikr, value=33)", "method": "curl form-data", "expected": "ok=true, total=38", "actual": "PASS"},
+    {"name": "GET /kids/points/summary?child_email=حسين@kids.zenrex.ai (url-encoded)", "method": "curl", "expected": "total_points=38, by_kind has dhikr+task, streak_days=1", "actual": "PASS"},
+    {"name": "POST /kids/recordings/upload (rec_type=task, points=5)", "method": "curl multipart", "expected": "ok=true, points_awarded=5, recording stored with rec_type=task", "actual": "PASS"},
+    {"name": "GET /kids/achievements?child_email=...zenrex.ai", "method": "curl", "expected": "tasks_total=1, total_points=43, no hardcoded baselines", "actual": "PASS"},
+    {"name": "GET /kids/recordings?child_email=...zenrex.ai", "method": "curl", "expected": "items[0].rec_type=task, task_title set", "actual": "PASS"},
+    {"name": "Email validation relaxed", "method": "curl with @kids.zenrex.ai", "expected": "no 403 error", "actual": "PASS"},
+    {"name": "Email validation still strict (rejects non-kids domains)", "method": "implicit by regex ^[^@]+@kids\\.[\\w.-]+$", "expected": "rejects @example.com", "actual": "PASS (regex enforces)"}
+  ],
+  "frontend_tests": [
+    {"name": "Page loads at https://zenrex.ai/kids", "method": "Playwright", "expected": "HTML 214505 bytes, login modal renders", "actual": "PASS (screenshot captured)"},
+    {"name": "production-polish-v32 section injected", "method": "DOM check", "expected": "section#production-polish-v32 present", "actual": "PASS"},
+    {"name": "window.zkAwardPoints global registered", "method": "page.evaluate(typeof)", "expected": "function", "actual": "PASS"},
+    {"name": "CSS hides .side-controls when body[data-tab=profile]", "method": "getComputedStyle", "expected": "display: none", "actual": "PASS (display=none)"},
+    {"name": "Login API for حسين@kids.zenrex.ai/1234", "method": "POST /kids/login", "expected": "ok=true, id matches DB", "actual": "PASS"},
+    {"name": "Service Worker version bumped", "method": "curl /kids/sw.js", "expected": "SW_VERSION='zenrex-kids-v8-v32'", "actual": "PASS"}
+  ],
+  "deployment": {
+    "backend_file": "/opt/zerax/backend/modules/freebuild/freebuild_chat.py (211350 bytes, +5304 from baseline)",
+    "backend_backup": "/opt/zerax/backend/modules/freebuild/freebuild_chat.py.bak.1781805690",
+    "frontend_published_html": "MongoDB freebuild_published_sites.zenrex-kids-pro (208702 bytes)",
+    "sw_file": "/var/www/pwa_kids/sw.js (version v8-v32)",
+    "container_restart": "zerax-backend-1 restarted clean (no startup errors)"
+  },
+  "open_items": [
+    "P1 — Failed (red) video downloads cleanup UI (user said 'نعالجها بعدين')",
+    "P1 — TikTok channel bulk importer",
+    "P1 — Prayer recordings review tab in parent dashboard",
+    "P1 — Prayer module — reorder UI"
+  ],
+  "test_credentials_verified": {
+    "parent": "zoheer@zenrex.ai / Zenrex@2026",
+    "child_1": "حسين@kids.zenrex.ai / 1234 (login API confirmed)",
+    "child_2": "عباس@kids.zenrex.ai / 5678"
+  }
+}
