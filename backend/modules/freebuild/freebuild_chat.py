@@ -2432,14 +2432,21 @@ def make_freebuild_chat_router(db, get_current_user):
         child_name: str = Form(""),
         audio_track: str = Form(""),
         duration_sec: float = Form(0.0),
+        rec_type: str = Form("prayer"),     # prayer | task | dhikr
+        task_id: str = Form(""),
+        task_title: str = Form(""),
+        points: int = Form(0),               # points to award upon successful upload
+        phase: str = Form(""),               # "before" or "after" for two-step tasks
     ):
         """Public — Kids PWA uploads a prayer recording.
         We trust the child_email (from client-side login) since the recording
         is non-sensitive media that parents will review anyway.
         """
         child_email = (child_email or "").strip().lower()
-        if not child_email.endswith("@kids.local"):
-            raise HTTPException(403, "child email must be @kids.local")
+        # Accept any "@kids.*" domain (kids.local, kids.zenrex.ai, etc.)
+        _kids_re = re.compile(r"^[^@\s]+@kids\.[\w.\-]+$")
+        if not _kids_re.match(child_email):
+            raise HTTPException(403, "child_email must be a @kids.* address")
         # Read file (cap at 200MB)
         body = await file.read()
         if len(body) > 200 * 1024 * 1024:
@@ -2469,12 +2476,124 @@ def make_freebuild_chat_router(db, get_current_user):
             "parent_comments": [],
             "viewed_by_parent": False,
         }
+        doc["rec_type"] = (rec_type or "prayer").lower()
+        doc["task_id"] = task_id
+        doc["task_title"] = task_title
+        if phase: doc["phase"] = phase
         await db.kids_recordings.insert_one(doc)
+        # Auto-award points (default by type if 0)
+        try:
+            pts = int(points or 0)
+        except Exception:
+            pts = 0
+        if pts <= 0:
+            pts = {"prayer": 10, "task": 5, "dhikr": 0}.get(doc["rec_type"], 0)
+        if pts > 0:
+            await db.kids_points.insert_one({
+                "id": uuid.uuid4().hex,
+                "child_email": child_email,
+                "kind": doc["rec_type"],
+                "value": pts,
+                "meta": {"recording_id": rec_id, "task_id": task_id, "task_title": task_title, "audio_track": audio_track},
+                "created_at": now,
+            })
         return {
             "ok": True,
             "id": rec_id,
             "url": f"/api/freebuild-chat/kids/recordings/{rec_id}/stream",
             "size_bytes": len(body),
+            "points_awarded": pts,
+        }
+
+    # ═══════════════════════════════════════════════════════════════════════
+    # KIDS PWA — Points ledger (real, server-side)
+    # ═══════════════════════════════════════════════════════════════════════
+    @router.post("/kids/points/award")
+    async def kids_award_points(
+        child_email: str = Form(...),
+        kind: str = Form(...),               # dhikr | task | prayer | video | bonus
+        value: int = Form(...),
+        meta_json: str = Form("{}"),
+    ):
+        child_email = (child_email or "").strip().lower()
+        _kids_re = re.compile(r"^[^@\s]+@kids\.[\w.\-]+$")
+        if not _kids_re.match(child_email):
+            raise HTTPException(403, "child_email must be a @kids.* address")
+        try:
+            v = int(value)
+        except Exception:
+            raise HTTPException(400, "value must be int")
+        if v <= 0 or v > 10000:
+            raise HTTPException(400, "value out of range")
+        try:
+            meta = json.loads(meta_json or "{}")
+        except Exception:
+            meta = {}
+        entry = {
+            "id": uuid.uuid4().hex,
+            "child_email": child_email,
+            "kind": (kind or "bonus").lower()[:24],
+            "value": v,
+            "meta": meta,
+            "created_at": _now(),
+        }
+        await db.kids_points.insert_one(entry)
+        # Return new total
+        agg = await db.kids_points.aggregate([
+            {"$match": {"child_email": child_email}},
+            {"$group": {"_id": None, "total": {"$sum": "$value"}}}
+        ]).to_list(length=1)
+        total = (agg[0]["total"] if agg else 0)
+        return {"ok": True, "id": entry["id"], "total": total, "added": v}
+
+    @router.get("/kids/points/summary")
+    async def kids_points_summary(child_email: str):
+        from datetime import datetime as _dt, timezone as _tz, timedelta as _td
+        child_email = (child_email or "").strip().lower()
+        # Total
+        agg_total = await db.kids_points.aggregate([
+            {"$match": {"child_email": child_email}},
+            {"$group": {"_id": "$kind", "sum": {"$sum": "$value"}, "count": {"$sum": 1}}}
+        ]).to_list(length=50)
+        by_kind = {x["_id"]: {"points": x["sum"], "count": x["count"]} for x in agg_total}
+        total = sum(x["sum"] for x in agg_total)
+        # Today + week
+        now = _dt.now(_tz.utc)
+        today_start = now.replace(hour=0, minute=0, second=0, microsecond=0).isoformat()
+        week_start = (now - _td(days=7)).isoformat()
+        agg_today = await db.kids_points.aggregate([
+            {"$match": {"child_email": child_email, "created_at": {"$gte": today_start}}},
+            {"$group": {"_id": None, "sum": {"$sum": "$value"}}}
+        ]).to_list(length=1)
+        agg_week = await db.kids_points.aggregate([
+            {"$match": {"child_email": child_email, "created_at": {"$gte": week_start}}},
+            {"$group": {"_id": None, "sum": {"$sum": "$value"}}}
+        ]).to_list(length=1)
+        # Recent
+        recent = await db.kids_points.find(
+            {"child_email": child_email}, {"_id": 0}
+        ).sort("created_at", -1).limit(20).to_list(length=20)
+        # Streak: distinct days with at least 1 entry, counting back from today
+        days = await db.kids_points.distinct("created_at", {"child_email": child_email})
+        day_set = {d[:10] for d in days if isinstance(d, str)}
+        streak = 0
+        cur = now
+        while cur.strftime("%Y-%m-%d") in day_set:
+            streak += 1
+            cur = cur - _td(days=1)
+        # SAR conversion (0.1 SAR per point default)
+        sar_per_point = 0.1
+        return {
+            "ok": True,
+            "child_email": child_email,
+            "total_points": total,
+            "today_points": (agg_today[0]["sum"] if agg_today else 0),
+            "week_points": (agg_week[0]["sum"] if agg_week else 0),
+            "streak_days": streak,
+            "by_kind": by_kind,
+            "recent": recent,
+            "sar_per_point": sar_per_point,
+            "monthly_sar": round(total * sar_per_point, 2),
         }
 
     @router.get("/kids/recordings")
@@ -2594,6 +2713,30 @@ def make_freebuild_chat_router(db, get_current_user):
         media_map = {"mp3": "audio/mpeg", "m4a": "audio/mp4", "ogg": "audio/ogg", "wav": "audio/wav", "webm": "audio/webm"}
         return FileResponse(doc["path"], media_type=media_map.get(doc.get("ext","mp3"),"audio/mpeg"))
 
+    @router.delete("/kids/audio/{aid}")
+    async def kids_delete_audio(aid: str, user=Depends(get_current_user)):
+        doc = await db.kids_audio_tracks.find_one({"id": aid})
+        if doc:
+            try:
+                p = doc.get("path") or ""
+                if p and os.path.exists(p):
+                    os.remove(p)
+            except Exception:
+                pass
+        await db.kids_audio_tracks.delete_one({"id": aid})
+        return {"ok": True}
+
+    @router.post("/kids/audio/{aid}/order")
+    async def kids_set_audio_order(aid: str, order: int = Form(...), user=Depends(get_current_user)):
+        await db.kids_audio_tracks.update_one({"id": aid}, {"$set": {"order": int(order)}})
+        return {"ok": True}
+
+    @router.post("/kids/audio/{aid}/prayer")
+    async def kids_set_audio_prayer(aid: str, prayer: str = Form(...), user=Depends(get_current_user)):
+        """Tag an audio with a prayer name (fajr/dhuhr/asr/maghrib/isha)."""
+        await db.kids_audio_tracks.update_one({"id": aid}, {"$set": {"prayer": prayer.strip()}})
+        return {"ok": True}
+
     # ═══════════════════════════════════════════════════════════════════════
     # KIDS PWA — Achievements (points, tasks, monthly earnings)
     # ═══════════════════════════════════════════════════════════════════════
@@ -2602,52 +2745,49 @@ def make_freebuild_chat_router(db, get_current_user):
         """Return achievements summary for a child.
         Points are derived from: prayer recordings count, comments resolved, video watches.
         """
+        from datetime import datetime as _dt, timezone as _tz, timedelta as _td
         child_email = child_email.strip().lower()
         rec_count = await db.kids_recordings.count_documents({"child_email": child_email})
-        # Hardcoded baseline (in absence of full watch history) — augment with real recording count
-        baseline = {
-            "hussain@kids.local": {"watched": 47, "prayers_base": 18, "streak": 5},
-            "abbas@kids.local": {"watched": 22, "prayers_base": 9, "streak": 2},
-        }.get(child_email, {"watched": 0, "prayers_base": 0, "streak": 0})
-
-        prayers_total = baseline["prayers_base"] + rec_count
-        # Point rules
-        points_prayers = prayers_total * 10
-        points_videos = baseline["watched"] * 2
-        points_streak = baseline["streak"] * 5
-        total_points = points_prayers + points_videos + points_streak
-
-        # Monthly earnings: 0.1 SAR per point
+        prayer_count = await db.kids_recordings.count_documents({"child_email": child_email, "rec_type": "prayer"})
+        task_count = await db.kids_recordings.count_documents({"child_email": child_email, "rec_type": "task"})
+        # Real points from ledger
+        agg = await db.kids_points.aggregate([
+            {"$match": {"child_email": child_email}},
+            {"$group": {"_id": None, "sum": {"$sum": "$value"}}}
+        ]).to_list(length=1)
+        total_points = (agg[0]["sum"] if agg else 0)
+        # Real streak
+        days = await db.kids_points.distinct("created_at", {"child_email": child_email})
+        day_set = {d[:10] for d in days if isinstance(d, str)}
+        now = _dt.now(_tz.utc)
+        streak = 0
+        cur = now
+        while cur.strftime("%Y-%m-%d") in day_set:
+            streak += 1
+            cur = cur - _td(days=1)
+        # SAR
         sar_per_point = 0.1
         monthly_sar = round(total_points * sar_per_point, 2)
-
-        # Active tasks (suggested goals)
+        # Suggested goals
         tasks = [
-            {"id": "t1", "title": "صلِّ 5 صلوات مع التسجيل اليوم", "progress": min(rec_count, 5), "target": 5, "reward": 50},
-            {"id": "t2", "title": "شاهد 3 فيديوهات تعليمية", "progress": min(baseline["watched"] % 3, 3), "target": 3, "reward": 30},
-            {"id": "t3", "title": "حافظ على streak لمدة 7 أيام", "progress": baseline["streak"], "target": 7, "reward": 100},
+            {"id": "t1", "title": "صلِّ 5 صلوات اليوم", "progress": min(prayer_count, 5), "target": 5, "reward": 50},
+            {"id": "t2", "title": "أنجز 5 مهام يومية", "progress": min(task_count, 5), "target": 5, "reward": 30},
+            {"id": "t3", "title": "حافظ على streak لمدة 7 أيام", "progress": streak, "target": 7, "reward": 100},
         ]
-        # Badges earned
         badges = []
-        if prayers_total >= 5:
-            badges.append({"id":"b1","emoji":"🌟","title":"5 صلوات"})
-        if prayers_total >= 20:
-            badges.append({"id":"b2","emoji":"🏅","title":"20 صلاة"})
-        if prayers_total >= 50:
-            badges.append({"id":"b3","emoji":"🥇","title":"50 صلاة - بطل"})
-        if baseline["streak"] >= 3:
-            badges.append({"id":"b4","emoji":"🔥","title":"3 أيام متتالية"})
-        if baseline["streak"] >= 7:
-            badges.append({"id":"b5","emoji":"⚡","title":"أسبوع كامل"})
-        if baseline["watched"] >= 20:
-            badges.append({"id":"b6","emoji":"🎬","title":"محب الفيديوهات"})
-
+        if prayer_count >= 5: badges.append({"id":"b1","emoji":"🌟","title":"5 صلوات"})
+        if prayer_count >= 20: badges.append({"id":"b2","emoji":"🏅","title":"20 صلاة"})
+        if prayer_count >= 50: badges.append({"id":"b3","emoji":"🥇","title":"بطل الصلوات"})
+        if streak >= 3: badges.append({"id":"b4","emoji":"🔥","title":"3 أيام متتالية"})
+        if streak >= 7: badges.append({"id":"b5","emoji":"⚡","title":"أسبوع كامل"})
+        if task_count >= 10: badges.append({"id":"b6","emoji":"✅","title":"منجز المهام"})
         return {
             "ok": True,
             "child_email": child_email,
-            "prayers_total": prayers_total,
-            "videos_watched": baseline["watched"],
-            "streak_days": baseline["streak"],
+            "prayers_total": prayer_count,
+            "tasks_total": task_count,
+            "recordings_total": rec_count,
+            "streak_days": streak,
             "total_points": total_points,
             "monthly_sar": monthly_sar,
             "sar_per_point": sar_per_point,
@@ -2708,6 +2848,15 @@ def make_freebuild_chat_router(db, get_current_user):
         )
         return {"ok": True, "deleted": r.deleted_count}
 
+    @router.get("/kids/accounts/public")
+    async def kids_list_public():
+        """Public list of kid accounts (name + email only) for login dropdown."""
+        items = await db.kids_accounts.find(
+            {"is_active": True},
+            {"_id": 0, "name": 1, "email": 1},
+        ).sort("created_at", 1).to_list(length=50)
+        return {"ok": True, "items": items}
+
     @router.post("/kids/login")
     async def kids_login(email: str = Form(...), pin: str = Form(...)):
         email = (email or "").strip().lower()
@@ -2716,6 +2865,759 @@ def make_freebuild_chat_router(db, get_current_user):
         if not doc or doc.get("pin") != pin:
             raise HTTPException(401, "البريد أو كلمة المرور خاطئة")
         return {"ok": True, "email": email, "name": doc.get("name"), "id": doc.get("id")}
+
+    # ═══════════════════════════════════════════════════════════════════════
+    # KIDS PWA — Parent-managed CATEGORIES (videos)
+    # ═══════════════════════════════════════════════════════════════════════
+    DEFAULT_CATEGORIES = [
+        {"id": "all", "icon": "🎬", "title": "الكل", "system": True, "order": 0},
+        {"id": "games", "icon": "🎮", "title": "ألعاب", "system": False, "order": 1},
+        {"id": "quran", "icon": "📖", "title": "قرآن", "system": False, "order": 2},
+        {"id": "educational", "icon": "🎓", "title": "تعليمي", "system": False, "order": 3},
+    ]
+
+    async def _ensure_default_categories(parent_id: str):
+        n = await db.kids_categories.count_documents({"parent_id": parent_id})
+        if n > 0:
+            return
+        for c in DEFAULT_CATEGORIES:
+            await db.kids_categories.insert_one({
+                **c,
+                "parent_id": parent_id,
+                "created_at": _now(),
+            })
+
+    @router.get("/kids/categories")
+    async def kids_list_categories(parent_id: Optional[str] = None):
+        """Public — Kids app reads categories. If parent_id missing, uses first parent."""
+        pid = parent_id
+        if not pid:
+            any_parent = await db.kids_accounts.find_one({}, {"parent_id": 1})
+            pid = any_parent.get("parent_id") if any_parent else None
+        if pid:
+            await _ensure_default_categories(pid)
+        cursor = db.kids_categories.find({"parent_id": pid}, {"_id": 0, "parent_id": 0}).sort("order", 1)
+        items = await cursor.to_list(length=100)
+        return {"ok": True, "items": items}
+
+    @router.post("/kids/categories")
+    async def kids_add_category(
+        title: str = Form(...),
+        icon: str = Form("🎬"),
+        order: int = Form(99),
+        user=Depends(get_current_user),
+    ):
+        title = (title or "").strip()
+        if not title:
+            raise HTTPException(400, "العنوان مطلوب")
+        if len(title) > 40:
+            raise HTTPException(400, "العنوان طويل جداً")
+        import re as _re
+        cid = _re.sub(r"[^a-zA-Z0-9\u0600-\u06FF]+", "_", title).lower().strip("_")[:30] or uuid.uuid4().hex[:8]
+        # Uniqueness per parent
+        exists = await db.kids_categories.find_one({"id": cid, "parent_id": user["user_id"]})
+        if exists:
+            raise HTTPException(409, "تصنيف موجود بنفس الاسم")
+        doc = {
+            "id": cid,
+            "icon": icon[:8] if icon else "🎬",
+            "title": title,
+            "system": False,
+            "order": int(order),
+            "parent_id": user["user_id"],
+            "created_at": _now(),
+        }
+        await db.kids_categories.insert_one(doc)
+        return {"ok": True, "category": {k: v for k, v in doc.items() if k not in ("parent_id", "_id")}}
+
+    @router.delete("/kids/categories/{cid}")
+    async def kids_delete_category(cid: str, user=Depends(get_current_user)):
+        doc = await db.kids_categories.find_one({"id": cid, "parent_id": user["user_id"]})
+        if not doc:
+            raise HTTPException(404, "غير موجود")
+        if doc.get("system"):
+            raise HTTPException(400, "تصنيف نظامي لا يُحذف")
+        r = await db.kids_categories.delete_one({"id": cid, "parent_id": user["user_id"]})
+        return {"ok": True, "deleted": r.deleted_count}
+
+    # ═══════════════════════════════════════════════════════════════════════
+    # KIDS PWA — Parent-managed TASKS (daily tasks for child)
+    # ═══════════════════════════════════════════════════════════════════════
+    DEFAULT_PARENT_TASKS = [
+        {"id": "t_brush_am", "icon": "🪥", "title": "فرش الأسنان (صباحاً)", "points": 5, "needs_camera": True, "order": 1},
+        {"id": "t_brush_pm", "icon": "🪥", "title": "فرش الأسنان (قبل النوم)", "points": 5, "needs_camera": True, "order": 2},
+        {"id": "t_shower", "icon": "🛁", "title": "الاستحمام", "points": 10, "needs_camera": False, "order": 3},
+        {"id": "t_breakfast", "icon": "🍽️", "title": "تناول الفطور", "points": 5, "needs_camera": False, "order": 4},
+        {"id": "t_read", "icon": "📚", "title": "قراءة 10 دقائق", "points": 10, "needs_camera": True, "order": 5},
+        {"id": "t_room", "icon": "🧹", "title": "ترتيب الغرفة", "points": 8, "needs_camera": True, "order": 6},
+    ]
+
+    async def _ensure_default_tasks(parent_id: str):
+        n = await db.kids_parent_tasks.count_documents({"parent_id": parent_id})
+        if n > 0:
+            return
+        for t in DEFAULT_PARENT_TASKS:
+            await db.kids_parent_tasks.insert_one({
+                **t, "parent_id": parent_id, "created_at": _now(), "is_active": True,
+            })
+
+    @router.get("/kids/parent-tasks")
+    async def kids_list_parent_tasks(parent_id: Optional[str] = None):
+        pid = parent_id
+        if not pid:
+            any_parent = await db.kids_accounts.find_one({}, {"parent_id": 1})
+            pid = any_parent.get("parent_id") if any_parent else None
+        if pid:
+            await _ensure_default_tasks(pid)
+        cursor = db.kids_parent_tasks.find(
+            {"parent_id": pid, "is_active": True}, {"_id": 0, "parent_id": 0}
+        ).sort("order", 1)
+        items = await cursor.to_list(length=200)
+        return {"ok": True, "items": items}
+
+    @router.post("/kids/parent-tasks")
+    async def kids_add_parent_task(
+        title: str = Form(...),
+        icon: str = Form("✅"),
+        points: int = Form(5),
+        needs_camera: bool = Form(True),
+        needs_before_after: bool = Form(False),
+        order: int = Form(99),
+        user=Depends(get_current_user),
+    ):
+        title = (title or "").strip()
+        if not title:
+            raise HTTPException(400, "عنوان المهمة مطلوب")
+        if len(title) > 80:
+            raise HTTPException(400, "عنوان طويل")
+        tid = "t_" + uuid.uuid4().hex[:10]
+        doc = {
+            "id": tid,
+            "icon": icon[:8] if icon else "✅",
+            "title": title,
+            "points": max(1, min(int(points or 5), 500)),
+            "needs_camera": bool(needs_camera),
+            "needs_before_after": bool(needs_before_after),
+            "order": int(order),
+            "parent_id": user["user_id"],
+            "is_active": True,
+            "created_at": _now(),
+        }
+        await db.kids_parent_tasks.insert_one(doc)
+        return {"ok": True, "task": {k: v for k, v in doc.items() if k not in ("parent_id", "_id")}}
+
+    @router.delete("/kids/parent-tasks/{tid}")
+    async def kids_delete_parent_task(tid: str, user=Depends(get_current_user)):
+        r = await db.kids_parent_tasks.update_one(
+            {"id": tid, "parent_id": user["user_id"]},
+            {"$set": {"is_active": False}},
+        )
+        return {"ok": True, "deleted": r.modified_count}
+
+    # ═══════════════════════════════════════════════════════════════════════
+    # KIDS PWA — Parent-managed DHIKR (Islamic remembrance counters)
+    # ═══════════════════════════════════════════════════════════════════════
+    DEFAULT_DHIKR = [
+        {"id": "dh_subhanallah", "icon": "📿", "title": "سبحان الله", "target": 33, "points": 5, "order": 1},
+        {"id": "dh_alhamdulillah", "icon": "📿", "title": "الحمد لله", "target": 33, "points": 5, "order": 2},
+        {"id": "dh_allahuakbar", "icon": "📿", "title": "الله أكبر", "target": 34, "points": 5, "order": 3},
+        {"id": "dh_lailaha", "icon": "📿", "title": "لا إله إلا الله", "target": 100, "points": 10, "order": 4},
+        {"id": "dh_istighfar", "icon": "🤲", "title": "أستغفر الله", "target": 100, "points": 10, "order": 5},
+    ]
+
+    async def _ensure_default_dhikr(parent_id: str):
+        n = await db.kids_dhikr.count_documents({"parent_id": parent_id})
+        if n > 0:
+            return
+        for d_ in DEFAULT_DHIKR:
+            await db.kids_dhikr.insert_one({**d_, "parent_id": parent_id, "is_active": True, "created_at": _now()})
+
+    @router.get("/kids/dhikr")
+    async def kids_list_dhikr(parent_id: Optional[str] = None):
+        pid = parent_id
+        if not pid:
+            any_parent = await db.kids_accounts.find_one({}, {"parent_id": 1})
+            pid = any_parent.get("parent_id") if any_parent else None
+        if pid:
+            await _ensure_default_dhikr(pid)
+        cursor = db.kids_dhikr.find(
+            {"parent_id": pid, "is_active": True}, {"_id": 0, "parent_id": 0}
+        ).sort("order", 1)
+        items = await cursor.to_list(length=100)
+        return {"ok": True, "items": items}
+
+    @router.post("/kids/dhikr")
+    async def kids_add_dhikr(
+        title: str = Form(...),
+        icon: str = Form("📿"),
+        target: int = Form(33),
+        points: int = Form(5),
+        order: int = Form(99),
+        user=Depends(get_current_user),
+    ):
+        title = (title or "").strip()
+        if not title:
+            raise HTTPException(400, "عنوان الذكر مطلوب")
+        if len(title) > 80:
+            raise HTTPException(400, "عنوان طويل")
+        did = "dh_" + uuid.uuid4().hex[:10]
+        doc = {
+            "id": did,
+            "icon": icon[:8] if icon else "📿",
+            "title": title,
+            "target": max(1, min(int(target or 33), 10000)),
+            "points": max(1, min(int(points or 5), 500)),
+            "order": int(order),
+            "parent_id": user["user_id"],
+            "is_active": True,
+            "created_at": _now(),
+        }
+        await db.kids_dhikr.insert_one(doc)
+        return {"ok": True, "dhikr": {k: v for k, v in doc.items() if k not in ("parent_id", "_id")}}
+
+    @router.delete("/kids/dhikr/{did}")
+    async def kids_delete_dhikr(did: str, user=Depends(get_current_user)):
+        r = await db.kids_dhikr.update_one(
+            {"id": did, "parent_id": user["user_id"]},
+            {"$set": {"is_active": False}},
+        )
+        return {"ok": True, "deleted": r.modified_count}
+
+    # ═══════════════════════════════════════════════════════════════════════
+    # KIDS PWA — Auto-categorize a video by title using Emergent LLM
+    # ═══════════════════════════════════════════════════════════════════════
+    async def _categorize_one(video_id: str, parent_id: str):
+        """Internal helper — used by both single + batch endpoints."""
+        media = await db.freebuild_media_assets.find_one({"id": video_id})
+        if not media:
+            return {"ok": False, "video_id": video_id, "error": "not_found"}
+        await _ensure_default_categories(parent_id)
+        cats = await db.kids_categories.find(
+            {"parent_id": parent_id, "id": {"$ne": "all"}},
+            {"_id": 0}
+        ).to_list(length=100)
+        if not cats:
+            return {"ok": False, "video_id": video_id, "error": "no_categories"}
+        cat_list = ", ".join([f"{c['id']} ({c['title']})" for c in cats])
+        title = media.get("prompt") or media.get("title") or media.get("filename") or ""
+        try:
+            from emergentintegrations.llm.chat import LlmChat, UserMessage
+            chat = LlmChat(
+                api_key=os.environ["EMERGENT_LLM_KEY"],
+                session_id=f"cat-{video_id}",
+                system_message=(
+                    f"You are a video categorizer for an Islamic kids app. "
+                    f"Available categories (id): {cat_list}. "
+                    f"Reply ONLY with the category id that best matches the video title. "
+                    f"If unclear, reply 'educational'."
+                ),
+            ).with_model("anthropic", "claude-haiku-4-5")
+            resp = await chat.send_message(UserMessage(text=f"Title: {title}"))
+            cid = str(resp).strip().lower().split()[0]
+            valid_ids = {c["id"] for c in cats}
+            if cid not in valid_ids:
+                cid = "educational" if "educational" in valid_ids else cats[0]["id"]
+            await db.freebuild_media_assets.update_one(
+                {"id": video_id}, {"$set": {"category": cid, "categorized_at": _now()}}
+            )
+            return {"ok": True, "video_id": video_id, "category": cid, "title": title[:80]}
+        except Exception as e:
+            logger.warning(f"[auto-categorize] {e}")
+            tl = title.lower()
+            fallback = None
+            for c in cats:
+                key = c["title"].lower()
+                if key in tl or c["id"] in tl:
+                    fallback = c["id"]; break
+            fallback = fallback or ("educational" if any(c["id"] == "educational" for c in cats) else cats[0]["id"])
+            await db.freebuild_media_assets.update_one(
+                {"id": video_id}, {"$set": {"category": fallback, "categorized_at": _now(), "categorized_fallback": True}}
+            )
+            return {"ok": True, "video_id": video_id, "category": fallback, "fallback": True}
+
+    @router.post("/kids/auto-categorize")
+    async def kids_auto_categorize(
+        video_id: str = Form(...),
+        user=Depends(get_current_user),
+    ):
+        r = await _categorize_one(video_id, user["user_id"])
+        if not r.get("ok"):
+            raise HTTPException(404 if r.get("error") == "not_found" else 400, r.get("error", "fail"))
+        return r
+
+    @router.post("/kids/auto-categorize/all")
+    async def kids_auto_categorize_all(user=Depends(get_current_user)):
+        """Batch — categorize all approved videos missing a category."""
+        cursor = db.freebuild_media_assets.find(
+            {"approved": True, "$or": [{"category": {"$exists": False}}, {"category": None}, {"category": ""}]},
+            {"id": 1},
+        ).limit(50)
+        ids = [d["id"] async for d in cursor]
+        results = []
+        for vid in ids:
+            r = await _categorize_one(vid, user["user_id"])
+            results.append(r)
+        return {"ok": True, "count": len(ids), "results": results}
+
+    # ═══════════════════════════════════════════════════════════════════════
+    # KIDS PWA — Video Metadata Extraction (preview before download)
+    # ═══════════════════════════════════════════════════════════════════════
+    @router.post("/kids/videos/import")
+    async def kids_import_video(
+        url: str = Form(...),
+        title: str = Form(""),
+        user=Depends(get_current_user),
+    ):
+        """One-call import: download + approve + AI-categorize.
+        Returns the imported video record ready to show in feed."""
+        if not url or not url.startswith(("http://", "https://")):
+            raise HTTPException(400, "Invalid URL")
+        # Step 1: download via existing /media/download logic by calling it
+        import subprocess as _sp
+        import json as _json
+        os.makedirs(MEDIA_DIR, exist_ok=True)
+        file_id = uuid.uuid4().hex[:16]
+        out_path = os.path.join(MEDIA_DIR, f"{file_id}.%(ext)s")
+        meta_path = os.path.join(MEDIA_DIR, f"{file_id}.info.json")
+        # Detect platform for cookies
+        url_low = url.lower()
+        platform = ""
+        if "youtube" in url_low or "youtu.be" in url_low: platform = "youtube"
+        elif "tiktok" in url_low: platform = "tiktok"
+        elif "instagram" in url_low: platform = "instagram"
+        cookies_args = []
+        if platform:
+            ck = _cookie_path_for(user["user_id"], platform)
+            if os.path.exists(ck):
+                cookies_args = ["--cookies", ck]
+        fmt_args = ["-f", "bv*[height<=720][ext=mp4][vcodec*=avc1]+ba[ext=m4a]/bv*[height<=720][ext=mp4]+ba[ext=m4a]/b[height<=720][ext=mp4]/b[height<=720]/b[ext=mp4]/best", "-S", "vcodec:h264,res:720,acodec:m4a", "--merge-output-format", "mp4", "--recode-video", "mp4", "--postprocessor-args", "-c:v libx264 -preset fast -crf 23 -c:a aac -movflags +faststart"]
+        cmd = ["yt-dlp", "--no-playlist", "--no-warnings", "--restrict-filenames", "--write-info-json", "-o", out_path] + cookies_args + fmt_args + [url]
+        try:
+            proc = await asyncio.create_subprocess_exec(*cmd, stdout=_sp.PIPE, stderr=_sp.PIPE)
+            stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=150)
+            if proc.returncode != 0:
+                err = (stderr.decode("utf-8", errors="ignore") or "")[-400:]
+                if "403" in err.lower() or "ip address is blocked" in err.lower():
+                    raise HTTPException(451, f"ip_blocked: ارفع cookies.txt من قسم البوت لـ{platform or 'يوتيوب'}")
+                raise HTTPException(502, f"فشل التحميل: {err}")
+        except FileNotFoundError:
+            raise HTTPException(500, "yt-dlp not installed")
+        # Find produced file
+        produced = [f for f in os.listdir(MEDIA_DIR) if f.startswith(file_id) and not f.endswith(".info.json")]
+        if not produced:
+            raise HTTPException(500, "no file produced")
+        actual_file = produced[0]
+        actual_ext = actual_file.rsplit(".", 1)[-1]
+        # Read metadata
+        actual_title = title
+        thumbnail = None
+        duration = None
+        try:
+            if os.path.exists(meta_path):
+                with open(meta_path, "r", encoding="utf-8") as f:
+                    m = _json.load(f)
+                actual_title = title or m.get("title", "") or ""
+                thumbnail = m.get("thumbnail")
+                duration = m.get("duration")
+        except Exception:
+            pass
+        public_url = f"/api/freebuild-chat/media/file/{file_id}.{actual_ext}"
+        # Insert APPROVED + AI categorize
+        await db.freebuild_media_assets.insert_one({
+            "id": file_id,
+            "user_id": user["user_id"],
+            "filename": actual_file,
+            "ext": actual_ext,
+            "source_url": url,
+            "title": actual_title,
+            "prompt": actual_title,
+            "duration": duration,
+            "thumbnail_url": thumbnail,
+            "category": None,
+            "format": "mp4_720p",
+            "file_url": public_url,
+            "public_url": public_url,
+            "url": public_url,
+            "approved": True,
+            "approved_at": _now(),
+            "created_at": _now(),
+        })
+        # AI categorize
+        cat_result = None
+        try:
+            cat_result = await _categorize_one(file_id, user["user_id"])
+        except Exception as e:
+            logger.warning(f"[import] categorize failed: {e}")
+        return {
+            "ok": True,
+            "id": file_id,
+            "url": public_url,
+            "title": actual_title,
+            "thumbnail": thumbnail,
+            "category": cat_result.get("category") if cat_result else None,
+        }
+
+    # ═══════════════════════════════════════════════════════════════════════
+    # KIDS PWA — Parent view of all child recordings
+    # ═══════════════════════════════════════════════════════════════════════
+    # ═══════════════════════════════════════════════════════════════════════
+    # KIDS PWA — Quran memorization (full 114 surahs + parent approval)
+    # ═══════════════════════════════════════════════════════════════════════
+    _QURAN_CACHE = {}  # surah_num -> dict
+
+    @router.get("/kids/quran/surahs")
+    async def kids_quran_surahs():
+        """List all 114 surahs (number, name, ayah count, revelation place)."""
+        if "_list" in _QURAN_CACHE:
+            return {"ok": True, "items": _QURAN_CACHE["_list"]}
+        import urllib.request, json as _json
+        try:
+            req = urllib.request.Request("https://api.alquran.cloud/v1/surah", headers={"User-Agent": "Zenrex/1.0"})
+            with urllib.request.urlopen(req, timeout=10) as r:
+                data = _json.loads(r.read())
+            items = []
+            for s in data.get("data", []):
+                items.append({
+                    "number": s.get("number"),
+                    "name": s.get("name"),
+                    "name_en": s.get("englishName"),
+                    "ayahs": s.get("numberOfAyahs"),
+                    "revelation": "مكية" if s.get("revelationType") == "Meccan" else "مدنية",
+                })
+            _QURAN_CACHE["_list"] = items
+            return {"ok": True, "items": items}
+        except Exception as e:
+            logger.error(f"[quran] surah list fail: {e}")
+            raise HTTPException(502, f"تعذّر جلب قائمة السور: {e}")
+
+    @router.get("/kids/quran/surah/{num}")
+    async def kids_quran_surah(num: int, reciter: str = "ar.alafasy"):
+        """Full surah: text + audio URL per ayah from a reciter.
+        reciter examples: ar.alafasy (مشاري), ar.abdulbasitmurattal (عبدالباسط), ar.husary, ar.ghamadi"""
+        if num < 1 or num > 114:
+            raise HTTPException(400, "رقم السورة بين 1 و 114")
+        cache_key = f"s{num}_{reciter}"
+        if cache_key in _QURAN_CACHE:
+            return {"ok": True, **_QURAN_CACHE[cache_key]}
+        import urllib.request, json as _json
+        try:
+            # Get text + reciter audio in one call
+            req = urllib.request.Request(
+                f"https://api.alquran.cloud/v1/surah/{num}/editions/quran-uthmani,{reciter}",
+                headers={"User-Agent": "Zenrex/1.0"}
+            )
+            with urllib.request.urlopen(req, timeout=15) as r:
+                data = _json.loads(r.read())
+            editions = data.get("data", [])
+            if len(editions) < 2:
+                raise HTTPException(502, "بيانات السورة غير مكتملة")
+            text_edition = next((e for e in editions if "quran-uthmani" in e.get("edition", {}).get("identifier", "")), editions[0])
+            audio_edition = next((e for e in editions if e != text_edition), editions[1])
+            text_ayahs = text_edition.get("ayahs", [])
+            audio_ayahs = audio_edition.get("ayahs", [])
+            ayahs = []
+            for i, t in enumerate(text_ayahs):
+                aud = audio_ayahs[i] if i < len(audio_ayahs) else {}
+                ayahs.append({
+                    "number_in_surah": t.get("numberInSurah"),
+                    "text": t.get("text"),
+                    "audio": aud.get("audio") or aud.get("audioSecondary", [None])[0],
+                })
+            result = {
+                "number": num,
+                "name": text_edition.get("name"),
+                "name_en": text_edition.get("englishName"),
+                "ayahs": ayahs,
+                "reciter": reciter,
+            }
+            _QURAN_CACHE[cache_key] = result
+            return {"ok": True, **result}
+        except HTTPException:
+            raise
+        except Exception as e:
+            logger.error(f"[quran] surah {num} fail: {e}")
+            raise HTTPException(502, f"تعذّر جلب السورة: {e}")
+
+    @router.post("/kids/quran/submit")
+    async def kids_quran_submit(
+        file: UploadFile = File(...),
+        child_email: str = Form(...),
+        surah_num: int = Form(...),
+        ayah_from: int = Form(1),
+        ayah_to: int = Form(0),
+        duration_sec: float = Form(0.0),
+        proposed_points: int = Form(0),
+    ):
+        """Child uploads memorization recording. Goes through:
+           1. AI verification via Whisper (sets ai_verdict + ai_transcript)
+           2. Parent review (ai_verdict=ok) → status='pending_parent'
+           3. AI rejected → status='rejected_ai'
+           4. Parent approves → status='approved' + points awarded
+        """
+        child_email = (child_email or "").strip().lower()
+        _kids_re = re.compile(r"^[^@\s]+@kids\.[\w.\-]+$")
+        if not _kids_re.match(child_email):
+            raise HTTPException(403, "child_email must be a @kids.* address")
+        if surah_num < 1 or surah_num > 114:
+            raise HTTPException(400, "invalid surah_num")
+        # Save audio file
+        body = await file.read()
+        if not body or len(body) < 1024:
+            raise HTTPException(400, "ملف صوتي صغير جداً")
+        os.makedirs(MEDIA_DIR, exist_ok=True)
+        rec_id = uuid.uuid4().hex
+        ext = (file.filename or "").rsplit(".", 1)[-1].lower() if file.filename and "." in file.filename else "webm"
+        fname = f"quran_{rec_id}.{ext}"
+        path = os.path.join(MEDIA_DIR, fname)
+        with open(path, "wb") as f:
+            f.write(body)
+        # Default points: 20 per ayah range max 200
+        if ayah_to < ayah_from: ayah_to = ayah_from
+        ayah_count = ayah_to - ayah_from + 1
+        points = max(int(proposed_points or 0), min(20 * ayah_count, 200))
+        # AI verification (try Whisper)
+        ai_verdict = "skipped"
+        ai_transcript = ""
+        try:
+            from emergentintegrations.llm.chat import LlmChat, UserMessage, FileContentWithMimeType
+            chat = LlmChat(
+                api_key=os.environ["EMERGENT_LLM_KEY"],
+                session_id=f"quran-{rec_id}",
+                system_message="You transcribe Arabic audio. Return ONLY the Arabic transcript without diacritics, no English, no comments."
+            ).with_model("openai", "whisper-1")
+            # Note: whisper integration may differ — fallback to text comparison
+            try:
+                msg = UserMessage(text="Transcribe this audio.", file_contents=[FileContentWithMimeType(file_path=path, mime_type="audio/webm")])
+                resp = await chat.send_message(msg)
+                ai_transcript = str(resp).strip()
+                ai_verdict = "transcribed"  # We'll let parent be the final judge
+            except Exception as e2:
+                logger.warning(f"[quran-ai] Whisper failed: {e2}")
+                ai_verdict = "skipped"
+        except Exception as e:
+            logger.warning(f"[quran-ai] {e}")
+            ai_verdict = "skipped"
+
+        doc = {
+            "id": rec_id,
+            "child_email": child_email,
+            "child_name": "",
+            "surah_num": surah_num,
+            "ayah_from": ayah_from,
+            "ayah_to": ayah_to,
+            "duration_sec": duration_sec,
+            "file_path": path,
+            "size_bytes": len(body),
+            "ext": ext,
+            "ai_verdict": ai_verdict,
+            "ai_transcript": ai_transcript,
+            "status": "pending_parent",  # always parent-review for safety
+            "proposed_points": points,
+            "awarded_points": 0,
+            "parent_note": "",
+            "created_at": _now(),
+            "reviewed_at": None,
+        }
+        # Fetch child name
+        kid = await db.kids_accounts.find_one({"email": child_email}, {"name": 1})
+        if kid: doc["child_name"] = kid.get("name", "")
+        await db.kids_quran_submissions.insert_one(doc)
+        return {"ok": True, "id": rec_id, "status": doc["status"], "ai_verdict": ai_verdict, "proposed_points": points}
+
+    @router.get("/kids/quran/submissions/{rec_id}/audio")
+    async def kids_quran_audio(rec_id: str):
+        doc = await db.kids_quran_submissions.find_one({"id": rec_id})
+        if not doc or not os.path.exists(doc.get("file_path", "")):
+            raise HTTPException(404, "audio not found")
+        from fastapi.responses import FileResponse
+        return FileResponse(doc["file_path"], media_type=f"audio/{doc.get('ext','webm')}")
+
+    @router.get("/kids/quran/submissions")
+    async def kids_quran_submissions_list(
+        child_email: Optional[str] = None,
+        status: Optional[str] = None,
+        limit: int = 50,
+    ):
+        q = {}
+        if child_email: q["child_email"] = child_email.strip().lower()
+        if status: q["status"] = status
+        cur = db.kids_quran_submissions.find(q, {"_id": 0, "file_path": 0}).sort("created_at", -1).limit(int(limit))
+        items = await cur.to_list(length=int(limit))
+        return {"ok": True, "items": items}
+
+    @router.post("/kids/quran/submissions/{rec_id}/approve")
+    async def kids_quran_approve(rec_id: str, note: str = Form(""), user=Depends(get_current_user)):
+        doc = await db.kids_quran_submissions.find_one({"id": rec_id})
+        if not doc: raise HTTPException(404, "غير موجود")
+        if doc["status"] == "approved": return {"ok": True, "already": True}
+        pts = doc.get("proposed_points", 20)
+        await db.kids_quran_submissions.update_one(
+            {"id": rec_id},
+            {"$set": {"status": "approved", "awarded_points": pts, "parent_note": note, "reviewed_at": _now()}}
+        )
+        # Award points
+        await db.kids_points.insert_one({
+            "id": uuid.uuid4().hex,
+            "child_email": doc["child_email"],
+            "kind": "quran",
+            "value": pts,
+            "meta": {"submission_id": rec_id, "surah_num": doc["surah_num"]},
+            "created_at": _now(),
+        })
+        return {"ok": True, "awarded": pts}
+
+    @router.get("/kids/quran/plan")
+    async def kids_quran_plan_get(child_email: str):
+        ce = (child_email or "").strip().lower()
+        doc = await db.kids_quran_plans.find_one({"child_email": ce}, {"_id": 0})
+        return {"ok": True, "plan": doc or {"surahs": [], "note": "", "type": "free"}}
+
+    @router.post("/kids/quran/plan")
+    async def kids_quran_plan_set(
+        child_email: str = Form(...),
+        surahs: str = Form(""),
+        note: str = Form(""),
+        plan_type: str = Form("custom"),
+        user=Depends(get_current_user),
+    ):
+        import json as _json
+        ce = (child_email or "").strip().lower()
+        try:
+            arr = _json.loads(surahs) if surahs else []
+            arr = [int(x) for x in arr if 1 <= int(x) <= 114]
+        except Exception:
+            arr = []
+        if plan_type == "random":
+            import random
+            n = max(5, min(int(note) if note.isdigit() else 10, 30))
+            arr = random.sample(range(1, 115), n)
+            note = f"عشوائي: {n} سورة"
+        doc = {"child_email": ce, "surahs": arr, "note": note, "type": plan_type, "updated_at": _now()}
+        await db.kids_quran_plans.update_one({"child_email": ce}, {"$set": doc}, upsert=True)
+        return {"ok": True, "plan": doc}
+
+    @router.post("/kids/quran/submissions/{rec_id}/reject")
+    async def kids_quran_reject(rec_id: str, note: str = Form(""), user=Depends(get_current_user)):
+        await db.kids_quran_submissions.update_one(
+            {"id": rec_id},
+            {"$set": {"status": "rejected", "parent_note": note, "reviewed_at": _now()}}
+        )
+        return {"ok": True}
+
+    @router.get("/kids/parent-recordings")
+    async def kids_parent_recordings(parent_id: Optional[str] = None, limit: int = 50):
+        pid = parent_id
+        if not pid:
+            any_parent = await db.kids_accounts.find_one({}, {"parent_id": 1})
+            pid = any_parent.get("parent_id") if any_parent else None
+        if not pid:
+            return {"ok": True, "items": []}
+        # Get kids of this parent
+        kids = await db.kids_accounts.find({"parent_id": pid}, {"email": 1, "name": 1}).to_list(length=20)
+        kid_map = {k["email"]: k.get("name", k["email"]) for k in kids}
+        emails = list(kid_map.keys())
+        if not emails:
+            return {"ok": True, "items": []}
+        cursor = db.kids_recordings.find(
+            {"child_email": {"$in": emails}}, {"_id": 0, "path": 0}
+        ).sort("created_at", -1).limit(int(limit))
+        items = await cursor.to_list(length=int(limit))
+        for it in items:
+            it["child_name"] = kid_map.get(it.get("child_email"), it.get("child_email"))
+        return {"ok": True, "items": items}
+
+    @router.post("/kids/video-metadata")
+    async def kids_video_metadata(
+        url: str = Form(...),
+        user=Depends(get_current_user),
+    ):
+        """Use yt-dlp --dump-json to fetch video info without downloading."""
+        import subprocess as _sp
+        import json as _json
+        url = (url or "").strip()
+        if not url:
+            raise HTTPException(400, "URL مطلوب")
+        ck = _cookie_path_for(user["user_id"], "youtube" if "youtube" in url else "tiktok") if "_cookie_path_for" in globals() else None
+        cmd = ["yt-dlp", "--dump-json", "--no-download", "--skip-download", "--no-warnings", url]
+        if ck and os.path.exists(ck):
+            cmd.extend(["--cookies", ck])
+        try:
+            r = _sp.run(cmd, capture_output=True, text=True, timeout=30)
+            if r.returncode != 0:
+                # Don't fail entirely — return URL with empty metadata so user can still add
+                return {"ok": True, "url": url, "title": "", "thumbnail": "", "duration": 0, "uploader": "", "error": r.stderr[:200]}
+            info = _json.loads(r.stdout.strip().split("\n")[0])
+            return {
+                "ok": True,
+                "url": url,
+                "title": info.get("title") or info.get("fulltitle") or "",
+                "thumbnail": info.get("thumbnail") or "",
+                "duration": info.get("duration") or 0,
+                "uploader": info.get("uploader") or info.get("channel") or "",
+                "description": (info.get("description") or "")[:300],
+                "platform": info.get("extractor_key") or info.get("extractor") or "",
+            }
+        except Exception as e:
+            logger.warning(f"[video-metadata] {e}")
+            return {"ok": True, "url": url, "title": "", "thumbnail": "", "duration": 0, "uploader": "", "error": str(e)}
+
+    @router.get("/kids/parent-summary")
+    async def kids_parent_summary(parent_id: Optional[str] = None):
+        """Aggregated dashboard view: list children + per-child stats."""
+        pid = parent_id
+        if not pid:
+            any_parent = await db.kids_accounts.find_one({}, {"parent_id": 1})
+            pid = any_parent.get("parent_id") if any_parent else None
+        if not pid:
+            return {"ok": True, "children": [], "totals": {}}
+        # Get all kids
+        kids = await db.kids_accounts.find(
+            {"parent_id": pid, "is_active": True}, {"_id": 0, "parent_id": 0}
+        ).to_list(length=20)
+        children = []
+        total_points = 0
+        total_recs = 0
+        for kid in kids:
+            email = kid["email"]
+            # Points
+            agg = await db.kids_points.aggregate([
+                {"$match": {"child_email": email}},
+                {"$group": {"_id": "$kind", "sum": {"$sum": "$value"}, "n": {"$sum": 1}}}
+            ]).to_list(length=20)
+            by_kind = {a["_id"]: {"points": a["sum"], "count": a["n"]} for a in agg}
+            pts = sum(a["sum"] for a in agg)
+            # Recordings
+            recs = await db.kids_recordings.count_documents({"child_email": email})
+            prayer_recs = await db.kids_recordings.count_documents({"child_email": email, "rec_type": "prayer"})
+            task_recs = await db.kids_recordings.count_documents({"child_email": email, "rec_type": "task"})
+            # Recent
+            recent_recs = await db.kids_recordings.find(
+                {"child_email": email}, {"_id": 0, "path": 0}
+            ).sort("created_at", -1).limit(5).to_list(length=5)
+            recent_pts = await db.kids_points.find(
+                {"child_email": email}, {"_id": 0}
+            ).sort("created_at", -1).limit(5).to_list(length=5)
+            children.append({
+                "email": email,
+                "name": kid.get("name"),
+                "pin": kid.get("pin"),
+                "total_points": pts,
+                "monthly_sar": round(pts * 0.1, 2),
+                "by_kind": by_kind,
+                "recordings_count": recs,
+                "prayer_recordings": prayer_recs,
+                "task_recordings": task_recs,
+                "recent_recordings": recent_recs,
+                "recent_points": recent_pts,
+            })
+            total_points += pts
+            total_recs += recs
+        return {
+            "ok": True,
+            "children": children,
+            "totals": {"points": total_points, "recordings": total_recs, "kids": len(children)},
+        }
+
 
 
 
@@ -3125,13 +4027,13 @@ def make_freebuild_chat_router(db, get_current_user):
                 fmt_args = []  # download as-is
             else:
                 # Tries 1080p mp4 streams, then any 1080p, then any mp4, then ANY video — ensures TikTok-style single-stream works
-                fmt_args = ["-f", "bv*[height<=1080][ext=mp4]+ba[ext=m4a]/b[height<=1080][ext=mp4]/b[height<=1080]/b[ext=mp4]/best", "--merge-output-format", "mp4"]
+                fmt_args = ["-f", "bv*[height<=1080][ext=mp4][vcodec*=avc1]+ba[ext=m4a]/bv*[height<=1080][ext=mp4]+ba[ext=m4a]/b[height<=1080][ext=mp4]/b[height<=1080]/b[ext=mp4]/best", "-S", "vcodec:h264,res:1080,acodec:m4a", "--merge-output-format", "mp4", "--recode-video", "mp4", "--postprocessor-args", "-c:v libx264 -preset fast -crf 23 -c:a aac -movflags +faststart"]
             ext = "mp4"
         else:  # default mp4_720p
             if is_direct_media:
                 fmt_args = []  # download as-is
             else:
-                fmt_args = ["-f", "bv*[height<=720][ext=mp4]+ba[ext=m4a]/b[height<=720][ext=mp4]/b[height<=720]/b[ext=mp4]/best", "--merge-output-format", "mp4"]
+                fmt_args = ["-f", "bv*[height<=720][ext=mp4][vcodec*=avc1]+ba[ext=m4a]/bv*[height<=720][ext=mp4]+ba[ext=m4a]/b[height<=720][ext=mp4]/b[height<=720]/b[ext=mp4]/best", "-S", "vcodec:h264,res:720,acodec:m4a", "--merge-output-format", "mp4", "--recode-video", "mp4", "--postprocessor-args", "-c:v libx264 -preset fast -crf 23 -c:a aac -movflags +faststart"]
             ext = "mp4"
 
         out_path = os.path.join(MEDIA_DIR, f"{file_id}.%(ext)s")

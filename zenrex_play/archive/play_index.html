@@ -1,0 +1,371 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#ff2d55">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Zenrex Kids">
+<title>Zenrex Kids</title>
+<link rel="manifest" href="/play/manifest.webmanifest">
+<link rel="apple-touch-icon" href="/play/icon-192.png">
+<link rel="icon" href="/play/icon-192.png">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+html,body{width:100%;height:100%;overflow:hidden;background:#0a0a0a;color:#fff;font-family:-apple-system,"SF Pro Text","Segoe UI",Tahoma,sans-serif;overscroll-behavior:none}
+button,input,select,textarea{font-family:inherit;border:none;outline:none}
+
+/* ════════ AUTH SCREEN ════════ */
+#auth-screen{position:fixed;inset:0;z-index:1000;background:linear-gradient(180deg,#0a0a0a 0%,#1a0a1a 50%,#0a0a0a 100%);display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px;animation:fadeIn .4s}
+@keyframes fadeIn{from{opacity:0}to{opacity:1}}
+#auth-screen.hide{display:none}
+.auth-box{width:100%;max-width:380px;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);border-radius:24px;padding:28px;backdrop-filter:blur(14px)}
+.auth-logo{width:100px;height:100px;border-radius:24px;margin:0 auto 16px;display:block;box-shadow:0 8px 32px rgba(255,45,85,.4)}
+.auth-title{text-align:center;font-size:24px;font-weight:900;background:linear-gradient(135deg,#ff2d55,#ff6b9d);-webkit-background-clip:text;background-clip:text;color:transparent;margin-bottom:6px}
+.auth-sub{text-align:center;font-size:13px;opacity:.6;margin-bottom:22px}
+.auth-tabs{display:flex;background:rgba(0,0,0,.4);border-radius:14px;padding:4px;margin-bottom:18px}
+.auth-tab{flex:1;padding:10px 12px;text-align:center;font-size:13px;font-weight:800;border-radius:10px;cursor:pointer;color:#fff;opacity:.55;transition:all .2s}
+.auth-tab.on{background:linear-gradient(135deg,#ff2d55,#ff6b9d);opacity:1;box-shadow:0 4px 14px rgba(255,45,85,.4)}
+.auth-input{width:100%;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);color:#fff;padding:13px 16px;border-radius:12px;font-size:14px;margin-bottom:10px;text-align:right}
+.auth-input:focus{border-color:#ff2d55}
+.auth-input::placeholder{color:rgba(255,255,255,.4)}
+.auth-btn{width:100%;background:linear-gradient(135deg,#ff2d55,#ff6b9d);color:#fff;padding:14px;border-radius:12px;font-size:15px;font-weight:900;cursor:pointer;margin-top:8px;box-shadow:0 4px 14px rgba(255,45,85,.3)}
+.auth-btn:active{transform:scale(.98)}
+.auth-err{color:#fca5a5;font-size:12px;text-align:center;margin-top:10px;min-height:14px}
+
+/* ════════ MAIN APP ════════ */
+#app{position:fixed;inset:0;display:none}
+#app.on{display:block}
+
+/* ════════ TOP BAR ════════ */
+.top-bar{position:fixed;top:0;left:0;right:0;height:calc(50px + env(safe-area-inset-top));padding:env(safe-area-inset-top) 14px 0;z-index:30;display:flex;align-items:center;justify-content:space-between;background:linear-gradient(180deg,rgba(0,0,0,.6),transparent);pointer-events:none}
+.top-bar > *{pointer-events:auto}
+.cat-fab{background:rgba(0,0,0,.55);backdrop-filter:blur(14px);border:1px solid rgba(255,255,255,.18);color:#fff;padding:8px 14px;border-radius:100px;font-weight:800;font-size:13px;cursor:pointer;display:flex;align-items:center;gap:6px}
+.logout-fab{background:rgba(0,0,0,.55);backdrop-filter:blur(14px);border:1px solid rgba(255,255,255,.18);color:#fff;padding:8px 12px;border-radius:100px;font-weight:800;font-size:12px;cursor:pointer}
+
+/* ════════ VIDEO FEED ════════ */
+#feed{position:fixed;inset:0;overflow-y:scroll;scroll-snap-type:y mandatory;-webkit-overflow-scrolling:touch;overscroll-behavior:contain;background:#000}
+.video-slide{position:relative;width:100vw;height:100vh;scroll-snap-align:start;scroll-snap-stop:always;background:#000;display:flex;align-items:center;justify-content:center}
+.video-slide video{width:100%;height:100%;object-fit:cover;background:#000}
+.video-info{position:absolute;left:14px;right:60px;bottom:calc(80px + env(safe-area-inset-bottom));z-index:5;color:#fff;text-shadow:0 2px 8px rgba(0,0,0,.8)}
+.video-info .vt{font-size:14px;font-weight:800;line-height:1.4;margin-bottom:4px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.video-info .vc{font-size:11px;opacity:.7;background:rgba(0,0,0,.4);padding:2px 8px;border-radius:100px;display:inline-block}
+.feed-empty{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;color:rgba(255,255,255,.5);font-size:14px;padding:20px;text-align:center}
+.feed-empty .ic{font-size:48px;margin-bottom:14px}
+
+/* ════════ BOTTOM NAV ════════ */
+.nav-bar{position:fixed;bottom:0;left:0;right:0;height:calc(58px + env(safe-area-inset-bottom));padding-bottom:env(safe-area-inset-bottom);background:rgba(10,10,10,.96);backdrop-filter:blur(20px);border-top:1px solid rgba(255,255,255,.08);z-index:40;display:flex}
+.nav-btn{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;color:rgba(255,255,255,.5);font-size:10px;font-weight:700;cursor:pointer;transition:color .2s}
+.nav-btn .ic{font-size:22px}
+.nav-btn.on{color:#ff2d55}
+
+/* ════════ SCREENS (Religion/Tasks/Profile/Parent) ════════ */
+.screen{position:fixed;inset:0;padding:calc(env(safe-area-inset-top) + 14px) 14px calc(80px + env(safe-area-inset-bottom));overflow-y:auto;-webkit-overflow-scrolling:touch;background:linear-gradient(180deg,#0a0a0a,#15101e);z-index:20;display:none}
+.screen.on{display:block;animation:slideUp .25s}
+@keyframes slideUp{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
+.screen h1{font-size:20px;font-weight:900;margin-bottom:16px;background:linear-gradient(135deg,#fff,#aaa);-webkit-background-clip:text;background-clip:text;color:transparent}
+.card{background:linear-gradient(135deg,rgba(168,85,247,.08),rgba(56,189,248,.04));border:1px solid rgba(168,85,247,.2);border-radius:16px;padding:14px;margin-bottom:12px}
+.card h3{font-size:14px;font-weight:900;margin-bottom:8px;color:#fff}
+.card .hint{font-size:11px;opacity:.6;margin-bottom:10px;line-height:1.6}
+.list-item{display:flex;align-items:center;gap:10px;padding:11px 12px;background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.06);border-radius:12px;margin-bottom:6px;cursor:pointer;transition:background .15s}
+.list-item:active{background:rgba(255,45,85,.08)}
+.list-item .ic{font-size:22px;width:30px;text-align:center}
+.list-item .tx{flex:1}
+.list-item .ttl{font-size:13px;font-weight:800;margin-bottom:2px}
+.list-item .meta{font-size:11px;opacity:.55}
+.list-item .meta b{color:#fbbf24}
+.list-item .actions{display:flex;gap:4px}
+.btn-sm{padding:5px 10px;border-radius:8px;font-size:11px;font-weight:800;cursor:pointer}
+.btn-go{background:linear-gradient(135deg,#22c55e,#16a34a);color:#fff}
+.btn-del{background:rgba(239,68,68,.15);color:#fca5a5;border:1px solid rgba(239,68,68,.3)}
+
+/* Stats */
+.stat-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:8px;margin-bottom:12px}
+.stat-cell{background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);border-radius:14px;padding:14px;text-align:center}
+.stat-cell .v{font-size:24px;font-weight:900;color:#fbbf24;line-height:1}
+.stat-cell .l{font-size:10px;opacity:.6;margin-top:4px}
+
+/* Forms */
+.form-row{display:flex;gap:6px;margin-bottom:8px;flex-wrap:wrap}
+.form-row input,.form-row select{flex:1;min-width:80px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);color:#fff;padding:9px 11px;border-radius:8px;font-size:12px}
+.form-row input.icon{flex:0 0 50px;text-align:center;font-size:16px}
+.form-row input.pts{flex:0 0 60px}
+.btn-add{background:linear-gradient(135deg,#22c55e,#16a34a);color:#fff;padding:9px 14px;border-radius:8px;font-size:12px;font-weight:900;cursor:pointer}
+.status{font-size:11px;padding:6px 10px;border-radius:8px;margin-top:6px;display:none}
+.status.show{display:block}
+.status.ok{background:rgba(34,197,94,.15);color:#86efac;border:1px solid rgba(34,197,94,.3)}
+.status.err{background:rgba(239,68,68,.15);color:#fca5a5;border:1px solid rgba(239,68,68,.3)}
+.status.wait{background:rgba(251,191,36,.15);color:#fcd34d;border:1px solid rgba(251,191,36,.3)}
+
+/* Parent tabs */
+.p-tabs{display:flex;gap:5px;overflow-x:auto;padding-bottom:12px;margin:0 -10px 10px;padding-left:10px;padding-right:10px;scrollbar-width:none}
+.p-tabs::-webkit-scrollbar{display:none}
+.p-tab{flex-shrink:0;padding:8px 13px;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);border-radius:100px;color:rgba(255,255,255,.7);font-size:12px;font-weight:800;cursor:pointer;white-space:nowrap}
+.p-tab.on{background:linear-gradient(135deg,#ff2d55,#ff6b9d);color:#fff;border-color:transparent}
+
+/* Drawer */
+.drawer{position:fixed;left:0;right:0;bottom:0;background:linear-gradient(180deg,#1a0a2e,#0a0820);border-top:1px solid rgba(255,255,255,.1);border-radius:22px 22px 0 0;padding:18px 14px calc(20px + env(safe-area-inset-bottom));transform:translateY(100%);transition:transform .3s cubic-bezier(.4,0,.2,1);z-index:9300;max-height:70vh;overflow-y:auto}
+.drawer.on{transform:translateY(0)}
+.drawer .handle{width:40px;height:4px;background:rgba(255,255,255,.2);border-radius:2px;margin:0 auto 14px}
+.drawer .dtitle{font-size:15px;font-weight:900;text-align:center;margin-bottom:12px}
+.drawer-bd{position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:9290;opacity:0;pointer-events:none;transition:opacity .3s}
+.drawer-bd.on{opacity:1;pointer-events:auto}
+.drawer .grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.drawer .item{display:flex;align-items:center;gap:10px;padding:12px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.08);border-radius:12px;cursor:pointer}
+.drawer .item.on{background:linear-gradient(135deg,rgba(255,45,85,.2),rgba(255,107,157,.1));border-color:rgba(255,45,85,.5)}
+.drawer .item .ic{font-size:22px}
+.drawer .item .t{font-size:13px;font-weight:800}
+
+/* Dhikr overlay */
+.dh-overlay{position:fixed;inset:0;background:linear-gradient(180deg,#1a0a2e,#0a0820);z-index:9999;display:none;flex-direction:column;align-items:center;justify-content:center;padding:20px}
+.dh-overlay.on{display:flex}
+.dh-overlay .close{position:absolute;top:max(20px,env(safe-area-inset-top));right:16px;width:40px;height:40px;background:rgba(255,255,255,.1);border-radius:50%;color:#fff;font-size:20px;cursor:pointer}
+.dh-overlay .ic-big{font-size:80px;margin-bottom:14px;animation:pulse 1.5s ease-in-out infinite}
+@keyframes pulse{0%,100%{transform:scale(1)}50%{transform:scale(1.06)}}
+.dh-overlay .t-big{font-size:26px;font-weight:900;margin-bottom:4px;text-align:center}
+.dh-overlay .t-meta{opacity:.6;font-size:13px;margin-bottom:24px}
+.dh-overlay .ct{font-size:80px;font-weight:900;color:#fbbf24;line-height:1;margin-bottom:22px;text-shadow:0 0 36px rgba(251,191,36,.5)}
+.dh-overlay .tap{width:180px;height:180px;border-radius:50%;background:linear-gradient(135deg,#ff2d55,#ff6b9d);color:#fff;font-size:22px;font-weight:900;cursor:pointer;box-shadow:0 10px 36px rgba(255,45,85,.5);user-select:none}
+.dh-overlay .tap:active{transform:scale(.92)}
+.dh-overlay .pg{width:80%;max-width:300px;height:8px;background:rgba(255,255,255,.1);border-radius:100px;overflow:hidden;margin-top:22px}
+.dh-overlay .pg-fill{height:100%;background:linear-gradient(90deg,#fbbf24,#f59e0b);width:0%;transition:width .3s}
+.dh-overlay .done{color:#86efac;font-size:18px;font-weight:900;margin-top:14px;display:none;text-align:center}
+.dh-overlay.done-state .done{display:block}
+.dh-overlay.done-state .tap{display:none}
+
+/* Camera modal */
+.cam-modal{position:fixed;inset:0;background:#000;z-index:9999;display:none;flex-direction:column}
+.cam-modal.on{display:flex}
+.cam-modal video{flex:1;width:100%;object-fit:cover;background:#000}
+.cam-modal .ctrl{padding:20px;display:flex;justify-content:center;gap:14px;background:#000}
+.cam-modal .rec-btn{width:72px;height:72px;border-radius:50%;background:#ff2d55;color:#fff;font-size:14px;font-weight:900;cursor:pointer;box-shadow:0 0 0 4px rgba(255,45,85,.3)}
+.cam-modal .rec-btn.recording{background:#fff;color:#ff2d55;animation:recBlink 1s infinite}
+@keyframes recBlink{0%,100%{box-shadow:0 0 0 4px rgba(255,45,85,.3)}50%{box-shadow:0 0 0 14px rgba(255,45,85,0)}}
+.cam-modal .x-btn{position:absolute;top:max(20px,env(safe-area-inset-top));right:16px;width:40px;height:40px;background:rgba(0,0,0,.6);border-radius:50%;color:#fff;font-size:20px;cursor:pointer}
+.cam-modal .timer{position:absolute;top:max(20px,env(safe-area-inset-top));left:16px;background:rgba(0,0,0,.6);color:#ff2d55;padding:6px 14px;border-radius:100px;font-weight:900;font-size:13px;display:none}
+.cam-modal.recording .timer{display:block}
+/* Quran specific */
+.q-surah-card{display:flex;align-items:center;gap:10px;padding:11px 12px;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);border-radius:12px;margin-bottom:6px;cursor:pointer}
+.q-surah-card:active{background:rgba(255,45,85,.1)}
+.q-surah-card .num{width:36px;height:36px;background:linear-gradient(135deg,#ff2d55,#ff6b9d);color:#fff;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:900;font-size:13px}
+.q-surah-card .info{flex:1}
+.q-surah-card .name{font-size:15px;font-weight:900;font-family:"Amiri","Traditional Arabic",serif}
+.q-surah-card .meta{font-size:11px;opacity:.55}
+.q-ayah{padding:14px;background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.06);border-radius:12px;margin-bottom:8px}
+.q-ayah .num{display:inline-block;width:28px;height:28px;background:#fbbf24;color:#000;border-radius:50%;text-align:center;line-height:28px;font-weight:900;font-size:12px;margin-left:8px}
+.q-ayah .txt{font-family:"Amiri","Traditional Arabic",serif;font-size:21px;line-height:2.1;color:#fff;direction:rtl}
+.q-ayah .ctrls{margin-top:8px;display:flex;gap:8px}
+.q-ayah .ctrls button{padding:6px 12px;border-radius:8px;font-size:11px;font-weight:800;cursor:pointer;background:rgba(168,85,247,.15);color:#c4b5fd;border:1px solid rgba(168,85,247,.3)}
+.q-ayah .ctrls button:active{transform:scale(.96)}
+.q-rec-btn{position:fixed;bottom:calc(72px + env(safe-area-inset-bottom));left:50%;transform:translateX(-50%);background:linear-gradient(135deg,#ff2d55,#ff6b9d);color:#fff;border-radius:100px;padding:12px 22px;font-weight:900;font-size:13px;cursor:pointer;z-index:50;box-shadow:0 6px 20px rgba(255,45,85,.4);display:none}
+.q-rec-btn.recording{background:#fff;color:#ff2d55;animation:recBlink 1s infinite}
+.q-sub-card{padding:14px;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);border-radius:12px;margin-bottom:8px}
+.q-sub-card .h{display:flex;align-items:center;gap:8px;margin-bottom:8px}
+.q-sub-card .h .nm{font-weight:900;font-size:13px}
+.q-sub-card .h .st{margin-right:auto;font-size:11px;padding:3px 10px;border-radius:100px}
+.q-sub-card .st.pending{background:rgba(251,191,36,.15);color:#fcd34d}
+.q-sub-card .st.approved{background:rgba(34,197,94,.15);color:#86efac}
+.q-sub-card .st.rejected{background:rgba(239,68,68,.15);color:#fca5a5}
+.q-sub-card audio{width:100%;margin-bottom:8px}
+.q-sub-card .acts{display:flex;gap:6px}
+.q-sub-card .acts button{flex:1;padding:9px;border-radius:8px;font-weight:900;font-size:12px;cursor:pointer}
+.q-sub-card .acts .ok{background:linear-gradient(135deg,#22c55e,#16a34a);color:#fff}
+.q-sub-card .acts .no{background:rgba(239,68,68,.2);color:#fca5a5;border:1px solid rgba(239,68,68,.3)}
+</style>
+</head>
+<body>
+
+<!-- ════════════════════ AUTH SCREEN ════════════════════ -->
+<div id="auth-screen">
+  <div class="auth-box">
+    <img src="/play/icon-192.png" class="auth-logo" alt="Zenrex Play">
+    <div class="auth-title">Zenrex Kids</div>
+    <div class="auth-sub">تطبيق آمن للأطفال</div>
+    <div class="auth-tabs">
+      <div class="auth-tab on" data-role="child">👶 طفل</div>
+      <div class="auth-tab" data-role="parent">👨‍👩‍👧 ولي أمر</div>
+    </div>
+    <div id="auth-child">
+      <select class="auth-input" id="ai-kid-pick"></select>
+      <input type="tel" class="auth-input" id="ai-kid-pin" placeholder="الرقم السري (PIN)" inputmode="numeric" maxlength="12">
+    </div>
+    <div id="auth-parent" style="display:none">
+      <input type="email" class="auth-input" id="ai-p-email" placeholder="البريد الإلكتروني" dir="ltr" autocomplete="email">
+      <input type="password" class="auth-input" id="ai-p-pwd" placeholder="كلمة السر">
+    </div>
+    <button class="auth-btn" id="ai-login">دخول</button>
+    <div class="auth-err" id="ai-err"></div>
+  </div>
+</div>
+
+<!-- ════════════════════ MAIN APP ════════════════════ -->
+<div id="app">
+
+  <!-- TOP BAR (child only on home tab) -->
+  <div class="top-bar" id="topbar">
+    <button class="cat-fab" id="cat-fab">🏷️ <span id="cat-fab-label">الكل</span> ▾</button>
+    <button class="logout-fab" id="logout-fab">↩</button>
+  </div>
+
+  <!-- FEED (child home) -->
+  <div id="feed"></div>
+
+  <!-- RELIGION SCREEN -->
+  <div class="screen" id="religion-screen">
+    <h1>📿 الدين</h1>
+    <div class="card">
+      <h3>الصلوات</h3>
+      <div id="prayer-list"></div>
+    </div>
+    <div class="card">
+      <h3>الأذكار</h3>
+      <div id="dhikr-list"></div>
+    </div>
+  </div>
+
+  <!-- QURAN HOME SCREEN (new tab) -->
+  <div class="screen" id="quran-home-screen">
+    <h1>📖 حفظ القرآن</h1>
+    <div class="card" id="quran-plan-card" style="display:none">
+      <h3>📋 خطة الحفظ</h3>
+      <div class="hint" id="quran-plan-desc"></div>
+      <div id="quran-plan-progress"></div>
+    </div>
+    <div class="card">
+      <h3>🗺️ خريطة الحفظ</h3>
+      <div class="hint">سور خضراء = حُفظت بموافقة ولي الأمر. صفراء = تحت المراجعة. رمادية = لم تبدأ.</div>
+      <div id="quran-map" style="display:grid;grid-template-columns:repeat(6,1fr);gap:5px;margin-top:8px"></div>
+      <div style="display:flex;gap:10px;font-size:11px;margin-top:10px;opacity:.7">
+        <span>🟩 محفوظة (<span id="qm-ok">0</span>)</span>
+        <span>🟨 معلقة (<span id="qm-pend">0</span>)</span>
+        <span>⬜ لم تبدأ (<span id="qm-empty">0</span>)</span>
+      </div>
+    </div>
+    <div class="card">
+      <button class="btn-add" id="open-quran-from-tab" style="width:100%;padding:13px;font-size:14px">📖 تصفح كل السور (114)</button>
+    </div>
+  </div>
+    <div class="card">
+      <h3>📖 القرآن الكريم</h3>
+      <div class="hint">اضغط تاب 📖 القرآن في الأسفل لفتح المصحف.</div>
+    </div>
+  </div>
+
+  <!-- QURAN SCREEN (surah list) -->
+  <div class="screen" id="quran-list-screen">
+    <h1>📖 القرآن الكريم</h1>
+    <input id="quran-search" placeholder="🔍 ابحث عن سورة..." style="width:100%;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);color:#fff;padding:11px 14px;border-radius:10px;margin-bottom:12px;font-size:14px">
+    <div id="quran-surahs-list"></div>
+  </div>
+
+  <!-- QURAN SURAH SCREEN -->
+  <div class="screen" id="quran-surah-screen">
+    <button id="quran-back" style="background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);color:#fff;padding:7px 12px;border-radius:8px;cursor:pointer;font-family:inherit;margin-bottom:10px">← السور</button>
+    <h1 id="quran-surah-title"></h1>
+    <div class="card">
+      <button class="btn-add" id="quran-rec-btn" style="width:100%;padding:12px;font-size:13px">🎤 سجّل قراءتك للتحفيظ</button>
+      <div class="hint" id="quran-rec-hint">سجّل ثم سيُرسل لولي أمرك ليراجعه</div>
+    </div>
+    <div id="quran-ayahs"></div>
+
+  <!-- TASKS SCREEN -->
+  <div class="screen" id="tasks-screen">
+    <h1>🎯 المهام اليومية</h1>
+    <div id="tasks-list"></div>
+  </div>
+
+  <!-- PROFILE SCREEN (child) -->
+  <div class="screen" id="profile-screen">
+    <h1>👤 حسابي</h1>
+    <div class="stat-grid" id="profile-stats"></div>
+    <div class="card">
+      <h3>📊 آخر النشاطات</h3>
+      <div id="profile-recent"></div>
+    </div>
+  </div>
+
+  <!-- PARENT DASHBOARD -->
+  <div class="screen" id="parent-screen">
+    <h1>👨‍👩‍👧 لوحة ولي الأمر</h1>
+    <div class="p-tabs" id="p-tabs">
+      <button class="p-tab on" data-pt="videos">🎬 الفيديوهات</button>
+      <button class="p-tab" data-pt="cats">🏷️ التصنيفات</button>
+      <button class="p-tab" data-pt="tasks">🎯 المهام</button>
+      <button class="p-tab" data-pt="dhikr">📿 الأذكار</button>
+      <button class="p-tab" data-pt="kids">👶 الأطفال</button>
+      <button class="p-tab" data-pt="recordings">📹 التسجيلات</button>
+      <button class="p-tab" data-pt="quran-review">📖 مراجعة القرآن</button>
+      <button class="p-tab" data-pt="stats">📊 الإحصائيات</button>
+    </div>
+    <div id="p-content"></div>
+  </div>
+
+  <!-- BOTTOM NAV -->
+  <div class="nav-bar" id="nav">
+    <div class="nav-btn on" data-nav="home"><span class="ic">🏠</span><span>الرئيسية</span></div>
+    <div class="nav-btn" data-nav="religion"><span class="ic">📿</span><span>الدين</span></div>
+    <div class="nav-btn" data-nav="quran"><span class="ic">📖</span><span>القرآن</span></div>
+    <div class="nav-btn" data-nav="tasks"><span class="ic">🎯</span><span>المهام</span></div>
+    <div class="nav-btn" data-nav="profile"><span class="ic">👤</span><span>حسابي</span></div>
+  </div>
+</div>
+
+<!-- Inline video player modal (for parent recordings playback) -->
+<div id="play-modal" style="position:fixed;inset:0;background:rgba(0,0,0,.95);z-index:99999;display:none;align-items:center;justify-content:center;padding:20px">
+  <button onclick="document.getElementById('play-modal').style.display='none';document.getElementById('play-video').pause();" style="position:absolute;top:max(20px,env(safe-area-inset-top));right:16px;width:42px;height:42px;background:rgba(255,255,255,.15);border:none;border-radius:50%;color:#fff;font-size:22px;cursor:pointer">✕</button>
+  <video id="play-video" controls autoplay playsinline style="max-width:100%;max-height:100%;background:#000;border-radius:12px"></video>
+</div>
+
+<!-- Category drawer -->
+<div class="drawer-bd" id="cat-bd"></div>
+<div class="drawer" id="cat-drawer">
+  <div class="handle"></div>
+  <div class="dtitle">🏷️ اختر التصنيف</div>
+  <div class="grid" id="cat-grid"></div>
+</div>
+
+<!-- Dhikr counter overlay -->
+<div class="dh-overlay" id="dh-overlay">
+  <button class="close" onclick="document.getElementById('dh-overlay').classList.remove('on')">✕</button>
+  <div class="ic-big" id="dh-ic"></div>
+  <div class="t-big" id="dh-title"></div>
+  <div class="t-meta" id="dh-meta"></div>
+  <div class="ct" id="dh-ct">0</div>
+  <button class="tap" id="dh-tap">سبّح</button>
+  <div class="pg"><div class="pg-fill" id="dh-fill"></div></div>
+  <div class="done" id="dh-done"></div>
+</div>
+
+<!-- Camera modal -->
+<div class="cam-modal" id="cam">
+  <button class="x-btn" id="cam-x">✕</button>
+  <div class="timer" id="cam-timer">⏺ 00:00</div>
+  <video id="cam-vid" autoplay muted playsinline></video>
+  <div class="ctrl">
+    <button class="rec-btn" id="cam-rec">تسجيل</button>
+  </div>
+</div>
+
+<script src="/play/app.js"></script>
+<script>
+// Register SW
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('/play/sw.js', { scope: '/play' }).catch(e => console.warn('SW reg:', e));
+  // Unregister any hostile SW (root Zenrex PWA, old /kids SW)
+  navigator.serviceWorker.getRegistrations().then(regs => {
+    regs.forEach(r => {
+      const s = r.scope || '';
+      if (!s.includes('/play')) r.unregister().catch(() => {});
+    });
+  });
+  // Clear old caches
+  if ('caches' in window) {
+    caches.keys().then(ks => ks.forEach(k => {
+      if (!k.startsWith('zenrex-play')) caches.delete(k).catch(() => {});
+    }));
+  }
+}
+</script>
+</body>
+</html>

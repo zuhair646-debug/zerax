@@ -23,6 +23,30 @@ Deploy Zenrex Farm to the cloud, expand the Zenrex AI Brain to specialized modes
 - **Features Live**: Parent dashboard (dynamic kid mgmt, manual URL download, auto-bot config),
   Child TikTok-style feed with SW media caching, achievements tab, prayer tab.
 
+
+## Kids PWA (Zenrex Play /play) — 2026-06-18 Refresh
+- **URL**: `https://zenrex.ai/play` (legacy `/kids` redirects here)
+- **Production assets**: `/var/www/pwa_play/` on VPS — synced via rsync from `/app/zenrex_play/`
+- **Source-of-truth (this repo)**: `/app/zenrex_play/` (index.html, app.js, sw.js, manifest.webmanifest, icon-192.png, icon-512.png)
+- **Service Worker**: `zenrex-play-v2-quran-mushaf` (no-cache HTML, cache-first shell assets)
+- **Bottom Nav (5 tabs)**: 🏠 الرئيسية · 📿 الدين · 📖 القرآن · 🎯 المهام · 👤 حسابي
+- **Quran Tab**:
+  - Memorization Map (114 surahs colored: 🟩 approved · 🟨 pending · ⬜ empty)
+  - Parent-assigned plan progress bar
+  - Surah list with reciter selector (11 sheikhs)
+  - Read mode + **Tasmee'** mode (blur text, child must recite, "أظهر الآية" reveal button)
+  - Audio repetition (×1 / ×3)
+  - Child audio recording → parent review → points
+  - **🕋 Mushaf Viewer**: 604 pages rendered as authentic Madinah-style pages
+    (cream paper background, Amiri Quran font, golden ayah-number circles)
+    using `api.alquran.cloud/v1/page/{N}/quran-uthmani`. Tap any ayah →
+    plays audio via `cdn.islamic.network/quran/audio/{128|64|192}/{reciter}/{global_ayah}.mp3`.
+
+## Deployment (2026-06-18)
+- `bash /app/deploy/deploy.sh zenrex.ai` now also rsyncs `/app/zenrex_play/` → VPS `/var/www/pwa_play/`.
+- Backend (`freebuild_chat.py`) was out-of-sync — pulled fresh from VPS to local (5083 lines), now matches.
+
+
 ## Changelog
 
 - **2026-06-18 (v35 — CRITICAL: Root SW hijacking + Category labeling bug)**:

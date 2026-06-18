@@ -10,10 +10,10 @@
 - **Password:** `owner123`
 - **Role:** owner
 
-## Zenrex Kids PWA (https://zenrex.ai/kids)
-- **Parent (ولي الأمر)** — `zoheer@zenrex.ai` / `Zenrex@2026` → routes to Parent Dashboard with kid records
-- **Child 1 (حسين)** — `hussain@kids.local` / `1234` → routes to restricted child feed (Home + Prayer only)
-- **Child 2 (عباس)** — `abbas@kids.local` / `5678` → same child view
+## Zenrex Kids PWA (https://zenrex.ai/play — legacy `/kids` redirects)
+- **Parent (ولي الأمر)** — `zoheer@zenrex.ai` / `Zenrex@2026` → routes to Parent Dashboard
+- **Child accounts** — emails like `حسين@kids.zenrex.ai` (Arabic local-part). Login uses
+  dropdown + PIN. PINs are stored on accounts and set by the Parent in the dashboard.
 
 **Note:** The two environments have different MongoDBs and different seeded users.
 - For preview testing: use `owner@zerax.com`

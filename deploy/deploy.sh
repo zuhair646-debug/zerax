@@ -26,6 +26,14 @@ rsync -az --no-perms --no-owner --no-group --delete \
   --exclude="backups/" --exclude="__pycache__/" --exclude="*.pyc" \
   -e "ssh -i $SSH_KEY -o StrictHostKeyChecking=no" \
   /app/backend/ root@$VPS_IP:/opt/zerax/backend/ > /dev/null
+
+# 2b) Sync Zenrex Play PWA (Kids app at /play) to /var/www/pwa_play/
+echo "📦 Syncing Zenrex Play PWA..."
+rsync -az --no-perms --no-owner --no-group \
+  --exclude="*.bak*" \
+  -e "ssh -i $SSH_KEY -o StrictHostKeyChecking=no" \
+  /app/zenrex_play/ root@$VPS_IP:/var/www/pwa_play/ > /dev/null
+echo "✓ /play PWA synced"
 echo "✓ Files synced"
 
 # 3) Hot-reload Nginx (no downtime)
