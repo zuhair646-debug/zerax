@@ -29,6 +29,15 @@ Deploy Zenrex Farm to the cloud, expand the Zenrex AI Brain to specialized modes
   metal railing. Deployed `icon-192.png` & `icon-512.png` to `/var/www/pwa_kids/`. SW bumped v4→v5.
   Old icons backed up as `.bak.<timestamp>`. All approved variations preserved at
   `/app/frontend/public/logo_previews/` (logo_v9_corniche_evening.png is the deployed one).
+- **2026-06-18**: Fixed Kids PWA install bug — `/kids` was loading the main Zenrex manifest +
+  stale `data:` URI manifest with scope `/`, causing iOS/Android to install it as the main app
+  shortcut instead of a separate PWA. Cleaned the published-site HTML in MongoDB
+  (`freebuild_published_sites.zenrex-kids-pro`) — removed 3 bad manifest links, stale
+  `<section id="head">`, root-scope SW registration. Injected proper `<link rel="manifest"
+  data-pwa="kids" data-real="1" href="/kids/manifest.webmanifest">` plus apple-touch-icon +
+  apple-mobile-web-app-capable. Now `/kids` installs as a fully standalone PWA, separate from
+  the main `zenrex.ai` app, with the new family Corniche icon. Fix script preserved at
+  `/app/logo_gen/fix_kids_pwa.py`.
 - **2026-06 (prior)**: Built full Parent/Child backend auth, dynamic child mgmt widget,
   fullscreen TikTok video UI, yt-dlp fallback chain `/best`, manual URL downloader,
   auto-bot config UI (cookies + keywords + targeted usernames), deep DB purge of
