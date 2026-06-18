@@ -25,6 +25,53 @@ Deploy Zenrex Farm to the cloud, expand the Zenrex AI Brain to specialized modes
 
 ## Changelog
 
+- **2026-06-18 (v35 — CRITICAL: Root SW hijacking + Category labeling bug)**:
+  **ROOT CAUSE FOUND** after user reported "حرف ز شعار" splash + broken site +
+  no videos showing. Two compounding bugs:
+  
+  **BUG #1 — Root PWA hijacking `/kids` (the "two versions" problem)**:
+  - The main Zenrex platform (`https://zenrex.ai/`) registered a SW at `scope='/'`
+    via `/service-worker.js`, which intercepted EVERY navigation including `/kids`.
+  - Users who had installed the Zenrex main PWA: when they opened `/kids`,
+    the root SW returned the cached React index.html instead of the Kids HTML,
+    showing the "Z" splash + main app shell over the kids page.
+  - **Fix A** (`/opt/zerax/frontend/build/service-worker.js` + public):
+    * Bumped CACHE_VERSION to `zenrex-pwa-v2-skipkids` (forces re-install)
+    * Added `if (url.pathname === '/kids' || url.pathname.startsWith('/kids/')) return;`
+      at top of fetch handler — bypass /kids completely
+    * Removed `/kids` from the `caches.match('/')` offline fallback
+  - **Fix B** (`critical-fixes-v35` section in kids HTML — runs EARLY):
+    * On load, calls `navigator.serviceWorker.getRegistrations()` and
+      unregisters any SW whose scope doesn't contain `/kids`
+    * Deletes any cache key starting with `zenrex-pwa` / `zenrex-shell`
+    * This force-evicts the hostile SW even on installed PWAs
+  
+  **BUG #2 — All videos hardcoded `category='curated'`**:
+  - The legacy `loadAndShuffleChildFeed` (v17) mapped every video to
+    `category: 'curated'` regardless of its real DB value.
+  - Result: every category filter showed 0 videos (no video matched
+    `quran`, `educational`, etc.). Looked like "no videos".
+  - **Fix** (v35): Override `loadAndShuffleChildFeed` with a new
+    `v35ForceRenderFeed()` that uses `it.category` from the API.
+    Also runs every 8s as a self-healer: if videos array is empty OR all
+    tagged `curated`, re-fetches.
+  
+  **Other additions in v35**:
+  - Full-screen loading UI (`#v35-feed-loading`) with spinner + retry button.
+    Hidden once videos render successfully. Times out after 3 failed attempts.
+  
+  **Verified end-to-end via Playwright on real prod URL**:
+  - SW scopes after page load: `['https://zenrex.ai/kids']` only (root SW gone)
+  - Cache keys: only `zenrex-kids-*` (no `zenrex-pwa-*`)
+  - `APP_STATE.videos`: 26 items with real categories `['أخبار','educational','quran']`
+  - 26 `.video-slide` elements in DOM, 26 `<video>` elements
+  - 1 video playing simultaneously (single-video fix from v34 confirmed)
+  - `muted=false, volume=1` after first body click (audio unlock works)
+  - Title "زنركس كيدز برو" (correct PWA, not main app)
+  - SW bumped to `zenrex-kids-v11-v35`
+
+## Changelog
+
 - **2026-06-18 (v34 — COMPREHENSIVE PARENT DASHBOARD + Audio/Video fixes)**:
   Complete rebuild of parent dashboard from scratch (no widget relocations).
   Fixes for audio overlap, slow video preload, broken category filter, camera permissions.
