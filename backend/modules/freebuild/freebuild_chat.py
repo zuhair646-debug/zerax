@@ -3506,6 +3506,7 @@ def make_freebuild_chat_router(db, get_current_user):
                     "Content-Length": str(file_size),
                     "Content-Type": ct,
                     "Accept-Ranges": "bytes",
+                    "Cache-Control": "public, max-age=31536000, immutable",
                 },
             )
 
@@ -3545,7 +3546,7 @@ def make_freebuild_chat_router(db, get_current_user):
                     "Content-Range": f"bytes {start}-{end}/{file_size}",
                     "Accept-Ranges": "bytes",
                     "Content-Length": str(length),
-                    "Cache-Control": "public, max-age=3600",
+                    "Cache-Control": "public, max-age=31536000, immutable",
                 },
             )
 
@@ -3565,7 +3566,7 @@ def make_freebuild_chat_router(db, get_current_user):
             headers={
                 "Content-Length": str(file_size),
                 "Accept-Ranges": "bytes",
-                "Cache-Control": "public, max-age=3600",
+                "Cache-Control": "public, max-age=31536000, immutable",
             },
         )
 
