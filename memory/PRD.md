@@ -41,6 +41,39 @@ Deploy Zenrex Farm to the cloud, expand the Zenrex AI Brain to specialized modes
   if videos disappeared). Endpoint: `/api/freebuild-chat/kids/bot/approved` returns 26 docs.
   Each card has video preview + preview link + delete button.
 
+- **2026-06-18 (v25 — CRITICAL PRODUCTION FIX: Video Playback)**:
+  Root cause of "videos spin forever and don't play" diagnosed and fully fixed.
+  
+  **3 layered issues found**:
+  1. **HEVC codec everywhere**: 26 of 27 downloaded TikTok videos were H.265/HEVC.
+     Most browsers (Chrome on Android, Firefox, older iOS) cannot decode HEVC.
+     This is the PRIMARY cause of infinite buffering on mobile.
+  2. **Service Worker was caching media** (v5/v6): SW was caching video files which
+     broke Range requests — cached 200 responses can't satisfy Range, causing infinite
+     buffering after first load. nginx already serves videos with `Cache-Control: max-age=31536000 immutable`
+     so HTTP cache handles it perfectly; SW caching was harmful.
+  3. **`muted=false` + `crossOrigin='anonymous'`** prevented mobile autoplay + forced
+     unnecessary CORS mode.
+  
+  **Fixes applied**:
+  - **Batch transcoded all 27 videos** HEVC → H.264 (libx264 High profile, yuv420p) via
+    background ffmpeg. Space went from ~30MB HEVC + ~80MB temp → 18MB H.264. HEVC backups deleted.
+  - **SW v7** (`/var/www/pwa_kids/sw.js`): COMPLETE REWRITE. Media files now pass-through
+    (no SW interception). Only HTML + manifest + icons cached. Range requests work natively.
+    SW activate clears all old `zenrex-kids-v5/v6/media-v1` caches.
+  - **yt-dlp download endpoint** (`POST /media/download`) updated to:
+    `-f bv*[height<=720][ext=mp4][vcodec*=avc1]+ba[ext=m4a]/...` + `-S vcodec:h264` +
+    `--recode-video mp4` + `--postprocessor-args "-c:v libx264 -preset fast -crf 23 -c:a aac -movflags +faststart"`.
+    All future downloads will be H.264 + faststart (instant playback, no remux needed).
+  - **Frontend video creation**: `muted=true`, `playsinline`, `webkit-playsinline`, `preload=auto`,
+    `loop=true` for TikTok-style continuous playback. Removed harmful `crossOrigin='anonymous'`.
+  - **New section `video-playback-fix-v25`**:
+    * Tap-to-unmute floating banner
+    * Auto-detect stuck videos (>8s no progress) → force reload
+    * Error overlay with retry button per video
+    * Defensive: clears any leftover `media-v1` / `v5` / `v6` caches on every page load
+    * Forces SW update on existing PWA installs
+
 - **2026-06-18 (PRAYER MODULE v23)**: Built new Prayer Studio. Parent dashboard gets 5 prayer
   cards (Fajr/Dhuhr/Asr/Maghrib/Isha) with 🎤 سجّل button → records voice via MediaRecorder
   (audio/webm + echoCancellation). Backend adds `DELETE /kids/audio/{id}`, `POST /kids/audio/{id}/prayer`,
