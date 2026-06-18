@@ -2657,6 +2657,69 @@ def make_freebuild_chat_router(db, get_current_user):
         }
 
     # ═══════════════════════════════════════════════════════════════════════
+    # KIDS PWA — Server-side child accounts (parent creates, child logs in)
+    # ═══════════════════════════════════════════════════════════════════════
+    @router.post("/kids/accounts")
+    async def kids_create_account(
+        name: str = Form(...),
+        pin: str = Form(...),
+        user=Depends(get_current_user),
+    ):
+        name = (name or "").strip()
+        pin = (pin or "").strip()
+        if not name:
+            raise HTTPException(400, "اسم الطفل مطلوب")
+        if not pin or len(pin) < 4 or len(pin) > 12:
+            raise HTTPException(400, "PIN يجب 4 إلى 12 خانة")
+        # Build email — use deterministic slug; allow Arabic via lowering only ascii
+        import re as _re
+        slug = _re.sub(r"[^a-zA-Z0-9\u0600-\u06FF]+", "", name).lower()
+        if not slug:
+            slug = "child" + uuid.uuid4().hex[:6]
+        email = f"{slug}@kids.zenrex.ai"
+        # Ensure uniqueness per parent
+        existing = await db.kids_accounts.find_one({"email": email, "parent_id": user["user_id"]})
+        if existing:
+            raise HTTPException(409, "يوجد طفل بنفس الاسم — اختر اسماً آخر أو احذف الموجود")
+        doc = {
+            "id": uuid.uuid4().hex,
+            "email": email,
+            "name": name,
+            "pin": pin,  # stored as plain — short PIN, low value
+            "parent_id": user["user_id"],
+            "created_at": _now(),
+            "is_active": True,
+        }
+        await db.kids_accounts.insert_one(doc)
+        return {"ok": True, "email": email, "name": name, "pin": pin}
+
+    @router.get("/kids/accounts")
+    async def kids_list_accounts(user=Depends(get_current_user)):
+        items = await db.kids_accounts.find(
+            {"parent_id": user["user_id"], "is_active": True},
+            {"_id": 0, "parent_id": 0},
+        ).sort("created_at", 1).to_list(length=50)
+        return {"ok": True, "items": items}
+
+    @router.delete("/kids/accounts/{email}")
+    async def kids_delete_account(email: str, user=Depends(get_current_user)):
+        r = await db.kids_accounts.delete_one(
+            {"email": email.lower(), "parent_id": user["user_id"]}
+        )
+        return {"ok": True, "deleted": r.deleted_count}
+
+    @router.post("/kids/login")
+    async def kids_login(email: str = Form(...), pin: str = Form(...)):
+        email = (email or "").strip().lower()
+        pin = (pin or "").strip()
+        doc = await db.kids_accounts.find_one({"email": email, "is_active": True})
+        if not doc or doc.get("pin") != pin:
+            raise HTTPException(401, "البريد أو كلمة المرور خاطئة")
+        return {"ok": True, "email": email, "name": doc.get("name"), "id": doc.get("id")}
+
+
+
+    # ═══════════════════════════════════════════════════════════════════════
     # KIDS PWA — Bot sources (followed accounts) + keyword filter + scrape
     # ═══════════════════════════════════════════════════════════════════════
     @router.get("/kids/bot/config")
