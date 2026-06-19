@@ -3341,11 +3341,15 @@ function ChatWorkspace({ projectId }) {
                       </div>
                     )}
                     <div className="text-sm leading-relaxed">
-                      {/* Hide the main bubble while the agent is still streaming —
-                          the live_text bubbles below carry the in-flight text.
-                          Once streaming completes, m.content holds the final
-                          summary and renders here (live_text bubbles vanish). */}
-                      {!(m.role === 'assistant' && m.agent_streaming) && (
+                      {/* Render the main content bubble ONLY if there are no
+                          live_text steps. When the assistant streamed via SSE
+                          we keep those styled bubbles as the single source of
+                          truth — swapping to m.content would cause a visible
+                          flash where text appears to "rewrite itself". */}
+                      {!(
+                        (m.role === 'assistant') &&
+                        (m.agent_streaming || (m.agent_steps || []).some((s) => s.kind === 'live_text'))
+                      ) && (
                         <MarkdownText>{m.content}</MarkdownText>
                       )}
                     </div>
@@ -3386,15 +3390,19 @@ function ChatWorkspace({ projectId }) {
                             );
                           }
                           if (s.kind === 'live_text') {
-                            // Live streaming text from Claude — render markdown INCREMENTALLY so the
-                            // user sees nicely formatted headings/lists/checkmarks as they type
-                            // (no more raw `##` + `-` characters flickering before the final swap).
-                            // After streaming completes, hide these bubbles because the same text
-                            // already lives in m.content (rendered above) — otherwise it would
-                            // appear twice and cause the layout shuffle the user complained about.
-                            if (!s.open && m.agent_streaming === false) return null;
+                            // Live streaming text from Claude. Render markdown
+                            // incrementally so headings/lists look polished.
+                            // Keep these bubbles visible permanently — even
+                            // after streaming completes — because they are the
+                            // single source of truth (the main m.content bubble
+                            // is hidden when live_text steps exist). This
+                            // eliminates the "text writes then disappears"
+                            // flash users complained about.
+                            // Only hide empty bubbles (no text accumulated).
+                            const hasText = (s.text || '').trim().length > 0;
+                            if (!hasText) return null;
                             return (
-                              <div key={sIdx} className="text-sm leading-relaxed text-zinc-100 bg-zinc-900/40 border-r-2 border-emerald-500/50 px-3 py-2 rounded">
+                              <div key={sIdx} className="text-sm leading-relaxed text-zinc-100">
                                 <MarkdownText>{s.text || ''}</MarkdownText>
                                 {s.open && <span className="inline-block w-1.5 h-4 bg-emerald-400 ml-0.5 align-middle animate-pulse" />}
                               </div>
