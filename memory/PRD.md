@@ -1,53 +1,67 @@
 # Zenrex Farm — PRD (Product Requirements Document)
 
+## 2026-06-19 (الجلسة الخامسة) — 🛡️ Tier-1: HTML Validator + Auto-Heal
+**Status**: ✅ Implemented, tested, E2E confirmed on independent hosting
+
+### ما تم بناؤه:
+1. **`/app/backend/modules/freebuild/html_validator.py`** (جديد) — 8 طبقات فحص:
+   - بنية HTML (DOCTYPE, html, head, body, title, lang, dir, viewport)
+   - تطابق الـtags (parser ذكي يكتشف unclosed/mismatched)
+   - الروابط الداخلية (`<a href="#X">` بدون `<section id="X">`)
+   - الصور (alt + ممنوع localhost/backend URLs)
+   - تحليل JS basic (تطابق أقواس)
+   - تحليل CSS (تطابق braces)
+   - فحص أمني (يكتشف Stripe keys, AWS keys, GitHub tokens مسربة)
+   - حجم الـHTML
+   - يُرجع `{ok, summary, critical[], major[], minor[]}`
+
+2. **Auto-Heal Loop في chat endpoint**:
+   - بعد كل توليد HTML، الـValidator يفحص آلياً
+   - لو فيه مشاكل → استدعاء Claude Sonnet 4.5 بـ`format_validation_for_ai()` يطلب الإصلاح
+   - يفحص المُحَسَّن، يقبله **فقط** لو قلّ عدد المشاكل
+   - يخزن `last_validation` على المشروع للوحة الأدمن
+
+3. **Paywall على Export**: `export-source` يرجع HTTP 402 إن `code_unlocked=false`
+
+### E2E Test (موقع لياقة بدنية → استضافة مستقلة):
+1. ✅ AI ولّد HTML نظيف من المرة الأولى (32.9KB, validator: ✅ OK)
+2. ✅ محاولة export قبل الدفع → HTTP 402 "ميزة مدفوعة"
+3. ✅ تفعيل unlock بـ$100 tier=code_only → success
+4. ✅ تصدير ZIP (7.8KB) → 3 ملفات نظيفة (index.html + README + LICENSE)
+5. ✅ رفع على `python3 -m http.server 9100` (استضافة مستقلة تماماً)
+6. ✅ تشغيل في playwright → 200 OK، title صحيح، 0 console errors
+7. ✅ 11/11 امتثال (DOCTYPE, RTL, viewport, privacy, terms, WhatsApp, NO Zenrex، NO localhost)
+8. ✅ تصميم احترافي: Hero قوي، CTA مزدوج، Stats، WhatsApp button
+
+### اختبار الـValidator على HTML مكسور حقيقي (unit test):
+- Input: div بدون closing, broken anchor, localhost image, missing title/viewport, broken JS
+- Output: 1 critical + 7 major + 4 minor = ✗ FAIL
+- Heal prompt مُولَّد جاهز للـAI
+
+### Future Tier-2 / Tier-3 (مقترحات سابقة):
+- 🟡 P1: Multi-Page Architecture (index + about + contact + products)
+- 🟡 P1: Site Health Score (0-100 بطاقة تقييم)
+- 🟢 P2: AI Memory & Brand Kit (تذكر تفضيلات العميل عبر المشاريع)
+- 🟢 P2: Proactive Guardian (تنبؤ بالفشل قبل ما يحصل)
+- 🟢 P2: Visual Guardian (لقطة شاشة + Vision LLM)
+
 ## 2026-06-19 (الجلسة الرابعة) — 🛡️ Zenrex Guardian (Silent AI Supervisor)
-**Status**: ✅ End-to-end working, tested with angry customer simulation
-
-### المعمارية:
-عميل ←→ Claude Opus (يبني الموقع) ←→ Claude Sonnet 4.5 (مشرف خفي) ←→ لوحة Admin
-
-### المكوّنات المُنفّذة:
-1. **`/app/backend/modules/freebuild/guardian.py`** (جديد):
-   - `compute_distress()`: حساب Distress Score من 0-15 على آخر 8 رسائل
-   - كلمات سلبية بأوزان: "لا!", "غلط", "زفت", "خربتها" (+3)
-   - إشارات فقدان أمل: "اتركها", "يأست", "تعب", "ارجع للأول" (+5)
-   - كشف تكرار AI لنفس الرد (Jaccard similarity ≥0.85 → +3)
-   - كشف ركود الـHTML (4+ رسائل بدون تقدم → +2)
-   - `get_guardian_directive()`: استدعاء Claude Sonnet 4.5 لتشخيص + إصدار توجيه JSON
-   - `format_guardian_note()`: تنسيق التوجيه كـ`[ZENREX_GUARDIAN_NOTE]` block
-
-2. **Hook في `/freebuild-chat/project/{pid}/chat`**:
-   - يُشغّل Guardian **قبل** AI الرئيسي يرد
-   - يحقن `guardian_note_for_prompt` في رأس `extra_ctx` (أعلى أولوية)
-   - Cooldown ذكي: ما يفعّل مرتين متتاليتين على نفس العميل
-   - يحفظ كل تدخّل في `freebuild_projects.guardian_interventions` (آخر 20)
-   - يحدّث `last_distress` و `last_guardian_at` دائماً للوحة الأدمن
-
-3. **Admin Endpoints جديدة**:
-   - `GET /admin/guardian/projects?level=...` — قائمة المشاريع مع distress scores
-   - `GET /admin/guardian/project/{pid}` — تفاصيل المحادثة + كل التدخلات
-   - `POST /admin/guardian/project/{pid}/inject` — حقن توجيه يدوي من الأدمن
-
-4. **`/app/frontend/src/pages/GuardianDashboard.jsx`** (جديد):
-   - Grid بطاقات ملوّنة (🟢🟡🟠🔴) حسب Distress Level
-   - فلاتر + بحث + auto-refresh كل 6 ثوان
-   - Dialog تفاصيل: stats + سجل تدخلات + معاينة رسائل + textarea للحقن اليدوي
-   - متاحة على `/admin/guardian` (admin-only في `App.js`)
-
-### E2E Test (محاكاة عميل غاضب):
-- T1: "أبي موقع لمطعم" → AI سأل أسئلة (طبيعي)
-- T2: "زفت! خربتها! ما تفهم اصلا!!! اتركها يأست تعب" 
-  - 🛡️ Guardian فعّل (score=8, level=intervene)
-  - تشخيص دقيق: "AI انحرف لاستبيان تصميمي طويل بدلاً من تنفيذ فوري"
-  - توجيه: "توقف عن الأسئلة فوراً. ابدأ ببناء HTML كامل لموقع مطعم نموذجي الآن..."
-  - AI الرئيسي صحّح المسار: "خلاص خلاص، فهمت! 😄 لا تتعب نفسك — أنا أبني لك موقع مطعم حلو الحين مباشرة"
-  - بنى الموقع كاملاً (html_updated=True)
-  - **بدون اعتذار، بدون ذكر أي خطأ سابق — العميل ما يحس بالتدخل**
-
-### Paywall Enforcement:
-- `export-source` endpoint الآن يفرض `code_unlocked=True` (HTTP 402 لو ما دفع)
+- ✅ Distress Detection (20+ كلمة عربية بأوزان)
+- ✅ Auto-intervention بـClaude Sonnet 4.5
+- ✅ Admin Dashboard على `/admin/guardian`
+- ✅ Cooldown ذكي + سجل تدخلات
 
 ## 2026-06-19 (الجلسة الثالثة) — Source Code Export
+- ✅ ZIP فيه index.html + assets + README + LICENSE
+- ✅ يحذف Zenrex footer للسورس المدفوع
+
+## 2026-06-19 (الجلسة الثانية) — UI Polish + AI Behavior
+- ✅ إزالة Z الأحمر، إصلاح text glitch، قاعدة Information First
+
+## 2026-06-19 (الجلسة الأولى) — AI Compliance Layer
+- ✅ 4-stage machine + 15/15 امتثال + رفض المحتوى الممنوع
+
+
 - ✅ `GET /export-source` يولّد ZIP (index.html + assets + README + LICENSE)
 - ✅ يحذف Zenrex footer للسورس المدفوع
 - ✅ اختبار على موقع غريب (متحف الجوارب) — رُفع على استضافة مستقلة وعمل 100%

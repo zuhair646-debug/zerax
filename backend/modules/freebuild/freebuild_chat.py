@@ -2272,6 +2272,63 @@ def make_freebuild_chat_router(db, get_current_user):
             if broken:
                 logger.warning(f"freebuild broken anchors: {broken[:5]}")
 
+        # ═════════════════════════════════════════════════════════════════════
+        # 🛡️ TIER-1: PRE-FLIGHT VALIDATION + AUTO-HEAL
+        # Run a structural validator on the generated HTML. If any critical or
+        # major issues are found, silently ask the AI for a corrective turn
+        # using the validation report as context. The customer never sees the
+        # broken intermediate version — only the healed result.
+        # ═════════════════════════════════════════════════════════════════════
+        validation_report = None
+        autoheal_applied = False
+        if new_html:
+            try:
+                from .html_validator import validate_html, format_validation_for_ai
+                validation_report = validate_html(new_html)
+                logger.info(f"🛡️ validator: {validation_report['summary']}")
+                if not validation_report.get("ok"):
+                    heal_prompt = format_validation_for_ai(validation_report)
+                    heal_system = (
+                        "أنت Claude Opus — تستلم HTML قد ولّدته للتو وفيه أخطاء بنيوية محددة. "
+                        "مهمتك الآن: إصلاح المشاكل المذكورة فقط، وإعادة الـHTML الكامل المصحَّح "
+                        "داخل ```html ... ``` block واحد. لا اعتذار، لا شرح طويل، فقط الكود المصحَّح."
+                    )
+                    heal_user = (
+                        heal_prompt
+                        + "\n\n[HTML الحالي للإصلاح]\n```html\n"
+                        + new_html[:90000]
+                        + "\n```\n\nأعد الكود مصحَّحاً الآن."
+                    )
+                    try:
+                        from emergentintegrations.llm.chat import LlmChat, UserMessage  # type: ignore
+                        api_key = os.environ.get("EMERGENT_LLM_KEY")
+                        if api_key:
+                            heal_chat = (
+                                LlmChat(api_key=api_key, session_id=f"heal-{uuid.uuid4().hex[:10]}", system_message=heal_system)
+                                .with_model("anthropic", "claude-sonnet-4-5-20250929")
+                            )
+                            heal_resp = await heal_chat.send_message(UserMessage(text=heal_user))
+                            heal_text = heal_resp if isinstance(heal_resp, str) else getattr(heal_resp, "content", "")
+                            heal_blocks = _extract_all_html_variants(heal_text or "")
+                            if heal_blocks:
+                                healed_html = heal_blocks[0]
+                                re_report = validate_html(healed_html)
+                                logger.info(f"🛡️ post-heal: {re_report['summary']}")
+                                before_bad = len(validation_report.get("critical", [])) + len(validation_report.get("major", []))
+                                after_bad = len(re_report.get("critical", [])) + len(re_report.get("major", []))
+                                if after_bad < before_bad:
+                                    healed_html, _ = _fix_dead_navigation_links(healed_html)
+                                    new_html = healed_html
+                                    validation_report = re_report
+                                    autoheal_applied = True
+                                    logger.info(f"✅ auto-heal accepted: {before_bad}→{after_bad} issues")
+                                else:
+                                    logger.info(f"⏭️ auto-heal rejected (no improvement): {before_bad}→{after_bad}")
+                    except Exception as _heal_err:  # noqa: BLE001
+                        logger.warning(f"auto-heal LLM call failed: {_heal_err}")
+            except Exception as _v_err:  # noqa: BLE001
+                logger.warning(f"validator skipped: {_v_err}")
+
         # Strip code blocks from chat display — code is private/paid feature.
         # If we have design variants, replace all blocks with a single one-line notice;
         # otherwise replace each block with the "updated live preview" notice.
@@ -2326,6 +2383,18 @@ def make_freebuild_chat_router(db, get_current_user):
                     "$slice": -20,  # keep last 20
                 }
             update_set["current_html"] = _inject_zenrex_footer(new_html)
+            # Persist validation report + auto-heal flag for admin/dashboard visibility
+            if validation_report is not None:
+                update_set["last_validation"] = {
+                    "ok": validation_report.get("ok"),
+                    "summary": validation_report.get("summary"),
+                    "critical_count": len(validation_report.get("critical", [])),
+                    "major_count": len(validation_report.get("major", [])),
+                    "minor_count": len(validation_report.get("minor", [])),
+                    "autoheal_applied": autoheal_applied,
+                    "size_kb": validation_report.get("size_kb"),
+                    "at": _now(),
+                }
             # Auto-advance phase whenever we ship HTML (anti-stuck-on-discovery)
             update_set["current_phase"] = "build"
             # Mark earlier phases as completed in phase_history (visual sidebar)
