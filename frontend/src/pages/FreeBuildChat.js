@@ -30,8 +30,10 @@ const PHASES = [
 ];
 
 // ─────────────────────────────────────────────────────────────
-// STEP 1: Project Entry (no categories — just listen) — REDESIGNED 2026-06-19
+// STEP 1: Project Entry — REDESIGNED 2026-06-19 v2 (cache-bust ${Date.now()})
+// Build timestamp: 2026-06-19T01:35:00Z — force unique webpack contenthash
 // ─────────────────────────────────────────────────────────────
+const _BUILD_VERSION = '2026-06-19-redesign-v2';
 const QUICK_EXAMPLES = [
   { icon: '🌹', title: 'متجر عطور فاخر',     hint: 'متجر إلكتروني بهوية راقية، صفحة كل عطر، سلة شراء، Stripe' },
   { icon: '☕',  title: 'موقع مطعم/كافيه',    hint: 'منيو تفاعلي، صور أطباق، حجز طاولة، خريطة' },

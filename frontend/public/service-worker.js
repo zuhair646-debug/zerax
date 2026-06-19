@@ -1,5 +1,5 @@
 /* Zenrex Service Worker — PWA */
-const CACHE_VERSION = 'zenrex-pwa-v1';
+const CACHE_VERSION = 'zenrex-pwa-v2-2026-06-19';
 const STATIC_CACHE = `${CACHE_VERSION}-static`;
 const RUNTIME_CACHE = `${CACHE_VERSION}-runtime`;
 
