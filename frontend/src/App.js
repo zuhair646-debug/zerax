@@ -25,6 +25,7 @@ import QuickShare from '@/pages/QuickShare';
 import ShareHistory from '@/pages/ShareHistory';
 import Profile from '@/pages/Profile';
 import FreeBuildChat from '@/pages/FreeBuildChat';
+import GuardianDashboard from '@/pages/GuardianDashboard';
 import AppsConvert from '@/pages/AppsConvert';
 import NewRequest from '@/pages/NewRequest';
 import MyRequests from '@/pages/MyRequests';
@@ -216,6 +217,7 @@ function App() {
           <Route path="/admin/credits" element={<ProtectedRoute adminOnly><AdminCredits user={user} /></ProtectedRoute>} />
           <Route path="/admin/training" element={<ProtectedRoute adminOnly><AdminTraining user={user} /></ProtectedRoute>} />
           <Route path="/admin/notifications" element={<ProtectedRoute adminOnly><AdminNotifications user={user} /></ProtectedRoute>} />
+          <Route path="/admin/guardian" element={<ProtectedRoute adminOnly><GuardianDashboard user={user} /></ProtectedRoute>} />
           <Route path="/storage" element={<ProtectedRoute><StoragePage user={user} /></ProtectedRoute>} />
           <Route path="/trash" element={<ProtectedRoute><TrashPage user={user} /></ProtectedRoute>} />
           <Route path="/chat" element={<ProtectedRoute><AIChat user={user} /></ProtectedRoute>} />

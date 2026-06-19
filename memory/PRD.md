@@ -1,34 +1,64 @@
 # Zenrex Farm — PRD (Product Requirements Document)
 
-## 2026-06-19 (الجلسة الثالثة) — Source Code Export Endpoint + Full E2E Test
-**Status**: ✅ Endpoint built, ZIP verified, site hosted independently and validated
+## 2026-06-19 (الجلسة الرابعة) — 🛡️ Zenrex Guardian (Silent AI Supervisor)
+**Status**: ✅ End-to-end working, tested with angry customer simulation
 
-### New Endpoint: `GET /api/freebuild-chat/project/{pid}/export-source`
-- يولّد ZIP يحتوي:
-  - `index.html` — الموقع كامل
-  - `assets/` — كل الصور الخارجية مُنزّلة محلياً + إعادة كتابة الـsrc URLs
-  - `README.md` — تعليمات النشر بالعربي (Netlify, Vercel, Hostinger)
-  - `LICENSE.txt` — رخصة ملكية كاملة باسم المشتري
-- **يحذف Zenrex footer تلقائياً** للسورس المدفوع (ملكية كاملة للعميل)
-- Headers: `X-Assets-Downloaded`, `X-Assets-Failed` للتشخيص
+### المعمارية:
+عميل ←→ Claude Opus (يبني الموقع) ←→ Claude Sonnet 4.5 (مشرف خفي) ←→ لوحة Admin
 
-### E2E Test (موقع غريب: متحف الجوارب الضائعة):
-1. ✅ AI بنى الموقع في رسالة واحدة (مع جوارب طائرة، عداد حي، 6 قصص دولية)
-2. ✅ ZIP تم تصديره (9.3KB) — 3 ملفات (index.html, README, LICENSE)
-3. ✅ تم رفعه على **استضافة مستقلة تماماً** (`python3 -m http.server 8765`)
-4. ✅ الموقع شغّال 100% — لا أخطاء console، الـAnimations تشتغل، الـRTL ممتاز
-5. ✅ 0 إشارة لـZenrex في الـbody (متحقّق برمجياً)
-6. ✅ Self-contained — فقط Tailwind CDN + Google Fonts كاعتماديات خارجية
+### المكوّنات المُنفّذة:
+1. **`/app/backend/modules/freebuild/guardian.py`** (جديد):
+   - `compute_distress()`: حساب Distress Score من 0-15 على آخر 8 رسائل
+   - كلمات سلبية بأوزان: "لا!", "غلط", "زفت", "خربتها" (+3)
+   - إشارات فقدان أمل: "اتركها", "يأست", "تعب", "ارجع للأول" (+5)
+   - كشف تكرار AI لنفس الرد (Jaccard similarity ≥0.85 → +3)
+   - كشف ركود الـHTML (4+ رسائل بدون تقدم → +2)
+   - `get_guardian_directive()`: استدعاء Claude Sonnet 4.5 لتشخيص + إصدار توجيه JSON
+   - `format_guardian_note()`: تنسيق التوجيه كـ`[ZENREX_GUARDIAN_NOTE]` block
 
-## 2026-06-19 (الجلسة الثانية) — UI Polish + AI Behavior Fixes
-- ✅ إزالة شعار Z الأحمر من الـthinking bubble (نقاط بسيطة بدلاً منه)
-- ✅ إصلاح جذري لـtext glitch: الـpolling يحافظ على `agent_steps` (live_text bubbles) عند الـmerge من DB
-- ✅ قاعدة "Information First": AI يجاوب على الأسئلة المعلوماتية كمستشار قبل القفز للتصميم (مع مثال صح + مثال خطأ في الـprompt)
+2. **Hook في `/freebuild-chat/project/{pid}/chat`**:
+   - يُشغّل Guardian **قبل** AI الرئيسي يرد
+   - يحقن `guardian_note_for_prompt` في رأس `extra_ctx` (أعلى أولوية)
+   - Cooldown ذكي: ما يفعّل مرتين متتاليتين على نفس العميل
+   - يحفظ كل تدخّل في `freebuild_projects.guardian_interventions` (آخر 20)
+   - يحدّث `last_distress` و `last_guardian_at` دائماً للوحة الأدمن
 
-## 2026-06-19 (الجلسة الأولى) — AI Compliance Layer + Conversational Discovery
-- ✅ 4-stage AI machine (FIRST_CONTACT → DISCOVERY → WOW_REVEAL → VALUE_LOOP)
-- ✅ 15/15 امتثال للمواقع التجارية (Privacy/Terms/Refund/PDPL/الضريبة 15%/WhatsApp)
-- ✅ رفض المحتوى الممنوع (قمار، إباحي، مسروق، إلخ) مع اقتراح بدائل
+3. **Admin Endpoints جديدة**:
+   - `GET /admin/guardian/projects?level=...` — قائمة المشاريع مع distress scores
+   - `GET /admin/guardian/project/{pid}` — تفاصيل المحادثة + كل التدخلات
+   - `POST /admin/guardian/project/{pid}/inject` — حقن توجيه يدوي من الأدمن
+
+4. **`/app/frontend/src/pages/GuardianDashboard.jsx`** (جديد):
+   - Grid بطاقات ملوّنة (🟢🟡🟠🔴) حسب Distress Level
+   - فلاتر + بحث + auto-refresh كل 6 ثوان
+   - Dialog تفاصيل: stats + سجل تدخلات + معاينة رسائل + textarea للحقن اليدوي
+   - متاحة على `/admin/guardian` (admin-only في `App.js`)
+
+### E2E Test (محاكاة عميل غاضب):
+- T1: "أبي موقع لمطعم" → AI سأل أسئلة (طبيعي)
+- T2: "زفت! خربتها! ما تفهم اصلا!!! اتركها يأست تعب" 
+  - 🛡️ Guardian فعّل (score=8, level=intervene)
+  - تشخيص دقيق: "AI انحرف لاستبيان تصميمي طويل بدلاً من تنفيذ فوري"
+  - توجيه: "توقف عن الأسئلة فوراً. ابدأ ببناء HTML كامل لموقع مطعم نموذجي الآن..."
+  - AI الرئيسي صحّح المسار: "خلاص خلاص، فهمت! 😄 لا تتعب نفسك — أنا أبني لك موقع مطعم حلو الحين مباشرة"
+  - بنى الموقع كاملاً (html_updated=True)
+  - **بدون اعتذار، بدون ذكر أي خطأ سابق — العميل ما يحس بالتدخل**
+
+### Paywall Enforcement:
+- `export-source` endpoint الآن يفرض `code_unlocked=True` (HTTP 402 لو ما دفع)
+
+## 2026-06-19 (الجلسة الثالثة) — Source Code Export
+- ✅ `GET /export-source` يولّد ZIP (index.html + assets + README + LICENSE)
+- ✅ يحذف Zenrex footer للسورس المدفوع
+- ✅ اختبار على موقع غريب (متحف الجوارب) — رُفع على استضافة مستقلة وعمل 100%
+
+## 2026-06-19 (الجلسة الثانية) — UI Polish + AI Behavior
+- ✅ إزالة شعار Z الأحمر من الـthinking bubble
+- ✅ إصلاح text glitch (polling يحافظ على `agent_steps`)
+- ✅ قاعدة "Information First" في الـprompt
+
+## 2026-06-19 (الجلسة الأولى) — AI Compliance Layer
+- ✅ 4-stage machine + 15/15 امتثال + رفض المحتوى الممنوع
 
 ## Original Problem Statement
 Deploy Zenrex Farm to the cloud, expand the Zenrex AI Brain to specialized modes, sever ties with Emergent integrations for 100% independence, and build a unified Brand Manager. Within Zenrex Farm, develop a "Kids PWA" — a TikTok-style video aggregator for kids with strict Parent/Child roles, automated targeted scraping, pre-caching for instant playback, and dedicated sections for prayers and rewards.

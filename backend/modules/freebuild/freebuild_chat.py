@@ -1234,6 +1234,70 @@ def make_freebuild_chat_router(db, get_current_user):
         if not proj:
             raise HTTPException(404, "المشروع غير موجود")
 
+        # ═════════════════════════════════════════════════════════════════════
+        # 🛡️ ZENREX GUARDIAN — silent supervisor pass on prior conversation.
+        # Runs BEFORE the main AI replies so its corrective directive can be
+        # injected into this very turn's system prompt. The customer never
+        # sees the Guardian; they only experience a sudden quality jump.
+        # ═════════════════════════════════════════════════════════════════════
+        guardian_note_for_prompt: str = ""
+        try:
+            from .guardian import compute_distress, get_guardian_directive, format_guardian_note  # noqa: WPS433
+            prior_messages = list(proj.get("messages") or [])
+            # Include the CURRENT incoming message so distress reflects the latest
+            # vent — otherwise we always lag by one turn and miss escalation.
+            distress_messages = prior_messages + [
+                {"role": "user", "content": (message or "")}
+            ]
+            distress = compute_distress(distress_messages, proj.get("current_html"))
+            # Cooldown — don't fire Guardian if it already fired on the previous
+            # user turn. Give the corrected reply a chance to land.
+            last_g_at = proj.get("last_guardian_at")
+            user_turns_since = 0
+            if last_g_at:
+                for _m in reversed(prior_messages):
+                    if _m.get("role") == "user":
+                        user_turns_since += 1
+                    if (_m.get("timestamp") or "") <= str(last_g_at):
+                        break
+            on_cooldown = bool(last_g_at) and user_turns_since < 2
+            if distress["level"] in ("intervene", "critical") and not on_cooldown:
+                directive = await get_guardian_directive(
+                    messages=distress_messages,
+                    current_html=proj.get("current_html"),
+                    project_name=proj.get("name", ""),
+                    distress_report=distress,
+                )
+                if directive:
+                    guardian_note_for_prompt = format_guardian_note(directive)
+                    await db.freebuild_projects.update_one(
+                        {"id": pid},
+                        {
+                            "$push": {
+                                "guardian_interventions": {
+                                    "$each": [directive],
+                                    "$slice": -20,
+                                }
+                            },
+                            "$set": {
+                                "last_distress": distress,
+                                "last_guardian_at": _now(),
+                            },
+                        },
+                    )
+                    logger.info(
+                        "🛡️ Guardian intervened on project %s (score=%s level=%s)",
+                        pid, distress["score"], distress["level"],
+                    )
+            else:
+                # Always persist the latest distress reading for the dashboard
+                await db.freebuild_projects.update_one(
+                    {"id": pid},
+                    {"$set": {"last_distress": distress}},
+                )
+        except Exception as _guard_err:  # noqa: BLE001
+            logger.warning("Guardian pre-pass skipped: %s", _guard_err)
+
         # Parse answer_meta JSON (sent when user clicks AI's offered options)
         parsed_answer_meta: Optional[Dict[str, Any]] = None
         if answer_meta:
@@ -1475,7 +1539,8 @@ def make_freebuild_chat_router(db, get_current_user):
         )
 
         extra_ctx = (
-            _build_self_verification(proj)
+            guardian_note_for_prompt
+            + _build_self_verification(proj)
             + f"اسم المشروع: {proj['name']}\n"
             f"وصف المشروع: {proj['description'] or '(لم يحدد العميل وصفاً بعد — اسأله ودَوّن)'}\n"
             f"عدد رسائل العميل حتى الآن: {_user_turns}\n"
@@ -2681,6 +2746,109 @@ def make_freebuild_chat_router(db, get_current_user):
     # Vision: user says "publish" in chat → AI calls publish_site tool →
     # site goes live at https://zenrex.ai/s/{slug} in seconds.
     # ═══════════════════════════════════════════════════════════════════════
+
+    # ═══════════════════════════════════════════════════════════════════════
+    # 🛡️ GUARDIAN ADMIN DASHBOARD — live monitoring of all active projects
+    # Admin-only. Lists projects with their current distress score + last
+    # intervention, sorted by urgency.
+    # ═══════════════════════════════════════════════════════════════════════
+    async def _ensure_admin(user: Dict[str, Any]) -> None:
+        if user.get("is_admin") or user.get("role") in ("admin", "owner"):
+            return
+        # Some legacy users have admin email
+        if (user.get("email") or "").lower() in ("admin@zenrex.ai", "owner@zerax.com"):
+            return
+        raise HTTPException(403, "Admin only")
+
+    @router.get("/admin/guardian/projects")
+    async def admin_guardian_projects(
+        level: Optional[str] = None,  # filter: warn|intervene|critical
+        user=Depends(get_current_user),
+    ):
+        """List all FreeBuild projects with their distress signals."""
+        await _ensure_admin(user)
+        cursor = db.freebuild_projects.find(
+            {},
+            {
+                "_id": 0, "id": 1, "name": 1, "user_id": 1, "current_phase": 1,
+                "updated_at": 1, "last_distress": 1, "last_guardian_at": 1,
+                "code_unlocked": 1, "current_html": 1,
+                "guardian_interventions": {"$slice": -1},
+                "messages": {"$slice": -2},
+            },
+        ).sort([("last_guardian_at", -1), ("updated_at", -1)]).limit(200)
+        rows: List[Dict[str, Any]] = []
+        async for p in cursor:
+            d = p.get("last_distress") or {}
+            row = {
+                "id": p["id"],
+                "name": p.get("name") or "—",
+                "user_id": p.get("user_id"),
+                "current_phase": p.get("current_phase") or "discovery",
+                "updated_at": p.get("updated_at"),
+                "distress_score": d.get("score", 0),
+                "distress_level": d.get("level", "ok"),
+                "distress_signals": d.get("signals", []),
+                "has_html": bool(p.get("current_html")),
+                "code_unlocked": bool(p.get("code_unlocked")),
+                "last_guardian_at": p.get("last_guardian_at"),
+                "last_intervention": (p.get("guardian_interventions") or [None])[-1] if p.get("guardian_interventions") else None,
+                "msg_preview": [
+                    {"role": m.get("role"), "content": (m.get("content") or "")[:160]}
+                    for m in (p.get("messages") or [])
+                ],
+                "intervention_count": len(p.get("guardian_interventions") or []),
+            }
+            if level and row["distress_level"] != level:
+                continue
+            rows.append(row)
+        return {"projects": rows, "count": len(rows)}
+
+    @router.get("/admin/guardian/project/{pid}")
+    async def admin_guardian_project_detail(pid: str, user=Depends(get_current_user)):
+        await _ensure_admin(user)
+        p = await db.freebuild_projects.find_one(
+            {"id": pid},
+            {"_id": 0, "messages": 1, "guardian_interventions": 1, "last_distress": 1, "name": 1, "user_id": 1, "current_html": 1},
+        )
+        if not p:
+            raise HTTPException(404, "Project not found")
+        return p
+
+    @router.post("/admin/guardian/project/{pid}/inject")
+    async def admin_guardian_inject(
+        pid: str,
+        directive: str = Form(...),
+        diagnosis: str = Form(""),
+        user=Depends(get_current_user),
+    ):
+        """Admin manually injects a corrective directive (skips LLM)."""
+        await _ensure_admin(user)
+        if not directive.strip():
+            raise HTTPException(400, "directive مطلوب")
+        intervention = {
+            "id": uuid.uuid4().hex,
+            "created_at": _now(),
+            "diagnosis": diagnosis.strip() or "تدخّل يدوي من الأدمن",
+            "directive": directive.strip(),
+            "tone": "confident",
+            "severity": "manual",
+            "distress_score": -1,
+            "signals": ["manual_admin_injection"],
+            "consumed": False,
+            "injected_by": user.get("email") or user.get("user_id"),
+        }
+        r = await db.freebuild_projects.update_one(
+            {"id": pid},
+            {
+                "$push": {"guardian_interventions": {"$each": [intervention], "$slice": -20}},
+                "$set": {"last_guardian_at": _now()},
+            },
+        )
+        if r.matched_count == 0:
+            raise HTTPException(404, "Project not found")
+        return {"ok": True, "intervention_id": intervention["id"]}
+
     @router.post("/project/{pid}/publish")
     async def publish_project(
         pid: str,
@@ -5392,6 +5560,12 @@ def make_freebuild_chat_router(db, get_current_user):
         )
         if not proj:
             raise HTTPException(404, "Project not found")
+        # 💳 PAYWALL — source export is a paid feature ($100 one-time)
+        if not proj.get("code_unlocked"):
+            raise HTTPException(
+                402,
+                "الكود المصدري ميزة مدفوعة. اشتر الباقة من /api/freebuild-chat/project/{pid}/unlock أولاً.",
+            )
         html = proj.get("current_html") or ""
         if not html:
             raise HTTPException(400, "ما فيه موقع جاهز للتصدير بعد. اطلب من الذكاء يبني التصميم أولاً.")
