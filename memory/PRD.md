@@ -6,6 +6,38 @@
 Quick summary: العميل يملك VPS Hetzner. أي تعديل تعمله، شغّل **`bash /app/deploy/deploy.sh zenrex.ai`** فوراً.
 SSH key موجود في `/root/.ssh/zerax_deploy`. **لا تسأل، لا تعتذر، انشر مباشرة.**
 
+## 2026-06-19 (الجلسة العاشرة) — 📱 Native App Builder (PWA Studio)
+
+**Status**: ✅ مُنجَز — اختبار E2E ناجح 100% (7/7 backend + frontend) + نُشِر على https://zenrex.ai/
+
+### ما تم في هذه الجلسة:
+1. **`/native/new`** — صفحة منفصلة لاختيار النظام (iPhone / Android / الاثنين) + اسم ووصف. JSX جاهز في `/app/frontend/src/pages/NativeAppNew.jsx`.
+2. **Route مربوط** — `/native/new` و `/native/chat/:id` في `App.js`.
+3. **Backend — `platform` field**:
+   - `ProjectIn` Pydantic أُضيف لها `platform: Optional[str]`
+   - `create_project` يتحقق من القيمة `ios|android|both` ويحفظها على `freebuild_projects` document
+   - Greeting الافتتاحي يتكيّف حسب الاختيار: "اخترت تطوير تطبيقك لـ iPhone / Android / Universal PWA"
+4. **System Prompt — `app_ctx`** (PWA Mode):
+   - تعليمات صارمة: manifest.json inline base64، Service Worker inline، meta tags (viewport, theme-color, apple-mobile-web-app-*), Bottom Tab Bar, Touch-friendly (≥44px)، Safe Areas (env(safe-area-inset-*))، max-width 480px، 100dvh، Material Ripple للأندرويد، Dynamic Island/notch awareness.
+   - مفعّل حصرياً عندما `proj.get('mode') == 'app'`
+5. **Phone Frame في `FreeBuildChat.js`**:
+   - `isAppMode` flag + `appDevice` state (iphone | android)
+   - عند `mode === 'app'`، الـ live preview يلتف داخل إطار جوال CSS:
+     - iPhone: 390×844px، border-radius 52px، Dynamic Island notch، home indicator
+     - Android: 390×844px، border-radius 32px، camera dot، home bar
+   - زر تبديل iPhone ↔ Android (`device-iphone-btn` / `device-android-btn`)
+   - تفعيل تلقائي للـ mobile preview mode عند فتح مشروع app
+6. **CTA على `/freebuild/chat` landing**: رابط "أو ابني تطبيق جوال من الصفر (PWA)" → `/native/new`
+7. **اختبار** — 7/7 backend pytest + frontend Playwright PASS (`/app/test_reports/iteration_45.json`)
+8. **نشر للإنتاج** — https://zenrex.ai/ → API + UI verified live
+
+### Files Created/Modified:
+- ✏️ `/app/backend/modules/freebuild/freebuild_chat.py` — ProjectIn, create_project, greeting override, app_ctx system prompt block
+- ✏️ `/app/frontend/src/App.js` — `/native/new` route added
+- ✏️ `/app/frontend/src/pages/FreeBuildChat.js` — phone-frame wrapper + device toggle + native CTA
+- ✅ `/app/frontend/src/pages/NativeAppNew.jsx` — already existed, now routed
+- ✅ `/app/backend/tests/test_native_app_builder.py` — new pytest suite (7 tests)
+
 ## 2026-06-19 (الجلسة السابعة) — 🎭 White-Label AI Branding
 
 **Status**: ✅ مُنجَز — تأكيد بصري وبرمجي (No 'claude' anywhere in page)
