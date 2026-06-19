@@ -3851,6 +3851,14 @@ try:
 except Exception as _cme:
     logging.getLogger(__name__).error(f"Failed to register Companion module: {_cme}", exc_info=True)
 
+# ============== AUTO-RESUME REMINDERS (cross-product nudge emails) ==============
+try:
+    from modules.resume_reminder import register_resume_reminders
+    register_resume_reminders(db, app, get_current_user)
+    logging.getLogger(__name__).info("Resume Reminder module registered + scheduler armed")
+except Exception as _rre:
+    logging.getLogger(__name__).error(f"Failed to register Resume Reminder module: {_rre}", exc_info=True)
+
 # ============== VISUAL DESIGNER APIS ==============
 class DesignElement(BaseModel):
     id: str

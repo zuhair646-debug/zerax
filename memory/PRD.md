@@ -6,6 +6,30 @@
 Quick summary: العميل يملك VPS Hetzner. أي تعديل تعمله، شغّل **`bash /app/deploy/deploy.sh zenrex.ai`** فوراً.
 SSH key موجود في `/root/.ssh/zerax_deploy`. **لا تسأل، لا تعتذر، انشر مباشرة.**
 
+## 2026-06-19 (الجلسة 12) — 🔔 Auto-Resume Reminders (كل أنواع المشاريع)
+
+**Status**: ✅ مُنجَز — 5/5 pytest PASS، نُشر على https://zenrex.ai/
+
+### ما تم:
+1. **Module جديد** `/app/backend/modules/resume_reminder/__init__.py`:
+   - Scheduler يشتغل كل ساعة (`SCAN_INTERVAL_SECONDS=3600`)
+   - يفحص: `freebuild_projects` (مواقع/تطبيقات/استوديو)، `game_projects` (ألعاب)، `video_series` (فيديو طويل)
+   - Cadence: 24h → 72h → 168h (٧ أيام)، ثم يتوقف
+   - Idempotent عبر `db.resume_reminders` tracker (sent_count + last_reminder_at + history)
+   - يحترم `user.reminder_opt_out` flag
+2. **إيميل HTML** بهوية زنركس (لوغو ذهبي + RTL + tone متدرج حسب رقم التذكير) عبر Resend.
+3. **Endpoints**:
+   - `GET /api/resume-reminders/me` — قراءة الـopt_out
+   - `POST /api/resume-reminders/me/opt-out` — تفعيل/إيقاف
+   - `GET /api/resume-reminders/me/history` — سجل التذكيرات المُرسلة
+   - `POST /api/resume-reminders/admin/run-now` — تشغيل يدوي (admin only)
+4. **UI في `/freebuild/projects`**:
+   - زر toggle "🔔 تذكيرات مفعّلة / موقوفة" في الـheader
+   - Banner أصفر تحت الفلاتر يشرح آلية التذكيرات + رابط إيقاف سريع
+5. **مُسجَّل في `server.py`** بعد Companion module عبر `register_resume_reminders(db, app, get_current_user)`.
+6. **Pytest** — `/app/backend/tests/test_resume_reminders.py` — 5/5 PASS.
+7. **نُشر** — على prod مع log: `[RESUME-REMINDER] scheduler running (every 3600s)`.
+
 ## 2026-06-19 (الجلسة 11) — Branding + Connections Help + Storage + My Projects
 
 **Status**: ✅ مُنجَز — Backend 100% PASS، Frontend verified، نُشر على https://zenrex.ai/

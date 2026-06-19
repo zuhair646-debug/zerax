@@ -13,7 +13,7 @@
  */
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Globe, Smartphone, Sparkles, Trash2, ArrowLeft, Plus, LifeBuoy, Clock, RefreshCw } from 'lucide-react';
+import { Globe, Smartphone, Sparkles, Trash2, ArrowLeft, Plus, LifeBuoy, Clock, RefreshCw, Bell, BellOff } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '../components/ui/button';
 import ZenrexBrand from '../components/ZenrexBrand';
@@ -128,6 +128,34 @@ export default function MyProjects() {
   const [projects, setProjects] = useState([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState('all'); // all | website | app | studio
+  const [reminderOptOut, setReminderOptOut] = useState(false);
+
+  const loadReminderPref = useCallback(async () => {
+    const token = localStorage.getItem('token');
+    if (!token) return;
+    try {
+      const r = await fetch(`${API}/api/resume-reminders/me`, { headers: { Authorization: `Bearer ${token}` } });
+      if (r.ok) setReminderOptOut(!!(await r.json()).opt_out);
+    } catch (_) { /* silent */ }
+  }, []);
+
+  const toggleReminders = async () => {
+    const token = localStorage.getItem('token');
+    const next = !reminderOptOut;
+    try {
+      const r = await fetch(`${API}/api/resume-reminders/me/opt-out`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ opt_out: next }),
+      });
+      if (r.ok) {
+        setReminderOptOut(next);
+        toast.success(next ? 'تم إيقاف التذكيرات' : 'تم تفعيل التذكيرات — راح نذكرك بمشاريعك');
+      }
+    } catch (_) {
+      toast.error('فشل التحديث');
+    }
+  };
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -153,7 +181,7 @@ export default function MyProjects() {
     }
   }, [navigate]);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => { load(); loadReminderPref(); }, [load, loadReminderPref]);
 
   const handleContinue = (p) => {
     navigate(`/freebuild/chat/${p.id}`);
@@ -218,6 +246,16 @@ export default function MyProjects() {
             <StorageIndicator />
             <button
               type="button"
+              onClick={toggleReminders}
+              data-testid="toggle-reminders"
+              title={reminderOptOut ? 'فعّل تذكيرات أكمل المشروع' : 'أوقف تذكيرات أكمل المشروع'}
+              className={`inline-flex items-center gap-1.5 px-3 py-2 rounded-lg border text-xs font-bold ${reminderOptOut ? 'bg-zinc-900 border-zinc-700 text-zinc-400' : 'bg-amber-500/10 border-amber-500/40 text-amber-300'}`}
+            >
+              {reminderOptOut ? <BellOff className="w-4 h-4" /> : <Bell className="w-4 h-4" />}
+              <span className="hidden sm:inline">{reminderOptOut ? 'التذكيرات موقوفة' : 'تذكيرات مفعّلة'}</span>
+            </button>
+            <button
+              type="button"
               onClick={load}
               className="p-2 rounded-lg bg-white/5 hover:bg-white/10 text-zinc-300"
               aria-label="تحديث"
@@ -263,6 +301,25 @@ export default function MyProjects() {
             </button>
           ))}
         </div>
+
+        {/* Reminder info banner */}
+        {!reminderOptOut && (
+          <div data-testid="reminder-banner" className="mb-6 rounded-xl border border-amber-500/20 bg-gradient-to-l from-amber-500/5 to-transparent p-3 flex items-start gap-3">
+            <Bell className="w-4 h-4 text-amber-400 mt-0.5 flex-shrink-0" />
+            <p className="text-xs text-amber-100/80 leading-relaxed flex-1">
+              <strong className="text-amber-200">تذكيرات ذكية مفعّلة:</strong> راح نرسل لك إيميل لطيف
+              بعد <b>يوم</b>، ثم <b>٣ أيام</b>، ثم <b>أسبوع</b> لأي مشروع تتركه بدون إكمال — موقع، تطبيق، لعبة، أو فيديو.
+              <button
+                type="button"
+                onClick={toggleReminders}
+                className="underline mr-1 hover:text-amber-200"
+                data-testid="reminder-banner-disable"
+              >
+                إيقاف
+              </button>
+            </p>
+          </div>
+        )}
 
         {loading ? (
           <div className="text-center py-20 text-zinc-500">جاري التحميل...</div>
