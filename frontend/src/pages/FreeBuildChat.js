@@ -3481,10 +3481,20 @@ function ChatWorkspace({ projectId }) {
                       />
                     )}
 
-                    {/* Brand spinner — only while the agent is actively working */}
+                    {/* Brand spinner — only while the agent is actively working.
+                        Uses neutral dots (no Zenrex Z) per UX request. */}
                     {m.role === 'assistant' && m.agent_streaming && (
                       <div className="mt-3" data-testid={`agent-spinner-${i}`}>
-                        <ZCrownSpinner size={28} label="الذكاء الصناعي يعمل الآن…" />
+                        <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-emerald-500/10 border border-emerald-400/30">
+                          <span className="flex items-center gap-1">
+                            <span className="w-1.5 h-1.5 rounded-full bg-cyan-300 animate-pulse" style={{ animationDelay: '0ms' }} />
+                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-300 animate-pulse" style={{ animationDelay: '180ms' }} />
+                            <span className="w-1.5 h-1.5 rounded-full bg-cyan-300 animate-pulse" style={{ animationDelay: '360ms' }} />
+                          </span>
+                          <span className="text-[12px] font-semibold bg-gradient-to-r from-cyan-300 via-emerald-300 to-cyan-300 bg-clip-text text-transparent">
+                            يحلل ويكتب...
+                          </span>
+                        </div>
                       </div>
                     )}
 
@@ -3835,14 +3845,14 @@ function ChatWorkspace({ projectId }) {
                 </div>
               ))}
               <div ref={chatEndRef} />
-              {!loading && lastTask && (lastTask.label || lastTask.model) && (
+              {!loading && lastTask && lastTask.label && (
                 <div className="flex justify-start" data-testid="last-task-badge">
                   <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-zinc-900/60 border border-cyan-400/20 text-[10px] text-zinc-400">
                     <span className="w-1.5 h-1.5 rounded-full bg-cyan-400" />
                     <span className="text-cyan-200">{lastTask.label}</span>
-                    {lastTask.model && (
-                      <span className="text-zinc-500 font-mono" dir="ltr">· {lastTask.model.split('+')[0].trim()}</span>
-                    )}
+                    {/* Model name intentionally hidden — Zenrex presents
+                        a unified branded AI experience without disclosing
+                        the underlying provider. */}
                   </div>
                 </div>
               )}

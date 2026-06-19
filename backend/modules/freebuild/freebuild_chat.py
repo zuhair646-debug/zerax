@@ -691,8 +691,10 @@ def _classify_freebuild_task(
     and a human-readable label like "🎨 توليد تصاميم (Claude Opus)" surfaced
     to the user as live progress.
     """
+    # Returns generic Zenrex-branded labels — no underlying model names exposed
+    # to the customer (proprietary AI experience per UX requirement).
     if is_retry_for_fix:
-        return ("reasoning_hard", "🛠️ يصلّح أخطاء برمجية (GPT-5 / Opus)")
+        return ("reasoning_hard", "🛠️ يصلّح أخطاء برمجية")
 
     msg = (user_msg or "").lower()
 
@@ -700,11 +702,11 @@ def _classify_freebuild_task(
     if _INTENT_CONVERSATIONAL_RE.search(user_msg or "") and not (
         _INTENT_ADDITIVE_RE.search(user_msg or "") or _INTENT_REDESIGN_RE.search(user_msg or "")
     ):
-        return ("arabic", "💬 يحاور (Claude Opus — أفضل عربي)")
+        return ("arabic", "💬 يحاور")
 
-    # Big existing project → need long context (Kimi 256K)
+    # Big existing project → need long context
     if has_current_html and current_html_len > 30_000:
-        return ("long_context", "📚 يحلّل موقع كبير (Kimi 256K)")
+        return ("long_context", "📚 يحلّل موقع كبير")
 
     # Variant / multi-design request → design specialty
     variant_re = re.compile(
@@ -712,9 +714,8 @@ def _classify_freebuild_task(
         r"design\s+options?|show\s+me\s+(?:designs?|options))",
         re.IGNORECASE,
     )
-    # First time (no current_html) OR explicit visual exploration → design
     if not has_current_html or variant_re.search(msg):
-        return ("design", "🎨 يصمم (Claude Opus 4.5)")
+        return ("design", "🎨 يصمم")
 
     # Debug/fix request → reasoning
     fix_re = re.compile(
@@ -724,7 +725,7 @@ def _classify_freebuild_task(
         re.IGNORECASE,
     )
     if fix_re.search(msg):
-        return ("reasoning_hard", "🧠 يحلّل ويصحّح (GPT-5 / Opus)")
+        return ("reasoning_hard", "🧠 يحلّل ويصحّح")
 
     # Complex code request (multiple sections, advanced features) → coding_strong
     complex_re = re.compile(
@@ -734,10 +735,10 @@ def _classify_freebuild_task(
         re.IGNORECASE,
     )
     if complex_re.search(msg):
-        return ("coding_strong", "⚡ كود متقدم (Kimi K2.6 + Opus)")
+        return ("coding_strong", "⚡ كود متقدم")
 
-    # Code add/modify → website_build (Kimi K2.6 leads)
-    return ("website_build", "💻 يكتب الكود (Kimi K2.6)")
+    # Code add/modify
+    return ("website_build", "💻 يكتب الكود")
 
 
 def _strip_tags(text: str) -> str:
@@ -2455,7 +2456,8 @@ def make_freebuild_chat_router(db, get_current_user):
             "pending_assets": pending_assets,
             "html_updated": bool(new_html),
             "task_label": task_label,
-            "model_used": model_used,
+            # model_used intentionally omitted — proprietary AI experience
+            "model_used": "",
             "agent_iterations": agent_iterations,
         }
 
@@ -6093,7 +6095,7 @@ For questions: legal@zenrex.ai
                      "pending_assets": [], "had_html": bool(new_html),
                      "options": options, "design_variants": [],
                      "agent_iterations": iterations,
-                     "model_used": result.get("model_used")},
+                     "model_used": ""},
                 ]
             }
         }
@@ -6116,8 +6118,8 @@ For questions: legal@zenrex.ai
             "html_updated": bool(new_html),
             "options": options,
             "agent_iterations": iterations,
-            "model_used": result.get("model_used"),
-            "task_label": f"🤖 Agent ({iterations} خطوة)",
+            "model_used": "",
+            "task_label": f"🤖 يعمل ({iterations} خطوة)",
             "tool_log": result.get("tool_log", []),
         }
 
@@ -6254,7 +6256,7 @@ For questions: legal@zenrex.ai
                                  "inline_video": captured["inline_video"],
                                  "design_variants": [],
                                  "agent_iterations": captured["iterations"],
-                                 "model_used": captured["model_used"]},
+                                 "model_used": ""},
                             ]
                         }
                     }

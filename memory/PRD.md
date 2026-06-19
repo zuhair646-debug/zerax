@@ -1,6 +1,27 @@
 # Zenrex Farm — PRD (Product Requirements Document)
 
-## 2026-06-19 (الجلسة السادسة) — 🎯 المنظومة الكاملة (Health Score + Brand Kit + Stripe + Checkout)
+## 2026-06-19 (الجلسة السابعة) — 🎭 White-Label AI Branding
+
+**Status**: ✅ مُنجَز — تأكيد بصري وبرمجي (No 'claude' anywhere in page)
+
+### ما تم:
+1. **إزالة حرف Z الأحمر** من spinner المحادثة (استُبدل بـ3 نقاط ملوّنة + نص "يحلل ويكتب...")
+2. **إخفاء model_used تماماً**: 
+   - Backend يرجع `model_used: ""` في كل endpoints
+   - Frontend ما يعرض الـmodel حتى لو وُجد
+3. **حذف أسماء النماذج من task labels**:
+   - "🎨 يصمم (Claude Opus 4.5)" → "🎨 يصمم"
+   - "💻 يكتب الكود (Kimi K2.6)" → "💻 يكتب الكود"
+   - "🛠️ يصلّح أخطاء برمجية (GPT-5 / Opus)" → "🛠️ يصلّح أخطاء برمجية"
+   - "🤖 Agent (N خطوة)" → "🤖 يعمل (N خطوة)"
+4. **حذف SSE provider disclosure**: 
+   - "🧠 يستخدم claude-sonnet..." → "🧠 الذكاء الصناعي يحلل..."
+   - "🚀 الذكاء بدأ التحليل..." → "🚀 يحلل ويبدأ..."
+
+### الفائدة:
+العميل يحس إن Zenrex منصة مستقلة بذكاء صناعي خاص بها (white-label experience). لا يدري إن الـbackend يستخدم Claude/Opus/Kimi/etc — أسرار تشغيلية محفوظة.
+
+
 
 
 ### مكوّنات جديدة:

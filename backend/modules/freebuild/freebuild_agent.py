@@ -4246,7 +4246,7 @@ async def stream_agent_turn(
 
     user_language: ISO 639-1 code from the UI; AI will reply in that language.
     """
-    yield _sse("start", {"message": "🚀 الذكاء بدأ التحليل..."})
+    yield _sse("start", {"message": "🚀 يحلل ويبدأ..."})
     await asyncio.sleep(0)
 
     # Anthropic ONLY — same family as the platform AI (Claude). No GPT, no Kimi:
@@ -4262,7 +4262,7 @@ async def stream_agent_turn(
     last_err = None
     for provider, model in providers:
         try:
-            yield _sse("provider", {"name": provider, "model": model, "message": f"🧠 يستخدم {model}"})
+            yield _sse("provider", {"name": provider, "model": model, "message": "🧠 الذكاء الصناعي يحلل..."})
             await asyncio.sleep(0)
             async for chunk in _stream_one_provider(project, user_message, history_messages, max_iterations, provider, model, ctx_holder=ctx_holder, user_language=user_language, auth_token=auth_token, db=db, is_owner=is_owner):
                 yield chunk
