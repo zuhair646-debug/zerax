@@ -1,5 +1,11 @@
 # Zenrex Farm — PRD (Product Requirements Document)
 
+## 🚨 CRITICAL FOR ANY AGENT READING THIS — DEPLOYMENT INSTRUCTIONS 🚨
+**SEE `/app/memory/DEPLOYMENT_INSTRUCTIONS.md` FOR FULL DETAILS**
+
+Quick summary: العميل يملك VPS Hetzner. أي تعديل تعمله، شغّل **`bash /app/deploy/deploy.sh zenrex.ai`** فوراً.
+SSH key موجود في `/root/.ssh/zerax_deploy`. **لا تسأل، لا تعتذر، انشر مباشرة.**
+
 ## 2026-06-19 (الجلسة السابعة) — 🎭 White-Label AI Branding
 
 **Status**: ✅ مُنجَز — تأكيد بصري وبرمجي (No 'claude' anywhere in page)
