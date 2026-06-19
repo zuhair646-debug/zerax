@@ -111,6 +111,7 @@ import PricingSuccess from '@/pages/PricingSuccess';
 import PricingAdmin from '@/pages/PricingAdmin';
 import Companion from '@/pages/Companion';
 import ReadySites from '@/pages/ReadySites';
+import ReadySitesPreview from '@/pages/ReadySitesPreview';
 import ReadySitesPurchase from '@/pages/ReadySitesPurchase';
 import StudioLanding from '@/pages/StudioLanding';
 import ZenrexShowcase from '@/pages/ZenrexShowcase';
@@ -283,6 +284,7 @@ function App() {
           <Route path="/companion" element={<ProtectedRoute><Companion user={user} setUser={setUser} /></ProtectedRoute>} />
           {/* 🏪 Ready Sites — Wizard-driven AI restaurant site builder */}
           <Route path="/ready-sites" element={<ProtectedRoute><ReadySites user={user} /></ProtectedRoute>} />
+          <Route path="/ready-sites/preview/:id" element={<ProtectedRoute><ReadySitesPreview user={user} /></ProtectedRoute>} />
           <Route path="/ready-sites/purchase" element={<ProtectedRoute><ReadySitesPurchase user={user} /></ProtectedRoute>} />
           <Route path="/image-studio" element={<ProtectedRoute><StudioLanding mode="image_studio" user={user} /></ProtectedRoute>} />
           <Route path="/video-studio" element={<ProtectedRoute><VideoStudioModeSelector user={user} /></ProtectedRoute>} />

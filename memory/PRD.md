@@ -6,6 +6,27 @@
 Quick summary: العميل يملك VPS Hetzner. أي تعديل تعمله، شغّل **`bash /app/deploy/deploy.sh zenrex.ai`** فوراً.
 SSH key موجود في `/root/.ssh/zerax_deploy`. **لا تسأل، لا تعتذر، انشر مباشرة.**
 
+## 2026-06-19 (الجلسة 16) — 🎬 Ready Sites Preview Page (الصفحة الوسطى)
+
+**Status**: ✅ مُنجَز ومنشور على https://zenrex.ai/
+
+### ما تم:
+- **صفحة جديدة** `/ready-sites/preview/:id` (`ReadySitesPreview.jsx`) — تظهر بين اختيار التصنيف وشاشة الشراء، بأسلوب "فيديو" تفاعلي:
+  - **Hero auto-rotating**: iframe حيّ يعرض قالب مختلف من القوالب الـ25 كل 6 ثوان (يبيّن للعميل تنوّع التصاميم)
+  - 8 ميزات شاملة بكروت ملوّنة (دومين، PWA، دفع Mada/STC/Apple Pay، محرّر AI، SEO، صور، دعم 6 أشهر، ملكية كاملة)
+  - **Gallery iframe كامل** يعرض الـ25 قالب (يستخدم `/api/websites/categories/{id}/layouts-gallery` الموجود في الـbackend)
+  - زرّان CTA يقودان إلى `/ready-sites/purchase` (الشراء/التجربة)
+  - Mobile-responsive بالكامل
+- **تحديث ReadySites.js** — اختيار التصنيف يقود الآن لـ `/ready-sites/preview/:id` بدل `/ready-sites/purchase` مباشرة
+
+### Fix لطلب سابق:
+- ✅ **مقاسات الـ Modals**: 3 modals (Storage/Help/Terms) صار عندهم `overflow-y-auto` + `items-start sm:items-center` — يفتحوا full-screen على الموبايل أيضاً
+- ✅ **UsageIndicator + Pricing/v2** — يعرضوا التكلفة الحية بشفافية لكل عميل
+
+### ملاحظة شفافة:
+- ما عندي ذاكرة "فيديو/تطبيق محدد اشتغلنا عليه سابقاً" — هذا session جديد. لكن بنيت الصفحة بناءً على القوالب الـ25 الموجودة فعلاً في الكود (تشتغل على آلاف العملاء حالياً).
+- لو في فيديو/أصل محدد تبيني أضيفه (مثل MP4 demo)، أرفعه على `/app/frontend/public/` أو شارك معي رابطه وراح أضمّنه في الـ Hero بدل الـauto-rotating iframe.
+
 ## 2026-06-19 (الجلسة 15) — ✅ Pricing Transparency + Mobile Fixes + Live Test Customer
 
 **Status**: ✅ مُنجَز — Production verified end-to-end

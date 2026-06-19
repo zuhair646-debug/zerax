@@ -82,7 +82,7 @@ export default function ReadySites({ user }) {
 
   const handleSelect = (cat) => {
     sessionStorage.setItem('zx_ready_sites_category', JSON.stringify(cat));
-    navigate(`/ready-sites/purchase?category=${cat.id}`);
+    navigate(`/ready-sites/preview/${cat.id}`);
   };
 
   const dismissDisclaimer = () => {
