@@ -113,9 +113,14 @@ function exitViewAsUser() {
   $('#return-to-parent').style.display = 'none';
   enterApp();
 }
+// Direct + delegated wiring (some browsers/PWAs miss delegation under transformed parents)
+const _viewBtn = $('#p-view-as-user');
+if (_viewBtn) _viewBtn.onclick = enterViewAsUser;
+const _retBtn = $('#return-to-parent');
+if (_retBtn) _retBtn.onclick = exitViewAsUser;
 document.addEventListener('click', (e) => {
-  if (e.target.closest('#p-view-as-user')) enterViewAsUser();
-  if (e.target.closest('#return-to-parent')) exitViewAsUser();
+  if (e.target.closest('#p-view-as-user')) { e.preventDefault(); enterViewAsUser(); }
+  if (e.target.closest('#return-to-parent')) { e.preventDefault(); exitViewAsUser(); }
 });
 
 // Hydrate viewAsUser from localStorage on first load

@@ -1,5 +1,5 @@
 // Zenrex Play — Service Worker (CLEAN BUILD)
-const SW_VERSION = 'zenrex-play-v2-quran-mushaf';
+const SW_VERSION = 'zenrex-play-v3-challenge-viewuser';
 const SHELL_CACHE = SW_VERSION + '-shell';
 
 const SHELL = ['/play/manifest.webmanifest', '/play/icon-192.png', '/play/icon-512.png'];
