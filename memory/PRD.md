@@ -6,6 +6,50 @@
 Quick summary: العميل يملك VPS Hetzner. أي تعديل تعمله، شغّل **`bash /app/deploy/deploy.sh zenrex.ai`** فوراً.
 SSH key موجود في `/root/.ssh/zerax_deploy`. **لا تسأل، لا تعتذر، انشر مباشرة.**
 
+## 2026-06-19 (الجلسة 13) — 🔁 Site-to-App Converter + ⚖️ Legal Terms Gate
+
+**Status**: ✅ مُنجَز — 12/12 backend pytest PASS، نُشر على https://zenrex.ai/
+
+### Site-to-App Converter (مسار جديد `/native/convert`):
+- **Backend** — `/app/backend/modules/site_to_app/__init__.py`:
+  - `POST /api/site-to-app/scan` — يقبل `source: 'url'|'project'`، يجلب HTML ويحلّله بـ BeautifulSoup (لغة، عنوان، أقسام، روابط قائمة، صور، نماذج، ميزات: ecommerce/booking/blog/contact_form/video/auth).
+  - `POST /api/site-to-app/plan` — يولّد خطّة مرحلية + قائمة المعلومات المطلوبة (Stripe, calendar, logo, ألوان) + الأمور التي لا يمكن تحويلها تلقائياً.
+  - `POST /api/site-to-app/start` — ينشئ `freebuild_projects` doc بـ `mode='app'` + `tech_stack` + رسالة افتتاحية تفصيلية + الخطّة محفوظة.
+  - يستخدم `db.site_to_app_scans` لحفظ نتائج الفحص.
+- **Frontend** — `/app/frontend/src/pages/SiteToAppWizard.jsx`:
+  - 4 خطوات: المصدر → الفحص → التقنية → الخطّة.
+  - يدعم اختيار من مشاريع موجودة (مواقع website mode فقط) أو لصق رابط خارجي.
+  - 5 خيارات Tech Stack (PWA موصى به، React Native، Flutter، Native iOS، Native Android).
+  - 6 تصنيفات (ecommerce/services/content/community/productivity/other).
+  - يعرض الميزات المكتشفة كـ pills خضراء/رمادية، الخطة المرحلية، المعلومات المطلوبة، الأمور غير القابلة للتحويل.
+
+### Legal Terms Gate (لكل قسم):
+- **Backend** — `/app/backend/modules/terms/__init__.py`:
+  - 9 أقسام محدّدة: websites, apps, images, videos, longform, games, deploy, payments, site_to_app.
+  - كل قسم له `TERMS_VERSION` + نصّ كامل بـ `ar` + `en` (يقابل الـ16 bullet للنقاط الأساسية).
+  - `GET /api/terms/content?section=X&locale=Y` — يرجع المحتوى مع fallback chain (requested→en→ar).
+  - `GET /api/terms/check?section=X` — يفحص قبول المستخدم.
+  - `POST /api/terms/accept` — idempotent upsert يحفظ {user_id, section, version, locale, accepted_at, ip, user_agent}.
+  - `GET /api/terms/my-acceptances` — سجل المستخدم الكامل.
+- **Frontend** — `/app/frontend/src/components/TermsGate.js`:
+  - مكوّن `<TermsGate section="...">` يلفّ أي صفحة.
+  - يكتشف لغة المستخدم تلقائياً من `localStorage`/`<html lang>`/`navigator.language`.
+  - Modal بالـ RTL/LTR يطلب موافقة قبل دخول القسم.
+  - يحفظ Date/Time/IP لأغراض قانونية.
+- **مطبّق على**: `/freebuild/chat` (websites), `/native/new` (apps), `/native/convert` (site_to_app).
+
+### Files Added:
+- `/app/backend/modules/terms/__init__.py`
+- `/app/backend/modules/site_to_app/__init__.py`
+- `/app/backend/tests/test_terms_and_site_to_app.py` (12/12 PASS)
+- `/app/frontend/src/components/TermsGate.js`
+- `/app/frontend/src/pages/SiteToAppWizard.jsx`
+
+### Files Modified:
+- `/app/backend/server.py` — مُسجَّل الـ2 موديول.
+- `/app/frontend/src/App.js` — Routes `/native/convert`, ولفّ `/freebuild/chat` و `/native/new` بـ TermsGate.
+- `/app/frontend/src/pages/NativeAppNew.jsx` — أُضيف زر CTA "حوّل موقعك إلى تطبيق".
+
 ## 2026-06-19 (الجلسة 12) — 🔔 Auto-Resume Reminders (كل أنواع المشاريع)
 
 **Status**: ✅ مُنجَز — 5/5 pytest PASS، نُشر على https://zenrex.ai/
