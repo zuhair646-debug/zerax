@@ -2454,6 +2454,28 @@ function ChatWorkspace({ projectId }) {
             if (prev && prev.current_html !== d.current_html) {
               setPreviewKey((k) => k + 1);
             }
+            // PRESERVE LOCAL agent_steps on assistant messages — the DB only
+            // stores the final `content` summary, not the streamed bubbles.
+            // If we just swap in the DB version, the styled live_text bubbles
+            // would vanish and m.content would suddenly appear in a different
+            // style — causing the "text writes then disappears" flash.
+            // We merge per-index: pick text from DB (authoritative) but keep
+            // local agent_steps/agent_streaming/agent_holder_id when present.
+            if (prev?.messages && d.messages && prev.messages.length === d.messages.length) {
+              const merged = d.messages.map((dm, i) => {
+                const pm = prev.messages[i];
+                if (!pm) return dm;
+                if (pm.role !== 'assistant' || dm.role !== 'assistant') return dm;
+                if (!pm.agent_steps || pm.agent_steps.length === 0) return dm;
+                return {
+                  ...dm,
+                  agent_steps: pm.agent_steps,
+                  agent_holder_id: pm.agent_holder_id,
+                  agent_streaming: false, // streaming already done by the time polling lands
+                };
+              });
+              return { ...d, messages: merged };
+            }
             return d;
           });
         }
@@ -3737,22 +3759,17 @@ function ChatWorkspace({ projectId }) {
               )}
               {loading && (
                 <div className="flex justify-start" data-testid="thinking-bubble">
-                  <div className="inline-flex items-center gap-3 rounded-full pl-4 pr-2 py-1.5 bg-gradient-to-r from-cyan-500/10 via-emerald-500/10 to-cyan-500/10 border border-cyan-400/30 relative overflow-hidden">
+                  <div className="inline-flex items-center gap-3 rounded-full pl-4 pr-3 py-1.5 bg-gradient-to-r from-cyan-500/10 via-emerald-500/10 to-cyan-500/10 border border-cyan-400/30 relative overflow-hidden">
                     {/* Animated shimmer sweep */}
                     <span className="absolute inset-0 ai-think-shimmer bg-gradient-to-r from-transparent via-cyan-400/25 to-transparent pointer-events-none" />
-                    {/* Pulsing logo with glow ring */}
-                    <span className="relative flex items-center justify-center w-8 h-8 ai-think-bounce">
-                      <span className="absolute inset-0 rounded-full bg-cyan-400/40 blur-md animate-ping" />
-                      <span className="absolute inset-0 rounded-full bg-emerald-400/30 blur animate-pulse" />
-                      <img
-                        src="/zenrex-logo-sm.png"
-                        alt="Zenrex"
-                        className="relative w-7 h-7 rounded-full object-contain ai-think-spin"
-                        style={{ filter: 'drop-shadow(0 0 6px rgba(34,211,238,0.8))' }}
-                      />
+                    {/* Simple three-dot pulse (no branding Z in chat per UX request) */}
+                    <span className="relative flex items-center gap-1">
+                      <span className="w-1.5 h-1.5 rounded-full bg-cyan-300 animate-pulse" style={{ animationDelay: '0ms' }} />
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-300 animate-pulse" style={{ animationDelay: '180ms' }} />
+                      <span className="w-1.5 h-1.5 rounded-full bg-cyan-300 animate-pulse" style={{ animationDelay: '360ms' }} />
                     </span>
                     <span className="text-[12px] font-semibold bg-gradient-to-r from-cyan-300 via-emerald-300 to-cyan-300 bg-clip-text text-transparent">
-                      رُوح تحلل وتكتب...
+                      يحلل ويكتب...
                     </span>
                   </div>
                 </div>
