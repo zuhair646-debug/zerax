@@ -179,18 +179,25 @@ def _splice_before_body_close(html: str, fragment: str) -> str:
 ZENREX_FOOTER_MARK = '<!-- zenrex-brand-footer -->'
 ZENREX_FOOTER_HTML = (
     '\n' + ZENREX_FOOTER_MARK +
-    '\n<div id="zenrex-brand-footer" dir="rtl" lang="ar" style="'
-    'position:relative;background:linear-gradient(180deg,#08080f 0%,#0c0c18 100%);'
-    'border-top:1px solid rgba(212,162,83,0.25);padding:18px 16px;text-align:center;'
-    'font-family:\'IBM Plex Sans Arabic\',Tahoma,sans-serif;color:#cfcfdd;font-size:13px;z-index:1">'
-    '<a href="https://zenrex.ai" target="_blank" rel="noopener" '
-    'style="display:inline-flex;align-items:center;gap:10px;text-decoration:none;color:inherit">'
-    '<span style="display:inline-flex;align-items:center;justify-content:center;width:32px;height:32px;'
-    'border-radius:8px;background:radial-gradient(circle at 30% 30%,#f5d57a,#b8862e 70%,#7c5012);'
-    'box-shadow:0 4px 14px rgba(212,162,83,0.4);font-family:\'Playfair Display\',\'Cormorant Garamond\',serif;'
-    'font-weight:900;font-size:18px;color:#1a0a0a;line-height:1">Z</span>'
-    '<span style="font-weight:700;letter-spacing:0.3px">صُمِّم بـ <b style="color:#f5d57a">Zenrex</b></span>'
-    '</a></div>\n'
+    '\n<a id="zenrex-brand-footer" href="https://zenrex.ai" target="_blank" rel="noopener" dir="rtl" lang="ar" '
+    'aria-label="مصمم بـ Zenrex — انتقل للموقع الرئيسي" '
+    'style="position:relative;display:flex;align-items:center;justify-content:center;gap:12px;'
+    'background:linear-gradient(180deg,#06060c 0%,#0c0c18 100%);'
+    'border-top:1px solid rgba(212,162,83,0.35);padding:14px 16px;text-align:center;'
+    'font-family:\'IBM Plex Sans Arabic\',\'Tajawal\',Tahoma,sans-serif;color:#e9e9f5;font-size:13px;'
+    'font-weight:600;letter-spacing:0.3px;text-decoration:none;z-index:9999;'
+    'transition:background .2s ease">'
+    # Real Zenrex logo (served from main site)
+    '<img src="https://zenrex.ai/zenrex-logo-sm.png" alt="Zenrex" '
+    'style="width:38px;height:38px;border-radius:10px;display:block;'
+    'box-shadow:0 4px 14px rgba(212,162,83,0.35);object-fit:contain;background:#0c0c18">'
+    '<span style="display:inline-flex;flex-direction:column;align-items:flex-start;line-height:1.25">'
+    '<span style="font-size:10px;color:#cfcfdd;opacity:.7;letter-spacing:1.5px">صُمِّم بواسطة</span>'
+    '<span style="font-size:17px;font-weight:900;background:linear-gradient(135deg,#f5d57a 0%,#d4a253 60%,#b8862e 100%);'
+    '-webkit-background-clip:text;background-clip:text;color:transparent;letter-spacing:0.5px">'
+    'Zenrex AI</span>'
+    '</span>'
+    '</a>\n'
 )
 
 
@@ -1192,6 +1199,25 @@ def make_freebuild_chat_router(db, get_current_user):
         answer_meta: str = Form(default=""),
         user=Depends(get_current_user),
     ):
+        # Shield the entire chat work so it survives client disconnects.
+        # Uvicorn cancels the request task on disconnect; asyncio.shield keeps
+        # the inner coroutine running so the AI completes its work + DB saves.
+        # On reconnect, the client polls GET /project/{pid} and sees the new
+        # messages waiting for them. (Backup memory guarantee.)
+        return await asyncio.shield(_chat_impl(
+            pid=pid, message=message, files=files,
+            reference_asset_id=reference_asset_id,
+            answer_meta=answer_meta, user=user,
+        ))
+
+    async def _chat_impl(
+        pid: str,
+        message: str,
+        files: List[UploadFile],
+        reference_asset_id: str,
+        answer_meta: str,
+        user: dict,
+    ):
         proj = await db.freebuild_projects.find_one(
             {"id": pid, "user_id": user["user_id"]}, {"_id": 0}
         )
@@ -1616,12 +1642,30 @@ def make_freebuild_chat_router(db, get_current_user):
             "     → اكتب الخطة + الـshell معاً في نفس الرسالة. لا تنتظر موافقة على الخطة.\n"
             "\n"
             "🟢 **متى تكتب HTML فوراً بدون أي سؤال موافقة**:\n"
-            "  • أول مرة في المشروع (current_html فاضي) → اكتب الـshell كاملاً فوراً.\n"
+            "  • **لكن قبلها (DISCOVERY-FIRST)**: في الرسالة الأولى من العميل (current_html فاضي + عدد الرسائل ≤ 2)، **مرّر بمرحلة اكتشاف قصيرة وذكية**:\n"
+            "     - رحّب بعمى — جملتين كحد أقصى\n"
+            "     - أعد صياغة فكرة العميل بكلمات أوضح لتُظهر إنك فهمته\n"
+            "     - ضمّن **سؤال واحد إلى سؤالين فقط** كجزء طبيعي من حديثك (مو قائمة Q&A جافة). ركّز على ما لم يذكره ولا يمكن استنتاجه:\n"
+            "       • هل يبي صفحة واحدة scroll أم موقع متعدد الصفحات (Home/About/Products/Contact مستقلة)؟\n"
+            "       • هل يحتاج لوحة تحكم (Admin) أم واجهة فقط؟\n"
+            "       • هل يحتاج تكامل دفع (Stripe/Mada/Tap) أو حجز أو فورم تواصل فقط؟\n"
+            "       • اللغات: عربي فقط، إنجليزي فقط، أم ثنائي؟\n"
+            "       • شخصية البراند: فاخر، عصري، ودود، احترافي، شبابي؟\n"
+            "     - **اختر الأهم من هذه الأسئلة فقط** بناءً على ما لم يوضّحه العميل. لا تسأل عن شيء واضح.\n"
+            "     - في نهاية رسالتك، اعرض عليه: 'أنطلق بالبناء الآن وتقدر تعدّل لاحقاً، أم تبيني أسأل عن شي قبل؟'\n"
+            "  • **بعد المرحلة الأولى**: عند أي إجابة منه أو إذا قال 'ابدأ' / 'انطلق' / 'كفى أسئلة' → اكتب الكود فوراً.\n"
+            "  • أول مرة بعد الاكتشاف (current_html فاضي بعد رسالة 2-3) → اكتب الـshell كاملاً فوراً.\n"
             "  • العميل قال 'ابني، اعمل، نفّذ، صمم لي، اكتب' → اكتب الكود فوراً.\n"
             "  • طلب إضافة قسم جديد → استخدم `APPEND_SECTION` فوراً.\n"
             "  • طلب تعديل قسم موجود → استخدم `REPLACE_SECTION` فوراً.\n"
             "  • طلب تغيير ألوان/نصوص/صور → نفّذ فوراً.\n"
             "  • أي طلب صريح يتضمن فعل تنفيذي → نفّذ فوراً.\n"
+            "\n"
+            "🏗️ **فهم نوع المشروع (مهم — قبل البناء)**:\n"
+            "  • **SPA (single-page-app)**: كل المحتوى في صفحة واحدة بأقسام anchored. ابني <section id=\"X\"> وروابط للداخل.\n"
+            "  • **متعدد صفحات (multi-page)**: استخدم routes منفصلة (`/about`, `/products`). HTML5 history API أو ملفات HTML منفصلة.\n"
+            "  • **مع لوحة تحكم**: ضف مسار `/admin` مع login + CRUD باستخدام localStorage/Firebase.\n"
+            "  • **تحقق الأزرار**: قبل ما تنهي البناء، تأكد كل زر/رابط في الصفحة يفتح وجهة موجودة (anchor موجود أو route مفعّل). لا تترك أزرار dead-end.\n"
             "\n"
             "🟡 **متى تسأل سؤال واحد فقط قبل التنفيذ**:\n"
             "  • فقط حالة واحدة: current_html موجود + العميل قال صراحة 'صمم لي من جديد كلياً' أو 'غيّر التصميم كاملاً' أو 'ابدأ من الصفر'.\n"
@@ -1971,6 +2015,8 @@ def make_freebuild_chat_router(db, get_current_user):
                     "$slice": -20,  # keep last 20
                 }
             update_set["current_html"] = _inject_zenrex_footer(new_html)
+            # Auto-advance phase whenever we ship HTML (anti-stuck-on-discovery)
+            update_set["current_phase"] = "build"
         await db.freebuild_projects.update_one(
             {"id": pid},
             {
@@ -5179,6 +5225,8 @@ def make_freebuild_chat_router(db, get_current_user):
         }
         if new_html:
             update_set["current_html"] = _inject_zenrex_footer(new_html)
+            # Auto-advance phase whenever we ship HTML (anti-stuck-on-discovery)
+            update_set["current_phase"] = "build"
         if snapshots:
             push_ops["html_snapshots"] = {"$each": snapshots, "$slice": -20}
         await db.freebuild_projects.update_one(
@@ -5334,6 +5382,7 @@ def make_freebuild_chat_router(db, get_current_user):
                     }
                     if new_html:
                         update_set["current_html"] = _inject_zenrex_footer(new_html)
+                        update_set["current_phase"] = "build"
                     if snapshots:
                         push_ops["html_snapshots"] = {"$each": snapshots, "$slice": -20}
                     await db.freebuild_projects.update_one(
