@@ -30,80 +30,6 @@ const PHASES = [
 ];
 
 // ─────────────────────────────────────────────────────────────
-// Quick Edits Box — appears in sidebar; sends inline correction
-// requests to the AI without showing code. Designed so a non-tech
-// user can say "اجعل الزر أكبر" and the AI patches HTML in place.
-// ─────────────────────────────────────────────────────────────
-function QuickEditsBox({ projectId, onApplied, token, api }) {
-  const [val, setVal] = useState('');
-  const [busy, setBusy] = useState(false);
-  const submit = async () => {
-    const txt = val.trim();
-    if (!txt) return;
-    setBusy(true);
-    try {
-      const fd = new FormData();
-      fd.append('message', `⚡ تعديل سريع: ${txt}`);
-      const r = await fetch(`${api}/api/freebuild-chat/project/${projectId}/chat`, {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${token}` },
-        body: fd,
-      });
-      const data = await r.json().catch(() => ({}));
-      if (r.ok) {
-        toast.success('✨ تم تطبيق التعديل في المعاينة');
-        setVal('');
-        if (onApplied) onApplied(data);
-      } else {
-        toast.error(data.detail || 'فشل التعديل');
-      }
-    } catch (e) { toast.error(e.message); }
-    finally { setBusy(false); }
-  };
-  const quickHints = ['اجعل اللون الأساسي ذهبي', 'كبّر الزر الرئيسي', 'بدّل صورة الـhero', 'أضف قسم آراء العملاء'];
-  return (
-    <div className="mt-4 rounded-xl border border-violet-500/30 bg-gradient-to-b from-violet-500/10 to-zinc-900/40 p-3">
-      <div className="flex items-center gap-2 mb-2">
-        <span className="w-6 h-6 rounded-md bg-violet-500/25 flex items-center justify-center text-[14px]">⚡</span>
-        <h4 className="text-[12px] font-black text-violet-200">تعديلات سريعة</h4>
-      </div>
-      <p className="text-[10px] text-violet-200/60 leading-relaxed mb-2">
-        اكتب وش تبي تغيّر، الذكاء يعدّله فوراً في المعاينة بدون كود
-      </p>
-      <textarea
-        value={val}
-        onChange={(e) => setVal(e.target.value)}
-        rows={2}
-        placeholder="مثال: غيّر اللون الأساسي إلى ذهبي..."
-        data-testid="quick-edit-input"
-        className="w-full bg-black/40 border border-white/15 rounded-lg px-2 py-1.5 text-[11px] outline-none focus:border-violet-400 resize-none text-white"
-      />
-      <div className="flex flex-wrap gap-1 mt-1.5">
-        {quickHints.map((h, i) => (
-          <button
-            key={i}
-            type="button"
-            onClick={() => setVal(h)}
-            className="text-[9px] px-2 py-0.5 rounded-full bg-white/5 hover:bg-violet-500/20 border border-white/10 text-zinc-400 hover:text-violet-200 transition"
-          >
-            {h}
-          </button>
-        ))}
-      </div>
-      <button
-        type="button"
-        onClick={submit}
-        disabled={!val.trim() || busy}
-        data-testid="quick-edit-submit"
-        className="mt-2 w-full bg-violet-500 hover:bg-violet-400 disabled:bg-zinc-700 disabled:text-zinc-500 text-white text-[11px] font-black rounded-lg py-1.5 transition flex items-center justify-center gap-1.5"
-      >
-        {busy ? <><Loader2 className="w-3 h-3 animate-spin" /><span>جاري التطبيق...</span></> : <><Sparkles className="w-3 h-3" /><span>طبّق التعديل</span></>}
-      </button>
-    </div>
-  );
-}
-
-// ─────────────────────────────────────────────────────────────
 // STEP 1: Project Entry — REDESIGNED 2026-06-19 v2 (cache-bust ${Date.now()})
 // Build timestamp: 2026-06-19T01:35:00Z — force unique webpack contenthash
 // ─────────────────────────────────────────────────────────────
@@ -2738,7 +2664,7 @@ function ChatWorkspace({ projectId }) {
           toast.success('✨ تم تحديث المعاينة الحية', {
             action: { label: 'افتح', onClick: () => setActiveTab('live') },
           });
-          setActiveTab('live');
+          setActiveTab((prev) => (prev === 'chat' ? 'live' : prev));
           // refresh project HTML/snapshots but preserve local messages
           // (DB doesn't have agent_steps — refetching would erase the live narration
           // bubbles the user just watched, making the response feel "wiped")
@@ -2788,7 +2714,7 @@ function ChatWorkspace({ projectId }) {
         toast.success(msg, {
           action: { label: 'افتح', onClick: () => setActiveTab('live') },
         });
-        setActiveTab('live');
+        setActiveTab((prev) => (prev === 'chat' ? 'live' : prev));
       }
       // Capture which AI model worked on this turn (for UI display)
       if (data.task_label || data.model_used) {
@@ -2901,7 +2827,7 @@ function ChatWorkspace({ projectId }) {
         toast.success('✨ تم تحديث المعاينة الحية', {
           action: { label: 'افتح', onClick: () => setActiveTab('live') },
         });
-        setActiveTab('live');
+        setActiveTab((prev) => (prev === 'chat' ? 'live' : prev));
       }
       const pr = await fetch(`${API}/api/freebuild-chat/project/${projectId}`, { headers: { Authorization: `Bearer ${token}` } });
       if (pr.ok) setProject(await pr.json());
@@ -3042,75 +2968,59 @@ function ChatWorkspace({ projectId }) {
       <div className="flex-1 flex overflow-hidden">
         {/* RIGHT (sidebar in RTL): Phases */}
         <div className="w-56 lg:w-64 bg-zinc-900/50 border-l border-white/10 p-3 lg:p-4 overflow-y-auto shrink-0 hidden md:block">
+          {/* Cookies button — opens manager so user can upload YouTube/TikTok cookies */}
+          {!isVideoMode && (
+            <button
+              type="button"
+              onClick={() => setCookiesOpen(true)}
+              className="w-full mb-3 flex items-center justify-center gap-2 px-3 py-2 rounded-lg bg-amber-500/15 border border-amber-500/30 text-amber-200 hover:bg-amber-500/25 transition-colors text-xs font-bold"
+              data-testid="open-cookies-manager-btn"
+              title="رفع كوكيز YouTube/TikTok عشان الذكاء يقدر يحمّل الفيديوهات"
+            >
+              <span>🍪</span>
+              <span>كوكيز التحميل</span>
+            </button>
+          )}
           <h2 className="font-bold mb-3 text-emerald-400 text-sm flex items-center gap-1.5">
-            <span>📋</span> <span>مراحل البناء</span>
+            <span>📋</span> <span>المراحل</span>
           </h2>
           <div className="space-y-2">
-            {sidebarPhases.map((phase, phaseIdx) => {
+            {sidebarPhases.map((phase) => {
               const isActive = activePhase === phase.id;
-              // Compute "done" state based on real signals
+              // Compute a per-phase status hint based on mode
+              let stat = '';
               const qcount = messages.filter((mm) => mm.role === 'assistant' && (mm.options || []).length > 0).length;
               const variantsCount = messages.reduce((s, mm) => s + (mm.design_variants?.length || 0), 0);
-              let stat = '';
-              let isDone = false;
               if (isVideoMode) {
+                // Video-specific phase status
                 const phaseHistory = new Set(project?.phase_history || []);
                 const currentPhase = project?.current_phase || 'film_type';
-                if (phaseHistory.has(phase.id)) { stat = '✓ منتهية'; isDone = true; }
+                if (phaseHistory.has(phase.id)) stat = '✓ منتهية';
                 else if (phase.id === currentPhase) stat = '🟠 جارية الآن';
                 else stat = '🔒 مقفلة';
-              } else {
-                // Determine if the phase is "done" based on real artifacts
-                if (phase.id === 'discovery') {
-                  isDone = qcount >= 3 || (project?.brief && Object.keys(project.brief || {}).length >= 4);
-                  stat = isDone ? `✓ ${qcount} سؤال` : `${qcount} سؤال طُرح`;
-                } else if (phase.id === 'design') {
-                  isDone = variantsCount > 0 && (project?.selected_variant_id || project?.brief?.style_chosen);
-                  stat = isDone ? '✓ معتمد' : (variantsCount > 0 ? `${variantsCount} اقتراح` : 'بانتظار خيارات');
-                } else if (phase.id === 'assets') {
-                  isDone = approvedAssets.length >= 1;
-                  stat = isDone ? `✓ ${approvedAssets.length} معتمد` : `${approvedAssets.length} معتمد`;
-                } else if (phase.id === 'build') {
-                  isDone = !!project?.current_html;
-                  stat = isDone ? '✓ مبني' : (project?.code_unlocked ? '🔓 جاهز للبناء' : '🔒 مقفل');
-                } else if (phase.id === 'preview') {
-                  isDone = !!project?.preview_approved;
-                  stat = isDone ? '✓ معتمد' : (project?.current_html ? '🟠 للمراجعة' : '—');
-                } else if (phase.id === 'deploy') {
-                  isDone = !!project?.deployed_url || !!project?.github_repo_url;
-                  stat = isDone ? '✓ منشور' : '—';
-                }
-              }
-
-              // Color logic: red (locked) / orange+pulse (active) / green (done)
-              let stateClasses = '';
-              let dotClass = '';
-              let icColor = 'text-zinc-400';
-              if (isDone) {
-                stateClasses = 'bg-emerald-500/15 border-emerald-500/50 text-emerald-100 shadow-[0_0_18px_rgba(16,185,129,0.25)]';
-                dotClass = 'bg-emerald-400 shadow-[0_0_8px_rgba(16,185,129,0.8)]';
-                icColor = 'text-emerald-300';
-              } else if (isActive) {
-                stateClasses = 'bg-orange-500/15 border-orange-500/60 text-orange-100 shadow-[0_0_20px_rgba(249,115,22,0.35)] animate-pulse';
-                dotClass = 'bg-orange-400 animate-pulse';
-                icColor = 'text-orange-300';
-              } else {
-                stateClasses = 'bg-rose-500/5 border-rose-500/20 text-rose-200/60 hover:border-rose-400/40';
-                dotClass = 'bg-rose-500/40';
-                icColor = 'text-rose-300/60';
-              }
+              } else if (phase.id === 'discovery') stat = `${qcount} سؤال طُرح`;
+              else if (phase.id === 'design')   stat = variantsCount > 0 ? `${variantsCount} تصميم` : 'بانتظار خيارات';
+              else if (phase.id === 'assets')   stat = `${approvedAssets.length} معتمد`;
+              else if (phase.id === 'build')    stat = project.code_unlocked ? '🔓 مفتوح' : '🔒 مقفل';
+              else if (phase.id === 'preview')  stat = project.current_html ? '✓ جاهز' : '—';
+              else if (phase.id === 'deploy')   stat = project.github_repo_url ? '✓ منشور' : '—';
 
               const handleClick = () => {
                 setActivePhase(phase.id);
-                if (isVideoMode) { setActiveTab('chat'); return; }
+                if (isVideoMode) {
+                  // Video mode: just open chat — all phases are conversational
+                  setActiveTab('chat');
+                  return;
+                }
+                // Functional routing — each phase opens the right context (website mode)
                 if (phase.id === 'assets') setActiveTab('approved');
-                else if (phase.id === 'preview' || phase.id === 'build') {
-                  if (project?.current_html) setActiveTab('live');
-                  else setActiveTab('chat');
+                else if (phase.id === 'preview') setActiveTab('live');
+                else if (phase.id === 'build') {
+                  if (project.code_unlocked) setActiveTab('live');
+                  else setFinalizeOpen(true);
                 } else if (phase.id === 'deploy') {
-                  if (project?.code_unlocked) setConnectionsOpen(true);
-                  else if (project?.current_html) setActiveTab('live');
-                  else setActiveTab('chat');
+                  if (project.code_unlocked) setConnectionsOpen(true);
+                  else setFinalizeOpen(true);
                 } else {
                   setActiveTab('chat');
                 }
@@ -3122,31 +3032,24 @@ function ChatWorkspace({ projectId }) {
                   type="button"
                   onClick={handleClick}
                   data-testid={`phase-${phase.id}`}
-                  className={`w-full text-right p-3 rounded-lg border transition-all ${stateClasses}`}
+                  className={`w-full text-right p-3 rounded-lg border transition-all ${
+                    isActive
+                      ? 'bg-emerald-500/15 border-emerald-500/50 text-emerald-200'
+                      : 'bg-black/20 border-white/10 hover:border-emerald-400/30 text-zinc-300'
+                  }`}
                 >
                   <div className="flex items-center justify-between mb-1 gap-1">
-                    <span className={`text-sm font-bold flex items-center gap-1.5 min-w-0 ${icColor}`}>
-                      <span className={`w-2 h-2 rounded-full ${dotClass} shrink-0`}></span>
-                      <span className="truncate">{phaseIdx + 1}. {phase.title}</span>
+                    <span className="text-sm font-bold flex items-center gap-1.5 min-w-0">
+                      <span>{phase.icon}</span><span className="truncate">{phase.title}</span>
                     </span>
-                    {isDone ? <Check className="w-4 h-4 text-emerald-400 shrink-0" /> : null}
+                    {isActive && <Check className="w-3.5 h-3.5 text-emerald-400 shrink-0" />}
                   </div>
-                  <p className="text-[10px] opacity-70 leading-tight">{phase.desc}</p>
-                  <p className="text-[10px] mt-1 font-bold opacity-90">{stat}</p>
+                  <p className="text-[10px] text-zinc-500 leading-tight">{phase.desc}</p>
+                  <p className="text-[10px] mt-1 text-emerald-300/80 font-bold">{stat}</p>
                 </button>
               );
             })}
           </div>
-
-          {/* Quick edits box — visible when site has a current_html (something to edit) */}
-          {!isVideoMode && project?.current_html && (
-            <QuickEditsBox
-              projectId={project.id}
-              onApplied={() => { setActiveTab('live'); }}
-              token={localStorage.getItem('token')}
-              api={API}
-            />
-          )}
 
           {/* Lock-state mini card for "Build" phase — website mode only */}
           {!isVideoMode && !project.code_unlocked && (

@@ -172,6 +172,41 @@ def _splice_before_body_close(html: str, fragment: str) -> str:
     return html + "\n" + fragment
 
 
+# ─────────────────────────────────────────────────────────────
+# Zenrex Brand Footer — mandatory on every generated site (freemium policy)
+# Cannot be removed by user; only stripped when user purchases "independence" plan.
+# ─────────────────────────────────────────────────────────────
+ZENREX_FOOTER_MARK = '<!-- zenrex-brand-footer -->'
+ZENREX_FOOTER_HTML = (
+    '\n' + ZENREX_FOOTER_MARK +
+    '\n<div id="zenrex-brand-footer" dir="rtl" lang="ar" style="'
+    'position:relative;background:linear-gradient(180deg,#08080f 0%,#0c0c18 100%);'
+    'border-top:1px solid rgba(212,162,83,0.25);padding:18px 16px;text-align:center;'
+    'font-family:\'IBM Plex Sans Arabic\',Tahoma,sans-serif;color:#cfcfdd;font-size:13px;z-index:1">'
+    '<a href="https://zenrex.ai" target="_blank" rel="noopener" '
+    'style="display:inline-flex;align-items:center;gap:10px;text-decoration:none;color:inherit">'
+    '<span style="display:inline-flex;align-items:center;justify-content:center;width:32px;height:32px;'
+    'border-radius:8px;background:radial-gradient(circle at 30% 30%,#f5d57a,#b8862e 70%,#7c5012);'
+    'box-shadow:0 4px 14px rgba(212,162,83,0.4);font-family:\'Playfair Display\',\'Cormorant Garamond\',serif;'
+    'font-weight:900;font-size:18px;color:#1a0a0a;line-height:1">Z</span>'
+    '<span style="font-weight:700;letter-spacing:0.3px">صُمِّم بـ <b style="color:#f5d57a">Zenrex</b></span>'
+    '</a></div>\n'
+)
+
+
+def _inject_zenrex_footer(html: Optional[str]) -> Optional[str]:
+    """Ensure the Zenrex footer is present on every generated site.
+    Idempotent: if the mark is already present, returns html unchanged.
+    The footer is part of Zenrex's freemium policy and is removed only when
+    the user purchases the 'independence/code-export' plan (handled elsewhere).
+    """
+    if not html or not isinstance(html, str):
+        return html
+    if ZENREX_FOOTER_MARK in html:
+        return html
+    return _splice_before_body_close(html, ZENREX_FOOTER_HTML)
+
+
 def _extract_section_directives(text: str) -> Dict[str, Any]:
     """Pull APPEND/REPLACE/UPDATE_NAV directives out of the AI response."""
     appends = [(m.group(1), m.group(2)) for m in APPEND_SECTION_RE.finditer(text)]
@@ -1142,6 +1177,9 @@ def make_freebuild_chat_router(db, get_current_user):
         )
         if not proj:
             raise HTTPException(404, "المشروع غير موجود")
+        # Always ensure the Zenrex footer is present in served HTML (freemium policy).
+        if proj.get("current_html"):
+            proj["current_html"] = _inject_zenrex_footer(proj["current_html"])
         return proj
 
     # ===== Chat (the core flow — multipart: text + optional image attachments) =====
@@ -1932,7 +1970,7 @@ def make_freebuild_chat_router(db, get_current_user):
                     "$each": [snapshot],
                     "$slice": -20,  # keep last 20
                 }
-            update_set["current_html"] = new_html
+            update_set["current_html"] = _inject_zenrex_footer(new_html)
         await db.freebuild_projects.update_one(
             {"id": pid},
             {
@@ -2414,7 +2452,7 @@ def make_freebuild_chat_router(db, get_current_user):
             await db.freebuild_published_sites.update_one({"slug": slug}, {"$inc": {"views": 1}})
         except Exception:
             pass
-        return HTMLResponse(site["current_html"])
+        return HTMLResponse(_inject_zenrex_footer(site["current_html"]))
 
     # ═══════════════════════════════════════════════════════════════════════
     # KIDS PWA — Prayer Recordings (server-stored, parent reviewable)
@@ -5140,7 +5178,7 @@ def make_freebuild_chat_router(db, get_current_user):
             }
         }
         if new_html:
-            update_set["current_html"] = new_html
+            update_set["current_html"] = _inject_zenrex_footer(new_html)
         if snapshots:
             push_ops["html_snapshots"] = {"$each": snapshots, "$slice": -20}
         await db.freebuild_projects.update_one(
@@ -5295,7 +5333,7 @@ def make_freebuild_chat_router(db, get_current_user):
                         }
                     }
                     if new_html:
-                        update_set["current_html"] = new_html
+                        update_set["current_html"] = _inject_zenrex_footer(new_html)
                     if snapshots:
                         push_ops["html_snapshots"] = {"$each": snapshots, "$slice": -20}
                     await db.freebuild_projects.update_one(
