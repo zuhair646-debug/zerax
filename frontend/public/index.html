@@ -66,6 +66,26 @@
             >✕</button>
         </div>
         <script>
+            // ── ONE-TIME forced cache bust (after v3 SW update) ──
+            // Any browser that still has the v2 SW + caches gets a clean slate.
+            if ('serviceWorker' in navigator) {
+                var BUST_KEY = 'zenrex_sw_v3_busted';
+                if (!localStorage.getItem(BUST_KEY)) {
+                    try {
+                        navigator.serviceWorker.getRegistrations().then(function (regs) {
+                            regs.forEach(function (r) { r.unregister(); });
+                        });
+                        if (window.caches) {
+                            caches.keys().then(function (keys) {
+                                keys.forEach(function (k) { caches.delete(k); });
+                            });
+                        }
+                    } catch (_) {}
+                    localStorage.setItem(BUST_KEY, '1');
+                    setTimeout(function () { window.location.reload(true); }, 500);
+                }
+            }
+
             // Zenrex PWA — Service Worker registration + install prompt
             if ('serviceWorker' in navigator) {
                 window.addEventListener('load', function () {
