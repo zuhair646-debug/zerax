@@ -1,44 +1,28 @@
-# Test Credentials
+# Test Credentials — Production zenrex.ai
 
-## Owner/Admin — Production (zenrex.ai)
-- **Email:** `admin@zenrex.ai`
-- **Password:** `owner123`
-- **Role:** owner
+## 🔑 Admin Owner Account (Production)
+- **Email**: `admin@zenrex.ai`
+- **Password**: `Zenrex@2026`
+- **Role**: `owner`
+- **URL**: https://zenrex.ai/login
 
-## Owner/Admin — Preview (preview.emergentagent.com)
-- **Email:** `owner@zerax.com`
-- **Password:** `owner123`
-- **Role:** owner
+## 🔑 Secondary Owner
+- **Email**: `zoheer@zenrex.ai`
+- **Role**: `owner`
+- (password not reset)
 
-## Zenrex Kids PWA (https://zenrex.ai/play — legacy `/kids` redirects)
-- **Parent (ولي الأمر)** — `zoheer@zenrex.ai` / `Zenrex@2026` → routes to Parent Dashboard
-- **Child accounts** — emails like `حسين@kids.zenrex.ai` (Arabic local-part). Login uses
-  dropdown + PIN. PINs are stored on accounts and set by the Parent in the dashboard.
+## 🛠️ Local Preview (Emergent)
+- **Email**: `owner@zerax.com`
+- **Password**: `owner123`
+- For testing in Emergent preview environment only.
 
-**Note:** The two environments have different MongoDBs and different seeded users.
-- For preview testing: use `owner@zerax.com`
-- For production verification: use `admin@zenrex.ai`
-
-## Desktop Agent Pairing
-- Project ID: `owner-autocoder-desktop`
-- Pairing Code: `VQPR5Y`
-- WS endpoint: `wss://zenrex.ai/api/desktop-agent/ws?code=VQPR5Y`
-- Status endpoint: `https://zenrex.ai/api/desktop-agent/status`
-
-## SSH (Hetzner VPS)
-- Host: `zenrex.ai`
-- User: `root`
-- Key: `~/.ssh/zerax_key`
-
-## Alpaca Trading API
-- Stored in `/app/backend/.env` (paper trading)
-
-## Emergent LLM Key
-- Stored as `EMERGENT_LLM_KEY` in `/app/backend/.env`
-
-## Desktop Agent Installer (Windows)
-- One-click PowerShell:
+## 📌 Notes
+- Production DB: MongoDB Atlas (`zerax_prod` database)
+- Backend connects via `MONGO_URL` env var (Atlas connection string)
+- If login fails on production, reset via:
+  ```bash
+  scp -i /root/.ssh/zerax_deploy /tmp/reset_admin.py root@91.98.154.148:/tmp/
+  ssh -i /root/.ssh/zerax_deploy root@91.98.154.148 "docker compose -f /opt/zerax/docker-compose.yml cp /tmp/reset_admin.py backend:/tmp/ && docker compose -f /opt/zerax/docker-compose.yml exec -T backend python3 /tmp/reset_admin.py"
   ```
-  iwr -useb https://zenrex.ai/install_agent.ps1 | iex
-  ```
-- Agent source: `https://zenrex.ai/api/desktop-agent/agent-source`
+
+Last updated: 2026-06-19 (Session 9 — login fix)
