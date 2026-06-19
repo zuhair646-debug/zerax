@@ -2447,6 +2447,34 @@ def make_freebuild_chat_router(db, get_current_user):
         _kids_re = re.compile(r"^[^@\s]+@kids\.[\w.\-]+$")
         if not _kids_re.match(child_email):
             raise HTTPException(403, "child_email must be a @kids.* address")
+
+        rec_type_n = (rec_type or "prayer").lower()
+
+        # ── ANTI-CHEAT: 24h cooldown per (child, task_id) ──
+        # Prevents kids from re-submitting the same task multiple times in a day.
+        # Applies only to 'task' and 'dhikr' types. Prayers exempt (5 daily prayers).
+        if rec_type_n in ("task", "dhikr") and task_id:
+            from datetime import timedelta as _td, timezone as _tz, datetime as _dt
+            window_start = (_dt.now(_tz.utc) - _td(hours=24)).isoformat()
+            existing = await db.kids_recordings.find_one({
+                "child_email": child_email,
+                "task_id": task_id,
+                "status": {"$in": ["pending", "approved"]},
+                "created_at": {"$gte": window_start},
+            })
+            if existing:
+                # For two-step tasks: allow 'after' phase if previous was 'before'
+                prev_phase = existing.get("phase", "")
+                if not (phase == "after" and prev_phase == "before"):
+                    hrs_ago = 0
+                    try:
+                        from datetime import datetime as _dt2
+                        t0 = _dt2.fromisoformat(existing["created_at"].replace("Z", "+00:00"))
+                        hrs_ago = int((_dt2.now(_tz.utc) - t0).total_seconds() / 3600)
+                    except Exception:
+                        pass
+                    raise HTTPException(429, f"✋ أنجزت هذه المهمة قبل {max(hrs_ago,0)} ساعة. حاول مرة أخرى بعد {max(0, 24 - hrs_ago)} ساعة.")
+
         # Read file (cap at 200MB)
         body = await file.read()
         if len(body) > 200 * 1024 * 1024:
@@ -2463,6 +2491,19 @@ def make_freebuild_chat_router(db, get_current_user):
             logger.error(f"[kids-rec] write fail: {e}")
             raise HTTPException(500, "فشل حفظ الملف")
         now = _now()
+
+        # Compute proposed points: explicit > defaults
+        try:
+            pts = int(points or 0)
+        except Exception:
+            pts = 0
+        if pts <= 0:
+            pts = {"prayer": 10, "task": 5, "dhikr": 5}.get(rec_type_n, 0)
+
+        # Auto-approve prayers only. Tasks/dhikr require parent review.
+        auto_approve = rec_type_n == "prayer"
+        status = "approved" if auto_approve else "pending"
+
         doc = {
             "id": rec_id,
             "child_email": child_email,
@@ -2475,24 +2516,22 @@ def make_freebuild_chat_router(db, get_current_user):
             "created_at": now,
             "parent_comments": [],
             "viewed_by_parent": False,
+            "rec_type": rec_type_n,
+            "task_id": task_id,
+            "task_title": task_title,
+            "proposed_points": pts,
+            "awarded_points": pts if auto_approve else 0,
+            "status": status,
         }
-        doc["rec_type"] = (rec_type or "prayer").lower()
-        doc["task_id"] = task_id
-        doc["task_title"] = task_title
         if phase: doc["phase"] = phase
         await db.kids_recordings.insert_one(doc)
-        # Auto-award points (default by type if 0)
-        try:
-            pts = int(points or 0)
-        except Exception:
-            pts = 0
-        if pts <= 0:
-            pts = {"prayer": 10, "task": 5, "dhikr": 0}.get(doc["rec_type"], 0)
-        if pts > 0:
+
+        # Only award immediately if auto-approved (prayer)
+        if auto_approve and pts > 0:
             await db.kids_points.insert_one({
                 "id": uuid.uuid4().hex,
                 "child_email": child_email,
-                "kind": doc["rec_type"],
+                "kind": rec_type_n,
                 "value": pts,
                 "meta": {"recording_id": rec_id, "task_id": task_id, "task_title": task_title, "audio_track": audio_track},
                 "created_at": now,
@@ -2502,8 +2541,99 @@ def make_freebuild_chat_router(db, get_current_user):
             "id": rec_id,
             "url": f"/api/freebuild-chat/kids/recordings/{rec_id}/stream",
             "size_bytes": len(body),
-            "points_awarded": pts,
+            "points_awarded": pts if auto_approve else 0,
+            "proposed_points": pts,
+            "status": status,
+            "message": "✅ +%d نقطة!" % pts if auto_approve else f"⏳ أُرسل لولي أمرك للمراجعة (+{pts} نقطة عند الموافقة)",
         }
+
+    @router.post("/kids/recordings/{rec_id}/approve")
+    async def kids_recording_approve(rec_id: str, user=Depends(get_current_user)):
+        rec = await db.kids_recordings.find_one({"id": rec_id})
+        if not rec:
+            raise HTTPException(404, "التسجيل غير موجود")
+        if rec.get("status") == "approved":
+            return {"ok": True, "already_approved": True, "points": int(rec.get("awarded_points") or 0)}
+        pts = int(rec.get("proposed_points") or 0)
+        await db.kids_recordings.update_one(
+            {"id": rec_id},
+            {"$set": {"status": "approved", "awarded_points": pts, "reviewed_at": _now(), "reviewed_by": user["user_id"], "viewed_by_parent": True}},
+        )
+        if pts > 0:
+            await db.kids_points.insert_one({
+                "id": uuid.uuid4().hex,
+                "child_email": rec["child_email"],
+                "kind": rec.get("rec_type", "task"),
+                "value": pts,
+                "meta": {"recording_id": rec_id, "task_id": rec.get("task_id", ""), "task_title": rec.get("task_title", "")},
+                "created_at": _now(),
+            })
+        return {"ok": True, "points_awarded": pts}
+
+    @router.post("/kids/recordings/{rec_id}/reject")
+    async def kids_recording_reject(rec_id: str, reason: str = Form(""), user=Depends(get_current_user)):
+        rec = await db.kids_recordings.find_one({"id": rec_id})
+        if not rec:
+            raise HTTPException(404, "التسجيل غير موجود")
+        await db.kids_recordings.update_one(
+            {"id": rec_id},
+            {"$set": {"status": "rejected", "reject_reason": reason[:200], "reviewed_at": _now(), "reviewed_by": user["user_id"], "viewed_by_parent": True}},
+        )
+        return {"ok": True}
+
+    @router.get("/kids/notifications/count")
+    async def kids_notifications_count(parent_id: Optional[str] = None):
+        """Returns counts of pending items for parent review (recordings + Quran)."""
+        pid = parent_id
+        if not pid:
+            any_parent = await db.kids_accounts.find_one({}, {"parent_id": 1})
+            pid = any_parent.get("parent_id") if any_parent else None
+        # Get all kids of this parent
+        kid_emails = []
+        if pid:
+            kids = await db.kids_accounts.find({"parent_id": pid}, {"email": 1}).to_list(length=30)
+            kid_emails = [k["email"] for k in kids]
+        rec_q = {"status": "pending"} if not kid_emails else {"status": "pending", "child_email": {"$in": kid_emails}}
+        quran_q = {"status": "pending"} if not kid_emails else {"status": "pending", "child_email": {"$in": kid_emails}}
+        pending_rec = await db.kids_recordings.count_documents(rec_q)
+        pending_quran = await db.kids_quran_submissions.count_documents(quran_q)
+        return {"ok": True, "pending_recordings": pending_rec, "pending_quran": pending_quran, "total": pending_rec + pending_quran}
+
+    @router.get("/kids/tasks/today_status")
+    async def kids_tasks_today_status(child_email: str):
+        """Returns for each parent_task: locked (done in last 24h) or available."""
+        child_email = child_email.strip().lower()
+        from datetime import timedelta as _td, timezone as _tz, datetime as _dt
+        window_start = (_dt.now(_tz.utc) - _td(hours=24)).isoformat()
+        # Get child's parent
+        ka = await db.kids_accounts.find_one({"email": child_email})
+        if not ka:
+            return {"ok": True, "items": []}
+        pid = ka.get("parent_id")
+        tasks = await db.kids_parent_tasks.find({"parent_id": pid, "is_active": True}, {"_id": 0, "parent_id": 0}).sort("order", 1).to_list(length=200)
+        # Recent recordings for this child
+        recs = await db.kids_recordings.find({
+            "child_email": child_email,
+            "rec_type": {"$in": ["task", "dhikr"]},
+            "status": {"$in": ["pending", "approved"]},
+            "created_at": {"$gte": window_start},
+        }, {"task_id": 1, "status": 1, "phase": 1, "created_at": 1}).to_list(length=200)
+        done_map = {}
+        for r in recs:
+            tid = r.get("task_id", "")
+            if tid:
+                done_map.setdefault(tid, []).append(r)
+        out = []
+        for t in tasks:
+            entries = done_map.get(t["id"], [])
+            locked = bool(entries)
+            # For two-step tasks: locked only if BOTH before & after done
+            if t.get("needs_before_after"):
+                phases = {e.get("phase") for e in entries}
+                locked = "before" in phases and "after" in phases
+            out.append({**t, "locked_today": locked, "submissions_today": len(entries), "pending_review": any(e.get("status") == "pending" for e in entries)})
+        return {"ok": True, "items": out}
+
 
     # ═══════════════════════════════════════════════════════════════════════
     # KIDS PWA — Points ledger (real, server-side)
@@ -2514,6 +2644,7 @@ def make_freebuild_chat_router(db, get_current_user):
         kind: str = Form(...),               # dhikr | task | prayer | video | bonus
         value: int = Form(...),
         meta_json: str = Form("{}"),
+        task_id: str = Form(""),
     ):
         child_email = (child_email or "").strip().lower()
         _kids_re = re.compile(r"^[^@\s]+@kids\.[\w.\-]+$")
@@ -2529,16 +2660,29 @@ def make_freebuild_chat_router(db, get_current_user):
             meta = json.loads(meta_json or "{}")
         except Exception:
             meta = {}
+        kind_n = (kind or "bonus").lower()[:24]
+        # 24h cooldown for task awards (anti-cheat)
+        tid = task_id or meta.get("task_id") or ""
+        if kind_n == "task" and tid:
+            from datetime import timedelta as _td, timezone as _tz, datetime as _dt
+            window_start = (_dt.now(_tz.utc) - _td(hours=24)).isoformat()
+            exists = await db.kids_points.find_one({
+                "child_email": child_email,
+                "kind": "task",
+                "meta.task_id": tid,
+                "created_at": {"$gte": window_start},
+            })
+            if exists:
+                raise HTTPException(429, "✋ أنجزت هذه المهمة اليوم! حاول غداً.")
         entry = {
             "id": uuid.uuid4().hex,
             "child_email": child_email,
-            "kind": (kind or "bonus").lower()[:24],
+            "kind": kind_n,
             "value": v,
             "meta": meta,
             "created_at": _now(),
         }
         await db.kids_points.insert_one(entry)
-        # Return new total
         agg = await db.kids_points.aggregate([
             {"$match": {"child_email": child_email}},
             {"$group": {"_id": None, "total": {"$sum": "$value"}}}

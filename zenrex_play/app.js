@@ -88,16 +88,51 @@ async function enterApp() {
     buildParentDashboard('videos');
     $('#nav').style.display = 'none';
     $('.cat-fab').style.display = 'none';
+    // Load notification counts (badges on tabs)
+    loadParentNotifications();
+    // Refresh every 30s while on parent dashboard
+    if (window._parentNotifTimer) clearInterval(window._parentNotifTimer);
+    window._parentNotifTimer = setInterval(loadParentNotifications, 30000);
   } else {
     // Child OR Parent in view-as-user mode: load feed
     $('#nav').style.display = '';
     $('.cat-fab').style.display = '';
+    if (window._parentNotifTimer) { clearInterval(window._parentNotifTimer); window._parentNotifTimer = null; }
     await loadCategories();
     await loadVideos();
     await loadDhikr();
     await loadParentTasks();
     showScreen('home');
   }
+}
+
+// Refresh notification badges on parent tabs (pending recordings + Quran)
+async function loadParentNotifications() {
+  try {
+    const r = await fetch(API + '/kids/notifications/count');
+    const d = await r.json();
+    const recsBadge = d.pending_recordings || 0;
+    const quranBadge = d.pending_quran || 0;
+    const setBadge = (sel, n) => {
+      const tab = document.querySelector(sel);
+      if (!tab) return;
+      const existing = tab.querySelector('.notif-badge');
+      if (existing) existing.remove();
+      if (n > 0) {
+        const span = document.createElement('span');
+        span.className = 'notif-badge';
+        span.textContent = n;
+        span.style.cssText = 'background:#ef4444;color:#fff;border-radius:100px;padding:1px 7px;font-size:10px;font-weight:900;margin-right:5px;min-width:18px;display:inline-block;text-align:center;vertical-align:middle';
+        tab.prepend(span);
+      }
+    };
+    setBadge('.p-tab[data-pt="recordings"]', recsBadge);
+    setBadge('.p-tab[data-pt="quran-review"]', quranBadge);
+    // Total on the view-as-user button title for visibility
+    const total = recsBadge + quranBadge;
+    const vbtn = $('#p-view-as-user');
+    if (vbtn) vbtn.title = total > 0 ? `لديك ${total} عنصر ينتظر مراجعتك` : 'انتقل إلى وضع المستخدم';
+  } catch(_){}
 }
 
 // Toggle: Parent → View-as-User
@@ -409,38 +444,61 @@ function openDhikr(d) {
 // ════════ TASKS ════════
 async function loadParentTasks() {
   try {
-    const r = await fetch(API + '/kids/parent-tasks');
+    // Use today_status endpoint to get locked/pending state per task
+    const r = await fetch(API + '/kids/tasks/today_status?child_email=' + encodeURIComponent(STATE.email));
     const d = await r.json();
     STATE.parentTasks = d.items || [];
   } catch (e) { console.warn(e); }
 }
 function renderTasksScreen() {
-  $('#tasks-list').innerHTML = STATE.parentTasks.map(t => `
-    <div class="list-item" data-tk="${t.id}">
+  $('#tasks-list').innerHTML = STATE.parentTasks.map(t => {
+    const locked = t.locked_today;
+    const pending = t.pending_review;
+    let badge = '';
+    if (locked && pending) badge = '<span style="background:rgba(251,191,36,.2);color:#fcd34d;padding:3px 9px;border-radius:100px;font-size:10px;font-weight:800;margin-right:6px">⏳ ينتظر المراجعة</span>';
+    else if (locked) badge = '<span style="background:rgba(34,197,94,.2);color:#86efac;padding:3px 9px;border-radius:100px;font-size:10px;font-weight:800;margin-right:6px">✅ تم اليوم</span>';
+    const btnLabel = locked
+      ? (pending ? '⏳ تحت المراجعة' : '✅ تم اليوم — بكرة!')
+      : (t.needs_before_after ? '📹📹 ابدأ' : t.needs_camera ? '📹 سجّل' : '✓ تم');
+    const opacity = locked ? 'opacity:.55;pointer-events:none' : '';
+    return `
+    <div class="list-item" data-tk="${t.id}" style="${opacity}">
       <span class="ic">${t.icon || '✅'}</span>
-      <div class="tx"><div class="ttl">${t.title}</div><div class="meta">${t.needs_before_after ? '📹📹 قبل + بعد ' : t.needs_camera ? '📹 ' : ''}<b>+${t.points} نقطة</b></div></div>
-      <button class="btn-sm btn-go">${t.needs_before_after ? '📹📹 ابدأ' : t.needs_camera ? '📹 سجّل' : '✓ تم'}</button>
-    </div>
-  `).join('');
+      <div class="tx"><div class="ttl">${t.title} ${badge}</div><div class="meta">${t.needs_before_after ? '📹📹 قبل + بعد ' : t.needs_camera ? '📹 ' : ''}<b>+${t.points} نقطة</b></div></div>
+      <button class="btn-sm ${locked ? '' : 'btn-go'}" ${locked ? 'disabled style="background:rgba(255,255,255,.05);color:rgba(255,255,255,.4);cursor:not-allowed"' : ''}>${btnLabel}</button>
+    </div>`;
+  }).join('');
   $('#tasks-list').querySelectorAll('.list-item').forEach(it => {
     it.onclick = async () => {
       const t = STATE.parentTasks.find(x => x.id === it.dataset.tk);
-      if (!t) return;
+      if (!t || t.locked_today) return;
       if (t.needs_before_after) {
-        // Two-step: before then after
         if (!confirm(`المهمة: "${t.title}"\n\nخطوة 1️⃣: صوّر الحالة قبل التنظيف/التنفيذ.\nاضغط موافق لفتح الكاميرا.`)) return;
         openCamera('task', t.id, t.title, Math.round(t.points / 2), 'before', () => {
-          // After first upload done, prompt for "after"
           setTimeout(() => {
             if (confirm(`أحسنت! ✅\n\nخطوة 2️⃣: الحين نفذ المهمة (مثلاً نظّف). لما تخلص، اضغط موافق لتصوير الحالة بعد التنفيذ.`)) {
               openCamera('task', t.id, t.title, t.points - Math.round(t.points / 2), 'after');
             }
+            loadParentTasks().then(renderTasksScreen);
           }, 600);
         });
-      } else if (t.needs_camera) openCamera('task', t.id, t.title, t.points, '');
+      } else if (t.needs_camera) openCamera('task', t.id, t.title, t.points, '', () => loadParentTasks().then(renderTasksScreen));
       else {
-        await awardPoints('task', t.points, { task_id: t.id, title: t.title });
-        alert(`✅ +${t.points} نقطة!`);
+        // No camera tasks: directly award (still subject to backend 24h check via recordings? No - direct points/award)
+        // To prevent cheat we route through a server-side cooldown check too.
+        const fd = new FormData();
+        fd.append('child_email', STATE.email);
+        fd.append('kind', 'task');
+        fd.append('value', String(t.points));
+        fd.append('meta_json', JSON.stringify({ task_id: t.id, title: t.title }));
+        fd.append('task_id', t.id);
+        try {
+          const rr = await fetch(API + '/kids/points/award', { method: 'POST', body: fd });
+          const dd = await rr.json();
+          if (rr.ok && dd.ok) alert(`✅ +${t.points} نقطة!`);
+          else alert('❌ ' + (dd.detail || 'فشل'));
+        } catch(e){ alert('❌ ' + e.message); }
+        loadParentTasks().then(renderTasksScreen);
       }
     };
   });
@@ -510,10 +568,18 @@ async function uploadRecording() {
   try {
     const r = await fetch(API + '/kids/recordings/upload', { method: 'POST', body: fd });
     const d = await r.json();
-    if (d.ok) {
+    if (r.ok && d.ok) {
       const cb = recCtx.onDone;
-      alert(`✅ تم! +${d.points_awarded || recCtx.points} نقطة`);
+      // Show appropriate message based on auto-approval status
+      if (d.status === 'approved') {
+        alert(`✅ تم! حصلت على +${d.points_awarded} نقطة!`);
+      } else {
+        alert(`⏳ أُرسل التسجيل لولي أمرك.\nستحصل على +${d.proposed_points} نقطة عند موافقته 👨‍👩‍👧`);
+      }
       if (cb) cb();
+    } else if (r.status === 429) {
+      // 24h cooldown hit
+      alert(d.detail || '✋ أنجزت هذه المهمة اليوم! حاول غداً.');
     } else {
       alert('❌ ' + (d.detail || 'فشل الرفع'));
     }
@@ -802,33 +868,62 @@ async function pdRecordings(c) {
     const r = await fetch(API + '/kids/parent-recordings?limit=100');
     const d = await r.json();
     if (!d.items?.length) { c.innerHTML = '<div class="card"><div style="opacity:.6;text-align:center;padding:20px">لا توجد تسجيلات بعد</div></div>'; return; }
-    c.innerHTML = '<div class="card"><h3>📹 تسجيلات الأطفال (' + d.items.length + ')</h3><div class="hint">شاهد فيديوهات الأطفال للمهام والصلوات.</div><div id="recs-list"></div></div>';
+    // Sort: pending first
+    const items = [...d.items].sort((a, b) => (a.status === 'pending' ? -1 : 1) - (b.status === 'pending' ? -1 : 1));
+    const pendingCount = items.filter(x => x.status === 'pending').length;
+    c.innerHTML = `<div class="card">
+      <h3>📹 تسجيلات الأطفال (${items.length}) ${pendingCount ? `<span style="background:#ef4444;color:#fff;padding:3px 10px;border-radius:100px;font-size:11px;margin-right:6px">⏳ ${pendingCount} ينتظر مراجعتك</span>` : ''}</h3>
+      <div class="hint">راجع كل تسجيل، اعتمد لمنح النقاط أو ارفض. النقاط لا تُمنح إلا بعد موافقتك.</div>
+      <div id="recs-list"></div></div>`;
     const host = $('#recs-list');
-    d.items.forEach(rec => {
+    items.forEach(rec => {
       const icon = rec.rec_type === 'prayer' ? '🕌' : rec.rec_type === 'task' ? '🎯' : '📹';
       const phase = rec.phase ? (rec.phase === 'before' ? ' (قبل)' : ' (بعد)') : '';
       const dur = rec.duration_sec ? Math.round(rec.duration_sec) + 'ث' : '';
-      const it = document.createElement('div');
-      it.className = 'list-item';
-      it.innerHTML = `
-        <span class="ic">${icon}</span>
-        <div class="tx">
-          <div class="ttl">${rec.child_name}${phase}</div>
-          <div class="meta">${rec.task_title || rec.audio_track || rec.rec_type} • ${(rec.created_at || '').slice(0, 16).replace('T', ' ')} • ${dur}</div>
+      const status = rec.status || (rec.awarded_points ? 'approved' : 'pending');
+      const proposed = rec.proposed_points || rec.awarded_points || 0;
+      const statusPill = status === 'approved'
+        ? '<span style="background:rgba(34,197,94,.2);color:#86efac;padding:2px 9px;border-radius:100px;font-size:10px;font-weight:800;margin-right:4px">✅ معتمد</span>'
+        : status === 'rejected'
+        ? '<span style="background:rgba(239,68,68,.2);color:#fca5a5;padding:2px 9px;border-radius:100px;font-size:10px;font-weight:800;margin-right:4px">❌ مرفوض</span>'
+        : '<span style="background:rgba(251,191,36,.2);color:#fcd34d;padding:2px 9px;border-radius:100px;font-size:10px;font-weight:800;margin-right:4px">⏳ ينتظر</span>';
+      const card = document.createElement('div');
+      card.style.cssText = 'background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.06);border-radius:12px;padding:10px;margin-bottom:8px';
+      card.innerHTML = `
+        <div style="display:flex;align-items:center;gap:8px">
+          <span style="font-size:22px">${icon}</span>
+          <div style="flex:1">
+            <div style="font-weight:800;font-size:13px">${rec.child_name}${phase} ${statusPill}</div>
+            <div style="font-size:11px;opacity:.6">${rec.task_title || rec.audio_track || rec.rec_type} • ${(rec.created_at || '').slice(0, 16).replace('T', ' ')} • ${dur} • <b>+${proposed}</b></div>
+          </div>
+          <button class="btn-sm btn-go" data-play="${rec.id}">▶</button>
         </div>
-        <button class="btn-sm btn-go" data-vid="${rec.id}">▶</button>
-      `;
-      host.appendChild(it);
+        ${status === 'pending' ? `<div style="display:flex;gap:6px;margin-top:8px">
+          <button class="btn-sm btn-go" data-approve="${rec.id}" style="flex:1;background:linear-gradient(135deg,#22c55e,#16a34a)">✅ اعتمد +${proposed}</button>
+          <button class="btn-sm btn-del" data-reject="${rec.id}" style="flex:1">❌ ارفض</button>
+        </div>` : ''}`;
+      host.appendChild(card);
     });
-    host.querySelectorAll('button[data-vid]').forEach(b => b.onclick = () => {
-      const url = `${API}/kids/recordings/${b.dataset.vid}/stream`;
+    host.querySelectorAll('button[data-play]').forEach(b => b.onclick = () => {
+      const url = `${API}/kids/recordings/${b.dataset.play}/stream`;
       const vid = document.getElementById('play-video');
-      vid.src = url;
-      vid.load();
+      vid.src = url; vid.load();
       document.getElementById('play-modal').style.display = 'flex';
-      vid.play().catch(() => {});
     });
-  } catch (e) { c.innerHTML = '<div class="card status err show">' + e.message + '</div>'; }
+    host.querySelectorAll('button[data-approve]').forEach(b => b.onclick = async () => {
+      b.disabled = true; b.textContent = '⏳';
+      const rr = await fetch(API + '/kids/recordings/' + b.dataset.approve + '/approve', { method: 'POST', headers: headers() });
+      const dd = await rr.json();
+      if (dd.ok) { alert(`✅ منح ${dd.points_awarded || 0} نقطة`); pdRecordings(c); }
+      else { alert('❌ ' + (dd.detail || 'فشل')); b.disabled = false; }
+    });
+    host.querySelectorAll('button[data-reject]').forEach(b => b.onclick = async () => {
+      const reason = prompt('سبب الرفض (اختياري):') || '';
+      const fd = new FormData(); fd.append('reason', reason);
+      const rr = await fetch(API + '/kids/recordings/' + b.dataset.reject + '/reject', { method: 'POST', headers: headers(), body: fd });
+      if ((await rr.json()).ok) pdRecordings(c);
+    });
+  } catch (e) { c.innerHTML = `<div class="card status err show">${e.message}</div>`; }
 }
 
 // ════════ QURAN ════════
@@ -1282,7 +1377,7 @@ $('#quran-rec-btn').onclick = async () => {
 
 // ════════ MUSHAF (page images) ════════
 // Surah → first page number in Madinah Mushaf (15 lines, 604 pages)
-const SURAH_START_PAGE = [1,1,50,77,106,128,151,177,187,208,221,235,249,255,262,267,282,293,305,312,322,332,342,350,359,367,377,385,396,404,411,415,418,428,434,440,446,453,458,467,477,483,489,496,499,502,507,511,515,518,521,524,527,531,534,537,542,545,549,551,553,554,556,558,560,562,564,566,568,570,572,574,575,577,578,580,582,583,585,586,587,587,589,590,591,591,592,593,594,595,595,596,596,597,597,598,598,599,599,600,600,601,601,601,602,602,602,603,603,603,604,604,604,604];
+const SURAH_START_PAGE = [1,2,50,77,106,128,151,177,187,208,221,235,249,255,262,267,282,293,305,312,322,332,342,350,359,367,377,385,396,404,411,415,418,428,434,440,446,453,458,467,477,483,489,496,499,502,507,511,515,518,520,523,526,528,531,534,537,542,545,549,551,553,554,556,558,560,562,564,566,568,570,572,574,575,577,578,580,582,583,585,586,587,587,589,590,591,591,592,593,594,595,595,596,596,597,597,598,598,599,599,600,600,601,601,601,602,602,602,603,603,603,604,604,604];
 
 let mushafCurrentPage = 1;
 let mushafCurrentSurah = 1;
@@ -1306,8 +1401,10 @@ async function openMushaf(surahNum = 1) {
 function renderMushafPage() {
   const pg = mushafCurrentPage;
   $('#mushaf-pg-num').textContent = `صفحة ${pg} / 604`;
-  $('#mushaf-prev').disabled = pg <= 1;
-  $('#mushaf-next').disabled = pg >= 604;
+  // mushaf-prev button (◀ التالي) increments page → disable at end (604)
+  // mushaf-next button (▶ السابق) decrements page → disable at start (1)
+  $('#mushaf-prev').disabled = pg >= 604;
+  $('#mushaf-next').disabled = pg <= 1;
   const stage = $('#mushaf-stage');
   stage.innerHTML = `<div class="ph">جاري تحميل صفحة ${pg}…</div>`;
   // Fetch ayahs for this page from alquran.cloud and render in mushaf style.

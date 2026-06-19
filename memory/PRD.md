@@ -71,6 +71,45 @@ Deploy Zenrex Farm to the cloud, expand the Zenrex AI Brain to specialized modes
   Fisher-Yates; fresh/old interleave is followed by a FINAL random pass over the whole
   merged list so EVERY login = a completely different feed order. Added top-bar
   `🎲` shuffle button that reorders the current feed (no refetch) and scrolls back
+
+## 2026-06-19 — Critical Fixes (Mushaf, Anti-Cheat, Parent Review, Videos)
+
+### 🐛 Critical Bugs Fixed
+- **deploy.sh wiped uploaded videos**: rsync `--delete` was deleting `/opt/zerax/backend/backend/uploads/*` on every deploy. Added `--exclude="uploads/" --exclude="backend/uploads/" --exclude="static/uploads/" --exclude="static/videos/"`. Cleaned 39 orphan DB records pointing to deleted files.
+- **Mushaf disabled buttons swapped**: `mushaf-prev` (forward) was disabled at page 1 instead of 604. Fixed.
+- **Surah → page mapping bug**: Al-Baqarah (surah 2) had start_page=1 instead of 2. Updated full 114-surah verified array.
+
+### 🛡️ Anti-Cheat System (CRITICAL)
+- **24h Cooldown per task**: `kids_upload_recording` rejects with HTTP 429 if same `(child_email, task_id)` was submitted in last 24h.
+  - Exception: two-step tasks allow `phase='after'` if previous was `phase='before'`.
+- **No more auto-points for tasks/dhikr**: Only `prayer` recordings auto-award. Tasks/dhikr now save with `status='pending'` and `proposed_points`, awaiting parent approval.
+- **`/kids/points/award` also enforces 24h cooldown** when `kind='task'` and `meta.task_id` set.
+
+### 👨‍👩‍👧 Parent Review Workflow
+- New endpoints:
+  - `POST /kids/recordings/{rec_id}/approve` → awards `proposed_points`, marks status='approved'
+  - `POST /kids/recordings/{rec_id}/reject` → marks status='rejected', stores reason
+  - `GET  /kids/notifications/count` → returns `pending_recordings + pending_quran`
+  - `GET  /kids/tasks/today_status?child_email=` → per-task: `locked_today`, `pending_review`
+- Parent dashboard:
+  - 🔴 Red notification badge with pending count on tabs `📹 التسجيلات` and `📖 مراجعة القرآن`
+  - Auto-refresh every 30s while parent dashboard is open
+  - Each pending recording has ✅ اعتمد / ❌ ارفض buttons (with reason prompt)
+  - Recordings sorted: pending first
+- Child UX:
+  - Upload toast now shows "⏳ أُرسل لولي أمرك للمراجعة" instead of fake "+5 نقطة"
+  - Tasks completed today appear with badge "⏳ ينتظر المراجعة" or "✅ تم اليوم — بكرة!"
+  - Locked tasks are dim + button disabled
+
+### 🎮 Gamification Roadmap (Backlog — was requested to organize)
+- Persistent badges: بطل الأسبوع 🏆 · أسطورة الشهر 🌟 · حافظ المبتدئ 📖 · حافظ السبع الطوال 🕋
+- Fair design: تحدّي تعويضي · مضاعفة نقاط الأخ الأصغر · سور Bonus اليوم
+- Engagement: عدّاد تنازلي · push notifications · صوت + كونفيتي عند الموافقة · شريط تقدّم يومي
+- Insights: إحصائيات الوقت الأفضل · السور الصعبة · تقرير شهري PDF
+- Beyond Quran: تحدّي الأذكار · تحدّي الصلوات · تحدّي المهام البيتية
+- Father's personal space: مجلد قراء مفضّلين + ملاحظات تدبّر + Word-by-word highlight
+
+
   to top — kids can spin a new order on demand.
 - **Auth fix**: logout now also clears `zp_view_as_user` so a fresh login starts in
   the correct role.

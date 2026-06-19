@@ -24,6 +24,8 @@ rsync -az --no-perms --no-owner --no-group --delete -e "ssh -i $SSH_KEY -o Stric
   /app/frontend/build/ root@$VPS_IP:/opt/zerax/frontend/build/ > /dev/null
 rsync -az --no-perms --no-owner --no-group --delete \
   --exclude="backups/" --exclude="__pycache__/" --exclude="*.pyc" \
+  --exclude="uploads/" --exclude="backend/uploads/" \
+  --exclude="static/uploads/" --exclude="static/videos/" \
   -e "ssh -i $SSH_KEY -o StrictHostKeyChecking=no" \
   /app/backend/ root@$VPS_IP:/opt/zerax/backend/ > /dev/null
 
