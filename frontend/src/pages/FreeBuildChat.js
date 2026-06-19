@@ -3060,24 +3060,33 @@ function ChatWorkspace({ projectId }) {
                 else if (phase.id === currentPhase) stat = '🟠 جارية الآن';
                 else stat = '🔒 مقفلة';
               } else {
-                // Determine if the phase is "done" based on real artifacts
+                // Determine if the phase is "done" based on real artifacts.
+                // Rule: any phase whose milestone artifact exists OR is implicit
+                // in `phase_history` (server-marked) is considered complete.
+                const phaseHistory = new Set(project?.phase_history || []);
+                const htmlExists = !!project?.current_html;
                 if (phase.id === 'discovery') {
-                  isDone = qcount >= 3 || (project?.brief && Object.keys(project.brief || {}).length >= 4);
-                  stat = isDone ? `✓ ${qcount} سؤال` : `${qcount} سؤال طُرح`;
+                  isDone = (
+                    phaseHistory.has('discovery') || qcount >= 2 || htmlExists ||
+                    (project?.brief && Object.keys(project.brief || {}).length >= 3)
+                  );
+                  stat = isDone ? `✓ ${qcount || ''} سؤال`.trim() : `${qcount} سؤال طُرح`;
                 } else if (phase.id === 'design') {
-                  isDone = variantsCount > 0 && (project?.selected_variant_id || project?.brief?.style_chosen);
+                  isDone = (
+                    phaseHistory.has('design') || htmlExists || variantsCount > 0
+                  );
                   stat = isDone ? '✓ معتمد' : (variantsCount > 0 ? `${variantsCount} اقتراح` : 'بانتظار خيارات');
                 } else if (phase.id === 'assets') {
-                  isDone = approvedAssets.length >= 1;
+                  isDone = phaseHistory.has('assets') || approvedAssets.length >= 1 || htmlExists;
                   stat = isDone ? `✓ ${approvedAssets.length} معتمد` : `${approvedAssets.length} معتمد`;
                 } else if (phase.id === 'build') {
-                  isDone = !!project?.current_html;
+                  isDone = htmlExists;
                   stat = isDone ? '✓ مبني' : (project?.code_unlocked ? '🔓 جاهز للبناء' : '🔒 مقفل');
                 } else if (phase.id === 'preview') {
                   isDone = !!project?.preview_approved;
-                  stat = isDone ? '✓ معتمد' : (project?.current_html ? '🟠 للمراجعة' : '—');
+                  stat = isDone ? '✓ معتمد' : (htmlExists ? '🟠 للمراجعة' : '—');
                 } else if (phase.id === 'deploy') {
-                  isDone = !!project?.deployed_url || !!project?.github_repo_url;
+                  isDone = !!project?.deployed_url || !!project?.github_repo_url || !!project?.published;
                   stat = isDone ? '✓ منشور' : '—';
                 }
               }
@@ -3332,7 +3341,13 @@ function ChatWorkspace({ projectId }) {
                       </div>
                     )}
                     <div className="text-sm leading-relaxed">
-                      <MarkdownText>{m.content}</MarkdownText>
+                      {/* Hide the main bubble while the agent is still streaming —
+                          the live_text bubbles below carry the in-flight text.
+                          Once streaming completes, m.content holds the final
+                          summary and renders here (live_text bubbles vanish). */}
+                      {!(m.role === 'assistant' && m.agent_streaming) && (
+                        <MarkdownText>{m.content}</MarkdownText>
+                      )}
                     </div>
 
                     {/* Clean copy/quote toolbar — only on finished assistant messages with content */}

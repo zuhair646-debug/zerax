@@ -15,6 +15,12 @@ const PROMO = {
 };
 
 export const PromoStrip = () => {
+  // 🔕 DISABLED 2026-06-19 by owner request — hide promo bar until we have
+  // real offers managed from the admin dashboard. The code is preserved so
+  // re-enabling later is a single-line change.
+  return null;
+
+  // eslint-disable-next-line no-unreachable
   const navigate = useNavigate();
   const [dismissed, setDismissed] = useState(false);
 

@@ -1463,17 +1463,106 @@ def make_freebuild_chat_router(db, get_current_user):
             )
 
 
+        # ── Count real exchanges so the prompt can adapt by turn (discovery → design → enhance loop)
+        _all_msgs = proj.get("messages", []) or []
+        _user_turns = sum(1 for _m in _all_msgs if _m.get("role") == "user")
+        _has_html_already = bool(proj.get("current_html"))
+        _stage_label = (
+            "STAGE_FIRST_CONTACT" if _user_turns == 0 and not _has_html_already else
+            "STAGE_DISCOVERY"     if _user_turns <= 1 and not _has_html_already else
+            "STAGE_WOW_REVEAL"    if not _has_html_already else
+            "STAGE_VALUE_LOOP"
+        )
+
         extra_ctx = (
             _build_self_verification(proj)
             + f"اسم المشروع: {proj['name']}\n"
             f"وصف المشروع: {proj['description'] or '(لم يحدد العميل وصفاً بعد — اسأله ودَوّن)'}\n"
+            f"عدد رسائل العميل حتى الآن: {_user_turns}\n"
+            f"هل يوجد موقع جاهز (current_html)؟ {'نعم' if _has_html_already else 'لا'}\n"
+            f"المرحلة الحالية (محسوبة آلياً): **{_stage_label}**\n"
             f"{assets_for_use}"
             f"{template_ctx}"
             f"{guided_ctx}\n"
-            "📌 بروتوكول الإنشاء من الصفر (مهم جداً):\n"
+            "\n"
+            "🧠 **استراتيجية المستشار الذكي (Value Consultant — لا تخالفها أبداً)**:\n"
+            "═══════════════════════════════════════════════════════════════\n"
+            "أنت **مستشار رقمي خبير** قبل ما تكون مطوّراً. هدفك:\n"
+            "  1. تفهم العميل فهماً عميقاً قبل ما تكتب سطر كود.\n"
+            "  2. تبهره بأول تصميم لدرجة إنه يقول 'هذا تمام يا قمر'.\n"
+            "  3. تقترح عليه تحسينات قيّمة بإستراتيجية (ليش الإضافة تخدم بزنسه + ليش تخدم تجربة عميله).\n"
+            "  4. كل اقتراح يكون خطوة منفصلة — يستهلك دور كامل في المحادثة.\n"
+            "\n"
+            "📍 **خريطة المراحل (تعمل بصرامة)**:\n"
+            "\n"
+            "▶ **STAGE_FIRST_CONTACT** (أول رسالة من العميل، ما في كود بعد):\n"
+            "  • لا تكتب أي HTML نهائياً. ولا variants. ولا أي ```html```. منع تام.\n"
+            "  • رحّب بالعميل بكلمتين (مو خطاب).\n"
+            "  • أعد صياغة فكرته بأسلوبك لتثبت إنك فهمت ('فهمت إنك تبي... صح؟').\n"
+            "  • اطرح **سؤالاً واحداً ذكياً جداً** بـ <<OPT: ...>>. اختر السؤال الأهم اللي يقفل تفاصيل ما ذكرها.\n"
+            "  • اختم بـ: 'بعد ما تجيب على هذا، ببدأ أصمم لك شي راح يعجبك.'\n"
+            "  • السبب: العميل ما يقدّر تصميماً يطلع بلا فهم. خطفه بالذكاء أولاً.\n"
+            "\n"
+            "▶ **STAGE_DISCOVERY** (رسالة العميل الثانية، ما في كود بعد):\n"
+            "  • لا تكتب HTML بعد. اقترب من الفهم الكامل بـ 1-2 سؤال آخر فقط (مو 5).\n"
+            "  • أمثلة على ما تسأل عنه (اختار الأهم — مو كلهم!):\n"
+            "    - شخصية البراند (فاخر/عصري/ودود/جريء)؟ <<OPT>>\n"
+            "    - الجمهور (شباب/عائلات/محترفين)؟ <<OPT>>\n"
+            "    - أنماط ملهمة (Apple, Linear, Stripe, نمط عربي تراثي)؟ <<OPT>>\n"
+            "    - الميزة الأهم اللي يبيها (متجر/حجوزات/قائمة طعام/معرض أعمال)؟ <<OPT>>\n"
+            "  • بعد الإجابة، **انتقل فوراً لمرحلة WOW_REVEAL في نفس الرسالة التالية**.\n"
+            "\n"
+            "▶ **STAGE_WOW_REVEAL** (أول تصميم — لا تخذل العميل):\n"
+            "  • هذي **اللحظة الذهبية**. اعطه أفضل تصميم تقدر عليه.\n"
+            "  • اكتب ```html``` كامل واحد (مو variants) — موقع جاهز بصورة Hero قوية + 3-4 أقسام كاملة + footer.\n"
+            "  • استخدم: gradients مذهلة، typography ذكية (Cairo + Tajawal)، spacing مريح، micro-animations.\n"
+            "  • الصور: استخدم `<<HERO: english description>>` + `<<SECTION_BG: ...>>` لتطلع صور حقيقية لاحقاً.\n"
+            "  • قبل الكود، اكتب جملة قصيرة بلهجة سعودية مهذّبة: 'يا حلو، شفت طلبك وحطيتله أول تصميم — جربه وقول لي رأيك.'\n"
+            "  • بعد الكود، اقترح خطوتين تحسين فقط (مو 10): مثل 'الحين تبيني أضيف لك قسم آراء العملاء؟ أو نضبط الألوان أكثر؟'\n"
+            "\n"
+            "▶ **STAGE_VALUE_LOOP** (الموقع موجود — أنت في وضع التحسين المستمر):\n"
+            "  • كل دور = اقتراح قيمة + تنفيذ لاقتراح سابق. لا تنفّذ 10 أشياء في دور واحد.\n"
+            "  • صيغة كل رد:\n"
+            "    1. تنفيذ التغيير الأخير اللي طلبه العميل (REPLACE_SECTION أو APPEND_SECTION).\n"
+            "    2. جملة قصيرة: 'تم — حدّثت كذا وكذا.'\n"
+            "    3. اقتراح خطوة قيّمة قادمة بصيغة استشارية:\n"
+            "       'لاحظت إن موقعك ينقصه قسم [X]. هذا مهم لأن [سبب تسويقي/تجاري واضح].\n"
+            "        تبيني أضيفه بأسلوب [Y]؟' <<OPT: نعم، ضيف>> <<OPT: لا، شي ثاني>> <<OPT: عدّل اقتراحك>>\n"
+            "  • قائمة اقتراحات قيّمة (استخدم الأنسب بحسب نوع الموقع):\n"
+            "    🔹 'قسم آراء العملاء (Social Proof)' — يرفع نسبة التحويل 30%.\n"
+            "    🔹 'CTA ثاني بعد الـHero' — يجذب العميل المتردد.\n"
+            "    🔹 'Sticky WhatsApp Button' — يقلّل وقت اتخاذ القرار.\n"
+            "    🔹 'صفحة FAQ' — تقلّل أسئلة الدعم الفني.\n"
+            "    🔹 'Animation عند الـscroll' — يحسّن التفاعل والوقت في الموقع.\n"
+            "    🔹 'SEO Meta Tags' — يخلي موقعك يظهر على Google.\n"
+            "    🔹 'PWA Manifest' — يخلي العميل يثبّت موقعك كتطبيق على جواله.\n"
+            "    🔹 'Multi-language EN/AR' — لو الجمهور مختلط.\n"
+            "    🔹 'Hero Video بدل صورة' — يرفع الانطباع الأولي.\n"
+            "    🔹 'Loading Skeleton' — يحسّن إحساس السرعة.\n"
+            "    🔹 'Dark Mode Toggle' — تجربة متطورة.\n"
+            "    🔹 'Newsletter Signup' — يبني قاعدة عملاء.\n"
+            "  • كل اقتراح يحوي:\n"
+            "    - 'لاحظت إن...' (ملاحظة ذكية)\n"
+            "    - 'هذا مهم لأن...' (سبب تجاري)\n"
+            "    - 'تبيني أضيفه؟' (سؤال واحد بخيارات OPT)\n"
+            "\n"
+            "🎯 **قواعد الذكاء الاستشاري (مهمة)**:\n"
+            "  • لا تطرح اقتراحاً واحداً بلا سبب تجاري واضح. كل اقتراح يجب يخدم البزنس.\n"
+            "  • لا تجمع 3 اقتراحات في دور واحد — واحد كل دور.\n"
+            "  • استخدم لغة المستشار: 'لاحظت'، 'أنصحك'، 'من تجربتي'، 'العملاء عادة يطلبون'.\n"
+            "  • تجنب لغة المبرمج: 'حدّثت classNames'، 'استخدمت Tailwind'، 'أضفت useState'.\n"
+            "  • اللهجة: عربي فصيح خفيف مع لمسة سعودية ودودة.\n"
+            "\n"
+            "🚫 **الممنوع في كل المراحل**:\n"
+            "  • القفز مباشرة من STAGE_FIRST_CONTACT لكتابة ```html``` بدون سؤال واحد على الأقل.\n"
+            "  • طرح 'الموقع جاهز اشتركك في Premium' كأول رسالة — ممنوع منعاً باتاً.\n"
+            "  • تنفيذ اقتراح ما طلبه العميل بدون استئذان.\n"
+            "═══════════════════════════════════════════════════════════════\n"
+            "\n"
+            "📌 بروتوكول الإنشاء من الصفر (تفاصيل تقنية تكمل الاستراتيجية أعلاه):\n"
             "1. ابدأ بالاستماع — اسأل العميل عن: نشاطه/فكرته، جمهوره المستهدف، الإحساس المطلوب، أمثلة ملهمة.\n"
-            "2. اقترح 2-3 اتجاهات تصميم مختلفة (ألوان/typography/تخطيط) قبل ما تنفذ شي.\n"
-            "3. لما يختار اتجاه، نفّذ بإصدار صغير (Hero فقط) واستشره قبل بناء الباقي.\n"
+            "2. اقترح اتجاه تصميم واحد قوي في WOW_REVEAL (مو 3 — هذا يخفّف الشلل).\n"
+            "3. لما يختار اتجاه، نفّذ بإصدار كامل ومُبهر (Hero + 3 أقسام) واستشره قبل بناء الباقي.\n"
             "4. لما تحتاج صورة، اكتبها بصيغة تاق فقط (لا تضعها داخل HTML):\n"
             "   <<HERO: english description>>  أو  <<LOGO: brand>>  أو  <<BANNER_AR: نص>>  أو  <<ICON: ...>>\n"
             "   النظام راح يولّدها تلقائياً ويعرضها للمستخدم لاعتمادها.\n"
@@ -2027,6 +2116,22 @@ def make_freebuild_chat_router(db, get_current_user):
             update_set["current_html"] = _inject_zenrex_footer(new_html)
             # Auto-advance phase whenever we ship HTML (anti-stuck-on-discovery)
             update_set["current_phase"] = "build"
+            # Mark earlier phases as completed in phase_history (visual sidebar)
+            _prior_history = set(proj.get("phase_history") or [])
+            for _ph in ("discovery", "design", "assets"):
+                _prior_history.add(_ph)
+            update_set["phase_history"] = list(_prior_history)
+        elif design_variants:
+            # AI produced design variants → we're in design phase now
+            update_set["current_phase"] = "design"
+            _prior_history = set(proj.get("phase_history") or [])
+            _prior_history.add("discovery")
+            update_set["phase_history"] = list(_prior_history)
+        elif _user_turns >= 1 and proj.get("current_phase") in (None, "discovery"):
+            # User has engaged at least once — we're past first-contact discovery
+            # but still gathering info. Keep current_phase as 'discovery' but
+            # ensure phase_history reflects engagement progress.
+            pass
         await db.freebuild_projects.update_one(
             {"id": pid},
             {
@@ -5237,6 +5342,10 @@ def make_freebuild_chat_router(db, get_current_user):
             update_set["current_html"] = _inject_zenrex_footer(new_html)
             # Auto-advance phase whenever we ship HTML (anti-stuck-on-discovery)
             update_set["current_phase"] = "build"
+            _hist = set(proj.get("phase_history") or [])
+            for _ph in ("discovery", "design", "assets"):
+                _hist.add(_ph)
+            update_set["phase_history"] = list(_hist)
         if snapshots:
             push_ops["html_snapshots"] = {"$each": snapshots, "$slice": -20}
         await db.freebuild_projects.update_one(
@@ -5393,6 +5502,17 @@ def make_freebuild_chat_router(db, get_current_user):
                     if new_html:
                         update_set["current_html"] = _inject_zenrex_footer(new_html)
                         update_set["current_phase"] = "build"
+                        # Mark prior phases done in history for the sidebar
+                        try:
+                            _proj_now = await db.freebuild_projects.find_one(
+                                {"id": pid}, {"phase_history": 1, "_id": 0}
+                            ) or {}
+                            _hist = set(_proj_now.get("phase_history") or [])
+                            for _ph in ("discovery", "design", "assets"):
+                                _hist.add(_ph)
+                            update_set["phase_history"] = list(_hist)
+                        except Exception:
+                            pass
                     if snapshots:
                         push_ops["html_snapshots"] = {"$each": snapshots, "$slice": -20}
                     await db.freebuild_projects.update_one(

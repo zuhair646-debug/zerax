@@ -1,5 +1,21 @@
 # Zenrex Farm — PRD (Product Requirements Document)
 
+## 2026-06-19 — FreeBuild AI Value Consultant Strategy
+**Status**: ✅ Implemented & E2E Tested (Pet Store prompt)
+- **Backend** (`/app/backend/modules/freebuild/freebuild_chat.py`):
+  - Added stage machine: `STAGE_FIRST_CONTACT` → `STAGE_DISCOVERY` → `STAGE_WOW_REVEAL` → `STAGE_VALUE_LOOP`
+  - AI now refuses HTML on first turn, asks 1 smart `<<OPT>>` question, gathers brand personality + language, then delivers WOW design, then enters value-loop with consultative suggestions ("لاحظت إن... هذا مهم لأن... تبيني أضيفه؟")
+  - Phase auto-progression: `phase_history` populated with `discovery/design/assets` whenever `current_html` is shipped, so the sidebar turns green.
+- **Frontend** (`/app/frontend/src/pages/FreeBuildChat.js`):
+  - Phase greening logic now respects `phase_history` AND artifact presence (any phase whose artifact exists is green; html-shipped → all prior phases green).
+  - Streaming text glitch fixed: hide `m.content` bubble while `agent_streaming === true` so live_text bubbles carry the in-flight typing; final summary takes over once streaming completes (no double-render flash).
+- **E2E Validation** (prompt: "متجر للقطط مستلزماتها مع خدمات الترويش"):
+  - Turn 1: AI asks brand personality (4 OPT choices), no HTML ✅
+  - Turn 2: AI asks language (AR / AR+EN), no HTML ✅
+  - Turn 3 (user: "عربي فقط، انطلق"): full HTML site (27.9KB) shipped, `current_phase=build`, `phase_history=[discovery, design, assets]` ✅
+  - Turn 4 (user: "وش تنصحني أضيف"): smart consultative suggestion "قسم قبل وبعد لخدمات الترويش" with business reasoning, asks permission ✅
+- **Promo Strip**: hidden (`PromoStrip.jsx` returns null) ✅
+
 ## Original Problem Statement
 Deploy Zenrex Farm to the cloud, expand the Zenrex AI Brain to specialized modes, sever ties with Emergent integrations for 100% independence, and build a unified Brand Manager. Within Zenrex Farm, develop a "Kids PWA" — a TikTok-style video aggregator for kids with strict Parent/Child roles, automated targeted scraping, pre-caching for instant playback, and dedicated sections for prayers and rewards.
 
