@@ -40,14 +40,21 @@ COST_INPUT_PER_1M = 3.0    # USD per 1M input tokens
 COST_OUTPUT_PER_1M = 15.0  # USD per 1M output tokens
 
 # ─── Free-tier caps ──────────────────────────────────────────────────────
-DEFAULT_FREE_DAILY_TOKENS = 50_000
-DEFAULT_FREE_DAILY_REQUESTS = 100
+# Free tier = ONE WOW demo only. Just enough tokens to build a single
+# initial design that hooks the customer (≈ 4-5 messages), then we hit
+# the cap and convert them to a paid plan.
+DEFAULT_FREE_DAILY_TOKENS = 120_000   # ≈ $0.38 real cost — one polished demo
+DEFAULT_FREE_DAILY_REQUESTS = 12
 
-# Higher caps for paid tiers
+# Higher caps for paid tiers (calibrated for healthy margins).
+#   Starter $29 → 600K tokens (~ $1.90 cost) → margin ≈ $27
+#   Pro     $99 → 3M  tokens (~ $9.50 cost) → margin ≈ $89
+#   Studio  $299 → 18M tokens (~ $57 cost) → margin ≈ $242
 TIER_DAILY_TOKENS = {
-    "free":   50_000,
-    "pro":    1_000_000,    # ~1M tokens/day
-    "studio": 10_000_000,   # ~10M tokens/day (effectively unlimited)
+    "free":    120_000,
+    "starter": 600_000,
+    "pro":     3_000_000,
+    "studio":  18_000_000,
 }
 
 

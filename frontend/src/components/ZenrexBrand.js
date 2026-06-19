@@ -5,7 +5,7 @@
  */
 import React from 'react';
 
-export default function ZenrexBrand({ size = 24, showLabel = true, label = 'زنركس AI', className = '' }) {
+export default function ZenrexBrand({ size = 24, showLabel = true, label = 'Zenrex', className = '' }) {
   const [imgError, setImgError] = React.useState(false);
   return (
     <span className={`inline-flex items-center gap-2 ${className}`} data-testid="zenrex-brand">

@@ -2244,16 +2244,29 @@ def make_freebuild_chat_router(db, get_current_user):
             _quota = await check_quota(db, user["user_id"])
             if not _quota.get("allowed"):
                 # Return a friendly assistant message + flag the client UI.
+                tier_label = _quota.get("next_tier_label", "Pro")
                 assistant_msg = {
                     "id": str(uuid.uuid4()),
                     "role": "assistant",
-                    "content": _quota.get("message") or "وصلت لحدّ الاستخدام اليومي. ترقّي باقتك للاستمرار.",
+                    "content": (
+                        "🎉 **انتهت تجربتك المجانية**\n\n"
+                        "بنيت لك تصميم أوّلي ممتاز للموقع — وصلت لحدّ الاستخدام اليومي المجاني.\n\n"
+                        "**عشان نكمل** نحتاج تختار باقة:\n\n"
+                        "• 🎯 **Project Pack — $79** — تنهي مشروعك الحالي بالكامل (30 رسالة، 30 يوم)\n"
+                        "• 🚀 **Starter — $29/شهر** — 3 مشاريع جديدة شهرياً\n"
+                        "• ⭐ **Pro — $99/شهر** — 12 مشروع + Visual Guardian + دعم واتساب\n\n"
+                        "اضغط الزر اللي يناسبك تحت 👇 وارجع نكمل من نفس النقطة بالضبط."
+                    ),
                     "options": [
-                        {"label": "ترقية الباقة", "emoji": "⭐", "description": _quota.get("next_tier_label", "Pro")},
+                        {"label": "اشترِ المشروع الحالي - $79", "emoji": "🎯", "description": "أنهِ هذا المشروع فقط"},
+                        {"label": "اشترك Starter - $29/شهر", "emoji": "🚀", "description": "3 مشاريع شهرياً"},
+                        {"label": "اشترك Pro - $99/شهر", "emoji": "⭐", "description": "الأكثر شعبية"},
+                        {"label": "اعرض كل الباقات", "emoji": "📋", "description": "/pricing/v2"},
                     ],
                     "inline_images": [],
                     "timestamp": _now(),
                     "quota_blocked": True,
+                    "pricing_redirect": "/pricing/v2",
                 }
                 return {
                     "ok": True,

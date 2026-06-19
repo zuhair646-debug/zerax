@@ -6,6 +6,45 @@
 Quick summary: العميل يملك VPS Hetzner. أي تعديل تعمله، شغّل **`bash /app/deploy/deploy.sh zenrex.ai`** فوراً.
 SSH key موجود في `/root/.ssh/zerax_deploy`. **لا تسأل، لا تعتذر، انشر مباشرة.**
 
+## 2026-06-19 (الجلسة 17) — 💰 Pricing Calibration + Brand Polish + AI Memory
+
+**Status**: ✅ مُنجَز ومنشور
+
+### الأرقام الجديدة (هوامش صحية):
+| الباقة | السعر | Tokens/يوم | تكلفتنا الفعلية | **هامشنا** |
+|---|---|---|---|---|
+| Free Trial | $0 | 120K (≈ 4-6 رسائل = تصميم واحد wow) | $0.38 | acquisition cost |
+| **Project Pack** | $79 مرّة | 600K (≈ 30 رسالة، 30 يوم) | $1.90 | **+$77** ✨ |
+| Starter | $29/شهر | 600K/يوم | $1.90 | +$27 |
+| Pro | $99/شهر | 3M/يوم | $9.50 | **+$89** |
+| Studio | $299/شهر | 18M/يوم | $57 | **+$242** |
+
+### اللي تم:
+1. **Spinner** — حرف Z ذهبي يدور (360°/2.4ث) داخل اللوغو الفعلي، مع رنين خارجي معاكس. الاسم "**Zenrex**" بالإنجليزي في كل اللغات.
+2. **ZenrexBrand** — Label الافتراضي صار "Zenrex" بالإنجليزي عالمياً.
+3. **PACKAGES في Billing**:
+   - أضفت `project_pack` ($79 مرة واحدة) — الـconversion path الأقوى
+   - حدّثت `tier_starter_monthly` $29، `tier_pro_monthly` $99، `tier_studio_monthly` $299
+   - Webhook + polled fulfillment يحدّث `users.storage_tier` + `daily_token_cap` تلقائياً
+4. **Pricing Page** — 4 باقات بـ grid 4-cols، badges (الأفضل لتجربة / الأكثر شعبية / للوكالات)، current tier detection محدّث للأرقام الجديدة.
+5. **رسالة "انتهت التجربة"** في الشات — صار فيها:
+   - تأكيد إن AI بنى تصميم أوّلي ممتاز
+   - 3 خيارات شراء مباشرة (Project Pack/Starter/Pro)
+   - زر "اعرض كل الباقات" → `/pricing/v2`
+   - وعد بـ "نكمل من نفس النقطة بالضبط"
+6. **AI Memory Rules** في `section_briefs.py`:
+   - رقم 2: "أنت بنيت هذا المشروع بنفسك. لما يطلب تعديل، **لا تقل** 'راح أفحص'. نفّذ التعديل مباشرة"
+   - رقم 3: "تعديل دقيق لا شامل — لو طلب تغيير الألوان، غيّر الألوان فقط بدون لمس التخطيط"
+
+### الـ Token Meter Logic:
+- Free `daily_token_cap = 120,000` (كافي لتصميم واحد فقط)
+- Starter `600,000` — يشيل 1-2 مشروع متوسط
+- Pro `3,000,000` — يشيل 10+ مشروع
+- Studio `18,000,000` — للوكالات
+
+### ملاحظة على الـ video glitch:
+الـtext appears/disappears يحتاج reproduction خطوة بخطوة. لو تقدر تعطيني مثال نصّي تحديدي (مثل: "لما أكتب X وأنزل ثم أرجع للأعلى يختفي") أقدر أصلحه بدقّة. حالياً لاحظ إن `useEffect` يعتمد على `messages.length` للـauto-scroll.
+
 ## 2026-06-19 (الجلسة 16) — 🎬 Ready Sites Preview Page (الصفحة الوسطى)
 
 **Status**: ✅ مُنجَز ومنشور على https://zenrex.ai/

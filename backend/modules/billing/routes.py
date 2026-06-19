@@ -32,28 +32,51 @@ PACKAGES: Dict[str, Dict[str, Any]] = {
         "duration_days": 30,
         "subscription_type": "website_studio",
     },
-    # Storage / AI quota tiers — applied to user.storage_tier after successful webhook
+    # ─── One-time per-project unlock — highest-margin path ─────────────
+    "project_pack": {
+        "name": "Project Pack — مشروع واحد كامل",
+        "price_usd": 79.00,
+        "currency": "usd",
+        "duration_days": 30,           # 30-day window to finish the project
+        "subscription_type": "tier_upgrade",
+        "tier": "starter",
+        "tier_quota_mb": 1024,
+        "tier_quota_projects": 1,
+        "daily_token_cap": 600_000,    # ~30 messages of high-quality build
+    },
+    # ─── Monthly subscription tiers (margin-calibrated) ────────────────
+    "tier_starter_monthly": {
+        "name": "Starter — شهري",
+        "price_usd": 29.00,
+        "currency": "usd",
+        "duration_days": 30,
+        "subscription_type": "tier_upgrade",
+        "tier": "starter",
+        "tier_quota_mb": 1024,
+        "tier_quota_projects": 3,
+        "daily_token_cap": 600_000,
+    },
     "tier_pro_monthly": {
-        "name": "Pro - شهري",
-        "price_usd": 9.00,
+        "name": "Pro — شهري",
+        "price_usd": 99.00,
         "currency": "usd",
         "duration_days": 30,
         "subscription_type": "tier_upgrade",
         "tier": "pro",
         "tier_quota_mb": 5120,
-        "tier_quota_projects": 20,
-        "daily_token_cap": 1_000_000,
+        "tier_quota_projects": 12,
+        "daily_token_cap": 3_000_000,
     },
     "tier_studio_monthly": {
-        "name": "Studio - شهري",
-        "price_usd": 29.00,
+        "name": "Studio — شهري",
+        "price_usd": 299.00,
         "currency": "usd",
         "duration_days": 30,
         "subscription_type": "tier_upgrade",
         "tier": "studio",
         "tier_quota_mb": 51200,
-        "tier_quota_projects": 999,
-        "daily_token_cap": 10_000_000,
+        "tier_quota_projects": 60,
+        "daily_token_cap": 18_000_000,
     },
 }
 

@@ -16,51 +16,74 @@ const API = process.env.REACT_APP_BACKEND_URL;
 
 const TIERS = [
   {
-    id: 'free',
-    name: 'مجاني',
-    price: 0,
-    cta: 'الباقة الحالية',
-    cta_disabled: true,
+    id: 'project_pack',
+    name: 'Project Pack',
+    price: 79,
+    period: 'مرّة واحدة',
+    cta: 'اشترِ مشروع واحد',
+    badge: 'الأفضل لتجربة واحدة',
     perks: [
-      '3 مشاريع نشطة',
-      '100 MB تخزين',
-      '50,000 رمز ذكاء يومياً',
-      '100 طلب يومياً',
-      'استوديو المواقع + التطبيقات',
-      'فحص المحول للمواقع الخارجية',
+      'مشروع كامل واحد (موقع أو تطبيق)',
+      'حتى 30 رسالة مع AI لإنهائه',
+      '1 GB تخزين',
+      '30 يوم لإكماله',
+      'نشر فوري على نطاق فرعي مجاني',
+      'دعم AI أثناء الإنشاء',
     ],
-    color: 'zinc',
+    color: 'cyan',
+  },
+  {
+    id: 'tier_starter_monthly',
+    name: 'Starter',
+    price: 29,
+    period: 'شهرياً',
+    cta: 'اشترك في Starter',
+    perks: [
+      '3 مشاريع شهرياً',
+      '600,000 رمز AI يومياً',
+      '1 GB تخزين',
+      'تطبيق PWA مدمج',
+      'نشر على نطاق Zenrex مجاني',
+      'دعم بريد إلكتروني',
+    ],
+    color: 'emerald',
   },
   {
     id: 'tier_pro_monthly',
     name: 'Pro',
-    price: 9,
-    cta: 'ترقّي لـ Pro',
+    price: 99,
+    period: 'شهرياً',
+    cta: 'اشترك في Pro',
+    badge: 'الأكثر شعبية',
     perks: [
-      '20 مشروع نشط',
+      '12 مشروع شهرياً',
+      '3,000,000 رمز AI يومياً',
       '5 GB تخزين',
-      '1,000,000 رمز ذكاء يومياً (20×)',
-      '∞ طلبات يومياً',
       'Visual Guardian (مراجعة بصرية)',
-      'تذكيرات ذكية + دعم بالواتساب',
+      'دومين مخصص',
+      'دعم واتساب أولوية',
+      'تذكيرات + تقارير شهرية',
     ],
-    color: 'emerald',
+    color: 'amber',
     highlighted: true,
   },
   {
     id: 'tier_studio_monthly',
     name: 'Studio',
-    price: 29,
-    cta: 'ترقّي لـ Studio',
+    price: 299,
+    period: 'شهرياً',
+    cta: 'اشترك في Studio',
+    badge: 'للوكالات والمحترفين',
     perks: [
-      'مشاريع غير محدودة',
+      '60 مشروع شهرياً',
+      '18,000,000 رمز AI يومياً',
       '50 GB تخزين',
-      '10,000,000 رمز ذكاء يومياً',
-      'دعم أولوية 24/7',
+      'تصدير كود + GitHub تلقائي',
       'كل ميزات Pro',
-      'تصدير كود + رفع على GitHub تلقائي',
+      'دعم فوري 24/7',
+      'مدير حساب مخصص',
     ],
-    color: 'amber',
+    color: 'purple',
   },
 ];
 
@@ -74,27 +97,28 @@ const TRANSPARENCY = [
 function TierCard({ tier, onUpgrade, currentTier }) {
   const styles = {
     zinc:    { border: 'border-zinc-700', bg: 'bg-zinc-950', accent: 'text-zinc-300', btn: 'bg-zinc-800 text-zinc-300' },
+    cyan:    { border: 'border-cyan-500/40', bg: 'bg-gradient-to-br from-cyan-500/10 to-blue-500/5', accent: 'text-cyan-300', btn: 'bg-gradient-to-r from-cyan-500 to-blue-500 text-white' },
     emerald: { border: 'border-emerald-500/40', bg: 'bg-gradient-to-br from-emerald-500/10 to-teal-500/5', accent: 'text-emerald-300', btn: 'bg-gradient-to-r from-emerald-500 to-teal-500 text-white' },
     amber:   { border: 'border-amber-500/60', bg: 'bg-gradient-to-br from-amber-500/15 to-yellow-500/5', accent: 'text-amber-300', btn: 'bg-gradient-to-r from-amber-400 to-yellow-500 text-black' },
+    purple:  { border: 'border-purple-500/40', bg: 'bg-gradient-to-br from-purple-500/10 to-fuchsia-500/5', accent: 'text-purple-300', btn: 'bg-gradient-to-r from-purple-500 to-fuchsia-500 text-white' },
   };
   const s = styles[tier.color] || styles.zinc;
-  const isCurrent = (currentTier === 'free' && tier.id === 'free') ||
-                    (currentTier === 'pro' && tier.id === 'tier_pro_monthly') ||
-                    (currentTier === 'studio' && tier.id === 'tier_studio_monthly');
+  const tierKey = tier.id.replace('tier_', '').replace('_monthly', '');
+  const isCurrent = currentTier === tierKey;
   return (
     <div
       data-testid={`tier-${tier.id}`}
-      className={`relative rounded-2xl border ${s.border} ${s.bg} p-6 ${tier.highlighted ? 'ring-2 ring-emerald-500/30 scale-[1.02]' : ''}`}
+      className={`relative rounded-2xl border ${s.border} ${s.bg} p-6 ${tier.highlighted ? 'ring-2 ring-amber-500/40 scale-[1.02]' : ''}`}
     >
-      {tier.highlighted && (
-        <div className="absolute -top-3 left-1/2 -translate-x-1/2 bg-emerald-500 text-black text-[10px] font-black px-3 py-1 rounded-full">
-          الأكثر شعبية
+      {tier.badge && (
+        <div className={`absolute -top-3 left-1/2 -translate-x-1/2 text-[10px] font-black px-3 py-1 rounded-full whitespace-nowrap ${tier.highlighted ? 'bg-amber-400 text-black' : 'bg-zinc-800 text-zinc-300 border border-zinc-700'}`}>
+          {tier.badge}
         </div>
       )}
       <h3 className={`text-xl font-black ${s.accent} mb-1`}>{tier.name}</h3>
       <div className="flex items-baseline gap-1 mb-4">
         <span className="text-4xl font-black">${tier.price}</span>
-        {tier.price > 0 && <span className="text-xs text-zinc-500"> / شهر</span>}
+        {tier.period && <span className="text-xs text-zinc-500"> · {tier.period}</span>}
       </div>
       <ul className="space-y-2 mb-6">
         {tier.perks.map((p, i) => (
@@ -107,10 +131,6 @@ function TierCard({ tier, onUpgrade, currentTier }) {
       {isCurrent ? (
         <button disabled className="w-full px-4 py-3 rounded-xl bg-zinc-800 text-zinc-500 text-sm font-black cursor-not-allowed">
           ✓ الباقة الحالية
-        </button>
-      ) : tier.id === 'free' ? (
-        <button disabled className="w-full px-4 py-3 rounded-xl bg-zinc-900 text-zinc-600 text-sm font-black cursor-not-allowed">
-          {tier.cta}
         </button>
       ) : (
         <button
@@ -162,7 +182,11 @@ export default function Pricing() {
   };
 
   const currentTier = (usage?.quota?.reason === 'admin') ? 'admin'
-                    : (usage ? (usage.quota.cap >= 10_000_000 ? 'studio' : usage.quota.cap >= 1_000_000 ? 'pro' : 'free') : 'free');
+                    : (usage ? (
+                        usage.quota.cap >= 18_000_000 ? 'studio' :
+                        usage.quota.cap >= 3_000_000 ? 'pro' :
+                        usage.quota.cap >= 600_000 ? 'starter' : 'free'
+                      ) : 'free');
 
   return (
     <div className="min-h-screen bg-zinc-950 text-zinc-100" dir="rtl" data-testid="pricing-page">
@@ -207,7 +231,7 @@ export default function Pricing() {
         )}
 
         {/* Tier cards */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-5 mb-12">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5 mb-12">
           {TIERS.map((t) => (
             <TierCard key={t.id} tier={t} onUpgrade={upgrade} currentTier={currentTier} />
           ))}

@@ -1,11 +1,16 @@
 /**
- * ZCrownSpinner — animated branded chip using the REAL Zenrex crown logo (PNG)
- * plus the "Zenrex AI" brand name. Customers always see Zenrex's proprietary AI,
- * never the underlying model provider.
+ * ZCrownSpinner — rotating GOLD "Z" mark with the universal Zenrex brand
+ * (English-only label — "Zenrex" is the global brand regardless of the
+ * customer's UI language).
+ *
+ * Visual contract:
+ *   • The actual Z+crown PNG rotates slowly (one full rotation / 2.4s).
+ *   • Outer ring orbits faster the other way for the "AI thinking" feel.
+ *   • Label is "Zenrex" in English, not transliterated, in every locale.
  */
 import React from 'react';
 
-export default function ZCrownSpinner({ size = 36, label = 'يحلل ويكتب...' }) {
+export default function ZCrownSpinner({ size = 38, label = '' }) {
   const px = `${size}px`;
   return (
     <div className="zcs-wrap" data-testid="z-crown-spinner" role="status" aria-live="polite">
@@ -20,8 +25,8 @@ export default function ZCrownSpinner({ size = 36, label = 'يحلل ويكتب.
         <span className="zcs-ring zcs-ring-2" />
       </div>
       <div className="zcs-text">
-        <span className="zcs-brand">زنركس AI</span>
-        <span className="zcs-status">{label}</span>
+        <span className="zcs-brand">Zenrex</span>
+        {label ? <span className="zcs-status">{label}</span> : null}
       </div>
       <style>{`
         .zcs-wrap {
@@ -41,10 +46,10 @@ export default function ZCrownSpinner({ size = 36, label = 'يحلل ويكتب.
           position: relative; z-index: 2;
           object-fit: contain;
           filter: drop-shadow(0 0 8px rgba(212,175,55,0.55));
-          animation: zcs-pulse 1.8s ease-in-out infinite;
+          animation: zcs-rotate-logo 2.4s linear infinite;
         }
         .zcs-ring {
-          position: absolute; inset: 0;
+          position: absolute; inset: -2px;
           border-radius: 50%;
           border: 1.5px solid transparent;
           border-top-color: rgba(255,215,100,0.85);
@@ -52,7 +57,7 @@ export default function ZCrownSpinner({ size = 36, label = 'يحلل ويكتب.
           animation: zcs-rotate 1.5s linear infinite;
         }
         .zcs-ring-2 {
-          inset: -3px;
+          inset: -5px;
           border-top-color: rgba(255,215,100,0.35);
           border-left-color: rgba(212,175,55,0.25);
           border-right-color: transparent; border-bottom-color: transparent;
@@ -64,15 +69,16 @@ export default function ZCrownSpinner({ size = 36, label = 'يحلل ويكتب.
           background: linear-gradient(90deg, #FFD86B, #D4AF37);
           -webkit-background-clip: text; background-clip: text;
           color: transparent;
+          letter-spacing: 0.5px;
         }
         .zcs-status {
           font-size: 10.5px;
           color: rgba(255,235,180,0.75);
           font-weight: 500;
         }
-        @keyframes zcs-pulse {
-          0%, 100% { transform: scale(1);    filter: drop-shadow(0 0 6px rgba(212,175,55,0.6)); }
-          50%      { transform: scale(1.08); filter: drop-shadow(0 0 12px rgba(255,215,100,0.95)); }
+        @keyframes zcs-rotate-logo {
+          0%   { transform: rotate(0deg); }
+          100% { transform: rotate(360deg); }
         }
         @keyframes zcs-rotate { to { transform: rotate(360deg); } }
       `}</style>
