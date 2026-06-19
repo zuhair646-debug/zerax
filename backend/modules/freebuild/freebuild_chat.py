@@ -1241,6 +1241,13 @@ def make_freebuild_chat_router(db, get_current_user):
         # sees the Guardian; they only experience a sudden quality jump.
         # ═════════════════════════════════════════════════════════════════════
         guardian_note_for_prompt: str = ""
+        brand_kit_block: str = ""
+        try:
+            from .brand_kit import get_brand_kit, format_brand_kit_for_prompt
+            user_kit = await get_brand_kit(db, user["user_id"])
+            brand_kit_block = format_brand_kit_for_prompt(user_kit)
+        except Exception as _bk_err:  # noqa: BLE001
+            logger.warning(f"brand_kit load skipped: {_bk_err}")
         try:
             from .guardian import compute_distress, get_guardian_directive, format_guardian_note  # noqa: WPS433
             prior_messages = list(proj.get("messages") or [])
@@ -1540,6 +1547,7 @@ def make_freebuild_chat_router(db, get_current_user):
 
         extra_ctx = (
             guardian_note_for_prompt
+            + brand_kit_block
             + _build_self_verification(proj)
             + f"اسم المشروع: {proj['name']}\n"
             f"وصف المشروع: {proj['description'] or '(لم يحدد العميل وصفاً بعد — اسأله ودَوّن)'}\n"
@@ -2395,6 +2403,23 @@ def make_freebuild_chat_router(db, get_current_user):
                     "size_kb": validation_report.get("size_kb"),
                     "at": _now(),
                 }
+            # 📊 Site Health Score — runs on every shipped HTML so the customer
+            # always sees a fresh 0-100 grade and click-to-improve suggestions.
+            try:
+                from .health_score import score_html
+                update_set["last_health"] = {
+                    **score_html(new_html),
+                    "at": _now(),
+                }
+            except Exception as _hs_err:  # noqa: BLE001
+                logger.warning(f"health_score skipped: {_hs_err}")
+            # 🧠 Brand kit learning — extract signals from this HTML and merge
+            # into the user's persistent brand kit so future projects start smarter.
+            try:
+                from .brand_kit import learn_from_project
+                await learn_from_project(db, user["user_id"], new_html, proj.get("name", ""))
+            except Exception as _bk_learn_err:  # noqa: BLE001
+                logger.warning(f"brand_kit learn skipped: {_bk_learn_err}")
             # Auto-advance phase whenever we ship HTML (anti-stuck-on-discovery)
             update_set["current_phase"] = "build"
             # Mark earlier phases as completed in phase_history (visual sidebar)
@@ -2788,6 +2813,153 @@ def make_freebuild_chat_router(db, get_current_user):
 
     # ===== INDEPENDENCE TOOLKIT =====
     # Unlock the code/independence tier (mocked payment — wire Lemon Squeezy later)
+    # ═══════════════════════════════════════════════════════════════════════
+    # 💳 STRIPE CHECKOUT — Source-Code Unlock ($100 one-time)
+    #
+    # Fixed packages defined SERVER-SIDE only (security best practice).
+    # Webhook /api/webhook/stripe and polling status endpoint included.
+    # ═══════════════════════════════════════════════════════════════════════
+    STRIPE_PACKAGES = {
+        "code_only":     {"amount": 100.00, "currency": "usd", "tier": "code_only"},
+        "code_pro":      {"amount": 249.00, "currency": "usd", "tier": "code_pro"},
+        "hosting_month": {"amount":  25.00, "currency": "usd", "tier": "hosting_month"},
+    }
+
+    @router.post("/project/{pid}/checkout")
+    async def create_checkout(
+        pid: str,
+        request: Request,
+        package_id: str = Form(...),
+        origin: str = Form(...),
+        user=Depends(get_current_user),
+    ):
+        if package_id not in STRIPE_PACKAGES:
+            raise HTTPException(400, "باقة غير صالحة")
+        proj = await db.freebuild_projects.find_one(
+            {"id": pid, "user_id": user["user_id"]}, {"_id": 0, "name": 1}
+        )
+        if not proj:
+            raise HTTPException(404, "المشروع غير موجود")
+
+        pkg = STRIPE_PACKAGES[package_id]
+        api_key = os.environ.get("STRIPE_API_KEY")
+        if not api_key:
+            raise HTTPException(500, "STRIPE_API_KEY غير مكوّن")
+        try:
+            from emergentintegrations.payments.stripe.checkout import (  # type: ignore
+                StripeCheckout, CheckoutSessionRequest,
+            )
+        except ImportError:
+            raise HTTPException(500, "emergentintegrations stripe module غير مثبّت")
+
+        host_url = str(request.base_url).rstrip("/")
+        webhook_url = f"{host_url}/api/webhook/stripe"
+        stripe_checkout = StripeCheckout(api_key=api_key, webhook_url=webhook_url)
+
+        origin = origin.rstrip("/")
+        success_url = f"{origin}/freebuild/checkout/{pid}/success?session_id={{CHECKOUT_SESSION_ID}}"
+        cancel_url = f"{origin}/freebuild/checkout/{pid}/cancel"
+
+        metadata = {
+            "project_id": pid,
+            "user_id": user["user_id"],
+            "package_id": package_id,
+            "tier": pkg["tier"],
+        }
+        req = CheckoutSessionRequest(
+            amount=pkg["amount"],
+            currency=pkg["currency"],
+            success_url=success_url,
+            cancel_url=cancel_url,
+            metadata=metadata,
+        )
+        try:
+            session = await stripe_checkout.create_checkout_session(req)
+        except Exception as e:  # noqa: BLE001
+            logger.exception("stripe checkout failed: %s", e)
+            raise HTTPException(500, f"فشل إنشاء جلسة الدفع: {e}")
+
+        # MANDATORY: persist a pending transaction row BEFORE redirect.
+        await db.payment_transactions.insert_one({
+            "session_id": session.session_id,
+            "user_id": user["user_id"],
+            "project_id": pid,
+            "package_id": package_id,
+            "tier": pkg["tier"],
+            "amount": pkg["amount"],
+            "currency": pkg["currency"],
+            "payment_status": "pending",
+            "status": "initiated",
+            "metadata": metadata,
+            "created_at": _now(),
+            "updated_at": _now(),
+        })
+        return {"url": session.url, "session_id": session.session_id}
+
+    @router.get("/payments/status/{session_id}")
+    async def checkout_status(session_id: str, request: Request, user=Depends(get_current_user)):
+        api_key = os.environ.get("STRIPE_API_KEY")
+        if not api_key:
+            raise HTTPException(500, "STRIPE_API_KEY غير مكوّن")
+        try:
+            from emergentintegrations.payments.stripe.checkout import StripeCheckout  # type: ignore
+        except ImportError:
+            raise HTTPException(500, "emergentintegrations stripe module غير مثبّت")
+        host_url = str(request.base_url).rstrip("/")
+        stripe_checkout = StripeCheckout(api_key=api_key, webhook_url=f"{host_url}/api/webhook/stripe")
+        try:
+            status = await stripe_checkout.get_checkout_status(session_id)
+        except Exception as e:  # noqa: BLE001
+            raise HTTPException(502, f"فشل جلب حالة الدفع: {e}")
+
+        # Update transaction (idempotent — only process success once)
+        txn = await db.payment_transactions.find_one({"session_id": session_id}, {"_id": 0})
+        already_processed = txn and txn.get("status") == "completed"
+        if status.payment_status == "paid" and not already_processed:
+            tier = (txn or {}).get("tier") or status.metadata.get("tier") or "code_only"
+            project_id = (txn or {}).get("project_id") or status.metadata.get("project_id")
+            if project_id and tier in ("code_only", "code_pro"):
+                await db.freebuild_projects.update_one(
+                    {"id": project_id},
+                    {"$set": {
+                        "code_unlocked": True,
+                        "tier": tier,
+                        "unlocked_at": _now(),
+                        "updated_at": _now(),
+                    }},
+                )
+            if project_id and tier == "hosting_month":
+                await db.freebuild_projects.update_one(
+                    {"id": project_id},
+                    {"$set": {
+                        "hosting_active": True,
+                        "hosting_until": _now(),  # frontend should display real date from billing record
+                        "updated_at": _now(),
+                    }},
+                )
+            await db.payment_transactions.update_one(
+                {"session_id": session_id},
+                {"$set": {
+                    "status": "completed",
+                    "payment_status": status.payment_status,
+                    "amount_total": status.amount_total,
+                    "completed_at": _now(),
+                    "updated_at": _now(),
+                }},
+            )
+        elif status.payment_status != "paid":
+            await db.payment_transactions.update_one(
+                {"session_id": session_id},
+                {"$set": {"payment_status": status.payment_status, "updated_at": _now()}},
+            )
+        return {
+            "session_id": session_id,
+            "payment_status": status.payment_status,
+            "status": status.status,
+            "amount_total": status.amount_total,
+            "currency": status.currency,
+        }
+
     @router.post("/project/{pid}/unlock")
     async def unlock_independence(
         pid: str,

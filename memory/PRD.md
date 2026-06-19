@@ -1,6 +1,65 @@
 # Zenrex Farm — PRD (Product Requirements Document)
 
-## 2026-06-19 (الجلسة الخامسة) — 🛡️ Tier-1: HTML Validator + Auto-Heal
+## 2026-06-19 (الجلسة السادسة) — 🎯 المنظومة الكاملة (Health Score + Brand Kit + Stripe + Checkout)
+
+
+### مكوّنات جديدة:
+1. **`/app/backend/modules/freebuild/health_score.py`** — Site Health Score 0-100
+   - 5 أبعاد بأوزان: 🎨 تصميم (25), 🔍 SEO (20), ⚡ أداء (20), ♿ Accessibility (15), 🛡️ امتثال سعودي (20)
+   - يولّد grade (A+, A, B+, B, C, D, F) + emoji + top_suggestions قابلة للنقر
+   - يُحفظ في `last_health` على كل تحديث HTML
+
+2. **`/app/backend/modules/freebuild/brand_kit.py`** — AI Memory عبر المشاريع
+   - `get_brand_kit()` يجيب تفضيلات العميل من DB
+   - `format_brand_kit_for_prompt()` يُحقن في system prompt
+   - `learn_from_project()` يستخرج ألوان، خطوط، قطاع تجاري تلقائياً بعد كل HTML
+   - مع الوقت AI يعرف العميل أكثر فأكثر
+
+3. **Stripe Checkout كامل** في `freebuild_chat.py`:
+   - 3 باقات (server-side):
+     - `code_only` $100 (دفعة واحدة، كود ملكية كاملة)
+     - `code_pro` $249 (كود + Multi-Page + استشارة)
+     - `hosting_month` $25 (اشتراك شهري)
+   - `POST /project/{pid}/checkout` يولّد Stripe session
+   - `GET /payments/status/{session_id}` يفحص الحالة مع idempotent unlock
+   - `POST /api/webhook/stripe` (global في server.py) يعالج Webhook events
+   - `payment_transactions` collection يحفظ كل المعاملات
+
+4. **`/app/frontend/src/pages/FreebuildCheckout.jsx`** — صفحة قرار النهائي:
+   - 3 بطاقات gradient احترافية
+   - Stripe redirect + polling status
+   - Success/Cancel routes
+
+5. **Health Card في FreeBuildChat.js**:
+   - Sidebar فيها bar chart للـ5 أبعاد
+   - Top suggestions بصيغة زر — كل نقرة تضيف الاقتراح لـcomposer
+   - Upgrade CTA "احصد الكود — $100" يفتح صفحة Checkout
+
+### اختبار شامل (موقع صالون تجميل):
+- ✅ HTML built (28.5KB)
+- ✅ Validator: `✅ OK (29.0KB, 0 ملاحظات)` — autoheal not needed
+- ✅ Health Score: **73/100 (B+ 🟡)** 
+  - 🎨 تصميم 22/25 (88%)
+  - 🔍 SEO 11/20 (55%) ← فرصة upsell واضحة
+  - ⚡ أداء 14/20 (70%)
+  - ♿ Accessibility 7/15 (47%) ← فرصة تحسين كبيرة
+  - 🛡️ امتثال سعودي 19/20 (95%)
+- ✅ Top suggestions: Open Graph, Twitter Card, Schema.org, aria-label, input labels
+- ✅ Brand Kit auto-learned: ألوان بنفسجي/وردي، قطاع salon
+
+### ما يحتاج جلسة قادمة (لأسباب نطاق):
+- 🟡 **Multi-Page Architecture**: يحتاج تحديث جذري للـAI prompt + export endpoint لتوليد عدة صفحات HTML بدل واحدة. مدة تقديرية: نصف يوم.
+- 🟡 **Visual Guardian**: يحتاج screenshot + Gemini/Claude Vision لفحص بصري آلي. مدة تقديرية: 3-4 ساعات.
+
+### Trail of sessions in this work block:
+- Session 1: AI Compliance Layer + 4-stage machine + 15/15 امتثال + رفض المحتوى الممنوع
+- Session 2: UI polish + text glitch fix + Information First rule
+- Session 3: Source Code Export (ZIP) + E2E hosted
+- Session 4: Zenrex Guardian (silent supervisor) + Admin Dashboard
+- Session 5: HTML Validator + Auto-Heal
+- Session 6 (الحالية): Site Health Score + Brand Kit + Stripe Checkout + UI cards
+
+
 **Status**: ✅ Implemented, tested, E2E confirmed on independent hosting
 
 ### ما تم بناؤه:

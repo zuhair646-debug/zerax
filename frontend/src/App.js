@@ -25,6 +25,7 @@ import QuickShare from '@/pages/QuickShare';
 import ShareHistory from '@/pages/ShareHistory';
 import Profile from '@/pages/Profile';
 import FreeBuildChat from '@/pages/FreeBuildChat';
+import FreebuildCheckout from '@/pages/FreebuildCheckout';
 import GuardianDashboard from '@/pages/GuardianDashboard';
 import AppsConvert from '@/pages/AppsConvert';
 import NewRequest from '@/pages/NewRequest';
@@ -218,6 +219,9 @@ function App() {
           <Route path="/admin/training" element={<ProtectedRoute adminOnly><AdminTraining user={user} /></ProtectedRoute>} />
           <Route path="/admin/notifications" element={<ProtectedRoute adminOnly><AdminNotifications user={user} /></ProtectedRoute>} />
           <Route path="/admin/guardian" element={<ProtectedRoute adminOnly><GuardianDashboard user={user} /></ProtectedRoute>} />
+          <Route path="/freebuild/checkout/:pid" element={<ProtectedRoute><FreebuildCheckout user={user} /></ProtectedRoute>} />
+          <Route path="/freebuild/checkout/:pid/success" element={<ProtectedRoute><FreebuildCheckout user={user} /></ProtectedRoute>} />
+          <Route path="/freebuild/checkout/:pid/cancel" element={<ProtectedRoute><FreebuildCheckout user={user} /></ProtectedRoute>} />
           <Route path="/storage" element={<ProtectedRoute><StoragePage user={user} /></ProtectedRoute>} />
           <Route path="/trash" element={<ProtectedRoute><TrashPage user={user} /></ProtectedRoute>} />
           <Route path="/chat" element={<ProtectedRoute><AIChat user={user} /></ProtectedRoute>} />

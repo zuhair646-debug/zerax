@@ -2409,6 +2409,22 @@ function ChatWorkspace({ projectId }) {
 
   // Manual force-refresh of project (used by 'Refresh' button)
   const [previewKey, setPreviewKey] = useState(0);
+
+  // ── Quick-message bus — health-card suggestion buttons (and other UI bits)
+  // dispatch a `freebuild_quick_message` window event with the text to send.
+  // We populate the composer with it; user can edit or hit Send.
+  useEffect(() => {
+    const handler = (e) => {
+      const text = e?.detail?.text;
+      if (!text) return;
+      setMessage((m) => (m ? `${m.trim()} ${text}` : text));
+      try {
+        toast.info('💡 الاقتراح أُضيف للمحادثة — اضغط إرسال');
+      } catch (_) { /* ignore */ }
+    };
+    window.addEventListener('freebuild_quick_message', handler);
+    return () => window.removeEventListener('freebuild_quick_message', handler);
+  }, []);
   const refreshProject = useCallback(async () => {
     const token = localStorage.getItem('token');
     try {
@@ -3064,6 +3080,79 @@ function ChatWorkspace({ projectId }) {
       <div className="flex-1 flex overflow-hidden">
         {/* RIGHT (sidebar in RTL): Phases */}
         <div className="w-56 lg:w-64 bg-zinc-900/50 border-l border-white/10 p-3 lg:p-4 overflow-y-auto shrink-0 hidden md:block">
+          {/* 📊 SITE HEALTH SCORE — visible after first build */}
+          {project?.last_health && (
+            <div className="mb-4 rounded-xl border border-zinc-700/60 bg-gradient-to-br from-zinc-900 to-zinc-950 p-3" data-testid="health-card">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-xs font-bold text-zinc-400">صحة الموقع</span>
+                <span className="text-lg">{project.last_health.summary_emoji}</span>
+              </div>
+              <div className="flex items-baseline gap-1 mb-1">
+                <span className={`text-3xl font-black ${
+                  project.last_health.total >= 80 ? 'text-emerald-400' :
+                  project.last_health.total >= 60 ? 'text-amber-400' : 'text-orange-400'
+                }`} data-testid="health-score-total">
+                  {project.last_health.total}
+                </span>
+                <span className="text-zinc-500 text-sm">/100</span>
+                <span className="text-zinc-400 text-xs mr-2">{project.last_health.grade}</span>
+              </div>
+              {/* Dimension bars */}
+              <div className="space-y-1 mb-3">
+                {(project.last_health.dimensions || []).map((d) => (
+                  <div key={d.id} className="text-[10px]">
+                    <div className="flex justify-between text-zinc-400 mb-0.5">
+                      <span>{d.name}</span>
+                      <span>{d.score}/{d.max}</span>
+                    </div>
+                    <div className="h-1 bg-zinc-800 rounded-full overflow-hidden">
+                      <div
+                        className={`h-full ${
+                          d.percent >= 80 ? 'bg-emerald-500' :
+                          d.percent >= 60 ? 'bg-amber-500' : 'bg-orange-500'
+                        }`}
+                        style={{ width: `${d.percent}%` }}
+                      />
+                    </div>
+                  </div>
+                ))}
+              </div>
+              {/* Top suggestions — click to apply */}
+              {(project.last_health.top_suggestions || []).length > 0 && (
+                <div className="border-t border-zinc-800 pt-2">
+                  <div className="text-[10px] font-bold text-zinc-400 mb-1.5">
+                    💡 رفعها لـ{Math.min(95, project.last_health.total + project.last_health.improvement_potential)}+:
+                  </div>
+                  {project.last_health.top_suggestions.slice(0, 3).map((sug, i) => (
+                    <button
+                      key={i}
+                      onClick={() => {
+                        try {
+                          window.dispatchEvent(new CustomEvent('freebuild_quick_message', {
+                            detail: { text: sug },
+                          }));
+                        } catch (_) { /* ignore */ }
+                      }}
+                      data-testid={`health-suggest-${i}`}
+                      className="text-right w-full text-[11px] text-emerald-300/90 hover:text-emerald-200 hover:bg-emerald-500/10 rounded px-2 py-1 mb-0.5 transition"
+                    >
+                      • {sug.length > 55 ? sug.slice(0, 55) + '…' : sug}
+                    </button>
+                  ))}
+                </div>
+              )}
+              {/* Checkout CTA if not unlocked */}
+              {!project.code_unlocked && project.current_html && (
+                <button
+                  onClick={() => (window.location.href = `/freebuild/checkout/${project.id}`)}
+                  data-testid="upgrade-cta"
+                  className="mt-3 w-full bg-gradient-to-r from-purple-500 to-pink-500 text-white text-xs font-bold py-2 rounded-lg hover:opacity-90"
+                >
+                  🚀 احصد الكود — $100
+                </button>
+              )}
+            </div>
+          )}
           <h2 className="font-bold mb-3 text-emerald-400 text-sm flex items-center gap-1.5">
             <span>📋</span> <span>مراحل البناء</span>
           </h2>

@@ -3497,6 +3497,60 @@ try:
 except Exception as _goe:
     logging.getLogger(__name__).error(f"Failed to register Google OAuth: {_goe}", exc_info=True)
 
+# ============== STRIPE WEBHOOK (global /api/webhook/stripe) ===================
+from fastapi import Request as _Req
+
+@app.post("/api/webhook/stripe")
+async def _stripe_webhook(request: _Req):
+    """Stripe webhook for payment events. Marks projects as unlocked atomically."""
+    import os as _os
+    api_key = _os.environ.get("STRIPE_API_KEY")
+    if not api_key:
+        return {"received": False, "error": "no_api_key"}
+    try:
+        from emergentintegrations.payments.stripe.checkout import StripeCheckout  # type: ignore
+    except ImportError:
+        return {"received": False, "error": "module_missing"}
+    body = await request.body()
+    sig = request.headers.get("Stripe-Signature", "")
+    host_url = str(request.base_url).rstrip("/")
+    stripe_checkout = StripeCheckout(api_key=api_key, webhook_url=f"{host_url}/api/webhook/stripe")
+    try:
+        evt = await stripe_checkout.handle_webhook(body, sig)
+    except Exception as e:
+        logging.getLogger(__name__).warning(f"stripe webhook parse failed: {e}")
+        return {"received": False, "error": str(e)}
+    # Idempotent project unlock
+    if evt.payment_status == "paid":
+        meta = evt.metadata or {}
+        proj_id = meta.get("project_id")
+        tier = meta.get("tier") or "code_only"
+        if proj_id:
+            from datetime import datetime, timezone
+            _now_iso = datetime.now(timezone.utc).isoformat()
+            if tier in ("code_only", "code_pro"):
+                await db.freebuild_projects.update_one(
+                    {"id": proj_id},
+                    {"$set": {
+                        "code_unlocked": True, "tier": tier,
+                        "unlocked_at": _now_iso, "updated_at": _now_iso,
+                    }},
+                )
+            elif tier == "hosting_month":
+                await db.freebuild_projects.update_one(
+                    {"id": proj_id},
+                    {"$set": {"hosting_active": True, "updated_at": _now_iso}},
+                )
+            await db.payment_transactions.update_one(
+                {"session_id": evt.session_id},
+                {"$set": {
+                    "status": "completed", "payment_status": "paid",
+                    "webhook_processed_at": _now_iso,
+                }},
+                upsert=False,
+            )
+    return {"received": True, "event_type": evt.event_type}
+
 try:
     from routers.owner_notifications import router as _owner_notif_router
     app.include_router(_owner_notif_router)
