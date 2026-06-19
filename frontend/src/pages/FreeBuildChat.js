@@ -3530,8 +3530,14 @@ function ChatWorkspace({ projectId }) {
                             );
                           }
                           if (s.kind === 'tool_building') {
-                            // Live "editor" view: shows real code snippets being
-                            // typed by Claude (Cursor/Bolt-style), not just a counter.
+                            // Only render the LATEST tool_building step (or the
+                            // 'done' final one) to avoid the spammy "78ch → 90ch →
+                            // 159ch" cascade that feels like text being written
+                            // then deleted. Earlier in-progress steps are
+                            // suppressed since they're superseded.
+                            const allBuilds = (m.agent_steps || []).filter((x) => x.kind === 'tool_building');
+                            const lastBuild = allBuilds[allBuilds.length - 1];
+                            if (s !== lastBuild && !s.done) return null;
                             const snippet = (s.snippet || '').trim();
                             const isDone = !!s.done;
                             return (
