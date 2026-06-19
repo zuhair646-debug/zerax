@@ -3859,6 +3859,22 @@ try:
 except Exception as _rre:
     logging.getLogger(__name__).error(f"Failed to register Resume Reminder module: {_rre}", exc_info=True)
 
+# ============== LEGAL TERMS (per-section acceptance) ==============
+try:
+    from modules.terms import make_terms_router
+    app.include_router(make_terms_router(db, get_current_user))
+    logging.getLogger(__name__).info("Terms module registered")
+except Exception as _te:
+    logging.getLogger(__name__).error(f"Failed to register Terms module: {_te}", exc_info=True)
+
+# ============== SITE-TO-APP CONVERTER ==============
+try:
+    from modules.site_to_app import make_site_to_app_router
+    app.include_router(make_site_to_app_router(db, get_current_user))
+    logging.getLogger(__name__).info("Site-to-App converter module registered")
+except Exception as _sta:
+    logging.getLogger(__name__).error(f"Failed to register Site-to-App module: {_sta}", exc_info=True)
+
 # ============== VISUAL DESIGNER APIS ==============
 class DesignElement(BaseModel):
     id: str

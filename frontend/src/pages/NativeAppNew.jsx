@@ -103,6 +103,15 @@ export default function NativeAppNew() {
           <p className="text-zinc-400 max-w-2xl mx-auto">
             اكتب فكرتك بكلمات بسيطة، اختر النظام، وزنركس يبني لك تطبيق PWA قابل للتثبيت على iPhone و Android فوراً — بدون App Store.
           </p>
+
+          {/* CTA: Site-to-App Converter */}
+          <a
+            href="/native/convert"
+            data-testid="goto-converter-cta"
+            className="inline-flex items-center gap-2 mt-5 px-5 py-2.5 rounded-xl bg-gradient-to-l from-cyan-500/15 to-purple-500/15 hover:from-cyan-500/25 hover:to-purple-500/25 border border-cyan-400/30 text-cyan-200 text-sm font-bold transition"
+          >
+            🔁 عندك موقع جاهز؟ حوّله إلى تطبيق
+          </a>
         </div>
 
         <div className="grid md:grid-cols-3 gap-6">

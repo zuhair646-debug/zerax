@@ -27,6 +27,8 @@ import Profile from '@/pages/Profile';
 import FreeBuildChat from '@/pages/FreeBuildChat';
 import NativeAppNew from '@/pages/NativeAppNew';
 import MyProjects from '@/pages/MyProjects';
+import SiteToAppWizard from '@/pages/SiteToAppWizard';
+import TermsGate from '@/components/TermsGate';
 import FreebuildCheckout from '@/pages/FreebuildCheckout';
 import GuardianDashboard from '@/pages/GuardianDashboard';
 import AppsConvert from '@/pages/AppsConvert';
@@ -196,9 +198,10 @@ function App() {
           <Route path="/dashboard/share-history" element={<ProtectedRoute><ShareHistory user={user} setUser={setUser} /></ProtectedRoute>} />
           <Route path="/dashboard/downloads" element={<ProtectedRoute><MyImages user={user} setUser={setUser} /></ProtectedRoute>} />
           <Route path="/dashboard/profile" element={<ProtectedRoute><Profile user={user} setUser={setUser} /></ProtectedRoute>} />
-          <Route path="/freebuild/chat" element={<ProtectedRoute><FreeBuildChat user={user} setUser={setUser} /></ProtectedRoute>} />
+          <Route path="/freebuild/chat" element={<ProtectedRoute><TermsGate section="websites"><FreeBuildChat user={user} setUser={setUser} /></TermsGate></ProtectedRoute>} />
           <Route path="/freebuild/chat/:id" element={<ProtectedRoute><FreeBuildChat user={user} setUser={setUser} /></ProtectedRoute>} />
-          <Route path="/native/new" element={<ProtectedRoute><NativeAppNew /></ProtectedRoute>} />
+          <Route path="/native/new" element={<ProtectedRoute><TermsGate section="apps"><NativeAppNew /></TermsGate></ProtectedRoute>} />
+          <Route path="/native/convert" element={<ProtectedRoute><SiteToAppWizard /></ProtectedRoute>} />
           <Route path="/native/chat/:id" element={<ProtectedRoute><FreeBuildChat user={user} setUser={setUser} /></ProtectedRoute>} />
           <Route path="/freebuild/projects" element={<ProtectedRoute><MyProjects /></ProtectedRoute>} />
           <Route path="/my-projects" element={<ProtectedRoute><MyProjects /></ProtectedRoute>} />
