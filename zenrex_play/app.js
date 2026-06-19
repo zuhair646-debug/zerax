@@ -70,7 +70,7 @@ $('#ai-login').onclick = async () => {
 };
 $('#logout-fab').onclick = () => {
   if (!confirm('تسجيل الخروج؟')) return;
-  ['zp_role','zp_email','zp_name','zp_token'].forEach(k => localStorage.removeItem(k));
+  ['zp_role','zp_email','zp_name','zp_token','zp_view_as_user'].forEach(k => localStorage.removeItem(k));
   location.reload();
 };
 
@@ -79,14 +79,19 @@ async function enterApp() {
   $('#auth-screen').classList.add('hide');
   $('#app').classList.add('on');
   document.body.dataset.role = STATE.role;
-  if (STATE.role === 'parent') {
+  // viewAsUser: parent browsing the app as a regular user (separate from kids)
+  const isViewAs = STATE.viewAsUser === '1';
+  $('#return-to-parent').style.display = isViewAs ? 'block' : 'none';
+  if (STATE.role === 'parent' && !isViewAs) {
     // Show parent screen directly
     showScreen('parent');
     buildParentDashboard('videos');
     $('#nav').style.display = 'none';
     $('.cat-fab').style.display = 'none';
   } else {
-    // Child: load feed
+    // Child OR Parent in view-as-user mode: load feed
+    $('#nav').style.display = '';
+    $('.cat-fab').style.display = '';
     await loadCategories();
     await loadVideos();
     await loadDhikr();
@@ -94,6 +99,27 @@ async function enterApp() {
     showScreen('home');
   }
 }
+
+// Toggle: Parent → View-as-User
+function enterViewAsUser() {
+  STATE.viewAsUser = '1';
+  localStorage.setItem('zp_view_as_user', '1');
+  // Keep parent role + email/token; just flip into user mode
+  enterApp();
+}
+function exitViewAsUser() {
+  STATE.viewAsUser = '';
+  localStorage.removeItem('zp_view_as_user');
+  $('#return-to-parent').style.display = 'none';
+  enterApp();
+}
+document.addEventListener('click', (e) => {
+  if (e.target.closest('#p-view-as-user')) enterViewAsUser();
+  if (e.target.closest('#return-to-parent')) exitViewAsUser();
+});
+
+// Hydrate viewAsUser from localStorage on first load
+STATE.viewAsUser = localStorage.getItem('zp_view_as_user') || '';
 
 // ════════ NAV ════════
 $$('.nav-btn').forEach(b => b.onclick = () => {
@@ -125,14 +151,27 @@ function showScreen(name) {
 }
 
 // ════════ VIDEO FEED ════════
+function shuffleArr(a) {
+  // Cryptographically random Fisher-Yates (uses crypto when available)
+  const rand = () => {
+    if (window.crypto && crypto.getRandomValues) {
+      const u32 = new Uint32Array(1); crypto.getRandomValues(u32); return u32[0] / 0x100000000;
+    }
+    return Math.random();
+  };
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(rand() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
 async function loadVideos() {
   try {
-    const r = await fetch(API + '/kids/bot/approved?_=' + Date.now());
+    const r = await fetch(API + '/kids/bot/approved?_=' + Date.now() + '&n=' + Math.random());
     const d = await r.json();
     const items = (d.items || []).filter(v => v.url);
-    // Smart shuffle: every login = fresh order. Uses a Fisher-Yates with seeded
-    // randomness based on session ID, then mixes old (>3 days) and new (<3 days)
-    // alternately to keep variety.
+    // Strong randomness: completely re-shuffle every load, every login = totally new order.
+    // Mix fresh (<3 days) with old (≥3 days) by interleaving — variety + freshness priority.
     const now = Date.now();
     const fresh = [], old = [];
     items.forEach(v => {
@@ -140,20 +179,33 @@ async function loadVideos() {
       const ageDays = (now - created) / 86400000;
       if (ageDays <= 3) fresh.push(v); else old.push(v);
     });
-    // Shuffle each group independently
-    function shuf(a) { for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; }
-    shuf(fresh); shuf(old);
-    // Interleave: 1 fresh, 1 old, 1 fresh, 1 old... (so user always sees variety)
+    shuffleArr(fresh); shuffleArr(old);
     const merged = [];
     const max = Math.max(fresh.length, old.length);
     for (let i = 0; i < max; i++) {
       if (fresh[i]) merged.push(fresh[i]);
       if (old[i]) merged.push(old[i]);
     }
+    // Final shuffle pass over the merged list — guarantees true randomness even with
+    // tiny fresh/old counts (otherwise pattern would be fresh-old-fresh-old which can
+    // feel "repeating" to kids).
+    shuffleArr(merged);
     STATE.videos = merged;
     renderFeed();
   } catch (e) { console.error('loadVideos', e); }
 }
+// Manual reshuffle button — re-renders feed in new random order (no refetch)
+function reshuffleFeed() {
+  if (!STATE.videos.length) return;
+  shuffleArr(STATE.videos);
+  renderFeed();
+  // Scroll back to top
+  const feed = $('#feed');
+  if (feed) feed.scrollTo({ top: 0, behavior: 'smooth' });
+}
+document.addEventListener('click', (e) => {
+  if (e.target.closest('#shuffle-fab')) reshuffleFeed();
+});
 function renderFeed() {
   const feed = $('#feed');
   const filtered = STATE.category === 'all'
@@ -517,6 +569,7 @@ function buildParentDashboard(pt) {
   if (pt === 'stats') return pdStats(c);
   if (pt === 'recordings') return pdRecordings(c);
   if (pt === 'quran-review') return pdQuranReview(c);
+  if (pt === 'challenge') return pdChallenge(c);
 }
 async function pdVideos(c) {
   c.innerHTML = `
@@ -877,11 +930,189 @@ async function pdQuranReview(c) {
     });
   } catch (e) { c.innerHTML = `<div class="card status err show">${e.message}</div>`; }
 }
+
+// ════════ PARENT: WEEKLY CHALLENGE ════════
+async function pdChallenge(c) {
+  c.innerHTML = '⏳';
+  try {
+    const r = await fetch(API + '/kids/challenge/active', { headers: headers() });
+    const d = await r.json();
+    if (!quranSurahs.length) {
+      try { const r2 = await fetch(API + '/kids/quran/surahs'); quranSurahs = (await r2.json()).items || []; } catch(_){}
+    }
+    const surahName = (n) => (quranSurahs.find(s => s.number === n)?.name) || `سورة ${n}`;
+    let activeHtml = '';
+    if (d.challenge) {
+      const ch = d.challenge;
+      const lb = d.leaderboard || [];
+      const endsAt = new Date(ch.end_at);
+      const daysLeft = Math.max(0, Math.ceil((endsAt - new Date()) / 86400000));
+      activeHtml = `
+        <div class="card" style="border-color:rgba(34,197,94,.4);background:linear-gradient(135deg,rgba(34,197,94,.08),rgba(168,85,247,.04))">
+          <h3>🏆 التحدي النشط — ${daysLeft} يوم متبقي</h3>
+          <div class="hint">السور المستهدفة (${ch.surah_nums.length}):</div>
+          <div style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:10px">
+            ${ch.surah_nums.map(n => `<span style="background:rgba(168,85,247,.15);padding:4px 10px;border-radius:100px;font-size:12px;font-weight:800">${n}. ${surahName(n)}</span>`).join('')}
+          </div>
+          <div style="margin-top:10px">
+            <div style="font-size:12px;opacity:.7;margin-bottom:6px">🏅 التصنيف (الأكثر سور مكتملة):</div>
+            ${lb.map((row, idx) => `
+              <div style="background:rgba(255,255,255,.04);padding:10px;border-radius:10px;margin-bottom:6px">
+                <div style="display:flex;align-items:center;gap:8px">
+                  <span style="font-size:18px">${idx === 0 ? '🥇' : idx === 1 ? '🥈' : '🥉'}</span>
+                  <span style="flex:1;font-weight:900">${row.child_name}</span>
+                  <span style="background:#fbbf24;color:#000;padding:3px 10px;border-radius:100px;font-size:11px;font-weight:900">${row.unique_surahs_done}/${d.total_surahs}</span>
+                </div>
+                <div style="background:rgba(0,0,0,.3);height:8px;border-radius:100px;overflow:hidden;margin-top:6px">
+                  <div style="height:100%;background:linear-gradient(90deg,#22c55e,#86efac);width:${row.completion_pct}%"></div>
+                </div>
+                <div style="font-size:11px;opacity:.6;margin-top:4px">${row.approved_count} تسجيل معتمد · ${row.points} نقطة</div>
+              </div>
+            `).join('') || '<div style="opacity:.5;padding:10px;text-align:center">لا يوجد أطفال أو لم يبدأ أحد بعد</div>'}
+          </div>
+          <button class="btn-add" id="ch-end" data-cid="${ch.id}" style="width:100%;margin-top:10px;background:linear-gradient(135deg,#ef4444,#dc2626)">🏁 إنهاء التحدي الآن وإعلان الفائز</button>
+        </div>`;
+    }
+    c.innerHTML = `
+      ${activeHtml}
+      <div class="card">
+        <h3>${d.challenge ? '🔄 ابدأ تحدّي جديد (سيُنهي الحالي)' : '🚀 ابدأ تحدي أسبوعي'}</h3>
+        <div class="hint">حدّد سور معينة أو اترك النظام يختار عشوائياً.</div>
+        <div class="form-row">
+          <label style="flex:1 1 100%;display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer">
+            <input type="radio" name="ch-mode" value="manual" checked style="width:18px;height:18px"> 📋 يدوي (أنا أختار)
+          </label>
+          <label style="flex:1 1 100%;display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer">
+            <input type="radio" name="ch-mode" value="random" style="width:18px;height:18px"> 🎲 عشوائي
+          </label>
+        </div>
+        <div id="ch-manual-box">
+          <div class="hint">اكتب أرقام السور مفصولة بفاصلة (مثال: 1, 112, 113, 114):</div>
+          <div class="form-row"><input id="ch-surahs" placeholder="1, 112, 113, 114" style="flex:1"></div>
+        </div>
+        <div id="ch-random-box" style="display:none">
+          <div class="form-row">
+            <label style="font-size:12px">عدد السور:</label>
+            <input id="ch-random-n" type="number" min="1" max="10" value="3" style="flex:0 0 80px">
+          </div>
+        </div>
+        <div class="form-row">
+          <label style="font-size:12px">مدّة التحدي (أيام):</label>
+          <input id="ch-days" type="number" min="1" max="30" value="7" style="flex:0 0 80px">
+        </div>
+        <button class="btn-add" id="ch-create" style="width:100%;padding:12px;font-size:13px;margin-top:6px">🏆 بدء التحدي</button>
+        <div class="status" id="ch-st"></div>
+      </div>
+      <div class="card">
+        <h3>📜 سجل التحدّيات السابقة</h3>
+        <div id="ch-history"></div>
+      </div>`;
+
+    // Wire up mode toggle
+    $$('input[name="ch-mode"]').forEach(el => el.onchange = (e) => {
+      const isRandom = e.target.value === 'random';
+      $('#ch-manual-box').style.display = isRandom ? 'none' : 'block';
+      $('#ch-random-box').style.display = isRandom ? 'block' : 'none';
+    });
+
+    // End challenge
+    const endBtn = $('#ch-end');
+    if (endBtn) endBtn.onclick = async () => {
+      if (!confirm('إنهاء التحدي الآن وإعلان الفائز؟')) return;
+      const fd = new FormData(); fd.append('challenge_id', endBtn.dataset.cid);
+      const rr = await fetch(API + '/kids/challenge/end', { method: 'POST', headers: headers(), body: fd });
+      const dd = await rr.json();
+      if (dd.winner_email) alert(`🏆 الفائز: ${dd.leaderboard[0].child_name} (${dd.leaderboard[0].unique_surahs_done} سورة) — حصل على 100 نقطة!`);
+      else alert('انتهى التحدي. لا فائز (لا توجد تسجيلات معتمدة).');
+      pdChallenge(c);
+    };
+
+    // Create
+    $('#ch-create').onclick = async () => {
+      const mode = ($('input[name="ch-mode"]:checked')||{}).value || 'manual';
+      const days = parseInt($('#ch-days').value || '7', 10);
+      const fd = new FormData();
+      fd.append('mode', mode);
+      fd.append('days', String(days));
+      if (mode === 'manual') {
+        const txt = $('#ch-surahs').value.trim();
+        const nums = txt.split(/[,،\s]+/).map(x => parseInt(x, 10)).filter(n => n >= 1 && n <= 114);
+        if (!nums.length) { setStatus('#ch-st', 'err', 'اكتب أرقام السور.'); return; }
+        fd.append('surah_nums', JSON.stringify(nums));
+      } else {
+        fd.append('random_count', String(parseInt($('#ch-random-n').value || '3', 10)));
+      }
+      setStatus('#ch-st', 'wait', '⏳ جاري الإنشاء...');
+      try {
+        const rr = await fetch(API + '/kids/challenge/create', { method: 'POST', headers: headers(), body: fd });
+        const dd = await rr.json();
+        if (rr.ok && dd.ok) {
+          setStatus('#ch-st', 'ok', '✅ بدأ التحدي!');
+          setTimeout(() => pdChallenge(c), 600);
+        } else {
+          setStatus('#ch-st', 'err', dd.detail || 'فشل');
+        }
+      } catch (e) { setStatus('#ch-st', 'err', e.message); }
+    };
+
+    // History
+    try {
+      const rh = await fetch(API + '/kids/challenge/history', { headers: headers() });
+      const dh = await rh.json();
+      const items = (dh.items || []).filter(x => x.status === 'ended').slice(0, 10);
+      $('#ch-history').innerHTML = items.length ? items.map(x => `
+        <div style="background:rgba(255,255,255,.03);padding:10px;border-radius:10px;margin-bottom:6px">
+          <div style="font-size:12px;opacity:.8">${(x.surah_nums||[]).map(n => surahName(n)).join('، ')}</div>
+          <div style="font-size:11px;opacity:.6;margin-top:4px">انتهى ${new Date(x.ended_at || x.created_at).toLocaleDateString('ar')} · ${x.winner_email ? '🏆 ' + x.winner_email.split('@')[0] : 'لا فائز'}</div>
+        </div>`).join('') : '<div style="opacity:.5;text-align:center;padding:10px">لا تحدّيات سابقة</div>';
+    } catch(_){}
+  } catch (e) { c.innerHTML = `<div class="card status err show">${e.message}</div>`; }
+}
+
+// Helper: setStatus
+function setStatus(sel, kind, msg) {
+  const el = typeof sel === 'string' ? $(sel) : sel;
+  if (!el) return;
+  el.className = 'status show ' + kind;
+  el.textContent = msg;
+}
+
+
 // ════════ QURAN HOME (5th tab) ════════
 async function renderQuranHome() {
   if (!quranSurahs.length) {
     try { const r = await fetch(API + '/kids/quran/surahs'); quranSurahs = (await r.json()).items || []; } catch(e){}
   }
+  // ── Weekly Challenge banner ──
+  try {
+    const rc = await fetch(API + '/kids/challenge/active');
+    const dc = await rc.json();
+    const banner = $('#quran-challenge-banner');
+    if (dc.challenge && banner) {
+      const ch = dc.challenge;
+      const lb = dc.leaderboard || [];
+      const mine = lb.find(x => x.child_email === STATE.email);
+      const surahName = (n) => (quranSurahs.find(s => s.number === n)?.name) || `سورة ${n}`;
+      const endsAt = new Date(ch.end_at);
+      const daysLeft = Math.max(0, Math.ceil((endsAt - new Date()) / 86400000));
+      banner.innerHTML = `
+        <div class="card" style="border-color:rgba(251,191,36,.5);background:linear-gradient(135deg,rgba(251,191,36,.12),rgba(168,85,247,.06));margin-bottom:14px">
+          <h3>🏆 التحدي الأسبوعي · ${daysLeft} يوم متبقي</h3>
+          <div class="hint">السور: ${ch.surah_nums.map(n => surahName(n)).join('، ')}</div>
+          ${mine ? `
+            <div style="background:rgba(0,0,0,.3);height:10px;border-radius:100px;overflow:hidden;margin:8px 0">
+              <div style="height:100%;background:linear-gradient(90deg,#fbbf24,#f59e0b);width:${mine.completion_pct}%"></div>
+            </div>
+            <div style="font-size:12px;opacity:.85">تقدّمك: ${mine.unique_surahs_done}/${dc.total_surahs} سورة</div>` : ''}
+          <div style="margin-top:10px;display:flex;gap:6px;flex-wrap:wrap">
+            ${lb.map((row, idx) => `<span style="background:${row.child_email === STATE.email ? 'rgba(251,191,36,.25)' : 'rgba(255,255,255,.06)'};padding:4px 10px;border-radius:100px;font-size:11px;font-weight:800">${idx === 0 ? '🥇' : idx === 1 ? '🥈' : '🥉'} ${row.child_name}: ${row.unique_surahs_done}/${dc.total_surahs}</span>`).join('')}
+          </div>
+        </div>`;
+    } else if (banner) {
+      banner.innerHTML = '';
+    }
+  } catch(_){}
+
   let subs = [];
   try {
     const r = await fetch(API + '/kids/quran/submissions?child_email=' + encodeURIComponent(STATE.email) + '&limit=200');

@@ -3504,6 +3504,157 @@ def make_freebuild_chat_router(db, get_current_user):
         )
         return {"ok": True}
 
+    # ═══════════════════════════════════════════════════════════════════════
+    # KIDS PWA — Weekly Challenge (parent picks surahs, kids compete)
+    # ═══════════════════════════════════════════════════════════════════════
+    @router.post("/kids/challenge/create")
+    async def kids_challenge_create(
+        surah_nums: str = Form("[]"),
+        days: int = Form(7),
+        mode: str = Form("manual"),  # 'manual' or 'random'
+        random_count: int = Form(3),
+        user=Depends(get_current_user),
+    ):
+        """Create a weekly Quran-memorization challenge among parent's kids.
+
+        mode='manual' → surah_nums is a JSON array like "[1,112,113]"
+        mode='random' → server picks random_count surahs (3..10) from 1..114
+        """
+        import json as _json, random as _random
+        try:
+            arr = _json.loads(surah_nums) if surah_nums else []
+            arr = [int(x) for x in arr if 1 <= int(x) <= 114]
+        except Exception:
+            arr = []
+        if mode == "random":
+            n = max(1, min(int(random_count) if random_count else 3, 10))
+            arr = sorted(_random.sample(range(1, 115), n))
+        if not arr:
+            raise HTTPException(400, "اختر سورة واحدة على الأقل")
+        days = max(1, min(int(days or 7), 30))
+        now = _now()
+        from datetime import datetime as _dt, timedelta as _td, timezone as _tz
+        start = _dt.now(_tz.utc)
+        end = start + _td(days=days)
+        # End any existing active challenge for this parent first
+        await db.kids_weekly_challenges.update_many(
+            {"parent_id": user["user_id"], "status": "active"},
+            {"$set": {"status": "ended", "ended_at": now}},
+        )
+        cid = uuid.uuid4().hex
+        doc = {
+            "id": cid,
+            "parent_id": user["user_id"],
+            "surah_nums": arr,
+            "mode": mode,
+            "days": days,
+            "start_at": start.isoformat(),
+            "end_at": end.isoformat(),
+            "status": "active",
+            "winner_email": None,
+            "created_at": now,
+        }
+        await db.kids_weekly_challenges.insert_one(doc)
+        return {"ok": True, "challenge": {**doc, "_id": None}}
+
+    async def _compute_challenge_progress(ch: dict) -> dict:
+        """Build per-child progress for a challenge document."""
+        # Get kids of this parent
+        kids = await db.kids_accounts.find(
+            {"parent_id": ch["parent_id"]}, {"email": 1, "name": 1}
+        ).to_list(length=20)
+        emails = [k["email"] for k in kids]
+        kid_name = {k["email"]: k.get("name", k["email"]) for k in kids}
+        # All approved submissions for challenge surahs within window
+        q = {
+            "child_email": {"$in": emails},
+            "surah_num": {"$in": ch["surah_nums"]},
+            "status": "approved",
+            "reviewed_at": {"$gte": ch["start_at"], "$lte": ch["end_at"]},
+        }
+        subs = await db.kids_quran_submissions.find(q, {"_id": 0}).to_list(length=500)
+        per_child = {e: {"name": kid_name[e], "approved_surahs": set(), "approved_count": 0, "points": 0} for e in emails}
+        for s in subs:
+            ce = s.get("child_email")
+            if ce not in per_child:
+                continue
+            per_child[ce]["approved_surahs"].add(s["surah_num"])
+            per_child[ce]["approved_count"] += 1
+            per_child[ce]["points"] += int(s.get("awarded_points", 0))
+        leaderboard = []
+        for e, st in per_child.items():
+            leaderboard.append({
+                "child_email": e,
+                "child_name": st["name"],
+                "approved_surahs": sorted(st["approved_surahs"]),
+                "unique_surahs_done": len(st["approved_surahs"]),
+                "approved_count": st["approved_count"],
+                "points": st["points"],
+                "completion_pct": int(100 * len(st["approved_surahs"]) / max(1, len(ch["surah_nums"]))),
+            })
+        # Sort: unique surahs DESC, then total approved count DESC, then points DESC
+        leaderboard.sort(key=lambda x: (-x["unique_surahs_done"], -x["approved_count"], -x["points"]))
+        return {"leaderboard": leaderboard, "total_surahs": len(ch["surah_nums"])}
+
+    @router.get("/kids/challenge/active")
+    async def kids_challenge_active(parent_id: Optional[str] = None):
+        """Get currently active challenge for the parent (auto-detect if not given)
+        + per-child leaderboard."""
+        pid = parent_id
+        if not pid:
+            any_parent = await db.kids_accounts.find_one({}, {"parent_id": 1})
+            pid = any_parent.get("parent_id") if any_parent else None
+        if not pid:
+            return {"ok": True, "challenge": None}
+        ch = await db.kids_weekly_challenges.find_one(
+            {"parent_id": pid, "status": "active"}, {"_id": 0}, sort=[("created_at", -1)]
+        )
+        if not ch:
+            return {"ok": True, "challenge": None}
+        progress = await _compute_challenge_progress(ch)
+        return {"ok": True, "challenge": ch, **progress}
+
+    @router.post("/kids/challenge/end")
+    async def kids_challenge_end(challenge_id: str = Form(...), user=Depends(get_current_user)):
+        ch = await db.kids_weekly_challenges.find_one({"id": challenge_id, "parent_id": user["user_id"]})
+        if not ch:
+            raise HTTPException(404, "التحدي غير موجود")
+        if ch["status"] != "active":
+            return {"ok": True, "already": True}
+        progress = await _compute_challenge_progress(ch)
+        lb = progress["leaderboard"]
+        winner_email = lb[0]["child_email"] if lb and lb[0]["approved_count"] > 0 else None
+        await db.kids_weekly_challenges.update_one(
+            {"id": challenge_id},
+            {"$set": {"status": "ended", "winner_email": winner_email, "ended_at": _now()}},
+        )
+        # Award 100-point badge to winner
+        if winner_email:
+            await db.kids_points.insert_one({
+                "id": uuid.uuid4().hex,
+                "child_email": winner_email,
+                "kind": "challenge_winner",
+                "value": 100,
+                "meta": {"challenge_id": challenge_id, "surahs": ch["surah_nums"]},
+                "created_at": _now(),
+            })
+        return {"ok": True, "winner_email": winner_email, "leaderboard": lb}
+
+    @router.get("/kids/challenge/history")
+    async def kids_challenge_history(parent_id: Optional[str] = None, limit: int = 20):
+        pid = parent_id
+        if not pid:
+            any_parent = await db.kids_accounts.find_one({}, {"parent_id": 1})
+            pid = any_parent.get("parent_id") if any_parent else None
+        if not pid:
+            return {"ok": True, "items": []}
+        cur = db.kids_weekly_challenges.find(
+            {"parent_id": pid}, {"_id": 0}
+        ).sort("created_at", -1).limit(int(limit))
+        items = await cur.to_list(length=int(limit))
+        return {"ok": True, "items": items}
+
+
     @router.get("/kids/parent-recordings")
     async def kids_parent_recordings(parent_id: Optional[str] = None, limit: int = 50):
         pid = parent_id

@@ -230,8 +230,14 @@ button,input,select,textarea{font-family:inherit;border:none;outline:none}
   <!-- TOP BAR (child only on home tab) -->
   <div class="top-bar" id="topbar">
     <button class="cat-fab" id="cat-fab" data-testid="category-fab">🏷️ <span id="cat-fab-label">الكل</span> ▾</button>
-    <button class="logout-fab" id="logout-fab" data-testid="logout-fab">↩</button>
+    <div style="display:flex;gap:6px">
+      <button class="cat-fab" id="shuffle-fab" data-testid="shuffle-fab" title="خلط الفيديوهات">🎲</button>
+      <button class="logout-fab" id="logout-fab" data-testid="logout-fab">↩</button>
+    </div>
   </div>
+
+  <!-- Return to Parent floating button (visible only when view-as-user is on) -->
+  <button id="return-to-parent" data-testid="return-to-parent" style="display:none;position:fixed;top:max(14px,env(safe-area-inset-top));left:14px;z-index:9999;background:linear-gradient(135deg,#7c3aed,#a78bfa);color:#fff;border:none;padding:9px 14px;border-radius:100px;font-weight:900;font-size:12px;cursor:pointer;box-shadow:0 6px 20px rgba(124,58,237,.5)">🔙 لوحة ولي الأمر</button>
 
   <!-- FEED (child home) -->
   <div id="feed"></div>
@@ -252,6 +258,7 @@ button,input,select,textarea{font-family:inherit;border:none;outline:none}
   <!-- QURAN HOME SCREEN (5th tab) -->
   <div class="screen" id="quran-home-screen">
     <h1>📖 حفظ القرآن الكريم</h1>
+    <div id="quran-challenge-banner"></div>
     <div class="card" id="quran-plan-card" style="display:none">
       <h3>📋 خطة الحفظ من ولي الأمر</h3>
       <div class="hint" id="quran-plan-desc"></div>
@@ -352,7 +359,10 @@ button,input,select,textarea{font-family:inherit;border:none;outline:none}
 
   <!-- PARENT DASHBOARD -->
   <div class="screen" id="parent-screen">
-    <h1>👨‍👩‍👧 لوحة ولي الأمر</h1>
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:14px;flex-wrap:wrap">
+      <h1 style="margin:0;flex:1">👨‍👩‍👧 لوحة ولي الأمر</h1>
+      <button id="p-view-as-user" data-testid="view-as-user-btn" style="background:linear-gradient(135deg,#a78bfa,#7c3aed);color:#fff;border:none;padding:9px 14px;border-radius:100px;font-weight:900;font-size:12px;cursor:pointer;box-shadow:0 4px 14px rgba(124,58,237,.4)">👤 وضع المستخدم</button>
+    </div>
     <div class="p-tabs" id="p-tabs">
       <button class="p-tab on" data-pt="videos">🎬 الفيديوهات</button>
       <button class="p-tab" data-pt="cats">🏷️ التصنيفات</button>
@@ -361,6 +371,7 @@ button,input,select,textarea{font-family:inherit;border:none;outline:none}
       <button class="p-tab" data-pt="kids">👶 الأطفال</button>
       <button class="p-tab" data-pt="recordings">📹 التسجيلات</button>
       <button class="p-tab" data-pt="quran-review">📖 مراجعة القرآن</button>
+      <button class="p-tab" data-pt="challenge">🏆 التحدي الأسبوعي</button>
       <button class="p-tab" data-pt="stats">📊 الإحصائيات</button>
     </div>
     <div id="p-content"></div>

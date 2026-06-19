@@ -46,6 +46,37 @@ Deploy Zenrex Farm to the cloud, expand the Zenrex AI Brain to specialized modes
 - `bash /app/deploy/deploy.sh zenrex.ai` now also rsyncs `/app/zenrex_play/` → VPS `/var/www/pwa_play/`.
 - Backend (`freebuild_chat.py`) was out-of-sync — pulled fresh from VPS to local (5083 lines), now matches.
 
+## 2026-06-19 — Parent View-as-User + Weekly Challenge + Random Shuffle
+- **Parent View-as-User toggle**: Parent dashboard top-right `👤 وضع المستخدم` button →
+  switches the same authenticated parent into a child-like browsing experience
+  (videos, religion, Quran, mushaf, tasks, profile). Floating top-left
+  `🔙 لوحة ولي الأمر` button restores parent dashboard. State persisted in
+  `localStorage.zp_view_as_user`. The parent's browsing is NOT counted in any
+  kids' competition / leaderboard (frontend-only toggle, no extra account needed).
+- **Weekly Challenge** (new parent tab `🏆 التحدي الأسبوعي`):
+  - Backend (`/app/backend/modules/freebuild/freebuild_chat.py` ~lines 3505–3650):
+    - `POST /kids/challenge/create` — body: `surah_nums (JSON)`, `days`, `mode (manual|random)`, `random_count`
+    - `GET  /kids/challenge/active` — returns current challenge + per-child leaderboard
+    - `POST /kids/challenge/end` — declares winner & awards 100 pts via `kids_points`
+    - `GET  /kids/challenge/history`
+    - Mongo collection: `kids_weekly_challenges` `{id, parent_id, surah_nums[], days, start_at, end_at, mode, status, winner_email}`
+    - Progress is computed dynamically by joining `kids_quran_submissions` (status='approved',
+      surah_num ∈ challenge.surah_nums, reviewed_at within window).
+    - Ranking: unique surahs done ▶ total approved count ▶ accumulated points.
+  - Frontend (parent UI): create form with manual/random modes (1–10 surahs random),
+    1–30 day duration; live leaderboard with progress bars & 🥇🥈🥉 badges; end-now button.
+  - Frontend (child UI): banner at the top of Quran tab showing active challenge,
+    days remaining, target surahs, and live leaderboard pills (own row highlighted).
+- **Stronger video randomness**: `loadVideos()` now uses `crypto.getRandomValues`-backed
+  Fisher-Yates; fresh/old interleave is followed by a FINAL random pass over the whole
+  merged list so EVERY login = a completely different feed order. Added top-bar
+  `🎲` shuffle button that reorders the current feed (no refetch) and scrolls back
+  to top — kids can spin a new order on demand.
+- **Auth fix**: logout now also clears `zp_view_as_user` so a fresh login starts in
+  the correct role.
+
+
+
 
 ## Changelog
 
