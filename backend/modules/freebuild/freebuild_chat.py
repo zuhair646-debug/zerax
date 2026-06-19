@@ -864,6 +864,8 @@ class ProjectIn(BaseModel):
     # When mode == 'video_studio', the user picks one of:
     #   'stage_by_stage' (default) | 'open' | 'commercial' | 'voice_to_video'
     video_submode: Optional[str] = None
+    # When mode == 'app', the user picks one of: 'ios' | 'android' | 'both'
+    platform: Optional[str] = None
 
 
 class ChatIn(BaseModel):
@@ -906,6 +908,14 @@ def make_freebuild_chat_router(db, get_current_user):
             video_submode = raw_submode if raw_submode in valid_video_submodes else "stage_by_stage"
         else:
             video_submode = None
+
+        # Validate platform (only meaningful when proj_mode == 'app')
+        valid_platforms = {"ios", "android", "both"}
+        raw_platform = (payload.platform or "").strip().lower()
+        if proj_mode == "app":
+            platform = raw_platform if raw_platform in valid_platforms else "both"
+        else:
+            platform = None
 
         # Mode-specific greeting (shown as first AI message in the chat).
         # For studio modes we seed both `content` (markdown) and `options` (rich
@@ -1056,6 +1066,29 @@ def make_freebuild_chat_router(db, get_current_user):
                 "timestamp": _now(),
             })
 
+        # Override App Studio greeting based on platform chosen at creation
+        if proj_mode == "app" and platform and initial_messages:
+            platform_label = {
+                "ios": "iPhone (iOS)",
+                "android": "Android",
+                "both": "iPhone + Android (Universal PWA)",
+            }.get(platform, "Universal PWA")
+            initial_messages[0]["content"] = (
+                f"مرحبا بك في **استوديو التطبيقات** 📱\n\n"
+                f"اخترت تطوير تطبيقك لـ **{platform_label}**.\n\n"
+                f"راح أبني لك Progressive Web App (PWA) كامل، قابل للتثبيت على الجوال مباشرة "
+                f"بدون متجر تطبيقات — مع `manifest.json` + Service Worker + تصميم mobile-first.\n\n"
+                f"**📍 المرحلة 1 — فكرة التطبيق**\n\n"
+                f"اشرح لي فكرة تطبيقك بكلمتين، أو اختر تصنيف من تحت:"
+            )
+            initial_messages[0]["options"] = [
+                {"label": "تطبيق متجر", "emoji": "🛒", "description": "بيع منتجات + سلة + دفع"},
+                {"label": "تطبيق خدمات", "emoji": "🛠️", "description": "حجز خدمات / مواعيد"},
+                {"label": "تطبيق محتوى", "emoji": "📰", "description": "أخبار / مدونة / فيديو"},
+                {"label": "تطبيق مجتمع", "emoji": "💬", "description": "Chat / Feed / ملفات أعضاء"},
+                {"label": "تطبيق إنتاجية", "emoji": "✅", "description": "مهام / ملاحظات / تقويم"},
+                {"label": "غير ذلك", "emoji": "✍️", "description": "اكتب فكرتك"},
+            ]
         # Override Video Studio greeting based on `video_submode` chosen by the user
         if proj_mode == "video_studio" and video_submode and video_submode != "stage_by_stage":
             sub_greetings = {
@@ -1155,6 +1188,7 @@ def make_freebuild_chat_router(db, get_current_user):
             "category_icon": (category_meta or {}).get("icon"),
             "mode": proj_mode,
             "video_submode": video_submode,
+            "platform": platform,
             "name": payload.name.strip()[:120],
             "description": payload.description.strip()[:1500],
             "status": "active",
@@ -1167,7 +1201,7 @@ def make_freebuild_chat_router(db, get_current_user):
             "created_at": _now(),
             "updated_at": _now(),
         })
-        return {"id": pid, "name": payload.name, "mode": proj_mode, "video_submode": video_submode}
+        return {"id": pid, "name": payload.name, "mode": proj_mode, "video_submode": video_submode, "platform": platform}
 
     # ===== List projects =====
     @router.get("/projects")
@@ -1515,6 +1549,74 @@ def make_freebuild_chat_router(db, get_current_user):
                 "ركّز على إجابات تقنية مختصرة فقط لما يسأل.\n"
             )
 
+        # App (PWA) project — mobile-first directives override the website rules.
+        app_ctx = ""
+        if proj.get("mode") == "app":
+            plat = (proj.get("platform") or "both").lower()
+            plat_label = {
+                "ios": "iPhone (iOS Safari) ONLY",
+                "android": "Android (Chrome) ONLY",
+                "both": "iPhone + Android (Universal)",
+            }.get(plat, "iPhone + Android (Universal)")
+            app_ctx = (
+                "\n\n📱 **وضع تطبيق الجوال (PWA Mode — أولوية مطلقة على كل قواعد المواقع)**:\n"
+                f"الجهاز المستهدف: **{plat_label}**\n"
+                "العميل اختار يبني تطبيق جوال (Native-like) من الصفر. ما يبني موقع ديسكتوب — يبني PWA.\n"
+                "\n"
+                "🚫 **ممنوع منعاً باتاً** في هذا الوضع:\n"
+                "  • تصميم 12-column grid عريض (max-width 1200px) — هذا desktop، ممنوع.\n"
+                "  • Nav bar أفقي بثلاث روابط على اليمين — ممنوع. استخدم Bottom Tab Bar مكانه.\n"
+                "  • Hero مع صورة كبيرة جنب نص — استخدم mobile Hero: صورة فوق + عنوان + CTA.\n"
+                "  • Footer طويل بأعمدة — استخدم نسخة مصغّرة فقط أو احذفه.\n"
+                "  • أي عرض > 480px في التصميم الأساسي (المعاينة مقيّدة بإطار جوال 390×844).\n"
+                "\n"
+                "✅ **واجب التزامه في كل HTML تولّده**:\n"
+                "  1. `<meta name='viewport' content='width=device-width, initial-scale=1, viewport-fit=cover'>`\n"
+                "  2. `<meta name='theme-color' content='#0EA5E9'>` (يلوّن status bar)\n"
+                "  3. `<meta name='apple-mobile-web-app-capable' content='yes'>`\n"
+                "  4. `<meta name='apple-mobile-web-app-status-bar-style' content='black-translucent'>`\n"
+                "  5. **PWA Manifest inline**: ضمّن `<link rel='manifest' href='data:application/json;base64,...'>` "
+                "بقيمة base64 من JSON يحتوي: name, short_name, start_url='./', display='standalone', "
+                "theme_color, background_color, icons[{src,sizes,type}], orientation='portrait'.\n"
+                "  6. **Service Worker inline**: في `<script>` سجّل SW عبر `navigator.serviceWorker.register('data:text/javascript;base64,...')` "
+                "أو استخدم Blob URL لتسجيل SW بسيط (cache-first للأصول الثابتة).\n"
+                "  7. **Install Banner**: زر '📲 ثبّت التطبيق' يستمع لـ `beforeinstallprompt` event ويعرضه.\n"
+                "  8. **Bottom Tab Bar** (إذا التطبيق فيه أكثر من شاشة): ثابت في الأسفل، 3-5 أيقونات، "
+                "active state واضح، حجم لمسة ≥ 48×48px.\n"
+                "  9. **Touch-friendly**: كل زر/رابط ≥ 44×44px، spacing بين العناصر ≥ 8px، "
+                "ما في hover effects (touch only) — استخدم `:active` بدل `:hover`.\n"
+                " 10. **Safe areas**: استخدم `padding-top: env(safe-area-inset-top)` و"
+                "`padding-bottom: env(safe-area-inset-bottom)` للـnotch والـhome indicator.\n"
+                " 11. **Pull-to-refresh / Swipe gestures**: لو مناسب للتطبيق، أضفها بـtouch events.\n"
+                " 12. **Loading states**: skeleton screens بدل spinners (تجربة أفضل على الموبايل).\n"
+                " 13. **Fonts**: Cairo / Tajawal للعربي، حجم نص أساسي 16px (عشان iOS ما يـ zoom on input focus).\n"
+                " 14. **Offline-first**: إن أمكن، خزّن آخر شاشة في localStorage عشان تشتغل بدون نت.\n"
+                "\n"
+                "📐 **قواعد التصميم الجوال (Layout)**:\n"
+                "  • التصميم الأساسي: `max-width: 480px; margin: 0 auto;` على الـbody container.\n"
+                "  • استخدم `100dvh` (dynamic viewport height) للشاشات الكاملة، مو `100vh`.\n"
+                "  • Flexbox عمودي (`flex-direction: column`) هو الأساس، مو grid أفقي عريض.\n"
+                "  • CTA أساسي = زر بعرض كامل (`width: 100%`) في الأسفل أو بعد الـHero.\n"
+                "  • صور: `object-fit: cover` + height محدد، ما تخلي الصورة تشد التخطيط.\n"
+                "  • Modals = bottom sheets (تطلع من تحت بـ`transform: translateY`)، مو dialogs ديسكتوب.\n"
+                "\n"
+                "🍎 **خصوصيات iOS** (إذا plat='ios' أو 'both'):\n"
+                "  • Tap highlight: `-webkit-tap-highlight-color: transparent;` على * للحركة الطبيعية.\n"
+                "  • Inputs: `font-size >= 16px` ضروري عشان iOS Safari ما يـ zoom.\n"
+                "  • Status bar: Black-translucent + apple-touch-icon 180×180.\n"
+                "\n"
+                "🤖 **خصوصيات Android** (إذا plat='android' أو 'both'):\n"
+                "  • Material Ripple: استخدم `:active` مع `transform: scale(0.97)` و`transition: 80ms`.\n"
+                "  • Theme color يلوّن status bar Chrome على Android تلقائياً.\n"
+                "  • Maskable icon في الـmanifest عشان adaptive icons.\n"
+                "\n"
+                "💡 **بعد بناء أول شاشة**:\n"
+                "  • ذكّر العميل: 'افتح الموقع على جوالك بكروم/سفاري → قائمة → \"أضف للشاشة الرئيسية\" → "
+                "وراح يصير عندك أيقونة تطبيق حقيقية تفتح بدون شريط متصفح'.\n"
+                "  • اقترح عليه ميزات native-like قادمة: إشعارات Push، GPS، كاميرا، مشاركة، إلخ.\n"
+                "═══════════════════════════════════════════════════════════════\n"
+            )
+
         # Template-based project (Websites Studio mode)
         template_ctx = ""
         if proj.get("category_id"):
@@ -1556,6 +1658,7 @@ def make_freebuild_chat_router(db, get_current_user):
             f"هل يوجد موقع جاهز (current_html)؟ {'نعم' if _has_html_already else 'لا'}\n"
             f"المرحلة الحالية (محسوبة آلياً): **{_stage_label}**\n"
             f"{assets_for_use}"
+            f"{app_ctx}"
             f"{template_ctx}"
             f"{guided_ctx}\n"
             "\n"

@@ -287,6 +287,16 @@ function ProjectEntry({ onCreated, onOpenMyProjects }) {
               <p className="text-xs text-zinc-500 mt-3 text-center">
                 💡 لما تضغط الزر، يفتح الشات الذكي ويبدأ يسألك خطوة بخطوة
               </p>
+
+              <a
+                href="/native/new"
+                data-testid="native-app-cta"
+                className="mt-4 w-full inline-flex items-center justify-center gap-2 bg-gradient-to-r from-purple-600/20 via-pink-600/20 to-amber-500/20 hover:from-purple-500/30 hover:via-pink-500/30 hover:to-amber-500/30 border border-purple-400/30 rounded-xl py-3 transition-all"
+              >
+                <span className="text-purple-300">📱</span>
+                <span className="text-sm font-bold text-zinc-100">أو ابني تطبيق جوال من الصفر (PWA)</span>
+                <ArrowLeft className="w-4 h-4 text-zinc-400" />
+              </a>
             </div>
 
             {recent.length > 0 && (
@@ -2355,11 +2365,14 @@ function ChatWorkspace({ projectId }) {
   // Mode helpers — video modes hide HTML/Build/Deploy UI entirely.
   const isVideoMode = ['video_studio', 'anime_studio', 'longform_video'].includes(project?.mode);
   const isStudioMode = isVideoMode || project?.mode === 'image_studio';
+  const isAppMode = project?.mode === 'app';
   const VIDEO_PHASE_EMOJI = { film_type: '🎞️', characters: '👥', script: '📝', voice: '🎙️', storyboard: '🖼️', preview: '👁️', render: '✨' };
   const sidebarPhases = isVideoMode
     ? VIDEO_PHASES.map((p) => ({ id: p.id, title: p.label, icon: VIDEO_PHASE_EMOJI[p.id] || '🎬', desc: p.desc }))
     : PHASES;
   const [previewMode, setPreviewMode] = useState('desktop');
+  // For app mode: which device frame to show (iphone | android) — initial pick from project.platform
+  const [appDevice, setAppDevice] = useState('iphone');
   const [myProjectsOpen, setMyProjectsOpen] = useState(false);
   const [credentialRequest, setCredentialRequest] = useState(null); // {service, label, instructions}
   const [credentialValue, setCredentialValue] = useState('');
@@ -2425,6 +2438,17 @@ function ChatWorkspace({ projectId }) {
     window.addEventListener('freebuild_quick_message', handler);
     return () => window.removeEventListener('freebuild_quick_message', handler);
   }, []);
+  // When an "app" mode project loads, force mobile preview and pick the device
+  // frame matching the chosen platform (ios → iphone, android → android, both → iphone default)
+  useEffect(() => {
+    if (project?.mode === 'app') {
+      setPreviewMode('mobile');
+      const p = (project.platform || 'both').toLowerCase();
+      if (p === 'android') setAppDevice('android');
+      else setAppDevice('iphone');
+    }
+  }, [project?.mode, project?.platform]);
+
   const refreshProject = useCallback(async () => {
     const token = localStorage.getItem('token');
     try {
@@ -3972,22 +3996,91 @@ function ChatWorkspace({ projectId }) {
                     onOpenConnections={() => setConnectionsOpen(true)}
                   />
                 )}
+                {isAppMode && (
+                  <div className="self-center flex items-center gap-2 mb-1" data-testid="app-device-toggle">
+                    <button
+                      type="button"
+                      onClick={() => setAppDevice('iphone')}
+                      data-testid="device-iphone-btn"
+                      className={`px-3 py-1.5 text-xs font-bold rounded-lg border transition ${appDevice === 'iphone' ? 'bg-zinc-100 text-zinc-900 border-zinc-100' : 'bg-zinc-900 text-zinc-400 border-zinc-700 hover:border-zinc-500'}`}
+                    >
+                      📱 iPhone
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setAppDevice('android')}
+                      data-testid="device-android-btn"
+                      className={`px-3 py-1.5 text-xs font-bold rounded-lg border transition ${appDevice === 'android' ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40' : 'bg-zinc-900 text-zinc-400 border-zinc-700 hover:border-zinc-500'}`}
+                    >
+                      🤖 Android
+                    </button>
+                  </div>
+                )}
                 {project.current_html ? (
-                  <iframe
-                    key={previewKey}
-                    title="Live Preview"
-                    data-testid="preview-iframe"
-                    srcDoc={project.current_html}
-                    sandbox="allow-scripts allow-same-origin"
-                    className={`bg-white rounded-lg shadow-2xl border border-white/10 transition-all ${previewMode === 'mobile' ? 'w-[375px] self-center' : 'w-full max-w-5xl self-center'}`}
-                    style={{ height: '100%', minHeight: '600px' }}
-                  />
+                  isAppMode ? (
+                    /* Mobile device frame: iPhone or Android */
+                    <div
+                      className="self-center relative"
+                      data-testid="phone-frame"
+                      style={{
+                        width: '390px',
+                        height: '844px',
+                        background: appDevice === 'iphone' ? '#1a1a1a' : '#222',
+                        borderRadius: appDevice === 'iphone' ? '52px' : '32px',
+                        padding: appDevice === 'iphone' ? '14px' : '10px',
+                        boxShadow: '0 25px 70px rgba(0,0,0,0.6), inset 0 0 0 1.5px rgba(255,255,255,0.06)',
+                      }}
+                    >
+                      {/* iPhone notch (Dynamic Island) */}
+                      {appDevice === 'iphone' && (
+                        <div
+                          className="absolute left-1/2 -translate-x-1/2 z-10 rounded-full"
+                          style={{ top: '22px', width: '110px', height: '32px', background: '#000' }}
+                        />
+                      )}
+                      {/* Android top camera dot */}
+                      {appDevice === 'android' && (
+                        <div
+                          className="absolute left-1/2 -translate-x-1/2 z-10 rounded-full"
+                          style={{ top: '14px', width: '10px', height: '10px', background: '#000', border: '2px solid #333' }}
+                        />
+                      )}
+                      <iframe
+                        key={previewKey}
+                        title="Live Preview"
+                        data-testid="preview-iframe"
+                        srcDoc={project.current_html}
+                        sandbox="allow-scripts allow-same-origin"
+                        className="w-full h-full bg-white"
+                        style={{ borderRadius: appDevice === 'iphone' ? '40px' : '24px', border: 0 }}
+                      />
+                      {/* Android home bar / iPhone home indicator */}
+                      <div
+                        className="absolute left-1/2 -translate-x-1/2 rounded-full bg-white/40"
+                        style={{
+                          bottom: appDevice === 'iphone' ? '8px' : '4px',
+                          width: appDevice === 'iphone' ? '130px' : '90px',
+                          height: '4px',
+                        }}
+                      />
+                    </div>
+                  ) : (
+                    <iframe
+                      key={previewKey}
+                      title="Live Preview"
+                      data-testid="preview-iframe"
+                      srcDoc={project.current_html}
+                      sandbox="allow-scripts allow-same-origin"
+                      className={`bg-white rounded-lg shadow-2xl border border-white/10 transition-all ${previewMode === 'mobile' ? 'w-[375px] self-center' : 'w-full max-w-5xl self-center'}`}
+                      style={{ height: '100%', minHeight: '600px' }}
+                    />
+                  )
                 ) : (
                   <div className="w-full h-full flex items-center justify-center text-center">
                     <div>
                       <Code className="w-16 h-16 mx-auto mb-4 text-zinc-700" />
-                      <p className="text-zinc-400 text-sm font-bold mb-1">لا يوجد HTML بعد</p>
-                      <p className="text-zinc-600 text-xs">اطلب من الذكاء بناء صفحة كاملة في المحادثة</p>
+                      <p className="text-zinc-400 text-sm font-bold mb-1">{isAppMode ? 'لا يوجد تطبيق بعد' : 'لا يوجد HTML بعد'}</p>
+                      <p className="text-zinc-600 text-xs">{isAppMode ? 'اطلب من الذكاء بناء أول شاشة من تطبيقك' : 'اطلب من الذكاء بناء صفحة كاملة في المحادثة'}</p>
                     </div>
                   </div>
                 )}

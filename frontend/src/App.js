@@ -25,6 +25,7 @@ import QuickShare from '@/pages/QuickShare';
 import ShareHistory from '@/pages/ShareHistory';
 import Profile from '@/pages/Profile';
 import FreeBuildChat from '@/pages/FreeBuildChat';
+import NativeAppNew from '@/pages/NativeAppNew';
 import FreebuildCheckout from '@/pages/FreebuildCheckout';
 import GuardianDashboard from '@/pages/GuardianDashboard';
 import AppsConvert from '@/pages/AppsConvert';
@@ -196,6 +197,8 @@ function App() {
           <Route path="/dashboard/profile" element={<ProtectedRoute><Profile user={user} setUser={setUser} /></ProtectedRoute>} />
           <Route path="/freebuild/chat" element={<ProtectedRoute><FreeBuildChat user={user} setUser={setUser} /></ProtectedRoute>} />
           <Route path="/freebuild/chat/:id" element={<ProtectedRoute><FreeBuildChat user={user} setUser={setUser} /></ProtectedRoute>} />
+          <Route path="/native/new" element={<ProtectedRoute><NativeAppNew /></ProtectedRoute>} />
+          <Route path="/native/chat/:id" element={<ProtectedRoute><FreeBuildChat user={user} setUser={setUser} /></ProtectedRoute>} />
           <Route path="/apps/convert/:id" element={<ProtectedRoute><AppsConvert /></ProtectedRoute>} />
           <Route path="/dashboard/new-request" element={<ProtectedRoute><NewRequest user={user} /></ProtectedRoute>} />
           <Route path="/dashboard/requests" element={<ProtectedRoute><MyRequests user={user} /></ProtectedRoute>} />

@@ -1,0 +1,36 @@
+{
+  "summary": "Native App Builder module — full E2E backend + frontend verification PASSED. Backend: 7/7 pytest tests passed (create app with ios/android/both, platform persisted, greeting mentions iPhone/Android/Universal, invalid/missing platform falls back to 'both', website mode regression intact, seeded project verified). Frontend: /native/new auth gating works (unauth -> /login), all 7 testids render on the creator screen, iOS-platform create flow redirects to /freebuild/chat/{id}?platform=ios with iPhone-aware greeting, phone-frame container renders on seeded app-mode project with iPhone notch (border-radius 52px) and switches to Android camera dot (border-radius 32px) via device-iphone-btn / device-android-btn toggles, iframe correctly nested inside phone-frame, native-app-cta link visible on /freebuild/chat landing pointing to /native/new, regular website project shows NO phone-frame (regression OK).",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "/native/new", "issues": ["Page is rendered in English ('Build Your App in Minutes', 'Start Design') even though the JSX has hardcoded Arabic strings ('ابدأ التصميم', 'اصنع تطبيقك في دقائق'). This is the global i18next/Floating Language Picker auto-translation behavior, NOT a regression caused by this feature. Confirm with PM if Arabic-by-default is required when source code has hardcoded Arabic literals."]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_native_app_builder.py",
+    "/app/test_reports/pytest/native_app_builder_results.xml"
+  ],
+  "action_items": [
+    "Optional: verify whether global i18n auto-translation should override hardcoded Arabic on /native/new (current behavior shows English in preview-env browser)."
+  ],
+  "critical_code_review_comments": [
+    "FreeBuildChat.js is very large (>4000 lines) — file size red flag, consider splitting Phone Frame preview into its own component for maintainability.",
+    "Server route validates platform when mode='app' (good) and stores null when mode!='app' (good). Greeting override block in mode_greetings['app'] correctly cascades platform_label into initial message.",
+    "app_ctx system prompt (PWA directives) properly gated on proj.get('mode')=='app' and uses proj.get('platform') for plat_label — clean."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_native_app_builder.py (new)"
+  ],
+  "success_rate": {"backend": "100% (7/7)", "frontend": "100% (all critical flows verified)"},
+  "test_credentials": "owner@zerax.com / owner123 (from /app/memory/test_credentials.md). Login via UI was flaky in headless preview — recommend tests use direct POST /api/auth/login + localStorage.setItem('token') for reliability.",
+  "seed_data_creation": "Test created TEST_native_ios, TEST_native_android, TEST_native_both projects via backend tests (each cleaned up via DELETE in fixtures). One iOS project created during UI test left behind: TEST_ios_app_e2e (project id 98690e2d-4396-4152-93f7-ca76b635b995). One regression website project also left: 02a4ee9a-799c-46ec-80df-b2e154747d35.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Native App Builder is fully working. Test file at /app/backend/tests/test_native_app_builder.py covers all platform variants + invalid/missing + website regression + seeded project check. UI testids verified: native-new, app-name-input, app-desc-input, platform-ios, platform-android, platform-both, create-app-btn, phone-frame, device-iphone-btn, device-android-btn, native-app-cta. Phone frame computed border-radius: iPhone=52px, Android=32px (matches spec). Seeded project ba0892c8-6d2a-423a-9bdf-ebe6271bb02a (owner@zerax.com) has current_html and is the easiest way to verify phone-frame visually. The /freebuild/chat page polls heavily — use wait_until='domcontentloaded' instead of 'networkidle' in Playwright. Login UI form submit was intermittent in headless; using API login + setting token in localStorage is more reliable.",
+  "rca of the issue": "N/A — no issues found. All 7 review-request requirements PASS: (1) /native/new platform selector works, (2) backend stores mode='app' + platform correctly, (3) phone-frame renders with iPhone notch / Android dot + toggle, (4) PWA directives in app_ctx are present in code and gated correctly on mode=='app', (5) backwards compat website mode shows NO phone-frame."
+}
