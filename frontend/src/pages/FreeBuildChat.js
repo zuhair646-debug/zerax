@@ -3,6 +3,9 @@ import { useParams, useNavigate } from 'react-router-dom';
 import VideoStudioPreview from './VideoStudioPreview';
 import VideoPhaseTracker, { VIDEO_PHASES } from '../components/VideoPhaseTracker';
 import ZCrownSpinner from '../components/ZCrownSpinner';
+import ZenrexBrand from '../components/ZenrexBrand';
+import ConnectionHelpModal from '../components/ConnectionHelpModal';
+import StorageIndicator from '../components/StorageIndicator';
 import CookiesManager from '../components/CookiesManager';
 import {
   Globe, Send, Loader2, Sparkles, Eye, ArrowRight, ArrowLeft,
@@ -10,7 +13,7 @@ import {
   Monitor, Smartphone, Trash2, MessageSquare, Paperclip, X,
   ZoomIn, Reply, Download, ExternalLink, Rocket, Smartphone as Phone,
   Crown, Github, Globe2, Cloud, Link2, Copy, FileText, Plug, Mic,
-  History, RotateCcw, Clock,
+  History, RotateCcw, Clock, HelpCircle, AlertCircle,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import ReactMarkdown from 'react-markdown';
@@ -190,24 +193,31 @@ function ProjectEntry({ onCreated, onOpenMyProjects }) {
       {/* Top nav */}
       <div className="sticky top-0 z-20 backdrop-blur-md bg-zinc-950/60 border-b border-white/5">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 py-3 flex items-center justify-between gap-2">
-          <button
-            type="button"
-            onClick={onOpenMyProjects}
-            data-testid="open-my-projects"
-            className="inline-flex items-center gap-2 px-3 py-2 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-zinc-300 hover:text-white transition-all text-sm font-medium"
-          >
-            <FolderOpen className="w-4 h-4" />
-            <span>مشاريعي السابقة</span>
-          </button>
-          <button
-            type="button"
-            onClick={() => navigate('/dashboard')}
-            data-testid="back-to-dashboard"
-            className="inline-flex items-center gap-2 px-3 py-2 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-zinc-300 hover:text-white transition-all text-sm font-medium"
-          >
-            <ArrowRight className="w-4 h-4" />
-            <span>لوحة التحكم</span>
-          </button>
+          <div className="flex items-center gap-2 sm:gap-3">
+            <a href="/" className="hover:opacity-90" aria-label="Zenrex"><ZenrexBrand size={26} /></a>
+            <span className="hidden sm:inline text-zinc-700">•</span>
+            <a
+              href="/freebuild/projects"
+              data-testid="open-my-projects"
+              className="inline-flex items-center gap-2 px-3 py-2 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-zinc-300 hover:text-white transition-all text-xs sm:text-sm font-medium"
+            >
+              <FolderOpen className="w-4 h-4" />
+              <span className="hidden sm:inline">مشاريعي قيد الإنشاء</span>
+              <span className="sm:hidden">مشاريعي</span>
+            </a>
+          </div>
+          <div className="flex items-center gap-2">
+            <StorageIndicator compact />
+            <button
+              type="button"
+              onClick={() => navigate('/dashboard')}
+              data-testid="back-to-dashboard"
+              className="inline-flex items-center gap-2 px-3 py-2 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-zinc-300 hover:text-white transition-all text-xs sm:text-sm font-medium"
+            >
+              <ArrowRight className="w-4 h-4" />
+              <span className="hidden sm:inline">لوحة التحكم</span>
+            </button>
+          </div>
         </div>
       </div>
 
@@ -1568,6 +1578,7 @@ function ConnectionsPanel({ open, projectId, onClose }) {
   const [loading, setLoading] = useState(true);
   const [drafts, setDrafts] = useState({}); // {github: 'ghp_...', vercel: '...'}
   const [busy, setBusy] = useState('');
+  const [helpFor, setHelpFor] = useState(null); // providerId currently showing help modal
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -1660,15 +1671,28 @@ function ConnectionsPanel({ open, projectId, onClose }) {
                       <Icon className="w-5 h-5 text-white" />
                     </div>
                     <div>
-                      <h4 className="font-black text-sm">{p.title}</h4>
+                      <h4 className="font-black text-sm flex items-center gap-1.5">
+                        {p.title}
+                        <button
+                          type="button"
+                          onClick={() => setHelpFor(p.id)}
+                          data-testid={`conn-help-${p.id}`}
+                          className="text-amber-300 hover:text-amber-200 inline-flex items-center"
+                          title="كيف أحصل عليه؟"
+                          aria-label={`دليل ${p.title}`}
+                        >
+                          <HelpCircle className="w-4 h-4" />
+                        </button>
+                      </h4>
                       <p className="text-[11px] text-zinc-300/70">{p.hint}</p>
                     </div>
                   </div>
                   {existing ? (
-                    <div className="flex items-center gap-2 shrink-0">
-                      <span className="px-2 py-1 rounded-full bg-emerald-500/20 border border-emerald-400/40 text-emerald-200 text-[10px] font-bold flex items-center gap-1">
+                    <div className="flex items-center gap-2 shrink-0" data-testid={`conn-status-${p.id}-connected`}>
+                      <span className="px-2 py-1 rounded-full bg-emerald-500/20 border border-emerald-400/50 text-emerald-200 text-[10px] font-bold flex items-center gap-1">
+                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
                         <Check className="w-3 h-3" />
-                        {existing.mask}
+                        مربوط · {existing.mask}
                       </span>
                       <button
                         type="button"
@@ -1682,7 +1706,12 @@ function ConnectionsPanel({ open, projectId, onClose }) {
                       </button>
                     </div>
                   ) : (
-                    <span className="px-2 py-1 rounded-full bg-zinc-700/40 border border-white/10 text-zinc-400 text-[10px] font-bold">
+                    <span
+                      data-testid={`conn-status-${p.id}-disconnected`}
+                      className="px-2 py-1 rounded-full bg-red-500/15 border border-red-500/40 text-red-300 text-[10px] font-bold flex items-center gap-1"
+                    >
+                      <span className="w-1.5 h-1.5 rounded-full bg-red-400" />
+                      <AlertCircle className="w-3 h-3" />
                       غير مربوط
                     </span>
                   )}
@@ -1709,14 +1738,15 @@ function ConnectionsPanel({ open, projectId, onClose }) {
                       </button>
                     </div>
                     {p.docs && (
-                      <a
-                        href={p.docs}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="inline-flex items-center gap-1.5 text-[11px] text-cyan-400 hover:text-cyan-300 underline"
+                      <button
+                        type="button"
+                        onClick={() => setHelpFor(p.id)}
+                        data-testid={`conn-show-guide-${p.id}`}
+                        className="inline-flex items-center gap-1.5 text-[11px] text-amber-300 hover:text-amber-200"
                       >
-                        <ExternalLink className="w-3 h-3" /> {p.docsLabel}
-                      </a>
+                        <HelpCircle className="w-3.5 h-3.5" />
+                        <span>دليل خطوة بخطوة + صور</span>
+                      </button>
                     )}
                   </div>
                 )}
@@ -1729,6 +1759,11 @@ function ConnectionsPanel({ open, projectId, onClose }) {
           🔐 جميع المفاتيح تُحفظ مشفّرة في قاعدة البيانات (Fernet AES). لا يتم عرضها بعد الحفظ.
         </div>
       </div>
+      <ConnectionHelpModal
+        open={!!helpFor}
+        providerId={helpFor}
+        onClose={() => setHelpFor(null)}
+      />
     </div>
   );
 }
@@ -3010,14 +3045,15 @@ function ChatWorkspace({ projectId }) {
           </button>
           <button
             type="button"
-            onClick={() => setMyProjectsOpen(true)}
+            onClick={() => navigate('/freebuild/projects')}
             data-testid="open-my-projects-chat"
             className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-zinc-300 hover:text-white transition-all shrink-0"
-            title="افتح مشاريعي السابقة"
+            title="افتح مشاريعي قيد الإنشاء"
           >
             <FolderOpen className="w-4 h-4" />
             <span className="text-xs font-medium hidden sm:inline">مشاريعي</span>
           </button>
+          <a href="/" className="hidden md:inline-flex shrink-0" aria-label="Zenrex"><ZenrexBrand size={22} /></a>
           <Globe className="w-6 h-6 text-emerald-400 shrink-0" />
           <div className="min-w-0">
             <h1 className="font-bold text-base sm:text-lg truncate" data-testid="project-title">{project.name}</h1>
@@ -3095,8 +3131,9 @@ function ChatWorkspace({ projectId }) {
           )}
           <div className={`px-3 py-1.5 ${isVideoMode ? 'bg-red-500/10 border-red-500/30' : 'bg-emerald-500/10 border-emerald-500/30'} border rounded-lg flex items-center gap-1.5`}>
             <Sparkles className={`w-3.5 h-3.5 ${isVideoMode ? 'text-red-400' : 'text-emerald-400'}`} />
-            <span className={`text-xs ${isVideoMode ? 'text-red-300' : 'text-emerald-300'} font-bold hidden sm:inline`}>{isVideoMode ? '🎬 استوديو الفيديو' : 'من الصفر'}</span>
+            <span className={`text-xs ${isVideoMode ? 'text-red-300' : 'text-emerald-300'} font-bold hidden sm:inline`}>{isVideoMode ? '🎬 استوديو الفيديو' : isAppMode ? '📱 استوديو التطبيقات' : 'من الصفر'}</span>
           </div>
+          <StorageIndicator compact />
         </div>
       </div>
 

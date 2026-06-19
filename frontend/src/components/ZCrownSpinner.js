@@ -1,10 +1,7 @@
 /**
- * ZCrownSpinner — animated GOLD Z logo + branded AI name "زنركس".
- *
- * Per UX requirement: keep the brand Z (NOT a generic dots animation),
- * paint it gold like the main Zenrex logo, and show the AI's own name
- * underneath so customers feel they're using Zenrex's proprietary AI
- * (never expose the underlying provider like Claude/Opus/Sonnet).
+ * ZCrownSpinner — animated branded chip using the REAL Zenrex crown logo (PNG)
+ * plus the "Zenrex AI" brand name. Customers always see Zenrex's proprietary AI,
+ * never the underlying model provider.
  */
 import React from 'react';
 
@@ -13,12 +10,17 @@ export default function ZCrownSpinner({ size = 36, label = 'يحلل ويكتب.
   return (
     <div className="zcs-wrap" data-testid="z-crown-spinner" role="status" aria-live="polite">
       <div className="zcs-z" style={{ width: px, height: px }}>
-        <span className="zcs-z-glyph">Z</span>
+        <img
+          src="/zenrex-logo.png"
+          alt="Zenrex"
+          className="zcs-logo"
+          style={{ width: `${size * 0.92}px`, height: `${size * 0.92}px` }}
+        />
         <span className="zcs-ring" />
         <span className="zcs-ring zcs-ring-2" />
       </div>
       <div className="zcs-text">
-        <span className="zcs-brand">زنركس</span>
+        <span className="zcs-brand">زنركس AI</span>
         <span className="zcs-status">{label}</span>
       </div>
       <style>{`
@@ -35,17 +37,11 @@ export default function ZCrownSpinner({ size = 36, label = 'يحلل ويكتب.
           display: flex; align-items: center; justify-content: center;
           flex-shrink: 0;
         }
-        .zcs-z-glyph {
+        .zcs-logo {
           position: relative; z-index: 2;
-          font-family: 'Cairo', 'Tajawal', serif;
-          font-weight: 900;
-          font-size: ${size * 0.62}px;
-          background: linear-gradient(135deg, #FFD86B 0%, #D4AF37 45%, #B8860B 100%);
-          -webkit-background-clip: text; background-clip: text;
-          color: transparent;
-          text-shadow: 0 0 12px rgba(212,175,55,0.45);
+          object-fit: contain;
+          filter: drop-shadow(0 0 8px rgba(212,175,55,0.55));
           animation: zcs-pulse 1.8s ease-in-out infinite;
-          line-height: 1;
         }
         .zcs-ring {
           position: absolute; inset: 0;
@@ -75,8 +71,8 @@ export default function ZCrownSpinner({ size = 36, label = 'يحلل ويكتب.
           font-weight: 500;
         }
         @keyframes zcs-pulse {
-          0%, 100% { transform: scale(1);    filter: drop-shadow(0 0 4px rgba(212,175,55,0.5)); }
-          50%      { transform: scale(1.08); filter: drop-shadow(0 0 10px rgba(255,215,100,0.85)); }
+          0%, 100% { transform: scale(1);    filter: drop-shadow(0 0 6px rgba(212,175,55,0.6)); }
+          50%      { transform: scale(1.08); filter: drop-shadow(0 0 12px rgba(255,215,100,0.95)); }
         }
         @keyframes zcs-rotate { to { transform: rotate(360deg); } }
       `}</style>

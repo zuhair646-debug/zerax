@@ -10,12 +10,14 @@
  */
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Smartphone, Apple, Bot, ArrowRight, Sparkles } from 'lucide-react';
+import { Smartphone, Apple, Bot, ArrowRight, Sparkles, FolderOpen } from 'lucide-react';
 import { Card } from '../components/ui/card';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Textarea } from '../components/ui/textarea';
 import { toast } from 'sonner';
+import ZenrexBrand from '../components/ZenrexBrand';
+import StorageIndicator from '../components/StorageIndicator';
 
 const API = process.env.REACT_APP_BACKEND_URL;
 
@@ -71,6 +73,24 @@ export default function NativeAppNew() {
 
   return (
     <div className="min-h-screen bg-zinc-950 text-zinc-100" dir="rtl" data-testid="native-new">
+      {/* Top bar with brand + storage + my projects */}
+      <header className="sticky top-0 z-30 border-b border-white/10 bg-zinc-950/85 backdrop-blur">
+        <div className="max-w-5xl mx-auto px-4 py-3 flex items-center justify-between gap-3">
+          <a href="/" className="hover:opacity-90"><ZenrexBrand size={26} /></a>
+          <div className="flex items-center gap-2">
+            <StorageIndicator compact />
+            <a
+              href="/freebuild/projects"
+              data-testid="goto-my-projects"
+              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-zinc-300 text-xs font-bold"
+            >
+              <FolderOpen className="w-4 h-4" />
+              <span className="hidden sm:inline">مشاريعي قيد الإنشاء</span>
+            </a>
+          </div>
+        </div>
+      </header>
+
       <div className="max-w-5xl mx-auto px-4 py-10">
         <div className="text-center mb-10">
           <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-purple-500/10 border border-purple-400/30 text-purple-300 text-xs mb-4">

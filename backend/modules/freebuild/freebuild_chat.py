@@ -1212,6 +1212,72 @@ def make_freebuild_chat_router(db, get_current_user):
         items = await cur.to_list(length=50)
         return {"projects": items}
 
+    # ===== User storage usage (for quota indicator + paywall) =====
+    @router.get("/storage/usage")
+    async def storage_usage(user=Depends(get_current_user)):
+        """Compute the user's storage footprint across all their projects so the
+        UI can show a quota bar and prompt for a paid upgrade when over limit.
+
+        Quotas (defaults; can be overridden per-user by `user.storage_quota_mb`):
+          - Free tier:    3 projects, 100 MB
+          - Pro tier:    20 projects,   5 GB  (purchasable)
+          - Studio tier: unlimited,    50 GB
+        """
+        uid = user["user_id"]
+        # Project count + bytes
+        cur = db.freebuild_projects.find(
+            {"user_id": uid, "status": {"$ne": "deleted"}},
+            {"current_html": 1, "messages": 1, "approved_assets": 1, "name": 1, "mode": 1}
+        )
+        projects = await cur.to_list(length=500)
+        bytes_used = 0
+        for p in projects:
+            bytes_used += len((p.get("current_html") or "").encode("utf-8", errors="ignore"))
+            for m in (p.get("messages") or []):
+                bytes_used += len((m.get("content") or "").encode("utf-8", errors="ignore"))
+            for a in (p.get("approved_assets") or []):
+                bytes_used += len((a.get("prompt") or "").encode("utf-8", errors="ignore"))
+                bytes_used += len((a.get("image_url") or "").encode("utf-8", errors="ignore"))
+        # Asset uploads (binary files) — count by metadata size in DB
+        try:
+            assets = await db.freebuild_assets.find(
+                {"user_id": uid}, {"size_bytes": 1, "file_size": 1}
+            ).to_list(length=2000)
+            for a in assets:
+                bytes_used += int(a.get("size_bytes") or a.get("file_size") or 0)
+        except Exception:
+            pass
+
+        # User tier — read from user doc or default to free
+        user_doc = await db.users.find_one({"id": uid}, {"storage_tier": 1, "storage_quota_mb": 1, "storage_quota_projects": 1})
+        tier = (user_doc or {}).get("storage_tier") or "free"
+        TIER_DEFAULTS = {
+            "free":   {"quota_mb": 100,   "quota_projects": 3,   "label": "مجاني",  "next_tier_label": "Pro"},
+            "pro":    {"quota_mb": 5120,  "quota_projects": 20,  "label": "Pro",    "next_tier_label": "Studio"},
+            "studio": {"quota_mb": 51200, "quota_projects": 999, "label": "Studio", "next_tier_label": None},
+        }
+        defaults = TIER_DEFAULTS.get(tier, TIER_DEFAULTS["free"])
+        quota_mb = int((user_doc or {}).get("storage_quota_mb") or defaults["quota_mb"])
+        quota_projects = int((user_doc or {}).get("storage_quota_projects") or defaults["quota_projects"])
+        used_mb = bytes_used / (1024 * 1024)
+        project_count = len(projects)
+        over_storage = used_mb > quota_mb
+        over_projects = project_count > quota_projects
+        return {
+            "tier": tier,
+            "tier_label": defaults["label"],
+            "next_tier_label": defaults["next_tier_label"],
+            "used_mb": round(used_mb, 2),
+            "quota_mb": quota_mb,
+            "used_pct": round((used_mb / quota_mb) * 100, 1) if quota_mb > 0 else 0,
+            "project_count": project_count,
+            "quota_projects": quota_projects,
+            "over_quota": bool(over_storage or over_projects),
+            "over_storage": bool(over_storage),
+            "over_projects": bool(over_projects),
+            "needs_upgrade": bool(over_storage or over_projects),
+        }
+
     # ===== Get single project =====
     @router.get("/project/{pid}")
     async def get_project(pid: str, user=Depends(get_current_user)):
