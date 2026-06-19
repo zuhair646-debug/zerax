@@ -14,6 +14,7 @@ import hashlib
 from datetime import datetime, timezone
 from typing import Optional, List, Dict, Any
 from fastapi import APIRouter, HTTPException, Depends, Form, UploadFile, File, Request, BackgroundTasks
+from fastapi.responses import Response
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 import base64
@@ -1193,22 +1194,31 @@ def make_freebuild_chat_router(db, get_current_user):
     @router.post("/project/{pid}/chat")
     async def chat(
         pid: str,
+        request: Request,
         message: str = Form(...),
         files: List[UploadFile] = File(default=[]),
         reference_asset_id: str = Form(default=""),
         answer_meta: str = Form(default=""),
         user=Depends(get_current_user),
     ):
-        # Shield the entire chat work so it survives client disconnects.
-        # Uvicorn cancels the request task on disconnect; asyncio.shield keeps
-        # the inner coroutine running so the AI completes its work + DB saves.
-        # On reconnect, the client polls GET /project/{pid} and sees the new
-        # messages waiting for them. (Backup memory guarantee.)
-        return await asyncio.shield(_chat_impl(
+        # Spawn the AI work as a fully-detached background task so it CANNOT be
+        # cancelled by client disconnect. We then `await` it for the response.
+        # If the client disconnects mid-flight, our await raises CancelledError
+        # but the inner task keeps running and saves to DB. Client gets the
+        # latest state by polling GET /project/{pid} on reconnect.
+        inner_task = asyncio.create_task(_chat_impl(
             pid=pid, message=message, files=files,
             reference_asset_id=reference_asset_id,
             answer_meta=answer_meta, user=user,
         ))
+        try:
+            return await asyncio.shield(inner_task)
+        except asyncio.CancelledError:
+            # Client disconnected. The shielded task continues in the background.
+            # Return None — Starlette will skip sending a response since the
+            # connection is already closed. This avoids "No response returned".
+            logger.info(f"[chat] client disconnected for {pid}; AI continues in background")
+            return Response(status_code=499)  # nginx convention: client closed
 
     async def _chat_impl(
         pid: str,
