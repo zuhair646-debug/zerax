@@ -6,6 +6,41 @@
 Quick summary: العميل يملك VPS Hetzner. أي تعديل تعمله، شغّل **`bash /app/deploy/deploy.sh zenrex.ai`** فوراً.
 SSH key موجود في `/root/.ssh/zerax_deploy`. **لا تسأل، لا تعتذر، انشر مباشرة.**
 
+## 2026-06-19 (الجلسة 14) — 🧠 Unified AI Brain + Token Meter + Admin Dashboard
+
+**Status**: ✅ مُنجَز — 5/5 pytest + UI verified + production deployed
+
+### 🧠 Unified AI Brain (المعرفة الموحَّدة)
+- **Module جديد** `/app/backend/modules/ai_core/section_briefs.py`:
+  - مصدر واحد للمعرفة الاستراتيجية لكل قسم (websites, apps, site_to_app, images, videos, longform, games, companion, deploy, marketing)
+  - كل brief يحتوي: الهدف، المراحل (3-6 phases)، الاستراتيجية الافتتاحية، الأدوات المتاحة، Anti-patterns، قواعد إلزامية
+  - `UNIVERSAL_RULES` يطبَّق على كل الأقسام: زنركس AI لا يكشف الموديل، يكون المبادر دائماً، يطرح خيارات (3-5)، يؤكد قبل التنفيذ، يعكس لغة العميل
+  - `brief_for_mode(mode)` — يُحقَن تلقائياً في `extra_ctx` لكل استدعاء AI في `freebuild_chat.py`
+- نتيجة: نفس Claude Sonnet 4.5 يصير "خبير موقع" أو "خبير تطبيق" حسب القسم، بدون ما يكشف هويته التقنية
+
+### 💰 Token Meter + Quota Gate
+- **Module جديد** `/app/backend/modules/ai_core/usage_meter.py`:
+  - `record_usage()` يُستدعى بعد كل completion في freebuild_chat (موصول)
+  - يخزّن `usage_events` (event-level) + `usage_daily` (aggregate سريع)
+  - تسعير دقيق: $3/1M input + $15/1M output (Sonnet 4.5)
+  - `check_quota()` قبل كل AI call: Free=50K tokens/يوم + 100 طلب، Pro=1M/يوم، Studio=10M/يوم. Owner/admin مستثنى.
+  - عند تجاوز الحد، يرجع رسالة لطيفة بالعربي + option ترقية بدل ما يخسر AI cost.
+
+### 📊 Admin Usage Dashboard
+- **صفحة جديدة** `/admin/usage` (`AdminUsageDashboard.jsx`) — للمشرفين فقط:
+  - 4 stat cards: آخر 24س / آخر 30 يوم / مستخدمين نشطين / مشاريع مستهلكة
+  - جدول Top Spenders: email + tier + tokens + calls + cost (مرتّب بالتكلفة)
+  - جدول Top Projects: project name + section + owner + tokens + cost
+- **Endpoints**:
+  - `GET /api/usage/me` + `/api/usage/me/per-project` (للمستخدم)
+  - `GET /api/usage/admin/totals` + `/top-spenders` + `/by-project` (admin only)
+
+### 🧪 الاختبار
+- ✅ 5/5 pytest PASS (`/app/backend/tests/test_usage_meter.py`)
+- ✅ End-to-end تجربة: رسالة واحدة سجّلت 20,530 tokens = $0.064 بدقّة
+- ✅ Dashboard UI يعرض البيانات الفعلية live
+- ✅ Production deployment ناجح، كل endpoints + routes تشتغل
+
 ## 2026-06-19 (الجلسة 13) — 🔁 Site-to-App Converter + ⚖️ Legal Terms Gate
 
 **Status**: ✅ مُنجَز — 12/12 backend pytest PASS، نُشر على https://zenrex.ai/

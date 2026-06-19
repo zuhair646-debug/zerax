@@ -1714,8 +1714,17 @@ def make_freebuild_chat_router(db, get_current_user):
             "STAGE_VALUE_LOOP"
         )
 
+        # Pull the unified Zenrex AI section brief — phases, goals,
+        # requirements, strategy — so the brain acts as a domain expert.
+        try:
+            from modules.ai_core.section_briefs import brief_for_mode
+            _section_brief = brief_for_mode(proj.get("mode"))
+        except Exception:
+            _section_brief = ""
+
         extra_ctx = (
-            guardian_note_for_prompt
+            _section_brief + "\n\n"
+            + guardian_note_for_prompt
             + brand_kit_block
             + _build_self_verification(proj)
             + f"اسم المشروع: {proj['name']}\n"
@@ -2229,6 +2238,32 @@ def make_freebuild_chat_router(db, get_current_user):
         )
         logger.info(f"freebuild route: task={task_type} label={task_label}")
 
+        # ── Quota gate (free-tier daily cap on tokens / requests) ──
+        try:
+            from modules.ai_core.usage_meter import check_quota
+            _quota = await check_quota(db, user["user_id"])
+            if not _quota.get("allowed"):
+                # Return a friendly assistant message + flag the client UI.
+                assistant_msg = {
+                    "id": str(uuid.uuid4()),
+                    "role": "assistant",
+                    "content": _quota.get("message") or "وصلت لحدّ الاستخدام اليومي. ترقّي باقتك للاستمرار.",
+                    "options": [
+                        {"label": "ترقية الباقة", "emoji": "⭐", "description": _quota.get("next_tier_label", "Pro")},
+                    ],
+                    "inline_images": [],
+                    "timestamp": _now(),
+                    "quota_blocked": True,
+                }
+                return {
+                    "ok": True,
+                    "quota_blocked": True,
+                    "quota": _quota,
+                    "messages": (proj.get("messages") or []) + [assistant_msg],
+                }
+        except Exception as _qe:
+            logger.warning(f"freebuild quota check skipped: {_qe}")
+
         try:
             from modules.zenrex_ai import zenrex_chat
             result = await zenrex_chat(
@@ -2243,6 +2278,24 @@ def make_freebuild_chat_router(db, get_current_user):
                 raise HTTPException(502, "خطأ في الذكاء الاصطناعي")
             ai_text = result["content"]
             model_used = result.get("model_used", "unknown")
+            # Record AI usage (tokens + cost) for metering / dashboards.
+            try:
+                from modules.ai_core.usage_meter import record_usage
+                _usage = result.get("usage") or {}
+                # Estimate tokens if missing (1 char ≈ 0.4 tokens).
+                _ti = int(_usage.get("input_tokens") or _usage.get("prompt_tokens") or max(1, len(extra_ctx) // 3))
+                _to = int(_usage.get("output_tokens") or _usage.get("completion_tokens") or max(1, len(ai_text) // 3))
+                await record_usage(
+                    db,
+                    user_id=user["user_id"],
+                    project_id=pid,
+                    section=proj.get("mode") or "websites",
+                    tokens_in=_ti,
+                    tokens_out=_to,
+                    model_label="zenrex-ai",
+                )
+            except Exception as _ue:
+                logger.warning(f"freebuild usage record failed: {_ue}")
 
             # Truthfulness gate — if AI lied about producing variants/updates, retry once
             error_msg = _validate_truthfulness(ai_text)

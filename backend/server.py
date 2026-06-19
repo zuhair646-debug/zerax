@@ -3875,6 +3875,14 @@ try:
 except Exception as _sta:
     logging.getLogger(__name__).error(f"Failed to register Site-to-App module: {_sta}", exc_info=True)
 
+# ============== AI USAGE METER (token tracking + admin top-spenders) ==============
+try:
+    from modules.ai_core.usage_meter import make_usage_router
+    app.include_router(make_usage_router(db, get_current_user))
+    logging.getLogger(__name__).info("AI Usage Meter module registered")
+except Exception as _ume:
+    logging.getLogger(__name__).error(f"Failed to register Usage Meter module: {_ume}", exc_info=True)
+
 # ============== VISUAL DESIGNER APIS ==============
 class DesignElement(BaseModel):
     id: str

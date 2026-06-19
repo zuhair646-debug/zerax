@@ -28,6 +28,7 @@ import FreeBuildChat from '@/pages/FreeBuildChat';
 import NativeAppNew from '@/pages/NativeAppNew';
 import MyProjects from '@/pages/MyProjects';
 import SiteToAppWizard from '@/pages/SiteToAppWizard';
+import AdminUsageDashboard from '@/pages/AdminUsageDashboard';
 import TermsGate from '@/components/TermsGate';
 import FreebuildCheckout from '@/pages/FreebuildCheckout';
 import GuardianDashboard from '@/pages/GuardianDashboard';
@@ -205,6 +206,7 @@ function App() {
           <Route path="/native/chat/:id" element={<ProtectedRoute><FreeBuildChat user={user} setUser={setUser} /></ProtectedRoute>} />
           <Route path="/freebuild/projects" element={<ProtectedRoute><MyProjects /></ProtectedRoute>} />
           <Route path="/my-projects" element={<ProtectedRoute><MyProjects /></ProtectedRoute>} />
+          <Route path="/admin/usage" element={<ProtectedRoute adminOnly><AdminUsageDashboard /></ProtectedRoute>} />
           <Route path="/apps/convert/:id" element={<ProtectedRoute><AppsConvert /></ProtectedRoute>} />
           <Route path="/dashboard/new-request" element={<ProtectedRoute><NewRequest user={user} /></ProtectedRoute>} />
           <Route path="/dashboard/requests" element={<ProtectedRoute><MyRequests user={user} /></ProtectedRoute>} />
