@@ -8,7 +8,7 @@
  */
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Check, Sparkles, ShieldCheck, ArrowLeft, Zap, Image, Video, ExternalLink, Crown } from 'lucide-react';
+import { Check, Sparkles, ShieldCheck, ArrowLeft, Zap, Image, Video, ExternalLink, Crown, Flame } from 'lucide-react';
 import { toast } from 'sonner';
 import ZenrexBrand from '../components/ZenrexBrand';
 
@@ -18,7 +18,9 @@ const TIERS = [
   {
     id: 'project_pack',
     name: 'Project Pack',
-    price: 79,
+    price: 49,
+    originalPrice: 79,
+    discountPct: 38,
     period: 'مرّة واحدة',
     cta: 'اشترِ مشروع واحد',
     badge: 'الأفضل لتجربة واحدة',
@@ -35,7 +37,9 @@ const TIERS = [
   {
     id: 'tier_starter_monthly',
     name: 'Starter',
-    price: 29,
+    price: 19,
+    originalPrice: 29,
+    discountPct: 35,
     period: 'شهرياً',
     cta: 'اشترك في Starter',
     perks: [
@@ -51,7 +55,9 @@ const TIERS = [
   {
     id: 'tier_pro_monthly',
     name: 'Pro',
-    price: 99,
+    price: 69,
+    originalPrice: 99,
+    discountPct: 30,
     period: 'شهرياً',
     cta: 'اشترك في Pro',
     badge: 'الأكثر شعبية',
@@ -70,7 +76,9 @@ const TIERS = [
   {
     id: 'tier_studio_monthly',
     name: 'Studio',
-    price: 299,
+    price: 199,
+    originalPrice: 299,
+    discountPct: 33,
     period: 'شهرياً',
     cta: 'اشترك في Studio',
     badge: 'للوكالات والمحترفين',
@@ -116,11 +124,27 @@ function TierCard({ tier, onUpgrade, currentTier }) {
         </div>
       )}
       <h3 className={`text-xl font-black ${s.accent} mb-1`}>{tier.name}</h3>
-      <div className="flex items-baseline gap-1 mb-4">
-        <span className="text-4xl font-black">${tier.price}</span>
-        {tier.period && <span className="text-xs text-zinc-500"> · {tier.period}</span>}
+      {/* Price block with strikethrough launch promo */}
+      <div className="mb-1">
+        {tier.originalPrice && (
+          <div className="flex items-center gap-2 mb-1">
+            <span className="text-sm text-zinc-500 line-through">${tier.originalPrice}</span>
+            <span className="text-[10px] font-black px-1.5 py-0.5 rounded-md bg-rose-500/20 border border-rose-500/40 text-rose-300">
+              -{tier.discountPct}% خصم الإطلاق
+            </span>
+          </div>
+        )}
+        <div className="flex items-baseline gap-1">
+          <span className="text-4xl font-black">${tier.price}</span>
+          {tier.period && <span className="text-xs text-zinc-500"> · {tier.period}</span>}
+        </div>
+        {tier.originalPrice && (
+          <p className="text-[10px] text-emerald-400 font-bold mt-1">
+            توفير ${tier.originalPrice - tier.price}{tier.period === 'شهرياً' ? ' كل شهر' : ''}
+          </p>
+        )}
       </div>
-      <ul className="space-y-2 mb-6">
+      <ul className="space-y-2 mb-6 mt-3">
         {tier.perks.map((p, i) => (
           <li key={i} className="flex items-start gap-2 text-sm text-zinc-200">
             <Check className={`w-4 h-4 ${s.accent} flex-shrink-0 mt-0.5`} />
@@ -201,11 +225,15 @@ export default function Pricing() {
 
       <main className="max-w-6xl mx-auto px-4 py-10">
         <div className="text-center mb-8">
+          <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-gradient-to-l from-rose-500/20 via-amber-500/20 to-rose-500/20 border border-rose-500/40 text-rose-200 text-xs mb-4 animate-pulse" data-testid="launch-promo-banner">
+            <Flame className="w-4 h-4" />
+            <span className="font-black">🔥 عرض الإطلاق — خصومات حتى 38% لفترة محدودة</span>
+          </div>
           <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 text-xs mb-4">
             <ShieldCheck className="w-3.5 h-3.5" />
             <span>شفافية كاملة في الأسعار</span>
           </div>
-          <h1 className="text-3xl sm:text-4xl font-black mb-2">باقات زنركس AI</h1>
+          <h1 className="text-3xl sm:text-4xl font-black mb-2">باقات Zenrex AI</h1>
           <p className="text-zinc-400 max-w-2xl mx-auto text-sm">
             ادفع شهرياً فقط. لا رسوم خفية. لا التزام طويل. ألغِ في أي وقت.
           </p>

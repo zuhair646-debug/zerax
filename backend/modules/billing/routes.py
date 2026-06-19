@@ -35,19 +35,25 @@ PACKAGES: Dict[str, Dict[str, Any]] = {
     # ─── One-time per-project unlock — highest-margin path ─────────────
     "project_pack": {
         "name": "Project Pack — مشروع واحد كامل",
-        "price_usd": 79.00,
+        "price_usd": 49.00,                # Launch promo price
+        "original_price_usd": 79.00,       # Strikethrough display price
+        "discount_pct": 38,
+        "promo_label": "عرض الإطلاق",
         "currency": "usd",
-        "duration_days": 30,           # 30-day window to finish the project
+        "duration_days": 30,
         "subscription_type": "tier_upgrade",
         "tier": "starter",
         "tier_quota_mb": 1024,
         "tier_quota_projects": 1,
-        "daily_token_cap": 600_000,    # ~30 messages of high-quality build
+        "daily_token_cap": 600_000,
     },
-    # ─── Monthly subscription tiers (margin-calibrated) ────────────────
+    # ─── Monthly subscription tiers ────────────────────────────────────
     "tier_starter_monthly": {
         "name": "Starter — شهري",
-        "price_usd": 29.00,
+        "price_usd": 19.00,                # Launch promo price
+        "original_price_usd": 29.00,
+        "discount_pct": 35,
+        "promo_label": "عرض الإطلاق",
         "currency": "usd",
         "duration_days": 30,
         "subscription_type": "tier_upgrade",
@@ -58,7 +64,10 @@ PACKAGES: Dict[str, Dict[str, Any]] = {
     },
     "tier_pro_monthly": {
         "name": "Pro — شهري",
-        "price_usd": 99.00,
+        "price_usd": 69.00,                # Launch promo price
+        "original_price_usd": 99.00,
+        "discount_pct": 30,
+        "promo_label": "عرض الإطلاق",
         "currency": "usd",
         "duration_days": 30,
         "subscription_type": "tier_upgrade",
@@ -69,7 +78,10 @@ PACKAGES: Dict[str, Dict[str, Any]] = {
     },
     "tier_studio_monthly": {
         "name": "Studio — شهري",
-        "price_usd": 299.00,
+        "price_usd": 199.00,               # Launch promo price
+        "original_price_usd": 299.00,
+        "discount_pct": 33,
+        "promo_label": "عرض الإطلاق",
         "currency": "usd",
         "duration_days": 30,
         "subscription_type": "tier_upgrade",
@@ -149,8 +161,16 @@ def register_routes(app, db, get_current_user):
                     "id": pid,
                     "name": pkg["name"],
                     "price_usd": pkg["price_usd"],
+                    "original_price_usd": pkg.get("original_price_usd"),
+                    "discount_pct": pkg.get("discount_pct"),
+                    "promo_label": pkg.get("promo_label"),
                     "currency": pkg["currency"],
                     "duration_days": pkg["duration_days"],
+                    "subscription_type": pkg.get("subscription_type"),
+                    "tier": pkg.get("tier"),
+                    "tier_quota_mb": pkg.get("tier_quota_mb"),
+                    "tier_quota_projects": pkg.get("tier_quota_projects"),
+                    "daily_token_cap": pkg.get("daily_token_cap"),
                 }
                 for pid, pkg in PACKAGES.items()
             ]
