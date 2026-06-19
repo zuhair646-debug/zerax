@@ -145,12 +145,12 @@ export default function ConnectionHelpModal({ open, providerId, onClose }) {
 
   return (
     <div
-      className="fixed inset-0 z-[70] bg-black/85 backdrop-blur-md flex items-center justify-center p-4 overflow-y-auto"
+      className="fixed inset-0 z-[70] bg-black/85 backdrop-blur-md flex items-start sm:items-center justify-center p-3 sm:p-4 overflow-y-auto"
       onClick={onClose}
       data-testid={`help-modal-${providerId}`}
     >
       <div
-        className="bg-zinc-900 border border-amber-500/40 rounded-2xl max-w-2xl w-full my-8 shadow-2xl shadow-amber-500/10"
+        className="bg-zinc-900 border border-amber-500/40 rounded-2xl max-w-2xl w-full my-4 sm:my-8 shadow-2xl shadow-amber-500/10 max-h-[calc(100vh-2rem)] overflow-y-auto"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}

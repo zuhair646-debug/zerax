@@ -6,6 +6,7 @@ import ZCrownSpinner from '../components/ZCrownSpinner';
 import ZenrexBrand from '../components/ZenrexBrand';
 import ConnectionHelpModal from '../components/ConnectionHelpModal';
 import StorageIndicator from '../components/StorageIndicator';
+import UsageIndicator from '../components/UsageIndicator';
 import CookiesManager from '../components/CookiesManager';
 import {
   Globe, Send, Loader2, Sparkles, Eye, ArrowRight, ArrowLeft,
@@ -3133,6 +3134,7 @@ function ChatWorkspace({ projectId }) {
             <Sparkles className={`w-3.5 h-3.5 ${isVideoMode ? 'text-red-400' : 'text-emerald-400'}`} />
             <span className={`text-xs ${isVideoMode ? 'text-red-300' : 'text-emerald-300'} font-bold hidden sm:inline`}>{isVideoMode ? '🎬 استوديو الفيديو' : isAppMode ? '📱 استوديو التطبيقات' : 'من الصفر'}</span>
           </div>
+          <UsageIndicator compact refreshKey={messages.length} />
           <StorageIndicator compact />
         </div>
       </div>

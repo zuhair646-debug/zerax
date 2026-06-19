@@ -96,11 +96,11 @@ export default function TermsGate({ section, children }) {
 
   return (
     <div
-      className="fixed inset-0 z-[100] bg-zinc-950/95 backdrop-blur-md flex items-center justify-center p-4 overflow-y-auto"
+      className="fixed inset-0 z-[100] bg-zinc-950/95 backdrop-blur-md flex items-start sm:items-center justify-center p-3 sm:p-4 overflow-y-auto"
       data-testid={`terms-gate-${section}`}
       dir={isRtl ? 'rtl' : 'ltr'}
     >
-      <div className="bg-zinc-900 border border-amber-500/40 rounded-2xl max-w-2xl w-full my-8 shadow-2xl shadow-amber-500/15">
+      <div className="bg-zinc-900 border border-amber-500/40 rounded-2xl max-w-2xl w-full my-4 sm:my-8 shadow-2xl shadow-amber-500/15 max-h-[calc(100vh-2rem)] overflow-y-auto">
         <div className="p-5 border-b border-white/10 flex items-center justify-between gap-3">
           <div className="flex items-center gap-3">
             <ZenrexBrand size={26} showLabel={false} />

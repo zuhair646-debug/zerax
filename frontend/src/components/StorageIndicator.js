@@ -73,12 +73,12 @@ export default function StorageIndicator({ compact = false }) {
 
       {showUpgrade && (
         <div
-          className="fixed inset-0 z-[80] bg-black/85 backdrop-blur-md flex items-center justify-center p-4"
+          className="fixed inset-0 z-[80] bg-black/85 backdrop-blur-md flex items-start sm:items-center justify-center p-3 sm:p-4 overflow-y-auto"
           onClick={() => setShowUpgrade(false)}
           data-testid="storage-upgrade-modal"
         >
           <div
-            className="bg-zinc-900 border border-amber-500/40 rounded-2xl max-w-lg w-full p-6 shadow-2xl"
+            className="bg-zinc-900 border border-amber-500/40 rounded-2xl max-w-lg w-full p-5 sm:p-6 shadow-2xl my-4 sm:my-8 max-h-[calc(100vh-2rem)] overflow-y-auto"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-start justify-between mb-4">
@@ -146,7 +146,7 @@ export default function StorageIndicator({ compact = false }) {
                       <li>✓ Visual Guardian</li>
                     </ul>
                     <a
-                      href="/pricing"
+                      href="/pricing/v2"
                       data-testid="storage-upgrade-pro"
                       className="block text-center mt-3 px-3 py-2 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-black text-xs font-black"
                     >
@@ -164,7 +164,7 @@ export default function StorageIndicator({ compact = false }) {
                       <li>✓ كل ميزات Pro + دعم أولوية</li>
                     </ul>
                     <a
-                      href="/pricing"
+                      href="/pricing/v2"
                       data-testid="storage-upgrade-studio"
                       className="block text-center mt-3 px-3 py-2 rounded-lg bg-amber-400 hover:bg-amber-300 text-black text-xs font-black"
                     >

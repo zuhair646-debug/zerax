@@ -32,6 +32,29 @@ PACKAGES: Dict[str, Dict[str, Any]] = {
         "duration_days": 30,
         "subscription_type": "website_studio",
     },
+    # Storage / AI quota tiers — applied to user.storage_tier after successful webhook
+    "tier_pro_monthly": {
+        "name": "Pro - شهري",
+        "price_usd": 9.00,
+        "currency": "usd",
+        "duration_days": 30,
+        "subscription_type": "tier_upgrade",
+        "tier": "pro",
+        "tier_quota_mb": 5120,
+        "tier_quota_projects": 20,
+        "daily_token_cap": 1_000_000,
+    },
+    "tier_studio_monthly": {
+        "name": "Studio - شهري",
+        "price_usd": 29.00,
+        "currency": "usd",
+        "duration_days": 30,
+        "subscription_type": "tier_upgrade",
+        "tier": "studio",
+        "tier_quota_mb": 51200,
+        "tier_quota_projects": 999,
+        "daily_token_cap": 10_000_000,
+    },
 }
 
 
@@ -225,6 +248,20 @@ def register_routes(app, db, get_current_user):
             await db.studio_subscriptions.insert_one(sub_doc)
             log.info(f"Activated studio subscription for user {txn['user_id']} until {expires_at}")
 
+            # ── Tier upgrade fulfillment (Pro / Studio) ──
+            if pkg.get("subscription_type") == "tier_upgrade":
+                await db.users.update_one(
+                    {"id": txn["user_id"]},
+                    {"$set": {
+                        "storage_tier": pkg["tier"],
+                        "storage_quota_mb": pkg.get("tier_quota_mb"),
+                        "storage_quota_projects": pkg.get("tier_quota_projects"),
+                        "daily_token_cap": pkg.get("daily_token_cap"),
+                        "tier_expires_at": expires_at.isoformat(),
+                    }},
+                )
+                log.info(f"Upgraded user {txn['user_id']} to tier {pkg['tier']}")
+
         return {
             "session_id": session_id,
             "status": new_status,
@@ -294,6 +331,20 @@ def register_routes(app, db, get_current_user):
                 }
             )
             log.info(f"[webhook] Activated studio subscription for user {txn['user_id']}")
+
+            # ── Tier upgrade fulfillment (Pro / Studio) ──
+            if pkg.get("subscription_type") == "tier_upgrade":
+                await db.users.update_one(
+                    {"id": txn["user_id"]},
+                    {"$set": {
+                        "storage_tier": pkg["tier"],
+                        "storage_quota_mb": pkg.get("tier_quota_mb"),
+                        "storage_quota_projects": pkg.get("tier_quota_projects"),
+                        "daily_token_cap": pkg.get("daily_token_cap"),
+                        "tier_expires_at": expires_at.isoformat(),
+                    }},
+                )
+                log.info(f"[webhook] Upgraded user {txn['user_id']} to tier {pkg['tier']}")
 
             # 🆕 Affiliate commission hook (best-effort, never breaks payment)
             try:

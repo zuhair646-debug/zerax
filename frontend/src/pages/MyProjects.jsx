@@ -18,6 +18,7 @@ import { toast } from 'sonner';
 import { Button } from '../components/ui/button';
 import ZenrexBrand from '../components/ZenrexBrand';
 import StorageIndicator from '../components/StorageIndicator';
+import UsageIndicator from '../components/UsageIndicator';
 
 const API = process.env.REACT_APP_BACKEND_URL;
 
@@ -243,6 +244,7 @@ export default function MyProjects() {
             <h1 className="text-sm font-bold text-zinc-300">مشاريعي قيد الإنشاء</h1>
           </div>
           <div className="flex items-center gap-2">
+            <UsageIndicator />
             <StorageIndicator />
             <button
               type="button"

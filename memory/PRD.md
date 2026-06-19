@@ -6,6 +6,37 @@
 Quick summary: العميل يملك VPS Hetzner. أي تعديل تعمله، شغّل **`bash /app/deploy/deploy.sh zenrex.ai`** فوراً.
 SSH key موجود في `/root/.ssh/zerax_deploy`. **لا تسأل، لا تعتذر، انشر مباشرة.**
 
+## 2026-06-19 (الجلسة 15) — ✅ Pricing Transparency + Mobile Fixes + Live Test Customer
+
+**Status**: ✅ مُنجَز — Production verified end-to-end
+
+### ما تم في هذه الجلسة:
+1. **مشكلة المقاسات** — إضافة `overflow-y-auto` + `max-h-[calc(100vh-2rem)]` + `items-start sm:items-center` على 3 modals (StorageIndicator, ConnectionHelpModal, TermsGate) — يفتح كامل على ديسكتوب وموبايل.
+2. **UsageIndicator** (`/app/frontend/src/components/UsageIndicator.js`) — pill في الـtop bar يبيّن:
+   - النسبة % المستخدمة + التكلفة $0.xx + شريط تقدّم
+   - 🟢 < 60% / 🟡 60-85% / 🔴 > 85% / **محجوب · ترقّ** نابض عند تجاوز الحد
+   - Auto-refresh كل 30 ثانية + refresh فوري بعد كل رسالة
+3. **صفحة `/pricing/v2`** (`PricingV2.jsx`) — شفافية كاملة:
+   - Banner استهلاك live: "$0.192 · 61,398 رمز · 3 طلب · متبقي N رمز"
+   - 3 باقات (Free / Pro $9 / Studio $29) مع تمييز الحالية بـ ✓
+   - قسم "شفافية التكاليف الفعلية" يعرض كلفة كل عملية: محادثة AI ≈ $0.05-0.10، صورة $0.02، فيديو $0.40، فحص محوّل = مجاني
+4. **Billing tiers موصول بـ Stripe**:
+   - `tier_pro_monthly` ($9) + `tier_studio_monthly` ($29) في `PACKAGES`
+   - Webhook + polled status fulfillment يحدّث `users.storage_tier` تلقائياً بعد الدفع
+5. **اختبار End-to-End حقيقي**:
+   - أنشأت حساب `test_zenrex_2026@example.com` / `Test@Pass2026!`
+   - أرسلت 3 رسائل: 20K → 40K → 61K (تجاوز الحد 50K)
+   - الرسالة الرابعة **مُنحجبت تلقائياً** برسالة لطيفة بالعربي + خيار ترقية
+   - الـUsageIndicator يبيّن "محجوب · ترقّ" بشكل بصري واضح
+
+### 📧 بيانات الحساب التجريبي (للاختبار اليدوي من المستخدم):
+```
+Email: test_zenrex_2026@example.com
+Password: Test@Pass2026!
+الحالة: محجوب — استخدم 61,398 / 50,000 رمز (تكلفة فعلية: $0.192)
+رابط الترقية المباشر: https://zenrex.ai/pricing/v2
+```
+
 ## 2026-06-19 (الجلسة 14) — 🧠 Unified AI Brain + Token Meter + Admin Dashboard
 
 **Status**: ✅ مُنجَز — 5/5 pytest + UI verified + production deployed
