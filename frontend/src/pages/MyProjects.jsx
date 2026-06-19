@@ -49,29 +49,31 @@ function modeBadge(mode) {
 function ProjectCard({ project, onContinue, onDelete }) {
   const m = modeBadge(project.mode);
   const Icon = m.icon;
-  const colorClasses = {
-    emerald: 'border-emerald-500/30 hover:border-emerald-400/60 text-emerald-300',
-    purple:  'border-purple-500/30 hover:border-purple-400/60 text-purple-300',
-    rose:    'border-rose-500/30 hover:border-rose-400/60 text-rose-300',
-    cyan:    'border-cyan-500/30 hover:border-cyan-400/60 text-cyan-300',
-    pink:    'border-pink-500/30 hover:border-pink-400/60 text-pink-300',
-    blue:    'border-blue-500/30 hover:border-blue-400/60 text-blue-300',
+  // Static class maps — Tailwind JIT requires literal class names
+  const STYLE = {
+    emerald: { card: 'border-emerald-500/30 hover:border-emerald-400/60', icon: 'text-emerald-300', pill: 'bg-emerald-500/20 border-emerald-500/30 text-emerald-300', btn: 'bg-gradient-to-r from-emerald-500 to-emerald-600' },
+    purple:  { card: 'border-purple-500/30 hover:border-purple-400/60',  icon: 'text-purple-300',  pill: 'bg-purple-500/20 border-purple-500/30 text-purple-300',    btn: 'bg-gradient-to-r from-purple-500 to-purple-600' },
+    rose:    { card: 'border-rose-500/30 hover:border-rose-400/60',      icon: 'text-rose-300',    pill: 'bg-rose-500/20 border-rose-500/30 text-rose-300',          btn: 'bg-gradient-to-r from-rose-500 to-rose-600' },
+    cyan:    { card: 'border-cyan-500/30 hover:border-cyan-400/60',      icon: 'text-cyan-300',    pill: 'bg-cyan-500/20 border-cyan-500/30 text-cyan-300',          btn: 'bg-gradient-to-r from-cyan-500 to-cyan-600' },
+    pink:    { card: 'border-pink-500/30 hover:border-pink-400/60',      icon: 'text-pink-300',    pill: 'bg-pink-500/20 border-pink-500/30 text-pink-300',          btn: 'bg-gradient-to-r from-pink-500 to-pink-600' },
+    blue:    { card: 'border-blue-500/30 hover:border-blue-400/60',      icon: 'text-blue-300',    pill: 'bg-blue-500/20 border-blue-500/30 text-blue-300',          btn: 'bg-gradient-to-r from-blue-500 to-blue-600' },
   };
+  const s = STYLE[m.color] || STYLE.emerald;
 
   return (
     <div
       data-testid={`project-card-${project.id}`}
-      className={`group rounded-2xl border bg-zinc-900/60 ${colorClasses[m.color]} p-5 transition-all hover:scale-[1.01]`}
+      className={`group rounded-2xl border bg-zinc-900/60 ${s.card} p-5 transition-all hover:scale-[1.01]`}
     >
       <div className="flex items-start justify-between gap-3 mb-3">
         <div className="flex items-center gap-2.5 min-w-0 flex-1">
-          <div className={`w-10 h-10 rounded-xl bg-black/40 flex items-center justify-center shrink-0 ${colorClasses[m.color].split(' ')[2]}`}>
+          <div className={`w-10 h-10 rounded-xl bg-black/40 flex items-center justify-center shrink-0 ${s.icon}`}>
             <Icon className="w-5 h-5" />
           </div>
           <div className="min-w-0 flex-1">
             <h3 className="font-black text-base text-white truncate">{project.name || 'بدون اسم'}</h3>
             <div className="flex items-center gap-2 mt-0.5">
-              <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full bg-${m.color}-500/20 border border-${m.color}-500/30 ${colorClasses[m.color].split(' ')[2]}`}>
+              <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${s.pill}`}>
                 {m.label}
               </span>
               {project.platform && (
@@ -111,7 +113,7 @@ function ProjectCard({ project, onContinue, onDelete }) {
         <Button
           onClick={() => onContinue(project)}
           data-testid={`project-continue-${project.id}`}
-          className={`flex-1 bg-gradient-to-r from-${m.color}-500 to-${m.color}-600 hover:opacity-90 text-white text-xs font-black`}
+          className={`flex-1 ${s.btn} hover:opacity-90 text-white text-xs font-black`}
         >
           أكمل العمل
           <ArrowLeft className="w-3.5 h-3.5 mr-1.5" />
@@ -187,6 +189,18 @@ export default function MyProjects() {
     { id: 'studio',  title: 'الاستوديو (صور/فيديو)', icon: Sparkles,   items: studio,   newPath: '/dashboard',       color: 'rose'    },
   ];
   const visibleGroups = filter === 'all' ? groups : groups.filter((g) => g.id === filter);
+
+  // Static class maps for group "new" buttons — Tailwind JIT needs literals
+  const GROUP_BTN = {
+    emerald: 'bg-emerald-500/10 hover:bg-emerald-500/20 border-emerald-500/30 text-emerald-300',
+    purple:  'bg-purple-500/10 hover:bg-purple-500/20 border-purple-500/30 text-purple-300',
+    rose:    'bg-rose-500/10 hover:bg-rose-500/20 border-rose-500/30 text-rose-300',
+  };
+  const GROUP_ICON = {
+    emerald: 'text-emerald-400',
+    purple:  'text-purple-400',
+    rose:    'text-rose-400',
+  };
 
   return (
     <div className="min-h-screen bg-zinc-950 text-zinc-100" dir="rtl" data-testid="my-projects-page">
@@ -276,14 +290,14 @@ export default function MyProjects() {
                 <section key={g.id} data-testid={`group-${g.id}`}>
                   <div className="flex items-center justify-between mb-4">
                     <h2 className="text-lg font-black flex items-center gap-2">
-                      <Icon className={`w-5 h-5 text-${g.color}-400`} />
+                      <Icon className={`w-5 h-5 ${GROUP_ICON[g.color]}`} />
                       <span>{g.title}</span>
                       <span className="text-xs text-zinc-500 font-normal">({g.items.length})</span>
                     </h2>
                     <a
                       href={g.newPath}
                       data-testid={`new-${g.id}-btn`}
-                      className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-${g.color}-500/10 hover:bg-${g.color}-500/20 border border-${g.color}-500/30 text-${g.color}-300 text-xs font-bold`}
+                      className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-bold ${GROUP_BTN[g.color]}`}
                     >
                       <Plus className="w-3.5 h-3.5" />
                       <span>جديد</span>

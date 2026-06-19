@@ -6,6 +6,39 @@
 Quick summary: العميل يملك VPS Hetzner. أي تعديل تعمله، شغّل **`bash /app/deploy/deploy.sh zenrex.ai`** فوراً.
 SSH key موجود في `/root/.ssh/zerax_deploy`. **لا تسأل، لا تعتذر، انشر مباشرة.**
 
+## 2026-06-19 (الجلسة 11) — Branding + Connections Help + Storage + My Projects
+
+**Status**: ✅ مُنجَز — Backend 100% PASS، Frontend verified، نُشر على https://zenrex.ai/
+
+### ما تم:
+1. **`ZenrexBrand` + لوغو رسمي** (`/zenrex-logo.png` — Z+تاج ذهبي) — مستبدل أي ذكر للموديل.
+2. **`ZCrownSpinner` محدّث** — يستخدم اللوغو الحقيقي PNG مع رنين ذهبي وعنوان "زنركس AI".
+3. **`ConnectionHelpModal`** — لكل provider (github/vercel/cloudflare/domain/stripe/brand_logo):
+   - مقدمة بالعربي
+   - رابط مباشر للموقع الرسمي
+   - Screenshot من الصفحة الفعلية (من docs الرسمية)
+   - 5-7 خطوات مرقّمة بالتفصيل
+   - أخطاء شائعة (Pitfalls)
+   - يفتح من زر ❓ بجنب كل صف اتصال
+4. **ConnectionsPanel UX**:
+   - 🔴 pill أحمر متحرّك "غير مربوط" + ⚠️ icon
+   - 🟢 pill أخضر نابض "مربوط · ghp_..." بعد الحفظ
+   - زر ❓ بجنب كل عنوان provider + رابط "دليل خطوة بخطوة + صور"
+5. **`StorageIndicator`** — pill أخضر/كهرماني/أحمر يعرض MB المستخدمة و عدد المشاريع، يفتح Modal للترقية ($9 Pro / $29 Studio).
+6. **Backend `/api/freebuild-chat/storage/usage`** — يحسب bytes_used من current_html + messages + assets، يقارنها بحدود الباقة (free 100MB/3, pro 5GB/20, studio 50GB/∞).
+7. **`MyProjects` page** (`/freebuild/projects` + `/my-projects`):
+   - مجموعات: مواقع 🌐 / تطبيقات 📱 / استوديو 🎨
+   - فلاتر، كرت لكل مشروع مع "أكمل العمل" + حذف + دعم فني
+   - StorageIndicator + Brand في الـheader
+8. **تحديث Top Bar في FreeBuildChat** — Brand + Storage + شارة "📱 استوديو التطبيقات" عند `isAppMode`.
+9. **Pytest** — `/app/backend/tests/test_storage_quota.py` — 6/6 PASS.
+10. **نُشر للإنتاج** — https://zenrex.ai/api/freebuild-chat/storage/usage يعمل، Frontend مع build جديد.
+
+### ملاحظات تقنية:
+- Tailwind JIT لا يدعم class names ديناميكية (`bg-${color}-500`) — استخدمت static maps في `MyProjects.jsx`.
+- `ZenrexBrand` فيه fallback `<Z>` لو فشل تحميل اللوغو.
+- `FreeBuildChat.js` صار ~4500 سطر — يحتاج تقسيم في session قادم (ConnectionsPanel, FinalizeModal, CookiesManager، CredentialModal مرشّحون للاستخراج).
+
 ## 2026-06-19 (الجلسة العاشرة) — 📱 Native App Builder (PWA Studio)
 
 **Status**: ✅ مُنجَز — اختبار E2E ناجح 100% (7/7 backend + frontend) + نُشِر على https://zenrex.ai/
