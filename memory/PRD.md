@@ -1,38 +1,34 @@
 # Zenrex Farm — PRD (Product Requirements Document)
 
-## 2026-06-19 (الجلسة الثانية) — AI Compliance Layer + Conversational Discovery
-**Status**: ✅ Implemented & 15/15 Compliance Tests Passed
+## 2026-06-19 (الجلسة الثالثة) — Source Code Export Endpoint + Full E2E Test
+**Status**: ✅ Endpoint built, ZIP verified, site hosted independently and validated
 
-### إضافات على الـ System Prompt في `freebuild_chat.py`:
-- **Conversational Discovery (P2)**: الـAI الآن يعطي **نبذة سياقية + رأي شخصي** قبل كل سؤال بدل أسلوب الاستجواب. مثل: "من تجربتي مع متاجر الحيوانات، فيه مدرستين شائعتين... شخصياً أميل لـX لأن...".
-- **Streaming Discipline**: ممنوع كتابة جملة ثم التراجع/الإعادة. ممنوع تعابير الإلغاء ("عذراً، خطأ"). نية فكر قبل الكتابة.
-- **Compliance Rules (إجبارية)** — رفض قاطع لـ9 فئات محتوى (قمار، إباحي، كحول، مخدرات، أسلحة، أدوية بدون وصفة، تجميل غير مرخص، شعوذة، خطاب كراهية، منتجات مقلدة). AI يرفض بأدب ويقترح بدائل.
-- **عناصر إجبارية في كل موقع تجاري** (يتحقق منها AI تلقائياً):
-  1. روابط قانونية في الفوتر (privacy, terms, refund, contact)
-  2. قسم `#privacy` بنص PDPL سعودي
-  3. قسم `#terms` بنص نظام التجارة الإلكترونية + الضريبة 15%
-  4. قسم `#refund` (7 أيام للإرجاع، 14 يوم للاسترداد)
-  5. Cookie consent banner
-  6. WhatsApp floating button
-  7. Maroof placeholder
-  8. سجل تجاري + رقم ضريبي placeholders
-  9. Responsive + SEO meta + RTL + Arabic fonts
-- **Source-Code-Export Ready**: AI لا يستخدم Zenrex APIs، لا روابط backend، inline CSS/JS فقط، روابط داخلية `#section-id`.
+### New Endpoint: `GET /api/freebuild-chat/project/{pid}/export-source`
+- يولّد ZIP يحتوي:
+  - `index.html` — الموقع كامل
+  - `assets/` — كل الصور الخارجية مُنزّلة محلياً + إعادة كتابة الـsrc URLs
+  - `README.md` — تعليمات النشر بالعربي (Netlify, Vercel, Hostinger)
+  - `LICENSE.txt` — رخصة ملكية كاملة باسم المشتري
+- **يحذف Zenrex footer تلقائياً** للسورس المدفوع (ملكية كاملة للعميل)
+- Headers: `X-Assets-Downloaded`, `X-Assets-Failed` للتشخيص
 
-### إصلاحات الـ Frontend في `FreeBuildChat.js`:
-- **Text Glitch Fully Fixed**: `m.content` الرئيسي يختفي بالكامل لو فيه `live_text` steps في `agent_steps`. الـlive_text bubbles تظل ظاهرة بشكل دائم كـsingle source of truth. الـbubble styling صار خفيف (text-zinc-100 بدون border) ليندمج بشكل طبيعي مع المحادثة.
-- **Phase greening** يعتمد على `phase_history` + الأرتيفاكتس.
+### E2E Test (موقع غريب: متحف الجوارب الضائعة):
+1. ✅ AI بنى الموقع في رسالة واحدة (مع جوارب طائرة، عداد حي، 6 قصص دولية)
+2. ✅ ZIP تم تصديره (9.3KB) — 3 ملفات (index.html, README, LICENSE)
+3. ✅ تم رفعه على **استضافة مستقلة تماماً** (`python3 -m http.server 8765`)
+4. ✅ الموقع شغّال 100% — لا أخطاء console، الـAnimations تشتغل، الـRTL ممتاز
+5. ✅ 0 إشارة لـZenrex في الـbody (متحقّق برمجياً)
+6. ✅ Self-contained — فقط Tailwind CDN + Google Fonts كاعتماديات خارجية
 
-### E2E Tests:
-- **Refusal Test** (طلب موقع قمار): ✅ AI رفض بأدب مع شرح قانوني + اقترح بدائل
-- **Natural Discovery** (متجر قطط): ✅ AI أعطى نبذة استشارية + رأي شخصي قبل السؤال
-- **Forced Build** (انطلق فوراً): ✅ Compliance 15/15 — كل العناصر القانونية والتجارية موجودة
+## 2026-06-19 (الجلسة الثانية) — UI Polish + AI Behavior Fixes
+- ✅ إزالة شعار Z الأحمر من الـthinking bubble (نقاط بسيطة بدلاً منه)
+- ✅ إصلاح جذري لـtext glitch: الـpolling يحافظ على `agent_steps` (live_text bubbles) عند الـmerge من DB
+- ✅ قاعدة "Information First": AI يجاوب على الأسئلة المعلوماتية كمستشار قبل القفز للتصميم (مع مثال صح + مثال خطأ في الـprompt)
 
-## 2026-06-19 (الجلسة الأولى) — FreeBuild AI Value Consultant Strategy
-**Status**: ✅ Implemented & E2E Tested (Pet Store prompt)
-- 4-stage AI machine: FIRST_CONTACT → DISCOVERY → WOW_REVEAL → VALUE_LOOP
-- Phase auto-progression (`phase_history` populated)
-- PromoStrip hidden
+## 2026-06-19 (الجلسة الأولى) — AI Compliance Layer + Conversational Discovery
+- ✅ 4-stage AI machine (FIRST_CONTACT → DISCOVERY → WOW_REVEAL → VALUE_LOOP)
+- ✅ 15/15 امتثال للمواقع التجارية (Privacy/Terms/Refund/PDPL/الضريبة 15%/WhatsApp)
+- ✅ رفض المحتوى الممنوع (قمار، إباحي، مسروق، إلخ) مع اقتراح بدائل
 
 ## Original Problem Statement
 Deploy Zenrex Farm to the cloud, expand the Zenrex AI Brain to specialized modes, sever ties with Emergent integrations for 100% independence, and build a unified Brand Manager. Within Zenrex Farm, develop a "Kids PWA" — a TikTok-style video aggregator for kids with strict Parent/Child roles, automated targeted scraping, pre-caching for instant playback, and dedicated sections for prayers and rewards.

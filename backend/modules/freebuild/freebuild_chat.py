@@ -5374,6 +5374,203 @@ def make_freebuild_chat_router(db, get_current_user):
                 return {"ok": True, "html": s.get("html", ""), "created_at": s.get("created_at")}
         raise HTTPException(404, "نسخة غير موجودة")
 
+    # ═══════════════════════════════════════════════════════════════
+    # EXPORT SOURCE CODE — bundle the website as a self-contained ZIP
+    # so the customer can host it anywhere (gumroad-style ownership).
+    # Downloads all external images locally and rewrites src URLs.
+    # ═══════════════════════════════════════════════════════════════
+    @router.get("/project/{pid}/export-source")
+    async def export_source(pid: str, user=Depends(get_current_user)):
+        """Bundle the current_html + all images + README + LICENSE as a ZIP."""
+        import io
+        import zipfile
+        import httpx
+        from fastapi.responses import StreamingResponse
+
+        proj = await db.freebuild_projects.find_one(
+            {"id": pid, "user_id": user["user_id"]}, {"_id": 0}
+        )
+        if not proj:
+            raise HTTPException(404, "Project not found")
+        html = proj.get("current_html") or ""
+        if not html:
+            raise HTTPException(400, "ما فيه موقع جاهز للتصدير بعد. اطلب من الذكاء يبني التصميم أولاً.")
+
+        # Strip the Zenrex auto-injected footer for paid source export
+        # (customer owns the code now). The mark is at module top.
+        if ZENREX_FOOTER_MARK in html:
+            footer_start = html.find(ZENREX_FOOTER_MARK)
+            footer_end = html.find("</a>", footer_start)
+            if footer_end != -1:
+                html = html[:footer_start] + html[footer_end + 4:]
+
+        # Find every external image src and download it locally.
+        img_pattern = re.compile(
+            r'(<img\b[^>]*?\bsrc\s*=\s*["\'])(https?://[^"\']+)(["\'])',
+            re.IGNORECASE,
+        )
+        # Also pick up CSS url(https://...) backgrounds
+        css_url_pattern = re.compile(
+            r'url\(\s*["\']?(https?://[^)"\']+)["\']?\s*\)',
+            re.IGNORECASE,
+        )
+
+        external_urls: Dict[str, str] = {}  # url → local relative path
+        for m in img_pattern.finditer(html):
+            url = m.group(2)
+            if url not in external_urls:
+                # Build a safe local filename
+                ext = ".jpg"
+                lower = url.lower().split("?")[0]
+                for cand in (".png", ".jpg", ".jpeg", ".webp", ".svg", ".gif"):
+                    if lower.endswith(cand):
+                        ext = cand
+                        break
+                fname = f"img-{hashlib.md5(url.encode()).hexdigest()[:10]}{ext}"
+                external_urls[url] = f"assets/{fname}"
+        for m in css_url_pattern.finditer(html):
+            url = m.group(1)
+            if url not in external_urls and url.startswith("http"):
+                ext = ".jpg"
+                lower = url.lower().split("?")[0]
+                for cand in (".png", ".jpg", ".jpeg", ".webp", ".svg", ".gif"):
+                    if lower.endswith(cand):
+                        ext = cand
+                        break
+                fname = f"bg-{hashlib.md5(url.encode()).hexdigest()[:10]}{ext}"
+                external_urls[url] = f"assets/{fname}"
+
+        # Download all unique external assets in parallel
+        downloaded: Dict[str, bytes] = {}
+        failures: List[str] = []
+        if external_urls:
+            async with httpx.AsyncClient(timeout=20, follow_redirects=True) as cli:
+                async def _fetch(u: str):
+                    try:
+                        r = await cli.get(u)
+                        if r.status_code == 200:
+                            downloaded[u] = r.content
+                        else:
+                            failures.append(f"{u} (HTTP {r.status_code})")
+                    except Exception as e:  # noqa: BLE001
+                        failures.append(f"{u} ({type(e).__name__})")
+                await asyncio.gather(*[_fetch(u) for u in external_urls.keys()])
+
+        # Rewrite the HTML to point to the local /assets/ paths for downloaded ones.
+        # Failed URLs stay as-is (customer can manually replace later).
+        def _rewrite_img(m: re.Match) -> str:
+            url = m.group(2)
+            if url in downloaded:
+                return m.group(1) + external_urls[url] + m.group(3)
+            return m.group(0)
+
+        def _rewrite_css(m: re.Match) -> str:
+            url = m.group(1)
+            if url in downloaded:
+                return f"url({external_urls[url]})"
+            return m.group(0)
+
+        html = img_pattern.sub(_rewrite_img, html)
+        html = css_url_pattern.sub(_rewrite_css, html)
+
+        # Build the README.md
+        readme = f"""# {proj.get('name') or 'موقعي'}
+
+تم بناء هذا الموقع بواسطة **Zenrex AI** (https://zenrex.ai)
+وأنت تملك السورس كامل — استضفه على أي مزود تحبه.
+
+## محتويات الحزمة
+
+- `index.html` — الصفحة الرئيسية
+- `assets/` — مجلد الصور والوسائط
+- `LICENSE.txt` — رخصة الاستخدام
+
+## كيف أنشره؟
+
+### الطريقة 1: Netlify (مجاناً، سهل)
+1. ادخل https://app.netlify.com/drop
+2. اسحب وأفلت الـ ZIP كامل
+3. خلاص — موقعك شغّال على رابط `*.netlify.app`
+
+### الطريقة 2: Vercel
+1. ارفع الملفات إلى مستودع GitHub
+2. ادخل https://vercel.com → New Project → استورد المستودع
+3. اضغط Deploy
+
+### الطريقة 3: استضافة مدفوعة (Hostinger, GoDaddy)
+1. ادخل لوحة التحكم → File Manager
+2. اذهب إلى مجلد `public_html`
+3. ارفع كل الملفات بنفس الترتيب
+
+## التعديل اليدوي
+
+- لتغيير ألوان أو نصوص: افتح `index.html` بمحرر VSCode أو Notepad
+- لتغيير الصور: استبدل ملفات داخل `assets/` بنفس الأسماء، أو غيّر مسارات `src`
+
+## ملاحظات
+
+- الموقع يستخدم Tailwind CSS عبر CDN (لا يحتاج build)
+- الخطوط من Google Fonts (متصلة بالإنترنت)
+- إذا قرّرت استضافة على VPS خاص بدون إنترنت، نزّل Tailwind محلياً
+
+## دعم
+
+عندك سؤال؟ تواصل: support@zenrex.ai
+"""
+
+        license_txt = f"""ZENREX AI SOURCE CODE LICENSE
+=====================================
+
+Project: {proj.get('name') or 'website'}
+Project ID: {pid}
+Customer: {user.get('email') or user.get('user_id')}
+Issued: {_now()}
+
+You (the buyer) have purchased FULL OWNERSHIP rights to this source code.
+
+You may:
+  ✓ Use it commercially without royalties
+  ✓ Modify, adapt, and rebrand it
+  ✓ Host it on any infrastructure (yours, third-party, or cloud)
+  ✓ Resell modified derivatives to your own clients
+  ✓ Remove all references to Zenrex AI
+
+You may not:
+  ✗ Re-sell this exact unmodified package to others
+  ✗ Claim it was created by anyone but Zenrex AI when redistributed unchanged
+
+Zenrex AI provides this code AS-IS without warranty of any kind.
+For questions: legal@zenrex.ai
+"""
+
+        # Pack everything into a ZIP in memory
+        buf = io.BytesIO()
+        with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
+            zf.writestr("index.html", html)
+            zf.writestr("README.md", readme)
+            zf.writestr("LICENSE.txt", license_txt)
+            for url, content in downloaded.items():
+                local_path = external_urls[url]
+                zf.writestr(local_path, content)
+            if failures:
+                zf.writestr(
+                    "assets/MISSING_ASSETS.txt",
+                    "هذه الصور فشل تنزيلها — استبدلها يدوياً:\n\n"
+                    + "\n".join(failures),
+                )
+
+        buf.seek(0)
+        safe_name = re.sub(r"[^a-zA-Z0-9_-]+", "-", proj.get("name") or "website")[:50] or "website"
+        return StreamingResponse(
+            iter([buf.getvalue()]),
+            media_type="application/zip",
+            headers={
+                "Content-Disposition": f'attachment; filename="zenrex-{safe_name}.zip"',
+                "X-Assets-Downloaded": str(len(downloaded)),
+                "X-Assets-Failed": str(len(failures)),
+            },
+        )
+
     @router.post("/project/{pid}/snapshots/{sid}/restore")
     async def restore_snapshot(pid: str, sid: str, user=Depends(get_current_user)):
         proj = await db.freebuild_projects.find_one(
