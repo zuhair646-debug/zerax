@@ -646,22 +646,39 @@ function MarkdownImage({ src, alt, title }) {
 }
 
 const MD_COMPONENTS = {
-  h1: ({ node, ...p }) => <h1 className="text-base font-black text-emerald-200 mt-3 mb-2 first:mt-0" {...p} />,
-  h2: ({ node, ...p }) => <h2 className="text-base font-black text-emerald-200 mt-3 mb-2 first:mt-0" {...p} />,
-  h3: ({ node, ...p }) => <h3 className="text-sm font-black text-emerald-300 mt-2.5 mb-1.5 first:mt-0" {...p} />,
-  p:  ({ node, ...p }) => <p className="text-sm leading-relaxed my-1.5" {...p} />,
+  h1: ({ node, ...p }) => <h1 className="text-base font-black text-emerald-200 mt-3 mb-2 first:mt-0 break-words" {...p} />,
+  h2: ({ node, ...p }) => <h2 className="text-base font-black text-emerald-200 mt-3 mb-2 first:mt-0 break-words" {...p} />,
+  h3: ({ node, ...p }) => <h3 className="text-sm font-black text-emerald-300 mt-2.5 mb-1.5 first:mt-0 break-words" {...p} />,
+  // `break-words` + `[overflow-wrap:anywhere]` makes long Arabic words and
+  // URLs wrap inside their bubble instead of expanding the parent flex
+  // container — the root cause of "words cut off" on mobile.
+  p:  ({ node, ...p }) => <p className="text-sm leading-relaxed my-1.5 break-words [overflow-wrap:anywhere]" {...p} />,
   strong: ({ node, ...p }) => <strong className="font-bold text-emerald-100" {...p} />,
   em: ({ node, ...p }) => <em className="italic text-emerald-100" {...p} />,
-  ul: ({ node, ...p }) => <ul className="my-2 space-y-1 pr-5 list-disc marker:text-emerald-400 text-sm" {...p} />,
-  ol: ({ node, ...p }) => <ol className="my-2 space-y-1 pr-5 list-decimal marker:text-emerald-400 marker:font-bold text-sm" {...p} />,
-  li: ({ node, ...p }) => <li className="leading-relaxed" {...p} />,
-  a:  ({ node, ...p }) => <a className="text-cyan-400 hover:text-cyan-300 underline" target="_blank" rel="noreferrer" {...p} />,
+  ul: ({ node, ...p }) => <ul className="my-2 space-y-1.5 pr-5 list-disc marker:text-emerald-400 text-sm" {...p} />,
+  ol: ({ node, ...p }) => <ol className="my-2 space-y-1.5 pr-5 list-decimal marker:text-emerald-400 marker:font-bold text-sm" {...p} />,
+  li: ({ node, ...p }) => <li className="leading-relaxed break-words [overflow-wrap:anywhere] pl-1" {...p} />,
+  // URLs: never let them push the layout. Break-all forces wrap inside the
+  // bubble even for very long single-token URLs.
+  a:  ({ node, ...p }) => <a className="text-cyan-400 hover:text-cyan-300 underline break-all [overflow-wrap:anywhere]" target="_blank" rel="noreferrer" {...p} />,
   code: ({ inline, node, ...p }) =>
     inline
-      ? <code className="px-1 py-0.5 rounded bg-black/40 text-amber-200 text-[12px] font-mono" {...p} />
-      : <code className="block p-3 rounded-lg bg-black/50 text-amber-100 text-[12px] font-mono overflow-x-auto" {...p} />,
+      ? <code className="px-1 py-0.5 rounded bg-black/40 text-amber-200 text-[12px] font-mono break-all" {...p} />
+      : <code className="block p-3 rounded-lg bg-black/50 text-amber-100 text-[12px] font-mono overflow-x-auto whitespace-pre" {...p} />,
   pre: ({ node, ...p }) => <pre className="my-2 overflow-x-auto" {...p} />,
-  blockquote: ({ node, ...p }) => <blockquote className="border-r-2 border-emerald-500/40 pr-3 my-2 text-zinc-300 italic" {...p} />,
+  blockquote: ({ node, ...p }) => <blockquote className="border-r-2 border-emerald-500/40 pr-3 my-2 text-zinc-300 italic break-words" {...p} />,
+  // GFM tables wrapped in a horizontal-scroll container so they never break
+  // the chat bubble layout. Columns stay readable; user can swipe sideways.
+  table: ({ node, ...p }) => (
+    <div className="my-3 -mx-1 overflow-x-auto rounded-lg border border-white/10">
+      <table className="min-w-full text-xs sm:text-sm border-collapse" {...p} />
+    </div>
+  ),
+  thead: ({ node, ...p }) => <thead className="bg-emerald-500/15 text-emerald-200" {...p} />,
+  tbody: ({ node, ...p }) => <tbody {...p} />,
+  tr: ({ node, ...p }) => <tr className="border-b border-white/5 last:border-0" {...p} />,
+  th: ({ node, ...p }) => <th className="px-2.5 py-2 text-right font-black whitespace-nowrap" {...p} />,
+  td: ({ node, ...p }) => <td className="px-2.5 py-2 align-top break-words [overflow-wrap:anywhere]" {...p} />,
   img: ({ node, src, alt, title }) => <MarkdownImage src={src} alt={alt} title={title} />,
 };
 
@@ -3658,8 +3675,8 @@ function ChatWorkspace({ projectId }) {
               )}
 
               {messages.map((m, i) => (
-                <div key={i} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-                  <div className={`max-w-[85%] rounded-2xl px-4 py-3 ${
+                <div key={i} className={`flex min-w-0 ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                  <div className={`min-w-0 max-w-[88%] sm:max-w-[85%] rounded-2xl px-3 sm:px-4 py-3 ${
                     m.role === 'user'
                       ? 'bg-emerald-500/15 border border-emerald-500/30 text-emerald-50'
                       : 'bg-zinc-800/70 border border-white/10 text-zinc-100'
