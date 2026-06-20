@@ -72,12 +72,23 @@ function TierCard({ pkg, onBuy, busy }) {
       </div>
 
       <button
-        onClick={() => onBuy(pkg.id)}
-        disabled={busy === pkg.id}
-        data-testid={`buy-${pkg.id}`}
-        className={`w-full px-4 py-3 rounded-xl text-sm font-black ${t.btn} hover:opacity-90 transition disabled:opacity-50`}
+        onClick={() => onBuy(pkg.id, 'paypal')}
+        disabled={busy === `${pkg.id}-paypal` || busy === `${pkg.id}-lemon`}
+        data-testid={`buy-${pkg.id}-paypal`}
+        className="w-full px-4 py-2.5 rounded-xl text-sm font-black bg-[#0070ba] hover:bg-[#005ea6] text-white disabled:opacity-50 transition mb-2"
       >
-        {busy === pkg.id ? '...' : (isMonthly ? 'اشترك الآن' : 'اشترِ الآن')}
+        {busy === `${pkg.id}-paypal` ? '...' : (
+          <><span className="font-extrabold">Pay</span><span className="italic">Pal</span><span className="opacity-80 text-xs"> — ${pkg.price_usd}</span></>
+        )}
+      </button>
+      <button
+        onClick={() => onBuy(pkg.id, 'lemon')}
+        disabled={busy === `${pkg.id}-paypal` || busy === `${pkg.id}-lemon`}
+        data-testid={`buy-${pkg.id}-lemon`}
+        className="w-full px-4 py-2.5 rounded-xl text-sm font-black bg-[#FFC233] hover:bg-[#fcd460] text-black disabled:opacity-50 transition"
+        title="بطاقات + Klarna + Afterpay"
+      >
+        {busy === `${pkg.id}-lemon` ? '...' : `LemonSqueezy — $${pkg.price_usd}`}
       </button>
     </div>
   );
@@ -108,21 +119,25 @@ export default function Pricing() {
     }
   }, [isAuthed]);
 
-  const buy = async (packageId) => {
+  const buy = async (packageId, method) => {
     if (!isAuthed) { navigate('/login?return=/pricing'); return; }
-    setBusy(packageId);
+    setBusy(`${packageId}-${method}`);
     try {
-      const r = await fetch(`${API}/api/billing/checkout`, {
+      const url = method === 'paypal'
+        ? `${API}/api/payments/paypal/create`
+        : `${API}/api/payments/lemonsqueezy/create`;
+      const r = await fetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${localStorage.getItem('token')}` },
-        body: JSON.stringify({ package_id: packageId, origin_url: window.location.origin }),
+        body: JSON.stringify({ package_id: packageId }),
       });
       const d = await r.json();
-      if (!r.ok || !d.url) {
+      const redirect = d.approval_url || d.checkout_url;
+      if (!r.ok || !redirect) {
         toast.error(d.detail || 'فشل إنشاء جلسة الدفع');
         return;
       }
-      window.location.href = d.url;
+      window.location.href = redirect;
     } catch (e) {
       toast.error('فشل الاتصال بالخادم');
     } finally {

@@ -1,6 +1,6 @@
-/* Zenrex Service Worker — PWA (v11 — navbar static + PayPal verified live) */
+/* Zenrex Service Worker — PWA (v12 — PayPal + LemonSqueezy on all packages) */
 /* eslint-disable no-restricted-globals */
-const CACHE_VERSION = 'zenrex-pwa-v11-2026-06-20';
+const CACHE_VERSION = 'zenrex-pwa-v12-2026-06-20';
 const STATIC_CACHE = `${CACHE_VERSION}-static`;
 const RUNTIME_CACHE = `${CACHE_VERSION}-runtime`;
 

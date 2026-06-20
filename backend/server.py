@@ -3708,6 +3708,13 @@ try:
 except Exception as _rspe:
     logging.getLogger(__name__).error(f"Failed to register ready_sites payment routes: {_rspe}", exc_info=True)
 
+# ── Generic PayPal payments for subscription tiers ──
+try:
+    from modules.payments.paypal_generic import register_payments as _pp_register
+    _pp_register(app, db, get_current_user)
+except Exception as _ppe:
+    logging.getLogger(__name__).error(f"Failed to register generic PayPal payments: {_ppe}", exc_info=True)
+
 # ============== CARE PORTAL (post-delivery client dashboard + Mobile App upgrade) ==============
 try:
     from modules.care_portal import create_care_router
