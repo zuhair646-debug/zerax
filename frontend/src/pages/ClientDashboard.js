@@ -188,7 +188,9 @@ const ClientDashboard = ({ user, setUser }) => {
           <div className="rounded-xl bg-gradient-to-br from-amber-500/15 to-yellow-700/5 border border-amber-500/25 p-4">
             <div className="flex items-center justify-between mb-1">
               <Coins className="w-6 h-6 text-amber-400" />
-              <span className="text-2xl font-black text-white">{user?.credits || 0}</span>
+              <span className="text-2xl font-black text-white" data-testid="stat-credits-balance">
+                {Math.round(Number(user?.credits || 0)).toLocaleString('en-US')}
+              </span>
             </div>
             <p className="text-xs text-amber-200/70 font-medium">رصيد النقاط</p>
           </div>

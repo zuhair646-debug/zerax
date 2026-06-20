@@ -8,7 +8,8 @@ const API = process.env.REACT_APP_BACKEND_URL;
 
 // ─── Credits badge ───────────────────────────────────────────────────
 // Shows the logged-in user's available credit balance and links to /pricing.
-// Polls every 20s so the navbar stays in sync after AI calls deduct credits.
+// Polls every 30s. Keeps the LAST KNOWN value during refetches so the badge
+// never flashes empty/disappears between polls (prevents UI flicker).
 const CreditsBadge = ({ onClick }) => {
   const [data, setData] = React.useState(null);
 
@@ -19,13 +20,18 @@ const CreditsBadge = ({ onClick }) => {
       const r = await fetch(`${API}/api/usage/credits`, {
         headers: { Authorization: `Bearer ${token}` },
       });
-      if (r.ok) setData(await r.json());
-    } catch (_) { /* silent */ }
+      if (r.ok) {
+        const d = await r.json();
+        // Only replace state on a successful fetch — keeps the previous value
+        // visible while the next poll is in flight.
+        setData(d);
+      }
+    } catch (_) { /* silent — keep previous value */ }
   }, []);
 
   React.useEffect(() => {
     fetchBalance();
-    const id = setInterval(fetchBalance, 20000);
+    const id = setInterval(fetchBalance, 30000);
     const onCreditEvt = () => fetchBalance();
     window.addEventListener('zenrex:credits-changed', onCreditEvt);
     return () => {
@@ -34,7 +40,18 @@ const CreditsBadge = ({ onClick }) => {
     };
   }, [fetchBalance]);
 
-  if (!data) return null;
+  if (!data) {
+    // Placeholder pill so layout doesn't jump while first fetch is in flight
+    return (
+      <span
+        data-testid="credits-badge-loading"
+        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-amber-500/5 border border-amber-500/20 text-amber-300/60 text-xs font-bold"
+      >
+        <Sparkles className="w-3.5 h-3.5" />
+        <span>···</span>
+      </span>
+    );
+  }
 
   if (data.unlimited) {
     return (
@@ -51,7 +68,7 @@ const CreditsBadge = ({ onClick }) => {
     );
   }
 
-  const credits = Number(data.credits || 0);
+  const credits = Math.round(Number(data.credits || 0));
   const isLow = credits < 50;
   return (
     <button

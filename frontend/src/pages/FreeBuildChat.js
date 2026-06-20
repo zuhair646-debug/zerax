@@ -2400,7 +2400,7 @@ function ChatWorkspace({ projectId }) {
   const setActivePhase = setActivePhaseOverride;
   const [activeTab, setActiveTab] = useState('chat'); // chat | live | approved
   // Credits guard — disables input + shows recharge UI when credits = 0
-  const { isBlocked: creditsBlocked, refresh: refreshCredits } = useCreditsGuard();
+  const { isBlocked: creditsBlocked, refresh: refreshCredits, credits: liveCredits, unlimited: liveUnlimited } = useCreditsGuard();
 
   // Mode helpers — video modes hide HTML/Build/Deploy UI entirely.
   const isVideoMode = ['video_studio', 'anime_studio', 'longform_video'].includes(project?.mode);
@@ -2775,6 +2775,11 @@ function ChatWorkspace({ projectId }) {
               finalInlineVideo = payload.inline_video || [];
               htmlUpdated = !!payload.html_updated;
               setLastTask({ label: `🤖 Agent (${payload.iterations || 0} خطوة)`, model: payload.model_used || '' });
+              // Credits were just deducted server-side — refresh the visible
+              // balance pill in both the chat input strip and the navbar so
+              // the user sees the drop in near-real-time.
+              try { await refreshCredits(); } catch (_) { /* ignore */ }
+              notifyCreditsChanged();
             } else if (eventName === 'error') {
               liveSteps.push({ kind: 'error', message: payload.message });
             } else if (eventName === 'ping') {

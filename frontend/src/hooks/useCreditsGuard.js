@@ -39,7 +39,7 @@ export default function useCreditsGuard() {
       }
       const d = await r.json();
       const unlimited = !!d.unlimited;
-      const balance = Number(d.credits || 0);
+      const balance = Math.round(Number(d.credits || 0));
       setState({
         credits: balance,
         unlimited,
@@ -54,7 +54,9 @@ export default function useCreditsGuard() {
 
   useEffect(() => {
     refresh();
-    const id = setInterval(refresh, 25000);
+    // Poll every 30 seconds — long enough to avoid re-render storms but quick
+    // enough to reflect deductions within a chat session.
+    const id = setInterval(refresh, 30000);
     const onEvt = () => refresh();
     window.addEventListener('zenrex:credits-changed', onEvt);
     return () => {

@@ -10,11 +10,12 @@ import uuid
 log = logging.getLogger("zenrex.pricing.credits")
 
 
-async def get_balance(db, user_id: str) -> float:
+async def get_balance(db, user_id: str) -> int:
     user = await db.users.find_one({"id": user_id}, {"credits": 1, "_id": 0})
     if not user:
-        return 0.0
-    return float(user.get("credits", 0) or 0)
+        return 0
+    # Always expose balance as an integer — float drift is a UX bug.
+    return int(round(float(user.get("credits", 0) or 0)))
 
 
 async def add_credits(

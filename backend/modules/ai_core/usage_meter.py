@@ -219,7 +219,7 @@ def make_usage_router(db, get_current_user):
             "month_tokens": month_tokens,
             "month_cost_usd": month_cost,
             "month_credits": month_credits,
-            "credits": int((user_doc or {}).get("credits") or 0),
+            "credits": int(round(float((user_doc or {}).get("credits") or 0))),
             "tier": (user_doc or {}).get("storage_tier") or "free",
             "quota": q,
         }
@@ -228,12 +228,9 @@ def make_usage_router(db, get_current_user):
     async def my_credits(user=Depends(get_current_user)):
         """Lightweight endpoint for the navbar credits badge — quick to poll."""
         uid = user["user_id"]
-        u = await db.users.find_one({"id": uid}, {"_id": 0, "credits": 1, "role": 1, "storage_tier": 1})
-        role = (u or {}).get("role") or ""
-        if role.lower() in ("owner", "super_admin"):
-            return {"credits": None, "unlimited": True, "tier": (u or {}).get("storage_tier") or "free"}
+        u = await db.users.find_one({"id": uid}, {"_id": 0, "credits": 1, "storage_tier": 1})
         return {
-            "credits": int((u or {}).get("credits") or 0),
+            "credits": int(round(float((u or {}).get("credits") or 0))),
             "unlimited": False,
             "tier": (u or {}).get("storage_tier") or "free",
         }
