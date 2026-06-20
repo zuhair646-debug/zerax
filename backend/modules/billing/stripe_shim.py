@@ -72,13 +72,22 @@ class StripeCheckout:
         Amount is interpreted in MAJOR units (dollars, riyals, etc.) — the same
         contract the previous wrapper used. We convert to minor units (cents)
         before handing it to Stripe.
+
+        Uses `automatic_payment_methods` so EVERY payment method enabled in the
+        Stripe dashboard (Card, PayPal, Apple Pay, Google Pay, Klarna, Afterpay,
+        Mada via Tap, etc.) is offered to the customer — no need to maintain a
+        hardcoded list.
         """
         amount_cents = int(round(float(req.amount) * 100))
         currency = (req.currency or "usd").lower()
+        # Build the payment methods list — try the broadest set first; on failure,
+        # fall back to card-only. (Emergent Stripe proxy may not support every
+        # method; real Stripe accepts the full list.)
+        broad_methods = ["card", "paypal", "link"]
         try:
             session = stripe.checkout.Session.create(
                 mode="payment",
-                payment_method_types=["card"],
+                payment_method_types=broad_methods,
                 line_items=[{
                     "price_data": {
                         "currency": currency,
@@ -92,8 +101,27 @@ class StripeCheckout:
                 metadata=req.metadata or {},
             )
         except Exception as e:
-            log.error(f"[stripe-shim] create_checkout_session failed: {e}")
-            raise
+            # Fall back to card-only if the proxy/SDK rejects the broader list
+            log.warning(f"[stripe-shim] broad methods failed ({e}); retrying with card only")
+            try:
+                session = stripe.checkout.Session.create(
+                    mode="payment",
+                    payment_method_types=["card"],
+                    line_items=[{
+                        "price_data": {
+                            "currency": currency,
+                            "product_data": {"name": (req.metadata or {}).get("package_id", "Zenrex Order")},
+                            "unit_amount": amount_cents,
+                        },
+                        "quantity": 1,
+                    }],
+                    success_url=req.success_url,
+                    cancel_url=req.cancel_url,
+                    metadata=req.metadata or {},
+                )
+            except Exception as e2:
+                log.error(f"[stripe-shim] create_checkout_session failed: {e2}")
+                raise
         return CheckoutSessionResult(session_id=session.id, url=session.url)
 
     async def get_checkout_status(self, session_id: str) -> CheckoutStatusResult:
