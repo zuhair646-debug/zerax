@@ -292,7 +292,8 @@ function App() {
           <Route path="/care/:projectId" element={<ProtectedRoute><CarePortal user={user} /></ProtectedRoute>} />
           <Route path="/showcase" element={<ZenrexShowcase />} />
           {/* 💰 Pricing & Billing */}
-          <Route path="/pricing" element={<Pricing user={user} />} />
+          <Route path="/pricing" element={<PricingV2 />} />
+          <Route path="/pricing-legacy" element={<Pricing user={user} />} />
           <Route path="/billing" element={<ProtectedRoute><Billing user={user} /></ProtectedRoute>} />
           <Route path="/pricing/success" element={<ProtectedRoute><PricingSuccess user={user} /></ProtectedRoute>} />
           {/* 🛡️ Honeypot catch-all — bans scanners hitting /.env, /wp-admin, etc. */}

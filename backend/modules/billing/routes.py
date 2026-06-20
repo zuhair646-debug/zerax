@@ -16,10 +16,20 @@ from typing import Optional, Dict, Any
 from fastapi import APIRouter, HTTPException, Depends, Request
 from pydantic import BaseModel
 
-from emergentintegrations.payments.stripe.checkout import (
-    StripeCheckout,
-    CheckoutSessionRequest,
-)
+# Lazy Stripe import — billing /packages endpoint must still work even if
+# emergentintegrations SDK is unavailable on the host. Only checkout creation
+# requires the SDK.
+try:
+    from emergentintegrations.payments.stripe.checkout import (
+        StripeCheckout,
+        CheckoutSessionRequest,
+    )
+    _STRIPE_SDK_AVAILABLE = True
+except Exception as _stripe_imp_err:  # pragma: no cover
+    StripeCheckout = None  # type: ignore
+    CheckoutSessionRequest = None  # type: ignore
+    _STRIPE_SDK_AVAILABLE = False
+    _STRIPE_SDK_ERROR = str(_stripe_imp_err)
 
 log = logging.getLogger(__name__)
 
@@ -103,6 +113,11 @@ def register_routes(app, db, get_current_user):
     webhook_router = APIRouter(prefix="/api", tags=["billing-webhook"])
 
     def _stripe_client(http_request: Request) -> StripeCheckout:
+        if not _STRIPE_SDK_AVAILABLE:
+            raise HTTPException(
+                status_code=503,
+                detail="مزود الدفع غير مهيأ على هذا الخادم — تواصل مع الدعم",
+            )
         api_key = os.environ.get("STRIPE_API_KEY")
         if not api_key:
             raise HTTPException(status_code=500, detail="Stripe غير مُهيأ")
