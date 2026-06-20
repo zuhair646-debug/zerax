@@ -33,34 +33,26 @@ except Exception as _stripe_imp_err:  # pragma: no cover
 
 log = logging.getLogger(__name__)
 
-# Fixed server-side packages (price_usd is authoritative)
+# Fixed server-side packages — Credits-based pricing (1 credit ≈ 500 AI tokens).
+# `credits` is the amount added to user balance on successful payment.
 PACKAGES: Dict[str, Dict[str, Any]] = {
-    "studio_monthly": {
-        "name": "اشتراك استوديو المواقع - شهري",
-        "price_usd": 50.00,
-        "currency": "usd",
-        "duration_days": 30,
-        "subscription_type": "website_studio",
-    },
-    # ─── One-time per-project unlock — highest-margin path ─────────────
+    # ─── One-time top-up — no expiry on the credits ───────────────────
     "project_pack": {
-        "name": "Project Pack — مشروع واحد كامل",
+        "name": "Project Pack",
         "price_usd": 49.00,                # Launch promo price
-        "original_price_usd": 79.00,       # Strikethrough display price
+        "original_price_usd": 79.00,
         "discount_pct": 38,
         "promo_label": "عرض الإطلاق",
         "currency": "usd",
-        "duration_days": 30,
+        "duration_days": 30,               # tier label expiry (credits never expire)
         "subscription_type": "tier_upgrade",
         "tier": "starter",
-        "tier_quota_mb": 1024,
-        "tier_quota_projects": 1,
-        "daily_token_cap": 600_000,
+        "credits": 5_000,
     },
-    # ─── Monthly subscription tiers ────────────────────────────────────
+    # ─── Monthly subscriptions — credits refill on each renewal ──────
     "tier_starter_monthly": {
-        "name": "Starter — شهري",
-        "price_usd": 19.00,                # Launch promo price
+        "name": "Starter",
+        "price_usd": 19.00,
         "original_price_usd": 29.00,
         "discount_pct": 35,
         "promo_label": "عرض الإطلاق",
@@ -68,13 +60,11 @@ PACKAGES: Dict[str, Dict[str, Any]] = {
         "duration_days": 30,
         "subscription_type": "tier_upgrade",
         "tier": "starter",
-        "tier_quota_mb": 1024,
-        "tier_quota_projects": 3,
-        "daily_token_cap": 600_000,
+        "credits": 2_000,
     },
     "tier_pro_monthly": {
-        "name": "Pro — شهري",
-        "price_usd": 69.00,                # Launch promo price
+        "name": "Pro",
+        "price_usd": 69.00,
         "original_price_usd": 99.00,
         "discount_pct": 30,
         "promo_label": "عرض الإطلاق",
@@ -82,13 +72,11 @@ PACKAGES: Dict[str, Dict[str, Any]] = {
         "duration_days": 30,
         "subscription_type": "tier_upgrade",
         "tier": "pro",
-        "tier_quota_mb": 5120,
-        "tier_quota_projects": 12,
-        "daily_token_cap": 3_000_000,
+        "credits": 8_000,
     },
     "tier_studio_monthly": {
-        "name": "Studio — شهري",
-        "price_usd": 199.00,               # Launch promo price
+        "name": "Studio",
+        "price_usd": 199.00,
         "original_price_usd": 299.00,
         "discount_pct": 33,
         "promo_label": "عرض الإطلاق",
@@ -96,9 +84,7 @@ PACKAGES: Dict[str, Dict[str, Any]] = {
         "duration_days": 30,
         "subscription_type": "tier_upgrade",
         "tier": "studio",
-        "tier_quota_mb": 51200,
-        "tier_quota_projects": 60,
-        "daily_token_cap": 18_000_000,
+        "credits": 25_000,
     },
 }
 
@@ -169,7 +155,7 @@ def register_routes(app, db, get_current_user):
 
     @router.get("/packages")
     async def list_packages():
-        """Publicly list available subscription packages."""
+        """Publicly list available subscription packages (credits-based)."""
         return {
             "packages": [
                 {
@@ -183,9 +169,7 @@ def register_routes(app, db, get_current_user):
                     "duration_days": pkg["duration_days"],
                     "subscription_type": pkg.get("subscription_type"),
                     "tier": pkg.get("tier"),
-                    "tier_quota_mb": pkg.get("tier_quota_mb"),
-                    "tier_quota_projects": pkg.get("tier_quota_projects"),
-                    "daily_token_cap": pkg.get("daily_token_cap"),
+                    "credits": pkg.get("credits", 0),
                 }
                 for pid, pkg in PACKAGES.items()
             ]
@@ -306,19 +290,20 @@ def register_routes(app, db, get_current_user):
             await db.studio_subscriptions.insert_one(sub_doc)
             log.info(f"Activated studio subscription for user {txn['user_id']} until {expires_at}")
 
-            # ── Tier upgrade fulfillment (Pro / Studio) ──
+            # ── Tier upgrade fulfillment (credits-based) ──
             if pkg.get("subscription_type") == "tier_upgrade":
+                credits_to_add = int(pkg.get("credits") or 0)
                 await db.users.update_one(
                     {"id": txn["user_id"]},
-                    {"$set": {
-                        "storage_tier": pkg["tier"],
-                        "storage_quota_mb": pkg.get("tier_quota_mb"),
-                        "storage_quota_projects": pkg.get("tier_quota_projects"),
-                        "daily_token_cap": pkg.get("daily_token_cap"),
-                        "tier_expires_at": expires_at.isoformat(),
-                    }},
+                    {
+                        "$set": {
+                            "storage_tier": pkg["tier"],
+                            "tier_expires_at": expires_at.isoformat(),
+                        },
+                        "$inc": {"credits": credits_to_add},
+                    },
                 )
-                log.info(f"Upgraded user {txn['user_id']} to tier {pkg['tier']}")
+                log.info(f"Added {credits_to_add} credits to user {txn['user_id']} (tier={pkg['tier']})")
 
         return {
             "session_id": session_id,
@@ -390,19 +375,20 @@ def register_routes(app, db, get_current_user):
             )
             log.info(f"[webhook] Activated studio subscription for user {txn['user_id']}")
 
-            # ── Tier upgrade fulfillment (Pro / Studio) ──
+            # ── Tier upgrade fulfillment (credits-based) ──
             if pkg.get("subscription_type") == "tier_upgrade":
+                credits_to_add = int(pkg.get("credits") or 0)
                 await db.users.update_one(
                     {"id": txn["user_id"]},
-                    {"$set": {
-                        "storage_tier": pkg["tier"],
-                        "storage_quota_mb": pkg.get("tier_quota_mb"),
-                        "storage_quota_projects": pkg.get("tier_quota_projects"),
-                        "daily_token_cap": pkg.get("daily_token_cap"),
-                        "tier_expires_at": expires_at.isoformat(),
-                    }},
+                    {
+                        "$set": {
+                            "storage_tier": pkg["tier"],
+                            "tier_expires_at": expires_at.isoformat(),
+                        },
+                        "$inc": {"credits": credits_to_add},
+                    },
                 )
-                log.info(f"[webhook] Upgraded user {txn['user_id']} to tier {pkg['tier']}")
+                log.info(f"[webhook] Added {credits_to_add} credits to user {txn['user_id']} (tier={pkg['tier']})")
 
             # 🆕 Affiliate commission hook (best-effort, never breaks payment)
             try:

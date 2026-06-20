@@ -39,6 +39,18 @@ log = logging.getLogger("zenrex.usage_meter")
 COST_INPUT_PER_1M = 3.0    # USD per 1M input tokens
 COST_OUTPUT_PER_1M = 15.0  # USD per 1M output tokens
 
+# ─── Credits system (1 credit ≈ $0.005 actual cost = ~500 AI tokens) ──
+# We bill the user at 200 credits per dollar of actual cost (≥ 2× margin).
+CREDITS_PER_USD = 200
+FREE_SIGNUP_CREDITS = 200  # given to brand-new users on registration
+
+
+def _credits_for_cost(cost_usd: float) -> int:
+    """Convert a real-USD cost into the credits to deduct from user balance."""
+    import math
+    return max(1, int(math.ceil((cost_usd or 0) * CREDITS_PER_USD)))
+
+
 # ─── Free-tier caps ──────────────────────────────────────────────────────
 # Free tier = ONE WOW demo only. Just enough tokens to build a single
 # initial design that hooks the customer (≈ 4-5 messages), then we hit
@@ -79,9 +91,10 @@ async def record_usage(
     tokens_out: int,
     model_label: str = "zenrex-ai",
 ) -> Dict[str, Any]:
-    """Insert a usage event + bump daily aggregate counter."""
+    """Insert a usage event + bump daily aggregate counter + deduct credits."""
     try:
         cost = _estimate_cost(tokens_in or 0, tokens_out or 0)
+        credits_used = _credits_for_cost(cost)
         now = datetime.now(timezone.utc)
         await db.usage_events.insert_one({
             "user_id": user_id,
@@ -90,6 +103,7 @@ async def record_usage(
             "tokens_in": int(tokens_in or 0),
             "tokens_out": int(tokens_out or 0),
             "cost_usd": cost,
+            "credits_used": credits_used,
             "model_label": model_label,
             "ts": now.isoformat(),
             "ymd": _today_key(now),
@@ -103,12 +117,19 @@ async def record_usage(
                     "tokens_out": int(tokens_out or 0),
                     "calls": 1,
                     "cost_usd": cost,
+                    "credits_used": credits_used,
                 },
                 "$setOnInsert": {"user_id": user_id, "ymd": _today_key(now)},
             },
             upsert=True,
         )
-        return {"ok": True, "cost_usd": cost}
+        # Deduct from user's credits balance (legacy `credits` field — shared
+        # across the whole platform: AI calls, image/video gen, etc.)
+        await db.users.update_one(
+            {"id": user_id},
+            {"$inc": {"credits": -credits_used}},
+        )
+        return {"ok": True, "cost_usd": cost, "credits_used": credits_used}
     except Exception as e:
         log.warning(f"[USAGE-METER] record_usage failed: {e}")
         return {"ok": False, "error": str(e)}
@@ -123,45 +144,36 @@ async def get_user_daily_usage(db, user_id: str) -> Dict[str, Any]:
 
 
 async def check_quota(db, user_id: str, user_doc: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
-    """Decide if this user can make another AI call right now."""
+    """Decide if this user can make another AI call right now.
+
+    Credits-based: if `users.credits` > 0 → allow. Otherwise block
+    and prompt upgrade. Admin/owner bypass.
+    """
     if user_doc is None:
         user_doc = await db.users.find_one(
             {"id": user_id},
-            {"storage_tier": 1, "daily_token_cap": 1, "daily_request_cap": 1, "role": 1},
+            {"credits": 1, "storage_tier": 1, "role": 1},
         ) or {}
 
     # Owner / super_admin never throttled.
     if (user_doc.get("role") or "").lower() in ("owner", "super_admin"):
-        return {"allowed": True, "reason": "admin"}
+        return {"allowed": True, "reason": "admin", "credits": None}
 
+    balance = int(user_doc.get("credits") or 0)
     tier = (user_doc.get("storage_tier") or "free").lower()
-    cap = int(user_doc.get("daily_token_cap") or TIER_DAILY_TOKENS.get(tier, DEFAULT_FREE_DAILY_TOKENS))
-    req_cap = int(user_doc.get("daily_request_cap") or (DEFAULT_FREE_DAILY_REQUESTS if tier == "free" else 10_000))
 
-    usage = await get_user_daily_usage(db, user_id)
-    total_tokens = (usage.get("tokens_in", 0) + usage.get("tokens_out", 0))
-    calls = usage.get("calls", 0)
-
-    if total_tokens >= cap:
+    if balance <= 0:
         return {
             "allowed": False,
-            "reason": "daily_token_cap_reached",
-            "used": total_tokens, "cap": cap,
-            "calls": calls,
-            "next_tier_label": "Pro" if tier == "free" else "Studio",
+            "reason": "no_credits",
+            "credits": 0,
+            "next_tier_label": "Starter" if tier == "free" else "Pro",
             "message": (
-                "وصلت لحدّ الاستخدام اليومي المجاني. ترقّي بسيطة لباقة Pro "
-                "تعطيك ميزانية ٢٠× أكبر — تكفي لأي مشروع كامل في يوم."
+                "رصيد النقاط انتهى. اشحن باقة جديدة لمواصلة الإنشاء — "
+                "كل النقاط متاحة فوراً بعد الدفع."
             ),
         }
-    if calls >= req_cap:
-        return {
-            "allowed": False,
-            "reason": "daily_request_cap_reached",
-            "used_calls": calls, "cap_calls": req_cap,
-            "message": "وصلت لحد عدد الطلبات اليومية. حاول مرة ثانية بكرة أو رقّي باقتك.",
-        }
-    return {"allowed": True, "reason": "ok", "used": total_tokens, "cap": cap}
+    return {"allowed": True, "reason": "ok", "credits": balance}
 
 
 # ─── Router ───────────────────────────────────────────────────────────────
@@ -175,20 +187,38 @@ def make_usage_router(db, get_current_user):
         # 30-day rollup
         since = (datetime.now(timezone.utc) - timedelta(days=30)).isoformat()
         cur = db.usage_events.find({"user_id": uid, "ts": {"$gte": since}},
-                                   {"_id": 0, "tokens_in": 1, "tokens_out": 1, "cost_usd": 1})
+                                   {"_id": 0, "tokens_in": 1, "tokens_out": 1, "cost_usd": 1, "credits_used": 1})
         items = await cur.to_list(length=10000)
         month_tokens = sum((it.get("tokens_in", 0) + it.get("tokens_out", 0)) for it in items)
         month_cost = round(sum(it.get("cost_usd", 0) for it in items), 4)
-        # Quota status
+        month_credits = sum(it.get("credits_used", 0) for it in items)
+        # Quota status + credits balance
         user_doc = await db.users.find_one(
-            {"id": uid}, {"storage_tier": 1, "daily_token_cap": 1, "role": 1},
+            {"id": uid}, {"storage_tier": 1, "credits": 1, "role": 1},
         )
         q = await check_quota(db, uid, user_doc)
         return {
             "today": today,
             "month_tokens": month_tokens,
             "month_cost_usd": month_cost,
+            "month_credits": month_credits,
+            "credits": int((user_doc or {}).get("credits") or 0),
+            "tier": (user_doc or {}).get("storage_tier") or "free",
             "quota": q,
+        }
+
+    @router.get("/credits")
+    async def my_credits(user=Depends(get_current_user)):
+        """Lightweight endpoint for the navbar credits badge — quick to poll."""
+        uid = user["user_id"]
+        u = await db.users.find_one({"id": uid}, {"_id": 0, "credits": 1, "role": 1, "storage_tier": 1})
+        role = (u or {}).get("role") or ""
+        if role.lower() in ("owner", "super_admin"):
+            return {"credits": None, "unlimited": True, "tier": (u or {}).get("storage_tier") or "free"}
+        return {
+            "credits": int((u or {}).get("credits") or 0),
+            "unlimited": False,
+            "tier": (u or {}).get("storage_tier") or "free",
         }
 
     @router.get("/me/per-project")

@@ -297,7 +297,7 @@ class CaptureOrderRequest(BaseModel):
 
 # إعدادات النقاط
 POINTS_CONFIG = {
-    "signup_bonus": 20,                # نقاط التسجيل المجاني
+    "signup_bonus": 200,               # نقاط التسجيل المجاني (≈ $1 of free AI usage)
     "first_purchase_bonus": 50,        # نقاط أول شحن
     "referral_bonus_inviter": 30,      # نقاط للداعي
     "referral_bonus_invited": 20,      # نقاط للمدعو

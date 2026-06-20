@@ -1,8 +1,76 @@
 import React from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
-import { LogOut, LayoutDashboard, Shield, Menu, X, ArrowRight } from 'lucide-react';
+import { LogOut, LayoutDashboard, Shield, Menu, X, ArrowRight, Sparkles } from 'lucide-react';
 import LanguagePicker from '@/components/LanguagePicker';
+
+const API = process.env.REACT_APP_BACKEND_URL;
+
+// ─── Credits badge ───────────────────────────────────────────────────
+// Shows the logged-in user's available credit balance and links to /pricing.
+// Polls every 20s so the navbar stays in sync after AI calls deduct credits.
+const CreditsBadge = ({ onClick }) => {
+  const [data, setData] = React.useState(null);
+
+  const fetchBalance = React.useCallback(async () => {
+    const token = localStorage.getItem('token');
+    if (!token) return;
+    try {
+      const r = await fetch(`${API}/api/usage/credits`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (r.ok) setData(await r.json());
+    } catch (_) { /* silent */ }
+  }, []);
+
+  React.useEffect(() => {
+    fetchBalance();
+    const id = setInterval(fetchBalance, 20000);
+    const onCreditEvt = () => fetchBalance();
+    window.addEventListener('zenrex:credits-changed', onCreditEvt);
+    return () => {
+      clearInterval(id);
+      window.removeEventListener('zenrex:credits-changed', onCreditEvt);
+    };
+  }, [fetchBalance]);
+
+  if (!data) return null;
+
+  if (data.unlimited) {
+    return (
+      <button
+        type="button"
+        onClick={onClick}
+        data-testid="credits-badge"
+        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-purple-500/15 border border-purple-500/40 text-purple-300 text-xs font-bold"
+        title="رصيد لا محدود (مالك / أدمن)"
+      >
+        <Sparkles className="w-3.5 h-3.5" />
+        <span>لا محدود</span>
+      </button>
+    );
+  }
+
+  const credits = Number(data.credits || 0);
+  const isLow = credits < 50;
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      data-testid="credits-badge"
+      className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border text-xs font-bold transition ${
+        isLow
+          ? 'bg-rose-500/15 border-rose-500/50 text-rose-300 animate-pulse hover:bg-rose-500/25'
+          : 'bg-amber-500/10 border-amber-500/40 text-amber-300 hover:bg-amber-500/20'
+      }`}
+      title={isLow ? 'رصيدك منخفض — اشحن نقاط' : 'رصيد النقاط'}
+    >
+      <Sparkles className="w-3.5 h-3.5" />
+      <span data-testid="credits-badge-value">{credits.toLocaleString('en-US')}</span>
+      <span className="opacity-70">نقطة</span>
+    </button>
+  );
+};
 
 // شعار Zenrex — الصورة المعتمدة (L1: ملكي تراثي ذهبي) + حركة دوران لطيفة في المكان
 export const ZenrexLogo = ({ size = 'md', animated = true }) => {
@@ -103,6 +171,7 @@ export const Navbar = ({ user, transparent = false, setUser }) => {
             </Link>
             {user ? (
               <>
+                <CreditsBadge onClick={() => navigate('/pricing')} />
                 <button
                   type="button"
                   onClick={() => navigate(isAdmin ? '/admin' : '/dashboard')}

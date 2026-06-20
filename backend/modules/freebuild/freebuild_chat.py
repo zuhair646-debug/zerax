@@ -2249,24 +2249,23 @@ def make_freebuild_chat_router(db, get_current_user):
                     "id": str(uuid.uuid4()),
                     "role": "assistant",
                     "content": (
-                        "🎉 **انتهت تجربتك المجانية**\n\n"
-                        "بنيت لك تصميم أوّلي ممتاز للموقع — وصلت لحدّ الاستخدام اليومي المجاني.\n\n"
-                        "**عشان نكمل** نحتاج تختار باقة:\n\n"
-                        "• 🎯 **Project Pack — $79** — تنهي مشروعك الحالي بالكامل (30 رسالة، 30 يوم)\n"
-                        "• 🚀 **Starter — $29/شهر** — 3 مشاريع جديدة شهرياً\n"
-                        "• ⭐ **Pro — $99/شهر** — 12 مشروع + Visual Guardian + دعم واتساب\n\n"
-                        "اضغط الزر اللي يناسبك تحت 👇 وارجع نكمل من نفس النقطة بالضبط."
+                        "🎉 **انتهى رصيد النقاط**\n\n"
+                        "وصلت لنهاية رصيدك. اشحن نقاط جديدة وكمل مشروعك من نفس النقطة بالضبط 👇\n\n"
+                        "• 💎 **Project Pack** — $49 — 5,000 نقطة (مرّة واحدة)\n"
+                        "• 🚀 **Starter** — $19/شهر — 2,000 نقطة\n"
+                        "• ⭐ **Pro** — $69/شهر — 8,000 نقطة (الأكثر شعبية)\n"
+                        "• 👑 **Studio** — $199/شهر — 25,000 نقطة"
                     ),
                     "options": [
-                        {"label": "اشترِ المشروع الحالي - $79", "emoji": "🎯", "description": "أنهِ هذا المشروع فقط"},
-                        {"label": "اشترك Starter - $29/شهر", "emoji": "🚀", "description": "3 مشاريع شهرياً"},
-                        {"label": "اشترك Pro - $99/شهر", "emoji": "⭐", "description": "الأكثر شعبية"},
-                        {"label": "اعرض كل الباقات", "emoji": "📋", "description": "/pricing/v2"},
+                        {"label": "Project Pack — $49", "emoji": "💎", "description": "5,000 نقطة لمرّة واحدة"},
+                        {"label": "Starter — $19/شهر", "emoji": "🚀", "description": "2,000 نقطة شهرياً"},
+                        {"label": "Pro — $69/شهر", "emoji": "⭐", "description": "8,000 نقطة شهرياً"},
+                        {"label": "اعرض كل الباقات", "emoji": "📋", "description": "/pricing"},
                     ],
                     "inline_images": [],
                     "timestamp": _now(),
                     "quota_blocked": True,
-                    "pricing_redirect": "/pricing/v2",
+                    "pricing_redirect": "/pricing",
                 }
                 return {
                     "ok": True,
