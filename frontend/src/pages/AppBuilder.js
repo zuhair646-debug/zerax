@@ -107,7 +107,7 @@ export default function AppBuilder({ user }) {
               </span>
             </h2>
             <p className="text-zinc-400 text-sm max-w-xl mx-auto">
-              4 طرق احترافية — اختر اللي يناسب مهارتك وهدف مشروعك. الذكاء يرشدك خطوة بخطوة في كل واحد.
+              3 طرق احترافية — اختر اللي يناسب مهارتك وهدف مشروعك. الذكاء يرشدك خطوة بخطوة في نفس واجهة الشات الموحّدة عبر كل أقسام Zenrex.
             </p>
           </div>
 
@@ -117,9 +117,33 @@ export default function AppBuilder({ user }) {
               return (
                 <button
                   key={m.id}
-                  onClick={() => setMode(m.id)}
+                  onClick={async () => {
+                    // Unified chat: create a FreeBuild project with the
+                    // chosen tech stack stored in metadata, then redirect to
+                    // the same /freebuild/chat surface used by every other
+                    // builder so all sections share the same chat UX.
+                    const token = localStorage.getItem('token');
+                    if (!token) { nav('/login?return=/app-builder'); return; }
+                    try {
+                      const r = await fetch(`${API}/api/freebuild-chat/project`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+                        body: JSON.stringify({
+                          name: `تطبيق ${m.title}`,
+                          mode: 'app',
+                          platform: 'both',
+                          metadata: { app_tech: m.id, app_title: m.title, app_tech_label: m.tech },
+                        }),
+                      });
+                      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+                      const data = await r.json();
+                      nav(`/freebuild/chat/${data.id || data.project_id || ''}`);
+                    } catch (e) {
+                      toast.error(`تعذّر بدء المشروع: ${e.message}`);
+                    }
+                  }}
                   data-testid={`mode-${m.id}`}
-                  className={`group relative text-right rounded-2xl border border-zinc-800 hover:border-zinc-600 bg-gradient-to-br ${m.bg} p-6 transition-all hover:scale-[1.02] hover:shadow-2xl`}
+                  className={`group relative text-right rounded-2xl border ${m.recommended ? 'border-blue-400/50 ring-2 ring-blue-500/20' : 'border-zinc-800 hover:border-zinc-600'} bg-gradient-to-br ${m.bg} p-6 transition-all hover:scale-[1.02] hover:shadow-2xl`}
                   style={{ boxShadow: `0 0 0 0 ${m.accent}00` }}
                 >
                   <div className="flex items-start gap-4">

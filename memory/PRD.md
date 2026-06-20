@@ -51,9 +51,20 @@ Arabic-first AI builder for websites/apps/images/videos with credits-based prici
 - **Calm UI banners:** smaller pill-style, single tap to /pricing
 - **Ready Sites paywall:** PayPal + LemonSqueezy (Stripe fully removed)
 - **End-to-end verified:** signup→200 credits, Ready Sites checkout returns real PayPal URL on prod
-- **🆕 FreeBuild streaming agent now deducts credits per turn** — fixed root cause of "credits not deducting" complaint. The `/api/freebuild/project/{pid}/agent-chat-stream` SSE endpoint was the main builder chat but had ZERO `record_usage()` calls. Added token accumulation from Claude's `final_msg.usage` and one `record_usage()` call per turn before the `done` event.
-- **🆕 Removed all role-based credit bypasses** — owner/admin/super_admin/`is_owner=true` no longer skip credit deduction. Every account, regardless of role, deducts credits for AI usage from `users.credits`. Modified: `pricing/credits.py:charge_user`, `ai_core/usage_meter.py:check_quota` + `/usage/credits`, `middleware/credits_guard.py`, `ai_core/__init__.py:_get_user_tier`.
-- **🆕 Removed leftover preview-env asset links** from static HTML files: `final-preview.html`, `iframe-test.html`, `user-crop-preview.html` (all referenced `ai-cinematic-hub-2.preview.emergentagent.com` for background images).
+- **FreeBuild streaming agent now deducts credits per turn** — fixed root cause of "credits not deducting"
+- **Removed all role-based credit bypasses** — owner/admin/super_admin no longer skip credit deduction
+- **🆕 8 LemonSqueezy variants live + connected on VPS** (1817088 → 1817151)
+- **🆕 Custom amount: tiered bonus** — $5–$10K range with progressive gifts up to +500K @ $10K
+- **🆕 Pricing UI: strikethrough base + green new total + bonus pill** for cross-cultural clarity
+- **🆕 Float credits killed** — backend rounds to int + DB normalized + UI displays integers only
+- **🆕 Dashboard/Navbar jitter fixed** — single source `useCreditsGuard`, removed promo top-transition, removed duplicate `/auth/me` fetch
+- **🆕 Floating language picker + support widget removed** — cleaner pages
+- **🆕 Mobile chat overhaul:** PhaseHeaderPill (animated on phase change), credits + storage popovers visible on mobile, send button always visible, attach supports all file types
+- **🆕 Hard credit gate (50 credits min) before any AI turn** in `/agent-chat-stream` + `PendingResumeBanner` ("إكمل ➜") that resumes the user's saved message after recharge
+- **🆕 Markdown rendering — mobile-safe:** tables overflow-x-auto, links break-all, words wrap, lists fully styled
+- **🆕 Storage popover opens from left on mobile** (was off-screen)
+- **🆕 Strict Phase Protocol + Completeness Rule** added to system prompt: AI must complete sentences before tool calls, cannot skip phases, must use competitor research with URLs in Discovery
+- **🆕 Apps Builder cleaned + unified:** 3 options (Flutter ⭐ recommended, React Native, Native Swift/Kotlin). Removed "تطبيق قابل للإكمال" (lives in its own /projects/continue section). On selection, creates a FreeBuild project with `mode='app'` and redirects to `/freebuild/chat/<pid>` — SAME chat UX as websites.
 
 ## Pending — P1
 - 🍋 **LemonSqueezy variant IDs** — user needs to create 2 products in LemonSqueezy dashboard:
