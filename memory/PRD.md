@@ -6,84 +6,70 @@ Arabic-first AI builder for websites/apps/images/videos with credits-based prici
 ## Current Status — Healthy, Production Live
 - Domain: https://zenrex.ai
 - Backend: Docker compose on VPS, MongoDB local
-- Frontend: React PWA, Service Worker v7 (network-first, cache-busting)
+- Frontend: React PWA, Service Worker v8 (network-first, cache-busting)
 - LLM: Claude Sonnet 4.5 via Emergent LLM key
 
-## Pricing — CREDITS-BASED with GLOBAL GUARD (verified end-to-end ✅)
+## Pricing — CREDITS-BASED with TRIPLE-LAYER GUARD
 | Tier | Price | Credits |
 |---|---|---|
 | Free signup | $0 | 200 (bonus, one-time) |
 | Project Pack | $49 | 5,000 (one-time) |
-| Starter | $19/mo | 2,000 (refills monthly) |
+| Starter | $19/mo | 2,000 |
 | Pro | $69/mo | 8,000 (most popular) |
 | Studio | $199/mo | 25,000 |
 
-**Service costs (catalog `modules/pricing/catalog.py` `SERVICE_COSTS`):**
-- Image (GPT/Nano Banana): 100 credits
-- Video (Sora 10s): 1,200 credits
-- AI text (1k tokens): 30 credits
-- Chat message: 10 credits
+**Service costs (`modules/pricing/catalog.py` `SERVICE_COSTS`):**
+- Image: 100 credits | Video 10s: 1,200 | AI text 1k tokens: 30 | Chat msg: 10
 
-## Credits Architecture
+## Three-Layer Credit Guard Architecture
 1. **Per-endpoint deduction** — `pricing.credits.charge_user(service_key)` atomically decrements `users.credits` and logs to `credit_transactions`.
-2. **Global Guard Middleware** — `/app/backend/middleware/credits_guard.py` intercepts ALL POST requests matching AI endpoints (chat/generate/agent-chat/etc.) and returns HTTP 402 with friendly Arabic message if `users.credits == 0`. Owners/admins/super_admins bypass.
-3. **Frontend hook** — `useCreditsGuard()` polls `/api/usage/credits` every 25s. Returns `{credits, isBlocked, unlimited}`.
-4. **UI block** — When `isBlocked=true`, the chat input in `FreeBuildChat.js` is **replaced** by `<CreditsBlockedBanner />` (3 quick recharge cards + main CTA). Send function short-circuits with redirect to `/pricing`. On 402 response, hook re-polls instantly.
-5. **Navbar badge** — Always-visible credit pill, turns red+pulse if balance < 50.
-
-**Endpoints covered by Credits Guard (regex):**
-freebuild chat (project/{id}/{chat,agent-chat,agent-chat-stream}), freebuild-v2, ai-core/chat, ai/chat, companion (chat, voice-chat), avatar/chat, merchant/avatar/{slug}/chat, autocoder, mobile-app-builder, video-studio (chat, producer-chat), app-studio/producer-chat, agent/chat, games/project/{id}/chat, generate/{image,video}
+2. **Backend Middleware** — `/app/backend/middleware/credits_guard.py` intercepts ALL POST/PUT/PATCH requests to AI endpoints (regex-matched) and returns HTTP 402 with friendly Arabic message when `credits == 0`. Bypass: owner/admin/super_admin.
+3. **Frontend Global Toast** — `<GlobalCreditsGuard />` mounted in `App.js`. Calm fixed-bottom-right pill on AI/chat routes when blocked. Single tap → `/pricing`. Dismissable for 10 min. Routes covered: freebuild, build, chat, ai, companion, avatar, studio, app-builder, mobile-app, video-studio, image-studio, image-generator, games, web-games, operator, new-request, agent.
+4. **In-chat Banner** — `<CreditsBlockedBanner />` (calm pill-style) replaces input row in FreeBuildChat when blocked. Compact single-tap surface.
 
 ## Recent Completed Work (2026-06-20 session)
 - Removed redundant centered Z logo from landing hero
 - Fixed `/pricing` to load PricingV2 directly
 - Made `emergentintegrations.payments.stripe` import lazy
-- **CREDITS-BASED PRICING PIVOT**
-  - PACKAGES simplified — only credits, no fake features
-  - PricingV2.jsx rewritten: simple cards (price + credits + button)
-  - usage_meter.py unified with `pricing.credits.charge_user()` 
-  - `/generate/video` now deducts credits (was bug)
-  - CreditsBadge in Navbar (polls 20s, red+pulse if < 50)
-  - StorageIndicator: small popover instead of full-screen modal
-  - usage_events now stores `credits_used` for month aggregation
-  - super_admin added to owner-bypass tuple
-- **GLOBAL CREDITS GUARD MIDDLEWARE (NEW)**
-  - Created `/app/backend/middleware/credits_guard.py`
-  - Intercepts all AI endpoints, returns 402 if credits=0
-  - Verified working: fresh user (200 credits) → chat succeeds; same user with credits=0 → 402 across both `/api/ai-core/chat` and `/api/generate/image`
-- **FRONTEND BLOCK UI**
-  - Created `useCreditsGuard` hook + `CreditsBlockedBanner` component
-  - Wired into FreeBuildChat: input row entirely replaced by banner when blocked
-  - Send function short-circuits to `/pricing` if blocked, also handles 402 responses instantly
+- **CREDITS PIVOT** — Packages simplified, PricingV2 rewritten, deduction unified
+- `/generate/video` now deducts credits (was bug)
+- StorageIndicator → small popover (not modal)
+- `super_admin` added to owner-bypass
+- **GLOBAL CREDITS GUARD MIDDLEWARE** — all AI endpoints protected
+- **Calm Banner** — small, single-tap, no overwhelming visuals
+- **GlobalCreditsGuard component** — one toast covers all chat/AI pages
+
+## Verified End-to-End (testing agent iteration_48 + curl):
+- ✅ Signup → 200 credits
+- ✅ Chat 1k tokens deducts 30 (500→470)
+- ✅ Image deducts 100 (500→400)
+- ✅ Video 10s deducts 1,200 (2000→800)
+- ✅ Credits=0 → 402 on `/api/ai-core/chat`, `/api/generate/image` (both prod + preview)
+- ✅ Owner/admin/super_admin bypass
+- ✅ Auth endpoints unaffected
+- ✅ Transactions logged to `credit_transactions`
 
 ## Pending — P1
-- 🪙 **Top-up credits packs** (one-time small purchases like 1,000 credits for $9)
-- 🟢 **File Upload UI red→green** indicator in FreeBuildChat.js
-- 📧 **Email Verification on Registration** — Resend API
-- 🔄 **Chat Session Reconnection** — re-attach to SSE stream after reload
-- 💸 **Credit refund on external API failure** for /generate/image and /generate/video
-- 🔒 **Replace `emergentintegrations.payments.stripe`** with official `stripe` SDK
-- 📱 Apply `CreditsBlockedBanner` to other chat pages (Companion, AppStudio, AvatarChat, etc.) — middleware blocks at the backend but UX is best when each page shows the banner inline
+- 🪙 Top-up credits packs (1,000 credits for $9, etc.)
+- 🟢 File Upload UI red→green indicator
+- 📧 Email Verification on Registration (Resend)
+- 🔄 Chat Session Reconnection (SSE re-attach)
+- 💸 Credit refund on external API failure (image/video)
+- 🔒 Replace `emergentintegrations.payments.stripe` with official `stripe`
 
 ## Pending — P2
-- Sticky in-page section navigator for landing page (waiting on user screenshot)
-- Multi-page generated sites (`/about`, `/contact`) for SEO
-- Visual Guardian (Vision LLM)
-- CI/CD pipeline (GitHub Actions → VPS)
-- Backfill existing free users to 200 credits (legacy were 20)
-
-## Refactoring Backlog
-- Split FreeBuildChat.js (4500+ lines) into smaller components
-- Split FreeBuild chat backend (3300+ lines) into routers/services
-- Consolidate POINTS_CONFIG and PRICING_CONFIG (server.py)
+- Sticky in-page section navigator (waiting on screenshot from user)
+- Multi-page generated sites
+- Visual Guardian
+- CI/CD pipeline
+- Backfill existing free users to 200 credits
 
 ## Tech Stack
 React, FastAPI, MongoDB, Stripe, Resend, Emergent LLM (Claude Sonnet 4.5), PWA Service Worker, SSE.
 
 ## Test Credentials
-- Admin: admin@zenrex.ai / Zenrex@2026 (only on PROD DB, not preview)
+- Admin: admin@zenrex.ai / Zenrex@2026 (PROD DB only)
 - Prod Test User: test_zenrex_2026@example.com / Test@Pass2026!
 
 ## Deployment
-`bash /app/deploy/deploy.sh zenrex.ai` — builds React, rsyncs to VPS, reloads nginx, recreates backend container.
-Backend recreate takes ~3 min (pip install) → health check 502s briefly.
+`bash /app/deploy/deploy.sh zenrex.ai` — builds React, rsyncs to VPS, reloads nginx, recreates backend. Backend recreate ~3 min for pip install.

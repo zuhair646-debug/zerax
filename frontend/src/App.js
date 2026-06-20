@@ -33,6 +33,7 @@ import PricingV2 from '@/pages/PricingV2';
 import TermsGate from '@/components/TermsGate';
 import FreebuildCheckout from '@/pages/FreebuildCheckout';
 import GuardianDashboard from '@/pages/GuardianDashboard';
+import GlobalCreditsGuard from '@/components/GlobalCreditsGuard';
 import AppsConvert from '@/pages/AppsConvert';
 import NewRequest from '@/pages/NewRequest';
 import MyRequests from '@/pages/MyRequests';
@@ -161,6 +162,7 @@ function App() {
         <DetectedLanguageBanner />
         <FloatingLanguagePicker />
         <SupportWidget user={user} />
+        <GlobalCreditsGuard />
         <Routes>
           {/* Root: ALWAYS show landing. Logged-in users can click on dashboard CTA to navigate. */}
           <Route path="/" element={<LandingPage user={user} />} />
