@@ -34,6 +34,7 @@ PACKAGES = {
     "credits_xl":     {"price_usd": 199.00,  "credits": 32_000,  "label": "32,000 Credits",  "lemon_var": "LEMONSQUEEZY_VARIANT_STUDIO"},
     "credits_pro":    {"price_usd": 500.00,  "credits": 80_000,  "label": "80,000 Credits",  "lemon_var": "LEMONSQUEEZY_VARIANT_PRO_PACK"},
     "credits_mega":   {"price_usd": 1000.00, "credits": 160_000, "label": "160,000 Credits", "lemon_var": "LEMONSQUEEZY_VARIANT_MEGA"},
+    "credits_enterprise": {"price_usd": 3000.00, "credits": 510_000, "label": "510,000 Credits", "lemon_var": "LEMONSQUEEZY_VARIANT_ENTERPRISE"},
 }
 
 # Custom amount: 90 credits/$ (safe rate that survives all fee scenarios)

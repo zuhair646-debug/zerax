@@ -20,7 +20,8 @@ const PACKS = [
   { id: 'credits_large',  price: 99,   credits: 16_000,  badge: 'وفّر 10%' },
   { id: 'credits_xl',     price: 199,  credits: 32_000,  badge: 'وفّر 15%' },
   { id: 'credits_pro',    price: 500,  credits: 80_000,  badge: 'وفّر 20%' },
-  { id: 'credits_mega',   price: 1000, credits: 160_000, badge: 'أفضل قيمة' },
+  { id: 'credits_mega',   price: 1000, credits: 160_000, badge: 'وفّر 25%' },
+  { id: 'credits_enterprise', price: 3000, credits: 510_000, badge: 'أفضل قيمة' },
 ];
 
 const fmt = (n) => n.toLocaleString('en-US');
