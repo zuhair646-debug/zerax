@@ -68,8 +68,7 @@ const ClientDashboard = ({ user, setUser }) => {
       safeFetch(`${API}/api/generate/videos/history`),
       safeFetch(`${API}/api/websites`),
       safeFetch(`${API}/api/requests`),
-      safeFetch(`${API}/api/auth/me`),
-    ]).then(([images, videos, websites, requests, me]) => {
+    ]).then(([images, videos, websites, requests]) => {
       setCounts({
         images: Array.isArray(images) ? images.length : 0,
         videos: Array.isArray(videos) ? videos.length : 0,
@@ -77,7 +76,10 @@ const ClientDashboard = ({ user, setUser }) => {
         apps: 0, // placeholder until /api/apps exists
         orders: Array.isArray(requests) ? requests.length : 0,
       });
-      if (me && me.id && setUser) setUser(me);
+      // NOTE: we intentionally do NOT call /api/auth/me here. App.js already
+      // fetched the user once on mount; calling setUser again causes a parent
+      // re-render which makes the navbar + header text jitter. Live credits
+      // come from useCreditsGuard() which polls /api/usage/credits separately.
     });
 
     return () => controller.abort();

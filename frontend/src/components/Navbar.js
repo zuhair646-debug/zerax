@@ -153,7 +153,6 @@ export const Navbar = ({ user, transparent = false, setUser }) => {
   return (
     <nav
       className={`relative z-50 ${transparent ? 'bg-[#0a0a12]/95 backdrop-blur-xl border-b border-amber-500/10' : 'bg-[#0a0a12]/98 backdrop-blur-md border-b border-amber-500/20'}`}
-      style={{ top: promoShown ? '32px' : '0', transition: 'top 0.2s ease' }}
     >
       <div className="container mx-auto px-4 md:px-8 max-w-7xl">
         <div className="flex items-center justify-between h-16">

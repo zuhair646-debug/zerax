@@ -202,7 +202,10 @@ def register_payments(app, db, get_current_user):
                 "type": "checkouts",
                 "attributes": {
                     "checkout_data": {
-                        "email": u_email,
+                        # Email NOT pre-filled — LemonSqueezy re-hydrates this
+                        # field on every internal state change, which caused
+                        # a visible flicker reported by the owner. Letting the
+                        # user type once removes the flicker entirely.
                         "custom": {
                             "user_id": user["user_id"],
                             "package_id": body.package_id,
