@@ -24,25 +24,23 @@ from pydantic import BaseModel
 
 log = logging.getLogger(__name__)
 
-# Maps package_id → price/credits/tier + LemonSqueezy variant env var name
+# Credit-only packages (no subscriptions — all one-time pay-for-credits).
+# Price/credit ratio improves at higher tiers (bigger discount for bigger spend).
 PACKAGES = {
-    "tier_starter_monthly": {
-        "price_usd": 19.00,  "credits": 2_000,  "tier": "starter", "duration_days": 30,
-        "label": "Zenrex Starter (monthly)", "lemon_var": "LEMONSQUEEZY_VARIANT_STARTER",
-    },
-    "tier_pro_monthly": {
-        "price_usd": 69.00,  "credits": 8_000,  "tier": "pro", "duration_days": 30,
-        "label": "Zenrex Pro (monthly)", "lemon_var": "LEMONSQUEEZY_VARIANT_PRO",
-    },
-    "tier_studio_monthly": {
-        "price_usd": 199.00, "credits": 25_000, "tier": "studio", "duration_days": 30,
-        "label": "Zenrex Studio (monthly)", "lemon_var": "LEMONSQUEEZY_VARIANT_STUDIO",
-    },
-    "project_pack": {
-        "price_usd": 49.00,  "credits": 5_000,  "tier": "starter", "duration_days": 365,
-        "label": "Zenrex Project Pack", "lemon_var": "LEMONSQUEEZY_VARIANT_PROJECT_PACK",
-    },
+    "credits_mini":   {"price_usd": 9.00,   "credits": 1_000,   "label": "1,000 Credits",   "lemon_var": "LEMONSQUEEZY_VARIANT_MINI"},
+    "credits_small":  {"price_usd": 19.00,  "credits": 2_500,   "label": "2,500 Credits",   "lemon_var": "LEMONSQUEEZY_VARIANT_STARTER"},
+    "credits_medium": {"price_usd": 49.00,  "credits": 7_000,   "label": "7,000 Credits",   "lemon_var": "LEMONSQUEEZY_VARIANT_PROJECT_PACK"},
+    "credits_large":  {"price_usd": 99.00,  "credits": 15_000,  "label": "15,000 Credits",  "lemon_var": "LEMONSQUEEZY_VARIANT_PRO"},
+    "credits_xl":     {"price_usd": 199.00, "credits": 35_000,  "label": "35,000 Credits",  "lemon_var": "LEMONSQUEEZY_VARIANT_STUDIO"},
+    "credits_pro":    {"price_usd": 500.00, "credits": 95_000,  "label": "95,000 Credits",  "lemon_var": "LEMONSQUEEZY_VARIANT_PRO_PACK"},
+    "credits_mega":   {"price_usd": 1000.00,"credits": 200_000, "label": "200,000 Credits", "lemon_var": "LEMONSQUEEZY_VARIANT_MEGA"},
 }
+
+# Custom-amount payments: user picks any amount, gets amount * CREDITS_PER_USD credits.
+# Base rate 100 credits/$ (no volume discount — bonus only on pre-defined packs).
+CREDITS_PER_USD = 100
+CUSTOM_MIN_USD = 5
+CUSTOM_MAX_USD = 5000
 
 
 class PayPalCreateIn(BaseModel):
@@ -57,6 +55,11 @@ class PayPalCaptureIn(BaseModel):
 
 class LemonCreateIn(BaseModel):
     package_id: str
+
+
+class CustomAmountIn(BaseModel):
+    amount_usd: float  # USD amount the user wants to pay
+    method: str        # "paypal" | "lemonsqueezy"
 
 
 def register_payments(app, db, get_current_user):
@@ -104,7 +107,7 @@ def register_payments(app, db, get_current_user):
             await db.payment_transactions.insert_one({
                 "id": str(uuid.uuid4()), "user_id": user["user_id"], "method": "paypal",
                 "paypal_order_id": payment.id, "package_id": body.package_id,
-                "amount_usd": pkg["price_usd"], "credits": pkg["credits"], "tier": pkg["tier"],
+                "amount_usd": pkg["price_usd"], "credits": pkg["credits"],
                 "status": "pending", "created_at": datetime.now(timezone.utc).isoformat(),
             })
             return {"order_id": payment.id, "approval_url": approval_url}
@@ -145,7 +148,7 @@ def register_payments(app, db, get_current_user):
                 {"$set": {"status": "completed", "completed_at": datetime.now(timezone.utc).isoformat()}},
             )
             return {"ok": True, "package_id": txn["package_id"],
-                    "credits_added": pkg.get("credits", 0), "tier": pkg.get("tier")}
+                    "credits_added": pkg.get("credits", 0)}
         except HTTPException:
             raise
         except Exception as e:
@@ -218,7 +221,7 @@ def register_payments(app, db, get_current_user):
             await db.payment_transactions.insert_one({
                 "id": str(uuid.uuid4()), "user_id": user["user_id"], "method": "lemonsqueezy",
                 "txn_ref": txn_ref, "package_id": body.package_id,
-                "amount_usd": pkg["price_usd"], "credits": pkg["credits"], "tier": pkg["tier"],
+                "amount_usd": pkg["price_usd"], "credits": pkg["credits"],
                 "status": "pending", "created_at": datetime.now(timezone.utc).isoformat(),
             })
             return {"checkout_url": url, "txn_ref": txn_ref}
@@ -265,21 +268,35 @@ def register_payments(app, db, get_current_user):
             raise HTTPException(404, "غير موجود")
         return {"status": txn.get("status"), "package_id": txn.get("package_id")}
 
+    @router.post("/custom/create")
+    async def custom_create(body: CustomAmountIn, user=Depends(get_current_user)):
+        """User picks any amount → gets amount * CREDITS_PER_USD credits."""
+        amt = float(body.amount_usd or 0)
+        if amt < CUSTOM_MIN_USD or amt > CUSTOM_MAX_USD:
+            raise HTTPException(400, f"المبلغ يجب أن يكون بين ${CUSTOM_MIN_USD} و ${CUSTOM_MAX_USD}")
+        credits = int(round(amt * CREDITS_PER_USD))
+        # Build a synthetic package for this transaction
+        synthetic_pkg_id = f"custom_{int(amt*100)}"
+        synthetic_pkg = {
+            "price_usd": round(amt, 2),
+            "credits": credits,
+            "label": f"{credits:,} Credits — Custom",
+        }
+        if body.method == "paypal":
+            # Use the same PayPal flow but with synthetic package
+            PACKAGES[synthetic_pkg_id] = synthetic_pkg
+            return await paypal_create(PayPalCreateIn(package_id=synthetic_pkg_id), user)
+        else:
+            raise HTTPException(400, "المبلغ المخصص متاح حالياً عبر PayPal فقط")
+
     app.include_router(router)
-    log.info("Generic payments registered (PayPal + LemonSqueezy)")
+    log.info("Generic payments registered (PayPal + LemonSqueezy + Custom)")
 
 
 async def _grant_package(db, user_id: str, pkg: dict):
-    """Add credits + set tier expiry after successful payment."""
+    """Add credits after successful payment (no subscription/tier logic — all one-time)."""
     credits = int(pkg.get("credits") or 0)
-    tier = pkg.get("tier")
-    update = {}
     if credits:
-        update["$inc"] = {"credits": credits}
-    if tier:
-        expires = (datetime.now(timezone.utc) + timedelta(days=pkg.get("duration_days", 30))).isoformat()
-        update["$set"] = {"storage_tier": tier, "tier_expires_at": expires}
-    if update:
-        await db.users.update_one({"id": user_id}, update)
-    log.info(f"[payments] granted +{credits} credits, tier={tier} to user {user_id}")
+        await db.users.update_one({"id": user_id}, {"$inc": {"credits": credits}})
+    log.info(f"[payments] granted +{credits} credits to user {user_id}")
 

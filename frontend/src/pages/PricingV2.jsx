@@ -1,94 +1,67 @@
 /**
- * Pricing — credits-based, ultra-simple cards.
- *   Each plan: price → credits. No feature lists, no refunds, no promises.
- *   Once purchased, credits are added to the user's balance and consumed
- *   automatically by AI calls / image / video generation.
+ * Pricing — credit packs only (no subscriptions).
+ *   • 7 fixed packs ($9 → $1000) with progressive discount
+ *   • Custom amount: user enters $ and gets 100 credits per dollar
+ *   • Each pack has PayPal + LemonSqueezy buttons
  */
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, Flame, Sparkles } from 'lucide-react';
+import { ArrowLeft, Sparkles, Flame, Calculator } from 'lucide-react';
 import { toast } from 'sonner';
 import ZenrexBrand from '../components/ZenrexBrand';
 
 const API = process.env.REACT_APP_BACKEND_URL;
+const authH = () => ({ Authorization: `Bearer ${localStorage.getItem('token')}` });
 
-const formatPoints = (n) => n.toLocaleString('en-US');
+const PACKS = [
+  { id: 'credits_mini',   price: 9,    credits: 1_000,   badge: null },
+  { id: 'credits_small',  price: 19,   credits: 2_500,   badge: null },
+  { id: 'credits_medium', price: 49,   credits: 7_000,   badge: 'الأكثر شعبية', popular: true },
+  { id: 'credits_large',  price: 99,   credits: 15_000,  badge: 'وفّر 15%' },
+  { id: 'credits_xl',     price: 199,  credits: 35_000,  badge: 'وفّر 25%' },
+  { id: 'credits_pro',    price: 500,  credits: 95_000,  badge: 'وفّر 35%' },
+  { id: 'credits_mega',   price: 1000, credits: 200_000, badge: 'أفضل قيمة' },
+];
 
-function TierCard({ pkg, onBuy, busy }) {
-  const isMonthly = pkg.subscription_type === 'tier_upgrade' && pkg.duration_days >= 28 && pkg.id !== 'project_pack';
-  const period = pkg.id === 'project_pack' ? 'مرّة واحدة' : 'شهرياً';
+const fmt = (n) => n.toLocaleString('en-US');
 
-  // Color theme per tier
-  const themes = {
-    project_pack:        { border: 'border-cyan-500/40',   bg: 'bg-gradient-to-br from-cyan-500/10 to-blue-500/5',     accent: 'text-cyan-300',    btn: 'bg-gradient-to-r from-cyan-500 to-blue-500 text-white' },
-    tier_starter_monthly:{ border: 'border-emerald-500/40',bg: 'bg-gradient-to-br from-emerald-500/10 to-teal-500/5',  accent: 'text-emerald-300', btn: 'bg-gradient-to-r from-emerald-500 to-teal-500 text-white' },
-    tier_pro_monthly:    { border: 'border-amber-500/60',  bg: 'bg-gradient-to-br from-amber-500/15 to-yellow-500/5',  accent: 'text-amber-300',   btn: 'bg-gradient-to-r from-amber-400 to-yellow-500 text-black' },
-    tier_studio_monthly: { border: 'border-purple-500/40', bg: 'bg-gradient-to-br from-purple-500/10 to-fuchsia-500/5',accent: 'text-purple-300',  btn: 'bg-gradient-to-r from-purple-500 to-fuchsia-500 text-white' },
-  };
-  const t = themes[pkg.id] || themes.tier_starter_monthly;
-  const highlighted = pkg.id === 'tier_pro_monthly';
-
+function PackCard({ pack, onBuy, busy }) {
   return (
     <div
-      data-testid={`tier-${pkg.id}`}
-      className={`relative rounded-2xl border ${t.border} ${t.bg} p-6 ${highlighted ? 'ring-2 ring-amber-500/40 scale-[1.02]' : ''}`}
+      className={`relative rounded-2xl border p-5 ${
+        pack.popular ? 'border-amber-400/50 bg-amber-500/10 ring-2 ring-amber-500/30' : 'border-white/10 bg-zinc-900/40'
+      }`}
+      data-testid={`pack-card-${pack.id}`}
     >
-      {highlighted && (
-        <div className="absolute -top-3 left-1/2 -translate-x-1/2 text-[10px] font-black px-3 py-1 rounded-full whitespace-nowrap bg-amber-400 text-black">
-          الأكثر شعبية
+      {pack.badge && (
+        <div className={`absolute -top-3 right-4 px-3 py-1 rounded-full text-[10px] font-black ${
+          pack.popular ? 'bg-amber-400 text-black' : 'bg-emerald-500 text-white'
+        }`}>
+          {pack.badge}
         </div>
       )}
-
-      <h3 className={`text-xl font-black ${t.accent} mb-3`}>{pkg.name}</h3>
-
-      {/* Price */}
-      <div className="mb-1">
-        {pkg.original_price_usd && (
-          <div className="flex items-center gap-2 mb-1">
-            <span className="text-sm text-zinc-500 line-through">${pkg.original_price_usd}</span>
-            {pkg.discount_pct ? (
-              <span className="text-[10px] font-black px-1.5 py-0.5 rounded-md bg-rose-500/20 border border-rose-500/40 text-rose-300">
-                -{pkg.discount_pct}% عرض الإطلاق
-              </span>
-            ) : null}
-          </div>
-        )}
-        <div className="flex items-baseline gap-1">
-          <span className="text-4xl font-black text-white">${pkg.price_usd}</span>
-          <span className="text-xs text-zinc-500"> · {period}</span>
+      <div className="text-center mb-4">
+        <div className="text-xs text-zinc-400 mb-1">${pack.price} USD</div>
+        <div className="text-3xl font-black text-white">${pack.price}</div>
+        <div className="mt-2 inline-flex items-center gap-1.5 text-amber-300 font-black text-lg">
+          <Sparkles className="w-4 h-4" /> {fmt(pack.credits)} نقطة
         </div>
       </div>
-
-      {/* Credits — the only metric that matters */}
-      <div className="mt-5 mb-6 rounded-xl border border-white/10 bg-black/30 p-4 text-center">
-        <div className="flex items-center justify-center gap-2 mb-1">
-          <Sparkles className={`w-4 h-4 ${t.accent}`} />
-          <span className="text-[11px] uppercase tracking-widest text-zinc-400 font-bold">تحصل على</span>
-        </div>
-        <div className="text-3xl font-black text-white" data-testid={`credits-${pkg.id}`}>
-          {formatPoints(pkg.credits || 0)}
-        </div>
-        <div className="text-xs text-zinc-400 mt-0.5">نقطة</div>
-      </div>
-
       <button
-        onClick={() => onBuy(pkg.id, 'paypal')}
-        disabled={busy === `${pkg.id}-paypal` || busy === `${pkg.id}-lemon`}
-        data-testid={`buy-${pkg.id}-paypal`}
-        className="w-full px-4 py-2.5 rounded-xl text-sm font-black bg-[#0070ba] hover:bg-[#005ea6] text-white disabled:opacity-50 transition mb-2"
+        onClick={() => onBuy(pack.id, 'paypal')}
+        disabled={!!busy}
+        data-testid={`buy-${pack.id}-paypal`}
+        className="w-full px-3 py-2 rounded-lg bg-[#0070ba] hover:bg-[#005ea6] text-white text-xs font-black mb-2 disabled:opacity-50"
       >
-        {busy === `${pkg.id}-paypal` ? '...' : (
-          <><span className="font-extrabold">Pay</span><span className="italic">Pal</span><span className="opacity-80 text-xs"> — ${pkg.price_usd}</span></>
-        )}
+        {busy === `${pack.id}-paypal` ? '...' : <><span className="font-extrabold">Pay</span>Pal</>}
       </button>
       <button
-        onClick={() => onBuy(pkg.id, 'lemon')}
-        disabled={busy === `${pkg.id}-paypal` || busy === `${pkg.id}-lemon`}
-        data-testid={`buy-${pkg.id}-lemon`}
-        className="w-full px-4 py-2.5 rounded-xl text-sm font-black bg-[#FFC233] hover:bg-[#fcd460] text-black disabled:opacity-50 transition"
-        title="بطاقات + Klarna + Afterpay"
+        onClick={() => onBuy(pack.id, 'lemon')}
+        disabled={!!busy}
+        data-testid={`buy-${pack.id}-lemon`}
+        className="w-full px-3 py-2 rounded-lg bg-[#FFC233] hover:bg-[#fcd460] text-black text-xs font-black disabled:opacity-50"
       >
-        {busy === `${pkg.id}-lemon` ? '...' : `LemonSqueezy — $${pkg.price_usd}`}
+        {busy === `${pack.id}-lemon` ? '...' : 'LemonSqueezy'}
       </button>
     </div>
   );
@@ -96,40 +69,21 @@ function TierCard({ pkg, onBuy, busy }) {
 
 export default function Pricing() {
   const navigate = useNavigate();
-  const [packages, setPackages] = useState([]);
-  const [balance, setBalance] = useState(null);
   const [busy, setBusy] = useState(null);
+  const [customAmount, setCustomAmount] = useState('');
   const isAuthed = !!localStorage.getItem('token');
 
-  useEffect(() => {
-    // Public — fetch packages list
-    fetch(`${API}/api/billing/packages`)
-      .then((r) => r.json())
-      .then((d) => setPackages(d.packages || []))
-      .catch(() => {});
-
-    // Authenticated — fetch current credits balance
-    if (isAuthed) {
-      fetch(`${API}/api/usage/credits`, {
-        headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
-      })
-        .then((r) => (r.ok ? r.json() : null))
-        .then(setBalance)
-        .catch(() => {});
-    }
-  }, [isAuthed]);
-
-  const buy = async (packageId, method) => {
+  const buy = async (pkgId, method) => {
     if (!isAuthed) { navigate('/login?return=/pricing'); return; }
-    setBusy(`${packageId}-${method}`);
+    setBusy(`${pkgId}-${method}`);
     try {
       const url = method === 'paypal'
         ? `${API}/api/payments/paypal/create`
         : `${API}/api/payments/lemonsqueezy/create`;
       const r = await fetch(url, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${localStorage.getItem('token')}` },
-        body: JSON.stringify({ package_id: packageId }),
+        headers: { 'Content-Type': 'application/json', ...authH() },
+        body: JSON.stringify({ package_id: pkgId }),
       });
       const d = await r.json();
       const redirect = d.approval_url || d.checkout_url;
@@ -138,23 +92,39 @@ export default function Pricing() {
         return;
       }
       window.location.href = redirect;
-    } catch (e) {
+    } catch (_) {
       toast.error('فشل الاتصال بالخادم');
     } finally {
       setBusy(null);
     }
   };
 
-  // Re-order so Pro card appears centered/highlighted
-  const orderedIds = ['tier_starter_monthly', 'tier_pro_monthly', 'tier_studio_monthly', 'project_pack'];
-  const orderedPackages = orderedIds
-    .map((id) => packages.find((p) => p.id === id))
-    .filter(Boolean);
+  const buyCustom = async () => {
+    if (!isAuthed) { navigate('/login?return=/pricing'); return; }
+    const amt = parseFloat(customAmount);
+    if (!amt || amt < 5) { toast.error('الحد الأدنى $5'); return; }
+    if (amt > 5000) { toast.error('الحد الأعلى $5,000'); return; }
+    setBusy('custom-paypal');
+    try {
+      const r = await fetch(`${API}/api/payments/custom/create`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...authH() },
+        body: JSON.stringify({ amount_usd: amt, method: 'paypal' }),
+      });
+      const d = await r.json();
+      if (!r.ok || !d.approval_url) { toast.error(d.detail || 'فشل'); return; }
+      window.location.href = d.approval_url;
+    } catch (_) {
+      toast.error('فشل الاتصال بالخادم');
+    } finally { setBusy(null); }
+  };
+
+  const customCredits = parseFloat(customAmount) > 0 ? Math.round(parseFloat(customAmount) * 100) : 0;
 
   return (
     <div className="min-h-screen bg-zinc-950 text-zinc-100" dir="rtl" data-testid="pricing-page">
-      <header className="sticky top-0 z-30 border-b border-white/10 bg-zinc-950/85 backdrop-blur">
-        <div className="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between gap-3">
+      <header className="border-b border-white/10 bg-zinc-950/85 backdrop-blur">
+        <div className="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between">
           <a href="/" className="hover:opacity-90"><ZenrexBrand size={26} /></a>
           <a href="/" className="inline-flex items-center gap-1.5 text-zinc-400 hover:text-zinc-200 text-sm" data-testid="back-link">
             <ArrowLeft className="w-4 h-4" /> رجوع
@@ -162,43 +132,62 @@ export default function Pricing() {
         </div>
       </header>
 
-      <main className="max-w-6xl mx-auto px-4 py-10">
+      <main className="max-w-6xl mx-auto px-4 py-8">
         <div className="text-center mb-8">
-          <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-gradient-to-l from-rose-500/20 via-amber-500/20 to-rose-500/20 border border-rose-500/40 text-rose-200 text-xs mb-4 animate-pulse" data-testid="launch-promo-banner">
-            <Flame className="w-4 h-4" />
-            <span className="font-black">عرض الإطلاق — خصومات حتى 38% لفترة محدودة</span>
+          <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-amber-500/10 border border-amber-500/30 text-amber-200 text-xs mb-3" data-testid="launch-promo-banner">
+            <Flame className="w-3.5 h-3.5" />
+            <span className="font-black">ادفع، احصل على النقاط، استخدمها كما تشاء</span>
           </div>
-          <h1 className="text-3xl sm:text-4xl font-black mb-2">باقات Zenrex AI</h1>
-          <p className="text-zinc-400 max-w-2xl mx-auto text-sm">
-            ادفع، احصل على النقاط، استخدمها كيف ما تبي.
-          </p>
+          <h1 className="text-3xl sm:text-4xl font-black mb-2">باقات النقاط</h1>
+          <p className="text-zinc-400 text-sm">كل النقاط لا تنتهي صلاحيتها · بدون اشتراكات شهرية</p>
         </div>
 
-        {/* Current balance — only for logged-in users */}
-        {balance && !balance.unlimited && (
-          <div data-testid="current-balance" className="mb-8 rounded-2xl border border-amber-500/30 bg-amber-500/5 p-4 text-center">
-            <p className="text-xs text-amber-300 font-bold mb-1">رصيدك الحالي</p>
-            <p className="text-3xl font-black text-amber-200">{formatPoints(balance.credits || 0)} <span className="text-sm text-zinc-400 font-normal">نقطة</span></p>
+        {/* Custom amount block */}
+        <div className="mb-8 rounded-2xl border border-purple-500/30 bg-gradient-to-br from-purple-500/10 to-fuchsia-500/5 p-5 sm:p-6" data-testid="custom-amount-card">
+          <div className="flex items-center gap-2 mb-3">
+            <Calculator className="w-5 h-5 text-purple-300" />
+            <h3 className="text-base font-black text-purple-200">مبلغ مخصص (100 نقطة لكل دولار)</h3>
           </div>
-        )}
-        {balance && balance.unlimited && (
-          <div data-testid="current-balance" className="mb-8 rounded-2xl border border-purple-500/30 bg-purple-500/5 p-4 text-center">
-            <p className="text-3xl font-black text-purple-200">رصيد لا محدود</p>
+          <div className="flex flex-col sm:flex-row items-stretch gap-3">
+            <div className="relative flex-1">
+              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400 font-bold">$</span>
+              <input
+                type="number"
+                min="5"
+                max="5000"
+                step="1"
+                value={customAmount}
+                onChange={(e) => setCustomAmount(e.target.value)}
+                placeholder="مثلاً 25"
+                data-testid="custom-amount-input"
+                className="w-full pl-7 pr-3 py-3 rounded-xl bg-black/40 border border-white/10 focus:border-purple-400 focus:outline-none text-lg font-bold text-white text-center"
+              />
+            </div>
+            <div className="flex-1 flex items-center justify-center bg-black/30 rounded-xl border border-white/10 px-4 py-3">
+              <Sparkles className="w-4 h-4 text-amber-300 ml-2" />
+              <span className="text-lg font-black text-amber-300" data-testid="custom-credits-preview">
+                {customCredits > 0 ? `${fmt(customCredits)} نقطة` : '— نقطة'}
+              </span>
+            </div>
+            <button
+              onClick={buyCustom}
+              disabled={!customAmount || busy === 'custom-paypal'}
+              data-testid="custom-buy-btn"
+              className="px-6 py-3 rounded-xl bg-gradient-to-r from-purple-500 to-fuchsia-500 hover:opacity-90 text-white font-black text-sm disabled:opacity-50"
+            >
+              {busy === 'custom-paypal' ? '...' : 'ادفع عبر PayPal'}
+            </button>
           </div>
-        )}
-
-        {/* Tier cards */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5 mb-12">
-          {orderedPackages.length === 0 && (
-            <div className="col-span-full text-center text-zinc-400 py-10">جاري تحميل الباقات...</div>
-          )}
-          {orderedPackages.map((pkg) => (
-            <TierCard key={pkg.id} pkg={pkg} onBuy={buy} busy={busy} />
-          ))}
+          <p className="text-[10px] text-zinc-500 mt-2 text-center">الحد الأدنى $5 · الحد الأعلى $5,000</p>
         </div>
 
-        <p className="text-center text-xs text-zinc-500">
-          مدفوعات آمنة عبر Stripe · النقاط تُضاف لرصيدك فوراً بعد الدفع
+        {/* Fixed packs */}
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+          {PACKS.map((p) => <PackCard key={p.id} pack={p} onBuy={buy} busy={busy} />)}
+        </div>
+
+        <p className="text-center text-xs text-zinc-500 mt-8">
+          PayPal أو LemonSqueezy · المعاملات بالدولار الأمريكي · النقاط تُضاف فوراً بعد الدفع
         </p>
       </main>
     </div>

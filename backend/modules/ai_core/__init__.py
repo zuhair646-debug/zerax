@@ -385,6 +385,16 @@ def create_ai_core_router(db, get_current_user, get_current_user_optional=None) 
             "created_at": _now().isoformat(),
         })
 
+        # 9. Deduct credits via central usage_meter (the global credits ledger)
+        try:
+            from modules.ai_core.usage_meter import record_usage
+            await record_usage(
+                db, user_id, None, f"ai-core:{ctx_tag}",
+                tokens_in, tokens_out, model_label=model_tier,
+            )
+        except Exception as _ue:
+            logger.warning(f"[AI-CORE] credits deduction failed: {_ue}")
+
         return {
             "reply": reply,
             "model_tier": model_tier,

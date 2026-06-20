@@ -4390,6 +4390,19 @@ async def zenrex_ai_chat(req: ZenrexAIRequest, current_user: dict = Depends(get_
     if not result.get("ok"):
         raise HTTPException(status_code=502, detail=result.get("error", "AI failed"))
 
+    # ─── Deduct credits via the central usage_meter (fixes the silent-bypass bug) ──
+    try:
+        from modules.ai_core.usage_meter import record_usage
+        # The agent result may include token counts; otherwise estimate from message length
+        toks_in = int(result.get("tokens_in") or sum(len((m.get("content") or "")) for m in req.messages) // 4)
+        toks_out = int(result.get("tokens_out") or len(result.get("content") or "") // 4)
+        await record_usage(
+            db, current_user["user_id"], None, f"ai-chat:{req.agent}",
+            toks_in, toks_out, model_label=result.get("model_used") or "zenrex-ai",
+        )
+    except Exception as _ue:
+        logging.getLogger(__name__).warning(f"[ai/chat] credit deduction failed: {_ue}")
+
     # Only owners/admins see model_used (security: don't leak which model we route to)
     is_admin = current_user.get("role") in ("owner", "admin", "super_admin") or current_user.get("is_owner")
     response = {
