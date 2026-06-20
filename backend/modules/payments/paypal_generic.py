@@ -43,6 +43,27 @@ CREDITS_PER_USD = 130
 CUSTOM_MIN_USD = 5
 CUSTOM_MAX_USD = 10000
 
+# Progressive bonus on top of base rate. Tiers MUST mirror frontend
+# CUSTOM_BONUS_TIERS so the receipt matches the on-screen quote.
+CUSTOM_BONUS_TIERS = [
+    (100,   499,   500),       # +500 credits
+    (500,   999,   5_000),     # +5,000
+    (1000,  2999,  20_000),    # +20,000
+    (3000,  4999,  70_000),    # +70,000
+    (5000,  7499,  200_000),   # +200,000
+    (7500,  9999,  350_000),   # +350,000
+    (10000, 10000, 500_000),   # +500,000 🎁 max-tier promo
+]
+
+
+def _custom_bonus(amt_usd: float) -> int:
+    if not amt_usd or amt_usd < 100:
+        return 0
+    for lo, hi, bonus in CUSTOM_BONUS_TIERS:
+        if lo <= amt_usd <= hi:
+            return int(bonus)
+    return 0
+
 
 class PayPalCreateIn(BaseModel):
     package_id: str

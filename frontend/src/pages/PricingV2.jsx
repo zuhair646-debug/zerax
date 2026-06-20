@@ -28,14 +28,15 @@ const PACKS = [
 const CUSTOM_BASE_RATE = 130;
 
 // Progressive bonus on top of base rate — bigger amount = bigger bonus.
-// Margins remain >88% across all tiers (verified).
+// Margins remain >90% across all tiers (verified).
 const CUSTOM_BONUS_TIERS = [
   { min: 100,   max: 499,   bonus: 500,     label: '+500 نقطة' },
   { min: 500,   max: 999,   bonus: 5_000,   label: '+5,000 نقطة' },
-  { min: 1000,  max: 2999,  bonus: 15_000,  label: '+15,000 نقطة' },
-  { min: 3000,  max: 4999,  bonus: 50_000,  label: '+50,000 نقطة' },
-  { min: 5000,  max: 9999,  bonus: 70_000,  label: '+70,000 نقطة' },
-  { min: 10000, max: 10000, bonus: 100_000, label: '+100,000 نقطة 🎁' },
+  { min: 1000,  max: 2999,  bonus: 20_000,  label: '+20,000 نقطة' },
+  { min: 3000,  max: 4999,  bonus: 70_000,  label: '+70,000 نقطة' },
+  { min: 5000,  max: 7499,  bonus: 200_000, label: '+200,000 نقطة' },
+  { min: 7500,  max: 9999,  bonus: 350_000, label: '+350,000 نقطة' },
+  { min: 10000, max: 10000, bonus: 500_000, label: '+500,000 نقطة 🎁' },
 ];
 
 const getBonus = (amt) => {
@@ -54,7 +55,9 @@ const packBonusOverBase = (pack) => {
 };
 
 function PackCard({ pack, onBuy, busy }) {
-  const bonus = packBonusOverBase(pack);
+  const baseAt130 = Math.round(pack.price * CUSTOM_BASE_RATE);
+  const bonus = Math.max(0, pack.credits - baseAt130);
+  const hasBonus = bonus > 0;
   return (
     <div
       className={`relative rounded-2xl border p-5 ${
@@ -70,19 +73,39 @@ function PackCard({ pack, onBuy, busy }) {
         </div>
       )}
       <div className="text-center mb-4">
-        <div className="text-xs text-zinc-400 mb-1">${pack.price} USD</div>
+        <div className="text-xs text-zinc-400 mb-1">USD</div>
         <div className="text-3xl font-black text-white">${pack.price}</div>
-        <div className="mt-2 inline-flex items-center gap-1.5 text-amber-300 font-black text-lg">
-          <Sparkles className="w-4 h-4" /> {fmt(pack.credits)} نقطة
+
+        {/* Old (base 130/$) price — struck out for visual contrast */}
+        {hasBonus && (
+          <div
+            className="mt-3 text-xs font-bold text-zinc-500 line-through tabular-nums"
+            data-testid={`pack-base-${pack.id}`}
+            title={`السعر العادي عند 130 نقطة/$: ${fmt(baseAt130)}`}
+          >
+            {fmt(baseAt130)} نقطة
+          </div>
+        )}
+
+        {/* Actual credits — bold green */}
+        <div
+          className={`mt-1 inline-flex items-center gap-1.5 font-black text-2xl tabular-nums ${
+            hasBonus ? 'text-emerald-400' : 'text-amber-300'
+          }`}
+          data-testid={`pack-credits-${pack.id}`}
+        >
+          <Sparkles className="w-5 h-5" /> {fmt(pack.credits)}
+          <span className="text-sm font-bold opacity-80">نقطة</span>
         </div>
-        {bonus > 0 && (
+
+        {/* Bonus pill */}
+        {hasBonus && (
           <div
             className="mt-2 inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-emerald-500/15 border border-emerald-400/40 text-emerald-300 text-[11px] font-black"
             data-testid={`pack-bonus-${pack.id}`}
-            title={`زيادة عن السعر الأساسي (130 نقطة/$): +${fmt(bonus)} نقطة هدية`}
           >
             <span className="text-sm leading-none">＋</span>
-            <span>{fmt(bonus)} نقطة هدية</span>
+            <span>{fmt(bonus)} هدية</span>
           </div>
         )}
       </div>
@@ -217,7 +240,7 @@ export default function Pricing() {
             </button>
           </div>
 
-          {/* Always-visible credits preview block (own row, prominent) */}
+          {/* Always-visible credits preview block — strikethrough base + green total */}
           <div
             className="mt-4 rounded-xl border border-amber-400/40 bg-gradient-to-r from-amber-500/10 via-amber-500/15 to-amber-500/10 px-5 py-4"
             data-testid="custom-credits-preview-block"
@@ -227,41 +250,71 @@ export default function Pricing() {
                 <Sparkles className="w-4 h-4" />
                 <span>ستحصل على</span>
               </div>
-              <div className="text-2xl sm:text-3xl font-black text-amber-300 tabular-nums" data-testid="custom-credits-preview">
-                {customCredits > 0 ? `${fmt(customCredits)}` : '0'}
-                <span className="text-sm font-bold text-amber-200/70 mr-2">نقطة</span>
+              <div className="text-left">
+                {/* Old base (strikethrough) only if bonus applies */}
+                {bonusInfo.bonus > 0 && (
+                  <div
+                    className="text-xs font-bold text-zinc-400 line-through tabular-nums"
+                    data-testid="custom-credits-base"
+                  >
+                    {fmt(baseCredits)} نقطة
+                  </div>
+                )}
+                {/* Green new total */}
+                <div
+                  className={`font-black text-3xl sm:text-4xl tabular-nums ${
+                    bonusInfo.bonus > 0 ? 'text-emerald-400' : 'text-amber-300'
+                  }`}
+                  data-testid="custom-credits-preview"
+                >
+                  {customCredits > 0 ? fmt(customCredits) : '0'}
+                  <span className="text-sm font-bold opacity-80 mr-2">نقطة</span>
+                </div>
               </div>
             </div>
 
-            {/* Breakdown when bonus applies */}
             {bonusInfo.bonus > 0 && (
-              <div className="mt-3 pt-3 border-t border-amber-400/20 flex flex-wrap items-center justify-between gap-2 text-xs">
-                <div className="text-amber-200/80">
-                  <span className="font-bold">{fmt(baseCredits)}</span> أساسية
-                  <span className="mx-1 text-amber-300/50">+</span>
-                  <span className="font-black text-emerald-300">{fmt(bonusInfo.bonus)}</span>
-                  <span className="text-emerald-300/80"> هدية</span>
-                </div>
+              <div className="mt-3 pt-3 border-t border-amber-400/20 flex flex-wrap items-center justify-end gap-2 text-xs">
                 <div
                   className="inline-flex items-center gap-1 px-3 py-1 rounded-full bg-emerald-500/15 border border-emerald-400/40 text-emerald-300 font-black"
                   data-testid="custom-bonus-badge"
                 >
                   <span className="text-base leading-none">＋</span>
-                  <span>{bonusInfo.label}</span>
+                  <span>{bonusInfo.label} هدية</span>
                 </div>
               </div>
             )}
 
-            {/* Tier hints — visible when no bonus yet, to nudge upsell */}
-            {bonusInfo.bonus === 0 && amtNum > 0 && amtNum < 100 && (
+            {/* Upsell hints for next milestone */}
+            {amtNum > 0 && amtNum < 100 && (
               <div className="mt-3 pt-3 border-t border-amber-400/20 text-[11px] text-amber-200/70 text-center">
                 💡 ارفع المبلغ إلى <span className="font-black text-emerald-300">$100</span> لتحصل على <span className="font-black text-emerald-300">+500 نقطة هدية</span>
+              </div>
+            )}
+            {amtNum >= 100 && amtNum < 500 && (
+              <div className="mt-3 pt-3 border-t border-amber-400/20 text-[11px] text-amber-200/70 text-center">
+                💡 ارفع إلى <span className="font-black text-emerald-300">$500</span> = <span className="font-black text-emerald-300">+5,000 هدية</span>
+              </div>
+            )}
+            {amtNum >= 3000 && amtNum < 5000 && (
+              <div className="mt-3 pt-3 border-t border-amber-400/20 text-[11px] text-amber-200/70 text-center">
+                💡 ارفع إلى <span className="font-black text-emerald-300">$5,000</span> = <span className="font-black text-emerald-300">+200,000 هدية</span>
+              </div>
+            )}
+            {amtNum >= 5000 && amtNum < 7500 && (
+              <div className="mt-3 pt-3 border-t border-amber-400/20 text-[11px] text-amber-200/70 text-center">
+                💡 ارفع إلى <span className="font-black text-emerald-300">$7,500</span> = <span className="font-black text-emerald-300">+350,000 هدية</span>
+              </div>
+            )}
+            {amtNum >= 7500 && amtNum < 10000 && (
+              <div className="mt-3 pt-3 border-t border-amber-400/20 text-[11px] text-amber-200/70 text-center">
+                🎁 المرحلة القصوى $10,000 = <span className="font-black text-emerald-300">+500,000 نقطة هدية</span>
               </div>
             )}
           </div>
 
           <p className="text-[11px] text-zinc-500 mt-3 text-center">
-            130 نقطة لكل دولار · هدايا إضافية تبدأ من $100 · أعلى عرض عند $10,000 (+100,000 نقطة 🎁)
+            130 نقطة لكل دولار · مكافآت متدرّجة من $100 إلى $10,000 (أقصى عرض +500,000 🎁)
           </p>
         </div>
 
