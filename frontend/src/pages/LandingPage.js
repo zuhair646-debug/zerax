@@ -425,7 +425,7 @@ const LandingPage = ({ user }) => {
       <Navbar user={user} transparent />
 
       {/* Rotating banner + stories */}
-      <div className="pt-16">
+      <div>
         <SiteBannerStories placement="outside" />
       </div>
 
