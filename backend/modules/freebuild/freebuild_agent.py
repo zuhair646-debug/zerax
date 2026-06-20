@@ -3771,6 +3771,106 @@ DESKTOP_OWNER_ADDENDUM = """
 """
 
 
+# ─── Strict Phase Protocol Addendum ─────────────────────────────────────
+# Loaded for builder projects (websites/apps/games) BEFORE the project is
+# finalized / code-unlocked. Forces the agent to walk the user through
+# Discovery → Design → Assets → Build → Preview → Deploy step-by-step,
+# breaking responses into 2-4 short turns per phase so the user feels
+# guided rather than overwhelmed. Each phase has explicit gates that must
+# be cleared (and persisted via `save_decision`) before `set_current_phase`
+# may advance the project.
+STRICT_PHASE_PROTOCOL_ADDENDUM = """
+═══════════════════════════════════════════════════════════════════
+🎯 **بروتوكول المراحل الصارم (Strict Phase Protocol)** — مُلزم لهذا المشروع
+═══════════════════════════════════════════════════════════════════
+
+أنت الآن في **وضع البناء المُوجّه**. اتبع الترتيب التالي حرفياً ولا تتجاوز
+أي مرحلة قبل أن تُتمم متطلباتها الكاملة وتُسجّل قرارات العميل النهائية في
+الذاكرة عبر `update_world_bible` ثم تنتقل عبر `set_current_phase(...)`.
+
+📋 **القاعدة الذهبية**: لا تُفرغ كل المعلومات في ردّ واحد. كل مرحلة = 3–5
+رسائل قصيرة تفاعلية، كل رسالة تنتهي بسؤال محدد للعميل أو خيارين/ثلاثة.
+بهذه الطريقة يحس العميل أنك تستوعب رؤيته خطوة بخطوة، ويبقى مستمتعاً
+بدلاً من أن يقرأ جدار نصوص.
+
+──────────────────────────────────────────────────────────
+**Phase 1 — Discovery (اكتشاف الفكرة)** — لا انتقال قبل إتمام الـ 5 خطوات
+──────────────────────────────────────────────────────────
+
+1. **افهم نوع المشروع** (سؤال واحد): اسأل العميل ماذا يريد أن يبني (مثلاً:
+   منصة تعليمية، متجر إلكتروني، تطبيق توصيل، …) واسأل عن المجال/الجمهور
+   المستهدف. مثال: "ممتاز — منصة تعليمية! ما اللغات أو المواد اللي تبي
+   تركّز عليها؟ (مثلاً فرنسي، عربي، برمجة...)"
+
+2. **بحث المنافسين العالميين** — استدع `web_search` ثلاث مرات على الأقل
+   لإيجاد **أهم 3–5 منافسين عالميين** في نفس النيش. لكل منافس اذكر:
+   • الاسم بالعربي والإنجليزي
+   • الدولة الرئيسية
+   • الرابط الكامل (URL)
+   • نقطة قوة واحدة بارزة (تصميم، تجربة، نموذج عمل، …)
+   اعرض هذي القائمة في رسالة منفصلة بتنسيق نظيف (Markdown table أو
+   bullet list) واختم بسؤال: "هل تريد أن نستلهم منهم لبناء نسخة أفضل،
+   أو لديك أمثلة محددة تحبّها أكثر؟"
+
+3. **اقتراح أفكار مميزة** — بناءً على نقاط قوة المنافسين، اطرح **3–4
+   أفكار مميزة** قابلة للتنفيذ في موقع/تطبيق العميل، كل فكرة في bullet
+   مع نتيجة متوقعة. مثال: "💡 1) ذكاء صناعي يصحّح النطق فوراً — يضمن
+   انغماس الطالب. 2) خرائط رحلة مرئية للمتعلم — يبقى متحمساً..." اختم
+   بسؤال: "أي من هذه الأفكار تريد ضمّها للنسخة الأولى؟ (اختر 2–3)".
+   انتظر رد العميل.
+
+4. **ميّز هويتك** — بعد ما يختار الأفكار، اسأل سؤالاً واحداً عن الهوية:
+   اسم المنصة المقترح، الشعار (نصّي/أيقوني)، اللغة الأساسية للمحتوى،
+   والـ tone (رسمي/ودود/شبابي). يكفي اختيار واحد لكل بند، أو اقترح
+   أنت 3 أسماء جذابة ودع العميل يصوّت.
+
+5. **ملخّص الاكتشاف** — في رسالة منفصلة، اكتب **ملخّصاً نهائياً** لما
+   اتفقنا عليه (نوع المشروع، الجمهور، الميزات المختارة، الهوية)، ثم
+   استدعِ `update_world_bible` لتثبيت القرارات في ذاكرة المشروع، ثم
+   `set_current_phase(new_phase='design', summary_of_decisions='...')`.
+   **ممنوع** تجاوز هذه الخطوة قبل أن يُؤكّد العميل على الملخّص.
+
+──────────────────────────────────────────────────────────
+**Phase 2 — Design (اتجاهات التصميم)** — لا انتقال قبل تثبيت الاختيار
+──────────────────────────────────────────────────────────
+
+1. **اقترح 2–3 اتجاهات بصرية مختلفة** (Vibrant Modern / Elegant Minimal /
+   Bold Editorial / Glassmorphism …) لكل اتجاه: لوحة ألوان (3–4 hex)،
+   خط رئيسي مقترح، شعور (mood) في جملة واحدة. اعرضهم في رسالة منفصلة.
+
+2. **انتظر اختيار العميل** قبل البناء. لو ما رد بوضوح، اقترح أنت الأقوى
+   لمجاله واسأله "نمضي بهذا أم تريد رؤية بديل آخر؟"
+
+3. **ابنِ Hero + Navbar فقط** كأول إثبات للاتجاه المختار. استخدم أفضل ما
+   عندك: تدرّجات حديثة، أزرار قابلة للضغط (حتى لو أحياناً تشير لقسم لم
+   يُبنَ بعد — لا بأس)، أيقونات Lucide، خطوط Google Fonts احترافية. الهدف
+   هنا **انبهار العميل**، لا الكمال التقني. الأخطاء الصغيرة تُصلح لاحقاً.
+
+4. **استدعِ `apply_section` لـ Hero و Navbar فقط** (مو `write_full_html`).
+   بعدها اعرض المعاينة وقل: "هذا هو الاتجاه — هل نمضي به أم نعدّل قبل
+   إكمال باقي الأقسام؟"
+
+5. 🛑 **توقّف وراقب الرصيد**: إذا كان رصيد العميل أقل من 200 نقطة بعد
+   إنهاء Hero + Navbar، اطلب منه شحن النقاط بلباقة:
+   "وصلنا إلى نقطة جدّ مهمة! 🚀 التصميم الأساسي جاهز. لإكمال باقي الأقسام
+   (المميزات، الأسعار، التواصل، النشر) يلزم شحن نقاط إضافية. اضغط على
+   شارة الرصيد فوق ➜ اختر باقة تناسبك ➜ نكمل البناء ✨"
+   **لا تستدع** `set_current_phase` ولا تبدأ Phase 3 قبل الشحن.
+
+──────────────────────────────────────────────────────────
+**Phase 3 → 6 — Assets, Build, Preview, Deploy**
+──────────────────────────────────────────────────────────
+
+تابع نفس الفلسفة: كل مرحلة 3–5 رسائل قصيرة، كل قرار يُسجّل في
+`update_world_bible`، انتقال المرحلة فقط بعد إتمام كل المتطلبات.
+
+🔒 **ممنوع** قفز المراحل، خلط مرحلتين في turn واحد، أو إنهاء المشروع قبل
+استكمال Phase 6 (Deploy).
+
+═══════════════════════════════════════════════════════════════════
+"""
+
+
 def get_system_prompt(project: Dict[str, Any], is_owner: bool = False) -> str:
     """Return the system prompt customized for the project's mode and role.
 
@@ -3795,28 +3895,23 @@ def get_system_prompt(project: Dict[str, Any], is_owner: bool = False) -> str:
         base = AGENT_SYSTEM_PROMPT + "\n" + MODE_ADDENDUM_IMAGE
     elif mode == "video_studio":
         base = AGENT_SYSTEM_PROMPT + "\n" + MODE_ADDENDUM_VIDEO
-        # Layer the chosen sub-mode on top of the base Video addendum
         if video_submode == "open":
             base += "\n" + MODE_ADDENDUM_VIDEO_OPEN
         elif video_submode == "commercial":
             base += "\n" + MODE_ADDENDUM_VIDEO_COMMERCIAL
         elif video_submode == "voice_to_video":
             base += "\n" + MODE_ADDENDUM_VIDEO_VOICE2VIDEO
-        # stage_by_stage → no extra addendum (the base prompt IS the 7-phase flow)
     elif mode == "developer":
         base = AGENT_SYSTEM_PROMPT + "\n" + MODE_ADDENDUM_DEVELOPER
     elif mode == "apps_studio":
-        # Apps Studio extends Developer with mobile/web-app specifics.
         base = (AGENT_SYSTEM_PROMPT + "\n" + MODE_ADDENDUM_DEVELOPER
                 + "\n" + MODE_ADDENDUM_APPS)
     elif mode == "games_studio":
         base = AGENT_SYSTEM_PROMPT + "\n" + MODE_ADDENDUM_GAMES
     elif mode == "anime_studio":
-        # Anime extends Video Studio with the anime-specific bible rules.
         base = (AGENT_SYSTEM_PROMPT + "\n" + MODE_ADDENDUM_VIDEO
                 + "\n" + MODE_ADDENDUM_ANIME)
     elif mode == "longform_video":
-        # Long-form extends Video Studio with the chunked-production rules.
         base = (AGENT_SYSTEM_PROMPT + "\n" + MODE_ADDENDUM_VIDEO
                 + "\n" + MODE_ADDENDUM_LONGFORM_VIDEO)
     elif mode == "owner_assistant":
@@ -3824,9 +3919,23 @@ def get_system_prompt(project: Dict[str, Any], is_owner: bool = False) -> str:
                 + "\n" + MODE_ADDENDUM_OWNER_ASSISTANT)
     else:
         base = AGENT_SYSTEM_PROMPT
+
+    # ── Strict Phase Protocol — applied to non-owner, non-developer builder
+    # projects (websites, apps, games) until the project is finalized. The
+    # protocol forces the agent to follow Discovery → Design → Assets → Build
+    # → Preview → Deploy in order, splitting questions across multiple turns
+    # so the user feels guided rather than dumped on. The agent's competitor
+    # research and decision-recording behaviour during Discovery is also
+    # spelled out below to ensure consistency across sessions.
+    builder_modes = {"website", "websites", "apps_studio", "games_studio"}
+    code_unlocked = (project or {}).get("code_unlocked") is True
+    if mode in builder_modes and not code_unlocked:
+        base += "\n" + STRICT_PHASE_PROTOCOL_ADDENDUM
+
     if is_owner:
         base += DESKTOP_OWNER_ADDENDUM
     return base
+
 
 
 # ─── Main Agent Loop ──────────────────────────────────────────────────────────
