@@ -15,49 +15,42 @@ const API = process.env.REACT_APP_BACKEND_URL;
 // ─────────────────────────────────────────────────────────────────────
 const MODES = [
   {
-    id: 'scratch_rn',
-    title: 'React Native',
-    subtitle: 'الأكثر مرونة',
-    desc: 'تطبيق Cross-Platform يشتغل على iOS و Android بنفس الكود. مع Expo.',
-    icon: Smartphone,
-    accent: '#06b6d4',
-    bg: 'from-cyan-500/15 to-blue-500/5',
-    pros: ['أسرع تطوير', 'كود واحد لمنصتين', 'مجتمع ضخم', 'مناسب 90% من الحالات'],
-    tech: 'React Native + Expo',
-  },
-  {
     id: 'scratch_flutter',
     title: 'Flutter',
-    subtitle: 'الأقوى أداءً',
-    desc: 'إطار Google لبناء تطبيقات native بأداء عالي ومظهر موحد على كل المنصات.',
+    subtitle: 'الموصى به ⭐ — تطبيق واحد لكل المنصات',
+    desc: 'إطار Google لبناء تطبيقات native بأداء عالٍ ومظهر موحد على iOS و Android والويب والديسكتوب من كود واحد. الاختيار الأسهل والأكثر إنتاجية لمعظم المشاريع.',
     icon: Layers,
     accent: '#3b82f6',
     bg: 'from-blue-500/15 to-indigo-500/5',
-    pros: ['أداء native كامل', 'UI متطابق على كل الأجهزة', 'Hot reload سريع', 'يدعم الويب والديسكتوب'],
+    pros: ['أداء native كامل', 'UI موحّد على كل الأجهزة', 'Hot reload سريع', 'يدعم iOS + Android + Web + Desktop'],
     tech: 'Flutter + Dart',
+    recommended: true,
+  },
+  {
+    id: 'scratch_rn',
+    title: 'React Native',
+    subtitle: 'الأكثر مرونة',
+    desc: 'تطبيق Cross-Platform يشتغل على iOS و Android بنفس الكود مع Expo. مثالي لفِرَق ويب تعرف React.',
+    icon: Smartphone,
+    accent: '#06b6d4',
+    bg: 'from-cyan-500/15 to-blue-500/5',
+    pros: ['أسرع تطوير لفِرَق React', 'كود واحد لمنصتين', 'مجتمع ضخم', 'مناسب 90% من الحالات'],
+    tech: 'React Native + Expo',
   },
   {
     id: 'scratch_native',
-    title: 'Native أصلي',
-    subtitle: 'الأفضل أداءً',
-    desc: 'Swift لـ iOS و Kotlin لـ Android — أعلى أداء وأقرب لتجربة النظام.',
+    title: 'البرمجة الأصلية (Native)',
+    subtitle: 'الأفضل أداءً — لتطبيقات ثقيلة',
+    desc: 'Swift لـ iOS و Kotlin لـ Android — أعلى أداء، أقرب لتجربة النظام، ومجالات الألعاب الثقيلة و AR/VR. تطبيقان منفصلان لكل منصة.',
     icon: Apple,
     accent: '#8b5cf6',
     bg: 'from-violet-500/15 to-purple-500/5',
-    pros: ['أداء استثنائي', 'وصول كامل لمزايا النظام', 'مكتبات أصلية', 'مناسب للألعاب والـ AR'],
+    pros: ['أداء استثنائي', 'وصول كامل لمزايا النظام', 'مكتبات أصلية', 'مناسب للألعاب الثقيلة والـ AR'],
     tech: 'Swift (iOS) + Kotlin (Android)',
   },
-  {
-    id: 'continue',
-    title: 'تطبيق قابل للإكمال',
-    subtitle: 'ارفع كودك ونكمل',
-    desc: 'ارفع مشروعك الموجود (ZIP أو GitHub) وخل الذكاء يكمّل ويعدّل عليه.',
-    icon: Upload,
-    accent: '#f59e0b',
-    bg: 'from-amber-500/15 to-orange-500/5',
-    pros: ['دعم لأي تقنية', 'صيانة وتحديثات', 'إضافة ميزات جديدة', 'تحويل التقنيات'],
-    tech: 'GitHub / ZIP / Repository URL',
-  },
+  // The "تطبيق قابل للإكمال" card was removed from this builder — it lives
+  // in its own dedicated section (/projects/continue) so it doesn't dilute
+  // the "build-from-scratch" choices here.
 ];
 
 // Tools available in sidebar
