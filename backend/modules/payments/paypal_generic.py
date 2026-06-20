@@ -39,7 +39,7 @@ PACKAGES = {
 # Custom amount: 90 credits/$ (safe rate that survives all fee scenarios)
 CREDITS_PER_USD = 90
 CUSTOM_MIN_USD = 5
-CUSTOM_MAX_USD = 5000
+CUSTOM_MAX_USD = 10000
 
 
 class PayPalCreateIn(BaseModel):

@@ -1,7 +1,7 @@
 /**
  * Pricing — credit packs only (no subscriptions).
  *   • 7 fixed packs ($9 → $1000) with progressive discount
- *   • Custom amount: user enters $ and gets 100 credits per dollar
+ *   • Custom amount: user enters $ and gets 90 credits per dollar ($5–$10,000)
  *   • Each pack has PayPal + LemonSqueezy buttons
  */
 import React, { useState } from 'react';
@@ -103,7 +103,7 @@ export default function Pricing() {
     if (!isAuthed) { navigate('/login?return=/pricing'); return; }
     const amt = parseFloat(customAmount);
     if (!amt || amt < 5) { toast.error('الحد الأدنى $5'); return; }
-    if (amt > 5000) { toast.error('الحد الأعلى $5,000'); return; }
+    if (amt > 10000) { toast.error('الحد الأعلى $10,000'); return; }
     setBusy('custom-paypal');
     try {
       const r = await fetch(`${API}/api/payments/custom/create`, {
@@ -148,13 +148,15 @@ export default function Pricing() {
             <Calculator className="w-5 h-5 text-purple-300" />
             <h3 className="text-base font-black text-purple-200">مبلغ مخصص (90 نقطة لكل دولار)</h3>
           </div>
+
+          {/* Input + Pay button row */}
           <div className="flex flex-col sm:flex-row items-stretch gap-3">
             <div className="relative flex-1">
               <span className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400 font-bold">$</span>
               <input
                 type="number"
                 min="5"
-                max="5000"
+                max="10000"
                 step="1"
                 value={customAmount}
                 onChange={(e) => setCustomAmount(e.target.value)}
@@ -162,12 +164,6 @@ export default function Pricing() {
                 data-testid="custom-amount-input"
                 className="w-full pl-7 pr-3 py-3 rounded-xl bg-black/40 border border-white/10 focus:border-purple-400 focus:outline-none text-lg font-bold text-white text-center"
               />
-            </div>
-            <div className="flex-1 flex items-center justify-center bg-black/30 rounded-xl border border-white/10 px-4 py-3">
-              <Sparkles className="w-4 h-4 text-amber-300 ml-2" />
-              <span className="text-lg font-black text-amber-300" data-testid="custom-credits-preview">
-                {customCredits > 0 ? `${fmt(customCredits)} نقطة` : '— نقطة'}
-              </span>
             </div>
             <button
               onClick={buyCustom}
@@ -178,7 +174,23 @@ export default function Pricing() {
               {busy === 'custom-paypal' ? '...' : 'ادفع عبر PayPal'}
             </button>
           </div>
-          <p className="text-[10px] text-zinc-500 mt-2 text-center">الحد الأدنى $5 · الحد الأعلى $5,000</p>
+
+          {/* Always-visible credits preview block (own row, prominent) */}
+          <div
+            className="mt-4 rounded-xl border border-amber-400/40 bg-gradient-to-r from-amber-500/10 via-amber-500/15 to-amber-500/10 px-5 py-4 flex items-center justify-between"
+            data-testid="custom-credits-preview-block"
+          >
+            <div className="flex items-center gap-2 text-amber-200 text-sm font-bold">
+              <Sparkles className="w-4 h-4" />
+              <span>ستحصل على</span>
+            </div>
+            <div className="text-2xl sm:text-3xl font-black text-amber-300 tabular-nums" data-testid="custom-credits-preview">
+              {customCredits > 0 ? `${fmt(customCredits)}` : '0'}
+              <span className="text-sm font-bold text-amber-200/70 mr-2">نقطة</span>
+            </div>
+          </div>
+
+          <p className="text-[11px] text-zinc-500 mt-3 text-center">الحد الأدنى $5 · الحد الأعلى $10,000 · 90 نقطة لكل دولار</p>
         </div>
 
         {/* Fixed packs */}
