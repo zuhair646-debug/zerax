@@ -1,18 +1,16 @@
 /**
- * StorageIndicator — small pill that surfaces a user's storage quota.
- * Polls /api/freebuild-chat/storage/usage every 60s. Shows:
- *   - 🟢 plenty of room      (< 70%)
- *   - 🟡 nearing the limit   (70-90%)
- *   - 🔴 over the limit      (>= 100%) — clicking opens upgrade dialog
+ * StorageIndicator — small pill + click-to-toggle popover (no full-screen modal).
+ * Shows storage usage; if over the limit, surfaces upgrade options that link to /pricing.
  */
-import React, { useState, useEffect, useCallback } from 'react';
-import { HardDrive, AlertTriangle, Sparkles, X } from 'lucide-react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { HardDrive, AlertTriangle, X } from 'lucide-react';
 
 const API = process.env.REACT_APP_BACKEND_URL;
 
 export default function StorageIndicator({ compact = false }) {
   const [usage, setUsage] = useState(null);
-  const [showUpgrade, setShowUpgrade] = useState(false);
+  const [open, setOpen] = useState(false);
+  const wrapRef = useRef(null);
 
   const load = useCallback(async () => {
     const token = localStorage.getItem('token');
@@ -34,6 +32,16 @@ export default function StorageIndicator({ compact = false }) {
     return () => clearInterval(t);
   }, [load]);
 
+  // Close on outside-click
+  useEffect(() => {
+    if (!open) return;
+    const onClick = (e) => {
+      if (wrapRef.current && !wrapRef.current.contains(e.target)) setOpen(false);
+    };
+    document.addEventListener('mousedown', onClick);
+    return () => document.removeEventListener('mousedown', onClick);
+  }, [open]);
+
   if (!usage) return null;
 
   const pct = Math.min(usage.used_pct || 0, 100);
@@ -48,13 +56,13 @@ export default function StorageIndicator({ compact = false }) {
   const c = colorMap[color];
 
   return (
-    <>
+    <div ref={wrapRef} className="relative inline-block">
       <button
         type="button"
-        onClick={() => setShowUpgrade(true)}
+        onClick={() => setOpen((v) => !v)}
         data-testid="storage-indicator"
         className={`inline-flex items-center gap-2 px-2.5 py-1.5 rounded-full border ${c.ring} bg-black/30 hover:bg-black/50 transition`}
-        title={`${usage.used_mb} MB / ${usage.quota_mb} MB — ${usage.project_count} مشروع من أصل ${usage.quota_projects}`}
+        title={`${usage.used_mb} MB / ${usage.quota_mb} MB`}
       >
         <span className={`w-1.5 h-1.5 rounded-full ${c.dot}`} />
         <HardDrive className={`w-3.5 h-3.5 ${c.text}`} />
@@ -71,114 +79,55 @@ export default function StorageIndicator({ compact = false }) {
         )}
       </button>
 
-      {showUpgrade && (
+      {/* Small popover anchored under the pill */}
+      {open && (
         <div
-          className="fixed inset-0 z-[80] bg-black/85 backdrop-blur-md flex items-start sm:items-center justify-center p-3 sm:p-4 overflow-y-auto"
-          onClick={() => setShowUpgrade(false)}
-          data-testid="storage-upgrade-modal"
+          data-testid="storage-upgrade-popover"
+          className="absolute z-[70] mt-2 right-0 w-80 sm:w-96 rounded-xl border border-amber-500/40 bg-zinc-900 shadow-2xl p-4"
+          role="dialog"
         >
-          <div
-            className="bg-zinc-900 border border-amber-500/40 rounded-2xl max-w-lg w-full p-5 sm:p-6 shadow-2xl my-4 sm:my-8 max-h-[calc(100vh-2rem)] overflow-y-auto"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="flex items-start justify-between mb-4">
-              <div>
-                <div className="flex items-center gap-2 mb-1">
-                  <HardDrive className="w-5 h-5 text-amber-300" />
-                  <h3 className="text-lg font-black text-amber-200">سعة التخزين</h3>
-                </div>
-                <p className="text-xs text-zinc-400">باقتك الحالية: <span className="text-amber-300 font-bold">{usage.tier_label}</span></p>
+          <div className="flex items-start justify-between mb-3">
+            <div>
+              <div className="flex items-center gap-1.5 mb-0.5">
+                <HardDrive className="w-4 h-4 text-amber-300" />
+                <h3 className="text-sm font-black text-amber-200">سعة التخزين</h3>
               </div>
-              <button type="button" onClick={() => setShowUpgrade(false)} className="text-zinc-400 hover:text-white p-1">
-                <X className="w-5 h-5" />
-              </button>
+              <p className="text-[10px] text-zinc-400">باقتك: <span className="text-amber-300 font-bold">{usage.tier_label}</span></p>
             </div>
-
-            {/* Usage bars */}
-            <div className="space-y-3 mb-5">
-              <div>
-                <div className="flex justify-between text-[11px] mb-1">
-                  <span className="text-zinc-400">المساحة المستخدمة</span>
-                  <span className={c.text}>
-                    {usage.used_mb.toFixed(2)} MB / {usage.quota_mb >= 1024 ? `${(usage.quota_mb/1024).toFixed(0)} GB` : `${usage.quota_mb} MB`}
-                  </span>
-                </div>
-                <div className="h-2 rounded-full bg-zinc-800 overflow-hidden">
-                  <div className={`h-full ${c.bar} transition-all`} style={{ width: `${pct}%` }} />
-                </div>
-              </div>
-              <div>
-                <div className="flex justify-between text-[11px] mb-1">
-                  <span className="text-zinc-400">عدد المشاريع</span>
-                  <span className={c.text}>{usage.project_count} / {usage.quota_projects >= 999 ? '∞' : usage.quota_projects}</span>
-                </div>
-                <div className="h-2 rounded-full bg-zinc-800 overflow-hidden">
-                  <div
-                    className={`h-full ${c.bar} transition-all`}
-                    style={{ width: `${Math.min((usage.project_count / Math.max(1, usage.quota_projects)) * 100, 100)}%` }}
-                  />
-                </div>
-              </div>
-            </div>
-
-            {/* Upgrade options */}
-            {usage.next_tier_label ? (
-              <div className="space-y-3">
-                {usage.needs_upgrade && (
-                  <div className="rounded-xl border border-red-500/40 bg-red-500/10 p-3 flex items-start gap-2.5">
-                    <AlertTriangle className="w-5 h-5 text-red-400 mt-0.5 flex-shrink-0" />
-                    <div>
-                      <p className="text-sm font-bold text-red-200">تجاوزت الحد المسموح</p>
-                      <p className="text-xs text-red-100/80 mt-0.5">
-                        ما راح تقدر تنشئ مشاريع جديدة لحد ما تحذف أو ترقّي باقتك.
-                      </p>
-                    </div>
-                  </div>
-                )}
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <div className="rounded-xl border border-emerald-500/30 bg-gradient-to-br from-emerald-500/10 to-teal-500/5 p-4">
-                    <div className="text-[10px] uppercase tracking-wider text-emerald-400 font-black mb-1">Pro</div>
-                    <div className="text-2xl font-black text-emerald-200">$9<span className="text-xs text-zinc-400 font-normal"> / شهر</span></div>
-                    <ul className="text-[11px] text-zinc-300 mt-2 space-y-1">
-                      <li>✓ 20 مشروع</li>
-                      <li>✓ 5 GB تخزين</li>
-                      <li>✓ Visual Guardian</li>
-                    </ul>
-                    <a
-                      href="/pricing/v2"
-                      data-testid="storage-upgrade-pro"
-                      className="block text-center mt-3 px-3 py-2 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-black text-xs font-black"
-                    >
-                      ترقّي لـ Pro
-                    </a>
-                  </div>
-                  <div className="rounded-xl border border-amber-500/40 bg-gradient-to-br from-amber-500/15 to-yellow-500/5 p-4">
-                    <div className="text-[10px] uppercase tracking-wider text-amber-400 font-black mb-1 flex items-center gap-1">
-                      <Sparkles className="w-3 h-3" /> Studio
-                    </div>
-                    <div className="text-2xl font-black text-amber-200">$29<span className="text-xs text-zinc-400 font-normal"> / شهر</span></div>
-                    <ul className="text-[11px] text-zinc-300 mt-2 space-y-1">
-                      <li>✓ مشاريع غير محدودة</li>
-                      <li>✓ 50 GB تخزين</li>
-                      <li>✓ كل ميزات Pro + دعم أولوية</li>
-                    </ul>
-                    <a
-                      href="/pricing/v2"
-                      data-testid="storage-upgrade-studio"
-                      className="block text-center mt-3 px-3 py-2 rounded-lg bg-amber-400 hover:bg-amber-300 text-black text-xs font-black"
-                    >
-                      ترقّي لـ Studio
-                    </a>
-                  </div>
-                </div>
-              </div>
-            ) : (
-              <p className="text-center text-xs text-zinc-500">أنت في أعلى باقة — استمتع 🎉</p>
-            )}
+            <button type="button" onClick={() => setOpen(false)} className="text-zinc-400 hover:text-white p-0.5" aria-label="إغلاق">
+              <X className="w-4 h-4" />
+            </button>
           </div>
+
+          {/* Usage bar */}
+          <div className="space-y-2 mb-3">
+            <div className="flex justify-between text-[10px]">
+              <span className="text-zinc-400">المستخدم</span>
+              <span className={c.text}>
+                {usage.used_mb.toFixed(2)} MB / {usage.quota_mb >= 1024 ? `${(usage.quota_mb/1024).toFixed(0)} GB` : `${usage.quota_mb} MB`}
+              </span>
+            </div>
+            <div className="h-1.5 rounded-full bg-zinc-800 overflow-hidden">
+              <div className={`h-full ${c.bar} transition-all`} style={{ width: `${pct}%` }} />
+            </div>
+          </div>
+
+          {usage.needs_upgrade && (
+            <div className="rounded-lg border border-red-500/40 bg-red-500/10 p-2 flex items-start gap-2 mb-3">
+              <AlertTriangle className="w-4 h-4 text-red-400 mt-0.5 flex-shrink-0" />
+              <p className="text-[11px] text-red-100/90">تجاوزت الحد — رقّي باقتك لمواصلة إنشاء المشاريع.</p>
+            </div>
+          )}
+
+          <a
+            href="/pricing"
+            data-testid="storage-upgrade-cta"
+            className="block text-center px-3 py-2 rounded-lg bg-gradient-to-r from-amber-400 to-yellow-500 hover:opacity-90 text-black text-xs font-black"
+          >
+            عرض الباقات والنقاط
+          </a>
         </div>
       )}
-    </>
+    </div>
   );
 }

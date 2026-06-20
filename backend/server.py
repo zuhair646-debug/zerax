@@ -1052,7 +1052,7 @@ async def generate_image(prompt: str, current_user: dict = Depends(get_current_u
         # ── New: charge from pricing credits balance ────────────────
         from modules.pricing.credits import charge_user
         try:
-            new_balance = await charge_user(
+            await charge_user(
                 db, current_user['user_id'], "image_gpt_standard",
                 meta={"prompt_preview": prompt[:60]},
             )
@@ -1092,7 +1092,7 @@ async def generate_image(prompt: str, current_user: dict = Depends(get_current_u
             "image_generated",
             "create",
             f"Generated image: {prompt[:50]}...",
-            {"is_free": is_free_use, "prompt": prompt}
+            {"is_free": is_free_use, "prompt": prompt, "charge_method": charge_method}
         )
         
         updated_user = await db.users.find_one({"id": current_user['user_id']}, {"_id": 0, "password": 0})
@@ -1251,24 +1251,35 @@ async def generate_video(
 ):
     user_doc = await db.users.find_one({"id": current_user['user_id']}, {"_id": 0})
     
-    is_owner = user_doc.get('is_owner', False)
+    is_owner = user_doc.get('is_owner', False) or user_doc.get('role') in ('owner', 'admin', 'super_admin')
     has_subscription = await check_user_subscription(current_user['user_id'], "videos")
     free_videos = user_doc.get('free_videos', 0)
     
     is_free_use = False
-    
+    charge_method = None  # 'owner' | 'subscription' | 'free_quota' | 'credits'
+
     if is_owner:
-        pass
+        charge_method = 'owner'
     elif has_subscription:
-        pass
+        charge_method = 'subscription'
     elif free_videos > 0:
         is_free_use = True
+        charge_method = 'free_quota'
         await db.users.update_one(
             {"id": current_user['user_id']},
             {"$inc": {"free_videos": -1}}
         )
     else:
-        raise HTTPException(status_code=403, detail="لا يوجد لديك رصيد مجاني أو اشتراك")
+        # ── Charge from pricing credits balance (10s video) ──
+        from modules.pricing.credits import charge_user
+        try:
+            await charge_user(
+                db, current_user['user_id'], "video_sora_10s",
+                meta={"prompt_preview": prompt[:60]},
+            )
+            charge_method = 'credits'  # noqa: F841 (used by log_activity below)
+        except ValueError as e:
+            raise HTTPException(status_code=402, detail=str(e))
     
     audio_url = None
     if voice_id and voice_text and eleven_client:
@@ -1308,7 +1319,7 @@ async def generate_video(
         "video_generated",
         "create",
         f"Generated video: {prompt[:50]}...",
-        {"is_free": is_free_use, "has_voice": bool(voice_id), "prompt": prompt}
+        {"is_free": is_free_use, "has_voice": bool(voice_id), "prompt": prompt, "charge_method": charge_method}
     )
     
     updated_user = await db.users.find_one({"id": current_user['user_id']}, {"_id": 0, "password": 0})

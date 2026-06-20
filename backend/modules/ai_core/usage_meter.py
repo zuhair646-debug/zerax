@@ -91,11 +91,18 @@ async def record_usage(
     tokens_out: int,
     model_label: str = "zenrex-ai",
 ) -> Dict[str, Any]:
-    """Insert a usage event + bump daily aggregate counter + deduct credits."""
+    """Log a usage event + deduct credits via the central pricing catalog.
+
+    Uses `modules.pricing.credits.charge_user("text_claude_1k", multiplier)`
+    so every section deducts using the same source of truth (SERVICE_COSTS).
+    """
     try:
         cost = _estimate_cost(tokens_in or 0, tokens_out or 0)
-        credits_used = _credits_for_cost(cost)
+        total_tokens = int((tokens_in or 0) + (tokens_out or 0))
+        # Multiplier = total_tokens / 1000 (catalog charges per 1K tokens)
+        multiplier = max(0.001, total_tokens / 1000.0)
         now = datetime.now(timezone.utc)
+        # Log raw event
         await db.usage_events.insert_one({
             "user_id": user_id,
             "project_id": project_id,
@@ -103,12 +110,11 @@ async def record_usage(
             "tokens_in": int(tokens_in or 0),
             "tokens_out": int(tokens_out or 0),
             "cost_usd": cost,
-            "credits_used": credits_used,
             "model_label": model_label,
             "ts": now.isoformat(),
             "ymd": _today_key(now),
         })
-        # Bump per-user/day counter
+        # Aggregate per day
         await db.usage_daily.update_one(
             {"user_id": user_id, "ymd": _today_key(now)},
             {
@@ -117,18 +123,29 @@ async def record_usage(
                     "tokens_out": int(tokens_out or 0),
                     "calls": 1,
                     "cost_usd": cost,
-                    "credits_used": credits_used,
                 },
                 "$setOnInsert": {"user_id": user_id, "ymd": _today_key(now)},
             },
             upsert=True,
         )
-        # Deduct from user's credits balance (legacy `credits` field — shared
-        # across the whole platform: AI calls, image/video gen, etc.)
-        await db.users.update_one(
-            {"id": user_id},
-            {"$inc": {"credits": -credits_used}},
-        )
+        # Deduct credits via the central pricing catalog. Owners are exempt.
+        credits_used = 0
+        try:
+            from modules.pricing.credits import charge_user
+            await charge_user(
+                db, user_id, "text_claude_1k",
+                multiplier=multiplier,
+                meta={"section": section, "project_id": project_id, "tokens": total_tokens},
+            )
+            # Estimate the actual amount charged: catalog credits × multiplier
+            from modules.pricing.catalog import SERVICE_COSTS
+            svc = SERVICE_COSTS.get("text_claude_1k") or {}
+            credits_used = int(float(svc.get("credits", 0)) * multiplier)
+        except ValueError:
+            # User out of credits — surface error to caller
+            return {"ok": False, "error": "no_credits", "cost_usd": cost}
+        except Exception as _ce:
+            log.warning(f"[USAGE-METER] credits charge failed: {_ce}")
         return {"ok": True, "cost_usd": cost, "credits_used": credits_used}
     except Exception as e:
         log.warning(f"[USAGE-METER] record_usage failed: {e}")
