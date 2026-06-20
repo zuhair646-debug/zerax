@@ -6383,6 +6383,30 @@ For questions: legal@zenrex.ai
         history = proj.get("messages") or []
         # Owner check — only the platform owner gets access to local_browser_*, desktop_*, run_shell, etc.
         is_platform_owner_stream = (user.get("role") or "").lower() in ("owner", "admin", "superuser")
+
+        # ── Hard credit gate ────────────────────────────────────────────
+        # Stop the agent before it even starts if the user can't afford a
+        # typical turn. We require ≥ MIN_TURN_CREDITS so a single turn
+        # doesn't drive the balance into a negative number and so the user
+        # gets the recharge banner BEFORE typing into the void.
+        MIN_TURN_CREDITS = 50
+        _u_credits_doc = await db.users.find_one(
+            {"id": user["user_id"]}, {"_id": 0, "credits": 1, "role": 1, "is_owner": 1},
+        ) or {}
+        _balance = int(round(float(_u_credits_doc.get("credits") or 0)))
+        _is_admin = (_u_credits_doc.get("role") or "").lower() in ("owner", "admin", "superuser") or _u_credits_doc.get("is_owner")
+        if not _is_admin and _balance < MIN_TURN_CREDITS:
+            # Surface a structured error so the frontend can render the
+            # "اشحن نقاطك للمتابعة" banner + lock the input.
+            raise HTTPException(
+                status_code=402,
+                detail={
+                    "error": "insufficient_credits",
+                    "balance": _balance,
+                    "required": MIN_TURN_CREDITS,
+                    "message_ar": "رصيدك غير كافٍ لمتابعة المحادثة. اشحن نقاطك ثم اضغط (إكمل) لمواصلة الذكاء من حيث توقف.",
+                },
+            )
         # Mint a short-lived JWT so the agent tools (publish_site, download_media, etc.)
         # can call protected /api endpoints as the same user.
         try:

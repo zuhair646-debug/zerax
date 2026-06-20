@@ -2519,8 +2519,63 @@ function PhaseHeaderPill({ currentPhase, currentLabel, onOpen }) {
   );
 }
 
-function ChatWorkspace({ projectId }) {
-  const navigate = useNavigate();
+/**
+ * PendingResumeBanner — shows a friendly "Continue from where you stopped"
+ * banner inside the chat input area when the previous send was blocked due
+ * to insufficient credits. Persists via localStorage so it survives a
+ * full page reload + recharge round-trip.
+ */
+function PendingResumeBanner({ projectId, credits, unlimited, onResume }) {
+  const [pending, setPending] = React.useState(null);
+  React.useEffect(() => {
+    const read = () => {
+      try {
+        const raw = localStorage.getItem(`zenrex:pending_msg:${projectId}`);
+        if (!raw) { setPending(null); return; }
+        setPending(JSON.parse(raw));
+      } catch (_) { setPending(null); }
+    };
+    read();
+    const onStorage = () => read();
+    window.addEventListener('storage', onStorage);
+    window.addEventListener('zenrex:credits-changed', read);
+    const t = setInterval(read, 10000);
+    return () => {
+      window.removeEventListener('storage', onStorage);
+      window.removeEventListener('zenrex:credits-changed', read);
+      clearInterval(t);
+    };
+  }, [projectId]);
+  if (!pending) return null;
+  const enoughBalance = unlimited || (Number(credits || 0) >= 50);
+  return (
+    <div className="mb-2 rounded-xl border border-amber-400/40 bg-amber-500/10 p-3 flex items-center gap-3" data-testid="pending-resume-banner">
+      <div className="flex-1 min-w-0">
+        <div className="text-xs font-black text-amber-200 mb-0.5">رسالتك محفوظة 🔒</div>
+        <div className="text-[11px] text-amber-100/80 truncate">{pending.text}</div>
+      </div>
+      {enoughBalance ? (
+        <button
+          type="button"
+          onClick={() => onResume(pending)}
+          data-testid="resume-pending-btn"
+          className="px-3 py-2 rounded-lg bg-gradient-to-r from-emerald-500 to-teal-600 text-black font-black text-xs whitespace-nowrap hover:from-emerald-400 hover:to-teal-500"
+        >
+          إكمل ➜
+        </button>
+      ) : (
+        <a
+          href="/pricing"
+          className="px-3 py-2 rounded-lg bg-gradient-to-r from-rose-500 to-pink-600 text-white font-black text-xs whitespace-nowrap"
+        >
+          اشحن نقاط
+        </a>
+      )}
+    </div>
+  );
+}
+
+function ChatWorkspace({ projectId }) {  const navigate = useNavigate();
   const [project, setProject] = useState(null);
   const [message, setMessage] = useState('');
   const [attachments, setAttachments] = useState([]);
@@ -2783,9 +2838,22 @@ function ChatWorkspace({ projectId }) {
         });
         if (!r.ok) {
           if (r.status === 402) {
+            // Parse structured error for the friendly recharge banner +
+            // remember the user's pending message so they can hit "إكمل"
+            // (Continue) after recharging without retyping anything.
+            let info = null;
+            try { info = await r.json(); } catch { /* ignore */ }
             await refreshCredits();
             notifyCreditsChanged();
-            toast.error('رصيد النقاط انتهى — اشحن باقة لمواصلة الدردشة');
+            try {
+              localStorage.setItem(
+                `zenrex:pending_msg:${projectId}`,
+                JSON.stringify({ text: msgText, ts: Date.now(), reference: refAsset, attachments: [] }),
+              );
+            } catch (_) { /* ignore quota */ }
+            const niceMsg = (info && info.detail && info.detail.message_ar) ||
+              'رصيدك غير كافٍ لمتابعة المحادثة. اشحن نقاطك ثم اضغط (إكمل) لمواصلة الذكاء من حيث توقف.';
+            toast.error(niceMsg, { duration: 6000 });
             navigate('/pricing');
             return;
           }
@@ -4413,6 +4481,20 @@ function ChatWorkspace({ projectId }) {
 
           {/* Input bar (always visible at bottom) */}
           <div className="border-t border-white/10 p-3 sm:p-4 bg-zinc-900/50 shrink-0">
+            {/* Pending-message resume banner — appears when the previous send
+                was blocked by insufficient credits. After the user recharges,
+                one tap on "إكمل" resends the exact same message so the
+                conversation continues from where it stopped. */}
+            <PendingResumeBanner
+              projectId={projectId}
+              credits={liveCredits}
+              unlimited={liveUnlimited}
+              onResume={(pending) => {
+                setMessage(pending.text || '');
+                setTimeout(() => { try { send(); } catch (_) { /* user can retry */ } }, 50);
+                try { localStorage.removeItem(`zenrex:pending_msg:${projectId}`); } catch (_) { /* quota */ }
+              }}
+            />
             {/* Reply-to-asset quote chip (WhatsApp-style) */}
             {replyToAsset && (
               <div className="mb-2 flex items-stretch gap-2 bg-black/40 border-r-2 border-emerald-400 rounded-lg overflow-hidden" data-testid="reply-quote">

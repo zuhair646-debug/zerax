@@ -83,7 +83,7 @@ export default function StorageIndicator({ compact = false }) {
       {open && (
         <div
           data-testid="storage-upgrade-popover"
-          className="absolute z-[70] mt-2 right-0 w-80 sm:w-96 rounded-xl border border-amber-500/40 bg-zinc-900 shadow-2xl p-4"
+          className="absolute z-[70] mt-2 left-0 sm:left-auto sm:right-0 w-[min(20rem,calc(100vw-1.5rem))] sm:w-96 rounded-xl border border-amber-500/40 bg-zinc-900 shadow-2xl p-4"
           role="dialog"
         >
           <div className="flex items-start justify-between mb-3">
