@@ -2378,6 +2378,130 @@ function CredentialModal({ request, value, setValue, submitting, onClose, onSubm
 // ─────────────────────────────────────────────────────────────
 // STEP 2: Chat Workspace (Game Studio style)
 // ─────────────────────────────────────────────────────────────
+
+/**
+ * ChatCreditsPill — compact pill that shows the user's REAL credit balance
+ * inside the chat header. Polls /api/usage/credits every 30s and listens to
+ * the `zenrex:credits-changed` event so deductions reflect within ~1s of an
+ * AI call. Clicking the pill jumps to /pricing.
+ *
+ * Color states:
+ *   • >= 50 credits   → amber pill (normal)
+ *   • <  50 credits   → rose-red pulsing pill (low-balance warning)
+ *   • unlimited (admin) → purple "لا محدود" pill (no number)
+ */
+function ChatCreditsPill() {
+  const [data, setData] = React.useState(null);
+
+  const fetchBalance = React.useCallback(async () => {
+    const token = localStorage.getItem('token');
+    if (!token) return;
+    try {
+      const r = await fetch(`${API}/api/usage/credits`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (r.ok) setData(await r.json());
+    } catch (_) { /* keep last value */ }
+  }, []);
+
+  React.useEffect(() => {
+    fetchBalance();
+    const id = setInterval(fetchBalance, 30000);
+    const onEvt = () => fetchBalance();
+    window.addEventListener('zenrex:credits-changed', onEvt);
+    return () => {
+      clearInterval(id);
+      window.removeEventListener('zenrex:credits-changed', onEvt);
+    };
+  }, [fetchBalance]);
+
+  if (!data) {
+    return (
+      <span className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-amber-500/5 border border-amber-500/20 text-amber-300/60 text-xs font-bold">
+        <Sparkles className="w-3.5 h-3.5" />···
+      </span>
+    );
+  }
+  if (data.unlimited) {
+    return (
+      <a
+        href="/pricing"
+        className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-purple-500/15 border border-purple-500/40 text-purple-300 text-xs font-bold"
+        title="رصيد لا محدود (مالك / أدمن)"
+        data-testid="chat-header-credits"
+      >
+        <Sparkles className="w-3.5 h-3.5" />
+        <span>لا محدود</span>
+      </a>
+    );
+  }
+  const credits = Math.round(Number(data.credits || 0));
+  const isLow = credits < 50;
+  return (
+    <a
+      href="/pricing"
+      data-testid="chat-header-credits"
+      className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border text-xs font-bold transition ${
+        isLow
+          ? 'bg-rose-500/15 border-rose-500/50 text-rose-300 animate-pulse hover:bg-rose-500/25'
+          : 'bg-amber-500/10 border-amber-500/40 text-amber-300 hover:bg-amber-500/20'
+      }`}
+      title={isLow ? 'رصيدك منخفض — اضغط للشحن' : 'رصيد النقاط'}
+    >
+      <Sparkles className="w-3.5 h-3.5" />
+      <span className="tabular-nums">{credits.toLocaleString('en-US')}</span>
+      <span className="opacity-70">نقطة</span>
+    </a>
+  );
+}
+
+/**
+ * PhaseHeaderPill — top strip above the tab bar that always shows the
+ * current build phase. When the AI advances to a new phase the pill briefly
+ * flashes the new phase name (3s) before settling back to a steady label.
+ * Tap to open the full phases drawer on mobile.
+ */
+function PhaseHeaderPill({ currentPhase, currentLabel, onOpen }) {
+  const [pulse, setPulse] = React.useState(false);
+  const prev = React.useRef(currentPhase);
+  React.useEffect(() => {
+    if (prev.current && prev.current !== currentPhase) {
+      setPulse(true);
+      const t = setTimeout(() => setPulse(false), 3000);
+      prev.current = currentPhase;
+      return () => clearTimeout(t);
+    }
+    prev.current = currentPhase;
+  }, [currentPhase]);
+
+  return (
+    <button
+      type="button"
+      onClick={onOpen}
+      data-testid="phase-header-pill"
+      className={`group w-full flex items-center justify-between gap-2 px-3 py-2 border-b transition-all ${
+        pulse
+          ? 'bg-gradient-to-r from-emerald-500/30 via-emerald-400/20 to-emerald-500/30 border-emerald-400/50 shadow-inner'
+          : 'bg-emerald-500/5 border-white/10 hover:bg-emerald-500/10'
+      }`}
+    >
+      <div className="flex items-center gap-2 min-w-0">
+        <span className={`inline-block w-1.5 h-1.5 rounded-full ${pulse ? 'bg-emerald-300 animate-ping' : 'bg-emerald-400'}`} />
+        <span className="text-[10px] font-black text-emerald-300/70">المرحلة</span>
+        <span
+          className={`text-xs sm:text-sm font-black truncate transition-all ${
+            pulse ? 'text-emerald-100 scale-[1.04]' : 'text-emerald-200'
+          }`}
+          data-testid="phase-header-name"
+        >
+          {currentLabel || '—'}
+        </span>
+      </div>
+      <ChevronLeft className="w-4 h-4 text-emerald-300/70 group-hover:text-emerald-200 md:hidden" />
+    </button>
+  );
+}
+
 function ChatWorkspace({ projectId }) {
   const navigate = useNavigate();
   const [project, setProject] = useState(null);
@@ -3149,7 +3273,7 @@ function ChatWorkspace({ projectId }) {
               type="button"
               onClick={() => setFinalizeOpen(true)}
               data-testid="open-finalize"
-              className="px-3 py-1.5 rounded-lg bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-400 hover:to-teal-500 text-black text-xs font-black flex items-center gap-1.5 shadow-lg shadow-emerald-500/20"
+              className="hidden sm:flex px-3 py-1.5 rounded-lg bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-400 hover:to-teal-500 text-black text-xs font-black items-center gap-1.5 shadow-lg shadow-emerald-500/20"
               title="نشر / استلام / تحويل"
             >
               <Rocket className="w-3.5 h-3.5" />
@@ -3161,11 +3285,9 @@ function ChatWorkspace({ projectId }) {
             <Sparkles className={`w-3.5 h-3.5 ${isVideoMode ? 'text-red-400' : 'text-emerald-400'}`} />
             <span className={`text-xs ${isVideoMode ? 'text-red-300' : 'text-emerald-300'} font-bold hidden sm:inline`}>{isVideoMode ? '🎬 استوديو الفيديو' : isAppMode ? '📱 استوديو التطبيقات' : 'من الصفر'}</span>
           </div>
-          {/* Credits + Storage popovers — visible on mobile too so the user
-              can peek at balance and storage usage without leaving the chat.
-              Each opens its own detailed popover (storage already has one;
-              credit pill links to /pricing). */}
-          <UsageIndicator compact refreshKey={messages.length} />
+          {/* Credits balance pill — always visible with the real number.
+              Click → /pricing. Turns rose-red below 50 credits.            */}
+          <ChatCreditsPill />
           <StorageIndicator compact />
         </div>
       </div>
@@ -3407,6 +3529,16 @@ function ChatWorkspace({ projectId }) {
 
         {/* CENTER: Tabs content */}
         <div className="flex-1 flex flex-col min-w-0">
+          {/* Phase header pill — shows the current build phase, flashes
+              when the AI advances to a new phase, and lets mobile users
+              open the phases drawer with a single tap. Always-visible
+              context strip just above the chat/preview/approved tabs. */}
+          <PhaseHeaderPill
+            currentPhase={activePhase}
+            currentLabel={(PHASES.find((p) => p.id === activePhase) || {}).title || activePhase}
+            onOpen={() => setPhasesMobileOpen(true)}
+          />
+
           {/* Tab Bar */}
           <div className="flex border-b border-white/10 bg-zinc-900/40 px-2 gap-1 shrink-0" data-testid="studio-tabs">
             <button
@@ -4421,27 +4553,9 @@ function ChatWorkspace({ projectId }) {
         </div>
       </div>
 
-      {/* Mobile-only FAB: open the phases drawer.
-          • Position: middle-right (vertical center) so it never overlaps
-            chat bubbles, headers, or the bottom input bar.
-          • Animation: gentle 2.5s sideways bounce + outer ping ring so users
-            notice it on first visit without it being distracting later.
-          • Label: small text appears beside the icon so the purpose is
-            obvious on first glance ("المراحل"). */}
-      <div className="md:hidden fixed top-1/2 right-3 z-30 -translate-y-1/2">
-        {/* Outer ping ring — attention-getter without being distracting */}
-        <span className="pointer-events-none absolute inset-0 m-auto rounded-full bg-emerald-400/30 animate-ping" aria-hidden="true" />
-        <button
-          type="button"
-          onClick={() => setPhasesMobileOpen(true)}
-          data-testid="open-phases-mobile"
-          aria-label="افتح لوحة المراحل والذكاء الصناعي"
-          className="relative flex items-center gap-2 pl-2 pr-3 py-2 rounded-full bg-gradient-to-br from-emerald-500 to-teal-600 text-white shadow-lg shadow-emerald-500/40 active:scale-95 transition-transform animate-fab-nudge"
-        >
-          <ChevronLeft className="w-4 h-4" />
-          <span className="text-xs font-black">المراحل</span>
-        </button>
-      </div>
+      {/* The floating phases FAB was removed — the PhaseHeaderPill above
+          the tab bar is now the single, always-visible entry point that
+          opens the phases drawer on mobile. */}
 
       {/* Mobile-only backdrop that closes the phases drawer when tapped. */}
       {phasesMobileOpen && (
