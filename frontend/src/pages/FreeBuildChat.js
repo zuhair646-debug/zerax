@@ -8,6 +8,8 @@ import ConnectionHelpModal from '../components/ConnectionHelpModal';
 import StorageIndicator from '../components/StorageIndicator';
 import UsageIndicator from '../components/UsageIndicator';
 import CookiesManager from '../components/CookiesManager';
+import CreditsBlockedBanner from '../components/CreditsBlockedBanner';
+import useCreditsGuard, { notifyCreditsChanged } from '../hooks/useCreditsGuard';
 import {
   Globe, Send, Loader2, Sparkles, Eye, ArrowRight, ArrowLeft,
   CheckCircle2, Check, Image as ImageIcon, FolderOpen, Code,
@@ -2397,6 +2399,8 @@ function ChatWorkspace({ projectId }) {
   const activePhase = activePhaseOverride || project?.current_phase || 'discovery';
   const setActivePhase = setActivePhaseOverride;
   const [activeTab, setActiveTab] = useState('chat'); // chat | live | approved
+  // Credits guard — disables input + shows recharge UI when credits = 0
+  const { isBlocked: creditsBlocked, refresh: refreshCredits } = useCreditsGuard();
 
   // Mode helpers — video modes hide HTML/Build/Deploy UI entirely.
   const isVideoMode = ['video_studio', 'anime_studio', 'longform_video'].includes(project?.mode);
@@ -2586,6 +2590,11 @@ function ChatWorkspace({ projectId }) {
 
   const send = async () => {
     if ((!message.trim() && attachments.length === 0 && !replyToAsset) || loading) return;
+    if (creditsBlocked) {
+      toast.error('رصيد النقاط انتهى — اشحن باقة لمواصلة الدردشة');
+      navigate('/pricing');
+      return;
+    }
     setLoading(true);
     setThinkingStage(0);
     const token = localStorage.getItem('token');
@@ -2627,7 +2636,16 @@ function ChatWorkspace({ projectId }) {
           body: fd,
           signal: abortController.signal,
         });
-        if (!r.ok) throw new Error(`HTTP ${r.status}`);
+        if (!r.ok) {
+          if (r.status === 402) {
+            await refreshCredits();
+            notifyCreditsChanged();
+            toast.error('رصيد النقاط انتهى — اشحن باقة لمواصلة الدردشة');
+            navigate('/pricing');
+            return;
+          }
+          throw new Error(`HTTP ${r.status}`);
+        }
         const reader = r.body.getReader();
         const decoder = new TextDecoder();
         let buf = '';
@@ -4281,6 +4299,14 @@ function ChatWorkspace({ projectId }) {
             )}
 
             <div className="flex gap-2">
+              {/* When out of credits, the entire input bar is replaced by the
+                  Recharge banner — typing is fully disabled across the chat. */}
+              {creditsBlocked ? (
+                <div className="flex-1">
+                  <CreditsBlockedBanner />
+                </div>
+              ) : (
+              <>
               {/* Hidden file input — accepts images, videos, audio, PDFs, docs, code, archives.
                   The AI reads images natively (vision) and uses OCR/parsing for the rest. */}
               <input
@@ -4354,6 +4380,8 @@ function ChatWorkspace({ projectId }) {
                 >
                   <Send className="w-5 h-5" />
                 </button>
+              )}
+              </>
               )}
             </div>
           </div>

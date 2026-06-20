@@ -6,10 +6,10 @@ Arabic-first AI builder for websites/apps/images/videos with credits-based prici
 ## Current Status — Healthy, Production Live
 - Domain: https://zenrex.ai
 - Backend: Docker compose on VPS, MongoDB local
-- Frontend: React PWA, Service Worker v6 (network-first, cache-busting)
+- Frontend: React PWA, Service Worker v7 (network-first, cache-busting)
 - LLM: Claude Sonnet 4.5 via Emergent LLM key
 
-## Pricing — CREDITS-BASED (verified end-to-end ✅)
+## Pricing — CREDITS-BASED with GLOBAL GUARD (verified end-to-end ✅)
 | Tier | Price | Credits |
 |---|---|---|
 | Free signup | $0 | 200 (bonus, one-time) |
@@ -18,38 +18,43 @@ Arabic-first AI builder for websites/apps/images/videos with credits-based prici
 | Pro | $69/mo | 8,000 (most popular) |
 | Studio | $199/mo | 25,000 |
 
-**Service costs (catalog: `modules/pricing/catalog.py` `SERVICE_COSTS`):**
+**Service costs (catalog `modules/pricing/catalog.py` `SERVICE_COSTS`):**
 - Image (GPT/Nano Banana): 100 credits
 - Video (Sora 10s): 1,200 credits
 - AI text (1k tokens): 30 credits
 - Chat message: 10 credits
 
-**Pricing chain — verified 14/14 by testing agent (iteration_48):**
-- ✅ /api/billing/packages returns correct credit amounts
-- ✅ Signup → 200 credit bonus
-- ✅ Image gen: 500→400 (deducted 100)
-- ✅ Video gen: 2000→800 (deducted 1200)
-- ✅ Chat 1k tokens: 500→470 (deducted 30)
-- ✅ Insufficient credits → 402 Payment Required
-- ✅ Zero credits → check_quota blocks with friendly upgrade prompt
-- ✅ Owner/admin/super_admin bypass works
-- ✅ All deductions logged in `credit_transactions` collection
+## Credits Architecture
+1. **Per-endpoint deduction** — `pricing.credits.charge_user(service_key)` atomically decrements `users.credits` and logs to `credit_transactions`.
+2. **Global Guard Middleware** — `/app/backend/middleware/credits_guard.py` intercepts ALL POST requests matching AI endpoints (chat/generate/agent-chat/etc.) and returns HTTP 402 with friendly Arabic message if `users.credits == 0`. Owners/admins/super_admins bypass.
+3. **Frontend hook** — `useCreditsGuard()` polls `/api/usage/credits` every 25s. Returns `{credits, isBlocked, unlimited}`.
+4. **UI block** — When `isBlocked=true`, the chat input in `FreeBuildChat.js` is **replaced** by `<CreditsBlockedBanner />` (3 quick recharge cards + main CTA). Send function short-circuits with redirect to `/pricing`. On 402 response, hook re-polls instantly.
+5. **Navbar badge** — Always-visible credit pill, turns red+pulse if balance < 50.
+
+**Endpoints covered by Credits Guard (regex):**
+freebuild chat (project/{id}/{chat,agent-chat,agent-chat-stream}), freebuild-v2, ai-core/chat, ai/chat, companion (chat, voice-chat), avatar/chat, merchant/avatar/{slug}/chat, autocoder, mobile-app-builder, video-studio (chat, producer-chat), app-studio/producer-chat, agent/chat, games/project/{id}/chat, generate/{image,video}
 
 ## Recent Completed Work (2026-06-20 session)
 - Removed redundant centered Z logo from landing hero
 - Fixed `/pricing` to load PricingV2 directly
-- Made `emergentintegrations.payments.stripe` import lazy (billing module no longer fails to load when SDK unavailable)
+- Made `emergentintegrations.payments.stripe` import lazy
 - **CREDITS-BASED PRICING PIVOT**
-  - PACKAGES dict simplified — only credits, no fake "12 projects", "WhatsApp support", etc.
-  - PricingV2.jsx rewritten: simple cards (price + credits + button only)
-  - usage_meter.py unified with `pricing.credits.charge_user()` — single source of truth (SERVICE_COSTS)
-  - `/generate/video` now deducts credits for paid users (was bug — only blocked free users before)
-  - `/generate/image` already deducts; both also log charge_method to activity feed
-  - CreditsBadge in Navbar (top-right) — polls every 20s, red+pulse if balance < 50
-  - StorageIndicator refactored: small popover instead of full-screen modal
-  - usage_events now includes `credits_used` field for accurate month_credits aggregation
-  - super_admin role added to owner-bypass tuple in `credits.charge_user`
-  - Fixed KeyError risk: PACKAGES["studio_monthly"] → "tier_studio_monthly"
+  - PACKAGES simplified — only credits, no fake features
+  - PricingV2.jsx rewritten: simple cards (price + credits + button)
+  - usage_meter.py unified with `pricing.credits.charge_user()` 
+  - `/generate/video` now deducts credits (was bug)
+  - CreditsBadge in Navbar (polls 20s, red+pulse if < 50)
+  - StorageIndicator: small popover instead of full-screen modal
+  - usage_events now stores `credits_used` for month aggregation
+  - super_admin added to owner-bypass tuple
+- **GLOBAL CREDITS GUARD MIDDLEWARE (NEW)**
+  - Created `/app/backend/middleware/credits_guard.py`
+  - Intercepts all AI endpoints, returns 402 if credits=0
+  - Verified working: fresh user (200 credits) → chat succeeds; same user with credits=0 → 402 across both `/api/ai-core/chat` and `/api/generate/image`
+- **FRONTEND BLOCK UI**
+  - Created `useCreditsGuard` hook + `CreditsBlockedBanner` component
+  - Wired into FreeBuildChat: input row entirely replaced by banner when blocked
+  - Send function short-circuits to `/pricing` if blocked, also handles 402 responses instantly
 
 ## Pending — P1
 - 🪙 **Top-up credits packs** (one-time small purchases like 1,000 credits for $9)
@@ -58,10 +63,10 @@ Arabic-first AI builder for websites/apps/images/videos with credits-based prici
 - 🔄 **Chat Session Reconnection** — re-attach to SSE stream after reload
 - 💸 **Credit refund on external API failure** for /generate/image and /generate/video
 - 🔒 **Replace `emergentintegrations.payments.stripe`** with official `stripe` SDK
+- 📱 Apply `CreditsBlockedBanner` to other chat pages (Companion, AppStudio, AvatarChat, etc.) — middleware blocks at the backend but UX is best when each page shows the banner inline
 
 ## Pending — P2
-- Wire credit deduction into `/api/ai-core/chat` (smart_chat) — currently bypasses credits system
-- Sticky in-page section navigator for landing page (waiting on user clarification)
+- Sticky in-page section navigator for landing page (waiting on user screenshot)
 - Multi-page generated sites (`/about`, `/contact`) for SEO
 - Visual Guardian (Vision LLM)
 - CI/CD pipeline (GitHub Actions → VPS)
@@ -70,15 +75,15 @@ Arabic-first AI builder for websites/apps/images/videos with credits-based prici
 ## Refactoring Backlog
 - Split FreeBuildChat.js (4500+ lines) into smaller components
 - Split FreeBuild chat backend (3300+ lines) into routers/services
-- Consolidate POINTS_CONFIG (server.py L299) and PRICING_CONFIG (L1694) — risk of drift
+- Consolidate POINTS_CONFIG and PRICING_CONFIG (server.py)
 
 ## Tech Stack
 React, FastAPI, MongoDB, Stripe, Resend, Emergent LLM (Claude Sonnet 4.5), PWA Service Worker, SSE.
 
 ## Test Credentials
-- Admin: admin@zenrex.ai / Zenrex@2026
+- Admin: admin@zenrex.ai / Zenrex@2026 (only on PROD DB, not preview)
 - Prod Test User: test_zenrex_2026@example.com / Test@Pass2026!
 
 ## Deployment
 `bash /app/deploy/deploy.sh zenrex.ai` — builds React, rsyncs to VPS, reloads nginx, recreates backend container.
-Backend recreate triggers fresh pip install (~3 min) → health check 502 briefly, settles ~3 min after.
+Backend recreate takes ~3 min (pip install) → health check 502s briefly.

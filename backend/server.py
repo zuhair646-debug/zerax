@@ -4403,6 +4403,16 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# ─── Credits Guard — global safety net ──────────────────────────────────
+# Returns 402 with friendly JSON for any AI endpoint when the authenticated
+# user's `credits` balance is zero. Owners/admins bypass.
+try:
+    from middleware.credits_guard import CreditsGuardMiddleware
+    app.add_middleware(CreditsGuardMiddleware, db_getter=lambda: db)
+    logging.getLogger(__name__).info("✅ Credits Guard middleware armed")
+except Exception as _cg_err:
+    logging.getLogger(__name__).warning(f"Credits Guard middleware failed to load: {_cg_err}")
+
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
