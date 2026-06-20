@@ -47,9 +47,6 @@ _PROTECTED_PATTERNS = re.compile(
     r")"
 )
 
-_BYPASS_ROLES = {"owner", "admin", "super_admin"}
-
-
 def _extract_user_id(request: Request) -> Optional[str]:
     auth = request.headers.get("authorization") or request.headers.get("Authorization")
     if not auth or not auth.lower().startswith("bearer "):
@@ -97,7 +94,7 @@ class CreditsGuardMiddleware(BaseHTTPMiddleware):
             db = self._db_getter()
             user = await db.users.find_one(
                 {"id": user_id},
-                {"_id": 0, "credits": 1, "role": 1, "is_owner": 1},
+                {"_id": 0, "credits": 1},
             )
         except Exception as e:
             log.warning(f"[CreditsGuard] DB lookup failed: {e}")
@@ -106,10 +103,7 @@ class CreditsGuardMiddleware(BaseHTTPMiddleware):
         if not user:
             return await call_next(request)
 
-        role = (user.get("role") or "").lower()
-        if role in _BYPASS_ROLES or user.get("is_owner"):
-            return await call_next(request)
-
+        # No role bypass — every user, including owner/admin, must have credits.
         balance = int(user.get("credits") or 0)
         if balance > 0:
             return await call_next(request)

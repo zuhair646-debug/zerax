@@ -96,13 +96,9 @@ async def charge_user(
 ) -> float:
     """High-level helper: charges based on SERVICE_COSTS catalog × multiplier.
 
-    Owner accounts (role=owner/admin) are NEVER charged.
-    Raises ValueError on insufficient balance.
+    Every user (including owner/admin) is charged — the credit ledger is the
+    single source of truth. Raises ValueError on insufficient balance.
     """
-    user = await db.users.find_one({"id": user_id}, {"role": 1, "_id": 0})
-    if user and (user.get("role") or "").lower() in ("owner", "admin", "super_admin"):
-        return await get_balance(db, user_id)  # admins free
-
     from .catalog import SERVICE_COSTS
     svc = SERVICE_COSTS.get(service_key)
     if not svc:

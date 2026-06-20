@@ -175,10 +175,7 @@ async def check_quota(db, user_id: str, user_doc: Optional[Dict[str, Any]] = Non
             {"credits": 1, "storage_tier": 1, "role": 1},
         ) or {}
 
-    # Owner / super_admin never throttled.
-    if (user_doc.get("role") or "").lower() in ("owner", "super_admin"):
-        return {"allowed": True, "reason": "admin", "credits": None}
-
+    # No role-based bypass — every user pays from their credit balance.
     balance = int(user_doc.get("credits") or 0)
     tier = (user_doc.get("storage_tier") or "free").lower()
 

@@ -161,11 +161,9 @@ def create_ai_core_router(db, get_current_user, get_current_user_optional=None) 
     router = APIRouter(prefix="/api/ai-core", tags=["ai-core"])
 
     async def _get_user_tier(user_id: str) -> str:
-        u = await db.users.find_one({"id": user_id}, {"_id": 0, "ai_tier": 1, "is_owner": 1, "role": 1})
+        u = await db.users.find_one({"id": user_id}, {"_id": 0, "ai_tier": 1})
         if not u:
             return "free"
-        if u.get("is_owner") or u.get("role") in ("owner", "super_admin", "admin"):
-            return "business"  # admins unlimited-ish
         return u.get("ai_tier") or "free"
 
     async def _get_usage_this_month(user_id: str) -> Dict[str, Any]:

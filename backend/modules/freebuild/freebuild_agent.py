@@ -3968,6 +3968,14 @@ async def _run_anthropic_agent(
                     "iterations": iterations, "tool_log": ctx.tool_log}
 
         model_used = getattr(resp, "model", model)
+        # Accumulate usage tokens reported by Anthropic for this iteration.
+        try:
+            _usage = getattr(resp, "usage", None)
+            if _usage is not None:
+                turn_tokens_in += int(getattr(_usage, "input_tokens", 0) or 0)
+                turn_tokens_out += int(getattr(_usage, "output_tokens", 0) or 0)
+        except Exception:
+            pass
         assistant_blocks: List[Dict[str, Any]] = []
         tool_uses: List[Dict[str, Any]] = []
         for block in resp.content:
@@ -4005,6 +4013,25 @@ async def _run_anthropic_agent(
         if finished:
             break
 
+    # ── Credit deduction (every user pays, no role bypass) ──────────────
+    credits_charged = 0
+    try:
+        if db is not None and (turn_tokens_in + turn_tokens_out) > 0:
+            _uid = project.get("user_id")
+            if _uid:
+                from modules.ai_core.usage_meter import record_usage
+                _res = await record_usage(
+                    db, _uid, project.get("id"),
+                    section=project.get("mode") or "websites",
+                    tokens_in=turn_tokens_in,
+                    tokens_out=turn_tokens_out,
+                    model_label=model_used or "zenrex-ai",
+                )
+                if _res and _res.get("ok"):
+                    credits_charged = int(_res.get("credits_used") or 0)
+    except Exception as _ce:
+        logger.warning(f"[agent] credit deduction failed: {_ce}")
+
     return {
         "ok": True,
         "summary": summary or "تم.",
@@ -4018,6 +4045,9 @@ async def _run_anthropic_agent(
         "snapshots": ctx.snapshots_to_create,
         "model_used": model_used,
         "changes_made": ctx.changes_made,
+        "tokens_in": turn_tokens_in,
+        "tokens_out": turn_tokens_out,
+        "credits_charged": credits_charged,
     }
 
 
@@ -4088,6 +4118,8 @@ async def _run_openai_compat_agent(
     inline_video: List[Dict[str, Any]] = []
     iterations = 0
     model_used = model
+    turn_tokens_in = 0
+    turn_tokens_out = 0
 
     for _step in range(max_iterations):
         iterations += 1
@@ -4102,6 +4134,13 @@ async def _run_openai_compat_agent(
         choice = resp.choices[0]
         msg = choice.message
         model_used = getattr(resp, "model", model)
+        try:
+            _usage = getattr(resp, "usage", None)
+            if _usage is not None:
+                turn_tokens_in += int(getattr(_usage, "prompt_tokens", 0) or 0)
+                turn_tokens_out += int(getattr(_usage, "completion_tokens", 0) or 0)
+        except Exception:
+            pass
         text_content = msg.content or ""
         tool_calls = msg.tool_calls or []
 
@@ -4140,6 +4179,25 @@ async def _run_openai_compat_agent(
         if finished:
             break
 
+    # ── Credit deduction (every user pays, no role bypass) ──────────────
+    credits_charged = 0
+    try:
+        if db is not None and (turn_tokens_in + turn_tokens_out) > 0:
+            _uid = project.get("user_id")
+            if _uid:
+                from modules.ai_core.usage_meter import record_usage
+                _res = await record_usage(
+                    db, _uid, project.get("id"),
+                    section=project.get("mode") or "websites",
+                    tokens_in=turn_tokens_in,
+                    tokens_out=turn_tokens_out,
+                    model_label=model_used or "zenrex-ai",
+                )
+                if _res and _res.get("ok"):
+                    credits_charged = int(_res.get("credits_used") or 0)
+    except Exception as _ce:
+        logger.warning(f"[agent-openai] credit deduction failed: {_ce}")
+
     return {
         "ok": True,
         "summary": summary or "تم.",
@@ -4153,6 +4211,9 @@ async def _run_openai_compat_agent(
         "snapshots": ctx.snapshots_to_create,
         "model_used": model_used,
         "changes_made": ctx.changes_made,
+        "tokens_in": turn_tokens_in,
+        "tokens_out": turn_tokens_out,
+        "credits_charged": credits_charged,
     }
 
 
@@ -4425,6 +4486,12 @@ async def _stream_one_provider(
     inline_video: List[Dict[str, Any]] = []
     model_used = model
 
+    # Token accounting for this turn — billed via the credit ledger when the
+    # turn ends. We sum across iterations so multi-step agent runs are charged
+    # for the actual cost, not just the last step.
+    turn_tokens_in = 0
+    turn_tokens_out = 0
+
     stall_recovery_used = False  # One-shot anti-stall guard for this turn
     for step in range(max_iterations):
         iterations += 1
@@ -4586,6 +4653,14 @@ async def _stream_one_provider(
                 raise stream_err
             model_used = getattr(final_msg, "model", model)
             stop_reason = getattr(final_msg, "stop_reason", "?")
+            # Accumulate token usage reported by Anthropic for this iteration.
+            try:
+                _usage = getattr(final_msg, "usage", None)
+                if _usage is not None:
+                    turn_tokens_in += int(getattr(_usage, "input_tokens", 0) or 0)
+                    turn_tokens_out += int(getattr(_usage, "output_tokens", 0) or 0)
+            except Exception:
+                pass
             logger.info(f"[agent-stream] iter={iterations} stream done. stop_reason={stop_reason} content_blocks={len(final_msg.content or [])}")
             for block in (final_msg.content or []):
                 bt = getattr(block, "type", "")
@@ -4622,6 +4697,14 @@ async def _stream_one_provider(
                     raise _ProviderUnavailable(msg)
                 raise
             model_used = getattr(resp, "model", model)
+            # Accumulate OpenAI-style usage tokens for this iteration.
+            try:
+                _usage = getattr(resp, "usage", None)
+                if _usage is not None:
+                    turn_tokens_in += int(getattr(_usage, "prompt_tokens", 0) or 0)
+                    turn_tokens_out += int(getattr(_usage, "completion_tokens", 0) or 0)
+            except Exception:
+                pass
             choice = resp.choices[0].message
             text_chunks = [choice.content] if choice.content else []
             tool_uses = []
@@ -4785,6 +4868,31 @@ async def _stream_one_provider(
         else:
             summary = "ما قدرت أكمل المهمة لسبب تقني. جرّب أعد صياغة طلبك أو أعد المحاولة."
     logger.info(f"[agent-stream] finalizing: iterations={iterations} summary_len={len(summary)} html_changes={ctx.changes_made}")
+
+    # ── Credit deduction ─────────────────────────────────────────────────
+    # Bill the user once per chat turn using the actual provider-reported
+    # token counts. Every user pays — there is no role-based bypass.
+    credits_charged = 0
+    no_credits_after = False
+    try:
+        if db is not None and (turn_tokens_in + turn_tokens_out) > 0:
+            _uid = project.get("user_id")
+            if _uid:
+                from modules.ai_core.usage_meter import record_usage
+                _res = await record_usage(
+                    db, _uid, project.get("id"),
+                    section=project.get("mode") or "websites",
+                    tokens_in=turn_tokens_in,
+                    tokens_out=turn_tokens_out,
+                    model_label=model_used or "zenrex-ai",
+                )
+                if _res and _res.get("ok"):
+                    credits_charged = int(_res.get("credits_used") or 0)
+                elif _res and _res.get("error") == "no_credits":
+                    no_credits_after = True
+    except Exception as _ce:
+        logger.warning(f"[agent-stream] credit deduction failed: {_ce}")
+
     yield _sse("done", {
         "summary": summary,
         "options": options,
@@ -4795,6 +4903,10 @@ async def _stream_one_provider(
         "model_used": model_used,
         "html_updated": ctx.changes_made > 0,
         "tool_log": ctx.tool_log,
+        "tokens_in": turn_tokens_in,
+        "tokens_out": turn_tokens_out,
+        "credits_charged": credits_charged,
+        "no_credits_after": no_credits_after,
     })
 
     # Persist to DB happens at the endpoint level (we return ctx via closure helpers below)

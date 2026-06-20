@@ -44,14 +44,16 @@ Arabic-first AI builder for websites/apps/images/videos with credits-based prici
 7. BillingSuccess page polls status, gets `project_id` field, redirects to `/freebuild/chat/{id}?source=ready-sites`
 8. User lands in chat with AI greeting asking for store name + logo
 
-## Recent Completed Work (2026-06-20 session)
+## Recent Completed Work (2026-06-20 → 2026-06-21 session)
 - Hero Z logo removed | `/pricing` loads PricingV2 | Stripe import made lazy
 - **Credits pivot:** PACKAGES simplified, deduction unified, `/generate/video` fixed
 - **3-layer guard:** middleware + per-endpoint charge + global toast
 - **Calm UI banners:** smaller pill-style, single tap to /pricing
-- **Ready Sites paywall:** Trial/Purchase now redirect to Stripe (USD) — no free trial without payment
-- **Stripe shim:** independent from emergentintegrations, supports both proxy and real Stripe keys
-- **End-to-end verified:** signup→200 credits, Ready Sites checkout returns real Stripe URL on prod
+- **Ready Sites paywall:** PayPal + LemonSqueezy (Stripe fully removed)
+- **End-to-end verified:** signup→200 credits, Ready Sites checkout returns real PayPal URL on prod
+- **🆕 FreeBuild streaming agent now deducts credits per turn** — fixed root cause of "credits not deducting" complaint. The `/api/freebuild/project/{pid}/agent-chat-stream` SSE endpoint was the main builder chat but had ZERO `record_usage()` calls. Added token accumulation from Claude's `final_msg.usage` and one `record_usage()` call per turn before the `done` event.
+- **🆕 Removed all role-based credit bypasses** — owner/admin/super_admin/`is_owner=true` no longer skip credit deduction. Every account, regardless of role, deducts credits for AI usage from `users.credits`. Modified: `pricing/credits.py:charge_user`, `ai_core/usage_meter.py:check_quota` + `/usage/credits`, `middleware/credits_guard.py`, `ai_core/__init__.py:_get_user_tier`.
+- **🆕 Removed leftover preview-env asset links** from static HTML files: `final-preview.html`, `iframe-test.html`, `user-crop-preview.html` (all referenced `ai-cinematic-hub-2.preview.emergentagent.com` for background images).
 
 ## Pending — P1
 - 🍋 **LemonSqueezy variant IDs** — user needs to create 2 products in LemonSqueezy dashboard:
@@ -89,8 +91,9 @@ Arabic-first AI builder for websites/apps/images/videos with credits-based prici
 ## Verified End-to-End (curl on production zenrex.ai)
 - ✅ Fresh signup → 200 credits hadyya
 - ✅ /api/billing/packages → 6 packages (Trial + Purchase + Project + Starter + Pro + Studio)
-- ✅ Ready Sites Trial checkout → real Stripe URL `cs_test_…`
-- ✅ Ready Sites Purchase checkout → real Stripe URL
+- ✅ Ready Sites Trial checkout → real PayPal URL
+- ✅ Ready Sites Purchase checkout → real PayPal URL
 - ✅ Credits=0 → 402 across all AI endpoints
-- ✅ Owner/admin/super_admin bypass works
+- ✅ `charge_user` now deducts from admin/owner accounts too (10100 → 10085 confirmed)
+- ✅ FreeBuild streaming agent now tracks input/output tokens via `final_msg.usage`
 - ✅ Auth endpoints unaffected
