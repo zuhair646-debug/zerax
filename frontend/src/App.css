@@ -547,3 +547,14 @@ button {
     transform: translateY(0);
   }
 }
+
+/* Mobile phases FAB — a gentle horizontal nudge so the pill draws
+ * attention to the right edge of the screen. Combined with the outer
+ * ping ring, users notice the button on first visit. */
+@keyframes zenrex-fab-nudge {
+  0%, 100% { transform: translateX(0); }
+  50%      { transform: translateX(-6px); }
+}
+.animate-fab-nudge {
+  animation: zenrex-fab-nudge 2.5s ease-in-out infinite;
+}

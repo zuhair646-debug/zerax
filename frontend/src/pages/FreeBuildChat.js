@@ -3161,8 +3161,12 @@ function ChatWorkspace({ projectId }) {
             <Sparkles className={`w-3.5 h-3.5 ${isVideoMode ? 'text-red-400' : 'text-emerald-400'}`} />
             <span className={`text-xs ${isVideoMode ? 'text-red-300' : 'text-emerald-300'} font-bold hidden sm:inline`}>{isVideoMode ? '🎬 استوديو الفيديو' : isAppMode ? '📱 استوديو التطبيقات' : 'من الصفر'}</span>
           </div>
-          <div className="hidden sm:flex"><UsageIndicator compact refreshKey={messages.length} /></div>
-          <div className="hidden sm:flex"><StorageIndicator compact /></div>
+          {/* Credits + Storage popovers — visible on mobile too so the user
+              can peek at balance and storage usage without leaving the chat.
+              Each opens its own detailed popover (storage already has one;
+              credit pill links to /pricing). */}
+          <UsageIndicator compact refreshKey={messages.length} />
+          <StorageIndicator compact />
         </div>
       </div>
 
@@ -4418,17 +4422,26 @@ function ChatWorkspace({ projectId }) {
       </div>
 
       {/* Mobile-only FAB: open the phases drawer.
-          Green gradient + glow so it stands out on top of the chat without
-          obstructing messages. Tapping any phase auto-closes the drawer. */}
-      <button
-        type="button"
-        onClick={() => setPhasesMobileOpen(true)}
-        data-testid="open-phases-mobile"
-        aria-label="المراحل والذكاء الصناعي"
-        className="md:hidden fixed top-20 right-3 z-30 w-12 h-12 rounded-full bg-gradient-to-br from-emerald-500 to-teal-600 text-white shadow-lg shadow-emerald-500/40 flex items-center justify-center hover:scale-110 active:scale-95 transition-transform"
-      >
-        <ChevronLeft className="w-5 h-5" />
-      </button>
+          • Position: middle-right (vertical center) so it never overlaps
+            chat bubbles, headers, or the bottom input bar.
+          • Animation: gentle 2.5s sideways bounce + outer ping ring so users
+            notice it on first visit without it being distracting later.
+          • Label: small text appears beside the icon so the purpose is
+            obvious on first glance ("المراحل"). */}
+      <div className="md:hidden fixed top-1/2 right-3 z-30 -translate-y-1/2">
+        {/* Outer ping ring — attention-getter without being distracting */}
+        <span className="pointer-events-none absolute inset-0 m-auto rounded-full bg-emerald-400/30 animate-ping" aria-hidden="true" />
+        <button
+          type="button"
+          onClick={() => setPhasesMobileOpen(true)}
+          data-testid="open-phases-mobile"
+          aria-label="افتح لوحة المراحل والذكاء الصناعي"
+          className="relative flex items-center gap-2 pl-2 pr-3 py-2 rounded-full bg-gradient-to-br from-emerald-500 to-teal-600 text-white shadow-lg shadow-emerald-500/40 active:scale-95 transition-transform animate-fab-nudge"
+        >
+          <ChevronLeft className="w-4 h-4" />
+          <span className="text-xs font-black">المراحل</span>
+        </button>
+      </div>
 
       {/* Mobile-only backdrop that closes the phases drawer when tapped. */}
       {phasesMobileOpen && (
