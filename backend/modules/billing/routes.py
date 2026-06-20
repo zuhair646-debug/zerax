@@ -16,11 +16,11 @@ from typing import Optional, Dict, Any
 from fastapi import APIRouter, HTTPException, Depends, Request
 from pydantic import BaseModel
 
-# Lazy Stripe import — billing /packages endpoint must still work even if
-# emergentintegrations SDK is unavailable on the host. Only checkout creation
-# requires the SDK.
+# Stripe integration — uses our local shim over the official `stripe` Python
+# SDK (so we don't depend on emergentintegrations). The shim exposes the same
+# interface the previous integration provided.
 try:
-    from emergentintegrations.payments.stripe.checkout import (
+    from .stripe_shim import (
         StripeCheckout,
         CheckoutSessionRequest,
     )
@@ -86,17 +86,126 @@ PACKAGES: Dict[str, Dict[str, Any]] = {
         "tier": "studio",
         "credits": 25_000,
     },
+    # ─── Ready Sites — one-off purchases (USD) ─────────────────────────
+    "ready_sites_trial": {
+        "name": "Ready Sites — Paid Trial (7 days)",
+        "price_usd": 9.00,
+        "currency": "usd",
+        "duration_days": 7,
+        "subscription_type": "ready_sites",
+        "plan": "trial",
+        "credits": 500,
+    },
+    "ready_sites_purchase": {
+        "name": "Ready Sites — Full Ownership",
+        "price_usd": 79.00,
+        "currency": "usd",
+        "duration_days": 365,
+        "subscription_type": "ready_sites",
+        "plan": "purchase",
+        "credits": 5_000,
+    },
 }
 
 
 class CheckoutRequestBody(BaseModel):
     package_id: str
     origin_url: str  # from window.location.origin on frontend
+    # Optional metadata merged into Stripe session — used by feature-specific
+    # webhooks (e.g. ready_sites passes category_id + plan so the project is
+    # auto-created after payment).
+    extra_metadata: Optional[Dict[str, Any]] = None
 
 
 def register_routes(app, db, get_current_user):
     router = APIRouter(prefix="/api/billing", tags=["billing"])
     webhook_router = APIRouter(prefix="/api", tags=["billing-webhook"])
+
+    async def _find_ready_sites_project_id(db, session_id):
+        """Look up the FreeBuild project created for a ready_sites payment."""
+        try:
+            proj = await db.freebuild_chat_projects.find_one(
+                {"ready_sites_session_id": session_id},
+                {"id": 1, "_id": 0},
+            )
+            return (proj or {}).get("id")
+        except Exception:
+            return None
+
+    async def _create_ready_sites_project(db, txn, pkg):
+        """Idempotently create a Ready Sites FreeBuild project after payment.
+
+        Reads category_id + plan from the transaction metadata (Stripe session
+        metadata that was set during /billing/checkout via extra_metadata).
+        Skips if a project for this session_id was already created (prevents
+        double-fulfillment when both webhook and polling fire).
+        """
+        import uuid
+        meta = txn.get("metadata") or {}
+        category_id = meta.get("category_id")
+        if not category_id:
+            log.warning(f"[ready_sites] No category_id in metadata for txn {txn.get('session_id')}")
+            return
+        # Idempotency — skip if we already created the project for this session
+        existing = await db.freebuild_chat_projects.find_one(
+            {"ready_sites_session_id": txn.get("session_id")},
+            {"id": 1, "_id": 0},
+        )
+        if existing:
+            log.info(f"[ready_sites] Project already exists for session {txn.get('session_id')}")
+            return
+        # Inline category labels (kept in sync with modules/ready_sites/QUICK_CATEGORY_LABELS)
+        _CAT_LABELS = {
+            "restaurants": {"ar": "مطاعم وكافيهات", "icon": "🍽️", "kind": "restaurant"},
+            "electronics": {"ar": "إلكترونيات وتقنية", "icon": "📱", "kind": "store"},
+            "stationery":  {"ar": "قرطاسيات ومكتبات", "icon": "✏️", "kind": "store"},
+            "grocery":     {"ar": "بقالات وسوبرماركت", "icon": "🛒", "kind": "store"},
+            "pharmacy":    {"ar": "صيدليات", "icon": "💊", "kind": "store"},
+            "fashion":     {"ar": "أزياء وموضة", "icon": "👗", "kind": "store"},
+            "beauty":      {"ar": "تجميل وعطور", "icon": "💄", "kind": "store"},
+            "flowers":     {"ar": "زهور وهدايا", "icon": "🌸", "kind": "store"},
+        }
+        cat = _CAT_LABELS.get(category_id) or {"ar": category_id, "icon": "🛍️", "kind": "store"}
+        plan = pkg.get("plan", "purchase")
+        project_id = str(uuid.uuid4())
+        now = datetime.now(timezone.utc).isoformat()
+        trial_until = None
+        if plan == "trial":
+            trial_until = (datetime.now(timezone.utc) + timedelta(days=pkg.get("duration_days", 7))).isoformat()
+        greeting = (
+            f"أهلاً وسهلاً! 👋\n\n"
+            f"مبروك دفعك واختيارك قالب **{cat['ar']}** {cat['icon']}.\n\n"
+            f"عشان أبدأ ببناء موقعك، أحتاج معلومتين فقط:\n\n"
+            f"1️⃣ **اسم متجرك** (مثل: مطعم الفجر، صيدلية النور...)\n"
+            f"2️⃣ **اللوغو**:\n"
+            f"   • ارفعه لو عندك واحد جاهز\n"
+            f"   • أو قول لي وصف بسيط وأنا أصمّمه لك\n\n"
+            f"بمجرد ما تعطيني المعلومتين، راح أبني الموقع كاملاً في دقائق ✨"
+        )
+        first_message = {
+            "id": str(uuid.uuid4()),
+            "role": "assistant",
+            "content": greeting,
+            "timestamp": now,
+        }
+        await db.freebuild_chat_projects.insert_one({
+            "id": project_id,
+            "user_id": txn["user_id"],
+            "name": f"{cat['icon']} {cat['ar']}",
+            "category_id": category_id,
+            "category_name": cat["ar"],
+            "category_icon": cat["icon"],
+            "category_kind": cat.get("kind"),
+            "plan": plan,
+            "trial_until": trial_until,
+            "source": "ready-sites",
+            "ready_sites_session_id": txn.get("session_id"),
+            "current_html": "",
+            "messages": [first_message],
+            "created_at": now,
+            "updated_at": now,
+        })
+        log.info(f"[ready_sites] ✓ Created project {project_id} for user {txn['user_id']} (plan={plan})")
 
     def _stripe_client(http_request: Request) -> StripeCheckout:
         if not _STRIPE_SDK_AVAILABLE:
@@ -198,6 +307,13 @@ def register_routes(app, db, get_current_user):
             "package_id": body.package_id,
             "source": "zenrex_studio_gate",
         }
+        # Merge in feature-specific metadata (ready_sites category/plan etc.)
+        if body.extra_metadata and isinstance(body.extra_metadata, dict):
+            for k, v in body.extra_metadata.items():
+                # Stripe metadata values must be strings <500 chars
+                if v is None:
+                    continue
+                metadata[str(k)] = str(v)[:500]
 
         stripe = _stripe_client(http_request)
         try:
@@ -305,6 +421,19 @@ def register_routes(app, db, get_current_user):
                 )
                 log.info(f"Added {credits_to_add} credits to user {txn['user_id']} (tier={pkg['tier']})")
 
+            # ── Ready Sites fulfillment (one-off, creates a project + credits) ──
+            elif pkg.get("subscription_type") == "ready_sites":
+                credits_to_add = int(pkg.get("credits") or 0)
+                if credits_to_add:
+                    await db.users.update_one(
+                        {"id": txn["user_id"]},
+                        {"$inc": {"credits": credits_to_add}},
+                    )
+                try:
+                    await _create_ready_sites_project(db, txn, pkg)
+                except Exception as _rs_err:
+                    log.warning(f"Failed to auto-create ready_sites project: {_rs_err}")
+
         return {
             "session_id": session_id,
             "status": new_status,
@@ -312,6 +441,8 @@ def register_routes(app, db, get_current_user):
             "amount_total": status_resp.amount_total,
             "currency": status_resp.currency,
             "fulfilled": new_payment_status == "paid",
+            "package_id": txn.get("package_id"),
+            "project_id": await _find_ready_sites_project_id(db, session_id),
         }
 
     # -------------------- WEBHOOK --------------------
@@ -389,6 +520,19 @@ def register_routes(app, db, get_current_user):
                     },
                 )
                 log.info(f"[webhook] Added {credits_to_add} credits to user {txn['user_id']} (tier={pkg['tier']})")
+
+            # ── Ready Sites fulfillment (one-off, creates project + credits) ──
+            elif pkg.get("subscription_type") == "ready_sites":
+                credits_to_add = int(pkg.get("credits") or 0)
+                if credits_to_add:
+                    await db.users.update_one(
+                        {"id": txn["user_id"]},
+                        {"$inc": {"credits": credits_to_add}},
+                    )
+                try:
+                    await _create_ready_sites_project(db, txn, pkg)
+                except Exception as _rs_err:
+                    log.warning(f"[webhook] Failed to auto-create ready_sites project: {_rs_err}")
 
             # 🆕 Affiliate commission hook (best-effort, never breaks payment)
             try:

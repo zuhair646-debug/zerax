@@ -35,6 +35,11 @@ export default function BillingSuccess() {
         if (data.payment_status === 'paid') {
           setStatus('paid');
           setMessage('تم تفعيل اشتراكك بنجاح — مرحباً بك في الاستوديو.');
+          // Ready Sites flow: status endpoint now returns project_id directly
+          if (data.project_id && (data.package_id || '').startsWith('ready_sites_')) {
+            navigate(`/freebuild/chat/${data.project_id}?source=ready-sites`, { replace: true });
+            return;
+          }
           return;
         }
         if (data.status === 'expired') {

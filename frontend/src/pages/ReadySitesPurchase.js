@@ -1,13 +1,14 @@
 /**
- * Ready Sites — Step 2: Purchase / Paid Trial
+ * Ready Sites — Step 2: Pay First, then Build
  *
- * After choosing a category, user sees two options:
- *   1. Direct Purchase — full ownership
- *   2. Paid Trial — try the platform for a fixed price, with credit toward full purchase
+ * Two plans displayed in USD:
+ *   1. Full Purchase ($79) — ownership + 5,000 credits
+ *   2. Paid Trial ($9, 7 days) — try the AI with 500 credits
  *
- * Both options charge using existing Zenrex billing (mocked for now → real Stripe later).
- * On success, creates a FreeBuild project pre-seeded with the chosen category and
- * navigates to /ready-sites/chat/:id where the AI asks for logo + name only.
+ * Both buttons redirect to Stripe checkout. After successful payment, the
+ * billing webhook auto-creates the FreeBuild project for the chosen
+ * category and the user is bounced to /ready-sites/success?session_id=…
+ * which polls and finally redirects to /freebuild/chat/{project_id}.
  */
 import React, { useEffect, useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
@@ -29,39 +30,40 @@ const CATEGORY_LABELS = {
 
 const PLANS = [
   {
-    id: 'purchase',
+    id: 'ready_sites_purchase',
+    plan: 'purchase',
     badge: 'الأكثر اختياراً',
-    title: 'شراء مباشر',
-    price: '٢٩٩',
+    title: 'شراء كامل',
+    price: '79',
+    currency: '$',
     period: 'مرة واحدة · ملكية كاملة',
     cta: 'اشترِ الآن وابدأ',
     features: [
       'موقع كامل احترافي بتخصصك',
       'دومين مخصص لمدة سنة كاملة',
-      'دعم فني وصيانة بـ AI لمدة 6 أشهر',
-      'محرر AI داخل الموقع لإضافة أقسام وتعديلات',
-      'تكامل المدفوعات (Mada, STC Pay, Apple Pay)',
-      'استضافة سريعة مدفوعة',
-      'تطبيق جوال PWA قابل للتثبيت',
+      'محرر AI داخل الموقع',
+      '5,000 نقطة AI تشحن مع الباقة',
+      'تطبيق جوال PWA',
+      'تكامل بوابات الدفع',
     ],
-    accent: 'amber',
     primary: true,
   },
   {
-    id: 'trial',
+    id: 'ready_sites_trial',
+    plan: 'trial',
     badge: 'جرّب قبل ما تشتري',
     title: 'تجربة مدفوعة',
-    price: '٢٩',
-    period: '٧ أيام · يُخصم من سعر الشراء الكامل',
+    price: '9',
+    currency: '$',
+    period: '7 أيام · لاختبار التجربة',
     cta: 'ابدأ التجربة',
     features: [
-      'موقع كامل لمدة ٧ أيام',
+      'موقع كامل لمدة 7 أيام',
       'كل ميزات الذكاء الاصطناعي مفتوحة',
-      'محفظة نقاط AI تشحن مرة واحدة (٥٠٠ نقطة)',
-      'بعد التجربة، الـ ٢٩ ريال تُخصم من سعر الشراء',
-      '⚠️ الموقع يُحذف تلقائياً بعد ٧ أيام لو ما اشتريت',
+      '500 نقطة AI لتختبر',
+      'تقدر تحوّلها لشراء كامل لاحقاً',
+      '⚠️ الموقع يُحذف تلقائياً بعد 7 أيام لو ما اشتريت',
     ],
-    accent: 'sky',
     primary: false,
   },
 ];
@@ -74,7 +76,7 @@ export default function ReadySitesPurchase({ user }) {
   const navigate = useNavigate();
   const location = useLocation();
   const [category, setCategory] = useState(null);
-  const [busy, setBusy] = useState(null); // 'purchase' | 'trial' | null
+  const [busy, setBusy] = useState(null);
 
   useEffect(() => {
     if (typeof window !== 'undefined') window.scrollTo(0, 0);
@@ -82,12 +84,10 @@ export default function ReadySitesPurchase({ user }) {
     try {
       const stored = sessionStorage.getItem('zx_ready_sites_category');
       if (stored) cat = JSON.parse(stored);
-    } catch (_) {
-      // sessionStorage parse failure — fall back to URL param
-    }
+    } catch (_) { /* ignore */ }
     const catId = getQueryParam(location.search, 'category');
     if (!cat && catId) {
-      cat = { id: catId, title: CATEGORY_LABELS[catId] || catId, subtitle: '' };
+      cat = { id: catId, title: CATEGORY_LABELS[catId] || catId };
     }
     if (!cat) {
       navigate('/ready-sites', { replace: true });
@@ -96,45 +96,46 @@ export default function ReadySitesPurchase({ user }) {
     setCategory(cat);
   }, [location.search, navigate]);
 
-  const handleSelect = async (planId) => {
+  const handleSelect = async (plan) => {
     if (!category || busy) return;
-    setBusy(planId);
+    setBusy(plan.id);
     try {
       const token = localStorage.getItem('token');
       if (!token) {
-        toast.error('سجّل دخول أولاً عشان تكمل');
-        navigate('/login');
+        toast.error('سجّل دخول أولاً عشان تكمل الشراء');
+        // Preserve flow: bounce back to login then back here
+        sessionStorage.setItem('zx_ready_sites_category', JSON.stringify(category));
+        navigate(`/login?return=/ready-sites/purchase?category=${category.id}`);
         return;
       }
-      // Call new ready-sites start endpoint (creates a freebuild project with category context)
-      const r = await fetch(`${API}/api/ready-sites/start`, {
+      // Persist so we can recover if user navigates back from Stripe
+      sessionStorage.setItem('zx_ready_sites_category', JSON.stringify(category));
+
+      const r = await fetch(`${API}/api/billing/checkout`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify({
-          category_id: category.id,
-          plan: planId,            // 'purchase' or 'trial'
+          package_id: plan.id,
+          origin_url: window.location.origin,
+          extra_metadata: {
+            category_id: category.id,
+            plan: plan.plan,
+            source: 'ready_sites',
+          },
         }),
       });
-      if (!r.ok) {
-        const txt = await r.text().catch(() => '');
-        throw new Error(`${r.status}: ${txt}`);
+      const data = await r.json().catch(() => ({}));
+      if (!r.ok || !data.url) {
+        throw new Error(data.detail || data.message || 'فشل إنشاء جلسة الدفع');
       }
-      const data = await r.json();
-      // Expect: { project_id, ... }
-      const projectId = data.project_id || data.id;
-      if (!projectId) {
-        throw new Error('ما رجع project_id من السيرفر');
-      }
-      toast.success(planId === 'trial' ? '🎉 بدأت تجربتك! AI يستقبل طلباتك الآن' : '🚀 تم الشراء بنجاح!');
-      sessionStorage.removeItem('zx_ready_sites_category');
-      // Navigate to FreeBuild chat (the same conversational interface used everywhere)
-      navigate(`/freebuild/chat/${projectId}?source=ready-sites&category=${category.id}&plan=${planId}`);
+      // Redirect to Stripe Checkout
+      window.location.href = data.url;
     } catch (e) {
       toast.error(`فشل الدفع: ${e.message || 'حاول مرة ثانية'}`);
-      console.error('purchase err', e);
+      console.error('checkout err', e);
     } finally {
       setBusy(null);
     }
@@ -144,7 +145,6 @@ export default function ReadySitesPurchase({ user }) {
 
   return (
     <div className="min-h-screen bg-[#08070d] text-white" dir="rtl" data-testid="rs-purchase-page">
-      {/* Header */}
       <header className="max-w-5xl mx-auto px-6 pt-12 pb-6 text-center">
         <button
           onClick={() => navigate('/ready-sites')}
@@ -158,14 +158,13 @@ export default function ReadySitesPurchase({ user }) {
           اخترت: <b className="text-amber-300">{category.title}</b>
         </div>
         <h1 className="text-4xl sm:text-5xl font-black mb-3 bg-gradient-to-b from-white to-amber-200 bg-clip-text text-transparent">
-          كيف تبي تبدأ؟
+          خطوة قبل ما يبدأ AI ✨
         </h1>
         <p className="text-base text-gray-400 max-w-xl mx-auto leading-relaxed">
-          خياران واضحان: شراء كامل، أو تجربة مدفوعة بسعر رمزي قبل ما تقرر.
+          ادفع أول، يفتح AI ويبني موقعك في دقائق. المدفوعات آمنة عبر Stripe.
         </p>
       </header>
 
-      {/* Plans Grid */}
       <main className="max-w-5xl mx-auto px-6 pb-12">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-5" data-testid="plans-grid">
           {PLANS.map((plan) => (
@@ -176,14 +175,11 @@ export default function ReadySitesPurchase({ user }) {
                   ? 'border-amber-400/40 bg-gradient-to-br from-amber-500/10 to-amber-500/[0.02] hover:border-amber-400/70 hover:shadow-2xl hover:shadow-amber-500/20'
                   : 'border-white/10 bg-white/[0.02] hover:border-sky-400/40 hover:shadow-xl hover:shadow-sky-500/10'
               }`}
-              data-testid={`plan-card-${plan.id}`}
+              data-testid={`plan-card-${plan.plan}`}
             >
-              {/* Badge */}
               <div
                 className={`absolute -top-3 right-6 px-3 py-1 rounded-full text-[11px] font-black ${
-                  plan.primary
-                    ? 'bg-amber-400 text-black'
-                    : 'bg-sky-500 text-white'
+                  plan.primary ? 'bg-amber-400 text-black' : 'bg-sky-500 text-white'
                 }`}
               >
                 {plan.badge}
@@ -201,8 +197,8 @@ export default function ReadySitesPurchase({ user }) {
               </div>
 
               <div className="mb-5">
+                <span className="text-base font-bold text-gray-400">{plan.currency}</span>
                 <span className="text-5xl font-black">{plan.price}</span>
-                <span className="text-base font-bold text-gray-400 me-2">ر.س</span>
                 <div className="text-xs text-gray-500 mt-1">{plan.period}</div>
               </div>
 
@@ -220,18 +216,18 @@ export default function ReadySitesPurchase({ user }) {
               </ul>
 
               <button
-                onClick={() => handleSelect(plan.id)}
+                onClick={() => handleSelect(plan)}
                 disabled={busy !== null}
                 className={`w-full py-3.5 rounded-xl font-black text-base transition-all inline-flex items-center justify-center gap-2 ${
                   plan.primary
                     ? 'bg-amber-400 text-black hover:bg-amber-300 disabled:bg-amber-400/40 disabled:cursor-wait'
                     : 'bg-white/10 text-white hover:bg-white/15 border border-white/10 hover:border-white/20 disabled:opacity-50 disabled:cursor-wait'
                 }`}
-                data-testid={`select-plan-${plan.id}-btn`}
+                data-testid={`select-plan-${plan.plan}-btn`}
               >
                 {busy === plan.id ? (
                   <>
-                    <Loader2 className="w-5 h-5 animate-spin" /> جاري المعالجة...
+                    <Loader2 className="w-5 h-5 animate-spin" /> جاري التحويل لصفحة الدفع...
                   </>
                 ) : (
                   <>
@@ -243,13 +239,11 @@ export default function ReadySitesPurchase({ user }) {
           ))}
         </div>
 
-        {/* Disclaimer */}
         <div className="mt-8 bg-amber-500/5 border border-amber-500/20 rounded-xl px-5 py-4 flex items-start gap-3" data-testid="rs-purchase-disclaimer">
           <Info className="w-5 h-5 text-amber-400 flex-shrink-0 mt-0.5" />
           <div className="text-xs text-amber-100/80 leading-relaxed">
-            <b className="text-amber-300">إخلاء مسؤولية:</b> الذكاء الاصطناعي في Zenrex محترف، لكن
-            النتيجة تعتمد على وضوح طلبات العميل. بعض الطلبات غير الواضحة قد تؤدي لنتائج غير متوقعة.
-            Zenrex لا تتحمل أي خلل ينتج عن عدم وضوح فكرة العميل.
+            <b className="text-amber-300">آمن:</b> الدفع يتم على Stripe مباشرة. بعد إتمام الدفع
+            بنجاح، يفتح AI تلقائياً ويبدأ ببناء موقعك.
           </div>
         </div>
       </main>

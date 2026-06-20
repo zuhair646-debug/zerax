@@ -1,6 +1,6 @@
-/* Zenrex Service Worker — PWA (v8 — global credits guard + calm banner) */
+/* Zenrex Service Worker — PWA (v9 — ready sites Stripe payment + post-pay project create) */
 /* eslint-disable no-restricted-globals */
-const CACHE_VERSION = 'zenrex-pwa-v8-2026-06-20';
+const CACHE_VERSION = 'zenrex-pwa-v9-2026-06-20';
 const STATIC_CACHE = `${CACHE_VERSION}-static`;
 const RUNTIME_CACHE = `${CACHE_VERSION}-runtime`;
 
