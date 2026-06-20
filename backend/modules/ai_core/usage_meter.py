@@ -101,6 +101,13 @@ async def record_usage(
         total_tokens = int((tokens_in or 0) + (tokens_out or 0))
         # Multiplier = total_tokens / 1000 (catalog charges per 1K tokens)
         multiplier = max(0.001, total_tokens / 1000.0)
+        # Compute the credits we *will* charge so we can record it on the event.
+        try:
+            from modules.pricing.catalog import SERVICE_COSTS
+            svc = SERVICE_COSTS.get("text_claude_1k") or {}
+            credits_used = int(float(svc.get("credits", 0)) * multiplier)
+        except Exception:
+            credits_used = 0
         now = datetime.now(timezone.utc)
         # Log raw event
         await db.usage_events.insert_one({
@@ -110,6 +117,7 @@ async def record_usage(
             "tokens_in": int(tokens_in or 0),
             "tokens_out": int(tokens_out or 0),
             "cost_usd": cost,
+            "credits_used": credits_used,
             "model_label": model_label,
             "ts": now.isoformat(),
             "ymd": _today_key(now),
@@ -123,13 +131,13 @@ async def record_usage(
                     "tokens_out": int(tokens_out or 0),
                     "calls": 1,
                     "cost_usd": cost,
+                    "credits_used": credits_used,
                 },
                 "$setOnInsert": {"user_id": user_id, "ymd": _today_key(now)},
             },
             upsert=True,
         )
         # Deduct credits via the central pricing catalog. Owners are exempt.
-        credits_used = 0
         try:
             from modules.pricing.credits import charge_user
             await charge_user(
@@ -137,12 +145,7 @@ async def record_usage(
                 multiplier=multiplier,
                 meta={"section": section, "project_id": project_id, "tokens": total_tokens},
             )
-            # Estimate the actual amount charged: catalog credits × multiplier
-            from modules.pricing.catalog import SERVICE_COSTS
-            svc = SERVICE_COSTS.get("text_claude_1k") or {}
-            credits_used = int(float(svc.get("credits", 0)) * multiplier)
         except ValueError:
-            # User out of credits — surface error to caller
             return {"ok": False, "error": "no_credits", "cost_usd": cost}
         except Exception as _ce:
             log.warning(f"[USAGE-METER] credits charge failed: {_ce}")

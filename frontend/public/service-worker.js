@@ -1,6 +1,6 @@
-/* Zenrex Service Worker — PWA (v5 — credits-based pricing) */
+/* Zenrex Service Worker — PWA (v6 — credits chain unified + storage popover) */
 /* eslint-disable no-restricted-globals */
-const CACHE_VERSION = 'zenrex-pwa-v5-2026-06-20';
+const CACHE_VERSION = 'zenrex-pwa-v6-2026-06-20';
 const STATIC_CACHE = `${CACHE_VERSION}-static`;
 const RUNTIME_CACHE = `${CACHE_VERSION}-runtime`;
 

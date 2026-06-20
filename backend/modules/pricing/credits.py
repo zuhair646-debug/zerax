@@ -100,7 +100,7 @@ async def charge_user(
     Raises ValueError on insufficient balance.
     """
     user = await db.users.find_one({"id": user_id}, {"role": 1, "_id": 0})
-    if user and user.get("role") in ("owner", "admin"):
+    if user and (user.get("role") or "").lower() in ("owner", "admin", "super_admin"):
         return await get_balance(db, user_id)  # admins free
 
     from .catalog import SERVICE_COSTS

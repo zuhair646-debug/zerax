@@ -271,8 +271,8 @@ def register_routes(app, db, get_current_user):
         )
 
         if new_payment_status == "paid" and not already_paid:
-            pkg_id = txn.get("package_id", "studio_monthly")
-            pkg = PACKAGES.get(pkg_id, PACKAGES["studio_monthly"])
+            pkg_id = txn.get("package_id", "tier_studio_monthly")
+            pkg = PACKAGES.get(pkg_id, PACKAGES["tier_studio_monthly"])
             started_at = datetime.now(timezone.utc)
             expires_at = started_at + timedelta(days=pkg["duration_days"])
 
@@ -355,8 +355,8 @@ def register_routes(app, db, get_current_user):
         )
 
         if event.payment_status == "paid" and not already_paid:
-            pkg_id = txn.get("package_id", "studio_monthly")
-            pkg = PACKAGES.get(pkg_id, PACKAGES["studio_monthly"])
+            pkg_id = txn.get("package_id", "tier_studio_monthly")
+            pkg = PACKAGES.get(pkg_id, PACKAGES["tier_studio_monthly"])
             started_at = datetime.now(timezone.utc)
             expires_at = started_at + timedelta(days=pkg["duration_days"])
             await db.studio_subscriptions.insert_one(

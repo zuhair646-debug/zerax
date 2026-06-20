@@ -6,52 +6,71 @@ Arabic-first AI builder for websites/apps/images/videos with credits-based prici
 ## Current Status — Healthy, Production Live
 - Domain: https://zenrex.ai
 - Backend: Docker compose on VPS, MongoDB local
-- Frontend: React PWA, Service Worker v5 (network-first, cache-busting)
+- Frontend: React PWA, Service Worker v6 (network-first, cache-busting)
 - LLM: Claude Sonnet 4.5 via Emergent LLM key
 
-## Pricing Model — CREDITS-BASED (2026-06-20 pivot)
-Simple price → credits. No feature lists, no projects/month, no fake promises.
-- Free signup: **200 credits** bonus (~$1 of value)
-- Project Pack: **$49** → **5,000 credits** (one-time, never expires)
-- Starter: **$19/month** → **2,000 credits** (refills on renewal)
-- Pro: **$69/month** → **8,000 credits** (most popular)
-- Studio: **$199/month** → **25,000 credits**
+## Pricing — CREDITS-BASED (verified end-to-end ✅)
+| Tier | Price | Credits |
+|---|---|---|
+| Free signup | $0 | 200 (bonus, one-time) |
+| Project Pack | $49 | 5,000 (one-time) |
+| Starter | $19/mo | 2,000 (refills monthly) |
+| Pro | $69/mo | 8,000 (most popular) |
+| Studio | $199/mo | 25,000 |
 
-**Credit economics:** 1 credit ≈ $0.005 actual LLM cost (~500 AI tokens). Margin floor ~37%, typical 60%+.
-- Field: `users.credits` (existing field, also used for image/video deduction)
-- Deduction: `usage_meter.record_usage()` → `$inc credits: -ceil(cost_usd * 200)`
-- Block: `check_quota()` → blocks if `credits <= 0`, friendly upgrade prompt
-- Endpoint: `GET /api/usage/credits` (lightweight, polled by navbar badge every 20s)
+**Service costs (catalog: `modules/pricing/catalog.py` `SERVICE_COSTS`):**
+- Image (GPT/Nano Banana): 100 credits
+- Video (Sora 10s): 1,200 credits
+- AI text (1k tokens): 30 credits
+- Chat message: 10 credits
+
+**Pricing chain — verified 14/14 by testing agent (iteration_48):**
+- ✅ /api/billing/packages returns correct credit amounts
+- ✅ Signup → 200 credit bonus
+- ✅ Image gen: 500→400 (deducted 100)
+- ✅ Video gen: 2000→800 (deducted 1200)
+- ✅ Chat 1k tokens: 500→470 (deducted 30)
+- ✅ Insufficient credits → 402 Payment Required
+- ✅ Zero credits → check_quota blocks with friendly upgrade prompt
+- ✅ Owner/admin/super_admin bypass works
+- ✅ All deductions logged in `credit_transactions` collection
 
 ## Recent Completed Work (2026-06-20 session)
 - Removed redundant centered Z logo from landing hero
-- Fixed `/pricing` to load PricingV2 directly (was loading old Pricing.js)
-- Made `emergentintegrations` import lazy in `billing/routes.py` (module was failing to load on prod since SDK is intentionally uninstalled for 100% independence — only checkout creation needs it now)
-- **Major pivot: credits-based pricing**
-  - Removed all `tier_quota_projects`, `tier_quota_mb`, `daily_token_cap` from packages
-  - PricingV2.jsx completely rewritten: simple cards (price + credits + button only)
-  - Webhook fulfillment now adds credits to `users.credits` instead of setting quotas
-  - usage_meter deducts credits on every AI call
-  - check_quota now blocks when `credits <= 0`
-  - CreditsBadge added to Navbar (top-right next to Pricing link)
-  - Quota-exceeded chat message updated with new tier prices
+- Fixed `/pricing` to load PricingV2 directly
+- Made `emergentintegrations.payments.stripe` import lazy (billing module no longer fails to load when SDK unavailable)
+- **CREDITS-BASED PRICING PIVOT**
+  - PACKAGES dict simplified — only credits, no fake "12 projects", "WhatsApp support", etc.
+  - PricingV2.jsx rewritten: simple cards (price + credits + button only)
+  - usage_meter.py unified with `pricing.credits.charge_user()` — single source of truth (SERVICE_COSTS)
+  - `/generate/video` now deducts credits for paid users (was bug — only blocked free users before)
+  - `/generate/image` already deducts; both also log charge_method to activity feed
+  - CreditsBadge in Navbar (top-right) — polls every 20s, red+pulse if balance < 50
+  - StorageIndicator refactored: small popover instead of full-screen modal
+  - usage_events now includes `credits_used` field for accurate month_credits aggregation
+  - super_admin role added to owner-bypass tuple in `credits.charge_user`
+  - Fixed KeyError risk: PACKAGES["studio_monthly"] → "tier_studio_monthly"
 
 ## Pending — P1
-- 🟢 **File Upload UI red→green status indicator** in FreeBuildChat.js
-- 📧 **Email Verification on Registration** — Resend API, OTP/link, `is_verified` field, block login until verified
-- 🔄 **Chat Session Reconnection** — re-attach to SSE stream after page reload
-- 💳 **Replace `emergentintegrations.payments.stripe`** with official `stripe` SDK for full independence
 - 🪙 **Top-up credits packs** (one-time small purchases like 1,000 credits for $9)
+- 🟢 **File Upload UI red→green** indicator in FreeBuildChat.js
+- 📧 **Email Verification on Registration** — Resend API
+- 🔄 **Chat Session Reconnection** — re-attach to SSE stream after reload
+- 💸 **Credit refund on external API failure** for /generate/image and /generate/video
+- 🔒 **Replace `emergentintegrations.payments.stripe`** with official `stripe` SDK
 
 ## Pending — P2
-- Multi-page architecture for generated sites (`/about`, `/contact`) for SEO
-- Visual Guardian (screenshot + Vision LLM bug detection)
+- Wire credit deduction into `/api/ai-core/chat` (smart_chat) — currently bypasses credits system
+- Sticky in-page section navigator for landing page (waiting on user clarification)
+- Multi-page generated sites (`/about`, `/contact`) for SEO
+- Visual Guardian (Vision LLM)
 - CI/CD pipeline (GitHub Actions → VPS)
-- Backfill existing free users to 200 credits (currently at legacy 20)
+- Backfill existing free users to 200 credits (legacy were 20)
 
 ## Refactoring Backlog
 - Split FreeBuildChat.js (4500+ lines) into smaller components
-- Dedupe webhook vs. polling user-upgrade logic in billing/routes.py
+- Split FreeBuild chat backend (3300+ lines) into routers/services
+- Consolidate POINTS_CONFIG (server.py L299) and PRICING_CONFIG (L1694) — risk of drift
 
 ## Tech Stack
 React, FastAPI, MongoDB, Stripe, Resend, Emergent LLM (Claude Sonnet 4.5), PWA Service Worker, SSE.
@@ -62,4 +81,4 @@ React, FastAPI, MongoDB, Stripe, Resend, Emergent LLM (Claude Sonnet 4.5), PWA S
 
 ## Deployment
 `bash /app/deploy/deploy.sh zenrex.ai` — builds React, rsyncs to VPS, reloads nginx, recreates backend container.
-Backend recreate triggers fresh pip install (~3 min) → health check may 502 briefly, settles ~2-3 min after.
+Backend recreate triggers fresh pip install (~3 min) → health check 502 briefly, settles ~3 min after.
