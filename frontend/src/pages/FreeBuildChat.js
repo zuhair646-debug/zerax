@@ -16,7 +16,7 @@ import {
   Monitor, Smartphone, Trash2, MessageSquare, Paperclip, X,
   ZoomIn, Reply, Download, ExternalLink, Rocket, Smartphone as Phone,
   Crown, Github, Globe2, Cloud, Link2, Copy, FileText, Plug, Mic,
-  History, RotateCcw, Clock, HelpCircle, AlertCircle,
+  History, RotateCcw, Clock, HelpCircle, AlertCircle, ChevronLeft,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import ReactMarkdown from 'react-markdown';
@@ -2414,6 +2414,10 @@ function ChatWorkspace({ projectId }) {
   // For app mode: which device frame to show (iphone | android) — initial pick from project.platform
   const [appDevice, setAppDevice] = useState('iphone');
   const [myProjectsOpen, setMyProjectsOpen] = useState(false);
+  // Mobile-only: controls the slide-in drawer that exposes the right-side
+  // phases sidebar on small screens. Default closed; user taps the colored
+  // FAB to peek at phases without losing the chat context.
+  const [phasesMobileOpen, setPhasesMobileOpen] = useState(false);
   const [credentialRequest, setCredentialRequest] = useState(null); // {service, label, instructions}
   const [credentialValue, setCredentialValue] = useState('');
   const [credentialSubmitting, setCredentialSubmitting] = useState(false);
@@ -3109,7 +3113,7 @@ function ChatWorkspace({ projectId }) {
               }
             }}
             data-testid="export-project"
-            className="px-3 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 border border-cyan-400/30 text-cyan-200 text-xs font-bold flex items-center gap-1.5"
+            className="hidden sm:flex px-3 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 border border-cyan-400/30 text-cyan-200 text-xs font-bold items-center gap-1.5"
             title="تنزيل نسخة احتياطية كاملة من المشروع (رسائل + قرارات + شخصيات + أصول) — JSON"
           >
             <Download className="w-3.5 h-3.5" />
@@ -3153,19 +3157,37 @@ function ChatWorkspace({ projectId }) {
               <span className="sm:hidden">إنهاء</span>
             </button>
           )}
-          <div className={`px-3 py-1.5 ${isVideoMode ? 'bg-red-500/10 border-red-500/30' : 'bg-emerald-500/10 border-emerald-500/30'} border rounded-lg flex items-center gap-1.5`}>
+          <div className={`hidden sm:flex px-3 py-1.5 ${isVideoMode ? 'bg-red-500/10 border-red-500/30' : 'bg-emerald-500/10 border-emerald-500/30'} border rounded-lg items-center gap-1.5`}>
             <Sparkles className={`w-3.5 h-3.5 ${isVideoMode ? 'text-red-400' : 'text-emerald-400'}`} />
             <span className={`text-xs ${isVideoMode ? 'text-red-300' : 'text-emerald-300'} font-bold hidden sm:inline`}>{isVideoMode ? '🎬 استوديو الفيديو' : isAppMode ? '📱 استوديو التطبيقات' : 'من الصفر'}</span>
           </div>
-          <UsageIndicator compact refreshKey={messages.length} />
-          <StorageIndicator compact />
+          <div className="hidden sm:flex"><UsageIndicator compact refreshKey={messages.length} /></div>
+          <div className="hidden sm:flex"><StorageIndicator compact /></div>
         </div>
       </div>
 
       {/* Main: 3 panes */}
-      <div className="flex-1 flex overflow-hidden">
-        {/* RIGHT (sidebar in RTL): Phases */}
-        <div className="w-56 lg:w-64 bg-zinc-900/50 border-l border-white/10 p-3 lg:p-4 overflow-y-auto shrink-0 hidden md:block">
+      <div className="flex-1 flex overflow-hidden relative">
+        {/* RIGHT (sidebar in RTL): Phases.
+            • Desktop (md+): always visible as a static column on the right.
+            • Mobile: hidden by default. A floating colored button (FAB) below
+              opens it as a slide-in drawer. Slides off-screen otherwise. */}
+        <div
+          className={`bg-zinc-900/95 backdrop-blur-xl border-l border-white/10 p-3 lg:p-4 overflow-y-auto shrink-0 transition-transform duration-300
+            md:relative md:w-56 lg:w-64 md:translate-x-0 md:block
+            fixed inset-y-0 right-0 z-40 w-72 max-w-[85vw] ${phasesMobileOpen ? 'translate-x-0' : 'translate-x-full'} md:translate-x-0`}
+          data-testid="phases-sidebar"
+        >
+          {/* Mobile-only close button */}
+          <button
+            type="button"
+            onClick={() => setPhasesMobileOpen(false)}
+            className="md:hidden absolute top-2 left-2 w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-zinc-300"
+            aria-label="إغلاق المراحل"
+            data-testid="close-phases-drawer"
+          >
+            <X className="w-4 h-4" />
+          </button>
           {/* 📊 SITE HEALTH SCORE — visible after first build */}
           {project?.last_health && (
             <div className="mb-4 rounded-xl border border-zinc-700/60 bg-gradient-to-br from-zinc-900 to-zinc-950 p-3" data-testid="health-card">
@@ -4340,7 +4362,7 @@ function ChatWorkspace({ projectId }) {
                 disabled={loading}
                 data-testid="attach-file-btn"
                 title="أرفق صورة، فيديو، صوت، PDF، Word، Excel، أو أي ملف (حتى 50 ميجا، 6 ملفات)"
-                className="px-3 py-3 bg-white/5 hover:bg-emerald-500/20 hover:border-emerald-400/40 border border-white/10 rounded-xl transition-all text-zinc-300 hover:text-emerald-200 disabled:opacity-50"
+                className="px-2.5 sm:px-3 py-2.5 sm:py-3 bg-white/5 hover:bg-emerald-500/20 hover:border-emerald-400/40 border border-white/10 rounded-xl transition-all text-zinc-300 hover:text-emerald-200 disabled:opacity-50 shrink-0"
               >
                 <Paperclip className="w-5 h-5" />
               </button>
@@ -4353,13 +4375,13 @@ function ChatWorkspace({ projectId }) {
               {/* Text input */}
               <input
                 type="text"
-                placeholder="اكتب أو سجّل صوت أو ارفع صورة..."
+                placeholder="اكتب رسالتك..."
                 value={message}
                 onChange={(e) => setMessage(e.target.value)}
                 onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && send()}
                 disabled={loading}
                 data-testid="chat-input"
-                className="flex-1 bg-black/40 border border-white/15 rounded-xl px-4 py-3 outline-none focus:border-emerald-400 text-sm"
+                className="min-w-0 flex-1 bg-black/40 border border-white/15 rounded-xl px-3 sm:px-4 py-2.5 sm:py-3 outline-none focus:border-emerald-400 text-sm"
               />
               {/* Send / Stop — same button morphs based on streaming state.
                   While the AI is writing, this becomes a red "Stop" button so the
@@ -4370,10 +4392,10 @@ function ChatWorkspace({ projectId }) {
                   onClick={stopStream}
                   data-testid="chat-stop-btn"
                   title="أوقف الذكاء الآن — لو ما عجبك التوجه نوضّح له وش تبي"
-                  className="px-5 py-3 bg-gradient-to-r from-red-500 to-rose-600 hover:from-red-400 hover:to-rose-500 text-white font-bold rounded-xl flex items-center gap-2 animate-pulse shadow-lg shadow-red-500/30"
+                  className="px-3 sm:px-5 py-2.5 sm:py-3 bg-gradient-to-r from-red-500 to-rose-600 hover:from-red-400 hover:to-rose-500 text-white font-bold rounded-xl flex items-center gap-1.5 animate-pulse shadow-lg shadow-red-500/30 shrink-0"
                 >
-                  <span className="w-3.5 h-3.5 bg-white rounded-sm" />
-                  <span className="text-xs">إيقاف</span>
+                  <span className="w-3 h-3 sm:w-3.5 sm:h-3.5 bg-white rounded-sm" />
+                  <span className="text-xs hidden sm:inline">إيقاف</span>
                 </button>
               ) : (
                 <button
@@ -4381,9 +4403,11 @@ function ChatWorkspace({ projectId }) {
                   onClick={send}
                   disabled={!message.trim() && attachments.length === 0 && !replyToAsset}
                   data-testid="chat-send-btn"
-                  className="px-5 py-3 bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-400 hover:to-teal-500 disabled:from-zinc-700 disabled:to-zinc-800 text-black font-bold rounded-xl flex items-center gap-2"
+                  aria-label="إرسال"
+                  className="px-3 sm:px-5 py-2.5 sm:py-3 bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-400 hover:to-teal-500 disabled:from-zinc-700 disabled:to-zinc-800 text-black font-bold rounded-xl flex items-center gap-1.5 shrink-0"
                 >
-                  <Send className="w-5 h-5" />
+                  <Send className="w-4 h-4 sm:w-5 sm:h-5" />
+                  <span className="text-xs hidden sm:inline">إرسال</span>
                 </button>
               )}
               </>
@@ -4392,6 +4416,28 @@ function ChatWorkspace({ projectId }) {
           </div>
         </div>
       </div>
+
+      {/* Mobile-only FAB: open the phases drawer.
+          Green gradient + glow so it stands out on top of the chat without
+          obstructing messages. Tapping any phase auto-closes the drawer. */}
+      <button
+        type="button"
+        onClick={() => setPhasesMobileOpen(true)}
+        data-testid="open-phases-mobile"
+        aria-label="المراحل والذكاء الصناعي"
+        className="md:hidden fixed top-20 right-3 z-30 w-12 h-12 rounded-full bg-gradient-to-br from-emerald-500 to-teal-600 text-white shadow-lg shadow-emerald-500/40 flex items-center justify-center hover:scale-110 active:scale-95 transition-transform"
+      >
+        <ChevronLeft className="w-5 h-5" />
+      </button>
+
+      {/* Mobile-only backdrop that closes the phases drawer when tapped. */}
+      {phasesMobileOpen && (
+        <div
+          className="md:hidden fixed inset-0 bg-black/60 backdrop-blur-sm z-30"
+          onClick={() => setPhasesMobileOpen(false)}
+          data-testid="phases-mobile-backdrop"
+        />
+      )}
 
       <MyProjectsModal
         open={myProjectsOpen}
