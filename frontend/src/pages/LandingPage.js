@@ -430,12 +430,9 @@ const LandingPage = ({ user }) => {
       </div>
 
       <div className="max-w-5xl mx-auto px-4 py-6 sm:py-10">
-        {/* Hero header — clean, animated logo only */}
+        {/* Hero header — tagline only (logo lives in the Navbar to avoid redundancy) */}
         <div className="text-center mb-6">
-          <div className="flex justify-center mb-3">
-            <ZenrexLogo size="xl" />
-          </div>
-          <p className="text-sm sm:text-base text-amber-200/60 font-medium tracking-wide" data-testid="hero-tagline">
+          <p className="text-base sm:text-lg text-amber-200/70 font-medium tracking-wide" data-testid="hero-tagline">
             منصّة <span className="text-amber-300 font-bold">Zenrex</span> — أنشئ مواقع، تطبيقات، صور وفيديوهات بالذكاء الاصطناعي
           </p>
         </div>

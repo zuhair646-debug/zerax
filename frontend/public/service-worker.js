@@ -1,6 +1,6 @@
-/* Zenrex Service Worker — PWA (v3 — fresh-content first) */
+/* Zenrex Service Worker — PWA (v4 — fresh-content first, hero Z removed) */
 /* eslint-disable no-restricted-globals */
-const CACHE_VERSION = 'zenrex-pwa-v3-2026-06-20';
+const CACHE_VERSION = 'zenrex-pwa-v4-2026-06-20';
 const STATIC_CACHE = `${CACHE_VERSION}-static`;
 const RUNTIME_CACHE = `${CACHE_VERSION}-runtime`;
 
