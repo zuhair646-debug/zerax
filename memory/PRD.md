@@ -54,13 +54,18 @@ Arabic-first AI builder for websites/apps/images/videos with credits-based prici
 - **End-to-end verified:** signup→200 credits, Ready Sites checkout returns real Stripe URL on prod
 
 ## Pending — P1
+- 🍋 **LemonSqueezy variant IDs** — user needs to create 2 products in LemonSqueezy dashboard:
+  1. "Ready Sites Trial" — $9 USD (one-time)
+  2. "Ready Sites Purchase" — $79 USD (one-time)
+  Then set `LEMONSQUEEZY_VARIANT_TRIAL` + `LEMONSQUEEZY_VARIANT_PURCHASE` in prod `.env`
+- 🍋 **LemonSqueezy webhook endpoint** must be registered in their dashboard:
+  `https://zenrex.ai/api/ready-sites/lemonsqueezy/webhook` (events: order_created)
 - 🪙 Top-up credits packs (1,000 credits for $9 etc.)
 - 💸 Refund credits if external API (OpenAI/Sora) fails after deduction
 - 🟢 File upload UI red→green indicator in FreeBuildChat
 - 📧 Email Verification on Registration (Resend)
 - 🔄 Chat Session Reconnection (SSE re-attach)
-- 🔑 Migrate prod to REAL Stripe keys (currently uses Emergent proxy via `sk_test_emergent` — still depends on Emergent infra for payments)
-- 📱 Wire `CreditsBlockedBanner` inline in other chat pages (AppStudio, Companion, etc.) — backend already blocks via middleware
+- 📱 Wire `CreditsBlockedBanner` inline in other chat pages
 
 ## Pending — P2
 - Sticky in-page section navigator

@@ -3701,6 +3701,13 @@ try:
 except Exception as _rse:
     logging.getLogger(__name__).error(f"Failed to register ready_sites module: {_rse}", exc_info=True)
 
+# ── Ready Sites payment methods (PayPal + LemonSqueezy) ──
+try:
+    from modules.ready_sites.payment_router import register_payment_routes as _rs_pay_register
+    _rs_pay_register(app, db, get_current_user)
+except Exception as _rspe:
+    logging.getLogger(__name__).error(f"Failed to register ready_sites payment routes: {_rspe}", exc_info=True)
+
 # ============== CARE PORTAL (post-delivery client dashboard + Mobile App upgrade) ==============
 try:
     from modules.care_portal import create_care_router

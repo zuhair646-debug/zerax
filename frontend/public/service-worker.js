@@ -1,6 +1,6 @@
-/* Zenrex Service Worker — PWA (v9 — ready sites Stripe payment + post-pay project create) */
+/* Zenrex Service Worker — PWA (v10 — PayPal + LemonSqueezy for Ready Sites) */
 /* eslint-disable no-restricted-globals */
-const CACHE_VERSION = 'zenrex-pwa-v9-2026-06-20';
+const CACHE_VERSION = 'zenrex-pwa-v10-2026-06-20';
 const STATIC_CACHE = `${CACHE_VERSION}-static`;
 const RUNTIME_CACHE = `${CACHE_VERSION}-runtime`;
 

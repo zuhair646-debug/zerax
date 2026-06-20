@@ -34,6 +34,7 @@ import TermsGate from '@/components/TermsGate';
 import FreebuildCheckout from '@/pages/FreebuildCheckout';
 import GuardianDashboard from '@/pages/GuardianDashboard';
 import GlobalCreditsGuard from '@/components/GlobalCreditsGuard';
+import ReadySitesPaypalReturn from '@/pages/ReadySitesPaypalReturn';
 import AppsConvert from '@/pages/AppsConvert';
 import NewRequest from '@/pages/NewRequest';
 import MyRequests from '@/pages/MyRequests';
@@ -288,6 +289,7 @@ function App() {
           <Route path="/ready-sites" element={<ProtectedRoute><ReadySites user={user} /></ProtectedRoute>} />
           <Route path="/ready-sites/preview/:id" element={<ProtectedRoute><ReadySitesPreview user={user} /></ProtectedRoute>} />
           <Route path="/ready-sites/purchase" element={<ProtectedRoute><ReadySitesPurchase user={user} /></ProtectedRoute>} />
+          <Route path="/ready-sites/paypal-return" element={<ProtectedRoute><ReadySitesPaypalReturn /></ProtectedRoute>} />
           <Route path="/image-studio" element={<ProtectedRoute><StudioLanding mode="image_studio" user={user} /></ProtectedRoute>} />
           <Route path="/video-studio" element={<ProtectedRoute><VideoStudioModeSelector user={user} /></ProtectedRoute>} />
           <Route path="/dashboard/ready-sites" element={<ProtectedRoute><ReadySites user={user} /></ProtectedRoute>} />
