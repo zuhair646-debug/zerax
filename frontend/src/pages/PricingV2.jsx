@@ -1,7 +1,7 @@
 /**
  * Pricing — credit packs only (no subscriptions).
  *   • 7 fixed packs ($9 → $1000) with progressive discount
- *   • Custom amount: user enters $ and gets 90 credits per dollar ($5–$10,000)
+ *   • Custom amount: user enters $ and gets 130 credits per dollar ($5–$10,000)
  *   • Each pack has PayPal + LemonSqueezy buttons
  */
 import React, { useState } from 'react';
@@ -120,7 +120,7 @@ export default function Pricing() {
     } finally { setBusy(null); }
   };
 
-  const customCredits = parseFloat(customAmount) > 0 ? Math.round(parseFloat(customAmount) * 90) : 0;
+  const customCredits = parseFloat(customAmount) > 0 ? Math.round(parseFloat(customAmount) * 130) : 0;
 
   return (
     <div className="min-h-screen bg-zinc-950 text-zinc-100" dir="rtl" data-testid="pricing-page">
@@ -147,7 +147,7 @@ export default function Pricing() {
         <div className="mb-8 rounded-2xl border border-purple-500/30 bg-gradient-to-br from-purple-500/10 to-fuchsia-500/5 p-5 sm:p-6" data-testid="custom-amount-card">
           <div className="flex items-center gap-2 mb-3">
             <Calculator className="w-5 h-5 text-purple-300" />
-            <h3 className="text-base font-black text-purple-200">مبلغ مخصص (90 نقطة لكل دولار)</h3>
+            <h3 className="text-base font-black text-purple-200">مبلغ مخصص (130 نقطة لكل دولار)</h3>
           </div>
 
           {/* Input + Pay button row */}
@@ -191,7 +191,7 @@ export default function Pricing() {
             </div>
           </div>
 
-          <p className="text-[11px] text-zinc-500 mt-3 text-center">الحد الأدنى $5 · الحد الأعلى $10,000 · 90 نقطة لكل دولار</p>
+          <p className="text-[11px] text-zinc-500 mt-3 text-center">الحد الأدنى $5 · الحد الأعلى $10,000 · 130 نقطة لكل دولار</p>
         </div>
 
         {/* Fixed packs */}

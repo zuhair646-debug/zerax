@@ -37,8 +37,9 @@ PACKAGES = {
     "credits_enterprise": {"price_usd": 3000.00, "credits": 510_000, "label": "510,000 Credits", "lemon_var": "LEMONSQUEEZY_VARIANT_ENTERPRISE"},
 }
 
-# Custom amount: 90 credits/$ (safe rate that survives all fee scenarios)
-CREDITS_PER_USD = 90
+# Custom amount: 130 credits/$ (sits just below the smallest pack at 133 cr/$
+# so packs always offer the better bulk-discount value, no inversion at $10K).
+CREDITS_PER_USD = 130
 CUSTOM_MIN_USD = 5
 CUSTOM_MAX_USD = 10000
 
