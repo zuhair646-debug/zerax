@@ -87,25 +87,28 @@ function PackCard({ pack, onBuy, busy }) {
           </div>
         )}
 
-        {/* Actual credits — bold green */}
+        {/* Actual credits — bold green (own block-level row) */}
         <div
-          className={`mt-1 inline-flex items-center gap-1.5 font-black text-2xl tabular-nums ${
+          className={`mt-1 font-black text-2xl tabular-nums flex items-center justify-center gap-1.5 ${
             hasBonus ? 'text-emerald-400' : 'text-amber-300'
           }`}
           data-testid={`pack-credits-${pack.id}`}
         >
-          <Sparkles className="w-5 h-5" /> {fmt(pack.credits)}
+          <Sparkles className="w-5 h-5" />
+          <span>{fmt(pack.credits)}</span>
           <span className="text-sm font-bold opacity-80">نقطة</span>
         </div>
 
-        {/* Bonus pill */}
+        {/* Bonus pill — always its own row (block container around inline-flex) */}
         {hasBonus && (
-          <div
-            className="mt-2 inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-emerald-500/15 border border-emerald-400/40 text-emerald-300 text-[11px] font-black"
-            data-testid={`pack-bonus-${pack.id}`}
-          >
-            <span className="text-sm leading-none">＋</span>
-            <span>{fmt(bonus)} هدية</span>
+          <div className="mt-2 flex justify-center">
+            <span
+              className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-emerald-500/15 border border-emerald-400/40 text-emerald-300 text-[11px] font-black whitespace-nowrap"
+              data-testid={`pack-bonus-${pack.id}`}
+            >
+              <span className="text-sm leading-none">＋</span>
+              <span>{fmt(bonus)} هدية</span>
+            </span>
           </div>
         )}
       </div>
