@@ -169,12 +169,15 @@ def register_payments(app, db, get_current_user):
 
         frontend = os.environ.get("FRONTEND_URL", "https://zenrex.ai").rstrip("/")
         txn_ref = str(uuid.uuid4())
+        # Fetch the user's email — `user` from get_current_user only has user_id
+        u_doc = await db.users.find_one({"id": user["user_id"]}, {"email": 1, "_id": 0})
+        u_email = (u_doc or {}).get("email") or "customer@zenrex.ai"
         payload = {
             "data": {
                 "type": "checkouts",
                 "attributes": {
                     "checkout_data": {
-                        "email": (user.get("email") or ""),
+                        "email": u_email,
                         "custom": {
                             "user_id": user["user_id"],
                             "package_id": body.package_id,

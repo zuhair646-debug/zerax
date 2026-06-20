@@ -261,12 +261,15 @@ def register_payment_routes(app, db, get_current_user):
         frontend = os.environ.get("FRONTEND_URL", "https://zenrex.ai").rstrip("/")
         # Unique reference so we can match the webhook event back to our project
         txn_ref = str(uuid.uuid4())
+        # Fetch user email — `user` from get_current_user only has user_id
+        u_doc = await db.users.find_one({"id": user["user_id"]}, {"email": 1, "_id": 0})
+        u_email = (u_doc or {}).get("email") or "customer@zenrex.ai"
         payload = {
             "data": {
                 "type": "checkouts",
                 "attributes": {
                     "checkout_data": {
-                        "email": (user.get("email") or ""),
+                        "email": u_email,
                         "custom": {
                             "user_id": user["user_id"],
                             "category_id": body.category_id,
