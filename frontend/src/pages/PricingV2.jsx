@@ -24,9 +24,37 @@ const PACKS = [
   { id: 'credits_enterprise', price: 3000, credits: 510_000, badge: 'أفضل قيمة' },
 ];
 
+// Custom amount base rate (no bonus tier yet)
+const CUSTOM_BASE_RATE = 130;
+
+// Progressive bonus on top of base rate — bigger amount = bigger bonus.
+// Margins remain >88% across all tiers (verified).
+const CUSTOM_BONUS_TIERS = [
+  { min: 100,   max: 499,   bonus: 500,     label: '+500 نقطة' },
+  { min: 500,   max: 999,   bonus: 5_000,   label: '+5,000 نقطة' },
+  { min: 1000,  max: 2999,  bonus: 15_000,  label: '+15,000 نقطة' },
+  { min: 3000,  max: 4999,  bonus: 50_000,  label: '+50,000 نقطة' },
+  { min: 5000,  max: 9999,  bonus: 70_000,  label: '+70,000 نقطة' },
+  { min: 10000, max: 10000, bonus: 100_000, label: '+100,000 نقطة 🎁' },
+];
+
+const getBonus = (amt) => {
+  if (!amt || amt < 100) return { bonus: 0, label: null };
+  const tier = CUSTOM_BONUS_TIERS.find(t => amt >= t.min && amt <= t.max);
+  return tier ? { bonus: tier.bonus, label: tier.label } : { bonus: 0, label: null };
+};
+
 const fmt = (n) => n.toLocaleString('en-US');
 
+// How many credits the pack offers ABOVE the flat custom rate (130/$).
+// This is shown as a green "+" badge to communicate the bulk savings.
+const packBonusOverBase = (pack) => {
+  const base = Math.round(pack.price * CUSTOM_BASE_RATE);
+  return Math.max(0, pack.credits - base);
+};
+
 function PackCard({ pack, onBuy, busy }) {
+  const bonus = packBonusOverBase(pack);
   return (
     <div
       className={`relative rounded-2xl border p-5 ${
@@ -47,6 +75,16 @@ function PackCard({ pack, onBuy, busy }) {
         <div className="mt-2 inline-flex items-center gap-1.5 text-amber-300 font-black text-lg">
           <Sparkles className="w-4 h-4" /> {fmt(pack.credits)} نقطة
         </div>
+        {bonus > 0 && (
+          <div
+            className="mt-2 inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-emerald-500/15 border border-emerald-400/40 text-emerald-300 text-[11px] font-black"
+            data-testid={`pack-bonus-${pack.id}`}
+            title={`زيادة عن السعر الأساسي (130 نقطة/$): +${fmt(bonus)} نقطة هدية`}
+          >
+            <span className="text-sm leading-none">＋</span>
+            <span>{fmt(bonus)} نقطة هدية</span>
+          </div>
+        )}
       </div>
       <button
         onClick={() => onBuy(pack.id, 'paypal')}
@@ -120,7 +158,10 @@ export default function Pricing() {
     } finally { setBusy(null); }
   };
 
-  const customCredits = parseFloat(customAmount) > 0 ? Math.round(parseFloat(customAmount) * 130) : 0;
+  const amtNum = parseFloat(customAmount) || 0;
+  const baseCredits = amtNum > 0 ? Math.round(amtNum * 130) : 0;
+  const bonusInfo = getBonus(amtNum);
+  const customCredits = baseCredits + bonusInfo.bonus;
 
   return (
     <div className="min-h-screen bg-zinc-950 text-zinc-100" dir="rtl" data-testid="pricing-page">
@@ -178,20 +219,50 @@ export default function Pricing() {
 
           {/* Always-visible credits preview block (own row, prominent) */}
           <div
-            className="mt-4 rounded-xl border border-amber-400/40 bg-gradient-to-r from-amber-500/10 via-amber-500/15 to-amber-500/10 px-5 py-4 flex items-center justify-between"
+            className="mt-4 rounded-xl border border-amber-400/40 bg-gradient-to-r from-amber-500/10 via-amber-500/15 to-amber-500/10 px-5 py-4"
             data-testid="custom-credits-preview-block"
           >
-            <div className="flex items-center gap-2 text-amber-200 text-sm font-bold">
-              <Sparkles className="w-4 h-4" />
-              <span>ستحصل على</span>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2 text-amber-200 text-sm font-bold">
+                <Sparkles className="w-4 h-4" />
+                <span>ستحصل على</span>
+              </div>
+              <div className="text-2xl sm:text-3xl font-black text-amber-300 tabular-nums" data-testid="custom-credits-preview">
+                {customCredits > 0 ? `${fmt(customCredits)}` : '0'}
+                <span className="text-sm font-bold text-amber-200/70 mr-2">نقطة</span>
+              </div>
             </div>
-            <div className="text-2xl sm:text-3xl font-black text-amber-300 tabular-nums" data-testid="custom-credits-preview">
-              {customCredits > 0 ? `${fmt(customCredits)}` : '0'}
-              <span className="text-sm font-bold text-amber-200/70 mr-2">نقطة</span>
-            </div>
+
+            {/* Breakdown when bonus applies */}
+            {bonusInfo.bonus > 0 && (
+              <div className="mt-3 pt-3 border-t border-amber-400/20 flex flex-wrap items-center justify-between gap-2 text-xs">
+                <div className="text-amber-200/80">
+                  <span className="font-bold">{fmt(baseCredits)}</span> أساسية
+                  <span className="mx-1 text-amber-300/50">+</span>
+                  <span className="font-black text-emerald-300">{fmt(bonusInfo.bonus)}</span>
+                  <span className="text-emerald-300/80"> هدية</span>
+                </div>
+                <div
+                  className="inline-flex items-center gap-1 px-3 py-1 rounded-full bg-emerald-500/15 border border-emerald-400/40 text-emerald-300 font-black"
+                  data-testid="custom-bonus-badge"
+                >
+                  <span className="text-base leading-none">＋</span>
+                  <span>{bonusInfo.label}</span>
+                </div>
+              </div>
+            )}
+
+            {/* Tier hints — visible when no bonus yet, to nudge upsell */}
+            {bonusInfo.bonus === 0 && amtNum > 0 && amtNum < 100 && (
+              <div className="mt-3 pt-3 border-t border-amber-400/20 text-[11px] text-amber-200/70 text-center">
+                💡 ارفع المبلغ إلى <span className="font-black text-emerald-300">$100</span> لتحصل على <span className="font-black text-emerald-300">+500 نقطة هدية</span>
+              </div>
+            )}
           </div>
 
-          <p className="text-[11px] text-zinc-500 mt-3 text-center">الحد الأدنى $5 · الحد الأعلى $10,000 · 130 نقطة لكل دولار</p>
+          <p className="text-[11px] text-zinc-500 mt-3 text-center">
+            130 نقطة لكل دولار · هدايا إضافية تبدأ من $100 · أعلى عرض عند $10,000 (+100,000 نقطة 🎁)
+          </p>
         </div>
 
         {/* Fixed packs */}

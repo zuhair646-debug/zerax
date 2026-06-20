@@ -271,17 +271,20 @@ def register_payments(app, db, get_current_user):
 
     @router.post("/custom/create")
     async def custom_create(body: CustomAmountIn, user=Depends(get_current_user)):
-        """User picks any amount → gets amount * CREDITS_PER_USD credits."""
+        """User picks any amount → gets amount * CREDITS_PER_USD credits + tiered bonus."""
         amt = float(body.amount_usd or 0)
         if amt < CUSTOM_MIN_USD or amt > CUSTOM_MAX_USD:
             raise HTTPException(400, f"المبلغ يجب أن يكون بين ${CUSTOM_MIN_USD} و ${CUSTOM_MAX_USD}")
-        credits = int(round(amt * CREDITS_PER_USD))
+        base_credits = int(round(amt * CREDITS_PER_USD))
+        bonus = _custom_bonus(amt)
+        credits = base_credits + bonus
         # Build a synthetic package for this transaction
         synthetic_pkg_id = f"custom_{int(amt*100)}"
+        bonus_suffix = f" (+{bonus:,} bonus)" if bonus else ""
         synthetic_pkg = {
             "price_usd": round(amt, 2),
             "credits": credits,
-            "label": f"{credits:,} Credits — Custom",
+            "label": f"{credits:,} Credits — Custom${int(amt)}{bonus_suffix}",
         }
         if body.method == "paypal":
             # Use the same PayPal flow but with synthetic package
