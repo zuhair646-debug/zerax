@@ -14,13 +14,13 @@ const API = process.env.REACT_APP_BACKEND_URL;
 const authH = () => ({ Authorization: `Bearer ${localStorage.getItem('token')}` });
 
 const PACKS = [
-  { id: 'credits_mini',   price: 9,    credits: 1_000,   badge: null },
-  { id: 'credits_small',  price: 19,   credits: 2_500,   badge: null },
-  { id: 'credits_medium', price: 49,   credits: 7_000,   badge: 'الأكثر شعبية', popular: true },
-  { id: 'credits_large',  price: 99,   credits: 15_000,  badge: 'وفّر 15%' },
-  { id: 'credits_xl',     price: 199,  credits: 35_000,  badge: 'وفّر 25%' },
-  { id: 'credits_pro',    price: 500,  credits: 95_000,  badge: 'وفّر 35%' },
-  { id: 'credits_mega',   price: 1000, credits: 200_000, badge: 'أفضل قيمة' },
+  { id: 'credits_mini',   price: 9,    credits: 1_200,   badge: null },
+  { id: 'credits_small',  price: 19,   credits: 2_800,   badge: null },
+  { id: 'credits_medium', price: 49,   credits: 7_500,   badge: 'الأكثر شعبية', popular: true },
+  { id: 'credits_large',  price: 99,   credits: 16_000,  badge: 'وفّر 10%' },
+  { id: 'credits_xl',     price: 199,  credits: 32_000,  badge: 'وفّر 15%' },
+  { id: 'credits_pro',    price: 500,  credits: 80_000,  badge: 'وفّر 20%' },
+  { id: 'credits_mega',   price: 1000, credits: 160_000, badge: 'أفضل قيمة' },
 ];
 
 const fmt = (n) => n.toLocaleString('en-US');
@@ -119,7 +119,7 @@ export default function Pricing() {
     } finally { setBusy(null); }
   };
 
-  const customCredits = parseFloat(customAmount) > 0 ? Math.round(parseFloat(customAmount) * 100) : 0;
+  const customCredits = parseFloat(customAmount) > 0 ? Math.round(parseFloat(customAmount) * 90) : 0;
 
   return (
     <div className="min-h-screen bg-zinc-950 text-zinc-100" dir="rtl" data-testid="pricing-page">
@@ -146,7 +146,7 @@ export default function Pricing() {
         <div className="mb-8 rounded-2xl border border-purple-500/30 bg-gradient-to-br from-purple-500/10 to-fuchsia-500/5 p-5 sm:p-6" data-testid="custom-amount-card">
           <div className="flex items-center gap-2 mb-3">
             <Calculator className="w-5 h-5 text-purple-300" />
-            <h3 className="text-base font-black text-purple-200">مبلغ مخصص (100 نقطة لكل دولار)</h3>
+            <h3 className="text-base font-black text-purple-200">مبلغ مخصص (90 نقطة لكل دولار)</h3>
           </div>
           <div className="flex flex-col sm:flex-row items-stretch gap-3">
             <div className="relative flex-1">

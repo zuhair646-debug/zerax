@@ -24,21 +24,20 @@ from pydantic import BaseModel
 
 log = logging.getLogger(__name__)
 
-# Credit-only packages (no subscriptions — all one-time pay-for-credits).
-# Price/credit ratio improves at higher tiers (bigger discount for bigger spend).
+# Credit-only packages. Math: worst-case fees (Lemon 5% + cards 2.9% + $0.50)
+# + LLM cost at 70% utilization ($0.005/credit) — all packs ≥ 35% margin floor.
 PACKAGES = {
-    "credits_mini":   {"price_usd": 9.00,   "credits": 1_000,   "label": "1,000 Credits",   "lemon_var": "LEMONSQUEEZY_VARIANT_MINI"},
-    "credits_small":  {"price_usd": 19.00,  "credits": 2_500,   "label": "2,500 Credits",   "lemon_var": "LEMONSQUEEZY_VARIANT_STARTER"},
-    "credits_medium": {"price_usd": 49.00,  "credits": 7_000,   "label": "7,000 Credits",   "lemon_var": "LEMONSQUEEZY_VARIANT_PROJECT_PACK"},
-    "credits_large":  {"price_usd": 99.00,  "credits": 15_000,  "label": "15,000 Credits",  "lemon_var": "LEMONSQUEEZY_VARIANT_PRO"},
-    "credits_xl":     {"price_usd": 199.00, "credits": 35_000,  "label": "35,000 Credits",  "lemon_var": "LEMONSQUEEZY_VARIANT_STUDIO"},
-    "credits_pro":    {"price_usd": 500.00, "credits": 95_000,  "label": "95,000 Credits",  "lemon_var": "LEMONSQUEEZY_VARIANT_PRO_PACK"},
-    "credits_mega":   {"price_usd": 1000.00,"credits": 200_000, "label": "200,000 Credits", "lemon_var": "LEMONSQUEEZY_VARIANT_MEGA"},
+    "credits_mini":   {"price_usd": 9.00,    "credits": 1_200,   "label": "1,200 Credits",   "lemon_var": "LEMONSQUEEZY_VARIANT_MINI"},
+    "credits_small":  {"price_usd": 19.00,   "credits": 2_800,   "label": "2,800 Credits",   "lemon_var": "LEMONSQUEEZY_VARIANT_STARTER"},
+    "credits_medium": {"price_usd": 49.00,   "credits": 7_500,   "label": "7,500 Credits",   "lemon_var": "LEMONSQUEEZY_VARIANT_PROJECT_PACK"},
+    "credits_large":  {"price_usd": 99.00,   "credits": 16_000,  "label": "16,000 Credits",  "lemon_var": "LEMONSQUEEZY_VARIANT_PRO"},
+    "credits_xl":     {"price_usd": 199.00,  "credits": 32_000,  "label": "32,000 Credits",  "lemon_var": "LEMONSQUEEZY_VARIANT_STUDIO"},
+    "credits_pro":    {"price_usd": 500.00,  "credits": 80_000,  "label": "80,000 Credits",  "lemon_var": "LEMONSQUEEZY_VARIANT_PRO_PACK"},
+    "credits_mega":   {"price_usd": 1000.00, "credits": 160_000, "label": "160,000 Credits", "lemon_var": "LEMONSQUEEZY_VARIANT_MEGA"},
 }
 
-# Custom-amount payments: user picks any amount, gets amount * CREDITS_PER_USD credits.
-# Base rate 100 credits/$ (no volume discount — bonus only on pre-defined packs).
-CREDITS_PER_USD = 100
+# Custom amount: 90 credits/$ (safe rate that survives all fee scenarios)
+CREDITS_PER_USD = 90
 CUSTOM_MIN_USD = 5
 CUSTOM_MAX_USD = 5000
 
