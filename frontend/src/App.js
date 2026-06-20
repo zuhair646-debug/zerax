@@ -4,8 +4,8 @@ import '@/i18n';  // initialize i18next + apply persisted language on app boot
 import { Toaster } from '@/components/ui/sonner';
 import PromoStrip from '@/components/PromoStrip';
 import DetectedLanguageBanner from '@/components/DetectedLanguageBanner';
-import FloatingLanguagePicker from '@/components/FloatingLanguagePicker';
-import SupportWidget from '@/components/SupportWidget';
+// FloatingLanguagePicker + SupportWidget removed at owner's request — they
+// duplicated controls already in the navbar and cluttered every page.
 import ClientIntelligence from '@/pages/ClientIntelligence';
 import AffiliateDashboard from '@/pages/AffiliateDashboard';
 import AffiliatesAdmin from '@/pages/AffiliatesAdmin';
@@ -162,8 +162,11 @@ function App() {
       <BrowserRouter>
         <PromoStrip />
         <DetectedLanguageBanner />
-        <FloatingLanguagePicker />
-        <SupportWidget user={user} />
+        {/* Floating language picker (globe pill at bottom-left) and
+            SupportWidget (chat bubble at bottom-right) were removed at the
+            owner's request — these duplicated the language selector already
+            present in the navbar and the AI chat reachable from the dashboard.
+            Keeping them caused visual clutter on every page. */}
         <GlobalCreditsGuard />
         <Routes>
           {/* Root: ALWAYS show landing. Logged-in users can click on dashboard CTA to navigate. */}

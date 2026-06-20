@@ -7,6 +7,7 @@ import {
   Download, Send, TrendingUp, Receipt, Settings, Award,
 } from 'lucide-react';
 import { BackButton } from '@/components/BackButton';
+import useCreditsGuard from '@/hooks/useCreditsGuard';
 
 // ─── Sections curated for a CUSTOMER DASHBOARD ───────────────────────
 // Philosophy: this page is the user's PRIVATE WORKSPACE.
@@ -40,6 +41,9 @@ const ClientDashboard = ({ user, setUser }) => {
   const navigate = useNavigate();
   const [counts, setCounts] = useState({ images: 0, videos: 0, websites: 0, apps: 0, orders: 0 });
   const fetchedRef = useRef(false);
+  // Authoritative, debounced credits value — same source the navbar uses, so
+  // dashboard and navbar stay in lock-step (no flicker between two clocks).
+  const { credits: liveCredits, unlimited: liveUnlimited } = useCreditsGuard();
 
   useEffect(() => {
     if (fetchedRef.current) return;
@@ -189,7 +193,11 @@ const ClientDashboard = ({ user, setUser }) => {
             <div className="flex items-center justify-between mb-1">
               <Coins className="w-6 h-6 text-amber-400" />
               <span className="text-2xl font-black text-white" data-testid="stat-credits-balance">
-                {Math.round(Number(user?.credits || 0)).toLocaleString('en-US')}
+                {liveUnlimited
+                  ? '∞'
+                  : (liveCredits !== null && liveCredits !== undefined
+                      ? Math.round(Number(liveCredits)).toLocaleString('en-US')
+                      : Math.round(Number(user?.credits || 0)).toLocaleString('en-US'))}
               </span>
             </div>
             <p className="text-xs text-amber-200/70 font-medium">رصيد النقاط</p>
