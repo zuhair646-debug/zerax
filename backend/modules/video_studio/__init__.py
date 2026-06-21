@@ -669,6 +669,20 @@ def create_video_studio_router(db, get_current_user) -> APIRouter:
     async def chat(payload: ChatIn, user=Depends(get_current_user)):
         if SectionAgent is None:
             raise HTTPException(503, "shared agent core not available")
+        # ── Hard credit gate — same minimum as freebuild surface ────────
+        MIN_TURN_CREDITS = 50
+        _u = await db.users.find_one({"id": user["user_id"]}, {"_id": 0, "credits": 1}) or {}
+        _bal = int(round(float(_u.get("credits") or 0)))
+        if _bal < MIN_TURN_CREDITS:
+            raise HTTPException(
+                status_code=402,
+                detail={
+                    "error": "insufficient_credits",
+                    "balance": _bal,
+                    "required": MIN_TURN_CREDITS,
+                    "message_ar": "رصيدك غير كافٍ لمتابعة المحادثة. اشحن نقاطك ثم اضغط (إكمل) لمواصلة الذكاء من حيث توقف.",
+                },
+            )
         extra = ""
         if payload.series_id:
             s = await db.video_series.find_one({"id": payload.series_id, "user_id": user["user_id"]}, {"_id": 0})
@@ -1366,6 +1380,20 @@ h1{{font-size:24px;margin:.5em 0 .2em;}}
     # AI Producer wizard — guides the user step by step through universe-building
     @router.post("/production/producer-chat")
     async def producer_chat(payload: ProducerChatIn, user=Depends(get_current_user)):
+        # ── Hard credit gate — same minimum as freebuild surface ────────
+        MIN_TURN_CREDITS = 50
+        _u = await db.users.find_one({"id": user["user_id"]}, {"_id": 0, "credits": 1}) or {}
+        _bal = int(round(float(_u.get("credits") or 0)))
+        if _bal < MIN_TURN_CREDITS:
+            raise HTTPException(
+                status_code=402,
+                detail={
+                    "error": "insufficient_credits",
+                    "balance": _bal,
+                    "required": MIN_TURN_CREDITS,
+                    "message_ar": "رصيدك غير كافٍ لمتابعة المحادثة. اشحن نقاطك ثم اضغط (إكمل) لمواصلة الذكاء من حيث توقف.",
+                },
+            )
         s = await db.video_series.find_one(
             {"id": payload.series_id, "user_id": user["user_id"]}, {"_id": 0}
         )

@@ -1057,14 +1057,22 @@ def create_game_router(db, get_current_user):
         if not phase_info:
             raise HTTPException(400, "Invalid phase")
         
-        # Load user doc for accurate credits + owner bypass
-        user_doc = await db.users.find_one({"id": user["user_id"]}, {"_id": 0, "credits": 1, "is_owner": 1, "role": 1}) or {}
+        # Load user doc for accurate credits — NO role bypass (all users pay)
+        user_doc = await db.users.find_one({"id": user["user_id"]}, {"_id": 0, "credits": 1}) or {}
         user_credits = int(user_doc.get("credits") or 0)
-        user_is_owner = bool(user_doc.get("is_owner") or user_doc.get("role") == "owner")
 
-        # Check credits (owner bypasses)
-        if not user_is_owner and user_credits < phase_info["credits"]:
-            raise HTTPException(402, f"رصيد غير كافٍ — تحتاج {phase_info['credits']} نقطة (لديك {user_credits})")
+        # Check credits — no bypass for any role
+        MIN_TURN_CREDITS = max(50, int(phase_info["credits"]))
+        if user_credits < MIN_TURN_CREDITS:
+            raise HTTPException(
+                status_code=402,
+                detail={
+                    "error": "insufficient_credits",
+                    "balance": user_credits,
+                    "required": MIN_TURN_CREDITS,
+                    "message_ar": f"رصيدك غير كافٍ ({user_credits} نقطة). تحتاج {MIN_TURN_CREDITS} نقطة على الأقل لإكمال هذه المرحلة. اشحن نقاطك ثم اضغط (إكمل) لمواصلة الذكاء من حيث توقف.",
+                },
+            )
         
         # Build AI context with memory — UNION of approved assets from BOTH storage paths:
         #   • phases[].messages[].generated_assets[]  (new — populated after v22 sync fix)

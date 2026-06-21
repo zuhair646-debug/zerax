@@ -4136,17 +4136,23 @@ async def _run_anthropic_agent(
             break
 
     # ── Credit deduction (every user pays, no role bypass) ──────────────
+    # Floor: charge a minimum-turn fee even if token capture failed.
+    MIN_TURN_CHARGE_TOKENS = 1500
     credits_charged = 0
     try:
-        if db is not None and (turn_tokens_in + turn_tokens_out) > 0:
+        if db is not None:
+            effective_in = turn_tokens_in or 0
+            effective_out = turn_tokens_out or 0
+            if (effective_in + effective_out) <= 0:
+                effective_out = MIN_TURN_CHARGE_TOKENS
             _uid = project.get("user_id")
             if _uid:
                 from modules.ai_core.usage_meter import record_usage
                 _res = await record_usage(
                     db, _uid, project.get("id"),
                     section=project.get("mode") or "websites",
-                    tokens_in=turn_tokens_in,
-                    tokens_out=turn_tokens_out,
+                    tokens_in=effective_in,
+                    tokens_out=effective_out,
                     model_label=model_used or "zenrex-ai",
                 )
                 if _res and _res.get("ok"):
@@ -4302,17 +4308,23 @@ async def _run_openai_compat_agent(
             break
 
     # ── Credit deduction (every user pays, no role bypass) ──────────────
+    # Floor: charge a minimum-turn fee even if token capture failed.
+    MIN_TURN_CHARGE_TOKENS = 1500
     credits_charged = 0
     try:
-        if db is not None and (turn_tokens_in + turn_tokens_out) > 0:
+        if db is not None:
+            effective_in = turn_tokens_in or 0
+            effective_out = turn_tokens_out or 0
+            if (effective_in + effective_out) <= 0:
+                effective_out = MIN_TURN_CHARGE_TOKENS
             _uid = project.get("user_id")
             if _uid:
                 from modules.ai_core.usage_meter import record_usage
                 _res = await record_usage(
                     db, _uid, project.get("id"),
                     section=project.get("mode") or "websites",
-                    tokens_in=turn_tokens_in,
-                    tokens_out=turn_tokens_out,
+                    tokens_in=effective_in,
+                    tokens_out=effective_out,
                     model_label=model_used or "zenrex-ai",
                 )
                 if _res and _res.get("ok"):
@@ -4994,18 +5006,26 @@ async def _stream_one_provider(
     # ── Credit deduction ─────────────────────────────────────────────────
     # Bill the user once per chat turn using the actual provider-reported
     # token counts. Every user pays — there is no role-based bypass.
+    # Floor: even if the provider returned 0 tokens (capture failed) we
+    # still charge a minimum-turn fee so the AI can never run for free.
+    MIN_TURN_CHARGE_TOKENS = 1500  # ≈ 50 credits at text_claude_1k rate
     credits_charged = 0
     no_credits_after = False
     try:
-        if db is not None and (turn_tokens_in + turn_tokens_out) > 0:
+        if db is not None:
+            effective_in = turn_tokens_in or 0
+            effective_out = turn_tokens_out or 0
+            if (effective_in + effective_out) <= 0:
+                # Token capture failed — charge the floor so usage can't escape billing
+                effective_out = MIN_TURN_CHARGE_TOKENS
             _uid = project.get("user_id")
             if _uid:
                 from modules.ai_core.usage_meter import record_usage
                 _res = await record_usage(
                     db, _uid, project.get("id"),
                     section=project.get("mode") or "websites",
-                    tokens_in=turn_tokens_in,
-                    tokens_out=turn_tokens_out,
+                    tokens_in=effective_in,
+                    tokens_out=effective_out,
                     model_label=model_used or "zenrex-ai",
                 )
                 if _res and _res.get("ok"):

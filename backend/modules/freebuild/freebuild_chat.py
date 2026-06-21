@@ -1335,6 +1335,27 @@ def make_freebuild_chat_router(db, get_current_user):
         if not proj:
             raise HTTPException(404, "المشروع غير موجود")
 
+        # ── Hard credit gate (mirrors agent-chat-stream) ────────────────
+        # Block ANY chat turn — websites, apps, games, image/video studio —
+        # if the user can't afford a typical turn. No role bypass: even
+        # admins/owners must have ≥ 50 credits. This prevents free AI usage
+        # across every unified surface.
+        MIN_TURN_CREDITS = 50
+        _u_doc = await db.users.find_one(
+            {"id": user["user_id"]}, {"_id": 0, "credits": 1},
+        ) or {}
+        _bal = int(round(float(_u_doc.get("credits") or 0)))
+        if _bal < MIN_TURN_CREDITS:
+            raise HTTPException(
+                status_code=402,
+                detail={
+                    "error": "insufficient_credits",
+                    "balance": _bal,
+                    "required": MIN_TURN_CREDITS,
+                    "message_ar": "رصيدك غير كافٍ لمتابعة المحادثة. اشحن نقاطك ثم اضغط (إكمل) لمواصلة الذكاء من حيث توقف.",
+                },
+            )
+
         # ═════════════════════════════════════════════════════════════════════
         # 🛡️ ZENREX GUARDIAN — silent supervisor pass on prior conversation.
         # Runs BEFORE the main AI replies so its corrective directive can be
@@ -6389,13 +6410,15 @@ For questions: legal@zenrex.ai
         # typical turn. We require ≥ MIN_TURN_CREDITS so a single turn
         # doesn't drive the balance into a negative number and so the user
         # gets the recharge banner BEFORE typing into the void.
+        # NO role bypass — even owner/admin must have credits. This is the
+        # single point of truth for credit enforcement across every chat
+        # surface (websites, apps, games, image/video studios).
         MIN_TURN_CREDITS = 50
         _u_credits_doc = await db.users.find_one(
-            {"id": user["user_id"]}, {"_id": 0, "credits": 1, "role": 1, "is_owner": 1},
+            {"id": user["user_id"]}, {"_id": 0, "credits": 1},
         ) or {}
         _balance = int(round(float(_u_credits_doc.get("credits") or 0)))
-        _is_admin = (_u_credits_doc.get("role") or "").lower() in ("owner", "admin", "superuser") or _u_credits_doc.get("is_owner")
-        if not _is_admin and _balance < MIN_TURN_CREDITS:
+        if _balance < MIN_TURN_CREDITS:
             # Surface a structured error so the frontend can render the
             # "اشحن نقاطك للمتابعة" banner + lock the input.
             raise HTTPException(

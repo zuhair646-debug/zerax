@@ -2666,7 +2666,7 @@ function ChatWorkspace({ projectId }) {  const navigate = useNavigate();
   const VIDEO_PHASE_EMOJI = { film_type: '🎞️', characters: '👥', script: '📝', voice: '🎙️', storyboard: '🖼️', preview: '👁️', render: '✨' };
   const sidebarPhases = isVideoMode
     ? VIDEO_PHASES.map((p) => ({ id: p.id, title: p.label, icon: VIDEO_PHASE_EMOJI[p.id] || '🎬', desc: p.desc }))
-    : PHASES;
+    : getPhases(project?.mode);
   const [previewMode, setPreviewMode] = useState('desktop');
   // For app mode: which device frame to show (iphone | android) — initial pick from project.platform
   const [appDevice, setAppDevice] = useState('iphone');

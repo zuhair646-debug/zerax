@@ -1,0 +1,41 @@
+{
+  "summary": "Verified 50-credit minimum gate across ALL AI chat surfaces (freebuild stream + non-stream, video-studio chat, video-studio producer-chat, games chat). Owner role has NO bypass — all return 402 with structured detail. App-mode freebuild project saves mode='app' correctly. Sidebar shows APP phases (تدفق الشاشات / هوية التطبيق / بناء الشاشات / محاكي الجوال) not website phases. Backend tests: 8/8 passed. Frontend: app-builder Flutter mode redirects to /freebuild/chat/{pid} and renders app phases correctly.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "/api/video-studio/chat", "issue": "Credit deduction observed (10000 -> 9981, delta=19) — works correctly, but the amount seems low (only 19 credits for one short turn). Confirm the per-token cost is intentional."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_credit_gate_50.py",
+    "/app/test_reports/pytest/credit_gate_50.xml"
+  ],
+  "action_items": [
+    "[INFO] If user reports App Builder still 'generating without deducting', confirm they are logged in as the SAME account that has < 50 credits — gate returns 402 reliably in tests for owner role.",
+    "[INFO] PendingResumeBanner UI was NOT directly tested at <50 credits (no straightforward UI way to drop credits during a session); backend 402 with structured `insufficient_credits` detail is verified, and FreeBuildChat.js already consumes this contract."
+  ],
+  "critical_code_review_comments": [
+    "freebuild_chat.py is 6641 lines — far exceeds the 700-line guideline. Should be split (router/handlers/persistence/agent-wrapper).",
+    "Credit gate code is DUPLICATED in 5 places (freebuild_chat _chat_impl L1338, agent_chat_stream L6408, video_studio /chat L672, /production/producer-chat L1380, games chat L1060). Consider extracting `require_min_credits(user, db, min_credits=50)` helper that raises the structured 402 to keep wording and balance reading in one place.",
+    "ProjectIn pydantic model uses field name=`name` but the AppBuilder frontend posts `name` — OK. However old `title` is still used in some pages; ensure consistency across freebuild project creation callers.",
+    "Games chat 402 detail.required is dynamic (max(50, phase_credits)) — frontend banner UI must read required from detail, not hardcode 50."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_credit_gate_50.py"
+  ],
+  "success_rate": {
+    "backend": "100% (8/8)",
+    "frontend": "100% (app-builder -> freebuild/chat flow + sidebar phases verified)"
+  },
+  "test_credentials": "owner@zerax.com / owner123 (local preview owner). Credits restored to 10000 after tests.",
+  "seed_data_creation": "Two test freebuild projects created (TEST_APP_credit_gate via API, 'تطبيق Flutter' via UI) and one TEST_GAME_gate via API. Not cleaned up but isolated.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Tests live at /app/backend/tests/test_credit_gate_50.py. Run with: cd /app/backend && export $(grep -v '^#' .env | xargs) && export REACT_APP_BACKEND_URL=$(grep REACT_APP_BACKEND_URL /app/frontend/.env | cut -d= -f2) && python -m pytest tests/test_credit_gate_50.py -v. The tests directly mutate users.credits in Mongo to <50 to exercise the gate, then restore to 10000. /api/games/project requires programming_type from PROGRAMMING_TYPES[game_type] — e.g. 'html5_canvas' for web. /api/freebuild-chat/project takes `name` (NOT `title`). Games /project/{pid}/chat is multipart Form (not JSON).",
+  "rca of the issue": "PRE-FIX RCA (confirmed solved by main agent): (1) agent-chat-stream had `is_platform_owner` bypass that skipped the credit check for owner/admin roles, letting them generate freely. (2) Credit deduction (charge_user) only ran when (tokens_in + tokens_out) > 0; LLM providers occasionally returned zero token counts, so deduction was skipped entirely. FIX VERIFIED: (a) role bypass removed — owner@zerax.com with credits=10 now gets 402 on agent-chat-stream + chat + video-chat + producer-chat + games-chat (8/8 endpoints assert 402 with structured detail). (b) MIN_TURN_CHARGE_TOKENS floor of 1500 ensures credits always deduct — observed video-studio /chat reducing balance 10000 -> 9981 on a single turn. Sidebar phases fix verified visually: APP mode shows تدفق الشاشات / هوية التطبيق / بناء الشاشات / محاكي الجوال instead of website phases."
+}
