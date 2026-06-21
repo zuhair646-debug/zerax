@@ -1377,7 +1377,7 @@ def make_freebuild_chat_router(db, get_current_user):
         # if the user can't afford a typical turn. No role bypass: even
         # admins/owners must have ≥ 50 credits. This prevents free AI usage
         # across every unified surface.
-        MIN_TURN_CREDITS = 50
+        MIN_TURN_CREDITS = 25
         _u_doc = await db.users.find_one(
             {"id": user["user_id"]}, {"_id": 0, "credits": 1},
         ) or {}
@@ -6450,7 +6450,7 @@ For questions: legal@zenrex.ai
         # NO role bypass — even owner/admin must have credits. This is the
         # single point of truth for credit enforcement across every chat
         # surface (websites, apps, games, image/video studios).
-        MIN_TURN_CREDITS = 50
+        MIN_TURN_CREDITS = 25
         _u_credits_doc = await db.users.find_one(
             {"id": user["user_id"]}, {"_id": 0, "credits": 1},
         ) or {}

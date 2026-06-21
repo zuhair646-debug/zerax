@@ -670,7 +670,7 @@ def create_video_studio_router(db, get_current_user) -> APIRouter:
         if SectionAgent is None:
             raise HTTPException(503, "shared agent core not available")
         # ── Hard credit gate — same minimum as freebuild surface ────────
-        MIN_TURN_CREDITS = 50
+        MIN_TURN_CREDITS = 25
         _u = await db.users.find_one({"id": user["user_id"]}, {"_id": 0, "credits": 1}) or {}
         _bal = int(round(float(_u.get("credits") or 0)))
         if _bal < MIN_TURN_CREDITS:
@@ -1381,7 +1381,7 @@ h1{{font-size:24px;margin:.5em 0 .2em;}}
     @router.post("/production/producer-chat")
     async def producer_chat(payload: ProducerChatIn, user=Depends(get_current_user)):
         # ── Hard credit gate — same minimum as freebuild surface ────────
-        MIN_TURN_CREDITS = 50
+        MIN_TURN_CREDITS = 25
         _u = await db.users.find_one({"id": user["user_id"]}, {"_id": 0, "credits": 1}) or {}
         _bal = int(round(float(_u.get("credits") or 0)))
         if _bal < MIN_TURN_CREDITS:
