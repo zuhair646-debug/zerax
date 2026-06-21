@@ -3715,6 +3715,13 @@ try:
 except Exception as _ppe:
     logging.getLogger(__name__).error(f"Failed to register generic PayPal payments: {_ppe}", exc_info=True)
 
+# ── Zenrex Storage Billing (unified storage subscription + grace period) ──
+try:
+    from modules.storage_billing import register_storage_billing as _sb_register
+    _sb_register(app, db, get_current_user)
+except Exception as _sbe:
+    logging.getLogger(__name__).error(f"Failed to register storage_billing: {_sbe}", exc_info=True)
+
 # ============== CARE PORTAL (post-delivery client dashboard + Mobile App upgrade) ==============
 try:
     from modules.care_portal import create_care_router

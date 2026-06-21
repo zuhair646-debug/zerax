@@ -1213,69 +1213,106 @@ def make_freebuild_chat_router(db, get_current_user):
         return {"projects": items}
 
     # ===== User storage usage (for quota indicator + paywall) =====
-    @router.get("/storage/usage")
-    async def storage_usage(user=Depends(get_current_user)):
-        """Compute the user's storage footprint across all their projects so the
-        UI can show a quota bar and prompt for a paid upgrade when over limit.
-
-        Quotas (defaults; can be overridden per-user by `user.storage_quota_mb`):
-          - Free tier:    3 projects, 100 MB
-          - Pro tier:    20 projects,   5 GB  (purchasable)
-          - Studio tier: unlimited,    50 GB
+    async def _user_total_bytes(db_, uid: str) -> int:
+        """Compute the user's storage footprint in bytes across every surface
+        (websites/apps/games/images/videos). Single source of truth — also used
+        by the storage_billing module when computing recovery tier pricing.
         """
-        uid = user["user_id"]
-        # Project count + bytes
-        cur = db.freebuild_projects.find(
+        total = 0
+        cur = db_.freebuild_projects.find(
             {"user_id": uid, "status": {"$ne": "deleted"}},
-            {"current_html": 1, "messages": 1, "approved_assets": 1, "name": 1, "mode": 1}
+            {"current_html": 1, "messages": 1, "approved_assets": 1}
         )
-        projects = await cur.to_list(length=500)
-        bytes_used = 0
+        projects = await cur.to_list(length=1000)
         for p in projects:
-            bytes_used += len((p.get("current_html") or "").encode("utf-8", errors="ignore"))
+            total += len((p.get("current_html") or "").encode("utf-8", errors="ignore"))
             for m in (p.get("messages") or []):
-                bytes_used += len((m.get("content") or "").encode("utf-8", errors="ignore"))
+                total += len((m.get("content") or "").encode("utf-8", errors="ignore"))
             for a in (p.get("approved_assets") or []):
-                bytes_used += len((a.get("prompt") or "").encode("utf-8", errors="ignore"))
-                bytes_used += len((a.get("image_url") or "").encode("utf-8", errors="ignore"))
-        # Asset uploads (binary files) — count by metadata size in DB
+                total += len((a.get("prompt") or "").encode("utf-8", errors="ignore"))
+                total += len((a.get("image_url") or "").encode("utf-8", errors="ignore"))
         try:
-            assets = await db.freebuild_assets.find(
+            assets = await db_.freebuild_assets.find(
                 {"user_id": uid}, {"size_bytes": 1, "file_size": 1}
-            ).to_list(length=2000)
+            ).to_list(length=5000)
             for a in assets:
-                bytes_used += int(a.get("size_bytes") or a.get("file_size") or 0)
+                total += int(a.get("size_bytes") or a.get("file_size") or 0)
         except Exception:
             pass
+        return total
 
-        # User tier — read from user doc or default to free
-        user_doc = await db.users.find_one({"id": uid}, {"storage_tier": 1, "storage_quota_mb": 1, "storage_quota_projects": 1})
-        tier = (user_doc or {}).get("storage_tier") or "free"
-        TIER_DEFAULTS = {
-            "free":   {"quota_mb": 100,   "quota_projects": 3,   "label": "مجاني",  "next_tier_label": "Pro"},
-            "pro":    {"quota_mb": 5120,  "quota_projects": 20,  "label": "Pro",    "next_tier_label": "Studio"},
-            "studio": {"quota_mb": 51200, "quota_projects": 999, "label": "Studio", "next_tier_label": None},
-        }
-        defaults = TIER_DEFAULTS.get(tier, TIER_DEFAULTS["free"])
-        quota_mb = int((user_doc or {}).get("storage_quota_mb") or defaults["quota_mb"])
-        quota_projects = int((user_doc or {}).get("storage_quota_projects") or defaults["quota_projects"])
+    # Expose for storage_billing module
+    import sys as _sys
+    _mod = _sys.modules[__name__]
+    _mod._user_total_bytes = _user_total_bytes  # type: ignore
+
+    @router.get("/storage/usage")
+    async def storage_usage(user=Depends(get_current_user)):
+        """Compute user's storage footprint + subscription status.
+
+        Unified across every content type (websites/apps/games/images/videos)
+        — quota is based on MB only (no project count limit). Subscription
+        status (active/past_due/archived) comes from `storage_subscriptions`.
+        """
+        uid = user["user_id"]
+        bytes_used = await _user_total_bytes(db, uid)
         used_mb = bytes_used / (1024 * 1024)
-        project_count = len(projects)
+
+        # ── Read subscription record (single source of truth for the plan) ──
+        sub = await db.storage_subscriptions.find_one({"user_id": uid}, {"_id": 0}) or {}
+        plan_id = sub.get("plan_id") or "free"
+        sub_status = sub.get("status") or "active"
+
+        # NEW plan catalogue (unified GB-only). Project count limits removed.
+        TIER_DEFAULTS = {
+            "free":    {"quota_mb": 250,           "label": "مجاني"},
+            "starter": {"quota_mb": 3 * 1024,      "label": "Starter"},
+            "plus":    {"quota_mb": 15 * 1024,     "label": "Plus"},
+            "pro":     {"quota_mb": 75 * 1024,     "label": "Pro"},
+            "studio":  {"quota_mb": 300 * 1024,    "label": "Studio"},
+        }
+        defaults = TIER_DEFAULTS.get(plan_id, TIER_DEFAULTS["free"])
+        quota_mb = defaults["quota_mb"]
+
+        # Grace countdown
+        grace_days_left = None
+        if sub_status == "past_due" and sub.get("grace_started_at"):
+            try:
+                started = datetime.fromisoformat(sub["grace_started_at"])
+                elapsed = (datetime.now(timezone.utc) - started).days
+                grace_days_left = max(0, 10 - elapsed)
+            except Exception:
+                pass
+
         over_storage = used_mb > quota_mb
-        over_projects = project_count > quota_projects
+        # `needs_upgrade` is now PURELY about storage % (or subscription health)
+        needs_upgrade = bool(over_storage) or sub_status in ("past_due", "archived")
+
+        # Project count is INFORMATIONAL only — no longer triggers a paywall.
+        try:
+            project_count = await db.freebuild_projects.count_documents(
+                {"user_id": uid, "status": {"$ne": "deleted"}}
+            )
+        except Exception:
+            project_count = 0
+
         return {
-            "tier": tier,
+            "tier": plan_id,
             "tier_label": defaults["label"],
-            "next_tier_label": defaults["next_tier_label"],
             "used_mb": round(used_mb, 2),
             "quota_mb": quota_mb,
             "used_pct": round((used_mb / quota_mb) * 100, 1) if quota_mb > 0 else 0,
             "project_count": project_count,
-            "quota_projects": quota_projects,
-            "over_quota": bool(over_storage or over_projects),
+            # legacy field kept so the frontend doesn't break, but always
+            # reports the same number → over_projects is always False now.
+            "quota_projects": 99999,
+            "over_quota": bool(over_storage),
             "over_storage": bool(over_storage),
-            "over_projects": bool(over_projects),
-            "needs_upgrade": bool(over_storage or over_projects),
+            "over_projects": False,
+            "needs_upgrade": needs_upgrade,
+            "subscription_status": sub_status,
+            "grace_days_left": grace_days_left,
+            "archived": sub_status == "archived",
         }
 
     # ===== Get single project =====

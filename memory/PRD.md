@@ -66,6 +66,48 @@ Arabic-first AI builder for websites/apps/images/videos with credits-based prici
   - `/api/games/project/{pid}/chat` → 402 with structured detail, owner bypass removed
   - Floor charge `MIN_TURN_CHARGE_TOKENS=1500` on all 3 freebuild agent code paths so credits ALWAYS deduct, even when provider returns zero token counts (root cause of "AI generates for free" bug)
 - **🆕 2026-06-21 — PHASES_BY_MODE fix:** `FreeBuildChat.js` sidebar now uses `getPhases(project?.mode)` instead of hardcoded website phases, so APP projects show app phases (تدفق الشاشات / هوية التطبيق / بناء الشاشات / محاكي الجوال) — verified by testing agent
+
+## 🆕 Storage Subscription System (2026-06-21)
+
+Unified storage billing — separated from AI credits. One MB pool across every surface (websites/apps/games/images/videos).
+
+### Plans (monthly recurring via LemonSqueezy)
+| Tier | Price | Storage |
+|---|---|---|
+| Free | $0 | 250 MB |
+| Starter | $7/mo | 3 GB |
+| Plus ⭐ | $14/mo | 15 GB |
+| Pro | $29/mo | 75 GB |
+| Studio | $59/mo | 300 GB |
+
+### Grace Period & Recovery
+- Payment fail → 10-day grace (email reminders at day 1/5/8 via Resend)
+- After grace → files moved to `archived` status (kept on server)
+- Archive retention: 6 months → eligible for purge
+- Recovery fees: $5 (<1GB) / $15 (1-10GB) / $35 (10-50GB) / $79 (+50GB)
+- User must pay recovery fee + renew subscription to regain access
+
+### Implementation
+- New module: `/app/backend/modules/storage_billing/__init__.py`
+- New collection: `storage_subscriptions` ({user_id, plan_id, status, lemon_subscription_id, current_period_end, grace_started_at, archived_at, archived_size_mb})
+- Background loop: hourly check for past_due → archive after 10 days
+- New endpoints:
+  - `GET /api/storage/plans` — list plans + recovery tiers
+  - `GET /api/storage/subscription` — current sub status
+  - `POST /api/storage/checkout` — start subscription checkout
+  - `POST /api/storage/recovery/checkout` — start one-time recovery
+  - `POST /api/storage/webhook` — LemonSqueezy events (subscription_created, payment_failed, cancelled, recovery order)
+- Updated `/api/freebuild-chat/storage/usage`:
+  - Removed project count limit (unified GB-based quota)
+  - Added subscription_status, grace_days_left, archived fields
+  - Single helper `_user_total_bytes()` for accurate measurement
+- New frontend page: `/billing/storage` with full plan comparison + recovery flow
+- Updated `StorageIndicator.js`: context-aware warnings (no more false "تجاوزت الحد" when only over project count)
+
+### Required Owner Action
+Create 8 LemonSqueezy Variants and add to `/app/backend/.env`:
+- `LEMONSQUEEZY_STORAGE_STARTER` / `_PLUS` / `_PRO` / `_STUDIO` (Subscription products)
+- `LEMONSQUEEZY_RECOVERY_SMALL` / `_MEDIUM` / `_LARGE` / `_XL` (One-time products)
 - **🆕 Floating language picker + support widget removed** — cleaner pages
 - **🆕 Mobile chat overhaul:** PhaseHeaderPill (animated on phase change), credits + storage popovers visible on mobile, send button always visible, attach supports all file types
 - **🆕 Hard credit gate (50 credits min) before any AI turn** in `/agent-chat-stream` + `PendingResumeBanner` ("إكمل ➜") that resumes the user's saved message after recharge

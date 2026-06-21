@@ -1,38 +1,53 @@
-# Test Credentials — Production zenrex.ai
+# Test Credentials
 
-## 🔑 Admin Owner Account (Production)
-- **Email**: `admin@zenrex.ai`
-- **Password**: `Zenrex@2026`
-- **Role**: `owner`
-- **URL**: https://zenrex.ai/login
+## Local Preview Environment
 
-## 🔑 Secondary Owner
-- **Email**: `zoheer@zenrex.ai`
-- **Role**: `owner`
-- (password not reset)
+### Owner Account (full admin access)
+- **Email:** owner@zerax.com
+- **Password:** owner123
+- **Role:** owner
+- **Credits:** 10000 (replenish via `db.users.updateOne({email:"owner@zerax.com"}, {$set:{credits:10000}})`)
 
-## 🛠️ Local Preview (Emergent)
-- **Email**: `owner@zerax.com`
-- **Password**: `owner123`
-- For testing in Emergent preview environment only.
+### Admin Account (alternative)
+- **Email:** admin@zenrex.ai
+- **Password:** Zenrex@2026
+- **Note:** May not work on local preview (used on production)
 
-## 📌 Notes
-- Production DB: MongoDB Atlas (`zerax_prod` database)
-- Backend connects via `MONGO_URL` env var (Atlas connection string)
-- If login fails on production, reset via:
-  ```bash
-  scp -i /root/.ssh/zerax_deploy /tmp/reset_admin.py root@91.98.154.148:/tmp/
-  ssh -i /root/.ssh/zerax_deploy root@91.98.154.148 "docker compose -f /opt/zerax/docker-compose.yml cp /tmp/reset_admin.py backend:/tmp/ && docker compose -f /opt/zerax/docker-compose.yml exec -T backend python3 /tmp/reset_admin.py"
-  ```
+### Test User
+- **Email:** test_zenrex_2026@example.com
+- **Password:** Test@Pass2026!
+- **Note:** Created on live production
 
-Last updated: 2026-06-19 (Session 15 — Test customer added)
+## Production (zenrex.ai)
+Same credentials as above. owner@zerax.com is the master admin.
 
-## 🧪 Test Customer (for quota/billing verification)
-- **Email**: `test_zenrex_2026@example.com`
-- **Password**: `Test@Pass2026!`
-- **Status**: Free tier — currently OVER cap (61,398 / 50,000 tokens, blocked)
-- **Use case**: Verify upgrade flow via `/pricing/v2`
-- **Note**: Created on preview env; for production, register the same email manually OR reset their tokens via:
-  ```python
-  await db.usage_daily.delete_many({"user_id": "<uid>"})
-  ```
+## Useful MongoDB Commands
+
+```bash
+# Reset owner credits
+python3 -c "
+import asyncio, os
+from motor.motor_asyncio import AsyncIOMotorClient
+async def main():
+    cli = AsyncIOMotorClient(os.environ.get('MONGO_URL'))
+    db = cli[os.environ.get('DB_NAME', 'test_database')]
+    await db.users.update_one({'email':'owner@zerax.com'}, {'\$set':{'credits':10000}})
+asyncio.run(main())
+"
+
+# Drop a user's credits to test 402 gate
+db.users.updateOne({email:"owner@zerax.com"}, {$set:{credits:4}})
+
+# Clear storage subscription (reset to free)
+db.storage_subscriptions.deleteMany({user_id:"<uid>"})
+```
+
+## Required LemonSqueezy Variant IDs (set in /app/backend/.env)
+- LEMONSQUEEZY_STORAGE_STARTER (Subscription, $7/mo)
+- LEMONSQUEEZY_STORAGE_PLUS (Subscription, $14/mo)
+- LEMONSQUEEZY_STORAGE_PRO (Subscription, $29/mo)
+- LEMONSQUEEZY_STORAGE_STUDIO (Subscription, $59/mo)
+- LEMONSQUEEZY_RECOVERY_SMALL (One-time, $5)
+- LEMONSQUEEZY_RECOVERY_MEDIUM (One-time, $15)
+- LEMONSQUEEZY_RECOVERY_LARGE (One-time, $35)
+- LEMONSQUEEZY_RECOVERY_XL (One-time, $79)

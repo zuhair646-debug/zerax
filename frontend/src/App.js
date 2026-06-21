@@ -71,6 +71,7 @@ import DriverDashboardPage from '@/pages/driver/DriverDashboard';
 import SubscriptionGate from '@/pages/billing/SubscriptionGate';
 import BillingSuccess from '@/pages/billing/BillingSuccess';
 import BillingCancel from '@/pages/billing/BillingCancel';
+import BillingStorage from '@/pages/BillingStorage';
 import StudioHub from '@/pages/studio/StudioHub';
 import StudioImage from '@/pages/studio/StudioImage';
 import StudioVideo from '@/pages/studio/StudioVideo';
@@ -251,6 +252,7 @@ function App() {
           <Route path="/websites" element={<ProtectedRoute><SubscriptionGate><WebsiteStudio user={user} /></SubscriptionGate></ProtectedRoute>} />
           <Route path="/billing/success" element={<ProtectedRoute><BillingSuccess /></ProtectedRoute>} />
           <Route path="/billing/cancel" element={<ProtectedRoute><BillingCancel /></ProtectedRoute>} />
+          <Route path="/billing/storage" element={<ProtectedRoute><BillingStorage /></ProtectedRoute>} />
           <Route path="/sites/:slug" element={<PublicSite />} />
           <Route path="/client/:slug" element={<ClientSiteDashboard />} />
           <Route path="/driver/:slug" element={<DriverDashboardPage />} />
