@@ -13,6 +13,7 @@
  *  - archived    → red + recovery CTA
  */
 import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { HardDrive, AlertTriangle, X, Clock, Archive } from 'lucide-react';
 
 const API = process.env.REACT_APP_BACKEND_URL;
@@ -127,21 +128,20 @@ export default function StorageIndicator({ compact = false }) {
         )}
       </button>
 
-      {/* Popover — FIXED horizontal center + drops BELOW the top navbar.
-          Backdrop is FULLY OPAQUE (inline style guarantee against any CSS
-          purge / cache issue) so the chat content behind it is completely
-          hidden — the popover is its own focused page. */}
-      {open && (
+      {/* Popover rendered via React PORTAL into document.body so it escapes
+          any parent stacking context (backdrop-blur in the navbar etc.)
+          which was previously clipping the fixed-positioned overlay. */}
+      {open && createPortal(
         <>
           <div
-            className="fixed inset-0 z-[60]"
+            className="fixed inset-0 z-[9998]"
             style={{ backgroundColor: '#09090b' }}
             onClick={() => setOpen(false)}
             aria-hidden
           />
           <div
             data-testid="storage-upgrade-popover"
-            className="fixed z-[80] left-1/2 -translate-x-1/2 top-[72px] sm:top-[80px] w-[calc(100vw-1rem)] sm:w-[26rem] max-w-[26rem] rounded-2xl border-2 border-amber-400 shadow-2xl shadow-amber-500/40 p-5 animate-in fade-in slide-in-from-top-3 duration-200"
+            className="fixed z-[9999] left-1/2 -translate-x-1/2 top-[72px] sm:top-[80px] w-[calc(100vw-1rem)] sm:w-[26rem] max-w-[26rem] rounded-2xl border-2 border-amber-400 shadow-2xl shadow-amber-500/40 p-5 animate-in fade-in slide-in-from-top-3 duration-200"
             style={{ backgroundColor: '#1a1a1d' }}
             role="dialog"
             onClick={(e) => e.stopPropagation()}
@@ -209,7 +209,8 @@ export default function StorageIndicator({ compact = false }) {
             </a>
           </div>
         </div>
-        </>
+        </>,
+        document.body
       )}
     </div>
   );
