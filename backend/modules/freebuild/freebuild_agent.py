@@ -4794,6 +4794,22 @@ verdict = READY، 0 placeholders، 0 dead buttons").
    عرض النتيجة الحقيقية من الأداة (length_before/after, removed_ids,
    filename, إلخ) = الدليل الوحيد على الإنجاز. أي شيء غير ذلك = كذب.
 
+🚫 **11. ممنوع "الوعد وتوقّف" — Anti Announce-and-Stop:**
+   إذا كتبت في ردّك أي عبارة تعدّ بفعل قادم — مثل:
+     "سأبدأ التنفيذ" / "سأصلح الآن" / "يبدأ التنفيذ الآن..." / "Let me start..." /
+     "بعدها أبني" / "ثم أنشئ" / "خلّيني أصلح" / "نبدأ الآن" / أي جملة تنتهي بـ "..." أو ":"
+   ⚠️ **يجب أن يحتوي نفس الـ turn على tool_use فعلي يُنفّذ الوعد**.
+   ⚠️ **ممنوع** كتابة وعد ثم إنهاء الـ turn بلا أداة — العميل سيدفع شعلات
+   ثانية ليجبرك على إكمال ما وعدت به، وهذا ظلم له.
+   
+   السلوك الصحيح:
+     خاطئ ❌: "🔧 أصلح الـ placeholders الآن..." [end turn]
+     صحيح ✅: "🔧 أصلح الـ placeholders" + `apply_section(...)` + 
+             `audit_html` + "✅ تم — 0 placeholders متبقية."
+   
+   إذا احتجت تفكير طويل، اصمت تماماً ولا تكتب — استدعِ الأدوات مباشرة.
+   النص بدون tool_use = إنهاء الـ turn. لا توعد بلا تنفيذ.
+
 ═══════════════════════════════════════════════════════════════════
 """
 
@@ -5617,7 +5633,8 @@ async def _stream_one_provider(
     turn_tokens_in = 0
     turn_tokens_out = 0
 
-    stall_recovery_used = False  # One-shot anti-stall guard for this turn
+    stall_recovery_used = 0  # Anti-stall counter for this turn (max 2 retries)
+    force_tool_use_next_iter = False  # When True, next Anthropic call uses tool_choice={"type":"any"}
     for step in range(max_iterations):
         iterations += 1
         logger.info(f"[agent-stream] iter={iterations} start (provider={provider})")
@@ -5660,11 +5677,20 @@ async def _stream_one_provider(
                         _user_tools = list(_user_tools)
                         _user_tools[-1] = {**_user_tools[-1], "cache_control": {"type": "ephemeral"}}
                     _cached_system = [{"type": "text", "text": sys_prompt, "cache_control": {"type": "ephemeral"}}] if sys_prompt else None
-                    async with client.messages.stream(
+                    # 🔧 Force tool_use when previous iteration was a stall —
+                    # `tool_choice={"type": "any"}` makes Anthropic REQUIRE at
+                    # least one tool call in the next response. Combined with
+                    # the stall-recovery nudge, this is the iron-clad guarantee
+                    # the AI can't keep fabricating success without doing work.
+                    _stream_kwargs = dict(
                         model=model, system=_cached_system or sys_prompt, max_tokens=16000,
                         tools=_user_tools, messages=messages,
                         extra_headers={"anthropic-beta": "prompt-caching-2024-07-31"},
-                    ) as st:
+                    )
+                    if _force_tools_this_iter:
+                        _stream_kwargs["tool_choice"] = {"type": "any"}
+                        logger.info("[agent-stream] forcing tool_choice=any for this iteration (recovery)")
+                    async with client.messages.stream(**_stream_kwargs) as st:
                         async for ev in st:
                             await queue.put(("event", ev))
                         fm = await st.get_final_message()
@@ -5672,6 +5698,10 @@ async def _stream_one_provider(
                 except Exception as exc:
                     await queue.put((_SENTINEL_ERROR, exc))
 
+            # Snapshot the force flag so the producer sees the value at the
+            # moment of iteration start, even if outer code mutates it later.
+            _force_tools_this_iter = force_tool_use_next_iter
+            force_tool_use_next_iter = False  # Auto-reset for next iteration
             producer = asyncio.create_task(_produce_events())
             stream_err: Optional[BaseException] = None
             try:
@@ -5864,12 +5894,24 @@ async def _stream_one_provider(
             #      actually calling the tool to verify. This is the worst case
             #      because it directly damages user trust. We catch it here and
             #      force a retry.
-            #  All three are handled with a one-shot auto-continue nudge.
+            #  All three are handled with up to TWO auto-continue nudges so the
+            #  user never has to send a second message just to make the AI finish
+            #  what it started in the same billing turn.
             joined = "\n".join(text_chunks).strip()
             STALL_MARKERS = (
-                "جاري", "خلّيني", "خليني", "أبدأ الآن", "ابدأ الآن", "بأشغّل",
-                "بأشغل", "بأجلب", "بأحضّر", "بأحضر", "يلا بنا", "Let me",
-                "I'll start", "starting now", "fetching", "loading",
+                # Action-imminent (Arabic) — "I'll do X now"
+                "جاري", "خلّيني", "خليني", "أبدأ الآن", "ابدأ الآن", "يبدأ الآن",
+                "سأبدأ", "سأنفّذ", "سأنفذ", "سأصلح", "سأبني", "سأكمل",
+                "سأطبّق", "سأطبق", "سأضيف", "سأحذف", "سأعدّل", "سأحدّث",
+                "بأشغّل", "بأشغل", "بأجلب", "بأحضّر", "بأحضر",
+                "نبدأ الآن", "يلا بنا", "خلنا نبدأ", "ابدأ بالتنفيذ",
+                "التنفيذ يبدأ", "البدء الآن", "نشتغل عليها",
+                "بعدها أبني", "ثم أبني", "بعدها أصلح", "ثم أصلح",
+                "بعدها أضيف", "ثم أضيف", "بعدها أنفّذ", "ثم أنفّذ",
+                # English equivalents
+                "Let me", "I'll start", "I will start", "I'll fix", "I will fix",
+                "I'll add", "I'll build", "I'll create", "I'll implement",
+                "starting now", "fetching", "loading", "executing now",
             )
             # 🚨 False-failure markers: AI claiming a service is down without calling it.
             FALSE_FAILURE_MARKERS = (
@@ -5880,14 +5922,37 @@ async def _stream_one_provider(
                 "voice service is down", "image service is down",
                 "service is currently down", "service is unavailable",
             )
+            # Trailing-ellipsis suggests interrupted/promised work
+            ends_with_promise = bool(joined) and (
+                joined.endswith(("...", "…", ":", "："))
+                or any(joined.endswith(p) for p in ("الآن", "الآن.", "now", "now."))
+            )
             looks_stalled = bool(joined) and (
-                joined.endswith(("...", "…")) or any(m in joined[-300:] for m in STALL_MARKERS)
+                ends_with_promise
+                or any(m in joined[-400:] for m in STALL_MARKERS)
             )
             looks_falsely_failing = bool(joined) and any(m in joined for m in FALSE_FAILURE_MARKERS)
-            if (looks_stalled or looks_falsely_failing) and not stall_recovery_used:
-                stall_recovery_used = True
+            # 🚨 In-turn LIE DETECTOR: text claims completion ("أصلحت", "تم
+            # الإصلاح", "+3KB محتوى حقيقي") but ctx.changes_made == 0 (no real
+            # tool was called this turn). Force a recovery to make the AI
+            # actually do the work it claimed.
+            FAKE_ACHIEVEMENT_MARKERS = (
+                "أصلحت", "صلحت", "عالجت", "ثبّت", "أكملت", "أنجزت",
+                "تم الإصلاح", "تم الإنشاء", "تم الحذف", "تم التعديل",
+                "fixed", "completed", "implemented",
+                "محتوى حقيقي", "بايت", "KB محتوى",
+            )
+            looks_fake_achievement = (
+                bool(joined)
+                and ctx.changes_made == 0
+                and any(m in joined for m in FAKE_ACHIEVEMENT_MARKERS)
+            )
+            # Allow up to TWO recovery cycles per turn — covers
+            # "promise → fake-achievement → finally execute" pattern.
+            if (looks_stalled or looks_falsely_failing or looks_fake_achievement) and stall_recovery_used < 2:
+                stall_recovery_used += 1
                 if looks_falsely_failing:
-                    logger.info("[agent-stream] FALSE-failure claim detected — AI lied about service being down. Forcing tool retry.")
+                    logger.info(f"[agent-stream] FALSE-failure claim (recovery #{stall_recovery_used}) — forcing tool retry")
                     nudge_text = (
                         "🚨 **انتهاك خطير**: أنت ادعيت أن إحدى الخدمات (الصوت/الصور/الفيديو) معطّلة، "
                         "لكنك **لم تستدعِ أي أداة فعلية للتحقق**. هذا كذب صريح.\n\n"
@@ -5897,19 +5962,41 @@ async def _stream_one_provider(
                         "- للفيديو: `generate_video(prompt='...')`\n\n"
                         "**ممنوع تكتب رد ثاني فيه عبارة 'الخدمة معطّلة' بدون نتيجة أداة حقيقية في نفس الرد.**"
                     )
-                else:
-                    logger.info("[agent-stream] stall detected — injecting auto-continue directive")
+                elif looks_fake_achievement:
+                    logger.info(f"[agent-stream] FAKE-achievement (recovery #{stall_recovery_used}) — changes_made=0 but claimed success")
                     nudge_text = (
-                        "أنت كتبت أنك ستفعل شيئاً (مثل 'جاري' أو 'بأشغّل') لكن **لم تستدعِ أي أداة فعلية**. "
-                        "هذا انتهاك مباشر لقاعدة Anti-Stall. **استدعِ الأداة الآن في هذا الرد بالضبط** "
-                        "(`list_voices`, `generate_voiceover`, `generate_image`, `generate_video`, إلخ) "
-                        "ولا تكتب أي نص فيه 'جاري' بدون tool_use في نفس الرسالة. ابدأ التنفيذ فوراً."
+                        "🚨 **كذب موثَّق**: قلت إنك أصلحت/أكملت/أنجزت شيئاً وذكرت "
+                        "أرقاماً إحصائية (مثل '+3.6 KB محتوى') لكن **`changes_made = 0`** — "
+                        "أي لم تستدعِ أي أداة تعديل فعلية في هذا الـ turn.\n\n"
+                        "هذا يكلّف العميل شعلات على لا شيء. الآن في نفس الـturn:\n"
+                        "  1. استدعِ الأداة الفعلية (apply_section / remove_section / "
+                        "create_page / write_full_html) لتنفيذ ما ادعيت إنجازه.\n"
+                        "  2. بعد التنفيذ، استدعِ `audit_html` للتحقق.\n"
+                        "  3. ثم اعرض النتيجة الحقيقية بالأرقام من نتيجة الأداة (length_before/after)، "
+                        "لا أرقام مُختلقة من ذاكرتك."
+                    )
+                else:
+                    logger.info(f"[agent-stream] stall detected (recovery #{stall_recovery_used}) — injecting auto-continue")
+                    nudge_text = (
+                        "🚨 **انتهاك Anti-Stall**: قلت إنك ستبدأ/ستفعل شيئاً، "
+                        "لكن **لم تستدعِ أي أداة في هذا الرد**. العميل ينتظر "
+                        "**التنفيذ الفعلي** — ليس وعداً ثانياً.\n\n"
+                        "في الردّ التالي مباشرة:\n"
+                        "  1. **استدعِ الأداة الفعلية** (apply_section / create_page / "
+                        "remove_section / write_full_html / generate_image / إلخ).\n"
+                        "  2. **ممنوع** أي نص فيه 'سأبدأ' أو 'يبدأ الآن' أو '...' "
+                        "بدون tool_use في نفس الرسالة.\n"
+                        "  3. أكمل المهمة التي وعدت بها في الرسالة السابقة "
+                        "**بدون توقف** حتى تنتهي."
                     )
                 if provider in ("anthropic", "emergent_anthropic"):
                     messages.append({"role": "user", "content": [{"type": "text", "text": nudge_text}]})
+                    # Iron-clad: force a tool call in the very next iteration so
+                    # the model literally CANNOT respond with text-only fabrication.
+                    force_tool_use_next_iter = True
                 else:
                     messages.append({"role": "user", "content": nudge_text})
-                yield _sse("thinking", {"text": "🔄 تم رصد توقف غير مبرّر — الـ AI ينفّذ الأداة الآن..."})
+                yield _sse("thinking", {"text": f"🔄 توقف غير مبرّر — الـAI يكمل التنفيذ تلقائياً (محاولة {stall_recovery_used}/2)..."})
                 await asyncio.sleep(0)
                 continue
             # Otherwise: clean finish
@@ -6072,9 +6159,17 @@ async def _stream_one_provider(
                 "تم الحذف", "تم حذف", "حذفت", "أزلت", "تم الإزالة",
                 "تم التعديل", "تم تطبيق", "طبّقت", "بنيت", "صنعت لك",
                 "صفحة جديدة", "تم البناء",
+                # Statistical / size-based fabrication
+                "محتوى حقيقي", "+3.", "+4.", "+5.",
+                "→ 3,", "→ 4,", "→ 5,", "→ 6,",
+                "بايت", "KB محتوى",
+                # Achievement / status verbs
+                "أصلحت", "صلحت", "عالجت", "ثبّت", "أكملت", "أنجزت",
+                "fixed", "completed", "implemented", "added successfully",
             ]
             user_intent_phrases = ["انشئ", "أنشئ", "احذف", "اضف", "أضف", "ضيف",
                                     "شيل", "بدّل", "اصنع", "ابن", "ابني",
+                                    "اصلح", "أصلح", "صلح", "عدل", "عدّل",
                                     "create_page", "delete_page", "remove_section"]
             looks_like_lie = any(p in ar_txt for p in lie_phrases)
             user_requested_action = any(p in (user_message or "").lower() for p in user_intent_phrases)

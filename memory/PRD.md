@@ -294,8 +294,31 @@ Fully internal ticket system — no WhatsApp, no external email. Telegram-style 
   - chat 25–80, inspection 15–50, edit 80–250, section_add 120–350,
     page_creation 200–500, full_site 300–800, deletion 25–60, repair 60–200,
     media +75 per image / +220 per video
-- ✅ **28/28 pytest cases pass** + verified end-to-end via curl on preview env
-  + deployed to `https://zenrex.ai`
+## 🆕 2026-02 — Anti-Lazy-Stop: In-Turn Auto-Recovery + Forced Tool Use
+- 🚫 **Anti Announce-and-Stop**: New Rule 11 in system prompt — explicitly
+  forbids text-only completions when user requested an action. Lists 12+
+  Arabic + English "promise" markers (سأبدأ، سأصلح، يبدأ الآن، Let me, etc.).
+- 🔄 **In-Turn Stall Recovery (Anthropic only)**: When the AI emits text
+  ending with "..." or containing a promise marker but calls NO tool, the
+  agent automatically injects a nudge AND retries WITHIN THE SAME TURN (no
+  extra billing). Recovery counter `stall_recovery_used` allows up to **2**
+  retries per turn.
+- 🛡️ **Fake-Achievement Detector**: Catches the worse case — AI claims
+  "أصلحت / +3.6 KB محتوى حقيقي" but `ctx.changes_made == 0`. Same in-turn
+  recovery cycle, but with a stronger nudge demanding tool calls + audit.
+- ⚡ **Forced Tool Use** (`tool_choice={"type": "any"}`): After a stall is
+  detected, the **next Anthropic API call** is forced to use a tool. This
+  is Anthropic's native server-side constraint — the AI literally cannot
+  reply with text-only on the recovery iteration.
+- 🔒 **Iteration-scoped flag** (`_force_tools_this_iter`): Snapshot of the
+  force flag taken before the producer task runs, so flag mutations in
+  the outer loop don't leak into the next iteration. Auto-resets each turn.
+- ✅ Verified flow on preview env (logs):
+  - `FAKE-achievement (recovery #1) — changes_made=0 but claimed success`
+  - `forcing tool_choice=any for this iteration (recovery)`
+  - Result: AI emits `event: tool_building` with `write_full_html` →
+    real changes happen → user is charged once for the FULL completed
+    turn instead of paying twice for promise + fake-claim + finally-real.
 
 ## Test Credentials
 - Admin: admin@zenrex.ai / Zenrex@2026 (PROD DB only)
