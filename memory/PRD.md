@@ -350,6 +350,25 @@ Fully internal ticket system — no WhatsApp, no external email. Telegram-style 
 - ✅ Verified: 1,180-char HTML + `write_full_html` → BLOCKED with rich
   error. Same call with `allow_full_rewrite=true` → succeeds. Deployed.
 
+## 🆕 2026-02 — Unified Site Integration (Auto-Wiring + Rule 13)
+- 🔗 **Auto-Wiring on `create_page`**: when a new page is created, the
+  server automatically injects a `<a href="filename.html">` link inside
+  the existing `<nav>` of `index.html`. If no nav exists, it builds a
+  minimal one with the new page link + a "🏠 الرئيسية" homelink. Idempotent
+  (won't duplicate links). Returns `nav_link_auto_wired: bool` in the
+  response so the AI can confirm to the user.
+- 🔗 **NEW Rule 13** (Unified Site Integration Mandate) — the longest +
+  most explicit rule in `STRICT_PHASE_PROTOCOL_ADDENDUM`. Lists 5 destructive
+  patterns ("orphan chat page", "settings without nav link", "buttons
+  without onclick") and 5 correct patterns (chat as a `<section>` in main
+  page, every button with real `onclick`/`href`, audit_html before claiming
+  done). Includes concrete code examples for AI chat widget, button wiring,
+  and form submission.
+- ✅ Verified end-to-end: 3 scenarios passed
+  - Scenario A: existing nav → link injected inside it
+  - Scenario B: no nav → minimal nav built with home + new link
+  - Scenario C: multiple pages → 1 link each, no duplication
+
 ## Test Credentials
 - Admin: admin@zenrex.ai / Zenrex@2026 (PROD DB only)
 - Prod Test User: test_zenrex_2026@example.com / Test@Pass2026!

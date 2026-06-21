@@ -1462,12 +1462,58 @@ def _exec_tool(ctx: FreeBuildToolContext, name: str, args: Dict[str, Any]) -> Di
                 )
             ctx.snapshot_before_write()
             ctx.pages[filename] = html
+            # 🔗 AUTO-WIRING: inject a nav link in index.html pointing to the
+            # new page so the user can actually REACH it from the homepage.
+            # Stops the #1 user complaint: "AI built a separate page with no
+            # link from the main site — orphaned content."
+            auto_wired = False
+            try:
+                index_html = ctx.pages.get("index.html", "")
+                # Only auto-wire if not already linked
+                if index_html and f'href="{filename}"' not in index_html and f"href='{filename}'" not in index_html:
+                    # Derive a friendly Arabic label from the title
+                    nav_label = title.strip()[:30] or filename.replace(".html", "")
+                    new_link = f'<a href="{filename}" class="nav-link" data-zenrex-auto-wire="1">{nav_label}</a>'
+                    # Try injecting into existing <nav>...</nav>
+                    if re.search(r"<nav\b[^>]*>", index_html, re.I):
+                        wired = re.sub(
+                            r"(<nav\b[^>]*>)",
+                            r"\1\n  " + new_link,
+                            index_html,
+                            count=1,
+                            flags=re.I,
+                        )
+                    else:
+                        # No nav tag — inject a minimal one right after <body>
+                        wired = re.sub(
+                            r"(<body[^>]*>)",
+                            r'\1\n<nav class="px-6 py-4 flex gap-4 border-b border-white/10">\n  '
+                            + f'<a href="index.html">🏠 الرئيسية</a>\n  '
+                            + new_link
+                            + "\n</nav>",
+                            index_html,
+                            count=1,
+                            flags=re.I,
+                        )
+                    if wired != index_html:
+                        ctx.pages["index.html"] = wired
+                        auto_wired = True
+                        # If index was the active page, refresh current_html
+                        if ctx.active_page == "index.html":
+                            ctx.current_html = wired
+            except Exception as _wire_e:
+                logger.warning(f"[create_page] auto-wire failed: {_wire_e}")
             ctx.active_page = filename
             ctx.current_html = html
             ctx.changes_made += 1
+            msg = (f"📄 صفحة جديدة '{filename}' أُنشئت وأصبحت النشطة الآن. "
+                   "ابدأ بإضافة الأقسام عبر apply_section.")
+            if auto_wired:
+                msg += f" 🔗 وأُضيف رابط '{filename}' في navbar index.html تلقائياً."
             return {"ok": True, "filename": filename, "title": title,
                     "bytes": len(html), "active_page": filename,
-                    "message": f"📄 صفحة جديدة '{filename}' أُنشئت وأصبحت النشطة الآن. ابدأ بإضافة الأقسام عبر apply_section."}
+                    "nav_link_auto_wired": auto_wired,
+                    "message": msg}
 
         if name == "switch_page":
             filename = (args.get("filename") or "").strip().lower()
@@ -4862,6 +4908,60 @@ verdict = READY، 0 placeholders، 0 dead buttons").
    استثناء وحيد: لو العميل طلب صراحةً "أعد بناء الموقع من الصفر" أو
    "احذف كل شي وابدأ من جديد" — حينها فقط مرّر `allow_full_rewrite=true`
    مع `write_full_html`.
+
+🔗 **13. الموقع وحدة واحدة مترابطة — Unified Site Integration Mandate:**
+   هذا أهم قانون. العميل **لا يبني موقعاً مفكّكاً** — يبني موقعاً **واحداً
+   مترابطاً**. كل طلب يجب أن **يندمج داخل المشروع الموحَّد**:
+   
+   ❌ **الأخطاء المُدمِّرة الشائعة:**
+   • العميل قال "ضيف شات" → فأنشأت `chat.html` صفحة منفصلة بدون رابط
+     من الصفحة الرئيسية ⛔
+   • العميل قال "ضيف إعدادات" → بنيت `settings.html` ولكن لا توجد
+     طريقة للوصول إليها من الـnav ⛔
+   • زر "ابدأ" بدون `onclick` ولا `href` — مجرد رسم ⛔
+   • صفحات منفصلة في الـpages dict لكن الـnav لا يشير إليها ⛔
+   • قسم جديد بـid='X' لكن لا يوجد `<a href="#X">` في الـnav ⛔
+   
+   ✅ **القاعدة الذهبية:**
+   كل قسم/صفحة/زرّ تنشئه يجب أن يكون **مرتبطاً بالموقع كاملاً**:
+   
+   1. **عند `create_page(filename)`** — السيرفر تلقائياً يضيف `<a href="filename">`
+      في navbar الـindex.html. تأكّد بنفسك أيضاً.
+   
+   2. **عند `apply_section(id='X', op='append')`** لقسم مرئي مهم:
+      • أضف `<a href="#X">عنوان</a>` في الـnav داخل نفس الـHTML
+      • تأكّد بـ `audit_html` بعدها (broken_anchors يجب يكون 0)
+   
+   3. **كل زر/CTA يجب أن يكون فعّالاً:**
+      - زر يبدأ تجربة → `onclick="document.getElementById('chat-section').scrollIntoView()"`
+      - زر يفتح modal → `onclick="document.getElementById('myModal').classList.remove('hidden')"`
+      - زر ينتقل لصفحة → `<a href="contact.html">...</a>`
+      - زر submit form → `<form action="..." onsubmit="...">`
+      
+   4. **الشات / Widget التفاعلي** — يُدمج كـ`<section>` في الصفحة الرئيسية،
+      وليس صفحة منفصلة. مثال:
+      ```html
+      <section id="ai-chat" class="...">
+        <h2>تحدّث مع الذكاء الاصطناعي</h2>
+        <div id="chat-messages"></div>
+        <input id="chat-input" onkeydown="if(event.key==='Enter')sendChat()">
+        <button onclick="sendChat()">إرسال</button>
+        <script>function sendChat(){...}</script>
+      </section>
+      ```
+   
+   5. **قبل ادعاء "خلاص الموقع جاهز":** استدع `audit_html()` للتأكد من:
+      • 0 dead buttons (كلهم بـonclick أو href)
+      • 0 broken anchors (كل #X في الـnav له `<section id="X">` مطابق)
+      • 0 placeholders
+   
+   ⛔ **ممنوع** إرسال "رابط شات" أو "رابط لوحة تحكم" منفصل عن الموقع
+   الرئيسي. كل شيء يُدمج في الـURL الأساسي (`/s/{slug}`) — كقسم في الـindex
+   أو كصفحة مرتبطة في الـnav (`/s/{slug}/settings.html` مع رابط واضح من
+   الـnav الرئيسي).
+   
+   لو العميل قال "اشتغل في الإعدادات" → افحص هل عنده قسم/صفحة إعدادات
+   موجودة فعلاً → اعمل عليها → تأكّد إنها مرتبطة بالـnav → تأكّد بـ`audit_html`.
 
 ═══════════════════════════════════════════════════════════════════
 """
