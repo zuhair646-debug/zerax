@@ -26,7 +26,7 @@ import VoiceRecorderButton from '@/components/VoiceRecorderButton';
 const API = process.env.REACT_APP_BACKEND_URL;
 
 // Phase definitions (purely visual sidebar — backend tracks current_phase)
-const PHASES = [
+const PHASES_DEFAULT = [
   { id: 'discovery',   title: 'اكتشاف الفكرة',   icon: '🔍', desc: 'نسمع منك ونفهم رؤيتك' },
   { id: 'design',      title: 'اتجاهات التصميم', icon: '🎨', desc: 'نقترح 2-3 خيارات' },
   { id: 'assets',      title: 'توليد الأصول',    icon: '🖼️', desc: 'صور + شعار + بانرات' },
@@ -34,6 +34,67 @@ const PHASES = [
   { id: 'preview',     title: 'المعاينة الحية',  icon: '👁️', desc: 'تجربة الموقع' },
   { id: 'deploy',      title: 'النشر',           icon: '🚀', desc: 'موقع جاهز للعالم' },
 ];
+
+// PHASES_BY_MODE — each builder surface (websites / apps / games / videos /
+// images / ready-site edits) gets a tailored phases ladder. Keeping the
+// same shape ({id,title,icon,desc}) means the rest of the UI doesn't need
+// to know which mode it is rendering. Modes not listed fall back to
+// PHASES_DEFAULT (the original website flow).
+const PHASES_BY_MODE = {
+  website:  PHASES_DEFAULT,
+  websites: PHASES_DEFAULT,
+  app: [
+    { id: 'discovery',  title: 'اكتشاف الفكرة',     icon: '🔍', desc: 'فهم الجمهور والميزات' },
+    { id: 'flow',       title: 'تدفق الشاشات',       icon: '🧭', desc: 'Wireframes + UX flow' },
+    { id: 'design',     title: 'هوية التطبيق',       icon: '🎨', desc: 'ألوان + خطوط + أيقونات' },
+    { id: 'build',      title: 'بناء الشاشات',       icon: '⚒️', desc: 'Flutter/RN/Native' },
+    { id: 'preview',    title: 'محاكي الجوال',       icon: '📱', desc: 'iOS + Android' },
+    { id: 'deploy',     title: 'النشر',             icon: '🚀', desc: 'TestFlight + Play Store' },
+  ],
+  apps_studio: [
+    { id: 'discovery',  title: 'اكتشاف الفكرة',     icon: '🔍', desc: 'فهم الجمهور والميزات' },
+    { id: 'flow',       title: 'تدفق الشاشات',       icon: '🧭', desc: 'Wireframes + UX flow' },
+    { id: 'design',     title: 'هوية التطبيق',       icon: '🎨', desc: 'ألوان + خطوط + أيقونات' },
+    { id: 'build',      title: 'بناء الشاشات',       icon: '⚒️', desc: 'Flutter/RN/Native' },
+    { id: 'preview',    title: 'محاكي الجوال',       icon: '📱', desc: 'iOS + Android' },
+    { id: 'deploy',     title: 'النشر',             icon: '🚀', desc: 'TestFlight + Play Store' },
+  ],
+  games_studio: [
+    { id: 'concept',    title: 'فكرة اللعبة',        icon: '💡', desc: 'النوع + اللوب الأساسي' },
+    { id: 'mechanics',  title: 'الميكانيكا',          icon: '🎮', desc: 'القواعد + نظام التقدم' },
+    { id: 'art',        title: 'الفن والشخصيات',     icon: '🎨', desc: 'Sprites + خلفيات' },
+    { id: 'build',      title: 'البناء',             icon: '⚒️', desc: 'Phaser/Unity/Godot' },
+    { id: 'playtest',   title: 'اختبار اللعب',       icon: '🕹️', desc: 'موازنة + بُولش' },
+    { id: 'publish',    title: 'النشر',             icon: '🚀', desc: 'Steam + متاجر الجوال' },
+  ],
+  video_studio: [
+    { id: 'discovery',  title: 'الفكرة',             icon: '💡', desc: 'القصة + الجمهور' },
+    { id: 'script',     title: 'السيناريو',          icon: '📝', desc: 'حوار + ستوريبورد' },
+    { id: 'characters', title: 'الشخصيات',           icon: '🎭', desc: 'بايبل الشخصيات' },
+    { id: 'render',     title: 'الإنتاج',           icon: '🎬', desc: 'مشاهد + موسيقى + تركيب' },
+    { id: 'preview',    title: 'المعاينة',           icon: '👁️', desc: 'مراجعة + تعديل' },
+    { id: 'export',     title: 'التصدير',            icon: '🚀', desc: 'MP4 جاهز للنشر' },
+  ],
+  image_studio: [
+    { id: 'concept',    title: 'الفكرة',             icon: '💡', desc: 'الهدف + الستايل' },
+    { id: 'palette',    title: 'الألوان والمزاج',    icon: '🎨', desc: 'لوحة + إضاءة' },
+    { id: 'generate',   title: 'التوليد',            icon: '✨', desc: 'صور بالذكاء' },
+    { id: 'refine',     title: 'الصقل',              icon: '🔧', desc: 'تعديلات + Upscale' },
+    { id: 'export',     title: 'التصدير',            icon: '🚀', desc: 'تنزيل + مشاركة' },
+  ],
+  ready_site_edit: [
+    { id: 'discovery',  title: 'مراجعة الموقع',     icon: '🔍', desc: 'فهم احتياجاتك' },
+    { id: 'customize',  title: 'التخصيص',            icon: '🎨', desc: 'ألوان + محتوى + شعار' },
+    { id: 'content',    title: 'المحتوى',            icon: '📝', desc: 'نصوص + صور حقيقية' },
+    { id: 'preview',    title: 'المعاينة',           icon: '👁️', desc: 'الموقع نهائياً' },
+    { id: 'publish',    title: 'النشر',             icon: '🚀', desc: 'دومين + استضافة' },
+  ],
+};
+
+const getPhases = (mode) => PHASES_BY_MODE[mode] || PHASES_DEFAULT;
+
+// Backward-compat alias for code paths that still reference PHASES directly.
+const PHASES = PHASES_DEFAULT;
 
 // ─────────────────────────────────────────────────────────────
 // Quick Edits Box — appears in sidebar; sends inline correction
@@ -3620,7 +3681,7 @@ function ChatWorkspace({ projectId }) {  const navigate = useNavigate();
               context strip just above the chat/preview/approved tabs. */}
           <PhaseHeaderPill
             currentPhase={activePhase}
-            currentLabel={(PHASES.find((p) => p.id === activePhase) || {}).title || activePhase}
+            currentLabel={(sidebarPhases.find((p) => p.id === activePhase) || {}).title || activePhase}
             onOpen={() => setPhasesMobileOpen(true)}
           />
 
