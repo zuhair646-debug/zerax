@@ -6521,6 +6521,7 @@ For questions: legal@zenrex.ai
                             captured["iterations"] = done.get("iterations", 0)
                             captured["model_used"] = done.get("model_used", "")
                             captured["html_updated"] = done.get("html_updated", False)
+                            captured["credits_charged"] = int(done.get("credits_charged") or 0)
                         except Exception:
                             logger.exception("agent stream: failed to parse done event")
                     # Mid-stream HTML checkpoint — survives disconnects
@@ -6603,6 +6604,28 @@ For questions: legal@zenrex.ai
                     )
                 except Exception:
                     logger.exception("background agent persist failed")
+
+                # ── SAFETY NET: guarantee ≥1 credit deduction per chat turn ──
+                # If the agent loop ran the full credit-deduction path (success),
+                # `credits_charged_this_turn` will be a positive integer (stored
+                # on captured by the agent module). If it's still 0 here (means
+                # the stream was cancelled mid-flight, the agent crashed, or any
+                # path skipped record_usage), charge a minimum floor so a user
+                # can NEVER chat for free. This closes every loophole the user
+                # observed where balance didn't decrease after a message.
+                try:
+                    if not int(captured.get("credits_charged") or 0):
+                        from modules.ai_core.usage_meter import record_usage
+                        await record_usage(
+                            db, user["user_id"], pid,
+                            section="websites",
+                            tokens_in=0,
+                            tokens_out=1500,        # ≈ 50-credit floor
+                            model_label="zenrex-ai-floor",
+                        )
+                        logger.info(f"[credits-safety] applied floor charge for user {user['user_id']} (turn had no deduction)")
+                except Exception as _ce:
+                    logger.warning(f"[credits-safety] floor charge failed: {_ce}")
                 # Signal queue completion
                 try:
                     event_queue.put_nowait(None)

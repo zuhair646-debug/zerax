@@ -75,6 +75,7 @@ import BillingStorage from '@/pages/BillingStorage';
 import Support from '@/pages/Support';
 import SupportTicket from '@/pages/SupportTicket';
 import AdminSupport from '@/pages/AdminSupport';
+import CreditsLedger from '@/pages/CreditsLedger';
 import StudioHub from '@/pages/studio/StudioHub';
 import StudioImage from '@/pages/studio/StudioImage';
 import StudioVideo from '@/pages/studio/StudioVideo';
@@ -259,6 +260,7 @@ function App() {
           <Route path="/support" element={<ProtectedRoute><Support /></ProtectedRoute>} />
           <Route path="/support/tickets/:id" element={<ProtectedRoute><SupportTicket /></ProtectedRoute>} />
           <Route path="/admin/support" element={<ProtectedRoute><AdminSupport /></ProtectedRoute>} />
+          <Route path="/credits/ledger" element={<ProtectedRoute><CreditsLedger /></ProtectedRoute>} />
           <Route path="/sites/:slug" element={<PublicSite />} />
           <Route path="/client/:slug" element={<ClientSiteDashboard />} />
           <Route path="/driver/:slug" element={<DriverDashboardPage />} />

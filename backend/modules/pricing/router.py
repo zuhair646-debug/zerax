@@ -147,6 +147,30 @@ def create_router(db, get_current_user, get_admin_user):
     async def my_billing(current_user: dict = Depends(get_current_user)):
         return await get_user_summary(db, current_user["user_id"])
 
+    @router.get("/transactions")
+    async def my_transactions(
+        limit: int = 100,
+        current_user: dict = Depends(get_current_user),
+    ):
+        """Full ledger of credit movements for the current user.
+
+        Returns every debit / credit with timestamp + reason so the user can
+        audit exactly where their points went. Sorted newest-first.
+        """
+        cur = db.credit_transactions.find(
+            {"user_id": current_user["user_id"]}, {"_id": 0}
+        ).sort("ts", -1).limit(min(max(1, limit), 500))
+        rows = await cur.to_list(length=500)
+        # Also expose current balance so the UI can verify ledger sums match.
+        user = await db.users.find_one(
+            {"id": current_user["user_id"]}, {"_id": 0, "credits": 1}
+        ) or {}
+        return {
+            "balance": int(round(float(user.get("credits") or 0))),
+            "transactions": rows,
+            "count": len(rows),
+        }
+
     @router.post("/checkout")
     async def checkout(body: CheckoutRequest, current_user: dict = Depends(get_current_user)):
         user_id = current_user["user_id"]
