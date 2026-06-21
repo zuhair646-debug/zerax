@@ -4859,6 +4859,47 @@ def get_system_prompt(project: Dict[str, Any], is_owner: bool = False) -> str:
     if mode in builder_modes and not code_unlocked:
         base += "\n" + STRICT_PHASE_PROTOCOL_ADDENDUM
 
+    # ── 🚦 PROJECT RAILS — clear knowledge of the two URLs ─────────────
+    # The user repeatedly reported confusion between the "editor preview"
+    # (current_html in DB, updates on every edit) and the "published URL"
+    # (/s/{slug}, a static snapshot). This block tells the agent EXACTLY
+    # which URL to send and explains the auto-republish behaviour so it
+    # stops shipping stale links to the user.
+    pub_slug = (project or {}).get("published_slug")
+    pub_pages = list(((project or {}).get("pages") or {}).keys())
+    rails_block = "\n\n══════════════════════════════════════════════════════════════\n"
+    rails_block += "🚦 **مفاهيم المشروع الأساسية (PROJECT RAILS — احفظها):**\n"
+    rails_block += "══════════════════════════════════════════════════════════════\n"
+    rails_block += "هذا المشروع له **رابطان مختلفان** — لا تخلط بينهما أبداً:\n\n"
+    rails_block += "  1️⃣ **معاينة المحرر (Editor Preview):**\n"
+    rails_block += "     • تنعكس فيها **كل تعديلاتك فوراً** (بعد كل tool call).\n"
+    rails_block += "     • هي الـ`current_html` المعروض في الـsidebar/iframe داخل zenrex.ai.\n"
+    rails_block += "     • مرئية فقط للعميل صاحب المشروع — ليست منشورة للعامة.\n\n"
+    if pub_slug:
+        rails_block += "  2️⃣ **الرابط المنشور (Live Published URL):**\n"
+        rails_block += f"     • https://zenrex.ai/s/{pub_slug}\n"
+        rails_block += f"     • السلوك التلقائي الجديد: **بعد كل تعديل ناجح في الـchat، السيرفر يحدّث هذا الرابط تلقائياً (auto-republish).**\n"
+        rails_block += "     • يعني لمّا تنفّذ تغيير عبر apply_section/remove_section/create_page... الرابط المنشور يصير محدّث فوراً بدون الحاجة لاستدعاء publish_site مرة ثانية.\n"
+        if pub_pages and len(pub_pages) > 1:
+            rails_block += f"     • هذا المشروع متعدد الصفحات. الـURLs الفعلية:\n"
+            for fn in pub_pages[:8]:
+                if fn == "index.html":
+                    rails_block += f"        • https://zenrex.ai/s/{pub_slug}\n"
+                else:
+                    rails_block += f"        • https://zenrex.ai/s/{pub_slug}/{fn}\n"
+    else:
+        rails_block += "  2️⃣ **الرابط المنشور (Live Published URL):**\n"
+        rails_block += "     • ⚠️ هذا المشروع **لم يُنشر بعد**.\n"
+        rails_block += "     • لو العميل طلب رابط مباشر — استدع `publish_site(slug='اسم-مناسب')` أولاً.\n"
+        rails_block += "     • قبل النشر، أي رابط ترسله للعميل = كذبة.\n"
+    rails_block += "\n📌 **قواعد إلزامية عند إرسال الروابط:**\n"
+    rails_block += "  • بعد أي تعديل ناجح، الرابط المنشور (لو موجود) **محدّث تلقائياً** — أرسله بثقة.\n"
+    rails_block += "  • **لا تخمّن** الرابط من ذاكرتك — استخدم القيم أعلاه فقط.\n"
+    rails_block += "  • إذا العميل قال \"الرابط القديم\" أو \"شفت تعديل قديم\" — تأكّد بـ `fetch_url(...)` ثم اشرح: \"الرابط محدّث، رجاءً اعمل refresh بـ Ctrl+F5 (الكاش).\"\n"
+    rails_block += "  • إذا المشروع متعدد الصفحات، أرسل **روابط الصفحات الصحيحة** (index و about و contact كلها روابط منفصلة).\n"
+    rails_block += "══════════════════════════════════════════════════════════════\n"
+    base += rails_block
+
     if is_owner:
         base += DESKTOP_OWNER_ADDENDUM
     return base

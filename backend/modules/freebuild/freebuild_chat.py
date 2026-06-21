@@ -3504,7 +3504,10 @@ def make_freebuild_chat_router(db, get_current_user):
             pass
         # Multi-page aware: serve pages["index.html"] when available, else fall back to legacy current_html
         html = (site.get("pages") or {}).get("index.html") or site.get("current_html") or ""
-        return HTMLResponse(_inject_zenrex_footer(html))
+        # Cache-bust: published HTML is volatile (auto-republished on every edit),
+        # so tell browsers + edge cache to revalidate every load.
+        return HTMLResponse(_inject_zenrex_footer(html),
+                             headers={"Cache-Control": "no-store, max-age=0, must-revalidate"})
 
     @router.get("/published-sites/{slug}/{filename}", include_in_schema=False)
     async def serve_published_subpage(slug: str, filename: str):
@@ -3533,7 +3536,8 @@ def make_freebuild_chat_router(db, get_current_user):
             await db.freebuild_published_sites.update_one({"slug": slug}, {"$inc": {"views": 1}})
         except Exception:
             pass
-        return HTMLResponse(_inject_zenrex_footer(html))
+        return HTMLResponse(_inject_zenrex_footer(html),
+                             headers={"Cache-Control": "no-store, max-age=0, must-revalidate"})
 
     # ═══════════════════════════════════════════════════════════════════════
     # KIDS PWA — Prayer Recordings (server-stored, parent reviewable)
@@ -6681,6 +6685,36 @@ For questions: legal@zenrex.ai
                     )
                 except Exception:
                     logger.exception("background agent persist failed")
+
+                # ── 🔁 AUTO-REPUBLISH: keep the public /s/{slug} URL in lockstep
+                # with the editor. Previously: user makes edits → AI sends old
+                # published URL → user sees stale broken version. Now: if this
+                # project was previously published, push the new HTML + pages
+                # to freebuild_published_sites IMMEDIATELY so the live URL
+                # always matches what the user just saw in chat.
+                try:
+                    if new_html and final_ctx and final_ctx.changes_made > 0:
+                        proj_doc = await db.freebuild_projects.find_one(
+                            {"id": pid},
+                            {"_id": 0, "published_slug": 1, "name": 1, "user_id": 1,
+                             "pages": 1, "current_html": 1},
+                        ) or {}
+                        slug = proj_doc.get("published_slug")
+                        if slug:
+                            all_pages = proj_doc.get("pages") or {"index.html": proj_doc.get("current_html") or new_html}
+                            if "index.html" not in all_pages:
+                                all_pages["index.html"] = proj_doc.get("current_html") or new_html
+                            await db.freebuild_published_sites.update_one(
+                                {"slug": slug},
+                                {"$set": {
+                                    "current_html": proj_doc.get("current_html") or new_html,
+                                    "pages": all_pages,
+                                    "updated_at": _now(),
+                                }},
+                            )
+                            logger.info(f"[auto-republish] synced slug={slug} for project={pid} ({len(all_pages)} pages)")
+                except Exception as _rep_e:
+                    logger.warning(f"[auto-republish] failed: {_rep_e}")
 
                 # ── SAFETY NET: guarantee ≥1 credit deduction per chat turn ──
                 # If the agent loop ran the full credit-deduction path (success),

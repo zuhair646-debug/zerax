@@ -237,6 +237,20 @@ Fully internal ticket system — no WhatsApp, no external email. Telegram-style 
   - Rule 9: Zero Lying on Delete (must call `remove_section`, prove via output)
   - Rule 10: Tool-Action Mandate (intent → tool mapping table; any
     completion-claim without tool call = documented lie)
+- ✅ **Auto-Republish on Edits (live URL sync)**: After any successful agent
+  turn (`changes_made > 0`), if `project.published_slug` exists, the server
+  automatically syncs `current_html` + `pages` to `freebuild_published_sites`.
+  No need to manually re-publish. FIXES user-reported bug: AI sent old
+  published URL after making edits → user saw stale broken version.
+- ✅ **PROJECT RAILS block** appended to every system prompt — clearly
+  explains the difference between "Editor Preview" (real-time current_html)
+  and "Live Published URL" (/s/{slug} auto-synced). Lists exact multi-page
+  URLs (`/s/{slug}/about.html` etc) so the AI never guesses or sends stale
+  links from memory.
+- ✅ **Cache-busting**: `serve_published_site` + `serve_published_subpage`
+  now send `Cache-Control: no-store, max-age=0, must-revalidate`. Updated
+  VPS nginx `/s/{slug}` rule to remove the 60s edge cache override —
+  edits are visible on the live URL instantly (Ctrl+F5 no longer needed).
 
 ## Test Credentials
 - Admin: admin@zenrex.ai / Zenrex@2026 (PROD DB only)
