@@ -58,6 +58,14 @@ Arabic-first AI builder for websites/apps/images/videos with credits-based prici
 - **🆕 Pricing UI: strikethrough base + green new total + bonus pill** for cross-cultural clarity
 - **🆕 Float credits killed** — backend rounds to int + DB normalized + UI displays integers only
 - **🆕 Dashboard/Navbar jitter fixed** — single source `useCreditsGuard`, removed promo top-transition, removed duplicate `/auth/me` fetch
+- **🆕 2026-06-21 — UNIVERSAL 50-credit gate enforced across ALL AI chat surfaces (NO role bypass, even owners pay):**
+  - `/api/freebuild-chat/project/{pid}/agent-chat-stream` → 402 if balance < 50 (admin bypass removed)
+  - `/api/freebuild-chat/project/{pid}/chat` (non-streaming) → 402 if balance < 50 (gate added)
+  - `/api/video-studio/chat` → 402 if balance < 50 (gate added)
+  - `/api/video-studio/production/producer-chat` → 402 if balance < 50 (gate added)
+  - `/api/games/project/{pid}/chat` → 402 with structured detail, owner bypass removed
+  - Floor charge `MIN_TURN_CHARGE_TOKENS=1500` on all 3 freebuild agent code paths so credits ALWAYS deduct, even when provider returns zero token counts (root cause of "AI generates for free" bug)
+- **🆕 2026-06-21 — PHASES_BY_MODE fix:** `FreeBuildChat.js` sidebar now uses `getPhases(project?.mode)` instead of hardcoded website phases, so APP projects show app phases (تدفق الشاشات / هوية التطبيق / بناء الشاشات / محاكي الجوال) — verified by testing agent
 - **🆕 Floating language picker + support widget removed** — cleaner pages
 - **🆕 Mobile chat overhaul:** PhaseHeaderPill (animated on phase change), credits + storage popovers visible on mobile, send button always visible, attach supports all file types
 - **🆕 Hard credit gate (50 credits min) before any AI turn** in `/agent-chat-stream` + `PendingResumeBanner` ("إكمل ➜") that resumes the user's saved message after recharge
