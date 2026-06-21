@@ -949,6 +949,137 @@ def tools_for_user(is_owner: bool) -> List[Dict[str, Any]]:
 
 
 # ─── Tool Implementations ─────────────────────────────────────────────────────
+def _build_reality_check_block(html: str, max_sections: int = 14, max_ctas: int = 12) -> str:
+    """🔬 Ground-truth snapshot injected into every agent turn for projects
+    that already have HTML. This forces the AI to **see** what's currently in
+    the project before responding — preventing the 'suggest features that
+    already exist' or 'claim fix without verification' failure mode.
+
+    Returns a compact Arabic Markdown block listing:
+      • Actual section ids + their first H1/H2/H3 heading text
+      • Every unique CTA / button text already on the page
+      • Live audit verdict (placeholders, dead buttons, broken anchors, empty
+        sections) — same logic as the `audit_html` tool but inline
+      • A concrete instruction telling the AI what its FIRST action must be
+    """
+    if not html or len(html) < 50:
+        return (
+            "\n🔬 **حالة المشروع (Reality Check)**: "
+            "لا يوجد HTML بعد. هذه أول مرة تبني فيها — ابدأ بـ Discovery Phase "
+            "(أسئلة هيكلية) قبل أي كود.\n"
+        )
+    # 1) Section list with first heading inside
+    sections_info: List[Dict[str, str]] = []
+    for m in re.finditer(
+        r'<section\b[^>]*\bid\s*=\s*["\']([a-zA-Z0-9_\-]+)["\'][^>]*>([\s\S]*?)</section>',
+        html, re.IGNORECASE,
+    ):
+        sid, inner = m.group(1), m.group(2)
+        h = re.search(r"<h[1-6][^>]*>([\s\S]*?)</h[1-6]>", inner, re.IGNORECASE)
+        heading = ""
+        if h:
+            heading = re.sub(r"<[^>]+>", " ", h.group(1)).strip()[:80]
+        sections_info.append({"id": sid, "heading": heading or "(بدون عنوان)"})
+
+    # 2) Unique CTA / button texts
+    cta_texts: List[str] = []
+    seen_cta = set()
+    for m in re.finditer(r"<(button|a)\b[^>]*>([\s\S]*?)</\1>", html, re.IGNORECASE):
+        txt = re.sub(r"<[^>]+>", " ", m.group(2)).strip()
+        txt = re.sub(r"\s+", " ", txt)
+        if 2 < len(txt) < 60 and txt not in seen_cta:
+            seen_cta.add(txt)
+            cta_texts.append(txt)
+            if len(cta_texts) >= max_ctas:
+                break
+
+    # 3) Audit — placeholders, empty sections, dead buttons, broken anchors
+    placeholder_patterns = [
+        "جاري التطوير", "قيد التطوير", "قريباً", "قريبًا",
+        "Coming soon", "Lorem ipsum", "TODO", "placeholder", "Under construction",
+    ]
+    lower_html = html.lower()
+    placeholder_hits = [p for p in placeholder_patterns if p.lower() in lower_html]
+    empty_sections = []
+    for m in re.finditer(
+        r'<section\b[^>]*\bid\s*=\s*["\']([a-zA-Z0-9_\-]+)["\'][^>]*>([\s\S]*?)</section>',
+        html, re.I,
+    ):
+        sid, inner = m.group(1), m.group(2)
+        text_only = re.sub(r"<[^>]+>", " ", inner).strip()
+        if len(text_only) < 60:
+            empty_sections.append(sid)
+    dead_buttons = []
+    for m in re.finditer(r"<(button|a)\b([^>]*)>([\s\S]*?)</\1>", html, re.IGNORECASE):
+        attrs, inner_html = m.group(2), m.group(3)
+        text = re.sub(r"<[^>]+>", " ", inner_html).strip()
+        has_action = ("onclick" in attrs.lower()) or (
+            "href" in attrs.lower()
+            and 'href="#"' not in attrs.lower()
+            and "href=''" not in attrs.lower()
+        )
+        if text and not has_action and len(text) > 2 and len(dead_buttons) < 8:
+            dead_buttons.append(text[:50])
+    broken_anchors = _verify_anchor_links(html) if html else []
+
+    # Build the block
+    lines = [
+        "",
+        "🔬 ═════════════════════════════════════════════════════════════",
+        "🔬 **الواقع الفعلي للمشروع الآن (Reality Check — اقرأ قبل أي ردّ):**",
+        "🔬 ═════════════════════════════════════════════════════════════",
+        f"  📏 حجم الـHTML: {len(html):,} حرف (~{len(html)//1024} KB)",
+    ]
+    if sections_info:
+        lines.append(f"  📚 **الأقسام الموجودة فعلاً ({len(sections_info)}):**")
+        for s in sections_info[:max_sections]:
+            lines.append(f"     • `#{s['id']}` → \"{s['heading']}\"")
+        if len(sections_info) > max_sections:
+            lines.append(f"     • ... و {len(sections_info)-max_sections} قسم آخر")
+    else:
+        lines.append("  📚 لا توجد <section id> — أضف ids للأقسام قبل الـ nav.")
+
+    if cta_texts:
+        lines.append(f"  🔘 **الأزرار/CTAs الموجودة ({len(cta_texts)}):**")
+        # Show as quoted list so AI can compare against suggestions
+        joined = " · ".join(f'\"{t}\"' for t in cta_texts)
+        # Wrap long line
+        if len(joined) > 240:
+            joined = joined[:240] + " ..."
+        lines.append(f"     {joined}")
+    else:
+        lines.append("  🔘 لا توجد أزرار/CTAs على الصفحة بعد.")
+
+    problems = len(placeholder_hits) + len(empty_sections) + len(dead_buttons) + len(broken_anchors)
+    if problems == 0:
+        lines.append("  ✅ **Audit:** ما في مشاكل ظاهرة (لا placeholders، لا أزرار ميتة، لا روابط مكسورة).")
+    else:
+        lines.append(f"  ⚠️ **Audit وجد {problems} مشكلة:**")
+        if placeholder_hits:
+            lines.append(f"     • placeholders/نصوص قاصرة: {', '.join(placeholder_hits[:5])}")
+        if empty_sections:
+            lines.append(f"     • أقسام شبه فارغة (<60 حرف): {', '.join('#'+s for s in empty_sections[:5])}")
+        if dead_buttons:
+            lines.append(f"     • أزرار ميتة (بدون onclick/href): {', '.join(repr(b) for b in dead_buttons[:5])}")
+        if broken_anchors:
+            lines.append(f"     • روابط nav مكسورة (#xxx بلا قسم مطابق): {', '.join('#'+a for a in broken_anchors[:5])}")
+
+    lines += [
+        "",
+        "⚡ **قواعد إلزامية بناءً على هذا الفحص:**",
+        "  1. **لا تقترح ميزة موجودة بالفعل** — راجع قائمة CTAs والأقسام أعلاه.",
+        "  2. إذا العميل قال \"أضف لي X\" — تحقّق أولاً: هل #X موجود؟ إذا نعم، اسأل \"تقصد تعدّل عليه أم تستبدله؟\"",
+        "  3. إذا العميل قال \"الزر ما يشتغل\" أو \"المشكلة في Y\" — استدع `read_current_html` أو",
+        "     `search_html('Y')` فوراً، ثم أصلح، ثم استدع `audit_html` للتحقق.",
+        "  4. إذا أُبلِغت بمشكلة في Audit أعلاه — أصلحها أولاً قبل أي طلب آخر.",
+        "  5. بعد أي تعديل (apply_section / write_full_html) — استدع `audit_html` للتأكيد قبل ما تقول \"تم\".",
+        "🔬 ═════════════════════════════════════════════════════════════",
+        "",
+    ]
+    return "\n".join(lines)
+
+
+# ─── Tool Implementations ─────────────────────────────────────────────────────
 class FreeBuildToolContext:
     """Holds mutable project state during an agent run."""
 
@@ -4557,7 +4688,7 @@ async def _run_anthropic_agent(
             content = m.get("content", "")
             if isinstance(content, str) and content.strip():
                 messages.append({"role": m["role"], "content": content})
-    messages.append({"role": "user", "content": f"{state_summary}\n\nالطلب: {user_message}"})
+    messages.append({"role": "user", "content": f"{_build_reality_check_block(ctx.current_html)}\n{state_summary}\n\nالطلب: {user_message}"})
 
     summary = ""
     options: List[Any] = []
@@ -4755,7 +4886,7 @@ async def _run_openai_compat_agent(
             content = m.get("content", "")
             if isinstance(content, str) and content.strip():
                 messages.append({"role": m["role"], "content": content})
-    messages.append({"role": "user", "content": f"{state_summary}\n\nالطلب: {user_message}"})
+    messages.append({"role": "user", "content": f"{_build_reality_check_block(ctx.current_html)}\n{state_summary}\n\nالطلب: {user_message}"})
 
     summary = ""
     options: List[Any] = []
@@ -5141,7 +5272,7 @@ async def _stream_one_provider(
     if _pending_audit:
         pending_audit_prefix = _pending_audit + "\n\n──────────────────────────\n\n"
 
-    messages.append({"role": "user", "content": f"{pending_audit_prefix}{state_summary}\n\nالطلب: {user_message}"})
+    messages.append({"role": "user", "content": f"{pending_audit_prefix}{_build_reality_check_block(ctx.current_html)}\n{state_summary}\n\nالطلب: {user_message}"})
 
     iterations = 0
     summary = ""

@@ -185,7 +185,7 @@ Fully internal ticket system — no WhatsApp, no external email. Telegram-style 
 - Consolidate POINTS_CONFIG (server.py)
 - Extract shared `require_min_credits(db, user, min)` helper (duplicated in 5 endpoints)
 
-## 🆕 2026-02 — Genius Engineer + Cumulative AI Memory
+## 🆕 2026-02 — Genius Engineer + Cumulative AI Memory + Reality Check
 - ✅ NEW `/app/backend/modules/freebuild/global_knowledge.py` — cross-user RAG learning
   - `add_best_practice()` with de-dup by (category, sector, normalised problem)
   - `load_global_knowledge_for_prompt()` injects top-8 practices ranked by success_count + tag overlap
@@ -202,8 +202,17 @@ Fully internal ticket system — no WhatsApp, no external email. Telegram-style 
   - Cost transparency rule
 - ✅ Per-operation image charging: `generate_image` now deducts `image_nano_banana` (75c)
   via `charge_user` so images don't hide inside the text token bill
+- ✅ **Reality Check Block** (CRITICAL FIX): `_build_reality_check_block(html)` now
+  runs at the start of EVERY agent turn (all 3 paths: anthropic, openai-compat,
+  stream). Injects ground-truth into the user message: section IDs + headings,
+  every existing CTA/button text, inline audit (placeholders/dead-buttons/broken
+  anchors), and 5 mandatory rules ("don't suggest existing features", "inspect
+  before fix", etc.). FIXES the user-reported bug where AI suggested CTAs that
+  already existed and couldn't see/fix real issues in the project.
 - ✅ Pytest: 5/5 in test_global_knowledge.py + 9/9 in test_genius_engineer_global_knowledge.py
 - ✅ Backend testing agent (iteration_50): 14/14 PASS, no critical/minor blockers
+- ✅ Live PROD verified: AI now opens reply with "🔍 قرأت الواقع الفعلي للموقع"
+  and correctly identifies when a suggested feature already exists.
 
 ## Test Credentials
 - Admin: admin@zenrex.ai / Zenrex@2026 (PROD DB only)
