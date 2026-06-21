@@ -4081,6 +4081,47 @@ verdict = READY، 0 placeholders، 0 dead buttons").
 في **Phase 1** اقترح ≥ 5 ميزات إضافية على الأقل، واسأل العميل أيّها يريد.
 **لا تكتفِ بنفس ما طلبه — كن استشارياً، اقترح أفكار قد تضاعف من قيمة موقعه!**
 
+📋 **قائمة أسئلة إجبارية (Mandatory Checklist) — استكملها كلها في Phase 1:**
+
+أنت **ممنوع** تنتقل من Phase 1 إلى Phase 2 قبل ما تسأل عن كل هذي البنود
+(اطرحها على دفعتين لتجنّب إغراق العميل):
+
+🏷️ **هوية المشروع:**
+1. **الاسم النهائي** للموقع/التطبيق
+2. **اللوجو** — هل عنده لوجو جاهز يرفعه، ولا نولّد له تصميم لوجو احترافي؟
+3. **اللون الأساسي** أو هل يفضّل تنوع (سنقترحه)
+4. **اللهجة العربية** (فصحى/سعودية/مصرية/خليجية عامة)
+5. **شعار/Slogan** قصير (نقترح أو يكتب)
+
+🛠️ **الميزات التشغيلية (حسب القطاع):**
+6. **لوحة تحكم Admin** — تبغى تدير المحتوى بنفسك؟ (نموذجياً نعم لكل المشاريع)
+7. **نظام طلبات/حجز** — حسب القطاع: طلبات للمطاعم، حجز للخدمات، شراء للمتاجر
+8. **التوصيل** (لو مطعم/متجر) — تبغى نظام توصيل؟ خرائط؟ تتبّع؟
+9. **الدفع** — كاش/Stripe/Apple Pay/Mada/Tabby/Tamara؟
+10. **تسجيل دخول العملاء** — حسابات للعملاء؟ نقاط ولاء؟
+11. **الإشعارات** — SMS/WhatsApp/Email؟
+
+📞 **الاتصال والوجود الرقمي:**
+12. **عنوان الفرع/الفروع** (إن وُجدت)
+13. **رقم الجوال/الواتساب** للتواصل
+14. **حسابات السوشيال** (Instagram/Twitter/Snapchat/TikTok)
+15. **خرائط جوجل** — رابط الموقع على الخرائط؟
+
+🌐 **النشر:**
+16. **اسم النطاق** — عنده دومين أم يبغى يشتري؟
+17. **اللغات** — عربي فقط أم عربي + إنجليزي؟
+
+**اسأل بذكاء — لا تجلد العميل بكل الأسئلة دفعة واحدة!** اقترح الإجابات
+المنطقية لقطاعه واطلب التأكيد. مثال: "لمخبزك، أقترح:
+• توصيل: نعم، مع تتبّع.
+• دفع: كاش + Mada + Apple Pay.
+• لغات: عربي + إنجليزي.
+هل توافق أم نعدّل؟"
+
+🚨 **حارس الجودة التلقائي (Server Guard):** بعد كل بناء HTML، النظام يفحص
+تلقائياً ويرسل لك تحذيراً كرسالة system لو لقى placeholders. اقرأ التحذير
+بعناية وأصلح المشاكل **قبل** ما تكمل أي خطوة أخرى.
+
 ──────────────────────────────────────────────────────────
 **Phase 3 → 6 — Assets, Build, Preview, Deploy**
 ──────────────────────────────────────────────────────────
@@ -4821,7 +4862,18 @@ async def _stream_one_provider(
             c = m.get("content", "")
             if isinstance(c, str) and c.strip():
                 messages.append({"role": m["role"], "content": c})
-    messages.append({"role": "user", "content": f"{state_summary}\n\nالطلب: {user_message}"})
+
+    # 🛡️ Inject pending audit warning (if the previous turn left placeholders).
+    # This makes the AI READ a concrete error report at the START of the next
+    # turn — it can't pretend it didn't see it. The warning is presented as
+    # a "system" message inside the user-turn so providers that only accept
+    # one system block (Anthropic) still receive it.
+    _pending_audit = project.get("_pending_audit_warning")
+    pending_audit_prefix = ""
+    if _pending_audit:
+        pending_audit_prefix = _pending_audit + "\n\n──────────────────────────\n\n"
+
+    messages.append({"role": "user", "content": f"{pending_audit_prefix}{state_summary}\n\nالطلب: {user_message}"})
 
     iterations = 0
     summary = ""
@@ -5213,6 +5265,68 @@ async def _stream_one_provider(
         else:
             summary = "ما قدرت أكمل المهمة لسبب تقني. جرّب أعد صياغة طلبك أو أعد المحاولة."
     logger.info(f"[agent-stream] finalizing: iterations={iterations} summary_len={len(summary)} html_changes={ctx.changes_made}")
+
+    # ── 🛡️ Post-turn HTML audit (Anti-Lying enforcement) ─────────────────
+    # If the agent built/modified HTML this turn AND it claims completion,
+    # automatically scan for placeholders. We persist the audit verdict to
+    # the project so on the NEXT user turn we inject a strong system warning
+    # forcing the AI to fix the problems it left behind (instead of just
+    # apologising and lying again).
+    audit_warning_text = None
+    try:
+        if ctx.changes_made > 0 and ctx.current_html:
+            html = ctx.current_html
+            placeholder_patterns = [
+                "جاري التطوير", "قيد التطوير", "قريباً", "قريبًا",
+                "سيتم إنشاؤه قريبا", "سيتم إضافته قريبا", "قسم قيد البناء",
+                "Coming soon", "coming-soon", "Lorem ipsum", "Under construction", "WIP",
+            ]
+            hits = [p for p in placeholder_patterns if p.lower() in html.lower()]
+            # Empty sections detection
+            empties = []
+            for m in re.finditer(
+                r'<section\b[^>]*\bid\s*=\s*["\']([a-zA-Z0-9_\-]+)["\'][^>]*>([\s\S]*?)</section>',
+                html, re.I,
+            ):
+                sid, inner = m.group(1), m.group(2)
+                text_only = re.sub(r"<[^>]+>", " ", inner).strip()
+                if len(text_only) < 60:
+                    empties.append(sid)
+            if hits or empties:
+                audit_warning_text = (
+                    "🛑 SYSTEM AUDIT WARNING (تحذير تلقائي من المراقب الداخلي):\n"
+                    f"بعد آخر تعديل، تم اكتشاف placeholders/أقسام فاضية بـ HTML:\n"
+                    + (f"• Placeholders: {', '.join(hits)}\n" if hits else "")
+                    + (f"• Empty sections (id): {', '.join(empties)}\n" if empties else "")
+                    + "❌ ممنوع تقول للعميل إن العمل اكتمل. ❌\n"
+                    "🛠️ في الـ turn القادم: استدع `audit_html`، ثم أصلح كل قسم بمحتوى حقيقي "
+                    "(لا 'قريباً' ولا 'Lorem ipsum'). بعد الإصلاح استدع audit_html مرة أخرى. "
+                    "كرّر حتى verdict='READY'. ثم فقط أعلن الإنجاز."
+                )
+                # Persist as a system note so the next turn picks it up
+                try:
+                    await db.freebuild_projects.update_one(
+                        {"id": project.get("id")},
+                        {"$set": {
+                            "_pending_audit_warning": audit_warning_text,
+                            "_pending_audit_problems": {"placeholders": hits, "empty_sections": empties},
+                            "_pending_audit_at": datetime.now(timezone.utc).isoformat(),
+                        }},
+                    )
+                    logger.info(f"[audit-guard] flagged project {project.get('id')} — placeholders={hits} empties={empties}")
+                except Exception as _ae:
+                    logger.warning(f"[audit-guard] persist failed: {_ae}")
+            else:
+                # Clear stale warnings — the AI fixed everything
+                try:
+                    await db.freebuild_projects.update_one(
+                        {"id": project.get("id")},
+                        {"$unset": {"_pending_audit_warning": "", "_pending_audit_problems": ""}},
+                    )
+                except Exception:
+                    pass
+    except Exception as _audit_e:
+        logger.warning(f"[audit-guard] failed: {_audit_e}")
 
     # ── Credit deduction ─────────────────────────────────────────────────
     # Bill the user once per chat turn using the actual provider-reported
