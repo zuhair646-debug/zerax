@@ -4911,7 +4911,7 @@ async def run_agent_turn(
     project: Dict[str, Any],
     user_message: str,
     history_messages: List[Dict[str, str]],
-    max_iterations: int = 30,
+    max_iterations: int = 12,
     model: str = "claude-sonnet-4-5-20250929",
     auth_token: Optional[str] = None,
     db: Any = None,
@@ -5407,7 +5407,7 @@ async def stream_agent_turn(
     project: Dict[str, Any],
     user_message: str,
     history_messages: List[Dict[str, str]],
-    max_iterations: int = 40,
+    max_iterations: int = 12,
     ctx_holder: Optional[Dict[str, Any]] = None,
     user_language: str = "ar",
     auth_token: Optional[str] = None,
@@ -6114,16 +6114,33 @@ async def _stream_one_provider(
     # token counts. Every user pays — there is no role-based bypass.
     # Floor: even if the provider returned 0 tokens (capture failed) we
     # still charge a minimum-turn fee so the AI can never run for free.
-    MIN_TURN_CHARGE_TOKENS = 1500  # ≈ 38 credits floor (~$0.19) — kept below Lovable's $0.25/msg
+    # Ceiling: hard cap per turn so the user never sees a 4000-credit
+    # surprise from a runaway turn (many iterations × huge HTML).
+    MIN_TURN_CHARGE_TOKENS = 1500            # ≈ 38 credits floor (~$0.19)
+    MAX_TURN_CREDITS = 500                    # ≤ $0.50 ceiling per turn
     credits_charged = 0
+    capped = False
     no_credits_after = False
     try:
         if db is not None:
             effective_in = turn_tokens_in or 0
             effective_out = turn_tokens_out or 0
-            if (effective_in + effective_out) <= 0:
+            total_eff = effective_in + effective_out
+            if total_eff <= 0:
                 # Token capture failed — charge the floor so usage can't escape billing
                 effective_out = MIN_TURN_CHARGE_TOKENS
+                total_eff = MIN_TURN_CHARGE_TOKENS
+            # 🛡️ Strict per-turn ceiling — refund excess instead of billing.
+            CAP_TOKENS = int(MAX_TURN_CREDITS * 1000 / 25)   # = 20_000 tokens
+            if total_eff > CAP_TOKENS:
+                scale = CAP_TOKENS / total_eff
+                effective_in = int(effective_in * scale)
+                effective_out = int(effective_out * scale)
+                capped = True
+                logger.warning(
+                    f"[agent-stream] CAP fired: real_tokens={total_eff} > "
+                    f"{CAP_TOKENS}; billing capped at {MAX_TURN_CREDITS} credits"
+                )
             _uid = project.get("user_id")
             if _uid:
                 from modules.ai_core.usage_meter import record_usage
@@ -6154,6 +6171,8 @@ async def _stream_one_provider(
         "tokens_in": turn_tokens_in,
         "tokens_out": turn_tokens_out,
         "credits_charged": credits_charged,
+        "credits_capped": capped,
+        "credits_cap": MAX_TURN_CREDITS,
         "no_credits_after": no_credits_after,
     })
 

@@ -252,6 +252,25 @@ Fully internal ticket system — no WhatsApp, no external email. Telegram-style 
   VPS nginx `/s/{slug}` rule to remove the 60s edge cache override —
   edits are visible on the live URL instantly (Ctrl+F5 no longer needed).
 
+## 🆕 2026-02 — Strict Credit Deduction (Floor + Ceiling + Iteration Cap)
+- 🛡️ **Per-turn hard CEILING**: `MAX_TURN_CREDITS = 500` (≤ $0.50/turn). Even
+  if a runaway turn would consume 100k tokens, billing is scaled down so the
+  user is never surprised by a 4000-credit drop. SSE response includes
+  `credits_capped: bool` + `credits_cap: 500` for full UI transparency.
+- 🛡️ **Per-turn FLOOR**: `MIN_TURN_CHARGE_TOKENS = 1500` (~38 credits) fires
+  when provider token capture fails — guarantees AI usage can never escape
+  billing.
+- 🛡️ **Iteration cap**: `max_iterations` reduced from 30/40 → **12** in both
+  `run_agent_turn` and `stream_agent_turn`. Prevents runaway loops where
+  the AI calls 20+ tools in one turn, each re-sending the full system
+  prompt (5K tokens) → 100K total → 2500 credits.
+- 🛡️ **Atomic ledger ops**: Verified `deduct_credits` uses MongoDB
+  `find_one_and_update` with `{"credits": {"$gte": amount}}` — fully atomic,
+  cannot overdraw, every charge logged in `credit_transactions`.
+- ✅ Real curl test confirmed: 5814 tokens × 25/1k = **145 credits charged
+  exactly** (no surprises). `credits_capped=false`, `credits_cap=500` shown.
+- ✅ 4/4 pytest cases in `/app/backend/tests/test_strict_credit_deduction.py`
+
 ## Test Credentials
 - Admin: admin@zenrex.ai / Zenrex@2026 (PROD DB only)
 - Prod Test User: test_zenrex_2026@example.com / Test@Pass2026!
