@@ -127,12 +127,10 @@ export default function StorageIndicator({ compact = false }) {
         )}
       </button>
 
-      {/* Popover — drops DOWN from the trigger (absolute) so users always
-          see where it came from. May temporarily overlap the tab bar, but
-          that's fine — closes on any outside click. */}
+      {/* Popover — FIXED horizontal center + drops BELOW the top navbar.
+          Never gets clipped off-screen on any device. Closes on outside click. */}
       {open && (
         <>
-          {/* Soft backdrop so chat content behind is visually muted */}
           <div
             className="fixed inset-0 z-[60] bg-black/60 backdrop-blur-sm"
             onClick={() => setOpen(false)}
@@ -140,7 +138,7 @@ export default function StorageIndicator({ compact = false }) {
           />
           <div
             data-testid="storage-upgrade-popover"
-            className="absolute z-[80] mt-2 right-0 sm:right-0 left-auto w-[min(22rem,calc(100vw-1.5rem))] sm:w-96 rounded-xl border-2 border-amber-500 bg-zinc-950 shadow-2xl shadow-amber-500/30 p-4 animate-in fade-in slide-in-from-top-2 duration-150"
+            className="fixed z-[80] left-1/2 -translate-x-1/2 top-[72px] sm:top-[80px] w-[min(24rem,calc(100vw-2rem))] rounded-2xl border-2 border-amber-400 bg-zinc-950 shadow-2xl shadow-amber-500/40 p-5 animate-in fade-in slide-in-from-top-3 duration-200"
             role="dialog"
             onClick={(e) => e.stopPropagation()}
           >
