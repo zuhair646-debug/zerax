@@ -180,8 +180,30 @@ Fully internal ticket system — no WhatsApp, no external email. Telegram-style 
 
 ## Refactoring Backlog
 - Split FreeBuildChat.js (4500+ lines)
-- Split FreeBuild backend chat module
+- Split FreeBuild backend chat module (now 6702 lines — urgent)
+- Split freebuild_agent.py (5650 lines)
 - Consolidate POINTS_CONFIG (server.py)
+- Extract shared `require_min_credits(db, user, min)` helper (duplicated in 5 endpoints)
+
+## 🆕 2026-02 — Genius Engineer + Cumulative AI Memory
+- ✅ NEW `/app/backend/modules/freebuild/global_knowledge.py` — cross-user RAG learning
+  - `add_best_practice()` with de-dup by (category, sector, normalised problem)
+  - `load_global_knowledge_for_prompt()` injects top-8 practices ranked by success_count + tag overlap
+  - `save_learning` tool exposed to AI (87 tools total now)
+  - New MongoDB collection `ai_global_knowledge`
+- ✅ Genius Engineer Protocol added to STRICT_PHASE_PROTOCOL_ADDENDUM:
+  - Zero-Assumptions inspection mandate (read_html_section before any fix)
+  - Originality Mandate (8 forbidden template patterns + alternative layouts)
+  - Sectoral Mastery (e-commerce / restaurant / health / education / services feature maps)
+  - Diagnose-Before-Fix (get_html → audit → test_page → classify → fix → verify)
+  - Golden Idea Rule (every meaningful reply ends with 💎 proactive suggestion)
+  - Granular Sectioning (5-12 sections per project, each a separate turn)
+  - Live Memory feedback loop (memory_save + save_learning hooks)
+  - Cost transparency rule
+- ✅ Per-operation image charging: `generate_image` now deducts `image_nano_banana` (75c)
+  via `charge_user` so images don't hide inside the text token bill
+- ✅ Pytest: 5/5 in test_global_knowledge.py + 9/9 in test_genius_engineer_global_knowledge.py
+- ✅ Backend testing agent (iteration_50): 14/14 PASS, no critical/minor blockers
 
 ## Test Credentials
 - Admin: admin@zenrex.ai / Zenrex@2026 (PROD DB only)
@@ -199,3 +221,5 @@ Fully internal ticket system — no WhatsApp, no external email. Telegram-style 
 - ✅ `charge_user` now deducts from admin/owner accounts too (10100 → 10085 confirmed)
 - ✅ FreeBuild streaming agent now tracks input/output tokens via `final_msg.usage`
 - ✅ Auth endpoints unaffected
+- ✅ NEW: Global knowledge module retrieves seeded restaurant/ecommerce practices and
+  injects them into every chat turn's system prompt
