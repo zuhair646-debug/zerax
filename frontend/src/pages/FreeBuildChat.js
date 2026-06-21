@@ -3077,7 +3077,22 @@ function ChatWorkspace({ projectId }) {  const navigate = useNavigate();
               }
             } else if (eventName === 'done') {
               streamReceivedDone = true;
-              finalSummary = payload.summary || '';
+              // Combine all accumulated live_text narration + closing summary
+              // so `m.content` ALWAYS has the full text the user just saw.
+              // This guarantees no truncation when we swap live_text → m.content
+              // at end-of-stream (also restores text properly on page refresh).
+              const accumulatedNarration = liveSteps
+                .filter((s) => s.kind === 'live_text' && (s.text || '').trim())
+                .map((s) => s.text)
+                .join('\n\n');
+              const closingSummary = payload.summary || '';
+              if (closingSummary && accumulatedNarration && !accumulatedNarration.includes(closingSummary.slice(0, 60))) {
+                // Different content — append summary after the narration
+                finalSummary = `${accumulatedNarration}\n\n${closingSummary}`;
+              } else {
+                // Either summary IS the narration repeated, or one is empty
+                finalSummary = accumulatedNarration || closingSummary;
+              }
               finalOptions = payload.options || [];
               finalInlineImages = payload.inline_images || [];
               finalInlineAudio = payload.inline_audio || [];
@@ -3935,21 +3950,23 @@ function ChatWorkspace({ projectId }) {  const navigate = useNavigate();
                             );
                           }
                           if (s.kind === 'live_text') {
-                            // Live streaming text from Claude. Render markdown
-                            // incrementally so headings/lists look polished.
+                            // Live streaming text from Claude.
                             //
-                            // CRITICAL: only show these bubbles while the
-                            // stream is still flowing. The moment the agent
-                            // finishes, `m.content` (the backend's final full
-                            // summary) takes over — this guarantees no word
-                            // is ever truncated. Previously these bubbles
-                            // stayed forever and remained incomplete.
+                            // CRITICAL FIX: render as PLAIN TEXT (no markdown
+                            // parsing) during streaming. ReactMarkdown's
+                            // incremental re-parsing caused the "text goes
+                            // forward then backward then ends incomplete"
+                            // flicker — incomplete markdown like `**hello`
+                            // (waiting for closing `**`) renders differently
+                            // from `**hello**`, making chars appear/disappear.
+                            // After streaming completes, m.content takes over
+                            // and renders with full markdown formatting.
                             if (!m.agent_streaming) return null;
                             const hasText = (s.text || '').trim().length > 0;
                             if (!hasText) return null;
                             return (
-                              <div key={sIdx} className="text-sm leading-relaxed text-zinc-100">
-                                <MarkdownText>{s.text || ''}</MarkdownText>
+                              <div key={sIdx} className="text-sm leading-relaxed text-zinc-100 whitespace-pre-wrap break-words">
+                                {s.text || ''}
                                 {s.open && <span className="inline-block w-1.5 h-4 bg-emerald-400 ml-0.5 align-middle animate-pulse" />}
                               </div>
                             );
