@@ -164,6 +164,36 @@ def _merge_sections(current_html: str, append_sections: List[tuple], replace_sec
     return html
 
 
+def _remove_sections(current_html: str, ids: List[str]):
+    """🗑️ Delete every <section id='X'>...</section> block whose id is in `ids`,
+    and also strip any matching <nav> <a href='#X'> links so navigation stays
+    consistent. Returns (new_html, removed_ids_list).
+    """
+    if not current_html or not ids:
+        return current_html or "", []
+    html = current_html
+    removed: List[str] = []
+    for sid in ids:
+        sid = (sid or "").strip()
+        if not sid:
+            continue
+        sec_pat = re.compile(
+            r"\s*<section\b[^>]*\bid\s*=\s*[\"']" + re.escape(sid) + r"[\"'][^>]*>[\s\S]*?</section>",
+            re.IGNORECASE,
+        )
+        new_html, n = sec_pat.subn("", html, count=1)
+        if n > 0:
+            removed.append(sid)
+            html = new_html
+            # Also strip any nav anchor pointing to this section
+            nav_a_pat = re.compile(
+                r"\s*<a\b[^>]*\bhref\s*=\s*[\"']#" + re.escape(sid) + r"[\"'][^>]*>[\s\S]*?</a>",
+                re.IGNORECASE,
+            )
+            html = nav_a_pat.sub("", html)
+    return html, removed
+
+
 def _splice_before_body_close(html: str, fragment: str) -> str:
     """Insert fragment immediately before </body>, or append if no </body>."""
     if "</body>" in html.lower():
@@ -3419,13 +3449,19 @@ def make_freebuild_chat_router(db, get_current_user):
         if existing and existing.get("project_id") != pid:
             raise HTTPException(409, f"الـ slug '{slug}' محجوز — اختر اسم ثاني")
         now = _now()
+        # Build the pages payload — supports multi-page projects too
+        all_pages = proj.get("pages") or {"index.html": proj["current_html"]}
+        # Always ensure index.html exists (legacy fallback)
+        if "index.html" not in all_pages:
+            all_pages["index.html"] = proj["current_html"]
         await db.freebuild_published_sites.update_one(
             {"slug": slug},
             {"$set": {
                 "slug": slug,
                 "project_id": pid,
                 "user_id": user["user_id"],
-                "current_html": proj["current_html"],
+                "current_html": proj["current_html"],   # legacy field
+                "pages": all_pages,                      # NEW — multi-page support
                 "name": proj.get("name") or slug,
                 "updated_at": now,
             }, "$setOnInsert": {"created_at": now, "views": 0}},
@@ -3446,7 +3482,7 @@ def make_freebuild_chat_router(db, get_current_user):
 
     @router.get("/published-sites/{slug}", include_in_schema=False)
     async def serve_published_site(slug: str):
-        """Public endpoint — serves the raw HTML of a published site.
+        """Public endpoint — serves the homepage (index.html) of a published site.
         Nginx routes /s/{slug} → /api/freebuild-chat/published-sites/{slug}
         so end-users see the clean URL https://zenrex.ai/s/{slug}.
         """
@@ -3462,12 +3498,42 @@ def make_freebuild_chat_router(db, get_current_user):
                 "</body></html>",
                 status_code=404
             )
-        # Async view-count increment (fire-and-forget)
         try:
             await db.freebuild_published_sites.update_one({"slug": slug}, {"$inc": {"views": 1}})
         except Exception:
             pass
-        return HTMLResponse(_inject_zenrex_footer(site["current_html"]))
+        # Multi-page aware: serve pages["index.html"] when available, else fall back to legacy current_html
+        html = (site.get("pages") or {}).get("index.html") or site.get("current_html") or ""
+        return HTMLResponse(_inject_zenrex_footer(html))
+
+    @router.get("/published-sites/{slug}/{filename}", include_in_schema=False)
+    async def serve_published_subpage(slug: str, filename: str):
+        """Serves additional pages of a multi-page published site, e.g.
+        /s/{slug}/about.html → /api/freebuild-chat/published-sites/{slug}/about.html
+        """
+        from fastapi.responses import HTMLResponse
+        slug = (slug or "").strip().lower()
+        filename = (filename or "").strip().lower()
+        if not re.match(r"^[a-z0-9][a-z0-9\-_]*\.html$", filename):
+            return HTMLResponse("<h1>Invalid page name</h1>", status_code=400)
+        site = await db.freebuild_published_sites.find_one({"slug": slug})
+        if not site:
+            return HTMLResponse("<h1>Site not found</h1>", status_code=404)
+        pages = site.get("pages") or {}
+        html = pages.get(filename)
+        if not html:
+            return HTMLResponse(
+                f"<!doctype html><html dir='rtl'><head><meta charset='utf-8'><title>404</title></head>"
+                f"<body style='font-family:sans-serif;text-align:center;padding:80px;background:#0a0a14;color:#fbbf24'>"
+                f"<h1>الصفحة غير موجودة</h1><p>الصفحة <code>{filename}</code> غير موجودة في هذا الموقع.</p>"
+                f"<p><a href='/s/{slug}' style='color:#fbbf24'>← الرئيسية</a></p></body></html>",
+                status_code=404,
+            )
+        try:
+            await db.freebuild_published_sites.update_one({"slug": slug}, {"$inc": {"views": 1}})
+        except Exception:
+            pass
+        return HTMLResponse(_inject_zenrex_footer(html))
 
     # ═══════════════════════════════════════════════════════════════════════
     # KIDS PWA — Prayer Recordings (server-stored, parent reviewable)
@@ -6533,6 +6599,8 @@ For questions: legal@zenrex.ai
                                 await db.freebuild_projects.update_one(
                                     {"id": pid},
                                     {"$set": {"current_html": ctx_now.current_html,
+                                              "pages": ctx_now.pages,
+                                              "active_page": ctx_now.active_page,
                                               "updated_at": _now(),
                                               "agent_in_progress": True}},
                                 )
@@ -6586,6 +6654,14 @@ For questions: legal@zenrex.ai
                     if new_html:
                         update_set["current_html"] = _inject_zenrex_footer(new_html)
                         update_set["current_phase"] = "build"
+                        # Persist the full multi-page state too so the
+                        # `pages` dict + active_page survive across turns.
+                        if final_ctx:
+                            try:
+                                update_set["pages"] = final_ctx.pages
+                                update_set["active_page"] = final_ctx.active_page
+                            except Exception:
+                                pass
                         # Mark prior phases done in history for the sidebar
                         try:
                             _proj_now = await db.freebuild_projects.find_one(

@@ -185,7 +185,7 @@ Fully internal ticket system — no WhatsApp, no external email. Telegram-style 
 - Consolidate POINTS_CONFIG (server.py)
 - Extract shared `require_min_credits(db, user, min)` helper (duplicated in 5 endpoints)
 
-## 🆕 2026-02 — Genius Engineer + Cumulative AI Memory + Reality Check
+## 🆕 2026-02 — Genius Engineer + Memory + Reality Check + DELETE + Multi-Page
 - ✅ NEW `/app/backend/modules/freebuild/global_knowledge.py` — cross-user RAG learning
   - `add_best_practice()` with de-dup by (category, sector, normalised problem)
   - `load_global_knowledge_for_prompt()` injects top-8 practices ranked by success_count + tag overlap
@@ -213,6 +213,30 @@ Fully internal ticket system — no WhatsApp, no external email. Telegram-style 
 - ✅ Backend testing agent (iteration_50): 14/14 PASS, no critical/minor blockers
 - ✅ Live PROD verified: AI now opens reply with "🔍 قرأت الواقع الفعلي للموقع"
   and correctly identifies when a suggested feature already exists.
+- ✅ **Real DELETE capability**: `apply_section` extended with `op='delete'` + NEW
+  dedicated `remove_section(ids=[...])` tool. Removes the entire `<section>`
+  block AND any matching `<nav>` link. Returns `removed_ids` + `bytes_freed`.
+  FIXES user-reported bug: AI claimed "حذفت" without actually deleting.
+- ✅ **Multi-page architecture**: NEW project field `pages: {filename: html}` + 
+  `active_page` + 4 new tools: `list_pages`, `create_page(filename, title)`,
+  `switch_page(filename)`, `delete_page(filename)`. Each page is independently
+  edited; `apply_section` operates on the active page only. `index.html`
+  cannot be deleted. The agent now creates real `<a href="about.html">`
+  multi-page navigation instead of forcing everything into one giant `#anchor`
+  scroll page.
+- ✅ **Published multi-page serving**: `publish_project` now uploads ALL pages,
+  served via:
+    `/s/{slug}` → `index.html`
+    `/s/{slug}/about.html` → `about.html` etc.
+  Nginx rule added on VPS for `^/s/([slug])/([file].html)$`.
+- ✅ **Anti-Hallucination Lie Detector (Server Guard)**: NEW post-turn check —
+  if assistant says "تم الإنشاء/الحذف" but `changes_made==0`, flags the project
+  with `_lie_detected_at` and injects a stinging correction prompt at the
+  start of the next user turn forcing the AI to actually call the tool.
+- ✅ Updated `STRICT_PHASE_PROTOCOL_ADDENDUM` rules 9 & 10:
+  - Rule 9: Zero Lying on Delete (must call `remove_section`, prove via output)
+  - Rule 10: Tool-Action Mandate (intent → tool mapping table; any
+    completion-claim without tool call = documented lie)
 
 ## Test Credentials
 - Admin: admin@zenrex.ai / Zenrex@2026 (PROD DB only)

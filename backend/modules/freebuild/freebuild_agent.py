@@ -35,6 +35,7 @@ from .freebuild_chat import (
     _extract_html,
     _fix_dead_navigation_links,
     _merge_sections,
+    _remove_sections,
     _summarize_html,
     _verify_anchor_links,
     _enc,
@@ -143,18 +144,101 @@ TOOLS_SCHEMA: List[Dict[str, Any]] = [
     {
         "name": "apply_section",
         "description": (
-            "Surgically apply a section to current_html. Set op='append' to add "
-            "a new section before </body>, or op='replace' to overwrite an "
-            "existing <section id='X'>. Preserves everything else."
+            "Surgically apply a section to current_html. op='append' adds a "
+            "new section before </body>; op='replace' overwrites an existing "
+            "<section id='X'>; op='delete' completely removes the "
+            "<section id='X'>...</section> block AND its matching nav link. "
+            "Always re-call list_sections or audit_html after to verify."
         ),
         "input_schema": {
             "type": "object",
             "properties": {
                 "id": {"type": "string", "description": "section id (e.g. 'quran')"},
-                "html": {"type": "string", "description": "<section id='X'>...</section> fragment"},
-                "op": {"type": "string", "enum": ["append", "replace"]},
+                "html": {"type": "string", "description": "<section id='X'>...</section> fragment. Empty/optional when op='delete'."},
+                "op": {"type": "string", "enum": ["append", "replace", "delete"]},
             },
-            "required": ["id", "html", "op"],
+            "required": ["id", "op"],
+        },
+    },
+    {
+        "name": "remove_section",
+        "description": (
+            "🗑️ Delete one or more <section id='...'> blocks from current_html. "
+            "Also removes any <nav> links pointing to those sections so the "
+            "navigation stays consistent. Returns the IDs actually removed. "
+            "Use this when the user explicitly asks to delete/remove sections."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "ids": {
+                    "type": "array", "items": {"type": "string"},
+                    "description": "List of section ids to remove (e.g. ['testimonials', 'stats']).",
+                },
+            },
+            "required": ["ids"],
+        },
+    },
+    # ─── Multi-page support ─────────────────────────────────────────────
+    {
+        "name": "list_pages",
+        "description": (
+            "📄 List every HTML page in this project (multi-page architecture). "
+            "Returns each filename, its byte size, title, section count, and "
+            "which one is currently active. Use this BEFORE creating a new "
+            "page so you don't duplicate one that already exists."
+        ),
+        "input_schema": {"type": "object", "properties": {}},
+    },
+    {
+        "name": "create_page",
+        "description": (
+            "📄✨ Create a NEW HTML page in the project (e.g. 'about.html', "
+            "'contact.html', 'services.html'). The filename MUST end with "
+            ".html and use lowercase/hyphens. After creation the new page "
+            "becomes the ACTIVE page automatically — subsequent write/edit "
+            "tools operate on it. Use this when the user asks for a separate "
+            "page (not a section)."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "filename": {"type": "string", "description": "Page filename, e.g. 'about.html'."},
+                "title": {"type": "string", "description": "Page <title> (also used as <h1>)."},
+                "html": {"type": "string", "description": "Optional full HTML body. If omitted, a clean skeleton is generated."},
+            },
+            "required": ["filename", "title"],
+        },
+    },
+    {
+        "name": "switch_page",
+        "description": (
+            "🔀 Switch the ACTIVE page (the one all edit tools target). Use "
+            "this when the user says 'edit the about page now'. Returns the "
+            "newly-active page's HTML so you can read it."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "filename": {"type": "string"},
+            },
+            "required": ["filename"],
+        },
+    },
+    {
+        "name": "delete_page",
+        "description": (
+            "🗑️📄 Permanently delete an entire HTML page from the project. "
+            "Cannot delete 'index.html' (the homepage). Also strips any "
+            "<a href='filename.html'> links pointing to it across all "
+            "remaining pages."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "filename": {"type": "string"},
+            },
+            "required": ["filename"],
         },
     },
     {
@@ -1091,10 +1175,29 @@ class FreeBuildToolContext:
         self.auth_token: Optional[str] = auth_token
         self.db = db
         self.is_owner: bool = bool(is_owner)
+        # ── Multi-page state ──────────────────────────────────────────
+        # `pages` is a dict { "index.html": "<html>...", "about.html": "..." }
+        # `active_page` is the file currently being edited. `current_html`
+        # always mirrors `pages[active_page]` so legacy code that only
+        # touches `current_html` keeps working transparently.
+        raw_pages = project.get("pages") or {}
+        self.pages: Dict[str, str] = {k: v for k, v in raw_pages.items() if isinstance(v, str)}
+        self.active_page: str = project.get("active_page") or "index.html"
         self.current_html: str = project.get("current_html") or ""
+        # Hydrate pages from current_html if pages is empty (back-compat)
+        if not self.pages and self.current_html:
+            self.pages[self.active_page] = self.current_html
+        # If pages exist but current_html is empty, restore from active page
+        if not self.current_html and self.pages.get(self.active_page):
+            self.current_html = self.pages[self.active_page]
         self.changes_made: int = 0
         self.snapshots_to_create: List[Dict[str, Any]] = []
         self.tool_log: List[Dict[str, Any]] = []
+
+    def _sync_active_page(self):
+        """Keep `pages[active_page]` in lockstep with `current_html`."""
+        if self.current_html:
+            self.pages[self.active_page] = self.current_html
 
     def snapshot_before_write(self):
         if self.current_html:
@@ -1211,16 +1314,35 @@ def _exec_tool(ctx: FreeBuildToolContext, name: str, args: Dict[str, Any]) -> Di
             new_html, fixed = _fix_dead_navigation_links(new_html)
             ctx.snapshot_before_write()
             ctx.current_html = new_html
+            ctx._sync_active_page()
             ctx.changes_made += 1
             return {"ok": True, "new_length": len(new_html), "dead_links_fixed": fixed}
         if name == "apply_section":
             sid = (args.get("id") or "").strip()
             frag = (args.get("html") or "").strip()
             op = args.get("op") or "append"
-            if not sid or not frag:
-                return {"ok": False, "error": "id and html are required"}
+            if not sid:
+                return {"ok": False, "error": "id is required"}
             if not ctx.current_html:
                 return {"ok": False, "error": "current_html is empty; call write_full_html first"}
+            if op == "delete":
+                # 🗑️ Real removal — strip the entire <section id='X'> block + matching nav link
+                before_len = len(ctx.current_html)
+                new_html, removed = _remove_sections(ctx.current_html, [sid])
+                if not removed:
+                    return {"ok": False, "op": op, "id": sid,
+                            "error": f"section '{sid}' not found in current_html — nothing removed"}
+                ctx.snapshot_before_write()
+                ctx.current_html = new_html
+                ctx._sync_active_page()
+                ctx.changes_made += 1
+                return {"ok": True, "op": op, "id": sid,
+                        "removed_ids": removed,
+                        "length_before": before_len,
+                        "length_after": len(new_html),
+                        "bytes_freed": before_len - len(new_html)}
+            if not frag:
+                return {"ok": False, "error": "html is required for append/replace"}
             appends = [(sid, frag)] if op == "append" else []
             replaces = [(sid, frag)] if op == "replace" else []
             merged = _merge_sections(ctx.current_html, appends, replaces, None)
@@ -1229,8 +1351,129 @@ def _exec_tool(ctx: FreeBuildToolContext, name: str, args: Dict[str, Any]) -> Di
             merged, fixed = _fix_dead_navigation_links(merged)
             ctx.snapshot_before_write()
             ctx.current_html = merged
+            ctx._sync_active_page()
             ctx.changes_made += 1
             return {"ok": True, "op": op, "id": sid, "new_total_length": len(merged), "dead_links_fixed": fixed}
+
+        if name == "remove_section":
+            ids = args.get("ids") or []
+            if isinstance(ids, str):
+                ids = [ids]
+            ids = [str(x).strip() for x in ids if str(x).strip()]
+            if not ids:
+                return {"ok": False, "error": "ids array is required"}
+            if not ctx.current_html:
+                return {"ok": False, "error": "current_html is empty"}
+            before_len = len(ctx.current_html)
+            new_html, removed = _remove_sections(ctx.current_html, ids)
+            not_found = [i for i in ids if i not in removed]
+            if not removed:
+                return {"ok": False, "error": f"none of {ids} were found in current_html",
+                        "not_found": not_found}
+            ctx.snapshot_before_write()
+            ctx.current_html = new_html
+            ctx._sync_active_page()
+            ctx.changes_made += 1
+            return {"ok": True, "removed_ids": removed, "not_found": not_found,
+                    "length_before": before_len, "length_after": len(new_html),
+                    "bytes_freed": before_len - len(new_html),
+                    "message": f"🗑️ تم حذف {len(removed)} قسم: {', '.join('#'+r for r in removed)}"}
+
+        # ── Multi-page tools ─────────────────────────────────────────────
+        if name == "list_pages":
+            ctx._sync_active_page()
+            out = []
+            for fn, html in ctx.pages.items():
+                title_m = re.search(r"<title[^>]*>([^<]+)</title>", html or "", re.I)
+                sec_count = len(re.findall(r"<section\b[^>]*\bid\s*=", html or "", re.I))
+                out.append({
+                    "filename": fn,
+                    "title": (title_m.group(1).strip()[:80] if title_m else ""),
+                    "bytes": len(html or ""),
+                    "sections": sec_count,
+                    "active": (fn == ctx.active_page),
+                })
+            return {"ok": True, "pages": out, "active_page": ctx.active_page,
+                    "total": len(out)}
+
+        if name == "create_page":
+            filename = (args.get("filename") or "").strip().lower()
+            title = (args.get("title") or "").strip()
+            custom_html = (args.get("html") or "").strip()
+            if not filename or not filename.endswith(".html"):
+                return {"ok": False, "error": "filename must end with .html"}
+            if not re.match(r"^[a-z0-9][a-z0-9\-_]*\.html$", filename):
+                return {"ok": False, "error": "filename must be lowercase letters/digits/hyphens only"}
+            if filename in ctx.pages:
+                return {"ok": False, "error": f"page '{filename}' already exists. Use switch_page to edit it."}
+            if not title:
+                return {"ok": False, "error": "title is required"}
+            ctx._sync_active_page()
+            if custom_html:
+                html = custom_html
+            else:
+                html = (
+                    f"<!DOCTYPE html>\n<html dir=\"rtl\" lang=\"ar\">\n<head>\n"
+                    f"<meta charset=\"utf-8\">\n<meta name=\"viewport\" content=\"width=device-width,initial-scale=1\">\n"
+                    f"<title>{title}</title>\n<script src=\"https://cdn.tailwindcss.com\"></script>\n</head>\n"
+                    f"<body class=\"bg-slate-950 text-white min-h-screen\">\n"
+                    f"<nav class=\"px-6 py-4 flex items-center gap-4 border-b border-white/10\">\n"
+                    f"  <a href=\"index.html\" class=\"font-bold\">🏠 الرئيسية</a>\n"
+                    f"</nav>\n"
+                    f"<section id=\"page-hero\" class=\"py-20 px-6 text-center\">\n"
+                    f"  <h1 class=\"text-4xl font-extrabold mb-4\">{title}</h1>\n"
+                    f"  <p class=\"text-slate-300\">ابدأ بإضافة المحتوى الفعلي لهذه الصفحة.</p>\n"
+                    f"</section>\n</body>\n</html>"
+                )
+            ctx.snapshot_before_write()
+            ctx.pages[filename] = html
+            ctx.active_page = filename
+            ctx.current_html = html
+            ctx.changes_made += 1
+            return {"ok": True, "filename": filename, "title": title,
+                    "bytes": len(html), "active_page": filename,
+                    "message": f"📄 صفحة جديدة '{filename}' أُنشئت وأصبحت النشطة الآن. ابدأ بإضافة الأقسام عبر apply_section."}
+
+        if name == "switch_page":
+            filename = (args.get("filename") or "").strip().lower()
+            if filename not in ctx.pages:
+                return {"ok": False, "error": f"page '{filename}' not found",
+                        "available": list(ctx.pages.keys())}
+            ctx._sync_active_page()  # save current edits to previously-active page first
+            ctx.active_page = filename
+            ctx.current_html = ctx.pages[filename]
+            ctx.changes_made += 1  # treated as a checkpoint event
+            return {"ok": True, "active_page": filename,
+                    "bytes": len(ctx.current_html),
+                    "message": f"🔀 صرت تعدّل الآن في صفحة '{filename}'."}
+
+        if name == "delete_page":
+            filename = (args.get("filename") or "").strip().lower()
+            if filename == "index.html":
+                return {"ok": False, "error": "cannot delete index.html (the homepage)"}
+            if filename not in ctx.pages:
+                return {"ok": False, "error": f"page '{filename}' not found",
+                        "available": list(ctx.pages.keys())}
+            ctx.snapshot_before_write()
+            del ctx.pages[filename]
+            # Strip <a href="filename.html"> links from every remaining page
+            link_pat = re.compile(
+                r"\s*<a\b[^>]*\bhref\s*=\s*[\"']" + re.escape(filename) + r"[\"'][^>]*>[\s\S]*?</a>",
+                re.IGNORECASE,
+            )
+            for other_fn in list(ctx.pages.keys()):
+                ctx.pages[other_fn] = link_pat.sub("", ctx.pages[other_fn])
+            # If we deleted the active page, switch back to index
+            if ctx.active_page == filename:
+                ctx.active_page = "index.html"
+                ctx.current_html = ctx.pages.get("index.html", "")
+            else:
+                ctx.current_html = ctx.pages.get(ctx.active_page, ctx.current_html)
+            ctx.changes_made += 1
+            return {"ok": True, "deleted": filename,
+                    "remaining_pages": list(ctx.pages.keys()),
+                    "active_page": ctx.active_page,
+                    "message": f"🗑️ صفحة '{filename}' حُذفت + كل الروابط المُؤدّية لها."}
         if name == "update_nav":
             items = [(i["id"], i["label"]) for i in (args.get("items") or []) if i.get("id") and i.get("label")]
             if not items:
@@ -1318,7 +1561,9 @@ async def _dispatch_tool(ctx: FreeBuildToolContext, name: str, args: Dict[str, A
     # for films when the customer just wanted the film delivered as assets.
     _mode = (ctx.project or {}).get("mode") or "website"
     _video_modes = {"video_studio", "anime_studio", "longform_video", "image_studio"}
-    _website_only_tools = {"write_full_html", "apply_section", "update_nav", "publish_site"}
+    _website_only_tools = {"write_full_html", "apply_section", "remove_section",
+                            "update_nav", "publish_site",
+                            "list_pages", "create_page", "switch_page", "delete_page"}
     if _mode in _video_modes and name in _website_only_tools:
         return {
             "ok": False,
@@ -2714,7 +2959,10 @@ AGENT_SYSTEM_PROMPT = """أنت **Zenrex Code Brain** — مهندس برمجي 
 
 ✏️ **الكتابة والتعديل:**
 - `write_full_html(html)` — اكتب موقع كامل (للمشروع الفاضي فقط، أو إذا العميل طلب إعادة بناء صراحةً)
-- `apply_section(id, html, op)` — أضف/استبدل قسم محدد (الأفضل للتعديلات)
+- `apply_section(id, html, op)` — أضف/استبدل/احذف قسم محدد (الأفضل للتعديلات)
+  • op='append' أو 'replace' → يضيف/يحدّث
+  • op='delete' → **يحذف القسم بالكامل + أي nav link مرتبط به** ⚡
+- `remove_section(ids)` — حذف دفعة من الأقسام مرة وحدة (مثلاً `['testimonials','stats','partners']`). يرجع لك `removed_ids` + كم بايت حُذف. **هذه الأداة الصحيحة لمّا العميل يقول "احذف لي القسم X" — لا تكذب وتقول حذفت بدون استدعاء هذي الأداة.**
 - `update_nav(items)` — حدّث قائمة التنقّل
 
 🌐 **البحث والاستكشاف:**
@@ -4516,6 +4764,36 @@ verdict = READY، 0 placeholders، 0 dead buttons").
    "هذا القسم يتطلب ~Nقطة (سبب: image_generation_x3 + audit). نمضي؟"
    احترام نقاط العميل = ثقة طويلة الأمد.
 
+🗑️ **9. الحذف الجذري الصادق — Zero Lying on Delete:**
+   لو العميل قال "احذف قسم X" أو "شيل القسم Y" أو "ما أبيه":
+   • **استدع `remove_section(ids=['X','Y'])` فوراً** (هذي الأداة الصحيحة).
+   • **ممنوع** تقول "حذفت" أو "تم" بدون ما تستدعي الأداة فعلاً.
+   • بعد الحذف، الأداة ترجع `removed_ids` + `bytes_freed` — اعرضها للعميل
+     كدليل ملموس على الحذف الحقيقي.
+   • لو الـids ما انحذفت (موجودة في `not_found`) — قل للعميل بصراحة:
+     "ما لقيت قسم بـid='X'. الأقسام الموجودة فعلاً هي: …" واعرضها.
+   • **لو العميل طلب الحذف مرتين** ولا انحذف — قف، استدع `read_current_html`
+     لترى الواقع، ثم استدع `remove_section` بالـid الصحيح، ثم استدع
+     `list_sections` لتأكيد الحذف بصرياً.
+
+🚨 **10. القانون الذهبي — Tool-Action Mandate (ممنوع الكذب):**
+   إذا العميل طلب فعلاً ملموساً (أنشئ / احذف / أضف / عدّل / بدّل):
+     **يجب** أن يحتوي ردّك على **استدعاء أداة فعلي**.
+     **ممنوع منعاً باتاً** أن تقول "تم الإنشاء" أو "أُنشئت" أو "حذفت" أو
+     "بنيت" بدون ما تستدعي الأداة المناسبة في نفس الـ turn.
+   
+   مطابقة سريعة (Intent → Tool):
+     • "أنشئ صفحة about.html" → `create_page(filename='about.html', title=...)`
+     • "احذف قسم testimonials" → `remove_section(ids=['testimonials'])`
+     • "أزل صفحة contact.html" → `delete_page(filename='contact.html')`
+     • "ضيف قسم hero" → `apply_section(id='hero', html='...', op='append')`
+     • "بدّل القسم X" → `apply_section(id='X', html='...', op='replace')`
+     • "غيّر النافبار" → `update_nav(items=[...])`
+   
+   **آخر turn — System Lie Detector اكتشف كذبك إذا ادّعيت إنجازاً بلا أداة.**
+   عرض النتيجة الحقيقية من الأداة (length_before/after, removed_ids,
+   filename, إلخ) = الدليل الوحيد على الإنجاز. أي شيء غير ذلك = كذب.
+
 ═══════════════════════════════════════════════════════════════════
 """
 
@@ -5017,6 +5295,16 @@ TOOL_LABELS_AR: Dict[str, Dict[str, str]] = {
                             "done": "✅ كتب الـHTML الجديد"},
     "apply_section":      {"running": "🔧 يطبّق قسم محدد بدقة...",
                             "done": "✅ تم تطبيق القسم"},
+    "remove_section":     {"running": "🗑️ يحذف الأقسام المطلوبة...",
+                            "done": "✅ تم الحذف"},
+    "list_pages":         {"running": "📄 يستعرض كل صفحات المشروع...",
+                            "done": "✅ قائمة الصفحات"},
+    "create_page":        {"running": "📄✨ ينشئ صفحة HTML جديدة...",
+                            "done": "✅ صفحة جديدة"},
+    "switch_page":        {"running": "🔀 يبدّل الصفحة النشطة...",
+                            "done": "✅ تبديل الصفحة"},
+    "delete_page":        {"running": "🗑️📄 يحذف صفحة كاملة من المشروع...",
+                            "done": "✅ صفحة محذوفة"},
     "update_nav":         {"running": "🗺️ يحدّث قائمة التنقّل (nav)...",
                             "done": "✅ تم تحديث القائمة"},
     "web_search":         {"running": "🌐 يبحث في الإنترنت عن أفضل المراجع...",
@@ -5726,6 +6014,59 @@ async def _stream_one_provider(
                     pass
     except Exception as _audit_e:
         logger.warning(f"[audit-guard] failed: {_audit_e}")
+
+    # ── 🚨 Anti-Hallucination Lie Detector ───────────────────────────────
+    # Catches the most dangerous failure mode: the AI claims it created /
+    # deleted / removed something but didn't actually invoke the tool. If
+    # the assistant text contains a completion phrase ("تم الإنشاء",
+    # "تم الحذف", "أُنشئت", "حذفت", "أنشأت") AND ctx.changes_made == 0,
+    # we flag the project so the next turn injects a stinging correction
+    # forcing the AI to actually execute the tool instead of fabricating.
+    try:
+        if ctx.changes_made == 0 and summary:
+            txt = summary.lower()
+            ar_txt = summary  # Arabic terms preserved
+            lie_phrases = [
+                "تم الإنشاء", "تم إنشاء", "أُنشئت", "أنشأت", "تم إضافة",
+                "تم الحذف", "تم حذف", "حذفت", "أزلت", "تم الإزالة",
+                "تم التعديل", "تم تطبيق", "طبّقت", "بنيت", "صنعت لك",
+                "صفحة جديدة", "تم البناء",
+            ]
+            user_intent_phrases = ["انشئ", "أنشئ", "احذف", "اضف", "أضف", "ضيف",
+                                    "شيل", "بدّل", "اصنع", "ابن", "ابني",
+                                    "create_page", "delete_page", "remove_section"]
+            looks_like_lie = any(p in ar_txt for p in lie_phrases)
+            user_requested_action = any(p in (user_message or "").lower() for p in user_intent_phrases)
+            if looks_like_lie and user_requested_action:
+                lie_warning = (
+                    "🚨 SYSTEM LIE DETECTOR (كذب موثَّق من المراقب الداخلي):\n"
+                    "في الـ turn السابق ادّعيت أنك أنشأت/حذفت/عدّلت شيئاً، لكن "
+                    "**لم تستدع أي أداة (changes_made=0)**. هذا كذب صريح يكسر "
+                    "ثقة العميل ويستنزف رصيده على لا شيء.\n"
+                    "❌ ممنوع تكذب على العميل. ❌\n"
+                    "🛠️ في الـ turn القادم: **استدع الأداة الصحيحة فوراً** قبل "
+                    "أي نص:\n"
+                    "  • طلب إنشاء صفحة → `create_page(filename, title)`\n"
+                    "  • طلب حذف قسم → `remove_section(ids=[...])`\n"
+                    "  • طلب حذف صفحة → `delete_page(filename)`\n"
+                    "  • طلب إضافة قسم → `apply_section(id, html, op='append')`\n"
+                    "  • طلب تعديل → `apply_section(id, html, op='replace')`\n"
+                    "ثم أعطِ العميل تقريراً بالنتيجة الفعلية (length_before/after, "
+                    "removed_ids, إلخ). لا تخترع نتائج."
+                )
+                try:
+                    await db.freebuild_projects.update_one(
+                        {"id": project.get("id")},
+                        {"$set": {
+                            "_pending_audit_warning": (audit_warning_text + "\n\n" + lie_warning) if audit_warning_text else lie_warning,
+                            "_lie_detected_at": datetime.now(timezone.utc).isoformat(),
+                        }},
+                    )
+                    logger.warning(f"[lie-detector] flagged project {project.get('id')} — user requested action but agent did nothing")
+                except Exception as _le:
+                    logger.warning(f"[lie-detector] persist failed: {_le}")
+    except Exception as _lde:
+        logger.warning(f"[lie-detector] failed: {_lde}")
 
     # ── Credit deduction ─────────────────────────────────────────────────
     # Bill the user once per chat turn using the actual provider-reported
