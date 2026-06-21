@@ -18,7 +18,7 @@ import { toast } from 'sonner';
 import { Button } from '../components/ui/button';
 import ZenrexBrand from '../components/ZenrexBrand';
 import StorageIndicator from '../components/StorageIndicator';
-import UsageIndicator from '../components/UsageIndicator';
+// UsageIndicator removed (duplicate of credits pill)
 
 const API = process.env.REACT_APP_BACKEND_URL;
 
@@ -130,6 +130,7 @@ export default function MyProjects() {
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState('all'); // all | website | app | studio
   const [reminderOptOut, setReminderOptOut] = useState(false);
+  const [supportUnread, setSupportUnread] = useState(0);
 
   const loadReminderPref = useCallback(async () => {
     const token = localStorage.getItem('token');
@@ -183,6 +184,26 @@ export default function MyProjects() {
   }, [navigate]);
 
   useEffect(() => { load(); loadReminderPref(); }, [load, loadReminderPref]);
+
+  // Poll support unread badge every 60s
+  useEffect(() => {
+    const fetchUnread = async () => {
+      const token = localStorage.getItem('token');
+      if (!token) return;
+      try {
+        const r = await fetch(`${API}/api/support/unread-count`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (r.ok) {
+          const d = await r.json();
+          setSupportUnread(d.unread || 0);
+        }
+      } catch (_) { /* silent */ }
+    };
+    fetchUnread();
+    const t = setInterval(fetchUnread, 60000);
+    return () => clearInterval(t);
+  }, []);
 
   const handleContinue = (p) => {
     navigate(`/freebuild/chat/${p.id}`);
@@ -244,7 +265,7 @@ export default function MyProjects() {
             <h1 className="text-sm font-bold text-zinc-300">مشاريعي قيد الإنشاء</h1>
           </div>
           <div className="flex items-center gap-2">
-            <UsageIndicator />
+            {/* UsageIndicator removed — duplicate of credits pill */}
             <StorageIndicator />
             <button
               type="button"
@@ -265,16 +286,21 @@ export default function MyProjects() {
             >
               <RefreshCw className="w-4 h-4" />
             </button>
-            <a
-              href="https://wa.me/966500000000"
-              target="_blank"
-              rel="noreferrer"
+            <button
+              type="button"
+              onClick={() => window.location.assign('/support')}
               data-testid="support-btn"
               className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/30 text-emerald-300 text-xs font-bold"
+              title="افتح مركز الدعم الداخلي"
             >
               <LifeBuoy className="w-4 h-4" />
               <span className="hidden sm:inline">دعم فني</span>
-            </a>
+              {supportUnread > 0 && (
+                <span className="ml-0.5 inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full bg-amber-400 text-black text-[10px] font-black animate-pulse">
+                  {supportUnread > 9 ? '9+' : supportUnread}
+                </span>
+              )}
+            </button>
           </div>
         </div>
       </header>

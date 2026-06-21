@@ -22,7 +22,7 @@ import {
   Smartphone, CreditCard, Bot, Search, ImageIcon, Crown, Loader2,
 } from 'lucide-react';
 import ZenrexBrand from '../components/ZenrexBrand';
-import UsageIndicator from '../components/UsageIndicator';
+// UsageIndicator removed (duplicate of credits pill)
 
 const API = process.env.REACT_APP_BACKEND_URL;
 
@@ -120,7 +120,7 @@ export default function ReadySitesPreview({ user }) {
             <span className="text-sm font-bold text-amber-300 truncate">{meta.emoji} {meta.title}</span>
           </div>
           <div className="flex items-center gap-2">
-            <UsageIndicator compact />
+            {/* UsageIndicator removed — duplicate of credits pill */}
           </div>
         </div>
       </header>

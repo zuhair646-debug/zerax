@@ -72,6 +72,9 @@ import SubscriptionGate from '@/pages/billing/SubscriptionGate';
 import BillingSuccess from '@/pages/billing/BillingSuccess';
 import BillingCancel from '@/pages/billing/BillingCancel';
 import BillingStorage from '@/pages/BillingStorage';
+import Support from '@/pages/Support';
+import SupportTicket from '@/pages/SupportTicket';
+import AdminSupport from '@/pages/AdminSupport';
 import StudioHub from '@/pages/studio/StudioHub';
 import StudioImage from '@/pages/studio/StudioImage';
 import StudioVideo from '@/pages/studio/StudioVideo';
@@ -253,6 +256,9 @@ function App() {
           <Route path="/billing/success" element={<ProtectedRoute><BillingSuccess /></ProtectedRoute>} />
           <Route path="/billing/cancel" element={<ProtectedRoute><BillingCancel /></ProtectedRoute>} />
           <Route path="/billing/storage" element={<ProtectedRoute><BillingStorage /></ProtectedRoute>} />
+          <Route path="/support" element={<ProtectedRoute><Support /></ProtectedRoute>} />
+          <Route path="/support/tickets/:id" element={<ProtectedRoute><SupportTicket /></ProtectedRoute>} />
+          <Route path="/admin/support" element={<ProtectedRoute><AdminSupport /></ProtectedRoute>} />
           <Route path="/sites/:slug" element={<PublicSite />} />
           <Route path="/client/:slug" element={<ClientSiteDashboard />} />
           <Route path="/driver/:slug" element={<DriverDashboardPage />} />

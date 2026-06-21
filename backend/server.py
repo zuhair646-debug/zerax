@@ -3648,7 +3648,7 @@ except Exception as _ate:
 
 # ============== SUPPORT + NOTIFICATIONS ==============
 try:
-    from modules.support import build_router as _build_support, notify_factory
+    from modules.support import build_router_with_uploads as _build_support, notify_factory
     _support_router = _build_support(db, get_current_user)
     app.include_router(_support_router, prefix="/api")
     logging.getLogger(__name__).info("support router registered")

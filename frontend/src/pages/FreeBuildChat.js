@@ -6,7 +6,7 @@ import ZCrownSpinner from '../components/ZCrownSpinner';
 import ZenrexBrand from '../components/ZenrexBrand';
 import ConnectionHelpModal from '../components/ConnectionHelpModal';
 import StorageIndicator from '../components/StorageIndicator';
-import UsageIndicator from '../components/UsageIndicator';
+// UsageIndicator removed — duplicate of the credits pill, was confusing users.
 import CookiesManager from '../components/CookiesManager';
 import CreditsBlockedBanner from '../components/CreditsBlockedBanner';
 import useCreditsGuard, { notifyCreditsChanged } from '../hooks/useCreditsGuard';

@@ -108,6 +108,47 @@ Unified storage billing — separated from AI credits. One MB pool across every 
 Create 8 LemonSqueezy Variants and add to `/app/backend/.env`:
 - `LEMONSQUEEZY_STORAGE_STARTER` / `_PLUS` / `_PRO` / `_STUDIO` (Subscription products)
 - `LEMONSQUEEZY_RECOVERY_SMALL` / `_MEDIUM` / `_LARGE` / `_XL` (One-time products)
+
+## 🆕 Support Tickets System (2026-06-21)
+
+Fully internal ticket system — no WhatsApp, no external email. Telegram-style threaded conversations between user / AI / admin.
+
+### Flow
+1. User opens `/support` → "تذكرة جديدة"
+2. Claude **auto-triages** on submission:
+   - **Refund/استرداد:** AI auto-declines politely per ToS terms, ticket marked `auto_resolved`, **NOT sent to admin** (saves your time)
+   - **Technical/Billing:** AI thanks user, asks for screenshots/video if missing, escalates to admin with a 1-line summary
+   - **Suggestions/Other:** AI acknowledges politely, escalates to admin
+3. User can attach images/videos/PDFs (max 25MB each, max 5 per upload)
+4. Admin replies from `/admin/support` — sees the audit snapshot inline:
+   - Credits balance, role, storage tier
+   - Project count
+   - Last 10 transactions
+   - Last 10 usage events
+   - Storage subscription status
+5. Bell notification + unread badge on user's dashboard when admin replies
+
+### Endpoints
+- `POST /api/support/tickets` — create + auto-triage
+- `GET /api/support/tickets/me` — my tickets
+- `GET /api/support/tickets/{id}` — thread
+- `POST /api/support/tickets/{id}/messages` — reply
+- `POST /api/support/tickets/{id}/upload` — attach files
+- `GET /api/support/attachment/{filename}` — serve attachment
+- `GET /api/support/unread-count` — badge count
+- `GET /api/admin/support/tickets?status=...` — admin list
+- `GET /api/admin/support/tickets/{id}` — admin view with audit_snapshot
+- `POST /api/admin/support/tickets/{id}/reply` — admin reply (with status change)
+- `POST /api/support/ai-quick-answer` — instant FAQ + Claude answer
+
+### Pages
+- `/support` — user ticket list + new-ticket form
+- `/support/tickets/:id` — threaded conversation (telegram-style)
+- `/admin/support` — admin inbox with audit panel + per-user analytics
+
+### Removed
+- ❌ Floating `UsageIndicator` ⚡ pill (was duplicating the credits display, confused users)
+- ❌ WhatsApp support button → now routes to `/support`
 - **🆕 Floating language picker + support widget removed** — cleaner pages
 - **🆕 Mobile chat overhaul:** PhaseHeaderPill (animated on phase change), credits + storage popovers visible on mobile, send button always visible, attach supports all file types
 - **🆕 Hard credit gate (50 credits min) before any AI turn** in `/agent-chat-stream` + `PendingResumeBanner` ("إكمل ➜") that resumes the user's saved message after recharge
