@@ -2534,12 +2534,12 @@ function ChatCreditsPill() {
 }
 
 /**
- * PhaseHeaderPill — top strip above the tab bar that always shows the
- * current build phase. When the AI advances to a new phase the pill briefly
- * flashes the new phase name (3s) before settling back to a steady label.
- * Tap to open the full phases drawer on mobile.
+ * PhaseHeaderPill — top strip above the tab bar that ALWAYS shows the
+ * project name + current build phase + storage indicator. The pill is now
+ * two-line on mobile (project name top, phase bottom) and one-line on desktop
+ * to maximise readability without sacrificing context.
  */
-function PhaseHeaderPill({ currentPhase, currentLabel, onOpen }) {
+function PhaseHeaderPill({ projectName, projectMode, currentPhase, currentLabel, onOpen }) {
   const [pulse, setPulse] = React.useState(false);
   const prev = React.useRef(currentPhase);
   React.useEffect(() => {
@@ -2552,30 +2552,65 @@ function PhaseHeaderPill({ currentPhase, currentLabel, onOpen }) {
     prev.current = currentPhase;
   }, [currentPhase]);
 
+  // Friendly mode label for the project-name line (shown on desktop after the title)
+  const MODE_LABELS = {
+    website: 'موقع',
+    app: 'تطبيق',
+    game: 'لعبة',
+    image_studio: 'صور',
+    short_video: 'فيديو قصير',
+    longform_video: 'فيديو طويل',
+  };
+  const modeLabel = MODE_LABELS[projectMode];
+
   return (
     <button
       type="button"
       onClick={onOpen}
       data-testid="phase-header-pill"
-      className={`group w-full flex items-center justify-between gap-2 px-3 py-2 border-b transition-all ${
+      className={`group w-full px-3 py-2 border-b transition-all ${
         pulse
           ? 'bg-gradient-to-r from-emerald-500/30 via-emerald-400/20 to-emerald-500/30 border-emerald-400/50 shadow-inner'
           : 'bg-emerald-500/5 border-white/10 hover:bg-emerald-500/10'
       }`}
     >
-      <div className="flex items-center gap-2 min-w-0">
-        <span className={`inline-block w-1.5 h-1.5 rounded-full ${pulse ? 'bg-emerald-300 animate-ping' : 'bg-emerald-400'}`} />
-        <span className="text-[10px] font-black text-emerald-300/70">المرحلة</span>
-        <span
-          className={`text-xs sm:text-sm font-black truncate transition-all ${
-            pulse ? 'text-emerald-100 scale-[1.04]' : 'text-emerald-200'
-          }`}
-          data-testid="phase-header-name"
-        >
-          {currentLabel || '—'}
-        </span>
+      <div className="flex items-center gap-3">
+        {/* Status dot */}
+        <span className={`flex-shrink-0 inline-block w-1.5 h-1.5 rounded-full ${pulse ? 'bg-emerald-300 animate-ping' : 'bg-emerald-400'}`} />
+
+        {/* TWO-LINE LAYOUT — project name above, phase below */}
+        <div className="flex-1 min-w-0 text-right">
+          {/* Top line: project name (+ mode chip on desktop) */}
+          <div className="flex items-center gap-1.5">
+            <span
+              className="text-[11px] sm:text-sm font-black text-white truncate"
+              data-testid="phase-header-project-name"
+              title={projectName || ''}
+            >
+              {projectName || 'مشروع بدون اسم'}
+            </span>
+            {modeLabel && (
+              <span className="hidden sm:inline-block text-[9px] px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-300 border border-amber-500/30 font-bold flex-shrink-0">
+                {modeLabel}
+              </span>
+            )}
+          </div>
+          {/* Bottom line: phase label */}
+          <div className="flex items-center gap-1.5 mt-0.5">
+            <span className="text-[9px] sm:text-[10px] font-black text-emerald-300/70 flex-shrink-0">المرحلة</span>
+            <span
+              className={`text-[10px] sm:text-xs font-black truncate transition-all ${
+                pulse ? 'text-emerald-100 scale-[1.04]' : 'text-emerald-200'
+              }`}
+              data-testid="phase-header-name"
+            >
+              {currentLabel || '—'}
+            </span>
+          </div>
+        </div>
+
+        <ChevronLeft className="flex-shrink-0 w-4 h-4 text-emerald-300/70 group-hover:text-emerald-200 md:hidden" />
       </div>
-      <ChevronLeft className="w-4 h-4 text-emerald-300/70 group-hover:text-emerald-200 md:hidden" />
     </button>
   );
 }
@@ -3680,6 +3715,8 @@ function ChatWorkspace({ projectId }) {  const navigate = useNavigate();
               open the phases drawer with a single tap. Always-visible
               context strip just above the chat/preview/approved tabs. */}
           <PhaseHeaderPill
+            projectName={project?.name || project?.title}
+            projectMode={project?.mode}
             currentPhase={activePhase}
             currentLabel={(sidebarPhases.find((p) => p.id === activePhase) || {}).title || activePhase}
             onOpen={() => setPhasesMobileOpen(true)}

@@ -126,13 +126,20 @@ export default function StorageIndicator({ compact = false }) {
         )}
       </button>
 
-      {/* Popover */}
+      {/* Popover with backdrop scrim so chat content underneath is dimmed */}
       {open && (
-        <div
-          data-testid="storage-upgrade-popover"
-          className="absolute z-[70] mt-2 left-0 sm:left-auto sm:right-0 w-[min(22rem,calc(100vw-1.5rem))] sm:w-96 rounded-xl border border-amber-500/40 bg-zinc-900 shadow-2xl p-4"
-          role="dialog"
-        >
+        <>
+          {/* Backdrop — closes on click and dims everything behind the popover */}
+          <div
+            className="fixed inset-0 z-[65] bg-black/70 backdrop-blur-sm"
+            onClick={() => setOpen(false)}
+            aria-hidden
+          />
+          <div
+            data-testid="storage-upgrade-popover"
+            className="absolute z-[80] mt-2 left-0 sm:left-auto sm:right-0 w-[min(22rem,calc(100vw-1.5rem))] sm:w-96 rounded-xl border-2 border-amber-500 bg-zinc-950 shadow-2xl shadow-amber-500/20 p-4"
+            role="dialog"
+          >
           <div className="flex items-start justify-between mb-3">
             <div>
               <div className="flex items-center gap-1.5 mb-0.5">
@@ -196,6 +203,7 @@ export default function StorageIndicator({ compact = false }) {
             </a>
           </div>
         </div>
+        </>
       )}
     </div>
   );
