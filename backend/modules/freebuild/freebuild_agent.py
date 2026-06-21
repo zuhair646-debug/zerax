@@ -90,6 +90,19 @@ TOOLS_SCHEMA: List[Dict[str, Any]] = [
         "input_schema": {"type": "object", "properties": {}, "required": []},
     },
     {
+        "name": "audit_html",
+        "description": (
+            "🛡️ Anti-lying audit — scans current_html for unfinished work: "
+            "placeholders like 'جاري التطوير' / 'قريباً' / 'Coming soon' / "
+            "'Lorem ipsum', empty section bodies, broken anchor links (#xxx "
+            "that don't exist), and buttons with no onclick/href. Returns a "
+            "structured report. **You MUST call this before ever claiming a "
+            "section/website is complete.** If problems exist, fix them before "
+            "telling the user the work is done."
+        ),
+        "input_schema": {"type": "object", "properties": {}, "required": []},
+    },
+    {
         "name": "list_sections",
         "description": (
             "List every <section id> in current_html with its content size and "
@@ -991,6 +1004,62 @@ def _exec_tool(ctx: FreeBuildToolContext, name: str, args: Dict[str, Any]) -> Di
                     ),
                 })
             return {"count": len(sections), "sections": sections}
+        if name == "audit_html":
+            # 🛡️ Anti-lying audit — scans current HTML for unfinished work.
+            # Returns a SHARP report that exposes any placeholders / dead
+            # buttons / empty sections so the agent can't claim "done" while
+            # work remains. This is the single most important defence against
+            # the AI lying about completion.
+            html = ctx.current_html or ""
+            placeholder_patterns = [
+                "جاري التطوير", "جاري التطور", "قيد التطوير", "قريباً", "قريبًا",
+                "سيتم إنشاؤه قريبا", "سيتم إضافته قريبا", "قسم قيد البناء",
+                "Coming soon", "coming-soon", "Lorem ipsum", "TODO", "placeholder",
+                "Under construction", "WIP",
+            ]
+            placeholder_hits = []
+            lower_html = html.lower()
+            for pat in placeholder_patterns:
+                pat_lower = pat.lower()
+                if pat_lower in lower_html:
+                    placeholder_hits.append(pat)
+            # Scan sections for empty bodies
+            empty_sections = []
+            for m in re.finditer(
+                r'<section\b[^>]*\bid\s*=\s*["\']([a-zA-Z0-9_\-]+)["\'][^>]*>([\s\S]*?)</section>',
+                html, re.I,
+            ):
+                sid, inner = m.group(1), m.group(2)
+                text_only = re.sub(r"<[^>]+>", " ", inner).strip()
+                if len(text_only) < 60:
+                    empty_sections.append({"id": sid, "text_size": len(text_only), "preview": text_only[:80]})
+            # Scan for buttons with no onclick / href
+            dead_buttons = []
+            for m in re.finditer(
+                r'<(button|a)\b([^>]*)>([\s\S]*?)</\1>', html, re.I,
+            ):
+                attrs, inner_html = m.group(2), m.group(3)
+                text = re.sub(r"<[^>]+>", " ", inner_html).strip()
+                has_action = ("onclick" in attrs.lower()) or ("href" in attrs.lower() and 'href="#"' not in attrs.lower() and "href=''" not in attrs.lower())
+                if text and not has_action and len(text) > 2 and len(dead_buttons) < 10:
+                    dead_buttons.append({"text": text[:60]})
+            # Broken anchor links (href="#xxx" with no <section id="xxx">)
+            broken_anchors = _verify_anchor_links(html) if html else []
+            problems_total = len(placeholder_hits) + len(empty_sections) + len(dead_buttons) + len(broken_anchors)
+            verdict = "READY" if problems_total == 0 else "INCOMPLETE"
+            return {
+                "verdict": verdict,
+                "problems_total": problems_total,
+                "placeholder_hits": placeholder_hits,
+                "empty_sections": empty_sections,
+                "dead_buttons": dead_buttons,
+                "broken_anchors": broken_anchors,
+                "advice_ar": (
+                    "✅ كل شي تمام — يمكنك الادعاء بالإنجاز للعميل."
+                    if verdict == "READY"
+                    else "🛑 ممنوع تقول للعميل إنك انتهيت! أصلح المشاكل المذكورة أولاً، ثم استدع audit_html مرة أخرى للتحقق."
+                ),
+            }
         if name == "validate_html":
             issues = _comprehensive_validation(ctx.current_html)
             return {"issue_count": len(issues), "issues": issues, "is_clean": len([i for i in issues if i["severity"] == "high"]) == 0}
@@ -3972,6 +4041,45 @@ STRICT_PHASE_PROTOCOL_ADDENDUM = """
 ⚖️ **عقوبة الكذب الذاتية:** لو لاحظت إنك ادّعيت شي قبل ما تتحقّق منه، اعتذر فوراً
 بصدق: "آسف، قلت X لكن لما تحقّقت لقيت Y. الواقع: [الحالة الفعلية]." العميل
 يثق بك أكثر لما تعترف بالخطأ من ما تخفيه.
+
+🛡️ **آلية الإنفاذ الإلزامية — `audit_html`:**
+
+أي مرة تنوي أن تقول للعميل "انتهيت" / "تم البناء" / "أصلحت كل شي" — **لازم**
+تستدع `audit_html()` أولاً. الـ tool راح يرجع verdict:
+• `"READY"` → معناها HTML نظيف، تقدر تعلن الإنجاز.
+• `"INCOMPLETE"` → معناها فيه placeholders/أزرار ميتة/أقسام فاضية. **ممنوع**
+  تقول إنك انتهيت. شوف القائمة وأصلح كل عنصر، ثم استدع audit_html مرة ثانية.
+  استمر في الـ loop حتى verdict = READY.
+
+كذلك لو العميل قال "هذا القسم فاضي" / "في placeholder" / "ما اشتغلت" → **أول**
+ما تسوي: استدع `audit_html()` لترى ما يراه العميل بالضبط، ثم أصلح، ثم audit
+ثاني، ثم أكّد للعميل بإجابة موضوعية (لا تقول "كل شي تمام" — قل: "audit
+verdict = READY، 0 placeholders، 0 dead buttons").
+
+💡 **مبدأ الاقتراحات الاستباقية — لا تكون محدوداً!**
+
+أنت **شريك مشروع** مش مجرد منفّذ. في كل مرحلة بعد ما يخلص العميل من فكرته
+الأساسية، **اقترح عليه ميزات إضافية يحتاجها ولم يفكر فيها:**
+
+أمثلة (حسب نوع المشروع):
+• **مطاعم/مخابز:** "تبغى نضيف نظام طلبات أونلاين؟ خريطة الموقع؟ نظام نقاط
+  ولاء العملاء؟ صور 360° للمحل؟ مدوّنة وصفات؟"
+• **متاجر إلكترونية:** "نظام كوبونات؟ تتبّع شحنات؟ مراجعات منتجات؟ Wishlist؟
+  دفع بالتقسيط؟ تحليلات للزوار؟ chat live؟"
+• **خدمات/استشارات:** "نظام حجز مواعيد؟ Stripe للدفع؟ شهادات عملاء سابقين؟
+  مكتبة موارد PDF؟ ندوات أونلاين؟"
+• **منصات تعليمية:** "نظام Quiz بعد كل درس؟ شهادات إنجاز؟ متابعة تقدم
+  المتعلم؟ منتدى نقاش؟ شات مع المعلمين؟"
+
+**كل المشاريع تقريباً تحتاج:**
+• 🎛️ **لوحة تحكم Admin** (للعميل عشان يدير محتواه)
+• 📧 **نموذج تواصل / Newsletter signup**
+• 📱 **SMS/WhatsApp/Email notifications**
+• 📊 **Analytics dashboard**
+• 🔐 **نظام تسجيل دخول للعملاء النهائيين** (لو فيه طلبات/حجز/تخصيص)
+
+في **Phase 1** اقترح ≥ 5 ميزات إضافية على الأقل، واسأل العميل أيّها يريد.
+**لا تكتفِ بنفس ما طلبه — كن استشارياً، اقترح أفكار قد تضاعف من قيمة موقعه!**
 
 ──────────────────────────────────────────────────────────
 **Phase 3 → 6 — Assets, Build, Preview, Deploy**
