@@ -128,18 +128,21 @@ export default function StorageIndicator({ compact = false }) {
       </button>
 
       {/* Popover — FIXED horizontal center + drops BELOW the top navbar.
-          Backdrop is FULLY OPAQUE (no transparency) so the chat content
-          behind it is completely hidden — the popover is its own focused page. */}
+          Backdrop is FULLY OPAQUE (inline style guarantee against any CSS
+          purge / cache issue) so the chat content behind it is completely
+          hidden — the popover is its own focused page. */}
       {open && (
         <>
           <div
-            className="fixed inset-0 z-[60] bg-zinc-950"
+            className="fixed inset-0 z-[60]"
+            style={{ backgroundColor: '#09090b' }}
             onClick={() => setOpen(false)}
             aria-hidden
           />
           <div
             data-testid="storage-upgrade-popover"
-            className="fixed z-[80] left-1/2 -translate-x-1/2 top-[72px] sm:top-[80px] w-[min(24rem,calc(100vw-2rem))] rounded-2xl border-2 border-amber-400 bg-zinc-900 shadow-2xl shadow-amber-500/40 p-5 animate-in fade-in slide-in-from-top-3 duration-200"
+            className="fixed z-[80] left-1/2 -translate-x-1/2 top-[72px] sm:top-[80px] w-[calc(100vw-1rem)] sm:w-[26rem] max-w-[26rem] rounded-2xl border-2 border-amber-400 shadow-2xl shadow-amber-500/40 p-5 animate-in fade-in slide-in-from-top-3 duration-200"
+            style={{ backgroundColor: '#1a1a1d' }}
             role="dialog"
             onClick={(e) => e.stopPropagation()}
           >
