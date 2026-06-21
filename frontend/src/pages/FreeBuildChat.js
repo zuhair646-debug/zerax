@@ -3877,15 +3877,14 @@ function ChatWorkspace({ projectId }) {  const navigate = useNavigate();
                       </div>
                     )}
                     <div className="text-sm leading-relaxed">
-                      {/* Render the main content bubble ONLY if there are no
-                          live_text steps. When the assistant streamed via SSE
-                          we keep those styled bubbles as the single source of
-                          truth — swapping to m.content would cause a visible
-                          flash where text appears to "rewrite itself". */}
-                      {!(
-                        (m.role === 'assistant') &&
-                        (m.agent_streaming || (m.agent_steps || []).some((s) => s.kind === 'live_text'))
-                      ) && (
+                      {/* Show the live streaming bubbles ONLY while actively
+                          streaming. The moment the stream completes, swap to
+                          the full `m.content` (the backend's finalSummary) —
+                          this guarantees no word ever appears truncated, even
+                          if individual text_delta chunks dropped a few chars.
+                          Previously we kept the live_text bubbles forever and
+                          they remained incomplete. */}
+                      {!(m.role === 'assistant' && m.agent_streaming) && (
                         <MarkdownText>{m.content}</MarkdownText>
                       )}
                     </div>
@@ -3938,13 +3937,14 @@ function ChatWorkspace({ projectId }) {  const navigate = useNavigate();
                           if (s.kind === 'live_text') {
                             // Live streaming text from Claude. Render markdown
                             // incrementally so headings/lists look polished.
-                            // Keep these bubbles visible permanently — even
-                            // after streaming completes — because they are the
-                            // single source of truth (the main m.content bubble
-                            // is hidden when live_text steps exist). This
-                            // eliminates the "text writes then disappears"
-                            // flash users complained about.
-                            // Only hide empty bubbles (no text accumulated).
+                            //
+                            // CRITICAL: only show these bubbles while the
+                            // stream is still flowing. The moment the agent
+                            // finishes, `m.content` (the backend's final full
+                            // summary) takes over — this guarantees no word
+                            // is ever truncated. Previously these bubbles
+                            // stayed forever and remained incomplete.
+                            if (!m.agent_streaming) return null;
                             const hasText = (s.text || '').trim().length > 0;
                             if (!hasText) return null;
                             return (
