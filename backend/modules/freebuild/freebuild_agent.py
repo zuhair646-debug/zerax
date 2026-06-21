@@ -129,14 +129,22 @@ TOOLS_SCHEMA: List[Dict[str, Any]] = [
     {
         "name": "write_full_html",
         "description": (
-            "Replace current_html entirely. ONLY use this for the very first "
-            "build (empty project) or when the user explicitly requested a "
-            "complete redesign. For everything else, prefer apply_section."
+            "⚠️ REPLACES THE ENTIRE PROJECT HTML. Use ONLY for: (1) the very "
+            "first build of an empty project, OR (2) when the user EXPLICITLY "
+            "asked for 'a complete redesign from scratch'. **It is BLOCKED by "
+            "the server when current_html ≥ 800 chars unless allow_full_rewrite=true.** "
+            "For 99% of edits (add/modify/remove a section, add a chat widget, "
+            "etc.) use `apply_section` or `create_page` to PRESERVE the "
+            "existing approved design."
         ),
         "input_schema": {
             "type": "object",
             "properties": {
                 "html": {"type": "string", "description": "Full <!DOCTYPE html>...</html> document."},
+                "allow_full_rewrite": {
+                    "type": "boolean",
+                    "description": "Set true ONLY if user explicitly requested a complete rebuild from scratch (rare). Without this the server will block destructive rewrites of an established design.",
+                },
             },
             "required": ["html"],
         },
@@ -1310,6 +1318,33 @@ def _exec_tool(ctx: FreeBuildToolContext, name: str, args: Dict[str, Any]) -> Di
                 return {"ok": False, "error": "html cannot be empty"}
             if not re.search(r"<html[\s\S]*</html>", new_html, re.I):
                 return {"ok": False, "error": "must be a complete <!DOCTYPE html>...</html> document"}
+            # 🛡️ DESIGN PRESERVATION: when an established design already
+            # exists (≥800 chars of HTML) we REFUSE to nuke it. This stops
+            # the #1 user complaint: "AI replaced my approved design with
+            # generic empty colored boxes when I asked to ADD a chat."
+            # The AI must use apply_section / create_page instead.
+            existing_size = len(ctx.current_html or "")
+            allow_full_rewrite = bool(args.get("allow_full_rewrite")) or \
+                                  bool((ctx.project or {}).get("design_unlocked"))
+            if existing_size >= 800 and not allow_full_rewrite:
+                return {
+                    "ok": False,
+                    "error": "DESIGN_PRESERVATION",
+                    "message": (
+                        f"⛔ ممنوع: المشروع فيه تصميم موجود ({existing_size:,} حرف). "
+                        f"`write_full_html` يحذف كل شيء ويكتب من الصفر — هذا يدمّر "
+                        f"التصميم المعتمد من العميل.\n\n"
+                        f"✅ بدلاً من ذلك:\n"
+                        f"  - **لإضافة قسم**: `apply_section(id='X', html='<section id=\"X\">...</section>', op='append')`\n"
+                        f"  - **لتعديل قسم**: `apply_section(id='X', html='...', op='replace')`\n"
+                        f"  - **لحذف قسم**: `remove_section(ids=['X'])`\n"
+                        f"  - **لإضافة صفحة جديدة**: `create_page(filename, title)`\n\n"
+                        f"إذا العميل طلب صراحةً 'إعادة كتابة الموقع من الصفر' "
+                        f"فقط حينها يمكنك تمرير `allow_full_rewrite=true`."
+                    ),
+                    "existing_html_size": existing_size,
+                    "suggestion": "use_apply_section_instead",
+                }
             # auto-fix dead navigation links
             new_html, fixed = _fix_dead_navigation_links(new_html)
             ctx.snapshot_before_write()
@@ -4809,6 +4844,24 @@ verdict = READY، 0 placeholders، 0 dead buttons").
    
    إذا احتجت تفكير طويل، اصمت تماماً ولا تكتب — استدعِ الأدوات مباشرة.
    النص بدون tool_use = إنهاء الـ turn. لا توعد بلا تنفيذ.
+
+🎨 **12. حماية التصميم المعتمد — Design Preservation Sacred Rule:**
+   عندما يكون للمشروع تصميم موجود فعلاً (current_html ≥ 800 حرف):
+   • **ممنوع منعاً باتاً استدعاء `write_full_html`** — السيرفر سيرفضه تلقائياً
+     ويعيد لك خطأ DESIGN_PRESERVATION.
+   • لإضافة ميزة (شات، قسم، نموذج، إلخ): استخدم `apply_section(op='append')`
+   • لتعديل قسم موجود: `apply_section(op='replace')` — يحافظ على باقي التصميم
+   • لإضافة صفحة جديدة: `create_page(filename, title)`
+   • لحذف قسم: `remove_section(ids=[...])`
+   
+   ⛔ **الخطأ المُدمِّر الذي يجب تجنّبه**: العميل وافق على تصميم جميل بألوان
+   وصور، وأنت طلبت منه إضافة شات → فاستخدمت `write_full_html` وأعدت كتابة
+   كل شيء من الصفر بصناديق ملوّنة فارغة بدون صور. **هذا يدمّر ثقة العميل
+   ويُلغي ساعات من عمله السابق.** التزم بـ `apply_section` دائماً.
+   
+   استثناء وحيد: لو العميل طلب صراحةً "أعد بناء الموقع من الصفر" أو
+   "احذف كل شي وابدأ من جديد" — حينها فقط مرّر `allow_full_rewrite=true`
+   مع `write_full_html`.
 
 ═══════════════════════════════════════════════════════════════════
 """

@@ -336,6 +336,20 @@ Fully internal ticket system — no WhatsApp, no external email. Telegram-style 
   AI calls `write_full_html` from iteration 1 → no stall → 6 iterations
   later: `html_changes=2`. Real work, no waste.
 
+## 🆕 2026-02 — Design Preservation (Anti-Destructive Rebuild)
+- 🎨 **Server-Side Block** on `write_full_html` when `current_html >= 800 chars`
+  AND `allow_full_rewrite` flag is not explicitly true. Returns
+  `DESIGN_PRESERVATION` error with a friendly Arabic message redirecting
+  the AI to use `apply_section`/`create_page`/`remove_section` instead.
+- 🔓 **Escape hatch**: `write_full_html(html=..., allow_full_rewrite=True)`
+  works when user explicitly asked for "إعادة بناء من الصفر".
+- 🎨 **New Rule 12** in `STRICT_PHASE_PROTOCOL_ADDENDUM` — Design Preservation
+  Sacred Rule. Explains the destructive-rebuild bug ("AI replaced approved
+  design with empty colored boxes when asked to ADD a chat") and lists the
+  correct preserving alternatives.
+- ✅ Verified: 1,180-char HTML + `write_full_html` → BLOCKED with rich
+  error. Same call with `allow_full_rewrite=true` → succeeds. Deployed.
+
 ## Test Credentials
 - Admin: admin@zenrex.ai / Zenrex@2026 (PROD DB only)
 - Prod Test User: test_zenrex_2026@example.com / Test@Pass2026!
