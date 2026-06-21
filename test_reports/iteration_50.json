@@ -1,0 +1,37 @@
+{
+  "summary": "Verified Genius Engineer + Global Knowledge integration. All 14 tests pass (5 from test_global_knowledge.py + 9 new in test_genius_engineer_global_knowledge.py). Confirmed: (a) /api/usage/credits returns numeric balance, (b) 402 insufficient_credits gate fires at balance<25 with structured detail {error,balance,required,message_ar}, (c) SSE agent-chat-stream returns event-stream content-type and streams start/provider events within 30s, (d) save_learning tool registered in TOOLS_SCHEMA, (e) image_nano_banana exists in SERVICE_COSTS catalog at 75 credits, (f) global knowledge RAG retrieval returns properly formatted Arabic markdown block (714 chars) for restaurant sector with 3 seeded best-practices visible.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "/api/freebuild-chat/project/{pid}/agent-chat-stream", "issue": "Did not observe a SEPARATE image_nano_banana ledger row during the SSE test (only text_claude_1k charges seen). The per-op charge code path at freebuild_agent.py L1339-1352 is structurally correct (calls charge_user with 'image_nano_banana') but only fires when the agent invokes generate_image — a short text-only Phase-1 Discovery turn does not trigger it. Recommend a separate longer-running e2e test that forces generate_image (e.g. a hero-image request after Phase-1 approval) to validate the credit deduction end-to-end."}
+    ]
+  },
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/backend/tests/test_genius_engineer_global_knowledge.py",
+    "/app/backend/tests/test_global_knowledge.py",
+    "/app/test_reports/pytest/iteration_50_results.xml",
+    "/app/test_reports/pytest/global_knowledge_results.xml"
+  ],
+  "action_items": [
+    "[OPTIONAL] Add an integration test that forces the agent to call generate_image so the image_nano_banana ledger row can be asserted directly (currently only inspected via catalog + code path).",
+    "[INFO] /api/usage/credits returns 'unlimited: false' for all users — even storage_tier='free' tier returns this. If a paid tier ever needs unlimited credits, hook in here (usage_meter.py L227-236)."
+  ],
+  "critical_code_review_comments": [
+    "global_knowledge.py is clean (~270 lines, single responsibility, dedup logic + RAG retrieval + tool schema all in one file). Good.",
+    "MIN_TURN_CREDITS=25 is hardcoded in TWO places (freebuild_chat.py L1381 _chat_impl AND L6454 agent_chat_stream). Iteration 49 already flagged that the credit-gate logic is duplicated across 5 endpoints. Refactor to a shared helper require_min_credits(db, user, min_credits=25) — pending from previous iteration.",
+    "freebuild_chat.py is 6702 lines (was 6641 in iter49) — still way over the 700-line guideline. Split urgently.",
+    "freebuild_agent.py at 5650 lines is also over budget. The new genius-engineer/global-knowledge plumbing landed cleanly (lines 64-65 imports, 769 tool registration, 1339-1352 image charge, 2237-2238 dispatch, 4587 RAG injection) but adds to an already-bloated module.",
+    "Image-charge ValueError handler (freebuild_agent.py L1353-1359) returns ok=True with a warning when the user runs out of credits mid-image-generation. UX-wise this is correct (don't waste their image), but the resulting `service:image_nano_banana` ledger row may never be written when ValueError fires before the insert — verify charge_user's transactional semantics (commit-before-deduct vs deduct-before-commit)."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_genius_engineer_global_knowledge.py"
+  ],
+  "success_rate": {"backend": "100% (14/14)", "frontend": "n/a (skipped per request)"},
+  "test_credentials": "test_zenrex_2026@example.com / Test@Pass2026! (credits started at 5000, balance after tests = 4932). Project PID=742d26c4-b1c0-46da-aa22-42664933bb59 reused.",
+  "seed_data_creation": "None added by this iteration. Verified main agent's 3 best-practices in ai_global_knowledge (sectors: restaurant, ecommerce, any) are queryable and returned by load_global_knowledge_for_prompt as expected.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Run: cd /app/backend && export $(grep -v '^#' .env | xargs) && python -m pytest tests/test_genius_engineer_global_knowledge.py tests/test_global_knowledge.py -v. The auth_token fixture has a 3-retry/60s timeout wrapper (preview endpoint is slow ~20-30s for first hit). SSE stream test reads up to 6 lines or 30s. Credit-gate test temporarily drops balance to 5 and restores afterward in a try/finally — safe to re-run. Image-charging path is verified structurally; end-to-end image deduction is NOT directly exercised (would require a 60s+ agent run that triggers generate_image).",
+  "rca of the issue": "Not a bug — this was a feature verification pass. The Genius Engineer addendum (freebuild_agent.py L4205-4220), global knowledge injection (L4587), save_learning tool dispatch (L2237), and per-op image charge (L1339-1352) all import & register correctly without breaking existing flows. Pytest confirms RAG retrieval returns a 714-char Arabic markdown block for restaurant sector with 3 seeded practices ranked by success_count + tag overlap."
+}

@@ -60,6 +60,12 @@ from .memory_audit_tools import (
     dispatch_phase4,
     load_project_memories_for_prompt,
 )
+from .global_knowledge import (
+    GLOBAL_KNOWLEDGE_TOOL_SCHEMA,
+    save_learning,
+    load_global_knowledge_for_prompt,
+    extract_keywords as _gk_extract_keywords,
+)
 from .browser_use_tools import (
     PHASE5_TOOL_SCHEMAS,
     PHASE5_TOOL_LABELS_AR,
@@ -760,6 +766,7 @@ TOOLS_SCHEMA.extend(ADVANCED_TOOL_SCHEMAS)
 # Append the workflow tools (ask_user_inline, plan_task, delegate)
 TOOLS_SCHEMA.extend(WORKFLOW_TOOL_SCHEMAS)
 TOOLS_SCHEMA.extend(PHASE4_TOOL_SCHEMAS)
+TOOLS_SCHEMA.append(GLOBAL_KNOWLEDGE_TOOL_SCHEMA)
 TOOLS_SCHEMA.extend(PHASE5_TOOL_SCHEMAS)
 TOOLS_SCHEMA.extend(DESKTOP_TOOL_SCHEMAS)
 
@@ -1154,7 +1161,7 @@ def _exec_tool(ctx: FreeBuildToolContext, name: str, args: Dict[str, Any]) -> Di
                     "save_credential", "validate_credential", "list_credentials",
                     "delete_credential", "recommend_service",
                     "github_list_repos", "github_create_repo", "github_push_file",
-                    "github_get_file") or name in ADVANCED_TOOL_NAMES or name in WORKFLOW_TOOL_NAMES or name in PHASE4_TOOL_NAMES or name in PHASE5_TOOL_NAMES or name in DESKTOP_TOOL_NAMES:
+                    "github_get_file", "save_learning") or name in ADVANCED_TOOL_NAMES or name in WORKFLOW_TOOL_NAMES or name in PHASE4_TOOL_NAMES or name in PHASE5_TOOL_NAMES or name in DESKTOP_TOOL_NAMES:
             return {"__async__": True, "tool": name, "args": args}
         return {"error": f"unknown tool: {name}"}
     except Exception as e:
@@ -1326,6 +1333,32 @@ async def _exec_tool_async(ctx: FreeBuildToolContext, name: str, args: Dict[str,
                 if not imgs:
                     return {"ok": False, "error": "fal.ai returned no image"}
                 img_url = imgs[0].get("url") if isinstance(imgs[0], dict) else imgs[0]
+                # ── Per-operation credit charge (so images don't hide inside the
+                # text-turn token bill). Uses the central catalog so pricing
+                # stays in one place. Owner role is exempt via charge_user logic.
+                try:
+                    if ctx.db is not None:
+                        from modules.pricing.credits import charge_user
+                        _proj_now = ctx.project or {}
+                        _uid = _proj_now.get("user_id") or _proj_now.get("merchant_id")
+                        if _uid:
+                            await charge_user(
+                                ctx.db, _uid, "image_nano_banana",
+                                multiplier=1.0,
+                                meta={"section": "freebuild_image",
+                                       "project_id": ctx.project_id,
+                                       "provider": "fal.ai/flux/schnell",
+                                       "description": description[:140]},
+                            )
+                except ValueError:
+                    # User ran out of credits mid-generation — image was already
+                    # produced, so we surface a soft warning instead of failing.
+                    return {"ok": True, "url": img_url, "image_url": img_url,
+                            "model": "fal-ai/flux/schnell", "provider": "fal.ai",
+                            "description": description,
+                            "warning": "تم توليد الصورة لكن رصيدك انخفض — اشحن لمواصلة العمل."}
+                except Exception as _ce:
+                    logger.warning(f"[image-charge] failed: {_ce}")
                 return {"ok": True, "url": img_url, "image_url": img_url,
                         "model": "fal-ai/flux/schnell", "provider": "fal.ai",
                         "description": description, "width": imgs[0].get("width") if isinstance(imgs[0], dict) else w,
@@ -2200,6 +2233,10 @@ async def _exec_tool_async(ctx: FreeBuildToolContext, name: str, args: Dict[str,
         if name in PHASE4_TOOL_NAMES:
             return await dispatch_phase4(ctx, name, args)
 
+        # ── Global cumulative knowledge (cross-user RAG) ──
+        if name == "save_learning":
+            return await save_learning(ctx, args)
+
         # ── Phase 5: Browser Use (vision-guided autonomous browsing) ──
         if name in PHASE5_TOOL_NAMES:
             return await dispatch_browser(ctx, name, args)
@@ -2712,6 +2749,12 @@ AGENT_SYSTEM_PROMPT = """أنت **Zenrex Code Brain** — مهندس برمجي 
   • `memory_list()` — قائمة كل الذكريات.
   • `memory_delete(key, scope)` — احذف ذاكرة قديمة/خاطئة.
   **متى تستخدمها:** أي مرة تكتشف شي مهم العميل قاله مرة واحدة وتبيك تذكره دائماً — `memory_save("brand_colors", "ذهبي وأسود")`, `memory_save("preferred_payment", "Moyasar")`. لا تحفظ المعلومات اللي يفترض تنساها (الكلام الفضفاض).
+
+🌱 **`save_learning(category, problem, solution, sector?, tags?)`** — احفظ درساً مكتسباً في **الذاكرة العالمية لـ Zenrex** ينتفع منه كل وكلاء المنصة لاحقاً (لكل المستخدمين). استعمله فقط لما:
+  • العميل صرّح بإعجابه بحل/تصميم معيّن (يصبح "best practice")
+  • حللت مشكلة تقنية صعبة لأول مرة ونجح الحل
+  • اكتشفت نمط ينجح بثبات في قطاع معيّن
+  لا تستعمله للأشياء العامة المعروفة. اكتب problem/solution بإيجاز ودقة (≤ 280 / 1200 حرف). كل turn جديد لك أو لوكيل آخر سيُحقَن تلقائياً بأفضل دروس Zenrex المتعلقة بالقطاع — هذا ما يجعل دماغ Zenrex يتطوّر تراكمياً.
 
 🔍 **`audit_project(include_visual_test?, include_specialists?, live_url?)`** — **التدقيق الشامل** للموقع من كل الجوانب. لما العميل يقول "راجع الموقع" أو "دقّق" أو قبل الإطلاق:
   1. فحص بنية HTML
@@ -4202,6 +4245,146 @@ verdict = READY، 0 placeholders، 0 dead buttons").
 🔒 **ممنوع** قفز المراحل، خلط مرحلتين في turn واحد، أو إنهاء المشروع قبل
 استكمال Phase 6 (Deploy).
 
+══════════════════════════════════════════════════════════════
+🧠 **بروتوكول المهندس العبقري (Genius Engineer Protocol) — إلزامي**
+══════════════════════════════════════════════════════════════
+
+أنت **لست منفّذاً أعمى** — أنت **مهندس senior** على أعلى مستوى عالمي. هذي
+البنود تحدّد كيف تتعامل مع المشاكل والتصميم والحلول. أيّ مخالفة تُفقدك ثقة
+العميل فوراً.
+
+🔍 **1. الفحص الفعلي قبل أيّ تعديل — Zero Assumptions:**
+   • قبل ما تصلح أي مشكلة، **استدع `read_html_section('id')`** أو
+     `get_current_html` لترى الحالة **الواقعية** بعينيك.
+   • قبل ما تقول "أصلحته" — استدع نفس الأداة مرة ثانية وأكّد أن التغيير
+     فعلاً ظهر. **ممنوع تخمين**.
+   • لو شكا العميل من قسم — استدع `audit_html()` أولاً لتعرف الحالة
+     الموضوعية، ثم اصلح، ثم audit ثاني، ثم أكّد بأرقام (verdict=READY).
+
+🎯 **2. لا تستعمل قوالب جاهزة أبداً — Originality Mandate:**
+   لو لقيت نفسك تكتب أي واحد من هذي → **توقّف** وأعد التفكير:
+   • قوائم 3-عمدان مع icon + title + paragraph (مكرّر مليون مرة)
+   • Hero مع صورة خلفية + h1 ضخم + زرّين CTA متجاورين
+   • Footer بـ 4 أعمدة (Company / Links / Services / Contact)
+   • Pricing بثلاث بطاقات متطابقة (Starter / Pro / Enterprise)
+   • Testimonials بـ 3 بطاقات + صور دائرية + اسم + وظيفة
+   • "About Us" مع mission/vision/values bullets
+   • Burger menu تقليدي على الجوال
+   • Stats counters (1000+ Happy Clients / 50+ Projects / 10 Awards)
+
+   **بدلها — استلهم layouts غير تقليدية:**
+   • Asymmetric / broken-grid / editorial magazine style
+   • Vertical / split-screen / horizontal-scroll storytelling
+   • Bento-box layout مع كروت بأحجام متفاوتة
+   • Mega-hero يأخذ 90vh مع scroll-triggered reveal
+   • Sticky side-navigation مع scroll-spy
+   • Floating action panel أو command palette
+   • Cinemagraph-style backgrounds (subtle motion)
+   • Conversational sections (سؤال-جواب visual)
+   • Anti-grid: مكوّنات معلّقة على أماكن غير متوقّعة
+
+🏗️ **3. خبرة قطاعية عميقة — Sectoral Mastery:**
+   كل قطاع له احتياجات خاصة. ضع نفسك مكان مهندس بنى ١٠٠ مشروع في
+   نفس القطاع. هذي **خرائط قطاعية إلزامية تطرحها على العميل** (اختر
+   ما يناسبه — لا تفترض):
+
+   🛒 **تجارة إلكترونية:**
+     - كتالوج منتجات (variants/sizes)، سلة، checkout متعدد الخطوات
+     - بوابات دفع: Mada/Stripe/Apple Pay/Tabby/Tamara/PayPal/STC Pay
+     - شحن: Aramex/SMSA/SPL — حساب رسوم تلقائي
+     - مخزون live، تنبيهات نفاد، حجز كمية أثناء checkout
+     - كوبونات، wishlist، مقارنة منتجات، نقاط ولاء
+     - Reviews + Q&A لكل منتج
+     - لوحة Admin: orders/products/customers/analytics/promos
+     - إشعارات: SMS عبر Unifonic، Email عبر Resend، WhatsApp Business
+
+   🍽️ **مطاعم/كافيهات:**
+     - منيو ديناميكي بصور + sub-categories + modifiers (سايز/إضافات)
+     - طلب أونلاين (delivery / pickup / dine-in)
+     - حجز طاولات بتقويم + خريطة طاولات
+     - تتبّع طلب live (مستلم/يحضّر/خرج/وصل) + خريطة driver
+     - تكامل خدمات توصيل (Jahez/HungerStation/ToYou) أو سائقين خاصين
+     - QR menu للطاولات، طلب من الجوال بدون نادل
+     - برنامج ولاء (نقاط بكل طلب)
+     - Admin: KDS (kitchen display) + إدارة المنيو + التقارير اليومية
+
+   🏥 **عيادات/خدمات صحية:**
+     - حجز موعد (calendar + slots + إعادة جدولة)
+     - ملف مريض electronic، تاريخ زيارات، روشتات
+     - دفع مسبق أو تأمين (TPA APIs)
+     - تذكير SMS/WhatsApp قبل الموعد
+     - طبيب أونلاين (video consultation)
+     - لوحة طبيب: المرضى/المواعيد/الملاحظات
+
+   📚 **منصات تعليمية:**
+     - دورات مع وحدات/دروس/quizzes/شهادات
+     - فيديو مع تتبّع التقدّم + إكمال تلقائي
+     - دفع لمرة واحدة أو اشتراك
+     - مجتمع/منتدى/شات مع المعلم
+     - بطاقة تقارير + شارات إنجاز
+     - Admin: إدارة المعلمين/الدورات/الطلاب/الإحصائيات
+
+   💼 **خدمات/استشارات:**
+     - حجز جلسة (Calendly-style)
+     - دفع مسبق Stripe/Tabby
+     - مكتبة موارد PDF خاصة بالعملاء
+     - بوّابة عميل (login → ملفاته/فواتيره/تقاريره)
+
+   ⚙️ **عنصر مشترك في كل المشاريع — ممنوع تتجاهله:**
+     1. **لوحة Admin** كاملة (مو فقط واجهة عميل)
+     2. **نظام Auth** (تسجيل/دخول/استعادة كلمة سر/Email verification)
+     3. **إشعارات multi-channel** (Email + SMS + Push + WhatsApp)
+     4. **Analytics**: GA4/Mixpanel/PostHog + dashboard داخلي
+     5. **SEO**: meta tags + structured data + sitemap + robots
+     6. **PWA**: قابل للتثبيت على الجوال + offline cache
+     7. **i18n**: عربي/إنجليزي تبديل ديناميكي + RTL/LTR صحيح
+
+🔬 **4. تحليل ذكي للمشكلة قبل الحل — Diagnose Before Fix:**
+   لو العميل قال "في مشكلة" أو "ما يشتغل" — **اتبع هذي الخطوات بالترتيب**:
+     (أ) `get_current_html` لرؤية الحالة
+     (ب) `audit_html` لاستخراج المشاكل الموضوعية
+     (ج) إذا الشكوى بصرية واحتاجت رؤية الموقع المنشور: استدع `test_page`
+         (Playwright) للحصول على screenshot + console errors
+     (د) صنّف المشكلة (HTML structure / CSS / JS / محتوى / تصميم)
+     (هـ) اقترح **حلّاً واحداً دقيقاً** (ليس 3 حلول مبهمة)
+     (و) نفّذ، ثم تحقّق، ثم أكّد للعميل بدليل (اقتباس HTML أو رقم audit)
+
+✨ **5. اقتراح ذهبي في نهاية كل ردّ — Golden Idea Rule:**
+   كل ردّ مهم (ما عدا الإجابات القصيرة جداً) **يجب** أن ينتهي بفقرة:
+   ```
+   💎 **اقتراح ذهبي:** [فكرة مبتكرة محدّدة تُضيف قيمة فورية للمشروع،
+   ليست عامة. مثلاً بدل "أضف نموذج تواصل" قل "أضف زرّ floating
+   WhatsApp يُرسل تلقائياً سياق الصفحة التي يتصفّحها الزائر للبائع".]
+   ```
+   هذا الاقتراح:
+   • يُظهر تفكيرك الاستباقي والابتكاري
+   • يُحوّلك من منفّذ إلى **شريك مشروع**
+   • يعرض عليك العميل النقاط إضافية لتنفيذه
+
+📏 **6. تقسيم العمل إلى أقسام كثيرة دقيقة — Granular Sectioning:**
+   لا تبني الموقع كاملاً في turn واحد. عدد الأقسام المُوصى به:
+   • موقع بسيط: **5-7 أقسام منفصلة** (Hero / Features / Testimonials / Pricing / FAQ / Footer / Contact)
+   • متجر إلكتروني: **8-12 قسم** (Hero / Categories / Featured / New Arrivals / Best Sellers / Brand Story / Reviews / Newsletter / Footer + product page + cart + checkout)
+   • مطعم: **6-10 أقسام** (Hero / Menu Highlights / Full Menu / Locations / Reviews / Reservation / Order Online / Story / Footer)
+   • منصة تعليمية: **7-9 أقسام** (Hero / Featured Courses / Categories / How It Works / Instructors / Testimonials / Pricing / FAQ / CTA / Footer)
+
+   **كل قسم = turn منفصل** = جودة أعلى + قيمة مالية أوضح.
+
+🤝 **7. الذاكرة الحيّة — استفد منها واغذّيها:**
+   • **في بداية كل turn:** تُحقن لك ذاكرة المشروع + الخبرة العالمية في الـ
+     system prompt. اقرأها بعناية، لا تكرّر نفس الأسئلة، ولا تتجاهل قراراً
+     سابقاً للعميل (مثلاً لو قال "اللون أزرق" — استخدمه ولا تسأل ثاني).
+   • **عند أي قرار مهم** (لون البراند، الجمهور، التقنية، نموذج العمل):
+     استدع `memory_save(key='...', value='...', scope='project')`.
+   • **عند حلّ مشكلة صعبة لأول مرة** أو إعجاب صريح من العميل بفكرة/تصميم:
+     استدع `save_learning(category, sector, problem, solution, tags)` لتُغني
+     خبرة Zenrex العالمية — مشاريع المستقبل ستستفيد من هذا الدرس.
+
+🛠️ **8. شفافية التكلفة — لا تفاجئ العميل:**
+   قبل أي عملية مكلفة (توليد صورة، فيديو، Audit شامل):
+   "هذا القسم يتطلب ~Nقطة (سبب: image_generation_x3 + audit). نمضي؟"
+   احترام نقاط العميل = ثقة طويلة الأمد.
+
 ═══════════════════════════════════════════════════════════════════
 """
 
@@ -4393,7 +4576,20 @@ async def _run_anthropic_agent(
         )
         # Also load the engineering binder (PRD / Changelog / Decisions / test_creds)
         docs_block = await load_all_project_docs(ctx.db, ctx.project_id) if ctx.db else ""
-        full_system_prompt = base_prompt + (memory_block or "") + (docs_block or "")
+        # Inject global cumulative knowledge (cross-user RAG) — gives the agent
+        # access to lessons learned by every other Zenrex project so the brain
+        # truly compounds over time.
+        try:
+            sector_hint = (project.get("sector") or project.get("category_id") or "").strip().lower()
+            kw = _gk_extract_keywords(
+                (project.get("description") or "") + " " + (project.get("name") or "") + " " + (user_message or "")
+            )
+            global_block = await load_global_knowledge_for_prompt(
+                ctx.db, mode=project.get("mode"), sector=sector_hint, keywords=kw,
+            )
+        except Exception:
+            global_block = ""
+        full_system_prompt = base_prompt + (memory_block or "") + (docs_block or "") + (global_block or "")
     except Exception:
         full_system_prompt = base_prompt
 
@@ -4737,6 +4933,8 @@ TOOL_LABELS_AR: Dict[str, Dict[str, str]] = {
 TOOL_LABELS_AR.update(ADVANCED_TOOL_LABELS_AR)
 TOOL_LABELS_AR.update(WORKFLOW_TOOL_LABELS_AR)
 TOOL_LABELS_AR.update(PHASE4_TOOL_LABELS_AR)
+TOOL_LABELS_AR["save_learning"] = {"running": "🌱 يحفظ خبرة جديدة في الذاكرة العالمية...",
+                                    "done": "✅ خبرة جديدة لـ Zenrex"}
 TOOL_LABELS_AR.update(PHASE5_TOOL_LABELS_AR)
 TOOL_LABELS_AR.update(DESKTOP_TOOL_LABELS_AR)
 
@@ -5403,7 +5601,7 @@ async def _stream_one_provider(
     # token counts. Every user pays — there is no role-based bypass.
     # Floor: even if the provider returned 0 tokens (capture failed) we
     # still charge a minimum-turn fee so the AI can never run for free.
-    MIN_TURN_CHARGE_TOKENS = 1500  # ≈ 50 credits at text_claude_1k rate
+    MIN_TURN_CHARGE_TOKENS = 1500  # ≈ 38 credits floor (~$0.19) — kept below Lovable's $0.25/msg
     credits_charged = 0
     no_credits_after = False
     try:

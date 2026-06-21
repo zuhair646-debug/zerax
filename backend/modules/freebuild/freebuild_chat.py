@@ -1374,9 +1374,10 @@ def make_freebuild_chat_router(db, get_current_user):
 
         # ── Hard credit gate (mirrors agent-chat-stream) ────────────────
         # Block ANY chat turn — websites, apps, games, image/video studio —
-        # if the user can't afford a typical turn. No role bypass: even
-        # admins/owners must have ≥ 50 credits. This prevents free AI usage
-        # across every unified surface.
+        # if the user can't afford a typical turn. The minimum is set at
+        # MIN_TURN_CREDITS to align with market-rate per-message pricing
+        # (Lovable ≈ $0.25/msg; Zenrex floor here ≈ $0.125/msg — cheaper).
+        # No role bypass: even admins/owners must clear the threshold.
         MIN_TURN_CREDITS = 25
         _u_doc = await db.users.find_one(
             {"id": user["user_id"]}, {"_id": 0, "credits": 1},
