@@ -6513,29 +6513,32 @@ For questions: legal@zenrex.ai
         # Owner check — only the platform owner gets access to local_browser_*, desktop_*, run_shell, etc.
         is_platform_owner_stream = (user.get("role") or "").lower() in ("owner", "admin", "superuser")
 
-        # ── Hard credit gate ────────────────────────────────────────────
-        # Stop the agent before it even starts if the user can't afford a
-        # typical turn. We require ≥ MIN_TURN_CREDITS so a single turn
-        # doesn't drive the balance into a negative number and so the user
-        # gets the recharge banner BEFORE typing into the void.
-        # NO role bypass — even owner/admin must have credits. This is the
-        # single point of truth for credit enforcement across every chat
-        # surface (websites, apps, games, image/video studios).
-        MIN_TURN_CREDITS = 25
+        # ── 🛡️ Action-Aware Pre-Flight Credit Gate ────────────────────
+        # Replaces the old flat 25-credit minimum. Now classifies the user's
+        # intent (create_page/section_add/deletion/edit/etc.) BEFORE the
+        # agent streams a single token and refuses turns the user can't
+        # afford. The 402 response includes a smart recommendation so the
+        # UI can surface "اشحن باقة Indie ($29) لتنفيذ 30+ عملية مثل هذه".
+        # NO role bypass — every user pays from their balance.
+        from .action_pricing import preflight_check
         _u_credits_doc = await db.users.find_one(
             {"id": user["user_id"]}, {"_id": 0, "credits": 1},
         ) or {}
         _balance = int(round(float(_u_credits_doc.get("credits") or 0)))
-        if _balance < MIN_TURN_CREDITS:
-            # Surface a structured error so the frontend can render the
-            # "اشحن نقاطك للمتابعة" banner + lock the input.
+        _pf = preflight_check(_balance, message)
+        if not _pf.get("allowed"):
             raise HTTPException(
                 status_code=402,
                 detail={
                     "error": "insufficient_credits",
                     "balance": _balance,
-                    "required": MIN_TURN_CREDITS,
-                    "message_ar": "رصيدك غير كافٍ لمتابعة المحادثة. اشحن نقاطك ثم اضغط (إكمل) لمواصلة الذكاء من حيث توقف.",
+                    "required": _pf["min_cost"],
+                    "needed": _pf["needed"],
+                    "intent": _pf["intent"],
+                    "estimated_max": _pf["max_cost"],
+                    "recommended_plan": _pf["recommended_plan"],
+                    "recharge_url": _pf["recharge_url"],
+                    "message_ar": _pf["message"],
                 },
             )
         # Mint a short-lived JWT so the agent tools (publish_site, download_media, etc.)
@@ -6573,6 +6576,24 @@ For questions: legal@zenrex.ai
         async def _run_agent_in_background():
             """Owns the agent lifecycle + the final DB write. Cancellation-safe."""
             last_persisted_changes = 0
+            # ── 💎 Cost Preview event (for operations ≥ 200 credits) ──
+            # Tells the UI to render a "🎯 هذه العملية ستكلف ~N شعلة" toast
+            # before the AI starts. Builds trust + sets expectations.
+            try:
+                if _pf.get("preview_recommended"):
+                    preview_payload = json.dumps({
+                        "intent": _pf["intent"],
+                        "min_cost": _pf["min_cost"],
+                        "max_cost": _pf["max_cost"],
+                        "current_balance": _balance,
+                        "message_ar": (
+                            f"🎯 هذه العملية متوقَّعة بين {_pf['min_cost']}–{_pf['max_cost']} شعلة "
+                            f"(رصيدك الآن: {_balance})."
+                        ),
+                    }, ensure_ascii=False)
+                    await event_queue.put(f"event: cost_preview\ndata: {preview_payload}\n\n")
+            except Exception:
+                pass
             try:
                 async for chunk in stream_agent_turn(
                     proj, message, history, ctx_holder=ctx_holder,

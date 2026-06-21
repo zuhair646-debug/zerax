@@ -6116,10 +6116,14 @@ async def _stream_one_provider(
     # still charge a minimum-turn fee so the AI can never run for free.
     # Ceiling: hard cap per turn so the user never sees a 4000-credit
     # surprise from a runaway turn (many iterations × huge HTML).
+    # Op-Floor: per-action minimum (e.g. create_page ≥ 200 credits) so the
+    # AI can't run a "page creation" turn with cheap cached tokens for 30
+    # credits — high-value work is billed at its real worth.
     MIN_TURN_CHARGE_TOKENS = 1500            # ≈ 38 credits floor (~$0.19)
     MAX_TURN_CREDITS = 500                    # ≤ $0.50 ceiling per turn
     credits_charged = 0
     capped = False
+    op_floor_used = 0
     no_credits_after = False
     try:
         if db is not None:
@@ -6141,6 +6145,26 @@ async def _stream_one_provider(
                     f"[agent-stream] CAP fired: real_tokens={total_eff} > "
                     f"{CAP_TOKENS}; billing capped at {MAX_TURN_CREDITS} credits"
                 )
+            # 💰 Op-Floor: if the agent ran a high-value tool (create_page,
+            # write_full_html, etc.) we floor the billing at that op's
+            # minimum rate even if token cost was lower. The action_pricing
+            # catalog is the single source of truth for op floors.
+            try:
+                from .action_pricing import compute_op_floor
+                op_floor_used = compute_op_floor(ctx.tool_log or [])
+                if op_floor_used > 0:
+                    # Translate op floor (in credits) → effective tokens so the
+                    # usage meter records the right bill. 25 credits = 1K tokens.
+                    op_floor_tokens = int(op_floor_used * 1000 / 25)
+                    if (effective_in + effective_out) < op_floor_tokens:
+                        # Bump output side so analytics still split sensibly
+                        effective_out = max(effective_out, op_floor_tokens - effective_in)
+                        logger.info(
+                            f"[agent-stream] op_floor={op_floor_used} credits applied "
+                            f"({op_floor_tokens} tokens)"
+                        )
+            except Exception as _of_e:
+                logger.warning(f"[agent-stream] op_floor failed: {_of_e}")
             _uid = project.get("user_id")
             if _uid:
                 from modules.ai_core.usage_meter import record_usage
@@ -6173,6 +6197,7 @@ async def _stream_one_provider(
         "credits_charged": credits_charged,
         "credits_capped": capped,
         "credits_cap": MAX_TURN_CREDITS,
+        "op_floor_credits": op_floor_used,
         "no_credits_after": no_credits_after,
     })
 

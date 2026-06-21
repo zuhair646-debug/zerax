@@ -271,6 +271,32 @@ Fully internal ticket system — no WhatsApp, no external email. Telegram-style 
   exactly** (no surprises). `credits_capped=false`, `credits_cap=500` shown.
 - ✅ 4/4 pytest cases in `/app/backend/tests/test_strict_credit_deduction.py`
 
+## 🆕 2026-02 — Action-Based Pricing (Pre-Flight Gate + Op Floors + Cost Preview)
+- 🛡️ **New module** `/app/backend/modules/freebuild/action_pricing.py`:
+  - `ACTION_COSTS` catalog: 9 action types each with (min, max, recommended_plan)
+  - `classify_intent(message)` — regex-based intent extractor (Arabic + English)
+  - `preflight_check(balance, message)` — returns 402 payload when balance < action min
+  - `compute_op_floor(tool_log)` — picks max op-floor from tools executed this turn
+  - `TOOL_OP_FLOORS` mapping tools → minimum credit charge
+- 🚪 **Pre-Flight Credit Gate** in `agent-chat-stream` endpoint:
+  - Classifies intent BEFORE streaming
+  - Returns 402 with rich details (balance, needed, intent, recommended plan,
+    recharge_url, and smart Arabic message: "اشحن Indie لتنفيذ 100+ عملية مثل هذه")
+  - NO mid-stream credit exhaustion. NO surprises.
+- 💎 **Cost Preview SSE event** (fires when max_cost ≥ 200):
+  - `event: cost_preview` with `{intent, min_cost, max_cost, current_balance,
+    message_ar}` — UI can render a "🎯 هذه العملية ~N-M شعلة" toast
+- 💰 **Per-Op Floor enforcement** in deduction:
+  - After token-based bill computed, if `compute_op_floor(tool_log) > token_credits`,
+    bump effective tokens so floor wins (page_creation always ≥ 200 credits)
+  - Prevents AI from running high-value ops cheaply via cached tokens
+- ✅ Action cost table (min–max in credits):
+  - chat 25–80, inspection 15–50, edit 80–250, section_add 120–350,
+    page_creation 200–500, full_site 300–800, deletion 25–60, repair 60–200,
+    media +75 per image / +220 per video
+- ✅ **28/28 pytest cases pass** + verified end-to-end via curl on preview env
+  + deployed to `https://zenrex.ai`
+
 ## Test Credentials
 - Admin: admin@zenrex.ai / Zenrex@2026 (PROD DB only)
 - Prod Test User: test_zenrex_2026@example.com / Test@Pass2026!
