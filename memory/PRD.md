@@ -320,6 +320,22 @@ Fully internal ticket system — no WhatsApp, no external email. Telegram-style 
     real changes happen → user is charged once for the FULL completed
     turn instead of paying twice for promise + fake-claim + finally-real.
 
+## 🆕 2026-02 — IRON-CLAD Anti-Lazy: Preemptive Force + Auto-Refund
+- 🔒 **Preemptive Tool Forcing**: When `classify_intent(user_message)` returns
+  any action intent (repair/section_add/page_creation/deletion/edit/full_site),
+  the **first Anthropic API call is already forced** with `tool_choice={"type":"any"}`.
+  The AI literally cannot reply with text-only on iteration #1. Stops the
+  "apology + promise + stop" pattern dead in its tracks. Logs:
+  `[agent-stream] PREEMPTIVE force_tool_use enabled (intent=repair)`
+- 💸 **Auto-Refund on Zero-Change Action Turns**: After the agent loop ends,
+  if intent was an action AND `ctx.changes_made == 0`, the system **skips all
+  credit deduction entirely**. User pays $0 for failed action attempts.
+  Surface field `auto_refunded: true` in SSE `done` payload so the UI can
+  show "✋ تم استرداد النقاط — العملية لم تنجح".
+- ✅ Verified on preview env: "أصلح المشاكل" intent → PREEMPTIVE fires →
+  AI calls `write_full_html` from iteration 1 → no stall → 6 iterations
+  later: `html_changes=2`. Real work, no waste.
+
 ## Test Credentials
 - Admin: admin@zenrex.ai / Zenrex@2026 (PROD DB only)
 - Prod Test User: test_zenrex_2026@example.com / Test@Pass2026!

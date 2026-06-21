@@ -5635,6 +5635,22 @@ async def _stream_one_provider(
 
     stall_recovery_used = 0  # Anti-stall counter for this turn (max 2 retries)
     force_tool_use_next_iter = False  # When True, next Anthropic call uses tool_choice={"type":"any"}
+
+    # 🔒 PREEMPTIVE FORCING for action intents — when the user says "fix",
+    # "build", "create", "delete", "add", the FIRST iteration is forced to
+    # use a tool. This stops the "apology + promise + stop" pattern dead in
+    # its tracks: the AI literally cannot respond with text-only on the
+    # first iteration. Detected via the same classifier used by the
+    # pre-flight credit gate so behaviour is consistent.
+    try:
+        from .action_pricing import classify_intent
+        _intent_for_force = classify_intent(user_message or "")
+        if _intent_for_force in ("repair", "section_add", "page_creation",
+                                  "deletion", "edit", "full_site"):
+            force_tool_use_next_iter = True
+            logger.info(f"[agent-stream] PREEMPTIVE force_tool_use enabled (intent={_intent_for_force})")
+    except Exception as _pe:
+        logger.warning(f"[agent-stream] preemptive force check failed: {_pe}")
     for step in range(max_iterations):
         iterations += 1
         logger.info(f"[agent-stream] iter={iterations} start (provider={provider})")
@@ -6220,8 +6236,26 @@ async def _stream_one_provider(
     capped = False
     op_floor_used = 0
     no_credits_after = False
+    auto_refunded = False
+    # ── 💸 AUTO-REFUND: if the user asked for an ACTION but the agent
+    # produced ZERO real changes (changes_made == 0), we DON'T charge them.
+    # This is the iron-clad guarantee against paying for empty work — even
+    # if every other detector failed to catch the AI's stall/fabrication.
     try:
-        if db is not None:
+        from .action_pricing import classify_intent as _ci
+        _user_intent = _ci(user_message or "")
+        _action_intents = {"repair", "section_add", "page_creation",
+                            "deletion", "edit", "full_site"}
+        if _user_intent in _action_intents and ctx.changes_made == 0:
+            auto_refunded = True
+            logger.warning(
+                f"[agent-stream] AUTO-REFUND: intent={_user_intent} but "
+                f"changes_made=0. Skipping all credit deduction."
+            )
+    except Exception as _re:
+        logger.warning(f"[agent-stream] auto-refund check failed: {_re}")
+    try:
+        if db is not None and not auto_refunded:
             effective_in = turn_tokens_in or 0
             effective_out = turn_tokens_out or 0
             total_eff = effective_in + effective_out
@@ -6293,6 +6327,7 @@ async def _stream_one_provider(
         "credits_capped": capped,
         "credits_cap": MAX_TURN_CREDITS,
         "op_floor_credits": op_floor_used,
+        "auto_refunded": auto_refunded,
         "no_credits_after": no_credits_after,
     })
 
