@@ -3387,11 +3387,9 @@ function ChatWorkspace({ projectId }) {  const navigate = useNavigate();
             <span className="text-xs font-medium hidden sm:inline">مشاريعي</span>
           </button>
           <a href="/" className="hidden md:inline-flex shrink-0" aria-label="Zenrex"><ZenrexBrand size={22} /></a>
-          <Globe className="w-6 h-6 text-emerald-400 shrink-0" />
-          <div className="min-w-0">
-            <h1 className="font-bold text-base sm:text-lg truncate" data-testid="project-title">{project.name}</h1>
-            <p className="text-xs text-zinc-500 truncate">{sidebarPhases.find((p) => p.id === activePhase)?.title}</p>
-          </div>
+          {/* Digital clock — replaces the old Globe + project title duplicate.
+              Project name is now shown in the PhaseHeaderPill below this bar. */}
+          <DigitalClock />
         </div>
         <div className="flex items-center gap-2 shrink-0">
           {!isVideoMode && (
@@ -4870,6 +4868,34 @@ function ChatWorkspace({ projectId }) {  const navigate = useNavigate();
 // ─────────────────────────────────────────────────────────────
 // MAIN PAGE
 // ─────────────────────────────────────────────────────────────
+/**
+ * DigitalClock — small fixed-width digital clock shown in the top navbar
+ * where the duplicated project title used to live. Updates every second.
+ * Uses tabular-nums so digits don't shift width when seconds change.
+ */
+function DigitalClock() {
+  const [now, setNow] = React.useState(new Date());
+  React.useEffect(() => {
+    const t = setInterval(() => setNow(new Date()), 1000);
+    return () => clearInterval(t);
+  }, []);
+  const hh = String(now.getHours()).padStart(2, '0');
+  const mm = String(now.getMinutes()).padStart(2, '0');
+  const ss = String(now.getSeconds()).padStart(2, '0');
+  return (
+    <div
+      data-testid="digital-clock"
+      className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-500/10 border border-emerald-500/30"
+      title="الوقت الحالي"
+    >
+      <Clock className="w-3.5 h-3.5 text-emerald-300" />
+      <span className="font-mono tabular-nums text-emerald-200 text-sm font-bold tracking-wider">
+        {hh}:{mm}<span className="opacity-50">:{ss}</span>
+      </span>
+    </div>
+  );
+}
+
 export default function FreeBuildChat() {
   const { id } = useParams();
   const navigate = useNavigate();

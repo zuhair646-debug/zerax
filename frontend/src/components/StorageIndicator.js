@@ -113,12 +113,13 @@ export default function StorageIndicator({ compact = false }) {
       >
         <span className={`w-1.5 h-1.5 rounded-full ${c.dot}`} />
         <HardDrive className={`w-3.5 h-3.5 ${c.text}`} />
-        {!compact && (
-          <span className={`text-[11px] font-bold ${c.text}`}>
-            {fmtSize(usage.used_mb)}
-            <span className="opacity-60"> / {fmtSize(usage.quota_mb)}</span>
-          </span>
-        )}
+        {/* Storage text is ALWAYS shown — even in compact (mobile) mode —
+            so the user sees how much room they have at a glance without
+            having to tap. The remaining MB is the source of truth. */}
+        <span className={`text-[10px] sm:text-[11px] font-bold ${c.text} whitespace-nowrap`}>
+          {fmtSize(usage.used_mb)}
+          <span className="opacity-60"> / {fmtSize(usage.quota_mb)}</span>
+        </span>
         {(isArchived || isPastDue) && (
           <span className="text-[10px] font-black bg-red-500 text-white px-1.5 py-0.5 rounded-full">
             {isArchived ? 'مؤرشف' : 'تجديد'}
@@ -126,19 +127,22 @@ export default function StorageIndicator({ compact = false }) {
         )}
       </button>
 
-      {/* Popover with backdrop scrim so chat content underneath is dimmed */}
+      {/* Popover — drops DOWN from the trigger (absolute) so users always
+          see where it came from. May temporarily overlap the tab bar, but
+          that's fine — closes on any outside click. */}
       {open && (
         <>
-          {/* Backdrop — closes on click and dims everything behind the popover */}
+          {/* Soft backdrop so chat content behind is visually muted */}
           <div
-            className="fixed inset-0 z-[65] bg-black/70 backdrop-blur-sm"
+            className="fixed inset-0 z-[60] bg-black/60 backdrop-blur-sm"
             onClick={() => setOpen(false)}
             aria-hidden
           />
           <div
             data-testid="storage-upgrade-popover"
-            className="absolute z-[80] mt-2 left-0 sm:left-auto sm:right-0 w-[min(22rem,calc(100vw-1.5rem))] sm:w-96 rounded-xl border-2 border-amber-500 bg-zinc-950 shadow-2xl shadow-amber-500/20 p-4"
+            className="absolute z-[80] mt-2 right-0 sm:right-0 left-auto w-[min(22rem,calc(100vw-1.5rem))] sm:w-96 rounded-xl border-2 border-amber-500 bg-zinc-950 shadow-2xl shadow-amber-500/30 p-4 animate-in fade-in slide-in-from-top-2 duration-150"
             role="dialog"
+            onClick={(e) => e.stopPropagation()}
           >
           <div className="flex items-start justify-between mb-3">
             <div>
