@@ -2995,6 +2995,21 @@ function ChatWorkspace({ projectId }) {  const navigate = useNavigate();
           scrollToBottomSoon();
         };
 
+        // Throttled wrapper — coalesces rapid SSE bursts into one paint per
+        // animation frame. Eliminates the "text flashes on/off" effect users
+        // saw at the start of long streams when many text_delta events arrived
+        // in the same tick: each one was triggering a full re-render of the
+        // markdown tree before the next char arrived.
+        let rafScheduled = false;
+        const scheduleUpdate = () => {
+          if (rafScheduled) return;
+          rafScheduled = true;
+          requestAnimationFrame(() => {
+            rafScheduled = false;
+            updateLive();
+          });
+        };
+
         let streamReceivedDone = false;
         while (true) {
           const { value, done } = await reader.read();
@@ -3024,13 +3039,30 @@ function ChatWorkspace({ projectId }) {  const navigate = useNavigate();
               const last = liveSteps[liveSteps.length - 1];
               if (last && last.kind === 'live_text' && last.open) {
                 last.text = (last.text || '') + (payload.text || '');
+                // Direct DOM append — bypasses React reconciliation so the
+                // user sees the chunk INSTANTLY without flicker. Falls back
+                // to scheduleUpdate() if the bubble hasn't mounted yet.
+                const bubbleIdx = liveSteps.length - 1;
+                const bubbleId = `${stepsHolderId}-${bubbleIdx}`;
+                const handle = liveBubbleRegistry.get(bubbleId);
+                if (handle) {
+                  handle.append(payload.text || '');
+                } else {
+                  scheduleUpdate(); // mount it via React first
+                }
               } else {
                 liveSteps.push({ kind: 'live_text', text: payload.text || '', open: true, step: payload.step });
+                // First chunk of a new bubble — must mount via React
+                scheduleUpdate();
               }
             } else if (eventName === 'text_end') {
               // Close the current live_text bubble so subsequent text starts a new one
               const last = liveSteps[liveSteps.length - 1];
               if (last && last.kind === 'live_text') last.open = false;
+              const bubbleIdx = liveSteps.length - 1;
+              const bubbleId = `${stepsHolderId}-${bubbleIdx}`;
+              const handle = liveBubbleRegistry.get(bubbleId);
+              if (handle) handle.finalize();
             } else if (eventName === 'tool') {
               liveSteps.push({ kind: 'tool', ...payload });
               // Detect request_credential sentinel → open secure modal so the
@@ -3127,7 +3159,10 @@ function ChatWorkspace({ projectId }) {  const navigate = useNavigate();
                 });
               }
             }
-            updateLive();
+            // Throttle the React update via rAF — coalesces dozens of
+            // rapid text_delta events per second into one paint, killing
+            // the flicker users saw at start-of-stream.
+            scheduleUpdate();
           }
         }
         // GRACEFUL INTERRUPTION HANDLING:
@@ -3854,7 +3889,7 @@ function ChatWorkspace({ projectId }) {  const navigate = useNavigate();
               )}
 
               {messages.map((m, i) => (
-                <div key={i} className={`flex min-w-0 ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                <div key={m.agent_holder_id || `${m.timestamp}-${m.role}-${i}`} className={`flex min-w-0 ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
                   <div className={`min-w-0 max-w-[88%] sm:max-w-[85%] rounded-2xl px-3 sm:px-4 py-3 ${
                     m.role === 'user'
                       ? 'bg-emerald-500/15 border border-emerald-500/30 text-emerald-50'
@@ -3952,23 +3987,23 @@ function ChatWorkspace({ projectId }) {  const navigate = useNavigate();
                           if (s.kind === 'live_text') {
                             // Live streaming text from Claude.
                             //
-                            // CRITICAL FIX: render as PLAIN TEXT (no markdown
-                            // parsing) during streaming. ReactMarkdown's
-                            // incremental re-parsing caused the "text goes
-                            // forward then backward then ends incomplete"
-                            // flicker — incomplete markdown like `**hello`
-                            // (waiting for closing `**`) renders differently
-                            // from `**hello**`, making chars appear/disappear.
+                            // CRITICAL FIX: render via LiveStreamBubble which
+                            // updates the DOM directly via ref — bypassing
+                            // React reconciliation. This eliminates the
+                            // "text appears then disappears" flicker that
+                            // was caused by React re-rendering the whole
+                            // messages list on every text_delta event.
+                            //
                             // After streaming completes, m.content takes over
                             // and renders with full markdown formatting.
                             if (!m.agent_streaming) return null;
-                            const hasText = (s.text || '').trim().length > 0;
-                            if (!hasText) return null;
+                            const bubbleId = `${m.agent_holder_id}-${sIdx}`;
                             return (
-                              <div key={sIdx} className="text-sm leading-relaxed text-zinc-100 whitespace-pre-wrap break-words">
-                                {s.text || ''}
-                                {s.open && <span className="inline-block w-1.5 h-4 bg-emerald-400 ml-0.5 align-middle animate-pulse" />}
-                              </div>
+                              <LiveStreamBubble
+                                key={bubbleId}
+                                bubbleId={bubbleId}
+                                initialText={s.text || ''}
+                              />
                             );
                           }
                           if (s.kind === 'tool_building') {
@@ -4912,6 +4947,54 @@ function DigitalClock() {
     </div>
   );
 }
+
+/**
+ * LiveStreamBubble — Renders streaming text using a DIRECT DOM ref instead
+ * of React state. This is the KEY fix for the "text flickers / appears then
+ * disappears" problem: React's reconciliation runs on every state update,
+ * which on a list of dozens of messages causes the live text node to be
+ * briefly unmounted/remounted as React re-keys siblings.
+ *
+ * By mutating textContent directly via ref, the bubble's DOM never gets
+ * torn down — text just appends character-by-character with zero flicker.
+ *
+ * The component subscribes once on mount, then the parent calls
+ * `bubble.appendText(chunk)` via the global `liveBubbleRegistry` map.
+ */
+const liveBubbleRegistry = new Map(); // bubbleId → { append, finalize, clear }
+
+const LiveStreamBubble = React.memo(function LiveStreamBubble({ bubbleId, initialText }) {
+  const ref = React.useRef(null);
+  const cursorRef = React.useRef(null);
+
+  React.useEffect(() => {
+    if (!ref.current) return;
+    // Initial text
+    ref.current.textContent = initialText || '';
+    // Register imperative handle
+    liveBubbleRegistry.set(bubbleId, {
+      append: (chunk) => {
+        if (ref.current) {
+          ref.current.textContent = (ref.current.textContent || '') + chunk;
+        }
+      },
+      setText: (full) => {
+        if (ref.current) ref.current.textContent = full;
+      },
+      finalize: () => {
+        if (cursorRef.current) cursorRef.current.style.display = 'none';
+      },
+    });
+    return () => liveBubbleRegistry.delete(bubbleId);
+  }, [bubbleId]);
+
+  return (
+    <div className="text-sm leading-relaxed text-zinc-100 whitespace-pre-wrap break-words" dir="rtl">
+      <span ref={ref} />
+      <span ref={cursorRef} className="inline-block w-1.5 h-4 bg-emerald-400 ml-0.5 align-middle animate-pulse" />
+    </div>
+  );
+});
 
 export default function FreeBuildChat() {
   const { id } = useParams();
