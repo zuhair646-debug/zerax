@@ -13,19 +13,19 @@ from typing import Dict, Any, List
 # Still maintains a ~2x margin over real provider cost.
 # ════════════════════════════════════════════════════════════════
 SERVICE_COSTS: Dict[str, Dict[str, Any]] = {
-    "text_gpt4o_1k":        {"label": "GPT-4o (1K tokens)",       "credits": 12,   "internal_cost_usd": 0.010},
-    "text_claude_1k":       {"label": "Claude Sonnet (1K tokens)","credits": 15,   "internal_cost_usd": 0.015},
-    "text_gemini_flash_1k": {"label": "Gemini Flash (1K tokens)", "credits": 1,    "internal_cost_usd": 0.0003},
-    "image_nano_banana":    {"label": "Nano Banana image",        "credits": 50,   "internal_cost_usd": 0.04},
-    "image_gpt_standard":   {"label": "GPT Image 1 (standard)",   "credits": 60,   "internal_cost_usd": 0.04},
-    "image_hd":             {"label": "Image HD",                 "credits": 200,  "internal_cost_usd": 0.16},
-    "video_fal_5s":         {"label": "Fal.ai video (5s)",        "credits": 180,  "internal_cost_usd": 0.10},
-    "video_sora_10s":       {"label": "Sora 2 video (10s)",       "credits": 900,  "internal_cost_usd": 0.50},
-    "voice_eleven_min":     {"label": "ElevenLabs voice (1min)",  "credits": 750,  "internal_cost_usd": 0.45},
-    "stt_whisper_min":      {"label": "Whisper STT (1min)",       "credits": 12,   "internal_cost_usd": 0.006},
-    "chat_message":         {"label": "Standard chat message",    "credits": 5,    "internal_cost_usd": 0.004},
-    "game_generation":      {"label": "Full game asset pipeline", "credits": 350,  "internal_cost_usd": 0.20},
-    "website_generation":   {"label": "Website builder turn",     "credits": 25,   "internal_cost_usd": 0.020},
+    "text_gpt4o_1k":        {"label": "GPT-4o (1K tokens)",       "credits": 20,   "internal_cost_usd": 0.010},
+    "text_claude_1k":       {"label": "Claude Sonnet (1K tokens)","credits": 25,   "internal_cost_usd": 0.015},
+    "text_gemini_flash_1k": {"label": "Gemini Flash (1K tokens)", "credits": 2,    "internal_cost_usd": 0.0003},
+    "image_nano_banana":    {"label": "Nano Banana image",        "credits": 75,   "internal_cost_usd": 0.04},
+    "image_gpt_standard":   {"label": "GPT Image 1 (standard)",   "credits": 90,   "internal_cost_usd": 0.04},
+    "image_hd":             {"label": "Image HD",                 "credits": 280,  "internal_cost_usd": 0.16},
+    "video_fal_5s":         {"label": "Fal.ai video (5s)",        "credits": 220,  "internal_cost_usd": 0.10},
+    "video_sora_10s":       {"label": "Sora 2 video (10s)",       "credits": 1100, "internal_cost_usd": 0.50},
+    "voice_eleven_min":     {"label": "ElevenLabs voice (1min)",  "credits": 900,  "internal_cost_usd": 0.45},
+    "stt_whisper_min":      {"label": "Whisper STT (1min)",       "credits": 18,   "internal_cost_usd": 0.006},
+    "chat_message":         {"label": "Standard chat message",    "credits": 8,    "internal_cost_usd": 0.004},
+    "game_generation":      {"label": "Full game asset pipeline", "credits": 450,  "internal_cost_usd": 0.20},
+    "website_generation":   {"label": "Website builder turn",     "credits": 40,   "internal_cost_usd": 0.020},
 }
 
 
