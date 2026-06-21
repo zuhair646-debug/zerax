@@ -3380,7 +3380,7 @@ function ChatWorkspace({ projectId }) {  const navigate = useNavigate();
             type="button"
             onClick={() => navigate('/freebuild/projects')}
             data-testid="open-my-projects-chat"
-            className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-zinc-300 hover:text-white transition-all shrink-0"
+            className="hidden sm:inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-zinc-300 hover:text-white transition-all shrink-0"
             title="افتح مشاريعي قيد الإنشاء"
           >
             <FolderOpen className="w-4 h-4" />
@@ -3428,7 +3428,7 @@ function ChatWorkspace({ projectId }) {  const navigate = useNavigate();
               type="button"
               onClick={() => setSnapshotsOpen(true)}
               data-testid="open-snapshots"
-              className="px-3 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 border border-amber-400/30 text-amber-200 text-xs font-bold flex items-center gap-1.5"
+              className="hidden sm:flex px-3 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 border border-amber-400/30 text-amber-200 text-xs font-bold items-center gap-1.5"
               title="سجل النسخ — استرجاع نسخة سابقة"
             >
               <History className="w-3.5 h-3.5" />
@@ -3440,7 +3440,7 @@ function ChatWorkspace({ projectId }) {  const navigate = useNavigate();
               type="button"
               onClick={() => setConnectionsOpen(true)}
               data-testid="open-connections"
-              className="px-3 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 border border-emerald-400/30 text-emerald-200 text-xs font-bold flex items-center gap-1.5"
+              className="hidden sm:flex px-3 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 border border-emerald-400/30 text-emerald-200 text-xs font-bold items-center gap-1.5"
               title="ربط GitHub / Vercel / Cloudflare"
             >
               <Plug className="w-3.5 h-3.5" />
