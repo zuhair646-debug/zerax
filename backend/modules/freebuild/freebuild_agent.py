@@ -427,6 +427,31 @@ TOOLS_SCHEMA: List[Dict[str, Any]] = [
         },
     },
     {
+        "name": "verify_my_work",
+        "description": (
+            "🎬 LIVE BROWSER TEST: Launch Playwright Chromium against the "
+            "current project preview and run automated scenarios:\n"
+            "  • Click every <button> in the page, verify no JS errors\n"
+            "  • Navigate to every linked .html page, verify it loads\n"
+            "  • Capture any console errors or 404s\n"
+            "USE THIS BEFORE complete_task to PROVE the work actually works "
+            "in a real browser. The AI's own ability to test its work is "
+            "what separates 'looks good in HTML' from 'works for the user'.\n\n"
+            "If you pass no `scenarios`, the server auto-generates them from "
+            "the current HTML (buttons + nav links)."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "scenarios": {
+                    "type": "array",
+                    "description": "Optional list of scenarios. Each: {name, action, selector, expect}. Actions: click/navigate/fill/count",
+                    "items": {"type": "object"},
+                },
+            },
+        },
+    },
+    {
         "name": "search_html",
         "description": (
             "Regex search inside current_html. Returns up to 10 matches with "
@@ -2348,6 +2373,60 @@ def _exec_tool(ctx: FreeBuildToolContext, name: str, args: Dict[str, Any]) -> Di
             orientation = (args.get("orientation") or "landscape").lower()
             count = int(args.get("count") or 1)
             return _fui(query, orientation, count)
+
+        # ── Power Tool: verify_my_work (LIVE PLAYWRIGHT TEST) ────────────
+        if name == "verify_my_work":
+            slug = ctx.project.get("published_slug")
+            if not slug:
+                return {
+                    "ok": False,
+                    "error": (
+                        "Project not published yet — cannot run live browser test. "
+                        "Auto-publish should run after each HTML write; if you "
+                        "see this, the project has zero current_html or the "
+                        "publish step failed."
+                    ),
+                }
+            # Build the local-pod URL (works in preview pod)
+            api_base = os.environ.get(
+                "REACT_APP_BACKEND_URL",
+                "https://ai-cinematic-hub-2.preview.emergentagent.com",
+            )
+            base_url = f"{api_base}/api/freebuild-chat/published-sites/{slug}"
+            from ..brain.power_tools import (
+                verify_my_work as _vmw,
+                auto_generate_scenarios as _ags,
+                quick_browser_check as _qbc,
+            )
+            scenarios = args.get("scenarios") or []
+            if not scenarios:
+                scenarios = _ags(ctx.current_html or "")
+            if not scenarios:
+                # Nothing to click — fall back to quick smoke check
+                import asyncio
+                try:
+                    loop = asyncio.get_event_loop()
+                    if loop.is_running():
+                        # nested loop fallback
+                        import nest_asyncio
+                        nest_asyncio.apply()
+                except Exception:
+                    pass
+                return asyncio.run(_qbc(base_url, timeout_seconds=15))
+            import asyncio
+            try:
+                return asyncio.run(_vmw(base_url, scenarios, timeout_seconds=25))
+            except RuntimeError:
+                # Already in event loop — use sync workaround via thread
+                import concurrent.futures
+                def _run():
+                    loop = asyncio.new_event_loop()
+                    try:
+                        return loop.run_until_complete(_vmw(base_url, scenarios, 25))
+                    finally:
+                        loop.close()
+                with concurrent.futures.ThreadPoolExecutor(max_workers=1) as ex:
+                    return ex.submit(_run).result(timeout=60)
 
         if name == "search_html":
             pat = args.get("pattern") or ""

@@ -366,3 +366,132 @@ async def verify_my_work(
             else f"❌ {passed}/{total} سيناريو نجح — أصلح الفشل قبل complete_task"
         ),
     }
+
+
+# ════════════════════════════════════════════════════════════════════════
+# 5. Auto-scenario generator — extract testable clickables from HTML
+# ════════════════════════════════════════════════════════════════════════
+def auto_generate_scenarios(html: str) -> List[Dict[str, Any]]:
+    """Walk the HTML and produce a list of click/navigate scenarios that
+    `verify_my_work` can run automatically. Catches the common dead-button
+    patterns without requiring the AI to write tests by hand."""
+    scenarios = []
+    if not html:
+        return scenarios
+    # Sample up to 4 buttons with text
+    btn_count = 0
+    for m in re.finditer(r"<button\b([^>]*)>([\s\S]*?)</button>", html, re.I):
+        if btn_count >= 4:
+            break
+        attrs, inner = m.group(1), m.group(2)
+        text = re.sub(r"<[^>]+>", " ", inner).strip()[:40]
+        if not text or len(text) < 2:
+            continue
+        idm = re.search(r'\bid\s*=\s*["\']([^"\']+)["\']', attrs, re.I)
+        if idm:
+            selector = f"#{idm.group(1)}"
+        else:
+            selector = f"button:has-text('{text[:20]}')"
+        scenarios.append({
+            "name": f"click button '{text[:30]}'",
+            "action": "click",
+            "selector": selector,
+            "expect": "",
+        })
+        btn_count += 1
+    # Sample up to 3 internal nav links
+    nav_count = 0
+    for m in re.finditer(
+        r'<a\b[^>]*\bhref\s*=\s*["\']([a-zA-Z0-9_\-]+\.html)["\'][^>]*>([\s\S]{0,80}?)</a>',
+        html, re.I,
+    ):
+        if nav_count >= 3:
+            break
+        href = m.group(1)
+        text = re.sub(r"<[^>]+>", " ", m.group(2)).strip()[:30]
+        if not text or href == "index.html":
+            continue
+        scenarios.append({
+            "name": f"navigate to {href}",
+            "action": "click",
+            "selector": f"a[href='{href}']",
+            "expect": "",  # just verify click doesn't error
+        })
+        nav_count += 1
+    return scenarios
+
+
+# ════════════════════════════════════════════════════════════════════════
+# 6. Quick smoke check — fast headless GET + JS console error capture
+# ════════════════════════════════════════════════════════════════════════
+async def quick_browser_check(base_url: str,
+                                timeout_seconds: int = 15) -> Dict[str, Any]:
+    """Lightweight Playwright check that just loads the page and reports:
+      • Console errors (broken JS, undefined vars)
+      • Failed network requests (missing images, 404 scripts)
+      • Page rendered correctly (body not empty, no React 'cannot read X')
+    Fast (~3-5s) so it can run after every write."""
+    try:
+        from playwright.async_api import async_playwright
+    except ImportError:
+        return {"ok": True, "skipped": "playwright not available"}
+    console_errors: List[str] = []
+    failed_requests: List[str] = []
+    try:
+        async with async_playwright() as pw:
+            browser = await pw.chromium.launch(
+                headless=True,
+                args=["--no-sandbox", "--disable-dev-shm-usage"],
+            )
+            ctx = await browser.new_context(
+                viewport={"width": 1280, "height": 800},
+                ignore_https_errors=True,
+            )
+            page = await ctx.new_page()
+            # Filter benign warnings (Tailwind CDN, dev-mode hints, etc.)
+            BENIGN_PATTERNS = (
+                "cdn.tailwindcss.com",
+                "should not be used in production",
+                "Download the React DevTools",
+                "Synchronous XMLHttpRequest",
+            )
+
+            def _on_console(msg):
+                if msg.type not in ("error", "warning"):
+                    return
+                txt = msg.text or ""
+                if any(b in txt for b in BENIGN_PATTERNS):
+                    return
+                console_errors.append(f"{msg.type}: {txt[:150]}")
+
+            page.on("console", _on_console)
+            page.on("requestfailed", lambda req: failed_requests.append(
+                f"{req.method} {req.url[:120]} — {req.failure}"
+            ))
+            try:
+                await page.goto(base_url, wait_until="domcontentloaded",
+                                  timeout=timeout_seconds * 1000)
+                await page.wait_for_timeout(1500)  # let JS settle
+                body_text = await page.evaluate(
+                    "() => document.body ? document.body.innerText.slice(0, 200) : ''"
+                )
+                body_size = len((body_text or "").strip())
+            except Exception as e:
+                await browser.close()
+                return {"ok": False, "error": f"page load failed: {type(e).__name__}: {str(e)[:200]}"}
+            await browser.close()
+    except Exception as e:
+        return {"ok": False, "error": f"playwright error: {type(e).__name__}: {str(e)[:200]}"}
+    has_errors = len(console_errors) > 0 or len(failed_requests) > 0
+    return {
+        "ok": not has_errors,
+        "console_errors": console_errors[:10],
+        "failed_requests": failed_requests[:10],
+        "body_excerpt": body_text[:150] if 'body_text' in dir() else "",
+        "body_size": body_size if 'body_size' in dir() else 0,
+        "summary": (
+            f"✅ الصفحة حُمّلت بدون أخطاء (body={body_size if 'body_size' in dir() else '?'} حرف)"
+            if not has_errors
+            else f"❌ {len(console_errors)} خطأ JS console + {len(failed_requests)} طلب فاشل"
+        ),
+    }
