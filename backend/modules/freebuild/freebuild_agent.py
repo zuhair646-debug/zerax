@@ -2027,6 +2027,36 @@ def _exec_tool(ctx: FreeBuildToolContext, name: str, args: Dict[str, Any]) -> Di
             ctx._sync_active_page()
             if custom_html:
                 html = custom_html
+                # 🏠 Guarantee back-to-home link in custom HTML — the #1
+                # complaint when AI creates standalone pages: "ما اقدر ارجع
+                # للصفحة الرئيسية" (can't return to homepage).
+                if filename != "index.html":
+                    has_index_link = bool(
+                        re.search(r'\bhref\s*=\s*["\']index\.html["\']',
+                                   html, re.I)
+                    )
+                    if not has_index_link:
+                        # Find <nav> or <header> and inject the home link first
+                        injection = '<a href="index.html" class="nav-link" data-zenrex-auto-wire="1">🏠 الرئيسية</a>'
+                        nav_m = (re.search(r"<nav\b[^>]*>", html, re.I)
+                                  or re.search(r"<header\b[^>]*>", html, re.I))
+                        if nav_m:
+                            ins_pt = nav_m.end()
+                            html = html[:ins_pt] + "\n  " + injection + html[ins_pt:]
+                        else:
+                            # No nav at all — inject a minimal one right after <body>
+                            body_m = re.search(r"<body\b[^>]*>", html, re.I)
+                            if body_m:
+                                ins_pt = body_m.end()
+                                nav_block = (
+                                    '\n<nav class="px-6 py-4 flex items-center gap-4 '
+                                    'border-b border-white/10 bg-slate-900/50">\n'
+                                    f"  {injection}\n</nav>\n"
+                                )
+                                html = html[:ins_pt] + nav_block + html[ins_pt:]
+                            else:
+                                # Last resort: prepend
+                                html = injection + "\n" + html
             else:
                 html = (
                     f"<!DOCTYPE html>\n<html dir=\"rtl\" lang=\"ar\">\n<head>\n"
@@ -5105,6 +5135,28 @@ id="about">` محلياً). لا تعتمد على هذا كحجة لكتابة 
    هذه تنقل المحتوى، تحذف من المصدر، تحدّث الـnavbar، وتعيد كتابة
    الأنكورات — كل ذلك في خطوة واحدة بدون فقد بيانات.
 
+🔴 **قاعدة (Section vs Page — لا تخلط بينهم أبداً):**
+هذي المشكلة المتكررة اللي ضايقت العميل أكثر من 4 مرات. خذها بجدية:
+
+  • العميل قال "قسم" / "section" / "بلوك" / "اقسم" / "اقسامها"
+    → استخدم `apply_section` **فقط**. هذي إضافة داخل نفس الصفحة الحالية.
+    ❌ ممنوع تستدعي `create_page`
+    ❌ ممنوع تغيّر الـURL
+    ❌ ممنوع تنقل العميل من index.html
+
+  • العميل قال "صفحة" / "page" / "ملف منفصل" / "URL منفصل"
+    → استخدم `create_page` أو `move_section_to_page`.
+
+  • العميل قال "شغّل الزر" / "ربط الزر بقسم": إذا الزر موجه لقسم في نفس
+    الصفحة → استخدم `apply_section` لتعديل الزر بـ`onclick`.
+    إذا الزر موجه لصفحة منفصلة موجودة → استخدم `apply_section` لتعديل
+    `href` ليشير للملف الموجود.
+
+🏠 **قاعدة (Back-to-Home Link Mandatory):**
+كل ما تستدعي `create_page`، الصفحة الجديدة **يجب** أن تحتوي على:
+  `<a href="index.html">الرئيسية</a>` في الـnavbar أو header
+السيرفر سيضيفه تلقائياً لو نسيت — لكن لا تعتمد على ذلك. اكتبه بنفسك.
+
 ✂️ **قاعدة (Keep-Only Pattern):**
 لما العميل يقول "خلّي لي بس X" أو "احتفظ فقط بـ X و Y" أو "اخلي بس
 المنتجات" — **لا تحذف الأقسام واحد واحد** عبر `remove_section`
@@ -6563,6 +6615,13 @@ async def _stream_one_provider(
         elif _intent_for_force == "keep_only":
             _required_tool = "keep_only_sections"
             _blocked_tools = {"write_full_html"}
+        elif _intent_for_force == "section_add":
+            # User asked for a SECTION (not a page). Block create_page so the
+            # AI cannot mistakenly hallucinate a separate file. They want
+            # apply_section on the active page ONLY.
+            _required_tool = "apply_section"
+            _blocked_tools = {"create_page", "move_section_to_page",
+                               "write_full_html"}
         if _blocked_tools:
             logger.info(
                 f"[agent-stream] INTENT_LOCK active (intent={_intent_for_force}) "

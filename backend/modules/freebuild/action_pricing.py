@@ -164,8 +164,16 @@ _INTENT_PATTERNS: list = [
         re.IGNORECASE)),
     # section addition (after deletion + repair to avoid false-positives)
     ("section_add", re.compile(
-        r"(?:اضف|تضيف|باضيف|ضيف|اعمل|تعمل|انشي(?:ء)?|اصنع)\s+(?:لي\s+|له\s+|)\s*(?:قسم|سكشن|section)|"
-        r"\badd\s+(?:a\s+|me\s+a\s+|me\s+|)(?:new\s+)?section",
+        # Verbs: add/make/create + سوي (do/make in colloquial)
+        r"(?:اضف|تضيف|باضيف|ضيف|اعمل|تعمل|انشي(?:ء)?|اصنع|"
+        r"سوي|تسوي|باسوي|سو|"
+        r"حط|تحط|بحط)\s+(?:لي\s+|له\s+|)\s*"
+        # Section keyword (NEVER "صفحة" — that's page_creation)
+        r"(?:قسم|سكشن|section|بلوك|block)"
+        # Optional modifiers that confirm section (not page)
+        r"(?:\s+(?:جديد|منفصل|مخصص|اضافي|تاني|ثاني))?"
+        r"|"
+        r"\badd\s+(?:a\s+|me\s+a\s+|me\s+|)(?:new\s+|separate\s+)?section\b",
         re.IGNORECASE)),
     # edits — wiring/linking/binding nav links to real pages is an "edit"
     ("edit", re.compile(
