@@ -32,42 +32,134 @@ def _safe_bs4(html: str):
         return None
 
 
-def _find_bottom_nav(soup) -> Optional[Any]:
-    """Heuristics to identify the 'bottom navigation' element.
-
-    Order of preference:
-      1. <nav> with class containing fixed+bottom (Tailwind)
-      2. Element with class hint: bottom-nav, tab-bar, fab-menu, bottom-bar
-      3. <nav> with inline `position:fixed;bottom:`
-      4. The LAST <nav> in <body> (heuristic for mobile-style apps)
-    """
+def _find_all_bottom_navs(soup) -> List[Any]:
+    """Find ALL elements that look like bottom navigation. Used for dedup."""
     if not soup:
-        return None
+        return []
     body = soup.body or soup
-
-    # Class-hint patterns
+    found: List[Any] = []
     class_hint = re.compile(
         r"(?:^|\s)(bottom[-_]?nav|tab[-_]?bar|fab[-_]?menu|bottom[-_]?bar|"
         r"mobile[-_]?nav|nav[-_]?bottom|footer[-_]?nav)(?:$|\s)",
         re.I,
     )
     for el in body.find_all(["nav", "div", "footer", "aside"]):
+        # Skip if nested inside an already-found one
+        if any(el in f.descendants for f in found):
+            continue
         classes = " ".join(el.get("class") or [])
         if class_hint.search(classes):
-            return el
-        # Tailwind fixed+bottom
+            found.append(el)
+            continue
         if "fixed" in classes and re.search(r"\bbottom-0?\b", classes):
-            return el
-        # Inline style fixed+bottom
+            found.append(el)
+            continue
         style = (el.get("style") or "").lower()
         if "position" in style and "fixed" in style and "bottom" in style:
-            return el
+            found.append(el)
+    return found
 
-    # Fallback: last <nav> in body
-    navs = body.find_all("nav")
-    if len(navs) >= 2:
-        return navs[-1]
-    return None
+
+def _pick_canonical_bottom_nav(candidates: List[Any]) -> Optional[Any]:
+    """Pick the BEST bottom-nav from multiple candidates.
+
+    Scoring (highest wins):
+      • +10 if has anchors with href to .html files (functional nav)
+      • +1 per anchor link
+      • +5 if uses 'fixed bottom-0' Tailwind (the modern pattern)
+      • +3 if longer (more complete)
+    """
+    if not candidates:
+        return None
+    if len(candidates) == 1:
+        return candidates[0]
+
+    def score(el):
+        s = 0
+        anchors = el.find_all("a", href=True)
+        html_links = [a for a in anchors if ".html" in a.get("href", "")]
+        if html_links:
+            s += 10
+        s += len(anchors)
+        classes = " ".join(el.get("class") or [])
+        if "fixed" in classes and "bottom-0" in classes:
+            s += 5
+        s += min(len(str(el)) // 200, 5)
+        return s
+
+    return max(candidates, key=score)
+
+
+def _find_bottom_nav(soup) -> Optional[Any]:
+    """Heuristics to identify the 'bottom navigation' element.
+
+    Now uses scoring across all candidates rather than first-match, so when
+    a page has BOTH `<div fixed bottom-0>` AND a `<nav class="bottom-nav">`,
+    we pick the most functional one (most nav links, most modern).
+    """
+    candidates = _find_all_bottom_navs(soup)
+    if not candidates:
+        # Fallback: last <nav> in body of multi-nav pages
+        if soup and (soup.body or soup):
+            navs = (soup.body or soup).find_all("nav")
+            if len(navs) >= 2:
+                return navs[-1]
+        return None
+    return _pick_canonical_bottom_nav(candidates)
+
+
+def _dedupe_bottom_navs_in_place(soup) -> int:
+    """Remove duplicate bottom-nav elements. Keeps the canonical one.
+
+    Returns the number of duplicates removed.
+    """
+    candidates = _find_all_bottom_navs(soup)
+    if len(candidates) < 2:
+        return 0
+    canonical = _pick_canonical_bottom_nav(candidates)
+    removed = 0
+    for el in candidates:
+        if el is not canonical:
+            try:
+                el.decompose()
+                removed += 1
+            except Exception:
+                pass
+    return removed
+
+
+
+def _rewrite_anchor_links_to_pages(soup, available_pages: List[str]) -> int:
+    """Convert `#anchor` hrefs to `anchor.html` when that page exists.
+
+    Solves the bug: bottom-nav uses #delivery #contests #cart anchors from
+    the original single-page version, but the project is now multi-page —
+    so those anchors don't navigate anywhere on sub-pages.
+
+    Returns count of rewritten links.
+    """
+    if not soup or not available_pages:
+        return 0
+    # Build map: 'delivery' → 'delivery.html' for fast lookup
+    stem_to_file = {}
+    for fn in available_pages:
+        if fn.endswith(".html"):
+            stem = fn[:-5].lower()
+            stem_to_file[stem] = fn
+            stem_to_file[stem + "-section"] = fn
+            stem_to_file["section-" + stem] = fn
+    rewrites = 0
+    for a in soup.find_all("a", href=True):
+        href = a["href"].strip()
+        if not href.startswith("#"):
+            continue
+        target_stem = href[1:].lower()
+        target_file = stem_to_file.get(target_stem)
+        if target_file:
+            a["href"] = target_file
+            rewrites += 1
+    return rewrites
+
 
 
 def _find_top_nav(soup) -> Optional[Any]:
@@ -369,6 +461,36 @@ def unify_pages_layout(
     sections_t = tuple(sections) if sections else DEFAULT_SECTIONS
 
     source_html = pages_dict[src]
+
+    # 🆕 STEP 0: Rewrite anchor links (#delivery) → file links (delivery.html)
+    # in BOTH source and all target pages. This solves the recurring bug
+    # where bottom-nav uses #anchor from the single-page era but the
+    # project is now multi-page.
+    available = list(pages_dict.keys())
+    total_anchor_rewrites = 0
+    pages_with_anchor_rewrites: List[str] = []
+    for fn in list(pages_dict.keys()):
+        s = _safe_bs4(pages_dict[fn])
+        if s:
+            n = _rewrite_anchor_links_to_pages(s, available)
+            if n > 0:
+                pages_dict[fn] = str(s)
+                total_anchor_rewrites += n
+                pages_with_anchor_rewrites.append(fn)
+    source_html = pages_dict[src]
+
+    # 🆕 STEP 1: Dedupe ALL bottom-nav duplicates in the SOURCE first.
+    # If index.html has BOTH `<nav class="bottom-nav">` AND `<div fixed
+    # bottom-0>`, pick the canonical one and remove duplicates. This is
+    # the #1 reason the homepage "looks different from sub-pages".
+    src_soup = _safe_bs4(source_html)
+    source_dedupes = 0
+    if src_soup:
+        source_dedupes = _dedupe_bottom_navs_in_place(src_soup)
+        if source_dedupes > 0:
+            source_html = str(src_soup)
+            pages_dict[src] = source_html  # mutate in-place for downstream use
+
     shell = extract_layout_shell(source_html)
     if not shell.get("ok"):
         return {"ok": False, "error": "could not extract source layout",
@@ -388,6 +510,21 @@ def unify_pages_layout(
     updated: Dict[str, str] = {}
     report: List[Dict[str, Any]] = []
     failed: List[Dict[str, Any]] = []
+
+    # 🆕 If we deduped the source OR rewrote anchors in it, mark it as updated
+    if source_dedupes > 0 or src in pages_with_anchor_rewrites:
+        updated[src] = source_html
+        changes_list = []
+        if source_dedupes > 0:
+            changes_list.append(f"removed_{source_dedupes}_duplicate_bottom_navs")
+        if src in pages_with_anchor_rewrites:
+            changes_list.append("rewrote_anchor_links")
+        report.append({
+            "filename": src,
+            "changes": changes_list,
+            "byte_delta": 0,  # we don't track delta from pre-rewrite size
+            "new_byte_size": len(source_html),
+        })
 
     for fn in targets:
         original = pages_dict[fn]
@@ -432,10 +569,14 @@ def unify_pages_layout(
         "unchanged_count": len(targets) - len(updated) - len(failed),
         "failed": failed,
         "report": report,
+        "anchor_rewrites": total_anchor_rewrites,
+        "source_dedupes": source_dedupes,
         "summary": (
             f"🎨 unified layout from '{src}' → "
             f"{len(updated)} pages patched, "
             f"{len(targets) - len(updated) - len(failed)} already in sync"
+            + (f", {total_anchor_rewrites} anchor links fixed" if total_anchor_rewrites else "")
+            + (f", {source_dedupes} source duplicates removed" if source_dedupes else "")
             + (f", {len(failed)} failed" if failed else "")
         ),
     }

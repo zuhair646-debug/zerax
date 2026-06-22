@@ -879,6 +879,19 @@ TOOLS_SCHEMA: List[Dict[str, Any]] = [
         },
     },
     {
+        "name": "sync_preview_to_published",
+        "description": (
+            "🔄 Force the published `/s/{slug}` URL to match the editor preview "
+            "byte-for-byte. Use ONLY if the user says 'Preview shows X but the "
+            "live link shows Y' — i.e. when auto-republish failed for some "
+            "reason. Returns: pages synced, byte deltas."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {},
+        },
+    },
+    {
         "name": "search_html",
         "description": (
             "Regex search inside current_html. Returns up to 10 matches with "
@@ -2920,7 +2933,8 @@ def _exec_tool(ctx: FreeBuildToolContext, name: str, args: Dict[str, Any]) -> Di
                      "recursive_test_agent", "crawl_url_deep",
                      "remember", "recall",
                      "troubleshoot_agent", "batch_refactor",
-                     "iterative_test_and_fix", "design_agent_full_stack"):
+                     "iterative_test_and_fix", "design_agent_full_stack",
+                     "sync_preview_to_published"):
             return {"__async__": True}
 
         # sync-safe: get_integration_playbook
@@ -2947,6 +2961,9 @@ def _exec_tool(ctx: FreeBuildToolContext, name: str, args: Dict[str, Any]) -> Di
                 if ctx.active_page in result["updated"]:
                     ctx.current_html = result["updated"][ctx.active_page]
                 ctx.changes_made += len(result["updated"])
+                # 🆕 Mark for auto-republish at turn end (if published)
+                ctx._needs_republish = True
+                result["will_auto_republish"] = True
             return result
 
 
@@ -3451,6 +3468,59 @@ async def _exec_tool_async(ctx: FreeBuildToolContext, name: str, args: Dict[str,
                 args.get("key_functionalities") or [],
                 args.get("app_type") or "saas_app",
             )
+
+        # 🔄 Force published ← source sync (use when auto-republish failed)
+        if name == "sync_preview_to_published":
+            pid = ctx.project_id or ""
+            slug = (ctx.project or {}).get("published_slug")
+            if not pid or not slug:
+                return {"ok": False,
+                        "error": "project must be published first (no slug found)"}
+            try:
+                from server import db as _db
+                # source pages (from ctx) → published copy
+                ctx._sync_active_page()
+                pages_to_push = dict(ctx.pages) if ctx.pages else {
+                    "index.html": ctx.current_html or ""
+                }
+                if not pages_to_push:
+                    return {"ok": False, "error": "no pages in source to push"}
+
+                # Compute size deltas vs current published
+                pub = await _db.freebuild_published_sites.find_one({"slug": slug})
+                deltas = []
+                if pub:
+                    pub_pages = pub.get("pages") or {}
+                    for fn, html in pages_to_push.items():
+                        old_size = len(pub_pages.get(fn, ""))
+                        deltas.append({
+                            "filename": fn,
+                            "old_bytes": old_size,
+                            "new_bytes": len(html),
+                            "delta": len(html) - old_size,
+                        })
+
+                await _db.freebuild_published_sites.update_one(
+                    {"slug": slug},
+                    {"$set": {
+                        "current_html": pages_to_push.get("index.html",
+                                                          ctx.current_html or ""),
+                        "pages": pages_to_push,
+                        "updated_at": __import__("time").time(),
+                    }},
+                )
+                return {
+                    "ok": True,
+                    "slug": slug,
+                    "pages_synced": list(pages_to_push.keys()),
+                    "deltas": deltas,
+                    "summary": (
+                        f"🔄 force-synced {len(pages_to_push)} pages to "
+                        f"https://zenrex.ai/s/{slug}/"
+                    ),
+                }
+            except Exception as e:
+                return {"ok": False, "error": f"sync failed: {e}"}
 
 
         if name == "publish_site":
@@ -4543,6 +4613,40 @@ AGENT_SYSTEM_PROMPT = """أنت **Zenrex Code Brain** — مهندس برمجي 
    - أي مشروع فيه 2+ صفحة → استدعِ `unify_pages_layout` قبل `finish`.
    - إذا بنيت صفحة جديدة بـ `create_page` ومعها HTML مخصص، التوحيد يصير تلقائياً (auto-inherit). لكن لو عدّلت يدوياً، استدعِ `unify_pages_layout` بنفسك.
    - إذا قال المستخدم "وحّد التصميم" أو "خلّ كل الصفحات متشابهة" → `unify_pages_layout` هي الجواب، **مو إعادة بناء الصفحات**.
+
+═══════════════════════════════════════════════════════════
+⛔ **قواعد إلزامية صارمة لأي مشروع multi-page (لا تنتهكها أبداً):**
+
+**القاعدة 1 — مصدر تصميم وحيد (Single Source of Layout Truth):**
+   - `index.html` هي مصدر تصميم كل الصفحات. Bottom-nav، top-nav، colors، fonts، body classes تجي منها بالضبط.
+   - لا يحق لك إنشاء `delivery.html` فيها bottom-nav بألوان غير ألوان index.
+   - لا يحق لك تكرار bottom-nav داخل index نفسها (شكلين، أو `<nav class="bottom-nav">` بجانب `<div fixed bottom-0>`). اختر واحد فقط.
+
+**القاعدة 2 — توحيد العناصر التفاعلية:**
+   - لو السلة في index رمزها 🛒 → كل الصفحات لازم نفس الرمز 🛒 (مو دائرة في صفحة، مربع في صفحة ثانية).
+   - لو الـ bottom-nav فيها 4 أيقونات → كل الصفحات لازم نفس الـ 4 أيقونات، نفس الترتيب، نفس الأشكال، نفس الحجم.
+   - لو الرابط "/cart.html" في index بلون pink → نفس اللون pink في كل صفحة.
+
+**القاعدة 3 — التحقق قبل التسليم:**
+   - قبل ما تقول "خلصت" أو تستدعي `finish`:
+     1. استدعِ `unify_pages_layout(source_page='index.html')` (يدوب تكرارات + يطبّق shell على كل الصفحات)
+     2. استدعِ `iterative_test_and_fix` للتأكد من الروابط والـ JS handlers
+     3. تأكد إن كل الصفحات published بنفس الـ HTML المحدّث
+
+**القاعدة 4 — لا فروق بين homepage و subpages:**
+   - بعد `unify_pages_layout`، لو الـ `homepage` لازالت تظهر للمستخدم بشكل مختلف عن باقي الصفحات → فيه bug.
+   - حلّك: استدعِ `unify_pages_layout` مرة ثانية بـ `force_dedupe=True` لإزالة أي عناصر مكررة في index.
+
+**القاعدة 5 — Preview = Published:**
+   - الـ preview في الشات و الـ published URL لازم يعرضان نفس المحتوى تماماً.
+   - إذا المستخدم قال "Preview ما تشتغل بس Published تشتغل" → استدعِ `sync_preview_to_published(project_id)` لمزامنتهم.
+
+**❌ ممنوع منعاً باتاً:**
+   - bottom-nav بألوان مختلفة بين صفحات نفس المشروع
+   - أيقونات مختلفة لنفس الوظيفة (🛒 vs ⭕ for cart)
+   - top-nav بـ items مختلفة (4 في صفحة، 3 في صفحة)
+   - footer بنص مختلف
+   - body class بألوان خلفية مختلفة
 ═══════════════════════════════════════════════════════════
 
 

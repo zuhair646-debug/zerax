@@ -201,3 +201,45 @@ class TestFullUnification:
         for fn, html in r2.get("updated", {}).items():
             assert "bg-pink-500" in html
             assert "bg-green-500" not in html
+
+    def test_dedupes_duplicate_bottom_navs_in_source(self):
+        # Source with TWO bottom-navs (the real-world bug)
+        source_with_dupes = """<!doctype html>
+<html dir="rtl" lang="ar">
+<head><title>Home</title></head>
+<body class="bg-slate-950">
+<header><nav>Top</nav></header>
+<main>Content</main>
+<nav class="bottom-nav">
+  <a href="index.html">🏠</a>
+</nav>
+<div class="fixed bottom-0 left-0 right-0 bg-black/80 py-4">
+  <a href="index.html">🏠</a>
+  <a href="cart.html">🛒</a>
+  <a href="account.html">👤</a>
+</div>
+</body></html>
+"""
+        target = """<!doctype html>
+<html><head><title>Cart</title></head>
+<body><main>cart content</main></body>
+</html>
+"""
+        pages = {"index.html": source_with_dupes, "cart.html": target}
+        result = unify_pages_layout(pages)
+        assert result["ok"]
+        # index should be in updated (deduped)
+        assert "index.html" in result["updated"]
+        # The canonical one (fixed bottom-0 with 3 links) should remain
+        # The <nav class="bottom-nav"> with only 1 link should be removed
+        patched_index = result["updated"]["index.html"]
+        # Only ONE bottom-nav should remain
+        from modules.brain.power_tools.unify import (
+            _find_all_bottom_navs, _safe_bs4,
+        )
+        soup = _safe_bs4(patched_index)
+        navs = _find_all_bottom_navs(soup)
+        assert len(navs) == 1, f"expected 1 bottom-nav, got {len(navs)}"
+        # And it should be the better one (with 3 links)
+        anchors = navs[0].find_all("a", href=True)
+        assert len(anchors) == 3

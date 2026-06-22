@@ -1,6 +1,61 @@
 # Zitex Changelog
 
 
+### 🔧 Feb 2026 — Hardened Multi-Page Consistency (5 New Strict Rules + Anchor Fix)
+
+User reported the unify fix wasn't complete: **homepage still looked different from sub-pages**, and **preview iframe didn't match published URL**. Real diagnostic on `zaheer-market` revealed THREE additional bugs:
+
+**Bug A — Source≠Published divergence**
+- Source project (`freebuild_projects` collection) had OLD versions: 9406b, 11146b, 10493b, 9692b
+- Published copy (`freebuild_published_sites`) had unified versions: 8999b, 10739b, 10086b, 9285b
+- Editor preview reads from source → user sees old layout despite my "fix"
+- **Fix**: Added `sync_preview_to_published` tool + updated dispatch to force-sync after `unify_pages_layout`
+
+**Bug B — Broken anchor navigation (36 broken links!)**
+- Bottom-nav used `href="#delivery"`, `href="#contests"`, `href="#cart"` (anchors from original single-page version)
+- On homepage, those scroll within page (sections existed)
+- On sub-pages, anchors point to non-existent sections → nothing happens when clicked
+- **Fix**: New `_rewrite_anchor_links_to_pages()` helper in `unify.py` that converts `#stem` → `stem.html` when the file exists in the project
+- Live result on zaheer-market: **36 broken anchors rewritten** to working file links
+
+**Bug C — Index had unwanted duplicate bottom-nav structures**
+- New `_find_all_bottom_navs()` + `_pick_canonical_bottom_nav()` (scoring: anchors with `.html` hrefs +10, link count +1 each, Tailwind `fixed bottom-0` +5, byte size up to +5)
+- `_dedupe_bottom_navs_in_place()` removes duplicates, keeps highest-scoring one
+- Runs automatically as STEP 1 of `unify_pages_layout`
+
+### Strict System Prompt Rules (NEW — `قواعد إلزامية صارمة`)
+Added 5 hard rules to `AGENT_SYSTEM_PROMPT` that the AI cannot ignore:
+
+1. **Single Source of Layout Truth**: `index.html` is canonical. No duplicate bottom-navs allowed.
+2. **Interactive element consistency**: Cart icon must be `🛒` on EVERY page. Bottom-nav must have same 4 items, same order, same shape, same color across all pages.
+3. **Pre-finish validation**: Must call `unify_pages_layout` + `iterative_test_and_fix` before `finish`.
+4. **No homepage exception**: If homepage looks different after unify → call `unify_pages_layout` again with force dedupe.
+5. **Preview = Published**: If user reports mismatch → call `sync_preview_to_published`.
+
+**Banned patterns** (with red X icons in the prompt):
+- ❌ bottom-nav with different colors per page
+- ❌ different icons for same function (🛒 vs ⭕ for cart)
+- ❌ top-nav with different items per page
+- ❌ footer with different text
+- ❌ body class with different background colors
+
+### Live Verification on zaheer-market
+After all fixes deployed:
+
+| الصفحة | bottom-nav hash | file-links | anchors broken |
+|---|---|---|---|
+| index.html | 4 links → all .html | 4 | 0 |
+| delivery.html | identical | 4 | 0 |
+| contests.html | identical | 4 | 0 |
+| cart.html | identical | 4 | 0 |
+| account.html | identical | 4 | 0 |
+
+**Tools count: 124** (was 123) — new tool: `sync_preview_to_published`.
+
+**Tests:** 14/14 unify tests passing including new `test_dedupes_duplicate_bottom_navs_in_source`.
+
+
+
 ### 🎯 Feb 2026 — Fix: Multi-Page Layout Consistency Bug (THE BIG ONE)
 User complaint (recurring 6+ times): "Every page I ask AI to create looks
 DIFFERENT — bottom-nav has pink circles on home but green squares on cart, 
