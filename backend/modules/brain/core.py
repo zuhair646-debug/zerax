@@ -42,7 +42,7 @@ class BrainConfig:
     provider: str = "emergent_anthropic"
     max_credit_budget: int = 500            # hard ceiling per turn
     max_iterations: int = 20                # upper iteration safety
-    enable_discovery: bool = True
+    enable_discovery: bool = False  # Constitution handles dialogue conversationally — no hardcoded question banks
     enable_visual_diff: bool = True
     enable_strict_mode: bool = True
     user_language: str = "ar"
