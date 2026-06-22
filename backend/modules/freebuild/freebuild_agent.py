@@ -127,6 +127,51 @@ TOOLS_SCHEMA: List[Dict[str, Any]] = [
         "input_schema": {"type": "object", "properties": {}, "required": []},
     },
     {
+        "name": "request_design_approval",
+        "description": (
+            "🤝 اطلب من العميل اعتماد التصميم الحالي. **استدعِ هذا تلقائياً بعد كل بناء أولي**. "
+            "يحفظ snapshot ويعرض للعميل سؤال: 'هل تعتمد هذا التصميم؟ بعد الاعتماد رح أعدّل فقط، "
+            "ما رح أعيد البناء.' لو وافق، استدعِ `lock_design` بعدها."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "design_summary": {"type": "string", "description": "وصف من سطرين عن التصميم"},
+            },
+            "required": ["design_summary"],
+        },
+    },
+    {
+        "name": "lock_design",
+        "description": (
+            "🔒 اقفل التصميم نهائياً. بعد القفل: write_full_html ممنوع. "
+            "كل التعديلات لازم تكون جراحية (apply_section / edit_file). "
+            "**استدعِ هذا بعد ما يقول العميل 'موافق' أو 'اعتمد' على التصميم.**"
+        ),
+        "input_schema": {"type": "object", "properties": {}},
+    },
+    {
+        "name": "unlock_design",
+        "description": (
+            "🔓 افتح قفل التصميم (للسماح بإعادة بناء كامل). "
+            "**استدعِ فقط لو العميل قال صراحةً 'ابني من جديد' أو 'rebuild كامل'.**"
+        ),
+        "input_schema": {"type": "object", "properties": {}},
+    },
+    {
+        "name": "revert_to_last_snapshot",
+        "description": (
+            "↩️ ارجع لأحدث snapshot محفوظ (قبل آخر تعديل). "
+            "**استدعِ هذا فوراً لو العميل قال 'شيلها'، 'ارجع للأول'، 'لغ التعديل'، 'ما عجبني'.**"
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "steps_back": {"type": "integer", "description": "كم خطوة للخلف، default=1"},
+            },
+        },
+    },
+    {
         "name": "write_full_html",
         "description": (
             "⚠️ REPLACES THE ENTIRE PROJECT HTML. Use ONLY for: (1) the very "
@@ -2255,6 +2300,31 @@ def _exec_tool(ctx: FreeBuildToolContext, name: str, args: Dict[str, Any]) -> Di
         if name == "validate_html":
             issues = _comprehensive_validation(ctx.current_html)
             return {"issue_count": len(issues), "issues": issues, "is_clean": len([i for i in issues if i["severity"] == "high"]) == 0}
+        if name == "request_design_approval":
+            summary = (args.get("design_summary") or "").strip()
+            ctx.snapshot_before_write()
+            return {
+                "ok": True,
+                "ask_user": True,
+                "message": (
+                    f"📐 **عرض التصميم للاعتماد**\n\n"
+                    f"{summary}\n\n"
+                    f"هل تعتمد هذا التصميم؟\n"
+                    f"  • قول **'موافق'** أو **'اعتمد'** → أقفل التصميم وننتقل لمرحلة التعديلات فقط\n"
+                    f"  • قول **'لا، عدّل X'** → أعدّل قبل القفل\n"
+                    f"  • قول **'ابني من جديد'** → أعيد البناء (نادر)\n\n"
+                    f"⚠️ بعد الاعتماد، **ما رح أعيد البناء أبداً**. فقط تعديلات جراحية محددة."
+                ),
+                "snapshot_saved": True,
+            }
+
+        if name == "lock_design":
+            return {"__async__": True}
+        if name == "unlock_design":
+            return {"__async__": True}
+        if name == "revert_to_last_snapshot":
+            return {"__async__": True}
+
         if name == "write_full_html":
             new_html = (args.get("html") or "").strip()
             if not new_html:
@@ -2267,8 +2337,24 @@ def _exec_tool(ctx: FreeBuildToolContext, name: str, args: Dict[str, Any]) -> Di
             # generic empty colored boxes when I asked to ADD a chat."
             # The AI must use apply_section / create_page instead.
             existing_size = len(ctx.current_html or "")
+            design_locked = bool((ctx.project or {}).get("design_locked"))
             allow_full_rewrite = bool(args.get("allow_full_rewrite")) or \
                                   bool((ctx.project or {}).get("design_unlocked"))
+            # 🔒 ABSOLUTE LOCK: once user approved the design, write_full_html
+            # is BANNED outright — no override, no `allow_full_rewrite` escape.
+            # User must explicitly call `unlock_design` to disable the lock.
+            if design_locked:
+                return {
+                    "ok": False,
+                    "error": "DESIGN_LOCKED",
+                    "message": (
+                        "🔒 التصميم مُعتمَد ومقفول من العميل. "
+                        "ممنوع `write_full_html` تماماً. "
+                        "استخدم `apply_section` / `edit_file` / `create_page` للتعديلات. "
+                        "لإلغاء القفل (إعادة بناء كاملة)، اطلب من العميل صراحة وانتظر "
+                        "`unlock_design` يستدعى."
+                    ),
+                }
             if existing_size >= 800 and not allow_full_rewrite:
                 return {
                     "ok": False,
@@ -2934,7 +3020,8 @@ def _exec_tool(ctx: FreeBuildToolContext, name: str, args: Dict[str, Any]) -> Di
                      "remember", "recall",
                      "troubleshoot_agent", "batch_refactor",
                      "iterative_test_and_fix", "design_agent_full_stack",
-                     "sync_preview_to_published"):
+                     "sync_preview_to_published",
+                     "lock_design", "unlock_design", "revert_to_last_snapshot"):
             return {"__async__": True}
 
         # sync-safe: get_integration_playbook
@@ -3471,7 +3558,6 @@ async def _exec_tool_async(ctx: FreeBuildToolContext, name: str, args: Dict[str,
 
         # 🔄 Force published ← source sync (use when auto-republish failed)
         if name == "sync_preview_to_published":
-            pid = ctx.project_id or ""
             slug = (ctx.project or {}).get("published_slug")
             if not pid or not slug:
                 return {"ok": False,
@@ -3521,6 +3607,76 @@ async def _exec_tool_async(ctx: FreeBuildToolContext, name: str, args: Dict[str,
                 }
             except Exception as e:
                 return {"ok": False, "error": f"sync failed: {e}"}
+
+
+        # Design lock/unlock/revert (replaces freelance rebuilds)
+        if name == "lock_design":
+            try:
+                from server import db as _db
+                pid = ctx.project_id
+                if pid:
+                    await _db.freebuild_projects.update_one(
+                        {"id": pid},
+                        {"$set": {"design_locked": True,
+                                   "design_locked_at": __import__("time").time(),
+                                   "design_unlocked": False}},
+                    )
+                if ctx.project is not None:
+                    ctx.project["design_locked"] = True
+                return {"ok": True,
+                        "message": "🔒 التصميم مقفول. الآن في وضع التعديل الجراحي فقط — write_full_html ممنوع."}
+            except Exception as e:
+                return {"ok": False, "error": str(e)}
+
+        if name == "unlock_design":
+            try:
+                from server import db as _db
+                pid = ctx.project_id
+                if pid:
+                    await _db.freebuild_projects.update_one(
+                        {"id": pid},
+                        {"$set": {"design_locked": False, "design_unlocked": True}},
+                    )
+                if ctx.project is not None:
+                    ctx.project["design_locked"] = False
+                    ctx.project["design_unlocked"] = True
+                return {"ok": True,
+                        "message": "🔓 التصميم غير مقفول. تنبيه: write_full_html ممكن يدمّر التصميم الحالي."}
+            except Exception as e:
+                return {"ok": False, "error": str(e)}
+
+        if name == "revert_to_last_snapshot":
+            try:
+                from server import db as _db
+                pid = ctx.project_id
+                if not pid:
+                    return {"ok": False, "error": "no project_id"}
+                steps = max(1, min(10, int(args.get("steps_back") or 1)))
+                proj = await _db.freebuild_projects.find_one({"id": pid})
+                if not proj:
+                    return {"ok": False, "error": "project not found"}
+                snapshots = proj.get("html_snapshots") or []
+                if len(snapshots) < steps:
+                    return {"ok": False,
+                            "error": f"only {len(snapshots)} snapshots available (asked for {steps})"}
+                target = snapshots[-steps]
+                restored_html = target.get("html", "")
+                if not restored_html:
+                    return {"ok": False, "error": "snapshot is empty"}
+                await _db.freebuild_projects.update_one(
+                    {"id": pid},
+                    {"$set": {"current_html": restored_html,
+                               "updated_at": __import__("time").time()}},
+                )
+                ctx.current_html = restored_html
+                if ctx.active_page and ctx.pages:
+                    ctx.pages[ctx.active_page] = restored_html
+                return {"ok": True,
+                        "message": f"↩️ رجعت {steps} خطوة(ات) للخلف. استرجع snapshot من '{target.get('label','?')}'.",
+                        "restored_label": target.get("label"),
+                        "restored_bytes": len(restored_html)}
+            except Exception as e:
+                return {"ok": False, "error": str(e)}
 
 
         if name == "publish_site":
@@ -4840,8 +4996,53 @@ AI:
 
 🏆 **المبدأ الأعلى**: العميل دفع للحصول على **اللي طلبه بالضبط**، لا أكثر ولا أقل. كل bit زيادة = إخفاق. كل bit نقص = إخفاق. التنفيذ الجراحي = الكمال.
 
-──────────────────────────────────────────────────────────
-📜 **القانون العاشر — الذاكرة المُنفّذة (EXECUTION MEMORY)**
+═══════════════════════════════════════════════════════════
+🔒 **القانون الحادي عشر — حلقة الاعتماد والتعديل الإجبارية**
+═══════════════════════════════════════════════════════════
+**أهم آلية في الدستور بعد التنفيذ الجراحي. اتباعها إجباري.**
+
+🔄 **الحلقة الإلزامية:**
+
+1️⃣ **بعد البناء الأولي مباشرة**:
+   استدعِ `request_design_approval(design_summary="بنيت لك X مع Y و Z")`.
+   هذي رح تعرض للعميل:
+   > "هل تعتمد التصميم؟ بعد الاعتماد، أعدّل فقط، ما أعيد البناء."
+
+2️⃣ **لو العميل قال "موافق" / "اعتمد" / "تمام":**
+   استدعِ `lock_design` فوراً. التصميم ينقفل في DB.
+   **من هالنقطة**: `write_full_html` مرفوض من البكند ولو حاولت.
+
+3️⃣ **لو العميل قال "عدّل X" / "ضيف Y" / "غير Z":**
+   - **ممنوع** تعيد بناء كامل.
+   - استخدم `apply_section` / `edit_file` / `create_page` فقط.
+   - **مثال صحيح**: العميل قال "ضيف لي قسم أفلام" → `apply_section(id='movies', html='<section id="movies">...</section>', op='append')` — فقط القسم الجديد، ما تلمس الباقي.
+
+4️⃣ **لو العميل قال "شيلها" / "ارجع للأول" / "ما عجبني":**
+   استدعِ `revert_to_last_snapshot(steps_back=1)` فوراً.
+   ما تجادل، ما تشرح، ما تحاول تنقذ التغيير — **ارجع**.
+   ثم اسأل: "رجعت للنسخة السابقة. وش تبيني أسوي بدالها؟"
+
+5️⃣ **لو العميل قال "ابني من جديد" / "rebuild":**
+   استدعِ `unlock_design`. هذا الحالة الوحيدة للـ write_full_html بعد القفل.
+
+**علامات إجبارية للـ AI:**
+
+✅ **بعد كل تعديل ناجح** → قول للعميل:
+   > "✓ سويت X. مر التعديل عبر `apply_section` فقط — التصميم الأساسي محفوظ. تبيني أضيف/أعدّل شي ثاني؟"
+
+✅ **قبل أي تغيير كبير** (>3 ملفات أو >30% من HTML) → اسأل صراحةً:
+   > "هذا التعديل كبير. متأكد تبيه؟ ولا تبي شي أصغر؟"
+
+❌ **ممنوع نهائياً بعد lock_design:**
+   - `write_full_html` (البكند يرفضه أصلاً)
+   - حذف >50% من المحتوى الموجود
+   - تغيير palette/font بدون طلب صريح
+   - إضافة قسم ما طلبه العميل
+
+🎯 **القاعدة الذهبية**: بعد القفل، **اللي مالك ما تلمسه. اللي طلبه العميل، اعمله بدقة. خلاص.**
+
+═══════════════════════════════════════════════════════════
+
 ──────────────────────────────────────────────────────────
 قبل كل turn، قبل أي tool call، **اقرأ آخر ٣ رسائل من العميل** واسأل نفسك:
 - وش طلب آخر مرة بالضبط؟ هل لسا نفس الطلب ولا تغيّر؟
