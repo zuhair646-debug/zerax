@@ -380,6 +380,53 @@ TOOLS_SCHEMA: List[Dict[str, Any]] = [
         "input_schema": {"type": "object", "properties": {}, "required": []},
     },
     {
+        "name": "validate_js_handlers",
+        "description": (
+            "🧪 STATIC TEST: Scan the current HTML and report any onclick/onsubmit "
+            "attributes referencing functions that are NOT defined in the inline "
+            "JS. This catches the #1 dead-button pattern: '<button onclick=\"openMovie()\">' "
+            "without a `function openMovie` definition.\n\n"
+            "USE THIS IMMEDIATELY AFTER apply_section / write_full_html — if any "
+            "handler is broken, fix it BEFORE moving on. NEVER call complete_task "
+            "while broken_handlers > 0."
+        ),
+        "input_schema": {"type": "object", "properties": {}, "required": []},
+    },
+    {
+        "name": "check_navigation_graph",
+        "description": (
+            "🔗 STATIC TEST: Build a directed graph of all <a href> page links "
+            "across the project. Returns:\n"
+            "  • broken_links: <a href> pointing to a non-existent .html file\n"
+            "  • orphan_pages: pages that can't be reached from index.html\n"
+            "  • pages_without_home_link: pages that can't navigate BACK to index\n\n"
+            "USE THIS AFTER create_page / move_section_to_page / any nav change. "
+            "If pages_without_home_link is non-empty, add a back-to-home link "
+            "via apply_section BEFORE complete_task."
+        ),
+        "input_schema": {"type": "object", "properties": {}, "required": []},
+    },
+    {
+        "name": "fetch_unsplash_image",
+        "description": (
+            "📸 Fetch real Unsplash image URLs for a topic. Returns CDN URLs you "
+            "embed directly in <img src=...>. Use this WHENEVER you need a real "
+            "photo (hero backgrounds, product images, team photos, etc.) — never "
+            "use 'placeholder.com' or fake URLs."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "query": {"type": "string",
+                            "description": "topic in English (e.g. 'red roses', 'modern office')"},
+                "orientation": {"type": "string", "enum": ["landscape", "portrait", "square"]},
+                "count": {"type": "integer",
+                           "description": "How many distinct image URLs to return (1-6)"},
+            },
+            "required": ["query"],
+        },
+    },
+    {
         "name": "search_html",
         "description": (
             "Regex search inside current_html. Returns up to 10 matches with "
@@ -2281,6 +2328,26 @@ def _exec_tool(ctx: FreeBuildToolContext, name: str, args: Dict[str, Any]) -> Di
                 })
             return {"ok": True, "count": len(out), "snapshots": out,
                     "message": f"📜 {len(out)} snapshot متاحة (الأحدث أولاً)"}
+
+        # ── Power Tool: validate_js_handlers ─────────────────────────────
+        if name == "validate_js_handlers":
+            from ..brain.power_tools import validate_js_handlers as _vjs
+            result = _vjs(ctx.current_html or "")
+            return result
+
+        # ── Power Tool: check_navigation_graph ───────────────────────────
+        if name == "check_navigation_graph":
+            from ..brain.power_tools import check_navigation_graph as _cng
+            result = _cng(dict(ctx.pages))
+            return result
+
+        # ── Power Tool: fetch_unsplash_image ─────────────────────────────
+        if name == "fetch_unsplash_image":
+            from ..brain.power_tools import fetch_unsplash_image as _fui
+            query = (args.get("query") or "").strip()
+            orientation = (args.get("orientation") or "landscape").lower()
+            count = int(args.get("count") or 1)
+            return _fui(query, orientation, count)
 
         if name == "search_html":
             pat = args.get("pattern") or ""
@@ -7071,39 +7138,48 @@ async def _stream_one_provider(
                 # call apply_section / write_full_html to fix it before
                 # being allowed to write a "تم بنجاح!" summary.
                 _dummy_audit = None
-                if tu["name"] in ("write_full_html", "apply_section", "create_page") \
+                if tu["name"] in ("write_full_html", "apply_section", "create_page",
+                                    "move_section_to_page", "keep_only_sections") \
                    and isinstance(result, dict) and result.get("ok"):
                     try:
                         _dummy_audit = _scan_for_dummy_ui(ctx.current_html or "")
-                        if _dummy_audit and not _dummy_audit.get("ok"):
-                            # Augment the result the AI sees with a strong audit
-                            result = {**result, "_dummy_audit": _dummy_audit,
-                                       "_repair_required": True,
-                                       "_message_ar": (
-                                           "⚠️ السيرفر فحص الـHTML بعد التعديل ووجد "
-                                           f"{_dummy_audit['total_problems']} مشكلة فعلية:\n"
-                                           f"  • {len(_dummy_audit['dead_buttons'])} زر بدون onclick/JS\n"
-                                           f"  • {len(_dummy_audit['fake_nav_links'])} رابط nav بـ href='#'\n"
-                                           f"  • {len(_dummy_audit['broken_anchors'])} anchor مكسور\n"
-                                           f"  • {len(_dummy_audit['dead_forms'])} نموذج بدون onsubmit\n"
-                                           "🛠️ في الخطوة التالية المباشرة: استدع apply_section "
-                                           "لإصلاح كل عنصر — أضِف onclick، اربط الأزرار بدوال "
-                                           "JS حقيقية، وحوّل أي href='#' لـ #section-existing أو "
-                                           "ملف صفحة فعلي. ممنوع تقول 'تم بنجاح' قبل ما "
-                                           "_dummy_audit يصير ok=True."
-                                       )}
+                        # 🧪 Also run JS handler validator and navigation graph check
+                        from ..brain.power_tools import (
+                            validate_js_handlers as _vjs,
+                            check_navigation_graph as _cng,
+                        )
+                        _js_audit = _vjs(ctx.current_html or "")
+                        _nav_audit = _cng(dict(ctx.pages))
+                        problems_total = (_dummy_audit.get("total_problems", 0)
+                                            + _js_audit.get("total_problems", 0)
+                                            + _nav_audit.get("total_problems", 0))
+                        if problems_total > 0:
+                            result = {
+                                **result,
+                                "_dummy_audit": _dummy_audit,
+                                "_js_handler_audit": _js_audit,
+                                "_navigation_audit": _nav_audit,
+                                "_repair_required": True,
+                                "_message_ar": (
+                                    f"⚠️ السيرفر اختبر النتيجة ووجد {problems_total} مشكلة:\n"
+                                    f"  • UI ميتة: {_dummy_audit.get('total_problems', 0)}\n"
+                                    f"  • JS handlers مكسورة: {_js_audit.get('total_problems', 0)}\n"
+                                    f"  • روابط navigation معطلة: {_nav_audit.get('total_problems', 0)}\n"
+                                    "🛠️ أصلِح كل مشكلة عبر apply_section قبل ما تقول 'تم'. "
+                                    "لو في handler يستدعي دالة غير معرّفة، أضف الدالة في "
+                                    "<script> داخل نفس التعديل. لو في صفحة بدون رجوع للرئيسية، "
+                                    "أضف <a href='index.html'> فيها."
+                                ),
+                            }
                             force_tool_use_next_iter = True
                             logger.warning(
-                                f"[dummy-detector] {tu['name']} produced "
-                                f"{_dummy_audit['total_problems']} dummy issues "
-                                f"(dead_btn={len(_dummy_audit['dead_buttons'])}, "
-                                f"fake_nav={len(_dummy_audit['fake_nav_links'])}, "
-                                f"broken={len(_dummy_audit['broken_anchors'])}, "
-                                f"dead_form={len(_dummy_audit['dead_forms'])}) "
-                                f"— forcing repair iteration"
+                                f"[post-write-audit] {tu['name']}: "
+                                f"dummy={_dummy_audit.get('total_problems', 0)} "
+                                f"js_handler={_js_audit.get('total_problems', 0)} "
+                                f"nav={_nav_audit.get('total_problems', 0)} → forcing repair"
                             )
                     except Exception as _dde:
-                        logger.warning(f"[dummy-detector] scan failed: {_dde}")
+                        logger.warning(f"[post-write-audit] scan failed: {_dde}")
                 label_done = TOOL_LABELS_AR.get(tu["name"], {}).get("done", "✅ تم")
                 # Add a short result snippet to the label
                 snippet = ""
