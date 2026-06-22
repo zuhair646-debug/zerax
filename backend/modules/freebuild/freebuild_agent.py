@@ -848,6 +848,37 @@ TOOLS_SCHEMA: List[Dict[str, Any]] = [
         },
     },
     {
+        "name": "unify_pages_layout",
+        "description": (
+            "🎨⚡ FORCES layout consistency across ALL pages in a multi-page "
+            "project. Extracts head styles, top nav, bottom nav, footer, body "
+            "classes from the source page (default: index.html) and applies "
+            "them VERBATIM to every other page. Preserves each page's <title> "
+            "and unique content. \n\n"
+            "**Call this EVERY TIME you finish creating/editing multiple "
+            "pages.** It's the #1 fix for 'each page has different "
+            "nav/footer styles' complaints. \n\n"
+            "Sections you can sync (default: all): head_styles, top_nav, "
+            "bottom_nav, footer, body_classes."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "source_page": {"type": "string", "description": "Canonical page (default: index.html)"},
+                "sections": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "head_styles | top_nav | bottom_nav | footer | body_classes",
+                },
+                "target_pages": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "Pages to update (default: all except source)",
+                },
+            },
+        },
+    },
+    {
         "name": "search_html",
         "description": (
             "Regex search inside current_html. Returns up to 10 matches with "
@@ -2541,6 +2572,30 @@ def _exec_tool(ctx: FreeBuildToolContext, name: str, args: Dict[str, Any]) -> Di
                 )
             ctx.snapshot_before_write()
             ctx.pages[filename] = html
+
+            # 🎨 AUTO-INHERIT LAYOUT: when there are already other pages,
+            # automatically copy the shell (head styles + top nav + bottom nav +
+            # footer + body classes) from index.html into the new page.
+            # This is the #1 fix for the recurring complaint:
+            # "كل صفحة لها تصميم مختلف" — different bottom-nav colors/shapes
+            # across pages. The AI can opt out by passing skip_inherit=True.
+            if filename != "index.html" and "index.html" in ctx.pages and \
+                    not bool(args.get("skip_inherit", False)):
+                try:
+                    from ..brain.power_tools import (
+                        extract_layout_shell as _els,
+                        inject_layout_shell as _ils,
+                    )
+                    shell = _els(ctx.pages["index.html"])
+                    if shell.get("ok") and (shell.get("has_top_nav")
+                                              or shell.get("has_bottom_nav")
+                                              or shell.get("has_footer")):
+                        patched = _ils(html, shell)
+                        if patched.get("ok"):
+                            ctx.pages[filename] = patched["html"]
+                            html = patched["html"]
+                except Exception as e:
+                    logger.debug(f"auto-inherit layout failed (non-fatal): {e}")
             # 🔗 AUTO-WIRING: inject a nav link in index.html pointing to the
             # new page so the user can actually REACH it from the homepage.
             # Stops the #1 user complaint: "AI built a separate page with no
@@ -2872,6 +2927,27 @@ def _exec_tool(ctx: FreeBuildToolContext, name: str, args: Dict[str, Any]) -> Di
         if name == "get_integration_playbook":
             from ..brain.power_tools import get_integration_playbook as _gip
             return _gip(args.get("service_name") or "")
+
+        # sync-safe: unify_pages_layout (BeautifulSoup is sync)
+        if name == "unify_pages_layout":
+            from ..brain.power_tools import unify_pages_layout as _upl
+            ctx._sync_active_page()
+            if not ctx.pages or len(ctx.pages) < 2:
+                return {"ok": False,
+                        "error": "need at least 2 pages to unify (current: %d)" % len(ctx.pages)}
+            src = (args.get("source_page") or "index.html").strip().lower()
+            sections = args.get("sections") or None
+            targets = args.get("target_pages") or None
+            result = _upl(dict(ctx.pages), src, sections, targets)
+            if result.get("ok") and result.get("updated"):
+                ctx.snapshot_before_write()
+                for fn, patched in result["updated"].items():
+                    ctx.pages[fn] = patched
+                # If active page got updated, refresh current_html
+                if ctx.active_page in result["updated"]:
+                    ctx.current_html = result["updated"][ctx.active_page]
+                ctx.changes_made += len(result["updated"])
+            return result
 
 
         if name == "search_html":
@@ -4460,6 +4536,13 @@ AGENT_SYSTEM_PROMPT = """أنت **Zenrex Code Brain** — مهندس برمجي 
   • **`iterative_test_and_fix(user_goal, max_iterations, max_scenarios)`** — **التاج الذهبي للاختبار**. test → فشل → Claude يحلل HTML → patches فعلية → re-test. حتى 3 iterations. **استدعِ هذا قبل `finish` على أي مشروع فيه user flows حقيقية**.
 
   • **`design_agent_full_stack(problem, user_choices, functionalities, app_type)`** — مدير تصميم سينيور. يرجع blueprint كامل (palette, typography, layout, motion, button style) مع CSS variables جاهزة. **مكافح للـ AI slop** (لا violet، لا Inter، لا centered uniform). **استدعِ هذا قبل بداية UI لأي مشروع جديد**.
+
+  • **`unify_pages_layout(source_page, sections)`** — ⚡ **قاعدة حديدية**: في أي مشروع multi-page (أكثر من صفحة)، **بعد ما تخلّص إنشاء/تعديل الصفحات، استدعِ هذي الأداة فوراً قبل ما تقول 'خلصت'**. تنسخ shell التصميم (head styles + top nav + bottom nav + footer + body classes) من `index.html` إلى كل الصفحات الباقية حرفياً. **هذي الأداة تحلّ مشكلة "كل صفحة لها bottom-nav بألوان وأشكال مختلفة"** — السبب الأول لشكاوى المستخدمين على مدى أشهر.
+
+**📐 قانون التوحيد البصري (إلزامي):**
+   - أي مشروع فيه 2+ صفحة → استدعِ `unify_pages_layout` قبل `finish`.
+   - إذا بنيت صفحة جديدة بـ `create_page` ومعها HTML مخصص، التوحيد يصير تلقائياً (auto-inherit). لكن لو عدّلت يدوياً، استدعِ `unify_pages_layout` بنفسك.
+   - إذا قال المستخدم "وحّد التصميم" أو "خلّ كل الصفحات متشابهة" → `unify_pages_layout` هي الجواب، **مو إعادة بناء الصفحات**.
 ═══════════════════════════════════════════════════════════
 
 

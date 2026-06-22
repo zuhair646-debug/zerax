@@ -41,6 +41,11 @@ from .senior_parity import (
     design_agent_full_stack,
     SENIOR_PARITY_TOOLS,
 )
+from .unify import (
+    unify_pages_layout,
+    extract_layout_shell,
+    inject_layout_shell,
+)
 
 __all__ = [
     # runtime
@@ -64,4 +69,6 @@ __all__ = [
     "troubleshoot_agent", "batch_refactor",
     "iterative_test_and_fix", "design_agent_full_stack",
     "SENIOR_PARITY_TOOLS",
+    # unify (multi-page layout consistency)
+    "unify_pages_layout", "extract_layout_shell", "inject_layout_shell",
 ]

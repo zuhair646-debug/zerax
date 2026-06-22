@@ -1,6 +1,47 @@
 # Zitex Changelog
 
 
+### 🎯 Feb 2026 — Fix: Multi-Page Layout Consistency Bug (THE BIG ONE)
+User complaint (recurring 6+ times): "Every page I ask AI to create looks
+DIFFERENT — bottom-nav has pink circles on home but green squares on cart, 
+different shapes on contests page". Real diagnostic on `zaheer-market` showed:
+- index.html: `bg-pink-500` only
+- delivery.html: `bg-red-500, bg-purple-900, bg-purple-500, bg-green-500` (BUG!)
+- contests/cart/account: mix of `bg-red-500, bg-purple-500, bg-purple-900`
+
+**Root Cause:** `create_page` tool generated each new page's nav/footer/shell
+INDEPENDENTLY — no shared layout source of truth.
+
+**Solution at `/app/backend/modules/brain/power_tools/unify.py`:**
+- `extract_layout_shell(html)` — pulls head styles, top nav, bottom nav, footer, body classes from a source page using BeautifulSoup + smart heuristics (class hints, Tailwind `fixed bottom-0`, last-nav fallback)
+- `inject_layout_shell(target_html, shell)` — replaces those sections in the target while preserving `<title>` and main content
+- `unify_pages_layout(pages_dict, source='index.html')` — applies the shell to every page
+
+**Tool registered (`unify_pages_layout`)** + **auto-trigger inside `create_page`**: any new page automatically inherits index.html's shell if it exists. The AI can opt out with `skip_inherit=true`.
+
+**System prompt updated** with new "📐 قانون التوحيد البصري" section instructing the AI:
+- Always call `unify_pages_layout` before `finish` for multi-page projects
+- When user says "وحّد التصميم", use this tool — DON'T rebuild pages
+
+**Tests:** 13/13 unit tests cover extraction, injection, full unification, idempotency, error cases. Total: 77 passing across all parity test files.
+
+**Live fix on zaheer-market:**
+- All 4 sub-pages (delivery, contests, cart, account) now have **byte-identical** bottom-nav (md5 hash `ed22260468a1`, 1061 bytes)
+- All pages share head styles + top nav + body classes from index.html
+- Unique content (delivery tracking, contests cards, cart items) preserved
+
+**Verified via curl:**
+```
+delivery.html : fixed-bottom=1 pink=2 unique-nav-links=5/5
+contests.html : fixed-bottom=1 pink=2 unique-nav-links=5/5
+cart.html     : fixed-bottom=1 pink=2 unique-nav-links=5/5
+account.html  : fixed-bottom=1 pink=2 unique-nav-links=5/5
+```
+
+Tool count: **123 tools registered on VPS** (was 122).
+
+
+
 ### 👑 Feb 2026 — TRUE 100% Parity Reached (Senior Sub-Agents Live)
 The final 15% — sub-agent equivalents — implemented at `/app/backend/modules/brain/power_tools/senior_parity.py`.
 
