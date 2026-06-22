@@ -60,56 +60,93 @@ TOOL_OP_FLOORS: Dict[str, Tuple[int, str]] = {
 
 # ─── Intent classifier ──────────────────────────────────────────────────────
 # Patterns are checked in priority order; first match wins.
+#
+# Arabic-normalization NOTE: real users type Arabic with mixed diacritics and
+# without the hamza — e.g. "انشئ" instead of "أنشئ", "تنشئ" instead of
+# "أنشئ", "اضف" instead of "أضف", "بأنشئ" / "بأنفذ" (colloquial future
+# tense). We normalize the input string before pattern matching so a single
+# pattern matches all these spellings.
+_HAMZA_NORM = str.maketrans({"أ": "ا", "إ": "ا", "آ": "ا", "ٱ": "ا",
+                              "ؤ": "و", "ئ": "ي", "ة": "ه",
+                              "ى": "ي", "ـ": ""})
+_DIACRITIC_RE = re.compile(r"[\u064B-\u065F\u0670\u06D6-\u06ED]")
+
+
+def _normalize_ar(s: str) -> str:
+    """Strip diacritics, normalize hamza/alif/ya/ta-marbuta, lowercase."""
+    if not s:
+        return ""
+    s = _DIACRITIC_RE.sub("", s).translate(_HAMZA_NORM)
+    return s.lower()
+
+
 _INTENT_PATTERNS: list = [
     # full website build — most specific (must come first)
     ("full_site", re.compile(
-        r"(?:ابن(?:ي|)|أنشئ|اصنع|سو(?:ي|)|اعمل)\s+(?:لي\s+|له\s+|)\s*"
-        r"(?:موقع|تطبيق|متجر)\s+(?:كامل|كاملاً)|"
+        # Verbs (already hamza-normalized): ابن/ابني/انشئ/اصنع/سوي/اعمل
+        r"(?:ابن(?:ي|)|انشي(?:ء)?|اصنع|سو(?:ي|)|اعمل|ابدا)\s+(?:لي\s+|له\s+|)\s*"
+        # Allow up to 4 words between verb-object and "كامل" (e.g. "متجر زهور فخم كامل")
+        r"(?:موقع|تطبيق|متجر|بلوق|بلوج|مدونه)(?:\s+\S+){0,4}\s+(?:كامل|كامله)|"
         r"build\s+(?:me\s+)?(?:a\s+)?(?:full|complete|whole|entire)\s+"
         r"(?:site|website|app|store)|"
         r"build\s+(?:me\s+)?(?:a\s+)?(?:site|website|app|store)|"
         r"موقع\s+كامل\s+(?:من|بـ|للـ)|كامل\s+من\s+الصفر",
         re.IGNORECASE)),
-    # new page creation
+    # new page creation — covers all colloquial Arabic prefixes:
+    # تنشئ / بأنشئ / ننشئ (نحن) / راح أنشئ / بدي أنشئ / أبي أنشئ / بنروح ننشئ ...
+    # All have "نشئ" or "نشي" stem after normalization. Same for اصنع/سوي/اعمل/اضف.
     ("page_creation", re.compile(
-        r"(?:أنشئ|اصنع|سوّ?(?:ي|)|اعمل|أضف|ضيف)\s+(?:لي\s+|له\s+|)\s*"
-        r"صفحة(?:\s+(?:جديدة|منفصلة|باسم|عنوان|اسم)|\s+\S+)|"
-        r"create\s+(?:a\s+|new\s+)?page|new\s+page|"
-        r"create\s+(?:a\s+|new\s+)?(?:html\s+)?page",
+        r"(?:"
+        r"(?:[تنبس]?(?:ا)?نشي(?:ء)?|بانشي(?:ء)?|راح\s+(?:ا|ن)نشي(?:ء)?|"
+        r"اصنع|تصنع|نصنع|باصنع|سوي|تسوي|نسوي|باسوي|"
+        r"اعمل|تعمل|نعمل|باعمل|"
+        r"اضف|تضيف|نضيف|بتضيف|باضيف|ضيف|"
+        r"اضيفها|اضيف)\s+(?:لي\s+|له\s+|)\s*"
+        r"صفحه(?:\s+(?:جديده|منفصله|مستقله|باسم|عنوان|اسم|اسمها|اسمه)|\s+\S+)"
+        r")|"
+        # English: create / add / make page
+        r"\b(?:create|add|make|build|generate)\s+(?:a\s+|new\s+|me\s+a\s+|me\s+|)(?:html\s+|separate\s+|standalone\s+|)page\b|"
+        r"\bnew\s+page\b",
         re.IGNORECASE)),
     # deletion
     ("deletion", re.compile(
-        r"(?:احذف|شيل|أزل|أزله|إحذف|امسح)\b|"
+        r"(?:احذف|تحذف|باحذف|شيل|تشيل|باشيل|ازل|ازله|امسح|تمسح)\b|"
         r"\b(?:remove|delete|drop)\b",
         re.IGNORECASE)),
     # repair / fix
     ("repair", re.compile(
-        r"(?:أصلح|صلح|اصلح|الزر ما يشتغل|"
+        r"(?:اصلح|تصلح|باصلح|صلح|الزر\s+ما\s+يشتغل|عالج|تعالج|"
         r"\bfix\b|\brepair\b|"
-        r"broken|doesn'?t work|مكسور|معطّل|خطأ|\bbug\b|اللي مو شغّال)",
+        r"broken|doesn'?t work|مكسور|معطل|خطا|\bbug\b|اللي\s+مو\s+شغال|مو\s+شغال)",
         re.IGNORECASE)),
     # section addition (after deletion + repair to avoid false-positives)
     ("section_add", re.compile(
-        r"(?:أضف|ضيف|اعمل|أنشئ|اصنع)\s+(?:لي\s+|له\s+|)\s*(?:قسم|section)|"
+        r"(?:اضف|تضيف|باضيف|ضيف|اعمل|تعمل|انشي(?:ء)?|اصنع)\s+(?:لي\s+|له\s+|)\s*(?:قسم|سكشن|section)|"
         r"\badd\s+(?:a\s+|me\s+a\s+|me\s+|)(?:new\s+)?section",
         re.IGNORECASE)),
-    # edits
+    # edits — wiring/linking/binding nav links to real pages is an "edit"
     ("edit", re.compile(
-        r"(?:غيّر|بدّل|عدّل|حدّث|اعدل|update|edit|modify|change)",
+        r"(?:غير|تغير|باغير|بدل|تبدل|بابدل|عدل|تعدل|باعدل|"
+        r"حدث|تحدث|باحدث|اعدل|اربط|تربط|بنربط|"
+        r"update|edit|modify|change|wire|bind|link)",
         re.IGNORECASE)),
     # inspection
     ("inspection", re.compile(
-        r"(?:اعرض|أرني|اعطني|ورّني|كم|ما\s+هي|\blist\b|\bshow\b|"
-        r"what\s+(?:is|are)|أرى|أشوف|كيف)",
+        r"(?:اعرض|ارني|اعطني|ورني|كم|ما\s+هي|\blist\b|\bshow\b|"
+        r"what\s+(?:is|are)|اري|اشوف|كيف)",
         re.IGNORECASE)),
 ]
 
 
 def classify_intent(message: str) -> str:
-    """Map a free-form user message to an action intent. Defaults to 'chat'."""
+    """Map a free-form user message to an action intent. Defaults to 'chat'.
+
+    Input is hamza-normalized first so colloquial spellings (تنشئ، انشئ،
+    اضف بدون همزة، الخ) match the same patterns as the formal MSA form.
+    """
     if not message or not isinstance(message, str):
         return "chat"
-    msg = message.strip()
+    msg = _normalize_ar(message.strip())
     for intent, pat in _INTENT_PATTERNS:
         if pat.search(msg):
             return intent

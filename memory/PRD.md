@@ -48,6 +48,59 @@ Arabic-first AI builder for websites/apps/images/videos with credits-based prici
 - Hero Z logo removed | `/pricing` loads PricingV2 | Stripe import made lazy
 - **Credits pivot:** PACKAGES simplified, deduction unified, `/generate/video` fixed
 - **3-layer guard:** middleware + per-endpoint charge + global toast
+
+## 2026-06-22 Session — "AI Generates Dummy UI" Ultimatum Fix ✅
+Root cause: Multiple silent bugs let the AI claim work without doing it:
+1. **Intent classifier (`action_pricing.classify_intent`)** missed common Arabic
+   spellings (`تنشئ`, `انشئ`, `اضف` without hamza) → preemptive `tool_choice=any`
+   never fired → AI responded with text only → counted as "chat" → user charged
+   floor with zero work. **Fixed** by hamza-normalization + expanded patterns
+   covering colloquial prefixes (تـ/بـ/راح/ننـ).
+2. **Lie detector markers** missed celebration phrases like "تم بنجاح",
+   "جاهز بالكامل", "ما تم إنجازه". **Fixed** by expanding `FAKE_ACHIEVEMENT_MARKERS`.
+3. **In-Turn Dummy Detector (new):** After every `write_full_html`/
+   `apply_section`/`create_page`, the server scans the resulting HTML for
+   dead buttons (no onclick AND no JS wiring), forms missing onsubmit,
+   nav links with `href="#"`, and broken anchors. If found, attaches the
+   audit to the tool result AND forces `tool_choice=any` on the next
+   iteration so the AI MUST call a repair tool before being allowed to
+   write a "تم بنجاح" summary. Function: `_scan_for_dummy_ui()`.
+4. **Anchor-to-Page rewriting (new):** `_rewrite_anchors_to_real_pages()`
+   runs after every HTML mutation. If `about.html` exists in `ctx.pages`
+   and the HTML has `<a href="#about">` with no matching `<section id="about">`,
+   the link is auto-rewritten to `<a href="about.html">`. Also handles
+   `#home`/`#homepage`/`#main`/`#top` → `index.html`. This is what
+   guarantees TRUE multi-page navigation works regardless of what the AI
+   writes.
+5. **create_page Auto-Wire (improved):** Now ALSO rewrites existing
+   `<a href="#stem">` anchor links across every page to point to the new
+   file (when no `<section id="stem">` exists locally). Stops the
+   "half-wired navbar" pattern where the new page links worked but the
+   original index.html still pointed to anchors.
+6. **<base href> Injection (new):** Published sites served at
+   `/api/.../published-sites/{slug}` (no trailing slash) had broken
+   multi-page nav because the browser resolved `about.html` relative to
+   the parent URL. Now `_inject_base_href()` injects
+   `<base href="/api/freebuild-chat/published-sites/{slug}/">` so all
+   relative links resolve correctly in BOTH preview and production.
+
+**Live test results (post-fix):**
+- Built portfolio site "تك سعد" with 3 real .html pages.
+- Confirmed in headless browser: clicking "من نحن" navigates to
+  `/.../teksaad-test/about.html` (real page load).
+- Contact form submission triggers HTML5 validation + success message.
+- Cart test on "زهور النور" flower shop: 4 add-to-cart buttons all fire
+  real `addToCart()`, badge updates 0→2, modal opens with items + total
+  (55 ريال computed correctly), localStorage persists.
+- 39/39 unit tests pass (11 new dummy detector tests added).
+
+**Files touched:**
+- `/app/backend/modules/freebuild/action_pricing.py` (classifier hardening)
+- `/app/backend/modules/freebuild/freebuild_agent.py` (Dummy Detector
+  + Anchor rewriter + Lie marker expansion + create_page auto-rewrite)
+- `/app/backend/modules/freebuild/freebuild_chat.py` (base href injection)
+- `/app/backend/tests/test_dummy_detector.py` (NEW — 11 unit tests)
+
 - **Calm UI banners:** smaller pill-style, single tap to /pricing
 - **Ready Sites paywall:** PayPal + LemonSqueezy (Stripe fully removed)
 - **End-to-end verified:** signup→200 credits, Ready Sites checkout returns real PayPal URL on prod

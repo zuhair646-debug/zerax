@@ -1040,7 +1040,246 @@ def tools_for_user(is_owner: bool) -> List[Dict[str, Any]]:
     return [t for t in TOOLS_SCHEMA if t["name"] not in OWNER_ONLY_TOOL_NAMES]
 
 
+def _rewrite_anchors_to_real_pages(html: str, pages_dict: Dict[str, str]) -> tuple:
+    """Rewrite <a href="#X"> → <a href="X.html"> when:
+      • An X.html file exists in `pages_dict`
+      • AND the same HTML does NOT contain <section id="X"> (so the
+        anchor was clearly meant to point to the page, not an in-page section)
+
+    This is the iron-clad guarantee that multi-page navigation links work:
+    once a page exists, every reference to its anchor name auto-resolves to
+    the real file across every other HTML page.
+
+    Returns (new_html, rewrite_count).
+    """
+    if not html or not pages_dict:
+        return html, 0
+    # Collect IDs that exist as sections in THIS html (anchors are legit)
+    local_section_ids = set(re.findall(
+        r'<(?:section|div|article|main|aside)\b[^>]*\bid\s*=\s*["\']([a-zA-Z0-9_\-]+)["\']',
+        html, re.I,
+    ))
+    rewrites = 0
+    new_html = html
+    # Special case: anchor links like #home, #homepage, #main commonly refer
+    # to the homepage when there's no matching section. Rewrite to index.html
+    # if it exists and the section is missing.
+    if "index.html" in pages_dict:
+        for anch in ("#home", "#homepage", "#main", "#top"):
+            target = anch.lstrip("#")
+            if target in local_section_ids:
+                continue
+            pat = re.compile(
+                r'(<a\b[^>]*\bhref\s*=\s*["\'])' + re.escape(anch) + r'(["\'])',
+                re.I,
+            )
+            new_html2, n = pat.subn(r"\1index.html\2", new_html)
+            if n > 0:
+                rewrites += n
+                new_html = new_html2
+    for filename in pages_dict.keys():
+        stem = re.sub(r"\.html$", "", filename, flags=re.I).lower()
+        if not stem or stem == "index":
+            continue  # don't rewrite #X → index.html
+        # Candidate anchor variants
+        for anch in (f"#{stem}", f"#{stem}-section", f"#section-{stem}"):
+            target = anch.lstrip("#")
+            target = re.sub(r"-(section)$|^section-", "", target)
+            if target in local_section_ids:
+                continue  # legitimate intra-page anchor — leave it
+            pat = re.compile(
+                r'(<a\b[^>]*\bhref\s*=\s*["\'])' + re.escape(anch) + r'(["\'])',
+                re.I,
+            )
+            new_html2, n = pat.subn(r"\1" + filename + r"\2", new_html)
+            if n > 0:
+                rewrites += n
+                new_html = new_html2
+    return new_html, rewrites
+
+
 # ─── Tool Implementations ─────────────────────────────────────────────────────
+def _scan_for_dummy_ui(html: str) -> Dict[str, Any]:
+    """🕵️ In-Turn Dummy Detector — scans freshly-written HTML for the most
+    common "looks-real-but-is-fake" patterns the AI is prone to generating:
+
+      1. Buttons with NO onclick AND no JS event wiring (dead clicks)
+      2. Forms with no `onsubmit` AND no `action` attribute (dead forms)
+      3. Nav menu links pointing to href="#" or "javascript:void(0)" (fake nav)
+      4. Anchor links pointing to `#section-id` whose target doesn't exist
+      5. `<a>` with empty/missing href on a button-like element
+      6. `<input type=submit>` inside a form whose `<form>` has no action+no JS
+
+    Returns:
+      {
+        "ok": bool,                     # True if HTML is clean
+        "dead_buttons": [{"text", "reason"}],
+        "fake_nav_links": [{"text", "href", "reason"}],
+        "broken_anchors": [{"text", "href"}],
+        "dead_forms": [{"id_or_class", "reason"}],
+        "total_problems": int,
+        "advice_ar": str,               # User-facing summary in Arabic
+      }
+
+    Heuristics (tuned to avoid false positives):
+      • A button is considered LIVE if it has any of:
+          - onclick=  (non-empty)
+          - data-action / data-cart / data-product-* / data-target / data-* event hooks
+          - id matched by `getElementById('that-id')` in inline JS
+          - class matched by `querySelector(All)('.that-class')` in inline JS
+          - Inside <form> with valid onsubmit / action
+      • Social-media icon links (Instagram/TikTok/Twitter/Facebook/WhatsApp)
+        with href="#" are NOT counted — those are placeholders the user
+        intentionally hasn't filled. We flag them separately as a "soft"
+        issue only the AI can fix on user request.
+    """
+    if not html or len(html) < 100:
+        return {"ok": True, "dead_buttons": [], "fake_nav_links": [],
+                "broken_anchors": [], "dead_forms": [],
+                "total_problems": 0, "soft_social_placeholders": 0,
+                "advice_ar": ""}
+
+    # Pre-extract inline JS so we can do containment checks quickly
+    js_blocks = re.findall(r"<script(?![^>]*\bsrc=)[^>]*>([\s\S]*?)</script>", html, re.I)
+    js_text = "\n".join(js_blocks)
+
+    # ── Collect all <section id="..."> IDs for anchor verification ──
+    section_ids = set(re.findall(
+        r'<(?:section|div|article|main|aside)\b[^>]*\bid\s*=\s*["\']([a-zA-Z0-9_\-]+)["\']',
+        html, re.I,
+    ))
+
+    dead_buttons: list[Dict[str, str]] = []
+    fake_nav: list[Dict[str, str]] = []
+    broken_anchors: list[Dict[str, str]] = []
+    dead_forms: list[Dict[str, str]] = []
+    soft_social_placeholders = 0
+
+    # Social-media domain hints (decorative icons with href='#' don't count
+    # as "fake nav" — they're awaiting real URLs from the user).
+    SOCIAL_ICON_HINTS = ("fa-instagram", "fa-twitter", "fa-tiktok", "fa-facebook",
+                          "fa-snapchat", "fa-youtube", "fa-linkedin", "fa-pinterest",
+                          "fa-whatsapp", "fa-telegram", "fa-x-twitter",
+                          "Instagram", "TikTok", "Twitter", "Facebook", "Snapchat",
+                          "📷", "🐦", "📱", "🎵", "👻", "📺", "💼", "📌")
+
+    # ── Scan <button> tags ──
+    for m in re.finditer(r"<button\b([^>]*)>([\s\S]*?)</button>", html, re.I):
+        attrs, inner = m.group(1), m.group(2)
+        text = re.sub(r"<[^>]+>", " ", inner).strip()[:60]
+        if not text or len(text) < 2:
+            continue
+        has_onclick = bool(re.search(r"\bonclick\s*=\s*[\"'][^\"']{3,}[\"']", attrs, re.I))
+        has_data_action = bool(re.search(r"\bdata-(?:action|cart|product|target|test|event|toggle|modal)", attrs, re.I))
+        has_type_submit_in_form = ("type=\"submit\"" in attrs.lower() or "type='submit'" in attrs.lower())
+        idm = re.search(r"\bid\s*=\s*[\"']([^\"']+)[\"']", attrs, re.I)
+        clsm = re.search(r"\bclass\s*=\s*[\"']([^\"']+)[\"']", attrs, re.I)
+        btn_id = idm.group(1) if idm else None
+        cls = clsm.group(1).split() if clsm else []
+        js_wired = False
+        if btn_id:
+            # getElementById('id'), document.querySelector('#id')
+            if re.search(rf"getElementById\([\"']({re.escape(btn_id)})[\"']\)", js_text) or \
+               re.search(rf"querySelector\([\"']#{re.escape(btn_id)}[\"']\)", js_text):
+                js_wired = True
+        for c in cls:
+            if c and (
+                re.search(rf"querySelector(?:All)?\([\"']\.{re.escape(c)}[\"']\)", js_text)
+                or re.search(rf"getElementsByClassName\([\"']({re.escape(c)})[\"']\)", js_text)
+                or re.search(rf"\.{re.escape(c)}\b.*?addEventListener", js_text)
+            ):
+                js_wired = True
+                break
+        if has_onclick or has_data_action or js_wired:
+            continue
+        if has_type_submit_in_form:
+            # Defer judgement to <form> scan below
+            continue
+        dead_buttons.append({"text": text, "reason": "no_onclick_no_js"})
+
+    # ── Scan <a> tags as nav links ──
+    nav_block_match = re.search(r"<nav\b[^>]*>([\s\S]*?)</nav>", html, re.I)
+    nav_block = nav_block_match.group(1) if nav_block_match else ""
+    for m in re.finditer(r"<a\b([^>]*)>([\s\S]*?)</a>", html, re.I):
+        attrs, inner = m.group(1), m.group(2)
+        text = re.sub(r"<[^>]+>", " ", inner).strip()[:60]
+        full_a = m.group(0)
+        # Is this anchor decorative / a social icon? Then skip strict check
+        is_social = any(h in full_a for h in SOCIAL_ICON_HINTS)
+        # Empty-text <a> tags with social-icon hints are soft placeholders
+        if (not text or len(text) < 1) and not is_social:
+            continue
+        href_m = re.search(r"\bhref\s*=\s*[\"']([^\"']*)[\"']", attrs, re.I)
+        href = (href_m.group(1) if href_m else "").strip()
+        in_nav = nav_block and (m.group(0) in nav_block or (text and text in nav_block))
+        if not href or href in ("#", "#!", "javascript:void(0)", ""):
+            if is_social:
+                soft_social_placeholders += 1
+            else:
+                # Only count as "fake nav" if it's inside <nav> OR has button-like text
+                # (so we don't flag every decorative "↓" arrow as fake)
+                if in_nav or (text and len(text) > 6):
+                    fake_nav.append({"text": text or "(icon)", "href": href or "(missing)",
+                                      "reason": "empty_or_hash_href"})
+        elif href.startswith("#"):
+            target = href[1:]
+            if target and target not in section_ids:
+                broken_anchors.append({"text": text or "(icon)", "href": href})
+        # else: real page link / external link / mailto / tel — all fine
+
+    # ── Scan <form> tags ──
+    for m in re.finditer(r"<form\b([^>]*)>([\s\S]*?)</form>", html, re.I):
+        attrs, inner = m.group(1), m.group(2)
+        has_action = bool(re.search(r"\baction\s*=\s*[\"'][^\"']{2,}[\"']", attrs, re.I))
+        has_onsubmit = bool(re.search(r"\bonsubmit\s*=\s*[\"'][^\"']{3,}[\"']", attrs, re.I))
+        idm = re.search(r"\bid\s*=\s*[\"']([^\"']+)[\"']", attrs, re.I)
+        clsm = re.search(r"\bclass\s*=\s*[\"']([^\"']+)[\"']", attrs, re.I)
+        form_id = idm.group(1) if idm else None
+        cls = clsm.group(1).split() if clsm else []
+        # Has inner submit-able input?
+        has_submit = bool(re.search(r"<(?:button|input)[^>]*type\s*=\s*[\"']submit[\"']", inner, re.I))
+        if not has_submit:
+            continue
+        if has_action or has_onsubmit:
+            continue
+        js_wired = False
+        if form_id:
+            if re.search(rf"getElementById\([\"']({re.escape(form_id)})[\"']\).+?addEventListener\([\"']submit", js_text, re.S) or \
+               re.search(rf"#{re.escape(form_id)}[\"'][\s\S]{{0,200}}?addEventListener\([\"']submit", js_text, re.S):
+                js_wired = True
+        for c in cls:
+            if c and re.search(rf"\.{re.escape(c)}[\"'][\s\S]{{0,200}}?addEventListener\([\"']submit", js_text, re.S):
+                js_wired = True
+                break
+        if not js_wired:
+            dead_forms.append({"id_or_class": form_id or (cls[0] if cls else "(unnamed)"),
+                                "reason": "no_action_no_onsubmit_no_js"})
+
+    total = len(dead_buttons) + len(fake_nav) + len(broken_anchors) + len(dead_forms)
+    advice = ""
+    if total > 0:
+        bits = []
+        if dead_buttons:
+            bits.append(f"{len(dead_buttons)} زر ميت (بدون onclick ولا JS)")
+        if fake_nav:
+            bits.append(f"{len(fake_nav)} رابط nav وهمي (href='#')")
+        if broken_anchors:
+            bits.append(f"{len(broken_anchors)} anchor مكسور (target مفقود)")
+        if dead_forms:
+            bits.append(f"{len(dead_forms)} نموذج بدون onsubmit")
+        advice = "🛑 " + " · ".join(bits) + " — أصلِح قبل إعلان الإنجاز."
+    return {
+        "ok": total == 0,
+        "dead_buttons": dead_buttons,
+        "fake_nav_links": fake_nav,
+        "broken_anchors": broken_anchors,
+        "dead_forms": dead_forms,
+        "soft_social_placeholders": soft_social_placeholders,
+        "total_problems": total,
+        "advice_ar": advice,
+    }
+
+
 def _build_reality_check_block(html: str, max_sections: int = 14, max_ctas: int = 12) -> str:
     """🔬 Ground-truth snapshot injected into every agent turn for projects
     that already have HTML. This forces the AI to **see** what's currently in
@@ -1347,11 +1586,17 @@ def _exec_tool(ctx: FreeBuildToolContext, name: str, args: Dict[str, Any]) -> Di
                 }
             # auto-fix dead navigation links
             new_html, fixed = _fix_dead_navigation_links(new_html)
+            # 🔗 Anchor → real-page rewriting (multi-page enforcement)
+            new_html, anchor_rewrites = _rewrite_anchors_to_real_pages(
+                new_html, ctx.pages,
+            )
             ctx.snapshot_before_write()
             ctx.current_html = new_html
             ctx._sync_active_page()
             ctx.changes_made += 1
-            return {"ok": True, "new_length": len(new_html), "dead_links_fixed": fixed}
+            return {"ok": True, "new_length": len(new_html),
+                    "dead_links_fixed": fixed,
+                    "anchor_to_page_rewrites": anchor_rewrites}
         if name == "apply_section":
             sid = (args.get("id") or "").strip()
             frag = (args.get("html") or "").strip()
@@ -1384,11 +1629,18 @@ def _exec_tool(ctx: FreeBuildToolContext, name: str, args: Dict[str, Any]) -> Di
             if not merged:
                 return {"ok": False, "error": "merge failed"}
             merged, fixed = _fix_dead_navigation_links(merged)
+            # 🔗 Anchor → real-page rewriting (multi-page enforcement)
+            merged, anchor_rewrites = _rewrite_anchors_to_real_pages(
+                merged, ctx.pages,
+            )
             ctx.snapshot_before_write()
             ctx.current_html = merged
             ctx._sync_active_page()
             ctx.changes_made += 1
-            return {"ok": True, "op": op, "id": sid, "new_total_length": len(merged), "dead_links_fixed": fixed}
+            return {"ok": True, "op": op, "id": sid,
+                    "new_total_length": len(merged),
+                    "dead_links_fixed": fixed,
+                    "anchor_to_page_rewrites": anchor_rewrites}
 
         if name == "remove_section":
             ids = args.get("ids") or []
@@ -1466,10 +1718,49 @@ def _exec_tool(ctx: FreeBuildToolContext, name: str, args: Dict[str, Any]) -> Di
             # new page so the user can actually REACH it from the homepage.
             # Stops the #1 user complaint: "AI built a separate page with no
             # link from the main site — orphaned content."
+            # ALSO: rewrite any existing <a href="#X"> anchor link whose target
+            # matches this page's logical name (e.g. "about", "contact") so
+            # the new file becomes the authoritative target — no half-wired
+            # navbars where 3 of 4 links go to the new page but 1 still goes
+            # to an anchor. This is the #1 cause of the user's complaint:
+            # "AI claims to wire about.html but old navbar still has #about".
             auto_wired = False
+            anchors_rewritten = 0
+            stem = re.sub(r"\.html$", "", filename, flags=re.I).lower()
             try:
+                for _other_fn in list(ctx.pages.keys()):
+                    if _other_fn == filename:
+                        continue
+                    other_html = ctx.pages.get(_other_fn) or ""
+                    if not other_html:
+                        continue
+                    # Common anchor variants that should now resolve to the
+                    # real file: #stem, #stem-section, #section-stem
+                    candidate_anchors = {f"#{stem}", f"#{stem}-section",
+                                          f"#section-{stem}"}
+                    new_other = other_html
+                    for anch in candidate_anchors:
+                        # Rewrite <a href="#X"> → <a href="filename"> but ONLY
+                        # when the page does NOT contain a <section id="X">.
+                        # If the section exists in the same file, the anchor
+                        # is legitimate intra-page navigation — leave it.
+                        sec_pat = (r'<(?:section|div|article|main|aside)\b[^>]*\bid\s*=\s*["\']'
+                                    + re.escape(stem) + r'["\']')
+                        if re.search(sec_pat, new_other, re.I):
+                            continue  # Section exists locally → anchor is real
+                        pat = re.compile(
+                            r'(<a\b[^>]*\bhref\s*=\s*["\'])' + re.escape(anch) + r'(["\'])',
+                            re.I,
+                        )
+                        new_other2, n = pat.subn(r'\1' + filename + r'\2', new_other)
+                        if n > 0:
+                            anchors_rewritten += n
+                            new_other = new_other2
+                    if new_other != other_html:
+                        ctx.pages[_other_fn] = new_other
                 index_html = ctx.pages.get("index.html", "")
-                # Only auto-wire if not already linked
+                # Only auto-wire a NEW <a> if not already linked (after the
+                # anchor rewrite above, the link may now exist).
                 if index_html and f'href="{filename}"' not in index_html and f"href='{filename}'" not in index_html:
                     # Derive a friendly Arabic label from the title
                     nav_label = title.strip()[:30] or filename.replace(".html", "")
@@ -1510,9 +1801,14 @@ def _exec_tool(ctx: FreeBuildToolContext, name: str, args: Dict[str, Any]) -> Di
                    "ابدأ بإضافة الأقسام عبر apply_section.")
             if auto_wired:
                 msg += f" 🔗 وأُضيف رابط '{filename}' في navbar index.html تلقائياً."
+            if anchors_rewritten:
+                msg += (f" 🔁 تم تحويل {anchors_rewritten} رابط anchor "
+                        f"(#{stem}) إلى رابط صفحة حقيقي '{filename}' في "
+                        f"الصفحات الأخرى — التنقّل الآن متعدّد-الصفحات حقيقي.")
             return {"ok": True, "filename": filename, "title": title,
                     "bytes": len(html), "active_page": filename,
                     "nav_link_auto_wired": auto_wired,
+                    "anchors_rewritten": anchors_rewritten,
                     "message": msg}
 
         if name == "switch_page":
@@ -6108,6 +6404,15 @@ async def _stream_one_provider(
             FAKE_ACHIEVEMENT_MARKERS = (
                 "أصلحت", "صلحت", "عالجت", "ثبّت", "أكملت", "أنجزت",
                 "تم الإصلاح", "تم الإنشاء", "تم الحذف", "تم التعديل",
+                # ── Common celebration phrases ────────────────────────
+                "تم بنجاح", "بنجاح!", "جاهز بالكامل", "جاهز تماماً",
+                "أنجزت لك", "تم الإنجاز", "خلصت", "خلّصت", "خلصنا",
+                "تمّت العملية", "تمت العملية", "إنجاز كامل",
+                "ما تم إنجازه", "ما تم بناؤه", "ما تم تنفيذه",
+                # ── Past-tense + اب prefix (colloquial) ──────────────
+                "أنشأت لك", "صنعت لك", "بنيت لك", "أضفت لك", "حذفت لك",
+                "ربطت لك", "حدّثت لك", "حدثت لك", "عدّلت لك", "عدلت لك",
+                # ── Tool-result fabrication signals ──────────────────
                 "fixed", "completed", "implemented",
                 "محتوى حقيقي", "بايت", "KB محتوى",
             )
@@ -6214,6 +6519,47 @@ async def _stream_one_provider(
                         await asyncio.sleep(0)
                 result = tool_task.result()
                 ctx.log(tu["name"], tu["input"], result)
+                # ── 🕵️ IN-TURN DUMMY DETECTOR ────────────────────────────
+                # After a successful HTML-mutating tool, scan the NEW state
+                # for dummy patterns the AI loves to emit. If found, attach
+                # the audit to the tool_result the AI will see next, AND
+                # force `tool_choice=any` for the next iteration so it MUST
+                # call apply_section / write_full_html to fix it before
+                # being allowed to write a "تم بنجاح!" summary.
+                _dummy_audit = None
+                if tu["name"] in ("write_full_html", "apply_section", "create_page") \
+                   and isinstance(result, dict) and result.get("ok"):
+                    try:
+                        _dummy_audit = _scan_for_dummy_ui(ctx.current_html or "")
+                        if _dummy_audit and not _dummy_audit.get("ok"):
+                            # Augment the result the AI sees with a strong audit
+                            result = {**result, "_dummy_audit": _dummy_audit,
+                                       "_repair_required": True,
+                                       "_message_ar": (
+                                           "⚠️ السيرفر فحص الـHTML بعد التعديل ووجد "
+                                           f"{_dummy_audit['total_problems']} مشكلة فعلية:\n"
+                                           f"  • {len(_dummy_audit['dead_buttons'])} زر بدون onclick/JS\n"
+                                           f"  • {len(_dummy_audit['fake_nav_links'])} رابط nav بـ href='#'\n"
+                                           f"  • {len(_dummy_audit['broken_anchors'])} anchor مكسور\n"
+                                           f"  • {len(_dummy_audit['dead_forms'])} نموذج بدون onsubmit\n"
+                                           "🛠️ في الخطوة التالية المباشرة: استدع apply_section "
+                                           "لإصلاح كل عنصر — أضِف onclick، اربط الأزرار بدوال "
+                                           "JS حقيقية، وحوّل أي href='#' لـ #section-existing أو "
+                                           "ملف صفحة فعلي. ممنوع تقول 'تم بنجاح' قبل ما "
+                                           "_dummy_audit يصير ok=True."
+                                       )}
+                            force_tool_use_next_iter = True
+                            logger.warning(
+                                f"[dummy-detector] {tu['name']} produced "
+                                f"{_dummy_audit['total_problems']} dummy issues "
+                                f"(dead_btn={len(_dummy_audit['dead_buttons'])}, "
+                                f"fake_nav={len(_dummy_audit['fake_nav_links'])}, "
+                                f"broken={len(_dummy_audit['broken_anchors'])}, "
+                                f"dead_form={len(_dummy_audit['dead_forms'])}) "
+                                f"— forcing repair iteration"
+                            )
+                    except Exception as _dde:
+                        logger.warning(f"[dummy-detector] scan failed: {_dde}")
                 label_done = TOOL_LABELS_AR.get(tu["name"], {}).get("done", "✅ تم")
                 # Add a short result snippet to the label
                 snippet = ""

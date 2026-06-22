@@ -3480,6 +3480,31 @@ def make_freebuild_chat_router(db, get_current_user):
             "message": f"✅ موقعك نُشر على {live_url}",
         }
 
+    def _inject_base_href(html: str, slug: str) -> str:
+        """Inject <base href='/api/freebuild-chat/published-sites/{slug}/'>
+        into <head> so relative links like <a href='about.html'> resolve to
+        the right sub-page URL instead of being interpreted relative to the
+        parent URL (which was sending /s/{slug} → /s/about.html instead of
+        /s/{slug}/about.html). This is the iron-clad guarantee multi-page
+        navigation works when serving from a no-trailing-slash route.
+
+        Uses the canonical API path so it works identically in the preview
+        environment and production (where Nginx rewrites /s/* → /api/...).
+        """
+        if not html:
+            return html
+        # Canonical absolute path — works in preview pod AND production Nginx
+        base_url = f"/api/freebuild-chat/published-sites/{slug}/"
+        # Skip if a <base> tag already exists (don't override user-provided)
+        if re.search(r"<base\b", html, re.I):
+            return html
+        base_tag = f'<base href="{base_url}">'
+        # Inject right after <head> (or before </head> if no opening tag found)
+        if re.search(r"<head\b[^>]*>", html, re.I):
+            return re.sub(r"(<head\b[^>]*>)", r"\1" + base_tag, html, count=1, flags=re.I)
+        # Fallback: prepend
+        return base_tag + html
+
     @router.get("/published-sites/{slug}", include_in_schema=False)
     async def serve_published_site(slug: str):
         """Public endpoint — serves the homepage (index.html) of a published site.
@@ -3504,6 +3529,10 @@ def make_freebuild_chat_router(db, get_current_user):
             pass
         # Multi-page aware: serve pages["index.html"] when available, else fall back to legacy current_html
         html = (site.get("pages") or {}).get("index.html") or site.get("current_html") or ""
+        # Inject <base href="/s/{slug}/"> so relative links (about.html,
+        # contact.html, ...) resolve correctly even when the URL has no
+        # trailing slash.
+        html = _inject_base_href(html, slug)
         # Cache-bust: published HTML is volatile (auto-republished on every edit),
         # so tell browsers + edge cache to revalidate every load.
         return HTMLResponse(_inject_zenrex_footer(html),
@@ -3536,6 +3565,7 @@ def make_freebuild_chat_router(db, get_current_user):
             await db.freebuild_published_sites.update_one({"slug": slug}, {"$inc": {"views": 1}})
         except Exception:
             pass
+        html = _inject_base_href(html, slug)
         return HTMLResponse(_inject_zenrex_footer(html),
                              headers={"Cache-Control": "no-store, max-age=0, must-revalidate"})
 
