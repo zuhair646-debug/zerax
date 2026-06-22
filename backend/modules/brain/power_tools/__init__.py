@@ -34,6 +34,13 @@ from .parity import (
     recall,
     PARITY_TOOLS,
 )
+from .senior_parity import (
+    troubleshoot_agent,
+    batch_refactor,
+    iterative_test_and_fix,
+    design_agent_full_stack,
+    SENIOR_PARITY_TOOLS,
+)
 
 __all__ = [
     # runtime
@@ -53,4 +60,8 @@ __all__ = [
     "analyze_uploaded_file", "integration_playbook_live",
     "recursive_test_agent", "crawl_url_deep",
     "remember", "recall", "PARITY_TOOLS",
+    # senior_parity (the last 15% — sub-agent equivalents)
+    "troubleshoot_agent", "batch_refactor",
+    "iterative_test_and_fix", "design_agent_full_stack",
+    "SENIOR_PARITY_TOOLS",
 ]

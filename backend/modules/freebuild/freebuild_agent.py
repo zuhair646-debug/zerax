@@ -769,6 +769,85 @@ TOOLS_SCHEMA: List[Dict[str, Any]] = [
         },
     },
     {
+        "name": "troubleshoot_agent",
+        "description": (
+            "🔬 SENIOR DEBUGGER — multi-step Root Cause Analysis for persistent "
+            "bugs. Reads logs, files, forms hypotheses iteratively (up to 8 "
+            "steps), returns a structured RCA report with confidence + specific "
+            "fixes + verification steps. Use this when a bug recurs 2+ times "
+            "or when logs are contradictory."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "issue": {"type": "string", "description": "What's broken"},
+                "component": {"type": "string", "description": "Frontend | Backend | Database | Integration"},
+                "error_messages": {"type": "string"},
+                "recent_actions": {"type": "string"},
+                "relevant_files": {"type": "array", "items": {"type": "string"}},
+                "max_steps": {"type": "integer", "description": "1-10, default 8"},
+            },
+            "required": ["issue"],
+        },
+    },
+    {
+        "name": "batch_refactor",
+        "description": (
+            "🔧 Atomic multi-file refactor (up to 30 files). Reads all files, "
+            "Claude plans + applies changes, auto-backs-up each file, returns "
+            "applied + failed list. Use this for: rename a function across "
+            "many files, swap a dependency, restructure a module, add headers, "
+            "migrate API style. Pass dry_run=true to preview without applying."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "description": {"type": "string", "description": "What to change"},
+                "file_paths": {"type": "array", "items": {"type": "string"}},
+                "constraints": {"type": "string", "description": "What NOT to change"},
+                "dry_run": {"type": "boolean", "description": "Preview only"},
+            },
+            "required": ["description", "file_paths"],
+        },
+    },
+    {
+        "name": "iterative_test_and_fix",
+        "description": (
+            "🔁 THE TESTING CROWN JEWEL — test → diagnose → fix → re-test loop. "
+            "Runs recursive_test_agent, on failures Claude reads HTML, plans "
+            "specific patches, applies them, re-tests. Up to N iterations. "
+            "Use this BEFORE finish() on any project with real user flows."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "user_goal": {"type": "string"},
+                "max_iterations": {"type": "integer", "description": "1-5, default 3"},
+                "max_scenarios": {"type": "integer", "description": "1-8, default 5"},
+            },
+        },
+    },
+    {
+        "name": "design_agent_full_stack",
+        "description": (
+            "🎨 SENIOR DESIGN DIRECTOR — produces a COMPLETE design blueprint "
+            "(palette, typography, layout, components, motion, button style). "
+            "Anti-AI-slop: no purple/Inter/centered/uniform. Returns concrete "
+            "CSS variables block + implementation priorities. Call BEFORE you "
+            "start building UI to lock in a coherent aesthetic."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "original_problem_statement": {"type": "string"},
+                "user_choices": {"type": "string"},
+                "key_functionalities": {"type": "array", "items": {"type": "string"}},
+                "app_type": {"type": "string", "description": "landing_page | dashboard | saas_app | portfolio | e-commerce | etc"},
+            },
+            "required": ["original_problem_statement"],
+        },
+    },
+    {
         "name": "search_html",
         "description": (
             "Regex search inside current_html. Returns up to 10 matches with "
@@ -2784,7 +2863,9 @@ def _exec_tool(ctx: FreeBuildToolContext, name: str, args: Dict[str, Any]) -> Di
                      "deploy_to_production", "call_self_test_agent",
                      "analyze_uploaded_file", "integration_playbook_live",
                      "recursive_test_agent", "crawl_url_deep",
-                     "remember", "recall"):
+                     "remember", "recall",
+                     "troubleshoot_agent", "batch_refactor",
+                     "iterative_test_and_fix", "design_agent_full_stack"):
             return {"__async__": True}
 
         # sync-safe: get_integration_playbook
@@ -3243,6 +3324,56 @@ async def _exec_tool_async(ctx: FreeBuildToolContext, name: str, args: Dict[str,
                 args.get("tags") or [],
                 args.get("project_id") or "",
                 int(args.get("limit") or 5),
+            )
+
+        # ── SENIOR PARITY TOOLS (final 15% — closes gap with E1 sub-agents) ───
+        if name == "troubleshoot_agent":
+            from ..brain.power_tools import troubleshoot_agent as _ta
+            return await _ta(
+                args.get("issue") or "",
+                args.get("component") or "Backend",
+                args.get("error_messages") or "",
+                args.get("recent_actions") or "",
+                args.get("relevant_files") or [],
+                int(args.get("max_steps") or 8),
+                ctx.project_id or "anon",
+            )
+
+        if name == "batch_refactor":
+            from ..brain.power_tools import batch_refactor as _br
+            return await _br(
+                args.get("description") or "",
+                args.get("file_paths") or [],
+                args.get("constraints") or "",
+                bool(args.get("dry_run", False)),
+                ctx.project_id or "anon",
+            )
+
+        if name == "iterative_test_and_fix":
+            from ..brain.power_tools import iterative_test_and_fix as _itaf
+            slug = (ctx.project or {}).get("published_slug")
+            if not slug:
+                return {"ok": False, "error": "project not published — cannot iterative-test"}
+            api_base = os.environ.get(
+                "REACT_APP_BACKEND_URL",
+                "https://ai-cinematic-hub-2.preview.emergentagent.com",
+            )
+            base_url = f"{api_base}/api/freebuild-chat/published-sites/{slug}"
+            return await _itaf(
+                ctx.project_id or "anon",
+                base_url,
+                args.get("user_goal") or "",
+                int(args.get("max_iterations") or 3),
+                int(args.get("max_scenarios") or 5),
+            )
+
+        if name == "design_agent_full_stack":
+            from ..brain.power_tools import design_agent_full_stack as _daf
+            return await _daf(
+                args.get("original_problem_statement") or "",
+                args.get("user_choices") or "No explicit design preferences provided by user.",
+                args.get("key_functionalities") or [],
+                args.get("app_type") or "saas_app",
             )
 
 
@@ -4318,7 +4449,19 @@ AGENT_SYSTEM_PROMPT = """أنت **Zenrex Code Brain** — مهندس برمجي 
   • **`crawl_url_deep(url)`** — يجيب محتوى أي صفحة ويب نظيف كـ Markdown (هيدرات، كود، جداول). استخدمها لما يرسل لك المستخدم رابط ويبي أو blog post.
   
   • **`remember(insight, tags, importance)` / `recall(query, tags)`** — ذاكرة عالمية بين المشاريع. عند بداية مشروع جديد، استدعِ `recall` بـ tags ذات صلة لتتعلّم من سوابقك. عند نجاح/فشل لافت، استخدم `remember` بـ importance 7+.
+
 ═══════════════════════════════════════════════════════════
+🎓 **Senior Sub-Agents (آخر 15% — مكافئات E1 sub-agents):**
+
+  • **`troubleshoot_agent(issue, component, error_messages, ...)`** — Root Cause Analysis متعدد الخطوات (حتى 8). يقرأ logs، يفحص ملفات، يضع فرضيات، يرجع RCA منظم مع confidence + fixes. **استدعِ هذا للـ bugs المتكررة (مرتين+) أو لما الـ logs متناقضة.**
+
+  • **`batch_refactor(description, file_paths, dry_run)`** — تعديل ذري على 30 ملف بضربة وحدة. Claude يخطّط، يطبّق، يعمل backup تلقائي، يرجع applied/failed. **استدعِ هذا لإعادة تسمية function عبر ملفات كثيرة، swap library، migration**.
+
+  • **`iterative_test_and_fix(user_goal, max_iterations, max_scenarios)`** — **التاج الذهبي للاختبار**. test → فشل → Claude يحلل HTML → patches فعلية → re-test. حتى 3 iterations. **استدعِ هذا قبل `finish` على أي مشروع فيه user flows حقيقية**.
+
+  • **`design_agent_full_stack(problem, user_choices, functionalities, app_type)`** — مدير تصميم سينيور. يرجع blueprint كامل (palette, typography, layout, motion, button style) مع CSS variables جاهزة. **مكافح للـ AI slop** (لا violet، لا Inter، لا centered uniform). **استدعِ هذا قبل بداية UI لأي مشروع جديد**.
+═══════════════════════════════════════════════════════════
+
 
 
 - 🧪 **اختبر قبل ما تحكم.** لما العميل يلصق مفتاح في الشات → `save_credential` → `validate_credential` → بعدها كلمه بالنتيجة الحقيقية. الحكم على المفتاح بدون اختبار = تخمين.
