@@ -528,6 +528,144 @@ TOOLS_SCHEMA: List[Dict[str, Any]] = [
         },
     },
     {
+        "name": "run_bash_unrestricted",
+        "description": (
+            "🔓 FULL BASH SHELL — pipes, chains, redirects, all allowed. "
+            "Runs in per-project workspace by default (/tmp/zenrex_workspaces/{pid}). "
+            "Pass cwd='/app' or cwd='/opt/zerax' for system-level work. "
+            "Every command is audit-logged. Only catastrophic patterns (rm -rf /, "
+            "mkfs, fork bomb, dd to /dev/sda, shutdown) are blocked.\n\n"
+            "Use this when you need to: install npm packages, compile code, "
+            "run git ops, multi-step scripts, etc. This is what the human "
+            "developer uses — you now have parity."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "command": {"type": "string", "description": "Bash command (multi-line ok)"},
+                "cwd": {"type": "string", "description": "Working dir (default: project workspace)"},
+                "timeout_seconds": {"type": "integer", "description": "1-120 sec, default 30"},
+            },
+            "required": ["command"],
+        },
+    },
+    {
+        "name": "run_python_in_sandbox",
+        "description": (
+            "🐍 Execute arbitrary Python 3 code (subprocess, full stdlib). "
+            "Use to: parse JSON, transform data, test regex, run pandas, "
+            "validate logic before writing it into the user's site. "
+            "60s max timeout, 50KB code cap, output capped at 100KB."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "code": {"type": "string", "description": "Python code"},
+                "timeout_seconds": {"type": "integer", "description": "1-60 sec, default 15"},
+            },
+            "required": ["code"],
+        },
+    },
+    {
+        "name": "read_any_file",
+        "description": (
+            "📖 Read any file under /app, /opt/zerax, /tmp, /var/log, or "
+            "the project workspace. Secrets (keys, tokens) are auto-redacted "
+            "from output. .env content is replaced with a count placeholder. "
+            "/etc/shadow and SSH keys are blocked entirely."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "path": {"type": "string"},
+                "max_bytes": {"type": "integer"},
+            },
+            "required": ["path"],
+        },
+    },
+    {
+        "name": "write_any_file",
+        "description": (
+            "✍️ Write any file under /app, /opt/zerax, /tmp, /var/www, or "
+            "the project workspace. If the file exists, a timestamped "
+            "backup is created automatically. .env / shadow / SSH keys "
+            "are blocked."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "path": {"type": "string"},
+                "content": {"type": "string"},
+                "create_dirs": {"type": "boolean"},
+            },
+            "required": ["path", "content"],
+        },
+    },
+    {
+        "name": "edit_file",
+        "description": (
+            "✏️ Surgical search-replace edit on any allowed file. "
+            "old_str must match EXACTLY (whitespace included). Use this "
+            "instead of write_any_file when you only need to change a "
+            "small section. Auto-backs-up before edit."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "path": {"type": "string"},
+                "old_str": {"type": "string"},
+                "new_str": {"type": "string"},
+                "replace_all": {"type": "boolean"},
+            },
+            "required": ["path", "old_str", "new_str"],
+        },
+    },
+    {
+        "name": "get_integration_playbook",
+        "description": (
+            "📚 Get a ready-to-use code template for a 3rd party integration. "
+            "Available services: stripe, openai, claude, gemini, resend, "
+            "twilio, paypal, google_oauth, fal. Returns env vars needed, "
+            "install command, backend snippet, frontend snippet, and docs URL."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "service_name": {"type": "string"},
+            },
+            "required": ["service_name"],
+        },
+    },
+    {
+        "name": "deploy_to_production",
+        "description": (
+            "🚀 Run /app/deploy/deploy.sh to push the current code to the "
+            "Hetzner VPS (zenrex.ai). Use ONLY when the owner explicitly says "
+            "'deploy' / 'انشر' / 'ارفع للسيرفر'. Returns deploy log + health."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "domain": {"type": "string", "description": "Default: zenrex.ai"},
+            },
+        },
+    },
+    {
+        "name": "call_self_test_agent",
+        "description": (
+            "🤖 Autonomous self-test: AI generates browser scenarios from "
+            "the project's current HTML (buttons + nav links), runs them "
+            "in Playwright Chromium, and returns pass/fail per scenario. "
+            "This is the AI grading its own work before saying 'done'."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "user_goal": {"type": "string", "description": "What the user asked you to build (for logging)"},
+            },
+        },
+    },
+    {
         "name": "search_html",
         "description": (
             "Regex search inside current_html. Returns up to 10 matches with "
@@ -2536,6 +2674,18 @@ def _exec_tool(ctx: FreeBuildToolContext, name: str, args: Dict[str, Any]) -> Di
             timeout = int(args.get("timeout_seconds") or 8)
             return _rsb(cmd, max(1, min(15, timeout)))
 
+        # ── Unrestricted Power Tools (full agent parity) ─────────────────
+        # async tools — return sentinel so _dispatch_tool routes to _exec_tool_async
+        if name in ("run_bash_unrestricted", "run_python_in_sandbox",
+                     "read_any_file", "write_any_file", "edit_file",
+                     "deploy_to_production", "call_self_test_agent"):
+            return {"__async__": True}
+
+        # sync-safe: get_integration_playbook
+        if name == "get_integration_playbook":
+            from ..brain.power_tools import get_integration_playbook as _gip
+            return _gip(args.get("service_name") or "")
+
 
         if name == "search_html":
             pat = args.get("pattern") or ""
@@ -2862,6 +3012,74 @@ async def _exec_tool_async(ctx: FreeBuildToolContext, name: str, args: Dict[str,
             except Exception as e:
                 return {"ok": False, "error": f"test_page failed: {type(e).__name__}: {str(e)[:200]}"}
 
+
+        # ── UNRESTRICTED POWER TOOLS (full agent parity) ──────────────────
+        if name == "run_bash_unrestricted":
+            from ..brain.power_tools import run_bash_unrestricted as _rbu
+            return await _rbu(
+                ctx.project_id or "anon",
+                args.get("command") or "",
+                args.get("cwd"),
+                int(args.get("timeout_seconds") or 30),
+            )
+
+        if name == "run_python_in_sandbox":
+            from ..brain.power_tools import run_python_in_sandbox as _rpy
+            return await _rpy(
+                ctx.project_id or "anon",
+                args.get("code") or "",
+                int(args.get("timeout_seconds") or 15),
+            )
+
+        if name == "read_any_file":
+            from ..brain.power_tools import read_any_file as _raf
+            return await _raf(
+                ctx.project_id or "anon",
+                args.get("path") or "",
+                int(args.get("max_bytes") or 200_000),
+            )
+
+        if name == "write_any_file":
+            from ..brain.power_tools import write_any_file as _waf
+            return await _waf(
+                ctx.project_id or "anon",
+                args.get("path") or "",
+                args.get("content") or "",
+                bool(args.get("create_dirs", True)),
+            )
+
+        if name == "edit_file":
+            from ..brain.power_tools import edit_file as _ef
+            return await _ef(
+                ctx.project_id or "anon",
+                args.get("path") or "",
+                args.get("old_str") or "",
+                args.get("new_str") or "",
+                bool(args.get("replace_all", False)),
+            )
+
+        if name == "deploy_to_production":
+            from ..brain.power_tools import deploy_to_production as _dtp
+            return await _dtp(
+                args.get("domain") or "zenrex.ai",
+                int(args.get("wait_seconds") or 30),
+            )
+
+        if name == "call_self_test_agent":
+            from ..brain.power_tools import call_self_test_agent as _csta
+            slug = (ctx.project or {}).get("published_slug")
+            if not slug:
+                return {"ok": False, "error": "project not published — cannot self-test"}
+            api_base = os.environ.get(
+                "REACT_APP_BACKEND_URL",
+                "https://ai-cinematic-hub-2.preview.emergentagent.com",
+            )
+            base_url = f"{api_base}/api/freebuild-chat/published-sites/{slug}"
+            return await _csta(
+                ctx.project_id or "anon",
+                base_url,
+                args.get("user_goal") or "",
+            )
 
 
         if name == "publish_site":
@@ -3904,6 +4122,26 @@ AGENT_SYSTEM_PROMPT = """أنت **Zenrex Code Brain** — مهندس برمجي 
 🦁 **قدراتك (مفعّلة 100% — استخدمها بحرية):**
 
 - الـ 30+ أداة تحت إيدك جاهزة: `save_credential`, `validate_credential`, `list_credentials`, `delete_credential`, `recommend_service`, `github_list_repos`, `github_create_repo`, `github_push_file`, `github_get_file`, `download_media`, `publish_site`, `test_page`, `request_credential`, `generate_image`, `web_search`, `fetch_url`, `write_full_html`, `apply_section`, `update_nav`, `validate_html`, `lint_javascript`, `read_current_html`, `list_sections`, `search_html`, `list_voices`, `generate_voiceover`, `write_script`, `generate_storyboard`, `update_world_bible`, `finish`. لو ما عندك أداة لشي يطلبه العميل — أنت تختار: تبني له الكود من الصفر، تبحث في النت، تطلب مفتاح، تنصحه بخدمة، أو تركّب 3-4 أدوات مع بعض. **القرار قرارك، والذكاء ذكاؤك.**
+
+═══════════════════════════════════════════════════════════
+🔓 **أدوات الـ Full Agent Parity (مفعّلة من Feb 2026)** — صلاحياتك الآن مطابقة لمهندس البشر تماماً:
+
+  • **`run_bash_unrestricted`** — Bash كامل بدون whitelist: pipes, chains, redirects، أي شي. يشتغل في workspace خاص بمشروعك (`/tmp/zenrex_workspaces/{pid}/`). فقط الأنماط الكارثية ممنوعة (rm -rf /, mkfs, fork bomb, shutdown). للأعمال على ملفات النظام، مرّر `cwd='/app'` أو `cwd='/opt/zerax'`.
+  • **`run_python_in_sandbox`** — تنفّذ كود Python كامل (subprocess، stdlib كامل، 60s timeout). استخدمه لاختبار logic, تحويل JSON, regex, pandas, validation قبل ما تكتب في الموقع.
+  • **`read_any_file`** — قراءة أي ملف تحت `/app`, `/opt/zerax`, `/tmp`, `/var/log`, `/etc/nginx`. الـ secrets (مفاتيح API) تُخفى أوتوماتيكياً. `.env` يرجّع عدد الأسطر فقط.
+  • **`write_any_file`** — كتابة أي ملف (مع backup تلقائي للنسخة السابقة بـ `.bak.{timestamp}`).
+  • **`edit_file`** — تعديل جراحي بنمط search/replace.
+  • **`web_search`** — بحث DuckDuckGo (للمستندات الحديثة، إصدارات SDK، error messages).
+  • **`get_integration_playbook`** — تعليمات جاهزة لـ stripe / openai / claude / gemini / resend / twilio / paypal / google_oauth / fal.
+  • **`deploy_to_production`** — يشغّل `/app/deploy/deploy.sh` لرفع التغييرات للسيرفر (zenrex.ai). استخدمه فقط إذا قال المالك "انشر" أو "ارفع".
+  • **`call_self_test_agent`** — اختبار ذاتي تلقائي: يولّد scenarios من HTML الموقع، يشغّلها في Chromium، يرجّع النتائج. استدعِ هذا قبل ما تقول "خلّصت".
+
+🧠 **استخدامها بحكمة:**
+   - لا تستخدم `run_bash_unrestricted` لأشياء فيها أدوات متخصصة (مثل `apply_section` للـ HTML).
+   - استخدم `web_search` لما تحتاج معلومة محدّثة (لا تخمّن من تدريبك).
+   - دائماً `call_self_test_agent` بعد تعديل وقبل `finish` لو فيه تفاعلات.
+   - كل استخدام مسجّل في `ai_tool_audit` — لا تستخدم الـ bash لأي شي خبيث.
+═══════════════════════════════════════════════════════════
 
 - 🧪 **اختبر قبل ما تحكم.** لما العميل يلصق مفتاح في الشات → `save_credential` → `validate_credential` → بعدها كلمه بالنتيجة الحقيقية. الحكم على المفتاح بدون اختبار = تخمين.
 
