@@ -113,6 +113,33 @@ _INTENT_PATTERNS: list = [
         r"(?:احذف|تحذف|باحذف|شيل|تشيل|باشيل|ازل|ازله|امسح|تمسح)\b|"
         r"\b(?:remove|delete|drop)\b",
         re.IGNORECASE)),
+    # keep_only — "خلّي لي بس X" / "احتفظ بـ X و Y فقط" / "keep only ..."
+    # User describes what to KEEP rather than what to REMOVE. Treated as
+    # an action intent (charged + force-tool-use) because it requires a
+    # destructive edit (delete everything except the named items).
+    ("keep_only", re.compile(
+        r"(?:خل(?:ي|ني|نا|)|اخل(?:ي|)|"
+        r"احتفظ|تحتفظ|نحتفظ|باحتفظ|"
+        r"ابقي|تبقي|باقي|"
+        r"حافظ\s+على)\s+(?:لي\s+|له\s+|)\s*(?:بس|فقط|سوى|عدا|)\s*"
+        r"(?:قسم|اقسام|الـ|ال)?"
+        r"|"
+        r"\bkeep\s+only\b|\bonly\s+keep\b",
+        re.IGNORECASE)),
+    # move section between pages — "انقل القسم لصفحة منفصلة" / "حط X في صفحة"
+    ("move_section", re.compile(
+        # Verbs of moving (already hamza-normalized)
+        r"(?:انقل|تنقل|نقل|بانقل|"
+        r"حط|تحط|بحط|"
+        r"حول|تحول|نحول|باحول)\b"
+        # Optional words in between (e.g. "انقل لي قسم السلة في صفحة...")
+        r"(?:\s+\S+){0,5}\s+"
+        # Must mention "صفحه" (page) with a separator/destination form
+        r"(?:في\s+صفحه|بصفحه|لصفحه|الى\s+صفحه|على\s+صفحه|"
+        r"في\s+صفحه\s+مستقله|صفحه\s+منفصله|صفحه\s+لحالها|صفحه\s+مخصصه)"
+        r"|"
+        r"\bmove\s+(?:the\s+|a\s+|)(?:\w+\s+)?(?:section|tab|panel|cart|map|products)\b\s+(?:\w+\s+){0,3}to\s+(?:its\s+own|a\s+separate|a\s+new)?\s*page",
+        re.IGNORECASE)),
     # repair / fix
     ("repair", re.compile(
         r"(?:اصلح|تصلح|باصلح|صلح|الزر\s+ما\s+يشتغل|عالج|تعالج|"

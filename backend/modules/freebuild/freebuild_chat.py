@@ -6534,6 +6534,8 @@ For questions: legal@zenrex.ai
             raise HTTPException(404, "مشروع غير موجود")
         try:
             from .freebuild_agent import stream_agent_turn, FreeBuildToolContext, _exec_tool
+            from ..brain import BrainOrchestrator, BrainConfig
+            from ..brain.core import brain_stream_turn
             from fastapi.responses import StreamingResponse
         except Exception:
             logger.exception("agent import failed")
@@ -6625,10 +6627,21 @@ For questions: legal@zenrex.ai
             except Exception:
                 pass
             try:
-                async for chunk in stream_agent_turn(
-                    proj, message, history, ctx_holder=ctx_holder,
-                    user_language=user_language, auth_token=_agent_token,
-                    db=db, is_owner=is_platform_owner_stream,
+                # Brain v2 takes over: state machine, discovery, plan,
+                # memory, strict completion. It defers to the legacy
+                # executor only inside the EXECUTING state.
+                brain_cfg = BrainConfig(
+                    section="freebuild",
+                    user_language=user_language,
+                    max_iterations=20,
+                )
+                async for chunk in brain_stream_turn(
+                    proj, message, history,
+                    config=brain_cfg,
+                    ctx_holder=ctx_holder,
+                    auth_token=_agent_token,
+                    db=db,
+                    is_owner=is_platform_owner_stream,
                 ):
                     # Capture done events for final persistence
                     if chunk.startswith("event: done\n"):

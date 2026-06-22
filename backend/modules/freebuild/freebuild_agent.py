@@ -274,6 +274,75 @@ TOOLS_SCHEMA: List[Dict[str, Any]] = [
         },
     },
     {
+        "name": "move_section_to_page",
+        "description": (
+            "🚚 ATOMIC: Move a <section id='...'> block from the ACTIVE page "
+            "to a TARGET page in a single operation. The target page is "
+            "created if it doesn't exist. After moving:\n"
+            "  1. Section content is REMOVED from the source page (the "
+            "     section, plus any nav links pointing to #section-id).\n"
+            "  2. Section content is INSERTED into the target page's <main> "
+            "     (or appended before </body>).\n"
+            "  3. The target page is auto-wired into source's navbar (if "
+            "     missing) as a real <a href='target.html'> link.\n"
+            "  4. Any remaining <a href='#section-id'> anchors across all "
+            "     pages are auto-rewritten to <a href='target.html'>.\n"
+            "USE THIS WHENEVER THE USER ASKS TO 'انقل القسم لصفحة منفصلة' "
+            "/ 'حط السلة في صفحة لحالها' / 'move cart to its own page'. "
+            "Do NOT chain create_page+apply_section+remove_section "
+            "manually — this single atomic tool guarantees no data loss "
+            "and no half-wired navbars."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "section_id": {
+                    "type": "string",
+                    "description": "id of the <section> to move (e.g. 'cart', 'products')",
+                },
+                "target_filename": {
+                    "type": "string",
+                    "description": "Target page filename (e.g. 'cart.html'). Created if missing.",
+                },
+                "target_title": {
+                    "type": "string",
+                    "description": "<title> for the target page (used if creating a new one).",
+                },
+                "nav_label": {
+                    "type": "string",
+                    "description": "Optional label for the auto-wired navbar link to the new page. Defaults to target_title.",
+                },
+            },
+            "required": ["section_id", "target_filename", "target_title"],
+        },
+    },
+    {
+        "name": "keep_only_sections",
+        "description": (
+            "✂️ Whitelist mode: Delete ALL <section id='...'> blocks from "
+            "the active page EXCEPT the ones whose id is in `keep_ids`. "
+            "Also strips any nav links pointing to the deleted sections. "
+            "USE THIS WHENEVER THE USER ASKS:\n"
+            "  • 'خلّي لي بس المنتجات'  /  'اخلي بس X'\n"
+            "  • 'احتفظ فقط بـ X و Y'\n"
+            "  • 'keep only the products section'\n"
+            "  • 'احذف كل شي عدا X'\n"
+            "This is the SAFE counterpart to remove_section when the user "
+            "describes what to KEEP rather than what to REMOVE."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "keep_ids": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "List of section ids that must REMAIN. Everything else is deleted.",
+                },
+            },
+            "required": ["keep_ids"],
+        },
+    },
+    {
         "name": "search_html",
         "description": (
             "Regex search inside current_html. Returns up to 10 matches with "
@@ -1098,6 +1167,24 @@ def _rewrite_anchors_to_real_pages(html: str, pages_dict: Dict[str, str]) -> tup
     return new_html, rewrites
 
 
+def _build_blank_page_skeleton(title: str, nav_label: str = "") -> str:
+    """Generate the default HTML skeleton used by create_page and
+    move_section_to_page when the target page doesn't yet exist."""
+    safe_title = (title or "صفحة جديدة").strip()
+    return (
+        f"<!DOCTYPE html>\n<html dir=\"rtl\" lang=\"ar\">\n<head>\n"
+        f"<meta charset=\"utf-8\">\n<meta name=\"viewport\" content=\"width=device-width,initial-scale=1\">\n"
+        f"<title>{safe_title}</title>\n<script src=\"https://cdn.tailwindcss.com\"></script>\n</head>\n"
+        f"<body class=\"bg-slate-950 text-white min-h-screen\">\n"
+        f"<nav class=\"px-6 py-4 flex items-center gap-4 border-b border-white/10\">\n"
+        f"  <a href=\"index.html\" class=\"font-bold\">🏠 الرئيسية</a>\n"
+        f"</nav>\n"
+        f"<main class=\"py-20 px-6\">\n"
+        f"  <h1 class=\"text-4xl font-extrabold mb-4 text-center\">{safe_title}</h1>\n"
+        f"</main>\n</body>\n</html>"
+    )
+
+
 # ─── Tool Implementations ─────────────────────────────────────────────────────
 def _scan_for_dummy_ui(html: str) -> Dict[str, Any]:
     """🕵️ In-Turn Dummy Detector — scans freshly-written HTML for the most
@@ -1666,6 +1753,143 @@ def _exec_tool(ctx: FreeBuildToolContext, name: str, args: Dict[str, Any]) -> Di
                     "bytes_freed": before_len - len(new_html),
                     "message": f"🗑️ تم حذف {len(removed)} قسم: {', '.join('#'+r for r in removed)}"}
 
+        # ── ATOMIC: move_section_to_page (P0 user demand) ──────────────────
+        if name == "move_section_to_page":
+            sid = (args.get("section_id") or "").strip().lstrip("#")
+            target_fn = (args.get("target_filename") or "").strip().lower()
+            target_title = (args.get("target_title") or "").strip()
+            nav_label = (args.get("nav_label") or target_title).strip()
+            if not sid:
+                return {"ok": False, "error": "section_id is required"}
+            if not target_fn or not target_fn.endswith(".html"):
+                return {"ok": False, "error": "target_filename must end with .html"}
+            if not re.match(r"^[a-z0-9][a-z0-9\-_]*\.html$", target_fn):
+                return {"ok": False, "error": "target_filename must be lowercase a-z0-9 + hyphens only"}
+            if target_fn == "index.html":
+                return {"ok": False, "error": "cannot move INTO index.html — use apply_section instead"}
+            if not ctx.current_html:
+                return {"ok": False, "error": "active page is empty"}
+            source_fn = ctx.active_page or "index.html"
+            # 1) Extract the section HTML from the source page
+            src_html = ctx.current_html
+            sec_pat = re.compile(
+                r'<section\b[^>]*\bid\s*=\s*["\']' + re.escape(sid) + r'["\'][\s\S]*?</section>',
+                re.I,
+            )
+            sec_m = sec_pat.search(src_html)
+            if not sec_m:
+                return {"ok": False, "error": f"section '#{sid}' not found in active page '{source_fn}'"}
+            section_html = sec_m.group(0)
+            # 2) Remove the section + any nav links pointing to #sid from source
+            src_after, _removed = _remove_sections(src_html, [sid])
+            # 3) Prepare/ensure target page exists
+            if target_fn not in ctx.pages:
+                # Create with skeleton, then we'll inject the section
+                ctx.pages[target_fn] = _build_blank_page_skeleton(target_title or sid.title(), nav_label)
+            target_html = ctx.pages[target_fn]
+            # Insert section into <main> if present, else before </body>
+            if "<main" in target_html.lower():
+                target_after = re.sub(
+                    r"(<main\b[^>]*>)",
+                    r"\1\n" + section_html + "\n",
+                    target_html, count=1, flags=re.I,
+                )
+            elif "</body>" in target_html.lower():
+                target_after = re.sub(
+                    r"(</body>)", section_html + r"\n\1",
+                    target_html, count=1, flags=re.I,
+                )
+            else:
+                target_after = target_html + "\n" + section_html
+            ctx.pages[target_fn] = target_after
+            # 4) Auto-wire navbar in source (and any sibling pages) to point
+            #    to the new target page, AND rewrite any #sid anchor links
+            #    everywhere to target_fn.
+            for _pgname in list(ctx.pages.keys()):
+                if _pgname == target_fn:
+                    continue
+                _pg = ctx.pages.get(_pgname) or ""
+                # Rewrite #sid → target.html (only when no local section#sid)
+                local_sec = re.search(
+                    r'<section\b[^>]*\bid\s*=\s*["\']' + re.escape(sid) + r'["\']',
+                    _pg, re.I,
+                )
+                if not local_sec:
+                    _pg = re.sub(
+                        r'(<a\b[^>]*\bhref\s*=\s*["\'])#' + re.escape(sid) + r'(["\'])',
+                        r"\1" + target_fn + r"\2",
+                        _pg, flags=re.I,
+                    )
+                # Inject nav link to target_fn if not already present
+                if f'href="{target_fn}"' not in _pg and f"href='{target_fn}'" not in _pg:
+                    # Look for <nav>, then <header>, then <section id="nav">
+                    nav_m = (re.search(r"<nav\b[^>]*>", _pg, re.I)
+                              or re.search(r"<header\b[^>]*>", _pg, re.I)
+                              or re.search(r'<section\b[^>]*\bid\s*=\s*["\']nav["\'][^>]*>',
+                                            _pg, re.I))
+                    if nav_m:
+                        ins_pt = nav_m.end()
+                        _pg = (_pg[:ins_pt]
+                                + f'\n<a href="{target_fn}" class="nav-link" data-zenrex-auto-wire="1">{nav_label}</a>'
+                                + _pg[ins_pt:])
+                ctx.pages[_pgname] = _pg
+            # 5) Commit source changes
+            ctx.snapshot_before_write()
+            ctx.pages[source_fn] = src_after
+            ctx.current_html = src_after  # source remains active
+            ctx.changes_made += 1
+            return {
+                "ok": True,
+                "section_moved": sid,
+                "from": source_fn,
+                "to": target_fn,
+                "target_bytes": len(ctx.pages[target_fn]),
+                "source_bytes": len(src_after),
+                "message": (
+                    f"🚚 نقلت القسم '#{sid}' من {source_fn} إلى صفحة "
+                    f"مستقلة '{target_fn}'. الـnavbar اتحدث تلقائياً والأنكورات "
+                    f"اتحولت لروابط .html حقيقية. الصفحة النشطة: {source_fn}."
+                ),
+            }
+
+        # ── Whitelist: keep_only_sections ───────────────────────────────────
+        if name == "keep_only_sections":
+            keep_ids = args.get("keep_ids") or []
+            if isinstance(keep_ids, str):
+                keep_ids = [keep_ids]
+            keep_set = {str(x).strip().lstrip("#") for x in keep_ids if str(x).strip()}
+            if not keep_set:
+                return {"ok": False, "error": "keep_ids array is required and must not be empty"}
+            if not ctx.current_html:
+                return {"ok": False, "error": "current_html is empty"}
+            # Find all current section IDs
+            all_ids = re.findall(
+                r'<section\b[^>]*\bid\s*=\s*["\']([a-zA-Z0-9_\-]+)["\']',
+                ctx.current_html, re.I,
+            )
+            to_remove = [i for i in all_ids if i not in keep_set]
+            if not to_remove:
+                return {"ok": False, "error": "nothing to delete — every section is already in keep_ids",
+                        "current_sections": all_ids, "keep_ids": list(keep_set)}
+            before_len = len(ctx.current_html)
+            new_html, removed = _remove_sections(ctx.current_html, to_remove)
+            ctx.snapshot_before_write()
+            ctx.current_html = new_html
+            ctx._sync_active_page()
+            ctx.changes_made += 1
+            return {
+                "ok": True,
+                "kept_ids": [i for i in all_ids if i in keep_set],
+                "removed_ids": removed,
+                "length_before": before_len,
+                "length_after": len(new_html),
+                "message": (
+                    f"✂️ احتفظت بـ{len(keep_set)} قسم وحذفت {len(removed)} "
+                    f"قسم: {', '.join('#'+r for r in removed)}"
+                ),
+            }
+
+
         # ── Multi-page tools ─────────────────────────────────────────────
         if name == "list_pages":
             ctx._sync_active_page()
@@ -1765,15 +1989,15 @@ def _exec_tool(ctx: FreeBuildToolContext, name: str, args: Dict[str, Any]) -> Di
                     # Derive a friendly Arabic label from the title
                     nav_label = title.strip()[:30] or filename.replace(".html", "")
                     new_link = f'<a href="{filename}" class="nav-link" data-zenrex-auto-wire="1">{nav_label}</a>'
-                    # Try injecting into existing <nav>...</nav>
-                    if re.search(r"<nav\b[^>]*>", index_html, re.I):
-                        wired = re.sub(
-                            r"(<nav\b[^>]*>)",
-                            r"\1\n  " + new_link,
-                            index_html,
-                            count=1,
-                            flags=re.I,
-                        )
+                    # Try injecting into existing <nav>, <header>, or <section id="nav">
+                    nav_open = (re.search(r"<nav\b[^>]*>", index_html, re.I)
+                                or re.search(r"<header\b[^>]*>", index_html, re.I)
+                                or re.search(r'<section\b[^>]*\bid\s*=\s*["\']nav["\'][^>]*>',
+                                              index_html, re.I))
+                    if nav_open:
+                        ins_pt = nav_open.end()
+                        wired = (index_html[:ins_pt] + "\n  " + new_link
+                                  + index_html[ins_pt:])
                     else:
                         # No nav tag — inject a minimal one right after <body>
                         wired = re.sub(
@@ -4701,6 +4925,33 @@ STRICT_PHASE_PROTOCOL_ADDENDUM = """
 id="about">` محلياً). لا تعتمد على هذا كحجة لكتابة anchors عشوائية —
 السيرفر يصلحها لكن الـDummy Detector قد يفعّل repair iteration.
 
+🚚 **قاعدة (Multi-Page Architecture) — استخدم أدوات النقل الذرّية:**
+لما العميل يقول "انقل قسم السلة لصفحة منفصلة" أو "حط الخريطة في صفحة
+لحالها" أو "وزعهم في صفحات مستقلة":
+
+❌ **لا تفعل** هذه السلسلة الطويلة:
+   `create_page` → `apply_section` → `switch_page` → `remove_section`
+   (5 خطوات، عرضة للفشل، ينتهي الـ iteration بنصف العمل)
+
+✅ **افعل** أداة واحدة ذرّية:
+   `move_section_to_page(section_id="cart", target_filename="cart.html",
+                          target_title="السلة")`
+   هذه تنقل المحتوى، تحذف من المصدر، تحدّث الـnavbar، وتعيد كتابة
+   الأنكورات — كل ذلك في خطوة واحدة بدون فقد بيانات.
+
+✂️ **قاعدة (Keep-Only Pattern):**
+لما العميل يقول "خلّي لي بس X" أو "احتفظ فقط بـ X و Y" أو "اخلي بس
+المنتجات" — **لا تحذف الأقسام واحد واحد** عبر `remove_section`
+متعددة. استخدم أداة واحدة:
+   `keep_only_sections(keep_ids=["products"])`
+هذه تحذف كل الأقسام الأخرى مع روابطها في الـnavbar في خطوة واحدة.
+
+🛑 **قاعدة (Anti-Lie — حرفية):**
+لو قلت "نقلت" / "حذفت" / "عدّلت" / "خلّيت" بدون استدعاء الأداة المناسبة
+في **نفس الـturn**، الـLie Detector يفعّل **AUTO-REFUND** (يرجّع كل
+النقاط للعميل) ويسجّل الحادثة. لا تقول "تم" أبداً قبل ما تستدعي الأداة
+وترى `ok: true` في النتيجة.
+
 ──────────────────────────────────────────────────────────
 **Phase 1 — Discovery (اكتشاف الفكرة)** 🌱 — الأطول والأهم
 ──────────────────────────────────────────────────────────
@@ -6122,7 +6373,8 @@ async def _stream_one_provider(
         from .action_pricing import classify_intent
         _intent_for_force = classify_intent(user_message or "")
         if _intent_for_force in ("repair", "section_add", "page_creation",
-                                  "deletion", "edit", "full_site"):
+                                  "deletion", "edit", "full_site",
+                                  "keep_only", "move_section"):
             force_tool_use_next_iter = True
             logger.info(f"[agent-stream] PREEMPTIVE force_tool_use enabled (intent={_intent_for_force})")
     except Exception as _pe:
@@ -6439,6 +6691,12 @@ async def _stream_one_provider(
                 # ── Past-tense + اب prefix (colloquial) ──────────────
                 "أنشأت لك", "صنعت لك", "بنيت لك", "أضفت لك", "حذفت لك",
                 "ربطت لك", "حدّثت لك", "حدثت لك", "عدّلت لك", "عدلت لك",
+                # ── Past-tense without prefix (often used after fake action) ─
+                "نقلت", "نقلتها", "نقلته", "نقلتهم",
+                "حذفت", "حذفتها", "حذفته",
+                "عدّلت", "عدلت", "عدّلتها", "عدلتها",
+                "أبقيت", "ابقيت", "خلّيت", "خليت",
+                "رتّبت", "رتبت", "نظّمت", "نظمت",
                 # ── Tool-result fabrication signals ──────────────────
                 "fixed", "completed", "implemented",
                 "محتوى حقيقي", "بايت", "KB محتوى",
@@ -6771,7 +7029,8 @@ async def _stream_one_provider(
         from .action_pricing import classify_intent as _ci
         _user_intent = _ci(user_message or "")
         _action_intents = {"repair", "section_add", "page_creation",
-                            "deletion", "edit", "full_site"}
+                            "deletion", "edit", "full_site",
+                            "keep_only", "move_section"}
         if _user_intent in _action_intents and ctx.changes_made == 0:
             auto_refunded = True
             logger.warning(
