@@ -343,6 +343,43 @@ TOOLS_SCHEMA: List[Dict[str, Any]] = [
         },
     },
     {
+        "name": "restore_snapshot",
+        "description": (
+            "⏪ Restore the project HTML to a previous snapshot. THE ONLY TOOL "
+            "the AI may call when the user asks to UNDO / ROLLBACK / RESTORE:\n"
+            "  • 'ارجع للتصميم السابق'  /  'undo'  /  'restore'\n"
+            "  • 'الغ آخر تعديل'  /  'الغي التغيير'\n"
+            "  • 'لا أعجبني الجديد، ارجع للقديم'\n"
+            "Calling write_full_html / apply_section instead of restore_snapshot "
+            "on these requests is a LIE and will be rejected.\n\n"
+            "Use offset=1 for 'undo last change', offset=2 for 'undo 2 changes', "
+            "or pass `snapshot_id` for a specific snapshot from list_snapshots."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "offset": {
+                    "type": "integer",
+                    "description": "Number of changes to undo (default 1 = last change). Ignored if snapshot_id is given.",
+                },
+                "snapshot_id": {
+                    "type": "string",
+                    "description": "Specific snapshot UUID to restore (optional).",
+                },
+            },
+        },
+    },
+    {
+        "name": "list_snapshots",
+        "description": (
+            "📜 List available snapshots for this project. Returns up to 10 "
+            "most-recent snapshots with id, created_at, and a one-line summary. "
+            "Use this BEFORE restore_snapshot when the user asks about specific "
+            "older versions ('ارجع لقبل ساعتين')."
+        ),
+        "input_schema": {"type": "object", "properties": {}, "required": []},
+    },
+    {
         "name": "search_html",
         "description": (
             "Regex search inside current_html. Returns up to 10 matches with "
@@ -1284,6 +1321,74 @@ def _scan_for_dummy_ui(html: str) -> Dict[str, Any]:
             continue
         dead_buttons.append({"text": text, "reason": "no_onclick_no_js"})
 
+    # ── Scan card-like containers (divs/articles/sections with "clickable"
+    #    class hints like 'card', 'movie', 'product', 'item', 'post',
+    #    'tile', 'thumb'). These are the #1 source of "AI built a grid
+    #    of fake clickable cards" — invisible to the <button> scan above.
+    CARD_CLASS_HINTS = ("card", "movie", "product", "item", "post", "tile",
+                         "thumb", "show", "episode", "course", "service",
+                         "feature-box", "team-member", "testimonial")
+    # Find all elements with class containing any hint
+    card_pattern = re.compile(
+        r'<(div|article|section|li|figure)\b([^>]*\bclass\s*=\s*["\'][^"\']*'
+        + r'(?:' + "|".join(re.escape(h) for h in CARD_CLASS_HINTS) + r')[^"\']*'
+        + r'["\'][^>]*)>',
+        re.I,
+    )
+    for m in card_pattern.finditer(html):
+        attrs = m.group(2)
+        # Skip if it's clearly a container (data-list/data-grid) and not a
+        # single card — heuristic: must NOT have aria-label="container"
+        # nor class containing "list"/"grid"/"container" alone
+        cls_m = re.search(r'\bclass\s*=\s*["\']([^"\']+)["\']', attrs, re.I)
+        if not cls_m:
+            continue
+        classes = cls_m.group(1).split()
+        is_container = any(c in ("cards", "movies", "products", "items",
+                                   "list", "grid", "wrapper", "container",
+                                   "showcase")
+                            for c in classes)
+        if is_container:
+            continue
+        has_onclick = bool(re.search(r"\bonclick\s*=\s*[\"'][^\"']{3,}[\"']", attrs, re.I))
+        has_data_action = bool(re.search(r"\bdata-(?:action|target|href|movie-id|product-id|item-id|id)", attrs, re.I))
+        idm = re.search(r"\bid\s*=\s*[\"']([^\"']+)[\"']", attrs, re.I)
+        card_id = idm.group(1) if idm else None
+        # JS-wired?
+        js_wired = False
+        if card_id and re.search(
+            rf"getElementById\([\"']({re.escape(card_id)})[\"']\).+?addEventListener",
+            js_text, re.S,
+        ):
+            js_wired = True
+        for c in classes:
+            if c and re.search(
+                rf"querySelector(?:All)?\([\"']\.{re.escape(c)}[\"']\)[\s\S]{{0,200}}?addEventListener",
+                js_text, re.S,
+            ):
+                js_wired = True
+                break
+        # Wrapped in <a href=...>?
+        # Look for nearest opening <a ...> before the card tag
+        start = m.start()
+        wrap_a = re.search(r"<a\b[^>]*\bhref\s*=\s*[\"']([^\"'#][^\"']*)[\"'][^>]*>(?:(?!</a>)[\s\S])*?$",
+                            html[max(0, start - 400):start], re.I)
+        wrapped_in_link = bool(wrap_a)
+        # Or contains <a href="..."> inside the card (next 800 chars)
+        end_chunk = html[start:start + 1500]
+        inner_a = re.search(r'<a\b[^>]*\bhref\s*=\s*["\']([^"\'#][^"\']*\.html|[^"\'#][^"\']*\?[^"\']+)["\']',
+                             end_chunk, re.I)
+        contains_real_link = bool(inner_a)
+        if has_onclick or has_data_action or js_wired or wrapped_in_link or contains_real_link:
+            continue
+        # Extract title text from inside card for the report
+        inner_text = re.search(r">([\s\S]{0,300})", html[start:start + 300], re.I)
+        text = re.sub(r"<[^>]+>", " ", inner_text.group(1) if inner_text else "").strip()[:50]
+        dead_buttons.append({
+            "text": f"[card:{classes[0]}] {text}",
+            "reason": "card_without_click_handler",
+        })
+
     # ── Scan <a> tags as nav links ──
     nav_block_match = re.search(r"<nav\b[^>]*>([\s\S]*?)</nav>", html, re.I)
     nav_block = nav_block_match.group(1) if nav_block_match else ""
@@ -2086,6 +2191,67 @@ def _exec_tool(ctx: FreeBuildToolContext, name: str, args: Dict[str, Any]) -> Di
             ctx.current_html = merged
             ctx.changes_made += 1
             return {"ok": True, "items": items, "new_length": len(merged)}
+        # ── Undo: restore_snapshot ─────────────────────────────────────────
+        if name == "restore_snapshot":
+            offset = int(args.get("offset") or 1)
+            snap_id = (args.get("snapshot_id") or "").strip()
+            snaps = ctx.snapshots_to_create + (ctx.project.get("html_snapshots") or [])
+            # Sort newest-last (snapshots_to_create are the latest in this turn)
+            available = list(snaps)
+            if not available:
+                return {"ok": False, "error": "no snapshots available — cannot restore"}
+            target = None
+            if snap_id:
+                for s in available:
+                    if s.get("id") == snap_id:
+                        target = s
+                        break
+                if not target:
+                    return {"ok": False, "error": f"snapshot_id '{snap_id}' not found",
+                            "available_ids": [s.get("id") for s in available[-5:]]}
+            else:
+                # offset=1 → last snapshot (most recent backup BEFORE current)
+                if offset < 1 or offset > len(available):
+                    return {"ok": False, "error": f"offset {offset} out of range (1..{len(available)})"}
+                target = available[-offset]
+            restored_html = target.get("html") or ""
+            if not restored_html or len(restored_html) < 20:
+                return {"ok": False, "error": "snapshot HTML is empty or corrupted"}
+            # Save a fresh snapshot of the CURRENT state before overwriting
+            ctx.snapshot_before_write()
+            ctx.current_html = restored_html
+            ctx._sync_active_page()
+            ctx.changes_made += 1
+            return {
+                "ok": True,
+                "restored_snapshot_id": target.get("id"),
+                "restored_from": target.get("created_at"),
+                "restored_summary": target.get("summary", "")[:200],
+                "new_html_length": len(restored_html),
+                "message": (
+                    f"⏪ تم استرجاع التصميم لحالة سابقة "
+                    f"({target.get('summary', '')[:80]}). تم حفظ النسخة الحالية في snapshot جديد."
+                ),
+            }
+
+        # ── List available snapshots ─────────────────────────────────────
+        if name == "list_snapshots":
+            persisted = list(ctx.project.get("html_snapshots") or [])
+            this_turn = list(ctx.snapshots_to_create)
+            combined = persisted + this_turn
+            # Newest first
+            combined = list(reversed(combined[-10:]))
+            out = []
+            for s in combined:
+                out.append({
+                    "id": s.get("id"),
+                    "created_at": s.get("created_at"),
+                    "summary": (s.get("summary") or "")[:120],
+                    "html_size": len(s.get("html") or ""),
+                })
+            return {"ok": True, "count": len(out), "snapshots": out,
+                    "message": f"📜 {len(out)} snapshot متاحة (الأحدث أولاً)"}
+
         if name == "search_html":
             pat = args.get("pattern") or ""
             try:
@@ -6374,9 +6540,34 @@ async def _stream_one_provider(
         _intent_for_force = classify_intent(user_message or "")
         if _intent_for_force in ("repair", "section_add", "page_creation",
                                   "deletion", "edit", "full_site",
-                                  "keep_only", "move_section"):
+                                  "keep_only", "move_section", "restore"):
             force_tool_use_next_iter = True
             logger.info(f"[agent-stream] PREEMPTIVE force_tool_use enabled (intent={_intent_for_force})")
+
+        # 🔒 INTENT LOCK: certain intents must use a SPECIFIC tool — block
+        # all destructive tools that would defeat the user's intent.
+        #   • restore → only restore_snapshot/list_snapshots allowed
+        #   • move_section → block write_full_html (use move_section_to_page)
+        #   • keep_only → block write_full_html (use keep_only_sections)
+        _blocked_tools: set = set()
+        _required_tool: Optional[str] = None
+        if _intent_for_force == "restore":
+            # User asked to undo — the only legitimate tool is restore_snapshot
+            _required_tool = "restore_snapshot"
+            _blocked_tools = {"write_full_html", "apply_section", "create_page",
+                               "remove_section", "move_section_to_page",
+                               "keep_only_sections", "update_nav"}
+        elif _intent_for_force == "move_section":
+            _required_tool = "move_section_to_page"
+            _blocked_tools = {"write_full_html"}
+        elif _intent_for_force == "keep_only":
+            _required_tool = "keep_only_sections"
+            _blocked_tools = {"write_full_html"}
+        if _blocked_tools:
+            logger.info(
+                f"[agent-stream] INTENT_LOCK active (intent={_intent_for_force}) "
+                f"blocking={_blocked_tools} required={_required_tool}"
+            )
     except Exception as _pe:
         logger.warning(f"[agent-stream] preemptive force check failed: {_pe}")
     for step in range(max_iterations):
@@ -6415,6 +6606,10 @@ async def _stream_one_provider(
                     # tokens; caching drops this to ~$0.30. For a project with
                     # 20+ turns this saves the user real money on every chat.
                     _user_tools = tools_for_user(ctx.is_owner)
+                    # 🔒 Filter out blocked tools per INTENT_LOCK
+                    if _blocked_tools:
+                        _user_tools = [t for t in _user_tools
+                                        if t.get("name") not in _blocked_tools]
                     # Mark the LAST tool with cache_control — Anthropic caches the
                     # entire system+tools prefix up to and including the marked tool.
                     if _user_tools:
@@ -6431,7 +6626,12 @@ async def _stream_one_provider(
                         tools=_user_tools, messages=messages,
                         extra_headers={"anthropic-beta": "prompt-caching-2024-07-31"},
                     )
-                    if _force_tools_this_iter:
+                    if _required_tool and _force_tools_this_iter:
+                        # Pin to the EXACT tool the intent demands
+                        _stream_kwargs["tool_choice"] = {"type": "tool",
+                                                          "name": _required_tool}
+                        logger.info(f"[agent-stream] tool_choice pinned to '{_required_tool}'")
+                    elif _force_tools_this_iter:
                         _stream_kwargs["tool_choice"] = {"type": "any"}
                         logger.info("[agent-stream] forcing tool_choice=any for this iteration (recovery)")
                     async with client.messages.stream(**_stream_kwargs) as st:
@@ -7030,7 +7230,7 @@ async def _stream_one_provider(
         _user_intent = _ci(user_message or "")
         _action_intents = {"repair", "section_add", "page_creation",
                             "deletion", "edit", "full_site",
-                            "keep_only", "move_section"}
+                            "keep_only", "move_section", "restore"}
         if _user_intent in _action_intents and ctx.changes_made == 0:
             auto_refunded = True
             logger.warning(

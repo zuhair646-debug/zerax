@@ -113,6 +113,22 @@ _INTENT_PATTERNS: list = [
         r"(?:احذف|تحذف|باحذف|شيل|تشيل|باشيل|ازل|ازله|امسح|تمسح)\b|"
         r"\b(?:remove|delete|drop)\b",
         re.IGNORECASE)),
+    # restore / undo — user wants to roll back to a previous design
+    # "ارجع للتصميم السابق" / "الغ آخر تعديل" / "ما عجبني الجديد ارجع للقديم"
+    ("restore", re.compile(
+        # Verbs of returning/undoing (followed by 0..N words then a "restore noun")
+        r"\b(?:ارجع|رجع|ارجعلي|رجعلي|رجوع|بارجع|بارجعك)\b"
+        r"(?:[^.!?]*?)"   # lazy chars (any words/spaces) up to noun
+        r"\b(?:ل*ا?ل?(?:تصميم|موقع|حاله|حالة|نسخه|نسخة|شكل|"
+        r"سابق|قديم|اول|اصل|بدايه|بداية|سابقه|سابقة))\b"
+        r"|"
+        # Or cancel/undo verbs
+        r"\b(?:الغ|الغي|الغاء|البطل|تراجع)\b(?:[^.!?]*?)"
+        r"(?:ال)?(?:تعديل|تغيير|اضافه|اضافة|حذف|عمليه|عملية)\b"
+        r"|"
+        # English
+        r"\b(?:undo|rollback|revert|restore|go\s+back)\b",
+        re.IGNORECASE)),
     # keep_only — "خلّي لي بس X" / "احتفظ بـ X و Y فقط" / "keep only ..."
     # User describes what to KEEP rather than what to REMOVE. Treated as
     # an action intent (charged + force-tool-use) because it requires a
