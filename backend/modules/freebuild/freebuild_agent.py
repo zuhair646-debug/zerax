@@ -4674,6 +4674,33 @@ STRICT_PHASE_PROTOCOL_ADDENDUM = """
 5. **الروابط (URLs) تُكتب كاملة في سطر واحد** (`https://example.com`)،
    لا تكسر الرابط على سطرين.
 
+🚨 **قاعدة (Anti-Dummy UI) — السيرفر يفحص ويرفض الـHTML الميت:**
+بعد كل استدعاء لـ `write_full_html` / `apply_section` / `create_page`،
+يفحص السيرفر تلقائياً الـHTML الناتج، ولو لقى:
+  • زر `<button>` بدون `onclick="..."` ولا ربط JS (`addEventListener`/
+    `document.getElementById('btn-id')`)
+  • رابط `<a href="#">` أو `<a href="javascript:void(0)">` داخل `<nav>`
+  • `<a href="#xxx">` لقسم غير موجود (broken anchor)
+  • `<form>` فيه `type="submit"` بدون `action`/`onsubmit`/JS handler
+سيُرفق فحصاً يحوي `_dummy_audit` ويُجبرك على استدعاء أداة إصلاح في
+الـiteration التالي **قبل ما تقدر تكتب 'تم بنجاح'**.
+
+لذلك — في كل HTML تكتبه:
+  ✅ كل زر يجب أن يكون له `onclick="functionName()"` أو
+     `<script>document.getElementById('id').addEventListener(...)</script>`
+  ✅ روابط الـnavbar يجب أن تكون إمّا `href="page.html"` (صفحة حقيقية)
+     أو `href="#section-id"` لقسم موجود فعلاً (`<section id="section-id">`)
+  ✅ النماذج يجب أن تكون لها `onsubmit` يستدعي دالة JS تعرض رسالة
+     شكر، أو `action` لـmailto/URL حقيقي
+  ✅ السلة/Modal/Toggle تستخدم `localStorage` + `addEventListener`
+     فعلية لا أزرار خيالية
+
+🚨 **قاعدة Auto-Anchor-Rewriting:**
+لو الصفحة `about.html` موجودة في المشروع، فأي `<a href="#about">` يكتبه
+السيرفر تلقائياً يحوّله إلى `<a href="about.html">` (إذا ما فيه `<section
+id="about">` محلياً). لا تعتمد على هذا كحجة لكتابة anchors عشوائية —
+السيرفر يصلحها لكن الـDummy Detector قد يفعّل repair iteration.
+
 ──────────────────────────────────────────────────────────
 **Phase 1 — Discovery (اكتشاف الفكرة)** 🌱 — الأطول والأهم
 ──────────────────────────────────────────────────────────
@@ -5376,7 +5403,7 @@ async def run_agent_turn(
     project: Dict[str, Any],
     user_message: str,
     history_messages: List[Dict[str, str]],
-    max_iterations: int = 12,
+    max_iterations: int = 16,
     model: str = "claude-sonnet-4-5-20250929",
     auth_token: Optional[str] = None,
     db: Any = None,
@@ -5872,7 +5899,7 @@ async def stream_agent_turn(
     project: Dict[str, Any],
     user_message: str,
     history_messages: List[Dict[str, str]],
-    max_iterations: int = 12,
+    max_iterations: int = 16,
     ctx_holder: Optional[Dict[str, Any]] = None,
     user_language: str = "ar",
     auth_token: Optional[str] = None,
