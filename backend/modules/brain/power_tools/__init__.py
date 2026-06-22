@@ -25,6 +25,15 @@ from .unrestricted import (
     call_self_test_agent,
     UNRESTRICTED_TOOLS,
 )
+from .parity import (
+    analyze_uploaded_file,
+    integration_playbook_live,
+    recursive_test_agent,
+    crawl_url_deep,
+    remember,
+    recall,
+    PARITY_TOOLS,
+)
 
 __all__ = [
     # runtime
@@ -40,4 +49,8 @@ __all__ = [
     "web_search", "get_integration_playbook",
     "deploy_to_production", "call_self_test_agent",
     "UNRESTRICTED_TOOLS",
+    # parity (final 5% closing the gap to 100%)
+    "analyze_uploaded_file", "integration_playbook_live",
+    "recursive_test_agent", "crawl_url_deep",
+    "remember", "recall", "PARITY_TOOLS",
 ]

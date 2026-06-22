@@ -666,6 +666,109 @@ TOOLS_SCHEMA: List[Dict[str, Any]] = [
         },
     },
     {
+        "name": "analyze_uploaded_file",
+        "description": (
+            "🔬 AI-analyze ANY file (PDF / image / audio / text / code). "
+            "Auto-detects type, extracts content, runs Claude/Vision/Whisper "
+            "as needed, returns a structured summary. Use when the user "
+            "uploads a document and wants you to understand it."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "source": {"type": "string", "description": "Local path or HTTP(S) URL"},
+                "query": {"type": "string", "description": "What to analyze (default: summarize)"},
+            },
+            "required": ["source"],
+        },
+    },
+    {
+        "name": "integration_playbook_live",
+        "description": (
+            "🔎 Generate a fresh integration playbook for ANY service. First "
+            "checks the 9 hardcoded templates; if miss, searches the web, "
+            "crawls top docs, and synthesizes a JSON playbook with env_vars, "
+            "install, backend snippet, frontend snippet, pitfalls. Use this "
+            "for ANY 3rd party the user requests (Discord, Pinecone, Cloudflare R2, etc.)."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "service_name": {"type": "string"},
+                "use_case": {"type": "string"},
+            },
+            "required": ["service_name"],
+        },
+    },
+    {
+        "name": "recursive_test_agent",
+        "description": (
+            "🧪 SENIOR-LEVEL multi-turn QA. Claude reads your live HTML, "
+            "designs realistic end-to-end USER JOURNEYS (signup → checkout, "
+            "browse → filter → buy, etc.), executes them via Playwright, and "
+            "returns a structured QA report with AI interpretation of failures. "
+            "Use this BEFORE saying 'done' for any project with interactions."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "user_goal": {"type": "string", "description": "The high-level goal the user wanted"},
+                "max_scenarios": {"type": "integer", "description": "1-8 scenarios, default 6"},
+            },
+        },
+    },
+    {
+        "name": "crawl_url_deep",
+        "description": (
+            "📄 Fetch any URL and return CLEAN MARKDOWN (headings, code blocks, "
+            "tables preserved, ads/nav stripped). Use when the user shares a "
+            "link and you need to deeply understand its content (vs web_search "
+            "which only returns snippets)."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "url": {"type": "string"},
+                "max_chars": {"type": "integer", "description": "Default 50000"},
+            },
+            "required": ["url"],
+        },
+    },
+    {
+        "name": "remember",
+        "description": (
+            "🧠 Save a cross-project insight to global memory. Use for: user "
+            "preferences ('always Arabic RTL'), patterns ('this client uses "
+            "Stripe'), mistakes to avoid, successful strategies. Tags help "
+            "future recall."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "insight": {"type": "string"},
+                "tags": {"type": "array", "items": {"type": "string"}},
+                "importance": {"type": "integer", "description": "1-10, default 5"},
+            },
+            "required": ["insight"],
+        },
+    },
+    {
+        "name": "recall",
+        "description": (
+            "🧠 Retrieve cross-project memories matching query/tags. Use this "
+            "at the START of new projects to learn from your past work. "
+            "Returns insights sorted by importance + recency."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "query": {"type": "string"},
+                "tags": {"type": "array", "items": {"type": "string"}},
+                "limit": {"type": "integer", "description": "1-20, default 5"},
+            },
+        },
+    },
+    {
         "name": "search_html",
         "description": (
             "Regex search inside current_html. Returns up to 10 matches with "
@@ -2678,7 +2781,10 @@ def _exec_tool(ctx: FreeBuildToolContext, name: str, args: Dict[str, Any]) -> Di
         # async tools — return sentinel so _dispatch_tool routes to _exec_tool_async
         if name in ("run_bash_unrestricted", "run_python_in_sandbox",
                      "read_any_file", "write_any_file", "edit_file",
-                     "deploy_to_production", "call_self_test_agent"):
+                     "deploy_to_production", "call_self_test_agent",
+                     "analyze_uploaded_file", "integration_playbook_live",
+                     "recursive_test_agent", "crawl_url_deep",
+                     "remember", "recall"):
             return {"__async__": True}
 
         # sync-safe: get_integration_playbook
@@ -3079,6 +3185,64 @@ async def _exec_tool_async(ctx: FreeBuildToolContext, name: str, args: Dict[str,
                 ctx.project_id or "anon",
                 base_url,
                 args.get("user_goal") or "",
+            )
+
+        # ── PARITY TOOLS (closes the final gap to 100%) ──────────────────
+        if name == "analyze_uploaded_file":
+            from ..brain.power_tools import analyze_uploaded_file as _auf
+            return await _auf(
+                args.get("source") or "",
+                args.get("query") or "Summarize this file",
+                ctx.project_id or "anon",
+            )
+
+        if name == "integration_playbook_live":
+            from ..brain.power_tools import integration_playbook_live as _ipl
+            return await _ipl(
+                args.get("service_name") or "",
+                args.get("use_case") or "general integration",
+            )
+
+        if name == "recursive_test_agent":
+            from ..brain.power_tools import recursive_test_agent as _rta
+            slug = (ctx.project or {}).get("published_slug")
+            if not slug:
+                return {"ok": False, "error": "project not published — cannot deep-test"}
+            api_base = os.environ.get(
+                "REACT_APP_BACKEND_URL",
+                "https://ai-cinematic-hub-2.preview.emergentagent.com",
+            )
+            base_url = f"{api_base}/api/freebuild-chat/published-sites/{slug}"
+            return await _rta(
+                base_url,
+                args.get("user_goal") or "",
+                int(args.get("max_scenarios") or 6),
+                ctx.project_id or "anon",
+            )
+
+        if name == "crawl_url_deep":
+            from ..brain.power_tools import crawl_url_deep as _cud
+            return await _cud(
+                args.get("url") or "",
+                int(args.get("max_chars") or 50_000),
+            )
+
+        if name == "remember":
+            from ..brain.power_tools import remember as _rmb
+            return await _rmb(
+                args.get("insight") or "",
+                args.get("tags") or [],
+                ctx.project_id or "anon",
+                int(args.get("importance") or 5),
+            )
+
+        if name == "recall":
+            from ..brain.power_tools import recall as _rcl
+            return await _rcl(
+                args.get("query") or "",
+                args.get("tags") or [],
+                args.get("project_id") or "",
+                int(args.get("limit") or 5),
             )
 
 
@@ -4141,7 +4305,21 @@ AGENT_SYSTEM_PROMPT = """أنت **Zenrex Code Brain** — مهندس برمجي 
    - استخدم `web_search` لما تحتاج معلومة محدّثة (لا تخمّن من تدريبك).
    - دائماً `call_self_test_agent` بعد تعديل وقبل `finish` لو فيه تفاعلات.
    - كل استخدام مسجّل في `ai_tool_audit` — لا تستخدم الـ bash لأي شي خبيث.
+
 ═══════════════════════════════════════════════════════════
+🎯 **أدوات الـ 100% Parity (الفجوة الأخيرة مغلقة):**
+
+  • **`analyze_uploaded_file(source, query)`** — يحلّل أي ملف بالـ AI: PDF (نص + ملخص)، صورة (Claude Vision)، صوت (Whisper)، نص/كود. لو مستخدم رفع PDF فاتورة أو صورة شعار، استدعِ هذي مباشرة.
+  
+  • **`integration_playbook_live(service_name)`** — لو طلب المستخدم خدمة برّا الـ 9 الجاهزة (Discord, Pinecone, Cloudflare R2, Mux، أي شي)، استخدم هذي. تبحث في الويب وتولّد playbook كامل JSON مع env_vars و install و backend snippet.
+  
+  • **`recursive_test_agent(user_goal, max_scenarios)`** — اختبار شامل بعمق. Claude يقرأ HTML الموقع ويصمّم *سيناريوهات رحلات حقيقية* (تسجيل → دفع → email)، يشغّلها في Chromium، ويعطيك تقرير QA منظّم. **استدعِ هذي قبل `finish` في أي مشروع فيه تفاعلات حقيقية**.
+  
+  • **`crawl_url_deep(url)`** — يجيب محتوى أي صفحة ويب نظيف كـ Markdown (هيدرات، كود، جداول). استخدمها لما يرسل لك المستخدم رابط ويبي أو blog post.
+  
+  • **`remember(insight, tags, importance)` / `recall(query, tags)`** — ذاكرة عالمية بين المشاريع. عند بداية مشروع جديد، استدعِ `recall` بـ tags ذات صلة لتتعلّم من سوابقك. عند نجاح/فشل لافت، استخدم `remember` بـ importance 7+.
+═══════════════════════════════════════════════════════════
+
 
 - 🧪 **اختبر قبل ما تحكم.** لما العميل يلصق مفتاح في الشات → `save_credential` → `validate_credential` → بعدها كلمه بالنتيجة الحقيقية. الحكم على المفتاح بدون اختبار = تخمين.
 
