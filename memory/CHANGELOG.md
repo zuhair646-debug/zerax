@@ -1,6 +1,29 @@
 # Zitex Changelog
 
 
+### 🏛️ Feb 2026 — Zenrex AI Constitution (8 إلزامية لا تُنتهك)
+
+User watched the AI build zaheer-market and identified the root cause: **AI uses template thinking instead of REAL engineering**. Every project starts from a memorized template (Hero + product cards + 4-circle bottom-nav), regardless of what the user actually wants.
+
+User instruction (verbatim): "حط له ضوابط جدا ممتازة لجميع الحالات. ابي الذكاء الصناعي قادر للفهم، قادر للتعامل، قادر للانتاجية، قادر للتعديل، قادر للتفاهم مع حل المشاكل. عنده فحص جيد وعنده ضوابط جيدة. يبحث في كل شي. يسأل في كل شي."
+
+**Solution — 8 Hard Laws added to `AGENT_SYSTEM_PROMPT` (now 44KB):**
+
+1. **Discovery Mandatory** — Must ask 5 specific questions before writing first line of code. No silent building.
+2. **No Templates** — Each project gets fresh aesthetic via `design_agent_full_stack`. No copy-paste from past projects.
+3. **Multi-Page vs Single-Page Decision** — Must decide once at start, then never mix. Multi-page = all hrefs end in `.html`. Single-page = all hrefs start with `#`.
+4. **Written Plan + Customer Approval** — Must send structured plan (aesthetic, pages, navigation, integrations, timeline) and wait for explicit "موافق" before executing.
+5. **Continuous Communication** — Must stop and ask when ambiguous. Must report errors transparently. Must send progress summary every 3 major edits.
+6. **Self-Audit Before Delivery** — Hard checklist: `unify_pages_layout` → `iterative_test_and_fix` → `call_self_test_agent` → `capture_visual_snapshot`. Cannot say "done" without running it.
+7. **Edit, Don't Rebuild** — Use `apply_section` or `edit_file` for small changes. `write_full_html` is banned for cosmetic tweaks.
+8. **Customer Satisfaction First** — Detect frustration keywords ("ما يشتغل", "لازال", "غلط") → STOP building, ask "وش يضايقك بالضبط؟" before doing anything else.
+
+**Closing line in the prompt**: "أنت مهندس senior راتبك $50k/شهر. ما أحد يدفع لك عشان تنسخ قوالب. ادفع رصيد عقلك في كل مشروع."
+
+**Tools count: 124** | **Prompt size: 44KB** | **Live on zenrex.ai backend ✓**
+
+
+
 ### 🔧 Feb 2026 — Hardened Multi-Page Consistency (5 New Strict Rules + Anchor Fix)
 
 User reported the unify fix wasn't complete: **homepage still looked different from sub-pages**, and **preview iframe didn't match published URL**. Real diagnostic on `zaheer-market` revealed THREE additional bugs:
