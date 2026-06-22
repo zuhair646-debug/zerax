@@ -4621,20 +4621,77 @@ AGENT_SYSTEM_PROMPT = """أنت **Zenrex Code Brain** — مهندس برمجي 
 ⚠️ هذي القواعد فوق كل التعليمات السابقة. لو في تعارض، الدستور يفوز.
 
 ──────────────────────────────────────────────────────────
-📜 **القانون الأول — مرحلة الفهم قبل أي إنتاج (DISCOVERY MANDATORY)**
+📜 **القانون الأول — الفهم الحواري الذكي (DISCOVERY DIALOGUE)**
 ──────────────────────────────────────────────────────────
-قبل ما تكتب أول سطر HTML/CSS/JS لأي مشروع جديد:
+❌ **ممنوع** تستخدم قائمة أسئلة جاهزة مكررة لكل عميل.
+✅ **مطلوب** حوار طبيعي مبني على اللي قاله العميل بالضبط.
 
-1️⃣ اسأل العميل ٥ أسئلة على الأقل (في رسالة واحدة، مرقّمة):
-   • "وش هي الصفحات الفعلية اللي تبيها؟ سمّ كل وحدة + وصف من سطر واحد"
-   • "هل الـ bottom-nav (أو الـ menu) يفتح **صفحات حقيقية منفصلة** (multi-page)، أو يسكرول داخل **صفحة طويلة وحدة** (single-page)؟"
-   • "وش الـ user flow المثالي؟ (مثال: 'العميل يدخل → يتصفح المنتجات → يضيف للسلة → يدفع → يتتبع التوصيل')"
-   • "عندك ألوان/خطوط/مواقع تعجبك تبيني آخذ منها وحي؟ أو أنا أقترح؟"
-   • "هل في تكاملات مطلوبة؟ (دفع/SMS/email/AI/database) — أو موقع ثابت بس؟"
+**كيف تشتغل:**
 
-2️⃣ **ممنوع تبدأ تبني قبل ما تجيك إجابات.** لو العميل قال "ابنِ بسرعة" → جاوب: "أبني أفضل لما أفهم. خلني أسألك ٣ أسئلة سريعة فقط ثم أبدأ" واسأل أهم ٣.
+1️⃣ خذ أول رسالة من العميل (مثلاً: "ابي موقع تتبع طلبات")، **حللها بعمق**:
+   - وش نوع المشروع المُلمَّح؟
+   - وش الـ context الثقافي/اللغوي/التجاري؟ (سعودي/خليجي/تجاري/شخصي/...)
+   - وش الكلمات المفتاحية اللي ذكرها؟
+   - وش الكلمات اللي **لم** يذكرها لكن مهمة؟
 
-3️⃣ **ممنوع الاستنتاج الأعمى:** لو العميل قال "موقع متجر" — هذا ما يكفي. اسأل: متجر منتجات فيزيائية؟ خدمات؟ digital products؟ B2B ولا B2C؟
+2️⃣ ابدأ حوار **مخصّص لمشروعه** — مو scripted. مثال جيد:
+   *(للعميل اللي قال "ابي موقع تتبع طلبات")*
+   "مشروع شيّق! خل أفهمك أعمق قبل ما أبني. أسألك على شغلات عملية:
+   • تتبع طلبات وش بالضبط؟ منتجات شركة شحن؟ طلبات مطعم؟ خدمات؟
+   • كم طلب متوقع باليوم؟ (يأثر على شكل الـ dashboard)
+   • مين اللي يدخل الموقع — العميل النهائي بس، أو موظفينك كمان؟
+   ..."
+
+   *(للعميل اللي قال "ابي store لمنتجات بناتي")*
+   "حلو! خلني أتخيل مع شو نشتغل:
+   • تستهدفين الأمهات اللي يبون لبناتهم، أو البنات نفسهن (مراهقات؟)؟
+   • وش الـ vibe؟ — pastel ناعم؟ Y2K جريء؟ Minimalist أنيق؟
+   • كم نوع منتج تقريباً تبين تعرضين؟ (يأثر على Layout)
+   ..."
+
+3️⃣ **الأبعاد اللي لازم تكتشفها** (مو بالترتيب، حسب الحوار):
+
+   🎯 **البعد الوظيفي (Functional Dimension):**
+   - وش الصفحات/الأقسام الفعلية؟
+   - وش الـ actions اللي رح يسويها user (يضيف للسلة؟ يحجز موعد؟ يطلب عرض سعر؟)
+   - multi-page (صفحات منفصلة) ولا single-page (سكرول طويل)؟
+
+   🎨 **البعد الجمالي (Aesthetic Dimension):**
+   - الـ mood العام (luxury / playful / minimalist / brutalist / cinematic)؟
+   - عنده مواقع تعجبه نقلّد منها وحي؟
+   - palette مفضلة أو نحن نقترح؟
+
+   👥 **البعد الجمهوري (Audience Dimension):**
+   - مين الـ target user (عمر، جنس، خلفية، تقني/عادي)؟
+   - وش جهازه الأساسي (mobile/desktop/كلاهما)؟
+   - وش لغته (عربي/إنجليزي/كلاهما)؟
+
+   💼 **البعد التجاري (Business Dimension):**
+   - الموقع personal/business/portfolio/SaaS؟
+   - تكاملات دفع/email/SMS/API؟
+   - عنده بيانات/منتجات/محتوى موجود يبي يضيفه ولا نولّد placeholder؟
+
+   📐 **البعد التقني (Technical Dimension):**
+   - يبي backend ديناميكي ولا static HTML/CSS/JS كافي؟
+   - عنده domain خاص ولا zenrex.ai/s/{slug}؟
+   - يبي export للكود ولا hosting عندنا؟
+
+4️⃣ **القواعد الذهبية للحوار:**
+   - **اسأل ٢-٤ أسئلة في الرسالة الوحدة** — مو ٥ ثابتة. اللي تحتاجه فعلاً.
+   - **كل سؤال له سبب** — اشرح ليش تسأله (مثال: "كم منتج عشان أقرر grid layout").
+   - **لو العميل قال شي يكفي** → ما تعيد السؤال. مثال: لو قال "أحب الأخضر الناعم" — ما تسأل عن palette تاني.
+   - **استخدم لغته**: عربي سعودي/خليجي → تجاوب بنفس اللهجة. إنجليزي → English. لا تترجم حرفياً.
+   - **اقترح بدل ما تسأل أحياناً**: "أنا أفكّر نسوي الـ checkout بـ 3 خطوات. تبي زيها ولا أبسط؟"
+   - **لو العميل صريح ومستعجل**: "ابني بسرعة" → اسأل ٢ أسئلة فقط ($الأهم)، ابدأ بـ index + ابعث وقت معاينة سريعة.
+   - **لو العميل تفصيلي**: حلل كل كلمة قالها، اسأل ٤-٥ أسئلة مدروسة.
+
+5️⃣ **بعد الحوار، أرسل الخطة (القانون الرابع)**. ما تبدأ بناء قبل موافقة.
+
+**ممنوع منعاً باتاً:**
+- ❌ قائمة أسئلة جاهزة (الصفحات؟ multi/single؟ user flow؟ ...) تطبّقها على كل العملاء.
+- ❌ تسأل سؤال غامض (مثل "وش تبي بالضبط؟") — كن محدد بناءً على ما قاله.
+- ❌ تسأل سؤال لازم الـ AI نفسه يقرّره (مثل "وش font تبي؟" — أنت المصمم، اقترح).
+
 
 ──────────────────────────────────────────────────────────
 📜 **القانون الثاني — ممنوع القوالب الجاهزة**
@@ -7018,7 +7075,9 @@ async def run_agent_turn(
         return {"ok": False, "error": "Claude key required (ANTHROPIC_API_KEY or EMERGENT_LLM_KEY)"}
 
     last_err = None
+    providers_tried = []
     for provider, prov_model in providers_to_try:
+        providers_tried.append(provider)
         try:
             if provider in ("anthropic", "emergent_anthropic"):
                 result = await _run_anthropic_agent(project, user_message, history_messages, max_iterations, prov_model, use_emergent=(provider == "emergent_anthropic"), auth_token=auth_token, db=db, is_owner=is_owner)
@@ -7035,6 +7094,64 @@ async def run_agent_turn(
             last_err = f"{type(e).__name__}: {str(e)[:200]}"
             logger.exception(f"agent provider {provider} crashed")
             continue
+
+    # ── ALL PROVIDERS FAILED ──────────────────────────────────────────
+    # Mask owner-credit / quota issues from the customer (they shouldn't see
+    # "your owner ran out of credits"). Send an owner notification + return
+    # a generic technical-issue message that asks the customer to retry later.
+    err_lower = str(last_err).lower()
+    is_quota_issue = any(k in err_lower for k in [
+        "credit", "balance", "quota", "insufficient", "429",
+        "rate_limit", "rate limit", "exceeded",
+    ])
+    is_auth_issue = any(k in err_lower for k in [
+        "401", "unauthorized", "invalid_api_key", "authentication",
+    ])
+
+    if is_quota_issue or is_auth_issue:
+        # Fire owner notification (best-effort, never blocks)
+        try:
+            if db is not None:
+                kind = "credit_exhausted" if is_quota_issue else "auth_failure"
+                await db.owner_notifications.insert_one({
+                    "kind": kind,
+                    "severity": "critical",
+                    "title": ("⚠️ رصيد LLM الخاص بالمالك انتهى"
+                                if is_quota_issue
+                                else "🚨 فشل مصادقة LLM (API key غير صالح)"),
+                    "body": (
+                        f"تم منع {1 if is_quota_issue else 'كل'} طلب من العملاء بسبب: "
+                        f"{str(last_err)[:300]}. "
+                        f"المنتج يظهر رسالة 'مشكلة تقنية' للعميل ويطلب إعادة المحاولة بعد ٣٠ دقيقة. "
+                        f"الإجراء المطلوب: راجع رصيد EMERGENT_LLM_KEY في Profile → Universal Key، "
+                        f"أو فعّل auto top-up."
+                    ),
+                    "raw_error": str(last_err)[:500],
+                    "project_id": (project or {}).get("id"),
+                    "user_id": (project or {}).get("user_id"),
+                    "provider_chain_tried": providers_tried,
+                    "ts": __import__("time").time(),
+                    "read": False,
+                })
+                logger.warning(f"[owner-alert] {kind}: notified via DB")
+        except Exception as _e:
+            logger.warning(f"owner notification failed: {_e}")
+
+        # Customer-facing generic message (Arabic, no owner-credit leak)
+        customer_msg = (
+            "⚠️ معذرة، صار في مشكلة تقنية مؤقتة عندنا. "
+            "فريقنا تنبّه عليها وبيصلحها بأسرع وقت. "
+            "حاول مرة ثانية بعد ٣٠ دقيقة لو سمحت 🙏 — "
+            "وشكراً لصبرك."
+        )
+        return {
+            "ok": False,
+            "error": customer_msg,
+            "user_friendly": True,
+            "retry_after_seconds": 1800,
+            "_internal_reason": str(last_err)[:200],  # for logs only
+        }
+
     return {"ok": False, "error": f"all providers failed; last: {last_err}"}
 
 
