@@ -452,6 +452,82 @@ TOOLS_SCHEMA: List[Dict[str, Any]] = [
         },
     },
     {
+        "name": "capture_visual_snapshot",
+        "description": (
+            "📸 Take a screenshot + perceptual hash of the live published "
+            "site for visual comparison later. Use this BEFORE any major "
+            "redesign (apply_section with full rewrite, write_full_html) so "
+            "compare_visuals can detect unintended design destruction."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "label": {"type": "string",
+                            "description": "Short label like 'before_hero_change' or 'after_movies_added'"},
+            },
+            "required": ["label"],
+        },
+    },
+    {
+        "name": "compare_visuals",
+        "description": (
+            "🔍 Compare two visual snapshots and report similarity (0-100%). "
+            "Verdicts:\n"
+            "  • ≥95% — minor tweak (safe)\n"
+            "  • 70-94% — moderate change (review)\n"
+            "  • 40-69% — major redesign ⚠️ (ask user first!)\n"
+            "  • <40% — complete replacement 🚨 (RESTORE NOW)\n\n"
+            "CRITICAL: If verdict is major_redesign OR complete_replacement "
+            "and the user didn't EXPLICITLY ask for redesign, call "
+            "restore_snapshot immediately."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "before_label": {"type": "string"},
+                "after_label": {"type": "string"},
+            },
+            "required": ["before_label", "after_label"],
+        },
+    },
+    {
+        "name": "run_js_in_sandbox",
+        "description": (
+            "🧪 Execute JavaScript in an isolated Node sandbox (5s timeout, "
+            "no filesystem/network access). Use to TEST your own JS logic "
+            "before embedding it in the page. Example:\n"
+            "  code = `function addToCart(items, p){items.push(p); return items.length;}\n"
+            "          console.log(addToCart([],{id:1}));`\n"
+            "Returns stdout + stderr. If your logic is broken, fix BEFORE "
+            "writing it into the user's page."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "code": {"type": "string", "description": "JavaScript code to execute"},
+                "timeout_seconds": {"type": "integer", "description": "1-10 seconds (default 5)"},
+            },
+            "required": ["code"],
+        },
+    },
+    {
+        "name": "run_safe_bash",
+        "description": (
+            "💻 Run a SINGLE whitelisted shell command (read-only inspection). "
+            "Allowed: ls/cat/grep/find/curl/wget/git/python3/node + system "
+            "info. NO pipes, NO chains, NO destructive ops. For when you "
+            "need to verify external resources (e.g. `curl -I https://...`)."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "command": {"type": "string"},
+                "timeout_seconds": {"type": "integer"},
+            },
+            "required": ["command"],
+        },
+    },
+    {
         "name": "search_html",
         "description": (
             "Regex search inside current_html. Returns up to 10 matches with "
@@ -2387,7 +2463,6 @@ def _exec_tool(ctx: FreeBuildToolContext, name: str, args: Dict[str, Any]) -> Di
                         "publish step failed."
                     ),
                 }
-            # Build the local-pod URL (works in preview pod)
             api_base = os.environ.get(
                 "REACT_APP_BACKEND_URL",
                 "https://ai-cinematic-hub-2.preview.emergentagent.com",
@@ -2401,32 +2476,66 @@ def _exec_tool(ctx: FreeBuildToolContext, name: str, args: Dict[str, Any]) -> Di
             scenarios = args.get("scenarios") or []
             if not scenarios:
                 scenarios = _ags(ctx.current_html or "")
-            if not scenarios:
-                # Nothing to click — fall back to quick smoke check
-                import asyncio
-                try:
-                    loop = asyncio.get_event_loop()
-                    if loop.is_running():
-                        # nested loop fallback
-                        import nest_asyncio
-                        nest_asyncio.apply()
-                except Exception:
-                    pass
-                return asyncio.run(_qbc(base_url, timeout_seconds=15))
-            import asyncio
-            try:
-                return asyncio.run(_vmw(base_url, scenarios, timeout_seconds=25))
-            except RuntimeError:
-                # Already in event loop — use sync workaround via thread
+
+            def _run_async(coro):
                 import concurrent.futures
-                def _run():
+                def _r():
                     loop = asyncio.new_event_loop()
                     try:
-                        return loop.run_until_complete(_vmw(base_url, scenarios, 25))
+                        return loop.run_until_complete(coro)
                     finally:
                         loop.close()
                 with concurrent.futures.ThreadPoolExecutor(max_workers=1) as ex:
-                    return ex.submit(_run).result(timeout=60)
+                    return ex.submit(_r).result(timeout=90)
+
+            if not scenarios:
+                return _run_async(_qbc(base_url, timeout_seconds=15))
+            return _run_async(_vmw(base_url, scenarios, timeout_seconds=25))
+
+        # ── Power Tool: capture_visual_snapshot ──────────────────────────
+        if name == "capture_visual_snapshot":
+            slug = ctx.project.get("published_slug")
+            if not slug:
+                return {"ok": False, "error": "project not published — publish first"}
+            label = (args.get("label") or "").strip()
+            if not label or len(label) > 60:
+                return {"ok": False, "error": "label required (1-60 chars)"}
+            api_base = os.environ.get("REACT_APP_BACKEND_URL",
+                "https://ai-cinematic-hub-2.preview.emergentagent.com")
+            base_url = f"{api_base}/api/freebuild-chat/published-sites/{slug}"
+            from ..brain.power_tools import capture_visual_snapshot as _cvs
+            import concurrent.futures
+            def _r():
+                loop = asyncio.new_event_loop()
+                try:
+                    return loop.run_until_complete(
+                        _cvs(ctx.project_id or "anon", label, base_url, 20))
+                finally:
+                    loop.close()
+            with concurrent.futures.ThreadPoolExecutor(max_workers=1) as ex:
+                return ex.submit(_r).result(timeout=40)
+
+        # ── Power Tool: compare_visuals ──────────────────────────────────
+        if name == "compare_visuals":
+            from ..brain.power_tools import compare_visuals as _cv
+            return _cv(ctx.project_id or "anon",
+                       (args.get("before_label") or "").strip(),
+                       (args.get("after_label") or "").strip())
+
+        # ── Power Tool: run_js_in_sandbox ────────────────────────────────
+        if name == "run_js_in_sandbox":
+            from ..brain.power_tools import run_js_in_sandbox as _rjs
+            code = args.get("code") or ""
+            timeout = int(args.get("timeout_seconds") or 5)
+            return _rjs(code, max(1, min(10, timeout)))
+
+        # ── Power Tool: run_safe_bash ────────────────────────────────────
+        if name == "run_safe_bash":
+            from ..brain.power_tools import run_safe_bash as _rsb
+            cmd = args.get("command") or ""
+            timeout = int(args.get("timeout_seconds") or 8)
+            return _rsb(cmd, max(1, min(15, timeout)))
+
 
         if name == "search_html":
             pat = args.get("pattern") or ""

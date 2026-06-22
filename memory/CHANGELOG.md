@@ -1,6 +1,34 @@
 # Zitex Changelog
 
 
+### 🆕 Feb 2026 — Brain v2 Advanced Power Tools Deployed to Production (zenrex.ai) ✅
+The final 12% of "AI = real engineer" feature parity is now LIVE on the VPS production server.
+
+**Tools deployed in `/app/backend/modules/brain/power_tools/advanced.py`:**
+- `capture_visual_snapshot(label, base_url)` — Playwright screenshot + perceptual hash (phash + dhash, 256-bit)
+- `compare_visuals(before, after)` — pixel + structural diff with 4-tier verdict (minor_tweak / moderate_change / major_redesign / complete_replacement) and Arabic recommendations
+- `run_js_in_sandbox(code)` — Node v20 subprocess with strict limits (5s timeout, 50KB output, no fs/net/process.env access)
+- `run_safe_bash(command)` — single-command whitelist (33 read-only commands), blocks pipes/chains/sudo/.env/MONGO_URL
+
+**Infrastructure changes on VPS (`/opt/zerax/docker-compose.yml`):**
+- Added `nodejs` v20 install (NodeSource repo)
+- Added `playwright install --with-deps chromium` on startup
+- Mounted persistent volume `/opt/zerax/data/playwright:/ms-playwright` so chromium doesn't re-download every restart
+- Added `imagehash==4.3.2` to requirements.txt
+
+**Production smoke test results (`docker exec zerax-backend-1`):**
+- ✅ node v20.20.2 available
+- ✅ /ms-playwright/chromium-1217 cached
+- ✅ `run_safe_bash("date")` → returns current VPS time
+- ✅ `run_js_in_sandbox("console.log(...)")` → returns stdout
+- ✅ `capture_visual_snapshot("https://example.com")` → phash captured (17KB png)
+- ✅ `compare_visuals(v1, v2)` → similarity 100% (verdict: minor_tweak)
+- ✅ `verify_my_work` on example.com → 2/2 scenarios passed
+
+All 4 tools are wired into `freebuild_agent.TOOLS_SCHEMA` and dispatched in `execute_tool` — Claude Sonnet 4.5 can now call them mid-conversation. Local pytest: 13/13 passed.
+
+
+
 ### 🆕 Feb 2026 — Old Hosting Eradication (Railway + Vercel) ✅
 Resolved P0 issue: user could still access old "Zenrex/Zerax" web frontend via cached Vercel aliases (`zitex.vercel.app` was serving stale Zenrex HTML with `x-vercel-cache: HIT`).
 

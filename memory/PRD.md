@@ -1,13 +1,14 @@
-# Zenrex Farm — PRD (Updated 2026-06-20)
+# Zenrex Farm — PRD (Updated 2026-02 — Brain v2 Advanced Power Tools Live)
 
 ## Problem Statement
 Arabic-first AI builder for websites/apps/images/videos with credits-based pricing, Stripe payments, background-task persistence, and exportable codebase. Deployed on Hetzner VPS (zenrex.ai).
 
 ## Current Status — Healthy, Production Live ✅
 - Domain: https://zenrex.ai
-- Backend: Docker compose, MongoDB local
+- Backend: Docker compose, MongoDB local (+ Atlas for prod data)
 - Frontend: React PWA, Service Worker v9
 - Stripe: Official `stripe` SDK with proxy support (no more emergentintegrations.payments dependency)
+- **Brain v2 with Advanced Power Tools** is LIVE: AI can capture screenshots, diff visuals, run JS sandbox, and safe bash on the VPS.
 
 ## Pricing (USD)
 | Package | Price | Credits | Type |
