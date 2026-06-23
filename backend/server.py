@@ -2115,6 +2115,32 @@ async def update_payment_settings(settings: SiteSettings, admin: dict = Depends(
     )
     return {"message": "Settings updated"}
 
+# ── 🎛️ AI MODE (Owner-only — toggles FreeBuild between Claude-Only and Hybrid)
+@api_router.get("/admin/ai-mode")
+async def get_admin_ai_mode(admin: dict = Depends(require_admin)):
+    """Returns the platform-wide AI mode used by FreeBuild.
+
+    Possible values:
+      • claude_only — Claude Sonnet 4.5 handles every phase (default).
+      • hybrid      — GPT-5.5 handles first creative build, Claude handles everything else.
+    """
+    from modules.freebuild.ai_mode import get_ai_mode, VALID_MODES
+    current = await get_ai_mode(db)
+    return {"mode": current, "valid_modes": sorted(VALID_MODES)}
+
+
+@api_router.put("/admin/ai-mode")
+async def set_admin_ai_mode(payload: dict, admin: dict = Depends(require_admin)):
+    """Update the platform-wide AI mode. Body: {"mode": "claude_only" | "hybrid"}."""
+    from modules.freebuild.ai_mode import set_ai_mode, VALID_MODES
+    mode = (payload or {}).get("mode")
+    if mode not in VALID_MODES:
+        raise HTTPException(status_code=400, detail=f"mode must be one of {sorted(VALID_MODES)}")
+    await set_ai_mode(db, mode)
+    return {"ok": True, "mode": mode}
+
+
+
 @api_router.put("/admin/users/{user_id}/role")
 async def update_user_role(user_id: str, role: str, current_user: dict = Depends(get_current_user)):
     """Update user role - only owner can promote to super_admin"""

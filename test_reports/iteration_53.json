@@ -1,0 +1,48 @@
+{
+  "summary": "Iteration 3 backend-only verification of the Hybrid AI Mode router. All 19 unit tests in test_ai_mode.py pass. Created /app/backend/tests/test_admin_ai_mode_http.py with 8 HTTP smoke tests against the preview URL — all 8 pass (GET default, PUT→hybrid, GET persistence, PUT invalid→400, PUT/GET no-auth→401/403, non-admin GET+PUT→403, reset to claude_only). Backwards-compat regression: 26 surgical_fixes + 24 surgical_fixes_v2 + 19 ai_mode = 69/69 still pass; with the new HTTP suite total is 77/77. Source-string introspection confirms stream_agent_turn (lines 8873-8907) calls get_ai_mode + classify_phase + pick_provider, and that GPT_PROVIDER='openai_direct' is appended to the provider list ONLY when (_prov == GPT_PROVIDER AND OPENAI_DIRECT_KEY/OPENAI_API_KEY is set). _stream_one_provider at line 9071 handles the 'openai_direct' branch.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {
+        "endpoint": "/api/admin/ai-mode (PUT)",
+        "issue": "Body validation accepts a raw dict (no Pydantic model) — extra/unknown keys are silently ignored. Functional for the current contract but a typed AdminAIModeUpdate(BaseModel) would give clearer 422 errors and OpenAPI schema. Non-blocking."
+      },
+      {
+        "endpoint": "modules/freebuild/freebuild_agent.py line 8894",
+        "issue": "On import failure inside the AI-router try/except, GPT_PROVIDER is assigned in the except block ONLY for that branch — the variable is later referenced unconditionally at line 8898. If the import succeeds, GPT_PROVIDER is correctly imported. If it fails, the local fallback `GPT_PROVIDER = 'openai_direct'` is set. Logic is correct but slightly fragile; consider moving the constant to a module-level fallback. Non-blocking."
+      }
+    ]
+  },
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/backend/tests/test_ai_mode.py",
+    "/app/backend/tests/test_admin_ai_mode_http.py",
+    "/app/backend/tests/test_surgical_fixes.py",
+    "/app/backend/tests/test_surgical_fixes_v2.py",
+    "/app/test_reports/pytest/iteration_53_results.xml"
+  ],
+  "action_items": [
+    "(Optional) Replace the raw dict payload in PUT /api/admin/ai-mode with a Pydantic model `AdminAIModeUpdate(BaseModel): mode: Literal['claude_only','hybrid']` for stronger schema + 422 on malformed body.",
+    "(Optional) Hoist GPT_PROVIDER='openai_direct' to module-level in freebuild_agent.py so the import-failure fallback branch doesn't redeclare it.",
+    "(Optional) Seed admin@zenrex.ai locally too so dev preview matches production credentials (currently only owner@zerax.com is seeded locally; admin@zenrex.ai exists only on the VPS)."
+  ],
+  "critical_code_review_comments": [
+    "ai_mode.py is clean, deterministic, well-commented, no magic numbers — exemplary module-level design. Good use of VALID_MODES set + DEFAULT_MODE constant.",
+    "Provider chain at freebuild_agent.py:8896-8903 correctly prepends GPT only when (mode=hybrid AND phase=first_design AND key present), and ALWAYS appends Claude as fallback. Safe-by-default design verified.",
+    "Server endpoints at server.py:2119/2132 are correctly protected by `Depends(require_admin)` — verified via HTTP test that non-admin user gets 403.",
+    "freebuild_agent.py is now 10,290 lines (was 10,276 last iteration). Still well above the 700-line guideline. Strongly recommend splitting (already flagged in iteration 52)."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_admin_ai_mode_http.py (new — 8 HTTP smoke tests)"
+  ],
+  "success_rate": {
+    "backend": "100% (77/77: 19 ai_mode unit + 8 admin_ai_mode_http + 26 surgical_fixes + 24 surgical_fixes_v2)",
+    "frontend": "N/A (skipped per request — backend-only iteration)"
+  },
+  "test_credentials": "Used owner@zerax.com/owner123 (role=owner, passes require_admin). admin@zenrex.ai/Zenrex@2026 is NOT seeded on the local preview — login returns 'Invalid credentials' as expected per /app/memory/test_credentials.md note.",
+  "seed_data_creation": "Created an ephemeral non-admin user via POST /api/auth/register with email TEST_nonadmin_<uuid>@example.com to verify 403 enforcement. Persisted in DB (no cleanup endpoint exposed). Reset the platform AI mode back to 'claude_only' at end of HTTP suite for test isolation.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "AI Mode router (iteration 3) is fully verified: (a) 19/19 unit tests for classify_phase + pick_provider + describe_choice + constants; (b) 8/8 HTTP smoke tests for GET/PUT /api/admin/ai-mode including auth enforcement (no-auth→401/403, non-admin→403, owner→200) and persistence (PUT hybrid → GET returns hybrid); (c) source introspection confirms stream_agent_turn correctly calls the router and only adds 'openai_direct' to the provider chain when mode=hybrid, phase=first_design, and OPENAI_DIRECT_KEY/OPENAI_API_KEY is set. Backwards-compat: all 50 prior surgical-fix pytest cases still pass — zero regression. End-to-end hybrid agent loop (Claude→GPT→Claude) was NOT tested as it would burn Anthropic+OpenAI credits — verified structurally instead, per the agent-to-agent note. JUnit XML at /app/test_reports/pytest/iteration_53_results.xml.",
+  "rca_of_the_issue": "N/A — no bugs found. The AI Mode router is correctly designed and integrated: pure-Python classifier (no LLM call) cleanly separates first_design vs surgical, pick_provider safely falls back to Claude when no OpenAI key is present, and the server endpoints enforce admin auth via Depends(require_admin). The owner-vs-admin@zenrex.ai credential gap is documented in /app/memory/test_credentials.md and is expected (admin@zenrex.ai is production-only)."
+}

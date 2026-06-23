@@ -107,6 +107,7 @@ import AdminSections from '@/pages/AdminSections';
 import AdminApiKeys from '@/pages/AdminApiKeys';
 import AdminIndependence from '@/pages/AdminIndependence';
 import AdminAIReadiness from '@/pages/AdminAIReadiness';
+import AdminAIMode from '@/pages/AdminAIMode';
 import AdminLearning from '@/pages/AdminLearning';
 import AdminNotifications from '@/pages/AdminNotifications';
 import StoragePage from '@/pages/StoragePage';
@@ -290,6 +291,7 @@ function App() {
           <Route path="/admin/api-keys" element={<ProtectedRoute adminOnly><AdminApiKeys user={user} /></ProtectedRoute>} />
           <Route path="/admin/independence" element={<ProtectedRoute adminOnly><AdminIndependence user={user} /></ProtectedRoute>} />
           <Route path="/admin/ai-readiness" element={<ProtectedRoute adminOnly><AdminAIReadiness user={user} /></ProtectedRoute>} />
+          <Route path="/admin/ai-mode" element={<ProtectedRoute adminOnly><AdminAIMode user={user} /></ProtectedRoute>} />
           <Route path="/admin/learning" element={<ProtectedRoute adminOnly><AdminLearning user={user} /></ProtectedRoute>} />
           <Route path="/admin/security" element={<ProtectedRoute adminOnly><SecurityControlRoom user={user} /></ProtectedRoute>} />
           <Route path="/admin/pricing" element={<ProtectedRoute adminOnly><PricingAdmin user={user} /></ProtectedRoute>} />

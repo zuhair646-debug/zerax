@@ -8873,14 +8873,36 @@ async def stream_agent_turn(
     yield _sse("start", {"message": "🚀 يحلل ويبدأ..."})
     await asyncio.sleep(0)
 
-    # Anthropic ONLY — same family as the platform AI (Claude). No GPT, no Kimi:
-    # those models produce subpar visual designs in Arabic. If credits run out,
-    # we surface a clear Arabic error so the owner can top up.
+    # ── 🎛️ AI MODE ROUTER (admin-selectable) ────────────────────────────
+    # Two modes are supported: claude_only (default) and hybrid.
+    # In hybrid mode, the FIRST creative build is routed to GPT-5.5 for
+    # visual flair; all other phases (surgical edits, debug, conversation)
+    # stay with Claude Sonnet 4.5 for tool-use discipline.
+    try:
+        from .ai_mode import (
+            get_ai_mode, classify_phase, pick_provider, describe_choice,
+            GPT_PROVIDER,
+        )
+        _ai_mode = await get_ai_mode(db) if db is not None else "claude_only"
+        _phase = classify_phase(user_message, project)
+        _prov, _model = pick_provider(_ai_mode, _phase)
+        logger.info(f"[ai-router] mode={_ai_mode} phase={_phase} → {_prov}/{_model}")
+    except Exception as _re:
+        logger.warning(f"[ai-router] failed, falling back to claude: {_re}")
+        _ai_mode, _phase = "claude_only", "surgical"
+        _prov, _model = "anthropic", "claude-sonnet-4-5-20250929"
+        GPT_PROVIDER = "openai_direct"
+
+    # Build the provider chain. Primary = router choice. Fallback = Claude.
     providers = []
+    if _prov == GPT_PROVIDER and (os.environ.get("OPENAI_DIRECT_KEY") or os.environ.get("OPENAI_API_KEY")):
+        providers.append((GPT_PROVIDER, _model))
     if os.environ.get("ANTHROPIC_API_KEY", "").strip():
         providers.append(("anthropic", "claude-sonnet-4-5-20250929"))
+    elif os.environ.get("EMERGENT_LLM_KEY", "").strip():
+        providers.append(("emergent_anthropic", "claude-sonnet-4-5-20250929"))
     if not providers:
-        yield _sse("error", {"message": "لا يوجد مفتاح Anthropic — أضف ANTHROPIC_API_KEY"})
+        yield _sse("error", {"message": "لا يوجد مفتاح Anthropic أو OpenAI — أضف ANTHROPIC_API_KEY أو OPENAI_DIRECT_KEY"})
         return
 
     last_err = None
@@ -9046,6 +9068,9 @@ async def _stream_one_provider(
         if provider == "moonshot":
             client = AsyncOpenAI(api_key=os.environ.get("MOONSHOT_API_KEY", ""),
                                  base_url="https://api.moonshot.ai/v1")
+        elif provider == "openai_direct":
+            # Hybrid mode: direct OpenAI access for the GPT phase
+            client = AsyncOpenAI(api_key=os.environ.get("OPENAI_DIRECT_KEY") or os.environ.get("OPENAI_API_KEY", ""))
         else:
             client = AsyncOpenAI(api_key=os.environ.get("OPENAI_DIRECT_KEY") or os.environ.get("OPENAI_API_KEY", ""))
         try:
