@@ -12,7 +12,25 @@ Arabic-first AI builder for websites/apps/images/videos with credits-based prici
 
 ## Recent Fixes (Feb 2026)
 
-### 🔬 Surgical Quality Pack (P0) — RESOLVED 2026-02-XX (LIVE on VPS)
+### 🎛️ Hybrid AI Mode Toggle (P0) — RESOLVED 2026-02-XX (LIVE on VPS)
+**User request:** "أبني توليفة: Claude للمحادثة + GPT للتصميم الإبداعي + Claude للتعديل الجراحي. توجل من لوحة Admin يبدّل بين الوضعين."
+
+**Implementation:**
+- ✅ New file `backend/modules/freebuild/ai_mode.py` — pure-Python phase classifier + provider picker. No magic numbers, all constants.
+- ✅ Two modes: `claude_only` (default, all phases → Claude) and `hybrid` (first_design → GPT-5.5, surgical/edit/debug → Claude).
+- ✅ Phase classifier (`classify_phase`): deterministic; first_design = empty project + build verbs, OR explicit rebuild markers (`من الصفر / rebuild`). Surgical = everything else on existing content.
+- ✅ Provider picker (`pick_provider`): safe fallback — if `ai_mode=hybrid` but no `OPENAI_DIRECT_KEY`, falls back to Claude.
+- ✅ MongoDB persistence via `platform_settings` collection, doc id `ai_mode`.
+- ✅ Admin endpoints: `GET /api/admin/ai-mode`, `PUT /api/admin/ai-mode` (both `require_admin`).
+- ✅ Admin UI: `AdminAIMode.js` page (route `/admin/ai-mode`) with two cards (Claude Only / Hybrid) and a Shield section listing the 7 guards that protect both modes.
+- ✅ Dashboard tile: `admin-tile-ai-mode` in `AdminDashboard.js` for quick access.
+- ✅ `_stream_one_provider` now handles `openai_direct` provider key alongside existing `anthropic` / `emergent_anthropic` / `moonshot`.
+
+**Tests:** 77/77 pytest pass (19 ai_mode unit + 8 HTTP smoke + 26 surgical_fixes + 24 surgical_fixes_v2). Zero regression. Iteration_53.json.
+
+**Live verification:** GET/PUT `/api/admin/ai-mode` on `https://zenrex.ai` succeeded end-to-end with admin token. All 5 phase routing combinations verified on the actual VPS container (claude_only/hybrid × first_design/surgical/rebuild).
+
+### 🛡️ Surgical Quality Pack v2 (P0) — RESOLVED 2026-02-XX (LIVE on VPS)
 **User Pain (verbatim):** "AI يضيف أقسام مكررة في أسفل الصفحة بدل ما يعدل الموجود، يكدّس كل شي في index.html رغم إن المشروع متعدد الصفحات، ويستخدم write_full_html ويدمّر التصميم."
 
 **RCA (via troubleshoot_agent):**
