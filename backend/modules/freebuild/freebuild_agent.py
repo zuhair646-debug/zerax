@@ -2357,10 +2357,16 @@ def _exec_tool(ctx: FreeBuildToolContext, name: str, args: Dict[str, Any]) -> Di
                 "summary": _summarize_html(html),
             }
         if name == "list_sections":
+            # Honour optional page=... arg so post-write verification can
+            # inspect non-active pages. Falls back to ctx.current_html.
+            _page_arg = (args or {}).get("page")
+            _target_html = ctx.current_html
+            if _page_arg and ctx.pages and _page_arg in ctx.pages:
+                _target_html = ctx.pages.get(_page_arg) or ""
             sections = []
             for m in re.finditer(
                 r'<section\b[^>]*\bid\s*=\s*["\']([a-zA-Z0-9_\-]+)["\'][^>]*>([\s\S]*?)</section>',
-                ctx.current_html, re.I,
+                _target_html, re.I,
             ):
                 sid, inner = m.group(1), m.group(2)
                 text_only = re.sub(r"<[^>]+>", " ", inner).strip()
@@ -2372,7 +2378,7 @@ def _exec_tool(ctx: FreeBuildToolContext, name: str, args: Dict[str, Any]) -> Di
                         p in text_only for p in ["قيد البناء", "placeholder", "TODO", "Coming soon"]
                     ),
                 })
-            return {"count": len(sections), "sections": sections}
+            return {"count": len(sections), "sections": sections, "page": _page_arg or ctx.active_page}
         if name == "audit_html":
             # 🛡️ Anti-lying audit — scans current HTML for unfinished work.
             # Returns a SHARP report that exposes any placeholders / dead

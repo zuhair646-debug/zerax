@@ -1,17 +1,40 @@
-# Zenrex Farm — PRD (Updated 2026-02 — Template Trap Fixed)
+# Zenrex Farm — PRD (Updated 2026-02 — Surgical Quality Fixes)
 
 ## Problem Statement
 Arabic-first AI builder for websites/apps/images/videos with credits-based pricing, Stripe payments, background-task persistence, and exportable codebase. Deployed on Hetzner VPS (zenrex.ai).
 
 ## Current Status — Healthy, Production Live ✅
-- Domain: https://zenrex.ai
+- Domain: https://zenrex.ai (HTTP 200 / api/health → healthy)
 - Backend: Docker compose, MongoDB local (+ Atlas for prod data)
 - Frontend: React PWA, Service Worker v9
 - Stripe: Official `stripe` SDK with proxy support
-- **Brain v2 + Architecture-Aware Build Protocol** is LIVE.
+- **Brain v2 + Architecture-Aware Build Protocol + Surgical-First Policy** are LIVE.
 
 ## Recent Fixes (Feb 2026)
-### 🔧 Template Trap (P0) — RESOLVED 2026-02
+
+### 🔬 Surgical Quality Pack (P0) — RESOLVED 2026-02-XX (LIVE on VPS)
+**User Pain (verbatim):** "AI يضيف أقسام مكررة في أسفل الصفحة بدل ما يعدل الموجود، يكدّس كل شي في index.html رغم إن المشروع متعدد الصفحات، ويستخدم write_full_html ويدمّر التصميم."
+
+**RCA (via troubleshoot_agent):**
+1. `classify_user_intent` was too permissive — words like "كمّل/أكمل" classified as `new_build` → unlocked `write_full_html` → AI used it on existing projects, hallucinating template sections.
+2. After every HTML mutation, Claude only saw `{"ok":true,"length":N}` — never saw the actual new HTML structure → could not detect its own duplicates → kept saying "تم" while page was broken.
+3. Multi-page projects had no nudge — AI kept appending sections to `index.html` even when user wanted a separate page.
+4. Guards were reactive (block AFTER tool was called, wasting tokens) instead of preventive.
+
+**Fixes Applied (4):**
+- ✅ **Fix #1 — Surgical-First Classifier** (`classify_user_intent` at freebuild_agent.py:8085): For any project with `has_existing_content=True`, defaults to `surgical` mode UNLESS user explicitly says rebuild markers (`من الصفر / rebuild / from scratch / احذف كل شي وابدأ`). Tested 12/12 + 26/26 pytest.
+- ✅ **Fix #2 — SURGICAL-HARDBLOCK** (freebuild_agent.py:9119): When classifier=surgical AND project has > 500 chars, `write_full_html` is physically removed from the tool list before Claude sees it. Cannot be called even if AI wants to.
+- ✅ **Fix #3 — Force Post-Write Verification** (freebuild_agent.py:9734): After every HTML-mutating tool (`apply_section`, `create_page`, `remove_section`, `write_full_html`, etc.), the server runs `list_sections` + Counter to detect duplicate `<section id='X'>` and near-duplicate headings, then injects a verification message into the conversation forcing the AI to fix duplicates via `remove_section` before saying "تم". Also flips `force_tool_use_next_iter=True`.
+- ✅ **Fix #4 — Multi-Page Nudge** (freebuild_agent.py:9786 + SURGICAL_EDIT_MICRO_PROMPT): When project has > 1 page AND user mentions "صفحة / كمل" AND AI called `apply_section/op=append`, server suggests `create_page` instead. Multi-Page Awareness rule added to surgical micro-prompt.
+
+**Bonus:** Fixed latent bug in `list_sections` _exec_tool — now honours `page=...` kwarg (previously silently dropped). freebuild_agent.py:2359.
+
+**Verified:**
+- Backend pytest: 26/26 pass (`/app/backend/tests/test_surgical_fixes.py`)
+- VPS live test: 6/6 classifier cases pass on zenrex.ai
+- testing_agent_v3_fork iteration_51 → 100% backend success, no critical issues
+
+### 🔧 Template Trap (P0) — RESOLVED 2026-02 (Previous Session)
 **Root cause:** Two pieces of the AI prompt forced a canned single-page template regardless of user intent:
 1. `STRICT_PHASE_PROTOCOL_ADDENDUM` → "Progressive Build Protocol" forced Turn-1 to build `apply_section('hero')`+`apply_section('nav')` with `href="#section_id"` anchors PLUS placeholder sections via `apply_section` for every imagined section inside `index.html`.
 2. `STRICT_PHASE_PROTOCOL_ADDENDUM` → Phase 2 step 3 mandated "ابنِ Hero + Navbar فقط" with `href="#..."` anchors.
