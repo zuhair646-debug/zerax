@@ -2856,19 +2856,9 @@ def _exec_tool(ctx: FreeBuildToolContext, name: str, args: Dict[str, Any]) -> Di
                                 # Last resort: prepend
                                 html = injection + "\n" + html
             else:
-                html = (
-                    f"<!DOCTYPE html>\n<html dir=\"rtl\" lang=\"ar\">\n<head>\n"
-                    f"<meta charset=\"utf-8\">\n<meta name=\"viewport\" content=\"width=device-width,initial-scale=1\">\n"
-                    f"<title>{title}</title>\n<script src=\"https://cdn.tailwindcss.com\"></script>\n</head>\n"
-                    f"<body class=\"bg-slate-950 text-white min-h-screen\">\n"
-                    f"<nav class=\"px-6 py-4 flex items-center gap-4 border-b border-white/10\">\n"
-                    f"  <a href=\"index.html\" class=\"font-bold\">🏠 الرئيسية</a>\n"
-                    f"</nav>\n"
-                    f"<section id=\"page-hero\" class=\"py-20 px-6 text-center\">\n"
-                    f"  <h1 class=\"text-4xl font-extrabold mb-4\">{title}</h1>\n"
-                    f"  <p class=\"text-slate-300\">ابدأ بإضافة المحتوى الفعلي لهذه الصفحة.</p>\n"
-                    f"</section>\n</body>\n</html>"
-                )
+                # Use the canonical skeleton helper so SCAFFOLD_PLACEHOLDER
+                # is uniformly present (consumed by the BLANK PAGE detector).
+                html = _build_blank_page_skeleton(title)
             ctx.snapshot_before_write()
             ctx.pages[filename] = html
 
