@@ -9079,7 +9079,43 @@ async def _stream_one_provider(
             _docs_block = ""
         messages = [{"role": "system", "content": get_system_prompt(project, is_owner=is_owner) + _lang_directive + (_docs_block or "")}]
         sys_prompt = None
-        openai_tools = [{"type": "function", "function": {"name": t["name"], "description": t["description"], "parameters": t["input_schema"]}} for t in TOOLS_SCHEMA]
+
+        # 🚦 OpenAI hard-caps tools at 128 per request. We have 134+ tools.
+        # Filter out tools that are NOT useful for OpenAI's primary role
+        # (first creative design build): desktop control, GitHub ops, credential
+        # mgmt, etc. These are owner/ops tools — irrelevant for designing HTML.
+        OPENAI_TOOL_BLACKLIST = {
+            # Desktop control (10 tools — owner-only ops)
+            "desktop_pair", "desktop_status", "desktop_screenshot", "desktop_act",
+            "desktop_unpair", "desktop_screen_record", "desktop_screen_record_stop",
+            "desktop_focus_window", "desktop_close_app", "desktop_run_command",
+            # GitHub ops (4 tools — code mgmt, not design)
+            "github_list_repos", "github_create_repo", "github_push_file", "github_get_file",
+            # Credential mgmt (5 tools)
+            "request_credential", "save_credential", "validate_credential",
+            "list_credentials", "delete_credential",
+            # Local browser relay (owner-only debugging)
+            "local_browser_open", "local_browser_screenshot", "local_browser_act",
+            "local_browser_close",
+            # Misc rarely-needed
+            "recommend_service", "get_integration_playbook", "integration_playbook_live",
+            "deploy_to_production", "memory_audit", "memory_audit_save",
+        }
+        _filtered_schema = [t for t in TOOLS_SCHEMA
+                            if t.get("name") not in OPENAI_TOOL_BLACKLIST]
+        # Defensive: if still > 128, truncate (preserving early tools — they are
+        # the most essential like write_full_html, create_page, apply_section).
+        if len(_filtered_schema) > 128:
+            logger.warning(
+                f"[openai] Tool list still {len(_filtered_schema)} after blacklist — truncating to 128"
+            )
+            _filtered_schema = _filtered_schema[:128]
+        logger.info(f"[openai] using {len(_filtered_schema)} tools (was {len(TOOLS_SCHEMA)})")
+        openai_tools = [{"type": "function",
+                          "function": {"name": t["name"],
+                                       "description": t["description"],
+                                       "parameters": t["input_schema"]}}
+                         for t in _filtered_schema]
 
     for m in history_messages[-12:]:
         if m.get("role") in ("user", "assistant"):
