@@ -3493,8 +3493,13 @@ def make_freebuild_chat_router(db, get_current_user):
         """
         if not html:
             return html
-        # Canonical absolute path — works in preview pod AND production Nginx
-        base_url = f"/api/freebuild-chat/published-sites/{slug}/"
+        # 🔧 Use the PUBLIC `/s/{slug}/` path (not /api/...) so relative
+        # links like <a href='movies.html'> resolve to the public URL the
+        # user clicked. Nginx rewrites /s/{slug}/X → /api/.../X for us.
+        # Previously we used the API path here — caused all nav links
+        # to fail because the API path doesn't have the public sub-page
+        # serving wired up identically.
+        base_url = f"/s/{slug}/"
         # Skip if a <base> tag already exists (don't override user-provided)
         if re.search(r"<base\b", html, re.I):
             return html
