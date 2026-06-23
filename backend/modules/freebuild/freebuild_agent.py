@@ -217,6 +217,28 @@ TOOLS_SCHEMA: List[Dict[str, Any]] = [
         },
     },
     {
+        "name": "reorder_sections",
+        "description": (
+            "🔀 **SURGICAL REORDER** — move sections to new positions WITHOUT "
+            "recreating them. Pass `new_order` as array of section IDs in "
+            "desired order. Any IDs NOT in the array stay in their current "
+            "relative order at the end. This is THE correct tool for 'move X "
+            "to top' / 'put Y after Z' requests — use it instead of "
+            "delete+append (which causes drift and loses styling)."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "new_order": {
+                    "type": "array", "items": {"type": "string"},
+                    "description": "Section IDs in desired order, e.g. ['hero', 'contests', 'products-grid', 'footer']",
+                },
+                "page": {"type": "string", "description": "Target filename (default: active_page)"},
+            },
+            "required": ["new_order"],
+        },
+    },
+    {
         "name": "remove_section",
         "description": (
             "🗑️ Delete one or more <section id='...'> blocks from current_html. "
@@ -3244,7 +3266,7 @@ def _exec_tool(ctx: FreeBuildToolContext, name: str, args: Dict[str, Any]) -> Di
                     # 🆕 Mass-edit tools (impl lives in _exec_tool_async)
                     "batch_replace_in_pages", "update_pages_theme",
                     "inject_global_css", "list_all_pages_summary",
-                    "insert_html_at",
+                    "insert_html_at", "reorder_sections",
                     "sync_preview_to_published") or name in ADVANCED_TOOL_NAMES or name in WORKFLOW_TOOL_NAMES or name in PHASE4_TOOL_NAMES or name in PHASE5_TOOL_NAMES or name in DESKTOP_TOOL_NAMES:
             return {"__async__": True, "tool": name, "args": args}
         return {"error": f"unknown tool: {name}"}
@@ -3910,6 +3932,90 @@ async def _exec_tool_async(ctx: FreeBuildToolContext, name: str, args: Dict[str,
                 })
             return {"ok": True, "active_page": ctx.active_page,
                     "total_pages": len(summary), "pages": summary}
+
+        if name == "reorder_sections":
+            """Reorder existing <section id='X'> blocks on a page WITHOUT
+            recreating them. Sections not in new_order keep relative order
+            at the end. This is the canonical tool for "move X to top".
+            """
+            import re as _re
+            new_order = args.get("new_order") or []
+            if not isinstance(new_order, list) or not new_order:
+                return {"ok": False, "error": "new_order must be a non-empty array of section IDs"}
+            target_page = (args.get("page") or ctx.active_page or "index.html").strip()
+            if target_page not in ctx.pages:
+                return {"ok": False, "error": f"page '{target_page}' not found",
+                        "available_pages": list(ctx.pages.keys())}
+            html = ctx.pages[target_page]
+            # Find each section with matching ID and extract its full block (open→close)
+            sections_map: Dict[str, str] = {}
+            order_found: List[str] = []
+            section_pattern = _re.compile(
+                r'<section\b[^>]*\bid\s*=\s*["\']([a-zA-Z0-9_\-]+)["\'][^>]*>',
+                _re.IGNORECASE,
+            )
+            for mo in section_pattern.finditer(html):
+                sid = mo.group(1)
+                start = mo.start()
+                # Find matching </section>
+                depth = 1
+                pos = mo.end()
+                close_re = _re.compile(r"<(/?)section\b[^>]*>", _re.IGNORECASE)
+                end_pos = -1
+                while True:
+                    m2 = close_re.search(html, pos)
+                    if not m2:
+                        break
+                    if m2.group(1) == "":
+                        depth += 1
+                    else:
+                        depth -= 1
+                        if depth == 0:
+                            end_pos = m2.end()
+                            break
+                    pos = m2.end()
+                if end_pos > 0 and sid not in sections_map:
+                    sections_map[sid] = html[start:end_pos]
+                    order_found.append(sid)
+            if not sections_map:
+                return {"ok": False, "error": "no <section id='...'> blocks found on page"}
+            missing = [sid for sid in new_order if sid not in sections_map]
+            if missing:
+                return {"ok": False,
+                        "error": f"these section IDs don't exist on {target_page}: {missing}",
+                        "existing_section_ids": order_found}
+            # Build final order: requested IDs first, then remaining ones (preserve their order)
+            tail_ids = [sid for sid in order_found if sid not in new_order]
+            final_order = list(new_order) + tail_ids
+            # Strip ALL sections from html, then re-insert in final order
+            # before </body>
+            html_stripped = html
+            for sid, block in sections_map.items():
+                html_stripped = html_stripped.replace(block, "", 1)
+            reordered_blocks = "\n".join(sections_map[sid] for sid in final_order)
+            if "</body>" in html_stripped:
+                new_html = html_stripped.replace("</body>", reordered_blocks + "\n</body>", 1)
+            else:
+                new_html = html_stripped + "\n" + reordered_blocks
+            # Clean up excess whitespace from removals
+            new_html = _re.sub(r"\n{3,}", "\n\n", new_html)
+            ctx.snapshot_before_write()
+            ctx.pages[target_page] = new_html
+            if target_page == ctx.active_page:
+                ctx.current_html = new_html
+            ctx.changes_made += 1
+            ctx._needs_republish = True
+            return {
+                "ok": True,
+                "page": target_page,
+                "old_order": order_found,
+                "new_order": final_order,
+                "sections_moved": len(new_order),
+                "bytes_before": len(html),
+                "bytes_after": len(new_html),
+                "summary": f"🔀 رتّبت {len(new_order)} قسم في {target_page} حسب الترتيب المطلوب. الباقي محفوظ في موقعه النسبي.",
+                "will_auto_republish": True,
+            }
 
         if name == "insert_html_at":
             """Surgically insert HTML at a CSS-selector-based position inside a
@@ -5171,8 +5277,45 @@ _SERVICE_CATALOG: Dict[str, List[Dict[str, Any]]] = {
 AGENT_SYSTEM_PROMPT = """أنت **Zenrex Code Brain** — مهندس برمجي ومصمم Senior على أعلى مستوى عالمي (مستوى Apple / Stripe / Linear). تتكلم وتفكر بثقة بدون قيود. تبني مواقع HTML/CSS/JS احترافية كاملة.
 
 ══════════════════════════════════════════════════════════════
-🚨 **القاعدة العليا (تتجاوز كل القواعد الأخرى)**
+🚨 **MODE DETECTION (HIGHEST PRIORITY — قبل أي شي ثاني)**
 ══════════════════════════════════════════════════════════════
+
+قبل أي action، **صنّف طلب العميل بدقّة**:
+
+**A) SURGICAL EDIT** (تعديل جراحي):
+   ملامح:
+   • يذكر **أقسام محددة** للتعديل/النقل/الحذف (مثلاً "انقل قسم المسابقات للأعلى")
+   • كلمات: "غيّر", "بدّل", "انقل", "احذف", "أزل", "نظّف", "اضبط", "edit", "move", "change", "remove", "clean up"
+   • المشروع **موجود بمحتوى** (`current_html` > 1KB)
+   
+   قواعد إجبارية في SURGICAL EDIT — **تطغى على كل القواعد الأخرى**:
+   ❌ **ممنوع** `apply_section` بـ id جديد غير مذكور في رسالة العميل
+   ❌ **ممنوع** "إكمال" الصفحة بأقسام قياسية (newsletter, testimonials, FAQ, CTA, brands)
+   ❌ **ممنوع** `create_page` لصفحات لم يطلبها العميل
+   ❌ **ممنوع** "اقتراح" أقسام لتحسين الصفحة
+   ✅ **مطلوب**: استدعِ tools **فقط** للأقسام/العناصر اللي ذكرها العميل صراحة
+   ✅ **مطلوب**: لـmove/reorder، استخدم `reorder_sections(new_order=[...])` ← أداة واحدة بدل 4
+   ✅ بعد التنفيذ، اعرض **delta واقعي**: "حذفت X، حرّكت Y إلى الأعلى، ما لمست الباقي"
+
+**B) NEW BUILD** (بناء جديد):
+   ملامح: "ابني", "أنشئ", "build", "create" + المشروع فاضي (`current_html < 100b`)
+   قواعد: smart defaults، multi-page rules، Senior Dev mindset.
+
+**C) AMBIGUOUS** (غامض):
+   ملامح: "حسّن", "اجعله أفضل", "improve", "make it better" بدون تفاصيل
+   قواعد: **اسأل سؤال واحد محدد** ("وش بالضبط تبيني أحسّن؟ الألوان؟ القسم الفلاني؟") ثم ابنِ.
+
+**القاعدة الحديدية لـSURGICAL**:
+لو المستخدم قال "انقل قسم المسابقات للأعلى ونظّف الصفحة"، أنت تفعل **فقط**:
+   1. `reorder_sections(new_order=['contests', ...old order without contests])`
+   2. لو فيه أقسام واضحة مكررة → احذفها بـ `remove_section(ids=[...])` 
+   3. **ما تضيف أبداً**: newsletter, download-app, testimonials, FAQ، إلخ
+   4. **لا تلمس باقي الصفحات**
+   5. خلاص — turn ينتهي. لا "إكمال" ولا "تحسينات إضافية".
+
+══════════════════════════════════════════════════════════════
+
+
 
 **⚡ القاعدة #0 — التنفيذ الفوري (Senior Developer Mindset):**
 أنت **Senior Developer** مثل E1/Cursor/Replit Agent، مو مصمم يسأل أسئلة.
@@ -9209,6 +9352,65 @@ async def _stream_one_provider(
                 yield _sse("tool", {"name": "finish", "phase": "done", "label": TOOL_LABELS_AR["finish"]["done"], "step": iterations})
                 await asyncio.sleep(0)
             else:
+                # ── 🛡️ SURGICAL-EDIT GUARD ────────────────────────────────
+                # If the project already has content (existing pages with HTML)
+                # AND the user message looks like a SURGICAL edit request
+                # (mentions specific section names, uses move/delete/clean/edit
+                # verbs), BLOCK any `apply_section` with op='append' that
+                # introduces a section ID NOT mentioned in the user message.
+                # This kills the "AI adds newsletter/testimonials/CTA on every
+                # edit" failure mode.
+                tool_name = tu["name"]
+                tool_input = tu.get("input") or {}
+                surgical_blocked = False
+                if tool_name == "apply_section" and (tool_input.get("op") or "append") == "append":
+                    section_id = (tool_input.get("id") or "").strip().lower()
+                    user_msg_lc = (user_message or "").lower()
+                    # Check if project has substantial existing content
+                    total_existing = sum(len(h or "") for h in ctx.pages.values())
+                    is_existing_project = total_existing > 1000
+                    # Detect surgical-edit verbs in user message
+                    SURGICAL_VERBS = (
+                        "انقل", "حرّك", "حرك", "غيّر", "غير", "بدّل", "بدل",
+                        "احذف", "أزل", "ازل", "نظّف", "نظف", "اضبط", "صحّح", "صحح",
+                        "move ", "edit ", "delete ", "remove ", "clean ",
+                        "reorder ", "fix ", "swap ",
+                    )
+                    is_surgical_request = any(v in user_msg_lc or v in (user_message or "") for v in SURGICAL_VERBS)
+                    # Section ID NOT mentioned in user message (anywhere)
+                    section_unrequested = (
+                        section_id and section_id not in user_msg_lc
+                        and section_id.replace("-", " ") not in user_msg_lc
+                        and section_id.replace("_", " ") not in user_msg_lc
+                        # Also check Arabic-translated keywords
+                        and not any(arabic_kw in (user_message or "") for arabic_kw in (
+                            section_id.replace("-", " "), section_id.replace("_", " ")))
+                    )
+                    if is_existing_project and is_surgical_request and section_unrequested:
+                        surgical_blocked = True
+                        block_msg = (
+                            f"⛔ SURGICAL-EDIT GUARD: العميل طلب تعديل جراحي محدد، "
+                            f"لكنك تحاول إضافة قسم جديد '{section_id}' لم يطلبه. "
+                            f"الطلب الأصلي: '{(user_message or '')[:120]}...'. "
+                            f"ممنوع تضيف أقسام لم يذكرها العميل. "
+                            f"إذا تبي تنقل قسم → استخدم reorder_sections. "
+                            f"إذا تبي تحذف → استخدم remove_section. "
+                            f"إذا تبي تعدّل محتوى قسم موجود → استخدم apply_section بـ op='replace' على نفس الـid الموجود."
+                        )
+                        ctx.log("surgical_guard_block", {"section_id": section_id,
+                                                          "user_msg": (user_message or "")[:200]},
+                                {"blocked": True, "reason": "unrequested section addition in surgical edit"})
+                        # Send blocked result back to model so it adjusts
+                        if provider in ("anthropic", "emergent_anthropic"):
+                            messages.append({"role": "user", "content": [{"type": "tool_result", "tool_use_id": tu["id"], "content": block_msg}]})
+                        else:
+                            messages.append({"role": "tool", "tool_call_id": tu["id"], "content": block_msg})
+                        yield _sse("tool", {"name": tu["name"], "phase": "blocked",
+                                              "label": f"⛔ مُنع: محاولة إضافة قسم '{section_id}' غير مطلوب",
+                                              "step": iterations})
+                        await asyncio.sleep(0)
+                        continue  # skip the actual dispatch
+                # ── End surgical guard ────────────────────────────────────
                 # Wrap tool execution with periodic SSE heartbeats so the frontend
                 # doesn't think we disconnected during long-running tools like
                 # web_search / fetch_url / test_page (which can take 20-60s).
