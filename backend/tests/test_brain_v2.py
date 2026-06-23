@@ -131,6 +131,34 @@ class TestPlanner:
         assert cost["min"] < cost["expected"] < cost["max"]
         assert cost["expected"] > 30
 
+    def test_multi_page_intent_from_explicit_pages(self):
+        """User asking for separate movie+series pages must trigger multi-page plan."""
+        from modules.brain.planner import _detect_multi_page_intent, _extract_requested_pages
+        goal = "ابي تطبيق فيه صفحة أفلام وصفحة مسلسلات وصفحة تسجيل دخول"
+        assert _detect_multi_page_intent(goal, {}) is True
+        pages = _extract_requested_pages(goal)
+        assert "movies.html" in pages
+        assert "series.html" in pages
+        assert "login.html" in pages
+
+    def test_multi_page_plan_uses_create_page_not_section(self):
+        """Critical: multi-page plans must use create_page for separate pages,
+        NOT apply_section with placeholder content (the Template Trap bug)."""
+        goal = "ابي تطبيق فيه صفحة أفلام منفصلة وصفحة مسلسلات"
+        plan = build_plan(goal, "app", {}, [])
+        tools_used = [s["tool"] for s in plan["steps"]]
+        # Must have create_page steps for the named pages
+        assert "create_page" in tools_used
+        # Verify the actual filenames
+        filenames = [s["args"].get("filename") for s in plan["steps"] if s["tool"] == "create_page"]
+        assert "movies.html" in filenames
+        assert "series.html" in filenames
+
+    def test_single_page_landing_stays_single(self):
+        """Landing-page projects without page hints stay single-page."""
+        from modules.brain.planner import _detect_multi_page_intent
+        assert _detect_multi_page_intent("landing بسيط لمنتج SaaS", {}) is False
+
 
 # ─── Strict Mode (Completion Evidence Validation) ────────────────────────
 

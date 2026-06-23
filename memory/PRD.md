@@ -1,4 +1,4 @@
-# Zenrex Farm — PRD (Updated 2026-02 — Brain v2 Advanced Power Tools Live)
+# Zenrex Farm — PRD (Updated 2026-02 — Template Trap Fixed)
 
 ## Problem Statement
 Arabic-first AI builder for websites/apps/images/videos with credits-based pricing, Stripe payments, background-task persistence, and exportable codebase. Deployed on Hetzner VPS (zenrex.ai).
@@ -7,8 +7,30 @@ Arabic-first AI builder for websites/apps/images/videos with credits-based prici
 - Domain: https://zenrex.ai
 - Backend: Docker compose, MongoDB local (+ Atlas for prod data)
 - Frontend: React PWA, Service Worker v9
-- Stripe: Official `stripe` SDK with proxy support (no more emergentintegrations.payments dependency)
-- **Brain v2 with Advanced Power Tools** is LIVE: AI can capture screenshots, diff visuals, run JS sandbox, and safe bash on the VPS.
+- Stripe: Official `stripe` SDK with proxy support
+- **Brain v2 + Architecture-Aware Build Protocol** is LIVE.
+
+## Recent Fixes (Feb 2026)
+### 🔧 Template Trap (P0) — RESOLVED 2026-02
+**Root cause:** Two pieces of the AI prompt forced a canned single-page template regardless of user intent:
+1. `STRICT_PHASE_PROTOCOL_ADDENDUM` → "Progressive Build Protocol" forced Turn-1 to build `apply_section('hero')`+`apply_section('nav')` with `href="#section_id"` anchors PLUS placeholder sections via `apply_section` for every imagined section inside `index.html`.
+2. `STRICT_PHASE_PROTOCOL_ADDENDUM` → Phase 2 step 3 mandated "ابنِ Hero + Navbar فقط" with `href="#..."` anchors.
+3. `planner.py` had a broken `is_multi_page` detector (checked only for the literal phrase "صفحات متعددة" in `answers["site_structure"]`, but discovery is disabled so `answers` is empty — always defaulted to single-page).
+
+**Fix applied (surgical, no new rules added):**
+- ❌ Removed Progressive Build Protocol (placeholder template) from `STRICT_PHASE_PROTOCOL_ADDENDUM`
+- ❌ Removed Phase 2 "Hero+Navbar with anchors" forced template
+- ✅ Added a single **top-of-prompt "القاعدة العليا"** that overrides everything below: "If user mentioned page names → use `create_page` for separate `.html` files, NOT `apply_section` placeholders"
+- ✅ Added new "Architecture-Aware Build Protocol" with explicit Multi-Page vs Single-Page branching
+- ✅ Rewrote `planner.py` with `_detect_multi_page_intent()` + `_extract_requested_pages()` — detects from user goal text (Arabic + English), maps to filenames (movies→movies.html, مسلسلات→series.html, etc.)
+- ✅ Multi-page plans now emit `create_page(filename)` steps before any `apply_section`
+- ✅ 3 new regression tests in `tests/test_brain_v2.py` (all passing — 29/29 total)
+
+**Verified live on zenrex.ai:**
+```
+Multi-page detected for "صفحة أفلام وصفحة مسلسلات": True
+create_page filenames: ['movies.html', 'series.html']
+```
 
 ## Pricing (USD)
 | Package | Price | Credits | Type |
