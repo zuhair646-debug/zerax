@@ -8078,55 +8078,58 @@ SURGICAL_EDIT_MICRO_PROMPT = """أنت **محرّر جراحي (Surgical Editor)
 
 ══════════════════════════════════════════════════════════════
 
+══════════════════════════════════════════════════════════════
+📑 **قاعدة المشاريع متعددة الصفحات (Multi-Page Awareness)**
+══════════════════════════════════════════════════════════════
+إذا كان المشروع يحتوي على أكثر من صفحة (pages dict > 1)، فالعميل **قرّر مسبقاً** أن مشروعه multi-page.
+في هذه الحالة:
+
+✅ **عندما يقول "أكمل / كمّل / أضف قسم بعد كذا" — لازم تسأل نفسك:**
+   • هل القسم الجديد **يكمّل نفس موضوع الصفحة الحالية**؟ → استخدم `apply_section`
+   • هل القسم الجديد **موضوع مستقل** (مثلاً: about / pricing / contact / blog)؟
+     → **يجب** استدعاء `create_page` لإنشاء صفحة جديدة وإضافة رابطها للـnav.
+
+❌ **خطأ كبير**: لا تكدّس كل المحتوى في صفحة index.html إذا المشروع multi-page.
+   كل موضوع مستقل = صفحة مستقلة في الـpages dict + رابط في الـnav.
+
+🎯 **مثال صحيح**:
+   العميل (مشروع 4 صفحات): "كمّل، ضيف قسم عن الفريق"
+   ✅ `create_page(filename='team.html', title='فريق العمل', nav_label='الفريق')`
+   ❌ `apply_section(id='team', op='append', page='index.html')` ← خطأ! يدمج موضوع مستقل في الـindex.
+
+══════════════════════════════════════════════════════════════
+
 تذكّر: **العميل دفع لك ليحصل على EXACTLY what he asked for**. لا تفاجئه بإضافات. لا تتذاكى. **نفّذ الجراحة، انتهى.**
 """
 
 
 def classify_user_intent(user_message: str, has_existing_content: bool) -> str:
-    """Classify the user's request as 'surgical' | 'new_build' | 'ambiguous'.
+    """Classify the user's request as 'surgical' | 'new_build'.
 
-    - surgical: existing project + user mentions specific changes
-    - new_build: empty project OR user explicitly says "build/create new"
-    - ambiguous: vague request like "make it better"
+    SURGICAL-FIRST POLICY (Feb 2026 rewrite based on troubleshoot RCA):
+    - If project has existing content (current_html ≥ 500 chars), DEFAULT to surgical.
+    - Only escape to new_build if user EXPLICITLY says "rebuild / from scratch / من الصفر".
+    - This kills the "AI adds unrequested newsletter/FAQ/CTA" failure mode for 99% of edits.
     """
     msg = (user_message or "").lower()
     msg_raw = user_message or ""
-    # Build verbs — Arabic + English
-    BUILD_VERBS = (
-        "ابني", "اصنع", "أنشئ", "انشئ", "اعمل لي", "سوّي لي", "سوي لي",
-        "build ", "create ", "make a ", "design ",
+    # EXPLICIT rebuild markers — only these escape to new_build mode on existing projects
+    REBUILD_MARKERS = (
+        "من الصفر", "من جديد", "اعد بناء", "أعد بناء", "اعد البناء",
+        "اعد تصميم", "أعد تصميم", "ابدأ من جديد", "ابدأ من الصفر",
+        "احذف كل شي وابدأ", "احذف الكل",
+        "rebuild", "redesign", "start over", "from scratch", "scrap and rebuild",
     )
-    # Surgical verbs — Arabic + English
-    SURGICAL_VERBS = (
-        "انقل", "حرّك", "حرك", "غيّر", "غير", "بدّل", "بدل",
-        "احذف", "أزل", "ازل", "نظّف", "نظف", "اضبط", "صحّح", "صحح",
-        "أصلح", "اصلح", "عدّل", "عدل",
-        "move ", "edit ", "delete ", "remove ", "clean ",
-        "reorder ", "fix ", "swap ", "change ", "update ",
-    )
-    # Ambiguous markers
-    AMBIGUOUS_MARKERS = (
-        "حسّن", "حسن", "اجعله أفضل", "خليه أحلى", "improve ", "make it better",
-        "make it nicer", "polish ",
-    )
-
-    has_build = any(v in msg_raw or v in msg for v in BUILD_VERBS)
-    has_surgical = any(v in msg_raw or v in msg for v in SURGICAL_VERBS)
-    has_ambiguous = any(v in msg_raw or v in msg for v in AMBIGUOUS_MARKERS)
 
     # Empty project → must be new_build
     if not has_existing_content:
         return "new_build"
-    # Existing project + ambiguous + no specific verb → ambiguous
-    if has_ambiguous and not has_surgical:
-        return "ambiguous"
-    # Existing project + surgical verb → SURGICAL
-    if has_surgical:
-        return "surgical"
-    # Existing project + build verb → new_build (user wants to add/expand)
-    if has_build:
+
+    # Existing project + EXPLICIT rebuild request → new_build
+    if any(m in msg_raw or m in msg for m in REBUILD_MARKERS):
         return "new_build"
-    # Default for existing projects → surgical (safer to be strict)
+
+    # Existing project + ANYTHING else → surgical (default-deny new construction)
     return "surgical"
 
 
@@ -9128,6 +9131,18 @@ async def _stream_one_provider(
         elif _intent_for_force == "full_site":
             # 🆕 NEW BUILD — force planning before execution
             _required_tool = "plan_task"
+        # 🔒 SURGICAL MODE HARD-BLOCK — when intent classifier says surgical
+        # AND the project has substantial content, REMOVE `write_full_html`
+        # entirely so the LLM literally cannot rewrite the whole page.
+        # This is the third high-ROI fix recommended by the troubleshoot expert.
+        try:
+            _has_content_blk = bool((project or {}).get("current_html")) and len((project or {}).get("current_html") or "") > 500
+            if _has_content_blk and _intent == "surgical":
+                _blocked_tools = _blocked_tools | {"write_full_html"}
+                logger.info("[agent-stream] SURGICAL-HARDBLOCK: write_full_html removed from toolset")
+        except Exception:
+            pass
+
         if _blocked_tools:
             logger.info(
                 f"[agent-stream] INTENT_LOCK active (intent={_intent_for_force}) "
@@ -9727,6 +9742,130 @@ async def _stream_one_provider(
                     messages.append({"role": "user", "content": [{"type": "tool_result", "tool_use_id": tu["id"], "content": json.dumps(result, ensure_ascii=False)[:6000]}]})
                 else:
                     messages.append({"role": "tool", "tool_call_id": tu["id"], "content": json.dumps(result, ensure_ascii=False)[:6000]})
+
+                # ── 🔬 FORCE POST-WRITE VERIFICATION (Fix #1 from RCA) ────
+                # After ANY HTML-mutating tool, automatically:
+                # (a) run list_sections so Claude SEES the actual structure
+                # (b) auto-detect & flag duplicate section IDs / near-duplicate
+                #     content blocks
+                # (c) if multi-page project AND the AI just appended a section
+                #     instead of creating a page, NUDGE it to consider create_page
+                #
+                # This is the highest-ROI fix per the troubleshoot RCA: forces
+                # the model to inspect its own work BEFORE saying "تم".
+                _MUTATING_TOOLS = {
+                    "write_full_html", "apply_section", "create_page",
+                    "remove_section", "move_section_to_page",
+                    "keep_only_sections", "reorder_sections",
+                    "insert_html_at", "batch_replace_in_pages",
+                    "update_pages_theme", "inject_global_css",
+                }
+                if tu["name"] in _MUTATING_TOOLS and isinstance(result, dict) and result.get("ok"):
+                    try:
+                        # (a) Re-read sections of the active page so AI sees REAL state
+                        _verify_target = (tu.get("input") or {}).get("page") or (ctx.active_page or "index.html")
+                        _sections_now = _exec_tool(ctx, "list_sections", {"page": _verify_target}) or {}
+                        _section_ids = [s.get("id") for s in (_sections_now.get("sections") or []) if s.get("id")]
+
+                        # (b) Detect EXACT duplicate IDs (impossible HTML, must be cleaned)
+                        from collections import Counter as _Counter
+                        _id_counts = _Counter([sid for sid in _section_ids if sid])
+                        _dup_ids = [sid for sid, c in _id_counts.items() if c > 1]
+
+                        # (c) Detect near-duplicate semantic blocks (same heading text inside section)
+                        _near_dups: List[str] = []
+                        try:
+                            from bs4 import BeautifulSoup as _BS
+                            _soup = _BS(ctx.pages.get(_verify_target, "") or "", "html.parser")
+                            _seen_titles: Dict[str, str] = {}
+                            for _sec in _soup.find_all("section"):
+                                _sid = (_sec.get("id") or "").strip()
+                                if not _sid:
+                                    continue
+                                _h = _sec.find(["h1", "h2", "h3"])
+                                if not _h:
+                                    continue
+                                _title = (_h.get_text() or "").strip().lower()
+                                if not _title or len(_title) < 4:
+                                    continue
+                                if _title in _seen_titles and _seen_titles[_title] != _sid:
+                                    _near_dups.append(f"#{_sid} يكرّر عنوان قسم #{_seen_titles[_title]} ('{_title[:40]}')")
+                                else:
+                                    _seen_titles[_title] = _sid
+                        except Exception:
+                            pass
+
+                        # (d) Multi-page nudge: if the project has > 1 page AND the
+                        # user message mentions "صفحة" / "page" / "أضف" / "كمل"
+                        # AND the AI just used apply_section/op=append → nudge to create_page
+                        _multi_page_nudge = ""
+                        try:
+                            _all_pages = list((ctx.pages or {}).keys())
+                            _is_multi_page = len(_all_pages) > 1
+                            _user_msg_lc = (user_message or "").lower()
+                            _wants_page_words = any(w in _user_msg_lc or w in (user_message or "") for w in (
+                                "صفحة", "صفحه", "page ", "كمل الأقسام", "كمل الاقسام",
+                                "أضف صفحة", "اضف صفحة", "أنشئ صفحة", "انشئ صفحة",
+                            ))
+                            if (_is_multi_page and _wants_page_words
+                                and tu["name"] == "apply_section"
+                                and (tu.get("input") or {}).get("op") in (None, "append")):
+                                _multi_page_nudge = (
+                                    "\n\n📑 **تنبيه multi-page**: هذا مشروع متعدد الصفحات "
+                                    f"({len(_all_pages)} صفحات). العميل ذكر 'صفحة' في طلبه — "
+                                    "هل كان يقصد **إنشاء صفحة جديدة** (`create_page`) بدلاً من "
+                                    "إلحاق قسم في الصفحة الحالية؟ راجع طلبه واتخذ الإجراء الصحيح "
+                                    "قبل ما تقول 'تم'."
+                                )
+                        except Exception:
+                            pass
+
+                        # Compose verification message back to the AI
+                        _verif_lines = [
+                            f"🔬 **POST-WRITE VERIFICATION** ({_verify_target}):",
+                            f"  • أقسام موجودة الآن ({len(_section_ids)}): "
+                            f"{', '.join('#'+s for s in _section_ids[:20]) or '—'}",
+                        ]
+                        if _dup_ids:
+                            _verif_lines.append(
+                                f"  • ⚠️ **IDs مكرّرة (يجب الحذف فوراً)**: "
+                                f"{', '.join('#'+d for d in _dup_ids)} → استدع "
+                                f"`remove_section(ids=[...], page='{_verify_target}')` "
+                                "لحذف النسخ الزائدة قبل ما تقول 'تم'."
+                            )
+                        if _near_dups:
+                            _verif_lines.append(
+                                "  • ⚠️ **أقسام بعناوين مكرّرة** (تعني محتوى مكرر للعميل):\n    - "
+                                + "\n    - ".join(_near_dups[:5])
+                                + "\n    → احذف الأقدم أو ادمج المحتوى."
+                            )
+                        if _multi_page_nudge:
+                            _verif_lines.append(_multi_page_nudge)
+                        if not _dup_ids and not _near_dups and not _multi_page_nudge:
+                            _verif_lines.append(
+                                "  • ✅ لا تكرارات. البنية نظيفة. يمكنك المتابعة."
+                            )
+
+                        _verif_msg = "\n".join(_verif_lines)
+
+                        if provider in ("anthropic", "emergent_anthropic"):
+                            messages.append({
+                                "role": "user",
+                                "content": [{"type": "text", "text": _verif_msg}],
+                            })
+                        else:
+                            messages.append({"role": "user", "content": _verif_msg})
+
+                        # If duplicates exist → force AI to use a tool next iter
+                        if _dup_ids or _near_dups:
+                            force_tool_use_next_iter = True
+                            logger.warning(
+                                f"[post-write-verify] {tu['name']}: dup_ids={_dup_ids} "
+                                f"near_dups={len(_near_dups)} → forcing tool_use"
+                            )
+                    except Exception as _vex:
+                        logger.warning(f"[post-write-verify] failed: {_vex}")
+                # ── End force post-write verification ────────────────────
 
         if finished:
             break

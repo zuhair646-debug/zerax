@@ -1,0 +1,32 @@
+{
+  "summary": "Backend-only verification of the 4 high-leverage RCA fixes in /app/backend/modules/freebuild/freebuild_agent.py for Zenrex Farm AI Builder (surgical-first classifier, write_full_html hard-block, post-write duplicate verification, multi-page nudge). 26 pytest cases passed (100%). Tests call the production helpers directly (classify_user_intent, _exec_tool, FreeBuildToolContext) and additionally do source-string introspection to assert the inline production code paths (logger labels, blocked-tool sets, Arabic phrases like 'IDs مكرّرة', 'تنبيه multi-page') still exist exactly as designed.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_surgical_fixes.py",
+    "/app/test_reports/pytest/surgical_fixes_results.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "freebuild_agent.py is now 10,123 lines — well past the 700-line guideline. Strongly recommend splitting into focused modules (tools/, prompts/, agent_loop/, verification/, classifier.py). Maintainability + future RCA debugging will suffer otherwise.",
+    "The 4 fixes are inline inside run_agent_turn_stream (lines 9100-9868) rather than extracted into named helpers (e.g. apply_intent_lock_filter(tools, intent, project) and verify_after_mutation(ctx, tool_name, tool_input, user_message)). Extracting them would (a) make unit-testing direct instead of replicated-logic, (b) reduce risk of regression when run_agent_turn_stream is next refactored. The current tests guard against drift via inspect.getsource() string-checks but a hard refactor would be brittle.",
+    "list_sections in _exec_tool (line 2359) ignores the 'page' kwarg and always reads ctx.current_html. The post-write verification at line 9767 passes {'page': _verify_target} but the value is silently dropped. Works today because the verification always runs on the active page, but it is a latent bug if the AI ever mutates a non-active page (apply_section accepts a 'page' arg). Recommend honouring the 'page' arg in list_sections."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_surgical_fixes.py"
+  ],
+  "success_rate": {"backend": "100%", "frontend": "n/a (skipped per request)"},
+  "test_credentials": "admin@zenrex.ai / Zenrex@2026 — not needed; tests call helpers directly, no HTTP/auth required.",
+  "seed_data_creation": "None. Tests construct in-memory FreeBuildToolContext objects with TEST_ prefixed project IDs; no DB writes.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "The 4 fixes (classify_user_intent surgical-first policy, SURGICAL-HARDBLOCK of write_full_html, POST-WRITE VERIFICATION with dup-ID + near-dup-heading detection, multi-page nudge) are all unit-verified. End-to-end agent-chat-stream wasn't exercised because (a) it requires real Anthropic credits, (b) the agent_to_agent note explicitly allowed direct helper testing, (c) each fix is deterministic Python — the AI's *reaction* to the verification message is the only piece not tested, but Claude Sonnet 4.5's behaviour can't be unit-tested anyway. If you want E2E, mock the Anthropic stream to return a write_full_html tool_use and verify the filter throws a tool_not_found / removes it before sending.",
+  "rca of the issue": "Original bug: AI agent on existing projects (a) appended duplicate sections, (b) ignored multi-page structure stacking everything into index.html, (c) destructively rewrote whole pages with write_full_html on a 'كمّل' request. Root cause: classify_user_intent was too permissive — words like 'كمّل/أكمل' classified as new_build, so the agent received write_full_html as a tool and the AI gladly used it. Mitigation (now verified): (1) Surgical-by-default for has_existing_content=True unless user explicitly says 'من الصفر/rebuild'. (2) Even if classifier mis-fires, write_full_html is physically removed from the tool schema sent to Anthropic when surgical+content>500. (3) After every mutating tool, a deterministic Python pass list_sections + Counter detects duplicate <section id='X'> and pushes 'IDs مكرّرة → استدع remove_section(...)' into the conversation + flips force_tool_use_next_iter=True so the AI cannot say 'تم' until cleaning up. (4) On multi-page projects, the same pass injects 'تنبيه multi-page → create_page' when user mentioned 'صفحة/كمل' and the AI used apply_section/op=append. All 4 logic paths verified deterministically."
+}
