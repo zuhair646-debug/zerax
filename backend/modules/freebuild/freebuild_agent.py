@@ -241,18 +241,20 @@ TOOLS_SCHEMA: List[Dict[str, Any]] = [
     {
         "name": "remove_section",
         "description": (
-            "🗑️ Delete one or more <section id='...'> blocks from current_html. "
-            "Also removes any <nav> links pointing to those sections so the "
-            "navigation stays consistent. Returns the IDs actually removed. "
-            "Use this when the user explicitly asks to delete/remove sections."
+            "🗑️ Delete one or more <section id='...'> blocks from a page. "
+            "Pass `page='X.html'` to target ANY page (not just active). Also "
+            "removes <nav> links pointing to those sections. Returns the IDs "
+            "actually removed. Use when the user explicitly asks to delete."
         ),
         "input_schema": {
             "type": "object",
             "properties": {
                 "ids": {
                     "type": "array", "items": {"type": "string"},
-                    "description": "List of section ids to remove (e.g. ['testimonials', 'stats']).",
+                    "description": "List of section ids to remove (e.g. ['newsletter', 'cta']).",
                 },
+                "page": {"type": "string",
+                          "description": "Optional target filename (default: active_page)"},
             },
             "required": ["ids"],
         },
@@ -2597,22 +2599,42 @@ def _exec_tool(ctx: FreeBuildToolContext, name: str, args: Dict[str, Any]) -> Di
             ids = [str(x).strip() for x in ids if str(x).strip()]
             if not ids:
                 return {"ok": False, "error": "ids array is required"}
-            if not ctx.current_html:
-                return {"ok": False, "error": "current_html is empty"}
-            before_len = len(ctx.current_html)
-            new_html, removed = _remove_sections(ctx.current_html, ids)
+            # 🆕 Cross-page support: `page` arg targets any page directly
+            target_page = (args.get("page") or "").strip()
+            if target_page:
+                if target_page not in ctx.pages:
+                    return {"ok": False,
+                            "error": f"page '{target_page}' not found",
+                            "available_pages": list(ctx.pages.keys())}
+                source_html = ctx.pages[target_page]
+                if not source_html:
+                    return {"ok": False, "error": f"page '{target_page}' is empty"}
+            else:
+                if not ctx.current_html:
+                    return {"ok": False, "error": "current_html is empty; pass page='X.html'"}
+                source_html = ctx.current_html
+            before_len = len(source_html)
+            new_html, removed = _remove_sections(source_html, ids)
             not_found = [i for i in ids if i not in removed]
             if not removed:
-                return {"ok": False, "error": f"none of {ids} were found in current_html",
-                        "not_found": not_found}
+                return {"ok": False, "error": f"none of {ids} were found in {target_page or ctx.active_page}",
+                        "not_found": not_found,
+                        "hint": "call list_sections first to see exact IDs available"}
             ctx.snapshot_before_write()
-            ctx.current_html = new_html
-            ctx._sync_active_page()
+            if target_page:
+                ctx.pages[target_page] = new_html
+                if target_page == ctx.active_page:
+                    ctx.current_html = new_html
+            else:
+                ctx.current_html = new_html
+                ctx._sync_active_page()
             ctx.changes_made += 1
+            ctx._needs_republish = True
             return {"ok": True, "removed_ids": removed, "not_found": not_found,
+                    "page": target_page or ctx.active_page,
                     "length_before": before_len, "length_after": len(new_html),
                     "bytes_freed": before_len - len(new_html),
-                    "message": f"🗑️ تم حذف {len(removed)} قسم: {', '.join('#'+r for r in removed)}"}
+                    "message": f"🗑️ حذفت {len(removed)} قسم من {target_page or ctx.active_page}: {', '.join('#'+r for r in removed)}"}
 
         # ── ATOMIC: move_section_to_page (P0 user demand) ──────────────────
         if name == "move_section_to_page":
@@ -7957,6 +7979,157 @@ verdict = READY، 0 placeholders، 0 dead buttons").
 """
 
 
+SURGICAL_EDIT_MICRO_PROMPT = """أنت **محرّر جراحي (Surgical Editor)** — لست بنّاءً. المشروع موجود ومحتواه جاهز. مهمتك الوحيدة: **نفّذ بالضبط ما طلبه العميل، لا أكثر ولا أقل**.
+
+══════════════════════════════════════════════════════════════
+🔒 **القانون الحديدي #1 — لا إضافات**
+══════════════════════════════════════════════════════════════
+أي قسم/صفحة/feature لم يذكره العميل **صراحةً** في رسالته الحالية → **ممنوع** تضيفه.
+أنت **لست** ذكي إكمال قوالب. أنت ذكي **يحترم نية العميل بدقّة**.
+
+❌ **ممنوع منعاً قاطعاً**:
+   • إضافة newsletter, FAQ, testimonials, CTA, brands, social proof, download-app
+   • أي قسم لم يطلبه العميل بالنص الحالي
+   • `create_page` (لإنشاء صفحات جديدة) — هذي مهمة بناء، مو تعديل
+   • `write_full_html` (لإعادة بناء صفحة بالكامل) — يدمّر الموجود
+   • `apply_section` بـ `op='append'` لقسم لم يُذكر اسمه في طلب العميل
+   • تغيير الألوان لو ما طلب
+   • تغيير الـ typography لو ما طلب
+   • لمس صفحات غير المطلوب صراحة
+
+══════════════════════════════════════════════════════════════
+🛠️ **الأدوات المسموحة (Surgical Toolkit فقط)**
+══════════════════════════════════════════════════════════════
+
+1. **`list_all_pages_summary()`** — استدعها أولاً لتعرف ما يوجد فعلاً.
+
+2. **`read_current_html()`** أو **`list_sections()`** — لفهم البنية الحالية قبل أي تعديل.
+
+3. **`reorder_sections(new_order=['id1','id2',...], page='X.html')`** — لنقل/ترتيب أقسام موجودة. أي IDs غير مذكورة في الـarray تنتقل للنهاية تلقائياً.
+
+4. **`remove_section(ids=['id1','id2'], page='X.html')`** — حذف أقسام موجودة.
+
+5. **`apply_section(id='X', op='replace', html='...', page='Y.html')`** — تعديل محتوى قسم موجود (نفس الـid). **مسموح** لتعديل محتوى موجود. **ممنوع** لإنشاء قسم جديد.
+
+6. **`insert_html_at(page='X.html', selector='#existing-id', where='before|after|inside_start|inside_end', html='...')`** — إدراج عنصر صغير محدد (شارة، input، زر) داخل عنصر موجود.
+
+7. **`update_pages_theme(color_map={...}, pages='all')`** — فقط لو العميل طلب تغيير ألوان صراحة.
+
+8. **`batch_replace_in_pages(find, replace, pages='...')`** — فقط لو العميل طلب استبدال نص/class صراحة.
+
+9. **`inject_global_css(css, marker, pages='...')`** — فقط لو العميل طلب style/تأثير صراحة.
+
+══════════════════════════════════════════════════════════════
+📋 **بروتوكول التنفيذ الإلزامي (4 خطوات فقط)**
+══════════════════════════════════════════════════════════════
+
+**الخطوة 1: حلّل** — اقرأ رسالة العميل، حدّد **بدقة**:
+   • الأقسام/الصفحات المذكورة بالاسم
+   • العمليات المطلوبة (نقل / حذف / تعديل محتوى / تغيير لون / إضافة عنصر صغير محدد)
+   • ما **لم** يذكره العميل = ممنوع تلمسه
+
+**الخطوة 2: خطّط** — اكتب في رسالتك الأولى **خطة JSON قصيرة** (لا تُنفّذ بعد):
+   ```
+   {
+     "operations": [
+       {"tool":"remove_section","args":{"ids":["newsletter","cta"],"page":"index.html"}},
+       {"tool":"reorder_sections","args":{"new_order":["hero","contests","products-grid"],"page":"index.html"}}
+     ],
+     "preserved": ["جميع الألوان","جميع الصفحات الأخرى","التصميم العام"]
+   }
+   ```
+
+**الخطوة 3: نفّذ** — استدعِ الأدوات بالضبط حسب الخطة. لا تضيف خطوة لم تكن في الخطة.
+
+**الخطوة 4: أكّد بدليل واقعي** — اعرض الـbefore/after من نتائج الأدوات. لا تخترع أرقاماً.
+
+══════════════════════════════════════════════════════════════
+🚨 **عقوبات الانتهاك**
+══════════════════════════════════════════════════════════════
+
+• لو حاولت `apply_section` بـop='append' لـid لم يذكره العميل → backend يبلوكك ويرجع لك تعليمة "ممنوع".
+• لو لمست صفحة لم يذكرها العميل → يُعتبر كذب على العميل (`changes_made` تُعدّ لكن النتيجة سلبية).
+• لو "أكملت" الصفحة بأقسام قياسية لم تُطلب → فشل ذريع. العميل سيلغي اشتراكه.
+
+══════════════════════════════════════════════════════════════
+✅ **أمثلة دقيقة**
+══════════════════════════════════════════════════════════════
+
+**مثال 1**:
+العميل: "انقل قسم المسابقات للأعلى"
+✅ الصحيح:
+   1. `list_sections(page='index.html')` → نتيجة: ['hero','products','contests','footer']
+   2. `reorder_sections(new_order=['hero','contests','products','footer'], page='index.html')`
+   3. "✅ نقلت #contests للموقع بعد #hero. الباقي محفوظ."
+❌ الخطأ: استدعاء apply_section لإنشاء newsletter, CTA, testimonials معه.
+
+**مثال 2**:
+العميل: "غيّر لون الزر الأخضر إلى أحمر في صفحة المنتجات فقط"
+✅ الصحيح:
+   1. `batch_replace_in_pages(find='bg-green-500', replace='bg-red-500', pages=['products.html'])`
+   2. "✅ بدّلت 12 استبدال في products.html. باقي الصفحات لم تتأثر."
+
+**مثال 3**:
+العميل: "احذف قسم newsletter من index.html"
+✅ الصحيح:
+   1. `remove_section(ids=['newsletter'], page='index.html')`
+   2. "✅ حذفت #newsletter. الباقي كما هو."
+❌ الخطأ: نسيان `page='index.html'` فيحذف من كل الصفحات.
+
+══════════════════════════════════════════════════════════════
+
+تذكّر: **العميل دفع لك ليحصل على EXACTLY what he asked for**. لا تفاجئه بإضافات. لا تتذاكى. **نفّذ الجراحة، انتهى.**
+"""
+
+
+def classify_user_intent(user_message: str, has_existing_content: bool) -> str:
+    """Classify the user's request as 'surgical' | 'new_build' | 'ambiguous'.
+
+    - surgical: existing project + user mentions specific changes
+    - new_build: empty project OR user explicitly says "build/create new"
+    - ambiguous: vague request like "make it better"
+    """
+    msg = (user_message or "").lower()
+    msg_raw = user_message or ""
+    # Build verbs — Arabic + English
+    BUILD_VERBS = (
+        "ابني", "اصنع", "أنشئ", "انشئ", "اعمل لي", "سوّي لي", "سوي لي",
+        "build ", "create ", "make a ", "design ",
+    )
+    # Surgical verbs — Arabic + English
+    SURGICAL_VERBS = (
+        "انقل", "حرّك", "حرك", "غيّر", "غير", "بدّل", "بدل",
+        "احذف", "أزل", "ازل", "نظّف", "نظف", "اضبط", "صحّح", "صحح",
+        "أصلح", "اصلح", "عدّل", "عدل",
+        "move ", "edit ", "delete ", "remove ", "clean ",
+        "reorder ", "fix ", "swap ", "change ", "update ",
+    )
+    # Ambiguous markers
+    AMBIGUOUS_MARKERS = (
+        "حسّن", "حسن", "اجعله أفضل", "خليه أحلى", "improve ", "make it better",
+        "make it nicer", "polish ",
+    )
+
+    has_build = any(v in msg_raw or v in msg for v in BUILD_VERBS)
+    has_surgical = any(v in msg_raw or v in msg for v in SURGICAL_VERBS)
+    has_ambiguous = any(v in msg_raw or v in msg for v in AMBIGUOUS_MARKERS)
+
+    # Empty project → must be new_build
+    if not has_existing_content:
+        return "new_build"
+    # Existing project + ambiguous + no specific verb → ambiguous
+    if has_ambiguous and not has_surgical:
+        return "ambiguous"
+    # Existing project + surgical verb → SURGICAL
+    if has_surgical:
+        return "surgical"
+    # Existing project + build verb → new_build (user wants to add/expand)
+    if has_build:
+        return "new_build"
+    # Default for existing projects → surgical (safer to be strict)
+    return "surgical"
+
+
 def get_system_prompt(project: Dict[str, Any], is_owner: bool = False) -> str:
     """Return the system prompt customized for the project's mode and role.
 
@@ -8833,6 +9006,28 @@ async def _stream_one_provider(
         except Exception:
             _docs_block = ""
         sys_prompt = get_system_prompt(project, is_owner=is_owner) + _lang_directive + (_docs_block or "")
+        # ── 🔪 SURGICAL MODE — replace 55KB monolith with 4KB focused prompt
+        # when user request is clearly an edit on an existing project. This is
+        # the radical cure for "AI adds unrequested sections" recommended by
+        # the senior-engineer troubleshoot subagent.
+        try:
+            _has_content = bool((project or {}).get("current_html")) and len((project or {}).get("current_html") or "") > 500
+            _intent = classify_user_intent(user_message, _has_content)
+            if _intent == "surgical":
+                sys_prompt = (
+                    SURGICAL_EDIT_MICRO_PROMPT
+                    + _lang_directive
+                    + "\n\n# CURRENT PROJECT SNAPSHOT\n"
+                    + f"Project name: {(project or {}).get('name','?')}\n"
+                    + f"Active page: {(project or {}).get('active_page','index.html')}\n"
+                    + f"Pages: {list(((project or {}).get('pages') or {}).keys())}\n"
+                    + (_docs_block or "")
+                )
+                logger.info(f"[agent] SURGICAL micro-prompt activated for project={project.get('id')} intent={_intent}")
+            else:
+                logger.info(f"[agent] full-prompt mode (intent={_intent})")
+        except Exception as _ie:
+            logger.warning(f"[agent] intent classification failed: {_ie}")
     else:
         from openai import AsyncOpenAI
         if provider == "moonshot":
