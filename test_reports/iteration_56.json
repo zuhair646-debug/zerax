@@ -1,0 +1,47 @@
+{
+  "summary": "Verified the _intent UnboundLocalError fix in _stream_one_provider. The GLOBAL CLASSIFIER block now sits above the provider switch and assigns `_intent` + `_has_content` exactly once for ALL providers (Anthropic, emergent_anthropic, openai_direct, moonshot), with safe fallback values on classifier exception. 5/5 new regression tests pass, AND all 81 prior tests pass — total 86/86.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "verification_details": {
+    "global_classifier_marker": "Present at freebuild_agent.py:9053 (single occurrence).",
+    "intent_assignment_count_file": "`_intent = classify_user_intent` appears EXACTLY ONCE in freebuild_agent.py (line 9059). No duplicate inside Anthropic branch.",
+    "has_content_assignment_count_file": "`_has_content = bool(` appears EXACTLY ONCE in freebuild_agent.py (line 9058).",
+    "provider_branch_position": "Line 9065 `if provider in (\"anthropic\", \"emergent_anthropic\"):` sits directly AFTER the GLOBAL CLASSIFIER block — confirmed both by grep and by inspect.getsource of _stream_one_provider.",
+    "downstream_references_safe": "Real SURGICAL-HARDBLOCK at line 9249 and DESIGN-DESTRUCTION GUARD at line 9695 both reside AFTER the classifier and AFTER the provider branch — `_intent` is guaranteed defined when they read it for every provider path.",
+    "fallback_values_present": "`_intent = \"new_build\"` and `_has_content = False` are set inside the `except Exception` of the global classifier — downstream code cannot hit UnboundLocalError even if classify_user_intent raises.",
+    "inspect_getsource_order": "Within inspect.getsource(_stream_one_provider): GLOBAL CLASSIFIER comment offset=2815 < _has_content=3125 < _intent=3247 < provider branch=3483 < real SURGICAL-HARDBLOCK=13995 < real DESIGN-DESTRUCTION GUARD=42656. Strict ordering confirmed."
+  },
+  "test_results": {
+    "test_intent_scope_fix.py": "5/5 PASS (classifier_runs_before_provider_branch, intent_assigned_outside_provider_branch, has_content_assigned_outside_provider_branch, fallback_values_set_on_classifier_exception, no_duplicate_intent_assignment_inside_anthropic_branch)",
+    "test_openai_param_compat.py": "12/12 PASS — no regression on iteration 53-55 fixes",
+    "test_ai_mode.py": "19/19 PASS",
+    "test_surgical_fixes.py": "26/26 PASS",
+    "test_surgical_fixes_v2.py": "24/24 PASS",
+    "total": "86/86 PASS in 0.68s"
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_intent_scope_fix.py",
+    "/app/test_reports/pytest/iter56_results.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "Fix correctly lifts `_intent` and `_has_content` to function-level scope before any provider dispatch. The try/except wraps both assignments and provides deterministic fallbacks (`new_build`, False), so downstream guards cannot UnboundLocalError regardless of classifier failure mode.",
+    "Defensive note (non-blocking): The fallback `_intent = 'new_build'` is the SAFER default for the SURGICAL-HARDBLOCK (it leaves write_full_html available) but the LESS safe default for the DESIGN-DESTRUCTION GUARD (which only fires on surgical). If classify_user_intent ever silently misclassifies a true surgical edit as new_build via this fallback, design-destruction guard won't fire. Acceptable tradeoff — preferable to crashing — but worth a counter/metric in logs to track fallback hit-rate.",
+    "Single-source assignment (count == 1 in entire freebuild_agent.py) eliminates the shadowing risk the original test guarded against."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "100% (86/86)", "frontend": "n/a (backend-only re-test as requested)"},
+  "test_credentials": "n/a — pure source-introspection + deterministic unit tests, no network or auth required.",
+  "seed_data_creation": "None.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Iteration 56 confirms the third Hybrid-mode bug (UnboundLocalError on `_intent` when provider == openai_direct) is fully resolved. The GLOBAL CLASSIFIER block at freebuild_agent.py:9053-9063 runs unconditionally before the provider switch at line 9065 and assigns both `_intent` and `_has_content` with try/except fallback. All 86 backend tests pass (5 new + 81 prior). No regression on iterations 53-55 fixes (OpenAI 128-tool limit + max_completion_tokens). If future edits to _stream_one_provider re-introduce a branch-local `_intent = classify_user_intent`, test_no_duplicate_intent_assignment_inside_anthropic_branch will catch it immediately.",
+  "rca_of_the_issue": "RCA: Pre-fix, `_intent` and `_has_content` were assigned only inside the `if provider in ('anthropic', 'emergent_anthropic'):` branch (~line 9075). When the Hybrid mode router chose `openai_direct` for first_design intent, that branch was skipped and the downstream SURGICAL-HARDBLOCK (L9237) plus DESIGN-DESTRUCTION GUARD (L9693) referenced an undefined local. Mitigation: main agent extracted classification into a GLOBAL CLASSIFIER block (L9053-9063) that runs once at the top of _stream_one_provider with try/except and safe fallback (`_intent='new_build'`, `_has_content=False`). Verification: source grep confirms single assignment site; inspect.getsource confirms ordering; 5 new regression tests + 81 prior tests all green."
+}

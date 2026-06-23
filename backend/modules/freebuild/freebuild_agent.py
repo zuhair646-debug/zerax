@@ -9050,6 +9050,18 @@ async def _stream_one_provider(
         f"the user explicitly requests a different language for the site itself.\n"
     )
 
+    # ── 🔪 GLOBAL CLASSIFIER — must run BEFORE the provider branch so that
+    # `_intent` and `_has_content` are defined for ALL providers (Anthropic,
+    # OpenAI, openai_direct, moonshot). The downstream SURGICAL-HARDBLOCK and
+    # DESIGN-DESTRUCTION GUARD reference these variables unconditionally.
+    try:
+        _has_content = bool((project or {}).get("current_html")) and len((project or {}).get("current_html") or "") > 500
+        _intent = classify_user_intent(user_message, _has_content)
+    except Exception as _cli_e:
+        logger.warning(f"[agent] global intent classification failed: {_cli_e}")
+        _has_content = False
+        _intent = "new_build"
+
     if provider in ("anthropic", "emergent_anthropic"):
         from anthropic import AsyncAnthropic
         if provider == "emergent_anthropic":
@@ -9072,8 +9084,6 @@ async def _stream_one_provider(
         # the radical cure for "AI adds unrequested sections" recommended by
         # the senior-engineer troubleshoot subagent.
         try:
-            _has_content = bool((project or {}).get("current_html")) and len((project or {}).get("current_html") or "") > 500
-            _intent = classify_user_intent(user_message, _has_content)
             if _intent == "surgical":
                 sys_prompt = (
                     SURGICAL_EDIT_MICRO_PROMPT
