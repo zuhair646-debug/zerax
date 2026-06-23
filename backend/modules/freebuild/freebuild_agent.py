@@ -8668,9 +8668,15 @@ async def _run_openai_compat_agent(
 
     for _step in range(max_iterations):
         iterations += 1
+        # GPT-5.x and o-series models require `max_completion_tokens` instead
+        # of the legacy `max_tokens` (OpenAI deprecated max_tokens for them).
+        _is_gpt5_or_o = isinstance(model, str) and (
+            model.startswith("gpt-5") or model.startswith("o")
+        )
+        _token_kwargs = {"max_completion_tokens": 8000} if _is_gpt5_or_o else {"max_tokens": 8000}
         try:
             resp = await client.chat.completions.create(
-                model=model, messages=messages, tools=openai_tools, max_tokens=8000,
+                model=model, messages=messages, tools=openai_tools, **_token_kwargs,
             )
         except Exception as e:
             return {"ok": False, "error": f"{provider} call failed: {type(e).__name__}: {str(e)[:200]}",

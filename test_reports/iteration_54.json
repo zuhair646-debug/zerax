@@ -1,0 +1,45 @@
+{
+  "summary": "Ran test_openai_param_compat.py (12 new cases) + 4 prior regression suites (test_ai_mode, test_admin_ai_mode_http, test_surgical_fixes, test_surgical_fixes_v2). 89/89 tests pass. HOWEVER, a critical functional gap was discovered: the OpenAI max_completion_tokens fix was applied at ONLY ONE of the two claimed call sites in freebuild_agent.py. The second call site in _stream_one_provider (line 9447-9448) still uses hardcoded `max_tokens=8000`, which means the user's reported BadRequest error in Hybrid (streaming) mode will still occur for gpt-5.x / o-series models.",
+  "backend_issues": {
+    "critical": [
+      {
+        "endpoint": "freebuild_agent.py:_stream_one_provider (line 9447-9448, OpenAI branch)",
+        "issue": "Second OpenAI call site STILL uses hardcoded `max_tokens=8000` instead of the conditional `max_completion_tokens` selector. The fix was claimed in the review request to be applied at TWO call sites, but only the first one (_run_openai_compat_agent, line 8678) was actually patched. Streaming mode (Hybrid path) will continue to throw `Unsupported parameter: 'max_tokens' is not supported with this model` for gpt-5.x and o-series models. User's live https://zenrex.ai error WILL reproduce.",
+        "priority": "CRITICAL"
+      },
+      {
+        "endpoint": "test_openai_param_compat.py::test_source_contains_max_completion_tokens_logic",
+        "issue": "Weak assertion gives FALSE confidence. It only checks `src.count('max_completion_tokens') >= 2`, which is satisfied by the comment on line 8671 + code on line 8676 (BOTH inside call site 1). The test passes even though the fix was applied to only one of the two OpenAI call sites. Recommended: assert the conditional `_token_kwargs` pattern appears at least 2 distinct line ranges, or grep for `chat.completions.create` and ensure none of them pass a raw `max_tokens=` kwarg for gpt-5/o models.",
+        "priority": "HIGH"
+      }
+    ],
+    "minor": []
+  },
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/backend/tests/test_openai_param_compat.py",
+    "/app/backend/tests/test_ai_mode.py",
+    "/app/backend/tests/test_admin_ai_mode_http.py",
+    "/app/backend/tests/test_surgical_fixes.py",
+    "/app/backend/tests/test_surgical_fixes_v2.py",
+    "/app/test_reports/pytest/iteration_54.xml"
+  ],
+  "action_items": [
+    "URGENT: Apply the same conditional kwarg selector pattern to the second OpenAI call site in _stream_one_provider at freebuild_agent.py:9447-9448. Replace `max_tokens=8000` with the same `_token_kwargs` pattern used at line 8676. Without this, Hybrid streaming mode on gpt-5.x / o-series models will keep failing with the exact BadRequest the user reported.",
+    "Strengthen test_source_contains_max_completion_tokens_logic: instead of substring count, parse the file and assert the conditional `model.startswith('gpt-5') or model.startswith('o')` snippet exists within 30 lines of BOTH `chat.completions.create(` call sites. Current test is misleading.",
+    "After fix, re-run pytest backend/tests/test_openai_param_compat.py — the source-introspection test should still pass (occurrences will be 3+)."
+  ],
+  "critical_code_review_comments": [
+    "freebuild_agent.py is now 10,333 lines — far above the 700-line guideline. The fact that the main agent missed patching the second call site is a direct consequence. Strongly recommend splitting OpenAI/Anthropic/streaming logic into separate modules.",
+    "Duplicated kwarg-selection logic at two call sites is a DRY violation. Extract into a small helper `_openai_token_kwargs(model: str, n: int) -> dict` and import at both sites — this would have prevented the half-applied fix.",
+    "Line 8463 in another path also uses `max_tokens=8000` for Anthropic — confirmed it's Anthropic.messages.create so unaffected, but worth a quick audit to ensure no other OpenAI calls were missed."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "100% on declared tests (89/89), but 50% on actual fix coverage (1 of 2 call sites patched)", "frontend": "skipped per request"},
+  "test_credentials": "not needed - pure-Python introspection + unit assertions",
+  "seed_data_creation": "none",
+  "retest_needed": true,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "After main agent patches line 9447-9448 to use the same _token_kwargs conditional, re-run: `python -m pytest /app/backend/tests/test_openai_param_compat.py /app/backend/tests/test_ai_mode.py /app/backend/tests/test_admin_ai_mode_http.py /app/backend/tests/test_surgical_fixes.py /app/backend/tests/test_surgical_fixes_v2.py -v`. Also grep for `max_tokens=8000` in freebuild_agent.py — after fix, that exact literal should no longer appear inside an OpenAI chat.completions.create call.",
+  "rca_of_the_issue": "ROOT CAUSE: Main agent intended to patch both OpenAI call sites (line ~8669 and line ~9441) but only applied the conditional kwarg selector to the first (line 8678 via _run_openai_compat_agent). The second call site in _stream_one_provider's openai branch (line 9447-9448) was missed — it still hardcodes `max_tokens=8000`. The accompanying source-introspection test was too loose (substring count >= 2) so it passed despite only one call site being fixed. REPRODUCTION: Run a Hybrid-mode build on Zenrex with model=gpt-5.5; the streaming path goes through _stream_one_provider → OpenAI branch (line 9447) → BadRequest 'Unsupported parameter max_tokens'. MITIGATION: (1) Replace lines 9447-9449 with the same conditional block used at lines 8672-8678. (2) Better: extract a helper `_openai_token_kwargs(model)` and call from both sites. (3) Tighten the test to assert two distinct conditional-pattern occurrences in source, not just substring count."
+}
