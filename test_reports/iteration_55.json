@@ -1,0 +1,37 @@
+{
+  "summary": "Re-test of iteration 54's CRITICAL flag (half-applied OpenAI max_completion_tokens fix). Verified the new module-level helper `_openai_token_kwargs(model, n)` is now invoked at BOTH OpenAI call sites in freebuild_agent.py (lines 8696 and 9468), and the Anthropic call at line 8463 is correctly preserved with `max_tokens=8000`. All 12 unit tests pass (including strengthened source-introspection), all 69 regression tests pass (test_ai_mode 19 + test_surgical_fixes 26 + test_surgical_fixes_v2 24), and runtime import-and-call verification on the live helper returned the correct dict for all 10 model patterns (gpt-5.5/5.4/5.2/5/o1/o3/o4-mini -> max_completion_tokens; gpt-4o/gpt-4.1/moonshot-v1 -> max_tokens). Helper has a complete docstring covering the GPT-5/o-series requirement.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "verification_details": {
+    "grep_helper_calls": "`grep -c '_openai_token_kwargs(model' freebuild_agent.py` = 3 (1 def at L8599 + 2 calls at L8696, L9468). Requirement >= 2 satisfied.",
+    "grep_raw_max_tokens": "`grep -c 'max_tokens=8000,' freebuild_agent.py` = 1 (Anthropic at L8463 only). Requirement <= 1 satisfied.",
+    "anthropic_preserved": "Line 8463 still uses `max_tokens=8000` inside `client.messages.create(...)` (Anthropic SDK) — not regressed.",
+    "helper_runtime_check": "Imported _openai_token_kwargs and called for 10 model strings — all returned the expected dict.",
+    "kwarg_spread_check": "Both call sites use `**_token_kwargs` in `chat.completions.create(model=model, messages=messages, tools=openai_tools, **_token_kwargs, ...)` (L8699 and L9470).",
+    "docstring_quality": "help(_openai_token_kwargs) shows clear explanation of GPT-5/o-series requirement, OpenAI 400 BadRequestError context, Args, and Returns."
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_openai_param_compat.py",
+    "/app/test_reports/pytest/iter55_results.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "DRY fix is correctly applied — helper centralizes the model-prefix check at module scope, eliminating the divergence that caused iteration 54's CRITICAL flag.",
+    "Minor (non-blocking): The helper uses `isinstance(model, str)` guard; consider raising TypeError on non-string model rather than silently defaulting to max_tokens — could mask programmer errors. Not urgent."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "100% (81/81 tests pass: 12 param_compat + 19 ai_mode + 26 surgical + 24 surgical_v2)", "frontend": "n/a (backend-only re-test)"},
+  "test_credentials": "n/a — deterministic unit + source-introspection tests, no auth/network needed.",
+  "seed_data_creation": "None.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Iteration 54's CRITICAL issue (half-applied max_completion_tokens fix in _stream_one_provider's openai branch) is fully resolved. Both OpenAI call sites now route through the shared `_openai_token_kwargs` helper at line 8599. Anthropic call at line 8463 is unchanged and correct. Hybrid-mode regression for GPT-5.x/o-series models on zenrex.ai should no longer reproduce. The strengthened source-introspection test would fail if either call site regresses to a raw `max_tokens=8000,` kwarg — keep that test in the regression suite.",
+  "rca_of_the_issue": "Iter 54 RCA: First fix patched only _run_openai_compat_agent (L8696) and left _stream_one_provider's openai branch (L9468) with the legacy `max_tokens=8000` kwarg — Hybrid mode in streaming path still hit OpenAI 400 BadRequestError for GPT-5.x/o-series. Mitigation (iter 54 main agent): extracted `_openai_token_kwargs(model, n)` at module scope (L8599) and replaced both call sites with `**_token_kwargs` spread. Verified in iter 55: source grep, unit tests, runtime import, and docstring all confirm the fix is complete and symmetric across both code paths."
+}

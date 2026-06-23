@@ -72,16 +72,26 @@ def test_moonshot_kimi_uses_max_tokens():
 
 
 def test_source_contains_max_completion_tokens_logic():
-    """Source-string check: confirm the inline logic exists in both call
-    sites (not silently removed by a refactor).
+    """Source-string check: confirm the helper is defined AND called from
+    BOTH OpenAI call sites. We grep for `_openai_token_kwargs(` (call form)
+    and require >= 2 occurrences (one per call site in freebuild_agent.py).
     """
     src = open("/app/backend/modules/freebuild/freebuild_agent.py").read()
-    # The conditional kwarg pattern must appear at least twice
-    # (in _run_openai_compat_agent + in _stream_one_provider's openai branch).
-    occurrences = src.count("max_completion_tokens")
-    assert occurrences >= 2, (
-        f"Expected the max_completion_tokens fix in BOTH OpenAI call sites; "
-        f"found only {occurrences} occurrences."
+    # Helper must be defined
+    assert "def _openai_token_kwargs(" in src, "Helper function is not defined"
+    # Helper must be called at least twice (one per OpenAI call site)
+    call_count = src.count("_openai_token_kwargs(model")
+    assert call_count >= 2, (
+        f"Expected the helper to be called at BOTH OpenAI call sites; "
+        f"found only {call_count} call(s)."
+    )
+    # And: no raw `max_tokens=8000,` should appear in OpenAI chat.completions.create
+    # blocks. We can check by ensuring the literal `max_tokens=8000,` only
+    # appears in the Anthropic call (line ~8463) — exactly once now.
+    raw_count = src.count("max_tokens=8000,")
+    assert raw_count <= 1, (
+        f"Expected at most 1 raw `max_tokens=8000,` (Anthropic only); "
+        f"found {raw_count}. OpenAI calls must use the helper."
     )
 
 

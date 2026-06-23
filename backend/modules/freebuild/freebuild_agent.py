@@ -8596,6 +8596,29 @@ async def _run_anthropic_agent(
     }
 
 
+def _openai_token_kwargs(model: str, n: int = 8000) -> Dict[str, int]:
+    """Return the correct token-cap kwarg for an OpenAI chat.completions call.
+
+    GPT-5.x and o-series (o1/o3/o4-mini/etc.) require ``max_completion_tokens``
+    — OpenAI deprecated ``max_tokens`` for these models and returns a 400
+    BadRequestError if it is passed. Legacy models (gpt-4o, gpt-4.1, moonshot)
+    still take ``max_tokens``.
+
+    Args:
+        model: The model identifier (e.g. ``"gpt-5.5"`` or ``"gpt-4o"``).
+        n: The token cap value.
+
+    Returns:
+        Dict with exactly one key — either ``max_completion_tokens`` or
+        ``max_tokens``.
+    """
+    is_gpt5_or_o = isinstance(model, str) and (
+        model.startswith("gpt-5") or model.startswith("o")
+    )
+    return {"max_completion_tokens": n} if is_gpt5_or_o else {"max_tokens": n}
+
+
+
 async def _run_openai_compat_agent(
     project: Dict[str, Any],
     user_message: str,
@@ -8670,10 +8693,7 @@ async def _run_openai_compat_agent(
         iterations += 1
         # GPT-5.x and o-series models require `max_completion_tokens` instead
         # of the legacy `max_tokens` (OpenAI deprecated max_tokens for them).
-        _is_gpt5_or_o = isinstance(model, str) and (
-            model.startswith("gpt-5") or model.startswith("o")
-        )
-        _token_kwargs = {"max_completion_tokens": 8000} if _is_gpt5_or_o else {"max_tokens": 8000}
+        _token_kwargs = _openai_token_kwargs(model, 8000)
         try:
             resp = await client.chat.completions.create(
                 model=model, messages=messages, tools=openai_tools, **_token_kwargs,
@@ -9444,8 +9464,10 @@ async def _stream_one_provider(
                 continue
         else:
             try:
+                # GPT-5.x and o-series models require `max_completion_tokens`.
+                _token_kwargs = _openai_token_kwargs(model, 8000)
                 resp = await client.chat.completions.create(
-                    model=model, messages=messages, tools=openai_tools, max_tokens=8000,
+                    model=model, messages=messages, tools=openai_tools, **_token_kwargs,
                 )
             except Exception as e:
                 msg = f"{type(e).__name__}: {str(e)[:200]}"
