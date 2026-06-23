@@ -6722,14 +6722,16 @@ For questions: legal@zenrex.ai
                     if new_html:
                         update_set["current_html"] = _inject_zenrex_footer(new_html)
                         update_set["current_phase"] = "build"
-                        # Persist the full multi-page state too so the
-                        # `pages` dict + active_page survive across turns.
-                        if final_ctx:
-                            try:
-                                update_set["pages"] = final_ctx.pages
-                                update_set["active_page"] = final_ctx.active_page
-                            except Exception:
-                                pass
+                    # Persist the full multi-page state ALWAYS (even when only
+                    # non-active pages changed) so the `pages` dict + active_page
+                    # survive across turns and reach auto-republish below.
+                    if final_ctx:
+                        try:
+                            update_set["pages"] = final_ctx.pages
+                            update_set["active_page"] = final_ctx.active_page
+                        except Exception:
+                            pass
+                    if new_html:
                         # Mark prior phases done in history for the sidebar
                         try:
                             _proj_now = await db.freebuild_projects.find_one(
@@ -6751,13 +6753,11 @@ For questions: legal@zenrex.ai
                     logger.exception("background agent persist failed")
 
                 # ── 🔁 AUTO-REPUBLISH: keep the public /s/{slug} URL in lockstep
-                # with the editor. Previously: user makes edits → AI sends old
-                # published URL → user sees stale broken version. Now: if this
-                # project was previously published, push the new HTML + pages
-                # to freebuild_published_sites IMMEDIATELY so the live URL
-                # always matches what the user just saw in chat.
+                # with the editor. Triggers when ANY change happened — including
+                # batch tools that edit non-active pages (where new_html itself
+                # may not have shifted but ctx.pages did).
                 try:
-                    if new_html and final_ctx and final_ctx.changes_made > 0:
+                    if final_ctx and final_ctx.changes_made > 0:
                         proj_doc = await db.freebuild_projects.find_one(
                             {"id": pid},
                             {"_id": 0, "published_slug": 1, "name": 1, "user_id": 1,
@@ -6765,18 +6765,35 @@ For questions: legal@zenrex.ai
                         ) or {}
                         slug = proj_doc.get("published_slug")
                         if slug:
-                            all_pages = proj_doc.get("pages") or {"index.html": proj_doc.get("current_html") or new_html}
+                            # Trust the just-persisted ctx.pages (already saved
+                            # to DB on line ~6746 above). Fall back to DB pages
+                            # if ctx ones are missing.
+                            ctx_pages = dict(final_ctx.pages) if final_ctx.pages else {}
+                            db_pages = proj_doc.get("pages") or {}
+                            all_pages = ctx_pages or db_pages or {
+                                "index.html": proj_doc.get("current_html") or new_html or ""
+                            }
+                            # Ensure index.html is present
                             if "index.html" not in all_pages:
-                                all_pages["index.html"] = proj_doc.get("current_html") or new_html
+                                all_pages["index.html"] = (
+                                    final_ctx.current_html if final_ctx else ""
+                                ) or proj_doc.get("current_html") or new_html or ""
+                            published_current = (
+                                all_pages.get(final_ctx.active_page if final_ctx else "index.html")
+                                or all_pages.get("index.html")
+                                or proj_doc.get("current_html")
+                                or new_html
+                                or ""
+                            )
                             await db.freebuild_published_sites.update_one(
                                 {"slug": slug},
                                 {"$set": {
-                                    "current_html": proj_doc.get("current_html") or new_html,
+                                    "current_html": published_current,
                                     "pages": all_pages,
                                     "updated_at": _now(),
                                 }},
                             )
-                            logger.info(f"[auto-republish] synced slug={slug} for project={pid} ({len(all_pages)} pages)")
+                            logger.info(f"[auto-republish] synced slug={slug} for project={pid} ({len(all_pages)} pages, active={getattr(final_ctx,'active_page',None)})")
                 except Exception as _rep_e:
                     logger.warning(f"[auto-republish] failed: {_rep_e}")
 

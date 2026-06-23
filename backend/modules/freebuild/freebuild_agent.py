@@ -197,10 +197,12 @@ TOOLS_SCHEMA: List[Dict[str, Any]] = [
     {
         "name": "apply_section",
         "description": (
-            "Surgically apply a section to current_html. op='append' adds a "
-            "new section before </body>; op='replace' overwrites an existing "
+            "Surgically apply a section to a page. op='append' adds a new "
+            "section before </body>; op='replace' overwrites an existing "
             "<section id='X'>; op='delete' completely removes the "
             "<section id='X'>...</section> block AND its matching nav link. "
+            "Pass `page='X.html'` to operate on a SPECIFIC page (no switch_page "
+            "needed). Without `page`, operates on the active_page. "
             "Always re-call list_sections or audit_html after to verify."
         ),
         "input_schema": {
@@ -209,6 +211,7 @@ TOOLS_SCHEMA: List[Dict[str, Any]] = [
                 "id": {"type": "string", "description": "section id (e.g. 'quran')"},
                 "html": {"type": "string", "description": "<section id='X'>...</section> fragment. Empty/optional when op='delete'."},
                 "op": {"type": "string", "enum": ["append", "replace", "delete"]},
+                "page": {"type": "string", "description": "Optional target filename (e.g. 'index.html'). Defaults to active_page."},
             },
             "required": ["id", "op"],
         },
@@ -934,6 +937,100 @@ TOOLS_SCHEMA: List[Dict[str, Any]] = [
         "input_schema": {
             "type": "object",
             "properties": {},
+        },
+    },
+    {
+        "name": "batch_replace_in_pages",
+        "description": (
+            "🔁 **TOP-TIER MASS-EDIT TOOL** — find-and-replace across multiple DB "
+            "pages in ONE call (no per-page switch_page loops). Auto-republish "
+            "after. Use this for: rename a CSS class everywhere, fix a typo "
+            "site-wide, change a brand string, swap a font-family, update a "
+            "phone number across all pages. Returns per-file replacement count."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "find": {"type": "string", "description": "String to find (or regex if is_regex=true)"},
+                "replace": {"type": "string", "description": "Replacement string"},
+                "pages": {"description": "'all' or list of filenames like ['index.html','cart.html']"},
+                "is_regex": {"type": "boolean", "description": "Treat `find` as regex (default false)"},
+            },
+            "required": ["find", "replace"],
+        },
+    },
+    {
+        "name": "update_pages_theme",
+        "description": (
+            "🎨 **THEME SWAP IN ONE CALL** — atomic colour theme replacement "
+            "across ALL pages. Handles Tailwind utility classes (bg-green-600 "
+            "→ bg-blue-800) AND inline hex (#16a34a → #1e3a8a) simultaneously. "
+            "Pass a `color_map` dict and the tool walks every page, applying "
+            "longest-key-first replacement (so 'green-700' isn't matched inside "
+            "'green-7'). This is the canonical way to recolour a multi-page site."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "color_map": {"type": "object",
+                                "description": "Dict like {'green-600':'blue-800','#16a34a':'#1e3a8a','green-50':'sky-50'}"},
+                "pages": {"description": "'all' or list of filenames"},
+            },
+            "required": ["color_map"],
+        },
+    },
+    {
+        "name": "inject_global_css",
+        "description": (
+            "💉 Inject a <style> block into the <head> of ALL (or selected) "
+            "pages. Tagged with a unique marker so subsequent calls REPLACE "
+            "the same block (no duplication). Use for: site-wide CSS variables, "
+            "theme overrides, custom utility classes, animation keyframes."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "css": {"type": "string", "description": "Raw CSS body (no <style> tags)"},
+                "marker": {"type": "string",
+                            "description": "Unique marker for this injection (default 'zenrex-global'). Calls with the same marker overwrite the previous block."},
+                "pages": {"description": "'all' or list of filenames"},
+            },
+            "required": ["css"],
+        },
+    },
+    {
+        "name": "list_all_pages_summary",
+        "description": (
+            "📋 Quick read-only inventory of all pages: filename → bytes + "
+            "first 200 chars of body preview + has_localstorage flag. Call "
+            "this BEFORE any batch operation so you know exactly what pages "
+            "exist and what each contains."
+        ),
+        "input_schema": {"type": "object", "properties": {}},
+    },
+    {
+        "name": "insert_html_at",
+        "description": (
+            "📎 **SURGICAL INSERT** — insert raw HTML at a precise CSS-selector "
+            "position inside ONE page. The single most precise editing tool — "
+            "use it for: adding a search bar above a filter, inserting a "
+            "section between two existing ones, adding a badge inside a card, "
+            "appending a button at the end of a form. Supports selectors: "
+            "'tag' (e.g. 'h2'), '#id' (e.g. '#filter'), '.class' (e.g. "
+            "'.product-card'), or combined 'tag#id' / 'tag.class'. Positions: "
+            "'before' (sibling), 'after' (sibling), 'inside_start' (first child), "
+            "'inside_end' (last child), 'replace' (overwrite element)."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "page": {"type": "string", "description": "Target filename (default: active_page)"},
+                "selector": {"type": "string", "description": "CSS-ish: 'h2', '#filter', '.card', 'section#hero'"},
+                "where": {"type": "string", "description": "before|after|inside_start|inside_end|replace"},
+                "html": {"type": "string", "description": "Raw HTML to insert"},
+                "all_matches": {"type": "boolean", "description": "Apply to every match (default false → first only)"},
+            },
+            "required": ["selector", "where", "html"],
         },
     },
     {
@@ -2402,22 +2499,43 @@ def _exec_tool(ctx: FreeBuildToolContext, name: str, args: Dict[str, Any]) -> Di
             sid = (args.get("id") or "").strip()
             frag = (args.get("html") or "").strip()
             op = args.get("op") or "append"
+            target_page = (args.get("page") or "").strip()
             if not sid:
                 return {"ok": False, "error": "id is required"}
-            if not ctx.current_html:
-                return {"ok": False, "error": "current_html is empty; call write_full_html first"}
+            # 🆕 Cross-page support: if `page` arg given, operate on that page
+            # without requiring a switch_page() first. This prevents the
+            # "added to wrong page" bug where active_page differs from intent.
+            if target_page:
+                if target_page not in ctx.pages:
+                    return {"ok": False,
+                            "error": f"page '{target_page}' not found in project",
+                            "available_pages": list(ctx.pages.keys())}
+                source_html = ctx.pages[target_page]
+                if not source_html and op != "delete":
+                    return {"ok": False, "error": f"page '{target_page}' is empty"}
+            else:
+                source_html = ctx.current_html
+                if not source_html:
+                    return {"ok": False, "error": "current_html is empty; call write_full_html first or pass page='X.html'"}
             if op == "delete":
                 # 🗑️ Real removal — strip the entire <section id='X'> block + matching nav link
-                before_len = len(ctx.current_html)
-                new_html, removed = _remove_sections(ctx.current_html, [sid])
+                before_len = len(source_html)
+                new_html, removed = _remove_sections(source_html, [sid])
                 if not removed:
                     return {"ok": False, "op": op, "id": sid,
-                            "error": f"section '{sid}' not found in current_html — nothing removed"}
+                            "error": f"section '{sid}' not found in {target_page or 'current_html'} — nothing removed"}
                 ctx.snapshot_before_write()
-                ctx.current_html = new_html
-                ctx._sync_active_page()
+                if target_page:
+                    ctx.pages[target_page] = new_html
+                    if target_page == ctx.active_page:
+                        ctx.current_html = new_html
+                else:
+                    ctx.current_html = new_html
+                    ctx._sync_active_page()
                 ctx.changes_made += 1
+                ctx._needs_republish = True
                 return {"ok": True, "op": op, "id": sid,
+                        "page": target_page or ctx.active_page,
                         "removed_ids": removed,
                         "length_before": before_len,
                         "length_after": len(new_html),
@@ -2426,7 +2544,7 @@ def _exec_tool(ctx: FreeBuildToolContext, name: str, args: Dict[str, Any]) -> Di
                 return {"ok": False, "error": "html is required for append/replace"}
             appends = [(sid, frag)] if op == "append" else []
             replaces = [(sid, frag)] if op == "replace" else []
-            merged = _merge_sections(ctx.current_html, appends, replaces, None)
+            merged = _merge_sections(source_html, appends, replaces, None)
             if not merged:
                 return {"ok": False, "error": "merge failed"}
             merged, fixed = _fix_dead_navigation_links(merged)
@@ -2435,10 +2553,17 @@ def _exec_tool(ctx: FreeBuildToolContext, name: str, args: Dict[str, Any]) -> Di
                 merged, ctx.pages,
             )
             ctx.snapshot_before_write()
-            ctx.current_html = merged
-            ctx._sync_active_page()
+            if target_page:
+                ctx.pages[target_page] = merged
+                if target_page == ctx.active_page:
+                    ctx.current_html = merged
+            else:
+                ctx.current_html = merged
+                ctx._sync_active_page()
             ctx.changes_made += 1
+            ctx._needs_republish = True
             return {"ok": True, "op": op, "id": sid,
+                    "page": target_page or ctx.active_page,
                     "new_total_length": len(merged),
                     "dead_links_fixed": fixed,
                     "anchor_to_page_rewrites": anchor_rewrites}
@@ -3115,7 +3240,12 @@ def _exec_tool(ctx: FreeBuildToolContext, name: str, args: Dict[str, Any]) -> Di
                     "save_credential", "validate_credential", "list_credentials",
                     "delete_credential", "recommend_service",
                     "github_list_repos", "github_create_repo", "github_push_file",
-                    "github_get_file", "save_learning") or name in ADVANCED_TOOL_NAMES or name in WORKFLOW_TOOL_NAMES or name in PHASE4_TOOL_NAMES or name in PHASE5_TOOL_NAMES or name in DESKTOP_TOOL_NAMES:
+                    "github_get_file", "save_learning",
+                    # 🆕 Mass-edit tools (impl lives in _exec_tool_async)
+                    "batch_replace_in_pages", "update_pages_theme",
+                    "inject_global_css", "list_all_pages_summary",
+                    "insert_html_at",
+                    "sync_preview_to_published") or name in ADVANCED_TOOL_NAMES or name in WORKFLOW_TOOL_NAMES or name in PHASE4_TOOL_NAMES or name in PHASE5_TOOL_NAMES or name in DESKTOP_TOOL_NAMES:
             return {"__async__": True, "tool": name, "args": args}
         return {"error": f"unknown tool: {name}"}
     except Exception as e:
@@ -3566,6 +3696,365 @@ async def _exec_tool_async(ctx: FreeBuildToolContext, name: str, args: Dict[str,
                 args.get("key_functionalities") or [],
                 args.get("app_type") or "saas_app",
             )
+
+        # ═════════════════════════════════════════════════════════════
+        # 🆕 MASS-EDIT TOOLS — for cross-page changes in ONE call
+        # ═════════════════════════════════════════════════════════════
+
+        if name == "batch_replace_in_pages":
+            """Find-and-replace across multiple DB pages in a single tool call.
+
+            Args:
+              find: string to find (literal or regex if is_regex=True)
+              replace: replacement string
+              pages: 'all' or list of filenames (e.g. ['index.html','cart.html'])
+              is_regex: whether `find` is a regex pattern (default False)
+
+            Returns per-file replace count + total. Auto-syncs current_html
+            for the active page so the live preview updates immediately.
+            """
+            import re as _re
+            find_str = args.get("find") or ""
+            replace_str = args.get("replace") if args.get("replace") is not None else ""
+            target = args.get("pages") or "all"
+            is_regex = bool(args.get("is_regex", False))
+            if not find_str:
+                return {"ok": False, "error": "find string required"}
+            target_files = (list(ctx.pages.keys()) if target == "all"
+                             else [f for f in (target if isinstance(target, list) else [target])
+                                    if f in ctx.pages])
+            if not target_files:
+                return {"ok": False, "error": "no matching pages found",
+                        "available_pages": list(ctx.pages.keys())}
+            ctx.snapshot_before_write()
+            per_file = []
+            total = 0
+            try:
+                if is_regex:
+                    pattern = _re.compile(find_str, _re.MULTILINE)
+                for fn in target_files:
+                    html = ctx.pages.get(fn) or ""
+                    if is_regex:
+                        new_html, n = pattern.subn(replace_str, html)
+                    else:
+                        n = html.count(find_str)
+                        new_html = html.replace(find_str, replace_str) if n else html
+                    if n > 0:
+                        ctx.pages[fn] = new_html
+                        if fn == ctx.active_page:
+                            ctx.current_html = new_html
+                        total += n
+                    per_file.append({"file": fn, "replacements": n,
+                                      "bytes": len(new_html)})
+            except _re.error as re_e:
+                return {"ok": False, "error": f"invalid regex: {re_e}"}
+            if total > 0:
+                ctx.changes_made += 1
+                ctx._needs_republish = True
+            return {
+                "ok": True,
+                "total_replacements": total,
+                "files": per_file,
+                "summary": (
+                    f"🔁 استبدلت `{find_str[:40]}` → `{str(replace_str)[:40]}` في "
+                    f"{sum(1 for f in per_file if f['replacements']>0)}/{len(per_file)} "
+                    f"صفحة ({total} استبدال إجمالي)."
+                ),
+                "will_auto_republish": total > 0,
+            }
+
+        if name == "update_pages_theme":
+            """Bulk theme swap across ALL DB pages with a single mapping dict.
+
+            Handles BOTH Tailwind utility classes (bg-green-600 → bg-navy-800)
+            AND inline hex colors (#16a34a → #1e3a8a) in one atomic operation.
+
+            Args:
+              color_map: dict like {
+                "green-50":"sky-50","green-100":"amber-100",
+                "green-500":"blue-700","green-600":"blue-800","green-700":"blue-900",
+                "#16a34a":"#1e3a8a","#22c55e":"#1e40af","#15803d":"#1e3a8a",
+                "#dcfce7":"#dbeafe","#f0fdf4":"#eff6ff"
+              }
+              pages: 'all' or list of filenames
+            """
+            color_map = args.get("color_map") or {}
+            if not isinstance(color_map, dict) or not color_map:
+                return {"ok": False, "error": "color_map dict required (e.g. {'green-600':'blue-800', '#16a34a':'#1e3a8a'})"}
+            target = args.get("pages") or "all"
+            target_files = (list(ctx.pages.keys()) if target == "all"
+                             else [f for f in (target if isinstance(target, list) else [target])
+                                    if f in ctx.pages])
+            if not target_files:
+                return {"ok": False, "error": "no matching pages",
+                        "available_pages": list(ctx.pages.keys())}
+            ctx.snapshot_before_write()
+            # Sort keys longest-first to avoid 'green-7' matching inside 'green-700'
+            sorted_keys = sorted(color_map.keys(), key=lambda k: -len(k))
+            per_file = []
+            grand_total = 0
+            for fn in target_files:
+                html = ctx.pages.get(fn) or ""
+                file_total = 0
+                for k in sorted_keys:
+                    v = color_map[k]
+                    if not k or v is None:
+                        continue
+                    n = html.count(k)
+                    if n:
+                        html = html.replace(k, str(v))
+                        file_total += n
+                if file_total > 0:
+                    ctx.pages[fn] = html
+                    if fn == ctx.active_page:
+                        ctx.current_html = html
+                grand_total += file_total
+                per_file.append({"file": fn, "swaps": file_total,
+                                  "bytes": len(html)})
+            if grand_total > 0:
+                ctx.changes_made += 1
+                ctx._needs_republish = True
+            return {
+                "ok": True,
+                "total_swaps": grand_total,
+                "files": per_file,
+                "mappings_applied": len(color_map),
+                "summary": (
+                    f"🎨 طبّقت {len(color_map)} mapping ألوان على {len(per_file)} "
+                    f"صفحة ({grand_total} استبدال إجمالي)."
+                ),
+                "will_auto_republish": grand_total > 0,
+            }
+
+        if name == "inject_global_css":
+            """Inject a <style> block into the <head> of ALL pages (or selected).
+
+            Use this for theme overrides, custom CSS variables, or rules that
+            should apply site-wide. The block is auto-marked with a comment
+            so subsequent calls REPLACE the previous injection (no duplication).
+
+            Args:
+              css: raw CSS rules (e.g. ':root{--brand:#1e3a8a}\\n.btn-primary{background:var(--brand)}')
+              marker: optional unique marker (default 'zenrex-global'); calls
+                       with the SAME marker overwrite the previous injection
+              pages: 'all' or list
+            """
+            import re as _re
+            css_body = args.get("css") or ""
+            marker = (args.get("marker") or "zenrex-global").strip()
+            if not css_body:
+                return {"ok": False, "error": "css body required"}
+            target = args.get("pages") or "all"
+            target_files = (list(ctx.pages.keys()) if target == "all"
+                             else [f for f in (target if isinstance(target, list) else [target])
+                                    if f in ctx.pages])
+            if not target_files:
+                return {"ok": False, "error": "no matching pages"}
+            ctx.snapshot_before_write()
+            start_tag = f"<!-- @{marker}:start -->"
+            end_tag = f"<!-- @{marker}:end -->"
+            block = f"{start_tag}\n<style data-zenrex=\"{marker}\">\n{css_body}\n</style>\n{end_tag}"
+            existing_pattern = _re.compile(
+                _re.escape(start_tag) + r".*?" + _re.escape(end_tag),
+                _re.DOTALL,
+            )
+            per_file = []
+            for fn in target_files:
+                html = ctx.pages.get(fn) or ""
+                if existing_pattern.search(html):
+                    # Replace existing block in-place
+                    new_html = existing_pattern.sub(block, html, count=1)
+                    action = "replaced"
+                elif "</head>" in html:
+                    new_html = html.replace("</head>", f"  {block}\n</head>", 1)
+                    action = "inserted"
+                else:
+                    # No <head> — prepend a minimal head wrapper
+                    new_html = f"<head>{block}</head>\n" + html
+                    action = "prepended"
+                ctx.pages[fn] = new_html
+                if fn == ctx.active_page:
+                    ctx.current_html = new_html
+                per_file.append({"file": fn, "action": action, "bytes": len(new_html)})
+            ctx.changes_made += 1
+            ctx._needs_republish = True
+            return {
+                "ok": True,
+                "files": per_file,
+                "marker": marker,
+                "css_bytes": len(css_body),
+                "summary": (
+                    f"💉 حقنت CSS عام ({len(css_body)} بايت) بـ marker '{marker}' "
+                    f"في {len(per_file)} صفحة."
+                ),
+                "will_auto_republish": True,
+            }
+
+        if name == "list_all_pages_summary":
+            """Quick read-only inventory: filename → size + first 200 chars of body.
+            Useful BEFORE batch operations so the agent knows what's there."""
+            summary = []
+            for fn, html in ctx.pages.items():
+                import re as _re
+                body_match = _re.search(r"<body[^>]*>(.*?)</body>", html or "", _re.S | _re.I)
+                body = body_match.group(1).strip() if body_match else (html or "")
+                # Strip tags for preview
+                preview = _re.sub(r"<[^>]+>", " ", body)
+                preview = _re.sub(r"\s+", " ", preview).strip()[:200]
+                summary.append({
+                    "file": fn,
+                    "bytes": len(html or ""),
+                    "preview": preview,
+                    "has_localstorage": "localStorage" in (html or ""),
+                    "is_active": fn == ctx.active_page,
+                })
+            return {"ok": True, "active_page": ctx.active_page,
+                    "total_pages": len(summary), "pages": summary}
+
+        if name == "insert_html_at":
+            """Surgically insert HTML at a CSS-selector-based position inside a
+            specific page. The single most precise editing tool — for adding a
+            search bar above the filter, a section between two existing ones,
+            a badge inside a card, a button at the end of a form, etc.
+
+            Args:
+              page: target filename (e.g. 'products.html'). If omitted, uses active_page.
+              selector: CSS-ish selector. Supported forms:
+                          - 'h1', 'h2', 'header', 'footer', 'nav', '.cls', '#id',
+                            'section#xxx', 'div.foo', 'button.add-to-cart'.
+                            (Lightweight matcher — first occurrence by default)
+              where: 'before' | 'after' | 'inside_start' | 'inside_end' | 'replace'
+              html: raw HTML to insert
+              all_matches: if True (default False), apply to every match in the page
+
+            Returns: matches_found, applied, file_bytes.
+            """
+            import re as _re
+            page_fn = (args.get("page") or ctx.active_page or "index.html").strip()
+            selector = (args.get("selector") or "").strip()
+            where = (args.get("where") or "after").strip().lower()
+            payload = args.get("html") or ""
+            all_matches = bool(args.get("all_matches", False))
+            if page_fn not in ctx.pages:
+                return {"ok": False, "error": f"page '{page_fn}' not found",
+                        "available_pages": list(ctx.pages.keys())}
+            if not selector:
+                return {"ok": False, "error": "selector required"}
+            if not payload and where != "replace":
+                return {"ok": False, "error": "html required (use where='replace' to delete instead)"}
+            if where not in ("before", "after", "inside_start", "inside_end", "replace"):
+                return {"ok": False, "error": "where must be one of: before|after|inside_start|inside_end|replace"}
+
+            # Build a regex matching the OPENING tag of the selector
+            sel = selector
+            tag = "[a-zA-Z][a-zA-Z0-9]*"
+            attr_filter = ""
+            # Parse #id
+            m_id = _re.match(r"^([a-zA-Z][a-zA-Z0-9]*)?#([a-zA-Z0-9_\-]+)$", sel)
+            m_cls = _re.match(r"^([a-zA-Z][a-zA-Z0-9]*)?\.([a-zA-Z0-9_\-]+)$", sel)
+            if m_id:
+                if m_id.group(1):
+                    tag = _re.escape(m_id.group(1))
+                attr_filter = rf'[^>]*\bid\s*=\s*["\']{_re.escape(m_id.group(2))}["\']'
+            elif m_cls:
+                if m_cls.group(1):
+                    tag = _re.escape(m_cls.group(1))
+                attr_filter = rf'[^>]*\bclass\s*=\s*["\'][^"\']*\b{_re.escape(m_cls.group(2))}\b'
+            elif _re.match(r"^[a-zA-Z][a-zA-Z0-9]*$", sel):
+                tag = _re.escape(sel)
+            else:
+                return {"ok": False, "error": f"unsupported selector '{selector}' (use 'tag', '.class', '#id', or 'tag.class' / 'tag#id')"}
+
+            html = ctx.pages[page_fn]
+            applied = 0
+            # Find all matches of opening tag
+            open_pattern = _re.compile(rf"<{tag}\b{attr_filter}[^>]*>", _re.IGNORECASE)
+            matches = list(open_pattern.finditer(html))
+            if not matches:
+                return {"ok": False, "error": f"no element matched selector '{selector}' in {page_fn}",
+                        "selector_regex": open_pattern.pattern}
+
+            # For each (or first) match, compute the corresponding close tag and apply
+            def find_close(html: str, start_after: int, tag_name: str) -> int:
+                """Return index of the matching close-tag end position (after >).
+                Handles nesting for the same tag name."""
+                tag_lc = tag_name.lower()
+                p = _re.compile(rf"<(/?){_re.escape(tag_lc)}\b[^>]*>", _re.IGNORECASE)
+                depth = 1
+                pos = start_after
+                while True:
+                    m = p.search(html, pos)
+                    if not m:
+                        return -1
+                    if m.group(1) == "":
+                        depth += 1
+                    else:
+                        depth -= 1
+                        if depth == 0:
+                            return m.end()
+                    pos = m.end()
+
+            new_html = html
+            offset = 0
+            target_matches = matches if all_matches else matches[:1]
+            for mo in target_matches:
+                start = mo.start() + offset
+                open_end = mo.end() + offset
+                # Tag name from the matched open tag
+                t_match = _re.match(r"<([a-zA-Z][a-zA-Z0-9]*)", mo.group(0))
+                if not t_match:
+                    continue
+                tname = t_match.group(1)
+                close_end = find_close(new_html, open_end, tname)
+                if close_end < 0:
+                    continue
+                if where == "before":
+                    new_html = new_html[:start] + payload + new_html[start:]
+                    offset += len(payload)
+                elif where == "after":
+                    new_html = new_html[:close_end] + payload + new_html[close_end:]
+                    offset += len(payload)
+                elif where == "inside_start":
+                    new_html = new_html[:open_end] + payload + new_html[open_end:]
+                    offset += len(payload)
+                elif where == "inside_end":
+                    # find pos right BEFORE the close tag
+                    close_tag_start = new_html.rfind(f"</{tname}", open_end, close_end)
+                    if close_tag_start < 0:
+                        continue
+                    new_html = new_html[:close_tag_start] + payload + new_html[close_tag_start:]
+                    offset += len(payload)
+                elif where == "replace":
+                    removed = close_end - start
+                    new_html = new_html[:start] + payload + new_html[close_end:]
+                    offset += len(payload) - removed
+                applied += 1
+
+            if applied == 0:
+                return {"ok": False, "error": "could not apply (closing tag not found)"}
+            ctx.snapshot_before_write()
+            ctx.pages[page_fn] = new_html
+            if page_fn == ctx.active_page:
+                ctx.current_html = new_html
+            ctx.changes_made += 1
+            ctx._needs_republish = True
+            return {
+                "ok": True,
+                "page": page_fn,
+                "selector": selector,
+                "where": where,
+                "matches_found": len(matches),
+                "matches_applied": applied,
+                "bytes_before": len(html),
+                "bytes_after": len(new_html),
+                "summary": (
+                    f"📎 أدرجت HTML ({len(payload)}b) "
+                    f"`{where}` `{selector}` في `{page_fn}` ({applied} موضع)."
+                ),
+                "will_auto_republish": True,
+            }
+
+        # ═════════════════════════════════════════════════════════════
 
         # 🔄 Force published ← source sync (use when auto-republish failed)
         if name == "sync_preview_to_published":
@@ -4697,6 +5186,39 @@ AGENT_SYSTEM_PROMPT = """أنت **Zenrex Code Brain** — مهندس برمجي 
     غير ذلك → ابنِ فوراً.
   • بعد البناء، اعرض النتيجة وقل: "بنيتها بالخيارات الافتراضية. لو تبي تغيّر
     [الألوان/المحتوى/التخطيط] قول لي." — لا تسأل **قبل** البناء.
+
+**⚡ القاعدة #0.5 — أدوات التعديل الجماعي (Mass-Edit Tools):**
+في المشاريع متعددة الصفحات، **ممنوع** تستخدم `switch_page` + `write_full_html`
+في حلقة لكل صفحة. استخدم الأدوات الجماعية في tool call واحد:
+
+  • **`update_pages_theme(color_map={...}, pages='all')`** — لتغيير ألوان الموقع
+    كاملاً. يعدّل Tailwind classes (مثل `bg-green-600 → bg-blue-800`) و
+    inline hex (`#16a34a → #1e3a8a`) في نفس الوقت عبر كل الصفحات.
+    مثال:
+      `update_pages_theme(color_map={
+        "green-50":"sky-50", "green-100":"amber-100",
+        "green-500":"blue-700","green-600":"blue-800","green-700":"blue-900",
+        "#16a34a":"#1e3a8a","#dcfce7":"#dbeafe","#f0fdf4":"#eff6ff"
+      })`
+
+  • **`batch_replace_in_pages(find, replace, pages='all')`** — find/replace
+    عبر كل الصفحات. للنصوص، الكلاسات، الـURLs، أرقام الهاتف، إلخ.
+    دعم regex لو is_regex=true.
+
+  • **`inject_global_css(css, marker='theme-override')`** — حقن style block
+    في `<head>` كل الصفحات. يستبدل البلوك السابق بنفس الـmarker تلقائياً
+    (لا تكرار). استخدمه للـCSS variables، الـ typography، الـ animations.
+
+  • **`insert_html_at(page, selector, where, html)`** — إدراج HTML في موقع
+    محدد بدقة. selector ممكن يكون 'h2' / '#filter' / '.product-card' /
+    'section#hero'. where: before/after/inside_start/inside_end/replace.
+    **هذي الأداة هي الأبسط** لإضافة search bar فوق فلتر، أو شارة داخل
+    بطاقة، أو قسم جديد بين قسمين موجودين. لا تستخدم `apply_section` لإضافة
+    عناصر صغيرة — استخدم `insert_html_at`.
+
+  • **`list_all_pages_summary()`** — استدعِها **قبل** أي batch لتعرف ما يوجد.
+
+**القاعدة:** أي تغيير يطال صفحتين فأكثر → استخدم الأدوات الجماعية، لا الحلقة.
 
 **🚨 القاعدة #1 — احترام المعمارية (Multi-Page vs Single-Page):**
 لو العميل ذكر **أي** من الكلمات التالية في طلبه:
@@ -7638,6 +8160,44 @@ async def _run_anthropic_agent(
         messages.append({"role": "assistant", "content": assistant_blocks})
 
         if not tool_uses:
+            # ── 🛡️ LYING GUARD ────────────────────────────────────────────
+            # If the user clearly asked for an ACTION (add/change/build/etc.)
+            # and the model returned text-only with NO tool calls AND nothing
+            # was changed this turn, force ONE retry. This kills the "AI lies
+            # about completion" failure mode.
+            assistant_text = ""
+            for b in assistant_blocks:
+                if b.get("type") == "text":
+                    assistant_text += "\n" + b["text"]
+            ACTION_VERBS = (
+                "أضف", "اضف", "غيّر", "غير", "اعمل", "اكتب", "احذف", "ابني", "ابن",
+                "نفّذ", "نفذ", "حدّث", "حدث", "أنشئ", "انشئ", "بدّل", "بدل",
+                "add ", "change ", "update ", "delete ", "build ", "create ",
+                "make ", "write ", "replace ", "remove ",
+            )
+            user_wants_action = any(v in (user_message or "") for v in ACTION_VERBS)
+            already_acted = ctx.changes_made > 0
+            already_retried = getattr(ctx, "_lying_guard_fired", False)
+            lied = user_wants_action and not already_acted and not already_retried
+            if lied:
+                ctx._lying_guard_fired = True
+                ctx.log("lying_guard", {"user_text": (user_message or "")[:200]},
+                         {"reason": "no tool_use this turn but user asked for action"})
+                messages.append({
+                    "role": "user",
+                    "content": [{
+                        "type": "text",
+                        "text": (
+                            "⛔ ادّعيت إتمام التغيير لكن **لم تستدعِ أي tool**. "
+                            "هذا يُعتبر كذباً على العميل. الآن استدعِ tool واحد "
+                            "على الأقل (insert_html_at / apply_section / "
+                            "update_pages_theme / batch_replace_in_pages / "
+                            "create_page / write_full_html) لتنفّذ الطلب فعلاً. "
+                            "ممنوع تخرج رد نصي بدون استدعاء tool."
+                        ),
+                    }],
+                })
+                continue  # let the model try again
             for b in assistant_blocks:
                 if b.get("type") == "text":
                     summary = (summary + "\n" + b["text"]).strip()
@@ -8546,18 +9106,25 @@ async def _stream_one_provider(
                 "أنجزت لك", "تم الإنجاز", "خلصت", "خلّصت", "خلصنا",
                 "تمّت العملية", "تمت العملية", "إنجاز كامل",
                 "ما تم إنجازه", "ما تم بناؤه", "ما تم تنفيذه",
+                # ── Bare-verb past-tense (NEW — broader catch) ─────────
+                "✅ تم", "تم!", "تم أ", "تم إ", "تم ت", "تم ح",
+                "أضفت", "حذفت", "عدّلت", "عدلت", "غيّرت", "غيرت",
+                "بنيت", "أنشأت", "نقلت", "ربطت", "كتبت", "حدّثت", "حدثت",
                 # ── Past-tense + اب prefix (colloquial) ──────────────
                 "أنشأت لك", "صنعت لك", "بنيت لك", "أضفت لك", "حذفت لك",
                 "ربطت لك", "حدّثت لك", "حدثت لك", "عدّلت لك", "عدلت لك",
                 # ── Past-tense without prefix (often used after fake action) ─
-                "نقلت", "نقلتها", "نقلته", "نقلتهم",
-                "حذفت", "حذفتها", "حذفته",
-                "عدّلت", "عدلت", "عدّلتها", "عدلتها",
+                "نقلتها", "نقلته", "نقلتهم",
+                "حذفتها", "حذفته",
+                "عدّلتها", "عدلتها",
                 "أبقيت", "ابقيت", "خلّيت", "خليت",
                 "رتّبت", "رتبت", "نظّمت", "نظمت",
                 # ── Tool-result fabrication signals ──────────────────
                 "fixed", "completed", "implemented",
                 "محتوى حقيقي", "بايت", "KB محتوى",
+                # ── English completion claims (NEW) ───────────────────
+                "✅ done", "✅ added", "✅ updated", "✅ created", "✅ changed",
+                "successfully added", "successfully created", "successfully updated",
             )
             looks_fake_achievement = (
                 bool(joined)
