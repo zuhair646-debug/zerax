@@ -9119,6 +9119,15 @@ async def _stream_one_provider(
             _required_tool = "apply_section"
             _blocked_tools = {"create_page", "move_section_to_page",
                                "write_full_html"}
+        elif _intent_for_force == "repair":
+            # 🆕 BUG REPAIR — force the AI to consult the troubleshoot expert
+            # FIRST before attempting any patch. This kills the "patch loop"
+            # where the AI keeps applying broken fixes to the same bug.
+            _required_tool = "ask_troubleshoot_expert"
+            # Don't block other tools — expert will recommend which tool to use next
+        elif _intent_for_force == "full_site":
+            # 🆕 NEW BUILD — force planning before execution
+            _required_tool = "plan_task"
         if _blocked_tools:
             logger.info(
                 f"[agent-stream] INTENT_LOCK active (intent={_intent_for_force}) "
@@ -9650,21 +9659,37 @@ async def _stream_one_provider(
                                             + _js_audit.get("total_problems", 0)
                                             + _nav_audit.get("total_problems", 0))
                         if problems_total > 0:
+                            # 🆕 REPAIR-LOOP BREAKER: track repeated audit failures
+                            # If audit reports problems > 0 for 2+ consecutive iterations,
+                            # the AI is in a feedback loop. Force escalation to the
+                            # troubleshoot expert (instead of asking same AI to fix).
+                            ctx._repair_attempts = getattr(ctx, "_repair_attempts", 0) + 1
+                            ctx._last_audit_problems = problems_total
+                            escalate_to_expert = ctx._repair_attempts >= 2
                             result = {
                                 **result,
                                 "_dummy_audit": _dummy_audit,
                                 "_js_handler_audit": _js_audit,
                                 "_navigation_audit": _nav_audit,
                                 "_repair_required": True,
+                                "_repair_attempts": ctx._repair_attempts,
                                 "_message_ar": (
                                     f"⚠️ السيرفر اختبر النتيجة ووجد {problems_total} مشكلة:\n"
                                     f"  • UI ميتة: {_dummy_audit.get('total_problems', 0)}\n"
                                     f"  • JS handlers مكسورة: {_js_audit.get('total_problems', 0)}\n"
                                     f"  • روابط navigation معطلة: {_nav_audit.get('total_problems', 0)}\n"
-                                    "🛠️ أصلِح كل مشكلة عبر apply_section قبل ما تقول 'تم'. "
-                                    "لو في handler يستدعي دالة غير معرّفة، أضف الدالة في "
-                                    "<script> داخل نفس التعديل. لو في صفحة بدون رجوع للرئيسية، "
-                                    "أضف <a href='index.html'> فيها."
+                                    + (
+                                        "🚨 **REPAIR LOOP DETECTED** — جربت إصلاح هذا "
+                                        f"{ctx._repair_attempts} مرات بدون نجاح. **توقّف** عن "
+                                        "محاولة الإصلاح المباشر، واستدعِ `ask_troubleshoot_expert` "
+                                        "الآن بالتفاصيل الكاملة (المشكلة + ما جربت + الحالة الحالية). "
+                                        "هذا تفويض إلزامي."
+                                        if escalate_to_expert else
+                                        "🛠️ أصلِح كل مشكلة عبر apply_section قبل ما تقول 'تم'. "
+                                        "لو في handler يستدعي دالة غير معرّفة، أضف الدالة في "
+                                        "<script> داخل نفس التعديل. لو في صفحة بدون رجوع للرئيسية، "
+                                        "أضف <a href='index.html'> فيها."
+                                    )
                                 ),
                             }
                             force_tool_use_next_iter = True
@@ -9672,8 +9697,14 @@ async def _stream_one_provider(
                                 f"[post-write-audit] {tu['name']}: "
                                 f"dummy={_dummy_audit.get('total_problems', 0)} "
                                 f"js_handler={_js_audit.get('total_problems', 0)} "
-                                f"nav={_nav_audit.get('total_problems', 0)} → forcing repair"
+                                f"nav={_nav_audit.get('total_problems', 0)} "
+                                f"attempt={ctx._repair_attempts} → "
+                                f"{'ESCALATE TO EXPERT' if escalate_to_expert else 'forcing repair'}"
                             )
+                        else:
+                            # Audit passed — reset repair counter
+                            if hasattr(ctx, "_repair_attempts"):
+                                ctx._repair_attempts = 0
                     except Exception as _dde:
                         logger.warning(f"[post-write-audit] scan failed: {_dde}")
                 label_done = TOOL_LABELS_AR.get(tu["name"], {}).get("done", "✅ تم")
