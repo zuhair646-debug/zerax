@@ -1884,7 +1884,14 @@ def _rewrite_anchors_to_real_pages(html: str, pages_dict: Dict[str, str]) -> tup
 
 def _build_blank_page_skeleton(title: str, nav_label: str = "") -> str:
     """Generate the default HTML skeleton used by create_page and
-    move_section_to_page when the target page doesn't yet exist."""
+    move_section_to_page when the target page doesn't yet exist.
+
+    The skeleton includes:
+      • A working back-link to index.html (prevents orphan pages).
+      • A SCAFFOLD_PLACEHOLDER marker that the post-write detector picks up
+        as a "blank page" → forces the AI to fill it with real content
+        before saying "تم".
+    """
     safe_title = (title or "صفحة جديدة").strip()
     return (
         f"<!DOCTYPE html>\n<html dir=\"rtl\" lang=\"ar\">\n<head>\n"
@@ -1892,10 +1899,17 @@ def _build_blank_page_skeleton(title: str, nav_label: str = "") -> str:
         f"<title>{safe_title}</title>\n<script src=\"https://cdn.tailwindcss.com\"></script>\n</head>\n"
         f"<body class=\"bg-slate-950 text-white min-h-screen\">\n"
         f"<nav class=\"px-6 py-4 flex items-center gap-4 border-b border-white/10\">\n"
-        f"  <a href=\"index.html\" class=\"font-bold\">🏠 الرئيسية</a>\n"
+        f"  <a href=\"index.html\" class=\"font-bold hover:text-amber-400\">🏠 الرئيسية</a>\n"
+        f"  <span class=\"opacity-50\">/</span>\n"
+        f"  <span class=\"opacity-80\">{safe_title}</span>\n"
         f"</nav>\n"
         f"<main class=\"py-20 px-6\">\n"
-        f"  <h1 class=\"text-4xl font-extrabold mb-4 text-center\">{safe_title}</h1>\n"
+        f"  <section id=\"page-header\" class=\"max-w-4xl mx-auto text-center\">\n"
+        f"    <h1 class=\"text-4xl font-extrabold mb-4\">{safe_title}</h1>\n"
+        f"    <p class=\"opacity-70 text-lg\" data-scaffold=\"true\">"
+        f"<!-- SCAFFOLD_PLACEHOLDER: AI MUST replace this paragraph and add real sections via apply_section before finish -->"
+        f"محتوى الصفحة قيد البناء — سيتم تعبئتها بأقسام حقيقية.</p>\n"
+        f"  </section>\n"
         f"</main>\n</body>\n</html>"
     )
 
@@ -9588,6 +9602,59 @@ async def _stream_one_provider(
                 tool_name = tu["name"]
                 tool_input = tu.get("input") or {}
                 surgical_blocked = False
+
+                # ── 🛡️ DESIGN-DESTRUCTION GUARD (NEW Fix #7) ───────────────
+                # If the AI does apply_section/op='replace' on an EXISTING
+                # section AND the new HTML is dramatically larger or smaller
+                # than the existing block, that's almost certainly a hallucinated
+                # full rewrite (the typical "I'll make it better" failure mode).
+                # We block it and ask for a tighter surgical change.
+                if (tool_name == "apply_section"
+                    and (tool_input.get("op") or "append") == "replace"
+                    and _intent == "surgical"):
+                    try:
+                        _replace_id = (tool_input.get("id") or "").strip()
+                        _new_html = (tool_input.get("html") or "")
+                        _replace_page = tool_input.get("page") or (ctx.active_page or "index.html")
+                        _existing_html = ctx.pages.get(_replace_page, "") or ""
+                        import re as _re_rep
+                        _m = _re_rep.search(
+                            r'<section\b[^>]*\bid\s*=\s*["\']' + _re_rep.escape(_replace_id) + r'["\'][^>]*>([\s\S]*?)</section>',
+                            _existing_html, _re_rep.I,
+                        )
+                        if _m:
+                            _old_len = len(_m.group(0))
+                            _new_len = len(_new_html)
+                            # Allow up to 2.5x growth or shrinkage. Anything beyond
+                            # is suspicious.
+                            _ratio = (_new_len / max(_old_len, 1))
+                            if _old_len > 400 and (_ratio > 2.5 or _ratio < 0.4):
+                                _block_msg = (
+                                    f"⛔ DESIGN-DESTRUCTION GUARD: تحاول استبدال قسم "
+                                    f"#{_replace_id} (حجمه {_old_len} حرف) بقسم جديد حجمه "
+                                    f"{_new_len} حرف (نسبة {_ratio:.1f}x). هذا يعني إعادة بناء "
+                                    "كاملة وليس تعديلاً جراحياً.\n\n"
+                                    "إذا العميل طلب تغييراً صغيراً (نص، لون، أيقونة): "
+                                    "استخدم `insert_html_at` أو `batch_replace_in_pages` "
+                                    "بدلاً من إعادة كتابة القسم كاملاً.\n"
+                                    "إذا فعلاً تحتاج تعيد بناء قسم: أبقِ نفس البنية والـclasses "
+                                    "والـimages الموجودة، وعدّل النص فقط."
+                                )
+                                ctx.log("design_destruction_guard_block",
+                                        {"id": _replace_id, "old": _old_len, "new": _new_len, "ratio": _ratio},
+                                        {"blocked": True})
+                                if provider in ("anthropic", "emergent_anthropic"):
+                                    messages.append({"role": "user", "content": [{"type": "tool_result", "tool_use_id": tu["id"], "content": _block_msg}]})
+                                else:
+                                    messages.append({"role": "tool", "tool_call_id": tu["id"], "content": _block_msg})
+                                yield _sse("tool", {"name": tu["name"], "phase": "blocked",
+                                                      "label": f"⛔ مُنع: محاولة إعادة بناء كاملة لقسم #{_replace_id}",
+                                                      "step": iterations})
+                                await asyncio.sleep(0)
+                                continue
+                    except Exception as _dg_e:
+                        logger.warning(f"[design-destruction-guard] failed: {_dg_e}")
+
                 if tool_name == "apply_section" and (tool_input.get("op") or "append") == "append":
                     section_id = (tool_input.get("id") or "").strip().lower()
                     user_msg_lc = (user_message or "").lower()
@@ -9826,6 +9893,80 @@ async def _stream_one_provider(
                         except Exception:
                             pass
 
+                        # (e) BLANK PAGE DETECTOR — if the just-mutated page has
+                        # ≤ 1 section AND < 800 chars of meaningful content,
+                        # it's a blank skeleton (typical after `create_page`).
+                        # Force the AI to fill it with real content via
+                        # `apply_section` BEFORE saying "تم".
+                        _blank_warning = ""
+                        try:
+                            _page_html = ctx.pages.get(_verify_target, "") or ""
+                            # Strip tags to estimate real content length
+                            import re as _re_blank
+                            _text_only = _re_blank.sub(r"<[^>]+>", " ", _page_html)
+                            _text_only = _re_blank.sub(r"\s+", " ", _text_only).strip()
+                            _meaningful_chars = len(_text_only)
+                            _is_blank = (
+                                tu["name"] == "create_page"
+                                or (len(_section_ids) <= 1 and _meaningful_chars < 800)
+                            )
+                            if _is_blank and tu["name"] in ("create_page", "apply_section"):
+                                _blank_warning = (
+                                    f"\n\n🚨 **BLANK PAGE DETECTOR**: صفحة `{_verify_target}` "
+                                    f"الآن فيها {len(_section_ids)} قسم فقط و~{_meaningful_chars} حرف "
+                                    "نصّ حقيقي. هذا **هيكل فارغ غير مقبول للعميل**. "
+                                    "العميل لا يدفع نقاطه لصفحات بيضاء.\n\n"
+                                    f"**يجب الآن** أن تستدعي `apply_section(page='{_verify_target}', "
+                                    "op='append', id='...', html='...')` "
+                                    "لإضافة محتوى الصفحة الفعلي (Hero + 2-4 أقسام مرتبطة "
+                                    f"بموضوع الصفحة) **قبل** ما تقول 'تم' أو تستدعي `finish`. "
+                                    "هذا إلزامي."
+                                )
+                        except Exception:
+                            pass
+
+                        # (f) ORPHAN-PAGE DETECTOR — if create_page was just used,
+                        # verify the new file has a back-link to index.html in its
+                        # nav. The skeleton template provides it, but custom
+                        # html overrides may strip it. Without a back-link, user
+                        # gets stuck on the new page with no way back.
+                        _orphan_warning = ""
+                        try:
+                            if tu["name"] == "create_page" and _verify_target != "index.html":
+                                _has_back = (
+                                    'href="index.html"' in _page_html
+                                    or "href='index.html'" in _page_html
+                                    or 'href="/"' in _page_html
+                                )
+                                # Verify index.html nav links to this new page
+                                _idx_html = ctx.pages.get("index.html", "") or ""
+                                _linked_from_index = (
+                                    f'href="{_verify_target}"' in _idx_html
+                                    or f"href='{_verify_target}'" in _idx_html
+                                )
+                                _problems = []
+                                if not _has_back:
+                                    _problems.append(
+                                        f"صفحة `{_verify_target}` بدون رابط رجوع لـ index.html — "
+                                        "العميل سيعلق فيها."
+                                    )
+                                if not _linked_from_index:
+                                    _problems.append(
+                                        f"`index.html` لا يحتوي على `<a href=\"{_verify_target}\">` — "
+                                        "العميل لن يقدر يصل للصفحة الجديدة من الرئيسية."
+                                    )
+                                if _problems:
+                                    _orphan_warning = (
+                                        "\n\n🔗 **ORPHAN-PAGE DETECTOR**: "
+                                        + " | ".join(_problems)
+                                        + f"\n→ استدع `update_nav(items=[...])` أو "
+                                        f"`insert_html_at(page='index.html', selector='nav', "
+                                        f"where='inside_end', html='<a href=\"{_verify_target}\" "
+                                        "class=\"...\">عنوان الصفحة</a>')` لإصلاح الترابط الآن."
+                                    )
+                        except Exception:
+                            pass
+
                         # Compose verification message back to the AI
                         _verif_lines = [
                             f"🔬 **POST-WRITE VERIFICATION** ({_verify_target}):",
@@ -9847,9 +9988,14 @@ async def _stream_one_provider(
                             )
                         if _multi_page_nudge:
                             _verif_lines.append(_multi_page_nudge)
-                        if not _dup_ids and not _near_dups and not _multi_page_nudge:
+                        if _blank_warning:
+                            _verif_lines.append(_blank_warning)
+                        if _orphan_warning:
+                            _verif_lines.append(_orphan_warning)
+                        if not (_dup_ids or _near_dups or _multi_page_nudge
+                                or _blank_warning or _orphan_warning):
                             _verif_lines.append(
-                                "  • ✅ لا تكرارات. البنية نظيفة. يمكنك المتابعة."
+                                "  • ✅ لا تكرارات. لا صفحات فارغة. الترابط سليم. يمكنك المتابعة."
                             )
 
                         _verif_msg = "\n".join(_verif_lines)
@@ -9862,12 +10008,13 @@ async def _stream_one_provider(
                         else:
                             messages.append({"role": "user", "content": _verif_msg})
 
-                        # If duplicates exist → force AI to use a tool next iter
-                        if _dup_ids or _near_dups:
+                        # If problems exist → force AI to use a tool next iter
+                        if (_dup_ids or _near_dups or _blank_warning or _orphan_warning):
                             force_tool_use_next_iter = True
                             logger.warning(
                                 f"[post-write-verify] {tu['name']}: dup_ids={_dup_ids} "
-                                f"near_dups={len(_near_dups)} → forcing tool_use"
+                                f"near_dups={len(_near_dups)} blank={bool(_blank_warning)} "
+                                f"orphan={bool(_orphan_warning)} → forcing tool_use"
                             )
                     except Exception as _vex:
                         logger.warning(f"[post-write-verify] failed: {_vex}")

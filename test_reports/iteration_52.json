@@ -1,0 +1,42 @@
+{
+  "summary": "Iteration 2 backend-only verification of the 3 new surgical-quality fixes (BLANK PAGE DETECTOR, ORPHAN-PAGE DETECTOR, DESIGN-DESTRUCTION GUARD) plus the latent list_sections page-arg fix. Created /app/backend/tests/test_surgical_fixes_v2.py with 24 deterministic pytest cases. All 24 new tests + all 26 iteration-1 tests pass (50/50). Verified via direct helper calls (FreeBuildToolContext + _exec_tool + _build_blank_page_skeleton) and source-string introspection for the guard / detector code paths that live inside run_agent_turn_stream and can only be reached with a real Anthropic key.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {
+        "endpoint": "_exec_tool/create_page (default skeleton path, line ~2859)",
+        "issue": "When create_page is called WITHOUT custom html, the inline default skeleton (lines 2859-2871) does NOT use _build_blank_page_skeleton and therefore lacks the SCAFFOLD_PLACEHOLDER marker. The BLANK PAGE DETECTOR still fires correctly because it treats tu['name']=='create_page' as ALWAYS blank, but the SCAFFOLD_PLACEHOLDER marker is only embedded if create_page reuses _build_blank_page_skeleton OR if move_section_to_page invokes it (line 2691). Consider unifying both paths so SCAFFOLD_PLACEHOLDER appears in every newly-created page. Non-blocking — detector still works."
+      }
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_surgical_fixes_v2.py",
+    "/app/backend/tests/test_surgical_fixes.py",
+    "/app/test_reports/pytest/surgical_fixes_v2_results.xml"
+  ],
+  "action_items": [
+    "Optional: Refactor create_page default-skeleton path (lines 2858-2871) to call _build_blank_page_skeleton() so SCAFFOLD_PLACEHOLDER is uniformly present in every new page. Detector still works without this since it short-circuits on tu['name']=='create_page'."
+  ],
+  "critical_code_review_comments": [
+    "freebuild_agent.py is now 10,276 lines — far above the 700-line guideline. Strongly recommend splitting into focused modules (tool implementations, agent loop, prompts, guards/detectors). Risk: future surgical fixes become increasingly hard to locate and the post-write verification block alone now exceeds 200 lines.",
+    "DESIGN-DESTRUCTION GUARD ratio thresholds (2.5x and 0.4x) are magic numbers inside the loop. Extract to module-level constants (e.g. DESIGN_GUARD_MAX_RATIO=2.5, DESIGN_GUARD_MIN_RATIO=0.4) for testability and tuning.",
+    "BLANK PAGE DETECTOR threshold (≤1 section, <800 chars) is also a magic number — same constant-extraction recommendation.",
+    "create_page has TWO skeleton paths (inline at 2859 and _build_blank_page_skeleton at 1885). They should be consolidated to a single source of truth.",
+    "Detector composition (lines 9970-9999) builds the verification message via list concatenation. Easy to break ordering when new detectors are added; consider a registry pattern."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_surgical_fixes_v2.py"
+  ],
+  "success_rate": {"backend": "100% (50/50 pytest cases pass)", "frontend": "N/A (skipped per request)"},
+  "test_credentials": "Not used — tests call helpers directly without auth or DB.",
+  "seed_data_creation": "None. No DB writes; FreeBuildToolContext built in-memory from synthetic page dicts.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Iteration 2 fixes verified: (a) _build_blank_page_skeleton returns HTML containing both SCAFFOLD_PLACEHOLDER and href=\"index.html\" back-link; (b) BLANK PAGE DETECTOR source contains both the marker string and the Arabic phrase 'هيكل فارغ غير مقبول' with correct thresholds (sections≤1, chars<800); (c) ORPHAN-PAGE DETECTOR source contains its marker and triggers on missing back-link OR index not linking new page; (d) DESIGN-DESTRUCTION GUARD source has ratio thresholds 2.5/0.4 and >400-char floor, gated on intent==surgical AND op==replace; (e) list_sections at line 2373 now honours args.page (previously latent bug). All 26 iteration-1 tests still pass. The guard / detector branches inside run_agent_turn_stream cannot be exercised end-to-end without a real Anthropic stream — verified via source introspection per agent_to_agent_context_note. If main agent wants e2e coverage they will need an Anthropic key + the existing /api/agent-chat-stream endpoint.",
+  "rca_of_the_issue": "Iteration 1 fixed 4 of the 7 surgical-quality issues; iteration 2 added the remaining 3 (blank/orphan page + design destruction). Root cause for each: (1) BLANK — create_page produced a minimal skeleton and the AI's prompt didn't enforce filling it before claiming completion, so the post-write hook now flags any ≤1-section + <800-char page after create_page/apply_section and force-flips force_tool_use_next_iter=True to make the AI act. (2) ORPHAN — even with auto-wire in create_page, custom-html overrides could strip the back-link OR fail to update index nav; post-write hook now inspects both directions (page→index back-link + index→page nav link). (3) DESIGN-DESTRUCTION — surgical replace requests could ship 3000-char rewrites of 1000-char sections, destroying design. Guard blocks the dispatch via `continue` when ratio is outside [0.4, 2.5] and old section >400 chars, sending a tool_result back to the LLM nudging it toward insert_html_at / batch_replace_in_pages instead."
+}
