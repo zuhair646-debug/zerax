@@ -1,0 +1,32 @@
+{
+  "summary": "Iteration 6 (workflow engine) backend testing. All 31 workflow_engine tests pass. All backwards-compat tests across the 8 required files pass (124 collected/passed in one pytest run — slightly higher than the 116 referenced because some files contain parametrized tests; ALL green). Source-level checks confirm: (a) TOOLS_SCHEMA has 137 unique tools including the 3 new ones (save_discovery_answer, advance_workflow_stage, mark_page_wired), (b) dispatcher in _exec_tool validates key/value/filename and sets ctx.workflow_state_dirty=True after each, (c) _wf_addendum is loaded once near GLOBAL CLASSIFIER block (line 9190) and injected into BOTH Anthropic system_prompt (line 9214) AND OpenAI messages (line 9255), (d) workflow_state persistence block at line 10451 runs only when workflow_state_dirty=True and writes via db.freebuild_projects.update_one with $set workflow_state, (e) migration: empty project => discovery, project with current_html>500 chars OR pages dict => surgical_edit. Gate semantics fully verified by parameterized tests.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_workflow_engine.py",
+    "/app/test_reports/pytest/workflow_engine.xml",
+    "/app/test_reports/pytest/backcompat.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "freebuild_agent.py is now 10581 lines — well past the 700-line threshold. It is the single biggest maintainability risk in the repo. Recommend extracting: (1) the TOOLS_SCHEMA list (lines 89-1700) into freebuild_tools_schema.py, (2) the dispatcher _exec_tool() into freebuild_tool_dispatcher.py, (3) the provider stream loops into provider_anthropic.py / provider_openai.py. Tests already pin behaviour so refactor is low-risk.",
+    "mark_page_wired tolerates filename=='index.html' even when missing from project.pages dict (special-case at line 2460). Harmless for now, but if a project ever truly lacks index.html this could create a phantom wired entry. Consider tightening or document the carve-out.",
+    "Workflow tool imports (from .workflow_engine import ...) live inside the dispatcher branches — fine for cold-start cost but means the module is re-imported on every tool call. Hoist to top-of-file imports for clarity.",
+    "Persistence block (line 10454) silently swallows exceptions with logger.warning. For workflow state this is acceptable, but consider counting failures into a metric so silent DB issues don't accumulate unnoticed."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "100%", "frontend": "N/A (skipped per request)"},
+  "test_credentials": "Not needed — pure-Python deterministic tests + source introspection.",
+  "seed_data_creation": "None",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Workflow engine is fully covered by /app/backend/tests/test_workflow_engine.py (31 tests, source-level guards included). For backwards-compat keep running: test_ai_mode, test_ai_mode_three_modes, test_admin_ai_mode_http, test_surgical_fixes, test_surgical_fixes_v2, test_openai_param_compat, test_intent_scope_fix, test_pre_finish_gate. Frontend testing was explicitly skipped this iteration. Tools schema total is now 137 (134+3). If new tools are added, update test_workflow_tools_are_registered_in_schema if needed and the count expectation.",
+  "rca of the issue": "N/A — no bugs found. All implementation matches the iteration-6 spec precisely."
+}

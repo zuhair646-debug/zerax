@@ -96,6 +96,61 @@ TOOLS_SCHEMA: List[Dict[str, Any]] = [
         ),
         "input_schema": {"type": "object", "properties": {}, "required": []},
     },
+    # ── Workflow Engine tools (4-stage build protocol) ──
+    {
+        "name": "save_discovery_answer",
+        "description": (
+            "💬 Save one of the customer's answers during the Discovery stage. "
+            "Required during the Discovery stage. The `key` must be one of: "
+            "site_purpose, page_count_and_names, page_contents, target_audience, "
+            "style_preference, key_features, branding, competitors_or_refs. "
+            "After all 8 keys are saved, call advance_workflow_stage(to='visual_skeleton')."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "key": {"type": "string",
+                         "enum": ["site_purpose", "page_count_and_names", "page_contents",
+                                  "target_audience", "style_preference", "key_features",
+                                  "branding", "competitors_or_refs"]},
+                "value": {"type": "string", "description": "The customer's answer (short, 1-3 sentences)."},
+            },
+            "required": ["key", "value"],
+        },
+    },
+    {
+        "name": "advance_workflow_stage",
+        "description": (
+            "🚦 Move the project to the next build stage. Valid targets: "
+            "'visual_skeleton' (after discovery), 'wiring' (after visual skeleton), "
+            "'surgical_edit' (after wiring all pages). The server enforces gate "
+            "conditions and will reject premature transitions."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "to": {"type": "string",
+                        "enum": ["visual_skeleton", "wiring", "surgical_edit"]},
+            },
+            "required": ["to"],
+        },
+    },
+    {
+        "name": "mark_page_wired",
+        "description": (
+            "✅ Mark a specific page as fully wired (its buttons / forms now work). "
+            "Call this only after activating ALL interactive elements on that page. "
+            "The server records the page and clears it from current_wiring_page."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "filename": {"type": "string", "description": "Page filename, e.g. 'movies.html'."},
+            },
+            "required": ["filename"],
+        },
+    },
+
     {
         "name": "audit_html",
         "description": (
@@ -2335,6 +2390,8 @@ class FreeBuildToolContext:
         self.changes_made: int = 0
         self.snapshots_to_create: List[Dict[str, Any]] = []
         self.tool_log: List[Dict[str, Any]] = []
+        # Workflow Engine state (4-stage protocol)
+        self.workflow_state_dirty: bool = False
 
     def _sync_active_page(self):
         """Keep `pages[active_page]` in lockstep with `current_html`."""
@@ -2359,6 +2416,64 @@ def _exec_tool(ctx: FreeBuildToolContext, name: str, args: Dict[str, Any]) -> Di
     """Synchronously execute a single tool call and return the result.
     NOTE: async tools (web_search, fetch_url, generate_image) are dispatched via _exec_tool_async."""
     try:
+        # ── Workflow Engine tools ──
+        if name == "save_discovery_answer":
+            from .workflow_engine import get_workflow_state, DISCOVERY_QUESTIONS
+            key = (args or {}).get("key", "").strip()
+            value = (args or {}).get("value", "").strip()
+            valid_keys = {q["key"] for q in DISCOVERY_QUESTIONS}
+            if key not in valid_keys:
+                return {"ok": False, "error": f"key '{key}' غير معروف. الـkeys المسموحة: {sorted(valid_keys)}"}
+            if not value:
+                return {"ok": False, "error": "value فارغ — احفظ إجابة العميل الفعلية."}
+            ws = get_workflow_state(ctx.project)
+            ws.setdefault("discovery_answers", {})[key] = value[:1000]
+            ctx.project["workflow_state"] = ws
+            ctx.workflow_state_dirty = True
+            answered = sum(1 for q in DISCOVERY_QUESTIONS
+                           if ws["discovery_answers"].get(q["key"]))
+            return {"ok": True, "key": key, "progress": f"{answered}/8",
+                    "complete": answered == 8}
+
+        if name == "advance_workflow_stage":
+            from .workflow_engine import (get_workflow_state, can_advance_to,
+                                           stage_label_ar)
+            target = (args or {}).get("to", "").strip()
+            ok, reason = can_advance_to(ctx.project, target)
+            if not ok:
+                return {"ok": False, "error": reason}
+            ws = get_workflow_state(ctx.project)
+            ws["stage"] = target
+            # Clear per-stage transient state
+            if target == "wiring":
+                ws.setdefault("wired_pages", [])
+            ctx.project["workflow_state"] = ws
+            ctx.workflow_state_dirty = True
+            return {"ok": True, "stage": target, "label": stage_label_ar(target)}
+
+        if name == "mark_page_wired":
+            from .workflow_engine import get_workflow_state
+            filename = (args or {}).get("filename", "").strip()
+            if not filename:
+                return {"ok": False, "error": "filename مطلوب."}
+            pages = (ctx.project or {}).get("pages", {}) or {}
+            if filename not in pages and filename != "index.html":
+                return {"ok": False, "error": f"الصفحة '{filename}' غير موجودة في pages."}
+            ws = get_workflow_state(ctx.project)
+            wired = list(ws.get("wired_pages") or [])
+            if filename not in wired:
+                wired.append(filename)
+            ws["wired_pages"] = wired
+            if ws.get("current_wiring_page") == filename:
+                ws["current_wiring_page"] = None
+            ctx.project["workflow_state"] = ws
+            ctx.workflow_state_dirty = True
+            unwired = [p for p in pages.keys() if p not in wired]
+            return {"ok": True, "wired_count": len(wired),
+                    "remaining": unwired,
+                    "all_done": not unwired}
+
+
         if name == "read_current_html":
             html = ctx.current_html
             return {
@@ -9065,6 +9180,21 @@ async def _stream_one_provider(
         _has_content = False
         _intent = "new_build"
 
+    # ── 🎬 WORKFLOW STAGE — read the project's build stage (4-stage protocol)
+    # so we can inject the appropriate system-prompt addendum below. The
+    # stage is persisted in project.workflow_state.stage.
+    try:
+        from .workflow_engine import (get_workflow_state, stage_prompt_addendum,
+                                       stage_label_ar)
+        _wf_state = get_workflow_state(project)
+        _wf_addendum = stage_prompt_addendum(_wf_state, project)
+        _wf_label = stage_label_ar(_wf_state.get("stage", ""))
+        logger.info(f"[workflow] stage={_wf_state.get('stage')} ({_wf_label})")
+    except Exception as _wfe:
+        logger.warning(f"[workflow] addendum load failed: {_wfe}")
+        _wf_addendum = ""
+        _wf_label = ""
+
     if provider in ("anthropic", "emergent_anthropic"):
         from anthropic import AsyncAnthropic
         if provider == "emergent_anthropic":
@@ -9081,7 +9211,7 @@ async def _stream_one_provider(
             _docs_block = await load_all_project_docs(db, project.get("id")) if db else ""
         except Exception:
             _docs_block = ""
-        sys_prompt = get_system_prompt(project, is_owner=is_owner) + _lang_directive + (_docs_block or "")
+        sys_prompt = get_system_prompt(project, is_owner=is_owner) + _lang_directive + (_docs_block or "") + (_wf_addendum or "")
         # ── 🔪 SURGICAL MODE — replace 55KB monolith with 4KB focused prompt
         # when user request is clearly an edit on an existing project. This is
         # the radical cure for "AI adds unrequested sections" recommended by
@@ -9122,7 +9252,7 @@ async def _stream_one_provider(
             _docs_block = await load_all_project_docs(db, project.get("id")) if db else ""
         except Exception:
             _docs_block = ""
-        messages = [{"role": "system", "content": get_system_prompt(project, is_owner=is_owner) + _lang_directive + (_docs_block or "")}]
+        messages = [{"role": "system", "content": get_system_prompt(project, is_owner=is_owner) + _lang_directive + (_docs_block or "") + (_wf_addendum or "")}]
         sys_prompt = None
 
         # 🚦 OpenAI hard-caps tools at 128 per request. We have 134+ tools.
@@ -10317,6 +10447,21 @@ async def _stream_one_provider(
                     logger.warning(f"[lie-detector] persist failed: {_le}")
     except Exception as _lde:
         logger.warning(f"[lie-detector] failed: {_lde}")
+
+    # ── 💾 WORKFLOW STATE PERSISTENCE ───────────────────────────────────────
+    # If any workflow-engine tool ran during this turn, persist the updated
+    # workflow_state back to MongoDB so the next turn picks it up.
+    try:
+        if getattr(ctx, "workflow_state_dirty", False) and db is not None and project.get("id"):
+            await db.freebuild_projects.update_one(
+                {"id": project.get("id")},
+                {"$set": {"workflow_state": ctx.project.get("workflow_state") or {}}},
+            )
+            logger.info(f"[workflow] persisted state for {project.get('id')}")
+    except Exception as _wpe:
+        logger.warning(f"[workflow] persist failed: {_wpe}")
+
+
 
     # ── Credit deduction ─────────────────────────────────────────────────
     # Bill the user once per chat turn using the actual provider-reported
