@@ -229,13 +229,18 @@ TOOLS_SCHEMA: List[Dict[str, Any]] = [
     {
         "name": "write_full_html",
         "description": (
-            "⚠️ REPLACES THE ENTIRE PROJECT HTML. Use ONLY for: (1) the very "
-            "first build of an empty project, OR (2) when the user EXPLICITLY "
-            "asked for 'a complete redesign from scratch'. **It is BLOCKED by "
-            "the server when current_html ≥ 800 chars unless allow_full_rewrite=true.** "
-            "For 99% of edits (add/modify/remove a section, add a chat widget, "
-            "etc.) use `apply_section` or `create_page` to PRESERVE the "
-            "existing approved design."
+            "🆕 **First-time build of an empty/near-empty page.** Writes the "
+            "ENTIRE HTML document. For ANY edit on an existing page (add a "
+            "section, change a colour, wire a button, swap a hero image) you "
+            "MUST use `apply_section`, `batch_replace_in_pages`, "
+            "`update_pages_theme`, or `insert_html_at` instead — they preserve "
+            "the rest of the page automatically. If you call `write_full_html` "
+            "on an established page (≥800 chars), the server activates "
+            "**Smart-Merge**: any <section> that existed before but is missing "
+            "from your new HTML is spliced back in automatically and reported "
+            "via `preserved_sections`. This protects the customer's approved "
+            "work, but it also means you should pass `allow_full_rewrite=true` "
+            "ONLY when the customer explicitly asked for a complete rebuild."
         ),
         "input_schema": {
             "type": "object",
@@ -243,7 +248,7 @@ TOOLS_SCHEMA: List[Dict[str, Any]] = [
                 "html": {"type": "string", "description": "Full <!DOCTYPE html>...</html> document."},
                 "allow_full_rewrite": {
                     "type": "boolean",
-                    "description": "Set true ONLY if user explicitly requested a complete rebuild from scratch (rare). Without this the server will block destructive rewrites of an established design.",
+                    "description": "Set true ONLY if the customer literally said 'rebuild from scratch' or 'delete everything and start over'. Otherwise leave it false and let Smart-Merge protect the existing sections.",
                 },
             },
             "required": ["html"],
@@ -1879,6 +1884,62 @@ def tools_for_user(is_owner: bool) -> List[Dict[str, Any]]:
     return [t for t in TOOLS_SCHEMA if t["name"] not in OWNER_ONLY_TOOL_NAMES]
 
 
+def _smart_merge_preserve_sections(old_html: str, new_html: str) -> tuple:
+    """🧠 Smart-Merge — protects against the #1 destructive failure mode:
+    the AI calls `write_full_html` for what was meant to be a surgical edit,
+    forgets to include sections that existed before, and the customer loses
+    minutes of approved work.
+
+    Strategy:
+      • Extract every <section id='X'>...</section> block from `old_html`.
+      • Extract the set of section IDs present in `new_html`.
+      • For any ID present in `old_html` but missing from `new_html`, splice
+        the original section back into `new_html` right before `</main>` (or
+        `</body>` as fallback).
+
+    Returns (merged_html, preserved_ids: List[str]).
+
+    This is NOT a hard block. It is a safety net: the AI's intended new HTML
+    is honoured; we simply add back the sections it forgot. The tool result
+    includes `preserved_sections` so the AI sees exactly what was preserved.
+    """
+    if not old_html or not new_html:
+        return new_html, []
+
+    section_re = re.compile(
+        r'<section\b[^>]*\bid\s*=\s*["\']([a-zA-Z0-9_\-]+)["\'][^>]*>[\s\S]*?</section>',
+        re.IGNORECASE,
+    )
+    # Map old section_id → full <section>...</section> markup
+    old_sections: Dict[str, str] = {}
+    for m in section_re.finditer(old_html):
+        sid = m.group(1)
+        if sid not in old_sections:  # first occurrence wins
+            old_sections[sid] = m.group(0)
+    new_ids = set(section_re.findall(new_html))
+    missing = [sid for sid in old_sections.keys() if sid not in new_ids]
+    if not missing:
+        return new_html, []
+
+    # Splice missing sections in the order they appeared in `old_html`,
+    # just before `</main>` (preferred) or `</body>` (fallback).
+    insertion = "\n" + "\n".join(old_sections[sid] for sid in missing) + "\n"
+    merged = new_html
+    insertion_point = re.search(r"</main\s*>", merged, re.IGNORECASE)
+    if insertion_point:
+        idx = insertion_point.start()
+        merged = merged[:idx] + insertion + merged[idx:]
+    else:
+        body_close = re.search(r"</body\s*>", merged, re.IGNORECASE)
+        if body_close:
+            idx = body_close.start()
+            merged = merged[:idx] + insertion + merged[idx:]
+        else:
+            merged = merged + insertion
+    return merged, missing
+
+
+
 def _rewrite_anchors_to_real_pages(html: str, pages_dict: Dict[str, str]) -> tuple:
     """Rewrite <a href="#X"> → <a href="X.html"> when:
       • An X.html file exists in `pages_dict`
@@ -2360,6 +2421,45 @@ def _build_reality_check_block(html: str, max_sections: int = 14, max_ctas: int 
     return "\n".join(lines)
 
 
+def _build_pages_overview(pages: Dict[str, str], active_page: str, max_pages: int = 10) -> str:
+    """🗂️ Multi-page overview — shows the AI every page in the project with
+    its section IDs at a glance. Prevents the failure mode where the AI is
+    editing the active page but is unaware of sections living on other pages
+    (and ends up duplicating or referring to non-existent IDs).
+
+    Output (Arabic markdown), e.g.:
+        🗂️ خريطة المشروع (5 صفحات):
+          ◉ index.html  (active) — 4 أقسام: #hero #features #pricing #cta
+          • movies.html — 3 أقسام: #catalog #filters #details
+          • points.html — 2 قسم: #balance #earn
+    """
+    if not pages:
+        return ""
+    section_re = re.compile(
+        r'<section\b[^>]*\bid\s*=\s*["\']([a-zA-Z0-9_\-]+)["\']',
+        re.IGNORECASE,
+    )
+    lines = [f"🗂️ **خريطة المشروع ({len(pages)} صفحات):**"]
+    items = list(pages.items())
+    for fn, html in items[:max_pages]:
+        ids = section_re.findall(html or "")
+        marker = "◉" if fn == active_page else "•"
+        suffix = " (active)" if fn == active_page else ""
+        if ids:
+            ids_str = " ".join(f"#{i}" for i in ids[:8])
+            extra = f" + {len(ids) - 8} أكثر" if len(ids) > 8 else ""
+            lines.append(f"  {marker} `{fn}`{suffix} — {len(ids)} قسم: {ids_str}{extra}")
+        else:
+            size = len(html or "")
+            lines.append(f"  {marker} `{fn}`{suffix} — فارغة (size={size})")
+    if len(items) > max_pages:
+        lines.append(f"  ... و {len(items) - max_pages} صفحة أخرى")
+    lines.append("")
+    return "\n".join(lines)
+
+
+
+
 # ─── Tool Implementations ─────────────────────────────────────────────────────
 class FreeBuildToolContext:
     """Holds mutable project state during an agent run."""
@@ -2665,8 +2765,34 @@ def _exec_tool(ctx: FreeBuildToolContext, name: str, args: Dict[str, Any]) -> Di
             if existing_size >= 800 and not allow_full_rewrite:
                 logger.info(
                     f"[write_full_html] advisory: overwriting existing design "
-                    f"({existing_size} chars) without allow_full_rewrite — proceeding"
+                    f"({existing_size} chars) without allow_full_rewrite — applying smart-merge"
                 )
+            # 🧠 Smart-Merge — if the AI's new HTML is missing any section
+            # that existed before, splice the original section back in. This
+            # is the safety net for the #1 destructive failure mode (forgot
+            # to include other sections when asked for a surgical edit).
+            #
+            # Trigger criteria: at least one existing <section id> AND user
+            # did NOT explicitly request a full rewrite. The size-based
+            # threshold (≥800 chars) used to gate this; replaced with the
+            # cleaner "has sections" test so even small projects are protected.
+            preserved_sections: List[str] = []
+            try:
+                _existing_section_count = len(re.findall(
+                    r'<section\b[^>]*\bid\s*=\s*["\'][^"\']+["\']',
+                    ctx.current_html or "", re.IGNORECASE,
+                ))
+            except Exception:
+                _existing_section_count = 0
+            if _existing_section_count >= 1 and not allow_full_rewrite:
+                new_html, preserved_sections = _smart_merge_preserve_sections(
+                    ctx.current_html or "", new_html,
+                )
+                if preserved_sections:
+                    logger.info(
+                        f"[write_full_html] smart-merge preserved {len(preserved_sections)} "
+                        f"section(s): {preserved_sections}"
+                    )
             # auto-fix dead navigation links
             new_html, fixed = _fix_dead_navigation_links(new_html)
             # 🔗 Anchor → real-page rewriting (multi-page enforcement)
@@ -2677,9 +2803,21 @@ def _exec_tool(ctx: FreeBuildToolContext, name: str, args: Dict[str, Any]) -> Di
             ctx.current_html = new_html
             ctx._sync_active_page()
             ctx.changes_made += 1
-            return {"ok": True, "new_length": len(new_html),
-                    "dead_links_fixed": fixed,
-                    "anchor_to_page_rewrites": anchor_rewrites}
+            _result: Dict[str, Any] = {
+                "ok": True,
+                "new_length": len(new_html),
+                "dead_links_fixed": fixed,
+                "anchor_to_page_rewrites": anchor_rewrites,
+            }
+            if preserved_sections:
+                _result["preserved_sections"] = preserved_sections
+                _result["preservation_message_ar"] = (
+                    f"🛡️ **Smart-Merge:** الصفحة كان فيها {len(preserved_sections)} "
+                    f"قسم لم تذكرهم في الـHTML الجديد، فأعدتهم تلقائياً للحفاظ على عمل "
+                    f"العميل: {', '.join('#'+s for s in preserved_sections)}. "
+                    f"لو كنت تقصد حذفهم فعلاً، استدع `remove_section(ids=[...])` صراحة."
+                )
+            return _result
         if name == "apply_section":
             sid = (args.get("id") or "").strip()
             frag = (args.get("html") or "").strip()
@@ -8558,7 +8696,7 @@ async def _run_anthropic_agent(
             content = m.get("content", "")
             if isinstance(content, str) and content.strip():
                 messages.append({"role": m["role"], "content": content})
-    messages.append({"role": "user", "content": f"{_build_reality_check_block(ctx.current_html)}\n{state_summary}\n\nالطلب: {user_message}"})
+    messages.append({"role": "user", "content": f"{_build_pages_overview(ctx.pages, ctx.active_page)}\n{_build_reality_check_block(ctx.current_html)}\n{state_summary}\n\nالطلب: {user_message}"})
 
     summary = ""
     options: List[Any] = []
@@ -8782,7 +8920,7 @@ async def _run_openai_compat_agent(
             content = m.get("content", "")
             if isinstance(content, str) and content.strip():
                 messages.append({"role": m["role"], "content": content})
-    messages.append({"role": "user", "content": f"{_build_reality_check_block(ctx.current_html)}\n{state_summary}\n\nالطلب: {user_message}"})
+    messages.append({"role": "user", "content": f"{_build_pages_overview(ctx.pages, ctx.active_page)}\n{_build_reality_check_block(ctx.current_html)}\n{state_summary}\n\nالطلب: {user_message}"})
 
     summary = ""
     options: List[Any] = []
@@ -9313,7 +9451,7 @@ async def _stream_one_provider(
     # _pending_audit injection REMOVED per user request. The previous turn's
     # placeholder warnings are no longer carried forward — the AI starts each
     # turn with a clean slate.
-    messages.append({"role": "user", "content": f"{_build_reality_check_block(ctx.current_html)}\n{state_summary}\n\nالطلب: {user_message}"})
+    messages.append({"role": "user", "content": f"{_build_pages_overview(ctx.pages, ctx.active_page)}\n{_build_reality_check_block(ctx.current_html)}\n{state_summary}\n\nالطلب: {user_message}"})
 
     iterations = 0
     summary = ""

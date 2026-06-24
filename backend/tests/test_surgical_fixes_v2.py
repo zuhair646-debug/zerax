@@ -53,14 +53,10 @@ class TestBlankPageDetector:
     phrase 'هيكل فارغ غير مقبول' and set force_tool_use_next_iter=True."""
 
     def test_source_contains_blank_page_detector_strings(self):
+        # BLANK PAGE DETECTOR was removed per user request. The marker now
+        # records its removal in the source.
         src = inspect.getsource(fa)
-        assert "BLANK PAGE DETECTOR" in src, "marker string missing"
-        assert "هيكل فارغ غير مقبول" in src, "Arabic warning missing"
-        # Threshold values from the detector logic
-        assert "len(_section_ids) <= 1" in src
-        assert "_meaningful_chars < 800" in src
-        # Detector applies to both create_page and apply_section
-        assert 'tu["name"] in ("create_page", "apply_section")' in src
+        assert "BLANK PAGE DETECTOR — REMOVED" in src
 
     def test_skeleton_contains_scaffold_placeholder_marker(self):
         """_build_blank_page_skeleton must embed the SCAFFOLD_PLACEHOLDER
@@ -105,12 +101,10 @@ class TestBlankPageDetector:
         assert len(skel_text) < 800
 
     def test_detector_force_tool_use_flag_set(self):
-        """Source must include the force_tool_use_next_iter=True branch
-        gated on _blank_warning being non-empty."""
+        """BLANK PAGE DETECTOR + force_tool_use_next_iter on blank pages
+        were removed per user request. The removal is documented in source."""
         src = inspect.getsource(fa)
-        assert "_blank_warning or _orphan_warning" in src
-        # The flag-flip logic must be present
-        assert "force_tool_use_next_iter = True" in src
+        assert "BLANK PAGE DETECTOR — REMOVED" in src
 
 
 # ════════════════════════════════════════════════════════════════════════════
@@ -124,14 +118,10 @@ class TestOrphanPageDetector:
     """
 
     def test_source_contains_orphan_detector_strings(self):
+        # ORPHAN-PAGE DETECTOR was removed per user request. The removal
+        # marker is in source.
         src = inspect.getsource(fa)
-        assert "ORPHAN-PAGE DETECTOR" in src
-        # Detection logic
-        assert 'href="index.html"' in src
-        assert "update_nav" in src
-        assert "insert_html_at" in src
-        # Detector only runs on non-index pages
-        assert '_verify_target != "index.html"' in src
+        assert "ORPHAN-PAGE DETECTOR — REMOVED" in src
 
     def test_orphan_logic_back_link_missing(self):
         """Replicate detector logic: a page missing back-link is flagged."""

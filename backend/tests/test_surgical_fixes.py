@@ -149,12 +149,14 @@ class TestSurgicalHardBlock:
         assert "write_full_html" in tool_names
 
     def test_hardblock_logic_present_in_source(self):
-        # Hard block was intentionally relaxed to an advisory per user request.
-        # The advisory still classifies intent but no longer removes
-        # write_full_html from the toolset.
+        # ALL hard blocks (INTENT_LOCK, SURGICAL-HARDBLOCK, advisories) were
+        # removed per user request. Tools dispatch freely; the AI is steered
+        # only by the system prompt + workflow_engine phase banner. The
+        # write_full_html dispatcher still applies Smart-Merge to preserve
+        # forgotten sections.
         src = inspect.getsource(fa)
-        assert "INTENT advisory" in src
-        assert "SURGICAL-HARDBLOCK removed" in src
+        assert "_smart_merge_preserve_sections" in src
+        assert "preserved_sections" in src
 
 
 # ════════════════════════════════════════════════════════════════════════════
@@ -267,20 +269,12 @@ class TestPostWriteVerification:
 
     def test_post_write_logic_present_in_source(self):
         src = inspect.getsource(fa)
-        # Block label
-        assert "POST-WRITE VERIFICATION" in src
-        assert "FORCE POST-WRITE VERIFICATION" in src
-        # The mutating-tools set must include all HTML-changing tools
-        for t in ("write_full_html", "apply_section", "create_page",
-                  "remove_section", "move_section_to_page",
-                  "keep_only_sections"):
+        # Force-tool-use on duplicate IDs was removed per user request.
+        # The post-write audit is now advisory only.
+        assert "[post-write-audit advisory]" in src
+        # The mutating-tools set is still iterated for the audit
+        for t in ("write_full_html", "apply_section", "create_page"):
             assert f'"{t}"' in src
-        # Force-tool-use flag flipped on dup detection
-        assert "force_tool_use_next_iter = True" in src
-        # The Arabic phrase the AI is supposed to react to
-        assert "IDs مكرّرة" in src
-        # Logger trail
-        assert "[post-write-verify]" in src
 
 
 # ════════════════════════════════════════════════════════════════════════════
