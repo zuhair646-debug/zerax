@@ -154,21 +154,21 @@ def test_discovery_addendum_lists_remaining_questions():
     state = {"stage": STAGE_DISCOVERY, "discovery_answers": {}}
     addendum = stage_prompt_addendum(state, {})
     assert "Discovery" in addendum
-    # All 8 questions referenced
-    for q in DISCOVERY_QUESTIONS:
-        # The Arabic prompt fragment appears
-        assert q["ar"][:25] in addendum, f"missing question {q['key']}"
+    # New free-form wording must be present
+    assert "بحرية" in addendum or "مخصّصة" in addendum or "مخصصة" in addendum
+    # The 4 required topic keys must appear
+    for key in ["site_purpose", "page_count_and_names", "page_contents", "style_preference"]:
+        assert f"`{key}`" in addendum, f"missing required topic {key}"
 
 
 def test_discovery_addendum_omits_already_answered():
-    answers = {DISCOVERY_QUESTIONS[0]["key"]: "موقع للأفلام"}
+    answers = {"site_purpose": "موقع للأفلام"}
     state = {"stage": STAGE_DISCOVERY, "discovery_answers": answers}
     addendum = stage_prompt_addendum(state, {})
-    # The remaining 7 questions are listed
-    for q in DISCOVERY_QUESTIONS[1:]:
-        assert q["ar"][:25] in addendum
-    # The answered one shows in the summary
+    # The answered topic shows in the summary
     assert "موقع للأفلام" in addendum
+    # Other required topics still appear with ⏳
+    assert "⏳" in addendum
 
 
 def test_visual_skeleton_addendum_keeps_buttons_inert_but_nav_works():

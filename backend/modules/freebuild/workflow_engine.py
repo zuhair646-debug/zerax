@@ -130,34 +130,68 @@ def stage_prompt_addendum(state: Dict[str, Any], project: Dict[str, Any]) -> str
 
 
 def _discovery_addendum(state: Dict[str, Any]) -> str:
-    """Force the AI to ask the 8 discovery questions and STOP — no code yet."""
+    """Free-form smart discovery — AI asks questions tailored to the customer's idea.
+
+    We give the AI a FRAMEWORK (4 essential topics + 4 optional), not a script.
+    We only enforce that the 4 essential topics have saved answers by the end.
+    """
     answers = state.get("discovery_answers") or {}
-    remaining = [q for q in DISCOVERY_QUESTIONS if not answers.get(q["key"])]
-    answered_summary = "\n".join(
-        f"  ✅ {q['ar'].split('. ', 1)[-1]}: {answers.get(q['key'])}"
-        for q in DISCOVERY_QUESTIONS if answers.get(q["key"])
-    )
-    if not remaining:
+    covered_required = [k for k in DISCOVERY_REQUIRED_TOPICS if answers.get(k)]
+    missing_required = [k for k in DISCOVERY_REQUIRED_TOPICS if not answers.get(k)]
+    covered_optional = [k for k in DISCOVERY_OPTIONAL_TOPICS if answers.get(k)]
+
+    if not missing_required:
         return (
-            "\n\n📋 **مرحلة Discovery: اكتملت الـ 8 أسئلة.**\n"
-            "الآن انتقل لمرحلة Visual Skeleton (بناء التصميم البصري الكامل لكل الصفحات "
-            "بدون تفعيل الأزرار). استدع `advance_workflow_stage(to=\"visual_skeleton\")`.\n"
+            "\n\n📋 **مرحلة Discovery: الأساسيات اكتملت.**\n"
+            f"غُطّيت {len(covered_required)}/4 موضوع أساسي + "
+            f"{len(covered_optional)}/4 اختياري. تستطيع الانتقال لـ Visual Skeleton عبر "
+            "`advance_workflow_stage(to=\"visual_skeleton\")` الآن، أو طرح أسئلة "
+            "إضافية لو تحتاج تفاصيل أكثر.\n"
         )
+
+    topic_descriptions = {
+        "site_purpose": "الهدف من الموقع والمشكلة التي يحلها",
+        "page_count_and_names": "عدد الصفحات وأسماؤها (لو multi-page)",
+        "page_contents": "محتوى كل صفحة باختصار",
+        "style_preference": "النمط البصري والألوان",
+        "target_audience": "الجمهور المستهدف (اختياري)",
+        "key_features": "الميزات الأهم (اختياري)",
+        "branding": "اسم/شعار/لغة (اختياري)",
+        "competitors_or_refs": "مراجع مشابهة (اختياري)",
+    }
     lines = [
-        "\n\n📋 **مرحلة Discovery — ممنوع كتابة أي كود الآن.**",
+        "\n\n📋 **مرحلة Discovery — اسأل بحرية وبذكاء.**",
         "",
-        "اطرح **الأسئلة التالية الناقصة فقط** على العميل في رسالة واحدة منظمة، "
-        "وانتظر إجاباته. بعد كل إجابة، استدع "
-        "`save_discovery_answer(key=\"...\", value=\"...\")` لحفظها. لا تستدع `apply_section` "
-        "ولا `create_page` ولا `write_full_html` قبل اكتمال الـ 8 أسئلة كلها.",
+        "أنت مهندس متمرس. **اطرح أسئلة ذكية مخصّصة لفكرة العميل** — مو أسئلة "
+        "محفوظة من قائمة جامدة. أسلوبك طبيعي مثل محادثة استشارية: لو قال "
+        "\"موقع أفلام\" اسأل عن المصادر والترجمة ونظام المشاهدة؛ لو قال \"متجر\" "
+        "اسأل عن المنتجات والشحن والدفع.",
         "",
-        "**الأسئلة المتبقية:**",
+        f"**الحد الأدنى المطلوب قبل البناء: 4 مواضيع أساسية (حالياً {len(covered_required)}/4):**",
     ]
-    for q in remaining:
-        lines.append(f"  • {q['ar']}")
-    if answered_summary:
-        lines.append("\n**الأسئلة المُجابة سابقاً:**")
-        lines.append(answered_summary)
+    for k in DISCOVERY_REQUIRED_TOPICS:
+        mark = "✅" if answers.get(k) else "⏳"
+        lines.append(f"  {mark} `{k}` — {topic_descriptions.get(k, '')}")
+    lines.append(f"\n**مواضيع اختيارية (اسأل عنها بحرية لو رأيت إنها مفيدة، حالياً {len(covered_optional)}/4):**")
+    for k in DISCOVERY_OPTIONAL_TOPICS:
+        mark = "✅" if answers.get(k) else "○"
+        lines.append(f"  {mark} `{k}` — {topic_descriptions.get(k, '')}")
+    lines.extend([
+        "",
+        "**قواعد المرحلة:**",
+        "  • بعد كل إجابة من العميل، استدع "
+        "`save_discovery_answer(key=\"...\", value=\"...\")` فوراً لحفظها.",
+        "  • تقدر تسأل سؤالاً واحداً أو 3 أسئلة في رسالة، حسب ما يناسب السياق.",
+        "  • تقدر تجمع معلومات عدة في إجابة واحدة وتحفظها تحت keys مختلفة.",
+        "  • **ممنوع** استدعاء `apply_section / create_page / write_full_html` "
+        "قبل اكتمال الـ 4 مواضيع الأساسية وانتقالك لـ visual_skeleton عبر "
+        "`advance_workflow_stage(to=\"visual_skeleton\")`.",
+        "",
+    ])
+    if answers:
+        lines.append("**ما حفظته سابقاً:**")
+        for k, v in answers.items():
+            lines.append(f"  ✅ {k}: {v[:150]}")
     return "\n".join(lines)
 
 
@@ -265,12 +299,12 @@ def can_advance_to(project: Dict[str, Any], target_stage: str) -> tuple[bool, st
     if target_stage not in VALID_STAGES:
         return (False, f"stage غير معروف: {target_stage}")
 
-    # discovery → visual_skeleton: must have all 8 answers
+    # discovery → visual_skeleton: must have all 4 REQUIRED topics
     if current == STAGE_DISCOVERY and target_stage == STAGE_VISUAL_SKELETON:
         if not discovery_complete(state):
-            answered = sum(1 for q in DISCOVERY_QUESTIONS
-                           if (state.get("discovery_answers") or {}).get(q["key"]))
-            return (False, f"Discovery غير مكتمل ({answered}/8). أكمل الأسئلة أولاً.")
+            answered = sum(1 for k in DISCOVERY_REQUIRED_TOPICS
+                           if (state.get("discovery_answers") or {}).get(k))
+            return (False, f"Discovery غير مكتمل ({answered}/4 موضوع أساسي). أكمل المواضيع الأساسية الناقصة أولاً.")
         return (True, "")
 
     # visual_skeleton → wiring: must have ≥ 2 pages OR a single page with real content
