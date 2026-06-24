@@ -74,7 +74,8 @@ def test_hybrid_gpt_falls_back_to_claude_when_no_openai_key(monkeypatch):
 # ─── pick_provider — hybrid_glm ─────────────────────────────────────────────
 
 def test_hybrid_glm_first_design_picks_glm(monkeypatch):
-    monkeypatch.setenv("ZHIPU_API_KEY", "zhipu-test-xxx")
+    monkeypatch.setenv("OPENROUTER_API_KEY", "sk-or-test-xxx")
+    monkeypatch.delenv("ZHIPU_API_KEY", raising=False)
     prov, model = pick_provider("hybrid_glm", PHASE_FIRST_DESIGN)
     assert prov == GLM_PROVIDER
     assert model == GLM_MODEL
@@ -82,24 +83,32 @@ def test_hybrid_glm_first_design_picks_glm(monkeypatch):
 
 def test_hybrid_glm_surgical_picks_claude(monkeypatch):
     """Surgical edits always go to Claude regardless of which Hybrid mode is set."""
-    monkeypatch.setenv("ZHIPU_API_KEY", "zhipu-test-xxx")
+    monkeypatch.setenv("OPENROUTER_API_KEY", "sk-or-test-xxx")
     prov, _ = pick_provider("hybrid_glm", PHASE_SURGICAL)
     assert prov == CLAUDE_PROVIDER
 
 
-def test_hybrid_glm_falls_back_to_claude_when_no_zhipu_key(monkeypatch):
+def test_hybrid_glm_falls_back_to_claude_when_no_keys(monkeypatch):
+    monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
     monkeypatch.delenv("ZHIPU_API_KEY", raising=False)
     prov, _ = pick_provider("hybrid_glm", PHASE_FIRST_DESIGN)
     assert prov == CLAUDE_PROVIDER
 
 
-def test_hybrid_modes_do_not_cross_keys(monkeypatch):
-    """hybrid_gpt should NOT pick GLM even if ZHIPU_API_KEY exists, and vice versa."""
+def test_hybrid_glm_works_with_legacy_zhipu_key(monkeypatch):
+    """Backwards-compat: ZHIPU_API_KEY still works if OpenRouter is unset."""
+    monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
     monkeypatch.setenv("ZHIPU_API_KEY", "zhipu-test")
+    prov, _ = pick_provider("hybrid_glm", PHASE_FIRST_DESIGN)
+    assert prov == GLM_PROVIDER
+
+
+def test_hybrid_modes_do_not_cross_keys(monkeypatch):
+    """hybrid_gpt should NOT pick GLM even if OpenRouter key exists."""
+    monkeypatch.setenv("OPENROUTER_API_KEY", "sk-or-test")
     monkeypatch.delenv("OPENAI_DIRECT_KEY", raising=False)
     monkeypatch.delenv("OPENAI_API_KEY", raising=False)
     prov, _ = pick_provider("hybrid_gpt", PHASE_FIRST_DESIGN)
-    # No OpenAI key → falls back to Claude (must not silently use GLM key)
     assert prov == CLAUDE_PROVIDER
 
 
@@ -112,9 +121,9 @@ def test_describe_choice_hybrid_gpt(monkeypatch):
 
 
 def test_describe_choice_hybrid_glm(monkeypatch):
-    monkeypatch.setenv("ZHIPU_API_KEY", "zhipu-test-xxx")
+    monkeypatch.setenv("OPENROUTER_API_KEY", "sk-or-test")
     s = describe_choice("hybrid_glm", PHASE_FIRST_DESIGN)
-    assert "GLM-5.2" in s
+    assert "GLM-4.6" in s
 
 
 def test_describe_choice_claude_default():
@@ -140,8 +149,8 @@ def test_gpt_model_is_latest():
 
 
 def test_glm_model_is_latest():
-    """GLM-4.6 is Zhipu's latest stable production identifier for the GLM-5.2 family."""
-    assert GLM_MODEL == "glm-4.6"
+    """z-ai/glm-4.6 is Zhipu's latest stable production identifier via OpenRouter."""
+    assert GLM_MODEL == "z-ai/glm-4.6"
 
 
 def test_legacy_alias_constant():

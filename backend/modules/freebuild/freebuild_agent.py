@@ -9039,7 +9039,7 @@ async def stream_agent_turn(
     providers = []
     if _prov == GPT_PROVIDER and (os.environ.get("OPENAI_DIRECT_KEY") or os.environ.get("OPENAI_API_KEY")):
         providers.append((GPT_PROVIDER, _model))
-    elif _prov == GLM_PROVIDER and os.environ.get("ZHIPU_API_KEY"):
+    elif _prov == GLM_PROVIDER and (os.environ.get("OPENROUTER_API_KEY") or os.environ.get("ZHIPU_API_KEY")):
         providers.append((GLM_PROVIDER, _model))
     if os.environ.get("ANTHROPIC_API_KEY", "").strip():
         providers.append(("anthropic", "claude-sonnet-4-5-20250929"))
@@ -9241,10 +9241,22 @@ async def _stream_one_provider(
             # Hybrid mode: direct OpenAI access for the GPT phase
             client = AsyncOpenAI(api_key=os.environ.get("OPENAI_DIRECT_KEY") or os.environ.get("OPENAI_API_KEY", ""))
         elif provider == "zhipu_glm":
-            # Hybrid mode: Zhipu GLM-5.2 via OpenAI-compatible endpoint (z.ai)
+            # Hybrid mode: Zhipu GLM via OpenAI-compatible endpoint (z.ai direct)
             client = AsyncOpenAI(
                 api_key=os.environ.get("ZHIPU_API_KEY", ""),
                 base_url="https://api.z.ai/api/paas/v4/",
+            )
+        elif provider == "openrouter_glm":
+            # Hybrid mode: GLM-4.6 via OpenRouter (no Chinese phone-verification).
+            # OpenRouter requires HTTP-Referer header for analytics tracking; the
+            # OpenAI SDK lets us pass default_headers for every request.
+            client = AsyncOpenAI(
+                api_key=os.environ.get("OPENROUTER_API_KEY", ""),
+                base_url="https://openrouter.ai/api/v1",
+                default_headers={
+                    "HTTP-Referer": "https://zenrex.ai",
+                    "X-Title": "Zenrex FreeBuild",
+                },
             )
         else:
             client = AsyncOpenAI(api_key=os.environ.get("OPENAI_DIRECT_KEY") or os.environ.get("OPENAI_API_KEY", ""))
