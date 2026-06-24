@@ -3436,6 +3436,18 @@ function ChatWorkspace({ projectId }) {  const navigate = useNavigate();
             <FolderOpen className="w-4 h-4" />
             <span className="text-xs font-medium hidden sm:inline">مشاريعي</span>
           </button>
+          {project?.id && (
+            <button
+              type="button"
+              onClick={() => navigate(`/lab/${project.id}`)}
+              data-testid="open-lab-chat"
+              className="hidden sm:inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 text-amber-300 hover:text-amber-200 transition-all shrink-0"
+              title="افتح المختبر — شات مباشر بدون مراحل"
+            >
+              <span className="text-sm">🧪</span>
+              <span className="text-xs font-medium hidden sm:inline">المختبر</span>
+            </button>
+          )}
           <a href="/" className="hidden md:inline-flex shrink-0" aria-label="Zenrex"><ZenrexBrand size={22} /></a>
           {/* Digital clock — replaces the old Globe + project title duplicate.
               Project name is now shown in the PhaseHeaderPill below this bar. */}

@@ -6573,6 +6573,7 @@ For questions: legal@zenrex.ai
         pid: str,
         message: str = Form(...),
         user_language: str = Form("ar"),
+        mode: str = Form("default"),  # "default" = full Brain workflow, "lab" = bare AI + tools only
         user=Depends(get_current_user),
     ):
         """SSE endpoint: streams 'thinking' events as the agent works."""
@@ -6676,63 +6677,119 @@ For questions: legal@zenrex.ai
             except Exception:
                 pass
             try:
-                # Brain v2 takes over: state machine, discovery, plan,
-                # memory, strict completion. It defers to the legacy
-                # executor only inside the EXECUTING state.
-                brain_cfg = BrainConfig(
-                    section="freebuild",
-                    user_language=user_language,
-                    max_iterations=20,
-                )
-                async for chunk in brain_stream_turn(
-                    proj, message, history,
-                    config=brain_cfg,
-                    ctx_holder=ctx_holder,
-                    auth_token=_agent_token,
-                    db=db,
-                    is_owner=is_platform_owner_stream,
-                ):
-                    # Capture done events for final persistence
-                    if chunk.startswith("event: done\n"):
-                        try:
-                            data_line = [ln for ln in chunk.split("\n") if ln.startswith("data:")][0][5:].strip()
-                            done = json.loads(data_line)
-                            captured["summary"] = done.get("summary", "")
-                            captured["options"] = done.get("options") or []
-                            captured["inline_images"] = done.get("inline_images") or []
-                            captured["inline_audio"] = done.get("inline_audio") or []
-                            captured["inline_video"] = done.get("inline_video") or []
-                            captured["iterations"] = done.get("iterations", 0)
-                            captured["model_used"] = done.get("model_used", "")
-                            captured["html_updated"] = done.get("html_updated", False)
-                            captured["credits_charged"] = int(done.get("credits_charged") or 0)
-                        except Exception:
-                            logger.exception("agent stream: failed to parse done event")
-                    # Mid-stream HTML checkpoint — survives disconnects
-                    if chunk.startswith("event: tool\n") and '"phase": "done"' in chunk:
-                        ctx_now = ctx_holder.get("ctx")
-                        if ctx_now and ctx_now.changes_made > last_persisted_changes and ctx_now.current_html:
+                if mode == "lab":
+                    # 🧪 LAB MODE — bypasses Brain orchestrator and workflow
+                    # constraints entirely. Pure: user message → AI tools → result.
+                    # Same 3 models, same tools, NO discovery/mockup/skeleton/
+                    # wiring/surgical phases. Used for isolating bugs from
+                    # the workflow layer.
+                    proj_lab = dict(proj)
+                    proj_lab["workflow_state"] = {
+                        "stage": "surgical_edit",  # most permissive — no addendum constraints
+                        "discovery_answers": {"_lab_mode": "yes"},
+                    }
+                    from .freebuild_agent import FreeBuildToolContext as _FBC
+                    _ctx = _FBC(
+                        proj_lab,
+                        auth_token=_agent_token,
+                        db=db,
+                        is_owner=is_platform_owner_stream,
+                    )
+                    ctx_holder["ctx"] = _ctx
+                    async for chunk in stream_agent_turn(
+                        proj_lab, message, history,
+                        ctx=_ctx,
+                        user_language=user_language,
+                        max_iterations=40,
+                    ):
+                        if chunk.startswith("event: done\n"):
                             try:
-                                await db.freebuild_projects.update_one(
-                                    {"id": pid},
-                                    {"$set": {"current_html": ctx_now.current_html,
-                                              "pages": ctx_now.pages,
-                                              "active_page": ctx_now.active_page,
-                                              "updated_at": _now(),
-                                              "agent_in_progress": True}},
-                                )
-                                last_persisted_changes = ctx_now.changes_made
+                                data_line = [ln for ln in chunk.split("\n") if ln.startswith("data:")][0][5:].strip()
+                                done = json.loads(data_line)
+                                captured["summary"] = done.get("summary", "")
+                                captured["options"] = done.get("options") or []
+                                captured["inline_images"] = done.get("inline_images") or []
+                                captured["inline_audio"] = done.get("inline_audio") or []
+                                captured["inline_video"] = done.get("inline_video") or []
+                                captured["iterations"] = done.get("iterations", 0)
+                                captured["model_used"] = done.get("model_used", "")
+                                captured["html_updated"] = done.get("html_updated", False)
+                                captured["credits_charged"] = int(done.get("credits_charged") or 0)
                             except Exception:
-                                logger.exception("mid-stream checkpoint failed")
-                    # Push to queue — drop oldest if full (keeps memory bounded)
-                    try:
-                        event_queue.put_nowait(chunk)
-                    except _asyncio.QueueFull:
+                                logger.exception("lab stream: failed to parse done event")
+                        if chunk.startswith("event: tool\n") and '"phase": "done"' in chunk:
+                            ctx_now = ctx_holder.get("ctx")
+                            if ctx_now and ctx_now.changes_made > last_persisted_changes and ctx_now.current_html:
+                                try:
+                                    await db.freebuild_projects.update_one(
+                                        {"id": pid},
+                                        {"$set": {"current_html": ctx_now.current_html,
+                                                  "pages": ctx_now.pages,
+                                                  "active_page": ctx_now.active_page,
+                                                  "updated_at": datetime.now(timezone.utc).isoformat()}},
+                                    )
+                                    last_persisted_changes = ctx_now.changes_made
+                                except Exception:
+                                    logger.exception("lab mid-stream persist failed")
+                        await event_queue.put(chunk)
+                else:
+                    # Brain v2 takes over: state machine, discovery, plan,
+                    # memory, strict completion. It defers to the legacy
+                    # executor only inside the EXECUTING state.
+                    brain_cfg = BrainConfig(
+                        section="freebuild",
+                        user_language=user_language,
+                        max_iterations=20,
+                    )
+                    async for chunk in brain_stream_turn(
+                        proj, message, history,
+                        config=brain_cfg,
+                        ctx_holder=ctx_holder,
+                        auth_token=_agent_token,
+                        db=db,
+                        is_owner=is_platform_owner_stream,
+                    ):
+                        # Capture done events for final persistence
+                        if chunk.startswith("event: done\n"):
+                            try:
+                                data_line = [ln for ln in chunk.split("\n") if ln.startswith("data:")][0][5:].strip()
+                                done = json.loads(data_line)
+                                captured["summary"] = done.get("summary", "")
+                                captured["options"] = done.get("options") or []
+                                captured["inline_images"] = done.get("inline_images") or []
+                                captured["inline_audio"] = done.get("inline_audio") or []
+                                captured["inline_video"] = done.get("inline_video") or []
+                                captured["iterations"] = done.get("iterations", 0)
+                                captured["model_used"] = done.get("model_used", "")
+                                captured["html_updated"] = done.get("html_updated", False)
+                                captured["credits_charged"] = int(done.get("credits_charged") or 0)
+                            except Exception:
+                                logger.exception("agent stream: failed to parse done event")
+                        # Mid-stream HTML checkpoint — survives disconnects
+                        if chunk.startswith("event: tool\n") and '"phase": "done"' in chunk:
+                            ctx_now = ctx_holder.get("ctx")
+                            if ctx_now and ctx_now.changes_made > last_persisted_changes and ctx_now.current_html:
+                                try:
+                                    await db.freebuild_projects.update_one(
+                                        {"id": pid},
+                                        {"$set": {"current_html": ctx_now.current_html,
+                                                  "pages": ctx_now.pages,
+                                                  "active_page": ctx_now.active_page,
+                                                  "updated_at": _now(),
+                                                  "agent_in_progress": True}},
+                                    )
+                                    last_persisted_changes = ctx_now.changes_made
+                                except Exception:
+                                    logger.exception("mid-stream checkpoint failed")
+                        # Push to queue — drop oldest if full (keeps memory bounded)
                         try:
-                            event_queue.get_nowait()
                             event_queue.put_nowait(chunk)
-                        except _asyncio.QueueEmpty:
-                            pass
+                        except _asyncio.QueueFull:
+                            try:
+                                event_queue.get_nowait()
+                                event_queue.put_nowait(chunk)
+                            except _asyncio.QueueEmpty:
+                                pass
             finally:
                 # Persist to DB even on cancellation
                 final_ctx = ctx_holder.get("ctx")
