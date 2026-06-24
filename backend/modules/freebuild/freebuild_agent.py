@@ -2445,7 +2445,9 @@ def _exec_tool(ctx: FreeBuildToolContext, name: str, args: Dict[str, Any]) -> Di
 
         # ── Workflow Engine tools ──
         if name == "save_discovery_answer":
-            from .workflow_engine import get_workflow_state, DISCOVERY_QUESTIONS
+            from .workflow_engine import (get_workflow_state, DISCOVERY_QUESTIONS,
+                                           DISCOVERY_REQUIRED_TOPICS,
+                                           discovery_complete, STAGE_VISUAL_SKELETON)
             key = (args or {}).get("key", "").strip()
             value = (args or {}).get("value", "").strip()
             valid_keys = {q["key"] for q in DISCOVERY_QUESTIONS}
@@ -2455,12 +2457,30 @@ def _exec_tool(ctx: FreeBuildToolContext, name: str, args: Dict[str, Any]) -> Di
                 return {"ok": False, "error": "value فارغ — احفظ إجابة العميل الفعلية."}
             ws = get_workflow_state(ctx.project)
             ws.setdefault("discovery_answers", {})[key] = value[:1000]
+            # Auto-advance: as soon as the 4 required topics are filled, jump
+            # the stage forward without waiting for the LLM to call
+            # advance_workflow_stage. This avoids the failure mode where the
+            # AI keeps gathering answers indefinitely or never calls advance.
+            auto_advanced = False
+            if discovery_complete(ws) and ws.get("stage") != STAGE_VISUAL_SKELETON:
+                ws["stage"] = STAGE_VISUAL_SKELETON
+                auto_advanced = True
             ctx.project["workflow_state"] = ws
             ctx.workflow_state_dirty = True
-            answered = sum(1 for q in DISCOVERY_QUESTIONS
-                           if ws["discovery_answers"].get(q["key"]))
-            return {"ok": True, "key": key, "progress": f"{answered}/8",
-                    "complete": answered == 8}
+            answered = sum(1 for k in DISCOVERY_REQUIRED_TOPICS
+                           if ws["discovery_answers"].get(k))
+            total_req = len(DISCOVERY_REQUIRED_TOPICS)
+            return {
+                "ok": True, "key": key,
+                "progress": f"{answered}/{total_req} موضوع أساسي",
+                "complete": answered == total_req,
+                "auto_advanced_to_visual_skeleton": auto_advanced,
+                "next_action": (
+                    "ابدأ بناء Visual Skeleton الآن — كل الصفحات بتصميم متناسق + nav يعمل."
+                    if auto_advanced else
+                    "اطرح السؤال التالي أو احفظ إجابة موضوع آخر."
+                ),
+            }
 
         if name == "advance_workflow_stage":
             from .workflow_engine import (get_workflow_state, can_advance_to,
@@ -9216,6 +9236,16 @@ async def _stream_one_provider(
         _wf_state = get_workflow_state(project)
         _wf_addendum = stage_prompt_addendum(_wf_state, project)
         _wf_label = stage_label_ar(_wf_state.get("stage", ""))
+        # Stage banner at the TOP of the prompt — strongest signal to the LLM
+        # about which stage it is in. Placed BEFORE the base prompt so it
+        # outranks any conflicting instructions further down.
+        _stage_banner = (
+            f"\n\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+            f"🎬 **المرحلة الحالية: {_wf_label}** (stage={_wf_state.get('stage')})\n"
+            f"━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+            f"اقرأ أدناه قواعد هذه المرحلة بعناية والتزم بها قبل أي قواعد أخرى.\n"
+        )
+        _wf_addendum = _stage_banner + (_wf_addendum or "")
         logger.info(f"[workflow] stage={_wf_state.get('stage')} ({_wf_label})")
     except Exception as _wfe:
         logger.warning(f"[workflow] addendum load failed: {_wfe}")
