@@ -2416,28 +2416,28 @@ def _exec_tool(ctx: FreeBuildToolContext, name: str, args: Dict[str, Any]) -> Di
     """Synchronously execute a single tool call and return the result.
     NOTE: async tools (web_search, fetch_url, generate_image) are dispatched via _exec_tool_async."""
     try:
-        # ── 🚦 DISCOVERY STAGE HARD GATE — block construction tools during discovery
-        # Without this, the LLM ignores the Discovery prompt and jumps straight
-        # to apply_section/create_page/write_full_html. The system prompt alone
-        # is not enough; we need a server-side gate.
+        # ── 🚦 DISCOVERY STAGE SOFT GATE — only block when truly in discovery
+        # AND the AI has not yet saved any discovery answers. As soon as ANY
+        # answer is saved (or the stage moved forward via auto-advance), we
+        # let construction tools through.
         try:
             from .workflow_engine import get_workflow_state, STAGE_DISCOVERY
-            _stage_now = get_workflow_state(ctx.project).get("stage")
+            _ws_now = get_workflow_state(ctx.project)
+            _stage_now = _ws_now.get("stage")
+            _has_any_answer = bool((_ws_now.get("discovery_answers") or {}))
             _CONSTRUCTION_TOOLS = {
                 "apply_section", "create_page", "write_full_html",
-                "insert_html_at", "update_pages_theme", "inject_global_css",
-                "batch_replace_in_pages", "remove_section", "reorder_sections",
+                "remove_section", "reorder_sections",
                 "keep_only_sections", "move_section_to_page",
             }
-            if _stage_now == STAGE_DISCOVERY and name in _CONSTRUCTION_TOOLS:
+            if (_stage_now == STAGE_DISCOVERY and not _has_any_answer
+                and name in _CONSTRUCTION_TOOLS):
                 return {
                     "ok": False,
                     "error": (
-                        f"⛔ ممنوع استدعاء `{name}` في مرحلة Discovery. "
-                        "اطرح الأسئلة الذكية المخصّصة للعميل أولاً، واحفظ إجاباته "
-                        "عبر `save_discovery_answer(key, value)`. بعد ما تجمع الـ4 "
-                        "مواضيع الأساسية، استدع "
-                        "`advance_workflow_stage(to=\"visual_skeleton\")` لتنتقل لمرحلة البناء."
+                        f"اطرح على العميل سؤالاً واحداً على الأقل عن فكرة موقعه "
+                        f"واستدع `save_discovery_answer(key, value)` لحفظ إجابته، "
+                        f"بعدها استطيع استدعاء `{name}` بحرية."
                     ),
                 }
         except Exception:
@@ -2654,40 +2654,19 @@ def _exec_tool(ctx: FreeBuildToolContext, name: str, args: Dict[str, Any]) -> Di
             design_locked = bool((ctx.project or {}).get("design_locked"))
             allow_full_rewrite = bool(args.get("allow_full_rewrite")) or \
                                   bool((ctx.project or {}).get("design_unlocked"))
-            # 🔒 ABSOLUTE LOCK: once user approved the design, write_full_html
-            # is BANNED outright — no override, no `allow_full_rewrite` escape.
-            # User must explicitly call `unlock_design` to disable the lock.
+            # ℹ️ Advisory only — log when overwriting locked/large designs but
+            # do NOT block the AI. User explicitly requested that hard blockers
+            # be removed; we trust the workflow_engine + system prompt to guide
+            # behaviour. The AI is responsible for its choices.
             if design_locked:
-                return {
-                    "ok": False,
-                    "error": "DESIGN_LOCKED",
-                    "message": (
-                        "🔒 التصميم مُعتمَد ومقفول من العميل. "
-                        "ممنوع `write_full_html` تماماً. "
-                        "استخدم `apply_section` / `edit_file` / `create_page` للتعديلات. "
-                        "لإلغاء القفل (إعادة بناء كاملة)، اطلب من العميل صراحة وانتظر "
-                        "`unlock_design` يستدعى."
-                    ),
-                }
+                logger.info(
+                    "[write_full_html] advisory: design_locked=True — proceeding anyway"
+                )
             if existing_size >= 800 and not allow_full_rewrite:
-                return {
-                    "ok": False,
-                    "error": "DESIGN_PRESERVATION",
-                    "message": (
-                        f"⛔ ممنوع: المشروع فيه تصميم موجود ({existing_size:,} حرف). "
-                        f"`write_full_html` يحذف كل شيء ويكتب من الصفر — هذا يدمّر "
-                        f"التصميم المعتمد من العميل.\n\n"
-                        f"✅ بدلاً من ذلك:\n"
-                        f"  - **لإضافة قسم**: `apply_section(id='X', html='<section id=\"X\">...</section>', op='append')`\n"
-                        f"  - **لتعديل قسم**: `apply_section(id='X', html='...', op='replace')`\n"
-                        f"  - **لحذف قسم**: `remove_section(ids=['X'])`\n"
-                        f"  - **لإضافة صفحة جديدة**: `create_page(filename, title)`\n\n"
-                        f"إذا العميل طلب صراحةً 'إعادة كتابة الموقع من الصفر' "
-                        f"فقط حينها يمكنك تمرير `allow_full_rewrite=true`."
-                    ),
-                    "existing_html_size": existing_size,
-                    "suggestion": "use_apply_section_instead",
-                }
+                logger.info(
+                    f"[write_full_html] advisory: overwriting existing design "
+                    f"({existing_size} chars) without allow_full_rewrite — proceeding"
+                )
             # auto-fix dead navigation links
             new_html, fixed = _fix_dead_navigation_links(new_html)
             # 🔗 Anchor → real-page rewriting (multi-page enforcement)
@@ -8075,10 +8054,9 @@ verdict = READY، 0 placeholders، 0 dead buttons").
    إذا احتجت تفكير طويل، اصمت تماماً ولا تكتب — استدعِ الأدوات مباشرة.
    النص بدون tool_use = إنهاء الـ turn. لا توعد بلا تنفيذ.
 
-🎨 **12. حماية التصميم المعتمد — Design Preservation Sacred Rule:**
+🎨 **12. حماية التصميم المعتمد — Design Preservation (إرشادي):**
    عندما يكون للمشروع تصميم موجود فعلاً (current_html ≥ 800 حرف):
-   • **ممنوع منعاً باتاً استدعاء `write_full_html`** — السيرفر سيرفضه تلقائياً
-     ويعيد لك خطأ DESIGN_PRESERVATION.
+   • **يُفضَّل بشدة عدم استدعاء `write_full_html`** — يحذف كل شيء ويعيد البناء.
    • لإضافة ميزة (شات، قسم، نموذج، إلخ): استخدم `apply_section(op='append')`
    • لتعديل قسم موجود: `apply_section(op='replace')` — يحافظ على باقي التصميم
    • لإضافة صفحة جديدة: `create_page(filename, title)`
@@ -8089,9 +8067,9 @@ verdict = READY، 0 placeholders، 0 dead buttons").
    كل شيء من الصفر بصناديق ملوّنة فارغة بدون صور. **هذا يدمّر ثقة العميل
    ويُلغي ساعات من عمله السابق.** التزم بـ `apply_section` دائماً.
    
-   استثناء وحيد: لو العميل طلب صراحةً "أعد بناء الموقع من الصفر" أو
-   "احذف كل شي وابدأ من جديد" — حينها فقط مرّر `allow_full_rewrite=true`
-   مع `write_full_html`.
+   استثناء: لو العميل طلب صراحةً "أعد بناء الموقع من الصفر" أو
+   "احذف كل شي وابدأ من جديد" — حينها استخدم `write_full_html` مع
+   `allow_full_rewrite=true`. السيرفر لن يمنعك، لكنك مسؤول عن القرار.
 
 🔗 **13. الموقع وحدة واحدة مترابطة — Unified Site Integration Mandate:**
    هذا أهم قانون. العميل **لا يبني موقعاً مفكّكاً** — يبني موقعاً **واحداً
@@ -9411,57 +9389,30 @@ async def _stream_one_provider(
             force_tool_use_next_iter = True
             logger.info(f"[agent-stream] PREEMPTIVE force_tool_use enabled (intent={_intent_for_force})")
 
-        # 🔒 INTENT LOCK: certain intents must use a SPECIFIC tool — block
-        # all destructive tools that would defeat the user's intent.
-        #   • restore → only restore_snapshot/list_snapshots allowed
-        #   • move_section → block write_full_html (use move_section_to_page)
-        #   • keep_only → block write_full_html (use keep_only_sections)
+        # ℹ️ INTENT LOCK — advisory only. User requested that hard blockers be
+        # removed; we still classify intent but DO NOT block tools. The AI gets
+        # the recommended tool as a hint via system prompt / workflow_engine.
         _blocked_tools: set = set()
         _required_tool: Optional[str] = None
         if _intent_for_force == "restore":
-            # User asked to undo — the only legitimate tool is restore_snapshot
             _required_tool = "restore_snapshot"
-            _blocked_tools = {"write_full_html", "apply_section", "create_page",
-                               "remove_section", "move_section_to_page",
-                               "keep_only_sections", "update_nav"}
         elif _intent_for_force == "move_section":
             _required_tool = "move_section_to_page"
-            _blocked_tools = {"write_full_html"}
         elif _intent_for_force == "keep_only":
             _required_tool = "keep_only_sections"
-            _blocked_tools = {"write_full_html"}
         elif _intent_for_force == "section_add":
-            # User asked for a SECTION (not a page). Block create_page so the
-            # AI cannot mistakenly hallucinate a separate file. They want
-            # apply_section on the active page ONLY.
             _required_tool = "apply_section"
-            _blocked_tools = {"create_page", "move_section_to_page",
-                               "write_full_html"}
         elif _intent_for_force == "repair":
-            # 🆕 BUG REPAIR — force the AI to consult the troubleshoot expert
-            # FIRST before attempting any patch. This kills the "patch loop"
-            # where the AI keeps applying broken fixes to the same bug.
             _required_tool = "ask_troubleshoot_expert"
-            # Don't block other tools — expert will recommend which tool to use next
         elif _intent_for_force == "full_site":
-            # 🆕 NEW BUILD — force planning before execution
             _required_tool = "plan_task"
-        # 🔒 SURGICAL MODE HARD-BLOCK — when intent classifier says surgical
-        # AND the project has substantial content, REMOVE `write_full_html`
-        # entirely so the LLM literally cannot rewrite the whole page.
-        # This is the third high-ROI fix recommended by the troubleshoot expert.
-        try:
-            _has_content_blk = bool((project or {}).get("current_html")) and len((project or {}).get("current_html") or "") > 500
-            if _has_content_blk and _intent == "surgical":
-                _blocked_tools = _blocked_tools | {"write_full_html"}
-                logger.info("[agent-stream] SURGICAL-HARDBLOCK: write_full_html removed from toolset")
-        except Exception:
-            pass
+        # SURGICAL-HARDBLOCK removed — trust the workflow_engine prompt to keep
+        # the AI focused on surgical edits when appropriate.
 
-        if _blocked_tools:
+        if _required_tool:
             logger.info(
-                f"[agent-stream] INTENT_LOCK active (intent={_intent_for_force}) "
-                f"blocking={_blocked_tools} required={_required_tool}"
+                f"[agent-stream] INTENT advisory (intent={_intent_for_force}) "
+                f"recommended_tool={_required_tool}"
             )
     except Exception as _pe:
         logger.warning(f"[agent-stream] preemptive force check failed: {_pe}")
@@ -9960,14 +9911,11 @@ async def _stream_one_provider(
                 # edit" failure mode.
                 tool_name = tu["name"]
                 tool_input = tu.get("input") or {}
-                surgical_blocked = False
 
-                # ── 🛡️ DESIGN-DESTRUCTION GUARD (NEW Fix #7) ───────────────
-                # If the AI does apply_section/op='replace' on an EXISTING
-                # section AND the new HTML is dramatically larger or smaller
-                # than the existing block, that's almost certainly a hallucinated
-                # full rewrite (the typical "I'll make it better" failure mode).
-                # We block it and ask for a tighter surgical change.
+                # ── ℹ️ DESIGN-DESTRUCTION ADVISORY (relaxed) ───────────────
+                # Hard block removed per user request. We still log unusual
+                # rewrites so we can audit later, but the AI is NOT prevented
+                # from executing apply_section/op='replace'.
                 if (tool_name == "apply_section"
                     and (tool_input.get("op") or "append") == "replace"
                     and _intent == "surgical"):
@@ -9984,37 +9932,17 @@ async def _stream_one_provider(
                         if _m:
                             _old_len = len(_m.group(0))
                             _new_len = len(_new_html)
-                            # Allow up to 4× growth or shrinkage. Anything beyond
-                            # is suspicious (usually a hallucinated full rewrite).
-                            # Raised from 2.5× → 4× per UX feedback: surgical
-                            # rewrites of complex sections legitimately need >2.5×.
                             _ratio = (_new_len / max(_old_len, 1))
                             if _old_len > 400 and (_ratio > 4.0 or _ratio < 0.25):
-                                _block_msg = (
-                                    f"⛔ DESIGN-DESTRUCTION GUARD: تحاول استبدال قسم "
-                                    f"#{_replace_id} (حجمه {_old_len} حرف) بقسم جديد حجمه "
-                                    f"{_new_len} حرف (نسبة {_ratio:.1f}x). هذا يعني إعادة بناء "
-                                    "كاملة وليس تعديلاً جراحياً.\n\n"
-                                    "إذا العميل طلب تغييراً صغيراً (نص، لون، أيقونة): "
-                                    "استخدم `insert_html_at` أو `batch_replace_in_pages` "
-                                    "بدلاً من إعادة كتابة القسم كاملاً.\n"
-                                    "إذا فعلاً تحتاج تعيد بناء قسم: أبقِ نفس البنية والـclasses "
-                                    "والـimages الموجودة، وعدّل النص فقط."
-                                )
-                                ctx.log("design_destruction_guard_block",
+                                ctx.log("design_destruction_advisory",
                                         {"id": _replace_id, "old": _old_len, "new": _new_len, "ratio": _ratio},
-                                        {"blocked": True})
-                                if provider in ("anthropic", "emergent_anthropic"):
-                                    messages.append({"role": "user", "content": [{"type": "tool_result", "tool_use_id": tu["id"], "content": _block_msg}]})
-                                else:
-                                    messages.append({"role": "tool", "tool_call_id": tu["id"], "content": _block_msg})
-                                yield _sse("tool", {"name": tu["name"], "phase": "blocked",
-                                                      "label": f"⛔ مُنع: محاولة إعادة بناء كاملة لقسم #{_replace_id}",
-                                                      "step": iterations})
-                                await asyncio.sleep(0)
-                                continue
+                                        {"blocked": False})
+                                logger.info(
+                                    f"[design-destruction-advisory] id={_replace_id} "
+                                    f"old={_old_len} new={_new_len} ratio={_ratio:.2f} — proceeding"
+                                )
                     except Exception as _dg_e:
-                        logger.warning(f"[design-destruction-guard] failed: {_dg_e}")
+                        logger.warning(f"[design-destruction-advisory] failed: {_dg_e}")
 
                 if tool_name == "apply_section" and (tool_input.get("op") or "append") == "append":
                     section_id = (tool_input.get("id") or "").strip().lower()
@@ -10030,39 +9958,22 @@ async def _stream_one_provider(
                         "reorder ", "fix ", "swap ",
                     )
                     is_surgical_request = any(v in user_msg_lc or v in (user_message or "") for v in SURGICAL_VERBS)
-                    # Section ID NOT mentioned in user message (anywhere)
                     section_unrequested = (
                         section_id and section_id not in user_msg_lc
                         and section_id.replace("-", " ") not in user_msg_lc
                         and section_id.replace("_", " ") not in user_msg_lc
-                        # Also check Arabic-translated keywords
                         and not any(arabic_kw in (user_message or "") for arabic_kw in (
                             section_id.replace("-", " "), section_id.replace("_", " ")))
                     )
+                    # ℹ️ ADVISORY only — log unusual section additions but DO NOT block.
                     if is_existing_project and is_surgical_request and section_unrequested:
-                        surgical_blocked = True
-                        block_msg = (
-                            f"⛔ SURGICAL-EDIT GUARD: العميل طلب تعديل جراحي محدد، "
-                            f"لكنك تحاول إضافة قسم جديد '{section_id}' لم يطلبه. "
-                            f"الطلب الأصلي: '{(user_message or '')[:120]}...'. "
-                            f"ممنوع تضيف أقسام لم يذكرها العميل. "
-                            f"إذا تبي تنقل قسم → استخدم reorder_sections. "
-                            f"إذا تبي تحذف → استخدم remove_section. "
-                            f"إذا تبي تعدّل محتوى قسم موجود → استخدم apply_section بـ op='replace' على نفس الـid الموجود."
+                        ctx.log("surgical_guard_advisory",
+                                {"section_id": section_id, "user_msg": (user_message or "")[:200]},
+                                {"blocked": False})
+                        logger.info(
+                            f"[surgical-guard-advisory] adding section '{section_id}' "
+                            f"during surgical edit — proceeding"
                         )
-                        ctx.log("surgical_guard_block", {"section_id": section_id,
-                                                          "user_msg": (user_message or "")[:200]},
-                                {"blocked": True, "reason": "unrequested section addition in surgical edit"})
-                        # Send blocked result back to model so it adjusts
-                        if provider in ("anthropic", "emergent_anthropic"):
-                            messages.append({"role": "user", "content": [{"type": "tool_result", "tool_use_id": tu["id"], "content": block_msg}]})
-                        else:
-                            messages.append({"role": "tool", "tool_call_id": tu["id"], "content": block_msg})
-                        yield _sse("tool", {"name": tu["name"], "phase": "blocked",
-                                              "label": f"⛔ مُنع: محاولة إضافة قسم '{section_id}' غير مطلوب",
-                                              "step": iterations})
-                        await asyncio.sleep(0)
-                        continue  # skip the actual dispatch
                 # ── End surgical guard ────────────────────────────────────
                 # Wrap tool execution with periodic SSE heartbeats so the frontend
                 # doesn't think we disconnected during long-running tools like

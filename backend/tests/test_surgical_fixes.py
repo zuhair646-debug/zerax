@@ -149,13 +149,12 @@ class TestSurgicalHardBlock:
         assert "write_full_html" in tool_names
 
     def test_hardblock_logic_present_in_source(self):
-        # Make sure the actual production code path still contains the block.
+        # Hard block was intentionally relaxed to an advisory per user request.
+        # The advisory still classifies intent but no longer removes
+        # write_full_html from the toolset.
         src = inspect.getsource(fa)
-        assert "SURGICAL-HARDBLOCK" in src
-        assert "write_full_html removed from toolset" in src
-        # Block is gated by both intent=='surgical' AND >500 chars
-        assert "len((project or {}).get(\"current_html\") or \"\") > 500" in src
-        assert '_intent == "surgical"' in src
+        assert "INTENT advisory" in src
+        assert "SURGICAL-HARDBLOCK removed" in src
 
 
 # ════════════════════════════════════════════════════════════════════════════
