@@ -10,6 +10,40 @@ Arabic-first AI builder for websites/apps/images/videos with credits-based prici
 - Stripe: Official `stripe` SDK with proxy support
 - **Brain v2 + Architecture-Aware Build Protocol + Surgical-First Policy** are LIVE.
 
+
+### 🔓 Blockers Relaxation (P0) — RESOLVED 2026-02 (LIVE on VPS)
+**User Pain (verbatim):** "شيل التعقيدات عنا والموانع. يلا ضبط الامور فحص وضبط. ما يرجع له صفحات بيضاء. خلي شوي عنده امور — حطله قواعد ولا حطله قواعد انه ما يقدر يسوي شي."
+
+**Root cause:** Five Python-level guards inside `freebuild_agent.py` were too aggressive — they returned tool_result errors and removed tools from the toolset BEFORE the AI ever got a chance to call them, even on legitimate first-design or surgical edits. The AI then reported "عندي blockers/constraints" back to the user.
+
+**Fix:** Converted ALL five guards to log-only advisories — the dispatcher proceeds and the AI gets the result it expected. Essential rules KEPT (per "خلي قواعد أساسية"):
+
+| Guard | Before | After |
+|---|---|---|
+| `DESIGN_LOCKED` | hard error on `write_full_html` | `logger.info` advisory, proceeds |
+| `DESIGN_PRESERVATION` (>800 chars) | hard error with `use_apply_section_instead` suggestion | `logger.info`, proceeds |
+| `INTENT_LOCK._blocked_tools` | tools removed from toolset | recommended-tool hint only |
+| `DESIGN-DESTRUCTION GUARD` (replace + ratio > 4×) | hard block + continue | `design_destruction_advisory` log only |
+| `SURGICAL-EDIT GUARD` (unrequested section append) | hard block + continue | `surgical_guard_advisory` log only |
+| `SURGICAL-HARDBLOCK` | `write_full_html` removed from toolset | removed entirely |
+
+**ESSENTIAL RULES KEPT (per user "خلي قواعد أساسية"):**
+- `BLANK PAGE DETECTOR` — injects warning into AI message when page < 800 chars / ≤ 1 section.
+- `PRE-FINISH GATE` — rejects `finish` call when any page is still blank; sets `force_tool_use_next_iter=True`.
+- `LYING GUARD` — appends one-shot reminder when user requests an action but assistant returns zero tool_use.
+- All tool-level argument validation (id required, html required, etc.)
+- Post-write audit (dummy UI / JS handlers / nav graph).
+- System prompt section 12 rewritten — removed "ممنوع منعاً باتاً" language, replaced with "يُفضَّل بشدة" advisory.
+
+**Tests:** 64/64 pytest pass (`test_blockers_relaxed.py 8/8`, `test_surgical_fixes.py 27/27`, `test_surgical_fixes_v2.py 23/23`, `test_pre_finish_gate.py 6/6`). Testing agent (iteration_65.json) confirmed 107/107 across all 6 explicit files. Live VPS deployed and healthy (HTTP 200).
+
+**Files changed:**
+- `/app/backend/modules/freebuild/freebuild_agent.py` (5 sections + 1 system-prompt rewrite).
+- `/app/backend/tests/test_blockers_relaxed.py` (new).
+- `/app/backend/tests/test_surgical_fixes.py` (test_hardblock_logic_present_in_source updated).
+- `/app/backend/tests/test_surgical_fixes_v2.py` (test_source_contains_guard_label_and_thresholds updated).
+
+
 ## Recent Fixes (Feb 2026)
 
 ### 🎛️ Hybrid AI Mode Toggle (P0) — RESOLVED 2026-02-XX (LIVE on VPS)

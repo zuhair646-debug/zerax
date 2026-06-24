@@ -189,17 +189,21 @@ class TestDesignDestructionGuard:
     """
 
     def test_source_contains_guard_label_and_thresholds(self):
+        # Hard block was intentionally converted to an advisory per user
+        # request. Verify the advisory form exists in source instead of the
+        # old hard-block assertions.
         src = inspect.getsource(fa)
-        assert "DESIGN-DESTRUCTION GUARD" in src
-        # Threshold constants must be exactly 4.0 and 0.25 per current requirements
-        # (raised from 2.5/0.4 in Feb 2026 UX iteration)
+        assert "DESIGN-DESTRUCTION ADVISORY" in src
+        # Threshold constants must still be evaluated (we just log instead
+        # of blocking when they exceed).
         assert "_ratio > 4.0 or _ratio < 0.25" in src
-        # Minimum existing-section gate (>400 chars)
         assert "_old_len > 400" in src
-        # Guard is intent-gated
+        # Advisory is still intent-gated
         assert '_intent == "surgical"' in src
-        # Skips dispatch via continue
-        assert "design_destruction_guard_block" in src
+        # Old continue path must be gone
+        assert "design_destruction_guard_block" not in src
+        # New advisory log marker is present
+        assert "design_destruction_advisory" in src
 
     def _simulate_guard(self, existing_html, new_html, replace_id, intent="surgical", op="replace"):
         """Mirror the source ratio guard so we can deterministically test it."""
