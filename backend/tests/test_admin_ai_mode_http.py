@@ -94,20 +94,20 @@ def test_put_ai_mode_hybrid_then_get_persists(owner_headers):
     put = requests.put(
         f"{API}/admin/ai-mode",
         headers=owner_headers,
-        json={"mode": "hybrid"},
+        json={"mode": "hybrid_gpt"},
         timeout=45,
     )
-    assert put.status_code == 200, f"PUT hybrid failed: {put.status_code} {put.text[:200]}"
+    assert put.status_code == 200, f"PUT hybrid_gpt failed: {put.status_code} {put.text[:200]}"
     body = put.json()
     assert body.get("ok") is True
-    assert body.get("mode") == "hybrid"
+    assert body.get("mode") == "hybrid_gpt"
 
     # Small sleep to allow any eventual-consistency (single-node Mongo so 0 is fine)
     time.sleep(0.2)
 
     get = requests.get(f"{API}/admin/ai-mode", headers=owner_headers, timeout=45)
     assert get.status_code == 200
-    assert get.json().get("mode") == "hybrid", "Persistence failed: GET did not return 'hybrid'"
+    assert get.json().get("mode") == "hybrid_gpt", "Persistence failed: GET did not return 'hybrid_gpt'"
 
 
 # ────────────────────────────────────────────────────────────────────────────

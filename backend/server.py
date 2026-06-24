@@ -2122,7 +2122,8 @@ async def get_admin_ai_mode(admin: dict = Depends(require_admin)):
 
     Possible values:
       • claude_only — Claude Sonnet 4.5 handles every phase (default).
-      • hybrid      — GPT-5.5 handles first creative build, Claude handles everything else.
+      • hybrid_gpt  — GPT-5.5 handles first creative build, Claude handles everything else.
+      • hybrid_glm  — GLM-5.2 (Zhipu, China) handles first creative build, Claude handles everything else.
     """
     from modules.freebuild.ai_mode import get_ai_mode, VALID_MODES
     current = await get_ai_mode(db)
@@ -2131,13 +2132,22 @@ async def get_admin_ai_mode(admin: dict = Depends(require_admin)):
 
 @api_router.put("/admin/ai-mode")
 async def set_admin_ai_mode(payload: dict, admin: dict = Depends(require_admin)):
-    """Update the platform-wide AI mode. Body: {"mode": "claude_only" | "hybrid"}."""
-    from modules.freebuild.ai_mode import set_ai_mode, VALID_MODES
+    """Update the platform-wide AI mode. Body: {"mode": one of claude_only | hybrid_gpt | hybrid_glm}.
+
+    The legacy alias "hybrid" is accepted on writes and normalized to "hybrid_gpt"
+    so older clients/saves keep working without manual migration.
+    """
+    from modules.freebuild.ai_mode import set_ai_mode, VALID_MODES, LEGACY_HYBRID_ALIAS
     mode = (payload or {}).get("mode")
-    if mode not in VALID_MODES:
-        raise HTTPException(status_code=400, detail=f"mode must be one of {sorted(VALID_MODES)}")
-    await set_ai_mode(db, mode)
-    return {"ok": True, "mode": mode}
+    # Single source of truth lives in ai_mode.set_ai_mode; let its ValueError
+    # surface as HTTP 400 rather than duplicating the validation here. This
+    # also means LEGACY_HYBRID_ALIAS is accepted (the module normalizes it).
+    try:
+        await set_ai_mode(db, mode)
+    except ValueError as ve:
+        raise HTTPException(status_code=400, detail=str(ve))
+    normalized = "hybrid_gpt" if mode == LEGACY_HYBRID_ALIAS else mode
+    return {"ok": True, "mode": normalized}
 
 
 
