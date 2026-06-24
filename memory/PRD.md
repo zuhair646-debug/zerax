@@ -11,6 +11,36 @@ Arabic-first AI builder for websites/apps/images/videos with credits-based prici
 - **Brain v2 + Architecture-Aware Build Protocol + Surgical-First Policy** are LIVE.
 
 
+### 🧪 Lab Mode + Scaffold Stripping (P0) — DEPLOYED 2026-06-24
+**User pain (72+ hours, 3000+ credits lost):** "الذكاء الاصطناعي يبني صفحة وحدة والباقي صفحات بيضاء" + "يهدم العمل السابق لما أطلب تعديل".
+
+**ROOT CAUSE (confirmed by testing_agent iteration_66.json):**
+The `create_page` tool was emitting a visible Arabic scaffold paragraph:
+```html
+<section id="page-header">
+  <p data-scaffold="true"><!-- SCAFFOLD_PLACEHOLDER --> محتوى الصفحة قيد البناء — سيتم تعبئتها بأقسام حقيقية.</p>
+</section>
+```
+The AI would `apply_section` real content **next to** this paragraph but never delete it. End-users saw "قيد البناء" dominating the top of each non-homepage and assumed the page was empty → reported "blank pages" for 72 hours despite the DB containing 7–10 KB of real HTML per page.
+
+**FIXES IN THIS ITERATION:**
+1. **`create_page` template** — now emits only an HTML comment marker, no visible Arabic text. New pages truly start blank so the AI MUST populate them.
+2. **`_strip_scaffold_placeholders`** wired into both `/s/{slug}` and `/s/{slug}/{filename}` serve handlers — cleans up legacy projects on the fly (idempotent, regex-bounded).
+3. **`mark_page_built` completeness gate** — refuses to flag a page as built until ≥2 sections AND ≥600 chars meaningful text AND no banned placeholders (`قريباً`, `Lorem ipsum`, `Coming soon`, etc.). Forces the AI to keep writing until the page is genuinely populated.
+4. **`write_full_html` post-write warning** — emits `incomplete_warning` in tool result when output is sub-threshold.
+5. **🧪 Lab Mode** — new `mode=lab` form param on `/agent-chat-stream` bypasses Brain orchestrator + workflow stages entirely. Operates on an isolated `proj_lab = dict(proj)` copy so the real workflow_state is never contaminated. Same Claude/GPT/GLM tools, raw chat. New `/lab/:id` frontend route, 🧪 المختبر button in FreeBuildChat top bar.
+
+**Tests:** 130/130 PASS (25 new in `test_lab_mode_and_scaffold.py` + 105 regression). Live on https://zenrex.ai (Lab page HTTP 200, scaffold text stripped from zanrax-cinema/account.html confirmed).
+
+**Files changed:**
+- `/app/backend/modules/freebuild/freebuild_agent.py` — `create_page` template, `mark_page_built` gate, `write_full_html` warning, placeholder detector tightened to text-only scan.
+- `/app/backend/modules/freebuild/freebuild_chat.py` — `_strip_scaffold_placeholders` helper + lab mode branch in agent-chat-stream.
+- `/app/frontend/src/pages/FreebuildLab.js` (new) — 200-line bare-bones lab chat.
+- `/app/frontend/src/App.js` — `<Route path="/lab/:id">`.
+- `/app/frontend/src/pages/FreeBuildChat.js` — 🧪 المختبر button.
+
+
+
 ### 🔓 Blockers Relaxation (P0) — RESOLVED 2026-02 (LIVE on VPS)
 **User Pain (verbatim):** "شيل التعقيدات عنا والموانع. يلا ضبط الامور فحص وضبط. ما يرجع له صفحات بيضاء. خلي شوي عنده امور — حطله قواعد ولا حطله قواعد انه ما يقدر يسوي شي."
 

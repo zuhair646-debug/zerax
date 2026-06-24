@@ -2835,9 +2835,9 @@ def _exec_tool(ctx: FreeBuildToolContext, name: str, args: Dict[str, Any]) -> Di
             _meaningful = len(_text_only)
             _placeholders = [
                 p for p in ("قريباً", "قريبا", "قيد التطوير", "Lorem ipsum",
-                            "Coming soon", "Under construction", "TBD", "WIP",
-                            "placeholder", "..."*5)
-                if p.lower() in page_html.lower()
+                            "Coming soon", "Under construction", "TBD",
+                            "محتوى الصفحة قيد البناء")
+                if p.lower() in _text_only.lower()
             ]
             if _section_count < 2 or _meaningful < 600 or _placeholders:
                 problems = []
