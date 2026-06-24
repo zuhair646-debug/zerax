@@ -36,13 +36,22 @@ from typing import Any, Dict, Tuple
 SETTINGS_COLLECTION = "platform_settings"
 SETTINGS_DOC_ID = "ai_mode"
 DEFAULT_MODE = "claude_only"
-VALID_MODES = {"claude_only", "hybrid"}
+VALID_MODES = {"claude_only", "hybrid_gpt", "hybrid_glm"}
+
+# Backwards compat: accept "hybrid" as an alias for "hybrid_gpt" (the original
+# Hybrid mode shipped before GLM was added). This keeps any previously-saved
+# admin setting working without manual migration.
+LEGACY_HYBRID_ALIAS = "hybrid"
 
 # Provider/model identifiers
 CLAUDE_PROVIDER = "anthropic"
 CLAUDE_MODEL = "claude-sonnet-4-5-20250929"
 GPT_PROVIDER = "openai_direct"
 GPT_MODEL = "gpt-5.5"
+# Zhipu GLM-5.2 — China's top-ranked design model (Design Arena #1 globally,
+# 6x cheaper than GPT-5.5, OpenAI-compatible API via z.ai).
+GLM_PROVIDER = "zhipu_glm"
+GLM_MODEL = "glm-4.6"  # latest stable production model from Zhipu
 
 # Phase identifiers
 PHASE_FIRST_DESIGN = "first_design"
@@ -55,8 +64,13 @@ async def get_ai_mode(db: Any) -> str:
         return DEFAULT_MODE
     try:
         doc = await db[SETTINGS_COLLECTION].find_one({"_id": SETTINGS_DOC_ID})
-        if doc and doc.get("mode") in VALID_MODES:
-            return doc["mode"]
+        if doc:
+            raw = doc.get("mode")
+            # Legacy alias: pre-GLM saves stored "hybrid" → map to hybrid_gpt
+            if raw == LEGACY_HYBRID_ALIAS:
+                return "hybrid_gpt"
+            if raw in VALID_MODES:
+                return raw
     except Exception:
         pass
     return DEFAULT_MODE
@@ -64,6 +78,9 @@ async def get_ai_mode(db: Any) -> str:
 
 async def set_ai_mode(db: Any, mode: str) -> None:
     """Persist the AI mode. Raises ValueError if invalid."""
+    # Accept the legacy alias on writes too so any external caller is forgiving
+    if mode == LEGACY_HYBRID_ALIAS:
+        mode = "hybrid_gpt"
     if mode not in VALID_MODES:
         raise ValueError(f"Invalid mode '{mode}'. Must be one of: {sorted(VALID_MODES)}")
     if db is None:
@@ -117,17 +134,23 @@ def pick_provider(ai_mode: str, phase: str) -> Tuple[str, str]:
     Returns:
         Tuple of (provider_key, model_id) compatible with _stream_one_provider.
     """
-    if ai_mode == "hybrid" and phase == PHASE_FIRST_DESIGN:
-        # Only route to GPT if we actually have the OpenAI direct key.
-        if os.environ.get("OPENAI_DIRECT_KEY") or os.environ.get("OPENAI_API_KEY"):
-            return (GPT_PROVIDER, GPT_MODEL)
-    # Default: Claude for everything
+    if phase == PHASE_FIRST_DESIGN:
+        if ai_mode == "hybrid_gpt":
+            if os.environ.get("OPENAI_DIRECT_KEY") or os.environ.get("OPENAI_API_KEY"):
+                return (GPT_PROVIDER, GPT_MODEL)
+        elif ai_mode == "hybrid_glm":
+            if os.environ.get("ZHIPU_API_KEY"):
+                return (GLM_PROVIDER, GLM_MODEL)
+    # Default: Claude for everything (also the fallback when keys are missing)
     return (CLAUDE_PROVIDER, CLAUDE_MODEL)
 
 
 def describe_choice(ai_mode: str, phase: str) -> str:
     """Human-readable summary for SSE / logs."""
     provider, model = pick_provider(ai_mode, phase)
-    if ai_mode == "hybrid" and phase == PHASE_FIRST_DESIGN and provider == GPT_PROVIDER:
-        return f"Hybrid → GPT-5.5 (التصميم الإبداعي الأولي)"
-    return f"Claude Sonnet 4.5 (الانضباط والتعديل الجراحي)"
+    if phase == PHASE_FIRST_DESIGN:
+        if ai_mode == "hybrid_gpt" and provider == GPT_PROVIDER:
+            return "Hybrid → GPT-5.5 (التصميم الإبداعي)"
+        if ai_mode == "hybrid_glm" and provider == GLM_PROVIDER:
+            return "Hybrid → GLM-5.2 (تصميم #1 عالمياً)"
+    return "Claude Sonnet 4.5 (الانضباط والتعديل الجراحي)"

@@ -1,0 +1,55 @@
+{
+  "summary": "GLM-5.2 third-mode integration validated. 122/124 tests pass across 8 test files (test_ai_mode 19 + test_ai_mode_three_modes 17 new + test_admin_ai_mode_http 8 + test_surgical_fixes 26 + test_surgical_fixes_v2 24 + test_openai_param_compat 12 + test_intent_scope_fix 5 + test_pre_finish_gate 6, minus 2 failures from one identical root cause). Module-level ai_mode.py is correct on every dimension. Source introspection on freebuild_agent.py confirms zhipu_glm routing + AsyncOpenAI base_url='https://api.z.ai/api/paas/v4/'. Cross-key isolation verified: hybrid_gpt with only ZHIPU_API_KEY correctly falls back to Claude (NOT silently substitutes GLM). The only failure is one real backend bug in server.py: the HTTP PUT route rejects the legacy 'hybrid' alias with 400 because it does an early VALID_MODES check BEFORE delegating to set_ai_mode (which would normalize the alias). This breaks the explicit requirement that PUT {mode:'hybrid'} must return 200 + 'hybrid_gpt'.",
+  "backend_issues": {
+    "critical": [
+      {
+        "endpoint": "PUT /api/admin/ai-mode",
+        "issue": "Body {mode:'hybrid'} returns 400 ('mode must be one of [...]') instead of 200 with body {mode:'hybrid_gpt'}. The legacy alias is correctly handled inside ai_mode.set_ai_mode() (it accepts 'hybrid' and normalizes to 'hybrid_gpt') BUT server.py lines 2136-2138 do a hard `if mode not in VALID_MODES: raise HTTPException(400)` BEFORE calling set_ai_mode, so the alias never reaches normalization. Any admin who previously saved 'hybrid' will hit a 400 when the FE re-PUTs that value. Fix: either (a) accept LEGACY_HYBRID_ALIAS in the route check and pass it through to set_ai_mode which will normalize, or (b) catch ValueError from set_ai_mode and let the module decide. Suggested patch at /app/backend/server.py:2136 — replace the early check with: `from modules.freebuild.ai_mode import LEGACY_HYBRID_ALIAS; if mode != LEGACY_HYBRID_ALIAS and mode not in VALID_MODES: raise HTTPException(400, ...); await set_ai_mode(db, mode); normalized = 'hybrid_gpt' if mode == LEGACY_HYBRID_ALIAS else mode; return {'ok': True, 'mode': normalized}`.",
+        "priority": "HIGH"
+      }
+    ],
+    "minor": [
+      {
+        "endpoint": "GET /api/admin/ai-mode",
+        "issue": "Docstring still says 'claude_only | hybrid' — should mention all three modes (claude_only / hybrid_gpt / hybrid_glm) at /app/backend/server.py:2118-2126 and 2134. Cosmetic only."
+      }
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_ai_mode_three_modes.py",
+    "/app/backend/tests/test_ai_mode.py",
+    "/app/backend/tests/test_admin_ai_mode_http.py",
+    "/app/test_reports/pytest/iteration_58_full.xml",
+    "/app/test_reports/pytest/iteration_58_three_modes.xml"
+  ],
+  "action_items": [
+    "Patch /app/backend/server.py:2136-2138 (PUT /api/admin/ai-mode) to accept the legacy 'hybrid' alias and return the normalized 'hybrid_gpt' value. The module-level set_ai_mode already supports this — the route just needs to let the alias pass the gate and report the normalized result.",
+    "Update inline docstrings on get_admin_ai_mode and set_admin_ai_mode to list all three modes (claude_only / hybrid_gpt / hybrid_glm) instead of the stale 'claude_only | hybrid'.",
+    "(Optional) After fix, rerun: pytest /app/backend/tests/test_ai_mode_three_modes.py /app/backend/tests/test_admin_ai_mode_http.py — expect 25 passed."
+  ],
+  "critical_code_review_comments": [
+    "ai_mode.py: VALID_MODES = {'claude_only','hybrid_gpt','hybrid_glm'} ✓. LEGACY_HYBRID_ALIAS = 'hybrid' ✓. get_ai_mode auto-migrates 'hybrid' → 'hybrid_gpt' on read (line 70-71) ✓. set_ai_mode normalizes 'hybrid' → 'hybrid_gpt' on write (line 82-83) ✓.",
+    "pick_provider correctly gates on per-mode keys (OPENAI_DIRECT_KEY/OPENAI_API_KEY for hybrid_gpt; ZHIPU_API_KEY for hybrid_glm) and falls back to Claude when the matching key is absent. Verified cross-key isolation: hybrid_gpt with only ZHIPU_API_KEY does NOT silently use GLM — falls back to Claude (test_hybrid_gpt_with_only_zhipu_key_falls_back_to_claude PASSED).",
+    "freebuild_agent.py:8910-8928 — provider chain correctly handles GLM_PROVIDER + ZHIPU_API_KEY presence check, and Claude is always appended as a fallback when ANTHROPIC_API_KEY exists.",
+    "freebuild_agent.py:9113-9118 — _stream_one_provider's elif provider == 'zhipu_glm' branch instantiates AsyncOpenAI with api_key=ZHIPU_API_KEY and base_url='https://api.z.ai/api/paas/v4/' — matches z.ai's OpenAI-compatible endpoint spec ✓.",
+    "BUG: server.py:2136-2138 — the route's early VALID_MODES check rejects 'hybrid' before set_ai_mode can normalize it. This contradicts the explicit pre-GLM-saves backwards-compat goal. The READ path (get_ai_mode via GET) is fine because the doc value is normalized at read time; the WRITE path through HTTP is broken.",
+    "Stale docstrings on server.py:2121-2125 and 2134 still say the only modes are 'claude_only | hybrid' — minor doc drift now that there are three.",
+    "test_admin_ai_mode_http.py was iteration-3 era (2-mode contract); I updated its valid_modes assertion to the 3-mode contract. Its PUT-with-'hybrid' test now legitimately exposes the same server.py bug."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_ai_mode_three_modes.py (new — 17 tests covering legacy alias on read/write, cross-key isolation, source introspection, and HTTP end-to-end on the live preview URL)",
+    "/app/backend/tests/test_admin_ai_mode_http.py (updated 1 assertion to the 3-mode valid_modes contract — purely a stale test-script fix, no functional change)"
+  ],
+  "success_rate": {"backend": "98.4% (122/124 tests pass — 2 failures share one root cause: server.py route rejects legacy alias)", "frontend": "N/A (backend-only per request)"},
+  "test_credentials": "owner@zerax.com / owner123 (per /app/memory/test_credentials.md). admin@zenrex.ai is production-only; the preview env doesn't have it seeded.",
+  "seed_data_creation": "None — used an in-memory _FakeDB shim for ai_mode.py legacy-alias logic tests, and the live preview server's existing platform_settings document for HTTP tests (state reset to claude_only at end of suite for isolation).",
+  "retest_needed": true,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "After the server.py route is patched to accept LEGACY_HYBRID_ALIAS, rerun `pytest /app/backend/tests/test_ai_mode_three_modes.py /app/backend/tests/test_admin_ai_mode_http.py -v` and expect 25/25 passed. Both failing tests are HTTP-level — the module-level legacy alias behavior is already correct and locked down by test_legacy_hybrid_on_read_is_migrated_to_hybrid_gpt and test_legacy_hybrid_on_write_persists_as_hybrid_gpt. The full backwards-compat sweep across all 8 files is now 124 tests (well above the 92-minimum the user asked for).",
+  "rca of the issue": "Root cause: ai_mode.set_ai_mode() was correctly extended to accept the legacy 'hybrid' alias and normalize to 'hybrid_gpt' (line 82-83 of ai_mode.py), but the HTTP route in server.py was NOT updated to mirror this — it still does a raw `if mode not in VALID_MODES: raise HTTPException(400)` at line 2137 which rejects 'hybrid' before set_ai_mode is ever called. Reproduction: `curl -X PUT $BACKEND/api/admin/ai-mode -H 'Authorization: Bearer <owner_token>' -H 'Content-Type: application/json' -d '{\"mode\":\"hybrid\"}'` → 400 instead of 200. Mitigation: in server.py:2136-2140, treat LEGACY_HYBRID_ALIAS as a valid input — either (a) explicitly allow it in the guard and pass through to set_ai_mode (which normalizes), or (b) remove the early guard and rely on set_ai_mode to raise ValueError which then maps to 400. The second approach is cleaner (single source of truth in ai_mode.py)."
+}

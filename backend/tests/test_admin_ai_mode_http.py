@@ -82,9 +82,9 @@ def test_get_ai_mode_returns_mode_and_valid_modes(owner_headers):
     assert r.status_code == 200, f"GET failed: {r.status_code} {r.text[:200]}"
     data = r.json()
     assert "mode" in data
-    assert data["mode"] in {"claude_only", "hybrid"}
+    assert data["mode"] in {"claude_only", "hybrid_gpt", "hybrid_glm"}
     assert "valid_modes" in data
-    assert sorted(data["valid_modes"]) == ["claude_only", "hybrid"]
+    assert sorted(data["valid_modes"]) == ["claude_only", "hybrid_glm", "hybrid_gpt"]
 
 
 # ────────────────────────────────────────────────────────────────────────────

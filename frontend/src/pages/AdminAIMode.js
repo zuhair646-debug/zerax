@@ -28,15 +28,25 @@ const MODE_META = {
     color: 'from-indigo-500/20 to-blue-500/20 border-indigo-400/40',
     iconColor: 'text-indigo-300',
   },
-  hybrid: {
-    title: 'Hybrid (GPT-5.5 + Claude)',
-    subtitle: 'توليفة: GPT للتصميم الإبداعي، Claude للانضباط',
+  hybrid_gpt: {
+    title: 'Hybrid GPT (GPT-5.5 + Claude)',
+    subtitle: 'GPT-5.5 للتصميم الإبداعي، Claude للانضباط',
     description:
-      'GPT-5.5 يبني التصميم الأول الإبداعي (HTML/CSS). Claude Sonnet 4.5 يستلم كل التعديلات الجراحية والإصلاحات. توليفة قوية بصرياً وانضباطياً.',
+      'GPT-5.5 يبني التصميم الأول الإبداعي. Claude Sonnet 4.5 يستلم التعديلات الجراحية. توليفة قوية بصرياً وانضباطياً.',
     badge: 'تجريبي · تصاميم أجمل',
     icon: Sparkles,
     color: 'from-amber-500/20 to-pink-500/20 border-amber-400/40',
     iconColor: 'text-amber-300',
+  },
+  hybrid_glm: {
+    title: 'Hybrid GLM (GLM-5.2 + Claude)',
+    subtitle: 'GLM-5.2 الصيني — #1 عالمياً في التصميم',
+    description:
+      'GLM-5.2 من Zhipu AI (الصين) — أول مرتبة في Design Arena عالمياً، 6× أرخص من GPT-5.5، context 1M token. Claude يستلم التعديلات الجراحية بعدها. يحتاج ZHIPU_API_KEY.',
+    badge: 'جديد · #1 تصميم · 6× أرخص',
+    icon: Sparkles,
+    color: 'from-emerald-500/20 to-cyan-500/20 border-emerald-400/40',
+    iconColor: 'text-emerald-300',
   },
 };
 
@@ -120,7 +130,7 @@ export default function AdminAIMode() {
           </div>
         ) : (
           <>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
               {Object.entries(MODE_META).map(([key, meta]) => {
                 const Icon = meta.icon;
                 const isActive = currentMode === key;

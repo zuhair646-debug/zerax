@@ -8907,7 +8907,7 @@ async def stream_agent_turn(
     try:
         from .ai_mode import (
             get_ai_mode, classify_phase, pick_provider, describe_choice,
-            GPT_PROVIDER,
+            GPT_PROVIDER, GLM_PROVIDER,
         )
         _ai_mode = await get_ai_mode(db) if db is not None else "claude_only"
         _phase = classify_phase(user_message, project)
@@ -8918,17 +8918,20 @@ async def stream_agent_turn(
         _ai_mode, _phase = "claude_only", "surgical"
         _prov, _model = "anthropic", "claude-sonnet-4-5-20250929"
         GPT_PROVIDER = "openai_direct"
+        GLM_PROVIDER = "zhipu_glm"
 
     # Build the provider chain. Primary = router choice. Fallback = Claude.
     providers = []
     if _prov == GPT_PROVIDER and (os.environ.get("OPENAI_DIRECT_KEY") or os.environ.get("OPENAI_API_KEY")):
         providers.append((GPT_PROVIDER, _model))
+    elif _prov == GLM_PROVIDER and os.environ.get("ZHIPU_API_KEY"):
+        providers.append((GLM_PROVIDER, _model))
     if os.environ.get("ANTHROPIC_API_KEY", "").strip():
         providers.append(("anthropic", "claude-sonnet-4-5-20250929"))
     elif os.environ.get("EMERGENT_LLM_KEY", "").strip():
         providers.append(("emergent_anthropic", "claude-sonnet-4-5-20250929"))
     if not providers:
-        yield _sse("error", {"message": "لا يوجد مفتاح Anthropic أو OpenAI — أضف ANTHROPIC_API_KEY أو OPENAI_DIRECT_KEY"})
+        yield _sse("error", {"message": "لا يوجد مفتاح Anthropic أو OpenAI أو Zhipu — أضف ANTHROPIC_API_KEY / OPENAI_DIRECT_KEY / ZHIPU_API_KEY"})
         return
 
     last_err = None
@@ -9107,6 +9110,12 @@ async def _stream_one_provider(
         elif provider == "openai_direct":
             # Hybrid mode: direct OpenAI access for the GPT phase
             client = AsyncOpenAI(api_key=os.environ.get("OPENAI_DIRECT_KEY") or os.environ.get("OPENAI_API_KEY", ""))
+        elif provider == "zhipu_glm":
+            # Hybrid mode: Zhipu GLM-5.2 via OpenAI-compatible endpoint (z.ai)
+            client = AsyncOpenAI(
+                api_key=os.environ.get("ZHIPU_API_KEY", ""),
+                base_url="https://api.z.ai/api/paas/v4/",
+            )
         else:
             client = AsyncOpenAI(api_key=os.environ.get("OPENAI_DIRECT_KEY") or os.environ.get("OPENAI_API_KEY", ""))
         try:
