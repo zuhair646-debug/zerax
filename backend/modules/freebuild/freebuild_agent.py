@@ -10019,47 +10019,18 @@ async def _stream_one_provider(
                                             + _js_audit.get("total_problems", 0)
                                             + _nav_audit.get("total_problems", 0))
                         if problems_total > 0:
-                            # 🆕 REPAIR-LOOP BREAKER: track repeated audit failures
-                            # If audit reports problems > 0 for 2+ consecutive iterations,
-                            # the AI is in a feedback loop. Force escalation to the
-                            # troubleshoot expert (instead of asking same AI to fix).
-                            ctx._repair_attempts = getattr(ctx, "_repair_attempts", 0) + 1
-                            ctx._last_audit_problems = problems_total
-                            escalate_to_expert = ctx._repair_attempts >= 2
-                            result = {
-                                **result,
-                                "_dummy_audit": _dummy_audit,
-                                "_js_handler_audit": _js_audit,
-                                "_navigation_audit": _nav_audit,
-                                "_repair_required": True,
-                                "_repair_attempts": ctx._repair_attempts,
-                                "_message_ar": (
-                                    f"⚠️ السيرفر اختبر النتيجة ووجد {problems_total} مشكلة:\n"
-                                    f"  • UI ميتة: {_dummy_audit.get('total_problems', 0)}\n"
-                                    f"  • JS handlers مكسورة: {_js_audit.get('total_problems', 0)}\n"
-                                    f"  • روابط navigation معطلة: {_nav_audit.get('total_problems', 0)}\n"
-                                    + (
-                                        "🚨 **REPAIR LOOP DETECTED** — جربت إصلاح هذا "
-                                        f"{ctx._repair_attempts} مرات بدون نجاح. **توقّف** عن "
-                                        "محاولة الإصلاح المباشر، واستدعِ `ask_troubleshoot_expert` "
-                                        "الآن بالتفاصيل الكاملة (المشكلة + ما جربت + الحالة الحالية). "
-                                        "هذا تفويض إلزامي."
-                                        if escalate_to_expert else
-                                        "🛠️ أصلِح كل مشكلة عبر apply_section قبل ما تقول 'تم'. "
-                                        "لو في handler يستدعي دالة غير معرّفة، أضف الدالة في "
-                                        "<script> داخل نفس التعديل. لو في صفحة بدون رجوع للرئيسية، "
-                                        "أضف <a href='index.html'> فيها."
-                                    )
-                                ),
-                            }
-                            force_tool_use_next_iter = True
-                            logger.warning(
-                                f"[post-write-audit] {tu['name']}: "
+                            # ℹ️ ADVISORY only — DO NOT attach repair pressure
+                            # to the tool_result and DO NOT force tool_choice=any.
+                            # The previous behaviour caused build loops during
+                            # multi-page builds (every intermediate skeleton
+                            # triggered "fix it now"). PRE-FINISH GATE remains
+                            # the backstop at completion time.
+                            logger.info(
+                                f"[post-write-audit advisory] {tu['name']}: "
                                 f"dummy={_dummy_audit.get('total_problems', 0)} "
                                 f"js_handler={_js_audit.get('total_problems', 0)} "
-                                f"nav={_nav_audit.get('total_problems', 0)} "
-                                f"attempt={ctx._repair_attempts} → "
-                                f"{'ESCALATE TO EXPERT' if escalate_to_expert else 'forcing repair'}"
+                                f"nav={_nav_audit.get('total_problems', 0)} — "
+                                f"NOT forcing repair (advisory only)"
                             )
                         else:
                             # Audit passed — reset repair counter
@@ -10165,79 +10136,20 @@ async def _stream_one_provider(
                         except Exception:
                             pass
 
-                        # (e) BLANK PAGE DETECTOR — if the just-mutated page has
-                        # ≤ 1 section AND < 800 chars of meaningful content,
-                        # it's a blank skeleton (typical after `create_page`).
-                        # Force the AI to fill it with real content via
-                        # `apply_section` BEFORE saying "تم".
+                        # (e) BLANK PAGE DETECTOR — REMOVED per user request.
+                        # In-flight blank-page warnings created build loops:
+                        # AI creates a skeleton page, detector immediately says
+                        # "صفحة بيضاء غير مقبولة", AI tries to fix mid-build,
+                        # loop ensues. PRE-FINISH GATE still rejects `finish`
+                        # while any page is blank — that is the right place to
+                        # enforce this rule (at completion, not mid-flight).
                         _blank_warning = ""
-                        try:
-                            _page_html = ctx.pages.get(_verify_target, "") or ""
-                            # Strip tags to estimate real content length
-                            import re as _re_blank
-                            _text_only = _re_blank.sub(r"<[^>]+>", " ", _page_html)
-                            _text_only = _re_blank.sub(r"\s+", " ", _text_only).strip()
-                            _meaningful_chars = len(_text_only)
-                            _is_blank = (
-                                tu["name"] == "create_page"
-                                or (len(_section_ids) <= 1 and _meaningful_chars < 800)
-                            )
-                            if _is_blank and tu["name"] in ("create_page", "apply_section"):
-                                _blank_warning = (
-                                    f"\n\n🚨 **BLANK PAGE DETECTOR**: صفحة `{_verify_target}` "
-                                    f"الآن فيها {len(_section_ids)} قسم فقط و~{_meaningful_chars} حرف "
-                                    "نصّ حقيقي. هذا **هيكل فارغ غير مقبول للعميل**. "
-                                    "العميل لا يدفع نقاطه لصفحات بيضاء.\n\n"
-                                    f"**يجب الآن** أن تستدعي `apply_section(page='{_verify_target}', "
-                                    "op='append', id='...', html='...')` "
-                                    "لإضافة محتوى الصفحة الفعلي (Hero + 2-4 أقسام مرتبطة "
-                                    f"بموضوع الصفحة) **قبل** ما تقول 'تم' أو تستدعي `finish`. "
-                                    "هذا إلزامي."
-                                )
-                        except Exception:
-                            pass
 
-                        # (f) ORPHAN-PAGE DETECTOR — if create_page was just used,
-                        # verify the new file has a back-link to index.html in its
-                        # nav. The skeleton template provides it, but custom
-                        # html overrides may strip it. Without a back-link, user
-                        # gets stuck on the new page with no way back.
+                        # (f) ORPHAN-PAGE DETECTOR — REMOVED per user request.
+                        # Was forcing AI into back-link fix loops during normal
+                        # multi-page builds. The AI is free to add nav links
+                        # naturally; if it forgets, the user can ask for it.
                         _orphan_warning = ""
-                        try:
-                            if tu["name"] == "create_page" and _verify_target != "index.html":
-                                _has_back = (
-                                    'href="index.html"' in _page_html
-                                    or "href='index.html'" in _page_html
-                                    or 'href="/"' in _page_html
-                                )
-                                # Verify index.html nav links to this new page
-                                _idx_html = ctx.pages.get("index.html", "") or ""
-                                _linked_from_index = (
-                                    f'href="{_verify_target}"' in _idx_html
-                                    or f"href='{_verify_target}'" in _idx_html
-                                )
-                                _problems = []
-                                if not _has_back:
-                                    _problems.append(
-                                        f"صفحة `{_verify_target}` بدون رابط رجوع لـ index.html — "
-                                        "العميل سيعلق فيها."
-                                    )
-                                if not _linked_from_index:
-                                    _problems.append(
-                                        f"`index.html` لا يحتوي على `<a href=\"{_verify_target}\">` — "
-                                        "العميل لن يقدر يصل للصفحة الجديدة من الرئيسية."
-                                    )
-                                if _problems:
-                                    _orphan_warning = (
-                                        "\n\n🔗 **ORPHAN-PAGE DETECTOR**: "
-                                        + " | ".join(_problems)
-                                        + f"\n→ استدع `update_nav(items=[...])` أو "
-                                        f"`insert_html_at(page='index.html', selector='nav', "
-                                        f"where='inside_end', html='<a href=\"{_verify_target}\" "
-                                        "class=\"...\">عنوان الصفحة</a>')` لإصلاح الترابط الآن."
-                                    )
-                        except Exception:
-                            pass
 
                         # Compose verification message back to the AI
                         _verif_lines = [
@@ -10342,17 +10254,13 @@ async def _stream_one_provider(
                 "Coming soon", "coming-soon", "Lorem ipsum", "Under construction", "WIP",
             ]
             hits = [p for p in placeholder_patterns if p.lower() in html.lower()]
-            # Empty sections detection
-            empties = []
-            for m in re.finditer(
-                r'<section\b[^>]*\bid\s*=\s*["\']([a-zA-Z0-9_\-]+)["\'][^>]*>([\s\S]*?)</section>',
-                html, re.I,
-            ):
-                sid, inner = m.group(1), m.group(2)
-                text_only = re.sub(r"<[^>]+>", " ", inner).strip()
-                if len(text_only) < 60:
-                    empties.append(sid)
-            if hits or empties:
+            # Empty section detection REMOVED from post-turn audit — was
+            # too aggressive during multi-page builds (newly created skeleton
+            # sections naturally start under the threshold). PRE-FINISH GATE
+            # at `finish` time is the user-facing guarantee against blank
+            # output.
+            empties: List[str] = []
+            if hits:
                 audit_warning_text = (
                     "🛑 SYSTEM AUDIT WARNING (تحذير تلقائي من المراقب الداخلي):\n"
                     f"بعد آخر تعديل، تم اكتشاف placeholders/أقسام فاضية بـ HTML:\n"
