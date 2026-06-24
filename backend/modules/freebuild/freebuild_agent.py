@@ -9666,6 +9666,68 @@ async def _stream_one_provider(
             await asyncio.sleep(0)
 
             if tu["name"] == "finish":
+                # ── 🚦 PRE-FINISH GATE — block finish() if any page is still
+                # blank (≤ 1 section AND < 800 chars of meaningful text).
+                # The user repeatedly hit "sidebar pages are white/empty"
+                # in Hybrid mode because GPT/Claude calls create_page → skeleton
+                # → moves to the next page → finish without ever filling
+                # the prior ones. Reject finish until every page has content.
+                try:
+                    import re as _re_pf
+                    _blanks: List[str] = []
+                    for _fn, _html in (ctx.pages or {}).items():
+                        if not _html:
+                            _blanks.append(_fn)
+                            continue
+                        _sec_count = len(_re_pf.findall(
+                            r'<section\b[^>]*\bid\s*=\s*["\'][^"\']+["\']',
+                            _html, _re_pf.I,
+                        ))
+                        _text_only = _re_pf.sub(r"<[^>]+>", " ", _html)
+                        _text_only = _re_pf.sub(r"\s+", " ", _text_only).strip()
+                        if _sec_count <= 1 and len(_text_only) < 800:
+                            _blanks.append(_fn)
+                    if _blanks:
+                        _gate_msg = (
+                            "🚦 **PRE-FINISH GATE — رفض إنهاء المهمة**:\n"
+                            f"الصفحات التالية ما زالت فارغة أو شبه فارغة:\n"
+                            + "\n".join(f"  • `{b}`" for b in _blanks)
+                            + "\n\n**ممنوع** استدعاء `finish` قبل بناء محتوى حقيقي "
+                            "(Hero + 2-4 أقسام) لكل صفحة منها. استخدم "
+                            "`apply_section(page='X.html', op='append', id='...', "
+                            "html='...')` لكل صفحة ناقصة الآن. العميل يدفع نقاطه "
+                            "لصفحات تشتغل، مو لصفحات بيضاء."
+                        )
+                        ctx.log("pre_finish_gate_block",
+                                {"blanks": _blanks}, {"blocked": True})
+                        if provider in ("anthropic", "emergent_anthropic"):
+                            messages.append({
+                                "role": "user",
+                                "content": [{"type": "tool_result",
+                                              "tool_use_id": tu["id"],
+                                              "content": _gate_msg}],
+                            })
+                        else:
+                            messages.append({
+                                "role": "tool",
+                                "tool_call_id": tu["id"],
+                                "content": _gate_msg,
+                            })
+                        force_tool_use_next_iter = True
+                        yield _sse("tool", {
+                            "name": "finish",
+                            "phase": "blocked",
+                            "label": f"⛔ مُنع: {len(_blanks)} صفحة بيضاء — تكمل أولاً",
+                            "step": iterations,
+                        })
+                        await asyncio.sleep(0)
+                        logger.warning(
+                            f"[pre-finish-gate] blocked finish — blank pages: {_blanks}"
+                        )
+                        continue
+                except Exception as _pfg_e:
+                    logger.warning(f"[pre-finish-gate] check failed: {_pfg_e}")
+
                 summary = (tu["input"].get("summary") or "").strip()
                 options = _normalize_finish_options(tu["input"].get("options"))
                 inline_images = _normalize_inline_images(tu["input"].get("inline_images"))
