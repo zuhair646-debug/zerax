@@ -122,7 +122,6 @@ def test_mark_page_built_requires_existing_page():
 
 def test_mark_page_built_tracks_progress_and_advises_next():
     fa, ctx = _ctx_at_mockup_design()
-    # Set up: lock blueprint with two pages
     fa._exec_tool(ctx, "save_page_mockup", {
         "page_filename": "index.html", "page_title": "x",
         "image_url": "https://x/i.png",
@@ -132,11 +131,52 @@ def test_mark_page_built_tracks_progress_and_advises_next():
         "image_url": "https://x/m.png",
     })
     fa._exec_tool(ctx, "lock_blueprint", {})
-    # Simulate that index.html has been built
-    ctx.project["pages"]["index.html"] = "<html><body><section id='hero'></section></body></html>"
+    # Simulate that index.html has been COMPLETED (2 sections + 600+ chars)
+    real_text = "هذا نص حقيقي طويل لقسم البطل. " * 30
+    ctx.project["pages"]["index.html"] = (
+        "<!DOCTYPE html><html><body><main>"
+        f"<section id='hero'><h1>Hero</h1><p>{real_text}</p></section>"
+        f"<section id='features'><h2>Features</h2><p>{real_text}</p></section>"
+        "</main></body></html>"
+    )
     res = fa._exec_tool(ctx, "mark_page_built", {"filename": "index.html"})
-    assert res["ok"] is True
+    assert res["ok"] is True, f"failed: {res}"
     assert "index.html" in res["built_pages"]
     assert res["all_done"] is False
     assert res["remaining_pages"] == ["movies.html"]
     assert "movies.html" in res["next_action"]
+
+
+def test_mark_page_built_rejects_blank_page():
+    fa, ctx = _ctx_at_mockup_design()
+    fa._exec_tool(ctx, "save_page_mockup", {
+        "page_filename": "index.html", "page_title": "x",
+        "image_url": "https://x/i.png",
+    })
+    fa._exec_tool(ctx, "lock_blueprint", {})
+    # Page is essentially blank
+    ctx.project["pages"]["index.html"] = "<html><body><section id='hero'></section></body></html>"
+    res = fa._exec_tool(ctx, "mark_page_built", {"filename": "index.html"})
+    assert res["ok"] is False
+    assert res["error"] == "page_incomplete"
+    assert "غير مكتملة" in res["message_ar"]
+
+
+def test_mark_page_built_rejects_placeholder_text():
+    fa, ctx = _ctx_at_mockup_design()
+    fa._exec_tool(ctx, "save_page_mockup", {
+        "page_filename": "index.html", "page_title": "x",
+        "image_url": "https://x/i.png",
+    })
+    fa._exec_tool(ctx, "lock_blueprint", {})
+    long = "Lorem ipsum " * 60
+    ctx.project["pages"]["index.html"] = (
+        "<!DOCTYPE html><html><body><main>"
+        f"<section id='hero'><p>{long}</p></section>"
+        f"<section id='cta'><p>قريباً</p></section>"
+        "</main></body></html>"
+    )
+    res = fa._exec_tool(ctx, "mark_page_built", {"filename": "index.html"})
+    assert res["ok"] is False
+    assert "placeholders_found" in res
+    assert len(res["placeholders_found"]) > 0

@@ -2487,16 +2487,15 @@ def _build_reality_check_block(html: str, max_sections: int = 14, max_ctas: int 
 
 
 def _build_pages_overview(pages: Dict[str, str], active_page: str, max_pages: int = 10) -> str:
-    """🗂️ Multi-page overview — shows the AI every page in the project with
-    its section IDs at a glance. Prevents the failure mode where the AI is
-    editing the active page but is unaware of sections living on other pages
-    (and ends up duplicating or referring to non-existent IDs).
+    """🗂️ Multi-page overview — shows the AI every page with its completion
+    state, so the AI can NEVER forget that page 2/3/4 are still blank.
 
-    Output (Arabic markdown), e.g.:
-        🗂️ خريطة المشروع (5 صفحات):
-          ◉ index.html  (active) — 4 أقسام: #hero #features #pricing #cta
-          • movies.html — 3 أقسام: #catalog #filters #details
-          • points.html — 2 قسم: #balance #earn
+    Output example:
+        🗂️ خريطة المشروع (4 صفحات) — حالة الإكمال:
+          ◉ index.html  (active) — ✅ مكتمل — 4 أقسام، 2,847 حرف نصّ
+          • movies.html — 🔴 فارغة — 0 قسم، 0 حرف نصّ
+          • points.html — 🔴 فارغة — 1 قسم، 145 حرف نصّ
+          • profile.html — 🟡 ناقصة — 2 قسم، 412 حرف نصّ (الحد الأدنى 600)
     """
     if not pages:
         return ""
@@ -2504,21 +2503,36 @@ def _build_pages_overview(pages: Dict[str, str], active_page: str, max_pages: in
         r'<section\b[^>]*\bid\s*=\s*["\']([a-zA-Z0-9_\-]+)["\']',
         re.IGNORECASE,
     )
-    lines = [f"🗂️ **خريطة المشروع ({len(pages)} صفحات):**"]
+    text_strip_re = re.compile(r"<[^>]+>")
+    ws_collapse_re = re.compile(r"\s+")
+    lines = [f"🗂️ **خريطة المشروع ({len(pages)} صفحات) — حالة الإكمال:**"]
     items = list(pages.items())
+    blank_count = 0
+    incomplete_count = 0
     for fn, html in items[:max_pages]:
         ids = section_re.findall(html or "")
+        text_only = text_strip_re.sub(" ", html or "")
+        text_only = ws_collapse_re.sub(" ", text_only).strip()
+        chars = len(text_only)
         marker = "◉" if fn == active_page else "•"
         suffix = " (active)" if fn == active_page else ""
-        if ids:
-            ids_str = " ".join(f"#{i}" for i in ids[:8])
-            extra = f" + {len(ids) - 8} أكثر" if len(ids) > 8 else ""
-            lines.append(f"  {marker} `{fn}`{suffix} — {len(ids)} قسم: {ids_str}{extra}")
+        if len(ids) >= 2 and chars >= 600:
+            status = f"✅ مكتمل — {len(ids)} أقسام، {chars:,} حرف نصّ"
+        elif len(ids) == 0 and chars < 100:
+            status = f"🔴 **فارغة** — 0 قسم، {chars} حرف نصّ"
+            blank_count += 1
         else:
-            size = len(html or "")
-            lines.append(f"  {marker} `{fn}`{suffix} — فارغة (size={size})")
+            status = f"🟡 ناقصة — {len(ids)} قسم، {chars} حرف نصّ (يحتاج 2+ أقسام و 600+ حرف)"
+            incomplete_count += 1
+        lines.append(f"  {marker} `{fn}`{suffix} — {status}")
     if len(items) > max_pages:
         lines.append(f"  ... و {len(items) - max_pages} صفحة أخرى")
+    if blank_count or incomplete_count:
+        lines.append("")
+        lines.append(
+            f"⚠️ **تنبيه:** فيه {blank_count} صفحة فارغة و {incomplete_count} ناقصة. "
+            "أكملها عبر `write_full_html(allow_full_rewrite=true)` بـHTML حقيقي قبل ما تستدعي `finish`."
+        )
     lines.append("")
     return "\n".join(lines)
 
@@ -2810,12 +2824,56 @@ def _exec_tool(ctx: FreeBuildToolContext, name: str, args: Dict[str, Any]) -> Di
             pages = (ctx.project or {}).get("pages", {}) or {}
             if filename not in pages:
                 return {"ok": False, "error": f"الصفحة '{filename}' غير موجودة في pages — ابنِها أولاً عبر create_page/write_full_html."}
+            # 🛡️ Completeness gate — ensure the page is NOT a blank skeleton
+            # before we mark it as built. This is the missing feedback loop
+            # that caused the AI to leave pages 2/3/4 blank for 72+ hours.
+            page_html = pages.get(filename) or ""
+            import re as _re_mpb
+            _section_count = len(_re_mpb.findall(
+                r'<section\b[^>]*\bid\s*=\s*["\'][^"\']+["\']',
+                page_html, _re_mpb.I,
+            ))
+            _text_only = _re_mpb.sub(r"<[^>]+>", " ", page_html)
+            _text_only = _re_mpb.sub(r"\s+", " ", _text_only).strip()
+            _meaningful = len(_text_only)
+            _placeholders = [
+                p for p in ("قريباً", "قريبا", "قيد التطوير", "Lorem ipsum",
+                            "Coming soon", "Under construction", "TBD", "WIP",
+                            "placeholder", "..."*5)
+                if p.lower() in page_html.lower()
+            ]
+            if _section_count < 2 or _meaningful < 600 or _placeholders:
+                problems = []
+                if _section_count < 2:
+                    problems.append(f"عدد الأقسام = {_section_count} (الأدنى 2 أقسام)")
+                if _meaningful < 600:
+                    problems.append(f"محتوى نصي حقيقي = {_meaningful} حرف (الأدنى 600)")
+                if _placeholders:
+                    problems.append(f"placeholders موجودة: {_placeholders}")
+                return {
+                    "ok": False,
+                    "error": "page_incomplete",
+                    "filename": filename,
+                    "section_count": _section_count,
+                    "meaningful_chars": _meaningful,
+                    "placeholders_found": _placeholders,
+                    "message_ar": (
+                        f"⛔ الصفحة `{filename}` غير مكتملة — لا أستطيع تعليمها كمبنية:\n"
+                        + "\n".join(f"  • {p}" for p in problems) +
+                        "\n\n**يجب** أن تحتوي كل صفحة على:\n"
+                        "  - Hero section (قسم رئيسي بصري) + 1-3 أقسام محتوى حقيقي\n"
+                        "  - 600+ حرف من النص الفعلي (مو placeholders)\n"
+                        "  - شريط nav موحّد يربط بكل الصفحات\n\n"
+                        "استدعِ `write_full_html(allow_full_rewrite=true)` مرة أخرى "
+                        "بـHTML كامل ومحتوى حقيقي، ثم أعد `mark_page_built`."
+                    ),
+                }
             ws = get_workflow_state(ctx.project)
             built = list(ws.get("built_pages") or [])
             if filename not in built:
                 built.append(filename)
             ws["built_pages"] = built
-            # 🆕 Pop the queue: remove this filename, get next
+            # Pop the queue
             build_queue = list(ws.get("build_queue") or [])
             if filename in build_queue:
                 build_queue.remove(filename)
@@ -3025,12 +3083,34 @@ def _exec_tool(ctx: FreeBuildToolContext, name: str, args: Dict[str, Any]) -> Di
             ctx.current_html = new_html
             ctx._sync_active_page()
             ctx.changes_made += 1
+            # 🛡️ Post-write completeness check — warn the AI immediately if
+            # the page it just wrote is blank. This kills the failure mode
+            # where the AI writes a skeleton and moves on without realising.
+            try:
+                _section_count = len(re.findall(
+                    r'<section\b[^>]*\bid\s*=\s*["\'][^"\']+["\']',
+                    new_html, re.IGNORECASE,
+                ))
+                _text_only = re.sub(r"<[^>]+>", " ", new_html)
+                _text_only = re.sub(r"\s+", " ", _text_only).strip()
+                _meaningful = len(_text_only)
+            except Exception:
+                _section_count, _meaningful = 0, len(new_html)
             _result: Dict[str, Any] = {
                 "ok": True,
                 "new_length": len(new_html),
+                "section_count": _section_count,
+                "meaningful_chars": _meaningful,
                 "dead_links_fixed": fixed,
                 "anchor_to_page_rewrites": anchor_rewrites,
             }
+            if _section_count < 2 or _meaningful < 600:
+                _result["incomplete_warning"] = (
+                    f"⚠️ الصفحة اللي كتبتها ناقصة: {_section_count} قسم، "
+                    f"{_meaningful} حرف نصّ. الحد الأدنى للصفحة المكتملة = "
+                    f"2 أقسام + 600 حرف نصّ. أكملها عبر write_full_html مرة "
+                    f"أخرى بمحتوى حقيقي قبل ما تستدعي mark_page_built."
+                )
             if preserved_sections:
                 _result["preserved_sections"] = preserved_sections
                 _result["preservation_message_ar"] = (

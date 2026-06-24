@@ -145,9 +145,11 @@ class TestSmartMergeIntegrationWithWriteFullHtml:
 
 
 class TestPagesOverviewHelper:
-    def test_lists_each_page_with_section_ids(self):
+    def test_lists_each_page_with_status(self):
+        # Long content for index.html so it shows as ✅ مكتمل
+        long_para = "<p>" + ("هذا نص حقيقي طويل. " * 80) + "</p>"
         pages = {
-            "index.html": _full(SECTION_HERO, SECTION_FEATURES),
+            "index.html": _full(SECTION_HERO + long_para, SECTION_FEATURES + long_para),
             "movies.html": _full(
                 '<section id="catalog"><h2>Catalog</h2></section>'
                 '<section id="filters"><h2>Filters</h2></section>'
@@ -161,13 +163,12 @@ class TestPagesOverviewHelper:
         assert "index.html" in out
         assert "movies.html" in out
         assert "points.html" in out
-        assert "#hero" in out
-        assert "#features" in out
-        assert "#catalog" in out
-        assert "#filters" in out
-        assert "#balance" in out
-        # Active marker on index.html
         assert "(active)" in out
+        # index.html should show as complete (2 sections + lots of text)
+        assert "✅ مكتمل" in out
+        # movies.html has 2 sections but very little text → ناقصة
+        # points.html has 1 section → ناقصة
+        assert "🟡 ناقصة" in out
 
     def test_empty_pages_returns_empty_string(self):
         assert fa._build_pages_overview({}, "index.html") == ""
