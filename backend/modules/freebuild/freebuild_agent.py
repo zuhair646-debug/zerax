@@ -2085,12 +2085,9 @@ def _build_blank_page_skeleton(title: str, nav_label: str = "") -> str:
         f"  <span class=\"opacity-80\">{safe_title}</span>\n"
         f"</nav>\n"
         f"<main class=\"py-20 px-6\">\n"
-        f"  <section id=\"page-header\" class=\"max-w-4xl mx-auto text-center\">\n"
-        f"    <h1 class=\"text-4xl font-extrabold mb-4\">{safe_title}</h1>\n"
-        f"    <p class=\"opacity-70 text-lg\" data-scaffold=\"true\">"
-        f"<!-- SCAFFOLD_PLACEHOLDER: AI MUST replace this paragraph and add real sections via apply_section before finish -->"
-        f"محتوى الصفحة قيد البناء — سيتم تعبئتها بأقسام حقيقية.</p>\n"
-        f"  </section>\n"
+        f"  <!-- SCAFFOLD_PLACEHOLDER: AI MUST add real sections via apply_section "
+        f"or write_full_html before finish. This skeleton renders BLANK on "
+        f"purpose so the customer never sees a 'under construction' page. -->\n"
         f"</main>\n</body>\n</html>"
     )
 

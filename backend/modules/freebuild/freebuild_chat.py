@@ -231,6 +231,48 @@ ZENREX_FOOTER_HTML = (
     '</a>\n'
 )
 
+def _strip_scaffold_placeholders(html: Optional[str]) -> Optional[str]:
+    """🧹 Remove any leftover `create_page` scaffold placeholder text the AI
+    forgot to overwrite. This is critical for the user-facing experience —
+    without this, customers see "محتوى الصفحة قيد البناء" on multi-page
+    sites where the AI added new sections via `apply_section` but forgot to
+    delete the scaffold paragraph from `<section id="page-header">`.
+
+    Safe and idempotent: only removes the well-known scaffold markers we
+    emit ourselves. Real content the AI wrote is untouched.
+    """
+    if not html or not isinstance(html, str):
+        return html
+    out = html
+    # 1. Remove the legacy <section id="page-header"> scaffold with the
+    #    Arabic "قيد البناء" placeholder + the SCAFFOLD_PLACEHOLDER comment.
+    import re as _re
+    out = _re.sub(
+        r'<section\b[^>]*id\s*=\s*["\']page-header["\'][^>]*>[\s\S]*?'
+        r'(?:SCAFFOLD_PLACEHOLDER|قيد البناء|سيتم تعبئتها)[\s\S]*?</section>',
+        "",
+        out,
+        flags=_re.IGNORECASE,
+    )
+    # 2. Strip any standalone `<p data-scaffold="true">...</p>` paragraphs
+    out = _re.sub(
+        r'<p\b[^>]*data-scaffold\s*=\s*["\']true["\'][^>]*>[\s\S]*?</p>',
+        "",
+        out,
+        flags=_re.IGNORECASE,
+    )
+    # 3. Strip the SCAFFOLD_PLACEHOLDER HTML comment marker
+    out = _re.sub(r'<!--\s*SCAFFOLD_PLACEHOLDER[\s\S]*?-->', "", out)
+    # 4. Strip any orphan "محتوى الصفحة قيد البناء" text that survived
+    out = _re.sub(
+        r'محتوى الصفحة قيد البناء[^<\n]*',
+        "",
+        out,
+    )
+    return out
+
+
+
 
 def _inject_zenrex_footer(html: Optional[str]) -> Optional[str]:
     """Ensure the Zenrex footer is present on every generated site.
@@ -3538,6 +3580,7 @@ def make_freebuild_chat_router(db, get_current_user):
         # contact.html, ...) resolve correctly even when the URL has no
         # trailing slash.
         html = _inject_base_href(html, slug)
+        html = _strip_scaffold_placeholders(html)
         # Cache-bust: published HTML is volatile (auto-republished on every edit),
         # so tell browsers + edge cache to revalidate every load.
         return HTMLResponse(_inject_zenrex_footer(html),
@@ -3571,6 +3614,7 @@ def make_freebuild_chat_router(db, get_current_user):
         except Exception:
             pass
         html = _inject_base_href(html, slug)
+        html = _strip_scaffold_placeholders(html)
         return HTMLResponse(_inject_zenrex_footer(html),
                              headers={"Cache-Control": "no-store, max-age=0, must-revalidate"})
 
