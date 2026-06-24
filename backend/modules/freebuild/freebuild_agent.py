@@ -2557,6 +2557,10 @@ class FreeBuildToolContext:
         self.tool_log: List[Dict[str, Any]] = []
         # Workflow Engine state (4-stage protocol)
         self.workflow_state_dirty: bool = False
+        # 🆕 Inline image bucket for tools that need to surface images in the
+        # final chat message without going through `finish` (e.g. mockup
+        # approval, which stops the turn waiting for the customer).
+        self.pending_inline_images: List[Dict[str, Any]] = []
 
     def _sync_active_page(self):
         """Keep `pages[active_page]` in lockstep with `current_html`."""
@@ -2728,6 +2732,16 @@ def _exec_tool(ctx: FreeBuildToolContext, name: str, args: Dict[str, Any]) -> Di
                 ws["stage"] = STAGE_MOCKUP_APPROVAL
                 ctx.project["workflow_state"] = ws
                 ctx.workflow_state_dirty = True
+            # 🖼️ Surface mockup images in the final chat message so the
+            # customer actually sees the previews in the chat (instead of
+            # only a text summary). These are appended to ctx and the SSE
+            # `done` event will pick them up when the AI finishes the turn.
+            ctx.pending_inline_images = [
+                {"url": m.get("image_url"),
+                 "caption": f"{m.get('page_title') or m.get('page_filename')} — {(m.get('description') or '')[:80]}"}
+                for m in mockups.values()
+                if (m.get("image_url") or "").startswith(("http://", "https://", "/"))
+            ][:6]
             return {
                 "ok": True,
                 "ask_user": True,
@@ -2744,6 +2758,7 @@ def _exec_tool(ctx: FreeBuildToolContext, name: str, args: Dict[str, Any]) -> Di
                     }
                     for m in mockups.values()
                 ],
+                "inline_images_attached": len(ctx.pending_inline_images),
                 "stage": "mockup_approval",
             }
 
@@ -9014,7 +9029,7 @@ async def _run_anthropic_agent(
         "ok": True,
         "summary": summary or "تم.",
         "options": options,
-        "inline_images": inline_images,
+        "inline_images": inline_images or ctx.pending_inline_images,
         "inline_audio": inline_audio,
         "inline_video": inline_video,
         "new_html": ctx.current_html if ctx.changes_made > 0 else None,
@@ -9212,7 +9227,7 @@ async def _run_openai_compat_agent(
         "ok": True,
         "summary": summary or "تم.",
         "options": options,
-        "inline_images": inline_images,
+        "inline_images": inline_images or ctx.pending_inline_images,
         "inline_audio": inline_audio,
         "inline_video": inline_video,
         "new_html": ctx.current_html if ctx.changes_made > 0 else None,
@@ -10411,7 +10426,7 @@ async def _stream_one_provider(
     yield _sse("done", {
         "summary": summary,
         "options": options,
-        "inline_images": inline_images,
+        "inline_images": inline_images or ctx.pending_inline_images,
         "inline_audio": inline_audio,
         "inline_video": inline_video,
         "iterations": iterations,

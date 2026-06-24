@@ -6736,6 +6736,19 @@ For questions: legal@zenrex.ai
                             update_set["active_page"] = final_ctx.active_page
                         except Exception:
                             pass
+                        # 🆕 Persist Mockup-Driven Workflow state too.
+                        try:
+                            _proj_state = final_ctx.project or {}
+                            if _proj_state.get("mockups") is not None:
+                                update_set["mockups"] = _proj_state.get("mockups")
+                            if "blueprint_locked" in _proj_state:
+                                update_set["blueprint_locked"] = _proj_state.get("blueprint_locked")
+                            if "blueprint_locked_at" in _proj_state:
+                                update_set["blueprint_locked_at"] = _proj_state.get("blueprint_locked_at")
+                            if final_ctx.workflow_state_dirty and _proj_state.get("workflow_state") is not None:
+                                update_set["workflow_state"] = _proj_state.get("workflow_state")
+                        except Exception:
+                            logger.exception("workflow/mockup persist failed")
                     if new_html:
                         # Mark prior phases done in history for the sidebar
                         try:
