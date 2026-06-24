@@ -30,12 +30,16 @@ from typing import Any, Dict, List, Optional
 
 # Stage identifiers (single source of truth)
 STAGE_DISCOVERY = "discovery"
-STAGE_VISUAL_SKELETON = "visual_skeleton"
+STAGE_MOCKUP_DESIGN = "mockup_design"      # AI generates one image-mockup per page
+STAGE_MOCKUP_APPROVAL = "mockup_approval"  # Customer reviews + approves the mockups
+STAGE_VISUAL_SKELETON = "visual_skeleton"  # AI builds HTML matching the approved mockups
 STAGE_WIRING = "wiring"
 STAGE_SURGICAL_EDIT = "surgical_edit"
 
 VALID_STAGES = {
     STAGE_DISCOVERY,
+    STAGE_MOCKUP_DESIGN,
+    STAGE_MOCKUP_APPROVAL,
     STAGE_VISUAL_SKELETON,
     STAGE_WIRING,
     STAGE_SURGICAL_EDIT,
@@ -122,6 +126,10 @@ def stage_prompt_addendum(state: Dict[str, Any], project: Dict[str, Any]) -> str
     stage = state.get("stage") or STAGE_DISCOVERY
     if stage == STAGE_DISCOVERY:
         return _discovery_addendum(state)
+    if stage == STAGE_MOCKUP_DESIGN:
+        return _mockup_design_addendum(state, project)
+    if stage == STAGE_MOCKUP_APPROVAL:
+        return _mockup_approval_addendum(state, project)
     if stage == STAGE_VISUAL_SKELETON:
         return _visual_skeleton_addendum(state, project)
     if stage == STAGE_WIRING:
@@ -195,36 +203,129 @@ def _discovery_addendum(state: Dict[str, Any]) -> str:
     return "\n".join(lines)
 
 
-def _visual_skeleton_addendum(state: Dict[str, Any], project: Dict[str, Any]) -> str:
-    """Build ALL pages with cohesive design + WORKING nav between pages."""
+def _mockup_design_addendum(state: Dict[str, Any], project: Dict[str, Any]) -> str:
+    """🎨 Generate one image-mockup per page (using generate_image), then call
+    `present_page_mockups` to show them all at once to the customer."""
     answers = state.get("discovery_answers") or {}
     pages_hint = answers.get("page_count_and_names", "")
     contents_hint = answers.get("page_contents", "")
     style_hint = answers.get("style_preference", "")
+    mockups = (project or {}).get("mockups") or {}
+    done = list(mockups.keys())
     return (
-        "\n\n🎨 **مرحلة Visual Skeleton — تصميم بصري كامل + nav يعمل.**\n\n"
-        "**ما يجب فعله:**\n"
-        f"  1. ابنِ كل الصفحات المطلوبة (حسب: {pages_hint or '—'}) "
-        f"بمحتوى متّسق مع: {contents_hint or '—'}.\n"
-        f"  2. التزم بالنمط: {style_hint or 'حديث ومنسق'}. كل الصفحات على نفس "
-        "color palette، نفس الخط، نفس components.\n"
-        "  3. كل صفحة مستقلة في الـ pages dict (استخدم `create_page`).\n"
-        "  4. ⭐ **شريط nav موحد في كل الصفحات، روابطه `<a href=\"X.html\">` "
-        "يجب أن تنقل العميل فعلياً بين الصفحات منذ هذه المرحلة.** هذا يخلي العميل "
-        "يستعرض الـ Visual Skeleton طبيعياً.\n"
-        "  5. كل صفحة فيها Hero + 2-4 أقسام محتوى حقيقي (مو بس placeholder).\n"
-        "  6. الأزرار/forms الداخلية (مثل \"اشترك\"، \"اشترِ النقاط\"، \"احفظ\") "
-        "اعرضها مرئياً مع `data-wiring=\"pending\"` — **لا تُضِف لها JS handlers الآن**. "
-        "هذه أزرار وظيفية تحتاج backend logic، نفعّلها في مرحلة Wiring.\n"
-        "  7. الأزرار البصرية البحتة (تبديل theme، scroll-to-top، فتح modal بسيط) "
-        "تقدر تفعّلها مباشرة لأنها لا تحتاج backend.\n\n"
-        "**ممنوع في هذه المرحلة:**\n"
-        "  ❌ استدعاء `finish` قبل ما تكتمل **كل الصفحات** بمحتوى حقيقي.\n"
-        "  ❌ ترك صفحة بـ Hero فقط — كل صفحة تحتاج محتوى يستحق المشاهدة.\n\n"
-        "بعد ما تنتهي، استدع `advance_workflow_stage(to=\"wiring\")` ثم `finish` "
-        "برسالة للعميل: \"التصميم البصري جاهز. تنقّل بين الصفحات وراجعها، "
-        "ثم نبدأ تفعيل الأزرار الوظيفية.\""
+        "\n\n🎨 **مرحلة Mockup Design — رسم تصاميم بصرية قبل البناء.**\n\n"
+        "في هذه المرحلة، تنشئ **صورة mockup واحدة لكل صفحة** من صفحات المشروع "
+        "عبر `generate_image(description='...')` (يستخدم Gemini Nano Banana). "
+        "العميل يشوف كل التصاميم دفعة واحدة ويوافق عليها قبل أي كود HTML.\n\n"
+        f"**صفحات المشروع المطلوبة:** {pages_hint or '—'}\n"
+        f"**محتوى كل صفحة:** {contents_hint or '—'}\n"
+        f"**النمط البصري:** {style_hint or 'حديث منسّق'}\n"
+        f"**Mockups جاهزة حتى الآن:** {', '.join(done) if done else 'لا شي بعد'}\n\n"
+        "**الخطوات (إلزامية بالترتيب):**\n"
+        "  1. لكل صفحة، استدع `generate_image` بـ description مفصّل (Arabic OK):\n"
+        "     مثال: `generate_image(description='Full-page modern mockup of a "
+        "cinema homepage in Arabic RTL, dark background with cinematic posters "
+        "in a grid, neon orange accents, hero banner with featured movie...')`\n"
+        "  2. بعد كل صورة، استدع "
+        "`save_page_mockup(page_filename='index.html', page_title='الصفحة الرئيسية', "
+        "image_url='<URL من generate_image>', description='شرح موجز للتصميم')`\n"
+        "  3. لما تخلّص كل الصفحات، استدع `present_mockups_for_approval("
+        "message='هذي معاينة كل صفحات الموقع. وش رأيك؟ نعتمدها أم نعدّل؟')`\n"
+        "  4. **أوقف الـturn هنا.** انتظر رد العميل.\n\n"
+        "**ملاحظات:**\n"
+        "  • صورة لكل صفحة (مو 2 ولا 3) — صورة واحدة كاملة الـmockup.\n"
+        "  • التصاميم يجب تتشارك نفس الـpalette والـtypography (cohesive brand).\n"
+        "  • **ممنوع** تبدأ كتابة HTML أو استدعاء `apply_section/create_page/"
+        "write_full_html` في هذه المرحلة — التصميم البصري أولاً، الكود ثانياً.\n"
+        "  • لو العميل قال \"تخطّى الصور وروح ابني\" — استدع "
+        "`advance_workflow_stage(to=\"visual_skeleton\")` صراحة.\n"
     )
+
+
+def _mockup_approval_addendum(state: Dict[str, Any], project: Dict[str, Any]) -> str:
+    """⏳ Customer is reviewing the mockups. Wait for explicit approval/edit."""
+    mockups = (project or {}).get("mockups") or {}
+    locked = bool((project or {}).get("blueprint_locked"))
+    pages_list = ", ".join(mockups.keys()) if mockups else "لا شي"
+    return (
+        "\n\n⏳ **مرحلة Mockup Approval — العميل يراجع التصاميم.**\n\n"
+        f"**Mockups المعروضة:** {pages_list}\n"
+        f"**حالة القفل:** {'🔒 مقفولة' if locked else '🔓 ما زالت قابلة للتعديل'}\n\n"
+        "**ماذا تفعل بناءً على رد العميل:**\n"
+        "  • قال \"موافق\" / \"اعتمد\" / \"حلوة\" / \"يلا ابني\" → استدع "
+        "`lock_blueprint()` فوراً. الـmockups تصير reference دائمة، ثم انتقل تلقائياً "
+        "لـ Visual Skeleton وابدأ بناء أول صفحة.\n"
+        "  • قال \"عدّل صفحة X\" / \"ما عجبتني الـhero\" / إلخ → استدع `generate_image` "
+        "بـ description محدّث، ثم `save_page_mockup` فوق الإصدار القديم، ثم "
+        "`present_mockups_for_approval` بالصور المحدّثة.\n"
+        "  • قال \"ابدأ من جديد\" / \"الفكرة تغيّرت\" → استدع "
+        "`advance_workflow_stage(to=\"discovery\")` للرجوع لمرحلة الأسئلة.\n\n"
+        "**ممنوع في هذه المرحلة:**\n"
+        "  ❌ كتابة أي HTML — لا `apply_section`، لا `create_page`، لا `write_full_html`.\n"
+        "  ❌ افتراض الموافقة من تلقاء نفسك — انتظر كلمة صريحة من العميل.\n"
+    )
+
+
+def _visual_skeleton_addendum(state: Dict[str, Any], project: Dict[str, Any]) -> str:
+    """Build pages ONE-AT-A-TIME, each matching its locked blueprint mockup."""
+    answers = state.get("discovery_answers") or {}
+    pages_hint = answers.get("page_count_and_names", "")
+    contents_hint = answers.get("page_contents", "")
+    style_hint = answers.get("style_preference", "")
+    mockups = (project or {}).get("mockups") or {}
+    locked = bool((project or {}).get("blueprint_locked"))
+    built_pages = set((state.get("built_pages") or []))
+    planned = list(mockups.keys()) if mockups else []
+    pending = [p for p in planned if p not in built_pages]
+    current_page = pending[0] if pending else None
+    current_mockup = (mockups.get(current_page) if current_page else None) or {}
+    parts = [
+        "\n\n🏗️ **مرحلة Visual Skeleton — بناء صفحة-صفحة طبق الـmockup المعتمد.**\n",
+    ]
+    if locked and mockups:
+        parts.append(
+            f"\n🔒 **Blueprint مقفول.** هذي الـmockups المعتمدة من العميل:\n"
+        )
+        for fn, mk in mockups.items():
+            marker = "✅ مكتمل" if fn in built_pages else (
+                "⏳ التالي" if fn == current_page else "○ مؤجل"
+            )
+            title = mk.get("page_title") or fn
+            parts.append(f"  • `{fn}` — {title} — {marker}")
+        parts.append("")
+        if current_page:
+            img = current_mockup.get("image_url") or ""
+            desc = current_mockup.get("description") or ""
+            parts.append(
+                f"\n**🎯 المهمة الآن: ابنِ `{current_page}` فقط.**\n"
+                f"  • Mockup المعتمد: {img}\n"
+                f"  • وصف التصميم: {desc}\n"
+                f"  • استخدم `create_page(filename='{current_page}', title='...')` "
+                f"(لو ما موجودة) ثم `write_full_html` (allow_full_rewrite=true لأول كتابة) "
+                f"بـHTML كامل طبق الـmockup: نفس الـpalette، نفس الـlayout، نفس الـsections.\n"
+                f"  • بعد البناء، استدع `mark_page_built(filename='{current_page}')` "
+                f"ثم `finish` برسالة: \"بنيت `{current_page}` طبق التصميم المعتمد. "
+                f"راجعها وقولي قبل أنتقل للصفحة التالية.\"\n"
+                f"  • **أوقف هنا.** ممنوع تبني صفحتين في turn واحد.\n"
+            )
+        else:
+            parts.append(
+                "\n✅ **كل الصفحات اكتملت.** استدع "
+                "`advance_workflow_stage(to=\"wiring\")` للانتقال لتفعيل الأزرار.\n"
+            )
+    else:
+        # Fallback: no locked blueprint (legacy projects or AI skipped mockups)
+        parts.append(
+            f"\n⚠️ **لا يوجد blueprint مقفول.** تستطيع البناء بدون mockups إذا أردت، "
+            f"لكن الأفضل تستدع `advance_workflow_stage(to=\"mockup_design\")` "
+            f"ثم تولّد mockups وتأخذ موافقة العميل أولاً.\n\n"
+            f"**تذكير من Discovery:**\n"
+            f"  • صفحات: {pages_hint or '—'}\n"
+            f"  • محتوى: {contents_hint or '—'}\n"
+            f"  • نمط: {style_hint or 'حديث'}\n\n"
+            f"**ابنِ صفحة واحدة فقط في هذا الـturn**، ثم `mark_page_built` و`finish`.\n"
+        )
+    return "".join(parts)
 
 
 def _surgical_edit_addendum() -> str:
@@ -299,12 +400,37 @@ def can_advance_to(project: Dict[str, Any], target_stage: str) -> tuple[bool, st
     if target_stage not in VALID_STAGES:
         return (False, f"stage غير معروف: {target_stage}")
 
-    # discovery → visual_skeleton: must have all 4 REQUIRED topics
+    # discovery → mockup_design: discovery answers covered the basics
+    if current == STAGE_DISCOVERY and target_stage == STAGE_MOCKUP_DESIGN:
+        if not discovery_complete(state):
+            answered = sum(1 for k in DISCOVERY_REQUIRED_TOPICS
+                           if (state.get("discovery_answers") or {}).get(k))
+            return (False, f"Discovery غير مكتمل ({answered}/4 موضوع أساسي).")
+        return (True, "")
+
+    # discovery → visual_skeleton: legacy direct skip (allowed for back-compat)
     if current == STAGE_DISCOVERY and target_stage == STAGE_VISUAL_SKELETON:
         if not discovery_complete(state):
             answered = sum(1 for k in DISCOVERY_REQUIRED_TOPICS
                            if (state.get("discovery_answers") or {}).get(k))
-            return (False, f"Discovery غير مكتمل ({answered}/4 موضوع أساسي). أكمل المواضيع الأساسية الناقصة أولاً.")
+            return (False, f"Discovery غير مكتمل ({answered}/4 موضوع أساسي).")
+        return (True, "")
+
+    # mockup_design → mockup_approval: at least one mockup saved
+    if current == STAGE_MOCKUP_DESIGN and target_stage == STAGE_MOCKUP_APPROVAL:
+        mockups = (project or {}).get("mockups") or {}
+        if not mockups:
+            return (False, "لا توجد أي mockup محفوظة بعد. استدع `generate_image` ثم `save_page_mockup` لكل صفحة أولاً.")
+        return (True, "")
+
+    # mockup_approval → visual_skeleton: blueprint must be locked
+    if current == STAGE_MOCKUP_APPROVAL and target_stage == STAGE_VISUAL_SKELETON:
+        if not (project or {}).get("blueprint_locked"):
+            return (False, "Blueprint غير مقفول. استدع `lock_blueprint()` بعد موافقة العميل.")
+        return (True, "")
+
+    # mockup_design → visual_skeleton: shortcut (customer skipped approval)
+    if current == STAGE_MOCKUP_DESIGN and target_stage == STAGE_VISUAL_SKELETON:
         return (True, "")
 
     # visual_skeleton → wiring: must have ≥ 2 pages OR a single page with real content
@@ -327,10 +453,7 @@ def can_advance_to(project: Dict[str, Any], target_stage: str) -> tuple[bool, st
     if target_stage == STAGE_SURGICAL_EDIT:
         return (True, "")
 
-    # discovery → wiring or surgical_edit: not allowed without visual skeleton
-    if current == STAGE_DISCOVERY and target_stage in (STAGE_WIRING, STAGE_SURGICAL_EDIT):
-        return (False, "ممنوع تخطّي Visual Skeleton. أكمل Discovery → Visual Skeleton أولاً.")
-
+    # back-tracking is always allowed (customer changed their mind)
     return (True, "")
 
 
@@ -338,7 +461,9 @@ def stage_label_ar(stage: str) -> str:
     """User-facing Arabic label for a stage."""
     return {
         STAGE_DISCOVERY: "اكتشاف الفكرة (Q&A)",
-        STAGE_VISUAL_SKELETON: "التصميم البصري",
+        STAGE_MOCKUP_DESIGN: "رسم تصاميم Mockups",
+        STAGE_MOCKUP_APPROVAL: "اعتماد التصاميم",
+        STAGE_VISUAL_SKELETON: "بناء صفحة-صفحة",
         STAGE_WIRING: "تفعيل الأزرار",
         STAGE_SURGICAL_EDIT: "تعديلات جراحية",
     }.get(stage, stage)

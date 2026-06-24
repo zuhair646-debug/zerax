@@ -122,17 +122,82 @@ TOOLS_SCHEMA: List[Dict[str, Any]] = [
         "name": "advance_workflow_stage",
         "description": (
             "🚦 Move the project to the next build stage. Valid targets: "
-            "'visual_skeleton' (after discovery), 'wiring' (after visual skeleton), "
-            "'surgical_edit' (after wiring all pages). The server enforces gate "
-            "conditions and will reject premature transitions."
+            "'mockup_design' (after discovery), 'mockup_approval' (after mockups "
+            "generated), 'visual_skeleton' (after blueprint locked), 'wiring' "
+            "(after visual skeleton), 'surgical_edit' (after wiring all pages). "
+            "The server enforces gate conditions."
         ),
         "input_schema": {
             "type": "object",
             "properties": {
                 "to": {"type": "string",
-                        "enum": ["visual_skeleton", "wiring", "surgical_edit"]},
+                        "enum": ["discovery", "mockup_design", "mockup_approval",
+                                 "visual_skeleton", "wiring", "surgical_edit"]},
             },
             "required": ["to"],
+        },
+    },
+    {
+        "name": "save_page_mockup",
+        "description": (
+            "🖼️ Persist a generated mockup image for one page of the project. "
+            "Call this RIGHT AFTER `generate_image` returns a URL for a page "
+            "mockup, BEFORE moving on to the next page. The mockup is saved "
+            "under `project.mockups[page_filename]` and shown to the customer "
+            "when you later call `present_mockups_for_approval`."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "page_filename": {"type": "string", "description": "e.g. 'index.html', 'movies.html', 'points.html'."},
+                "page_title": {"type": "string", "description": "Arabic title shown to the customer, e.g. 'الصفحة الرئيسية'."},
+                "image_url": {"type": "string", "description": "The URL returned by generate_image for THIS page mockup."},
+                "description": {"type": "string", "description": "1-2 sentence description of the design (colors, sections, mood)."},
+            },
+            "required": ["page_filename", "page_title", "image_url"],
+        },
+    },
+    {
+        "name": "present_mockups_for_approval",
+        "description": (
+            "📋 Show ALL saved mockups to the customer in a single card and "
+            "ask for approval. Call this ONCE after every page mockup has been "
+            "saved via `save_page_mockup`. After calling this, STOP the turn "
+            "and wait for the customer's reply. The server advances the stage "
+            "to `mockup_approval` automatically."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "message": {"type": "string", "description": "Arabic message asking for approval, e.g. 'هذي معاينة كل صفحات الموقع. وش رأيك؟ نعتمدها أم نعدّل صفحة معيّنة؟'"},
+            },
+            "required": ["message"],
+        },
+    },
+    {
+        "name": "lock_blueprint",
+        "description": (
+            "🔒 Lock the customer-approved mockups as the immutable blueprint "
+            "for the build. Call this when the customer says 'موافق' / 'اعتمد' "
+            "/ 'يلا ابني'. After locking, every page must be built to match "
+            "its mockup. Auto-advances the stage to `visual_skeleton`."
+        ),
+        "input_schema": {"type": "object", "properties": {}},
+    },
+    {
+        "name": "mark_page_built",
+        "description": (
+            "✅ Mark a specific page as fully built to match its approved "
+            "mockup. Call this after writing the page HTML and BEFORE `finish` "
+            "so the workflow can advance to the next page. The customer is "
+            "expected to review before you move on to the next page."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "filename": {"type": "string", "description": "e.g. 'index.html'."},
+            },
+            "required": ["filename"],
         },
     },
     {
@@ -2547,7 +2612,7 @@ def _exec_tool(ctx: FreeBuildToolContext, name: str, args: Dict[str, Any]) -> Di
         if name == "save_discovery_answer":
             from .workflow_engine import (get_workflow_state, DISCOVERY_QUESTIONS,
                                            DISCOVERY_REQUIRED_TOPICS,
-                                           discovery_complete, STAGE_VISUAL_SKELETON)
+                                           discovery_complete, STAGE_MOCKUP_DESIGN)
             key = (args or {}).get("key", "").strip()
             value = (args or {}).get("value", "").strip()
             valid_keys = {q["key"] for q in DISCOVERY_QUESTIONS}
@@ -2558,12 +2623,12 @@ def _exec_tool(ctx: FreeBuildToolContext, name: str, args: Dict[str, Any]) -> Di
             ws = get_workflow_state(ctx.project)
             ws.setdefault("discovery_answers", {})[key] = value[:1000]
             # Auto-advance: as soon as the 4 required topics are filled, jump
-            # the stage forward without waiting for the LLM to call
-            # advance_workflow_stage. This avoids the failure mode where the
-            # AI keeps gathering answers indefinitely or never calls advance.
+            # the stage forward to MOCKUP_DESIGN (image-mockup phase). The AI
+            # then generates one mockup image per page before any HTML.
             auto_advanced = False
-            if discovery_complete(ws) and ws.get("stage") != STAGE_VISUAL_SKELETON:
-                ws["stage"] = STAGE_VISUAL_SKELETON
+            if discovery_complete(ws) and ws.get("stage") != STAGE_MOCKUP_DESIGN \
+               and not (ctx.project or {}).get("pages"):
+                ws["stage"] = STAGE_MOCKUP_DESIGN
                 auto_advanced = True
             ctx.project["workflow_state"] = ws
             ctx.workflow_state_dirty = True
@@ -2574,9 +2639,10 @@ def _exec_tool(ctx: FreeBuildToolContext, name: str, args: Dict[str, Any]) -> Di
                 "ok": True, "key": key,
                 "progress": f"{answered}/{total_req} موضوع أساسي",
                 "complete": answered == total_req,
-                "auto_advanced_to_visual_skeleton": auto_advanced,
+                "auto_advanced_to_mockup_design": auto_advanced,
                 "next_action": (
-                    "ابدأ بناء Visual Skeleton الآن — كل الصفحات بتصميم متناسق + nav يعمل."
+                    "ابدأ مرحلة Mockup Design — استدع `generate_image` لكل صفحة، "
+                    "ثم `save_page_mockup`، ثم `present_mockups_for_approval`."
                     if auto_advanced else
                     "اطرح السؤال التالي أو احفظ إجابة موضوع آخر."
                 ),
@@ -2619,6 +2685,130 @@ def _exec_tool(ctx: FreeBuildToolContext, name: str, args: Dict[str, Any]) -> Di
             return {"ok": True, "wired_count": len(wired),
                     "remaining": unwired,
                     "all_done": not unwired}
+
+        if name == "save_page_mockup":
+            page_filename = (args or {}).get("page_filename", "").strip()
+            page_title = (args or {}).get("page_title", "").strip()
+            image_url = (args or {}).get("image_url", "").strip()
+            description = (args or {}).get("description", "").strip()
+            if not page_filename or not image_url:
+                return {"ok": False, "error": "page_filename و image_url مطلوبان."}
+            if not page_filename.endswith(".html"):
+                page_filename = page_filename + ".html"
+            mockups = dict((ctx.project or {}).get("mockups") or {})
+            mockups[page_filename] = {
+                "page_filename": page_filename,
+                "page_title": page_title or page_filename,
+                "image_url": image_url,
+                "description": description,
+                "saved_at": datetime.now(timezone.utc).isoformat(),
+            }
+            ctx.project["mockups"] = mockups
+            ctx.workflow_state_dirty = True
+            return {
+                "ok": True,
+                "page_filename": page_filename,
+                "mockups_saved": list(mockups.keys()),
+                "next_action": (
+                    "إذا في صفحات أخرى — استدع `generate_image` للتالية ثم "
+                    "`save_page_mockup`. إذا خلصت كل الصفحات — استدع "
+                    "`present_mockups_for_approval(message='...')`."
+                ),
+            }
+
+        if name == "present_mockups_for_approval":
+            from .workflow_engine import (get_workflow_state, STAGE_MOCKUP_APPROVAL,
+                                           STAGE_MOCKUP_DESIGN)
+            message = (args or {}).get("message", "").strip()
+            mockups = (ctx.project or {}).get("mockups") or {}
+            if not mockups:
+                return {"ok": False, "error": "لا توجد mockups محفوظة. استدع `save_page_mockup` لكل صفحة أولاً."}
+            ws = get_workflow_state(ctx.project)
+            if ws.get("stage") in (STAGE_MOCKUP_DESIGN,):
+                ws["stage"] = STAGE_MOCKUP_APPROVAL
+                ctx.project["workflow_state"] = ws
+                ctx.workflow_state_dirty = True
+            return {
+                "ok": True,
+                "ask_user": True,
+                "kind": "mockup_approval",
+                "message": message or (
+                    "هذي معاينة كل صفحات الموقع. وش رأيك؟ نعتمدها أم نعدّل صفحة معيّنة؟"
+                ),
+                "mockups": [
+                    {
+                        "page_filename": m["page_filename"],
+                        "page_title": m.get("page_title"),
+                        "image_url": m.get("image_url"),
+                        "description": m.get("description"),
+                    }
+                    for m in mockups.values()
+                ],
+                "stage": "mockup_approval",
+            }
+
+        if name == "lock_blueprint":
+            from .workflow_engine import (get_workflow_state, STAGE_VISUAL_SKELETON)
+            mockups = (ctx.project or {}).get("mockups") or {}
+            if not mockups:
+                return {"ok": False, "error": "لا توجد mockups لتقفلها."}
+            ctx.project["blueprint_locked"] = True
+            ctx.project["blueprint_locked_at"] = datetime.now(timezone.utc).isoformat()
+            ws = get_workflow_state(ctx.project)
+            ws["stage"] = STAGE_VISUAL_SKELETON
+            ws.setdefault("built_pages", [])
+            ctx.project["workflow_state"] = ws
+            ctx.workflow_state_dirty = True
+            # Pick the first page to build (index.html prioritized)
+            page_order = ["index.html"] + [p for p in mockups.keys() if p != "index.html"]
+            first_page = next((p for p in page_order if p in mockups), None)
+            return {
+                "ok": True,
+                "blueprint_locked": True,
+                "mockups_locked": list(mockups.keys()),
+                "stage": "visual_skeleton",
+                "next_page_to_build": first_page,
+                "next_action": (
+                    f"ابدأ بناء `{first_page}` فقط الآن. استدع `create_page` "
+                    f"(إن لم تكن موجودة) ثم `write_full_html(allow_full_rewrite=true)` "
+                    f"بـHTML كامل مطابق لـmockup الصفحة. بعد البناء استدع "
+                    f"`mark_page_built(filename='{first_page}')` ثم `finish` "
+                    f"برسالة \"بنيت الصفحة الأولى — راجعها قبل أنتقل للتالية\"."
+                ),
+            }
+
+        if name == "mark_page_built":
+            from .workflow_engine import get_workflow_state
+            filename = (args or {}).get("filename", "").strip()
+            if not filename:
+                return {"ok": False, "error": "filename مطلوب."}
+            pages = (ctx.project or {}).get("pages", {}) or {}
+            if filename not in pages:
+                return {"ok": False, "error": f"الصفحة '{filename}' غير موجودة في pages — ابنِها أولاً عبر create_page/write_full_html."}
+            ws = get_workflow_state(ctx.project)
+            built = list(ws.get("built_pages") or [])
+            if filename not in built:
+                built.append(filename)
+            ws["built_pages"] = built
+            ctx.project["workflow_state"] = ws
+            ctx.workflow_state_dirty = True
+            mockups = (ctx.project or {}).get("mockups") or {}
+            planned = list(mockups.keys()) if mockups else list(pages.keys())
+            remaining = [p for p in planned if p not in built]
+            return {
+                "ok": True,
+                "built_pages": built,
+                "remaining_pages": remaining,
+                "all_done": not remaining,
+                "next_action": (
+                    f"كل الصفحات اكتملت. استدع `advance_workflow_stage(to=\"wiring\")` "
+                    f"لتفعيل الأزرار."
+                    if not remaining else
+                    f"التالية: `{remaining[0]}`. أوقف الـturn الآن واستدع `finish` "
+                    f"برسالة \"بنيت `{filename}` — راجعها وقولي قبل أنتقل لـ `{remaining[0]}`\"."
+                ),
+            }
+
 
 
         if name == "read_current_html":

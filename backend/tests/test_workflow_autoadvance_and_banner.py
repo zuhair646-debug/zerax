@@ -14,12 +14,12 @@ from __future__ import annotations
 def test_auto_advance_logic_in_source():
     """save_discovery_answer must check discovery_complete and flip stage."""
     src = open("/app/backend/modules/freebuild/freebuild_agent.py").read()
-    # Locate the dispatcher block
     idx = src.find('if name == "save_discovery_answer":')
     assert idx > 0
     block = src[idx:idx + 2200]
     assert "auto_advanced" in block
-    assert "STAGE_VISUAL_SKELETON" in block
+    # New target: MOCKUP_DESIGN (image mockups before HTML)
+    assert "STAGE_MOCKUP_DESIGN" in block
     assert "discovery_complete(ws)" in block
 
 
@@ -71,7 +71,7 @@ def _make_ctx():
 def test_functional_auto_advance_on_fourth_required_key():
     """Call save_discovery_answer 4 times with required keys; assert auto-advance fires on the 4th call only."""
     fa, ctx = _make_ctx()
-    from modules.freebuild.workflow_engine import STAGE_VISUAL_SKELETON, STAGE_DISCOVERY
+    from modules.freebuild.workflow_engine import STAGE_MOCKUP_DESIGN
 
     required_sequence = [
         ("site_purpose", "متجر إلكتروني لبيع الكتب"),
@@ -87,33 +87,29 @@ def test_functional_auto_advance_on_fourth_required_key():
 
     # First three calls must NOT auto-advance
     for i in range(3):
-        assert results[i]["auto_advanced_to_visual_skeleton"] is False, (
+        assert results[i]["auto_advanced_to_mockup_design"] is False, (
             f"unexpected auto-advance at call {i+1}: {results[i]}"
         )
-        # progress denominator should reference total_req (4)
         assert results[i]["progress"].endswith("موضوع أساسي")
         assert results[i]["progress"].startswith(f"{i+1}/4")
         assert results[i]["complete"] is False
 
-    # 4th call MUST auto-advance
+    # 4th call MUST auto-advance to Mockup Design
     final = results[3]
-    assert final["auto_advanced_to_visual_skeleton"] is True, f"4th call did not auto-advance: {final}"
+    assert final["auto_advanced_to_mockup_design"] is True, f"4th call did not auto-advance: {final}"
     assert final["complete"] is True
     assert final["progress"].startswith("4/4")
 
-    # ctx.project.workflow_state.stage must be visual_skeleton
     ws = ctx.project["workflow_state"]
-    assert ws["stage"] == STAGE_VISUAL_SKELETON, f"stage not flipped: {ws}"
+    assert ws["stage"] == STAGE_MOCKUP_DESIGN, f"stage not flipped: {ws}"
     assert ctx.workflow_state_dirty is True
-
-    # next_action hint for the 4th call must direct to Visual Skeleton
-    assert "Visual Skeleton" in final["next_action"]
+    assert "Mockup Design" in final["next_action"]
 
 
 def test_functional_no_auto_advance_with_only_three_required():
     """With only 3 of 4 required keys filled, stage must remain discovery."""
     fa, ctx = _make_ctx()
-    from modules.freebuild.workflow_engine import STAGE_DISCOVERY, STAGE_VISUAL_SKELETON
+    from modules.freebuild.workflow_engine import STAGE_DISCOVERY, STAGE_MOCKUP_DESIGN
 
     only_three = [
         ("site_purpose", "موقع مطعم"),
@@ -123,15 +119,13 @@ def test_functional_no_auto_advance_with_only_three_required():
     for k, v in only_three:
         res = fa._exec_tool(ctx, "save_discovery_answer", {"key": k, "value": v})
         assert res["ok"] is True
-        assert res["auto_advanced_to_visual_skeleton"] is False
+        assert res["auto_advanced_to_mockup_design"] is False
         assert res["complete"] is False
         ws = ctx.project.get("workflow_state") or {}
-        # Stage must remain discovery throughout
-        assert ws.get("stage") != STAGE_VISUAL_SKELETON, (
+        assert ws.get("stage") != STAGE_MOCKUP_DESIGN, (
             f"stage prematurely advanced after key={k}: {ws}"
         )
 
-    # Final state assertion
     ws = ctx.project["workflow_state"]
     assert ws["stage"] == STAGE_DISCOVERY
 
@@ -139,9 +133,8 @@ def test_functional_no_auto_advance_with_only_three_required():
 def test_functional_optional_key_does_not_trigger_advance():
     """Filling an optional key without the 4 required keys must NOT advance."""
     fa, ctx = _make_ctx()
-    from modules.freebuild.workflow_engine import STAGE_VISUAL_SKELETON
+    from modules.freebuild.workflow_engine import STAGE_MOCKUP_DESIGN
 
-    # Fill optional + 3 required (missing style_preference)
     sequence = [
         ("site_purpose", "موقع"),
         ("page_count_and_names", "صفحة واحدة"),
@@ -151,9 +144,9 @@ def test_functional_optional_key_does_not_trigger_advance():
     for k, v in sequence:
         res = fa._exec_tool(ctx, "save_discovery_answer", {"key": k, "value": v})
         assert res["ok"] is True
-        assert res["auto_advanced_to_visual_skeleton"] is False
+        assert res["auto_advanced_to_mockup_design"] is False
 
-    assert ctx.project["workflow_state"]["stage"] != STAGE_VISUAL_SKELETON
+    assert ctx.project["workflow_state"]["stage"] != STAGE_MOCKUP_DESIGN
 
 
 def test_functional_invalid_key_rejected():
