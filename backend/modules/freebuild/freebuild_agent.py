@@ -2772,23 +2772,33 @@ def _exec_tool(ctx: FreeBuildToolContext, name: str, args: Dict[str, Any]) -> Di
             ws = get_workflow_state(ctx.project)
             ws["stage"] = STAGE_VISUAL_SKELETON
             ws.setdefault("built_pages", [])
+            # 🆕 BUILD QUEUE — deterministic page order the AI MUST follow.
+            # index.html is always first (homepage), then the other pages in
+            # the order they were saved as mockups.
+            page_order = ["index.html"] + [p for p in mockups.keys() if p != "index.html"]
+            build_queue = [p for p in page_order if p in mockups]
+            ws["build_queue"] = build_queue
             ctx.project["workflow_state"] = ws
             ctx.workflow_state_dirty = True
-            # Pick the first page to build (index.html prioritized)
-            page_order = ["index.html"] + [p for p in mockups.keys() if p != "index.html"]
-            first_page = next((p for p in page_order if p in mockups), None)
+            first_page = build_queue[0] if build_queue else None
+            first_mockup = mockups.get(first_page, {}) if first_page else {}
             return {
                 "ok": True,
                 "blueprint_locked": True,
                 "mockups_locked": list(mockups.keys()),
                 "stage": "visual_skeleton",
+                "build_queue": build_queue,
                 "next_page_to_build": first_page,
+                "next_page_mockup_url": first_mockup.get("image_url"),
+                "next_page_mockup_description": first_mockup.get("description"),
                 "next_action": (
-                    f"ابدأ بناء `{first_page}` فقط الآن. استدع `create_page` "
-                    f"(إن لم تكن موجودة) ثم `write_full_html(allow_full_rewrite=true)` "
-                    f"بـHTML كامل مطابق لـmockup الصفحة. بعد البناء استدع "
-                    f"`mark_page_built(filename='{first_page}')` ثم `finish` "
-                    f"برسالة \"بنيت الصفحة الأولى — راجعها قبل أنتقل للتالية\"."
+                    f"الـblueprint مقفول. قائمة البناء الإلزامية: {build_queue}.\n"
+                    f"ابدأ بـ `{first_page}` الآن:\n"
+                    f"  1. `write_full_html(html='...', allow_full_rewrite=true)` "
+                    f"بـHTML كامل طبق mockup هذي الصفحة.\n"
+                    f"  2. `mark_page_built(filename='{first_page}')` بعد البناء.\n"
+                    f"  3. `finish` بملخص قصير وانتظر العميل.\n"
+                    f"⚠️ ممنوع تبني صفحتين في turn واحد — صفحة واحدة فقط."
                 ),
             }
 
@@ -2805,22 +2815,29 @@ def _exec_tool(ctx: FreeBuildToolContext, name: str, args: Dict[str, Any]) -> Di
             if filename not in built:
                 built.append(filename)
             ws["built_pages"] = built
+            # 🆕 Pop the queue: remove this filename, get next
+            build_queue = list(ws.get("build_queue") or [])
+            if filename in build_queue:
+                build_queue.remove(filename)
+            ws["build_queue"] = build_queue
             ctx.project["workflow_state"] = ws
             ctx.workflow_state_dirty = True
             mockups = (ctx.project or {}).get("mockups") or {}
-            planned = list(mockups.keys()) if mockups else list(pages.keys())
-            remaining = [p for p in planned if p not in built]
+            next_page = build_queue[0] if build_queue else None
+            next_mockup = mockups.get(next_page, {}) if next_page else {}
             return {
                 "ok": True,
                 "built_pages": built,
-                "remaining_pages": remaining,
-                "all_done": not remaining,
+                "remaining_pages": build_queue,
+                "all_done": not build_queue,
+                "next_page_to_build": next_page,
+                "next_page_mockup_url": next_mockup.get("image_url"),
                 "next_action": (
-                    f"كل الصفحات اكتملت. استدع `advance_workflow_stage(to=\"wiring\")` "
-                    f"لتفعيل الأزرار."
-                    if not remaining else
-                    f"التالية: `{remaining[0]}`. أوقف الـturn الآن واستدع `finish` "
-                    f"برسالة \"بنيت `{filename}` — راجعها وقولي قبل أنتقل لـ `{remaining[0]}`\"."
+                    f"كل الصفحات اكتملت ({len(built)}/{len(built)}). "
+                    f"استدع `advance_workflow_stage(to=\"wiring\")` لتفعيل الأزرار."
+                    if not build_queue else
+                    f"التالية: `{next_page}`. أوقف الـturn الآن واستدع `finish` "
+                    f"بملخص قصير ينتظر مراجعة العميل قبل أنتقل لـ `{next_page}`."
                 ),
             }
 
@@ -8745,7 +8762,7 @@ async def run_agent_turn(
     project: Dict[str, Any],
     user_message: str,
     history_messages: List[Dict[str, str]],
-    max_iterations: int = 16,
+    max_iterations: int = 40,
     model: str = "claude-sonnet-4-5-20250929",
     auth_token: Optional[str] = None,
     db: Any = None,
@@ -9330,7 +9347,7 @@ async def stream_agent_turn(
     project: Dict[str, Any],
     user_message: str,
     history_messages: List[Dict[str, str]],
-    max_iterations: int = 16,
+    max_iterations: int = 40,
     ctx_holder: Optional[Dict[str, Any]] = None,
     user_language: str = "ar",
     auth_token: Optional[str] = None,

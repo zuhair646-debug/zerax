@@ -274,56 +274,74 @@ def _visual_skeleton_addendum(state: Dict[str, Any], project: Dict[str, Any]) ->
     style_hint = answers.get("style_preference", "")
     mockups = (project or {}).get("mockups") or {}
     locked = bool((project or {}).get("blueprint_locked"))
-    built_pages = set((state.get("built_pages") or []))
-    planned = list(mockups.keys()) if mockups else []
-    pending = [p for p in planned if p not in built_pages]
-    current_page = pending[0] if pending else None
+    built_pages = list(state.get("built_pages") or [])
+    build_queue = list(state.get("build_queue") or [])
+    if not build_queue and mockups and locked:
+        # Rebuild queue from mockups if persistence dropped it
+        page_order = ["index.html"] + [p for p in mockups.keys() if p != "index.html"]
+        build_queue = [p for p in page_order if p in mockups and p not in built_pages]
+    current_page = build_queue[0] if build_queue else None
     current_mockup = (mockups.get(current_page) if current_page else None) or {}
+    pages_dict = (project or {}).get("pages") or {}
     parts = [
-        "\n\n🏗️ **مرحلة Visual Skeleton — بناء صفحة-صفحة طبق الـmockup المعتمد.**\n",
+        "\n\n🏗️ **مرحلة Visual Skeleton — قائمة بناء إلزامية صفحة-صفحة.**\n",
     ]
     if locked and mockups:
-        parts.append(
-            f"\n🔒 **Blueprint مقفول.** هذي الـmockups المعتمدة من العميل:\n"
-        )
-        for fn, mk in mockups.items():
-            marker = "✅ مكتمل" if fn in built_pages else (
-                "⏳ التالي" if fn == current_page else "○ مؤجل"
-            )
-            title = mk.get("page_title") or fn
-            parts.append(f"  • `{fn}` — {title} — {marker}")
+        parts.append("\n🔒 **Blueprint مقفول. خطة البناء الإلزامية:**\n")
+        for i, fn in enumerate(["index.html"] + [p for p in mockups.keys() if p != "index.html"]):
+            if fn not in mockups:
+                continue
+            title = mockups[fn].get("page_title") or fn
+            if fn in built_pages:
+                marker = "✅ مكتمل"
+            elif fn == current_page:
+                marker = "⏳ **المهمة الآن**"
+            else:
+                marker = "⏸️ مؤجل"
+            parts.append(f"  {i+1}. `{fn}` — {title} — {marker}")
         parts.append("")
         if current_page:
             img = current_mockup.get("image_url") or ""
             desc = current_mockup.get("description") or ""
             parts.append(
-                f"\n**🎯 المهمة الآن: ابنِ `{current_page}` فقط.**\n"
-                f"  • Mockup المعتمد: {img}\n"
-                f"  • وصف التصميم: {desc}\n"
-                f"  • استخدم `create_page(filename='{current_page}', title='...')` "
-                f"(لو ما موجودة) ثم `write_full_html` (allow_full_rewrite=true لأول كتابة) "
-                f"بـHTML كامل طبق الـmockup: نفس الـpalette، نفس الـlayout، نفس الـsections.\n"
-                f"  • بعد البناء، استدع `mark_page_built(filename='{current_page}')` "
-                f"ثم `finish` برسالة: \"بنيت `{current_page}` طبق التصميم المعتمد. "
-                f"راجعها وقولي قبل أنتقل للصفحة التالية.\"\n"
-                f"  • **أوقف هنا.** ممنوع تبني صفحتين في turn واحد.\n"
+                f"\n## 🎯 الـturn الحالي: ابنِ `{current_page}` فقط.\n\n"
+                f"**Mockup المعتمد:** {img}\n"
+                f"**وصف التصميم:** {desc}\n\n"
+                f"**القواعد الإلزامية لهذه الصفحة:**\n"
+                f"  1. استدع `write_full_html(html='<!DOCTYPE html>...', allow_full_rewrite=true)` "
+                f"مرة واحدة بـHTML كامل (head + body + style + sections + nav).\n"
+                f"  2. **استخدم نفس palette/typography/components** اللي في الصفحات المبنية سابقاً "
+                f"(انظر القسم 'تصميم المرجع' أدناه).\n"
+                f"  3. **شريط nav موحّد في كل الصفحات** يربط كل الـ4 صفحات مع بعض "
+                f"بـ `<a href=\"X.html\">` فعلية.\n"
+                f"  4. كل صفحة فيها **Hero + 2-4 أقسام محتوى حقيقي** (مو placeholders).\n"
+                f"  5. بعد write_full_html، استدع `mark_page_built(filename='{current_page}')`.\n"
+                f"  6. ثم `finish` بملخص قصير يطلب من العميل المراجعة.\n"
+                f"  7. **ممنوع** تبني صفحة ثانية في نفس الـturn — انتظر العميل.\n"
             )
+            # 🎨 Inject reference HTML from already-built pages so palette/components
+            # stay consistent. Truncate each to ~3000 chars to avoid blowing context.
+            if built_pages:
+                parts.append("\n## 🎨 تصميم المرجع — التزم بنفس الـpalette/components:\n")
+                for fn in built_pages[:2]:  # last 2 built pages as anchors
+                    ref_html = (pages_dict.get(fn) or "")[:3000]
+                    if ref_html:
+                        parts.append(
+                            f"\n### مرجع من `{fn}` (أول 3000 حرف — التزم بنفس الستايل):\n"
+                            f"```html\n{ref_html}\n```\n"
+                        )
         else:
             parts.append(
                 "\n✅ **كل الصفحات اكتملت.** استدع "
-                "`advance_workflow_stage(to=\"wiring\")` للانتقال لتفعيل الأزرار.\n"
+                "`advance_workflow_stage(to=\"wiring\")` للانتقال لتفعيل الأزرار."
             )
     else:
-        # Fallback: no locked blueprint (legacy projects or AI skipped mockups)
         parts.append(
-            f"\n⚠️ **لا يوجد blueprint مقفول.** تستطيع البناء بدون mockups إذا أردت، "
-            f"لكن الأفضل تستدع `advance_workflow_stage(to=\"mockup_design\")` "
-            f"ثم تولّد mockups وتأخذ موافقة العميل أولاً.\n\n"
-            f"**تذكير من Discovery:**\n"
-            f"  • صفحات: {pages_hint or '—'}\n"
-            f"  • محتوى: {contents_hint or '—'}\n"
-            f"  • نمط: {style_hint or 'حديث'}\n\n"
-            f"**ابنِ صفحة واحدة فقط في هذا الـturn**، ثم `mark_page_built` و`finish`.\n"
+            f"\n⚠️ **لا يوجد blueprint مقفول.** ابنِ مرحلة Mockup Design أولاً "
+            f"(`generate_image` لكل صفحة → `save_page_mockup` → "
+            f"`present_mockups_for_approval` → `lock_blueprint`).\n\n"
+            f"**ملخص من Discovery:** صفحات: {pages_hint or '—'} | محتوى: "
+            f"{contents_hint or '—'} | نمط: {style_hint or 'حديث'}\n"
         )
     return "".join(parts)
 

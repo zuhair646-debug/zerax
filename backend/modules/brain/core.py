@@ -41,7 +41,7 @@ class BrainConfig:
     model: str = "claude-sonnet-4-5-20250929"
     provider: str = "emergent_anthropic"
     max_credit_budget: int = 500            # hard ceiling per turn
-    max_iterations: int = 20                # upper iteration safety
+    max_iterations: int = 40                # upper iteration safety
     enable_discovery: bool = False  # Constitution handles dialogue conversationally — no hardcoded question banks
     enable_visual_diff: bool = True
     enable_strict_mode: bool = True
