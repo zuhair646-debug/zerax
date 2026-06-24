@@ -41,9 +41,25 @@ VALID_STAGES = {
     STAGE_SURGICAL_EDIT,
 }
 
-# Discovery questions — the EXACT 8 questions the AI must ask before any
-# code is written on an empty project. Each question is short and answerable
-# in one or two sentences so the discovery phase doesn't drag on.
+# Discovery topics — the MINIMUM coverage required before allowing the
+# transition to visual_skeleton. The AI is FREE to ask questions in any
+# style/order, as many or as few as needed, and to phrase them naturally
+# based on the customer's idea (a movie site vs a restaurant menu vs a
+# portfolio site need different question shapes). What we enforce is that
+# by the end of the discovery stage, the AI has saved an answer under each
+# of these 4 essential topic keys. Optional keys can be filled or skipped.
+DISCOVERY_REQUIRED_TOPICS = {
+    "site_purpose",         # What is this site for?
+    "page_count_and_names", # Single-page vs multi-page; if multi, what pages?
+    "page_contents",        # What does each page contain (1 line each)?
+    "style_preference",     # Visual style + colour direction
+}
+DISCOVERY_OPTIONAL_TOPICS = {
+    "target_audience",
+    "key_features",
+    "branding",
+    "competitors_or_refs",
+}
 DISCOVERY_QUESTIONS: List[Dict[str, str]] = [
     {"key": "site_purpose",
      "ar": "1. ما الهدف الأساسي من الموقع؟ (متجر، خدمات، عرض أعمال، تطبيق، ...)"},
@@ -85,10 +101,15 @@ def get_workflow_state(project: Dict[str, Any]) -> Dict[str, Any]:
 
 
 def discovery_complete(state: Dict[str, Any]) -> bool:
-    """All 8 questions must have at least a short answer string."""
+    """Discovery is complete when the 4 REQUIRED topics have been answered.
+
+    Optional topics (audience, features, branding, refs) can be skipped if the
+    AI feels they aren't needed for the customer's specific project. This
+    intentionally trusts the AI to judge what's needed — we only enforce the
+    bare minimum so it can't skip everything.
+    """
     answers = state.get("discovery_answers") or {}
-    required_keys = {q["key"] for q in DISCOVERY_QUESTIONS}
-    return all(answers.get(k) for k in required_keys)
+    return all(answers.get(k) for k in DISCOVERY_REQUIRED_TOPICS)
 
 
 def stage_prompt_addendum(state: Dict[str, Any], project: Dict[str, Any]) -> str:
@@ -141,30 +162,60 @@ def _discovery_addendum(state: Dict[str, Any]) -> str:
 
 
 def _visual_skeleton_addendum(state: Dict[str, Any], project: Dict[str, Any]) -> str:
-    """Build ALL pages with cohesive design. Buttons must stay inert."""
+    """Build ALL pages with cohesive design + WORKING nav between pages."""
     answers = state.get("discovery_answers") or {}
     pages_hint = answers.get("page_count_and_names", "")
     contents_hint = answers.get("page_contents", "")
+    style_hint = answers.get("style_preference", "")
     return (
-        "\n\n🎨 **مرحلة Visual Skeleton — تصميم بصري كامل بدون wiring.**\n\n"
+        "\n\n🎨 **مرحلة Visual Skeleton — تصميم بصري كامل + nav يعمل.**\n\n"
         "**ما يجب فعله:**\n"
-        f"  1. بناء كل الصفحات المطلوبة (حسب إجابة العميل: {pages_hint or '—'})\n"
-        f"     بمحتوى متّسق (حسب: {contents_hint or '—'}).\n"
-        "  2. كل صفحة مستقلة في الـ pages dict (استخدم `create_page` للصفحات الجديدة).\n"
-        "  3. شريط تنقّل (`<nav>`) موحّد في كل الصفحات، روابطه `href=\"X.html\"` "
-        "تنقل بين الصفحات فعلياً.\n"
-        "  4. الأزرار، النماذج، dropdowns: **اعرضها مرئياً لكن اتركها خاملة** "
-        "(لا `onclick`, لا `addEventListener`, لا JS handlers). أضف "
-        "`data-wiring=\"pending\"` لكل زر/نموذج لتمييزه.\n"
-        "  5. التصميم متناسق: نفس الـcolor palette، نفس الـfont، نفس الـspacing، "
-        "نفس الـcomponents.\n\n"
+        f"  1. ابنِ كل الصفحات المطلوبة (حسب: {pages_hint or '—'}) "
+        f"بمحتوى متّسق مع: {contents_hint or '—'}.\n"
+        f"  2. التزم بالنمط: {style_hint or 'حديث ومنسق'}. كل الصفحات على نفس "
+        "color palette، نفس الخط، نفس components.\n"
+        "  3. كل صفحة مستقلة في الـ pages dict (استخدم `create_page`).\n"
+        "  4. ⭐ **شريط nav موحد في كل الصفحات، روابطه `<a href=\"X.html\">` "
+        "يجب أن تنقل العميل فعلياً بين الصفحات منذ هذه المرحلة.** هذا يخلي العميل "
+        "يستعرض الـ Visual Skeleton طبيعياً.\n"
+        "  5. كل صفحة فيها Hero + 2-4 أقسام محتوى حقيقي (مو بس placeholder).\n"
+        "  6. الأزرار/forms الداخلية (مثل \"اشترك\"، \"اشترِ النقاط\"، \"احفظ\") "
+        "اعرضها مرئياً مع `data-wiring=\"pending\"` — **لا تُضِف لها JS handlers الآن**. "
+        "هذه أزرار وظيفية تحتاج backend logic، نفعّلها في مرحلة Wiring.\n"
+        "  7. الأزرار البصرية البحتة (تبديل theme، scroll-to-top، فتح modal بسيط) "
+        "تقدر تفعّلها مباشرة لأنها لا تحتاج backend.\n\n"
         "**ممنوع في هذه المرحلة:**\n"
-        "  ❌ ممنوع كتابة `<script>` يحتوي على event handlers أو state management.\n"
-        "  ❌ ممنوع `fetch()` أو localStorage manipulation.\n"
-        "  ❌ ممنوع استدعاء `finish` قبل ما تكتمل **كل الصفحات** ببنية بصرية "
-        "حقيقية (Hero + 2-4 أقسام لكل صفحة).\n\n"
+        "  ❌ استدعاء `finish` قبل ما تكتمل **كل الصفحات** بمحتوى حقيقي.\n"
+        "  ❌ ترك صفحة بـ Hero فقط — كل صفحة تحتاج محتوى يستحق المشاهدة.\n\n"
         "بعد ما تنتهي، استدع `advance_workflow_stage(to=\"wiring\")` ثم `finish` "
-        "بملخّص يخبر العميل أن التصميم البصري جاهز للمراجعة."
+        "برسالة للعميل: \"التصميم البصري جاهز. تنقّل بين الصفحات وراجعها، "
+        "ثم نبدأ تفعيل الأزرار الوظيفية.\""
+    )
+
+
+def _surgical_edit_addendum() -> str:
+    """Default for established projects — pinpoint edits with smart guidance."""
+    return (
+        "\n\n🔪 **مرحلة Surgical Edit — تعديلات جراحية مع المرونة.**\n\n"
+        "**خطوات التعامل مع طلب تعديل:**\n"
+        "  1. ابدأ بـ `list_sections` أو `read_current_html` لرؤية البنية الحالية.\n"
+        "  2. حدد بدقة العنصر/القسم الذي يحتاج التعديل.\n"
+        "  3. اختر الأداة الأنسب:\n"
+        "     • تغيير نص أو attribute → `batch_replace_in_pages`\n"
+        "     • إضافة سطر/قسم صغير → `insert_html_at`\n"
+        "     • استبدال قسم كامل بآخر → `apply_section(op='replace')`\n"
+        "     • إصلاح زر لا يعمل → `insert_html_at` مع `<script>` JS handler\n"
+        "     • تغيير الألوان عبر الموقع → `update_pages_theme`\n"
+        "     • إضافة CSS عام → `inject_global_css`\n\n"
+        "**القواعد الذكية (لا تعتبرها قيوداً، بل إرشادات):**\n"
+        "  • التعديل لقسم موجود: حافظ على نفس بنية الـ classes والـ structure؛ "
+        "إذا كان حجم القسم الجديد أكبر من 4× القسم الأصلي، فهذا غالباً إعادة بناء "
+        "كاملة وليس تعديلاً — تأكد إن هذا فعلاً ما طلبه العميل.\n"
+        "  • لا تضِف أقساماً لم يطلبها العميل صراحة (newsletter, FAQ, testimonials...).\n"
+        "  • إذا العميل قال \"الزر الفلاني ما يشتغل\" — هذا طلب wiring، استخدم "
+        "`insert_html_at` لإضافة `<script>` يفعّل الزر، **بدون تغيير شكله أو موقعه**.\n"
+        "  • بعد كل تعديل، استدع `read_current_html` للتأكد من النتيجة قبل ما "
+        "تقول \"تم\"."
     )
 
 
@@ -197,17 +248,11 @@ def _wiring_addendum(state: Dict[str, Any], project: Dict[str, Any]) -> str:
     )
 
 
-def _surgical_edit_addendum() -> str:
-    """Default for established projects — pinpoint edits only."""
-    return (
-        "\n\n🔪 **مرحلة Surgical Edit — تعديلات جراحية فقط.**\n\n"
-        "العميل يطلب تعديلاً محدداً. التزم بـ:\n"
-        "  • استدع `list_sections` أولاً لرؤية البنية الحالية.\n"
-        "  • طبّق التعديل على العنصر المحدد فقط (`apply_section`, `insert_html_at`, "
-        "`batch_replace_in_pages`).\n"
-        "  • لا تضِف أقساماً لم يطلبها العميل.\n"
-        "  • لا تعيد بناء أي قسم بالكامل — التعديل يجب أن يحافظ على ≤2.5× حجم القسم الأصلي."
-    )
+def _surgical_edit_addendum_OLD_REMOVED() -> str:
+    """REMOVED — replaced by smarter version above. This stub exists to keep
+    the import surface stable for any external caller. Will be deleted in a
+    future refactor."""
+    return ""
 
 
 # ─── Stage-advance helpers (called by the LLM through tools) ────────────────

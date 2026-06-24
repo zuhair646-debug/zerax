@@ -70,12 +70,17 @@ def test_discovery_incomplete_when_no_answers():
 
 
 def test_discovery_incomplete_when_partial():
-    answers = {q["key"]: "x" for q in DISCOVERY_QUESTIONS[:5]}
+    # Provide answers for 3 of the 4 REQUIRED topics — should still be incomplete
+    from backend.modules.freebuild.workflow_engine import DISCOVERY_REQUIRED_TOPICS
+    required = list(DISCOVERY_REQUIRED_TOPICS)
+    answers = {required[0]: "x", required[1]: "x", required[2]: "x"}
     assert not discovery_complete({"discovery_answers": answers})
 
 
-def test_discovery_complete_when_all_8():
-    answers = {q["key"]: "answer" for q in DISCOVERY_QUESTIONS}
+def test_discovery_complete_when_all_required_topics_answered():
+    """Only the 4 required topics matter — optional ones may stay empty."""
+    from backend.modules.freebuild.workflow_engine import DISCOVERY_REQUIRED_TOPICS
+    answers = {k: "answer" for k in DISCOVERY_REQUIRED_TOPICS}
     assert discovery_complete({"discovery_answers": answers})
 
 
@@ -166,12 +171,15 @@ def test_discovery_addendum_omits_already_answered():
     assert "موقع للأفلام" in addendum
 
 
-def test_visual_skeleton_addendum_forbids_wiring():
+def test_visual_skeleton_addendum_keeps_buttons_inert_but_nav_works():
+    """New behavior: nav links work from Visual Skeleton stage; only
+    functional buttons (forms/purchase/save) stay inert."""
     state = {"stage": STAGE_VISUAL_SKELETON, "discovery_answers": {}}
     addendum = stage_prompt_addendum(state, {})
     assert "Visual Skeleton" in addendum
     assert "data-wiring" in addendum
-    assert "onclick" in addendum or "event handlers" in addendum.lower()
+    # Nav must navigate from this stage
+    assert "تنقل" in addendum or "navigate" in addendum.lower()
 
 
 def test_wiring_addendum_focuses_on_one_page():
@@ -184,11 +192,17 @@ def test_wiring_addendum_focuses_on_one_page():
     assert "mark_page_wired" in addendum
 
 
-def test_surgical_addendum_for_default_stage():
+def test_surgical_addendum_lists_alternatives():
+    """New surgical addendum teaches the AI WHICH tool to pick for each
+    edit type. Threshold raised to 4× (from 2.5×)."""
     state = {"stage": STAGE_SURGICAL_EDIT}
     addendum = stage_prompt_addendum(state, {})
     assert "Surgical" in addendum
-    assert "2.5" in addendum or "2.5×" in addendum
+    assert "batch_replace_in_pages" in addendum
+    assert "insert_html_at" in addendum
+    assert "apply_section" in addendum
+    # New 4× threshold (raised from 2.5×)
+    assert "4×" in addendum or "4x" in addendum
 
 
 # ─── stage_label_ar ─────────────────────────────────────────────────────────

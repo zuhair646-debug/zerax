@@ -185,14 +185,15 @@ class TestOrphanPageDetector:
 class TestDesignDestructionGuard:
     """Guard at ~line 9606-9656 fires when:
        intent == surgical AND tool == apply_section AND op == 'replace'
-       AND existing section > 400 chars AND ratio (new/old) > 2.5 or < 0.4
+       AND existing section > 400 chars AND ratio (new/old) > 4.0 or < 0.25
     """
 
     def test_source_contains_guard_label_and_thresholds(self):
         src = inspect.getsource(fa)
         assert "DESIGN-DESTRUCTION GUARD" in src
-        # Threshold constants must be exactly 2.5 and 0.4 per requirements
-        assert "_ratio > 2.5 or _ratio < 0.4" in src
+        # Threshold constants must be exactly 4.0 and 0.25 per current requirements
+        # (raised from 2.5/0.4 in Feb 2026 UX iteration)
+        assert "_ratio > 4.0 or _ratio < 0.25" in src
         # Minimum existing-section gate (>400 chars)
         assert "_old_len > 400" in src
         # Guard is intent-gated
@@ -214,35 +215,36 @@ class TestDesignDestructionGuard:
         old_len = len(m.group(0))
         new_len = len(new_html)
         ratio = new_len / max(old_len, 1)
-        fired = old_len > 400 and (ratio > 2.5 or ratio < 0.4)
+        fired = old_len > 400 and (ratio > 4.0 or ratio < 0.25)
         return {"fired": fired, "old_len": old_len, "new_len": new_len, "ratio": ratio}
 
     def test_guard_fires_when_new_html_too_large(self):
-        # 1000-char existing section, 3000-char new html → ratio 3x → fire
+        # 1000-char existing section, 5000-char new html → ratio 5x → fire (above 4×)
         existing_section = '<section id="hero"><h1>Welcome</h1><p>' + ("x" * 950) + "</p></section>"
         existing_html = f"<html><body>{existing_section}</body></html>"
-        new_html = "<section id='hero'><h1>BIG</h1><p>" + ("y" * 3000) + "</p></section>"
+        new_html = "<section id='hero'><h1>BIG</h1><p>" + ("y" * 5000) + "</p></section>"
         r = self._simulate_guard(existing_html, new_html, "hero")
         assert r["fired"] is True, r
-        assert r["ratio"] > 2.5
+        assert r["ratio"] > 4.0
 
     def test_guard_fires_when_new_html_too_small(self):
-        # 1000-char existing, 200-char new → ratio ~0.2 → fire
+        # 1000-char existing, 100-char new → ratio ~0.1 → fire (below 0.25)
         existing_section = '<section id="hero"><h1>Welcome</h1><p>' + ("x" * 950) + "</p></section>"
         existing_html = f"<html><body>{existing_section}</body></html>"
         new_html = "<section id='hero'><h1>hi</h1></section>"  # ~50 chars
         r = self._simulate_guard(existing_html, new_html, "hero")
         assert r["fired"] is True, r
-        assert r["ratio"] < 0.4
+        assert r["ratio"] < 0.25
 
     def test_guard_does_NOT_fire_within_ratio_window(self):
-        # 1000-char existing, 1500-char new → ratio 1.5 → no fire
+        # 1000-char existing, 3000-char new → ratio 3x → NO fire (under 4×)
+        # This is the case the old 2.5× guard wrongly blocked — now legitimate.
         existing_section = '<section id="hero"><h1>Welcome</h1><p>' + ("x" * 950) + "</p></section>"
         existing_html = f"<html><body>{existing_section}</body></html>"
-        new_html = "<section id='hero'><h1>Welcome 2</h1><p>" + ("y" * 1400) + "</p></section>"
+        new_html = "<section id='hero'><h1>Welcome 2</h1><p>" + ("y" * 2900) + "</p></section>"
         r = self._simulate_guard(existing_html, new_html, "hero")
         assert r["fired"] is False, r
-        assert 0.4 <= r["ratio"] <= 2.5
+        assert 0.25 <= r["ratio"] <= 4.0
 
     def test_guard_does_NOT_fire_when_existing_section_short(self):
         # Existing section < 400 chars → guard skipped (allows tiny stub edits)

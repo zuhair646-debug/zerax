@@ -9927,10 +9927,12 @@ async def _stream_one_provider(
                         if _m:
                             _old_len = len(_m.group(0))
                             _new_len = len(_new_html)
-                            # Allow up to 2.5x growth or shrinkage. Anything beyond
-                            # is suspicious.
+                            # Allow up to 4× growth or shrinkage. Anything beyond
+                            # is suspicious (usually a hallucinated full rewrite).
+                            # Raised from 2.5× → 4× per UX feedback: surgical
+                            # rewrites of complex sections legitimately need >2.5×.
                             _ratio = (_new_len / max(_old_len, 1))
-                            if _old_len > 400 and (_ratio > 2.5 or _ratio < 0.4):
+                            if _old_len > 400 and (_ratio > 4.0 or _ratio < 0.25):
                                 _block_msg = (
                                     f"⛔ DESIGN-DESTRUCTION GUARD: تحاول استبدال قسم "
                                     f"#{_replace_id} (حجمه {_old_len} حرف) بقسم جديد حجمه "

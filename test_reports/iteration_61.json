@@ -1,0 +1,60 @@
+{
+  "summary": "Iteration 8 backend testing (UX-softened workflow engine + raised destruction guard). Ran all 9 requested test files together — 156/156 PASSED in 4.39s. JUnit XML at /app/test_reports/pytest/iter61_all.xml. Source introspection + runtime checks confirm: (a) DISCOVERY_REQUIRED_TOPICS = {site_purpose, page_count_and_names, page_contents, style_preference} (exactly 4 keys), (b) DISCOVERY_OPTIONAL_TOPICS = {target_audience, key_features, branding, competitors_or_refs} (exactly 4 keys), (c) discovery_complete() returns True with only the 4 required topics filled and False on 3/4, (d) _visual_skeleton_addendum contains both 'تنقل' and 'href=\"X.html\"' — nav truly navigates between pages, (e) _surgical_edit_addendum lists ALL 5 tools (insert_html_at, batch_replace_in_pages, apply_section, update_pages_theme, inject_global_css), (f) freebuild_agent.py line 9935 has the new threshold exactly: `_old_len > 400 and (_ratio > 4.0 or _ratio < 0.25)` — raised from 2.5×/0.4 per spec. Edge cases verified: empty project → discovery; current_html>500 chars → surgical_edit; can_advance(discovery→visual_skeleton) is True for 4/4 required and False for 3/4. Provider routing regression check: pick_provider returns ('anthropic','claude-sonnet-4-5-20250929') for claude_only, ('openai_direct','gpt-5.5') for hybrid_gpt, ('openrouter_glm','z-ai/glm-4.6') for hybrid_glm — no regression from iter-7 OpenRouter integration. VPS smoke: https://zenrex.ai/api/health → {status:healthy}, /api/admin/ai-mode → 403 unauthenticated (expected). All test files: test_ai_mode 27, test_ai_mode_three_modes 17, test_admin_ai_mode_http 8, test_surgical_fixes 26, test_surgical_fixes_v2 24, test_openai_param_compat 12, test_intent_scope_fix 5, test_pre_finish_gate 6, test_workflow_engine 31 = 156 total.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "workflow_engine._discovery_addendum", "issue": "Spec item (d) requested the addendum to encourage FREE-FORM smart questions and contain the word 'بحرية' or 'مخصصة'. Neither word is present. The text still says 'اطرح الأسئلة التالية الناقصة فقط' and 'قبل اكتمال الـ 8 أسئلة كلها' — wording still implies the fixed 8-question framing rather than free-form questions adapted to the customer's idea. Functionality is correct (only 4 required, AI free to add to any of the 4+4 keys) but the addendum copy does not reflect/encourage that freedom."},
+      {"endpoint": "workflow_engine.can_advance_to (discovery→visual_skeleton)", "issue": "Blocked message reads 'Discovery غير مكتمل (3/8). أكمل الأسئلة أولاً.' — the denominator is 8 (counts of DISCOVERY_QUESTIONS) while the actual gate requires only 4 (DISCOVERY_REQUIRED_TOPICS). Should report e.g. '(3/4 essential answered)' to match the new spec. Cosmetic but user-facing."},
+      {"endpoint": "workflow_engine._discovery_addendum copy", "issue": "Same internal inconsistency: addendum literally says 'قبل اكتمال الـ 8 أسئلة كلها' but the gate now requires 4. AI may believe it must collect 8 before advancing even though the engine would allow 4."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_workflow_engine.py",
+    "/app/backend/tests/test_surgical_fixes_v2.py",
+    "/app/backend/tests/test_ai_mode.py",
+    "/app/backend/tests/test_ai_mode_three_modes.py",
+    "/app/backend/tests/test_admin_ai_mode_http.py",
+    "/app/backend/tests/test_surgical_fixes.py",
+    "/app/backend/tests/test_openai_param_compat.py",
+    "/app/backend/tests/test_intent_scope_fix.py",
+    "/app/backend/tests/test_pre_finish_gate.py",
+    "/app/test_reports/pytest/iter61_all.xml"
+  ],
+  "per_file_test_counts": {
+    "test_ai_mode.py": 27,
+    "test_ai_mode_three_modes.py": 17,
+    "test_admin_ai_mode_http.py": 8,
+    "test_surgical_fixes.py": 26,
+    "test_surgical_fixes_v2.py": 24,
+    "test_openai_param_compat.py": 12,
+    "test_intent_scope_fix.py": 5,
+    "test_pre_finish_gate.py": 6,
+    "test_workflow_engine.py": 31,
+    "total": 156
+  },
+  "action_items": [
+    "Update _discovery_addendum copy to encourage free-form smart questions adapted to the customer's idea — add 'بحرية' or 'مخصصة' wording per spec item (d). Replace 'قبل اكتمال الـ 8 أسئلة كلها' with language that points at the 4 required topic keys instead of a fixed 8-question count.",
+    "Update can_advance_to(discovery→visual_skeleton) blocked-message to report progress against the 4 required topics (e.g. 'X/4 essential') instead of X/8.",
+    "(Optional) Add a test that asserts _discovery_addendum contains the free-form/مخصصة wording — currently no test enforces this UX requirement so future regressions will be silent."
+  ],
+  "critical_code_review_comments": [
+    "freebuild_agent.py is still ~10,600 lines — way past the 700-line maintainability ceiling. Prior recommendation to extract TOOLS_SCHEMA / _exec_tool dispatcher / provider stream loops still stands.",
+    "DISCOVERY_QUESTIONS (8 items) is no longer the source of truth for advancement but is still used by _discovery_addendum to list the questions AND by can_advance_to to compute the 'X/8' progress string. Either rename it to DISCOVERY_QUESTION_HINTS to make its advisory role explicit, or rewrite the addendum to be generative ('اطرح أسئلة ذكية مخصّصة …') and have can_advance_to count against DISCOVERY_REQUIRED_TOPICS only.",
+    "_surgical_edit_addendum_OLD_REMOVED stub (line 251-255) is dead code — safe to delete next refactor.",
+    "Provider error message at freebuild_agent.py ~line 9049 still does not mention OpenRouter explicitly (same as iter-7 note). Worth fixing alongside this iteration.",
+    "Design-Destruction Guard threshold raise (2.5/0.4 → 4.0/0.25) doubles the allowed expansion. Reasonable per UX goal, but ensure backend telemetry (`design_destruction_guard_block`) is still being collected so the team can tune the value with real data."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "100% (156/156)", "frontend": "N/A (skipped per request)"},
+  "test_credentials": "Not used — all tests are pure-Python deterministic unit tests + source introspection. No live LLM calls.",
+  "seed_data_creation": "None",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Iteration 8 UX softening is functionally correct: 4 required + 4 optional discovery topics, discovery_complete enforces only the 4 required, design-destruction guard raised to 4×/0.25, visual skeleton addendum makes nav actually navigate, surgical edit addendum lists 5 tools. All 156 pytest cases pass. The only deviations are in the Arabic addendum/error copy: it still references '8 questions' and lacks the 'بحرية/مخصصة' wording the spec asked for. These are copy-only fixes — none break tests but they will confuse the AI runtime since the prompt says '8' while the gate accepts 4. Recommend the main agent fix the three copy strings flagged in action_items and then no retest is needed.",
+  "rca of the issue": "N/A — no functional bugs. Three minor UX/copy inconsistencies between the addendum/error-message wording and the new 4-required-topics logic, documented under backend_issues.minor and action_items."
+}
