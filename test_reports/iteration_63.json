@@ -1,0 +1,36 @@
+{
+  "summary": "Iteration 63 — Verified BOTH critical fixes from the user-reported claude_only mode bugs: (1) DISCOVERY STAGE HARD GATE in _exec_tool blocks 10 construction tools (apply_section/create_page/write_full_html/insert_html_at/update_pages_theme/inject_global_css/batch_replace_in_pages/remove_section/reorder_sections/keep_only_sections/move_section_to_page) when stage=='discovery' and returns an error guiding the AI to save_discovery_answer. (2) POST-WRITE VERIFICATION block for Anthropic providers MERGES the verification text into the just-appended tool_result content (matching tool_use_id == tu['id']) instead of appending a separate user text message — fixes the Anthropic 400 'tool_use ids were found without tool_result blocks immediately after' crash. All 160 backend regression tests + 5 new functional gate tests = 165 PASSED. Live VPS smoke (https://zenrex.ai) healthy and ai-mode endpoint returns the correct 3-mode set.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_discovery_gate_and_anthropic_fix.py",
+    "/app/backend/tests/test_discovery_gate_functional.py",
+    "/app/test_reports/pytest/iteration_63_results.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "freebuild_agent.py is now 10,641 lines — well above the 700-line guideline. Strongly recommend splitting into modules (tool dispatch, provider streams, verification, audit, workflow gates) for maintainability; this file size is causing real friction in patching and review.",
+    "Anthropic merge logic at line 10341-10357 silently swallows merge failures via except Exception — fine for resilience but the warning is logged only; consider counting merge failures into a Prometheus metric so we notice degradation before it manifests as user-visible 400s again.",
+    "The discovery-gate construction-tools set is hard-coded inline. Recommend moving _CONSTRUCTION_TOOLS to workflow_engine.py as a module-level constant so it cannot drift from the stage-rules in the same module."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_discovery_gate_functional.py (NEW — 5 functional runtime tests for the gate)"
+  ],
+  "success_rate": {
+    "backend": "100% (165/165 tests pass — 160 specified suite + 5 new functional gate tests)",
+    "frontend": "skipped per request (backend only)"
+  },
+  "test_credentials": "admin@zenrex.ai / Zenrex@2026 (used for VPS /api/admin/ai-mode smoke via Bearer token from /api/auth/login)",
+  "seed_data_creation": "None — all tests use synthetic in-memory project dicts; no DB writes.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Both fixes verified at source-pattern AND runtime levels. Source: discovery gate at freebuild_agent.py:2419 just above the workflow-engine dispatcher; Anthropic merge at freebuild_agent.py:10341-10357 with `_block.get('tool_use_id') == tu['id']` and OpenAI/Moonshot branch unchanged at line 10359. Live VPS endpoint /api/admin/ai-mode confirmed returns valid_modes=['claude_only','hybrid_glm','hybrid_gpt']. The full 160-test suite from iteration_62 still passes plus 4 new gate source-tests + 5 new gate functional tests = 165 total.",
+  "rca_of_the_issue": "Verified the documented RCA matches the source: Anthropic's strict pairing rule (tool_use must be immediately followed by tool_result blocks in the next user message) was being violated by an unconditional `messages.append({'role':'user','content':[{'type':'text','text':_verif_msg}]})` after each tool_result. The fix now branches on provider and, for Anthropic, mutates the existing tool_result block's content (string concat or list append depending on the existing content shape). For the discovery gate, the system-prompt addendum alone was advisory — the LLM ignored it under load. The server-side gate in _exec_tool is now authoritative and returns ok=False+error so the AI gets a clear, repeatable instruction to call save_discovery_answer instead of construction tools. The visual_skeleton stage test confirms the gate does not over-fire."
+}

@@ -2416,6 +2416,33 @@ def _exec_tool(ctx: FreeBuildToolContext, name: str, args: Dict[str, Any]) -> Di
     """Synchronously execute a single tool call and return the result.
     NOTE: async tools (web_search, fetch_url, generate_image) are dispatched via _exec_tool_async."""
     try:
+        # ── 🚦 DISCOVERY STAGE HARD GATE — block construction tools during discovery
+        # Without this, the LLM ignores the Discovery prompt and jumps straight
+        # to apply_section/create_page/write_full_html. The system prompt alone
+        # is not enough; we need a server-side gate.
+        try:
+            from .workflow_engine import get_workflow_state, STAGE_DISCOVERY
+            _stage_now = get_workflow_state(ctx.project).get("stage")
+            _CONSTRUCTION_TOOLS = {
+                "apply_section", "create_page", "write_full_html",
+                "insert_html_at", "update_pages_theme", "inject_global_css",
+                "batch_replace_in_pages", "remove_section", "reorder_sections",
+                "keep_only_sections", "move_section_to_page",
+            }
+            if _stage_now == STAGE_DISCOVERY and name in _CONSTRUCTION_TOOLS:
+                return {
+                    "ok": False,
+                    "error": (
+                        f"⛔ ممنوع استدعاء `{name}` في مرحلة Discovery. "
+                        "اطرح الأسئلة الذكية المخصّصة للعميل أولاً، واحفظ إجاباته "
+                        "عبر `save_discovery_answer(key, value)`. بعد ما تجمع الـ4 "
+                        "مواضيع الأساسية، استدع "
+                        "`advance_workflow_stage(to=\"visual_skeleton\")` لتنتقل لمرحلة البناء."
+                    ),
+                }
+        except Exception:
+            pass
+
         # ── Workflow Engine tools ──
         if name == "save_discovery_answer":
             from .workflow_engine import get_workflow_state, DISCOVERY_QUESTIONS
@@ -10304,11 +10331,30 @@ async def _stream_one_provider(
 
                         _verif_msg = "\n".join(_verif_lines)
 
+                        # Anthropic requires that every tool_use is followed
+                        # immediately by tool_result(s) in the next user message.
+                        # If we insert a free-standing user text message between
+                        # tool_uses in a multi-tool response, Anthropic crashes
+                        # with "tool_use ids were found without tool_result
+                        # blocks immediately after". So we MERGE the verification
+                        # into the just-appended tool_result content instead.
                         if provider in ("anthropic", "emergent_anthropic"):
-                            messages.append({
-                                "role": "user",
-                                "content": [{"type": "text", "text": _verif_msg}],
-                            })
+                            try:
+                                _last = messages[-1] if messages else None
+                                if _last and _last.get("role") == "user":
+                                    _content = _last.get("content")
+                                    if isinstance(_content, list):
+                                        for _block in _content:
+                                            if (_block.get("type") == "tool_result"
+                                                and _block.get("tool_use_id") == tu["id"]):
+                                                _existing = _block.get("content", "")
+                                                if isinstance(_existing, str):
+                                                    _block["content"] = _existing + "\n\n" + _verif_msg
+                                                elif isinstance(_existing, list):
+                                                    _existing.append({"type": "text", "text": _verif_msg})
+                                                break
+                            except Exception as _me:
+                                logger.warning(f"[post-write-verify] merge failed: {_me}")
                         else:
                             messages.append({"role": "user", "content": _verif_msg})
 
