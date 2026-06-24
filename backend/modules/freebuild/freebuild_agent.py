@@ -8629,44 +8629,9 @@ async def _run_anthropic_agent(
         messages.append({"role": "assistant", "content": assistant_blocks})
 
         if not tool_uses:
-            # ── 🛡️ LYING GUARD ────────────────────────────────────────────
-            # If the user clearly asked for an ACTION (add/change/build/etc.)
-            # and the model returned text-only with NO tool calls AND nothing
-            # was changed this turn, force ONE retry. This kills the "AI lies
-            # about completion" failure mode.
-            assistant_text = ""
-            for b in assistant_blocks:
-                if b.get("type") == "text":
-                    assistant_text += "\n" + b["text"]
-            ACTION_VERBS = (
-                "أضف", "اضف", "غيّر", "غير", "اعمل", "اكتب", "احذف", "ابني", "ابن",
-                "نفّذ", "نفذ", "حدّث", "حدث", "أنشئ", "انشئ", "بدّل", "بدل",
-                "add ", "change ", "update ", "delete ", "build ", "create ",
-                "make ", "write ", "replace ", "remove ",
-            )
-            user_wants_action = any(v in (user_message or "") for v in ACTION_VERBS)
-            already_acted = ctx.changes_made > 0
-            already_retried = getattr(ctx, "_lying_guard_fired", False)
-            lied = user_wants_action and not already_acted and not already_retried
-            if lied:
-                ctx._lying_guard_fired = True
-                ctx.log("lying_guard", {"user_text": (user_message or "")[:200]},
-                         {"reason": "no tool_use this turn but user asked for action"})
-                messages.append({
-                    "role": "user",
-                    "content": [{
-                        "type": "text",
-                        "text": (
-                            "⛔ ادّعيت إتمام التغيير لكن **لم تستدعِ أي tool**. "
-                            "هذا يُعتبر كذباً على العميل. الآن استدعِ tool واحد "
-                            "على الأقل (insert_html_at / apply_section / "
-                            "update_pages_theme / batch_replace_in_pages / "
-                            "create_page / write_full_html) لتنفّذ الطلب فعلاً. "
-                            "ممنوع تخرج رد نصي بدون استدعاء tool."
-                        ),
-                    }],
-                })
-                continue  # let the model try again
+            # No tool calls this turn — accept the AI's text response as-is.
+            # LYING GUARD removed per user request: zero hard rules; trust the
+            # AI's intelligence + workflow_engine system-prompt guidance.
             for b in assistant_blocks:
                 if b.get("type") == "text":
                     summary = (summary + "\n" + b["text"]).strip()
@@ -9345,17 +9310,10 @@ async def _stream_one_provider(
             if isinstance(c, str) and c.strip():
                 messages.append({"role": m["role"], "content": c})
 
-    # 🛡️ Inject pending audit warning (if the previous turn left placeholders).
-    # This makes the AI READ a concrete error report at the START of the next
-    # turn — it can't pretend it didn't see it. The warning is presented as
-    # a "system" message inside the user-turn so providers that only accept
-    # one system block (Anthropic) still receive it.
-    _pending_audit = project.get("_pending_audit_warning")
-    pending_audit_prefix = ""
-    if _pending_audit:
-        pending_audit_prefix = _pending_audit + "\n\n──────────────────────────\n\n"
-
-    messages.append({"role": "user", "content": f"{pending_audit_prefix}{_build_reality_check_block(ctx.current_html)}\n{state_summary}\n\nالطلب: {user_message}"})
+    # _pending_audit injection REMOVED per user request. The previous turn's
+    # placeholder warnings are no longer carried forward — the AI starts each
+    # turn with a clean slate.
+    messages.append({"role": "user", "content": f"{_build_reality_check_block(ctx.current_html)}\n{state_summary}\n\nالطلب: {user_message}"})
 
     iterations = 0
     summary = ""
@@ -9371,51 +9329,18 @@ async def _stream_one_provider(
     turn_tokens_in = 0
     turn_tokens_out = 0
 
-    stall_recovery_used = 0  # Anti-stall counter for this turn (max 2 retries)
+    # stall_recovery removed per user request (no hard rules).
     force_tool_use_next_iter = False  # When True, next Anthropic call uses tool_choice={"type":"any"}
 
-    # 🔒 PREEMPTIVE FORCING for action intents — when the user says "fix",
-    # "build", "create", "delete", "add", the FIRST iteration is forced to
-    # use a tool. This stops the "apology + promise + stop" pattern dead in
-    # its tracks: the AI literally cannot respond with text-only on the
-    # first iteration. Detected via the same classifier used by the
-    # pre-flight credit gate so behaviour is consistent.
-    try:
-        from .action_pricing import classify_intent
-        _intent_for_force = classify_intent(user_message or "")
-        if _intent_for_force in ("repair", "section_add", "page_creation",
-                                  "deletion", "edit", "full_site",
-                                  "keep_only", "move_section", "restore"):
-            force_tool_use_next_iter = True
-            logger.info(f"[agent-stream] PREEMPTIVE force_tool_use enabled (intent={_intent_for_force})")
+    # PREEMPTIVE FORCING + INTENT_LOCK + advisories REMOVED per user request.
+    # The AI is fully open — no preemptive tool forcing, no recommended-tool
+    # advisories. Behaviour is steered entirely by the system prompt +
+    # workflow_engine phase banner. Tool argument validation in the
+    # dispatcher remains (id required, html required, etc.) — that is a
+    # tool contract, not a flow rule.
+    _blocked_tools: set = set()
+    _required_tool: Optional[str] = None
 
-        # ℹ️ INTENT LOCK — advisory only. User requested that hard blockers be
-        # removed; we still classify intent but DO NOT block tools. The AI gets
-        # the recommended tool as a hint via system prompt / workflow_engine.
-        _blocked_tools: set = set()
-        _required_tool: Optional[str] = None
-        if _intent_for_force == "restore":
-            _required_tool = "restore_snapshot"
-        elif _intent_for_force == "move_section":
-            _required_tool = "move_section_to_page"
-        elif _intent_for_force == "keep_only":
-            _required_tool = "keep_only_sections"
-        elif _intent_for_force == "section_add":
-            _required_tool = "apply_section"
-        elif _intent_for_force == "repair":
-            _required_tool = "ask_troubleshoot_expert"
-        elif _intent_for_force == "full_site":
-            _required_tool = "plan_task"
-        # SURGICAL-HARDBLOCK removed — trust the workflow_engine prompt to keep
-        # the AI focused on surgical edits when appropriate.
-
-        if _required_tool:
-            logger.info(
-                f"[agent-stream] INTENT advisory (intent={_intent_for_force}) "
-                f"recommended_tool={_required_tool}"
-            )
-    except Exception as _pe:
-        logger.warning(f"[agent-stream] preemptive force check failed: {_pe}")
     for step in range(max_iterations):
         iterations += 1
         logger.info(f"[agent-stream] iter={iterations} start (provider={provider})")
@@ -9679,144 +9604,14 @@ async def _stream_one_provider(
                     await asyncio.sleep(0)
 
         if not tool_uses:
-            # No tool calls this turn. Three possibilities:
-            #  (a) Model wrapped up cleanly with a final answer  → break naturally.
-            #  (b) Model "stalled": wrote "جاري ..." but didn't call any tool.
-            #  (c) Model LIED: claimed a service is "down" / "معطّلة" without
-            #      actually calling the tool to verify. This is the worst case
-            #      because it directly damages user trust. We catch it here and
-            #      force a retry.
-            #  All three are handled with up to TWO auto-continue nudges so the
-            #  user never has to send a second message just to make the AI finish
-            #  what it started in the same billing turn.
-            joined = "\n".join(text_chunks).strip()
-            STALL_MARKERS = (
-                # Action-imminent (Arabic) — "I'll do X now"
-                "جاري", "خلّيني", "خليني", "أبدأ الآن", "ابدأ الآن", "يبدأ الآن",
-                "سأبدأ", "سأنفّذ", "سأنفذ", "سأصلح", "سأبني", "سأكمل",
-                "سأطبّق", "سأطبق", "سأضيف", "سأحذف", "سأعدّل", "سأحدّث",
-                "بأشغّل", "بأشغل", "بأجلب", "بأحضّر", "بأحضر",
-                "نبدأ الآن", "يلا بنا", "خلنا نبدأ", "ابدأ بالتنفيذ",
-                "التنفيذ يبدأ", "البدء الآن", "نشتغل عليها",
-                "بعدها أبني", "ثم أبني", "بعدها أصلح", "ثم أصلح",
-                "بعدها أضيف", "ثم أضيف", "بعدها أنفّذ", "ثم أنفّذ",
-                # English equivalents
-                "Let me", "I'll start", "I will start", "I'll fix", "I will fix",
-                "I'll add", "I'll build", "I'll create", "I'll implement",
-                "starting now", "fetching", "loading", "executing now",
-            )
-            # 🚨 False-failure markers: AI claiming a service is down without calling it.
-            FALSE_FAILURE_MARKERS = (
-                "خدمة الصوت معطّلة", "خدمة الصوت معطلة",
-                "خدمة توليد الصور معطّلة", "خدمة توليد الصور معطلة",
-                "خدمة الفيديو معطّلة", "خدمة الفيديو معطلة",
-                "الخدمات معطّلة", "الخدمات معطلة",
-                "voice service is down", "image service is down",
-                "service is currently down", "service is unavailable",
-            )
-            # Trailing-ellipsis suggests interrupted/promised work
-            ends_with_promise = bool(joined) and (
-                joined.endswith(("...", "…", ":", "："))
-                or any(joined.endswith(p) for p in ("الآن", "الآن.", "now", "now."))
-            )
-            looks_stalled = bool(joined) and (
-                ends_with_promise
-                or any(m in joined[-400:] for m in STALL_MARKERS)
-            )
-            looks_falsely_failing = bool(joined) and any(m in joined for m in FALSE_FAILURE_MARKERS)
-            # 🚨 In-turn LIE DETECTOR: text claims completion ("أصلحت", "تم
-            # الإصلاح", "+3KB محتوى حقيقي") but ctx.changes_made == 0 (no real
-            # tool was called this turn). Force a recovery to make the AI
-            # actually do the work it claimed.
-            FAKE_ACHIEVEMENT_MARKERS = (
-                "أصلحت", "صلحت", "عالجت", "ثبّت", "أكملت", "أنجزت",
-                "تم الإصلاح", "تم الإنشاء", "تم الحذف", "تم التعديل",
-                # ── Common celebration phrases ────────────────────────
-                "تم بنجاح", "بنجاح!", "جاهز بالكامل", "جاهز تماماً",
-                "أنجزت لك", "تم الإنجاز", "خلصت", "خلّصت", "خلصنا",
-                "تمّت العملية", "تمت العملية", "إنجاز كامل",
-                "ما تم إنجازه", "ما تم بناؤه", "ما تم تنفيذه",
-                # ── Bare-verb past-tense (NEW — broader catch) ─────────
-                "✅ تم", "تم!", "تم أ", "تم إ", "تم ت", "تم ح",
-                "أضفت", "حذفت", "عدّلت", "عدلت", "غيّرت", "غيرت",
-                "بنيت", "أنشأت", "نقلت", "ربطت", "كتبت", "حدّثت", "حدثت",
-                # ── Past-tense + اب prefix (colloquial) ──────────────
-                "أنشأت لك", "صنعت لك", "بنيت لك", "أضفت لك", "حذفت لك",
-                "ربطت لك", "حدّثت لك", "حدثت لك", "عدّلت لك", "عدلت لك",
-                # ── Past-tense without prefix (often used after fake action) ─
-                "نقلتها", "نقلته", "نقلتهم",
-                "حذفتها", "حذفته",
-                "عدّلتها", "عدلتها",
-                "أبقيت", "ابقيت", "خلّيت", "خليت",
-                "رتّبت", "رتبت", "نظّمت", "نظمت",
-                # ── Tool-result fabrication signals ──────────────────
-                "fixed", "completed", "implemented",
-                "محتوى حقيقي", "بايت", "KB محتوى",
-                # ── English completion claims (NEW) ───────────────────
-                "✅ done", "✅ added", "✅ updated", "✅ created", "✅ changed",
-                "successfully added", "successfully created", "successfully updated",
-            )
-            looks_fake_achievement = (
-                bool(joined)
-                and ctx.changes_made == 0
-                and any(m in joined for m in FAKE_ACHIEVEMENT_MARKERS)
-            )
-            # Allow up to TWO recovery cycles per turn — covers
-            # "promise → fake-achievement → finally execute" pattern.
-            if (looks_stalled or looks_falsely_failing or looks_fake_achievement) and stall_recovery_used < 2:
-                stall_recovery_used += 1
-                if looks_falsely_failing:
-                    logger.info(f"[agent-stream] FALSE-failure claim (recovery #{stall_recovery_used}) — forcing tool retry")
-                    nudge_text = (
-                        "🚨 **انتهاك خطير**: أنت ادعيت أن إحدى الخدمات (الصوت/الصور/الفيديو) معطّلة، "
-                        "لكنك **لم تستدعِ أي أداة فعلية للتحقق**. هذا كذب صريح.\n\n"
-                        "الخدمات شغّالة 100% (المالك أكّد ذلك بفحص مباشر). استدعِ الأداة الفعلية الآن في هذا الرد بالضبط:\n"
-                        "- للصوت: `list_voices(language='ar')` ثم `generate_voiceover(text='...', voice_id='...')`\n"
-                        "- للصور: `generate_image(prompt='...')`\n"
-                        "- للفيديو: `generate_video(prompt='...')`\n\n"
-                        "**ممنوع تكتب رد ثاني فيه عبارة 'الخدمة معطّلة' بدون نتيجة أداة حقيقية في نفس الرد.**"
-                    )
-                elif looks_fake_achievement:
-                    logger.info(f"[agent-stream] FAKE-achievement (recovery #{stall_recovery_used}) — changes_made=0 but claimed success")
-                    nudge_text = (
-                        "🚨 **كذب موثَّق**: قلت إنك أصلحت/أكملت/أنجزت شيئاً وذكرت "
-                        "أرقاماً إحصائية (مثل '+3.6 KB محتوى') لكن **`changes_made = 0`** — "
-                        "أي لم تستدعِ أي أداة تعديل فعلية في هذا الـ turn.\n\n"
-                        "هذا يكلّف العميل شعلات على لا شيء. الآن في نفس الـturn:\n"
-                        "  1. استدعِ الأداة الفعلية (apply_section / remove_section / "
-                        "create_page / write_full_html) لتنفيذ ما ادعيت إنجازه.\n"
-                        "  2. بعد التنفيذ، استدعِ `audit_html` للتحقق.\n"
-                        "  3. ثم اعرض النتيجة الحقيقية بالأرقام من نتيجة الأداة (length_before/after)، "
-                        "لا أرقام مُختلقة من ذاكرتك."
-                    )
-                else:
-                    logger.info(f"[agent-stream] stall detected (recovery #{stall_recovery_used}) — injecting auto-continue")
-                    nudge_text = (
-                        "🚨 **انتهاك Anti-Stall**: قلت إنك ستبدأ/ستفعل شيئاً، "
-                        "لكن **لم تستدعِ أي أداة في هذا الرد**. العميل ينتظر "
-                        "**التنفيذ الفعلي** — ليس وعداً ثانياً.\n\n"
-                        "في الردّ التالي مباشرة:\n"
-                        "  1. **استدعِ الأداة الفعلية** (apply_section / create_page / "
-                        "remove_section / write_full_html / generate_image / إلخ).\n"
-                        "  2. **ممنوع** أي نص فيه 'سأبدأ' أو 'يبدأ الآن' أو '...' "
-                        "بدون tool_use في نفس الرسالة.\n"
-                        "  3. أكمل المهمة التي وعدت بها في الرسالة السابقة "
-                        "**بدون توقف** حتى تنتهي."
-                    )
-                if provider in ("anthropic", "emergent_anthropic"):
-                    messages.append({"role": "user", "content": [{"type": "text", "text": nudge_text}]})
-                    # Iron-clad: force a tool call in the very next iteration so
-                    # the model literally CANNOT respond with text-only fabrication.
-                    force_tool_use_next_iter = True
-                else:
-                    messages.append({"role": "user", "content": nudge_text})
-                yield _sse("thinking", {"text": f"🔄 توقف غير مبرّر — الـAI يكمل التنفيذ تلقائياً (محاولة {stall_recovery_used}/2)..."})
-                await asyncio.sleep(0)
-                continue
-            # Otherwise: clean finish
-            summary = joined
+            # No tool calls this turn — accept the model's text response as
+            # the final answer. Stall-recovery, false-failure detection, and
+            # in-turn lie detection were ALL removed per user request: zero
+            # hard rules, trust the AI's intelligence + system-prompt guidance.
+            summary = "\n".join(text_chunks).strip()
             break
 
+        # Execute each tool, emit "tool" events
         # Execute each tool, emit "tool" events
         finished = False
         for tu in tool_uses:
@@ -9825,68 +9620,8 @@ async def _stream_one_provider(
             await asyncio.sleep(0)
 
             if tu["name"] == "finish":
-                # ── 🚦 PRE-FINISH GATE — block finish() if any page is still
-                # blank (≤ 1 section AND < 800 chars of meaningful text).
-                # The user repeatedly hit "sidebar pages are white/empty"
-                # in Hybrid mode because GPT/Claude calls create_page → skeleton
-                # → moves to the next page → finish without ever filling
-                # the prior ones. Reject finish until every page has content.
-                try:
-                    import re as _re_pf
-                    _blanks: List[str] = []
-                    for _fn, _html in (ctx.pages or {}).items():
-                        if not _html:
-                            _blanks.append(_fn)
-                            continue
-                        _sec_count = len(_re_pf.findall(
-                            r'<section\b[^>]*\bid\s*=\s*["\'][^"\']+["\']',
-                            _html, _re_pf.I,
-                        ))
-                        _text_only = _re_pf.sub(r"<[^>]+>", " ", _html)
-                        _text_only = _re_pf.sub(r"\s+", " ", _text_only).strip()
-                        if _sec_count <= 1 and len(_text_only) < 800:
-                            _blanks.append(_fn)
-                    if _blanks:
-                        _gate_msg = (
-                            "🚦 **PRE-FINISH GATE — رفض إنهاء المهمة**:\n"
-                            f"الصفحات التالية ما زالت فارغة أو شبه فارغة:\n"
-                            + "\n".join(f"  • `{b}`" for b in _blanks)
-                            + "\n\n**ممنوع** استدعاء `finish` قبل بناء محتوى حقيقي "
-                            "(Hero + 2-4 أقسام) لكل صفحة منها. استخدم "
-                            "`apply_section(page='X.html', op='append', id='...', "
-                            "html='...')` لكل صفحة ناقصة الآن. العميل يدفع نقاطه "
-                            "لصفحات تشتغل، مو لصفحات بيضاء."
-                        )
-                        ctx.log("pre_finish_gate_block",
-                                {"blanks": _blanks}, {"blocked": True})
-                        if provider in ("anthropic", "emergent_anthropic"):
-                            messages.append({
-                                "role": "user",
-                                "content": [{"type": "tool_result",
-                                              "tool_use_id": tu["id"],
-                                              "content": _gate_msg}],
-                            })
-                        else:
-                            messages.append({
-                                "role": "tool",
-                                "tool_call_id": tu["id"],
-                                "content": _gate_msg,
-                            })
-                        force_tool_use_next_iter = True
-                        yield _sse("tool", {
-                            "name": "finish",
-                            "phase": "blocked",
-                            "label": f"⛔ مُنع: {len(_blanks)} صفحة بيضاء — تكمل أولاً",
-                            "step": iterations,
-                        })
-                        await asyncio.sleep(0)
-                        logger.warning(
-                            f"[pre-finish-gate] blocked finish — blank pages: {_blanks}"
-                        )
-                        continue
-                except Exception as _pfg_e:
-                    logger.warning(f"[pre-finish-gate] check failed: {_pfg_e}")
-
+                # PRE-FINISH GATE removed per user request. Zero hard rules:
+                # the AI decides when to finish; the user is the final judge.
                 summary = (tu["input"].get("summary") or "").strip()
                 options = _normalize_finish_options(tu["input"].get("options"))
                 inline_images = _normalize_inline_images(tu["input"].get("inline_images"))
@@ -10211,14 +9946,9 @@ async def _stream_one_provider(
                         else:
                             messages.append({"role": "user", "content": _verif_msg})
 
-                        # If problems exist → force AI to use a tool next iter
-                        if (_dup_ids or _near_dups or _blank_warning or _orphan_warning):
-                            force_tool_use_next_iter = True
-                            logger.warning(
-                                f"[post-write-verify] {tu['name']}: dup_ids={_dup_ids} "
-                                f"near_dups={len(_near_dups)} blank={bool(_blank_warning)} "
-                                f"orphan={bool(_orphan_warning)} → forcing tool_use"
-                            )
+                        # Forced tool_use REMOVED per user request. Audit
+                        # findings are now purely informational in the
+                        # tool_result; the AI decides what to do next.
                     except Exception as _vex:
                         logger.warning(f"[post-write-verify] failed: {_vex}")
                 # ── End force post-write verification ────────────────────
@@ -10238,124 +9968,10 @@ async def _stream_one_provider(
             summary = "ما قدرت أكمل المهمة لسبب تقني. جرّب أعد صياغة طلبك أو أعد المحاولة."
     logger.info(f"[agent-stream] finalizing: iterations={iterations} summary_len={len(summary)} html_changes={ctx.changes_made}")
 
-    # ── 🛡️ Post-turn HTML audit (Anti-Lying enforcement) ─────────────────
-    # If the agent built/modified HTML this turn AND it claims completion,
-    # automatically scan for placeholders. We persist the audit verdict to
-    # the project so on the NEXT user turn we inject a strong system warning
-    # forcing the AI to fix the problems it left behind (instead of just
-    # apologising and lying again).
-    audit_warning_text = None
-    try:
-        if ctx.changes_made > 0 and ctx.current_html:
-            html = ctx.current_html
-            placeholder_patterns = [
-                "جاري التطوير", "قيد التطوير", "قريباً", "قريبًا",
-                "سيتم إنشاؤه قريبا", "سيتم إضافته قريبا", "قسم قيد البناء",
-                "Coming soon", "coming-soon", "Lorem ipsum", "Under construction", "WIP",
-            ]
-            hits = [p for p in placeholder_patterns if p.lower() in html.lower()]
-            # Empty section detection REMOVED from post-turn audit — was
-            # too aggressive during multi-page builds (newly created skeleton
-            # sections naturally start under the threshold). PRE-FINISH GATE
-            # at `finish` time is the user-facing guarantee against blank
-            # output.
-            empties: List[str] = []
-            if hits:
-                audit_warning_text = (
-                    "🛑 SYSTEM AUDIT WARNING (تحذير تلقائي من المراقب الداخلي):\n"
-                    f"بعد آخر تعديل، تم اكتشاف placeholders/أقسام فاضية بـ HTML:\n"
-                    + (f"• Placeholders: {', '.join(hits)}\n" if hits else "")
-                    + (f"• Empty sections (id): {', '.join(empties)}\n" if empties else "")
-                    + "❌ ممنوع تقول للعميل إن العمل اكتمل. ❌\n"
-                    "🛠️ في الـ turn القادم: استدع `audit_html`، ثم أصلح كل قسم بمحتوى حقيقي "
-                    "(لا 'قريباً' ولا 'Lorem ipsum'). بعد الإصلاح استدع audit_html مرة أخرى. "
-                    "كرّر حتى verdict='READY'. ثم فقط أعلن الإنجاز."
-                )
-                # Persist as a system note so the next turn picks it up
-                try:
-                    await db.freebuild_projects.update_one(
-                        {"id": project.get("id")},
-                        {"$set": {
-                            "_pending_audit_warning": audit_warning_text,
-                            "_pending_audit_problems": {"placeholders": hits, "empty_sections": empties},
-                            "_pending_audit_at": datetime.now(timezone.utc).isoformat(),
-                        }},
-                    )
-                    logger.info(f"[audit-guard] flagged project {project.get('id')} — placeholders={hits} empties={empties}")
-                except Exception as _ae:
-                    logger.warning(f"[audit-guard] persist failed: {_ae}")
-            else:
-                # Clear stale warnings — the AI fixed everything
-                try:
-                    await db.freebuild_projects.update_one(
-                        {"id": project.get("id")},
-                        {"$unset": {"_pending_audit_warning": "", "_pending_audit_problems": ""}},
-                    )
-                except Exception:
-                    pass
-    except Exception as _audit_e:
-        logger.warning(f"[audit-guard] failed: {_audit_e}")
-
-    # ── 🚨 Anti-Hallucination Lie Detector ───────────────────────────────
-    # Catches the most dangerous failure mode: the AI claims it created /
-    # deleted / removed something but didn't actually invoke the tool. If
-    # the assistant text contains a completion phrase ("تم الإنشاء",
-    # "تم الحذف", "أُنشئت", "حذفت", "أنشأت") AND ctx.changes_made == 0,
-    # we flag the project so the next turn injects a stinging correction
-    # forcing the AI to actually execute the tool instead of fabricating.
-    try:
-        if ctx.changes_made == 0 and summary:
-            txt = summary.lower()
-            ar_txt = summary  # Arabic terms preserved
-            lie_phrases = [
-                "تم الإنشاء", "تم إنشاء", "أُنشئت", "أنشأت", "تم إضافة",
-                "تم الحذف", "تم حذف", "حذفت", "أزلت", "تم الإزالة",
-                "تم التعديل", "تم تطبيق", "طبّقت", "بنيت", "صنعت لك",
-                "صفحة جديدة", "تم البناء",
-                # Statistical / size-based fabrication
-                "محتوى حقيقي", "+3.", "+4.", "+5.",
-                "→ 3,", "→ 4,", "→ 5,", "→ 6,",
-                "بايت", "KB محتوى",
-                # Achievement / status verbs
-                "أصلحت", "صلحت", "عالجت", "ثبّت", "أكملت", "أنجزت",
-                "fixed", "completed", "implemented", "added successfully",
-            ]
-            user_intent_phrases = ["انشئ", "أنشئ", "احذف", "اضف", "أضف", "ضيف",
-                                    "شيل", "بدّل", "اصنع", "ابن", "ابني",
-                                    "اصلح", "أصلح", "صلح", "عدل", "عدّل",
-                                    "create_page", "delete_page", "remove_section"]
-            looks_like_lie = any(p in ar_txt for p in lie_phrases)
-            user_requested_action = any(p in (user_message or "").lower() for p in user_intent_phrases)
-            if looks_like_lie and user_requested_action:
-                lie_warning = (
-                    "🚨 SYSTEM LIE DETECTOR (كذب موثَّق من المراقب الداخلي):\n"
-                    "في الـ turn السابق ادّعيت أنك أنشأت/حذفت/عدّلت شيئاً، لكن "
-                    "**لم تستدع أي أداة (changes_made=0)**. هذا كذب صريح يكسر "
-                    "ثقة العميل ويستنزف رصيده على لا شيء.\n"
-                    "❌ ممنوع تكذب على العميل. ❌\n"
-                    "🛠️ في الـ turn القادم: **استدع الأداة الصحيحة فوراً** قبل "
-                    "أي نص:\n"
-                    "  • طلب إنشاء صفحة → `create_page(filename, title)`\n"
-                    "  • طلب حذف قسم → `remove_section(ids=[...])`\n"
-                    "  • طلب حذف صفحة → `delete_page(filename)`\n"
-                    "  • طلب إضافة قسم → `apply_section(id, html, op='append')`\n"
-                    "  • طلب تعديل → `apply_section(id, html, op='replace')`\n"
-                    "ثم أعطِ العميل تقريراً بالنتيجة الفعلية (length_before/after, "
-                    "removed_ids, إلخ). لا تخترع نتائج."
-                )
-                try:
-                    await db.freebuild_projects.update_one(
-                        {"id": project.get("id")},
-                        {"$set": {
-                            "_pending_audit_warning": (audit_warning_text + "\n\n" + lie_warning) if audit_warning_text else lie_warning,
-                            "_lie_detected_at": datetime.now(timezone.utc).isoformat(),
-                        }},
-                    )
-                    logger.warning(f"[lie-detector] flagged project {project.get('id')} — user requested action but agent did nothing")
-                except Exception as _le:
-                    logger.warning(f"[lie-detector] persist failed: {_le}")
-    except Exception as _lde:
-        logger.warning(f"[lie-detector] failed: {_lde}")
+    # Post-turn HTML audit + post-turn lie detector REMOVED per
+    # user request. We no longer persist `_pending_audit_warning` to the
+    # project or inject it on the next turn. Zero hard rules — the AI is
+    # fully open and the user is the final judge.
 
     # ── 💾 WORKFLOW STATE PERSISTENCE ───────────────────────────────────────
     # If any workflow-engine tool ran during this turn, persist the updated
