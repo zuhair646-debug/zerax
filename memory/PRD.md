@@ -11,6 +11,27 @@ Arabic-first AI builder for websites/apps/images/videos with credits-based prici
 - **Brain v2 + Architecture-Aware Build Protocol + Surgical-First Policy** are LIVE.
 
 
+### 🔁 Auto-Republish + No-Preview Links (P0) — DEPLOYED 2026-02 (zenrex.ai LIVE)
+
+**User pain (verbatim):** "كل ما تحدث تحديث لازم يضيفه في كل محادثة بالتغير يتأكد منه ... للان يرسل روابط بنفس الفكرة. هنا ينقلني الى عدة اقسام بغير تعديل وبس اضغط على كلمة الحساب يرجع يطلع لي الموقع المعدل ... في رابط مختلط"
+
+**ROOT CAUSE (3 bugs together):**
+1. AI was inventing `https://zenrex.ai/preview/{slug}` URLs that don't exist → 404s confusing user.
+2. After edits, the AI used a DIFFERENT base slug (`cinema-rare-films-fixed` instead of `cinema-rare-films-v2`), so cross-page navigation visited the OLD project's slug → "mixed link" symptom.
+3. The `_needs_republish=True` flag was set 9 times across the agent but **never consumed** anywhere → the "auto-republish" promised in the system prompt was a lie.
+
+**FIX:**
+1. New `auto_republish_project(db, pid, uid)` helper in `freebuild_chat.py` (top-level, no router). At every chat turn end, if `ctx.changes_made > 0` AND project has `published_base_slug`, the server transparently bumps the version (`v{N}` → `v{N+1}`), supersedes the old slug, and yields an `auto_published` SSE event with the new URL.
+2. Frontend: new `auto_published` event renders a prominent green card with the new live URL (testid: `auto-published-link-*`) directly in the chat stream.
+3. Stripped the misleading "✨ تم تحديث المعاينة الحية — افتح تبويب المعاينة للمشاهدة" auto-appendage that referenced the now-deleted preview tab.
+4. Chat post-processor strips any `/preview/{slug}` URLs the AI hallucinates and any "اضغط للمشاهدة" lines.
+5. PROJECT RAILS system prompt rewritten: explicitly forbids `/preview/` URLs, documents auto-republish so the AI knows it doesn't need to call publish_site after edits, and pins the `base_slug` so the AI doesn't accidentally fork the project.
+6. `<button>تم تحديث المعاينة الحية — اضغط للمشاهدة</button>` hidden in website mode (kept for studio/app modes that still have a live tab).
+
+**Verified end-to-end:** seeded a project, published v1, sent agent message "غيّر العنوان h1 إلى 'النسخة المحدثة'" → received `auto_published` event with `v2` URL → v2 page contains the new content, v1 page shows superseded "نسخة قديمة" + auto-redirect.
+
+---
+
 ### 🔗 Versioned Publish URLs + 🧑‍💻 المهندس (Engineer Audit) — DEPLOYED 2026-02 (zenrex.ai LIVE)
 
 **User pain (verbatim):**

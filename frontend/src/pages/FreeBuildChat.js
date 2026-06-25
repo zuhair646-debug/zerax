@@ -3131,6 +3131,12 @@ function ChatWorkspace({ projectId }) {  const navigate = useNavigate();
               } else {
                 liveSteps.push({ kind: 'tool_building', ...payload });
               }
+            } else if (eventName === 'auto_published') {
+              // Server just bumped the published version. Show a prominent
+              // card with the brand-new live URL so the user never sees a
+              // mixed/stale URL again.
+              liveSteps.push({ kind: 'auto_published', ...payload });
+              scheduleUpdate();
             } else if (eventName === 'done') {
               streamReceivedDone = true;
               // Combine all accumulated live_text narration + closing summary
@@ -4129,6 +4135,30 @@ function ChatWorkspace({ projectId }) {  const navigate = useNavigate();
                               </div>
                             );
                           }
+                          if (s.kind === 'auto_published') {
+                            return (
+                              <div key={sIdx} data-testid={`auto-published-${sIdx}`} className="my-2 rounded-lg border border-emerald-400/40 bg-emerald-500/10 px-3.5 py-3 text-sm">
+                                <div className="flex items-center gap-2 text-emerald-200 font-bold mb-1.5">
+                                  <span>🚀</span>
+                                  <span>تم نشر الإصدار الجديد (v{s.version})</span>
+                                </div>
+                                <a
+                                  href={s.url}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="inline-block text-cyan-300 hover:text-cyan-200 underline text-[13px] break-all font-mono"
+                                  data-testid={`auto-published-link-${sIdx}`}
+                                >
+                                  {s.url}
+                                </a>
+                                {s.previous_url && (
+                                  <div className="text-[10px] text-zinc-500 mt-2">
+                                    الإصدار السابق ({s.previous_url}) صار قديم — يعمل auto-redirect للجديد.
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          }
                           if (s.kind === 'provider') {
                             return (
                               <div key={sIdx} className="text-[10px] text-zinc-500 px-3">
@@ -4311,7 +4341,13 @@ function ChatWorkspace({ projectId }) {  const navigate = useNavigate();
                         onConfirm={submitOptionAnswer}
                       />
                     )}
-                    {m.had_html && (
+                    {/* In website mode the live-preview tab is removed; we
+                        no longer show the "اضغط للمشاهدة" CTA because it
+                        used to switch to a tab that no longer exists. The AI
+                        is expected to publish_site() and reply with the live
+                        versioned URL instead. For studio/app modes, keep the
+                        legacy CTA so they still work. */}
+                    {m.had_html && !isWebsiteMode && (
                       <p className="text-cyan-400 text-[11px] mt-2 flex items-center gap-1">
                         <Eye className="w-3 h-3" />
                         <button type="button" onClick={() => setActiveTab('live')} className="underline hover:text-cyan-300">

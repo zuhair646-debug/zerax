@@ -41,6 +41,7 @@ from .freebuild_chat import (
     _enc,
     _dec,
     _mask,
+    auto_republish_project,
 )
 from .advanced_tools import (
     ADVANCED_TOOL_SCHEMAS,
@@ -8794,37 +8795,42 @@ def get_system_prompt(project: Dict[str, Any], is_owner: bool = False) -> str:
     # which URL to send and explains the auto-republish behaviour so it
     # stops shipping stale links to the user.
     pub_slug = (project or {}).get("published_slug")
+    pub_base = (project or {}).get("published_base_slug")
+    pub_version = int((project or {}).get("published_version") or 0)
     pub_pages = list(((project or {}).get("pages") or {}).keys())
     rails_block = "\n\n══════════════════════════════════════════════════════════════\n"
     rails_block += "🚦 **مفاهيم المشروع الأساسية (PROJECT RAILS — احفظها):**\n"
     rails_block += "══════════════════════════════════════════════════════════════\n"
-    rails_block += "هذا المشروع له **رابطان مختلفان** — لا تخلط بينهما أبداً:\n\n"
-    rails_block += "  1️⃣ **معاينة المحرر (Editor Preview):**\n"
-    rails_block += "     • تنعكس فيها **كل تعديلاتك فوراً** (بعد كل tool call).\n"
-    rails_block += "     • هي الـ`current_html` المعروض في الـsidebar/iframe داخل zenrex.ai.\n"
-    rails_block += "     • مرئية فقط للعميل صاحب المشروع — ليست منشورة للعامة.\n\n"
+    rails_block += "🚫 **ممنوع منعاً باتاً اختراع روابط:**\n"
+    rails_block += "  • لا تذكر أبداً روابط مثل `https://zenrex.ai/preview/...` — هذا الـendpoint **غير موجود** وسيُعطي 404.\n"
+    rails_block += "  • الرابط العام الوحيد للموقع المنشور هو: `https://zenrex.ai/s/{slug-v{N}}`.\n\n"
     if pub_slug:
-        rails_block += "  2️⃣ **الرابط المنشور (Live Published URL):**\n"
-        rails_block += f"     • https://zenrex.ai/s/{pub_slug}\n"
-        rails_block += f"     • السلوك التلقائي الجديد: **بعد كل تعديل ناجح في الـchat، السيرفر يحدّث هذا الرابط تلقائياً (auto-republish).**\n"
-        rails_block += "     • يعني لمّا تنفّذ تغيير عبر apply_section/remove_section/create_page... الرابط المنشور يصير محدّث فوراً بدون الحاجة لاستدعاء publish_site مرة ثانية.\n"
+        rails_block += "  ✅ **الرابط المنشور الحالي (Live URL — مرقّم):**\n"
+        rails_block += f"     • https://zenrex.ai/s/{pub_slug}  (الإصدار v{pub_version})\n"
+        rails_block += f"     • الـ base slug = `{pub_base}` (هذا هو الاسم الأساسي للمشروع — استخدمه دائماً)\n\n"
+        rails_block += "  🔁 **AUTO-REPUBLISH (مهم جداً):**\n"
+        rails_block += "     • بعد كل تعديل ناجح (write_full_html / apply_section / create_page / remove_section ...),\n"
+        rails_block += "       السيرفر **ينشر تلقائياً إصداراً جديداً** على slug جديد:\n"
+        rails_block += f"       v{pub_version} → v{pub_version+1} → v{pub_version+2} ... (الإصدار القديم يصبح superseded ويعمل auto-redirect للإصدار الأحدث)\n"
+        rails_block += "     • **ما تحتاج تنادي publish_site بعد التعديل** — السيرفر يسوّيها ويرجع الرابط الجديد في `auto_published` event.\n"
+        rails_block += "     • في رسالتك للعميل: قل \"الرابط الجديد سيظهر تلقائياً تحت\" أو ارفق الرابط من `auto_published` event مباشرة.\n\n"
         if pub_pages and len(pub_pages) > 1:
-            rails_block += f"     • هذا المشروع متعدد الصفحات. الـURLs الفعلية:\n"
+            rails_block += f"  📂 **هذا المشروع متعدد الصفحات** ({len(pub_pages)} صفحات):\n"
             for fn in pub_pages[:8]:
                 if fn == "index.html":
-                    rails_block += f"        • https://zenrex.ai/s/{pub_slug}\n"
+                    rails_block += f"     • https://zenrex.ai/s/{pub_slug}  (الرئيسية)\n"
                 else:
-                    rails_block += f"        • https://zenrex.ai/s/{pub_slug}/{fn}\n"
+                    rails_block += f"     • https://zenrex.ai/s/{pub_slug}/{fn}\n"
+            rails_block += "  ⚠️ كل الصفحات تنتمي لنفس الإصدار — لا اختلاط بين النسخ بعد الآن.\n\n"
     else:
-        rails_block += "  2️⃣ **الرابط المنشور (Live Published URL):**\n"
-        rails_block += "     • ⚠️ هذا المشروع **لم يُنشر بعد**.\n"
-        rails_block += "     • لو العميل طلب رابط مباشر — استدع `publish_site(slug='اسم-مناسب')` أولاً.\n"
-        rails_block += "     • قبل النشر، أي رابط ترسله للعميل = كذبة.\n"
-    rails_block += "\n📌 **قواعد إلزامية عند إرسال الروابط:**\n"
-    rails_block += "  • بعد أي تعديل ناجح، الرابط المنشور (لو موجود) **محدّث تلقائياً** — أرسله بثقة.\n"
-    rails_block += "  • **لا تخمّن** الرابط من ذاكرتك — استخدم القيم أعلاه فقط.\n"
-    rails_block += "  • إذا العميل قال \"الرابط القديم\" أو \"شفت تعديل قديم\" — تأكّد بـ `fetch_url(...)` ثم اشرح: \"الرابط محدّث، رجاءً اعمل refresh بـ Ctrl+F5 (الكاش).\"\n"
-    rails_block += "  • إذا المشروع متعدد الصفحات، أرسل **روابط الصفحات الصحيحة** (index و about و contact كلها روابط منفصلة).\n"
+        rails_block += "  ⚠️ **لم يُنشر المشروع بعد:**\n"
+        rails_block += "     • أول مرة فقط: استدع `publish_site(slug='اسم-أساسي-للمشروع')` — مرة وحدة كافية.\n"
+        rails_block += "     • بعد ذلك، كل تعديل = نسخة جديدة تلقائياً (v2, v3, v4 ...). **لا تنادي publish_site مرة ثانية ولا تغيّر الـ base slug**.\n"
+        rails_block += "     • إذا الـ base يتغير، الموقع ينقسم لمشاريع منفصلة — هذا خطأ. احفظ الـ base الأول مدى الحياة.\n\n"
+    rails_block += "📌 **قواعد إلزامية للروابط:**\n"
+    rails_block += "  • لا تخترع روابط من ذاكرتك — استخدم القيم أعلاه فقط أو الرابط الذي يصل من `auto_published`/`publish_site` tool result.\n"
+    rails_block += "  • لو العميل قال \"الرابط القديم يطلع\" — هذا غير ممكن في نظامنا الحالي لأن كل تعديل = slug جديد. تأكد بـ `fetch_url(<new_url>)` ثم اعرض الرابط الأحدث.\n"
+    rails_block += "  • لا تذكر أبداً عبارات مثل \"رابط المعاينة\" أو \"المعاينة الحية\" أو \"اضغط للمشاهدة\" — تبويب المعاينة محذوف، خلّك على الرابط المنشور فقط.\n"
     rails_block += "══════════════════════════════════════════════════════════════\n"
     base += rails_block
 
@@ -10523,6 +10529,34 @@ async def _stream_one_provider(
     except Exception as _ce:
         logger.warning(f"[agent-stream] credit deduction failed: {_ce}")
 
+    # ── 🔁 AUTO-REPUBLISH ──────────────────────────────────────────────
+    # If the agent applied real HTML changes AND the project is already
+    # published, immediately bump the published version so the user sees the
+    # fresh content on a brand-new URL. The previous URL becomes "superseded"
+    # (auto-redirects to the new one). This kills the stale/mixed-pages bug
+    # the user reported.
+    _ar_info = None
+    try:
+        wants_republish = (
+            getattr(ctx, "_needs_republish", False) is True
+            or ctx.changes_made > 0
+        )
+        if wants_republish and project.get("published_base_slug") and not auto_refunded:
+            _ar_info = await auto_republish_project(db, project["id"], project["user_id"])
+            if _ar_info and _ar_info.get("ok"):
+                logger.info(
+                    f"[agent-stream] auto-republished {project['id']} → "
+                    f"{_ar_info['slug']} (v{_ar_info['version']})"
+                )
+                yield _sse("auto_published", {
+                    "url": _ar_info["url"],
+                    "slug": _ar_info["slug"],
+                    "version": _ar_info["version"],
+                    "previous_url": _ar_info.get("previous_url"),
+                })
+    except Exception as _ar_e:
+        logger.warning(f"[agent-stream] auto-republish skipped: {_ar_e}")
+
     yield _sse("done", {
         "summary": summary,
         "options": options,
@@ -10541,6 +10575,7 @@ async def _stream_one_provider(
         "op_floor_credits": op_floor_used,
         "auto_refunded": auto_refunded,
         "no_credits_after": no_credits_after,
+        "auto_republished": _ar_info,
     })
 
     # Persist to DB happens at the endpoint level (we return ctx via closure helpers below)

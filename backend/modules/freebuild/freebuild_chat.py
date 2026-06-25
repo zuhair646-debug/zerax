@@ -111,6 +111,98 @@ UPDATE_NAV_RE = re.compile(
     re.IGNORECASE,
 )
 
+async def auto_republish_project(db, project_id: str, user_id: str) -> Optional[Dict[str, Any]]:
+    """Internal helper: publish a brand-new versioned snapshot of a project's
+    pages WITHOUT going through the public HTTP endpoint.
+
+    Used at end-of-turn auto-republish so the AI never has to call publish_site
+    manually — the server takes the project's current_html + pages, bumps the
+    version on the published_base_slug, and supersedes the previous version.
+
+    Returns {ok, slug, version, url, previous_url} or None on failure.
+    Silent-no-op when the project isn't published yet (no published_base_slug).
+    """
+    try:
+        proj = await db.freebuild_chat_projects.find_one({"id": project_id, "user_id": user_id}, {"_id": 0})
+        collection = db.freebuild_chat_projects
+        if not proj:
+            proj = await db.freebuild_projects.find_one({"id": project_id, "user_id": user_id}, {"_id": 0})
+            collection = db.freebuild_projects
+        if not proj:
+            return None
+        if not proj.get("current_html"):
+            return None
+        base = proj.get("published_base_slug")
+        if not base:
+            return None  # Never published — AI must call publish_site explicitly first.
+        prev_version = int(proj.get("published_version") or 0)
+        new_version = prev_version + 1
+        new_slug = f"{base}-v{new_version}"
+        guard = 0
+        while True:
+            existing = await db.freebuild_published_sites.find_one({"slug": new_slug})
+            if not existing or existing.get("project_id") == project_id:
+                break
+            new_version += 1
+            new_slug = f"{base}-v{new_version}"
+            guard += 1
+            if guard > 50:
+                return None
+        now = _now()
+        all_pages = proj.get("pages") or {"index.html": proj["current_html"]}
+        if "index.html" not in all_pages:
+            all_pages["index.html"] = proj["current_html"]
+        await db.freebuild_published_sites.update_one(
+            {"slug": new_slug},
+            {"$set": {
+                "slug": new_slug, "base_slug": base, "version": new_version,
+                "project_id": project_id, "user_id": user_id,
+                "current_html": proj["current_html"], "pages": all_pages,
+                "name": proj.get("name") or base, "updated_at": now,
+                "superseded": False, "superseded_by": None, "auto_published": True,
+            }, "$setOnInsert": {"created_at": now, "views": 0}},
+            upsert=True,
+        )
+        prev_slug = proj.get("published_slug")
+        if prev_slug and prev_slug != new_slug:
+            await db.freebuild_published_sites.update_one(
+                {"slug": prev_slug},
+                {"$set": {"superseded": True, "superseded_by": new_slug, "updated_at": now}},
+            )
+        try:
+            old_docs = await db.freebuild_published_sites.find(
+                {"project_id": project_id, "base_slug": base},
+                {"_id": 0, "slug": 1, "version": 1},
+            ).sort("version", -1).to_list(length=100)
+            to_delete = [d["slug"] for d in old_docs[5:]]
+            if to_delete:
+                await db.freebuild_published_sites.delete_many({"slug": {"$in": to_delete}})
+        except Exception:
+            pass
+        history = list(proj.get("published_history") or [])
+        history.append({"slug": new_slug, "version": new_version, "published_at": now, "auto": True})
+        history = history[-10:]
+        await collection.update_one(
+            {"id": project_id},
+            {"$set": {
+                "published": True, "published_slug": new_slug,
+                "published_base_slug": base, "published_version": new_version,
+                "published_at": now, "published_history": history,
+            }},
+        )
+        url = f"{_public_host()}/s/{new_slug}"
+        previous_url = f"{_public_host()}/s/{prev_slug}" if prev_slug and prev_slug != new_slug else None
+        return {"ok": True, "slug": new_slug, "version": new_version, "url": url,
+                "previous_url": previous_url, "base_slug": base}
+    except Exception as e:
+        try:
+            logger.exception(f"[auto-republish] failed for {project_id}: {e}")
+        except Exception:
+            pass
+        return None
+
+
+
 
 def _merge_sections(current_html: str, append_sections: List[tuple], replace_sections: List[tuple], nav_items: Optional[List[tuple]] = None) -> Optional[str]:
     """
@@ -854,12 +946,20 @@ def _strip_code_from_chat(text: str) -> str:
     cleaned = _RAW_JS_LEAK_RE.sub("", cleaned)
     # Raw HTML fragment trailing leak
     cleaned = _RAW_HTML_FRAGMENT_RE.sub("", cleaned)
+    # Strip any hallucinated /preview/{slug} URLs — Zenrex has NO live-preview
+    # endpoint; the only public URL is /s/{slug}-v{N}. AI tends to invent these.
+    cleaned = re.sub(r"https?://[^\s]+/preview/[^\s)\"']+", "", cleaned)
+    # Strip lines that reference the removed preview tab.
+    cleaned = re.sub(r"^.*(?:تبويب المعاينة|افتح المعاينة الحية|اضغط للمشاهدة).*$",
+                       "", cleaned, flags=re.MULTILINE)
     if original_had_code:
         cleaned = cleaned.strip()
-        if cleaned:
-            cleaned = cleaned + "\n\n*✨ تم تحديث المعاينة الحية — افتح تبويب المعاينة للمشاهدة*"
-        else:
-            cleaned = "✨ تم تحديث المعاينة الحية — افتح تبويب المعاينة للمشاهدة"
+        # NOTE: deliberately NO "✨ تم تحديث المعاينة الحية" suffix anymore —
+        # the website-mode UI has no preview tab. Instead the AI is expected to
+        # call publish_site after meaningful edits, and the returned versioned
+        # URL becomes the source of truth.
+        if not cleaned:
+            cleaned = "✅ طبّقت التعديل."
     cleaned = re.sub(r"\n{3,}", "\n\n", cleaned)
     return cleaned.strip()
 
@@ -2717,8 +2817,11 @@ def make_freebuild_chat_router(db, get_current_user):
             chat_text = _strip_code_from_chat(ai_text)
         # Strip section directives from chat (internal-only)
         chat_text = _strip_section_directives(chat_text)
-        if sections_applied > 0:
-            chat_text = (chat_text + f"\n\n*✨ تم تحديث المعاينة الحية — {sections_applied} قسم/أقسام جديدة*").strip()
+        # NOTE: no "تم تحديث المعاينة الحية" appendage — the preview tab is
+        # removed. The AI is expected to publish_site() right after meaningful
+        # edits and the versioned URL becomes the live truth.
+        if sections_applied > 0 and not chat_text.strip():
+            chat_text = f"✅ طبّقت {sections_applied} تعديل."
         clean_text = _strip_tags(chat_text)
         # First try OPT tags; if none, fall back to numbered/bulleted lists after a question.
         opt_tag_items = [m.group(1).strip() for m in OPT_RE.finditer(ai_text)]
