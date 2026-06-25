@@ -6,6 +6,7 @@ import ZCrownSpinner from '../components/ZCrownSpinner';
 import ZenrexBrand from '../components/ZenrexBrand';
 import ConnectionHelpModal from '../components/ConnectionHelpModal';
 import StorageIndicator from '../components/StorageIndicator';
+import { EngineerAuditModal } from '../components/EngineerAuditModal';
 // UsageIndicator removed — duplicate of the credits pill, was confusing users.
 import CookiesManager from '../components/CookiesManager';
 import CreditsBlockedBanner from '../components/CreditsBlockedBanner';
@@ -2712,6 +2713,8 @@ function ChatWorkspace({ projectId }) {  const navigate = useNavigate();
     _setActiveTabRaw(tab);
   }, [isWebsiteMode]);
   const VIDEO_PHASE_EMOJI = { film_type: '🎞️', characters: '👥', script: '📝', voice: '🎙️', storyboard: '🖼️', preview: '👁️', render: '✨' };
+  // Engineer (المهندس) — paid auditor modal state.
+  const [engineerOpen, setEngineerOpen] = useState(false);
   const sidebarPhases = isVideoMode
     ? VIDEO_PHASES.map((p) => ({ id: p.id, title: p.label, icon: VIDEO_PHASE_EMOJI[p.id] || '🎬', desc: p.desc }))
     : getPhases(project?.mode);
@@ -3847,6 +3850,18 @@ function ChatWorkspace({ projectId }) {  const navigate = useNavigate();
             )}
             <div className="flex-1" />
             {/* GitHub push / paywall button — website mode only */}
+            {!isVideoMode && project?.published_slug && (
+            <button
+              type="button"
+              onClick={() => setEngineerOpen(true)}
+              data-testid="engineer-open-btn"
+              className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 my-1 mx-1 rounded-md text-[11px] font-black transition-all bg-amber-500/15 hover:bg-amber-500/25 text-amber-200 border border-amber-400/40"
+              title="استدعِ المهندس — فحص دقيق للموقع المنشور (500 نقطة)"
+            >
+              <span>🧑‍💻</span>
+              <span>استدعِ المهندس</span>
+            </button>
+            )}
             {!isVideoMode && (
             <button
               type="button"
@@ -4893,6 +4908,23 @@ function ChatWorkspace({ projectId }) {  const navigate = useNavigate();
         open={connectionsOpen}
         projectId={projectId}
         onClose={() => setConnectionsOpen(false)}
+      />
+      <EngineerAuditModal
+        open={engineerOpen}
+        onClose={() => setEngineerOpen(false)}
+        projectId={projectId}
+        projectPublished={!!project?.published_slug}
+        apiBase={API}
+        authToken={localStorage.getItem('token') || ''}
+        onIssueDispatchToChat={(text) => {
+          setMessage(text);
+          // Slight delay so the modal close animation completes before the
+          // textarea receives focus.
+          setTimeout(() => {
+            const ta = document.querySelector('[data-testid="chat-input-textarea"], textarea');
+            if (ta) { ta.focus(); ta.scrollIntoView({ behavior: 'smooth', block: 'end' }); }
+          }, 250);
+        }}
       />
       <CookiesManager
         open={cookiesOpen}

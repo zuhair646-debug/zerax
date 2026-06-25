@@ -3468,13 +3468,18 @@ def make_freebuild_chat_router(db, get_current_user):
     ):
         """Publish a finished FreeBuild project to a live URL on Zenrex.
 
-        - Validates slug (lowercase letters, digits, hyphens; 3-60 chars)
-        - Ensures slug is globally unique
-        - Marks the project as published and stores its slug
-        - Returns the live URL
+        Versioned URLs (added 2026-02):
+        - The slug the user provides is the **base name** (e.g. "awesome-cafe").
+        - Every publish increments the version → `awesome-cafe-v1`, `awesome-cafe-v2`...
+        - The previous version is marked `superseded` (not deleted) and serves a
+          redirect page so any open tabs/bookmarks land on the latest version.
+        - Only the last 5 versions are kept; older ones are hard-deleted.
+        - This guarantees ZERO cache-mixing: every edit gives a brand-new URL.
         """
-        slug = (slug or "").strip().lower()
-        if not re.match(r"^[a-z0-9][a-z0-9-]{1,58}[a-z0-9]$", slug):
+        raw = (slug or "").strip().lower()
+        # Strip any user-supplied -vN suffix so we always work with the base.
+        base = re.sub(r"-v\d+$", "", raw)
+        if not re.match(r"^[a-z0-9][a-z0-9-]{1,58}[a-z0-9]$", base):
             raise HTTPException(400, "الـ slug لازم 3-60 حرف، حروف صغيرة وأرقام وشُرَط فقط")
         # Look in chat-projects collection first (new flow), then legacy
         proj = await db.freebuild_chat_projects.find_one({"id": pid, "user_id": user["user_id"]}, {"_id": 0})
@@ -3486,40 +3491,107 @@ def make_freebuild_chat_router(db, get_current_user):
             raise HTTPException(404, "المشروع غير موجود")
         if not proj.get("current_html"):
             raise HTTPException(400, "الموقع فاضي — أكمل البناء أولاً")
-        # slug uniqueness check (skip if this project already owns it)
-        existing = await db.freebuild_published_sites.find_one({"slug": slug})
-        if existing and existing.get("project_id") != pid:
-            raise HTTPException(409, f"الـ slug '{slug}' محجوز — اختر اسم ثاني")
+
+        # Determine the new version.
+        # If the user is republishing under the SAME base they used before → bump.
+        # If the user is changing the base → start fresh at v1.
+        prev_base = proj.get("published_base_slug")
+        prev_version = int(proj.get("published_version") or 0)
+        if prev_base == base and prev_version > 0:
+            new_version = prev_version + 1
+        else:
+            new_version = 1
+        new_slug = f"{base}-v{new_version}"
+
+        # Collision check — if some other project already owns this slug, bump until free.
+        # (Extremely rare since slug includes user's base, but defensive.)
+        guard = 0
+        while True:
+            existing = await db.freebuild_published_sites.find_one({"slug": new_slug})
+            if not existing or existing.get("project_id") == pid:
+                break
+            new_version += 1
+            new_slug = f"{base}-v{new_version}"
+            guard += 1
+            if guard > 50:
+                raise HTTPException(409, "تعذّر إيجاد slug متاح — جرّب اسم آخر")
+
         now = _now()
-        # Build the pages payload — supports multi-page projects too
         all_pages = proj.get("pages") or {"index.html": proj["current_html"]}
-        # Always ensure index.html exists (legacy fallback)
         if "index.html" not in all_pages:
             all_pages["index.html"] = proj["current_html"]
+        # Snapshot the latest pages into the NEW slug doc (fresh document, no
+        # leftover fields from prior version).
         await db.freebuild_published_sites.update_one(
-            {"slug": slug},
+            {"slug": new_slug},
             {"$set": {
-                "slug": slug,
+                "slug": new_slug,
+                "base_slug": base,
+                "version": new_version,
                 "project_id": pid,
                 "user_id": user["user_id"],
                 "current_html": proj["current_html"],   # legacy field
-                "pages": all_pages,                      # NEW — multi-page support
-                "name": proj.get("name") or slug,
+                "pages": all_pages,                      # multi-page support
+                "name": proj.get("name") or base,
                 "updated_at": now,
+                "superseded": False,
+                "superseded_by": None,
             }, "$setOnInsert": {"created_at": now, "views": 0}},
             upsert=True,
         )
+
+        # Mark the previous version (if any) as superseded so it can serve a
+        # redirect page instead of stale content.
+        prev_slug = proj.get("published_slug")
+        if prev_slug and prev_slug != new_slug:
+            await db.freebuild_published_sites.update_one(
+                {"slug": prev_slug},
+                {"$set": {"superseded": True, "superseded_by": new_slug, "updated_at": now}},
+            )
+
+        # Retention: keep only the last 5 versions for this project, hard-delete older ones.
+        try:
+            old_docs = await db.freebuild_published_sites.find(
+                {"project_id": pid, "base_slug": base},
+                {"_id": 0, "slug": 1, "version": 1},
+            ).sort("version", -1).to_list(length=100)
+            to_delete = [d["slug"] for d in old_docs[5:]]  # everything past the top-5
+            if to_delete:
+                await db.freebuild_published_sites.delete_many({"slug": {"$in": to_delete}})
+                logger.info(f"[publish] retention purge: deleted {len(to_delete)} old versions for {pid}")
+        except Exception:
+            logger.exception("[publish] retention purge failed (non-fatal)")
+
+        # Build the published_history list on the project (last 10 entries).
+        history = list(proj.get("published_history") or [])
+        history.append({"slug": new_slug, "version": new_version, "published_at": now})
+        history = history[-10:]
         await collection.update_one(
             {"id": pid},
-            {"$set": {"published": True, "published_slug": slug, "published_at": now}},
+            {"$set": {
+                "published": True,
+                "published_slug": new_slug,
+                "published_base_slug": base,
+                "published_version": new_version,
+                "published_at": now,
+                "published_history": history,
+            }},
         )
-        live_url = f"https://zenrex.ai/s/{slug}"
-        logger.info(f"[publish] user={user['user_id']} project={pid} slug={slug}")
+
+        live_url = f"https://zenrex.ai/s/{new_slug}"
+        previous_url = f"https://zenrex.ai/s/{prev_slug}" if prev_slug and prev_slug != new_slug else None
+        logger.info(f"[publish] user={user['user_id']} project={pid} new_slug={new_slug} (v{new_version}) prev={prev_slug}")
         return {
             "ok": True,
-            "slug": slug,
+            "slug": new_slug,
+            "base_slug": base,
+            "version": new_version,
             "url": live_url,
-            "message": f"✅ موقعك نُشر على {live_url}",
+            "previous_url": previous_url,
+            "message": f"✅ النسخة v{new_version} نُشرت على {live_url}" + (
+                f"\n⚠️ النسخة السابقة ({prev_slug}) أصبحت قديمة — تُحوّل تلقائياً للنسخة الجديدة."
+                if previous_url else ""
+            ),
         }
 
     def _inject_base_href(html: str, slug: str) -> str:
@@ -3570,6 +3642,24 @@ def make_freebuild_chat_router(db, get_current_user):
                 "</body></html>",
                 status_code=404
             )
+        # Superseded version → redirect to the newest version with a friendly notice.
+        if site.get("superseded") and site.get("superseded_by"):
+            new_slug = site["superseded_by"]
+            new_url = f"/s/{new_slug}"
+            return HTMLResponse(
+                f"<!doctype html><html dir='rtl' lang='ar'><head><meta charset='utf-8'>"
+                f"<title>تم تحديث الموقع</title>"
+                f"<meta http-equiv='refresh' content='2;url={new_url}'>"
+                f"<style>body{{font-family:-apple-system,system-ui,'SF Arabic',sans-serif;background:#0a0a14;color:#e5e7eb;text-align:center;padding:80px 20px;margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center}}.card{{max-width:540px;background:rgba(251,191,36,0.05);border:1px solid rgba(251,191,36,0.25);border-radius:18px;padding:48px 32px}}h1{{color:#fbbf24;font-size:28px;margin:0 0 16px}}p{{color:#cbd5e1;line-height:1.7;margin:8px 0}}a{{display:inline-block;margin-top:24px;background:#fbbf24;color:#0a0a14;padding:14px 32px;border-radius:12px;text-decoration:none;font-weight:700}}.spinner{{display:inline-block;width:22px;height:22px;border:3px solid rgba(251,191,36,0.2);border-top-color:#fbbf24;border-radius:50%;animation:spin 0.8s linear infinite;vertical-align:middle;margin-left:8px}}@keyframes spin{{to{{transform:rotate(360deg)}}}}</style></head>"
+                f"<body><div class='card'>"
+                f"<h1>⚠️ هذه نسخة قديمة من الموقع</h1>"
+                f"<p>المالك حدّث الموقع — جاري نقلك للنسخة الجديدة <span class='spinner'></span></p>"
+                f"<p style='font-size:13px;opacity:0.6'>إذا لم يتم النقل تلقائياً:</p>"
+                f"<a href='{new_url}'>افتح النسخة الجديدة الآن ←</a>"
+                f"</div></body></html>",
+                status_code=200,
+                headers={"Cache-Control": "no-store, max-age=0, must-revalidate"},
+            )
         try:
             await db.freebuild_published_sites.update_one({"slug": slug}, {"$inc": {"views": 1}})
         except Exception:
@@ -3599,6 +3689,21 @@ def make_freebuild_chat_router(db, get_current_user):
         site = await db.freebuild_published_sites.find_one({"slug": slug})
         if not site:
             return HTMLResponse("<h1>Site not found</h1>", status_code=404)
+        # Superseded sub-page → redirect to same filename on the newer slug.
+        if site.get("superseded") and site.get("superseded_by"):
+            new_slug = site["superseded_by"]
+            new_url = f"/s/{new_slug}/{filename}"
+            return HTMLResponse(
+                f"<!doctype html><html dir='rtl' lang='ar'><head><meta charset='utf-8'>"
+                f"<meta http-equiv='refresh' content='1;url={new_url}'>"
+                f"<title>تم تحديث الموقع</title></head>"
+                f"<body style='font-family:sans-serif;background:#0a0a14;color:#fbbf24;text-align:center;padding:80px'>"
+                f"<h2>⚠️ هذه نسخة قديمة — جاري النقل للنسخة الجديدة...</h2>"
+                f"<p><a href='{new_url}' style='color:#fbbf24'>اضغط هنا إذا لم يتم النقل ←</a></p>"
+                f"</body></html>",
+                status_code=200,
+                headers={"Cache-Control": "no-store, max-age=0, must-revalidate"},
+            )
         pages = site.get("pages") or {}
         html = pages.get(filename)
         if not html:
@@ -3617,6 +3722,309 @@ def make_freebuild_chat_router(db, get_current_user):
         html = _strip_scaffold_placeholders(html)
         return HTMLResponse(_inject_zenrex_footer(html),
                              headers={"Cache-Control": "no-store, max-age=0, must-revalidate"})
+
+    # ═══════════════════════════════════════════════════════════════════════
+    # المهندس — Engineer Audit (paid, user-triggered)
+    # Crawls the published site with a real browser, generates a structured
+    # audit report (phased fix plan). User reviews → asks AI to fix each issue.
+    # ═══════════════════════════════════════════════════════════════════════
+    ENGINEER_AUDIT_COST = 500  # credits per full audit run
+
+    async def _run_engineer_audit(live_url_base: str, pages: Dict[str, str]) -> Dict[str, Any]:
+        """Crawl every page with Playwright, collect issues."""
+        from playwright.async_api import async_playwright
+        issues: List[Dict[str, Any]] = []
+        pages_checked: List[Dict[str, Any]] = []
+
+        def _add(severity: str, category: str, page: str, description: str,
+                 fix_suggestion: str, element_text: str = "", element_selector: str = ""):
+            issues.append({
+                "id": str(uuid.uuid4()),
+                "severity": severity,                # critical | high | medium | low
+                "category": category,
+                "page": page,
+                "element_text": element_text[:140],
+                "element_selector": element_selector[:200],
+                "description": description,
+                "fix_suggestion": fix_suggestion,
+                "fixed": False,
+            })
+
+        async with async_playwright() as pw:
+            browser = await pw.chromium.launch(headless=True, args=["--no-sandbox", "--disable-dev-shm-usage"])
+            ctx_b = await browser.new_context(viewport={"width": 1280, "height": 800})
+            page = await ctx_b.new_page()
+            # Always check at least index.html
+            page_files = list(pages.keys())
+            if "index.html" not in page_files:
+                page_files.insert(0, "index.html")
+            # Cap to 12 pages to keep audit time bounded.
+            page_files = page_files[:12]
+
+            for pname in page_files:
+                page_url = live_url_base if pname == "index.html" else f"{live_url_base}/{pname}"
+                console_errors: List[str] = []
+                page.on("console", lambda msg, _errs=console_errors:
+                        _errs.append(f"[{msg.type}] {msg.text[:240]}") if msg.type == "error" else None)
+                nav_ok = True
+                try:
+                    await page.goto(page_url, wait_until="domcontentloaded", timeout=20000)
+                except Exception as e:
+                    nav_ok = False
+                    _add("critical", "page_load_failed", pname,
+                         f"الصفحة فشلت في التحميل: {type(e).__name__}",
+                         f"تأكد أن الصفحة `{pname}` موجودة في الموقع وتُحمَّل بدون أخطاء شبكة.")
+                if not nav_ok:
+                    pages_checked.append({"page": pname, "loaded": False})
+                    continue
+                await page.wait_for_timeout(1500)
+
+                metrics = await page.evaluate("""() => {
+                    const internal = (h) => h && !/^(https?:|mailto:|tel:|#)/i.test(h);
+                    const links = Array.from(document.querySelectorAll('a[href]')).map(a => ({
+                        href: a.getAttribute('href') || '',
+                        text: (a.innerText || a.textContent || '').trim().slice(0, 80),
+                        internal: internal(a.getAttribute('href'))
+                    }));
+                    const buttons = Array.from(document.querySelectorAll('button, [role=button], input[type=submit], input[type=button]')).map(b => ({
+                        text: (b.innerText || b.value || '').trim().slice(0, 80),
+                        hasOnclick: !!b.getAttribute('onclick'),
+                        hasType: b.type || '',
+                        disabled: b.disabled || false,
+                    }));
+                    const forms = Array.from(document.querySelectorAll('form')).map(f => ({
+                        action: f.getAttribute('action') || '',
+                        method: f.getAttribute('method') || 'GET',
+                        hasOnsubmit: !!f.getAttribute('onsubmit'),
+                        fields: f.querySelectorAll('input, textarea, select').length,
+                    }));
+                    const images = Array.from(document.querySelectorAll('img')).map(img => ({
+                        src: img.currentSrc || img.src || '',
+                        alt: img.getAttribute('alt') || '',
+                        loaded: img.complete && img.naturalWidth > 0,
+                    }));
+                    const bodyText = (document.body.innerText || '').toLowerCase();
+                    const hasPaymentWord = /(checkout|دفع|اشتري|اشترِ|stripe|paypal|سلة|buy now|إتمام الشراء)/i.test(document.body.innerText || '');
+                    const hasShippingWord = /(shipping|شحن|توصيل|عنوان|delivery)/i.test(document.body.innerText || '');
+                    const hasDashboardWord = /(dashboard|لوحة التحكم|admin|إدارة)/i.test(document.body.innerText || '');
+                    const stripeLoaded = !!window.Stripe;
+                    const paypalLoaded = !!window.paypal;
+                    return {links, buttons, forms, images, hasPaymentWord, hasShippingWord, hasDashboardWord, stripeLoaded, paypalLoaded,
+                            scripts: Array.from(document.scripts).map(s => s.src).filter(Boolean).slice(0, 30)};
+                }""")
+
+                # 1. Console errors
+                if console_errors:
+                    _add("high", "console_error", pname,
+                         f"تم رصد {len(console_errors)} خطأ JavaScript في الـ console.",
+                         "افتح Developer Tools واصلح الأخطاء — قد تكون متغير غير معرّف، API call فاشل، أو syntax error.",
+                         element_text=" | ".join(console_errors[:3]))
+
+                # 2. Internal links pointing to pages that don't exist
+                known_pages = set(pages.keys())
+                for lnk in metrics["links"]:
+                    if lnk["internal"]:
+                        href = lnk["href"].lstrip("/").split("?")[0].split("#")[0]
+                        if not href:
+                            continue
+                        # Skip absolute paths that go to /api/, etc.
+                        if href.startswith("api/") or href.startswith("s/"):
+                            continue
+                        target = href if href.endswith(".html") else f"{href}.html"
+                        # If it's "index" or empty → ok
+                        if target in ("index.html", "") or target in known_pages:
+                            continue
+                        # Anchor-only?
+                        if "#" in lnk["href"] and not href:
+                            continue
+                        _add("high", "broken_link", pname,
+                             f"رابط يشير إلى صفحة غير موجودة: `{lnk['href']}`.",
+                             f"إما أنشئ الصفحة `{target}` أو غيّر الرابط لصفحة موجودة.",
+                             element_text=lnk["text"], element_selector=f"a[href='{lnk['href']}']")
+
+                # 3. Buttons with no click handler and not inside a form
+                for btn in metrics["buttons"]:
+                    if not btn["hasOnclick"] and btn["hasType"] != "submit" and not btn["disabled"]:
+                        # Only flag buttons with meaningful text
+                        if btn["text"] and len(btn["text"]) > 1:
+                            _add("medium", "button_no_handler", pname,
+                                 f"زر `{btn['text']}` بدون أي onclick أو event handler.",
+                                 "أضف handler أو حوّله إلى `<a href>` لصفحة فعلية. الزر الحالي بدون وظيفة.",
+                                 element_text=btn["text"])
+
+                # 4. Forms without submit handlers and without backend action
+                for frm in metrics["forms"]:
+                    if not frm["action"] and not frm["hasOnsubmit"] and frm["fields"] > 0:
+                        _add("high", "form_no_handler", pname,
+                             f"نموذج فيه {frm['fields']} حقل لكن بدون action ولا onsubmit.",
+                             "أضف backend endpoint للنموذج أو onsubmit handler — وإلا البيانات تضيع.")
+
+                # 5. Broken images
+                for img in metrics["images"]:
+                    if not img["loaded"] and img["src"]:
+                        _add("medium", "broken_image", pname,
+                             f"صورة لا تُحمَّل: `{img['src'][:120]}`.",
+                             "تحقق من مسار الصورة أو استبدلها بصورة عاملة.",
+                             element_selector=f"img[src='{img['src'][:80]}']")
+
+                # 6. Payment hints without SDK
+                if metrics["hasPaymentWord"] and not metrics["stripeLoaded"] and not metrics["paypalLoaded"]:
+                    has_payment_script = any("stripe" in s.lower() or "paypal" in s.lower() for s in metrics["scripts"])
+                    if not has_payment_script:
+                        _add("critical", "missing_payment_integration", pname,
+                             "الصفحة تذكر شراء/دفع لكن لا يوجد Stripe ولا PayPal SDK مُحمَّل.",
+                             "اطلب من Zenrex استدعاء Stripe Checkout أو ربط بوابة دفع فعلية — وإلا الزر مجرد ديكور.")
+
+                # 7. Shipping hints without input fields
+                if metrics["hasShippingWord"]:
+                    addr_inputs = await page.evaluate("""() => {
+                        const ins = Array.from(document.querySelectorAll('input, textarea'));
+                        return ins.filter(i => /address|عنوان|شحن|city|مدينة|country|دولة|zip|postal/i.test((i.name||'') + ' ' + (i.placeholder||'') + ' ' + (i.id||''))).length;
+                    }""")
+                    if addr_inputs == 0:
+                        _add("medium", "missing_shipping_fields", pname,
+                             "الصفحة تذكر الشحن/التوصيل لكن لا يوجد حقول عنوان أو مدينة أو دولة.",
+                             "أضف نموذج شحن فيه: العنوان، المدينة، الدولة، الرمز البريدي، رقم الجوال.")
+
+                pages_checked.append({
+                    "page": pname,
+                    "loaded": True,
+                    "console_errors": len(console_errors),
+                    "links": len(metrics["links"]),
+                    "buttons": len(metrics["buttons"]),
+                    "forms": len(metrics["forms"]),
+                    "images": len(metrics["images"]),
+                })
+
+            await browser.close()
+
+        # Group issues into phases (~5 issues per phase, ordered by severity).
+        sev_order = {"critical": 0, "high": 1, "medium": 2, "low": 3}
+        issues.sort(key=lambda i: (sev_order.get(i["severity"], 9), i["page"]))
+        for idx, issue in enumerate(issues):
+            issue["phase"] = (idx // 5) + 1
+
+        total = len(issues)
+        crit = sum(1 for i in issues if i["severity"] == "critical")
+        high = sum(1 for i in issues if i["severity"] == "high")
+        med = sum(1 for i in issues if i["severity"] == "medium")
+        # Score: 100 - weighted issues. Cap floor at 0.
+        score = max(0, 100 - (crit * 15 + high * 8 + med * 3))
+        if total == 0:
+            verdict = "🟢 ممتاز — لم أجد أي ثغرات."
+        elif crit == 0 and high <= 2:
+            verdict = "🟡 جيد — ثغرات بسيطة قابلة للإصلاح."
+        elif crit <= 2:
+            verdict = "🟠 يحتاج عمل — عدة ثغرات مهمة."
+        else:
+            verdict = "🔴 خطير — ثغرات حرجة كثيرة، يلزم إصلاح فوري."
+        phases_count = (total + 4) // 5 if total else 0
+        return {
+            "issues": issues,
+            "pages_checked": pages_checked,
+            "stats": {"total": total, "critical": crit, "high": high, "medium": med, "score": score, "phases": phases_count},
+            "verdict": verdict,
+        }
+
+    @router.post("/project/{pid}/engineer/audit")
+    async def engineer_audit(
+        pid: str,
+        user=Depends(get_current_user),
+    ):
+        """Run المهندس — a paid deep audit on the published site.
+
+        Cost: ENGINEER_AUDIT_COST credits (refunded on failure).
+        Requires the project to be published.
+        """
+        proj = await db.freebuild_chat_projects.find_one({"id": pid, "user_id": user["user_id"]}, {"_id": 0})
+        if not proj:
+            proj = await db.freebuild_projects.find_one({"id": pid, "user_id": user["user_id"]}, {"_id": 0})
+        if not proj:
+            raise HTTPException(404, "المشروع غير موجود")
+        slug = proj.get("published_slug")
+        if not slug:
+            raise HTTPException(400, "لازم تنشر الموقع أولاً قبل ما تستدعي المهندس")
+
+        site = await db.freebuild_published_sites.find_one({"slug": slug})
+        if not site:
+            raise HTTPException(404, "النسخة المنشورة غير موجودة")
+        pages = site.get("pages") or {"index.html": site.get("current_html") or ""}
+
+        # Charge upfront (refund on failure).
+        _u_doc = await db.users.find_one({"id": user["user_id"]}, {"_id": 0, "credits": 1, "role": 1}) or {}
+        _bal = int(round(float(_u_doc.get("credits") or 0)))
+        _is_unlimited = (_u_doc.get("role") or "").lower() in ("owner", "admin", "superuser")
+        if not _is_unlimited:
+            if _bal < ENGINEER_AUDIT_COST:
+                raise HTTPException(402, f"رصيدك ({_bal}) ما يكفي — يلزم {ENGINEER_AUDIT_COST} نقطة لاستدعاء المهندس")
+            await db.users.update_one({"id": user["user_id"]}, {"$inc": {"credits": -ENGINEER_AUDIT_COST}})
+
+        audit_id = str(uuid.uuid4())
+        started_at = _now()
+        # Insert a "running" record so the UI can poll if needed.
+        await db.freebuild_audit_reports.insert_one({
+            "id": audit_id,
+            "project_id": pid,
+            "user_id": user["user_id"],
+            "slug": slug,
+            "status": "running",
+            "started_at": started_at,
+        })
+
+        try:
+            live_url_base = f"{_public_host()}/s/{slug}"
+            result = await _run_engineer_audit(live_url_base, pages)
+            completed_at = _now()
+            doc = {
+                "status": "completed",
+                "completed_at": completed_at,
+                "issues": result["issues"],
+                "pages_checked": result["pages_checked"],
+                "stats": result["stats"],
+                "verdict": result["verdict"],
+            }
+            await db.freebuild_audit_reports.update_one({"id": audit_id}, {"$set": doc})
+            logger.info(f"[engineer] user={user['user_id']} project={pid} audit={audit_id} "
+                        f"issues={result['stats']['total']} score={result['stats']['score']}")
+            return {
+                "ok": True,
+                "audit_id": audit_id,
+                "live_url": live_url_base,
+                "started_at": started_at,
+                "completed_at": completed_at,
+                **doc,
+            }
+        except Exception as e:
+            if not _is_unlimited:
+                await db.users.update_one({"id": user["user_id"]}, {"$inc": {"credits": ENGINEER_AUDIT_COST}})
+            await db.freebuild_audit_reports.update_one(
+                {"id": audit_id},
+                {"$set": {"status": "failed", "error": str(e)[:300]}},
+            )
+            logger.exception(f"[engineer] audit failed: {e}")
+            raise HTTPException(500, f"المهندس واجه مشكلة. تمت إعادة النقاط. ({str(e)[:120]})")
+
+    @router.get("/project/{pid}/engineer/audits")
+    async def list_engineer_audits(pid: str, user=Depends(get_current_user)):
+        """List all audit reports for a project (most recent first)."""
+        cursor = db.freebuild_audit_reports.find(
+            {"project_id": pid, "user_id": user["user_id"]},
+            {"_id": 0, "issues": 0, "pages_checked": 0},  # heavy fields stripped
+        ).sort("started_at", -1).limit(20)
+        items = await cursor.to_list(length=20)
+        return {"audits": items, "count": len(items)}
+
+    @router.get("/project/{pid}/engineer/audit/{audit_id}")
+    async def get_engineer_audit(pid: str, audit_id: str, user=Depends(get_current_user)):
+        """Fetch a single full audit report."""
+        audit = await db.freebuild_audit_reports.find_one(
+            {"id": audit_id, "project_id": pid, "user_id": user["user_id"]},
+            {"_id": 0},
+        )
+        if not audit:
+            raise HTTPException(404, "تقرير المهندس غير موجود")
+        return audit
+
 
     # ═══════════════════════════════════════════════════════════════════════
     # KIDS PWA — Prayer Recordings (server-stored, parent reviewable)

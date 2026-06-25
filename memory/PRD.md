@@ -11,7 +11,31 @@ Arabic-first AI builder for websites/apps/images/videos with credits-based prici
 - **Brain v2 + Architecture-Aware Build Protocol + Surgical-First Policy** are LIVE.
 
 
-### 🧹 Website-Mode UI Cleanup + AI Unrestricted (P0) — DEPLOYED 2026-02 (zenrex.ai LIVE)
+### 🔗 Versioned Publish URLs + 🧑‍💻 المهندس (Engineer Audit) — DEPLOYED 2026-02 (zenrex.ai LIVE)
+
+**User pain (verbatim):**
+> "لما يعدل كان الرابط يكون متردد ... رابط مختلط ... اضغط على الصفحة الرئيسية يجيني الإصدار السابق ... اروح اضغط على الحساب ينقلني الى موقع اخر ويكون بالتعديل اللي طلبته ... كل تحديث يعمل رابط جديد غير عن الرابط السابق ولازم يرسله في نهاية الشات"
+
+**FIX 1 — Versioned Publish URLs:**
+- Rewrote `publish_project` (`freebuild_chat.py` L3463-3593): every publish increments version (`v1, v2, v3, ...`) and creates a NEW slug = `{base}-v{N}`. The previous slug is marked `superseded=True, superseded_by=new_slug`.
+- `serve_published_site` + `serve_published_subpage` (L3625-3724): superseded slugs return a friendly redirect HTML with 2-second `meta refresh` to the latest version + manual fallback link. End result: zero cache-mixing because the URL changes on every publish.
+- Retention: only the last 5 versions are kept per project; older slugs are hard-deleted.
+- Project doc gets `published_base_slug, published_version, published_history[]`.
+- Tested: v1→v2→v3 chain works; old `index.html` and `about.html` BOTH show superseded marker; new pages serve correctly.
+
+**FIX 2 — المهندس (Engineer Audit, user-triggered + paid):**
+- New endpoint `POST /api/freebuild-chat/project/{pid}/engineer/audit` (`freebuild_chat.py` L3726-3997):
+  - Crawls every page of the LATEST published version with a real Playwright Chromium browser (up to 12 pages).
+  - Checks: page-load, console errors, broken internal links, buttons without handler, forms without action/onsubmit, broken images, payment hints without Stripe/PayPal SDK, shipping mentions without address inputs.
+  - Returns structured `issues[]` (each with severity/category/page/element/description/fix_suggestion), grouped into phases of 5 issues, plus stats + verdict.
+  - Cost: **500 credits** (refunded on failure; owners/admins bypass charge).
+  - Storage: `freebuild_audit_reports` collection.
+- New listing/detail endpoints: `GET .../engineer/audits` and `GET .../engineer/audit/{audit_id}`.
+- Frontend: new `EngineerAuditModal.js` + Engineer button (`engineer-open-btn`) in FreeBuildChat — visible only when `project.published_slug` exists. Each issue card has "🛠️ أصلح هذي" button that pushes a structured fix instruction into the chat input.
+
+**Tests:** verified end-to-end on preview (v1→v2→v3 lineage + audit returns 200 with structured issues) and on production (`zenrex.ai/api/health` healthy, engineer endpoints respond).
+
+
 **User pain (verbatim):** "الغي لي بس اللي هو المعاينة اللي على جنب والاعتماد اثنينهم دول الغيهم ... وتأكد ان الذكاء الصناعي مفتوح تماما ما عنده اي عوائق او تعليمات داخلية واعطيه الادوات كاملة. احنا نتكلم بس قسم بناء المواقع من الصفر."
 
 **FIX (this iteration):**
