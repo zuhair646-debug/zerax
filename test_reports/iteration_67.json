@@ -1,0 +1,37 @@
+{
+  "summary": "Iteration 67 — Verified the TypeError regression fix in /app/backend/modules/freebuild/freebuild_chat.py line 6695. Bug: default chat path was calling stream_agent_turn(ctx=_ctx) but the real signature requires ctx_holder=... ; every chat request raised TypeError and the SSE stream only emitted the '⏸️ انقطع الاتصال قبل ما أبدأ' disconnect message. Fix verified: line 6697 now passes ctx_holder=ctx_holder, auth_token=_agent_token, db=db, is_owner=is_platform_owner_stream, max_iterations=40 — matching the real signature in freebuild_agent.py line 9423. 4/4 new SSE end-to-end tests PASS against the live preview URL (https://ai-cinematic-hub-2.preview.emergentagent.com) — including the exact reproduction scenario from the user complaint (POST agent-chat-stream with message='مرحبا', user_language=ar, no mode field). The stream now emits 'event: start' + 'event: text_delta'/'event: tool'/'event: provider' + 'event: done', and the disconnect message is gone. mode=lab and mode=legacy_brain branches also verified. Persistence verified: user+assistant messages saved to project.messages and agent_in_progress cleared. 130/130 regression tests PASS across the 7 files listed in the review (test_smart_merge 10, test_workflow_engine 31, test_mockup_workflow 11, test_blockers_relaxed 12, test_workflow_tools 14, test_lab_mode_and_scaffold 25, test_ai_mode 27). Combined: 134/134 backend tests pass.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_agent_chat_stream_fix.py",
+    "/app/test_reports/pytest/iter67_typeerror_fix.xml",
+    "/app/test_reports/pytest/iter67_regression.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "The default chat path (mode != 'legacy_brain') is a one-line away from a hard outage: it relies on the caller getting stream_agent_turn's kwargs exactly right. The function takes 9 parameters (project, user_message, history_messages, max_iterations, ctx_holder, user_language, auth_token, db, is_owner). The signature has NO type-checked enforcement at the call-site and silently allowed `ctx=_ctx` to be passed as an *unknown keyword argument* that raised TypeError at runtime. Recommendation: add `@typing.no_type_check_decorator` style discipline OR convert ctx_holder into a positional-only param so static analysis (mypy/pyright) flags the bad kwarg, OR wrap the call in a thin typed adapter `_invoke_lab_stream(proj, msg, history, ctx_holder, lang, token, db, owner)` so the call site never has to remember the kwarg names.",
+    "There is no unit test covering the agent-chat-stream FastAPI endpoint itself — only the inner stream_agent_turn generator. A simple smoke test that hits the endpoint with `mode` omitted, `mode='lab'`, and `mode='legacy_brain'` would have caught this TypeError in CI before it reached the user. The new test_agent_chat_stream_fix.py does exactly this and should stay in the regression set.",
+    "freebuild_chat.py is now 7020 lines — the file has grown past the 700-line guideline by a factor of 10. The agent-chat-stream handler alone is ~250 lines (6571-6820). Split into a sub-module: routes/agent_chat_stream.py with the handler and a dedicated lab_dispatcher.py / brain_dispatcher.py for the two branches. Each branch is independently testable today only via live HTTP.",
+    "The captured-event dict and the mid-stream persist block are duplicated verbatim across the default branch (lines 6704-6740) and the legacy_brain branch (lines 6761-6800). Extract a helper `_consume_agent_stream(generator, ctx_holder, captured, event_queue, db, pid)` — would also make future stream variants (e.g., for app/game modes) trivial to add."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_agent_chat_stream_fix.py"
+  ],
+  "success_rate": {
+    "backend": "100% (4/4 new TypeError-fix tests + 130/130 regression = 134/134)",
+    "frontend": "skipped per review request (backend-only iteration)"
+  },
+  "test_credentials": "owner@zerax.com / owner123 (admin@zenrex.ai does not work on local preview per /app/memory/test_credentials.md; used owner instead — has 78,511 credits which is well above the action-pricing pre-flight gate for simple chat turns).",
+  "seed_data_creation": "Each test creates its own TEST_iter67_<uuid6> project via POST /api/freebuild-chat/project and deletes it on teardown. 4 throwaway projects created and removed.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "The TypeError fix on freebuild_chat.py line 6695-6703 is now covered by an explicit end-to-end SSE regression test (test_agent_chat_stream_fix.py) that POSTs to the real endpoint, consumes the stream, and asserts both (a) the disconnect message is absent and (b) 'event: done' is reached. The test takes ~40s total because each turn waits up to 240s for the real Claude/GPT/GLM model to finish — keep that timeout if you re-use the file. The live SSE round-trip burns ~$0.05-0.10 of API credit per test run × 4 tests = ~$0.40 per pytest invocation. If you need a cheaper smoke test, swap the message to a one-word reply hint or mock the LLM client at fixture level. owner@zerax.com had 78,511 credits before this run; should still have >78,000 after.",
+  "rca_of_the_issue": "ROOT CAUSE: when the default-chat path was refactored in iter66 to bypass the Brain orchestrator and call stream_agent_turn directly with an isolated proj_lab copy (the same mechanism Lab Mode uses), the call site copy-pasted from an older draft that used a positional `FreeBuildToolContext` named `ctx`. The actual stream_agent_turn signature (freebuild_agent.py:9423) takes `ctx_holder: Optional[Dict[str, Any]] = None` — there is no `ctx` parameter. Python raised `TypeError: stream_agent_turn() got an unexpected keyword argument 'ctx'` on the very first chat turn, the surrounding try/except caught it and emitted the queue's 'انقطع الاتصال قبل ما أبدأ. أعد إرسال طلبك من فضلك.' fallback message that the user screenshotted. FIX (this iter): line 6697 replaced `ctx=_ctx` with `ctx_holder=ctx_holder, auth_token=_agent_token, db=db, is_owner=is_platform_owner_stream, max_iterations=40` — the exact 5 kwargs the real signature expects. REPRODUCTION: `curl -X POST $BACKEND/api/freebuild-chat/project/$PID/agent-chat-stream -H 'Authorization: Bearer $TOKEN' -F 'message=مرحبا' -F 'user_language=ar' --no-buffer` — BEFORE fix: only 'انقطع الاتصال' message; AFTER fix (verified this run): full SSE with start → text_delta/provider/tool → done with AI Arabic reply. MITIGATION: the 4 new tests in test_agent_chat_stream_fix.py now exercise all 3 mode branches (omitted, lab, legacy_brain) plus persistence; any future call-site signature drift will fail in CI immediately."
+}

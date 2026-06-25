@@ -6692,18 +6692,13 @@ For questions: legal@zenrex.ai
                         "stage": "surgical_edit",
                         "discovery_answers": (proj.get("workflow_state") or {}).get("discovery_answers") or {},
                     }
-                    from .freebuild_agent import FreeBuildToolContext as _FBC
-                    _ctx = _FBC(
-                        proj_lab,
+                    async for chunk in stream_agent_turn(
+                        proj_lab, message, history,
+                        ctx_holder=ctx_holder,
+                        user_language=user_language,
                         auth_token=_agent_token,
                         db=db,
                         is_owner=is_platform_owner_stream,
-                    )
-                    ctx_holder["ctx"] = _ctx
-                    async for chunk in stream_agent_turn(
-                        proj_lab, message, history,
-                        ctx=_ctx,
-                        user_language=user_language,
                         max_iterations=40,
                     ):
                         if chunk.startswith("event: done\n"):
