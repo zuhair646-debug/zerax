@@ -3816,6 +3816,14 @@ except Exception as _care_e:
 try:
     from modules.freebuild.freebuild_chat import make_freebuild_chat_router
     _fbc_router = make_freebuild_chat_router(db, get_current_user)
+    # 🆕 Owner Engineer Portal — elevated AI assistant for the platform owner.
+    # IMPORTANT: register sub-routes BEFORE include_router (FastAPI snapshots routes at include).
+    try:
+        from modules.freebuild.owner_engineer import setup_owner_engineer_routes
+        setup_owner_engineer_routes(_fbc_router, db, get_current_user)
+        logging.getLogger(__name__).info("Owner Engineer Portal registered")
+    except Exception as _oe_e:
+        logging.getLogger(__name__).warning(f"Owner Engineer registration failed: {_oe_e}", exc_info=True)
     api_router.include_router(_fbc_router)
     logging.getLogger(__name__).info("FreeBuild Chat module registered")
 except Exception as _fbce:

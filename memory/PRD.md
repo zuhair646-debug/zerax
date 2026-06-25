@@ -1,4 +1,4 @@
-# Zenrex Farm — PRD (Updated 2026-02 — Surgical Quality Fixes)
+# Zenrex Farm — PRD (Updated 2026-02 — Owner Engineer Portal LIVE)
 
 ## Problem Statement
 Arabic-first AI builder for websites/apps/images/videos with credits-based pricing, Stripe payments, background-task persistence, and exportable codebase. Deployed on Hetzner VPS (zenrex.ai).
@@ -9,6 +9,35 @@ Arabic-first AI builder for websites/apps/images/videos with credits-based prici
 - Frontend: React PWA, Service Worker v9
 - Stripe: Official `stripe` SDK with proxy support
 - **Brain v2 + Architecture-Aware Build Protocol + Surgical-First Policy** are LIVE.
+- **Owner Engineer Portal** at `/admin/engineer` — cross-platform AI oversight for the owner (2026-02).
+
+
+### 🛠️ Owner Engineer Portal — DEPLOYED 2026-02 (preview verified, awaiting VPS push)
+
+A dedicated console at `/admin/engineer` (admin/owner role gated) that lets the human owner oversee EVERY project across the entire platform with the same Claude Sonnet 4.5 brain plus elevated tools.
+
+**Backend** (`/app/backend/modules/freebuild/owner_engineer.py`)
+- Tools schema: `list_all_projects`, `get_project_summary`, `search_projects`, `read_project_page`, `get_project_owner`, `get_platform_stats` — all cross-user (no `user_id` filter).
+- Owner emails resolved on the fly via `users` collection lookup.
+- Chat endpoint `POST /api/freebuild-chat/owner/engineer/chat` — SSE stream with manual tool loop (max 5 iterations), tolerant JSON-from-markdown-fence parsing.
+- Direct REST helpers used by the UI: `GET /projects`, `GET /projects/{pid}`, `GET /projects/{pid}/page`, `GET /stats`, `GET /sessions`, `GET /sessions/{sid}`.
+- `_ensure_owner` gate (role in `owner|admin|superuser`).
+- Sessions persisted to `owner_chat_sessions` collection (keyed by `(id, user_id)`).
+- `project_id` form field on chat injects a focus block into the system prompt so the AI is grounded on the selected project.
+
+**Frontend** (`/app/frontend/src/pages/OwnerEngineer.js`, route registered in `App.js`, tile added to `AdminDashboard.js`)
+- 3-column layout (1920×800): left = ALL projects with search/refresh, center = chat with project-focus bar, right = live iframe preview + prior sessions + tools cheat-sheet.
+- Suggested prompts adapt to whether a project is focused or not.
+- Tool-call cards rendered inline (amber chips) so the owner sees which tool ran with which args + result summary.
+
+**Critical fix**: server.py now calls `setup_owner_engineer_routes` BEFORE `api_router.include_router(_fbc_router)` — FastAPI snapshots routes at include time, so the previous ordering meant the new routes were never registered.
+
+**End-to-end verification (preview env, owner@zerax.com):**
+- `/api/freebuild-chat/owner/engineer/stats` → `{total_projects:122, published:8, total_users:84}` ✅
+- `/api/freebuild-chat/owner/engineer/projects?limit=3` → returns full project rows with `owner_email` ✅
+- Chat: "كم مشروع منشور؟" → AI calls `get_platform_stats` tool → replies "عندك 8 مشاريع منشورة من أصل 122" ✅
+- UI screenshot: sidebar lists 84 users' worth of projects; project tiles show owner email + status dot ✅
+
 
 
 ### 🧠🧠🧠🧠 الـ 4 Architectural AI Layers — DEPLOYED 2026-02 (zenrex.ai LIVE)

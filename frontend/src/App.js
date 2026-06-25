@@ -25,6 +25,7 @@ import QuickShare from '@/pages/QuickShare';
 import ShareHistory from '@/pages/ShareHistory';
 import Profile from '@/pages/Profile';
 import FreeBuildChat from '@/pages/FreeBuildChat';
+import OwnerEngineer from '@/pages/OwnerEngineer';
 import FreebuildLab from '@/pages/FreebuildLab';
 import NativeAppNew from '@/pages/NativeAppNew';
 import MyProjects from '@/pages/MyProjects';
@@ -196,6 +197,7 @@ function App() {
           <Route path="/dashboard/games/app/:id" element={<ProtectedRoute><AppGameProject user={user} /></ProtectedRoute>} />
           <Route path="/logo-picker" element={<LogoPicker />} />
           <Route path="/admin/marketing" element={<ProtectedRoute adminOnly><AdminMarketing user={user} /></ProtectedRoute>} />
+          <Route path="/admin/engineer" element={<ProtectedRoute adminOnly><OwnerEngineer user={user} /></ProtectedRoute>} />
           <Route path="/vrm-preview" element={<VrmPreview />} />
           <Route path="/demo" element={<DemoLanding />} />
           <Route path="/login" element={<LoginPage setUser={setUser} />} />
