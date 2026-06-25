@@ -11,7 +11,7 @@ Arabic-first AI builder for websites/apps/images/videos with credits-based prici
 - **Brain v2 + Architecture-Aware Build Protocol + Surgical-First Policy** are LIVE.
 
 
-### 🧹 Website-Mode UI Cleanup + AI Unrestricted (P0) — VERIFIED 2026-02 (preview, awaiting deploy)
+### 🧹 Website-Mode UI Cleanup + AI Unrestricted (P0) — DEPLOYED 2026-02 (zenrex.ai LIVE)
 **User pain (verbatim):** "الغي لي بس اللي هو المعاينة اللي على جنب والاعتماد اثنينهم دول الغيهم ... وتأكد ان الذكاء الصناعي مفتوح تماما ما عنده اي عوائق او تعليمات داخلية واعطيه الادوات كاملة. احنا نتكلم بس قسم بناء المواقع من الصفر."
 
 **FIX (this iteration):**
@@ -22,7 +22,9 @@ Arabic-first AI builder for websites/apps/images/videos with credits-based prici
 5. **Backend already had** `inject_workflow_addendum=False` threaded into the single `stream_agent_turn` callsite in `freebuild_chat.py` (L6707) — the AI receives the base system prompt with no phase-rule banner.
 6. video_studio / anime_studio / longform_video / image_studio / app modes are **untouched** — they keep their tabs (regression-tested OK).
 
-**Tests:** iteration_68 — 7/7 backend + 3/3 frontend Playwright scenarios PASS. New regression test file `/app/backend/tests/test_website_tabs_removed.py`. 36/36 pre-existing tests (smart-merge, blockers-relaxed, workflow-tools) still PASS.
+**BUG fix on top (iter69):** The previous fork added `inject_workflow_addendum` as a parameter to `stream_agent_turn` (L9433) but **the actual usage is at L9616 inside `_stream_one_provider`**, which never received the parameter → `NameError: name 'inject_workflow_addendum' is not defined` at runtime in production. Fixed by adding the param to `_stream_one_provider`'s signature and threading it through from `stream_agent_turn`. Verified live on zenrex.ai with two end-to-end chat streams (no errors).
+
+**Tests:** iteration_68 — 7/7 backend + 3/3 frontend Playwright. iter69 smoke — production SSE chat returns full Claude response without NameError. 36/36 pre-existing tests still PASS.
 
 
 ### 🧪 Lab Mode + Scaffold Stripping (P0) — DEPLOYED 2026-06-24

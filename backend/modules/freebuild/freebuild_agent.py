@@ -9482,7 +9482,7 @@ async def stream_agent_turn(
         try:
             yield _sse("provider", {"name": provider, "model": model, "message": "🧠 الذكاء الصناعي يحلل..."})
             await asyncio.sleep(0)
-            async for chunk in _stream_one_provider(project, user_message, history_messages, max_iterations, provider, model, ctx_holder=ctx_holder, user_language=user_language, auth_token=auth_token, db=db, is_owner=is_owner):
+            async for chunk in _stream_one_provider(project, user_message, history_messages, max_iterations, provider, model, ctx_holder=ctx_holder, user_language=user_language, auth_token=auth_token, db=db, is_owner=is_owner, inject_workflow_addendum=inject_workflow_addendum):
                 yield chunk
             return
         except _ProviderUnavailable as e:
@@ -9547,6 +9547,7 @@ async def _stream_one_provider(
     auth_token: Optional[str] = None,
     db: Any = None,
     is_owner: bool = False,
+    inject_workflow_addendum: bool = True,
 ) -> AsyncGenerator[str, None]:
     """Run the tool loop for one provider, yielding SSE chunks per step."""
     ctx = FreeBuildToolContext(project, auth_token=auth_token, db=db, is_owner=is_owner)
