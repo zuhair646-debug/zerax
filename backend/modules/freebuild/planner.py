@@ -114,17 +114,58 @@ def _strip_json_fences(text: str) -> str:
 
 
 def _safe_parse(raw: str) -> Optional[Dict[str, Any]]:
+    """Robustly extract a JSON plan object from a possibly noisy LLM response."""
+    if not raw:
+        return None
     cleaned = _strip_json_fences(raw)
+    # 1) Direct parse
     try:
-        return json.loads(cleaned)
+        obj = json.loads(cleaned)
+        if isinstance(obj, dict):
+            return obj
     except Exception:
         pass
+    # 2) Greedy regex from first { to last }
     m = re.search(r"\{[\s\S]*\}", cleaned)
     if m:
         try:
-            return json.loads(m.group(0))
+            obj = json.loads(m.group(0))
+            if isinstance(obj, dict):
+                return obj
         except Exception:
-            return None
+            pass
+    # 3) Bracket-depth walker (handles strings + escapes — tolerates inner braces)
+    s = cleaned
+    start = s.find("{")
+    while start != -1:
+        depth = 0
+        in_str = False
+        esc = False
+        for i in range(start, len(s)):
+            ch = s[i]
+            if esc:
+                esc = False
+                continue
+            if ch == "\\" and in_str:
+                esc = True
+                continue
+            if ch == '"':
+                in_str = not in_str
+                continue
+            if in_str:
+                continue
+            if ch == "{":
+                depth += 1
+            elif ch == "}":
+                depth -= 1
+                if depth == 0:
+                    try:
+                        obj = json.loads(s[start:i + 1])
+                        if isinstance(obj, dict):
+                            return obj
+                    except Exception:
+                        break
+        start = s.find("{", start + 1)
     return None
 
 
@@ -237,8 +278,24 @@ async def generate_build_plan(
 
     parsed = _safe_parse(raw if isinstance(raw, str) else "")
     if not isinstance(parsed, dict):
-        logger.warning("[planner] couldn't parse plan JSON")
-        return _minimal_default_plan(user_message)
+        # One retry with stronger nudge — if the model produced prose, force JSON.
+        try:
+            preview = (raw or "")[:200] if isinstance(raw, str) else "(non-string)"
+            logger.warning(f"[planner] first parse failed. preview={preview!r}")
+            retry_msg = (
+                "ردك السابق لم يكن JSON صرف. أعد الإجابة الآن — "
+                "ابدأ مباشرة بـ `{` وانتهِ بـ `}` بدون أي شرح أو markdown."
+            )
+            raw2 = await asyncio.wait_for(
+                chat.send_message(UserMessage(text=retry_msg)),
+                timeout=20,
+            )
+            parsed = _safe_parse(raw2 if isinstance(raw2, str) else "")
+        except Exception as e:
+            logger.warning(f"[planner] retry failed: {e}")
+        if not isinstance(parsed, dict):
+            logger.warning("[planner] couldn't parse plan JSON after retry → fallback")
+            return _minimal_default_plan(user_message)
 
     # Light validation + normalization
     parsed.setdefault("summary", "")

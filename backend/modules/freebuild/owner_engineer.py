@@ -432,25 +432,74 @@ async def _tool_read_full_html(db, project_id: str, filename: str = "index.html"
 
 
 async def _tool_read_server_logs(lines: int = 80, filter_str: Optional[str] = None) -> Dict[str, Any]:
+    """Tail backend logs from whichever source is available.
+
+    Production (zenrex.ai) runs via Docker → use `docker logs`.
+    Preview env runs via supervisor → tail the log file.
+    """
+    import asyncio as _asyncio
     lines = max(1, min(int(lines or 80), 200))
-    path = "/var/log/supervisor/backend.err.log"
-    if not os.path.exists(path):
-        return {"ok": False, "error": "log file not found"}
-    try:
-        # Read tail efficiently.
-        with open(path, "rb") as f:
-            f.seek(0, 2)
-            size = f.tell()
-            read_size = min(size, 200_000)  # cap 200KB
-            f.seek(size - read_size)
-            data = f.read().decode("utf-8", errors="replace")
-        all_lines = data.splitlines()
-        if filter_str:
-            all_lines = [ln for ln in all_lines if filter_str.lower() in ln.lower()]
-        tail = all_lines[-lines:]
-        return {"ok": True, "lines_returned": len(tail), "filter": filter_str, "logs": "\n".join(tail)}
-    except Exception as e:
-        return {"ok": False, "error": str(e)[:200]}
+    sources_tried: List[str] = []
+
+    # 1) Supervisor log file (preview env) + in-container file mirror (prod).
+    candidates = [
+        "/var/log/supervisor/backend.err.log",
+        "/var/log/supervisor/backend.out.log",
+        "/tmp/backend.log",  # In-container mirror (configured in server.py startup)
+        "/app/logs/backend.log",
+    ]
+    for path in candidates:
+        sources_tried.append(path)
+        if os.path.exists(path):
+            try:
+                with open(path, "rb") as f:
+                    f.seek(0, 2)
+                    size = f.tell()
+                    read_size = min(size, 250_000)
+                    f.seek(size - read_size)
+                    data = f.read().decode("utf-8", errors="replace")
+                all_lines = data.splitlines()
+                if filter_str:
+                    all_lines = [ln for ln in all_lines if filter_str.lower() in ln.lower()]
+                tail = all_lines[-lines:]
+                return {
+                    "ok": True, "source": path, "lines_returned": len(tail),
+                    "filter": filter_str, "logs": "\n".join(tail),
+                }
+            except Exception as e:
+                sources_tried.append(f"{path}:ERROR:{e}")
+
+    # 2) Docker container logs (production VPS).
+    for container in ("zerax-backend", "zenrex-backend", "backend"):
+        sources_tried.append(f"docker:{container}")
+        try:
+            proc = await _asyncio.create_subprocess_exec(
+                "docker", "logs", "--tail", str(min(lines * 4, 600)), container,
+                stdout=_asyncio.subprocess.PIPE, stderr=_asyncio.subprocess.STDOUT,
+            )
+            out, _ = await _asyncio.wait_for(proc.communicate(), timeout=10)
+            if proc.returncode == 0 and out:
+                txt = out.decode("utf-8", errors="replace")
+                all_lines = txt.splitlines()
+                if filter_str:
+                    all_lines = [ln for ln in all_lines if filter_str.lower() in ln.lower()]
+                tail = all_lines[-lines:]
+                return {
+                    "ok": True, "source": f"docker:{container}",
+                    "lines_returned": len(tail), "filter": filter_str,
+                    "logs": "\n".join(tail),
+                }
+        except FileNotFoundError:
+            # docker not installed on this host
+            break
+        except Exception as e:
+            sources_tried.append(f"docker:{container}:ERROR:{str(e)[:80]}")
+
+    return {
+        "ok": False,
+        "error": "no log source available",
+        "sources_tried": sources_tried,
+    }
 
 
 async def _tool_apply_fix_to_project(

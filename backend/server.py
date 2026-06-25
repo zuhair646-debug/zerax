@@ -4495,6 +4495,27 @@ logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
+
+# 🛠️ Mirror logs to a writable file inside the container so the
+# Owner Engineer Portal `read_server_logs` tool can tail them in
+# both supervisor (preview) and Docker (production) environments.
+try:
+    from logging.handlers import RotatingFileHandler as _RFH
+    import os as _os
+    _log_dir = "/app/logs"
+    try:
+        _os.makedirs(_log_dir, exist_ok=True)
+        _log_path = f"{_log_dir}/backend.log"
+    except Exception:
+        _log_path = "/tmp/backend.log"  # Fallback if /app/logs is not writable
+    _file_handler = _RFH(_log_path, maxBytes=5_000_000, backupCount=2, encoding="utf-8")
+    _file_handler.setLevel(logging.INFO)
+    _file_handler.setFormatter(logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s'))
+    logging.getLogger().addHandler(_file_handler)
+    logging.getLogger(__name__).info(f"📝 File log mirror enabled → {_log_path}")
+except Exception as _log_err:
+    logging.getLogger(__name__).warning(f"File log mirror failed: {_log_err}")
+
 logger = logging.getLogger(__name__)
 
 @app.on_event("shutdown")
